@@ -1,0 +1,36 @@
+# The release folders ("PS5 Cooling and System Center v...") are not in git, so
+# a checkout has none to compare: run without -TemplateOnly, the script finds
+# no folder and fails, and with the folder list as it was it passed having
+# compared nothing. This job therefore checks what is in git - the template
+# and its version - and the folder comparison stays a local check before a
+# release. The path filter lists the files that check reads; the old entry for
+# the release folders could never match.
+name: Release LIESMICH Sync Check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - docs/LIESMICH.txt
+      - src/ps5tm.h
+      - tools/check-release-liesmich-sync.ps1
+      - .github/workflows/liesmich-sync-check.yml
+  push:
+    branches:
+      - main
+    paths:
+      - docs/LIESMICH.txt
+      - src/ps5tm.h
+      - tools/check-release-liesmich-sync.ps1
+      - .github/workflows/liesmich-sync-check.yml
+
+jobs:
+  check-liesmich-sync:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check the LIESMICH template
+        shell: pwsh
+        run: .\tools\check-release-liesmich-sync.ps1 -TemplateOnly

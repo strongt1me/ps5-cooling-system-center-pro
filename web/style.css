@@ -1,0 +1,1362 @@
+/* PS5 Temperature Manager — dashboard styling.
+ *
+ * Dark-only by design: this runs on a games console, on a TV or phone, usually
+ * in a dim room. The series colours are the validated categorical slots 1-3
+ * (blue / orange / aqua), stepped for a dark surface; status colours are the
+ * reserved good/warning/serious/critical steps and always ship with a word,
+ * never colour alone.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --plane:      #0b1220;
+  --side:       #0e1830;   /* Seitenleiste */
+  --accent:     #3b82f6;   /* Bedienakzent, nicht Datenreihe */
+  --surface-1:  #141b29;
+  --surface-2:  #1a2334;
+  --inset:      #0c1320;
+
+  --ink:        #eaf0fb;
+  --ink-2:      #aeb8d6;
+  --ink-muted:  #7c89ac;
+
+  --grid:       #1f2839;
+  --baseline:   #2f3547;
+  --hairline:   rgba(255,255,255,.09);
+
+  --s1: #3987e5;   /* CPU        */
+  --s2: #d95926;   /* SoC        */
+  --s3: #199e70;   /* Lüfter     */
+  --s4: #a371f7;   /* Grafik, SoC-Kanal 7 (1.45.1) */
+  --neutral: #7e8698;
+
+  --good:     #0ca30c;
+  --warning:  #fab219;
+  --serious:  #ec835a;
+  --critical: #d03b3b;
+
+  --r-lg: 18px;
+  --r-md: 12px;
+  --r-sm: 9px;
+  --shadow: 0 18px 44px rgba(0,0,0,.45);
+}
+
+* { box-sizing: border-box; }
+
+/* Die Seite scrollt nur nach oben und unten (Wunsch 19.09.2026). Grund des
+   ersten Falls war der Schmuck-Lüfter der Übersicht, der 78 px über den
+   Rand ragte. overflow-x NUR am Wurzelelement: Es wirkt auf das
+   Seitenfenster, macht aber kein Element zum eigenen Scroll-Container,
+   sodass die feststehende Seitenleiste (position: sticky) weiter hält. */
+html { overflow-x: hidden; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* Feines Platinenmuster des Users (nahtlos, 1000 px), Grundfarbe = --plane.
+     Scrollt mit (kein fixed: das zwänge die PS5 zum Neuzeichnen). */
+  background: var(--plane) url(/img/bg-pattern.jpg) repeat;
+  color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Rahmen: Seitenleiste + Inhalt (Neugestaltung Reihe D, 19.09.2026) ──
+ * ‼ Kein filter und kein backdrop-filter. Beides war auf der PS5 nachweislich
+ * teuer (ruckelnder Lüfter UND träge Oberfläche, siehe ui-redesign). Tiefe
+ * entsteht nur über Flächenfarben, Linien und Farbverläufe. */
+.app { display: flex; min-height: 100vh; }
+.side { width: 236px; flex: none; position: sticky; top: 0; height: 100vh;
+  display: flex; flex-direction: column; padding: 26px 18px;
+  /* Lüfter-Bild des Users unten; sein oberer Rand ist bereits in --side
+     übergeblendet, deshalb passt es bei jeder Bildschirmhöhe. */
+  background: var(--side) url(/img/side-art.jpg) center bottom / 100% auto no-repeat;
+  border-right: 1px solid var(--hairline); }
+.shell { flex: 1 1 auto; min-width: 0; padding: 26px 32px 40px; position: relative; }
+.shell > .topbar, .shell > main, .shell > .foot { max-width: 1320px; margin-left: auto; margin-right: auto; }
+
+.brand { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 0 6px 22px; }
+/* Logo: Bild des Users (Lüfter + Thermometer), Ecken schon rund freigestellt */
+.brand-mark { width: 40px; height: 40px; flex: none; display: block; }
+/* Der Name ist lang: In der Seitenleiste bricht er nach „PS5 Cooling &" um und
+   lässt „System Center - Pro" auf der zweiten Zeile stehen. Das „Pro" hängt per
+   geschütztem Leerzeichen am Strich, damit es nie allein in der Zeile steht. */
+.brand-text strong { display: block; font-size: 13.5px; font-weight: 800; letter-spacing: -.01em;
+  line-height: 1.25; }
+
+.tabs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.tab { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px;
+  padding: 10px 12px; border: 1px solid transparent; border-radius: 10px; background: none;
+  color: var(--ink-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+  transition: background .15s, color .15s; }
+.tab svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tab:hover, .tab:focus-visible { color: var(--ink); background: rgba(255,255,255,.04); }
+.tab.active { color: var(--ink); font-weight: 600;
+  background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.3); }
+.tab.active svg { stroke: #8ab4ff; }
+/* Liegt über dem Lüfter-Bild: eigene dunkle Unterlage, sonst unlesbar */
+.side-foot { margin: auto 0 0; padding: 11px 13px; border: 1px solid var(--hairline);
+  border-radius: 12px; background: rgba(9,15,30,.8);
+  color: var(--ink-2); font-size: 11.5px; line-height: 1.6; }
+
+/* ── Kopfzeile ─────────────────────────────────────────────────────── */
+.topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px;
+  margin-bottom: 20px; position: relative; z-index: 2; }
+/* Drei Teile in einer Reihe: Titel links, die Power-Optionen als Gruppe in der Mitte, die übrigen Schalter rechts.
+   Titel und Schalter teilen sich den freien Platz zu gleichen Teilen, damit die Gruppe mittig steht; brauchen die
+   Schalter mehr (sie brechen nie um), rückt die Gruppe ein Stück nach links. Wird es zu eng, rutschen die Schalter
+   in eine zweite Zeile. */
+.page-head { min-width: 150px; flex: 1 1 0; }
+.page-head h1 { margin: 0; font-size: 23px; font-weight: 800; letter-spacing: -.015em; }
+.page-head small { display: block; color: var(--ink-muted); font-size: 12.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-right { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; justify-content: flex-end; flex: 1 1 0; min-width: max-content; }
+.xswitch { display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 14px;
+  border: 1px solid var(--hairline); border-radius: 999px; background: var(--surface-1);
+  color: var(--ink-2); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.xswitch .switch i { width: 40px; height: 23px; }
+.xswitch .switch i::after { width: 17px; height: 17px; }
+.xswitch .switch input:checked + i::after { transform: translateX(17px); }
+
+.conn { display: flex; align-items: center; gap: 8px; padding: 8px 13px;
+  border: 1px solid var(--hairline); border-radius: 999px;
+  background: var(--surface-1); color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-muted); flex: none; }
+.conn.on i { background: var(--good); box-shadow: 0 0 10px var(--good); }
+.conn.off i { background: var(--critical); }
+
+.page { display: none; }
+.page.active { display: block; animation: fade .22s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(5px); } }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dot.s1, .legend i.s1 { background: var(--s1); }
+.dot.s2, .legend i.s2 { background: var(--s2); }
+.dot.s3, .legend i.s3 { background: var(--s3); }
+.dot.s4, .legend i.s4 { background: var(--s4); }
+
+.bar { height: 6px; border-radius: 999px; background: var(--inset); overflow: hidden; }
+.bar span { display: block; height: 100%; width: 0; border-radius: 999px;
+  transition: width .45s cubic-bezier(.4,0,.2,1); background: var(--neutral); }
+.bar span.s1 { background: var(--s1); }
+.bar span.s2 { background: var(--s2); }
+.bar span.s3 { background: var(--s3); }
+.bar span.warn { background: var(--warning); }
+.bar span.hot  { background: var(--critical); }
+
+/* ── Kopfzeile, Verlauf und Sensoren der Kühlungsseite (bis 1.45.x die Übersicht) ── */
+
+.ov-row { position: relative; z-index: 1; display: grid; gap: 16px; margin-bottom: 16px; }
+.ov-row .card { margin-bottom: 0; }
+.ov-top    { grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); }
+.ov-mid    { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+
+/* Wärmster Punkt: Ring + Klartext. Dahinter das Bild des Users (Kühlkörper im
+   Luftstrom), in voller Höhe rechts angeschlagen; ein Verlauf deckt links ab,
+   damit Ring und Text ruhig stehen. */
+.ov-hero { display: flex; align-items: center; gap: 26px; }
+/* .card.… damit die spätere .card-Fläche das Bild nicht überdeckt */
+.card.ov-hero {
+  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 52%, rgba(20,27,41,.62) 80%, rgba(20,27,41,.3) 100%),
+    url(/img/hero-overview.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+/* Gleiches Bild, offline umgefärbt (Licht orange bzw. rot, Grund bleibt
+   Nachtblau): Der Zustand ist schon von weitem zu sehen. warn/hot setzt
+   renderStatus() nach describe(). */
+.card.ov-hero.warn {
+  background-image: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 52%, rgba(20,27,41,.62) 80%, rgba(20,27,41,.3) 100%),
+    url(/img/hero-overview-warm.jpg); }
+.card.ov-hero.hot {
+  background-image: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 52%, rgba(20,27,41,.62) 80%, rgba(20,27,41,.3) 100%),
+    url(/img/hero-overview-hot.jpg); }
+.ov-gauge { position: relative; width: 150px; height: 150px; flex: none; }
+.ov-gauge svg { width: 150px; height: 150px; display: block; }
+.rg-track { fill: none; stroke: var(--inset); stroke-width: 12; }
+.rg-fill { fill: none; stroke-width: 12; stroke-linecap: round; stroke-dasharray: 0 402;
+  transition: stroke-dasharray .8s cubic-bezier(.4,0,.2,1); }
+.ov-hot { stroke: url(#ovHot); }
+.ov-hero.warn .ov-hot { stroke: var(--warning); }
+.ov-hero.hot  .ov-hot { stroke: var(--critical); }
+.ov-gauge-val { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.hero-num { font-size: 42px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+.hero-unit { font-size: 17px; color: var(--ink-muted); margin-left: 2px; }
+.hero-copy { min-width: 0; }
+.ov-title { display: flex; align-items: center; gap: 10px; }
+.ov-title h2 { margin: 0; font-size: 20px; letter-spacing: -.015em; }
+.hero-icon { width: 28px; height: 28px; flex: none; display: grid; place-items: center;
+  border-radius: 8px; font-size: 15px; font-weight: 800;
+  background: rgba(12,163,12,.16); color: var(--good); }
+.ov-hero.warn .hero-icon { background: rgba(250,178,25,.16); color: var(--warning); }
+.ov-hero.hot  .hero-icon { background: rgba(208,59,59,.16); color: var(--critical); }
+.hero-copy p { margin: 8px 0 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.55; }
+.ov-caption { display: block; margin-top: 10px; color: var(--ink-muted); font-size: 12px; }
+.ov-caption b { color: var(--ink-2); }
+
+/* Lüfter und laufendes Spiel */
+.ov-side { display: grid; grid-template-rows: 1fr 1fr; gap: 16px; }
+.ov-tile { display: flex; align-items: center; gap: 16px; padding: 16px 20px; }
+.ov-tile-text { min-width: 0; }
+.ov-label { display: block; font-size: 11.5px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-muted); }
+.ov-big { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.15; }
+.ov-big i { font-size: 14px; font-style: normal; color: var(--ink-muted); margin-left: 2px; }
+.ov-tile small { display: block; color: var(--ink-muted); font-size: 12px; }
+.ov-game b { display: block; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--ink-muted); }
+.run-dot.live { background: var(--good); box-shadow: 0 0 9px var(--good); }
+
+/* Spielkachel: Controller-Bild, der grüne Punkt sitzt als Marke darauf.
+   Ohne Spiel ist das Bild gedämpft (opacity, kein filter). */
+.ov-game-pic { position: relative; width: 70px; flex: none; }
+.ov-game-pic img { display: block; width: 100%; height: auto; opacity: .4; transition: opacity .4s; }
+.ov-game-pic .run-dot { position: absolute; right: -3px; top: -3px; z-index: 1;
+  width: 13px; height: 13px; border: 2px solid var(--surface-1); }
+.run-dot.live + img { opacity: 1; }
+
+/* Lüfter aus den Bildern des Users (v1.38.0): Rad (dreht) unter Rahmen
+   (steht), darüber der Drehzahl-Ring genau auf der Leuchtröhre des Rahmens
+   (r = 110 von 256, gemessen). Die Röhre wird abgedunkelt und leuchtet so weit
+   auf, wie der Lüfter dreht. Die Drehung bleibt eine feste CSS-Animation, die
+   JS nie anfasst — so seit v1.35.1 auf der Konsole ruckelfrei (siehe
+   ui-redesign). Das Rad ist auf die Nabe zentriert, es eiert nicht. */
+.ov-fan { position: relative; width: 92px; height: 92px; flex: none; }
+.fan-pic img, .fan-pic svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fan-rotor { animation: fan-blade-spin 2.1s linear infinite; }
+.fan-ring-track { fill: none; stroke: rgba(5,9,18,.8); stroke-width: 11; }
+.fan-ring-glow, .fan-ring-fill { fill: none; stroke-linecap: round; stroke-dasharray: 0 691.2;
+  transition: stroke-dasharray .8s cubic-bezier(.4,0,.2,1); }
+.fan-ring-glow { stroke: rgba(56,189,248,.3); stroke-width: 18; }
+.fan-ring-fill { stroke: #8fdcff; stroke-width: 7; }
+@keyframes fan-blade-spin { to { transform: rotate(360deg); } }
+
+/* Hinweis unter den Voreinstellungen */
+.sub b { color: var(--ink-2); font-weight: 600; }
+.ov-note { margin: 12px 0 0; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
+
+/* Sensoren */
+/* Chip-Bild: drei vorgefärbte Fassungen übereinander, app.js setzt data-heat.
+   Umgeschaltet wird nur die Deckkraft (billig), nicht per filter umgefärbt. */
+.ov-chip { position: relative; width: 84px; height: 63px; flex: none; margin: -10px -8px -14px 0; }
+.ov-chip img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .5s; }
+.ov-chip[data-heat="ok"] .c-ok, .ov-chip[data-heat="warm"] .c-warm,
+.ov-chip[data-heat="hot"] .c-hot { opacity: 1; }
+.ov-kv { display: grid; gap: 11px; }
+.ov-kv > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.ov-kv span { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; color: var(--ink-2); min-width: 0; }
+.ov-kv span small { flex-basis: 100%; color: var(--ink-muted); font-size: 11.5px; }
+.ov-kv b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ov-kv b i { font-style: normal; font-size: 12px; color: var(--ink-muted); margin-left: 2px; }
+
+/* Expertenbereich: nur bei eingeschaltetem Expertenmodus (body.expert). */
+.expert-only { display: none; position: relative; z-index: 1; }
+body.expert .expert-only { display: block; }
+.ov-expert-head { margin: 8px 0 14px; padding-top: 18px; border-top: 1px solid var(--hairline); }
+.ov-expert-head h2 { margin: 0; font-size: 17px; }
+
+/* ── Kühlung (Reihe D) ─────────────────────────────────────────────── */
+.co-stat { min-width: 0; padding: 4px 22px; border-left: 1px solid var(--hairline); }
+.co-stat:first-child { padding-left: 0; border-left: 0; }
+.co-stat small { display: block; color: var(--ink-muted); font-size: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+/* Seitenbanner auf System und Protokoll: Bild des Users rechts in voller
+   Höhe, links abgedeckt; die Werte darin sind echt (app.js). */
+.card.page-banner { min-height: 168px; margin-bottom: 18px; padding: 22px 28px;
+  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 48%, rgba(20,27,41,.35) 80%, rgba(20,27,41,.08) 100%),
+    url(/img/banner-system.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+.card.page-banner.pb-log {
+  background-image: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 48%, rgba(20,27,41,.35) 80%, rgba(20,27,41,.08) 100%),
+    url(/img/banner-log.jpg); }
+.page-banner h2 { margin: 0; font-size: 20px; letter-spacing: -.015em; }
+.pb-sub { margin: 4px 0 0; max-width: 460px; color: var(--ink-2); font-size: 13.5px; }
+.pb-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 170px)); margin-top: 16px; }
+.pb-val { display: block; font-size: 19px; font-weight: 800; letter-spacing: -.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Profil (19.09.2026) ─────────────────────────────────────────────
+   Kopf: echtes Profilbild der Konsole im Leuchtring (ohne eigenes Bild
+   steht der Anfangsbuchstabe darin), Name groß. Dahinter das Profil-Banner
+   (aus den Bildern des Users zusammengesetzt: Abzeichen im Halo mit Ringen),
+   in voller Höhe rechts angeschlagen wie die anderen Seitenbanner. */
+.card.pf-hero { position: relative; display: flex; align-items: center; gap: 26px;
+  min-height: 176px; margin-bottom: 18px; padding: 24px 28px; overflow: hidden;
+  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.9) 40%, rgba(20,27,41,.2) 72%, rgba(20,27,41,0) 100%),
+    url(/img/banner-profile.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+.pf-avatar { position: relative; width: 116px; height: 116px; flex: none; border-radius: 50%;
+  background: linear-gradient(135deg, #22d3ee, #3b82f6 55%, #1e3a8a);
+  box-shadow: 0 0 0 6px rgba(59,130,246,.12); }
+.pf-avatar > span, .pf-avatar > img { position: absolute; top: 4px; left: 4px;
+  width: calc(100% - 8px); height: calc(100% - 8px); border-radius: 50%; background: var(--inset); }
+.pf-avatar > span { display: grid; place-items: center; font-size: 46px; font-weight: 800; color: #8fdcff; }
+.pf-avatar > img { object-fit: cover; }
+.pf-avatar > img[hidden], .pf-avatar.has-pic > span { display: none; }
+.pf-id { min-width: 0; padding-right: 260px; }      /* Platz für das Abzeichen im Banner */
+.pf-id h2 { margin: 2px 0 4px; font-size: 32px; font-weight: 800; letter-spacing: -.02em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Kartensymbole (Systemseite): oben rechts in der Karte, der Kartenkopf hält
+   Abstand. Absolut gesetzt, damit Knöpfe im Kopf nicht verrutschen. */
+.card.has-ico { position: relative; }
+.card.has-ico > .card-head { padding-right: 84px; min-height: 48px; }
+.card-ico { position: absolute; top: 10px; right: 14px; width: 76px; height: auto; pointer-events: none; }
+
+/* Leere Liste der Spielprofile */
+.empty-state { display: flex; align-items: center; gap: 16px; padding: 6px 0; }
+.empty-state img { width: 56px; height: auto; flex: none; opacity: .85; }
+.empty-state p { margin: 0; }
+
+/* Keine Verbindung: Hinweis oben im Inhalt, nur mit body.offline sichtbar */
+.offline-note { display: none; align-items: center; gap: 16px; margin-bottom: 16px; padding: 14px 20px;
+  border: 1px solid rgba(208,59,59,.4); border-radius: var(--r-lg); background: rgba(208,59,59,.08); }
+body.offline .offline-note { display: flex; }
+.offline-note img { width: 64px; height: auto; flex: none; }
+.offline-note b { display: block; font-size: 15px; }
+.offline-note small { display: block; color: var(--ink-2); font-size: 12.5px; }
+
+/* Schnellwahl in der Zieltemperatur-Karte: dieselben Werte wie in der Übersicht */
+.co-quick { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.co-quick-head { display: flex; align-items: baseline; justify-content: space-between;
+  flex-wrap: wrap; gap: 4px 12px; margin-bottom: 10px; font-size: 13.5px; }
+.co-quick-head small { color: var(--ink-muted); font-size: 12px; }
+.co-quick-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.co-preset { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-height: 58px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 11px;
+  background: rgba(255,255,255,.03); color: var(--ink); font: inherit; font-size: 13.5px;
+  text-align: left; cursor: pointer; transition: background .15s, border-color .15s; }
+.co-preset span { color: var(--ink-muted); font-size: 12px; }
+.co-preset:hover, .co-preset:focus-visible { border-color: rgba(59,130,246,.35); }
+.co-preset.on { background: rgba(59,130,246,.14); border-color: rgba(59,130,246,.4); }
+.co-preset.on span { color: #8ab4ff; }
+.co-preset:disabled { opacity: .5; cursor: default; }
+
+/* „Wie arbeitet die Regelung?" — zugeklappt, Text wie im alten Erklärblock */
+.co-explain summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--ink-2); }
+.co-explain summary:hover { color: var(--ink); }
+.co-explain-body { margin-top: 12px; }
+.co-explain-body p { margin: 0 0 10px; color: var(--ink-2); font-size: 13.5px; line-height: 1.62; }
+.co-explain-body p:last-child { margin-bottom: 0; }
+.expert-only > .advanced { margin-bottom: 18px; }
+
+/* Vollbild-Knopf in der Kopfzeile (erscheint nur, wenn der Browser es kann) */
+.fs-btn { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 7px 14px;
+  border: 1px solid var(--hairline); border-radius: 999px; background: var(--surface-1);
+  color: var(--ink-2); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.fs-btn[hidden] { display: none; }
+.fs-btn svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor;
+  stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.fs-btn:hover, .fs-btn:focus-visible { color: var(--ink); border-color: rgba(255,255,255,.22); }
+
+/* Power-Optionen: die Knöpfe in der Mitte der Kopfzeile (siehe armConfirm: zwei Klicks). Ein gemeinsamer Rahmen
+   zeigt, dass sie zusammengehören, und hebt sie von „Vollbild“, „Expertenmodus“ und der Verbindungsanzeige ab;
+   2 px und heller, seit 05.10.2026 (1 px in der Haarlinienfarbe war auf dem Fernseher kaum zu sehen). */
+.pw-group { display: flex; flex: 0 1 auto; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px;
+  padding: 4px; border: 2px solid rgba(174,184,214,.38); border-radius: 999px; background: rgba(9,15,30,.55); }
+.pw-btn { min-height: 34px; padding: 6px 14px; border: 1px solid transparent; border-radius: 999px;
+  background: var(--surface-1); color: var(--ink-2); font: inherit; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; }
+.pw-btn:hover, .pw-btn:focus-visible { color: var(--ink); border-color: rgba(255,255,255,.22); }
+.pw-btn[data-armed] { color: #ffd57b; border-color: rgba(250,178,25,.6); background: rgba(250,178,25,.14); }
+
+/* Schmal (Handy, geteilter Bildschirm): Seitenleiste wird zur Leiste oben */
+@media (max-width: 980px) {
+  .co-main { grid-template-columns: minmax(0, 1fr); }
+  .app { display: block; }
+  .side { position: static; width: auto; height: auto; padding: 12px 14px;
+    border-right: 0; border-bottom: 1px solid var(--hairline);
+    background: var(--side); }                        /* als Leiste oben ohne Bild */
+  .brand { padding-bottom: 10px; }
+  .tabs { flex-direction: row; flex-wrap: wrap; }   /* umbrechen statt seitlich scrollen */
+  .tab { width: auto; flex: none; }
+  .side-foot { display: none; }
+  .shell { padding: 18px 16px 32px; }
+  .ov-top, .ov-mid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  /* Banner hochkant: Bild füllt die Karte, gleichmäßig abgedunkelt */
+  .co-stat { padding: 2px 12px; }
+  .card.page-banner { padding: 18px 20px;
+    background: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)),
+      url(/img/banner-system.jpg) right center / cover no-repeat, var(--surface-1); }
+  .card.page-banner.pb-log {
+    background-image: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)), url(/img/banner-log.jpg); }
+  .pb-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .card-ico { width: 58px; top: 12px; right: 12px; }
+  .card.has-ico > .card-head { padding-right: 64px; }
+}
+@media (max-width: 720px) {
+  /* hochkant: Banner füllt die Karte, gleichmäßig abgedunkelt */
+  .card.pf-hero {
+    background: linear-gradient(rgba(20,27,41,.8), rgba(20,27,41,.8)),
+      url(/img/banner-profile.jpg) right center / cover no-repeat, var(--surface-1); }
+  .pf-id { padding-right: 0; }
+}
+@media (max-width: 480px) {
+  .card.pf-hero { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .pf-id h2 { font-size: 26px; }
+  .pb-stats { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .co-stat { padding: 0; border-left: 0; }
+}
+@media (max-width: 560px) {
+  .topbar { flex-direction: column; align-items: flex-start; }
+  .page-head, .top-right { flex: 0 0 auto; min-width: 0; }
+  .top-right { flex-wrap: wrap; justify-content: flex-start; }
+  .pw-group { justify-content: flex-start; border-radius: 18px; }
+  .co-quick-row { grid-template-columns: minmax(0, 1fr); }
+  .co-preset { flex-direction: row; align-items: center; justify-content: space-between; min-height: 46px; }
+  .ov-hero { flex-direction: column; align-items: flex-start; }
+  .card.ov-hero {
+    background: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)),
+      url(/img/hero-overview.jpg) right center / cover no-repeat, var(--surface-1); }
+  .card.ov-hero.warn { background-image: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)),
+      url(/img/hero-overview-warm.jpg); }
+  .card.ov-hero.hot { background-image: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)),
+      url(/img/hero-overview-hot.jpg); }
+  .choice-ico { width: 52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fan-rotor { animation: none; }
+}
+
+.fan-compare { position: relative; height: 8px; margin-bottom: 12px; }
+.fan-compare span { position: absolute; left: 0; top: 0; bottom: 0; }
+.fan-compare span.fade { opacity: .55; }
+
+.fan-mini { margin: 10px 0 13px; padding: 8px 10px; border-radius: var(--r-sm);
+  border: 1px solid var(--hairline); background: var(--inset); }
+.fan-mini svg { display: block; width: 100%; height: 56px; }
+.fan-mini .mini-target { fill: none; stroke: var(--s1); stroke-width: 1.6;
+  stroke-dasharray: 4 3; opacity: .75; vector-effect: non-scaling-stroke; }
+.fan-mini .mini-measured { fill: none; stroke: var(--s3); stroke-width: 2;
+  vector-effect: non-scaling-stroke; }
+.fan-mini-meta { margin-top: 5px; color: var(--ink-muted); font-size: 11.5px; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
+.badge.ok { background: rgba(12,163,12,.2); color: #9df89d; }
+.badge.warn { background: rgba(250,178,25,.2); color: #ffd57b; }
+.badge.hot { background: rgba(208,59,59,.2); color: #ffb0b0; }
+.badge.quiet { background: rgba(255,255,255,.08); color: var(--ink-2); }
+
+/* ── Karten ────────────────────────────────────────────────────────── */
+.card { padding: 20px 22px; margin-bottom: 18px; border: 1px solid var(--hairline);
+  border-radius: var(--r-lg); background: var(--surface-1); }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+.card-head h2 { margin: 0; font-size: 16px; letter-spacing: -.01em; }
+.sub { margin: 3px 0 0; color: var(--ink-muted); font-size: 12px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+
+.legend { display: flex; gap: 14px; color: var(--ink-2); font-size: 12px; }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend i { width: 9px; height: 9px; border-radius: 50%; }
+.legend i.tgt { width: 14px; height: 0; border-top: 2px dashed var(--ink-muted); border-radius: 0; }
+
+/* ── Diagramme ─────────────────────────────────────────────────────── */
+.chart-host { position: relative; padding-left: 34px; }
+.chart-host svg { display: block; width: 100%; height: 210px; overflow: visible; }
+.grid path { stroke: var(--grid); stroke-width: 1; fill: none; }
+.line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke; }
+.l1 { stroke: var(--s1); } .l2 { stroke: var(--s2); } .l3 { stroke: var(--s3); }
+.l4 { stroke: var(--s4); }
+.area { stroke: none; opacity: .17; }
+.a1 { fill: var(--s1); } .a2 { fill: var(--s2); } .a3 { fill: var(--s3); }
+.tgtline { fill: none; stroke: var(--ink-muted); stroke-width: 1.5; stroke-dasharray: 5 5;
+  vector-effect: non-scaling-stroke; }
+.cross { stroke: var(--ink-2); stroke-width: 1; opacity: 0; vector-effect: non-scaling-stroke; }
+.chart-host.hover .cross { opacity: .5; }
+
+.axis-y { position: absolute; left: 0; top: 0; bottom: 0; width: 32px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  color: var(--ink-muted); font-size: 10.5px; text-align: right;
+  font-variant-numeric: tabular-nums; pointer-events: none; }
+
+.tip { position: absolute; z-index: 4; padding: 9px 11px; border-radius: 10px;
+  border: 1px solid var(--hairline); background: rgba(11,14,21,.96);
+  color: var(--ink); font-size: 12px; white-space: nowrap; pointer-events: none;
+  opacity: 0; transform: translate(-50%,-115%); transition: opacity .12s;
+  box-shadow: var(--shadow); }
+.chart-host.hover .tip { opacity: 1; }
+.tip b { display: block; margin-bottom: 3px; color: var(--ink-2); font-weight: 600; font-size: 11px; }
+.tip u { display: flex; align-items: center; gap: 6px; text-decoration: none; }
+.tip u i { width: 8px; height: 8px; border-radius: 50%; }
+
+/* ── Sensorraster ──────────────────────────────────────────────────── */
+.sensor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px,1fr)); gap: 11px; }
+.sensor { padding: 13px 14px; border: 1px solid var(--hairline); border-radius: var(--r-md);
+  background: var(--inset); }
+.sensor span { display: block; color: var(--ink-muted); font-size: 11.5px; margin-bottom: 5px; }
+.sensor b { font-size: 19px; font-weight: 700; letter-spacing: -.02em; }
+.sensor b em { font-size: 12px; font-style: normal; color: var(--ink-muted); margin-left: 2px; }
+
+/* ── Kernauslastung ────────────────────────────────────────────────── */
+/* Acht Kerne sind EINE Messung über acht Plätze, keine acht Messwerte.
+   Deshalb eine Farbe und die Höhe als Wert — nicht acht gleich aussehende
+   Zahlenkacheln, zwischen denen das Auge nichts vergleichen kann. */
+.cpu-block { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 26px;
+  align-items: center; }
+@media (max-width: 620px) {
+  .cpu-block { grid-template-columns: 1fr; gap: 18px; justify-items: center; }
+}
+
+.cpu-ring { position: relative; width: 132px; height: 132px; flex: none; }
+.cpu-ring svg { width: 132px; height: 132px; display: block; }
+/* Die Spur ist eine hellere Stufe derselben Farbe, damit der Zustand über den
+   ganzen Ring lesbar bleibt — nicht ein fremdes Grau. */
+.ring-track { fill: none; stroke: rgba(57,135,229,.15); stroke-width: 13; }
+.ring-fill  { fill: none; stroke: var(--s1); stroke-width: 13; stroke-linecap: round;
+  stroke-dasharray: 0 351.86; transition: stroke-dasharray .35s ease; }
+.ring-mid { position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; }
+.ring-mid b { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+.ring-mid span { margin-top: 3px; color: var(--ink-muted); font-size: 10.5px; }
+
+.cores { display: flex; flex-direction: column; gap: 7px; }
+.core { display: grid; grid-template-columns: 52px minmax(0,1fr) 40px; gap: 10px;
+  align-items: center; }
+.core i { font-style: normal; font-size: 11px; color: var(--ink-muted); }
+.core .track { position: relative; height: 8px; border-radius: 4px;
+  background: rgba(57,135,229,.15); }
+.core .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px;
+  background: var(--s1); transition: width .35s ease; }
+.core u { text-decoration: none; text-align: right; font-size: 11.5px;
+  color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* ── Erklärblock ───────────────────────────────────────────────────── */
+.explain { padding: 18px 22px; margin-bottom: 18px; border-radius: var(--r-lg);
+  border: 1px solid rgba(57,135,229,.22); background: rgba(57,135,229,.07); }
+.explain h2 { margin: 0 0 7px; font-size: 15px; }
+.explain p { margin: 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.62; }
+
+/* ── Bedienelemente ────────────────────────────────────────────────── */
+.target-row { display: flex; align-items: baseline; gap: 13px; margin-bottom: 14px; flex-wrap: wrap; }
+#target-out { font-size: 40px; font-weight: 700; letter-spacing: -.04em; }
+.target-hint { color: var(--ink-muted); font-size: 12px; flex: 1; min-width: 160px; }
+
+input[type=range] { width: 100%; height: 6px; margin: 4px 0 10px; border-radius: 999px;
+  appearance: none; background: linear-gradient(90deg, var(--s3), var(--warning), var(--serious)); }
+input[type=range]::-webkit-slider-thumb { appearance: none; width: 22px; height: 22px;
+  border-radius: 50%; background: #fff; border: 3px solid var(--s1); cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0,0,0,.5); }
+input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--s1); cursor: pointer; }
+
+.scale { display: flex; justify-content: space-between; margin-bottom: 16px;
+  color: var(--ink-2); font-size: 12px; }
+.scale .right { text-align: right; }
+.scale small { display: block; color: var(--ink-muted); font-size: 10.5px; }
+
+.choices { display: grid; gap: 9px; margin-bottom: 6px; }
+.choice { display: flex; gap: 11px; padding: 12px 14px; border-radius: var(--r-md);
+  border: 1px solid var(--hairline); background: var(--inset); cursor: pointer;
+  transition: border-color .16s, background .16s; }
+.choice:hover { border-color: rgba(57,135,229,.4); }
+.choice input { margin: 2px 0 0; accent-color: var(--s1); flex: none; }
+.choice b { display: block; font-size: 13.5px; }
+.choice small { display: block; margin-top: 2px; color: var(--ink-muted); font-size: 11.5px; line-height: 1.45; }
+.choice:has(input:checked) { border-color: var(--s1); background: rgba(57,135,229,.10); }
+/* Betriebsart: Lüfter mit sanftem / mittlerem / starkem Luftstrom (Bilder
+   des Users), gedämpft, bis die Stufe gewählt ist. */
+.choice > span { flex: 1 1 auto; min-width: 0; }
+.choice-ico { width: 66px; height: auto; flex: none; align-self: center; opacity: .6;
+  transition: opacity .2s; }
+.choice:has(input:checked) .choice-ico { opacity: 1; }
+
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding-top: 15px; margin-top: 13px; border-top: 1px solid var(--hairline); cursor: pointer; }
+.switch-row b { display: block; font-size: 13.5px; }
+.switch-row small { display: block; margin-top: 2px; color: var(--ink-muted); font-size: 11.5px; }
+.switch { position: relative; flex: none; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch i { display: block; width: 46px; height: 27px; padding: 3px; border-radius: 999px;
+  background: #2b3145; transition: background .18s; }
+.switch i::after { content: ""; display: block; width: 21px; height: 21px; border-radius: 50%;
+  background: #fff; transition: transform .18s; }
+.switch input:checked + i { background: var(--s1); }
+.switch input:checked + i::after { transform: translateX(19px); }
+
+.note { margin: 11px 0 0; padding: 11px 13px; border-radius: var(--r-sm);
+  background: var(--inset); border: 1px solid var(--hairline);
+  color: var(--ink-muted); font-size: 11.5px; line-height: 1.5; }
+
+.diag-advice.ok { border-color: rgba(12,163,12,.35); background: rgba(12,163,12,.10); color: #baf5ba; }
+.diag-advice.warn { border-color: rgba(250,178,25,.4); background: rgba(250,178,25,.10); color: #ffd991; }
+.diag-advice.hot { border-color: rgba(208,59,59,.42); background: rgba(208,59,59,.12); color: #ffc2c2; }
+.diag-advice { white-space: pre-line; }
+
+.btn { padding: 11px 17px; border: 1px solid var(--hairline); border-radius: 11px;
+  background: var(--surface-2); color: var(--ink); font: inherit; font-size: 13.5px;
+  font-weight: 600; cursor: pointer; transition: background .16s, border-color .16s; }
+/* Hover ohne filter (auf der PS5 teuer): Rand und Fläche werden heller. */
+.btn:hover, .btn:focus-visible { border-color: rgba(255,255,255,.22); background-color: #222c40; }
+.btn.ghost:hover, .btn.ghost:focus-visible { background-color: rgba(255,255,255,.05); }
+.btn.primary { border: 0; background: linear-gradient(120deg, var(--s1), #7b5cf0);
+  box-shadow: 0 8px 20px rgba(57,135,229,.28); }
+.btn.ghost { background: none; }
+.btn.full { width: 100%; margin-top: 14px; }
+.linkish { border: 0; background: none; color: var(--ink-muted); font: inherit;
+  font-size: 12px; cursor: pointer; text-decoration: underline; }
+
+/* ── Wertelisten ───────────────────────────────────────────────────── */
+.kv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px,1fr)); gap: 11px; }
+.kv-grid > div { padding: 12px 14px; border-radius: var(--r-md); background: var(--inset);
+  border: 1px solid var(--hairline); }
+.kv-grid span { display: block; color: var(--ink-muted); font-size: 11.5px; margin-bottom: 4px; }
+.kv-grid b { font-size: 17px; font-weight: 700; letter-spacing: -.02em; }
+
+.kv-list > div { display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  padding: 11px 0; border-bottom: 1px solid var(--hairline); font-size: 13.5px; }
+.kv-list > div:last-child { border-bottom: 0; }
+.kv-list span { color: var(--ink-muted); }
+.kv-list b { text-align: right; word-break: break-word; }
+.kv-list b.multiline { white-space: pre-line; }
+.reason-tag { display: inline-block; min-width: 34px; text-align: center;
+  padding: 1px 7px; margin-right: 6px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .04em; }
+.reason-tag.ok { background: rgba(12,163,12,.22); color: #9df89d; }
+.reason-tag.warn { background: rgba(250,178,25,.22); color: #ffd57b; }
+.reason-tag.hot { background: rgba(208,59,59,.24); color: #ffb0b0; }
+.reason-tag.info { background: rgba(126,134,152,.28); color: #d3d7e2; }
+
+.fan-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px;
+  color: var(--ink-muted); font-size: 11.5px; }
+.fan-legend span { display: inline-flex; align-items: center; }
+.fan-legend .reason-tag { margin-right: 7px; }
+
+.diag-events { margin-top: 12px; border-top: 1px solid var(--hairline); padding-top: 10px; }
+.diag-events-top { display: flex; align-items: center; gap: 10px; margin-bottom: 7px;
+  flex-wrap: wrap; }
+.diag-events-head { margin: 0 0 7px; font-size: 11.5px; }
+.diag-events-top .diag-events-head { margin: 0; }
+.diag-events-top #diag-events-count { margin-left: auto; }
+.diag-window { display: inline-flex; border: 1px solid var(--hairline);
+  border-radius: 999px; overflow: hidden; }
+.diag-window button { border: 0; background: transparent; color: var(--ink-muted);
+  font: inherit; font-size: 11px; padding: 4px 8px; cursor: pointer; }
+.diag-window button + button { border-left: 1px solid var(--hairline); }
+.diag-window button.active { background: rgba(57,135,229,.18); color: var(--ink); }
+.diag-events-top #diag-events-clear { padding: 5px 10px; font-size: 11.5px; }
+.diag-summary { display: flex; align-items: center; gap: 10px; margin: 2px 0 8px; }
+.diag-summary span { display: inline-flex; align-items: center; gap: 6px;
+  color: var(--ink-2); font-size: 11.5px; }
+.diag-summary b { font-size: 12px; }
+.diag-events .row { display: flex; align-items: baseline; gap: 10px;
+  padding: 6px 0; border-bottom: 1px dashed rgba(255,255,255,.08); }
+.diag-events .row:last-child { border-bottom: 0; }
+.diag-events time { color: var(--ink-muted); font-size: 11px; min-width: 58px;
+  font-variant-numeric: tabular-nums; }
+.diag-src { display: inline-block; min-width: 72px; color: var(--ink-muted);
+  font-size: 11px; white-space: nowrap; }
+.diag-diff { display: inline-block; min-width: 68px; text-align: center;
+  color: var(--ink-2); font-size: 10.5px; border: 1px solid var(--hairline);
+  border-radius: 999px; padding: 1px 7px; }
+.diag-diff.escalate { border-color: rgba(208,59,59,.45); color: #ffb0b0;
+  background: rgba(208,59,59,.12); }
+.diag-diff.recover { border-color: rgba(12,163,12,.45); color: #9df89d;
+  background: rgba(12,163,12,.12); }
+.diag-diff.steady { border-color: var(--hairline); color: var(--ink-2);
+  background: rgba(126,134,152,.1); }
+.diag-events b { color: var(--ink-2); font-size: 12px; }
+#diag-events-list.diag-swap { animation: diagSwap .18s ease; }
+@keyframes diagSwap {
+  from { opacity: .42; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+#diag-events-list.diag-swap .row {
+  opacity: 0;
+  transform: translateY(4px);
+  animation: diagRowIn .2s ease forwards;
+}
+#diag-events-list.diag-swap .row:nth-child(1) { animation-delay: 0ms; }
+#diag-events-list.diag-swap .row:nth-child(2) { animation-delay: 22ms; }
+#diag-events-list.diag-swap .row:nth-child(3) { animation-delay: 44ms; }
+#diag-events-list.diag-swap .row:nth-child(4) { animation-delay: 66ms; }
+#diag-events-list.diag-swap .row:nth-child(5) { animation-delay: 88ms; }
+#diag-events-list.diag-swap .row:nth-child(6) { animation-delay: 110ms; }
+#diag-events-list.diag-swap .row:nth-child(7) { animation-delay: 132ms; }
+#diag-events-list.diag-swap .row:nth-child(8) { animation-delay: 154ms; }
+@keyframes diagRowIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #diag-events-list.diag-swap { animation: none; }
+  #diag-events-list.diag-swap .row {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
+
+/* ── Speicher ──────────────────────────────────────────────────────── */
+.vol { padding: 14px 0; border-bottom: 1px solid var(--hairline); }
+.vol:last-child { border-bottom: 0; }
+.vol-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin-bottom: 8px; }
+.vol-head b { font-size: 14px; }
+.vol-head span { color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.vol .bar { height: 9px; }
+
+/* ── Spielprofile ──────────────────────────────────────────────────── */
+.rule-current { display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 14px;
+  border-radius: var(--r-md); border: 1px solid rgba(57,135,229,.28);
+  background: rgba(57,135,229,.08); }
+.rule-current.is-hidden { display: none; }
+.rule-current b { display: block; font-size: 14.5px; }
+.rule-current small { color: var(--ink-muted); font-size: 12px; }
+
+.rule { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+.rule:last-child { border-bottom: 0; }
+.rule b { font-size: 13.5px; }
+.rule small { display: block; margin-top: 2px; color: var(--ink-muted); font-size: 11.5px; }
+.rule.live b::before { content: "● "; color: var(--good); font-size: 11px; }
+.rule button { border: 0; padding: 7px 11px; border-radius: 8px; cursor: pointer;
+  background: rgba(208,59,59,.15); color: #ffb3b3; font: inherit; font-size: 11.5px; }
+
+/* ── Erweitert ─────────────────────────────────────────────────────── */
+.advanced { padding: 16px 20px; border: 1px solid var(--hairline); border-radius: var(--r-lg);
+  background: var(--surface-1); }
+.advanced summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--ink-2); }
+.advanced summary:hover { color: var(--ink); }
+.advanced > .row-gap { margin-top: 12px; }
+.adv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr));
+  gap: 13px; margin-top: 16px; }
+.adv-grid label { display: block; color: var(--ink-2); font-size: 12.5px; }
+.adv-grid input { width: 100%; margin-top: 6px; padding: 9px 11px; border-radius: 9px;
+  border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
+.adv-grid small { display: block; margin-top: 4px; color: var(--ink-muted); font-size: 11px; }
+
+/* ── Benutzerprofil ────────────────────────────────────────────────── */
+.name-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.name-row .uid { padding: 9px 11px; border: 1px solid var(--hairline);
+  border-radius: 9px; background: var(--inset); color: var(--ink-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.name-row input { flex: 1 1 200px; min-width: 0; padding: 9px 11px;
+  border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset);
+  color: var(--ink); font: inherit; }
+.name-row input:focus { outline: none; border-color: var(--s1); }
+.name-row input:disabled, .name-row button:disabled { opacity: .5; }
+
+/* ── Spiele (1.46.0) ──────────────────────────────────────────────────
+   Für den PS5-Browser bewusst ohne inset, aspect-ratio und filter: das
+   Quadrat hält padding-top, die Lage top/left/right/bottom. */
+.gm-tools { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.gm-tools input[type=search] { flex: 1 1 240px; min-width: 0; padding: 9px 12px;
+  border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset);
+  color: var(--ink); font: inherit; font-size: 13.5px; }
+.gm-tools input[type=search]:focus { outline: none; border-color: var(--s1); }
+.gm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gm-chip { padding: 7px 12px; border: 1px solid var(--hairline); border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-2); font: inherit; font-size: 12.5px;
+  font-weight: 600; cursor: pointer; }
+.gm-chip:hover, .gm-chip:focus-visible { border-color: rgba(255,255,255,.22); }
+.gm-chip.active { color: var(--ink); background: rgba(59,130,246,.18);
+  border-color: rgba(59,130,246,.4); }
+.gm-sort { display: flex; align-items: center; gap: 8px; color: var(--ink-muted); font-size: 12.5px; }
+.gm-sort select { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline);
+  background: var(--inset); color: var(--ink); font: inherit; font-size: 13px; }
+
+/* Karten einer Reihe stehen gleich hoch (align-items: stretch, der
+   Grid-Standard) — sonst wirkt die Reihe zerrissen, je nachdem ob eine
+   Karte Kopieren/Verschieben/Konvertieren zeigt oder nicht. Nur die Karte,
+   die gerade ihre Infos aufklappt, fällt per align-self auf ihre eigene
+   Höhe zurück (unten), sonst würde sie die ganze Reihe mitstrecken. */
+.gm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px; margin-bottom: 18px; }
+.gm-card { display: flex; flex-direction: column; border: 1px solid var(--hairline);
+  border-radius: var(--r-lg); background: var(--surface-1); overflow: hidden; }
+.gm-card:has(.gm-info[aria-expanded="true"]) { align-self: start; }
+.gm-card.running { border-color: rgba(12,163,12,.7); box-shadow: 0 0 0 1px rgba(12,163,12,.45); }
+.gm-cover { position: relative; padding-top: 100%; background: var(--inset); }
+.gm-cover img, .gm-fallback { position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 100%; }
+.gm-cover img { display: block; object-fit: cover; }
+.gm-cover img.broken { visibility: hidden; }
+.gm-fallback { display: flex; align-items: center; justify-content: center;
+  color: var(--ink-muted); font-size: 34px; font-weight: 800; letter-spacing: .04em; }
+.gm-plat, .gm-live { position: absolute; top: 10px; padding: 3px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.gm-plat { left: 10px; background: rgba(9,15,30,.82); color: #fff;
+  border: 1px solid rgba(255,255,255,.18); }
+.gm-live { right: 10px; background: var(--good); color: #04140a; }
+.gm-body { display: flex; flex-direction: column; gap: 9px; padding: 13px 15px 15px;
+  flex: 1 1 auto; }
+/* Alles, was bedient wird, sitzt am unteren Rand der Karte. Die Karten einer
+   Reihe sind gleich hoch, und jede hat dieselben Knöpfe in derselben Ordnung —
+   „Infos & Metadaten", „Starten", „Kopieren", „Verschieben", „Konvertieren"
+   liegen so auf allen Karten auf einer Linie, gleich wie lang der Titel ist
+   und wie viele Marken darunter stehen. */
+.gm-actions { margin-top: auto; display: flex; flex-direction: column; gap: 9px; }
+/* Immer zwei Zeilen hoch, damit die Knöpfe zugeklappter Karten in einer
+   Reihe auf einer Linie stehen. */
+.gm-body h3 { margin: 0; font-size: 14.5px; line-height: 1.3; letter-spacing: -.01em;
+  min-height: 2.6em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gm-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.gm-tag { padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 800;
+  letter-spacing: .04em; cursor: help; }
+.gm-tag.bp   { background: rgba(250,178,25,.16); color: #ffd57b; border: 1px solid rgba(250,178,25,.38); }
+.gm-tag.ampr { background: rgba(57,135,229,.16); color: #9cc4ff; border: 1px solid rgba(57,135,229,.4); }
+.gm-tag.pg   { background: rgba(25,158,112,.16); color: #7fe0bc; border: 1px solid rgba(25,158,112,.4); }
+.gm-tag.fmt  { background: rgba(255,255,255,.07); color: var(--ink-2); border: 1px solid rgba(255,255,255,.2); }
+.gm-tag.unk  { background: none; color: var(--ink-muted); border: 1px dashed rgba(255,255,255,.18);
+  font-weight: 700; }
+.gm-meta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px;
+  margin: 0; font-size: 12px; }
+.gm-meta dt { color: var(--ink-muted); }
+.gm-meta dd { margin: 0; color: var(--ink-2); text-align: right; word-break: break-word; }
+.gm-meta dd.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; word-break: break-all; }
+.gm-meta dd.warn { color: #ffd57b; cursor: help; }
+/* display: grid oben schlägt das hidden-Attribut des Browsers. */
+.gm-meta[hidden] { display: none; }
+
+.gm-info { width: 100%; padding: 8px 12px; display: flex; align-items: center;
+  justify-content: space-between; gap: 8px; }
+.gm-info::after { content: "▾"; color: var(--ink-muted); }
+.gm-info[aria-expanded="true"]::after { content: "▴"; }
+.gm-start { width: 100%; padding: 9px 12px; }
+/* Hinweis nach dem Start im PS5-Browser: das Spiel läuft hinter der Seite. */
+.gm-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  background: rgba(4,8,16,.82); }
+/* display:flex above would win over the hidden attribute: the delete dialog's "Schließen" hid it without effect */
+.gm-overlay[hidden] { display: none; }
+/* While a window is open the page behind it stands still (Wunsch 06.10.2026: the right stick moved the page
+   behind the dimmed background); only the window itself scrolls. app.js sets the class. */
+html.modal-open, html.modal-open body { overflow: hidden; }
+.gm-overlay { overscroll-behavior: contain; }
+.gm-overlay-box { max-width: 460px; padding: 26px 28px; border-radius: var(--r-lg);
+  border: 1px solid rgba(12,163,12,.55); background: var(--surface-1); text-align: center; }
+.gm-overlay-box b { display: block; font-size: 19px; margin-bottom: 8px; }
+.gm-overlay-box p { margin: 0 0 16px; color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+.gm-start:disabled { opacity: .55; cursor: default; }
+.gm-close { width: 100%; margin-top: 8px; padding: 8px 12px; }
+.run-close { margin-top: 8px; align-self: flex-start; padding: 6px 12px; font-size: 13px; }
+.run-close[hidden] { display: none; }
+/* Kopieren und Verschieben nebeneinander, Konvertieren darunter über die
+   ganze Breite — auf jeder Karte und in jeder Breite gleich. Eine feste
+   Anordnung statt eines Umbruchs, der je nach Kartenbreite anders fiele. */
+.gm-more { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.gm-more .btn { min-width: 0; padding: 7px 6px; font-size: 12px; }
+.gm-more .gm-conv { grid-column: 1 / -1; }
+/* Was für dieses Spiel nicht geht, bleibt sichtbar und ist ausgegraut; der
+   Hinweis steht im Tooltip. */
+.gm-card .btn:disabled { opacity: .42; cursor: not-allowed; }
+.gm-card .btn:disabled:hover { border-color: var(--hairline); background-color: var(--surface-2); }
+
+/* ── Kopieren (1.46.0) ────────────────────────────────────────────────
+   Das Fenster sitzt im selben Hintergrund wie der Start-Hinweis. */
+.cp-dialog { width: 100%; max-width: 580px; max-height: calc(100vh - 40px);
+  overflow-y: auto; padding: 20px 22px; border-radius: var(--r-lg);
+  border: 1px solid var(--hairline); background: var(--surface-1); text-align: left; }
+.cp-head { display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; margin-bottom: 12px; }
+.cp-head h3 { margin: 0; font-size: 17px; line-height: 1.3; }
+.cp-x { border: 0; background: none; color: var(--ink-muted); font-size: 24px;
+  line-height: 1; cursor: pointer; padding: 0 4px; }
+.cp-x:hover, .cp-x:focus-visible { color: var(--ink); }
+.cp-dialog code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; word-break: break-all; color: var(--ink-2); }
+.cp-src, .cp-dest { display: flex; flex-direction: column; gap: 3px; margin: 0 0 12px;
+  font-size: 13px; }
+.cp-step { margin: 16px 0 8px; font-size: 13.5px; color: var(--ink-2); }
+.cp-list { display: flex; flex-direction: column; gap: 8px; }
+.cp-choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px;
+  border: 1px solid var(--hairline); border-radius: 11px; background: var(--surface-2);
+  cursor: pointer; }
+.cp-choice:hover { border-color: rgba(255,255,255,.22); }
+.cp-choice input { margin-top: 3px; flex: none; }
+.cp-choice.off { opacity: .55; cursor: default; }
+.cp-choice-text { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.cp-choice-text .muted { font-size: 12px; }
+.cp-why { color: #ffd57b; font-size: 12px; }
+.cp-check { margin-top: 10px; }
+.cp-warn { margin-top: 10px; padding: 10px 12px; border-radius: 11px; font-size: 12.5px;
+  line-height: 1.5; background: rgba(250,178,25,.12); color: #ffe2a6;
+  border: 1px solid rgba(250,178,25,.38); }
+.cp-err { color: #ff9b9b; font-size: 13px; }
+
+/* Löschen (gamedelete.c): der Knopf auf der Karte in Rot, der Dialog mit Häkchen und rotem Endknopf. */
+.gm-more .gm-del, .bk-row .gm-del { color: #ff9b9b; }
+.btn.danger { background: rgba(208,59,59,.22); border-color: rgba(208,59,59,.7); color: #ffd4d4; }
+.btn.danger:disabled { opacity: .45; cursor: not-allowed; }
+.btn.danger[data-armed] { background: #d03b3b; border-color: #ff8a8a; color: #fff; }
+.dl-name { margin: 0 0 6px; line-height: 1.5; }
+.dl-items { margin: 4px 0 10px 18px; padding: 0; font-size: 13.5px; line-height: 1.55; }
+.dl-keep { color: #8fe08f; font-size: 13px; margin: 6px 0; }
+.dl-ack { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 6px; font-size: 13.5px; line-height: 1.45; cursor: pointer; }
+.dl-ack input { margin-top: 3px; }
+.dl-done { font-size: 15px; font-weight: 600; }
+.bk-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0;
+  border-top: 1px solid var(--hairline); }
+.bk-row:first-child { border-top: 0; }
+.cp-ok { color: #7fe0bc; font-size: 14px; font-weight: 700; }
+.cp-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;
+  margin-top: 16px; }
+.cp-actions .btn:disabled { opacity: .5; cursor: default; }
+.cp-bar { height: 10px; border-radius: 999px; background: var(--inset); overflow: hidden;
+  margin: 4px 0 10px; }
+.cp-bar div { height: 100%; background: linear-gradient(90deg, var(--s1), #7b5cf0); }
+.cp-num { margin: 0 0 4px; font-size: 13.5px; }
+.cp-cur { margin: 6px 0 0; }
+.cp-banner { display: block; width: 100%; margin: 0 0 14px; padding: 10px 14px;
+  border: 1px solid var(--hairline); border-radius: 11px; background: var(--surface-2);
+  color: var(--ink-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.cp-banner.live { border-color: rgba(59,130,246,.45); color: var(--ink); }
+.cp-banner[hidden] { display: none; }
+
+.sub-head { margin: 22px 0 12px; padding-top: 18px; font-size: 14px;
+  border-top: 1px solid var(--hairline); color: var(--ink-2); }
+.avatar-box { display: grid; grid-template-columns: 200px minmax(0,1fr);
+  gap: 18px; align-items: start; }
+@media (max-width: 640px) { .avatar-box { grid-template-columns: 1fr; } }
+.avatar-preview { position: relative; aspect-ratio: 1; border-radius: var(--r-lg);
+  border: 1px solid var(--hairline); background: var(--inset); overflow: hidden;
+  display: grid; place-items: center; }
+.avatar-preview canvas { width: 100%; height: 100%; display: none; }
+.avatar-preview canvas.on { display: block; }
+.avatar-preview p { position: absolute; font-size: 12px; text-align: center;
+  padding: 0 12px; }
+.avatar-ctl { display: flex; flex-direction: column; gap: 13px; }
+.avatar-ctl input[type=file] { color: var(--ink-2); font: inherit; font-size: 13px; }
+.av-pick-label { font-size: 12.5px; color: var(--ink-muted); margin-bottom: -6px; }
+
+/* Die fertigen Profilbilder, in der App eingebaut (web/avatars). Quadratische
+   Felder statt Kreise: Die PS5 beschneidet selbst, hier soll man das ganze
+   Bild sehen. Gewählt = Akzentrand, nicht nur Farbe geändert. */
+.av-gallery-wrap { margin: 0 0 18px; }
+.av-gallery-wrap[hidden] { display: none; }
+.av-gallery-title { margin: 0 0 10px; font-size: 13px; color: var(--ink-2); }
+.av-gallery-title small { margin-left: 8px; font-size: 12px; color: var(--ink-muted); }
+.av-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 10px; }
+@media (max-width: 640px) { .av-gallery { grid-template-columns: repeat(5, 1fr); gap: 8px; } }
+.av-thumb { padding: 0; border: 2px solid var(--hairline); border-radius: 14px;
+  background: var(--inset); cursor: pointer; aspect-ratio: 1; overflow: hidden;
+  transition: border-color .15s, transform .15s; }
+.av-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.av-thumb:hover { border-color: rgba(255,255,255,.3); transform: translateY(-1px); }
+.av-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.av-thumb.on { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,.4); }
+
+/* ── Payloads (seit 1.46.0 an der Stelle der früheren Übersicht) ──────── */
+.pl-top { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  flex-wrap: wrap; margin: 0 0 20px; }
+.pl-title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.pl-title span { color: var(--accent); }
+.pl-sec { margin: 0 0 28px; }
+.pl-sec-head { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; }
+.pl-sec-head svg { width: 17px; height: 17px; flex: none; fill: none; stroke: var(--accent);
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pl-sec-head h3 { margin: 0; color: var(--ink-2); font-size: 12px; font-weight: 800;
+  letter-spacing: .09em; text-transform: uppercase; }
+.pl-count { margin-left: auto; padding: 3px 11px; border-radius: 999px; font-size: 11px;
+  font-weight: 700; color: var(--ink-2); background: rgba(255,255,255,.06);
+  border: 1px solid var(--hairline); white-space: nowrap; }
+.pl-where { margin: -4px 0 12px; color: var(--ink-muted); font-size: 12px; }
+.pl-where code { color: var(--ink-2); font-size: 12px; word-break: break-all; }
+.pl-note { margin: 12px 0 0; color: var(--ink-muted); font-size: 12px; line-height: 1.55; }
+.pl-help { margin-top: 0; }
+
+.pl-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pl-card { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 14px 16px;
+  border: 1px solid var(--hairline); border-radius: var(--r-lg); background: var(--surface-1); }
+.pl-card.self { border-color: rgba(59,130,246,.4); }
+.pl-card.bad { border-color: rgba(250,178,25,.35); }
+.pl-ico { display: grid; place-items: center; flex: none; width: 44px; height: 44px;
+  border-radius: 12px; border: 1px solid var(--hairline); background: var(--inset); }
+.pl-ico svg { width: 22px; height: 22px; fill: none; stroke: var(--ink-muted); stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+.pl-info { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pl-name { font-size: 14.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.pl-ver { color: #8ab4ff; font-size: 11.5px; font-weight: 700; }
+.pl-badtxt { color: var(--warning); font-size: 11.5px; font-weight: 600; }
+.pl-path { color: var(--ink-muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.pl-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap;
+  gap: 8px; flex: none; max-width: 52%; }
+.pl-act { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; font-size: 12.5px;
+  text-align: left; }
+.pl-act svg { width: 14px; height: 14px; flex: none; fill: currentColor; stroke: none; }
+.pl-act.pl-copy svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round;
+  stroke-linejoin: round; }
+.pl-act:disabled, .pl-trash:disabled { opacity: .45; cursor: not-allowed; }
+.pl-trash { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 38px; height: 38px; padding: 0 10px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(208,59,59,.45); background: rgba(208,59,59,.1); color: #ff8d8d;
+  font: inherit; font-size: 12px; font-weight: 700; transition: background .15s; }
+.pl-trash svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pl-trash:hover, .pl-trash:focus-visible { background: rgba(208,59,59,.2); }
+.pl-trash .pl-trash-ask { display: none; white-space: nowrap; }
+.pl-trash.armed { background: rgba(208,59,59,.4); color: #fff; }
+.pl-trash.armed .pl-trash-ask { display: inline; }
+.pl-live { color: var(--good); font-size: 12px; font-weight: 700; }
+.pl-drive { display: flex; align-items: center; gap: 9px; margin: 20px 0 10px; font-size: 13px; }
+.pl-drive svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--ink-muted);
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pl-drive code { margin-left: auto; color: var(--ink-muted); font-size: 11.5px; }
+.pl-drive:first-child { margin-top: 0; }
+/* Zwei Spalten erst, wenn jede Karte Platz für Namen und Knöpfe hat. */
+@media (max-width: 1200px) { .pl-grid { grid-template-columns: minmax(0, 1fr); } }
+/* USB-Karten haben zwei lange Knöpfe: die kommen unter den Namen. */
+.pl-card.pl-wide { flex-wrap: wrap; }
+.pl-card.pl-wide .pl-actions { width: 100%; max-width: none; justify-content: flex-start; }
+.pl-card.pl-wide .pl-copy { flex: 1 1 210px; }
+@media (max-width: 560px) {
+  .pl-card { flex-wrap: wrap; }
+  .pl-actions { max-width: none; width: 100%; justify-content: flex-start; }
+}
+.av-library { display: grid; gap: 10px; padding: 10px; border-radius: var(--r-sm);
+  border: 1px solid var(--hairline); background: rgba(57,135,229,.05); }
+.av-library label { display: block; color: var(--ink-2); font-size: 12px; }
+.av-library input, .av-library select { width: 100%; margin-top: 6px; padding: 9px 11px;
+  border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset);
+  color: var(--ink); font: inherit; }
+.av-status { margin: 0; padding: 9px 11px; border-radius: 9px; font-size: 12.5px;
+  background: var(--inset); border: 1px solid var(--hairline); color: var(--ink-2); }
+.av-status.err { border-color: var(--crit, #d9534f); color: var(--ink); }
+
+/* ── Protokoll ─────────────────────────────────────────────────────── */
+.log { max-height: 560px; overflow: auto; }
+.entry { display: grid; grid-template-columns: 82px 62px minmax(0,1fr); gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid var(--hairline); font-size: 12.5px; }
+.entry:last-child { border-bottom: 0; }
+.entry time { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.entry .lvl { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; }
+.entry .lvl.info  { color: var(--good); }
+.entry .lvl.warn  { color: var(--warning); }
+.entry .lvl.error { color: var(--critical); }
+.entry p { margin: 0; color: var(--ink-2); line-height: 1.45; }
+.entry code { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 10.5px; }
+
+/* Kernel-Log live (Protokoll, zweiter Reiter) */
+.pg-tabs { margin: 0 0 14px; }
+/* Spiele: die Reiter links, der Schalter für den Zwischenspeicher am rechten Ende der Zeile */
+.pg-tabbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
+.pg-tabbar .pg-tabs { margin: 0; }
+.gm-cache { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; margin-left: auto; }
+.gm-cache-info { color: var(--ink-muted); font-size: 12px; }
+.gm-cache .btn { padding: 6px 13px; border-radius: 999px; font-size: 12.5px; }
+.kl-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 4px 0 12px; }
+.kl-tools input[type=search] { flex: 1 1 260px; min-width: 0; padding: 9px 12px; border-radius: 9px;
+  border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
+.kl-follow { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; cursor: pointer; }
+.kl-view { height: 62vh; min-height: 280px; overflow: auto; padding: 6px 0; border: 1px solid var(--hairline);
+  border-radius: 10px; background: var(--inset);
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.kl-line { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 10px; padding: 1px 12px;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.kl-line time { color: var(--ink-muted); font-variant-numeric: tabular-nums; user-select: none; }
+.kl-line span { color: var(--ink-2); }
+.kl-line.kl-err span  { color: var(--critical); }
+.kl-line.kl-warn span { color: var(--warning); }
+.kl-line.kl-app span  { color: var(--good); }
+.kl-line.kl-mark { margin: 3px 0; background: rgba(255,255,255,.05); font-style: italic; }
+.kl-line.kl-mark span { color: var(--ink-muted); }
+
+/* ── Spielzeit (03.10.2026) ────────────────────────────────────────────
+   Ohne inset, aspect-ratio und filter, wie die Spiele-Seite: Die Balkenhöhe
+   kommt in Pixeln aus dem Skript, nicht aus Prozenten einer Flex-Fläche. */
+.pt-note { margin: 0 0 14px; padding: 9px 12px; border: 1px solid rgba(250,178,25,.38);
+  border-radius: var(--r-sm); background: rgba(250,178,25,.12); color: #ffd57b; font-size: 13px; }
+.pt-live { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 12px 14px;
+  border: 1px solid rgba(12,163,12,.45); border-radius: var(--r-md); background: rgba(12,163,12,.08); }
+.pt-live b { display: block; font-size: 14.5px; overflow-wrap: anywhere; }
+.pt-live small { display: block; color: var(--ink-2); font-size: 12.5px; }
+.pt-live[hidden] { display: none; }
+.pt-live-dot { width: 10px; height: 10px; border-radius: 50%; flex: none;
+  background: var(--good); box-shadow: 0 0 10px var(--good); }
+.pt-live-dot.back { background: var(--warning); box-shadow: none; }
+.pt-live-dot.gone { background: var(--ink-muted); box-shadow: none; }
+.pt-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pt-stat { min-width: 0; padding: 12px 14px; border: 1px solid var(--hairline);
+  border-radius: var(--r-md); background: var(--surface-2); }
+.pt-stat strong { display: block; margin-top: 2px; font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+.pt-stat small { color: var(--ink-muted); font-size: 12px; }
+.pt-foot { margin: 14px 0 0; font-size: 12px; line-height: 1.5; }
+
+.pt-bars { display: flex; align-items: flex-end; gap: 6px; padding-top: 4px; }
+.pt-bar { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-end; }
+.pt-bar-val { height: 15px; margin-bottom: 4px; color: var(--ink-2); font-size: 10.5px;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pt-bar-col { display: block; width: 100%; max-width: 40px; border-radius: 6px 6px 0 0;
+  background: var(--s1); }
+.pt-bar.today .pt-bar-col { background: var(--s3); }
+.pt-bar-base { display: block; width: 100%; height: 2px; background: var(--baseline); }
+.pt-bar-lbl { margin-top: 6px; color: var(--ink-muted); font-size: 10.5px; line-height: 1.25;
+  text-align: center; white-space: nowrap; }
+.pt-bar.today .pt-bar-lbl { color: var(--ink); font-weight: 700; }
+.pt-d-short { display: none; }
+
+.pt-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px;
+  align-items: center; padding: 10px 0; border-top: 1px solid var(--hairline); }
+.pt-row:first-child { border-top: 0; padding-top: 0; }
+.pt-cover { position: relative; width: 44px; height: 44px; border-radius: 10px; overflow: hidden;
+  background: var(--inset); }
+.pt-cover img, .pt-cover span { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.pt-cover img { display: block; object-fit: cover; }
+.pt-cover img.broken { visibility: hidden; }
+.pt-cover span { display: flex; align-items: center; justify-content: center;
+  color: var(--ink-muted); font-size: 14px; font-weight: 800; letter-spacing: .04em; }
+.pt-main { min-width: 0; }
+.pt-main b { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.pt-main small { display: block; margin-top: 1px; color: var(--ink-muted); font-size: 12px; }
+.pt-main .badge { margin: 3px 4px 0 0; }
+.pt-side { text-align: right; font-variant-numeric: tabular-nums; }
+.pt-side b { display: block; font-size: 14px; }
+.pt-side small { display: block; color: var(--ink-muted); font-size: 12px; }
+.pt-share { height: 5px; margin-top: 6px; border-radius: 999px; background: var(--inset); overflow: hidden; }
+.pt-share span { display: block; height: 100%; background: var(--s1); }
+.pt-empty { margin: 0; color: var(--ink-muted); font-size: 13px; }
+@media (max-width: 720px) {
+  .pt-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pt-bars { gap: 3px; }
+  .pt-bar-lbl { font-size: 9.5px; }
+  .pt-d-full { display: none; }                 /* 14 Balken: nur der Tag des Monats */
+  .pt-d-short { display: inline; }
+  .pt-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .pt-side { grid-column: 2; text-align: left; }
+}
+
+/* ── Spielstände (04.10.2026) ───────────────────────────────────────── */
+.sv-intro { margin: 0 0 14px; font-size: 12.5px; line-height: 1.5; }
+.sv-actions { align-items: center; justify-content: space-between; }
+.sv-hint { margin: 0; flex: 1 1 220px; font-size: 12.5px; }
+.sv-user { margin: 0 0 14px; border: 1px solid var(--hairline); border-radius: var(--r-md);
+  background: var(--surface-2); overflow: hidden; }
+.sv-user-head, .sv-title { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.sv-user-head { padding: 10px 14px; }
+.sv-user-head b { font-size: 14px; overflow-wrap: anywhere; }
+.sv-user-head .muted { margin-left: auto; font-size: 12px; white-space: nowrap; }
+.sv-title { padding: 8px 14px; border-top: 1px solid var(--hairline); }
+.sv-user input[type=checkbox] { accent-color: var(--s1); flex: none; width: 17px; height: 17px; }
+.sv-t-name { flex: 1 1 auto; min-width: 0; }
+.sv-t-name b { display: block; font-size: 13.5px; overflow-wrap: anywhere; }
+.sv-t-name small { display: block; color: var(--ink-muted); font-size: 11.5px; }
+.sv-t-size { text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sv-t-size small { display: block; color: var(--ink-muted); font-size: 11px; }
+.sv-bk { margin: 0 0 10px; border: 1px solid var(--hairline); border-radius: var(--r-md);
+  background: var(--surface-2); }
+.sv-bk-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 14px; }
+.sv-bk-main { min-width: 0; flex: 1 1 260px; }
+.sv-bk-main b { font-size: 14px; }
+.sv-bk-main small { display: block; margin-top: 2px; color: var(--ink-muted); font-size: 12px; }
+.sv-bk-main .badge { margin-left: 6px; vertical-align: 1px; }
+.sv-bk-titles { border-top: 1px solid var(--hairline); }
+.sv-bk-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--hairline); }
+.sv-bk-row:first-child { border-top: 0; }
+.sv-bk-row .btn { padding: 7px 12px; font-size: 12.5px; }
+.sv-unfinished { margin: 10px 0 0; line-height: 1.5; }
+.sv-job-path { margin: 6px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.sv-job-path code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+@media (max-width: 720px) {
+  .sv-user-head .muted { white-space: normal; text-align: right; }
+}
+
+/* ── Kernel-Log: Aufnahme und die Dateien auf der Konsole (04.10.2026) ── */
+.kl-rec[aria-pressed="true"] { color: #ffb3b3; border-color: rgba(255,107,107,.6); background: rgba(255,107,107,.12); }
+.kl-rec[aria-pressed="true"]::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px;
+  border-radius: 50%; background: #ff6b6b; vertical-align: 1px; animation: kl-blink 1.4s ease-in-out infinite; }
+@keyframes kl-blink { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .kl-rec[aria-pressed="true"]::before { animation: none; } }
+.kl-files-note { margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; }
+.kl-files-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
+.kl-file { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 9px 0; border-top: 1px solid var(--hairline); }
+.kl-file:first-child { border-top: 0; }
+.kl-file-name { flex: 1 1 240px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.kl-file-name small { display: block; color: var(--ink-muted); font-size: 11.5px; }
+.kl-file-size { font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kl-file a.btn { padding: 7px 12px; font-size: 12.5px; text-decoration: none; }
+
+.muted { color: var(--ink-muted); font-size: 13px; }
+.row-gap { display: flex; gap: 9px; flex-wrap: wrap; }
+.mt-10 { margin-top: 10px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.probe-on { color: var(--good) !important; }
+.probe-off { color: var(--ink-muted) !important; }
+
+.integ-grid label { display: block; }
+.integ-grid input { width: 100%; margin-top: 6px; padding: 9px 11px; border-radius: 9px;
+  border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
+.file-inline { display: inline-flex; flex-direction: column; gap: 4px; color: var(--ink-2); font-size: 12px; }
+.file-inline input[type=file] { color: var(--ink-2); font: inherit; font-size: 13px; }
+.log-tail-box { max-height: 220px; margin-top: 10px; border: 1px solid var(--hairline);
+  border-radius: 10px; padding: 8px 10px; background: var(--inset); }
+.log-tail-box .entry { padding: 8px 0; }
+
+/* ── Fußzeile ──────────────────────────────────────────────────────── */
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-top: 22px; color: var(--ink-muted); font-size: 12px; }
+.is-hidden { display: none; }
+/* Die Grafik-Zeile gibt es nur auf der PS5 Pro (1.45.1). .is-hidden allein
+   verliert gegen die display-Regeln dieser beiden Container. */
+.ov-kv > div.is-hidden, .legend span.is-hidden { display: none; }
+
+/* ── Hinweis ───────────────────────────────────────────────────────── */
+.toast { position: fixed; left: 50%; bottom: 24px; z-index: 40; transform: translate(-50%, 14px);
+  max-width: min(440px, 92vw); padding: 13px 17px; border-radius: 12px;
+  border: 1px solid var(--hairline); background: rgba(19,23,34,.97); color: var(--ink);
+  font-size: 13px; box-shadow: var(--shadow); opacity: 0; pointer-events: none;
+  transition: opacity .18s, transform .18s; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.err { border-color: rgba(208,59,59,.5); }
+
+/* ── Schmale Bildschirme ───────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .tiles  { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 620px) {
+  .shell { padding: 16px 13px 32px; }
+  /* Keep the header on one line: the title must not wrap and the status chip
+     must not push itself off the right edge. */
+  .brand-mark { width: 36px; height: 36px; border-radius: 11px; }
+  .brand-text strong { font-size: 14px; }
+  .conn { padding: 7px 10px; font-size: 11px; }
+  .conn span { max-width: 33vw; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  .hero { flex-wrap: wrap; padding: 18px; gap: 14px; }
+  .hero-figure { text-align: left; }
+  .hero-num { font-size: 38px; }
+  .hero-copy h1 { font-size: 18px; }
+  .tabs { grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 4px; }
+  .tab { flex-direction: column; gap: 3px; padding: 9px 3px; font-size: 10.5px; }
+  .card { padding: 16px; }
+  .entry { grid-template-columns: 1fr; gap: 3px; }
+  #target-out { font-size: 32px; }
+}
+
+/* Pakete (04.10.2026) */
+.pk-intro { margin: 0 0 12px; }
+.pk-tools { margin-top: 4px; }
+.pk-drive { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 18px 2px 8px; font-size: 14px; }
+.pk-drive .muted { font-size: 12px; font-weight: 400; }
+.pk-card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 12px 14px; margin: 0 0 8px;
+  border: 1px solid var(--hairline); border-radius: 14px; background: var(--surface-1); }
+.pk-ico { position: relative; width: 64px; height: 64px; border-radius: 12px; overflow: hidden; background: var(--inset);
+  display: flex; align-items: center; justify-content: center; color: var(--ink-muted); font-weight: 800; font-size: 18px; }
+.pk-ico img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pk-ico img.broken { display: none; }
+.pk-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pk-main b { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-main small { color: var(--ink-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.pk-side { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }   /* the buttons are as wide as each other */
+.pk-size { font-weight: 700; font-size: 13px; white-space: nowrap; text-align: right; }
+.pk-split { grid-column: 1 / -1; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.pk-note { margin: 6px 0 0; font-size: 12px; }
+.pk-facts { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 3px; font-size: 13px; }
+.pk-side .btn + .btn { margin-top: 0; }
+.pk-gb { width: 90px; margin-left: 8px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
+.pk-sha { word-break: break-all; }
+@media (max-width: 560px) {
+  .pk-card { grid-template-columns: 52px minmax(0, 1fr); }
+  .pk-ico { width: 52px; height: 52px; }
+  .pk-side { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; align-items: center; gap: 8px; }
+  .pk-size { margin-right: auto; text-align: left; }
+  .pk-side .btn { flex: 1 1 0; max-width: 11rem; }
+}
+
+/* ── Credits (06.10.2026): Dank an die Entwickler, mit GitHub-Bild, Name, Dank und Links ── */
+.cr-hero { display: flex; gap: 22px; align-items: center; }
+.cr-hero h2 { margin: 0 0 8px; }
+.cr-hero p { margin: 0 0 8px; color: var(--ink-2); line-height: 1.55; max-width: 72ch; }
+.cr-hero-pic { width: 88px; height: 88px; border-radius: 50%; flex: none;
+  border: 2px solid rgba(59,130,246,.55); box-shadow: 0 0 0 5px rgba(59,130,246,.12); }
+.cr-by { font-size: 13px; }
+.cr-group { margin: 26px 2px 12px; font-size: 15px; color: var(--ink-2); letter-spacing: .02em; }
+.cr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.cr-card { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border-radius: var(--r-lg);
+  border: 1px solid var(--hairline); background: var(--surface-1); }
+.cr-pic { width: 56px; height: 56px; border-radius: 50%; flex: none; border: 1px solid var(--hairline);
+  background: var(--surface-2); object-fit: cover; }
+.cr-initials { display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px;
+  color: var(--ink-2); }
+.cr-text { min-width: 0; }
+.cr-text b { font-size: 15px; }
+.cr-login { display: inline-block; margin-left: 4px; font-size: 13px; color: var(--ink-muted); }
+a.cr-login { color: var(--accent); text-decoration: none; }
+a.cr-login:hover, a.cr-login:focus-visible { text-decoration: underline; }
+.cr-text p { margin: 6px 0 10px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.cr-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.cr-links a { padding: 4px 10px; border-radius: 999px; font-size: 12px; text-decoration: none; color: var(--ink);
+  border: 1px solid rgba(59,130,246,.45); background: rgba(59,130,246,.08); word-break: break-all; }
+.cr-links a::before { content: "↗ "; color: var(--accent); }
+.cr-links a:hover, .cr-links a:focus-visible { background: rgba(59,130,246,.2); }
+.cr-foot { margin: 22px 2px 4px; font-size: 12px; line-height: 1.5; }
+@media (max-width: 720px) {
+  .cr-hero { flex-direction: column; align-items: flex-start; }
+  .cr-grid { grid-template-columns: 1fr; }
+}
+/* ohne Internet: dieselben Marken, nur nicht anklickbar (app.js nimmt ihnen dann die Adresse) */
+.cr-links a.cr-off { color: var(--ink-2); border-color: var(--hairline); background: var(--surface-2); cursor: default; }
+.cr-links a.cr-off::before { content: ""; }
+a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: none; }
+.cr-hero a.cr-off { color: var(--ink-2); text-decoration: none; cursor: default; }
+.cr-net { margin: 22px 2px 0; font-size: 13px; color: var(--ink-2); }
+.cr-intro { margin: -4px 2px 14px; font-size: 13px; line-height: 1.5; max-width: 90ch; }
+
+/* ── Dateien (06.10.2026): der Dateimanager ── */
+.fm-places { margin: 4px 0 10px; flex-wrap: wrap; }
+.fm-places small { color: var(--ink-muted); font-weight: 400; margin-left: 4px; }
+.fm-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 0 0 12px; padding: 8px 10px;
+  border-radius: var(--r-md); background: var(--inset); border: 1px solid var(--hairline); }
+.fm-crumb { background: none; border: 0; color: var(--ink); font: inherit; font-size: 14px; padding: 4px 6px;
+  border-radius: 6px; cursor: pointer; }
+.fm-crumb:hover, .fm-crumb:focus-visible { background: var(--surface-2); }
+.fm-sep { color: var(--ink-muted); }
+.fm-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.fm-upload { cursor: pointer; }
+.fm-upload.disabled { opacity: .5; pointer-events: none; }
+.fm-ro { font-size: 13px; color: var(--warning); }
+.fm-free { margin-left: auto; font-size: 13px; }
+.fm-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px;
+  border-radius: var(--r-md); border: 1px solid rgba(59,130,246,.45); background: rgba(59,130,246,.08); }
+.fm-bar b, .fm-bar span { margin-right: 6px; font-size: 14px; }
+.fm-clip { border-color: rgba(25,158,112,.5); background: rgba(25,158,112,.08); }
+.fm-job { margin: 0 0 12px; padding: 12px 14px; border-radius: var(--r-md); border: 1px solid var(--hairline);
+  background: var(--surface-2); }
+.fm-job code { font-size: 12px; word-break: break-all; }
+.fm-list { border-top: 1px solid var(--hairline); border-radius: 0 0 var(--r-md) var(--r-md); }
+.fm-list.drop { outline: 2px dashed var(--accent); outline-offset: 4px; }
+.fm-row { display: grid; grid-template-columns: auto 28px 1fr auto; align-items: center; gap: 12px;
+  padding: 9px 6px; border-bottom: 1px solid var(--hairline); }
+.fm-row.sel { background: rgba(59,130,246,.10); }
+.fm-check { width: 18px; height: 18px; }
+.fm-ico svg { width: 24px; height: 24px; fill: none; stroke: var(--ink-2); stroke-width: 1.6;
+  stroke-linejoin: round; stroke-linecap: round; display: block; }
+.fm-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fm-name { font-size: 14px; color: var(--ink); overflow-wrap: anywhere; text-align: left; }
+.fm-open { background: none; border: 0; padding: 0; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.fm-open:hover, .fm-open:focus-visible { color: var(--accent); text-decoration: underline; }
+.fm-main small { font-size: 12px; }
+.fm-acts { display: flex; gap: 6px; }
+.fm-act { padding: 5px 10px; font-size: 12px; text-decoration: none; }
+.fm-empty { padding: 18px 6px; }
+.fm-field { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; font-size: 13px; color: var(--ink-2); }
+.fm-field input { padding: 9px 11px; border-radius: var(--r-sm); border: 1px solid var(--hairline);
+  background: var(--inset); color: var(--ink); font: inherit; font-size: 14px; }
+@media (max-width: 720px) {
+  .fm-row { grid-template-columns: auto 24px 1fr; }
+  .fm-acts { grid-column: 3; }
+}
+/* display:flex oben würde das hidden-Attribut überstimmen (wie beim Lösch-Fenster) */
+#page-files [hidden] { display: none !important; }
+.cr-featured { max-width: 760px; border-color: rgba(59,130,246,.55); background: linear-gradient(135deg, rgba(59,130,246,.12), var(--surface-1) 60%); }
+.cr-featured .cr-pic { width: 80px; height: 80px; border: 2px solid rgba(59,130,246,.6); }
+.cr-featured .cr-text b { font-size: 17px; }
+.cr-featured .cr-text p { font-size: 14px; }
+.cr-outro { margin: 26px 2px 4px; font-size: 13px; line-height: 1.5; max-width: 90ch; }
+/* Handbuch und FAQ: Links in der Seitenleiste, aussehend wie die Knöpfe */
+a.tab { text-decoration: none; color: inherit; }
+.tab-doc { opacity: .92; }

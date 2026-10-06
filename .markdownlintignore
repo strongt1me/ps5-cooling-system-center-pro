@@ -1,0 +1,8 @@
+# Generated/binary-heavy release folders
+PS5 Cooling Center v*/
+PS5 Cooling and System Center v*/
+release/
+
+# Large SDK/archives and HTML snapshots in repo, if any
+**/*.htm
+**/*.html

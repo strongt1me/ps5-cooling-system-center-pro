@@ -1,0 +1,168 @@
+PS5 Cooling & System Center - Pro
+Advanced Cooling & Thermal Management for PlayStation 5
+
+
+WAS HIER DRIN LIEGT
+===================
+
+PS5_Cooling_System_Center_v1.49.1.elf
+    Das Hauptprogramm: Lüftersteuerung und Web-Oberfläche. Das ist die
+    Datei, die du nach jedem Neustart der Konsole sendest.
+
+cooling-center-launcher-installer_v1.49.1.elf
+    Installiert nur die Startmenü-Kachel, sonst nichts. Als Rückfallweg
+    gedacht, falls die Kachel-Installation im Hauptprogramm klemmt: hier
+    siehst du den nackten Fehlercode, ohne dass die App dazwischenfunkt.
+
+IV9999-PSCC69690_00-PS5COOLINGCNTR01-A0100-V0100.pkg
+    Das Kachel-Paket allein, falls du es lieber über einen PKG-Installer
+    einspielst. Es steckt bereits im Installer-ELF.
+
+
+SO WIRD ES BENUTZT
+==================
+
+1. PS5_Cooling_System_Center_v1.49.1.elf an die Konsole senden (Port 9021).
+2. Auf dem Fernseher erscheint eine Meldung mit der Adresse der
+   Web-Oberfläche.
+3. Im Browser aufrufen:  http://<PS5-IP>:8086/
+
+Die Kachel im Startmenü ("Medien") legt das Hauptprogramm beim ersten Start
+selbst an; ein Installer ist dafür nicht nötig. Sie überlebt Neustarts. Hast
+du sie in der Konsole gelöscht, kommt sie nicht von allein zurück: Auf der
+Systemseite legt "Kachel installieren" sie wieder an. Die Datei
+cooling-center-launcher-installer_v1.49.1.elf bleibt als Rückfallweg, falls
+das nicht klappt.
+
+Neues Kachelbild: Die Kachel zuerst in der Konsole löschen (Kachel auswählen,
+Options-Taste, Löschen) und danach auf der Systemseite "Kachel installieren"
+drücken. Der Installer lässt eine vorhandene Kachel unverändert. Die App und
+ihre Einstellungen bleiben dabei unberührt.
+
+Wichtig: Die Kachel startet das Programm NICHT. Sie öffnet nur die
+Web-Oberfläche. Nach jedem Neustart der Konsole muss das Hauptprogramm
+einmal gesendet werden, sonst zeigt die Kachel nichts an.
+
+Wichtig: Immer nur EINE Instanz laufen lassen. Zwei Instanzen regeln den
+Lüfter gleichzeitig und stören sich. Eine alte Instanz lässt sich auf der
+Systemseite unter "Payloads" beenden, sonst hilft ein Neustart.
+
+
+EINSTELLUNGEN
+=============
+
+Werden unter /data/PS5-Cooling-Center/ gespeichert und beim nächsten Start
+wieder verwendet. Läuft die App nicht, gelten die normalen PS5-Vorgaben —
+die Konsole regelt dann wieder selbst.
+
+Standard-Zieltemperatur: 66 °C.
+
+Bis Version 1.2 hieß der Ordner "/data/PS5 Cooling Center/" — mit
+Leerzeichen. Beim ersten Start von 1.3 wird er samt Einstellungen und
+Temperaturverlauf automatisch umbenannt. Es geht nichts verloren.
+
+
+HINWEIS ZUM PORT
+================
+
+Die Oberfläche liegt fest auf Port 8086, weil genau diese Adresse in der
+Startmenü-Kachel hinterlegt ist. Frühere Fassungen nutzten 8080 und 8770;
+eine alte Konfiguration wird beim ersten Start automatisch umgestellt.
+
+Ist 8086 belegt — meist läuft dann noch eine alte Instanz —, weicht das
+Programm NICHT auf einen anderen Port aus, denn dann stimmte die Adresse der
+Kachel nicht mehr. Es meldet das im Protokoll und auf dem Fernseher und
+versucht es alle 5 Sekunden erneut; die Lüftersteuerung läuft in der
+Zwischenzeit normal weiter. Konsole neu starten und das Programm nur einmal
+senden.
+
+Wer den Port in den Einstellungen trotzdem ändert: erlaubt ist 1024 bis
+65535, und nur, wenn dort nichts anderes lauscht (sonst lehnt die App die
+Änderung ab und bleibt auf dem alten Port).
+
+Die Oberfläche öffnest du am besten über die IP-Adresse der Konsole. Aus
+Sicherheitsgründen lehnt die App Anfragen ab, die erkennbar von einer fremden
+Webseite kommen oder an einen ungewöhnlichen Rechnernamen gerichtet sind
+(Fehler 403 mit Hinweistext).
+
+
+EIGENE PAYLOADS STARTEN
+=======================
+
+Auf der Seite "Payloads" der Weboberfläche lassen sich Payloads (.elf)
+starten, ohne sie vom PC zu senden:
+
+- aus dem Ordner /data/PS5-Cooling-Center/payloads (die App legt ihn beim
+  Start an, wenn es ihn nicht gibt; ein vorhandener bleibt, wie er ist)
+- von einem USB-Stick: im Hauptverzeichnis oder im Ordner "payloads"
+
+Von einem Stick lässt sich eine Datei auch in den internen Ordner kopieren.
+Gestartet wird über den Payload-Lader der Konsole (elfldr, Port 9021) —
+ist der nicht geladen, meldet die Seite das.
+
+Die früheren Seiten "Übersicht" und "Kühlung" sind ab dieser Version eine:
+"Kühlung". Die Seite "Payloads" steht an der Stelle der Übersicht.
+
+
+KURZDIAGNOSE (PC-SEITE)
+=======================
+
+Wenn die Web-Oberfläche oder API nicht erreichbar ist:
+
+1. Port prüfen (Windows PowerShell):
+    Test-NetConnection -ComputerName <PS5-IP> -Port 8086
+
+2. API direkt prüfen:
+    Invoke-RestMethod -Uri "http://<PS5-IP>:8086/api/v1/config" -Method Get -TimeoutSec 8
+
+3. Bei Fehlern:
+    - Payload erneut senden (Port 9021)
+    - Nur eine Instanz laufen lassen
+    - Falls nötig Diagnose-Skript verwenden:
+      .\tools\diagnose.ps1 -Ps5Ip <PS5-IP> -AutoPort
+
+Optionaler Lüfter-Wirkungstest:
+  .\tools\diagnose.ps1 -Ps5Ip <PS5-IP> -AutoPort -FanTest
+
+
+ZUM NAMEN
+=========
+
+Ab Version 1.32.0 hieß das Programm "PS5 Cooling & System Center", ab
+Version 1.46.0 heißt es "PS5 Cooling & System Center - Pro". Dateinamen und
+Ordner der Auslieferung behalten ihre bisherige Form.
+
+Der Datenordner heißt weiterhin /data/PS5-Cooling-Center/ und wird
+bewusst NICHT mit umbenannt: Dort liegen der Temperaturverlauf und die
+mehrwöchige Kühlleistungs-Aufzeichnung. Ein umbenannter Ordner würde
+beides auf null zurücksetzen.
+
+Die Startmenü-Kachel behält ihre Kennung PSCC69690, es entsteht also nie
+eine zweite. Eine schon installierte Kachel lässt der Installer aber
+stehen, wie sie ist. Den neuen Namen zeigt sie erst, wenn man sie vorher
+löscht (siehe oben, "Neues Kachelbild").
+
+RECHTLICHES
+===========
+
+Kein Produkt von Sony. "PlayStation" und "PS5" sind Marken der Sony
+Interactive Entertainment Inc. Dieses Programm steht in keiner Verbindung zu
+Sony.
+
+Nur für die eigene Konsole. Das Modifizieren einer Konsole kann gegen
+Nutzungsbedingungen verstoßen und zu Garantieverlust oder zur Sperrung von
+Konto oder Konsole führen. Das Risiko trägt, wer das tut.
+
+Keine Piraterie. Das Programm enthält keine Spiele, keine Firmware, keine
+Schlüssel und nichts, was einen Kopierschutz umgeht. Es lädt nichts aus dem
+Internet (nur die Seite "Credits" prüft im Browser, ob github.com erreichbar
+ist). Kopieren, Verschieben und Konvertieren wirken nur auf Spiele, die
+schon auf der eigenen Konsole liegen; Pakete finden, aufteilen und installieren
+nur auf Pakete, die du selbst auf die Konsole oder ein Laufwerk gelegt hast.
+Raubkopien zu beschaffen oder zu
+verbreiten ist in den meisten Ländern strafbar und wird hier nicht
+unterstützt.
+
+Keine Gewährleistung. Das Programm wird so bereitgestellt, wie es ist (GNU
+General Public License, Version 3 oder später). Wer es benutzt, tut das auf
+eigene Gefahr.

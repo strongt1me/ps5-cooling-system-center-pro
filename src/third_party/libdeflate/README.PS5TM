@@ -1,0 +1,14 @@
+libdeflate 1.26 (https://github.com/ebiggers/libdeflate, tag v1.26, commit 92e6a0d),
+unchanged, with one file added. Only what zlib-format compression and
+decompression need on x86-64; gzip, the ARM and RISC-V parts and the programs
+are left out. Licence: see COPYING (MIT).
+
+Added (03.10.2026): lib/crc32.c, the entry point libdeflate_crc32() that the
+cut-down copy had left out — written for this project on the pattern of
+upstream's adler32.c (portable slice-8 routine as the fallback, the best x86
+routine chosen at run time), over upstream's own tables (crc32_tables.h),
+multipliers (crc32_multipliers.h) and PCLMULQDQ routines (x86/crc32_impl.h),
+which were here all along. Checked on random data of many lengths and
+alignments: the routine the CPU picks against zlib's crc32(), and each of the
+four implementations that compile here (slice-8, PCLMULQDQ, PCLMULQDQ with AVX,
+VPCLMULQDQ with AVX2) against a byte-wise reference.

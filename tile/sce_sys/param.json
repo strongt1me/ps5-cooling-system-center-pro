@@ -1,0 +1,10 @@
+{
+  "titleId": "PSCC69690",
+  "applicationCategoryType": 65536,
+  "deeplinkUri": "http://127.0.0.1:8086",
+  "localizedParameters": {
+    "defaultLanguage": "en-US",
+    "de-DE": { "titleName": "PS5 Cooling & System Center - Pro" },
+    "en-US": { "titleName": "PS5 Cooling & System Center - Pro" }
+  }
+}

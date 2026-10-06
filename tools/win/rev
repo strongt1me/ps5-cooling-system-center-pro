@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# rev(1) for Git Bash, which does not ship it. The SDK's wrapper scripts use it
+# to derive a tool's name from their own ("prospero-strip" -> "strip").
+
+while IFS= read -r line || [[ -n "$line" ]]; do
+  out=""
+  for (( i = ${#line} - 1; i >= 0; i-- )); do
+    out+="${line:i:1}"
+  done
+  printf '%s\n' "$out"
+done

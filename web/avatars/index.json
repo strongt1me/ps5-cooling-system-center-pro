@@ -1,0 +1,125 @@
+{
+ "size": 440,
+ "images": [
+  {
+   "file": "01-neon-portraet.jpg",
+   "label": "Neon-Porträt"
+  },
+  {
+   "file": "02-neon-fuchs.jpg",
+   "label": "Neon-Fuchs"
+  },
+  {
+   "file": "03-neon-roboter.jpg",
+   "label": "Neon-Roboter"
+  },
+  {
+   "file": "04-neon-pilz.jpg",
+   "label": "Neon-Pilz"
+  },
+  {
+   "file": "05-blau-astronaut.jpg",
+   "label": "Astronaut"
+  },
+  {
+   "file": "06-blau-katze.jpg",
+   "label": "Katze"
+  },
+  {
+   "file": "07-blau-wolf.jpg",
+   "label": "Wolf"
+  },
+  {
+   "file": "08-blau-samurai.jpg",
+   "label": "Samurai"
+  },
+  {
+   "file": "09-blau-drache.jpg",
+   "label": "Drache"
+  },
+  {
+   "file": "10-blau-eule.jpg",
+   "label": "Eule"
+  },
+  {
+   "file": "11-blau-gamer.jpg",
+   "label": "Gamer"
+  },
+  {
+   "file": "12-blau-panda.jpg",
+   "label": "Panda"
+  },
+  {
+   "file": "13-blau-loewe.jpg",
+   "label": "Löwe"
+  },
+  {
+   "file": "14-blau-cyber-schaedel.jpg",
+   "label": "Cyber-Schädel"
+  },
+  {
+   "file": "15-blau-raumfahrer.jpg",
+   "label": "Raumfahrerin"
+  },
+  {
+   "file": "16-blau-katana.jpg",
+   "label": "Katana"
+  },
+  {
+   "file": "17-blau-krake.jpg",
+   "label": "Krake"
+  },
+  {
+   "file": "18-blau-biene.jpg",
+   "label": "Biene"
+  },
+  {
+   "file": "19-blau-wesen.jpg",
+   "label": "Wesen"
+  },
+  {
+   "file": "20-blau-planet.jpg",
+   "label": "Planet"
+  },
+  {
+   "file": "21-blau-controller.jpg",
+   "label": "Controller"
+  },
+  {
+   "file": "22-blau-kopfhoerer.jpg",
+   "label": "Kopfhörer"
+  },
+  {
+   "file": "23-blau-ninja.jpg",
+   "label": "Ninja"
+  },
+  {
+   "file": "24-blau-ritterhelm.jpg",
+   "label": "Ritterhelm"
+  },
+  {
+   "file": "25-blau-tiger.jpg",
+   "label": "Tiger"
+  },
+  {
+   "file": "26-blau-phoenix.jpg",
+   "label": "Phönix"
+  },
+  {
+   "file": "27-blau-schlange.jpg",
+   "label": "Schlange"
+  },
+  {
+   "file": "28-blau-schmetterling.jpg",
+   "label": "Schmetterling"
+  },
+  {
+   "file": "29-blau-kolibri.jpg",
+   "label": "Kolibri"
+  },
+  {
+   "file": "30-blau-qualle.jpg",
+   "label": "Qualle"
+  }
+ ]
+}

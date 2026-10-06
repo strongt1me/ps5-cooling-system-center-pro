@@ -1,0 +1,29 @@
+# Build artifacts
+*.elf
+*.o
+*.a
+*.so
+
+# Generated/output directories
+gen/
+pkg/
+release/
+
+# Historical packaged release folders (large binaries)
+PS5 Cooling Center v*/
+PS5 Cooling and System Center v*/
+
+# Local editor/system
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local SDK copy (do not commit toolchain)
+PS5_PAYLOAD_SDK/
+
+# Temporary local diagnostics
+build.out.txt
+build.err.txt
+
+# Local backup of a previous ELF (never commit binaries)
+*.elf.bak-*

@@ -1,0 +1,1857 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- &amp;, nicht &: In HTML leitet ein nacktes & eine Entity ein. Browser
+         verzeihen es meist, aber „&amp; S…" wäre genau der Fall, in dem es
+         schiefgehen kann. -->
+    <title>PS5 Cooling &amp; System Center - Pro</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <div class="app">
+      <!-- ══════ Seitenleiste ══════
+           Nur Bereiche, die es wirklich gibt. Leistung, Einstellungen und
+           Profil aus dem Entwurf kommen dazu, sobald sie gebaut sind — keine
+           Einträge, die ins Leere führen. -->
+      <aside class="side">
+        <div class="brand">
+          <img class="brand-mark" src="/img/app-mark.png" alt="" width="40" height="40">
+          <div class="brand-text">
+            <strong>PS5 Cooling &amp; System Center -&nbsp;Pro</strong>
+          </div>
+        </div>
+        <nav class="tabs" role="tablist" aria-label="Bereiche">
+          <button class="tab" data-page="profile" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profil
+          </button>
+          <!-- Seit 1.46.0: die Spiele-Reihe des Startbildschirms (library.c). -->
+          <button class="tab" data-page="games" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="10" rx="5"/><path d="M7.5 10.5v3M6 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg>Spiele
+          </button>
+          <!-- Seit 06.10.2026: der Dateimanager (filemgr.c). -->
+          <button class="tab" data-page="files" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>Dateien
+          </button>
+          <button class="tab" data-page="payloads" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9L12 3z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Payloads
+          </button>
+          <button class="tab active" data-page="cooling" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Kühlung
+          </button>
+          <button class="tab" data-page="system" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg>System
+          </button>
+          <button class="tab" data-page="log" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Protokoll
+          </button>
+          <!-- Seit 06.10.2026: Dank an die Entwickler, deren Arbeit in der App steckt (Wunsch des Users). -->
+          <button class="tab" data-page="credits" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Credits
+          </button>
+          <!-- Seit 06.10.2026: Benutzerhandbuch und FAQ, in der App eingebaut (ohne Bildschirmfotos, klein gehalten);
+               öffnen am PC in einem neuen Tab, im Browser der PS5 ggf. an derselben Stelle (Link „Zurück zur App“). -->
+          <a class="tab tab-doc" href="/handbuch.html" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v16H6.5A1.5 1.5 0 0 0 5 20.5z"/><path d="M5 20.5A1.5 1.5 0 0 0 6.5 22H19v-3"/><path d="M9 7h6M9 10.5h6"/></svg>Handbuch
+          </a>
+          <a class="tab tab-doc" href="/faq.html" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><path d="M12 16.8h.01"/></svg>FAQ
+          </a>
+        </nav>
+        <p class="side-foot">Fortgeschrittene Kühlung &amp; Wärmeüberwachung für die PlayStation 5.</p>
+      </aside>
+
+    <div class="shell">
+      <header class="topbar">
+        <div class="page-head">
+          <h1 id="page-title">Kühlung</h1>
+          <small id="console-model">PlayStation 5</small>
+        </div>
+        <!-- Power-Optionen (bis 1.47.0 die Karte „Konsole steuern“ auf der Systemseite): jeder Befehl unterbricht,
+             was gerade läuft, und verlangt deshalb zwei Klicks; die Folge nennt der Hinweis nach dem ersten (app.js).
+             Die Knöpfe sind eine Gruppe mit Rahmen und stehen zwischen Titel und Schaltern (style.css). -->
+        <div class="pw-group" role="group" aria-label="Power-Optionen">
+          <button class="pw-btn" id="pw-standby" type="button" title="Die Konsole in den Ruhemodus versetzen">Ruhemodus</button>
+          <button class="pw-btn" id="pw-reboot" type="button" title="Die Konsole neu starten">Neu starten</button>
+          <button class="pw-btn" id="pw-off" type="button" title="Die Konsole ausschalten">Ausschalten</button>
+          <button class="pw-btn" id="pw-safe" type="button" title="Neu starten und im Menü des abgesicherten Modus stehen bleiben">Abgesicherter Modus</button>
+        </div>
+        <div class="top-right">
+          <!-- Vollbild: nur sichtbar, wenn der Browser es anbietet (app.js) -->
+          <button class="fs-btn" id="fs-btn" type="button" hidden aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
+            <span id="fs-text">Vollbild</span>
+          </button>
+          <label class="xswitch" for="expert-mode-top">
+            <span>Expertenmodus</span>
+            <span class="switch"><input type="checkbox" id="expert-mode-top"><i></i></span>
+          </label>
+          <div class="conn" id="conn"><i></i><span id="conn-text">Verbinde …</span></div>
+        </div>
+      </header>
+
+      <main>
+        <!-- Nur sichtbar, solange die Konsole nicht antwortet (body.offline) -->
+        <div class="offline-note" role="status">
+          <img src="/img/empty-offline.png" alt="">
+          <div><b>Keine Verbindung zur Konsole</b>
+            <small>Die App fragt jede Sekunde neu nach. Läuft die App noch und ist die PS5 im Netz?</small></div>
+        </div>
+        <!-- ══════════════════════ PROFIL ══════════════════════
+             Neu am 19.09.2026: alles rund um das Konto an dieser Konsole.
+             Name und Profilbild stammen aus der alten Karte „Benutzerprofil"
+             (System), die Sicherungen aus „Assistent und Integrationen".
+             Die IDs sind unverändert, die Verdrahtung in app.js hängt daran. -->
+        <section class="page" id="page-profile">
+          <article class="card pf-hero">
+            <div class="pf-avatar" id="pf-avatar">
+              <span id="pf-avatar-initial">?</span>
+              <img id="pf-avatar-img" alt="" hidden>
+            </div>
+            <div class="pf-id">
+              <span class="ov-label">Angemeldet an dieser PS5</span>
+              <h2 id="pf-name">--</h2>
+              <p class="pb-sub"><span id="pf-console">--</span> · Benutzer-ID <span id="pf-uid">--</span></p>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div><h2>Anzeigename</h2>
+              <p class="sub">so heißt dein Konto im Startmenü</p></div></div>
+            <div class="name-row">
+              <span class="uid" id="user-uid">--</span>
+              <input type="text" id="user-name" maxlength="16" placeholder="Name"
+                     autocomplete="off" spellcheck="false" disabled>
+              <button class="btn primary" id="user-save" disabled>Speichern</button>
+            </div>
+            <p class="note" id="user-note">Der Name erscheint im Startmenü und auf
+              dem Anmeldebildschirm. Die PS5 erlaubt höchstens 16 Zeichen. Die
+              Änderung gilt sofort und übersteht einen Neustart — im Startmenü
+              wird sie manchmal erst nach einem Wechsel des Benutzers sichtbar.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div><h2>Profilbild</h2>
+              <p class="sub">ein fertiges Bild antippen oder ein eigenes wählen, dann übernehmen</p></div></div>
+            <!-- Die fertigen Bilder liegen in der App selbst (web/avatars, gebaut
+                 mit tools/build_avatars.py); app.js lädt die Liste und blendet
+                 den Block erst ein, wenn sie da ist. -->
+            <div class="av-gallery-wrap" id="av-gallery-wrap" hidden>
+              <p class="av-gallery-title"><b>Fertige Bilder</b>
+                <small><span id="av-gallery-count">0</span> Stück, in der App
+                eingebaut — dafür braucht es weder einen PC noch eine Datei</small></p>
+              <div class="av-gallery" id="av-gallery" role="group"
+                   aria-label="Fertige Profilbilder"></div>
+            </div>
+            <div class="avatar-box">
+              <div class="avatar-preview">
+                <canvas id="av-canvas" width="440" height="440"></canvas>
+                <p class="muted" id="av-empty">noch kein Bild gewählt</p>
+              </div>
+              <div class="avatar-ctl">
+                <span class="av-pick-label">Eigenes Bild von diesem Gerät:</span>
+                <input type="file" id="av-file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" title="Profilbild auswählen">
+                <div class="row-gap">
+                  <label class="choice"><input type="radio" name="av-mode" value="crop" checked>
+                    <span><b>Zuschneiden</b><small>füllt das Quadrat, die langen
+                      Kanten fallen weg</small></span></label>
+                  <label class="choice"><input type="radio" name="av-mode" value="fit">
+                    <span><b>Einpassen</b><small>zeigt das ganze Bild, füllt
+                      mit Transparenz auf</small></span></label>
+                </div>
+                <div class="row-gap">
+                  <button class="btn primary" id="av-apply" disabled>Profilbild übernehmen</button>
+                  <button class="btn" id="av-save-pack" disabled>Als Avatar speichern</button>
+                  <button class="btn ghost" id="av-restore">Vorheriges zurückholen</button>
+                </div>
+                <p class="av-status" id="av-status">Noch kein Bild gewählt.</p>
+                <p class="note" id="av-note">Das Bild wird hier im Browser in die
+                  vier Größen umgerechnet, die die PS5 erwartet, und erst danach
+                  zur Konsole geschickt. <b>Mit „Als Avatar speichern" wird das Set im
+                  Ordner /data/PS5-Cooling-Center/Avatars abgelegt</b> und kann später
+                  wieder geladen oder auf andere Profile übernommen werden. <b>Vor der ersten Übernahme wird das
+                  bisherige Profilbild gesichert</b> — „Vorheriges zurückholen"
+                  macht die Änderung damit rückgängig. Bis das Startmenü das neue
+                  Bild zeigt, kann ein Benutzerwechsel nötig sein.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div><h2>Gespeicherte Avatare</h2>
+              <p class="sub">eigene Bilder aufheben und später wieder verwenden</p></div></div>
+            <div class="av-library">
+              <label>Paketname<input type="text" id="av-pack-name" maxlength="48" placeholder="z. B. Astro Blau"></label>
+              <div class="row-gap">
+                <button class="btn ghost" id="av-pack-refresh">Liste laden</button>
+                <button class="btn ghost" id="av-pack-load">In Vorschau laden</button>
+                <button class="btn ghost" id="av-pack-delete">Paket löschen</button>
+              </div>
+              <label>Gespeicherte Avatare
+                <select id="av-pack-list" title="Gespeicherte Avatar-Pakete">
+                  <option value="">-- keine Pakete geladen --</option>
+                </select>
+              </label>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div><h2>Profile sichern und übertragen</h2>
+              <p class="sub">als Datei speichern und auf einem anderen Gerät wieder einlesen</p></div></div>
+            <p class="note">Das <b>Web-Profil</b> enthält die Einstellungen dieses
+              Browsers (z. B. Expertenmodus, eigene Alarme). Die <b>Spielprofile</b>
+              sind die Zieltemperaturen je Spiel von der Kühlungsseite.</p>
+            <div class="row-gap mt-12">
+              <button class="btn" id="webprofile-export">Web-Profil exportieren</button>
+              <label class="file-inline"><span>Profildatei</span><input type="file" id="webprofile-import-file" accept="application/json"></label>
+              <button class="btn" id="webprofile-import">Web-Profil importieren</button>
+            </div>
+            <div class="row-gap mt-12">
+              <button class="btn" id="rules-export">Spielprofile exportieren</button>
+              <label class="file-inline"><span>Importdatei</span><input type="file" id="rules-import-file" accept="application/json"></label>
+              <button class="btn" id="rules-import">Spielprofile importieren</button>
+            </div>
+          </article>
+        </section>
+
+        <!-- ══════════════════════ SPIELE ══════════════════════
+             Neu in 1.46.0: die Spiele-Reihe des Startbildschirms, genau so,
+             wie die Konsole sie führt — gelesen aus ihrer App-Datenbank
+             (library.c, /api/v1/library). Die Karten baut app.js. -->
+        <section class="page" id="page-games">
+          <div class="pg-tabbar">
+            <div class="gm-chips pg-tabs" role="tablist" aria-label="Ansicht wählen">
+              <button type="button" class="gm-chip active" id="gm-tab-lib" role="tab" aria-selected="true">Bibliothek</button>
+              <button type="button" class="gm-chip" id="gm-tab-time" role="tab" aria-selected="false">Spielzeit</button>
+              <button type="button" class="gm-chip" id="gm-tab-saves" role="tab" aria-selected="false">Spielstände</button>
+              <button type="button" class="gm-chip" id="gm-tab-pkg" role="tab" aria-selected="false">Pakete</button>
+              <button type="button" class="gm-chip" id="gm-tab-bk" role="tab" aria-selected="false">Sicherungen</button>
+            </div>
+            <!-- Zwischenspeicher der Spieleliste (libcache.c, 04.10.2026): Titelbilder und die Angaben, die
+                 ein Scan sonst bei jedem Lesen neu holt, auf der Konsole in covers_and_more. -->
+            <div class="gm-cache" id="gm-cache">
+              <span class="gm-cache-info" id="gm-cache-info" hidden></span>
+              <button type="button" class="btn ghost" id="gm-cache-clear" hidden>Ordner leeren</button>
+              <label class="xswitch" for="gm-cache-on"
+                     title="Speichert die Titelbilder und Angaben Ihrer Spiele auf der Konsole (Ordner /data/PS5-Cooling-Center/covers_and_more), damit die Liste schneller lädt.">
+                <span>Covers &amp; Metadaten speichern</span>
+                <span class="switch"><input type="checkbox" id="gm-cache-on" aria-describedby="gm-cache-info"><i></i></span>
+              </label>
+            </div>
+          </div>
+
+          <div id="gm-pane-lib">
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Spiele auf dem Startbildschirm</h2>
+                  <p class="sub" id="gm-sub">wird gelesen …</p></div>
+              </div>
+              <div class="gm-tools">
+                <input type="search" id="gm-search" placeholder="Titel, Titel-ID oder Content-ID"
+                       autocomplete="off" spellcheck="false" aria-label="Spiele durchsuchen">
+                <div class="gm-chips" role="group" aria-label="Auswahl">
+                  <button type="button" class="gm-chip active" data-plat="">Alle</button>
+                  <button type="button" class="gm-chip" data-plat="PS5">PS5</button>
+                  <button type="button" class="gm-chip" data-plat="PS4">PS4</button>
+                  <button type="button" class="gm-chip" data-plat="mods">Backport · AMPR · PlayGo</button>
+                </div>
+                <label class="gm-sort"><span>Sortierung</span>
+                  <select id="gm-sort">
+                    <option value="recent">wie auf dem Startbildschirm</option>
+                    <option value="name">Name</option>
+                    <option value="last">zuletzt gespielt</option>
+                    <option value="played">Spielzeit</option>
+                    <option value="size">Größe</option>
+                    <option value="installed">installiert</option>
+                  </select>
+                </label>
+              </div>
+            </article>
+
+            <!-- Laufende oder gerade beendete Kopie; ein Klick öffnet ihr Fenster (app.js) -->
+            <button type="button" class="cp-banner" id="gm-copy-banner" hidden></button>
+
+            <div class="gm-grid" id="gm-grid"></div>
+          </div>
+
+          <!-- Spielzeit: was die App selbst mitgeschrieben hat (playtime.c). Die
+               Zahlen auf den Karten oben stammen von der Konsole und zählen von
+               Anfang an; hier steht, wann gespielt wurde und wie heiß es dabei war. -->
+          <div id="gm-pane-time" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Spielzeit</h2><p class="sub" id="pt-sub">wird gelesen …</p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="pt-export" type="button">Als Tabelle speichern</button>
+                  <button class="btn ghost" id="pt-reset" type="button">Verlauf löschen</button>
+                </div>
+              </div>
+              <div class="pt-note" id="pt-note" hidden></div>
+              <div class="pt-live" id="pt-live" hidden></div>
+              <div class="pt-stats" id="pt-stats"></div>
+              <p class="muted pt-foot">Diese Zeiten zählt die App selbst, ab dem ersten Start mit dieser
+                Version. Die Spielzeit auf den Karten der Bibliothek stammt von der Konsole und zählt von
+                Anfang an. Gezählt wird, solange ein Spiel vorn ist; pausiert es auf dem Startbildschirm,
+                steht die Uhr.</p>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Die letzten 14 Tage</h2><p class="sub">Spielzeit pro Tag</p></div>
+              </div>
+              <div class="pt-bars" id="pt-bars" role="img" aria-label="Spielzeit pro Tag"></div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Meistgespielt</h2><p class="sub" id="pt-rank-sub"></p></div>
+              </div>
+              <div id="pt-rank"></div>
+              <button class="btn ghost mt-10" id="pt-rank-more" type="button" hidden></button>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Letzte Sitzungen</h2><p class="sub" id="pt-list-sub"></p></div>
+              </div>
+              <div id="pt-list"></div>
+              <button class="btn ghost mt-10" id="pt-more" type="button" hidden>Mehr anzeigen</button>
+            </article>
+          </div>
+
+          <!-- Spielstände sichern und zurückspielen (savebackup.c): was die Konsole hat,
+               wohin gesichert werden kann, was an Sicherungen schon da ist. app.js baut die Listen. -->
+          <!-- Pakete (04.10.2026): .pkg-Dateien auf Sticks, Discs und im Konsolenspeicher finden und anzeigen,
+               große Pakete in Teile aufteilen (pkgscan.c, pkgparse.c, pkgsplit.c). app.js (pk*) füllt es. -->
+          <div id="gm-pane-pkg" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Pakete</h2><p class="sub" id="pk-sub">wird gelesen …</p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="pk-scan" type="button">Neu suchen</button>
+                </div>
+              </div>
+              <p class="muted pk-intro">Hier stehen die Spiele-Pakete (<code>.pkg</code>) auf angesteckten USB-Laufwerken, Platten und im
+                Konsolenspeicher. Gesucht wird im Hauptordner und im Ordner <code>pkg</code> (mit seinen Unterordnern) jedes Laufwerks, im
+                Konsolenspeicher (<code>/data/pkg</code>) nur im Ordner <code>pkg</code>. Ein sehr großes Paket lässt sich in Teile aufteilen,
+                die auf einen FAT32-Stick (4 GB je Datei) oder auf Discs passen. Das Paket selbst bleibt dabei unverändert.</p>
+              <div class="gm-tools pk-tools">
+                <input type="search" id="pk-search" placeholder="Name, Titel-ID oder Dateiname" autocomplete="off" spellcheck="false" aria-label="Pakete durchsuchen">
+                <div class="gm-chips" role="group" aria-label="Art des Pakets">
+                  <button type="button" class="gm-chip active" data-pk-kind="">Alle</button>
+                  <button type="button" class="gm-chip" data-pk-kind="base">Spiele</button>
+                  <button type="button" class="gm-chip" data-pk-kind="update">Updates</button>
+                  <button type="button" class="gm-chip" data-pk-kind="dlc">Zusatzinhalte</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="card" id="pk-job-card" hidden>
+              <div class="card-head">
+                <div><h2 id="pk-job-title">Paket aufteilen</h2><p class="sub" id="pk-job-sub"></p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="pk-cancel" type="button">Abbrechen</button>
+                </div>
+              </div>
+              <div id="pk-job"></div>
+            </article>
+
+            <article class="card" id="pk-inst-card" hidden>
+              <div class="card-head">
+                <div><h2 id="pk-inst-title">Paket installieren</h2><p class="sub" id="pk-inst-sub"></p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="pk-inst-cancel" type="button">Abbrechen</button>
+                </div>
+              </div>
+              <div id="pk-inst"></div>
+            </article>
+
+            <div id="pk-list"></div>
+          </div>
+
+          <!-- Die Kopien und Konvertierungen der App (PS5-Sicherung/Spiele auf jedem Laufwerk); löschen über denselben
+               Dialog wie ein Spiel (gamedelete.c). -->
+          <div id="gm-pane-bk" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Sicherungen</h2><p class="sub" id="bk-sub">wird gelesen …</p></div>
+                <div class="row-gap"><button type="button" class="btn ghost" id="bk-reload">Neu einlesen</button></div>
+              </div>
+              <div id="bk-list"></div>
+            </article>
+          </div>
+
+          <div id="gm-pane-saves" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Spielstände sichern</h2><p class="sub" id="sv-sub">wird gelesen …</p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="sv-reload" type="button">Aktualisieren</button>
+                </div>
+              </div>
+              <p class="muted sv-intro">Kopiert die Spielstände genau so, wie die Konsole sie ablegt: verschlüsselt,
+                nichts wird entschlüsselt oder verändert, und nichts wird ins Internet geschickt. Eine Sicherung passt
+                zu dieser Konsole und ihren Benutzern; auf einer anderen ließe sie sich nicht öffnen. Gesichert und
+                zurückgespielt wird nur, wenn kein Spiel läuft, auch kein pausiertes.</p>
+              <div class="pt-note" id="sv-game" hidden></div>
+              <div id="sv-users"></div>
+              <p class="cp-step">Wohin soll gesichert werden?</p>
+              <div class="cp-list" id="sv-drives"></div>
+              <div class="cp-actions sv-actions">
+                <p class="muted sv-hint" id="sv-hint"></p>
+                <button type="button" class="btn primary" id="sv-start" disabled>Spielstände sichern</button>
+              </div>
+            </article>
+
+            <article class="card" id="sv-job-card" hidden>
+              <div class="card-head">
+                <div><h2 id="sv-job-title">Vorgang</h2><p class="sub" id="sv-job-sub"></p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="sv-cancel" type="button">Abbrechen</button>
+                </div>
+              </div>
+              <div id="sv-job"></div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Sicherungen</h2><p class="sub" id="sv-bk-sub"></p></div>
+              </div>
+              <div id="sv-backups"></div>
+              <p class="muted sv-hint sv-unfinished" id="sv-unfinished" hidden></p>
+            </article>
+          </div>
+        </section>
+
+        <!-- ══════════════════════ PAYLOADS ══════════════════════
+             Seit 1.46.0 an der Stelle der früheren „Übersicht" (deren Inhalt steht
+             jetzt auf der Kühlungsseite). Laufende, gespeicherte und auf USB liegende
+             Payloads; app.js (loadPayloadsPage) füllt die Listen. -->
+        <section class="page" id="page-payloads">
+          <div class="pl-top">
+            <h2 class="pl-title">Payload <span>Verwaltung</span></h2>
+            <button class="btn" id="pl-refresh" type="button">Aktualisieren</button>
+          </div>
+
+          <section class="pl-sec" aria-labelledby="pl-h-running">
+            <header class="pl-sec-head">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z"/></svg>
+              <h3 id="pl-h-running">Laufende Payloads</h3>
+              <span class="pl-count" id="pl-count-running">–</span>
+            </header>
+            <div class="pl-grid" id="pl-list"><p class="muted">wird gelesen …</p></div>
+            <p class="pl-note">„Beenden" hält das Programm an und gibt seinen Arbeitsspeicher
+              wieder frei; gestartet wird es erneut aus den Listen darunter. Praktisch vor
+              allem dann, wenn diese App versehentlich zweimal gestartet wurde: Beide würden
+              sonst gleichzeitig am Lüfter drehen und sich gegenseitig stören.</p>
+          </section>
+
+          <section class="pl-sec" aria-labelledby="pl-h-stored">
+            <header class="pl-sec-head">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9L12 3z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>
+              <h3 id="pl-h-stored">Gespeicherte Payloads</h3>
+              <span class="pl-count" id="pl-count-stored">–</span>
+            </header>
+            <p class="pl-where">Ordner auf der Konsole: <code id="pl-dir">/data/PS5-Cooling-Center/payloads</code></p>
+            <div class="pl-grid" id="pl-stored"><p class="muted">wird gelesen …</p></div>
+          </section>
+
+          <section class="pl-sec" aria-labelledby="pl-h-usb">
+            <header class="pl-sec-head">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13"/><circle cx="12" cy="19" r="2"/><path d="M12 9l-4-2v3M12 12l4-2v3"/><rect x="14" y="4.5" width="4" height="3" rx=".5"/><rect x="5.5" y="9" width="4" height="3" rx=".5"/></svg>
+              <h3 id="pl-h-usb">USB-Speicher</h3>
+              <span class="pl-count" id="pl-count-usb">–</span>
+            </header>
+            <p class="pl-where">Gesucht wird im Hauptverzeichnis des Sticks und in dessen Ordner <code>payloads</code>.</p>
+            <div id="pl-usb"><p class="muted">wird gelesen …</p></div>
+          </section>
+
+          <p class="note pl-help">„Starten" schickt die Datei an den Payload-Lader der Konsole
+            (Port 9021) — genau das, was sonst vom PC aus geschieht, nur ohne PC. Eigene
+            Payloads gehören in den Ordner oben (zum Beispiel per FTP hineinkopiert) oder auf
+            einen USB-Stick, dort ins Hauptverzeichnis oder in einen Ordner „payloads". Der
+            Ordner wird beim Start der App angelegt, wenn es ihn noch nicht gibt; ein
+            vorhandener bleibt unberührt.</p>
+        </section>
+
+        <!-- ══════════════════════ KÜHLUNG ══════════════════════
+             Reihe D (19.09.2026). Oben das Wichtigste zum Einstellen, unten im
+             Expertenbereich Regelzustand, Diagnose und Erweitertes. Alle
+             Blöcke sind die bisherigen, nur neu angeordnet — keine ID fehlt.
+             ⚠ Ungeschützt von app.js beschrieben: target-range, apply-target,
+             auto-mode, rule-list, rule-nogame, rule-save, save-adv, s-bind,
+             s-fan-reapply, s-port, s-safe, s-wcpu.
+             Seit 1.46.0 steht hier auch, was früher die Übersicht zeigte (ohne
+             die Doppelungen). ⚠ Auch diese IDs beschreibt app.js OHNE
+             Existenzprüfung — nicht entfernen: hero, hero-temp, hero-diff, t-cpu,
+             t-soc, t-fan, run-dot, sensor-grid, hist-reset, line-/area-cpu|soc|fan|
+             hcpu|hsoc, line-target. -->
+        <section class="page active" id="page-cooling">
+          <!-- Reihe 1: wärmster Punkt, Lüfter und laufendes Spiel (bis 1.45.x die Übersicht) -->
+          <div class="ov-row ov-top">
+            <article class="card ov-hero" id="hero">
+              <div class="ov-gauge">
+                <svg viewBox="0 0 150 150" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="ovHot" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stop-color="#22d3ee"></stop>
+                      <stop offset="1" stop-color="#3b82f6"></stop>
+                    </linearGradient>
+                  </defs>
+                  <circle class="rg-track" cx="75" cy="75" r="64"></circle>
+                  <circle class="rg-fill ov-hot" id="ov-hot-ring" cx="75" cy="75" r="64"
+                          transform="rotate(-90 75 75)"></circle>
+                </svg>
+                <div class="ov-gauge-val"><span class="hero-num" id="hero-temp">--</span><span class="hero-unit">°C</span></div>
+              </div>
+              <div class="hero-copy">
+                <div class="ov-title"><span class="hero-icon" id="hero-icon">·</span><h2 id="hero-title">Status wird geprüft …</h2></div>
+                <p id="hero-sub">Einen Moment, die Sensoren werden gelesen.</p>
+                <small class="ov-caption">Wärmster Punkt der Konsole · <b id="hero-diff">wird gelesen …</b></small>
+              </div>
+            </article>
+
+            <div class="ov-side">
+              <article class="card ov-tile">
+                <div class="ov-fan fan-pic">
+                  <img class="fan-rotor" src="/img/fan-rotor.png" alt="">
+                  <img class="fan-frame" src="/img/fan-frame.png" alt="">
+                  <svg viewBox="0 0 256 256" aria-hidden="true">
+                    <circle class="fan-ring-track" cx="128" cy="128" r="110"></circle>
+                    <circle class="fan-ring-glow" cx="128" cy="128" r="110" transform="rotate(-90 128 128)"></circle>
+                    <circle class="fan-ring-fill" id="ov-fan-ring" cx="128" cy="128" r="110" transform="rotate(-90 128 128)"></circle>
+                  </svg>
+                </div>
+                <div class="ov-tile-text">
+                  <span class="ov-label">Lüfter</span>
+                  <strong class="ov-big" id="t-fan">--<i>%</i></strong>
+                  <small id="t-fan-note">Drehzahl</small>
+                </div>
+              </article>
+              <article class="card ov-tile ov-game" id="running">
+                <div class="ov-game-pic">
+                  <span class="run-dot" id="run-dot"></span>
+                  <img src="/img/empty-game.png" alt="">
+                </div>
+                <div class="ov-tile-text">
+                  <span class="ov-label">Läuft gerade</span>
+                  <b id="run-name">--</b>
+                  <small id="run-state"></small>
+                  <button type="button" class="btn ghost run-close" id="run-close" hidden title="Beendet das Spiel sofort, ohne Rückfrage. Was darin nicht gespeichert ist, geht verloren.">Spiel beenden</button>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <!-- Reihe 2: Zieltemperatur und Betriebsart, gleich unter dem Status (05.10.2026, Wunsch des Users;
+               vorher standen sie unter Verlauf und Sensoren) -->
+          <div class="ov-row co-main">
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-target.png" alt="">
+              <div class="card-head"><div><h2>Zieltemperatur</h2>
+                <p class="sub">worauf die Konsole gehalten wird</p></div></div>
+              <div class="target-row">
+                <output id="target-out">-- °C</output>
+                <span class="target-hint" id="target-hint">wird geladen …</span>
+              </div>
+              <input id="target-range" type="range" min="60" max="78" step="1" value="66" title="Zieltemperatur in Grad Celsius">
+              <div class="scale">
+                <span>60 °C<small>kühler, lauter</small></span>
+                <span class="right">78 °C<small>wärmer, leiser</small></span>
+              </div>
+              <button class="btn primary full" id="apply-target">Übernehmen</button>
+              <div class="co-quick">
+                <div class="co-quick-head"><b>Schnellwahl</b><small>setzt das Ziel sofort, ohne „Übernehmen"</small></div>
+                <div class="co-quick-row">
+                  <button class="co-preset" id="preset-cool" data-kind="cool" aria-pressed="false"><b>Kühl</b><span id="co-preset-cool-v">--</span></button>
+                  <button class="co-preset" id="preset-balanced" data-kind="balanced" aria-pressed="false"><b>Ausgewogen</b><span id="co-preset-balanced-v">--</span></button>
+                  <button class="co-preset" id="preset-quiet" data-kind="quiet" aria-pressed="false"><b>Leise</b><span id="co-preset-quiet-v">--</span></button>
+                </div>
+                <p class="ov-note" id="co-preset-note">wird gelesen …</p>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><div><h2>Betriebsart</h2>
+                <p class="sub">wie kräftig der Lüfter auf Wärme antwortet — <b>ändert nicht das Ziel</b></p></div></div>
+              <div class="choices">
+                <label class="choice"><input type="radio" name="profile" value="comfort">
+                  <span><b>Leise</b><small>Voller Lüfter erst 14 °C über dem Ziel,
+                  Änderungen in kleinsten Schritten. Gemessen im Spiel: 69–70 °C
+                  bei ruhigen 38 %. <b>Empfohlen.</b></small></span>
+                  <img class="choice-ico" src="/img/mode-quiet.png" alt=""></label>
+                <label class="choice"><input type="radio" name="profile" value="balanced">
+                  <span><b>Ausgewogen</b><small>Voller Lüfter schon 10 °C über dem
+                  Ziel, reagiert doppelt so schnell. Etwas kühler, etwas
+                  hörbarer.</small></span>
+                  <img class="choice-ico" src="/img/mode-balanced.png" alt=""></label>
+                <label class="choice"><input type="radio" name="profile" value="cool">
+                  <span><b>Kühl</b><small>Voller Lüfter bereits 7 °C über dem Ziel,
+                  dreifach flinke Anpassung. Deutlich kühler und deutlich
+                  hörbar.</small></span>
+                  <img class="choice-ico" src="/img/mode-cool.png" alt=""></label>
+              </div>
+              <label class="switch-row">
+                <span><b>Automatik</b><small>Aus = die App gibt die Steuerung an
+                die PS5 zurück und zeigt nur noch Werte an.</small></span>
+                <span class="switch"><input type="checkbox" id="auto-mode"><i></i></span>
+              </label>
+              <p class="note" id="auto-note">
+                Beim Ausschalten bekommt die Konsole sofort ihre eigene
+                Lüftereinstellung zurück und regelt wieder selbst – genau so,
+                als liefe die App nicht.
+              </p>
+              <label class="switch-row mt-12">
+                <span><b>Anzeige per Mikrofon-Taste</b><small>Die Mikrofon-Taste
+                des Controllers zweimal kurz hintereinander drücken: Oben rechts
+                erscheinen kurz Prozessortemperatur und Lüfterdrehzahl – auch ohne
+                diese Seite. Das Mikrofon wird dabei zweimal umgeschaltet und ist
+                danach wieder wie vorher. Höchstens alle 5 Sekunden.</small></span>
+                <span class="switch"><input type="checkbox" id="mic-button-status"><i></i></span>
+              </label>
+            </article>
+          </div>
+
+          <!-- Reihe 3: Verlauf und Sensoren -->
+          <div class="ov-row ov-mid">
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Temperaturverlauf</h2><p class="sub">letzte 2 Minuten</p></div>
+                <div class="legend">
+                  <span><i class="s1"></i>Prozessor</span>
+                  <span><i class="s2"></i>Hauptchip</span>
+                  <!-- Seit 1.45.1, nur auf der PS5 Pro (dort vermessen). -->
+                  <span id="legend-gpu" class="is-hidden"><i class="s4"></i>Grafik</span>
+                  <span><i class="tgt"></i>Ziel</span>
+                </div>
+              </div>
+              <div class="chart-host" id="host-temp">
+                <div class="axis-y" id="axis-temp"></div>
+                <svg id="chart-temp" viewBox="0 0 720 210" preserveAspectRatio="none"
+                     role="img" aria-label="Temperaturverlauf von Prozessor, Hauptchip und Grafik">
+                  <g class="grid" id="grid-temp"></g>
+                  <path class="tgtline" id="line-target"></path>
+                  <path class="area a1" id="area-cpu"></path>
+                  <path class="area a2" id="area-soc"></path>
+                  <path class="line l1" id="line-cpu"></path>
+                  <path class="line l2" id="line-soc"></path>
+                  <path class="line l4" id="line-gpu"></path>
+                  <line class="cross" id="cross-temp" y1="0" y2="210"></line>
+                </svg>
+                <div class="tip" id="tip-temp"></div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><div><h2>Sensoren</h2><p class="sub">direkt von der Konsole</p></div>
+                <div class="ov-chip" id="ov-chip" data-heat="ok" aria-hidden="true">
+                  <img class="c-ok" src="/img/chip-ok.png" alt="">
+                  <img class="c-warm" src="/img/chip-warm.png" alt="">
+                  <img class="c-hot" src="/img/chip-hot.png" alt="">
+                </div></div>
+              <div class="ov-kv">
+                <div><span><i class="dot s1"></i>Prozessor<small id="t-cpu-note">wird gelesen …</small></span>
+                  <b id="t-cpu">--<i>°C</i></b></div>
+                <div><span><i class="dot s2"></i>Hauptchip<small id="t-soc-note">wird gelesen …</small></span>
+                  <b id="t-soc">--<i>°C</i></b></div>
+                <div id="t-gpu-row" class="is-hidden"><span><i class="dot s4"></i>Grafik<small id="t-gpu-note">wird gelesen …</small></span>
+                  <b id="t-gpu">--<i>°C</i></b></div>
+              </div>
+            </article>
+          </div>
+
+          <article class="card has-ico">
+            <img class="card-ico" src="/img/icon-games.png" alt="">
+            <div class="card-head"><div><h2>Profile pro Spiel</h2>
+              <p class="sub">automatisch umschalten, sobald ein Spiel läuft</p></div></div>
+
+            <div id="rule-current" class="rule-current is-hidden">
+              <div>
+                <b id="rule-game">--</b>
+                <small id="rule-hint">läuft gerade</small>
+              </div>
+              <button class="btn primary" id="rule-save">Aktuelle Einstellung merken</button>
+            </div>
+            <p class="muted" id="rule-nogame">
+              Starte ein Spiel, dann kannst du die aktuelle Zieltemperatur und
+              Betriebsart dafür speichern. Voraussetzung ist, dass die
+              <b>Spielerkennung</b> unter „Zusatzabfragen" eingeschaltet ist —
+              ohne sie weiß die App nicht, welcher Titel läuft.
+            </p>
+
+            <div id="rule-list"></div>
+          </article>
+
+          <details class="card co-explain">
+            <summary>Wie arbeitet die Regelung?</summary>
+            <div class="co-explain-body">
+              <p>Du gibst eine <b>Zieltemperatur</b> vor, und die App versucht, die
+               Konsole dort zu halten. Je weiter sie über dieses Ziel steigt, desto
+               schneller dreht der Lüfter — gleichmäßig ansteigend, nicht in Sprüngen.</p>
+            <p>Damit er nicht bei jeder kurzen Spitze aufheult, rechnet die App mit dem
+               <b>Durchschnitt der letzten Sekunden</b> statt mit dem letzten Messwert
+               und ändert die Drehzahl immer nur ein wenig auf einmal.</p>
+            <p>Ein gemessenes Beispiel: Bei Ziel 65 °C blieb die Konsole während eines
+               Spiels bei rund 70 °C, der Lüfter lief dabei ruhig mit etwa 38 % — obwohl
+               die Auslastung zwischen 13 % und 87 % schwankte. Wird es doch einmal zu
+               heiß, lässt der <b>Notfallmodus</b> alle Rücksicht auf Lautstärke fallen
+               und dreht zügig auf. Und noch darunter schützt sich die PS5 selbst, ganz
+               ohne diese App.</p>
+            </div>
+          </details>
+
+          <!-- ══ Expertenbereich ══ -->
+          <div class="expert-only">
+            <div class="ov-expert-head">
+              <h2>Expertenansicht</h2>
+              <p class="sub">Regelzustand, Diagnose, Verläufe, Rohwerte und erweiterte Einstellungen — über den Schalter oben ein- und ausblendbar.</p>
+            </div>
+            <article class="card">
+              <div class="card-head"><div><h2>Aktueller Regelzustand</h2>
+                <p class="sub">was die Regelung gerade sieht</p></div></div>
+              <div class="kv-grid">
+                <div><span>Durchschnittstemperatur</span><b id="c-avg">--</b></div>
+                <div><span>Tendenz</span><b id="c-trend">--</b></div>
+                <div><span>Gewünschte Drehzahl</span><b id="c-tduty">--</b></div>
+                <div><span>Tatsächliche Drehzahl</span><b id="c-rduty">--</b></div>
+                <div><span>An die Konsole übergeben</span><b id="c-thr">--</b></div>
+                <div><span>Notfallmodus</span><b id="c-safety">--</b></div>
+              </div>
+              <p class="note">
+                <b>Warum sinkt die übergebene Zahl, wenn der Lüfter schneller
+                dreht?</b> Weil die App den Lüfter nicht direkt stellt. Sie nennt
+                der Konsole nur die Temperatur, die diese anstreben soll — den
+                Rest erledigt deren eigene Steuerung. Eine <i>niedrigere</i>
+                Vorgabe bedeutet also <i>mehr</i> Kühlung. Beispiel aus einem
+                gemessenen Spiel: Vorgabe 70 °C ergab rund 38 % Drehzahl; als es
+                kühler wurde, stieg die Vorgabe wieder auf 75 °C und der Lüfter
+                ging herunter.
+              </p>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><div><h2>Lüfterdiagnose (Soll / Ist / Clamp)</h2>
+                <p class="sub">Regelziel, echte Drehzahl und Begrenzungen</p></div></div>
+              <div class="bar fan-compare">
+                <span id="fan-balance-target" class="s1 fade"></span>
+                <span id="fan-balance-measured" class="s3"></span>
+              </div>
+              <div class="fan-mini">
+                <svg viewBox="0 0 280 56" preserveAspectRatio="none"
+                     role="img" aria-label="Lüftertrend Soll und Ist der letzten 60 Sekunden">
+                  <path id="fan-mini-target" class="mini-target"></path>
+                  <path id="fan-mini-measured" class="mini-measured"></path>
+                </svg>
+                <div class="fan-mini-meta" id="fan-mini-meta">60s-Trend wird gelesen …</div>
+              </div>
+              <div class="kv-grid" id="fan-diag-list">
+                <div><span>Modus</span><b id="f-mode">--</b></div>
+                <div><span>Steueradapter</span><b id="f-availability">--</b></div>
+                <div><span>Effektives Ziel</span><b id="f-effective-target">--</b></div>
+                <div><span>Aktive Spielregel</span><b id="f-rule">--</b></div>
+                <div><span>Soll-Ist-Abweichung</span><b id="f-delta">--</b></div>
+                <div><span>Gemessen (roh)</span><b id="f-raw">--</b></div>
+                <div><span>Clamp-Lage</span><b id="f-clamp">--</b></div>
+                <div><span>Regelprofil / Samples</span><b id="f-profile">--</b></div>
+              </div>
+              <p class="note diag-advice" id="fan-diag-advice">Diagnose wird gelesen …</p>
+              <div class="fan-legend" aria-label="Bedeutung der Diagnose-Badges">
+                <span><i class="reason-tag ok">OK</i> stabil, weiter beobachten</span>
+                <span><i class="reason-tag warn">GELB</i> beobachten und ggf. nachregeln</span>
+                <span><i class="reason-tag hot">ROT</i> sofort handeln</span>
+              </div>
+              <p class="note">Der helle Balken zeigt die Soll-Drehzahl, der
+                farbige Balken den gemessenen Ist-Wert. Weicht der Ist-Wert stark
+                ab, kann die PS5 gerade intern priorisieren (z. B. Lastwechsel,
+                Schutzpfade, Startphase).</p>
+            </article>
+
+            <div class="grid-2">
+              <article class="card">
+                <div class="card-head">
+                  <div><h2>Lüfterdrehzahl</h2><p class="sub">letzte 2 Minuten</p></div>
+                  <div class="legend"><span><i class="s3"></i>gemessen</span></div>
+                </div>
+                <div class="chart-host" id="host-fan">
+                  <div class="axis-y" id="axis-fan"></div>
+                  <svg id="chart-fan" viewBox="0 0 720 210" preserveAspectRatio="none"
+                       role="img" aria-label="Verlauf der Lüfterdrehzahl">
+                    <g class="grid" id="grid-fan"></g>
+                    <path class="area a3" id="area-fan"></path>
+                    <path class="line l3" id="line-fan"></path>
+                    <line class="cross" id="cross-fan" y1="0" y2="210"></line>
+                  </svg>
+                  <div class="tip" id="tip-fan"></div>
+                </div>
+              </article>
+
+              <article class="card">
+                <div class="card-head"><div><h2>Prozessor</h2>
+                  <p class="sub">Auslastung über alle acht Kerne</p></div></div>
+                <div class="cpu-block">
+                  <div class="cpu-ring">
+                    <svg viewBox="0 0 132 132" aria-hidden="true">
+                      <circle class="ring-track" cx="66" cy="66" r="56"></circle>
+                      <circle class="ring-fill" id="cpu-arc" cx="66" cy="66" r="56"
+                              transform="rotate(-90 66 66)"></circle>
+                    </svg>
+                    <div class="ring-mid">
+                      <b id="cpu-total">--</b><span>gesamt</span>
+                    </div>
+                  </div>
+                  <div class="cores" id="cores"></div>
+                </div>
+                <p class="note" id="cpu-sub">wird gelesen …</p>
+              </article>
+            </div>
+
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Langzeitverlauf</h2>
+                  <p class="sub" id="hist-range">letzte 24 Stunden</p></div>
+                <div class="row-gap">
+                  <span class="legend"><span><i class="s1"></i>Prozessor</span>
+                    <span><i class="s2"></i>Hauptchip</span></span>
+                  <button class="btn ghost" id="hist-reset">Zurücksetzen</button>
+                </div>
+              </div>
+              <div class="chart-host" id="host-hist">
+                <div class="axis-y" id="axis-hist"></div>
+                <svg id="chart-hist" viewBox="0 0 720 210" preserveAspectRatio="none"
+                     role="img" aria-label="Temperaturverlauf über Stunden">
+                  <g class="grid" id="grid-hist"></g>
+                  <path class="area a1" id="area-hcpu"></path>
+                  <path class="line l1" id="line-hcpu"></path>
+                  <path class="line l2" id="line-hsoc"></path>
+                  <line class="cross" id="cross-hist" y1="0" y2="210"></line>
+                </svg>
+                <div class="tip" id="tip-hist"></div>
+              </div>
+              <div class="kv-grid mt-16">
+                <div><span>Höchstwert Prozessor</span><b id="peak-cpu">--</b></div>
+                <div><span>Höchstwert Hauptchip</span><b id="peak-soc">--</b></div>
+                <div><span>Höchste Drehzahl</span><b id="peak-fan">--</b></div>
+                <div><span>Aufgezeichnet</span><b id="hist-count">--</b></div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><div><h2>Weitere Messwerte</h2>
+                <p class="sub">zusätzlich zu den Werten oben</p></div></div>
+              <div class="sensor-grid" id="sensor-grid"></div>
+            </article>
+
+            <details class="advanced" open>
+              <summary>Erweiterte Einstellungen</summary>
+              <p class="note">Wie schnell und wie kräftig der Lüfter reagiert,
+                legt die <b>Betriebsart</b> oben fest — dafür braucht es hier
+                keine Einzelwerte mehr. Übrig bleibt, was die Betriebsart nicht
+                entscheiden kann.</p>
+              <div class="kv-grid mt-10" id="profile-effective-box">
+                <div><span>Regelband</span><b id="eff-band">--</b></div>
+                <div><span>Ruhezone</span><b id="eff-deadband">--</b></div>
+                <div><span>Regelintervall</span><b id="eff-interval">--</b></div>
+                <div><span>Glättung</span><b id="eff-window">--</b></div>
+                <div><span>Max. Schrittweite</span><b id="eff-step">--</b></div>
+              </div>
+              <div class="adv-grid">
+                <label>Warnung ab (°C)<input type="number" id="s-wcpu" min="40" max="110">
+                  <small>Ab dieser Prozessortemperatur erscheint eine Meldung auf
+                    dem Fernseher. Für den Hauptchip gilt automatisch 5 °C mehr,
+                    weil der mehr Luft nach oben hat.</small></label>
+                <label>Notfallgrenze (°C)<input type="number" id="s-safe" min="72" max="90">
+                  <small>Ab hier werden alle Rücksichten auf Lautstärke fallen
+                    gelassen und der Lüfter geht zügig auf Vollast. Ein Notnagel,
+                    kein Feinregler — am besten so lassen.</small></label>
+                <label>Port der Weboberfläche<input type="number" id="s-port" min="1024" max="65535">
+                  <small>Nur ändern, wenn der Port belegt ist. <b>Achtung:</b> Die
+                    Kachel im Startmenü ruft fest 8086 auf und findet die App
+                    danach nicht mehr.</small></label>
+                <label>Bind-Adresse<input type="text" id="s-bind" maxlength="63" placeholder="0.0.0.0">
+                  <small><b>0.0.0.0</b> bedeutet: im LAN erreichbar. <b>127.0.0.1</b>
+                    bedeutet: nur lokal auf der Konsole erreichbar.</small></label>
+              </div>
+              <div class="row-gap mt-12">
+                <button class="btn ghost" id="bind-lan">LAN-Zugriff (0.0.0.0)</button>
+                <button class="btn ghost" id="bind-local">Nur lokal (127.0.0.1)</button>
+              </div>
+              <div class="row-gap mt-12">
+                <label><span>Direktwert (°C)</span><input type="number" id="s-direct-threshold" min="30" max="90"></label>
+                <label><span>Reapply-Intervall (s)</span><input type="number" id="s-fan-reapply" min="1" max="300"></label>
+                <button class="btn" id="apply-direct-threshold">Direkt setzen</button>
+              </div>
+              <p class="note" id="s-direct-threshold-note">Im Modus Automatik setzt dieser Wert die Zieltemperatur. Im Modus Beobachten wird eine feste Lüfterschwelle gesetzt.</p>
+              <h3 class="sub-head">Lüfterkurve (Experte)</h3>
+              <div class="kv-list" id="fan-curve-list"><p class="muted">Kurve wird geladen …</p></div>
+              <div class="row-gap mt-12">
+                <button class="btn ghost" id="fan-curve-add">Punkt hinzufügen</button>
+                <button class="btn" id="fan-curve-save">Kurve speichern</button>
+                <button class="btn ghost" id="fan-curve-reset">Standardkurve laden</button>
+              </div>
+              <p class="note">Jeder Punkt definiert: bei Temperatur X soll Ziel-Drehzahl Y gelten. Die Punkte werden nach Temperatur sortiert gespeichert.</p>
+              <button class="btn full" id="save-adv">Erweiterte Einstellungen speichern</button>
+            </details>
+          </div>
+        </section>
+
+        <!-- ══════════════════════ SYSTEM ══════════════════════ -->
+        <section class="page" id="page-system">
+          <!-- Aufgeteilt am 19.09.2026: vorne, was im Alltag nützt; alles
+               Technische im Expertenbereich (body.expert blendet ein). -->
+          <article class="card page-banner pb-system">
+            <h2>Deine Konsole</h2>
+            <p class="pb-sub">Hardware, Speicher und Netzwerk auf einen Blick.</p>
+            <div class="pb-stats">
+              <div class="co-stat"><span class="ov-label">Modell</span><strong class="pb-val" id="sy-model">--</strong></div>
+              <div class="co-stat"><span class="ov-label">Firmware</span><strong class="pb-val" id="sy-fw">--</strong></div>
+              <div class="co-stat"><span class="ov-label">Läuft seit</span><strong class="pb-val" id="sy-uptime">--</strong></div>
+            </div>
+          </article>
+
+          <article class="card has-ico">
+            <img class="card-ico" src="/img/chip-ok.png" alt="">
+            <div class="card-head"><div><h2>Konsole</h2>
+              <p class="sub">Hardware und Software</p></div></div>
+            <div class="kv-list" id="sys-list"><p class="muted">wird gelesen …</p></div>
+          </article>
+
+          <div class="grid-2">
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-network.png" alt="">
+              <div class="card-head"><div><h2>Netzwerk</h2>
+                <p class="sub">Verbindung der Konsole</p></div></div>
+              <div class="kv-list" id="net-list"><p class="muted">wird gelesen …</p></div>
+            </article>
+
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-display.png" alt="">
+              <div class="card-head"><div><h2>Bildschirm</h2>
+                <p class="sub">angeschlossenes Anzeigegerät</p></div></div>
+              <div class="kv-list" id="disp-list"><p class="muted">wird gelesen …</p></div>
+            </article>
+          </div>
+
+          <div class="grid-2">
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-ssd.png" alt="">
+              <div class="card-head"><div><h2>Speicherplatz</h2>
+                <p class="sub">interne SSD, Erweiterung und angeschlossene Medien</p></div></div>
+              <div id="storage-list"><p class="muted">wird gelesen …</p></div>
+            </article>
+
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-history.png" alt="">
+              <div class="card-head"><div><h2>Kühlleistung über die Zeit</h2>
+                <p class="sub">lässt die Kühlung nach?</p></div></div>
+              <div id="health-box"><p class="muted">wird gelesen …</p></div>
+              <p class="note">Verglichen werden nur Zeiten, in denen die Konsole
+                <b>ähnlich stark arbeitet und der Lüfter ähnlich schnell dreht</b>
+                — sonst würde ein anspruchsvolleres Spiel wie nachlassende
+                Kühlung aussehen. Steigt die Temperatur unter diesen gleichen
+                Bedingungen über Wochen an, sammelt sich Staub. Die Aussage
+                braucht etwa vier Wochen Nutzung, vorher steht hier nur, wie
+                viel schon erfasst ist.</p>
+            </article>
+          </div>
+
+          <article class="card has-ico">
+            <img class="card-ico" src="/img/icon-gear2.png" alt="">
+            <div class="card-head"><div><h2>Zusatzabfragen</h2>
+              <p class="sub">einzeln zuschaltbar</p></div></div>
+            <label class="switch-row">
+              <span><b>Spielerkennung</b><small>erkennt, welches Spiel gerade
+                läuft</small></span>
+              <span class="switch"><input type="checkbox" id="probe-game"><i></i></span>
+            </label>
+            <label class="switch-row">
+              <span><b>Netzwerk und Bildschirm</b><small>Verbindung, Adresse und
+                angeschlossenes Anzeigegerät</small></span>
+              <span class="switch"><input type="checkbox" id="probe-netdisp"><i></i></span>
+            </label>
+            <label class="switch-row">
+              <span><b>Controller-Akku</b><small>Ladestand des DualSense</small></span>
+              <span class="switch"><input type="checkbox" id="probe-pad"><i></i></span>
+            </label>
+            <label class="switch-row">
+              <span><b>Risikotelemetrie</b><small>Last aller 16 CPUs, Takt live und
+                Stromschienen (Grafik, Prozessor, Speicher) über riskantere API-Pfade</small></span>
+              <span class="switch"><input type="checkbox" id="probe-risky"><i></i></span>
+            </label>
+            <label class="switch-row">
+              <span><b>Laufwerkstelemetrie</b><small>zusätzliche Details zu
+                gemounteten /dev/daN-Laufwerken</small></span>
+              <span class="switch"><input type="checkbox" id="probe-drive"><i></i></span>
+            </label>
+            <label class="switch-row">
+              <span><b>Bilder pro Sekunde</b><small>zählt die Bildwechsel der
+                Bildausgabe (/dev/dce) — mit einem Spiel im Vordergrund dessen
+                Bildrate</small></span>
+              <span class="switch"><input type="checkbox" id="probe-fps"><i></i></span>
+            </label>
+            <button class="btn" id="probe-save">Übernehmen</button>
+            <div class="row-gap mt-12">
+              <button class="btn ghost" id="probe-preset-safe">Preset Sicher</button>
+              <button class="btn ghost" id="probe-preset-monitor">Preset Monitoring</button>
+              <button class="btn ghost" id="probe-preset-full">Preset Voll</button>
+            </div>
+            <div class="kv-grid mt-12" id="probe-live-state">
+              <div><span>Risikotelemetrie</span><b id="probe-risky-state">--</b></div>
+              <div><span>Laufwerkstelemetrie</span><b id="probe-drive-state">--</b></div>
+              <div><span>Bilder pro Sekunde</span><b id="probe-fps-state">--</b></div>
+            </div>
+            <div class="kv-grid mt-12" id="probe-diag-state">
+              <div><span>Diagnoseprofil</span><b id="probe-diag-mode">aus</b></div>
+              <div><span>Restzeit</span><b id="probe-diag-left">--</b></div>
+            </div>
+            <div class="row-gap mt-12">
+              <button class="btn ghost" id="probe-diag-2m">Diagnose 2 Min.</button>
+              <button class="btn ghost" id="probe-diag-5m">Diagnose 5 Min.</button>
+              <button class="btn ghost" id="probe-diag-10m">Diagnose 10 Min.</button>
+              <button class="btn ghost" id="probe-diag-stop">Diagnose stoppen</button>
+            </div>
+            <p class="note">Diese Abfragen holen ihre Angaben direkt beim
+              Betriebssystem der PS5. Eine davon hat die App auf dieser Konsole
+              schon einmal zum Stillstand gebracht, deshalb sind sie zunächst
+              ausgeschaltet. Schalte sie <b>einzeln</b> ein und lade die Seite
+              neu: Antwortet sie weiterhin, ist diese Abfrage in Ordnung.
+              Reagiert nichts mehr, war es diese — dann das Programm einfach
+              erneut an die Konsole schicken, danach sind wieder alle aus.</p>
+          </article>
+
+          <article class="card has-ico">
+            <img class="card-ico" src="/img/icon-tiles.png" alt="">
+            <div class="card-head"><div><h2>Startmenü-Kachel</h2>
+              <p class="sub">Verknüpfung im PS5-Menü</p></div></div>
+            <p class="muted" id="tile-msg">wird geprüft …</p>
+            <div id="tile-setup">
+              <div class="row-gap">
+                <button class="btn primary" id="ensure-tile">Kachel installieren</button>
+              </div>
+              <p class="note">Die Kachel steckt im Programm und wird beim ersten
+                Start von allein angelegt, ein eigener Installer ist nicht nötig.
+                Hast du sie gelöscht, legt dieser Knopf sie wieder an. Was dabei
+                passiert, steht Zeile für Zeile im Protokoll.</p>
+              <details class="advanced">
+                <summary>Stattdessen ein Kachel-Paket verwenden</summary>
+                <div class="row-gap">
+                  <input type="file" id="tile-file" accept=".pkg" title="Kachel-Paket auswählen">
+                  <button class="btn" id="tile-upload">Paket hochladen</button>
+                </div>
+                <p class="note">Nur nötig, wenn die eingebaute Kachel sich nicht
+                  anmelden lässt: die Datei <code>IV9999-PSCC69690_00-…​.pkg</code>
+                  hochladen und dann „Kachel installieren“ drücken.</p>
+              </details>
+            </div>
+          </article>
+
+          <!-- ══ Expertenbereich ══ -->
+          <div class="expert-only">
+            <div class="ov-expert-head">
+              <h2>Expertenansicht</h2>
+              <p class="sub">Rohwerte, Diagnose und Telemetrie — über den Schalter oben ein- und ausblendbar.</p>
+            </div>
+            <article class="card is-hidden" id="locale-expert-card">
+              <div class="card-head"><div><h2>Region, Sprache, Zeitzone (Experte)</h2>
+                <p class="sub">Rohwerte aus der Registry</p></div></div>
+              <div class="kv-list" id="locale-expert-list"><p class="muted">wird gelesen …</p></div>
+              <p class="note">Die Werte sind absichtlich roh. Je nach Firmware/Region
+                kann dieselbe Zahl unterschiedlich belegt sein.</p>
+            </article>
+
+            <article class="card is-hidden" id="firmware-expert-card">
+              <div class="card-head"><div><h2>Firmware-Interna (Experte)</h2>
+                <p class="sub">nur lesend, ohne Eingriff</p></div></div>
+              <div class="kv-list" id="firmware-expert-list"><p class="muted">wird gelesen …</p></div>
+              <p class="note">Legende: <b>Firmware (roh)</b> ist die interne Hex-ID,
+                <b>Firmware-Gruppe</b> ist die zugeordnete Offset-Familie,
+                <b>CPU-Modus (roh)</b> ist ein undokumentierter Zustandswert.</p>
+            </article>
+
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-cores.png" alt="">
+              <div class="card-head"><div><h2>Auslastung je Kern</h2>
+                <p class="sub">alle acht Kerne der CPU</p></div></div>
+              <div id="core-list"><p class="muted">wird gelesen …</p></div>
+            </article>
+
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-ram.png" alt="">
+              <div class="card-head"><div><h2>Arbeitsspeicher</h2>
+                <p class="sub">Belegung der Konsole und je Programm</p></div></div>
+              <div class="kv-grid" id="mem-list"><p class="muted">wird gelesen …</p></div>
+              <div id="mem-procs"></div>
+              <p class="note">Diese Angaben stehen im Systemprotokoll der Konsole,
+                nicht in einer Abfrage — sie erscheinen daher nur gelegentlich und
+                zeigen den zuletzt gemeldeten Stand.</p>
+            </article>
+
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-shield.png" alt="">
+              <div class="card-head"><div><h2>Live-Status und Warnungen</h2>
+                <p class="sub">aktueller Betriebszustand in einem Blick</p></div>
+                <button class="btn ghost" id="snapshot-export">Diagnose-Snapshot exportieren</button>
+              </div>
+              <div class="row-gap mt-12">
+                <label class="file-inline"><span>Referenz-Snapshot</span><input type="file" id="snapshot-compare-file" accept="application/json"></label>
+                <button class="btn ghost" id="snapshot-compare-run">Snapshot vergleichen</button>
+                <button class="btn ghost" id="snapshot-compare-clear">Vergleich löschen</button>
+              </div>
+              <div class="kv-list mt-10" id="snapshot-compare-result">
+                <p class="muted">Kein Snapshot-Vergleich aktiv.</p>
+              </div>
+              <div class="kv-list" id="health-live-list"><p class="muted">wird gelesen …</p></div>
+              <p class="note" id="warning-countdown-note">Warn-Countdown wird gelesen …</p>
+              <div class="kv-grid mt-10" id="lightbar-state-box">
+                <div><span>Prospero Lights (DualSense)</span><b id="lightbar-state">--</b></div>
+                <div><span>Statusfarbe</span><b id="lightbar-color">--</b></div>
+              </div>
+              <div class="diag-events">
+                <div class="diag-events-top">
+                  <p class="muted diag-events-head">Letzte Zustandswechsel</p>
+                  <span class="muted" id="diag-events-count">0 Einträge</span>
+                  <div class="diag-window" id="diag-window" aria-label="Statistikfenster">
+                    <button class="active" data-minutes="2">2m</button>
+                    <button data-minutes="5">5m</button>
+                    <button data-minutes="10">10m</button>
+                  </div>
+                  <button class="btn ghost" id="diag-events-clear">Zurücksetzen</button>
+                </div>
+                <div class="diag-summary" id="diag-summary">
+                  <span><i class="reason-tag hot">ROT</i><b id="diag-count-hot">0</b></span>
+                  <span><i class="reason-tag warn">GELB</i><b id="diag-count-warn">0</b></span>
+                  <span><i class="reason-tag ok">OK</i><b id="diag-count-ok">0</b></span>
+                  <small class="muted" id="diag-summary-note">Fenster: letzte 2 Minuten</small>
+                </div>
+                <div id="diag-events-list"><p class="muted">noch keine Wechsel erkannt</p></div>
+              </div>
+              <p class="note">Diese Karte zeigt den aktuellen Zustand aus der
+                Live-Abfrage. Sie ersetzt keine Langzeitbewertung, hilft aber
+                sofort bei Fehlerbild, Warnung oder Sicherheitsmodus.</p>
+            </article>
+
+            <article class="card has-ico is-hidden" id="diag-master-card">
+              <img class="card-ico" src="/img/icon-diag.png" alt="">
+              <div class="card-head"><div><h2>Diagnostik-Masteransicht (Experte)</h2>
+                <p class="sub">Prioritäten, Ursachen und nächste Maßnahmen</p></div></div>
+              <div class="kv-grid" id="diag-master-summary">
+                <div><span>Gesamtstatus</span><b id="diag-master-status">--</b></div>
+                <div><span>Kritisch</span><b id="diag-master-hot">0</b></div>
+                <div><span>Warnung</span><b id="diag-master-warn">0</b></div>
+                <div><span>Hinweise</span><b id="diag-master-info">0</b></div>
+              </div>
+              <div class="kv-list mt-10" id="diag-master-list">
+                <p class="muted">Noch keine Diagnosewerte verfügbar.</p>
+              </div>
+              <p class="note">Reihenfolge ist nach Priorität sortiert. Die Ansicht
+                fasst nur verfügbare Messwerte zusammen und erfindet keine Sensoren.</p>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><div><h2>Monitoring-Alarme</h2>
+                <p class="sub">eigene Schwellwerte, Verlauf und Sofortstatus</p></div></div>
+              <div class="kv-grid mt-10">
+                <div><span>Status</span><b id="mon-alert-state">aus</b></div>
+                <div><span>Ereignisse</span><b id="mon-alert-count">0</b></div>
+              </div>
+              <div class="kv-list mt-10" id="mon-alert-reason">
+                <div><span>Auslöser</span><b>Monitoring ist ausgeschaltet.</b></div>
+              </div>
+              <label class="switch-row mt-12">
+                <span><b>Monitoring-Alarme aktivieren</b><small>prüft Live-Werte jede Sekunde auf Grenzverletzungen</small></span>
+                <span class="switch"><input type="checkbox" id="mon-alert-enable"><i></i></span>
+              </label>
+              <div class="kv-grid mt-12 integ-grid">
+                <label><span>Warnung ab (°C)</span><input type="number" id="mon-alert-warn" min="55" max="95"></label>
+                <label><span>Kritisch ab (°C)</span><input type="number" id="mon-alert-hot" min="56" max="98"></label>
+                <label><span>Fan-Minimum (%)</span><input type="number" id="mon-alert-fanmin" min="15" max="95"></label>
+              </div>
+              <div class="row-gap mt-12">
+                <button class="btn" id="mon-alert-save">Grenzwerte speichern</button>
+                <button class="btn ghost" id="mon-alert-reset">Verlauf zurücksetzen</button>
+                <button class="btn ghost" id="mon-alert-preset-quiet">Profil Leise</button>
+                <button class="btn ghost" id="mon-alert-preset-standard">Profil Standard</button>
+                <button class="btn ghost" id="mon-alert-preset-strict">Profil Streng</button>
+              </div>
+              <div class="diag-events mt-12">
+                <div class="diag-events-top">
+                  <p class="muted diag-events-head">Letzte Alarmwechsel</p>
+                </div>
+                <div id="mon-alert-list"><p class="muted">noch keine Alarmwechsel</p></div>
+              </div>
+              <p class="note">Diese Alarme sind rein lokal im Browserprofil gespeichert
+                und dienen als schneller Betriebsindikator. Die PS5-Regelung wird dadurch
+                nicht verändert.</p>
+            </article>
+
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-apps2.png" alt="">
+              <div class="card-head"><div><h2>Assistent und Integrationen</h2>
+                <p class="sub">PS5Upload-inspirierte Komfortfunktionen</p></div></div>
+              <div class="kv-grid integ-grid">
+                <label><span>Warn-Countdown (Sekunden)</span><input type="number" id="s-warn-countdown" min="30" max="900"></label>
+                <label><span>Retention (Tage)</span><input type="number" id="s-retention-days" min="7" max="365"></label>
+                <label><span>Lightbar GELB ab (°C)</span><input type="number" id="s-lightbar-warn" min="55" max="90"></label>
+                <label><span>Lightbar ROT ab (°C)</span><input type="number" id="s-lightbar-hot" min="56" max="95"></label>
+              </div>
+              <label class="switch-row">
+                <span><b>Prospero Lights aktivieren</b><small>DualSense-Licht als Temperaturampel (best effort)</small></span>
+                <span class="switch"><input type="checkbox" id="s-lightbar-enabled"><i></i></span>
+              </label>
+              <label class="switch-row">
+                <span><b>Experte-Modus</b><small>zeigt zusätzliche Roh- und Diagnosewerte</small></span>
+                <span class="switch"><input type="checkbox" id="expert-mode"><i></i></span>
+              </label>
+              <label class="switch-row">
+                <span><b>Nur bestätigte Rohsensorwerte</b><small>blendet unbestätigte Kanal-Heuristiken aus</small></span>
+                <span class="switch"><input type="checkbox" id="chanraw-confirmed-only"><i></i></span>
+              </label>
+              <div class="row-gap mt-12">
+                <button class="btn" id="config-export">Konfiguration exportieren</button>
+                <label class="file-inline"><span>Importdatei</span><input type="file" id="config-import-file" accept="application/json"></label>
+                <button class="btn" id="config-import">Konfiguration importieren</button>
+              </div>
+              <div class="row-gap mt-12">
+                <button class="btn ghost" id="log-tail-toggle">Live-Protokoll starten</button>
+              </div>
+              <div class="log log-tail-box" id="log-tail-box"></div>
+            </article>
+
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-power.png" alt="">
+              <div class="card-head"><div><h2>Power-Telemetrie-Verlauf</h2>
+                <p class="sub">Sitzungshistorie aus Laufzeit, Idle-Status und Leistung (Grafik + Speicher)</p></div></div>
+              <div class="kv-grid" id="power-hist-summary">
+                <div><span>Samples</span><b id="power-hist-count">0</b></div>
+                <div><span>Leistung aktuell</span><b id="power-hist-now">--</b></div>
+                <div><span>Leistung Ø</span><b id="power-hist-avg">--</b></div>
+                <div><span>Leistung Max</span><b id="power-hist-max">--</b></div>
+              </div>
+              <div class="diag-events mt-12">
+                <div class="diag-events-top">
+                  <p class="muted diag-events-head">Letzte Power-Samples</p>
+                  <button class="btn ghost" id="power-hist-clear">Verlauf zurücksetzen</button>
+                </div>
+                <div id="power-hist-list"><p class="muted">noch keine Daten erfasst</p></div>
+              </div>
+            </article>
+
+            <div class="grid-2">
+              <article class="card">
+                <div class="card-head"><div><h2>Risikotelemetrie (auf Abruf)</h2>
+                  <p class="sub">CPU-Last, Kerne, Takt und SoC-Leistung</p></div>
+                  <button class="btn ghost" id="risky-refresh">Jetzt messen</button>
+                </div>
+                <div class="kv-grid mt-12">
+                  <div><span>Auto-Monitoring</span><b id="risky-auto-state">aus</b></div>
+                  <div><span>Intervall</span><b id="risky-auto-current">15 s</b></div>
+                </div>
+                <label class="switch-row mt-12">
+                  <span><b>Auto-Monitoring aktivieren</b><small>misst automatisch im gewählten Intervall</small></span>
+                  <span class="switch"><input type="checkbox" id="risky-auto-toggle"><i></i></span>
+                </label>
+                <label class="switch-row">
+                  <span><b>Intervall</b><small>nur bei aktivem Auto-Monitoring relevant</small></span>
+                  <span>
+                    <select id="risky-auto-interval">
+                      <option value="10">10 s</option>
+                      <option value="15" selected>15 s</option>
+                      <option value="30">30 s</option>
+                      <option value="60">60 s</option>
+                    </select>
+                  </span>
+                </label>
+                <div class="kv-list" id="risky-list"><p class="muted">Noch nicht abgefragt.</p></div>
+                <p class="note">Diese Messung nutzt optionale, firmwareabhängige Pfade.
+                  Sie wird deshalb nur bei Bedarf ausgelöst und nicht im Sekundentakt.
+                  Voraussetzung: Zusatzabfrage „Risikotelemetrie" ist aktiviert.</p>
+              </article>
+
+              <article class="card has-ico">
+                <img class="card-ico" src="/img/icon-ssd2.png" alt="">
+                <div class="card-head"><div><h2>Laufwerkstelemetrie (optional)</h2>
+                  <p class="sub">gemountete /dev/daN-Laufwerke und Auslastung</p></div></div>
+                <div id="drive-telemetry-list"><p class="muted">wird gelesen …</p></div>
+                <p class="note">Temperaturen sind auf vielen Firmwares aus diesem Kontext
+                  nicht verfügbar. Wenn vorhanden, werden sie hier ergänzt.</p>
+              </article>
+            </div>
+
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-controller.png" alt="">
+              <div class="card-head"><div><h2>Controller-Diagnose</h2>
+                <p class="sub">passiver Backend-Check ohne Eingriff in den Controller</p></div></div>
+              <div class="kv-list" id="pad-diag-list"><p class="muted">wird gelesen …</p></div>
+              <div class="kv-list is-hidden" id="controller-expert-list"></div>
+              <div class="log log-tail-box is-hidden" id="diag-raw-box"></div>
+              <p class="note">Diese Ansicht prüft nur, welche Schnittstellen und
+                Gerätedateien verfügbar sind. Es werden keine Controller-Daten
+                gelesen und keine undokumentierten Akku-Funktionen aufgerufen.</p>
+            </article>
+
+            <div class="grid-2">
+              <article class="card">
+                <div class="card-head"><div><h2>Grafikdaten</h2>
+                  <p class="sub">was diese Firmware zur GPU wirklich liefert</p></div></div>
+                <div class="kv-list" id="gpu-list"><p class="muted">wird gelesen …</p></div>
+                <p class="note">Einen eigenen GPU-Temperatursensor und eine GPU-Auslastung
+                  meldet die PS5 nicht. Auf der PS5 Pro liegt SoC-Kanal 7 der
+                  Grafikeinheit am nächsten (gemessen im September 2026). Er erscheint
+                  hier als Grafiktemperatur. Statt der Auslastung zeigt die
+                  Grafikleistung, wie viel die GPU arbeitet.</p>
+              </article>
+
+              <article class="card has-ico">
+                <img class="card-ico" src="/img/icon-sensors.png" alt="">
+                <div class="card-head"><div><h2>Rohsensoren (SoC-Kanäle)</h2>
+                  <p class="sub">letzte Messung je Kanal aus 8 Sensorlinien</p></div></div>
+                <div class="kv-list" id="chanraw-list"><p class="muted">wird gelesen …</p></div>
+                <div class="note" id="chanraw-corr">Korrelation wird gelesen …</div>
+                <p class="note">Diese Kanäle sind absichtlich roh. Sie helfen bei der
+                  Zuordnung, welche Messlinie unter Last wie reagiert.</p>
+              </article>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ══════════════════════ PROTOKOLL ══════════════════════ -->
+        <section class="page" id="page-log">
+          <article class="card page-banner pb-log">
+            <h2>Was ist passiert?</h2>
+            <p class="pb-sub">Alles, was die App gemessen, geregelt und gemeldet hat.</p>
+            <div class="pb-stats">
+              <div class="co-stat"><span class="ov-label">Einträge</span><strong class="pb-val" id="lg-total">--</strong></div>
+              <div class="co-stat"><span class="ov-label">Hinweise</span><strong class="pb-val" id="lg-warn">--</strong></div>
+              <div class="co-stat"><span class="ov-label">Fehler</span><strong class="pb-val" id="lg-err">--</strong></div>
+            </div>
+          </article>
+
+          <!-- Zwei Ansichten: die Ereignisse der App und das Kernel-Log live (klog.c). -->
+          <div class="gm-chips pg-tabs" role="tablist" aria-label="Protokoll wählen">
+            <button type="button" class="gm-chip active" id="log-tab-app" role="tab" aria-selected="true">Ereignisse der App</button>
+            <button type="button" class="gm-chip" id="log-tab-klog" role="tab" aria-selected="false">Kernel-Log live</button>
+          </div>
+
+          <div id="log-pane-app">
+            <article class="card has-ico">
+              <img class="card-ico" src="/img/icon-log.png" alt="">
+              <div class="card-head">
+                <div><h2>Ereignisse</h2><p class="sub" id="log-count">--</p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="reload-log">Aktualisieren</button>
+                  <button class="btn ghost" id="export-log">Exportieren</button>
+                </div>
+              </div>
+              <div class="log" id="log-list"><p class="muted">wird geladen …</p></div>
+            </article>
+          </div>
+
+          <div id="log-pane-klog" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Kernel-Log live</h2><p class="sub" id="kl-sub">wird geladen …</p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="kl-pause" type="button">Pause</button>
+                  <button class="btn ghost" id="kl-clear" type="button">Leeren</button>
+                  <button class="btn ghost kl-rec" id="kl-rec" type="button" aria-pressed="false"
+                          title="Die Konsole schreibt das Kernel-Log fortlaufend in eine Datei im Ordner klog-live-log, auch bei geschlossener Seite">Aufnahme</button>
+                  <button class="btn ghost" id="kl-save" type="button"
+                          title="Legt die Zeilen, die der Filter durchlässt, als Datei im Ordner klog-live-log auf der Konsole ab">Speichern</button>
+                  <button class="btn ghost" id="kl-dl" type="button"
+                          title="Lädt die Zeilen, die der Filter durchlässt, als Datei im Browser herunter">Herunterladen</button>
+                </div>
+              </div>
+              <div class="kl-tools">
+                <input type="search" id="kl-filter" autocomplete="off" spellcheck="false"
+                       placeholder="Filter: Wörter (alle müssen vorkommen), mit - davor ausschließen"
+                       aria-label="Kernel-Log filtern">
+                <div class="gm-chips" id="kl-presets" role="group" aria-label="Auswahl">
+                  <button type="button" class="gm-chip active" data-kl="">Alles</button>
+                  <button type="button" class="gm-chip" data-kl="quiet">Ohne Rauschen</button>
+                  <button type="button" class="gm-chip" data-kl="app">Diese App</button>
+                  <button type="button" class="gm-chip" data-kl="games">Spiele</button>
+                  <button type="button" class="gm-chip" data-kl="err">Fehler</button>
+                </div>
+                <label class="kl-follow"><input type="checkbox" id="kl-follow" checked> Mitlaufen</label>
+              </div>
+              <div class="kl-view" id="kl-view" role="log" aria-live="off" tabindex="0"></div>
+            </article>
+
+            <!-- Was im Ordner klog-live-log auf der Konsole liegt: gespeicherte Auszüge und Aufnahmen -->
+            <article class="card" id="kl-files-card">
+              <div class="card-head">
+                <div><h2>Auf der Konsole gespeichert</h2><p class="sub" id="kl-files-sub">wird gelesen …</p></div>
+                <div class="row-gap">
+                  <button class="btn ghost" id="kl-files-reload" type="button">Aktualisieren</button>
+                  <button class="btn ghost" id="kl-files-clear" type="button">Ordner leeren</button>
+                </div>
+              </div>
+              <p class="muted kl-files-note">Ordner <code>/data/PS5-Cooling-Center/klog-live-log</code>. „Speichern“ legt hier den
+                gefilterten Auszug ab, „Aufnahme“ schreibt das Kernel-Log fortlaufend mit, bis man sie beendet
+                (höchstens 64 MB). „Ordner leeren“ löscht nur die Dateien, die diese App hier angelegt hat.</p>
+              <div id="kl-files"></div>
+            </article>
+          </div>
+        </section>
+
+        <!-- ══════════════════════ DATEIEN ══════════════════════
+             Seit 06.10.2026: der Dateimanager. Ansehen und Herunterladen überall, Ändern (Hochladen, neuer Ordner,
+             Umbenennen, Kopieren, Verschieben, Löschen) nur auf den Laufwerken und in /data; das entscheidet die
+             Konsole (filemgr.c), die Seite zeigt nur an. Verdrahtung in app.js (fm…). -->
+        <section class="page" id="page-files">
+          <article class="card fm-card">
+            <div class="card-head">
+              <div><h2>Dateien</h2><p class="sub" id="fm-sub">wird geladen …</p></div>
+              <div class="row-gap">
+                <button class="btn ghost" id="fm-up" type="button" title="Eine Ebene höher">↑ Hoch</button>
+                <button class="btn ghost" id="fm-reload" type="button">Aktualisieren</button>
+              </div>
+            </div>
+            <div class="gm-chips fm-places" id="fm-places" role="group" aria-label="Orte"></div>
+            <nav class="fm-crumbs" id="fm-crumbs" aria-label="Pfad"></nav>
+            <div class="fm-tools">
+              <button class="btn ghost" id="fm-mkdir" type="button">Neuer Ordner</button>
+              <label class="btn ghost fm-upload" id="fm-upload-lbl">Hochladen
+                <input type="file" id="fm-upload" multiple hidden></label>
+              <span class="fm-ro" id="fm-ro" hidden>Nur ansehen – hier darf nichts geändert werden</span>
+              <span class="fm-free muted" id="fm-free"></span>
+            </div>
+            <div class="fm-bar" id="fm-selbar" hidden>
+              <b id="fm-selcount"></b>
+              <button class="btn ghost" id="fm-copy" type="button">Kopieren</button>
+              <button class="btn ghost" id="fm-cut" type="button">Ausschneiden</button>
+              <button class="btn danger" id="fm-del" type="button">Löschen</button>
+              <button class="btn ghost" id="fm-selnone" type="button">Auswahl aufheben</button>
+            </div>
+            <div class="fm-bar fm-clip" id="fm-clipbar" hidden>
+              <span id="fm-cliptext"></span>
+              <button class="btn" id="fm-paste" type="button">Hier einfügen</button>
+              <button class="btn ghost" id="fm-clipclear" type="button">Vergessen</button>
+            </div>
+            <div class="fm-job" id="fm-job" hidden></div>
+            <div class="fm-job" id="fm-uploads" hidden></div>
+            <div class="fm-list" id="fm-list" role="list"></div>
+          </article>
+        </section>
+
+        <!-- ══════════════════════ CREDITS ══════════════════════
+             Seit 06.10.2026 (Wunsch des Users): wer an der App mitgewirkt hat, mit dem Bild seines GitHub-Kontos
+             (einmal geladen, verkleinert, in web/credits eingebaut: die App lädt nichts aus dem Internet), dem Namen,
+             einem Dank und den Links zu den Arbeiten. Was wem zugeschrieben wird, steht so in README.md (Credits);
+             Konten und Hauptautoren am 06.10.2026 per GitHub-API geprüft. Ohne belegtes Konto: Kürzel statt Bild. -->
+        <section class="page" id="page-credits">
+          <article class="card cr-hero">
+            <img class="cr-hero-pic" src="/credits/strongt1me.jpg" alt="" width="88" height="88">
+            <div>
+              <h2>Danke!</h2>
+              <p>Diese App steht auf den Schultern der PS5-Homebrew-Gemeinschaft. Ohne die Arbeit der Menschen auf dieser
+                Seite gäbe es weder die Plattform, auf der sie läuft, noch viele ihrer Funktionen. Vielen Dank für eure
+                Zeit, euer Wissen und dafür, dass ihr es mit allen teilt.</p>
+              <p class="cr-by">Idee, Gestaltung und Tests an der Konsole:
+                <a href="https://github.com/strongt1me" target="_blank" rel="noopener noreferrer">strongt1me</a>
+                · umgesetzt zusammen mit Claude (Anthropic)</p>
+            </div>
+          </article>
+
+          <!-- Wunsch des Users (06.10.2026): Gezine ganz oben. -->
+          <h3 class="cr-group">Ein ganz besonderer Dank</h3>
+          <article class="cr-card cr-featured">
+            <img class="cr-pic" src="/credits/Gezine.jpg" alt="" width="80" height="80">
+            <div class="cr-text">
+              <b>Gezine</b> <a class="cr-login" href="https://github.com/Gezine" target="_blank" rel="noopener noreferrer">@Gezine</a>
+              <p>Seine Arbeit ist für die PS5-Homebrew-Community grundlegend: Ohne sie liefe auf vielen Konsolen kein
+                Homebrew – und damit auch diese App nicht. Danke für alles, was du mit der Community teilst!</p>
+              <div class="cr-links">
+                <a href="https://github.com/Gezine?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+              </div>
+            </div>
+          </article>
+
+          <h3 class="cr-group">Plattform und Werkzeuge</h3>
+          <div class="cr-grid">
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/john-tornblom.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>John Törnblom</b> <a class="cr-login" href="https://github.com/john-tornblom" target="_blank" rel="noopener noreferrer">@john-tornblom</a>
+                <p>Das PS5-Payload-SDK, mit dem jede ELF dieser App gebaut wird, der Payload-Lader elfldr auf Port 9021,
+                  dazu klogsrv, ftpsrv und websrv. Danke für das Fundament, auf dem fast alles Homebrew der PS5 steht –
+                  und an alle Mitwirkenden von ps5-payload-dev.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/ps5-payload-dev/sdk" target="_blank" rel="noopener noreferrer">sdk</a>
+                  <a href="https://github.com/ps5-payload-dev/elfldr" target="_blank" rel="noopener noreferrer">elfldr</a>
+                  <a href="https://github.com/ps5-payload-dev/websrv" target="_blank" rel="noopener noreferrer">websrv</a>
+                  <a href="https://github.com/ps5-payload-dev" target="_blank" rel="noopener noreferrer">ps5-payload-dev</a>
+                  <a href="https://github.com/john-tornblom?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <!-- kstuff: Mitwirkende laut GitHub (06.10.2026): sleirsgoevy 174 Beiträge in jedem kstuff-Repository;
+                 kstuff-lite (EchoStretch): drakmor 134, EchoStretch 100. -->
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/sleirsgoevy.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>sleirsgoevy</b> <a class="cr-login" href="https://github.com/sleirsgoevy" target="_blank" rel="noopener noreferrer">@sleirsgoevy</a>
+                <p>Der Hauptautor von kstuff. Ohne kstuff gäbe es keinen Zugriff auf den Lüfter-Controller – und damit keine
+                  Lüftersteuerung. Dazu ps4jb und bd-jb für die PS4. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/ps5-payload-dev/kstuff" target="_blank" rel="noopener noreferrer">kstuff</a>
+                  <a href="https://github.com/sleirsgoevy/bd-jb" target="_blank" rel="noopener noreferrer">bd-jb</a>
+                  <a href="https://github.com/sleirsgoevy?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/EchoStretch.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Echo Stretch</b> <a class="cr-login" href="https://github.com/EchoStretch" target="_blank" rel="noopener noreferrer">@EchoStretch</a>
+                <p>Pflegt die Weiterentwicklungen kstuff und kstuff-lite, mit über hundert eigenen Beiträgen. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/EchoStretch/kstuff" target="_blank" rel="noopener noreferrer">kstuff</a>
+                  <a href="https://github.com/EchoStretch/kstuff-lite" target="_blank" rel="noopener noreferrer">kstuff-lite</a>
+                  <a href="https://github.com/EchoStretch/kstuff-toggle" target="_blank" rel="noopener noreferrer">kstuff-toggle</a>
+                  <a href="https://github.com/EchoStretch?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <h3 class="cr-group">Code, der in der App steckt</h3>
+          <div class="cr-grid">
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/RenanGBarreto.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Renan Barreto</b> <a class="cr-login" href="https://github.com/RenanGBarreto" target="_blank" rel="noopener noreferrer">@RenanGBarreto</a>
+                <p>MkPFS: der Aufbau von exFAT-, PFS- und PFSC-Abbildern. Das Konvertieren auf der Konsole ist eine
+                  Übertragung davon nach C. Danke für dieses Stück Arbeit!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/PSBrew/MkPFS" target="_blank" rel="noopener noreferrer">MkPFS</a>
+                  <a href="https://github.com/PSBrew" target="_blank" rel="noopener noreferrer">PSBrew</a>
+                  <a href="https://github.com/PSBrew/MicroMount" target="_blank" rel="noopener noreferrer">MicroMount</a>
+                  <a href="https://github.com/RenanGBarreto?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/rdmrocha.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>rdmrocha</b> <a class="cr-login" href="https://github.com/rdmrocha" target="_blank" rel="noopener noreferrer">@rdmrocha</a>
+                <p>Mitautor von MkPFS – danke, auch an alle weiteren Mitwirkenden von MkPFS.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/PSBrew/MkPFS" target="_blank" rel="noopener noreferrer">MkPFS</a>
+                  <a href="https://github.com/rdmrocha?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/SvenGDK.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>SvenGDK</b> <a class="cr-login" href="https://github.com/SvenGDK" target="_blank" rel="noopener noreferrer">@SvenGDK</a>
+                <p>UFS2Tool: die Vorlage für den UFS2-/ffpkg-Schreiber der App. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/SvenGDK/UFS2Tool" target="_blank" rel="noopener noreferrer">UFS2Tool</a>
+                  <a href="https://github.com/SvenGDK/LibProsperoPKG" target="_blank" rel="noopener noreferrer">LibProsperoPKG</a>
+                  <a href="https://github.com/SvenGDK/PS-Multi-Tools" target="_blank" rel="noopener noreferrer">PS-Multi-Tools</a>
+                  <a href="https://github.com/SvenGDK/SharpProspero" target="_blank" rel="noopener noreferrer">SharpProspero</a>
+                  <a href="https://github.com/SvenGDK?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/itsPLK.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>itsPLK</b> <a class="cr-login" href="https://github.com/itsPLK" target="_blank" rel="noopener noreferrer">@itsPLK</a>
+                <p>ps5-pkg-manager: Vorbild für Pakete finden, aufteilen und installieren. Dazu ps5-payload-manager als
+                  Vorbild der Payload-Verwaltung und ps5-unified-autoloader. Danke für gleich drei Werkzeuge!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/itsPLK/ps5-pkg-manager" target="_blank" rel="noopener noreferrer">ps5-pkg-manager</a>
+                  <a href="https://github.com/itsPLK/ps5-payload-manager" target="_blank" rel="noopener noreferrer">ps5-payload-manager</a>
+                  <a href="https://github.com/itsPLK/ps5-unified-autoloader" target="_blank" rel="noopener noreferrer">ps5-unified-autoloader</a>
+                  <a href="https://github.com/itsPLK?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/phantomptr.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>PhantomPtr</b> <a class="cr-login" href="https://github.com/phantomptr" target="_blank" rel="noopener noreferrer">@phantomptr</a>
+                <p>ps5upload: der Aufbau der Profilfunktion und das Format des Profilbilds. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/phantomptr/ps5upload" target="_blank" rel="noopener noreferrer">ps5upload</a>
+                  <a href="https://github.com/phantomptr/ps5drive" target="_blank" rel="noopener noreferrer">ps5drive</a>
+                  <a href="https://github.com/phantomptr?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/ebiggers.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Eric Biggers</b> <a class="cr-login" href="https://github.com/ebiggers" target="_blank" rel="noopener noreferrer">@ebiggers</a>
+                <p>libdeflate: die schnelle Kompression, mit der die Abbilder auf der Konsole entstehen. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/ebiggers/libdeflate" target="_blank" rel="noopener noreferrer">libdeflate</a>
+                  <a href="https://github.com/ebiggers?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/DaveGamble.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Dave Gamble</b> <a class="cr-login" href="https://github.com/DaveGamble" target="_blank" rel="noopener noreferrer">@DaveGamble</a>
+                <p>cJSON: jede Antwort der App an diese Seite. Danke an ihn und alle Mitwirkenden!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/DaveGamble/cJSON" target="_blank" rel="noopener noreferrer">cJSON</a>
+                  <a href="https://github.com/DaveGamble?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <h3 class="cr-group">Zusammenspiel, Wissen und Vorbilder</h3>
+          <div class="cr-grid">
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/drakmor.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Drakmor</b> <a class="cr-login" href="https://github.com/drakmor" target="_blank" rel="noopener noreferrer">@drakmor</a>
+                <p>ShadowMountPlus: Spiele einhängen, verschieben und entpacken – die Spiele-Seite baut darauf auf. Dazu
+                  ps5-hwinfo mit den Stromschienen und Taktwerten, und als einer der größten Mitwirkenden an kstuff-lite
+                  auch am Zugang zur Konsole. Danke für so viel Wissen über die PS5!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/drakmor/ShadowMountPlus" target="_blank" rel="noopener noreferrer">ShadowMountPlus</a>
+                  <a href="https://github.com/drakmor/ps5-hwinfo" target="_blank" rel="noopener noreferrer">ps5-hwinfo</a>
+                  <a href="https://github.com/EchoStretch/kstuff-lite" target="_blank" rel="noopener noreferrer">kstuff-lite</a>
+                  <a href="https://github.com/drakmor/fan_target" target="_blank" rel="noopener noreferrer">fan_target</a>
+                  <a href="https://github.com/drakmor/nanoDNS" target="_blank" rel="noopener noreferrer">nanoDNS</a>
+                  <a href="https://github.com/drakmor?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/kerrdec97.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>kerrdec97</b> <a class="cr-login" href="https://github.com/kerrdec97" target="_blank" rel="noopener noreferrer">@kerrdec97</a>
+                <p>exFAT Image Builder: zeigte, mit welchen Einstellungen ein .ffpkg für ShadowMountPlus gebaut wird. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/kerrdec97/ps5-exfat-builder" target="_blank" rel="noopener noreferrer">ps5-exfat-builder</a>
+                  <a href="https://github.com/kerrdec97/exFAT-Ripper" target="_blank" rel="noopener noreferrer">exFAT-Ripper</a>
+                  <a href="https://github.com/kerrdec97/PFS-Ripper" target="_blank" rel="noopener noreferrer">PFS-Ripper</a>
+                  <a href="https://github.com/kerrdec97/ps5-image-studio" target="_blank" rel="noopener noreferrer">ps5-image-studio</a>
+                  <a href="https://github.com/kerrdec97?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/StonedModder.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>StonedModder</b> <a class="cr-login" href="https://github.com/StonedModder" target="_blank" rel="noopener noreferrer">@StonedModder</a>
+                <p>ps-game-state-lib: die Muster im Kernel-Log, an denen die App das laufende Spiel erkennt. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/StonedModder/ps-game-state-lib" target="_blank" rel="noopener noreferrer">ps-game-state-lib</a>
+                  <a href="https://github.com/StonedModder/Porkfolio" target="_blank" rel="noopener noreferrer">Porkfolio</a>
+                  <a href="https://github.com/StonedModder/ChronicLoader-PS5-Payload" target="_blank" rel="noopener noreferrer">ChronicLoader</a>
+                  <a href="https://github.com/StonedModder?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/etaHEN.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>etaHEN</b> <a class="cr-login" href="https://github.com/etaHEN" target="_blank" rel="noopener noreferrer">@etaHEN</a>
+                <p>Quelltext und Dokumentation zu Systemaufrufen, Messwerten und der Bildraten-Abfrage. Danke an das
+                  ganze Projekt!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/etaHEN/etaHEN" target="_blank" rel="noopener noreferrer">etaHEN</a>
+                  <a href="https://github.com/etaHEN?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/aydencharles.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Hexwell</b> <a class="cr-login" href="https://github.com/aydencharles" target="_blank" rel="noopener noreferrer">@aydencharles</a>
+                <p>onionHEN: Quelltext und Dokumentation, aus denen die App viel gelernt hat. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/aydencharles/onionHEN" target="_blank" rel="noopener noreferrer">onionHEN</a>
+                  <a href="https://github.com/aydencharles/ps5-kylin-explorer" target="_blank" rel="noopener noreferrer">ps5-kylin-explorer</a>
+                  <a href="https://github.com/aydencharles?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/BestPig.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>BestPig</b> <a class="cr-login" href="https://github.com/BestPig" target="_blank" rel="noopener noreferrer">@BestPig</a>
+                <p>BackPork: das Prinzip der Ersatzbibliotheken, das die Spiele-Seite erkennt und anzeigt. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/BestPig/BackPork" target="_blank" rel="noopener noreferrer">BackPork</a>
+                  <a href="https://github.com/BestPig?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <span class="cr-pic cr-initials" aria-hidden="true">GC</span>
+              <div class="cr-text">
+                <b>Juma Sayeh und Osama Abualia</b> <span class="cr-login">PS5 Game Compressor</span>
+                <p>Vorbild für das Zurücklesen und Prüfen von Sicherungen, die Ruhemodus-Sperre und weitere Ideen beim
+                  Kopieren und Konvertieren (alles neu geschrieben). Danke!</p>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/soniciso.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Soniciso</b> <a class="cr-login" href="https://git.etawen.dev/soniciso" target="_blank" rel="noopener noreferrer">@soniciso</a>
+                <p>Elf Arsenal, das All-in-one-Werkzeug für die PS5 und Nachfolger von Sonic Loader: Vorbild für viele
+                  Funktionen dieser App – Spiel beenden, Kernel-Log live, Spielzeit, Spielstände, Dateimanager, Spiele
+                  löschen – und die Form der Aufrufe für die Kachel-Installation. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://git.etawen.dev/soniciso/elf-arsenal" target="_blank" rel="noopener noreferrer">Elf Arsenal</a>
+                  <a href="https://git.etawen.dev/soniciso/sonicloader" target="_blank" rel="noopener noreferrer">Sonic Loader</a>
+                  <a href="https://git.etawen.dev/soniciso" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <span class="cr-pic cr-initials" aria-hidden="true">Lx</span>
+              <div class="cr-text">
+                <b>Linux-Kernel</b> <span class="cr-login">Treiber hid-playstation</span>
+                <p>Die Dokumentation des DualSense-Statusbytes für den Akkustand.</p>
+              </div>
+            </article>
+            <article class="cr-card">
+              <span class="cr-pic cr-initials" aria-hidden="true">DL</span>
+              <div class="cr-text">
+                <b>Xbox 360 DashLaunch</b> <span class="cr-login">Vorbild</span>
+                <p>Der Gedanke der ruhigen, trägen Temperaturregelung.</p>
+              </div>
+            </article>
+          </div>
+
+          <!-- Wunsch vom 06.10.2026: auch den bekannten Entwicklern danken, die ihr Wissen und ihre Arbeit mit der
+               Community teilen. Ihr Code steckt nicht in der App; genannt sind nur Arbeiten, die auf ihren
+               GitHub-Seiten stehen (am 06.10.2026 geprüft). -->
+          <h3 class="cr-group">Danke an die Community</h3>
+          <p class="muted cr-intro">Ihr Code steckt nicht in dieser App – aber ohne ihre Arbeit, die sie mit allen teilen,
+            gäbe es die PS5-Homebrew-Szene in dieser Form nicht. Danke für euer Wissen, eure Zeit und eure Werkzeuge!</p>
+          <div class="cr-grid">
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/owendswang.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>owendswang</b> <a class="cr-login" href="https://github.com/owendswang" target="_blank" rel="noopener noreferrer">@owendswang</a>
+                <p>Ein Datei-Manager mit Weboberfläche, eine eigene Lüftersteuerung und viele kleine Werkzeuge für die PS5.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/owendswang/ps5-web-file-manager" target="_blank" rel="noopener noreferrer">ps5-web-file-manager</a>
+                  <a href="https://github.com/owendswang/ps5-fan-control" target="_blank" rel="noopener noreferrer">ps5-fan-control</a>
+                  <a href="https://github.com/owendswang/ps5-syslang" target="_blank" rel="noopener noreferrer">ps5-syslang</a>
+                  <a href="https://github.com/owendswang?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/LightningMods.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>LightningMods</b> <a class="cr-login" href="https://github.com/LightningMods" target="_blank" rel="noopener noreferrer">@LightningMods</a>
+                <p>Hauptentwickler von etaHEN, dazu Itemzflow und der PS4-Store.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/etaHEN/etaHEN" target="_blank" rel="noopener noreferrer">etaHEN</a>
+                  <a href="https://github.com/LightningMods/Itemzflow" target="_blank" rel="noopener noreferrer">Itemzflow</a>
+                  <a href="https://github.com/etaHEN/etaHEN-Plugins" target="_blank" rel="noopener noreferrer">etaHEN-Plugins</a>
+                  <a href="https://github.com/LightningMods?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/TheOfficialFloW.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Andy Nguyen (TheFloW)</b> <a class="cr-login" href="https://github.com/TheOfficialFloW" target="_blank" rel="noopener noreferrer">@TheOfficialFloW</a>
+                <p>PPPwn und vieles mehr – von der PS Vita bis zur PS5.</p>
+                <div class="cr-links"><a href="https://github.com/TheOfficialFloW/PPPwn" target="_blank" rel="noopener noreferrer">PPPwn</a>
+                  <a href="https://github.com/TheOfficialFloW?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a></div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/Cryptogenic.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Specter</b> <a class="cr-login" href="https://github.com/Cryptogenic" target="_blank" rel="noopener noreferrer">@Cryptogenic</a>
+                <p>Der IPv6-Kernel-Exploit für die PS5 und ausführliche Write-ups, aus denen die Szene lernt.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/Cryptogenic/PS5-IPV6-Kernel-Exploit" target="_blank" rel="noopener noreferrer">PS5-IPV6-Kernel-Exploit</a>
+                  <a href="https://github.com/Cryptogenic/Exploit-Writeups" target="_blank" rel="noopener noreferrer">Exploit-Writeups</a>
+                  <a href="https://github.com/Cryptogenic?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/ChendoChap.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>ChendoChap</b> <a class="cr-login" href="https://github.com/ChendoChap" target="_blank" rel="noopener noreferrer">@ChendoChap</a>
+                <p>pOOBs4 und die Code-Ausführung über den WebKit-Browser der PS5.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/ChendoChap/pOOBs4" target="_blank" rel="noopener noreferrer">pOOBs4</a>
+                  <a href="https://github.com/ChendoChap/PS5-Webkit-Execution" target="_blank" rel="noopener noreferrer">PS5-Webkit-Execution</a>
+                  <a href="https://github.com/ChendoChap?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/idlesauce.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>idlesauce</b> <a class="cr-login" href="https://github.com/idlesauce" target="_blank" rel="noopener noreferrer">@idlesauce</a>
+                <p>umtx2 und weitere Werkzeuge für PS4 und PS5.</p>
+                <div class="cr-links"><a href="https://github.com/idlesauce/umtx2" target="_blank" rel="noopener noreferrer">umtx2</a>
+                  <a href="https://github.com/idlesauce?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a></div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/flatz.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>flatz</b> <a class="cr-login" href="https://github.com/flatz" target="_blank" rel="noopener noreferrer">@flatz</a>
+                <p>Werkzeuge rund um Pakete und das PFS-Dateisystem, dazu der PS5-ELF-Lader für IDA.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/flatz/pkg_pfs_tool" target="_blank" rel="noopener noreferrer">pkg_pfs_tool</a>
+                  <a href="https://github.com/flatz/ida_ps5_elf_plugin" target="_blank" rel="noopener noreferrer">ida_ps5_elf_plugin</a>
+                  <a href="https://github.com/flatz?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/Al-Azif.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Al Azif</b> <a class="cr-login" href="https://github.com/Al-Azif" target="_blank" rel="noopener noreferrer">@Al-Azif</a>
+                <p>Der Exploit-Host für die PS4 und psfree-lapse.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/Al-Azif/ps4-exploit-host" target="_blank" rel="noopener noreferrer">ps4-exploit-host</a>
+                  <a href="https://github.com/Al-Azif/psfree-lapse" target="_blank" rel="noopener noreferrer">psfree-lapse</a>
+                  <a href="https://github.com/Al-Azif?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/zecoxao.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>zecoxao</b> <a class="cr-login" href="https://github.com/zecoxao" target="_blank" rel="noopener noreferrer">@zecoxao</a>
+                <p>Viel Forschung und Dokumentation rund um die Firmware der PS5.</p>
+                <div class="cr-links">
+                  <a href="https://github.com/zecoxao?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a></div>
+              </div>
+            </article>
+          </div>
+          <p class="muted cr-outro">… und allen anderen, die hier nicht stehen und trotzdem ihren Teil beitragen – mit Code,
+            Tests, Anleitungen oder Antworten auf Fragen. Danke!</p>
+
+          <p class="cr-net" id="cr-net" role="status">Prüfe, ob GitHub erreichbar ist …</p>
+          <p class="muted cr-foot">Wer sich hier vermisst oder falsch beschrieben findet: bitte melden, die Liste wird gern
+            ergänzt. Welche fremden Teile in der App stecken und unter welcher Lizenz, steht in THIRD_PARTY_NOTICES.md
+            des Projekts. Die Links öffnen GitHub und sind nur anklickbar, wenn dieser Browser Internet hat.</p>
+        </section>
+      </main>
+
+      <footer class="foot">
+        <span id="foot-version">PS5 Cooling &amp; System Center - Pro</span>
+      </footer>
+    </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

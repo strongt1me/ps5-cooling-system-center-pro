@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Stand-in for llvm-config on Windows.
+#
+# The official LLVM installer for Windows does not ship llvm-config.exe, but
+# the SDK's scripts (bin/prospero-llvm-config) ask it for exactly two things:
+# where the tools live and which version they are. tools/build-windows.sh
+# points LLVM_CONFIG here.
+
+LLVM_BIN="${LLVM_BIN:-/c/Program Files/LLVM/bin}"
+
+case "$1" in
+  --bindir)
+    echo "$LLVM_BIN"
+    ;;
+  --version)
+    "$LLVM_BIN/clang.exe" --version |
+      sed -n 's/.*clang version \([0-9][0-9.]*\).*/\1/p' | head -n 1
+    ;;
+  *)
+    echo "llvm-config (stand-in): '$1' is not supported" >&2
+    exit 1
+    ;;
+esac

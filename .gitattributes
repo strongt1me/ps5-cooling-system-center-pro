@@ -1,0 +1,11 @@
+# Shell scripts keep LF on every checkout. With core.autocrlf=true, Windows
+# would hand them to bash with CRLF, and bash stops at the first $'\r'.
+*.sh        text eol=lf
+tools/win/* text eol=lf
+
+# The web files are embedded into the ELF byte for byte. LF keeps a build on
+# Windows identical to one from Linux (README, "Windows ohne WSL"); with CRLF
+# the embedded pages differ although nothing changed.
+web/*.html  text eol=lf
+web/*.css   text eol=lf
+web/*.js    text eol=lf
