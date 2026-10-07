@@ -110,7 +110,9 @@ ps5tm_fan_active_rule(void) {
 /* ------------------------------------------------ threshold <-> duty helpers
  *
  * Only used to seed the servo and to describe a manual pin; the closed loop
- * corrects whatever these get wrong.
+ * corrects whatever these get wrong. Anchored at PS5TM_THRESHOLD_BASE_C (80),
+ * not at the top of the range (91): a threshold above 80 simply means "no
+ * extra speed", which is what 0 % stands for here.
  */
 
 int
@@ -118,16 +120,16 @@ ps5tm_fan_duty_to_threshold(int duty_pct) {
   if(duty_pct < 0)   duty_pct = 0;
   if(duty_pct > 100) duty_pct = 100;
 
-  const int span = PS5TM_THRESHOLD_MAX_C - PS5TM_THRESHOLD_MIN_C;
-  return PS5TM_THRESHOLD_MAX_C - ((duty_pct * span) + 50) / 100;
+  const int span = PS5TM_THRESHOLD_BASE_C - PS5TM_THRESHOLD_MIN_C;
+  return PS5TM_THRESHOLD_BASE_C - ((duty_pct * span) + 50) / 100;
 }
 
 int
 ps5tm_fan_threshold_to_duty(int threshold_c) {
-  const int span = PS5TM_THRESHOLD_MAX_C - PS5TM_THRESHOLD_MIN_C;
+  const int span = PS5TM_THRESHOLD_BASE_C - PS5TM_THRESHOLD_MIN_C;
   if(threshold_c <= PS5TM_THRESHOLD_MIN_C) return 100;
-  if(threshold_c >= PS5TM_THRESHOLD_MAX_C) return 0;
-  return ((PS5TM_THRESHOLD_MAX_C - threshold_c) * 100 + span / 2) / span;
+  if(threshold_c >= PS5TM_THRESHOLD_BASE_C) return 0;
+  return ((PS5TM_THRESHOLD_BASE_C - threshold_c) * 100 + span / 2) / span;
 }
 
 int
@@ -313,6 +315,23 @@ clamp_target_c(unsigned t) {
 static int
 target_c100(const ps5tm_config_t *cfg) {
   return (int)clamp_target_c(cfg->target_temp_c) * 100;
+}
+
+/* Where the threshold rests while the fan has nothing to do: PS5TM_REST_ABOVE_TARGET_C
+ * above the target, but never below PS5TM_THRESHOLD_BASE_C (80, where it always rested) and
+ * never above PS5TM_THRESHOLD_MAX_C (91, the firmware's own value).
+ *
+ * For targets up to 70 °C this is 80 exactly as before. Above, the resting place rises
+ * with the target: with the threshold stuck at 80 a console held at 85 °C would sit 5 °C
+ * above it, which the firmware answers with extra fan speed — the quiet state that a
+ * high target is for would not exist. At a target of 91 the resting threshold is the
+ * firmware's own 91, which is "as quiet as without this app". */
+static int
+rest_threshold_c(const ps5tm_config_t *cfg) {
+  int t = (int)clamp_target_c(cfg->target_temp_c) + PS5TM_REST_ABOVE_TARGET_C;
+  if(t < PS5TM_THRESHOLD_BASE_C) t = PS5TM_THRESHOLD_BASE_C;
+  if(t > PS5TM_THRESHOLD_MAX_C)  t = PS5TM_THRESHOLD_MAX_C;
+  return t;
 }
 
 /* A profile out of range behaves like the default, as it does everywhere else
@@ -583,7 +602,21 @@ check_warnings(const ps5tm_sensors_t *s, int *warn_cpu, int *warn_soc) {
   int cpu_limit    = (int)g_config.warning_cpu_c;
   int soc_limit    = (int)g_config.warning_soc_c;
   int safety_limit = (int)g_config.safety_temp_c;
+  int automatic    = (g_config.mode == PS5TM_MODE_AUTOMATIC);
   ps5tm_config_unlock();
+
+  /* A warning is for a console that is hotter than it should be. With a target of 91 °C the console is meant to
+     run at 85, and a warning limit of 80 would nag all game long. So the limit in force is never lower than the
+     target in force + 2 (the target of the running game's own rule included: the snapshot of the previous cycle
+     has it); the configured value stays as it is and applies whenever the target is lower. The main chip's limit
+     keeps its 5 °C above the processor's. */
+  if(automatic) {
+    pthread_mutex_lock(&g_snapshot_lock);
+    int target = g_snapshot.effective_target_c;
+    pthread_mutex_unlock(&g_snapshot_lock);
+    if(target > 0 && cpu_limit < target + 2) cpu_limit = target + 2;
+    if(target > 0 && soc_limit < cpu_limit + 5) soc_limit = cpu_limit + 5;
+  }
 
   *warn_cpu = (s->cpu_valid && s->cpu_c >= cpu_limit);
   *warn_soc = (s->soc_valid && s->soc_c >= soc_limit);
@@ -966,7 +999,7 @@ fan_worker(void *arg) {
         int was_safety = safety_active;
         /* "Nothing more to give": the threshold is already parked at its
            maximum and the fan is turning faster than we are asking for. */
-        int at_min = (last_applied >= PS5TM_THRESHOLD_MAX_C) &&
+        int at_min = (last_applied >= rest_threshold_c(&cfg)) &&
                      (measured >= 0) && (measured >= desired_duty);
         desired_duty = comfort_step(desired_duty, avg_c100, trend_c100,
                                     &cfg, now, &last_down_ms, &safety_active,
@@ -993,7 +1026,7 @@ fan_worker(void *arg) {
 
     if(automatic && avg_c100 >= 0) {
       if(desired_duty <= SERVO_IDLE_DUTY_PCT) {
-        desired_threshold = PS5TM_THRESHOLD_MAX_C;
+        desired_threshold = rest_threshold_c(&cfg);
       } else if(last_applied <= 0) {
         desired_threshold = ps5tm_fan_duty_to_threshold(desired_duty);
       } else if(measured < 0) {

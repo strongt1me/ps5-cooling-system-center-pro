@@ -1,0 +1,298 @@
+{
+ "ui": {
+  "lang_name": "English",
+  "manual_title": "User manual – PS5 Cooling & System Center - Pro",
+  "manual_kicker": "User manual · PS5 homebrew",
+  "manual_cover_title": "PS5 Cooling &amp; System Center – Pro",
+  "manual_lead": "Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.",
+  "manual_badges": [
+   "Version {version}",
+   "Tested on firmware 12.00",
+   "PS5 Pro CFI-7021",
+   "English"
+  ],
+  "toc": "Contents",
+  "faq_title": "FAQ – PS5 Cooling & System Center - Pro",
+  "faq_kicker": "Frequently asked questions · PS5 homebrew",
+  "faq_cover_title": "FAQ",
+  "faq_lead": "Quick answers about starting, the fan, games, packages, saved data, the file manager and security.",
+  "faq_badges": [
+   "Version {version}",
+   "{n} questions",
+   "English"
+  ],
+  "back": "← Back to the app",
+  "footer": "PS5 Cooling &amp; System Center - Pro · Version {version} · As of 7 October 2026 · Not a Sony product; “PlayStation” and “PS5” are trademarks of Sony Interactive Entertainment Inc. Only for your own console, without warranty (GPL-3.0-or-later)."
+ },
+ "captions": {
+  "01-kuehlung.png": "The “Cooling” page",
+  "02-kuehlung-betriebsart.png": "Operating mode, automatic mode and mute button",
+  "03-spiele-bibliothek.png": "Games · Library",
+  "04-spiele-konvertieren.png": "Converting with a choice of format, type and destination",
+  "08-spiele-sicherungen.png": "Games · Backups",
+  "05-spiele-spielzeit.png": "Games · Play time",
+  "06-spiele-spielstaende.png": "Games · Saved data",
+  "07-spiele-pakete.png": "Games · Packages",
+  "15-dateien.png": "Files",
+  "09-payloads.png": "Payloads",
+  "10-profil.png": "Profile",
+  "11-system.png": "System",
+  "14-kernel-log-live.png": "Log · Live kernel log",
+  "16-credits.png": "Credits"
+ },
+ "chapters": [
+  {
+   "id": "start",
+   "title": "Welcome",
+   "html": "\n<p><b>PS5 Cooling &amp; System Center - Pro</b> is a homebrew program (ELF) for a jailbroken PS5. It controls the\nfan according to a calm, freely adjustable target temperature and comes with a web interface that you open from any device on your\nhome network: phone, tablet, PC or the console's own browser. On top of that come game management, packages,\nsaved data, a file manager, payloads, profile and system information.</p>\n<div class='grid'>\n<div class='card'><b class='t'>Quiet, not loud</b>The control holds a target temperature – gently and slowly, without constant ups and downs.</div>\n<div class='card'><b class='t'>Everything in the browser</b>No installation on a PC needed: open the address, done.</div>\n<div class='card'><b class='t'>No internet</b>The app only connects to programs on the console and to the browsers on your home network.</div>\n<div class='card'><b class='t'>Safe to use</b>Deleting and power commands require a confirmation; important things are protected.</div>\n</div>\n<div class='info'>Tested on a PS5 Pro (CFI-7021) with firmware 12.00. Other firmware may work but has not been checked.</div>\n"
+  },
+  {
+   "id": "voraussetzungen",
+   "title": "Requirements",
+   "html": "\n<ul>\n<li>A PS5 with a jailbreak and a loaded payload loader (<code>elfldr</code>, port <code>9021</code>).</li>\n<li><b>kstuff</b> must be loaded – only with it can the app reach the fan controller. Without kstuff, the display and the\nweb interface work, but fan control then reports “not available”.</li>\n<li>A device with a browser on the same home network.</li>\n<li>To send the ELF, a program such as <code>nc</code> (netcat) or a payload sender of your choice.</li>\n</ul>\n"
+  },
+  {
+   "id": "installation",
+   "title": "Installation &amp; first start",
+   "html": "\n<ol class='steps'>\n<li>Send <code>PS5_Cooling_System_Center_v{version}.elf</code> to the console, port <code>9021</code>, e.g.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>A notification with the address of the web interface appears at the top right of the TV.</li>\n<li>Open it in the browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>The tile on the Home screen</h3>\n<p>On the first start, the app itself creates a tile under “Media”. It <b>only opens the web interface</b> – it\ndoes not start the program. So after every restart of the console, the ELF has to be sent once again.</p>\n<div class='warn'>Only ever run <b>one</b> instance. Two instances control the fan at the same time and interfere with each other.\nYou can stop an old instance on the “Payloads” page; otherwise a restart helps.</div>\n<div class='tip'>Tile deleted, or want a new tile picture? Delete the tile on the console (Options button, Delete) and on\nthe “System” page press <b>Install tile</b>.</div>\n"
+  },
+  {
+   "id": "oberflaeche",
+   "title": "The interface at a glance",
+   "html": "\n<p>On the left is the sidebar with the sections <b>Profile, Games, Files, Payloads, Cooling, System, Log</b> and\n<b>Credits</b>. At the top in the header, on every page: the <b>power options</b>, “Fullscreen”, “Expert mode” and the\nconnection indicator.</p>\n<h3>Power options</h3>\n<p><b>Rest Mode</b>, <b>Restart</b>, <b>Turn off</b> and <b>Safe Mode</b>. Every command needs two clicks:\nthe first turns the button yellow (“Really? Click again”) and states the consequence, the second carries it out. A double click\ndoes not count; after ten seconds the button returns to normal.</p>\n<div class='warn'>When turning off or restarting, unsaved game progress is lost.</div>\n<h3>Language</h3>\n<p>At the top right of the header you choose the language of the interface: <b>Deutsch, English, Italiano, Español, Français</b> or <b>Русский</b>.\nOn the first visit, the page uses your browser's language; if that is not available, English. The browser remembers the choice; the page then reloads\nand stays on the section you were on. Numbers, dates and times follow the language.</p>\n<div class=\"info\">Notifications that the console itself shows on the TV (at start or with a warning) are in German.</div>\n<h3>Manual and FAQ</h3>\n<p>Under “Credits” in the sidebar, <b>Manual</b> and <b>FAQ</b> open these texts directly in the app, in the chosen language (without the\nscreenshots, so that the app stays small). With pictures, both are available as PDF and HTML for download with every release.</p>\n<h3>Windows and the right stick</h3>\n<p>When a window opens (e.g. for deleting), the background is dimmed and stays still. In the PS5's browser, the right stick\nthen only scrolls the window itself.</p>\n"
+  },
+  {
+   "id": "kuehlung",
+   "title": "Cooling",
+   "html": "\n<p>The most important page: the status in plain words, the current temperature, the fan and the running game. Right below, you set\nthe <b>Target temperature</b> and the <b>Operating mode</b>.</p>\n{{FIG:01-kuehlung.png}}\n<h3>Target temperature</h3>\n<p>The temperature the console should hold: adjustable from <b>60 to 91 °C</b>, <b>66 °C</b> by default. Higher means\nquieter and warmer. <b>Quick select</b> sets the target immediately: <b>Cool 62 °C</b>, <b>Balanced 77 °C</b>, <b>Quiet 91 °C</b>.</p>\n<div class=\"info\"><b>91 °C</b> is the value the console sets itself (ShadowMountPlus also offers it as the highest target):\nthe fan stays as quiet as without the app, but the console gets noticeably warmer. The emergency limit is always at least\n4 °C above the target (so 95 °C at 91 °C); the app's warning threshold moves with the target (never lower than target + 2 °C),\nso that it does not warn all the time with a high target; the value set in the settings stays saved.</div>\n<h3>Operating mode</h3>\n<p><b>Quiet</b>, <b>Balanced</b> and <b>Cool</b> determine how strongly the fan responds to heat – they do not change the\ntarget. “Quiet” is recommended.</p>\n{{FIG:02-kuehlung-betriebsart.png}}\n<h3>How the control works</h3>\n<ul>\n<li>It works with a moving average, not with single readings.</li>\n<li>Within ±1 °C of the target, nothing happens.</li>\n<li>The trend counts: if the temperature is already falling, the fan is not turned up any further.</li>\n<li>It turns up in small steps, and turns down only once the temperature has been stably low.</li>\n<li>Above the safety limit, only the hardware counts; the firmware always protects itself in addition.</li>\n</ul>\n<h3>Automatic mode</h3>\n<p>If “Automatic mode” is off, the app hands control back to the PS5 and only shows values. If the app is not running, the\nconsole controls the fan itself again anyway.</p>\n<h3>Display via the mute button</h3>\n<p>Press the controller's mute button <b>twice quickly</b>: the processor temperature and\nfan speed appear at the top right – even without the web interface. The microphone is toggled twice in the process and ends up as it was before.</p>\n"
+  },
+  {
+   "id": "spiele",
+   "title": "Games",
+   "html": "\n<p>The games on your Home screen with cover, format and actions. You can search by title, title ID or content ID;\nfilter by PS5, PS4 or “Backport · AMPR · PlayGo”; and sort by Home screen order, name, play time, size and more.</p>\n{{FIG:03-spiele-bibliothek.png}}\n<h3>Starting and closing</h3>\n<ul>\n<li><b>Start</b> starts the game directly. In the console's browser, the browser closes so that the game is in front.</li>\n<li>If another game is already running, the app starts nothing and tells you so. <b>Close game</b> closes the running game\n<b>immediately and without asking</b> – anything not saved is lost.</li>\n<li>A game is never started twice; a second click within 30 seconds does nothing.</li>\n</ul>\n<h3>Copying, moving, converting</h3>\n<p>Dump folders can be copied, moved and converted directly on the console into <b>ffpfsc</b> (compressed, recommended),\n<b>ffpkg</b> or <b>exFAT</b> – either playable in the folder <code>homebrew</code> of the destination (ShadowMountPlus\nfinds it there) or as a backup in <code>PS5-Sicherung/Spiele</code>. Every copy is read back after writing\nand verified; nothing is overwritten.</p>\n{{FIG:04-spiele-konvertieren.png}}\n<div class='warn'>Please recreate <code>.ffpkg</code> images made with versions before 1.48.0 (old structure).</div>\n"
+  },
+  {
+   "id": "loeschen",
+   "title": "Deleting games &amp; backups",
+   "html": "\n<p>Every game card has <b>Delete</b>, and so does every entry in the <b>Backups</b> tab.</p>\n<ul>\n<li><b>Installed games</b> are uninstalled by the console itself – as with “Delete” in the menu, including updates and add-ons.</li>\n<li><b>Games from ShadowMountPlus</b> are unregistered first; then the image or the folder is deleted.</li>\n<li><b>The app's backups</b> (copies and conversions) are deleted together with their checksum file.</li>\n</ul>\n<ol class='steps'>\n<li>Tap <b>Delete</b>: the window shows exactly what will go.</li>\n<li>Tick “I understand: deleting is final”.</li>\n<li>Press <b>Delete for good</b> twice (the first click asks “Really?”).</li>\n<li>A progress bar with a percentage shows how far it has got.</li>\n</ol>\n<div class='tip'>Your <b>saved data is always kept</b>. A running game is never deleted.</div>\n{{FIG:08-spiele-sicherungen.png}}\n"
+  },
+  {
+   "id": "spielzeit",
+   "title": "Play time",
+   "html": "\n<p>When you played, for how long and how warm the console got: totals for today, 7 and 30 days, the last 14 days\nas bars, the most played games and the recent sessions with peak temperatures. Can be saved as a spreadsheet (CSV).</p>\n{{FIG:05-spiele-spielzeit.png}}\n"
+  },
+  {
+   "id": "spielstaende",
+   "title": "Back up saved data",
+   "html": "\n<p>Copies the saved data as the console stores it – encrypted, without opening or changing anything – to a\nUSB stick, a disk or the internal SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Every file is verified;\n“Verify” reads a backup again later.</p>\n<p><b>Restore</b> works for individual games: the app first backs up the current state, writes all new files next to the old ones first,\nverifies them and only then replaces the old ones.</p>\n<div class='warn'>Backing up and restoring only happen when <b>no game is running</b> – not even a paused one. Backups from another\nconsole cannot be restored.</div>\n{{FIG:06-spiele-spielstaende.png}}\n"
+  },
+  {
+   "id": "pakete",
+   "title": "Packages",
+   "html": "\n<p>Finds <code>.pkg</code> files on USB drives, disks and in console storage (folder <code>pkg</code>) and shows the picture,\nname, title ID, version, type and size.</p>\n<ul>\n<li><b>Install…</b> – the console installs the package itself; the app provides it and shows the progress.\nBeforehand, a plan lists what could get in the way.</li>\n<li><b>Split…</b> – splits large packages into parts for FAT32 sticks (up to 4 GB per file) or discs; the original stays unchanged.</li>\n</ul>\n<div class='info'>An aborted installation attempt can leave space reserved. You free it again on the console, in the\ndownload list, with “Delete”.</div>\n{{FIG:07-spiele-pakete.png}}\n"
+  },
+  {
+   "id": "dateien",
+   "title": "Files – the file manager",
+   "html": "\n<p>Viewing the console's folders and downloading files works everywhere. <b>Changing</b> – uploading, new folder, renaming,\ncopying, moving, deleting – only works on the <b>drives</b> and in <code>/data</code>. Everywhere else it says “View only”.</p>\n{{FIG:15-dateien.png}}\n<h3>Sorting, selecting, viewing</h3>\n<ul>\n<li><b>Sorting:</b> Above the list you choose “Name”, “Size” or “Date”; the arrow next to it reverses the direction. Folders are always at the top. The browser remembers the choice.</li>\n<li><b>Select all:</b> The box above the list selects all entries of the folder (except links and special files). Half filled means: only some of them are selected.</li>\n<li><b>Folder sizes:</b> “Size” on a folder counts how much is inside; “Folder sizes” does this for all folders in the view, one after another. A very large folder is reported with “at least” after about 8 seconds.</li>\n<li><b>Viewing:</b> “View” shows pictures (PNG, JPG, GIF, WebP, BMP, ICO) and the beginning of text files (up to 256 KB). Other files can only be downloaded.</li>\n</ul>\n<h3>Copying &amp; moving</h3>\n<ol class='steps'>\n<li>Tick the entries.</li>\n<li>Press <b>Copy</b> or <b>Cut</b>.</li>\n<li>Go to the destination folder and press <b>Paste here</b>.</li>\n<li>A bar shows the percentage, the amount of data and the current file; <b>Cancel</b> removes the started entry from the destination again.</li>\n</ol>\n<h3>Uploading</h3>\n<p><b>Upload</b> chooses one or more files; on a PC you can also drag them onto the list. A bar shows the\nprogress per file.</p>\n<div class='tip'>Protected: nothing is ever overwritten, links are never followed, and in the app's folder\n(<code>/data/PS5-Cooling-Center</code>) only <code>payloads</code> can be changed – ideal for uploading payloads.</div>\n"
+  },
+  {
+   "id": "payloads",
+   "title": "Payloads",
+   "html": "\n<p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>\nor from the USB stick (root or folder <code>payloads</code>). They are started via the console's payload loader\n(port 9021).</p>\n{{FIG:09-payloads.png}}\n"
+  },
+  {
+   "id": "profil",
+   "title": "Profile",
+   "html": "\n<p>Change the console's display name and choose a profile picture – your own or one of the 30 built-in ones.</p>\n{{FIG:10-profil.png}}\n"
+  },
+  {
+   "id": "system",
+   "title": "System &amp; log",
+   "html": "\n<p><b>System</b> shows the console, firmware, uptime, the storage of all drives, network, display and the\ncooling performance over the weeks; this is also where you reinstall the tile.</p>\n{{FIG:11-system.png}}\n<p><b>Log</b> lists every measurement, control action and message of the app (exportable). The <b>Live kernel log</b> tab shows\nthe console's log as it is written – with filter, pause, save, download and recording.</p>\n{{FIG:14-kernel-log-live.png}}\n"
+  },
+  {
+   "id": "credits",
+   "title": "Credits",
+   "html": "\n<p>The page thanks the developers whose work is in the app, and other well-known developers of the community – with\nprofile picture, name and links. The links can only be clicked if the browser has internet access.</p>\n{{FIG:16-credits.png}}\n"
+  },
+  {
+   "id": "sicherheit",
+   "title": "Security on the home network",
+   "html": "\n<ul>\n<li>The interface has <b>no login</b>: every device on the home network can read and change things.</li>\n<li>The console does not belong on the open internet – <b>do not set up port forwarding</b> to port 8086.</li>\n<li>If you only want to use it on the device itself, set the network binding in the settings to <code>127.0.0.1</code>.</li>\n<li>The app refuses requests that recognisably come from outside websites (error 403).</li>\n</ul>\n"
+  },
+  {
+   "id": "hilfe",
+   "title": "If something does not work",
+   "html": "\n<table>\n<tr><th>Problem</th><th>Solution</th></tr>\n<tr><td>Web interface not reachable</td><td>Send the ELF again (port 9021); only one instance; check the address <code>http://&lt;PS5-IP&gt;:8086/</code>.</td></tr>\n<tr><td>Port 8086 in use</td><td>Usually an old instance is still running: restart the console and send the ELF only once.</td></tr>\n<tr><td>Fan “not available”</td><td>kstuff is not loaded – load kstuff, then send the app again.</td></tr>\n<tr><td>“The drive has disconnected”</td><td>Usually the USB cable: try a different, short cable directly on the console; afterwards restart the console if needed.</td></tr>\n<tr><td>Tile opens nothing</td><td>The tile does not start the app – send the ELF once after every restart.</td></tr>\n<tr><td>Error 403 in the browser</td><td>Open the page directly via the console's IP address, not via another name or another website.</td></tr>\n</table>\n<p>More answers are in the <b>FAQ</b>.</p>\n"
+  }
+ ],
+ "faq": [
+  {
+   "cat": "General",
+   "items": [
+    {
+     "q": "What does the app actually do?",
+     "a": "It controls the PS5's fan according to a target temperature – calm and slow rather than loud and hectic – and offers a web interface for games, packages, saved data, files, payloads, profile and system information."
+    },
+    {
+     "q": "Do I need internet?",
+     "a": "No. The app only connects to programs on the console and to the browsers on your home network. The only exception, in the browser: the “Credits” page checks once whether github.com is reachable, so that the links become clickable."
+    },
+    {
+     "q": "Which firmware is supported?",
+     "a": "Firmware 12.00 on a PS5 Pro (CFI-7021) is tested. The app is built with an SDK that goes up to 13.60; on 13.xx, however, the app has not been tested."
+    },
+    {
+     "q": "Does the app cost anything?",
+     "a": "No. It is free software under the GNU GPL, version 3 or later."
+    }
+   ]
+  },
+  {
+   "cat": "Starting &amp; using",
+   "items": [
+    {
+     "q": "Do I have to send the app again after every restart?",
+     "a": "Yes. The ELF runs in memory. Send it to port 9021 once after every restart of the console. The settings are kept."
+    },
+    {
+     "q": "The tile only opens an empty page – why?",
+     "a": "The tile does not start the app; it only opens the web interface. If the app has not been sent yet after a restart, there is nothing to show."
+    },
+    {
+     "q": "How do I open the interface on a phone or PC?",
+     "a": "Open <code>http://&lt;PS5-IP&gt;:8086/</code> in the browser. The IP is in the notification on the TV after the start."
+    },
+    {
+     "q": "Can I start the app twice?",
+     "a": "Please don't: two instances control the fan at the same time and interfere with each other. Stop an old instance on the “Payloads” page or restart the console."
+    },
+    {
+     "q": "How do I see the temperature without opening the page?",
+     "a": "Press the controller's mute button twice quickly: the temperature and fan speed appear at the top right."
+    },
+    {
+     "q": "Why doesn't the page move when a window is open?",
+     "a": "That is on purpose: while a window is open, the background stays still, and the right stick only scrolls the window itself."
+    },
+    {
+     "q": "In which languages is the interface available?",
+     "a": "German, English, Italian, Spanish, French and Russian. You choose the language at the top right of the header; the manual and the FAQ are available in all six. Notifications that the console shows on the TV stay in German."
+    },
+    {
+     "q": "A text is still in German – is that a bug?",
+     "a": "Not a bug in the app, but a gap: rare texts and console messages are not translated into every language and then appear in German. Please report them; the dictionaries are easy to extend."
+    }
+   ]
+  },
+  {
+   "cat": "Fan &amp; temperature",
+   "items": [
+    {
+     "q": "Which target temperature makes sense?",
+     "a": "66 °C by default. Cool = 62 °C, Balanced = 77 °C, Quiet = 91 °C. Higher means quieter and warmer; up to 72 °C is a good range for most people. 91 °C is the value the console sets itself: as quiet as without the app, but the console gets noticeably warmer; the warning threshold moves with it automatically (target + 2 °C)."
+    },
+    {
+     "q": "Can the app overheat my console?",
+     "a": "The app only holds the temperature you set. Above a safety limit, only the hardware counts, and the PS5's firmware always protects itself independently of that."
+    },
+    {
+     "q": "Why doesn't the fan spin up immediately?",
+     "a": "The control is deliberately slow: it works with an average, ignores small fluctuations of ±1 °C and adjusts in small steps."
+    },
+    {
+     "q": "What happens when I quit the app?",
+     "a": "Then the console controls the fan itself again according to its normal settings. The same applies when “Automatic mode” is switched off."
+    },
+    {
+     "q": "The fan is “not available” – what can I do?",
+     "a": "kstuff is not loaded. Without kstuff, the app cannot reach the fan controller. Load kstuff and send the app again."
+    }
+   ]
+  },
+  {
+   "cat": "Games, packages &amp; saved data",
+   "items": [
+    {
+     "q": "Does deleting a game delete my saved data?",
+     "a": "No. Saved data is always kept. Deleting only happens after ticking the box and clicking twice."
+    },
+    {
+     "q": "Which format should I choose when converting?",
+     "a": "<b>ffpfsc</b> is compressed and recommended. <b>ffpkg</b> and <b>exFAT</b> are uncompressed. Please recreate older <code>.ffpkg</code> files made with versions before 1.48.0."
+    },
+    {
+     "q": "A large package does not fit on my FAT32 stick.",
+     "a": "FAT32 allows at most 4 GB per file. Under “Packages”, “Split…” cuts a package into suitable parts – the original stays unchanged."
+    },
+    {
+     "q": "An installation was aborted – where is my storage space?",
+     "a": "The console reserves the space immediately. Remove the aborted entry from the console's download list with “Delete”."
+    },
+    {
+     "q": "Where are my saved data backups?",
+     "a": "On the drive you choose when backing up, in the folder <code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code> – on the internal SSD under <code>/data</code>."
+    },
+    {
+     "q": "Can I restore saved data from another console?",
+     "a": "No. Saved data is tied to its console; such backups can only be verified."
+    }
+   ]
+  },
+  {
+   "cat": "File manager",
+   "items": [
+    {
+     "q": "Why can't I change some folders?",
+     "a": "Changes are only possible on the drives and in <code>/data</code>. System folders are for viewing only – this protects the console."
+    },
+    {
+     "q": "Why is the app's folder locked?",
+     "a": "Settings and logs are stored there. Only the subfolder <code>payloads</code> can be changed, so that you can upload payloads."
+    },
+    {
+     "q": "Is anything overwritten when copying?",
+     "a": "No, never. If a name already exists in the destination, nothing starts, and the message names it."
+    },
+    {
+     "q": "What happens with “Cancel”?",
+     "a": "The operation stops; whatever of the started entry had already been written to the destination is removed again."
+    },
+    {
+     "q": "How do I view a file without downloading it?",
+     "a": "With “View” on the file: pictures (PNG, JPG, GIF, WebP, BMP, ICO) appear in a window; for text files, the beginning up to 256 KB. Binary files can only be downloaded."
+    },
+    {
+     "q": "Can I sort the list by size or date?",
+     "a": "Yes: above the list you choose “Name”, “Size” or “Date”; the arrow reverses the order. With “Folder sizes”, the console also counts the size of the folders."
+    }
+   ]
+  },
+  {
+   "cat": "Problems &amp; security",
+   "items": [
+    {
+     "q": "“The drive has disconnected (Device not configured)”",
+     "a": "Almost always the USB cable, the port or too little power. Try a different, short cable directly on the console; if there are problems afterwards, restart the console."
+    },
+    {
+     "q": "I get error 403.",
+     "a": "The app refuses requests that come from outside websites. Open the interface directly via the console's IP address."
+    },
+    {
+     "q": "Is the interface password-protected?",
+     "a": "No. Every device on the home network can use it. So do not set up port forwarding; if you like, set the network binding to <code>127.0.0.1</code>."
+    },
+    {
+     "q": "Unknown folders with zip files in /data/homebrew?",
+     "a": "They usually come from another tool with automatic saved data backup (e.g. ProsperoMgr), not from this app."
+    },
+    {
+     "q": "Is this legal?",
+     "a": "The app contains no games, no firmware, no keys and nothing that circumvents copy protection. Modifying a console may violate terms of use; whoever does it bears the risk. Piracy is not supported."
+    }
+   ]
+  }
+ ]
+}

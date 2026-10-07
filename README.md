@@ -4,14 +4,16 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5, mit deutscher Weboberfläche im Heimnetz.**
+**Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5, mit Weboberfläche im Heimnetz in sechs Sprachen.**
 
-![Version](https://img.shields.io/badge/Version-1.49.1-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.50.0-1f6feb)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
-![Oberfläche](https://img.shields.io/badge/Oberfl%C3%A4che-Deutsch-lightgrey)
+![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
 
-[Funktionen](#funktionen) · [Installation](#installation) · [Bedienung](#bedienung) · [Dokumentation](#dokumentation) · [Rechtliches](#rechtliches-und-haftungsausschluss) · [Credits](#credits-und-danksagung) · [English](#english-summary)
+[Funktionen](#funktionen) · [Installation](#installation) · [Bedienung](#bedienung) · [Dokumentation](#dokumentation) · [Rechtliches](#rechtliches-und-haftungsausschluss) · [Credits](#credits-und-danksagung)
+
+**Deutsch** · [English](README.en.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -45,7 +47,7 @@ Das Projekt ist der Nachfolger des *PS5 Temperature Manager*; Backend (C) und Ob
 
 **Kühlung**
 
-- **Komfortregelung des Lüfters.** Hält eine Zieltemperatur (Standard 66 °C) mit gleitendem Mittelwert, Totzone und Trend und ändert die Drehzahl nur in kleinen Schritten. Das Ziel ist nicht die niedrigste Temperatur, sondern ein Lüfter, der ruhig und gleichmäßig klingt. Betriebsarten (leise, ausgewogen, kühl), Schnellwahl und eigene Regeln je Spiel.
+- **Komfortregelung des Lüfters.** Hält eine Zieltemperatur (Standard 66 °C, einstellbar von 60 bis 91 °C; 91 °C ist der Wert der Konsole selbst) mit gleitendem Mittelwert, Totzone und Trend und ändert die Drehzahl nur in kleinen Schritten. Das Ziel ist nicht die niedrigste Temperatur, sondern ein Lüfter, der ruhig und gleichmäßig klingt. Betriebsarten (leise, ausgewogen, kühl), Schnellwahl und eigene Regeln je Spiel.
 - **Sicherheit zuerst.** Ab der Sicherheitstemperatur (Standard 78 °C) gilt nur noch die Hardware. Läuft die App nicht, regelt die Konsole mit ihrer eigenen Kennlinie.
 - **Messwerte.** Prozessor, Hauptchip, Grafik (nur PS5 Pro), Lüfterdrehzahl, Last aller CPU-Kerne, Takt live, Stromaufnahme der Spannungsschienen, Bildrate im Spiel und Controller-Akku. Verläufe über 2 Minuten, 24 Stunden und als Wochenauswertung der Kühlleistung.
 - **Meldungen auf dem Fernseher.** Beim Start, bei Warnungen und auf Wunsch regelmäßig. Zwei kurze Drücke auf die Mikrofon-Taste des Controllers zeigen Prozessortemperatur und Lüfter.
@@ -53,13 +55,15 @@ Das Projekt ist der Nachfolger des *PS5 Temperature Manager*; Backend (C) und Ob
 **Verwaltung**
 
 - **Spiele.** Die Spiele des Startbildschirms mit Cover, Spielzeit, Format und Speicherort. Direkt starten (läuft ein anderes Spiel, weist ein Hinweis darauf hin; „Spiel beenden“ schließt es sofort, danach startet das nächste mit einem Tipp), auf andere Laufwerke kopieren, mit ShadowMountPlus verschieben oder entpacken und ohne PC in exFAT-, ffpkg- und ffpfsc-Abbilder umwandeln. Ein zweiter Reiter schreibt die Spielzeit mit: wann gespielt wurde, wie lange und wie warm die Konsole dabei wurde, mit Summen, Tagesbalken und Rangfolge. Ein dritter sichert die Spielstände auf einen Stick, eine Platte oder den Konsolenspeicher und spielt einen Titel auf Wunsch zurück: unverändert und verschlüsselt, jede Datei zurückgelesen und geprüft, und vor dem Zurückspielen wird der jetzige Stand eigens gesichert. Kopien und Abbilder werden nach dem Schreiben ganz zurückgelesen und geprüft; daneben liegt eine `.sha256`-Datei, die am PC mit `sha256sum -c` später wieder zu prüfen ist. Ein Schalter „Covers & Metadaten speichern“ legt Titelbilder und die langsam zu ermittelnden Angaben der Spiele auf der Konsole ab (Ordner `covers_and_more`), damit die Liste schneller lädt. Ein vierter Reiter, „Pakete“, findet die Spiel-Pakete (`.pkg`) auf Sticks, Platten und im Konsolenspeicher, zeigt sie mit Bild, Version und Art und teilt große Pakete in Teile für FAT32-Sticks oder Discs auf (zurückgelesen und geprüft; das Paket bleibt unverändert) und installiert ein Paket auf Wunsch über die Installation der Konsole selbst: Die App stellt es ihr nur bereit, prüft vorher, was im Weg stehen würde, zeigt den Fortschritt und löscht oder überschreibt nichts.
+- **Dateien.** Ein Dateimanager für die Ordner der Konsole: ansehen, herunterladen, hochladen, neuen Ordner anlegen, umbenennen, kopieren, verschieben und löschen (Ändern nur auf den Laufwerken und in `/data`; Löschen fragt zweimal nach). Die Liste lässt sich nach Name, Größe oder Datum ordnen, alle Einträge lassen sich auf einmal wählen, die Größe eines Ordners wird auf Wunsch nachgezählt, und Bilder und Textdateien zeigt „Ansehen“ gleich im Browser.
 - **Payloads.** Laufende Payloads ansehen und beenden. Eigene `.elf`-Dateien aus einem Ordner der Konsole oder von einem USB-Stick starten oder in den Ordner kopieren, ganz ohne PC.
 - **Profil.** Anzeigename ändern; Profilbild aus 30 eingebauten Bildern oder aus einer eigenen Datei, mit Sicherung des bisherigen Bildes.
 - **System.** Modell, Firmware, Laufzeit, Speicher und Netzwerk. Rohsensoren und Diagnose im Expertenmodus. Ereignisprotokoll zum Exportieren.
 - **Kopfzeile.** Auf jeder Seite: Ruhemodus, Neu starten, Ausschalten und abgesicherter Modus (jeder nach zwei Klicks, als Gruppe in der Mitte), Vollbild und Expertenmodus.
+- **Sprachen.** Die Oberfläche gibt es auf Deutsch, Englisch, Italienisch, Spanisch, Französisch und Russisch; oben rechts wählst du die Sprache (beim ersten Besuch gilt die des Browsers). Handbuch und FAQ stehen in allen sechs Sprachen in der App und als PDF zum Download. Meldungen, die die Konsole selbst auf dem Fernseher einblendet, sind deutsch.
 - **Startmenü-Kachel.** Öffnet die Oberfläche direkt im Browser der Konsole.
 
-**Technik.** Eigener HTTP-Server ohne Fremdbibliothek, dokumentierte [JSON-Schnittstelle](docs/API.md), Einstellungen unter `/data/PS5-Cooling-Center/config.json`, kein Zugriff aufs Internet (die App verbindet sich nur mit Programmen auf der Konsole selbst).
+**Technik.** Eigener HTTP-Server ohne Fremdbibliothek (die Dateien der Oberfläche gehen komprimiert über das Netz), dokumentierte [JSON-Schnittstelle](docs/API.md), Einstellungen unter `/data/PS5-Cooling-Center/config.json`, kein Zugriff aufs Internet (die App verbindet sich nur mit Programmen auf der Konsole selbst).
 
 ## Voraussetzungen
 
@@ -77,7 +81,7 @@ Das Projekt ist der Nachfolger des *PS5 Temperature Manager*; Backend (C) und Ob
 2. Die ELF an die Konsole senden, Port **9021**, mit einem beliebigen Payload-Sender oder per Kommandozeile:
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.49.1.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.50.0.elf
    ```
 
 3. Auf dem Fernseher erscheint eine Meldung mit der Adresse. Im Browser öffnen: **`http://<PS5-IP>:8086`**
@@ -91,10 +95,12 @@ Nach jedem Neustart der Konsole muss die ELF erneut gesendet werden, zum Beispie
 | --- | --- |
 | **Profil** | Anzeigename und Profilbild der Konsole |
 | **Spiele** | Spiele starten, kopieren, verschieben, konvertieren; Spielzeit mit Temperaturen; Spielstände sichern und zurückspielen |
+| **Dateien** | Dateimanager: Ordner ansehen, Dateien hoch- und herunterladen, kopieren, verschieben, löschen |
 | **Payloads** | laufende, gespeicherte und auf USB liegende Payloads |
 | **Kühlung** | Status, Verlauf, Sensoren, Zieltemperatur, Betriebsart, Spielprofile |
 | **System** | Konsole, Speicher, Netzwerk, Diagnose, Ausschalten und Neustart |
 | **Protokoll** | Ereignisse der App, als `.log` exportierbar, und das Kernel-Log der Konsole live mit Filter, Pause, Speichern auf der Konsole und Aufnahme |
+| **Credits** | Dank an die Entwickler, deren Arbeit in der App steckt; dazu **Handbuch** und **FAQ** in deiner Sprache |
 
 Alles Weitere steht im [Handbuch](docs/HANDBUCH.md): Komfortregelung und ihre Parameter, Payloads starten, Profilbilder, Kachel, Bildschirmanzeige und Einstellungen.
 
@@ -121,7 +127,7 @@ Ergebnis ist `PS5_Cooling_Center.elf`. Alle Schritte, Fehlersuche, Release-Ablau
 
 | Dokument | Inhalt |
 | --- | --- |
-| [Handbuch](docs/HANDBUCH.md) | Bedienung im Detail |
+| [Handbuch](docs/HANDBUCH.md) | Bedienung im Detail (auch in der App und als PDF in sechs Sprachen, siehe Releases) |
 | [API](docs/API.md) | Alle Endpunkte und Konfigurationsfelder |
 | [Entwicklung](docs/ENTWICKLUNG.md) | Bauen, Senden, Fehlersuche, Quellcode-Aufbau |
 | [Versionshinweise](docs/RELEASE_NOTES.md) | Was sich in welcher Version geändert hat |
@@ -193,13 +199,6 @@ Bis einschließlich 1.45.1 stand das Projekt unter der MIT-Lizenz. Ab 1.46.0 gil
 
 ---
 
-## English summary
+## Sprachen
 
-**PS5 Cooling & System Center - Pro** is a homebrew payload for a jailbroken PlayStation 5. It reads the console's temperature sensors, drives the fan with a quiet, adjustable comfort controller and serves a web interface on port 8086 for any device on your home network. It also manages games (start, copy, move, convert to exFAT/ffpkg/ffpfsc), payloads (start `.elf` files from a folder or a USB stick), the console profile (name, picture) and shows system details. Everything runs on the console; the app makes no connection to the internet.
-
-- **Requirements:** a jailbroken PS5 with an ELF loader on port 9021 and kstuff loaded (needed for fan control). Tested on a PS5 Pro (CFI-7021), firmware 12.00. Built with ps5-payload-sdk v0.43, whose start-up code knows firmware up to 13.60; a firmware it does not know never reaches `main()`. Fan control and sensors are untested beyond 12.00.
-- **Install:** send `PS5_Cooling_System_Center_v<version>.elf` to `<PS5-IP>:9021`, then open `http://<PS5-IP>:8086`. The home-screen tile is created by the app itself on first start (the launcher installer is a fallback).
-- **Language:** the user interface and the documentation are in German.
-- **Not a Sony product.** PlayStation and PS5 are trademarks of Sony Interactive Entertainment Inc. The project contains no games, firmware, keys or copy-protection circumvention and does not support piracy. Use it only on your own console; modifying a console can violate terms of service, void the warranty or get an account or console banned. Provided **without any warranty** (GPL-3.0-or-later).
-- **Credits:** John Törnblom and the ps5-payload-dev contributors (SDK, elfldr and more), RenanGBarreto, rdmrocha and the PSBrew contributors (MkPFS), Juma Sayeh and Osama Abualia (PS5 Game Compressor, ideas only, no code), SvenGDK (UFS2Tool), phantomptr (ps5upload), Eric Biggers (libdeflate), Dave Gamble (cJSON), drakmor (ShadowMountPlus, ps5-hwinfo), itsPLK (ps5-unified-autoloader, ps5-payload-manager), StonedModder (ps-game-state-lib), the kstuff, etaHEN and onionHEN projects and the whole PS5 homebrew community. Details in the German credits above and in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-- **Build:** see [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
+Diese README gibt es auch auf [English](README.en.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md) und [Русский](README.ru.md). Das Entscheidungsprotokoll, die Entwicklerdokumente und die Schnittstellenbeschreibung sind deutsch; Handbuch und FAQ liegen jeder Veröffentlichung in allen sechs Sprachen als PDF und HTML bei und sind in der App eingebaut. Fehlende oder holprige Übersetzungen gern als Issue („Translation“) melden; Näheres zum Ergänzen steht in [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md#übersetzungen).

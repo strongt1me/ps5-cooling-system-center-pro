@@ -79,6 +79,8 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET | `/api/v1/files/places` | die Orte des Dateimanagers: `{ok, places:[{label, path, free_bytes, writable}]}` |
 | GET | `/api/v1/files/list?path=` | ein Ordner (Pfad percent-kodiert): `{ok, path, parent, writable, free_bytes, total, truncated, entries:[{name, type (dir\|file\|dirlink\|link\|other), size, mtime, writable}]}`; höchstens 3000 Einträge |
 | GET | `/api/v1/files/download?path=` | eine Datei als Download (nur gewöhnliche Dateien) |
+| GET | `/api/v1/files/view?path=&max=` | eine Datei zum Ansehen im Browser (`Content-Disposition: inline`): ein Bild (PNG, JPG, GIF, WebP, BMP, ICO; bis 16 MB, sonst `413`) mit seinem Typ oder der Anfang einer Textdatei als `text/plain` (`max` Bytes, Standard 256 KB, höchstens 1 MB; Kopf `X-Fm-Size` = ganze Größe, `X-Fm-Truncated` = 1, wenn gekürzt). Binärdateien: `415 not_text`. Die Antwort trägt `Content-Security-Policy: default-src 'none'; sandbox` und `nosniff` |
+| GET | `/api/v1/files/size?path=` | Größe einer Datei oder eines Ordners samt allem darunter: `{ok, path, bytes, files, folders, partial}`. Die Konsole zählt höchstens 8 Sekunden; ein zu großer Ordner kommt mit `partial: true` und dem bisher Gezählten zurück (untere Grenze). Verknüpfungen werden nicht verfolgt, ein anderes Laufwerk darunter nicht betreten |
 | POST | `/api/v1/files/upload?path=&name=` | Rohdaten als neue Datei im Ordner `path` (nie überschreiben; 409 wenn der Name vergeben ist, 403 außerhalb der Laufwerke und `/data`) |
 | POST | `/api/v1/files/mkdir` | `{path, name}`: neuer Ordner |
 | POST | `/api/v1/files/rename` | `{path, name}`: neuer Name im selben Ordner |
@@ -101,9 +103,27 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | POST | `/api/v1/profile/avatar/library/load` | Paket in den Avatar-Stagingbereich laden (`{"name":"Mein Avatar"}`) |
 | POST | `/api/v1/profile/avatar/library/delete` | gespeichertes Paket löschen (`{"name":"Mein Avatar"}`) |
 
+## Kompression und Sprachen
+
+- **Komprimierte Auslieferung.** Die Dateien der Oberfläche (HTML, CSS, JS, JSON, SVG) liegen in der App bereits gzip-komprimiert
+  und gehen so an Browser, deren Anfrage `Accept-Encoding: gzip` enthält (Antwort mit `Content-Encoding: gzip` und `Vary:
+  Accept-Encoding`). Alle anderen bekommen den Text unkomprimiert: Die App entpackt ihn dazu beim Senden. Bilder (PNG, JPG)
+  bleiben unverändert. Die JSON-Antworten der Schnittstelle selbst werden nicht komprimiert.
+- **Wörterbücher.** `GET /lang/<xx>.json` (`en`, `it`, `es`, `fr`, `ru`) liefert das Wörterbuch einer Sprache der Oberfläche:
+  `{"v":1,"lang":"xx","t":{"deutscher Text":"Übersetzung", …}}`. Texte mit Platzhaltern (`{0}`, `{1}`, …) stehen mit den
+  Platzhaltern darin. Für Deutsch gibt es kein Wörterbuch; die Seite wählt die Sprache selbst (gemerkte Wahl, sonst Sprache
+  des Browsers, sonst Englisch) und lädt nur das eine Wörterbuch. `GET /handbuch.<xx>.html` und `/faq.<xx>.html` sind Handbuch und
+  FAQ in der Sprache (Deutsch ohne Kürzel: `/handbuch.html`, `/faq.html`).
+
 ## Konfiguration
 
 Konfiguration liegt unter `/data/PS5-Cooling-Center/config.json`.
+
+Bereiche, die `GET /api/v1/config` meldet (seit 07.10.2026; die Werte setzt die App, nicht der Client): `target_min_c` /
+`target_max_c` (Zieltemperatur der Automatik, 60–91 °C), `threshold_min_c` / `threshold_max_c` (Lüfterschwelle, 45–91 °C: der
+feste Wert der Betriebsart „Beobachten“ und das, was die Regelung einstellen darf) und `safety_min_c` / `safety_max_c`
+(Notfallgrenze, 72–95 °C; sie liegt immer mindestens 4 °C über dem Ziel und wird beim Speichern dorthin angehoben). Werte
+außerhalb werden auf den Bereich begrenzt, nicht abgelehnt.
 
 Neue Konfigurationsfelder:
 

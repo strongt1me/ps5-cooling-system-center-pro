@@ -11,6 +11,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "third_party/libdeflate/libdeflate.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 
@@ -2299,6 +2300,8 @@ handle_config_get(int fd) {
       "\"warning_cpu_c\":%u,\"warning_soc_c\":%u,"
       "\"http_port\":%u,\"bind_address\":\"%s\",\"probe_mask\":%u%s,"
       "\"target_temp_c\":%u,\"target_min_c\":%u,\"target_max_c\":%u,"
+      "\"threshold_min_c\":%u,\"threshold_max_c\":%u,"
+      "\"safety_min_c\":%u,\"safety_max_c\":%u,"
       /* The five below are reported, not offered. They follow the profile —
          see the PUT handler. band_min_c/band_max_c used to sit here too and
          advertised a range of 5..30 that nothing could actually select; a
@@ -2323,6 +2326,8 @@ handle_config_get(int fd) {
       g_config.warning_soc_c, g_config.http_port, bind_esc,
       g_config.probe_mask, revert,
       g_config.target_temp_c, PS5TM_TARGET_MIN_C, PS5TM_TARGET_MAX_C,
+      PS5TM_THRESHOLD_MIN_C, PS5TM_THRESHOLD_MAX_C,
+      PS5TM_SAFETY_MIN_C, PS5TM_SAFETY_MAX_C,
       g_config.control_band_c,
       g_config.deadband_c, g_config.control_interval_s,
       g_config.average_window_s, g_config.max_step_pct,
@@ -3198,39 +3203,6 @@ handle_logs_tail(int fd, const ps5tm_request_t *req) {
   ps5tm_http_send_json(fd, 200, body);
   free(entries);
   free(body);
-}
-
-
-/* ------------------------------------------------------------------- assets */
-
-/* What the page may do, said to the browser along with the page itself. The
- * page has no inline script and talks to its own origin only, so the policy
- * costs it nothing — checked by running every page and dialog of it against
- * exactly this header: no violations. What it buys: a script smuggled in
- * through a title's name or a log line is refused by the browser even if some
- * place forgot to escape it, and no other page can frame this one. Styles stay
- * open to inline because the page sets widths and colours through the style
- * attribute. */
-#define PAGE_HEADERS \
-  "Content-Security-Policy: default-src 'self'; script-src 'self'; " \
-  "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://github.com; " \
-  "connect-src 'self'; object-src 'none'; base-uri 'none'; " \
-  "form-action 'self'; frame-ancestors 'none'\r\n" \
-  "Referrer-Policy: no-referrer\r\n"
-
-static int
-serve_asset(int fd, const char *path) {
-  if(!strcmp(path, "/")) path = "/index.html";
-
-  for(unsigned i = 0; i < ps5tm_assets_count; i++) {
-    if(strcmp(ps5tm_assets[i].path, path) != 0) continue;
-    int page = !strncmp(ps5tm_assets[i].ctype, "text/html", 9);
-    ps5tm_http_send(fd, 200, "OK", ps5tm_assets[i].ctype,
-                    ps5tm_assets[i].data, ps5tm_assets[i].len,
-                    page ? PAGE_HEADERS : NULL);
-    return 1;
-  }
-  return 0;
 }
 
 
@@ -4536,7 +4508,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
-  if(is_get && serve_asset(fd, req->path)) return;
+  if(is_get && ps5tm_asset_serve(fd, req)) return;
 
   ps5tm_http_send_error(fd, 404, "not_found",
                         "Diese Adresse existiert nicht.");

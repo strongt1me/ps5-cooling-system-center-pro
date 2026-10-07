@@ -8,6 +8,7 @@
          schiefgehen kann. -->
     <title>PS5 Cooling &amp; System Center - Pro</title>
     <link rel="stylesheet" href="/style.css">
+    <script src="/i18n-boot.js"></script>
   </head>
   <body>
     <div class="app">
@@ -52,10 +53,10 @@
           </button>
           <!-- Seit 06.10.2026: Benutzerhandbuch und FAQ, in der App eingebaut (ohne Bildschirmfotos, klein gehalten);
                öffnen am PC in einem neuen Tab, im Browser der PS5 ggf. an derselben Stelle (Link „Zurück zur App“). -->
-          <a class="tab tab-doc" href="/handbuch.html" target="_blank" rel="noopener">
+          <a class="tab tab-doc" data-doc="handbuch" href="/handbuch.html" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v16H6.5A1.5 1.5 0 0 0 5 20.5z"/><path d="M5 20.5A1.5 1.5 0 0 0 6.5 22H19v-3"/><path d="M9 7h6M9 10.5h6"/></svg>Handbuch
           </a>
-          <a class="tab tab-doc" href="/faq.html" target="_blank" rel="noopener">
+          <a class="tab tab-doc" data-doc="faq" href="/faq.html" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><path d="M12 16.8h.01"/></svg>FAQ
           </a>
         </nav>
@@ -78,6 +79,17 @@
           <button class="pw-btn" id="pw-safe" type="button" title="Neu starten und im Menü des abgesicherten Modus stehen bleiben">Abgesicherter Modus</button>
         </div>
         <div class="top-right">
+          <!-- Sprachwahl (i18n.js): die Wahl wird gemerkt, die Seite lädt neu -->
+          <label class="lang-switch" title="Language / Sprache">
+            <select id="lang" aria-label="Language / Sprache" data-no-i18n>
+              <option value="de">Deutsch</option>
+              <option value="en">English</option>
+              <option value="it">Italiano</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
           <!-- Vollbild: nur sichtbar, wenn der Browser es anbietet (app.js) -->
           <button class="fs-btn" id="fs-btn" type="button" hidden aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
@@ -555,10 +567,10 @@
                 <output id="target-out">-- °C</output>
                 <span class="target-hint" id="target-hint">wird geladen …</span>
               </div>
-              <input id="target-range" type="range" min="60" max="78" step="1" value="66" title="Zieltemperatur in Grad Celsius">
+              <input id="target-range" type="range" min="60" max="91" step="1" value="66" title="Zieltemperatur in Grad Celsius">
               <div class="scale">
                 <span>60 °C<small>kühler, lauter</small></span>
-                <span class="right">78 °C<small>wärmer, leiser</small></span>
+                <span class="right">91 °C<small>wärmer, leiser</small></span>
               </div>
               <button class="btn primary full" id="apply-target">Übernehmen</button>
               <div class="co-quick">
@@ -860,7 +872,7 @@
                   <small>Ab dieser Prozessortemperatur erscheint eine Meldung auf
                     dem Fernseher. Für den Hauptchip gilt automatisch 5 °C mehr,
                     weil der mehr Luft nach oben hat.</small></label>
-                <label>Notfallgrenze (°C)<input type="number" id="s-safe" min="72" max="90">
+                <label>Notfallgrenze (°C)<input type="number" id="s-safe" min="72" max="95">
                   <small>Ab hier werden alle Rücksichten auf Lautstärke fallen
                     gelassen und der Lüfter geht zügig auf Vollast. Ein Notnagel,
                     kein Feinregler — am besten so lassen.</small></label>
@@ -877,7 +889,7 @@
                 <button class="btn ghost" id="bind-local">Nur lokal (127.0.0.1)</button>
               </div>
               <div class="row-gap mt-12">
-                <label><span>Direktwert (°C)</span><input type="number" id="s-direct-threshold" min="30" max="90"></label>
+                <label><span>Direktwert (°C)</span><input type="number" id="s-direct-threshold" min="45" max="91"></label>
                 <label><span>Reapply-Intervall (s)</span><input type="number" id="s-fan-reapply" min="1" max="300"></label>
                 <button class="btn" id="apply-direct-threshold">Direkt setzen</button>
               </div>
@@ -1417,6 +1429,19 @@
               <span class="fm-ro" id="fm-ro" hidden>Nur ansehen – hier darf nichts geändert werden</span>
               <span class="fm-free muted" id="fm-free"></span>
             </div>
+            <div class="fm-sortbar">
+              <label class="fm-selall"><input type="checkbox" id="fm-selall"> <span>Alle auswählen</span></label>
+              <span class="fm-sortgrp">
+                <label for="fm-sort">Sortieren nach</label>
+                <select id="fm-sort">
+                  <option value="name">Name</option>
+                  <option value="size">Größe</option>
+                  <option value="date">Datum</option>
+                </select>
+                <button class="btn ghost" id="fm-dir" type="button">↑</button>
+              </span>
+              <button class="btn ghost" id="fm-sizes" type="button" title="Berechnet die Größe aller Ordner in dieser Ansicht" hidden>Ordnergrößen</button>
+            </div>
             <div class="fm-bar" id="fm-selbar" hidden>
               <b id="fm-selcount"></b>
               <button class="btn ghost" id="fm-copy" type="button">Kopieren</button>
@@ -1852,6 +1877,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/i18n.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
 </html>

@@ -47,6 +47,15 @@ If `PS5_PAYLOAD_SDK` is not set, the build will fail.
 .\tools\check-release-liesmich-sync.ps1
 ```
 
+## Translations
+
+The interface exists in German (the language of the source texts), English, Italian, Spanish, French and Russian. The dictionaries are plain
+JSON files in `web/lang/<xx>.json` (key = the German text exactly as it stands in the source, value = the translation, `{0}` `{1}` … are
+values the program inserts and must stay). Fixing a wording or filling a gap is a one-line change; `python tools/i18n/check_lang.py <xx>`
+lists missing texts and wrong placeholders. How it works, how to add a language and how the manual, FAQ and README are built:
+[docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md#übersetzungen) (German). A text that is wrong or still German can also be reported with the
+"Translation" issue form.
+
 ## Security and safety
 
 - Do not commit secrets, private tokens, or local credentials.

@@ -1360,3 +1360,24 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 /* Handbuch und FAQ: Links in der Seitenleiste, aussehend wie die Knöpfe */
 a.tab { text-decoration: none; color: inherit; }
 .tab-doc { opacity: .92; }
+/* Dateimanager: Sortierung, Alle auswählen, Vorschau (07.10.2026) */
+.fm-sortbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 10px; padding: 8px 6px;
+  border-bottom: 1px solid var(--hairline); font-size: 13px; color: var(--ink-2); }
+.fm-selall { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.fm-selall input { width: 18px; height: 18px; }
+.fm-sortgrp { display: inline-flex; align-items: center; gap: 8px; }
+.fm-sortgrp select { padding: 7px 10px; border-radius: var(--r-sm); border: 1px solid var(--hairline); background: var(--inset);
+  color: var(--ink); font: inherit; font-size: 13px; }
+.fm-sortgrp .btn, #fm-sizes { padding: 6px 12px; font-size: 13px; }
+.cp-dialog.fm-view { max-width: 920px; }
+.fm-view-img { display: block; max-width: 100%; max-height: 68vh; margin: 4px auto 8px; border-radius: 10px;
+  background: var(--inset); border: 1px solid var(--hairline); object-fit: contain; }
+.fm-view-text { max-height: 58vh; overflow: auto; margin: 4px 0 8px; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; color: var(--ink);
+  background: var(--inset); border: 1px solid var(--hairline); border-radius: 10px; }
+.fm-view-note { font-size: 12px; margin: 0 0 6px; }
+/* Sprachwahl und Wartezustand, bis das Wörterbuch geladen ist (i18n-boot.js, i18n.js) */
+html.i18n-wait body { visibility: hidden; }
+.lang-switch select { padding: 8px 10px; border-radius: 999px; border: 1px solid var(--hairline); background: var(--surface-1);
+  color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.lang-switch select:hover, .lang-switch select:focus-visible { border-color: rgba(59,130,246,.55); }

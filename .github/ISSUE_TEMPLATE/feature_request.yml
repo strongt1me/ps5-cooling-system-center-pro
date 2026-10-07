@@ -1,0 +1,21 @@
+name: Feature request / Wunsch
+description: An idea for something the app could do. / Eine Idee für eine neue Funktion.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like the app to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why, and how would you use it?
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Scope
+      options:
+        - label: It does not need game data, keys, firmware or anything that circumvents copy protection.
+          required: true

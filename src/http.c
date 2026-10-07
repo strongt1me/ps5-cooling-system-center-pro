@@ -485,6 +485,14 @@ serve_connection(void *arg) {
     }
   }
 
+  {
+    char enc[160];
+    req.gzip_ok = 0;
+    if(header_value(headers, "Accept-Encoding", enc, sizeof(enc)) > 0)
+      for(const char *c = enc; *c; c++)
+        if(!strncasecmp(c, "gzip", 4)) { req.gzip_ok = 1; break; }
+  }
+
   const char *cl = find_header(headers, "Content-Length");
   size_t want = cl ? (size_t)strtoul(cl, NULL, 10) : 0;
 

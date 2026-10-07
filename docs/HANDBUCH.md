@@ -33,8 +33,9 @@ Konfigurationen ziehen beim ersten Start automatisch um.
    Kernel-Log live (siehe unten)
 
 Darunter öffnen **Handbuch** und **FAQ** (seit 1.49.1) das eingebaute Benutzerhandbuch und die häufigen Fragen,
-am PC in einem neuen Tab; oben steht „← Zurück zur App“. Die eingebauten Fassungen haben keine Bildschirmfotos
-(die Fassungen mit Bildern gibt es als PDF und HTML zum Release).
+am PC in einem neuen Tab; oben steht „← Zurück zur App“. Sie erscheinen in der gewählten Sprache (seit 1.50.0 sechs, siehe
+„Sprache der Oberfläche“ unten). Die eingebauten Fassungen haben keine Bildschirmfotos (die Fassungen mit Bildern gibt es als PDF
+und HTML zum Release).
 
 In der **Kopfzeile**, auf jeder Seite, stehen die **Power-Optionen**: vier Knöpfe, mit denen
 sich die Konsole steuern lässt. Ein gemeinsamer Rahmen zeigt, dass sie zusammengehören; sie sitzen
@@ -271,8 +272,8 @@ Die Seite **Dateien** zeigt die Ordner der Konsole. Oben stehen die Orte (Intern
 Laufwerk, „Ganzes System (nur ansehen)“), darunter der Pfad zum Anklicken und die Liste: Ordner zuerst, mit Größe und
 Datum. Ein Ordnername öffnet ihn, **↑ Hoch** geht eine Ebene zurück.
 
-**Ansehen und Herunterladen gehen überall.** Jede Datei hat **Herunterladen** (im Browser am PC; Gerätedateien wie unter
-`/dev` werden nicht ausgeliefert).
+**Ansehen und Herunterladen gehen überall.** Jede Datei hat **Ansehen** (Bilder und Textdateien, siehe unten) und
+**Herunterladen** (im Browser am PC; Gerätedateien wie unter `/dev` werden nicht ausgeliefert).
 
 **Ändern geht nur auf den Laufwerken und in `/data`** (USB, M.2, interne SSD): **Neuer Ordner**, **Hochladen** (eine oder
 mehrere Dateien, mit Fortschrittsbalken in Prozent; am PC auch per Ziehen auf die Liste), **Umbenennen**, **Kopieren**,
@@ -283,6 +284,19 @@ Konsole selbst, nicht nur die Seite. Zusätzlich geschützt:
   verändert werden, damit man Payloads für die Seite „Payloads“ hochladen kann;
 - Verknüpfungen: Sie werden nie verfolgt, wenn etwas geändert wird, und lassen sich weder umbenennen noch löschen;
 - Laufwerke, die in `/data` eingehängt sind, und die Laufwerke selbst (`/mnt/usb0`, `/data`): nur ihr Inhalt.
+
+**Ordnen, auswählen, ansehen (seit 07.10.2026):**
+
+- **Sortieren:** Über der Liste stehen „Name“, „Größe“ und „Datum“; der Pfeil daneben kehrt die Richtung um. Ordner stehen
+  immer oben. Der Browser merkt sich die Wahl.
+- **Alle auswählen:** Das Kästchen über der Liste wählt alle Einträge des Ordners, ausgenommen Verknüpfungen und
+  Sonderdateien. Halb gefüllt heißt: nur ein Teil ist gewählt.
+- **Ordnergrößen:** „Größe“ an einem Ordner zählt nach, wie viel darin liegt; „Ordnergrößen“ macht das nacheinander für alle
+  Ordner der Ansicht. Die Konsole zählt höchstens etwa 8 Sekunden je Ordner; dauert es länger, steht die Größe als
+  „mindestens“ da (`partial`).
+- **Ansehen:** „Ansehen“ zeigt Bilder (PNG, JPG, GIF, WebP, BMP, ICO) und den Anfang von Textdateien (bis 256 KB) in einem
+  Fenster. Die Datei kommt mit strenger Sicherheitskopfzeile (kein Skript, nur das Bild oder der Text); andere Dateien lassen
+  sich nur herunterladen.
 
 **Kopieren und Verschieben:** Einträge ankreuzen, **Kopieren** oder **Ausschneiden**, in den Zielordner wechseln, **Hier
 einfügen**. Ein Balken zeigt Prozent, Bytes und die aktuelle Datei; **Abbrechen** hält an und entfernt im Ziel, was vom
@@ -295,6 +309,22 @@ kopiert, und das Original erst gelöscht, wenn die Kopie vollständig ist. Vorhe
 
 Während Kopieren, Verschieben oder Löschen läuft, startet kein zweiter solcher Auftrag; der Dateimanager startet nicht,
 solange ein anderer Vorgang der App läuft (Spiel kopieren, konvertieren, installieren …). Jede Änderung steht im Protokoll.
+
+## Sprache der Oberfläche (seit 07.10.2026)
+
+Oben rechts in der Kopfzeile steht die Sprachwahl: **Deutsch, English, Italiano, Español, Français, Русский**. Beim ersten
+Besuch nimmt die Seite die Sprache des Browsers; hat die App sie nicht, Englisch. Die Wahl merkt sich der Browser
+(`localStorage`, Schlüssel `lang`), die Seite lädt dann neu und bleibt auf der Seite, auf der man war. Zahlen, Datum und
+Uhrzeit folgen der Sprache (`de-DE`, `en-GB`, `it-IT`, `es-ES`, `fr-FR`, `ru-RU`).
+
+- Die Quelltexte der App sind deutsch. Für jede andere Sprache lädt die Seite ein Wörterbuch (`/lang/<xx>.json`), das jeden
+  deutschen Text auf den übersetzten abbildet. Deutsch braucht keins.
+- Texte, die die Konsole selbst auf dem Fernseher einblendet (beim Start, bei einer Warnung, bei der Mikrofon-Taste), sind
+  deutsch. Auch Meldungen aus der Konsole in der Oberfläche (z. B. Fehlertexte eines Auftrags) werden übersetzt, soweit das
+  Wörterbuch sie kennt; seltene Texte können deutsch bleiben. Wer eine Lücke findet, kann sie als Issue melden
+  („Translation“) – Näheres zum Ergänzen steht in [ENTWICKLUNG.md](ENTWICKLUNG.md#übersetzungen).
+- **Handbuch und FAQ** gibt es in allen sechs Sprachen: in der App (Seitenleiste, unter „Credits“; ohne Bildschirmfotos) und
+  mit Bildern als PDF und HTML bei jeder Veröffentlichung.
 
 ## Credits (seit 06.10.2026)
 
@@ -771,12 +801,12 @@ DashLaunch.
 
 | Parameter | Standard | Bedeutung |
 | --- | --- | --- |
-| `target_temp_c` | 66 °C | zu haltende Temperatur (60–78, bis 72 empfohlen) |
+| `target_temp_c` | 66 °C | zu haltende Temperatur (60–91, bis 72 empfohlen) |
 | `deadband_c` | 1 °C | innerhalb passiert nichts |
 | `control_interval_s` | 5 s | Messung bleibt bei 1 s |
 | `average_window_s` | 12 s | gleitender Mittelwert |
 | `max_step_pct` | 1 % | Drehzahländerung pro Zyklus |
-| `safety_temp_c` | 78 °C | darüber zählt nur noch die Hardware |
+| `safety_temp_c` | 78 °C | darüber wird der Lüfter hochgefahren (72–95; mindestens Ziel + 4) |
 | `profile` | comfort | comfort / balanced / cool |
 
 Wie es arbeitet:
@@ -790,8 +820,8 @@ Wie es arbeitet:
   entsprechend schneller.
 - Direkter Eingriff ist weiter möglich: der Direktwert-Block bietet Presets
    (`Kühl`, `Ausgewogen`, `Leise`) und setzt je nach Modus entweder die
-   Zieltemperatur (`automatic`: 62, 70 und 78 °C; bis 03.10.2026 waren es 62, 66 und
-   70 °C, als der Regler noch nur bis 72 °C ging) oder eine feste Schwelle (`observe`:
+   Zieltemperatur (`automatic`: 62, 77 und 91 °C; bis 07.10.2026 waren es 62, 70 und 78 °C, bis
+   03.10.2026 62, 66 und 70 °C, als der Regler noch nur bis 72 °C ging) oder eine feste Schwelle (`observe`:
    58, 65 und 74 °C).
 - Netzbindung ist als Option verfügbar: `bind_address` kann in der UI direkt
    auf `0.0.0.0` (LAN) oder `127.0.0.1` (nur lokal auf der Konsole) gesetzt
@@ -802,14 +832,18 @@ Wie es arbeitet:
 - **Komfortgrenze** (65 % im Komfortprofil): verhindert, dass ein Thermostat,
   der sein Ziel unter Dauerlast nie erreicht, bis auf 100 % hochdreht.
 - Ab `safety_temp_c` werden Totzone, Mittelwert und Komfortgrenze ignoriert.
-- **Ziele über 72 °C** (seit dem 03.10.2026 bis 78 °C einstellbar): Die Konsole läuft
+- **Ziele über 72 °C** (seit dem 03.10.2026 bis 78 °C, seit dem 07.10.2026 bis 91 °C einstellbar): Die Konsole läuft
   dann deutlich wärmer, der Lüfter bleibt länger auf seiner leisen Grundkurve. Die
-  Notfallgrenze rückt dabei von selbst auf Ziel + 4 °C (bei 78 °C auf 82 °C), sonst
+  Notfallgrenze rückt dabei von selbst auf Ziel + 4 °C (bei 78 °C auf 82 °C, bei 91 °C auf 95 °C), sonst
   würde die Regelung mitten in ihrer Arbeit in den Notfallmodus kippen. Die
-  Warnschwelle der App (`warning_cpu_c`, 80 °C ab Werk) bleibt, wo sie ist, und liegt
-  bei hohen Zielen nah über der gehaltenen Temperatur: Wer dort dauernd eine
-  Temperaturwarnung bekommt, hebt sie in den Einstellungen an. Die Firmware der
+  Warnschwelle der App (`warning_cpu_c`) geht seit dem 07.10.2026 mit: Die wirksame Schwelle ist nie niedriger als
+  Ziel + 2 °C (beim Spielprofil: das Ziel des laufenden Spiels), die Hauptchip-Schwelle liegt weiter 5 °C darüber. Der
+  eingestellte Wert bleibt gespeichert und gilt, solange das Ziel niedrig genug ist. Die Firmware der
   Konsole schützt sich unabhängig davon weiter selbst.
+- **91 °C** ist der Wert, den die Firmware der Konsole bei jedem Zustandswechsel selbst einstellt
+  (gemessen am 24.09.2026, Firmware 12.00) und der höchste, den auch ShadowMountPlus anbietet. Ein Ziel von 91 °C
+  heißt deshalb: so leise wie ohne diese App; erst über 91 °C greift die Regelung ein, und ab der Notfallgrenze
+  (95 °C) geht der Lüfter zügig hoch.
 
 ### Wichtig: Schwelle statt Drehzahl
 
@@ -826,6 +860,36 @@ Drehzahl zurück und kalibriert sich damit selbst.
 
 Die Schwelle wird mindestens alle 15 Sekunden neu gesetzt, weil die Firmware
 den ICC-Zustand bei jedem Spiel-/App-Start zurücksetzt.
+
+### Ruhelage der Schwelle (seit 07.10.2026)
+
+Hat der Lüfter nichts zu tun (die Temperatur liegt am oder unter dem Ziel), parkt die App die Schwelle: bei Zielen bis
+70 °C wie immer auf 80 °C, darüber auf **Ziel + 10 °C, höchstens 91 °C**. Der Grund: Die Firmware dreht den Lüfter
+proportional zum Abstand über der Schwelle hoch und gibt schon innerhalb von etwa 20 °C darunter ein wenig Drehzahl dazu
+(das Messmodell der Firmware 12.00 steht in `test/stubs_comfort.c`). Läge die Ruhelage fest bei 80 °C, könnte eine Konsole,
+die bei 85 °C gehalten werden soll, nie so leise laufen, wie das Ziel verspricht. Bei einem Ziel von 91 °C ist die
+Ruhelage die 91 °C, die die Konsole selbst einstellt. Überschreitet die Temperatur das Ziel, senkt der Servo die Schwelle
+wie bisher in Schritten von höchstens 3 °C alle 6 Sekunden, bis die Drehzahl zum Bedarf passt.
+
+### Vergleich mit ShadowMountPlus (`fan_target_temperature`)
+
+ShadowMountPlus (SMP, auch über SMPlusGUI einstellbar) kennt `fan_target_temperature=system|50..91` in der `config.ini`.
+Beide Programme stellen am Ende **dieselbe Größe** ein: die Schwelle, die die Konsole an ihrem Lüfterbaustein
+(`/dev/icc_fan`, Byte 5) hat. Der Unterschied ist, wie:
+
+| | SMP | diese App |
+| --- | --- | --- |
+| Was | schreibt einen **festen Wert** (50–91 °C) als Schwelle | hält eine **Temperatur** (60–91 °C) und stellt die Schwelle dafür laufend nach |
+| Wann | einmal, wenn ein Spiel den Fokus bekommt; ab Werk `system` = schreibt nichts | Sekundentakt; mindestens alle 15 s neu gesetzt, sofort zurückgeholt, wenn die Firmware sie zurücksetzt |
+| Rückmeldung | keine: der Wert gilt, ganz gleich, wie warm es wird | liest Temperatur und Drehzahl zurück, Mittelwert, Trend, Totzone, Notfallgrenze |
+| Schutz nach oben | nur die Firmware der Konsole | zusätzlich die Notfallgrenze (Ziel + 4 °C, höchstens 95 °C) |
+| Pro Spiel | ein Wert für alle Spiele | Spielprofile mit eigenem Ziel |
+
+Ein hoher Wert in SMP und ein hohes Ziel in dieser App führen zum selben Ruhezustand des Lüfters; die App hält die
+Konsole darüber hinaus nahe am Ziel, statt sie ungebremst steigen zu lassen. **Nicht beides gleichzeitig:** Steht in SMP eine Zahl und
+läuft hier die Automatik, setzt die App ihre Schwelle innerhalb von höchstens 15 Sekunden wieder durch (das Protokoll
+vermerkt es als Überschreibung); SMPs Wert hält dann nur kurz. Wer SMPs Wert will, lässt die Automatik aus (Betriebsart
+„Beobachten“, dort gilt eine feste Schwelle bis 91 °C) oder lässt SMP auf `system`.
 
 ## Voraussetzung kstuff
 

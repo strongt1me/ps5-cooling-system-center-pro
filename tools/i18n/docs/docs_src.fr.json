@@ -1,0 +1,298 @@
+{
+ "ui": {
+  "lang_name": "Français",
+  "manual_title": "Manuel d’utilisation – PS5 Cooling & System Center - Pro",
+  "manual_kicker": "Manuel d’utilisation · PS5 Homebrew",
+  "manual_cover_title": "PS5 Cooling &amp; System Center – Pro",
+  "manual_lead": "Contrôle silencieux du ventilateur, jeux, paquets, données sauvegardées, gestionnaire de fichiers et système – tout dans le navigateur, directement sur la PS5.",
+  "manual_badges": [
+   "Version {version}",
+   "Testé sur firmware 12.00",
+   "PS5 Pro CFI-7021",
+   "Français"
+  ],
+  "toc": "Sommaire",
+  "faq_title": "FAQ – PS5 Cooling & System Center - Pro",
+  "faq_kicker": "Questions fréquentes · PS5 Homebrew",
+  "faq_cover_title": "FAQ",
+  "faq_lead": "Des réponses rapides sur le lancement, le ventilateur, les jeux, les paquets, les données sauvegardées, le gestionnaire de fichiers et la sécurité.",
+  "faq_badges": [
+   "Version {version}",
+   "{n} questions",
+   "Français"
+  ],
+  "back": "← Retour à l’app",
+  "footer": "PS5 Cooling &amp; System Center - Pro · Version {version} · Mis à jour le 7 octobre 2026 · Ce n’est pas un produit de Sony ; « PlayStation » et « PS5 » sont des marques de Sony Interactive Entertainment Inc. Uniquement pour votre propre console, sans garantie (GPL-3.0-or-later)."
+ },
+ "captions": {
+  "01-kuehlung.png": "La page « Refroidissement »",
+  "02-kuehlung-betriebsart.png": "Mode de fonctionnement, mode automatique et touche du micro",
+  "03-spiele-bibliothek.png": "Jeux · Bibliothèque",
+  "04-spiele-konvertieren.png": "Conversion avec choix du format, du type et de la destination",
+  "08-spiele-sicherungen.png": "Jeux · Copies de sécurité",
+  "05-spiele-spielzeit.png": "Jeux · Temps de jeu",
+  "06-spiele-spielstaende.png": "Jeux · Données sauvegardées",
+  "07-spiele-pakete.png": "Jeux · Paquets",
+  "15-dateien.png": "Fichiers",
+  "09-payloads.png": "Payloads",
+  "10-profil.png": "Profil",
+  "11-system.png": "Système",
+  "14-kernel-log-live.png": "Journal · Journal du noyau en direct",
+  "16-credits.png": "Crédits"
+ },
+ "chapters": [
+  {
+   "id": "start",
+   "title": "Bienvenue",
+   "html": "\n<p><b>PS5 Cooling &amp; System Center - Pro</b> est un programme homebrew (ELF) pour une PS5 jailbreakée. Il régule le\nventilateur selon une température cible calme et librement réglable, et fournit une interface web que vous ouvrez depuis n’importe quel appareil du\nréseau domestique : téléphone, tablette, PC ou le navigateur de la console elle-même. S’y ajoutent la gestion des jeux, les paquets,\nles données sauvegardées, un gestionnaire de fichiers, les payloads, le profil et des informations système.</p>\n<div class='grid'>\n<div class='card'><b class='t'>Silencieux plutôt que bruyant</b>La régulation maintient une température cible – en douceur et avec inertie, sans montées et descentes incessantes.</div>\n<div class='card'><b class='t'>Tout dans le navigateur</b>Aucune installation sur le PC : ouvrez l’adresse, c’est tout.</div>\n<div class='card'><b class='t'>Sans Internet</b>L’app se connecte uniquement aux programmes de la console et aux navigateurs du réseau domestique.</div>\n<div class='card'><b class='t'>Utilisation sûre</b>La suppression et les commandes d’alimentation demandent une confirmation ; ce qui est important est protégé.</div>\n</div>\n<div class='info'>Testé sur une PS5 Pro (CFI-7021) avec le firmware 12.00. D’autres firmwares peuvent fonctionner, mais n’ont pas été vérifiés.</div>\n"
+  },
+  {
+   "id": "voraussetzungen",
+   "title": "Prérequis",
+   "html": "\n<ul>\n<li>Une PS5 jailbreakée avec un chargeur de payloads chargé (<code>elfldr</code>, port <code>9021</code>).</li>\n<li><b>kstuff</b> doit être chargé – c’est la seule façon pour l’app d’atteindre le contrôleur du ventilateur. Sans kstuff, l’affichage et\nl’interface web fonctionnent, mais la régulation du ventilateur indique alors « indisponible ».</li>\n<li>Un appareil du même réseau domestique avec un navigateur.</li>\n<li>Pour envoyer l’ELF, un programme comme <code>nc</code> (netcat) ou l’outil d’envoi de payloads de votre choix.</li>\n</ul>\n"
+  },
+  {
+   "id": "installation",
+   "title": "Installation &amp; premier lancement",
+   "html": "\n<ol class='steps'>\n<li>Envoyez <code>PS5_Cooling_System_Center_v{version}.elf</code> à la console, port <code>9021</code>, p. ex. :<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>Un message avec l’adresse de l’interface web apparaît en haut à droite du téléviseur.</li>\n<li>Ouvrez dans le navigateur : <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>La vignette de l’écran d’accueil</h3>\n<p>Au premier lancement, l’app crée elle-même une vignette dans « Multimédia ». Elle <b>ouvre uniquement l’interface web</b> – elle\nne lance pas le programme. Après chaque redémarrage de la console, l’ELF doit donc être renvoyé une fois.</p>\n<div class='warn'>Ne faites tourner qu'<b>une seule</b> instance à la fois. Deux instances régulent le ventilateur en même temps et se gênent.\nVous arrêtez une ancienne instance sur la page « Payloads » ; sinon, un redémarrage aide.</div>\n<div class='tip'>Vignette supprimée ou nouvelle image de vignette souhaitée ? Supprimez la vignette sur la console (touche OPTIONS, Supprimer) et appuyez sur\n<b>Installer la vignette</b> sur la page « Système ».</div>\n"
+  },
+  {
+   "id": "oberflaeche",
+   "title": "L’interface en un coup d’œil",
+   "html": "\n<p>À gauche se trouve la barre latérale avec les sections <b>Profil, Jeux, Fichiers, Payloads, Refroidissement, Système, Journal</b> et\n<b>Crédits</b>. En haut, dans la barre d’en-tête, sur chaque page : les <b>options d’alimentation</b>, « Plein écran », « Mode expert » et\nl’indicateur de connexion.</p>\n<h3>Options d’alimentation</h3>\n<p><b>Mode repos</b>, <b>Redémarrer</b>, <b>Éteindre</b> et <b>Mode sans échec</b>. Chaque commande demande deux clics :\nle premier colore le bouton en jaune (« Vraiment ? Cliquez encore ») et indique la conséquence, le second l’exécute. Un double-clic\nne compte pas ; au bout de dix secondes, le bouton redevient normal.</p>\n<div class='warn'>En cas d’extinction et de redémarrage, les données de jeu non sauvegardées sont perdues.</div>\n<h3>Langue</h3>\n<p>En haut à droite de la barre d’en-tête, vous choisissez la langue de l’interface : <b>Deutsch, English, Italiano, Español, Français</b> ou <b>Русский</b>.\nLors de la première visite, la page prend la langue de votre navigateur ; si elle n’est pas disponible, l’anglais. Le navigateur mémorise ce choix, la page se recharge alors\net reste sur la section où vous étiez. Les nombres, la date et l’heure suivent la langue.</p>\n<div class=\"info\">Les messages que la console affiche elle-même sur le téléviseur (au démarrage ou lors d’un avertissement) sont en allemand.</div>\n<h3>Manuel et FAQ</h3>\n<p>Sous « Crédits » dans la barre latérale, <b>Manuel</b> et <b>FAQ</b> ouvrent ces textes directement dans l’app, dans la langue choisie (sans les\ncaptures d’écran, pour que l’app reste légère). Avec images, les deux sont disponibles en PDF et en HTML, à télécharger avec chaque version publiée.</p>\n<h3>Fenêtres et joystick droit</h3>\n<p>Lorsqu’une fenêtre s’ouvre (p. ex. pour supprimer), l’arrière-plan s’assombrit et reste immobile. Dans le navigateur de la PS5, le\njoystick droit ne fait alors défiler que la fenêtre elle-même.</p>\n"
+  },
+  {
+   "id": "kuehlung",
+   "title": "Refroidissement",
+   "html": "\n<p>La page la plus importante : l’état en clair, la température actuelle, le ventilateur et le jeu en cours. Juste en dessous, vous réglez\nla <b>température cible</b> et le <b>mode de fonctionnement</b>.</p>\n{{FIG:01-kuehlung.png}}\n<h3>Température cible</h3>\n<p>La température que la console doit maintenir : réglable de <b>60 à 91 °C</b>, <b>66 °C</b> par défaut. Plus haut signifie\nplus silencieux et plus chaud. Le <b>choix rapide</b> règle la cible immédiatement : <b>Frais 62 °C</b>, <b>Équilibré 77 °C</b>, <b>Silencieux 91 °C</b>.</p>\n<div class=\"info\"><b>91 °C</b> est la valeur que la console règle elle-même (ShadowMountPlus la propose aussi comme cible la plus haute) :\nle ventilateur reste aussi silencieux que sans l’app, mais la console chauffe alors nettement plus. Le seuil d’urgence se situe toujours au moins\n4 °C au-dessus de la cible (donc à 95 °C pour 91 °C) ; le seuil d’avertissement de l’app suit la cible (jamais moins que cible + 2 °C), pour ne pas avertir en permanence avec une cible élevée ; la valeur réglée dans les paramètres reste enregistrée.</div>\n<h3>Mode de fonctionnement</h3>\n<p><b>Silencieux</b>, <b>Équilibré</b> et <b>Frais</b> déterminent avec quelle force le ventilateur réagit à la chaleur – ils ne changent pas la\ncible. « Silencieux » est recommandé.</p>\n{{FIG:02-kuehlung-betriebsart.png}}\n<h3>Comment fonctionne la régulation</h3>\n<ul>\n<li>Elle calcule avec une moyenne glissante, pas avec des mesures isolées.</li>\n<li>Dans une plage de ±1 °C autour de la cible, rien ne se passe.</li>\n<li>La tendance compte : si la température baisse déjà, la vitesse n’augmente pas davantage.</li>\n<li>Montée par petits paliers, descente seulement après une température basse et stable.</li>\n<li>Au-delà de la limite de sécurité, seul le matériel compte ; le firmware se protège en plus toujours lui-même.</li>\n</ul>\n<h3>Mode automatique</h3>\n<p>Si « Mode automatique » est désactivé, l’app rend le contrôle à la PS5 et se contente d’afficher les valeurs. Si l’app ne tourne pas, la console\nrégule de toute façon de nouveau elle-même.</p>\n<h3>Affichage par la touche du micro</h3>\n<p>Appuyez <b>deux fois rapidement</b> sur la touche du micro de la manette : la température du processeur et la\nvitesse du ventilateur apparaissent en haut à droite – même sans l’interface web. Le micro est basculé deux fois et revient ensuite à son état précédent.</p>\n"
+  },
+  {
+   "id": "spiele",
+   "title": "Jeux",
+   "html": "\n<p>Les jeux de votre écran d’accueil avec jaquette, format et actions. La recherche porte sur le titre, l’ID de titre ou l’ID de contenu ;\nfiltrer par PS5, PS4 ou « Backport · AMPR · PlayGo » ; trier comme sur l’écran d’accueil, par nom, temps de jeu, taille et plus encore.</p>\n{{FIG:03-spiele-bibliothek.png}}\n<h3>Lancer et fermer</h3>\n<ul>\n<li><b>Lancer</b> lance directement le jeu. Dans le navigateur de la console, le navigateur se ferme pour que le jeu passe au premier plan.</li>\n<li>Si un autre jeu est déjà lancé, l’app ne lance rien et vous l’indique. <b>Fermer le jeu</b> ferme le jeu en cours\n<b>immédiatement et sans confirmation</b> – ce qui n’est pas enregistré est perdu.</li>\n<li>Un jeu n’est jamais lancé deux fois ; un second clic dans les 30 secondes n’a aucun effet.</li>\n</ul>\n<h3>Copier, déplacer, convertir</h3>\n<p>Les dossiers de dump peuvent être copiés, déplacés et convertis directement sur la console en <b>ffpfsc</b> (compressé, recommandé),\n<b>ffpkg</b> ou <b>exFAT</b> – au choix en version jouable dans le dossier <code>homebrew</code> de la destination (ShadowMountPlus\nl’y trouve) ou en copie de sécurité dans <code>PS5-Sicherung/Spiele</code>. Chaque copie est relue\net vérifiée après l’écriture ; rien n’est écrasé.</p>\n{{FIG:04-spiele-konvertieren.png}}\n<div class='warn'>Veuillez recréer les images <code>.ffpkg</code> issues des versions antérieures à 1.48.0 (ancienne structure).</div>\n"
+  },
+  {
+   "id": "loeschen",
+   "title": "Supprimer des jeux &amp; des copies de sécurité",
+   "html": "\n<p>Chaque carte de jeu a un bouton <b>Supprimer</b>, de même que chaque entrée de l’onglet <b>Copies de sécurité</b>.</p>\n<ul>\n<li><b>Jeux installés</b> : la console les désinstalle elle-même – comme avec le menu « Supprimer », y compris les mises à jour et les contenus additionnels.</li>\n<li><b>Jeux de ShadowMountPlus</b> : ils sont d’abord désinscrits, puis l’image ou le dossier est supprimé.</li>\n<li><b>Copies de sécurité de l’app</b> (copies et conversions) : elles sont supprimées avec leur fichier de sommes de contrôle.</li>\n</ul>\n<ol class='steps'>\n<li>Touchez <b>Supprimer</b> : la fenêtre indique exactement ce qui sera supprimé.</li>\n<li>Cochez la case « Je comprends : la suppression est définitive ».</li>\n<li>Appuyez deux fois sur <b>Supprimer définitivement</b> (le premier clic demande « Vraiment ? »).</li>\n<li>Une barre de progression avec pourcentage indique où en est l’opération.</li>\n</ol>\n<div class='tip'>Vos <b>données sauvegardées sont toujours conservées</b>. Un jeu en cours n’est jamais supprimé.</div>\n{{FIG:08-spiele-sicherungen.png}}\n"
+  },
+  {
+   "id": "spielzeit",
+   "title": "Temps de jeu",
+   "html": "\n<p>Quand vous avez joué, combien de temps, et à quel point la console a chauffé : totaux pour aujourd’hui, 7 et 30 jours, les 14 derniers jours\nen barres, les jeux les plus joués et les dernières sessions avec les températures maximales. Enregistrable en tableau (CSV).</p>\n{{FIG:05-spiele-spielzeit.png}}\n"
+  },
+  {
+   "id": "spielstaende",
+   "title": "Copie de sécurité des données sauvegardées",
+   "html": "\n<p>Copie les données sauvegardées telles que la console les stocke – chiffrées, sans rien ouvrir ni modifier – sur une\nclé USB, un disque ou le SSD interne (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Chaque fichier est vérifié ;\n« Vérifier » relit plus tard une copie de sécurité.</p>\n<p><b>Restaurer</b> se fait jeu par jeu : l’app fait d’abord une copie de sécurité de l’état actuel, écrit tous les nouveaux fichiers d’abord\nà côté, les vérifie et ne remplace qu’ensuite.</p>\n<div class='warn'>Copie de sécurité et restauration n’ont lieu que si <b>aucun jeu n’est lancé</b> – même en pause. Les copies de sécurité d’une\nautre console ne peuvent pas être restaurées.</div>\n{{FIG:06-spiele-spielstaende.png}}\n"
+  },
+  {
+   "id": "pakete",
+   "title": "Paquets",
+   "html": "\n<p>Trouve les fichiers <code>.pkg</code> sur les lecteurs USB, les disques et dans le stockage de la console (dossier <code>pkg</code>) et affiche l’image,\nle nom, l’ID de titre, la version, le type et la taille.</p>\n<ul>\n<li><b>Installer…</b> – la console installe elle-même le paquet ; l’app le lui met à disposition et affiche la progression.\nAuparavant, un plan indique ce qui pourrait poser problème.</li>\n<li><b>Diviser…</b> – découpe les gros paquets en parties pour clés USB FAT32 (jusqu’à 4 GB par fichier) ou disques optiques ; l’original reste inchangé.</li>\n</ul>\n<div class='info'>Une tentative d’installation interrompue peut laisser de l’espace réservé. Vous le libérez sur la console, dans la\nliste des téléchargements, avec « Supprimer ».</div>\n{{FIG:07-spiele-pakete.png}}\n"
+  },
+  {
+   "id": "dateien",
+   "title": "Fichiers – le gestionnaire de fichiers",
+   "html": "\n<p>Parcourir les dossiers de la console et télécharger des fichiers est possible partout. <b>Modifier</b> – téléverser, créer un dossier, renommer,\ncopier, déplacer, supprimer – n’est possible que sur les <b>lecteurs</b> et dans <code>/data</code>. Partout ailleurs, « Consultation seule » s’affiche.</p>\n{{FIG:15-dateien.png}}\n<h3>Trier, sélectionner, afficher</h3>\n<ul>\n<li><b>Trier :</b> au-dessus de la liste, vous choisissez « Nom », « Taille » ou « Date » ; la flèche à côté inverse l’ordre. Les dossiers sont toujours en haut. Le navigateur mémorise ce choix.</li>\n<li><b>Tout sélectionner :</b> la case au-dessus de la liste sélectionne toutes les entrées du dossier (sauf les liens et les fichiers spéciaux). À moitié cochée, elle signifie que seule une partie est sélectionnée.</li>\n<li><b>Taille des dossiers :</b> « Taille » sur un dossier calcule ce qu’il contient ; « Taille des dossiers » le fait pour tous les dossiers de la vue, l’un après l’autre. Un très gros dossier est signalé après environ 8 secondes avec « au moins ».</li>\n<li><b>Afficher :</b> « Afficher » montre les images (PNG, JPG, GIF, WebP, BMP, ICO) et le début des fichiers texte (jusqu’à 256 KB). Les autres fichiers peuvent seulement être téléchargés.</li>\n</ul>\n<h3>Copier &amp; déplacer</h3>\n<ol class='steps'>\n<li>Cochez les entrées.</li>\n<li>Appuyez sur <b>Copier</b> ou <b>Couper</b>.</li>\n<li>Allez dans le dossier de destination et appuyez sur <b>Coller ici</b>.</li>\n<li>Une barre indique le pourcentage, la quantité de données et le fichier en cours ; <b>Annuler</b> retire de la destination l’entrée commencée.</li>\n</ol>\n<h3>Téléverser</h3>\n<p><b>Téléverser</b> permet de choisir un ou plusieurs fichiers ; sur un PC, vous pouvez aussi les faire glisser sur la liste. Une barre indique la\nprogression de chaque fichier.</p>\n<div class='tip'>Protégé : rien n’est jamais écrasé, les liens ne sont jamais suivis, et dans le dossier de l’app\n(<code>/data/PS5-Cooling-Center</code>) seul <code>payloads</code> est modifiable – idéal pour téléverser des payloads.</div>\n"
+  },
+  {
+   "id": "payloads",
+   "title": "Payloads",
+   "html": "\n<p>Voir et arrêter les payloads en cours, lancer d’un clic ceux qui sont enregistrés – depuis <code>/data/PS5-Cooling-Center/payloads</code>\nou depuis la clé USB (racine ou dossier <code>payloads</code>). Le lancement passe par le chargeur de payloads de la console\n(port 9021).</p>\n{{FIG:09-payloads.png}}\n"
+  },
+  {
+   "id": "profil",
+   "title": "Profil",
+   "html": "\n<p>Modifier le nom affiché de la console et choisir une image de profil – la vôtre ou l’une des 30 images intégrées.</p>\n{{FIG:10-profil.png}}\n"
+  },
+  {
+   "id": "system",
+   "title": "Système &amp; journal",
+   "html": "\n<p><b>Système</b> affiche la console, le firmware, la durée de fonctionnement, l’espace de stockage de tous les lecteurs, le réseau, l’écran et\nl’efficacité du refroidissement au fil des semaines ; c’est aussi ici que vous réinstallez la vignette.</p>\n{{FIG:11-system.png}}\n<p><b>Journal</b> liste chaque mesure, régulation et message de l’app (exportable). L’onglet <b>Journal du noyau en direct</b> affiche\nle journal de la console au fur et à mesure – avec filtre, pause, enregistrement, téléchargement et capture.</p>\n{{FIG:14-kernel-log-live.png}}\n"
+  },
+  {
+   "id": "credits",
+   "title": "Crédits",
+   "html": "\n<p>La page remercie les développeurs dont le travail est intégré à l’app, ainsi que d’autres développeurs connus de la communauté – avec\nimage de profil, nom et liens. Les liens ne sont cliquables que si le navigateur a accès à Internet.</p>\n{{FIG:16-credits.png}}\n"
+  },
+  {
+   "id": "sicherheit",
+   "title": "Sécurité sur le réseau domestique",
+   "html": "\n<ul>\n<li>L’interface n’a <b>aucune authentification</b> : tout appareil du réseau domestique peut lire et modifier.</li>\n<li>La console n’a rien à faire sur l’Internet ouvert – <b>ne configurez aucune redirection de port</b> vers le port 8086.</li>\n<li>Pour n’utiliser l’interface que sur l’appareil lui-même, réglez l’adresse d’écoute sur <code>127.0.0.1</code> dans les paramètres.</li>\n<li>L’app refuse les requêtes qui proviennent manifestement de pages web tierces (erreur 403).</li>\n</ul>\n"
+  },
+  {
+   "id": "hilfe",
+   "title": "En cas de problème",
+   "html": "\n<table>\n<tr><th>Problème</th><th>Solution</th></tr>\n<tr><td>Interface web inaccessible</td><td>Renvoyez l’ELF (port 9021) ; une seule instance ; vérifiez l’adresse <code>http://&lt;PS5-IP&gt;:8086/</code>.</td></tr>\n<tr><td>Port 8086 occupé</td><td>Le plus souvent, une ancienne instance tourne encore : redémarrez la console et n’envoyez l’ELF qu’une seule fois.</td></tr>\n<tr><td>Ventilateur « indisponible »</td><td>kstuff n’est pas chargé – chargez kstuff, puis renvoyez l’app.</td></tr>\n<tr><td>« Le support s’est déconnecté »</td><td>Le plus souvent, le câble USB : essayez un autre câble court branché directement sur la console ; ensuite, redémarrez la console si nécessaire.</td></tr>\n<tr><td>La vignette n’ouvre rien</td><td>La vignette ne lance pas l’app – après chaque redémarrage, envoyez l’ELF une fois.</td></tr>\n<tr><td>Erreur 403 dans le navigateur</td><td>Ouvrez la page directement via l’adresse IP de la console, pas via un nom tiers ou une autre page web.</td></tr>\n</table>\n<p>D’autres réponses figurent dans la <b>FAQ</b>.</p>\n"
+  }
+ ],
+ "faq": [
+  {
+   "cat": "Général",
+   "items": [
+    {
+     "q": "Que fait l’app au juste ?",
+     "a": "Elle régule le ventilateur de la PS5 selon une température cible – calmement et avec inertie plutôt que bruyamment et nerveusement – et offre une interface web pour les jeux, les paquets, les données sauvegardées, les fichiers, les payloads, le profil et les informations système."
+    },
+    {
+     "q": "Ai-je besoin d’Internet ?",
+     "a": "Non. L’app se connecte uniquement aux programmes de la console et aux navigateurs du réseau domestique. Seule exception, dans le navigateur : la page « Crédits » vérifie une fois si github.com est accessible, pour rendre les liens cliquables."
+    },
+    {
+     "q": "Quel firmware est pris en charge ?",
+     "a": "Le firmware 12.00 a été testé sur une PS5 Pro (CFI-7021). La compilation utilise un SDK qui va jusqu’à 13.60 ; l’app n’a toutefois pas été testée sur 13.xx."
+    },
+    {
+     "q": "L’app est-elle payante ?",
+     "a": "Non. C’est un logiciel libre sous licence GNU GPL, version 3 ou ultérieure."
+    }
+   ]
+  },
+  {
+   "cat": "Démarrage &amp; utilisation",
+   "items": [
+    {
+     "q": "Dois-je renvoyer l’app après chaque redémarrage ?",
+     "a": "Oui. L’ELF tourne en mémoire vive. Après chaque redémarrage de la console, envoyez-le une fois sur le port 9021. Les paramètres sont conservés."
+    },
+    {
+     "q": "La vignette n’ouvre qu’une page vide – pourquoi ?",
+     "a": "La vignette ne lance pas l’app, elle ouvre seulement l’interface web. Si l’app n’a pas encore été envoyée après un redémarrage, il n’y a rien à afficher."
+    },
+    {
+     "q": "Comment ouvrir l’interface sur un téléphone ou un PC ?",
+     "a": "Ouvrez <code>http://&lt;PS5-IP&gt;:8086/</code> dans le navigateur. L’adresse IP figure dans le message affiché sur le téléviseur après le lancement."
+    },
+    {
+     "q": "Puis-je lancer l’app deux fois ?",
+     "a": "Mieux vaut pas : deux instances régulent le ventilateur en même temps et se gênent. Arrêtez une ancienne instance sur la page « Payloads » ou redémarrez la console."
+    },
+    {
+     "q": "Comment voir la température sans ouvrir la page ?",
+     "a": "Appuyez deux fois rapidement sur la touche du micro de la manette : la température et la vitesse du ventilateur apparaissent en haut à droite."
+    },
+    {
+     "q": "Pourquoi la page ne bouge-t-elle pas quand une fenêtre est ouverte ?",
+     "a": "C’est voulu : quand une fenêtre est ouverte, l’arrière-plan reste immobile et le joystick droit ne fait défiler que la fenêtre elle-même."
+    },
+    {
+     "q": "Dans quelles langues l’interface est-elle disponible ?",
+     "a": "Allemand, anglais, italien, espagnol, français et russe. Vous choisissez la langue en haut à droite de la barre d’en-tête ; le manuel et la FAQ existent dans les six langues. Les messages que la console affiche sur le téléviseur restent en allemand."
+    },
+    {
+     "q": "Un texte est encore en allemand – est-ce une erreur ?",
+     "a": "Ce n’est pas une erreur de l’app, mais une lacune : des textes rares et des messages de la console ne sont pas traduits dans toutes les langues et apparaissent alors en allemand. Signalez-les : les dictionnaires se complètent facilement."
+    }
+   ]
+  },
+  {
+   "cat": "Ventilateur &amp; température",
+   "items": [
+    {
+     "q": "Quelle température cible est judicieuse ?",
+     "a": "66 °C par défaut. Frais = 62 °C, Équilibré = 77 °C, Silencieux = 91 °C. Plus haut signifie plus silencieux et plus chaud ; jusqu’à 72 °C, c’est une bonne plage pour la plupart des gens. 91 °C est la valeur que la console règle elle-même : aussi silencieux que sans l’app, mais la console chauffe nettement plus ; le seuil d’avertissement suit automatiquement (cible + 2 °C)."
+    },
+    {
+     "q": "L’app peut-elle faire surchauffer ma console ?",
+     "a": "L’app maintient seulement la température réglée. Au-delà d’une limite de sécurité, seul le matériel compte, et le firmware de la PS5 se protège toujours lui-même, indépendamment de l’app."
+    },
+    {
+     "q": "Pourquoi le ventilateur n’accélère-t-il pas immédiatement ?",
+     "a": "La régulation est volontairement lente : elle calcule avec une moyenne, ignore les petites variations de ±1 °C et régule par petits paliers."
+    },
+    {
+     "q": "Que se passe-t-il si j’arrête l’app ?",
+     "a": "La console régule alors de nouveau elle-même, selon ses réglages habituels. Il en va de même si « Mode automatique » est désactivé."
+    },
+    {
+     "q": "Le ventilateur est « indisponible » – que faire ?",
+     "a": "kstuff n’est pas chargé. Sans kstuff, l’app n’accède pas au contrôleur du ventilateur. Chargez kstuff et renvoyez l’app."
+    }
+   ]
+  },
+  {
+   "cat": "Jeux, paquets &amp; données sauvegardées",
+   "items": [
+    {
+     "q": "La suppression d’un jeu supprime-t-elle mes données sauvegardées ?",
+     "a": "Non. Les données sauvegardées sont toujours conservées. La suppression n’a lieu qu’après avoir coché la case et cliqué deux fois."
+    },
+    {
+     "q": "Quel format choisir pour la conversion ?",
+     "a": "<b>ffpfsc</b> est compressé et recommandé. <b>ffpkg</b> et <b>exFAT</b> ne sont pas compressés. Veuillez recréer les anciens <code>.ffpkg</code> issus des versions antérieures à 1.48.0."
+    },
+    {
+     "q": "Un gros paquet ne tient pas sur ma clé USB FAT32.",
+     "a": "FAT32 autorise 4 GB au maximum par fichier. Sous « Paquets », « Diviser… » permet de découper un paquet en parties adaptées – l’original reste inchangé."
+    },
+    {
+     "q": "Une installation a été interrompue – où est passé mon espace de stockage ?",
+     "a": "La console réserve l’espace immédiatement. Supprimez l’entrée interrompue dans la liste des téléchargements de la console avec « Supprimer »."
+    },
+    {
+     "q": "Où se trouvent mes copies de sécurité des données sauvegardées ?",
+     "a": "Sur le lecteur que vous choisissez pour la copie de sécurité, dans le dossier <code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code> – sur le SSD interne, sous <code>/data</code>."
+    },
+    {
+     "q": "Puis-je restaurer les données sauvegardées d’une autre console ?",
+     "a": "Non. Les données sauvegardées sont liées à leur console ; de telles copies de sécurité peuvent seulement être vérifiées."
+    }
+   ]
+  },
+  {
+   "cat": "Gestionnaire de fichiers",
+   "items": [
+    {
+     "q": "Pourquoi ne puis-je pas modifier certains dossiers ?",
+     "a": "La modification n’est possible que sur les lecteurs et dans <code>/data</code>. Les dossiers système sont en consultation seule – cela protège la console."
+    },
+    {
+     "q": "Pourquoi le dossier de l’app est-il verrouillé ?",
+     "a": "Il contient les paramètres et les journaux. Seul le sous-dossier <code>payloads</code> est modifiable, pour que vous puissiez y téléverser des payloads."
+    },
+    {
+     "q": "La copie écrase-t-elle quelque chose ?",
+     "a": "Non, jamais. Si un nom existe déjà dans la destination, rien ne commence et le message l’indique."
+    },
+    {
+     "q": "Que se passe-t-il avec « Annuler » ?",
+     "a": "L’opération s’arrête ; ce qui avait déjà été écrit de l’entrée commencée dans la destination est retiré."
+    },
+    {
+     "q": "Comment afficher un fichier sans le télécharger ?",
+     "a": "Avec « Afficher » sur le fichier : les images (PNG, JPG, GIF, WebP, BMP, ICO) apparaissent dans une fenêtre, et pour les fichiers texte, le début jusqu’à 256 KB. Les fichiers binaires peuvent seulement être téléchargés."
+    },
+    {
+     "q": "Puis-je trier la liste par taille ou par date ?",
+     "a": "Oui : au-dessus de la liste, vous choisissez « Nom », « Taille » ou « Date », et la flèche inverse l’ordre. Avec « Taille des dossiers », la console calcule aussi la taille des dossiers."
+    }
+   ]
+  },
+  {
+   "cat": "Problèmes &amp; sécurité",
+   "items": [
+    {
+     "q": "« Le support s’est déconnecté (Device not configured) »",
+     "a": "Presque toujours le câble USB, le port ou une alimentation insuffisante. Essayez un autre câble court branché directement sur la console ; si des problèmes persistent ensuite, redémarrez la console."
+    },
+    {
+     "q": "J’obtiens l’erreur 403.",
+     "a": "L’app refuse les requêtes provenant de pages web tierces. Ouvrez l’interface directement via l’adresse IP de la console."
+    },
+    {
+     "q": "L’interface est-elle protégée par un mot de passe ?",
+     "a": "Non. Tout appareil du réseau domestique peut l’utiliser. Ne configurez donc aucune redirection de port ; si vous le souhaitez, réglez l’adresse d’écoute sur <code>127.0.0.1</code>."
+    },
+    {
+     "q": "Des dossiers inconnus avec des fichiers zip dans /data/homebrew ?",
+     "a": "Ils proviennent généralement d’un autre outil doté d’une copie de sécurité automatique des données sauvegardées (p. ex. ProsperoMgr), pas de cette app."
+    },
+    {
+     "q": "Est-ce légal ?",
+     "a": "L’app ne contient aucun jeu, aucun firmware, aucune clé, ni rien qui contourne une protection contre la copie. Modifier une console peut enfreindre des conditions d’utilisation ; le risque incombe à celui qui le fait. Le piratage n’est pas pris en charge."
+    }
+   ]
+  }
+ ]
+}

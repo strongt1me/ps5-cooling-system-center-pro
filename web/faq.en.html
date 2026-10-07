@@ -1,0 +1,99 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>FAQ – PS5 Cooling &amp; System Center - Pro</title><style>
+:root{--plane:#0b1220;--side:#0e1830;--accent:#3b82f6;--violet:#7b5cf0;--s1:#1a2334;--s0:#141b29;--inset:#0c1320;
+--ink:#eaf0fb;--ink2:#aeb8d6;--muted:#7c89ac;--hair:rgba(255,255,255,.09);--good:#22c55e;--warn:#fab219;--bad:#ef5350}
+*{box-sizing:border-box}
+html{background:var(--plane)}
+body{margin:0;color:var(--ink);font:15px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+background:radial-gradient(1200px 600px at 70% -10%,rgba(59,130,246,.22),transparent 60%),
+radial-gradient(900px 500px at 0% 20%,rgba(123,92,240,.12),transparent 60%),var(--plane)}
+a{color:#7fb0ff}
+.wrap{max-width:1000px;margin:0 auto;padding:40px 28px 60px}
+.cover{min-height:92vh;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:18px;
+border-bottom:1px solid var(--hair);margin-bottom:34px;page-break-after:always;break-after:page}
+.cover img.mark{width:120px;height:120px;border-radius:26px;box-shadow:0 0 0 6px rgba(59,130,246,.16),0 20px 60px rgba(0,0,0,.5)}
+.kicker{letter-spacing:.32em;text-transform:uppercase;font-size:12px;color:#8fb7ff}
+.cover h1{font-size:52px;line-height:1.05;margin:0;background:linear-gradient(120deg,#fff,#a9c8ff 60%,#b9a6ff);
+-webkit-background-clip:text;background-clip:text;color:transparent}
+.cover p.lead{font-size:19px;color:var(--ink2);max-width:640px;margin:0}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.badge{padding:6px 12px;border-radius:999px;font-size:13px;border:1px solid rgba(59,130,246,.45);background:rgba(59,130,246,.10)}
+.psrow{display:flex;gap:14px;margin-top:18px;font-size:28px;opacity:.85}
+.psrow span{display:inline-flex;width:46px;height:46px;border-radius:50%;align-items:center;justify-content:center;
+border:2px solid var(--hair);background:var(--s0)}
+.tri{color:#36c8a5}.cir{color:#ff5a6e}.crs{color:#7aa7ff}.sqr{color:#e58fff}
+.toc{background:var(--s0);border:1px solid var(--hair);border-radius:18px;padding:22px 26px;margin:0 0 34px;
+page-break-after:always;break-after:page}
+.toc h2{margin:0 0 10px;font-size:20px}
+.toc ol{margin:0;padding-left:22px;columns:2;column-gap:36px}
+.toc li{margin:4px 0;break-inside:avoid}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:#7fb0ff}
+section.ch{margin:0 0 38px;break-inside:auto}
+.ch-head{display:flex;align-items:center;gap:14px;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--hair)}
+.ch-num{flex:none;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+font-weight:800;background:linear-gradient(135deg,var(--accent),var(--violet));box-shadow:0 8px 24px rgba(59,130,246,.35)}
+.ch-head h2{margin:0;font-size:25px}
+h3{font-size:17px;margin:22px 0 8px;color:#d7e3ff}
+p{margin:0 0 10px;color:#dfe6f6}
+ul,ol{margin:0 0 12px;padding-left:22px}
+li{margin:3px 0}
+code{font-family:Consolas,ui-monospace,monospace;font-size:13px;background:var(--inset);border:1px solid var(--hair);
+padding:1px 6px;border-radius:6px;color:#cfe0ff}
+.card{background:var(--s0);border:1px solid var(--hair);border-radius:16px;padding:16px 18px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.grid .card{margin:0}
+.card b.t{display:block;margin-bottom:4px}
+.tip,.warn,.info{border-radius:14px;padding:12px 16px 12px 46px;margin:12px 0;position:relative;break-inside:avoid}
+.tip{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.4)}
+.warn{background:rgba(250,178,25,.08);border:1px solid rgba(250,178,25,.45)}
+.info{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.45)}
+.tip::before,.warn::before,.info::before{position:absolute;left:14px;top:11px;font-weight:800;font-size:16px}
+.tip::before{content:"✓";color:var(--good)}.warn::before{content:"!";color:var(--warn)}.info::before{content:"i";color:#7fb0ff}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;position:relative;padding:8px 0 8px 46px;border-bottom:1px dashed var(--hair)}
+.steps li::before{content:counter(s);position:absolute;left:0;top:6px;width:30px;height:30px;border-radius:50%;
+display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;background:var(--s1);
+border:1px solid rgba(59,130,246,.5);color:#cfe0ff}
+figure{margin:16px 0;break-inside:avoid}
+figure img{width:100%;display:block;border-radius:14px;border:1px solid rgba(59,130,246,.35);
+box-shadow:0 18px 50px rgba(0,0,0,.45)}
+figcaption{font-size:13px;color:var(--muted);margin-top:6px;text-align:center}
+.kbd{display:inline-block;padding:1px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:var(--s1);
+font-size:13px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+th{color:#cfe0ff;background:var(--s1)}
+.back{position:sticky;top:0;z-index:5;display:inline-block;margin:0 0 10px;padding:9px 16px;border-radius:999px;background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0ff;text-decoration:none;font-weight:600}
+.back:hover{background:rgba(59,130,246,.25)}
+@media print{.back{display:none}}
+.foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--hair);font-size:12px;color:var(--muted)}
+/* FAQ */
+.faq-cat{margin:30px 0 10px;font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#8fb7ff}
+details{background:var(--s0);border:1px solid var(--hair);border-radius:14px;margin:8px 0;padding:0 16px;break-inside:avoid}
+details[open]{border-color:rgba(59,130,246,.45)}
+summary{cursor:pointer;list-style:none;padding:13px 0 13px 30px;position:relative;font-weight:600}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";position:absolute;left:0;top:10px;width:22px;height:22px;border-radius:50%;
+display:flex;align-items:center;justify-content:center;background:var(--s1);border:1px solid rgba(59,130,246,.5);color:#cfe0ff}
+details[open] summary::before{content:"–"}
+details .a{padding:0 0 14px 30px;color:#dfe6f6}
+@page{size:A4;margin:12mm 11mm}
+@media print{
+html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:var(--plane)}
+.wrap{max-width:none;padding:0}
+.cover{min-height:255mm}
+a{text-decoration:none}
+details{padding:0 14px}
+details .a{display:block}
+h2,h3{break-after:avoid}
+}
+@media (max-width:720px){.grid{grid-template-columns:1fr}.toc ol{columns:1}.cover h1{font-size:38px}}
+
+.back{position:sticky;top:0;z-index:5;display:inline-block;margin:0 0 10px;padding:9px 16px;border-radius:999px;
+background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0ff;text-decoration:none;font-weight:600}
+.back:hover{background:rgba(59,130,246,.25)}
+@media print{.back,.langs{display:none}}
+.langs{display:inline-flex;flex-wrap:wrap;gap:6px;margin:0 0 10px 10px;vertical-align:top}
+.langs a{padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#aebbd4;text-decoration:none;font-size:14px}
+.langs a:hover{border-color:rgba(59,130,246,.6);color:#fff}.langs a.on{background:rgba(59,130,246,.22);color:#fff;border-color:rgba(59,130,246,.55)}
+.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/faq.html'>Deutsch</a><a href='/faq.en.html' class='on'>English</a><a href='/faq.it.html'>Italiano</a><a href='/faq.es.html'>Español</a><a href='/faq.fr.html'>Français</a><a href='/faq.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>Frequently asked questions · PS5 homebrew</div><h1>FAQ</h1><p class='lead'>Quick answers about starting, the fan, games, packages, saved data, the file manager and security.</p><div class='badges'><span class='badge'>Version 1.50.0</span><span class='badge'>34 questions</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><div class='faq-cat'>General</div><details open><summary>What does the app actually do?</summary><div class='a'>It controls the PS5's fan according to a target temperature – calm and slow rather than loud and hectic – and offers a web interface for games, packages, saved data, files, payloads, profile and system information.</div></details><details open><summary>Do I need internet?</summary><div class='a'>No. The app only connects to programs on the console and to the browsers on your home network. The only exception, in the browser: the “Credits” page checks once whether github.com is reachable, so that the links become clickable.</div></details><details open><summary>Which firmware is supported?</summary><div class='a'>Firmware 12.00 on a PS5 Pro (CFI-7021) is tested. The app is built with an SDK that goes up to 13.60; on 13.xx, however, the app has not been tested.</div></details><details open><summary>Does the app cost anything?</summary><div class='a'>No. It is free software under the GNU GPL, version 3 or later.</div></details><div class='faq-cat'>Starting &amp; using</div><details open><summary>Do I have to send the app again after every restart?</summary><div class='a'>Yes. The ELF runs in memory. Send it to port 9021 once after every restart of the console. The settings are kept.</div></details><details open><summary>The tile only opens an empty page – why?</summary><div class='a'>The tile does not start the app; it only opens the web interface. If the app has not been sent yet after a restart, there is nothing to show.</div></details><details open><summary>How do I open the interface on a phone or PC?</summary><div class='a'>Open <code>http://&lt;PS5-IP&gt;:8086/</code> in the browser. The IP is in the notification on the TV after the start.</div></details><details open><summary>Can I start the app twice?</summary><div class='a'>Please don't: two instances control the fan at the same time and interfere with each other. Stop an old instance on the “Payloads” page or restart the console.</div></details><details open><summary>How do I see the temperature without opening the page?</summary><div class='a'>Press the controller's mute button twice quickly: the temperature and fan speed appear at the top right.</div></details><details open><summary>Why doesn't the page move when a window is open?</summary><div class='a'>That is on purpose: while a window is open, the background stays still, and the right stick only scrolls the window itself.</div></details><details open><summary>In which languages is the interface available?</summary><div class='a'>German, English, Italian, Spanish, French and Russian. You choose the language at the top right of the header; the manual and the FAQ are available in all six. Notifications that the console shows on the TV stay in German.</div></details><details open><summary>A text is still in German – is that a bug?</summary><div class='a'>Not a bug in the app, but a gap: rare texts and console messages are not translated into every language and then appear in German. Please report them; the dictionaries are easy to extend.</div></details><div class='faq-cat'>Fan &amp; temperature</div><details open><summary>Which target temperature makes sense?</summary><div class='a'>66 °C by default. Cool = 62 °C, Balanced = 77 °C, Quiet = 91 °C. Higher means quieter and warmer; up to 72 °C is a good range for most people. 91 °C is the value the console sets itself: as quiet as without the app, but the console gets noticeably warmer; the warning threshold moves with it automatically (target + 2 °C).</div></details><details open><summary>Can the app overheat my console?</summary><div class='a'>The app only holds the temperature you set. Above a safety limit, only the hardware counts, and the PS5's firmware always protects itself independently of that.</div></details><details open><summary>Why doesn't the fan spin up immediately?</summary><div class='a'>The control is deliberately slow: it works with an average, ignores small fluctuations of ±1 °C and adjusts in small steps.</div></details><details open><summary>What happens when I quit the app?</summary><div class='a'>Then the console controls the fan itself again according to its normal settings. The same applies when “Automatic mode” is switched off.</div></details><details open><summary>The fan is “not available” – what can I do?</summary><div class='a'>kstuff is not loaded. Without kstuff, the app cannot reach the fan controller. Load kstuff and send the app again.</div></details><div class='faq-cat'>Games, packages &amp; saved data</div><details open><summary>Does deleting a game delete my saved data?</summary><div class='a'>No. Saved data is always kept. Deleting only happens after ticking the box and clicking twice.</div></details><details open><summary>Which format should I choose when converting?</summary><div class='a'><b>ffpfsc</b> is compressed and recommended. <b>ffpkg</b> and <b>exFAT</b> are uncompressed. Please recreate older <code>.ffpkg</code> files made with versions before 1.48.0.</div></details><details open><summary>A large package does not fit on my FAT32 stick.</summary><div class='a'>FAT32 allows at most 4 GB per file. Under “Packages”, “Split…” cuts a package into suitable parts – the original stays unchanged.</div></details><details open><summary>An installation was aborted – where is my storage space?</summary><div class='a'>The console reserves the space immediately. Remove the aborted entry from the console's download list with “Delete”.</div></details><details open><summary>Where are my saved data backups?</summary><div class='a'>On the drive you choose when backing up, in the folder <code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code> – on the internal SSD under <code>/data</code>.</div></details><details open><summary>Can I restore saved data from another console?</summary><div class='a'>No. Saved data is tied to its console; such backups can only be verified.</div></details><div class='faq-cat'>File manager</div><details open><summary>Why can't I change some folders?</summary><div class='a'>Changes are only possible on the drives and in <code>/data</code>. System folders are for viewing only – this protects the console.</div></details><details open><summary>Why is the app's folder locked?</summary><div class='a'>Settings and logs are stored there. Only the subfolder <code>payloads</code> can be changed, so that you can upload payloads.</div></details><details open><summary>Is anything overwritten when copying?</summary><div class='a'>No, never. If a name already exists in the destination, nothing starts, and the message names it.</div></details><details open><summary>What happens with “Cancel”?</summary><div class='a'>The operation stops; whatever of the started entry had already been written to the destination is removed again.</div></details><details open><summary>How do I view a file without downloading it?</summary><div class='a'>With “View” on the file: pictures (PNG, JPG, GIF, WebP, BMP, ICO) appear in a window; for text files, the beginning up to 256 KB. Binary files can only be downloaded.</div></details><details open><summary>Can I sort the list by size or date?</summary><div class='a'>Yes: above the list you choose “Name”, “Size” or “Date”; the arrow reverses the order. With “Folder sizes”, the console also counts the size of the folders.</div></details><div class='faq-cat'>Problems &amp; security</div><details open><summary>“The drive has disconnected (Device not configured)”</summary><div class='a'>Almost always the USB cable, the port or too little power. Try a different, short cable directly on the console; if there are problems afterwards, restart the console.</div></details><details open><summary>I get error 403.</summary><div class='a'>The app refuses requests that come from outside websites. Open the interface directly via the console's IP address.</div></details><details open><summary>Is the interface password-protected?</summary><div class='a'>No. Every device on the home network can use it. So do not set up port forwarding; if you like, set the network binding to <code>127.0.0.1</code>.</div></details><details open><summary>Unknown folders with zip files in /data/homebrew?</summary><div class='a'>They usually come from another tool with automatic saved data backup (e.g. ProsperoMgr), not from this app.</div></details><details open><summary>Is this legal?</summary><div class='a'>The app contains no games, no firmware, no keys and nothing that circumvents copy protection. Modifying a console may violate terms of use; whoever does it bears the risk. Piracy is not supported.</div></details><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.50.0 · As of 7 October 2026 · Not a Sony product; “PlayStation” and “PS5” are trademarks of Sony Interactive Entertainment Inc. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>

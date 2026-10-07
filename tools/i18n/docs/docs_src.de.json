@@ -1,0 +1,298 @@
+{
+ "ui": {
+  "lang_name": "Deutsch",
+  "manual_title": "Benutzerhandbuch – PS5 Cooling & System Center - Pro",
+  "manual_kicker": "Benutzerhandbuch · PS5 Homebrew",
+  "manual_cover_title": "PS5 Cooling &amp; System Center – Pro",
+  "manual_lead": "Leise Lüftersteuerung, Spiele, Pakete, Spielstände, Dateimanager und System – alles im Browser, direkt auf der PS5.",
+  "manual_badges": [
+   "Version {version}",
+   "Firmware 12.00 getestet",
+   "PS5 Pro CFI-7021",
+   "Deutsch"
+  ],
+  "toc": "Inhalt",
+  "faq_title": "FAQ – PS5 Cooling & System Center - Pro",
+  "faq_kicker": "Häufige Fragen · PS5 Homebrew",
+  "faq_cover_title": "FAQ",
+  "faq_lead": "Schnelle Antworten zu Start, Lüfter, Spielen, Paketen, Spielständen, Dateimanager und Sicherheit.",
+  "faq_badges": [
+   "Version {version}",
+   "{n} Fragen",
+   "Deutsch"
+  ],
+  "back": "← Zurück zur App",
+  "footer": "PS5 Cooling &amp; System Center - Pro · Version {version} · Stand 07.10.2026 · Kein Produkt von Sony; „PlayStation“ und „PS5“ sind Marken der Sony Interactive Entertainment Inc. Nur für die eigene Konsole, ohne Gewähr (GPL-3.0-or-later)."
+ },
+ "captions": {
+  "01-kuehlung.png": "Die Seite „Kühlung“",
+  "02-kuehlung-betriebsart.png": "Betriebsart, Automatik und Mikrofon-Taste",
+  "03-spiele-bibliothek.png": "Spiele · Bibliothek",
+  "04-spiele-konvertieren.png": "Konvertieren mit Auswahl von Format, Art und Ziel",
+  "08-spiele-sicherungen.png": "Spiele · Sicherungen",
+  "05-spiele-spielzeit.png": "Spiele · Spielzeit",
+  "06-spiele-spielstaende.png": "Spiele · Spielstände",
+  "07-spiele-pakete.png": "Spiele · Pakete",
+  "15-dateien.png": "Dateien",
+  "09-payloads.png": "Payloads",
+  "10-profil.png": "Profil",
+  "11-system.png": "System",
+  "14-kernel-log-live.png": "Protokoll · Kernel-Log live",
+  "16-credits.png": "Credits"
+ },
+ "chapters": [
+  {
+   "id": "start",
+   "title": "Willkommen",
+   "html": "\n<p><b>PS5 Cooling &amp; System Center - Pro</b> ist ein Homebrew-Programm (ELF) für eine gejailbreakte PS5. Es regelt den\nLüfter nach einer ruhigen, frei einstellbaren Zieltemperatur und bringt eine Weboberfläche mit, die du von jedem Gerät im\nHeimnetz öffnest: Handy, Tablet, PC oder der Browser der Konsole selbst. Dazu kommen Spieleverwaltung, Pakete,\nSpielstände, ein Dateimanager, Payloads, Profil und Systeminfos.</p>\n<div class='grid'>\n<div class='card'><b class='t'>Leise statt laut</b>Die Regelung hält eine Zieltemperatur – sanft und träge, ohne ständiges Auf und Ab.</div>\n<div class='card'><b class='t'>Alles im Browser</b>Keine Installation am PC nötig: Adresse aufrufen, fertig.</div>\n<div class='card'><b class='t'>Ohne Internet</b>Die App verbindet sich nur mit Programmen auf der Konsole und mit den Browsern im Heimnetz.</div>\n<div class='card'><b class='t'>Sicher im Umgang</b>Löschen und Power-Befehle verlangen eine Bestätigung; Wichtiges ist geschützt.</div>\n</div>\n<div class='info'>Getestet auf einer PS5 Pro (CFI-7021) mit Firmware 12.00. Andere Firmware kann funktionieren, ist aber nicht geprüft.</div>\n"
+  },
+  {
+   "id": "voraussetzungen",
+   "title": "Voraussetzungen",
+   "html": "\n<ul>\n<li>Eine PS5 mit Jailbreak und geladenem Payload-Lader (<code>elfldr</code>, Port <code>9021</code>).</li>\n<li><b>kstuff</b> muss geladen sein – nur damit erreicht die App den Lüfter-Controller. Ohne kstuff laufen Anzeige und\nWeboberfläche, die Lüfterregelung meldet dann „nicht verfügbar“.</li>\n<li>Ein Gerät im selben Heimnetz mit einem Browser.</li>\n<li>Zum Senden der ELF ein Programm wie <code>nc</code> (netcat) oder ein Payload-Sender deiner Wahl.</li>\n</ul>\n"
+  },
+  {
+   "id": "installation",
+   "title": "Installation &amp; erster Start",
+   "html": "\n<ol class='steps'>\n<li><code>PS5_Cooling_System_Center_v{version}.elf</code> an die Konsole senden, Port <code>9021</code>, z. B.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>Auf dem Fernseher erscheint oben rechts eine Meldung mit der Adresse der Weboberfläche.</li>\n<li>Im Browser öffnen: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>Die Kachel im Startmenü</h3>\n<p>Beim ersten Start legt die App selbst eine Kachel unter „Medien“ an. Sie <b>öffnet nur die Weboberfläche</b> – sie\nstartet das Programm nicht. Nach jedem Neustart der Konsole muss die ELF also einmal neu gesendet werden.</p>\n<div class='warn'>Immer nur <b>eine</b> Instanz laufen lassen. Zwei Instanzen regeln den Lüfter gleichzeitig und stören sich.\nEine alte Instanz beendest du auf der Seite „Payloads“, sonst hilft ein Neustart.</div>\n<div class='tip'>Kachel gelöscht oder neues Kachelbild gewünscht? Kachel in der Konsole löschen (Options-Taste, Löschen) und auf\nder Seite „System“ <b>Kachel installieren</b> drücken.</div>\n"
+  },
+  {
+   "id": "oberflaeche",
+   "title": "Die Oberfläche im Überblick",
+   "html": "\n<p>Links steht die Seitenleiste mit den Bereichen <b>Profil, Spiele, Dateien, Payloads, Kühlung, System, Protokoll</b> und\n<b>Credits</b>. Oben in der Kopfzeile, auf jeder Seite: die <b>Power-Optionen</b>, „Vollbild“, „Expertenmodus“ und die\nVerbindungsanzeige.</p>\n<h3>Power-Optionen</h3>\n<p><b>Ruhemodus</b>, <b>Neu starten</b>, <b>Ausschalten</b> und <b>Abgesicherter Modus</b>. Jeder Befehl braucht zwei Klicks:\nDer erste färbt den Knopf gelb („Wirklich? Nochmal klicken“) und nennt die Folge, der zweite führt ihn aus. Ein Doppelklick\nzählt nicht; nach zehn Sekunden ist der Knopf wieder normal.</p>\n<div class='warn'>Beim Ausschalten und beim Neustart gehen nicht gespeicherte Spielstände verloren.</div>\n<h3>Sprache</h3>\n<p>Oben rechts in der Kopfzeile wählst du die Sprache der Oberfläche: <b>Deutsch, English, Italiano, Español, Français</b> oder <b>Русский</b>.\nBeim ersten Besuch nimmt die Seite die Sprache deines Browsers; gibt es sie nicht, Englisch. Die Wahl merkt sich der Browser, die Seite lädt dann\nneu und bleibt auf dem Bereich, auf dem du warst. Zahlen, Datum und Uhrzeit richten sich nach der Sprache.</p>\n<div class=\"info\">Meldungen, die die Konsole selbst auf dem Fernseher einblendet (beim Start oder bei einer Warnung), sind deutsch.</div>\n<h3>Handbuch und FAQ</h3>\n<p>Unter „Credits“ in der Seitenleiste öffnen <b>Handbuch</b> und <b>FAQ</b> diese Texte direkt in der App, in der gewählten Sprache (ohne die\nBildschirmfotos, damit die App klein bleibt). Mit Bildern gibt es beide als PDF und HTML zum Download bei jedem Release.</p>\n<h3>Fenster und der rechte Stick</h3>\n<p>Öffnet sich ein Fenster (z. B. zum Löschen), wird der Hintergrund abgedunkelt und steht still. Im Browser der PS5 scrollt\nder rechte Stick dann nur das Fenster selbst.</p>\n"
+  },
+  {
+   "id": "kuehlung",
+   "title": "Kühlung",
+   "html": "\n<p>Die wichtigste Seite: Status in Klartext, die aktuelle Temperatur, Lüfter und das laufende Spiel. Gleich darunter stellst\ndu die <b>Zieltemperatur</b> und die <b>Betriebsart</b> ein.</p>\n{{FIG:01-kuehlung.png}}\n<h3>Zieltemperatur</h3>\n<p>Die Temperatur, die die Konsole halten soll: einstellbar von <b>60 bis 91 °C</b>, ab Werk <b>66 °C</b>. Höher heißt\nleiser und wärmer. Die <b>Schnellwahl</b> setzt das Ziel sofort: <b>Kühl 62 °C</b>, <b>Ausgewogen 77 °C</b>, <b>Leise 91 °C</b>.</p>\n<div class=\"info\"><b>91 °C</b> ist der Wert, den die Konsole selbst einstellt (auch ShadowMountPlus bietet ihn als höchstes Ziel an):\nDer Lüfter bleibt so leise wie ohne die App, die Konsole wird dabei aber deutlich wärmer. Die Notfallgrenze liegt immer mindestens\n4 °C über dem Ziel (bei 91 °C also bei 95 °C), die Warnschwelle der App geht mit dem Ziel mit (nie niedriger als Ziel + 2 °C), damit sie bei einem hohen\nZiel nicht dauernd warnt; der in den Einstellungen eingestellte Wert bleibt gespeichert.</div>\n<h3>Betriebsart</h3>\n<p><b>Leise</b>, <b>Ausgewogen</b> und <b>Kühl</b> bestimmen, wie kräftig der Lüfter auf Wärme antwortet – sie ändern nicht das\nZiel. „Leise“ ist empfohlen.</p>\n{{FIG:02-kuehlung-betriebsart.png}}\n<h3>Wie die Regelung arbeitet</h3>\n<ul>\n<li>Sie rechnet mit einem gleitenden Mittelwert, nicht mit einzelnen Messungen.</li>\n<li>Innerhalb von ±1 °C um das Ziel passiert nichts.</li>\n<li>Der Trend zählt: Fällt die Temperatur schon, wird nicht weiter hochgeregelt.</li>\n<li>Hochregeln in kleinen Schritten, Runterregeln erst nach stabil niedriger Temperatur.</li>\n<li>Über der Sicherheitsgrenze zählt nur noch die Hardware; die Firmware schützt sich zusätzlich immer selbst.</li>\n</ul>\n<h3>Automatik</h3>\n<p>Ist „Automatik“ aus, gibt die App die Steuerung an die PS5 zurück und zeigt nur noch Werte an. Läuft die App nicht, regelt\ndie Konsole ohnehin wieder selbst.</p>\n<h3>Anzeige per Mikrofon-Taste</h3>\n<p>Die Mikrofon-Taste des Controllers <b>zweimal kurz</b> drücken: oben rechts erscheinen Prozessortemperatur und\nLüfterdrehzahl – auch ohne die Weboberfläche. Das Mikrofon wird dabei zweimal umgeschaltet und ist danach wieder wie vorher.</p>\n"
+  },
+  {
+   "id": "spiele",
+   "title": "Spiele",
+   "html": "\n<p>Die Spiele deines Startbildschirms mit Cover, Format und Aktionen. Gesucht wird nach Titel, Titel-ID oder Content-ID;\nfiltern nach PS5, PS4 oder „Backport · AMPR · PlayGo“; sortieren nach Startbildschirm, Name, Spielzeit, Größe und mehr.</p>\n{{FIG:03-spiele-bibliothek.png}}\n<h3>Starten und beenden</h3>\n<ul>\n<li><b>Starten</b> startet das Spiel direkt. Im Browser der Konsole schließt sich der Browser, damit das Spiel vorn ist.</li>\n<li>Läuft schon ein anderes Spiel, startet die App nichts und sagt es dir. <b>Spiel beenden</b> schließt das laufende Spiel\n<b>sofort und ohne Rückfrage</b> – nicht Gespeichertes geht verloren.</li>\n<li>Ein Spiel wird nie zweimal gestartet; ein zweiter Klick innerhalb von 30 Sekunden bewirkt nichts.</li>\n</ul>\n<h3>Kopieren, verschieben, konvertieren</h3>\n<p>Dump-Ordner lassen sich kopieren, verschieben und direkt auf der Konsole in <b>ffpfsc</b> (komprimiert, empfohlen),\n<b>ffpkg</b> oder <b>exFAT</b> umwandeln – wahlweise spielbar in den Ordner <code>homebrew</code> des Ziels (ShadowMountPlus\nfindet es dort) oder als Sicherung nach <code>PS5-Sicherung/Spiele</code>. Jede Kopie wird nach dem Schreiben zurückgelesen\nund geprüft; nichts wird überschrieben.</p>\n{{FIG:04-spiele-konvertieren.png}}\n<div class='warn'><code>.ffpkg</code>-Abbilder aus Versionen vor 1.48.0 bitte neu erzeugen (alter Aufbau).</div>\n"
+  },
+  {
+   "id": "loeschen",
+   "title": "Spiele &amp; Sicherungen löschen",
+   "html": "\n<p>Jede Spielkarte hat <b>Löschen</b>, ebenso jeder Eintrag im Reiter <b>Sicherungen</b>.</p>\n<ul>\n<li><b>Installierte Spiele</b> deinstalliert die Konsole selbst – wie im Menü „Löschen“, samt Updates und Zusatzinhalten.</li>\n<li><b>Spiele von ShadowMountPlus</b> werden zuerst abgemeldet, danach wird das Abbild bzw. der Ordner gelöscht.</li>\n<li><b>Sicherungen der App</b> (Kopien und Konvertierungen) werden samt Prüfsummen-Datei gelöscht.</li>\n</ul>\n<ol class='steps'>\n<li>Auf <b>Löschen</b> tippen: Das Fenster zeigt genau, was weggeht.</li>\n<li>Das Häkchen „Ich verstehe: Das Löschen ist endgültig“ setzen.</li>\n<li><b>Endgültig löschen</b> zweimal drücken (der erste Klick fragt „Wirklich?“).</li>\n<li>Ein Fortschrittsbalken mit Prozent zeigt, wie weit es ist.</li>\n</ol>\n<div class='tip'>Deine <b>Spielstände bleiben immer erhalten</b>. Ein laufendes Spiel wird nie gelöscht.</div>\n{{FIG:08-spiele-sicherungen.png}}\n"
+  },
+  {
+   "id": "spielzeit",
+   "title": "Spielzeit",
+   "html": "\n<p>Wann du gespielt hast, wie lange und wie warm die Konsole dabei wurde: Summen für heute, 7 und 30 Tage, die letzten 14 Tage\nals Balken, die meistgespielten Spiele und die letzten Sitzungen mit Höchsttemperaturen. Als Tabelle (CSV) speicherbar.</p>\n{{FIG:05-spiele-spielzeit.png}}\n"
+  },
+  {
+   "id": "spielstaende",
+   "title": "Spielstände sichern",
+   "html": "\n<p>Kopiert die Spielstände so, wie die Konsole sie ablegt – verschlüsselt, ohne etwas zu öffnen oder zu ändern – auf einen\nUSB-Stick, eine Platte oder die interne SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Jede Datei wird geprüft;\n„Prüfen“ liest eine Sicherung später erneut nach.</p>\n<p><b>Zurückspielen</b> geht für einzelne Spiele: Die App sichert vorher den jetzigen Stand, schreibt alle neuen Dateien zuerst\ndaneben, prüft sie und ersetzt erst dann.</p>\n<div class='warn'>Gesichert und zurückgespielt wird nur, wenn <b>kein Spiel läuft</b> – auch kein pausiertes. Sicherungen einer\nanderen Konsole lassen sich nicht zurückspielen.</div>\n{{FIG:06-spiele-spielstaende.png}}\n"
+  },
+  {
+   "id": "pakete",
+   "title": "Pakete",
+   "html": "\n<p>Findet <code>.pkg</code>-Dateien auf USB-Laufwerken, Platten und im Konsolenspeicher (Ordner <code>pkg</code>) und zeigt Bild,\nName, Titel-ID, Version, Art und Größe.</p>\n<ul>\n<li><b>Installieren …</b> – die Konsole installiert das Paket selbst, die App stellt es ihr bereit und zeigt den Fortschritt.\nVorher nennt ein Plan, was im Weg stehen könnte.</li>\n<li><b>Aufteilen …</b> – große Pakete in Teile für FAT32-Sticks (bis 4 GB je Datei) oder Discs; das Original bleibt unverändert.</li>\n</ul>\n<div class='info'>Ein abgebrochener Installationsversuch kann Platz reserviert lassen. Den gibst du an der Konsole in der\nDownload-Liste mit „Löschen“ wieder frei.</div>\n{{FIG:07-spiele-pakete.png}}\n"
+  },
+  {
+   "id": "dateien",
+   "title": "Dateien – der Dateimanager",
+   "html": "\n<p>Ordner der Konsole ansehen und Dateien herunterladen geht überall. <b>Ändern</b> – hochladen, neuer Ordner, umbenennen,\nkopieren, verschieben, löschen – geht nur auf den <b>Laufwerken</b> und in <code>/data</code>. Überall sonst steht „Nur ansehen“.</p>\n{{FIG:15-dateien.png}}\n<h3>Ordnen, auswählen, ansehen</h3>\n<ul>\n<li><b>Sortieren:</b> Über der Liste wählst du „Name“, „Größe“ oder „Datum“; der Pfeil daneben kehrt die Richtung um. Ordner stehen immer oben. Der Browser merkt sich die Wahl.</li>\n<li><b>Alle auswählen:</b> Das Kästchen über der Liste wählt alle Einträge des Ordners (Verknüpfungen und Sonderdateien ausgenommen). Halb gefüllt heißt: nur ein Teil ist gewählt.</li>\n<li><b>Ordnergrößen:</b> „Größe“ an einem Ordner zählt nach, wie viel darin liegt; „Ordnergrößen“ macht das für alle Ordner der Ansicht nacheinander. Ein sehr großer Ordner wird nach etwa 8 Sekunden mit „mindestens“ gemeldet.</li>\n<li><b>Ansehen:</b> „Ansehen“ zeigt Bilder (PNG, JPG, GIF, WebP, BMP, ICO) und den Anfang von Textdateien (bis 256 KB). Andere Dateien lassen sich nur herunterladen.</li>\n</ul>\n<h3>Kopieren &amp; Verschieben</h3>\n<ol class='steps'>\n<li>Einträge ankreuzen.</li>\n<li><b>Kopieren</b> oder <b>Ausschneiden</b> drücken.</li>\n<li>In den Zielordner wechseln und <b>Hier einfügen</b> drücken.</li>\n<li>Ein Balken zeigt Prozent, Datenmenge und die aktuelle Datei; <b>Abbrechen</b> entfernt den angefangenen Eintrag im Ziel wieder.</li>\n</ol>\n<h3>Hochladen</h3>\n<p><b>Hochladen</b> wählt eine oder mehrere Dateien; am PC kannst du sie auch auf die Liste ziehen. Ein Balken zeigt den\nFortschritt je Datei.</p>\n<div class='tip'>Geschützt: Es wird nie etwas überschrieben, Verknüpfungen werden nie verfolgt, und vom Ordner der App\n(<code>/data/PS5-Cooling-Center</code>) ist nur <code>payloads</code> änderbar – ideal, um Payloads hochzuladen.</div>\n"
+  },
+  {
+   "id": "payloads",
+   "title": "Payloads",
+   "html": "\n<p>Laufende Payloads sehen und beenden, gespeicherte mit einem Klick starten – aus <code>/data/PS5-Cooling-Center/payloads</code>\noder vom USB-Stick (Hauptverzeichnis oder Ordner <code>payloads</code>). Gestartet wird über den Payload-Lader der Konsole\n(Port 9021).</p>\n{{FIG:09-payloads.png}}\n"
+  },
+  {
+   "id": "profil",
+   "title": "Profil",
+   "html": "\n<p>Anzeigename der Konsole ändern und ein Profilbild wählen – ein eigenes oder eines der 30 eingebauten.</p>\n{{FIG:10-profil.png}}\n"
+  },
+  {
+   "id": "system",
+   "title": "System &amp; Protokoll",
+   "html": "\n<p><b>System</b> zeigt Konsole, Firmware, Laufzeit, Speicherplatz aller Laufwerke, Netzwerk, Bildschirm und die\nKühlleistung über die Wochen; hier installierst du auch die Kachel neu.</p>\n{{FIG:11-system.png}}\n<p><b>Protokoll</b> listet jede Messung, Regelung und Meldung der App (exportierbar). Der Reiter <b>Kernel-Log live</b> zeigt\ndas Log der Konsole, wie es entsteht – mit Filter, Pause, Speichern, Herunterladen und Aufnahme.</p>\n{{FIG:14-kernel-log-live.png}}\n"
+  },
+  {
+   "id": "credits",
+   "title": "Credits",
+   "html": "\n<p>Die Seite dankt den Entwicklern, deren Arbeit in der App steckt, und weiteren bekannten Entwicklern der Community – mit\nProfilbild, Name und Links. Die Links sind nur anklickbar, wenn der Browser Internet hat.</p>\n{{FIG:16-credits.png}}\n"
+  },
+  {
+   "id": "sicherheit",
+   "title": "Sicherheit im Heimnetz",
+   "html": "\n<ul>\n<li>Die Oberfläche hat <b>keine Anmeldung</b>: Jedes Gerät im Heimnetz kann lesen und ändern.</li>\n<li>Die Konsole gehört nicht ins offene Internet – <b>keine Portweiterleitung</b> auf Port 8086 einrichten.</li>\n<li>Wer nur am Gerät selbst bedienen will, stellt die Netzbindung in den Einstellungen auf <code>127.0.0.1</code>.</li>\n<li>Anfragen, die erkennbar von fremden Webseiten kommen, lehnt die App ab (Fehler 403).</li>\n</ul>\n"
+  },
+  {
+   "id": "hilfe",
+   "title": "Wenn etwas nicht klappt",
+   "html": "\n<table>\n<tr><th>Problem</th><th>Lösung</th></tr>\n<tr><td>Weboberfläche nicht erreichbar</td><td>ELF erneut senden (Port 9021); nur eine Instanz; Adresse <code>http://&lt;PS5-IP&gt;:8086/</code> prüfen.</td></tr>\n<tr><td>Port 8086 belegt</td><td>Meist läuft noch eine alte Instanz: Konsole neu starten und die ELF nur einmal senden.</td></tr>\n<tr><td>Lüfter „nicht verfügbar“</td><td>kstuff ist nicht geladen – kstuff laden, dann die App neu senden.</td></tr>\n<tr><td>„Der Datenträger hat sich abgemeldet“</td><td>Meist das USB-Kabel: ein anderes, kurzes Kabel direkt an der Konsole probieren; danach ggf. Konsole neu starten.</td></tr>\n<tr><td>Kachel öffnet nichts</td><td>Die Kachel startet die App nicht – nach jedem Neustart die ELF einmal senden.</td></tr>\n<tr><td>Fehler 403 im Browser</td><td>Seite direkt über die IP-Adresse der Konsole öffnen, nicht über einen fremden Namen oder eine andere Webseite.</td></tr>\n</table>\n<p>Mehr Antworten stehen in der <b>FAQ</b>.</p>\n"
+  }
+ ],
+ "faq": [
+  {
+   "cat": "Allgemein",
+   "items": [
+    {
+     "q": "Was macht die App eigentlich?",
+     "a": "Sie regelt den Lüfter der PS5 nach einer Zieltemperatur – ruhig und träge statt laut und hektisch – und bietet eine Weboberfläche für Spiele, Pakete, Spielstände, Dateien, Payloads, Profil und Systeminfos."
+    },
+    {
+     "q": "Brauche ich Internet?",
+     "a": "Nein. Die App verbindet sich nur mit Programmen auf der Konsole und mit den Browsern im Heimnetz. Einzige Ausnahme im Browser: Die Seite „Credits“ prüft einmal, ob github.com erreichbar ist, damit die Links anklickbar werden."
+    },
+    {
+     "q": "Welche Firmware wird unterstützt?",
+     "a": "Getestet ist Firmware 12.00 auf einer PS5 Pro (CFI-7021). Gebaut wird mit einem SDK, das bis 13.60 reicht; auf 13.xx ist die App aber nicht getestet."
+    },
+    {
+     "q": "Kostet die App etwas?",
+     "a": "Nein. Sie ist freie Software unter der GNU GPL, Version 3 oder später."
+    }
+   ]
+  },
+  {
+   "cat": "Start &amp; Bedienung",
+   "items": [
+    {
+     "q": "Muss ich die App nach jedem Neustart neu senden?",
+     "a": "Ja. Die ELF läuft im Arbeitsspeicher. Nach jedem Neustart der Konsole einmal an Port 9021 senden. Die Einstellungen bleiben erhalten."
+    },
+    {
+     "q": "Die Kachel öffnet nur eine leere Seite – warum?",
+     "a": "Die Kachel startet die App nicht, sie öffnet nur die Weboberfläche. Ist die App nach einem Neustart noch nicht gesendet, gibt es nichts anzuzeigen."
+    },
+    {
+     "q": "Wie öffne ich die Oberfläche am Handy oder PC?",
+     "a": "Im Browser <code>http://&lt;PS5-IP&gt;:8086/</code> aufrufen. Die IP steht in der Meldung auf dem Fernseher nach dem Start."
+    },
+    {
+     "q": "Kann ich die App zweimal starten?",
+     "a": "Bitte nicht: Zwei Instanzen regeln den Lüfter gleichzeitig und stören sich. Eine alte Instanz auf der Seite „Payloads“ beenden oder die Konsole neu starten."
+    },
+    {
+     "q": "Wie sehe ich die Temperatur, ohne die Seite zu öffnen?",
+     "a": "Die Mikrofon-Taste des Controllers zweimal kurz drücken: oben rechts erscheinen Temperatur und Lüfterdrehzahl."
+    },
+    {
+     "q": "Warum bewegt sich die Seite nicht, wenn ein Fenster offen ist?",
+     "a": "Absicht: Bei einem offenen Fenster steht der Hintergrund still, und der rechte Stick scrollt nur das Fenster selbst."
+    },
+    {
+     "q": "In welchen Sprachen gibt es die Oberfläche?",
+     "a": "Deutsch, Englisch, Italienisch, Spanisch, Französisch und Russisch. Oben rechts in der Kopfzeile wählst du die Sprache; Handbuch und FAQ gibt es in allen sechs. Meldungen, die die Konsole auf dem Fernseher einblendet, bleiben deutsch."
+    },
+    {
+     "q": "Ein Text steht noch auf Deutsch – ist das ein Fehler?",
+     "a": "Kein Fehler der App, aber eine Lücke: Seltene Texte und Meldungen der Konsole sind nicht in jeder Sprache übersetzt und erscheinen dann deutsch. Bitte melde sie, die Wörterbücher lassen sich leicht ergänzen."
+    }
+   ]
+  },
+  {
+   "cat": "Lüfter &amp; Temperatur",
+   "items": [
+    {
+     "q": "Welche Zieltemperatur ist sinnvoll?",
+     "a": "Ab Werk 66 °C. Kühl = 62 °C, Ausgewogen = 77 °C, Leise = 91 °C. Höher bedeutet leiser und wärmer; bis 72 °C ist ein guter Bereich für die meisten. 91 °C ist der Wert, den die Konsole selbst einstellt: so leise wie ohne die App, aber die Konsole wird deutlich wärmer; die Warnschwelle geht automatisch mit (Ziel + 2 °C)."
+    },
+    {
+     "q": "Kann die App meine Konsole überhitzen?",
+     "a": "Die App hält nur die eingestellte Temperatur. Über einer Sicherheitsgrenze zählt nur noch die Hardware, und die Firmware der PS5 schützt sich unabhängig davon immer selbst."
+    },
+    {
+     "q": "Warum dreht der Lüfter nicht sofort hoch?",
+     "a": "Die Regelung ist absichtlich träge: Sie rechnet mit einem Mittelwert, ignoriert kleine Schwankungen um ±1 °C und regelt in kleinen Schritten."
+    },
+    {
+     "q": "Was passiert, wenn ich die App beende?",
+     "a": "Dann regelt die Konsole wieder selbst nach ihren normalen Vorgaben. Dasselbe gilt, wenn „Automatik“ ausgeschaltet ist."
+    },
+    {
+     "q": "Der Lüfter ist „nicht verfügbar“ – was tun?",
+     "a": "kstuff ist nicht geladen. Ohne kstuff kommt die App nicht an den Lüfter-Controller. kstuff laden und die App neu senden."
+    }
+   ]
+  },
+  {
+   "cat": "Spiele, Pakete &amp; Spielstände",
+   "items": [
+    {
+     "q": "Werden beim Löschen eines Spiels meine Spielstände gelöscht?",
+     "a": "Nein. Spielstände bleiben immer erhalten. Gelöscht wird nur nach Häkchen und zwei Klicks."
+    },
+    {
+     "q": "Welches Format soll ich beim Konvertieren wählen?",
+     "a": "<b>ffpfsc</b> ist komprimiert und empfohlen. <b>ffpkg</b> und <b>exFAT</b> sind unkomprimiert. Ältere <code>.ffpkg</code> aus Versionen vor 1.48.0 bitte neu erzeugen."
+    },
+    {
+     "q": "Ein großes Paket passt nicht auf meinen FAT32-Stick.",
+     "a": "FAT32 erlaubt höchstens 4 GB je Datei. Unter „Pakete“ lässt sich ein Paket mit „Aufteilen …“ in passende Teile zerlegen – das Original bleibt unverändert."
+    },
+    {
+     "q": "Eine Installation brach ab – wo ist mein Speicherplatz?",
+     "a": "Die Konsole reserviert den Platz sofort. Den abgebrochenen Eintrag in der Download-Liste der Konsole mit „Löschen“ entfernen."
+    },
+    {
+     "q": "Wo liegen meine Spielstand-Sicherungen?",
+     "a": "Auf dem Laufwerk, das du beim Sichern wählst, im Ordner <code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code> – auf der internen SSD unter <code>/data</code>."
+    },
+    {
+     "q": "Kann ich Spielstände einer anderen Konsole zurückspielen?",
+     "a": "Nein. Spielstände sind an ihre Konsole gebunden; solche Sicherungen lassen sich nur prüfen."
+    }
+   ]
+  },
+  {
+   "cat": "Dateimanager",
+   "items": [
+    {
+     "q": "Warum kann ich manche Ordner nicht ändern?",
+     "a": "Ändern geht nur auf den Laufwerken und in <code>/data</code>. Systemordner sind nur zum Ansehen da – das schützt die Konsole."
+    },
+    {
+     "q": "Warum ist der Ordner der App gesperrt?",
+     "a": "Dort liegen Einstellungen und Protokolle. Nur der Unterordner <code>payloads</code> ist änderbar, damit du Payloads hochladen kannst."
+    },
+    {
+     "q": "Wird beim Kopieren etwas überschrieben?",
+     "a": "Nein, nie. Gibt es einen Namen im Ziel schon, beginnt nichts, und die Meldung nennt ihn."
+    },
+    {
+     "q": "Was passiert bei „Abbrechen“?",
+     "a": "Der Vorgang hält an; was vom angefangenen Eintrag im Ziel schon geschrieben war, wird wieder entfernt."
+    },
+    {
+     "q": "Wie sehe ich mir eine Datei an, ohne sie herunterzuladen?",
+     "a": "Mit „Ansehen“ an der Datei: Bilder (PNG, JPG, GIF, WebP, BMP, ICO) erscheinen in einem Fenster, bei Textdateien der Anfang bis 256 KB. Binärdateien lassen sich nur herunterladen."
+    },
+    {
+     "q": "Kann ich die Liste nach Größe oder Datum ordnen?",
+     "a": "Ja: Über der Liste wählst du „Name“, „Größe“ oder „Datum“, der Pfeil kehrt die Reihenfolge um. Mit „Ordnergrößen“ zählt die Konsole auch die Größe der Ordner nach."
+    }
+   ]
+  },
+  {
+   "cat": "Probleme &amp; Sicherheit",
+   "items": [
+    {
+     "q": "„Der Datenträger hat sich abgemeldet (Device not configured)“",
+     "a": "Fast immer das USB-Kabel, der Anschluss oder zu wenig Strom. Ein anderes, kurzes Kabel direkt an der Konsole probieren; gibt es danach Störungen, die Konsole neu starten."
+    },
+    {
+     "q": "Ich bekomme Fehler 403.",
+     "a": "Die App lehnt Anfragen ab, die von fremden Webseiten kommen. Öffne die Oberfläche direkt über die IP-Adresse der Konsole."
+    },
+    {
+     "q": "Ist die Oberfläche passwortgeschützt?",
+     "a": "Nein. Jedes Gerät im Heimnetz kann sie bedienen. Richte deshalb keine Portweiterleitung ein; wer will, stellt die Netzbindung auf <code>127.0.0.1</code>."
+    },
+    {
+     "q": "Fremde Ordner mit Zip-Dateien in /data/homebrew?",
+     "a": "Die stammen meist von einem anderen Werkzeug mit automatischer Spielstand-Sicherung (z. B. ProsperoMgr), nicht von dieser App."
+    },
+    {
+     "q": "Ist das legal?",
+     "a": "Die App enthält keine Spiele, keine Firmware, keine Schlüssel und nichts, was einen Kopierschutz umgeht. Das Modifizieren einer Konsole kann gegen Nutzungsbedingungen verstoßen; das Risiko trägt, wer es tut. Raubkopien werden nicht unterstützt."
+    }
+   ]
+  }
+ ]
+}

@@ -73,6 +73,7 @@ SRCS += src/gamecopy.c
 SRCS += src/gamemove.c
 SRCS += src/gamedelete.c
 SRCS += src/filemgr.c
+SRCS += src/assets.c
 SRCS += src/smp.c
 SRCS += src/gameconvert.c
 SRCS += src/conv_exfat.c
@@ -176,7 +177,9 @@ FAST_OBJS := $(patsubst src/%.c,gen/fast/%.o,$(FAST_SRCS))
 # date", and the ELF quietly shipped the old one (25.09.2026, the new app mark).
 # The avatars are the 30 built-in profile pictures (tools/build_avatars.py);
 # they are the largest part of the web UI, about 1.4 MB.
-WEB_FILES := $(wildcard web/*) $(wildcard web/img/*) $(wildcard web/avatars/*)
+# web/lang holds the dictionaries of the interface languages (07.10.2026); a changed
+# translation alone has to rebuild the ELF as well.
+WEB_FILES := $(wildcard web/*) $(wildcard web/img/*) $(wildcard web/avatars/*) $(wildcard web/lang/*)
 
 CFLAGS := -Os -Wall -Wextra -Werror -Isrc -Isrc/third_party
 CFLAGS += -ffunction-sections -fdata-sections

@@ -283,6 +283,38 @@ steckt im Installer.
 Gebaut wird sie mit `pkg/build.ps1` (Bilder skalieren → `LibProsperoPkg.dll`
 bereitstellen → `dotnet run`). Voraussetzung ist das **.NET-10-SDK**.
 
+## Übersetzungen
+
+Die Oberfläche gibt es auf Deutsch, Englisch, Italienisch, Spanisch, Französisch und Russisch. Die Quelltexte sind deutsch und
+bleiben es; die Übersetzung geschieht zur Laufzeit im Browser.
+
+- `web/i18n-boot.js` wählt die Sprache (gemerkte Wahl in `localStorage` `lang`, sonst Browsersprache, sonst Englisch), noch bevor
+  die Seite gezeichnet wird, und setzt `window.PS5_LANG` und `window.PS5_LOCALE` (Zahlen und Datum).
+- `web/i18n.js` lädt `web/lang/<xx>.json` und ersetzt Texte im Dokument und alle später hinzukommenden (MutationObserver).
+  Das Wörterbuch ist `{"v":1,"lang":"xx","t":{"deutscher Text":"Übersetzung"}}`. Ein Text mit Werten, die das Programm einsetzt,
+  steht mit `{0}`, `{1}` … darin (aus `${…}` einer Vorlage in `app.js` oder `%d`/`%s` einer Meldung in `src/*.c`); Texte aus mehreren
+  Stücken, die das Programm mit „ · “ verbindet, werden stückweise übersetzt. Ein Element mit `data-no-i18n` bleibt, wie es ist.
+- Fehlt ein Text, bleibt er deutsch. Im Browser zeigt `PS5I18N.misses()` die Texte, die auf der Seite standen, aber nicht im
+  Wörterbuch; so findet man Lücken (die Browsertests sammeln sie je Sprache).
+- **Einen Text ergänzen oder verbessern:** in `web/lang/<xx>.json` den Schlüssel (der deutsche Text, genau wie im Quelltext) mit der
+  Übersetzung eintragen. Die Platzhalter müssen in beiden gleich oft und genau als `{0}` vorkommen. Danach `tools/gen_assets.py` (läuft
+  beim Bauen von selbst) – die Wörterbücher sind in die ELF eingebettet.
+- **Eine neue Sprache:** `web/lang/<xx>.json` anlegen, in `web/i18n-boot.js` (`LOCALES`) und in der Sprachwahl in `web/index.html`
+  eintragen. `tools/i18n/` hat die Hilfen: `extract.py` und `extract_c.py` ziehen alle deutschen Texte aus Oberfläche und Quelltext
+  (`strings.json`, `strings_c.json`), `check_lang.py <xx>` meldet Lücken und Platzhalterfehler eines Wörterbuchs.
+- **Mehrzahlformen:** Wo nach einer Zahl ein Hauptwort steht, schreiben fast alle Sprachen Einzahl und Mehrzahl als eigene Muster
+  (`{0} file` / `{0} files`; im Deutschen sind es zwei Quelltexte, `{0} Datei` und `{0} Dateien`). Russisch braucht drei Formen: Dort steht in
+  der Übersetzung eine Mehrzahlgruppe `{0|файл|файла|файлов}` (1, 21 … / 2–4, 22–24 … / sonst; ein Bruch nimmt die zweite Form), die die
+  Laufzeit (`PS5I18N.plural` in `web/i18n.js`) durch **das eine Wort** ersetzt, das zum Wert von `{0}` passt; die Zahl steht getrennt als `{0}`
+  davor. `check_lang.py` zählt eine Gruppe nicht als Platzhalter.
+- **Texte, die der Extraktor nicht findet:** Einzelne kleingeschriebene Wörter, die das Programm in Sätze einsetzt (`kopiert`, `fertig` …), stehen
+  von Hand in `tools/i18n/extra_sources.json`. Aneinandergefügte Zeichenketten (`"a" + "b"`) und `${bedingung ? "x" : "y"}` löst der Extraktor
+  selbst auf.
+- **Handbuch und FAQ** (`web/handbuch*.html`, `web/faq*.html` und die PDFs) entstehen aus `tools/i18n/docs/docs_src.<xx>.json` (Texte) und
+  `docs_style.css`; `python tools/i18n/docs_build.py app` schreibt die Fassungen für die App, `... full --shots <Ordner>` die mit Bildschirmfotos
+  für PDF und HTML (der Ordner hat je Sprache einen Unterordner mit den Bildern; PDF daraus mit dem Druckdialog des Browsers).
+- Die Meldungen, die die Konsole selbst auf dem Fernseher einblendet, sind deutsch (sie entstehen in `src/notify.c`, nicht im Browser).
+
 ## Aufbau des Quellcodes
 
 ```text
@@ -291,6 +323,7 @@ src/platform.c      Rechteausweitung, Temperatursensoren, ICC-Lüftersteuerung, 
 src/fan.c           Komfortregelung (Mittelwert, Totzone, Trend) und Servo auf die Lüfterschwelle
 src/probe.c         Hintergrund-Thread für alle Abfragen an Systemdienste
 src/http.c          HTTP/1.1-Server (POSIX-Sockets, ohne Fremdbibliothek), Host-/Origin-Prüfung
+src/assets.c        liefert die eingebetteten Dateien der Oberfläche aus, gzip wie gespeichert oder entpackt (libdeflate), je nach Accept-Encoding
 src/api.c           REST-Schnittstelle unter /api/v1
 src/config.c        JSON-Konfiguration, atomares Speichern
 src/log.c           Ereignis-Ringpuffer (gespiegelt ins Kernelprotokoll); Steuerzeichen einer Meldung werden zu Leerzeichen, damit aus einem Namen mit Zeilenumbruch keine zweite Zeile wird
@@ -343,7 +376,7 @@ src/tile.c          Kachel-Installation über AppInstUtil (Ordner aus eingebette
 src/dynsym.c        Symbolsuche in Sony-Modulen
 src/sony_api_lock.c gemeinsame Sperre für empfindliche Systemaufrufe
 src/third_party/    cJSON, libdeflate
-web/                Web-Oberfläche (per tools/gen_assets.py eingebettet), Profilbilder in web/avatars/
+web/                Web-Oberfläche (per tools/gen_assets.py eingebettet, gzip), Profilbilder in web/avatars/, Wörterbücher in web/lang/
 tile/               Dateien der Kachel (sce_sys), eingebettet über tools/gen_tile_files.py
 installer/          eigenständiger Kachel-Installer (ELF)
 tools/              Build-, Release- und Diagnose-Skripte

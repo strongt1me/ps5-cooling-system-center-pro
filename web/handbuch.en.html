@@ -1,0 +1,299 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>User manual – PS5 Cooling &amp; System Center - Pro</title><style>
+:root{--plane:#0b1220;--side:#0e1830;--accent:#3b82f6;--violet:#7b5cf0;--s1:#1a2334;--s0:#141b29;--inset:#0c1320;
+--ink:#eaf0fb;--ink2:#aeb8d6;--muted:#7c89ac;--hair:rgba(255,255,255,.09);--good:#22c55e;--warn:#fab219;--bad:#ef5350}
+*{box-sizing:border-box}
+html{background:var(--plane)}
+body{margin:0;color:var(--ink);font:15px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+background:radial-gradient(1200px 600px at 70% -10%,rgba(59,130,246,.22),transparent 60%),
+radial-gradient(900px 500px at 0% 20%,rgba(123,92,240,.12),transparent 60%),var(--plane)}
+a{color:#7fb0ff}
+.wrap{max-width:1000px;margin:0 auto;padding:40px 28px 60px}
+.cover{min-height:92vh;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:18px;
+border-bottom:1px solid var(--hair);margin-bottom:34px;page-break-after:always;break-after:page}
+.cover img.mark{width:120px;height:120px;border-radius:26px;box-shadow:0 0 0 6px rgba(59,130,246,.16),0 20px 60px rgba(0,0,0,.5)}
+.kicker{letter-spacing:.32em;text-transform:uppercase;font-size:12px;color:#8fb7ff}
+.cover h1{font-size:52px;line-height:1.05;margin:0;background:linear-gradient(120deg,#fff,#a9c8ff 60%,#b9a6ff);
+-webkit-background-clip:text;background-clip:text;color:transparent}
+.cover p.lead{font-size:19px;color:var(--ink2);max-width:640px;margin:0}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.badge{padding:6px 12px;border-radius:999px;font-size:13px;border:1px solid rgba(59,130,246,.45);background:rgba(59,130,246,.10)}
+.psrow{display:flex;gap:14px;margin-top:18px;font-size:28px;opacity:.85}
+.psrow span{display:inline-flex;width:46px;height:46px;border-radius:50%;align-items:center;justify-content:center;
+border:2px solid var(--hair);background:var(--s0)}
+.tri{color:#36c8a5}.cir{color:#ff5a6e}.crs{color:#7aa7ff}.sqr{color:#e58fff}
+.toc{background:var(--s0);border:1px solid var(--hair);border-radius:18px;padding:22px 26px;margin:0 0 34px;
+page-break-after:always;break-after:page}
+.toc h2{margin:0 0 10px;font-size:20px}
+.toc ol{margin:0;padding-left:22px;columns:2;column-gap:36px}
+.toc li{margin:4px 0;break-inside:avoid}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:#7fb0ff}
+section.ch{margin:0 0 38px;break-inside:auto}
+.ch-head{display:flex;align-items:center;gap:14px;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--hair)}
+.ch-num{flex:none;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+font-weight:800;background:linear-gradient(135deg,var(--accent),var(--violet));box-shadow:0 8px 24px rgba(59,130,246,.35)}
+.ch-head h2{margin:0;font-size:25px}
+h3{font-size:17px;margin:22px 0 8px;color:#d7e3ff}
+p{margin:0 0 10px;color:#dfe6f6}
+ul,ol{margin:0 0 12px;padding-left:22px}
+li{margin:3px 0}
+code{font-family:Consolas,ui-monospace,monospace;font-size:13px;background:var(--inset);border:1px solid var(--hair);
+padding:1px 6px;border-radius:6px;color:#cfe0ff}
+.card{background:var(--s0);border:1px solid var(--hair);border-radius:16px;padding:16px 18px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.grid .card{margin:0}
+.card b.t{display:block;margin-bottom:4px}
+.tip,.warn,.info{border-radius:14px;padding:12px 16px 12px 46px;margin:12px 0;position:relative;break-inside:avoid}
+.tip{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.4)}
+.warn{background:rgba(250,178,25,.08);border:1px solid rgba(250,178,25,.45)}
+.info{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.45)}
+.tip::before,.warn::before,.info::before{position:absolute;left:14px;top:11px;font-weight:800;font-size:16px}
+.tip::before{content:"✓";color:var(--good)}.warn::before{content:"!";color:var(--warn)}.info::before{content:"i";color:#7fb0ff}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;position:relative;padding:8px 0 8px 46px;border-bottom:1px dashed var(--hair)}
+.steps li::before{content:counter(s);position:absolute;left:0;top:6px;width:30px;height:30px;border-radius:50%;
+display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;background:var(--s1);
+border:1px solid rgba(59,130,246,.5);color:#cfe0ff}
+figure{margin:16px 0;break-inside:avoid}
+figure img{width:100%;display:block;border-radius:14px;border:1px solid rgba(59,130,246,.35);
+box-shadow:0 18px 50px rgba(0,0,0,.45)}
+figcaption{font-size:13px;color:var(--muted);margin-top:6px;text-align:center}
+.kbd{display:inline-block;padding:1px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:var(--s1);
+font-size:13px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+th{color:#cfe0ff;background:var(--s1)}
+.back{position:sticky;top:0;z-index:5;display:inline-block;margin:0 0 10px;padding:9px 16px;border-radius:999px;background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0ff;text-decoration:none;font-weight:600}
+.back:hover{background:rgba(59,130,246,.25)}
+@media print{.back{display:none}}
+.foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--hair);font-size:12px;color:var(--muted)}
+/* FAQ */
+.faq-cat{margin:30px 0 10px;font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#8fb7ff}
+details{background:var(--s0);border:1px solid var(--hair);border-radius:14px;margin:8px 0;padding:0 16px;break-inside:avoid}
+details[open]{border-color:rgba(59,130,246,.45)}
+summary{cursor:pointer;list-style:none;padding:13px 0 13px 30px;position:relative;font-weight:600}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";position:absolute;left:0;top:10px;width:22px;height:22px;border-radius:50%;
+display:flex;align-items:center;justify-content:center;background:var(--s1);border:1px solid rgba(59,130,246,.5);color:#cfe0ff}
+details[open] summary::before{content:"–"}
+details .a{padding:0 0 14px 30px;color:#dfe6f6}
+@page{size:A4;margin:12mm 11mm}
+@media print{
+html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:var(--plane)}
+.wrap{max-width:none;padding:0}
+.cover{min-height:255mm}
+a{text-decoration:none}
+details{padding:0 14px}
+details .a{display:block}
+h2,h3{break-after:avoid}
+}
+@media (max-width:720px){.grid{grid-template-columns:1fr}.toc ol{columns:1}.cover h1{font-size:38px}}
+
+.back{position:sticky;top:0;z-index:5;display:inline-block;margin:0 0 10px;padding:9px 16px;border-radius:999px;
+background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0ff;text-decoration:none;font-weight:600}
+.back:hover{background:rgba(59,130,246,.25)}
+@media print{.back,.langs{display:none}}
+.langs{display:inline-flex;flex-wrap:wrap;gap:6px;margin:0 0 10px 10px;vertical-align:top}
+.langs a{padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#aebbd4;text-decoration:none;font-size:14px}
+.langs a:hover{border-color:rgba(59,130,246,.6);color:#fff}.langs a.on{background:rgba(59,130,246,.22);color:#fff;border-color:rgba(59,130,246,.55)}
+.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.50.0</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
+<p><b>PS5 Cooling &amp; System Center - Pro</b> is a homebrew program (ELF) for a jailbroken PS5. It controls the
+fan according to a calm, freely adjustable target temperature and comes with a web interface that you open from any device on your
+home network: phone, tablet, PC or the console's own browser. On top of that come game management, packages,
+saved data, a file manager, payloads, profile and system information.</p>
+<div class='grid'>
+<div class='card'><b class='t'>Quiet, not loud</b>The control holds a target temperature – gently and slowly, without constant ups and downs.</div>
+<div class='card'><b class='t'>Everything in the browser</b>No installation on a PC needed: open the address, done.</div>
+<div class='card'><b class='t'>No internet</b>The app only connects to programs on the console and to the browsers on your home network.</div>
+<div class='card'><b class='t'>Safe to use</b>Deleting and power commands require a confirmation; important things are protected.</div>
+</div>
+<div class='info'>Tested on a PS5 Pro (CFI-7021) with firmware 12.00. Other firmware may work but has not been checked.</div>
+</section><section class='ch' id='voraussetzungen'><div class='ch-head'><div class='ch-num'>2</div><h2>Requirements</h2></div>
+<ul>
+<li>A PS5 with a jailbreak and a loaded payload loader (<code>elfldr</code>, port <code>9021</code>).</li>
+<li><b>kstuff</b> must be loaded – only with it can the app reach the fan controller. Without kstuff, the display and the
+web interface work, but fan control then reports “not available”.</li>
+<li>A device with a browser on the same home network.</li>
+<li>To send the ELF, a program such as <code>nc</code> (netcat) or a payload sender of your choice.</li>
+</ul>
+</section><section class='ch' id='installation'><div class='ch-head'><div class='ch-num'>3</div><h2>Installation &amp; first start</h2></div>
+<ol class='steps'>
+<li>Send <code>PS5_Cooling_System_Center_v1.50.0.elf</code> to the console, port <code>9021</code>, e.g.:<br>
+<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.50.0.elf</code></li>
+<li>A notification with the address of the web interface appears at the top right of the TV.</li>
+<li>Open it in the browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
+</ol>
+<h3>The tile on the Home screen</h3>
+<p>On the first start, the app itself creates a tile under “Media”. It <b>only opens the web interface</b> – it
+does not start the program. So after every restart of the console, the ELF has to be sent once again.</p>
+<div class='warn'>Only ever run <b>one</b> instance. Two instances control the fan at the same time and interfere with each other.
+You can stop an old instance on the “Payloads” page; otherwise a restart helps.</div>
+<div class='tip'>Tile deleted, or want a new tile picture? Delete the tile on the console (Options button, Delete) and on
+the “System” page press <b>Install tile</b>.</div>
+</section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>The interface at a glance</h2></div>
+<p>On the left is the sidebar with the sections <b>Profile, Games, Files, Payloads, Cooling, System, Log</b> and
+<b>Credits</b>. At the top in the header, on every page: the <b>power options</b>, “Fullscreen”, “Expert mode” and the
+connection indicator.</p>
+<h3>Power options</h3>
+<p><b>Rest Mode</b>, <b>Restart</b>, <b>Turn off</b> and <b>Safe Mode</b>. Every command needs two clicks:
+the first turns the button yellow (“Really? Click again”) and states the consequence, the second carries it out. A double click
+does not count; after ten seconds the button returns to normal.</p>
+<div class='warn'>When turning off or restarting, unsaved game progress is lost.</div>
+<h3>Language</h3>
+<p>At the top right of the header you choose the language of the interface: <b>Deutsch, English, Italiano, Español, Français</b> or <b>Русский</b>.
+On the first visit, the page uses your browser's language; if that is not available, English. The browser remembers the choice; the page then reloads
+and stays on the section you were on. Numbers, dates and times follow the language.</p>
+<div class="info">Notifications that the console itself shows on the TV (at start or with a warning) are in German.</div>
+<h3>Manual and FAQ</h3>
+<p>Under “Credits” in the sidebar, <b>Manual</b> and <b>FAQ</b> open these texts directly in the app, in the chosen language (without the
+screenshots, so that the app stays small). With pictures, both are available as PDF and HTML for download with every release.</p>
+<h3>Windows and the right stick</h3>
+<p>When a window opens (e.g. for deleting), the background is dimmed and stays still. In the PS5's browser, the right stick
+then only scrolls the window itself.</p>
+</section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Cooling</h2></div>
+<p>The most important page: the status in plain words, the current temperature, the fan and the running game. Right below, you set
+the <b>Target temperature</b> and the <b>Operating mode</b>.</p>
+
+<h3>Target temperature</h3>
+<p>The temperature the console should hold: adjustable from <b>60 to 91 °C</b>, <b>66 °C</b> by default. Higher means
+quieter and warmer. <b>Quick select</b> sets the target immediately: <b>Cool 62 °C</b>, <b>Balanced 77 °C</b>, <b>Quiet 91 °C</b>.</p>
+<div class="info"><b>91 °C</b> is the value the console sets itself (ShadowMountPlus also offers it as the highest target):
+the fan stays as quiet as without the app, but the console gets noticeably warmer. The emergency limit is always at least
+4 °C above the target (so 95 °C at 91 °C); the app's warning threshold moves with the target (never lower than target + 2 °C),
+so that it does not warn all the time with a high target; the value set in the settings stays saved.</div>
+<h3>Operating mode</h3>
+<p><b>Quiet</b>, <b>Balanced</b> and <b>Cool</b> determine how strongly the fan responds to heat – they do not change the
+target. “Quiet” is recommended.</p>
+
+<h3>How the control works</h3>
+<ul>
+<li>It works with a moving average, not with single readings.</li>
+<li>Within ±1 °C of the target, nothing happens.</li>
+<li>The trend counts: if the temperature is already falling, the fan is not turned up any further.</li>
+<li>It turns up in small steps, and turns down only once the temperature has been stably low.</li>
+<li>Above the safety limit, only the hardware counts; the firmware always protects itself in addition.</li>
+</ul>
+<h3>Automatic mode</h3>
+<p>If “Automatic mode” is off, the app hands control back to the PS5 and only shows values. If the app is not running, the
+console controls the fan itself again anyway.</p>
+<h3>Display via the mute button</h3>
+<p>Press the controller's mute button <b>twice quickly</b>: the processor temperature and
+fan speed appear at the top right – even without the web interface. The microphone is toggled twice in the process and ends up as it was before.</p>
+</section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Games</h2></div>
+<p>The games on your Home screen with cover, format and actions. You can search by title, title ID or content ID;
+filter by PS5, PS4 or “Backport · AMPR · PlayGo”; and sort by Home screen order, name, play time, size and more.</p>
+
+<h3>Starting and closing</h3>
+<ul>
+<li><b>Start</b> starts the game directly. In the console's browser, the browser closes so that the game is in front.</li>
+<li>If another game is already running, the app starts nothing and tells you so. <b>Close game</b> closes the running game
+<b>immediately and without asking</b> – anything not saved is lost.</li>
+<li>A game is never started twice; a second click within 30 seconds does nothing.</li>
+</ul>
+<h3>Copying, moving, converting</h3>
+<p>Dump folders can be copied, moved and converted directly on the console into <b>ffpfsc</b> (compressed, recommended),
+<b>ffpkg</b> or <b>exFAT</b> – either playable in the folder <code>homebrew</code> of the destination (ShadowMountPlus
+finds it there) or as a backup in <code>PS5-Sicherung/Spiele</code>. Every copy is read back after writing
+and verified; nothing is overwritten.</p>
+
+<div class='warn'>Please recreate <code>.ffpkg</code> images made with versions before 1.48.0 (old structure).</div>
+</section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>7</div><h2>Deleting games &amp; backups</h2></div>
+<p>Every game card has <b>Delete</b>, and so does every entry in the <b>Backups</b> tab.</p>
+<ul>
+<li><b>Installed games</b> are uninstalled by the console itself – as with “Delete” in the menu, including updates and add-ons.</li>
+<li><b>Games from ShadowMountPlus</b> are unregistered first; then the image or the folder is deleted.</li>
+<li><b>The app's backups</b> (copies and conversions) are deleted together with their checksum file.</li>
+</ul>
+<ol class='steps'>
+<li>Tap <b>Delete</b>: the window shows exactly what will go.</li>
+<li>Tick “I understand: deleting is final”.</li>
+<li>Press <b>Delete for good</b> twice (the first click asks “Really?”).</li>
+<li>A progress bar with a percentage shows how far it has got.</li>
+</ol>
+<div class='tip'>Your <b>saved data is always kept</b>. A running game is never deleted.</div>
+
+</section><section class='ch' id='spielzeit'><div class='ch-head'><div class='ch-num'>8</div><h2>Play time</h2></div>
+<p>When you played, for how long and how warm the console got: totals for today, 7 and 30 days, the last 14 days
+as bars, the most played games and the recent sessions with peak temperatures. Can be saved as a spreadsheet (CSV).</p>
+
+</section><section class='ch' id='spielstaende'><div class='ch-head'><div class='ch-num'>9</div><h2>Back up saved data</h2></div>
+<p>Copies the saved data as the console stores it – encrypted, without opening or changing anything – to a
+USB stick, a disk or the internal SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Every file is verified;
+“Verify” reads a backup again later.</p>
+<p><b>Restore</b> works for individual games: the app first backs up the current state, writes all new files next to the old ones first,
+verifies them and only then replaces the old ones.</p>
+<div class='warn'>Backing up and restoring only happen when <b>no game is running</b> – not even a paused one. Backups from another
+console cannot be restored.</div>
+
+</section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>10</div><h2>Packages</h2></div>
+<p>Finds <code>.pkg</code> files on USB drives, disks and in console storage (folder <code>pkg</code>) and shows the picture,
+name, title ID, version, type and size.</p>
+<ul>
+<li><b>Install…</b> – the console installs the package itself; the app provides it and shows the progress.
+Beforehand, a plan lists what could get in the way.</li>
+<li><b>Split…</b> – splits large packages into parts for FAT32 sticks (up to 4 GB per file) or discs; the original stays unchanged.</li>
+</ul>
+<div class='info'>An aborted installation attempt can leave space reserved. You free it again on the console, in the
+download list, with “Delete”.</div>
+
+</section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>11</div><h2>Files – the file manager</h2></div>
+<p>Viewing the console's folders and downloading files works everywhere. <b>Changing</b> – uploading, new folder, renaming,
+copying, moving, deleting – only works on the <b>drives</b> and in <code>/data</code>. Everywhere else it says “View only”.</p>
+
+<h3>Sorting, selecting, viewing</h3>
+<ul>
+<li><b>Sorting:</b> Above the list you choose “Name”, “Size” or “Date”; the arrow next to it reverses the direction. Folders are always at the top. The browser remembers the choice.</li>
+<li><b>Select all:</b> The box above the list selects all entries of the folder (except links and special files). Half filled means: only some of them are selected.</li>
+<li><b>Folder sizes:</b> “Size” on a folder counts how much is inside; “Folder sizes” does this for all folders in the view, one after another. A very large folder is reported with “at least” after about 8 seconds.</li>
+<li><b>Viewing:</b> “View” shows pictures (PNG, JPG, GIF, WebP, BMP, ICO) and the beginning of text files (up to 256 KB). Other files can only be downloaded.</li>
+</ul>
+<h3>Copying &amp; moving</h3>
+<ol class='steps'>
+<li>Tick the entries.</li>
+<li>Press <b>Copy</b> or <b>Cut</b>.</li>
+<li>Go to the destination folder and press <b>Paste here</b>.</li>
+<li>A bar shows the percentage, the amount of data and the current file; <b>Cancel</b> removes the started entry from the destination again.</li>
+</ol>
+<h3>Uploading</h3>
+<p><b>Upload</b> chooses one or more files; on a PC you can also drag them onto the list. A bar shows the
+progress per file.</p>
+<div class='tip'>Protected: nothing is ever overwritten, links are never followed, and in the app's folder
+(<code>/data/PS5-Cooling-Center</code>) only <code>payloads</code> can be changed – ideal for uploading payloads.</div>
+</section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>12</div><h2>Payloads</h2></div>
+<p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>
+or from the USB stick (root or folder <code>payloads</code>). They are started via the console's payload loader
+(port 9021).</p>
+
+</section><section class='ch' id='profil'><div class='ch-head'><div class='ch-num'>13</div><h2>Profile</h2></div>
+<p>Change the console's display name and choose a profile picture – your own or one of the 30 built-in ones.</p>
+
+</section><section class='ch' id='system'><div class='ch-head'><div class='ch-num'>14</div><h2>System &amp; log</h2></div>
+<p><b>System</b> shows the console, firmware, uptime, the storage of all drives, network, display and the
+cooling performance over the weeks; this is also where you reinstall the tile.</p>
+
+<p><b>Log</b> lists every measurement, control action and message of the app (exportable). The <b>Live kernel log</b> tab shows
+the console's log as it is written – with filter, pause, save, download and recording.</p>
+
+</section><section class='ch' id='credits'><div class='ch-head'><div class='ch-num'>15</div><h2>Credits</h2></div>
+<p>The page thanks the developers whose work is in the app, and other well-known developers of the community – with
+profile picture, name and links. The links can only be clicked if the browser has internet access.</p>
+
+</section><section class='ch' id='sicherheit'><div class='ch-head'><div class='ch-num'>16</div><h2>Security on the home network</h2></div>
+<ul>
+<li>The interface has <b>no login</b>: every device on the home network can read and change things.</li>
+<li>The console does not belong on the open internet – <b>do not set up port forwarding</b> to port 8086.</li>
+<li>If you only want to use it on the device itself, set the network binding in the settings to <code>127.0.0.1</code>.</li>
+<li>The app refuses requests that recognisably come from outside websites (error 403).</li>
+</ul>
+</section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>17</div><h2>If something does not work</h2></div>
+<table>
+<tr><th>Problem</th><th>Solution</th></tr>
+<tr><td>Web interface not reachable</td><td>Send the ELF again (port 9021); only one instance; check the address <code>http://&lt;PS5-IP&gt;:8086/</code>.</td></tr>
+<tr><td>Port 8086 in use</td><td>Usually an old instance is still running: restart the console and send the ELF only once.</td></tr>
+<tr><td>Fan “not available”</td><td>kstuff is not loaded – load kstuff, then send the app again.</td></tr>
+<tr><td>“The drive has disconnected”</td><td>Usually the USB cable: try a different, short cable directly on the console; afterwards restart the console if needed.</td></tr>
+<tr><td>Tile opens nothing</td><td>The tile does not start the app – send the ELF once after every restart.</td></tr>
+<tr><td>Error 403 in the browser</td><td>Open the page directly via the console's IP address, not via another name or another website.</td></tr>
+</table>
+<p>More answers are in the <b>FAQ</b>.</p>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.50.0 · As of 7 October 2026 · Not a Sony product; “PlayStation” and “PS5” are trademarks of Sony Interactive Entertainment Inc. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>

@@ -1,0 +1,299 @@
+<!doctype html><html lang='ru'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Руководство пользователя — PS5 Cooling &amp; System Center - Pro</title><style>
+:root{--plane:#0b1220;--side:#0e1830;--accent:#3b82f6;--violet:#7b5cf0;--s1:#1a2334;--s0:#141b29;--inset:#0c1320;
+--ink:#eaf0fb;--ink2:#aeb8d6;--muted:#7c89ac;--hair:rgba(255,255,255,.09);--good:#22c55e;--warn:#fab219;--bad:#ef5350}
+*{box-sizing:border-box}
+html{background:var(--plane)}
+body{margin:0;color:var(--ink);font:15px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+background:radial-gradient(1200px 600px at 70% -10%,rgba(59,130,246,.22),transparent 60%),
+radial-gradient(900px 500px at 0% 20%,rgba(123,92,240,.12),transparent 60%),var(--plane)}
+a{color:#7fb0ff}
+.wrap{max-width:1000px;margin:0 auto;padding:40px 28px 60px}
+.cover{min-height:92vh;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:18px;
+border-bottom:1px solid var(--hair);margin-bottom:34px;page-break-after:always;break-after:page}
+.cover img.mark{width:120px;height:120px;border-radius:26px;box-shadow:0 0 0 6px rgba(59,130,246,.16),0 20px 60px rgba(0,0,0,.5)}
+.kicker{letter-spacing:.32em;text-transform:uppercase;font-size:12px;color:#8fb7ff}
+.cover h1{font-size:52px;line-height:1.05;margin:0;background:linear-gradient(120deg,#fff,#a9c8ff 60%,#b9a6ff);
+-webkit-background-clip:text;background-clip:text;color:transparent}
+.cover p.lead{font-size:19px;color:var(--ink2);max-width:640px;margin:0}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.badge{padding:6px 12px;border-radius:999px;font-size:13px;border:1px solid rgba(59,130,246,.45);background:rgba(59,130,246,.10)}
+.psrow{display:flex;gap:14px;margin-top:18px;font-size:28px;opacity:.85}
+.psrow span{display:inline-flex;width:46px;height:46px;border-radius:50%;align-items:center;justify-content:center;
+border:2px solid var(--hair);background:var(--s0)}
+.tri{color:#36c8a5}.cir{color:#ff5a6e}.crs{color:#7aa7ff}.sqr{color:#e58fff}
+.toc{background:var(--s0);border:1px solid var(--hair);border-radius:18px;padding:22px 26px;margin:0 0 34px;
+page-break-after:always;break-after:page}
+.toc h2{margin:0 0 10px;font-size:20px}
+.toc ol{margin:0;padding-left:22px;columns:2;column-gap:36px}
+.toc li{margin:4px 0;break-inside:avoid}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:#7fb0ff}
+section.ch{margin:0 0 38px;break-inside:auto}
+.ch-head{display:flex;align-items:center;gap:14px;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--hair)}
+.ch-num{flex:none;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+font-weight:800;background:linear-gradient(135deg,var(--accent),var(--violet));box-shadow:0 8px 24px rgba(59,130,246,.35)}
+.ch-head h2{margin:0;font-size:25px}
+h3{font-size:17px;margin:22px 0 8px;color:#d7e3ff}
+p{margin:0 0 10px;color:#dfe6f6}
+ul,ol{margin:0 0 12px;padding-left:22px}
+li{margin:3px 0}
+code{font-family:Consolas,ui-monospace,monospace;font-size:13px;background:var(--inset);border:1px solid var(--hair);
+padding:1px 6px;border-radius:6px;color:#cfe0ff}
+.card{background:var(--s0);border:1px solid var(--hair);border-radius:16px;padding:16px 18px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.grid .card{margin:0}
+.card b.t{display:block;margin-bottom:4px}
+.tip,.warn,.info{border-radius:14px;padding:12px 16px 12px 46px;margin:12px 0;position:relative;break-inside:avoid}
+.tip{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.4)}
+.warn{background:rgba(250,178,25,.08);border:1px solid rgba(250,178,25,.45)}
+.info{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.45)}
+.tip::before,.warn::before,.info::before{position:absolute;left:14px;top:11px;font-weight:800;font-size:16px}
+.tip::before{content:"✓";color:var(--good)}.warn::before{content:"!";color:var(--warn)}.info::before{content:"i";color:#7fb0ff}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;position:relative;padding:8px 0 8px 46px;border-bottom:1px dashed var(--hair)}
+.steps li::before{content:counter(s);position:absolute;left:0;top:6px;width:30px;height:30px;border-radius:50%;
+display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;background:var(--s1);
+border:1px solid rgba(59,130,246,.5);color:#cfe0ff}
+figure{margin:16px 0;break-inside:avoid}
+figure img{width:100%;display:block;border-radius:14px;border:1px solid rgba(59,130,246,.35);
+box-shadow:0 18px 50px rgba(0,0,0,.45)}
+figcaption{font-size:13px;color:var(--muted);margin-top:6px;text-align:center}
+.kbd{display:inline-block;padding:1px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:var(--s1);
+font-size:13px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+th{color:#cfe0ff;background:var(--s1)}
+.back{position:sticky;top:0;z-index:5;display:inline-block;margin:0 0 10px;padding:9px 16px;border-radius:999px;background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0ff;text-decoration:none;font-weight:600}
+.back:hover{background:rgba(59,130,246,.25)}
+@media print{.back{display:none}}
+.foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--hair);font-size:12px;color:var(--muted)}
+/* FAQ */
+.faq-cat{margin:30px 0 10px;font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#8fb7ff}
+details{background:var(--s0);border:1px solid var(--hair);border-radius:14px;margin:8px 0;padding:0 16px;break-inside:avoid}
+details[open]{border-color:rgba(59,130,246,.45)}
+summary{cursor:pointer;list-style:none;padding:13px 0 13px 30px;position:relative;font-weight:600}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";position:absolute;left:0;top:10px;width:22px;height:22px;border-radius:50%;
+display:flex;align-items:center;justify-content:center;background:var(--s1);border:1px solid rgba(59,130,246,.5);color:#cfe0ff}
+details[open] summary::before{content:"–"}
+details .a{padding:0 0 14px 30px;color:#dfe6f6}
+@page{size:A4;margin:12mm 11mm}
+@media print{
+html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:var(--plane)}
+.wrap{max-width:none;padding:0}
+.cover{min-height:255mm}
+a{text-decoration:none}
+details{padding:0 14px}
+details .a{display:block}
+h2,h3{break-after:avoid}
+}
+@media (max-width:720px){.grid{grid-template-columns:1fr}.toc ol{columns:1}.cover h1{font-size:38px}}
+
+.back{position:sticky;top:0;z-index:5;display:inline-block;margin:0 0 10px;padding:9px 16px;border-radius:999px;
+background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0ff;text-decoration:none;font-weight:600}
+.back:hover{background:rgba(59,130,246,.25)}
+@media print{.back,.langs{display:none}}
+.langs{display:inline-flex;flex-wrap:wrap;gap:6px;margin:0 0 10px 10px;vertical-align:top}
+.langs a{padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#aebbd4;text-decoration:none;font-size:14px}
+.langs a:hover{border-color:rgba(59,130,246,.6);color:#fff}.langs a.on{background:rgba(59,130,246,.22);color:#fff;border-color:rgba(59,130,246,.55)}
+.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Назад в приложение</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html' class='on'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>Руководство пользователя · PS5 Homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Тихое управление вентилятором, игры, пакеты, сохранённые данные, файловый менеджер и система — всё в браузере, прямо на PS5.</p><div class='badges'><span class='badge'>Версия 1.50.0</span><span class='badge'>Проверено на прошивке 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>Русский</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Содержание</h2><ol><li><a href='#start'>Добро пожаловать</a></li><li><a href='#voraussetzungen'>Требования</a></li><li><a href='#installation'>Установка и первый запуск</a></li><li><a href='#oberflaeche'>Обзор интерфейса</a></li><li><a href='#kuehlung'>Охлаждение</a></li><li><a href='#spiele'>Игры</a></li><li><a href='#loeschen'>Удаление игр и резервных копий</a></li><li><a href='#spielzeit'>Время игры</a></li><li><a href='#spielstaende'>Резервное копирование сохранённых данных</a></li><li><a href='#pakete'>Пакеты</a></li><li><a href='#dateien'>Файлы — файловый менеджер</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Профиль</a></li><li><a href='#system'>Система и журнал</a></li><li><a href='#credits'>Благодарности</a></li><li><a href='#sicherheit'>Безопасность в домашней сети</a></li><li><a href='#hilfe'>Если что-то не работает</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Добро пожаловать</h2></div>
+<p><b>PS5 Cooling &amp; System Center - Pro</b> — это homebrew-программа (ELF) для PS5 с джейлбрейком. Она управляет
+вентилятором по спокойной, свободно настраиваемой целевой температуре и предоставляет веб-интерфейс, который можно открыть с любого
+устройства в домашней сети: телефона, планшета, ПК или браузера самой консоли. Кроме того, в ней есть управление играми, пакеты,
+сохранённые данные, файловый менеджер, payloads, профиль и сведения о системе.</p>
+<div class='grid'>
+<div class='card'><b class='t'>Тихо, а не громко</b>Регулирование удерживает целевую температуру — мягко и инерционно, без постоянных скачков вверх и вниз.</div>
+<div class='card'><b class='t'>Всё в браузере</b>Ничего не нужно устанавливать на ПК: откройте адрес — и готово.</div>
+<div class='card'><b class='t'>Без интернета</b>Приложение подключается только к программам на консоли и к браузерам в домашней сети.</div>
+<div class='card'><b class='t'>Безопасно в работе</b>Удаление и команды питания требуют подтверждения; важное защищено.</div>
+</div>
+<div class='info'>Проверено на PS5 Pro (CFI-7021) с прошивкой 12.00. Другие прошивки могут работать, но не проверялись.</div>
+</section><section class='ch' id='voraussetzungen'><div class='ch-head'><div class='ch-num'>2</div><h2>Требования</h2></div>
+<ul>
+<li>PS5 с джейлбрейком и загруженным загрузчиком payload (<code>elfldr</code>, порт <code>9021</code>).</li>
+<li>Должен быть загружен <b>kstuff</b> — только с ним приложение получает доступ к контроллеру вентилятора. Без kstuff показ данных и
+веб-интерфейс работают, но регулирование вентилятора сообщает «недоступно».</li>
+<li>Устройство с браузером в той же домашней сети.</li>
+<li>Для отправки ELF — программа вроде <code>nc</code> (netcat) или любой отправщик payload на ваш выбор.</li>
+</ul>
+</section><section class='ch' id='installation'><div class='ch-head'><div class='ch-num'>3</div><h2>Установка и первый запуск</h2></div>
+<ol class='steps'>
+<li>Отправьте <code>PS5_Cooling_System_Center_v1.50.0.elf</code> на консоль, порт <code>9021</code>, например:<br>
+<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.50.0.elf</code></li>
+<li>На телевизоре в правом верхнем углу появится уведомление с адресом веб-интерфейса.</li>
+<li>Откройте в браузере: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
+</ol>
+<h3>Значок на главном экране</h3>
+<p>При первом запуске приложение само создаёт значок в разделе «Медиа». Он <b>открывает только веб-интерфейс</b> — программу он
+не запускает. Поэтому после каждой перезагрузки консоли ELF нужно один раз отправить заново.</p>
+<div class='warn'>Всегда запускайте только <b>один</b> экземпляр. Два экземпляра одновременно управляют вентилятором и мешают друг другу.
+Старый экземпляр можно завершить на странице «Payloads», иначе поможет перезагрузка.</div>
+<div class='tip'>Значок удалён или нужна новая картинка значка? Удалите значок на консоли (кнопка OPTIONS, «Удалить») и на
+странице «Система» нажмите <b>Установить значок</b>.</div>
+</section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>Обзор интерфейса</h2></div>
+<p>Слева находится боковая панель с разделами <b>Профиль, Игры, Файлы, Payloads, Охлаждение, Система, Журнал</b> и
+<b>Благодарности</b>. Вверху в строке заголовка, на каждой странице: <b>параметры питания</b>, «Во весь экран», «Режим эксперта» и
+индикатор подключения.</p>
+<h3>Параметры питания</h3>
+<p><b>Режим покоя</b>, <b>Перезапустить</b>, <b>Выключить</b> и <b>Безопасный режим</b>. Каждой команде нужно два нажатия:
+первое окрашивает кнопку в жёлтый цвет («Точно? Нажмите ещё раз») и называет последствия, второе выполняет команду. Двойной щелчок
+не считается; через десять секунд кнопка возвращается в обычное состояние.</p>
+<div class='warn'>При выключении и перезагрузке несохранённый прогресс в играх будет потерян.</div>
+<h3>Язык</h3>
+<p>В правом верхнем углу строки заголовка выбирается язык интерфейса: <b>Deutsch, English, Italiano, Español, Français</b> или <b>Русский</b>.
+При первом посещении страница берёт язык вашего браузера; если такого нет — английский. Браузер запоминает выбор, затем страница
+перезагружается и остаётся в том разделе, где вы были. Числа, дата и время оформляются по выбранному языку.</p>
+<div class="info">Сообщения, которые консоль сама выводит на телевизор (при запуске или при предупреждении), — на немецком языке.</div>
+<h3>Руководство и FAQ</h3>
+<p>В разделе «Благодарности» на боковой панели ссылки <b>Руководство</b> и <b>FAQ</b> открывают эти тексты прямо в приложении на выбранном языке (без
+снимков экрана, чтобы приложение оставалось небольшим). С изображениями оба документа можно скачать в форматах PDF и HTML в каждом релизе.</p>
+<h3>Окна и правый стик</h3>
+<p>Когда открывается окно (например, для удаления), фон затемняется и не двигается. В браузере PS5 правый стик
+тогда прокручивает только само окно.</p>
+</section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Охлаждение</h2></div>
+<p>Самая важная страница: состояние понятными словами, текущая температура, вентилятор и запущенная игра. Сразу под ними
+настраиваются <b>Целевая температура</b> и <b>Режим работы</b>.</p>
+
+<h3>Целевая температура</h3>
+<p>Температура, которую должна удерживать консоль: настраивается от <b>60 до 91 °C</b>, по умолчанию <b>66 °C</b>. Выше — значит
+тише и теплее. <b>Быстрый выбор</b> задаёт цель сразу: <b>Прохладный 62 °C</b>, <b>Сбалансированный 77 °C</b>, <b>Тихий 91 °C</b>.</p>
+<div class="info"><b>91 °C</b> — это значение, которое консоль устанавливает сама (ShadowMountPlus тоже предлагает его как максимальную цель):
+вентилятор остаётся таким же тихим, как без приложения, но консоль при этом заметно сильнее нагревается. Аварийный порог всегда как минимум
+на 4 °C выше цели (при 91 °C — 95 °C), а порог предупреждения приложения следует за целью (никогда не ниже цели + 2 °C),
+чтобы при высокой цели приложение не предупреждало постоянно; значение, заданное в настройках, остаётся сохранённым.</div>
+<h3>Режим работы</h3>
+<p><b>Тихий</b>, <b>Сбалансированный</b> и <b>Прохладный</b> определяют, насколько сильно вентилятор реагирует на нагрев, — цель они
+не меняют. Рекомендуется «Тихий».</p>
+
+<h3>Как работает регулирование</h3>
+<ul>
+<li>Оно опирается на скользящее среднее, а не на отдельные измерения.</li>
+<li>В пределах ±1 °C от цели ничего не происходит.</li>
+<li>Учитывается тренд: если температура уже падает, обороты дальше не повышаются.</li>
+<li>Обороты повышаются мелкими шагами, а снижаются только после стабильно низкой температуры.</li>
+<li>Выше порога безопасности имеет значение только оборудование; прошивка к тому же всегда защищает себя сама.</li>
+</ul>
+<h3>Автоматический режим</h3>
+<p>Если «Автоматический режим» выключен, приложение возвращает управление PS5 и только показывает значения. Когда приложение не запущено,
+консоль и так снова регулирует вентилятор сама.</p>
+<h3>Показ по кнопке микрофона</h3>
+<p>Нажмите кнопку микрофона на контроллере <b>дважды быстро</b>: в правом верхнем углу появятся температура процессора и
+обороты вентилятора — даже без веб-интерфейса. Микрофон при этом переключается дважды и затем возвращается в прежнее состояние.</p>
+</section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Игры</h2></div>
+<p>Игры с вашего главного экрана с обложкой, форматом и действиями. Поиск — по названию, ID игры или ID контента;
+фильтр — PS5, PS4 или «Backport · AMPR · PlayGo»; сортировка — как на главном экране, по имени, времени игры, размеру и другим признакам.</p>
+
+<h3>Запуск и закрытие</h3>
+<ul>
+<li><b>Запустить</b> сразу запускает игру. В браузере консоли браузер закрывается, чтобы игра вышла на передний план.</li>
+<li>Если уже запущена другая игра, приложение ничего не запускает и сообщает вам об этом. <b>Закрыть игру</b> закрывает запущенную игру
+<b>немедленно и без подтверждения</b> — всё несохранённое будет потеряно.</li>
+<li>Игра никогда не запускается дважды; повторное нажатие в течение 30 секунд ничего не делает.</li>
+</ul>
+<h3>Копирование, перемещение, конвертация</h3>
+<p>Папки дампа можно копировать, перемещать и прямо на консоли преобразовывать в <b>ffpfsc</b> (сжатый, рекомендуется),
+<b>ffpkg</b> или <b>exFAT</b> — на выбор: для игры в папку <code>homebrew</code> места назначения (там его найдёт ShadowMountPlus)
+или как резервную копию в <code>PS5-Sicherung/Spiele</code>. Каждая копия после записи считывается обратно
+и проверяется; ничего не перезаписывается.</p>
+
+<div class='warn'>Образы <code>.ffpkg</code>, созданные версиями до 1.48.0, создайте заново (старая структура).</div>
+</section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>7</div><h2>Удаление игр и резервных копий</h2></div>
+<p>На каждой карточке игры есть кнопка <b>Удалить</b>, как и у каждой записи на вкладке <b>Резервные копии</b>.</p>
+<ul>
+<li><b>Установленные игры</b> консоль удаляет сама — как через пункт меню «Удалить», вместе с обновлениями и дополнениями.</li>
+<li><b>Игры из ShadowMountPlus</b> сначала снимаются с регистрации, затем удаляется образ или папка.</li>
+<li><b>Резервные копии приложения</b> (копии и результаты конвертации) удаляются вместе с файлом контрольных сумм.</li>
+</ul>
+<ol class='steps'>
+<li>Нажмите <b>Удалить</b>: окно точно покажет, что будет удалено.</li>
+<li>Поставьте флажок «Я понимаю: удаление окончательно».</li>
+<li>Дважды нажмите <b>Удалить навсегда</b> (первое нажатие спрашивает «Точно?»).</li>
+<li>Индикатор выполнения с процентами показывает, сколько уже сделано.</li>
+</ol>
+<div class='tip'>Ваши <b>сохранённые данные всегда остаются</b>. Запущенная игра никогда не удаляется.</div>
+
+</section><section class='ch' id='spielzeit'><div class='ch-head'><div class='ch-num'>8</div><h2>Время игры</h2></div>
+<p>Когда вы играли, как долго и насколько при этом нагревалась консоль: итоги за сегодня, за 7 и 30 дней, последние 14 дней
+в виде столбцов, самые популярные игры и последние сеансы с максимальными температурами. Можно сохранить как таблицу (CSV).</p>
+
+</section><section class='ch' id='spielstaende'><div class='ch-head'><div class='ch-num'>9</div><h2>Резервное копирование сохранённых данных</h2></div>
+<p>Копирует сохранённые данные в том виде, в каком их хранит консоль, — в зашифрованном, ничего не открывая и не изменяя, — на
+USB-накопитель, диск или внутренний SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Каждый файл проверяется;
+«Проверить» позже снова перечитывает резервную копию.</p>
+<p><b>Восстановить</b> можно для отдельных игр: приложение сначала сохраняет текущее состояние, записывает все новые файлы
+рядом с текущими, проверяет их и только потом заменяет.</p>
+<div class='warn'>Копирование и восстановление выполняются, только когда <b>не запущена ни одна игра</b> — даже приостановленная. Резервные копии
+с другой консоли восстановить нельзя.</div>
+
+</section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>10</div><h2>Пакеты</h2></div>
+<p>Находит файлы <code>.pkg</code> на USB-накопителях, дисках и в памяти консоли (папка <code>pkg</code>) и показывает изображение,
+название, ID игры, версию, тип и размер.</p>
+<ul>
+<li><b>Установить…</b> — консоль устанавливает пакет сама, приложение предоставляет ей пакет и показывает ход установки.
+Перед этим план показывает, что может помешать.</li>
+<li><b>Разделить…</b> — большие пакеты делятся на части для накопителей FAT32 (до 4 GB на файл) или дисков; оригинал остаётся без изменений.</li>
+</ul>
+<div class='info'>Прерванная попытка установки может оставить место зарезервированным. Освободить его можно на консоли в
+списке загрузок с помощью «Удалить».</div>
+
+</section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>11</div><h2>Файлы — файловый менеджер</h2></div>
+<p>Просматривать папки консоли и скачивать файлы можно везде. <b>Изменять</b> — загружать, создавать папки, переименовывать,
+копировать, перемещать, удалять — можно только на <b>накопителях</b> и в <code>/data</code>. Везде в остальных местах показано «Только просмотр».</p>
+
+<h3>Сортировка, выбор, просмотр</h3>
+<ul>
+<li><b>Сортировка:</b> над списком выберите «Имя», «Размер» или «Дата»; стрелка рядом меняет направление. Папки всегда вверху. Браузер запоминает выбор.</li>
+<li><b>Выбрать все:</b> флажок над списком выбирает все элементы папки (кроме ссылок и специальных файлов). Наполовину заполненный флажок означает, что выбрана только часть.</li>
+<li><b>Размеры папок:</b> «Размер» у папки подсчитывает, сколько в ней данных; «Размеры папок» делает это по очереди для всех папок в этом виде. Для очень большой папки примерно через 8 секунд выводится результат с пометкой «как минимум».</li>
+<li><b>Просмотр:</b> «Просмотреть» показывает изображения (PNG, JPG, GIF, WebP, BMP, ICO) и начало текстовых файлов (до 256 KB). Остальные файлы можно только скачать.</li>
+</ul>
+<h3>Копирование и перемещение</h3>
+<ol class='steps'>
+<li>Отметьте элементы.</li>
+<li>Нажмите <b>Копировать</b> или <b>Вырезать</b>.</li>
+<li>Перейдите в папку назначения и нажмите <b>Вставить сюда</b>.</li>
+<li>Индикатор показывает проценты, объём данных и текущий файл; <b>Отмена</b> удаляет начатый элемент из места назначения.</li>
+</ol>
+<h3>Загрузка</h3>
+<p><b>Загрузить</b> выбирает один или несколько файлов; на ПК их можно также перетащить на список. Индикатор показывает
+ход загрузки каждого файла.</p>
+<div class='tip'>Защищено: ничего никогда не перезаписывается, ссылки никогда не отслеживаются, а в папке приложения
+(<code>/data/PS5-Cooling-Center</code>) можно изменять только <code>payloads</code> — идеально для загрузки payloads.</div>
+</section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>12</div><h2>Payloads</h2></div>
+<p>Просматривайте и завершайте запущенные payloads, запускайте сохранённые одним нажатием — из <code>/data/PS5-Cooling-Center/payloads</code>
+или с USB-накопителя (корневая папка или папка <code>payloads</code>). Запуск выполняется через загрузчик payload консоли
+(порт 9021).</p>
+
+</section><section class='ch' id='profil'><div class='ch-head'><div class='ch-num'>13</div><h2>Профиль</h2></div>
+<p>Изменение отображаемого имени консоли и выбор изображения профиля — своего или одного из 30 встроенных.</p>
+
+</section><section class='ch' id='system'><div class='ch-head'><div class='ch-num'>14</div><h2>Система и журнал</h2></div>
+<p><b>Система</b> показывает консоль, прошивку, время работы, свободное место на всех накопителях, сеть, экран и
+эффективность охлаждения по неделям; здесь же можно заново установить значок.</p>
+
+<p><b>Журнал</b> содержит каждое измерение, действие регулирования и сообщение приложения (можно экспортировать). Вкладка <b>Журнал ядра в реальном времени</b> показывает
+журнал консоли по мере его появления — с фильтром, паузой, сохранением, скачиванием и записью.</p>
+
+</section><section class='ch' id='credits'><div class='ch-head'><div class='ch-num'>15</div><h2>Благодарности</h2></div>
+<p>Страница благодарит разработчиков, чья работа используется в приложении, и других известных разработчиков сообщества — с
+изображением профиля, именем и ссылками. Ссылки активны, только если у браузера есть доступ в интернет.</p>
+
+</section><section class='ch' id='sicherheit'><div class='ch-head'><div class='ch-num'>16</div><h2>Безопасность в домашней сети</h2></div>
+<ul>
+<li>У интерфейса <b>нет авторизации</b>: любое устройство в домашней сети может читать и изменять данные.</li>
+<li>Консоль не должна быть доступна из открытого интернета — <b>не настраивайте перенаправление порта</b> 8086.</li>
+<li>Если вы хотите управлять приложением только с самой консоли, установите в настройках сетевую привязку <code>127.0.0.1</code>.</li>
+<li>Запросы, которые явно приходят с посторонних сайтов, приложение отклоняет (ошибка 403).</li>
+</ul>
+</section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>17</div><h2>Если что-то не работает</h2></div>
+<table>
+<tr><th>Проблема</th><th>Решение</th></tr>
+<tr><td>Веб-интерфейс недоступен</td><td>Снова отправьте ELF (порт 9021); только один экземпляр; проверьте адрес <code>http://&lt;PS5-IP&gt;:8086/</code>.</td></tr>
+<tr><td>Порт 8086 занят</td><td>Обычно ещё работает старый экземпляр: перезагрузите консоль и отправьте ELF только один раз.</td></tr>
+<tr><td>Вентилятор: «недоступно»</td><td>kstuff не загружен — загрузите kstuff, затем снова отправьте приложение.</td></tr>
+<tr><td>«Носитель отключился»</td><td>Обычно дело в USB-кабеле: попробуйте другой, короткий кабель, подключённый прямо к консоли; затем при необходимости перезагрузите консоль.</td></tr>
+<tr><td>Значок ничего не открывает</td><td>Значок не запускает приложение — после каждой перезагрузки один раз отправьте ELF.</td></tr>
+<tr><td>Ошибка 403 в браузере</td><td>Открывайте страницу напрямую по IP-адресу консоли, а не через чужое имя или другой сайт.</td></tr>
+</table>
+<p>Больше ответов — в разделе <b>FAQ</b>.</p>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Версия 1.50.0 · По состоянию на 7 октября 2026 г. · Не является продуктом Sony; «PlayStation» и «PS5» — товарные знаки Sony Interactive Entertainment Inc. Только для собственной консоли, без каких-либо гарантий (GPL-3.0-or-later).</div></div></body></html>

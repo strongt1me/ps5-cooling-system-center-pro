@@ -1,0 +1,48 @@
+name: Bug report / Fehler melden
+description: Something does not work as described. / Etwas funktioniert nicht wie beschrieben.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. English or German is fine. / Danke für die Meldung, Englisch oder Deutsch.
+        Please do **not** post game files, keys, firmware or anything that circumvents copy protection, and do not ask for help with pirated content.
+        Security problems: please use the private link on the issue chooser page.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown on the "System" page and in the file name of the ELF.
+      placeholder: "1.50.0"
+    validations:
+      required: true
+  - type: input
+    id: console
+    attributes:
+      label: Console and firmware
+      placeholder: "PS5 Pro CFI-7021, firmware 12.00"
+    validations:
+      required: true
+  - type: input
+    id: loader
+    attributes:
+      label: Exploit / loader (and other payloads running)
+      placeholder: "etaHEN 2.x, ShadowMountPlus, kstuff"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Steps to reproduce help most.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Page "Log" -> save or copy the last lines around the problem (no personal data in it, but have a look before you post).
+      render: text
+  - type: dropdown
+    id: lang
+    attributes:
+      label: Interface language
+      options: ["Deutsch", "English", "Italiano", "Español", "Français", "Русский"]

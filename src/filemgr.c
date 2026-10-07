@@ -723,6 +723,9 @@ other_job_active(char *err, size_t n) {
 typedef struct {
   uint64_t files, bytes, seen;
   int      err;
+  uint64_t dirs;                      /* folders below (and the start itself, when it is one) */
+  uint64_t deadline_ms;               /* 0: none; else counting stops there, partial = 1 (the numbers are a lower bound) */
+  int      partial;
 } count_t;
 
 /* Files and bytes below real (not following links, not entering another drive). */
@@ -731,10 +734,12 @@ count_tree(const char *real, dev_t dev, int depth, count_t *c) {
   if(c->err) return;
   if(depth > FM_DEPTH) { c->err = ELOOP; return; }
   if(++c->seen > FM_COUNT_MAX) { c->err = E2BIG; return; }
+  if(c->deadline_ms && (c->seen & 255) == 0 && ps5tm_mono_ms() > c->deadline_ms) { c->partial = 1; c->err = ETIMEDOUT; return; }
   struct stat st;
   if(lstat(real, &st) != 0) { c->err = errno; return; }
   if(S_ISREG(st.st_mode)) { c->files++; c->bytes += (uint64_t)st.st_size; return; }
   if(!S_ISDIR(st.st_mode) || st.st_dev != dev) { c->files++; return; }
+  c->dirs++;
   DIR *d = opendir(real);
   if(!d) { c->err = errno; return; }
   struct dirent *e;
@@ -745,6 +750,154 @@ count_tree(const char *real, dev_t dev, int depth, count_t *c) {
     count_tree(child, dev, depth + 1, c);
   }
   closedir(d);
+}
+
+
+/* ------------------------------------------------------------------ view and size (07.10.2026) */
+
+/* Looking, like the download, is allowed everywhere. A picture is sent as itself (types by extension only: never
+   SVG, which can carry script), a text as plain text, cut at max bytes. Everything is "inline" and sealed with a
+   header that lets the browser do nothing with it but show it. A file that is no text (a NUL byte or too many
+   control characters in its first 8 KB) is refused with 415, so a binary never lands in the page as garbage. */
+#define FM_VIEW_TEXT_DEFAULT  (256u * 1024)
+#define FM_VIEW_TEXT_MAX      (1024u * 1024)
+#define FM_VIEW_IMAGE_MAX     (16ull << 20)
+
+static const char *
+image_type(const char *name) {
+  const char *dot = strrchr(name, '.');
+  if(!dot) return NULL;
+  static const struct { const char *ext, *type; } t[] = {
+    { ".png", "image/png" }, { ".jpg", "image/jpeg" }, { ".jpeg", "image/jpeg" }, { ".gif", "image/gif" },
+    { ".webp", "image/webp" }, { ".bmp", "image/bmp" }, { ".ico", "image/x-icon" },
+  };
+  for(size_t i = 0; i < sizeof(t) / sizeof(t[0]); i++)
+    if(!strcasecmp(dot, t[i].ext)) return t[i].type;
+  return NULL;
+}
+
+static int
+looks_like_text(const unsigned char *b, size_t n) {
+  size_t ctl = 0;
+  for(size_t i = 0; i < n; i++) {
+    if(b[i] == 0) return 0;
+    if(b[i] < 0x20 && b[i] != '\n' && b[i] != '\r' && b[i] != '\t' && b[i] != '\f' && b[i] != 0x1b) ctl++;
+  }
+  return n == 0 || ctl * 10 < n;
+}
+
+static void
+handle_view(int fd, const ps5tm_request_t *req) {
+  char p[FM_PATH], real[FM_PATH + 64], num[24];
+  if(query_value(req->query, "path", p, sizeof(p)) != 0 || !path_plain(p) || !strcmp(p, "/") ||
+     real_path(p, real, sizeof(real)) != 0) {
+    ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
+    return;
+  }
+  size_t max = FM_VIEW_TEXT_DEFAULT;
+  if(query_value(req->query, "max", num, sizeof(num)) == 0 && num[0]) {
+    char *end = NULL;
+    unsigned long v = strtoul(num, &end, 10);
+    if(!end || *end || v == 0) { ps5tm_http_send_error(fd, 400, "bad_max", "Ungültige Länge."); return; }
+    max = v > FM_VIEW_TEXT_MAX ? FM_VIEW_TEXT_MAX : (size_t)v;
+  }
+  int in = open(real, O_RDONLY | O_NONBLOCK);
+  struct stat st;
+  if(in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode)) {
+    if(in >= 0) close(in);
+    ps5tm_http_send_error(fd, 404, "not_a_file", "Das ist keine Datei, die sich ansehen lässt.");
+    return;
+  }
+  const char *img = image_type(base_name(p));
+  size_t send_n;
+  if(img) {
+    if((uint64_t)st.st_size > FM_VIEW_IMAGE_MAX) {
+      close(in);
+      ps5tm_http_send_error(fd, 413, "too_big", "Das Bild ist zu groß für die Vorschau (über 16 MB).");
+      return;
+    }
+    send_n = (size_t)st.st_size;
+  } else {
+    unsigned char probe[8192];
+    ssize_t k = read(in, probe, sizeof(probe));
+    if(k < 0 || !looks_like_text(probe, (size_t)k)) {
+      close(in);
+      ps5tm_http_send_error(fd, 415, "not_text", "Das ist keine Textdatei; sie lässt sich nur herunterladen.");
+      return;
+    }
+    if(lseek(in, 0, SEEK_SET) < 0) { close(in); ps5tm_http_send_error(fd, 500, "seek_failed", "Lesen ging nicht."); return; }
+    send_n = (uint64_t)st.st_size > max ? max : (size_t)st.st_size;
+  }
+  char head[640];
+  int n = snprintf(head, sizeof(head),
+                   "HTTP/1.1 200 OK\r\n"
+                   "Content-Type: %s\r\n"
+                   "Content-Length: %zu\r\n"
+                   "Content-Disposition: inline\r\n"
+                   "Cache-Control: no-store\r\n"
+                   "X-Content-Type-Options: nosniff\r\n"
+                   "Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox\r\n"
+                   "X-Fm-Size: %lld\r\n"
+                   "X-Fm-Truncated: %d\r\n"
+                   "Connection: close\r\n\r\n",
+                   img ? img : "text/plain; charset=utf-8", send_n, (long long)st.st_size, send_n < (size_t)st.st_size);
+  if(n < 0 || n >= (int)sizeof(head)) { close(in); ps5tm_http_send_error(fd, 500, "head_failed", "Antwort zu lang."); return; }
+  struct timeval tv = { 30, 0 };
+  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+  char *buf = malloc(128 * 1024);
+  if(!buf) { close(in); ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
+  int ok = write(fd, head, (size_t)n) == n;
+  size_t left = send_n;
+  while(ok && left > 0) {
+    ssize_t r = read(in, buf, left < 128 * 1024 ? left : 128 * 1024);
+    if(r <= 0) break;
+    ssize_t off = 0;
+    while(off < r) {
+      ssize_t w = write(fd, buf + off, (size_t)(r - off));
+      if(w < 0 && errno == EINTR) continue;
+      if(w <= 0) { ok = 0; break; }
+      off += w;
+    }
+    left -= (size_t)r;
+  }
+  free(buf);
+  close(in);
+}
+
+/* The size of a file or a folder with everything below it, counted for at most FM_SIZE_BUDGET_MS: a folder too big
+   for that comes back with partial=true and the numbers counted so far (a lower bound). Links are not followed and
+   another drive below is not entered (as when copying and deleting). */
+#ifndef FM_SIZE_BUDGET_MS
+#define FM_SIZE_BUDGET_MS 8000
+#endif
+
+static void
+handle_size(int fd, const ps5tm_request_t *req) {
+  char p[FM_PATH], real[FM_PATH + 64];
+  if(query_value(req->query, "path", p, sizeof(p)) != 0 || !path_plain(p) || !strcmp(p, "/") ||
+     real_path(p, real, sizeof(real)) != 0) {
+    ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
+    return;
+  }
+  struct stat st;
+  if(lstat(real, &st) != 0) { ps5tm_http_send_error(fd, 404, "not_found", "Das gibt es nicht (mehr)."); return; }
+  count_t c = { 0 };
+  c.deadline_ms = ps5tm_mono_ms() + FM_SIZE_BUDGET_MS;
+  count_tree(real, st.st_dev, 0, &c);
+  if(c.err && !c.partial) {
+    char msg[300];
+    snprintf(msg, sizeof(msg), "Die Größe ließ sich nicht ermitteln: %s", io_words(c.err));
+    ps5tm_http_send_error(fd, c.err == E2BIG ? 413 : 500, "size_failed", msg);
+    return;
+  }
+  cJSON *o = cJSON_CreateObject();
+  cJSON_AddBoolToObject(o, "ok", 1);
+  cJSON_AddStringToObject(o, "path", p);
+  cJSON_AddNumberToObject(o, "bytes", (double)c.bytes);
+  cJSON_AddNumberToObject(o, "files", (double)c.files);
+  cJSON_AddNumberToObject(o, "folders", (double)(c.dirs > 0 ? c.dirs - 1 : 0));   /* without the start itself */
+  cJSON_AddBoolToObject(o, "partial", c.partial);
+  send_obj(fd, 200, o);
 }
 
 
@@ -949,7 +1102,7 @@ run_copy(fm_args_t *a, int move) {
       job_current(a->src[i]);
       rc = rename(rs, rt) == 0 ? 0 : errno;
       if(!rc) {
-        count_t c = { 0, 0, 0, 0 };
+        count_t c = { 0 };
         count_tree(rt, ss.st_dev, 0, &c);
         job_add(c.bytes, c.files);
       }
@@ -1134,13 +1287,13 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
     struct stat ts;
     if(lstat(rt, &ts) == 0) { cJSON_AddItemToArray(conflicts, cJSON_CreateString(base_name(a->src[i]))); continue; }
     if(!move || ss.st_dev != ds.st_dev) {
-      count_t c = { 0, 0, 0, 0 };
+      count_t c = { 0 };
       count_tree(rs, ss.st_dev, 0, &c);
       if(c.err) { http = 500; snprintf(err, sizeof(err), "%.300s ließ sich nicht durchzählen: %s", a->src[i], io_words(c.err)); break; }
       bytes += c.bytes;
       files += c.files;
     } else {
-      count_t c = { 0, 0, 0, 0 };
+      count_t c = { 0 };
       count_tree(rs, ss.st_dev, 0, &c);           /* only for the bar; a rename takes no room */
       files += c.files;
       bytes += c.err ? 0 : c.bytes;
@@ -1224,7 +1377,7 @@ handle_delete_plan(int fd, const ps5tm_request_t *req) {
       http = 404; snprintf(err, sizeof(err), "%.300s gibt es nicht (mehr).", a.src[i]); break;
     }
     if(S_ISDIR(st.st_mode)) dirs++;
-    count_t c = { 0, 0, 0, 0 };
+    count_t c = { 0 };
     count_tree(rs, st.st_dev, 0, &c);
     files += c.files;
     bytes += c.bytes;
@@ -1283,7 +1436,7 @@ handle_delete(int fd, const ps5tm_request_t *req) {
     struct stat st;
     if(!writable(a->src[i])) { http = 403; snprintf(err, sizeof(err), "%.300s darf nicht gelöscht werden.", a->src[i]); break; }
     if(real_path(a->src[i], rs, sizeof(rs)) != 0 || lstat(rs, &st) != 0) continue;
-    count_t c = { 0, 0, 0, 0 };
+    count_t c = { 0 };
     count_tree(rs, st.st_dev, 0, &c);
     bytes += c.bytes;
     files += c.files;
@@ -1351,6 +1504,7 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
     { "/api/v1/files/job", 0 }, { "/api/v1/files/mkdir", 1 }, { "/api/v1/files/rename", 1 },
     { "/api/v1/files/copy", 1 }, { "/api/v1/files/move", 1 }, { "/api/v1/files/delete/plan", 1 },
     { "/api/v1/files/delete", 1 }, { "/api/v1/files/job/cancel", 1 },
+    { "/api/v1/files/view", 0 }, { "/api/v1/files/size", 0 },
   };
   for(size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
     if(strcmp(p, routes[i].path)) continue;
@@ -1374,6 +1528,8 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
         __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
         ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
         break;
+      case 11: handle_view(fd, req); break;
+      case 12: handle_size(fd, req); break;
     }
     return 1;
   }

@@ -1,0 +1,28 @@
+name: Translation / Übersetzung
+description: A text is still German, wrong or reads badly in your language. / Ein Text ist noch deutsch, falsch oder klingt schlecht.
+labels: ["translation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The interface exists in German, English, Italian, Spanish, French and Russian. Texts of the console itself (the messages it shows on the TV) are German.
+        Developers: see "Translations" in docs/ENTWICKLUNG.md - the dictionaries are plain JSON files in `web/lang`.
+  - type: dropdown
+    id: lang
+    attributes:
+      label: Language
+      options: ["English", "Italiano", "Español", "Français", "Русский", "New language / neue Sprache"]
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Where (page, button)
+      placeholder: "Games -> Packages, button next to 'Split'"
+  - type: textarea
+    id: text
+    attributes:
+      label: The text as it is now, and the text you suggest
+      description: If the text is still German, copy it exactly (the dictionary is keyed by the German text). Placeholders like {0} must stay.
+    validations:
+      required: true

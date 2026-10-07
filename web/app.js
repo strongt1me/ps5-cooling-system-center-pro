@@ -70,6 +70,9 @@
     targetDirty: false
   };
 
+  /* Zahlen und Zeiten richten sich nach der gewählten Sprache (i18n-boot.js setzt PS5_LOCALE, z. B. "en-GB"). */
+  const LOCALE = window.PS5_LOCALE || "de-DE";
+
   const $  = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const txt = (sel, v) => { const n = $(sel); if (n) n.textContent = v; };
@@ -77,7 +80,7 @@
   /* ── Hilfen ─────────────────────────────────────────────────────── */
 
   const num = (v, digits = 0) =>
-    Number(v).toLocaleString("de-DE", { minimumFractionDigits: digits,
+    Number(v).toLocaleString(LOCALE, { minimumFractionDigits: digits,
                                         maximumFractionDigits: digits });
 
   const esc = (s) => String(s)
@@ -187,8 +190,11 @@
   new MutationObserver(syncModal).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
   document.addEventListener("wheel", (e) => {
     if (!modalOpen()) return;
-    const box = e.target.closest && e.target.closest(".cp-dialog, .gm-overlay-box");
-    if (!box || box.scrollHeight <= box.clientHeight) e.preventDefault();
+    /* erlaubt, wenn unter dem Zeiger etwas im Fenster selbst scrollen kann (das Fenster oder ein Textfeld darin) */
+    for (let el = e.target; el && el !== document.body; el = el.parentElement) {
+      if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.closest(".gm-overlay")) return;
+    }
+    e.preventDefault();
   }, { passive: false });
 
   /* Credits: Die Links zu GitHub sind nur anklickbar, wenn dieser Browser GitHub auch erreicht (Wunsch vom
@@ -463,7 +469,7 @@
     }
 
     const rows = data.slice(-10).reverse().map((s) => {
-      const stamp = new Date(s.ts).toLocaleTimeString("de-DE");
+      const stamp = new Date(s.ts).toLocaleTimeString(LOCALE);
       const up = s.uptimeSec === null ? "--" : duration(s.uptimeSec);
       const idle = s.idleSec === null ? "--" : (s.idleSec >= 60
         ? `${Math.round(s.idleSec / 60)} Min.`
@@ -635,7 +641,7 @@
     return {
       ok: true,
       collected_at_iso: new Date().toISOString(),
-      collected_at_local: new Date().toLocaleString("de-DE"),
+      collected_at_local: new Date().toLocaleString(LOCALE),
       source: "PS5 Cooling & System Center - Pro WebUI",
       ui_state: {
         page: state.page,
@@ -895,7 +901,7 @@
         listEl.innerHTML = state.monitorAlertEvents.map((e) => {
           const label = e.level === "hot" ? "KRITISCH" : e.level === "warn" ? "WARNUNG" : "OK";
           const cls = e.level === "hot" ? "hot" : e.level === "warn" ? "warn" : "ok";
-          return `<div class="row"><time>${new Date(e.ts).toLocaleTimeString("de-DE")}</time>`
+          return `<div class="row"><time>${new Date(e.ts).toLocaleTimeString(LOCALE)}</time>`
             + `<i class="reason-tag ${cls}">${label}</i>`
             + `<span>${esc(e.detail)}</span></div>`;
         }).join("");
@@ -1380,13 +1386,14 @@
      Lüfterschwelle. Eine Voreinstellung ist nur „aktiv", solange der Wert
      noch genau stimmt — danach ist es ein eigener Wert. */
   /* Die Zieltemperatur der Schnellwahl (Automatik). Bis 03.10.2026 reichte der Regler bis
-     72 °C und die Werte waren 62 / 66 / 70; seit er bis 78 °C geht, verteilen sie sich über
-     den ganzen Bereich: „Leise" ist der leiseste Wert, den der Regler zulässt (78 °C), und
-     „Ausgewogen" liegt in der Mitte zwischen den beiden anderen. Die Schwellen der
-     Beobachtungsart (observe) sind etwas anderes — eine feste Schwelle der Konsole, kein
-     Ziel — und gelten unverändert. */
+     72 °C und die Werte waren 62 / 66 / 70; bis 07.10.2026 ging er bis 78 °C (62 / 70 / 78);
+     seit er bis 91 °C geht, verteilen sich die Werte über den ganzen Bereich: „Leise" ist der
+     leiseste Wert, den der Regler zulässt (91 °C, der Wert der Konsole selbst), „Kühl" bleibt
+     bei 62 °C und „Ausgewogen" liegt in der Mitte zwischen den beiden (76,5, aufgerundet).
+     Die Schwellen der Beobachtungsart (observe) sind etwas anderes — eine feste Schwelle der
+     Konsole, kein Ziel — und gelten unverändert. */
   const PRESETS = {
-    automatic: { cool: 62, balanced: 70, quiet: 78 },
+    automatic: { cool: 62, balanced: 77, quiet: 91 },
     observe:   { cool: 58, balanced: 65, quiet: 74 }
   };
   const PRESET_NAMES = { cool: "Kühl", balanced: "Ausgewogen", quiet: "Leise" };
@@ -1703,12 +1710,16 @@
       if (!F.automatic) return Number.isFinite(F.threshold_c)
         ? `manueller Wert ${F.threshold_c} °C`
         : "manueller Wert ohne Rückmeldung";
-      const minT = state.cfg && Number(state.cfg.target_min_c);
-      const maxT = state.cfg && Number(state.cfg.target_max_c);
-      if (Number.isFinite(F.threshold_c) && Number.isFinite(minT) && Number.isFinite(maxT)) {
+      /* Die Schwelle der Konsole, nicht das Ziel: unten der Anschlag der App, oben die Ruhelage
+         (Ziel + 10 °C, mindestens 80, höchstens 91), in der der Lüfter nichts zu tun hat. */
+      const minT = state.cfg && Number(state.cfg.threshold_min_c);
+      const maxT = state.cfg && Number(state.cfg.threshold_max_c);
+      const goal = Number.isFinite(C.effective_target_c) ? C.effective_target_c : C.target_temp_c;
+      if (Number.isFinite(F.threshold_c) && Number.isFinite(minT) && Number.isFinite(maxT) && Number.isFinite(goal)) {
+        const restT = Math.min(maxT, Math.max(80, goal + 10));
         if (F.threshold_c <= minT) return `unterer Anschlag (${minT} °C)`;
-        if (F.threshold_c >= maxT) return `oberer Anschlag (${maxT} °C)`;
-        return `im Regelbereich (${minT}-${maxT} °C)`;
+        if (F.threshold_c >= restT) return `oberer Anschlag (${restT} °C)`;
+        return `im Regelbereich (${minT}-${restT} °C)`;
       }
       return "Automatik aktiv";
     })();
@@ -1983,7 +1994,7 @@
 
     if (!state.targetDirty) {
       $("#target-range").min = c.target_min_c ?? 60;
-      $("#target-range").max = c.target_max_c ?? 78;
+      $("#target-range").max = c.target_max_c ?? 91;
       $("#target-range").value = c.target_temp_c;
       txt("#target-out", `${c.target_temp_c} °C`);
       updateTargetHint(c.target_temp_c);
@@ -2020,19 +2031,19 @@
     if (directInput) {
       if (c.mode === "automatic") {
         directInput.min = String(c.target_min_c ?? 60);
-        directInput.max = String(c.target_max_c ?? 78);
+        directInput.max = String(c.target_max_c ?? 91);
         directInput.value = String(c.target_temp_c ?? 66);
       } else {
-        directInput.min = "30";
-        directInput.max = "90";
+        directInput.min = String(c.threshold_min_c ?? 45);
+        directInput.max = String(c.threshold_max_c ?? 91);
         directInput.value = String(c.fan_threshold_c ?? 65);
       }
     }
     const directNote = $("#s-direct-threshold-note");
     if (directNote) {
       directNote.textContent = c.mode === "automatic"
-        ? "Automatik: setzt die Zieltemperatur (60-78 °C, bis 72 °C empfohlen)."
-        : "Beobachten: setzt eine feste Lüfterschwelle (30-90 °C).";
+        ? `Automatik: setzt die Zieltemperatur (${c.target_min_c ?? 60}-${c.target_max_c ?? 91} °C, bis 72 °C empfohlen).`
+        : `Beobachten: setzt eine feste Lüfterschwelle (${c.threshold_min_c ?? 45}-${c.threshold_max_c ?? 91} °C).`;
     }
 
     /* Ohne diese Zeile standen die drei Schalter immer auf „aus", ganz gleich
@@ -2066,17 +2077,19 @@
   };
 
   const updateTargetHint = (v) => {
-    /* Über 72 °C (bis 78 °C seit 03.10.2026): sehr leise, aber die Konsole
-       läuft heiß. Die Notfallgrenze liegt mindestens vier Grad über dem Ziel
-       (die Einstellungen heben sie von selbst an), die Warnschwelle der App
-       bleibt, wo sie ist, und liegt dann nahe darüber. */
+    /* Über 72 °C (bis 78 °C seit 03.10.2026, bis 91 °C seit 07.10.2026): sehr leise, aber
+       die Konsole läuft heiß. Die Notfallgrenze liegt mindestens vier Grad über dem Ziel
+       (die Einstellungen heben sie von selbst an), die Warnschwelle der App bleibt, wo sie
+       ist, und liegt bei hohen Zielen darunter. Bei 91 °C ist das der Wert, den die Konsole
+       selbst einstellt. */
     const cfgNum = (k, dflt) => (state.cfg && Number.isFinite(state.cfg[k]) ? state.cfg[k] : dflt);
-    const warnC = cfgNum("warning_cpu_c", 80);
+    const warnC = Math.max(cfgNum("warning_cpu_c", 80), v + 2);   /* die Warnschwelle geht mit dem Ziel mit (Ziel + 2) */
     const safeC = Math.max(cfgNum("safety_temp_c", 78), v + 4);
     const hint = v <= 62 ? "Sehr kühl — der Lüfter ist dauerhaft gut hörbar."
                : v <= 65 ? "Kühl — spürbar mehr Lüftergeräusch."
                : v <= 68 ? "Empfohlen — leiser Betrieb bei sicheren Temperaturen."
                : v <= 72 ? "Leise — die Konsole läuft wärmer, bleibt aber im grünen Bereich."
+               : v >= 91 ? `So leise wie ohne die App (91 °C stellt die Konsole selbst ein), aber heiß — die Notfallgrenze liegt bei ${safeC} °C, die Warnschwelle bei ${warnC} °C.`
                          : `Sehr leise, aber heiß — die Notfallgrenze liegt bei ${safeC} °C, die Warnschwelle bei ${warnC} °C.`;
     txt("#target-hint", hint);
   };
@@ -2193,7 +2206,7 @@
     return `${num(b / 1048576, 1)} MB`;
   };
   const plDate = (t) => (t > 0
-    ? new Date(t * 1000).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
+    ? new Date(t * 1000).toLocaleDateString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric" })
     : "");
   /* „kstuff_v1.13_dr_Beta4.elf" → Titel „kstuff v1.13 dr Beta4", Version „1.13".
      Eine Version erkennt nur, wer Punkte hat; „PS5" ist keine. */
@@ -3131,7 +3144,7 @@
 
       packList.innerHTML = packs.map((p) => {
         const ts = Number.isFinite(p.mtime)
-          ? new Date(p.mtime * 1000).toLocaleString("de-DE")
+          ? new Date(p.mtime * 1000).toLocaleString(LOCALE)
           : "unbekannt";
         return `<option value="${esc(p.name)}">${esc(p.name)} · ${esc(ts)}</option>`;
       }).join("");
@@ -4058,7 +4071,7 @@
       const l = d.load || {};
       const rows = [];
       rows.push(["Zeitpunkt", d.timestamp_ms
-        ? new Date(d.timestamp_ms).toLocaleTimeString("de-DE")
+        ? new Date(d.timestamp_ms).toLocaleTimeString(LOCALE)
         : "--"]);
       rows.push(["CPU gesamt (16 logische)", l.cpu_valid ? `${num(l.cpu_pct, 1)} %` : "nicht verfügbar"]);
       if (Number.isFinite(l.game_pct)) rows.push(["Spiel-CPUs", `${num(l.game_pct, 1)} %`]);
@@ -4162,7 +4175,7 @@
     const lv = String(e.level).toLowerCase();
     return `
             <div class="entry">
-              <time>${new Date(e.timestamp_ms).toLocaleTimeString("de-DE")}</time>
+              <time>${new Date(e.timestamp_ms).toLocaleTimeString(LOCALE)}</time>
               <span class="lvl ${lv === "warn" || lv === "error" ? lv : "info"}">${esc(e.level)}</span>
               <div><p>${esc(e.message)}</p><code>${esc(e.code)}</code></div>
             </div>`;
@@ -4424,9 +4437,9 @@
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "—";
     return withTime
-      ? d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric",
+      ? d.toLocaleString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric",
                                     hour: "2-digit", minute: "2-digit" })
-      : d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+      : d.toLocaleDateString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric" });
   };
 
   const gmHasMods = (x) => !!(x.mods && x.mods.state === "checked"
@@ -5749,9 +5762,9 @@
   const ptDay     = (ms) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
   const ptNextDay = (ms) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(); };
   const ptDaysAgo = (ms, n) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate() - n).getTime(); };
-  const ptClock = (ms) => new Date(ms).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-  const ptDate = (ms) => new Date(ms).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
-  const ptDateFull = (ms) => new Date(ms).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const ptClock = (ms) => new Date(ms).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+  const ptDate = (ms) => new Date(ms).toLocaleDateString(LOCALE, { weekday: "short", day: "2-digit", month: "2-digit" });
+  const ptDateFull = (ms) => new Date(ms).toLocaleDateString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric" });
 
   const ptDur = (sec) => {
     sec = Math.round(sec);
@@ -5897,8 +5910,8 @@
     const max = Math.max(3600, ...days.map((x) => x.sec));
     $("#pt-bars").innerHTML = days.map((x) => {
       const h = x.sec > 0 ? Math.max(3, Math.round(120 * x.sec / max)) : 0;
-      const wd = new Date(x.k).toLocaleDateString("de-DE", { weekday: "short" });
-      const dm = new Date(x.k).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+      const wd = new Date(x.k).toLocaleDateString(LOCALE, { weekday: "short" });
+      const dm = new Date(x.k).toLocaleDateString(LOCALE, { day: "2-digit", month: "2-digit" });
       const dd = new Date(x.k).getDate();
       const tip = `${ptDate(x.k)}: ${x.sec > 0 ? ptDur(x.sec) : "nicht gespielt"}`;
       return `<div class="pt-bar${x.k === c.today ? " today" : ""}" title="${esc(tip)}">
@@ -6186,17 +6199,47 @@
      Kennwort, Häkchen, zwei Klicks. Hochladen läuft je Datei über XMLHttpRequest, weil nur das den Fortschritt
      des Sendens meldet. Namen kommen von der Konsole und gehen durch esc(); Knöpfe tragen nur Nummern. */
   const fm = { path: "", places: [], list: null, sel: new Set(), clip: null, poll: 0, xhr: null, upQueue: [],
-               plan: null, armed: 0, timer: 0, loaded: false };
+               plan: null, armed: 0, timer: 0, loaded: false,
+               sort: "name", desc: false, sorted: [], sizes: new Map(), sizing: false, viewSeq: 0 };
+  /* Die Sortierung merkt sich der Browser (nur eine Annehmlichkeit, nichts davon hängt daran). */
+  try {
+    const s = JSON.parse(localStorage.getItem("fmSort") || "null");
+    if (s && ["name", "size", "date"].includes(s.sort)) { fm.sort = s.sort; fm.desc = !!s.desc; }
+  } catch { /* ohne gespeicherte Sortierung: nach Namen */ }
+  const fmSaveSort = () => { try { localStorage.setItem("fmSort", JSON.stringify({ sort: fm.sort, desc: fm.desc })); } catch { /* egal */ } };
   const fmJoin = (dir, name) => `${dir === "/" ? "" : dir}/${name}`;
-  const fmWhen = (s) => (s > 0 ? new Date(s * 1000).toLocaleString("de-DE", { day: "2-digit", month: "2-digit",
+  const fmWhen = (s) => (s > 0 ? new Date(s * 1000).toLocaleString(LOCALE, { day: "2-digit", month: "2-digit",
     year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
   const FM_ICO = {
     dir: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>',
     file: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>',
     link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
   };
-  const fmEntries = () => (fm.list && fm.list.entries) || [];
+  /* Die Einträge in der Reihenfolge, in der sie auf der Seite stehen: Die Knöpfe tragen Nummern aus dieser Liste. */
+  const fmEntries = () => fm.sorted;
   const fmSelected = () => fmEntries().filter((e) => fm.sel.has(e.name));
+  const fmIsDir = (e) => e.type === "dir" || e.type === "dirlink";
+  const fmSelectable = (e) => e.type !== "link" && e.type !== "dirlink" && e.type !== "other";
+  /* Ordner stehen immer zuerst. Innerhalb der Gruppen: nach Namen (ohne Groß-/Kleinschreibung, Zahlen als Zahlen),
+     nach Größe (ein Ordner zählt mit der berechneten Größe, ohne sie als 0) oder nach Datum. Gleiche Werte
+     fallen auf den Namen zurück. */
+  const fmSortList = (list) => {
+    const dir = fm.desc ? -1 : 1;
+    const size = (e) => {
+      if (e.type === "file") return e.size;
+      const s = fm.sizes.get(fmJoin(fm.path, e.name));
+      return s ? s.bytes : 0;
+    };
+    const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true })
+      || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    return list.slice().sort((a, b) => {
+      const g = (fmIsDir(a) ? 0 : 1) - (fmIsDir(b) ? 0 : 1);
+      if (g) return g;
+      if (fm.sort === "name") return byName(a, b) * dir;
+      const c = fm.sort === "size" ? size(a) - size(b) : a.mtime - b.mtime;
+      return c ? c * dir : byName(a, b);
+    });
+  };
 
   const fmLoadPlaces = async () => {
     try { fm.places = (await api("/api/v1/files/places")).places || []; } catch { fm.places = []; }
@@ -6214,6 +6257,7 @@
       if (fm.path !== d.path) fm.sel.clear();
       fm.path = d.path;
       fm.list = d;
+      fm.sizes = new Map();                          /* berechnete Ordnergrößen gelten nur für diesen Stand */
     } catch (e) {
       if (seq !== fmSeq) return;
       txt("#fm-sub", `Nicht lesbar: ${e.message}`);
@@ -6247,20 +6291,38 @@
     $("#fm-upload-lbl").classList.toggle("disabled", !d.writable);
     $("#fm-upload").disabled = !d.writable;
     $("#fm-up").disabled = !d.parent;
-    $("#fm-list").innerHTML = n ? d.entries.map((e, i) => {
-      const isDir = e.type === "dir" || e.type === "dirlink";
+    fm.sorted = fmSortList(d.entries);
+    const sortSel = $("#fm-sort");
+    if (sortSel) sortSel.value = fm.sort;
+    const dirBtn = $("#fm-dir");
+    if (dirBtn) {
+      dirBtn.textContent = fm.desc ? "↓" : "↑";
+      dirBtn.setAttribute("aria-label", fm.desc ? "absteigend sortiert" : "aufsteigend sortiert");
+      dirBtn.title = fm.desc ? "Absteigend (zum Umkehren tippen)" : "Aufsteigend (zum Umkehren tippen)";
+    }
+    $("#fm-sizes").hidden = !fm.sorted.some((e) => e.type === "dir");
+    $("#fm-list").innerHTML = n ? fm.sorted.map((e, i) => {
+      const isDir = fmIsDir(e);
       const ico = isDir ? FM_ICO.dir : (e.type === "link" ? FM_ICO.link : FM_ICO.file);
-      const canSel = e.type !== "link" && e.type !== "dirlink" && e.type !== "other";
+      const canSel = fmSelectable(e);
       const name = isDir ? `<button type="button" class="fm-name fm-open" data-fm-open="${i}">${esc(e.name)}</button>`
         : `<span class="fm-name">${esc(e.name)}</span>`;
       const kind = e.type === "dirlink" ? "Verknüpfung zu einem Ordner" : e.type === "link" ? "Verknüpfung" : e.type === "other" ? "Gerät oder Sonderdatei" : "";
-      const dl = e.type === "file" ? `<a class="btn ghost fm-act" href="/api/v1/files/download?path=${encodeURIComponent(fmJoin(d.path, e.name))}" download>Herunterladen</a>` : "";
-      const ren = e.writable ? `<button type="button" class="btn ghost fm-act" data-fm-ren="${i}">Umbenennen</button>` : "";
+      const sz = e.type === "dir" ? fm.sizes.get(fmJoin(d.path, e.name)) : null;
+      const sizeText = e.type === "file" ? bytes(e.size)
+        : sz ? `${bytes(sz.bytes) === "--" ? "0 B" : bytes(sz.bytes)}${sz.partial ? "+" : ""} · ${num(sz.files)} ${sz.files === 1 ? "Datei" : "Dateien"}${sz.partial ? " (mindestens)" : ""}` : "";
+      const full = encodeURIComponent(fmJoin(d.path, e.name));
+      const acts = [
+        e.type === "file" ? `<button type="button" class="btn ghost fm-act" data-fm-view="${i}">Ansehen</button>` : "",
+        e.type === "dir" && !sz ? `<button type="button" class="btn ghost fm-act" data-fm-size="${i}">Größe</button>` : "",
+        e.type === "file" ? `<a class="btn ghost fm-act" href="/api/v1/files/download?path=${full}" download>Herunterladen</a>` : "",
+        e.writable ? `<button type="button" class="btn ghost fm-act" data-fm-ren="${i}">Umbenennen</button>` : "",
+      ].join("");
       return `<div class="fm-row${fm.sel.has(e.name) ? " sel" : ""}" role="listitem">
           <input type="checkbox" class="fm-check" data-fm-sel="${i}" aria-label="${esc(e.name)} auswählen"${fm.sel.has(e.name) ? " checked" : ""}${canSel ? "" : " disabled"}>
           <span class="fm-ico">${ico}</span>
-          <div class="fm-main">${name}<small class="muted">${[e.type === "file" ? bytes(e.size) : "", fmWhen(e.mtime), kind].filter(Boolean).map(esc).join(" · ")}</small></div>
-          <div class="fm-acts">${dl}${ren}</div>
+          <div class="fm-main">${name}<small class="muted">${[sizeText, fmWhen(e.mtime), kind].filter(Boolean).map(esc).join(" · ")}</small></div>
+          <div class="fm-acts">${acts}</div>
         </div>`;
     }).join("") : `<p class="muted fm-empty">Dieser Ordner ist leer.</p>`;
     fmRenderBars();
@@ -6268,6 +6330,14 @@
 
   const fmRenderBars = () => {
     const s = fmSelected();
+    /* „Alle auswählen“: an, wenn alles Wählbare gewählt ist; halb, wenn nur ein Teil */
+    const selectable = fmEntries().filter(fmSelectable);
+    const all = $("#fm-selall");
+    if (all) {
+      all.disabled = !selectable.length;
+      all.checked = selectable.length > 0 && s.length === selectable.length;
+      all.indeterminate = s.length > 0 && s.length < selectable.length;
+    }
     $("#fm-selbar").hidden = !s.length;
     txt("#fm-selcount", `${s.length} ausgewählt`);
     const allW = s.length && s.every((e) => e.writable);
@@ -6317,9 +6387,10 @@
   };
   const fmClose = () => {
     const o = $("#fm-overlay");
-    if (o) o.hidden = true;
+    if (o) { o.hidden = true; o.querySelector(".cp-dialog").classList.remove("fm-view"); }
     clearTimeout(fm.timer);
     fm.armed = 0;
+    fm.viewSeq++;                                     /* eine noch laufende Vorschau darf nichts mehr einsetzen */
   };
   const fmDisarm = (go) => { clearTimeout(fm.timer); fm.armed = 0; go.removeAttribute("data-armed"); go.textContent = "Endgültig löschen"; };
 
@@ -6489,6 +6560,91 @@
     x.send(it.f);
   };
 
+  /* Ordnergrößen: die Konsole zählt (höchstens 8 Sekunden je Ordner, dann „mindestens“). Je Ordner ein Knopf, oder
+     alle Ordner dieser Ansicht nacheinander (höchstens 60). Ein Wechsel des Ordners bricht das Durchzählen ab. */
+  const fmSizeFetch = async (e) => {
+    const full = fmJoin(fm.path, e.name);
+    const r = await api(`/api/v1/files/size?path=${encodeURIComponent(full)}`, { timeoutMs: 20000 });
+    fm.sizes.set(full, { bytes: r.bytes, files: r.files, folders: r.folders, partial: !!r.partial });
+  };
+  const fmSizeOne = async (i) => {
+    const e = fmEntries()[i];
+    if (!e || fm.sizing) return;
+    const seq = fmSeq;
+    fm.sizing = true;
+    const b = $(`[data-fm-size="${i}"]`);
+    if (b) { b.disabled = true; b.textContent = "…"; }
+    try { await fmSizeFetch(e); } catch (er) { toast(`${e.name}: ${er.message}`, "error"); }
+    fm.sizing = false;
+    if (seq === fmSeq) { fm.sorted = fmSortList(fm.list.entries); fmRender(); }
+  };
+  const fmSizeAll = async () => {
+    if (fm.sizing) return;
+    const seq = fmSeq;
+    const dirs = fmEntries().filter((e) => e.type === "dir" && !fm.sizes.has(fmJoin(fm.path, e.name))).slice(0, 60);
+    if (!dirs.length) return;
+    fm.sizing = true;
+    const btn = $("#fm-sizes");
+    btn.disabled = true;
+    let done = 0;
+    for (const e of dirs) {
+      if (seq !== fmSeq) break;
+      btn.textContent = `Ordnergrößen ${done + 1} von ${dirs.length} …`;
+      try { await fmSizeFetch(e); } catch (er) { toast(`${e.name}: ${er.message}`, "error"); }
+      done++;
+    }
+    fm.sizing = false;
+    btn.disabled = false;
+    btn.textContent = "Ordnergrößen";
+    if (seq === fmSeq) { fm.sorted = fmSortList(fm.list.entries); fmRender(); }
+  };
+
+  /* Vorschau: ein Bild (nach der Endung, nie SVG) oder der Anfang einer Textdatei, nur zum Ansehen. */
+  const FM_IMG = /\.(png|jpe?g|gif|webp|bmp|ico)$/i;
+  const fmView = async (i) => {
+    const e = fmEntries()[i];
+    if (!e) return;
+    const full = encodeURIComponent(fmJoin(fm.path, e.name));
+    const url = `/api/v1/files/view?path=${full}`;
+    const o = fmShell();
+    o.querySelector(".cp-dialog").classList.add("fm-view");
+    txt("#fm-dlg-title", e.name);
+    const actions = `<div class="cp-actions"><a class="btn ghost" href="/api/v1/files/download?path=${full}" download>Herunterladen</a>
+        <button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
+    $("#fm-dlg-body").innerHTML = `<p class="muted">wird geladen …</p>`;
+    o.hidden = false;
+    const mine = ++fm.viewSeq;
+    if (FM_IMG.test(e.name)) {
+      $("#fm-dlg-body").innerHTML = `<img class="fm-view-img" alt="${esc(e.name)}" src="${url}">
+        <p class="muted fm-view-note">${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))}</p>${actions}`;
+      const img = $("#fm-dlg-body .fm-view-img");
+      img.addEventListener("error", () => {
+        if (mine !== fm.viewSeq) return;
+        $("#fm-dlg-body").innerHTML = `<p class="cp-err">Das Bild lässt sich nicht anzeigen (zu groß, beschädigt oder kein Bild).</p>${actions}`;
+      });
+      return;
+    }
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) {
+        let m = "";
+        try { m = (await r.json()).message; } catch { /* keine Meldung */ }
+        throw new Error(m || `HTTP ${r.status}`);
+      }
+      const text = await r.text();
+      if (mine !== fm.viewSeq) return;
+      const truncated = r.headers.get("X-Fm-Truncated") === "1";
+      const total = Number(r.headers.get("X-Fm-Size"));
+      const shown = Number(r.headers.get("Content-Length")) || text.length;
+      $("#fm-dlg-body").innerHTML = `<pre class="fm-view-text"></pre>
+        <p class="muted fm-view-note">${truncated ? `Nur der Anfang: ${esc(bytes(shown))} von ${esc(bytes(total))}. ` : ""}${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))}</p>${actions}`;
+      $("#fm-dlg-body .fm-view-text").textContent = text || "(leer)";
+    } catch (er) {
+      if (mine !== fm.viewSeq) return;
+      $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(er.message)}</p>${actions}`;
+    }
+  };
+
   const fmOpen = async () => {
     if (!fm.loaded) {
       fm.loaded = true;
@@ -6510,6 +6666,10 @@
       const en = fmEntries()[+d.fmRen];
       if (en) fmAskName("Umbenennen", "Neuer Name", en.name, (v) => api("/api/v1/files/rename", { method: "POST", body: JSON.stringify({ path: fmJoin(fm.path, en.name), name: v }) }));
     }
+    else if (d.fmView !== undefined) fmView(+d.fmView);
+    else if (d.fmSize !== undefined) fmSizeOne(+d.fmSize);
+    else if (t.id === "fm-sizes") fmSizeAll();
+    else if (t.id === "fm-dir") { fm.desc = !fm.desc; fmSaveSort(); fmRender(); }
     else if (t.id === "fm-up") { if (fm.list && fm.list.parent) fmLoad(fm.list.parent); }
     else if (t.id === "fm-reload") { fmLoadPlaces().then(() => fmLoad(fm.path)); }
     else if (t.id === "fm-mkdir") fmAskName("Neuer Ordner", "Name des Ordners", "Neuer Ordner", (v) => api("/api/v1/files/mkdir", { method: "POST", body: JSON.stringify({ path: fm.path, name: v }) }));
@@ -6540,6 +6700,16 @@
     } else if (c.id === "fm-upload" && c.files && c.files.length) {
       fmUpload(c.files);
       c.value = "";
+    } else if (c.id === "fm-sort") {
+      /* Größe und Datum: das Größte und Neueste zuerst; Name: von A bis Z */
+      fm.sort = ["name", "size", "date"].includes(c.value) ? c.value : "name";
+      fm.desc = fm.sort !== "name";
+      fmSaveSort();
+      fmRender();
+    } else if (c.id === "fm-selall") {
+      if (c.checked) fmEntries().filter(fmSelectable).forEach((en) => fm.sel.add(en.name));
+      else fm.sel.clear();
+      fmRender();
     }
   });
   const fmDrop = $("#fm-list");
@@ -6639,12 +6809,12 @@
                open: new Set(), timer: 0, polling: false, job: null, dismissed: "", armed: new Map() };
 
   const svWhen = (sec) => (sec > 0
-    ? new Date(sec * 1000).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric",
+    ? new Date(sec * 1000).toLocaleString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric",
                                                       hour: "2-digit", minute: "2-digit" })
     : "—");
   /* Für Bildschirmleser: zwei Sicherungen derselben Minute sollen sich unterscheiden lassen. */
   const svWhenSec = (sec) => (sec > 0
-    ? new Date(sec * 1000).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric",
+    ? new Date(sec * 1000).toLocaleString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric",
                                                       hour: "2-digit", minute: "2-digit", second: "2-digit" })
     : "—");
   const svName = (t) => t.name || t.id;
@@ -7475,6 +7645,7 @@
   $$(".tab").forEach((b) => b.addEventListener("click", () => {
     if (!b.dataset.page) return;                       /* Handbuch und FAQ sind Links, keine Seiten */
     state.page = b.dataset.page;
+    try { sessionStorage.setItem("ps5page", state.page); } catch { /* ohne Speicher: kein Merken */ }
     $$(".tab").forEach((x) => {
       x.classList.toggle("active", x === b);
       x.setAttribute("aria-selected", x === b ? "true" : "false");
@@ -7506,6 +7677,16 @@
     pkSync();
     syncLogTail();
   }));
+
+  /* Nach dem Umschalten der Sprache lädt die Seite neu (i18n.js); sie öffnet dann wieder die Seite, auf der man war. */
+  try {
+    const back = sessionStorage.getItem("ps5restore");
+    if (back) {
+      sessionStorage.removeItem("ps5restore");
+      const tab = $(`.tab[data-page="${back}"]`);
+      if (tab) tab.click();
+    }
+  } catch { /* ohne Speicher: es bleibt bei der Kühlung */ }
 
   $("#target-range").addEventListener("input", (e) => {
     state.targetDirty = true;
@@ -7629,7 +7810,7 @@
     if (value === undefined) return Promise.resolve();
     if (auto) {
       const lo = state.cfg && Number.isFinite(state.cfg.target_min_c) ? state.cfg.target_min_c : 60;
-      const hi = state.cfg && Number.isFinite(state.cfg.target_max_c) ? state.cfg.target_max_c : 78;
+      const hi = state.cfg && Number.isFinite(state.cfg.target_max_c) ? state.cfg.target_max_c : 91;
       value = Math.max(lo, Math.min(hi, value));
     }
     const inp = $("#s-direct-threshold");
@@ -7758,7 +7939,7 @@
   wireTooltip("#host-hist", "#cross-hist", "#tip-hist", (_, idx) => {
     const h = state.hist2;
     if (!h) return "";
-    return `<b>${new Date(h.t[idx]).toLocaleString("de-DE")}</b>
+    return `<b>${new Date(h.t[idx]).toLocaleString(LOCALE)}</b>
       <u><i style="background:var(--s1)"></i>CPU ${h.cpu[idx] ?? "--"} °C</u>
       <u><i style="background:var(--s2)"></i>Hauptchip ${h.soc[idx] ?? "--"} °C</u>
       <u><i style="background:var(--s3)"></i>Lüfter ${h.fan[idx] ?? "--"} %</u>`;
@@ -7922,7 +8103,7 @@
         : "noch nichts gespeichert");
       $("#kl-files").innerHTML = d.files.length ? d.files.map((f) => `<div class="kl-file">
         <span class="kl-file-name"><b>${esc(f.name)}</b>
-          <small>${f.kind === "rec" ? "Aufnahme" : "Auszug"} · ${esc(new Date(f.mtime * 1000).toLocaleString("de-DE", {
+          <small>${f.kind === "rec" ? "Aufnahme" : "Auszug"} · ${esc(new Date(f.mtime * 1000).toLocaleString(LOCALE, {
             day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }))}</small></span>
         ${f.active ? `<span class="badge warn">läuft</span>` : ""}
         <span class="kl-file-size">${esc(bytes(f.size))}</span>
@@ -8062,7 +8243,7 @@
         if (typeof backend.mode === "string") patch.mode = backend.mode;
         if (typeof backend.profile === "string") patch.profile = backend.profile;
         if (backend.target_temp_c !== undefined)
-          patch.target_temp_c = clampInt(backend.target_temp_c, 60, 78, 66);
+          patch.target_temp_c = clampInt(backend.target_temp_c, 60, 91, 66);
         if (backend.fan_threshold_c !== undefined)
           patch.fan_threshold_c = clampInt(backend.fan_threshold_c, 45, 80, 65);
         if (backend.fan_reapply_sec !== undefined)
@@ -8070,7 +8251,7 @@
         if (backend.warning_cpu_c !== undefined)
           patch.warning_cpu_c = clampInt(backend.warning_cpu_c, 40, 110, 80);
         if (backend.safety_temp_c !== undefined)
-          patch.safety_temp_c = clampInt(backend.safety_temp_c, 72, 90, 78);
+          patch.safety_temp_c = clampInt(backend.safety_temp_c, 72, 95, 78);
         if (backend.probe_mask !== undefined)
           patch.probe_mask = clampInt(backend.probe_mask, 0, 63, 0);
         if (Array.isArray(backend.curve))
@@ -8406,13 +8587,13 @@
   renderPowerHistory();
 
   wireTooltip("#host-temp", "#cross-temp", "#tip-temp", (r) => `
-    <b>${new Date(r.t).toLocaleTimeString("de-DE")}</b>
+    <b>${new Date(r.t).toLocaleTimeString(LOCALE)}</b>
     <u><i style="background:var(--s1)"></i>CPU ${r.cpu ?? "--"} °C</u>
     <u><i style="background:var(--s2)"></i>Hauptchip ${r.soc ?? "--"} °C</u>${r.gpu != null ? `
     <u><i style="background:var(--s4)"></i>Grafik ${r.gpu} °C</u>` : ""}`);
 
   wireTooltip("#host-fan", "#cross-fan", "#tip-fan", (r) => `
-    <b>${new Date(r.t).toLocaleTimeString("de-DE")}</b>
+    <b>${new Date(r.t).toLocaleTimeString(LOCALE)}</b>
     <u><i style="background:var(--s3)"></i>Lüfter ${r.fan ?? "--"} %</u>`);
 
   /* ── Start ──────────────────────────────────────────────────────── */

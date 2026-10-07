@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.49.1"
+#define PS5TM_VERSION        "1.50.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -56,11 +56,27 @@
 #endif
 #define PS5TM_LEGACY_CONFIG_PATH "/data/ps5-temperature-manager/config.json"
 
-/* Threshold range the web UI exposes. The ICC controller itself accepts a
-   wider band (30..90), but values outside this window are either useless
-   (>80: fan never ramps in time) or pointlessly loud (<45). */
+/* Threshold range the app itself uses (the controller, the pinned value of the
+   observe mode, the curve). The top is 91 °C since 07.10.2026 (it was 80): that
+   is the value the firmware sets itself at every change of state (measured
+   24.09.2026, FW 12.00) and the highest one ShadowMountPlus offers for its
+   fan_target_temperature (50..91), so the hardware takes it. 91 is "as quiet
+   as the console is without this app". Below 45 the fan is pointlessly loud. */
 #define PS5TM_THRESHOLD_MIN_C 45
-#define PS5TM_THRESHOLD_MAX_C 80
+#define PS5TM_THRESHOLD_MAX_C 91
+
+/* The top of the range up to 1.49.x. Where the threshold rests for targets up
+   to 70 °C (see rest_threshold_c in fan.c) and the anchor of the rough
+   duty <-> threshold seeds, which the servo corrects anyway; keeping both where
+   they were leaves the behaviour for the usual targets exactly as tested. */
+#define PS5TM_THRESHOLD_BASE_C 80
+
+/* A fan that has nothing to do rests this far above the target (limited to
+   PS5TM_THRESHOLD_BASE_C..PS5TM_THRESHOLD_MAX_C): the firmware raises the fan
+   in proportion to how far the die is above the threshold and keeps a little
+   extra speed within about 20 °C below it, so a resting threshold just at the
+   target would never be as quiet as the console can be. */
+#define PS5TM_REST_ABOVE_TARGET_C 10
 
 /* Size of the block both ICC fan ioctls exchange, and where the threshold
    sits inside it. Not a guess: the command number encodes the size
@@ -176,13 +192,15 @@ typedef enum {
 
 /* Bounds for the user-settable control parameters.
  *
- * The upper bound was 72 until 03.10.2026, when the owner asked for 78: a
- * quieter console that runs warmer. Nothing else moves with it by itself —
- * the safety limit follows (target + 4, see ps5tm_config_clamp), while the
- * warning limit (warning_cpu_c, 80 °C unless changed) stays where it is and
- * so lies close above a high target. */
+ * The upper bound was 72 until 03.10.2026, when the owner asked for 78, and
+ * 78 until 07.10.2026, when he asked for 91 like ShadowMountPlus (a quieter
+ * console that runs warmer; 91 is the firmware's own value, see
+ * PS5TM_THRESHOLD_MAX_C). Nothing else moves with it by itself — the safety
+ * limit follows (target + 4, see ps5tm_config_clamp), while the warning limit
+ * (warning_cpu_c, 80 °C unless changed) stays where it is and so lies at or
+ * below a high target. */
 #define PS5TM_TARGET_MIN_C   60
-#define PS5TM_TARGET_MAX_C   78
+#define PS5TM_TARGET_MAX_C   91
 
 /* The proportional band: how many degrees above the target the fan needs to
  * go from its floor to full.
@@ -202,7 +220,7 @@ typedef enum {
 #define PS5TM_BAND_MIN_C      5
 #define PS5TM_BAND_MAX_C     30
 #define PS5TM_SAFETY_MIN_C   72
-#define PS5TM_SAFETY_MAX_C   90
+#define PS5TM_SAFETY_MAX_C   95    /* target 91 + 4 */
 
 typedef struct {
   unsigned temperature_c;
@@ -232,7 +250,7 @@ typedef struct {
   unsigned            curve_len;
 
   /* --- comfort controller ------------------------------------------- */
-  unsigned        target_temp_c;       /* temperature to hold  (60..78)  */
+  unsigned        target_temp_c;       /* temperature to hold  (60..91)  */
   unsigned        control_band_c;      /* degrees above target = full fan */
   unsigned        deadband_c;          /* no action within +/- this      */
   unsigned        control_interval_s;  /* how often the fan may change   */
@@ -1453,6 +1471,8 @@ typedef struct {
   /* Who asked, as dotted IPv4. "127.0.0.1" is the console's own browser,
      opened from the tile (1.46.0: the start button needs to know). */
   char   peer[16];
+  /* The browser's Accept-Encoding names gzip: stored pages go out as they are, else they are unpacked first. */
+  int    gzip_ok;
 } ps5tm_request_t;
 
 /* The file manager's requests (/api/v1/files/...): 1 when it answered, 0 when the path is not its own. */
@@ -1497,8 +1517,13 @@ typedef struct {
   const char          *path;
   const char          *ctype;
   const unsigned char *data;
-  unsigned             len;
+  unsigned             len;       /* the bytes stored: gzip when gz is 1 */
+  unsigned             raw_len;   /* the file's own length */
+  unsigned             gz;        /* 1: stored as gzip (tools/gen_assets.py) */
 } ps5tm_asset_t;
+
+/* Serves one of the embedded pages for a GET (assets.c): 1 when the path is one of them. */
+int ps5tm_asset_serve(int fd, const ps5tm_request_t *req);
 
 extern const ps5tm_asset_t ps5tm_assets[];
 extern const unsigned      ps5tm_assets_count;

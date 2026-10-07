@@ -3,6 +3,7 @@
 
 Usage: gen_assets.py <output.c> <web-dir>
 """
+import gzip
 import os
 import sys
 
@@ -17,6 +18,11 @@ CONTENT_TYPES = {
     ".svg":  "image/svg+xml",
     ".ico":  "image/x-icon",
 }
+
+# Text is stored gzipped (level 9, no name or time: the same bytes every build) when that is smaller, and the app
+# sends it as it is to a browser that accepts gzip, or unpacks it for one that does not (src/api.c). Pictures are
+# already compressed.
+GZIP_TYPES = {".html", ".css", ".js", ".json", ".svg"}
 
 
 def emit_bytes(out, name, blob):
@@ -53,22 +59,28 @@ def main():
         for index, (url, full) in enumerate(files):
             with open(full, "rb") as handle:
                 blob = handle.read()
+            ext = os.path.splitext(full)[1].lower()
+            raw_len, gz = len(blob), 0
+            if ext in GZIP_TYPES and raw_len > 512:
+                packed = gzip.compress(blob, 9, mtime=0)
+                if len(packed) < raw_len * 0.9:
+                    blob, gz = packed, 1
             sym = "asset_%d" % index
             emit_bytes(out, sym, blob)
-            ext = os.path.splitext(full)[1].lower()
             symbols.append((url, CONTENT_TYPES.get(ext, "application/octet-stream"),
-                            sym, len(blob)))
+                            sym, len(blob), raw_len, gz))
 
         out.write("const ps5tm_asset_t ps5tm_assets[] = {\n")
-        for url, ctype, sym, size in symbols:
-            out.write('  { "%s", "%s", %s, %d },\n' % (url, ctype, sym, size))
+        for url, ctype, sym, size, raw_len, gz in symbols:
+            out.write('  { "%s", "%s", %s, %d, %d, %d },\n' % (url, ctype, sym, size, raw_len, gz))
         out.write("};\n\n")
         out.write("const unsigned ps5tm_assets_count =\n"
                   "    sizeof(ps5tm_assets) / sizeof(ps5tm_assets[0]);\n")
 
-    total = sum(size for _, _, _, size in symbols)
-    print("gen_assets: %d Datei(en), %d Bytes -> %s"
-          % (len(symbols), total, out_path))
+    total = sum(s[3] for s in symbols)
+    raw = sum(s[4] for s in symbols)
+    print("gen_assets: %d Datei(en), %d Bytes (%d unkomprimiert, %d gzip) -> %s"
+          % (len(symbols), total, raw, sum(s[5] for s in symbols), out_path))
 
 
 if __name__ == "__main__":
