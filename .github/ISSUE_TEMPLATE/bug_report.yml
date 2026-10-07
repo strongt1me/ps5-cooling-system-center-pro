@@ -13,7 +13,7 @@ body:
     attributes:
       label: Version
       description: Shown on the "System" page and in the file name of the ELF.
-      placeholder: "1.50.0"
+      placeholder: "1.51.0"
     validations:
       required: true
   - type: input

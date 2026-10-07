@@ -446,6 +446,28 @@
             <button class="btn" id="pl-refresh" type="button">Aktualisieren</button>
           </div>
 
+          <section class="pl-sec" aria-labelledby="pl-h-prof">
+            <header class="pl-sec-head">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h6"/><path d="M17 9l4 3-4 3z"/></svg>
+              <h3 id="pl-h-prof">Profile</h3>
+              <span class="pl-count" id="pl-count-prof">–</span>
+              <span class="pl-head-actions">
+                <button class="btn" id="pl-prof-new" type="button">Neues Profil</button>
+                <button class="btn ghost" id="pl-prof-export" type="button">Profile sichern</button>
+                <label class="btn ghost" for="pl-prof-import-file">Profile laden</label>
+                <input type="file" id="pl-prof-import-file" accept=".json,application/json" hidden>
+              </span>
+            </header>
+            <p class="pl-where">Ein Profil ist eine Abfolge von Payloads mit Pausen dazwischen. Das <b>Startprofil</b> führt die App nach jedem Start von selbst aus.</p>
+            <div id="pl-prof-run" class="pl-prof-run is-hidden" role="status" aria-live="polite"></div>
+            <div class="pl-grid" id="pl-prof-list"><p class="muted">wird gelesen …</p></div>
+            <div id="pl-prof-edit" class="pl-prof-edit is-hidden"></div>
+            <p class="pl-note">Die Payloads kommen aus dem Ordner der Konsole (siehe „Gespeicherte Payloads“). Neue lassen sich vom PC
+              importieren, im Profil oder bei den gespeicherten Payloads. Läuft ein Ablauf nicht zu Ende (zum Beispiel weil ein Payload
+              die App neu startet), führt die App das Startprofil beim nächsten Start nicht noch einmal aus, damit sich nichts
+              endlos wiederholt.</p>
+          </section>
+
           <section class="pl-sec" aria-labelledby="pl-h-running">
             <header class="pl-sec-head">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z"/></svg>
@@ -459,11 +481,16 @@
               sonst gleichzeitig am Lüfter drehen und sich gegenseitig stören.</p>
           </section>
 
+
           <section class="pl-sec" aria-labelledby="pl-h-stored">
             <header class="pl-sec-head">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9L12 3z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>
               <h3 id="pl-h-stored">Gespeicherte Payloads</h3>
               <span class="pl-count" id="pl-count-stored">–</span>
+              <span class="pl-head-actions">
+                <label class="btn" for="pl-import-file">Vom PC importieren</label>
+                <input type="file" id="pl-import-file" accept=".elf" multiple hidden>
+              </span>
             </header>
             <p class="pl-where">Ordner auf der Konsole: <code id="pl-dir">/data/PS5-Cooling-Center/payloads</code></p>
             <div class="pl-grid" id="pl-stored"><p class="muted">wird gelesen …</p></div>

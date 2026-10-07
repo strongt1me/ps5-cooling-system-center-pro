@@ -1133,9 +1133,14 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .sv-user { margin: 0 0 14px; border: 1px solid var(--hairline); border-radius: var(--r-md);
   background: var(--surface-2); overflow: hidden; }
 .sv-user-head, .sv-title { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.sv-user-head { padding: 10px 14px; }
-.sv-user-head b { font-size: 14px; overflow-wrap: anywhere; }
-.sv-user-head .muted { margin-left: auto; font-size: 12px; white-space: nowrap; }
+.sv-user-head { padding: 14px 16px; gap: 14px; background: rgba(59, 130, 246, .10); border-radius: var(--r-md) var(--r-md) 0 0; }
+.sv-user-head b { font-size: 17px; overflow-wrap: anywhere; }
+.sv-user-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sv-user-name .muted { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; }
+.sv-user-sum { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
+.sv-avatar { position: relative; flex: none; width: 56px; height: 56px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  font-size: 24px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #3b82f6, #7c5cff); box-shadow: 0 0 0 2px rgba(255, 255, 255, .18); }
+.sv-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .sv-title { padding: 8px 14px; border-top: 1px solid var(--hairline); }
 .sv-user input[type=checkbox] { accent-color: var(--s1); flex: none; width: 17px; height: 17px; }
 .sv-t-name { flex: 1 1 auto; min-width: 0; }
@@ -1381,3 +1386,36 @@ html.i18n-wait body { visibility: hidden; }
 .lang-switch select { padding: 8px 10px; border-radius: 999px; border: 1px solid var(--hairline); background: var(--surface-1);
   color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
 .lang-switch select:hover, .lang-switch select:focus-visible { border-color: rgba(59,130,246,.55); }
+
+/* Payload-Profile */
+.pl-head-actions { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.pl-head-actions .btn { cursor: pointer; }
+.pl-startup-tag { display: inline-block; align-self: flex-start; margin: 2px 0 2px 0; padding: 1px 8px; border-radius: 999px; font-size: 11px;
+  background: rgba(59,130,246,.18); color: #7db1ff; }
+.pl-card.pl-prof.is-startup { border-color: rgba(59,130,246,.55); }
+.pl-card.pl-prof .pl-act.on { border-color: rgba(59,130,246,.6); }
+.pl-prof-run { margin: 10px 0; padding: 10px 14px; border: 1px solid rgba(59,130,246,.35); border-radius: 12px; }
+.pl-prof-run ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.pl-prof-run li.bad { color: #f5a3a3; }
+.pl-prof-edit { margin-top: 14px; padding: 14px 16px; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; }
+.pl-prof-edit h4 { margin: 0 0 10px; }
+.pl-ed-name { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.pl-ed-name input { flex: 1; min-width: 0; }
+.pl-ed-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.pl-ed-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(255,255,255,.04); }
+.pl-ed-row.bad { outline: 1px solid rgba(250,178,25,.45); }
+.pl-ed-n { width: 22px; opacity: .6; }
+.pl-ed-t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pl-ed-t input { width: 90px; }
+.pl-mini { padding: 2px 9px; min-width: 0; }
+.pl-ed-add, .pl-ed-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.pl-ed-add select { flex: 1 1 220px; min-width: 0; }
+.pl-ed-add label.btn { cursor: pointer; }
+.pl-ed-delete { margin-left: auto; }
+.pl-card.pl-prof { grid-column: 1 / -1; }
+.pl-card.pl-prof .pl-actions { flex-wrap: wrap; justify-content: flex-end; max-width: none; }
+.pl-ed-name input, .pl-ed-add select { padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.05); color: inherit; }
+.sv-group { margin: 14px 0 4px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; opacity: .85; }
+.sv-title-row { display: flex; align-items: center; gap: 10px; }
+.sv-title-row .sv-title { flex: 1; min-width: 0; }
+.sv-del { flex: none; }

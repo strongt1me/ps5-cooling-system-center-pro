@@ -84,7 +84,7 @@
   {
    "id": "spielstaende",
    "title": "Copia de seguridad de datos guardados",
-   "html": "\n<p>Copia los datos guardados tal como los almacena la consola —cifrados, sin abrir ni modificar nada— en una\nmemoria USB, un disco o el SSD interno (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Cada archivo se verifica;\n«Verificar» vuelve a comprobar una copia de seguridad más adelante.</p>\n<p><b>Restaurar</b> funciona para juegos individuales: la app hace antes una copia de seguridad del estado actual, escribe primero todos los archivos nuevos\nal lado, los verifica y solo entonces sustituye.</p>\n<div class='warn'>Las copias de seguridad y las restauraciones solo se hacen cuando <b>no hay ningún juego en ejecución</b>, ni siquiera en pausa. Las copias de seguridad de\notra consola no se pueden restaurar.</div>\n{{FIG:06-spiele-spielstaende.png}}\n"
+   "html": "\n<p>Copia los datos guardados tal como los almacena la consola —cifrados, sin abrir ni modificar nada— en una\nmemoria USB, un disco o el SSD interno (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Cada archivo se verifica;\n«Verificar» vuelve a comprobar una copia de seguridad más adelante.</p>\n<p><b>Restaurar</b> funciona para juegos individuales: la app hace antes una copia de seguridad del estado actual, escribe primero todos los archivos nuevos\nal lado, los verifica y solo entonces sustituye.</p>\n<div class='warn'>Las copias de seguridad y las restauraciones solo se hacen cuando <b>no hay ningún juego en ejecución</b>, ni siquiera en pausa. Las copias de seguridad de\notra consola no se pueden restaurar.</div>\n<p>Por usuario, separados en juegos de PS5, apps de PS5, juegos de PS4 y apps de PS4. «Eliminar» (dos clics) borra los datos guardados de un título; la app guarda antes el estado actual y permite recuperarlo.</p>\n{{FIG:06-spiele-spielstaende.png}}\n"
   },
   {
    "id": "pakete",
@@ -99,7 +99,7 @@
   {
    "id": "payloads",
    "title": "Payloads",
-   "html": "\n<p>Ver y finalizar los payloads en ejecución e iniciar con un clic los guardados, desde <code>/data/PS5-Cooling-Center/payloads</code>\no desde la memoria USB (directorio raíz o carpeta <code>payloads</code>). Se inician a través del cargador de payloads de la consola\n(puerto 9021).</p>\n{{FIG:09-payloads.png}}\n"
+   "html": "\n<p>Ver y finalizar los payloads en ejecución e iniciar con un clic los guardados, desde <code>/data/PS5-Cooling-Center/payloads</code>\no desde la memoria USB (directorio raíz o carpeta <code>payloads</code>). Se inician a través del cargador de payloads de la consola\n(puerto 9021).</p>\n<p><b>Perfiles:</b> un perfil es una secuencia con nombre de payloads y pausas que «Ejecutar» inicia paso a paso. Uno puede definirse como <b>perfil de inicio</b>; la app lo ejecuta sola tras cada inicio (con protección contra bucles infinitos). Los payloads nuevos se cargan en la carpeta de la consola con «Importar desde el PC», también al editar un perfil. «Guardar perfiles» y «Cargar perfiles» intercambian perfiles como archivo.</p>\n{{FIG:09-payloads.png}}\n"
   },
   {
    "id": "profil",

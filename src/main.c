@@ -432,6 +432,8 @@ main(int argc, char **argv) {
        cached and writes its own two files, so it waits for nothing; it goes
        here only because there is no reason for it to run earlier. */
     ps5tm_playtime_start();
+    ps5tm_library_probe_start();
+    ps5tm_payprof_start();
 
     ps5tm_http_run(srv, port);
   }

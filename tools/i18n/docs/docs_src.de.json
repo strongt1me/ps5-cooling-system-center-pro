@@ -84,7 +84,7 @@
   {
    "id": "spielstaende",
    "title": "Spielstände sichern",
-   "html": "\n<p>Kopiert die Spielstände so, wie die Konsole sie ablegt – verschlüsselt, ohne etwas zu öffnen oder zu ändern – auf einen\nUSB-Stick, eine Platte oder die interne SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Jede Datei wird geprüft;\n„Prüfen“ liest eine Sicherung später erneut nach.</p>\n<p><b>Zurückspielen</b> geht für einzelne Spiele: Die App sichert vorher den jetzigen Stand, schreibt alle neuen Dateien zuerst\ndaneben, prüft sie und ersetzt erst dann.</p>\n<div class='warn'>Gesichert und zurückgespielt wird nur, wenn <b>kein Spiel läuft</b> – auch kein pausiertes. Sicherungen einer\nanderen Konsole lassen sich nicht zurückspielen.</div>\n{{FIG:06-spiele-spielstaende.png}}\n"
+   "html": "\n<p>Kopiert die Spielstände so, wie die Konsole sie ablegt – verschlüsselt, ohne etwas zu öffnen oder zu ändern – auf einen\nUSB-Stick, eine Platte oder die interne SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Jede Datei wird geprüft;\n„Prüfen“ liest eine Sicherung später erneut nach.</p>\n<p><b>Zurückspielen</b> geht für einzelne Spiele: Die App sichert vorher den jetzigen Stand, schreibt alle neuen Dateien zuerst\ndaneben, prüft sie und ersetzt erst dann.</p>\n<div class='warn'>Gesichert und zurückgespielt wird nur, wenn <b>kein Spiel läuft</b> – auch kein pausiertes. Sicherungen einer\nanderen Konsole lassen sich nicht zurückspielen.</div>\n<p>Je Benutzer getrennt nach PS5-Spielen, PS5-Apps, PS4-Spielen und PS4-Apps. Mit „Löschen“ (zwei Klicks) entfernst du die Spielstände eines Titels; die App sichert den jetzigen Stand vorher und lässt ihn zurückspielen.</p>\n{{FIG:06-spiele-spielstaende.png}}\n"
   },
   {
    "id": "pakete",
@@ -99,7 +99,7 @@
   {
    "id": "payloads",
    "title": "Payloads",
-   "html": "\n<p>Laufende Payloads sehen und beenden, gespeicherte mit einem Klick starten – aus <code>/data/PS5-Cooling-Center/payloads</code>\noder vom USB-Stick (Hauptverzeichnis oder Ordner <code>payloads</code>). Gestartet wird über den Payload-Lader der Konsole\n(Port 9021).</p>\n{{FIG:09-payloads.png}}\n"
+   "html": "\n<p>Laufende Payloads sehen und beenden, gespeicherte mit einem Klick starten – aus <code>/data/PS5-Cooling-Center/payloads</code>\noder vom USB-Stick (Hauptverzeichnis oder Ordner <code>payloads</code>). Gestartet wird über den Payload-Lader der Konsole\n(Port 9021).</p>\n<p><b>Profile:</b> Ein Profil ist eine benannte Abfolge aus Payloads und Pausen, die „Ausführen“ Schritt für Schritt startet. Eines lässt sich als <b>Startprofil</b> festlegen; die App führt es dann nach jedem Start von selbst aus (mit Schutz vor Endlosschleifen). Neue Payloads lassen sich mit „Vom PC importieren“ in den Ordner der Konsole laden, auch direkt beim Bearbeiten eines Profils. „Profile sichern“ und „Profile laden“ tauschen Profile als Datei aus.</p>\n{{FIG:09-payloads.png}}\n"
   },
   {
    "id": "profil",

@@ -84,7 +84,7 @@
   {
    "id": "spielstaende",
    "title": "Backup dei dati salvati",
-   "html": "\n<p>Copia i dati salvati così come li archivia la console – crittografati, senza aprire né modificare nulla – su una\nchiavetta USB, un disco o la SSD interna (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Ogni file viene verificato;\n«Verifica» rilegge un backup in un secondo momento.</p>\n<p>Il <b>ripristino</b> funziona per singoli giochi: prima l'app esegue il backup dello stato attuale, scrive tutti i nuovi file\naccanto a quelli esistenti, li verifica e solo allora li sostituisce.</p>\n<div class='warn'>Backup e ripristino avvengono solo quando <b>nessun gioco è in esecuzione</b> – nemmeno in pausa. I backup di\nun'altra console non si possono ripristinare.</div>\n{{FIG:06-spiele-spielstaende.png}}\n"
+   "html": "\n<p>Copia i dati salvati così come li archivia la console – crittografati, senza aprire né modificare nulla – su una\nchiavetta USB, un disco o la SSD interna (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Ogni file viene verificato;\n«Verifica» rilegge un backup in un secondo momento.</p>\n<p>Il <b>ripristino</b> funziona per singoli giochi: prima l'app esegue il backup dello stato attuale, scrive tutti i nuovi file\naccanto a quelli esistenti, li verifica e solo allora li sostituisce.</p>\n<div class='warn'>Backup e ripristino avvengono solo quando <b>nessun gioco è in esecuzione</b> – nemmeno in pausa. I backup di\nun'altra console non si possono ripristinare.</div>\n<p>Per ogni utente, divisi in giochi PS5, app PS5, giochi PS4 e app PS4. «Elimina» (due clic) rimuove i salvataggi di un titolo; l’app salva prima lo stato attuale e permette di ripristinarlo.</p>\n{{FIG:06-spiele-spielstaende.png}}\n"
   },
   {
    "id": "pakete",
@@ -99,7 +99,7 @@
   {
    "id": "payloads",
    "title": "Payload",
-   "html": "\n<p>Visualizza e termina i payload in esecuzione, avvia quelli salvati con un clic – da <code>/data/PS5-Cooling-Center/payloads</code>\no dalla chiavetta USB (cartella principale o cartella <code>payloads</code>). L'avvio avviene tramite il caricatore di payload della console\n(porta 9021).</p>\n{{FIG:09-payloads.png}}\n"
+   "html": "\n<p>Visualizza e termina i payload in esecuzione, avvia quelli salvati con un clic – da <code>/data/PS5-Cooling-Center/payloads</code>\no dalla chiavetta USB (cartella principale o cartella <code>payloads</code>). L'avvio avviene tramite il caricatore di payload della console\n(porta 9021).</p>\n<p><b>Profili:</b> un profilo è una sequenza con nome di payload e pause che «Esegui» avvia passo dopo passo. Uno può essere impostato come <b>profilo di avvio</b>; l’app lo esegue da sola a ogni avvio (con una protezione contro i cicli infiniti). I nuovi payload si caricano nella cartella della console con «Importa dal PC», anche durante la modifica di un profilo. «Salva profili» e «Carica profili» scambiano i profili come file.</p>\n{{FIG:09-payloads.png}}\n"
   },
   {
    "id": "profil",

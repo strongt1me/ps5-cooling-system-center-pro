@@ -84,7 +84,7 @@
   {
    "id": "spielstaende",
    "title": "Copie de sécurité des données sauvegardées",
-   "html": "\n<p>Copie les données sauvegardées telles que la console les stocke – chiffrées, sans rien ouvrir ni modifier – sur une\nclé USB, un disque ou le SSD interne (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Chaque fichier est vérifié ;\n« Vérifier » relit plus tard une copie de sécurité.</p>\n<p><b>Restaurer</b> se fait jeu par jeu : l’app fait d’abord une copie de sécurité de l’état actuel, écrit tous les nouveaux fichiers d’abord\nà côté, les vérifie et ne remplace qu’ensuite.</p>\n<div class='warn'>Copie de sécurité et restauration n’ont lieu que si <b>aucun jeu n’est lancé</b> – même en pause. Les copies de sécurité d’une\nautre console ne peuvent pas être restaurées.</div>\n{{FIG:06-spiele-spielstaende.png}}\n"
+   "html": "\n<p>Copie les données sauvegardées telles que la console les stocke – chiffrées, sans rien ouvrir ni modifier – sur une\nclé USB, un disque ou le SSD interne (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Chaque fichier est vérifié ;\n« Vérifier » relit plus tard une copie de sécurité.</p>\n<p><b>Restaurer</b> se fait jeu par jeu : l’app fait d’abord une copie de sécurité de l’état actuel, écrit tous les nouveaux fichiers d’abord\nà côté, les vérifie et ne remplace qu’ensuite.</p>\n<div class='warn'>Copie de sécurité et restauration n’ont lieu que si <b>aucun jeu n’est lancé</b> – même en pause. Les copies de sécurité d’une\nautre console ne peuvent pas être restaurées.</div>\n<p>Par utilisateur, séparés en jeux PS5, applis PS5, jeux PS4 et applis PS4. « Supprimer » (deux clics) efface les sauvegardes d’un titre ; l’appli sauvegarde d’abord l’état actuel et permet de le restaurer.</p>\n{{FIG:06-spiele-spielstaende.png}}\n"
   },
   {
    "id": "pakete",
@@ -99,7 +99,7 @@
   {
    "id": "payloads",
    "title": "Payloads",
-   "html": "\n<p>Voir et arrêter les payloads en cours, lancer d’un clic ceux qui sont enregistrés – depuis <code>/data/PS5-Cooling-Center/payloads</code>\nou depuis la clé USB (racine ou dossier <code>payloads</code>). Le lancement passe par le chargeur de payloads de la console\n(port 9021).</p>\n{{FIG:09-payloads.png}}\n"
+   "html": "\n<p>Voir et arrêter les payloads en cours, lancer d’un clic ceux qui sont enregistrés – depuis <code>/data/PS5-Cooling-Center/payloads</code>\nou depuis la clé USB (racine ou dossier <code>payloads</code>). Le lancement passe par le chargeur de payloads de la console\n(port 9021).</p>\n<p><b>Profils :</b> un profil est une séquence nommée de payloads et de pauses que « Exécuter » lance pas à pas. L’un d’eux peut être défini comme <b>profil de démarrage</b> ; l’appli l’exécute alors d’elle-même après chaque démarrage (avec une protection contre les boucles infinies). Les nouveaux payloads se chargent dans le dossier de la console avec « Importer depuis le PC », y compris pendant la modification d’un profil. « Sauvegarder les profils » et « Charger des profils » échangent les profils sous forme de fichier.</p>\n{{FIG:09-payloads.png}}\n"
   },
   {
    "id": "profil",

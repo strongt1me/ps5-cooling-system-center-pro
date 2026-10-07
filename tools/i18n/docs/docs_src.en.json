@@ -84,7 +84,7 @@
   {
    "id": "spielstaende",
    "title": "Back up saved data",
-   "html": "\n<p>Copies the saved data as the console stores it – encrypted, without opening or changing anything – to a\nUSB stick, a disk or the internal SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Every file is verified;\n“Verify” reads a backup again later.</p>\n<p><b>Restore</b> works for individual games: the app first backs up the current state, writes all new files next to the old ones first,\nverifies them and only then replaces the old ones.</p>\n<div class='warn'>Backing up and restoring only happen when <b>no game is running</b> – not even a paused one. Backups from another\nconsole cannot be restored.</div>\n{{FIG:06-spiele-spielstaende.png}}\n"
+   "html": "\n<p>Copies the saved data as the console stores it – encrypted, without opening or changing anything – to a\nUSB stick, a disk or the internal SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Every file is verified;\n“Verify” reads a backup again later.</p>\n<p><b>Restore</b> works for individual games: the app first backs up the current state, writes all new files next to the old ones first,\nverifies them and only then replaces the old ones.</p>\n<div class='warn'>Backing up and restoring only happen when <b>no game is running</b> – not even a paused one. Backups from another\nconsole cannot be restored.</div>\n<p>Per user, split into PS5 games, PS5 apps, PS4 games and PS4 apps. “Delete” (two clicks) removes the saved games of one title; the app backs up the current state first and lets you put it back.</p>\n{{FIG:06-spiele-spielstaende.png}}\n"
   },
   {
    "id": "pakete",
@@ -99,7 +99,7 @@
   {
    "id": "payloads",
    "title": "Payloads",
-   "html": "\n<p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>\nor from the USB stick (root or folder <code>payloads</code>). They are started via the console's payload loader\n(port 9021).</p>\n{{FIG:09-payloads.png}}\n"
+   "html": "\n<p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>\nor from the USB stick (root or folder <code>payloads</code>). They are started via the console's payload loader\n(port 9021).</p>\n<p><b>Profiles:</b> A profile is a named sequence of payloads and pauses that “Run” starts step by step. One can be set as the <b>startup profile</b>; the app then runs it by itself after every start (with protection against endless loops). New payloads can be loaded into the console’s folder with “Import from PC”, also while editing a profile. “Back up profiles” and “Load profiles” exchange profiles as a file.</p>\n{{FIG:09-payloads.png}}\n"
   },
   {
    "id": "profil",

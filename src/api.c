@@ -3131,6 +3131,18 @@ handle_packages_install(int fd, const ps5tm_request_t *req) {
 }
 
 static void
+handle_saves_delete(int fd, const ps5tm_request_t *req) {
+  cJSON *root = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *u = root ? cJSON_GetObjectItem(root, "uid") : NULL, *i = root ? cJSON_GetObjectItem(root, "id") : NULL,
+              *m = root ? cJSON_GetObjectItem(root, "mount") : NULL;
+  char err[640] = "";
+  int st = ps5tm_saves_delete_start(cJSON_IsString(u) ? u->valuestring : NULL, cJSON_IsString(i) ? i->valuestring : NULL,
+                                    cJSON_IsString(m) ? m->valuestring : "", err, sizeof(err));
+  cJSON_Delete(root);
+  saves_started(fd, st, "saves_refused", err);
+}
+
+static void
 handle_saves_verify(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
   const cJSON *jp = body ? cJSON_GetObjectItem(body, "path") : NULL;
@@ -3626,6 +3638,40 @@ handle_avatar_current(int fd) {
 }
 
 
+/* The picture of one of the users whose saved games the page lists: ?uid=<8 hex digits>. Read-only, the same file as
+   above; a user without a custom picture has none (404, the page shows an initial). */
+static void
+handle_saves_avatar(int fd, const char *query) {
+  char uid[16];
+  query_param(query, "uid", uid, sizeof(uid));
+  if(strlen(uid) != 8 || strspn(uid, "0123456789abcdefABCDEF") != 8) {
+    ps5tm_http_send_error(fd, 400, "bad_uid", "Ungültige Benutzerkennung.");
+    return;
+  }
+  for(int i = 0; i < 8; i++) uid[i] = (char)(uid[i] >= 'a' && uid[i] <= 'f' ? uid[i] - 32 : uid[i]);
+  static const char *const names[] = { "avatar.png", "picture.png" };
+  for(size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+    char path[160];
+    snprintf(path, sizeof(path), "/system_data/priv/cache/profile/0x%s/%s", uid, names[i]);
+    FILE *f = fopen(path, "rb");
+    if(!f) continue;
+    struct stat st;
+    if(fstat(fileno(f), &st) != 0 || st.st_size <= 0 || st.st_size > 4 * 1024 * 1024) { fclose(f); continue; }
+    unsigned char *buf = malloc((size_t)st.st_size);
+    if(!buf) { fclose(f); break; }
+    size_t n = fread(buf, 1, (size_t)st.st_size, f);
+    fclose(f);
+    if(n == (size_t)st.st_size) {
+      ps5tm_http_send(fd, 200, "OK", "image/png", buf, n, NULL);
+      free(buf);
+      return;
+    }
+    free(buf);
+  }
+  ps5tm_http_send_error(fd, 404, "no_avatar", "Für diesen Benutzer liegt kein Profilbild vor.");
+}
+
+
 static void
 handle_avatar_commit(int fd, int restore) {
   ps5tm_user_t prof;
@@ -4073,6 +4119,17 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
+  if(!strcmp(req->path, "/api/v1/library/probe")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                         "Nur POST erlaubt."); return; }
+    if(ps5tm_library_probe_now() != 0) {
+      ps5tm_http_send_error(fd, 503, "probe_not_running", "Die Prüfung der Abbilder läuft nicht.");
+      return;
+    }
+    ps5tm_http_send_json(fd, 202, "{\"ok\":true,\"message\":\"Die Prüfung der Abbilder wurde angefordert.\"}");
+    return;
+  }
+
   if(!strcmp(req->path, "/api/v1/library/cover")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
@@ -4197,6 +4254,49 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                          "Nur POST erlaubt."); return; }
     handle_payload_kill(fd, req);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/payload-profiles")) {
+    if(is_get) {
+      char *txt = ps5tm_payprof_get_json();
+      if(!txt) { ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
+      ps5tm_http_send(fd, 200, "OK", "application/json", txt, strlen(txt), NULL);
+      free(txt);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET oder POST erlaubt."); return; }
+    char err[256] = "", *out = NULL;
+    int st = ps5tm_payprof_save(req->body ? req->body : "", &out, err, sizeof(err));
+    if(st != 200) { ps5tm_http_send_error(fd, st, "profiles_refused", err); return; }
+    ps5tm_http_send(fd, 200, "OK", "application/json", out, strlen(out), NULL);
+    free(out);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/payload-profiles/status")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char *txt = ps5tm_payprof_status_json();
+    if(!txt) { ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
+    ps5tm_http_send(fd, 200, "OK", "application/json", txt, strlen(txt), NULL);
+    free(txt);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/payload-profiles/run") || !strcmp(req->path, "/api/v1/payload-profiles/stop")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    if(!strcmp(req->path, "/api/v1/payload-profiles/stop")) {
+      ps5tm_payprof_stop();
+      ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+      return;
+    }
+    cJSON *root = req->body ? cJSON_Parse(req->body) : NULL;
+    const char *id = json_text(root, "id");
+    char err[160] = "";
+    int st = ps5tm_payprof_run(id, 0, err, sizeof(err));
+    cJSON_Delete(root);
+    if(st != 200) { ps5tm_http_send_error(fd, st, "profile_not_started", err); return; }
+    ps5tm_http_send_json(fd, 202, "{\"ok\":true}");
     return;
   }
 
@@ -4417,6 +4517,13 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
+  if(!strcmp(req->path, "/api/v1/saves/avatar")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                        "Nur GET erlaubt."); return; }
+    handle_saves_avatar(fd, req->query);
+    return;
+  }
+
   if(!strcmp(req->path, "/api/v1/saves/job")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
@@ -4427,12 +4534,14 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   if(!strcmp(req->path, "/api/v1/saves/backup") ||
      !strcmp(req->path, "/api/v1/saves/verify") ||
      !strcmp(req->path, "/api/v1/saves/restore") ||
+     !strcmp(req->path, "/api/v1/saves/delete") ||
      !strcmp(req->path, "/api/v1/saves/cancel")) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                          "Nur POST erlaubt."); return; }
     if(!strcmp(req->path, "/api/v1/saves/backup"))       handle_saves_backup(fd, req);
     else if(!strcmp(req->path, "/api/v1/saves/verify"))  handle_saves_verify(fd, req);
     else if(!strcmp(req->path, "/api/v1/saves/restore")) handle_saves_restore(fd, req);
+    else if(!strcmp(req->path, "/api/v1/saves/delete"))  handle_saves_delete(fd, req);
     else { ps5tm_saves_cancel(); send_cjson(fd, 200, ps5tm_saves_job_json()); }
     return;
   }

@@ -451,6 +451,15 @@ ihre Trophäen gehören nicht dazu.
   (Bild, Beschreibung). Bei einer Sicherung kommt noch die Spielstand-Datenbank der
   gewählten Benutzer dazu (`savedata.db`, `game_setting.dat`). Sie wird nur aufbewahrt und
   nie zurückgespielt.
+- **Ordnung der Liste (ab 1.51.0).** Je Benutzer getrennt nach **PS5-Spielen, PS5-Apps, PS4-Spielen und PS4-Apps**.
+  Als **App** gilt, was die Konsole selbst so beschreibt: bei PS5-Titeln `applicationCategoryType` in `param.json`
+  ungleich 0 (YouTube: 65536, Spiele: 0), bei PS4-Titeln eine `CATEGORY` in `param.sfo`, die nicht mit „g“ beginnt, und
+  die System-Anwendungen `NPXS…`. Fehlt jede Beschreibung, gilt der Titel als Spiel. Neben der Titel-ID steht der Name,
+  auch bei nicht mehr installierten Titeln, soweit ihn die Konsole noch kennt.
+- **Löschen (ab 1.51.0).** Jeder Titel hat einen Knopf „Löschen“ (zwei Klicks). Die App sichert den jetzigen Stand
+  zuerst auf dem gewählten Ziel (als „Stand vor dem Löschen“, derselbe Weg wie beim Zurückspielen; er lässt sich
+  zurückspielen) und entfernt dann die Spielstand-Ordner dieses Titels für diesen Benutzer. Das geht nur, wenn
+  kein Spiel läuft, auch kein pausiertes. Die Spielstand-Datenbank der Konsole (`savedata.db`) fasst die App nicht an.
 - **Sichern.** Die Seite listet je Benutzer (bis zu 16, so viele Konten hat eine PS5) die Titel
   mit Größe und Datum der letzten Änderung; alle sind vorgewählt, ein Häkchen am Benutzer wählt
   alle oder keinen. Dann das
@@ -785,6 +794,47 @@ Original bleibt); aus dem internen Ordner lässt sie sich löschen (zwei Klicks)
   oder kurz nach dem ersten auf dieselbe Datei wird abgewiesen.
 - Startet ein Payload diese App selbst neu, reißt die Verbindung kurz ab; die
   Seite findet die neue Ausführung von allein wieder.
+
+### Profile: Abläufe aus mehreren Payloads (ab 1.51.0)
+
+Auf der Seite „Payloads“ steht über den gespeicherten Payloads der Abschnitt
+„Profile“. Ein Profil ist eine **benannte Abfolge** aus Payloads des internen
+Ordners und Pausen dazwischen (zum Beispiel erst kstuff, 3 Sekunden Pause, dann
+ShadowMountPlus). „Ausführen“ startet die Abfolge Schritt für Schritt; „Anhalten“
+beendet sie nach dem laufenden Schritt. Angezeigt werden Schritt, Gesamtzahl und
+das Ergebnis jedes Schritts.
+
+- **Startprofil:** Mit „Als Startprofil“ führt die App das Profil nach jedem
+  eigenen Start von selbst aus (rund 25 Sekunden danach, wenn die Konsole mit
+  ihrem Start fertig ist). Es gibt höchstens ein Startprofil.
+- **Schutz vor Endlosschleifen:** Solange ein Ablauf läuft, liegt eine Markierung
+  im Datenordner. Findet die App sie beim Start, wurde der letzte Ablauf nicht
+  beendet (ein Payload darin hat die App oder die Konsole neu gestartet); dann
+  läuft das Startprofil diesmal **nicht**, und das Protokoll sagt es.
+- **Bearbeiten:** Name, Einträge hinzufügen (aus dem Ordner), Pausen einfügen
+  (1 ms bis 10 Minuten), Reihenfolge ändern, Einträge entfernen, Profil löschen.
+  Höchstens 24 Profile mit je 64 Einträgen.
+- **Importieren:** „Vom PC importieren“ (bei den gespeicherten Payloads, und im
+  Profil mit „Vom PC importieren und hinzufügen“) lädt `.elf`-Dateien vom Rechner
+  in den Ordner der Konsole; eine vorhandene Datei wird nie überschrieben.
+  „Profile sichern“ speichert alle Profile als Datei, „Profile laden“ fügt die
+  Profile einer solchen Datei hinzu.
+- Gespeichert wird in `/data/PS5-Cooling-Center/payload-profiles.json`.
+
+Die Idee (Profile, Pausen, Startprofil) stammt vom ps5-payload-manager von itsPLK
+(GPL-3.0); hier ist sie für den eigenen Payload-Ordner neu gebaut, ohne dessen
+Code zu übernehmen.
+
+### Backport-Quellen: fakelib2 und Backport-Ordner (ab 1.51.0)
+
+Die Marken „Backport“, „AMPR EMU“ und „PlayGo“ folgen jetzt der Wahl von
+ShadowMountPlus: Ein Ordner `fakelib2` ersetzt `fakelib` (er ersetzt, er ergänzt
+nicht), und ein Ordner `<Scanpfad>/backports/<TITEL-ID>/` mit `fakelib2` oder
+`fakelib` hat Vorrang vor den Bibliotheken im Spiel. Die Detailansicht des Spiels
+nennt, aus welchem Ordner die Bibliotheken kommen. Gesucht wird neben dem Spiel
+(bzw. seinem Abbild) und in `/data/homebrew`, `/data/etaHEN/games`, auf `ext0`/`ext1`
+und auf USB unter `etaHEN/games`. Die globale Bibliothek unter
+`/data/shadowmount/fakelib` zeigt die App nicht je Spiel an: Sie gälte für alle.
 
 ## Betriebsarten
 

@@ -61,8 +61,10 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
+#include "imgread.h"
 #include "ps5tm.h"
 #include "sqlite_ro.h"
 #include "third_party/cJSON.h"
@@ -87,6 +89,8 @@ typedef struct {
   int      ampr_index;           /* ampr_emu.index: the emulation has run   */
   int      playgo_log;           /* playlgo.log: likewise                   */
   int      extra_libs;           /* other libraries in fakelib              */
+  int      fakelib2;             /* the libraries come from fakelib2 (it replaces fakelib, as ShadowMountPlus uses it) */
+  int      bp_from;              /* 0 none, 1 in the game, 2 from <scanpath>/backports/<TITLE_ID>                      */
   uint32_t eboot_sdk;            /* from eboot.bin, 0 = not readable        */
   int      nlibs;
   int      more_libs;
@@ -131,6 +135,7 @@ typedef struct {
   char       title_id[12];
   char       source[128];
   int64_t    eboot_mtime, eboot_size, fakelib_mtime;
+  int64_t    img_size, img_mtime;      /* the image file the image probe read it from; 0 when it was read from a mount */
   lib_mods_t mods;
 } mods_cache_t;
 
@@ -286,16 +291,13 @@ rd64(const unsigned char *p) {
  * 0x04000033 = 4.00, 0x10000040 = 10.00.
  *
  * Two small reads, never the whole file — AC Shadows' eboot.bin is 212 MB. */
-static uint32_t
-eboot_sdk(const char *root) {
-  char path[192];
-  snprintf(path, sizeof(path), "%s/eboot.bin", root);
-  int fd = open(path, O_RDONLY);
-  if(fd < 0) return 0;
+typedef long (*rd_at_fn)(void *ctx, uint64_t off, void *buf, size_t n);   /* bytes read, -1 on error */
 
+static uint32_t
+eboot_sdk_rd(rd_at_fn rd, void *ctx) {
   unsigned char h[4096];
   uint32_t sdk = 0;
-  ssize_t  n   = read(fd, h, sizeof(h));
+  long     n   = rd(ctx, 0, h, sizeof(h));
   if(n < 0x100 || (memcmp(h, "\x4f\x15\x3d\x1d", 4) != 0 &&
                    memcmp(h, "\x54\x14\xf5\xee", 4) != 0))
     goto out;
@@ -329,8 +331,7 @@ eboot_sdk(const char *root) {
       uint64_t eoff = rd64(en + 8), efsz = rd64(en + 16), rel = pp - off;
       unsigned char b[0x18];
       if(rel + sizeof(b) <= efsz &&
-         lseek(fd, (off_t)(eoff + rel), SEEK_SET) == (off_t)(eoff + rel) &&
-         read(fd, b, sizeof(b)) == (ssize_t)sizeof(b) &&
+         rd(ctx, eoff + rel, b, sizeof(b)) == (long)sizeof(b) &&
          memcmp(b + 8, "ORBI", 4) == 0)
         sdk = rd32(b + 0x14);
       goto out;
@@ -338,33 +339,108 @@ eboot_sdk(const char *root) {
     goto out;
   }
 out:
+  return sdk;
+}
+
+static long
+rd_fd_at(void *ctx, uint64_t off, void *buf, size_t n) {
+  ssize_t k = pread(*(int *)ctx, buf, n, (off_t)off);
+  return (long)k;
+}
+
+static uint32_t
+eboot_sdk(const char *root) {
+  char path[192];
+  snprintf(path, sizeof(path), "%s/eboot.bin", root);
+  int fd = open(path, O_RDONLY);
+  if(fd < 0) return 0;
+  uint32_t sdk = eboot_sdk_rd(rd_fd_at, &fd);
   close(fd);
   return sdk;
 }
 
+/* A library name found in fakelib: what it is counted as. */
+static void
+fakelib_add(lib_mods_t *m, const char *nm) {
+  size_t len = strlen(nm);
+  if(nm[0] == '.') return;
+  if(!(len > 5 && !strcasecmp(nm + len - 5, ".sprx")) &&
+     !(len > 4 && !strcasecmp(nm + len - 4, ".prx")))
+    return;
+  if(!strcasecmp(nm, "libSceAmpr.sprx"))        m->ampr = 1;
+  else if(!strcasecmp(nm, "libScePlayGo.sprx")) m->playgo = 1;
+  else                                          m->extra_libs++;
+  if(m->nlibs < MOD_LIB_NAMES)
+    snprintf(m->libs[m->nlibs++], sizeof(m->libs[0]), "%s", nm);
+  else
+    m->more_libs++;
+}
+
+/* The libraries in one folder; 1 when the folder is there. */
+static int
+scan_libdir(const char *path, lib_mods_t *m) {
+  DIR *d = opendir(path);
+  if(!d) return 0;
+  struct dirent *e;
+  while((e = readdir(d)) != NULL) fakelib_add(m, e->d_name);
+  closedir(d);
+  return 1;
+}
+
+/* fakelib2 replaces fakelib when it is there (ShadowMountPlus mounts one or the other). */
 static void
 scan_fakelib(const char *root, lib_mods_t *m) {
   char path[192];
+  snprintf(path, sizeof(path), "%s/fakelib2", root);
+  if(scan_libdir(path, m)) { m->fakelib2 = 1; return; }
   snprintf(path, sizeof(path), "%s/fakelib", root);
-  DIR *d = opendir(path);
-  if(!d) return;
-  struct dirent *e;
-  while((e = readdir(d)) != NULL) {
-    const char *nm  = e->d_name;
-    size_t      len = strlen(nm);
-    if(nm[0] == '.') continue;
-    if(!(len > 5 && !strcasecmp(nm + len - 5, ".sprx")) &&
-       !(len > 4 && !strcasecmp(nm + len - 4, ".prx")))
-      continue;
-    if(!strcasecmp(nm, "libSceAmpr.sprx"))        m->ampr = 1;
-    else if(!strcasecmp(nm, "libScePlayGo.sprx")) m->playgo = 1;
-    else                                          m->extra_libs++;
-    if(m->nlibs < MOD_LIB_NAMES)
-      snprintf(m->libs[m->nlibs++], sizeof(m->libs[0]), "%s", nm);
-    else
-      m->more_libs++;
+  scan_libdir(path, m);
+}
+
+/* The external backport folder ShadowMountPlus prefers over the game's own libraries:
+   <scanpath>/backports/<TITLE_ID>/fakelib2, else .../fakelib. Looked for beside the game (or its image) and in the
+   places ShadowMountPlus scans by default. Not cached: a few stat calls. */
+static void
+overlay_backports(const lib_game_t *g, lib_mods_t *m) {
+  char roots[16][160];
+  int  n = 0;
+  const char *own = g->real_path[0] == '/' ? g->real_path
+                  : strncmp(g->source, "/mnt/shadowmnt/", 15) ? g->source : "";    /* the folder or image of the game */
+  if(own[0] == '/') {
+    snprintf(roots[n], sizeof(roots[0]), "%s", own);
+    char *sl = strrchr(roots[n], '/');
+    if(sl && sl != roots[n]) { *sl = 0; n++; }
   }
-  closedir(d);
+  snprintf(roots[n++], sizeof(roots[0]), "/data/homebrew");
+  snprintf(roots[n++], sizeof(roots[0]), "/data/etaHEN/games");
+  snprintf(roots[n++], sizeof(roots[0]), "/mnt/ext0/etaHEN/games");
+  snprintf(roots[n++], sizeof(roots[0]), "/mnt/ext1/etaHEN/games");
+  for(int u = 0; u < 4 && n < 16; u++) snprintf(roots[n++], sizeof(roots[0]), "/mnt/usb%d/etaHEN/games", u);
+
+  for(int i = 0; i < n; i++) {
+    char base[240], p2[300];
+    snprintf(base, sizeof(base), "%s/backports/%s", roots[i], g->title_id);
+    lib_mods_t t;
+    memset(&t, 0, sizeof(t));
+    snprintf(p2, sizeof(p2), "%s/fakelib2", base);
+    int is2 = 1;
+    if(!scan_libdir(p2, &t)) {
+      snprintf(p2, sizeof(p2), "%s/fakelib", base);
+      is2 = 0;
+      if(!scan_libdir(p2, &t)) continue;
+    }
+    if(t.nlibs + t.more_libs == 0) continue;               /* an empty folder is not an overlay */
+    m->ampr = t.ampr;
+    m->playgo = t.playgo;
+    m->extra_libs = t.extra_libs;
+    m->nlibs = t.nlibs;
+    m->more_libs = t.more_libs;
+    memcpy(m->libs, t.libs, sizeof(m->libs));
+    m->fakelib2 = is2;
+    m->bp_from = 2;
+    return;
+  }
+  if(m->nlibs + m->more_libs > 0) m->bp_from = 1;
 }
 
 static int64_t
@@ -384,6 +460,23 @@ detect_mods(lib_game_t *g) {
 
   struct stat st;
   if(stat(g->source, &st) != 0 || !S_ISDIR(st.st_mode)) {
+    /* An image that is not mounted: what was found while it was (a game running from it, or the image probe at the
+       start) is the last thing known, and better than "unknown". The two live marks are not known, the backport
+       verdict is drawn again from the saved parts. */
+    if(!strncmp(g->source, "/mnt/shadowmnt/", 15)) {
+      for(int i = 0; i < g_mods_cached; i++) {
+        mods_cache_t *c = &g_mods_cache[i];
+        if(strcmp(c->title_id, g->title_id)) continue;   /* by title only: ShadowMountPlus gives the mount point another name after every mount */
+        *m = c->mods;
+        m->ampr_index = 0;
+        m->playgo_log = 0;
+        overlay_backports(g, m);
+        uint32_t eb0 = (m->eboot_sdk >> 16) & 0xFFFF;
+        uint32_t pj0 = (uint32_t)(g->param_sdk >> 48) & 0xFFFF;
+        m->backport = m->extra_libs > 0 || (eb0 && pj0 && eb0 < pj0);
+        return;
+      }
+    }
     m->state = MODS_UNREACHABLE;
     return;
   }
@@ -394,6 +487,10 @@ detect_mods(lib_game_t *g) {
   int64_t eb_mtime = stat_mtime(path, &eb_size);
   snprintf(path, sizeof(path), "%s/fakelib", g->source);
   int64_t fl_mtime = stat_mtime(path, NULL);
+  snprintf(path, sizeof(path), "%s/fakelib2", g->source);
+  int64_t fl2_mtime = stat_mtime(path, NULL);
+  if(fl2_mtime > fl_mtime) fl_mtime = fl2_mtime;
+  else if(fl2_mtime >= 0) fl_mtime += 1;                  /* a fakelib2 appearing must change the key */
 
   mods_cache_t *c = NULL;
   for(int i = 0; i < g_mods_cached; i++)
@@ -422,6 +519,7 @@ detect_mods(lib_game_t *g) {
   m->ampr_index = stat(path, &st) == 0;
   snprintf(path, sizeof(path), "%s/playlgo.log", g->source);
   m->playgo_log = stat(path, &st) == 0;
+  overlay_backports(g, m);
 
   uint32_t eb = (m->eboot_sdk >> 16) & 0xFFFF;              /* 0x0400 = 4.00 */
   uint32_t pj = (uint32_t)(g->param_sdk >> 48) & 0xFFFF;    /* 0x0500 = 5.00 */
@@ -1303,6 +1401,8 @@ ps5tm_library_json(void) {
       cJSON_AddBoolToObject  (m, "ampr_index", md->ampr_index);
       cJSON_AddBoolToObject  (m, "playgo_log", md->playgo_log);
       cJSON_AddNumberToObject(m, "backport_libs", md->extra_libs);
+      cJSON_AddBoolToObject  (m, "fakelib2", md->fakelib2);
+      cJSON_AddStringToObject(m, "libs_from", md->bp_from == 2 ? "folder" : md->bp_from == 1 ? "game" : "");
       if(md->eboot_sdk) {
         snprintf(v, sizeof(v), "%x.%02x", (unsigned)(md->eboot_sdk >> 24) & 0xFF,
                  (unsigned)(md->eboot_sdk >> 16) & 0xFF);
@@ -1644,4 +1744,413 @@ ps5tm_library_cover(const char *title_id, char *path, size_t path_len) {
   int rc = cover_source(db_path, title_id, path, path_len);
   if(rc == 0 && cache_on) ps5tm_libcache_cover_put(title_id, ts, path);
   return rc;
+}
+
+
+/* ------------------------------------------------------------------ image probe
+ *
+ * ShadowMountPlus 1.7 keeps an image mounted only while its game starts or runs (persistent_image_mounts=0, the default),
+ * so detect_mods() finds the folder of an image game unreachable. This thread asks ShadowMountPlus itself to mount such a
+ * title read-only (POST /games/mount), reads eboot.bin and fakelib exactly as detect_mods() does, and releases the title
+ * again (POST /games/unmount) — one title at a time, a few seconds each.
+ *
+ * Careful by design: it runs only when ShadowMountPlus offers both calls, no game is up, and none of this app's own jobs
+ * is working on a drive; the first refusal of ShadowMountPlus (it answers EBUSY while a game is active, while it scans or
+ * while another mount is going on) ends the round, and the next one comes half an hour later — never a retry in a loop.
+ * Before a mount the title's id is written to a small file, removed after the release; one that is still there at the
+ * start means the last run ended with the image mounted, and it is released first. */
+
+#define PROBE_MARK       PS5TM_DATA_DIR "/probe-hold.txt"
+#define PROBE_DIR        PS5TM_DATA_DIR "/covers_and_more"      /* next to the cover copies */
+#define PROBE_SAVED      PROBE_DIR "/image-probe.json"
+#define PROBE_FIRST_MS   20000u
+#define PROBE_EVERY_MS   (10u * 60u * 1000u)
+#define PROBE_MAX_TITLES 40
+
+static pthread_mutex_t g_probe_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  g_probe_cv   = PTHREAD_COND_INITIALIZER;
+static int             g_probe_started;
+static int             g_probe_want;
+
+static int
+probe_post(const char *route, const char *tid, int with_mode, char *err, size_t err_len) {
+  cJSON *b = cJSON_CreateObject();
+  cJSON_AddStringToObject(b, "title_id", tid);
+  if(with_mode) cJSON_AddStringToObject(b, "mode", "ro");
+  cJSON *a = ps5tm_smp_call(route, b, 90000, err, err_len);
+  cJSON_Delete(b);
+  if(!a) return -1;
+  cJSON_Delete(a);
+  return 0;
+}
+
+/* The same reading as detect_mods() makes of a reachable folder, stored in the same cache. */
+static int
+probe_read_into_cache(const char *tid, const char *source) {
+  struct stat st;
+  if(stat(source, &st) != 0 || !S_ISDIR(st.st_mode)) return -1;
+  lib_mods_t m;
+  memset(&m, 0, sizeof(m));
+  m.state = MODS_CHECKED;
+  scan_fakelib(source, &m);
+  m.eboot_sdk = eboot_sdk(source);
+  char    path[192];
+  int64_t eb_size = -1;
+  snprintf(path, sizeof(path), "%s/eboot.bin", source);
+  int64_t eb_mtime = stat_mtime(path, &eb_size);
+  snprintf(path, sizeof(path), "%s/fakelib", source);
+  int64_t fl_mtime = stat_mtime(path, NULL);
+  snprintf(path, sizeof(path), "%s/fakelib2", source);
+  int64_t fl2_mtime = stat_mtime(path, NULL);
+  if(fl2_mtime > fl_mtime) fl_mtime = fl2_mtime;
+  else if(fl2_mtime >= 0) fl_mtime += 1;
+  pthread_mutex_lock(&g_refresh_lock);
+  mods_cache_t *c = NULL;
+  for(int i = 0; i < g_mods_cached; i++)
+    if(!strcmp(g_mods_cache[i].title_id, tid)) { c = &g_mods_cache[i]; break; }
+  if(!c && g_mods_cached < LIBRARY_MAX) c = &g_mods_cache[g_mods_cached++];
+  if(c) {
+    snprintf(c->title_id, sizeof(c->title_id), "%s", tid);
+    snprintf(c->source, sizeof(c->source), "%s", source);
+    c->eboot_mtime   = eb_mtime;
+    c->eboot_size    = eb_size;
+    c->fakelib_mtime = fl_mtime;
+    c->mods          = m;
+  }
+  pthread_mutex_unlock(&g_refresh_lock);
+  return c ? 0 : -1;
+}
+
+/* What the probe found stays: a start without a new game then mounts nothing. Only image games (a source under
+   /mnt/shadowmnt) are written. */
+static void
+probe_save(void) {
+  cJSON *arr = cJSON_CreateArray();
+  pthread_mutex_lock(&g_refresh_lock);
+  for(int i = 0; i < g_mods_cached; i++) {
+    const mods_cache_t *c = &g_mods_cache[i];
+    if((strncmp(c->source, "/mnt/shadowmnt/", 15) && c->img_size <= 0) || c->mods.state != MODS_CHECKED) continue;
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "title_id", c->title_id);
+    cJSON_AddStringToObject(o, "source", c->source);
+    cJSON_AddNumberToObject(o, "img_size", (double)c->img_size);
+    cJSON_AddNumberToObject(o, "img_mtime", (double)c->img_mtime);
+    cJSON_AddNumberToObject(o, "eboot_sdk", (double)c->mods.eboot_sdk);
+    cJSON_AddNumberToObject(o, "ampr", c->mods.ampr);
+    cJSON_AddNumberToObject(o, "playgo", c->mods.playgo);
+    cJSON_AddNumberToObject(o, "extra_libs", c->mods.extra_libs);
+    cJSON_AddNumberToObject(o, "more_libs", c->mods.more_libs);
+    cJSON_AddNumberToObject(o, "fakelib2", c->mods.fakelib2);
+    cJSON *libs = cJSON_AddArrayToObject(o, "libs");
+    for(int k = 0; k < c->mods.nlibs; k++) cJSON_AddItemToArray(libs, cJSON_CreateString(c->mods.libs[k]));
+    cJSON_AddItemToArray(arr, o);
+  }
+  pthread_mutex_unlock(&g_refresh_lock);
+  char *txt = cJSON_PrintUnformatted(arr);
+  cJSON_Delete(arr);
+  if(!txt) return;
+  mkdir(PS5TM_DATA_DIR, 0755);
+  mkdir(PROBE_DIR, 0755);
+  char tmp[sizeof(PROBE_SAVED) + 8];
+  snprintf(tmp, sizeof(tmp), "%s.tmp", PROBE_SAVED);
+  FILE *f = fopen(tmp, "w");
+  if(f) {
+    int ok = fputs(txt, f) >= 0;
+    ok = (fclose(f) == 0) && ok;
+    if(ok) rename(tmp, PROBE_SAVED); else remove(tmp);
+  }
+  free(txt);
+}
+
+static void
+probe_load(void) {
+  FILE *f = fopen(PROBE_SAVED, "r");
+  if(!f) return;
+  char *buf = malloc(256 * 1024);
+  if(!buf) { fclose(f); return; }
+  size_t n = fread(buf, 1, 256 * 1024 - 1, f);
+  fclose(f);
+  buf[n] = 0;
+  cJSON *arr = cJSON_Parse(buf);
+  free(buf);
+  if(!cJSON_IsArray(arr)) { cJSON_Delete(arr); return; }
+  pthread_mutex_lock(&g_refresh_lock);
+  const cJSON *o;
+  cJSON_ArrayForEach(o, arr) {
+    const cJSON *tid = cJSON_GetObjectItem(o, "title_id"), *src = cJSON_GetObjectItem(o, "source");
+    if(!cJSON_IsString(tid) || !cJSON_IsString(src)) continue;
+    if(src->valuestring[0] && strncmp(src->valuestring, "/mnt/shadowmnt/", 15)) continue;
+    int have = 0;
+    for(int i = 0; i < g_mods_cached; i++)
+      if(!strcmp(g_mods_cache[i].title_id, tid->valuestring)) { have = 1; break; }
+    if(have || g_mods_cached >= LIBRARY_MAX) continue;
+    mods_cache_t *c = &g_mods_cache[g_mods_cached++];
+    memset(c, 0, sizeof(*c));
+    snprintf(c->title_id, sizeof(c->title_id), "%s", tid->valuestring);
+    snprintf(c->source, sizeof(c->source), "%s", src->valuestring);
+    const cJSON *isz = cJSON_GetObjectItem(o, "img_size"), *imt = cJSON_GetObjectItem(o, "img_mtime");
+    c->img_size  = cJSON_IsNumber(isz) ? (int64_t)isz->valuedouble : 0;
+    c->img_mtime = cJSON_IsNumber(imt) ? (int64_t)imt->valuedouble : 0;
+    lib_mods_t *m = &c->mods;
+    m->state      = MODS_CHECKED;
+    m->eboot_sdk  = (uint32_t)ps5tm_num_u32(cJSON_GetObjectItem(o, "eboot_sdk") ? cJSON_GetObjectItem(o, "eboot_sdk")->valuedouble : 0);
+    m->ampr       = cJSON_IsNumber(cJSON_GetObjectItem(o, "ampr")) && cJSON_GetObjectItem(o, "ampr")->valuedouble != 0;
+    m->playgo     = cJSON_IsNumber(cJSON_GetObjectItem(o, "playgo")) && cJSON_GetObjectItem(o, "playgo")->valuedouble != 0;
+    m->fakelib2   = cJSON_IsNumber(cJSON_GetObjectItem(o, "fakelib2")) && cJSON_GetObjectItem(o, "fakelib2")->valuedouble != 0;
+    const cJSON *el = cJSON_GetObjectItem(o, "extra_libs"), *ml = cJSON_GetObjectItem(o, "more_libs");
+    m->extra_libs = cJSON_IsNumber(el) ? (int)ps5tm_num_u32(el->valuedouble) : 0;
+    m->more_libs  = cJSON_IsNumber(ml) ? (int)ps5tm_num_u32(ml->valuedouble) : 0;
+    const cJSON *libs = cJSON_GetObjectItem(o, "libs"), *l;
+    cJSON_ArrayForEach(l, libs)
+      if(cJSON_IsString(l) && m->nlibs < MOD_LIB_NAMES) snprintf(m->libs[m->nlibs++], sizeof(m->libs[0]), "%s", l->valuestring);
+  }
+  pthread_mutex_unlock(&g_refresh_lock);
+  cJSON_Delete(arr);
+}
+
+static void
+probe_mark_set(const char *tid) {
+  mkdir(PS5TM_DATA_DIR, 0755);
+  FILE *f = fopen(PROBE_MARK, "w");
+  if(f) { fprintf(f, "%s\n", tid); fclose(f); }
+}
+
+static void
+probe_recover(void) {
+  FILE *f = fopen(PROBE_MARK, "r");
+  if(!f) return;
+  char tid[16] = {0};
+  if(fgets(tid, sizeof(tid), f)) tid[strcspn(tid, "\r\n")] = 0;
+  fclose(f);
+  if(tid[0]) {
+    char err[200];
+    if(probe_post("/games/unmount", tid, 0, err, sizeof(err)) == 0)
+      PS5TM_INFO("image_probe_recovered", "Abbild von %s, das beim letzten Mal eingehängt geblieben war, wurde freigegeben.", tid);
+    else
+      PS5TM_WARN("image_probe_recover_failed", "Das Abbild von %s ließ sich nicht freigeben: %s", tid, err);
+  }
+  remove(PROBE_MARK);
+  ps5tm_smp_forget();
+}
+
+/* What imgread.c finds in an image, stored like the folder check stores it. 0 when the image was read. */
+static long
+rd_img_eboot(void *ctx, uint64_t off, void *buf, size_t n) {
+  return imgr_pread((imgr_t *)ctx, "/eboot.bin", off, buf, n);
+}
+
+static int
+probe_fakelib_cb(const char *name, int is_dir, void *ctx) {
+  if(!is_dir) fakelib_add((lib_mods_t *)ctx, name);
+  return 0;
+}
+
+static int
+probe_read_image_file(const char *tid, const char *image_path, int64_t img_size, int64_t img_mtime) {
+  char err[160];
+  imgr_t *r = imgr_open(image_path, err, sizeof(err));
+  if(!r) return -1;
+  lib_mods_t m;
+  memset(&m, 0, sizeof(m));
+  m.state = MODS_CHECKED;
+  if(imgr_list(r, "/fakelib2", probe_fakelib_cb, &m) == 0) m.fakelib2 = 1;     /* fakelib2 replaces fakelib */
+  else imgr_list(r, "/fakelib", probe_fakelib_cb, &m);                         /* no fakelib folder: nothing in it */
+  m.eboot_sdk = eboot_sdk_rd(rd_img_eboot, r);
+  imgr_close(r);
+  pthread_mutex_lock(&g_refresh_lock);
+  mods_cache_t *c = NULL;
+  for(int i = 0; i < g_mods_cached; i++)
+    if(!strcmp(g_mods_cache[i].title_id, tid)) { c = &g_mods_cache[i]; break; }
+  if(!c && g_mods_cached < LIBRARY_MAX) c = &g_mods_cache[g_mods_cached++];
+  if(c) {
+    snprintf(c->title_id, sizeof(c->title_id), "%s", tid);
+    c->source[0]      = 0;
+    c->eboot_mtime    = -1;
+    c->eboot_size     = -1;
+    c->fakelib_mtime  = -1;
+    c->img_size       = img_size;
+    c->img_mtime      = img_mtime;
+    c->mods           = m;
+  }
+  pthread_mutex_unlock(&g_refresh_lock);
+  return c ? 0 : -1;
+}
+
+static int
+probe_idle(void) {
+  ps5tm_gamestate_t gs;
+  ps5tm_gamestate_get(&gs);
+  if(gs.title_id[0]) return 0;                                   /* a game is up, even a paused one */
+  return !ps5tm_gamecopy_busy() && !ps5tm_gameconvert_busy() && !ps5tm_gamemove_busy() &&
+         !ps5tm_gamedelete_busy() && !ps5tm_filemgr_busy();
+}
+
+/* Titles whose image the reader could not open: for them (and only them) the mount is the way. */
+static char g_probe_failed[PROBE_MAX_TITLES][12];
+static int  g_probe_nfailed;
+
+static int
+probe_reader_failed(const char *tid) {
+  for(int i = 0; i < g_probe_nfailed; i++)
+    if(!strcmp(g_probe_failed[i], tid)) return 1;
+  return 0;
+}
+
+static void
+probe_note_failed(const char *tid) {
+  if(probe_reader_failed(tid) || g_probe_nfailed >= PROBE_MAX_TITLES) return;
+  snprintf(g_probe_failed[g_probe_nfailed++], sizeof(g_probe_failed[0]), "%s", tid);
+}
+
+/* Part one: read every image game's own file, nothing mounted, no call to ShadowMountPlus. A title is read again only when
+   its image file has another size or time than the one the saved result was read from. Returns how many were read. */
+static int
+probe_read_images(void) {
+  struct { char tid[12]; char path[256]; } img[PROBE_MAX_TITLES];
+  int n = 0;
+  pthread_mutex_lock(&g_lock);
+  for(int i = 0; i < g_count && n < PROBE_MAX_TITLES; i++) {
+    const lib_game_t *g = &g_games[i];
+    if(g->platform != 0 || g->real_path[0] != '/' || !strcmp(g->format, "folder") || !strcmp(g->format, "pkg") || !g->format[0]) continue;
+    snprintf(img[n].tid, sizeof(img[n].tid), "%s", g->title_id);
+    snprintf(img[n].path, sizeof(img[n].path), "%s", g->real_path);
+    n++;
+  }
+  pthread_mutex_unlock(&g_lock);
+
+  int done = 0;
+  for(int i = 0; i < n; i++) {
+    struct stat st;
+    if(stat(img[i].path, &st) != 0 || !S_ISREG(st.st_mode)) continue;            /* the drive is not there now */
+    int have = 0;
+    pthread_mutex_lock(&g_refresh_lock);
+    for(int k = 0; k < g_mods_cached; k++) {
+      const mods_cache_t *c = &g_mods_cache[k];
+      if(!strcmp(c->title_id, img[i].tid) && c->mods.state == MODS_CHECKED && c->img_size == (int64_t)st.st_size &&
+         c->img_mtime == (int64_t)st.st_mtime) { have = 1; break; }
+    }
+    pthread_mutex_unlock(&g_refresh_lock);
+    if(have) continue;
+    if(probe_read_image_file(img[i].tid, img[i].path, (int64_t)st.st_size, (int64_t)st.st_mtime) == 0) {
+      done++;
+    } else {
+      probe_note_failed(img[i].tid);
+      PS5TM_INFO("image_probe_unread", "Das Abbild von %s ließ sich nicht direkt lesen (unbekanntes Format?); falls möglich wird es kurz eingehängt.", img[i].tid);
+    }
+  }
+  if(done) {
+    probe_save();
+    ps5tm_library_forget();                                 /* the next list is made with what was found */
+    PS5TM_INFO("image_probe_read", "Anpassungen der Abbilder gelesen: %d Spiel(e), ohne etwas einzuhängen.", done);
+  }
+  return done;
+}
+
+static void
+probe_round(void) {
+  ensure_fresh(1);
+  probe_read_images();
+
+  /* The fallback: a title whose image the reader does not know is mounted for a moment through ShadowMountPlus (see above). */
+  if(g_probe_nfailed == 0) return;
+  if(!ps5tm_smp_available(NULL, 0) || !ps5tm_smp_can("mount_game") || !ps5tm_smp_can("unmount_game")) return;
+  probe_recover();
+
+  struct { char tid[12]; char source[128]; } todo[PROBE_MAX_TITLES];
+  int n = 0;
+  pthread_mutex_lock(&g_lock);
+  for(int i = 0; i < g_count && n < PROBE_MAX_TITLES; i++) {
+    const lib_game_t *g = &g_games[i];
+    if(g->platform != 0 || !g->smp || !g->smp_available || g->mods.state != MODS_UNREACHABLE) continue;
+    if(strncmp(g->source, "/mnt/shadowmnt/", 15) || !probe_reader_failed(g->title_id)) continue;
+    snprintf(todo[n].tid, sizeof(todo[n].tid), "%s", g->title_id);
+    snprintf(todo[n].source, sizeof(todo[n].source), "%s", g->source);
+    n++;
+  }
+  pthread_mutex_unlock(&g_lock);
+  if(n == 0) return;
+
+  PS5TM_INFO("image_probe_start", "Anpassungen prüfen durch kurzes Einhängen: %d Spiel(e), jedes gleich wieder freigegeben.", n);
+  int done = 0;
+  for(int i = 0; i < n; i++) {
+    if(!probe_idle()) {
+      PS5TM_INFO("image_probe_stop", "Prüfung der Abbilder angehalten: ein Spiel oder ein anderer Vorgang läuft. %d von %d geprüft.", done, n);
+      return;
+    }
+    char err[200];
+    probe_mark_set(todo[i].tid);
+    if(probe_post("/games/mount", todo[i].tid, 1, err, sizeof(err)) != 0) {
+      remove(PROBE_MARK);
+      PS5TM_INFO("image_probe_refused", "ShadowMountPlus hängt %s gerade nicht ein (%s); die Prüfung wird später erneut versucht. %d von %d geprüft.",
+                 todo[i].tid, err, done, n);
+      return;
+    }
+    ps5tm_smp_forget();
+    int read_ok = -1;
+    for(int w = 0; w < 40 && read_ok != 0; w++) {                   /* up to 10 s for the mount point */
+      read_ok = probe_read_into_cache(todo[i].tid, todo[i].source);
+      if(read_ok != 0) usleep(250 * 1000);
+    }
+    if(probe_post("/games/unmount", todo[i].tid, 0, err, sizeof(err)) == 0) {
+      remove(PROBE_MARK);
+    } else {
+      PS5TM_WARN("image_probe_unmount_failed", "Das Abbild von %s ließ sich nicht wieder freigeben: %s. Beim nächsten Start wird es noch einmal versucht.",
+                 todo[i].tid, err);
+      ps5tm_smp_forget();
+      return;
+    }
+    ps5tm_smp_forget();
+    if(read_ok == 0) { done++; probe_save(); }
+    else PS5TM_INFO("image_probe_unread", "Das Abbild von %s war eingehängt, ließ sich aber nicht lesen.", todo[i].tid);
+    sleep(3);
+  }
+  if(done) ps5tm_library_forget();
+  PS5TM_INFO("image_probe_done", "Anpassungen der Abbilder geprüft: %d von %d.", done, n);
+}
+
+static void *
+probe_thread(void *arg) {
+  (void)arg;
+  uint64_t wait_ms = PROBE_FIRST_MS;
+  for(;;) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    uint64_t ns = (uint64_t)ts.tv_nsec + (wait_ms % 1000) * 1000000ull;
+    ts.tv_sec += (time_t)(wait_ms / 1000 + ns / 1000000000ull);
+    ts.tv_nsec = (long)(ns % 1000000000ull);
+    pthread_mutex_lock(&g_probe_lock);
+    while(!g_probe_want) {
+      if(pthread_cond_timedwait(&g_probe_cv, &g_probe_lock, &ts) != 0) break;
+    }
+    g_probe_want = 0;
+    pthread_mutex_unlock(&g_probe_lock);
+    probe_round();
+    wait_ms = PROBE_EVERY_MS;
+  }
+  return NULL;
+}
+
+void
+ps5tm_library_probe_start(void) {
+  pthread_mutex_lock(&g_probe_lock);
+  if(!g_probe_started) {
+    probe_load();
+    pthread_t th;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(&attr, 256 * 1024);
+    if(pthread_create(&th, &attr, probe_thread, NULL) == 0) g_probe_started = 1;
+    pthread_attr_destroy(&attr);
+  }
+  pthread_mutex_unlock(&g_probe_lock);
+}
+
+int
+ps5tm_library_probe_now(void) {
+  pthread_mutex_lock(&g_probe_lock);
+  int up = g_probe_started;
+  if(up) { g_probe_want = 1; pthread_cond_signal(&g_probe_cv); }
+  pthread_mutex_unlock(&g_probe_lock);
+  return up ? 0 : -1;
 }

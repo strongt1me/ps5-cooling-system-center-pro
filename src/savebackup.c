@@ -680,20 +680,224 @@ typedef struct {
   int      with_db;           /* the users' save databases go in (a backup, not an undo copy) */
 } bk_t;
 
-/* The name of a title as the page knows it: from the library, which only lists
-   what is installed. */
+/* The name of a title as the page knows it: from the library, which only lists what is installed. A title that is
+   not installed any more keeps its saved games and loses its name: so what the library has told is remembered
+   (covers_and_more/title-names.json), and for the rest the console's own appmeta is asked (param.json of a PS5 title,
+   param.sfo of a PS4 one), which often stays behind after an uninstall. "Installed" is still only what the library lists. */
+#define SV_NAMES_FILE   PS5TM_DATA_DIR "/covers_and_more/title-names.json"
+#define SV_MEMNAMES_MAX    600
+
+static pthread_mutex_t g_names_lock = PTHREAD_MUTEX_INITIALIZER;
+static cJSON          *g_names_mem;        /* id -> name, remembered; under g_names_lock */
+static int             g_names_dirty;
+
+static void
+names_mem_load_locked(void) {
+  if(g_names_mem) return;
+  g_names_mem = cJSON_CreateObject();
+  FILE *f = fopen(SV_NAMES_FILE, "r");
+  if(!f) return;
+  char *buf = malloc(128 * 1024);
+  if(!buf) { fclose(f); return; }
+  size_t n = fread(buf, 1, 128 * 1024 - 1, f);
+  fclose(f);
+  buf[n] = 0;
+  cJSON *o = cJSON_Parse(buf);
+  free(buf);
+  cJSON *it;
+  cJSON_ArrayForEach(it, o)
+    if(it->string && cJSON_IsString(it) && it->valuestring[0] && cJSON_GetArraySize(g_names_mem) < SV_MEMNAMES_MAX)
+      cJSON_AddStringToObject(g_names_mem, it->string, it->valuestring);
+  cJSON_Delete(o);
+}
+
+static void
+names_mem_save_locked(void) {
+  if(!g_names_dirty || !g_names_mem) return;
+  char *txt = cJSON_PrintUnformatted(g_names_mem);
+  if(!txt) return;
+  mkdir(PS5TM_DATA_DIR, 0755);
+  mkdir(PS5TM_DATA_DIR "/covers_and_more", 0755);
+  char tmp[sizeof(SV_NAMES_FILE) + 8];
+  snprintf(tmp, sizeof(tmp), "%s.tmp", SV_NAMES_FILE);
+  FILE *f = fopen(tmp, "w");
+  if(f) {
+    int ok = fputs(txt, f) >= 0;
+    ok = (fclose(f) == 0) && ok;
+    if(ok && rename(tmp, SV_NAMES_FILE) == 0) g_names_dirty = 0; else remove(tmp);
+  }
+  free(txt);
+}
+
+static void
+names_mem_put_locked(const char *id, const char *name) {
+  cJSON *old = cJSON_GetObjectItem(g_names_mem, id);
+  if(cJSON_IsString(old) && !strcmp(old->valuestring, name)) return;
+  if(!old && cJSON_GetArraySize(g_names_mem) >= SV_MEMNAMES_MAX) return;
+  cJSON_DeleteItemFromObject(g_names_mem, id);
+  cJSON_AddStringToObject(g_names_mem, id, name);
+  g_names_dirty = 1;
+}
+
+/* One text value out of a param.sfo (PS4), e.g. CATEGORY. 0 when found. */
+static int
+sfo_value(const unsigned char *b, size_t n, const char *key, char *out, size_t out_len) {
+  if(n < 20 || memcmp(b, "\0PSF", 4) != 0) return -1;
+  uint32_t kt = (uint32_t)b[8] | (uint32_t)b[9] << 8 | (uint32_t)b[10] << 16 | (uint32_t)b[11] << 24;
+  uint32_t dt = (uint32_t)b[12] | (uint32_t)b[13] << 8 | (uint32_t)b[14] << 16 | (uint32_t)b[15] << 24;
+  uint32_t cnt = (uint32_t)b[16] | (uint32_t)b[17] << 8 | (uint32_t)b[18] << 16 | (uint32_t)b[19] << 24;
+  size_t kl = strlen(key) + 1;
+  if(cnt > 256) return -1;
+  for(uint32_t i = 0; i < cnt; i++) {
+    size_t e = 20 + (size_t)i * 16;
+    if(e + 16 > n) return -1;
+    uint32_t ko = (uint32_t)b[e] | (uint32_t)b[e + 1] << 8;
+    uint32_t len = (uint32_t)b[e + 4] | (uint32_t)b[e + 5] << 8 | (uint32_t)b[e + 6] << 16 | (uint32_t)b[e + 7] << 24;
+    uint32_t doff = (uint32_t)b[e + 12] | (uint32_t)b[e + 13] << 8 | (uint32_t)b[e + 14] << 16 | (uint32_t)b[e + 15] << 24;
+    if((size_t)kt + ko + kl > n || memcmp(b + kt + ko, key, kl) != 0) continue;
+    if((size_t)dt + doff + len > n || len == 0) return -1;
+    size_t l = len < out_len ? len : out_len - 1;
+    memcpy(out, b + dt + doff, l);
+    out[l] = 0;
+    out[strnlen(out, l)] = 0;
+    return out[0] ? 0 : -1;
+  }
+  return -1;
+}
+
+/* Is the title a game or an app (YouTube, a browser, a system app)? PS5: applicationCategoryType in param.json is 0
+   for a game (measured: Arkanoid 0, YouTube 65536). PS4: CATEGORY in param.sfo starts with "g" for a game. A title
+   the console no longer has any description of is called a game, as it is by default. Remembered until the app ends. */
+static const char *
+title_kind(const char *id) {
+  static char memo_id[64][10];
+  static char memo_kind[64];                          /* 'g' or 'a' */
+  static int  nmemo;
+  static pthread_mutex_t lk = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_lock(&lk);
+  for(int i = 0; i < nmemo; i++)
+    if(!strcmp(memo_id[i], id)) { const char *r = memo_kind[i] == 'a' ? "app" : "game"; pthread_mutex_unlock(&lk); return r; }
+  pthread_mutex_unlock(&lk);
+
+  char kind = 0;
+  if(!strncmp(id, "NPXS", 4)) kind = 'a';                          /* PS4 system applications */
+  static const char *const roots[] = { "/user/appmeta", "/system_data/priv/appmeta", "/mnt/ext0/user/appmeta", "/mnt/ext1/user/appmeta" };
+  for(size_t r = 0; r < sizeof(roots) / sizeof(roots[0]) && !kind; r++) {
+    for(int k = 0; k < 2 && !kind; k++) {
+      char path[160];
+      snprintf(path, sizeof(path), "%s/%s/%s", roots[r], id, k == 0 ? "param.json" : "param.sfo");
+      FILE *f = fopen(path, "rb");
+      if(!f) continue;
+      unsigned char *buf = malloc(96 * 1024);
+      size_t n = buf ? fread(buf, 1, 96 * 1024 - 1, f) : 0;
+      fclose(f);
+      if(buf && n) {
+        buf[n] = 0;
+        if(k == 0) {
+          cJSON *j = cJSON_Parse((const char *)buf);
+          cJSON *ct = j ? cJSON_GetObjectItem(j, "applicationCategoryType") : NULL;
+          if(cJSON_IsNumber(ct)) kind = ct->valuedouble == 0 ? 'g' : 'a';
+          cJSON_Delete(j);
+        } else {
+          char cat[16];
+          if(sfo_value(buf, n, "CATEGORY", cat, sizeof(cat)) == 0) kind = cat[0] == 'g' ? 'g' : 'a';
+        }
+      }
+      free(buf);
+    }
+  }
+  if(!kind) kind = 'g';
+  pthread_mutex_lock(&lk);
+  if(nmemo < 64) { snprintf(memo_id[nmemo], sizeof(memo_id[0]), "%s", id); memo_kind[nmemo++] = kind; }
+  pthread_mutex_unlock(&lk);
+  return kind == 'a' ? "app" : "game";
+}
+
+/* TITLE out of a param.sfo (the PS4 key/value file). */
+static int
+sfo_title(const unsigned char *b, size_t n, char *out, size_t out_len) {
+  if(n < 20 || memcmp(b, "\0PSF", 4) != 0) return -1;
+  uint32_t kt = (uint32_t)b[8] | (uint32_t)b[9] << 8 | (uint32_t)b[10] << 16 | (uint32_t)b[11] << 24;
+  uint32_t dt = (uint32_t)b[12] | (uint32_t)b[13] << 8 | (uint32_t)b[14] << 16 | (uint32_t)b[15] << 24;
+  uint32_t cnt = (uint32_t)b[16] | (uint32_t)b[17] << 8 | (uint32_t)b[18] << 16 | (uint32_t)b[19] << 24;
+  if(cnt > 256) return -1;
+  for(uint32_t i = 0; i < cnt; i++) {
+    size_t e = 20 + (size_t)i * 16;
+    if(e + 16 > n) return -1;
+    uint32_t ko = (uint32_t)b[e] | (uint32_t)b[e + 1] << 8;
+    uint32_t len = (uint32_t)b[e + 4] | (uint32_t)b[e + 5] << 8 | (uint32_t)b[e + 6] << 16 | (uint32_t)b[e + 7] << 24;
+    uint32_t doff = (uint32_t)b[e + 12] | (uint32_t)b[e + 13] << 8 | (uint32_t)b[e + 14] << 16 | (uint32_t)b[e + 15] << 24;
+    if((size_t)kt + ko + 6 > n || memcmp(b + kt + ko, "TITLE", 6) != 0) continue;
+    if((size_t)dt + doff + len > n || len == 0) return -1;
+    size_t l = len;
+    if(l >= out_len) l = out_len - 1;
+    memcpy(out, b + dt + doff, l);
+    out[l] = 0;
+    out[strnlen(out, l)] = 0;
+    return out[0] ? 0 : -1;
+  }
+  return -1;
+}
+
+static int
+meta_title(const char *id, char *out, size_t out_len) {
+  static const char *const roots[] = { "/user/appmeta", "/system_data/priv/appmeta", "/mnt/ext0/user/appmeta", "/mnt/ext1/user/appmeta" };
+  for(size_t r = 0; r < sizeof(roots) / sizeof(roots[0]); r++) {
+    for(int k = 0; k < 2; k++) {
+      char path[160];
+      snprintf(path, sizeof(path), "%s/%s/%s", roots[r], id, k == 0 ? "param.json" : "param.sfo");
+      FILE *f = fopen(path, "rb");
+      if(!f) continue;
+      unsigned char *buf = malloc(96 * 1024);
+      size_t n = buf ? fread(buf, 1, 96 * 1024 - 1, f) : 0;
+      fclose(f);
+      int ok = -1;
+      if(buf && n) {
+        buf[n] = 0;
+        if(k == 0) {
+          cJSON *j = cJSON_Parse((const char *)buf);
+          cJSON *lp = j ? cJSON_GetObjectItem(j, "localizedParameters") : NULL;
+          cJSON *dl = lp ? cJSON_GetObjectItem(lp, "defaultLanguage") : NULL;
+          cJSON *lang = cJSON_IsString(dl) ? cJSON_GetObjectItem(lp, dl->valuestring) : NULL;
+          cJSON *tn = lang ? cJSON_GetObjectItem(lang, "titleName") : NULL;
+          if(!cJSON_IsString(tn) && lp) {
+            cJSON *any;
+            cJSON_ArrayForEach(any, lp) {
+              cJSON *t2 = cJSON_IsObject(any) ? cJSON_GetObjectItem(any, "titleName") : NULL;
+              if(cJSON_IsString(t2)) { tn = t2; break; }
+            }
+          }
+          if(cJSON_IsString(tn) && tn->valuestring[0]) { snprintf(out, out_len, "%s", tn->valuestring); ok = 0; }
+          cJSON_Delete(j);
+        } else {
+          ok = sfo_title(buf, n, out, out_len);
+        }
+      }
+      free(buf);
+      if(ok == 0) return 0;
+    }
+  }
+  return -1;
+}
+
 static void
 names_load(cJSON **map) {
   *map = cJSON_CreateObject();
   cJSON *lib = ps5tm_library_json();
   cJSON *games = lib ? cJSON_GetObjectItem(lib, "games") : NULL;
   cJSON *g;
+  pthread_mutex_lock(&g_names_lock);
+  names_mem_load_locked();
   cJSON_ArrayForEach(g, games) {
     cJSON *id = cJSON_GetObjectItem(g, "title_id");
     cJSON *nm = cJSON_GetObjectItem(g, "name");
-    if(cJSON_IsString(id) && cJSON_IsString(nm) && *map && !cJSON_HasObjectItem(*map, id->valuestring))
+    if(cJSON_IsString(id) && cJSON_IsString(nm) && *map && !cJSON_HasObjectItem(*map, id->valuestring)) {
       cJSON_AddStringToObject(*map, id->valuestring, nm->valuestring);
+      if(nm->valuestring[0]) names_mem_put_locked(id->valuestring, nm->valuestring);
+    }
   }
+  names_mem_save_locked();
+  pthread_mutex_unlock(&g_names_lock);
   cJSON_Delete(lib);
 }
 
@@ -701,6 +905,23 @@ static const char *
 name_of(cJSON *map, const char *id) {
   cJSON *it = map ? cJSON_GetObjectItem(map, id) : NULL;
   return cJSON_IsString(it) ? it->valuestring : "";
+}
+
+/* The name to show: the installed title's, else a remembered one, else what appmeta has. Empty when nothing knows it.
+   The answer is copied into out. */
+static void
+name_shown(cJSON *map, const char *id, char *out, size_t out_len) {
+  snprintf(out, out_len, "%s", name_of(map, id));
+  if(out[0]) return;
+  pthread_mutex_lock(&g_names_lock);
+  names_mem_load_locked();
+  cJSON *m = cJSON_GetObjectItem(g_names_mem, id);
+  if(cJSON_IsString(m)) snprintf(out, out_len, "%s", m->valuestring);
+  if(!out[0] && meta_title(id, out, out_len) == 0 && out[0]) {
+    names_mem_put_locked(id, out);
+    names_mem_save_locked();
+  }
+  pthread_mutex_unlock(&g_names_lock);
 }
 
 /* Builds the list of what goes in. */
@@ -1060,6 +1281,7 @@ args_free(job_args_t *a) {
 static void *backup_main(void *arg);
 static void *verify_main(void *arg);
 static void *restore_main(void *arg);
+static void *delete_main(void *arg);
 
 static int
 job_launch(void *(*fn)(void *), job_args_t *a, const char *kind, char *err, size_t err_len) {
@@ -1660,6 +1882,83 @@ out:
 
 
 
+/* ---- delete: a title's saved games for one user, with a copy of them first (the same "undo" copy a restore makes,
+   so it can be put back), then the folders are removed. The console's own save database is not touched. */
+
+static void *delete_main(void *arg);
+
+static void *
+delete_main(void *arg) {
+  job_args_t *a = arg;
+  ps5tm_powerguard_hold();
+  char err[640] = {0};
+  bk_t undo;
+  memset(&undo, 0, sizeof(undo));
+  int area = a->nsel ? a->sel[0].area : 0;
+  char data[PATH_MAX], meta[PATH_MAX];
+  title_dirs(a->uid, area, a->id, data, sizeof(data), meta, sizeof(meta));
+
+  if(a->base[0]) {
+    undo.sel   = calloc(1, sizeof(*undo.sel));
+    undo.users = calloc(1, sizeof(*undo.users));
+    if(!undo.sel || !undo.users) { job_fail("Kein Speicher."); goto out; }
+    snprintf(undo.sel[0].uid, sizeof(undo.sel[0].uid), "%s", a->uid);
+    snprintf(undo.sel[0].id, sizeof(undo.sel[0].id), "%s", a->id);
+    undo.sel[0].area = area;
+    undo.nsel = 1;
+    snprintf(undo.users[0], 9, "%s", a->uid);
+    undo.nusers  = 1;
+    undo.with_db = 0;
+    snprintf(undo.base, sizeof(undo.base), "%s", a->base);
+    snprintf(undo.kind, sizeof(undo.kind), "undo");
+    char tag[40];
+    snprintf(tag, sizeof(tag), "vor-Loeschen_%s", a->id);
+    int rc = bk_write(&undo, tag, "Stand vor dem Löschen sichern", err, sizeof(err));
+    if(rc == ECANCELED) { job_state(J_CANCELLED); goto out; }
+    if(rc != 0) {
+      PS5TM_WARN("saves_delete_failed", "Spielstände: Löschen von %s nicht begonnen, die Sicherung davor schlug fehl.", a->id);
+      job_fail("Der Stand ließ sich nicht sichern, deshalb wurde nichts gelöscht. %s", err);
+      goto out;
+    }
+    pthread_mutex_lock(&g_lock);
+    snprintf(g_job.undo, sizeof(g_job.undo), "%s", undo.dir);
+    pthread_mutex_unlock(&g_lock);
+  }
+
+  {
+    char gid[16];
+    if(game_running(gid, sizeof(gid))) {
+      job_fail("Währenddessen wurde ein Spiel gestartet (%s). Es wurde nichts gelöscht.", gid);
+      goto out;
+    }
+  }
+
+  __atomic_store_n(&g_nocancel, 1, __ATOMIC_RELEASE);
+  job_phase(J_APPLY, "Löschen", 0);
+  job_current(a->id);
+  remove_own(data);
+  remove_own(meta);
+  struct stat st;
+  if(stat(data, &st) == 0 || stat(meta, &st) == 0) {
+    PS5TM_WARN("saves_delete_failed", "Spielstände: Löschen von %s unvollständig.", a->id);
+    job_fail("Die Spielstände ließen sich nicht ganz löschen (Reste liegen noch auf der Konsole).%s",
+             undo.dir[0] ? " Der Stand davor ist gesichert." : "");
+    goto out;
+  }
+  PS5TM_INFO("saves_delete_done", "Spielstände: %s von Benutzer %s gelöscht%s.", a->id, a->uid,
+             undo.dir[0] ? ", der Stand davor ist gesichert" : " (ohne Sicherung davor)");
+  job_state(J_DONE);
+
+out:
+  free(undo.files.v);
+  free(undo.sel);
+  free(undo.users);
+  ps5tm_powerguard_release();
+  args_free(a);
+  return NULL;
+}
+
+
 /* ------------------------------------------------------------ the starts */
 
 /* Title ids and user ids a page names are looked up in what the console has: a
@@ -1873,6 +2172,38 @@ ps5tm_saves_restore_start(const char *path, const char *uid, const char *title,
 }
 
 int
+ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, char *err, size_t err_len) {
+  if(!uid_ok(uid) || !tid_ok(id)) { snprintf(err, err_len, "Benutzer oder Titel sind falsch angegeben."); return 400; }
+  char gid[16];
+  if(game_running(gid, sizeof(gid))) {
+    snprintf(err, err_len, "Es läuft ein Spiel (%s). Spielstände werden nur gelöscht, wenn kein Spiel läuft, auch kein "
+             "pausiertes: Es könnte seinen Spielstand offen halten. Beende das Spiel zuerst.", gid);
+    return 409;
+  }
+  if(other_job_active(err, err_len)) return 409;
+  if(!user_exists(uid)) { snprintf(err, err_len, "Diesen Benutzer gibt es an der Konsole nicht."); return 404; }
+  int area = title_find(uid, id);
+  if(area < 0) { snprintf(err, err_len, "Diesen Titel gibt es für diesen Benutzer nicht."); return 404; }
+  char base[64] = "";
+  if(target_mount && target_mount[0]) {
+    drive_t dr;
+    if(drive_resolve(target_mount, &dr) != 0) { snprintf(err, err_len, "Dieses Ziel gibt es an der Konsole gerade nicht."); return 404; }
+    snprintf(base, sizeof(base), "%s", dr.base);
+  }
+  job_args_t *a = calloc(1, sizeof(*a));
+  if(!a) { snprintf(err, err_len, "Kein Speicher."); return 503; }
+  snprintf(a->kind, sizeof(a->kind), "delete");
+  snprintf(a->base, sizeof(a->base), "%s", base);
+  snprintf(a->uid, sizeof(a->uid), "%s", uid);
+  snprintf(a->id, sizeof(a->id), "%s", id);
+  a->sel = calloc(1, sizeof(*a->sel));
+  if(!a->sel) { args_free(a); snprintf(err, err_len, "Kein Speicher."); return 503; }
+  a->sel[0].area = area;
+  a->nsel = 1;
+  return job_launch(delete_main, a, "delete", err, err_len);
+}
+
+int
 ps5tm_saves_busy(void) {
   pthread_mutex_lock(&g_lock);
   int active = job_active_locked();
@@ -2015,10 +2346,13 @@ ps5tm_saves_json(void) {
       uint64_t bytes; unsigned files; int64_t mt;
       measure_title(sel[i].uid, sel[i].area, sel[i].id, &bytes, &files, &mt);
       const char *nmz = name_of(names, sel[i].id);
+      char shown[160];
+      name_shown(names, sel[i].id, shown, sizeof(shown));
       cJSON_AddStringToObject(tj, "id", sel[i].id);
-      cJSON_AddStringToObject(tj, "name", nmz);
+      cJSON_AddStringToObject(tj, "name", shown);
       cJSON_AddBoolToObject(tj, "installed", nmz[0] != 0);
       cJSON_AddStringToObject(tj, "platform", k_area[sel[i].area].plat);
+      cJSON_AddStringToObject(tj, "kind", title_kind(sel[i].id));
       cJSON_AddNumberToObject(tj, "bytes", (double)bytes);
       cJSON_AddNumberToObject(tj, "files", files);
       cJSON_AddNumberToObject(tj, "mtime", (double)mt);

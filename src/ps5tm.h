@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.50.0"
+#define PS5TM_VERSION        "1.51.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -603,6 +603,11 @@ struct cJSON *ps5tm_library_json(void);
 /* The list is stale the moment a job has moved, copied or converted something:
    the next ps5tm_library_json() reads again instead of waiting out its TTL. */
 void          ps5tm_library_forget(void);
+/* Image probe (library.c): a background thread that, a little after the start and then now and then, mounts each image game
+   whose adaptations are unknown (ShadowMountPlus mounts images only while a game runs), reads them and releases the image
+   again. probe_now() asks for a round at once; 0 when one was requested, -1 when the thread is not running. */
+void          ps5tm_library_probe_start(void);
+int           ps5tm_library_probe_now(void);
 /* Every title id the app database lists as installed (tbl_contentinfo), read
    afresh. Writes up to `max` of them into `ids` and returns how many there are
    — more than `max` means the list is incomplete — or -1 when the database
@@ -937,6 +942,7 @@ int  ps5tm_saves_backup_start(const char *target_mount,
 int  ps5tm_saves_verify_start(const char *path, char *err, size_t err_len);
 int  ps5tm_saves_restore_start(const char *path, const char *uid, const char *title,
                                char *err, size_t err_len);
+int  ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, char *err, size_t err_len);
 void ps5tm_saves_cancel(void);
 int  ps5tm_saves_busy(void);                    /* 1 while a job with the saved games is under way */
 
@@ -999,6 +1005,14 @@ int   ps5tm_payload_start(const char *source, const char *mount, const char *dir
 int   ps5tm_payload_copy(const char *mount, const char *dir, const char *name,
                          ps5tm_payload_result_t *r);
 int   ps5tm_payload_delete(const char *name, ps5tm_payload_result_t *r);
+
+/* Payload profiles (payprofiles.c): named sequences of payload files with pauses; one can run at app start. */
+char *ps5tm_payprof_get_json(void);
+int   ps5tm_payprof_save(const char *json, char **out, char *err, size_t en);
+int   ps5tm_payprof_run(const char *id, int from_startup, char *err, size_t en);
+void  ps5tm_payprof_stop(void);
+char *ps5tm_payprof_status_json(void);
+void  ps5tm_payprof_start(void);
 
 /* The two identities this payload needs. A process holds one at a time, but
    the authid field is ours to rewrite, so both jobs fit in one run as long as

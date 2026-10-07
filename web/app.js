@@ -2273,6 +2273,8 @@
   /* Gespeicherte Payloads und USB-Speicher */
   const renderPayloadFiles = (d) => {
     const internal = Array.isArray(d.internal) ? d.internal : [];
+    plInternal = internal;
+    if (plEdit) plRenderEdit();
     const dir = d.dir || "/data/PS5-Cooling-Center/payloads";
     txt("#pl-dir", dir);
     txt("#pl-count-stored", plCount(internal.length, "Datei", "Dateien"));
@@ -2363,7 +2365,7 @@
     renderPayloadFiles(d);
   };
 
-  const loadPayloadsPage = () => { loadPayloads(); loadPayloadFiles(); };
+  const loadPayloadsPage = () => { loadPayloads(); loadPayloadFiles(); loadProfiles(); };
 
   const plPost = (route, body, timeoutMs) =>
     api(`/api/v1/payload-files/${route}`, { method: "POST", body: JSON.stringify(body), timeoutMs });
@@ -2411,6 +2413,273 @@
     }
   };
 
+
+  /* ── Payload-Profile ─────────────────────────────────────────────────
+     Eine Abfolge aus .elf-Dateinamen (Ordner der Konsole) und Pausen „!ms".
+     Die Seite schickt das ganze Dokument; payprofiles.c prüft es noch einmal.
+     Idee: ps5-payload-manager (itsPLK), hier neu gebaut. */
+  let plProf = { startup: "", profiles: [] };
+  let plInternal = [];
+  let plEdit = null;            /* { id, name, items[], isNew } */
+  let plRunTimer = 0;
+
+  const plNewId = () => `p${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+  const plIsDelay = (it) => it.charAt(0) === "!";
+  const plDelayTxt = (it) => {
+    const ms = Number(it.slice(1));
+    return ms >= 1000 ? `${num(ms / 1000, ms % 1000 ? 1 : 0)} s Pause` : `${ms} ms Pause`;
+  };
+  const plSummary = (items) => {
+    const files = items.filter((i) => !plIsDelay(i));
+    if (!files.length) return "leer";
+    const names = files.slice(0, 3).map((n) => plTitle(n)).join(" → ");
+    return files.length > 3 ? `${names} → … (${files.length} Payloads)` : names;
+  };
+
+  const plProfSave = async (doc) => {
+    const r = await api("/api/v1/payload-profiles", { method: "POST", body: JSON.stringify(doc) });
+    plProf = { startup: r.startup || "", profiles: Array.isArray(r.profiles) ? r.profiles : [] };
+    plRenderProfiles();
+  };
+
+  const plRenderProfiles = () => {
+    const list = plProf.profiles;
+    txt("#pl-count-prof", plCount(list.length, "Profil", "Profile"));
+    const box = $("#pl-prof-list");
+    if (!box) return;
+    const running = plRunState && plRunState.running;
+    box.innerHTML = list.length ? list.map((p) => {
+      const isStart = p.id === plProf.startup;
+      return `
+      <div class="pl-card pl-prof${isStart ? " is-startup" : ""}">
+        <div class="pl-ico">${PL_SVG.box}</div>
+        <div class="pl-info">
+          <b class="pl-name" title="${esc(p.name)}">${esc(p.name)}</b>
+          ${isStart ? `<span class="pl-startup-tag">Startprofil</span>` : ""}
+          <small class="pl-path" title="${esc(plSummary(p.items))}">${esc(plSummary(p.items))}</small>
+        </div>
+        <div class="pl-actions">
+          <button class="btn primary pl-act" data-pp-run="${esc(p.id)}"${running || !p.items.some((i) => !plIsDelay(i)) ? " disabled" : ""}>${PL_SVG.play}Ausführen</button>
+          <button class="btn pl-act" data-pp-edit="${esc(p.id)}">Bearbeiten</button>
+          <button class="btn pl-act${isStart ? " on" : ""}" data-pp-startup="${esc(p.id)}" title="${isStart ? "Das Startprofil wird beim Start der App nicht mehr ausgeführt." : "Dieses Profil führt die App nach jedem Start von selbst aus."}">${isStart ? "Startprofil aufheben" : "Als Startprofil"}</button>
+        </div>
+      </div>`;
+    }).join("") : `<p class="muted">Noch kein Profil. „Neues Profil“ legt eines an; dort lassen sich auch Payloads vom PC importieren.</p>`;
+  };
+
+  let plRunState = null;
+  const plRenderRun = (d) => {
+    plRunState = d;
+    const box = $("#pl-prof-run");
+    if (!box) return;
+    const res = Array.isArray(d.results) ? d.results : [];
+    if (!d.running && !res.length) { box.classList.add("is-hidden"); return; }
+    box.classList.remove("is-hidden");
+    const head = d.running
+      ? `„${esc(d.name)}“ läuft: Schritt ${esc(d.step)} von ${esc(d.total)}${d.startup ? " (Startprofil)" : ""}`
+      : `„${esc(d.name)}“ ist fertig.`;
+    box.innerHTML = `<p><b>${head}</b>${d.running ? ` <button class="btn pl-act" data-pp-stop type="button">Anhalten</button>` : ""}</p>`
+      + (res.length ? `<ul>${res.map((r) => `<li class="${r.ok ? "ok" : "bad"}">${esc(plIsDelay(r.item) ? plDelayTxt(r.item) : r.item)} – ${esc(r.msg)}</li>`).join("")}</ul>` : "");
+    plRenderProfiles();
+  };
+  const plPollRun = async () => {
+    clearTimeout(plRunTimer);
+    plRunTimer = 0;
+    let d;
+    try { d = await api("/api/v1/payload-profiles/status"); } catch { return; }
+    plRenderRun(d);
+    if (d.running) plRunTimer = setTimeout(plPollRun, 1200);
+  };
+
+  const loadProfiles = async () => {
+    let d;
+    try { d = await api("/api/v1/payload-profiles"); } catch { return; }
+    plProf = { startup: d.startup || "", profiles: Array.isArray(d.profiles) ? d.profiles : [] };
+    plRenderProfiles();
+    plPollRun();
+  };
+
+  /* Editor */
+  const plRenderEdit = () => {
+    const box = $("#pl-prof-edit");
+    if (!box) return;
+    if (!plEdit) { box.classList.add("is-hidden"); box.innerHTML = ""; return; }
+    box.classList.remove("is-hidden");
+    const have = new Set(plEdit.items.filter((i) => !plIsDelay(i)).map((i) => i.toLowerCase()));
+    const opts = plInternal.filter((f) => f.valid && !have.has(f.name.toLowerCase()))
+      .map((f) => `<option value="${esc(f.name)}">${esc(plTitle(f.name))}</option>`).join("");
+    const rows = plEdit.items.map((it, i) => {
+      const missing = !plIsDelay(it) && !plInternal.some((f) => f.name.toLowerCase() === it.toLowerCase());
+      return `<li class="pl-ed-row${missing ? " bad" : ""}">
+        <span class="pl-ed-n">${i + 1}</span>
+        <span class="pl-ed-t">${plIsDelay(it)
+          ? `<input type="number" min="1" max="600000" step="100" value="${esc(it.slice(1))}" data-pp-delay="${i}" aria-label="Pause in Millisekunden"> ms Pause`
+          : `${esc(plTitle(it))}${missing ? ` <em>(Datei fehlt im Ordner)</em>` : ""}`}</span>
+        <button class="btn pl-mini" data-pp-up="${i}" title="Nach oben"${i === 0 ? " disabled" : ""}>↑</button>
+        <button class="btn pl-mini" data-pp-down="${i}" title="Nach unten"${i === plEdit.items.length - 1 ? " disabled" : ""}>↓</button>
+        <button class="btn pl-mini" data-pp-del="${i}" title="Entfernen">✕</button>
+      </li>`;
+    }).join("");
+    box.innerHTML = `
+      <h4>${plEdit.isNew ? "Neues Profil" : "Profil bearbeiten"}</h4>
+      <label class="pl-ed-name">Name <input type="text" id="pl-ed-name" maxlength="60" value="${esc(plEdit.name)}"></label>
+      <ol class="pl-ed-list">${rows || `<li class="muted">Noch keine Einträge. Unten Payloads hinzufügen oder importieren.</li>`}</ol>
+      <div class="pl-ed-add">
+        <select id="pl-ed-pick" aria-label="Payload hinzufügen"${opts ? "" : " disabled"}><option value="">${opts ? "Payload aus dem Ordner wählen …" : "Keine weiteren Payloads im Ordner"}</option>${opts}</select>
+        <button class="btn" data-pp-add type="button"${opts ? "" : " disabled"}>Hinzufügen</button>
+        <button class="btn" data-pp-pause type="button">Pause einfügen</button>
+        <label class="btn" for="pl-ed-import">Vom PC importieren und hinzufügen</label>
+        <input type="file" id="pl-ed-import" accept=".elf" multiple hidden>
+      </div>
+      <div class="pl-ed-foot">
+        <button class="btn primary" data-pp-save type="button">Speichern</button>
+        <button class="btn ghost" data-pp-cancel type="button">Abbrechen</button>
+        ${plEdit.isNew ? "" : `<button class="btn pl-ed-delete" data-pp-remove type="button">Profil löschen</button>`}
+      </div>`;
+  };
+
+  /* Eine Datei in den Ordner der Konsole laden (derselbe Weg wie auf der Seite „Dateien“). */
+  const plUpload = (file, dir) => new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.onload = () => {
+      let d = null;
+      try { d = JSON.parse(x.responseText); } catch { /* keine Antwort */ }
+      if (x.status === 200 && d && d.ok) resolve("neu");
+      else if (x.status === 409 && d && d.code === "exists") resolve("vorhanden");
+      else reject(new Error((d && d.message) || `HTTP ${x.status}`));
+    };
+    x.onerror = () => reject(new Error("Die Verbindung brach ab."));
+    x.open("POST", `/api/v1/files/upload?path=${encodeURIComponent(dir)}&name=${encodeURIComponent(file.name)}`);
+    x.send(file);
+  });
+
+  const plImport = async (files) => {
+    const dir = ($("#pl-dir") && $("#pl-dir").textContent) || "/data/PS5-Cooling-Center/payloads";
+    const added = [];
+    for (const f of files) {
+      if (!/\.elf$/i.test(f.name)) { toast(`„${f.name}“ ist keine .elf-Datei.`, "error"); continue; }
+      try {
+        const r = await plUpload(f, dir);
+        toast(r === "neu" ? `„${f.name}“ importiert.` : `„${f.name}“ gab es schon; die vorhandene Datei bleibt.`);
+        added.push(f.name);
+      } catch (e) { toast(`„${f.name}“: ${e.message}`, "error"); }
+    }
+    await loadPayloadFiles(true);
+    return added;
+  };
+
+  const plEditSync = () => {
+    if (!plEdit) return;
+    const n = $("#pl-ed-name");
+    if (n) plEdit.name = n.value;
+    $$("#pl-prof-edit [data-pp-delay]").forEach((i) => {
+      const v = Math.max(1, Math.min(600000, Math.round(Number(i.value) || 1000)));
+      plEdit.items[Number(i.dataset.ppDelay)] = `!${v}`;
+    });
+  };
+
+  const plDoc = (list) => ({ startup: plProf.startup, profiles: list });
+
+  const wireProfiles = () => {
+    const sec = $("#pl-prof-list") && $("#pl-prof-list").closest(".pl-sec");
+    if (!sec) return;
+    sec.addEventListener("click", async (e) => {
+      const b = e.target.closest("button");
+      if (!b || b.disabled) return;
+      const d = b.dataset;
+      try {
+        if (b.id === "pl-prof-new") {
+          plEdit = { id: plNewId(), name: "", items: [], isNew: true };
+          plRenderEdit();
+          const n = $("#pl-ed-name"); if (n) n.focus();
+        } else if (b.id === "pl-prof-export") {
+          const blob = new Blob([JSON.stringify(plProf, null, 2)], { type: "application/json" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "payload-profile.json";
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        } else if (d.ppRun !== undefined) {
+          await api("/api/v1/payload-profiles/run", { method: "POST", body: JSON.stringify({ id: d.ppRun }) });
+          toast("Profil wird ausgeführt.");
+          plPollRun();
+        } else if (b.hasAttribute("data-pp-stop")) {
+          await api("/api/v1/payload-profiles/stop", { method: "POST", body: "{}" });
+          toast("Das Profil wird nach dem laufenden Schritt angehalten.");
+        } else if (d.ppEdit !== undefined) {
+          const p = plProf.profiles.find((x) => x.id === d.ppEdit);
+          if (p) { plEdit = { id: p.id, name: p.name, items: p.items.slice(), isNew: false }; plRenderEdit(); }
+        } else if (d.ppStartup !== undefined) {
+          const off = plProf.startup === d.ppStartup;
+          await plProfSave({ startup: off ? "" : d.ppStartup, profiles: plProf.profiles });
+          toast(off ? "Kein Startprofil mehr." : "Startprofil gesetzt: Es läuft nach jedem Start der App.");
+        } else if (plEdit) {
+          plEditSync();
+          if (d.ppUp !== undefined || d.ppDown !== undefined) {
+            const i = Number(d.ppUp !== undefined ? d.ppUp : d.ppDown), j = d.ppUp !== undefined ? i - 1 : i + 1;
+            if (j >= 0 && j < plEdit.items.length) [plEdit.items[i], plEdit.items[j]] = [plEdit.items[j], plEdit.items[i]];
+            plRenderEdit();
+          } else if (d.ppDel !== undefined) {
+            plEdit.items.splice(Number(d.ppDel), 1);
+            plRenderEdit();
+          } else if (b.hasAttribute("data-pp-add")) {
+            const v = $("#pl-ed-pick").value;
+            if (v && plEdit.items.length < 64) plEdit.items.push(v);
+            plRenderEdit();
+          } else if (b.hasAttribute("data-pp-pause")) {
+            if (plEdit.items.length < 64) plEdit.items.push("!2000");
+            plRenderEdit();
+          } else if (b.hasAttribute("data-pp-cancel")) {
+            plEdit = null;
+            plRenderEdit();
+          } else if (b.hasAttribute("data-pp-save")) {
+            const name = plEdit.name.trim();
+            if (!name) { toast("Das Profil braucht einen Namen.", "error"); return; }
+            const entry = { id: plEdit.id, name, items: plEdit.items };
+            const list = plEdit.isNew ? plProf.profiles.concat([entry])
+              : plProf.profiles.map((x) => (x.id === entry.id ? entry : x));
+            await plProfSave(plDoc(list));
+            toast(`Profil „${name}“ gespeichert.`);
+            plEdit = null;
+            plRenderEdit();
+          } else if (b.hasAttribute("data-pp-remove")) {
+            const id = plEdit.id;
+            const startup = plProf.startup === id ? "" : plProf.startup;
+            await plProfSave({ startup, profiles: plProf.profiles.filter((x) => x.id !== id) });
+            toast("Profil gelöscht.");
+            plEdit = null;
+            plRenderEdit();
+          }
+        }
+      } catch (err) { toast(err.message, "error"); }
+    });
+    sec.addEventListener("change", async (e) => {
+      const t = e.target;
+      if (t.id === "pl-ed-import" && t.files && t.files.length && plEdit) {
+        plEditSync();
+        const added = await plImport(Array.from(t.files));
+        t.value = "";
+        added.forEach((n) => { if (plEdit && plEdit.items.length < 64 && !plEdit.items.includes(n)) plEdit.items.push(n); });
+        plRenderEdit();
+      } else if (t.id === "pl-prof-import-file" && t.files && t.files[0]) {
+        try {
+          const doc = JSON.parse(await t.files[0].text());
+          const profiles = Array.isArray(doc.profiles) ? doc.profiles : [];
+          const known = new Set(plProf.profiles.map((p) => p.id));
+          const merged = plProf.profiles.slice();
+          profiles.forEach((p) => {
+            const q = { id: known.has(p.id) ? plNewId() : p.id, name: p.name, items: p.items };
+            known.add(q.id);
+            merged.push(q);
+          });
+          await plProfSave({ startup: plProf.startup, profiles: merged });
+          toast(`${plCount(profiles.length, "Profil", "Profile")} geladen.`);
+        } catch (err) { toast(`Die Datei ließ sich nicht laden: ${err.message}`, "error"); }
+        t.value = "";
+      }
+    });
+  };
+
   const wirePayloads = () => {
     const page = $("#page-payloads");
     if (!page) return;
@@ -2419,6 +2688,12 @@
       if (!b || b.disabled || !page.contains(b)) return;
       if (b.hasAttribute("data-pl-start")) plStart(b);
       else if (b.hasAttribute("data-pl-copy")) plCopy(b);
+    });
+    wireProfiles();
+    const imp = $("#pl-import-file");
+    if (imp) imp.addEventListener("change", async () => {
+      if (imp.files && imp.files.length) await plImport(Array.from(imp.files));
+      imp.value = "";
     });
     const refresh = $("#pl-refresh");
     if (refresh) refresh.addEventListener("click", async () => {
@@ -4508,14 +4783,15 @@
       if (m.eboot_sdk && x.sdk && m.eboot_sdk !== x.sdk)
         why.push(`eboot.bin auf SDK ${m.eboot_sdk} abgesenkt (param.json: SDK ${x.sdk})`);
       if (m.backport_libs > 0)
-        why.push(`${m.backport_libs} Systembibliothek(en) im Ordner fakelib`);
+        why.push(`${m.backport_libs} Systembibliothek(en) im Ordner ${m.fakelib2 ? "fakelib2" : "fakelib"}`
+          + (m.libs_from === "folder" ? " (Backport-Ordner neben dem Spiel)" : ""));
       t.push(`<span class="gm-tag bp" title="${esc(why.join(" · "))}">Backport</span>`);
     }
     if (m.ampr_emu)
-      t.push(`<span class="gm-tag ampr" title="${esc("fakelib/libSceAmpr.sprx"
+      t.push(`<span class="gm-tag ampr" title="${esc((m.fakelib2 ? "fakelib2" : "fakelib") + "/libSceAmpr.sprx"
         + (m.ampr_index ? " · ampr_emu.index vorhanden: die Emulation lief schon" : ""))}">AMPR EMU</span>`);
     if (m.playgo)
-      t.push(`<span class="gm-tag pg" title="${esc("fakelib/libScePlayGo.sprx"
+      t.push(`<span class="gm-tag pg" title="${esc((m.fakelib2 ? "fakelib2" : "fakelib") + "/libScePlayGo.sprx"
         + (m.playgo_log ? " · playlgo.log vorhanden" : ""))}">PlayGo</span>`);
     return t.join("");
   };
@@ -4604,9 +4880,12 @@
     else if (x.source && !x.path) rows.push(["Spieldaten", x.source, "mono"]);
     if (m && m.eboot_sdk && x.sdk && m.eboot_sdk !== x.sdk)
       rows.push(["eboot.bin", `SDK ${m.eboot_sdk}`]);
-    if (m && m.fakelib && m.fakelib.length)
-      rows.push(["fakelib", m.fakelib.join(", ")
+    if (m && m.fakelib && m.fakelib.length) {
+      rows.push([m.fakelib2 ? "fakelib2" : "fakelib", m.fakelib.join(", ")
         + (m.fakelib_more ? ` +${m.fakelib_more}` : ""), "mono"]);
+      rows.push(["Bibliotheken aus", m.libs_from === "folder"
+        ? `dem Backport-Ordner (…/backports/${x.title_id})` : "dem Spielordner bzw. Abbild"]);
+    }
 
     /* Ohne \p{L}: Ein Browser, der das nicht kennt, verwirft das ganze
        Skript, nicht nur diese Zeile. */
@@ -6819,7 +7098,9 @@
     : "—");
   const svName = (t) => t.name || t.id;
   const svActive = () => !!(sv.job && sv.job.active);
-  const SV_KIND = { backup: "Sicherung", verify: "Prüfung", restore: "Zurückspielen" };
+  const SV_KIND = { backup: "Sicherung", verify: "Prüfung", restore: "Zurückspielen", delete: "Löschen" };
+  /* PS5 und PS4 getrennt, Spiele und Apps getrennt (YouTube & Co. sind keine Spiele). */
+  const SV_GROUPS = [["PS5", "game", "PS5-Spiele"], ["PS5", "app", "PS5-Apps"], ["PS4", "game", "PS4-Spiele"], ["PS4", "app", "PS4-Apps"]];
 
   const svSyncSelection = () => {
     const keys = new Set();
@@ -6858,14 +7139,24 @@
     }
     host.innerHTML = d.users.map((u) => `<div class="sv-user">
       <label class="sv-user-head"><input type="checkbox" data-sv-user="${esc(u.uid)}">
-        <b>${esc(u.name)}</b><span class="muted">${esc(String(u.titles.length))} Titel · ${esc(bytes(u.bytes))}</span></label>
-      ${u.titles.map((t) => {
-        const k = `${u.uid}/${t.id}`;
-        return `<label class="sv-title"><input type="checkbox" data-sv-title="${esc(k)}"${sv.sel.has(k) ? " checked" : ""}>
+        <span class="sv-avatar" aria-hidden="true">${esc((u.name || "?").trim().charAt(0).toUpperCase())}<img src="/api/v1/saves/avatar?uid=${esc(u.uid)}" alt="" loading="lazy"></span>
+        <span class="sv-user-name"><b>${esc(u.name)}</b><span class="muted">Benutzer</span></span>
+        <span class="muted sv-user-sum">${esc(String(u.titles.length))} Titel · ${esc(bytes(u.bytes))}</span></label>
+      ${SV_GROUPS.map(([plat, kind, label]) => {
+        const list = u.titles.filter((t) => t.platform === plat && (t.kind === "app" ? "app" : "game") === kind);
+        if (!list.length) return "";
+        return `<h4 class="sv-group">${esc(label)} <span class="muted">${esc(String(list.length))}</span></h4>`
+          + list.map((t) => {
+            const k = `${u.uid}/${t.id}`;
+            return `<div class="sv-title-row"><label class="sv-title"><input type="checkbox" data-sv-title="${esc(k)}"${sv.sel.has(k) ? " checked" : ""}>
           <span class="sv-t-name"><b>${esc(svName(t))}</b>
-            <small>${esc(t.id)} · ${esc(t.platform)}${t.installed ? "" : " · nicht installiert"}</small></span>
-          <span class="sv-t-size">${esc(bytes(t.bytes))}<small>${t.mtime ? esc(svWhen(t.mtime)) : ""}</small></span></label>`;
+            <small>${esc(t.id)} · ${esc(t.platform)}${t.kind === "app" ? " · App" : ""}${t.installed ? "" : " · nicht installiert"}</small></span>
+          <span class="sv-t-size">${esc(bytes(t.bytes))}<small>${t.mtime ? esc(svWhen(t.mtime)) : ""}</small></span></label>
+          <button type="button" class="btn ghost sv-del" data-sv-delete="${esc(k)}" data-name="${esc(svName(t))}" aria-label="${esc(svName(t))} löschen">Löschen</button></div>`;
+          }).join("");
       }).join("")}</div>`).join("");
+    /* No inline handler (the page's CSP forbids it): a user without a picture keeps the initial. */
+    host.querySelectorAll(".sv-avatar img").forEach((im) => im.addEventListener("error", () => im.remove(), { once: true }));
     svUserBoxes();
   };
 
@@ -6967,6 +7258,9 @@
             <p class="sv-job-path muted">Ordner: <code>${esc(j.path)}</code></p>`;
         else if (j.kind === "verify")
           body = `<p class="cp-ok">Alle ${esc(String(j.ok_files))} Dateien stimmen mit der Sicherung überein.</p>`;
+        else if (j.kind === "delete")
+          body = `<p class="cp-ok">Die Spielstände wurden gelöscht.</p>
+            ${j.undo ? `<p class="sv-job-path muted">Der Stand davor liegt hier und lässt sich zurückspielen: <code>${esc(j.undo)}</code></p>` : ""}`;
         else
           body = `<p class="cp-ok">${esc(String(j.ok_files))} Dateien zurückgespielt und geprüft.</p>
             ${j.undo ? `<p class="sv-job-path muted">Der Stand davor liegt hier und lässt sich genauso zurückspielen: <code>${esc(j.undo)}</code></p>` : ""}
@@ -7147,6 +7441,18 @@
       try {
         svStarted(await api("/api/v1/saves/verify", { method: "POST", body: JSON.stringify({ path: b.dataset.svVerify }) }));
       } catch (err) { toast(err.message, "error"); }
+      return;
+    }
+    if (b.dataset.svDelete) {
+      const key = b.dataset.svDelete, name = b.dataset.name;
+      const [uid, id] = key.split("/");
+      svArm(b, `del|${key}`, "Wirklich löschen?",
+        `Die Spielstände von „${name}“ werden gelöscht. Der Stand davor wird zuerst auf dem gewählten Ziel gesichert und lässt `
+        + "sich dann zurückspielen. Das geht nur, wenn kein Spiel läuft. Zum Bestätigen noch einmal klicken.", async () => {
+          try {
+            svStarted(await api("/api/v1/saves/delete", { method: "POST", body: JSON.stringify({ uid, id, mount: sv.drive || "" }) }));
+          } catch (err) { toast(err.message, "error"); }
+        });
       return;
     }
     if (b.dataset.svRestore) {

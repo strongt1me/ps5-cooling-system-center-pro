@@ -1,52 +1,46 @@
 ## Release Notes
 
-Version: v1.50.0
+Version: v1.51.0
 Datum: 2026-10-07
 
-Neu seit 1.49.1: die Zieltemperatur bis 91 °C, die Oberfläche in sechs Sprachen, mehr Komfort im Dateimanager und kleinere Seitendateien.
+Neu seit 1.50.0: Payload-Profile mit Startprofil, ein eigener Abbild-Leser statt Einhängen, Erkennung von fakelib2 und Backport-Ordnern und eine übersichtlichere Spielstände-Seite.
 
 ### Neu
 
-- **Zieltemperatur bis 91 °C** (bisher 78 °C), wie bei ShadowMountPlus (`fan_target_temperature`, 50–91). 91 °C ist der Wert,
-  den die Konsole selbst einstellt: so leise wie ohne die App. Die **Schnellwahl** heißt jetzt Kühl 62 °C, Ausgewogen 77 °C,
-  Leise 91 °C (bisher 62 / 70 / 78). Damit das Ziel erreichbar ist, parkt die Regelung den Lüfter bei hohen Zielen höher:
-  die Ruhelage der Schwelle liegt bei Ziel + 10 °C (mindestens 80, höchstens 91; bei Zielen bis 70 °C ändert sich nichts).
-  Die Notfallgrenze folgt dem Ziel (mindestens +4 °C, bis 95 °C), die feste Schwelle der Betriebsart „Beobachten“ geht ebenfalls
-  bis 91 °C. **Die Warnschwelle geht mit dem Ziel mit** (nie niedriger als Ziel + 2 °C), sonst würde die App bei hohen Zielen dauernd warnen; der eingestellte Wert bleibt gespeichert.
-  Der Vergleich mit ShadowMountPlus steht im [Handbuch](HANDBUCH.md#vergleich-mit-shadowmountplus-fan_target_temperature).
-- **Sechs Sprachen.** Oben rechts in der Kopfzeile wählst du **Deutsch, English, Italiano, Español, Français** oder **Русский**.
-  Beim ersten Besuch nimmt die Seite die Sprache deines Browsers (gibt es sie nicht: Englisch); die Wahl merkt sich der Browser.
-  Zahlen, Datum und Uhrzeit folgen der Sprache. Das Wörterbuch einer Sprache wird erst beim Wählen geladen.
-- **Handbuch und FAQ in allen sechs Sprachen**, in der App (Seitenleiste, unter „Credits“) und als **PDF und HTML mit Bildschirmfotos** zum
-  Download (`PS5_Cooling_System_Center_Handbuch_FAQ_v1.50.0.zip`). Die README gibt es ebenfalls in allen sechs Sprachen.
-- **Dateimanager: ordnen, auswählen, ansehen.** Sortieren nach Name, Größe oder Datum (mit Richtung; der Browser merkt sich die Wahl),
-  „Alle auswählen“, „Ordnergrößen“ (zählt Ordner nach, höchstens etwa 8 Sekunden je Ordner, dann „mindestens“) und **Ansehen**: Bilder
-  (PNG, JPG, GIF, WebP, BMP, ICO) und der Anfang von Textdateien (bis 256 KB) gleich im Browser.
-- **Kleinere Seitendateien.** Die Dateien der Oberfläche liegen komprimiert (gzip) in der App und gehen so über das Netz: die Seite
-  (HTML, Skript, Stil) schrumpft von 611 KB auf 160 KB. Browser ohne gzip bekommen den Text wie bisher.
-- **GitHub:** Vorlagen für Fehler, Wünsche und Übersetzungen.
+- **Payload-Profile.** Auf der Seite „Payloads“ legst du **Profile** an: benannte Abfolgen aus Payloads des Konsolenordners mit Pausen dazwischen
+  (zum Beispiel kstuff, 3 Sekunden Pause, ShadowMountPlus). „Ausführen“ startet sie Schritt für Schritt, „Anhalten“ beendet nach dem laufenden Schritt.
+  Ein Profil lässt sich als **Startprofil** festlegen: die App führt es dann nach jedem eigenen Start von selbst aus. Läuft ein Ablauf nicht zu Ende
+  (ein Payload startet die App neu), führt die App das Startprofil beim nächsten Start **nicht** noch einmal aus (Schutz vor Endlosschleifen).
+  **„Vom PC importieren“** lädt `.elf`-Dateien vom Rechner in den Ordner der Konsole, auch direkt beim Bearbeiten eines Profils; „Profile sichern“
+  und „Profile laden“ tauschen Profile als Datei aus. Die Idee stammt vom ps5-payload-manager von itsPLK (GPL-3.0); hier ist sie neu gebaut.
+- **Abbild-Leser statt Einhängen.** „Anpassungen unbekannt“ bei Abbild-Spielen (`.exfat`, `.ffpkg`, `.ffpfsc`) verschwindet, ohne dass etwas eingehängt wird:
+  die App liest `eboot.bin` und `fakelib` direkt aus der Abbilddatei. Das Ergebnis bleibt gespeichert; beim nächsten Start wird nur gelesen, was sich geändert hat.
+  Nur ein Abbild, das der Leser nicht kennt, wird (falls ShadowMountPlus es zulässt) kurz eingehängt.
+- **fakelib2 und Backport-Ordner** werden erkannt wie bei ShadowMountPlus: `fakelib2` ersetzt `fakelib`, und ein Ordner
+  `<Scanpfad>/backports/<TITEL-ID>/` hat Vorrang vor den Bibliotheken im Spiel. Die Spieldetails nennen, woher die Bibliotheken kommen.
+- **Spielstände:** das Bild des Benutzers links neben dem Namen, eine größere Benutzerkachel und der **Spielname neben der Titel-ID**
+  (auch bei nicht mehr installierten Spielen, soweit die Konsole den Namen noch kennt).
+  Die Liste ist je Benutzer in **PS5-Spiele, PS5-Apps, PS4-Spiele und PS4-Apps** getrennt (Apps wie YouTube sind gekennzeichnet).
+  **Löschen:** jeder Titel hat einen Knopf „Löschen“ (zwei Klicks); die App sichert den jetzigen Stand vorher und lässt ihn zurückspielen.
 
 ### Verbessert
 
-- Die eingebauten Fassungen von Handbuch und FAQ haben ein kompaktes Deckblatt, eine Sprachleiste und tragen das Logo nicht mehr
-  als eingebettetes Bild in jeder Seite.
-- Handbuch und FAQ nennen die neuen Funktionen (Sortieren, Ansehen, Sprache).
+- Die Warnschwelle geht mit dem Ziel mit; Ziel bis 91 °C (siehe 1.50.0).
+- Daten der App liegen unter `/data/PS5-Cooling-Center/covers_and_more` (Cover, Metadaten, Abbild-Ergebnisse, gemerkte Spielnamen).
+- Handbuch und FAQ beschreiben Profile und Backport-Quellen in allen sechs Sprachen.
 
 ### Wichtig
 
-- **Getestet ist nur Firmware 12.00** auf einer PS5 Pro (CFI-7021).
+- **Getestet ist nur Firmware 12.00** auf einer PS5 Pro (CFI-7021). An der Konsole liefen: der Abbild-Leser (10 Abbilder, nichts eingehängt),
+  der Start der App mit den Profilen und die neue Spielstände-Liste (PS5/PS4 getrennt, YouTube als App erkannt). **Noch nicht an der Konsole
+  benutzt:** Profile ausführen und als Startprofil, der Import vom PC, die Backport-Erkennung mit `fakelib2`/`backports` und das **Löschen von
+  Spielständen** (nur im Host- und Browsertest geprüft). Probiere das Löschen zuerst mit einem unwichtigen Titel.
 - **Löschen ist endgültig** – bei Spielen, Sicherungen und im Dateimanager.
 - **`.ffpkg`-Dateien aus Fassungen vor 1.48.0 neu erzeugen.**
-- **„Spiel beenden“ fragt nicht nach.**
-- **Was auf Deutsch bleibt:** die Meldungen, die die Konsole selbst auf dem Fernseher einblendet (beim Start, bei einer Warnung, bei der
-  Mikrofon-Taste), die Entwicklerdokumente und die Schnittstellenbeschreibung. Ein seltener Text kann in einer Sprache noch fehlen und
-  erscheint dann deutsch; bitte als Issue („Translation“) melden.
+- **Was auf Deutsch bleibt:** die Meldungen, die die Konsole selbst auf dem Fernseher einblendet, die Entwicklerdokumente und die Schnittstellenbeschreibung.
 
 ### Technisches
 
-- Neue Dateien: `src/assets.c` (liefert die eingebetteten Dateien aus, gzip wie gespeichert oder mit libdeflate entpackt),
-  `web/i18n-boot.js` und `web/i18n.js` (Sprachwahl und Übersetzung zur Laufzeit), Wörterbücher `web/lang/<xx>.json`,
-  `web/handbuch.<xx>.html` und `web/faq.<xx>.html`.
-- Neue Endpunkte `GET /api/v1/files/view` (Ansehen) und `GET /api/v1/files/size` (Größe von Ordnern), siehe [API.md](API.md).
-- `tools/i18n/` mit den Hilfen für Übersetzer (Texte aus dem Quelltext ziehen, Wörterbuch prüfen), siehe
-  [ENTWICKLUNG.md](ENTWICKLUNG.md#übersetzungen).
+- Neue Dateien: `src/payprofiles.c` (Profile), `src/imgread.c` (Leser für exFAT, UFS2 und PFSC), Endpunkte `/api/v1/payload-profiles*`,
+  `POST /api/v1/library/probe`, `GET /api/v1/saves/avatar`, siehe [API.md](API.md).
+- Hosttests: Profile 18 Prüfungen (mit Sanitizern), Backport-Quellen 4, Browser 18.
