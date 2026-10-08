@@ -1,35 +1,31 @@
 ## Release Notes
 
-Version: v1.52.0
+Version: v1.53.0
 Datum: 2026-10-08
 
-Neu seit 1.51.0: Pakete direkt vom PC installieren und ein QR-Code mit der Adresse der Weboberfläche.
+Neu seit 1.52.0: der neue Lüfter in der Oberfläche.
 
 ### Neu
 
-- **Pakete direkt vom PC installieren.** Auf dem Reiter **Pakete** steht oben die Karte **„Vom PC installieren“**: eine `.pkg`-Datei wählen oder auf die Karte
-  ziehen, den Plan lesen, „Jetzt installieren“. Die Datei wird **nicht auf der Konsole gespeichert**: Der Browser schickt sie in Stücken zu einem Megabyte,
-  während die Konsole sie installiert. Die Installation braucht darum nur den Platz des installierten Spiels, nicht noch einmal die Größe der Datei.
-  Die Konsole liest das Paket nicht der Reihe nach; die App hält einen Ring von 64 MB im Arbeitsspeicher und liefert zuerst, was die Konsole gerade braucht.
-  **Die Seite muss offen bleiben**, bis die Installation fertig ist (sie arbeitet auch in einem Hintergrund-Reiter weiter). Meldet sich der Browser 40 Sekunden
-  lang nicht, bricht die Konsole mit einem klaren Satz ab, statt zu hängen. Geteilte Pakete (`.part1` …) gehen auf diesem Weg nicht. Die Idee stammt vom
-  „Direct Install“ des PKG Managers von itsPLK (GPL-3.0); hier ist sie neu gebaut.
-- **QR-Code mit der Adresse der Seite.** Auf der Seite **System** zeigt die Karte **„Am Handy öffnen“** einen QR-Code: Kamera des Handys darauf halten, und die Seite
-  geht auf dem Handy auf (im selben Netzwerk). Der Code enthält nur die Adresse, keine Zugangsdaten. Der Encoder stammt aus webhb 0.4.1 von slopmaster33 (GPL-3.0).
+- **Der Lüfter in der Oberfläche ist neu** (Entwurf des Users, Komponente `<ps5-cooling-fan>`, Datei `web/ps5-fan.js`). Auf der Seite **Kühlung** sitzt er als leuchtende Kachel:
+  ein gezeichneter Radiallüfter mit 23 Lamellen und Lichtring. Er zeigt den **gemessenen** Lüfterwert. Die **Farbe** geht stufenlos von Blau (bis 25 %) über Grün (um 55 %)
+  zu Rot (ab 65 %) und färbt auch Rand, Glühen und Zahl der Kachel. Die **Drehung** wird mit dem Wert schneller (etwa 0,15 bis 1 Umdrehung pro Sekunde), beschleunigt und bremst
+  weich und steht bei 0 %; die Nabe in der Mitte steht still. Ohne Messwert ist der Lüfter grau und steht. Die Drehung ist eine Darstellung, keine gemessene Drehzahl.
+- **Kleiner Lüfter in der Kopfleiste** neben dem Verbindungsstatus mit Wert und Zone („Kühl“, „Normal“, „Hohe Last“) auf jeder Seite, **außer auf Kühlung**, wo der große zu sehen ist.
+- **Einstellung „Animation“** in der Kachel: „voll“, „reduziert“ (keine Drehung, Farbe bleibt) oder „aus“ (auch ohne Lichteffekte). Der Browser merkt sich die Wahl.
+- **Schutz für den alten Browser der Konsole:** Wird ein Bild zu langsam, schaltet der Lüfter zuerst die Lichteffekte ab und danach die Drehung.
 
 ### Wichtig
 
-- **Getestet ist nur Firmware 12.00** auf einer PS5 Pro (CFI-7021). Die **Übertragung und Installation vom PC** und der **QR-Code** wurden an der Konsole ausprobiert und liefen
-  (Rückmeldung des Users vom 08.10.2026). Noch nicht an der Konsole benutzt: Profile ausführen und als Startprofil, der Import vom PC bei den Profilen, die
-  Backport-Erkennung mit `fakelib2`/`backports` und das **Löschen von Spielständen** (aus 1.51.0; nur im Host- und Browsertest geprüft). Probiere das Löschen zuerst
-  mit einem unwichtigen Titel.
-- **Löschen ist endgültig** – bei Spielen, Sicherungen und im Dateimanager.
+- **Die Anzeige des Lüfters ist am Fernseher der Konsole beurteilt worden** (Rückmeldung des Users vom 08.10.2026: Drehung und Nabe passen). Zuerst drehte die Nabe mit und die Lamellen sprangen bei
+  hoher Drehzahl; beides ist behoben (Höchstdrehzahl 1 Umdrehung pro Sekunde, Nabe fest).
+- **Firmware:** Getestet auf einer PS5 Pro (CFI-7021) mit **12.00**. Der Nutzer meldet, dass die App auch auf einer PS5 mit **13.60** läuft (nicht von mir geprüft). Neuere Firmware als 13.60 startet erst mit einem neueren SDK.
+- Noch nicht an der Konsole benutzt: Profile ausführen und als Startprofil, der Import vom PC bei den Profilen, die Backport-Erkennung mit `fakelib2`/`backports` und das **Löschen von Spielständen**.
+  Probiere das Löschen zuerst mit einem unwichtigen Titel. **Löschen ist endgültig** – bei Spielen, Sicherungen und im Dateimanager.
 - **`.ffpkg`-Dateien aus Fassungen vor 1.48.0 neu erzeugen.**
 - **Was auf Deutsch bleibt:** die Meldungen, die die Konsole selbst auf dem Fernseher einblendet, die Entwicklerdokumente und die Schnittstellenbeschreibung.
 
 ### Technisches
 
-- Neue Dateien: `src/pkglive.c` (Übertragung vom PC), `src/qr.c` (QR-Encoder); Endpunkte `POST /api/v1/packages/live/init`, `PUT /api/v1/packages/live/segment`,
-  `GET /api/v1/packages/live/state` (mit `since`/`wait` als Wartemodus), `POST /api/v1/packages/live/cancel` und `GET /api/v1/qr`, siehe [API.md](docs/API.md).
-- Tests: Installationstest mit simulierter Konsole 644 Prüfungen (80 für diesen Weg, mit ThreadSanitizer sauber), Host-Test mit echtem HTTP-Server, Browser-Suite 53 Szenarien,
-  der QR-Code mit einem Lesegerät (OpenCV) für alle sechs Versionen zurückgelesen.
+- Neu: `web/ps5-fan.js`; entfernt: `web/img/fan-rotor.png`, `web/img/fan-frame.png`. Keine neuen Endpunkte, keine Änderung am C-Teil außer der Versionsnummer.
+- Tests: Browser-Suite 54 Szenarien ohne Befund (mit Content-Security-Policy), Lüfter-Szenario FN.

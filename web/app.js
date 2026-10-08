@@ -1374,11 +1374,48 @@
    * Es gibt einen Ring (Kühlungsseite; bis 1.45.x hatten Übersicht und Kühlung je einen).
    * Seit v1.38.0 liegt er auf der Leuchtröhre des Lüfterbilds (r = 110 von
    * 256): Füllung und ihr breiter Schein wachsen gemeinsam. */
-  const FAN_RING_CIRC = 691.2;                /* Umfang bei r = 110 */
-  const fanRing = (pct) => {
-    const f = Math.max(0, Math.min(1, pct / 100));
-    const dash = `${(f * FAN_RING_CIRC).toFixed(1)} ${FAN_RING_CIRC}`;
-    $$(".fan-ring-fill, .fan-ring-glow").forEach((el) => { el.style.strokeDasharray = dash; });
+  /* Der Lüfter (seit 1.52.0): <ps5-cooling-fan> (ps5-fan.js, vom User entworfen) in der Kachel der Kühlungsseite und klein
+     neben dem Verbindungsstatus. Er bekommt nur den gemessenen Wert und ob er gültig ist; ohne Wert steht er still und ist
+     grau. Die Farbe („r,g,b") steht in --fan-rgb und färbt auch die Kachel und den kleinen Chip. Der Chip ist auf der
+     Kühlungsseite versteckt, weil dort der große Lüfter zu sehen ist. Die Animation lässt sich in der Kachel einstellen
+     (voll, reduziert = keine Drehung, aus = auch ohne Lichteffekte); der Browser merkt sich die Wahl. */
+  const FAN_MOTION_KEY = "ps5tm.fanMotion";
+  let fanKey = "";
+  const fanZoneWord = (p) => (p <= 35 ? "Kühl" : p < 80 ? "Normal" : "Hohe Last");
+  const fanMotionGet = () => {
+    try { const v = localStorage.getItem(FAN_MOTION_KEY); return v === "reduced" || v === "off" ? v : "full"; } catch { return "full"; }
+  };
+  const fanMotionApply = () => {
+    const m = fanMotionGet();
+    $$("ps5-cooling-fan").forEach((f) => {
+      f.setAttribute("motion", m === "full" ? "full" : "reduced");
+      f.setAttribute("lite", m === "off" ? "true" : "false");
+    });
+    const sel = $("#fan-motion");
+    if (sel && sel.value !== m) sel.value = m;
+  };
+  const fanChipSync = () => {
+    const chip = $("#fan-chip");
+    if (chip) chip.hidden = state.page === "cooling";
+  };
+  const fanVisual = (pct, ok) => {
+    const valid = !!ok && Number.isFinite(pct);
+    const p = valid ? Math.max(0, Math.min(100, Math.round(pct))) : 0;
+    const key = valid ? String(p) : "off";
+    if (key === fanKey) return;
+    fanKey = key;
+    const model = window.PS5FanModel;
+    $$("ps5-cooling-fan").forEach((f) => {
+      if (!f.setTelemetry) return;                      /* die Komponente ist (noch) nicht da: die Seite geht ohne sie */
+      f.setTelemetry({ percent: p, connected: valid });
+      f.setAttribute("aria-label", valid ? `Lüfter ${p} Prozent` : "Lüfter ohne Messwert");
+    });
+    const rgb = model ? (valid ? model.colorAt(p) : model.GREY) : [116, 130, 151];
+    document.documentElement.style.setProperty("--fan-rgb", rgb.join(","));
+    const tile = $("#fan-tile");
+    if (tile && tile.closest(".ov-tile")) tile.closest(".ov-tile").classList.add("fan-glow");
+    txt("#fan-chip-val", valid ? `${p} %` : "—");
+    txt("#fan-chip-zone", valid ? fanZoneWord(p) : "Kein Signal");
   };
 
   /* Die drei Voreinstellungen, genau wie presetApply() sie setzt: im Modus
@@ -1402,7 +1439,7 @@
     const T = s.temperatures, F = s.fan, C = s.control;
     /* Ring: wärmster Punkt, gleiche Skala 30–90 °C wie früher die Einzelringe */
     ringArc("#ov-hot-ring", T.hottest_c, T.hottest_c >= 0);
-    fanRing(F.measured_valid ? F.measured_duty_pct : 0);
+    fanVisual(F.measured_valid ? F.measured_duty_pct : NaN, !!F.measured_valid);
 
     const auto = !!F.automatic;
     /* Wirksames Ziel (eine Spielregel kann es überschreiben) wird gezeigt.
@@ -4688,6 +4725,7 @@
       const conn = $("#conn");
       conn.classList.remove("on"); conn.classList.add("off");
       txt("#conn-text", "Keine Verbindung");
+      fanVisual(NaN, false);
       document.body.classList.add("offline");   /* zeigt .offline-note */
     }
   };
@@ -8192,6 +8230,7 @@
   $$(".tab").forEach((b) => b.addEventListener("click", () => {
     if (!b.dataset.page) return;                       /* Handbuch und FAQ sind Links, keine Seiten */
     state.page = b.dataset.page;
+    fanChipSync();
     try { sessionStorage.setItem("ps5page", state.page); } catch { /* ohne Speicher: kein Merken */ }
     $$(".tab").forEach((x) => {
       x.classList.toggle("active", x === b);
@@ -9145,6 +9184,13 @@
 
   /* ── Start ──────────────────────────────────────────────────────── */
 
+  fanMotionApply();
+  fanChipSync();
+  const fanSel = $("#fan-motion");
+  if (fanSel) fanSel.addEventListener("change", () => {
+    try { localStorage.setItem(FAN_MOTION_KEY, fanSel.value); } catch { /* ohne Speicher: gilt bis zum Neuladen nicht */ }
+    fanMotionApply();
+  });
   refresh();
   loadConfigUntilOk();
   loadSystem();

@@ -836,6 +836,23 @@ nennt, aus welchem Ordner die Bibliotheken kommen. Gesucht wird neben dem Spiel
 und auf USB unter `etaHEN/games`. Die globale Bibliothek unter
 `/data/shadowmount/fakelib` zeigt die App nicht je Spiel an: Sie gälte für alle.
 
+## Der Lüfter in der Oberfläche (ab 1.53.0)
+
+Der Lüfter auf der Seite **Kühlung** ist ein gezeichneter Radiallüfter mit 23 Lamellen und einem Lichtring (Entwurf des Users, als
+Komponente `<ps5-cooling-fan>` in `web/ps5-fan.js`). Er zeigt den **gemessenen** Lüfterwert:
+
+- **Drehung:** Die Lamellen drehen sich sichtbar schneller, je höher der Wert (von etwa 0,15 bis höchstens 1 Umdrehung pro Sekunde; schneller würde das Bild bei 23 eng stehenden Lamellen springen), wird weich beschleunigt und
+  gebremst und stehen bei 0 %. Die Nabe in der Mitte steht still. Das ist eine Darstellung, keine gemessene Drehzahl.
+- **Farbe:** Sie geht stufenlos von Blau (bis 25 %) über Grün (um 55 %) zu Rot (ab 65 %). Die Farbe stellt die Lüfterlast dar, nicht die
+  Temperatur. Sie färbt auch den Rand, das Glühen und die Zahl der Kachel.
+- **Kein Wert:** Ohne gültigen Messwert (oder ohne Verbindung zur App) ist der Lüfter grau und steht, die Zahl zeigt „—“.
+- **Der kleine Lüfter oben** neben dem Verbindungsstatus zeigt Wert und Zone („Kühl“ bis 35 %, „Normal“ bis 79 %, „Hohe Last“) auf jeder
+  Seite, **außer auf der Seite Kühlung**: Dort ist der große zu sehen, und der kleine ist ausgeblendet.
+- **Animation** (in der Kachel, der Browser merkt sich die Wahl): „voll“; „reduziert“ (keine Drehung, Farbe und Lichtring bleiben); „aus“
+  (keine Drehung und ohne Lichteffekte). Stellt der Browser die Bewegung in den Systemeinstellungen auf „reduziert“, dreht sich nichts.
+- **Schutz für langsame Browser:** Braucht der Browser zu lange für ein Bild (der Browser der Konsole ist alt), schaltet die Komponente
+  zuerst die aufwendigen Lichteffekte ab und, wenn es immer noch ruckelt, die Drehung; Farbe und Werte bleiben.
+
 ## Betriebsarten
 
 | Modus | Verhalten |

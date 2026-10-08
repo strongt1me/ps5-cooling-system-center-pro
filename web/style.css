@@ -214,21 +214,25 @@ body {
   width: 13px; height: 13px; border: 2px solid var(--surface-1); }
 .run-dot.live + img { opacity: 1; }
 
-/* Lüfter aus den Bildern des Users (v1.38.0): Rad (dreht) unter Rahmen
-   (steht), darüber der Drehzahl-Ring genau auf der Leuchtröhre des Rahmens
-   (r = 110 von 256, gemessen). Die Röhre wird abgedunkelt und leuchtet so weit
-   auf, wie der Lüfter dreht. Die Drehung bleibt eine feste CSS-Animation, die
-   JS nie anfasst — so seit v1.35.1 auf der Konsole ruckelfrei (siehe
-   ui-redesign). Das Rad ist auf die Nabe zentriert, es eiert nicht. */
-.ov-fan { position: relative; width: 92px; height: 92px; flex: none; }
-.fan-pic img, .fan-pic svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.fan-rotor { animation: fan-blade-spin 2.1s linear infinite; }
-.fan-ring-track { fill: none; stroke: rgba(5,9,18,.8); stroke-width: 11; }
-.fan-ring-glow, .fan-ring-fill { fill: none; stroke-linecap: round; stroke-dasharray: 0 691.2;
-  transition: stroke-dasharray .8s cubic-bezier(.4,0,.2,1); }
-.fan-ring-glow { stroke: rgba(56,189,248,.3); stroke-width: 18; }
-.fan-ring-fill { stroke: #8fdcff; stroke-width: 7; }
-@keyframes fan-blade-spin { to { transform: rotate(360deg); } }
+/* Der Lüfter (seit 1.52.0): <ps5-cooling-fan> aus ps5-fan.js, vom User entworfen. Er dreht schneller, je höher der gemessene
+   Wert, und leuchtet in einer Farbe, die stufenlos von Blau über Grün zu Rot geht (grau, wenn kein Wert da ist). Die Farbe als
+   „r,g,b" steht in --fan-rgb (app.js, fanVisual) und färbt auch die Kachel und den kleinen Lüfter neben dem Verbindungsstatus.
+   Bis 1.51.x waren es zwei Bilder mit fester CSS-Drehung und einem Ring; die Komponente schützt sich selbst vor einem
+   langsamen Browser (siehe ps5-fan.js, „lite"). */
+:root { --fan-rgb: 116,130,151; }
+.ov-fan { position: relative; width: 112px; height: 112px; flex: none; }
+.ov-fan ps5-cooling-fan { width: 112px; }
+.ov-tile.fan-glow { border-color: rgba(var(--fan-rgb),.55);
+  box-shadow: 0 0 0 1px rgba(var(--fan-rgb),.25), 0 0 30px rgba(var(--fan-rgb),.26), inset 0 0 40px rgba(var(--fan-rgb),.07);
+  background: linear-gradient(135deg, rgba(var(--fan-rgb),.10), var(--surface-1) 55%); transition: border-color .8s, box-shadow .8s; }
+.ov-tile.fan-glow #t-fan { color: rgb(var(--fan-rgb)); }
+.fan-motion { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--ink-muted); }
+.fan-motion select { background: var(--inset); color: var(--ink-2); border: 1px solid var(--hairline); border-radius: 6px; padding: 1px 4px; font-size: 11px; }
+/* Der kleine Lüfter neben dem Verbindungsstatus */
+.fan-chip { display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 3px 5px; border-radius: 999px;
+  border: 1px solid rgba(var(--fan-rgb),.45); background: rgba(var(--fan-rgb),.10); font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.fan-chip ps5-cooling-fan { width: 32px; flex: none; }
+.fan-chip b { color: rgb(var(--fan-rgb)); }
 
 /* Hinweis unter den Voreinstellungen */
 .sub b { color: var(--ink-2); font-weight: 600; }
@@ -414,9 +418,6 @@ body.offline .offline-note { display: flex; }
   .card.ov-hero.hot { background-image: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)),
       url(/img/hero-overview-hot.jpg); }
   .choice-ico { width: 52px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .fan-rotor { animation: none; }
 }
 
 .fan-compare { position: relative; height: 8px; margin-bottom: 12px; }
@@ -1428,3 +1429,4 @@ html.i18n-wait body { visibility: hidden; }
 .qr-box { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
 #qr-img { background: #fff; padding: 6px; border-radius: 10px; flex: none; }
 .qr-url code { font-size: 15px; word-break: break-all; }
+.fan-chip[hidden] { display: none; }

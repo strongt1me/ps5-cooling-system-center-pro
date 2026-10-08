@@ -99,6 +99,11 @@
             <span>Expertenmodus</span>
             <span class="switch"><input type="checkbox" id="expert-mode-top"><i></i></span>
           </label>
+          <!-- Der kleine Lüfter neben dem Verbindungsstatus: auf jeder Seite zu sehen, ob und wie schnell er läuft (app.js, fanVisual) -->
+          <span class="fan-chip" id="fan-chip" title="Gemessene Lüfterleistung">
+            <ps5-cooling-fan id="fan-top" speed="0" connected="false"></ps5-cooling-fan>
+            <span class="fan-chip-txt"><b id="fan-chip-val">—</b> <span id="fan-chip-zone">Kein Signal</span></span>
+          </span>
           <div class="conn" id="conn"><i></i><span id="conn-text">Verbinde …</span></div>
         </div>
       </header>
@@ -567,19 +572,23 @@
 
             <div class="ov-side">
               <article class="card ov-tile">
+                <!-- Der Lüfter (seit 1.53.0): <ps5-cooling-fan> aus ps5-fan.js, ein SVG mit Rotor, dessen Drehung und Lichtfarbe
+                     dem gemessenen Wert folgen (app.js, fanVisual). Kein Wert: grau und stehend. -->
                 <div class="ov-fan fan-pic">
-                  <img class="fan-rotor" src="/img/fan-rotor.png" alt="">
-                  <img class="fan-frame" src="/img/fan-frame.png" alt="">
-                  <svg viewBox="0 0 256 256" aria-hidden="true">
-                    <circle class="fan-ring-track" cx="128" cy="128" r="110"></circle>
-                    <circle class="fan-ring-glow" cx="128" cy="128" r="110" transform="rotate(-90 128 128)"></circle>
-                    <circle class="fan-ring-fill" id="ov-fan-ring" cx="128" cy="128" r="110" transform="rotate(-90 128 128)"></circle>
-                  </svg>
+                  <ps5-cooling-fan id="fan-tile" speed="0" connected="false"></ps5-cooling-fan>
                 </div>
                 <div class="ov-tile-text">
                   <span class="ov-label">Lüfter</span>
                   <strong class="ov-big" id="t-fan">--<i>%</i></strong>
                   <small id="t-fan-note">Drehzahl</small>
+                  <label class="fan-motion" title="Wie der Lüfter gezeigt wird; wird in diesem Browser gemerkt">
+                    <span>Animation</span>
+                    <select id="fan-motion" aria-label="Animation des Lüfters">
+                      <option value="full">voll</option>
+                      <option value="reduced">reduziert</option>
+                      <option value="off">aus</option>
+                    </select>
+                  </label>
                 </div>
               </article>
               <article class="card ov-tile ov-game" id="running">
@@ -1933,6 +1942,7 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="/i18n.js" defer></script>
+    <script src="/ps5-fan.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
 </html>
