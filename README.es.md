@@ -6,7 +6,7 @@
 
 **Control del ventilador, supervisión de temperatura y centro de sistema para la PlayStation 5 con jailbreak, con interfaz web en la red doméstica en seis idiomas.**
 
-![Versión](https://img.shields.io/badge/Versi%C3%B3n-1.53.0-1f6feb)
+![Versión](https://img.shields.io/badge/Versi%C3%B3n-1.53.1-1f6feb)
 ![Licencia](https://img.shields.io/badge/Licencia-GPL--3.0--or--later-blue)
 ![Plataforma](https://img.shields.io/badge/Plataforma-PS5%20Payload-003791)
 ![Idiomas](https://img.shields.io/badge/Idiomas-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -69,7 +69,7 @@ El proyecto es el sucesor de *PS5 Temperature Manager*; el backend (C) y la inte
 
 | | |
 | --- | --- |
-| **Consola** | PS5 con jailbreak y un cargador de ELF en el **puerto 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) o equivalente). Probado en una **PS5 Pro (CFI-7021) con firmware 12.00**. Otros modelos y versiones de firmware no se han probado. La temperatura de gráficos solo está disponible en la Pro. |
+| **Consola** | PS5 con jailbreak y un cargador de ELF en el **puerto 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) o equivalente). Probado en una **PS5 Pro (CFI-7021) con firmware 12.00**. Un usuario informa de que la app también funciona en una PS5 con **firmware 13.60** (no comprobado por el autor). Otros modelos y versiones de firmware no se han probado. La temperatura de gráficos solo está disponible en la Pro. |
 | **Firmware** | El ELF se compila con el PS5-Payload-SDK **v0.43**, cuyo código de arranque conoce el firmware **hasta la 13.60**. Con un firmware que el código de arranque no conoce, no se llega a `main()`: el programa ni siquiera se inicia y no escribe nada en el registro. Que el inicio funcione en 13.xx no significa que el control del ventilador y los sensores funcionen allí igual que en 12.00: eso **no se ha comprobado**. |
 | **kstuff** | Necesario para el control del ventilador (`/dev/icc_fan`). Sin kstuff, los sensores y la interfaz siguen funcionando y la regulación indica «no disponible». |
 | **Red** | Un navegador en la misma red que la consola. |
@@ -81,7 +81,7 @@ El proyecto es el sucesor de *PS5 Temperature Manager*; el backend (C) y la inte
 2. Envía el ELF a la consola, puerto **9021**, con cualquier emisor de payloads o por línea de comandos:
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.53.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.53.1.elf
    ```
 
 3. En el televisor aparece una notificación con la dirección. Ábrela en el navegador: **`http://<PS5-IP>:8086`**

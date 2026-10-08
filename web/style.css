@@ -1430,3 +1430,10 @@ html.i18n-wait body { visibility: hidden; }
 #qr-img { background: #fff; padding: 6px; border-radius: 10px; flex: none; }
 .qr-url code { font-size: 15px; word-break: break-all; }
 .fan-chip[hidden] { display: none; }
+
+/* Auswahlfelder: der alte Browser der Konsole zeichnet sie sonst eckig und mit eigenem Aussehen (Rundung und Farbe werden ignoriert);
+   darum das Eigenaussehen abschalten und den Pfeil selbst zeichnen */
+select:not([multiple]) { -webkit-appearance: none; appearance: none; padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%277%27%3E%3Cpath d=%27M1 1l5 5 5-5%27 fill=%27none%27 stroke=%27%23aab4c4%27 stroke-width=%271.8%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 12px 7px; }
+button, input[type=text], input[type=search], input[type=number], input[type=password], input:not([type]), textarea { -webkit-appearance: none; appearance: none; }

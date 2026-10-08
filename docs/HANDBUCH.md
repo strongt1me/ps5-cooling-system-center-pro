@@ -768,7 +768,7 @@ Die App ist mit dem PS5-Payload-SDK **v0.43** gebaut. Dessen Startcode kennt die
 Firmware **bis einschließlich 13.60**; v0.41, mit dem die Versionen bis 1.46.0
 gebaut waren, endete bei 13.40. Eine Firmware, die der Startcode nicht kennt,
 kommt nicht bis `main()`: Das Programm startet dann nicht und schreibt nichts ins
-Protokoll. Getestet ist nur die **Firmware 12.00** auf einer PS5 Pro; ob
+Protokoll. Getestet ist nur die **Firmware 12.00** auf einer PS5 Pro; ein Nutzer meldet, dass die App auch auf **13.60** läuft (vom Autor nicht geprüft). Ob
 Lüftersteuerung und Sensoren auf 13.xx so arbeiten wie dort, ist nicht geprüft.
 Was die Konsole meldet, steht auf der Systemseite („Firmware“) und im Protokoll
 (`firmware`).
