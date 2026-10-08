@@ -471,13 +471,18 @@
               <h3 id="pl-h-prof">Profile</h3>
               <span class="pl-count" id="pl-count-prof">–</span>
               <span class="pl-head-actions">
-                <button class="btn" id="pl-prof-new" type="button">Neues Profil</button>
-                <button class="btn ghost" id="pl-prof-export" type="button">Profile sichern</button>
-                <label class="btn ghost" for="pl-prof-import-file">Profile laden</label>
-                <input type="file" id="pl-prof-import-file" accept=".json,application/json" hidden>
+                <button class="btn primary" id="pl-prof-new" type="button">Neues Profil</button>
+                <details class="pl-menu" id="pl-prof-menu">
+                  <summary class="pl-more" aria-label="Mehr anzeigen" title="Mehr anzeigen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary>
+                  <div class="pl-menu-pop">
+                    <p class="pl-where">Ein Profil ist eine Abfolge von Payloads mit Pausen dazwischen. Das <b>Startprofil</b> führt die App nach jedem Start von selbst aus.</p>
+                    <button class="btn ghost" id="pl-prof-export" type="button">Profile sichern</button>
+                    <label class="btn ghost" for="pl-prof-import-file">Profile laden</label>
+                    <input type="file" id="pl-prof-import-file" accept=".json,application/json" hidden>
+                  </div>
+                </details>
               </span>
             </header>
-            <p class="pl-where">Ein Profil ist eine Abfolge von Payloads mit Pausen dazwischen. Das <b>Startprofil</b> führt die App nach jedem Start von selbst aus.</p>
             <div id="pl-prof-run" class="pl-prof-run is-hidden" role="status" aria-live="polite"></div>
             <div class="pl-grid" id="pl-prof-list"><p class="muted">wird gelesen …</p></div>
             <div id="pl-prof-edit" class="pl-prof-edit is-hidden"></div>

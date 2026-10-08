@@ -2230,6 +2230,8 @@
      davon annimmt, prüft payloads.c noch einmal. */
   const PL_SVG = {
     box:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9L12 3z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>',
+    star:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 17l-5.2 2.7 1-5.9-4.3-4.1 5.9-.8z"/></svg>',
+    edit:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>',
     play:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>',
     trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/></svg>',
     usb:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13"/><circle cx="12" cy="19" r="2"/><path d="M12 9l-4-2v3M12 12l4-2v3"/><rect x="14" y="4.5" width="4" height="3" rx=".5"/><rect x="5.5" y="9" width="4" height="3" rx=".5"/></svg>',
@@ -2497,8 +2499,8 @@
         </div>
         <div class="pl-actions">
           <button class="btn primary pl-act" data-pp-run="${esc(p.id)}"${running || !p.items.some((i) => !plIsDelay(i)) ? " disabled" : ""}>${PL_SVG.play}Ausführen</button>
-          <button class="btn pl-act" data-pp-edit="${esc(p.id)}">Bearbeiten</button>
-          <button class="btn pl-act${isStart ? " on" : ""}" data-pp-startup="${esc(p.id)}" title="${isStart ? "Das Startprofil wird beim Start der App nicht mehr ausgeführt." : "Dieses Profil führt die App nach jedem Start von selbst aus."}">${isStart ? "Startprofil aufheben" : "Als Startprofil"}</button>
+          <button class="btn pl-act pl-ib" data-pp-edit="${esc(p.id)}" title="Bearbeiten">${PL_SVG.edit}<span class="pl-sr">Bearbeiten</span></button>
+          <button class="btn pl-act pl-ib${isStart ? " on" : ""}" data-pp-startup="${esc(p.id)}" title="${isStart ? "Das Startprofil wird beim Start der App nicht mehr ausgeführt." : "Dieses Profil führt die App nach jedem Start von selbst aus."}">${PL_SVG.star}<span class="pl-sr">${isStart ? "Startprofil aufheben" : "Als Startprofil"}</span></button>
         </div>
       </div>`;
     }).join("") : `<p class="muted">Noch kein Profil. „Neues Profil“ legt eines an; dort lassen sich auch Payloads vom PC importieren.</p>`;
@@ -2621,6 +2623,8 @@
     const sec = $("#pl-prof-list") && $("#pl-prof-list").closest(".pl-sec");
     if (!sec) return;
     sec.addEventListener("click", async (e) => {
+      const menu = $("#pl-prof-menu");
+      if (menu && menu.open && e.target.closest(".pl-menu-pop") && e.target.closest(".btn")) setTimeout(() => { menu.open = false; }, 0);
       const b = e.target.closest("button");
       if (!b || b.disabled) return;
       const d = b.dataset;
