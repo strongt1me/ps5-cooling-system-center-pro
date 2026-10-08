@@ -57,4 +57,18 @@ int  ps5tm_pkgstream_start(const ps5tm_pkgstream_cfg_t *cfg, char *err, size_t e
 void ps5tm_pkgstream_stop(void);
 void ps5tm_pkgstream_stats(ps5tm_pkgstream_stats_t *st);
 
+/* The live source (pkglive.c): a slice whose path begins with "live:" is read through the session of the browser's
+   upload, not from a file. */
+#define PKGLIVE_PREFIX "live:"
+int  ps5tm_pkglive_find(const char *id, ps5tm_pkg_t *out);
+int  ps5tm_pkglive_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsigned *n, uint64_t *total,
+                          char *err, size_t err_len);
+/* Exactly n bytes at off of the package of the session `id`; waits for the browser to send what is not there yet.
+   0, or -1 (the session ended, the browser is gone, or the data did not come). */
+int  ps5tm_pkglive_read(const char *id, uint64_t off, void *buf, size_t n);
+int  ps5tm_pkglive_icon(const ps5tm_pkg_t *p, uint8_t **data, size_t *n);
+void ps5tm_pkglive_installing(const char *id, int on);     /* an installation reads the session: it does not expire */
+void ps5tm_pkglive_end(const char *id);                    /* the installation is over: the memory goes */
+const char *ps5tm_pkglive_why(char *out, size_t n);        /* why the session ended, "" when it did not */
+
 #endif

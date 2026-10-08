@@ -89,7 +89,7 @@
   {
    "id": "pakete",
    "title": "Paquets",
-   "html": "\n<p>Trouve les fichiers <code>.pkg</code> sur les lecteurs USB, les disques et dans le stockage de la console (dossier <code>pkg</code>) et affiche l’image,\nle nom, l’ID de titre, la version, le type et la taille.</p>\n<ul>\n<li><b>Installer…</b> – la console installe elle-même le paquet ; l’app le lui met à disposition et affiche la progression.\nAuparavant, un plan indique ce qui pourrait poser problème.</li>\n<li><b>Diviser…</b> – découpe les gros paquets en parties pour clés USB FAT32 (jusqu’à 4 GB par fichier) ou disques optiques ; l’original reste inchangé.</li>\n</ul>\n<div class='info'>Une tentative d’installation interrompue peut laisser de l’espace réservé. Vous le libérez sur la console, dans la\nliste des téléchargements, avec « Supprimer ».</div>\n{{FIG:07-spiele-pakete.png}}\n"
+   "html": "\n<p>Trouve les fichiers <code>.pkg</code> sur les lecteurs USB, les disques et dans le stockage de la console (dossier <code>pkg</code>) et affiche l’image,\nle nom, l’ID de titre, la version, le type et la taille.</p>\n<ul>\n<li><b>Installer…</b> – la console installe elle-même le paquet ; l’app le lui met à disposition et affiche la progression.\nAuparavant, un plan indique ce qui pourrait poser problème.</li>\n<li><b>Diviser…</b> – découpe les gros paquets en parties pour clés USB FAT32 (jusqu’à 4 GB par fichier) ou disques optiques ; l’original reste inchangé.</li>\n<li><b>Installer depuis le PC</b> – choisissez un <code>.pkg</code> sur l’ordinateur du navigateur ou glissez-le sur la carte ; il est envoyé par morceaux pendant l’installation et n’est pas enregistré sur la console. La page doit rester ouverte.</li>\n</ul>\n<div class='info'>Une tentative d’installation interrompue peut laisser de l’espace réservé. Vous le libérez sur la console, dans la\nliste des téléchargements, avec « Supprimer ».</div>\n{{FIG:07-spiele-pakete.png}}\n"
   },
   {
    "id": "dateien",
@@ -109,7 +109,7 @@
   {
    "id": "system",
    "title": "Système &amp; journal",
-   "html": "\n<p><b>Système</b> affiche la console, le firmware, la durée de fonctionnement, l’espace de stockage de tous les lecteurs, le réseau, l’écran et\nl’efficacité du refroidissement au fil des semaines ; c’est aussi ici que vous réinstallez la vignette.</p>\n{{FIG:11-system.png}}\n<p><b>Journal</b> liste chaque mesure, régulation et message de l’app (exportable). L’onglet <b>Journal du noyau en direct</b> affiche\nle journal de la console au fur et à mesure – avec filtre, pause, enregistrement, téléchargement et capture.</p>\n{{FIG:14-kernel-log-live.png}}\n"
+   "html": "\n<p><b>Système</b> affiche la console, le firmware, la durée de fonctionnement, l’espace de stockage de tous les lecteurs, le réseau, l’écran et\nl’efficacité du refroidissement au fil des semaines ; c’est aussi ici que vous réinstallez la vignette.</p>\n<p><b>Système</b> affiche aussi un code QR avec l’adresse de cette page : pointez l’appareil photo du téléphone dessus et la page s’ouvre sur le téléphone (sur le même réseau).</p>\n{{FIG:11-system.png}}\n<p><b>Journal</b> liste chaque mesure, régulation et message de l’app (exportable). L’onglet <b>Journal du noyau en direct</b> affiche\nle journal de la console au fur et à mesure – avec filtre, pause, enregistrement, téléchargement et capture.</p>\n{{FIG:14-kernel-log-live.png}}\n"
   },
   {
    "id": "credits",

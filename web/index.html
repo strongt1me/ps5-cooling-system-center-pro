@@ -359,6 +359,20 @@
               </div>
             </article>
 
+            <!-- Ein Paket direkt vom PC installieren (pkglive.c): app.js (lv*) schickt die Datei in Stücken, während die Konsole sie installiert. -->
+            <article class="card" id="pk-live-card">
+              <div class="card-head">
+                <div><h2>Vom PC installieren</h2><p class="sub" id="pk-live-sub">Eine .pkg-Datei von diesem Rechner direkt installieren</p></div>
+                <div class="row-gap">
+                  <label class="btn" for="pk-live-file" id="pk-live-pick">Paketdatei wählen …</label>
+                  <input type="file" id="pk-live-file" accept=".pkg" hidden>
+                  <button class="btn ghost" id="pk-live-cancel" type="button" hidden>Abbrechen</button>
+                </div>
+              </div>
+              <div class="pk-drop" id="pk-live-drop" tabindex="0">Oder eine .pkg-Datei hierher ziehen. Sie wird nicht auf der Konsole gespeichert, sondern während der Installation übertragen.</div>
+              <div id="pk-live"></div>
+            </article>
+
             <article class="card" id="pk-job-card" hidden>
               <div class="card-head">
                 <div><h2 id="pk-job-title">Paket aufteilen</h2><p class="sub" id="pk-job-sub"></p></div>
@@ -970,6 +984,20 @@
               <div class="kv-list" id="disp-list"><p class="muted">wird gelesen …</p></div>
             </article>
           </div>
+
+          <!-- Die Adresse dieser Seite als QR-Code für das Handy (qr.c, GET /api/v1/qr); app.js (loadQr) füllt es. -->
+          <article class="card" id="qr-card">
+            <div class="card-head"><div><h2>Am Handy öffnen</h2>
+              <p class="sub">QR-Code mit der Adresse dieser Seite</p></div></div>
+            <div class="qr-box">
+              <img id="qr-img" alt="QR-Code mit der Adresse der Weboberfläche" width="180" height="180" hidden>
+              <div>
+                <p class="qr-url"><code id="qr-url">wird gelesen …</code></p>
+                <p class="muted">Die Kamera des Handys auf den Code halten. Das Handy muss im selben Netzwerk (WLAN) sein wie die Konsole.
+                  Der Code enthält nur die Adresse dieser Seite, keine Zugangsdaten.</p>
+              </div>
+            </div>
+          </article>
 
           <div class="grid-2">
             <article class="card has-ico">

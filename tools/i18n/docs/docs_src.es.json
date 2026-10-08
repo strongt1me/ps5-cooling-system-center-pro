@@ -89,7 +89,7 @@
   {
    "id": "pakete",
    "title": "Paquetes",
-   "html": "\n<p>Encuentra archivos <code>.pkg</code> en unidades USB, discos y en el almacenamiento de la consola (carpeta <code>pkg</code>) y muestra imagen,\nnombre, ID de título, versión, tipo y tamaño.</p>\n<ul>\n<li><b>Instalar …</b>: la consola instala el paquete por sí misma; la app se lo pone a su disposición y muestra el progreso.\nAntes, un plan indica lo que podría impedirlo.</li>\n<li><b>Dividir …</b>: divide paquetes grandes en partes para memorias USB FAT32 (hasta 4 GB por archivo) o discos; el original no se modifica.</li>\n</ul>\n<div class='info'>Un intento de instalación interrumpido puede dejar espacio reservado. Lo liberas en la consola, en la\nlista de descargas, con «Eliminar».</div>\n{{FIG:07-spiele-pakete.png}}\n"
+   "html": "\n<p>Encuentra archivos <code>.pkg</code> en unidades USB, discos y en el almacenamiento de la consola (carpeta <code>pkg</code>) y muestra imagen,\nnombre, ID de título, versión, tipo y tamaño.</p>\n<ul>\n<li><b>Instalar …</b>: la consola instala el paquete por sí misma; la app se lo pone a su disposición y muestra el progreso.\nAntes, un plan indica lo que podría impedirlo.</li>\n<li><b>Dividir …</b>: divide paquetes grandes en partes para memorias USB FAT32 (hasta 4 GB por archivo) o discos; el original no se modifica.</li>\n<li><b>Instalar desde el PC</b> – elige un <code>.pkg</code> del ordenador del navegador o arrástralo a la tarjeta; se envía en trozos mientras dura la instalación y no se guarda en la consola. La página debe permanecer abierta.</li>\n</ul>\n<div class='info'>Un intento de instalación interrumpido puede dejar espacio reservado. Lo liberas en la consola, en la\nlista de descargas, con «Eliminar».</div>\n{{FIG:07-spiele-pakete.png}}\n"
   },
   {
    "id": "dateien",
@@ -109,7 +109,7 @@
   {
    "id": "system",
    "title": "Sistema &amp; Registro",
-   "html": "\n<p><b>Sistema</b> muestra la consola, el firmware, el tiempo en marcha, el almacenamiento de todas las unidades, la red, la pantalla y el\nrendimiento de refrigeración a lo largo de las semanas; aquí también vuelves a instalar el icono.</p>\n{{FIG:11-system.png}}\n<p><b>Registro</b> enumera cada medición, regulación y mensaje de la app (exportable). La pestaña <b>Registro del kernel en directo</b> muestra\nel registro de la consola a medida que se genera, con filtro, pausa, guardado, descarga y grabación.</p>\n{{FIG:14-kernel-log-live.png}}\n"
+   "html": "\n<p><b>Sistema</b> muestra la consola, el firmware, el tiempo en marcha, el almacenamiento de todas las unidades, la red, la pantalla y el\nrendimiento de refrigeración a lo largo de las semanas; aquí también vuelves a instalar el icono.</p>\n<p>En <b>Sistema</b> también hay un código QR con la dirección de esta página: apunta la cámara del móvil y la página se abre en el móvil (en la misma red).</p>\n{{FIG:11-system.png}}\n<p><b>Registro</b> enumera cada medición, regulación y mensaje de la app (exportable). La pestaña <b>Registro del kernel en directo</b> muestra\nel registro de la consola a medida que se genera, con filtro, pausa, guardado, descarga y grabación.</p>\n{{FIG:14-kernel-log-live.png}}\n"
   },
   {
    "id": "credits",

@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.51.0"
+#define PS5TM_VERSION        "1.52.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -374,6 +374,8 @@ int  ps5tm_notify_action(const char *message, const char *sub,
                          const char *action_url);
 /* Writes the console's LAN address into `out`; returns 0 when one was found. */
 int  ps5tm_local_ip(char *out, size_t out_len);
+/* The text (up to 106 bytes) as an SVG picture of its QR code (qr.c). 0, or -1 when it is too long or out too small. */
+int  ps5tm_qr_svg(const char *text, char *out, size_t out_size);
 
 
 /* -------------------------------------------------------------- platform */
@@ -1193,6 +1195,10 @@ typedef struct {
 
 int  ps5tm_pkg_parse(const char *path, ps5tm_pkg_t *out);
 int  ps5tm_pkg_icon(const ps5tm_pkg_t *p, uint8_t **data, size_t *n);
+int  ps5tm_pkg_parse_reader(int (*rd)(void *ctx, void *buf, size_t n, uint64_t off), void *ctx, uint64_t total,
+                            const char *file, ps5tm_pkg_t *out);
+int  ps5tm_pkg_icon_reader(const ps5tm_pkg_t *p, int (*rd)(void *ctx, void *buf, size_t n, uint64_t off), void *ctx,
+                           uint8_t **data, size_t *n);
 int  ps5tm_pkg_part_name(const char *file, unsigned *part);
 
 /* The drives packages are looked for on, and written to (parts of a split package): the sticks, discs and
@@ -1219,6 +1225,14 @@ struct cJSON *ps5tm_pkgsplit_job_json(void);
 /* Installing a package the last search found (pkginstall.c, pkgstream.c, helper/pkginst_helper.c): the console's own
    installation, one package at a time, and never without a click. */
 struct cJSON *ps5tm_pkginst_plan_json(const char *id, int *http);   /* what installing would do, and whether it can */
+/* A package that is not on the console: the browser on a PC uploads it, piece by piece, while the console installs it
+   (pkglive.c). One at a time; the pieces go into a ring in memory (64 MB), the console reads them back through the same
+   server as any package. The id it answers with ("live-N") is used like the id of a package a search found. */
+struct cJSON *ps5tm_pkglive_init(const char *name, uint64_t size, int *http, char *err, size_t err_len);
+struct cJSON *ps5tm_pkglive_state(const char *id, long since, unsigned wait_ms, int *http);   /* since < 0: answer at once */
+void ps5tm_pkglive_receive(int fd, const char *query, const char *prefix, size_t prefix_len, size_t total);   /* http.c */
+int  ps5tm_pkglive_cancel(const char *id);
+
 int  ps5tm_pkginst_start(const char *id, char *err, size_t err_len);   /* HTTP status: 200 started, 404 no such package, 409 cannot be done */
 void ps5tm_pkginst_cancel(void);
 int  ps5tm_pkginst_busy(void);

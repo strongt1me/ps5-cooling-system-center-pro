@@ -6,7 +6,7 @@
 
 **Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak, con interfaccia web nella rete domestica in sei lingue.**
 
-![Versione](https://img.shields.io/badge/Versione-1.51.0-1f6feb)
+![Versione](https://img.shields.io/badge/Versione-1.52.0-1f6feb)
 ![Licenza](https://img.shields.io/badge/Licenza-GPL--3.0--or--later-blue)
 ![Piattaforma](https://img.shields.io/badge/Piattaforma-PS5%20Payload-003791)
 ![Lingue](https://img.shields.io/badge/Lingue-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -81,7 +81,7 @@ Il progetto è il successore di *PS5 Temperature Manager*; backend (C) e interfa
 2. Invia l'ELF alla console, porta **9021**, con un qualsiasi strumento di invio payload o da riga di comando:
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.51.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.52.0.elf
    ```
 
 3. Sul televisore compare una notifica con l'indirizzo. Apri nel browser: **`http://<PS5-IP>:8086`**
@@ -175,6 +175,7 @@ Questo progetto poggia sulle spalle della comunità homebrew della PS5. Senza il
 - **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (montare, spostare ed estrarre i giochi; la pagina Giochi si basa su di esso; il suo README indica la struttura consigliata per le immagini `.ffpkg`: blocchi da 64 KiB) e [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (ordine delle linee di alimentazione, valori di frequenza).
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: ha mostrato con quali parametri si crea un `.ffpkg` per ShadowMountPlus (blocchi e frammenti da 64 KiB, nessuno spazio riservato, densità degli inode 262144, dimensione del settore 512) e che la dimensione del settore 4096 lì (su Windows) produce immagini difettose. Solo conoscenze, nessun codice.
 - **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) (chiusura del browser della console) e [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager), modello per la gestione dei payload e per la regola su quali processi si possono terminare.
+- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): l’encoder QR che mostra l’indirizzo dell’interfaccia web come codice (`src/qr.c`, ripreso e verificato con un lettore).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): gli schemi nel registro del kernel con cui si riconosce il gioco in esecuzione.
 - **Il progetto [etaHEN](https://github.com/etaHEN/etaHEN)** e **[onionHEN](https://github.com/aydencharles/onionHEN)** (aydencharles): codice sorgente e documentazione su chiamate di sistema, valori misurati e rilevazione della frequenza dei fotogrammi.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)** (successore di [Sonic Loader](https://git.etawen.dev/soniciso/sonicloader)): forma delle chiamate per l'installazione del riquadro e modello per molte funzioni (chiudere il gioco, registro del kernel in tempo reale, tempo di gioco, dati salvati, gestione file, eliminazione dei giochi); il codice è stato riscritto da zero in ogni caso.

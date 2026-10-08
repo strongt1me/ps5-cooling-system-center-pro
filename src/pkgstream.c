@@ -186,6 +186,17 @@ pkg_read(rdr_t *r, uint64_t off, unsigned char *buf, size_t len) {
     const ps5tm_pkgslice_t *s = &g.slices[k];
     uint64_t in = off - s->logical, avail = s->size - in;
     size_t n = len < avail ? len : (size_t)avail;
+    if(!strncmp(s->path, PKGLIVE_PREFIX, strlen(PKGLIVE_PREFIX))) {      /* the browser's upload: no file */
+      if(ps5tm_pkglive_read(s->path + strlen(PKGLIVE_PREFIX), s->file_off + in, buf, n) != 0) {
+        r->err = -2;
+        r->bad_idx = k;
+        return -1;
+      }
+      buf += n;
+      off += n;
+      len -= n;
+      continue;
+    }
     if(r->fd < 0 || r->idx != k) {
       if(r->fd >= 0) close(r->fd);
       r->idx = k;
@@ -452,7 +463,8 @@ serve_one(int fd, const req_t *r, rdr_t *rd, unsigned char **buf) {
       pthread_mutex_lock(&g.lock);
       g.read_errors++;
       pthread_mutex_unlock(&g.lock);
-      const char *why = rd->err > 0 ? strerror(rd->err) : rd->err < 0 ? "die Datei hat sich seit der Suche verändert" : "die Datei ist kürzer als bei der Suche";
+      const char *why = rd->err > 0 ? strerror(rd->err) : rd->err == -2 ? "der PC liefert das Paket nicht mehr" :
+                        rd->err < 0 ? "die Datei hat sich seit der Suche verändert" : "die Datei ist kürzer als bei der Suche";
       const char *file = g.slices && rd->bad_idx < g.nslices ? strrchr(g.slices[rd->bad_idx].path, '/') : NULL;
       PS5TM_WARN("pkg_stream_read_error", "Server: Lesefehler bei Byte %llu in Teil %u (%.60s): %.60s.", (unsigned long long)a,
                  rd->bad_idx + 1, file ? file + 1 : "?", why);

@@ -977,6 +977,31 @@ weist der Server deshalb ab, was erkennbar von einer fremden Webseite kommt:
 - Die Seite selbst kommt mit einer Content-Security-Policy: kein Skript von
   außen, kein Einbetten in fremde Seiten.
 
+## Pakete direkt vom PC installieren (ab 1.52.0)
+
+Auf dem Reiter **Pakete** steht oben die Karte **„Vom PC installieren“**: Eine `.pkg`-Datei von dem Rechner, an dem der Browser läuft, wird
+installiert, ohne sie vorher auf ein Laufwerk der Konsole zu kopieren. Datei wählen oder auf die Karte ziehen, dann den Plan lesen und
+„Jetzt installieren“ drücken.
+
+- **Es wird nichts auf der Konsole gespeichert.** Die Seite schickt die Datei in Stücken zu einem Megabyte, *während* die Konsole sie
+  installiert. Die Installation braucht darum nur den Platz des installierten Spiels, nicht noch einmal die Größe der Datei.
+- **Was die Konsole braucht, bekommt sie zuerst.** Die Konsole liest das Paket nicht der Reihe nach und nicht nur einmal: den Anfang
+  mehrfach, dann zwei Ströme in großen Bereichen, bei einem zweiten Versuch wieder von vorn. Die App hält dafür einen Ring von 64
+  Stücken (64 MB) im Arbeitsspeicher, das erste Stück bleibt für immer darin. Die Konsole meldet, welches Stück sie gerade braucht; die
+  Seite schickt genau das, dahinter die nächsten, soweit im Ring Platz ist. Ein Stück, das gelesen wurde, wird als erstes ersetzt.
+- **Der Plan** ist derselbe wie bei Paketen auf einem Laufwerk (Name, Art, Version, PS4/PS5, Größe, freier Platz, was verhindert). Die
+  Angaben liest die Konsole aus dem Anfang der Datei; was keine PS4- oder PS5-Paketdatei ist, wird mit einem Satz abgewiesen. Geteilte
+  Pakete (`.part1` …) gehen auf diesem Weg nicht.
+- **Die Seite muss offen bleiben**, bis die Installation fertig ist (beim Schließen warnt der Browser). Die Seite arbeitet auch dann
+  weiter, wenn der Reiter im Hintergrund liegt: Sie lebt von den Antworten der Konsole, nicht von Zeitgebern. Meldet sich der Browser länger
+  als 40 Sekunden nicht, oder kommt ein gebrauchtes Stück zwei Minuten lang nicht, bricht die Konsole die Installation mit einem Satz
+  ab, statt zu hängen; was sie schon angelegt hat, kann liegen bleiben (wie bei jedem Abbruch).
+- **Ein Vorgang zugleich.** Eine Übertragung läuft nicht neben einem Kopieren, Konvertieren, Verschieben, Sichern, Löschen, Teilen oder einer
+  anderen Installation. Eine Übertragung, an der niemand mehr teilnimmt, endet nach drei Minuten; ein Plan, den man offen lässt, nach einer
+  halben Stunde.
+- **Netzwerk wie bei jeder Installation:** Die Konsole liest das Paket über die eigene Adresse (siehe oben); sie muss mit einem Netzwerk
+  verbunden sein.
+
 ## Profilbilder und Avatar-Pakete
 
 - Auf der Seite „Profil“ stehen **30 fertige Profilbilder** zur Auswahl. Sie
@@ -1086,6 +1111,10 @@ Expertenmodus-Schalter) und ist für schnelle Profilwechsel gedacht.
 
 Auf der Systemseite gibt es zusätzlich:
 
+- **Am Handy öffnen (ab 1.52.0)**: ein QR-Code mit der Adresse dieser Seite (`http://<Adresse der Konsole>:<Port>/`). Die Kamera des Handys
+  darauf halten, und die Seite geht auf; das Handy muss im selben Netzwerk sein. Der Code enthält nur die Adresse, keine Zugangsdaten und
+  keinen Text, den jemand anders bestimmen könnte (die Konsole erzeugt ihn nur für ihre eigene Adresse). Der Encoder (Byte-Modus, Stufe M,
+  Version 1 bis 6) stammt aus webhb von slopmaster33 (GPL-3.0); er ist mit einem Lesegerät (OpenCV) für alle Versionen und die Grenzen geprüft.
 - **Grafikdaten**: zeigt verifizierbare GPU-Stellvertreterwerte (z. B.
    Grafiktakt und GPU-Seitentabellen), und kennzeichnet explizit, dass diese
    Firmware keine direkte GPU-Temperatur/GPU-Auslastung liefert.

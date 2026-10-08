@@ -586,3 +586,35 @@ ps5tm_pkg_icon(const ps5tm_pkg_t *p, uint8_t **data, size_t *n) {
   *n = p->icon_size;
   return 0;
 }
+
+/* A package read through a function instead of a file: the one the browser uploads while it is being installed
+   (pkglive.c). rd reads n bytes at off (0, or -1), the whole package is total bytes. A package in parts is not
+   read this way. Only name, ids, kind, version, platform and where the icon lies are filled in. 0, or -1. */
+int
+ps5tm_pkg_parse_reader(int (*rd)(void *ctx, void *buf, size_t n, uint64_t off), void *ctx, uint64_t total,
+                       const char *file, ps5tm_pkg_t *out) {
+  if(!rd || !out || total < 0x80) return -1;
+  memset(out, 0, sizeof(*out));
+  SET(out->file, file ? file : "");
+  out->size = out->total = total;
+  uint8_t hdr[0x200];
+  size_t hr = total < sizeof(hdr) ? (size_t)total : sizeof(hdr);
+  pkg_src_t src = { rd, ctx, total };
+  if(src_read(&src, hdr, hr, 0) != 0) return -1;
+  if(hr >= 8 && !memcmp(hdr, "PS5MPKG1", 8)) return -1;
+  return parse_container(&src, hdr, hr, out);
+}
+
+/* The icon of such a package: the bytes at the place the container named, only if they are a PNG. */
+int
+ps5tm_pkg_icon_reader(const ps5tm_pkg_t *p, int (*rd)(void *ctx, void *buf, size_t n, uint64_t off), void *ctx,
+                      uint8_t **data, size_t *n) {
+  if(!p || !rd || !data || !n || p->icon_size == 0 || p->icon_size >= PKG_MAX_ICON) return -1;
+  if(p->icon_off > p->total || (uint64_t)p->icon_size > p->total - p->icon_off) return -1;
+  uint8_t *b = malloc(p->icon_size);
+  int rc = (b && rd(ctx, b, p->icon_size, p->icon_off) == 0 && p->icon_size >= 8 && !memcmp(b, "\x89PNG\r\n\x1a\n", 8)) ? 0 : -1;
+  if(rc != 0) { free(b); return -1; }
+  *data = b;
+  *n = p->icon_size;
+  return 0;
+}

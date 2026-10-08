@@ -364,6 +364,7 @@ ps5tm_pkgscan_json(void) {
 /* The package the last search listed under this id (for a set of parts: its lowest part). 0, or -1. */
 int
 ps5tm_pkgscan_find(const char *id, ps5tm_pkg_t *out) {
+  if(id && !strncmp(id, "live-", 5)) return ps5tm_pkglive_find(id, out);        /* a package the browser is uploading */
   if(!id || strlen(id) != 16) return -1;
   int rc = -1;
   pthread_mutex_lock(&g_lock);
@@ -384,6 +385,7 @@ ps5tm_pkgscan_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsign
   err[0] = 0;
   *n = 0;
   *total = 0;
+  if(id && !strncmp(id, "live-", 5)) return ps5tm_pkglive_slices(id, out, max, n, total, err, err_len);
   if(!id || strlen(id) != 16) { snprintf(err, err_len, "Dieses Paket kennt die letzte Suche nicht."); return -1; }
   int rc = -1;
   pthread_mutex_lock(&g_lock);

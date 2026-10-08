@@ -1,46 +1,35 @@
 ## Release Notes
 
-Version: v1.51.0
-Datum: 2026-10-07
+Version: v1.52.0
+Datum: 2026-10-08
 
-Neu seit 1.50.0: Payload-Profile mit Startprofil, ein eigener Abbild-Leser statt Einhängen, Erkennung von fakelib2 und Backport-Ordnern und eine übersichtlichere Spielstände-Seite.
+Neu seit 1.51.0: Pakete direkt vom PC installieren und ein QR-Code mit der Adresse der Weboberfläche.
 
 ### Neu
 
-- **Payload-Profile.** Auf der Seite „Payloads“ legst du **Profile** an: benannte Abfolgen aus Payloads des Konsolenordners mit Pausen dazwischen
-  (zum Beispiel kstuff, 3 Sekunden Pause, ShadowMountPlus). „Ausführen“ startet sie Schritt für Schritt, „Anhalten“ beendet nach dem laufenden Schritt.
-  Ein Profil lässt sich als **Startprofil** festlegen: die App führt es dann nach jedem eigenen Start von selbst aus. Läuft ein Ablauf nicht zu Ende
-  (ein Payload startet die App neu), führt die App das Startprofil beim nächsten Start **nicht** noch einmal aus (Schutz vor Endlosschleifen).
-  **„Vom PC importieren“** lädt `.elf`-Dateien vom Rechner in den Ordner der Konsole, auch direkt beim Bearbeiten eines Profils; „Profile sichern“
-  und „Profile laden“ tauschen Profile als Datei aus. Die Idee stammt vom ps5-payload-manager von itsPLK (GPL-3.0); hier ist sie neu gebaut.
-- **Abbild-Leser statt Einhängen.** „Anpassungen unbekannt“ bei Abbild-Spielen (`.exfat`, `.ffpkg`, `.ffpfsc`) verschwindet, ohne dass etwas eingehängt wird:
-  die App liest `eboot.bin` und `fakelib` direkt aus der Abbilddatei. Das Ergebnis bleibt gespeichert; beim nächsten Start wird nur gelesen, was sich geändert hat.
-  Nur ein Abbild, das der Leser nicht kennt, wird (falls ShadowMountPlus es zulässt) kurz eingehängt.
-- **fakelib2 und Backport-Ordner** werden erkannt wie bei ShadowMountPlus: `fakelib2` ersetzt `fakelib`, und ein Ordner
-  `<Scanpfad>/backports/<TITEL-ID>/` hat Vorrang vor den Bibliotheken im Spiel. Die Spieldetails nennen, woher die Bibliotheken kommen.
-- **Spielstände:** das Bild des Benutzers links neben dem Namen, eine größere Benutzerkachel und der **Spielname neben der Titel-ID**
-  (auch bei nicht mehr installierten Spielen, soweit die Konsole den Namen noch kennt).
-  Die Liste ist je Benutzer in **PS5-Spiele, PS5-Apps, PS4-Spiele und PS4-Apps** getrennt (Apps wie YouTube sind gekennzeichnet).
-  **Löschen:** jeder Titel hat einen Knopf „Löschen“ (zwei Klicks); die App sichert den jetzigen Stand vorher und lässt ihn zurückspielen.
-
-### Verbessert
-
-- Die Warnschwelle geht mit dem Ziel mit; Ziel bis 91 °C (siehe 1.50.0).
-- Daten der App liegen unter `/data/PS5-Cooling-Center/covers_and_more` (Cover, Metadaten, Abbild-Ergebnisse, gemerkte Spielnamen).
-- Handbuch und FAQ beschreiben Profile und Backport-Quellen in allen sechs Sprachen.
+- **Pakete direkt vom PC installieren.** Auf dem Reiter **Pakete** steht oben die Karte **„Vom PC installieren“**: eine `.pkg`-Datei wählen oder auf die Karte
+  ziehen, den Plan lesen, „Jetzt installieren“. Die Datei wird **nicht auf der Konsole gespeichert**: Der Browser schickt sie in Stücken zu einem Megabyte,
+  während die Konsole sie installiert. Die Installation braucht darum nur den Platz des installierten Spiels, nicht noch einmal die Größe der Datei.
+  Die Konsole liest das Paket nicht der Reihe nach; die App hält einen Ring von 64 MB im Arbeitsspeicher und liefert zuerst, was die Konsole gerade braucht.
+  **Die Seite muss offen bleiben**, bis die Installation fertig ist (sie arbeitet auch in einem Hintergrund-Reiter weiter). Meldet sich der Browser 40 Sekunden
+  lang nicht, bricht die Konsole mit einem klaren Satz ab, statt zu hängen. Geteilte Pakete (`.part1` …) gehen auf diesem Weg nicht. Die Idee stammt vom
+  „Direct Install“ des PKG Managers von itsPLK (GPL-3.0); hier ist sie neu gebaut.
+- **QR-Code mit der Adresse der Seite.** Auf der Seite **System** zeigt die Karte **„Am Handy öffnen“** einen QR-Code: Kamera des Handys darauf halten, und die Seite
+  geht auf dem Handy auf (im selben Netzwerk). Der Code enthält nur die Adresse, keine Zugangsdaten. Der Encoder stammt aus webhb 0.4.1 von slopmaster33 (GPL-3.0).
 
 ### Wichtig
 
-- **Getestet ist nur Firmware 12.00** auf einer PS5 Pro (CFI-7021). An der Konsole liefen: der Abbild-Leser (10 Abbilder, nichts eingehängt),
-  der Start der App mit den Profilen und die neue Spielstände-Liste (PS5/PS4 getrennt, YouTube als App erkannt). **Noch nicht an der Konsole
-  benutzt:** Profile ausführen und als Startprofil, der Import vom PC, die Backport-Erkennung mit `fakelib2`/`backports` und das **Löschen von
-  Spielständen** (nur im Host- und Browsertest geprüft). Probiere das Löschen zuerst mit einem unwichtigen Titel.
+- **Getestet ist nur Firmware 12.00** auf einer PS5 Pro (CFI-7021). Die **Übertragung und Installation vom PC** und der **QR-Code** wurden an der Konsole ausprobiert und liefen
+  (Rückmeldung des Users vom 08.10.2026). Noch nicht an der Konsole benutzt: Profile ausführen und als Startprofil, der Import vom PC bei den Profilen, die
+  Backport-Erkennung mit `fakelib2`/`backports` und das **Löschen von Spielständen** (aus 1.51.0; nur im Host- und Browsertest geprüft). Probiere das Löschen zuerst
+  mit einem unwichtigen Titel.
 - **Löschen ist endgültig** – bei Spielen, Sicherungen und im Dateimanager.
 - **`.ffpkg`-Dateien aus Fassungen vor 1.48.0 neu erzeugen.**
 - **Was auf Deutsch bleibt:** die Meldungen, die die Konsole selbst auf dem Fernseher einblendet, die Entwicklerdokumente und die Schnittstellenbeschreibung.
 
 ### Technisches
 
-- Neue Dateien: `src/payprofiles.c` (Profile), `src/imgread.c` (Leser für exFAT, UFS2 und PFSC), Endpunkte `/api/v1/payload-profiles*`,
-  `POST /api/v1/library/probe`, `GET /api/v1/saves/avatar`, siehe [API.md](API.md).
-- Hosttests: Profile 18 Prüfungen (mit Sanitizern), Backport-Quellen 4, Browser 18.
+- Neue Dateien: `src/pkglive.c` (Übertragung vom PC), `src/qr.c` (QR-Encoder); Endpunkte `POST /api/v1/packages/live/init`, `PUT /api/v1/packages/live/segment`,
+  `GET /api/v1/packages/live/state` (mit `since`/`wait` als Wartemodus), `POST /api/v1/packages/live/cancel` und `GET /api/v1/qr`, siehe [API.md](docs/API.md).
+- Tests: Installationstest mit simulierter Konsole 644 Prüfungen (80 für diesen Weg, mit ThreadSanitizer sauber), Host-Test mit echtem HTTP-Server, Browser-Suite 53 Szenarien,
+  der QR-Code mit einem Lesegerät (OpenCV) für alle sechs Versionen zurückgelesen.

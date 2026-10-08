@@ -459,6 +459,7 @@ evaluate(const char *id, eval_t *e) {
   for(unsigned i = 0; i < e->nslices; i++) {
     const ps5tm_pkgslice_t *s = &e->slices[i];
     struct stat st;
+    if(!strncmp(s->path, PKGLIVE_PREFIX, strlen(PKGLIVE_PREFIX))) continue;       /* from the browser: no file to look at */
     if(lstat(s->path, &st) != 0 || !S_ISREG(st.st_mode) || (uint64_t)st.st_size < s->file_off + s->size ||
        (s->file_size && ((uint64_t)st.st_size != s->file_size || (int64_t)st.st_mtime != s->mtime))) {
       snprintf(e->block, sizeof(e->block), "Die Paketdatei hat sich seit der Suche verändert oder ist nicht mehr da. Bitte noch einmal suchen.");
@@ -1157,9 +1158,19 @@ install_main(void *arg) {
     PS5TM_INFO("pkg_install_start", "Pakete: Installation von „%.60s“ (%s, %s, %u Teile, %s) beginnt.", p->name, p->title_id, p->kind, a->nslices, gt);
   }
 
+  /* A package from the browser (pkglive.c): the session is read by this installation from here on, and it is over
+     when this job is. */
+  const char *live_id = !strncmp(p->path, PKGLIVE_PREFIX, strlen(PKGLIVE_PREFIX)) ? p->path + strlen(PKGLIVE_PREFIX) : NULL;
+  char live_buf[24] = "";
+  if(live_id) {
+    snprintf(live_buf, sizeof(live_buf), "%s", live_id);
+    live_id = live_buf;
+    ps5tm_pkglive_installing(live_id, 1);
+  }
+
   uint8_t *icon = NULL;
   size_t icon_n = 0;
-  if(p->icon_size > 0 && ps5tm_pkg_icon(p, &icon, &icon_n) != 0) {
+  if(p->icon_size > 0 && (live_id ? ps5tm_pkglive_icon(p, &icon, &icon_n) : ps5tm_pkg_icon(p, &icon, &icon_n)) != 0) {
     icon = NULL;
     icon_n = 0;
     PS5TM_INFO("pkg_install_icon", "Pakete: das Bild des Pakets ließ sich nicht lesen; die Konsole zeigt dann keins.");
@@ -1339,7 +1350,13 @@ install_main(void *arg) {
       /* A file that could not be read is the reason when the system then reports a failure (it saw the connection
          dropped), so this comes first. */
       if(st.read_errors) {
-        job_fail(0, "Eine Paketdatei ließ sich nicht mehr lesen (sie hat sich verändert, oder das Laufwerk wurde entfernt).");
+        if(live_id) {
+          char lw[260];
+          ps5tm_pkglive_why(lw, sizeof(lw));
+          job_fail(0, "Das Paket kam nicht mehr vom PC an. %s", lw[0] ? lw : "Die Übertragung wurde unterbrochen.");
+        } else {
+          job_fail(0, "Eine Paketdatei ließ sich nicht mehr lesen (sie hat sich verändert, oder das Laufwerk wurde entfernt).");
+        }
         result = J_FAILED;
         goto out;
       }
@@ -1530,6 +1547,7 @@ out:
   ps5tm_pkgstream_stats(&fin);
   if(h.fd >= 0 || h.pid > 0 || h.loader_fd >= 0) { drain_loader(&h); helper_close(&h); }
   if(stream_up) ps5tm_pkgstream_stop();
+  if(live_id) ps5tm_pkglive_end(live_id);                  /* the browser's upload has nothing left to wait for */
   free(icon);
   ps5tm_powerguard_release();                              /* nothing is left to keep the console awake for */
   const unsigned took_s = (unsigned)((mono_ms() - began_ms) / 1000);

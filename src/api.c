@@ -4318,6 +4318,33 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
+  /* The address of this web interface as a QR code, for a phone (qr.c). Only this address: the route takes no text. */
+  if(!strcmp(req->path, "/api/v1/qr")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char ip[32], url[64];
+    if(ps5tm_local_ip(ip, sizeof(ip)) != 0) {
+      ps5tm_http_send_error(fd, 404, "no_address", "Die Konsole hat gerade keine Netzwerkadresse.");
+      return;
+    }
+    ps5tm_config_lock();
+    unsigned port = g_config.http_port;
+    ps5tm_config_unlock();
+    snprintf(url, sizeof(url), "http://%s:%u/", ip, port);
+    char *svg = malloc(8192);
+    if(!svg || ps5tm_qr_svg(url, svg, 8192) != 0) {
+      free(svg);
+      ps5tm_http_send_error(fd, 500, "qr_failed", "Der QR-Code ließ sich nicht erzeugen.");
+      return;
+    }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "url", url);
+    cJSON_AddStringToObject(o, "svg", svg);
+    free(svg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+
   if(!strcmp(req->path, "/api/v1/system")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
@@ -4584,6 +4611,47 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
                                          "Nur POST erlaubt."); return; }
     if(!strcmp(req->path, "/api/v1/packages/split")) handle_packages_split(fd, req);
     else { ps5tm_pkgsplit_cancel(); send_cjson(fd, 200, ps5tm_pkgsplit_job_json()); }
+    return;
+  }
+
+  /* A package from the PC (pkglive.c); the pieces themselves come in through http.c. */
+  if(!strcmp(req->path, "/api/v1/packages/live/init")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jn = b ? cJSON_GetObjectItem(b, "name") : NULL, *js = b ? cJSON_GetObjectItem(b, "size") : NULL;
+    char err[300] = "";
+    int http = 200;
+    uint64_t size = cJSON_IsNumber(js) && js->valuedouble >= 0 && js->valuedouble < 1e13 ? (uint64_t)js->valuedouble : 0;
+    cJSON *j = ps5tm_pkglive_init(cJSON_IsString(jn) ? jn->valuestring : NULL, size, &http, err, sizeof(err));
+    cJSON_Delete(b);
+    if(!j) { ps5tm_http_send_error(fd, http, "live_refused", err); return; }
+    send_cjson(fd, 200, j);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/packages/live/state")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char id[24], since_s[16], wait_s[8];
+    query_param(req->query, "id", id, sizeof(id));
+    query_param(req->query, "since", since_s, sizeof(since_s));          /* long poll: answer when the version moved on */
+    query_param(req->query, "wait", wait_s, sizeof(wait_s));
+    long since = since_s[0] ? strtol(since_s, NULL, 10) : -1;
+    unsigned wait_ms = wait_s[0] ? (unsigned)strtoul(wait_s, NULL, 10) : 0;
+    int http = 200;
+    cJSON *j = ps5tm_pkglive_state(id, since, wait_ms, &http);
+    if(!j) { ps5tm_http_send_error(fd, http == 200 ? 404 : http, "live_unknown", "Diese Übertragung gibt es nicht (mehr)."); return; }
+    send_cjson(fd, 200, j);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/packages/live/cancel")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *ji = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    int rc = ps5tm_pkglive_cancel(cJSON_IsString(ji) ? ji->valuestring : "");
+    cJSON_Delete(b);
+    if(rc != 0) { ps5tm_http_send_error(fd, 404, "live_unknown", "Diese Übertragung gibt es nicht (mehr)."); return; }
+    ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
     return;
   }
 

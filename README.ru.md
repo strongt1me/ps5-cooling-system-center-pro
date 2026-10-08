@@ -6,7 +6,7 @@
 
 **Управление вентилятором, контроль температуры и системный центр для PlayStation 5 с джейлбрейком — с веб-интерфейсом в домашней сети на шести языках.**
 
-![Версия](https://img.shields.io/badge/%D0%92%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.51.0-1f6feb)
+![Версия](https://img.shields.io/badge/%D0%92%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.52.0-1f6feb)
 ![Лицензия](https://img.shields.io/badge/%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-GPL--3.0--or--later-blue)
 ![Платформа](https://img.shields.io/badge/%D0%9F%D0%BB%D0%B0%D1%82%D1%84%D0%BE%D1%80%D0%BC%D0%B0-PS5%20Payload-003791)
 ![Языки](https://img.shields.io/badge/%D0%AF%D0%B7%D1%8B%D0%BA%D0%B8-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -81,7 +81,7 @@ PS5 Cooling & System Center - Pro — это homebrew-payload (ELF) для PlayS
 2. Отправьте ELF на консоль, порт **9021**, любым отправщиком payload или из командной строки:
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.51.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.52.0.elf
    ```
 
 3. На телевизоре появится уведомление с адресом. Откройте в браузере: **`http://<PS5-IP>:8086`**
@@ -175,6 +175,7 @@ make
 - **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (монтирование, перемещение и распаковка игр; на нём построена страница «Игры»; в его README указана рекомендуемая структура для образов `.ffpkg`: блоки по 64 KiB) и [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (порядок шин питания, значения частот).
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: показал, с какими параметрами собирается `.ffpkg` для ShadowMountPlus (блоки и фрагменты по 64 KiB, без зарезервированного места, плотность inode 262144, размер сектора 512), и что размер сектора 4096 там (в Windows) даёт неисправные образы. Только знания, без кода.
 - **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) (закрытие браузера консоли) и [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager), образец управления payloads и правила, какие процессы можно завершать.
+- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR-кодировщик, показывающий адрес веб-интерфейса в виде кода (`src/qr.c`, заимствован и проверен считывателем).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): шаблоны в журнале ядра, по которым можно распознать запущенную игру.
 - **Проект [etaHEN](https://github.com/etaHEN/etaHEN)** и **[onionHEN](https://github.com/aydencharles/onionHEN)** (aydencharles): исходный код и документация по системным вызовам, измерениям и запросу частоты кадров.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)** (преемник [Sonic Loader](https://git.etawen.dev/soniciso/sonicloader)): форма вызовов для установки значка и образец для многих функций (закрытие игры, журнал ядра в реальном времени, время игры, сохранённые данные, файловый менеджер, удаление игр); код в каждом случае написан заново.

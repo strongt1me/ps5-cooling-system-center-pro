@@ -1419,3 +1419,12 @@ html.i18n-wait body { visibility: hidden; }
 .sv-title-row { display: flex; align-items: center; gap: 10px; }
 .sv-title-row .sv-title { flex: 1; min-width: 0; }
 .sv-del { flex: none; }
+/* Paket vom PC */
+.pk-drop { margin-top: 10px; padding: 18px 16px; border: 2px dashed rgba(255,255,255,.2); border-radius: 12px; text-align: center; font-size: 13px; opacity: .85; }
+.pk-drop.over { border-color: rgba(59,130,246,.8); background: rgba(59,130,246,.08); opacity: 1; }
+#pk-live-pick.disabled { opacity: .45; pointer-events: none; }
+#pk-live { margin-top: 8px; }
+/* QR-Code */
+.qr-box { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+#qr-img { background: #fff; padding: 6px; border-radius: 10px; flex: none; }
+.qr-url code { font-size: 15px; word-break: break-all; }

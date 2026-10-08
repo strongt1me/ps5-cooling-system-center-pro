@@ -3784,9 +3784,27 @@
 
   /* ── Systemseite ────────────────────────────────────────────────── */
 
+  /* Die Adresse der Seite als QR-Code (Konsole: qr.c). Wird neu geholt, wenn sich die Adresse der Konsole ändert. */
+  let qrKey = null;
+  const loadQr = async () => {
+    const img = $("#qr-img");
+    if (!img) return;
+    try {
+      const d = await api("/api/v1/qr");
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(d.svg)}`;
+      img.hidden = false;
+      txt("#qr-url", d.url);
+    } catch {
+      img.hidden = true;
+      txt("#qr-url", "keine Netzwerkadresse");
+    }
+  };
+
   const loadSystem = async () => {
     let sys;
     try { sys = await api("/api/v1/system"); } catch { return; }
+    const qrNow = sys && sys.network ? String(sys.network.ip || "") : "";
+    if (qrNow !== qrKey) { qrKey = qrNow; loadQr(); }
 
     let diag = null;
     try { diag = await api("/api/v1/controller/diag"); } catch {}
@@ -7666,6 +7684,227 @@
     pkRenderList();
   };
 
+  /* ── Ein Paket direkt vom PC (pkglive.c) ─────────────────────────────
+     Die Seite schneidet die gewählte .pkg-Datei in Stücke zu einem Megabyte und schickt, was die Konsole gerade braucht,
+     während sie das Paket installiert; nichts wird auf der Konsole gespeichert. Die Seite fragt die Konsole im Wartemodus
+     (GET state mit since/wait: die Antwort kommt, sobald sich etwas ändert) und lebt von diesen Antworten und vom Ende
+     ihrer eigenen Übertragungen, nicht von Zeitgebern: Ein Reiter im Hintergrund, dessen Zeitgeber der Browser bremst,
+     überträgt so weiter. Die Seite muss offen bleiben; schließt man sie, bricht die Konsole die Installation nach
+     etwa 40 Sekunden ab. */
+  const LV_SEG = 1048576, LV_PAR = 3;
+  const lv = { gen: 0, active: false, starting: false, id: "", file: null, st: null, plan: null, planErr: "", planBusy: false,
+               inflight: new Set(), err: "", fails: 0, sent: 0, t0: 0, installing: false, ended: "", last: "" };
+
+  const lvReset = () => {
+    lv.gen++;
+    Object.assign(lv, { active: false, starting: false, id: "", file: null, st: null, plan: null, planErr: "", planBusy: false,
+                        inflight: new Set(), err: "", fails: 0, sent: 0, t0: 0, installing: false, ended: "", last: "" });
+  };
+
+  const lvJson = async (url, opts) => {
+    const r = await fetch(url, Object.assign({ cache: "no-store" }, opts));
+    let d = null;
+    try { d = await r.json(); } catch { /* keine Antwort in JSON */ }
+    if (!r.ok) {
+      const e = new Error((d && d.message) || `HTTP ${r.status}`);
+      e.status = r.status;
+      throw e;
+    }
+    return d;
+  };
+
+  const lvPlanHtml = (q) => {
+    const inst = q.installed && q.installed.state === 1 ? `<li>Schon installiert: ${esc(q.installed.version || "Version unbekannt")}</li>` : "";
+    return `<ul class="pk-facts">
+        <li><b>${esc(q.name)}</b> · ${esc(PK_INST_KIND[q.kind] || "Paket")}${q.version ? " · " + esc(q.version) : ""} · ${q.plat === 5 ? "PS5" : q.plat === 4 ? "PS4" : "unbekannte Plattform"}</li>
+        <li>${esc(bytes(q.size))}${q.space && q.space.known ? ` · auf dem internen Speicher sind ${esc(bytes(q.space.free))} frei` : ""}</li>
+        ${inst}</ul>
+      ${q.warning ? `<p class="cp-warn">${esc(q.warning)}</p>` : ""}
+      ${q.blocked ? `<p class="cp-err">${esc(q.blocked)}</p>` : ""}`;
+  };
+
+  const lvRender = () => {
+    const host = $("#pk-live");
+    if (!host) return;
+    const busy = lv.active || pkiActive() || pkActive();
+    const pick = $("#pk-live-file");
+    if (pick) pick.disabled = busy;
+    $("#pk-live-pick").classList.toggle("disabled", busy);
+    $("#pk-live-drop").hidden = lv.active || !!lv.ended;
+    const cancel = $("#pk-live-cancel");
+    cancel.hidden = !(lv.active || lv.ended);
+    cancel.textContent = lv.active ? "Abbrechen" : "Schließen";
+    const st = lv.st || {};
+    let html = "", sub = "Eine .pkg-Datei von diesem Rechner direkt installieren";
+    if (lv.starting) {
+      html = `<p class="muted">Die Übertragung wird vorbereitet …</p>`;
+    } else if (lv.active) {
+      const f = lv.file ? lv.file.name : st.name;
+      sub = f || sub;
+      const secs = lv.t0 ? Math.max(1, (Date.now() - lv.t0) / 1000) : 1;
+      const rate = lv.sent / secs;
+      const sentTxt = st.size ? `Gesendet: ${esc(bytes(lv.sent))} von ${esc(bytes(st.size))}` : `Gesendet: ${esc(bytes(lv.sent))}`;
+      const rateTxt = rate > 0 && lv.installing ? ` · etwa ${esc(bytes(rate))}/s` : "";
+      const prog = `<p class="muted cp-cur">${sentTxt}${rateTxt}</p>`;
+      if (lv.err) {
+        html = `<p class="cp-err">${esc(lv.err)}</p>`;
+      } else if (st.state === "failed") {
+        html = `<p class="cp-err">${esc(st.error || "Die Datei ließ sich nicht lesen.")}</p>`;
+      } else if (st.state === "ready" && !lv.installing) {
+        const q = lv.plan;
+        const ok = !!(q && q.can_install && !pkiActive() && !pkActive());
+        html = (lv.planErr ? `<p class="cp-err">${esc(lv.planErr)}</p>` : q ? lvPlanHtml(q) : `<p class="muted">Die Konsole prüft das Paket …</p>`)
+          + `<p class="muted pk-note">Die Konsole installiert das Paket selbst. Diese Seite schickt ihr die Datei dafür in Stücken, während die Installation läuft;
+            sie wird nicht auf der Konsole gespeichert. <b>Die Seite muss dabei offen bleiben</b>, bis die Installation fertig ist. Schließt man sie, bricht
+            die Konsole nach etwa 40 Sekunden ab; was sie schon angelegt hat, kann liegen bleiben. Die Konsole muss mit einem Netzwerk verbunden sein
+            (LAN oder WLAN, Internet ist nicht nötig).</p>
+          <div class="cp-actions"><button type="button" class="btn primary" data-lv-install${ok ? "" : " disabled"}>Jetzt installieren</button></div>`;
+      } else if (lv.installing) {
+        html = `${prog}<p class="cp-warn">Diese Seite muss offen bleiben, bis die Installation fertig ist.</p>`;
+      } else {
+        html = `<p class="muted">Die Konsole liest den Anfang des Pakets …</p>${prog}`;
+      }
+    } else if (lv.ended) {
+      html = `<p class="cp-warn">${esc(lv.ended)}</p>`;
+    }
+    const key = `${sub}|${html}`;
+    if (key === lv.last) return;
+    lv.last = key;
+    txt("#pk-live-sub", sub);
+    host.innerHTML = html;
+  };
+
+  const lvSend = async (n, gen) => {
+    lv.inflight.add(n);
+    try {
+      const buf = await lv.file.slice(n * LV_SEG, Math.min(lv.file.size, (n + 1) * LV_SEG)).arrayBuffer();
+      const d = await lvJson(`/api/v1/packages/live/segment?id=${encodeURIComponent(lv.id)}&n=${n}`, { method: "PUT", body: buf });
+      if (gen === lv.gen) { lv.sent += buf.byteLength; lv.fails = 0; if (d && d.state) lv.st = d; }
+    } catch (e) {
+      if (gen !== lv.gen) return;
+      if (e.status === 410 || e.status === 404) lv.ended = e.message;               /* die Konsole hat die Übertragung beendet */
+      else if (e.status !== 503 && ++lv.fails > 6) lv.err = e.name === "NotReadableError" ? "Die Datei lässt sich nicht mehr lesen." : `Das Senden scheitert: ${e.message}`;
+    } finally {
+      if (gen === lv.gen) lv.inflight.delete(n);
+    }
+  };
+
+  const lvPlan = async (gen) => {
+    lv.planBusy = true;
+    try {
+      const q = await lvJson(`/api/v1/packages/install/plan?id=${encodeURIComponent(lv.id)}`);
+      if (gen === lv.gen) { lv.plan = q; lv.planErr = ""; }
+    } catch (e) {
+      if (gen === lv.gen) lv.planErr = e.message || "Die Konsole konnte das Paket nicht prüfen.";
+    }
+    if (gen === lv.gen) { lv.planBusy = false; lvRender(); }
+  };
+
+  const lvLoop = async (gen) => {
+    let ver = -1, bad = 0;
+    while (lv.active && lv.gen === gen) {
+      let st;
+      try {
+        st = await lvJson(`/api/v1/packages/live/state?id=${encodeURIComponent(lv.id)}${ver >= 0 ? `&since=${ver}&wait=1000` : ""}`);
+        bad = 0;
+      } catch (e) {
+        if (e.status === 404) {
+          st = { state: "ended", error: "Die Übertragung gibt es nicht mehr." };
+        } else {
+          if (++bad >= 5) lv.err = "Die Seite erreicht die App nicht mehr.";
+          lvRender();
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+      }
+      if (lv.gen !== gen) return;
+      lv.st = st;
+      ver = typeof st.ver === "number" ? st.ver : -1;
+      if (st.state === "ended" || lv.ended) {
+        lv.active = false;
+        lv.ended = lv.ended || st.error || "Die Übertragung ist beendet.";
+        if (lv.installing) { lv.installing = false; pkiRefresh().then(() => { pkRender(); pkSync(); }); }
+        lvRender();
+        return;
+      }
+      for (const n of st.send || []) {
+        if (lv.inflight.size >= LV_PAR) break;
+        if (!lv.inflight.has(n)) lvSend(n, gen);
+      }
+      if (st.state === "ready" && !lv.plan && !lv.planBusy && !lv.installing) lvPlan(gen);
+      lvRender();
+    }
+  };
+
+  const lvStart = async (file) => {
+    if (!file || lv.active) return;
+    if (!/\.pkg$/i.test(file.name)) { toast("Das ist keine .pkg-Datei.", "error"); return; }
+    if (pkActive() || pkiActive()) { toast("Es läuft schon ein Vorgang mit einem Paket.", "error"); return; }
+    lvReset();
+    lv.file = file;
+    lv.active = true;
+    lv.starting = true;
+    const gen = lv.gen;
+    lvRender();
+    try {
+      const st = await lvJson("/api/v1/packages/live/init", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                              body: JSON.stringify({ name: file.name, size: file.size }) });
+      if (gen !== lv.gen) return;
+      lv.id = st.id;
+      lv.st = st;
+      lv.starting = false;
+      lv.t0 = Date.now();
+      lvLoop(gen);
+    } catch (e) {
+      if (gen === lv.gen) lvReset();
+      toast(e.message, "error");
+    }
+    lvRender();
+  };
+
+  const lvInstall = async () => {
+    if (!lv.active || !lv.plan || !lv.plan.can_install) return;
+    try {
+      pk.igen++;
+      pk.ijob = await api("/api/v1/packages/install", { method: "POST", body: JSON.stringify({ id: lv.id }) });
+      pk.idismissed = "";
+      lv.installing = true;
+      lv.t0 = Date.now();
+      lv.sent = 0;
+      pkRender();
+      pkSync();
+      lvRender();
+      $("#pk-inst-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      toast(e.message, "error");
+      lv.plan = null;                                      /* der Plan zeigt, was jetzt im Weg ist */
+      lvRender();
+    }
+  };
+
+  const lvCancel = async () => {
+    if (lv.active && lv.installing && pkiActive()) {
+      try { pk.ijob = await api("/api/v1/packages/install/cancel", { method: "POST" }); pkRender(); pkSync(); } catch (e) { toast(e.message, "error"); }
+      return;
+    }
+    const id = lv.id;
+    lvReset();
+    if (id) { try { await lvJson("/api/v1/packages/live/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }); } catch { /* schon beendet */ } }
+    lvRender();
+  };
+
+  const wireLive = () => {
+    const pick = $("#pk-live-file"), drop = $("#pk-live-drop");
+    if (!pick) return;
+    pick.addEventListener("change", () => { const f = pick.files && pick.files[0]; pick.value = ""; lvStart(f); });
+    ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+    ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+    drop.addEventListener("drop", (e) => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; lvStart(f); });
+    $("#pk-live-cancel").addEventListener("click", lvCancel);
+    $("#pk-live").addEventListener("click", (e) => { if (e.target.closest("[data-lv-install]")) lvInstall(); });
+    window.addEventListener("beforeunload", (e) => { if (lv.active && lv.installing) { e.preventDefault(); e.returnValue = ""; } });
+  };
+
   const pkiRenderJob = () => {
     const j = pk.ijob, card = $("#pk-inst-card");
     const recent = j && j.state !== "idle" && (j.active || j.state === "lost" || (j.finished_ago_s >= 0 && j.finished_ago_s < 900));
@@ -7768,6 +8007,7 @@
   };
 
   const pkRender = () => {
+    lvRender();
     if (!pk.loaded) { txt("#pk-sub", "wird gelesen …"); return; }
     if (!pk.data) {
       txt("#pk-sub", "nicht verfügbar");
@@ -7885,6 +8125,7 @@
       toast(e.message, "error");
     }
   });
+  wireLive();
   $("#pk-list").addEventListener("click", async (e) => {
     const iopen = e.target.closest("[data-pk-iopen]");
     if (iopen) {

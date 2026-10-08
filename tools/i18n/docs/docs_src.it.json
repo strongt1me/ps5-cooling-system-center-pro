@@ -89,7 +89,7 @@
   {
    "id": "pakete",
    "title": "Pacchetti",
-   "html": "\n<p>Trova i file <code>.pkg</code> su unità USB, dischi e nella memoria della console (cartella <code>pkg</code>) e ne mostra immagine,\nnome, ID titolo, versione, tipo e dimensione.</p>\n<ul>\n<li><b>Installa…</b> – la console installa il pacchetto da sola, l'app glielo mette a disposizione e mostra l'avanzamento.\nPrima un piano indica cosa potrebbe essere d'ostacolo.</li>\n<li><b>Dividi…</b> – divide i pacchetti grandi in parti per chiavette FAT32 (fino a 4 GB per file) o dischi ottici; l'originale resta invariato.</li>\n</ul>\n<div class='info'>Un tentativo di installazione interrotto può lasciare dello spazio riservato. Lo liberi sulla console\nnell'elenco dei download con «Elimina».</div>\n{{FIG:07-spiele-pakete.png}}\n"
+   "html": "\n<p>Trova i file <code>.pkg</code> su unità USB, dischi e nella memoria della console (cartella <code>pkg</code>) e ne mostra immagine,\nnome, ID titolo, versione, tipo e dimensione.</p>\n<ul>\n<li><b>Installa…</b> – la console installa il pacchetto da sola, l'app glielo mette a disposizione e mostra l'avanzamento.\nPrima un piano indica cosa potrebbe essere d'ostacolo.</li>\n<li><b>Dividi…</b> – divide i pacchetti grandi in parti per chiavette FAT32 (fino a 4 GB per file) o dischi ottici; l'originale resta invariato.</li>\n<li><b>Installa dal PC</b> – scegli un <code>.pkg</code> sul computer del browser o trascinalo sulla scheda; viene inviato a pezzi mentre l’installazione è in corso e non viene salvato sulla console. La pagina deve restare aperta.</li>\n</ul>\n<div class='info'>Un tentativo di installazione interrotto può lasciare dello spazio riservato. Lo liberi sulla console\nnell'elenco dei download con «Elimina».</div>\n{{FIG:07-spiele-pakete.png}}\n"
   },
   {
    "id": "dateien",
@@ -109,7 +109,7 @@
   {
    "id": "system",
    "title": "Sistema &amp; registro",
-   "html": "\n<p><b>Sistema</b> mostra console, firmware, tempo di attività, spazio di archiviazione di tutte le unità, rete, schermo e\nl'efficacia del raffreddamento nel corso delle settimane; qui reinstalli anche il riquadro.</p>\n{{FIG:11-system.png}}\n<p><b>Registro</b> elenca ogni misurazione, regolazione e messaggio dell'app (esportabile). La scheda <b>Registro del kernel in tempo reale</b> mostra\nil registro della console mentre viene scritto – con filtro, pausa, salvataggio, download e registrazione.</p>\n{{FIG:14-kernel-log-live.png}}\n"
+   "html": "\n<p><b>Sistema</b> mostra console, firmware, tempo di attività, spazio di archiviazione di tutte le unità, rete, schermo e\nl'efficacia del raffreddamento nel corso delle settimane; qui reinstalli anche il riquadro.</p>\n<p>In <b>Sistema</b> c’è anche un codice QR con l’indirizzo di questa pagina: inquadralo con la fotocamera del telefono e la pagina si apre sul telefono (nella stessa rete).</p>\n{{FIG:11-system.png}}\n<p><b>Registro</b> elenca ogni misurazione, regolazione e messaggio dell'app (esportabile). La scheda <b>Registro del kernel in tempo reale</b> mostra\nil registro della console mentre viene scritto – con filtro, pausa, salvataggio, download e registrazione.</p>\n{{FIG:14-kernel-log-live.png}}\n"
   },
   {
    "id": "credits",
