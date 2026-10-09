@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.54.1"
+#define PS5TM_VERSION        "1.55.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -1234,9 +1234,33 @@ void ps5tm_pkglive_receive(int fd, const char *query, const char *prefix, size_t
 int  ps5tm_pkglive_cancel(const char *id);
 
 int  ps5tm_pkginst_start(const char *id, char *err, size_t err_len);   /* HTTP status: 200 started, 404 no such package, 409 cannot be done */
+/* The same for the queue: *transient says a refusal is only "not now" (a game runs, another job is under way), *seq is the
+   number of the job that has started. ps5tm_pkginst_result tells how the last job ended: state 0 going/none, 1 done,
+   2 failed, 3 stopped. */
+typedef struct {
+  unsigned seq;
+  int      state, verified, blind, started, error_code;
+  char     error[512], note[400];
+} ps5tm_pkginst_result_t;
+int  ps5tm_pkginst_start_q(const char *id, char *err, size_t err_len, int *transient, unsigned *seq);
+void ps5tm_pkginst_result(ps5tm_pkginst_result_t *r);
 void ps5tm_pkginst_cancel(void);
 int  ps5tm_pkginst_busy(void);
 struct cJSON *ps5tm_pkginst_job_json(void);
+
+/* Several packages one after the other (pkgqueue.c): a list the person fills from the packages the search found, started
+   with a click. Each package is asked the same questions as an installation of its own when its turn comes (installed
+   already? the game before it there? a game running?), so a refused one is skipped with its reason, and a failed one
+   halts the queue. In memory only: an app that restarts starts with an empty queue. */
+struct cJSON *ps5tm_pkgqueue_json(void);
+int  ps5tm_pkgqueue_add(const char *const *ids, unsigned n, unsigned *added, unsigned *ignored, char *err, size_t err_len);   /* HTTP status */
+int  ps5tm_pkgqueue_start(char *err, size_t err_len);              /* HTTP status: 200 running, 409 not now */
+void ps5tm_pkgqueue_pause(void);                                   /* after the package that runs */
+int  ps5tm_pkgqueue_cancel(void);                                  /* stops the package that runs and halts the queue; 1 when one ran */
+int  ps5tm_pkgqueue_remove(const char *id);                        /* HTTP status: 200, 404 no such entry, 409 it is running */
+int  ps5tm_pkgqueue_retry(const char *id);                         /* NULL: every failed, stopped or skipped one; returns how many */
+void ps5tm_pkgqueue_clear(int all);                                /* the finished ones, or all but the running one */
+
 /* The system's uninstall of a title (the game, its updates and add-ons; saved games stay), through a helper of its
    own. Synchronous. 0, or the system's code / a PKGI_E_ code with the reason in why. */
 int  ps5tm_pkginst_uninstall(const char *title_id, int *res_pat, int *res_addcont, char *why, size_t why_len);

@@ -4780,7 +4780,7 @@
   /* open: Karten mit aufgeklappten Infos — das Raster wird bei jedem Filtern
      und bei jedem Spielwechsel neu gebaut und soll sie dabei nicht zuklappen. */
   const gm = { list: [], meta: null, error: "", loaded: false,
-               plat: "", q: "", sort: "recent", running: "", open: new Set(),
+               plat: "", q: "", sort: "recent", running: "", pop: "" /* Titel-ID, deren Infos-Fenster offen ist */,
                wanted: null /* {id, name, at}: Start, der an einem laufenden Spiel scheiterte */ };
 
   /* Manuelles Hochladen von AMPR-EMU-/PlayGo-Bibliotheken (eigener
@@ -4928,6 +4928,7 @@
             ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move)}
             ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert)}
             ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
+            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path, why.copy)}
           </div>`;
   };
 
@@ -4991,10 +4992,9 @@
       .map((w) => w.replace(/[^0-9A-Za-zÀ-ÿ]/g, "")).filter(Boolean)
       .slice(0, 2).map((w) => w[0]).join("").toUpperCase();
     const tags = gmTags(x);
-    /* Die Angaben stehen hinter „Infos & Metadaten" und klappen darunter
-       auf; zugeklappt bleiben die Karten kurz genug für einen Blick über
-       die ganze Reihe. */
-    const open = gm.open.has(x.title_id);
+    /* Die Angaben stehen hinter „Infos & Metadaten" und öffnen sich als
+       Fenster über der Seite (gmPopOpen); die Karten bleiben so gleich hoch. */
+    const open = gm.pop === x.title_id;
     return `<article class="gm-card${running ? " running" : ""}">
       <div class="gm-cover">
         <span class="gm-fallback">${esc(initials || "?")}</span>
@@ -5008,7 +5008,7 @@
         <div class="gm-actions">
           <button type="button" class="btn gm-info" data-info="${esc(x.title_id)}"
             aria-expanded="${open ? "true" : "false"}">Infos &amp; Metadaten</button>
-          <dl class="gm-meta"${open ? "" : " hidden"}>${rows.map(([k, v, cls, tip]) =>
+          <dl class="gm-meta" hidden>${rows.map(([k, v, cls, tip]) =>
             `<dt>${esc(k)}</dt><dd${cls ? ` class="${cls}"` : ""}${tip ? ` title="${esc(tip)}"` : ""}>${esc(v)}</dd>`).join("")}</dl>
           ${gmButtons(x, live)}
         </div>
@@ -6068,18 +6068,62 @@
     } catch (e) { toast(e.message, "error"); }
   }, "Alles im Ordner covers_and_more wird gelöscht. Ihre Spiele bleiben unberührt. Zum Bestätigen noch einmal klicken.");
 
+  /* Infos-Fenster: eines für alle Karten, fest über der Seite. Es sitzt über dem
+     Knopf (oder darunter, wenn oben kein Platz ist) und folgt ihm beim Scrollen;
+     schließt mit ✕, Esc, Klick daneben oder demselben Knopf. */
+  let gmPop = null, gmPopBtn = null;
+  const gmPopPlace = (fresh) => {
+    if (!gmPop || !gmPopBtn) return;
+    const r = gmPopBtn.getBoundingClientRect();
+    if (!gmPopBtn.isConnected || (fresh !== true && (r.bottom < 0 || r.top > window.innerHeight))) { gmPopClose(); return; }
+    const w = gmPop.offsetWidth, h = gmPop.offsetHeight;
+    gmPop.style.left = Math.max(12, Math.min(r.left - 6, window.innerWidth - w - 12)) + "px";
+    const up = r.top - h - 14;
+    gmPop.classList.toggle("below", up < 8);
+    gmPop.style.top = (up >= 8 ? up : Math.min(r.bottom + 14, Math.max(8, window.innerHeight - h - 8))) + "px";
+  };
+  const gmPopClose = () => {
+    if (gmPop) { gmPop.remove(); gmPop = null; }
+    if (gmPopBtn) gmPopBtn.setAttribute("aria-expanded", "false");
+    gmPopBtn = null; gm.pop = "";
+  };
+  const gmPopOpen = (btn) => {
+    gmPopClose();
+    const card = btn.closest(".gm-card"), dl = card && card.querySelector(".gm-meta");
+    if (!dl) return;
+    const pop = document.createElement("div");
+    pop.className = "gm-pop"; pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Infos & Metadaten");
+    const head = document.createElement("div"); head.className = "gm-pop-head";
+    const tt = document.createElement("div");
+    const b = document.createElement("b"); b.textContent = "Infos & Metadaten";
+    const s = document.createElement("small"); s.textContent = card.querySelector("h3").textContent;
+    tt.append(b, s);
+    const x = document.createElement("button"); x.type = "button"; x.className = "gm-pop-x";
+    x.setAttribute("aria-label", "Schließen"); x.textContent = "×";
+    x.addEventListener("click", gmPopClose);
+    head.append(tt, x);
+    const body = dl.cloneNode(true); body.hidden = false;
+    pop.append(head, body);
+    document.body.appendChild(pop);
+    gm.pop = btn.dataset.info; gmPop = pop; gmPopBtn = btn;
+    btn.setAttribute("aria-expanded", "true");
+    gmPopPlace(true);
+  };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && gmPop) gmPopClose(); });
+  document.addEventListener("mousedown", (e) => {
+    if (gmPop && !gmPop.contains(e.target) && !e.target.closest("button[data-info]")) gmPopClose();
+  });
+  window.addEventListener("scroll", () => gmPopPlace(), true);
+  window.addEventListener("resize", () => gmPopPlace());
+
   /* Ein Listener für alle Karten — das Raster wird bei jedem Filtern neu gebaut. */
   $("#gm-grid").addEventListener("click", (e) => {
     const info = e.target.closest("button[data-info]");
     if (info) {
       /* Nur diese Karte umschalten, nicht das Raster neu bauen: Die Seite
          bliebe sonst nicht, wo sie war. */
-      const id = info.dataset.info;
-      const open = !gm.open.has(id);
-      if (open) gm.open.add(id); else gm.open.delete(id);
-      info.setAttribute("aria-expanded", open ? "true" : "false");
-      const dl = info.nextElementSibling;
-      if (dl) dl.hidden = !open;
+      if (gm.pop === info.dataset.info) gmPopClose(); else gmPopOpen(info);
       return;
     }
     /* Ausgegraute Knöpfe stehen auf jeder Karte; sie tun nichts. */
@@ -6089,6 +6133,19 @@
     if (store) { if (!store.disabled) mvOpen(store.dataset.id, store.dataset.store); return; }
     const conv = e.target.closest("button[data-convert]");
     if (conv) { if (!conv.disabled) cvOpen(conv.dataset.convert); return; }
+    const gop = e.target.closest("button[data-gopath]");
+    if (gop) {
+      if (gop.disabled) return;
+      const g = gm.list.find((x) => x.title_id === gop.dataset.gopath);
+      if (!g || !g.path) return;
+      /* Ein Abbild (Datei) liegt in einem Ordner: den zeigt der Dateimanager. */
+      const dir = /\.(exfat|ffpkg|ffpfs|ffpfsc|img|iso)$/i.test(g.path) ? g.path.replace(/\/[^/]*$/, "") || "/" : g.path;
+      gmPopClose();
+      fm.path = dir; fm.sel.clear();
+      const tab = document.querySelector('.tab[data-page="files"]');
+      if (tab) tab.click();
+      return;
+    }
     const del = e.target.closest("button[data-delete]");
     if (del) { if (!del.disabled) dlOpen("game", del.dataset.delete); return; }
     const closeBtn = e.target.closest("button[data-close]");
@@ -7594,6 +7651,22 @@
   const pkActive = () => !!(pk.job && pk.job.active);
   const pkiActive = () => !!(pk.ijob && pk.ijob.active);
 
+  /* Die Warteschlange der Installationen (pkgqueue.c): Pakete der letzten Suche, die nacheinander installiert werden. Die Konsole
+     fragt bei jedem Paket erst dann, ob es sich installieren lässt, wenn es dran ist; was sie ablehnt, steht mit dem Grund in seiner
+     Zeile. Ein Fehler hält die Warteschlange an. */
+  const pq = { data: null, busy: false };
+  const pqCounts = () => (pq.data && pq.data.counts) || { total: 0, waiting: 0, running: 0, done: 0, failed: 0, skipped: 0, cancelled: 0 };
+  const pqRunning = () => !!(pq.data && pq.data.running);
+  const pqActive = () => !!(pq.data && (pq.data.running || pq.data.counts.running > 0));
+  const pqState = (id) => { const it = pq.data && pq.data.items.find((x) => x.id === id); return it ? it.state : ""; };
+  const pqRefresh = async () => {
+    try {
+      const d = await api("/api/v1/packages/queue");
+      if (d && Array.isArray(d.items) && d.counts) { pq.data = d; return true; }
+    } catch { /* die nächste Runde fragt wieder */ }
+    return false;
+  };
+
   /* Was die Konsole als Zustand nennt, auf Deutsch; ein Wort, das hier fehlt, bleibt, wie es ist. */
   const PK_SYS_WORD = { running: "läuft", playable: "spielbar", completed: "abgeschlossen", installing: "wird installiert", queued: "wartet",
                         paused: "pausiert", error: "Fehler", none: "noch nicht angemeldet" };
@@ -7693,12 +7766,34 @@
     panel.querySelector("[data-pk-split]").disabled = !ok;
   };
 
+  /* Die Pakete eines Titels in der Reihenfolge der Installation: das Spiel, dann die Updates (die älteren zuerst), dann die Zusatzinhalte.
+     Nur auf der Karte des ersten Pakets des Titels in der Liste, und nur bei zwei oder mehr vollständigen Paketen. */
+  const pqVerKey = (v) => String(v || "").replace(/^v/i, "").split(".").map((x) => parseInt(x, 10) || 0);
+  const pqVerCmp = (a, b) => {
+    const x = pqVerKey(a), y = pqVerKey(b);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
+    return 0;
+  };
+  const PQ_ORDER = { base: 0, update: 1, dlc: 2 };
+  const pqTitleGroup = (p) => {
+    if (!pk.data || !p.title_id || p.title_id === "UNKNOWN") return null;
+    const all = pk.data.packages.filter((x) => x.title_id === p.title_id && (!x.parts || x.parts.complete) && x.kind in PQ_ORDER);
+    if (all.length < 2 || all[0].id !== p.id) return null;
+    if (all.every((x) => pqState(x.id) === "waiting" || pqState(x.id) === "running")) return null;        /* nichts mehr hinzuzufügen */
+    all.sort((x, y) => (PQ_ORDER[x.kind] - PQ_ORDER[y.kind]) || (x.kind === "update" ? pqVerCmp(x.version, y.version) : String(x.name).localeCompare(String(y.name))));
+    return all.map((x) => x.id);
+  };
+
   const pkCardHtml = (p) => {
     const open = pk.open === p.id;
     const parts = p.parts;
     const plat = p.plat === 5 ? "PS5" : p.plat === 4 ? "PS4" : "";
-    const canSplit = !parts && p.size >= PK_MIN_MB * 1048576 * 2 && !pkActive() && !pkiActive();
-    const canInstall = (!parts || parts.complete) && !pkActive() && !pkiActive();
+    const canSplit = !parts && p.size >= PK_MIN_MB * 1048576 * 2 && !pkActive() && !pkiActive() && !pqRunning();
+    const canInstall = (!parts || parts.complete) && !pkActive() && !pkiActive() && !pqRunning();
+    const canQueue = !parts || parts.complete;
+    const qs = pqState(p.id);
+    const inQueue = qs === "waiting" || qs === "running";
+    const group = pqTitleGroup(p);
     const iopen = pk.ipanel === p.id;
     return `<div class="pk-card" data-pk-id="${esc(p.id)}">
       <div class="pk-ico">${p.has_icon ? `<img src="/api/v1/packages/icon?id=${esc(p.id)}&m=${esc(String(p.mtime))}" alt="" loading="lazy">` : ""}<span>${esc(pkInitials(p.name))}</span></div>
@@ -7711,8 +7806,12 @@
       <div class="pk-side"><span class="pk-size">${esc(bytes(parts ? p.total : p.size))}</span>
         ${canInstall ? `<button type="button" class="btn" data-pk-iopen="${esc(p.id)}" aria-expanded="${iopen ? "true" : "false"}"
             aria-label="${esc(p.name)} installieren">${iopen ? "Schließen" : "Installieren …"}</button>` : ""}
+        ${canQueue ? (inQueue
+          ? `<button type="button" class="btn ghost" disabled aria-label="${esc(p.name)} steht in der Warteschlange">In der Warteschlange</button>`
+          : `<button type="button" class="btn ghost" data-pk-qadd="${esc(p.id)}" aria-label="${esc(p.name)} in die Warteschlange">In die Warteschlange</button>`) : ""}
         ${canSplit ? `<button type="button" class="btn ghost" data-pk-open="${esc(p.id)}" aria-expanded="${open ? "true" : "false"}"
             aria-label="${esc(p.name)} aufteilen">${open ? "Schließen" : "Aufteilen …"}</button>` : ""}</div>
+      ${group ? `<div class="pk-qtitle"><button type="button" class="btn ghost" data-pk-qtitle="${esc(group.join(","))}">Alle ${esc(String(group.length))} Pakete dieses Titels in die Warteschlange</button></div>` : ""}
       ${open ? pkPanelHtml(p) : ""}
       ${iopen ? pkInstPanelHtml(p) : ""}
     </div>`;
@@ -7992,6 +8091,8 @@
 
   const pkiRenderJob = () => {
     const j = pk.ijob, card = $("#pk-inst-card");
+    /* Eine Installation, die die Warteschlange gestartet hat, zeigt sich in deren Zeile, nicht noch einmal hier. */
+    if (j && j.seq && pq.data && pq.data.job_seq === j.seq && pq.data.counts.total > 0) { card.hidden = true; return; }
     const recent = j && j.state !== "idle" && (j.active || j.state === "lost" || (j.finished_ago_s >= 0 && j.finished_ago_s < 900));
     const key = j ? `${j.name}|${j.state}|${j.finished_ago_s >= 0 || j.state === "lost" ? "end" : ""}` : "";
     if (!recent || (!j.active && pk.idismissed === key)) { card.hidden = true; return; }
@@ -8109,6 +8210,133 @@
     pkRenderList();
     pkRenderJob();
     pkiRenderJob();
+    pqRender();
+  };
+
+  /* ── die Karte der Warteschlange ── */
+  const PQ_LABEL = { waiting: ["wait", "wartet"], running: ["run", "läuft"], done: ["done", "fertig"], failed: ["fail", "Fehler"],
+                     skipped: ["skip", "übersprungen"], cancelled: ["cancel", "abgebrochen"] };
+
+  const pqProgressHtml = (d) => {
+    const j = pk.ijob;
+    if (!j || !j.active || j.seq !== d.job_seq) return `<div class="pq-prog"><p class="muted cp-cur">Wird vorbereitet …</p></div>`;
+    const pc = Math.max(0, Math.min(100, Number.isFinite(j.percent) ? j.percent : 0));
+    const rate = j.elapsed_s > 3 ? j.bytes_sent / j.elapsed_s : 0;
+    const remain = j.remain_s > 0 && j.remain_s < 30 * 86400 && pc < 100 ? " · noch etwa " + ptDur(j.remain_s) : "";
+    const speed = rate > 0 ? ` · etwa ${bytes(rate)}/s` : "";
+    const sys = j.system_status ? ` · Konsole: ${pkiSysWord(j.system_status)}` : "";
+    return `<div class="pq-prog"><p class="cp-num"><b>${esc(d.cancelling ? "Wird abgebrochen …" : j.phase)}</b> · ${esc(String(Math.round(pc)))} %</p>
+      <div class="cp-bar" role="progressbar" aria-label="Fortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>
+      <p class="muted cp-cur">${esc(bytes(j.bytes_done))} von ${esc(bytes(j.bytes_total))}${esc(speed)}${esc(sys)}${esc(remain)}</p>
+      ${j.note ? `<p class="cp-warn">${esc(j.note)}</p>` : ""}</div>`;
+  };
+
+  const pqRowHtml = (it, d) => {
+    const lab = PQ_LABEL[it.state] || ["wait", it.state];
+    const plat = it.plat === 5 ? "PS5" : it.plat === 4 ? "PS4" : "";
+    const sub = [PK_KIND[it.kind] || "Paket", it.version, plat, bytes(it.size)].filter(Boolean).join(" · ");
+    const verified = it.state === "done" && !it.verified;
+    const label = verified ? "fertig, nicht bestätigt" : lab[1];
+    let act = "";
+    if (it.state === "waiting") act = `<button type="button" class="btn ghost" data-pq-remove="${esc(it.id)}">Entfernen</button>`;
+    else if (it.state === "running") act = `<button type="button" class="btn ghost" data-pq-cancel${d.cancelling ? " disabled" : ""}>Abbrechen</button>`;
+    else if (it.state === "failed" || it.state === "cancelled")
+      act = `<button type="button" class="btn ghost" data-pq-retry="${esc(it.id)}">Wiederholen</button><button type="button" class="btn ghost" data-pq-remove="${esc(it.id)}">Entfernen</button>`;
+    else act = `<button type="button" class="btn ghost" data-pq-remove="${esc(it.id)}">Entfernen</button>`;
+    const why = it.message && it.state !== "running" ? `<p class="pq-why${it.state === "failed" ? " bad" : ""}">${esc(it.message)}</p>` : "";
+    return `<li class="pq-row${it.state === "running" ? " pq-run" : ""}" data-pq-id="${esc(it.id)}">
+      <span class="pq-ico">${it.has_icon ? `<img src="/api/v1/packages/icon?id=${esc(it.id)}&m=${esc(String(it.mtime))}" alt="" loading="lazy">` : ""}<span>${esc(pkInitials(it.name))}</span></span>
+      <div class="pq-main"><b title="${esc(it.name)}">${esc(it.name)}</b><small>${esc(sub)}</small></div>
+      <span class="pq-state ${lab[0]}${verified ? " skip" : ""}">${esc(label)}</span><span class="pq-act">${act}</span>
+      ${it.state === "running" ? pqProgressHtml(d) : ""}${why}</li>`;
+  };
+
+  const pqRender = () => {
+    const card = $("#pk-queue-card"), d = pq.data;
+    if (!d || !d.counts.total) {
+      card.hidden = true;
+      const l = $("#pk-queue-list");
+      l.innerHTML = "";
+      l.dataset.sig = "";
+      return;
+    }
+    card.hidden = false;
+    const c = d.counts;
+    const finished = c.done + c.failed + c.skipped + c.cancelled;
+    const bits = [];
+    if (d.halted) bits.push("angehalten");
+    bits.push(`${c.done} von ${c.total} erledigt`);
+    if (c.running) bits.push("läuft");
+    if (c.waiting) bits.push(`wartend: ${c.waiting}`);
+    if (c.skipped) bits.push(`übersprungen: ${c.skipped}`);
+    if (c.failed) bits.push(`Fehler: ${c.failed}`);
+    if (c.cancelled) bits.push(`abgebrochen: ${c.cancelled}`);
+    txt("#pk-queue-sub", bits.join(" · "));
+    const go = $("#pk-queue-go");
+    if (d.running) {
+      go.hidden = false;
+      go.disabled = !!d.pause_requested || !!d.cancelling;
+      go.classList.remove("primary");
+      go.textContent = d.pause_requested ? "Hält nach diesem Paket an" : "Nach diesem Paket anhalten";
+      go.dataset.pqAct = "pause";
+    } else if (c.waiting > 0) {
+      go.hidden = false;
+      go.disabled = false;
+      go.classList.add("primary");
+      go.textContent = d.halted || finished > 0 ? "Weiter" : "Starten";
+      go.dataset.pqAct = "start";
+    } else {
+      go.hidden = true;
+    }
+    $("#pk-queue-clear").hidden = finished === 0;
+    $("#pk-queue-clearall").hidden = d.running || c.total === 0;
+    let note = "";
+    if (d.halted && d.halt_kind === "failed")
+      note = `<p class="pq-note bad">Die Warteschlange hat angehalten, weil ein Paket nicht installiert werden konnte. Mit „Weiter“ geht es beim nächsten Paket weiter; „Wiederholen“ versucht das fehlgeschlagene noch einmal.</p>`;
+    else if (d.halted && d.halt_kind === "stopped")
+      note = `<p class="pq-note warn">Die Warteschlange ist angehalten, weil ein Paket abgebrochen wurde. Mit „Weiter“ geht es beim nächsten Paket weiter.</p>`;
+    else if (d.halted && d.halt_kind === "wait")
+      note = `<p class="pq-note warn"><span>${esc(d.halt_reason)}</span> <span>Mit „Weiter“ versucht die Warteschlange es noch einmal.</span></p>`;
+    else if (d.running && d.pause_requested)
+      note = `<p class="pq-note">Die Warteschlange hält nach dem laufenden Paket an.</p>`;
+    else if (!d.running && c.waiting === 0 && c.running === 0 && c.done > 0 && c.failed === 0)
+      note = `<p class="pq-note ok">Alle Pakete sind abgearbeitet.</p>`;
+    if ($("#pk-queue-note").innerHTML !== note) $("#pk-queue-note").innerHTML = note;
+    const html = d.items.map((it) => pqRowHtml(it, d)).join("");
+    const list = $("#pk-queue-list");
+    if (list.dataset.sig !== html) {
+      list.dataset.sig = html;
+      list.innerHTML = html;
+      $$("#pk-queue-list .pq-ico img").forEach((img) => img.addEventListener("error", () => img.classList.add("broken"), { once: true }));
+    }
+  };
+
+  const pqPost = async (what, body) => {
+    if (pq.busy) return null;
+    pq.busy = true;
+    try {
+      const d = await api(`/api/v1/packages/queue/${what}`, { method: "POST", body: JSON.stringify(body || {}) });
+      if (d && Array.isArray(d.items)) pq.data = d;
+      return d;
+    } catch (e) {
+      toast(e.message, "error");
+      await pqRefresh();
+      return null;
+    } finally {
+      pq.busy = false;
+      pkRender();
+      await pkiRefresh();
+      pkRender();
+      pkSync();
+    }
+  };
+
+  const pqAdd = async (ids) => {
+    const d = await pqPost("add", { ids });
+    if (!d) return;
+    if (d.added) toast(`In die Warteschlange gelegt: ${d.added}`);
+    if (d.ignored && !d.added) toast(`Schon in der Warteschlange: ${d.ignored}`);
+    if (d.message) toast(d.message, "error");
   };
 
   const loadPackages = async (scan) => {
@@ -8121,6 +8349,7 @@
       if (!d.ever && !d.scanning && !scan) { loadPackages(true); return; }
       const j = await api("/api/v1/packages/job");
       if (j && typeof j.state === "string") pk.job = j;
+      await pqRefresh();
       /* eine Installation, die schon läuft, zeigt sich auch nach dem Neuladen; scheitert die Frage, wird sie bald wiederholt */
       if (await pkiRefresh()) pk.ijobRetry = 0;
       else if (!pk.ijobTimer) { pk.ijobRetry = 0; pk.ijobTimer = setTimeout(pkiRetry, 2500); }
@@ -8135,7 +8364,7 @@
 
   /* Läuft nur, solange man es sehen kann: Reiter vorn, Seite vorn, eine Suche oder ein Auftrag läuft. */
   const pkSync = () => {
-    const run = state.page === "games" && pt.tab === "pkg" && !document.hidden && (pkActive() || pkiActive() || !!(pk.data && pk.data.scanning));
+    const run = state.page === "games" && pt.tab === "pkg" && !document.hidden && (pkActive() || pkiActive() || pqActive() || !!(pk.data && pk.data.scanning));
     if (run && !pk.timer) {
       pk.timer = setInterval(pkPoll, 1000);
     } else if (!run && pk.timer) {
@@ -8165,6 +8394,14 @@
         } else if (pk.ijob === was) {
           pk.ipollFail++;                              /* die Antwort blieb aus: nach drei Runden sagt die Karte, dass sie veraltet sein kann */
           pkiRenderJob();
+        }
+      }
+      if (pqActive()) {
+        const was = pq.data;
+        if (await pqRefresh()) {
+          await pkiRefresh();                                   /* der Fortschritt des laufenden Pakets */
+          pqRender();
+          if (was.running && !pq.data.running) await loadPackages();        /* die Liste neu: was installiert wurde, steht jetzt dort */
         }
       }
       if (wasScan) await loadPackages();
@@ -8211,7 +8448,21 @@
     }
   });
   wireLive();
+  $("#pk-queue-card").addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    if (b.id === "pk-queue-go") { await pqPost(b.dataset.pqAct === "pause" ? "pause" : "start"); return; }
+    if (b.id === "pk-queue-clear") { await pqPost("clear", { all: false }); return; }
+    if (b.id === "pk-queue-clearall") { await pqPost("clear", { all: true }); return; }
+    if (b.hasAttribute("data-pq-cancel")) { await pqPost("cancel"); return; }
+    if (b.dataset.pqRemove) { await pqPost("remove", { id: b.dataset.pqRemove }); return; }
+    if (b.dataset.pqRetry) { await pqPost("retry", { id: b.dataset.pqRetry }); }
+  });
   $("#pk-list").addEventListener("click", async (e) => {
+    const qadd = e.target.closest("[data-pk-qadd]");
+    if (qadd && !qadd.disabled) { await pqAdd([qadd.dataset.pkQadd]); return; }
+    const qtitle = e.target.closest("[data-pk-qtitle]");
+    if (qtitle && !qtitle.disabled) { await pqAdd(qtitle.dataset.pkQtitle.split(",")); return; }
     const iopen = e.target.closest("[data-pk-iopen]");
     if (iopen) {
       if (pk.ipanel === iopen.dataset.pkIopen) { pk.ipanel = ""; pkRenderList(); } else pkiOpen(iopen.dataset.pkIopen);

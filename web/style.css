@@ -263,10 +263,10 @@ body.expert .expert-only { display: block; }
 /* Seitenbanner auf System und Protokoll: Bild des Users rechts in voller
    Höhe, links abgedeckt; die Werte darin sind echt (app.js). */
 .card.page-banner { min-height: 168px; margin-bottom: 18px; padding: 22px 28px;
-  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 48%, rgba(20,27,41,.35) 80%, rgba(20,27,41,.08) 100%),
-    url(/img/banner-system.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+  background: linear-gradient(90deg, rgba(20,27,41,.8) 0%, rgba(20,27,41,.55) 38%, rgba(20,27,41,.12) 72%, rgba(20,27,41,0) 100%),
+    url(/img/banner-system.jpg) right center / cover no-repeat, var(--surface-1); }
 .card.page-banner.pb-log {
-  background-image: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 48%, rgba(20,27,41,.35) 80%, rgba(20,27,41,.08) 100%),
+  background-image: linear-gradient(90deg, rgba(20,27,41,.8) 0%, rgba(20,27,41,.55) 38%, rgba(20,27,41,.12) 72%, rgba(20,27,41,0) 100%),
     url(/img/banner-log.jpg); }
 .page-banner h2 { margin: 0; font-size: 20px; letter-spacing: -.015em; }
 .pb-sub { margin: 4px 0 0; max-width: 460px; color: var(--ink-2); font-size: 13.5px; }
@@ -281,8 +281,8 @@ body.expert .expert-only { display: block; }
    in voller Höhe rechts angeschlagen wie die anderen Seitenbanner. */
 .card.pf-hero { position: relative; display: flex; align-items: center; gap: 26px;
   min-height: 176px; margin-bottom: 18px; padding: 24px 28px; overflow: hidden;
-  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.9) 40%, rgba(20,27,41,.2) 72%, rgba(20,27,41,0) 100%),
-    url(/img/banner-profile.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+  background: linear-gradient(90deg, rgba(20,27,41,.8) 0%, rgba(20,27,41,.55) 38%, rgba(20,27,41,.12) 72%, rgba(20,27,41,0) 100%),
+    url(/img/banner-profile.jpg) right center / cover no-repeat, var(--surface-1); }
 .pf-avatar { position: relative; width: 116px; height: 116px; flex: none; border-radius: 50%;
   background: linear-gradient(135deg, #22d3ee, #3b82f6 55%, #1e3a8a);
   box-shadow: 0 0 0 6px rgba(59,130,246,.12); }
@@ -741,7 +741,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
    Für den PS5-Browser bewusst ohne inset, aspect-ratio und filter: das
    Quadrat hält padding-top, die Lage top/left/right/bottom. */
 .gm-tools { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
-.gm-tools input[type=search] { flex: 1 1 240px; min-width: 0; padding: 9px 12px;
+.gm-tools input[type=search] { flex: 1 1 200px; max-width: 520px; min-width: 0; padding: 9px 12px;
   border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset);
   color: var(--ink); font: inherit; font-size: 13.5px; }
 .gm-tools input[type=search]:focus { outline: none; border-color: var(--s1); }
@@ -765,7 +765,6 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
   gap: 16px; margin-bottom: 18px; }
 .gm-card { display: flex; flex-direction: column; border: 1px solid var(--hairline);
   border-radius: var(--r-lg); background: var(--surface-1); overflow: hidden; }
-.gm-card:has(.gm-info[aria-expanded="true"]) { align-self: start; }
 .gm-card.running { border-color: rgba(12,163,12,.7); box-shadow: 0 0 0 1px rgba(12,163,12,.45); }
 .gm-cover { position: relative; padding-top: 100%; background: var(--inset); }
 .gm-cover img, .gm-fallback { position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -1450,8 +1449,8 @@ button, input[type=text], input[type=search], input[type=number], input[type=pas
    Bild in voller Höhe rechts, links abgedeckt; der Knopf steht links unter dem Titel, nicht auf dem Chip. */
 .pl-top.pl-hero { position: relative; flex-direction: column; align-items: flex-start; justify-content: center; gap: 16px;
   min-height: 176px; margin-bottom: 22px; padding: 24px 28px; overflow: hidden;
-  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.9) 40%, rgba(20,27,41,.2) 72%, rgba(20,27,41,0) 100%),
-    url(/img/banner-payloads.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+  background: linear-gradient(90deg, rgba(20,27,41,.8) 0%, rgba(20,27,41,.55) 38%, rgba(20,27,41,.12) 72%, rgba(20,27,41,0) 100%),
+    url(/img/banner-payloads.jpg) right center / cover no-repeat, var(--surface-1); }
 @media (max-width: 720px) {
   .pl-top.pl-hero { min-height: 150px;
     background: linear-gradient(rgba(20,27,41,.8), rgba(20,27,41,.8)),
@@ -1460,8 +1459,8 @@ button, input[type=text], input[type=search], input[type=number], input[type=pas
 
 /* Dateien: Kachel wie bei den Payloads, mit dem Symbol der Dateien; „Aktualisieren“ steht links unter dem Titel, „Hoch“ als erster Knopf der Werkzeugzeile (09.10.2026) */
 .pl-top.pl-hero.fm-hero { gap: 14px;
-  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.9) 40%, rgba(20,27,41,.2) 72%, rgba(20,27,41,0) 100%),
-    url(/img/banner-files.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+  background: linear-gradient(90deg, rgba(20,27,41,.8) 0%, rgba(20,27,41,.55) 38%, rgba(20,27,41,.12) 72%, rgba(20,27,41,0) 100%),
+    url(/img/banner-files.jpg) right center / cover no-repeat, var(--surface-1); }
 .fm-hero .sub { margin: 4px 0 0; }
 @media (max-width: 720px) {
   .pl-top.pl-hero.fm-hero { background: linear-gradient(rgba(20,27,41,.8), rgba(20,27,41,.8)),
@@ -1475,5 +1474,74 @@ button, input[type=text], input[type=search], input[type=number], input[type=pas
 .ov-tile.fan-banner { min-height: 150px;
   background: linear-gradient(90deg, rgba(20,27,41,.55) 0%, rgba(20,27,41,.15) 60%, rgba(20,27,41,0) 100%),
     url(/img/banner-fan.jpg) center / cover no-repeat, var(--surface-1); }
-/* die Kachel „Läuft gerade“ bekommt denselben Hintergrund, ein anderer Ausschnitt, damit die Sterne nicht gleich liegen */
-.ov-tile.ov-game.fan-banner { background-position: 0 0, right bottom; background-size: auto, cover; }
+/* die Kachel „Läuft gerade“ hat einen eigenen Hintergrund (Leiterbahnen, 09.10.2026), damit sie nicht aussieht wie die Lüfter-Kachel */
+.ov-tile.ov-game.fan-banner {
+  background: linear-gradient(90deg, rgba(20,27,41,.62) 0%, rgba(20,27,41,.22) 55%, rgba(20,27,41,0) 100%),
+    url(/img/banner-game.jpg) center / cover no-repeat, var(--surface-1); }
+
+/* Warteschlange der Installationen (09.10.2026): die Karte oben auf dem Reiter Pakete, eine Zeile je Paket */
+.pq-note { margin: 0 0 10px; padding: 10px 12px; border-radius: 11px; font-size: 12.5px; background: rgba(255,255,255,.05); }
+.pq-note.warn { background: rgba(250,178,25,.12); color: #ffd57b; }
+.pq-note.bad { background: rgba(208,59,59,.14); color: #ffb0b0; }
+.pq-note.ok { background: rgba(12,163,12,.14); color: #9df89d; }
+.pq-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pq-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; gap: 4px 12px; align-items: center; padding: 10px 12px;
+  border: 1px solid var(--hairline); border-radius: 12px; background: var(--inset); }
+.pq-row.pq-run { border-color: rgba(59,130,246,.55); background: rgba(59,130,246,.07); }
+.pq-ico { position: relative; width: 44px; height: 44px; border-radius: 10px; overflow: hidden; background: var(--surface-1); display: grid; place-items: center;
+  font-size: 13px; font-weight: 800; color: var(--ink-2); }
+.pq-ico img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+.pq-ico img.broken { display: none; }
+.pq-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pq-main b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pq-main small { color: var(--ink-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pq-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; white-space: nowrap; color: var(--ink-2); }
+.pq-state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.pq-state.run { color: #7db4ff; }
+.pq-state.done { color: #7fe0bc; }
+.pq-state.skip { color: #ffd57b; }
+.pq-state.fail { color: #ff9b9b; }
+.pq-state.wait, .pq-state.cancel { color: var(--ink-muted); }
+.pq-why { grid-column: 2 / -1; margin: 0; font-size: 12px; color: var(--ink-2); }
+.pq-why.bad { color: #ff9b9b; }
+.pq-prog { grid-column: 2 / -1; }
+.pq-prog .cp-bar { margin: 2px 0 4px; }
+.pq-prog .cp-cur { margin: 0; }
+.pq-act { display: flex; gap: 6px; }
+.pq-act .btn { padding: 6px 12px; font-size: 12px; }
+.pq-foot { margin: 10px 0 0; font-size: 12px; }
+@media (max-width: 560px) {
+  .pq-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .pq-state, .pq-act { grid-column: 2; }
+}
+
+.pk-qtitle { grid-column: 2 / -1; margin-top: 2px; }
+.pk-qtitle .btn { padding: 5px 12px; font-size: 12px; }
+
+/* Kopf der Spiele-Seite: das Bild des Users rechts, links weich in die Kachel übergeblendet (keine Linie). */
+#gm-pane-lib > .card:first-child { position: relative; overflow: hidden; }
+#gm-pane-lib > .card:first-child::before { content: ""; position: absolute; top: 0; right: 0; width: 44%;
+  height: 132px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(20,27,41,0) 72%, var(--surface-1) 100%),
+    linear-gradient(90deg, var(--surface-1) 0%, rgba(20,27,41,.55) 28%, rgba(20,27,41,0) 62%),
+    url(img/banner-library.jpg) right center / cover no-repeat; }
+#gm-pane-lib > .card:first-child .card-head { min-height: 100px; position: relative; z-index: 1; }
+#gm-pane-lib > .card:first-child .card-head h2 { font-size: 26px; letter-spacing: -.02em; }
+#gm-pane-lib > .card:first-child .card-head .sub { font-size: 15px; margin-top: 6px; }
+#gm-pane-lib > .card:first-child .gm-tools { position: relative; z-index: 1; }
+@media (max-width: 720px) { #gm-pane-lib > .card:first-child::before { width: 70%; opacity: .55; } }
+
+/* „Infos & Metadaten": ein Fenster über der Seite; derselbe Knopf schließt es wieder. */
+.gm-pop { position: fixed; z-index: 70; width: 360px; max-width: calc(100vw - 24px);
+  border: 1px solid rgba(120,160,255,.35); border-radius: 14px; background: rgba(15,22,38,.97);
+  box-shadow: 0 18px 50px rgba(0,0,0,.6), 0 0 0 1px rgba(59,130,246,.18); }
+.gm-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid var(--hairline); }
+.gm-pop-head b { font-size: 14px; }
+.gm-pop-head small { display: block; color: var(--ink-muted); font-size: 11.5px; margin-top: 2px; }
+.gm-pop-x { width: 30px; height: 30px; flex: none; padding: 0; border-radius: 50%;
+  border: 1px solid var(--hairline); background: var(--inset); color: var(--ink-2);
+  font-size: 16px; line-height: 1; cursor: pointer; }
+.gm-pop .gm-meta { margin: 0; padding: 12px 14px 14px; font-size: 12.5px; gap: 6px 14px;
+  max-height: 56vh; overflow: auto; }
+.gm-pop .gm-meta[hidden] { display: none; }

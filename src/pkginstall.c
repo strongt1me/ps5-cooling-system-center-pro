@@ -13,7 +13,8 @@
  *     helper and a new address, as the console's own tools do.
  *
  * What the installation job never does: delete anything, uninstall anything, start a game, touch a package (it is
- * only read), or run without a click. (Uninstalling is a call of its own, ps5tm_pkginst_uninstall, made only by the
+ * only read), or run without a click. (The queue in pkgqueue.c starts one job after the other, but only after a click on
+ * its own start, and it asks the same questions of every package when its turn comes.) (Uninstalling is a call of its own, ps5tm_pkginst_uninstall, made only by the
  * delete job in gamedelete.c after the person confirmed it.) A stop kills the helper and the server; what the system has already put on its disk stays for it to
  * deal with.
  *
@@ -126,9 +127,11 @@ static struct {
   int      started;                              /* the system has accepted the package: from here on it may have put something on the console */
   int      verified;                             /* done: the result was found in the console's list */
   uint64_t started_ms, finished_ms;              /* the clock that only runs forward: a step of the wall clock must not show */
+  unsigned seq;                                  /* which job this is: counts up with every start, so the queue can tell its own */
 } g_job;
 static int g_cancel;
 static unsigned g_seq;
+static unsigned g_job_seq;
 
 static uint64_t
 mono_ms(void) { return ps5tm_mono_ms(); }
@@ -414,6 +417,7 @@ typedef struct {
   int              free_known;
   char             block[512];                   /* why it cannot be installed; "" when it can */
   int              http;                         /* the status a refused start answers with */
+  int              transient;                    /* the refusal is "not now" (a game runs, a job is under way), not "never" */
   char             warn[512];
 } eval_t;
 
@@ -510,11 +514,13 @@ evaluate(const char *id, eval_t *e) {
   if(gs.title_id[0] && !strcmp(gs.title_id, p->title_id) && strcmp(p->kind, "dlc")) {
     snprintf(e->block, sizeof(e->block), "Das Spiel läuft gerade. Bitte erst beenden.");
     e->http = 409;
+    e->transient = 1;
     return;
   }
   if(other_job_active() || ps5tm_pkginst_busy()) {
     snprintf(e->block, sizeof(e->block), "Es läuft gerade ein Kopieren, Konvertieren, Verschieben, Sichern oder Teilen, oder schon eine Installation. Das läuft nicht gleichzeitig.");
     e->http = 409;
+    e->transient = 1;
     return;
   }
 
@@ -1600,10 +1606,14 @@ out:
 
 /* ------------------------------------------------------------------ the start */
 
-/* The status of an HTTP answer: 200 started; 404 no such package; 409 cannot be done now. */
-int
-ps5tm_pkginst_start(const char *id, char *err, size_t err_len) {
+/* The status of an HTTP answer: 200 started; 404 no such package; 409 cannot be done now. *transient (when asked for) says
+   whether a refusal is only "not now" (a game runs, another job is under way), and *seq the number of the job that has
+   started: the queue (pkgqueue.c) waits on the one and recognises its own job by the other. */
+static int
+start_impl(const char *id, char *err, size_t err_len, int *transient, unsigned *seq_out) {
   err[0] = 0;
+  if(transient) *transient = 0;
+  if(seq_out) *seq_out = 0;
   args_t *a = calloc(1, sizeof(*a));
   eval_t *e = calloc(1, sizeof(*e));
   if(!a || !e) { free(a); free(e); snprintf(err, err_len, "Zu wenig Speicher."); return 409; }
@@ -1611,6 +1621,7 @@ ps5tm_pkginst_start(const char *id, char *err, size_t err_len) {
   if(e->block[0]) {
     snprintf(err, err_len, "%s", e->block);
     int http = e->http == 200 ? 409 : e->http;
+    if(transient) *transient = e->transient;
     free(a);
     free(e);
     return http;
@@ -1626,9 +1637,11 @@ ps5tm_pkginst_start(const char *id, char *err, size_t err_len) {
     pthread_mutex_unlock(&g_lock);
     free(a);
     snprintf(err, err_len, "Es läuft schon eine Installation.");
+    if(transient) *transient = 1;
     return 409;
   }
   memset(&g_job, 0, sizeof(g_job));
+  g_job.seq = ++g_job_seq;
   g_job.state = J_PREPARE;
   snprintf(g_job.phase, sizeof(g_job.phase), "Vorbereiten");
   snprintf(g_job.name, sizeof(g_job.name), "%s", a->pkg.name);
@@ -1640,6 +1653,7 @@ ps5tm_pkginst_start(const char *id, char *err, size_t err_len) {
   g_job.plat = a->pkg.plat;
   g_job.total = a->total;
   g_job.started_ms = mono_ms();
+  unsigned my_seq = g_job.seq;
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
 
@@ -1649,9 +1663,11 @@ ps5tm_pkginst_start(const char *id, char *err, size_t err_len) {
   if(other_job_active()) {
     pthread_mutex_lock(&g_lock);
     memset(&g_job, 0, sizeof(g_job));                    /* idle again */
+    g_job.seq = my_seq;                                  /* the number stays used */
     pthread_mutex_unlock(&g_lock);
     free(a);
     snprintf(err, err_len, "Es läuft gerade ein Kopieren, Konvertieren, Verschieben, Sichern oder Teilen. Das läuft nicht gleichzeitig mit einer Installation.");
+    if(transient) *transient = 1;
     return 409;
   }
 
@@ -1670,7 +1686,39 @@ ps5tm_pkginst_start(const char *id, char *err, size_t err_len) {
     snprintf(err, err_len, "Der Vorgang ließ sich nicht starten.");
     return 409;
   }
+  if(seq_out) *seq_out = my_seq;
   return 200;
+}
+
+int
+ps5tm_pkginst_start(const char *id, char *err, size_t err_len) {
+  return start_impl(id, err, err_len, NULL, NULL);
+}
+
+int
+ps5tm_pkginst_start_q(const char *id, char *err, size_t err_len, int *transient, unsigned *seq) {
+  return start_impl(id, err, err_len, transient, seq);
+}
+
+/* How the last job ended, for the queue: 0 still going (or never run), 1 done, 2 failed, 3 stopped. */
+void
+ps5tm_pkginst_result(ps5tm_pkginst_result_t *r) {
+  memset(r, 0, sizeof(*r));
+  pthread_mutex_lock(&g_lock);
+  r->seq = g_job.seq;
+  switch(g_job.state) {
+  case J_DONE:      r->state = 1; break;
+  case J_FAILED:    r->state = 2; break;
+  case J_CANCELLED: r->state = 3; break;
+  default:          r->state = 0; break;
+  }
+  r->verified = g_job.state == J_DONE && g_job.verified;
+  r->blind = g_job.blind;
+  r->started = g_job.started;
+  r->error_code = g_job.error_code;
+  snprintf(r->error, sizeof(r->error), "%s", g_job.error);
+  snprintf(r->note, sizeof(r->note), "%s", g_job.note);
+  pthread_mutex_unlock(&g_lock);
 }
 
 cJSON *
@@ -1682,6 +1730,7 @@ ps5tm_pkginst_job_json(void) {
   uint64_t now = mono_ms();
   cJSON_AddBoolToObject(o, "ok", 1);
   cJSON_AddStringToObject(o, "state", k_state[g_job.state]);
+  cJSON_AddNumberToObject(o, "seq", g_job.seq);                                 /* which job: the queue's own is the one it started */
   cJSON_AddBoolToObject(o, "active", act);
   cJSON_AddBoolToObject(o, "can_cancel", act && !cancelled());
   cJSON_AddBoolToObject(o, "cancelling", act && cancelled());                  /* the stop has been asked for and is under way */

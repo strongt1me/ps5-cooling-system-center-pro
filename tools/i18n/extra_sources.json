@@ -48,5 +48,8 @@
   "PS4-Spiele",
   "PS4-Apps",
   "voll",
-  "reduziert"
+  "reduziert",
+  "wartet",
+  "wartend: {0}",
+  "abgebrochen: {0}"
 ]

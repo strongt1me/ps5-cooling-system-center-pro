@@ -3134,6 +3134,65 @@ handle_packages_install(int fd, const ps5tm_request_t *req) {
   send_cjson(fd, 200, ps5tm_pkginst_job_json());
 }
 
+/* The queue of installations (pkgqueue.c). Packages are named by the ids the last search handed out; no path travels. */
+static void
+handle_pkgqueue_add(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const char *ids[64];
+  unsigned n = 0;
+  const cJSON *list = body ? cJSON_GetObjectItem(body, "ids") : NULL;
+  const cJSON *one = body ? cJSON_GetObjectItem(body, "id") : NULL;
+  if(cJSON_IsArray(list)) {
+    const cJSON *it;
+    cJSON_ArrayForEach(it, list)
+      if(cJSON_IsString(it) && n < 64) ids[n++] = it->valuestring;
+  } else if(cJSON_IsString(one)) {
+    ids[n++] = one->valuestring;
+  }
+  unsigned added = 0, ignored = 0;
+  char err[200];
+  int status = ps5tm_pkgqueue_add(ids, n, &added, &ignored, err, sizeof(err));
+  cJSON_Delete(body);
+  if(status != 200) { ps5tm_http_send_error(fd, status, "queue_refused", err); return; }
+  cJSON *o = ps5tm_pkgqueue_json();
+  if(!o) { ps5tm_http_send_error(fd, 503, "no_memory", "Zu wenig Speicher."); return; }
+  cJSON_AddNumberToObject(o, "added", added);
+  cJSON_AddNumberToObject(o, "ignored", ignored);
+  cJSON_AddStringToObject(o, "message", err);
+  send_cjson(fd, 200, o);
+}
+
+static void
+handle_pkgqueue_post(int fd, const ps5tm_request_t *req, const char *what) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *ji = body ? cJSON_GetObjectItem(body, "id") : NULL;
+  const cJSON *ja = body ? cJSON_GetObjectItem(body, "all") : NULL;
+  char id[24] = "", err[300] = "";
+  int has_id = 0;
+  if(cJSON_IsString(ji)) { snprintf(id, sizeof(id), "%s", ji->valuestring); has_id = 1; }
+  int all = cJSON_IsTrue(ja);
+  cJSON_Delete(body);
+  if(!strcmp(what, "start")) {
+    int st = ps5tm_pkgqueue_start(err, sizeof(err));
+    if(st != 200) { ps5tm_http_send_error(fd, st, "queue_refused", err); return; }
+  } else if(!strcmp(what, "pause")) {
+    ps5tm_pkgqueue_pause();
+  } else if(!strcmp(what, "cancel")) {
+    ps5tm_pkgqueue_cancel();
+  } else if(!strcmp(what, "remove")) {
+    int st = ps5tm_pkgqueue_remove(id);
+    if(st == 404) { ps5tm_http_send_error(fd, 404, "queue_unknown", "Dieses Paket steht nicht in der Warteschlange."); return; }
+    if(st == 409) { ps5tm_http_send_error(fd, 409, "queue_busy", "Das Paket wird gerade installiert. Erst abbrechen."); return; }
+  } else if(!strcmp(what, "retry")) {
+    ps5tm_pkgqueue_retry(has_id ? id : NULL);
+  } else if(!strcmp(what, "clear")) {
+    ps5tm_pkgqueue_clear(all);
+  }
+  cJSON *o = ps5tm_pkgqueue_json();
+  if(!o) { ps5tm_http_send_error(fd, 503, "no_memory", "Zu wenig Speicher."); return; }
+  send_cjson(fd, 200, o);
+}
+
 static void
 handle_saves_delete(int fd, const ps5tm_request_t *req) {
   cJSON *root = req->body ? cJSON_Parse(req->body) : NULL;
@@ -4672,6 +4731,29 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
     send_cjson(fd, 200, ps5tm_pkginst_job_json());
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/packages/queue")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                        "Nur GET erlaubt."); return; }
+    cJSON *o = ps5tm_pkgqueue_json();
+    if(!o) { ps5tm_http_send_error(fd, 503, "no_memory", "Zu wenig Speicher."); return; }
+    send_cjson(fd, 200, o);
+    return;
+  }
+
+  if(!strncmp(req->path, "/api/v1/packages/queue/", 23)) {
+    const char *what = req->path + 23;
+    if(strcmp(what, "add") && strcmp(what, "start") && strcmp(what, "pause") && strcmp(what, "cancel") &&
+       strcmp(what, "remove") && strcmp(what, "retry") && strcmp(what, "clear")) {
+      ps5tm_http_send_error(fd, 404, "not_found", "Diese Adresse gibt es nicht.");
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                         "Nur POST erlaubt."); return; }
+    if(!strcmp(what, "add")) handle_pkgqueue_add(fd, req);
+    else handle_pkgqueue_post(fd, req, what);
     return;
   }
 

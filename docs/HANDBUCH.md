@@ -992,6 +992,29 @@ weist der Server deshalb ab, was erkennbar von einer fremden Webseite kommt:
 - Die Seite selbst kommt mit einer Content-Security-Policy: kein Skript von
   außen, kein Einbetten in fremde Seiten.
 
+## Pakete in der Warteschlange installieren (ab 1.54.1)
+
+Mehrere Pakete lassen sich nacheinander installieren, ohne dass man jedes einzeln anstößt.
+
+- **Hineinlegen.** An jeder Paketkarte steht **„In die Warteschlange“**. Bei einem Titel mit mehreren Paketen legt
+  **„Alle … Pakete dieses Titels in die Warteschlange“** Spiel, Updates (die älteren zuerst) und Zusatzinhalte in der richtigen
+  Reihenfolge hinein. Die Karte **Warteschlange** oben auf dem Reiter zeigt eine Zeile je Paket mit Zustand (wartet, läuft, fertig,
+  übersprungen, Fehler, abgebrochen).
+- **Starten.** Nichts läuft von allein: Erst **„Starten“** setzt die Warteschlange in Gang. Jedes Paket wird mit der normalen
+  Installation der Konsole installiert, mit Balken, Menge, Tempo und Restzeit in seiner Zeile.
+- **Geprüft wird, wenn ein Paket dran ist.** Es gelten dieselben Regeln wie bei „Installieren …“. Ein Update kommt also erst dran,
+  wenn das Spiel davor installiert ist. Was die Konsole ablehnt (Spiel oder Update schon installiert, Spiel fehlt, Datei verändert),
+  wird **übersprungen**, der Grund steht in der Zeile, und die Warteschlange geht weiter.
+- **Ein Fehler hält an.** Scheitert ein Paket (zum Beispiel zu wenig Platz, loses USB-Kabel), hält die Warteschlange an, statt alle
+  weiteren der Reihe nach mit hineinzureißen. **„Weiter“** macht beim nächsten Paket weiter, **„Wiederholen“** versucht das
+  fehlgeschlagene noch einmal. Ein Spiel, das gerade läuft, hält sein Update ebenso an, bis man es beendet hat und **„Weiter“** drückt.
+- **Anhalten und Abbrechen.** **„Nach diesem Paket anhalten“** lässt das laufende fertig werden. **„Abbrechen“** in der Zeile stoppt die
+  laufende Installation (wie sonst auch; was die Konsole schon angelegt hat, kann liegen bleiben) und hält die Warteschlange an.
+- **Aufräumen.** **„Entfernen“** nimmt ein wartendes Paket heraus, **„Erledigte entfernen“** die fertigen, übersprungenen und
+  abgebrochenen, **„Alle entfernen“** alles, solange nichts läuft.
+- Die Warteschlange lebt im Arbeitsspeicher der App (höchstens 64 Pakete): Nach einem Neustart der App ist sie leer. „Vom PC
+  installieren“ bleibt eine eigene Sache und läuft nicht gleichzeitig. Die Warteschlange löscht und überschreibt nichts.
+
 ## Pakete direkt vom PC installieren (ab 1.52.0)
 
 Auf dem Reiter **Pakete** steht oben die Karte **„Vom PC installieren“**: Eine `.pkg`-Datei von dem Rechner, an dem der Browser läuft, wird

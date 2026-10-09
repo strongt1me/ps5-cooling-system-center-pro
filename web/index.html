@@ -258,11 +258,11 @@
               <div class="card-head">
                 <div><h2>Spiele auf dem Startbildschirm</h2>
                   <p class="sub" id="gm-sub">wird gelesen …</p></div>
-                <button class="btn ghost" id="gm-reload" type="button">Aktualisieren</button>
               </div>
               <div class="gm-tools">
                 <input type="search" id="gm-search" placeholder="Titel, Titel-ID oder Content-ID"
                        autocomplete="off" spellcheck="false" aria-label="Spiele durchsuchen">
+                <button class="btn ghost" id="gm-reload" type="button">Aktualisieren</button>
                 <div class="gm-chips" role="group" aria-label="Auswahl">
                   <button type="button" class="gm-chip active" data-plat="">Alle</button>
                   <button type="button" class="gm-chip" data-plat="PS5">PS5</button>
@@ -358,6 +358,21 @@
                   <button type="button" class="gm-chip" data-pk-kind="dlc">Zusatzinhalte</button>
                 </div>
               </div>
+            </article>
+
+            <!-- Die Warteschlange der Installationen (pkgqueue.c): Pakete der letzten Suche, die nacheinander installiert werden. app.js (pq*) füllt sie. -->
+            <article class="card" id="pk-queue-card" hidden>
+              <div class="card-head">
+                <div><h2>Warteschlange</h2><p class="sub" id="pk-queue-sub"></p></div>
+                <div class="row-gap">
+                  <button class="btn primary" id="pk-queue-go" type="button">Starten</button>
+                  <button class="btn ghost" id="pk-queue-clear" type="button">Erledigte entfernen</button>
+                  <button class="btn ghost" id="pk-queue-clearall" type="button">Alle entfernen</button>
+                </div>
+              </div>
+              <div id="pk-queue-note"></div>
+              <ol class="pq-list" id="pk-queue-list"></ol>
+              <p class="muted pq-foot">Die Konsole installiert die Pakete nacheinander, jedes mit ihrer eigenen Installation. Ein Update oder ein Zusatzinhalt kommt erst dran, wenn das Spiel davor installiert ist. Die Warteschlange gilt nur, solange die App läuft.</p>
             </article>
 
             <!-- Ein Paket direkt vom PC installieren (pkglive.c): app.js (lv*) schickt die Datei in Stücken, während die Konsole sie installiert. -->
