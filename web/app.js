@@ -1381,7 +1381,6 @@
      (voll, reduziert = keine Drehung, aus = auch ohne Lichteffekte); der Browser merkt sich die Wahl. */
   const FAN_MOTION_KEY = "ps5tm.fanMotion";
   let fanKey = "";
-  const fanZoneWord = (p) => (p <= 35 ? "Kühl" : p < 80 ? "Normal" : "Hohe Last");
   const fanMotionGet = () => {
     try { const v = localStorage.getItem(FAN_MOTION_KEY); return v === "reduced" || v === "off" ? v : "full"; } catch { return "full"; }
   };
@@ -1393,10 +1392,6 @@
     });
     const sel = $("#fan-motion");
     if (sel && sel.value !== m) sel.value = m;
-  };
-  const fanChipSync = () => {
-    const chip = $("#fan-chip");
-    if (chip) chip.hidden = state.page === "cooling";
   };
   const fanVisual = (pct, ok) => {
     const valid = !!ok && Number.isFinite(pct);
@@ -1414,8 +1409,6 @@
     document.documentElement.style.setProperty("--fan-rgb", rgb.join(","));
     const tile = $("#fan-tile");
     if (tile && tile.closest(".ov-tile")) tile.closest(".ov-tile").classList.add("fan-glow");
-    txt("#fan-chip-val", valid ? `${p} %` : "—");
-    txt("#fan-chip-zone", valid ? fanZoneWord(p) : "Kein Signal");
   };
 
   /* Die drei Voreinstellungen, genau wie presetApply() sie setzt: im Modus
@@ -2619,28 +2612,24 @@
 
   const plDoc = (list) => ({ startup: plProf.startup, profiles: list });
 
+  const plNewProfile = () => {
+    plEdit = { id: plNewId(), name: "", items: [], isNew: true };
+    plRenderEdit();
+    const n = $("#pl-ed-name"); if (n) n.focus();
+  };
+
   const wireProfiles = () => {
     const sec = $("#pl-prof-list") && $("#pl-prof-list").closest(".pl-sec");
     if (!sec) return;
+    /* „Neues Profil“ steht seit 09.10.2026 in der Kachel oben, rechts neben „Aktualisieren“, also außerhalb dieses Abschnitts */
+    const newBtn = $("#pl-prof-new");
+    if (newBtn) newBtn.addEventListener("click", plNewProfile);
     sec.addEventListener("click", async (e) => {
-      const menu = $("#pl-prof-menu");
-      if (menu && menu.open && e.target.closest(".pl-menu-pop") && e.target.closest(".btn")) setTimeout(() => { menu.open = false; }, 0);
       const b = e.target.closest("button");
       if (!b || b.disabled) return;
       const d = b.dataset;
       try {
-        if (b.id === "pl-prof-new") {
-          plEdit = { id: plNewId(), name: "", items: [], isNew: true };
-          plRenderEdit();
-          const n = $("#pl-ed-name"); if (n) n.focus();
-        } else if (b.id === "pl-prof-export") {
-          const blob = new Blob([JSON.stringify(plProf, null, 2)], { type: "application/json" });
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = "payload-profile.json";
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-        } else if (d.ppRun !== undefined) {
+        if (d.ppRun !== undefined) {
           await api("/api/v1/payload-profiles/run", { method: "POST", body: JSON.stringify({ id: d.ppRun }) });
           toast("Profil wird ausgeführt.");
           plPollRun();
@@ -2702,22 +2691,36 @@
         t.value = "";
         added.forEach((n) => { if (plEdit && plEdit.items.length < 64 && !plEdit.items.includes(n)) plEdit.items.push(n); });
         plRenderEdit();
-      } else if (t.id === "pl-prof-import-file" && t.files && t.files[0]) {
-        try {
-          const doc = JSON.parse(await t.files[0].text());
-          const profiles = Array.isArray(doc.profiles) ? doc.profiles : [];
-          const known = new Set(plProf.profiles.map((p) => p.id));
-          const merged = plProf.profiles.slice();
-          profiles.forEach((p) => {
-            const q = { id: known.has(p.id) ? plNewId() : p.id, name: p.name, items: p.items };
-            known.add(q.id);
-            merged.push(q);
-          });
-          await plProfSave({ startup: plProf.startup, profiles: merged });
-          toast(`${plCount(profiles.length, "Profil", "Profile")} geladen.`);
-        } catch (err) { toast(`Die Datei ließ sich nicht laden: ${err.message}`, "error"); }
-        t.value = "";
       }
+    });
+    /* „Neues Profil“, „Profile sichern“ und „Profile laden“ stehen seit 09.10.2026 in der Kachel oben (außerhalb dieses Abschnitts) */
+    const expBtn = $("#pl-prof-export");
+    if (expBtn) expBtn.addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(plProf, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "payload-profile.json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+    const impFile = $("#pl-prof-import-file");
+    if (impFile) impFile.addEventListener("change", async () => {
+      const t = impFile;
+      if (!(t.files && t.files[0])) return;
+      try {
+        const doc = JSON.parse(await t.files[0].text());
+        const profiles = Array.isArray(doc.profiles) ? doc.profiles : [];
+        const known = new Set(plProf.profiles.map((p) => p.id));
+        const merged = plProf.profiles.slice();
+        profiles.forEach((p) => {
+          const q = { id: known.has(p.id) ? plNewId() : p.id, name: p.name, items: p.items };
+          known.add(q.id);
+          merged.push(q);
+        });
+        await plProfSave({ startup: plProf.startup, profiles: merged });
+        toast(`${plCount(profiles.length, "Profil", "Profile")} geladen.`);
+      } catch (err) { toast(`Die Datei ließ sich nicht laden: ${err.message}`, "error"); }
+      t.value = "";
     });
   };
 
@@ -2746,16 +2749,39 @@
 
   /* ── Kühlleistung über die Zeit ─────────────────────────────────── */
 
+  const healthDate = (ms) => {
+    if (!(ms > 0)) return "";
+    const d = new Date(ms);
+    return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+  };
+
+  /* Verglichen werden nur Wochen unter den Einstellungen, die jetzt gelten (Einstellungs-Stempel, thermalog.c);
+     ändert man Zieltemperatur, Modus oder Lüfterkurve, beginnt der Vergleich von vorn. */
   const loadHealth = async () => {
     const box = $("#health-box");
     if (!box) return;
     let d;
     try { d = await api("/api/v1/cooling-health"); } catch { return; }
+    const since = healthDate(d.since_ms);
 
     if (!d.verdict_ready) {
-      /* Ehrlich sagen, wie weit es ist, statt ein vorläufiges Urteil zu
-         fällen — vier Wochen sind das Minimum für eine Aussage. */
       const w = d.weeks_usable || 0;
+      if (d.older_weeks > 0 || since) {
+        /* Ehrlich sagen, warum es von vorn zählt, statt ein Urteil aus nicht vergleichbaren Wochen zu fällen. */
+        box.innerHTML = `
+          <div class="hero-copy" style="margin-bottom:10px">
+            <h3 class="sub-head" style="margin-top:0">Vergleich neu gestartet</h3>
+            <p class="muted">Die Einstellungen der Lüftersteuerung wurden am <b>${since}</b> geändert oder der Vergleich wurde neu begonnen.
+              Mit anderen Einstellungen sind die Temperaturen nicht vergleichbar. Die App zählt deshalb neu:
+              <b>${w} von 4</b> Wochen seit dem Neustart.</p>
+          </div>
+          <div class="kv-grid">
+            <div><span>Vergleich seit</span><b>${since}</b></div>
+            <div><span>Wochen erfasst</span><b>${w} von 4</b></div>
+          </div>`;
+        box.className = "";
+        return;
+      }
       box.innerHTML = `<p class="muted">Noch keine Aussage möglich —
         <b>${w} von 4</b> benötigten Wochen erfasst. Die App zählt nur
         Zeiten mit vergleichbarer Last und Drehzahl; gelegentliches Spielen
@@ -2766,21 +2792,21 @@
     const dl = d.delta_c;
     let cls, title, text;
     if (dl >= 5) {
-      cls = "hot"; title = "Kühlleistung lässt deutlich nach";
-      text = `Bei gleicher Last und Drehzahl <b>${dl.toFixed(1)} °C wärmer</b>
-              als am Anfang. Das spricht für Staub im Lüfter oder in den
-              Kühlrippen.`;
+      cls = "hot"; title = "Wärmer als in den ersten Wochen";
+      text = `Seit dem ${since} läuft die Konsole bei gleicher Last, Drehzahl und gleichen Einstellungen <b>${dl.toFixed(1)} °C wärmer</b>.
+              Mögliche Ursachen: Staub im Lüfter oder in den Kühlrippen, trockene Wärmeleitpaste oder ein wärmerer Raum.
+              Ein Hinweis, kein Beweis.`;
     } else if (dl >= 2) {
-      cls = "warn"; title = "Kühlleistung lässt leicht nach";
-      text = `<b>${dl.toFixed(1)} °C wärmer</b> als am Anfang, bei gleicher
-              Last und Drehzahl. Noch unkritisch — im Auge behalten.`;
+      cls = "warn"; title = "Etwas wärmer als in den ersten Wochen";
+      text = `Seit dem ${since} <b>${dl.toFixed(1)} °C wärmer</b>, bei gleicher Last, Drehzahl und gleichen Einstellungen.
+              Noch unkritisch — im Auge behalten.`;
     } else if (dl <= -2) {
-      cls = "ok"; title = "Kühlleistung besser als am Anfang";
-      text = `<b>${Math.abs(dl).toFixed(1)} °C kühler</b> als am Anfang.
-              Nach einer Reinigung oder bei kühlerem Raum zu erwarten.`;
+      cls = "ok"; title = "Kühler als in den ersten Wochen";
+      text = `Seit dem ${since} <b>${Math.abs(dl).toFixed(1)} °C kühler</b>, bei gleichen Einstellungen.
+              Nach einer Reinigung oder in einem kühleren Raum zu erwarten.`;
     } else {
-      cls = "ok"; title = "Kühlleistung stabil";
-      text = `Unverändert gegenüber dem Anfang (${dl >= 0 ? "+" : ""}${dl.toFixed(1)} °C).`;
+      cls = "ok"; title = "Stabil";
+      text = `Gegenüber den ersten Wochen seit dem ${since} unverändert (${dl >= 0 ? "+" : ""}${dl.toFixed(1)} °C), bei gleichen Einstellungen.`;
     }
 
     box.innerHTML = `
@@ -2796,6 +2822,18 @@
       </div>`;
     box.className = cls;
   };
+
+  const wireHealth = () => {
+    const b = $("#health-restart");
+    if (!b) return;
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try { await api("/api/v1/cooling-health", { method: "POST", body: "{}" }); } catch { /* der nächste Abruf zeigt den Stand */ }
+      b.disabled = false;
+      loadHealth();
+    });
+  };
+  wireHealth();
 
   /* ── Zusatzabfragen ─────────────────────────────────────────────── */
 
@@ -6075,6 +6113,11 @@
     else cpOpen("");
   });
   $("#gm-search").addEventListener("input", (e) => { gm.q = e.target.value; renderGames(); });
+  $("#gm-reload").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    try { await loadGames(); } finally { b.disabled = false; }
+  });
   $("#gm-sort").addEventListener("change", (e) => { gm.sort = e.target.value; renderGames(); });
   /* Nur die Auswahl dieser Seite: Die Reiter der Protokollseite und die Voreinstellungen
      des Kernel-Logs tragen dieselbe Klasse, und ein Klick darauf nahm der Spieleliste
@@ -8234,7 +8277,6 @@
   $$(".tab").forEach((b) => b.addEventListener("click", () => {
     if (!b.dataset.page) return;                       /* Handbuch und FAQ sind Links, keine Seiten */
     state.page = b.dataset.page;
-    fanChipSync();
     try { sessionStorage.setItem("ps5page", state.page); } catch { /* ohne Speicher: kein Merken */ }
     $$(".tab").forEach((x) => {
       x.classList.toggle("active", x === b);
@@ -9189,7 +9231,6 @@
   /* ── Start ──────────────────────────────────────────────────────── */
 
   fanMotionApply();
-  fanChipSync();
   const fanSel = $("#fan-motion");
   if (fanSel) fanSel.addEventListener("change", () => {
     try { localStorage.setItem(FAN_MOTION_KEY, fanSel.value); } catch { /* ohne Speicher: gilt bis zum Neuladen nicht */ }

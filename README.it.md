@@ -6,7 +6,7 @@
 
 **Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak, con interfaccia web nella rete domestica in sei lingue.**
 
-![Versione](https://img.shields.io/badge/Versione-1.54.0-1f6feb)
+![Versione](https://img.shields.io/badge/Versione-1.54.1-1f6feb)
 ![Licenza](https://img.shields.io/badge/Licenza-GPL--3.0--or--later-blue)
 ![Piattaforma](https://img.shields.io/badge/Piattaforma-PS5%20Payload-003791)
 ![Lingue](https://img.shields.io/badge/Lingue-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -69,8 +69,8 @@ Il progetto è il successore di *PS5 Temperature Manager*; backend (C) e interfa
 
 | | |
 | --- | --- |
-| **Console** | PS5 con jailbreak e un caricatore ELF sulla **porta 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) o equivalente). Testato su una **PS5 Pro (CFI-7021) con firmware 12.00**. Un utente riferisce che l'app funziona anche su una PS5 con **firmware 13.60** (non verificato dall'autore). Altri modelli e versioni del firmware non sono testati. La temperatura grafica è disponibile solo sulla Pro. |
-| **Firmware** | L'ELF è compilato con il PS5-Payload-SDK **v0.43**, il cui codice di avvio conosce i firmware **fino a 13.60**. Con un firmware che il codice di avvio non conosce, il programma non arriva a `main()`: non si avvia affatto e non scrive nulla nel registro. Che l'avvio su 13.xx riesca non significa ancora che anche il controllo della ventola e i sensori funzionino lì come su 12.00: questo **non è verificato**. |
+| **Console** | PS5 con jailbreak e un caricatore ELF sulla **porta 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) o equivalente). Testato su una **PS5 Pro (CFI-7021) con firmware 12.00**. Diversi utenti riferiscono che l'app funziona anche su una PS5 con **firmware 13.60**. Altri modelli e versioni del firmware non sono testati. La temperatura grafica è disponibile solo sulla Pro. |
+| **Firmware** | L'ELF è compilato con il PS5-Payload-SDK **v0.43**, il cui codice di avvio conosce i firmware **fino a 13.60**. Con un firmware che il codice di avvio non conosce, il programma non arriva a `main()`: non si avvia affatto e non scrive nulla nel registro. Diversi utenti riferiscono che l'app funziona sul **13.60**; per 13.00-13.40 non ci sono segnalazioni (il codice di avvio li conosce). |
 | **kstuff** | Necessario per il controllo della ventola (`/dev/icc_fan`). Senza kstuff sensori e interfaccia continuano a funzionare, la regolazione segnala «non disponibile». |
 | **Rete** | Un browser nella stessa rete della console. |
 | **facoltativo** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) per spostare ed estrarre i giochi e per riconoscerne formato e posizione. |
@@ -81,7 +81,7 @@ Il progetto è il successore di *PS5 Temperature Manager*; backend (C) e interfa
 2. Invia l'ELF alla console, porta **9021**, con un qualsiasi strumento di invio payload o da riga di comando:
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.54.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.54.1.elf
    ```
 
 3. Sul televisore compare una notifica con l'indirizzo. Apri nel browser: **`http://<PS5-IP>:8086`**

@@ -813,8 +813,9 @@ handle_thermal(int fd) {
   }
 
   int delta = 0, base = 0, cur = 0;
-  unsigned usable = 0;
-  if(ps5tm_thermal_verdict(&delta, &usable, &base, &cur) == 0) {
+  unsigned usable = 0, older = 0;
+  uint64_t since = 0;
+  if(ps5tm_thermal_verdict(&delta, &usable, &base, &cur, &since, &older) == 0) {
     cJSON_AddBoolToObject  (root, "verdict_ready", 1);
     cJSON_AddNumberToObject(root, "baseline_c", base  / 10.0);
     cJSON_AddNumberToObject(root, "current_c",  cur   / 10.0);
@@ -823,6 +824,9 @@ handle_thermal(int fd) {
     cJSON_AddBoolToObject  (root, "verdict_ready", 0);
   }
   cJSON_AddNumberToObject(root, "weeks_usable", usable);
+  cJSON_AddNumberToObject(root, "weeks_needed", 4);
+  cJSON_AddNumberToObject(root, "since_ms", (double)since);
+  cJSON_AddNumberToObject(root, "older_weeks", older);
 
   char *txt = cJSON_PrintUnformatted(root);
   cJSON_Delete(root);
@@ -4050,8 +4054,10 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   }
 
   if(!strcmp(req->path, "/api/v1/cooling-health")) {
+    if(is_post) { ps5tm_thermal_restart();
+                  ps5tm_http_send_json(fd, 200, "{\"ok\":true}"); return; }
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
-                                        "Nur GET erlaubt."); return; }
+                                        "Nur GET und POST."); return; }
     handle_thermal(fd);
     return;
   }

@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.54.0"
+#define PS5TM_VERSION        "1.54.1"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -1306,6 +1306,7 @@ typedef struct {
   int      load_pct;    /* mean load */
    int      activity_pct;/* foreground activity share (0..100) */
   int      usable;      /* enough samples to be worth comparing */
+  int      same_settings; /* recorded under the settings in force now */
 } ps5tm_thermal_week_t;
 
 void     ps5tm_thermal_load(void);
@@ -1314,9 +1315,12 @@ void     ps5tm_thermal_sample(int temp_c, int temp_valid,
                                              int fan_pct, int fan_valid,
                                              int activity_fg);
 unsigned ps5tm_thermal_snapshot(ps5tm_thermal_week_t *out, unsigned max);
-/* 0 when a comparison is possible, -1 while there is still too little. */
+/* 0 when a comparison is possible, -1 while there is still too little. Only
+   weeks recorded under the settings in force now count (settings stamp). */
 int      ps5tm_thermal_verdict(int *delta_c10, unsigned *weeks_usable,
-                               int *baseline_c10, int *current_c10);
+                               int *baseline_c10, int *current_c10,
+                               uint64_t *since_ms, unsigned *older_weeks);
+void     ps5tm_thermal_restart(void);
 
 
 /* Fills `out`. Returns 0 if at least one temperature sensor responded. */

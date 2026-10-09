@@ -6,7 +6,7 @@
 
 **Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5, mit Weboberfläche im Heimnetz in sechs Sprachen.**
 
-![Version](https://img.shields.io/badge/Version-1.54.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.54.1-1f6feb)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
 ![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -69,8 +69,8 @@ Das Projekt ist der Nachfolger des *PS5 Temperature Manager*; Backend (C) und Ob
 
 | | |
 | --- | --- |
-| **Konsole** | PS5 mit Jailbreak und einem ELF-Lader auf **Port 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) oder gleichwertig). Getestet auf einer **PS5 Pro (CFI-7021) mit Firmware 12.00**. Auf einer PS5 mit **Firmware 13.60** läuft die App laut Rückmeldung eines Nutzers ebenfalls (vom Autor nicht selbst geprüft). Andere Modelle und Firmware-Stände sind ungetestet. Die Grafiktemperatur gibt es nur auf der Pro. |
-| **Firmware** | Die ELF ist mit dem PS5-Payload-SDK **v0.43** gebaut, dessen Startcode die Firmware **bis 13.60** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Dass der Start auf 13.xx klappt, heißt noch nicht, dass auch Lüftersteuerung und Sensoren dort so arbeiten wie auf 12.00: Das ist **nicht geprüft**. |
+| **Konsole** | PS5 mit Jailbreak und einem ELF-Lader auf **Port 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) oder gleichwertig). Getestet auf einer **PS5 Pro (CFI-7021) mit Firmware 12.00**. Auf einer PS5 mit **Firmware 13.60** läuft die App laut Rückmeldung mehrerer Nutzer ebenfalls. Andere Modelle und Firmware-Stände sind ungetestet. Die Grafiktemperatur gibt es nur auf der Pro. |
+| **Firmware** | Die ELF ist mit dem PS5-Payload-SDK **v0.43** gebaut, dessen Startcode die Firmware **bis 13.60** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Auf **13.60** melden mehrere Nutzer, dass die App läuft; für 13.00 bis 13.40 ist das nicht gemeldet (der Startcode kennt sie). |
 | **kstuff** | Für die Lüftersteuerung nötig (`/dev/icc_fan`). Ohne kstuff laufen Sensoren und Oberfläche weiter, die Regelung meldet „nicht verfügbar“. |
 | **Netzwerk** | Ein Browser im selben Netz wie die Konsole. |
 | **optional** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) für Verschieben und Entpacken von Spielen sowie die Erkennung von Format und Speicherort. |
@@ -81,7 +81,7 @@ Das Projekt ist der Nachfolger des *PS5 Temperature Manager*; Backend (C) und Ob
 2. Die ELF an die Konsole senden, Port **9021**, mit einem beliebigen Payload-Sender oder per Kommandozeile:
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.54.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.54.1.elf
    ```
 
 3. Auf dem Fernseher erscheint eine Meldung mit der Adresse. Im Browser öffnen: **`http://<PS5-IP>:8086`**

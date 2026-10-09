@@ -6,7 +6,7 @@
 
 **Contrôle du ventilateur, surveillance de la température et centre système pour la PlayStation 5 jailbreakée, avec une interface web sur le réseau domestique en six langues.**
 
-![Version](https://img.shields.io/badge/Version-1.54.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.54.1-1f6feb)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0--or--later-blue)
 ![Plateforme](https://img.shields.io/badge/Plateforme-PS5%20Payload-003791)
 ![Langues](https://img.shields.io/badge/Langues-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -69,8 +69,8 @@ Le projet succède au *PS5 Temperature Manager* ; le backend (C) et l’interf
 
 | | |
 | --- | --- |
-| **Console** | PS5 jailbreakée avec un chargeur d’ELF sur le **port 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) ou équivalent). Testé sur une **PS5 Pro (CFI-7021) avec le firmware 12.00**. Un utilisateur signale que l’app fonctionne aussi sur une PS5 avec le **firmware 13.60** (non vérifié par l’auteur). Les autres modèles et versions de firmware ne sont pas testés. La température graphique n’existe que sur la Pro. |
-| **Firmware** | L’ELF est compilé avec le SDK de payloads PS5 **v0.43**, dont le code de démarrage connaît les firmwares **jusqu’à 13.60**. Avec un firmware que le code de démarrage ne connaît pas, le programme n’atteint pas `main()` : il ne démarre pas du tout et n’écrit rien dans le journal. Que le démarrage fonctionne sur 13.xx ne signifie pas encore que le contrôle du ventilateur et les capteurs y fonctionnent comme sur 12.00 : ce n’est **pas vérifié**. |
+| **Console** | PS5 jailbreakée avec un chargeur d’ELF sur le **port 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) ou équivalent). Testé sur une **PS5 Pro (CFI-7021) avec le firmware 12.00**. Plusieurs utilisateurs signalent que l’app fonctionne aussi sur une PS5 avec le **firmware 13.60**. Les autres modèles et versions de firmware ne sont pas testés. La température graphique n’existe que sur la Pro. |
+| **Firmware** | L’ELF est compilé avec le SDK de payloads PS5 **v0.43**, dont le code de démarrage connaît les firmwares **jusqu’à 13.60**. Avec un firmware que le code de démarrage ne connaît pas, le programme n’atteint pas `main()` : il ne démarre pas du tout et n’écrit rien dans le journal. Plusieurs utilisateurs signalent que l’app fonctionne sur la **13.60** ; rien n’a été signalé pour 13.00 à 13.40 (le code de démarrage les connaît). |
 | **kstuff** | Nécessaire pour le contrôle du ventilateur (`/dev/icc_fan`). Sans kstuff, les capteurs et l’interface continuent de fonctionner, la régulation indique « indisponible ». |
 | **Réseau** | Un navigateur sur le même réseau que la console. |
 | **facultatif** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) pour le déplacement et l’extraction de jeux, ainsi que la détection du format et de l’emplacement. |
@@ -81,7 +81,7 @@ Le projet succède au *PS5 Temperature Manager* ; le backend (C) et l’interf
 2. Envoyez l’ELF à la console, port **9021**, avec l’outil d’envoi de payloads de votre choix ou en ligne de commande :
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.54.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.54.1.elf
    ```
 
 3. Un message avec l’adresse apparaît sur le téléviseur. Ouvrez dans le navigateur : **`http://<PS5-IP>:8086`**

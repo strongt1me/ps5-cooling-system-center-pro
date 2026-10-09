@@ -768,7 +768,7 @@ Die App ist mit dem PS5-Payload-SDK **v0.43** gebaut. Dessen Startcode kennt die
 Firmware **bis einschließlich 13.60**; v0.41, mit dem die Versionen bis 1.46.0
 gebaut waren, endete bei 13.40. Eine Firmware, die der Startcode nicht kennt,
 kommt nicht bis `main()`: Das Programm startet dann nicht und schreibt nichts ins
-Protokoll. Getestet ist nur die **Firmware 12.00** auf einer PS5 Pro; ein Nutzer meldet, dass die App auch auf **13.60** läuft (vom Autor nicht geprüft). Ob
+Protokoll. Getestet ist nur die **Firmware 12.00** auf einer PS5 Pro; mehrere Nutzer melden, dass die App auch auf **13.60** läuft. Ob
 Lüftersteuerung und Sensoren auf 13.xx so arbeiten wie dort, ist nicht geprüft.
 Was die Konsole meldet, steht auf der Systemseite („Firmware“) und im Protokoll
 (`firmware`).
@@ -846,8 +846,6 @@ Komponente `<ps5-cooling-fan>` in `web/ps5-fan.js`). Er zeigt den **gemessenen**
 - **Farbe:** Sie geht stufenlos von Blau (bis 25 %) über Grün (um 55 %) zu Rot (ab 65 %). Die Farbe stellt die Lüfterlast dar, nicht die
   Temperatur. Sie färbt auch den Rand, das Glühen und die Zahl der Kachel.
 - **Kein Wert:** Ohne gültigen Messwert (oder ohne Verbindung zur App) ist der Lüfter grau und steht, die Zahl zeigt „—“.
-- **Der kleine Lüfter oben** neben dem Verbindungsstatus zeigt Wert und Zone („Kühl“ bis 35 %, „Normal“ bis 79 %, „Hohe Last“) auf jeder
-  Seite, **außer auf der Seite Kühlung**: Dort ist der große zu sehen, und der kleine ist ausgeblendet.
 - **Animation** (in der Kachel, der Browser merkt sich die Wahl): „voll“; „reduziert“ (keine Drehung, Farbe und Lichtring bleiben); „aus“
   (keine Drehung und ohne Lichteffekte). Stellt der Browser die Bewegung in den Systemeinstellungen auf „reduziert“, dreht sich nichts.
 - **Schutz für langsame Browser:** Braucht der Browser zu lange für ein Bild (der Browser der Konsole ist alt), schaltet die Komponente

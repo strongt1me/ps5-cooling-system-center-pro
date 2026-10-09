@@ -216,7 +216,7 @@ body {
 
 /* Der Lüfter (seit 1.52.0): <ps5-cooling-fan> aus ps5-fan.js, vom User entworfen. Er dreht schneller, je höher der gemessene
    Wert, und leuchtet in einer Farbe, die stufenlos von Blau über Grün zu Rot geht (grau, wenn kein Wert da ist). Die Farbe als
-   „r,g,b" steht in --fan-rgb (app.js, fanVisual) und färbt auch die Kachel und den kleinen Lüfter neben dem Verbindungsstatus.
+   „r,g,b" steht in --fan-rgb (app.js, fanVisual) und färbt auch die Kachel.
    Bis 1.51.x waren es zwei Bilder mit fester CSS-Drehung und einem Ring; die Komponente schützt sich selbst vor einem
    langsamen Browser (siehe ps5-fan.js, „lite"). */
 :root { --fan-rgb: 116,130,151; }
@@ -228,11 +228,6 @@ body {
 .ov-tile.fan-glow #t-fan { color: rgb(var(--fan-rgb)); }
 .fan-motion { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--ink-muted); }
 .fan-motion select { background: var(--inset); color: var(--ink-2); border: 1px solid var(--hairline); border-radius: 6px; padding: 1px 4px; font-size: 11px; }
-/* Der kleine Lüfter neben dem Verbindungsstatus */
-.fan-chip { display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 3px 5px; border-radius: 999px;
-  border: 1px solid rgba(var(--fan-rgb),.45); background: rgba(var(--fan-rgb),.10); font-size: 13px; color: var(--ink-2); white-space: nowrap; }
-.fan-chip ps5-cooling-fan { width: 32px; flex: none; }
-.fan-chip b { color: rgb(var(--fan-rgb)); }
 
 /* Hinweis unter den Voreinstellungen */
 .sub b { color: var(--ink-2); font-weight: 600; }
@@ -1429,13 +1424,7 @@ html.i18n-wait body { visibility: hidden; }
 .qr-box { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
 #qr-img { background: #fff; padding: 6px; border-radius: 10px; flex: none; }
 .qr-url code { font-size: 15px; word-break: break-all; }
-/* Der kleine Lüfter nimmt in der Kopfleiste keinen Platz ein: Er hängt unter den Schaltern am rechten Rand. So sitzen die Power-Optionen
-   auf jeder Seite genau dort, wo sie auf der Seite Kühlung (ohne ihn) sitzen (Wunsch 08.10.2026). */
-.top-right { position: relative; }
-.fan-chip { position: absolute; right: 0; top: 100%; margin-top: -4px; z-index: 3; padding-top: 1px; padding-bottom: 1px; }
-.fan-chip ps5-cooling-fan { width: 26px; }
-.fan-chip[hidden] { display: none; }
-@media (max-width: 560px) { .fan-chip { position: static; margin-top: 0; } }
+#pl-count-prof { margin-left: 0; }
 
 /* Auswahlfelder: der alte Browser der Konsole zeichnet sie sonst eckig und mit eigenem Aussehen (Rundung und Farbe werden ignoriert);
    darum das Eigenaussehen abschalten und den Pfeil selbst zeichnen */
@@ -1445,16 +1434,6 @@ select:not([multiple]) { -webkit-appearance: none; appearance: none; padding-rig
 button, input[type=text], input[type=search], input[type=number], input[type=password], input:not([type]), textarea { -webkit-appearance: none; appearance: none; }
 
 /* Profile (08.10.2026): schlanke Kopfzeile, Sichern/Laden im Menü, Symbolknöpfe, Ergebnis in einer Zeile */
-.pl-menu { position: relative; display: inline-block; }
-.pl-more { list-style: none; width: 38px; height: 38px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--hairline); background: var(--surface-1); color: var(--ink-2); cursor: pointer; }
-.pl-more::-webkit-details-marker { display: none; }
-.pl-more svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
-.pl-menu[open] .pl-more { border-color: rgba(59,130,246,.55); }
-.pl-menu-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; width: 300px; display: flex; flex-direction: column; gap: 8px;
-  padding: 12px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--surface-1); box-shadow: 0 10px 30px rgba(0,0,0,.45); }
-.pl-menu-pop .pl-where { margin: 0 0 4px; }
-.pl-menu-pop .btn { text-align: center; justify-content: center; }
 .pl-card.pl-prof .pl-ib { width: 38px; height: 38px; padding: 0; justify-content: center; border-radius: 50%; }
 .pl-card.pl-prof .pl-ib svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; width: 17px; height: 17px; }
 .pl-card.pl-prof .pl-ib.on svg { fill: currentColor; }
@@ -1466,3 +1445,35 @@ button, input[type=text], input[type=search], input[type=number], input[type=pas
 .pl-prof-run li + li::before { content: " · "; }
 .pl-prof-run p { display: inline; }
 .pl-prof-run p + ul::before { content: " – "; }
+
+/* Payload Verwaltung als Kachel mit dem Bild des Users (09.10.2026), gebaut wie das Profil-Banner:
+   Bild in voller Höhe rechts, links abgedeckt; der Knopf steht links unter dem Titel, nicht auf dem Chip. */
+.pl-top.pl-hero { position: relative; flex-direction: column; align-items: flex-start; justify-content: center; gap: 16px;
+  min-height: 176px; margin-bottom: 22px; padding: 24px 28px; overflow: hidden;
+  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.9) 40%, rgba(20,27,41,.2) 72%, rgba(20,27,41,0) 100%),
+    url(/img/banner-payloads.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+@media (max-width: 720px) {
+  .pl-top.pl-hero { min-height: 150px;
+    background: linear-gradient(rgba(20,27,41,.8), rgba(20,27,41,.8)),
+      url(/img/banner-payloads.jpg) right center / cover no-repeat, var(--surface-1); }
+}
+
+/* Dateien: Kachel wie bei den Payloads, mit dem Symbol der Dateien; „Aktualisieren“ steht links unter dem Titel, „Hoch“ als erster Knopf der Werkzeugzeile (09.10.2026) */
+.pl-top.pl-hero.fm-hero { gap: 14px;
+  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.9) 40%, rgba(20,27,41,.2) 72%, rgba(20,27,41,0) 100%),
+    url(/img/banner-files.jpg) right center / auto 100% no-repeat, var(--surface-1); }
+.fm-hero .sub { margin: 4px 0 0; }
+@media (max-width: 720px) {
+  .pl-top.pl-hero.fm-hero { background: linear-gradient(rgba(20,27,41,.8), rgba(20,27,41,.8)),
+    url(/img/banner-files.jpg) right center / cover no-repeat, var(--surface-1); }
+}
+
+.pl-hero-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Lüfter-Kachel (09.10.2026): Hintergrund und Sterne des Banners über die ganze Kachel verteilt (ohne Ringe und ohne Bild des Chips);
+   der Lüfter links und seine Effekte bleiben. Links leicht abgedunkelt, damit Zahl und Text gut lesbar sind. */
+.ov-tile.fan-banner { min-height: 150px;
+  background: linear-gradient(90deg, rgba(20,27,41,.55) 0%, rgba(20,27,41,.15) 60%, rgba(20,27,41,0) 100%),
+    url(/img/banner-fan.jpg) center / cover no-repeat, var(--surface-1); }
+/* die Kachel „Läuft gerade“ bekommt denselben Hintergrund, ein anderer Ausschnitt, damit die Sterne nicht gleich liegen */
+.ov-tile.ov-game.fan-banner { background-position: 0 0, right bottom; background-size: auto, cover; }

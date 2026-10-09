@@ -6,7 +6,7 @@
 
 **Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5, with a web interface on your home network in six languages.**
 
-![Version](https://img.shields.io/badge/Version-1.54.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.54.1-1f6feb)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
 ![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
 ![Languages](https://img.shields.io/badge/Languages-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -69,8 +69,8 @@ The project is the successor to *PS5 Temperature Manager*; the back end (C) and 
 
 | | |
 | --- | --- |
-| **Console** | PS5 with a jailbreak and an ELF loader on **port 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) or equivalent). Tested on a **PS5 Pro (CFI-7021) with firmware 12.00**. A user reports that the app also runs on a PS5 with **firmware 13.60** (not checked by the author). Other models and firmware versions are untested. The graphics temperature is only available on the Pro. |
-| **Firmware** | The ELF is built with the PS5 payload SDK **v0.43**, whose start-up code knows firmware **up to 13.60**. On a firmware that the start-up code does not know, the program never reaches `main()`: it then does not start at all and writes nothing to the log. That it starts on 13.xx does not yet mean that fan control and sensors work there as they do on 12.00: this has **not been checked**. |
+| **Console** | PS5 with a jailbreak and an ELF loader on **port 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) or equivalent). Tested on a **PS5 Pro (CFI-7021) with firmware 12.00**. Several users report that the app also runs on a PS5 with **firmware 13.60**. Other models and firmware versions are untested. The graphics temperature is only available on the Pro. |
+| **Firmware** | The ELF is built with the PS5 payload SDK **v0.43**, whose start-up code knows firmware **up to 13.60**. On a firmware that the start-up code does not know, the program never reaches `main()`: it then does not start at all and writes nothing to the log. Several users report that the app runs on **13.60**; nothing has been reported for 13.00 to 13.40 (the start-up code knows them). |
 | **kstuff** | Needed for fan control (`/dev/icc_fan`). Without kstuff, sensors and interface keep working; the control reports “not available”. |
 | **Network** | A browser on the same network as the console. |
 | **optional** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) for moving and extracting games and for detecting format and location. |
@@ -81,7 +81,7 @@ The project is the successor to *PS5 Temperature Manager*; the back end (C) and 
 2. Send the ELF to the console, port **9021**, with any payload sender or from the command line:
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.54.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.54.1.elf
    ```
 
 3. A notification with the address appears on the TV. Open it in the browser: **`http://<PS5-IP>:8086`**

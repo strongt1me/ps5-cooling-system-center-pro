@@ -13,7 +13,8 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | --- | --- | --- |
 | GET | `/api/v1/status` | Momentaufnahme (Temperaturen, Lüfter, Adapter) |
 | GET/POST | `/api/v1/history` | Temperaturverlauf der letzten 24 Stunden (ein Punkt pro Minute) samt Spitzenwerten; `POST` setzt ihn zurück |
-| GET | `/api/v1/cooling-health` | Langzeitauswertung der Kühlleistung je Woche (aus `thermal-health.csv`) |
+| GET | `/api/v1/cooling-health` | Langzeitauswertung der Kühlleistung je Woche (aus `thermal-health.csv`); seit 1.54.1 zählen nur Wochen unter den jetzt geltenden Einstellungen (Einstellungs-Stempel): zusätzlich `weeks_needed` (4), `since_ms` (seit wann diese Einstellungen gelten) und `older_weeks` (davon ausgeschlossene Wochen) |
+| POST | `/api/v1/cooling-health` | „Vergleich neu beginnen“: erhöht den Zähler im Stempel, alle bisherigen Wochen bleiben in der Datei, zählen aber nicht mehr mit |
 | GET | `/api/v1/channels` | Aufzeichnung aller SoC-Sensorkanäle samt Last und Lüfterdrehzahl |
 | GET/PUT | `/api/v1/config` | Konfiguration lesen / schreiben |
 | GET | `/api/v1/config/export` | komplette Konfiguration als JSON herunterladen (inkl. Spielprofile) |

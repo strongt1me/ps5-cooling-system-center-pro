@@ -99,11 +99,6 @@
             <span>Expertenmodus</span>
             <span class="switch"><input type="checkbox" id="expert-mode-top"><i></i></span>
           </label>
-          <!-- Der kleine Lüfter neben dem Verbindungsstatus: auf jeder Seite zu sehen, ob und wie schnell er läuft (app.js, fanVisual) -->
-          <span class="fan-chip" id="fan-chip" title="Gemessene Lüfterleistung">
-            <ps5-cooling-fan id="fan-top" speed="0" connected="false"></ps5-cooling-fan>
-            <span class="fan-chip-txt"><b id="fan-chip-val">—</b> <span id="fan-chip-zone">Kein Signal</span></span>
-          </span>
           <div class="conn" id="conn"><i></i><span id="conn-text">Verbinde …</span></div>
         </div>
       </header>
@@ -263,6 +258,7 @@
               <div class="card-head">
                 <div><h2>Spiele auf dem Startbildschirm</h2>
                   <p class="sub" id="gm-sub">wird gelesen …</p></div>
+                <button class="btn ghost" id="gm-reload" type="button">Aktualisieren</button>
               </div>
               <div class="gm-tools">
                 <input type="search" id="gm-search" placeholder="Titel, Titel-ID oder Content-ID"
@@ -460,9 +456,15 @@
              jetzt auf der Kühlungsseite). Laufende, gespeicherte und auf USB liegende
              Payloads; app.js (loadPayloadsPage) füllt die Listen. -->
         <section class="page" id="page-payloads">
-          <div class="pl-top">
+          <div class="card pl-top pl-hero">
             <h2 class="pl-title">Payload <span>Verwaltung</span></h2>
-            <button class="btn" id="pl-refresh" type="button">Aktualisieren</button>
+            <div class="pl-hero-btns">
+              <button class="btn" id="pl-refresh" type="button">Aktualisieren</button>
+              <button class="btn primary" id="pl-prof-new" type="button">Neues Profil</button>
+              <button class="btn" id="pl-prof-export" type="button">Profile sichern</button>
+              <label class="btn" for="pl-prof-import-file">Profile laden</label>
+              <input type="file" id="pl-prof-import-file" accept=".json,application/json" hidden>
+            </div>
           </div>
 
           <section class="pl-sec" aria-labelledby="pl-h-prof">
@@ -470,23 +472,12 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h6"/><path d="M17 9l4 3-4 3z"/></svg>
               <h3 id="pl-h-prof">Profile</h3>
               <span class="pl-count" id="pl-count-prof">–</span>
-              <span class="pl-head-actions">
-                <button class="btn primary" id="pl-prof-new" type="button">Neues Profil</button>
-                <details class="pl-menu" id="pl-prof-menu">
-                  <summary class="pl-more" aria-label="Mehr anzeigen" title="Mehr anzeigen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></summary>
-                  <div class="pl-menu-pop">
-                    <p class="pl-where">Ein Profil ist eine Abfolge von Payloads mit Pausen dazwischen. Das <b>Startprofil</b> führt die App nach jedem Start von selbst aus.</p>
-                    <button class="btn ghost" id="pl-prof-export" type="button">Profile sichern</button>
-                    <label class="btn ghost" for="pl-prof-import-file">Profile laden</label>
-                    <input type="file" id="pl-prof-import-file" accept=".json,application/json" hidden>
-                  </div>
-                </details>
-              </span>
             </header>
             <div id="pl-prof-run" class="pl-prof-run is-hidden" role="status" aria-live="polite"></div>
             <div class="pl-grid" id="pl-prof-list"><p class="muted">wird gelesen …</p></div>
             <div id="pl-prof-edit" class="pl-prof-edit is-hidden"></div>
-            <p class="pl-note">Die Payloads kommen aus dem Ordner der Konsole (siehe „Gespeicherte Payloads“). Neue lassen sich vom PC
+            <p class="pl-note">Ein Profil ist eine Abfolge von Payloads mit Pausen dazwischen. Das <b>Startprofil</b> führt die App nach jedem Start von selbst aus.
+              Die Payloads kommen aus dem Ordner der Konsole (siehe „Gespeicherte Payloads“). Neue lassen sich vom PC
               importieren, im Profil oder bei den gespeicherten Payloads. Läuft ein Ablauf nicht zu Ende (zum Beispiel weil ein Payload
               die App neu startet), führt die App das Startprofil beim nächsten Start nicht noch einmal aus, damit sich nichts
               endlos wiederholt.</p>
@@ -576,7 +567,7 @@
             </article>
 
             <div class="ov-side">
-              <article class="card ov-tile">
+              <article class="card ov-tile fan-banner">
                 <!-- Der Lüfter (seit 1.53.0): <ps5-cooling-fan> aus ps5-fan.js, ein SVG mit Rotor, dessen Drehung und Lichtfarbe
                      dem gemessenen Wert folgen (app.js, fanVisual). Kein Wert: grau und stehend. -->
                 <div class="ov-fan fan-pic">
@@ -596,7 +587,7 @@
                   </label>
                 </div>
               </article>
-              <article class="card ov-tile ov-game" id="running">
+              <article class="card ov-tile ov-game fan-banner" id="running">
                 <div class="ov-game-pic">
                   <span class="run-dot" id="run-dot"></span>
                   <img src="/img/empty-game.png" alt="">
@@ -1027,12 +1018,12 @@
                 <p class="sub">lässt die Kühlung nach?</p></div></div>
               <div id="health-box"><p class="muted">wird gelesen …</p></div>
               <p class="note">Verglichen werden nur Zeiten, in denen die Konsole
-                <b>ähnlich stark arbeitet und der Lüfter ähnlich schnell dreht</b>
-                — sonst würde ein anspruchsvolleres Spiel wie nachlassende
-                Kühlung aussehen. Steigt die Temperatur unter diesen gleichen
-                Bedingungen über Wochen an, sammelt sich Staub. Die Aussage
-                braucht etwa vier Wochen Nutzung, vorher steht hier nur, wie
-                viel schon erfasst ist.</p>
+                <b>ähnlich stark arbeitet, der Lüfter ähnlich schnell dreht und die Einstellungen unverändert sind</b>
+                — sonst würde ein anspruchsvolleres Spiel oder eine andere Zieltemperatur wie nachlassende
+                Kühlung aussehen. Ändert man Zieltemperatur, Modus oder Lüfterkurve, beginnt der Vergleich von vorn;
+                nach einer Reinigung der Konsole lässt er sich selbst neu beginnen. Die Aussage braucht etwa vier
+                Wochen Nutzung, vorher steht hier nur, wie viel schon erfasst ist.</p>
+              <button class="btn ghost" id="health-restart" type="button">Vergleich neu beginnen</button>
             </article>
           </div>
 
@@ -1481,17 +1472,15 @@
              Umbenennen, Kopieren, Verschieben, Löschen) nur auf den Laufwerken und in /data; das entscheidet die
              Konsole (filemgr.c), die Seite zeigt nur an. Verdrahtung in app.js (fm…). -->
         <section class="page" id="page-files">
+          <div class="card pl-top pl-hero fm-hero">
+            <div><h2 class="pl-title">Dateien</h2><p class="sub" id="fm-sub">wird geladen …</p></div>
+            <button class="btn" id="fm-reload" type="button">Aktualisieren</button>
+          </div>
           <article class="card fm-card">
-            <div class="card-head">
-              <div><h2>Dateien</h2><p class="sub" id="fm-sub">wird geladen …</p></div>
-              <div class="row-gap">
-                <button class="btn ghost" id="fm-up" type="button" title="Eine Ebene höher">↑ Hoch</button>
-                <button class="btn ghost" id="fm-reload" type="button">Aktualisieren</button>
-              </div>
-            </div>
             <div class="gm-chips fm-places" id="fm-places" role="group" aria-label="Orte"></div>
             <nav class="fm-crumbs" id="fm-crumbs" aria-label="Pfad"></nav>
             <div class="fm-tools">
+              <button class="btn ghost" id="fm-up" type="button" title="Eine Ebene höher">↑ Hoch</button>
               <button class="btn ghost" id="fm-mkdir" type="button">Neuer Ordner</button>
               <label class="btn ghost fm-upload" id="fm-upload-lbl">Hochladen
                 <input type="file" id="fm-upload" multiple hidden></label>
