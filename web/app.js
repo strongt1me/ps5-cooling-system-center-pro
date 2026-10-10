@@ -1503,8 +1503,11 @@
     /* Kacheln */
     $("#t-cpu").innerHTML = `${T.cpu_valid ? T.cpu_c : "--"}<i>°C</i>`;
     $("#t-soc").innerHTML = `${T.soc_valid ? T.soc_c : "--"}<i>°C</i>`;
-    $("#t-fan").innerHTML =
-      `${F.measured_valid ? F.measured_duty_pct : "--"}<i>%</i>`;
+    /* Mit Messwert schreibt der Tacho die Zahl selbst, Schritt für Schritt mit der Nadel (Ereignis fan-display, unten);
+       nur ohne Messwert oder ohne Tacho steht sie hier. */
+    const fanTileEl = $("#fan-tile");
+    if (!F.measured_valid || !fanTileEl || !fanTileEl.setTelemetry)
+      $("#t-fan").innerHTML = `${F.measured_valid ? F.measured_duty_pct : "--"}<i>%</i>`;
     /* Not every firmware reports CPU utilisation. Rather than leave a tile
        showing "--" forever, it falls back to the figure the controller is
        actually working towards. */
@@ -9350,6 +9353,10 @@
   /* ── Start ──────────────────────────────────────────────────────── */
 
   fanMotionApply();
+  { const ft = $("#fan-tile");
+    if (ft) ft.addEventListener("fan-display", (e) => {
+      if (ft.telemetryConnected) $("#t-fan").innerHTML = `${e.detail.percent}<i>%</i>`;
+    }); }
 
   /* Dateiauswahl: Das Feld des Browsers schreibt seine Texte („Choose File“, „No file chosen“) in der Sprache des Browsers, und der
      alte Browser der Konsole zeichnet es eckig. Darum bleibt es unsichtbar im Dokument, und ein eigener runder Knopf mit eigenem Text

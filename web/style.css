@@ -1464,7 +1464,8 @@ button, input[type=text], input[type=search], input[type=number], input[type=pas
 .pl-top.pl-hero.fm-hero { gap: 14px;
   background: linear-gradient(90deg, rgba(20,27,41,.8) 0%, rgba(20,27,41,.55) 38%, rgba(20,27,41,.12) 72%, rgba(20,27,41,0) 100%),
     url(/img/banner-files.jpg) right center / cover no-repeat, var(--surface-1); }
-.fm-hero .sub { margin: 4px 0 0; }
+.fm-hero .sub { margin: 8px 0 0; font-size: 16px; color: var(--ink-2); }
+.fm-hero .pl-title { font-size: 36px; }
 @media (max-width: 720px) {
   .pl-top.pl-hero.fm-hero { background: linear-gradient(rgba(20,27,41,.8), rgba(20,27,41,.8)),
     url(/img/banner-files.jpg) right center / cover no-repeat, var(--surface-1); }
@@ -1477,9 +1478,9 @@ button, input[type=text], input[type=search], input[type=number], input[type=pas
 .ov-tile.fan-banner { min-height: 150px;
   background: linear-gradient(90deg, rgba(20,27,41,.55) 0%, rgba(20,27,41,.15) 60%, rgba(20,27,41,0) 100%),
     url(/img/banner-fan.jpg) center / cover no-repeat, var(--surface-1); }
-/* die Kachel „Läuft gerade“ hat einen eigenen Hintergrund (Leiterbahnen, 09.10.2026), damit sie nicht aussieht wie die Lüfter-Kachel */
+/* die Kachel „Läuft gerade“ hat einen eigenen Hintergrund (Bild des Users mit Luftstrom und Skala, 10.10.2026; sein eingezeichneter Rahmen ist abgeschnitten) */
 .ov-tile.ov-game.fan-banner {
-  background: linear-gradient(90deg, rgba(20,27,41,.62) 0%, rgba(20,27,41,.22) 55%, rgba(20,27,41,0) 100%),
+  background: linear-gradient(90deg, rgba(20,27,41,.35) 0%, rgba(20,27,41,0) 55%),
     url(/img/banner-game.jpg) center / cover no-repeat, var(--surface-1); }
 
 /* Warteschlange der Installationen (09.10.2026): die Karte oben auf dem Reiter Pakete, eine Zeile je Paket */
@@ -1548,8 +1549,11 @@ button, input[type=text], input[type=search], input[type=number], input[type=pas
 .gm-pop .gm-meta { margin: 0; padding: 12px 14px 14px; font-size: 12.5px; gap: 6px 14px;
   max-height: 56vh; overflow: auto; }
 .gm-pop .gm-meta[hidden] { display: none; }
-/* Kachel „Läuft gerade“: mehr Abstand zwischen Controller und Text */
-.ov-tile.ov-game { gap: 30px; }
+/* Kachel „Läuft gerade“ (10.10.2026): Text oben links, Controller unten rechts, direkt auf dem Hintergrund */
+/* gleicher Abstand: Text zum oberen und linken Rand wie Controller zum unteren und rechten (22 px; -3 px gleichen den Zeilenabstand über der Schrift aus) */
+.ov-tile.ov-game { position: relative; align-items: flex-start; padding: 22px; }
+.ov-tile.ov-game .ov-tile-text { padding-right: 110px; margin-top: -3px; }
+.ov-tile.ov-game .ov-game-pic { position: absolute; right: 22px; bottom: 22px; width: 84px; }
 
 /* Dateiauswahl (10.10.2026): eigener runder Knopf und eigener Text statt des Feldes des Browsers (englisch und eckig an der Konsole) */
 input.file-native { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
@@ -1574,3 +1578,22 @@ input[type=checkbox]:not(.switch input):focus-visible { outline: 2px solid rgba(
 .name-card .name-row input { padding: 15px 16px; font-size: 22px; border-radius: 12px; }
 .name-card .name-row .btn { padding: 15px 26px; font-size: 17px; border-radius: 12px; }
 .name-card .note { margin-top: 16px; padding: 14px 16px; font-size: 15px; line-height: 1.6; }
+
+/* Lüfter-Kachel mit leuchtendem Luftstrom (10.10.2026, Bild des Users): darunter das Bild ohne seine Farbe, darüber eine Fläche
+   in der Farbe der Drehzahl, die nur durch die Strömungslinien scheint (Maske). Ein weicher Schein in derselben Farbe umgibt den Tacho;
+   hinter dem Text liegt ein dunkler Verlauf, damit er lesbar bleibt. Kein filter (teuer auf der Konsole); die Farbe ändert sich nur mit dem Wert. */
+.ov-tile.fan-banner:not(.ov-game) { position: relative; overflow: hidden;
+  background: url(/img/banner-fan.jpg) center / cover no-repeat, var(--surface-1); }
+.fan-flow, .fan-shade { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.fan-flow { background: rgb(var(--fan-rgb)); opacity: .9;
+  -webkit-mask-image: url(/img/fan-flow-mask.png); -webkit-mask-size: cover; -webkit-mask-position: center; -webkit-mask-repeat: no-repeat;
+  mask-image: url(/img/fan-flow-mask.png); mask-size: cover; mask-position: center; mask-repeat: no-repeat; }
+.fan-shade { background: radial-gradient(ellipse 30% 55% at 72% 50%, rgba(10,15,26,.82), rgba(10,15,26,.35) 60%, rgba(10,15,26,0) 100%); }
+.ov-tile.fan-banner:not(.ov-game) > .ov-fan, .ov-tile.fan-banner:not(.ov-game) > .ov-tile-text { position: relative; z-index: 1; }
+.gauge-halo { position: absolute; left: -15.58%; top: -22.64%; width: 131.17%; height: 145.28%; pointer-events: none;
+  background: rgb(var(--fan-rgb)); opacity: .38;
+  -webkit-mask-image: url(/img/gauge-halo.png); -webkit-mask-size: 100% 100%; mask-image: url(/img/gauge-halo.png); mask-size: 100% 100%; }
+.ov-fan ps5-cooling-fan { position: relative; z-index: 1; }
+.ov-fan + .ov-tile-text .ov-label, .ov-fan + .ov-tile-text small, .ov-fan + .ov-tile-text .ov-big i { color: #e6ecf8; }
+.ov-fan + .ov-tile-text .ov-label, .ov-fan + .ov-tile-text small { text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(0,0,0,.8); }
+.ov-fan + .ov-tile-text .ov-big { text-shadow: 0 2px 10px rgba(0,0,0,.8); }

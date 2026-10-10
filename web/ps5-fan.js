@@ -10,14 +10,16 @@
 (function () {
   'use strict';
   const clamp = (v, min = 0, max = 100) => Math.min(max, Math.max(min, v));
-  const BLUE = [65, 170, 255], GREEN = [71, 222, 145], RED = [255, 85, 67], GREY = [116, 130, 151];
+  const BLUE = [65, 170, 255], GREEN = [71, 222, 145], YELLOW = [250, 214, 64], RED = [255, 85, 67], GREY = [116, 130, 151];
   const isValid = v => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
   const normalize = v => isValid(v) ? clamp(Number(v)) : null;
+  /* Stufenlos Blau (bis 25 %) -> Grün (55 %) -> Gelb (75 %) -> Rot (ab 95 %); Gelb kam am 10.10.2026 dazu (Wunsch des Users). */
   function colorAt(percent) {
     const p = clamp(percent);
-    const a = p <= 55 ? BLUE : GREEN, b = p <= 55 ? GREEN : RED;
-    const t = p <= 55 ? clamp((p - 25) / 30, 0, 1) : clamp((p - 65) / 35, 0, 1);
-    return a.map((n, i) => Math.round(n + (b[i] - n) * t));
+    const mix = (a, b, t) => a.map((n, i) => Math.round(n + (b[i] - n) * clamp(t, 0, 1)));
+    if (p <= 55) return mix(BLUE, GREEN, (p - 25) / 30);
+    if (p <= 75) return mix(GREEN, YELLOW, (p - 55) / 20);
+    return mix(YELLOW, RED, (p - 75) / 20);
   }
   const zoneAt = p => p <= 35 ? 'cool' : p < 80 ? 'normal' : 'high';
   /* a media query's change event, in the old and the new form */
@@ -37,7 +39,7 @@
       this._onPreference = () => this._wake();
       this._onVisibility = () => {
         this._last = 0;
-        if (document.hidden) { cancelAnimationFrame(this._frame); this._frame = 0; }
+        if (document.hidden) { cancelAnimationFrame(this._frame); this._frame = 0; this._display = this._connected ? this._target : 0; this._paint(); }
         else this._wake();
       };
       this._tick = this._tick.bind(this);
@@ -58,7 +60,7 @@
           const on = entries[entries.length - 1].isIntersecting;
           if (on === this._onScreen) return;
           this._onScreen = on; this._last = 0;
-          if (on) this._wake(); else { cancelAnimationFrame(this._frame); this._frame = 0; }
+          if (on) this._wake(); else { cancelAnimationFrame(this._frame); this._frame = 0; this._display = this._connected ? this._target : 0; this._paint(); }
         });
         this._io.observe(this);
       }
@@ -111,8 +113,22 @@
     }
     _motionReduced() { return this._static || this.getAttribute('motion') === 'reduced' || this.getAttribute('motion') === 'off' || this._query.matches; }
     _wake() {
-      if (!this._alive || document.hidden || !this._onScreen || this._frame) return;
+      if (!this._alive || this._frame) return;
+      /* Unsichtbar (Tab im Hintergrund, Kachel außerhalb des Bildes): nicht animieren, aber gleich den Endstand zeigen,
+         damit Nadel und Zahl stimmen, wenn man wieder hinsieht. */
+      if (document.hidden || !this._onScreen) {
+        const desired = this._connected ? this._target : 0;
+        if (this._display !== desired) { this._display = desired; this._paint(); }
+        return;
+      }
       this._frame = requestAnimationFrame(this._tick);
+      /* Kommt kein Bild (der Browser hält die Seite an), stehen Nadel und Zahl nach einer Sekunde trotzdem auf dem Endwert. */
+      clearTimeout(this._guard);
+      this._guard = setTimeout(() => {
+        if (!this._frame) return;
+        cancelAnimationFrame(this._frame); this._frame = 0; this._last = 0;
+        this._display = this._connected ? this._target : 0; this._paint();
+      }, 1000);
     }
     /* Frames that take too long: first the heavy light effects go, then the rotation. */
     _watch(rawMs) {
@@ -127,7 +143,7 @@
       }
     }
     _tick(timestamp) {
-      this._frame = 0;
+      this._frame = 0; clearTimeout(this._guard);
       const raw = this._last ? timestamp - this._last : 0;
       const dt = this._last ? Math.min(raw / 1000, 0.08) : 0;
       this._last = timestamp;
@@ -155,6 +171,9 @@
       /* Die Nadel ist ein eigenes <svg> über dem Zifferblatt und wird als Ganzes gedreht (Mitte in Prozent), von -90 Grad (0 %)
          bis +90 Grad (100 %). Hinter ihr wird der Bogen abgedunkelt: eine zweite Grafik, um die Mitte des Bogens gedreht. */
       this._angle = -90 + 1.8 * this._display;
+      /* Die Zahl neben dem Tacho läuft mit der Nadel mit: Die Seite hört auf dieses Ereignis (app.js) statt den Endwert sofort zu zeigen. */
+      const shownPct = Math.round(this._display);
+      if (s.pct !== shownPct) { s.pct = shownPct; this.dispatchEvent(new CustomEvent('fan-display', { detail: { percent: shownPct } })); }
       const turn = `rotate(${this._angle.toFixed(2)}deg)`;
       if (s.turn !== turn) {
         s.turn = turn; this._needle.style.transform = turn;

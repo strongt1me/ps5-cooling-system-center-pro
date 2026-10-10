@@ -843,8 +843,8 @@ Die Lüfter-Kachel auf der Seite **Kühlung** zeigt einen gezeichneten **Tacho**
 
 - **Nadel:** Sie steht bei 0 % ganz links und bei 100 % ganz rechts und fährt weich auf jeden neuen Wert. Dazwischen läuft nichts im Browser.
   Der Regenbogenbogen leuchtet nur bis zur Nadel, dahinter ist er abgedunkelt. Das ist eine Darstellung, keine gemessene Drehzahl.
-- **Farbe:** Sie geht stufenlos von Blau (bis 25 %) über Grün (um 55 %) zu Rot (ab 65 %). Die Farbe stellt die Lüfterlast dar, nicht die
-  Temperatur. Sie färbt Nadel, Zahl, Rand und Glühen der Kachel.
+- **Farbe:** Sie geht stufenlos von Blau (bis 25 %) über Grün (um 55 %) und Gelb (um 75 %) zu Rot (ab 95 %). Die Farbe stellt die Lüfterlast dar, nicht die
+  Temperatur. Sie färbt Nadel, Zahl, Rand und Glühen der Kachel und den Luftstrom im Hintergrund der Kachel, der in dieser Farbe leuchtet.
 - **Kein Wert:** Ohne gültigen Messwert (oder ohne Verbindung zur App) steht die Nadel grau links, der Bogen ist abgedunkelt, die Zahl zeigt „—“.
 - **Schutz für langsame Browser:** Braucht der Browser zu lange für ein Bild (der Browser der Konsole ist alt), schaltet die Komponente
   zuerst das Leuchten der Nadel ab und, wenn es immer noch ruckelt, die Fahrt der Nadel; Farbe und Werte bleiben. Eine Auswahl der Animation gibt es nicht mehr (bis 1.56.0 gab es „voll“, „reduziert“ und „aus“).
