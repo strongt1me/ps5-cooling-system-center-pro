@@ -2,56 +2,56 @@
 
 ## v1.59.0
 
-### Fan Tile
-- New background artwork with an airflow that glows in the colour of the measured fan speed
-- Speed colours now fade smoothly from blue (up to 25 %) to green (55 %), yellow (75 %, new) and red (from 95 %); needle, number and tile border follow the same colours
-- The gauge is now cut out cleanly along its shape and has a soft halo in the same colour, so it blends into the artwork
-- "Fan", "%" and "measured speed" are brighter and easier to read on the background
-- The number now counts up and down together with the needle instead of jumping straight to the new value
+### Lüfter-Kachel
+- Neues Hintergrundbild mit einem Luftstrom, der in der Farbe der gemessenen Drehzahl leuchtet
+- Die Farben gehen jetzt gleitend von Blau (bis 25 %) über Grün (55 %) und Gelb (75 %, neu) zu Rot (ab 95 %); Nadel, Zahl und Rand der Kachel folgen denselben Farben
+- Der Tacho ist sauber entlang seiner Form freigestellt und hat einen weichen Lichtschein in derselben Farbe, damit er zum Bild gehört
+- „Lüfter“, „%“ und „gemessene Drehzahl“ sind heller und auf dem Hintergrund besser lesbar
+- Die Zahl zählt jetzt mit der Nadel mit, statt sofort auf den neuen Wert zu springen
 
-### Running Game Tile
-- New background artwork
-- Text sits in the top left corner, the controller in the bottom right corner directly on the artwork, both with the same distance to the edge
+### Kachel „Läuft gerade“
+- Neues Hintergrundbild
+- Text oben links, Controller unten rechts direkt auf dem Bild, beide mit gleichem Abstand zum Rand
 
-### File Manager
-- Renamed the sidebar button from "Files" to "File manager"
-- Larger page title and path line
-- Moved "Refresh" into the toolbar next to "Upload"
+### Dateimanager
+- Der Knopf in der Seitenleiste heißt jetzt „Dateimanager“ statt „Dateien“
+- Größerer Titel und größere Pfadzeile
+- „Aktualisieren“ steht in der Werkzeugzeile neben „Hochladen“
 
-### Bug Fixes
-- Fixed the needle and number stopping at an old value when the fan tile left the screen during an animation
+### Fehlerbehebungen
+- Nadel und Zahl blieben auf einem alten Wert stehen, wenn die Lüfter-Kachel während einer Bewegung den Bildschirm verließ
 
 ---
 
 ## v1.58.0
 
-- Removed "Saved avatars" together with its function (save, load and delete avatar packs and the API endpoints `/api/v1/profile/avatar/library*`); packs already saved in `/data/PS5-Cooling-Center/Avatars` stay on the console
-- Larger "Display name" card on the profile page
-- Gauge and text are centred as a pair in the fan tile
+- „Gespeicherte Avatare“ samt Funktion entfernt (Pakete speichern, laden und löschen sowie die Schnittstellen `/api/v1/profile/avatar/library*`); schon gespeicherte Pakete in `/data/PS5-Cooling-Center/Avatars` bleiben auf der Konsole
+- Größere Karte „Anzeigename“ auf der Profilseite
+- Tacho und Text stehen als Paar in der Mitte der Lüfter-Kachel
 
 ## v1.57.0
 
-- Own round file picker ("Choose file", "No file chosen.") in the app's language instead of the browser's English, square control
-- Round checkboxes and range slider in the console's browser
-- Removed the fan animation selector; the gauge always runs in full motion
-- Fan tile text is centred and larger; more space between controller and text in the running game tile
+- Eigene runde Dateiauswahl („Datei auswählen“, „Keine Datei ausgewählt.“) in der Sprache der App statt des englischen, eckigen Feldes des Browsers
+- Runde Kästchen und runder Regler im Browser der Konsole
+- Auswahl „Animation“ der Lüfter-Kachel entfernt; der Tacho läuft immer voll
+- Text der Lüfter-Kachel zentriert und größer; mehr Abstand zwischen Controller und Text bei „Läuft gerade“
 
-### Bug Fixes
-- Quick choice (Cool / Balanced / Quiet) now applies immediately even if the slider was touched before
-- Loading or deleting a saved avatar now uses the pack selected in the list, not a leftover name in the name field
+### Fehlerbehebungen
+- Die Schnellwahl (Kühl / Ausgewogen / Leise) gilt sofort, auch wenn der Regler vorher angefasst wurde
+- Laden und Löschen gespeicherter Avatare nehmen das in der Liste gewählte Paket, nicht einen im Feld stehen gebliebenen Namen
 
 ## v1.56.0
 
-- Replaced the spinning fan with a speedometer gauge (artwork by the user); the needle moves smoothly to every new value and nothing runs in between, which fixes stutter while zooming and scrolling in the console's browser
-- Installed games (`app.pkg`) are now labelled "Installed" instead of "Image"; "Open path", "Move" and "Copy" are disabled for them
+- Tacho statt drehendem Lüfter (Bild des Users); die Nadel fährt weich auf jeden neuen Wert, dazwischen läuft nichts – behebt das Ruckeln beim Zoomen und Scrollen im Browser der Konsole
+- Installierte Spiele (`app.pkg`) heißen jetzt „Installiert“ statt „Abbild“; „Pfad öffnen“, „Verschieben“ und „Kopieren“ sind dort ausgeschaltet
 
 ## v1.55.0
 
-- Install queue for packages: queue several packages and install them one after another, with pause and cancel; every package is checked when its turn comes
-- Games page: new header with artwork, "Refresh" next to the search bar, and "Info & metadata" opens as a floating window
-- New "Open path" button on every game card opens its location in the file manager
-- Banners now fill the full tile width
+- Warteschlange für Pakete: mehrere Pakete vormerken und nacheinander installieren, mit Pause und Abbrechen; jedes Paket wird erst an seiner Reihe geprüft
+- Spiele-Seite: neuer Kopf mit Bild, „Aktualisieren“ neben der Suche, „Infos & Metadaten“ als Fenster über der Seite
+- Neuer Knopf „Pfad öffnen“ auf jeder Spielkarte öffnet den Speicherort im Dateimanager
+- Die Banner füllen die ganze Breite der Kacheln
 
 ---
 
-Older versions: see the [GitHub releases](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases).
+Ältere Versionen: siehe [GitHub-Releases](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases).
