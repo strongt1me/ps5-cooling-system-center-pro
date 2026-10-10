@@ -17,9 +17,9 @@
   --surface-2:  #1a2334;
   --inset:      #0c1320;
 
-  --ink:        #eaf0fb;
-  --ink-2:      #aeb8d6;
-  --ink-muted:  #7c89ac;
+  --ink:        #f3f6fd;   /* 10.10.2026 heller: am Fernseher waren die Texte kaum lesbar (vorher #eaf0fb) */
+  --ink-2:      #d3dbee;   /* vorher #aeb8d6 */
+  --ink-muted:  #a9b5d0;   /* vorher #7c89ac */
 
   --grid:       #1f2839;
   --baseline:   #2f3547;
@@ -161,15 +161,6 @@ body {
 .card.ov-hero {
   background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 52%, rgba(20,27,41,.62) 80%, rgba(20,27,41,.3) 100%),
     url(/img/hero-overview.jpg) right center / auto 100% no-repeat, var(--surface-1); }
-/* Gleiches Bild, offline umgefärbt (Licht orange bzw. rot, Grund bleibt
-   Nachtblau): Der Zustand ist schon von weitem zu sehen. warn/hot setzt
-   renderStatus() nach describe(). */
-.card.ov-hero.warn {
-  background-image: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 52%, rgba(20,27,41,.62) 80%, rgba(20,27,41,.3) 100%),
-    url(/img/hero-overview-warm.jpg); }
-.card.ov-hero.hot {
-  background-image: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.92) 52%, rgba(20,27,41,.62) 80%, rgba(20,27,41,.3) 100%),
-    url(/img/hero-overview-hot.jpg); }
 .ov-gauge { position: relative; width: 150px; height: 150px; flex: none; }
 .ov-gauge svg { width: 150px; height: 150px; display: block; }
 .rg-track { fill: none; stroke: var(--inset); stroke-width: 12; }
@@ -414,13 +405,8 @@ body.offline .offline-note { display: flex; }
   .co-quick-row { grid-template-columns: minmax(0, 1fr); }
   .co-preset { flex-direction: row; align-items: center; justify-content: space-between; min-height: 46px; }
   .ov-hero { flex-direction: column; align-items: flex-start; }
-  .card.ov-hero {
-    background: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)),
-      url(/img/hero-overview.jpg) right center / cover no-repeat, var(--surface-1); }
-  .card.ov-hero.warn { background-image: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)),
-      url(/img/hero-overview-warm.jpg); }
-  .card.ov-hero.hot { background-image: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)),
-      url(/img/hero-overview-hot.jpg); }
+  .card.ov-hero { background: url(/img/hero-overview.jpg) right center / cover no-repeat, var(--surface-1); }
+  .hero-shade { background: linear-gradient(rgba(20,27,41,.78), rgba(20,27,41,.55)); }
   .choice-ico { width: 52px; }
 }
 
@@ -1597,3 +1583,37 @@ input[type=checkbox]:not(.switch input):focus-visible { outline: 2px solid rgba(
 .ov-fan + .ov-tile-text .ov-label, .ov-fan + .ov-tile-text small, .ov-fan + .ov-tile-text .ov-big i { color: #e6ecf8; }
 .ov-fan + .ov-tile-text .ov-label, .ov-fan + .ov-tile-text small { text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(0,0,0,.8); }
 .ov-fan + .ov-tile-text .ov-big { text-shadow: 0 2px 10px rgba(0,0,0,.8); }
+
+/* Kachel „Läuft gerade“ wie die Lüfter-Kachel (10.10.2026): Luftstrom und Rand leuchten in der Farbe der Lüfterdrehzahl */
+.ov-tile.ov-game.fan-banner { overflow: hidden; border-color: rgba(var(--fan-rgb),.55);
+  box-shadow: 0 0 0 1px rgba(var(--fan-rgb),.25), 0 0 30px rgba(var(--fan-rgb),.26), inset 0 0 40px rgba(var(--fan-rgb),.07);
+  background: url(/img/banner-game.jpg) center / cover no-repeat, var(--surface-1); transition: border-color .8s, box-shadow .8s; }
+.fan-flow.game-flow { -webkit-mask-image: url(/img/game-flow-mask.png); mask-image: url(/img/game-flow-mask.png); }
+.ov-tile.ov-game > .ov-tile-text, .ov-tile.ov-game > .ov-game-pic { z-index: 1; }
+.ov-tile.ov-game > .ov-tile-text { position: relative; }
+.ov-tile.ov-game .ov-label, .ov-tile.ov-game .ov-tile-text small { color: #e6ecf8; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(0,0,0,.8); }
+.ov-tile.ov-game .ov-tile-text b { text-shadow: 0 2px 8px rgba(0,0,0,.8); }
+
+/* Große Kachel (Temperatur) wie die Lüfter-Kachel (10.10.2026): Luftstrom und Rand leuchten in der Farbe der Lüfterdrehzahl.
+   Bis 1.59.0 färbte sich das Bild nach der Temperatur (warm/heiß); den Zustand zeigen jetzt Ring, Zeichen und Text. */
+.card.ov-hero { position: relative; overflow: hidden; border-color: rgba(var(--fan-rgb),.55);
+  box-shadow: 0 0 0 1px rgba(var(--fan-rgb),.25), 0 0 30px rgba(var(--fan-rgb),.26), inset 0 0 40px rgba(var(--fan-rgb),.07);
+  background: url(/img/hero-overview.jpg) right center / cover no-repeat, var(--surface-1); transition: border-color .8s, box-shadow .8s; }
+.fan-flow.hero-flow { opacity: .75; -webkit-mask-image: url(/img/hero-flow-mask.png); mask-image: url(/img/hero-flow-mask.png);
+  -webkit-mask-position: right center; mask-position: right center; }
+.hero-shade { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;
+  background: linear-gradient(90deg, #141b29 0%, rgba(20,27,41,.9) 45%, rgba(20,27,41,.3) 72%, rgba(20,27,41,0) 100%); }
+.card.ov-hero > .ov-gauge, .card.ov-hero > .hero-copy { position: relative; z-index: 1; }
+@media (max-width: 720px) {
+  .card.ov-hero { background: url(/img/hero-overview.jpg) right center / cover no-repeat, var(--surface-1); }
+  .hero-shade { background: linear-gradient(rgba(20,27,41,.78), rgba(20,27,41,.55)); }
+}
+
+/* Seitenleiste (10.10.2026): Die Einträge über dem Lüfter-Bild waren kaum lesbar – hellere Schrift mit dunklem Schatten */
+.side .tab { color: #dfe6f5; text-shadow: 0 1px 2px rgba(0,0,0,.95), 0 0 8px rgba(0,0,0,.9), 0 0 14px rgba(0,0,0,.7); }
+.side .tab svg { stroke: #dfe6f5; }
+.side .tab.active svg { stroke: #8ab4ff; }
+.side .tab:not(.active) { background: rgba(9,15,30,.62); }
+
+/* Alle Texte mit einem leichten Schatten (10.10.2026), wie in der Seitenleiste: hebt sie am Fernseher vom Hintergrund ab */
+body { text-shadow: 0 1px 2px rgba(0,0,0,.6); }
