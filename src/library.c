@@ -631,6 +631,7 @@ detect_storage(lib_game_t *g) {
     const char *sl  = strrchr(s.path, '/');
     if(ext && sl && ext < sl) ext = NULL;
     if(!strcmp(s.source_type, "folder"))                fmt = "folder";
+    else if(ext && !strcasecmp(ext, ".pkg"))            fmt = "pkg";      /* installed package (app.pkg), not an image */
     else if(ext && !strcasecmp(ext, ".exfat"))          fmt = "exfat";
     else if(ext && !strcasecmp(ext, ".ffpkg"))          fmt = "ffpkg";
     else if(ext && !strcasecmp(ext, ".ffpfs"))          fmt = "ffpfs";
@@ -640,6 +641,7 @@ detect_storage(lib_game_t *g) {
     else if(!strcmp(s.image_type, "pfs"))               fmt = "ffpfs";
     else if(!strcmp(s.image_type, "pfsc"))              fmt = "ffpfsc";
     else                                                fmt = "image";
+    if(!strcmp(fmt, "pkg") && sl) g->real_path[sl - s.path] = 0;       /* an installed package: its folder, like the branch below */
   } else if(g->source[0] && strncmp(g->source, "/mnt/shadowmnt", 14)) {
     snprintf(g->real_path, sizeof(g->real_path), "%s", g->source);
     fmt = "folder";
@@ -1428,7 +1430,7 @@ ps5tm_library_json(void) {
     if(g->smp) cJSON_AddBoolToObject(e, "mounted", g->smp_mounted);
     cJSON_AddBoolToObject(e, "can_copy", g->real_path[0] == '/' &&
                           (!strcmp(g->format, "folder") || is_file));
-    cJSON_AddBoolToObject(e, "can_move", g->smp_can_move);
+    cJSON_AddBoolToObject(e, "can_move", g->smp_can_move && strcmp(g->format, "pkg"));
     cJSON_AddBoolToObject(e, "can_unpack", g->smp_can_unpack && is_file);
     /* Converting is the app's own (gameconvert.c): a folder becomes .exfat
        or .ffpfsc, an uncompressed image .ffpfsc. */

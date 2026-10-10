@@ -4844,8 +4844,7 @@
 
   /* Das Format steht als Marke in derselben Reihe wie Backport, AMPR EMU und
      PlayGo: kurz auf der Karte, ausführlich im Hinweis (und unter „Infos &
-     Metadaten"). Ein installiertes Paket heißt nach der Plattform PS4 PKG oder
-     PS5 PKG. Ob es ein echtes oder ein gefälschtes Paket (fpkg) ist, lässt
+     Metadaten"). Ein installiertes Paket heißt „Installiert“. Ob es ein echtes oder ein gefälschtes Paket (fpkg) ist, lässt
      sich nicht lesen: Beide liegen als /user/app/<ID>/app.pkg, mit denselben
      Angaben in der Datenbank — deshalb gibt es dafür keine eigene Marke. */
   const GM_FORMAT_TAGS = {
@@ -4858,7 +4857,7 @@
   };
   const gmFormatLabel = (x) => {
     if (x.format === "pkg")
-      return x.platform === "PS4" ? "PS4 PKG" : x.platform === "PS5" ? "PS5 PKG" : "PKG";
+      return "Installiert";
     return GM_FORMAT_TAGS[x.format] || "";
   };
 
@@ -4928,7 +4927,7 @@
             ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move)}
             ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert)}
             ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
-            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path, why.copy)}
+            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy)}
           </div>`;
   };
 

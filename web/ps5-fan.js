@@ -1,10 +1,12 @@
-/* PS5-inspired cooling fan · standalone Web Component · no dependencies.
+/* PS5 cooling gauge · standalone Web Component · no dependencies.
  *
- * Design and code: the user's own demo ("PS5-Luefter-Demo", 08.10.2026), taken over for the web interface of this
- * app. Changes for the console's own browser (an old WebKit): no aspect-ratio, inset, "rgb(r g b / a)" colours or
- * MediaQueryList.addEventListener; the screen-reader text comes from the page (attribute "label", translated there);
- * and a guard against a slow browser: when frames take too long the heavy light effects are switched off ("lite"), and
- * when they still take too long the rotor stops turning (colour and values stay). */
+ * Design: the user's own gauge picture (10.10.2026), a half-round dial with a rainbow arc and a needle. Until 1.55.x this
+ * element drew a turning fan (the user's "PS5-Luefter-Demo", 08.10.2026); the tag name and the interface stayed, so the
+ * page did not have to change. The dial is a picture without its needle; the needle and the dimming of the arc behind it
+ * are drawn here and move to the value like a speedometer. Nothing runs between two changes of the value.
+ * For the console's own browser (an old WebKit): no aspect-ratio, inset or "rgb(r g b / a)" colours, no
+ * MediaQueryList.addEventListener, and every turn is a CSS transform of a whole <svg> box with its centre given in
+ * percent: a centre in px, or a turn of an element inside the svg, lay beside the middle when the page was zoomed. */
 (function () {
   'use strict';
   const clamp = (v, min = 0, max = 100) => Math.min(max, Math.max(min, v));
@@ -17,11 +19,7 @@
     const t = p <= 55 ? clamp((p - 25) / 30, 0, 1) : clamp((p - 65) / 35, 0, 1);
     return a.map((n, i) => Math.round(n + (b[i] - n) * t));
   }
-  // These are intentionally DISPLAY revolutions/s, not physical console RPM.
-  const revolutionsAt = p => p <= 0 ? 0 : 0.15 + 0.85 * (clamp(p) / 100);   /* at most 1 rev/s: the 23 blades (15.7 deg apart) must not move further than half a pitch per frame, or the picture jumps and seems to turn unevenly */
   const zoneAt = p => p <= 35 ? 'cool' : p < 80 ? 'normal' : 'high';
-  const polar = (r, degrees) => [200 + r * Math.cos(degrees * Math.PI / 180), 200 + r * Math.sin(degrees * Math.PI / 180)];
-  const point = p => p.map(n => n.toFixed(2)).join(' ');
   /* a media query's change event, in the old and the new form */
   const listen = (q, fn) => { if (q.addEventListener) q.addEventListener('change', fn); else if (q.addListener) q.addListener(fn); };
   const unlisten = (q, fn) => { if (q.removeEventListener) q.removeEventListener('change', fn); else if (q.removeListener) q.removeListener(fn); };
@@ -31,9 +29,10 @@
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
-      this._target = 20; this._display = 0; this._angle = 0; this._last = 0;
+      this._target = 20; this._display = 0; this._angle = -90; this._last = 0;
       this._frame = 0; this._connected = true; this._alive = false;
       this._frames = 0; this._slow = 0; this._lite = false; this._static = false;
+      this._onScreen = true; this._io = null; this._shown = {};
       this._query = window.matchMedia('(prefers-reduced-motion: reduce)');
       this._onPreference = () => this._wake();
       this._onVisibility = () => {
@@ -43,7 +42,8 @@
       };
       this._tick = this._tick.bind(this);
       this.shadowRoot.innerHTML = this._template();
-      this._rotor = this.shadowRoot.querySelector('.rotor');
+      this._needle = this.shadowRoot.querySelector('.needle');
+      this._dim = this.shadowRoot.querySelector('.dim');
       this._visual = this.shadowRoot.querySelector('.assembly');
       this._label = this.shadowRoot.querySelector('.accessible');
       this._paint();
@@ -52,6 +52,16 @@
       this._alive = true;
       listen(this._query, this._onPreference);
       document.addEventListener('visibilitychange', this._onVisibility);
+      /* Außerhalb des Bildschirms wird nicht gerechnet: das Scrollen der Seite bleibt flüssig, und beim Zurückkommen läuft er weiter. */
+      if (typeof IntersectionObserver === 'function') {
+        this._io = new IntersectionObserver(entries => {
+          const on = entries[entries.length - 1].isIntersecting;
+          if (on === this._onScreen) return;
+          this._onScreen = on; this._last = 0;
+          if (on) this._wake(); else { cancelAnimationFrame(this._frame); this._frame = 0; }
+        });
+        this._io.observe(this);
+      }
       this._wake();
     }
     disconnectedCallback() {
@@ -59,6 +69,8 @@
       cancelAnimationFrame(this._frame); this._frame = 0; this._last = 0;
       unlisten(this._query, this._onPreference);
       document.removeEventListener('visibilitychange', this._onVisibility);
+      if (this._io) { this._io.disconnect(); this._io = null; }
+      this._onScreen = true;
     }
     attributeChangedCallback(name, oldValue, newValue) {
       if (oldValue === newValue) return;
@@ -92,14 +104,14 @@
     get telemetryConnected() { return this._connected; }
     get state() {
       return Object.freeze({ target: this._target, displayed: this._display, angle: this._angle,
-        revolutionsPerSecond: this._connected ? revolutionsAt(this._display) : 0,
+        revolutionsPerSecond: 0,
         color: this._connected ? colorAt(this._display) : GREY,
         zone: this._connected ? zoneAt(this._target) : 'none',
         connected: this._connected, reducedMotion: this._motionReduced(), lite: this._lite, stopped: this._static });
     }
     _motionReduced() { return this._static || this.getAttribute('motion') === 'reduced' || this.getAttribute('motion') === 'off' || this._query.matches; }
     _wake() {
-      if (!this._alive || document.hidden || this._frame) return;
+      if (!this._alive || document.hidden || !this._onScreen || this._frame) return;
       this._frame = requestAnimationFrame(this._tick);
     }
     /* Frames that take too long: first the heavy light effects go, then the rotation. */
@@ -122,81 +134,66 @@
       if (raw) this._watch(raw);
       const desired = this._connected ? this._target : 0;
       const tau = desired > this._display ? 1.3 : 1.8;
-      const previous = this._display;
-      this._display += (desired - this._display) * (1 - Math.exp(-dt / tau));
-      if (Math.abs(desired - this._display) < 0.03) this._display = desired;
-      if (!this._motionReduced()) {
-        this._angle = (this._angle + revolutionsAt((previous + this._display) / 2) * 360 * dt) % 360;
+      if (this._motionReduced()) this._display = desired;
+      else {
+        this._display += (desired - this._display) * (1 - Math.exp(-dt / tau));
+        if (Math.abs(desired - this._display) < 0.03) this._display = desired;
       }
       this._paint();
-      if ((this._display > 0 && !this._motionReduced()) || this._display !== desired) this._wake();
+      if (this._display !== desired) this._wake();
       else this._last = 0;
     }
     _paint() {
       if (!this._visual) return;
-      const color = this._connected ? colorAt(this._display) : GREY;
-      this._visual.style.setProperty('--fan-rgb', color.join(','));
-      this._visual.style.setProperty('--glow-strength', this._connected ? (0.23 + this._display * 0.005).toFixed(3) : '0.08');
-      this._rotor.style.transform = `rotate(${this._angle.toFixed(3)}deg)`;
-      this._visual.classList.toggle('offline', !this._connected);
-      this._visual.classList.toggle('lite', this._lite || this.getAttribute('lite') === 'true');
+      /* Farbe, Leuchtstärke und Klassen nur schreiben, wenn sie sich ändern: jedes Schreiben lässt den Browser die Leuchteffekte
+         neu zeichnen, und das verlangsamte an der Konsole das Scrollen der Seite. */
+      const s = this._shown, v = this._visual.style;
+      const color = (this._connected ? colorAt(this._display) : GREY).join(',');
+      if (s.color !== color) { s.color = color; v.setProperty('--fan-rgb', color); }
+      const glow = this._connected ? (0.23 + this._display * 0.005).toFixed(3) : '0.08';
+      if (s.glow !== glow) { s.glow = glow; v.setProperty('--glow-strength', glow); }
+      /* Die Nadel ist ein eigenes <svg> über dem Zifferblatt und wird als Ganzes gedreht (Mitte in Prozent), von -90 Grad (0 %)
+         bis +90 Grad (100 %). Hinter ihr wird der Bogen abgedunkelt: eine zweite Grafik, um die Mitte des Bogens gedreht. */
+      this._angle = -90 + 1.8 * this._display;
+      const turn = `rotate(${this._angle.toFixed(2)}deg)`;
+      if (s.turn !== turn) {
+        s.turn = turn; this._needle.style.transform = turn;
+        this._dim.style.transform = `rotate(${(this._angle + 0.03 * this._display).toFixed(2)}deg)`;
+      }
+      const off = !this._connected, lite = this._lite || this.getAttribute('lite') === 'true';
+      if (s.off !== off) { s.off = off; this._visual.classList.toggle('offline', off); }
+      if (s.lite !== lite) { s.lite = lite; this._visual.classList.toggle('lite', lite); }
       const description = this.getAttribute('aria-label') || this.getAttribute('label') || '';
       if (this._label.textContent !== description) this._label.textContent = description;
     }
     _template() {
-      const blades = Array.from({ length: 23 }, (_, i) => `<g transform="rotate(${(i * 360 / 23).toFixed(3)} 200 200)"><path d="M 179 145 C 146 129 122 96 119 73 C 129 66 140 61 152 57 C 145 89 158 120 193 140 Z" fill="url(#blade-face)" stroke="#090e16" stroke-width="1.4"/><path d="M 120 73 C 123 99 149 132 179 145" fill="none" stroke="url(#blade-edge)" stroke-width="1.4"/><path d="M 151 59 C 147 88 159 119 189 137" fill="none" stroke="#95a2b6" stroke-opacity=".12" stroke-width=".75"/></g>`).join('');
-      const ticks = Array.from({ length: 72 }, (_, i) => {
-        const a = polar(169, i * 5), b = polar(i % 6 === 0 ? 176 : 172, i * 5);
-        return `<path d="M ${point(a)} L ${point(b)}" stroke="${i % 6 === 0 ? '#8795a9' : '#394558'}" stroke-width="${i % 6 === 0 ? 1.3 : .8}"/>`;
-      }).join('');
-      const vents = Array.from({ length: 7 }, (_, i) => `<path d="M ${55 + i * 7} ${41 + i * 2.3} l -10 23" stroke="#141b27" stroke-width="3.2" stroke-linecap="round"/>`).join('');
-      const hubRings = Array.from({ length: 14 }, (_, i) => `<circle cx="200" cy="200" r="${24 + i * 1.7}" fill="none" stroke="#c5cfdf" stroke-width=".35" opacity=".09"/>`).join('');
       return `<style>
         :host { display:block; width:100%; position:relative; contain:layout style; isolation:isolate; }
-        :host::before { content:""; display:block; padding-top:100%; }
-        *{box-sizing:border-box} .assembly{position:absolute;top:0;left:0;right:0;bottom:0;--fan-rgb:65,170,255;--glow-strength:.35;color:rgb(var(--fan-rgb))}
-        .halo{position:absolute;top:11%;left:11%;right:11%;bottom:11%;border-radius:50%;background:radial-gradient(circle,transparent 48%,rgba(var(--fan-rgb),.075) 65%,transparent 75%);filter:blur(12px);opacity:.9;pointer-events:none}
-        svg{display:block;width:100%;height:100%;overflow:visible}.rotor{transform-origin:200px 200px;will-change:transform}.light-ring{filter:drop-shadow(0 0 3px currentColor) drop-shadow(0 0 11px rgba(var(--fan-rgb),var(--glow-strength)))}
-        .surface-light{opacity:var(--glow-strength)}.offline .light-ring{opacity:.35}.offline .surface-light{opacity:.08}
-        .lite .halo{display:none}.lite .light-ring{filter:none}.lite .surface-light{display:none}
+        :host::before { content:""; display:block; padding-top:68.83%; }
+        *{box-sizing:border-box}
+        .assembly{position:absolute;top:0;left:0;right:0;bottom:0;--fan-rgb:65,170,255;color:rgb(var(--fan-rgb))}
+        img{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
+        svg{display:block;width:100%;height:100%;overflow:visible}
+        .clip{position:absolute;top:0;left:0;width:100%;height:70.19%;overflow:hidden}
+        .dim{position:absolute;top:0;left:0;width:100%;height:142.47%;transform-origin:49.74% 69.43%;transform:rotate(-90deg)}
+        .dim path{fill:rgba(7,13,25,.72)}.offline .dim path{fill:rgba(7,13,25,.86)}
+        .needle{position:absolute;top:0;left:0;width:100%;height:100%;transform-origin:49.74% 66.23%;transform:rotate(-90deg);will-change:transform}
+        .g1{fill:rgba(var(--fan-rgb),.22);stroke:rgba(var(--fan-rgb),.22);stroke-width:26;stroke-linejoin:round}
+        .g2{fill:rgba(var(--fan-rgb),.35);stroke:rgba(var(--fan-rgb),.35);stroke-width:12;stroke-linejoin:round}
+        .core{fill:rgb(var(--fan-rgb));stroke:rgb(var(--fan-rgb));stroke-width:2;stroke-linejoin:round}
+        .hl{fill:none;stroke:rgba(255,255,255,.55);stroke-width:2.4;stroke-linecap:round}
+        .offline .hl{opacity:.35}
+        .lite .g1,.lite .g2{display:none}
         .accessible{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-        @media(prefers-reduced-motion:reduce){.rotor{will-change:auto}}
-      </style><div class="assembly" role="img" aria-labelledby="fan-description"><span class="accessible" id="fan-description"></span><div class="halo"></div>
-      <svg viewBox="0 0 400 400" aria-hidden="true" focusable="false"><defs>
-        <linearGradient id="shell" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e6ecf3"/><stop offset=".17" stop-color="#929dad"/><stop offset=".38" stop-color="#e2e7ef"/><stop offset=".65" stop-color="#5a6575"/><stop offset="1" stop-color="#b4bfcd"/></linearGradient>
-        <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8290a3"/><stop offset=".3" stop-color="#1c2635"/><stop offset=".6" stop-color="#0a101a"/><stop offset="1" stop-color="#4f6178"/></linearGradient>
-        <linearGradient id="blade-face" x1="119" y1="58" x2="188" y2="145" gradientUnits="userSpaceOnUse"><stop stop-color="#5b6a7a"/><stop offset=".22" stop-color="#303d4b"/><stop offset=".46" stop-color="#1b2532"/><stop offset=".83" stop-color="#0c1420"/><stop offset="1" stop-color="#465361"/></linearGradient>
-        <linearGradient id="blade-edge" x1="122" y1="73" x2="180" y2="145" gradientUnits="userSpaceOnUse"><stop stop-color="#d3dce8" stop-opacity=".48"/><stop offset=".45" stop-color="#65819c" stop-opacity=".22"/><stop offset="1" stop-color="#c2cdd9" stop-opacity=".2"/></linearGradient>
-        <radialGradient id="well"><stop stop-color="#142032"/><stop offset=".78" stop-color="#0c1320"/><stop offset="1" stop-color="#030710"/></radialGradient>
-        <linearGradient id="hub" x1=".15" y1="0" x2=".9" y2="1"><stop stop-color="#c9d3df"/><stop offset=".22" stop-color="#718194"/><stop offset=".45" stop-color="#283646"/><stop offset=".6" stop-color="#56687b"/><stop offset=".8" stop-color="#91a1b2"/><stop offset="1" stop-color="#303e50"/></linearGradient>
-        <linearGradient id="light-reflection" x1="0" y1="0" x2="1" y2="1"><stop stop-color="currentColor" stop-opacity=".45"/><stop offset=".5" stop-color="currentColor" stop-opacity="0"/><stop offset="1" stop-color="currentColor" stop-opacity=".3"/></linearGradient>
-      </defs>
-      <ellipse cx="200" cy="213" rx="172" ry="172" fill="#000" opacity=".3"/>
-      <g><path d="M 49 32 L 128 45 Q 155 22 200 22 Q 245 22 273 46 L 347 32 Q 362 33 365 48 L 351 123 Q 376 158 376 200 Q 376 244 352 274 L 365 347 Q 363 363 348 365 L 274 352 Q 242 376 200 376 Q 157 376 126 352 L 50 365 Q 34 363 33 348 L 46 275 Q 22 242 22 200 Q 22 157 46 126 L 33 50 Q 33 35 49 32 Z" fill="url(#shell)" stroke="#d5deeb" stroke-opacity=".32"/>
-      <path d="M 50 39 L 121 52 M 279 53 L 346 39 M 359 54 L 346 119 M 54 358 L 122 346" stroke="#fff" stroke-opacity=".4" fill="none"/>
-      <g>${vents}</g><g transform="rotate(90 200 200)">${vents}</g><g transform="rotate(180 200 200)">${vents}</g><g transform="rotate(270 200 200)">${vents}</g>
-      ${[[52,52],[348,52],[52,348],[348,348]].map(([x,y]) => `<g><circle cx="${x}" cy="${y}" r="8" fill="#475362"/><circle cx="${x}" cy="${y}" r="5.8" fill="#1a2330" stroke="#8d9aac" stroke-width="1"/><path d="M ${x-3} ${y} h 6 M ${x} ${y-3} v 6" stroke="#778596" stroke-width="1.2"/></g>`).join('')}</g>
-      <circle cx="200" cy="200" r="174" fill="url(#rim)" stroke="#0c111b" stroke-width="2"/>
-      <circle cx="200" cy="200" r="162" fill="url(#well)" stroke="#000" stroke-width="7"/>
-      <circle cx="200" cy="200" r="158" fill="none" stroke="#647790" stroke-opacity=".26" stroke-width="1"/>
-      <g opacity=".65">${ticks}</g>
-      <g class="light-ring" fill="none" stroke="currentColor" stroke-linecap="round"><circle cx="200" cy="200" r="165" stroke-width="1.7" opacity=".28"/><circle cx="200" cy="200" r="165" stroke-width="2.5" stroke-dasharray="170 89 84 176 194 90 55 179" transform="rotate(-57 200 200)"/></g>
-      <g class="rotor"><circle cx="200" cy="200" r="150" fill="#0a111c"/>${blades}</g>
-      <g class="hub-static" pointer-events="none">
-        <circle cx="200" cy="200" r="58" fill="#060d17" stroke="#617187" stroke-opacity=".3" stroke-width="2"/>
-        <circle cx="200" cy="200" r="52" fill="url(#hub)" stroke="#aab8c9" stroke-opacity=".4" stroke-width="1"/>${hubRings}
-        <circle cx="200" cy="200" r="47" fill="none" stroke="#e4edff" stroke-opacity=".18" stroke-width=".7"/>
-        <path d="M 164 182 A 40 40 0 0 1 204 160" stroke="#fff" stroke-opacity=".25" fill="none"/>
-        <circle cx="200" cy="200" r="14" fill="#172432" stroke="#9aaabf" stroke-opacity=".45"/>
-        <circle cx="200" cy="200" r="4" fill="#6b7b90"/><path d="M 198 197 L 202 203" stroke="#1b293a" stroke-width="1.2"/>
-      </g>
-      <circle class="surface-light" cx="200" cy="200" r="155" fill="url(#light-reflection)" pointer-events="none"/>
-      <path d="M 99 335 Q 195 384 304 337" fill="none" stroke="#e3ebf5" stroke-width="1" stroke-opacity=".4"/>
-      <path d="M 119 62 Q 188 27 264 54" fill="none" stroke="#ecf5ff" stroke-width="1" stroke-opacity=".25"/>
-      </svg></div>`;
+      </style><div class="assembly" role="img" aria-labelledby="fan-description"><span class="accessible" id="fan-description"></span>
+      <img src="/img/gauge-dial.png" alt="" draggable="false">
+      <div class="clip"><div class="dim"><svg viewBox="0 0 770 530" aria-hidden="true" focusable="false"><path d="M383.0 56.0 A312 312 0 1 1 350.4 678.3 L353.5 648.5 A282 282 0 1 0 383.0 86.0 Z"/></svg></div></div>
+      <div class="needle"><svg viewBox="0 0 770 530" aria-hidden="true" focusable="false">
+        <path class="g1" d="M375 285 L381.4 89 L383 83 L384.6 89 L391 285 Z"/><path class="g2" d="M375 285 L381.4 89 L383 83 L384.6 89 L391 285 Z"/><path class="core" d="M375 285 L381.4 89 L383 83 L384.6 89 L391 285 Z"/><path class="hl" d="M383 281 L383 96"/>
+      </svg></div></div>`;
     }
   }
   // Testable deterministic mappings, also useful to colour the host application's card.
-  window.PS5FanModel = Object.freeze({ normalize, colorAt, revolutionsAt, zoneAt, GREY });
+  window.PS5FanModel = Object.freeze({ normalize, colorAt, zoneAt, GREY });
   if (!customElements.get('ps5-cooling-fan')) customElements.define('ps5-cooling-fan', PS5CoolingFan);
 })();

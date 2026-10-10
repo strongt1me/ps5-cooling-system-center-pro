@@ -220,8 +220,11 @@ body {
    Bis 1.51.x waren es zwei Bilder mit fester CSS-Drehung und einem Ring; die Komponente schützt sich selbst vor einem
    langsamen Browser (siehe ps5-fan.js, „lite"). */
 :root { --fan-rgb: 116,130,151; }
-.ov-fan { position: relative; width: 112px; height: 112px; flex: none; }
-.ov-fan ps5-cooling-fan { width: 112px; }
+.ov-fan { position: relative; width: 190px; flex: none; }
+.ov-fan ps5-cooling-fan { width: 190px; }
+/* Tacho (10.10.2026): das Bild hat einen weichen Rand, deshalb rückt es näher an den Kachelrand und an den Text */
+.ov-tile.fan-banner { padding-left: 8px; gap: 6px; }
+@media (max-width: 420px) { .ov-fan, .ov-fan ps5-cooling-fan { width: 150px; } }
 .ov-tile.fan-glow { border-color: rgba(var(--fan-rgb),.55);
   box-shadow: 0 0 0 1px rgba(var(--fan-rgb),.25), 0 0 30px rgba(var(--fan-rgb),.26), inset 0 0 40px rgba(var(--fan-rgb),.07);
   background: linear-gradient(135deg, rgba(var(--fan-rgb),.10), var(--surface-1) 55%); transition: border-color .8s, box-shadow .8s; }
