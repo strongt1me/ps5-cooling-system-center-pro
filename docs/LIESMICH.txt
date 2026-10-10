@@ -5,11 +5,11 @@ Advanced Cooling & Thermal Management for PlayStation 5
 WAS HIER DRIN LIEGT
 ===================
 
-PS5_Cooling_System_Center_v1.56.0.elf
+PS5_Cooling_System_Center_v1.57.0.elf
     Das Hauptprogramm: Lüftersteuerung und Web-Oberfläche. Das ist die
     Datei, die du nach jedem Neustart der Konsole sendest.
 
-cooling-center-launcher-installer_v1.56.0.elf
+cooling-center-launcher-installer_v1.57.0.elf
     Installiert nur die Startmenü-Kachel, sonst nichts. Als Rückfallweg
     gedacht, falls die Kachel-Installation im Hauptprogramm klemmt: hier
     siehst du den nackten Fehlercode, ohne dass die App dazwischenfunkt.
@@ -22,7 +22,7 @@ IV9999-PSCC69690_00-PS5COOLINGCNTR01-A0100-V0100.pkg
 SO WIRD ES BENUTZT
 ==================
 
-1. PS5_Cooling_System_Center_v1.56.0.elf an die Konsole senden (Port 9021).
+1. PS5_Cooling_System_Center_v1.57.0.elf an die Konsole senden (Port 9021).
 2. Auf dem Fernseher erscheint eine Meldung mit der Adresse der
    Web-Oberfläche.
 3. Im Browser aufrufen:  http://<PS5-IP>:8086/
@@ -31,7 +31,7 @@ Die Kachel im Startmenü ("Medien") legt das Hauptprogramm beim ersten Start
 selbst an; ein Installer ist dafür nicht nötig. Sie überlebt Neustarts. Hast
 du sie in der Konsole gelöscht, kommt sie nicht von allein zurück: Auf der
 Systemseite legt "Kachel installieren" sie wieder an. Die Datei
-cooling-center-launcher-installer_v1.56.0.elf bleibt als Rückfallweg, falls
+cooling-center-launcher-installer_v1.57.0.elf bleibt als Rückfallweg, falls
 das nicht klappt.
 
 Neues Kachelbild: Die Kachel zuerst in der Konsole löschen (Kachel auswählen,

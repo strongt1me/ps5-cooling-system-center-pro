@@ -1379,10 +1379,9 @@
      grau. Die Farbe („r,g,b") steht in --fan-rgb und färbt auch die Kachel und den kleinen Chip. Der Chip ist auf der
      Kühlungsseite versteckt, weil dort der große Lüfter zu sehen ist. Die Animation lässt sich in der Kachel einstellen
      (voll, reduziert = keine Drehung, aus = auch ohne Lichteffekte); der Browser merkt sich die Wahl. */
-  const FAN_MOTION_KEY = "ps5tm.fanMotion";
   let fanKey = "";
   const fanMotionGet = () => {
-    try { const v = localStorage.getItem(FAN_MOTION_KEY); return v === "reduced" || v === "off" ? v : "full"; } catch { return "full"; }
+    return "full";                                   /* die Auswahl in der Kachel gibt es nicht mehr (10.10.2026); ein früher gemerkter Wert zählt nicht */
   };
   const fanMotionApply = () => {
     const m = fanMotionGet();
@@ -1390,8 +1389,6 @@
       f.setAttribute("motion", m === "full" ? "full" : "reduced");
       f.setAttribute("lite", m === "off" ? "true" : "false");
     });
-    const sel = $("#fan-motion");
-    if (sel && sel.value !== m) sel.value = m;
   };
   const fanVisual = (pct, ok) => {
     const valid = !!ok && Number.isFinite(pct);
@@ -3480,6 +3477,14 @@
       return String(packList && packList.value ? packList.value : "").trim();
     };
 
+    /* Laden und Löschen nehmen das Paket, das in der Liste gewählt ist; ein im Feld „Paketname“ stehen gebliebener Name zählt nur,
+       wenn nichts gewählt ist. Er ist für „Speichern“ gedacht (neuer Name) und überstimmte vorher die Liste: Das Paket ließ sich dann
+       nicht laden, und im Feld stand ein Name, den es nicht gab. */
+    const listedPackName = () => {
+      const chosen = String(packList && packList.value ? packList.value : "").trim();
+      return chosen || selectedPackName();
+    };
+
     const loadPackList = async () => {
       if (!packList) return;
       const d = await api("/api/v1/profile/avatar/library");
@@ -3779,7 +3784,7 @@
 
     if (packLoad) {
       packLoad.addEventListener("click", async () => {
-        const name = selectedPackName();
+        const name = listedPackName();
         if (!name) { say("Bitte ein Paket auswählen.", true); return; }
         packLoad.disabled = true;
         try {
@@ -3803,7 +3808,7 @@
 
     if (packDelete) {
       packDelete.addEventListener("click", async () => {
-        const name = selectedPackName();
+        const name = listedPackName();
         if (!name) { say("Bitte ein Paket auswählen.", true); return; }
         packDelete.disabled = true;
         try {
@@ -8664,6 +8669,7 @@
         body: JSON.stringify({ threshold_c: Math.round(val) })
       });
       toast(r.message || "Direktwert gesetzt.");
+      state.targetDirty = false;       /* ein am Regler angefangener, nicht übernommener Wert verdrängt sonst den neuen im Regler */
       await loadConfig();
       await refresh();
     } catch (e) {
@@ -9481,11 +9487,45 @@
   /* ── Start ──────────────────────────────────────────────────────── */
 
   fanMotionApply();
-  const fanSel = $("#fan-motion");
-  if (fanSel) fanSel.addEventListener("change", () => {
-    try { localStorage.setItem(FAN_MOTION_KEY, fanSel.value); } catch { /* ohne Speicher: gilt bis zum Neuladen nicht */ }
-    fanMotionApply();
-  });
+
+  /* Dateiauswahl: Das Feld des Browsers schreibt seine Texte („Choose File“, „No file chosen“) in der Sprache des Browsers, und der
+     alte Browser der Konsole zeichnet es eckig. Darum bleibt es unsichtbar im Dokument, und ein eigener runder Knopf mit eigenem Text
+     öffnet es. Wird sein Wert von der Seite zurückgesetzt, springt der Text mit zurück. Versteckte Felder (hidden) bleiben, wie sie sind. */
+  const enhanceFileInputs = () => {
+    const valueDesc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    $$("input[type=file]").forEach((inp) => {
+      if (inp.hidden || inp.dataset.pick) return;
+      inp.dataset.pick = "1";
+      const wrap = document.createElement("span");
+      wrap.className = "file-pick";
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "btn ghost file-btn";
+      btn.textContent = inp.multiple ? "Dateien auswählen" : "Datei auswählen";
+      const name = document.createElement("span");
+      name.className = "file-name";
+      const sync = () => {
+        const n = inp.files ? inp.files.length : 0;
+        name.textContent = n === 0 ? "Keine Datei ausgewählt." : n === 1 ? inp.files[0].name : `${n} Dateien ausgewählt`;
+        name.title = n === 1 ? inp.files[0].name : "";
+      };
+      btn.addEventListener("click", () => inp.click());
+      inp.addEventListener("change", sync);
+      if (valueDesc && valueDesc.set) {
+        Object.defineProperty(inp, "value", {
+          configurable: true,
+          get() { return valueDesc.get.call(this); },
+          set(v) { valueDesc.set.call(this, v); sync(); }
+        });
+      }
+      inp.classList.add("file-native");
+      inp.tabIndex = -1;
+      inp.setAttribute("aria-hidden", "true");
+      wrap.append(btn, name);
+      inp.insertAdjacentElement("afterend", wrap);
+      sync();
+    });
+  };
+  enhanceFileInputs();
   refresh();
   loadConfigUntilOk();
   loadSystem();

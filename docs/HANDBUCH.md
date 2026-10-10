@@ -846,10 +846,8 @@ Die Lüfter-Kachel auf der Seite **Kühlung** zeigt einen gezeichneten **Tacho**
 - **Farbe:** Sie geht stufenlos von Blau (bis 25 %) über Grün (um 55 %) zu Rot (ab 65 %). Die Farbe stellt die Lüfterlast dar, nicht die
   Temperatur. Sie färbt Nadel, Zahl, Rand und Glühen der Kachel.
 - **Kein Wert:** Ohne gültigen Messwert (oder ohne Verbindung zur App) steht die Nadel grau links, der Bogen ist abgedunkelt, die Zahl zeigt „—“.
-- **Animation** (in der Kachel, der Browser merkt sich die Wahl): „voll“; „reduziert“ (die Nadel springt statt zu fahren); „aus“
-  (springt und ohne Leuchten der Nadel). Stellt der Browser die Bewegung in den Systemeinstellungen auf „reduziert“, springt die Nadel.
 - **Schutz für langsame Browser:** Braucht der Browser zu lange für ein Bild (der Browser der Konsole ist alt), schaltet die Komponente
-  zuerst das Leuchten der Nadel ab und, wenn es immer noch ruckelt, die Fahrt der Nadel; Farbe und Werte bleiben.
+  zuerst das Leuchten der Nadel ab und, wenn es immer noch ruckelt, die Fahrt der Nadel; Farbe und Werte bleiben. Eine Auswahl der Animation gibt es nicht mehr (bis 1.56.0 gab es „voll“, „reduziert“ und „aus“).
 
 ## Betriebsarten
 

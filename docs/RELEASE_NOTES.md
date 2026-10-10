@@ -1,18 +1,21 @@
 ## Release Notes
 
-Version: v1.56.0
+Version: v1.57.0
 Datum: 2026-10-10
 
-Neu seit 1.55.0: Die Lüfter-Kachel zeigt einen Tacho statt eines drehenden Lüfters, installierte Spiele heißen „Installiert“, und „Pfad öffnen“ ist dort grau.
+Neu seit 1.56.0: eine eigene runde Dateiauswahl (auch an der Konsole auf Deutsch), runde Kästchen, drei Korrekturen und kleine Änderungen an der Lüfter-Kachel.
 
 ### Neu
 
-- **Tacho statt drehendem Lüfter.** Die Kachel „Lüfter“ auf der Seite Kühlung zeigt das Zifferblatt des Users mit Nadel: von links (0 %) bis rechts (100 %), die Nadel fährt weich auf jeden neuen Wert. Der Regenbogenbogen leuchtet nur bis zur Nadel.
-  Nadel, Zahl und Leuchtrand gehen wie bisher von Blau über Grün zu Rot (grau und abgedunkelt ohne Messwert). Die Auswahl „Animation“ bleibt: „reduziert“ lässt die Nadel springen, „aus“ nimmt zusätzlich ihr Leuchten weg.
-  Zwischen zwei Änderungen läuft nichts mehr im Browser; das behebt auch das Ruckeln beim Zoomen und das zähe Scrollen auf der Seite Kühlung, das der Lüfter an der Konsole verursacht hatte.
-- **Installierte Spiele:** Titel, deren Daten als `app.pkg` unter `/user/app/<ID>` liegen, trugen die Marke „Abbild“, wenn ShadowMountPlus sie kannte. Jetzt heißt die Marke bei allen installierten Spielen **„Installiert“** (vorher „PS4 PKG“ / „PS5 PKG“), und
-  **„Pfad öffnen“**, „Verschieben“ und „Kopieren“ sind dort ausgeschaltet. „Pfad öffnen“ bei Spielen mit Ordner oder Abbild öffnet den Speicherort im Bereich „Dateien“ (seit 1.55.0).
-- Handbuch (alle Sprachen) und `docs/HANDBUCH.md` beschreiben den Tacho.
+- **Dateiauswahl.** Das Feld des Browsers schrieb an der Konsole „Choose File“ / „No file chosen“ auf Englisch und war eckig. Jetzt öffnet ein eigener runder Knopf „Datei auswählen“ die Auswahl, daneben steht „Keine Datei ausgewählt.“ oder der Dateiname
+  („n Dateien ausgewählt“ bei mehreren). Betrifft alle sechs sichtbaren Stellen (Profilbild, Web-Profil und Regeln importieren, Kachel-Paket, Referenz-Snapshot, Konfiguration importieren); in allen Sprachen übersetzt.
+- **Runde Kästchen** (Mitlaufen im Kernel-Log, „Alle auswählen“ im Dateimanager, Auswahl bei den Spielständen) und der Regler der Zieltemperatur bekommen auch im alten Browser der Konsole die runde Form; die Schalter bleiben, wie sie waren.
+- **Lüfter-Kachel:** Die Auswahl „Animation“ ist entfernt (es läuft immer „voll“); der Text steht zentriert zwischen Tacho und rechter Kante und ist größer. Kachel „Läuft gerade“: mehr Abstand zwischen Controller und Text.
+
+### Behoben
+
+- **Schnellwahl** (Kühl / Ausgewogen / Leise) wurde an der Konsole erst nach „Übernehmen“ sichtbar, wenn der Regler vorher angefasst worden war: Der angefangene Wert verdrängte den neuen im Regler. Jetzt gilt die Schnellwahl sofort und der Regler folgt.
+- **Gespeicherte Avatare:** Ein im Feld „Paketname“ stehen gebliebener Name überstimmte die Liste, sodass „In Vorschau laden“ und „Paket löschen“ nichts fanden. Beide nehmen jetzt das in der Liste gewählte Paket; der Name im Feld zählt nur, wenn nichts gewählt ist.
 
 ### Wichtig
 
@@ -23,5 +26,4 @@ Neu seit 1.55.0: Die Lüfter-Kachel zeigt einen Tacho statt eines drehenden Lüf
 
 ### Technisches
 
-- Geändert: `web/ps5-fan.js` (Tacho; die Nadel ist ein eigenes `<svg>`, das als Ganzes gedreht wird, Mitte in Prozent – eine Drehung innerhalb des SVG lag im gezoomten Browser der Konsole neben der Mitte), neues Bild `web/img/gauge-dial.png` (168 KB), `src/library.c` (Erkennung `app.pkg`), `web/app.js`, `web/style.css`.
-  Tests: Browser-Suite 56 Szenarien ohne Befund, Wörterbücher aller fünf Sprachen ohne Fehler.
+- Nur Oberfläche: `web/app.js`, `web/style.css`, `web/index.html`, Wörterbücher; Handbuch beschreibt den Tacho ohne die Auswahl der Animation. Tests: Browser-Suite 56 Szenarien ohne Befund, Wörterbücher aller fünf Sprachen ohne Fehler.
