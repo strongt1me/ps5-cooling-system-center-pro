@@ -226,7 +226,9 @@ body {
 .ov-tile.fan-banner { padding-left: 8px; gap: 6px; }
 @media (max-width: 420px) { .ov-fan, .ov-fan ps5-cooling-fan { width: 150px; } }
 /* Der Text der Lüfter-Kachel steht in der Mitte zwischen Tacho und rechtem Rand, auch in der Höhe, und ist größer */
-.ov-fan + .ov-tile-text { flex: 1 1 auto; text-align: center; }
+/* Tacho und Text stehen als Paar in der Mitte der Kachel */
+.ov-tile.fan-banner:not(.ov-game) { justify-content: center; padding-left: 20px; gap: 22px; }
+.ov-fan + .ov-tile-text { flex: 0 1 auto; text-align: center; }
 .ov-fan + .ov-tile-text .ov-label { font-size: 14px; }
 .ov-fan + .ov-tile-text .ov-big { font-size: 46px; }
 .ov-fan + .ov-tile-text .ov-big i { font-size: 22px; }
@@ -1015,12 +1017,6 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   .pl-card { flex-wrap: wrap; }
   .pl-actions { max-width: none; width: 100%; justify-content: flex-start; }
 }
-.av-library { display: grid; gap: 10px; padding: 10px; border-radius: var(--r-sm);
-  border: 1px solid var(--hairline); background: rgba(57,135,229,.05); }
-.av-library label { display: block; color: var(--ink-2); font-size: 12px; }
-.av-library input, .av-library select { width: 100%; margin-top: 6px; padding: 9px 11px;
-  border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset);
-  color: var(--ink); font: inherit; }
 .av-status { margin: 0; padding: 9px 11px; border-radius: 9px; font-size: 12.5px;
   background: var(--inset); border: 1px solid var(--hairline); color: var(--ink-2); }
 .av-status.err { border-color: var(--crit, #d9534f); color: var(--ink); }
@@ -1568,3 +1564,13 @@ input[type=checkbox]:not(.switch input) { -webkit-appearance: none; appearance: 
 input[type=checkbox]:not(.switch input):checked { background-color: var(--s1); border-color: var(--s1);
   background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27%3E%3Cpath d=%27M2 6.5l3 3 5-6%27 fill=%27none%27 stroke=%27white%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E"); }
 input[type=checkbox]:not(.switch input):focus-visible { outline: 2px solid rgba(138,180,255,.7); outline-offset: 2px; }
+
+/* Karte „Anzeigename“ (10.10.2026): größer, vor allem die Texte */
+.name-card { padding: 26px 28px; }
+.name-card .card-head h2 { font-size: 24px; letter-spacing: -.02em; }
+.name-card .card-head .sub { font-size: 16px; margin-top: 6px; }
+.name-card .name-row { gap: 14px; margin-top: 6px; }
+.name-card .name-row .uid { padding: 15px 16px; font-size: 16px; border-radius: 12px; }
+.name-card .name-row input { padding: 15px 16px; font-size: 22px; border-radius: 12px; }
+.name-card .name-row .btn { padding: 15px 26px; font-size: 17px; border-radius: 12px; }
+.name-card .note { margin-top: 16px; padding: 14px 16px; font-size: 15px; line-height: 1.6; }

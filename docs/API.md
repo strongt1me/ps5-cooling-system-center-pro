@@ -117,10 +117,6 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | POST | `/api/v1/profile/avatar/file?name=avatar.png` | eine Datei des Profilbild-Satzes als Rohdaten in den Zwischenbereich laden (`avatar64.dds` … `avatar440.dds`, `picture64.dds` … `picture440.dds`, `avatar.png`, `picture.png`, `online.json`) |
 | POST | `/api/v1/profile/avatar/apply` | Zwischenbereich als Profilbild übernehmen; vor der ersten Übernahme wird das bisherige gesichert |
 | POST | `/api/v1/profile/avatar/restore` | das gesicherte vorherige Profilbild zurückholen |
-| GET | `/api/v1/profile/avatar/library` | gespeicherte Avatar-Pakete aus `/data/PS5-Cooling-Center/Avatars` auflisten |
-| POST | `/api/v1/profile/avatar/library/save` | aktuelles Avatar-Set als Paket speichern (`{"name":"Mein Avatar"}`) |
-| POST | `/api/v1/profile/avatar/library/load` | Paket in den Avatar-Stagingbereich laden (`{"name":"Mein Avatar"}`) |
-| POST | `/api/v1/profile/avatar/library/delete` | gespeichertes Paket löschen (`{"name":"Mein Avatar"}`) |
 
 ## Kompression und Sprachen
 

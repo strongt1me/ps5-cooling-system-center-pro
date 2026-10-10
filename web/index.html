@@ -128,7 +128,7 @@
             </div>
           </article>
 
-          <article class="card">
+          <article class="card name-card">
             <div class="card-head"><div><h2>Anzeigename</h2>
               <p class="sub">so heißt dein Konto im Startmenü</p></div></div>
             <div class="name-row">
@@ -174,7 +174,6 @@
                 </div>
                 <div class="row-gap">
                   <button class="btn primary" id="av-apply" disabled>Profilbild übernehmen</button>
-                  <button class="btn" id="av-save-pack" disabled>Als Avatar speichern</button>
                   <button class="btn ghost" id="av-restore">Vorheriges zurückholen</button>
                 </div>
                 <p class="av-status" id="av-status">Noch kein Bild gewählt.</p>
@@ -187,24 +186,6 @@
                   macht die Änderung damit rückgängig. Bis das Startmenü das neue
                   Bild zeigt, kann ein Benutzerwechsel nötig sein.</p>
               </div>
-            </div>
-          </article>
-
-          <article class="card">
-            <div class="card-head"><div><h2>Gespeicherte Avatare</h2>
-              <p class="sub">eigene Bilder aufheben und später wieder verwenden</p></div></div>
-            <div class="av-library">
-              <label>Paketname<input type="text" id="av-pack-name" maxlength="48" placeholder="z. B. Astro Blau"></label>
-              <div class="row-gap">
-                <button class="btn ghost" id="av-pack-refresh">Liste laden</button>
-                <button class="btn ghost" id="av-pack-load">In Vorschau laden</button>
-                <button class="btn ghost" id="av-pack-delete">Paket löschen</button>
-              </div>
-              <label>Gespeicherte Avatare
-                <select id="av-pack-list" title="Gespeicherte Avatar-Pakete">
-                  <option value="">-- keine Pakete geladen --</option>
-                </select>
-              </label>
             </div>
           </article>
 

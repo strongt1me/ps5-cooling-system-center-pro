@@ -3445,13 +3445,7 @@
   const wireAvatar = () => {
     const file = $("#av-file"), canvas = $("#av-canvas"),
           empty = $("#av-empty"), apply = $("#av-apply"),
-          restore = $("#av-restore"), status = $("#av-status"),
-          savePack = $("#av-save-pack"),
-          packName = $("#av-pack-name"),
-          packList = $("#av-pack-list"),
-          packRefresh = $("#av-pack-refresh"),
-          packLoad = $("#av-pack-load"),
-          packDelete = $("#av-pack-delete");
+          restore = $("#av-restore"), status = $("#av-status");
 
     let hasStagePack = false;
 
@@ -3470,44 +3464,6 @@
 
     const mode = () =>
       ($('input[name="av-mode"]:checked') || {}).value || "crop";
-
-    const selectedPackName = () => {
-      const typed = String(packName && packName.value ? packName.value : "").trim();
-      if (typed) return typed;
-      return String(packList && packList.value ? packList.value : "").trim();
-    };
-
-    /* Laden und Löschen nehmen das Paket, das in der Liste gewählt ist; ein im Feld „Paketname“ stehen gebliebener Name zählt nur,
-       wenn nichts gewählt ist. Er ist für „Speichern“ gedacht (neuer Name) und überstimmte vorher die Liste: Das Paket ließ sich dann
-       nicht laden, und im Feld stand ein Name, den es nicht gab. */
-    const listedPackName = () => {
-      const chosen = String(packList && packList.value ? packList.value : "").trim();
-      return chosen || selectedPackName();
-    };
-
-    const loadPackList = async () => {
-      if (!packList) return;
-      const d = await api("/api/v1/profile/avatar/library");
-      const packs = (d.packs || [])
-        .map((p) => ({
-          name: p && p.name ? String(p.name) : "",
-          mtime: Number(p && p.mtime)
-        }))
-        .filter((p) => p.name)
-        .sort((a, b) => (Number.isFinite(b.mtime) ? b.mtime : 0) - (Number.isFinite(a.mtime) ? a.mtime : 0));
-
-      if (!packs.length) {
-        packList.innerHTML = `<option value="">-- keine gespeicherten Pakete --</option>`;
-        return;
-      }
-
-      packList.innerHTML = packs.map((p) => {
-        const ts = Number.isFinite(p.mtime)
-          ? new Date(p.mtime * 1000).toLocaleString(LOCALE)
-          : "unbekannt";
-        return `<option value="${esc(p.name)}">${esc(p.name)} · ${esc(ts)}</option>`;
-      }).join("");
-    };
 
     const uploadAvatarFiles = async (files) => {
       let i = 0, sent = 0;
@@ -3552,7 +3508,6 @@
       /* Freigeben, bevor die Vorschau läuft: ein Fehler in der Vorschau darf
          die eigentliche Funktion nicht sperren. */
       apply.disabled = false;
-      if (savePack) savePack.disabled = false;
       say(`${what}Bereit: ${bmp.width} × ${bmp.height} Pixel.`);
       preview();
     };
@@ -3662,7 +3617,7 @@
 
     apply.addEventListener("click", async () => {
       if (!state.avImg && !hasStagePack) {
-        say("Erst ein Bild auswählen oder ein gespeichertes Paket laden.", true);
+        say("Erst ein Bild auswählen.", true);
         return;
       }
 
@@ -3737,98 +3692,6 @@
       }
     });
 
-    if (savePack) {
-      savePack.addEventListener("click", async () => {
-        const name = selectedPackName();
-        if (!name) {
-          say("Bitte einen Paketnamen eingeben oder aus der Liste wählen.", true);
-          return;
-        }
-
-        savePack.disabled = true;
-        try {
-          if (state.avImg) {
-            say("Bild wird für die Avatar-Bibliothek vorbereitet …");
-            const files = await buildAvatarFiles(state.avImg, mode(), state.userName);
-            await uploadAvatarFiles(files);
-          } else if (!hasStagePack) {
-            throw new Error("Es liegen keine Avatar-Dateien zum Speichern vor.");
-          }
-
-          const r = await api("/api/v1/profile/avatar/library/save", {
-            method: "POST",
-            body: JSON.stringify({ name })
-          });
-          say(`Avatar-Paket gespeichert: ${r.name} (${r.copied} Dateien).`);
-          toast("Avatar im Avatars-Ordner gespeichert.");
-          await loadPackList();
-          if (packName) packName.value = r.name || name;
-        } catch (e) {
-          say(`Speichern fehlgeschlagen — ${e.message}`, true);
-        } finally {
-          savePack.disabled = false;
-        }
-      });
-    }
-
-    if (packRefresh) {
-      packRefresh.addEventListener("click", async () => {
-        try {
-          await loadPackList();
-          say("Avatar-Liste aktualisiert.");
-        } catch (e) {
-          say(`Liste konnte nicht geladen werden — ${e.message}`, true);
-        }
-      });
-    }
-
-    if (packLoad) {
-      packLoad.addEventListener("click", async () => {
-        const name = listedPackName();
-        if (!name) { say("Bitte ein Paket auswählen.", true); return; }
-        packLoad.disabled = true;
-        try {
-          const r = await api("/api/v1/profile/avatar/library/load", {
-            method: "POST",
-            body: JSON.stringify({ name })
-          });
-          hasStagePack = true;
-          apply.disabled = false;
-          if (savePack) savePack.disabled = false;
-          say(`Paket geladen: ${r.name} (${r.copied} Dateien). Mit „Profilbild übernehmen“ aktivieren.`);
-          toast("Avatar-Paket in den Vorschaubereich geladen.");
-          if (packName) packName.value = r.name || name;
-        } catch (e) {
-          say(`Laden fehlgeschlagen — ${e.message}`, true);
-        } finally {
-          packLoad.disabled = false;
-        }
-      });
-    }
-
-    if (packDelete) {
-      packDelete.addEventListener("click", async () => {
-        const name = listedPackName();
-        if (!name) { say("Bitte ein Paket auswählen.", true); return; }
-        packDelete.disabled = true;
-        try {
-          const r = await api("/api/v1/profile/avatar/library/delete", {
-            method: "POST",
-            body: JSON.stringify({ name })
-          });
-          say(`Paket gelöscht: ${r.name} (${r.removed} Dateien entfernt).`);
-          toast("Avatar-Paket gelöscht.");
-          await loadPackList();
-          if (packName) packName.value = "";
-        } catch (e) {
-          say(`Löschen fehlgeschlagen — ${e.message}`, true);
-        } finally {
-          packDelete.disabled = false;
-        }
-      });
-    }
-
-    loadPackList().catch(() => {});
     loadGallery().catch(() => {});
   };
 

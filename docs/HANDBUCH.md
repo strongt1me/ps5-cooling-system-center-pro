@@ -1038,17 +1038,14 @@ installiert, ohne sie vorher auf ein Laufwerk der Konsole zu kopieren. Datei wä
 - **Netzwerk wie bei jeder Installation:** Die Konsole liest das Paket über die eigene Adresse (siehe oben); sie muss mit einem Netzwerk
   verbunden sein.
 
-## Profilbilder und Avatar-Pakete
+## Profilbilder
 
 - Auf der Seite „Profil“ stehen **30 fertige Profilbilder** zur Auswahl. Sie
    stecken in der App selbst (`web/avatars/`, 440 × 440 JPEG, gebaut mit
    `tools/build_avatars.py` aus den Originalen), man braucht also weder eine
    Datei noch einen PC: Bild antippen, Vorschau ansehen, „Profilbild
    übernehmen“. Sonst läuft alles wie bei einem eigenen Bild.
-- Bild auswählen, dann optional als Paket im Ordner
-   `/data/PS5-Cooling-Center/Avatars` speichern.
-- Später ein gespeichertes Paket laden und mit „Profilbild übernehmen“
-   aktivieren, ohne das Bild neu zu konvertieren.
+- Bis 1.57.0 ließ sich ein Bild als Paket speichern und später wieder laden; diese Funktion gibt es nicht mehr.
 
 ## Homescreen-Kachel
 

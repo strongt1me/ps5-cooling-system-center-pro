@@ -1,21 +1,16 @@
 ## Release Notes
 
-Version: v1.57.0
+Version: v1.58.0
 Datum: 2026-10-10
 
-Neu seit 1.56.0: eine eigene runde Dateiauswahl (auch an der Konsole auf Deutsch), runde Kästchen, drei Korrekturen und kleine Änderungen an der Lüfter-Kachel.
+Neu seit 1.57.0: „Gespeicherte Avatare“ ist entfernt, die Karte „Anzeigename“ ist größer, und Tacho und Text stehen in der Mitte der Lüfter-Kachel.
 
-### Neu
+### Geändert
 
-- **Dateiauswahl.** Das Feld des Browsers schrieb an der Konsole „Choose File“ / „No file chosen“ auf Englisch und war eckig. Jetzt öffnet ein eigener runder Knopf „Datei auswählen“ die Auswahl, daneben steht „Keine Datei ausgewählt.“ oder der Dateiname
-  („n Dateien ausgewählt“ bei mehreren). Betrifft alle sechs sichtbaren Stellen (Profilbild, Web-Profil und Regeln importieren, Kachel-Paket, Referenz-Snapshot, Konfiguration importieren); in allen Sprachen übersetzt.
-- **Runde Kästchen** (Mitlaufen im Kernel-Log, „Alle auswählen“ im Dateimanager, Auswahl bei den Spielständen) und der Regler der Zieltemperatur bekommen auch im alten Browser der Konsole die runde Form; die Schalter bleiben, wie sie waren.
-- **Lüfter-Kachel:** Die Auswahl „Animation“ ist entfernt (es läuft immer „voll“); der Text steht zentriert zwischen Tacho und rechter Kante und ist größer. Kachel „Läuft gerade“: mehr Abstand zwischen Controller und Text.
-
-### Behoben
-
-- **Schnellwahl** (Kühl / Ausgewogen / Leise) wurde an der Konsole erst nach „Übernehmen“ sichtbar, wenn der Regler vorher angefasst worden war: Der angefangene Wert verdrängte den neuen im Regler. Jetzt gilt die Schnellwahl sofort und der Regler folgt.
-- **Gespeicherte Avatare:** Ein im Feld „Paketname“ stehen gebliebener Name überstimmte die Liste, sodass „In Vorschau laden“ und „Paket löschen“ nichts fanden. Beide nehmen jetzt das in der Liste gewählte Paket; der Name im Feld zählt nur, wenn nichts gewählt ist.
+- **„Gespeicherte Avatare“ entfernt, mit Funktion.** Die Karte (Paketname, Liste laden, In Vorschau laden, Paket löschen) und der Knopf „Als Avatar speichern“ beim Profilbild sind weg, ebenso die Schnittstellen `/api/v1/profile/avatar/library`, `…/save`, `…/load` und `…/delete`.
+  Profilbild wählen, „Profilbild übernehmen“ und „Vorheriges zurückholen“ bleiben unverändert. Schon gespeicherte Pakete in `/data/PS5-Cooling-Center/Avatars` bleiben auf der Konsole liegen; die App zeigt und löscht sie nicht mehr (bei Bedarf über den Dateimanager entfernen).
+- **Karte „Anzeigename“ größer:** Titel, Unterzeile, Benutzer-ID, Name im Eingabefeld, „Speichern“ und der Hinweis haben größere Schrift und mehr Platz.
+- **Lüfter-Kachel:** Tacho und Text stehen als Paar in der Mitte der Kachel.
 
 ### Wichtig
 
@@ -26,4 +21,4 @@ Neu seit 1.56.0: eine eigene runde Dateiauswahl (auch an der Konsole auf Deutsch
 
 ### Technisches
 
-- Nur Oberfläche: `web/app.js`, `web/style.css`, `web/index.html`, Wörterbücher; Handbuch beschreibt den Tacho ohne die Auswahl der Animation. Tests: Browser-Suite 56 Szenarien ohne Befund, Wörterbücher aller fünf Sprachen ohne Fehler.
+- Geändert: `src/api.c` (Avatar-Paket-Schnittstellen entfernt), `web/index.html`, `web/app.js`, `web/style.css`, `docs/API.md`, `docs/HANDBUCH.md`. Tests: Browser-Suite 56 Szenarien ohne Befund, Wörterbücher aller fünf Sprachen ohne Fehler.

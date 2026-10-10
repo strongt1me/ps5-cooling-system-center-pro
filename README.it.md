@@ -6,7 +6,7 @@
 
 **Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak, con interfaccia web nella rete domestica in sei lingue.**
 
-![Versione](https://img.shields.io/badge/Versione-1.57.0-1f6feb)
+![Versione](https://img.shields.io/badge/Versione-1.58.0-1f6feb)
 ![Licenza](https://img.shields.io/badge/Licenza-GPL--3.0--or--later-blue)
 ![Piattaforma](https://img.shields.io/badge/Piattaforma-PS5%20Payload-003791)
 ![Lingue](https://img.shields.io/badge/Lingue-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -81,7 +81,7 @@ Il progetto è il successore di *PS5 Temperature Manager*; backend (C) e interfa
 2. Invia l'ELF alla console, porta **9021**, con un qualsiasi strumento di invio payload o da riga di comando:
 
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.57.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.58.0.elf
    ```
 
 3. Sul televisore compare una notifica con l'indirizzo. Apri nel browser: **`http://<PS5-IP>:8086`**
