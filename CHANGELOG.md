@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.61.0
+
+### Kühlung
+- Die Effekte auf den drei Kacheln sind wieder entfernt: kein farbiges Leuchten des Luftstroms, kein farbiger Leuchtrand und kein Lichtschein um den Tacho
+- Die Hintergrundbilder bleiben und zeigen wieder ihre eigenen Farben; Tacho, Nadel und Zahl färben sich weiterhin nach der Drehzahl
+
+### Payloads
+- Größere Überschriften („Profile“, „Laufende Payloads“, „Gespeicherte Payloads“) mit größeren Symbolen und Zählern
+- Größere Ordnerzeile und größere Hinweistexte
+
+---
+
 ## v1.60.0
 
 ### Kühlung

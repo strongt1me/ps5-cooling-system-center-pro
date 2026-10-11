@@ -1617,3 +1617,20 @@ input[type=checkbox]:not(.switch input):focus-visible { outline: 2px solid rgba(
 
 /* Alle Texte mit einem leichten Schatten (10.10.2026), wie in der Seitenleiste: hebt sie am Fernseher vom Hintergrund ab */
 body { text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+
+/* Payloads (11.10.2026): Überschriften, Zähler, Ordnerzeile und Hinweise größer – am Fernseher waren sie zu klein */
+.pl-sec-head { gap: 12px; margin: 0 0 16px; }
+.pl-sec-head svg { width: 24px; height: 24px; }
+.pl-sec-head h3 { font-size: 18px; color: var(--ink); }
+.pl-count { font-size: 14px; padding: 5px 14px; }
+.pl-where { font-size: 15px; margin: -4px 0 16px; }
+.pl-where code { font-size: 15px; }
+.pl-note, .note.pl-help { font-size: 14.5px; }
+
+/* Kühlung (11.10.2026, Wunsch des Users): Effekte wieder aus – kein farbiges Leuchten des Luftstroms, kein farbiger Leuchtrand,
+   kein Lichtschein um den Tacho. Die Bilder bleiben, jetzt wieder in ihren eigenen Farben; Tacho, Nadel und Zahl färben sich weiter. */
+.fan-flow, .gauge-halo { display: none; }
+.ov-tile.fan-glow, .ov-tile.ov-game.fan-banner, .card.ov-hero { border-color: var(--hairline); box-shadow: none; }
+.ov-tile.fan-banner.fan-glow:not(.ov-game) { background: url(/img/banner-fan.jpg) center / cover no-repeat, var(--surface-1); }
+.ov-tile.ov-game.fan-banner { background: linear-gradient(90deg, rgba(20,27,41,.35) 0%, rgba(20,27,41,0) 55%),
+    url(/img/banner-game.jpg) center / cover no-repeat, var(--surface-1); }
