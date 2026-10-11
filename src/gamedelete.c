@@ -86,12 +86,14 @@ static struct {
   char     token[33];
   char     kind[12];
   char     id[320];
+  char     path[320];                 /* where the plan said the data lies: the deletion must find the same */
   uint64_t until_ms;
 } g_tok;
 
 typedef struct {
   char kind[12];
   char id[320];
+  char path[320];
 } dl_args_t;
 
 
@@ -190,8 +192,8 @@ game_running(char *id, size_t n) {
 static int
 other_job_active(char *err, size_t err_len) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy()) {
-    snprintf(err, err_len, "Es läuft gerade ein anderer Vorgang (Kopieren, Konvertieren, Verschieben, Spielstände, "
+     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy()) {
+    snprintf(err, err_len, "Es läuft gerade ein anderer Vorgang (Kopieren, Konvertieren, Verschieben, Spielstände, Dateimanager, "
              "ein Paket teilen oder installieren). Gelöscht wird erst danach.");
     return 1;
   }
@@ -559,6 +561,7 @@ ps5tm_gamedelete_plan(const char *kind, const char *id, int *http) {
     make_token(g_tok.token);
     snprintf(g_tok.kind, sizeof(g_tok.kind), "%s", kind);
     snprintf(g_tok.id, sizeof(g_tok.id), "%s", id);
+    snprintf(g_tok.path, sizeof(g_tok.path), "%s", p.path);
     g_tok.until_ms = ps5tm_mono_ms() + DL_TOKEN_MS;
     cJSON_AddStringToObject(o, "confirm", g_tok.token);
     pthread_mutex_unlock(&g_lock);
@@ -666,7 +669,7 @@ run_installed(const dl_args_t *a) {
 static void
 run_smp(const dl_args_t *a) {
   ps5tm_smp_game_t s;
-  if(ps5tm_smp_find(a->id, &s) != 0 || !deletable_root(s.path)) {
+  if(ps5tm_smp_find(a->id, &s) != 0 || !deletable_root(s.path) || strcmp(s.path, a->path)) {
     job_end(DL_FAILED, "ShadowMountPlus kennt das Spiel nicht mehr oder die Spieldaten liegen an einem unerlaubten Ort. Es wurde nichts gelöscht.", NULL);
     return;
   }
@@ -744,6 +747,17 @@ delete_thread(void *arg) {
   else if(!strcmp(kind, "smp")) run_smp(a);
   else run_backup(a);
   ps5tm_powerguard_release();
+  /* one line in the history (jobhist.c) */
+  pthread_mutex_lock(&g_lock);
+  int st = g_job.state;
+  char name[160], error[640];
+  snprintf(name, sizeof(name), "%s", g_job.name);
+  snprintf(error, sizeof(error), "%s", g_job.error);
+  uint64_t bytes = g_job.bytes, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  pthread_mutex_unlock(&g_lock);
+  if(st == DL_DONE || st == DL_FAILED)
+    ps5tm_hist_add("delete", name, !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : "Spiel",
+                   st == DL_DONE ? "done" : "failed", error, bytes, dur);
   free(a);
   return NULL;
 }
@@ -756,6 +770,8 @@ ps5tm_gamedelete_start(const char *kind, const char *id, const char *token, char
   pthread_mutex_lock(&g_lock);
   int tok_ok = g_tok.token[0] && strlen(token) == 32 && !strcmp(token, g_tok.token) && !strcmp(kind, g_tok.kind) &&
                !strcmp(id, g_tok.id) && ps5tm_mono_ms() < g_tok.until_ms;
+  char planned[sizeof(g_tok.path)] = "";
+  if(tok_ok) snprintf(planned, sizeof(planned), "%s", g_tok.path);
   if(tok_ok) memset(&g_tok, 0, sizeof(g_tok));                     /* one use */
   pthread_mutex_unlock(&g_lock);
   if(!tok_ok) { snprintf(err, err_len, "Die Bestätigung fehlt oder ist abgelaufen. Bitte das Löschen noch einmal öffnen und bestätigen."); return 403; }
@@ -764,11 +780,17 @@ ps5tm_gamedelete_start(const char *kind, const char *id, const char *token, char
   int http = make_plan(kind, id, &p);
   if(http != 0) { snprintf(err, err_len, http == 404 ? "Das gibt es nicht (mehr)." : "Ungültige Angabe."); return http; }
   if(p.why[0]) { snprintf(err, err_len, "%s", p.why); return 409; }
+  /* the data must still lie where the confirmed plan said: ShadowMountPlus can list a title from another source by now */
+  if(strcmp(p.path, planned)) {
+    snprintf(err, err_len, "Die Spieldaten liegen inzwischen an einem anderen Ort als bestätigt. Bitte das Löschen noch einmal öffnen.");
+    return 409;
+  }
 
   dl_args_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 500; }
   snprintf(a->kind, sizeof(a->kind), "%s", p.kind);
   snprintf(a->id, sizeof(a->id), "%s", id);
+  snprintf(a->path, sizeof(a->path), "%s", p.path);
 
   pthread_mutex_lock(&g_lock);
   if(g_job.state == DL_RUNNING) {

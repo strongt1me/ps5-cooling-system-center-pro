@@ -406,7 +406,7 @@ serve_connection(void *arg) {
     static const char oom[] =
         "HTTP/1.1 503 Service Unavailable\r\n"
         "Content-Type: application/json; charset=utf-8\r\n"
-        "Content-Length: 96\r\n"
+        "Content-Length: 84\r\n"
         "Connection: close\r\n\r\n"
         "{\"ok\":false,\"code\":\"out_of_memory\","
         "\"message\":\"Zu wenig Arbeitsspeicher im Payload.\"}";
@@ -455,6 +455,13 @@ serve_connection(void *arg) {
     return NULL;
   }
 
+  /* A target that filled the whole field was probably cut: refuse it rather than act on a shortened path. */
+  if(strlen(target) >= sizeof(target) - 1) {
+    ps5tm_http_send_error(fd, 414, "uri_too_long", "Die Adresse ist zu lang.");
+    free(raw);
+    close(fd);
+    return NULL;
+  }
   char *qmark = strchr(target, '?');
   if(qmark) {
     *qmark = 0;
@@ -576,6 +583,13 @@ serve_connection(void *arg) {
     }
     req.body[have] = 0;
     req.body_len   = have;
+    if(have < want) {                     /* cut off (time budget or a read error): never hand on a partial body */
+      ps5tm_http_send_error(fd, 400, "incomplete_body", "Die Anfrage kam nicht vollständig an.");
+      free(req.body);
+      free(raw);
+      close(fd);
+      return NULL;
+    }
   }
 
   ps5tm_api_handle(fd, &req);
@@ -790,7 +804,7 @@ ps5tm_http_run(int srv, unsigned port) {
       static const char busy[] =
           "HTTP/1.1 503 Service Unavailable\r\n"
           "Content-Type: application/json; charset=utf-8\r\n"
-          "Content-Length: 88\r\n"
+          "Content-Length: 74\r\n"
           "Connection: close\r\n\r\n"
           "{\"ok\":false,\"code\":\"no_thread\","
           "\"message\":\"Kein Arbeitsthread verfügbar.\"}";

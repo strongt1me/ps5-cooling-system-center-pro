@@ -121,6 +121,7 @@ typedef struct {
   char target[320];
   char inner[40];
   int  folder;
+  int  ampr;                  /* build ampr_emu.index in the folder first (amprindex.c) */
 } cv_args_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -360,6 +361,18 @@ cv_thread(void *arg) {
   ps5tm_powerguard_hold();
   void *r = cv_run(arg);
   ps5tm_powerguard_release();
+  /* one line in the history (jobhist.c) */
+  pthread_mutex_lock(&g_lock);
+  int st = g_job.state;
+  char name[128], detail[96], error[640];
+  snprintf(name, sizeof(name), "%s", g_job.name);
+  snprintf(detail, sizeof(detail), "zu %s%s%s", g_job.op, g_job.drive[0] ? " · " : "", g_job.drive);
+  snprintf(error, sizeof(error), "%s", g_job.error);
+  uint64_t bytes = g_job.output_bytes ? g_job.output_bytes : g_job.done_bytes;
+  uint64_t dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  pthread_mutex_unlock(&g_lock);
+  if(st == CV_DONE || st == CV_FAILED || st == CV_CANCELLED)
+    ps5tm_hist_add("convert", name, detail, st == CV_DONE ? "done" : st == CV_FAILED ? "failed" : "cancelled", error, bytes, dur);
   return r;
 }
 
@@ -378,6 +391,16 @@ cv_run(void *arg) {
   int               out = -1;
   ps5tm_prefetch_t *pf = NULL;
 
+  /* The AMPR index first, if asked for: it goes into the folder and with it into the image, at the place APR-EMU
+     looks for it (/app0/ampr_emu.index). */
+  if(a.folder && a.ampr) {
+    unsigned ai_files = 0, ai_coll = 0;
+    int arc = ps5tm_ampr_build_dir(a.source, &ai_files, &ai_coll, &g_cancel, err, sizeof(err));
+    if(arc == ECANCELED) { cv_state(CV_CANCELLED); return NULL; }
+    if(arc) { cv_fail("Der AMPR-Index ließ sich nicht bauen: %s", err[0] ? err : strerror(arc)); return NULL; }
+    PS5TM_INFO("ampr_index_built", "AMPR-Index für %s vor dem Konvertieren gebaut: %u Dateien.", a.title_id, ai_files);
+    err[0] = 0;
+  }
   if(a.folder) {
     img = exfat_image_plan(a.source, serial_for(a.title_id), err, sizeof(err));
     if(!img) { cv_fail("%s", err); return NULL; }
@@ -820,6 +843,14 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
              "und Verschieben laufen nicht gleichzeitig damit.");
     return 1;
   }
+  if(ps5tm_ampr_busy()) {
+    snprintf(err, err_len, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
+    return 1;
+  }
+  if(ps5tm_filemgr_busy()) {
+    snprintf(err, err_len, "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
+    return 1;
+  }
   if(ps5tm_pkginst_busy()) {
     snprintf(err, err_len, "Es wird gerade ein Paket installiert. Kopieren, Konvertieren "
              "und Verschieben laufen nicht gleichzeitig damit.");
@@ -840,7 +871,7 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
 }
 
 int
-ps5tm_gameconvert_start(const char *title_id, const char *op, const char *mount,
+ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, const char *mount,
                         const char *mode, char *err, size_t err_len) {
   char name[128], source[256];
   if(!title_id || !op || !mount || !mode ||
@@ -861,6 +892,7 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, const char *mount,
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 500; }
   char label[40], dir[128], stem[200];
   a->folder = is_dir(source);
+  a->ampr = a->folder && ampr_index;
   stem_of(source, a->folder, stem, sizeof(stem));
   if(drive_base(mount, a->base, sizeof(a->base), label, sizeof(label)) != 0 ||
      dest_dir(a->base, mode, dir, sizeof(dir)) != 0 ||
@@ -998,10 +1030,10 @@ ps5tm_gameconvert_status(void) {
 
 int
 ps5tm_gameconvert_cancel(void) {
+  /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
   pthread_mutex_lock(&g_lock);
   int active = active_locked();
+  if(active) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
-  if(!active) return -1;
-  __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
-  return 0;
+  return active ? 0 : -1;
 }

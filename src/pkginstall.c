@@ -424,7 +424,7 @@ typedef struct {
 static int
 other_job_active(void) {
   return ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-         ps5tm_pkgsplit_busy() || ps5tm_gamedelete_busy();
+         ps5tm_pkgsplit_busy() || ps5tm_gamedelete_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy();
 }
 
 /* One more sentence for the warning of the plan. */
@@ -1154,7 +1154,7 @@ sleep_ms_cancellable(int ms) {
 }
 
 static void *
-install_main(void *arg) {
+install_run(void *arg) {
   args_t *a = arg;
   const ps5tm_pkg_t *p = &a->pkg;
   ps5tm_powerguard_hold();
@@ -1204,7 +1204,7 @@ install_main(void *arg) {
     uint64_t ts;
     names_for(pkg_name, sizeof(pkg_name), icon_name, sizeof(icon_name), &ts);
     ps5tm_pkgstream_cfg_t cfg = { a->slices, a->nslices, a->total, pkg_name, icon, icon_n, icon_name, PKGI_STREAM_PORT };
-    if(stream_up) { ps5tm_pkgstream_stop(); stream_up = 0; }
+    if(stream_up) { if(live_id) ps5tm_pkglive_kick(); ps5tm_pkgstream_stop(); stream_up = 0; }
     job_phase(J_START, attempt == 1 ? "Der Server für die Konsole wird gestartet" : "Neuer Versuch (%u von %u): der Server wird gestartet", attempt, PI_ATTEMPTS);
     if(ps5tm_pkgstream_start(&cfg, err, sizeof(err)) != 0) { job_fail(0, "%s", err); result = J_FAILED; goto out; }
     stream_up = 1;
@@ -1552,7 +1552,7 @@ out:
      it goes. */
   ps5tm_pkgstream_stats(&fin);
   if(h.fd >= 0 || h.pid > 0 || h.loader_fd >= 0) { drain_loader(&h); helper_close(&h); }
-  if(stream_up) ps5tm_pkgstream_stop();
+  if(stream_up) { if(live_id) ps5tm_pkglive_kick(); ps5tm_pkgstream_stop(); }
   if(live_id) ps5tm_pkglive_end(live_id);                  /* the browser's upload has nothing left to wait for */
   free(icon);
   ps5tm_powerguard_release();                              /* nothing is left to keep the console awake for */
@@ -1602,6 +1602,23 @@ out:
   }
   free(a);
   return NULL;
+}
+
+/* The thread: the installation itself, then one line in the history (jobhist.c). */
+static void *
+install_thread(void *arg) {
+  void *r = install_run(arg);
+  pthread_mutex_lock(&g_lock);
+  int st = g_job.state;
+  char name[160], detail[48], error[512];
+  snprintf(name, sizeof(name), "%s", g_job.name[0] ? g_job.name : g_job.file);
+  snprintf(detail, sizeof(detail), "%s%s%s", g_job.title_id, g_job.version[0] ? " · " : "", g_job.version);
+  snprintf(error, sizeof(error), "%s", g_job.error);
+  uint64_t bytes = g_job.total, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  pthread_mutex_unlock(&g_lock);
+  if(st == J_DONE || st == J_FAILED || st == J_CANCELLED)
+    ps5tm_hist_add("install", name, detail, st == J_DONE ? "done" : st == J_FAILED ? "failed" : "cancelled", error, bytes, dur);
+  return r;
 }
 
 /* ------------------------------------------------------------------ the start */
@@ -1676,7 +1693,7 @@ start_impl(const char *id, char *err, size_t err_len, int *transient, unsigned *
   pthread_attr_init(&at);
   pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
   pthread_attr_setstacksize(&at, 256 * 1024);
-  int rc = pthread_create(&th, &at, install_main, a);
+  int rc = pthread_create(&th, &at, install_thread, a);
   pthread_attr_destroy(&at);
   if(rc != 0) {
     pthread_mutex_lock(&g_lock);

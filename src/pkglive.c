@@ -131,7 +131,7 @@ expire_locked(void) {
 static int
 other_busy(void) {
   return ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-         ps5tm_pkgsplit_busy() || ps5tm_gamedelete_busy() || ps5tm_pkginst_busy();
+         ps5tm_pkgsplit_busy() || ps5tm_gamedelete_busy() || ps5tm_pkginst_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy();
 }
 
 /* ------------------------------------------------------------------ demands and readers */
@@ -276,10 +276,24 @@ state_json_locked(void) {
 
 /* ------------------------------------------------------------------ reading (for the installer and for the parser) */
 
+/* Raised by the installer right before it stops its stream server: readers that wait for a missing piece give
+   up at once instead of holding the server's connection open for up to two minutes (the server waits 10 s, then
+   counts the connection as hanging and refuses a new start, so a retry failed). The session itself goes on. */
+static unsigned g_kick;
+
+void
+ps5tm_pkglive_kick(void) {
+  pthread_mutex_lock(&L.lock);
+  g_kick++;
+  pthread_cond_broadcast(&L.cv);
+  pthread_mutex_unlock(&L.lock);
+}
+
 int
 ps5tm_pkglive_read(const char *id, uint64_t off, void *vbuf, size_t n) {
   unsigned char *buf = vbuf;
   pthread_mutex_lock(&L.lock);
+  const unsigned kick = g_kick;
   while(n) {
     if(!L.active || !id || strcmp(id, L.id) || off >= L.total) { pthread_mutex_unlock(&L.lock); return -1; }
     uint32_t s = (uint32_t)(off / LV_SEG);
@@ -303,6 +317,7 @@ ps5tm_pkglive_read(const char *id, uint64_t off, void *vbuf, size_t n) {
     dem_add_locked(s);
     rdr_note_locked(s);
     while(L.active && L.slot_of[s] < 0) {
+      if(g_kick != kick) { pthread_mutex_unlock(&L.lock); return -1; }
       uint64_t now = now_ms();
       if(now - L.last_contact > LV_CONTACT_MS) {
         char w[200];

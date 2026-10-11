@@ -96,6 +96,8 @@ SRCS += src/pkgstream.c
 SRCS += src/pkginstall.c
 SRCS += src/pkglive.c
 SRCS += src/pkgqueue.c
+SRCS += src/jobhist.c
+SRCS += src/amprindex.c
 SRCS += src/qr.c
 
 # ⚠ Die Kopfdateien gehören in die Abhängigkeiten.

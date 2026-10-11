@@ -76,7 +76,10 @@ sibling_on_port(unsigned port, int *pid_out) {
          socket may hand over any fraction of a document at a time, and the
          status body runs to several kilobytes. Now that a positive answer
          leads to kill(), the evidence has to be gathered properly. */
-      char    buf[4096];
+      /* 16 KiB: the status runs to about 2.6 KB plus headers today (measured 11.10.2026), with "pid" and
+         "adapters" near its end; 4 KiB left too little room for more readings in a game. Static: only the
+         start-up thread asks. */
+      static char buf[16384];
       size_t  len = 0;
       ssize_t n;
       while(len < sizeof(buf) - 1 &&

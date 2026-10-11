@@ -169,7 +169,7 @@ body {
 .ov-hot { stroke: url(#ovHot); }
 .ov-hero.warn .ov-hot { stroke: var(--warning); }
 .ov-hero.hot  .ov-hot { stroke: var(--critical); }
-.ov-gauge-val { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.ov-gauge-val { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
 .hero-num { font-size: 42px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
 .hero-unit { font-size: 17px; color: var(--ink-muted); margin-left: 2px; }
 .hero-copy { min-width: 0; }
@@ -237,7 +237,7 @@ body {
 /* Chip-Bild: drei vorgefärbte Fassungen übereinander, app.js setzt data-heat.
    Umgeschaltet wird nur die Deckkraft (billig), nicht per filter umgefärbt. */
 .ov-chip { position: relative; width: 84px; height: 63px; flex: none; margin: -10px -8px -14px 0; }
-.ov-chip img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .5s; }
+.ov-chip img { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .5s; }
 .ov-chip[data-heat="ok"] .c-ok, .ov-chip[data-heat="warm"] .c-warm,
 .ov-chip[data-heat="hot"] .c-hot { opacity: 1; }
 .ov-kv { display: grid; gap: 11px; }
@@ -499,7 +499,7 @@ body.offline .offline-note { display: flex; }
 .ring-track { fill: none; stroke: rgba(57,135,229,.15); stroke-width: 13; }
 .ring-fill  { fill: none; stroke: var(--s1); stroke-width: 13; stroke-linecap: round;
   stroke-dasharray: 0 351.86; transition: stroke-dasharray .35s ease; }
-.ring-mid { position: absolute; inset: 0; display: flex; flex-direction: column;
+.ring-mid { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; }
 .ring-mid b { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
 .ring-mid span { margin-top: 3px; color: var(--ink-muted); font-size: 10.5px; }
@@ -547,13 +547,14 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .choice input { margin: 2px 0 0; accent-color: var(--s1); flex: none; }
 .choice b { display: block; font-size: 13.5px; }
 .choice small { display: block; margin-top: 2px; color: var(--ink-muted); font-size: 11.5px; line-height: 1.45; }
-.choice:has(input:checked) { border-color: var(--s1); background: rgba(57,135,229,.10); }
+/* .is-checked setzt app.js (syncChoices): der alte Browser der Konsole kennt :has() nicht */
+.choice:has(input:checked), .choice.is-checked { border-color: var(--s1); background: rgba(57,135,229,.10); }
 /* Betriebsart: Lüfter mit sanftem / mittlerem / starkem Luftstrom (Bilder
    des Users), gedämpft, bis die Stufe gewählt ist. */
 .choice > span { flex: 1 1 auto; min-width: 0; }
 .choice-ico { width: 66px; height: auto; flex: none; align-self: center; opacity: .6;
   transition: opacity .2s; }
-.choice:has(input:checked) .choice-ico { opacity: 1; }
+.choice:has(input:checked) .choice-ico, .choice.is-checked .choice-ico { opacity: 1; }
 
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px;
   padding-top: 15px; margin-top: 13px; border-top: 1px solid var(--hairline); cursor: pointer; }
@@ -760,7 +761,15 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
   gap: 16px; margin-bottom: 18px; }
 .gm-card { display: flex; flex-direction: column; border: 1px solid var(--hairline);
   border-radius: var(--r-lg); background: var(--surface-1); overflow: hidden; }
-.gm-card.running { border-color: rgba(12,163,12,.7); box-shadow: 0 0 0 1px rgba(12,163,12,.45); }
+/* Das laufende Spiel (11.10.2026): grüner Rand, der Schein darum atmet sanft. Der Rand ist 1 px Rahmen + 1 px
+   Ring (box-shadow), damit die Karte nicht um einen Pixel springt; geatmet wird nur der Schein (box-shadow). */
+.gm-card.running { border-color: #2bd96b; box-shadow: 0 0 0 1px #2bd96b, 0 0 14px 2px rgba(43,217,107,.5), 0 0 34px 6px rgba(43,217,107,.22);
+  animation: gm-breathe 3.2s ease-in-out infinite; }
+@keyframes gm-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px #2bd96b, 0 0 10px 1px rgba(43,217,107,.38), 0 0 24px 3px rgba(43,217,107,.14); }
+  50%      { box-shadow: 0 0 0 1px #2bd96b, 0 0 18px 3px rgba(43,217,107,.62), 0 0 40px 8px rgba(43,217,107,.3); }
+}
+@media (prefers-reduced-motion: reduce) { .gm-card.running { animation: none; } }
 .gm-cover { position: relative; padding-top: 100%; background: var(--inset); }
 .gm-cover img, .gm-fallback { position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   width: 100%; height: 100%; }
@@ -1124,7 +1133,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .sv-user-sum { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
 .sv-avatar { position: relative; flex: none; width: 56px; height: 56px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
   font-size: 24px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #3b82f6, #7c5cff); box-shadow: 0 0 0 2px rgba(255, 255, 255, .18); }
-.sv-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sv-avatar img { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; object-fit: cover; }
 .sv-title { padding: 8px 14px; border-top: 1px solid var(--hairline); }
 .sv-user input[type=checkbox] { accent-color: var(--s1); flex: none; width: 17px; height: 17px; }
 .sv-t-name { flex: 1 1 auto; min-width: 0; }
@@ -1234,7 +1243,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   border: 1px solid var(--hairline); border-radius: 14px; background: var(--surface-1); }
 .pk-ico { position: relative; width: 64px; height: 64px; border-radius: 12px; overflow: hidden; background: var(--inset);
   display: flex; align-items: center; justify-content: center; color: var(--ink-muted); font-weight: 800; font-size: 18px; }
-.pk-ico img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pk-ico img { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; object-fit: cover; }
 .pk-ico img.broken { display: none; }
 .pk-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .pk-main b { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1634,3 +1643,33 @@ body { text-shadow: 0 1px 2px rgba(0,0,0,.6); }
 .ov-tile.fan-banner.fan-glow:not(.ov-game) { background: url(/img/banner-fan.jpg) center / cover no-repeat, var(--surface-1); }
 .ov-tile.ov-game.fan-banner { background: linear-gradient(90deg, rgba(20,27,41,.35) 0%, rgba(20,27,41,0) 55%),
     url(/img/banner-game.jpg) center / cover no-repeat, var(--surface-1); }
+
+/* APR & LZ4 (11.10.2026): der Knopf auf der Spielkarte, sein Fenster, das Kästchen beim Konvertieren */
+.gm-more .gm-apr { grid-column: 1 / -1; border-color: rgba(57,135,229,.45); color: #9cc4ff; }
+.apr-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 14px 16px;
+  border: 1px solid var(--hairline); border-radius: 12px; background: var(--inset); margin: 0 0 10px; }
+.apr-row b { display: block; font-size: 14.5px; }
+.apr-row small { display: block; color: var(--ink-muted); font-size: 12.5px; margin-top: 3px; line-height: 1.5; }
+.apr-row .btn { flex: none; }
+.apr-state { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+.apr-state.ok { background: rgba(12,163,12,.16); color: #7fe07f; border: 1px solid rgba(12,163,12,.4); }
+.apr-state.no { background: rgba(250,178,25,.14); color: #ffd57b; border: 1px solid rgba(250,178,25,.4); }
+.apr-note { font-size: 12.5px; margin: 4px 0 14px; }
+.cp-choice.cv-ampr { margin-top: 8px; }
+
+/* Verlauf (11.10.2026) */
+.hv-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.hv-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.hv-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; padding: 12px 14px;
+  border: 1px solid var(--hairline); border-radius: 12px; background: var(--inset); }
+.hv-ico { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  font-size: 17px; background: var(--surface-2); }
+.hv-main { min-width: 0; }
+.hv-main b { display: block; font-size: 14px; }
+.hv-main small { display: block; color: var(--ink-muted); font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; }
+.hv-main small.hv-err { color: #ffb0b0; }
+.hv-res { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.hv-res.ok { background: rgba(12,163,12,.16); color: #7fe07f; border: 1px solid rgba(12,163,12,.4); }
+.hv-res.bad { background: rgba(208,59,59,.16); color: #ffb0b0; border: 1px solid rgba(208,59,59,.45); }
+.hv-res.stop { background: rgba(250,178,25,.14); color: #ffd57b; border: 1px solid rgba(250,178,25,.4); }
+.hv-foot { font-size: 12.5px; margin-top: 12px; }

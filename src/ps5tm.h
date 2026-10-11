@@ -300,6 +300,7 @@ extern ps5tm_config_t g_config;
 
 void ps5tm_config_defaults(ps5tm_config_t *cfg);
 void ps5tm_config_clamp(ps5tm_config_t *cfg);
+void ps5tm_config_apply_profile(ps5tm_config_t *cfg);
 /* True for a dotted-quad IPv4 address — the only thing bind_address can be. */
 int  ps5tm_config_bind_valid(const char *s);
 int  ps5tm_config_load(void);
@@ -663,6 +664,21 @@ struct cJSON *ps5tm_gamedelete_backups_json(void);
 /* The file manager (filemgr.c): 1 while it copies, moves or deletes. */
 int           ps5tm_filemgr_busy(void);
 
+/* The history of the app's jobs (jobhist.c): one line per finished job in /data/PS5-Cooling-Center/history.jsonl.
+   result is "done", "failed" or "cancelled"; detail, error may be NULL. */
+void          ps5tm_hist_add(const char *kind, const char *title, const char *detail, const char *result,
+                             const char *error, uint64_t bytes, uint64_t dur_ms);
+struct cJSON *ps5tm_hist_json(void);
+int           ps5tm_hist_clear(void);
+
+/* The AMPR index of a game, ampr_emu.index (amprindex.c, a port of drakmor's build_ampr_index.py). */
+int           ps5tm_ampr_build_dir(const char *root, unsigned *files, unsigned *collisions, const int *cancel,
+                                   char *why, size_t why_len);
+struct cJSON *ps5tm_ampr_info(const char *title_id, int *http);
+int           ps5tm_ampr_start(const char *title_id, char *err, size_t err_len);
+struct cJSON *ps5tm_ampr_status(void);
+int           ps5tm_ampr_busy(void);
+
 /* ShadowMountPlus's own interface on 127.0.0.1:10101 — see smp.c. */
 #define PS5TM_SMP_MAX_GAMES 256
 typedef struct {
@@ -704,7 +720,7 @@ int           ps5tm_gamemove_cancel(char *err, size_t err_len);
    to .ffpfsc); mode "homebrew" or "backup" as for copying. start returns an
    HTTP status like copying. */
 struct cJSON *ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len);
-int           ps5tm_gameconvert_start(const char *title_id, const char *op,
+int           ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index,
                                       const char *mount, const char *mode,
                                       char *err, size_t err_len);
 struct cJSON *ps5tm_gameconvert_status(void);
@@ -1232,6 +1248,7 @@ struct cJSON *ps5tm_pkglive_init(const char *name, uint64_t size, int *http, cha
 struct cJSON *ps5tm_pkglive_state(const char *id, long since, unsigned wait_ms, int *http);   /* since < 0: answer at once */
 void ps5tm_pkglive_receive(int fd, const char *query, const char *prefix, size_t prefix_len, size_t total);   /* http.c */
 int  ps5tm_pkglive_cancel(const char *id);
+void ps5tm_pkglive_kick(void);   /* waiting readers give up (before the installer stops its stream server) */
 
 int  ps5tm_pkginst_start(const char *id, char *err, size_t err_len);   /* HTTP status: 200 started, 404 no such package, 409 cannot be done */
 /* The same for the queue: *transient says a refusal is only "not now" (a game runs, another job is under way), *seq is the
@@ -1457,7 +1474,7 @@ typedef struct {
    tries again. */
 int  ps5tm_fan_init(void);
 /* Title id of the per-game rule currently in force, empty when none. */
-const char *ps5tm_fan_active_rule(void);
+void ps5tm_fan_active_rule(char *out, size_t n);
 void ps5tm_fan_snapshot(ps5tm_snapshot_t *out);
 /* Applies `temp_c` immediately and pins it. Returns 0 on success. */
 int  ps5tm_fan_apply_manual(int temp_c, int *errno_out);

@@ -251,6 +251,12 @@ apply_profile_presets(ps5tm_config_t *cfg) {
   }
 }
 
+/* For the fan loop's own copy: a game's rule switches the profile, and with it band, step, interval and window. */
+void
+ps5tm_config_apply_profile(ps5tm_config_t *cfg) {
+  apply_profile_presets(cfg);
+}
+
 
 void
 ps5tm_config_clamp(ps5tm_config_t *cfg) {

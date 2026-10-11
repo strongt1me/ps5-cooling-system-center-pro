@@ -349,7 +349,9 @@ handle_status(int fd) {
     /* What the controller is really aiming at — a per-game rule may have
        replaced the configured target. */
     cJSON_AddNumberToObject(c, "effective_target_c", snap.effective_target_c);
-    cJSON_AddStringToObject(c, "active_game_rule",   ps5tm_fan_active_rule());
+    char active_rule[16];
+    ps5tm_fan_active_rule(active_rule, sizeof(active_rule));
+    cJSON_AddStringToObject(c, "active_game_rule",   active_rule);
     cJSON_AddBoolToObject  (c, "warning_active", snap.warning_active != 0);
     cJSON_AddNumberToObject(c, "warning_since_ms",
                             (double)snap.warning_since_ms);
@@ -501,7 +503,9 @@ static void
 handle_game_rules_get(int fd) {
   cJSON *root = cJSON_CreateObject();
   cJSON_AddBoolToObject(root, "ok", 1);
-  cJSON_AddStringToObject(root, "active", ps5tm_fan_active_rule());
+  char active_rule[16];
+  ps5tm_fan_active_rule(active_rule, sizeof(active_rule));
+  cJSON_AddStringToObject(root, "active", active_rule);
 
   cJSON *arr = cJSON_AddArrayToObject(root, "rules");
   ps5tm_config_lock();
@@ -689,7 +693,9 @@ handle_game_rules_put(int fd, const ps5tm_request_t *req) {
  */
 static void
 handle_channels(int fd) {
-  static ps5tm_chan_sample_t buf[PS5TM_CHANLOG_CAPACITY];
+  /* One buffer per request: a static one was shared by all connection threads, and two requests at once mixed. */
+  ps5tm_chan_sample_t *buf = malloc(sizeof(ps5tm_chan_sample_t) * PS5TM_CHANLOG_CAPACITY);
+  if(!buf) { ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
   unsigned n = ps5tm_chanlog_snapshot(buf, PS5TM_CHANLOG_CAPACITY);
 
   cJSON *root = cJSON_CreateObject();
@@ -781,6 +787,7 @@ handle_channels(int fd) {
     }
   }
 
+  free(buf);
   char *txt = cJSON_PrintUnformatted(root);
   cJSON_Delete(root);
   if(!txt) { ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
@@ -1224,13 +1231,26 @@ static pthread_mutex_t g_started_lock = PTHREAD_MUTEX_INITIALIZER;
 static char            g_started_id[16];
 static uint64_t        g_started_ms;
 
+/* The check and the mark in one step: two requests for the same title in the same moment (a double tap, two
+   tabs) cannot both pass and both start it. The mark holds while the start is under way; a request that ends
+   without starting anything takes it back (release_start). */
 static int
-started_recently(const char *id) {
+claim_start(const char *id) {
   pthread_mutex_lock(&g_started_lock);
-  int yes = g_started_id[0] && !strcmp(g_started_id, id) &&
-            ps5tm_mono_ms() - g_started_ms < START_GUARD_MS;
+  int free_ = !(g_started_id[0] && !strcmp(g_started_id, id) && ps5tm_mono_ms() - g_started_ms < START_GUARD_MS);
+  if(free_) {
+    snprintf(g_started_id, sizeof(g_started_id), "%s", id);
+    g_started_ms = ps5tm_mono_ms();
+  }
   pthread_mutex_unlock(&g_started_lock);
-  return yes;
+  return free_;
+}
+
+static void
+release_start(const char *id) {
+  pthread_mutex_lock(&g_started_lock);
+  if(!strcmp(g_started_id, id)) { g_started_id[0] = 0; g_started_ms = 0; }
+  pthread_mutex_unlock(&g_started_lock);
 }
 
 static void
@@ -1404,6 +1424,7 @@ sw_thread(void *arg) {
 
   int rc = ps5tm_procmgr_close_game(job.close_id, 6000);
   if(rc < 0) {
+    release_start(job.then_id);
     sw_set(SW_FAILED, "„%s“ ließ sich nicht beenden.", job.close_name);
     PS5TM_WARN("game_close_failed", "%s (%s) ließ sich nicht beenden.",
                job.close_name, job.close_id);
@@ -1483,6 +1504,7 @@ sw_thread(void *arg) {
     sw_set(SW_DONE, "„%s“ wurde beendet. Auf der PS5 oben rechts „Starten“ "
            "wählen, dann startet „%s“.", job.close_name, job.then_name);
   } else {
+    release_start(job.then_id);
     sw_set(SW_FAILED, "„%s“ wurde beendet, aber die Konsole nahm weder den "
            "Start (0x%08X) noch die Meldung (0x%08X) an.", job.close_name,
            (unsigned)lrc, (unsigned)nrc);
@@ -1635,8 +1657,8 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
     return;
   }
 
-  /* Never twice — see START_GUARD_MS. */
-  if(started_recently(id)) {
+  /* Never twice — see START_GUARD_MS. Checked and marked in one step (claim_start). */
+  if(!claim_start(id)) {
     ps5tm_http_send_json(fd, 200,
         "{\"ok\":true,\"started\":true,\"already_starting\":true}");
     return;
@@ -1648,6 +1670,7 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
       char err[160];
       if(sw_start(gs.title_id, run_name, id, name, link, on_console, err,
                   sizeof(err)) != 0) {
+        release_start(id);
         ps5tm_http_send_error(fd, 409, "busy", err);
         return;
       }
@@ -1659,6 +1682,7 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
       ps5tm_http_send_json(fd, 202, out);
       return;
     }
+    release_start(id);
     send_other_running(fd, gs.title_id, run_name, id, name);
     return;
   }
@@ -1703,6 +1727,7 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
         char err[160];
         if(sw_start(run_id, run_name, id, name, link, on_console, err,
                     sizeof(err)) != 0) {
+          release_start(id);
           ps5tm_http_send_error(fd, 409, "busy", err);
           return;
         }
@@ -1711,9 +1736,11 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
         ps5tm_http_send_json(fd, 202, out);
         return;
       }
+      release_start(id);
       send_other_running(fd, run_id, run_name, id, name);
       return;
     }
+    release_start(id);
     ps5tm_http_send_error(fd, 409, "other_running_unknown",
                           "Es läuft noch ein anderes Spiel. Bitte schließe es "
                           "zuerst über das Menü der PS-Taste.");
@@ -1727,6 +1754,7 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
     char msg[160];
     snprintf(msg, sizeof(msg), "Die Konsole hat weder den Start (0x%08X) noch die "
              "Meldung (0x%08X) angenommen.", (unsigned)rc, (unsigned)nrc);
+    release_start(id);
     ps5tm_http_send_error(fd, 503, "launch_refused", msg);
     return;
   }
@@ -1912,6 +1940,7 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   const cJSON *jop  = body ? cJSON_GetObjectItem(body, "op")     : NULL;
   const cJSON *jdst = body ? cJSON_GetObjectItem(body, "target") : NULL;
   const cJSON *jm   = body ? cJSON_GetObjectItem(body, "mode")   : NULL;
+  int ampr = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "ampr_index"));
   char id[16] = "", op[12] = "", target[40] = "", mode[12] = "";
   if(cJSON_IsString(jid))  snprintf(id, sizeof(id), "%s", jid->valuestring);
   if(cJSON_IsString(jop))  snprintf(op, sizeof(op), "%s", jop->valuestring);
@@ -1920,7 +1949,7 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   cJSON_Delete(body);
 
   char err[640] = "";
-  int status = ps5tm_gameconvert_start(id, op, target, mode, err, sizeof(err));
+  int status = ps5tm_gameconvert_start(id, op, ampr, target, mode, err, sizeof(err));
   if(status != 200) {
     ps5tm_http_send_error(fd, status, "convert_refused", err);
     return;
@@ -3634,7 +3663,7 @@ handle_klog_record_post(int fd, const ps5tm_request_t *req) {
   const cJSON *jtz = body ? cJSON_GetObjectItem(body, "tz") : NULL;
   int on = cJSON_IsTrue(jon);
   int off = cJSON_IsFalse(jon);
-  int tz = cJSON_IsNumber(jtz) ? (int)jtz->valuedouble : 0;
+  int tz = cJSON_IsNumber(jtz) ? ps5tm_num_i32(jtz->valuedouble) : 0;
   cJSON_Delete(body);
   if(!on && !off) {
     ps5tm_http_send_error(fd, 400, "bad_request", "Es fehlt \"on\": true oder false.");
@@ -3944,6 +3973,48 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
       return;
     }
     ps5tm_http_send_json(fd, 202, "{\"ok\":true,\"message\":\"Die Prüfung der Abbilder wurde angefordert.\"}");
+    return;
+  }
+
+  /* AMPR index of a game (amprindex.c): GET ?id= says what is there, POST {id} builds it, .../job follows the job. */
+  if(!strcmp(req->path, "/api/v1/library/ampr")) {
+    if(is_get) {
+      char id[16] = "";
+      query_param(req->query, "id", id, sizeof(id));
+      int http = 200;
+      cJSON *o = ps5tm_ampr_info(id, &http);
+      if(!o) { ps5tm_http_send_error(fd, http, "not_found", "Das Spiel ist nicht in der Liste."); return; }
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    char id[16] = "";
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    cJSON_Delete(b);
+    char err[400] = "";
+    int http = ps5tm_ampr_start(id, err, sizeof(err));
+    if(http != 200) { ps5tm_http_send_error(fd, http, "ampr_refused", err); return; }
+    send_cjson(fd, 200, ps5tm_ampr_status());
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/library/ampr/job")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    send_cjson(fd, 200, ps5tm_ampr_status());
+    return;
+  }
+
+  /* The history of the app's jobs (jobhist.c). */
+  if(!strcmp(req->path, "/api/v1/jobs/history")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    send_cjson(fd, 200, ps5tm_hist_json());
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/jobs/history/clear")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    if(ps5tm_hist_clear() != 0) { ps5tm_http_send_error(fd, 500, "clear_failed", "Der Verlauf ließ sich nicht leeren."); return; }
+    ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
     return;
   }
 

@@ -220,6 +220,7 @@
               <button type="button" class="gm-chip" id="gm-tab-saves" role="tab" aria-selected="false">Spielstände</button>
               <button type="button" class="gm-chip" id="gm-tab-pkg" role="tab" aria-selected="false">Pakete</button>
               <button type="button" class="gm-chip" id="gm-tab-bk" role="tab" aria-selected="false">Sicherungen</button>
+              <button type="button" class="gm-chip" id="gm-tab-hist" role="tab" aria-selected="false">Verlauf</button>
             </div>
             <!-- Zwischenspeicher der Spieleliste (libcache.c, 04.10.2026): Titelbilder und die Angaben, die
                  ein Scan sonst bei jedem Lesen neu holt, auf der Konsole in covers_and_more. -->
@@ -395,6 +396,25 @@
 
           <!-- Die Kopien und Konvertierungen der App (PS5-Sicherung/Spiele auf jedem Laufwerk); löschen über denselben
                Dialog wie ein Spiel (gamedelete.c). -->
+          <!-- Verlauf (jobhist.c, 11.10.2026): alle Vorgänge der App mit Ergebnis -->
+          <div id="gm-pane-hist" hidden>
+            <article class="card">
+              <div class="card-head"><div><h2>Verlauf</h2>
+                <p class="sub">alle Vorgänge der App: Kopieren, Verschieben, Konvertieren, Installieren, Löschen, AMPR-Index</p></div></div>
+              <div class="hv-tools">
+                <div class="gm-chips" id="hv-chips" role="group" aria-label="Auswahl">
+                  <button type="button" class="gm-chip active" data-hv="">Alle</button>
+                  <button type="button" class="gm-chip" data-hv="done">Fertig</button>
+                  <button type="button" class="gm-chip" data-hv="failed">Fehler</button>
+                  <button type="button" class="gm-chip" data-hv="cancelled">Abgebrochen</button>
+                </div>
+                <button type="button" class="btn ghost" id="hv-clear">Verlauf leeren</button>
+              </div>
+              <div class="hv-list" id="hv-list"><p class="muted">wird geladen …</p></div>
+              <p class="muted hv-foot">Die letzten 500 Vorgänge, gespeichert auf der Konsole (/data/PS5-Cooling-Center/history.jsonl).</p>
+            </article>
+          </div>
+
           <div id="gm-pane-bk" hidden>
             <article class="card">
               <div class="card-head">
@@ -1440,7 +1460,7 @@
                 </div>
                 <label class="kl-follow"><input type="checkbox" id="kl-follow" checked> Mitlaufen</label>
               </div>
-              <div class="kl-view" id="kl-view" role="log" aria-live="off" tabindex="0"></div>
+              <div class="kl-view" id="kl-view" data-no-i18n role="log" aria-live="off" tabindex="0"></div>
             </article>
 
             <!-- Was im Ordner klog-live-log auf der Konsole liegt: gespeicherte Auszüge und Aufnahmen -->

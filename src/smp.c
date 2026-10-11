@@ -185,10 +185,11 @@ status_ok(const cJSON *j) {
   return cJSON_IsNumber(s) && s->valueint == 0;
 }
 
-static void
+static int
 copy_str(const cJSON *j, const char *key, char *out, size_t out_len) {
   const cJSON *v = cJSON_GetObjectItem(j, key);
-  snprintf(out, out_len, "%s", cJSON_IsString(v) ? v->valuestring : "");
+  int len = snprintf(out, out_len, "%s", cJSON_IsString(v) ? v->valuestring : "");
+  return len >= 0 && (size_t)len < out_len;          /* 0: cut short */
 }
 
 /* The list and the version, at most every SMP_GAMES_TTL; after a failed ask
@@ -239,15 +240,17 @@ refresh_locked(void) {
     ps5tm_smp_game_t *e = &g_games[k];
     memset(e, 0, sizeof(*e));
     copy_str(g, "title_id", e->title_id, sizeof(e->title_id));
-    copy_str(g, "path", e->path, sizeof(e->path));
-    copy_str(g, "runtime_path", e->runtime_path, sizeof(e->runtime_path));
+    /* A path that does not fit is left out: cut short it would name another folder, and the app copies,
+       moves and deletes by these paths. */
+    int fits = copy_str(g, "path", e->path, sizeof(e->path));
+    fits &= copy_str(g, "runtime_path", e->runtime_path, sizeof(e->runtime_path));
     copy_str(g, "source_type", e->source_type, sizeof(e->source_type));
     copy_str(g, "image_type", e->image_type, sizeof(e->image_type));
     e->mounted   = cJSON_IsTrue(cJSON_GetObjectItem(g, "mounted"));
     e->available = cJSON_IsTrue(cJSON_GetObjectItem(g, "source_available"));
     /* Only absolute paths without a way up: they are shown, copied from and
        handed back to ShadowMountPlus. */
-    if(!e->title_id[0] || e->path[0] != '/' || ps5tm_path_has_dotdot(e->path))
+    if(!fits || !e->title_id[0] || e->path[0] != '/' || ps5tm_path_has_dotdot(e->path))
       continue;
     k++;
   }

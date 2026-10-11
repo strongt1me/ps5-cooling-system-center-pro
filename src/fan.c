@@ -100,10 +100,13 @@ static uint64_t g_warning_since_ms = 0;
    dashboard can say so and the log only reports the transitions. */
 static int  g_rule_active = 0;
 static char g_active_rule_id[16] = {0};
+static pthread_mutex_t g_rule_lock = PTHREAD_MUTEX_INITIALIZER;   /* written by the fan thread, read by HTTP threads */
 
-const char *
-ps5tm_fan_active_rule(void) {
-  return g_active_rule_id;
+void
+ps5tm_fan_active_rule(char *out, size_t n) {
+  pthread_mutex_lock(&g_rule_lock);
+  snprintf(out, n, "%s", g_active_rule_id);
+  pthread_mutex_unlock(&g_rule_lock);
 }
 
 
@@ -809,13 +812,16 @@ fan_worker(void *arg) {
        silently rewrites the user's own defaults. */
     {
       const char *active_rule = NULL;
-      if(gs.foreground && gs.title_id[0]) {
+      /* Only a fresh game reading counts: the probe thread that renews it can be held up (a tile install, the
+         controller), and a game that ended long ago must not keep its own target. */
+      if(gs.foreground && gs.title_id[0] && ps5tm_gamestate_age_ms() <= 60000) {
         for(unsigned i = 0; i < cfg.game_rule_count; i++) {
           if(strcmp(cfg.game_rules[i].title_id, gs.title_id) != 0) continue;
           /* Checked here, at the point of use, however well the settings
              were checked before: see clamp_target_c(). */
           cfg.target_temp_c = clamp_target_c(cfg.game_rules[i].target_temp_c);
           cfg.profile       = valid_profile(cfg.game_rules[i].profile);
+          ps5tm_config_apply_profile(&cfg);   /* the rule's whole profile, not only its name (band, step, window) */
           /* The safety limit has to stay clear of the target in force, or the
              controller flips into emergency mode while doing its job. The
              settings enforce that for the global target; a title's own
@@ -839,8 +845,10 @@ fan_worker(void *arg) {
                    "Spielprofil beendet – zurück auf Ziel %u °C.",
                    cfg.target_temp_c);
       }
+      pthread_mutex_lock(&g_rule_lock);
       snprintf(g_active_rule_id, sizeof(g_active_rule_id), "%s",
                active_rule ? active_rule : "");
+      pthread_mutex_unlock(&g_rule_lock);
     }
 
     /* The window length follows the profile, so this fires on every profile

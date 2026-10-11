@@ -396,6 +396,9 @@ read_fan_duty(int *pct_out) {
      guess of 0..255 scaled these to a constant 100 %, which hid the fact
      that the fan really was pegged. */
   int raw = (int)duty;
+  /* More than 1000 cannot be a reading (0xFFFF right after rest mode, for one): treated as none, so the
+     controller falls back to its open-loop way instead of taking it for a fan already at 100 %. */
+  if(raw > 1000) return -1;
   int pct = (raw + 5) / 10;
   if(pct > 100) pct = 100;
   if(pct < 0)   pct = 0;

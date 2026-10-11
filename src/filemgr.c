@@ -93,6 +93,7 @@ typedef struct {
   char     dest[FM_PATH];
   unsigned n;
   char   (*src)[FM_PATH];
+  char    *buf;                       /* this job's copy buffer; the job frees it (not g_buf: a next job may own that by then) */
 } fm_args_t;
 
 
@@ -664,6 +665,12 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
 
 void
 ps5tm_filemgr_receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len, size_t total) {
+  /* not beside a copy, move or delete of the file manager: a move deletes its source at the end, and a file
+     uploaded into that folder meanwhile would go with it, never copied */
+  if(ps5tm_filemgr_busy()) {
+    ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
+    return;
+  }
   if(pthread_mutex_trylock(&g_upload_lock) != 0) {
     ps5tm_http_send_error(fd, 409, "upload_busy", "Es wird gerade schon eine Datei hochgeladen.");
     return;
@@ -712,7 +719,7 @@ job_state(int s) {
 static int
 other_job_active(char *err, size_t n) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy()) {
+     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_ampr_busy()) {
     snprintf(err, n, "Es läuft gerade ein anderer Vorgang der App (Kopieren, Konvertieren, Verschieben, Spielstände, "
              "Paket teilen oder installieren, Löschen). Bitte danach noch einmal.");
     return 1;
@@ -991,6 +998,9 @@ copy_file(const char *rs, const char *rt, const char *vs) {
     if(rc) break;
     job_add((uint64_t)r, 0);
   }
+  /* On the drive before it counts as copied: a move deletes the original right after, and a USB stick pulled
+     a moment later must not take data with it that only sat in the cache. */
+  if(!rc && fsync(out) != 0) rc = errno ? errno : EIO;
   if(close(out) != 0 && !rc) rc = errno ? errno : EIO;
   close(in);
   if(!rc) job_add(0, 1);
@@ -1017,12 +1027,16 @@ copy_tree(const char *rs, const char *rt, const char *vs, dev_t dev, int depth) 
   struct dirent *e;
   char cs[FM_PATH + 64], ct[FM_PATH + 64], cv[FM_PATH + 64];
   int rc = 0;
-  while(!rc && (e = readdir(d)) != NULL) {
+  for(;;) {
+    errno = 0;
+    e = readdir(d);
+    if(!e) { if(errno) rc = errno; break; }          /* a read error is not the end of the folder: a move would delete the rest */
     if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
     if(snprintf(cs, sizeof(cs), "%s/%s", rs, e->d_name) >= (int)sizeof(cs) ||
        snprintf(ct, sizeof(ct), "%s/%s", rt, e->d_name) >= (int)sizeof(ct) ||
        snprintf(cv, sizeof(cv), "%s/%s", vs, e->d_name) >= (int)sizeof(cv)) { rc = ENAMETOOLONG; break; }
     rc = copy_tree(cs, ct, cv, dev, depth + 1);
+    if(rc) break;
   }
   closedir(d);
   return rc;
@@ -1091,6 +1105,12 @@ run_copy(fm_args_t *a, int move) {
       job_finish(FM_FAILED, err, NULL);
       return;
     }
+    struct stat now;
+    if(stat(rd, &now) != 0 || now.st_dev != ds.st_dev) {      /* the drive went away (or another one sits there now) */
+      snprintf(err, sizeof(err), "Das Ziellaufwerk ist nicht mehr da.%s", i ? " Die Einträge davor sind fertig." : "");
+      job_finish(FM_FAILED, err, NULL);
+      return;
+    }
     struct stat ts;
     if(lstat(rt, &ts) == 0) {
       snprintf(err, sizeof(err), "Im Ziel gibt es inzwischen schon „%.200s“. Nichts wurde überschrieben.", base_name(t));
@@ -1107,10 +1127,24 @@ run_copy(fm_args_t *a, int move) {
         job_add(c.bytes, c.files);
       }
     } else {
+      pthread_mutex_lock(&g_lock);
+      unsigned skipped_before = g_job.skipped;
+      pthread_mutex_unlock(&g_lock);
       rc = copy_tree(rs, rt, a->src[i], ss.st_dev, 0);
+      pthread_mutex_lock(&g_lock);
+      int skipped_some = g_job.skipped != skipped_before;
+      pthread_mutex_unlock(&g_lock);
       if(rc) {
-        struct stat ps;                           /* what this item left behind is its own: it goes again */
-        if(lstat(rt, &ps) == 0) delete_tree(rt, t, ps.st_dev, 0, 0);
+        /* What this item left behind is its own and goes again – unless the very first step found the name taken
+           (EEXIST): then someone else made it in the meantime, and it is not ours to delete. */
+        struct stat ps;
+        if(rc != EEXIST && lstat(rt, &ps) == 0) delete_tree(rt, t, ps.st_dev, 0, 0);
+      } else if(move && skipped_some) {
+        snprintf(err, sizeof(err), "%.250s wurde kopiert, aber Verknüpfungen oder Gerätedateien darin ließen sich nicht "
+                 "mitnehmen. Das Original bleibt deshalb liegen (es liegt jetzt an beiden Orten).", a->src[i]);
+        PS5TM_WARN("files_move_kept", "Dateien: %.170s", err);
+        job_finish(FM_FAILED, err, NULL);
+        return;
       } else if(move) {
         int drc = delete_tree(rs, a->src[i], ss.st_dev, 0, 0);
         if(drc) {
@@ -1160,8 +1194,25 @@ job_thread(void *arg) {
   if(!strcmp(a->kind, "delete")) run_delete(a);
   else run_copy(a, !strcmp(a->kind, "move"));
   ps5tm_powerguard_release();
-  free(g_buf);
-  g_buf = NULL;
+  /* one line in the history (jobhist.c) */
+  {
+    pthread_mutex_lock(&g_lock);
+    int st = g_job.state;
+    char title[64], detail[FM_PATH + 16], error[800];
+    snprintf(title, sizeof(title), "%u %s", g_job.items, g_job.items == 1 ? "Eintrag" : "Einträge");
+    snprintf(detail, sizeof(detail), "%s%s", g_job.dest[0] ? "nach " : "", g_job.dest);
+    snprintf(error, sizeof(error), "%s", g_job.error);
+    uint64_t bytes = g_job.bytes_done, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+    char kind[24];
+    snprintf(kind, sizeof(kind), "files_%s", g_job.kind);
+    pthread_mutex_unlock(&g_lock);
+    if(st == FM_DONE || st == FM_FAILED || st == FM_CANCELLED)
+      ps5tm_hist_add(kind, title, detail, st == FM_DONE ? "done" : st == FM_FAILED ? "failed" : "cancelled", error, bytes, dur);
+  }
+  pthread_mutex_lock(&g_lock);
+  if(g_buf == a->buf) g_buf = NULL;                 /* a job started after this one finished owns g_buf now: leave it */
+  pthread_mutex_unlock(&g_lock);
+  free(a->buf);
   free(a->src);
   free(a);
   return NULL;
@@ -1215,8 +1266,9 @@ start_job(fm_args_t *a, uint64_t bytes_total, uint64_t files_total, char *err, s
     pthread_mutex_unlock(&g_lock);
     return other ? 409 : 500;
   }
-  g_buf = buf;
+  a->buf = buf;
   pthread_mutex_lock(&g_lock);
+  g_buf = buf;
   memset(&g_job, 0, sizeof(g_job));
   g_job.state = FM_COUNTING;
   snprintf(g_job.kind, sizeof(g_job.kind), "%s", a->kind);
@@ -1236,8 +1288,11 @@ start_job(fm_args_t *a, uint64_t bytes_total, uint64_t files_total, char *err, s
   int rc = pthread_create(&th, &at, job_thread, a);
   pthread_attr_destroy(&at);
   if(rc != 0) {
-    free(g_buf);
-    g_buf = NULL;
+    pthread_mutex_lock(&g_lock);
+    if(g_buf == buf) g_buf = NULL;
+    pthread_mutex_unlock(&g_lock);
+    free(buf);
+    a->buf = NULL;
     job_finish(FM_FAILED, "Der Vorgang ließ sich nicht starten.", NULL);
     snprintf(err, n, "Der Vorgang ließ sich nicht starten.");
     return 500;

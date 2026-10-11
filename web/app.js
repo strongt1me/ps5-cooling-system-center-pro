@@ -2012,8 +2012,7 @@
     document.body.classList.remove("offline");
     txt("#conn-text", F.automatic ? "Verbunden · Automatik" : "Verbunden · Beobachten");
 
-    if (!state.targetDirty && state.cfg)
-      $("#auto-mode").checked = F.automatic;
+    if (state.cfg) $("#auto-mode").checked = F.automatic;   /* folgt der Konsole, auch wenn der Regler gerade angefasst ist */
   };
 
   /* ── Konfiguration ──────────────────────────────────────────────── */
@@ -2031,6 +2030,7 @@
     }
 
     $$("input[name=profile]").forEach((r) => { r.checked = r.value === c.profile; });
+    syncChoices();
     $("#auto-mode").checked = c.mode === "automatic";
     /* Fehlt das Feld (ältere App), gilt die Vorgabe „an". */
     if ($("#mic-button-status")) $("#mic-button-status").checked = c.ps_button_status !== 0;
@@ -2271,7 +2271,8 @@
     let d;
     try { d = await api("/api/v1/payloads"); } catch { return; }
     const list = d.payloads || [];
-    const sig = JSON.stringify(list);
+    /* ohne den Speicher: der ändert sich ständig, und jedes Neuzeichnen nahm einem halb bestätigten „Beenden“ die Bestätigung */
+    const sig = JSON.stringify(list.map((p) => Object.assign({}, p, { memory_mb: 0 })));
     if (!force && sig === plLast.running) return;
     plLast.running = sig;
 
@@ -4629,12 +4630,16 @@
   /* ── Abfragen ───────────────────────────────────────────────────── */
 
   const refresh = async () => {
-    try {
-      const s = await api("/api/v1/status");
-      renderStatus(s);
-      evaluateMonitorAlert(s);
-      if (state.page === "system") renderCores(s);
-    } catch {
+    let s = null;
+    try { s = await api("/api/v1/status"); } catch { s = null; }
+    if (s) {
+      /* Ein Fehler beim Zeichnen ist keine verlorene Verbindung: er wird gemeldet, die Seite bleibt „verbunden“. */
+      try {
+        renderStatus(s);
+        evaluateMonitorAlert(s);
+        if (state.page === "system") renderCores(s);
+      } catch (e) { console.error("Statusanzeige:", e); }
+    } else {
       const conn = $("#conn");
       conn.classList.remove("on"); conn.classList.add("off");
       txt("#conn-text", "Keine Verbindung");
@@ -4797,6 +4802,7 @@
             ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy)}
             ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move)}
             ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert)}
+            ${btn(" gm-apr", `data-apr="${id}"`, "APR &amp; LZ4 …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
             ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
             ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy)}
           </div>`;
@@ -5105,6 +5111,7 @@
         if (n === "mv-del") mv.del = e.target.checked;
         if (n === "cv-drive") cv.drive = e.target.value;
         if (n === "cv-mode") cv.mode = e.target.value;
+        if (n === "cv-ampr") cv.ampr = e.target.checked;
         if (n === "cv-op") {
           if (e.target.value === "unpack") { mvOpen(cv.id, "unpack"); return; }
           cv.op = e.target.value;
@@ -5249,11 +5256,34 @@
       html = `<p class="muted">Keine Kopie.</p>`;
     }
     const active = !!j.active;
-    body.innerHTML = `${html}
-      <div class="cp-actions">
+    paintJob(body, html, `
         ${active ? `<button type="button" class="btn" data-cp="cancel">Kopie abbrechen</button>` : ""}
-        <button type="button" class="btn${active ? "" : " primary"}" data-cp="close">${active ? "Im Hintergrund weiter" : "Schließen"}</button>
-      </div>`;
+        <button type="button" class="btn${active ? "" : " primary"}" data-cp="close">${active ? "Im Hintergrund weiter" : "Schließen"}</button>`);
+  };
+
+  /* Auswahlkarten (.choice): die gewählte trägt .is-checked – Ersatz für :has(), das der Browser der Konsole nicht kennt. */
+  const syncChoices = () => {
+    $$(".choice").forEach((l) => {
+      const i = l.querySelector("input");
+      l.classList.toggle("is-checked", !!(i && i.checked));
+    });
+  };
+  document.addEventListener("change", (e) => {
+    if (e.target && e.target.closest && e.target.closest(".choice")) syncChoices();
+  });
+  setTimeout(syncChoices, 0);
+
+  /* Fortschritt mit Knöpfen: Der Text wird bei jedem Takt neu geschrieben, die Knöpfe nur, wenn sie sich ändern.
+     Vorher ersetzte jeder Takt (alle 0,8–1 s, beim Hochladen viel öfter) auch die Knöpfe, und ein Klick auf
+     „Abbrechen“, der gerade in so einen Wechsel fiel, ging verloren. */
+  const paintJob = (box, main, actions) => {
+    let c = box.__cp;
+    if (!c || c.m.parentNode !== box || c.a.parentNode !== box) {
+      box.innerHTML = '<div class="cp-main"></div><div class="cp-actions"></div>';
+      c = box.__cp = { m: box.firstElementChild, a: box.lastElementChild, act: null };
+    }
+    c.m.innerHTML = main;
+    if (c.act !== actions) { c.a.innerHTML = actions; c.act = actions; }
   };
 
   /* Streifen über den Karten: eine laufende Kopie oder ein laufender Auftrag
@@ -5310,12 +5340,19 @@
   };
   const cpBanner = jobBanner;
 
+  /* Jeder Abfrager hat nur eine Kette: Ein zweiter Aufruf (Abbrechen, Seite neu geöffnet), während der erste
+     noch auf die Antwort wartet, ersetzt ihn; der ältere hört nach seiner Antwort auf. Ohne Auftrag wird nach
+     einem Fehler nicht endlos weiter gefragt. */
   const cpPoll = async () => {
     clearTimeout(cp.timer);
+    const my = cp.gen = (cp.gen || 0) + 1;
     try {
-      cp.job = await api("/api/v1/library/copy");
+      const j = await api("/api/v1/library/copy");
+      if (my !== cp.gen) return;
+      cp.job = j;
     } catch (e) {
-      cp.timer = setTimeout(cpPoll, 3000);
+      if (my !== cp.gen) return;
+      if (cp.job && cp.job.active) cp.timer = setTimeout(cpPoll, 3000);
       return;
     }
     cpBanner();
@@ -5489,11 +5526,9 @@
     } else {
       html = `<p class="muted">ShadowMountPlus hat keinen Auftrag.</p>`;
     }
-    body.innerHTML = `${html}
-      <div class="cp-actions">
+    paintJob(body, html, `
         ${j.active && j.cancellable ? `<button type="button" class="btn" data-cp="cancel" ${j.cancel_requested ? "disabled" : ""}>${j.cancel_requested ? "Wird abgebrochen …" : "Auftrag abbrechen"}</button>` : ""}
-        <button type="button" class="btn${j.active ? "" : " primary"}" data-cp="close">${j.active ? "Im Hintergrund weiter" : "Schließen"}</button>
-      </div>`;
+        <button type="button" class="btn${j.active ? "" : " primary"}" data-cp="close">${j.active ? "Im Hintergrund weiter" : "Schließen"}</button>`);
   };
 
   /* ShadowMountPlus can be too busy copying to answer in time. One lost answer
@@ -5506,10 +5541,13 @@
 
   const mvPoll = async () => {
     clearTimeout(mv.timer);
+    const my = mv.gen = (mv.gen || 0) + 1;
     let j;
     try {
       j = await api("/api/v1/library/storage");
+      if (my !== mv.gen) return;
     } catch (e) {
+      if (my !== mv.gen) return;
       if (mv.job && mv.job.active && ++mv.misses <= MV_MAX_MISSES) {
         mv.timer = setTimeout(mvPoll, 3000);
         return;
@@ -5582,7 +5620,7 @@
    * (gameconvert.c). Ein Abbild zu einem Ordner entpacken macht
    * ShadowMountPlus (mv…). Die Ziele sind die des Kopierens: der Ordner
    * homebrew eines Laufwerks oder PS5-Sicherung/Spiele. */
-  const cv = { id: "", plan: null, op: "", drive: "", mode: "", job: null, timer: 0 };
+  const cv = { id: "", plan: null, op: "", drive: "", mode: "", job: null, timer: 0, ampr: false };
 
   const CV_OPS = {
     ffpfsc: {
@@ -5670,6 +5708,12 @@
 
       <h4 class="cp-step">1. Was soll entstehen?</h4>
       <div class="cp-list">${ops}</div>
+      ${p.kind === "folder" ? `<label class="cp-choice cv-ampr">
+        <input type="checkbox" name="cv-ampr" ${cv.ampr ? "checked" : ""}>
+        <span class="cp-choice-text"><b>AMPR-Index vorher bauen</b>
+          <span class="muted">Für Spiele mit APR-EMU: legt <code>ampr_emu.index</code> (die Liste aller Dateien) in den Ordner,
+            bevor er gepackt wird; er kommt so mit ins Abbild. Ein alter Index bleibt als <code>ampr_emu.index.bak</code>.</span></span>
+      </label>` : ""}
 
       <h4 class="cp-step">2. Als was?</h4>
       <div class="cp-list">
@@ -5755,19 +5799,21 @@
       html = `<p class="muted">Keine Konvertierung.</p>`;
     }
     const active = !!j.active;
-    body.innerHTML = `${html}
-      <div class="cp-actions">
+    paintJob(body, html, `
         ${active ? `<button type="button" class="btn" data-cp="cancel">Konvertieren abbrechen</button>` : ""}
-        <button type="button" class="btn${active ? "" : " primary"}" data-cp="close">${active ? "Im Hintergrund weiter" : "Schließen"}</button>
-      </div>`;
+        <button type="button" class="btn${active ? "" : " primary"}" data-cp="close">${active ? "Im Hintergrund weiter" : "Schließen"}</button>`);
   };
 
   const cvPoll = async () => {
     clearTimeout(cv.timer);
+    const my = cv.gen = (cv.gen || 0) + 1;
     try {
-      cv.job = await api("/api/v1/library/convert");
+      const j = await api("/api/v1/library/convert");
+      if (my !== cv.gen) return;
+      cv.job = j;
     } catch (e) {
-      cv.timer = setTimeout(cvPoll, 3000);
+      if (my !== cv.gen) return;
+      if (cv.job && cv.job.active) cv.timer = setTimeout(cvPoll, 3000);
       return;
     }
     jobBanner();
@@ -5783,6 +5829,7 @@
     /* Ein komprimiertes Abbild lässt sich nur entpacken: gleich dorthin. */
     if (g && !g.can_convert && g.can_unpack) { mvOpen(id, "unpack"); return; }
     cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cp.view = "cvloading";
+    { const g0 = gm.list.find((x) => x.title_id === id); cv.ampr = !!(g0 && g0.mods && g0.mods.ampr_emu); }
     txt("#cp-title", `„${g ? g.name : id}“ konvertieren`);
     $("#cp-body").innerHTML = `<p class="muted">Das Spiel wird vermessen …</p>`;
     try {
@@ -5806,7 +5853,8 @@
     btn.disabled = true;
     try {
       cv.job = await api("/api/v1/library/convert", { method: "POST",
-        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode }) });
+        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode,
+                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && cv.ampr) }) });
       cvRenderJob();
       jobBanner();
       cv.timer = setTimeout(cvPoll, 1000);
@@ -6016,6 +6064,8 @@
       if (tab) tab.click();
       return;
     }
+    const apr = e.target.closest("button[data-apr]");
+    if (apr) { if (!apr.disabled) aprOpen(apr.dataset.apr); return; }
     const del = e.target.closest("button[data-delete]");
     if (del) { if (!del.disabled) dlOpen("game", del.dataset.delete); return; }
     const closeBtn = e.target.closest("button[data-close]");
@@ -6348,7 +6398,8 @@
     $("#gm-pane-saves").hidden = which !== "saves";
     $("#gm-pane-pkg").hidden   = which !== "pkg";
     $("#gm-pane-bk").hidden    = which !== "bk";
-    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["bk", "#gm-tab-bk"]].forEach(([k, sel]) => {
+    $("#gm-pane-hist").hidden  = which !== "hist";
+    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
       const b = $(sel);
       b.classList.toggle("active", which === k);
       b.setAttribute("aria-selected", which === k ? "true" : "false");
@@ -6357,6 +6408,7 @@
     if (which === "saves") loadSaves();
     if (which === "pkg") loadPackages();
     if (which === "bk") loadBackups();
+    if (which === "hist") loadHistory2();
     syncPlaytime();
     svSync();
     pkSync();
@@ -6366,6 +6418,120 @@
   $("#gm-tab-saves").addEventListener("click", () => ptSelectTab("saves"));
   $("#gm-tab-pkg").addEventListener("click", () => ptSelectTab("pkg"));
   $("#gm-tab-bk").addEventListener("click", () => ptSelectTab("bk"));
+  $("#gm-tab-hist").addEventListener("click", () => ptSelectTab("hist"));
+
+  /* ── Verlauf (jobhist.c, 11.10.2026) ────────────────────────────────
+     Alle Vorgänge der App mit Ergebnis, aus /api/v1/jobs/history, das neueste zuerst. */
+  const HV_KIND = {
+    copy: ["⧉", "Kopiert"], convert: ["⇄", "Konvertiert"], delete: ["🗑", "Gelöscht"], split: ["✂", "Paket geteilt"],
+    install: ["⬇", "Paket installiert"], ampr_index: ["🗜", "AMPR-Index gebaut"],
+    files_copy: ["📁", "Dateimanager: kopiert"], files_move: ["📁", "Dateimanager: verschoben"], files_delete: ["📁", "Dateimanager: gelöscht"],
+    saves_backup: ["💾", "Spielstände gesichert"], saves_restore: ["💾", "Spielstände zurückgespielt"],
+    saves_verify: ["💾", "Spielstände geprüft"], saves_delete: ["💾", "Spielstände gelöscht"]
+  };
+  const HV_RES = { done: ["ok", "Fertig"], failed: ["bad", "Fehler"], cancelled: ["stop", "Abgebrochen"] };
+  const hv = { list: [], filter: "" };
+  const hvWhen = (t) => {
+    const d = new Date(t * 1000), now = new Date();
+    const hm = d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+    const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const y = new Date(now.getTime() - 86400000);
+    return same(d, now) ? `heute, ${hm}` : same(d, y) ? `gestern, ${hm}` : `${d.toLocaleDateString(LOCALE)}, ${hm}`;
+  };
+  const hvRender = () => {
+    const rows = hv.list.filter((e) => !hv.filter || e.result === hv.filter);
+    $$("#hv-chips .gm-chip").forEach((b) => b.classList.toggle("active", (b.dataset.hv || "") === hv.filter));
+    $("#hv-list").innerHTML = rows.length ? rows.map((e) => {
+      const k = HV_KIND[e.kind] || ["•", e.kind];
+      const r = HV_RES[e.result] || HV_RES.done;
+      const parts = [e.title, e.detail, e.bytes ? bytes(e.bytes) : "", hvWhen(e.t), e.ms >= 1000 ? ptDur(Math.round(e.ms / 1000)) : ""].filter(Boolean);
+      return `<div class="hv-row"><div class="hv-ico" aria-hidden="true">${k[0]}</div>
+        <div class="hv-main"><b>${esc(k[1])}</b><small>${parts.map(esc).join(" · ")}</small>
+          ${e.error ? `<small class="hv-err">${esc(e.error)}</small>` : ""}</div>
+        <span class="hv-res ${r[0]}">${esc(r[1])}</span></div>`;
+    }).join("") : `<p class="muted">${hv.list.length ? "Nichts mit dieser Auswahl." : "Noch keine Vorgänge."}</p>`;
+  };
+  const loadHistory2 = async () => {
+    try {
+      const d = await api("/api/v1/jobs/history");
+      hv.list = d.entries || [];
+    } catch (e) { hv.list = []; toast(e.message, "error"); }
+    hvRender();
+  };
+  $("#hv-chips").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-hv]");
+    if (!b) return;
+    hv.filter = b.dataset.hv;
+    hvRender();
+  });
+  armConfirm($("#hv-clear"), "Wirklich leeren? Nochmal klicken", async () => {
+    try { await api("/api/v1/jobs/history/clear", { method: "POST" }); hv.list = []; hvRender(); toast("Verlauf geleert."); }
+    catch (e) { toast(e.message, "error"); }
+  }, "Alle Einträge des Verlaufs werden gelöscht. Zum Bestätigen noch einmal klicken.");
+
+  /* ── APR & LZ4 (amprindex.c, 11.10.2026) ──────────────────────────
+     Ein Fenster je Spiel; in Schritt 1 nur der AMPR-Index. Gleiches Fenster wie Kopieren (cp-overlay). */
+  const apr = { id: "", info: null, timer: 0 };
+  const aprRender = () => {
+    const body = $("#cp-body");
+    const i = apr.info, j = apr.job;
+    if (!body || !i) return;
+    cp.view = "apr";
+    txt("#cp-title", `APR & LZ4 – ${i.name}`);
+    const fmtName = GM_FORMATS[i.format] || i.format;
+    const state = i.has_index
+      ? `<span class="apr-state ok">vorhanden · ${num(i.files)} Dateien${i.mtime ? ` · ${esc(new Date(i.mtime * 1000).toLocaleDateString(LOCALE))}` : ""}</span>`
+      : `<span class="apr-state no">noch keiner</span>`;
+    const running = j && j.active;
+    const last = j && !j.active && j.id === apr.id && j.state !== "idle"
+      ? (j.state === "done" ? `<p class="cp-ok">✓ Gebaut: ${num(j.files)} Dateien${j.collisions ? ` (${num(j.collisions)} Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, einmal genommen)` : ""}.</p>`
+                            : `<p class="cp-err">✗ ${esc(j.error || "Fehlgeschlagen.")}</p>`) : "";
+    paintJob(body, `
+      <p class="muted" style="margin:0 0 14px">${esc(fmtName)}</p>
+      <div class="apr-row"><div><b>AMPR-Index</b>
+        <small>Die Liste aller Dateien des Spiels, die APR-EMU zum Finden braucht (<code>ampr_emu.index</code>).
+          Neu bauen, wenn Dateien dazukamen oder sich geändert haben.</small>${state}</div>
+        <button type="button" class="btn${i.can_build ? " primary" : ""}" data-apr-build ${i.can_build && !running ? "" : "disabled"}
+          ${i.why ? `title="${esc(i.why)}"` : ""}>${running ? "Wird gebaut …" : i.has_index ? "Neu bauen" : "Bauen"}</button></div>
+      ${running ? `<p class="muted">${esc(j.phase || "")}</p>` : ""}
+      ${last}
+      ${i.why ? `<p class="muted apr-note">${esc(i.why)}</p>` : `<p class="muted apr-note">Ein alter Index bleibt als
+        <code>ampr_emu.index.bak</code> liegen. ${i.format === "folder" ? "" : "Das Abbild wird dafür von ShadowMountPlus kurz zum Schreiben eingehängt und danach wieder freigegeben."}</p>`}`,
+      `<button type="button" class="btn" data-cp="close">Schließen</button>`);
+  };
+  const aprLoad = async () => {
+    try {
+      /* erst der Auftrag, dann die Angaben: so zeigt „vorhanden" nach dem Ende schon den neuen Index */
+      const job = await api("/api/v1/library/ampr/job");
+      const info = await api(`/api/v1/library/ampr?id=${encodeURIComponent(apr.id)}`);
+      if (cp.view !== "apr" && cp.view !== "aprloading") return;
+      apr.info = info; apr.job = job;
+      aprRender();
+      clearTimeout(apr.timer);
+      if (job.active) apr.timer = setTimeout(aprLoad, 1000);
+    } catch (e) {
+      $("#cp-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
+        <div class="cp-actions"><button type="button" class="btn primary" data-cp="close">Schließen</button></div>`;
+    }
+  };
+  const aprOpen = (id) => {
+    cpShell();
+    apr.id = id; apr.info = null; apr.job = null;
+    cp.view = "aprloading";
+    txt("#cp-title", "APR & LZ4");
+    $("#cp-body").innerHTML = `<p class="muted">wird gelesen …</p>`;
+    $("#cp-overlay").hidden = false;
+    aprLoad();
+  };
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest && e.target.closest("button[data-apr-build]");
+    if (!b || b.disabled) return;
+    b.disabled = true;
+    try {
+      apr.job = await api("/api/v1/library/ampr", { method: "POST", body: JSON.stringify({ id: apr.id }) });
+      aprLoad();
+    } catch (err) { toast(err.message, "error"); b.disabled = false; }
+  });
 
   /* ── Löschen (gamedelete.c) ─────────────────────────────────────────
      Ein Spiel (installiert: über die Deinstallation der Konsole; ShadowMountPlus: abmelden, dann die Datei löschen)
@@ -6783,8 +6949,14 @@
   const FM_KIND = { copy: "Kopieren", move: "Verschieben", delete: "Löschen" };
   const fmFollow = async () => {
     clearTimeout(fm.poll);
+    const my = fm.gen = (fm.gen || 0) + 1;
     let j = null;
-    try { j = await api("/api/v1/files/job"); } catch { /* gleich noch einmal */ }
+    try { j = await api("/api/v1/files/job"); } catch {
+      /* eine verlorene Antwort (WLAN) beendet die Anzeige nicht: gleich noch einmal */
+      if (my === fm.gen) fm.poll = setTimeout(fmFollow, 2500);
+      return;
+    }
+    if (my !== fm.gen) return;
     const box = $("#fm-job");
     if (!j || (!j.active && j.state === "idle")) { box.hidden = true; return; }
     box.hidden = false;
@@ -6792,10 +6964,10 @@
     if (j.active) {
       const pc = Math.max(0, Math.min(100, Math.floor(Number(j.percent) || 0)));
       const amount = j.bytes_total > 0 ? `${j.bytes_done > 0 ? esc(bytes(j.bytes_done)) : "0 B"} von ${esc(bytes(j.bytes_total))}` : `${num(j.files_done)} von ${num(j.files_total)} Dateien`;
-      box.innerHTML = `<p class="cp-num"><b>${esc(what)}${j.dest ? ` nach ${esc(j.dest)}` : ""}</b> · ${pc} %</p>
+      paintJob(box, `<p class="cp-num"><b>${esc(what)}${j.dest ? ` nach ${esc(j.dest)}` : ""}</b> · ${pc} %</p>
         <div class="cp-bar" role="progressbar" aria-label="Fortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>
-        <p class="muted cp-cur">${amount}${j.elapsed_s > 0 ? ` · seit ${esc(ptDur(j.elapsed_s))}` : ""}${j.current ? `<br><code>${esc(j.current)}</code>` : ""}</p>
-        <div class="cp-actions"><button type="button" class="btn" id="fm-cancel">Abbrechen</button></div>`;
+        <p class="muted cp-cur">${amount}${j.elapsed_s > 0 ? ` · seit ${esc(ptDur(j.elapsed_s))}` : ""}${j.current ? `<br><code>${esc(j.current)}</code>` : ""}</p>`,
+        `<button type="button" class="btn" id="fm-cancel">Abbrechen</button>`);
       fm.poll = setTimeout(fmFollow, 800);
       return;
     }
@@ -6843,10 +7015,10 @@
     const x = new XMLHttpRequest();
     fm.xhr = x;
     const show = (pc) => {
-      box.innerHTML = `<p class="cp-num"><b>Hochladen ${done + 1} von ${total}</b> · ${pc} %</p>
+      paintJob(box, `<p class="cp-num"><b>Hochladen ${done + 1} von ${total}</b> · ${pc} %</p>
         <div class="cp-bar" role="progressbar" aria-label="Fortschritt beim Hochladen" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>
-        <p class="muted cp-cur"><code>${esc(it.f.name)}</code> · ${esc(bytes(it.f.size))} nach ${esc(it.dir)}</p>
-        <div class="cp-actions"><button type="button" class="btn" id="fm-upcancel">Abbrechen</button></div>`;
+        <p class="muted cp-cur"><code>${esc(it.f.name)}</code> · ${esc(bytes(it.f.size))} nach ${esc(it.dir)}</p>`,
+        `<button type="button" class="btn" id="fm-upcancel">Abbrechen</button>`);
     };
     show(0);
     x.upload.onprogress = (e) => { if (e.lengthComputable) show(Math.floor((e.loaded / e.total) * 100)); };

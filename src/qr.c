@@ -9,6 +9,7 @@
  * This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public
  * License as published by the Free Software Foundation; either version 3, or (at your option) any later version. */
 
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -27,8 +28,7 @@ static const int g_align[QR_MAX_VERSION + 1] = { 0, 0, 18, 22, 26, 30, 34 };
 /* GF(256) with the QR polynomial 0x11d */
 static unsigned char g_exp[512], g_log[256];
 static void
-gf_init(void) {
-  if(g_exp[1]) return;
+gf_fill(void) {
   unsigned v = 1;
   for(int i = 0; i < 255; i++) {
     g_exp[i] = (unsigned char)v;
@@ -37,6 +37,13 @@ gf_init(void) {
     if(v & 0x100) v ^= 0x11d;
   }
   for(int i = 255; i < 512; i++) g_exp[i] = g_exp[i - 255];
+}
+
+/* Once for the whole process: two requests at the same moment must not see a half-filled table. */
+static pthread_once_t g_gf_once = PTHREAD_ONCE_INIT;
+static void
+gf_init(void) {
+  pthread_once(&g_gf_once, gf_fill);
 }
 
 static unsigned char

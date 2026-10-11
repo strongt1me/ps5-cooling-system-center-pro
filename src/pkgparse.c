@@ -490,7 +490,7 @@ ps5tm_pkg_parse(const char *path, ps5tm_pkg_t *out) {
   const char *slash = strrchr(path, '/');
   SET(out->file, slash ? slash + 1 : path);
 
-  int fd = open(path, O_RDONLY);
+  int fd = open(path, O_RDONLY | O_NONBLOCK);       /* a FIFO in a package's place must not block the scan */
   if(fd < 0) return -1;
   struct stat st;
   if(fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0x80) { close(fd); return -1; }
@@ -574,7 +574,7 @@ ps5tm_pkg_parse_slices(const ps5tm_pkgslice_t *sl, unsigned n, uint64_t total, p
 int
 ps5tm_pkg_icon(const ps5tm_pkg_t *p, uint8_t **data, size_t *n) {
   if(!p || !data || !n || p->icon_size == 0 || p->icon_size >= PKG_MAX_ICON) return -1;
-  int fd = open(p->path, O_RDONLY);
+  int fd = open(p->path, O_RDONLY | O_NONBLOCK);
   if(fd < 0) return -1;
   struct stat st;
   if(fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || p->icon_off + p->icon_size > (uint64_t)st.st_size) { close(fd); return -1; }

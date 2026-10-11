@@ -390,8 +390,8 @@ game_running(char *id, size_t n) {
 static int
 other_job_active(char *err, size_t err_len) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() ||
-     ps5tm_gamedelete_busy()) {
-    snprintf(err, err_len, "Es läuft gerade eine Kopie, Konvertierung, ein Verschieben oder Löschen von Spielen, "
+     ps5tm_gamedelete_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy()) {
+    snprintf(err, err_len, "Es läuft gerade eine Kopie, Konvertierung, ein Verschieben oder Löschen von Spielen, der Dateimanager, "
              "das Teilen oder Installieren eines Pakets. Das läuft nicht gleichzeitig mit den Spielständen.");
     return 1;
   }
@@ -1283,6 +1283,27 @@ static void *verify_main(void *arg);
 static void *restore_main(void *arg);
 static void *delete_main(void *arg);
 
+/* The thread: the job itself, then one line in the history (jobhist.c). */
+typedef struct { void *(*fn)(void *); job_args_t *a; } sv_run_t;
+
+static void *
+sv_thread(void *arg) {
+  sv_run_t r = *(sv_run_t *)arg;
+  free(arg);
+  void *res = r.fn(r.a);
+  pthread_mutex_lock(&g_lock);
+  int st = g_job.state;
+  char kind[24], detail[340], error[640];
+  snprintf(kind, sizeof(kind), "saves_%s", g_job.kind);
+  snprintf(detail, sizeof(detail), "%s", g_job.path);
+  snprintf(error, sizeof(error), "%s", g_job.error);
+  uint64_t bytes = g_job.bytes_total, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  pthread_mutex_unlock(&g_lock);
+  if(st == J_DONE || st == J_FAILED || st == J_CANCELLED)
+    ps5tm_hist_add(kind, "Spielstände", detail, st == J_DONE ? "done" : st == J_FAILED ? "failed" : "cancelled", error, bytes, dur);
+  return res;
+}
+
 static int
 job_launch(void *(*fn)(void *), job_args_t *a, const char *kind, char *err, size_t err_len) {
   pthread_mutex_lock(&g_lock);
@@ -1316,7 +1337,14 @@ job_launch(void *(*fn)(void *), job_args_t *a, const char *kind, char *err, size
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
   pthread_t t;
-  int rc = pthread_create(&t, &attr, fn, a);
+  sv_run_t *run = malloc(sizeof(*run));
+  int rc = -1;
+  if(run) {
+    run->fn = fn;
+    run->a = a;
+    rc = pthread_create(&t, &attr, sv_thread, run);
+    if(rc != 0) free(run);
+  }
   pthread_attr_destroy(&attr);
   if(rc != 0) {
     pthread_mutex_lock(&g_lock);

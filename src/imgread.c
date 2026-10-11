@@ -270,7 +270,11 @@ static int
 exf_read(exfat_t *x, uint32_t first, int nofat, uint64_t off, void *buf, size_t n) {
   uint8_t *out = buf;
   uint64_t csize = 1ull << x->clu_shift;
-  uint32_t idx = (uint32_t)(off >> x->clu_shift), c = first;
+  uint64_t idx64 = off >> x->clu_shift;
+  /* a file cannot reach past the cluster count: a corrupt size (or a FAT chain in a circle) must not make the
+     walk below run for billions of steps */
+  if(idx64 >= x->clusters) return -1;
+  uint32_t idx = (uint32_t)idx64, c = first;
   if(!exf_valid_cluster(x, first)) return -1;
   if(nofat) {
     c = first + idx;

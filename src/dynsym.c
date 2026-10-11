@@ -54,6 +54,7 @@ ps5tm_dynsym_in(unsigned module_handle, const char *module,
 #else
 
 #include <dlfcn.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <unistd.h>
 
@@ -73,10 +74,17 @@ static struct {
 
 static int g_opened_count = 0;
 
+static pthread_mutex_t g_opened_lock = PTHREAD_MUTEX_INITIALIZER;   /* several threads look symbols up */
+
 static void *
 open_module(const char *module) {
+  pthread_mutex_lock(&g_opened_lock);
   for(int i = 0; i < g_opened_count; i++) {
-    if(!strcmp(g_opened[i].name, module)) return g_opened[i].handle;
+    if(!strcmp(g_opened[i].name, module)) {
+      void *h = g_opened[i].handle;
+      pthread_mutex_unlock(&g_opened_lock);
+      return h;
+    }
   }
 
   void *handle = dlopen(module, RTLD_LAZY);
@@ -85,6 +93,7 @@ open_module(const char *module) {
     g_opened[g_opened_count].handle = handle;
     g_opened_count++;
   }
+  pthread_mutex_unlock(&g_opened_lock);
   return handle;
 }
 

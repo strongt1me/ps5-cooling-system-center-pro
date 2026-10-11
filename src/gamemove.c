@@ -305,6 +305,14 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
              "und Verschieben laufen nicht gleichzeitig damit.");
     return 409;
   }
+  if(ps5tm_ampr_busy()) {
+    snprintf(err, err_len, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
+    return 409;
+  }
+  if(ps5tm_filemgr_busy()) {
+    snprintf(err, err_len, "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
+    return 409;
+  }
   if(ps5tm_pkginst_busy()) {
     snprintf(err, err_len, "Es wird gerade ein Paket installiert. Kopieren, Konvertieren "
              "und Verschieben laufen nicht gleichzeitig damit.");

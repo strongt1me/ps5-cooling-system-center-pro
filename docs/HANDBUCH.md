@@ -266,6 +266,33 @@ anderen Kabel liefen sie durch. Was der Auftrag geschrieben hat, räumt er weg. 
 Konvertierung kann eine leere `….ps5cc-konv-teil`-Datei liegen bleiben, weil die Platte beim
 Aufräumen gerade fehlte; der nächste Versuch entfernt sie.
 
+## APR & LZ4 und der Verlauf (seit 11.10.2026)
+
+Jede Spielkarte hat unter **Konvertieren** den Knopf **APR & LZ4 …**. Er öffnet ein
+Fenster mit Werkzeugen rund um APR-EMU; bisher ist das der **AMPR-Index**
+(`ampr_emu.index`): die Liste aller Dateien des Spiels, die APR-EMU zum Finden
+braucht. Das Fenster zeigt, ob es einen gibt und wie viele Dateien er kennt.
+
+- **Bauen / Neu bauen** legt ihn an. Bei einem Dump-Ordner geschieht das direkt, bei
+  einem Abbild hängt ShadowMountPlus es kurz zum Schreiben ein und danach wieder aus.
+  Ein alter Index bleibt als `ampr_emu.index.bak` liegen. Ein laufendes Spiel und
+  jeder andere Vorgang der App sperren das Bauen.
+- Beim **Konvertieren** eines Dump-Ordners gibt es das Kästchen **AMPR-Index vorher
+  bauen** (bei Spielen mit APR-EMU schon angehakt). So kommt der Index mit ins
+  Abbild; bei einem komprimierten Abbild (`.ffpfsc`) ist das der einzige Weg, denn
+  dort lässt sich nachträglich nichts schreiben.
+- Der Aufbau folgt `build_ampr_index.py` aus [ampr_emu](https://github.com/drakmor/ampr_emu)
+  (drakmor, GPL-3.0) und ist mit dessen Ergebnis Byte für Byte verglichen: Kennung
+  `AMPRIDX3`, Pfade klein geschrieben (nur ASCII), nach Schlüssel sortiert, mit
+  FNV-1a-Tabelle. Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, nimmt der
+  Index einmal.
+
+Der Reiter **Verlauf** (Spiele-Seite) zeigt alle Vorgänge der App – Kopieren,
+Verschieben, Konvertieren, Paket teilen, Installieren, Löschen, Dateimanager,
+Spielstände, AMPR-Index – mit Ergebnis, Größe, Dauer und Zeit, nach Ergebnis
+filterbar. Die letzten 500 liegen auf der Konsole in
+`/data/PS5-Cooling-Center/history.jsonl`; **Verlauf leeren** löscht sie.
+
 ## Dateien: der Dateimanager (seit 06.10.2026)
 
 Die Seite **Dateien** zeigt die Ordner der Konsole. Oben stehen die Orte (Interne SSD `/data`, jedes angeschlossene
@@ -844,7 +871,7 @@ Die Lüfter-Kachel auf der Seite **Kühlung** zeigt einen gezeichneten **Tacho**
 - **Nadel:** Sie steht bei 0 % ganz links und bei 100 % ganz rechts und fährt weich auf jeden neuen Wert. Dazwischen läuft nichts im Browser.
   Der Regenbogenbogen leuchtet nur bis zur Nadel, dahinter ist er abgedunkelt. Das ist eine Darstellung, keine gemessene Drehzahl.
 - **Farbe:** Sie geht stufenlos von Blau (bis 25 %) über Grün (um 55 %) und Gelb (um 75 %) zu Rot (ab 95 %). Die Farbe stellt die Lüfterlast dar, nicht die
-  Temperatur. Sie färbt Nadel, Zahl, Rand und Glühen der Kachel und den Luftstrom im Hintergrund der Kachel, der in dieser Farbe leuchtet.
+  Temperatur. Sie färbt Nadel und Zahl (das farbige Leuchten von Luftstrom und Rand der Kacheln gab es nur in 1.59.0 und 1.60.0).
 - **Kein Wert:** Ohne gültigen Messwert (oder ohne Verbindung zur App) steht die Nadel grau links, der Bogen ist abgedunkelt, die Zahl zeigt „—“.
 - **Schutz für langsame Browser:** Braucht der Browser zu lange für ein Bild (der Browser der Konsole ist alt), schaltet die Komponente
   zuerst das Leuchten der Nadel ab und, wenn es immer noch ruckelt, die Fahrt der Nadel; Farbe und Werte bleiben. Eine Auswahl der Animation gibt es nicht mehr (bis 1.56.0 gab es „voll“, „reduziert“ und „aus“).

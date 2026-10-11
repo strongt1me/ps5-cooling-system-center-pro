@@ -762,11 +762,32 @@ static void *copy_run(void *arg);
 
 /* The console stays awake for as long as the copy runs, whichever way it ends
    (powerguard.c). */
+static const char *
+hist_result(int done, int failed, int state) {
+  return state == done ? "done" : state == failed ? "failed" : "cancelled";
+}
+
+/* One line in the history (jobhist.c) for the job that just ended. */
+static void
+hist_note(void) {
+  pthread_mutex_lock(&g_lock);
+  int st = g_job.state;
+  char name[128], detail[96], error[640];
+  snprintf(name, sizeof(name), "%s", g_job.name);
+  snprintf(detail, sizeof(detail), "nach %s", g_job.drive[0] ? g_job.drive : g_job.target);
+  snprintf(error, sizeof(error), "%s", g_job.error);
+  uint64_t bytes = g_job.done_bytes, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  pthread_mutex_unlock(&g_lock);
+  if(st != JOB_DONE && st != JOB_FAILED && st != JOB_CANCELLED) return;
+  ps5tm_hist_add("copy", name, detail, hist_result(JOB_DONE, JOB_FAILED, st), error, bytes, dur);
+}
+
 static void *
 copy_thread(void *arg) {
   ps5tm_powerguard_hold();
   void *r = copy_run(arg);
   ps5tm_powerguard_release();
+  hist_note();
   return r;
 }
 
@@ -1159,6 +1180,14 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
   if(ps5tm_gamedelete_busy()) {
     snprintf(err, err_len, "Es wird gerade ein Spiel oder eine Sicherung gelöscht. Kopieren, Konvertieren "
              "und Verschieben laufen nicht gleichzeitig damit.");
+    return 1;
+  }
+  if(ps5tm_ampr_busy()) {
+    snprintf(err, err_len, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
+    return 1;
+  }
+  if(ps5tm_filemgr_busy()) {
+    snprintf(err, err_len, "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
     return 1;
   }
   if(ps5tm_pkginst_busy()) {

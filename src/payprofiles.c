@@ -197,6 +197,7 @@ write_file(const char *txt) {
     if(k <= 0) { eno = errno ? errno : EIO; break; }
     off += (size_t)k;
   }
+  if(!eno && fsync(fd) != 0) eno = errno ? errno : EIO;   /* on the disk before it replaces the old file */
   if(close(fd) != 0 && !eno) eno = errno;
   if(!eno && rename(tmp, PP_FILE) != 0) eno = errno;
   if(eno) unlink(tmp);

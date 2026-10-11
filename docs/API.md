@@ -88,8 +88,13 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET/POST | `/api/v1/library/copy` | Status / Kopieren starten (`{"id":…,"target":…,"mode":"homebrew"\|"backup"}`) |
 | POST | `/api/v1/library/copy/cancel` | laufendes Kopieren abbrechen |
 | GET | `/api/v1/library/convert/plan?id=PPSA20396` | Konvertierungsplan: mögliche Zielformate für diesen Titel, `raw_bytes` (Größe als exFAT-Abbild) und `ffpkg_bytes` (Größe des `.ffpkg`; 0, wenn sie sich nicht berechnen lässt, dann nennt `ffpkg_error` den Grund, z. B. einen Ordner mit zu vielen Einträgen), je Ziel, ob der Platz reicht und ob FAT32 die Datei nicht aufnimmt (`fat32_too_big` nach der Größe als exFAT-Abbild, `fat32_too_big_ffpkg` nach der des `.ffpkg`) |
-| GET/POST | `/api/v1/library/convert` | Status / Konvertieren starten (`{"id":…,"op":"exfat"\|"ffpkg"\|"ffpfsc","target":…,"mode":"homebrew"\|"backup"}`) |
+| GET/POST | `/api/v1/library/convert` | Status / Konvertieren starten (`{"id":…,"op":"exfat"\|"ffpkg"\|"ffpfsc","target":…,"mode":"homebrew"\|"backup","ampr_index":true}`; `ampr_index` baut bei einem Dump-Ordner vorher den AMPR-Index) |
 | POST | `/api/v1/library/convert/cancel` | laufende Konvertierung abbrechen |
+| GET | `/api/v1/library/ampr?id=PPSA20396` | AMPR-Index des Spiels: `format`, `has_index`, `files`, `mtime`, `can_build` und, wenn nicht, der Grund `why` |
+| POST | `/api/v1/library/ampr` | AMPR-Index bauen (`{"id":…}`): Dump-Ordner direkt, Abbild über ShadowMountPlus (`/games/mount` mit `"mode":"rw"`, danach `/games/unmount`); ein alter Index bleibt als `ampr_emu.index.bak` |
+| GET | `/api/v1/library/ampr/job` | Stand des Auftrags (`idle`/`running`/`done`/`failed`, `phase`, `files`, `collisions`, `error`) |
+| GET | `/api/v1/jobs/history` | Verlauf aller Vorgänge der App, neueste zuerst: `entries[]` mit `t`, `kind`, `title`, `detail`, `result` (`done`/`failed`/`cancelled`), `error`, `bytes`, `ms` (höchstens 500, Datei `/data/PS5-Cooling-Center/history.jsonl`) |
+| POST | `/api/v1/jobs/history/clear` | Verlauf leeren |
 | GET | `/api/v1/library/storage/plan?id=PPSA20396&op=move` | Verschiebe-/Entpackplan über ShadowMountPlus (`op` `move` oder `unpack`) |
 | GET/POST | `/api/v1/library/storage` | Status / Verschieben oder Entpacken starten (`{"id":…,"op":"move"\|"unpack","target":…,"delete_source":false}`), beides über ShadowMountPlus |
 | POST | `/api/v1/library/storage/cancel` | laufendes Verschieben/Entpacken abbrechen |

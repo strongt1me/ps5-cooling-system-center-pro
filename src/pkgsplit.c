@@ -128,10 +128,10 @@ cancelled(void) { return __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE); }
 
 void
 ps5tm_pkgsplit_cancel(void) {
+  /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
   pthread_mutex_lock(&g_lock);
-  int a = active_locked();
+  if(active_locked()) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
-  if(a) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
 }
 
 /* ------------------------------------------------------------------ the header of a part */
@@ -273,7 +273,7 @@ parts_needed(const args_t *a, uint32_t icon_n) {
 }
 
 static void *
-split_main(void *arg) {
+split_run(void *arg) {
   args_t *a = arg;
   ps5tm_powerguard_hold();
   uint8_t *buf = malloc(SP_BUF), *icon = NULL, *hdr = malloc(SP_HEADER), *hdr2 = malloc(SP_HEADER);
@@ -463,12 +463,37 @@ out:
   return NULL;
 }
 
+/* The thread: the split itself, then one line in the history (jobhist.c). */
+static void *
+split_thread(void *arg) {
+  void *r = split_run(arg);
+  pthread_mutex_lock(&g_lock);
+  int st = g_job.state;
+  char name[160], detail[64], error[640];
+  snprintf(name, sizeof(name), "%s", g_job.name[0] ? g_job.name : g_job.file);
+  snprintf(detail, sizeof(detail), "%u Teile", g_job.parts);
+  snprintf(error, sizeof(error), "%s", g_job.error);
+  uint64_t bytes = g_job.bytes_total, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  pthread_mutex_unlock(&g_lock);
+  if(st == J_DONE || st == J_FAILED || st == J_CANCELLED)
+    ps5tm_hist_add("split", name, detail, st == J_DONE ? "done" : st == J_FAILED ? "failed" : "cancelled", error, bytes, dur);
+  return r;
+}
+
 /* ------------------------------------------------------------------ the start */
 
 static int
 other_job_active(char *err, size_t n) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() || ps5tm_gamedelete_busy()) {
     snprintf(err, n, "Es läuft gerade eine Kopie, Konvertierung, ein Verschieben, eine Sicherung oder ein Löschen. Das läuft nicht gleichzeitig mit dem Teilen eines Pakets.");
+    return 1;
+  }
+  if(ps5tm_ampr_busy()) {
+    snprintf(err, n, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
+    return 1;
+  }
+  if(ps5tm_filemgr_busy()) {
+    snprintf(err, n, "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
     return 1;
   }
   if(ps5tm_pkginst_busy()) {
@@ -611,7 +636,7 @@ ps5tm_pkgsplit_start(const char *id, const char *target_mount, uint64_t part_byt
   pthread_attr_init(&at);
   pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
   pthread_attr_setstacksize(&at, 256 * 1024);
-  int rc = pthread_create(&th, &at, split_main, a);
+  int rc = pthread_create(&th, &at, split_thread, a);
   pthread_attr_destroy(&at);
   if(rc != 0) {
     pthread_mutex_lock(&g_lock);
