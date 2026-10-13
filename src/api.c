@@ -4202,6 +4202,17 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
+  /* The starter app (starter/, a tile that starts this payload) asks for the web UI in the console's browser. Only the page of this
+     very app can be opened, whatever the request says. */
+  if(!strcmp(req->path, "/api/v1/open-ui")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    if(strcmp(req->peer, "127.0.0.1")) { ps5tm_http_send_error(fd, 403, "forbidden", "Nur von der Konsole selbst."); return; }
+    char url[48];
+    snprintf(url, sizeof(url), "http://127.0.0.1:%d", PS5TM_TILE_DEEPLINK_PORT);
+    int rc = ps5tm_open_ui(url);
+    ps5tm_http_send_json(fd, rc == 0 ? 200 : 503, rc == 0 ? "{\"ok\":true}" : "{\"ok\":false}");
+    return;
+  }
   /* The plugins of a game (plugins.c): GET ?id= the state, POST {id, action: apply} brings them up to date. */
   if(!strcmp(req->path, "/api/v1/library/plugins")) {
     if(is_get) {

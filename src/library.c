@@ -64,6 +64,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "dynsym.h"
 #include "imgread.h"
 #include "ps5tm.h"
 #include "sqlite_ro.h"
@@ -1648,6 +1649,28 @@ handover_claim(void) {
 
 
 static int handover_spawn(const char *title_id, int close_browser);
+
+/* The console's browser opened on the web UI, for the starter app (starter/, a tile that starts this payload and then asks for the
+   page). 0 = asked, -1 = no way to ask. */
+int
+ps5tm_open_ui(const char *url) {
+#ifdef PS5TM_HOST_TEST
+  (void)url;
+  return -1;
+#else
+  typedef int (*fn_init_t)(void *);
+  typedef int (*fn_browser_t)(const char *, void *);
+  static int user_ready;
+  fn_browser_t browser = (fn_browser_t)ps5tm_dynsym("libSceSystemService.sprx", "sceSystemServiceLaunchWebBrowser");
+  if(!browser) return -1;
+  if(!user_ready) {
+    fn_init_t init = (fn_init_t)ps5tm_dynsym("libSceUserService.sprx", "sceUserServiceInitialize");
+    if(init) init(NULL);
+    user_ready = 1;
+  }
+  return browser(url, NULL) == 0 ? 0 : -1;
+#endif
+}
 
 /* The console's browser closed now, before anything else (see the comment above): 0 when it is on its way, -1 when nothing could
    be asked (no shell library, no user, another hand-over still running). */

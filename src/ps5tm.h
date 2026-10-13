@@ -639,6 +639,8 @@ int           ps5tm_library_hand_over(const char *title_id, int close_browser);
 /* The console's browser closed at once, before the game is launched (a thread of its own); 0 when it is on its way. A hand-over with
    close_browser 0 then only brings the game to the front. */
 int           ps5tm_library_close_browser(void);
+/* Opens the console's browser on url (the starter app asks for it over POST /api/v1/open-ui); 0 = asked. */
+int           ps5tm_open_ui(const char *url);
 /* The name and where a title's data really lies — a folder, or the image
    file ShadowMountPlus mounts — for a title on the list with either.
    Returns 0 on success. */

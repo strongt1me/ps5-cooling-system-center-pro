@@ -1,0 +1,11 @@
+libc.prx
+========
+
+Herkunft: ps5-native-app-boilerplate (BlackBearReloaded), runtime/libc.prx
+SHA-256:  e6ff45d16adf687855cc3b33b0c8a4132b6504360b221e0a34c7e99fb3ba0036
+Lizenz:   GPL-3.0-or-later. Laut THIRD_PARTY_NOTICES des Projekts enthält die Datei nur selbst geschriebene
+          Kompatibilitäts-Stubs, Startcode und Lader-Metadaten, keinen Sony-Code.
+
+Wozu: Der App-Lader der PS5 verlangt in jedem Titel eine sce_module/libc.prx, auch wenn der Titel selbst keine
+C-Bibliothek benutzt. Fehlt sie, bricht der Start mit PRX_SCE_MODULE_LOAD_ERROR (0xa0020102) ab:
+"Lack of a .prx file in /app0/sce_module is detected!!!" (Kernel-Log, FW 12.00).

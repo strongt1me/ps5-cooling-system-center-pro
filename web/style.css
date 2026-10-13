@@ -50,8 +50,6 @@
    Seitenfenster, macht aber kein Element zum eigenen Scroll-Container,
    sodass die feststehende Seitenleiste (position: sticky) weiter hält. */
 html { overflow-x: hidden; }
-/* Die ganze Oberfläche auf 85 % (Wunsch 13.10.2026; ein Schieber dafür wurde wieder entfernt). */
-html { zoom: .85; }
 
 body {
   margin: 0;

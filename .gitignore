@@ -27,3 +27,8 @@ build.err.txt
 
 # Local backup of a previous ELF (never commit binaries)
 *.elf.bak-*
+
+# Starter app dump folder (tools/make_starter.sh)
+starter/out/
+starter/build/
+starter/eboot.bin

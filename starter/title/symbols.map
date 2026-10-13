@@ -1,0 +1,5 @@
+/* Alle Symbole bleiben intern: Der Umwandler lehnt Titel mit eigenen Exporten ab. */
+{
+    local:
+        *;
+};

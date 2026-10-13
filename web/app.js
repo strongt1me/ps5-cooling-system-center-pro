@@ -9216,14 +9216,10 @@
 
   /* ── Bedienung ──────────────────────────────────────────────────── */
 
-  /* Die Seite, auf der man beim Schließen war (13.10.2026), öffnet sich beim nächsten Mal wieder. */
-  const LAST_PAGE_KEY = "ps5lastpage";
-
   $$(".tab").forEach((b) => b.addEventListener("click", () => {
     if (!b.dataset.page) return;                       /* Handbuch und FAQ sind Links, keine Seiten */
     state.page = b.dataset.page;
     try { sessionStorage.setItem("ps5page", state.page); } catch { /* ohne Speicher: kein Merken */ }
-    try { localStorage.setItem(LAST_PAGE_KEY, state.page); } catch { /* ohne Speicher: kein Merken */ }
     $$(".tab").forEach((x) => {
       x.classList.toggle("active", x === b);
       x.setAttribute("aria-selected", x === b ? "true" : "false");
@@ -9258,11 +9254,12 @@
 
   /* Nach dem Umschalten der Sprache lädt die Seite neu (i18n.js); sie öffnet dann wieder die Seite, auf der man war. */
   try {
-    let back = sessionStorage.getItem("ps5restore");
-    if (back) sessionStorage.removeItem("ps5restore");
-    else back = localStorage.getItem(LAST_PAGE_KEY);
-    const tab = back ? $(`.tab[data-page="${back}"]`) : null;
-    if (tab) tab.click();
+    const back = sessionStorage.getItem("ps5restore");
+    if (back) {
+      sessionStorage.removeItem("ps5restore");
+      const tab = $(`.tab[data-page="${back}"]`);
+      if (tab) tab.click();
+    }
   } catch { /* ohne Speicher: es bleibt bei der Kühlung */ }
 
   $("#target-range").addEventListener("input", (e) => {
