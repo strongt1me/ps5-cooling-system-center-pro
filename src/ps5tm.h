@@ -369,6 +369,8 @@ uint64_t ps5tm_mono_ms(void);
 
 /* Shows a toast on the console itself. */
 void ps5tm_notify(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+/* The same text through the old plain call (top left, as a payload loader shows its messages). */
+void ps5tm_notify_plain(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 /* A toast with one button that opens action_url (notify.c). 0 = accepted. */
 int  ps5tm_notify_action(const char *message, const char *sub,
                          const char *icon_path, const char *action_name,
@@ -634,6 +636,9 @@ int           ps5tm_library_start(const char *title_id);
    through its tile link. close_browser 0 skips the first step. Returns 0
    when the thread was started. */
 int           ps5tm_library_hand_over(const char *title_id, int close_browser);
+/* The console's browser closed at once, before the game is launched (a thread of its own); 0 when it is on its way. A hand-over with
+   close_browser 0 then only brings the game to the front. */
+int           ps5tm_library_close_browser(void);
 /* The name and where a title's data really lies — a folder, or the image
    file ShadowMountPlus mounts — for a title on the list with either.
    Returns 0 on success. */
@@ -678,6 +683,75 @@ struct cJSON *ps5tm_ampr_info(const char *title_id, int *http);
 int           ps5tm_ampr_start(const char *title_id, char *err, size_t err_len);
 struct cJSON *ps5tm_ampr_status(void);
 int           ps5tm_ampr_busy(void);
+/* The APR-EMU file of a game as a job of the AMPR job (amprindex.c): op "apply" (store = the version's file name),
+   "restore" or "remove"; the HTTP status, 200 when started. */
+int           ps5tm_ampr_emu_start(const char *lib, const char *op, const char *store, const char *title_id, char *err, size_t err_len);
+
+/* The APR-EMU versions built into the app (gen/ampr_emu_blob.c, tools/gen_emu_blob.py): zlib-packed, SHA-256 of the unpacked file. */
+typedef struct {
+  const char          *name;          /* libSceAmpr.sprx-<version>-<variant> */
+  uint32_t             size;          /* unpacked */
+  const char          *sha256;
+  const unsigned char *z;
+  uint32_t             z_size;
+} ps5tm_emu_blob_t;
+extern const ps5tm_emu_blob_t ps5tm_emu_blobs[];
+extern const unsigned         ps5tm_emu_blob_count;
+
+/* The PlayGo stubs built into the app (gen/playgo_blob.c, tools/gen_emu_blob.py playgo): the same table. */
+extern const ps5tm_emu_blob_t ps5tm_playgo_blobs[];
+extern const unsigned         ps5tm_playgo_blob_count;
+
+/* The DLC modules built into the app (gen/dlc_blob.c, tools/gen_emu_blob.py dlc): the same table, three libraries. */
+extern const ps5tm_emu_blob_t ps5tm_dlc_blobs[];
+extern const unsigned         ps5tm_dlc_blob_count;
+
+/* A built-in file unpacked and checked against its SHA-256 (amprlib.c): *data is malloc'd. 0 or an errno. */
+int ps5tm_blob_unpack(const ps5tm_emu_blob_t *b, unsigned char **data, size_t *len);
+/* A file of a game's fakelib written whole (temporary name, fsync, rename), mode 0755 (amprlib.c). 0 or an errno. */
+int ps5tm_put_lib_file(const char *path, const unsigned char *d, size_t n);
+
+/* The APR-EMU file and the PlayGo file of a game (amprlib.c): the versions the person keeps, what a game has, and the
+   changes. lib is "ampr" (NULL or "" too) or "playgo"; an unknown lib gives NULL / -1 / EINVAL. */
+struct cJSON *ps5tm_amprlib_versions(const char *lib);
+struct cJSON *ps5tm_amprlib_state(const char *lib, const char *title_id, int *http);
+/* Puts the versions built into the app that are not in the store folder (AMPR_EMU, PlayGo) there. The versions JSON afterwards, with "installed": how many were put. */
+struct cJSON *ps5tm_amprlib_install_bundled(const char *lib, char *why, size_t why_len);
+/* "game" (the game's own fakelib: a folder, or an image mounted read-write) or "backport" (a compressed .ffpfsc, or a
+   backport folder that is already there); why is not empty when nothing can be changed. 0, or -1 when the title is not
+   on the list. */
+int           ps5tm_amprlib_place(const char *lib, const char *title_id, char *place, size_t place_len, char *why, size_t why_len);
+/* op "apply" (store_name), "restore" or "remove"; root is the game's root for the place "game", NULL for "backport".
+   0 on success (note holds what else is worth knowing), else an errno with the reason in why. */
+int           ps5tm_amprlib_run(const char *lib, const char *op, const char *title_id, const char *root, const char *store_name,
+                                char *note, size_t note_len, char *why, size_t why_len);
+
+/* Checking, unpacking and repairing the image of a game (imgjob.c). */
+struct cJSON *ps5tm_imgjob_info(const char *title_id, int *http);
+struct cJSON *ps5tm_imgjob_plan(const char *title_id, char *err, size_t err_len);
+/* kind "check", "unpack" (mount = the drive to unpack to) or "repair"; the HTTP status, 200 when started. */
+int           ps5tm_imgjob_start(const char *kind, const char *title_id, const char *mount, char *err, size_t err_len);
+struct cJSON *ps5tm_imgjob_status(void);
+int           ps5tm_imgjob_cancel(void);
+int           ps5tm_imgjob_busy(void);
+/* LZ4 asset packs of a game (imgjob_lz4.inc, lz4pack.c): the state and the estimate for the window, and the jobs
+   "pack" / "copy" (into <name>-lz4) / "verify" / "unpack" in the slot of the image jobs (ps5tm_imgjob_status follows them). */
+/* Does the game load libSceAmpr itself (eboot.bin or a module of sce_module names it)? 1 yes, 0 no, -1 eboot.bin not readable. */
+int           ps5tm_lz4_ampr_import(const char *game_dir);
+/* Optimization by recording (trace.c): the state for the window, and the actions "start", "stop", "collect", "generate" (the last two
+   in a thread; the state tells when it ends). The HTTP status; msg says what happened. The core is exposed for the host test. */
+struct cJSON *ps5tm_trace_info(const char *title_id, int *http);
+int           ps5tm_trace_action(const char *title_id, const char *action, char *msg, size_t msg_len);
+int           ps5tm_trace_build_profile(const char *const *journals, const char *const *indexes, int pairs, const char *out_toml,
+                                        const char *title_id, char *summary, size_t cap, int *out_files, int *out_traces);
+/* The plugins of a game (plugins.c): pgo_stub and dlc_emu in fakelib, kept up to date. */
+struct cJSON *ps5tm_plugins_info(const char *title_id, int *http);
+int           ps5tm_plugins_apply(const char *title_id, char *msg, size_t msg_len, struct cJSON **detail);
+struct cJSON *ps5tm_lz4_info(const char *title_id, int *http);
+struct cJSON *ps5tm_lz4_plan(const char *title_id, int level, const char *profile, int *http);
+int           ps5tm_lz4_start(const char *kind, const char *title_id, int level, const char *profile, char *err, size_t err_len);
+/* 1 when the game folder holds a pack set (ampr_assets.index) */
+int           ps5tm_lz4_packed_dir(const char *dir);
 
 /* ShadowMountPlus's own interface on 127.0.0.1:10101 — see smp.c. */
 #define PS5TM_SMP_MAX_GAMES 256

@@ -22,6 +22,32 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 
 ## Ohne übernommenen Code, nur als Vorbild, Schnittstelle oder Wissensquelle genutzt
 
+- **ampr_emu** (drakmor, GPL-3.0): Fünf Bauten der APR-EMU-Dateien (`libSceAmpr.sprx`, Fassungen 0.3.6.6 und
+  0.4.2.1, GPL-3.0, siehe `third_party/ampr_emu/ORIGIN.md`) sind gepackt in die App eingebettet; sie
+  kommen nur auf Wunsch in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` oder in ein Spiel
+  (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Fassungen und Bauarten (`test-pack`,
+  `test-nopack`, `test-debug-pack`, `test`, `test-debug`) nach <https://github.com/drakmor/ampr_emu>.
+- **pgo_stub** (drakmor, GPL-3.0): Zwei Bauten des PlayGo-Stubs (`libScePlayGo.sprx`, Fassung 0.6, mit und ohne
+  Protokoll, siehe `third_party/playgo/ORIGIN.md`) sind gepackt in die App eingebettet; sie kommen nur auf Wunsch in den
+  Ordner `/data/PS5-Cooling-Center/PlayGo` oder in ein Spiel (`src/amprlib.c`). Quelltext der Programme:
+  <https://github.com/drakmor/pgo_stub>.
+- **dlc_emu** (drakmor, GPL-3.0): Drei Bauten der DLC-Module (`libSceAppContent.sprx`, `libSceGameUpdate.sprx`,
+  `libSceNpEntitlementAccess.sprx`, Fassung 0.3, „nolog“, siehe `third_party/dlc_emu/ORIGIN.md`) sind gepackt in die App
+  eingebettet; sie kommen nur in ein Spiel, dessen Ordner eine `dlc_emu.ini` enthält (`src/plugins.c`). Quelltext der Programme:
+  <https://github.com/drakmor/dlc_emu>.
+- **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0 mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
+  lose lässt, für den Mitschnitt zur Profil-Erzeugung (`src/trace.c`, ein C-Nachbau von `ampr_pack_profile.py`, Gegenprobe mit
+  dem Python-Werkzeug) und für die Prüfsummen-Tabelle der Spiel-Plugins; kein Quelltext von V-10 ist übernommen.
+  <https://github.com/exFAT2AMPR/exfat2ampr>.
+- **ampr_emu, LZ4-Pakete** (drakmor, GPL-3.0): Format und Regeln der LZ4-Pakete (AMPRPAK4, AMPRDAT3, AMPRCRC1, die TOML-Profile) sind ein
+  C-Nachbau von `tools/ampr_pack.py` und `ampr_pack_format.py` (`src/lz4pack.c`, `src/lz4cfg.c`); gelesen am 12.10.2026 in
+  <https://github.com/drakmor/ampr_emu> (`docs/ASSET_PACKS.md`). Gegenprobe in beide Richtungen mit dessen Python-Werkzeug.
+- **LZ4** 1.10.0 (Yann Collet, BSD-2-Clause): `src/third_party/lz4/` (`lz4.c`, `lz4hc.c`), unverändert; die Fassung, die auch die APR-EMU
+  zum Entpacken benutzt. Lizenztext: `src/third_party/lz4/LICENSE`.
+- **PS5 Dump & Image Converter** (eigenes Projekt des Autors, Modul `shadowmount_generation.py` und der
+  fakelib-Manager): Vorbild für die Ablage der APR-EMU-Datei (`fakelib` statt `fakelib2`, Sicherung der
+  Spieldatei als `.orig`, Erkennung eines früheren Emulators an `[AMPR_EMU]`) und für die Suchreihenfolge von
+  ShadowMountPlus 1.7 (Backport-Ordner vor Spiel).
 - **ShadowMountPlus** (drakmor, GPL-3.0): Seine Web-Schnittstelle liefert Format
   und Speicherort der Spiele und übernimmt Verschieben und Entpacken
   (`src/smp.c`, `src/gamemove.c`); seine README nennt die Parameter für

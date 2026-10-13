@@ -390,7 +390,7 @@ game_running(char *id, size_t n) {
 static int
 other_job_active(char *err, size_t err_len) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() ||
-     ps5tm_gamedelete_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy()) {
+     ps5tm_gamedelete_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
     snprintf(err, err_len, "Es läuft gerade eine Kopie, Konvertierung, ein Verschieben oder Löschen von Spielen, der Dateimanager, "
              "das Teilen oder Installieren eines Pakets. Das läuft nicht gleichzeitig mit den Spielständen.");
     return 1;

@@ -115,8 +115,9 @@ Ausschalten löscht nichts; die Dateien bleiben liegen, werden dann aber nicht b
 ## Spiele starten und beenden
 
 „Starten“ startet das Spiel direkt; läuft es schon im Hintergrund, holt die
-App es nach vorn. Im Browser der Konsole schließt sich der Browser dabei, damit
-das Spiel vorn ist.
+App es nach vorn. Im Browser der Konsole schließt sich der Browser dabei sofort
+beim Tippen, noch bevor das Spiel lädt, damit das Spiel vorn ist; sagt die Konsole
+etwas dazu (eine Absage, ein Angebot „Starten“), zeigt sie es als Meldung oben rechts.
 
 - **Läuft schon ein anderes Spiel**, auch pausiert im Hintergrund, startet die
   App nichts. Sie zeigt fünf Sekunden lang einen Hinweis ohne Knopf (ein Tipp
@@ -266,9 +267,9 @@ anderen Kabel liefen sie durch. Was der Auftrag geschrieben hat, räumt er weg. 
 Konvertierung kann eine leere `….ps5cc-konv-teil`-Datei liegen bleiben, weil die Platte beim
 Aufräumen gerade fehlte; der nächste Versuch entfernt sie.
 
-## APR & LZ4 und der Verlauf (seit 11.10.2026)
+## AMPR-Index, APR-EMU, PlayGo und der Verlauf (seit 11.10.2026)
 
-Jede Spielkarte hat unter **Konvertieren** den Knopf **APR & LZ4 …**. Er öffnet ein
+Jede Spielkarte hat unter **Konvertieren** den Knopf **LZ4-Asset-Packs …**. Er öffnet das Fenster „LZ4-Asset-Packs & APR-EMU“, ein
 Fenster mit Werkzeugen rund um APR-EMU; bisher ist das der **AMPR-Index**
 (`ampr_emu.index`): die Liste aller Dateien des Spiels, die APR-EMU zum Finden
 braucht. Das Fenster zeigt, ob es einen gibt und wie viele Dateien er kennt.
@@ -287,11 +288,168 @@ braucht. Das Fenster zeigt, ob es einen gibt und wie viele Dateien er kennt.
   FNV-1a-Tabelle. Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, nimmt der
   Index einmal.
 
+**APR-EMU im Spiel.** Die Zeile zeigt, welche `libSceAmpr.sprx` ein Spiel lädt, und lässt dich
+eine Version einbauen, das Original zurückholen oder die Datei entfernen. Die Versionen liegen als
+Dateien im Ordner `/data/PS5-Cooling-Center/AMPR_EMU`, benannt wie bei drakmors Veröffentlichungen
+(`libSceAmpr.sprx-0.4.2.1-test-pack`). Fünf Fassungen (0.4.2.1 test-pack, test-debug-pack, test-nopack, 0.3.6.6 test,
+test-debug) sind in der App mitgeliefert: Sie stehen in der Auswahl, auch wenn sie noch nicht im Ordner liegen, und kommen
+beim Einbauen oder mit „Mitgelieferte Versionen in den Ordner legen“ dorthin (Ordner `AMPR_EMU`, wird bei Bedarf angelegt).
+Weitere Fassungen legt „Datei hinzufügen“ im Fenster in denselben Ordner. Wohin die
+Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backport-Ordner
+`<Suchpfad>/backports/<Titel-ID>/` mit `fakelib2` vor `fakelib`, dann das Spiel mit `fakelib2` vor
+`fakelib`; der erste vorhandene Ordner gilt allein, auch ein leerer):
+
+- **Spielordner, `.exfat`, `.ffpkg`:** `fakelib/libSceAmpr.sprx` im Spiel; ein Abbild hängt ShadowMountPlus
+  dafür kurz zum Schreiben ein. Den Namen `fakelib` lesen alle Fassungen; ein `fakelib2` daneben würde ab
+  1.7beta1 gewinnen und die Datei ungenutzt lassen, davor warnt das Fenster.
+- **Komprimiertes `.ffpfsc`:** nicht beschreibbar, also ein Backport-Ordner; das Spiel bleibt unberührt.
+  Weil dieser die `fakelib` des Spiels verdeckt, werden deren Dateien (außer `libSceAmpr.sprx`)
+  hineinkopiert. Ein schon vorhandener Backport-Ordner gilt für jedes Format. Ein `fakelib2` im Abbild oder
+  im Backport sperrt die Änderung.
+- Die Datei des Spiels wird einmal als `libSceAmpr.sprx.orig` gesichert und nie überschrieben; ein früherer
+  APR-EMU (Kennung `[AMPR_EMU]`) oder PlayGo-Stub gilt nicht als Original. Ein leer werdender Backport-Ordner
+  wird wieder entfernt, denn ein leerer Ordner würde die `fakelib` des Spiels verdecken.
+- Hinweise: `update_emulators=1` in der `config.ini` von ShadowMountPlus ersetzt die Datei beim Spielstart aus
+  `/data/shadowmount/emus` (gewinnt dann); ein Spiel in LZ4-Paketen nimmt nur Versionen mit „pack“.
+- Vorbild und Regeln: der „PS5 Dump & Image Converter“ (fakelib-Manager) und die Suchreihenfolge von
+  ShadowMountPlus 1.7; Versionen und Bauarten (`test-pack`, `test-nopack`, `test-debug-pack`, `test`,
+  `test-debug`) laut [drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (GPL-3.0).
+
+**LZ4-Asset-Packs (Kurzfassung).** Die Zeile packt die Spieldaten eines Spiels in seekbare LZ4-Pakete (`ampr_assets-NNN.pak`, Verzeichnis
+`ampr_assets.index`, dazu `ampr_assets.index.crc` zum Prüfen), die die APR-EMU beim Spielen liest. Nur für Spiele als Ordner und
+nur mit einer APR-EMU-Version, die Pakete liest („pack“): Die App legt `0.4.2.1 test-pack` nach `fakelib` (das Original als `.orig`).
+Das Einstellungsfenster fragt: Stufe 3 (LZ4 Fast), 9 oder 12 (LZ4 HC); „Automatisch“ (Programme, `sce_sys`, `fakelib`, Spielstände,
+komprimierte Medien und kaum packbare Riesendateien bleiben lose) oder ein eigenes Profil (TOML wie drakmors `ampr_pack.py`, im Ordner
+`/data/PS5-Cooling-Center/LZ4_Profile` oder `LZ4_Profile` auf einem USB-Laufwerk); „im Spielordner packen“ (AMPR-Index neu bauen, packen,
+jede Datei Byte für Byte mit dem Original vergleichen, erst dann die Originale entfernen; bei jedem Fehler werden die Pakete wieder
+entfernt) oder „als neuer Ordner `<Name>-lz4`“ (Original unberührt). Danach: **Pakete prüfen** (jeder Block gelesen, entpackt, gegen die
+CRC-Datei geprüft) und **LZ4 entpacken** (zurückschreiben, vergleichen, Pakete entfernen). Solange ein Spiel gepackt ist, ist der
+AMPR-Index gesperrt. Format und Regeln nach [drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (GPL-3.0), LZ4 1.10.0 (BSD-2).
+
+**PlayGo im Spiel.** Die zweite Zeile darunter arbeitet genauso für `libScePlayGo.sprx`, den PlayGo-Stub von
+drakmor ([pgo_stub](https://github.com/drakmor/pgo_stub), GPL-3.0): Er meldet einem Spiel, dessen PlayGo-Inhalte nicht
+(mehr) zu finden sind, alles als vollständig installiert; er hilft nur bei Spielen, die PlayGo-Inhalte als fehlend
+behandeln. Die Versionen liegen im Ordner `/data/PS5-Cooling-Center/PlayGo` (`libScePlayGo.sprx-0.6-nolog`,
+`libScePlayGo.sprx-0.6-log`); beide Fassungen 0.6 sind in der App mitgeliefert, „log“ schreibt `/app0/playlgo.log` in
+das Spiel. Jede Datei wird geprüft (SELF-Kopf, Kennung `playgo_stub.dat`). Ort (Spiel oder Backport-Ordner), Sicherung
+als `libScePlayGo.sprx.orig`, Warnungen und Entfernen gelten wie bei der APR-EMU-Datei; LZ4-Pakete spielen für PlayGo
+keine Rolle. Beide Dateien eines Spiels lassen sich unabhängig voneinander ändern; ein Stub im Emulator-Ordner von
+ShadowMountPlus (`/data/shadowmount/emus/libScePlayGo.sprx`) gewinnt auch hier.
+
+**Spiel-Plugins.** Die Zeile **Spiel-Plugins** hält die Ersatzmodule von drakmor im Ordner `fakelib` des Spiels auf dem neuesten Stand: den PlayGo-Stub (`libScePlayGo.sprx`, pgo_stub 0.6) und die DLC-Module (`libSceAppContent.sprx`, `libSceGameUpdate.sprx`, `libSceNpEntitlementAccess.sprx`, dlc_emu 0.3), die DLC aus der `dlc_emu.ini` des Spiels als gekauft zeigen.
+
+- Eine ältere Fassung (die App kennt sie an der Prüfsumme) wird ersetzt, die alte Datei bleibt als `.old`. Eine Datei in unbekannter Fassung bleibt unberührt.
+- Der PlayGo-Stub wird nie zu einem Spiel hinzugefügt, das keinen hat; das geht in der Zeile „PlayGo im Spiel“. Die DLC-Module kommen nur dazu, wenn im Spielordner eine `dlc_emu.ini` liegt (ohne sie würden sie die echten DLC verdecken).
+- Fehlt einer Bibliothek das Ausführungsrecht (so legte die App sie bis zum 13.10.2026 an), setzt „Aktualisieren“ es. Ohne das lädt die Konsole sie nicht („mount flag / attribute error“).
+- Liegt im Spiel ein `fakelib2` oder liest ShadowMountPlus einen Backport-Ordner, ändert die App nichts.
+
+
+**Abbild prüfen, entpacken, reparieren (Schritt 2).** Liegt das Spiel als Abbild vor
+(`.exfat`, `.ffpkg`, `.ffpfsc`), hat dasselbe Fenster drei weitere Werkzeuge; die App
+liest das Abbild selbst, ohne es einzuhängen:
+
+- **Abbild prüfen:** Bei `.ffpfsc` wird zuerst der ganze Container gelesen (Kopf,
+  Blocktabelle, jeder Block entpackt, jeder Block trägt eine Prüfsumme), dann wird
+  geprüft, ob die Dateien darin dort liegen, wo das Dateisystem es sagt. Bei `.exfat`
+  und `.ffpkg` wird jede Datei vollständig gelesen. Findet die Prüfung etwas, nennt das
+  Fenster die betroffenen Dateien mit der Stelle, ab der es hakt.
+- **In einen Ordner entpacken:** nach `homebrew/<Name des Abbilds>` auf einem
+  Laufwerk deiner Wahl (das Fenster zeigt Platz und Dateisystem; FAT32 nimmt keine
+  Dateien über 4 GB). Geschrieben wird in einen Ordner mit der Endung `.ps5cc-teil`;
+  jede Datei wird danach vom Laufwerk zurückgelesen und per CRC-32 mit dem verglichen,
+  was aus dem Abbild kam. Erst wenn alles stimmt, bekommt der Ordner seinen Namen; bei
+  Fehler oder Abbruch wird er entfernt. Das Abbild bleibt unberührt.
+- **Reparieren:** nur, wo es sicher geht. Stimmt die Größe einer `.ffpfsc`-Datei nicht
+  mit dem Kopf überein, die Daten sind aber vollständig und die überzähligen Bytes leer,
+  setzt die App die Größe richtig und liest den Container danach noch einmal ganz.
+  Defekte Blöcke lassen sich ohne Original nicht herstellen. Gesperrt, solange
+  ShadowMountPlus das Abbild eingehängt hat.
+
+Das Ergebnis der letzten Prüfung jedes Abbilds bleibt bis zum Neustart der App im Fenster
+stehen; jeder Vorgang steht außerdem im Verlauf.
+
 Der Reiter **Verlauf** (Spiele-Seite) zeigt alle Vorgänge der App – Kopieren,
 Verschieben, Konvertieren, Paket teilen, Installieren, Löschen, Dateimanager,
 Spielstände, AMPR-Index – mit Ergebnis, Größe, Dauer und Zeit, nach Ergebnis
 filterbar. Die letzten 500 liegen auf der Konsole in
 `/data/PS5-Cooling-Center/history.jsonl`; **Verlauf leeren** löscht sie.
+
+## LZ4-Asset-Packs: Schritt für Schritt (seit 12.10.2026)
+
+Ein **Asset-Pack** besteht aus wenigen Dateien (`ampr_assets-000.pak` und weitere, dazu `ampr_assets.index`). Die App packt die
+Spieldaten eines Spiels hinein und verkleinert sie mit LZ4. Die APR-EMU liest sie beim Spielen und entpackt jeden Block erst, wenn
+das Spiel ihn braucht. Laut dem Entwickler (drakmor, *ampr_emu*) halbiert das den Platzbedarf und lädt oft 30 bis 40 Prozent
+schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes Spiel verträgt das.**
+
+### Was nötig ist
+
+- Das Spiel liegt als **Ordner** vor. Ein Abbild bringst du vorher mit **In einen Ordner entpacken** in einen Ordner.
+- Das Spiel **bindet libSceAmpr ein**. Die App sucht den Namen in `eboot.bin` und in `sce_module` und zeigt **✓ lädt libSceAmpr
+  selbst**. Steht dort **✗ lädt libSceAmpr nicht selbst**, ist der Knopf gesperrt (auch auf der Konsole: Fehler 409): Das Spiel
+  würde seine Dateien in den Paketen nicht wiederfinden. Solche Spiele lassen sich nur zu einem `.ffpfsc`-Abbild komprimieren
+  (Knopf **Konvertieren**). Lässt sich `eboot.bin` nicht lesen, entscheidet die App nicht.
+- ShadowMountPlus in einer aktuellen Version, Abbilder schreibgeschützt eingehängt (der Standard).
+- Platz: Beim Packen im Spielordner braucht die App zusätzlich etwa die Hälfte der Spieldaten, bis die Originale entfernt sind.
+
+### Schritt für Schritt
+
+1. **APR-EMU einbauen.** Im Fenster „LZ4-Asset-Packs & APR-EMU“ bei **APR-EMU im Spiel** die Version `0.4.2.1 test-pack`
+   wählen. Nur die Versionen mit „pack“ im Namen lesen Pakete.
+2. **Ungepackt testen.** Das Spiel starten und ein Stück spielen: Menü, ein Level, einen Spielstand laden. Läuft es so nicht, läuft
+   es gepackt nie. Dann hilft nur eine ältere APR-EMU (zum Beispiel 0.3.6.6) oder keine.
+3. **Packen.** **Mit LZ4 packen …**, zum Anfang Stufe 9 und **Automatisch**. Das Kästchen „ungepackt gestartet, und es lief“
+   gehört dazu. **Im Spielordner packen** spart den meisten Platz; die Originale werden erst entfernt, wenn jede Datei Byte für
+   Byte mit den Paketen verglichen ist, und bei jedem Fehler bleibt alles wie vorher. Die Wahl **Als neuen Ordner … daneben** lässt
+   das Original unberührt, legt aber zwei Ordner mit derselben Titel-ID nebeneinander. ShadowMountPlus kann sich daran
+   verschlucken und das Spiel im Sekundentakt umhängen; nimm das Original vorher aus dem Suchpfad.
+4. **Pakete prüfen.** Liest jeden Block, entpackt ihn und vergleicht mit der CRC-Datei. Das zeigt, dass die Pakete heil sind,
+   nicht dass das Spiel sie richtig benutzt.
+5. **Starten und spielen.** Erst jetzt zeigt sich, ob es läuft. Spiele länger als ein paar Sekunden: Menü, ein Level, Laden und
+   Speichern.
+6. **Läuft es nicht:** **LZ4 entpacken …** schreibt alle Dateien zurück, vergleicht sie und entfernt die Pakete.
+
+### Was „Automatisch“ lose lässt
+
+Beim Profil **Automatisch** bleiben lose: Programme und Bibliotheken (`eboot.bin`, `.prx`, `.sprx`), `sce_sys`, `sce_module`, `fakelib`, Spielstände, schon komprimierte Medien (mp4, webm, ogg, wem …), Konfigurations- und Datendateien (`.json`, `.xml`, `.dat`, `.bin`, `.utoc`), Archive (`.zip`, `.7z`, `.rar`) und die eigenen `.pak`-Dateien des Spiels, die Ordner `trophy2`, `uds`, `_DUPLEX_`, `decrypted` und Film-Ordner, Wwise-Soundbanks (`soundbank…`, `wem…`), Dateien direkt im Spielordner und sehr große, kaum packbare Dateien. Das ist die Liste, die sich bei Werkzeugen bewährt hat, die auf der Konsole laufen (exFAT2AMPR von V-10, Lazy_AMPR). Ein eigenes Profil (TOML) packt, was seine Regeln sagen.
+
+### Besser als „Automatisch“: der Mitschnitt
+
+„Automatisch“ kennt nur, was auf der Platte liegt. Zuverlässiger ist ein Profil aus einem echten Spieldurchgang. Die Zeile **Optimierung per Mitschnitt** macht das in vier Schritten:
+
+1. **Mitschnitt starten.** Die App legt die Debug-APR-EMU (`0.4.2.1 test-debug-pack`) in einen Ordner `fakelib2` des Spiels und kopiert die anderen Bibliotheken aus `fakelib` dazu (ShadowMountPlus liest dann nur `fakelib2` und ersetzt dort nichts). Voraussetzung: Das Spiel lädt libSceAmpr, der AMPR-Index ist gebaut, es liegt nicht in Paketen.
+2. **Spielen.** Starte das Spiel, spiele ein Stück (Menü, ein Level, einen Spielstand laden) und beende es normal. Das Spiel schreibt `ampr_commands.bin`. Die Debug-Version ist langsamer.
+3. **Sitzung einsammeln.** Die App kopiert den Mitschnitt und den dazugehörigen Index nach `/data/PS5-Cooling-Center/traces/<Titel-ID>/<n>/`. Die Debug-APR-EMU leert den Mitschnitt bei jedem Start, also nach jeder Sitzung einsammeln. Mehrere Sitzungen (andere Level, andere Spielmodi) ergeben ein besseres Profil.
+4. **Profil erzeugen.** Aus allen Sitzungen entsteht `<Titel-ID>-mitschnitt.toml` im Ordner `LZ4_Profile`. Für jede gelesene Datei legt es Blockgröße (16 KiB bis 1 MiB), Anordnung (zufällig, gemischt, streamend), „heiß“ und die Behandlung fest (Medien werden gespeichert statt gepackt) und stellt die Zwischenspeicher der APR-EMU ein. Dateien, die das Spiel nie gelesen hat, bleiben lose. Beim Packen wählst du es unter **Eigenes Profil**.
+
+Danach **Mitschnitt beenden**: Das entfernt `fakelib2` wieder. Ein Mitschnitt zeigt nur, was in den gespielten Szenen gelesen wurde; für anderes ergänzt du eigene Regeln.
+
+### Wenn das Spiel nicht startet oder abstürzt
+
+- **Erst klären, wer schuld ist.** Entpacke das Spiel und starte es mit derselben APR-EMU-Version ungepackt. Beispiel Arkanoid
+  (12.10.2026): Mit 0.4.2.1 stürzte es schon ungepackt ab, mit 0.3.6.6 lief es. Pakete waren dort also nicht möglich.
+- **„mount flag / attribute error“** im Protokoll von ShadowMountPlus: Die Bibliothek lässt sich nicht laden, weil ihr das
+  Ausführungsrecht fehlt (Modus 0644). Die App legt sie mit 0755 an. Hast du die Datei selbst kopiert, setze per FTP
+  `SITE CHMOD 755`.
+- **Es stürzt nach wenigen Sekunden ab, obwohl es ungepackt lief:** Das Spiel liest vermutlich Dateien, die die Pakete nicht
+  bedienen, vor allem per **mmap** (in den Speicher eingeblendet) oder schreibend. Solche Dateien müssen lose bleiben. Benutze ein
+  eigenes Profil (TOML, Ordner `LZ4_Profile`) und setze ans Ende eine `loose`-Regel für die Datei: Die letzte passende Regel
+  gewinnt. Welche Dateien das Spiel nicht öffnen konnte, schreibt die Debug-Version (`0.4.2.1 test-debug-pack`) als
+  `apr.pack.open.fail` in `ampr_emu.log`.
+- **„Automatisch“ ist nur ein Anfang.** Es kennt nur, was auf der Platte liegt. Profile aus Mitschnitten eines echten Spiels sind
+  zuverlässiger (`ampr_pack_profile.py` aus ampr_emu, MkPFS).
+
+### Grenzen und Hinweise
+
+- Die APR-EMU lehnt Sätze mit mehr als 2 000 000 Dateien, 16 000 000 Blöcken oder 1 024 Paketdateien ab. Bei großen Spielen nimmt
+  die App größere Blöcke.
+- Index, `.runtime` und Pakete eines Spiels gehören zusammen (gleiche Build-ID). Tausche nie einzelne Teile aus und ändere nichts,
+  während das Spiel läuft.
+- Die APR-EMU 0.4.2.1 hat laut ihrem Autor noch einen Absturz bei Spielständen. Behalte das Original, bis du lange genug gespielt
+  hast.
+- Solange ein Spiel gepackt ist, sind AMPR-Index und APR-EMU-Version gesperrt.
+- Vorbilder und Regeln: [drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (`docs/ASSET_PACK_WORKFLOW_EN.md`, GPL-3.0),
+  [theghostonline/PS5-LZ4-Compression](https://github.com/theghostonline/PS5-LZ4-Compression) und
+  [danthespal/MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp).
 
 ## Dateien: der Dateimanager (seit 06.10.2026)
 

@@ -367,10 +367,15 @@ enum { AI_IDLE, AI_RUNNING, AI_DONE, AI_FAILED };
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct {
   int      state;
+  char     kind[8];                    /* "index" or "emu" (amprlib.c: the APR-EMU or PlayGo file of the game) */
+  char     lib[8];                     /* emu: "ampr" or "playgo" */
+  char     op[10];                     /* emu: apply, restore, remove */
+  char     store[96];                  /* emu apply: the version's file name */
   char     id[16];
   char     name[128];
   char     phase[160];
   char     error[400];
+  char     note[400];
   unsigned files, collisions;
   uint64_t started_ms, finished_ms;
 } g_job;
@@ -397,12 +402,19 @@ finish(int state, const char *error) {
   g_job.state = state;
   snprintf(g_job.error, sizeof(g_job.error), "%s", error ? error : "");
   g_job.finished_ms = ps5tm_mono_ms();
-  char name[128], detail[96];
+  char name[128], detail[160];
   snprintf(name, sizeof(name), "%s", g_job.name);
-  snprintf(detail, sizeof(detail), "%u Dateien", g_job.files);
+  int emu = !strcmp(g_job.kind, "emu");
+  if(emu) {
+    const char *sp = strstr(g_job.store, ".sprx-");
+    const char *lab = sp ? sp + 6 : g_job.store;
+    if(!strcmp(g_job.op, "apply")) snprintf(detail, sizeof(detail), "%s eingebaut", lab);
+    else if(!strcmp(g_job.op, "restore")) snprintf(detail, sizeof(detail), "Original wiederhergestellt");
+    else snprintf(detail, sizeof(detail), "entfernt");
+  } else snprintf(detail, sizeof(detail), "%u Dateien", g_job.files);
   uint64_t dur = g_job.finished_ms - g_job.started_ms;
   pthread_mutex_unlock(&g_lock);
-  ps5tm_hist_add("ampr_index", name, state == AI_DONE ? detail : NULL, state == AI_DONE ? "done" : "failed", error, 0, dur);
+  ps5tm_hist_add(emu ? (strcmp(g_job.lib, "playgo") ? "ampr_emu" : "playgo") : "ampr_index", name, state == AI_DONE ? detail : NULL, state == AI_DONE ? "done" : "failed", error, 0, dur);
 }
 
 static int
@@ -410,7 +422,7 @@ is_image_format(const char *f) {
   return !strcmp(f, "exfat") || !strcmp(f, "ffpkg") || !strcmp(f, "ffpfs") || !strcmp(f, "image");
 }
 
-typedef struct { char id[16]; } ai_args_t;
+typedef struct { char id[16]; int emu; char lib[8]; char op[10]; char store[96]; } ai_args_t;
 
 static int
 smp_mount(const char *id, const char *route, int rw, char *err, size_t n) {
@@ -424,18 +436,44 @@ smp_mount(const char *id, const char *route, int rw, char *err, size_t n) {
   return 0;
 }
 
+/* What is done in the root of a game: the index is built there, or the APR-EMU file is changed there. */
+typedef struct {
+  const ai_args_t *a;
+  unsigned         files, coll;
+  char             why[400];
+  char             note[400];
+} ai_ctx_t;
+
+static int
+root_job(const char *root, void *vctx) {
+  ai_ctx_t *c = vctx;
+  if(c->a->emu) {
+    int pg = !strcmp(c->a->lib, "playgo");
+    phase(!strcmp(c->a->op, "apply") ? (pg ? "Die PlayGo-Datei wird eingebaut" : "Die APR-EMU-Datei wird eingebaut")
+                                     : (pg ? "Die PlayGo-Datei wird zurückgesetzt" : "Die APR-EMU-Datei wird zurückgesetzt"));
+    return ps5tm_amprlib_run(c->a->lib, c->a->op, c->a->id, root, c->a->store, c->note, sizeof(c->note), c->why, sizeof(c->why));
+  }
+  phase("Die Dateien des Spiels werden gelesen");
+  return ps5tm_ampr_build_dir(root, &c->files, &c->coll, &g_cancel, c->why, sizeof(c->why));
+}
+
 static void *
 ai_thread(void *arg) {
   ai_args_t *a = arg;
   ps5tm_powerguard_hold();
   ps5tm_libdel_t li;
-  char why[400] = "";
+  ai_ctx_t ctx;
+  memset(&ctx, 0, sizeof(ctx));
+  ctx.a = a;
   if(ps5tm_library_delete_info(a->id, &li) != 0) { finish(AI_FAILED, "Das Spiel ist nicht mehr in der Liste."); goto out; }
-  unsigned files = 0, coll = 0;
-  if(!strcmp(li.format, "folder")) {
-    phase("Die Dateien des Spiels werden gelesen");
-    int rc = ps5tm_ampr_build_dir(li.path, &files, &coll, &g_cancel, why, sizeof(why));
-    if(rc) { finish(AI_FAILED, why[0] ? why : "Das Verzeichnis ließ sich nicht bauen."); goto out; }
+  int rc;
+  char place[10] = "game", pwhy[200] = "";
+  if(a->emu && ps5tm_amprlib_place(a->lib, a->id, place, sizeof(place), pwhy, sizeof(pwhy)) != 0) { finish(AI_FAILED, "Das Spiel ist nicht mehr in der Liste."); goto out; }
+  if(a->emu && !strcmp(place, "backport")) {
+    /* a compressed .ffpfsc or an existing backport folder: nothing is mounted, the game stays untouched */
+    rc = root_job(NULL, &ctx);
+  } else if(!strcmp(li.format, "folder")) {
+    rc = root_job(li.path, &ctx);
   } else {
     ps5tm_smp_game_t s;
     if(ps5tm_smp_find(a->id, &s) != 0) { finish(AI_FAILED, "ShadowMountPlus kennt das Spiel gerade nicht."); goto out; }
@@ -460,13 +498,15 @@ ai_thread(void *arg) {
       }
       usleep(250 * 1000);
     }
-    int rc = -1;
-    if(!where[0]) snprintf(why, sizeof(why), "Das eingehängte Abbild war nicht zu finden.");
+    rc = -1;
+    if(!where[0]) snprintf(ctx.why, sizeof(ctx.why), "Das eingehängte Abbild war nicht zu finden.");
     else {
-      phase("Die Dateien des Spiels werden gelesen");
-      rc = ps5tm_ampr_build_dir(where, &files, &coll, &g_cancel, why, sizeof(why));
-      if(rc == EROFS || rc == EACCES || rc == EPERM)
-        snprintf(why, sizeof(why), "ShadowMountPlus hat das Abbild nur zum Lesen eingehängt. Der Index entsteht dann beim Konvertieren aus dem Ordner.");
+      rc = root_job(where, &ctx);
+      if(rc == EROFS || rc == EACCES || rc == EPERM) {
+        if(a->emu) snprintf(ctx.why, sizeof(ctx.why), !strcmp(a->lib, "playgo") ? "ShadowMountPlus hat das Abbild nur zum Lesen eingehängt. Die PlayGo-Datei lässt sich so nicht ändern."
+                                                                                  : "ShadowMountPlus hat das Abbild nur zum Lesen eingehängt. Die APR-EMU-Datei lässt sich so nicht ändern.");
+        else snprintf(ctx.why, sizeof(ctx.why), "ShadowMountPlus hat das Abbild nur zum Lesen eingehängt. Der Index entsteht dann beim Konvertieren aus dem Ordner.");
+      }
     }
     if(!was_mounted) {
       phase("Das Abbild wird wieder freigegeben");
@@ -474,14 +514,16 @@ ai_thread(void *arg) {
         PS5TM_WARN("ampr_unmount_failed", "Das Abbild von %s ließ sich nicht wieder freigeben: %s", a->id, err);
     }
     ps5tm_smp_forget();
-    if(rc) { finish(AI_FAILED, why[0] ? why : "Das Verzeichnis ließ sich nicht bauen."); goto out; }
   }
+  if(rc) { finish(AI_FAILED, ctx.why[0] ? ctx.why : (a->emu ? (!strcmp(a->lib, "playgo") ? "Die PlayGo-Datei ließ sich nicht ändern." : "Die APR-EMU-Datei ließ sich nicht ändern.") : "Das Verzeichnis ließ sich nicht bauen.")); goto out; }
   pthread_mutex_lock(&g_lock);
-  g_job.files = files;
-  g_job.collisions = coll;
+  g_job.files = ctx.files;
+  g_job.collisions = ctx.coll;
+  snprintf(g_job.note, sizeof(g_job.note), "%s", ctx.note);
   pthread_mutex_unlock(&g_lock);
   ps5tm_library_forget();
-  PS5TM_INFO("ampr_index_built", "AMPR-Index für %s gebaut: %u Dateien%s.", a->id, files, coll ? " (Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, einmal genommen)" : "");
+  if(a->emu) PS5TM_INFO("ampr_emu_changed", "%s-Datei von %s geändert (%s %s).", !strcmp(a->lib, "playgo") ? "PlayGo" : "APR-EMU", a->id, a->op, a->store);
+  else PS5TM_INFO("ampr_index_built", "AMPR-Index für %s gebaut: %u Dateien%s.", a->id, ctx.files, ctx.coll ? " (Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, einmal genommen)" : "");
   finish(AI_DONE, NULL);
 out:
   ps5tm_powerguard_release();
@@ -554,6 +596,10 @@ ps5tm_ampr_info(const char *id, int *http) {
       close(fd);
     }
     can = 1;
+    if(ps5tm_lz4_packed_dir(li.path)) {
+      can = 0;
+      why = "Gesperrt, solange das Spiel in LZ4-Paketen liegt: Die Pakete gehören zu genau diesem Index. Zuerst „LZ4 entpacken“.";
+    }
   } else if(is_image_format(li.format) || !strcmp(li.format, "ffpfsc")) {
     if(ai_img_header(li.path, &count) == 0) have = 1;
     if(!strcmp(li.format, "ffpfsc")) why = "Ein komprimiertes Abbild (ffpfsc) lässt sich nicht beschreiben. Der Index entsteht beim Konvertieren aus dem Ordner.";
@@ -575,30 +621,65 @@ ps5tm_ampr_info(const char *id, int *http) {
 static int
 other_job(char *err, size_t n) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_filemgr_busy()) {
+     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_filemgr_busy() || ps5tm_imgjob_busy()) {
     snprintf(err, n, "Es läuft gerade ein anderer Vorgang der App. Bitte danach noch einmal.");
     return 1;
   }
   return 0;
 }
 
+static int ai_start(const char *kind, const char *lib, const char *op, const char *store, const char *id, char *err, size_t n);
+
 int
 ps5tm_ampr_start(const char *id, char *err, size_t n) {
-  int http = 200;
-  cJSON *info = ps5tm_ampr_info(id, &http);
-  if(!info) { snprintf(err, n, "Das Spiel ist nicht in der Liste."); return 404; }
-  int can = cJSON_IsTrue(cJSON_GetObjectItem(info, "can_build"));
-  const cJSON *why = cJSON_GetObjectItem(info, "why");
-  if(!can) { snprintf(err, n, "%s", cJSON_IsString(why) ? why->valuestring : "Für dieses Spiel geht das nicht."); cJSON_Delete(info); return 409; }
+  return ai_start("index", "", "", "", id, err, n);
+}
+
+/* The APR-EMU or PlayGo file of a game (amprlib.c; lib "ampr" or "playgo"): op "apply" (store = the version's file name),
+   "restore" or "remove". */
+int
+ps5tm_ampr_emu_start(const char *lib, const char *op, const char *store, const char *id, char *err, size_t n) {
+  if(!lib || !lib[0]) lib = "ampr";
+  if(strcmp(lib, "ampr") && strcmp(lib, "playgo")) { snprintf(err, n, "Unbekannte Bibliothek."); return 400; }
+  return ai_start("emu", lib, op, store, id, err, n);
+}
+
+static int
+ai_start(const char *kind, const char *lib, const char *op, const char *store, const char *id, char *err, size_t n) {
+  int emu = !strcmp(kind, "emu");
   char name[128];
-  snprintf(name, sizeof(name), "%s", cJSON_GetObjectItem(info, "name")->valuestring);
-  cJSON_Delete(info);
+  if(emu) {
+    if(strcmp(op, "apply") && strcmp(op, "restore") && strcmp(op, "remove")) { snprintf(err, n, "Unbekannter Vorgang."); return 400; }
+    if(!strcmp(op, "apply") && (!store || !store[0] || strchr(store, '/') || strlen(store) >= sizeof(((ai_args_t *)0)->store))) {
+      snprintf(err, n, "Es fehlt die Version, die eingebaut werden soll.");
+      return 400;
+    }
+    ps5tm_libdel_t li;
+    if(!id || ps5tm_library_delete_info(id, &li) != 0) { snprintf(err, n, "Das Spiel ist nicht in der Liste."); return 404; }
+    char place[10] = "", why[240] = "";
+    if(ps5tm_amprlib_place(lib, id, place, sizeof(place), why, sizeof(why)) != 0) { snprintf(err, n, "Das Spiel ist nicht in der Liste."); return 404; }
+    if(!place[0] || why[0]) { snprintf(err, n, "%s", why[0] ? why : "Für dieses Spiel geht das nicht."); return 409; }
+    snprintf(name, sizeof(name), "%s", li.name);
+  } else {
+    int http = 200;
+    cJSON *info = ps5tm_ampr_info(id, &http);
+    if(!info) { snprintf(err, n, "Das Spiel ist nicht in der Liste."); return 404; }
+    int can = cJSON_IsTrue(cJSON_GetObjectItem(info, "can_build"));
+    const cJSON *why = cJSON_GetObjectItem(info, "why");
+    if(!can) { snprintf(err, n, "%s", cJSON_IsString(why) ? why->valuestring : "Für dieses Spiel geht das nicht."); cJSON_Delete(info); return 409; }
+    snprintf(name, sizeof(name), "%s", cJSON_GetObjectItem(info, "name")->valuestring);
+    cJSON_Delete(info);
+  }
   if(ps5tm_procmgr_title_running(id) == 1) { snprintf(err, n, "Das Spiel läuft gerade. Bitte zuerst beenden."); return 409; }
   if(other_job(err, n)) return 409;
   pthread_mutex_lock(&g_lock);
   if(g_job.state == AI_RUNNING) { pthread_mutex_unlock(&g_lock); snprintf(err, n, "Es wird gerade schon ein Index gebaut."); return 409; }
   memset(&g_job, 0, sizeof(g_job));
   g_job.state = AI_RUNNING;
+  snprintf(g_job.kind, sizeof(g_job.kind), "%s", kind);
+  snprintf(g_job.lib, sizeof(g_job.lib), "%s", lib);
+  snprintf(g_job.op, sizeof(g_job.op), "%s", op);
+  snprintf(g_job.store, sizeof(g_job.store), "%s", store ? store : "");
   snprintf(g_job.id, sizeof(g_job.id), "%s", id);
   snprintf(g_job.name, sizeof(g_job.name), "%s", name);
   snprintf(g_job.phase, sizeof(g_job.phase), "Wird vorbereitet");
@@ -608,15 +689,20 @@ ps5tm_ampr_start(const char *id, char *err, size_t n) {
   ai_args_t *a = calloc(1, sizeof(*a));
   if(!a) { finish(AI_FAILED, "Kein Speicher."); snprintf(err, n, "Kein Speicher."); return 500; }
   snprintf(a->id, sizeof(a->id), "%s", id);
+  a->emu = emu;
+  snprintf(a->lib, sizeof(a->lib), "%s", lib);
+  snprintf(a->op, sizeof(a->op), "%s", op);
+  snprintf(a->store, sizeof(a->store), "%s", store ? store : "");
   pthread_t th;
   pthread_attr_t at;
   pthread_attr_init(&at);
   pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
-  pthread_attr_setstacksize(&at, 512 * 1024);
+  pthread_attr_setstacksize(&at, 768 * 1024);
   int rc = pthread_create(&th, &at, ai_thread, a);
   pthread_attr_destroy(&at);
   if(rc != 0) { free(a); finish(AI_FAILED, "Der Vorgang ließ sich nicht starten."); snprintf(err, n, "Der Vorgang ließ sich nicht starten."); return 500; }
-  PS5TM_INFO("ampr_index_start", "AMPR-Index wird gebaut: %s (%s).", name, id);
+  if(emu) PS5TM_INFO("ampr_emu_start", "%s-Datei: %s von %s (%s).", !strcmp(lib, "playgo") ? "PlayGo" : "APR-EMU", op, name, id);
+  else PS5TM_INFO("ampr_index_start", "AMPR-Index wird gebaut: %s (%s).", name, id);
   return 200;
 }
 
@@ -627,6 +713,10 @@ ps5tm_ampr_status(void) {
   static const char *const names[] = { "idle", "running", "done", "failed" };
   cJSON_AddBoolToObject(o, "ok", 1);
   cJSON_AddStringToObject(o, "state", names[g_job.state]);
+  cJSON_AddStringToObject(o, "kind", g_job.kind);
+  cJSON_AddStringToObject(o, "lib", g_job.lib);
+  cJSON_AddStringToObject(o, "op", g_job.op);
+  if(g_job.note[0]) cJSON_AddStringToObject(o, "note", g_job.note);
   cJSON_AddBoolToObject(o, "active", g_job.state == AI_RUNNING);
   cJSON_AddStringToObject(o, "id", g_job.id);
   cJSON_AddStringToObject(o, "name", g_job.name);

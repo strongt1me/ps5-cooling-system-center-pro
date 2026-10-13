@@ -96,7 +96,7 @@ background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0f
 .langs{display:inline-flex;flex-wrap:wrap;gap:6px;margin:0 0 10px 10px;vertical-align:top}
 .langs a{padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#aebbd4;text-decoration:none;font-size:14px}
 .langs a:hover{border-color:rgba(59,130,246,.6);color:#fff}.langs a.on{background:rgba(59,130,246,.22);color:#fff;border-color:rgba(59,130,246,.55)}
-.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.61.0</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#apr'>APR &amp; LZ4 and history</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
+.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.61.0</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#apr'>AMPR index, APR-EMU, PlayGo and history</a></li><li><a href='#assetpacks'>LZ4 asset packs: step by step</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
 <p><b>PS5 Cooling &amp; System Center - Pro</b> is a homebrew program (ELF) for a jailbroken PS5. It controls the
 fan according to a calm, freely adjustable target temperature and comes with a web interface that you open from any device on your
 home network: phone, tablet, PC or the console's own browser. On top of that come game management, packages,
@@ -185,7 +185,7 @@ filter by PS5, PS4 or “Backport · AMPR · PlayGo”; and sort by Home screen 
 
 <h3>Starting and closing</h3>
 <ul>
-<li><b>Start</b> starts the game directly. In the console's browser, the browser closes so that the game is in front.</li>
+<li><b>Start</b> starts the game directly. In the console's browser, the browser closes at once when you tap, before the game loads, so that the game is in front. If the console has something to say (a refusal, an offer “Start”), it shows it as a notification at the top right.</li>
 <li>If another game is already running, the app starts nothing and tells you so. <b>Close game</b> closes the running game
 <b>immediately and without asking</b> – anything not saved is lost.</li>
 <li>A game is never started twice; a second click within 30 seconds does nothing.</li>
@@ -197,17 +197,96 @@ finds it there) or as a backup in <code>PS5-Sicherung/Spiele</code>. Every copy 
 and verified; nothing is overwritten.</p>
 
 <div class='warn'>Please recreate <code>.ffpkg</code> images made with versions before 1.48.0 (old structure).</div>
-</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>APR &amp; LZ4 and history</h2></div>
-<p>Every game card has the button <b>APR &amp; LZ4 …</b> under <b>Convert</b>. It opens a window with tools around APR-EMU. For now it holds the <b>AMPR index</b>.</p>
+</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
+<p>Every game card has the button <b>LZ4 asset packs …</b> under <b>Convert</b>. It opens a window with tools around APR-EMU. For now it holds the <b>AMPR index</b>.</p>
 <ul>
 <li>The <b>AMPR index</b> (<code>ampr_emu.index</code>) is the list of all of the game's files that APR-EMU needs to find them. The window shows whether there is one and how many files it knows.</li>
 <li><b>Build</b> / <b>Rebuild</b> creates it. For a dump folder this happens directly; for an image, <b>ShadowMountPlus</b> briefly mounts it for writing and unmounts it afterwards. An old index stays as <code>ampr_emu.index.bak</code>.</li>
 <li>When <b>converting</b> a dump folder there is the box <b>Build the AMPR index first</b> (already ticked for games with APR-EMU). This puts the index inside the image – for a compressed image (<code>.ffpfsc</code>) it is the only way, as nothing can be written there afterwards.</li>
 </ul>
 <div class='tip'>A running game and any other job of the app block building. The layout follows drakmor's script <code>build_ampr_index.py</code> (GPL-3.0) and was compared byte for byte with its result.</div>
+<h3>APR-EMU in the game</h3>
+<p>The row <b>APR-EMU in the game</b> shows which <code>libSceAmpr.sprx</code> a game loads and lets you choose a version and put it in, bring the game's original back or remove the file. The versions are files in <code>/data/PS5-Cooling-Center/AMPR_EMU</code>, named like drakmor's releases (<code>libSceAmpr.sprx-0.4.2.1-test-pack</code>). Five versions are bundled with the app: they show in the list even when they are not in the folder yet, and get there when you build one in or with <b>Put the bundled versions into the folder</b> (the folder is made when needed). Add more with <b>Add file</b>. Every file is checked (SELF header, the mark “[AMPR_EMU]”). Variants with “pack” in the name can read LZ4 packs, “debug” writes a log.</p>
+<ul>
+<li>Where the file goes follows ShadowMountPlus (1.7beta1 and newer): it looks first in the backport folder <code>&lt;scan path&gt;/backports/&lt;title id&gt;/</code>, then in the game, and the first folder that exists counts alone. For a <b>game folder, .exfat or .ffpkg</b> it goes to <code>fakelib/libSceAmpr.sprx</code> in the game (an image is briefly mounted for writing by ShadowMountPlus). A <b>compressed .ffpfsc</b> cannot be written: a backport folder is made there and the game stays untouched; because it hides the game's <code>fakelib</code>, its files are copied in. If a backport folder already exists, it is used for every format.</li>
+<li>The file the game brought itself is kept once as <code>libSceAmpr.sprx.orig</code> and never overwritten; an earlier APR-EMU does not count as an original. <b>Restore original</b> puts it back. <b>Remove</b> deletes only the APR-EMU file.</li>
+<li>The window warns when a <code>fakelib2</code> lies beside <code>fakelib</code> (ShadowMountPlus from 1.7beta1 then reads only that one), and when ShadowMountPlus replaces the file at the start of a game from <code>/data/shadowmount/emus</code> (<code>update_emulators=1</code>). A game in LZ4 packs accepts only versions with “pack” and cannot otherwise be changed.</li>
+</ul>
+<h3>LZ4 asset packs (short version)</h3>
+<p>The step-by-step guide with troubleshooting is in the chapter <b>LZ4 asset packs: step by step</b>. Only a game that links libSceAmpr can be packed; otherwise the button is locked.</p>
+<p>The row <b>LZ4 asset packs</b> packs the data of a game into seekable LZ4 packs (<code>ampr_assets-NNN.pak</code>, directory <code>ampr_assets.index</code>) that APR-EMU reads while you play and unpacks block by block. The game then takes up less space. It only works for games that are a folder (turn an image into a folder first with <b>Unpack into a folder</b>) and only for games that use APR-EMU: the app puts the APR-EMU version “0.4.2.1 test-pack” into <code>fakelib</code> (the game's own file is kept as <code>.orig</code>), because only the “pack” versions read packs.</p>
+<p>The settings window (<b>Pack with LZ4 …</b>) asks three things:</p>
+<ul>
+<li><b>How strongly?</b> Level 3 (LZ4 Fast, quick), 9 (LZ4 HC, balanced) or 12 (LZ4 HC, smallest).</li>
+<li><b>What goes in?</b> <b>Automatic</b>: game data is packed; programs (<code>eboot.bin</code>, <code>.sprx</code>/<code>.prx</code>), <code>sce_sys</code>, <code>fakelib</code>, saved data and media that is already compressed (mp4, ogg, wem …) stay loose, and so do very large files that hardly compress. Or an <b>own profile (TOML)</b> in the format of drakmor's <code>ampr_pack.py</code> (<code>[pack]</code>, <code>[groups.NAME]</code>, <code>[[rule]]</code> with include/exclude, block_size, layout, compress/store/loose, <code>[runtime]</code>; lists for <code>include_from</code> lie beside it). Profiles live in the folder <code>/data/PS5-Cooling-Center/LZ4_Profile</code> or in the folder <code>LZ4_Profile</code> of a USB drive; <b>Add profile …</b> uploads a file there. Programs, system folders and the packs themselves always stay loose, even with a profile. Before the start the window shows how many files will be packed.</li>
+<li><b>What happens to the originals?</b> <b>Pack in the game folder</b>: the AMPR index is built afresh, the files are packed, every file is compared byte for byte with its original and only then is the original removed; on any error the packs are removed again and everything stays as before. Or <b>as a new folder <code>&lt;name&gt;-lz4</code></b> beside the game: the original stays untouched, the loose files are copied and read back.</li>
+</ul>
+<p>A packed game carries the tag <b>LZ4 packed</b> on its card. The row then offers <b>Check packs</b> (every block is read, unpacked and checked against its checksum) and <b>Unpack LZ4 …</b> (writes the files back, compares them with the packs and then removes the packs). While a game is packed, the AMPR index is locked and the APR-EMU can only be swapped for another “pack” version: the packs belong to exactly this index.</p>
+<div class='tip'>The app keeps packing at low priority even if the window is closed; a running game must be closed first. Format (AMPRPAK4/AMPRDAT3) and rules follow drakmor's ampr_emu (GPL-3.0); packing and checking are tested against its Python tool in both directions. Files a game reads through mmap do not belong in packs – the automatic selection therefore leaves programs and system files out.</div>
+<h3>PlayGo in the game</h3>
+<p>The row <b>PlayGo in the game</b> works the same way for <code>libScePlayGo.sprx</code>, drakmor's PlayGo stub (<a href="https://github.com/drakmor/pgo_stub">pgo_stub</a>, GPL-3.0): it reports everything as completely installed to a game whose PlayGo content cannot be found (any more). It only helps with games that treat PlayGo content as missing. The versions are files in the folder <code>/data/PS5-Cooling-Center/PlayGo</code> (<code>libScePlayGo.sprx-0.6-nolog</code>, <code>libScePlayGo.sprx-0.6-log</code>); both 0.6 builds come with the app, and “log” writes <code>/app0/playlgo.log</code> into the game. Each file is checked (SELF header, mark “playgo_stub.dat”). Place, the backup as <code>libScePlayGo.sprx.orig</code>, the backport folder for a <code>.ffpfsc</code>, the warnings and removing work as with the APR-EMU file; LZ4 packs play no part for PlayGo. The two files of a game can be changed independently of each other. A stub in the emulator folder of ShadowMountPlus (<code>/data/shadowmount/emus/libScePlayGo.sprx</code>) wins here too.</p>
+<h3>Check, unpack, repair an image</h3>
+<p>If the game is an image (<code>.exfat</code>, <code>.ffpkg</code> or <code>.ffpfsc</code>), the same window has three more tools. The app reads the image itself, without mounting it; a running game and any other job of the app block them.</p>
+<ul>
+<li><b>Check image</b>: for an <code>.ffpfsc</code> the whole container is read first (header, block table, every block unpacked – every block carries a checksum), then the files in it are checked to lie where the file system says. For <code>.exfat</code> and <code>.ffpkg</code> every file is read in full (a drive that is going bad shows there). If the check finds something, the window names the affected files, with the place where it starts. The result stays in the window until the app restarts.</li>
+<li><b>Unpack into a folder</b>: writes all files to <code>homebrew/&lt;name of the image&gt;</code> on a drive of your choice. Beforehand the window shows files, size, room and file system of every drive (FAT32 takes no files over 4 GB). Each file is written into a folder ending in <code>.ps5cc-teil</code>, read back from the drive and compared with what came from the image (CRC-32). Only when everything matches does the folder get its name; on an error or a cancel it is removed again. The image stays untouched; the game then exists twice.</li>
+<li><b>Repair</b>: only where it is safe. If the size of an <code>.ffpfsc</code> file does not match the image's header, but the data is complete and the extra bytes are empty, the app sets the size right and reads the container in full once more. Damaged blocks cannot be made again from the image alone. Repair is locked while ShadowMountPlus has the image mounted.</li>
+</ul>
 <h3>History</h3>
 <p>On the games page the <b>History</b> tab lists all of the app's jobs – copy, move, convert, split package, install, delete, file manager, saved data and AMPR index – with result (done, failed, cancelled), size, duration and time. The last 500 are kept on the console in <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Clear history</b> deletes them (click twice).</p>
-</section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>8</div><h2>Deleting games &amp; backups</h2></div>
+<h3>Game plugins</h3>
+<p>The row <b>Game plugins</b> keeps drakmor's replacement modules in the game's <code>fakelib</code> folder up to date: the PlayGo stub (<code>libScePlayGo.sprx</code>, pgo_stub 0.6) and the DLC modules (<code>libSceAppContent.sprx</code>, <code>libSceGameUpdate.sprx</code>, <code>libSceNpEntitlementAccess.sprx</code>, dlc_emu 0.3) that show the DLC listed in the game's <code>dlc_emu.ini</code> as owned.</p>
+<ul>
+<li>An older build (the app knows it by its checksum) is replaced, the old file stays as <code>.old</code>. A file of an unknown build is left alone.</li>
+<li>The PlayGo stub is never added to a game that has none; that is done in the row “PlayGo in the game”. The DLC modules are only added when the game folder holds a <code>dlc_emu.ini</code> (without it they would hide the real DLC).</li>
+<li>If a library lacks the execute permission (the app created them like that until 13 Oct 2026), “Update” sets it. Without it the console does not load it (“mount flag / attribute error”).</li>
+<li>If the game has a <code>fakelib2</code> or ShadowMountPlus reads a backport folder, the app changes nothing.</li>
+</ul>
+<!--tp--></section><section class='ch' id='assetpacks'><div class='ch-head'><div class='ch-num'>8</div><h2>LZ4 asset packs: step by step</h2></div><p>An <b>asset pack</b> is a few files (<code>ampr_assets-000.pak</code> and more, plus <code>ampr_assets.index</code>). The app packs a game's data into them and shrinks it with LZ4. APR-EMU reads them while you play and unpacks each block only when the game needs it. According to the developer (drakmor, <i>ampr_emu</i>) this halves the space and often loads 30 to 40 percent faster. Version 0.4.2.1 is expressly a test version: <b>not every game tolerates it.</b></p>
+<h3>What you need</h3>
+<ul>
+<li>The game is a <b>folder</b>. Turn an image into a folder first with <b>Unpack to a folder</b>.</li>
+<li>The game <b>links libSceAmpr</b>. The app looks for the name in <code>eboot.bin</code> and in <code>sce_module</code> and shows <b>✓ loads libSceAmpr itself</b>. If it says <b>✗ does not load libSceAmpr itself</b>, the button is locked: the game would not find its files in the packs. Such games can only be compressed to an <code>.ffpfsc</code> image (button <b>Convert</b>).</li>
+<li>A current ShadowMountPlus, with images mounted read-only (the default).</li>
+<li>Space: when packing inside the game folder the app needs about half of the game data extra until the originals are removed.</li>
+</ul>
+<h3>Step by step</h3>
+<ol>
+<li><b>Install APR-EMU.</b> In the window <b>LZ4 asset packs &amp; APR-EMU</b>, under <b>APR-EMU in the game</b>, choose version <code>0.4.2.1 test-pack</code>. Only versions with “pack” in the name read packs.</li>
+<li><b>Test unpacked.</b> Start the game and play for a while: menu, a level, load a save. If it does not run like this, it will never run packed. Then only an older APR-EMU (for example 0.3.6.6) or none helps.</li>
+<li><b>Pack.</b> <b>Pack with LZ4 …</b>, to begin with level 9 and <b>Automatic</b>. The box “started unpacked, and it ran” belongs to it. <b>Pack in the game folder</b> saves the most space; the originals are removed only once every file has been compared byte for byte with the packs, and on any error everything stays as before. The choice <b>As a new folder … next to it</b> leaves the original untouched but puts two folders with the same title ID side by side. ShadowMountPlus can choke on that and keep re-mounting the game every few seconds; take the original out of the search path first.</li>
+<li><b>Verify the packs.</b> Reads every block, unpacks it and compares with the CRC file. This shows that the packs are intact, not that the game uses them correctly.</li>
+<li><b>Start and play.</b> Only now you see whether it runs. Play for longer than a few seconds: menu, a level, loading and saving.</li>
+<li><b>If it does not run:</b> <b>Unpack LZ4 …</b> writes all files back, compares them and removes the packs.</li>
+</ol>
+<h3>What “Automatic” leaves loose</h3>
+<p>With the profile <b>Automatic</b>, these stay loose: programs and libraries (<code>eboot.bin</code>, <code>.prx</code>, <code>.sprx</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code>, saves, already compressed media (mp4, webm, ogg, wem …), configuration and data files (<code>.json</code>, <code>.xml</code>, <code>.dat</code>, <code>.bin</code>, <code>.utoc</code>), archives (<code>.zip</code>, <code>.7z</code>, <code>.rar</code>) and the game's own <code>.pak</code> files, the folders <code>trophy2</code>, <code>uds</code>, <code>_DUPLEX_</code>, <code>decrypted</code> and movie folders, Wwise sound banks (<code>soundbank…</code>, <code>wem…</code>), files directly in the game folder and very large files that hardly pack. This is the list that has proved itself in tools that run on the console (exFAT2AMPR by V-10, Lazy_AMPR). A profile of your own (TOML) packs what its rules say.</p>
+<h3>If the game does not start or crashes</h3>
+<ul>
+<li><b>First find out who is to blame.</b> Unpack the game and start it unpacked with the same APR-EMU version. Example Arkanoid (12 Oct 2026): with 0.4.2.1 it crashed even unpacked, with 0.3.6.6 it ran. Packs were not possible there.</li>
+<li><b>“mount flag / attribute error”</b> in the ShadowMountPlus log: the library cannot be loaded because it lacks the execute permission (mode 0644). The app creates it with 0755. If you copied the file yourself, run <code>SITE CHMOD 755</code> over FTP.</li>
+<li><b>It crashes after a few seconds although it ran unpacked:</b> the game probably reads files the packs do not serve, above all through <b>mmap</b> (mapped into memory) or for writing. Such files must stay loose. Use your own profile (TOML, folder <code>LZ4_Profile</code>) and add a <code>loose</code> rule for the file at the end: the last matching rule wins. Which files the game could not open is written by the debug version (<code>0.4.2.1 test-debug-pack</code>) as <code>apr.pack.open.fail</code> in <code>ampr_emu.log</code>.</li>
+<li><b>“Automatic” is only a start.</b> It only knows what is on the disk. Profiles made from recordings of a real play session are more reliable (<code>ampr_pack_profile.py</code> from ampr_emu, MkPFS).</li>
+</ul>
+<h3>Better than “Automatic”: the recording</h3>
+<p>“Automatic” only knows what is on the disk. A profile made from a real play session is more reliable. The row <b>Optimization by recording</b> does that in four steps:</p>
+<ol>
+<li><b>Start recording.</b> The app puts the debug APR-EMU (<code>0.4.2.1 test-debug-pack</code>) into a folder <code>fakelib2</code> of the game and copies the other libraries over from <code>fakelib</code> (ShadowMountPlus then reads only <code>fakelib2</code> and replaces nothing in it). Requirements: the game loads libSceAmpr, the AMPR index is built, it is not in packs.</li>
+<li><b>Play.</b> Start the game, play for a while (menu, a level, loading a save) and quit it normally. The game writes <code>ampr_commands.bin</code>. The debug version is slower.</li>
+<li><b>Collect the session.</b> The app copies the recording and its index to <code>/data/PS5-Cooling-Center/traces/&lt;title ID&gt;/&lt;n&gt;/</code>. The debug APR-EMU empties the recording at every launch, so collect after each session. Several sessions (other levels, other modes) make a better profile.</li>
+<li><b>Create the profile.</b> All sessions become <code>&lt;title ID&gt;-mitschnitt.toml</code> in the folder <code>LZ4_Profile</code>. For every file read it fixes the block size (16 KiB to 1 MiB), the layout (random, mixed, streaming), “hot” and the treatment (media are stored, not packed) and sets the caches of the APR-EMU. Files the game never read stay loose. When packing, choose it under <b>Own profile</b>.</li>
+</ol>
+<p>Then <b>Stop recording</b>: that removes <code>fakelib2</code> again. A recording only shows what was read in the scenes you played; add rules of your own for the rest.</p>
+<h3>Limits and notes</h3>
+<ul>
+<li>APR-EMU rejects sets with more than 2,000,000 files, 16,000,000 blocks or 1,024 pack files. For big games the app uses larger blocks.</li>
+<li>The index, <code>.runtime</code> and packs of a game belong together (same build ID). Never swap single parts and change nothing while the game runs.</li>
+<li>According to its author APR-EMU 0.4.2.1 still has a crash with saves. Keep the original until you have played long enough.</li>
+<li>While a game is packed, the AMPR index and the APR-EMU version are locked.</li>
+<li>Models and rules: drakmor/ampr_emu (docs/ASSET_PACK_WORKFLOW_EN.md, GPL-3.0), theghostonline/PS5-LZ4-Compression and danthespal/MkPFS.CSharp.</li>
+<li>Ideas and knowledge: exFAT2AMPR by V-10 (<a href="https://github.com/exFAT2AMPR/exfat2ampr">GitHub</a>, GPL-3.0 with additional terms, “Made by V-10”): the list that “Automatic” leaves loose, the recording for profile creation (its structure and constants follow his port of <code>ampr_pack_profile.py</code>) and the upkeep of the game plugins with their table of checksums.</li>
+</ul>
+<!--tp--></section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>9</div><h2>Deleting games &amp; backups</h2></div>
 <p>Every game card has <b>Delete</b>, and so does every entry in the <b>Backups</b> tab.</p>
 <ul>
 <li><b>Installed games</b> are uninstalled by the console itself – as with “Delete” in the menu, including updates and add-ons.</li>
@@ -222,11 +301,11 @@ and verified; nothing is overwritten.</p>
 </ol>
 <div class='tip'>Your <b>saved data is always kept</b>. A running game is never deleted.</div>
 
-</section><section class='ch' id='spielzeit'><div class='ch-head'><div class='ch-num'>9</div><h2>Play time</h2></div>
+</section><section class='ch' id='spielzeit'><div class='ch-head'><div class='ch-num'>10</div><h2>Play time</h2></div>
 <p>When you played, for how long and how warm the console got: totals for today, 7 and 30 days, the last 14 days
 as bars, the most played games and the recent sessions with peak temperatures. Can be saved as a spreadsheet (CSV).</p>
 
-</section><section class='ch' id='spielstaende'><div class='ch-head'><div class='ch-num'>10</div><h2>Back up saved data</h2></div>
+</section><section class='ch' id='spielstaende'><div class='ch-head'><div class='ch-num'>11</div><h2>Back up saved data</h2></div>
 <p>Copies the saved data as the console stores it – encrypted, without opening or changing anything – to a
 USB stick, a disk or the internal SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Every file is verified;
 “Verify” reads a backup again later.</p>
@@ -236,7 +315,7 @@ verifies them and only then replaces the old ones.</p>
 console cannot be restored.</div>
 <p>Per user, split into PS5 games, PS5 apps, PS4 games and PS4 apps. “Delete” (two clicks) removes the saved games of one title; the app backs up the current state first and lets you put it back.</p>
 
-</section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>11</div><h2>Packages</h2></div>
+</section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>12</div><h2>Packages</h2></div>
 <p>Finds <code>.pkg</code> files on USB drives, disks and in console storage (folder <code>pkg</code>) and shows the picture,
 name, title ID, version, type and size.</p>
 <ul>
@@ -249,7 +328,7 @@ Beforehand, a plan lists what could get in the way.</li>
 <div class='info'>An aborted installation attempt can leave space reserved. You free it again on the console, in the
 download list, with “Delete”.</div>
 
-</section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>12</div><h2>Files – the file manager</h2></div>
+</section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>13</div><h2>Files – the file manager</h2></div>
 <p>Viewing the console's folders and downloading files works everywhere. <b>Changing</b> – uploading, new folder, renaming,
 copying, moving, deleting – only works on the <b>drives</b> and in <code>/data</code>. Everywhere else it says “View only”.</p>
 
@@ -272,16 +351,16 @@ copying, moving, deleting – only works on the <b>drives</b> and in <code>/data
 progress per file.</p>
 <div class='tip'>Protected: nothing is ever overwritten, links are never followed, and in the app's folder
 (<code>/data/PS5-Cooling-Center</code>) only <code>payloads</code> can be changed – ideal for uploading payloads.</div>
-</section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>13</div><h2>Payloads</h2></div>
+</section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>14</div><h2>Payloads</h2></div>
 <p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>
 or from the USB stick (root or folder <code>payloads</code>). They are started via the console's payload loader
 (port 9021).</p>
 <p><b>Profiles:</b> A profile is a named sequence of payloads and pauses that “Run” starts step by step. One can be set as the <b>startup profile</b>; the app then runs it by itself after every start (with protection against endless loops). New payloads can be loaded into the console’s folder with “Import from PC”, also while editing a profile. “Back up profiles” and “Load profiles” exchange profiles as a file.</p>
 
-</section><section class='ch' id='profil'><div class='ch-head'><div class='ch-num'>14</div><h2>Profile</h2></div>
+</section><section class='ch' id='profil'><div class='ch-head'><div class='ch-num'>15</div><h2>Profile</h2></div>
 <p>Change the console's display name and choose a profile picture – your own or one of the 30 built-in ones.</p>
 
-</section><section class='ch' id='system'><div class='ch-head'><div class='ch-num'>15</div><h2>System &amp; log</h2></div>
+</section><section class='ch' id='system'><div class='ch-head'><div class='ch-num'>16</div><h2>System &amp; log</h2></div>
 <p><b>System</b> shows the console, firmware, uptime, the storage of all drives, network, display and the
 cooling performance over the weeks; this is also where you reinstall the tile.</p>
 <p><b>System</b> also shows a QR code with this page’s address: point the phone’s camera at it and the page opens on the phone (on the same network).</p>
@@ -289,18 +368,18 @@ cooling performance over the weeks; this is also where you reinstall the tile.</
 <p><b>Log</b> lists every measurement, control action and message of the app (exportable). The <b>Live kernel log</b> tab shows
 the console's log as it is written – with filter, pause, save, download and recording.</p>
 
-</section><section class='ch' id='credits'><div class='ch-head'><div class='ch-num'>16</div><h2>Credits</h2></div>
+</section><section class='ch' id='credits'><div class='ch-head'><div class='ch-num'>17</div><h2>Credits</h2></div>
 <p>The page thanks the developers whose work is in the app, and other well-known developers of the community – with
 profile picture, name and links. The links can only be clicked if the browser has internet access.</p>
 
-</section><section class='ch' id='sicherheit'><div class='ch-head'><div class='ch-num'>17</div><h2>Security on the home network</h2></div>
+</section><section class='ch' id='sicherheit'><div class='ch-head'><div class='ch-num'>18</div><h2>Security on the home network</h2></div>
 <ul>
 <li>The interface has <b>no login</b>: every device on the home network can read and change things.</li>
 <li>The console does not belong on the open internet – <b>do not set up port forwarding</b> to port 8086.</li>
 <li>If you only want to use it on the device itself, set the network binding in the settings to <code>127.0.0.1</code>.</li>
 <li>The app refuses requests that recognisably come from outside websites (error 403).</li>
 </ul>
-</section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>18</div><h2>If something does not work</h2></div>
+</section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>19</div><h2>If something does not work</h2></div>
 <table>
 <tr><th>Problem</th><th>Solution</th></tr>
 <tr><td>Web interface not reachable</td><td>Send the ELF again (port 9021); only one instance; check the address <code>http://&lt;PS5-IP&gt;:8086/</code>.</td></tr>

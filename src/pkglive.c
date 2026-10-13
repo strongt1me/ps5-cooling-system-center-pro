@@ -131,7 +131,7 @@ expire_locked(void) {
 static int
 other_busy(void) {
   return ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-         ps5tm_pkgsplit_busy() || ps5tm_gamedelete_busy() || ps5tm_pkginst_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy();
+         ps5tm_pkgsplit_busy() || ps5tm_gamedelete_busy() || ps5tm_pkginst_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy() || ps5tm_imgjob_busy();
 }
 
 /* ------------------------------------------------------------------ demands and readers */

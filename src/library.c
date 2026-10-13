@@ -88,6 +88,7 @@ typedef struct {
   int      playgo;               /* fakelib/libScePlayGo.sprx               */
   int      ampr_index;           /* ampr_emu.index: the emulation has run   */
   int      playgo_log;           /* playlgo.log: likewise                   */
+  int      lz4;                  /* ampr_assets.index: the game lies in LZ4 packs */
   int      extra_libs;           /* other libraries in fakelib              */
   int      fakelib2;             /* the libraries come from fakelib2 (it replaces fakelib, as ShadowMountPlus uses it) */
   int      bp_from;              /* 0 none, 1 in the game, 2 from <scanpath>/backports/<TITLE_ID>                      */
@@ -470,6 +471,7 @@ detect_mods(lib_game_t *g) {
         *m = c->mods;
         m->ampr_index = 0;
         m->playgo_log = 0;
+        m->lz4 = 0;
         overlay_backports(g, m);
         uint32_t eb0 = (m->eboot_sdk >> 16) & 0xFFFF;
         uint32_t pj0 = (uint32_t)(g->param_sdk >> 48) & 0xFFFF;
@@ -519,6 +521,8 @@ detect_mods(lib_game_t *g) {
   m->ampr_index = stat(path, &st) == 0;
   snprintf(path, sizeof(path), "%s/playlgo.log", g->source);
   m->playgo_log = stat(path, &st) == 0;
+  snprintf(path, sizeof(path), "%s/ampr_assets.index", g->source);
+  m->lz4 = stat(path, &st) == 0;
   overlay_backports(g, m);
 
   uint32_t eb = (m->eboot_sdk >> 16) & 0xFFFF;              /* 0x0400 = 4.00 */
@@ -1402,6 +1406,7 @@ ps5tm_library_json(void) {
       cJSON_AddBoolToObject  (m, "playgo", md->playgo);
       cJSON_AddBoolToObject  (m, "ampr_index", md->ampr_index);
       cJSON_AddBoolToObject  (m, "playgo_log", md->playgo_log);
+      cJSON_AddBoolToObject  (m, "lz4", md->lz4);
       cJSON_AddNumberToObject(m, "backport_libs", md->extra_libs);
       cJSON_AddBoolToObject  (m, "fakelib2", md->fakelib2);
       cJSON_AddStringToObject(m, "libs_from", md->bp_from == 2 ? "folder" : md->bp_from == 1 ? "game" : "");
@@ -1530,6 +1535,19 @@ ps5tm_library_start(const char *title_id) {
  * lets the page's answer leave first. The launch itself takes about 0.8 s,
  * so the browser is gone roughly a second and a half after "Starten".
  *
+ * That held for a game the launcher accepts at once. For one that ShadowMountPlus
+ * has to mount first, and for a switch from another game (the old one is closed
+ * first), the launch took seconds and the browser stood in front of them all that
+ * time (13.10.2026: "the web page closes very late"). So the page is now closed
+ * FIRST, as if the PS button had been pressed at the tap: ps5tm_library_close_browser()
+ * runs at once when the request comes from the console's browser, the launch goes
+ * on in the meantime, and the front request follows when the game is there
+ * (ps5tm_library_hand_over with close_browser 0). What the page would have said
+ * afterwards (a refusal, an offer) is told by a notification of the console. The
+ * browser cannot be kept open in the background: the shell's only way to take it
+ * off the screen closes it (measured 29.09.2026), and a game started behind it
+ * stays behind it.
+ *
  * libSceShellUIUtil.sprx is linked, not loaded at run time — see the Makefile,
  * and tile.c on sceKernelLoadStartModule. The calls run on a thread of their
  * own: the shell may take its time, and the request must not wait for it. */
@@ -1555,6 +1573,7 @@ typedef struct {
 } handover_t;
 
 static int g_handover_busy;             /* one hand-over at a time         */
+#define HANDOVER_WAIT_MS 4000           /* a request for the front waits this long for the one before it */
 static int g_shellui_ready;             /* handover_thread only, see above */
 
 static void *
@@ -1574,6 +1593,19 @@ handover_thread(void *arg) {
 
   shellui_uri_param_t prm = { sizeof(prm), h.user_id };
   int home = 0, closed_ms = -1;
+  if(!h.title_id[0]) {                  /* only the browser: closed now, the front request follows later */
+    home = sceShellUIUtilLaunchByUri(HOME_URI, &prm);
+    for(int t = 0; t <= BROWSER_CLOSE_MS; t += 100) {
+      if(ps5tm_procmgr_pid_by_name(BROWSER_PROCESS) == -1) { closed_ms = t; break; }
+      usleep(100 * 1000);
+    }
+    if(closed_ms >= 0)
+      PS5TM_INFO("library_browser_closed", "Browser der Konsole nach %d ms geschlossen (0x%08X), noch vor dem Start.", closed_ms, (unsigned)home);
+    else
+      PS5TM_WARN("library_browser_closed", "Browser der Konsole nach %d ms noch offen (0x%08X).", BROWSER_CLOSE_MS, (unsigned)home);
+    __atomic_store_n(&g_handover_busy, 0, __ATOMIC_RELEASE);
+    return NULL;
+  }
   if(h.close_browser) {
     home = sceShellUIUtilLaunchByUri(HOME_URI, &prm);
     for(int t = 0; t <= BROWSER_CLOSE_MS; t += 100) {
@@ -1601,20 +1633,46 @@ handover_thread(void *arg) {
   __atomic_store_n(&g_handover_busy, 0, __ATOMIC_RELEASE);
   return NULL;
 }
+
+/* The hand-overs run one at a time; one that finds another running waits for it a few seconds (the browser close that began
+   before the launch is gone in about half a second) instead of being refused. */
+static int
+handover_claim(void) {
+  for(int t = 0; t <= HANDOVER_WAIT_MS; t += 50) {
+    if(!__atomic_exchange_n(&g_handover_busy, 1, __ATOMIC_ACQ_REL)) return 0;
+    usleep(50 * 1000);
+  }
+  return -1;
+}
 #endif
+
+
+static int handover_spawn(const char *title_id, int close_browser);
+
+/* The console's browser closed now, before anything else (see the comment above): 0 when it is on its way, -1 when nothing could
+   be asked (no shell library, no user, another hand-over still running). */
+int
+ps5tm_library_close_browser(void) {
+  return handover_spawn("", 1);
+}
 
 int
 ps5tm_library_hand_over(const char *title_id, int close_browser) {
   if(!title_id || !is_title_id(title_id)) return -1;
+  return handover_spawn(title_id, close_browser);
+}
+
+static int
+handover_spawn(const char *title_id, int close_browser) {
 #ifdef PS5TM_HOST_TEST
-  (void)close_browser;
+  (void)title_id; (void)close_browser;
   return -1;
 #else
   if(!sceShellUIUtilInitialize || !sceShellUIUtilLaunchByUri) return -1;
   int uid = -1;
   if(ps5tm_user_service_active_user(&uid) != 0 || uid <= 0) return -1;
 
-  if(__atomic_exchange_n(&g_handover_busy, 1, __ATOMIC_ACQ_REL)) return -1;
+  if(handover_claim() != 0) return -1;
 
   handover_t *h = calloc(1, sizeof(*h));
   if(!h) {

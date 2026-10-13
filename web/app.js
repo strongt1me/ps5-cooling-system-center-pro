@@ -4692,7 +4692,7 @@
   };
 
   const gmHasMods = (x) => !!(x.mods && x.mods.state === "checked"
-    && (x.mods.backport || x.mods.ampr_emu || x.mods.playgo));
+    && (x.mods.backport || x.mods.ampr_emu || x.mods.playgo || x.mods.lz4));
 
   /* Form der Spieldaten (library.c, detect_storage): wie ShadowMountPlus sie
      meldet, sonst aus mount.lnk und /user/app geschlossen. */
@@ -4763,6 +4763,8 @@
     if (m.ampr_emu)
       t.push(`<span class="gm-tag ampr" title="${esc((m.fakelib2 ? "fakelib2" : "fakelib") + "/libSceAmpr.sprx"
         + (m.ampr_index ? " · ampr_emu.index vorhanden: die Emulation lief schon" : ""))}">AMPR EMU</span>`);
+    if (m.lz4)
+      t.push(`<span class="gm-tag ampr" title="ampr_assets.index · Das Spiel liegt in LZ4-Paketen">LZ4 gepackt</span>`);
     if (m.playgo)
       t.push(`<span class="gm-tag pg" title="${esc((m.fakelib2 ? "fakelib2" : "fakelib") + "/libScePlayGo.sprx"
         + (m.playgo_log ? " · playlgo.log vorhanden" : ""))}">PlayGo</span>`);
@@ -4802,7 +4804,7 @@
             ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy)}
             ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move)}
             ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert)}
-            ${btn(" gm-apr", `data-apr="${id}"`, "APR &amp; LZ4 …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
+            ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-Asset-Packs …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
             ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
             ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy)}
           </div>`;
@@ -5104,6 +5106,7 @@
         else if (act === "cancel") cancel(b);
       });
       o.addEventListener("change", (e) => {
+        if (cp.view.startsWith("ap")) return;                      /* APR & LZ4 hat eigene Felder (apr…) und keinen Plan */
         const n = e.target.name || "";
         if (n === "cp-drive") cp.drive = e.target.value;
         if (n === "cp-mode") cp.mode = e.target.value;
@@ -5640,6 +5643,8 @@
     }
   };
   const CV_EXT = { ffpfsc: ".ffpfsc", ffpkg: ".ffpkg", exfat: ".exfat" };
+  /* What the result is, by its name: the job view and the end of it say it, not only the choice before. */
+  const CV_FMT = { ffpfsc: "ffpfsc (komprimiertes PFS)", ffpkg: "ffpkg (UFS2-Abbild)", exfat: "exFAT-Abbild (.exfat)" };
 
   const cvBlocked = (d) => {
     const p = cv.plan;
@@ -5739,7 +5744,8 @@
       <h4 class="cp-step">3. Wohin?</h4>
       <div class="cp-list">${drives || `<p class="muted">Kein Laufwerk gefunden.</p>`}</div>
 
-      ${target ? `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(target)}</code>
+      ${target ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[cv.op] || cv.op)}</b></p>
+        <p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(target)}</code>
         ${tgt && tgt.unfinished ? `<span class="cp-why">Dort liegt eine unfertige Datei dieser App, sie wird ersetzt${
           tgt.unfinished_bytes > 0 ? ` (${bytes(tgt.unfinished_bytes)} werden dabei frei)` : ""}.</span>` : ""}</p>` : ""}
       ${blockedRun ? `<p class="cp-err">${esc(blockedRun)}</p>` : ""}
@@ -5760,7 +5766,8 @@
     cp.view = "cvjob";
     txt("#cp-title", `„${j.name || j.title_id}“ konvertieren`);
     const pct = j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0;
-    const where = `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(j.target || "")}</code></p>`;
+    const where = `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(j.target || "")}</code></p>`
+      + (CV_FMT[j.op] ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[j.op])}</b></p>` : "");
     const verb = j.op === "ffpfsc" ? "komprimiert" : "geschrieben";
     let html;
     if (j.state === "scanning") {
@@ -6427,7 +6434,8 @@
     install: ["⬇", "Paket installiert"], ampr_index: ["🗜", "AMPR-Index gebaut"],
     files_copy: ["📁", "Dateimanager: kopiert"], files_move: ["📁", "Dateimanager: verschoben"], files_delete: ["📁", "Dateimanager: gelöscht"],
     saves_backup: ["💾", "Spielstände gesichert"], saves_restore: ["💾", "Spielstände zurückgespielt"],
-    saves_verify: ["💾", "Spielstände geprüft"], saves_delete: ["💾", "Spielstände gelöscht"]
+    saves_verify: ["💾", "Spielstände geprüft"], saves_delete: ["💾", "Spielstände gelöscht"],
+    img_lz4pack: ["🗜", "LZ4 gepackt"], img_lz4copy: ["🗜", "LZ4-Kopie gemacht"], img_lz4verify: ["🔍", "LZ4-Pakete geprüft"], img_lz4unpack: ["📂", "LZ4 entpackt"], ampr_emu: ["🧩", "APR-EMU geändert"], playgo: ["🧩", "PlayGo geändert"], img_check: ["🔍", "Abbild geprüft"], img_unpack: ["📂", "Abbild entpackt"], img_repair: ["🛠", "Abbild repariert"]
   };
   const HV_RES = { done: ["ok", "Fertig"], failed: ["bad", "Fehler"], cancelled: ["stop", "Abgebrochen"] };
   const hv = { list: [], filter: "" };
@@ -6469,68 +6477,709 @@
     catch (e) { toast(e.message, "error"); }
   }, "Alle Einträge des Verlaufs werden gelöscht. Zum Bestätigen noch einmal klicken.");
 
-  /* ── APR & LZ4 (amprindex.c, 11.10.2026) ──────────────────────────
-     Ein Fenster je Spiel; in Schritt 1 nur der AMPR-Index. Gleiches Fenster wie Kopieren (cp-overlay). */
-  const apr = { id: "", info: null, timer: 0 };
+  /* ── APR & LZ4 (amprindex.c, imgjob.c, 11.10.2026) ──────────────────
+     Ein Fenster je Spiel (dasselbe wie Kopieren, cp-overlay): der AMPR-Index, dazu bei einem Abbild Prüfen, In einen
+     Ordner entpacken und Reparieren. Aufträge laufen auf der PS5 weiter, auch wenn das Fenster zu ist. */
+  const apr = { id: "", info: null, job: null, img: null, ij: null, plan: null, view: "main", drive: "", timer: 0, gen: 0, planErr: "",
+                emu: null, vers: null, emuSel: "", emuErr: "", emuNote: "", lz4: null, lz4s: null };
+  const aprViews = ["apr", "aprloading", "aprunpack", "apremu", "aplz4set"];
+
+  const aprProgress = (j) => {
+    const pct = j.work_total > 0 ? Math.min(100, Math.floor(j.work_done * 100 / j.work_total)) : 0;
+    return `<div class="cp-bar apr-bar"><div style="width:${pct}%"></div></div>
+      <small>${pct} % · ${esc(j.phase || "")}${j.bytes_per_s ? ` · ${bytes(j.bytes_per_s)}/s` : ""}${j.eta_s ? ` · ${cpEta(j.eta_s)}` : ""}</small>
+      ${j.files_total ? `<small>${num(j.files_done)} von ${num(j.files_total)} Dateien</small>` : ""}
+      ${j.current ? `<small class="apr-cur"><code>${esc(j.current)}</code></small>` : ""}`;
+  };
+
+  /* Was die Prüfung gefunden hat: die Dateien beim Namen, mit der Stelle, ab der es hakt. */
+  const aprBadList = (bad, total) => bad && bad.length
+    ? `<small class="apr-bad">${bad.map((b) => `<code>${esc(b.path)}</code>${b.offset ? ` · ab ${bytes(b.offset)}` : ""}`).join("<br>")}${
+      total > bad.length ? `<br>… und ${num(total - bad.length)} weitere` : ""}</small>` : "";
+
+  /* ── LZ4-Pakete (imgjob_lz4.inc, lz4pack.c, 12.10.2026) ─────────────
+     Zwei Zeilen im Fenster: „LZ4-Pakete“ (packen, oder bei einem gepackten Spiel prüfen) und „Zurück zu losen Dateien“.
+     Der Auftrag läuft im Platz der Abbild-Aufträge (apr.ij). Das Einstellungsfenster (view „lz4set“) fragt Stärke, Auswahl
+     und was mit den Originalen geschieht; die Auswahl wird vorab berechnet (/api/v1/library/lz4/plan). */
+  const AL_LEVELS = [
+    [9, "Stufe 9 · ausgewogen (empfohlen)", "LZ4 HC. Gute Packung, das Packen dauert eine Weile. Beim Spielen kostet das Entpacken kaum etwas."],
+    [3, "Stufe 3 · schnell", "LZ4 Fast. Packt viel schneller, spart aber weniger Platz."],
+    [12, "Stufe 12 · am kleinsten", "LZ4 HC, am langsamsten. Spart am meisten."],
+  ];
+
+  const aprLz4Rows = (z, ij, mine, anyRunning) => {
+    if (!z || !z.ok) return "";
+    const run = !!(mine && ij && ij.active && /^lz4/.test(ij.kind));
+    const lk = mine && ij && !ij.active && /^lz4/.test(ij.kind) && ij.state !== "idle" ? ij : null;
+    let result = "";
+    if (lk) {
+      if (lk.state === "done") {
+        result = lk.kind === "lz4verify" ? `<p class="cp-ok">✓ Alle Pakete gelesen: ${num(lk.lz4_packed)} Dateien in Ordnung.</p>`
+          : lk.kind === "lz4unpack" ? `<p class="cp-ok">✓ Entpackt: ${num(lk.lz4_packed)} Dateien, jede mit den Paketen verglichen.</p>`
+          : lk.kind === "lz4copy" ? `<p class="cp-ok">✓ Fertig: ${num(lk.lz4_packed)} Dateien gepackt, ${bytes(lk.lz4_logical)} → ${bytes(lk.lz4_stored)}.</p>
+              <small>Das gepackte Spiel liegt in:</small><small><code>${esc(lk.dest || "")}</code></small><small>Das Original blieb unberührt.</small>`
+          : `<p class="cp-ok">✓ Gepackt: ${num(lk.lz4_packed)} Dateien, ${bytes(lk.lz4_logical)} → ${bytes(lk.lz4_stored)}.</p>
+              <small>Jede Datei wurde Byte für Byte mit dem Original verglichen, bevor das Original entfernt wurde.</small>`;
+      } else if (lk.state === "cancelled") result = `<small>${lk.kind === "lz4unpack" ? "Abgebrochen. Die Pakete sind noch da." : "Abgebrochen. Das Spiel ist wie vorher."}</small>`;
+      else result = `<p class="cp-err">✗ ${esc(lk.error || "Das ging nicht.")}</p>`;
+    }
+    const prog = run ? aprProgress(ij) : "";
+    if (!z.can) {
+      return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
+          <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>).</small>
+          <small class="cp-why">${esc(z.why || "Für dieses Spiel geht das nicht.")}</small></div>
+          <button type="button" class="btn" disabled>Mit LZ4 packen …</button></div>`;
+    }
+    /* Kann dieses Spiel Asset-Packs überhaupt nutzen? Die gängigen Werkzeuge prüfen, ob eboot.bin oder sce_module libSceAmpr
+       einbinden; ohne das gibt es nur die ffpfsc-Komprimierung. Dasselbe tut die App (ampr_import: 1 ja, 0 nein, -1 nicht lesbar). */
+    if (z.ampr_import === 0 && !z.packed) {
+      return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
+          <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>).</small>
+          <span class="apr-state no">✗ lädt libSceAmpr nicht selbst</span>
+          <small class="cp-why">Dieses Spiel bindet libSceAmpr weder in eboot.bin noch in sce_module ein. Es würde seine Dateien in den Paketen nicht wiederfinden. Für solche Spiele gibt es nur die Komprimierung zu einem .ffpfsc-Abbild (Knopf „Konvertieren“).</small></div>
+          <button type="button" class="btn" disabled>Mit LZ4 packen …</button></div>`;
+    }
+    const fit = z.ampr_import === 1 ? `<span class="apr-state ok">✓ lädt libSceAmpr selbst</span>`
+      : z.ampr_import === -1 ? `<span class="apr-state no">? nicht zu erkennen, ob es libSceAmpr lädt</span>` : "";
+    const guide = `<details class="apr-guide"><summary>So geht es Schritt für Schritt</summary>
+        <ol>
+          <li><b>APR-EMU einbauen:</b> <span>Unten bei „APR-EMU im Spiel“ die Version 0.4.2.1 test-pack wählen.</span></li>
+          <li><b>Ungepackt testen:</b> <span>Das Spiel einmal starten und ein Stück spielen. Läuft es so nicht, läuft es auch gepackt nie.</span></li>
+          <li><b>Packen:</b> <span>„Mit LZ4 packen …“, Stufe 9 und „Automatisch“ sind ein guter Anfang.</span></li>
+          <li><b>Wieder starten:</b> <span>Erst wenn das gepackte Spiel läuft, ist das Original entbehrlich. Läuft es nicht, bringt „LZ4 entpacken“ alles zurück.</span></li>
+        </ol>
+        <small>Ausführlich im Handbuch, Kapitel „LZ4-Asset-Packs“.</small></details>`;
+    const cancel = `<button type="button" class="btn" data-apr-imgcancel>Abbrechen</button>`;
+    const runWhy = anyRunning ? "Es läuft schon ein Vorgang." : "";
+    if (z.packed) {
+      const pk = z.pack || {};
+      const pct = pk.logical_bytes ? Math.round(pk.stored_bytes * 100 / pk.logical_bytes) : 0;
+      const lc = z.last_check;
+      const lastLine = lc ? `<small>Letzte Prüfung: ${esc(hvWhen(lc.when))} · ${num(lc.files)} Dateien, ${lc.bytewise ? "jede Datei Byte für Byte gleich" : "alle Blöcke gelesen und geprüft"}.</small>` : "";
+      const need = (pk.logical_bytes || 0) + 268435456;
+      const room = z.free_bytes >= need;
+      const unWhy = anyRunning ? "Es läuft schon ein Vorgang." : !room ? `Zum Entpacken fehlt Platz: nötig sind ${bytes(need)}, frei sind ${bytes(z.free_bytes)}.` : "";
+      return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
+          <small>Das Spiel liegt in LZ4-Paketen. Es läuft nur mit einer APR-EMU-Version, die Pakete liest („pack“). Starte es jetzt: läuft es nicht, bringt „LZ4 entpacken“ alles zurück.</small>
+          <span class="apr-state ok">✓ gepackt · ${bytes(pk.logical_bytes)} → ${bytes(pk.stored_bytes)} (${pct} %)</span>
+          ${lastLine}${prog}${result}</div>
+          ${run ? cancel : `<button type="button" class="btn primary" data-apr-lz4="verify" ${anyRunning ? "disabled" : ""}>Pakete prüfen</button>`}</div>
+        <div class="apr-row"><div><b>Zurück zu losen Dateien</b>
+          <small>Entpackt die Pakete wieder in den Spielordner und prüft jede Datei. Danach lassen sich Index und APR-EMU-Version wieder ändern.</small>
+          ${unWhy && !anyRunning ? `<small class="cp-why">${esc(unWhy)}</small>` : ""}</div>
+          <button type="button" class="btn" data-apr-lz4="unpack" ${unWhy ? "disabled" : ""} ${unWhy ? `title="${esc(unWhy)}"` : ""}>LZ4 entpacken …</button></div>`;
+    }
+    return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
+        <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>). APR-EMU liest sie beim Spielen und entpackt jeden Block erst, wenn das Spiel ihn braucht. Das Spiel belegt danach weniger Platz.</small>
+        ${run ? "" : `<span class="apr-state no">nicht gepackt</span> ${fit}${guide}`}${prog}${result}</div>
+        ${run ? cancel : `<button type="button" class="btn primary" data-apr-lz4="open" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit LZ4 packen …</button>`}</div>`;
+  };
+
+  /* die Auswahl vorab berechnen (der AMPR-Index des Spiels wird gelesen, nichts wird gepackt) */
+  const aprLz4Plan = async () => {
+    const s = apr.lz4s;
+    if (!s) return;
+    const key = s.auto ? "" : s.profile;
+    s.planKey = key; s.plan = null; s.planErr = "";
+    if (!s.auto && !s.profile) { aprRender(); return; }
+    if (apr.lz4 && !apr.lz4.has_index) { aprRender(); return; }
+    s.busy = true;
+    aprRender();
+    try {
+      const r = await api(`/api/v1/library/lz4/plan?id=${encodeURIComponent(apr.id)}&level=${s.level}&profile=${encodeURIComponent(key)}`);
+      if (apr.lz4s !== s || s.planKey !== key) return;
+      if (r.valid) s.plan = r; else s.planErr = r.error || "Die Auswahl ließ sich nicht berechnen.";
+    } catch (err) { if (apr.lz4s === s && s.planKey === key) s.planErr = err.message; }
+    if (apr.lz4s === s && s.planKey === key) { s.busy = false; if (apr.view === "lz4set") aprRender(); }
+  };
+
+  /* ── Optimierung per Mitschnitt und Spiel-Plugins (trace.c, plugins.c, 13.10.2026) ───────────────
+     Mitschnitt: die Debug-APR-EMU liegt in fakelib2 des Spiels, das Spiel schreibt /app0/ampr_commands.bin; die App sammelt
+     jede Sitzung ein und baut daraus ein Profil für genau dieses Spiel (Ordner LZ4_Profile), das beim Packen unter „Eigenes
+     Profil“ zur Wahl steht. Plugins: PlayGo-Stub und DLC-Module (dlc_emu) in fakelib, auf dem neuesten Stand gehalten. */
+  const aprTraceRow = (t, ij, anyRunning) => {
+    if (!t || !t.ok) return "";
+    if (!t.can) return t.why && !/^Nur für Spiele/.test(t.why) ? `<div class="apr-row"><div><b>Optimierung per Mitschnitt</b>
+        <small>Das Spiel einmal spielen, die App liest mit, wie es seine Dateien liest, und baut daraus ein Profil für genau dieses Spiel.</small>
+        <small class="cp-why">${esc(t.why)}</small></div><button type="button" class="btn" disabled>Mitschnitt starten</button></div>` : "";
+    const run = anyRunning || t.busy ? "Es läuft schon ein Vorgang." : "";
+    let chip, btns;
+    if (!t.enabled) {
+      chip = `<span class="apr-state no">Mitschnitt aus</span>`;
+      btns = `<button type="button" class="btn primary" data-apr-trace="start" ${run ? "disabled" : ""}>Mitschnitt starten</button>`;
+    } else {
+      chip = `<span class="apr-state ok">● Mitschnitt läuft</span>`;
+      const play = t.game_running ? "Das Spiel läuft noch. Beende es normal, dann kannst du die Sitzung einsammeln." : "";
+      btns = `<div class="apr-btnstack">
+          <button type="button" class="btn primary" data-apr-trace="collect" ${run || t.game_running || !t.journal_new ? "disabled" : ""} ${play ? `title="${esc(play)}"` : ""}>Sitzung einsammeln</button>
+          <button type="button" class="btn" data-apr-trace="generate" ${run || !t.sessions ? "disabled" : ""}>Profil erzeugen</button>
+          <button type="button" class="btn ghost" data-apr-trace="stop" ${run || t.game_running ? "disabled" : ""}>Mitschnitt beenden</button></div>`;
+    }
+    const sess = t.sessions ? `<span class="apr-state ok">${num(t.sessions)} ${t.sessions === 1 ? "Sitzung gesammelt" : "Sitzungen gesammelt"}</span>` : "";
+    const prof = t.profile ? `<small>Profil gespeichert: <code>${esc(t.profile)}</code>. Beim Packen unter „Eigenes Profil“ wählen.</small>` : "";
+    const how = t.enabled ? `<small>Starte das Spiel, spiele ein Stück (Menü, ein Level, Spielstand laden) und beende es normal. Dann „Sitzung einsammeln“. Mehrere Sitzungen ergeben ein besseres Profil.</small>
+        <small class="cp-why">Der Debug-Bau ist langsamer. Beende den Mitschnitt, wenn das Profil fertig ist.</small>`
+      : `<small>Spiele das Spiel einmal mit der Debug-APR-EMU. Die App liest mit, wie es seine Dateien liest, und baut daraus ein Profil für genau dieses Spiel. Das ist zuverlässiger als „Automatisch“.</small>`;
+    const busy = t.busy ? `<p class="muted">${esc(t.phase || "Läuft")} …</p>` : "";
+    const msg = !t.busy && t.msg ? `<p class="${t.msg_err ? "cp-err" : "cp-ok"}">${t.msg_err ? "✗" : "✓"} ${esc(t.msg)}</p>` : "";
+    return `<div class="apr-row"><div><b>Optimierung per Mitschnitt</b>${how}${chip} ${sess}${prof}${busy}${msg}</div>${btns}</div>`;
+  };
+
+  /* The result of "Aktualisieren" as sentences, each in an element of its own so that each is translated (the console sends the numbers). */
+  const aprPlugMsg = (pl) => {
+    const d = pl.detail;
+    if (!d) return esc(pl.msg);
+    const out = [];
+    if (d.written) out.push(`<span>${num(d.written)} Datei(en) aktualisiert:</span> <span>${esc(d.names || "")}.</span>`);
+    if (d.fixed) out.push(`<span>Ausführungsrecht bei ${num(d.fixed)} Datei(en) gesetzt.</span>`);
+    if (d.unknown) out.push(`<span>${num(d.unknown)} Datei(en) in unbekannter Fassung blieben unverändert.</span>`);
+    if (!out.length) out.push(`<span>Alles schon aktuell.</span>`);
+    return out.join(" ");
+  };
+
+  const aprPlugRow = (pl, anyRunning) => {
+    if (!pl || !pl.ok) return "";
+    const names = { current: "aktuell", older: "älter", missing: "fehlt", unknown: "unbekannte Fassung", not_needed: "nicht nötig", noexec: "Ausführungsrecht fehlt" };
+    /* one chip per project (dlc_emu is three files): the state of the worst file */
+    const rank = { current: 0, noexec: 1, older: 2, unknown: 3, missing: 4 };
+    const byProj = {};
+    for (const f of (pl.files || [])) {
+      if (f.state === "not_needed") continue;
+      const g = byProj[f.project] || (byProj[f.project] = { project: f.project, state: "current", n: 0 });
+      g.n++;
+      if ((rank[f.state] || 0) > (rank[g.state] || 0)) g.state = f.state;
+    }
+    const items = Object.values(byProj).map((g) =>
+      `<span class="apr-state ${g.state === "current" ? "ok" : "no"}">${esc(g.project)}: ${esc(names[g.state] || g.state)}</span>`).join(" ");
+    const dlc = pl.dlc && pl.dlc.present ? `<small>Im Spiel liegt eine <code>dlc_emu.ini</code> mit ${num(pl.dlc.entries)} ${pl.dlc.entries === 1 ? "DLC-Eintrag" : "DLC-Einträgen"}.</small>` : "";
+    const todo = pl.state === "update" || pl.state === "missing";
+    if (!pl.can) return pl.why && !/^Nur für Spiele/.test(pl.why) ? `<div class="apr-row"><div><b>Spiel-Plugins</b>
+        <small>Hält die Ersatzmodule von drakmor in <code>fakelib</code> auf dem neuesten Stand: den PlayGo-Stub, wenn das Spiel PlayGo nutzt, und die DLC-Module, wenn eine <code>dlc_emu.ini</code> im Spiel liegt.</small>
+        <small class="cp-why">${esc(pl.why)}</small></div><button type="button" class="btn" disabled>Prüfen</button></div>` : "";
+    return `<div class="apr-row"><div><b>Spiel-Plugins</b>
+        <small>Hält die Ersatzmodule von drakmor in <code>fakelib</code> auf dem neuesten Stand: den PlayGo-Stub, wenn das Spiel PlayGo nutzt, und die DLC-Module, wenn eine <code>dlc_emu.ini</code> im Spiel liegt.</small>
+        ${items || `<span class="apr-state no">dieses Spiel braucht keine</span>`}${dlc}
+        ${pl.msg ? `<p class="${pl.msgErr ? "cp-err" : "cp-ok"}">${pl.msgErr ? "✗" : "✓"} ${aprPlugMsg(pl)}</p>` : ""}</div>
+        <button type="button" class="btn${todo ? " primary" : ""}" data-apr-plug="apply" ${anyRunning || !items ? "disabled" : ""}>${todo ? "Aktualisieren" : "Prüfen"}</button></div>`;
+  };
+
+  const aprRenderLz4Set = (body) => {
+    const z = apr.lz4, s = apr.lz4s;
+    cp.view = "aplz4set";
+    txt("#cp-title", `LZ4-Asset-Packs – ${apr.info ? apr.info.name : ""}`);
+    if (!z || !s) { body.innerHTML = `<p class="muted">wird gelesen …</p>`; return; }
+    const levels = AL_LEVELS.map(([v, t, d]) => `<label class="cp-choice">
+        <input type="radio" name="lz4-level" value="${v}" ${s.level === v ? "checked" : ""}>
+        <span class="cp-choice-text"><b>${esc(t)}</b><span class="muted">${esc(d)}</span></span></label>`).join("");
+    const profs = z.profiles || [];
+    const profSel = s.auto ? "" : (profs.length
+      ? `<div class="apr-prof"><select id="lz4-prof">${profs.map((x) => `<option value="${esc(x.id)}" ${s.profile === x.id ? "selected" : ""}>${esc(x.name)}${x.where !== "app" ? ` (${esc(x.where)})` : ""}</option>`).join("")}</select></div>`
+      : `<p class="muted">Noch kein Profil da. Lege eine <code>.toml</code>-Datei in den Ordner <code>/data/PS5-Cooling-Center/LZ4_Profile</code> oder in den Ordner <code>LZ4_Profile</code> auf einem USB-Laufwerk.</p>`)
+      + `<p class="apr-add"><button type="button" class="btn ghost" data-apr-lz4-add>Profil hinzufügen …</button>
+          <input type="file" id="apr-lz4-prof" accept=".toml" hidden><span class="muted" id="apr-lz4-up">${esc(s.upNote || "")}</span></p>`;
+    let est = "";
+    if (!z.has_index) est = `<p class="muted">Der AMPR-Index des Spiels wird zuerst gebaut.</p>`;
+    else if (s.busy) est = `<p class="muted">wird berechnet …</p>`;
+    else if (s.planErr) est = `<p class="cp-err">${esc(s.planErr)}</p>`;
+    else if (s.plan) {
+      const pl = s.plan, need = pl.pack_bytes / 2 + 268435456 + (s.copy ? pl.loose_bytes : 0);
+      est = `<p class="muted apr-est">${`Gepackt werden ${num(pl.pack_files)} Dateien (${bytes(pl.pack_bytes)}), ${num(pl.loose_files)} bleiben lose (${bytes(pl.loose_bytes)}).`}</p>`
+        + (z.free_bytes < need ? `<p class="cp-why">${`Das könnte knapp werden: frei sind ${bytes(z.free_bytes)}, die App rechnet für diese Auswahl mit etwa ${bytes(need)}.`}</p>` : "");
+    }
+    const base = (z.path || "").split("/").pop();
+    const noGo = (!s.auto && !s.profile) || s.busy || !!s.planErr || !s.tested;
+    body.innerHTML = `
+      <p class="cp-src"><span class="muted">Spiel</span> <code>${esc(z.path || "")}</code></p>
+      <div class="cp-warn"><b>Vorher erledigen:</b> <span>Baue unter „APR-EMU im Spiel“ die Version 0.4.2.1 test-pack ein und starte das Spiel ungepackt. Läuft es so nicht, läuft es gepackt nie. Behalte das Original, bis du das gepackte Spiel gestartet hast.</span>
+        <label class="cp-check"><input type="checkbox" id="lz4-tested" ${s.tested ? "checked" : ""}>
+          <span>Ich habe das Spiel mit APR-EMU (test-pack) ungepackt gestartet, und es lief.</span></label></div>
+      <h4 class="cp-step">1. Wie stark packen?</h4>
+      <div class="cp-list">${levels}</div>
+      <h4 class="cp-step">2. Was kommt hinein?</h4>
+      <div class="cp-list">
+        <label class="cp-choice"><input type="radio" name="lz4-mode" value="auto" ${s.auto ? "checked" : ""}>
+          <span class="cp-choice-text"><b>Automatisch (empfohlen)</b><span class="muted">Spieldaten werden gepackt. Programme (<code>eboot.bin</code>, <code>.sprx</code>), <code>sce_sys</code>, Spielstände und schon komprimierte Medien bleiben lose.</span></span></label>
+        <label class="cp-choice"><input type="radio" name="lz4-mode" value="toml" ${s.auto ? "" : "checked"}>
+          <span class="cp-choice-text"><b>Eigenes Profil (TOML)</b><span class="muted">Eine Packliste, z. B. aus einem Mitschnitt des Spiels oder aus der Community. Liegt sie auf der Konsole oder einem USB-Stick, wird sie dir angeboten.</span></span></label>
+      </div>
+      ${profSel}${est}
+      <h4 class="cp-step">3. Was geschieht mit den Originalen?</h4>
+      <div class="cp-list">
+        <label class="cp-choice"><input type="radio" name="lz4-where" value="inplace" ${s.copy ? "" : "checked"}>
+          <span class="cp-choice-text"><b>Im Spielordner packen (spart am meisten Platz)</b><span class="muted">Die Pakete entstehen im Spielordner; erst wenn jede Datei Byte für Byte geprüft ist, werden die Originale entfernt. Bei einem Fehler bleibt alles wie vorher.</span></span></label>
+        <label class="cp-choice"><input type="radio" name="lz4-where" value="copy" ${s.copy ? "checked" : ""}>
+          <span class="cp-choice-text"><b>${`Als neuen Ordner ${base}-lz4 daneben`}</b><span class="muted">Das Original bleibt unberührt. Braucht Platz für das gepackte Spiel zusätzlich.</span></span></label>
+      </div>
+      ${s.copy ? `<p class="cp-why">Achtung: Dann liegen zwei Ordner mit derselben Titel-ID nebeneinander. ShadowMountPlus kann sich daran verschlucken und das Spiel im Sekundentakt umhängen. Verschiebe das Original vorher aus dem Suchpfad (zum Beispiel auf einen USB-Stick).</p>` : ""}
+      <div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (die Version „0.4.2.1 test-pack“) in den Spielordner; ein gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>
+      ${s.err ? `<p class="cp-err">${esc(s.err)}</p>` : ""}
+      <p class="muted">Läuft auf der PS5 mit niedriger Priorität weiter, auch wenn du dieses Fenster schließt. Ein laufendes Spiel muss vorher beendet sein.</p>
+      <div class="cp-actions">
+        <button type="button" class="btn" data-apr-back>Abbrechen</button>
+        <button type="button" class="btn primary" data-apr-lz4-go ${noGo ? "disabled" : ""}>Packen starten</button>
+      </div>`;
+  };
+
+  document.addEventListener("change", async (e) => {
+    const el = e.target;
+    if (!el || cp.view !== "aplz4set" || !apr.lz4s) return;
+    const s = apr.lz4s;
+    if (el.id === "apr-lz4-prof") {
+      const files = Array.from(el.files || []);
+      el.value = "";
+      for (const f of files) {
+        if (!/\.toml$/i.test(f.name) || /[\\/]/.test(f.name)) { s.upNote = `„${f.name}“: Das muss eine .toml-Datei sein.`; continue; }
+        if (f.size > 1048576) { s.upNote = `„${f.name}“ ist zu groß.`; continue; }
+        try {
+          const r = await fetch(`/api/v1/files/upload?path=${encodeURIComponent("/data/PS5-Cooling-Center/LZ4_Profile")}&name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.ok) { s.upNote = `„${f.name}“: ${j.message || "HTTP " + r.status}`; continue; }
+          s.upNote = `„${f.name}“ hinzugefügt.`;
+          try { apr.lz4 = await api(`/api/v1/library/lz4?id=${encodeURIComponent(apr.id)}`); } catch (err) { /* die Liste bleibt, wie sie war */ }
+          s.auto = false; s.profile = `app:${f.name}`;
+        } catch (err) { s.upNote = `„${f.name}“: ${err.message}`; }
+      }
+      aprRender();
+      aprLz4Plan();
+      return;
+    }
+    if (el.id === "lz4-prof") { s.profile = el.value; aprLz4Plan(); return; }
+    if (el.id === "lz4-tested") s.tested = !!el.checked;
+    else if (el.name === "lz4-level") s.level = +el.value;
+    else if (el.name === "lz4-where") s.copy = el.value === "copy";
+    else if (el.name === "lz4-mode") {
+      s.auto = el.value === "auto";
+      if (!s.auto && !s.profile && apr.lz4 && apr.lz4.profiles && apr.lz4.profiles.length) s.profile = apr.lz4.profiles[0].id;
+      aprLz4Plan();
+      return;
+    } else return;
+    s.err = "";
+    aprRender();
+  });
+
+  /* Die zwei Dateien, die ein Spiel in fakelib mitbringen kann und die dieses Fenster ersetzt: APR-EMU (libSceAmpr.sprx) und der
+     PlayGo-Stub (libScePlayGo.sprx). Gleiche Regeln, anderer Ordner (AMPR_EMU, PlayGo), andere Bauarten. */
+  const APR_LIBS = {
+    ampr: { api: "/api/v1/ampr-emu", file: "libSceAmpr.sprx", dir: "AMPR_EMU", re: /^libSceAmpr\.sprx-\d+(\.\d+)*(-[A-Za-z0-9._-]+)?$/, example: "libSceAmpr.sprx-0.4.2.1-test-pack" },
+    playgo: { api: "/api/v1/playgo", file: "libScePlayGo.sprx", dir: "PlayGo", re: /^libScePlayGo\.sprx-\d+(\.\d+)*(-[A-Za-z0-9._-]+)?$/, example: "libScePlayGo.sprx-0.5-nolog" },
+  };
+
+  /* Eine Zeile „… im Spiel“: welche Datei das Spiel lädt (amprlib.c) */
+  const aprLibRow = (lib, em, j, anyRunning) => {
+    if (!em || !em.ok) return "";
+    const pg = lib === "playgo";
+    const ins = em.installed || {};
+    const emuJob = j && j.id === apr.id && j.kind === "emu" && (j.lib || "ampr") === lib;
+    let chip;
+    if (!ins.present) chip = `<span class="apr-state no">nicht eingebaut</span>`;
+    else if (ins.known) chip = `<span class="apr-state ok">eingebaut: ${esc(ins.label)}</span>`;
+    else if (ins.emu) chip = pg ? `<span class="apr-state ok">PlayGo-Stub, unbekannte Fassung (${bytes(ins.size)})</span>` : `<span class="apr-state ok">APR-EMU, unbekannte Fassung (${bytes(ins.size)})</span>`;
+    else chip = pg ? `<span class="apr-state no">Datei des Spiels, kein PlayGo-Stub</span>` : `<span class="apr-state no">Datei des Spiels, kein APR-EMU</span>`;
+    const notes = [];
+    if (em.place === "backport") notes.push(`Ablage: Backport-Ordner <code>${esc(em.backport.dir)}/fakelib</code> – das Spiel bleibt unberührt.`);
+    if (ins.has_orig) notes.push(`Die Datei, die das Spiel selbst mitbrachte, ist gesichert als <code>${APR_LIBS[lib].file}.orig</code>.`);
+    if (em.fakelib2 && em.place === "game") notes.push("Im Spielordner liegt auch ein <code>fakelib2</code>: ShadowMountPlus ab 1.7beta1 liest dann nur dieses, die Datei in <code>fakelib</code> bliebe ungenutzt.");
+    if (em.emus && em.emus.overrides) notes.push(`ShadowMountPlus ersetzt <code>${APR_LIBS[lib].file}</code> beim Spielstart aus <code>` + esc(em.emus.path) + "</code> (update_emulators=1): diese Datei gewinnt dann.");
+    if (em.packed) notes.push("Das Spiel liegt in LZ4-Paketen: nur eine Version mit „pack“ kann sie lesen.");
+    let result = "";
+    if (emuJob && !j.active && j.state === "done")
+      result = `<p class="cp-ok">${j.op === "apply" ? "✓ Eingebaut." : j.op === "restore" ? "✓ Das Original ist zurück." : "✓ Entfernt."}</p>${j.note ? `<small>${esc(j.note)}</small>` : ""}`;
+    else if (emuJob && !j.active && j.state === "failed") result = `<p class="cp-err">✗ ${esc(j.error || "Das ging nicht.")}</p>`;
+    const working = emuJob && j.active ? `<small>${esc(j.phase || "")}</small>` : "";
+    const why = !em.can_change ? (em.why || "Für dieses Spiel geht das nicht.") : anyRunning ? "Es läuft schon ein Vorgang." : "";
+    return `<div class="apr-row"><div><b>${pg ? "PlayGo im Spiel" : "APR-EMU im Spiel"}</b>
+        <small>${pg
+          ? `Welche PlayGo-Datei (<code>fakelib/libScePlayGo.sprx</code>) dieses Spiel lädt: den PlayGo-Stub einbauen, das Original zurückholen oder die Datei entfernen. Hilft bei Spielen, die PlayGo-Inhalte als fehlend behandeln.`
+          : `Welche APR-EMU-Datei (<code>fakelib/libSceAmpr.sprx</code>) dieses Spiel lädt: eine Version wählen und einbauen, das Original zurückholen oder die Datei entfernen.`}</small>${chip}
+        ${notes.map((n) => `<small>${n}</small>`).join("")}${working}${result}${!em.can_change && em.why ? `<small class="cp-why">${esc(em.why)}</small>` : ""}</div>
+        <button type="button" class="btn" data-apr-emu data-lib="${lib}" ${why ? "disabled" : ""} ${why ? `title="${esc(why)}"` : ""}>${emuJob && j.active ? "Läuft …" : "Version wählen …"}</button></div>`;
+  };
+
   const aprRender = () => {
     const body = $("#cp-body");
-    const i = apr.info, j = apr.job;
+    const i = apr.info;
     if (!body || !i) return;
+    const img = apr.img || {};
+    const j = apr.job, ij = apr.ij;
+    const mine = ij && ij.id === apr.id;
+    const ampRunning = !!(j && j.active);
+    const idxRunning = ampRunning && j.kind !== "emu";
+    const imgRunning = !!(ij && ij.active);
+    const anyRunning = ampRunning || imgRunning;
+    const fmtName = GM_FORMATS[img.format || i.format] || img.format || i.format;
+
+    if (apr.view === "unpack") { aprRenderUnpack(body); return; }
+    if (apr.view === "emu") { aprRenderEmu(body); return; }
+    if (apr.view === "lz4set") { aprRenderLz4Set(body); return; }
     cp.view = "apr";
-    txt("#cp-title", `APR & LZ4 – ${i.name}`);
-    const fmtName = GM_FORMATS[i.format] || i.format;
+    txt("#cp-title", `LZ4-Asset-Packs & APR-EMU – ${i.name}`);
+
+    /* AMPR-Index */
     const state = i.has_index
       ? `<span class="apr-state ok">vorhanden · ${num(i.files)} Dateien${i.mtime ? ` · ${esc(new Date(i.mtime * 1000).toLocaleDateString(LOCALE))}` : ""}</span>`
       : `<span class="apr-state no">noch keiner</span>`;
-    const running = j && j.active;
-    const last = j && !j.active && j.id === apr.id && j.state !== "idle"
+    const lastAmpr = j && !j.active && j.id === apr.id && j.state !== "idle" && j.kind !== "emu"
       ? (j.state === "done" ? `<p class="cp-ok">✓ Gebaut: ${num(j.files)} Dateien${j.collisions ? ` (${num(j.collisions)} Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, einmal genommen)` : ""}.</p>`
                             : `<p class="cp-err">✗ ${esc(j.error || "Fehlgeschlagen.")}</p>`) : "";
-    paintJob(body, `
-      <p class="muted" style="margin:0 0 14px">${esc(fmtName)}</p>
-      <div class="apr-row"><div><b>AMPR-Index</b>
+    const ampr = `<div class="apr-row"><div><b>AMPR-Index</b>
         <small>Die Liste aller Dateien des Spiels, die APR-EMU zum Finden braucht (<code>ampr_emu.index</code>).
-          Neu bauen, wenn Dateien dazukamen oder sich geändert haben.</small>${state}</div>
-        <button type="button" class="btn${i.can_build ? " primary" : ""}" data-apr-build ${i.can_build && !running ? "" : "disabled"}
-          ${i.why ? `title="${esc(i.why)}"` : ""}>${running ? "Wird gebaut …" : i.has_index ? "Neu bauen" : "Bauen"}</button></div>
-      ${running ? `<p class="muted">${esc(j.phase || "")}</p>` : ""}
-      ${last}
+          Neu bauen, wenn Dateien dazukamen oder sich geändert haben.</small>${state}
+        ${idxRunning ? `<small>${esc(j.phase || "")}</small>` : ""}${lastAmpr}</div>
+        <button type="button" class="btn${i.can_build ? " primary" : ""}" data-apr-build ${i.can_build && !anyRunning ? "" : "disabled"}
+          ${i.why ? `title="${esc(i.why)}"` : ""}>${idxRunning ? "Wird gebaut …" : i.has_index ? "Neu bauen" : "Bauen"}</button></div>
       ${i.why ? `<p class="muted apr-note">${esc(i.why)}</p>` : `<p class="muted apr-note">Ein alter Index bleibt als
-        <code>ampr_emu.index.bak</code> liegen. ${i.format === "folder" ? "" : "Das Abbild wird dafür von ShadowMountPlus kurz zum Schreiben eingehängt und danach wieder freigegeben."}</p>`}`,
-      `<button type="button" class="btn" data-cp="close">Schließen</button>`);
+        <code>ampr_emu.index.bak</code> liegen. ${i.format === "folder" ? "" : "Das Abbild wird dafür von ShadowMountPlus kurz zum Schreiben eingehängt und danach wieder freigegeben."}</p>`}`;
+
+    /* APR-EMU und PlayGo im Spiel: welche libSceAmpr.sprx und libScePlayGo.sprx das Spiel lädt */
+    const emuRow = aprLibRow("ampr", apr.emu, j, anyRunning) + aprLibRow("playgo", apr.pgo, j, anyRunning);
+
+    /* Abbild prüfen / entpacken / reparieren: nur bei einem Abbild */
+    let imgRows = "";
+    if (img.can_check) {
+      const why = anyRunning ? "Es läuft schon ein Vorgang." : "";
+      /* prüfen */
+      let check;
+      if (mine && imgRunning && ij.kind === "check") check = aprProgress(ij);
+      else {
+        const lc = img.last_check;
+        if (mine && !imgRunning && ij.kind === "check" && ij.state === "failed") check = `<p class="cp-err">✗ ${esc(ij.error || "Die Prüfung ist gescheitert.")}</p>`;
+        else if (mine && !imgRunning && ij.kind === "check" && ij.state === "cancelled") check = `<small>Abgebrochen.</small>`;
+        else check = "";
+        if (lc) {
+          check += lc.clean
+            ? `<span class="apr-state ok">✓ in Ordnung · ${esc(hvWhen(lc.when))} · ${num(lc.files)} Dateien</span>${lc.note ? `<small>${esc(lc.note)}</small>` : ""}`
+            : `<p class="cp-err apr-res">✗ ${lc.container ? esc(lc.container) : "Im Abbild wurden Fehler gefunden."}${
+              lc.bad_files ? ` ${num(lc.bad_files)} ${lc.bad_files === 1 ? "Datei ist" : "Dateien sind"} betroffen:` : ""}</p>${aprBadList(lc.bad, lc.bad_files + lc.bad_dirs)}`;
+        }
+      }
+      const checkBtn = mine && imgRunning && ij.kind === "check"
+        ? `<button type="button" class="btn" data-apr-imgcancel>Abbrechen</button>`
+        : `<button type="button" class="btn${img.last_check ? "" : " primary"}" data-apr-img="check" ${why ? "disabled" : ""} ${why ? `title="${esc(why)}"` : ""}>${img.last_check ? "Noch einmal prüfen" : "Prüfen"}</button>`;
+      imgRows += `<div class="apr-row"><div><b>Abbild prüfen</b>
+          <small>${img.format === "ffpfsc"
+            ? "Liest den ganzen Container (jeden Block) und prüft die Dateien darin, ohne das Abbild einzuhängen. Findet es etwas Defektes, nennt es die betroffenen Dateien beim Namen."
+            : "Liest jede Datei des Abbilds vollständig, ohne es einzuhängen. Findet es etwas Defektes, nennt es die betroffenen Dateien beim Namen."}</small>${check}</div>${checkBtn}</div>`;
+
+      /* entpacken */
+      let unpack = "";
+      if (mine && imgRunning && ij.kind === "unpack") unpack = `${aprProgress(ij)}<small>Ziel: <code>${esc(ij.dest || "")}</code></small>`;
+      else if (mine && ij.kind === "unpack" && ij.state === "done")
+        unpack = `<p class="cp-ok">✓ Entpackt: ${num(ij.files_done)} Dateien, jede nach dem Schreiben zurückgelesen und geprüft.</p>
+          <small>Ziel: <code>${esc(ij.dest || "")}</code></small>
+          <small>Das Spiel liegt jetzt zweimal vor (Abbild und Ordner). ShadowMountPlus findet den Ordner bei seinem nächsten Durchlauf; lösche das Abbild erst, wenn der Ordner startet.</small>`;
+      else if (mine && ij.kind === "unpack" && ij.state === "failed") unpack = `<p class="cp-err">✗ ${esc(ij.error || "Das Entpacken ist gescheitert.")}</p><small>Der unfertige Ordner wurde wieder entfernt.</small>`;
+      else if (mine && ij.kind === "unpack" && ij.state === "cancelled") unpack = `<small>Abgebrochen. Der unfertige Ordner wurde wieder entfernt.</small>`;
+      const unpackBtn = mine && imgRunning && ij.kind === "unpack"
+        ? `<button type="button" class="btn" data-apr-imgcancel>Abbrechen</button>`
+        : `<button type="button" class="btn" data-apr-unpack ${!img.can_unpack || why ? "disabled" : ""} ${!img.can_unpack ? `title="${esc(img.note || "Dieses Abbild lässt sich nicht entpacken.")}"` : why ? `title="${esc(why)}"` : ""}>Entpacken …</button>`;
+      imgRows += `<div class="apr-row"><div><b>In einen Ordner entpacken</b>
+          <small>Schreibt alle Dateien in einen Ordner auf einem Laufwerk deiner Wahl und prüft jede danach Byte für Byte. Das Abbild bleibt unberührt.</small>${unpack}</div>${unpackBtn}</div>`;
+
+      /* reparieren: nur ein komprimiertes Abbild */
+      if (img.format === "ffpfsc" || (img.repair && img.repair.state !== "na")) {
+        const rp = img.repair || { state: "na" };
+        let chip, rbtn;
+        if (mine && imgRunning && ij.kind === "repair") { chip = aprProgress(ij); rbtn = `<button type="button" class="btn" disabled>Läuft …</button>`; }
+        else {
+          chip = rp.state === "fixable" ? `<span class="apr-state no">Größe stimmt nicht: ${bytes(rp.actual)} statt ${bytes(rp.declared)}</span>`
+               : rp.state === "broken" ? `<span class="apr-state no">nicht reparierbar</span><small>${esc(rp.why || "")}</small>`
+               : `<span class="apr-state ok">nichts zu reparieren</span>`;
+          if (mine && !imgRunning && ij.kind === "repair") {
+            /* the engine keeps the last result: it is only the truth while the image is as it was left */
+            if (ij.state === "done" && rp.state === "fine") chip = ij.fixed_from === ij.fixed_to ? `<span class="apr-state ok">nichts zu reparieren</span>`
+              : `<p class="cp-ok">✓ Repariert: Größe von ${bytes(ij.fixed_from)} auf ${bytes(ij.fixed_to)}, danach den Container noch einmal ganz geprüft.</p>`;
+            else if (ij.state === "failed") chip = `<p class="cp-err">✗ ${esc(ij.error || "Die Reparatur ist gescheitert.")}</p>`;
+          }
+          rbtn = `<button type="button" class="btn${rp.state === "fixable" ? " primary" : ""}" data-apr-img="repair" ${rp.state === "fixable" && !anyRunning ? "" : "disabled"}>Reparieren</button>`;
+        }
+        imgRows += `<div class="apr-row"><div><b>Reparieren</b>
+            <small>Nur, wo es sicher geht: stimmt die Größe der Datei nicht mit dem Kopf des Abbilds überein (Daten vollständig, überzählige Bytes leer), setzt die App sie richtig. Defekte Blöcke lassen sich ohne Original nicht wiederherstellen.</small>${chip}</div>${rbtn}</div>`;
+      }
+    } else if (img.why || img.note) {
+      imgRows = `<p class="muted apr-note">${esc(img.why || img.note)}</p>`;
+    }
+
+    paintJob(body, `
+      <p class="muted" style="margin:0 0 14px">${esc(fmtName)}${img.image_bytes ? ` · ${bytes(img.image_bytes)}` : ""}</p>
+      ${ampr}${aprLz4Rows(apr.lz4, ij, mine, anyRunning)}${aprTraceRow(apr.trace, ij, anyRunning)}${emuRow}${aprPlugRow(apr.plug, anyRunning)}${imgRows}`,
+      `<button type="button" class="btn" data-cp="close">${anyRunning ? "Im Hintergrund weiter" : "Schließen"}</button>`);
   };
+
+  /* Version wählen (amprlib.c): die Dateien im Ordner /data/PS5-Cooling-Center/AMPR_EMU oder …/PlayGo (ein Teil ist in der App mitgeliefert),
+     in der Reihenfolge „neueste zuerst“. Gesichert wird nur die Datei, die das Spiel selbst mitbrachte. */
+  const aprRenderEmu = (body) => {
+    const L = APR_LIBS[apr.lib] || APR_LIBS.ampr, pg = apr.lib === "playgo";
+    const em = pg ? apr.pgo : apr.emu, v = apr.vers;
+    cp.view = "apremu";
+    txt("#cp-title", pg ? `PlayGo-Version – ${apr.info ? apr.info.name : ""}` : `APR-EMU-Version – ${apr.info ? apr.info.name : ""}`);
+    if (apr.emuErr && !v) {
+      body.innerHTML = `<p class="cp-err">${esc(apr.emuErr)}</p>
+        <div class="cp-actions"><button type="button" class="btn" data-apr-back>Zurück</button></div>`;
+      return;
+    }
+    if (!v || !em) { body.innerHTML = `<p class="muted">wird gelesen …</p>`; return; }
+    const ins = em.installed || {};
+    const sel = v.versions.find((x) => x.name === apr.emuSel);
+    const list = v.versions.map((x) => {
+      const off = !x.valid;
+      const packBlock = em.packed && !x.pack;
+      const folder = x.stored ? (pg ? "im Ordner PlayGo" : "im Ordner AMPR_EMU") : "in der App, noch nicht im Ordner";
+      return `<button type="button" class="cp-choice apr-drive${apr.emuSel === x.name ? " on" : ""}${off || packBlock ? " off" : ""}" data-apr-emu-pick="${esc(x.name)}" ${off || packBlock ? "disabled" : ""}>
+          <span class="cp-choice-text"><b>${esc(x.label)}</b>
+            ${x.pack || x.debug || x.bundled ? `<span class="apr-tags">${x.pack ? `<span class="gm-tag ampr">LZ4</span>` : ""}${x.debug ? `<span class="gm-tag bp">mit Protokoll</span>` : ""}${x.bundled ? `<span class="gm-tag fmt">mitgeliefert</span>` : ""}</span>` : ""}
+            <span class="muted"><span>${bytes(x.size)}</span> · ${pg ? "" : `<span>${x.pack ? "kann LZ4-Pakete lesen" : "ohne Paketunterstützung"}</span> · `}<span>${folder}</span>${ins.sha256 && ins.sha256 === x.sha256 ? ` · <b>so eingebaut</b>` : ""}</span>
+            ${off ? `<span class="cp-why">${pg ? "kein gültiger PlayGo-Stub" : "keine gültige APR-EMU-Datei"}</span>` : packBlock ? `<span class="cp-why">Das Spiel liegt in LZ4-Paketen: diese Version kann sie nicht lesen.</span>` : ""}</span></button>`;
+    }).join("");
+    const cur = ins.present ? (ins.known ? esc(ins.label) : ins.emu ? (pg ? `<span>PlayGo-Stub, unbekannte Fassung (${bytes(ins.size)})</span>` : `<span>APR-EMU, unbekannte Fassung (${bytes(ins.size)})</span>`)
+      : (pg ? `<span>die Datei des Spiels (kein PlayGo-Stub)</span>` : `<span>die Datei des Spiels (kein APR-EMU)</span>`)) : `<span>nichts</span>`;
+    const warn = [];
+    if (em.fakelib2 && em.place === "game") warn.push(pg
+      ? `<b>⚠ Im Spielordner liegt auch ein <code>fakelib2</code>.</b> ShadowMountPlus ab 1.7beta1 liest dann nur dieses; der PlayGo-Stub in <code>fakelib</code> bliebe ungenutzt.`
+      : `<b>⚠ Im Spielordner liegt auch ein <code>fakelib2</code>.</b> ShadowMountPlus ab 1.7beta1 liest dann nur dieses; der AMPR EMU in <code>fakelib</code> bliebe ungenutzt.`);
+    if (em.emus && em.emus.overrides) warn.push(`<b>⚠ ShadowMountPlus ersetzt die Datei beim Spielstart</b> aus <code>${esc(em.emus.path)}</code> (update_emulators=1). Dort liegt eine <code>${L.file}</code>; sie gewinnt gegen die Datei, die du hier einbaust.`);
+    const missing = v.versions.filter((x) => x.bundled && !x.stored).length;
+    const noStore = !v.versions.length ? (pg
+      ? `<p class="muted">Noch keine Versionen im Speicher. Lege Dateien namens <code>libScePlayGo.sprx-0.5-nolog</code> mit „Datei hinzufügen“ ab.</p>`
+      : `<p class="muted">Noch keine Versionen im Speicher. Lege Dateien namens <code>libSceAmpr.sprx-0.4.2.1-test-pack</code> (so heißen sie bei drakmors Veröffentlichungen) mit „Datei hinzufügen“ ab.</p>`) : "";
+    const busy = !!((apr.job && apr.job.active) || (apr.ij && apr.ij.active));
+    const canApply = !!(sel && sel.valid && em.can_change && !busy && !(em.packed && !sel.pack));
+    body.innerHTML = `
+      <p class="cp-src"><span class="muted">Spiel</span> <code>${esc(em.place === "backport" ? em.backport.dir + "/fakelib" : (em.game_path + (em.format === "folder" ? "/fakelib" : " › fakelib")))}</code>
+        <span><span>eingebaut:</span> <b>${cur}</b>${ins.has_orig ? ` · <span>Original des Spiels gesichert</span>` : ""}</span></p>
+      <h4 class="cp-step">Welche Version?</h4>
+      <p class="muted apr-folder">Die Dateien liegen im Ordner <code>${esc(v.dir)}</code>; ein Teil ist in der App mitgeliefert und kommt beim Einbauen (oder mit dem Knopf unten) dorthin.</p>
+      <div class="cp-list">${list}</div>
+      ${noStore}
+      <p class="apr-add">
+        ${missing ? `<button type="button" class="btn" data-apr-emu-install>Mitgelieferte Versionen in den Ordner legen</button>` : ""}
+        <button type="button" class="btn ghost" data-apr-emu-add>Datei hinzufügen …</button>
+        <input type="file" id="apr-emu-file" multiple hidden>
+        <span class="muted" id="apr-emu-up">${esc(apr.emuNote || "")}</span></p>
+      ${warn.map((w) => `<div class="cp-warn">${w}</div>`).join("")}
+      ${em.place === "backport" ? `<p class="muted">Dieses Spiel bekommt die Datei im Backport-Ordner (ein komprimiertes Abbild lässt sich nicht beschreiben); das Spiel selbst bleibt unberührt. Ein neuer Backport-Ordner verdeckt die <code>fakelib</code> des Spiels, deshalb werden deren Dateien hineinkopiert.</p>` : ""}
+      <p class="muted">${pg
+        ? "Gesichert wird nur die Datei, die das Spiel selbst mitbrachte – ein früherer PlayGo-Stub gilt nicht als Original. Das Spiel muss beendet sein."
+        : "Gesichert wird nur die Datei, die das Spiel selbst mitbrachte – ein früherer APR-EMU gilt nicht als Original. Das Spiel muss beendet sein."}</p>
+      ${apr.emuErr ? `<p class="cp-err">${esc(apr.emuErr)}</p>` : ""}
+      <div class="cp-actions">
+        <button type="button" class="btn" data-apr-back>Zurück</button>
+        ${ins.has_orig ? `<button type="button" class="btn" data-apr-emu-act="restore" ${em.can_change && !busy ? "" : "disabled"}>Original wiederherstellen</button>` : ""}
+        ${!ins.has_orig && ins.present && ins.emu ? `<button type="button" class="btn" data-apr-emu-act="remove" ${em.can_change && !busy ? "" : "disabled"}>Entfernen</button>` : ""}
+        <button type="button" class="btn primary" data-apr-emu-act="apply" ${canApply ? "" : "disabled"}>Diese Version einbauen</button>
+      </div>`;
+  };
+
+  /* Wohin entpacken? Die Laufwerke der Konsole mit dem Platz; der Plan zählt die Dateien des Abbilds vorher. */
+  const aprRenderUnpack = (body) => {
+    const p = apr.plan;
+    cp.view = "aprunpack";
+    txt("#cp-title", `Entpacken – ${apr.info ? apr.info.name : ""}`);
+    if (apr.planErr) {
+      body.innerHTML = `<p class="cp-err">${esc(apr.planErr)}</p>
+        <div class="cp-actions"><button type="button" class="btn" data-apr-back>Zurück</button></div>`;
+      return;
+    }
+    if (!p) { body.innerHTML = `<p class="muted">Das Abbild wird gezählt …</p>`; return; }
+    const blocked = (d) => d.exists ? "Dort gibt es den Ordner schon." : !d.enough_space ? `Nicht genug Platz: nötig sind ${bytes(p.size_bytes + 256 * 1048576)}.`
+      : d.fat32_too_big ? "FAT32 nimmt keine Dateien über 4 GB." : d.path_too_long ? "Ein Pfad im Abbild wäre dort zu lang." : "";
+    const drives = p.targets.map((d) => {
+      const why = blocked(d);
+      if (why && apr.drive === d.mount) apr.drive = "";
+      return `<button type="button" class="cp-choice apr-drive${apr.drive === d.mount ? " on" : ""}${why ? " off" : ""}" data-apr-drive="${esc(d.mount)}" ${why ? "disabled" : ""}>
+          <span class="cp-choice-text"><b>${esc(d.label)}</b>
+            <span class="muted">${cpBytes(d.free_bytes)} frei${d.fs ? ` · ${esc(cpFs(d.fs))}` : ""}${d.source_here ? " · hier liegt das Abbild" : ""}</span>
+            <span class="muted"><code>${esc(d.path)}</code></span>
+            ${why ? `<span class="cp-why">${esc(why)}</span>` : ""}</span></button>`;
+    }).join("");
+    const sel = p.targets.find((d) => d.mount === apr.drive);
+    const blockedRun = p.damaged ? "Das Abbild ist beschädigt: ein Ordner darin lässt sich nicht lesen. Zuerst „Abbild prüfen“." : p.busy ? "Es läuft schon ein Vorgang an einem Abbild." : "";
+    body.innerHTML = `
+      <p class="cp-src"><span class="muted">Abbild</span> <code>${esc(p.image)}</code>
+        <span>${cpFiles(p.files)}, ${bytes(p.size_bytes)} entpackt</span></p>
+      <h4 class="cp-step">Wohin?</h4>
+      <div class="cp-list">${drives || `<p class="muted">Kein Laufwerk gefunden.</p>`}</div>
+      ${sel ? `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(sel.path)}</code></p>` : ""}
+      ${blockedRun ? `<p class="cp-err">${esc(blockedRun)}</p>` : ""}
+      <p class="muted">Jede Datei wird erst in einen Ordner mit der Endung <code>.ps5cc-teil</code> geschrieben, danach vom Laufwerk
+        zurückgelesen und mit dem verglichen, was aus dem Abbild kam. Erst wenn alles stimmt, bekommt der Ordner seinen Namen.
+        Bei einem Fehler oder Abbruch wird er wieder entfernt. Die PS5 rechnet dabei mit niedriger Priorität.</p>
+      <div class="cp-actions">
+        <button type="button" class="btn" data-apr-back>Zurück</button>
+        <button type="button" class="btn primary" data-apr-unpack-go ${sel && !blockedRun ? "" : "disabled"}>Entpacken starten</button>
+      </div>`;
+  };
+
   const aprLoad = async () => {
+    const my = ++apr.gen;
     try {
-      /* erst der Auftrag, dann die Angaben: so zeigt „vorhanden" nach dem Ende schon den neuen Index */
+      /* erst die Aufträge, dann die Angaben: so zeigt das Fenster nach dem Ende schon das neue Ergebnis */
       const job = await api("/api/v1/library/ampr/job");
+      const ij = await api("/api/v1/library/image/job");
       const info = await api(`/api/v1/library/ampr?id=${encodeURIComponent(apr.id)}`);
-      if (cp.view !== "apr" && cp.view !== "aprloading") return;
-      apr.info = info; apr.job = job;
+      const img = await api(`/api/v1/library/image?id=${encodeURIComponent(apr.id)}`).catch(() => ({}));
+      const emu = await api(`/api/v1/library/emu?id=${encodeURIComponent(apr.id)}&lib=ampr`).catch(() => null);
+      const pgo = await api(`/api/v1/library/emu?id=${encodeURIComponent(apr.id)}&lib=playgo`).catch(() => null);
+      const lz4 = await api(`/api/v1/library/lz4?id=${encodeURIComponent(apr.id)}`).catch(() => null);
+      const trace = await api(`/api/v1/library/trace?id=${encodeURIComponent(apr.id)}`).catch(() => null);
+      const plug = await api(`/api/v1/library/plugins?id=${encodeURIComponent(apr.id)}`).catch(() => null);
+      if (my !== apr.gen || !aprViews.includes(cp.view)) return;
+      apr.info = info; apr.job = job; apr.ij = ij; apr.img = img; apr.emu = emu; apr.pgo = pgo; apr.lz4 = lz4;
+      apr.trace = trace;
+      if (plug && apr.plug && apr.plug.msg) { plug.msg = apr.plug.msg; plug.detail = apr.plug.detail; plug.msgErr = apr.plug.msgErr; } apr.plug = plug;
       aprRender();
       clearTimeout(apr.timer);
-      if (job.active) apr.timer = setTimeout(aprLoad, 1000);
+      if (job.active || ij.active || (trace && trace.busy)) apr.timer = setTimeout(aprLoad, 1000);
     } catch (e) {
+      if (my !== apr.gen) return;
       $("#cp-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
         <div class="cp-actions"><button type="button" class="btn primary" data-cp="close">Schließen</button></div>`;
     }
   };
   const aprOpen = (id) => {
     cpShell();
-    apr.id = id; apr.info = null; apr.job = null;
+    apr.id = id; apr.info = null; apr.job = null; apr.img = null; apr.ij = null; apr.plan = null; apr.view = "main"; apr.drive = ""; apr.planErr = "";
+    apr.emu = null; apr.pgo = null; apr.lib = "ampr"; apr.vers = null; apr.emuSel = ""; apr.emuErr = ""; apr.emuNote = ""; apr.lz4 = null; apr.lz4s = null; apr.trace = null; apr.plug = null;
     cp.view = "aprloading";
-    txt("#cp-title", "APR & LZ4");
+    txt("#cp-title", "LZ4-Asset-Packs & APR-EMU");
     $("#cp-body").innerHTML = `<p class="muted">wird gelesen …</p>`;
     $("#cp-overlay").hidden = false;
     aprLoad();
   };
-  document.addEventListener("click", async (e) => {
-    const b = e.target.closest && e.target.closest("button[data-apr-build]");
-    if (!b || b.disabled) return;
-    b.disabled = true;
+  document.addEventListener("change", async (e) => {
+    const fi = e.target;
+    if (!fi || fi.id !== "apr-emu-file" || !fi.files || !fi.files.length) return;
+    const files = Array.from(fi.files);
+    fi.value = "";
+    const L = APR_LIBS[apr.lib] || APR_LIBS.ampr;
+    const say = (m) => { const s = $("#apr-emu-up"); if (s) s.textContent = m; };
+    let ok = 0;
+    for (const f of files) {
+      if (!L.re.test(f.name)) { say(`„${f.name}“: Der Name muss so aussehen wie ${L.example}.`); continue; }
+      if (f.size > 4 * 1048576) { say(`„${f.name}“ ist zu groß.`); continue; }
+      say(`„${f.name}“ wird hochgeladen …`);
+      try {
+        const d = (apr.vers && apr.vers.dir) || "/data/PS5-Cooling-Center/" + L.dir;
+        const r = await fetch(`/api/v1/files/upload?path=${encodeURIComponent(d)}&name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) { say(`„${f.name}“: ${j.message || "HTTP " + r.status}`); continue; }
+        ok++;
+      } catch (err) { say(`„${f.name}“: ${err.message}`); }
+    }
+    if (ok) {
+      try { apr.vers = await api(L.api); } catch (err) { apr.emuErr = err.message; }
+      if (apr.view === "emu") aprRender();
+      say(`${ok} ${ok === 1 ? "Datei" : "Dateien"} hinzugefügt.`);
+    }
+  });
+  const aprStartImg = async (kind, target) => {
     try {
-      apr.job = await api("/api/v1/library/ampr", { method: "POST", body: JSON.stringify({ id: apr.id }) });
+      apr.ij = await api("/api/v1/library/image", { method: "POST", body: JSON.stringify({ kind, id: apr.id, target: target || "" }) });
+      apr.view = "main";
       aprLoad();
-    } catch (err) { toast(err.message, "error"); b.disabled = false; }
+    } catch (err) { toast(err.message, "error"); aprLoad(); }
+  };
+  document.addEventListener("click", async (e) => {
+    const t = e.target && e.target.closest ? e.target : null;
+    if (!t || !$("#cp-overlay") || !aprViews.includes(cp.view) || cp.view === "aprloading") return;
+    const b = t.closest("button");
+    if (!b || b.disabled) return;
+    if (b.hasAttribute("data-apr-build")) {
+      b.disabled = true;
+      try {
+        apr.job = await api("/api/v1/library/ampr", { method: "POST", body: JSON.stringify({ id: apr.id }) });
+        aprLoad();
+      } catch (err) { toast(err.message, "error"); b.disabled = false; }
+    } else if (b.hasAttribute("data-apr-emu")) {
+      apr.lib = b.dataset.lib === "playgo" ? "playgo" : "ampr";
+      apr.view = "emu"; apr.vers = null; apr.emuErr = ""; apr.emuSel = ""; apr.emuNote = "";
+      aprRender();
+      const my = apr.gen;
+      try { apr.vers = await api(APR_LIBS[apr.lib].api); } catch (err) { apr.emuErr = err.message; }
+      if (apr.view === "emu" && my === apr.gen) aprRender();
+    } else if (b.hasAttribute("data-apr-emu-pick")) {
+      apr.emuSel = b.dataset.aprEmuPick;
+      aprRender();
+    } else if (b.hasAttribute("data-apr-emu-install")) {
+      b.disabled = true;
+      try {
+        const r = await api(APR_LIBS[apr.lib].api + "/install", { method: "POST", body: "{}" });
+        apr.vers = r;
+        apr.emuNote = r.installed ? `${r.installed} ${r.installed === 1 ? "Version" : "Versionen"} im Ordner abgelegt.` : "Es war schon alles im Ordner.";
+        apr.emuErr = "";
+      } catch (err) { apr.emuErr = err.message; }
+      if (apr.view === "emu") aprRender();
+    } else if (b.hasAttribute("data-apr-emu-add")) {
+      const fi = $("#apr-emu-file");
+      if (fi) fi.click();
+    } else if (b.hasAttribute("data-apr-emu-act")) {
+      const action = b.dataset.aprEmuAct;
+      b.disabled = true;
+      try {
+        apr.job = await api("/api/v1/library/emu", { method: "POST", body: JSON.stringify({ id: apr.id, lib: apr.lib, action, name: action === "apply" ? apr.emuSel : "" }) });
+        apr.view = "main"; apr.emuErr = "";
+        aprLoad();
+      } catch (err) { apr.emuErr = err.message; aprRender(); }
+    } else if (b.hasAttribute("data-apr-lz4")) {
+      const what = b.dataset.aprLz4;
+      if (what === "open") {
+        apr.lz4s = { level: 9, auto: true, profile: "", copy: false, plan: null, planErr: "", planKey: "", busy: false, err: "", upNote: "", tested: false };
+        apr.view = "lz4set";
+        aprRender();
+        aprLz4Plan();
+      } else {
+        b.disabled = true;
+        try {
+          apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: what }) });
+          apr.view = "main";
+          aprLoad();
+        } catch (err) { toast(err.message, "error"); aprLoad(); }
+      }
+    } else if (b.hasAttribute("data-apr-lz4-go")) {
+      const s = apr.lz4s;
+      b.disabled = true;
+      try {
+        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy ? "copy" : "pack", level: s.level, profile: s.auto ? "" : s.profile }) });
+        apr.view = "main";
+        aprLoad();
+      } catch (err) { s.err = err.message; aprRender(); }
+    } else if (b.hasAttribute("data-apr-trace")) {
+      const what = b.dataset.aprTrace;
+      b.disabled = true;
+      try {
+        await api("/api/v1/library/trace", { method: "POST", body: JSON.stringify({ id: apr.id, action: what }) });
+      } catch (err) { toast(err.message, "error"); }
+      aprLoad();
+    } else if (b.hasAttribute("data-apr-plug")) {
+      b.disabled = true;
+      try {
+        const r = await api("/api/v1/library/plugins", { method: "POST", body: JSON.stringify({ id: apr.id, action: "apply" }) });
+        if (apr.plug) { apr.plug.msg = r.message || ""; apr.plug.detail = r.detail || null; apr.plug.msgErr = false; }
+      } catch (err) { if (apr.plug) { apr.plug.msg = err.message; apr.plug.detail = null; apr.plug.msgErr = true; } }
+      aprLoad();
+    } else if (b.hasAttribute("data-apr-lz4-add")) {
+      const fi = $("#apr-lz4-prof");
+      if (fi) fi.click();
+    } else if (b.hasAttribute("data-apr-img")) {
+      aprStartImg(b.dataset.aprImg);
+    } else if (b.hasAttribute("data-apr-imgcancel")) {
+      try { await api("/api/v1/library/image/cancel", { method: "POST" }); } catch (err) { toast(err.message, "error"); }
+      aprLoad();
+    } else if (b.hasAttribute("data-apr-unpack")) {
+      apr.view = "unpack"; apr.plan = null; apr.planErr = ""; apr.drive = "";
+      aprRender();
+      const my = apr.gen;
+      try { apr.plan = await api(`/api/v1/library/image/plan?id=${encodeURIComponent(apr.id)}`); }
+      catch (err) { apr.planErr = err.message; }
+      if (apr.view === "unpack" && my === apr.gen) aprRender();
+    } else if (b.hasAttribute("data-apr-drive")) {
+      apr.drive = b.dataset.aprDrive;
+      aprRender();
+    } else if (b.hasAttribute("data-apr-back")) {
+      apr.view = "main"; apr.planErr = ""; apr.emuErr = "";
+      aprLoad();
+    } else if (b.hasAttribute("data-apr-unpack-go")) {
+      if (apr.drive) aprStartImg("unpack", apr.drive);
+    }
   });
 
   /* ── Löschen (gamedelete.c) ─────────────────────────────────────────

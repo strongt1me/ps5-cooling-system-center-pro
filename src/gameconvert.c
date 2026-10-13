@@ -588,7 +588,7 @@ cv_run(void *arg) {
     rc = pfs_write_single(out, inner, raw, rd, rctx, &o, &size, err, sizeof(err));
     if(!rc) {
       cv_check_begin(size);
-      pfsc_check_t c = { wcrc, &g_cancel, cv_check_progress, NULL };
+      pfsc_check_t c = { wcrc, &g_cancel, cv_check_progress, NULL, 0 };
       rc = pfs_verify_full(out, &c, sha, err, sizeof(err));
       have_sha = !rc;
     }
@@ -843,7 +843,7 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
              "und Verschieben laufen nicht gleichzeitig damit.");
     return 1;
   }
-  if(ps5tm_ampr_busy()) {
+  if(ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
     snprintf(err, err_len, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
     return 1;
   }

@@ -98,6 +98,10 @@ SRCS += src/pkglive.c
 SRCS += src/pkgqueue.c
 SRCS += src/jobhist.c
 SRCS += src/amprindex.c
+SRCS += src/imgjob.c
+SRCS += src/amprlib.c
+SRCS += src/lz4cfg.c src/lz4pack.c
+SRCS += src/trace.c src/plugins.c
 SRCS += src/qr.c
 
 # ⚠ Die Kopfdateien gehören in die Abhängigkeiten.
@@ -121,12 +125,15 @@ DEFLATE_HDRS := $(wildcard src/third_party/libdeflate/*.h \
                 src/third_party/libdeflate/lib/*.h \
                 src/third_party/libdeflate/lib/x86/*.h)
 HDRS := $(wildcard src/*.h) $(wildcard src/*.inc) \
-        $(wildcard src/third_party/*.h) $(DEFLATE_HDRS)
+        $(wildcard src/third_party/*.h) $(DEFLATE_HDRS) $(wildcard src/third_party/lz4/*.h)
 
 GEN_SRCS := gen/assets.c
 GEN_SRCS += gen/tile_pkg.c
 GEN_SRCS += gen/tile_files.c
 GEN_SRCS += gen/pkginst_blob.c
+GEN_SRCS += gen/ampr_emu_blob.c
+GEN_SRCS += gen/playgo_blob.c
+GEN_SRCS += gen/dlc_blob.c
 
 # The home-screen tile as a folder: param.json, icon and pictures from
 # tile/sce_sys, about 1.7 MB. The app writes them to /user/app/<id>/sce_sys and
@@ -174,6 +181,10 @@ DEFLATE_SRCS := $(addprefix src/third_party/libdeflate/lib/,adler32.c crc32.c \
                 deflate_compress.c deflate_decompress.c zlib_compress.c \
                 zlib_decompress.c utils.c x86/cpu_features.c)
 DEFLATE_OBJS := $(patsubst src/third_party/libdeflate/lib/%.c,gen/libdeflate/%.o,$(DEFLATE_SRCS))
+
+# LZ4 1.10.0 (BSD-2-Clause) for the asset packs (lz4pack.c): the compressor and the decoder, built at -O2 like libdeflate.
+LZ4_OBJS := gen/lz4/lz4.o gen/lz4/lz4hc.o
+LZ4_HDRS := $(wildcard src/third_party/lz4/*.h)
 
 # SHA-256 is the other hot loop: it hashes every byte of a backup when that is
 # read back (checkfile.c). At -Os the compiler leaves its rounds rolled up.
@@ -264,6 +275,21 @@ $(PKGI_HELPER_ELF): src/helper/pkginst_helper.c src/pkginst_ipc.h Makefile gen/s
 gen/pkginst_blob.c: $(PKGI_HELPER_ELF) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(PKGI_HELPER_ELF) ps5tm_pkginst_helper PS5CC-PKGI-TOKEN:
 
+# The APR-EMU versions (third_party/ampr_emu), packed into the app (tools/gen_emu_blob.py, src/amprlib.c).
+EMU_FILES := $(wildcard third_party/ampr_emu/libSceAmpr.sprx-*)
+gen/ampr_emu_blob.c: $(EMU_FILES) tools/gen_emu_blob.py | gen
+	$(PYTHON) tools/gen_emu_blob.py $@ third_party/ampr_emu ampr
+
+# The PlayGo stubs (third_party/playgo), the same way.
+PLAYGO_FILES := $(wildcard third_party/playgo/libScePlayGo.sprx-*)
+gen/playgo_blob.c: $(PLAYGO_FILES) tools/gen_emu_blob.py | gen
+	$(PYTHON) tools/gen_emu_blob.py $@ third_party/playgo playgo
+
+# The DLC modules (third_party/dlc_emu), the same way.
+DLC_FILES := $(wildcard third_party/dlc_emu/libSce*.sprx-*)
+gen/dlc_blob.c: $(DLC_FILES) tools/gen_emu_blob.py | gen
+	$(PYTHON) tools/gen_emu_blob.py $@ third_party/dlc_emu dlc
+
 gen/tile_pkg.c: $(TILE_PKG) gen/tile_pkg.stamp tools/gen_pkg_blob.py | gen
 	$(PYTHON) tools/gen_pkg_blob.py $@ $(TILE_PKG)
 
@@ -278,6 +304,10 @@ $(CJSON_OBJ): src/third_party/cJSON.c src/third_party/cJSON_real.c \
 	    -c -o $@ src/third_party/cJSON.c
 
 gen/libdeflate/%.o: src/third_party/libdeflate/lib/%.c $(DEFLATE_HDRS) Makefile gen/sdk.stamp | gen
+	mkdir -p $(dir $@)
+	$(CC) -O2 -ffunction-sections -fdata-sections -c -o $@ $<
+
+gen/lz4/%.o: src/third_party/lz4/%.c $(LZ4_HDRS) Makefile gen/sdk.stamp | gen
 	mkdir -p $(dir $@)
 	$(CC) -O2 -ffunction-sections -fdata-sections -c -o $@ $<
 
@@ -300,9 +330,9 @@ gen/sdk.stamp: FORCE | gen
 check-sdk-firmware:
 	@$(PYTHON) tools/check_sdk_firmware.py sdk "$(PS5_PAYLOAD_SDK)" $(FW_NEED)
 
-$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(FAST_OBJS) \
+$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) \
         $(SHELLUI_STUB) gen/sdk.stamp | check-sdk-firmware
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(FAST_OBJS) $(LDADD)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(LDADD)
 	"$(PS5_PAYLOAD_SDK)/bin/prospero-strip" --strip-all $@
 	@$(PYTHON) tools/check_sdk_firmware.py elf $@ $(FW_NEED) >/dev/null || { rm -f $@; exit 1; }
 

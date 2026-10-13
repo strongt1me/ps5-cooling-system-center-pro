@@ -1253,6 +1253,51 @@ release_start(const char *id) {
   pthread_mutex_unlock(&g_started_lock);
 }
 
+/* A launch that ShadowMountPlus has to mount first (an image on a drive: Crash Bandicoot 4 took 11 s, 13.10.2026) leaves the screen
+   empty after the browser went: the home screen and nothing else. If the launch call has not come back after SLOW_START_MS, a
+   notification of the console says what is going on. One counter: the thread notifies only while its launch is still the last one
+   and has not finished. */
+#define SLOW_START_MS 1500
+static unsigned g_slow_gen;                       /* the launch that is going on */
+static unsigned g_slow_done;                      /* the last launch whose call came back */
+typedef struct { unsigned gen; char name[96]; } slow_start_t;
+
+static void *
+slow_start_thread(void *arg) {
+  slow_start_t *s = arg;
+  /* Once only (13.10.2026: repeating it left gaps and went on after the game was up — the launch call comes back later than the
+     game shows). Two short lines: the toast cuts a long one. */
+  for(int waited = 0; waited < SLOW_START_MS; waited += 100) {
+    if(__atomic_load_n(&g_slow_done, __ATOMIC_ACQUIRE) == s->gen) { free(s); return NULL; }
+    usleep(100 * 1000);
+  }
+  ps5tm_notify_plain("Bitte warten. Spiel wird geladen...");
+  free(s);
+  return NULL;
+}
+
+static unsigned
+slow_start_begin(const char *name) {
+  unsigned gen = __atomic_add_fetch(&g_slow_gen, 1, __ATOMIC_ACQ_REL);
+  slow_start_t *s = calloc(1, sizeof(*s));
+  if(!s) return gen;
+  s->gen = gen;
+  snprintf(s->name, sizeof(s->name), "%s", name ? name : "");
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&attr, 128 * 1024);
+  pthread_t th;
+  if(pthread_create(&th, &attr, slow_start_thread, s) != 0) free(s);
+  pthread_attr_destroy(&attr);
+  return gen;
+}
+
+static void
+slow_start_end(unsigned gen) {
+  __atomic_store_n(&g_slow_done, gen, __ATOMIC_RELEASE);
+}
+
 static void
 remember_started(const char *id) {
   pthread_mutex_lock(&g_started_lock);
@@ -1422,6 +1467,10 @@ sw_thread(void *arg) {
 
   usleep(400 * 1000);                     /* let the answer leave first */
 
+  /* From the console's browser the page is closed at once: closing the old game and launching the new one take seconds, and the
+     browser stood in front of all of it (13.10.2026). What the page would have shown goes out as a notification of the console. */
+  int early = job.on_console && job.then_id[0] && ps5tm_library_close_browser() == 0;
+
   int rc = ps5tm_procmgr_close_game(job.close_id, 6000);
   if(rc < 0) {
     release_start(job.then_id);
@@ -1475,7 +1524,9 @@ sw_thread(void *arg) {
   }
   if(lrc >= 0 || anyway) {
     remember_started(job.then_id);
-    int closing = job.on_console && ps5tm_library_hand_over(job.then_id, 1) == 0;
+    int closing;
+    if(early) { ps5tm_library_hand_over(job.then_id, 0); closing = 1; }          /* the browser went before: only the front is left */
+    else closing = job.on_console && ps5tm_library_hand_over(job.then_id, 1) == 0;
     char how[48];
     if(anyway) snprintf(how, sizeof(how), "läuft (Antwort 0x%08X)", (unsigned)lrc);
     else       snprintf(how, sizeof(how), "App-ID 0x%X", (unsigned)lrc);
@@ -1508,6 +1559,7 @@ sw_thread(void *arg) {
     sw_set(SW_FAILED, "„%s“ wurde beendet, aber die Konsole nahm weder den "
            "Start (0x%08X) noch die Meldung (0x%08X) an.", job.close_name,
            (unsigned)lrc, (unsigned)nrc);
+    if(early) ps5tm_notify("„%s“ ließ sich nicht starten (0x%08X).", job.then_name, (unsigned)lrc);
   }
   return NULL;
 }
@@ -1690,12 +1742,21 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
   /* Only with nothing running: a running title — the same one included, when
      handing it over failed — is never launched again (START_GUARD_MS). */
   int rc = -1;
+  int early = 0;                                  /* the console's browser is being closed before the launch */
   if(game_link && !gs.title_id[0]) {
+    /* From the console's browser the page goes at once, as if the PS button had been pressed at the tap: a launch that has to wait
+       for ShadowMountPlus to mount the game takes seconds, and the page stood in front of all of them (13.10.2026). A refusal or an
+       offer that the page would have shown goes out as a notification of the console instead. */
+    early = on_console && ps5tm_library_close_browser() == 0;
+    unsigned slow = early ? slow_start_begin(name) : 0;
     rc = ps5tm_library_start(id);
+    if(early) slow_start_end(slow);
     int anyway = rc < 0 && launched_anyway(id, rc);
     if(rc >= 0 || anyway) {
       remember_started(id);
-      int closing = on_console && ps5tm_library_hand_over(id, 1) == 0;
+      int closing;
+      if(early) { ps5tm_library_hand_over(id, 0); closing = 1; }                /* only the front is left */
+      else closing = on_console && ps5tm_library_hand_over(id, 1) == 0;
       char how[48];
       if(anyway) snprintf(how, sizeof(how), "läuft (Antwort 0x%08X)", (unsigned)rc);
       else       snprintf(how, sizeof(how), "App-ID 0x%X", (unsigned)rc);
@@ -1737,10 +1798,12 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
         return;
       }
       release_start(id);
+      if(early) ps5tm_notify("„%s“ läuft noch und muss zuerst beendet werden.", run_name);   /* the page is gone */
       send_other_running(fd, run_id, run_name, id, name);
       return;
     }
     release_start(id);
+    if(early) ps5tm_notify("Es läuft noch ein anderes Spiel. Bitte schließe es zuerst über das Menü der PS-Taste.");
     ps5tm_http_send_error(fd, 409, "other_running_unknown",
                           "Es läuft noch ein anderes Spiel. Bitte schließe es "
                           "zuerst über das Menü der PS-Taste.");
@@ -1755,6 +1818,7 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
     snprintf(msg, sizeof(msg), "Die Konsole hat weder den Start (0x%08X) noch die "
              "Meldung (0x%08X) angenommen.", (unsigned)rc, (unsigned)nrc);
     release_start(id);
+    if(early) ps5tm_notify("„%s“ ließ sich nicht starten (0x%08X).", name, (unsigned)rc);
     ps5tm_http_send_error(fd, 503, "launch_refused", msg);
     return;
   }
@@ -4002,6 +4066,199 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   if(!strcmp(req->path, "/api/v1/library/ampr/job")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
     send_cjson(fd, 200, ps5tm_ampr_status());
+    return;
+  }
+
+  /* The APR-EMU file and the PlayGo file of a game (amprlib.c): GET /api/v1/ampr-emu (or /api/v1/playgo) lists the versions
+     the person keeps, GET .../library/emu?id=&lib= says what a game has and where a change would go, POST {id, lib, action:
+     apply|restore|remove, name} changes it (the AMPR job .../library/ampr/job follows it). lib is "ampr" (default) or "playgo". */
+  int lib_pg = !strcmp(req->path, "/api/v1/playgo") || !strcmp(req->path, "/api/v1/playgo/install");
+  if(!strcmp(req->path, "/api/v1/ampr-emu") || !strcmp(req->path, "/api/v1/playgo")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    send_cjson(fd, 200, ps5tm_amprlib_versions(lib_pg ? "playgo" : "ampr"));
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/ampr-emu/install") || !strcmp(req->path, "/api/v1/playgo/install")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    char why[300] = "";
+    cJSON *o = ps5tm_amprlib_install_bundled(lib_pg ? "playgo" : "ampr", why, sizeof(why));
+    if(!o) { ps5tm_http_send_error(fd, 500, "ampr_emu_install_failed", why[0] ? why : "Die Versionen ließen sich nicht ablegen."); return; }
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/library/emu")) {
+    if(is_get) {
+      char id[16] = "", lib[8] = "";
+      query_param(req->query, "id", id, sizeof(id));
+      query_param(req->query, "lib", lib, sizeof(lib));
+      int http = 200;
+      cJSON *o = ps5tm_amprlib_state(lib, id, &http);
+      if(!o) { ps5tm_http_send_error(fd, http, http == 400 ? "bad_request" : "not_found", http == 400 ? "Unbekannte Bibliothek." : "Das Spiel ist nicht in der Liste."); return; }
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    const cJSON *ja = b ? cJSON_GetObjectItem(b, "action") : NULL;
+    const cJSON *jn = b ? cJSON_GetObjectItem(b, "name") : NULL;
+    const cJSON *jl = b ? cJSON_GetObjectItem(b, "lib") : NULL;
+    char id[16] = "", action[12] = "", store[100] = "", lib[8] = "";
+    if(cJSON_IsString(jl)) snprintf(lib, sizeof(lib), "%s", jl->valuestring);
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    if(cJSON_IsString(ja)) snprintf(action, sizeof(action), "%s", ja->valuestring);
+    if(cJSON_IsString(jn)) snprintf(store, sizeof(store), "%s", jn->valuestring);
+    cJSON_Delete(b);
+    char err[400] = "";
+    int http = ps5tm_ampr_emu_start(lib, action, store, id, err, sizeof(err));
+    if(http != 200) { ps5tm_http_send_error(fd, http, "ampr_emu_refused", err); return; }
+    send_cjson(fd, 200, ps5tm_ampr_status());
+    return;
+  }
+
+  /* Check, unpack and repair the image of a game (imgjob.c): GET ?id= says what can be done, .../plan?id= is the unpack plan
+     with the drives, POST {kind, id, target} starts, .../job follows, .../cancel stops. */
+  if(!strcmp(req->path, "/api/v1/library/image")) {
+    if(is_get) {
+      char id[16] = "";
+      query_param(req->query, "id", id, sizeof(id));
+      int http = 200;
+      cJSON *o = ps5tm_imgjob_info(id, &http);
+      if(!o) { ps5tm_http_send_error(fd, http, "not_found", "Das Spiel ist nicht in der Liste."); return; }
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jk = b ? cJSON_GetObjectItem(b, "kind") : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    const cJSON *jt = b ? cJSON_GetObjectItem(b, "target") : NULL;
+    char kind[12] = "", id[16] = "", target[64] = "";
+    if(cJSON_IsString(jk)) snprintf(kind, sizeof(kind), "%s", jk->valuestring);
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    if(cJSON_IsString(jt)) snprintf(target, sizeof(target), "%s", jt->valuestring);
+    cJSON_Delete(b);
+    char err[400] = "";
+    int http = ps5tm_imgjob_start(kind, id, target, err, sizeof(err));
+    if(http != 200) { ps5tm_http_send_error(fd, http, "image_refused", err); return; }
+    send_cjson(fd, 200, ps5tm_imgjob_status());
+    return;
+  }
+  /* LZ4 asset packs of a game (imgjob_lz4.inc): GET ?id= is the state of the packs and the profiles on offer, .../plan?id=&level=&profile=
+     says what a profile would pack, POST {id, kind: pack|copy|verify|unpack, level, profile} starts a job of the slot of the image
+     jobs (.../library/image/job follows it, .../library/image/cancel stops it). */
+  if(!strcmp(req->path, "/api/v1/library/lz4")) {
+    if(is_get) {
+      char id[16] = "";
+      query_param(req->query, "id", id, sizeof(id));
+      int http = 200;
+      cJSON *o = ps5tm_lz4_info(id, &http);
+      if(!o) { ps5tm_http_send_error(fd, http, "not_found", "Das Spiel ist nicht in der Liste."); return; }
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jk = b ? cJSON_GetObjectItem(b, "kind") : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    const cJSON *jl = b ? cJSON_GetObjectItem(b, "level") : NULL;
+    const cJSON *jp = b ? cJSON_GetObjectItem(b, "profile") : NULL;
+    char kind[12] = "", id[16] = "", profile[128] = "";
+    int level = cJSON_IsNumber(jl) ? (int)jl->valuedouble : 9;
+    if(cJSON_IsString(jk)) snprintf(kind, sizeof(kind), "%s", jk->valuestring);
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    if(cJSON_IsString(jp)) snprintf(profile, sizeof(profile), "%s", jp->valuestring);
+    cJSON_Delete(b);
+    char err[400] = "";
+    int http = ps5tm_lz4_start(kind, id, level, profile, err, sizeof(err));
+    if(http != 200) { ps5tm_http_send_error(fd, http, "lz4_refused", err); return; }
+    send_cjson(fd, 200, ps5tm_imgjob_status());
+    return;
+  }
+  /* Optimization by recording (trace.c): GET ?id= the state, POST {id, action: start|stop|collect|generate}. */
+  if(!strcmp(req->path, "/api/v1/library/trace")) {
+    if(is_get) {
+      char id[16] = "";
+      query_param(req->query, "id", id, sizeof(id));
+      int http = 200;
+      cJSON *o = ps5tm_trace_info(id, &http);
+      if(!o) { ps5tm_http_send_error(fd, http, "not_found", "Das Spiel ist nicht in der Liste."); return; }
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    const cJSON *ja = b ? cJSON_GetObjectItem(b, "action") : NULL;
+    char id[16] = "", action[12] = "", msg[500] = "";
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    if(cJSON_IsString(ja)) snprintf(action, sizeof(action), "%s", ja->valuestring);
+    cJSON_Delete(b);
+    int http = ps5tm_trace_action(id, action, msg, sizeof(msg));
+    if(http != 200) { ps5tm_http_send_error(fd, http, "trace_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  /* The plugins of a game (plugins.c): GET ?id= the state, POST {id, action: apply} brings them up to date. */
+  if(!strcmp(req->path, "/api/v1/library/plugins")) {
+    if(is_get) {
+      char id[16] = "";
+      query_param(req->query, "id", id, sizeof(id));
+      int http = 200;
+      cJSON *o = ps5tm_plugins_info(id, &http);
+      if(!o) { ps5tm_http_send_error(fd, http, "not_found", "Das Spiel ist nicht in der Liste."); return; }
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    char id[16] = "", msg[500] = "";
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    cJSON_Delete(b);
+    cJSON *detail = NULL;
+    int http = ps5tm_plugins_apply(id, msg, sizeof(msg), &detail);
+    if(http != 200) { ps5tm_http_send_error(fd, http, "plugins_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    if(detail) cJSON_AddItemToObject(o, "detail", detail);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/library/lz4/plan")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char id[16] = "", lv[8] = "", profile[128] = "";
+    query_param(req->query, "id", id, sizeof(id));
+    query_param(req->query, "level", lv, sizeof(lv));
+    query_param(req->query, "profile", profile, sizeof(profile));
+    int http = 200;
+    cJSON *o = ps5tm_lz4_plan(id, atoi(lv), profile, &http);
+    if(!o) { ps5tm_http_send_error(fd, http, http == 400 ? "bad_request" : "not_found", http == 400 ? "Das Profil gibt es nicht." : "Das Spiel ist nicht in der Liste oder liegt nicht als Ordner vor."); return; }
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/library/image/plan")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char id[16] = "", err[300] = "";
+    query_param(req->query, "id", id, sizeof(id));
+    cJSON *o = ps5tm_imgjob_plan(id, err, sizeof(err));
+    if(!o) { ps5tm_http_send_error(fd, 409, "image_plan_refused", err); return; }
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/library/image/job")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    send_cjson(fd, 200, ps5tm_imgjob_status());
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/library/image/cancel")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    ps5tm_imgjob_cancel();
+    ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
     return;
   }
 

@@ -488,7 +488,7 @@ other_job_active(char *err, size_t n) {
     snprintf(err, n, "Es läuft gerade eine Kopie, Konvertierung, ein Verschieben, eine Sicherung oder ein Löschen. Das läuft nicht gleichzeitig mit dem Teilen eines Pakets.");
     return 1;
   }
-  if(ps5tm_ampr_busy()) {
+  if(ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
     snprintf(err, n, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
     return 1;
   }

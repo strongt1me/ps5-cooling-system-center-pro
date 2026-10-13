@@ -1673,3 +1673,29 @@ body { text-shadow: 0 1px 2px rgba(0,0,0,.6); }
 .hv-res.bad { background: rgba(208,59,59,.16); color: #ffb0b0; border: 1px solid rgba(208,59,59,.45); }
 .hv-res.stop { background: rgba(250,178,25,.14); color: #ffd57b; border: 1px solid rgba(250,178,25,.4); }
 .hv-foot { font-size: 12.5px; margin-top: 12px; }
+
+/* APR & LZ4, Schritt 2 (11.10.2026): Fortschritt, Fundliste, Laufwerkswahl beim Entpacken */
+.apr-bar { margin: 8px 0 4px; }
+.apr-cur code, .apr-bad code { word-break: break-all; }
+.apr-bad { margin-top: 4px; }
+.apr-res { margin: 8px 0 4px; }
+button.apr-drive { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+button.apr-drive.on { border-color: #3987e5; background: rgba(57,135,229,.14); }
+button.apr-drive:disabled { cursor: default; }
+
+/* APR-EMU-Version wählen (11.10.2026) */
+.apr-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0; }
+.apr-add { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 4px; }
+.apr-folder { margin: 0 0 8px; font-size: 12.5px; }
+.apr-prof { margin: 8px 0 2px; }
+.apr-prof select { width: 100%; max-width: 420px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--hairline); background-color: var(--inset); color: inherit; font: inherit; }
+.apr-est { margin: 8px 0 2px; }
+.apr-btnstack { display: grid; gap: 8px; justify-items: stretch; flex: none; }
+.apr-btnstack .btn { white-space: nowrap; }
+.apr-guide { margin: 8px 0 2px; font-size: 12.5px; }
+.apr-guide summary { cursor: pointer; font-weight: 700; color: var(--accent, #7aa2ff); }
+.apr-guide ol { margin: 6px 0 4px 18px; padding: 0; display: grid; gap: 4px; }
+.apr-guide li { font-size: 12.5px; line-height: 1.45; }
+.apr-guide li b, .apr-guide li code { display: inline; font-size: inherit; }
+.cp-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; font-weight: 700; cursor: pointer; }
+.cp-check input { margin-top: 3px; }

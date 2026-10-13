@@ -60,6 +60,9 @@
 #define FM_SPACE_SPARE   (4ull << 20)    /* left free on the target beyond what is copied */
 #define APP_DIR          "/data/PS5-Cooling-Center"
 #define APP_PAYLOADS     APP_DIR "/payloads"
+#define APP_AMPREMU      APP_DIR "/AMPR_EMU"     /* the APR-EMU versions the person keeps (amprlib.c): added here from the page */
+#define APP_PLAYGO       APP_DIR "/PlayGo"       /* the same for the PlayGo stubs */
+#define APP_LZ4PROF      APP_DIR "/LZ4_Profile"  /* the packing profiles (TOML) of the LZ4 packs */
 #define UPLOAD_EXT       ".ps5cc-hochladen"
 
 enum { FM_IDLE, FM_COUNTING, FM_COPYING, FM_DELETING, FM_DONE, FM_FAILED, FM_CANCELLED };
@@ -161,8 +164,13 @@ write_root(const char *p) {
   if(!path_plain(p) || !strcmp(p, "/")) return NULL;
   size_t al = strlen(APP_DIR);
   if(!strncmp(p, APP_DIR, al) && (p[al] == 0 || p[al] == '/')) {
-    size_t pl = strlen(APP_PAYLOADS);
-    if(!(strncmp(p, APP_PAYLOADS, pl) == 0 && p[pl] == '/' && p[pl + 1])) return NULL;
+    /* the app's own data stays closed, but for what a person puts there on purpose: payloads, APR-EMU and PlayGo versions */
+    size_t pl = strlen(APP_PAYLOADS), el = strlen(APP_AMPREMU), gl = strlen(APP_PLAYGO), ql = strlen(APP_LZ4PROF);
+    int in_payloads = strncmp(p, APP_PAYLOADS, pl) == 0 && p[pl] == '/' && p[pl + 1];
+    int in_ampremu = strncmp(p, APP_AMPREMU, el) == 0 && p[el] == '/' && p[el + 1];
+    int in_playgo = strncmp(p, APP_PLAYGO, gl) == 0 && p[gl] == '/' && p[gl + 1];
+    int in_lz4prof = strncmp(p, APP_LZ4PROF, ql) == 0 && p[ql] == '/' && p[ql + 1];
+    if(!in_payloads && !in_ampremu && !in_playgo && !in_lz4prof) return NULL;
   }
   for(size_t i = 0; i < sizeof(fixed) / sizeof(fixed[0]); i++) {
     size_t l = strlen(fixed[i]);
@@ -719,7 +727,7 @@ job_state(int s) {
 static int
 other_job_active(char *err, size_t n) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_ampr_busy()) {
+     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
     snprintf(err, n, "Es läuft gerade ein anderer Vorgang der App (Kopieren, Konvertieren, Verschieben, Spielstände, "
              "Paket teilen oder installieren, Löschen). Bitte danach noch einmal.");
     return 1;

@@ -30,7 +30,31 @@ const char *imgr_kind(const imgr_t *r);
    such file or on a read error. */
 long    imgr_pread(imgr_t *r, const char *path, uint64_t off, void *buf, size_t n);
 /* Calls cb for every entry of the folder at path (not "." or ".."); cb returns non-zero to stop. 0, or -1 when the
-   folder is not there. */
+   folder is not there. cb may be NULL: the call then only says whether the folder is there. */
 int     imgr_list(imgr_t *r, const char *path, int (*cb)(const char *name, int is_dir, void *ctx), void *ctx);
+
+/* The whole tree of an image, for checking and unpacking (11.10.2026). Names are UTF-8. */
+#define IMGR_PATH_MAX 1024
+typedef struct {
+  char     path[IMGR_PATH_MAX];  /* "/data/level1.pak": from the root, parents come before what they hold */
+  int      is_dir;
+  int      damaged;              /* a folder whose entries could not be read: it is reported, then skipped */
+  uint64_t size;                 /* bytes of a file, 0 for a folder */
+  uint64_t h1;                   /* the reader's own handle (first cluster, inode), for the calls below */
+  uint32_t h2;
+} imgr_entry_t;
+
+/* Calls cb for every file and folder, depth first, parents first (cb gets the entry for the length of the call only);
+   cb returns non-zero to stop. 0 when the walk is complete, 1 when cb stopped it, -1 when the root cannot be read or
+   the tree is nested too deeply. A folder that cannot be read is reported with damaged set and the walk goes on. */
+int     imgr_walk(imgr_t *r, int (*cb)(const imgr_entry_t *e, void *ctx), void *ctx);
+/* Reads up to n bytes of a file from off (like imgr_pread, without looking the path up again). */
+long    imgr_read_entry(imgr_t *r, const imgr_entry_t *e, uint64_t off, void *buf, size_t n);
+/* Whether the file's data lies where the file system says: every cluster or block of it is inside the image and in a
+   chain that is long enough. deep also reads every byte (what a drive that has gone bad shows). 0 when it holds,
+   -1 with *bad_off the first offset that does not, or the size when the chain is too short. *cancel (may be NULL) stops
+   a deep read: -1 with errno ECANCELED. progress (may be NULL) gets the bytes read so far of this file. */
+int     imgr_verify_entry(imgr_t *r, const imgr_entry_t *e, int deep, uint64_t *bad_off, const int *cancel,
+                          void (*progress)(void *ctx, uint64_t done), void *ctx);
 
 #endif

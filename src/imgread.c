@@ -23,6 +23,8 @@
 
 #define MAX_DIR_BYTES   (8u << 20)
 #define MAX_PATH_PARTS  16
+#define EXF_NAME_MAX    1024           /* 255 UTF-16 units: at most 4 bytes each (a pair of surrogates) */
+#define MAX_WALK_DEPTH  40
 
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 static uint64_t rd64(const uint8_t *p) { return (uint64_t)rd32(p) | (uint64_t)rd32(p + 4) << 32; }
@@ -204,6 +206,11 @@ struct fsx {
   int  (*list)(fsx_t *f, const char *path, int (*cb)(const char *, int, void *), void *ctx);
   void (*cl)(fsx_t *f);
   bs_t *b;
+  /* the whole-tree side (imgr_walk and friends) */
+  int  (*root)(fsx_t *f, imgr_entry_t *e);                               /* the root folder as an entry */
+  int  (*children)(fsx_t *f, const imgr_entry_t *dir, int (*cb)(const char *name, const imgr_entry_t *e, void *ctx), void *ctx);
+  long (*read_entry)(fsx_t *f, const imgr_entry_t *e, uint64_t off, void *buf, size_t n);
+  int  (*chain_ok)(fsx_t *f, const imgr_entry_t *e, uint64_t *bad_off);   /* the data is where the file system says */
 };
 
 struct imgr {
@@ -350,17 +357,31 @@ exf_each(exfat_t *x, const exf_node_t *d, int (*cb)(const char *, const exf_node
     n.first  = rd32(st + 20);
     n.size   = rd64(st + 24);
     n.is_dir = (rd16(buf + i + 4) & 0x10) != 0;
-    char name[256];
-    unsigned k = 0;
+    /* the name is UTF-16 in up to 255 units, handed on as UTF-8 (a pair of surrogates is one character; a lone one
+       becomes '?') */
+    char name[EXF_NAME_MAX];
+    unsigned k = 0, o = 0;
+    uint32_t hi = 0;
     for(unsigned s = 2; s <= secondary && k < nlen; s++) {
       const uint8_t *ne = buf + i + 32 * (size_t)s;
       if(ne[0] != 0xC1) break;
       for(unsigned q = 0; q < 15 && k < nlen; q++, k++) {
-        uint16_t ch = rd16(ne + 2 + q * 2);
-        name[k] = ch < 0x80 ? (char)ch : '?';
+        uint32_t ch = rd16(ne + 2 + q * 2);
+        if(hi) {
+          if(ch >= 0xDC00 && ch <= 0xDFFF) ch = 0x10000 + ((hi - 0xD800) << 10) + (ch - 0xDC00);
+          else name[o++] = '?';
+          hi = 0;
+        }
+        if(ch >= 0xD800 && ch <= 0xDBFF) { hi = ch; continue; }
+        if(ch >= 0xDC00 && ch <= 0xDFFF) ch = '?';
+        if(ch < 0x80) name[o++] = (char)ch;
+        else if(ch < 0x800) { name[o++] = (char)(0xC0 | ch >> 6); name[o++] = (char)(0x80 | (ch & 0x3F)); }
+        else if(ch < 0x10000) { name[o++] = (char)(0xE0 | ch >> 12); name[o++] = (char)(0x80 | (ch >> 6 & 0x3F)); name[o++] = (char)(0x80 | (ch & 0x3F)); }
+        else { name[o++] = (char)(0xF0 | ch >> 18); name[o++] = (char)(0x80 | (ch >> 12 & 0x3F)); name[o++] = (char)(0x80 | (ch >> 6 & 0x3F)); name[o++] = (char)(0x80 | (ch & 0x3F)); }
       }
     }
-    name[k < 255 ? k : 255] = 0;
+    if(hi) name[o++] = '?';
+    name[o] = 0;
     int stop = cb(name, &n, ctx);
     if(stop) { free(buf); return 0; }
     i += 32 * (size_t)secondary;
@@ -412,7 +433,7 @@ typedef struct { int (*cb)(const char *, int, void *); void *ctx; } exf_list_t;
 static int
 exf_list_cb(const char *name, const exf_node_t *n, void *ctx) {
   exf_list_t *l = ctx;
-  return l->cb(name, n->is_dir, l->ctx);
+  return l->cb ? l->cb(name, n->is_dir, l->ctx) : 0;                /* no callback: the call only asks whether the folder is there */
 }
 
 static int
@@ -428,6 +449,90 @@ static void
 exf_cl(fsx_t *f) {
   f->b->cl(f->b);
   free(f);
+}
+
+/* ---- the whole-tree side, exFAT */
+
+static void
+exf_entry_of(const exf_node_t *n, imgr_entry_t *e) {
+  e->is_dir = n->is_dir;
+  e->size = n->is_dir ? 0 : n->size;
+  e->h1 = n->first;
+  e->h2 = (n->nofat ? 1u : 0u) | (n->is_dir ? 2u : 0u);
+}
+
+static exf_node_t
+exf_node_of(const imgr_entry_t *e) {
+  exf_node_t n;
+  n.first = (uint32_t)e->h1;
+  n.nofat = (e->h2 & 1) != 0;
+  n.is_dir = (e->h2 & 2) != 0;
+  n.size = e->size;
+  return n;
+}
+
+static int
+exf_root(fsx_t *f, imgr_entry_t *e) {
+  exfat_t *x = (exfat_t *)f;
+  exf_node_t n = { x->root, 0, 0, 1 };
+  memset(e, 0, sizeof(*e));
+  exf_entry_of(&n, e);
+  return 0;
+}
+
+typedef struct { int (*cb)(const char *, const imgr_entry_t *, void *); void *ctx; } exf_kids_t;
+
+static int
+exf_kids_cb(const char *name, const exf_node_t *n, void *ctx) {
+  exf_kids_t *k = ctx;
+  imgr_entry_t e;
+  memset(&e, 0, sizeof(e));
+  exf_entry_of(n, &e);
+  return k->cb(name, &e, k->ctx);
+}
+
+static int
+exf_children(fsx_t *f, const imgr_entry_t *dir, int (*cb)(const char *, const imgr_entry_t *, void *), void *ctx) {
+  exf_node_t d = exf_node_of(dir);
+  exf_kids_t k = { cb, ctx };
+  return exf_each((exfat_t *)f, &d, exf_kids_cb, &k);
+}
+
+static long
+exf_read_entry(fsx_t *f, const imgr_entry_t *e, uint64_t off, void *buf, size_t n) {
+  if(e->is_dir) return -1;
+  if(off >= e->size) return 0;
+  if(n > e->size - off) n = (size_t)(e->size - off);
+  if(n == 0) return 0;
+  exf_node_t nd = exf_node_of(e);
+  return exf_read((exfat_t *)f, nd.first, nd.nofat, off, buf, n) == 0 ? (long)n : -1;
+}
+
+/* The chain of a file has as many clusters as its size needs, all inside the heap, none twice in a row of the FAT
+   walk (a circle would otherwise run for ever: the walk is bounded by the cluster count). */
+static int
+exf_chain_ok(fsx_t *f, const imgr_entry_t *e, uint64_t *bad_off) {
+  exfat_t *x = (exfat_t *)f;
+  uint64_t csize = 1ull << x->clu_shift;
+  if(e->size == 0) return 0;
+  uint64_t need = (e->size + csize - 1) >> x->clu_shift;
+  *bad_off = 0;
+  if(need > x->clusters) return -1;
+  uint32_t c = (uint32_t)e->h1;
+  if(!exf_valid_cluster(x, c)) return -1;
+  if(e->h2 & 1) {                                          /* contiguous: no FAT */
+    if((uint64_t)c + need > (uint64_t)x->clusters + 2) { *bad_off = ((uint64_t)x->clusters + 2 - c) * csize; return -1; }
+    return 0;
+  }
+  for(uint64_t i = 0; i < need; i++) {
+    if(!exf_valid_cluster(x, c)) { *bad_off = i * csize; return -1; }
+    if(i + 1 < need) {
+      uint32_t nx;
+      if(exf_fat_next(x, c, &nx) != 0 || !exf_valid_cluster(x, nx)) { *bad_off = (i + 1) * csize; return -1; }
+      c = nx;
+    }
+  }
+  return 0;
 }
 
 /* Takes over b. NULL (b is closed) when it does not hold exFAT. */
@@ -449,6 +554,10 @@ exf_open(bs_t *b) {
   x->f.pread = exf_pread;
   x->f.list = exf_list;
   x->f.cl = exf_cl;
+  x->f.root = exf_root;
+  x->f.children = exf_children;
+  x->f.read_entry = exf_read_entry;
+  x->f.chain_ok = exf_chain_ok;
   x->f.b = b;
   return &x->f;
 }
@@ -585,7 +694,7 @@ static int
 ufs_list_cb(const char *name, uint32_t ino, int is_dir, void *ctx) {
   (void)ino;
   ufs_list_t *l = ctx;
-  return l->cb(name, is_dir, l->ctx);
+  return l->cb ? l->cb(name, is_dir, l->ctx) : 0;
 }
 
 static int
@@ -603,6 +712,69 @@ ufs_cl(fsx_t *f) {
   free(f);
 }
 
+/* ---- the whole-tree side, UFS2: h1 is the inode number */
+
+static int
+ufs_root(fsx_t *f, imgr_entry_t *e) {
+  (void)f;
+  memset(e, 0, sizeof(*e));
+  e->is_dir = 1;
+  e->h1 = 2;
+  return 0;
+}
+
+typedef struct { ufs_t *u; int (*cb)(const char *, const imgr_entry_t *, void *); void *ctx; } ufs_kids_t;
+
+static int
+ufs_kids_cb(const char *name, uint32_t ino, int is_dir, void *ctx) {
+  ufs_kids_t *k = ctx;
+  imgr_entry_t e;
+  memset(&e, 0, sizeof(e));
+  e.h1 = ino;
+  e.is_dir = is_dir;
+  if(!is_dir) {
+    ufs_ino_t in;
+    if(ufs_inode(k->u, ino, &in) != 0 || (in.mode & 0xF000) != 0x8000) return 0;       /* a link or a device: not a file of the game */
+    e.size = in.size;
+  }
+  return k->cb(name, &e, k->ctx);
+}
+
+static int
+ufs_children(fsx_t *f, const imgr_entry_t *dir, int (*cb)(const char *, const imgr_entry_t *, void *), void *ctx) {
+  ufs_t *u = (ufs_t *)f;
+  ufs_ino_t in;
+  if(ufs_inode(u, (uint32_t)dir->h1, &in) != 0) return -1;
+  ufs_kids_t k = { u, cb, ctx };
+  return ufs_each(u, &in, ufs_kids_cb, &k);
+}
+
+static long
+ufs_read_entry(fsx_t *f, const imgr_entry_t *e, uint64_t off, void *buf, size_t n) {
+  ufs_t *u = (ufs_t *)f;
+  ufs_ino_t in;
+  if(e->is_dir || ufs_inode(u, (uint32_t)e->h1, &in) != 0 || (in.mode & 0xF000) != 0x8000) return -1;
+  if(off >= in.size) return 0;
+  if(n > in.size - off) n = (size_t)(in.size - off);
+  if(n == 0) return 0;
+  return ufs_read(u, &in, off, buf, n) == 0 ? (long)n : -1;
+}
+
+/* every block of the file maps to somewhere inside the image */
+static int
+ufs_chain_ok(fsx_t *f, const imgr_entry_t *e, uint64_t *bad_off) {
+  ufs_t *u = (ufs_t *)f;
+  ufs_ino_t in;
+  *bad_off = 0;
+  if(ufs_inode(u, (uint32_t)e->h1, &in) != 0) return -1;
+  uint64_t blocks = (in.size + u->bsize - 1) / u->bsize;
+  for(uint64_t l = 0; l < blocks; l++) {
+    int64_t fr = ufs_bmap(u, &in, l);
+    if(fr < 0 || (fr > 0 && ((uint64_t)fr * u->fsize + u->fsize > u->f.b->size))) { *bad_off = l * u->bsize; return -1; }
+  }
+  return 0;
+}
+
 static fsx_t *
 ufs_open(bs_t *b) {
   uint8_t sb[0x560];
@@ -617,6 +789,10 @@ ufs_open(bs_t *b) {
   u->f.pread = ufs_pread;
   u->f.list = ufs_list;
   u->f.cl = ufs_cl;
+  u->f.root = ufs_root;
+  u->f.children = ufs_children;
+  u->f.read_entry = ufs_read_entry;
+  u->f.chain_ok = ufs_chain_ok;
   u->f.b = b;
   return &u->f;
 }
@@ -682,4 +858,111 @@ imgr_pread(imgr_t *r, const char *path, uint64_t off, void *buf, size_t n) {
 int
 imgr_list(imgr_t *r, const char *path, int (*cb)(const char *, int, void *), void *ctx) {
   return r ? r->fs->list(r->fs, path, cb, ctx) : -1;
+}
+
+/* ---- the whole tree */
+
+typedef struct {
+  imgr_t *r;
+  int (*cb)(const imgr_entry_t *, void *);
+  void *ctx;
+  char *path;                /* the path being built, IMGR_PATH_MAX bytes on the heap */
+  size_t len;
+  int depth, stopped, too_deep;
+} walk_t;
+
+static int walk_dir(walk_t *w, const imgr_entry_t *dir);
+
+static int
+walk_kid(const char *name, const imgr_entry_t *kid, void *ctx) {
+  walk_t *w = ctx;
+  size_t nl = strlen(name), keep = w->len;
+  /* a name that is empty, a dot, has a slash in it or does not fit is skipped: it could never be a path of the game */
+  if(nl == 0 || strchr(name, '/') || !strcmp(name, ".") || !strcmp(name, "..") || keep + 1 + nl >= IMGR_PATH_MAX) return 0;
+  imgr_entry_t *e = malloc(sizeof(*e));
+  if(!e) { w->stopped = 1; return 1; }
+  *e = *kid;
+  w->path[keep] = '/';
+  memcpy(w->path + keep + 1, name, nl + 1);
+  w->len = keep + 1 + nl;
+  memcpy(e->path, w->path, w->len + 1);
+  int stop = w->cb(e, w->ctx);
+  if(!stop && kid->is_dir) {
+    if(w->depth >= MAX_WALK_DEPTH) { w->too_deep = 1; stop = 1; }
+    else {
+      w->depth++;
+      imgr_entry_t d = *kid;
+      int rc = walk_dir(w, &d);
+      w->depth--;
+      if(rc != 0 && !w->stopped) {
+        /* the folder could not be read: said once more, with damaged set, then on with the next */
+        e->damaged = 1;
+        stop = w->cb(e, w->ctx);
+      }
+      if(w->stopped) stop = 1;
+    }
+  }
+  free(e);
+  w->path[keep] = 0;
+  w->len = keep;
+  if(stop) w->stopped = 1;
+  return stop;
+}
+
+static int
+walk_dir(walk_t *w, const imgr_entry_t *dir) {
+  return w->r->fs->children(w->r->fs, dir, walk_kid, w);
+}
+
+int
+imgr_walk(imgr_t *r, int (*cb)(const imgr_entry_t *, void *), void *ctx) {
+  if(!r || !r->fs->root || !r->fs->children) return -1;
+  walk_t w;
+  memset(&w, 0, sizeof(w));
+  w.r = r; w.cb = cb; w.ctx = ctx;
+  w.path = calloc(1, IMGR_PATH_MAX);
+  if(!w.path) return -1;
+  imgr_entry_t *root = malloc(sizeof(*root));
+  if(!root) { free(w.path); return -1; }
+  int rc = -1;
+  if(r->fs->root(r->fs, root) == 0) {
+    rc = walk_dir(&w, root);
+    if(rc == 0) rc = w.too_deep ? -1 : w.stopped ? 1 : 0;
+    else rc = -1;
+  }
+  free(root);
+  free(w.path);
+  return rc;
+}
+
+long
+imgr_read_entry(imgr_t *r, const imgr_entry_t *e, uint64_t off, void *buf, size_t n) {
+  return r && e ? r->fs->read_entry(r->fs, e, off, buf, n) : -1;
+}
+
+#define VERIFY_CHUNK (1u << 20)
+
+int
+imgr_verify_entry(imgr_t *r, const imgr_entry_t *e, int deep, uint64_t *bad_off, const int *cancel,
+                  void (*progress)(void *, uint64_t), void *ctx) {
+  uint64_t dummy;
+  if(!bad_off) bad_off = &dummy;
+  *bad_off = 0;
+  if(!r || !e || e->is_dir) return -1;
+  if(r->fs->chain_ok(r->fs, e, bad_off) != 0) return -1;
+  if(!deep || e->size == 0) return 0;
+  uint8_t *buf = malloc(VERIFY_CHUNK);
+  if(!buf) { errno = ENOMEM; return -1; }
+  uint64_t off = 0;
+  int rc = 0;
+  while(off < e->size) {
+    if(cancel && __atomic_load_n(cancel, __ATOMIC_ACQUIRE)) { errno = ECANCELED; rc = -1; *bad_off = off; break; }
+    size_t n = e->size - off < VERIFY_CHUNK ? (size_t)(e->size - off) : VERIFY_CHUNK;
+    long got = r->fs->read_entry(r->fs, e, off, buf, n);
+    if(got != (long)n) { *bad_off = off; errno = EIO; rc = -1; break; }
+    off += n;
+    if(progress) progress(ctx, off);
+  }
+  free(buf);
+  return rc;
 }

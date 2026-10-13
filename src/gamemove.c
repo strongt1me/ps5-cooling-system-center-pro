@@ -305,7 +305,7 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
              "und Verschieben laufen nicht gleichzeitig damit.");
     return 409;
   }
-  if(ps5tm_ampr_busy()) {
+  if(ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
     snprintf(err, err_len, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
     return 409;
   }

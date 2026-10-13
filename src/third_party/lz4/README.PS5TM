@@ -1,0 +1,4 @@
+LZ4 1.10.0 (https://github.com/lz4/lz4, release v1.10.0; archive sha256 537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b),
+unchanged: lib/lz4.c, lz4.h, lz4hc.c, lz4hc.h. Licence of the library: BSD 2-Clause (see LICENSE).
+Used by src/lz4pack.c for the independent raw LZ4 blocks of the asset packs (AMPRPAK4) -- the same decoder version
+that drakmor's ampr_emu pins (v1.10.0). Added 12.10.2026.

@@ -702,6 +702,52 @@ feed_blocks(vblocks_t *v, const uint8_t *p, uint64_t off, size_t n) {
 }
 
 int
+pfs_outer_check(int fd, uint64_t *declared, uint64_t *actual, char *err, size_t err_len) {
+  uint8_t *h = malloc(BS);
+  uint8_t *buf = NULL;
+  int rc = -1;
+  struct stat st;
+  if(!h) { snprintf(err, err_len, "Kein Speicher."); return -1; }
+  if(fstat(fd, &st) != 0 || pread_all(fd, h, BS, 0) != 0) { snprintf(err, err_len, "Das Abbild ist nicht lesbar."); goto out; }
+  if(get64(h) != PFS_VERSION_PS5 || get64(h + 8) != PFS_MAGIC || get32(h + 0x20) != BS || get64(h + 0x30) != INODE_COUNT) {
+    snprintf(err, err_len, "Das ist kein PFS-Abbild dieser Art.");
+    goto out;
+  }
+  uint64_t decl = get64(h + 0x38) * BS, act = (uint64_t)st.st_size;
+  if(declared) *declared = decl;
+  if(actual) *actual = act;
+  if(pread_all(fd, h, BS, BS) != 0) { snprintf(err, err_len, "Die Inodes sind nicht lesbar."); goto out; }
+  const uint8_t *fi = h + 3 * INODE_SIZE;
+  uint64_t stored = get64(fi + 0x08);
+  if(!(get32(fi + 0x04) & FLAG_COMPRESSED) || get32(fi + 0x64) != FIRST_FILE_BLOCK || !get64(fi + 0x10) ||
+     (FIRST_FILE_BLOCK + ceil_div(stored, BS)) * BS != decl) {
+    snprintf(err, err_len, "Kopf und Datei-Inode des Abbilds passen nicht zusammen.");
+    goto out;
+  }
+  if(act == decl) { rc = 0; goto out; }
+  if(act < (uint64_t)FIRST_FILE_BLOCK * BS + stored) {
+    snprintf(err, err_len, "Die Datei ist abgeschnitten: Daten des Abbilds fehlen.");
+    goto out;
+  }
+  if(act > decl) {                                             /* what lies beyond must be empty */
+    buf = malloc(IO_BYTES);
+    if(!buf) { snprintf(err, err_len, "Kein Speicher."); goto out; }
+    for(uint64_t pos = decl; pos < act;) {
+      size_t n = act - pos < IO_BYTES ? (size_t)(act - pos) : IO_BYTES;
+      if(pread_all(fd, buf, n, pos) != 0) { snprintf(err, err_len, "Lesefehler hinter dem Abbild."); goto out; }
+      for(size_t i = 0; i < n; i++)
+        if(buf[i]) { snprintf(err, err_len, "Hinter dem Ende des Abbilds stehen Daten."); goto out; }
+      pos += n;
+    }
+  }
+  rc = 1;
+out:
+  free(buf);
+  free(h);
+  return rc;
+}
+
+int
 pfs_verify_full(int fd, const pfsc_check_t *c, uint8_t sha[32], char *err, size_t err_len) {
   uint8_t *h = malloc(BS), *buf = malloc(IO_BYTES);
   vblocks_t v;
@@ -815,7 +861,7 @@ pfs_verify_full(int fd, const pfsc_check_t *c, uint8_t sha[32], char *err, size_
              (unsigned long long)v.next, (unsigned long long)block_count);
     goto out;
   }
-  if(c && v.crc != c->raw_crc) {
+  if(c && !c->skip_crc && v.crc != c->raw_crc) {
     snprintf(err, err_len, "Die Daten im Abbild stimmen nicht mit denen der Quelle überein "
              "(Prüfsumme %08X statt %08X).", (unsigned)v.crc, (unsigned)c->raw_crc);
     goto out;

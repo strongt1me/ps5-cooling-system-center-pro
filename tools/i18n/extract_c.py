@@ -107,7 +107,7 @@ def to_pattern(fmt):
 
 def main():
     seen = {}
-    for path in sorted(glob.glob(os.path.join(SRC, "*.c")) + glob.glob(os.path.join(SRC, "helper", "*.c"))):
+    for path in sorted(glob.glob(os.path.join(SRC, "*.c")) + glob.glob(os.path.join(SRC, "*.inc")) + glob.glob(os.path.join(SRC, "helper", "*.c"))):
         name = os.path.basename(path)
         src = open(path, encoding="utf-8", errors="replace").read()
         for text, line in c_literals(src):
@@ -124,7 +124,8 @@ def main():
                 words = re.findall(r"[A-Za-zÄÖÜäöüß]+", key)
                 german = E.UMLAUT.search(key) or any(w.lower() in E.GERMAN_LOWER or w.lower() in {
                     "konsole", "spiel", "laufwerk", "datei", "ordner", "fehler", "paket", "sicherung", "abgebrochen", "gelöscht",
-                    "gestartet", "fertig", "titel", "protokoll", "temperatur", "lüfter", "meldung", "vorgang", "kopie"} for w in words)
+                    "gestartet", "fertig", "titel", "protokoll", "temperatur", "lüfter", "meldung", "vorgang", "kopie", "sitzung", "mitschnitt",
+                    "profil", "eingesammelt", "plugins", "bibliothek"} for w in words)
                 if not german:
                     continue
                 e = seen.setdefault(key, {"where": [], "fmt": part})

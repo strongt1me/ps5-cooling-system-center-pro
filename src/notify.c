@@ -244,6 +244,25 @@ ps5tm_notify_action(const char *message, const char *sub, const char *icon_path,
 }
 
 
+/* The plain notification of the old call (top left, the one a payload loader shows while it loads a payload). 13.10.2026: asked for
+   as a way to announce a slow game start with another look than the toast. */
+void
+ps5tm_notify_plain(const char *fmt, ...) {
+  notify_request_t req;
+  memset(&req, 0, sizeof(req));
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(req.message, sizeof(req.message), fmt, ap);
+  va_end(ap);
+#ifdef PS5TM_HOST_TEST
+  printf("[NOTIFY-PLAIN] %s"\n", req.message);
+  fflush(stdout);
+#else
+  sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
+#endif
+}
+
+
 void
 ps5tm_notify(const char *fmt, ...) {
   notify_request_t req;

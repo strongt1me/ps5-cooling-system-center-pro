@@ -1182,7 +1182,7 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
              "und Verschieben laufen nicht gleichzeitig damit.");
     return 1;
   }
-  if(ps5tm_ampr_busy()) {
+  if(ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
     snprintf(err, err_len, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
     return 1;
   }

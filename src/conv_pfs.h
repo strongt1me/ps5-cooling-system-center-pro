@@ -32,6 +32,8 @@ typedef struct {
   const int *cancel;
   void     (*progress)(void *ctx, uint64_t done);   /* bytes of the image read */
   void      *progress_ctx;
+  int        skip_crc;        /* an image that was not written here: no payload CRC to compare with (last, so that
+                                 the positional initializers of the converter stay as they were) */
 } pfsc_check_t;
 
 /* Reads a finished image back from the drive, all of it and in order: header,
@@ -43,6 +45,13 @@ typedef struct {
    holds together; -1 with the reason in err, errno ECANCELED on a cancel. */
 int pfs_verify_full(int fd, const pfsc_check_t *c, uint8_t sha[32],
                     char *err, size_t err_len);
+
+/* The outer size of an image against what its header declares (11.10.2026): the size of the file must be exactly
+   the PFS block count of the header times the block size, and that count must follow from the file's own inode.
+   *declared and *actual get the two sizes. 0 when they are equal; 1 when they are not but the data is whole and what
+   lies beyond the declared size (if the file is longer) is all zero, so that setting the size to *declared repairs it;
+   -1 when the header and inode disagree, data is missing, or the extra bytes hold data: err says which. */
+int pfs_outer_check(int fd, uint64_t *declared, uint64_t *actual, char *err, size_t err_len);
 
 /* Whether the compression threads got the idle scheduling class: 1 yes,
    0 refused, -1 no thread has tried yet. */
