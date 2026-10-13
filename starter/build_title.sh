@@ -25,14 +25,16 @@ flags=(-target x86_64-sie-ps5 -fvisibility-nodllstorageclass=default -isysroot "
        -isystem "$PS5_PAYLOAD_SDK/target/include" -fno-stack-protector -fno-plt -femulated-tls -fPIC
        -ffreestanding -fno-builtin -std=c11 -O2 -Wall -Wextra -Werror -I.
        -funwind-tables -fasynchronous-unwind-tables)   # ps5-native-tool wants .eh_frame
-"$CLANG" "${flags[@]}" -c title/starter.c -o "$B/starter.o"
+# payload.elf (the app) is embedded with .incbin: tools/make_starter.sh puts it here
+[[ -f payload.elf ]] || { echo "starter/payload.elf missing (tools/make_starter.sh copies it)" >&2; exit 2; }
+"$CLANG" "${flags[@]}" -I. -c title/starter.c -o "$B/starter.o"
 
 "$PS5_PAYLOAD_SDK/bin/prospero-lld" -T title/title.ld --eh-frame-hdr \
     --version-script title/symbols.map -e _start -o "$B/pie.elf" "$B/starter.o" \
     --as-needed "$PS5_PAYLOAD_SDK"/target/lib/*.so
 
 # Only these imports are meant to be there (libkernel, libSceSystemService) - anything else would be NULL at run time
-allowed="close connect open read recv sceKernelDebugOutText sceKernelSendNotificationRequest sceKernelUsleep sceSystemServiceLoadExec send socket"
+allowed="close connect recv sceKernelDebugOutText sceKernelSendNotificationRequest sceKernelUsleep sceSystemServiceLoadExec send socket"
 imports=$("$PS5_PAYLOAD_SDK/bin/llvm-nm" -D --undefined-only "$B/pie.elf" | awk '{ sub(/@.*/, "", $2); print $2 }' | sort -u)
 for sym in $imports; do
     [[ " $allowed " == *" $sym "* ]] || { echo "unexpected import: $sym" >&2; exit 1; }

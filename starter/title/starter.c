@@ -2,8 +2,8 @@
  * Starter app of "PS5 Cooling & System Center - Pro" (FAKE08086; a dump folder for /data/homebrew, see tools/make_starter.sh).
  *
  * A tap on its tile runs this program. If the app is already up (127.0.0.1:8086 answers), it asks it to open the web UI in the
- * console's browser (POST /api/v1/open-ui). Otherwise it reads payload.elf from its own folder (/app0), sends it to the payload
- * loader of the jailbreak (127.0.0.1:9021) — the same as sending the ELF by hand —, waits until the app answers and then asks for
+ * console's browser (POST /api/v1/open-ui). Otherwise it sends the app's ELF, which is part of this very eboot.bin (.incbin below),
+ * to the payload loader of the jailbreak (127.0.0.1:9021) — the same as sending the ELF by hand —, waits until the app answers and then asks for
  * the page. After that it ends.
  *
  * Built as a native PS5 title (starter/build_title.sh): the console's app loader wants a real process-parameter block and a
@@ -20,16 +20,22 @@
 
 #define PORT_UI     8086
 #define PORT_LOADER 9021
-#define PAYLOAD     "/app0/payload.elf"
 
 /* libkernel / libSceSystemService (stubs in target/lib of the SDK) */
-int open(const char *path, int flags, ...);
-ssize_t read(int fd, void *buf, size_t n);
 int close(int fd);
 int sceKernelUsleep(unsigned int microseconds);
 int sceKernelDebugOutText(int channel, const char *text);
 int sceKernelSendNotificationRequest(int device, void *request, size_t size, int blocking);
 int sceSystemServiceLoadExec(const char *path, const char *const *argv);
+
+__asm__(".section .rodata\n"
+        ".global payload_elf\n"
+        "payload_elf:\n"
+        ".incbin \"payload.elf\"\n"
+        ".global payload_elf_end\n"
+        "payload_elf_end:\n"
+        ".previous\n");
+extern const unsigned char payload_elf[], payload_elf_end[];
 
 /* from the linker script (title.ld); the loader of the console does not clear BSS */
 extern char __bss_start[], __bss_end[];
@@ -38,8 +44,6 @@ static struct {
     char reserved[45];
     char message[3075];
 } notify_request;
-
-static unsigned char chunk[65536];
 
 static size_t length(const char *s) {
     size_t n = 0;
@@ -98,28 +102,15 @@ static int open_ui(void) {
     return 1;
 }
 
-/* payload.elf from /app0 to the loader; 0 = sent */
+/* the embedded ELF to the loader; 0 = sent */
 static int send_payload(void) {
-    int f = open(PAYLOAD, 0 /* O_RDONLY */);
-    if (f < 0) {
-        report("PS5 Cooling Center: payload.elf fehlt im Ordner der Kachel");
-        return -1;
-    }
     int s = connect_local(PORT_LOADER);
     if (s < 0) {
-        close(f);
         report("PS5 Cooling Center: ELF-Loader (Port 9021) nicht erreichbar - ist der Jailbreak geladen?");
         return -1;
     }
-    int rc = 0;
-    for (;;) {
-        ssize_t n = read(f, chunk, sizeof(chunk));
-        if (n < 0) { rc = -1; break; }
-        if (n == 0) break;
-        if (send_all(s, chunk, (size_t)n) != 0) { rc = -1; break; }
-    }
+    int rc = send_all(s, payload_elf, (size_t)(payload_elf_end - payload_elf));
     close(s);
-    close(f);
     if (rc != 0) report("PS5 Cooling Center: Senden an den ELF-Loader fehlgeschlagen");
     return rc;
 }
