@@ -9214,6 +9214,22 @@
     pkPanelUpdate();
   });
 
+  /* ── Größe der Oberfläche (13.10.2026) ──────────────────────────────
+   * Der Schieber unter dem FAQ-Knopf skaliert die ganze Seite (CSS zoom, das der Browser der PS5 kennt) und wird im Browser
+   * gemerkt. Ein Doppelklick auf den Schieber stellt 100 % wieder her. */
+  const UI_ZOOM_KEY = "ps5uizoom";
+  const uiZoomApply = (pct, save) => {
+    const v = Math.min(150, Math.max(70, Math.round(Number(pct) / 5) * 5 || 100));
+    document.documentElement.style.zoom = v === 100 ? "" : String(v / 100);
+    const r = $("#ui-zoom");
+    if (r) r.value = String(v);
+    txt("#ui-zoom-out", `${v} %`);
+    if (save) { try { localStorage.setItem(UI_ZOOM_KEY, String(v)); } catch { /* ohne Speicher: kein Merken */ } }
+  };
+  try { uiZoomApply(localStorage.getItem(UI_ZOOM_KEY) || 100, false); } catch { /* ohne Speicher: 100 % */ }
+  $("#ui-zoom").addEventListener("input", (e) => uiZoomApply(e.target.value, true));
+  $("#ui-zoom").addEventListener("dblclick", () => uiZoomApply(100, true));
+
   /* ── Bedienung ──────────────────────────────────────────────────── */
 
   /* Die Seite, auf der man beim Schließen war (13.10.2026), öffnet sich beim nächsten Mal wieder. */
