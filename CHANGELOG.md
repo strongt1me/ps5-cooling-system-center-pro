@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.65.0
+
+### Starter-Kachel
+- Neuer Dump-Ordner **`PPSA86921`** für `/data/homebrew` (Datei `PPSA86921.zip`, entpackt in den Homebrew-Ordner kopieren): ShadowMountPlus meldet ihn an, auf dem Startbildschirm erscheint eine Kachel
+- Ein Tipp auf die Kachel startet die App (die ELF steckt in der `eboot.bin`, es muss nichts mehr gesendet werden) und öffnet danach die Web UI im Browser der Konsole; läuft die App schon, öffnet sie nur die Web UI
+- Gebaut als nativer PS5-Titel nach dem Vorbild von ps5-native-app-boilerplate; die ELF darin ist die von v1.65.0 (bei jeder neuen Version den Ordner neu laden)
+- Neue Schnittstelle `POST /api/v1/open-ui` (nur von der Konsole selbst), öffnet den Browser auf der Web UI
+
+### Oberfläche
+- Seitenleiste: Kühlung oben, Profil unter System
+- Alle Kacheln sind leicht durchscheinend
+- Beim Konvertieren steht das Format des Ergebnisses
+
+---
+
 ## v1.64.0
 
 ### Oberfläche

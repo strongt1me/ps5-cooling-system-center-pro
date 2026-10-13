@@ -35,6 +35,10 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   `libSceNpEntitlementAccess.sprx`, Fassung 0.3, „nolog“, siehe `third_party/dlc_emu/ORIGIN.md`) sind gepackt in die App
   eingebettet; sie kommen nur in ein Spiel, dessen Ordner eine `dlc_emu.ini` enthält (`src/plugins.c`). Quelltext der Programme:
   <https://github.com/drakmor/dlc_emu>.
+- **ps5-native-app-boilerplate** (BlackBearReloaded, GPL-3.0-or-later): Für die Starter-Kachel (`starter/`) sind das Linker-Skript
+  (`starter/title/title.ld`), die Symboltabelle (`starter/title/symbols.map`) und `starter/sce_module/libc.prx` (Kompatibilitäts-Stubs
+  und Startcode, kein Sony-Code, siehe `starter/sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
+  Signatur) folgt dem Projekt. <https://github.com/BlackBearReloaded/ps5-native-app-boilerplate>
 - **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0 mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
   lose lässt, für den Mitschnitt zur Profil-Erzeugung (`src/trace.c`, ein C-Nachbau von `ampr_pack_profile.py`, Gegenprobe mit
   dem Python-Werkzeug) und für die Prüfsummen-Tabelle der Spiel-Plugins; kein Quelltext von V-10 ist übernommen.
