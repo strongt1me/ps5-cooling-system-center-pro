@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.64.0
+
+### Oberfläche
+- Die ganze Web UI ist jetzt auf 85 % skaliert, es passt mehr auf den Bildschirm
+- Der Schieber „Größe“ aus 1.63.0 ist wieder entfernt; der Platz unter dem FAQ-Knopf bleibt frei
+
+---
+
 ## v1.63.0
 
 ### Oberfläche
