@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.63.0
+
+### Oberfläche
+- Neuer Schieber „Größe“ unter dem FAQ-Knopf: skaliert die ganze Web UI von 70 bis 150 %; die Einstellung wird im Browser gemerkt, ein Doppelklick stellt 100 % wieder her
+- Der Text „Fortgeschrittene Kühlung & Wärmeüberwachung …“ unter dem FAQ-Knopf ist entfernt
+- Alle Kacheln sind leicht durchscheinend (86 %), das Platinenmuster des Hintergrunds schimmert durch
+
+---
+
 ## v1.62.0
 
 ### LZ4-Asset-Packs
