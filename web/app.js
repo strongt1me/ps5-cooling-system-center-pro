@@ -9252,6 +9252,23 @@
     syncLogTail();
   }));
 
+  /* L1 und R1 des Controllers schalten zwischen den Seiten um (14.10.2026): L1 zurück, R1 weiter. Der Browser der Konsole meldet
+   * sie als Tastendrücke F5 (L1) und F6 (R1), L2 und R2 als F7 und F8, nicht über die Gamepad-Schnittstelle (gemessen an der Konsole). */
+  const stepPage = (d) => {
+    const tabs = $$(".tab[data-page]");
+    const i = tabs.findIndex((x) => x.classList.contains("active"));
+    if (tabs.length && i >= 0) tabs[(i + d + tabs.length) % tabs.length].click();
+  };
+  /* L2 (F7) rollt die Seite nach oben, R2 (F8) nach unten, je knapp eine Bildschirmhöhe. */
+  const scrollPage = (d) => {
+    const top = d * Math.round(window.innerHeight * 0.8);
+    try { window.scrollBy({ top, behavior: "smooth" }); } catch { window.scrollBy(0, top); }
+  };
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "F5" || e.key === "F6") { e.preventDefault(); stepPage(e.key === "F5" ? -1 : 1); }
+    else if (e.key === "F7" || e.key === "F8") { e.preventDefault(); scrollPage(e.key === "F7" ? -1 : 1); }
+  });
+
   /* Nach dem Umschalten der Sprache lädt die Seite neu (i18n.js); sie öffnet dann wieder die Seite, auf der man war. */
   try {
     const back = sessionStorage.getItem("ps5restore");
