@@ -401,9 +401,12 @@ main(int argc, char **argv) {
     if(announced_port != port) {
       announced_port = port;
 
-      /* No notification at the start any more (14.10.2026): even the plain one (top left) played the console's
-         notification sound, and the start is seen anyway - the starter tile opens the web UI, the log says it. */
-      (void)have_ip;
+      /* The plain notification (top left), on ONE line (14.10.2026): with a line break in it the console played its
+         notification sound; on one line it is silent, as the payload loaders' messages are (checked on the console). */
+      if(have_ip)
+        ps5tm_notify_plain(PS5TM_APP_NAME " %s gestartet · http://%s:%u", PS5TM_VERSION, ip, port);
+      else
+        ps5tm_notify_plain(PS5TM_APP_NAME " %s gestartet · Port %u", PS5TM_VERSION, port);
       PS5TM_INFO("ready", "Web-UI erreichbar unter http://%s:%u", ip, port);
 
       /* Without kstuff the fan cannot be driven at all — worth saying on the
