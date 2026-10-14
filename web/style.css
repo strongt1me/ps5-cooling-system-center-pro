@@ -1059,6 +1059,22 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 /* ── Spielzeit (03.10.2026) ────────────────────────────────────────────
    Ohne inset, aspect-ratio und filter, wie die Spiele-Seite: Die Balkenhöhe
    kommt in Pixeln aus dem Skript, nicht aus Prozenten einer Flex-Fläche. */
+/* PS4Mount in der App (Reiter „PS4 von USB“) */
+.p4m-intro { margin: 0 0 14px; }
+.p4m-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+.p4m-row:first-child { border-top: 0; }
+.p4m-icon { width: 56px; height: 56px; border-radius: 10px; flex: none; background: var(--inset); object-fit: cover; }
+.p4m-main { flex: 1; min-width: 0; }
+.p4m-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p4m-meta { color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+.p4m-state { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hairline); font-size: 12px; white-space: nowrap; }
+.p4m-state.ok { border-color: rgba(12,163,12,.5); color: #7ee07e; }
+.p4m-state.warn { border-color: rgba(250,178,25,.5); color: #fab219; }
+.p4m-set { display: grid; gap: 12px; }
+.p4m-field { display: grid; gap: 4px; font-size: 13px; }
+.p4m-field input, .p4m-field textarea { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
+.p4m-log { margin: 0; max-height: 260px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: var(--inset);
+  font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
 .pt-note { margin: 0 0 14px; padding: 9px 12px; border: 1px solid rgba(250,178,25,.38);
   border-radius: var(--r-sm); background: rgba(250,178,25,.12); color: #ffd57b; font-size: 13px; }
 .pt-live { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 12px 14px;

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PS4Mount</title>
+<style>
+:root{--bg:#0e1116;--panel:#171b22;--line:#262c36;--fg:#e8eaed;--muted:#97a0ab;--accent:#3d7bfd;--ok:#2f9e57;--warn:#c98b1f;--bad:#c2453b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 20px;background:rgba(14,17,22,.95);border-bottom:1px solid var(--line)}
+h1{font-size:20px;margin:0}
+h1 small{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input[type=search]{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;min-width:200px}
+button{font:inherit;color:var(--fg);background:#262d38;border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+button:hover,button:focus{border-color:var(--accent);outline:none}
+button.primary{background:var(--accent);border-color:var(--accent)}
+button.danger{background:#3a1f1d;border-color:#5c2c28}
+button:disabled{opacity:.45;cursor:default}
+main{padding:20px;max-width:1400px;margin:0 auto}
+.summary{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;color:var(--muted)}
+.summary span{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.art{aspect-ratio:1/1;background:#0b0d11 center/cover no-repeat;position:relative}
+.badge{position:absolute;left:10px;top:10px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#000a}
+.b-ready{background:var(--ok)}.b-running{background:var(--accent)}.b-removed{background:#555}.b-internal{background:var(--warn)}.b-pending{background:var(--warn)}.b-duplicate{background:#555}
+.info{padding:12px 14px;display:flex;flex-direction:column;gap:4px;flex:1}
+.name{font-weight:600;font-size:16px}
+.meta{color:var(--muted);font-size:13px;word-break:break-all}
+.actions{display:flex;gap:8px;padding:0 14px 14px;flex-wrap:wrap}
+.empty{color:var(--muted);text-align:center;padding:60px 0}
+.warn{color:#f0c060;font-size:13px;background:#3a2e12;border:1px solid #5c4818;border-radius:8px;padding:6px 8px;margin-top:4px}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:12px;max-width:min(900px,95vw);width:900px}
+dialog::backdrop{background:#000a}
+pre{white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto;background:#0b0d11;padding:12px;border-radius:8px}
+form.settings{display:flex;flex-direction:column;gap:14px}
+form.settings label{display:flex;flex-direction:column;gap:6px}
+form.settings label.check{flex-direction:row;align-items:center;gap:10px}
+form.settings textarea,form.settings input[type=number]{background:#0b0d11;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}
+form.settings textarea{min-height:90px;resize:vertical;font-family:ui-monospace,Consolas,monospace}
+form.settings .hint{color:var(--muted);font-size:13px}
+form.settings .row{display:flex;gap:8px;justify-content:flex-end}
+#toast{position:fixed;right:20px;bottom:20px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 16px;display:none;max-width:420px}
+</style>
+</head>
+<body>
+<header>
+  <h1>PS4Mount <small id="ver"></small></h1>
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search game or CUSA">
+    <button id="rescan" class="primary">Scan for games</button>
+    <button id="settingsbtn">Settings</button>
+    <button id="logbtn">Log</button>
+    <button id="stop" class="danger">Stop</button>
+  </div>
+</header>
+<main>
+  <div class="summary" id="summary"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden>No PS4 games found. Put the .pkg files (game and update) in the root of a USB drive.</div>
+</main>
+<dialog id="setdlg"><h3>Settings</h3>
+<form class="settings" id="setform">
+  <label>Folders to search for pkgs (one per line, relative to each drive)
+    <textarea id="s-paths" spellcheck="false"></textarea>
+    <span class="hint">/ is the root of the drive. Games are moved into the ps4 folder, so it cannot be used here.</span>
+  </label>
+  <label class="check"><input type="checkbox" id="s-batch"> Add new games in groups</label>
+  <label>Games per group
+    <input type="number" id="s-size" min="1" max="50">
+    <span class="hint">Smaller groups are gentler on the system when many games are added at once.</span>
+  </label>
+  <label class="check"><input type="checkbox" id="s-dlc"> Install add-ons (DLC)</label>
+  <div class="row"><button type="button" id="s-cancel">Cancel</button><button class="primary" type="submit">Save</button></div>
+</form></dialog>
+<dialog id="logdlg"><h3>Log</h3><pre id="log"></pre><form method="dialog"><button>Close</button></form></dialog>
+<div id="toast"></div>
+<script>
+var games = [], busy = {};
+var labels = {ready: 'Ready', running: 'Running', removed: 'Not in library', internal: 'Installed on console', pending: 'Adding', duplicate: 'On another drive'};
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+function gb(n) { return (n / 1073741824).toFixed(n >= 10737418240 ? 0 : 1) + ' GB'; }
+function toast(msg) { var t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = 'none'; }, 4000); }
+
+function api(path, method) {
+  return fetch(path, {method: method || 'GET', cache: 'no-store'}).then(function (r) {
+    return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; });
+  });
+}
+
+function render() {
+  var q = $('q').value.toLowerCase(), html = '', shown = 0, counts = {};
+  games.forEach(function (g) {
+    counts[g.state] = (counts[g.state] || 0) + 1;
+    if (q && (g.name + ' ' + g.title_id).toLowerCase().indexOf(q) < 0) return;
+    shown++;
+    var act = '';
+    if (g.state === 'removed') act = '<button class="primary" data-a="mount" data-t="' + g.title_id + '">Add to library</button>';
+    else if (g.state === 'ready') act = '<button class="danger" data-a="unmount" data-t="' + g.title_id + '">Remove from library</button>';
+    else if (g.state === 'running') act = '<button disabled>Close the game to remove it</button>';
+    if (busy[g.title_id]) act = '<button disabled>Please wait…</button>';
+    html += '<div class="card"><div class="art" style="background-image:url(/icon/' + g.title_id + ')">' +
+      '<span class="badge b-' + g.state + '">' + esc(labels[g.state] || g.state) + '</span></div>' +
+      '<div class="info"><div class="name">' + esc(g.name) + '</div>' +
+      '<div class="meta">' + g.title_id + ' · v' + esc(g.version) + (g.has_patch ? ' (with update)' : '') +
+        (g.dlc ? ' · ' + g.dlc + ' add-on' + (g.dlc > 1 ? 's' : '') : '') + ' · ' + gb(g.size) + '</div>' +
+      '<div class="meta">' + esc(g.source) + (g.mount ? ' · mounted ' + g.mount : '') + '</div>' +
+      (g.update_issue ? '<div class="warn">' + esc(g.update_issue) + '</div>' : '') + '</div>' +
+      '<div class="actions">' + act + '</div></div>';
+  });
+  $('grid').innerHTML = html;
+  $('empty').hidden = games.length > 0;
+  var s = '<span>' + games.length + ' game(s)</span>';
+  for (var k in counts) s += '<span>' + esc(labels[k] || k) + ': ' + counts[k] + '</span>';
+  $('summary').innerHTML = s;
+}
+
+function load() {
+  api('/api/games').then(function (j) { games = j.games; $('ver').textContent = j.version; render(); })
+    .catch(function (e) { toast('Could not read the list: ' + e.message); });
+}
+
+$('grid').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-a]');
+  if (!b) return;
+  var tid = b.getAttribute('data-t'), a = b.getAttribute('data-a');
+  if (a === 'unmount' && !confirm('Remove ' + tid + ' from the library? The pkg stays on the USB drive.')) return;
+  busy[tid] = 1; render();
+  api('/api/' + a + '?title_id=' + tid, 'POST').then(function (j) { toast(j.message); })
+    .catch(function (err) { toast('Error: ' + err.message); })
+    .then(function () { delete busy[tid]; load(); });
+});
+$('q').addEventListener('input', render);
+$('rescan').onclick = function () { api('/api/rescan', 'POST').then(function (j) { toast(j.message); setTimeout(load, 3000); }); };
+$('logbtn').onclick = function () { api('/api/log').then(function (j) { $('log').textContent = j.log; $('logdlg').showModal(); }); };
+$('settingsbtn').onclick = function () {
+  api('/api/config').then(function (c) {
+    $('s-paths').value = c.paths.join('\n');
+    $('s-batch').checked = c.batch;
+    $('s-size').value = c.batch_size;
+    $('s-dlc').checked = c.dlc;
+    $('s-size').disabled = !c.batch;
+    $('setdlg').showModal();
+  }).catch(function (e) { toast('Could not read the settings: ' + e.message); });
+};
+$('s-batch').onchange = function () { $('s-size').disabled = !this.checked; };
+$('s-cancel').onclick = function () { $('setdlg').close(); };
+$('setform').onsubmit = function (e) {
+  e.preventDefault();
+  var body = 'batch=' + ($('s-batch').checked ? 1 : 0) + '&batch_size=' + encodeURIComponent($('s-size').value) +
+    '&dlc=' + ($('s-dlc').checked ? 1 : 0) + '&paths=' + encodeURIComponent($('s-paths').value);
+  fetch('/api/config', {method: 'POST', cache: 'no-store', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: body})
+    .then(function (r) { return r.json(); })
+    .then(function (j) { toast(j.message || j.error); if (j.ok) $('setdlg').close(); })
+    .catch(function (err) { toast('Error: ' + err.message); });
+};
+$('stop').onclick = function () {
+  if (!confirm('Stop PS4Mount? The games stay unavailable until it is loaded again.')) return;
+  api('/api/stop', 'POST').then(function (j) { toast(j.message); });
+};
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

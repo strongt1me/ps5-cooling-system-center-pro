@@ -218,6 +218,7 @@
               <button type="button" class="gm-chip" id="gm-tab-time" role="tab" aria-selected="false">Spielzeit</button>
               <button type="button" class="gm-chip" id="gm-tab-saves" role="tab" aria-selected="false">Spielstände</button>
               <button type="button" class="gm-chip" id="gm-tab-pkg" role="tab" aria-selected="false">Pakete</button>
+              <button type="button" class="gm-chip" id="gm-tab-p4m" role="tab" aria-selected="false">PS4 von USB</button>
               <button type="button" class="gm-chip" id="gm-tab-bk" role="tab" aria-selected="false">Sicherungen</button>
               <button type="button" class="gm-chip" id="gm-tab-hist" role="tab" aria-selected="false">Verlauf</button>
             </div>
@@ -421,6 +422,51 @@
                 <div class="row-gap"><button type="button" class="btn ghost" id="bk-reload">Neu einlesen</button></div>
               </div>
               <div id="bk-list"></div>
+            </article>
+          </div>
+
+          <!-- PS4Mount in der App (ps4m_core.c, GPL-3.0, gasb07): PS4-Fake-PKGs vom USB-Laufwerk ohne Installation -->
+          <div id="gm-pane-p4m" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div><h2>PS4-Spiele von USB</h2><p class="sub" id="p4m-sub">wird gelesen …</p></div>
+                <div class="row-gap">
+                  <label class="xswitch" for="p4m-on" title="Schaltet die Suche nach PS4-Spielen auf den USB-Laufwerken ein oder aus.">
+                    <span>Einschalten</span>
+                    <span class="switch"><input type="checkbox" id="p4m-on"><i></i></span>
+                  </label>
+                  <button class="btn ghost" id="p4m-scan" type="button">Jetzt suchen</button>
+                  <button class="btn ghost" id="p4m-reload" type="button">Aktualisieren</button>
+                </div>
+              </div>
+              <p class="muted p4m-intro">Spielt PS4-Spiele (Fake-PKG) direkt vom USB-Laufwerk, ohne sie zu installieren: Das Spiel kommt
+                mit Symbol auf den Startbildschirm, die PKG-Dateien bleiben auf dem Laufwerk. Legen Sie Spiel, Update und Zusatzinhalte
+                (.pkg) in die oberste Ebene eines exFAT-Laufwerks; beim ersten Suchen sortiert die App sie in den Ordner
+                <code>ps4/CUSAxxxxx</code>. Löschen auf der Konsole entfernt das Spiel nur aus der Bibliothek, die PKG bleibt. Nach
+                einem Neustart der Konsole muss die App laufen, damit die Spiele sichtbar bleiben.</p>
+              <div class="pt-note" id="p4m-note" hidden></div>
+              <div id="p4m-list"></div>
+            </article>
+            <article class="card">
+              <div class="card-head"><div><h2>Einstellungen</h2><p class="sub">gelten für die Suche nach PS4-Spielen</p></div></div>
+              <div class="p4m-set">
+                <label class="xswitch" for="p4m-dlc"><span>Zusatzinhalte (DLC) einbinden</span>
+                  <span class="switch"><input type="checkbox" id="p4m-dlc"><i></i></span></label>
+                <label class="xswitch" for="p4m-batch"><span>Neue Spiele in Gruppen hinzufügen</span>
+                  <span class="switch"><input type="checkbox" id="p4m-batch"><i></i></span></label>
+                <label class="p4m-field"><span>Spiele pro Gruppe</span>
+                  <input type="number" id="p4m-size" min="1" max="50" step="1"></label>
+                <label class="p4m-field"><span>Ordner mit PKG-Dateien (einer pro Zeile, „/“ = oberste Ebene des Laufwerks)</span>
+                  <textarea id="p4m-paths" rows="3" spellcheck="false"></textarea></label>
+                <div class="cp-actions"><button type="button" class="btn primary" id="p4m-save">Einstellungen speichern</button></div>
+              </div>
+            </article>
+            <article class="card">
+              <div class="card-head">
+                <div><h2>Protokoll von PS4Mount</h2><p class="sub">die letzten Zeilen</p></div>
+                <div class="row-gap"><button class="btn ghost" id="p4m-log-reload" type="button">Neu laden</button></div>
+              </div>
+              <pre class="p4m-log" id="p4m-log"></pre>
             </article>
           </div>
 
@@ -1718,6 +1764,16 @@
                   <a href="https://github.com/drakmor/fan_target" target="_blank" rel="noopener noreferrer">fan_target</a>
                   <a href="https://github.com/drakmor/nanoDNS" target="_blank" rel="noopener noreferrer">nanoDNS</a>
                   <a href="https://github.com/drakmor?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <span class="cr-pic cr-initials" aria-hidden="true">gb</span>
+              <div class="cr-text">
+                <b>gasb07</b> <a class="cr-login" href="https://github.com/gasb07" target="_blank" rel="noopener noreferrer">@gasb07</a>
+                <p>PS4Mount: Vorlage und Code für den Reiter „PS4 von USB“, PS4-Spiele (Fake-PKG) vom USB-Laufwerk ohne Installation. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/gasb07/ps4mount" target="_blank" rel="noopener noreferrer">ps4mount</a>
                 </div>
               </div>
             </article>

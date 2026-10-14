@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "ps4m.h"
 #include "ps5tm.h"
 
 void ps5tm_api_tile_refresh(void);
@@ -401,10 +402,10 @@ main(int argc, char **argv) {
       announced_port = port;
 
       if(have_ip) {
-        ps5tm_notify(PS5TM_APP_NAME " %s gestartet\n"
+        ps5tm_notify_plain(PS5TM_APP_NAME " %s gestartet\n"
                      "Web-UI: http://%s:%u", PS5TM_VERSION, ip, port);
       } else {
-        ps5tm_notify(PS5TM_APP_NAME " %s gestartet\n"
+        ps5tm_notify_plain(PS5TM_APP_NAME " %s gestartet\n"
                      "Web-UI auf Port %u (keine Netzwerkadresse gefunden)",
                      PS5TM_VERSION, port);
       }
@@ -437,6 +438,7 @@ main(int argc, char **argv) {
     ps5tm_playtime_start();
     ps5tm_library_probe_start();
     ps5tm_payprof_start();
+    ps4m_boot();                       /* PS4Mount, when it was switched on in the page */
 
     ps5tm_http_run(srv, port);
   }

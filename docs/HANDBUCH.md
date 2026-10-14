@@ -374,6 +374,18 @@ Spielstände, AMPR-Index – mit Ergebnis, Größe, Dauer und Zeit, nach Ergebni
 filterbar. Die letzten 500 liegen auf der Konsole in
 `/data/PS5-Cooling-Center/history.jsonl`; **Verlauf leeren** löscht sie.
 
+### PS4-Spiele von USB (PS4Mount)
+
+Der Reiter **PS4 von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) direkt vom USB-Laufwerk, ohne sie zu installieren. Er beruht auf PS4Mount von gasb07 (GPL-3.0), dessen Quelltext in die App übernommen ist.
+
+1. **Vorbereiten.** Auf einem exFAT-Laufwerk liegen Spiel, Update und Zusatzinhalte als `.pkg` in der obersten Ebene (oder in Ordnern, die in den Einstellungen stehen). Die Dateinamen sind egal.
+2. **Einschalten.** Der Schalter „Einschalten“ startet die Suche; er bleibt über einen Neustart der App hinweg an. „Jetzt suchen“ löst eine Suche sofort aus.
+3. **Warten.** Beim ersten Mal sortiert die App die Pakete in `ps4/CUSAxxxxx/` (`app.pkg`, `patch.pkg`, `addcont/…`) und meldet jedes Spiel, sobald es spielbereit ist. Das Spiel erscheint mit Symbol auf dem Startbildschirm.
+- Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Aus Bibliothek entfernen“, verschwindet es nur aus der Bibliothek, die PKG bleibt.
+- Updates (`patch.pkg`) und Zusatzinhalte (DLC) werden mit eingebunden; Zusatzinhalte nur, wenn der Schalter in den Einstellungen an ist.
+- Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Ist PS4Mount als eigenes Payload (`ps4mount.elf`) schon geladen, bleibt der Schalter wirkungslos, bis es beendet ist (beide teilen sich den Port 9032).
+- Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. Dieser Einbau ist an der Konsole noch nicht erprobt (12.00); er ist ausgeschaltet, bis man ihn einschaltet.
+
 ## LZ4-Asset-Packs: Schritt für Schritt (seit 12.10.2026)
 
 Ein **Asset-Pack** besteht aus wenigen Dateien (`ampr_assets-000.pak` und weitere, dazu `ampr_assets.index`). Die App packt die

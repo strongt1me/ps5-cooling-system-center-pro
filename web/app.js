@@ -6404,9 +6404,10 @@
     $("#gm-pane-time").hidden  = which !== "time";
     $("#gm-pane-saves").hidden = which !== "saves";
     $("#gm-pane-pkg").hidden   = which !== "pkg";
+    $("#gm-pane-p4m").hidden   = which !== "p4m";
     $("#gm-pane-bk").hidden    = which !== "bk";
     $("#gm-pane-hist").hidden  = which !== "hist";
-    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
+    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["p4m", "#gm-tab-p4m"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
       const b = $(sel);
       b.classList.toggle("active", which === k);
       b.setAttribute("aria-selected", which === k ? "true" : "false");
@@ -6414,11 +6415,13 @@
     if (which === "time") loadPlaytime();
     if (which === "saves") loadSaves();
     if (which === "pkg") loadPackages();
+    if (which === "p4m") { loadP4m(); loadP4mLog(); }
     if (which === "bk") loadBackups();
     if (which === "hist") loadHistory2();
     syncPlaytime();
     svSync();
     pkSync();
+    if (typeof p4mSync === "function") p4mSync();
   };
   $("#gm-tab-lib").addEventListener("click", () => ptSelectTab("lib"));
   $("#gm-tab-time").addEventListener("click", () => ptSelectTab("time"));
@@ -6426,6 +6429,93 @@
   $("#gm-tab-pkg").addEventListener("click", () => ptSelectTab("pkg"));
   $("#gm-tab-bk").addEventListener("click", () => ptSelectTab("bk"));
   $("#gm-tab-hist").addEventListener("click", () => ptSelectTab("hist"));
+
+
+  /* ── PS4 von USB (ps4m_core.c, 14.10.2026) ──────────────────────────
+   * PS4Mount von gasb07 (GPL-3.0) in der App: PS4-Fake-PKGs vom USB-Laufwerk ohne Installation. Die Seite zeigt die Liste, schaltet
+   * den Dienst ein und aus, löst eine Suche aus, nimmt Spiele aus der Bibliothek und wieder hinein und speichert die Einstellungen. */
+  const p4m = { data: null, timer: 0, busy: false };
+  const P4M_STATE = {
+    ready: ["ok", "Bereit"], running: ["ok", "Läuft"], pending: ["warn", "Wird hinzugefügt"],
+    removed: ["", "Aus der Bibliothek entfernt"], internal: ["", "Auf der Konsole installiert"],
+    duplicate: ["", "Liegt auch auf einem anderen Laufwerk"]
+  };
+
+  const p4mPost = async (body) => {
+    try {
+      const r = await api("/api/v1/ps4mount", { method: "POST", body: JSON.stringify(body) });
+      if (r.message) toast(r.message);
+    } catch (e) { toast(e.message, "error"); }
+    await loadP4m();
+  };
+
+  const p4mRender = () => {
+    const d = p4m.data;
+    if (!d) return;
+    const games = d.games || [];
+    txt("#p4m-sub", d.enabled
+      ? (d.running ? `eingeschaltet · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken` : "eingeschaltet, startet gleich")
+      : "ausgeschaltet");
+    $("#p4m-on").checked = !!d.enabled;
+    $("#p4m-scan").disabled = !d.running;
+    const note = $("#p4m-note");
+    note.hidden = d.enabled;
+    if (!d.enabled) note.textContent = "PS4Mount ist ausgeschaltet. Einschalten, damit die Spiele auf den Laufwerken gesucht und eingebunden werden.";
+    $("#p4m-list").innerHTML = games.length ? games.map((g) => {
+      const st = P4M_STATE[g.state] || ["", g.state];
+      const meta = [g.title_id, `Version ${g.version}`, bytes(g.size)];
+      if (g.has_patch) meta.push("mit Update");
+      if (g.dlc) meta.push(`${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}`);
+      const btn = g.state === "removed"
+        ? `<button type="button" class="btn ghost" data-p4m="add" data-id="${esc(g.title_id)}">Hinzufügen</button>`
+        : (g.state === "ready" || g.state === "pending")
+          ? `<button type="button" class="btn ghost" data-p4m="remove" data-id="${esc(g.title_id)}">Aus Bibliothek entfernen</button>` : "";
+      return `<div class="p4m-row">
+        <img class="p4m-icon" src="/api/v1/ps4mount/icon?id=${esc(g.title_id)}" alt="" loading="lazy">
+        <div class="p4m-main"><div class="p4m-name">${esc(g.name)}</div>
+          <div class="p4m-meta">${esc(meta.join(" · "))}</div>
+          ${g.update_issue ? `<div class="p4m-meta">${esc(g.update_issue)}</div>` : ""}</div>
+        <span class="p4m-state ${st[0]}">${esc(st[1])}</span>${btn}</div>`;
+    }).join("") : `<p class="muted">Keine PS4-Spiele auf den angeschlossenen Laufwerken gefunden.</p>`;
+    $$("#p4m-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
+    if (!p4m.cfgShown && d.config) {
+      p4m.cfgShown = true;
+      $("#p4m-dlc").checked = !!d.config.dlc;
+      $("#p4m-batch").checked = !!d.config.batch;
+      $("#p4m-size").value = d.config.batch_size;
+      $("#p4m-paths").value = (d.config.paths || ["/"]).join("\n");
+    }
+  };
+
+  const loadP4m = async () => {
+    try { p4m.data = await api("/api/v1/ps4mount"); p4mRender(); }
+    catch (e) { txt("#p4m-sub", e.message); }
+  };
+
+  const loadP4mLog = async () => {
+    try { const r = await api("/api/v1/ps4mount/log"); const el = $("#p4m-log"); el.textContent = r.log || ""; el.scrollTop = el.scrollHeight; }
+    catch (e) { $("#p4m-log").textContent = e.message; }
+  };
+
+  const p4mSync = () => {
+    const run = state.page === "games" && pt.tab === "p4m" && !document.hidden;
+    if (run && !p4m.timer) p4m.timer = setInterval(loadP4m, 5000);
+    else if (!run && p4m.timer) { clearInterval(p4m.timer); p4m.timer = 0; }
+  };
+
+  $("#gm-tab-p4m").addEventListener("click", () => ptSelectTab("p4m"));
+  $("#p4m-reload").addEventListener("click", () => { loadP4m(); loadP4mLog(); });
+  $("#p4m-log-reload").addEventListener("click", loadP4mLog);
+  $("#p4m-on").addEventListener("change", (e) => p4mPost({ action: e.target.checked ? "enable" : "disable" }));
+  $("#p4m-scan").addEventListener("click", () => p4mPost({ action: "scan" }));
+  $("#p4m-list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-p4m]");
+    if (b) p4mPost({ action: b.dataset.p4m, id: b.dataset.id });
+  });
+  $("#p4m-save").addEventListener("click", () => p4mPost({
+    action: "config", dlc: $("#p4m-dlc").checked, batch: $("#p4m-batch").checked,
+    batch_size: Number($("#p4m-size").value) || 5, paths: $("#p4m-paths").value
+  }));
 
   /* ── Verlauf (jobhist.c, 11.10.2026) ────────────────────────────────
      Alle Vorgänge der App mit Ergebnis, aus /api/v1/jobs/history, das neueste zuerst. */
@@ -9245,10 +9335,12 @@
       if (pt.tab === "time") loadPlaytime();
       if (pt.tab === "saves") loadSaves();
       if (pt.tab === "pkg") loadPackages();
+      if (pt.tab === "p4m") { loadP4m(); loadP4mLog(); }
     }
     syncPlaytime();
     svSync();
     pkSync();
+    p4mSync();
     syncLogTail();
   }));
 

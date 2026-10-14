@@ -255,7 +255,7 @@ ps5tm_notify_plain(const char *fmt, ...) {
   vsnprintf(req.message, sizeof(req.message), fmt, ap);
   va_end(ap);
 #ifdef PS5TM_HOST_TEST
-  printf("[NOTIFY-PLAIN] %s"\n", req.message);
+  printf("[NOTIFY-PLAIN] %s\n", req.message);
   fflush(stdout);
 #else
   sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);

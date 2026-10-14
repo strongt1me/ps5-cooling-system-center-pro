@@ -39,6 +39,12 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   (`starter/title/title.ld`), die Symboltabelle (`starter/title/symbols.map`) und `starter/sce_module/libc.prx` (Kompatibilitäts-Stubs
   und Startcode, kein Sony-Code, siehe `starter/sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt. <https://github.com/BlackBearReloaded/ps5-native-app-boilerplate>
+- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.4.4): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
+  Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
+  (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
+  (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
+  Vorlagen unter `third_party/ps4mount/`. Der Schlüssel in `src/ps4m_keys.h` stammt aus LibOrbisPkg (maxton, LGPL-3.0). Quelltext der
+  Vorlage: <https://github.com/gasb07/ps4mount>.
 - **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0 mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
   lose lässt, für den Mitschnitt zur Profil-Erzeugung (`src/trace.c`, ein C-Nachbau von `ampr_pack_profile.py`, Gegenprobe mit
   dem Python-Werkzeug) und für die Prüfsummen-Tabelle der Spiel-Plugins; kein Quelltext von V-10 ist übernommen.

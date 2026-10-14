@@ -197,7 +197,20 @@ lo encuentra allí) o como copia de seguridad en <code>PS5-Sicherung/Spiele</cod
 no se sobrescribe nada.</p>
 
 <div class='warn'>Vuelve a crear las imágenes <code>.ffpkg</code> de versiones anteriores a la 1.48.0 (estructura antigua).</div>
-</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Índice AMPR, APR-EMU, PlayGo e historial</h2></div>
+<h3>Juegos de PS4 desde USB (PS4Mount)</h3>
+<p>La pestaña <b>PS4 desde USB</b> de la página de juegos reproduce juegos de PS4 (PKG falsos) directamente desde la unidad USB sin instalarlos. Se basa en PS4Mount de gasb07 (GPL-3.0), cuyo código fuente se ha incorporado a la app.</p>
+<ol>
+<li><b>Preparar.</b> En una unidad exFAT, ponga el juego, su actualización y los contenidos adicionales como <code>.pkg</code> en el nivel superior (o en carpetas indicadas en los ajustes). Los nombres de archivo no importan.</li>
+<li><b>Activar.</b> El interruptor «Activar» inicia la búsqueda; se mantiene al reiniciar la app. «Buscar ahora» lanza una búsqueda enseguida.</li>
+<li><b>Esperar.</b> La primera vez, la app ordena los paquetes en <code>ps4/CUSAxxxxx/</code> (<code>app.pkg</code>, <code>patch.pkg</code>, <code>addcont/…</code>) y avisa de cada juego en cuanto está listo. El juego aparece en la pantalla de inicio con su icono.</li>
+</ol>
+<ul>
+<li>Los archivos PKG se quedan en la unidad; a la consola solo van pequeños archivos de gestión. Borrar un juego en la consola o con «Quitar de la biblioteca» solo lo quita de la biblioteca, el PKG se queda.</li>
+<li>Se incluyen las actualizaciones (<code>patch.pkg</code>) y los contenidos adicionales (DLC); los adicionales solo con el interruptor de los ajustes activado.</li>
+<li>La app debe estar en marcha para que los juegos sigan visibles tras reiniciar la consola. Si PS4Mount ya está cargado como payload propio (<code>ps4mount.elf</code>), el interruptor no surte efecto hasta que se detenga (ambos usan el puerto 9032).</li>
+<li>Firmware (desde PS4Mount 0.4.4): a partir de 6.00 la consola registra los juegos de la forma habitual (probado en 13.20, comunicado en 6.50); por debajo de 6.00 uno a uno, y si falta esa función no se añaden juegos, para proteger la base de datos. El aviso al activar indica el método. Esta versión dentro de la app aún no se ha probado en una consola (12.00); está desactivada hasta que la active.</li>
+</ul>
+<!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Índice AMPR, APR-EMU, PlayGo e historial</h2></div>
 <p>Cada tarjeta de juego tiene el botón <b>Asset packs LZ4 …</b> bajo <b>Convertir</b>. Abre una ventana con herramientas de APR-EMU. Por ahora contiene el <b>índice AMPR</b>.</p>
 <ul>
 <li>El <b>índice AMPR</b> (<code>ampr_emu.index</code>) es la lista de todos los archivos del juego que APR-EMU necesita para encontrarlos. La ventana muestra si existe y cuántos archivos conoce.</li>

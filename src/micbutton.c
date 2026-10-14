@@ -159,5 +159,5 @@ ps5tm_micbutton_poll(void) {
   PS5TM_INFO("mic_button_shown",
              "Mikrofon-Taste zweimal gedrückt: Prozessor %s, Lüfter %s als "
              "Meldung gezeigt.", cpu, fan);
-  ps5tm_notify("Prozessor %s · Lüfter %s", cpu, fan);
+  ps5tm_notify_plain("Prozessor %s · Lüfter %s", cpu, fan);
 }

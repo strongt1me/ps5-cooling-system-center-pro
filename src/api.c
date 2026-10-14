@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "third_party/libdeflate/libdeflate.h"
+#include "ps4m.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 
@@ -4199,6 +4200,74 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", 1);
     cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  /* PS4Mount inside the app (ps4m_core.c): GET the list and state, POST {action: enable|disable|scan|add|remove|config, ...}. */
+  if(!strcmp(req->path, "/api/v1/ps4mount")) {
+    if(is_get) {
+      char *s = ps4m_state_json();
+      if(!s) { ps5tm_http_send_error(fd, 500, "no_memory", "Zu wenig Speicher."); return; }
+      ps5tm_http_send_json(fd, 200, s);
+      free(s);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *ja = b ? cJSON_GetObjectItem(b, "action") : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    char action[16] = "", id[16] = "", msg[300] = "";
+    if(cJSON_IsString(ja)) snprintf(action, sizeof(action), "%s", ja->valuestring);
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    int rc = -1, http = 200;
+    if(!strcmp(action, "enable") || !strcmp(action, "disable")) {
+      rc = ps4m_set_enabled(action[0] == 'e', msg, sizeof(msg));
+    } else if(!strcmp(action, "config")) {
+      /* The settings as the form string of the original panel: batch, batch_size, dlc, paths (one folder per line). */
+      const cJSON *jb = cJSON_GetObjectItem(b, "batch"), *js = cJSON_GetObjectItem(b, "batch_size");
+      const cJSON *jd = cJSON_GetObjectItem(b, "dlc"), *jp = cJSON_GetObjectItem(b, "paths");
+      char form[1600], enc[1300];
+      size_t o = 0;
+      if(cJSON_IsString(jp)) {
+        for(const unsigned char *p = (const unsigned char *)jp->valuestring; *p && o + 4 < sizeof(enc); p++) {
+          if((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') || *p == '/' || *p == '_' || *p == '-' || *p == '.')
+            enc[o++] = (char)*p;
+          else o += (size_t)snprintf(enc + o, sizeof(enc) - o, "%%%02X", *p);
+        }
+      }
+      enc[o] = 0;
+      snprintf(form, sizeof(form), "batch=%d&batch_size=%d&dlc=%d&paths=%s",
+               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? (int)js->valuedouble : 5, cJSON_IsTrue(jd) ? 1 : 0, enc);
+      rc = ps4m_do_config(form, msg, sizeof(msg));
+    } else {
+      rc = ps4m_do_action(action, id, msg, sizeof(msg));
+    }
+    cJSON_Delete(b);
+    if(rc != 0) http = 409;
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", rc == 0);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, http, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/ps4mount/icon")) {
+    char id[16];
+    query_param(req->query, "id", id, sizeof(id));
+    unsigned char *png = NULL;
+    size_t len = 0;
+    if(strlen(id) != 9 || strncmp(id, "CUSA", 4) || ps4m_icon_png(id, &png, &len) != 0) {
+      ps5tm_http_send_error(fd, 404, "no_icon", "Kein Symbol vorhanden.");
+      return;
+    }
+    ps5tm_http_send_cached(fd, "image/png", png, len, 3600);
+    free(png);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/ps4mount/log")) {
+    char *s = ps4m_log_tail(16384);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "log", s ? s : "");
+    free(s);
     send_cjson(fd, 200, o);
     return;
   }

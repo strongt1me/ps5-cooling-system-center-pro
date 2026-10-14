@@ -102,6 +102,7 @@ SRCS += src/imgjob.c
 SRCS += src/amprlib.c
 SRCS += src/lz4cfg.c src/lz4pack.c
 SRCS += src/trace.c src/plugins.c
+SRCS += src/ps4m_core.c src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c
 SRCS += src/qr.c
 
 # ⚠ Die Kopfdateien gehören in die Abhängigkeiten.
@@ -199,7 +200,7 @@ FAST_OBJS := $(patsubst src/%.c,gen/fast/%.o,$(FAST_SRCS))
 # translation alone has to rebuild the ELF as well.
 WEB_FILES := $(wildcard web/*) $(wildcard web/img/*) $(wildcard web/avatars/*) $(wildcard web/lang/*)
 
-CFLAGS := -Os -Wall -Wextra -Werror -Isrc -Isrc/third_party
+CFLAGS := -Os -Wall -Wextra -Werror -Isrc -Isrc/third_party -Igen
 CFLAGS += -ffunction-sections -fdata-sections
 CFLAGS += -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-ident
 CFLAGS += -DPS5TM_BUILD=$(BUILD_DATE)
@@ -287,6 +288,12 @@ gen/playgo_blob.c: $(PLAYGO_FILES) tools/gen_emu_blob.py | gen
 
 # The DLC modules (third_party/dlc_emu), the same way.
 DLC_FILES := $(wildcard third_party/dlc_emu/libSce*.sprx-*)
+# PS4Mount (src/ps4m_*.c): the PlayGo record layouts, third_party/ps4mount/*.bin as C arrays
+gen/pdb_template.h: third_party/ps4mount/pdb_app_template.bin third_party/ps4mount/pdb_patch_template.bin third_party/ps4mount/pdb_addcont_template.bin tools/gen_p4m_templates.py | gen
+	$(PYTHON) tools/gen_p4m_templates.py $@
+
+src/ps4m_build.c: gen/pdb_template.h
+
 gen/dlc_blob.c: $(DLC_FILES) tools/gen_emu_blob.py | gen
 	$(PYTHON) tools/gen_emu_blob.py $@ third_party/dlc_emu dlc
 

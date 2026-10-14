@@ -197,7 +197,20 @@ finds it there) or as a backup in <code>PS5-Sicherung/Spiele</code>. Every copy 
 and verified; nothing is overwritten.</p>
 
 <div class='warn'>Please recreate <code>.ffpkg</code> images made with versions before 1.48.0 (old structure).</div>
-</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
+<h3>PS4 games from USB (PS4Mount)</h3>
+<p>The tab <b>PS4 from USB</b> on the games page plays PS4 games (fake PKG) straight from the USB drive without installing them. It is based on PS4Mount by gasb07 (GPL-3.0), whose source code has been taken into the app.</p>
+<ol>
+<li><b>Prepare.</b> On an exFAT drive, put the game, its update and add-ons as <code>.pkg</code> in the top level (or in folders named in the settings). The file names do not matter.</li>
+<li><b>Switch on.</b> The switch “Switch on” starts the search; it stays on across a restart of the app. “Search now” starts a search at once.</li>
+<li><b>Wait.</b> The first time, the app sorts the packages into <code>ps4/CUSAxxxxx/</code> (<code>app.pkg</code>, <code>patch.pkg</code>, <code>addcont/…</code>) and reports each game as soon as it is ready to play. The game appears on the home screen with its icon.</li>
+</ol>
+<ul>
+<li>The PKG files stay on the drive; only small management files go to the console. Deleting a game on the console or with “Remove from library” only removes it from the library, the PKG stays.</li>
+<li>Updates (<code>patch.pkg</code>) and add-ons (DLC) are included; add-ons only when the switch in the settings is on.</li>
+<li>The app has to be running for the games to stay visible after a console restart. If PS4Mount is already loaded as a payload of its own (<code>ps4mount.elf</code>), the switch has no effect until that one is stopped (both use port 9032).</li>
+<li>Firmware (since PS4Mount 0.4.4): from 6.00 the console registers the games the usual way (tested on 13.20, reported on 6.50); below 6.00 one at a time, and where that function is missing no games are added, to protect the database. The notification at switch-on names the way. This version inside the app has not yet been tried on a console (12.00); it is switched off until you switch it on.</li>
+</ul>
+<!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
 <p>Every game card has the button <b>LZ4 asset packs …</b> under <b>Convert</b>. It opens a window with tools around APR-EMU. For now it holds the <b>AMPR index</b>.</p>
 <ul>
 <li>The <b>AMPR index</b> (<code>ampr_emu.index</code>) is the list of all of the game's files that APR-EMU needs to find them. The window shows whether there is one and how many files it knows.</li>

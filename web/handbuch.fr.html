@@ -196,7 +196,20 @@ l’y trouve) ou en copie de sécurité dans <code>PS5-Sicherung/Spiele</code>. 
 et vérifiée après l’écriture ; rien n’est écrasé.</p>
 
 <div class='warn'>Veuillez recréer les images <code>.ffpkg</code> issues des versions antérieures à 1.48.0 (ancienne structure).</div>
-</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Index AMPR, APR-EMU, PlayGo et historique</h2></div>
+<h3>Jeux PS4 depuis USB (PS4Mount)</h3>
+<p>L'onglet <b>PS4 depuis USB</b> de la page des jeux lance des jeux PS4 (faux PKG) directement depuis le disque USB sans les installer. Il repose sur PS4Mount de gasb07 (GPL-3.0), dont le code source a été repris dans l'appli.</p>
+<ol>
+<li><b>Préparer.</b> Sur un disque exFAT, placez le jeu, sa mise à jour et les contenus additionnels en <code>.pkg</code> à la racine (ou dans des dossiers indiqués dans les réglages). Les noms de fichiers importent peu.</li>
+<li><b>Activer.</b> L'interrupteur « Activer » lance la recherche ; il reste actif après un redémarrage de l'appli. « Chercher maintenant » lance une recherche aussitôt.</li>
+<li><b>Patienter.</b> La première fois, l'appli range les paquets dans <code>ps4/CUSAxxxxx/</code> (<code>app.pkg</code>, <code>patch.pkg</code>, <code>addcont/…</code>) et signale chaque jeu dès qu'il est prêt. Le jeu apparaît sur l'écran d'accueil avec son icône.</li>
+</ol>
+<ul>
+<li>Les fichiers PKG restent sur le disque ; seuls de petits fichiers de gestion vont sur la console. Supprimer un jeu sur la console ou avec « Retirer de la bibliothèque » le retire seulement de la bibliothèque, le PKG reste.</li>
+<li>Les mises à jour (<code>patch.pkg</code>) et les contenus additionnels (DLC) sont inclus ; les additionnels seulement si l'interrupteur des réglages est activé.</li>
+<li>L'appli doit tourner pour que les jeux restent visibles après un redémarrage de la console. Si PS4Mount est déjà chargé comme payload à part (<code>ps4mount.elf</code>), l'interrupteur reste sans effet tant qu'il n'est pas arrêté (les deux utilisent le port 9032).</li>
+<li>Firmware (depuis PS4Mount 0.4.4) : à partir de 6.00 la console enregistre les jeux de la manière habituelle (testé sur 13.20, signalé sur 6.50) ; sous 6.00 un par un, et si cette fonction manque aucun jeu n'est ajouté, pour protéger la base de données. La notification à l'activation indique la méthode. Cette version intégrée à l'appli n'a pas encore été essayée sur une console (12.00) ; elle est désactivée tant que vous ne l'activez pas.</li>
+</ul>
+<!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Index AMPR, APR-EMU, PlayGo et historique</h2></div>
 <p>Chaque carte de jeu a le bouton <b>Asset packs LZ4 …</b> sous <b>Convertir</b>. Il ouvre une fenêtre d'outils autour d'APR-EMU. Pour l'instant elle contient l'<b>index AMPR</b>.</p>
 <ul>
 <li>L'<b>index AMPR</b> (<code>ampr_emu.index</code>) est la liste de tous les fichiers du jeu dont APR-EMU a besoin pour les trouver. La fenêtre indique s'il existe et combien de fichiers il connaît.</li>

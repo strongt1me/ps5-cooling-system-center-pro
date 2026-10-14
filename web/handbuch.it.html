@@ -197,7 +197,20 @@ li trova lì) o come backup in <code>PS5-Sicherung/Spiele</code>. Ogni copia vie
 non viene sovrascritto nulla.</p>
 
 <div class='warn'>Le immagini <code>.ffpkg</code> create con versioni precedenti alla 1.48.0 vanno ricreate (vecchia struttura).</div>
-</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Indice AMPR, APR-EMU, PlayGo e cronologia</h2></div>
+<h3>Giochi PS4 da USB (PS4Mount)</h3>
+<p>La scheda <b>PS4 da USB</b> nella pagina dei giochi esegue i giochi PS4 (PKG falsi) direttamente dall'unità USB senza installarli. Si basa su PS4Mount di gasb07 (GPL-3.0), il cui codice sorgente è stato incluso nell'app.</p>
+<ol>
+<li><b>Preparare.</b> Su un'unità exFAT metti gioco, aggiornamento e contenuti aggiuntivi come <code>.pkg</code> al livello principale (o in cartelle indicate nelle impostazioni). I nomi dei file non contano.</li>
+<li><b>Attivare.</b> L'interruttore «Attiva» avvia la ricerca; resta attivo anche dopo un riavvio dell'app. «Cerca ora» avvia subito una ricerca.</li>
+<li><b>Attendere.</b> La prima volta l'app ordina i pacchetti in <code>ps4/CUSAxxxxx/</code> (<code>app.pkg</code>, <code>patch.pkg</code>, <code>addcont/…</code>) e segnala ogni gioco appena è pronto. Il gioco compare nella schermata iniziale con la sua icona.</li>
+</ol>
+<ul>
+<li>I file PKG restano sull'unità; sulla console vanno solo piccoli file di gestione. Eliminare un gioco sulla console o con «Rimuovi dalla libreria» lo toglie solo dalla libreria, il PKG resta.</li>
+<li>Gli aggiornamenti (<code>patch.pkg</code>) e i contenuti aggiuntivi (DLC) sono inclusi; gli aggiuntivi solo con l'interruttore nelle impostazioni attivo.</li>
+<li>L'app deve essere in esecuzione perché i giochi restino visibili dopo un riavvio della console. Se PS4Mount è già caricato come payload a sé (<code>ps4mount.elf</code>), l'interruttore non ha effetto finché non lo fermi (entrambi usano la porta 9032).</li>
+<li>Firmware (da PS4Mount 0.4.4): dalla 6.00 la console registra i giochi nel modo consueto (provato sulla 13.20, segnalato sulla 6.50); sotto la 6.00 uno alla volta, e se manca quella funzione non viene aggiunto alcun gioco, per proteggere il database. La notifica all'attivazione indica il metodo. Questa versione dentro l'app non è ancora stata provata su una console (12.00); resta disattivata finché non la attivi.</li>
+</ul>
+<!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Indice AMPR, APR-EMU, PlayGo e cronologia</h2></div>
 <p>Ogni scheda di gioco ha il pulsante <b>Asset pack LZ4 …</b> sotto <b>Converti</b>. Apre una finestra con strumenti per APR-EMU. Per ora contiene l'<b>indice AMPR</b>.</p>
 <ul>
 <li>L'<b>indice AMPR</b> (<code>ampr_emu.index</code>) è l'elenco di tutti i file del gioco che serve ad APR-EMU per trovarli. La finestra mostra se esiste e quanti file conosce.</li>
