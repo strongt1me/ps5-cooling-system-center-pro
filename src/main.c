@@ -393,22 +393,17 @@ main(int argc, char **argv) {
 
     busy_reported = 0;
 
-    /* Announce on the TV only once the socket is actually listening, so the
-       address in the toast is one that works. Repeated on a port change. */
+    /* Logged once the socket is actually listening, so the address is one that
+       works. Repeated on a port change. */
     char ip[INET_ADDRSTRLEN] = "127.0.0.1";
     int have_ip = (ps5tm_local_ip(ip, sizeof(ip)) == 0);
 
     if(announced_port != port) {
       announced_port = port;
 
-      if(have_ip) {
-        ps5tm_notify_plain(PS5TM_APP_NAME " %s gestartet\n"
-                     "Web-UI: http://%s:%u", PS5TM_VERSION, ip, port);
-      } else {
-        ps5tm_notify_plain(PS5TM_APP_NAME " %s gestartet\n"
-                     "Web-UI auf Port %u (keine Netzwerkadresse gefunden)",
-                     PS5TM_VERSION, port);
-      }
+      /* No notification at the start any more (14.10.2026): even the plain one (top left) played the console's
+         notification sound, and the start is seen anyway - the starter tile opens the web UI, the log says it. */
+      (void)have_ip;
       PS5TM_INFO("ready", "Web-UI erreichbar unter http://%s:%u", ip, port);
 
       /* Without kstuff the fan cannot be driven at all — worth saying on the
