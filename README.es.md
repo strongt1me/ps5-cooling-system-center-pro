@@ -4,111 +4,212 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Control del ventilador, supervisión de temperatura y centro de sistema para la PlayStation 5 con jailbreak, con interfaz web en la red doméstica en seis idiomas.**
+**Control del ventilador, supervisión de temperatura y centro de sistema para la PlayStation 5 con jailbreak,<br>desde el navegador de la consola o cualquier dispositivo de la red doméstica, en seis idiomas.**
 
 ![Versión](https://img.shields.io/badge/Versi%C3%B3n-1.66.0-1f6feb)
 ![Licencia](https://img.shields.io/badge/Licencia-GPL--3.0--or--later-blue)
 ![Plataforma](https://img.shields.io/badge/Plataforma-PS5%20Payload-003791)
 ![Idiomas](https://img.shields.io/badge/Idiomas-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
 
-[Funciones](#funciones) · [Instalación](#instalación) · [Uso](#uso) · [Documentación](#documentación) · [Aviso legal](#aviso-legal-y-exención-de-responsabilidad) · [Créditos](#créditos-y-agradecimientos)
+[Funciones](#funciones) · [Inicio rápido](#inicio-rápido) · [Requisitos](#requisitos) · [Uso](#uso) · [Documentación](#documentación) · [Aviso legal](#aviso-legal-y-exención-de-responsabilidad) · [Créditos](#créditos-y-agradecimientos)
 
 [Deutsch](README.md) · [English](README.en.md) · [Italiano](README.it.md) · **Español** · [Français](README.fr.md) · [Русский](README.ru.md)
 
+<img src="docs/images/kuehlung.jpg" alt="Refrigeración: temperatura, ventilador, juego en marcha, temperatura objetivo y modo" width="860">
+
 </div>
 
----
+Un payload homebrew (ELF) que lee los sensores de temperatura de la PS5, regula el ventilador con una curva de confort silenciosa y ajustable e incluye una interfaz web. Además: gestión de juegos, archivos, payloads y perfil. Todo funciona en la propia consola, sin PC y sin Internet.
 
-PS5 Cooling & System Center - Pro es un payload homebrew (ELF) para una PlayStation 5 con jailbreak. Lee los sensores de temperatura de la consola, regula el ventilador según una curva de confort tranquila y configurable, e incluye una interfaz web que puedes abrir desde cualquier dispositivo de la red doméstica: móvil, tableta o PC. Además ofrece gestión de juegos, gestión de payloads y la gestión de perfiles de la consola. Todo se ejecuta en la propia PS5, sin PC y sin Internet.
-
-El proyecto es el sucesor de *PS5 Temperature Manager*; el backend (C) y la interfaz se han reescrito desde cero.
-
-<p align="center">
-  <img src="docs/images/kuehlung.jpg" alt="Refrigeración: temperatura, ventilador, juego en marcha, temperatura objetivo y modo" width="860">
-</p>
+## Funciones
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/payloads.jpg" alt="Gestión de payloads"></td>
-    <td width="50%"><img src="docs/images/profil.jpg" alt="Perfil con 30 imágenes de perfil integradas"></td>
+    <td width="33%" valign="top">
+      <h3>🌡️ Refrigeración</h3>
+      Regulación silenciosa del ventilador hacia una temperatura objetivo (60–91 °C), modos, perfiles por juego, límite de seguridad en el hardware.
+    </td>
+    <td width="33%" valign="top">
+      <h3>📊 Mediciones</h3>
+      CPU, chip principal, GPU (Pro), ventilador, carga de núcleos, frecuencias, líneas de alimentación, fotogramas y batería del mando, con historial.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🎮 Juegos</h3>
+      Iniciar, cerrar, copiar, mover, convertir a exFAT/ffpkg/ffpfsc, asset packs LZ4, APR-EMU, PlayGo.
+    </td>
   </tr>
   <tr>
-    <td align="center"><sub>Iniciar, copiar y finalizar payloads (datos de ejemplo)</sub></td>
-    <td align="center"><sub>Elegir la imagen de perfil entre 30 imágenes integradas</sub></td>
+    <td valign="top">
+      <h3>💾 PS4 desde USB</h3>
+      Jugar PKG falsos de PS4 directamente desde una unidad USB sin instalarlos (PS4Mount integrado), con actualizaciones y DLC.
+    </td>
+    <td valign="top">
+      <h3>📦 Paquetes y partidas</h3>
+      Buscar, dividir e instalar PKG; copiar y restaurar partidas guardadas; tiempo de juego con temperaturas.
+    </td>
+    <td valign="top">
+      <h3>📁 Archivos y payloads</h3>
+      Gestor de archivos para la consola y las unidades; iniciar y detener payloads, cargarlos en secuencia como perfiles.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>🖥️ Sistema y registro</h3>
+      Modelo, firmware, red, pantalla; registro de eventos y registro del kernel en directo con grabación.
+    </td>
+    <td valign="top">
+      <h3>🕹️ Atajos del mando</h3>
+      L1/R1 cambian de página, L2/R2 desplazan; pulsar dos veces Silencio muestra temperatura y ventilador en la TV.
+    </td>
+    <td valign="top">
+      <h3>🚀 Mosaico de inicio</h3>
+      Una carpeta para <code>/data/homebrew</code>: un toque en su mosaico inicia la app y abre la interfaz.
+    </td>
+  </tr>
+</table>
+
+### Pantallas
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/spiele.jpg" alt="Biblioteca de juegos"></td>
+    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Juegos de PS4 desde USB"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Juegos: biblioteca con iniciar, copiar, convertir</sub></td>
+    <td align="center"><sub>PS4 desde USB: PKG falsos sin instalar</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/spielzeit.jpg" alt="Tiempo de juego"></td>
+    <td><img src="docs/images/dateimanager.jpg" alt="Gestor de archivos"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Tiempo de juego con gráfico diario y temperaturas</sub></td>
+    <td align="center"><sub>Gestor de archivos para la consola y unidades USB</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/payloads.jpg" alt="Payloads"></td>
+    <td><img src="docs/images/system.jpg" alt="Sistema"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Payloads: perfiles, en marcha y guardados</sub></td>
+    <td align="center"><sub>Sistema: consola, red, pantalla</sub></td>
   </tr>
 </table>
 
 <details>
-<summary>También se puede usar desde el móvil</summary>
-<p align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Refrigeración en el móvil" width="300"></p>
+<summary><b>Más pantallas</b> (refrigeración en detalle, partidas, paquetes, perfil, registro, móvil)</summary>
+<br>
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="Historial de temperatura, sensores y perfiles por juego"></td>
+    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Copia de partidas guardadas"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/pakete.jpg" alt="Instalar paquetes"></td>
+    <td><img src="docs/images/profil.jpg" alt="Perfil con 30 imágenes integradas"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/protokoll.jpg" alt="Registro"></td>
+    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Refrigeración en el móvil" width="240"></td>
+  </tr>
+</table>
+<sub>Todas las imágenes con datos de ejemplo y juegos inventados; la interfaz se muestra en alemán.</sub>
 </details>
 
-## Funciones
+<details>
+<summary><b>Todas las funciones en detalle</b></summary>
 
 **Refrigeración**
+- Mantiene una temperatura objetivo (66 °C por defecto, ajustable 60–91 °C) con media móvil, zona muerta y tendencia, y cambia la velocidad solo en pasos pequeños.
+- Modos silencioso, equilibrado y fresco, selección rápida y reglas por juego.
+- Por encima de la temperatura de seguridad (78 °C por defecto) solo decide el hardware; si la app no está en marcha, la consola regula sola.
 
-- **Control de confort del ventilador.** Mantiene una temperatura objetivo (66 °C por defecto, ajustable de 60 a 91 °C; 91 °C es el valor de la propia consola) con media móvil, zona muerta y tendencia, y cambia la velocidad solo en pasos pequeños. El objetivo no es la temperatura más baja, sino un ventilador que suene tranquilo y uniforme. Modos de funcionamiento (silencioso, equilibrado, fresco), selección rápida y reglas propias por juego.
-- **La seguridad, lo primero.** A partir de la temperatura de seguridad (78 °C por defecto) solo cuenta el hardware. Si la app no se está ejecutando, la consola regula con su propia curva.
-- **Mediciones.** Procesador, chip principal, gráficos (solo PS5 Pro), velocidad del ventilador, carga de todos los núcleos de la CPU, frecuencia en directo, consumo de los raíles de alimentación, frecuencia de imagen en juego y batería del mando. Historiales de 2 minutos y de 24 horas, y una evaluación semanal del rendimiento de refrigeración.
-- **Notificaciones en el televisor.** Al iniciar, ante advertencias y, si se desea, de forma periódica. Dos pulsaciones breves del botón de micrófono del mando muestran la temperatura del procesador y el ventilador.
+**Juegos**
+- Iniciar (desde el navegador de la consola la página se cierra al instante), cerrar, copiar a otras unidades, mover o descomprimir con ShadowMountPlus.
+- Convertir a imágenes exFAT, ffpkg y ffpfsc sin PC; todo se relee y comprueba tras escribir, con un archivo `.sha256`.
+- Asset packs LZ4, índice AMPR, APR-EMU, stub de PlayGo y módulos DLC por juego; comprobar, descomprimir y reparar imágenes.
+- PS4 desde USB: PKG falsos de PS4 desde una unidad USB a la biblioteca sin instalarlos (PS4Mount de gasb07).
+- Tiempo de juego con temperaturas, copia y restauración de partidas, buscar, dividir e instalar paquetes, historial de todas las tareas.
 
 **Gestión**
+- Gestor de archivos: ver, descargar y subir, crear carpetas, renombrar, copiar, mover, borrar (cambios solo en unidades y en `/data`).
+- Payloads: ver y detener los que están en marcha, iniciar `.elf` propios desde una carpeta o un USB, perfiles como secuencia de inicio.
+- Perfil: nombre visible e imagen de perfil (30 imágenes integradas o un archivo propio).
+- Sistema: modelo, firmware, tiempo activo, almacenamiento, red; sensores en bruto y diagnóstico en modo experto.
+- Cabecera en cada página: modo reposo, reiniciar, apagar, modo seguro (dos clics cada uno).
 
-- **Juegos.** Los juegos de la pantalla de inicio con portada, tiempo de juego, formato y ubicación. Iniciarlos directamente (si se está ejecutando otro juego, un aviso lo indica; «Cerrar juego» lo cierra al instante y después el siguiente se inicia con un toque), copiarlos a otras unidades, moverlos o extraerlos con ShadowMountPlus y convertirlos sin PC en imágenes exFAT, ffpkg y ffpfsc. Una segunda pestaña registra el tiempo de juego: cuándo se jugó, cuánto tiempo y cuánto se calentó la consola, con totales, barras diarias y clasificación. Una tercera hace copias de seguridad de los datos guardados en una memoria USB, un disco o el almacenamiento de la consola y, si se desea, restaura un título: sin modificarlos y cifrados, con cada archivo releído y verificado; antes de restaurar se hace una copia de seguridad aparte del estado actual. Las copias y las imágenes se releen por completo y se verifican tras escribirlas; junto a ellas queda un archivo `.sha256` que más tarde se puede volver a comprobar en el PC con `sha256sum -c`. Un interruptor «Guardar portadas y metadatos» guarda en la consola las portadas y los datos de los juegos que tardan en obtenerse (carpeta `covers_and_more`), para que la lista cargue más rápido. Una cuarta pestaña, «Paquetes», encuentra los paquetes de juegos (`.pkg`) en memorias USB, discos y en el almacenamiento de la consola, los muestra con imagen, versión y tipo, divide paquetes grandes en partes para memorias USB FAT32 o discos (releídas y verificadas; el paquete no se modifica) y, si se desea, instala un paquete mediante la propia instalación de la consola: la app solo se lo pone a su disposición, comprueba antes qué podría impedirlo, muestra el progreso y no elimina ni sobrescribe nada.
-- **Archivos.** Un gestor de archivos para las carpetas de la consola: ver, descargar, subir, crear carpetas, cambiar nombre, copiar, mover y eliminar (modificar solo en las unidades y en `/data`; eliminar pide confirmación dos veces). La lista se puede ordenar por nombre, tamaño o fecha, se pueden seleccionar todas las entradas a la vez, el tamaño de una carpeta se calcula a petición y «Ver» muestra imágenes y archivos de texto directamente en el navegador.
-- **Payloads.** Ver y finalizar los payloads en ejecución. Iniciar archivos `.elf` propios desde una carpeta de la consola o desde una memoria USB, o copiarlos a esa carpeta, sin necesidad de PC.
-- **Perfil.** Cambiar el nombre visible; imagen de perfil entre 30 imágenes integradas o desde un archivo propio, con copia de seguridad de la imagen anterior.
-- **Sistema.** Modelo, firmware, tiempo en marcha, almacenamiento y red. Sensores en bruto y diagnóstico en el modo experto. Registro de eventos exportable.
-- **Barra superior.** En cada página: modo de reposo, reiniciar, apagar y modo seguro (cada uno tras dos clics, agrupados en el centro), pantalla completa y modo experto.
-- **Idiomas.** La interfaz está disponible en alemán, inglés, italiano, español, francés y ruso; el idioma se elige arriba a la derecha (en la primera visita se usa el del navegador). El manual y las FAQ están en los seis idiomas en la app y en PDF para descargar. Los mensajes que la propia consola muestra en el televisor están en alemán.
-- **Icono de la pantalla de inicio.** Abre la interfaz directamente en el navegador de la consola.
+**Técnica**
+- Servidor HTTP propio sin bibliotecas externas, [interfaz JSON](docs/API.md) documentada, ajustes en `/data/PS5-Cooling-Center/config.json`.
+- Sin acceso a Internet: la app solo habla con programas de la consola y con los navegadores de la red doméstica.
 
-**Técnica.** Servidor HTTP propio sin bibliotecas de terceros (los archivos de la interfaz se envían comprimidos por la red), [interfaz JSON](docs/API.md) documentada, ajustes en `/data/PS5-Cooling-Center/config.json`, sin acceso a Internet (la app solo se conecta con programas de la propia consola).
+</details>
+
+## Inicio rápido
+
+1. Descargar `PS5_Cooling_System_Center_v<versión>.elf` de las [Releases](../../releases).
+2. Enviarlo a la consola (cargador ELF, puerto **9021**), por ejemplo:
+   ```bash
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.66.0.elf
+   ```
+3. Abrir **`http://<IP-PS5>:8086`** en el navegador (la notificación arriba a la izquierda en la TV también muestra la dirección).
+
+> [!TIP]
+> **Iniciar sin enviar:** descomprimir `PPSA86921.zip` de la release y copiar la carpeta a `/data/homebrew/`. ShadowMountPlus crea un mosaico; un toque inicia la app y abre la interfaz.
+
+> [!IMPORTANT]
+> Solo puede funcionar **una** instancia a la vez; si no, dos programas regulan el ventilador uno contra otro. Una instancia antigua se detiene en la página "Payloads". Más en el [LIESMICH](docs/LIESMICH.txt) (en alemán).
 
 ## Requisitos
 
 | | |
 | --- | --- |
-| **Consola** | PS5 con jailbreak y un cargador de ELF en el **puerto 9021** ([elfldr](https://github.com/ps5-payload-dev/elfldr) o equivalente). Probado en una **PS5 Pro (CFI-7021) con firmware 12.00**. Varios usuarios informan de que la app también funciona en una PS5 con **firmware 13.60**. Otros modelos y versiones de firmware no se han probado. La temperatura de gráficos solo está disponible en la Pro. |
-| **Firmware** | El ELF se compila con el PS5-Payload-SDK **v0.43**, cuyo código de arranque conoce el firmware **hasta la 13.60**. Con un firmware que el código de arranque no conoce, no se llega a `main()`: el programa ni siquiera se inicia y no escribe nada en el registro. Varios usuarios informan de que la app funciona en la **13.60**; de la 13.00 a la 13.40 no hay informes (el código de arranque las conoce). |
-| **kstuff** | Necesario para el control del ventilador (`/dev/icc_fan`). Sin kstuff, los sensores y la interfaz siguen funcionando y la regulación indica «no disponible». |
-| **Red** | Un navegador en la misma red que la consola. |
-| **opcional** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) para mover y extraer juegos, y para detectar el formato y la ubicación. |
+| **Consola** | PS5 con jailbreak y cargador ELF en el puerto 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) o similar) |
+| **Probado** | PS5 Pro (CFI-7021), firmware 12.00; varios usuarios informan que también funciona en 13.60 |
+| **Ventilador** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (sin él funcionan sensores e interfaz, la regulación no) |
+| **Red** | Un navegador en la misma red, o el navegador de la consola |
+| **Opcional** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) para mover, descomprimir y el mosaico de inicio |
 
-## Instalación
+<details>
+<summary>Firmware y SDK en detalle</summary>
 
-1. Descarga de las **Releases** el archivo `PS5_Cooling_System_Center_v<Version>.elf`.
-2. Envía el ELF a la consola, puerto **9021**, con cualquier emisor de payloads o por línea de comandos:
-
-   ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.66.0.elf
-   ```
-
-3. En el televisor aparece una notificación con la dirección. Ábrela en el navegador: **`http://<PS5-IP>:8086`**
-4. El programa crea por sí mismo el icono de la pantalla de inicio (sección «Multimedia») en el primer inicio; no hace falta ningún instalador. El icono sobrevive a los reinicios, pero no inicia el programa: solo abre la interfaz. Si más adelante falta, «Instalar icono» en la página Sistema lo recupera; como alternativa se incluye `cooling-center-launcher-installer_v<Version>.elf`.
-
-Tras cada reinicio de la consola hay que volver a enviar el ELF, por ejemplo con un autoloader. Solo debe ejecutarse **una** instancia: dos instancias regularían el ventilador una contra otra. Una instancia antigua se puede finalizar en la página «Payloads». Las instrucciones detalladas se incluyen en la publicación como [LIESMICH](docs/LIESMICH.txt).
+El ELF se compila con el PS5 payload SDK **v0.43**, cuyo código de arranque conoce el firmware **hasta 13.60**. Un firmware que el código de arranque no conoce nunca llega a `main()`: el programa no arranca y no escribe nada en el registro. Para 13.00–13.40 aún no hay informes (el código de arranque los conoce). La temperatura de la GPU solo existe en la Pro.
+</details>
 
 ## Uso
 
 | Página | Contenido |
 | --- | --- |
-| **Perfil** | Nombre visible e imagen de perfil de la consola |
-| **Juegos** | Iniciar, copiar, mover y convertir juegos; tiempo de juego con temperaturas; copia de seguridad y restauración de datos guardados |
-| **Archivos** | Gestor de archivos: ver carpetas, subir y descargar archivos, copiar, mover, eliminar |
-| **Payloads** | payloads en ejecución, guardados y en USB |
-| **Refrigeración** | Estado, historial, sensores, temperatura objetivo, modo de funcionamiento, perfiles de juego |
-| **Sistema** | Consola, almacenamiento, red, diagnóstico, apagado y reinicio |
-| **Registro** | Eventos de la app, exportables como `.log`, y el registro del kernel de la consola en directo con filtro, pausa, guardado en la consola y grabación |
-| **Créditos** | Agradecimiento a los desarrolladores cuyo trabajo está en la app; además, **Manual** y **FAQ** en tu idioma |
+| **Refrigeración** | Estado, historial, sensores, temperatura objetivo, modo, perfiles por juego |
+| **Juegos** | Biblioteca, tiempo de juego, partidas, paquetes, PS4 desde USB, copias, historial |
+| **Gestor de archivos** | Carpetas de la consola y de las unidades |
+| **Payloads** | Payloads en marcha, guardados y en USB, perfiles |
+| **Sistema** | Consola, almacenamiento, red, diagnóstico |
+| **Perfil** | Nombre visible e imagen de perfil |
+| **Registro** | Eventos de la app y registro del kernel en directo |
+| **Créditos** | Agradecimientos; además **manual** y **FAQ** en seis idiomas |
 
-Todo lo demás está en el [manual](docs/HANDBUCH.md): el control de confort y sus parámetros, iniciar payloads, imágenes de perfil, icono, indicador en pantalla y ajustes.
+**Con el mando (navegador de la consola):** L1 / R1 página anterior / siguiente · L2 / R2 desplazar arriba / abajo · Silencio dos veces: temperatura y ventilador en la TV.
 
-**Acceso en la red doméstica.** La interfaz no tiene inicio de sesión: cualquier dispositivo de la red doméstica puede leer y modificar. La consola no debe quedar expuesta a Internet, así que **no configures ningún reenvío de puertos** al puerto 8086. Si no quieres esto, pon `bind_address` en `127.0.0.1`. El servidor rechaza las solicitudes que claramente proceden de páginas web ajenas. Los detalles están en el [manual](docs/HANDBUCH.md#zugriff-und-sicherheit-im-heimnetz) y en la [política de seguridad](SECURITY.md).
+> [!WARNING]
+> La interfaz **no tiene inicio de sesión**: cualquier dispositivo de la red doméstica puede leer y cambiar cosas. No configures reenvío del puerto 8086. Para permitir solo el navegador de la consola, pon `bind_address` en `127.0.0.1`. Detalles en el [manual](docs/HANDBUCH.md#zugriff-und-sicherheit-im-heimnetz) y en la [política de seguridad](SECURITY.md).
 
-## Compilar desde el código fuente
+## Documentación
 
-Se necesita el [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 o posterior** (compilado y probado con **v0.43**): su código de arranque decide en qué firmware llega a arrancar el ELF, y v0.41 termina en la 13.40. La compilación lo comprueba (`tools/check_sdk_firmware.py`) y se interrumpe con un SDK demasiado antiguo, y también tras el enlazado si el ELF terminado no contiene el caso de la 13.60. En Windows basta con Git Bash y LLVM 21 (no 18):
+| Documento | Contenido |
+| --- | --- |
+| [Manual](docs/HANDBUCH.md) | Uso en detalle (en alemán; también en la app y como PDF en seis idiomas) |
+| [API](docs/API.md) | Todos los endpoints y campos de configuración |
+| [Desarrollo](docs/ENTWICKLUNG.md) | Compilar, enviar, resolver problemas, estructura del código |
+| [Cambios](CHANGELOG.md) | Qué cambió en cada versión |
+| [Registro de decisiones](docs/ERWEITERUNGEN.md) | Por qué las cosas son así, qué se midió |
+| [Componentes de terceros](THIRD_PARTY_NOTICES.md) | Código adoptado y sus licencias |
+| [Colaborar](CONTRIBUTING.md) · [Seguridad](SECURITY.md) | Aportaciones y aviso de vulnerabilidades |
+
+<details>
+<summary><b>Compilar desde el código fuente</b></summary>
+
+Se necesita el [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 o posterior** (probado con v0.43); la compilación lo comprueba y se detiene con un SDK más antiguo. En Windows basta Git Bash con LLVM 21:
 
 ```bash
 tools/build-windows.sh
@@ -121,85 +222,82 @@ export PS5_PAYLOAD_SDK=$HOME/ps5sdk/sdk
 make
 ```
 
-El resultado es `PS5_Cooling_Center.elf`. Todos los pasos, la resolución de problemas, el proceso de publicación y la estructura del código fuente se describen en [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
-
-## Documentación
-
-| Documento (en alemán) | Contenido |
-| --- | --- |
-| [Manual](docs/HANDBUCH.md) | Uso en detalle (también en la app y en PDF en seis idiomas; ver Releases) |
-| [API](docs/API.md) | Todos los endpoints y campos de configuración |
-| [Desarrollo](docs/ENTWICKLUNG.md) | Compilar, enviar, resolución de problemas, estructura del código fuente |
-| [Notas de la versión](docs/RELEASE_NOTES.md) | Qué ha cambiado en cada versión |
-| [Registro de decisiones](docs/ERWEITERUNGEN.md) | Por qué algo está hecho así, qué se ha medido, qué está pendiente |
-| [LIESMICH](docs/LIESMICH.txt) | Guía breve incluida en cada publicación |
-| [Componentes de terceros](THIRD_PARTY_NOTICES.md) | Código adoptado y sus licencias |
-| [Colaborar](CONTRIBUTING.md) · [Seguridad](SECURITY.md) | Contribuciones y notificación de vulnerabilidades |
+El resultado es `PS5_Cooling_Center.elf`; `tools/make_starter.sh` crea el mosaico de inicio. Todo lo demás en [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
+</details>
 
 ## Aviso legal y exención de responsabilidad
 
-> Esta sección es información general y no constituye asesoramiento jurídico. Quien usa el proyecto es responsable de que su uso esté permitido en su país y frente a sus contrapartes contractuales.
+> [!CAUTION]
+> **No es un producto de Sony, sin piratería, sin responsabilidad.** Este proyecto no tiene relación con Sony. No contiene juegos, firmware, claves ni código para eludir protecciones anticopia, y no descarga nada de Internet. Modificar una consola puede costar la garantía y la cuenta; el riesgo es de quien lo hace. El programa se ofrece **sin ninguna garantía**.
 
-- **No es un producto de Sony.** «PlayStation», «PS5» y los logotipos correspondientes son marcas comerciales de Sony Interactive Entertainment Inc. Este proyecto no tiene ninguna relación con Sony y no cuenta con su apoyo ni con su aprobación. Todos los demás nombres pertenecen a sus respectivos titulares.
-- **Tu consola, tu responsabilidad.** El programa solo funciona en una consola que su propietario ha modificado. La modificación puede infringir las condiciones de uso y provocar la pérdida de la garantía o el bloqueo de la cuenta o de la consola, y en algunos países también tener consecuencias legales. El riesgo lo asume quien modifica la consola y usa este programa.
-- **Nada de piratería.** Este proyecto **no** está pensado para obtener, distribuir ni usar copias piratas, ni lo apoya. No contiene juegos, firmware, claves ni código para eludir la protección anticopia o el DRM. No descarga nada de Internet. Copiar, mover y convertir solo actúan sobre juegos que ya están como carpeta o imagen en la propia consola, y están pensados para copias de seguridad de juegos adquiridos legalmente. Buscar, dividir e instalar paquetes solo actúan sobre paquetes que tú mismo has puesto en la consola o en una unidad conectada; la app no obtiene ninguno. Distribuir contenido protegido por derechos de autor es delito en la mayoría de los países. Aquí no se ofrece ayuda para ello, tampoco en los issues.
-- **Ningún archivo de Sony en el repositorio.** No se incluyen ni se aceptan bibliotecas del sistema, firmware ni archivos propietarios del SDK (ver [CONTRIBUTING](CONTRIBUTING.md)). Las 30 imágenes de perfil las ha generado el propio autor.
-- **Sin garantía, sin responsabilidad.** El programa interviene en el control del ventilador y en funciones del sistema de la consola. Se proporciona tal cual, **sin ninguna garantía** (GNU GPL, secciones 15 y 16). El autor no se hace responsable de daños en la consola, los datos o las cuentas. El programa no sustituye al mantenimiento: una consola llena de polvo refrigera peor, se regule como se regule el ventilador.
-- **Privacidad.** Los historiales, el registro y los ajustes se quedan en la consola, en `/data/PS5-Cooling-Center/`. La app no envía datos a Internet y solo se conecta con programas de la propia consola (cargador de payloads, ShadowMountPlus) y con los navegadores de la red doméstica que abren la interfaz. Única excepción, en el navegador y no en la app: al abrirse, la página «Créditos» carga una vez la pequeña imagen de icono de github.com para comprobar si el navegador tiene Internet; solo entonces se pueden pulsar los enlaces a GitHub. Las imágenes de perfil de los desarrolladores están integradas en la app y no se cargan de Internet.
-- **Proyectos de terceros.** Están sujetos a sus propias licencias; ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) y los créditos más abajo.
+<details>
+<summary>Texto completo</summary>
+
+> Esta sección es información general, no asesoramiento jurídico. Quien use el proyecto es responsable de que su uso esté permitido en su país y frente a sus socios contractuales.
+
+- **No es un producto de Sony.** "PlayStation", "PS5" y los logotipos correspondientes son marcas de Sony Interactive Entertainment Inc. Este proyecto no tiene relación con Sony y no está respaldado ni aprobado por Sony. Los demás nombres pertenecen a sus respectivos titulares.
+- **Tu consola, tu responsabilidad.** El programa solo funciona en una consola modificada por su propietario. Modificarla puede infringir las condiciones de uso y suponer la pérdida de la garantía o el bloqueo de la cuenta o de la consola, y en algunos países consecuencias legales. El riesgo es de quien modifica la consola y usa este programa.
+- **Sin piratería.** Este proyecto **no** sirve para obtener, distribuir o usar copias piratas, y no lo apoya. Copiar, mover y convertir solo actúan sobre juegos que ya están en tu consola y sirven para copias de seguridad de juegos adquiridos legalmente. Buscar, dividir, instalar y montar paquetes desde USB solo actúan sobre paquetes que tú mismo pusiste en la consola o en una unidad; la app no consigue ninguno. Distribuir contenido protegido por derechos de autor es delito en la mayoría de los países. Aquí no hay ayuda para ello, tampoco en las issues.
+- **Ningún archivo de Sony en el repositorio.** Bibliotecas del sistema, firmware y archivos propietarios del SDK no se incluyen ni se aceptan (ver [CONTRIBUTING](CONTRIBUTING.md)). Las 30 imágenes de perfil las creó el autor.
+- **Sin garantía, sin responsabilidad.** El programa interviene en el control del ventilador y en funciones del sistema de la consola. Se ofrece tal cual, **sin ninguna garantía** (GNU GPL, secciones 15 y 16). El autor no responde de daños en consolas, datos o cuentas. Una consola con polvo refrigera peor, se regule como se regule el ventilador.
+- **Privacidad.** Historial, registro y ajustes se quedan en la consola en `/data/PS5-Cooling-Center/`. La app no envía datos a Internet. Única excepción en el navegador: la página "Créditos" carga una vez el pequeño icono de github.com para ver si el navegador tiene Internet; solo entonces los enlaces se pueden pulsar.
+- **Los proyectos de terceros** tienen sus propias licencias, ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+</details>
 
 ## Colaborar y notificar errores
 
-Los errores y las sugerencias son bienvenidos como [issue](../../issues). Indica el modelo de consola, el firmware, la versión del programa y, si lo tienes, el registro exportado (página «Registro»). Contribuciones: [CONTRIBUTING.md](CONTRIBUTING.md). No informes de vulnerabilidades públicamente, sino como se describe en [SECURITY.md](SECURITY.md).
+Errores y deseos son bienvenidos como [issue](../../issues), con modelo de consola, firmware, versión y el registro exportado (página "Registro"). Aportaciones: [CONTRIBUTING.md](CONTRIBUTING.md). Las vulnerabilidades se notifican como se describe en [SECURITY.md](SECURITY.md).
 
 ## Créditos y agradecimientos
 
-Este proyecto se apoya en los hombros de la comunidad homebrew de PS5. Sin el trabajo de estas desarrolladoras y desarrolladores no existirían ni la plataforma ni parte de las funciones. **¡Muchas gracias!**
+Este proyecto se apoya en los hombros de la comunidad homebrew de PS5. **¡Gracias!** Un agradecimiento muy especial a **[Gezine](https://github.com/Gezine)**: sin el trabajo de Gezine no funcionaría ningún homebrew en muchas consolas, y por tanto tampoco esta app.
 
-**Plataforma y herramientas**
+<details>
+<summary><b>Plataforma y herramientas</b></summary>
 
-- **John Törnblom y todos los colaboradores de [ps5-payload-dev](https://github.com/ps5-payload-dev)**: el [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk), con el que se compila cada ELF de este proyecto; el cargador de payloads [elfldr](https://github.com/ps5-payload-dev/elfldr) en el puerto 9021; [klogsrv](https://github.com/ps5-payload-dev/klogsrv) y [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) para el desarrollo; y [websrv](https://github.com/ps5-payload-dev/websrv), cuya forma de iniciar juegos sirvió aquí de modelo.
-- **Los desarrolladores de kstuff**: [sleirsgoevy](https://github.com/sleirsgoevy) (autor principal), [EchoStretch](https://github.com/EchoStretch) y [drakmor](https://github.com/drakmor) (los mayores colaboradores de [kstuff-lite](https://github.com/EchoStretch/kstuff-lite)); repositorios, entre otros, en [ps5-payload-dev](https://github.com/ps5-payload-dev/kstuff) y [EchoStretch](https://github.com/EchoStretch/kstuff). Sin kstuff no habría acceso al controlador del ventilador.
+- **John Törnblom y todos los colaboradores de [ps5-payload-dev](https://github.com/ps5-payload-dev)**: el [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk), el cargador [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) y [websrv](https://github.com/ps5-payload-dev/websrv).
+- **Los desarrolladores de kstuff**: [sleirsgoevy](https://github.com/sleirsgoevy), [EchoStretch](https://github.com/EchoStretch) y [drakmor](https://github.com/drakmor) ([kstuff-lite](https://github.com/EchoStretch/kstuff-lite)). Sin kstuff no habría acceso al controlador del ventilador.
+</details>
 
-**Código de otros proyectos (portado o integrado)**
+<details>
+<summary><b>Código de otros proyectos (portado o incluido)</b></summary>
 
-- **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) y los colaboradores de [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): creación de imágenes exFAT, PFS y PFSC. La conversión en la consola es un port a C.
-- **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): modelo para el generador UFS2/ffpkg.
-- **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): estructura de los paquetes de PS4/PS5, el formato de partes (`PS5MPKG1`), el plan de carpetas de la búsqueda de paquetes y el proceso de instalación (cómo se llama a la biblioteca del sistema de la consola y de dónde lee el paquete). Las funciones de paquetes de esta app son código propio basado en ese modelo; nada de él está integrado.
-- **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): estructura de la función de perfil y formato de la imagen de perfil.
-- **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT): compresión rápida para las imágenes.
-- **[Dave Gamble](https://github.com/DaveGamble) y colaboradores, [cJSON](https://github.com/DaveGamble/cJSON)** (MIT): JSON.
+- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PKG falsos de PS4 desde USB sin instalar; el código está integrado como pestaña "PS4 desde USB".
+- **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) y los colaboradores de [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): imágenes exFAT, PFS y PFSC.
+- **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): modelo del escritor UFS2/ffpkg.
+- **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (asset packs LZ4, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) y [dlc_emu](https://github.com/drakmor/dlc_emu) (versiones integradas, GPL-3.0).
+- **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): cómo se construye el mosaico de inicio como título nativo.
+- **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): estructura de los paquetes y proceso de instalación (código propio según este modelo).
+- **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): función de perfil y formato de la imagen de perfil.
+- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): codificador QR.
+- **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
+</details>
 
-**Colaboración, conocimientos y modelos**
+<details>
+<summary><b>Colaboración, conocimientos y modelos</b></summary>
 
-- **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (montar, mover y extraer juegos; la página Juegos se basa en él; su README indica la estructura recomendada para las imágenes `.ffpkg`: bloques de 64 KiB) y [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (orden de los raíles de alimentación, frecuencias).
-- **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: mostró con qué parámetros se crea un `.ffpkg` para ShadowMountPlus (bloques y fragmentos de 64 KiB, sin espacio reservado, densidad de inodos 262144, tamaño de sector 512) y que un tamaño de sector de 4096 produce allí (en Windows) imágenes defectuosas. Solo conocimientos, nada de código.
-- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) (cerrar el navegador de la consola) y [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager), modelo de la gestión de payloads y de la regla sobre qué procesos se pueden finalizar.
-- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): el codificador QR que muestra la dirección de la interfaz web como código (`src/qr.c`, adoptado y comprobado con un lector).
-- **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): patrones del registro del kernel con los que se puede reconocer el juego en ejecución.
-- **El proyecto [etaHEN](https://github.com/etaHEN/etaHEN)** y **[onionHEN](https://github.com/aydencharles/onionHEN)** (aydencharles): código fuente y documentación sobre llamadas al sistema, mediciones y la consulta de la frecuencia de imagen.
-- **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)** (sucesor de [Sonic Loader](https://git.etawen.dev/soniciso/sonicloader)): forma de las llamadas para la instalación del icono y modelo para muchas funciones (cerrar juego, registro del kernel en directo, tiempo de juego, datos guardados, gestor de archivos, eliminar juegos); el código se ha reescrito en cada caso.
-- **BestPig y [BackPork](https://github.com/BestPig/BackPork)**: el principio de las bibliotecas sustitutas (fakelibs), que la página Juegos detecta y muestra.
-- **Juma Sayeh (desarrollador) y Osama Abualia (pruebas), PS5 Game Compressor**: modelo para la comprobación del SDK respecto al firmware 13.60 al compilar y para cinco ideas al copiar y convertir: releer por completo y verificar las copias de seguridad tras escribirlas, impedir el modo de reposo durante operaciones largas, leer y escribir a la vez solo entre dos unidades distintas, rellenar explícitamente con ceros los huecos de las imágenes y dejar sin comprimir los bloques que ahorran menos del 5 %. El código fuente de Game Compressor no tiene licencia, por eso no se ha adoptado nada de él: todo está reescrito.
-- **Kernel de Linux, controlador `hid-playstation`**: documentación del byte de estado del DualSense para el nivel de batería.
-- **Xbox 360 DashLaunch**: modelo para la idea de una regulación de temperatura tranquila y pausada.
+- **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (montar, mover, descomprimir juegos) y [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (líneas de alimentación, frecuencias).
+- **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: lista para "Automático", grabación para crear perfiles, mantenimiento de los plugins de juegos.
+- **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: parámetros para imágenes `.ffpkg`.
+- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) y [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager).
+- **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): detección del juego en marcha.
+- **[etaHEN](https://github.com/etaHEN/etaHEN)** y **[onionHEN](https://github.com/aydencharles/onionHEN)**: llamadas al sistema, mediciones, fotogramas.
+- **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: modelo de muchas funciones (código reescrito cada vez).
+- **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: el principio de las bibliotecas sustitutas.
+- **Juma Sayeh y Osama Abualia, PS5 Game Compressor**: ideas para comprobar y convertir (todo reescrito; su código no tiene licencia).
+- **Controlador Linux `hid-playstation`** (batería del DualSense) · **Xbox 360 DashLaunch** (la idea de la regulación tranquila).
+</details>
 
-**Un agradecimiento muy especial a [Gezine](https://github.com/Gezine)**: su trabajo es fundamental para la comunidad homebrew de PS5; sin él, en muchas consolas no funcionaría ningún homebrew, y por tanto tampoco esta app.
+<details>
+<summary><b>Gracias a la comunidad</b></summary>
 
-**Gracias a la comunidad.** Su código no está en esta app, pero sin el trabajo que comparten la escena no sería como es: [owendswang](https://github.com/owendswang) ([ps5-web-file-manager](https://github.com/owendswang/ps5-web-file-manager), [ps5-fan-control](https://github.com/owendswang/ps5-fan-control)), [LightningMods](https://github.com/LightningMods) (etaHEN, [Itemzflow](https://github.com/LightningMods/Itemzflow)), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW) ([PPPwn](https://github.com/TheOfficialFloW/PPPwn)), [Specter](https://github.com/Cryptogenic) ([PS5-IPV6-Kernel-Exploit](https://github.com/Cryptogenic/PS5-IPV6-Kernel-Exploit)), [ChendoChap](https://github.com/ChendoChap) ([pOOBs4](https://github.com/ChendoChap/pOOBs4)), [idlesauce](https://github.com/idlesauce) ([umtx2](https://github.com/idlesauce/umtx2)), [flatz](https://github.com/flatz) ([pkg_pfs_tool](https://github.com/flatz/pkg_pfs_tool)), [Al Azif](https://github.com/Al-Azif) ([ps4-exploit-host](https://github.com/Al-Azif/ps4-exploit-host)), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama) ([PS5-Lapy-JB-Daemon](https://github.com/ArkSama/PS5-Lapy-JB-Daemon)), [nexgen999](https://github.com/nexgen999) ([evoX-CoreOS](https://github.com/nexgen999/evoX-CoreOS), [PS5-Repository-List](https://github.com/nexgen999/PS5-Repository-List)), [matem6](https://github.com/matem6) ([P2JB-Y2JB-Porting](https://github.com/matem6/P2JB-Y2JB-Porting)), [Phoenixx1202](https://github.com/Phoenixx1202) ([PS5-FPKG-Builder](https://github.com/Phoenixx1202/PS5-FPKG-Builder), [Spectrum-Library](https://github.com/Phoenixx1202/Spectrum-Library)), [SiSTR0](https://github.com/SiSTR0) ([ps4ren](https://github.com/SiSTR0/ps4ren)) – y a todos los demás que contribuyen con código, pruebas, guías o respuestas. En la app aparecen todos con imagen en la página «Créditos».
+Su código no está en esta app, pero sin su trabajo compartido la escena no existiría así: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [idlesauce](https://github.com/idlesauce), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) – y a todos los demás que contribuyen con código, pruebas, guías o respuestas. En la app aparecen todos con imagen en la página "Créditos".
+</details>
 
-Las 30 imágenes de perfil las ha generado el propio autor. Si echas en falta tu nombre o crees que la descripción no es correcta, avísanos y con gusto completaremos la lista.
+Si falta alguien o está mal descrito, avísanos: la lista se ampliará con gusto.
 
 ## Licencia
 
-Copyright © 2026 strongt1me
+Copyright © 2026 strongt1me · **GNU General Public License v3.0 o posterior**, ver [LICENSE](LICENSE). Hasta la 1.45.1 el proyecto era MIT; desde la 1.46.0 es GPL-3.0-or-later porque contiene partes de proyectos GPL (detalles en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-Este programa es software libre: se puede redistribuir y modificar según los términos de la **GNU General Public License**, versión 3 o (a tu elección) cualquier versión posterior; ver [LICENSE](LICENSE). Se proporciona sin ninguna garantía.
-
-Hasta la 1.45.1 incluida, el proyecto estaba bajo la licencia MIT. Desde la 1.46.0 rige GPL-3.0-or-later: la conversión de juegos es un port de [MkPFS](https://github.com/PSBrew/MkPFS) (GPL-3.0), y el PS5-Payload-SDK, con el que se compila cada ELF, está a su vez bajo GPLv3+. Qué partes de terceros incluye y bajo qué licencia se indica en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
----
-
-## Idiomas
-
-Este README también está disponible en [Deutsch](README.md), [English](README.en.md), [Italiano](README.it.md), [Français](README.fr.md) y [Русский](README.ru.md). El original es el README en alemán; las traducciones se basan en él. El registro de decisiones, los documentos para desarrolladores y la descripción de la API están en alemán; el manual y las FAQ se incluyen en cada publicación en los seis idiomas, en PDF y HTML, y están integrados en la app. Las traducciones que falten o suenen poco naturales se pueden notificar como issue («Translation»); cómo completarlas se explica en [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md#übersetzungen).
+<sub>Este README también está en [Deutsch](README.md), [English](README.en.md), [Italiano](README.it.md), [Français](README.fr.md) y [Русский](README.ru.md). El manual y las FAQ acompañan a cada release en los seis idiomas.</sub>
