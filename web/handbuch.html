@@ -120,7 +120,7 @@ Weboberfläche, die Lüfterregelung meldet dann „nicht verfügbar“.</li>
 <ol class='steps'>
 <li><code>PS5_Cooling_System_Center_v1.66.0.elf</code> an die Konsole senden, Port <code>9021</code>, z. B.:<br>
 <code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.66.0.elf</code></li>
-<li>Auf dem Fernseher erscheint oben rechts eine Meldung mit der Adresse der Weboberfläche.</li>
+<li>Auf dem Fernseher erscheint oben links eine Meldung mit der Adresse der Weboberfläche.</li>
 <li>Im Browser öffnen: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
 </ol>
 <h3>Die Kachel im Startmenü</h3>
@@ -130,7 +130,14 @@ startet das Programm nicht. Nach jedem Neustart der Konsole muss die ELF also ei
 Eine alte Instanz beendest du auf der Seite „Payloads“, sonst hilft ein Neustart.</div>
 <div class='tip'>Kachel gelöscht oder neues Kachelbild gewünscht? Kachel in der Konsole löschen (Options-Taste, Löschen) und auf
 der Seite „System“ <b>Kachel installieren</b> drücken.</div>
-</section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>Die Oberfläche im Überblick</h2></div>
+<h3>Die Starter-Kachel: Start ohne Senden</h3>
+<p>Mit der Starter-Kachel muss die ELF nicht mehr gesendet werden. Aus der Veröffentlichung <code>PPSA86921.zip</code> entpacken und den Ordner <code>PPSA86921</code> nach <code>/data/homebrew/</code> kopieren (per FTP oder mit dem Dateimanager). ShadowMountPlus legt dafür eine Kachel an.</p>
+<ul>
+<li>Ein Tipp auf die Kachel startet die App, falls sie noch nicht läuft, und öffnet danach die Weboberfläche im Browser der Konsole. Läuft die App schon, öffnet sie nur die Oberfläche.</li>
+<li>Die App steckt in der <code>eboot.bin</code> der Kachel. Nach einem Update den Ordner aus der neuen Veröffentlichung kopieren, sonst startet die Kachel die alte Fassung.</li>
+<li>ShadowMountPlus ist dafür nötig. Die alte Medien-Kachel (oben) darf bleiben oder gelöscht werden.</li>
+</ul>
+<!--starter--></section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>Die Oberfläche im Überblick</h2></div>
 <p>Links steht die Seitenleiste mit den Bereichen <b>Profil, Spiele, Dateien, Payloads, Kühlung, System, Protokoll</b> und
 <b>Credits</b>. Oben in der Kopfzeile, auf jeder Seite: die <b>Power-Optionen</b>, „Vollbild“, „Expertenmodus“ und die
 Verbindungsanzeige.</p>
@@ -150,7 +157,9 @@ Bildschirmfotos, damit die App klein bleibt). Mit Bildern gibt es beide als PDF 
 <h3>Fenster und der rechte Stick</h3>
 <p>Öffnet sich ein Fenster (z. B. zum Löschen), wird der Hintergrund abgedunkelt und steht still. Im Browser der PS5 scrollt
 der rechte Stick dann nur das Fenster selbst.</p>
-</section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Kühlung</h2></div>
+<h3>Tasten am Controller</h3>
+<p>Im Browser der Konsole helfen vier Tasten: <b>L1</b> und <b>R1</b> wechseln zur vorherigen und nächsten Seite der Seitenleiste, <b>L2</b> und <b>R2</b> rollen die Seite nach oben und unten. Der Browser meldet sie der Seite als Tasten F5 bis F8; ein Neuladen lösen sie nicht aus.</p>
+<!--keys--></section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Kühlung</h2></div>
 <p>Die wichtigste Seite: Status in Klartext, die aktuelle Temperatur, Lüfter und das laufende Spiel. Gleich darunter stellst
 du die <b>Zieltemperatur</b> und die <b>Betriebsart</b> ein.</p>
 
@@ -177,7 +186,7 @@ Ziel. „Leise“ ist empfohlen.</p>
 <p>Ist „Automatik“ aus, gibt die App die Steuerung an die PS5 zurück und zeigt nur noch Werte an. Läuft die App nicht, regelt
 die Konsole ohnehin wieder selbst.</p>
 <h3>Anzeige per Mikrofon-Taste</h3>
-<p>Die Mikrofon-Taste des Controllers <b>zweimal kurz</b> drücken: oben rechts erscheinen Prozessortemperatur und
+<p>Die Mikrofon-Taste des Controllers <b>zweimal kurz</b> drücken: oben links erscheinen (ohne Ton) Prozessortemperatur und
 Lüfterdrehzahl – auch ohne die Weboberfläche. Das Mikrofon wird dabei zweimal umgeschaltet und ist danach wieder wie vorher.</p>
 <p>Der <b>Lüfter</b> ist ein gezeichneter <b>Tacho</b>: Die Nadel zeigt den gemessenen Wert von links (0 %) bis rechts (100 %) und fährt weich auf jeden neuen Stand; der Regenbogenbogen leuchtet nur bis zur Nadel. Nadel, Zahl und Leuchtrand gehen von Blau über Grün und Gelb zu Rot (grau ohne Messwert).</p></section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Spiele</h2></div>
 <p>Die Spiele deines Startbildschirms mit Cover, Format und Aktionen. Gesucht wird nach Titel, Titel-ID oder Content-ID;
@@ -208,7 +217,7 @@ und geprüft; nichts wird überschrieben.</p>
 <li>Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Aus Bibliothek entfernen“, verschwindet es nur aus der Bibliothek, die PKG bleibt.</li>
 <li>Updates (<code>patch.pkg</code>) und Zusatzinhalte (DLC) werden mit eingebunden; Zusatzinhalte nur, wenn der Schalter in den Einstellungen an ist.</li>
 <li>Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Ist PS4Mount als eigenes Payload (<code>ps4mount.elf</code>) schon geladen, bleibt der Schalter wirkungslos, bis es beendet ist (beide teilen sich den Port 9032).</li>
-<li>Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. Dieser Einbau ist an der Konsole noch nicht erprobt (12.00); er ist ausgeschaltet, bis man ihn einschaltet.</li>
+<li>Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. An einer PS5 Pro mit 12.00 ist der Einbau geprüft: PS4-Spiele vom USB-Laufwerk werden eingebunden und laufen. Er ist ausgeschaltet, bis man ihn einschaltet.</li>
 </ul>
 <!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR-Index, APR-EMU, PlayGo und Verlauf</h2></div>
 <p>Jede Spielkarte hat unter <b>Konvertieren</b> den Knopf <b>LZ4-Asset-Packs …</b>. Er öffnet ein Fenster für Werkzeuge rund um APR-EMU. Bisher gibt es dort den <b>AMPR-Index</b>.</p>

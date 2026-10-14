@@ -120,7 +120,7 @@ l'interfaccia web, ma il controllo della ventola segnala «non disponibile».</l
 <ol class='steps'>
 <li>Invia <code>PS5_Cooling_System_Center_v1.66.0.elf</code> alla console, porta <code>9021</code>, ad es.:<br>
 <code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.66.0.elf</code></li>
-<li>Sul televisore compare in alto a destra una notifica con l'indirizzo dell'interfaccia web.</li>
+<li>Sul televisore compare in alto a sinistra una notifica con l'indirizzo dell'interfaccia web.</li>
 <li>Apri nel browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
 </ol>
 <h3>Il riquadro nella schermata Home</h3>
@@ -130,7 +130,14 @@ avvia il programma. Dopo ogni riavvio della console, quindi, l'ELF va inviato di
 Un'istanza vecchia la termini nella pagina «Payload», altrimenti aiuta un riavvio.</div>
 <div class='tip'>Hai eliminato il riquadro o vuoi una nuova immagine del riquadro? Elimina il riquadro sulla console (tasto OPTIONS, Elimina) e nella
 pagina «Sistema» premi <b>Installa riquadro</b>.</div>
-</section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>L'interfaccia in breve</h2></div>
+<h3>Il riquadro di avvio: avvio senza invio</h3>
+<p>Con il riquadro di avvio non serve più inviare l'ELF. Estrai <code>PPSA86921.zip</code> dalla release e copia la cartella <code>PPSA86921</code> in <code>/data/homebrew/</code> (via FTP o con il file manager). ShadowMountPlus crea un riquadro per essa.</p>
+<ul>
+<li>Un tocco sul riquadro avvia l'app se non è ancora in esecuzione e poi apre l'interfaccia web nel browser della console. Se l'app è già in esecuzione, apre solo l'interfaccia.</li>
+<li>L'app è contenuta nell'<code>eboot.bin</code> del riquadro. Dopo un aggiornamento copia la cartella della nuova release, altrimenti il riquadro avvia la versione vecchia.</li>
+<li>Serve ShadowMountPlus. Il vecchio riquadro in Contenuti multimediali (sopra) può restare o essere eliminato.</li>
+</ul>
+<!--starter--></section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>L'interfaccia in breve</h2></div>
 <p>A sinistra c'è la barra laterale con le sezioni <b>Profilo, Giochi, File, Payload, Raffreddamento, Sistema, Registro</b> e
 <b>Riconoscimenti</b>. In alto nell'intestazione, su ogni pagina: le <b>opzioni di alimentazione</b>, «Schermo intero», «Modalità esperto» e
 l'indicatore di connessione.</p>
@@ -150,7 +157,9 @@ le schermate, così l'app resta piccola). Con le immagini sono disponibili entra
 <h3>Finestre e la levetta destra</h3>
 <p>Quando si apre una finestra (ad es. per eliminare), lo sfondo viene oscurato e resta fermo. Nel browser della PS5 la levetta destra
 scorre allora solo la finestra stessa.</p>
-</section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Raffreddamento</h2></div>
+<h3>Tasti del controller</h3>
+<p>Nel browser della console aiutano quattro tasti: <b>L1</b> e <b>R1</b> passano alla pagina precedente e successiva della barra laterale, <b>L2</b> e <b>R2</b> scorrono la pagina su e giù. Il browser li passa alla pagina come tasti da F5 a F8; non ricaricano la pagina.</p>
+<!--keys--></section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Raffreddamento</h2></div>
 <p>La pagina più importante: lo stato in parole semplici, la temperatura attuale, la ventola e il gioco in esecuzione. Subito sotto imposti
 la <b>temperatura obiettivo</b> e la <b>modalità operativa</b>.</p>
 
@@ -177,7 +186,7 @@ l'obiettivo. «Silenzioso» è consigliato.</p>
 <p>Se la «Modalità automatica» è disattivata, l'app restituisce il controllo alla PS5 e mostra solo i valori. Se l'app non è in esecuzione,
 la console si regola comunque di nuovo da sola.</p>
 <h3>Visualizzazione con il tasto microfono</h3>
-<p>Premi il tasto microfono del controller <b>due volte di seguito</b>: in alto a destra compaiono la temperatura del processore e la
+<p>Premi il tasto microfono del controller <b>due volte di seguito</b>: in alto a sinistra compaiono (senza suono) la temperatura del processore e la
 velocità della ventola – anche senza l'interfaccia web. Il microfono viene commutato due volte e poi torna com'era.</p>
 <p>La <b>ventola</b> è un <b>tachimetro</b> disegnato: la lancetta mostra il valore misurato da sinistra (0 %) a destra (100 %) e si sposta dolcemente a ogni nuovo valore; l’arco arcobaleno si accende solo fino alla lancetta. Lancetta, cifra e bordo luminoso vanno dal blu al verde, al giallo e al rosso (grigi senza valore).</p></section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Giochi</h2></div>
 <p>I giochi della tua schermata Home con copertina, formato e azioni. Puoi cercare per titolo, ID titolo o ID contenuto,
@@ -208,7 +217,7 @@ non viene sovrascritto nulla.</p>
 <li>I file PKG restano sull'unità; sulla console vanno solo piccoli file di gestione. Eliminare un gioco sulla console o con «Rimuovi dalla libreria» lo toglie solo dalla libreria, il PKG resta.</li>
 <li>Gli aggiornamenti (<code>patch.pkg</code>) e i contenuti aggiuntivi (DLC) sono inclusi; gli aggiuntivi solo con l'interruttore nelle impostazioni attivo.</li>
 <li>L'app deve essere in esecuzione perché i giochi restino visibili dopo un riavvio della console. Se PS4Mount è già caricato come payload a sé (<code>ps4mount.elf</code>), l'interruttore non ha effetto finché non lo fermi (entrambi usano la porta 9032).</li>
-<li>Firmware (da PS4Mount 0.4.4): dalla 6.00 la console registra i giochi nel modo consueto (provato sulla 13.20, segnalato sulla 6.50); sotto la 6.00 uno alla volta, e se manca quella funzione non viene aggiunto alcun gioco, per proteggere il database. La notifica all'attivazione indica il metodo. Questa versione dentro l'app non è ancora stata provata su una console (12.00); resta disattivata finché non la attivi.</li>
+<li>Firmware (da PS4Mount 0.4.4): dalla 6.00 la console registra i giochi nel modo consueto (provato sulla 13.20, segnalato sulla 6.50); sotto la 6.00 uno alla volta, e se manca quella funzione non viene aggiunto alcun gioco, per proteggere il database. La notifica all'attivazione indica il metodo. Questa versione dentro l'app è verificata su una PS5 Pro con 12.00: i giochi PS4 da un'unità USB vengono aggiunti e funzionano. Resta disattivata finché non la attivi.</li>
 </ul>
 <!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Indice AMPR, APR-EMU, PlayGo e cronologia</h2></div>
 <p>Ogni scheda di gioco ha il pulsante <b>Asset pack LZ4 …</b> sotto <b>Converti</b>. Apre una finestra con strumenti per APR-EMU. Per ora contiene l'<b>indice AMPR</b>.</p>

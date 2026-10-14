@@ -120,7 +120,7 @@ interfaz web, pero la regulación del ventilador indica «no disponible».</li>
 <ol class='steps'>
 <li>Envía <code>PS5_Cooling_System_Center_v1.66.0.elf</code> a la consola, puerto <code>9021</code>, p. ej.:<br>
 <code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.66.0.elf</code></li>
-<li>En el televisor aparece, arriba a la derecha, una notificación con la dirección de la interfaz web.</li>
+<li>En el televisor aparece, arriba a la izquierda, una notificación con la dirección de la interfaz web.</li>
 <li>Ábrela en el navegador: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
 </ol>
 <h3>El icono de la pantalla de inicio</h3>
@@ -130,7 +130,14 @@ inicia el programa. Por eso, tras cada reinicio de la consola hay que volver a e
 Una instancia antigua se finaliza en la página «Payloads»; si no, reinicia la consola.</div>
 <div class='tip'>¿Has eliminado el icono o quieres una imagen de icono nueva? Elimina el icono en la consola (botón OPTIONS, Eliminar) y, en
 la página «Sistema», pulsa <b>Instalar icono</b>.</div>
-</section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>La interfaz de un vistazo</h2></div>
+<h3>El mosaico de inicio: arrancar sin enviar</h3>
+<p>Con el mosaico de inicio ya no hace falta enviar el ELF. Descomprime <code>PPSA86921.zip</code> de la release y copia la carpeta <code>PPSA86921</code> a <code>/data/homebrew/</code> (por FTP o con el gestor de archivos). ShadowMountPlus crea un mosaico para ella.</p>
+<ul>
+<li>Un toque en el mosaico inicia la app si aún no está en marcha y luego abre la interfaz web en el navegador de la consola. Si la app ya funciona, solo abre la interfaz.</li>
+<li>La app va dentro del <code>eboot.bin</code> del mosaico. Tras una actualización, copia la carpeta de la nueva release; si no, el mosaico inicia la versión antigua.</li>
+<li>Hace falta ShadowMountPlus. El mosaico antiguo de Multimedia (arriba) puede quedarse o borrarse.</li>
+</ul>
+<!--starter--></section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>La interfaz de un vistazo</h2></div>
 <p>A la izquierda está la barra lateral con las secciones <b>Perfil, Juegos, Archivos, Payloads, Refrigeración, Sistema, Registro</b> y
 <b>Créditos</b>. Arriba, en la barra superior de cada página: las <b>opciones de alimentación</b>, «Pantalla completa», «Modo experto» y el
 indicador de conexión.</p>
@@ -150,7 +157,9 @@ capturas de pantalla, para que la app siga siendo pequeña). Con imágenes, ambo
 <h3>Ventanas y el joystick derecho</h3>
 <p>Cuando se abre una ventana (p. ej., para eliminar), el fondo se oscurece y se queda quieto. En el navegador de la PS5, el
 joystick derecho solo desplaza entonces la propia ventana.</p>
-</section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Refrigeración</h2></div>
+<h3>Botones del mando</h3>
+<p>En el navegador de la consola ayudan cuatro botones: <b>L1</b> y <b>R1</b> van a la página anterior y siguiente de la barra lateral, <b>L2</b> y <b>R2</b> desplazan la página arriba y abajo. El navegador los comunica a la página como teclas F5 a F8; no recargan la página.</p>
+<!--keys--></section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Refrigeración</h2></div>
 <p>La página más importante: el estado en lenguaje claro, la temperatura actual, el ventilador y el juego en ejecución. Justo debajo
 ajustas la <b>Temperatura objetivo</b> y el <b>Modo de funcionamiento</b>.</p>
 
@@ -177,7 +186,7 @@ objetivo. Se recomienda «Silencioso».</p>
 <p>Si «Modo automático» está desactivado, la app devuelve el control a la PS5 y solo muestra valores. Si la app no se está ejecutando,
 la consola vuelve a regular por sí misma de todos modos.</p>
 <h3>Indicador con el botón de micrófono</h3>
-<p>Pulsa el botón de micrófono del mando <b>dos veces seguidas</b>: arriba a la derecha aparecen la temperatura del procesador y la
+<p>Pulsa el botón de micrófono del mando <b>dos veces seguidas</b>: arriba a la izquierda aparecen (sin sonido) la temperatura del procesador y la
 velocidad del ventilador, incluso sin la interfaz web. El micrófono cambia de estado dos veces y después queda como estaba.</p>
 <p>El <b>ventilador</b> es un <b>velocímetro</b> dibujado: la aguja muestra el valor medido de izquierda (0 %) a derecha (100 %) y se mueve suavemente a cada nuevo valor; el arco iris solo se ilumina hasta la aguja. Aguja, cifra y borde luminoso van del azul al verde, al amarillo y al rojo (gris sin valor).</p></section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Juegos</h2></div>
 <p>Los juegos de tu pantalla de inicio con portada, formato y acciones. Puedes buscar por título, ID de título o ID de contenido;
@@ -208,7 +217,7 @@ no se sobrescribe nada.</p>
 <li>Los archivos PKG se quedan en la unidad; a la consola solo van pequeños archivos de gestión. Borrar un juego en la consola o con «Quitar de la biblioteca» solo lo quita de la biblioteca, el PKG se queda.</li>
 <li>Se incluyen las actualizaciones (<code>patch.pkg</code>) y los contenidos adicionales (DLC); los adicionales solo con el interruptor de los ajustes activado.</li>
 <li>La app debe estar en marcha para que los juegos sigan visibles tras reiniciar la consola. Si PS4Mount ya está cargado como payload propio (<code>ps4mount.elf</code>), el interruptor no surte efecto hasta que se detenga (ambos usan el puerto 9032).</li>
-<li>Firmware (desde PS4Mount 0.4.4): a partir de 6.00 la consola registra los juegos de la forma habitual (probado en 13.20, comunicado en 6.50); por debajo de 6.00 uno a uno, y si falta esa función no se añaden juegos, para proteger la base de datos. El aviso al activar indica el método. Esta versión dentro de la app aún no se ha probado en una consola (12.00); está desactivada hasta que la active.</li>
+<li>Firmware (desde PS4Mount 0.4.4): a partir de 6.00 la consola registra los juegos de la forma habitual (probado en 13.20, comunicado en 6.50); por debajo de 6.00 uno a uno, y si falta esa función no se añaden juegos, para proteger la base de datos. El aviso al activar indica el método. Esta versión dentro de la app está probada en una PS5 Pro con 12.00: los juegos de PS4 desde una unidad USB se añaden y funcionan. Está desactivada hasta que la active.</li>
 </ul>
 <!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Índice AMPR, APR-EMU, PlayGo e historial</h2></div>
 <p>Cada tarjeta de juego tiene el botón <b>Asset packs LZ4 …</b> bajo <b>Convertir</b>. Abre una ventana con herramientas de APR-EMU. Por ahora contiene el <b>índice AMPR</b>.</p>

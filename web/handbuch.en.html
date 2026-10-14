@@ -120,7 +120,7 @@ web interface work, but fan control then reports “not available”.</li>
 <ol class='steps'>
 <li>Send <code>PS5_Cooling_System_Center_v1.66.0.elf</code> to the console, port <code>9021</code>, e.g.:<br>
 <code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.66.0.elf</code></li>
-<li>A notification with the address of the web interface appears at the top right of the TV.</li>
+<li>A notification with the address of the web interface appears at the top left of the TV.</li>
 <li>Open it in the browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
 </ol>
 <h3>The tile on the Home screen</h3>
@@ -130,7 +130,14 @@ does not start the program. So after every restart of the console, the ELF has t
 You can stop an old instance on the “Payloads” page; otherwise a restart helps.</div>
 <div class='tip'>Tile deleted, or want a new tile picture? Delete the tile on the console (Options button, Delete) and on
 the “System” page press <b>Install tile</b>.</div>
-</section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>The interface at a glance</h2></div>
+<h3>The starter tile: starting without sending</h3>
+<p>With the starter tile the ELF no longer has to be sent. Unpack <code>PPSA86921.zip</code> from the release and copy the folder <code>PPSA86921</code> to <code>/data/homebrew/</code> (over FTP or with the file manager). ShadowMountPlus adds a tile for it.</p>
+<ul>
+<li>One tap on the tile starts the app if it is not running yet and then opens the web interface in the console's browser. If the app is already running, it only opens the interface.</li>
+<li>The app is part of the tile's <code>eboot.bin</code>. After an update, copy the folder from the new release, otherwise the tile starts the old version.</li>
+<li>ShadowMountPlus is needed for it. The old media tile (above) may stay or be deleted.</li>
+</ul>
+<!--starter--></section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>The interface at a glance</h2></div>
 <p>On the left is the sidebar with the sections <b>Profile, Games, Files, Payloads, Cooling, System, Log</b> and
 <b>Credits</b>. At the top in the header, on every page: the <b>power options</b>, “Fullscreen”, “Expert mode” and the
 connection indicator.</p>
@@ -150,7 +157,9 @@ screenshots, so that the app stays small). With pictures, both are available as 
 <h3>Windows and the right stick</h3>
 <p>When a window opens (e.g. for deleting), the background is dimmed and stays still. In the PS5's browser, the right stick
 then only scrolls the window itself.</p>
-</section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Cooling</h2></div>
+<h3>Controller keys</h3>
+<p>In the console's browser four buttons help: <b>L1</b> and <b>R1</b> go to the previous and next page of the sidebar, <b>L2</b> and <b>R2</b> scroll the page up and down. The browser reports them to the page as the keys F5 to F8; they do not reload the page.</p>
+<!--keys--></section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Cooling</h2></div>
 <p>The most important page: the status in plain words, the current temperature, the fan and the running game. Right below, you set
 the <b>Target temperature</b> and the <b>Operating mode</b>.</p>
 
@@ -177,8 +186,7 @@ target. “Quiet” is recommended.</p>
 <p>If “Automatic mode” is off, the app hands control back to the PS5 and only shows values. If the app is not running, the
 console controls the fan itself again anyway.</p>
 <h3>Display via the mute button</h3>
-<p>Press the controller's mute button <b>twice quickly</b>: the processor temperature and
-fan speed appear at the top right – even without the web interface. The microphone is toggled twice in the process and ends up as it was before.</p>
+<p>Press the controller's mute button <b>twice quickly</b>: the processor temperature and fan speed appear at the top left (without a sound) – even without the web interface. The microphone is toggled twice in the process and ends up as it was before.</p>
 <p>The <b>fan</b> is a drawn <b>speedometer</b>: the needle shows the measured value from left (0 %) to right (100 %) and moves smoothly to every new reading; the rainbow arc lights up only as far as the needle. Needle, number and glowing edge go from blue through green and yellow to red (grey without a reading).</p></section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Games</h2></div>
 <p>The games on your Home screen with cover, format and actions. You can search by title, title ID or content ID;
 filter by PS5, PS4 or “Backport · AMPR · PlayGo”; and sort by Home screen order, name, play time, size and more.</p>
@@ -208,7 +216,7 @@ and verified; nothing is overwritten.</p>
 <li>The PKG files stay on the drive; only small management files go to the console. Deleting a game on the console or with “Remove from library” only removes it from the library, the PKG stays.</li>
 <li>Updates (<code>patch.pkg</code>) and add-ons (DLC) are included; add-ons only when the switch in the settings is on.</li>
 <li>The app has to be running for the games to stay visible after a console restart. If PS4Mount is already loaded as a payload of its own (<code>ps4mount.elf</code>), the switch has no effect until that one is stopped (both use port 9032).</li>
-<li>Firmware (since PS4Mount 0.4.4): from 6.00 the console registers the games the usual way (tested on 13.20, reported on 6.50); below 6.00 one at a time, and where that function is missing no games are added, to protect the database. The notification at switch-on names the way. This version inside the app has not yet been tried on a console (12.00); it is switched off until you switch it on.</li>
+<li>Firmware (since PS4Mount 0.4.4): from 6.00 the console registers the games the usual way (tested on 13.20, reported on 6.50); below 6.00 one at a time, and where that function is missing no games are added, to protect the database. The notification at switch-on names the way. This version inside the app has been checked on a PS5 Pro with 12.00: PS4 games from a USB drive are added and run. It is switched off until you switch it on.</li>
 </ul>
 <!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
 <p>Every game card has the button <b>LZ4 asset packs …</b> under <b>Convert</b>. It opens a window with tools around APR-EMU. For now it holds the <b>AMPR index</b>.</p>

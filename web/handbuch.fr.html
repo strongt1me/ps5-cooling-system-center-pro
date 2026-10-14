@@ -120,7 +120,7 @@ l’interface web fonctionnent, mais la régulation du ventilateur indique alors
 <ol class='steps'>
 <li>Envoyez <code>PS5_Cooling_System_Center_v1.66.0.elf</code> à la console, port <code>9021</code>, p. ex. :<br>
 <code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.66.0.elf</code></li>
-<li>Un message avec l’adresse de l’interface web apparaît en haut à droite du téléviseur.</li>
+<li>Un message avec l’adresse de l’interface web apparaît en haut à gauche du téléviseur.</li>
 <li>Ouvrez dans le navigateur : <code>http://&lt;PS5-IP&gt;:8086/</code></li>
 </ol>
 <h3>La vignette de l’écran d’accueil</h3>
@@ -130,7 +130,14 @@ ne lance pas le programme. Après chaque redémarrage de la console, l’ELF doi
 Vous arrêtez une ancienne instance sur la page « Payloads » ; sinon, un redémarrage aide.</div>
 <div class='tip'>Vignette supprimée ou nouvelle image de vignette souhaitée ? Supprimez la vignette sur la console (touche OPTIONS, Supprimer) et appuyez sur
 <b>Installer la vignette</b> sur la page « Système ».</div>
-</section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>L’interface en un coup d’œil</h2></div>
+<h3>La vignette de lancement : démarrer sans envoi</h3>
+<p>Avec la vignette de lancement, il n'est plus nécessaire d'envoyer l'ELF. Décompressez <code>PPSA86921.zip</code> de la release et copiez le dossier <code>PPSA86921</code> dans <code>/data/homebrew/</code> (par FTP ou avec le gestionnaire de fichiers). ShadowMountPlus crée une vignette pour lui.</p>
+<ul>
+<li>Un appui sur la vignette lance l'appli si elle ne tourne pas encore, puis ouvre l'interface web dans le navigateur de la console. Si l'appli tourne déjà, elle ouvre seulement l'interface.</li>
+<li>L'appli est contenue dans l'<code>eboot.bin</code> de la vignette. Après une mise à jour, copiez le dossier de la nouvelle release, sinon la vignette lance l'ancienne version.</li>
+<li>ShadowMountPlus est nécessaire. L'ancienne vignette Multimédia (ci-dessus) peut rester ou être supprimée.</li>
+</ul>
+<!--starter--></section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>L’interface en un coup d’œil</h2></div>
 <p>À gauche se trouve la barre latérale avec les sections <b>Profil, Jeux, Fichiers, Payloads, Refroidissement, Système, Journal</b> et
 <b>Crédits</b>. En haut, dans la barre d’en-tête, sur chaque page : les <b>options d’alimentation</b>, « Plein écran », « Mode expert » et
 l’indicateur de connexion.</p>
@@ -150,7 +157,9 @@ captures d’écran, pour que l’app reste légère). Avec images, les deux son
 <h3>Fenêtres et joystick droit</h3>
 <p>Lorsqu’une fenêtre s’ouvre (p. ex. pour supprimer), l’arrière-plan s’assombrit et reste immobile. Dans le navigateur de la PS5, le
 joystick droit ne fait alors défiler que la fenêtre elle-même.</p>
-</section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Refroidissement</h2></div>
+<h3>Touches de la manette</h3>
+<p>Dans le navigateur de la console, quatre touches aident : <b>L1</b> et <b>R1</b> passent à la page précédente et suivante de la barre latérale, <b>L2</b> et <b>R2</b> font défiler la page vers le haut et le bas. Le navigateur les transmet à la page comme touches F5 à F8 ; elles ne rechargent pas la page.</p>
+<!--keys--></section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Refroidissement</h2></div>
 <p>La page la plus importante : l’état en clair, la température actuelle, le ventilateur et le jeu en cours. Juste en dessous, vous réglez
 la <b>température cible</b> et le <b>mode de fonctionnement</b>.</p>
 
@@ -176,8 +185,7 @@ cible. « Silencieux » est recommandé.</p>
 <p>Si « Mode automatique » est désactivé, l’app rend le contrôle à la PS5 et se contente d’afficher les valeurs. Si l’app ne tourne pas, la console
 régule de toute façon de nouveau elle-même.</p>
 <h3>Affichage par la touche du micro</h3>
-<p>Appuyez <b>deux fois rapidement</b> sur la touche du micro de la manette : la température du processeur et la
-vitesse du ventilateur apparaissent en haut à droite – même sans l’interface web. Le micro est basculé deux fois et revient ensuite à son état précédent.</p>
+<p>Appuyez <b>deux fois rapidement</b> sur la touche du micro de la manette : la température du processeur et la vitesse du ventilateur apparaissent en haut à gauche (sans son) – même sans l’interface web. Le micro est basculé deux fois et revient ensuite à son état précédent.</p>
 <p>Le <b>ventilateur</b> est un <b>compteur</b> dessiné : l’aiguille indique la valeur mesurée de gauche (0 %) à droite (100 %) et se déplace en douceur à chaque nouvelle valeur ; l’arc arc-en-ciel ne s’allume que jusqu’à l’aiguille. Aiguille, chiffre et bord lumineux vont du bleu au vert, au jaune puis au rouge (gris sans valeur).</p></section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Jeux</h2></div>
 <p>Les jeux de votre écran d’accueil avec jaquette, format et actions. La recherche porte sur le titre, l’ID de titre ou l’ID de contenu ;
 filtrer par PS5, PS4 ou « Backport · AMPR · PlayGo » ; trier comme sur l’écran d’accueil, par nom, temps de jeu, taille et plus encore.</p>
@@ -207,7 +215,7 @@ et vérifiée après l’écriture ; rien n’est écrasé.</p>
 <li>Les fichiers PKG restent sur le disque ; seuls de petits fichiers de gestion vont sur la console. Supprimer un jeu sur la console ou avec « Retirer de la bibliothèque » le retire seulement de la bibliothèque, le PKG reste.</li>
 <li>Les mises à jour (<code>patch.pkg</code>) et les contenus additionnels (DLC) sont inclus ; les additionnels seulement si l'interrupteur des réglages est activé.</li>
 <li>L'appli doit tourner pour que les jeux restent visibles après un redémarrage de la console. Si PS4Mount est déjà chargé comme payload à part (<code>ps4mount.elf</code>), l'interrupteur reste sans effet tant qu'il n'est pas arrêté (les deux utilisent le port 9032).</li>
-<li>Firmware (depuis PS4Mount 0.4.4) : à partir de 6.00 la console enregistre les jeux de la manière habituelle (testé sur 13.20, signalé sur 6.50) ; sous 6.00 un par un, et si cette fonction manque aucun jeu n'est ajouté, pour protéger la base de données. La notification à l'activation indique la méthode. Cette version intégrée à l'appli n'a pas encore été essayée sur une console (12.00) ; elle est désactivée tant que vous ne l'activez pas.</li>
+<li>Firmware (depuis PS4Mount 0.4.4) : à partir de 6.00 la console enregistre les jeux de la manière habituelle (testé sur 13.20, signalé sur 6.50) ; sous 6.00 un par un, et si cette fonction manque aucun jeu n'est ajouté, pour protéger la base de données. La notification à l'activation indique la méthode. Cette version intégrée à l'appli est vérifiée sur une PS5 Pro en 12.00 : les jeux PS4 d'un disque USB sont ajoutés et fonctionnent. Elle est désactivée tant que vous ne l'activez pas.</li>
 </ul>
 <!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Index AMPR, APR-EMU, PlayGo et historique</h2></div>
 <p>Chaque carte de jeu a le bouton <b>Asset packs LZ4 …</b> sous <b>Convertir</b>. Il ouvre une fenêtre d'outils autour d'APR-EMU. Pour l'instant elle contient l'<b>index AMPR</b>.</p>

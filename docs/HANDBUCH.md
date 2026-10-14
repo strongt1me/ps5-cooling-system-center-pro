@@ -384,7 +384,7 @@ Der Reiter **PS4 von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) dir
 - Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Aus Bibliothek entfernen“, verschwindet es nur aus der Bibliothek, die PKG bleibt.
 - Updates (`patch.pkg`) und Zusatzinhalte (DLC) werden mit eingebunden; Zusatzinhalte nur, wenn der Schalter in den Einstellungen an ist.
 - Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Ist PS4Mount als eigenes Payload (`ps4mount.elf`) schon geladen, bleibt der Schalter wirkungslos, bis es beendet ist (beide teilen sich den Port 9032).
-- Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. Dieser Einbau ist an der Konsole noch nicht erprobt (12.00); er ist ausgeschaltet, bis man ihn einschaltet.
+- Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. An einer PS5 Pro mit 12.00 ist der Einbau geprüft: PS4-Spiele vom USB-Laufwerk werden eingebunden und laufen. Er ist ausgeschaltet, bis man ihn einschaltet.
 
 ## LZ4-Asset-Packs: Schritt für Schritt (seit 12.10.2026)
 
@@ -1298,15 +1298,36 @@ Systemseite lässt sich ein Paket auch hochladen.
 Wie die Kachel-Dateien eingebettet und das Paket gebaut werden, steht in
 [ENTWICKLUNG.md](ENTWICKLUNG.md#kachel-dateien-und-kachel-paket-bauen).
 
+## Starter-Kachel `PPSA86921` (seit 1.65.0)
+
+Mit der Starter-Kachel muss die ELF nicht mehr gesendet werden. Aus der Veröffentlichung `PPSA86921.zip` entpacken
+und den Ordner `PPSA86921` nach `/data/homebrew/` kopieren (per FTP oder mit dem Dateimanager); ShadowMountPlus legt
+dafür eine Kachel an.
+
+- Ein Tipp auf die Kachel startet die App, falls sie noch nicht läuft (die `eboot.bin` schickt die eingebettete ELF an
+  den Lader auf `127.0.0.1:9021`), wartet, bis die Oberfläche antwortet, und öffnet sie über `POST /api/v1/open-ui` im
+  Browser der Konsole. Läuft die App schon, öffnet sie nur die Oberfläche.
+- Die `eboot.bin` ist ein nativer, signierter PS5-Titel (gebaut mit `tools/make_starter.sh` nach dem Vorbild von
+  ps5-native-app-boilerplate); eine einfache ELF startet die Konsole nicht. `sce_module/libc.prx` verlangt der App-Lader.
+- Die App steckt in der `eboot.bin`: Nach einem Update den Ordner aus der neuen Veröffentlichung kopieren, sonst startet
+  die Kachel die alte Fassung.
+
+## Tasten am Controller (seit 1.66.0)
+
+Im Browser der Konsole wechseln **L1** und **R1** zur vorherigen und nächsten Seite der Seitenleiste, **L2** und **R2**
+rollen die Seite um knapp eine Bildschirmhöhe nach oben und unten. Der Browser der PS5 meldet diese Tasten der Seite
+als Tastendrücke F5 bis F8 (an der Konsole gemessen); die Seite fängt sie ab, ein Neuladen lösen sie nicht aus. Die
+Gamepad-Schnittstelle des Browsers liefert auf der PS5 nichts.
+
 ## Bildschirmanzeige auf der Konsole
 
-Beim Start meldet sich der Payload mit einem System-Hinweis oben rechts —
-Version, IP-Adresse und Port der Web-UI. Zusätzlich lässt sich unter
+Beim Start meldet sich der Payload mit einem Hinweis oben links (einzeilig, ohne Ton) —
+Version, IP-Adresse und Port der Web-UI. Mit einem Zeilenumbruch spielte die Konsole dabei ihren Meldeton, deshalb steht alles in einer Zeile. Zusätzlich lässt sich unter
 *System → Anzeige auf dem Fernseher* eine wiederkehrende Statusmeldung
 einschalten (Temperaturen, Lüfter, IP, freier Speicher; Intervall einstellbar).
 
 Auf Knopfdruck geht es auch: Wer die **Mikrofon-Taste des Controllers zweimal kurz
-hintereinander** drückt, sieht oben rechts kurz Prozessortemperatur und
+hintereinander** drückt, sieht oben links (ohne Ton) kurz Prozessortemperatur und
 Lüfterdrehzahl — auch ohne geöffnete Web-Oberfläche (Schalter unter
 *Kühlung → Anzeige per Mikrofon-Taste*, höchstens alle 5 Sekunden). Das
 Mikrofon wird dabei zweimal umgeschaltet und ist danach wieder wie vorher;

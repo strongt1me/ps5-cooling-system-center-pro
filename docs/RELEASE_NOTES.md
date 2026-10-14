@@ -22,6 +22,6 @@ Datum: 2026-10-14
 
 ### Wichtig
 - **Firmware:** Getestet auf einer PS5 Pro (CFI-7021) mit **12.00**. Mehrere Nutzer melden, dass die App auf 13.60 läuft; für 13.00 bis 13.40 gibt es keine Meldung.
-- PS4Mount ist an der Konsole nur ausgeschaltet geprüft; mit einem echten PS4-Spiel vom USB-Laufwerk ist der Einbau noch nicht erprobt (das Original prüfte gasb07 auf 13.20).
+- PS4Mount ist an einer PS5 Pro mit 12.00 geprüft: PS4-Spiele vom USB-Laufwerk werden eingebunden und laufen (das Original prüfte gasb07 auf 13.20).
 - Die LZ4-Pakete sind an der Konsole nur mit Arkanoid ausprobiert (kein Spielstart mit Paketen); der Mitschnitt und die DLC-Module sind dort noch nicht benutzt.
 - **`.ffpkg`-Dateien aus Fassungen vor 1.48.0 neu erzeugen.**
