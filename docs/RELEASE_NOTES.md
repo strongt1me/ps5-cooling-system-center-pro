@@ -1,21 +1,27 @@
 ## Release Notes
 
-Version: v1.65.0
-Datum: 2026-10-13
+Version: v1.66.0
+Datum: 2026-10-14
+
+### PS4-Spiele von USB (PS4Mount)
+- Neuer Reiter **„PS4 von USB“** auf der Spiele-Seite: PS4-Spiele (Fake-PKG) direkt vom USB-Laufwerk spielen, ohne sie zu installieren. Das Spiel kommt mit Symbol auf den Startbildschirm, die PKG-Dateien bleiben auf dem Laufwerk
+- Beruht auf PS4Mount 0.4.4 von gasb07 (GPL-3.0), dessen Quelltext in die App übernommen ist: Updates und Zusatzinhalte (DLC) werden mit eingebunden, viele Spiele in Gruppen hinzugefügt, Löschen auf der Konsole entfernt nur den Eintrag in der Bibliothek
+- Liste mit Symbol, Version, Update, Zusatzinhalten und Zustand; „Jetzt suchen“, „Aus Bibliothek entfernen“ und „Hinzufügen“; Einstellungen (Ordner, Gruppen, DLC) und Protokoll
+- In der Voreinstellung ausgeschaltet; läuft gleichzeitig das eigenständige `ps4mount.elf`, lässt es sich nicht einschalten
+- Neue Schnittstelle `/api/v1/ps4mount`
+
+### Bedienung mit dem Controller
+- **L1 / R1** wechseln im Browser der Konsole zur vorherigen / nächsten Seite der Seitenleiste
+- **L2 / R2** rollen die Seite nach oben / unten
+
+### Meldungen
+- Die Meldung beim Start der App und die Anzeige von Temperatur und Lüfter (Mute-Taste zweimal drücken) erscheinen oben links, ohne Ton
 
 ### Starter-Kachel
-- Neuer Dump-Ordner **`PPSA86921`** für `/data/homebrew` (Datei `PPSA86921.zip`, entpackt in den Homebrew-Ordner kopieren): ShadowMountPlus meldet ihn an, auf dem Startbildschirm erscheint eine Kachel
-- Ein Tipp auf die Kachel startet die App (die ELF steckt in der `eboot.bin`, es muss nichts mehr gesendet werden) und öffnet danach die Web UI im Browser der Konsole; läuft die App schon, öffnet sie nur die Web UI
-- Gebaut als nativer PS5-Titel nach dem Vorbild von ps5-native-app-boilerplate; die ELF darin ist die von v1.65.0 (bei jeder neuen Version den Ordner neu laden)
-- Neue Schnittstelle `POST /api/v1/open-ui` (nur von der Konsole selbst), öffnet den Browser auf der Web UI
-
-### Oberfläche
-- Seitenleiste: Kühlung oben, Profil unter System
-- Alle Kacheln sind leicht durchscheinend
-- Beim Konvertieren steht das Format des Ergebnisses
+- `PPSA86921.zip` enthält die App von v1.66.0; den Ordner in `/data/homebrew/` ersetzen
 
 ### Wichtig
 - **Firmware:** Getestet auf einer PS5 Pro (CFI-7021) mit **12.00**. Mehrere Nutzer melden, dass die App auf 13.60 läuft; für 13.00 bis 13.40 gibt es keine Meldung.
-- Die Starter-Kachel ist an einer PS5 Pro mit 12.00 geprüft (Tipp startet die App und öffnet die Web UI); auf anderen Firmwares ist sie ungetestet.
-- Die LZ4-Pakete sind an der Konsole nur mit Arkanoid ausprobiert (kein Spielstart mit Paketen); der Mitschnitt und die DLC-Module sind dort noch nicht benutzt. Erst ungepackt starten, dann packen.
+- PS4Mount ist an der Konsole nur ausgeschaltet geprüft; mit einem echten PS4-Spiel vom USB-Laufwerk ist der Einbau noch nicht erprobt (das Original prüfte gasb07 auf 13.20).
+- Die LZ4-Pakete sind an der Konsole nur mit Arkanoid ausprobiert (kein Spielstart mit Paketen); der Mitschnitt und die DLC-Module sind dort noch nicht benutzt.
 - **`.ffpkg`-Dateien aus Fassungen vor 1.48.0 neu erzeugen.**
