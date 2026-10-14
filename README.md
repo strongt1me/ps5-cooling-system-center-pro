@@ -24,7 +24,7 @@ PS5 Cooling & System Center - Pro ist ein Homebrew-Payload (ELF) für eine gejai
 Das Projekt ist der Nachfolger des *PS5 Temperature Manager*; Backend (C) und Oberfläche sind neu geschrieben.
 
 <p align="center">
-  <img src="docs/images/kuehlung.jpg" alt="Kühlung: Temperatur, Lüfter, Verlauf und Sensoren" width="860">
+  <img src="docs/images/kuehlung.jpg" alt="Kühlung: Temperatur, Lüfter, laufendes Spiel, Zieltemperatur und Betriebsart" width="860">
 </p>
 
 <table>

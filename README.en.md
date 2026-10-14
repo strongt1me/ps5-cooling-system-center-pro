@@ -24,7 +24,7 @@ PS5 Cooling & System Center - Pro is a homebrew payload (ELF) for a jailbroken P
 The project is the successor to *PS5 Temperature Manager*; the back end (C) and the interface have been rewritten from scratch.
 
 <p align="center">
-  <img src="docs/images/kuehlung.jpg" alt="Cooling: temperature, fan, history and sensors" width="860">
+  <img src="docs/images/kuehlung.jpg" alt="Cooling: temperature, fan, running game, target temperature and mode" width="860">
 </p>
 
 <table>

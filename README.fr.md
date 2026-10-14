@@ -24,7 +24,7 @@ PS5 Cooling & System Center - Pro est un payload homebrew (ELF) pour une PlaySta
 Le projet succède au *PS5 Temperature Manager* ; le backend (C) et l’interface ont été entièrement réécrits.
 
 <p align="center">
-  <img src="docs/images/kuehlung.jpg" alt="Refroidissement : température, ventilateur, historique et capteurs" width="860">
+  <img src="docs/images/kuehlung.jpg" alt="Refroidissement : température, ventilateur, jeu en cours, température cible et mode" width="860">
 </p>
 
 <table>
