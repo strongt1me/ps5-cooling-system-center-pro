@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.67.0
+
+### Handbuch
+- Neuer Abschnitt **Starter-Kachel**: Ordner `PPSA86921` nach `/data/homebrew/` kopieren, ein Tipp auf die Kachel startet die App und öffnet die Oberfläche
+- Neuer Abschnitt **Tasten am Controller**: L1 / R1 wechseln die Seite, L2 / R2 scrollen
+- Startmeldung und Anzeige per Mute-Taste stehen jetzt richtig als Meldung oben links, ohne Ton
+- PS4Mount ist als an der Konsole geprüft beschrieben (PS5 Pro, Firmware 12.00)
+- Alles in sechs Sprachen, in der App und als `HANDBUCH.md`
+
+### README auf GitHub
+- In allen sechs Sprachen neu gegliedert: Funktionen als Kacheln, Bildraster, Schnellstart mit der Starter-Kachel, kurze Tabellen und Hinweiskästen; lange Teile (alle Funktionen im Detail, Bauen, vollständiger Rechtstext, Credits) aufklappbar
+- Neue, anonyme Bilder aller Bereiche (Beispieldaten, erfundene Spiele) und eine aktuelle Handy-Ansicht
+- Credits ergänzt: gasb07 (PS4Mount), V-10, drakmors Emulatoren, BlackBearReloaded, LZ4
+
+### Starter-Kachel
+- `PPSA86921.zip` enthält die App von v1.67.0; den Ordner in `/data/homebrew/` ersetzen
+
+---
+
 ## v1.66.0
 
 ### PS4-Spiele von USB (PS4Mount)
