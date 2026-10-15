@@ -44,8 +44,8 @@
   /* Kacheln mit Leuchtrand (15.10.2026, Vorlage des Users): ein Blau für Rand, Schein und Symbolkachel */
   --glow-rgb:  56,128,255;
   --edge:      rgba(56,128,255,.34);
-  --card-top:  rgba(13,23,50,.72);   /* durchscheinend: 13.10.2026 Stufe 86 %, seit 15.10.2026 auf Wunsch 72 % */
-  --card-bot:  rgba(7,13,31,.72);
+  --card-top:  #0d1732;   /* deckend (Wunsch 15.10.2026 abends); vorher durchscheinend: 13.10. Stufe 86 %, 15.10. kurz 72 % */
+  --card-bot:  #070d1f;
   --card-glow: 0 0 0 1px rgba(56,128,255,.06), 0 0 20px rgba(56,128,255,.13), inset 0 1px 0 rgba(150,190,255,.09);
 }
 
@@ -439,11 +439,11 @@ body.offline .offline-note { display: flex; }
 
 /* ── Karten ────────────────────────────────────────────────────────── */
 /* Seit 15.10.2026 nach der Vorlage des Users: dunkles Blau mit Verlauf, leuchtender Rand, Symbolkachel im Kopf.
-   Nur Farbverläufe, Linien und box-shadow – kein filter/backdrop-filter (auf der PS5 teuer, siehe oben). Leicht
-   durchscheinend wie seit 13.10.2026: das Platinenmuster scheint durch. */
+   Nur Farbverläufe, Linien und box-shadow – kein filter/backdrop-filter (auf der PS5 teuer, siehe oben). Deckend:
+   das Platinenmuster scheint nicht mehr durch (Wunsch 15.10.2026 abends). */
 .card { padding: 20px 22px; margin-bottom: 18px; border: 1px solid var(--edge); border-radius: 20px;
   background: linear-gradient(180deg, var(--card-top), var(--card-bot)); box-shadow: var(--card-glow); }
-.card { --surface-1: rgba(13,23,50,.72); --surface-2: rgba(20,34,70,.9); --inset: rgba(6,12,30,.72); }
+.card { --surface-1: #0d1732; --surface-2: rgba(20,34,70,.9); --inset: rgba(6,12,30,.72); }
 .card-head { display: flex; align-items: center; justify-content: space-between;
   gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
 .card-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -.015em; line-height: 1.2; }
@@ -1773,9 +1773,9 @@ button.apr-drive:disabled { cursor: default; }
   .axis-y { left: 8px; top: 12px; bottom: 10px; font-size: 11.5px; }
 }
 
-/* ── Vier Designs (15.10.2026, Wunsch des Users): Aktuell, Hell, Dunkel, Optimal ─────────────────────
+/* ── Vier Designs (15.10.2026, Wunsch des Users): Standard, Hell, Dunkel, Optimal ────────────────────
    Das Design steht als data-theme an <html> (web/theme-boot.js setzt es vor dem ersten Zeichnen, gemerkt je Gerät);
-   „Aktuell“ ist die Vorgabe oben und braucht kein Attribut. Wie überall: kein filter/backdrop-filter (auf der PS5 teuer). */
+   „Standard“ (bis 15.10.2026 abends „Aktuell“) ist die Vorgabe oben und braucht kein Attribut. Wie überall: kein filter/backdrop-filter (auf der PS5 teuer). */
 
 /* ── Hell: helles Grau-Blau statt Weiß, gedämpft, damit es am Fernseher nicht blendet ── */
 :root[data-theme="hell"] {

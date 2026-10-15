@@ -49,7 +49,7 @@ Menü beim Hochfahren, von dort führt „PS5 neu starten“ ganz normal zurück
 in der ersten knappen Sekunde zählt nicht, damit ein Doppelklick nichts auslöst; nach zehn
 Sekunden ohne zweiten Klick ist der Knopf wieder gewöhnlich.
 
-**Design.** Neben der Sprache wählst du eines von vier Designs: **Aktuell** (dunkelblau mit leuchtenden Rändern, leicht durchscheinend), **Hell** (gedämpftes Grau-Blau, blendet nicht), **Dunkel** (fast schwarz, ohne Leuchten) und **Optimal** (für Fernseher und PS5: kräftiger Kontrast, größere Schrift, ohne Durchscheinen und Schatten, am schnellsten gezeichnet). Jedes Gerät merkt sich seine Wahl selbst (im Browser), etwa „Optimal“ am Fernseher und „Hell“ am Handy.
+**Design.** Neben der Sprache wählst du eines von vier Designs: **Standard** (dunkelblau mit leuchtenden Rändern), **Hell** (gedämpftes Grau-Blau, blendet nicht), **Dunkel** (fast schwarz, ohne Leuchten) und **Optimal** (für Fernseher und PS5: kräftiger Kontrast, größere Schrift, ohne Durchscheinen und Schatten, am schnellsten gezeichnet). Jedes Gerät merkt sich seine Wahl selbst (im Browser), etwa „Optimal“ am Fernseher und „Hell“ am Handy.
 
 ## Die Seite „Spiele“
 
@@ -385,7 +385,7 @@ Der Reiter **PS4 von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) dir
 3. **Warten.** Beim ersten Mal sortiert die App die Pakete in `ps4/CUSAxxxxx/` (`app.pkg`, `patch.pkg`, `addcont/…`) und meldet jedes Spiel, sobald es spielbereit ist. Das Spiel erscheint mit Symbol auf dem Startbildschirm.
 - Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Aus Bibliothek entfernen“, verschwindet es nur aus der Bibliothek, die PKG bleibt.
 - Updates (`patch.pkg`) und Zusatzinhalte (DLC) werden mit eingebunden; Zusatzinhalte nur, wenn der Schalter in den Einstellungen an ist.
-- Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Ist PS4Mount als eigenes Payload (`ps4mount.elf`) schon geladen, bleibt der Schalter wirkungslos, bis es beendet ist (beide teilen sich den Port 9032).
+- Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Läuft PS4Mount schon als eigenes Payload (`ps4mount.elf`), lädt die App ihr PS4Mount nicht ein zweites Mal: Der Reiter zeigt „wartet“, und sobald das eigenständige beendet ist, übernimmt die App von selbst. Erkannt wird es an seinem Web-Panel (Port 8770), an der Sperre auf Port 9032 oder am Prozessnamen; taucht es später doch auf, etwa nach dem Ruhemodus, hält die App ihres an. Umgekehrt startet die Seite Payloads (auch ein Startprofil) keine `ps4mount.elf`, solange schon ein PS4Mount läuft.
 - Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. An einer PS5 Pro mit 12.00 ist der Einbau geprüft: PS4-Spiele vom USB-Laufwerk werden eingebunden und laufen. Er ist ausgeschaltet, bis man ihn einschaltet.
 
 **PKGs zurückverschieben** (seit PS4Mount 0.5.0): PS4Mount merkt sich in `ps4/CUSAxxxxx/origin.txt`, woher jede PKG kam.

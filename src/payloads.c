@@ -22,6 +22,10 @@
  * the header of a 64-bit x86-64 ELF — a file that does not is listed, marked,
  * and refused: the loader answers a stray file with nothing a person can read.
  *
+ * PS4Mount is in the app (ps4m_core.c). A stand-alone PS4Mount (ps4mount.elf) is not started while a PS4Mount already runs,
+ * the app's own or a stand-alone one: two of them would register, mount and unmount the same games (15.10.2026). It is known
+ * by its content, not by its name: the mark "PS4Mount 0." without the app's own name, which the app's ELF carries as well.
+ *
  * Starting, copying and deleting take one lock, so two clicks (or two tabs)
  * cannot interleave their work. Listing reads USB drives, which can hang on a
  * bad stick: one scan at a time, answers kept for a few seconds, and a request
@@ -46,6 +50,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
+#include "ps4m.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 
@@ -540,6 +545,43 @@ open_payload(const char *path, int *status, uint64_t *size, ps5tm_payload_result
   return fd;
 }
 
+/* Does the text needle (m bytes) occur in the n bytes at hay? (memmem is not in this system's C library, see pkgparse.c) */
+static int
+has_bytes(const char *hay, size_t n, const char *needle, size_t m) {
+  if(m == 0 || n < m) return 0;
+  for(size_t i = 0; i + m <= n; i++) {
+    const char *p = memchr(hay + i, needle[0], n - m + 1 - i);
+    if(!p) return 0;
+    i = (size_t)(p - hay);
+    if(!memcmp(p, needle, m)) return 1;
+  }
+  return 0;
+}
+
+/* 1 when the file is a stand-alone PS4Mount: it carries "PS4Mount 0." (the version text of every release) and not the name of
+   this app (whose ELF holds PS4Mount too). Read with pread, the offset of fd stays where it is. */
+static int
+is_ps4mount(int fd, uint64_t size) {
+  static const char mark[] = "PS4Mount 0.", app[] = "PS5 Cooling & System Center";
+  enum { CH = 256 * 1024, KEEP = 64 };
+  char *buf = malloc(CH + KEEP);
+  if(!buf) return 0;
+  int found = 0, ours = 0;
+  size_t have = 0;                                  /* bytes kept from the chunk before, so a mark across the edge is found */
+  for(uint64_t off = 0; off < size && !ours;) {
+    ssize_t n = pread(fd, buf + have, CH, (off_t)off);
+    if(n <= 0) break;
+    size_t len = have + (size_t)n;
+    if(!found && has_bytes(buf, len, mark, sizeof(mark) - 1)) found = 1;
+    if(has_bytes(buf, len, app, sizeof(app) - 1)) ours = 1;
+    have = len < KEEP ? len : KEEP;
+    memmove(buf, buf + len - have, have);
+    off += (uint64_t)n;
+  }
+  free(buf);
+  return found && !ours;
+}
+
 
 /* ------------------------------------------------------------ the loader */
 
@@ -615,6 +657,24 @@ ps5tm_payload_start(const char *source, const char *mount, const char *dir,
   uint64_t size = 0;
   int fd = open_payload(path, &st, &size, r);
   if(fd < 0) { pthread_mutex_unlock(&g_op_lock); return st; }
+
+  /* never a second PS4Mount (15.10.2026): the app's own runs, or a stand-alone one already does */
+  if(is_ps4mount(fd, size)) {
+    char why[160] = "";
+    int mine = ps4m_running();
+    if(mine || ps4m_standalone_active(why, sizeof(why))) {
+      close(fd);
+      pthread_mutex_unlock(&g_op_lock);
+      char shown[PL_NAME_MAX];
+      PS5TM_WARN("payload_ps4mount_refused", "„%s“ ist PS4Mount, und PS4Mount läuft schon (%s): nicht gestartet.",
+                 log_name(name, shown, sizeof(shown)), mine ? "in der App" : "eigenständig");
+      return fail(r, 409, "ps4mount_running", mine
+                  ? "Die App hat PS4Mount eingebaut, und es läuft gerade (Reiter „PS4 von USB“). Ein zweites PS4Mount würde "
+                    "dieselben Spiele noch einmal anmelden und einhängen; diese Datei wird deshalb nicht gestartet. Wer lieber "
+                    "das eigenständige nutzt: dort zuerst ausschalten."
+                  : "Das eigenständige PS4Mount läuft schon. Es wird nicht ein zweites Mal gestartet.");
+    }
+  }
 
   uint64_t now = ps5tm_mono_ms();
   if(g_last_start_ms && now - g_last_start_ms < PL_START_GAP_MS &&

@@ -6488,14 +6488,19 @@
     const d = p4m.data;
     if (!d) return;
     const games = d.games || [];
+    /* standalone: the stand-alone ps4mount.elf runs, the app does not load PS4Mount a second time and waits (ps4m_core.c) */
+    const waits = d.enabled && !d.running && !!d.standalone;
     txt("#p4m-sub", d.busy ? "arbeitet gerade (fügt hinzu, entfernt oder verschiebt) …" : d.enabled
-      ? (d.running ? `eingeschaltet · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken` : "eingeschaltet, startet gleich")
+      ? (d.running ? `eingeschaltet · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken`
+        : waits ? "wartet: das eigenständige PS4Mount läuft" : "eingeschaltet, startet gleich")
       : "ausgeschaltet");
     $("#p4m-on").checked = !!d.enabled;
     $("#p4m-scan").disabled = !d.running;
     const note = $("#p4m-note");
-    note.hidden = d.enabled;
+    note.hidden = d.enabled && !waits;
     if (!d.enabled) note.textContent = "PS4Mount ist ausgeschaltet. Einschalten, damit die Spiele auf den Laufwerken gesucht und eingebunden werden.";
+    else if (waits) note.textContent = "Das eigenständige PS4Mount (ps4mount.elf) läuft schon. Die App lädt PS4Mount deshalb nicht ein "
+      + `zweites Mal und übernimmt von selbst, sobald es beendet ist (Beenden auf der Seite Payloads). ${d.standalone}`;
     $("#p4m-list").innerHTML = games.length ? games.map((g) => {
       const st = P4M_STATE[g.state] || ["", g.state];
       const meta = [g.title_id, `Version ${g.version}`, bytes(g.size)];

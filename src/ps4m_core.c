@@ -39,6 +39,14 @@ int ps4m_do_action(const char *action, const char *tid, char *msg, size_t n) { (
 int ps4m_do_config(const char *form, char *msg, size_t n) { (void)form; snprintf(msg, n, "Host-Test"); return -1; }
 int ps4m_icon_png(const char *tid, unsigned char **data, size_t *len) { (void)tid; (void)data; (void)len; return -1; }
 char *ps4m_log_tail(size_t max) { (void)max; return strdup(""); }
+/* PS5TM_TEST_P4M=running or =standalone lets the host tests try the payload guard (payloads.c) */
+int ps4m_running(void) { const char *e = getenv("PS5TM_TEST_P4M"); return e && !strcmp(e, "running"); }
+int ps4m_standalone_active(char *why, size_t n) {
+    const char *e = getenv("PS5TM_TEST_P4M");
+    if (!e || strcmp(e, "standalone")) return 0;
+    snprintf(why, n, "Sein Web-Panel antwortet auf Port 8770.");
+    return 1;
+}
 #else
 #include <dirent.h>
 #include <errno.h>
@@ -2883,6 +2891,93 @@ static volatile int g_alive;          /* the worker thread is running */
 static int g_lock_sock = -1;          /* single-instance lock on port 9032 (as the stand-alone PS4Mount) */
 static uint64_t g_klog_after;         /* the newest kernel-log line seen */
 
+/* (app) The stand-alone PS4Mount (ps4mount.elf) must never run beside this module: both would register, mount and unmount the
+   same games. The lock on 9032 alone is not enough: rest mode closes the sockets of payloads (the stand-alone one's lock too),
+   and a payload may be named anything. So any of three signs counts (15.10.2026, wish of the user): its web panel answers on
+   port 8770 (the app never listens there), the lock on 9032 is held while this module does not hold it, or a process is named
+   like it. While one is seen, the module does not start but waits, and takes over by itself once the stand-alone one is gone. */
+#define P4M_PANEL_PORT 8770
+static char g_standalone_why[160];    /* why the module waits for the stand-alone one; "" when it does not (under g_mu) */
+static volatile int g_sa_waiting;     /* the waiter thread runs */
+
+/* 1 when something accepts a connection on 127.0.0.1:port within 300 ms */
+static int port_answers(int port) {
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0)
+        return 0;
+    int fl = fcntl(s, F_GETFL, 0);
+    if (fl >= 0)
+        fcntl(s, F_SETFL, fl | O_NONBLOCK);
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof(a));
+    a.sin_family = AF_INET;
+    a.sin_port = htons((uint16_t)port);
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    int ok = 0;
+    if (!connect(s, (struct sockaddr *)&a, sizeof(a))) {
+        ok = 1;
+    } else if (errno == EINPROGRESS) {
+        fd_set w;
+        FD_ZERO(&w);
+        FD_SET(s, &w);
+        struct timeval tv = {0, 300 * 1000};
+        if (select(s + 1, NULL, &w, NULL, &tv) == 1) {
+            int err = 0;
+            socklen_t l = sizeof(err);
+            ok = !getsockopt(s, SOL_SOCKET, SO_ERROR, &err, &l) && !err;
+        }
+    }
+    close(s);
+    return ok;
+}
+
+/* "ps4mount" in a process name, any case */
+static int name_is_ps4mount(const char *name) {
+    char low[sizeof(((ps5tm_process_t *)0)->name)];
+    size_t i = 0;
+    for (; name[i] && i + 1 < sizeof(low); i++)
+        low[i] = (char)((name[i] >= 'A' && name[i] <= 'Z') ? name[i] + 32 : name[i]);
+    low[i] = 0;
+    return strstr(low, "ps4mount") != NULL;
+}
+
+/* 1, with the reason in why, when a stand-alone PS4Mount runs. mine: this module holds the lock on 9032 itself right now (then
+   that lock says nothing). Never called with g_mu held: it may wait up to 0.6 s. */
+static int standalone_seen(int mine, char *why, size_t n) {
+    if (port_answers(P4M_PANEL_PORT)) {
+        snprintf(why, n, "Sein Web-Panel antwortet auf Port 8770.");
+        return 1;
+    }
+    if (!mine && port_answers(LOCK_PORT)) {
+        snprintf(why, n, "Es hält die Sperre auf Port 9032.");
+        return 1;
+    }
+    ps5tm_process_t procs[96];
+    unsigned np = ps5tm_procmgr_list(procs, 96);
+    for (unsigned i = 0; i < np; i++) {
+        if (procs[i].is_self || !name_is_ps4mount(procs[i].name))
+            continue;
+        char shown[48];
+        size_t k = 0;
+        for (const char *c = procs[i].name; *c && k + 1 < sizeof(shown); c++)   /* for the page's JSON: no quotes, no control */
+            shown[k++] = (*c == '"' || *c == '\\' || (unsigned char)*c < 0x20) ? '?' : *c;
+        shown[k] = 0;
+        snprintf(why, n, "Es läuft als Prozess „%s“ (PID %d).", shown, procs[i].pid);
+        return 1;
+    }
+    return 0;
+}
+
+int ps4m_standalone_active(char *why, size_t n) {
+    return standalone_seen(g_alive, why, n);
+}
+
+int ps4m_running(void) {
+    return g_alive;
+}
+
+static void waiter_start(void);
+
 void ps4m_rescan(void) {
     g_next_scan = 0;
     g_manual_scan = 1;
@@ -3004,6 +3099,7 @@ static void *ps4m_worker(void *arg) {
     else
         notify("PS4Mount: Firmware %s wird noch nicht unterstützt. Zum Schutz der Systemdatenbank werden keine Spiele hinzugefügt.", g_fw_text);
     printf("[main] worker started\n");
+    int give_way = 0, seen = 0;
     while (!g_stop && g_enabled) {
         if (exists(STATE_DIR "/stop")) {
             unlink(STATE_DIR "/stop");
@@ -3013,11 +3109,28 @@ static void *ps4m_worker(void *arg) {
             if (g_lock_sock >= 0)
                 close(g_lock_sock);
             if ((g_lock_sock = instance_lock()) < 0) {
-                notify("PS4Mount beendet: Ein anderes PS4Mount läuft schon");
-                g_enabled = 0;
+                /* (app) someone else took the lock (after rest mode): the stand-alone PS4Mount; this module gives way and waits
+                   (until 15.10.2026 it switched itself off for the session) */
+                snprintf(g_standalone_why, sizeof(g_standalone_why), "Es hält die Sperre auf Port 9032.");
+                give_way = 1;
                 break;
             }
             printf("[main] instance lock opened again\n");
+        }
+        /* (app) once per scan: a stand-alone PS4Mount that got going beside this module (both locks were gone after rest mode)
+           makes this one give way; seen twice in a row, so that a stand-alone one that only tried to start and quit at once
+           because of our lock does not count */
+        if (time(NULL) >= g_next_scan && !g_deleting) {
+            char why[160];
+            pthread_mutex_unlock(&g_mu);
+            int sa = standalone_seen(1, why, sizeof(why));
+            pthread_mutex_lock(&g_mu);
+            seen = sa ? seen + 1 : 0;
+            if (seen >= 2) {
+                snprintf(g_standalone_why, sizeof(g_standalone_why), "%s", why);
+                give_way = 1;
+                break;
+            }
         }
         if (g_deleting && g_deleting_close_at && time(NULL) >= g_deleting_close_at)
             end_delete_window();
@@ -3047,7 +3160,12 @@ static void *ps4m_worker(void *arg) {
         }
         pump_events(1000);
     }
-    notify("PS4Mount wurde beendet");
+    if (give_way) {
+        notify("PS4Mount der App hält an: Das eigenständige PS4Mount läuft. Danach übernimmt die App wieder.");
+        printf("[main] the stand-alone PS4Mount runs (%s): this module gives way\n", g_standalone_why);
+    } else {
+        notify("PS4Mount wurde beendet");
+    }
     printf("[main] worker stopped\n");
     if (g_lock_sock >= 0) {
         close(g_lock_sock);
@@ -3055,6 +3173,8 @@ static void *ps4m_worker(void *arg) {
     }
     g_alive = 0;
     pthread_mutex_unlock(&g_mu);
+    if (give_way)
+        waiter_start();
     return NULL;
 }
 
@@ -3073,9 +3193,15 @@ static int lock_for_page(int ms) {
 
 #define P4M_BUSY "PS4Mount ist gerade beschäftigt: Es fügt hinzu, entfernt oder verschiebt. Bitte gleich noch einmal versuchen."
 
-/* Starts the thread (the lock on 9032 first). Returns 0, or -1 with a text in msg. Takes g_mu itself, so that two starts at once
-   (the page and the app's start) cannot both open the instance lock. */
+#define P4M_WAITS "Das eigenständige PS4Mount (ps4mount.elf) läuft schon. Die App lädt PS4Mount deshalb nicht ein zweites Mal und übernimmt von selbst, sobald es beendet ist."
+
+/* Starts the thread (the lock on 9032 first). Returns 0; 1 when a stand-alone PS4Mount runs (the module waits for it, msg says so);
+   or -1 with a text in msg. Takes g_mu itself, so that two starts at once (the page and the app's start) cannot both open the
+   instance lock. */
 static int worker_start(char *msg, size_t n) {
+    char why[160];
+    /* (app) never a second PS4Mount: looked at before anything is loaded (without the lock: it may take up to 0.6 s) */
+    int sa = !g_alive && standalone_seen(0, why, sizeof(why));
     if (lock_for_page(3000)) {
         snprintf(msg, n, P4M_BUSY);
         return -1;
@@ -3086,11 +3212,19 @@ static int worker_start(char *msg, size_t n) {
         snprintf(msg, n, "PS4Mount läuft schon");
         return 0;
     }
-    if ((g_lock_sock = instance_lock()) < 0) {
-        pthread_mutex_unlock(&g_mu);
-        snprintf(msg, n, "Ein anderes PS4Mount (ps4mount.elf) läuft schon. Bitte dieses zuerst beenden.");
-        return -1;
+    if (!sa && (g_lock_sock = instance_lock()) < 0) {
+        snprintf(why, sizeof(why), "Es hält die Sperre auf Port 9032.");
+        sa = 1;
     }
+    if (sa) {
+        snprintf(g_standalone_why, sizeof(g_standalone_why), "%s", why);
+        pthread_mutex_unlock(&g_mu);
+        printf("[main] the stand-alone PS4Mount runs (%s): not loaded a second time, waiting for it to end\n", why);
+        waiter_start();
+        snprintf(msg, n, P4M_WAITS);
+        return 1;
+    }
+    g_standalone_why[0] = 0;
     g_alive = 1;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -3112,6 +3246,53 @@ static int worker_start(char *msg, size_t n) {
     return 0;
 }
 
+/* (app) Waits while a stand-alone PS4Mount runs and starts the module once it is gone, as long as the module stays switched on.
+   One at a time; looks every 15 s. */
+static void *standalone_waiter(void *arg) {
+    (void)arg;
+    for (;;) {
+        sleep(15);
+        pthread_mutex_lock(&g_mu);
+        int go = g_enabled && !g_alive;
+        pthread_mutex_unlock(&g_mu);
+        if (!go)
+            break;
+        char why[160];
+        if (standalone_seen(0, why, sizeof(why))) {
+            pthread_mutex_lock(&g_mu);
+            snprintf(g_standalone_why, sizeof(g_standalone_why), "%s", why);
+            pthread_mutex_unlock(&g_mu);
+            continue;
+        }
+        __atomic_store_n(&g_sa_waiting, 0, __ATOMIC_RELEASE);   /* worker_start may need a new waiter (it saw the lock taken) */
+        char msg[200];
+        int rc = worker_start(msg, sizeof(msg));
+        if (rc == 0) {
+            printf("[main] the stand-alone PS4Mount is gone: this module took over\n");
+            PS5TM_INFO("ps4m_takeover", "PS4Mount: Das eigenständige PS4Mount ist beendet, die App hat übernommen.");
+        }
+        if (rc >= 0)
+            return NULL;        /* started, or a new waiter runs */
+        if (__atomic_exchange_n(&g_sa_waiting, 1, __ATOMIC_ACQ_REL))
+            return NULL;        /* busy, and another waiter got going meanwhile */
+    }
+    __atomic_store_n(&g_sa_waiting, 0, __ATOMIC_RELEASE);
+    return NULL;
+}
+
+static void waiter_start(void) {
+    if (__atomic_exchange_n(&g_sa_waiting, 1, __ATOMIC_ACQ_REL))
+        return;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(&attr, 256 * 1024);
+    pthread_t th;
+    if (pthread_create(&th, &attr, standalone_waiter, NULL))
+        __atomic_store_n(&g_sa_waiting, 0, __ATOMIC_RELEASE);
+    pthread_attr_destroy(&attr);
+}
+
 /* --- calls from the page (api.c) --- */
 
 void ps4m_boot(void) {
@@ -3124,8 +3305,11 @@ void ps4m_boot(void) {
     int on = g_enabled;
     pthread_mutex_unlock(&g_mu);
     if (on) {
-        char msg[160];
-        if (worker_start(msg, sizeof(msg)))
+        char msg[200];
+        int rc = worker_start(msg, sizeof(msg));
+        if (rc == 1)
+            PS5TM_INFO("ps4m_boot", "PS4Mount: %s", msg);
+        else if (rc)
             PS5TM_WARN("ps4m_boot", "PS4Mount: %s", msg);
     }
 }
@@ -3146,8 +3330,10 @@ int ps4m_set_enabled(int on, char *msg, size_t n) {
         g_readd_tid[0] = 0;
     }
     pthread_mutex_unlock(&g_mu);
-    if (on)
-        return worker_start(msg, n);
+    if (on) {
+        int rc = worker_start(msg, n);
+        return rc > 0 ? 0 : rc;   /* waiting for the stand-alone one is no failure: switched on, msg says what happens */
+    }
     snprintf(msg, n, "PS4Mount ist ausgeschaltet. Eingebundene Spiele bleiben, bis die Konsole neu startet oder Sie sie entfernen.");
     return 0;
 }
@@ -3176,11 +3362,16 @@ static char *state_json_impl(void) {
     ps4m_games_json(&games);
     ps4m_config_json(&cfg);
     int enabled = g_enabled, alive = g_alive;
+    char sa[sizeof(g_standalone_why)];
+    snprintf(sa, sizeof(sa), "%s", g_standalone_why);
     pthread_mutex_unlock(&g_mu);
     /* games is {"version":…,"games":[…]}: put the state in front of its fields and the settings at its end */
     const char *g = games.data ? (const char *)games.data : "{}";
     size_t gl = strlen(g);
     p4m_buf_printf(&out, "{\"ok\":true,\"enabled\":%s,\"running\":%s,", enabled ? "true" : "false", alive ? "true" : "false");
+    /* (app) why the module waits: the stand-alone PS4Mount runs (the texts hold no quotes; a process name was cleaned) */
+    if (enabled && !alive && sa[0])
+        p4m_buf_printf(&out, "\"standalone\":\"%s\",", sa);
     if (gl > 2) {
         p4m_buf_put(&out, g + 1, gl - 2);
         p4m_buf_printf(&out, ",\"config\":%s}", cfg.data ? (const char *)cfg.data : "{}");

@@ -6,10 +6,17 @@
 
 /* At the app's start: runs the module when it was switched on (config key enabled=1 in /data/ps4mount/config.txt). */
 void  ps4m_boot(void);
-/* Switches the scan thread on or off and keeps the choice. 0 = done, -1 = refused (msg says why: another PS4Mount runs). */
+/* Switches the scan thread on or off and keeps the choice. 0 = done, -1 = refused (msg says why). While the stand-alone
+   PS4Mount (ps4mount.elf) runs, switching on is done too, but the module is not loaded a second time: it waits and takes over
+   once the stand-alone one has ended (msg says so). */
 int   ps4m_set_enabled(int on, char *msg, size_t n);
-/* {"ok":true,"enabled":…,"running":…,"version":…,"games":[…],"config":{…}}, malloc'd. */
+/* {"ok":true,"enabled":…,"running":…,["standalone":"<why the module waits>",]"version":…,"games":[…],"config":{…}}, malloc'd. */
 char *ps4m_state_json(void);
+/* 1 while the module of the app runs. */
+int   ps4m_running(void);
+/* 1, with the reason in why, when the stand-alone PS4Mount runs: its web panel answers on port 8770, it holds the lock on 9032,
+   or a process is named like it (since 15.10.2026; may take up to 0.6 s). */
+int   ps4m_standalone_active(char *why, size_t n);
 /* "scan"; "add" / "remove" with a CUSA title id; "restore" with one or more title ids (comma-separated): their pkgs go back to
    where they came from (since 0.5.0, done by the worker, which closes the open game first); "restore_all"; "restored_forget":
    pkgs moved back are picked up again. 0 = done or started. */
