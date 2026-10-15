@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 gasb07 (PS4Mount 0.5.0), adapted for PS5 Cooling & System Center - Pro
+ * Copyright (C) 2026 gasb07 (PS4Mount 0.5.1), adapted for PS5 Cooling & System Center - Pro
  *
  * PS4Mount inside the app: scans USB drives for PS4 fake PKGs, registers them without installing them (nullfs mounts of internal
  * folders that hold symlinks to the packages), follows the kernel log and offers its list and actions to the web page.
@@ -72,7 +72,7 @@ char *ps4m_log_tail(size_t max) { (void)max; return strdup(""); }
 #include "sqlite_ro.h"
 #include <ps5/kernel.h>
 
-#define VERSION "PS4Mount 0.5.0"
+#define VERSION "PS4Mount 0.5.1"
 #define LOCK_PORT 9032
 #define SCAN_SECONDS 10
 #define STATE_DIR "/data/ps4mount"
@@ -114,12 +114,25 @@ int sceAppInstUtilAppUnInstall(const char *) __attribute__((weak));
 static void mkdirs(const char *path, mode_t mode);
 static int p4m_db_is_registered(const char *tid);
 
-/* Log of the module: /data/ps4mount/log.txt as with the stand-alone payload (the page shows its end), with the time of day. */
+/* Log of the module: /data/ps4mount/log.txt as with the stand-alone payload (the page shows its end). As in PS4Mount 0.5.1 every
+   line starts with date and time to the millisecond ("2026-10-15 18:08:35.284 "); a line written in several calls gets one stamp,
+   a call that holds several lines gets one per line. */
 static pthread_mutex_t g_log_lock = PTHREAD_MUTEX_INITIALIZER;
 static FILE *g_logf;
+static int g_log_at_start = 1;
 
 static void p4m_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void p4m_printf(const char *fmt, ...) {
+    char buf[2048];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n <= 0)
+        return;
+    size_t len = (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf) - 1;
+    if ((size_t)n >= sizeof(buf))
+        buf[len - 1] = '\n'; /* cut off: still a whole line, so that the next one gets its stamp */
     pthread_mutex_lock(&g_log_lock);
     if (!g_logf) {
         mkdirs(STATE_DIR, 0777);
@@ -136,18 +149,26 @@ static void p4m_printf(const char *fmt, ...) {
         g_logf = fopen(STATE_DIR "/log.txt", "a");
         if (g_logf)
             setvbuf(g_logf, NULL, _IOLBF, 0);
+        g_log_at_start = 1;
     }
     if (g_logf) {
-        time_t now = time(NULL);
+        struct timespec now;
         struct tm tm;
-        char ts[16];
-        localtime_r(&now, &tm);
-        strftime(ts, sizeof(ts), "%H:%M:%S ", &tm);
-        fputs(ts, g_logf);
-        va_list ap;
-        va_start(ap, fmt);
-        vfprintf(g_logf, fmt, ap);
-        va_end(ap);
+        char day[32], stamp[48];
+        clock_gettime(CLOCK_REALTIME, &now);
+        localtime_r(&now.tv_sec, &tm);
+        strftime(day, sizeof(day), "%Y-%m-%d %H:%M:%S", &tm);
+        snprintf(stamp, sizeof(stamp), "%s.%03ld ", day, (long)(now.tv_nsec / 1000000));
+        const char *p = buf, *end = buf + len;
+        while (p < end) {
+            if (g_log_at_start)
+                fputs(stamp, g_logf);
+            const char *nl = memchr(p, '\n', (size_t)(end - p));
+            size_t k = nl ? (size_t)(nl - p) + 1 : (size_t)(end - p);
+            fwrite(p, 1, k, g_logf);
+            g_log_at_start = nl != NULL;
+            p += k;
+        }
     }
     pthread_mutex_unlock(&g_log_lock);
 }
