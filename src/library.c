@@ -636,6 +636,7 @@ detect_storage(lib_game_t *g) {
     const char *sl  = strrchr(s.path, '/');
     if(ext && sl && ext < sl) ext = NULL;
     if(!strcmp(s.source_type, "folder"))                fmt = "folder";
+    else if(!strcmp(s.source_type, "pkg"))              fmt = "pkg";      /* ShadowMountPlus 1.7-beta4+ lists installed packages */
     else if(ext && !strcasecmp(ext, ".pkg"))            fmt = "pkg";      /* installed package (app.pkg), not an image */
     else if(ext && !strcasecmp(ext, ".exfat"))          fmt = "exfat";
     else if(ext && !strcasecmp(ext, ".ffpkg"))          fmt = "ffpkg";
@@ -1238,9 +1239,16 @@ ps5tm_library_installed_ids(char (*ids)[12], int max) {
     ids_ctx_t c = { ids, max, 0, sqlro_col(tab, "titleId") };
     if(c.c_tid >= 0 && sqlro_scan(&db, tab, ids_row, &c) >= 0) rc = c.count;
   }
-  if(rc < 0)
-    PS5TM_WARN("appdb_ids_failed", "App-Datenbank nicht auswertbar: %s",
-               err[0] ? err : "tbl_contentinfo fehlt oder ist unlesbar");
+  if(rc < 0) {
+    /* PS4Mount asks once a second while its tab is open: said once a minute, else it would wash the log ring empty */
+    static uint64_t last_ms;
+    uint64_t now = ps5tm_mono_ms(), last = __atomic_load_n(&last_ms, __ATOMIC_RELAXED);
+    if(!last || now - last >= 60000) {
+      __atomic_store_n(&last_ms, now, __ATOMIC_RELAXED);
+      PS5TM_WARN("appdb_ids_failed", "App-Datenbank nicht auswertbar: %s",
+                 err[0] ? err : "tbl_contentinfo fehlt oder ist unlesbar");
+    }
+  }
   free(tab);
   free(file);
   return rc;

@@ -334,7 +334,7 @@ typedef struct {
   uint64_t timestamp_ms;
   char     level[8];    /* INFO / WARN / ERROR */
   char     code[48];
-  char     message[192];
+  char     message[384]; /* room for a path and the reason behind it (was 192: long paths cut off the cause; review 15.10.2026) */
 } ps5tm_log_entry_t;
 
 void ps5tm_log_init(void);
@@ -708,6 +708,20 @@ extern const unsigned         ps5tm_playgo_blob_count;
 extern const ps5tm_emu_blob_t ps5tm_dlc_blobs[];
 extern const unsigned         ps5tm_dlc_blob_count;
 
+/* The tested LZ4 profiles built into the app (gen/lz4prof_blob.c, tools/gen_lz4_profiles.py, third_party/lz4_profiles,
+   written and tested by danthespal, GPL-3.0): the TOML text of each and what picks it for a game (imgjob_lz4.inc). */
+typedef struct {
+  const char *id, *file, *label, *tested, *source;
+  const char *title_ids;           /* comma separated */
+  const char *names;               /* comma separated words of the name: lower-case letters and digits */
+  const char *engine;              /* "insomniac", "unity" or "" */
+  const char *text;
+  unsigned    size;
+  const char *sha256;
+} ps5tm_lz4prof_t;
+extern const ps5tm_lz4prof_t ps5tm_lz4profs[];
+extern const unsigned        ps5tm_lz4prof_count;
+
 /* A built-in file unpacked and checked against its SHA-256 (amprlib.c): *data is malloc'd. 0 or an errno. */
 int ps5tm_blob_unpack(const ps5tm_emu_blob_t *b, unsigned char **data, size_t *len);
 /* A file of a game's fakelib written whole (temporary name, fsync, rename), mode 0755 (amprlib.c). 0 or an errno. */
@@ -727,6 +741,11 @@ int           ps5tm_amprlib_place(const char *lib, const char *title_id, char *p
    0 on success (note holds what else is worth knowing), else an errno with the reason in why. */
 int           ps5tm_amprlib_run(const char *lib, const char *op, const char *title_id, const char *root, const char *store_name,
                                 char *note, size_t note_len, char *why, size_t why_len);
+/* For the check of LZ4 packs: does the APR-EMU the game gets read packs? 0 yes; 1 no (with repair the built-in test-pack is
+   in now); 2 a fakelib2 without the reader wins (left alone, why says so); -1 with why. warn: ShadowMountPlus would replace
+   it at the start from its emulator folder by one that reads no packs. root: the game folder. */
+int           ps5tm_amprlib_pack_check(const char *title_id, const char *root, int repair, char *warn, size_t warn_len,
+                                       char *why, size_t why_len);
 
 /* Checking, unpacking and repairing the image of a game (imgjob.c). */
 struct cJSON *ps5tm_imgjob_info(const char *title_id, int *http);
@@ -761,7 +780,7 @@ typedef struct {
   char title_id[12];
   char path[256];          /* the real image file or folder             */
   char runtime_path[256];  /* where an image is mounted, else the same  */
-  char source_type[12];    /* "folder" or "image"                       */
+  char source_type[12];    /* "folder", "image" or "pkg" (since 1.7-beta4) */
   char image_type[12];     /* "exfatfs", "ufs", "pfs", "pfsc"           */
   int  mounted;
   int  available;          /* the source is reachable                   */
@@ -1036,7 +1055,8 @@ int  ps5tm_saves_backup_start(const char *target_mount,
 int  ps5tm_saves_verify_start(const char *path, char *err, size_t err_len);
 int  ps5tm_saves_restore_start(const char *path, const char *uid, const char *title,
                                char *err, size_t err_len);
-int  ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, char *err, size_t err_len);
+/* no_backup: delete even without a target for the backup made first (the page never sends it; without it a missing target is 409) */
+int  ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, int no_backup, char *err, size_t err_len);
 void ps5tm_saves_cancel(void);
 int  ps5tm_saves_busy(void);                    /* 1 while a job with the saved games is under way */
 
@@ -1578,6 +1598,9 @@ ps5tm_tile_state_t ps5tm_tile_ensure(char *msg, size_t msg_len);
 /* Start-up hook: installs the built-in tile package if — and only if — no
    tile is present yet. Returns with the fan identity restored. */
 void ps5tm_tile_bootstrap(void);
+/* sceAppInstUtilInitialize on a thread of its own, waited for at most 10 s (it can block for good while the installer service
+   is not up): 0 or a Sony code, -0xDEAD when it timed out, -0xBADD when the firmware lacks the calls (tile.c). */
+int  ps5tm_appinst_init(void);
 
 /* Queued by a web request, performed by the background thread. */
 void ps5tm_tile_request_install(void);

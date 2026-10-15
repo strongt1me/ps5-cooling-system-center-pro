@@ -2200,7 +2200,7 @@ ps5tm_saves_restore_start(const char *path, const char *uid, const char *title,
 }
 
 int
-ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, char *err, size_t err_len) {
+ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, int no_backup, char *err, size_t err_len) {
   if(!uid_ok(uid) || !tid_ok(id)) { snprintf(err, err_len, "Benutzer oder Titel sind falsch angegeben."); return 400; }
   char gid[16];
   if(game_running(gid, sizeof(gid))) {
@@ -2212,6 +2212,13 @@ ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mou
   if(!user_exists(uid)) { snprintf(err, err_len, "Diesen Benutzer gibt es an der Konsole nicht."); return 404; }
   int area = title_find(uid, id);
   if(area < 0) { snprintf(err, err_len, "Diesen Titel gibt es für diesen Benutzer nicht."); return 404; }
+  /* The page promises a backup of the state before deleting: without a target that promise would silently fail, so a missing
+     one is refused unless the request says no_backup:true on purpose (review 15.10.2026). */
+  if(!(target_mount && target_mount[0]) && !no_backup) {
+    snprintf(err, err_len, "Es ist kein Laufwerk für die Sicherung davor gewählt. Bitte oben ein Ziel wählen "
+             "(USB-Laufwerk oder interne SSD). Ohne Sicherung wird nichts gelöscht.");
+    return 409;
+  }
   char base[64] = "";
   if(target_mount && target_mount[0]) {
     drive_t dr;

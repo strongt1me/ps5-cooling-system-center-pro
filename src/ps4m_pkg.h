@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #define PKG_MAX_ENTRIES 512
+#define PKG_MAX_ENTRY_SIZE (64u << 20) /* largest entry p4m_pkg_entry reads */
 
 typedef struct {
     uint32_t id, flags1, flags2, offset, size;
@@ -19,6 +20,7 @@ typedef struct {
     char content_id[37];
     char title_id[10];
     uint64_t pkg_size, pfs_offset, pfs_size;
+    uint64_t file_size; /* (app) entries must lie inside the file (PS4Mount PR #18) */
     uint8_t digest[32];
     int nentries;
     pkg_entry_t entries[PKG_MAX_ENTRIES];

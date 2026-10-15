@@ -18,6 +18,7 @@
  * own with a big stack: a connection thread's is too small for the readers (the app died once on the first .ffpfsc read
  * on 11.10.2026). The result of the last check of each image is kept in memory for the window; every job also ends with
  * one line in the history (jobhist.c). */
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -80,7 +81,7 @@ typedef struct {
   int      state;
   char     kind[10];             /* "check", "unpack", "repair", "lz4pack", "lz4copy", "lz4verify", "lz4unpack" */
   char     id[16], name[128], image[256], format[8];
-  char     phase[160], current[256], error[640], dest[320], note[200], container[320];
+  char     phase[160], current[256], error[640], dest[320], note[640], container[320];
   uint64_t work_total, work_done, work_window_bytes, window_ms;
   double   rate;
   unsigned files_total, files_done, bad_files, bad_dirs;
@@ -92,6 +93,8 @@ typedef struct {
   uint64_t fixed_from, fixed_to;
   uint64_t lz4_logical, lz4_stored;     /* the LZ4 jobs: bytes of the packed files, bytes they take in the packs */
   unsigned lz4_loose, lz4_packed;       /* files left loose / packed */
+  int      lz4_apr_fixed;               /* lz4verify: the APR-EMU that reads packs was put back */
+  unsigned lz4_restored, lz4_modes;     /* lz4verify: files written back to the disk from the packs, modes set to 0777 */
 } job_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -191,7 +194,10 @@ finish(int state, const char *error) {
   } else if(!strcmp(g_job.kind, "unpack")) {
     snprintf(detail, sizeof(detail), "%u Dateien nach %s", g_job.files_done, g_job.dest);
   } else if(!strncmp(g_job.kind, "lz4", 3)) {
-    if(state == IJ_DONE && !strcmp(g_job.kind, "lz4verify")) snprintf(detail, sizeof(detail), "%u Dateien in Ordnung", g_job.lz4_packed);
+    if(state == IJ_DONE && !strcmp(g_job.kind, "lz4verify")) {
+      if(g_job.lz4_apr_fixed || g_job.lz4_restored || g_job.lz4_modes) snprintf(detail, sizeof(detail), "%u Dateien in Ordnung · repariert", g_job.lz4_packed);
+      else snprintf(detail, sizeof(detail), "%u Dateien in Ordnung", g_job.lz4_packed);
+    }
     else if(state == IJ_DONE && !strcmp(g_job.kind, "lz4unpack")) snprintf(detail, sizeof(detail), "%u Dateien entpackt", g_job.lz4_packed);
     else if(state == IJ_DONE) snprintf(detail, sizeof(detail), "%u Dateien, %.1f → %.1f GB", g_job.lz4_packed, (double)g_job.lz4_logical / 1e9, (double)g_job.lz4_stored / 1e9);
   } else if(state == IJ_DONE) {
@@ -199,6 +205,8 @@ finish(int state, const char *error) {
   }
   uint64_t bytes = g_job.bytes_files, dur = g_job.finished_ms - g_job.started_ms;
   pthread_mutex_unlock(&g_lock);
+  if(state == IJ_FAILED)
+    PS5TM_WARN("img_job_failed", "%s von %.60s gescheitert: %.150s", kind, name, err[0] ? err : "ohne Angabe");
   ps5tm_hist_add(kind, name, detail, result, err, bytes, dur);
 }
 
@@ -367,7 +375,7 @@ count_cb(const imgr_entry_t *e, void *ctx) {
   if(e->is_dir) {
     if(e->damaged) c->damaged_dirs++;
     else c->dirs++;
-    return 0;
+    return cancelled();
   }
   c->files++;
   c->bytes += e->size;
@@ -514,11 +522,20 @@ check_run(void *arg) {
   pthread_mutex_unlock(&g_lock);
   set_phase(deep ? "Alle Dateien werden gelesen" : "Die Dateien werden geprüft");
   chk_t ck = { r, deep, 0 };
-  imgr_walk(r, check_cb, &ck);
+  uint64_t skipped = 0;
+  int cw = imgr_walk2(r, check_cb, &ck, &skipped);
   imgr_close(r);
   if(ck.stop || cancelled()) { finish(IJ_CANCELLED, "Abgebrochen."); goto out; }
+  if(cw < 0) {                                   /* the walk did not get through: no "in Ordnung" for half the image */
+    finish(IJ_FAILED, "Die Prüfung brach mitten im Abbild ab: Die Ordner ließen sich nicht mehr lesen (Laufwerk getrennt?) "
+                      "oder das Abbild ist beschädigt.");
+    goto out;
+  }
   pthread_mutex_lock(&g_lock);
-  g_job.clean = !container_bad && g_job.bad_files == 0 && g_job.bad_dirs == 0;
+  g_job.clean = !container_bad && g_job.bad_files == 0 && g_job.bad_dirs == 0 && skipped == 0;
+  if(skipped)
+    snprintf(g_job.note, sizeof(g_job.note), "%llu Einträge im Abbild haben einen ungültigen Namen und wurden nicht geprüft.",
+             (unsigned long long)skipped);
   pthread_mutex_unlock(&g_lock);
   store_last();
   PS5TM_INFO("img_check_done", "Abbild geprüft: %s.", g_job.clean ? "in Ordnung" : "Fehler gefunden");
@@ -568,13 +585,15 @@ unp_cb(const imgr_entry_t *e, void *ctx) {
   memcpy(u->dst + u->tmp_len, e->path, pl + 1);
   if(e->is_dir) {
     if(e->damaged) { unp_fail(u, EIO | IJ_SRC, "", e->path); return 1; }
-    if(mkdir(u->dst, 0777) != 0 && errno != EEXIST) { unp_fail(u, errno, "Ordner anlegen", e->path); return 1; }
+    if(mkdir(u->dst, 0777) == 0) (void)chmod(u->dst, LZP_FILE_MODE);
+    else if(errno != EEXIST) { unp_fail(u, errno, "Ordner anlegen", e->path); return 1; }
     u->made_dirs++;
     return 0;
   }
   set_current(e->path);
-  int out = open(u->dst, O_WRONLY | O_CREAT | O_EXCL, 0666);
+  int out = open(u->dst, O_WRONLY | O_CREAT | O_EXCL, LZP_FILE_MODE);         /* a game folder: 0777 (lz4pack.h) */
   if(out < 0) { unp_fail(u, errno, "Datei anlegen", e->path); return 1; }
+  (void)fchmod(out, LZP_FILE_MODE);
   uint32_t crc = 0;
   uint64_t off = 0;
   int rc = 0;
@@ -780,6 +799,7 @@ unpack_run(void *arg) {
   }
   int mk = mkdir_p(tmp);
   if(mk == 0 && mkdir(tmp, 0777) != 0) mk = errno ? errno : EIO;
+  if(mk == 0) (void)chmod(tmp, LZP_FILE_MODE);
   if(mk != 0) {
     imgr_close(r);
     char m[300];
@@ -805,13 +825,29 @@ unpack_run(void *arg) {
   g_job.files_done = 0;
   pthread_mutex_unlock(&g_lock);
   set_phase("Die Dateien werden geschrieben");
-  imgr_walk(r, unp_cb, &u);
+  uint64_t skipped = 0;
+  int uw = imgr_walk2(r, unp_cb, &u, &skipped);
   imgr_close(r);
   free(u.dst);
   free(u.buf);
   if(u.rc) {
     rm_tree(tmp, 0);                                   /* created above with mkdir: ours */
     finish((u.rc & ~IJ_SRC) == ECANCELED ? IJ_CANCELLED : IJ_FAILED, u.why);
+    goto out;
+  }
+  pthread_mutex_lock(&g_lock);
+  unsigned written = g_job.files_done;
+  pthread_mutex_unlock(&g_lock);
+  if(uw != 0 || skipped || written != cnt.files) {   /* a folder half written is no game: never renamed into place */
+    rm_tree(tmp, 0);
+    char m[300];
+    if(skipped)
+      snprintf(m, sizeof(m), "%llu Einträge im Abbild haben einen ungültigen Namen; ohne sie wäre das Spiel unvollständig. Nichts wurde behalten.",
+               (unsigned long long)skipped);
+    else
+      snprintf(m, sizeof(m), "Das Entpacken brach mitten im Abbild ab (%u von %u Dateien): Die Ordner ließen sich nicht mehr lesen "
+               "(Laufwerk getrennt?). Nichts wurde behalten.", written, cnt.files);
+    finish(IJ_FAILED, m);
     goto out;
   }
   set_phase("Der Ordner wird fertiggestellt");
@@ -1170,6 +1206,11 @@ ps5tm_imgjob_status(void) {
     cJSON_AddNumberToObject(o, "lz4_stored", (double)g_job.lz4_stored);
     cJSON_AddNumberToObject(o, "lz4_loose", g_job.lz4_loose);
     cJSON_AddNumberToObject(o, "lz4_packed", g_job.lz4_packed);
+    if(!strcmp(g_job.kind, "lz4verify")) {
+      cJSON_AddBoolToObject(o, "lz4_apr_fixed", g_job.lz4_apr_fixed);
+      cJSON_AddNumberToObject(o, "lz4_restored", g_job.lz4_restored);
+      cJSON_AddNumberToObject(o, "lz4_modes", g_job.lz4_modes);
+    }
   }
   cJSON *a = cJSON_AddArrayToObject(o, "bad");
   for(unsigned k = 0; k < g_job.bad_n; k++) {

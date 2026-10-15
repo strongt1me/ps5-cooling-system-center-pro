@@ -161,6 +161,9 @@ ps5tm_msgbuf_read(size_t *len_out) {
 
     size_t got = cap;
     int    rc  = sysctlbyname("kern.msgbuf", buf, &got, NULL, 0);
+    /* The NUL the kernel appends is no line end: turned into one, a line still being written would look whole, and klog.c
+       would take it as the anchor of the next read, miss it there and hand out thousands of old lines as new (15.10.2026). */
+    while(rc == 0 && got > 0 && buf[got - 1] == 0) got--;
     if(rc == 0 && got > 0) {
       scrub_nuls(buf, got);
       buf[got] = 0;

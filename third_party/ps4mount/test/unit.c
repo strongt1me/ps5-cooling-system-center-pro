@@ -5,9 +5,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "ps4m_build.h"
 #include "ps4m_crypto.h"
+#include "ps4m_origin.h"
 #include "ps4m_pkg.h"
 #include "pdb_template.h"
 
@@ -243,6 +246,67 @@ static void test_sfo(void) {
     CHECK(p4m_sfo_parse(d, n, &s) != 0);
 }
 
+static void touch(const char *path) {
+    FILE *f = fopen(path, "w");
+    if (f)
+        fclose(f);
+}
+
+static void test_origin(void) {
+    printf("origin records and restored list\n");
+    char root[] = "/tmp/ps4mount-test-XXXXXX", game[128], list[128], out[256], p[256];
+    if (!mkdtemp(root)) {
+        CHECK(0);
+        return;
+    }
+    snprintf(game, sizeof(game), "%s/ps4", root);
+    mkdir(game, 0777);
+    snprintf(game, sizeof(game), "%s/ps4/CUSA00001", root);
+    mkdir(game, 0777);
+
+    CHECK(p4m_origin_find(game, "app.pkg", out, sizeof(out)) != 0); /* nothing recorded yet */
+    CHECK(p4m_origin_add(game, "app.pkg", "games/My Game [v1.00].pkg") == 0);
+    CHECK(p4m_origin_add(game, "patch.pkg", "Update 1.01.pkg") == 0);
+    CHECK(p4m_origin_add(game, "addcont/CUSA00001/TESTADDON0000001/ac.pkg", "dlc/Pack.pkg") == 0);
+    CHECK(p4m_origin_find(game, "app.pkg", out, sizeof(out)) == 0 && !strcmp(out, "games/My Game [v1.00].pkg"));
+    CHECK(p4m_origin_find(game, "addcont/CUSA00001/TESTADDON0000001/ac.pkg", out, sizeof(out)) == 0 &&
+          !strcmp(out, "dlc/Pack.pkg"));
+    /* a newer update in the same place: the last record wins, the old one is kept aside */
+    CHECK(p4m_origin_add(game, "replaced/patch-1.pkg", "Update 1.01.pkg") == 0);
+    CHECK(p4m_origin_add(game, "patch.pkg", "Update 1.02.pkg") == 0);
+    CHECK(p4m_origin_find(game, "patch.pkg", out, sizeof(out)) == 0 && !strcmp(out, "Update 1.02.pkg"));
+    CHECK(p4m_origin_find(game, "replaced/patch-1.pkg", out, sizeof(out)) == 0 && !strcmp(out, "Update 1.01.pkg"));
+    CHECK(p4m_origin_find(game, "patch", out, sizeof(out)) != 0); /* whole names only */
+    CHECK(p4m_origin_add(game, "bad\tname", "x.pkg") != 0);
+
+    /* free names in the original folder */
+    snprintf(p, sizeof(p), "%s/Game.pkg", root);
+    CHECK(p4m_origin_free_path(root, "Game.pkg", out, sizeof(out)) == 0 && !strcmp(out, p));
+    touch(p);
+    snprintf(p, sizeof(p), "%s/Game (1).pkg", root);
+    CHECK(p4m_origin_free_path(root, "Game.pkg", out, sizeof(out)) == 0 && !strcmp(out, p));
+    touch(p);
+    snprintf(p, sizeof(p), "%s/Game (2).pkg", root);
+    CHECK(p4m_origin_free_path(root, "Game.pkg", out, sizeof(out)) == 0 && !strcmp(out, p));
+    snprintf(p, sizeof(p), "%s/v1.0/noext", root);
+    CHECK(p4m_origin_free_path(root, "v1.0/noext", out, sizeof(out)) == 0 && !strcmp(out, p));
+
+    /* restored pkgs are matched by path and size */
+    snprintf(list, sizeof(list), "%s/restored.txt", root);
+    CHECK(!p4m_restored_has(list, "Game.pkg", 100));
+    CHECK(p4m_restored_add(list, "Game.pkg", 100) == 0);
+    CHECK(p4m_restored_add(list, "games/Other.pkg", 5000000000ull) == 0);
+    CHECK(p4m_restored_has(list, "Game.pkg", 100));
+    CHECK(p4m_restored_has(list, "games/Other.pkg", 5000000000ull));
+    CHECK(!p4m_restored_has(list, "Game.pkg", 101));    /* changed */
+    CHECK(!p4m_restored_has(list, "Game2.pkg", 100));   /* renamed */
+    CHECK(!p4m_restored_has(list, "x/Game.pkg", 100));  /* moved */
+
+    char cmd[300];
+    snprintf(cmd, sizeof(cmd), "rm -rf '%s'", root);
+    CHECK(system(cmd) == 0);
+}
+
 int main(void) {
     test_crypto();
     test_app_json();
@@ -250,6 +314,7 @@ int main(void) {
     test_ac_pdb();
     test_license();
     test_sfo();
+    test_origin();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;
 }

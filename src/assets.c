@@ -25,7 +25,7 @@
   "Content-Security-Policy: default-src 'self'; script-src 'self'; " \
   "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://github.com; " \
   "connect-src 'self'; object-src 'none'; base-uri 'none'; " \
-  "form-action 'self'; frame-ancestors 'none'\r\n" \
+  "form-action 'none'; frame-ancestors 'none'\r\n" \
   "Referrer-Policy: no-referrer\r\n"
 
 #define VARY_HEADER  "Vary: Accept-Encoding\r\n"

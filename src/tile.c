@@ -376,6 +376,12 @@ timed_init(void) {
   return -0xDEAD;                          /* timed out */
 }
 
+/* The same guarded start for the other users of AppInstUtil (PS4Mount): at most 10 s, never twice at once. */
+int
+ps5tm_appinst_init(void) {
+  return timed_init();
+}
+
 
 /* --------------------------------------------------- the tile as a folder */
 
@@ -560,6 +566,15 @@ register_tile(const char **how, char *why, size_t why_len) {
     if(rc_accepted(rc)) { *how = "Titelordner"; return 0; }
   }
   if(p_inst_all) {
+    /* Below 6.00 the batch call made the system check its whole app database and flag it as corrupted (PS4Mount 0.5.0,
+       fw.h; review 15.10.2026): never there. */
+    uint32_t fw = ps5tm_platform_firmware();
+    unsigned major = ((fw >> 28) & 0xf) * 10 + ((fw >> 24) & 0xf);
+    if(major && major < 6) {
+      snprintf(why, why_len, "Sammelinstallation unter Firmware 6.00 nicht sicher (sie markierte dort die App-Datenbank als beschädigt)");
+      PS5TM_WARN("tile_batch_refused", "Sammelinstallation nicht aufgerufen: %s.", why);
+      return TILE_BATCH_REFUSED;
+    }
     if(!batch_reach_ok(why, why_len)) {
       PS5TM_WARN("tile_batch_refused",
                  "Sammelinstallation nicht aufgerufen: %s.", why);

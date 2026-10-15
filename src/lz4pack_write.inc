@@ -234,7 +234,8 @@ plan_build(plan_t *p, const char *root, lzc_cfg_t *cfg, const lzp_ui_t *ui, char
     if(!safe_rel(rel)) { say(err, en, "Der AMPR-Index enthält einen unsicheren Pfad."); goto out; }
     lzc_rule_t tmp;
     const lzc_rule_t *rule = lzc_select(cfg, rel, &tmp);
-    if(lzc_protected(rel) || rule->action == LZC_LOOSE) {      /* programs, system folders and the packs stay loose whatever a profile says */
+    /* programs, system folders, the packs and the files the PS5 looks for on disk stay loose whatever a profile says */
+    if(lzc_protected(rel) || lzc_keep_on_disk(rel, e->size) || rule->action == LZC_LOOSE) {
       p->loose_files++;
       p->loose_bytes += e->size;
       continue;
@@ -481,6 +482,7 @@ layout_new_volume(layout_t *l, unsigned g, unsigned lane, uint32_t flags, char *
   if(sl) { *sl = 0; mkdir_p(dir); }
   v->f = fopen(v->tmp, "w+b");
   if(!v->f) { say(err, en, "Eine Paketdatei ließ sich nicht anlegen (%s).", strerror(errno)); free(v); return NULL; }
+  (void)fchmod(fileno(v->f), LZP_FILE_MODE);
   setvbuf(v->f, NULL, _IOFBF, 1u << 20);
   static const uint8_t zero[4096];
   uint64_t left = v->payload_off;
@@ -720,8 +722,9 @@ chunks_push(chunks_t *c, uint64_t loc, uint32_t desc, uint32_t crc) {
 
 static int
 write_tmp(const char *path, const uint8_t *a, size_t an, const uint8_t *b, size_t bn) {
-  int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, LZP_FILE_MODE);
   if(fd < 0) return -1;
+  (void)fchmod(fd, LZP_FILE_MODE);
   if((an && write_all(fd, a, an) != 0) || (bn && write_all(fd, b, bn) != 0) || fsync(fd) != 0) { close(fd); unlink(path); return -1; }
   return close(fd);
 }
@@ -773,7 +776,7 @@ lzp_pack(const char *root, const char *outdir, lzc_cfg_t *cfg, lzp_stats_t *st, 
   if(plan.chunks_est > MAX_CHUNKS) { say(err, en, "Das Spiel brauchte mehr als 16 Millionen Blöcke. Bitte größere Blöcke wählen oder weniger Dateien packen."); goto out; }
   if(cfg->nreq) {
     for(size_t i = 0; i < plan.ents.n; i++) {
-      if(plan.items[i].rule) continue;
+      if(plan.items[i].rule || lzc_keep_on_disk(plan.ents.e[i].path + 6, plan.ents.e[i].size)) continue;
       for(unsigned k = 0; k < cfg->nreq; k++)
         if(lzc_glob(cfg->required_packed[k], plan.ents.e[i].path + 6)) { say(err, en, "required_packed: %s bliebe lose.", plan.ents.e[i].path + 6); goto out; }
     }

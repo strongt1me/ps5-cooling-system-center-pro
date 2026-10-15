@@ -40,6 +40,13 @@
   --r-md: 12px;
   --r-sm: 9px;
   --shadow: 0 18px 44px rgba(0,0,0,.45);
+
+  /* Kacheln mit Leuchtrand (15.10.2026, Vorlage des Users): ein Blau für Rand, Schein und Symbolkachel */
+  --glow-rgb:  56,128,255;
+  --edge:      rgba(56,128,255,.34);
+  --card-top:  rgba(13,23,50,.72);   /* durchscheinend: 13.10.2026 Stufe 86 %, seit 15.10.2026 auf Wunsch 72 % */
+  --card-bot:  rgba(7,13,31,.72);
+  --card-glow: 0 0 0 1px rgba(56,128,255,.06), 0 0 20px rgba(56,128,255,.13), inset 0 1px 0 rgba(150,190,255,.09);
 }
 
 * { box-sizing: border-box; }
@@ -298,8 +305,8 @@ body.expert .expert-only { display: block; }
 /* Kartensymbole (Systemseite): oben rechts in der Karte, der Kartenkopf hält
    Abstand. Absolut gesetzt, damit Knöpfe im Kopf nicht verrutschen. */
 .card.has-ico { position: relative; }
-.card.has-ico > .card-head { padding-right: 84px; min-height: 48px; }
-.card-ico { position: absolute; top: 10px; right: 14px; width: 76px; height: auto; pointer-events: none; }
+.card.has-ico > .card-head { padding-right: 76px; min-height: 48px; }
+.card-ico { position: absolute; top: 14px; right: 16px; width: 64px; height: auto; pointer-events: none; }
 
 /* Leere Liste der Spielprofile */
 .empty-state { display: flex; align-items: center; gap: 16px; padding: 6px 0; }
@@ -431,39 +438,60 @@ body.offline .offline-note { display: flex; }
 .badge.quiet { background: rgba(255,255,255,.08); color: var(--ink-2); }
 
 /* ── Karten ────────────────────────────────────────────────────────── */
-.card { padding: 20px 22px; margin-bottom: 18px; border: 1px solid var(--hairline);
-  border-radius: var(--r-lg); background: var(--surface-1); }
-/* Alle Kacheln leicht durchscheinend (13.10.2026, Stufe 86 %): das Platinenmuster scheint durch. */
-.card { --surface-1: rgba(20,27,41,.86); --surface-2: rgba(26,35,52,.91); }
-.card-head { display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
-.card-head h2 { margin: 0; font-size: 16px; letter-spacing: -.01em; }
-.sub { margin: 3px 0 0; color: var(--ink-muted); font-size: 12px; }
+/* Seit 15.10.2026 nach der Vorlage des Users: dunkles Blau mit Verlauf, leuchtender Rand, Symbolkachel im Kopf.
+   Nur Farbverläufe, Linien und box-shadow – kein filter/backdrop-filter (auf der PS5 teuer, siehe oben). Leicht
+   durchscheinend wie seit 13.10.2026: das Platinenmuster scheint durch. */
+.card { padding: 20px 22px; margin-bottom: 18px; border: 1px solid var(--edge); border-radius: 20px;
+  background: linear-gradient(180deg, var(--card-top), var(--card-bot)); box-shadow: var(--card-glow); }
+.card { --surface-1: rgba(13,23,50,.72); --surface-2: rgba(20,34,70,.9); --inset: rgba(6,12,30,.72); }
+.card-head { display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+.card-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -.015em; line-height: 1.2; }
+.sub { margin: 4px 0 0; color: var(--ink-muted); font-size: 12.5px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
 
-.legend { display: flex; gap: 14px; color: var(--ink-2); font-size: 12px; }
+/* Titel mit Symbolkachel: Symbole aus dem Satz #ck-… oben in index.html */
+.ck-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ck-text { min-width: 0; }
+.ck-badge { width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 13px;
+  border: 1px solid rgba(120,170,255,.55);
+  background: radial-gradient(120% 120% at 30% 15%, rgba(80,150,255,.55), rgba(22,60,170,.55) 45%, rgba(9,22,64,.9) 100%);
+  box-shadow: 0 0 16px rgba(var(--glow-rgb),.35), inset 0 0 10px rgba(120,180,255,.25); }
+.ck-badge svg { width: 26px; height: 26px; fill: none; stroke: #e3eeff; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round; }
+.ck-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Legende als Pille, die Punkte leuchten in ihrer Farbe */
+.legend { display: flex; align-items: center; gap: 14px; padding: 7px 14px; border: 1px solid rgba(var(--glow-rgb),.26);
+  border-radius: 999px; background: rgba(8,16,40,.78); color: var(--ink); font-size: 12.5px; }
 .legend span { display: flex; align-items: center; gap: 6px; }
-.legend i { width: 9px; height: 9px; border-radius: 50%; }
-.legend i.tgt { width: 14px; height: 0; border-top: 2px dashed var(--ink-muted); border-radius: 0; }
+.legend i { width: 11px; height: 11px; border-radius: 50%; }
+.legend i.s1 { box-shadow: 0 0 8px var(--s1); } .legend i.s2 { box-shadow: 0 0 8px var(--s2); }
+.legend i.s3 { box-shadow: 0 0 8px var(--s3); } .legend i.s4 { box-shadow: 0 0 8px var(--s4); }
+.legend i.tgt { width: 18px; height: 0; border-top: 2px dashed var(--ink-2); border-radius: 0; }
 
 /* ── Diagramme ─────────────────────────────────────────────────────── */
-.chart-host { position: relative; padding-left: 34px; }
+/* Das Diagramm liegt in einem eigenen Innenfeld (15.10.2026); die Werte der Achse stehen links darin. */
+.chart-host { position: relative; padding: 16px 16px 12px 52px; border: 1px solid rgba(var(--glow-rgb),.30);
+  border-radius: 16px; background: linear-gradient(180deg, rgba(18,36,82,.42), rgba(6,12,30,.72));
+  box-shadow: inset 0 0 26px rgba(var(--glow-rgb),.10); }
 .chart-host svg { display: block; width: 100%; height: 210px; overflow: visible; }
-.grid path { stroke: var(--grid); stroke-width: 1; fill: none; }
-.line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+.grid path { stroke: rgba(120,160,255,.11); stroke-width: 1; fill: none; }
+.line { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
   vector-effect: non-scaling-stroke; }
 .l1 { stroke: var(--s1); } .l2 { stroke: var(--s2); } .l3 { stroke: var(--s3); }
 .l4 { stroke: var(--s4); }
-.area { stroke: none; opacity: .17; }
-.a1 { fill: var(--s1); } .a2 { fill: var(--s2); } .a3 { fill: var(--s3); }
-.tgtline { fill: none; stroke: var(--ink-muted); stroke-width: 1.5; stroke-dasharray: 5 5;
+/* Flächen mit Verlauf nach unten (Verläufe #ckFill… oben in index.html) */
+.area { stroke: none; }
+.a1 { fill: url(#ckFill1); } .a2 { fill: url(#ckFill2); } .a3 { fill: url(#ckFill3); }
+.tgtline { fill: none; stroke: rgba(225,235,255,.75); stroke-width: 1.6; stroke-dasharray: 6 6;
   vector-effect: non-scaling-stroke; }
 .cross { stroke: var(--ink-2); stroke-width: 1; opacity: 0; vector-effect: non-scaling-stroke; }
 .chart-host.hover .cross { opacity: .5; }
 
-.axis-y { position: absolute; left: 0; top: 0; bottom: 0; width: 32px;
+.axis-y { position: absolute; left: 12px; top: 16px; bottom: 12px; width: 32px;
   display: flex; flex-direction: column; justify-content: space-between;
-  color: var(--ink-muted); font-size: 10.5px; text-align: right;
+  color: var(--ink-2); font-size: 12.5px; text-align: left;
   font-variant-numeric: tabular-nums; pointer-events: none; }
 
 .tip { position: absolute; z-index: 4; padding: 9px 11px; border-radius: 10px;
@@ -887,6 +915,8 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .btn.danger { background: rgba(208,59,59,.22); border-color: rgba(208,59,59,.7); color: #ffd4d4; }
 .btn.danger:disabled { opacity: .45; cursor: not-allowed; }
 .btn.danger[data-armed] { background: #d03b3b; border-color: #ff8a8a; color: #fff; }
+/* every button waiting for its second click shows it, not only by its text (review 15.10.2026; same look as the power options) */
+.btn[data-armed]:not(.danger) { color: #ffd57b; border-color: rgba(250,178,25,.6); background: rgba(250,178,25,.14); }
 .dl-name { margin: 0 0 6px; line-height: 1.5; }
 .dl-items { margin: 4px 0 10px 18px; padding: 0; font-size: 13.5px; line-height: 1.55; }
 .dl-keep { color: #8fe08f; font-size: 13px; margin: 6px 0; }
@@ -1071,6 +1101,11 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .p4m-state.ok { border-color: rgba(12,163,12,.5); color: #7ee07e; }
 .p4m-state.warn { border-color: rgba(250,178,25,.5); color: #fab219; }
 .p4m-set { display: grid; gap: 12px; }
+.p4m-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.p4m-pick { display: grid; gap: 2px; max-height: 260px; overflow: auto; padding: 4px 10px; border-radius: 10px; background: var(--inset); }
+.p4m-pick:empty { display: none; }
+.cp-check.p4m-pickrow { margin-top: 0; padding: 6px 0; font-weight: 400; }
+@media (max-width: 640px) { .p4m-row { flex-wrap: wrap; } .p4m-btns { width: 100%; justify-content: flex-start; } }
 .p4m-field { display: grid; gap: 4px; font-size: 13px; }
 .p4m-field input, .p4m-field textarea { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
 .p4m-log { margin: 0; max-height: 260px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: var(--inset);
@@ -1291,7 +1326,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   border: 2px solid rgba(59,130,246,.55); box-shadow: 0 0 0 5px rgba(59,130,246,.12); }
 .cr-by { font-size: 13px; }
 .cr-group { margin: 26px 2px 12px; font-size: 15px; color: var(--ink-2); letter-spacing: .02em; }
-.cr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.cr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); gap: 14px; }
 .cr-card { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border-radius: var(--r-lg);
   border: 1px solid var(--hairline); background: var(--surface-1); }
 .cr-pic { width: 56px; height: 56px; border-radius: 50%; flex: none; border: 1px solid var(--hairline);
@@ -1717,3 +1752,174 @@ button.apr-drive:disabled { cursor: default; }
 .apr-guide li b, .apr-guide li code { display: inline; font-size: inherit; }
 .cp-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; font-weight: 700; cursor: pointer; }
 .cp-check input { margin-top: 3px; }
+
+/* ── Kachel-Optik (15.10.2026), Rest ──────────────────────────────────
+   Innenflächen bekommen den Rand im Blau der Kacheln; der aufklappbare Expertenblock steht wie eine Kachel da. Steht am Ende,
+   damit es die Grundregeln gleicher Gewichtung überschreibt (ausgewählte Zustände wie .co-preset.on wiegen mehr und bleiben). */
+.sensor, .kv-grid > div, .co-preset, .choice, .fan-mini { border-color: rgba(var(--glow-rgb),.22); }
+/* die Kacheln mit eigenem Aufbau (Spiele, Payloads, Credits) im selben Rahmen; ihre besonderen Zustände (laufendes Spiel,
+   eigenes Payload, Hervorgehobene) wiegen mehr und behalten ihre Farbe */
+.gm-card, .pl-card, .cr-card:not(.cr-featured) { border-color: var(--edge);
+  background: linear-gradient(180deg, var(--card-top), var(--card-bot)); }
+.gm-card, .pl-card, .cr-card { box-shadow: var(--card-glow); }
+.expert-only > .advanced { border-color: var(--edge); border-radius: 20px;
+  background: linear-gradient(180deg, var(--card-top), var(--card-bot)); box-shadow: var(--card-glow); }
+@media (max-width: 560px) {
+  .ck-title { gap: 11px; }
+  .ck-badge { width: 40px; height: 40px; border-radius: 11px; }
+  .ck-badge svg { width: 22px; height: 22px; }
+  .card-head h2 { font-size: 17px; }
+  .chart-host { padding: 12px 10px 10px 44px; }
+  .axis-y { left: 8px; top: 12px; bottom: 10px; font-size: 11.5px; }
+}
+
+/* ── Vier Designs (15.10.2026, Wunsch des Users): Aktuell, Hell, Dunkel, Optimal ─────────────────────
+   Das Design steht als data-theme an <html> (web/theme-boot.js setzt es vor dem ersten Zeichnen, gemerkt je Gerät);
+   „Aktuell“ ist die Vorgabe oben und braucht kein Attribut. Wie überall: kein filter/backdrop-filter (auf der PS5 teuer). */
+
+/* ── Hell: helles Grau-Blau statt Weiß, gedämpft, damit es am Fernseher nicht blendet ── */
+:root[data-theme="hell"] {
+  color-scheme: light;
+  --plane: #dfe5ee; --side: #e9eef5; --accent: #2f6fe0;
+  --surface-1: #f3f6fa; --surface-2: #e9eef6; --inset: #e6ebf3;
+  --ink: #18212f; --ink-2: #303d55; --ink-muted: #5a6780;
+  --grid: #d1d8e4; --baseline: #bcc6d6; --hairline: rgba(24,44,84,.13);
+  --s1: #2a6fcf; --s2: #cf531c; --s3: #11845d; --s4: #8352d6;
+  --glow-rgb: 47,111,224;
+  --edge: rgba(47,111,224,.26);
+  --card-top: rgba(250,251,253,.9); --card-bot: rgba(238,242,249,.9);
+  --card-glow: 0 1px 2px rgba(20,40,80,.07), 0 8px 22px rgba(30,70,140,.09);
+  --shadow: 0 14px 34px rgba(20,40,80,.18);
+}
+:root[data-theme="hell"] body { background: linear-gradient(rgba(223,229,238,.94), rgba(223,229,238,.94)), url(/img/bg-pattern.jpg) repeat; }
+:root[data-theme="hell"] .side { background: linear-gradient(180deg, #edf1f7, #e2e8f1); border-right-color: rgba(24,44,84,.12); }
+:root[data-theme="hell"] .card { --surface-1: #f6f8fb; --surface-2: #edf1f7; --inset: #e9eef5; }
+:root[data-theme="hell"] .ck-badge { border-color: rgba(47,111,224,.45);
+  background: radial-gradient(120% 120% at 30% 15%, #5f97f2, #2f6fe0 55%, #2459c4 100%); box-shadow: 0 4px 12px rgba(47,111,224,.28); }
+:root[data-theme="hell"] .ck-badge svg { stroke: #fff; }
+:root[data-theme="hell"] .legend { background: rgba(255,255,255,.75); }
+:root[data-theme="hell"] .chart-host { background: linear-gradient(180deg, #f8fafd, #edf2f9); box-shadow: inset 0 1px 3px rgba(20,40,80,.06); }
+:root[data-theme="hell"] .grid path { stroke: rgba(40,70,130,.13); }
+:root[data-theme="hell"] .tgtline { stroke: rgba(30,50,90,.55); }
+:root[data-theme="hell"] .tab:hover, :root[data-theme="hell"] .tab:focus-visible { background: rgba(24,44,84,.06); }
+:root[data-theme="hell"] .tab.active svg { stroke: #2a6fcf; }
+:root[data-theme="hell"] .btn:hover, :root[data-theme="hell"] .btn:focus-visible { border-color: rgba(24,44,84,.28); background-color: #dfe6f1; }
+:root[data-theme="hell"] .pw-group { background: rgba(255,255,255,.55); border-color: rgba(24,44,84,.22); }
+:root[data-theme="hell"] .pw-btn:hover, :root[data-theme="hell"] .pw-btn:focus-visible,
+:root[data-theme="hell"] .fs-btn:hover { border-color: rgba(24,44,84,.25); }
+:root[data-theme="hell"] .switch input:not(:checked) + i { background: #c3ccdb; }
+:root[data-theme="hell"] body { text-shadow: none; }
+:root[data-theme="hell"] .side .tab { color: var(--ink-2); text-shadow: none; }
+:root[data-theme="hell"] .side .tab svg { stroke: currentColor; }
+:root[data-theme="hell"] .side .tab:not(.active) { background: rgba(255,255,255,.5); }
+:root[data-theme="hell"] .side .tab.active { color: var(--ink); background: rgba(47,111,224,.14); border-color: rgba(47,111,224,.32); }
+:root[data-theme="hell"] .side .tab.active svg { stroke: #2a6fcf; }
+:root[data-theme="hell"] .side-foot { background: rgba(255,255,255,.6); }
+:root[data-theme="hell"] .tip { background: rgba(255,255,255,.97); }
+/* Kacheln mit Bild (Status, Lüfter, Spiel, Banner): das Bild ist dunkel, also behalten sie die dunklen Farben */
+:root[data-theme="hell"] .ov-hero, :root[data-theme="hell"] .ov-tile, :root[data-theme="hell"] .page-banner,
+:root[data-theme="hell"] .pf-hero, :root[data-theme="hell"] .gm-banner, :root[data-theme="hell"] .lib-head {
+  --ink: #f3f6fd; --ink-2: #d3dbee; --ink-muted: #a9b5d0; --hairline: rgba(255,255,255,.12);
+  --surface-1: rgba(20,27,41,.86); --surface-2: rgba(26,35,52,.91); --inset: #0c1320; color: var(--ink); }
+
+/* ── Dunkel: fast schwarz, ohne Leuchten und ohne Durchscheinen, ruhig für dunkle Räume ── */
+:root[data-theme="dunkel"] {
+  --plane: #05070b; --side: #080b11;
+  --surface-1: #0e121a; --surface-2: #141924; --inset: #080b11;
+  --ink: #eef2f8; --ink-2: #c9d2e3; --ink-muted: #8f9bb3;
+  --grid: #161c27; --hairline: rgba(255,255,255,.08);
+  --glow-rgb: 90,120,170;
+  --edge: rgba(255,255,255,.09);
+  --card-top: #0b0e15; --card-bot: #090c12;
+  --card-glow: none;
+}
+:root[data-theme="dunkel"] body { background: linear-gradient(rgba(5,7,11,.93), rgba(5,7,11,.93)), url(/img/bg-pattern.jpg) repeat; }
+:root[data-theme="dunkel"] .card { --surface-1: #0e121a; --surface-2: #141924; --inset: #07090e; }
+:root[data-theme="dunkel"] .ck-badge { border-color: rgba(255,255,255,.12); background: #141a26; box-shadow: none; }
+:root[data-theme="dunkel"] .ck-badge svg { stroke: #b9c7e2; }
+:root[data-theme="dunkel"] .legend { background: #0e121a; border-color: rgba(255,255,255,.09); }
+:root[data-theme="dunkel"] .legend i { box-shadow: none !important; }
+:root[data-theme="dunkel"] .chart-host { background: #07090e; border-color: rgba(255,255,255,.08); box-shadow: none; }
+:root[data-theme="dunkel"] .grid path { stroke: rgba(255,255,255,.06); }
+
+/* ── Optimal: für Fernseher und PS5 – kräftiger Kontrast, größere Schrift, klare Ränder, ohne Durchscheinen und Schatten
+      (am schnellsten zu zeichnen) ── */
+:root[data-theme="optimal"] {
+  --plane: #0a1020; --side: #0c1427;
+  --surface-1: #121b31; --surface-2: #1a2540; --inset: #0b1224;
+  --ink: #ffffff; --ink-2: #e8eef9; --ink-muted: #c3cde2;
+  --grid: #24304a; --hairline: rgba(255,255,255,.16);
+  --edge: rgba(120,165,255,.55);
+  --card-top: #111a2f; --card-bot: #111a2f;
+  --card-glow: none;
+}
+:root[data-theme="optimal"] body { background: var(--plane); font-size: 16px; text-shadow: none; }
+:root[data-theme="optimal"] .side .tab { text-shadow: none; }
+:root[data-theme="optimal"] .side .tab:not(.active) { background: #111a2f; }
+:root[data-theme="optimal"] .side { background: var(--side); }
+:root[data-theme="optimal"] .card { border-width: 2px; --surface-1: #121b31; --surface-2: #1a2540; --inset: #0b1224; }
+:root[data-theme="optimal"] .card-head h2 { font-size: 21px; }
+:root[data-theme="optimal"] .sub { font-size: 13.5px; }
+:root[data-theme="optimal"] .ck-badge { background: #1d4ed8; border-color: #6f9cff; box-shadow: none; }
+:root[data-theme="optimal"] .ck-badge svg { stroke: #fff; stroke-width: 2; }
+:root[data-theme="optimal"] .legend { font-size: 14px; background: #0b1224; border-width: 2px; }
+:root[data-theme="optimal"] .legend i { box-shadow: none !important; }
+:root[data-theme="optimal"] .chart-host { background: #0b1224; border-width: 2px; box-shadow: none; }
+:root[data-theme="optimal"] .axis-y { font-size: 14px; color: var(--ink); }
+:root[data-theme="optimal"] .line { stroke-width: 3.2; }
+:root[data-theme="optimal"] .grid path { stroke: rgba(255,255,255,.12); }
+:root[data-theme="optimal"] .tab { font-size: 15.5px; }
+
+/* Hell: die hellen Statusfarben der dunklen Designs, abgedunkelt im selben Farbton */
+/* >>> Hell: Statusfarben (erzeugt von tools/gen_theme_hell.py, nicht von Hand ändern) */
+:root[data-theme="hell"] .co-preset.on span { color: #0b3a8e; }
+:root[data-theme="hell"] .pw-btn[data-armed] { color: #8e640b; }
+:root[data-theme="hell"] .badge.ok { color: #0b8e0b; }
+:root[data-theme="hell"] .badge.warn { color: #8e640b; }
+:root[data-theme="hell"] .badge.hot { color: #8e0b0b; }
+:root[data-theme="hell"] .diag-advice.ok { color: #138613; }
+:root[data-theme="hell"] .diag-advice.warn { color: #8e610b; }
+:root[data-theme="hell"] .diag-advice.hot { color: #8e0b0b; }
+:root[data-theme="hell"] .reason-tag.ok { color: #0b8e0b; }
+:root[data-theme="hell"] .reason-tag.warn { color: #8e640b; }
+:root[data-theme="hell"] .reason-tag.hot { color: #8e0b0b; }
+:root[data-theme="hell"] .reason-tag.info { color: #20356f; }
+:root[data-theme="hell"] .diag-diff.escalate { color: #8e0b0b; }
+:root[data-theme="hell"] .diag-diff.recover { color: #0b8e0b; }
+:root[data-theme="hell"] .rule button { color: #8e0b0b; }
+:root[data-theme="hell"] .gm-tag.bp { color: #8e640b; }
+:root[data-theme="hell"] .gm-tag.ampr { color: #0b408e; }
+:root[data-theme="hell"] .gm-tag.pg { color: #1e7b59; }
+:root[data-theme="hell"] .gm-meta dd.warn { color: #8e640b; }
+:root[data-theme="hell"] .cp-why { color: #8e640b; }
+:root[data-theme="hell"] .cp-warn { color: #8e630b; }
+:root[data-theme="hell"] .cp-err { color: #8e0b0b; }
+:root[data-theme="hell"] .gm-more .gm-del, :root[data-theme="hell"] .bk-row .gm-del { color: #8e0b0b; }
+:root[data-theme="hell"] .btn.danger { color: #8e0b0b; }
+:root[data-theme="hell"] .btn[data-armed]:not(.danger) { color: #8e640b; }
+:root[data-theme="hell"] .dl-keep { color: #217821; }
+:root[data-theme="hell"] .cp-ok { color: #1e7b59; }
+:root[data-theme="hell"] .pl-ver { color: #0b3a8e; }
+:root[data-theme="hell"] .pl-trash { color: #8e0b0b; }
+:root[data-theme="hell"] .p4m-state.ok { color: #1e7b1e; }
+:root[data-theme="hell"] .pt-note { color: #8e640b; }
+:root[data-theme="hell"] .kl-rec[aria-pressed="true"] { color: #8e0b0b; }
+:root[data-theme="hell"] .pl-startup-tag { color: #0b3f8e; }
+:root[data-theme="hell"] .pl-prof-run li.bad { color: #8a0f0f; }
+:root[data-theme="hell"] .pq-note.warn { color: #8e640b; }
+:root[data-theme="hell"] .pq-note.bad { color: #8e0b0b; }
+:root[data-theme="hell"] .pq-note.ok { color: #0b8e0b; }
+:root[data-theme="hell"] .pq-state.run { color: #0b428e; }
+:root[data-theme="hell"] .pq-state.done { color: #1e7b59; }
+:root[data-theme="hell"] .pq-state.skip { color: #8e640b; }
+:root[data-theme="hell"] .pq-state.fail { color: #8e0b0b; }
+:root[data-theme="hell"] .pq-why.bad { color: #8e0b0b; }
+:root[data-theme="hell"] .side .tab { color: #223d77; }
+:root[data-theme="hell"] .gm-more .gm-apr { color: #0b408e; }
+:root[data-theme="hell"] .apr-state.ok { color: #1e7b1e; }
+:root[data-theme="hell"] .apr-state.no { color: #8e640b; }
+:root[data-theme="hell"] .hv-main small.hv-err { color: #8e0b0b; }
+:root[data-theme="hell"] .hv-res.ok { color: #1e7b1e; }
+:root[data-theme="hell"] .hv-res.bad { color: #8e0b0b; }
+:root[data-theme="hell"] .hv-res.stop { color: #8e640b; }
+/* <<< Hell: Statusfarben */

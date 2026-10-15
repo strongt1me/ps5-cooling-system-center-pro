@@ -33,8 +33,9 @@ int g_powerguard_ticks;          /* for the host tests */
 static int sceShellCoreUtilResetAutoPowerDownTimer(void) { g_powerguard_ticks++; return 0; }
 static int sceSystemServicePowerTick(void) { return 0; }
 #else
-int sceShellCoreUtilResetAutoPowerDownTimer(void);
-int sceSystemServicePowerTick(void);
+/* Weak (review 15.10.2026): confirmed on 12.00 only; a firmware without them must not keep the app from loading. */
+int sceShellCoreUtilResetAutoPowerDownTimer(void) __attribute__((weak));
+int sceSystemServicePowerTick(void) __attribute__((weak));
 #endif
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -60,8 +61,8 @@ guard_thread(void *arg) {
     was = held;
 
     if(held && now >= next && ps5tm_sony_api_trylock()) {
-      int r1 = sceShellCoreUtilResetAutoPowerDownTimer();
-      int r2 = sceSystemServicePowerTick();
+      int r1 = sceShellCoreUtilResetAutoPowerDownTimer ? sceShellCoreUtilResetAutoPowerDownTimer() : -1;
+      int r2 = sceSystemServicePowerTick ? sceSystemServicePowerTick() : -1;
       ps5tm_sony_api_unlock();
       if(!logged) {
         PS5TM_INFO("power_guard_on", "Langer Vorgang: Die Uhr für den automatischen "

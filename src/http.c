@@ -222,6 +222,15 @@ ps5tm_http_send_error(int fd, int status, const char *code,
   snprintf(body, sizeof(body),
            "{\"ok\":false,\"code\":\"%s\",\"message\":\"%s\"}",
            esc_code, esc_msg);
+  /* A fault of the console side (5xx) is said in the log too, not only to the browser that asked (review 15.10.2026). */
+  if(status >= 500) {
+    static uint64_t last_ms;                        /* at most one a second: an overload must not wash the log empty */
+    uint64_t now = ps5tm_mono_ms(), last = __atomic_load_n(&last_ms, __ATOMIC_RELAXED);
+    if(!last || now - last >= 1000) {
+      __atomic_store_n(&last_ms, now, __ATOMIC_RELAXED);
+      PS5TM_WARN("http_error", "Antwort %d (%.60s): %.200s", status, code ? code : "error", message ? message : "");
+    }
+  }
   ps5tm_http_send_json(fd, status, body);
 }
 
@@ -463,10 +472,16 @@ serve_connection(void *arg) {
     return NULL;
   }
   char *qmark = strchr(target, '?');
-  if(qmark) {
-    *qmark = 0;
-    snprintf(req.query, sizeof(req.query), "%s", qmark + 1);
+  if(qmark) *qmark = 0;
+  /* Path and query each have a field of their own: one that does not fit was refused too, never cut (an upload's name
+     would have been shortened; review 15.10.2026). */
+  if(strlen(target) >= sizeof(req.path) || (qmark && strlen(qmark + 1) >= sizeof(req.query))) {
+    ps5tm_http_send_error(fd, 414, "uri_too_long", "Die Adresse ist zu lang.");
+    free(raw);
+    close(fd);
+    return NULL;
   }
+  if(qmark) snprintf(req.query, sizeof(req.query), "%s", qmark + 1);
   snprintf(req.path, sizeof(req.path), "%.*s",
            (int)sizeof(req.path) - 1, target);
 
@@ -501,7 +516,21 @@ serve_connection(void *arg) {
   }
 
   const char *cl = find_header(headers, "Content-Length");
-  size_t want = cl ? (size_t)strtoul(cl, NULL, 10) : 0;
+  size_t want = 0;
+  if(cl) {
+    /* digits only: strtoul("-1") is the largest number there is, and would pass the size checks of the uploads */
+    while(*cl == ' ' || *cl == '\t') cl++;
+    char *ce = NULL;
+    errno = 0;
+    unsigned long long v = (*cl >= '0' && *cl <= '9') ? strtoull(cl, &ce, 10) : 0;
+    if(!(*cl >= '0' && *cl <= '9') || errno || (ce && *ce && *ce != '\r' && *ce != '\n' && *ce != ' ')) {
+      ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Content-Length.");
+      free(raw);
+      close(fd);
+      return NULL;
+    }
+    want = (size_t)v;
+  }
 
   /* The tile package is ten megabytes and must never be held in memory — that
      is what broke the app when it was embedded. It streams straight to disk
@@ -794,6 +823,9 @@ ps5tm_http_run(int srv, unsigned port) {
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    /* A stack of known size instead of the system's small default: handlers parse JSON and build answers on it
+       (review 15.10.2026; 24 connections at most, so at most 12 MiB). */
+    pthread_attr_setstacksize(&attr, 512 * 1024);
     int trc = pthread_create(&tid, &attr, connection_thread,
                              (void *)(intptr_t)cl_fd);
     if(trc != 0) {

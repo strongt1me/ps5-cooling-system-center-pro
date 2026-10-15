@@ -34,6 +34,7 @@
 #include <unistd.h>
 
 #include "imgread.h"
+#include "ioerr.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 
@@ -149,14 +150,27 @@ walk(ai_walk_t *w, const char *root, const char *rel, int depth) {
       if(snprintf(sub, sizeof(sub), "%s/%s", rel, names[i]) >= (int)sizeof(sub) ||
          snprintf(full, sizeof(full), "%s%s", root, sub) >= (int)sizeof(full)) { w->err = ENAMETOOLONG; break; }
       struct stat ls;
-      if(lstat(full, &ls) != 0) continue;
+      if(lstat(full, &ls) != 0) {
+        /* gone meanwhile is fine; any other error would leave the file out of the index, and APR-EMU would miss it while the
+           game runs (review 15.10.2026) */
+        if(errno == ENOENT) continue;
+        w->err = errno ? errno : EIO;
+        snprintf(w->why, sizeof(w->why), "Eintrag nicht lesbar (%.60s): %.150s", ps5tm_io_strerror(w->err), sub);
+        break;
+      }
       if(pass == 1) {
         if(S_ISDIR(ls.st_mode)) walk(w, root, sub, depth + 1);
         continue;
       }
       if(S_ISDIR(ls.st_mode)) continue;
       struct stat st;
-      if(stat(full, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+      if(stat(full, &st) != 0) {
+        if(errno == ENOENT || S_ISLNK(ls.st_mode)) continue;   /* a link into nothing, as os.walk + os.stat skip it */
+        w->err = errno ? errno : EIO;
+        snprintf(w->why, sizeof(w->why), "Datei nicht lesbar (%.60s): %.150s", ps5tm_io_strerror(w->err), sub);
+        break;
+      }
+      if(!S_ISREG(st.st_mode)) continue;
       char app0[AI_PATH + 8];
       snprintf(app0, sizeof(app0), "/app0%s", sub);
       /* the index itself and the two files APR-EMU writes at the top */
@@ -310,13 +324,14 @@ ps5tm_ampr_build_dir(const char *root, unsigned *files, unsigned *collisions, co
   snprintf(tmp, sizeof(tmp), "%s/%s.tmp", root, AI_NAME);
   snprintf(dst, sizeof(dst), "%s/%s", root, AI_NAME);
   snprintf(bak, sizeof(bak), "%s/%s.bak", root, AI_NAME);
-  int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0777);         /* game files are 0777 (see LZP_FILE_MODE in lz4pack.h) */
   if(fd < 0) {
     int e = errno;
     free(img);
     if(why && why_len) snprintf(why, why_len, "Die Datei ließ sich nicht anlegen: %s", strerror(e));
     return e;
   }
+  (void)fchmod(fd, 0777);
   int rc = write_all(fd, img, (size_t)total);
   if(!rc && fsync(fd) != 0) rc = errno ? errno : EIO;
   if(close(fd) != 0 && !rc) rc = errno ? errno : EIO;

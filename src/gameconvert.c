@@ -156,8 +156,12 @@ cv_fail(const char *fmt, ...) {
   va_start(ap, fmt);
   pthread_mutex_lock(&g_lock);
   vsnprintf(g_job.error, sizeof(g_job.error), fmt, ap);
+  char tid[12], why[200];
+  snprintf(tid, sizeof(tid), "%s", g_job.title_id);
+  snprintf(why, sizeof(why), "%s", g_job.error);
   pthread_mutex_unlock(&g_lock);
   va_end(ap);
+  PS5TM_WARN("convert_failed", "Konvertieren von %s gescheitert: %s", tid, why);   /* also the checks before (review 15.10.2026) */
   cv_state(CV_FAILED);
 }
 
@@ -970,6 +974,8 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   pthread_attr_t attr;
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  /* the AMPR index walk (amprindex.c) recurses with ~4 KB per folder level: never the small default stack */
+  pthread_attr_setstacksize(&attr, 1024 * 1024);
   pthread_t th;
   int rc = pthread_create(&th, &attr, cv_thread, a);
   pthread_attr_destroy(&attr);

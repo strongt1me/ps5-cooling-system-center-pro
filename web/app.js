@@ -103,7 +103,7 @@
     const d = Math.floor(sec / 86400);
     const h = Math.floor((sec % 86400) / 3600);
     const m = Math.floor((sec % 3600) / 60);
-    if (d) return `${d} Tage, ${h} Std.`;
+    if (d) return d === 1 ? `${d} Tag, ${h} Std.` : `${d} Tage, ${h} Std.`;
     if (h) return `${h} Std. ${m} Min.`;
     return `${m} Min.`;
   };
@@ -173,14 +173,37 @@
     return map.get(Math.trunc(n)) || "";
   };
 
+  /* Long enough to be read (review 15.10.2026: warnings of two-click buttons and errors were gone after 3.8 s): about 60 ms a
+     character, errors at least 8 s; a click on it closes it. Errors are announced at once (role alert). */
   const toast = (msg, kind) => {
     const el = $("#toast");
+    const err = kind === "error";
     el.textContent = msg;
-    el.classList.toggle("err", kind === "error");
+    el.classList.toggle("err", err);
+    el.setAttribute("role", err ? "alert" : "status");
     el.classList.add("show");
     clearTimeout(state.toastTimer);
-    state.toastTimer = setTimeout(() => el.classList.remove("show"), 3800);
+    const ms = Math.min(15000, Math.max(err ? 8000 : 3800, String(msg || "").length * 60));
+    state.toastTimer = setTimeout(() => el.classList.remove("show"), ms);
   };
+  $("#toast").addEventListener("click", () => { clearTimeout(state.toastTimer); $("#toast").classList.remove("show"); });
+
+  /* A script error in the browser (the PS5's browser shows none) goes into the console's log, a few a minute at most, so that a
+     dead button leaves a trace there (review 15.10.2026). */
+  {
+    let sent = 0, windowStart = 0;
+    const report = (msg, where) => {
+      const now = Date.now();
+      if (now - windowStart > 60000) { windowStart = now; sent = 0; }
+      if (++sent > 5) return;
+      try {
+        fetch("/api/v1/log/client", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ msg: String(msg || "").slice(0, 300), where: String(where || "").slice(0, 120) }) }).catch(() => {});
+      } catch (e) { /* nothing more to do */ }
+    };
+    window.addEventListener("error", (e) => report(e.message, `${(e.filename || "").split("/").pop()}:${e.lineno || 0}`));
+    window.addEventListener("unhandledrejection", (e) => report(e.reason && e.reason.message ? e.reason.message : String(e.reason), "promise"));
+  }
 
   /* Ein offenes Fenster (jedes .gm-overlay) hält die Seite dahinter fest (Wunsch vom 06.10.2026): Der rechte Stick
      scrollte im PS5-Browser die abgedunkelte Seite mit. html.modal-open sperrt ihr Scrollen; ein Rad- oder Stick-
@@ -1096,7 +1119,7 @@
 
       const body = data && typeof data === "object" ? data : null;
       if (!res.ok || (body && body.ok === false)) {
-        const err = new Error((body && body.message) || `HTTP ${res.status}`);
+        const err = new Error((body && body.message) || `Die Konsole meldet einen Fehler (HTTP ${res.status}).`);
         err.status = res.status;
         err.code = body && body.code;
         err.data = body;
@@ -1109,6 +1132,9 @@
     } catch (e) {
       if (e && e.name === "AbortError")
         throw new Error("Die Konsole antwortet nicht.");
+      /* fetch itself failed: no connection at all ("Failed to fetch" said nothing to anyone) */
+      if (e instanceof TypeError)
+        throw new Error("Keine Verbindung zur Konsole. Läuft die App noch, und ist dieses Gerät im selben Netz?");
       throw e;
     } finally {
       clearTimeout(timer);
@@ -1326,8 +1352,10 @@
       const x = n === 1 ? W : (idx / (n - 1)) * W;
       cross.setAttribute("x1", x); cross.setAttribute("x2", x);
       tip.innerHTML = format(countFn ? null : state.hist[idx], idx);
-      tip.style.left = `${34 + rel * box.width}px`;
-      tip.style.top = "26px";
+      /* measured, not assumed: the chart sits inside the inner field of the host (padding, 15.10.2026) */
+      const hb = host.getBoundingClientRect();
+      tip.style.left = `${box.left - hb.left + rel * box.width}px`;
+      tip.style.top = `${box.top - hb.top + 10}px`;
       host.classList.add("hover");
     };
     host.addEventListener("mousemove", move);
@@ -6434,7 +6462,7 @@
   /* ── PS4 von USB (ps4m_core.c, 14.10.2026) ──────────────────────────
    * PS4Mount von gasb07 (GPL-3.0) in der App: PS4-Fake-PKGs vom USB-Laufwerk ohne Installation. Die Seite zeigt die Liste, schaltet
    * den Dienst ein und aus, löst eine Suche aus, nimmt Spiele aus der Bibliothek und wieder hinein und speichert die Einstellungen. */
-  const p4m = { data: null, timer: 0, busy: false };
+  const p4m = { data: null, timer: 0, busy: false, sel: new Set(), armed: "", armTimer: 0 };
   const P4M_STATE = {
     ready: ["ok", "Bereit"], running: ["ok", "Läuft"], pending: ["warn", "Wird hinzugefügt"],
     removed: ["", "Aus der Bibliothek entfernt"], internal: ["", "Auf der Konsole installiert"],
@@ -6449,11 +6477,18 @@
     await loadP4m();
   };
 
+  /* Der Knopf der Auswahl: an, sobald etwas gewählt ist, mit der Zahl; die Liste selbst bleibt beim Ankreuzen stehen. */
+  const p4mPickButtons = () => {
+    const b = $("#p4m-restore-sel");
+    b.disabled = !(p4m.data && p4m.data.running) || !p4m.sel.size;
+    if (!b.dataset.armed) b.textContent = p4m.sel.size > 1 ? `${p4m.sel.size} Spiele zurückverschieben` : "Ausgewählte zurückverschieben";
+  };
+
   const p4mRender = () => {
     const d = p4m.data;
     if (!d) return;
     const games = d.games || [];
-    txt("#p4m-sub", d.enabled
+    txt("#p4m-sub", d.busy ? "arbeitet gerade (fügt hinzu, entfernt oder verschiebt) …" : d.enabled
       ? (d.running ? `eingeschaltet · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken` : "eingeschaltet, startet gleich")
       : "ausgeschaltet");
     $("#p4m-on").checked = !!d.enabled;
@@ -6470,13 +6505,29 @@
         ? `<button type="button" class="btn ghost" data-p4m="add" data-id="${esc(g.title_id)}">Hinzufügen</button>`
         : (g.state === "ready" || g.state === "pending")
           ? `<button type="button" class="btn ghost" data-p4m="remove" data-id="${esc(g.title_id)}">Aus Bibliothek entfernen</button>` : "";
+      /* PS4Mount 0.5.0: die PKGs dorthin zurück, woher sie kamen; nicht bei Spielen, die fest auf der Konsole installiert sind */
+      const armed = p4m.armed === g.title_id;
+      const back = g.state !== "internal"
+        ? `<button type="button" class="btn ${armed ? "danger" : "ghost"}" data-p4m-back="${esc(g.title_id)}" ${armed ? 'data-armed="1"' : ""}
+            title="Spiel, Update und Zusatzinhalte gehen an ihren alten Ort zurück; das Spiel verlässt die Bibliothek. Ein laufendes Spiel wird vorher geschlossen.">${armed ? "Wirklich? Nochmal klicken" : "Zurückverschieben"}</button>` : "";
       return `<div class="p4m-row">
         <img class="p4m-icon" src="/api/v1/ps4mount/icon?id=${esc(g.title_id)}" alt="" loading="lazy">
         <div class="p4m-main"><div class="p4m-name">${esc(g.name)}</div>
           <div class="p4m-meta">${esc(meta.join(" · "))}</div>
           ${g.update_issue ? `<div class="p4m-meta">${esc(g.update_issue)}</div>` : ""}</div>
-        <span class="p4m-state ${st[0]}">${esc(st[1])}</span>${btn}</div>`;
+        <span class="p4m-state ${st[0]}">${esc(st[1])}</span><div class="p4m-btns">${btn}${back}</div></div>`;
     }).join("") : `<p class="muted">Keine PS4-Spiele auf den angeschlossenen Laufwerken gefunden.</p>`;
+    /* die Auswahl zum Zurückverschieben: jedes Spiel, das nicht fest installiert ist; was mitgeht, steht dabei */
+    const movable = games.filter((g) => g.state !== "internal");
+    for (const id of Array.from(p4m.sel)) if (!movable.some((g) => g.title_id === id)) p4m.sel.delete(id);
+    $("#p4m-pick").innerHTML = movable.length ? movable.map((g) => {
+      const what = g.has_patch && g.dlc ? `Spiel, Update und ${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}`
+        : g.has_patch ? "Spiel und Update" : g.dlc ? `Spiel und ${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}` : "Spiel";
+      return `<label class="cp-check p4m-pickrow"><input type="checkbox" data-p4m-sel="${esc(g.title_id)}" ${p4m.sel.has(g.title_id) ? "checked" : ""}>
+        <span><b>${esc(g.name)}</b> <span class="muted">${esc(`${g.title_id} · ${what}`)}</span></span></label>`;
+    }).join("") : `<p class="muted">Keine Spiele zum Zurückverschieben.</p>`;
+    p4mPickButtons();
+    $("#p4m-restore-all").disabled = !d.running || !movable.length;
     $$("#p4m-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
     if (!p4m.cfgShown && d.config) {
       p4m.cfgShown = true;
@@ -6484,12 +6535,19 @@
       $("#p4m-batch").checked = !!d.config.batch;
       $("#p4m-size").value = d.config.batch_size;
       $("#p4m-paths").value = (d.config.paths || ["/"]).join("\n");
+      $("#p4m-rsize").value = d.config.restore_batch || 5;
+      $("#p4m-rsize").max = d.config.max_restore_batch || 10;
     }
   };
 
   const loadP4m = async () => {
-    try { p4m.data = await api("/api/v1/ps4mount"); p4mRender(); }
-    catch (e) { txt("#p4m-sub", e.message); }
+    try {
+      const r = await api("/api/v1/ps4mount");
+      /* busy: the console answers from its last list while PS4Mount works; without one the old list stays on the page */
+      if (r.busy && p4m.data && !(r.games && r.games.length)) p4m.data = Object.assign({}, p4m.data, { busy: true });
+      else p4m.data = r;
+      p4mRender();
+    } catch (e) { txt("#p4m-sub", e.message); }
   };
 
   const loadP4mLog = async () => {
@@ -6508,14 +6566,56 @@
   $("#p4m-log-reload").addEventListener("click", loadP4mLog);
   $("#p4m-on").addEventListener("change", (e) => p4mPost({ action: e.target.checked ? "enable" : "disable" }));
   $("#p4m-scan").addEventListener("click", () => p4mPost({ action: "scan" }));
+  /* Die Einstellungen als Ganzes: die Seite schickt immer alle, sonst setzt die Konsole fehlende auf ihre Grundwerte. */
+  const p4mConfig = () => ({
+    action: "config", dlc: $("#p4m-dlc").checked, batch: $("#p4m-batch").checked,
+    batch_size: Number($("#p4m-size").value) || 5, paths: $("#p4m-paths").value, restore_batch: Number($("#p4m-rsize").value) || 5
+  });
+  /* Zurückverschieben: zuerst die Gruppengröße speichern (wie im Original), dann den Auftrag geben. */
+  const p4mRestore = async (body) => {
+    const n = Number($("#p4m-rsize").value), max = Number($("#p4m-rsize").max) || 10;
+    if (!(n >= 1 && n <= max)) { toast(`Spiele pro Gruppe beim Zurückverschieben: eine Zahl von 1 bis ${max}.`, "error"); return; }
+    try {
+      await api("/api/v1/ps4mount", { method: "POST", body: JSON.stringify(p4mConfig()) });
+      const r = await api("/api/v1/ps4mount", { method: "POST", body: JSON.stringify(body) });
+      if (r.message) toast(r.message);
+      p4m.sel.clear();
+    } catch (e) { toast(e.message, "error"); }
+    await loadP4m();
+    setTimeout(loadP4mLog, 2500);
+  };
   $("#p4m-list").addEventListener("click", (e) => {
+    const back = e.target.closest("[data-p4m-back]");
+    if (back) {                                                             /* zweimal klicken, wie bei den anderen Knöpfen, die etwas bewegen */
+      const id = back.dataset.p4mBack;
+      clearTimeout(p4m.armTimer);
+      if (p4m.armed !== id) {
+        p4m.armed = id;
+        toast("Spiel, Update und Zusatzinhalte gehen an ihren alten Ort zurück, das Spiel verlässt die Bibliothek. Ein laufendes Spiel wird vorher geschlossen. Zum Bestätigen noch einmal klicken.");
+        p4m.armTimer = setTimeout(() => { p4m.armed = ""; p4mRender(); }, 10000);
+        p4mRender();
+        return;
+      }
+      p4m.armed = "";
+      p4mRestore({ action: "restore", id });
+      return;
+    }
     const b = e.target.closest("[data-p4m]");
     if (b) p4mPost({ action: b.dataset.p4m, id: b.dataset.id });
   });
-  $("#p4m-save").addEventListener("click", () => p4mPost({
-    action: "config", dlc: $("#p4m-dlc").checked, batch: $("#p4m-batch").checked,
-    batch_size: Number($("#p4m-size").value) || 5, paths: $("#p4m-paths").value
-  }));
+  $("#p4m-pick").addEventListener("change", (e) => {
+    const c = e.target.closest("[data-p4m-sel]");
+    if (!c) return;
+    if (c.checked) p4m.sel.add(c.dataset.p4mSel); else p4m.sel.delete(c.dataset.p4mSel);
+    p4mPickButtons();
+  });
+  $("#p4m-save").addEventListener("click", () => p4mPost(p4mConfig()));
+  armConfirm($("#p4m-restore-sel"), "Wirklich? Nochmal klicken", () => p4mRestore({ action: "restore", ids: Array.from(p4m.sel) }),
+    "Die ausgewählten Spiele gehen mit Update und Zusatzinhalten an ihren alten Ort zurück und verlassen die Bibliothek. Ein laufendes Spiel wird vorher geschlossen. Zum Bestätigen noch einmal klicken.");
+  armConfirm($("#p4m-restore-all"), "Wirklich ALLE? Nochmal klicken", () => p4mRestore({ action: "restore_all" }),
+    "Die PKGs ALLER PS4Mount-Spiele gehen an ihren alten Ort zurück, alle diese Spiele verlassen die Bibliothek. Ein laufendes Spiel wird vorher geschlossen. Zum Bestätigen noch einmal klicken.");
+  armConfirm($("#p4m-forget"), "Wirklich? Nochmal klicken", () => p4mPost({ action: "restored_forget" }),
+    "Zurückverschobene PKGs werden bei der nächsten Suche wieder in den Ordner ps4 sortiert und hinzugefügt. Zum Bestätigen noch einmal klicken.");
 
   /* ── Verlauf (jobhist.c, 11.10.2026) ────────────────────────────────
      Alle Vorgänge der App mit Ergebnis, aus /api/v1/jobs/history, das neueste zuerst. */
@@ -6597,6 +6697,16 @@
     [12, "Stufe 12 · am kleinsten", "LZ4 HC, am langsamsten. Spart am meisten."],
   ];
 
+  /* Was „Pakete prüfen“ außer den Paketen gerichtet hat (imgjob_lz4.inc, nach LZ4 Compression 1.4.3): jede Angabe ein eigener
+     Satz, damit jeder übersetzt wird. */
+  const aprLz4Repairs = (j) => {
+    const out = [];
+    if (j.lz4_apr_fixed) out.push(`<small>Die APR-EMU-Datei, die Pakete liest (0.4.2.1 test-pack), ist wieder eingebaut.</small>`);
+    if (j.lz4_restored) out.push(`<small>${num(j.lz4_restored)} Datei(en), die die PS5 auf der Platte sucht, aus den Paketen zurückgeholt.</small>`);
+    if (j.lz4_modes) out.push(`<small>Rechte von ${num(j.lz4_modes)} Dateien und Ordnern auf 0777 gesetzt.</small>`);
+    return (out.length ? `<small><b>Repariert:</b></small>${out.join("")}` : "") + (j.note ? `<p class="cp-warn">${esc(j.note)}</p>` : "");
+  };
+
   const aprLz4Rows = (z, ij, mine, anyRunning) => {
     if (!z || !z.ok) return "";
     const run = !!(mine && ij && ij.active && /^lz4/.test(ij.kind));
@@ -6604,7 +6714,7 @@
     let result = "";
     if (lk) {
       if (lk.state === "done") {
-        result = lk.kind === "lz4verify" ? `<p class="cp-ok">✓ Alle Pakete gelesen: ${num(lk.lz4_packed)} Dateien in Ordnung.</p>`
+        result = lk.kind === "lz4verify" ? `<p class="cp-ok">✓ Alle Pakete gelesen: ${num(lk.lz4_packed)} Dateien in Ordnung.</p>${aprLz4Repairs(lk)}`
           : lk.kind === "lz4unpack" ? `<p class="cp-ok">✓ Entpackt: ${num(lk.lz4_packed)} Dateien, jede mit den Paketen verglichen.</p>`
           : lk.kind === "lz4copy" ? `<p class="cp-ok">✓ Fertig: ${num(lk.lz4_packed)} Dateien gepackt, ${bytes(lk.lz4_logical)} → ${bytes(lk.lz4_stored)}.</p>
               <small>Das gepackte Spiel liegt in:</small><small><code>${esc(lk.dest || "")}</code></small><small>Das Original blieb unberührt.</small>`
@@ -6629,13 +6739,14 @@
           <small class="cp-why">Dieses Spiel bindet libSceAmpr weder in eboot.bin noch in sce_module ein. Es würde seine Dateien in den Paketen nicht wiederfinden. Für solche Spiele gibt es nur die Komprimierung zu einem .ffpfsc-Abbild (Knopf „Konvertieren“).</small></div>
           <button type="button" class="btn" disabled>Mit LZ4 packen …</button></div>`;
     }
-    const fit = z.ampr_import === 1 ? `<span class="apr-state ok">✓ lädt libSceAmpr selbst</span>`
-      : z.ampr_import === -1 ? `<span class="apr-state no">? nicht zu erkennen, ob es libSceAmpr lädt</span>` : "";
+    const fit = (z.ampr_import === 1 ? `<span class="apr-state ok">✓ lädt libSceAmpr selbst</span>`
+      : z.ampr_import === -1 ? `<span class="apr-state no">? nicht zu erkennen, ob es libSceAmpr lädt</span>` : "")
+      + (z.suggest ? ` <span class="apr-state ok">${esc(`✓ getestetes Profil: ${z.suggest.label}`)}</span>` : "");
     const guide = `<details class="apr-guide"><summary>So geht es Schritt für Schritt</summary>
         <ol>
           <li><b>APR-EMU einbauen:</b> <span>Unten bei „APR-EMU im Spiel“ die Version 0.4.2.1 test-pack wählen.</span></li>
           <li><b>Ungepackt testen:</b> <span>Das Spiel einmal starten und ein Stück spielen. Läuft es so nicht, läuft es auch gepackt nie.</span></li>
-          <li><b>Packen:</b> <span>„Mit LZ4 packen …“, Stufe 9 und „Automatisch“ sind ein guter Anfang.</span></li>
+          <li><b>Packen:</b> <span>„Mit LZ4 packen …“, Stufe 9 und „Automatisch“ sind ein guter Anfang. Gibt es für das Spiel ein getestetes Profil, ist es schon gewählt.</span></li>
           <li><b>Wieder starten:</b> <span>Erst wenn das gepackte Spiel läuft, ist das Original entbehrlich. Läuft es nicht, bringt „LZ4 entpacken“ alles zurück.</span></li>
         </ol>
         <small>Ausführlich im Handbuch, Kapitel „LZ4-Asset-Packs“.</small></details>`;
@@ -6665,13 +6776,17 @@
         ${run ? cancel : `<button type="button" class="btn primary" data-apr-lz4="open" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit LZ4 packen …</button>`}</div>`;
   };
 
+  /* Welches Profil der Auftrag bekommt: "" = automatisch, das getestete Profil, das zum Spiel passt (imgjob_lz4.inc, nach LZ4
+     Compression 1.4.0), oder eins aus der Liste. */
+  const lz4Key = (s) => s.mode === "auto" ? "" : s.mode === "tested" ? ((apr.lz4 && apr.lz4.suggest && apr.lz4.suggest.id) || "") : s.profile;
+
   /* die Auswahl vorab berechnen (der AMPR-Index des Spiels wird gelesen, nichts wird gepackt) */
   const aprLz4Plan = async () => {
     const s = apr.lz4s;
     if (!s) return;
-    const key = s.auto ? "" : s.profile;
+    const key = lz4Key(s);
     s.planKey = key; s.plan = null; s.planErr = "";
-    if (!s.auto && !s.profile) { aprRender(); return; }
+    if (s.mode !== "auto" && !key) { aprRender(); return; }
     if (apr.lz4 && !apr.lz4.has_index) { aprRender(); return; }
     s.busy = true;
     aprRender();
@@ -6729,9 +6844,10 @@
 
   const aprPlugRow = (pl, anyRunning) => {
     if (!pl || !pl.ok) return "";
-    const names = { current: "aktuell", older: "älter", missing: "fehlt", unknown: "unbekannte Fassung", not_needed: "nicht nötig", noexec: "Ausführungsrecht fehlt" };
+    /* faulty: a build known to crash the game (dlc_emu 0.3 without log, plugins.c); "Aktualisieren" replaces it */
+    const names = { current: "aktuell", older: "älter", faulty: "fehlerhafte Fassung, bitte ersetzen", missing: "fehlt", unknown: "unbekannte Fassung", not_needed: "nicht nötig", noexec: "Ausführungsrecht fehlt" };
     /* one chip per project (dlc_emu is three files): the state of the worst file */
-    const rank = { current: 0, noexec: 1, older: 2, unknown: 3, missing: 4 };
+    const rank = { current: 0, noexec: 1, older: 2, unknown: 3, missing: 4, faulty: 5 };
     const byProj = {};
     for (const f of (pl.files || [])) {
       if (f.state === "not_needed") continue;
@@ -6762,8 +6878,8 @@
         <input type="radio" name="lz4-level" value="${v}" ${s.level === v ? "checked" : ""}>
         <span class="cp-choice-text"><b>${esc(t)}</b><span class="muted">${esc(d)}</span></span></label>`).join("");
     const profs = z.profiles || [];
-    const profSel = s.auto ? "" : (profs.length
-      ? `<div class="apr-prof"><select id="lz4-prof">${profs.map((x) => `<option value="${esc(x.id)}" ${s.profile === x.id ? "selected" : ""}>${esc(x.name)}${x.where !== "app" ? ` (${esc(x.where)})` : ""}</option>`).join("")}</select></div>`
+    const profSel = s.mode !== "toml" ? "" : (profs.length
+      ? `<div class="apr-prof"><select id="lz4-prof">${profs.map((x) => `<option value="${esc(x.id)}" ${s.profile === x.id ? "selected" : ""}>${x.where === "builtin" ? esc(`${x.name} – mitgeliefert, getestet`) : esc(x.name) + (x.where !== "app" ? ` (${esc(x.where)})` : "")}</option>`).join("")}</select></div>`
       : `<p class="muted">Noch kein Profil da. Lege eine <code>.toml</code>-Datei in den Ordner <code>/data/PS5-Cooling-Center/LZ4_Profile</code> oder in den Ordner <code>LZ4_Profile</code> auf einem USB-Laufwerk.</p>`)
       + `<p class="apr-add"><button type="button" class="btn ghost" data-apr-lz4-add>Profil hinzufügen …</button>
           <input type="file" id="apr-lz4-prof" accept=".toml" hidden><span class="muted" id="apr-lz4-up">${esc(s.upNote || "")}</span></p>`;
@@ -6777,7 +6893,13 @@
         + (z.free_bytes < need ? `<p class="cp-why">${`Das könnte knapp werden: frei sind ${bytes(z.free_bytes)}, die App rechnet für diese Auswahl mit etwa ${bytes(need)}.`}</p>` : "");
     }
     const base = (z.path || "").split("/").pop();
-    const noGo = (!s.auto && !s.profile) || s.busy || !!s.planErr || !s.tested;
+    const noGo = (s.mode !== "auto" && !lz4Key(s)) || s.busy || !!s.planErr || !s.tested;
+    const sg = z.suggest;
+    const sgHow = !sg ? "" : sg.how === "engine" ? (sg.engine === "unity" ? "Passt über den Aufbau der Dateien: Das Spiel nutzt die Unity-Engine." : "Passt über den Aufbau der Dateien: Das Spiel nutzt die Engine von Insomniac.")
+      : sg.how === "title" ? "Passt über die Titel-ID: für genau dieses Spiel gemacht." : "Passt über den Namen des Spiels.";
+    const tested = sg ? `<label class="cp-choice"><input type="radio" name="lz4-mode" value="tested" ${s.mode === "tested" ? "checked" : ""}>
+          <span class="cp-choice-text"><b>${z.own_profile ? esc(`Getestetes Profil: ${sg.label}`) : esc(`Getestetes Profil: ${sg.label} (empfohlen)`)}</b><span class="muted">${esc(sgHow)}</span>
+          <span class="muted">${esc(`Von danthespal geschrieben und an der Konsole getestet mit ${sg.tested}. Dateien, die es nicht nennt, bleiben lose.`)}</span></span></label>` : "";
     body.innerHTML = `
       <p class="cp-src"><span class="muted">Spiel</span> <code>${esc(z.path || "")}</code></p>
       <div class="cp-warn"><b>Vorher erledigen:</b> <span>Baue unter „APR-EMU im Spiel“ die Version 0.4.2.1 test-pack ein und starte das Spiel ungepackt. Läuft es so nicht, läuft es gepackt nie. Behalte das Original, bis du das gepackte Spiel gestartet hast.</span>
@@ -6787,9 +6909,10 @@
       <div class="cp-list">${levels}</div>
       <h4 class="cp-step">2. Was kommt hinein?</h4>
       <div class="cp-list">
-        <label class="cp-choice"><input type="radio" name="lz4-mode" value="auto" ${s.auto ? "checked" : ""}>
-          <span class="cp-choice-text"><b>Automatisch (empfohlen)</b><span class="muted">Spieldaten werden gepackt. Programme (<code>eboot.bin</code>, <code>.sprx</code>), <code>sce_sys</code>, Spielstände und schon komprimierte Medien bleiben lose.</span></span></label>
-        <label class="cp-choice"><input type="radio" name="lz4-mode" value="toml" ${s.auto ? "" : "checked"}>
+        ${tested}
+        <label class="cp-choice"><input type="radio" name="lz4-mode" value="auto" ${s.mode === "auto" ? "checked" : ""}>
+          <span class="cp-choice-text"><b>${sg || z.own_profile ? "Automatisch" : "Automatisch (empfohlen)"}</b><span class="muted">Spieldaten werden gepackt. Programme (<code>eboot.bin</code>, <code>.sprx</code>), <code>sce_sys</code>, Spielstände und schon komprimierte Medien bleiben lose.</span></span></label>
+        <label class="cp-choice"><input type="radio" name="lz4-mode" value="toml" ${s.mode === "toml" ? "checked" : ""}>
           <span class="cp-choice-text"><b>Eigenes Profil (TOML)</b><span class="muted">Eine Packliste, z. B. aus einem Mitschnitt des Spiels oder aus der Community. Liegt sie auf der Konsole oder einem USB-Stick, wird sie dir angeboten.</span></span></label>
       </div>
       ${profSel}${est}
@@ -6798,7 +6921,7 @@
         <label class="cp-choice"><input type="radio" name="lz4-where" value="inplace" ${s.copy ? "" : "checked"}>
           <span class="cp-choice-text"><b>Im Spielordner packen (spart am meisten Platz)</b><span class="muted">Die Pakete entstehen im Spielordner; erst wenn jede Datei Byte für Byte geprüft ist, werden die Originale entfernt. Bei einem Fehler bleibt alles wie vorher.</span></span></label>
         <label class="cp-choice"><input type="radio" name="lz4-where" value="copy" ${s.copy ? "checked" : ""}>
-          <span class="cp-choice-text"><b>${`Als neuen Ordner ${base}-lz4 daneben`}</b><span class="muted">Das Original bleibt unberührt. Braucht Platz für das gepackte Spiel zusätzlich.</span></span></label>
+          <span class="cp-choice-text"><b>${esc(`Als neuen Ordner ${base}-lz4 daneben`)}</b><span class="muted">Das Original bleibt unberührt. Braucht Platz für das gepackte Spiel zusätzlich.</span></span></label>
       </div>
       ${s.copy ? `<p class="cp-why">Achtung: Dann liegen zwei Ordner mit derselben Titel-ID nebeneinander. ShadowMountPlus kann sich daran verschlucken und das Spiel im Sekundentakt umhängen. Verschiebe das Original vorher aus dem Suchpfad (zum Beispiel auf einen USB-Stick).</p>` : ""}
       <div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (die Version „0.4.2.1 test-pack“) in den Spielordner; ein gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>
@@ -6826,7 +6949,7 @@
           if (!r.ok || !j.ok) { s.upNote = `„${f.name}“: ${j.message || "HTTP " + r.status}`; continue; }
           s.upNote = `„${f.name}“ hinzugefügt.`;
           try { apr.lz4 = await api(`/api/v1/library/lz4?id=${encodeURIComponent(apr.id)}`); } catch (err) { /* die Liste bleibt, wie sie war */ }
-          s.auto = false; s.profile = `app:${f.name}`;
+          s.mode = "toml"; s.profile = `app:${f.name}`;
         } catch (err) { s.upNote = `„${f.name}“: ${err.message}`; }
       }
       aprRender();
@@ -6838,8 +6961,9 @@
     else if (el.name === "lz4-level") s.level = +el.value;
     else if (el.name === "lz4-where") s.copy = el.value === "copy";
     else if (el.name === "lz4-mode") {
-      s.auto = el.value === "auto";
-      if (!s.auto && !s.profile && apr.lz4 && apr.lz4.profiles && apr.lz4.profiles.length) s.profile = apr.lz4.profiles[0].id;
+      s.mode = el.value;
+      if (s.mode === "toml" && !s.profile && apr.lz4 && apr.lz4.profiles && apr.lz4.profiles.length)       /* ein eigenes zuerst, sonst ein mitgeliefertes */
+        s.profile = (apr.lz4.profiles.find((x) => x.where !== "builtin") || apr.lz4.profiles[0]).id;
       aprLz4Plan();
       return;
     } else return;
@@ -7212,7 +7336,9 @@
     } else if (b.hasAttribute("data-apr-lz4")) {
       const what = b.dataset.aprLz4;
       if (what === "open") {
-        apr.lz4s = { level: 9, auto: true, profile: "", copy: false, plan: null, planErr: "", planKey: "", busy: false, err: "", upNote: "", tested: false };
+        const z0 = apr.lz4 || {};                      /* ein eigenes Profil für das Spiel geht vor, dann das getestete, sonst automatisch */
+        apr.lz4s = { level: 9, mode: z0.own_profile ? "toml" : z0.suggest ? "tested" : "auto", profile: z0.own_profile || "", copy: false, plan: null, planErr: "",
+                     planKey: "", busy: false, err: "", upNote: "", tested: false };
         apr.view = "lz4set";
         aprRender();
         aprLz4Plan();
@@ -7228,7 +7354,7 @@
       const s = apr.lz4s;
       b.disabled = true;
       try {
-        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy ? "copy" : "pack", level: s.level, profile: s.auto ? "" : s.profile }) });
+        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy ? "copy" : "pack", level: s.level, profile: lz4Key(s) }) });
         apr.view = "main";
         aprLoad();
       } catch (err) { s.err = err.message; aprRender(); }
@@ -9308,6 +9434,8 @@
 
   $$(".tab").forEach((b) => b.addEventListener("click", () => {
     if (!b.dataset.page) return;                       /* Handbuch und FAQ sind Links, keine Seiten */
+    /* eine andere Seite beginnt oben (Durchsicht 15.10.2026: mit L1/R1 landete man mitten auf der nächsten Seite) */
+    if (state.page !== b.dataset.page) { try { window.scrollTo(0, 0); } catch { /* alte Browser */ } }
     state.page = b.dataset.page;
     try { sessionStorage.setItem("ps5page", state.page); } catch { /* ohne Speicher: kein Merken */ }
     $$(".tab").forEach((x) => {
@@ -9354,7 +9482,11 @@
   /* L2 (F7) rollt die Seite nach oben, R2 (F8) nach unten, je knapp eine Bildschirmhöhe. */
   const scrollPage = (d) => {
     const top = d * Math.round(window.innerHeight * 0.8);
-    try { window.scrollBy({ top, behavior: "smooth" }); } catch { window.scrollBy(0, top); }
+    /* Ist ein Fenster offen, rollt es (die Seite dahinter ist dann festgehalten); sonst die Seite */
+    const ov = document.querySelector(".gm-overlay:not([hidden])");
+    const box = ov ? (ov.querySelector(".cp-dialog") || ov) : null;
+    const t = box || window;
+    try { t.scrollBy({ top, behavior: "smooth" }); } catch { t.scrollBy(0, top); }
   };
   window.addEventListener("keydown", (e) => {
     if (e.key === "F5" || e.key === "F6") { e.preventDefault(); stepPage(e.key === "F5" ? -1 : 1); }

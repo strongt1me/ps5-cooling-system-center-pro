@@ -154,6 +154,11 @@ check_title(const char *title_id, const char *op, ps5tm_smp_game_t *s,
     snprintf(err, err_len, "Die Spieldaten sind gerade nicht erreichbar.");
     return 409;
   }
+  if(!strcmp(s->source_type, "pkg")) {         /* ShadowMountPlus 1.7-beta4+ lists installed packages too; it refuses both jobs */
+    snprintf(err, err_len, "Das Spiel ist als Paket installiert. ShadowMountPlus verschiebt und entpackt nur Spiele, die als "
+             "Ordner oder Abbild vorliegen.");
+    return 409;
+  }
   if(!strcmp(op, "unpack") && strcmp(s->source_type, "image")) {
     snprintf(err, err_len, "Das Spiel liegt schon als Ordner vor.");
     return 409;

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 gasb07 (PS4Mount 0.4.4), adapted for PS5 Cooling & System Center - Pro
+ * Copyright (C) 2026 gasb07 (PS4Mount 0.5.0), adapted for PS5 Cooling & System Center - Pro
  *
  * PS4Mount inside the app: scans USB drives for PS4 fake PKGs, registers them without installing them (nullfs mounts of internal
  * folders that hold symlinks to the packages), follows the kernel log and offers its list and actions to the web page.
@@ -54,20 +54,25 @@ char *ps4m_log_tail(size_t max) { (void)max; return strdup(""); }
 #include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <sys/uio.h>
+#include <sys/user.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "ps4m.h"
 #include "ps4m_build.h"
 #include "ps4m_crypto.h"
+#include "ps4m_fw.h"
+#include "ps4m_origin.h"
 #include "ps4m_pkg.h"
 #include "ps5tm.h"
 #include "sqlite_ro.h"
 #include <ps5/kernel.h>
 
-#define VERSION "PS4Mount 0.4.4"
+#define VERSION "PS4Mount 0.5.0"
 #define LOCK_PORT 9032
 #define SCAN_SECONDS 10
 #define STATE_DIR "/data/ps4mount"
@@ -83,6 +88,7 @@ char *ps4m_log_tail(size_t max) { (void)max; return strdup(""); }
 
 #define MAX_SCAN_PATHS 8
 #define CONFIG_PATH STATE_DIR "/config.txt"
+#define RESTORED_LIST STATE_DIR "/restored.txt" /* pkgs moved back: not picked up again */
 
 /* Settings, kept in CONFIG_PATH and edited in the panel. */
 typedef struct {
@@ -91,15 +97,19 @@ typedef struct {
     int dlc;        /* add-ons are moved and installed */
     char paths[MAX_SCAN_PATHS][128]; /* folders searched for pkgs, relative to each drive; "" is the root */
     int npaths;
+    int restore_batch; /* games removed from the library per group when moving pkgs back */
 } config_t;
 
-static config_t g_cfg = {1, 5, 1, {""}, 1};
+#define MAX_RESTORE_BATCH 10
+
+static config_t g_cfg = {1, 5, 1, {""}, 1, 5};
 static int g_enabled;     /* switched on in the page; kept in config.txt (key enabled=) */
 
 
-int sceAppInstUtilInitialize(void);
-int sceAppInstUtilAppInstallAll(void *);
-int sceAppInstUtilAppUnInstall(const char *);
+/* Weak: a firmware without them must not keep the whole app (fan control included) from loading; PS4Mount then says so. */
+int sceAppInstUtilInitialize(void) __attribute__((weak));
+int sceAppInstUtilAppInstallAll(void *) __attribute__((weak));
+int sceAppInstUtilAppUnInstall(const char *) __attribute__((weak));
 
 static void mkdirs(const char *path, mode_t mode);
 static int p4m_db_is_registered(const char *tid);
@@ -116,6 +126,13 @@ static void p4m_printf(const char *fmt, ...) {
         struct stat st;
         if (!stat(STATE_DIR "/log.txt", &st) && st.st_size > (512 << 10))
             rename(STATE_DIR "/log.txt", STATE_DIR "/log.old");
+        g_logf = fopen(STATE_DIR "/log.txt", "a");
+        if (g_logf)
+            setvbuf(g_logf, NULL, _IOLBF, 0);
+    }
+    if (g_logf && ftell(g_logf) > (1 << 20)) {   /* (app) kept small while the app runs for days, not only at the start */
+        fclose(g_logf);
+        rename(STATE_DIR "/log.txt", STATE_DIR "/log.old");
         g_logf = fopen(STATE_DIR "/log.txt", "a");
         if (g_logf)
             setvbuf(g_logf, NULL, _IOLBF, 0);
@@ -244,7 +261,13 @@ static int write_entry(pkg_t *pkg, uint32_t id, const char *path) {
     return rc;
 }
 
-static int write_buf(const char *path, const buf_t *b) { return write_file(path, b->data, b->len, 0777); }
+static int write_buf(const char *path, const buf_t *b) {
+    if (b->failed) { /* (app) out of memory while building it: a half-built file would break the game (PS4Mount PR #18) */
+        printf("[write] %s: out of memory while building it, not written\n", path);
+        return -1;
+    }
+    return write_file(path, b->data, b->len, 0777);
+}
 
 /* --- registration --- */
 
@@ -364,6 +387,12 @@ static int src_open(title_src_t *t, const char *root, const char *tid) {
     snprintf(t->patch_path, sizeof(t->patch_path), "%s/patch.pkg", t->dir);
     if (p4m_pkg_open(&t->app, t->app_path) || read_sfo(&t->app, &t->app_sfo)) {
         printf("[scan] %s: unreadable app pkg\n", t->app_path);
+        p4m_pkg_close(&t->app); /* (app) an unreadable param.sfo left the pkg open on every scan */
+        return -1;
+    }
+    if (strcmp(t->app.title_id, tid)) { /* (app) the folder carries the header's id: another one is a changed pkg */
+        printf("[scan] %s: title id %s in the pkg, not %s\n", t->app_path, t->app.title_id, tid);
+        p4m_pkg_close(&t->app);
         return -1;
     }
     if (exists(t->patch_path)) {
@@ -1009,20 +1038,7 @@ static void enforce_patch_sfo(title_src_t *t) {
     free(sfo);
 }
 
-/* How titles are registered by the system, chosen from the firmware at startup:
- *   REG_ALL      sceAppInstUtilAppInstallAll: the system registers every new title under
- *                /user/app. Used from 6.00 on (works on 6.50 and 13.20).
- *   REG_TITLEDIR sceAppInstUtilAppInstallTitleDir, one title at a time (works on 5.50). On
- *                5.50 InstallAll made the system check its whole app database and flag it
- *                as corrupted; below 6.00 the per-title call is used when the firmware has
- *                it (it was removed in newer firmwares: not present on 13.20).
- *   REG_NONE     neither is safe or available: no games are added. */
-#ifndef MIN_FW_INSTALL_ALL
-#define MIN_FW_INSTALL_ALL 6
-#endif
-
-enum { REG_ALL, REG_TITLEDIR, REG_NONE };
-
+/* Registration method: see fw.h. */
 typedef int (*title_dir_fn)(const char *title_id, const char *dir, void *reserved);
 
 static int g_reg_mode = REG_ALL;
@@ -1035,16 +1051,14 @@ static const char *reg_mode_name(void) {
 
 static void check_firmware(void) {
     uint32_t fw = kernel_get_fw_version();
-    unsigned major = ((fw >> 28) & 0xf) * 10 + ((fw >> 24) & 0xf), minor = ((fw >> 20) & 0xf) * 10 + ((fw >> 16) & 0xf);
-    snprintf(g_fw_text, sizeof(g_fw_text), "%u.%02u", major, minor);
+    unsigned major, minor;
+    p4m_fw_decode(fw, &major, &minor);
+    p4m_fw_text(fw, g_fw_text, sizeof(g_fw_text));
     /* looked up at runtime: linking it would stop the payload from loading where it is gone */
     uint32_t h = 0;
     if (!kernel_dynlib_handle(getpid(), "libSceAppInstUtil.sprx", &h))
         g_title_dir = (title_dir_fn)kernel_dynlib_dlsym(getpid(), h, "sceAppInstUtilAppInstallTitleDir");
-    if (major >= MIN_FW_INSTALL_ALL)
-        g_reg_mode = REG_ALL;
-    else
-        g_reg_mode = g_title_dir ? REG_TITLEDIR : REG_NONE;
+    g_reg_mode = p4m_fw_reg_mode(major, g_title_dir != NULL);
     printf("[main] firmware %s (0x%08x), AppInstallTitleDir %s, registration: %s\n", g_fw_text, fw,
            g_title_dir ? "present" : "missing", reg_mode_name());
 }
@@ -1062,7 +1076,7 @@ static int register_call(const char *tid) {
         printf("[reg] %s: AppInstallTitleDir=0x%08x\n", tid, rc);
         return rc == (int)0x80990002 ? 0 : rc; /* 0x80990002: already known, restored */
     }
-    return sceAppInstUtilAppInstallAll(NULL);
+    return sceAppInstUtilAppInstallAll ? sceAppInstUtilAppInstallAll(NULL) : -1; /* (app) weak */
 }
 
 static void *install_thread(void *arg) {
@@ -1333,6 +1347,20 @@ static int waiting_count(const char *root) {
     return n;
 }
 
+/* Path of a file relative to the drive root it is on. */
+static const char *drive_rel(const char *root, const char *path) {
+    size_t n = strlen(root);
+    return !strncmp(path, root, n) && path[n] == '/' ? path + n + 1 : path;
+}
+
+/* Records where a pkg moved into <root>/ps4/<TID>/<rel> came from. */
+static void record_origin(const char *root, const char *tid, const char *rel, const char *from) {
+    char game[PATH_MAX];
+    snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
+    if (p4m_origin_add(game, rel, drive_rel(root, from)))
+        printf("[scan] %s: could not record where %s came from\n", game, rel);
+}
+
 /* Moves an add-on pkg (ac) into <root>/ps4/<GAME>/addcont/<ADD-ON TID>/<LABEL>/ac.pkg. */
 static int adopt_dlc(const char *root, const char *name, const char *path, pkg_t *pkg) {
     char game[10], dst[PATH_MAX];
@@ -1362,6 +1390,9 @@ static int adopt_dlc(const char *root, const char *name, const char *path, pkg_t
         return 0;
     }
     printf("[scan] moved %s -> %s\n", path, dst);
+    char rel[64];
+    snprintf(rel, sizeof(rel), "addcont/%s/%s/ac.pkg", pkg->title_id, pkg->content_id + 20);
+    record_origin(root, game, rel, path);
     return 1;
 }
 
@@ -1383,6 +1414,12 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
         if (n < 5 || strcasecmp(e->d_name + n - 4, ".pkg"))
             continue;
         snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
+        struct stat rs;
+        if (!stat(path, &rs) && p4m_restored_has(RESTORED_LIST, drive_rel(root, path), (uint64_t)rs.st_size)) {
+            if (first_time(path))
+                printf("[scan] skip %s (moved back from ps4/ on request)\n", path);
+            continue;
+        }
         waiting_t *w = waiting_find(path);
         if (w && w->sig == g_lib_sig)
             continue; /* waiting add-on, and no new game since the last check */
@@ -1454,17 +1491,27 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
             char old[PATH_MAX];
             snprintf(old, sizeof(old), "%s/ps4/%s/replaced", root, tid);
             mkdirs(old, 0777);
-            snprintf(old, sizeof(old), "%s/ps4/%s/replaced/patch-%ld.pkg", root, tid, (long)time(NULL));
+            long now = (long)time(NULL);
+            struct stat taken;
+            snprintf(old, sizeof(old), "%s/ps4/%s/replaced/patch-%ld.pkg", root, tid, now);
+            for (int k = 2; !stat(old, &taken) && k < 100; k++) /* (app) rename() would replace it (PS4Mount PR #18) */
+                snprintf(old, sizeof(old), "%s/ps4/%s/replaced/patch-%ld-%d.pkg", root, tid, now, k);
             if (rename(dst, old)) {
                 printf("[scan] keep %s aside: %s\n", dst, strerror(errno));
                 continue;
             }
+            /* the update kept aside keeps its original name */
+            char game[PATH_MAX], was[PATH_MAX];
+            snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
+            if (!p4m_origin_find(game, "patch.pkg", was, sizeof(was)))
+                p4m_origin_add(game, old + strlen(game) + 1, was);
             notify("Neues Update für %s (v%s): Das bisherige liegt jetzt in ps4/%s/replaced", tid, ver, tid);
         }
         if (rename(path, dst)) {
             printf("[scan] move %s: %s\n", path, strerror(errno));
         } else {
             printf("[scan] moved %s -> %s\n", path, dst);
+            record_origin(root, tid, is_app ? "app.pkg" : "patch.pkg", path);
             moved++;
         }
     }
@@ -1875,6 +1922,27 @@ static void trace_klog(const char *line) {
         }
 }
 
+/* "system file disagree [<TID>]": the system refused to start a game with an update.
+ * Removing the game from the library and adding it again made it start; this is done
+ * once per title and daemon run, so a game that still fails is not removed again. */
+static char g_readd_tid[10];
+static char g_readd_done[MAX_TITLES][10];
+static int g_nreadd_done;
+
+static void disagree_seen(const char *tid) {
+    managed_t *m = managed_by(tid, NULL);
+    if (!m)
+        return;
+    m->running = 0; /* the launch was refused */
+    for (int i = 0; i < g_nreadd_done; i++)
+        if (!strcmp(g_readd_done[i], tid)) {
+            printf("[reg] %s: system file disagree again, it was already added again once\n", tid);
+            return;
+        }
+    if (m->has_patch && !g_readd_tid[0])
+        snprintf(g_readd_tid, sizeof(g_readd_tid), "%s", tid);
+}
+
 static void handle_klog_line(const char *line) {
     const char *p;
     char id[40];
@@ -1899,6 +1967,9 @@ static void handle_klog_line(const char *line) {
             m->running = 1;
             m->running_since = time(NULL);
         }
+    } else if ((p = after(line, "system file disagree ["))) {
+        snprintf(id, sizeof(id), "%.9s", p);
+        disagree_seen(id);
     } else if ((p = after(line, "[PlayGoService][End] end ("))) {
         snprintf(id, sizeof(id), "%.9s", p);
         managed_t *m = managed_by(id, NULL);
@@ -1926,8 +1997,11 @@ static void handle_klog_line(const char *line) {
             rm_tree(hold);
             notify("%s ist aus der Bibliothek entfernt. Die PKG bleibt auf dem USB-Laufwerk.", m->name);
             m->used = 0;
-        } else if (strlen(id) == 36) {
-            /* an add-on of one of our games: keep it out until the drive is reconnected */
+        } else if (strlen(id) == 36 && g_deleting) {
+            /* an add-on of one of our games deleted on a delete screen: keep it out until the
+             * drive is reconnected. Outside those screens the uninstall is the system's own:
+             * registering a game again uninstalls its add-ons' PlayGo data, and taking that
+             * for a delete removed the add-ons of the game every time a game was added. */
             for (int i = 0; i < MAX_TITLES; i++) {
                 managed_t *g = &g_managed[i];
                 for (int j = 0; g->used && j < g->ndlc_tids; j++) {
@@ -2093,8 +2167,51 @@ int ps4m_add(const char *tid, char *msg, size_t cap) {
     return 0;
 }
 
+/* sceAppInstUtilAppUnInstall in its own thread, waited for at most UNINSTALL_WAIT seconds:
+ * a call that never returns (as InstallAll did after rest mode) must not freeze PS4Mount.
+ * The wait does not serve the panel (this also runs from a panel request). */
+#define UNINSTALL_WAIT 60
+
+static volatile int g_uninstall_busy, g_uninstall_rc;
+static char g_uninstall_tid[10];
+
+static void *uninstall_thread(void *arg) {
+    (void)arg;
+    g_uninstall_rc = sceAppInstUtilAppUnInstall ? sceAppInstUtilAppUnInstall(g_uninstall_tid) : -1; /* (app) weak */
+    g_uninstall_busy = 0;
+    return NULL;
+}
+
+/* 0 or the system error; -2 while an earlier call is still running or this one timed out. */
+static int uninstall_title(const char *tid) {
+    if (g_uninstall_busy) {
+        printf("[remove] %s: an earlier uninstall (%s) is still running\n", tid, g_uninstall_tid);
+        return -2;
+    }
+    snprintf(g_uninstall_tid, sizeof(g_uninstall_tid), "%s", tid);
+    g_uninstall_busy = 1;
+    pthread_t th;
+    if (pthread_create(&th, NULL, uninstall_thread, NULL)) {
+        uninstall_thread(NULL);
+        return g_uninstall_rc;
+    }
+    pthread_detach(th);
+    for (int i = 0; i < UNINSTALL_WAIT * 10 && g_uninstall_busy; i++)
+        usleep(100000);
+    if (g_uninstall_busy) {
+        printf("[remove] %s: uninstall did not return within %d s\n", tid, UNINSTALL_WAIT);
+        return -2;
+    }
+    return g_uninstall_rc;
+}
+
 int ps4m_remove(const char *tid, char *msg, size_t cap) {
     managed_t *m = managed_by(tid, NULL);
+    if (installed_internally(tid)) { /* (app) a game installed on the console is not PS4Mount's to remove */
+        printf("[web] remove %s refused: installed on the console\n", tid);
+        snprintf(msg, cap, "%s ist fest auf der Konsole installiert; PS4Mount entfernt es nicht", tid);
+        return -1;
+    }
     if ((m && m->running) || title_running(tid)) {
         printf("[web] remove %s refused: game running\n", tid);
         snprintf(msg, cap, "Bitte das Spiel erst beenden, bevor es entfernt wird");
@@ -2117,12 +2234,449 @@ int ps4m_remove(const char *tid, char *msg, size_t cap) {
     write_file(path, tid, strlen(tid), 0666);
     snprintf(path, sizeof(path), STATE_DIR "/%s.src", tid);
     unlink(path);
-    int rc = p4m_db_is_registered(tid) ? sceAppInstUtilAppUnInstall(tid) : 0;
+    int rc = p4m_db_is_registered(tid) ? uninstall_title(tid) : 0;
     if (m)
         m->used = 0;
     printf("[web] remove %s: uninstall=0x%08x\n", tid, rc);
-    snprintf(msg, cap, rc ? "%s ließ sich nicht entfernen (0x%08x)" : "%s ist aus der Bibliothek entfernt. Die PKG bleibt auf dem USB-Laufwerk.", tid, rc);
+    if (rc == -2)
+        snprintf(msg, cap, "Die Konsole hat %s noch nicht fertig entfernt; bitte gleich noch einmal versuchen", tid);
+    else
+        snprintf(msg, cap, rc ? "%s ließ sich nicht entfernen (0x%08x)" : "%s ist aus der Bibliothek entfernt. Die PKG bleibt auf dem USB-Laufwerk.",
+                 tid, rc);
     return rc ? -1 : 0;
+}
+
+/* Removes a game refused with "system file disagree" from the library and adds it again. */
+static void readd_title(const char *tid) {
+    char msg[256], name[128];
+    managed_t *m = managed_by(tid, NULL);
+    snprintf(name, sizeof(name), "%s", m ? m->name : tid);
+    if (g_nreadd_done < MAX_TITLES)
+        snprintf(g_readd_done[g_nreadd_done++], 10, "%s", tid);
+    pump_events(5000); /* let the system finish the refused launch */
+    notify("%s startete nicht (Systemdatei passt nicht): Das Spiel wird neu in die Bibliothek aufgenommen", name);
+    int rc = ps4m_remove(tid, msg, sizeof(msg));
+    printf("[reg] %s: removed to add it again: %s\n", tid, msg);
+    if (!rc)
+        wait_db_quiet(3, 30);
+    ps4m_add(tid, msg, sizeof(msg));
+}
+
+/* --- moving pkgs back where they came from --- */
+
+static void clean_name(char *s) {
+    for (; *s; s++)
+        if (strchr("\\/:*?\"<>|", *s) || (unsigned char)*s < 0x20) /* (app) '/' too */
+            *s = '_';
+}
+
+/* Moves <game_dir>/<rel> to its recorded original path (or fallback, relative to the
+ * drive root, for pkgs moved before origins were recorded) and adds it to the list of
+ * restored pkgs. 1 moved, 0 nothing there, -1 failed. */
+/* (app) A recorded origin from origin.txt on the drive: relative, no "..", no empty part, so the pkg stays on its drive. */
+static int origin_path_ok(const char *p) {
+    if (!p[0] || p[0] == '/' || strstr(p, "//") || strchr(p, '\\'))
+        return 0;
+    for (const char *c = p; *c; c = strchr(c, '/') ? strchr(c, '/') + 1 : c + strlen(c))
+        if (!strncmp(c, "..", 2) && (c[2] == '/' || !c[2]))
+            return 0;
+    return 1;
+}
+
+static int restore_pkg(const char *root, const char *game_dir, const char *rel, const char *fallback) {
+    char src[PATH_MAX], orig[PATH_MAX], dst[PATH_MAX], dir[PATH_MAX];
+    snprintf(src, sizeof(src), "%s/%s", game_dir, rel);
+    struct stat st;
+    if (stat(src, &st))
+        return 0;
+    if (p4m_origin_find(game_dir, rel, orig, sizeof(orig)) || !origin_path_ok(orig)) {
+        snprintf(orig, sizeof(orig), "%s", fallback);
+        clean_name(orig);
+    }
+    snprintf(dir, sizeof(dir), "%s/%s", root, orig);
+    char *slash = strrchr(dir, '/');
+    if (slash && slash > dir + strlen(root))
+        *slash = 0, mkdirs(dir, 0777); /* the original folder may be gone */
+    if (p4m_origin_free_path(root, orig, dst, sizeof(dst)) || rename(src, dst)) {
+        printf("[restore] %s: %s\n", src, strerror(errno));
+        return -1;
+    }
+    p4m_restored_add(RESTORED_LIST, drive_rel(root, dst), (uint64_t)st.st_size);
+    printf("[restore] %s -> %s\n", src, dst);
+    return 1;
+}
+
+static void unlink_in(const char *dir, const char *const *names) {
+    char p[PATH_MAX];
+    for (; *names; names++) {
+        snprintf(p, sizeof(p), "%s/%s", dir, *names);
+        unlink(p);
+    }
+}
+
+/* Moves every pkg of one game folder back and removes what PS4Mount created for it.
+ * Folders are only removed when empty, so nothing else is ever deleted. */
+static void restore_files(const char *root, const char *tid, const char *name, int *moved, int *failed) {
+    static const char *const generated[] = {"app.json", "app.pbm", "app.pbm.backup", "app.xml", "patch.json",
+                                            "patch.pbm", "patch.pbm.backup", "patch.xml", NULL};
+    static const char *const ac_generated[] = {"ac.json", "ac.pbm", "ac.pbm.backup", NULL};
+    char game[PATH_MAX], rel[PATH_MAX], fb[PATH_MAX], sub[PATH_MAX];
+    snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
+    int rc;
+#define RESTORE(r, f)                                                                                                  \
+    do {                                                                                                               \
+        rc = restore_pkg(root, game, r, f);                                                                            \
+        *moved += rc > 0;                                                                                              \
+        *failed += rc < 0;                                                                                             \
+    } while (0)
+    snprintf(fb, sizeof(fb), "%s - %s - game.pkg", tid, name);
+    RESTORE("app.pkg", fb);
+    snprintf(fb, sizeof(fb), "%s - %s - update.pkg", tid, name);
+    RESTORE("patch.pkg", fb);
+    snprintf(sub, sizeof(sub), "%s/replaced", game);
+    DIR *d = opendir(sub);
+    struct dirent *e;
+    while (d && (e = readdir(d))) {
+        if (e->d_name[0] == '.')
+            continue;
+        snprintf(rel, sizeof(rel), "replaced/%s", e->d_name);
+        snprintf(fb, sizeof(fb), "%s - %s - older update %s", tid, name, e->d_name);
+        RESTORE(rel, fb);
+    }
+    if (d)
+        closedir(d);
+    rmdir(sub);
+    snprintf(sub, sizeof(sub), "%s/addcont", game);
+    d = opendir(sub);
+    while (d && (e = readdir(d))) {
+        if (e->d_name[0] == '.')
+            continue;
+        char tdir[PATH_MAX], hold[PATH_MAX];
+        snprintf(tdir, sizeof(tdir), "%s/%s", sub, e->d_name);
+        DIR *l = opendir(tdir);
+        struct dirent *f;
+        while (l && (f = readdir(l))) {
+            if (f->d_name[0] == '.')
+                continue;
+            char ldir[PATH_MAX + 64];
+            snprintf(ldir, sizeof(ldir), "%s/%s", tdir, f->d_name);
+            snprintf(rel, sizeof(rel), "addcont/%s/%s/ac.pkg", e->d_name, f->d_name);
+            snprintf(fb, sizeof(fb), "%s - %s - %s.pkg", e->d_name, name, f->d_name);
+            RESTORE(rel, fb);
+            unlink_in(ldir, ac_generated);
+            rmdir(ldir);
+            snprintf(hold, sizeof(hold), HOLD_DIR "/addcont/%s/%s", e->d_name, f->d_name);
+            rm_tree(hold);
+        }
+        if (l)
+            closedir(l);
+        rmdir(tdir);
+        snprintf(hold, sizeof(hold), HOLD_DIR "/addcont/%s", e->d_name);
+        rmdir(hold); /* kept while other games still use add-ons of this title */
+    }
+    if (d)
+        closedir(d);
+#undef RESTORE
+    rmdir(sub);
+    unlink_in(game, generated); /* written next to the pkgs by versions before 0.3.2 */
+    char marker[64];
+    snprintf(marker, sizeof(marker), "%s/" ORIGIN_FILE, game);
+    char probe[PATH_MAX];
+    snprintf(probe, sizeof(probe), "%s/app.pkg", game);
+    if (!exists(probe)) /* keep the record while a pkg could not be moved */
+        unlink(marker);
+    rmdir(game);
+    snprintf(probe, sizeof(probe), HOLD_DIR "/app/%s", tid);
+    rm_tree(probe);
+    snprintf(probe, sizeof(probe), HOLD_DIR "/patch/%s", tid);
+    rm_tree(probe);
+}
+
+/* Add-on title IDs of a game folder (its /user/addcont mounts). */
+static int folder_dlc_tids(const char *game, char (*tids)[10], int max) {
+    char sub[PATH_MAX];
+    snprintf(sub, sizeof(sub), "%s/addcont", game);
+    DIR *d = opendir(sub);
+    int n = 0;
+    struct dirent *e;
+    while (d && n < max && (e = readdir(d)))
+        if (strlen(e->d_name) == 9 && !strncmp(e->d_name, "CUSA", 4))
+            snprintf(tids[n++], 10, "%s", e->d_name);
+    if (d)
+        closedir(d);
+    return n;
+}
+
+/* Takes one game out of the library (through the system) and unmounts it. */
+static int restore_unregister(const char *root, const char *tid) {
+    char game[PATH_MAX], dtids[MAX_DLC_TIDS][10];
+    managed_t *rm = managed_by(tid, NULL);
+    if ((rm && rm->running) || title_running(tid)) { /* (app) checked before anything is unmounted */
+        printf("[restore] %s kept: the game is running\n", tid);
+        return -1;
+    }
+    snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
+    int nd = folder_dlc_tids(game, dtids, MAX_DLC_TIDS);
+    unmount_title(tid, dtids, nd);
+    char msg[256];
+    if (!installed_internally(tid) && ps4m_remove(tid, msg, sizeof(msg))) {
+        printf("[restore] %s kept: %s\n", tid, msg);
+        return -1;
+    }
+    return 0;
+}
+
+static void restore_clear_state(const char *tid) {
+    char p[64];
+    snprintf(p, sizeof(p), STATE_DIR "/%s.removed", tid);
+    unlink(p);
+    snprintf(p, sizeof(p), STATE_DIR "/%s.src", tid);
+    unlink(p);
+    retry_clear(tid);
+}
+
+/* Requests from the panel, run by the main loop: some titles, or all of them. */
+static char g_restore_tids[MAX_TITLES][10];
+static int g_restore_n, g_restore_all;
+
+/* --- closing the open game --- */
+
+typedef struct {
+    uint32_t app_id;
+    uint64_t unknown1;
+    char title_id[10];
+    uint32_t app_type;
+    char unknown2[0x36];
+    char app_spare[160]; /* (app) room: the layout is not known for every firmware */
+} app_info_t;
+
+/* (app) weak, and no sceSystemServiceKillApp: games are closed the way "Spiel beenden" does it (procmgr.c, SIGKILL), which
+   needs no service call that may be missing or unreliable on some firmware */
+int sceKernelGetAppInfo(pid_t pid, app_info_t *info) __attribute__((weak));
+
+/* Open games: processes named eboot.bin (PS4 and PS5 games alike). Fills up to max
+ * app ids and title ids, returns how many are open. */
+static int open_games(uint32_t *ids, char (*tids)[10], int max) {
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PROC, 0}, n = 0;
+    size_t len = 0;
+    if (!sceKernelGetAppInfo)
+        return -1; /* (app) unknown */
+    if (sysctl(mib, 4, NULL, &len, NULL, 0) || !len)
+        return -1; /* (app) unknown, not "none open" */
+    len += len / 4; /* processes started meanwhile */
+    uint8_t *buf = malloc(len);
+    if (!buf || sysctl(mib, 4, buf, &len, NULL, 0)) {
+        free(buf);
+        return -1;
+    }
+    for (size_t off = 0; off + sizeof(struct kinfo_proc) <= len;) {
+        struct kinfo_proc *ki = (struct kinfo_proc *)(buf + off);
+        if (ki->ki_structsize < (int)sizeof(*ki) || (size_t)ki->ki_structsize > len - off)
+            break;
+        app_info_t info;
+        memset(&info, 0, sizeof(info));
+        if (!strcmp(ki->ki_comm, "eboot.bin") && !sceKernelGetAppInfo(ki->ki_pid, &info) && info.app_id &&
+            (!strncmp(info.title_id, "CUSA", 4) || !strncmp(info.title_id, "PPSA", 4))) { /* (app) games only */
+            if (n < max) {
+                ids[n] = info.app_id;
+                snprintf(tids[n], 10, "%.9s", info.title_id);
+            }
+            n++;
+        }
+        off += (size_t)ki->ki_structsize;
+    }
+    free(buf);
+    return n;
+}
+
+/* Every pkg operation that takes games out of the library closes the open game first,
+ * whichever it is: a game left open keeps reading pkgs that are being moved. 0 once no
+ * game is open; -1 when one did not close within 30 seconds. */
+static int close_open_games(void) {
+    uint32_t ids[8];
+    char tids[8][10];
+    int n = open_games(ids, tids, 8);
+    if (n < 0) {
+        printf("[restore] the list of processes could not be read\n");
+        return -1; /* (app) do not move pkgs a game might still read */
+    }
+    if (!n)
+        return 0;
+    for (int i = 0; i < n && i < 8; i++) {
+        managed_t *m = managed_by(tids[i], NULL);
+        notify("%s wird geschlossen, um die PKGs zurückzuverschieben", m ? m->name : tids[i]);
+        int rc = ps5tm_procmgr_close_game(tids[i], 5000); /* (app) SIGKILL, as "Spiel beenden" */
+        printf("[restore] close %s (app 0x%08x): %d\n", tids[i], ids[i], rc);
+    }
+    char closing[8][10];
+    int nc = n < 8 ? n : 8;
+    memcpy(closing, tids, sizeof(closing[0]) * (size_t)nc);
+    for (int s = 0; s < 30; s++) {
+        pump_events(1000);
+        int mounted = 0;
+        for (int i = 0; i < nc; i++)
+            mounted |= title_running(closing[i]);
+        if (!open_games(ids, tids, 8) && !mounted) {
+            pump_events(2000); /* let the system finish unmounting the game */
+            for (int i = 0; i < MAX_TITLES; i++)
+                g_managed[i].running = 0;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+/* Folders of games on every connected drive (or only tid), with their name. */
+typedef struct {
+    char root[32], tid[10], name[128];
+} restore_item_t;
+
+/* only: n title ids to keep, or NULL for every game. */
+static int restore_collect(char (*only)[10], int nonly, restore_item_t *items, int max) {
+    int n = 0;
+    for (int i = 0; i < 10 && n < max; i++) {
+        char root[32], lib[PATH_MAX];
+        if (i < 8)
+            snprintf(root, sizeof(root), "/mnt/usb%d", i);
+        else
+            snprintf(root, sizeof(root), "/mnt/ext%d", i - 8);
+        if (!is_mountpoint(root))
+            continue;
+        snprintf(lib, sizeof(lib), "%s/ps4", root);
+        DIR *d = opendir(lib);
+        struct dirent *e;
+        while (d && n < max && (e = readdir(d))) {
+            if (strlen(e->d_name) != 9 || strncmp(e->d_name, "CUSA", 4))
+                continue;
+            int wanted = !only;
+            for (int k = 0; k < nonly && !wanted; k++)
+                wanted = !strcmp(only[k], e->d_name);
+            if (!wanted)
+                continue;
+            restore_item_t *it = &items[n++];
+            snprintf(it->root, sizeof(it->root), "%s", root);
+            snprintf(it->tid, sizeof(it->tid), "%s", e->d_name);
+            snprintf(it->name, sizeof(it->name), "%s", e->d_name);
+            char p[PATH_MAX];
+            snprintf(p, sizeof(p), "%s/%s/app.pkg", lib, e->d_name);
+            pkg_t pkg;
+            sfo_t sfo;
+            if (exists(p) && !p4m_pkg_open(&pkg, p)) {
+                const sfo_item_t *t = read_sfo(&pkg, &sfo) ? NULL : p4m_sfo_get(&sfo, "TITLE");
+                if (t) {
+                    snprintf(it->name, sizeof(it->name), "%s", t->sval);
+                    clean_name(it->name);
+                }
+                p4m_pkg_close(&pkg);
+            }
+        }
+        if (d)
+            closedir(d);
+    }
+    return n;
+}
+
+/* Moves the pkgs of the requested games (only, or all when NULL) back, in groups of the
+ * restore setting: the games of a group leave the library one at a time, their pkgs are
+ * moved, and the next group waits until the system databases are idle. */
+static void run_restore(char (*only)[10], int nonly) {
+    static restore_item_t items[MAX_TITLES];
+    int n = restore_collect(only, nonly, items, MAX_TITLES), moved = 0, failed = 0, done = 0, kept = 0;
+    if (!n) {
+        notify("Keine PS4Mount-Spiele zum Zurückverschieben");
+        return;
+    }
+    if (close_open_games()) {
+        notify("Das laufende Spiel ließ sich nicht schließen; es wurden keine PKGs zurückverschoben");
+        return;
+    }
+    int size = g_cfg.restore_batch;
+    if (n == 1)
+        notify("Die PKGs von %s werden zurückverschoben ...", items[0].name);
+    else
+        notify("Die PKGs von %d Spiel(en) werden an ihren alten Ort zurückverschoben, %d auf einmal ...", n, size);
+    for (int i = 0; i < n; i += size) {
+        if (i)
+            wait_db_quiet(BATCH_QUIET, 120);
+        int end = i + size < n ? i + size : n;
+        for (int k = i; k < end; k++) {
+            if (restore_unregister(items[k].root, items[k].tid)) {
+                kept++;
+                continue;
+            }
+            /* one removal at a time: the next waits until the system databases are idle */
+            wait_db_quiet(3, 30);
+            restore_files(items[k].root, items[k].tid, items[k].name, &moved, &failed);
+            done++;
+        }
+    }
+    /* the uninstall events arrive late and mark the games as removed: clear that, so a
+     * game added again later is not taken for one removed on the console */
+    pump_events(3000);
+    for (int i = 0; i < n; i++)
+        restore_clear_state(items[i].tid);
+    clear_removed_dlc();
+    g_next_scan = 0;
+    if (n == 1 && done)
+        notify("%s: %d PKG-Datei(en) zurückverschoben%s", items[0].name, moved,
+               failed ? ", einige ließen sich nicht verschieben (siehe Protokoll)" : "");
+    else if (n > 1)
+        notify("%d PKG-Datei(en) von %d Spiel(en) zurückverschoben%s%s", moved, done,
+               failed ? ", einige ließen sich nicht verschieben (siehe Protokoll)" : "",
+               kept ? ", einige Spiele ließen sich nicht aus der Bibliothek nehmen (siehe Protokoll)" : "");
+}
+
+int ps4m_restore(const char *tids, char *msg, size_t cap) {
+    if (g_restore_all || g_restore_n) {
+        snprintf(msg, cap, "Es werden schon PKGs zurückverschoben; bitte warten, bis das fertig ist");
+        return -1;
+    }
+    if (!tids) {
+        g_restore_all = 1;
+        snprintf(msg, cap, "Das laufende Spiel wird geschlossen, dann werden die PKGs aller Spiele an ihren alten Ort zurückverschoben");
+        return 0;
+    }
+    int n = 0;
+    for (const char *p = tids; *p;) {
+        size_t len = strcspn(p, ",");
+        char tid[10], root[32];
+        if (len != 9 || strncmp(p, "CUSA", 4) || strspn(p + 4, "0123456789") < 5) {
+            snprintf(msg, cap, "Ungültige Titel-ID: %.20s", p);
+            return -1;
+        }
+        snprintf(tid, sizeof(tid), "%.9s", p);
+        if (find_root(tid, root, sizeof(root))) {
+            snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
+            return -1;
+        }
+        int dup = 0;
+        for (int i = 0; i < n; i++)
+            dup |= !strcmp(g_restore_tids[i], tid);
+        if (!dup && n < MAX_TITLES)
+            snprintf(g_restore_tids[n++], 10, "%s", tid);
+        p += len;
+        if (*p == ',')
+            p++;
+    }
+    if (!n) {
+        snprintf(msg, cap, "Keine Spiele ausgewählt");
+        return -1;
+    }
+    g_restore_n = n;
+    if (n == 1)
+        snprintf(msg, cap, "Das laufende Spiel wird geschlossen, dann werden die PKGs von %s an ihren alten Ort zurückverschoben",
+                 g_restore_tids[0]);
+    else
+        snprintf(msg, cap, "Das laufende Spiel wird geschlossen, dann werden die PKGs von %d Spielen zurückverschoben, %d auf einmal", n,
+                 g_cfg.restore_batch);
+    return 0;
+}
+
+int ps4m_restored_forget(char *msg, size_t cap) {
+    unlink(RESTORED_LIST);
+    g_next_scan = 0;
+    snprintf(msg, cap, "Zurückverschobene PKGs werden bei der nächsten Suche wieder aufgenommen");
+    return 0;
 }
 
 /* --- settings --- */
@@ -2158,10 +2712,14 @@ static int clean_scan_path(const char *in, char *out, size_t n, char *why, size_
 
 static void config_save(void) {
     buf_t b = {0};
-    p4m_buf_printf(&b, "batch=%d\nbatch_size=%d\ndlc=%d\nenabled=%d\n", g_cfg.batch, g_cfg.batch_size, g_cfg.dlc, g_enabled);
+    p4m_buf_printf(&b, "batch=%d\nbatch_size=%d\ndlc=%d\nrestore_batch=%d\nenabled=%d\n", g_cfg.batch, g_cfg.batch_size, g_cfg.dlc,
+               g_cfg.restore_batch, g_enabled);
     for (int i = 0; i < g_cfg.npaths; i++)
         p4m_buf_printf(&b, "path=%s\n", g_cfg.paths[i]);
-    write_file(CONFIG_PATH, b.data, b.len, 0666);
+    if (b.failed) /* (app) PS4Mount PR #18 */
+        printf("[config] out of memory: settings not saved\n");
+    else
+        write_file(CONFIG_PATH, b.data, b.len, 0666);
     p4m_buf_free(&b);
 }
 
@@ -2182,6 +2740,8 @@ static void config_load(void) {
             c.dlc = atoi(line + 4) != 0;
         else if (!strncmp(line, "enabled=", 8))
             g_enabled = atoi(line + 8) != 0;
+        else if (!strncmp(line, "restore_batch=", 14))
+            c.restore_batch = atoi(line + 14);
         else if (!strncmp(line, "path=", 5) && c.npaths < MAX_SCAN_PATHS &&
                  !clean_scan_path(line + 5, path, sizeof(path), why, sizeof(why)))
             snprintf(c.paths[c.npaths++], sizeof(c.paths[0]), "%s", path);
@@ -2189,16 +2749,19 @@ static void config_load(void) {
     fclose(f);
     if (c.batch_size < 1 || c.batch_size > 50)
         c.batch_size = 5;
+    if (c.restore_batch < 1 || c.restore_batch > MAX_RESTORE_BATCH)
+        c.restore_batch = 5;
     if (!c.npaths)
         c.npaths = 1; /* the root */
     g_cfg = c;
-    printf("[config] batch=%d batch_size=%d dlc=%d folders=%d\n", g_cfg.batch, g_cfg.batch_size, g_cfg.dlc,
-           g_cfg.npaths);
+    printf("[config] batch=%d batch_size=%d dlc=%d restore_batch=%d folders=%d\n", g_cfg.batch, g_cfg.batch_size,
+           g_cfg.dlc, g_cfg.restore_batch, g_cfg.npaths);
 }
 
 void ps4m_config_json(buf_t *out) {
-    p4m_buf_printf(out, "{\"batch\":%s,\"batch_size\":%d,\"dlc\":%s,\"paths\":[", g_cfg.batch ? "true" : "false",
-               g_cfg.batch_size, g_cfg.dlc ? "true" : "false");
+    p4m_buf_printf(out, "{\"batch\":%s,\"batch_size\":%d,\"dlc\":%s,\"restore_batch\":%d,\"max_restore_batch\":%d,\"paths\":[",
+               g_cfg.batch ? "true" : "false", g_cfg.batch_size, g_cfg.dlc ? "true" : "false", g_cfg.restore_batch,
+               MAX_RESTORE_BATCH);
     for (int i = 0; i < g_cfg.npaths; i++) {
         char shown[130];
         snprintf(shown, sizeof(shown), "/%s", g_cfg.paths[i]);
@@ -2223,7 +2786,8 @@ static void url_decode(const char *in, size_t len, char *out, size_t n) {
     out[o] = 0;
 }
 
-/* body: batch=0|1&batch_size=N&dlc=0|1&paths=<folders, one per line> (form encoded). */
+/* body: batch=0|1&batch_size=N&dlc=0|1&restore_batch=N&paths=<folders, one per line> (form
+ * encoded); keys left out keep their value. */
 int ps4m_config_set(const char *body, char *msg, size_t cap) {
     config_t c = g_cfg;
     char value[1200], why[160] = "";
@@ -2239,7 +2803,11 @@ int ps4m_config_set(const char *body, char *msg, size_t cap) {
                 c.batch_size = atoi(value);
             else if (k == 3 && !strncmp(p, "dlc", 3))
                 c.dlc = atoi(value) != 0;
-            else if (k == 5 && !strncmp(p, "paths", 5)) {
+            else if (k == 13 && !strncmp(p, "restore_batch", 13)) {
+                char *end;
+                long v = strtol(value, &end, 10);
+                c.restore_batch = *value && !*end ? (int)v : 0;
+            } else if (k == 5 && !strncmp(p, "paths", 5)) {
                 c.npaths = 0;
                 for (char *line = strtok(value, "\n"); line; line = strtok(NULL, "\n")) {
                     char path[128];
@@ -2266,13 +2834,19 @@ int ps4m_config_set(const char *body, char *msg, size_t cap) {
         snprintf(msg, cap, "Nicht gespeichert: Spiele pro Gruppe müssen zwischen 1 und 50 liegen");
         return -1;
     }
+    if (c.restore_batch < 1 || c.restore_batch > MAX_RESTORE_BATCH) {
+        snprintf(msg, cap, "Nicht gespeichert: Spiele pro Gruppe beim Zurückverschieben müssen eine Zahl von 1 bis %d sein",
+                 MAX_RESTORE_BATCH);
+        return -1;
+    }
     if (!c.npaths) {
         snprintf(msg, cap, "Nicht gespeichert: Mindestens ein Ordner nötig (/ ist die oberste Ebene des Laufwerks)");
         return -1;
     }
     g_cfg = c;
     config_save();
-    printf("[config] saved: batch=%d batch_size=%d dlc=%d folders=%d\n", c.batch, c.batch_size, c.dlc, c.npaths);
+    printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d folders=%d\n", c.batch, c.batch_size, c.dlc,
+           c.restore_batch, c.npaths);
     g_next_scan = 0;
     snprintf(msg, cap, "Einstellungen gespeichert");
     return 0;
@@ -2302,7 +2876,7 @@ static time_t g_ids_at;
 
 static int p4m_db_is_registered(const char *tid) {
     time_t now = time(NULL);
-    if (!g_read_ok || now != g_ids_at) {
+    if (now != g_ids_at) {                  /* (app) at most once a second, also after a failed read */
         g_ids_at = now;
         if (!g_ids)
             g_ids = malloc(sizeof(*g_ids) * P4M_MAX_IDS);
@@ -2314,6 +2888,10 @@ static int p4m_db_is_registered(const char *tid) {
             }
         }
     }
+    /* (app) never read: "unknown" counts as registered, so that nothing is registered again with InstallAll (which would
+       also take along whatever else waits under /user/app) while the database cannot be read */
+    if (!g_read_ok)
+        return 1;
     for (int i = 0; i < g_nids; i++)
         if (!strcmp(g_ids[i], tid))
             return 1;
@@ -2375,10 +2953,18 @@ static void pump_events(int ms) {
 
 static void *ps4m_worker(void *arg) {
     (void)arg;
+    /* (app) Initialize can block for good while the installer service is not up: on a thread of its own, at most 10 s
+       (tile.c), and before the lock is taken, so that the page never waits behind it */
+    int irc = ps5tm_appinst_init();
     pthread_mutex_lock(&g_mu);
-    sceAppInstUtilInitialize();
+    if (irc)
+        printf("[main] sceAppInstUtilInitialize: 0x%08x%s\n", (unsigned)irc, irc == -0xDEAD ? " (timed out)" : irc == -0xBADD ? " (missing on this firmware)" : "");
+    if (!sceAppInstUtilAppInstallAll || !sceAppInstUtilAppUnInstall)
+        printf("[main] AppInstallAll/AppUnInstall missing on this firmware: games are only added one at a time, if at all\n");
     mkdirs(STATE_DIR, 0777);
-    check_firmware();   /* 0.4.4: InstallAll from 6.00 on, below that one title at a time, or none */
+    check_firmware();   /* since 0.4.4: InstallAll from 6.00 on, below that one title at a time, or none */
+    if (g_reg_mode == REG_ALL && !sceAppInstUtilAppInstallAll) /* (app) the call is weak: missing, the next way or none */
+        g_reg_mode = g_title_dir ? REG_TITLEDIR : REG_NONE;
     {
         /* start at the end of the log: what happened before is not ours */
         static ps5tm_klog_line_t one[1];
@@ -2416,6 +3002,20 @@ static void *ps4m_worker(void *arg) {
             end_delete_window();
         if (g_deleting && time(NULL) - g_deleting_since > 600)
             end_delete_window(); /* the line of the screen change was missed */
+        /* 0.5.0: moving pkgs back (asked by the page) and adding a title again after the system took it out */
+        if (g_restore_n || g_restore_all) {
+            run_restore(g_restore_all ? NULL : g_restore_tids, g_restore_n);
+            g_restore_n = 0;
+            g_restore_all = 0;
+            continue;
+        }
+        if (g_readd_tid[0] && !g_deleting) {
+            char tid[10];
+            snprintf(tid, sizeof(tid), "%s", g_readd_tid);
+            g_readd_tid[0] = 0;
+            readd_title(tid);
+            continue;
+        }
         if (time(NULL) >= g_next_scan && !g_deleting) {
             if (g_reg_mode != REG_NONE)
                 scan_all();
@@ -2437,13 +3037,36 @@ static void *ps4m_worker(void *arg) {
     return NULL;
 }
 
-/* Starts the thread (the lock on 9032 first). Returns 0, or -1 with a text in msg. */
+/* The page never waits long for the lock: the worker may hold it for a minute (an uninstall that does not answer, a group of
+   registrations), and requests that pile up behind it would fill every connection of the web server (review 15.10.2026).
+   0 when it is taken within ms. */
+static int lock_for_page(int ms) {
+    for (int waited = 0;; waited += 50) {
+        if (!pthread_mutex_trylock(&g_mu))
+            return 0;
+        if (waited >= ms)
+            return -1;
+        usleep(50 * 1000);
+    }
+}
+
+#define P4M_BUSY "PS4Mount ist gerade beschäftigt: Es fügt hinzu, entfernt oder verschiebt. Bitte gleich noch einmal versuchen."
+
+/* Starts the thread (the lock on 9032 first). Returns 0, or -1 with a text in msg. Takes g_mu itself, so that two starts at once
+   (the page and the app's start) cannot both open the instance lock. */
 static int worker_start(char *msg, size_t n) {
+    if (lock_for_page(3000)) {
+        snprintf(msg, n, P4M_BUSY);
+        return -1;
+    }
     if (g_alive) {
+        g_stop = 0; /* off and on again quickly: the stop not yet carried out is taken back */
+        pthread_mutex_unlock(&g_mu);
         snprintf(msg, n, "PS4Mount läuft schon");
         return 0;
     }
     if ((g_lock_sock = instance_lock()) < 0) {
+        pthread_mutex_unlock(&g_mu);
         snprintf(msg, n, "Ein anderes PS4Mount (ps4mount.elf) läuft schon. Bitte dieses zuerst beenden.");
         return -1;
     }
@@ -2459,9 +3082,11 @@ static int worker_start(char *msg, size_t n) {
         g_alive = 0;
         close(g_lock_sock);
         g_lock_sock = -1;
+        pthread_mutex_unlock(&g_mu);
         snprintf(msg, n, "Der Dienst ließ sich nicht starten");
         return -1;
     }
+    pthread_mutex_unlock(&g_mu);
     snprintf(msg, n, "PS4Mount ist eingeschaltet");
     return 0;
 }
@@ -2469,6 +3094,10 @@ static int worker_start(char *msg, size_t n) {
 /* --- calls from the page (api.c) --- */
 
 void ps4m_boot(void) {
+    static int booted; /* main.c calls this for every new listener (rest mode, a new network): once is enough */
+    if (booted)
+        return;
+    booted = 1;
     pthread_mutex_lock(&g_mu);
     config_load();
     int on = g_enabled;
@@ -2481,23 +3110,47 @@ void ps4m_boot(void) {
 }
 
 int ps4m_set_enabled(int on, char *msg, size_t n) {
-    pthread_mutex_lock(&g_mu);
+    if (lock_for_page(3000)) {
+        snprintf(msg, n, P4M_BUSY);
+        return -1;
+    }
     config_load();
     g_enabled = on != 0;
     config_save();
+    if (!on) {
+        g_stop = 1;
+        /* what was asked for and not yet done does not wait for the next start (it would close a game at once then) */
+        g_restore_n = 0;
+        g_restore_all = 0;
+        g_readd_tid[0] = 0;
+    }
     pthread_mutex_unlock(&g_mu);
     if (on)
         return worker_start(msg, n);
-    pthread_mutex_lock(&g_mu);
-    g_stop = 1;
-    pthread_mutex_unlock(&g_mu);
     snprintf(msg, n, "PS4Mount ist ausgeschaltet. Eingebundene Spiele bleiben, bis die Konsole neu startet oder Sie sie entfernen.");
     return 0;
 }
 
 /* {"ok":true,"enabled":…,"running":…,"version":…,"config":{…},"games":[…]} as a malloc'd string. */
+/* The last answer: given (marked "busy") while the worker holds the lock for long. */
+static pthread_mutex_t g_json_mu = PTHREAD_MUTEX_INITIALIZER;
+static char *g_json_last;
+
 static char *state_json_impl(void) {
-    pthread_mutex_lock(&g_mu);
+    if (lock_for_page(1500)) {
+        char *c = NULL;
+        pthread_mutex_lock(&g_json_mu);
+        if (g_json_last && g_json_last[0] == '{') {
+            size_t l = strlen(g_json_last);
+            c = malloc(l + 16);
+            if (c) {
+                memcpy(c, "{\"busy\":true,", 13);
+                memcpy(c + 13, g_json_last + 1, l); /* the rest and its NUL */
+            }
+        }
+        pthread_mutex_unlock(&g_json_mu);
+        return c ? c : strdup("{\"ok\":true,\"busy\":true,\"enabled\":true,\"running\":true,\"games\":[],\"config\":{}}");
+    }
     buf_t games = {0}, cfg = {0}, out = {0};
     ps4m_games_json(&games);
     ps4m_config_json(&cfg);
@@ -2515,18 +3168,50 @@ static char *state_json_impl(void) {
     }
     p4m_buf_free(&games);
     p4m_buf_free(&cfg);
-    return (char *)out.data;
+    char *res = (char *)out.data;
+    if (res) {
+        pthread_mutex_lock(&g_json_mu);
+        free(g_json_last);
+        g_json_last = strdup(res);
+        pthread_mutex_unlock(&g_json_mu);
+    }
+    return res;
 }
 
-/* action: "scan", "add", "remove" (tid for the last two). Returns 0 or -1; msg says what happened. */
+/* CUSA and five digits, as the module's own checks want it */
+static int tid_ok(const char *t) {
+    if (!t || strlen(t) != 9 || strncmp(t, "CUSA", 4))
+        return 0;
+    for (int i = 4; i < 9; i++)
+        if (t[i] < '0' || t[i] > '9')
+            return 0;
+    return 1;
+}
+
+/* action: "scan"; "add", "remove", "restore" (tid; for "restore" a comma-separated list of title IDs); "restore_all";
+   "restored_forget". Returns 0 or -1; msg says what happened. Moving back runs in the worker, which must be running. */
 int ps4m_do_action(const char *action, const char *tid, char *msg, size_t n) {
     int rc = -1;
-    pthread_mutex_lock(&g_mu);
+    if (lock_for_page(3000)) {
+        snprintf(msg, n, P4M_BUSY);
+        return -1;
+    }
     if (!strcmp(action, "scan")) {
         ps4m_rescan();
         snprintf(msg, n, g_alive ? "Die Laufwerke werden jetzt abgesucht" : "PS4Mount ist ausgeschaltet; bitte zuerst einschalten");
         rc = g_alive ? 0 : -1;
-    } else if (tid && strlen(tid) == 9 && !strncmp(tid, "CUSA", 4)) {
+    } else if (!strcmp(action, "restore_all") || !strcmp(action, "restore")) {
+        if (!g_alive)
+            snprintf(msg, n, "PS4Mount ist ausgeschaltet; bitte zuerst einschalten");
+        else if (!strcmp(action, "restore_all"))
+            rc = ps4m_restore(NULL, msg, n);
+        else if (tid && tid[0])
+            rc = ps4m_restore(tid, msg, n);
+        else
+            snprintf(msg, n, "Keine Spiele ausgewählt");
+    } else if (!strcmp(action, "restored_forget")) {
+        rc = ps4m_restored_forget(msg, n);
+    } else if (tid_ok(tid)) {
         if (!strcmp(action, "add"))
             rc = ps4m_add(tid, msg, n);
         else if (!strcmp(action, "remove"))
@@ -2541,14 +3226,18 @@ int ps4m_do_action(const char *action, const char *tid, char *msg, size_t n) {
 }
 
 int ps4m_do_config(const char *form, char *msg, size_t n) {
-    pthread_mutex_lock(&g_mu);
+    if (lock_for_page(3000)) {
+        snprintf(msg, n, P4M_BUSY);
+        return -1;
+    }
     int rc = ps4m_config_set(form, msg, n);
     pthread_mutex_unlock(&g_mu);
     return rc;
 }
 
 static int icon_impl(const char *tid, unsigned char **data, size_t *len) {
-    pthread_mutex_lock(&g_mu);
+    if (!tid_ok(tid) || lock_for_page(1500))
+        return -1;
     buf_t b = {0};
     int rc = ps4m_icon(tid, &b);
     pthread_mutex_unlock(&g_mu);

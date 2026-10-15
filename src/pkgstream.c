@@ -585,11 +585,14 @@ accept_main(void *arg) {
   while(!stopping()) {
     struct pollfd p = { g.listen_fd, POLLIN, 0 };
     int r = poll(&p, 1, 200);
-    if(r <= 0) continue;
+    if(r == 0) continue;
+    /* A listener that died (rest mode closes the sockets of payloads) or a full fd table answers at once, every time: without a
+       pause this loop ran flat out on the five CPUs all payloads share (review 15.10.2026). */
+    if(r < 0 || (p.revents & (POLLNVAL | POLLERR | POLLHUP))) { usleep(200 * 1000); continue; }
     struct sockaddr_in sa;
     socklen_t sl = sizeof(sa);
     int c = accept(g.listen_fd, (struct sockaddr *)&sa, &sl);
-    if(c < 0) continue;
+    if(c < 0) { if(errno != EINTR && errno != EAGAIN) usleep(100 * 1000); continue; }
     if(sa.sin_addr.s_addr != htonl(INADDR_LOOPBACK)) { close(c); continue; }        /* bound to loopback; belt and braces */
     pthread_mutex_lock(&g.lock);
     int full = g.conns >= PS_MAX_CONNS;

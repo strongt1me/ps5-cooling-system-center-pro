@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "ps4m_crypto.h"
@@ -65,10 +66,16 @@ int p4m_pkg_open(pkg_t *pkg, const char *path) {
     pkg->fd = open(path, O_RDONLY);
     if (pkg->fd < 0)
         return -1;
-    if (read_at(pkg->fd, pkg->header, sizeof(pkg->header), 0) || be32(pkg->header) != 0x7f434e54)
+    struct stat st; /* (app) the file's size, so that no entry is read past it (PS4Mount PR #18) */
+    if (fstat(pkg->fd, &st) || read_at(pkg->fd, pkg->header, sizeof(pkg->header), 0) || be32(pkg->header) != 0x7f434e54)
         goto fail;
+    pkg->file_size = (uint64_t)st.st_size;
     memcpy(pkg->content_id, pkg->header + 0x40, 36);
     memcpy(pkg->title_id, pkg->content_id + 7, 9);
+    /* (app) the title id from the header names folders on the console (/user/appmeta/<id>, ...): only AAAA00000 */
+    for (int k = 0; k < 9; k++)
+        if (k < 4 ? (pkg->title_id[k] < 'A' || pkg->title_id[k] > 'Z') : (pkg->title_id[k] < '0' || pkg->title_id[k] > '9'))
+            goto fail;
     pkg->pfs_offset = be64(pkg->header + 0x410);
     pkg->pfs_size = be64(pkg->header + 0x418);
     pkg->pkg_size = be64(pkg->header + 0x430);
@@ -110,7 +117,13 @@ uint8_t *p4m_pkg_entry(pkg_t *pkg, uint32_t id, size_t *len) {
         pkg_entry_t *e = &pkg->entries[i];
         if (e->id != id)
             continue;
-        size_t padded = (e->size + 15u) & ~15u;
+        /* the size comes from the file: the entries read here (param.sfo, artwork, sound,
+         * PlayGo data) are far smaller, and a bigger one is a damaged pkg */
+        if (e->size > PKG_MAX_ENTRY_SIZE)
+            return NULL;
+        size_t padded = ((size_t)e->size + 15u) & ~(size_t)15u;
+        if ((uint64_t)e->offset + padded > pkg->file_size) /* (app) PS4Mount PR #18 */
+            return NULL;
         uint8_t *buf = malloc(padded + 1);
         if (!buf || read_at(pkg->fd, buf, padded, e->offset)) {
             free(buf);
@@ -143,14 +156,23 @@ int p4m_sfo_parse(const uint8_t *d, size_t len, sfo_t *out) {
         return -1;
     uint32_t ko = le32(d + 8), dof = le32(d + 12), n = le32(d + 16);
     for (uint32_t i = 0; i < n && out->count < 128; i++) {
-        const uint8_t *ent = d + 20 + i * 16;
-        if ((size_t)(ent - d) + 16 > len)
+        size_t eo = 20 + (size_t)i * 16; /* (app) checked before the pointer is formed (PS4Mount PR #18) */
+        if (eo + 16 > len)
             return -1;
+        const uint8_t *ent = d + eo;
         uint16_t kof = le16(ent), fmt = le16(ent + 2);
         uint32_t ln = le32(ent + 4), vof = le32(ent + 12);
+        /* offsets and lengths come from the file: everything must lie inside it */
+        uint64_t key = (uint64_t)ko + kof, val = (uint64_t)dof + vof;
+        if (key >= len || val > len || (fmt == 0x404 ? 4 : ln) > len - val)
+            return -1;
         sfo_item_t *it = &out->items[out->count++];
-        strncpy(it->key, (const char *)d + ko + kof, sizeof(it->key) - 1);
-        const uint8_t *v = d + dof + vof;
+        size_t kl = strnlen((const char *)d + key, len - key);
+        if (kl > sizeof(it->key) - 1)
+            kl = sizeof(it->key) - 1;
+        memcpy(it->key, d + key, kl);
+        it->key[kl] = 0;
+        const uint8_t *v = d + val;
         if (fmt == 0x404) {
             it->is_int = 1;
             it->ival = le32(v);

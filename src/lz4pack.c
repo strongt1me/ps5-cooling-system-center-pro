@@ -141,10 +141,12 @@ mkdir_p(const char *path) {
   for(char *p = buf + 1; *p; p++) {
     if(*p != '/') continue;
     *p = 0;
-    if(mkdir(buf, 0777) != 0 && errno != EEXIST) return errno ? errno : EIO;
+    if(mkdir(buf, 0777) == 0) (void)chmod(buf, 0777);
+    else if(errno != EEXIST) return errno ? errno : EIO;
     *p = '/';
   }
-  if(mkdir(buf, 0777) != 0 && errno != EEXIST) return errno ? errno : EIO;
+  if(mkdir(buf, 0777) == 0) (void)chmod(buf, 0777);
+  else if(errno != EEXIST) return errno ? errno : EIO;
   return 0;
 }
 

@@ -9,3 +9,6 @@ tools/win/* text eol=lf
 web/*.html  text eol=lf
 web/*.css   text eol=lf
 web/*.js    text eol=lf
+
+# The tested LZ4 profiles are embedded as text with their SHA-256 (tools/gen_lz4_profiles.py): byte for byte as upstream.
+third_party/lz4_profiles/* text eol=lf

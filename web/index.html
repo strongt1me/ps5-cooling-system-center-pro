@@ -9,8 +9,11 @@
     <title>PS5 Cooling &amp; System Center - Pro</title>
     <link rel="stylesheet" href="/style.css">
     <script src="/i18n-boot.js"></script>
+    <script src="/theme-boot.js"></script>
   </head>
   <body>
+    <!-- Symbole der Kartenköpfe und Verläufe der Diagrammflächen (Kachel-Optik, 15.10.2026) -->
+    <svg class="ck-sprite" aria-hidden="true" focusable="false"><defs><linearGradient id="ckFill1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d5cff" stop-opacity=".55"/><stop offset="1" stop-color="#3a2a9a" stop-opacity=".12"/></linearGradient><linearGradient id="ckFill2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d95926" stop-opacity=".12"/><stop offset="1" stop-color="#d95926" stop-opacity="0"/></linearGradient><linearGradient id="ckFill3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#19c08a" stop-opacity=".42"/><stop offset="1" stop-color="#199e70" stop-opacity=".06"/></linearGradient></defs><symbol id="ck-archive" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="5" rx="1.5"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M10 13h4"/></symbol><symbol id="ck-bars" viewBox="0 0 24 24"><path d="M5 20V12M9.5 20V7M14 20v-9M18.5 20V5"/></symbol><symbol id="ck-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol><symbol id="ck-bolt" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></symbol><symbol id="ck-box" viewBox="0 0 24 24"><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9L12 3z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></symbol><symbol id="ck-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol><symbol id="ck-chip" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/></symbol><symbol id="ck-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol><symbol id="ck-console" viewBox="0 0 24 24"><path d="M8 3.5h5l3 2v15H8z"/><path d="M8 3.5 6 5v15.5h2"/><path d="M11 8h2"/></symbol><symbol id="ck-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 15v-3M12 15V9M16 15v-5"/></symbol><symbol id="ck-display" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/></symbol><symbol id="ck-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M4.5 19.5h15"/></symbol><symbol id="ck-drive" viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="12" rx="2.5"/><path d="M7 14h6"/><circle cx="16.5" cy="14" r=".9"/></symbol><symbol id="ck-fan" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 10c0-4 1-6.5 4-6.5 2.4 0 3 2.6 1 4.4C15.6 9.2 14 10 12 10z"/><path d="M14 12c4 0 6.5 1 6.5 4 0 2.4-2.6 3-4.4 1C14.8 15.6 14 14 14 12z"/><path d="M12 14c0 4-1 6.5-4 6.5-2.4 0-3-2.6-1-4.4C8.4 14.8 10 14 12 14z"/><path d="M10 12c-4 0-6.5-1-6.5-4 0-2.4 2.6-3 4.4-1C9.2 8.4 10 10 10 12z"/></symbol><symbol id="ck-folder" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></symbol><symbol id="ck-gauge" viewBox="0 0 24 24"><path d="M4.5 17a8.5 8.5 0 1 1 15 0"/><path d="M12 13l4-4"/><circle cx="12" cy="13" r="1"/></symbol><symbol id="ck-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></symbol><symbol id="ck-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.5 3.5 5.5 3.5 8.5s-1 6-3.5 8.5c-2.5-2.5-3.5-5.5-3.5-8.5s1-6 3.5-8.5z"/></symbol><symbol id="ck-gpu" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="11" rx="2"/><circle cx="9" cy="11.5" r="2.6"/><path d="M14.5 9.5h4M14.5 13.5h4M6 17v2.5M18 17v2.5"/></symbol><symbol id="ck-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol><symbol id="ck-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4.5V8H7"/><path d="M12 7.5V12l3 2"/></symbol><symbol id="ck-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/></symbol><symbol id="ck-image" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 3.5 3 3-2.5 4.5 4"/></symbol><symbol id="ck-layers" viewBox="0 0 24 24"><path d="M12 4 3.5 8.5 12 13l8.5-4.5z"/><path d="M3.5 12.5 12 17l8.5-4.5M3.5 16.5 12 21l8.5-4.5"/></symbol><symbol id="ck-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol><symbol id="ck-list" viewBox="0 0 24 24"><path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20"/><path d="M4 6.5h.01M4 12h.01M4 17.5h.01"/></symbol><symbol id="ck-log" viewBox="0 0 24 24"><path d="M6 3h8.5L19 7.5V21H6z"/><path d="M14 3v5h5M9 12h7M9 15.5h7M9 19h4"/></symbol><symbol id="ck-pad" viewBox="0 0 24 24"><rect x="2.5" y="7" width="19" height="10" rx="5"/><path d="M7.5 10.5v3M6 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></symbol><symbol id="ck-phone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol><symbol id="ck-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></symbol><symbol id="ck-queue" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="4.5" rx="1.2"/><rect x="4" y="10" width="16" height="4.5" rx="1.2"/><rect x="4" y="16" width="16" height="4" rx="1.2"/></symbol><symbol id="ck-ram" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="9" rx="1.5"/><path d="M7 10.5v2M10.5 10.5v2M14 10.5v2M17.5 10.5v2M6 16v3M10 16v3M14 16v3M18 16v3"/></symbol><symbol id="ck-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol><symbol id="ck-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/><path d="M7.5 10.5h1.5l1-2 1.5 4 1-2h1"/></symbol><symbol id="ck-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 8 7.5 9.5 4.3-1.5 7.5-5 7.5-9.5V6z"/><path d="M12 8.5V13M12 16h.01"/></symbol><symbol id="ck-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol><symbol id="ck-split" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><path d="M8.2 8.3 20 18M8.2 15.7 20 6"/></symbol><symbol id="ck-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/></symbol><symbol id="ck-terminal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 10l3 2.5L7 15M12.5 15.5h4.5"/></symbol><symbol id="ck-thermo" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 9v7"/><path d="M17.5 6h2M17.5 9.5h2M17.5 13h2"/></symbol><symbol id="ck-toggle" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="16" cy="12" r="2.6"/></symbol><symbol id="ck-transfer" viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></symbol><symbol id="ck-trend" viewBox="0 0 24 24"><path d="M3.5 17l5-5 4 3.5 7.5-8"/><path d="M15 7.5h5v5"/></symbol><symbol id="ck-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M8.5 20h7M10 17h4"/></symbol><symbol id="ck-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol><symbol id="ck-upload" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M12 13V7.5M9.5 10 12 7.5l2.5 2.5"/></symbol><symbol id="ck-usb" viewBox="0 0 24 24"><path d="M12 3v14"/><circle cx="12" cy="19" r="2"/><path d="M12 13 7.5 10.5V8M12 11l4.5-2.5V6.5"/><rect x="6.5" y="6" width="2" height="2"/><circle cx="16.5" cy="5.6" r="1.2"/></symbol><symbol id="ck-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></symbol><symbol id="ck-wifi" viewBox="0 0 24 24"><path d="M3.5 9.5a12 12 0 0 1 17 0"/><path d="M6.5 12.5a7.5 7.5 0 0 1 11 0"/><path d="M9.5 15.5a3.3 3.3 0 0 1 5 0"/><circle cx="12" cy="18.5" r=".9"/></symbol></svg>
     <div class="app">
       <!-- ══════ Seitenleiste ══════
            Nur Bereiche, die es wirklich gibt. Leistung, Einstellungen und
@@ -89,6 +92,15 @@
               <option value="ru">Русский</option>
             </select>
           </label>
+          <!-- Design (theme-boot.js, 15.10.2026): je Gerät gemerkt, wechselt ohne Neuladen -->
+          <label class="lang-switch" title="Design">
+            <select id="theme" aria-label="Design">
+              <option value="aktuell">Design: Aktuell</option>
+              <option value="hell">Design: Hell</option>
+              <option value="dunkel">Design: Dunkel</option>
+              <option value="optimal">Design: Optimal</option>
+            </select>
+          </label>
           <!-- Vollbild: nur sichtbar, wenn der Browser es anbietet (app.js) -->
           <button class="fs-btn" id="fs-btn" type="button" hidden aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
@@ -128,8 +140,8 @@
           </article>
 
           <article class="card name-card">
-            <div class="card-head"><div><h2>Anzeigename</h2>
-              <p class="sub">so heißt dein Konto im Startmenü</p></div></div>
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-user"/></svg></span><div class="ck-text"><h2>Anzeigename</h2>
+              <p class="sub">so heißt dein Konto im Startmenü</p></div></div></div>
             <div class="name-row">
               <span class="uid" id="user-uid">--</span>
               <input type="text" id="user-name" maxlength="16" placeholder="Name"
@@ -143,8 +155,8 @@
           </article>
 
           <article class="card">
-            <div class="card-head"><div><h2>Profilbild</h2>
-              <p class="sub">ein fertiges Bild antippen oder ein eigenes wählen, dann übernehmen</p></div></div>
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-image"/></svg></span><div class="ck-text"><h2>Profilbild</h2>
+              <p class="sub">ein fertiges Bild antippen oder ein eigenes wählen, dann übernehmen</p></div></div></div>
             <!-- Die fertigen Bilder liegen in der App selbst (web/avatars, gebaut
                  mit tools/build_avatars.py); app.js lädt die Liste und blendet
                  den Block erst ein, wenn sie da ist. -->
@@ -189,8 +201,8 @@
           </article>
 
           <article class="card">
-            <div class="card-head"><div><h2>Profile sichern und übertragen</h2>
-              <p class="sub">als Datei speichern und auf einem anderen Gerät wieder einlesen</p></div></div>
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-transfer"/></svg></span><div class="ck-text"><h2>Profile sichern und übertragen</h2>
+              <p class="sub">als Datei speichern und auf einem anderen Gerät wieder einlesen</p></div></div></div>
             <p class="note">Das <b>Web-Profil</b> enthält die Einstellungen dieses
               Browsers (z. B. Expertenmodus, eigene Alarme). Die <b>Spielprofile</b>
               sind die Zieltemperaturen je Spiel von der Kühlungsseite.</p>
@@ -238,8 +250,8 @@
           <div id="gm-pane-lib">
             <article class="card">
               <div class="card-head">
-                <div><h2>Spiele auf dem Startbildschirm</h2>
-                  <p class="sub" id="gm-sub">wird gelesen …</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pad"/></svg></span><div class="ck-text"><h2>Spiele auf dem Startbildschirm</h2>
+                  <p class="sub" id="gm-sub">wird gelesen …</p></div></div>
               </div>
               <div class="gm-tools">
                 <input type="search" id="gm-search" placeholder="Titel, Titel-ID oder Content-ID"
@@ -276,7 +288,7 @@
           <div id="gm-pane-time" hidden>
             <article class="card">
               <div class="card-head">
-                <div><h2>Spielzeit</h2><p class="sub" id="pt-sub">wird gelesen …</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-clock"/></svg></span><div class="ck-text"><h2>Spielzeit</h2><p class="sub" id="pt-sub">wird gelesen …</p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="pt-export" type="button">Als Tabelle speichern</button>
                   <button class="btn ghost" id="pt-reset" type="button">Verlauf löschen</button>
@@ -293,14 +305,14 @@
 
             <article class="card">
               <div class="card-head">
-                <div><h2>Die letzten 14 Tage</h2><p class="sub">Spielzeit pro Tag</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-calendar"/></svg></span><div class="ck-text"><h2>Die letzten 14 Tage</h2><p class="sub">Spielzeit pro Tag</p></div></div>
               </div>
               <div class="pt-bars" id="pt-bars" role="img" aria-label="Spielzeit pro Tag"></div>
             </article>
 
             <article class="card">
               <div class="card-head">
-                <div><h2>Meistgespielt</h2><p class="sub" id="pt-rank-sub"></p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-trophy"/></svg></span><div class="ck-text"><h2>Meistgespielt</h2><p class="sub" id="pt-rank-sub"></p></div></div>
               </div>
               <div id="pt-rank"></div>
               <button class="btn ghost mt-10" id="pt-rank-more" type="button" hidden></button>
@@ -308,7 +320,7 @@
 
             <article class="card">
               <div class="card-head">
-                <div><h2>Letzte Sitzungen</h2><p class="sub" id="pt-list-sub"></p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-list"/></svg></span><div class="ck-text"><h2>Letzte Sitzungen</h2><p class="sub" id="pt-list-sub"></p></div></div>
               </div>
               <div id="pt-list"></div>
               <button class="btn ghost mt-10" id="pt-more" type="button" hidden>Mehr anzeigen</button>
@@ -322,7 +334,7 @@
           <div id="gm-pane-pkg" hidden>
             <article class="card">
               <div class="card-head">
-                <div><h2>Pakete</h2><p class="sub" id="pk-sub">wird gelesen …</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-box"/></svg></span><div class="ck-text"><h2>Pakete</h2><p class="sub" id="pk-sub">wird gelesen …</p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="pk-scan" type="button">Neu suchen</button>
                 </div>
@@ -345,7 +357,7 @@
             <!-- Die Warteschlange der Installationen (pkgqueue.c): Pakete der letzten Suche, die nacheinander installiert werden. app.js (pq*) füllt sie. -->
             <article class="card" id="pk-queue-card" hidden>
               <div class="card-head">
-                <div><h2>Warteschlange</h2><p class="sub" id="pk-queue-sub"></p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-queue"/></svg></span><div class="ck-text"><h2>Warteschlange</h2><p class="sub" id="pk-queue-sub"></p></div></div>
                 <div class="row-gap">
                   <button class="btn primary" id="pk-queue-go" type="button">Starten</button>
                   <button class="btn ghost" id="pk-queue-clear" type="button">Erledigte entfernen</button>
@@ -360,7 +372,7 @@
             <!-- Ein Paket direkt vom PC installieren (pkglive.c): app.js (lv*) schickt die Datei in Stücken, während die Konsole sie installiert. -->
             <article class="card" id="pk-live-card">
               <div class="card-head">
-                <div><h2>Vom PC installieren</h2><p class="sub" id="pk-live-sub">Eine .pkg-Datei von diesem Rechner direkt installieren</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-upload"/></svg></span><div class="ck-text"><h2>Vom PC installieren</h2><p class="sub" id="pk-live-sub">Eine .pkg-Datei von diesem Rechner direkt installieren</p></div></div>
                 <div class="row-gap">
                   <label class="btn" for="pk-live-file" id="pk-live-pick">Paketdatei wählen …</label>
                   <input type="file" id="pk-live-file" accept=".pkg" hidden>
@@ -373,7 +385,7 @@
 
             <article class="card" id="pk-job-card" hidden>
               <div class="card-head">
-                <div><h2 id="pk-job-title">Paket aufteilen</h2><p class="sub" id="pk-job-sub"></p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-split"/></svg></span><div class="ck-text"><h2 id="pk-job-title">Paket aufteilen</h2><p class="sub" id="pk-job-sub"></p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="pk-cancel" type="button">Abbrechen</button>
                 </div>
@@ -383,7 +395,7 @@
 
             <article class="card" id="pk-inst-card" hidden>
               <div class="card-head">
-                <div><h2 id="pk-inst-title">Paket installieren</h2><p class="sub" id="pk-inst-sub"></p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-download"/></svg></span><div class="ck-text"><h2 id="pk-inst-title">Paket installieren</h2><p class="sub" id="pk-inst-sub"></p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="pk-inst-cancel" type="button">Abbrechen</button>
                 </div>
@@ -399,8 +411,8 @@
           <!-- Verlauf (jobhist.c, 11.10.2026): alle Vorgänge der App mit Ergebnis -->
           <div id="gm-pane-hist" hidden>
             <article class="card">
-              <div class="card-head"><div><h2>Verlauf</h2>
-                <p class="sub">alle Vorgänge der App: Kopieren, Verschieben, Konvertieren, Installieren, Löschen, AMPR-Index</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-history"/></svg></span><div class="ck-text"><h2>Verlauf</h2>
+                <p class="sub">alle Vorgänge der App: Kopieren, Verschieben, Konvertieren, Installieren, Löschen, AMPR-Index</p></div></div></div>
               <div class="hv-tools">
                 <div class="gm-chips" id="hv-chips" role="group" aria-label="Auswahl">
                   <button type="button" class="gm-chip active" data-hv="">Alle</button>
@@ -418,7 +430,7 @@
           <div id="gm-pane-bk" hidden>
             <article class="card">
               <div class="card-head">
-                <div><h2>Sicherungen</h2><p class="sub" id="bk-sub">wird gelesen …</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-archive"/></svg></span><div class="ck-text"><h2>Sicherungen</h2><p class="sub" id="bk-sub">wird gelesen …</p></div></div>
                 <div class="row-gap"><button type="button" class="btn ghost" id="bk-reload">Neu einlesen</button></div>
               </div>
               <div id="bk-list"></div>
@@ -429,7 +441,7 @@
           <div id="gm-pane-p4m" hidden>
             <article class="card">
               <div class="card-head">
-                <div><h2>PS4-Spiele von USB</h2><p class="sub" id="p4m-sub">wird gelesen …</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-usb"/></svg></span><div class="ck-text"><h2>PS4-Spiele von USB</h2><p class="sub" id="p4m-sub">wird gelesen …</p></div></div>
                 <div class="row-gap">
                   <label class="xswitch" for="p4m-on" title="Schaltet die Suche nach PS4-Spielen auf den USB-Laufwerken ein oder aus.">
                     <span>Einschalten</span>
@@ -448,7 +460,7 @@
               <div id="p4m-list"></div>
             </article>
             <article class="card">
-              <div class="card-head"><div><h2>Einstellungen</h2><p class="sub">gelten für die Suche nach PS4-Spielen</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gear"/></svg></span><div class="ck-text"><h2>Einstellungen</h2><p class="sub">gelten für die Suche nach PS4-Spielen</p></div></div></div>
               <div class="p4m-set">
                 <label class="xswitch" for="p4m-dlc"><span>Zusatzinhalte (DLC) einbinden</span>
                   <span class="switch"><input type="checkbox" id="p4m-dlc"><i></i></span></label>
@@ -461,9 +473,27 @@
                 <div class="cp-actions"><button type="button" class="btn primary" id="p4m-save">Einstellungen speichern</button></div>
               </div>
             </article>
+            <!-- PS4Mount 0.5.0: die PKGs eines Spiels dorthin zurück, woher sie kamen (origin.txt im Spielordner auf dem Laufwerk) -->
+            <article class="card">
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-undo"/></svg></span><div class="ck-text"><h2>PKGs zurückverschieben</h2><p class="sub">dorthin, woher sie kamen</p></div></div></div>
+              <p class="muted p4m-intro">Verschiebt die PKGs eines Spiels (Spiel, Update und alle Zusatzinhalte) mit ihren ursprünglichen
+                Namen dorthin zurück, woher sie kamen, und nimmt das Spiel aus der Bibliothek. Keine PKG wird gelöscht. Ein laufendes
+                Spiel wird vorher geschlossen, auch ein PS5-Spiel. Zurückverschobene PKGs nimmt die Suche nicht wieder auf, bis Sie
+                „Zurückverschobene wieder aufnehmen“ wählen.</p>
+              <div class="p4m-set">
+                <label class="p4m-field"><span>Spiele pro Gruppe beim Zurückverschieben (1 bis 10)</span>
+                  <input type="number" id="p4m-rsize" min="1" max="10" step="1"></label>
+                <div class="p4m-pick" id="p4m-pick"></div>
+                <div class="cp-actions">
+                  <button type="button" class="btn ghost" id="p4m-forget">Zurückverschobene wieder aufnehmen</button>
+                  <button type="button" class="btn danger" id="p4m-restore-all">Alle Spiele zurückverschieben</button>
+                  <button type="button" class="btn primary" id="p4m-restore-sel" disabled>Ausgewählte zurückverschieben</button>
+                </div>
+              </div>
+            </article>
             <article class="card">
               <div class="card-head">
-                <div><h2>Protokoll von PS4Mount</h2><p class="sub">die letzten Zeilen</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-log"/></svg></span><div class="ck-text"><h2>Protokoll von PS4Mount</h2><p class="sub">die letzten Zeilen</p></div></div>
                 <div class="row-gap"><button class="btn ghost" id="p4m-log-reload" type="button">Neu laden</button></div>
               </div>
               <pre class="p4m-log" id="p4m-log"></pre>
@@ -473,7 +503,7 @@
           <div id="gm-pane-saves" hidden>
             <article class="card">
               <div class="card-head">
-                <div><h2>Spielstände sichern</h2><p class="sub" id="sv-sub">wird gelesen …</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-save"/></svg></span><div class="ck-text"><h2>Spielstände sichern</h2><p class="sub" id="sv-sub">wird gelesen …</p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="sv-reload" type="button">Aktualisieren</button>
                 </div>
@@ -494,7 +524,7 @@
 
             <article class="card" id="sv-job-card" hidden>
               <div class="card-head">
-                <div><h2 id="sv-job-title">Vorgang</h2><p class="sub" id="sv-job-sub"></p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pulse"/></svg></span><div class="ck-text"><h2 id="sv-job-title">Vorgang</h2><p class="sub" id="sv-job-sub"></p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="sv-cancel" type="button">Abbrechen</button>
                 </div>
@@ -504,7 +534,7 @@
 
             <article class="card">
               <div class="card-head">
-                <div><h2>Sicherungen</h2><p class="sub" id="sv-bk-sub"></p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-archive"/></svg></span><div class="ck-text"><h2>Sicherungen</h2><p class="sub" id="sv-bk-sub"></p></div></div>
               </div>
               <div id="sv-backups"></div>
               <p class="muted sv-hint sv-unfinished" id="sv-unfinished" hidden></p>
@@ -665,8 +695,8 @@
           <div class="ov-row co-main">
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-target.png" alt="">
-              <div class="card-head"><div><h2>Zieltemperatur</h2>
-                <p class="sub">worauf die Konsole gehalten wird</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-target"/></svg></span><div class="ck-text"><h2>Zieltemperatur</h2>
+                <p class="sub">worauf die Konsole gehalten wird</p></div></div></div>
               <div class="target-row">
                 <output id="target-out">-- °C</output>
                 <span class="target-hint" id="target-hint">wird geladen …</span>
@@ -689,8 +719,8 @@
             </article>
 
             <article class="card">
-              <div class="card-head"><div><h2>Betriebsart</h2>
-                <p class="sub">wie kräftig der Lüfter auf Wärme antwortet — <b>ändert nicht das Ziel</b></p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-sliders"/></svg></span><div class="ck-text"><h2>Betriebsart</h2>
+                <p class="sub">wie kräftig der Lüfter auf Wärme antwortet — <b>ändert nicht das Ziel</b></p></div></div></div>
               <div class="choices">
                 <label class="choice"><input type="radio" name="profile" value="comfort">
                   <span><b>Leise</b><small>Voller Lüfter erst 14 °C über dem Ziel,
@@ -733,7 +763,7 @@
           <div class="ov-row ov-mid">
             <article class="card">
               <div class="card-head">
-                <div><h2>Temperaturverlauf</h2><p class="sub">letzte 2 Minuten</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-thermo"/></svg></span><div class="ck-text"><h2>Temperaturverlauf</h2><p class="sub">letzte 2 Minuten</p></div></div>
                 <div class="legend">
                   <span><i class="s1"></i>Prozessor</span>
                   <span><i class="s2"></i>Hauptchip</span>
@@ -760,7 +790,7 @@
             </article>
 
             <article class="card">
-              <div class="card-head"><div><h2>Sensoren</h2><p class="sub">direkt von der Konsole</p></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-chip"/></svg></span><div class="ck-text"><h2>Sensoren</h2><p class="sub">direkt von der Konsole</p></div></div>
                 <div class="ov-chip" id="ov-chip" data-heat="ok" aria-hidden="true">
                   <img class="c-ok" src="/img/chip-ok.png" alt="">
                   <img class="c-warm" src="/img/chip-warm.png" alt="">
@@ -779,8 +809,8 @@
 
           <article class="card has-ico">
             <img class="card-ico" src="/img/icon-games.png" alt="">
-            <div class="card-head"><div><h2>Profile pro Spiel</h2>
-              <p class="sub">automatisch umschalten, sobald ein Spiel läuft</p></div></div>
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pad"/></svg></span><div class="ck-text"><h2>Profile pro Spiel</h2>
+              <p class="sub">automatisch umschalten, sobald ein Spiel läuft</p></div></div></div>
 
             <div id="rule-current" class="rule-current is-hidden">
               <div>
@@ -824,8 +854,8 @@
               <p class="sub">Regelzustand, Diagnose, Verläufe, Rohwerte und erweiterte Einstellungen — über den Schalter oben ein- und ausblendbar.</p>
             </div>
             <article class="card">
-              <div class="card-head"><div><h2>Aktueller Regelzustand</h2>
-                <p class="sub">was die Regelung gerade sieht</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pulse"/></svg></span><div class="ck-text"><h2>Aktueller Regelzustand</h2>
+                <p class="sub">was die Regelung gerade sieht</p></div></div></div>
               <div class="kv-grid">
                 <div><span>Durchschnittstemperatur</span><b id="c-avg">--</b></div>
                 <div><span>Tendenz</span><b id="c-trend">--</b></div>
@@ -847,8 +877,8 @@
             </article>
 
             <article class="card">
-              <div class="card-head"><div><h2>Lüfterdiagnose (Soll / Ist / Clamp)</h2>
-                <p class="sub">Regelziel, echte Drehzahl und Begrenzungen</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gauge"/></svg></span><div class="ck-text"><h2>Lüfterdiagnose (Soll / Ist / Clamp)</h2>
+                <p class="sub">Regelziel, echte Drehzahl und Begrenzungen</p></div></div></div>
               <div class="bar fan-compare">
                 <span id="fan-balance-target" class="s1 fade"></span>
                 <span id="fan-balance-measured" class="s3"></span>
@@ -886,7 +916,7 @@
             <div class="grid-2">
               <article class="card">
                 <div class="card-head">
-                  <div><h2>Lüfterdrehzahl</h2><p class="sub">letzte 2 Minuten</p></div>
+                  <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-fan"/></svg></span><div class="ck-text"><h2>Lüfterdrehzahl</h2><p class="sub">letzte 2 Minuten</p></div></div>
                   <div class="legend"><span><i class="s3"></i>gemessen</span></div>
                 </div>
                 <div class="chart-host" id="host-fan">
@@ -903,8 +933,8 @@
               </article>
 
               <article class="card">
-                <div class="card-head"><div><h2>Prozessor</h2>
-                  <p class="sub">Auslastung über alle acht Kerne</p></div></div>
+                <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-cpu"/></svg></span><div class="ck-text"><h2>Prozessor</h2>
+                  <p class="sub">Auslastung über alle acht Kerne</p></div></div></div>
                 <div class="cpu-block">
                   <div class="cpu-ring">
                     <svg viewBox="0 0 132 132" aria-hidden="true">
@@ -924,8 +954,8 @@
 
             <article class="card">
               <div class="card-head">
-                <div><h2>Langzeitverlauf</h2>
-                  <p class="sub" id="hist-range">letzte 24 Stunden</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-history"/></svg></span><div class="ck-text"><h2>Langzeitverlauf</h2>
+                  <p class="sub" id="hist-range">letzte 24 Stunden</p></div></div>
                 <div class="row-gap">
                   <span class="legend"><span><i class="s1"></i>Prozessor</span>
                     <span><i class="s2"></i>Hauptchip</span></span>
@@ -953,8 +983,8 @@
             </article>
 
             <article class="card">
-              <div class="card-head"><div><h2>Weitere Messwerte</h2>
-                <p class="sub">zusätzlich zu den Werten oben</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-grid"/></svg></span><div class="ck-text"><h2>Weitere Messwerte</h2>
+                <p class="sub">zusätzlich zu den Werten oben</p></div></div></div>
               <div class="sensor-grid" id="sensor-grid"></div>
             </article>
 
@@ -1027,31 +1057,31 @@
 
           <article class="card has-ico">
             <img class="card-ico" src="/img/chip-ok.png" alt="">
-            <div class="card-head"><div><h2>Konsole</h2>
-              <p class="sub">Hardware und Software</p></div></div>
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-console"/></svg></span><div class="ck-text"><h2>Konsole</h2>
+              <p class="sub">Hardware und Software</p></div></div></div>
             <div class="kv-list" id="sys-list"><p class="muted">wird gelesen …</p></div>
           </article>
 
           <div class="grid-2">
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-network.png" alt="">
-              <div class="card-head"><div><h2>Netzwerk</h2>
-                <p class="sub">Verbindung der Konsole</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-wifi"/></svg></span><div class="ck-text"><h2>Netzwerk</h2>
+                <p class="sub">Verbindung der Konsole</p></div></div></div>
               <div class="kv-list" id="net-list"><p class="muted">wird gelesen …</p></div>
             </article>
 
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-display.png" alt="">
-              <div class="card-head"><div><h2>Bildschirm</h2>
-                <p class="sub">angeschlossenes Anzeigegerät</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-display"/></svg></span><div class="ck-text"><h2>Bildschirm</h2>
+                <p class="sub">angeschlossenes Anzeigegerät</p></div></div></div>
               <div class="kv-list" id="disp-list"><p class="muted">wird gelesen …</p></div>
             </article>
           </div>
 
           <!-- Die Adresse dieser Seite als QR-Code für das Handy (qr.c, GET /api/v1/qr); app.js (loadQr) füllt es. -->
           <article class="card" id="qr-card">
-            <div class="card-head"><div><h2>Am Handy öffnen</h2>
-              <p class="sub">QR-Code mit der Adresse dieser Seite</p></div></div>
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-phone"/></svg></span><div class="ck-text"><h2>Am Handy öffnen</h2>
+              <p class="sub">QR-Code mit der Adresse dieser Seite</p></div></div></div>
             <div class="qr-box">
               <img id="qr-img" alt="QR-Code mit der Adresse der Weboberfläche" width="180" height="180" hidden>
               <div>
@@ -1065,15 +1095,15 @@
           <div class="grid-2">
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-ssd.png" alt="">
-              <div class="card-head"><div><h2>Speicherplatz</h2>
-                <p class="sub">interne SSD, Erweiterung und angeschlossene Medien</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-drive"/></svg></span><div class="ck-text"><h2>Speicherplatz</h2>
+                <p class="sub">interne SSD, Erweiterung und angeschlossene Medien</p></div></div></div>
               <div id="storage-list"><p class="muted">wird gelesen …</p></div>
             </article>
 
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-history.png" alt="">
-              <div class="card-head"><div><h2>Kühlleistung über die Zeit</h2>
-                <p class="sub">lässt die Kühlung nach?</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-trend"/></svg></span><div class="ck-text"><h2>Kühlleistung über die Zeit</h2>
+                <p class="sub">lässt die Kühlung nach?</p></div></div></div>
               <div id="health-box"><p class="muted">wird gelesen …</p></div>
               <p class="note">Verglichen werden nur Zeiten, in denen die Konsole
                 <b>ähnlich stark arbeitet, der Lüfter ähnlich schnell dreht und die Einstellungen unverändert sind</b>
@@ -1087,8 +1117,8 @@
 
           <article class="card has-ico">
             <img class="card-ico" src="/img/icon-gear2.png" alt="">
-            <div class="card-head"><div><h2>Zusatzabfragen</h2>
-              <p class="sub">einzeln zuschaltbar</p></div></div>
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-toggle"/></svg></span><div class="ck-text"><h2>Zusatzabfragen</h2>
+              <p class="sub">einzeln zuschaltbar</p></div></div></div>
             <label class="switch-row">
               <span><b>Spielerkennung</b><small>erkennt, welches Spiel gerade
                 läuft</small></span>
@@ -1151,8 +1181,8 @@
 
           <article class="card has-ico">
             <img class="card-ico" src="/img/icon-tiles.png" alt="">
-            <div class="card-head"><div><h2>Startmenü-Kachel</h2>
-              <p class="sub">Verknüpfung im PS5-Menü</p></div></div>
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-home"/></svg></span><div class="ck-text"><h2>Startmenü-Kachel</h2>
+              <p class="sub">Verknüpfung im PS5-Menü</p></div></div></div>
             <p class="muted" id="tile-msg">wird geprüft …</p>
             <div id="tile-setup">
               <div class="row-gap">
@@ -1182,16 +1212,16 @@
               <p class="sub">Rohwerte, Diagnose und Telemetrie — über den Schalter oben ein- und ausblendbar.</p>
             </div>
             <article class="card is-hidden" id="locale-expert-card">
-              <div class="card-head"><div><h2>Region, Sprache, Zeitzone (Experte)</h2>
-                <p class="sub">Rohwerte aus der Registry</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-globe"/></svg></span><div class="ck-text"><h2>Region, Sprache, Zeitzone (Experte)</h2>
+                <p class="sub">Rohwerte aus der Registry</p></div></div></div>
               <div class="kv-list" id="locale-expert-list"><p class="muted">wird gelesen …</p></div>
               <p class="note">Die Werte sind absichtlich roh. Je nach Firmware/Region
                 kann dieselbe Zahl unterschiedlich belegt sein.</p>
             </article>
 
             <article class="card is-hidden" id="firmware-expert-card">
-              <div class="card-head"><div><h2>Firmware-Interna (Experte)</h2>
-                <p class="sub">nur lesend, ohne Eingriff</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-layers"/></svg></span><div class="ck-text"><h2>Firmware-Interna (Experte)</h2>
+                <p class="sub">nur lesend, ohne Eingriff</p></div></div></div>
               <div class="kv-list" id="firmware-expert-list"><p class="muted">wird gelesen …</p></div>
               <p class="note">Legende: <b>Firmware (roh)</b> ist die interne Hex-ID,
                 <b>Firmware-Gruppe</b> ist die zugeordnete Offset-Familie,
@@ -1200,15 +1230,15 @@
 
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-cores.png" alt="">
-              <div class="card-head"><div><h2>Auslastung je Kern</h2>
-                <p class="sub">alle acht Kerne der CPU</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-bars"/></svg></span><div class="ck-text"><h2>Auslastung je Kern</h2>
+                <p class="sub">alle acht Kerne der CPU</p></div></div></div>
               <div id="core-list"><p class="muted">wird gelesen …</p></div>
             </article>
 
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-ram.png" alt="">
-              <div class="card-head"><div><h2>Arbeitsspeicher</h2>
-                <p class="sub">Belegung der Konsole und je Programm</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-ram"/></svg></span><div class="ck-text"><h2>Arbeitsspeicher</h2>
+                <p class="sub">Belegung der Konsole und je Programm</p></div></div></div>
               <div class="kv-grid" id="mem-list"><p class="muted">wird gelesen …</p></div>
               <div id="mem-procs"></div>
               <p class="note">Diese Angaben stehen im Systemprotokoll der Konsole,
@@ -1218,8 +1248,8 @@
 
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-shield.png" alt="">
-              <div class="card-head"><div><h2>Live-Status und Warnungen</h2>
-                <p class="sub">aktueller Betriebszustand in einem Blick</p></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pulse"/></svg></span><div class="ck-text"><h2>Live-Status und Warnungen</h2>
+                <p class="sub">aktueller Betriebszustand in einem Blick</p></div></div>
                 <button class="btn ghost" id="snapshot-export">Diagnose-Snapshot exportieren</button>
               </div>
               <div class="row-gap mt-12">
@@ -1262,8 +1292,8 @@
 
             <article class="card has-ico is-hidden" id="diag-master-card">
               <img class="card-ico" src="/img/icon-diag.png" alt="">
-              <div class="card-head"><div><h2>Diagnostik-Masteransicht (Experte)</h2>
-                <p class="sub">Prioritäten, Ursachen und nächste Maßnahmen</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-search"/></svg></span><div class="ck-text"><h2>Diagnostik-Masteransicht (Experte)</h2>
+                <p class="sub">Prioritäten, Ursachen und nächste Maßnahmen</p></div></div></div>
               <div class="kv-grid" id="diag-master-summary">
                 <div><span>Gesamtstatus</span><b id="diag-master-status">--</b></div>
                 <div><span>Kritisch</span><b id="diag-master-hot">0</b></div>
@@ -1278,8 +1308,8 @@
             </article>
 
             <article class="card">
-              <div class="card-head"><div><h2>Monitoring-Alarme</h2>
-                <p class="sub">eigene Schwellwerte, Verlauf und Sofortstatus</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-bell"/></svg></span><div class="ck-text"><h2>Monitoring-Alarme</h2>
+                <p class="sub">eigene Schwellwerte, Verlauf und Sofortstatus</p></div></div></div>
               <div class="kv-grid mt-10">
                 <div><span>Status</span><b id="mon-alert-state">aus</b></div>
                 <div><span>Ereignisse</span><b id="mon-alert-count">0</b></div>
@@ -1316,8 +1346,8 @@
 
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-apps2.png" alt="">
-              <div class="card-head"><div><h2>Assistent und Integrationen</h2>
-                <p class="sub">PS5Upload-inspirierte Komfortfunktionen</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-link"/></svg></span><div class="ck-text"><h2>Assistent und Integrationen</h2>
+                <p class="sub">PS5Upload-inspirierte Komfortfunktionen</p></div></div></div>
               <div class="kv-grid integ-grid">
                 <label><span>Warn-Countdown (Sekunden)</span><input type="number" id="s-warn-countdown" min="30" max="900"></label>
                 <label><span>Retention (Tage)</span><input type="number" id="s-retention-days" min="7" max="365"></label>
@@ -1349,8 +1379,8 @@
 
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-power.png" alt="">
-              <div class="card-head"><div><h2>Power-Telemetrie-Verlauf</h2>
-                <p class="sub">Sitzungshistorie aus Laufzeit, Idle-Status und Leistung (Grafik + Speicher)</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-bolt"/></svg></span><div class="ck-text"><h2>Power-Telemetrie-Verlauf</h2>
+                <p class="sub">Sitzungshistorie aus Laufzeit, Idle-Status und Leistung (Grafik + Speicher)</p></div></div></div>
               <div class="kv-grid" id="power-hist-summary">
                 <div><span>Samples</span><b id="power-hist-count">0</b></div>
                 <div><span>Leistung aktuell</span><b id="power-hist-now">--</b></div>
@@ -1368,8 +1398,8 @@
 
             <div class="grid-2">
               <article class="card">
-                <div class="card-head"><div><h2>Risikotelemetrie (auf Abruf)</h2>
-                  <p class="sub">CPU-Last, Kerne, Takt und SoC-Leistung</p></div>
+                <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-shield"/></svg></span><div class="ck-text"><h2>Risikotelemetrie (auf Abruf)</h2>
+                  <p class="sub">CPU-Last, Kerne, Takt und SoC-Leistung</p></div></div>
                   <button class="btn ghost" id="risky-refresh">Jetzt messen</button>
                 </div>
                 <div class="kv-grid mt-12">
@@ -1399,8 +1429,8 @@
 
               <article class="card has-ico">
                 <img class="card-ico" src="/img/icon-ssd2.png" alt="">
-                <div class="card-head"><div><h2>Laufwerkstelemetrie (optional)</h2>
-                  <p class="sub">gemountete /dev/daN-Laufwerke und Auslastung</p></div></div>
+                <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-drive"/></svg></span><div class="ck-text"><h2>Laufwerkstelemetrie (optional)</h2>
+                  <p class="sub">gemountete /dev/daN-Laufwerke und Auslastung</p></div></div></div>
                 <div id="drive-telemetry-list"><p class="muted">wird gelesen …</p></div>
                 <p class="note">Temperaturen sind auf vielen Firmwares aus diesem Kontext
                   nicht verfügbar. Wenn vorhanden, werden sie hier ergänzt.</p>
@@ -1409,8 +1439,8 @@
 
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-controller.png" alt="">
-              <div class="card-head"><div><h2>Controller-Diagnose</h2>
-                <p class="sub">passiver Backend-Check ohne Eingriff in den Controller</p></div></div>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pad"/></svg></span><div class="ck-text"><h2>Controller-Diagnose</h2>
+                <p class="sub">passiver Backend-Check ohne Eingriff in den Controller</p></div></div></div>
               <div class="kv-list" id="pad-diag-list"><p class="muted">wird gelesen …</p></div>
               <div class="kv-list is-hidden" id="controller-expert-list"></div>
               <div class="log log-tail-box is-hidden" id="diag-raw-box"></div>
@@ -1421,8 +1451,8 @@
 
             <div class="grid-2">
               <article class="card">
-                <div class="card-head"><div><h2>Grafikdaten</h2>
-                  <p class="sub">was diese Firmware zur GPU wirklich liefert</p></div></div>
+                <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gpu"/></svg></span><div class="ck-text"><h2>Grafikdaten</h2>
+                  <p class="sub">was diese Firmware zur GPU wirklich liefert</p></div></div></div>
                 <div class="kv-list" id="gpu-list"><p class="muted">wird gelesen …</p></div>
                 <p class="note">Einen eigenen GPU-Temperatursensor und eine GPU-Auslastung
                   meldet die PS5 nicht. Auf der PS5 Pro liegt SoC-Kanal 7 der
@@ -1433,8 +1463,8 @@
 
               <article class="card has-ico">
                 <img class="card-ico" src="/img/icon-sensors.png" alt="">
-                <div class="card-head"><div><h2>Rohsensoren (SoC-Kanäle)</h2>
-                  <p class="sub">letzte Messung je Kanal aus 8 Sensorlinien</p></div></div>
+                <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-chip"/></svg></span><div class="ck-text"><h2>Rohsensoren (SoC-Kanäle)</h2>
+                  <p class="sub">letzte Messung je Kanal aus 8 Sensorlinien</p></div></div></div>
                 <div class="kv-list" id="chanraw-list"><p class="muted">wird gelesen …</p></div>
                 <div class="note" id="chanraw-corr">Korrelation wird gelesen …</div>
                 <p class="note">Diese Kanäle sind absichtlich roh. Sie helfen bei der
@@ -1467,7 +1497,7 @@
             <article class="card has-ico">
               <img class="card-ico" src="/img/icon-log.png" alt="">
               <div class="card-head">
-                <div><h2>Ereignisse</h2><p class="sub" id="log-count">--</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-list"/></svg></span><div class="ck-text"><h2>Ereignisse</h2><p class="sub" id="log-count">--</p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="reload-log">Aktualisieren</button>
                   <button class="btn ghost" id="export-log">Exportieren</button>
@@ -1480,7 +1510,7 @@
           <div id="log-pane-klog" hidden>
             <article class="card">
               <div class="card-head">
-                <div><h2>Kernel-Log live</h2><p class="sub" id="kl-sub">wird geladen …</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-terminal"/></svg></span><div class="ck-text"><h2>Kernel-Log live</h2><p class="sub" id="kl-sub">wird geladen …</p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="kl-pause" type="button">Pause</button>
                   <button class="btn ghost" id="kl-clear" type="button">Leeren</button>
@@ -1511,7 +1541,7 @@
             <!-- Was im Ordner klog-live-log auf der Konsole liegt: gespeicherte Auszüge und Aufnahmen -->
             <article class="card" id="kl-files-card">
               <div class="card-head">
-                <div><h2>Auf der Konsole gespeichert</h2><p class="sub" id="kl-files-sub">wird gelesen …</p></div>
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-folder"/></svg></span><div class="ck-text"><h2>Auf der Konsole gespeichert</h2><p class="sub" id="kl-files-sub">wird gelesen …</p></div></div>
                 <div class="row-gap">
                   <button class="btn ghost" id="kl-files-reload" type="button">Aktualisieren</button>
                   <button class="btn ghost" id="kl-files-clear" type="button">Ordner leeren</button>
@@ -1784,6 +1814,26 @@
                 <p>exFAT2AMPR: zeigte die Liste, die „Automatisch“ beim Packen lose lässt, den Mitschnitt zur Profil-Erzeugung und die Pflege der Spiel-Plugins mit ihren Prüfsummen. Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/exFAT2AMPR/exfat2ampr" target="_blank" rel="noopener noreferrer">exfat2ampr</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <span class="cr-pic cr-initials" aria-hidden="true">LZ4</span>
+              <div class="cr-text">
+                <b>theghostonline</b> <a class="cr-login" href="https://github.com/theghostonline" target="_blank" rel="noopener noreferrer">@theghostonline</a>
+                <p>PS5 LZ4 Compression (Husam Osman): zeigte, welche Dateien beim Packen lose bleiben müssen, warum Spieldateien die Rechte 0777 brauchen und wie „Pakete prüfen“ ein gepacktes Spiel repariert. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/theghostonline/PS5-LZ4-Compression" target="_blank" rel="noopener noreferrer">PS5-LZ4-Compression</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <span class="cr-pic cr-initials" aria-hidden="true">ds</span>
+              <div class="cr-text">
+                <b>danthespal</b> <a class="cr-login" href="https://github.com/danthespal" target="_blank" rel="noopener noreferrer">@danthespal</a>
+                <p>MkPFS.CSharp: schrieb und testete die vier LZ4-Profile, die die App mitbringt (ASTRO BOT, EA Sports UFC 6, Insomniac-Engine, Unity-Engine). Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/danthespal/MkPFS.CSharp" target="_blank" rel="noopener noreferrer">MkPFS.CSharp</a>
                 </div>
               </div>
             </article>

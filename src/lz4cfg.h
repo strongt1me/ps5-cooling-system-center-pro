@@ -73,6 +73,8 @@ typedef struct {
 /* Loads a TOML profile. include_from / exclude_from lists are read from beside the file (never outside its folder).
    0, or -1 with the reason (and line number) in err. */
 int  lzc_load(const char *toml_path, lzc_cfg_t *c, char *err, size_t n);
+/* The same from n bytes in memory (a profile built into the app): include_from / exclude_from are refused there. */
+int  lzc_load_text(const char *text, size_t len, lzc_cfg_t *c, char *err, size_t n);
 /* The built-in profile: level 1..12 (1-5 LZ4 fast, 6-12 LZ4 HC), the block size shift 14..20, lanes 1..8. */
 void lzc_automatic(lzc_cfg_t *c, int level, unsigned block_shift, unsigned lanes);
 void lzc_free(lzc_cfg_t *c);
@@ -81,6 +83,9 @@ void lzc_free(lzc_cfg_t *c);
 int  lzc_glob(const char *pattern, const char *s);
 /* Is this path one that must never be packed (programs, system folders, the pack files themselves)? */
 int  lzc_protected(const char *rel);
+/* Is this a file the PS5 itself must find on disk (PlayGo markers, empty files, Ghost of Yotei's boot files)? Such files stay
+   loose whatever a profile says, and a set that holds one packed gets it written back by the check (lzp_restore_disk_files). */
+int  lzc_keep_on_disk(const char *rel, uint64_t size);
 /* The rule of a path: the last matching rule wins; the default rule when none does. *def is filled for that case.
    The automatic profile judges by code. */
 const lzc_rule_t *lzc_select(const lzc_cfg_t *c, const char *rel, lzc_rule_t *def);

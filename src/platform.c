@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -20,6 +21,7 @@
 
 #include <ps5/kernel.h>
 
+#include "ioerr.h"
 #include "ps5tm.h"
 
 
@@ -181,7 +183,28 @@ ps5tm_platform_page_stats(int *cpu_used, int *cpu_total,
 #define ICC_FAN_HW_MAX_C 91
 
 static atomic_int g_fan_available = 0;
-static char       g_fan_message[224] = "Lüftersteuerung noch nicht geprüft.";
+/* The fan's state as a sentence, read by the page and the log while the fan thread may write it: two buffers, the one not being
+   read is written and then made current, and only when the text changes (it is set on every fan write). Review 15.10.2026. */
+static char            g_fan_msg[2][224] = { "Lüftersteuerung noch nicht geprüft.", "" };
+static atomic_int      g_fan_msg_i = 0;
+static pthread_mutex_t g_fan_msg_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static void fan_msg(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void
+fan_msg(const char *fmt, ...) {
+  char t[224];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(t, sizeof(t), fmt, ap);
+  va_end(ap);
+  pthread_mutex_lock(&g_fan_msg_mu);
+  int cur = atomic_load(&g_fan_msg_i);
+  if(strcmp(g_fan_msg[cur], t)) {
+    memcpy(g_fan_msg[1 - cur], t, sizeof(t));
+    atomic_store(&g_fan_msg_i, 1 - cur);
+  }
+  pthread_mutex_unlock(&g_fan_msg_mu);
+}
 
 
 int
@@ -191,7 +214,7 @@ ps5tm_platform_fan_available(void) {
 
 const char *
 ps5tm_platform_fan_message(void) {
-  return g_fan_message;
+  return g_fan_msg[atomic_load(&g_fan_msg_i)];
 }
 
 
@@ -260,7 +283,7 @@ ps5tm_platform_set_fan_threshold(int temp_c, int *errno_out) {
     g_sim_threshold_c = temp_c;
   }
   atomic_store(&g_fan_available, 1);
-  snprintf(g_fan_message, sizeof(g_fan_message),
+  fan_msg(
            "Host-Test: ICC-Schreibzugriff simuliert.");
   return 0;
 #endif
@@ -270,10 +293,10 @@ ps5tm_platform_set_fan_threshold(int temp_c, int *errno_out) {
     int eno = errno;
     if(errno_out) *errno_out = eno;
     atomic_store(&g_fan_available, 0);
-    snprintf(g_fan_message, sizeof(g_fan_message),
+    fan_msg(
              "%s ist nicht zugänglich (errno %d: %s). kstuff muss geladen "
              "sein, damit der Lüfter gesteuert werden kann.",
-             ICC_FAN_DEVICE, eno, strerror(eno));
+             ICC_FAN_DEVICE, eno, ps5tm_io_strerror(eno));
     return -1;
   }
 
@@ -297,14 +320,14 @@ ps5tm_platform_set_fan_threshold(int temp_c, int *errno_out) {
   if(rc != 0) {
     if(errno_out) *errno_out = eno;
     atomic_store(&g_fan_available, 0);
-    snprintf(g_fan_message, sizeof(g_fan_message),
+    fan_msg(
              "ICC-ioctl 0x%lX abgelehnt (rc=%d, errno %d: %s).",
-             ICC_FAN_THRESHOLD_IOCTL, rc, eno, strerror(eno));
+             ICC_FAN_THRESHOLD_IOCTL, rc, eno, ps5tm_io_strerror(eno));
     return -1;
   }
 
   atomic_store(&g_fan_available, 1);
-  snprintf(g_fan_message, sizeof(g_fan_message), "Lüftersteuerung bereit.");
+  fan_msg( "Lüftersteuerung bereit.");
   return 0;
 }
 

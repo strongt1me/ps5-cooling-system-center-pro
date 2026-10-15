@@ -13,7 +13,7 @@
  * can swap one for the other without looking at which errno it is.
  *
  * The longest message built from this text is the job's error field; those buffers are sized for it
- * (gameconvert.c, gamecopy.c, savebackup.c, pkgsplit.c). A log line holds 191 bytes and cuts it off after the
+ * (gameconvert.c, gamecopy.c, savebackup.c, pkgsplit.c). A log line holds 383 bytes and may cut it off after the
  * first sentence, which is the one that names the system's own words. */
 #ifndef PS5TM_IOERR_H
 #define PS5TM_IOERR_H
@@ -47,7 +47,31 @@ static inline const char *
 ps5tm_io_strerror(int e) {
   if(ps5tm_io_lost(e)) return PS5TM_IO_LOST_TEXT;
   if(e == EIO) return PS5TM_IO_FAULT_TEXT;
-  return strerror(e);
+  /* German words for the errors a person meets most (review 15.10.2026: "No space left on device" reached the German page);
+     the system's own words stay in brackets, so that a report can still be looked up. */
+  switch(e) {
+  case ENOSPC:       return "Auf dem Laufwerk ist kein Platz mehr frei (No space left on device).";
+  case EDQUOT:       return "Der Speicherplatz dafür ist aufgebraucht (Disc quota exceeded).";
+  case EROFS:        return "Das Laufwerk ist schreibgeschützt eingehängt (Read-only file system).";
+  case EACCES:       return "Keine Berechtigung für diese Datei oder diesen Ordner (Permission denied).";
+  case EPERM:        return "Das ist hier nicht erlaubt (Operation not permitted).";
+  case EEXIST:       return "Eine Datei oder ein Ordner dieses Namens gibt es schon (File exists).";
+  case ENOENT:       return "Die Datei oder der Ordner ist nicht (mehr) da (No such file or directory).";
+  case ENOTDIR:      return "Ein Teil des Pfades ist kein Ordner (Not a directory).";
+  case EISDIR:       return "Das ist ein Ordner, keine Datei (Is a directory).";
+  case ENOTEMPTY:    return "Der Ordner ist nicht leer (Directory not empty).";
+  case ENAMETOOLONG: return "Der Name oder Pfad ist zu lang (File name too long).";
+  case EFBIG:        return "Die Datei ist zu groß für dieses Laufwerk; FAT32 nimmt keine Datei ab 4 GiB (File too large).";
+  case EMFILE:
+  case ENFILE:       return "Zu viele offene Dateien; bitte gleich noch einmal versuchen (Too many open files).";
+  case ENOMEM:       return "Zu wenig Arbeitsspeicher frei (Cannot allocate memory).";
+  case EXDEV:        return "Das geht nicht über zwei Laufwerke hinweg (Cross-device link).";
+  case EBUSY:        return "Die Datei oder das Laufwerk ist gerade in Benutzung (Device busy).";
+  case ETIMEDOUT:    return "Es kam keine Antwort rechtzeitig (Operation timed out).";
+  case ECANCELED:    return "Abgebrochen.";
+  case EINVAL:       return "Ein ungültiger Wert (Invalid argument).";
+  default:           return strerror(e);
+  }
 }
 
 #endif

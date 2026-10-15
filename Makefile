@@ -102,7 +102,7 @@ SRCS += src/imgjob.c
 SRCS += src/amprlib.c
 SRCS += src/lz4cfg.c src/lz4pack.c
 SRCS += src/trace.c src/plugins.c
-SRCS += src/ps4m_core.c src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c
+SRCS += src/ps4m_core.c src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_fw.c src/ps4m_origin.c
 SRCS += src/qr.c
 
 # ⚠ Die Kopfdateien gehören in die Abhängigkeiten.
@@ -135,6 +135,7 @@ GEN_SRCS += gen/pkginst_blob.c
 GEN_SRCS += gen/ampr_emu_blob.c
 GEN_SRCS += gen/playgo_blob.c
 GEN_SRCS += gen/dlc_blob.c
+GEN_SRCS += gen/lz4prof_blob.c
 
 # The home-screen tile as a folder: param.json, icon and pictures from
 # tile/sce_sys, about 1.7 MB. The app writes them to /user/app/<id>/sce_sys and
@@ -296,6 +297,10 @@ src/ps4m_build.c: gen/pdb_template.h
 
 gen/dlc_blob.c: $(DLC_FILES) tools/gen_emu_blob.py | gen
 	$(PYTHON) tools/gen_emu_blob.py $@ third_party/dlc_emu dlc
+
+# The tested LZ4 profiles (third_party/lz4_profiles, from LZ4 Compression 1.5.0), as text (src/imgjob_lz4.inc).
+gen/lz4prof_blob.c: $(wildcard third_party/lz4_profiles/*.toml) third_party/lz4_profiles/index.json tools/gen_lz4_profiles.py | gen
+	$(PYTHON) tools/gen_lz4_profiles.py $@ third_party/lz4_profiles
 
 gen/tile_pkg.c: $(TILE_PKG) gen/tile_pkg.stamp tools/gen_pkg_blob.py | gen
 	$(PYTHON) tools/gen_pkg_blob.py $@ $(TILE_PKG)

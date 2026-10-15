@@ -49,6 +49,8 @@ Menü beim Hochfahren, von dort führt „PS5 neu starten“ ganz normal zurück
 in der ersten knappen Sekunde zählt nicht, damit ein Doppelklick nichts auslöst; nach zehn
 Sekunden ohne zweiten Klick ist der Knopf wieder gewöhnlich.
 
+**Design.** Neben der Sprache wählst du eines von vier Designs: **Aktuell** (dunkelblau mit leuchtenden Rändern, leicht durchscheinend), **Hell** (gedämpftes Grau-Blau, blendet nicht), **Dunkel** (fast schwarz, ohne Leuchten) und **Optimal** (für Fernseher und PS5: kräftiger Kontrast, größere Schrift, ohne Durchscheinen und Schatten, am schnellsten gezeichnet). Jedes Gerät merkt sich seine Wahl selbst (im Browser), etwa „Optimal“ am Fernseher und „Hell“ am Handy.
+
 ## Die Seite „Spiele“
 
 **Woher die Liste kommt.** Aus der App-Datenbank der Konsole
@@ -336,7 +338,7 @@ als `libScePlayGo.sprx.orig`, Warnungen und Entfernen gelten wie bei der APR-EMU
 keine Rolle. Beide Dateien eines Spiels lassen sich unabhängig voneinander ändern; ein Stub im Emulator-Ordner von
 ShadowMountPlus (`/data/shadowmount/emus/libScePlayGo.sprx`) gewinnt auch hier.
 
-**Spiel-Plugins.** Die Zeile **Spiel-Plugins** hält die Ersatzmodule von drakmor im Ordner `fakelib` des Spiels auf dem neuesten Stand: den PlayGo-Stub (`libScePlayGo.sprx`, pgo_stub 0.6) und die DLC-Module (`libSceAppContent.sprx`, `libSceGameUpdate.sprx`, `libSceNpEntitlementAccess.sprx`, dlc_emu 0.3), die DLC aus der `dlc_emu.ini` des Spiels als gekauft zeigen.
+**Spiel-Plugins.** Die Zeile **Spiel-Plugins** hält die Ersatzmodule von drakmor im Ordner `fakelib` des Spiels auf dem neuesten Stand: den PlayGo-Stub (`libScePlayGo.sprx`, pgo_stub 0.6) und die DLC-Module (`libSceAppContent.sprx`, `libSceGameUpdate.sprx`, `libSceNpEntitlementAccess.sprx`, dlc_emu 0.3, Fassung „log“: Sie schreibt `/app0/dlc_emu.log` in das Spiel; die Fassung ohne Protokoll stürzte beim Spielstart ab und wird als „fehlerhafte Fassung“ ersetzt), die DLC aus der `dlc_emu.ini` des Spiels als gekauft zeigen.
 
 - Eine ältere Fassung (die App kennt sie an der Prüfsumme) wird ersetzt, die alte Datei bleibt als `.old`. Eine Datei in unbekannter Fassung bleibt unberührt.
 - Der PlayGo-Stub wird nie zu einem Spiel hinzugefügt, das keinen hat; das geht in der Zeile „PlayGo im Spiel“. Die DLC-Module kommen nur dazu, wenn im Spielordner eine `dlc_emu.ini` liegt (ohne sie würden sie die echten DLC verdecken).
@@ -386,6 +388,21 @@ Der Reiter **PS4 von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) dir
 - Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Ist PS4Mount als eigenes Payload (`ps4mount.elf`) schon geladen, bleibt der Schalter wirkungslos, bis es beendet ist (beide teilen sich den Port 9032).
 - Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. An einer PS5 Pro mit 12.00 ist der Einbau geprüft: PS4-Spiele vom USB-Laufwerk werden eingebunden und laufen. Er ist ausgeschaltet, bis man ihn einschaltet.
 
+**PKGs zurückverschieben** (seit PS4Mount 0.5.0): PS4Mount merkt sich in `ps4/CUSAxxxxx/origin.txt`, woher jede PKG kam.
+„Zurückverschieben“ bei einem Spiel, „Ausgewählte zurückverschieben“ oder „Alle Spiele zurückverschieben“ legt Spiel, Update,
+ältere Updates und Zusatzinhalte mit ihren ursprünglichen Namen an ihren alten Ort zurück und nimmt das Spiel aus der Bibliothek.
+Ein laufendes Spiel wird vorher geschlossen, auch ein PS5-Spiel. Fehlt ein Ordner, wird er angelegt; eine vorhandene Datei wird
+nie ersetzt (dann kommt „ (1)“ an den Namen). PKGs, die ältere Versionen verschoben haben, landen in der obersten Ebene als
+`CUSAxxxxx - Name - game.pkg`. Keine PKG wird gelöscht. Zurückverschobene PKGs nimmt die Suche nicht wieder auf, bis man
+„Zurückverschobene wieder aufnehmen“ wählt.
+
+- **Vor dem Ruhemodus PS4Mount-Spiele schließen.** Der Ruhemodus schaltet das Laufwerk ab; ein offenes Spiel kann danach nicht
+  mehr lesen und hängt.
+- Zwei oder mehr angeschlossene Laufwerke (auch Partitionen) können die Oberfläche der Konsole träge machen, mit oder ohne
+  PS4Mount. Dann nur ein Laufwerk mit einer Partition anschließen.
+- Ein laufendes Spiel kann höchstens etwa 30 Pakete nutzen (Spiel, Update und rund 29 Zusatzinhalte). Das ist eine Grenze der
+  Konsole, auch für installierte Spiele.
+
 ## LZ4-Asset-Packs: Schritt für Schritt (seit 12.10.2026)
 
 Ein **Asset-Pack** besteht aus wenigen Dateien (`ampr_assets-000.pak` und weitere, dazu `ampr_assets.index`). Die App packt die
@@ -413,12 +430,33 @@ schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes
    gehört dazu. **Im Spielordner packen** spart den meisten Platz; die Originale werden erst entfernt, wenn jede Datei Byte für
    Byte mit den Paketen verglichen ist, und bei jedem Fehler bleibt alles wie vorher. Die Wahl **Als neuen Ordner … daneben** lässt
    das Original unberührt, legt aber zwei Ordner mit derselben Titel-ID nebeneinander. ShadowMountPlus kann sich daran
-   verschlucken und das Spiel im Sekundentakt umhängen; nimm das Original vorher aus dem Suchpfad.
-4. **Pakete prüfen.** Liest jeden Block, entpackt ihn und vergleicht mit der CRC-Datei. Das zeigt, dass die Pakete heil sind,
-   nicht dass das Spiel sie richtig benutzt.
+   verschlucken und das Spiel im Sekundentakt umhängen; nimm das Original vorher aus dem Suchpfad. Gibt es für das Spiel ein
+   **getestetes Profil** (siehe unten), ist es schon gewählt.
+4. **Pakete prüfen.** Liest jeden Block, entpackt ihn und vergleicht mit der CRC-Datei. Danach richtet es, was gute Pakete
+   außerdem brauchen: Fehlt die APR-EMU, die Pakete liest, oder hat etwas sie ersetzt, kommt `0.4.2.1 test-pack` wieder hinein.
+   Dateien, die die PS5 auf der Platte sucht, aber nur in den Paketen liegen (von älteren Werkzeugen gepackt), holt es zurück.
+   Und es setzt die Rechte im Spielordner auf 0777. Was es gerichtet hat, steht unter **Repariert**. Neu packen ist dafür nicht
+   nötig. Das zeigt, dass die Pakete heil sind, nicht dass das Spiel sie richtig benutzt.
 5. **Starten und spielen.** Erst jetzt zeigt sich, ob es läuft. Spiele länger als ein paar Sekunden: Menü, ein Level, Laden und
    Speichern.
 6. **Läuft es nicht:** **LZ4 entpacken …** schreibt alle Dateien zurück, vergleicht sie und entfernt die Pakete.
+
+### Getestete Profile
+
+Die App bringt vier Profile mit, die danthespal geschrieben und an der Konsole getestet hat (veröffentlicht mit MkPFS.CSharp,
+mitgeliefert auch von LZ4 Compression): **ASTRO BOT**, **EA Sports UFC 6**, die **Insomniac-Engine** (getestet mit Marvel's
+Wolverine) und die **Unity-Engine** (getestet mit God of War Sons of Sparta). Passt eins zum Spiel, über die Titel-ID, den Namen
+oder den Aufbau der Dateien, zeigt die Zeile **✓ getestetes Profil**, und beim Packen ist es schon gewählt. Ein eigenes Profil
+für das Spiel (Dateiname beginnt mit der Titel-ID, etwa aus dem Mitschnitt) geht vor. Unter **Eigenes Profil** stehen die vier
+auch für andere Spiele zur Wahl. Jedes lässt Dateien lose, die es nicht nennt: Eine andere Fassung des Spiels packt damit
+weniger, bleibt aber sicher.
+
+### Was immer lose bleibt
+
+Gleich mit welchem Profil: Leere Dateien, die PlayGo-Marker (`cache_ps5/pgc_*_dummy_file`, `cache_ps5/playgo.pgm`) und die
+Startdateien, die Ghost of Yōtei vor dem schwarzen Bildschirm braucht, bleiben lose. Die PS5 sucht sie außerhalb des Spiels auf
+der Platte, wo die APR-EMU nicht hilft (gefunden für LZ4 Compression 1.4.3). Alles, was die App in einen Spielordner schreibt,
+bekommt die Rechte 0777, auch beim Kopieren, beim Entpacken eines Abbilds und im Dateimanager.
 
 ### Was „Automatisch“ lose lässt
 
@@ -442,6 +480,9 @@ Danach **Mitschnitt beenden**: Das entfernt `fakelib2` wieder. Ein Mitschnitt ze
 - **„mount flag / attribute error“** im Protokoll von ShadowMountPlus: Die Bibliothek lässt sich nicht laden, weil ihr das
   Ausführungsrecht fehlt (Modus 0644). Die App legt sie mit 0755 an. Hast du die Datei selbst kopiert, setze per FTP
   `SITE CHMOD 755`.
+- **SIGBUS oder CE-108255-1 gleich beim Start:** `eboot.bin` oder Module haben kein Ausführungsrecht, typisch nach einer Kopie
+  aus einem `.exfat`-Abbild (Dateien mit 0666, gesehen bei 007 First Light). **Pakete prüfen** setzt die Rechte im ganzen
+  Spielordner auf 0777.
 - **Es stürzt nach wenigen Sekunden ab, obwohl es ungepackt lief:** Das Spiel liest vermutlich Dateien, die die Pakete nicht
   bedienen, vor allem per **mmap** (in den Speicher eingeblendet) oder schreibend. Solche Dateien müssen lose bleiben. Benutze ein
   eigenes Profil (TOML, Ordner `LZ4_Profile`) und setze ans Ende eine `loose`-Regel für die Datei: Die letzte passende Regel
@@ -461,7 +502,9 @@ Danach **Mitschnitt beenden**: Das entfernt `fakelib2` wieder. Ein Mitschnitt ze
 - Solange ein Spiel gepackt ist, sind AMPR-Index und APR-EMU-Version gesperrt.
 - Vorbilder und Regeln: [drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (`docs/ASSET_PACK_WORKFLOW_EN.md`, GPL-3.0),
   [theghostonline/PS5-LZ4-Compression](https://github.com/theghostonline/PS5-LZ4-Compression) und
-  [danthespal/MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp).
+  [danthespal/MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp). Von LZ4 Compression 1.4.3 bis 1.5.0 (Husam Osman,
+  GPL-3.0) stammen die Liste der Dateien, die lose bleiben müssen, die Rechte 0777, die Reparatur beim Prüfen und die Auswahl
+  der getesteten Profile; nachgebaut, nicht kopiert.
 
 ## Dateien: der Dateimanager (seit 06.10.2026)
 

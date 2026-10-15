@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -354,6 +355,18 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
 }
 
 
+/* A config.json that cannot be read is put aside as config.json.bad-<time> instead of being overwritten by the next save: the
+   settings in it may still be saved by hand, and it shows what went wrong (review 15.10.2026). */
+static void
+config_keep_bad(const char *why) {
+  char bad[300];
+  snprintf(bad, sizeof(bad), "%s.bad-%lld", PS5TM_CONFIG_PATH, (long long)time(NULL));
+  if(rename(PS5TM_CONFIG_PATH, bad) == 0)
+    PS5TM_WARN("config_kept_bad", "Konfiguration unbrauchbar (%s): beiseitegelegt als %s, Standardwerte aktiv.", why, bad);
+  else
+    PS5TM_WARN("config_kept_bad", "Konfiguration unbrauchbar (%s), ließ sich nicht beiseitelegen (errno %d); Standardwerte aktiv.", why, errno);
+}
+
 int
 ps5tm_config_load(void) {
   ps5tm_config_lock();
@@ -362,6 +375,8 @@ ps5tm_config_load(void) {
 
   int migrated = 0;
   FILE *f = fopen(PS5TM_CONFIG_PATH, "r");
+  if(!f && errno != ENOENT)                              /* there, but not readable: not the same as "none yet" */
+    PS5TM_WARN("config_unreadable", "Konfiguration %s nicht lesbar (errno %d) – Standardwerte aktiv.", PS5TM_CONFIG_PATH, errno);
   if(!f) {
     /* The data directory has been renamed twice; read the old locations once
        so an existing install does not quietly fall back to defaults. Newest
@@ -386,8 +401,9 @@ ps5tm_config_load(void) {
   fseek(f, 0, SEEK_SET);
   if(n <= 0 || n > 65536) {
     fclose(f);
+    if(!migrated) config_keep_bad("ungültige Größe");
+    else PS5TM_WARN("config_invalid", "Konfigurationsdatei hat eine ungültige Größe.");
     ps5tm_config_unlock();
-    PS5TM_WARN("config_invalid", "Konfigurationsdatei hat eine ungültige Größe.");
     return -1;
   }
 
@@ -395,6 +411,7 @@ ps5tm_config_load(void) {
   if(!buf) {
     fclose(f);
     ps5tm_config_unlock();
+    PS5TM_WARN("config_no_memory", "Konfiguration: zu wenig Speicher zum Lesen – Standardwerte aktiv.");
     return -1;
   }
   size_t got = fread(buf, 1, (size_t)n, f);
@@ -404,9 +421,9 @@ ps5tm_config_load(void) {
   cJSON *root = cJSON_Parse(buf);
   free(buf);
   if(!root) {
+    if(!migrated) config_keep_bad("kein gültiges JSON");
+    else PS5TM_WARN("config_parse_failed", "Konfiguration konnte nicht gelesen werden – Standardwerte aktiv.");
     ps5tm_config_unlock();
-    PS5TM_WARN("config_parse_failed",
-               "Konfiguration konnte nicht gelesen werden – Standardwerte aktiv.");
     return -1;
   }
 

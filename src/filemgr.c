@@ -23,6 +23,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -617,13 +618,14 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
     return;
   }
   snprintf(tmp, sizeof(tmp), "%s" UPLOAD_EXT, real);
-  int out = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0666);
+  int out = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0777);          /* 0777 like a game file (lz4pack.h), as FTP does */
   if(out < 0) {
     char msg[500];
     snprintf(msg, sizeof(msg), "Die Datei ließ sich nicht anlegen: %s", io_words(errno));
     ps5tm_http_send_error(fd, 500, "create_failed", msg);
     return;
   }
+  (void)fchmod(out, 0777);
   ps5tm_powerguard_hold();
   char *buf = malloc(FM_BUF);
   size_t got = 0;
@@ -633,10 +635,16 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
     if(write(out, prefix, first) != (ssize_t)first) werr = errno ? errno : EIO;
     got = first;
   }
+  uint64_t t0 = ps5tm_mono_ms();
+  int too_slow = 0;
   while(!werr && got < total) {
     size_t want = total - got < FM_BUF ? total - got : FM_BUF;
     int r = read_some(fd, buf, want);
     if(r <= 0) break;
+    /* a sender that trickles a few bytes now and then would hold the upload and the rest-mode guard for good: after two minutes
+       at least 16 KB/s on average, else the upload ends (review 15.10.2026) */
+    uint64_t el = ps5tm_mono_ms() - t0;
+    if(el > 120000 && (uint64_t)got < (el / 1000) * 16384) { too_slow = 1; break; }
     ssize_t off = 0;
     while(off < r) {
       ssize_t k = write(out, buf + off, (size_t)(r - off));
@@ -647,14 +655,17 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
     got += (size_t)r;
   }
   free(buf);
+  if(!werr && got == total && fsync(out) != 0) werr = errno ? errno : EIO;   /* on the drive before it counts as saved */
   if(close(out) != 0 && !werr) werr = errno ? errno : EIO;
   ps5tm_powerguard_release();
   if(werr || got != total) {
     unlink(tmp);
     char msg[500];
     if(werr) snprintf(msg, sizeof(msg), "Schreiben ging nicht: %s", io_words(werr));
+    else if(too_slow) snprintf(msg, sizeof(msg), "Die Übertragung war zu langsam und wurde nach %zu von %zu Bytes beendet. Nichts wurde gespeichert.", got, total);
     else snprintf(msg, sizeof(msg), "Die Übertragung brach nach %zu von %zu Bytes ab; nichts wurde gespeichert.", got, total);
-    ps5tm_http_send_error(fd, 500, "upload_incomplete", msg);
+    PS5TM_WARN("files_upload_failed", "Dateien: Hochladen von %.120s gescheitert: %.200s", t, msg);
+    ps5tm_http_send_error(fd, werr ? 500 : 400, "upload_incomplete", msg);
     return;
   }
   /* the name may have been taken while the bytes came: then the upload stays beside it under its own name */
@@ -987,8 +998,10 @@ copy_file(const char *rs, const char *rt, const char *vs) {
   job_current(vs);
   int in = open(rs, O_RDONLY | O_NONBLOCK);
   if(in < 0) return errno;
-  int out = open(rt, O_WRONLY | O_CREAT | O_EXCL, 0666);
+  /* 0777 whatever the umask says: a copied game whose eboot.bin lacks the execute bit crashes (lz4pack.h) */
+  int out = open(rt, O_WRONLY | O_CREAT | O_EXCL, 0777);
   if(out < 0) { int e = errno; close(in); return e; }
+  (void)fchmod(out, 0777);
   int rc = 0;
   for(;;) {
     if(cancelled()) { rc = ECANCELED; break; }
@@ -1030,6 +1043,7 @@ copy_tree(const char *rs, const char *rt, const char *vs, dev_t dev, int depth) 
     return 0;
   }
   if(mkdir(rt, 0777) != 0) return errno;
+  (void)chmod(rt, 0777);
   DIR *d = opendir(rs);
   if(!d) return errno;
   struct dirent *e;
@@ -1070,7 +1084,15 @@ run_delete(fm_args_t *a) {
   char real[FM_PATH + 64], err[800] = "";
   for(unsigned i = 0; i < a->n; i++) {
     struct stat st;
-    if(real_path(a->src[i], real, sizeof(real)) != 0 || lstat(real, &st) != 0) continue;   /* gone already */
+    if(real_path(a->src[i], real, sizeof(real)) != 0) continue;
+    if(lstat(real, &st) != 0) {
+      if(errno == ENOENT) continue;                           /* gone already */
+      /* an unplugged stick (ENXIO, EIO) is no "deleted" (review 15.10.2026) */
+      snprintf(err, sizeof(err), "Beim Löschen von %.300s: %s", a->src[i], io_words(errno));
+      PS5TM_WARN("files_delete_failed", "Dateien: %.170s", err);
+      job_finish(FM_FAILED, err, NULL);
+      return;
+    }
     int rc = delete_tree(real, a->src[i], st.st_dev, 0, 1);
     if(rc) {
       if(rc == ECANCELED) {
@@ -1096,9 +1118,72 @@ run_delete(fm_args_t *a) {
   job_finish(FM_DONE, NULL, NULL);
 }
 
+/* After a move between drives: removes from the source exactly what the copy holds (same name, a file of the same size), then
+   the folders that became empty. What was made or changed in the source meanwhile (an upload, a renamed entry, a file that
+   grew) is not in the copy and stays; *kept counts it (review 15.10.2026: the source used to be walked anew and deleted
+   whole). s and d are PATH_MAX buffers that grow while going down. 0 or an errno. */
+static int
+delete_copied(char *s, size_t sl, char *d, size_t dl, int depth, unsigned *kept) {
+  if(depth > 64) return ELOOP;
+  DIR *dir = opendir(d);
+  if(!dir) return errno ? errno : EIO;
+  struct dirent *e;
+  int rc = 0;
+  while(!rc && (e = readdir(dir)) != NULL) {
+    if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+    size_t n = strlen(e->d_name);
+    if(sl + 1 + n >= PATH_MAX || dl + 1 + n >= PATH_MAX) { rc = ENAMETOOLONG; break; }
+    s[sl] = '/'; memcpy(s + sl + 1, e->d_name, n + 1);
+    d[dl] = '/'; memcpy(d + dl + 1, e->d_name, n + 1);
+    struct stat dst, sst;
+    if(lstat(d, &dst) != 0) rc = errno ? errno : EIO;
+    else if(lstat(s, &sst) != 0) { if(errno != ENOENT) rc = errno ? errno : EIO; }
+    else if(S_ISDIR(dst.st_mode) && S_ISDIR(sst.st_mode)) {
+      rc = delete_copied(s, sl + 1 + n, d, dl + 1 + n, depth + 1, kept);
+      if(!rc && rmdir(s) != 0) {
+        if(errno == ENOTEMPTY || errno == EEXIST) (*kept)++;
+        else rc = errno ? errno : EIO;
+      }
+    } else if(S_ISREG(dst.st_mode) && S_ISREG(sst.st_mode) && dst.st_size == sst.st_size) {
+      if(unlink(s) != 0) rc = errno ? errno : EIO;
+    } else (*kept)++;
+    s[sl] = 0;
+    d[dl] = 0;
+  }
+  closedir(dir);
+  return rc;
+}
+
+static int
+move_cleanup(const char *rs, const char *rt, unsigned *kept) {
+  struct stat ss, ts;
+  if(lstat(rs, &ss) != 0) return errno == ENOENT ? 0 : (errno ? errno : EIO);
+  if(lstat(rt, &ts) != 0) return errno ? errno : EIO;
+  if(!S_ISDIR(ss.st_mode)) {
+    if(S_ISREG(ss.st_mode) && S_ISREG(ts.st_mode) && ss.st_size == ts.st_size) return unlink(rs) == 0 ? 0 : (errno ? errno : EIO);
+    (*kept)++;
+    return 0;
+  }
+  char *s = malloc(PATH_MAX), *d = malloc(PATH_MAX);
+  int rc = ENOMEM;
+  if(s && d) {
+    snprintf(s, PATH_MAX, "%s", rs);
+    snprintf(d, PATH_MAX, "%s", rt);
+    rc = delete_copied(s, strlen(s), d, strlen(d), 0, kept);
+    if(!rc && rmdir(rs) != 0) {
+      if(errno == ENOTEMPTY || errno == EEXIST) (*kept)++;
+      else rc = errno ? errno : EIO;
+    }
+  }
+  free(s);
+  free(d);
+  return rc;
+}
+
 static void
 run_copy(fm_args_t *a, int move) {
   job_state(FM_COPYING);
+  unsigned move_kept = 0;                         /* entries the source got or changed meanwhile: left where they are */
   char rd[FM_PATH + 64], rs[FM_PATH + 64], rt[FM_PATH + 64], t[FM_PATH], err[800] = "";
   struct stat ds;
   if(real_path(a->dest, rd, sizeof(rd)) != 0 || stat(rd, &ds) != 0) {
@@ -1154,7 +1239,8 @@ run_copy(fm_args_t *a, int move) {
         job_finish(FM_FAILED, err, NULL);
         return;
       } else if(move) {
-        int drc = delete_tree(rs, a->src[i], ss.st_dev, 0, 0);
+        job_current(a->src[i]);
+        int drc = move_cleanup(rs, rt, &move_kept);
         if(drc) {
           snprintf(err, sizeof(err), "%.250s wurde kopiert, aber das Original ließ sich nicht ganz löschen: %s. Es liegt "
                    "jetzt an beiden Orten (das Original vielleicht nur noch zum Teil).", a->src[i], io_words(drc));
@@ -1190,6 +1276,12 @@ run_copy(fm_args_t *a, int move) {
   pthread_mutex_unlock(&g_lock);
   if(skipped)
     snprintf(note, sizeof(note), "%u Einträge wurden ausgelassen (Verknüpfungen, Gerätedateien oder ein anderes Laufwerk darin).", skipped);
+  if(move_kept) {
+    size_t nl = strlen(note);
+    snprintf(note + nl, sizeof(note) - nl, "%s%u Einträge sind während des Verschiebens im Original neu entstanden oder haben sich "
+             "geändert; sie blieben dort liegen.", nl ? " " : "", move_kept);
+    PS5TM_WARN("files_move_kept", "Dateien: %u Einträge blieben im Original, weil sie neu waren oder sich geändert hatten.", move_kept);
+  }
   PS5TM_INFO("files_copy_done", "Dateien: %u Einträge %s nach %.100s (%llu MB).", a->n, move ? "verschoben" : "kopiert",
              a->dest, (unsigned long long)(done >> 20));
   job_finish(FM_DONE, NULL, note);
@@ -1293,6 +1385,8 @@ start_job(fm_args_t *a, uint64_t bytes_total, uint64_t files_total, char *err, s
   pthread_attr_t at;
   pthread_attr_init(&at);
   pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+  /* copy_tree / delete_tree / count_tree recurse with a few KB per folder level (up to 64): never the small default stack */
+  pthread_attr_setstacksize(&at, 1024 * 1024);
   int rc = pthread_create(&th, &at, job_thread, a);
   pthread_attr_destroy(&at);
   if(rc != 0) {

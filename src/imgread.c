@@ -868,8 +868,13 @@ typedef struct {
   void *ctx;
   char *path;                /* the path being built, IMGR_PATH_MAX bytes on the heap */
   size_t len;
-  int depth, stopped, too_deep;
+  int depth, stopped, too_deep, too_many;
+  uint64_t visits, skipped;  /* entries seen; names that could not be taken (empty, with a slash, too long) */
 } walk_t;
+
+/* A game has a few hundred thousand files at most. An image whose folders point at the same subfolder again and again would
+   make the walk practically endless (2^depth visits): past this many entries it is broken (review 15.10.2026). */
+#define IMGR_WALK_MAX_ENTRIES 4000000u
 
 static int walk_dir(walk_t *w, const imgr_entry_t *dir);
 
@@ -877,8 +882,11 @@ static int
 walk_kid(const char *name, const imgr_entry_t *kid, void *ctx) {
   walk_t *w = ctx;
   size_t nl = strlen(name), keep = w->len;
-  /* a name that is empty, a dot, has a slash in it or does not fit is skipped: it could never be a path of the game */
-  if(nl == 0 || strchr(name, '/') || !strcmp(name, ".") || !strcmp(name, "..") || keep + 1 + nl >= IMGR_PATH_MAX) return 0;
+  /* a name that is empty, a dot, has a slash in it or does not fit is skipped: it could never be a path of the game; all but
+     the dots (which a folder of UFS lists itself) are counted, so that an unpack can say a file is missing */
+  if(!strcmp(name, ".") || !strcmp(name, "..")) return 0;
+  if(nl == 0 || strchr(name, '/') || keep + 1 + nl >= IMGR_PATH_MAX) { w->skipped++; return 0; }
+  if(++w->visits > IMGR_WALK_MAX_ENTRIES) { w->too_many = 1; w->stopped = 1; return 1; }
   imgr_entry_t *e = malloc(sizeof(*e));
   if(!e) { w->stopped = 1; return 1; }
   *e = *kid;
@@ -916,6 +924,12 @@ walk_dir(walk_t *w, const imgr_entry_t *dir) {
 
 int
 imgr_walk(imgr_t *r, int (*cb)(const imgr_entry_t *, void *), void *ctx) {
+  return imgr_walk2(r, cb, ctx, NULL);
+}
+
+int
+imgr_walk2(imgr_t *r, int (*cb)(const imgr_entry_t *, void *), void *ctx, uint64_t *skipped) {
+  if(skipped) *skipped = 0;
   if(!r || !r->fs->root || !r->fs->children) return -1;
   walk_t w;
   memset(&w, 0, sizeof(w));
@@ -927,9 +941,10 @@ imgr_walk(imgr_t *r, int (*cb)(const imgr_entry_t *, void *), void *ctx) {
   int rc = -1;
   if(r->fs->root(r->fs, root) == 0) {
     rc = walk_dir(&w, root);
-    if(rc == 0) rc = w.too_deep ? -1 : w.stopped ? 1 : 0;
+    if(rc == 0) rc = (w.too_deep || w.too_many) ? -1 : w.stopped ? 1 : 0;
     else rc = -1;
   }
+  if(skipped) *skipped = w.skipped;
   free(root);
   free(w.path);
   return rc;

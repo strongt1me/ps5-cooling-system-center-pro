@@ -21,6 +21,11 @@
 #define LZP_AMPR_INDEX   "ampr_emu.index"
 #define LZP_PART_SUFFIX  ".ps5cc-teil"
 
+/* Everything written into a game folder is 0777, set with fchmod / chmod so that the umask cannot narrow it: a game whose
+   eboot.bin or modules lack the execute bit crashes at the start (SIGBUS, CE-108255-1; found by LZ4 Compression 1.4.3 on
+   007 First Light, whose files came as 0666, read on 15.10.2026; the same as the 0644 APR-EMU file of Arkanoid, amprlib.c). */
+#define LZP_FILE_MODE    0777
+
 /* What the job shows while it works. All callbacks may be NULL. */
 typedef struct {
   void (*phase)(void *ctx, const char *text);
@@ -84,6 +89,16 @@ typedef struct { char **rel; size_t n; } lzp_list_t;
 int  lzp_list(const char *dir, lzp_list_t *out, char *err, size_t n);
 void lzp_list_free(lzp_list_t *l);
 int  lzp_list_has(const lzp_list_t *l, const char *rel);
+
+/* Repairs of the check (after LZ4 Compression 1.4.3, read on 15.10.2026). The files the PS5 must find on disk
+   (lzc_keep_on_disk) that a set made before that rule, or by another tool, holds only packed: *missing counts those not on
+   disk, and with repair each is written next to the packs from them (CRC-checked, 0777), *restored counts those. The manifest
+   stays as it is, so the game still reads its packed copy. 0, or -1 with err. */
+int  lzp_restore_disk_files(const char *dir, int repair, unsigned *missing, unsigned *restored, char *err, size_t n);
+
+/* Every folder and regular file under root (root itself too) made 0777 (LZP_FILE_MODE); links stay. *fixed counts what was
+   changed, *failed what could not be (a drive that keeps no modes, a read-only mount). */
+void lzp_fix_modes(const char *root, unsigned *fixed, unsigned *failed);
 
 /* Deletes the pack set of dir: the volumes, the manifest, the CRC and runtime sidecars. 0, or -1 with err. */
 int lzp_remove_set(const char *dir, char *err, size_t n);

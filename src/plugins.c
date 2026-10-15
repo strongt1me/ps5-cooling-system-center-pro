@@ -2,11 +2,17 @@
  *
  *   libScePlayGo.sprx                                  pgo_stub  every PlayGo chunk reported installed (embedded: 0.6)
  *   libSceAppContent.sprx, libSceGameUpdate.sprx,
- *   libSceNpEntitlementAccess.sprx                     dlc_emu   the DLC listed in the game's dlc_emu.ini (embedded: 0.3)
+ *   libSceNpEntitlementAccess.sprx                     dlc_emu   the DLC listed in the game's dlc_emu.ini (embedded: 0.3 "log")
+ *
+ * dlc_emu 0.3 "nolog" crashes the game at every start: its IPC out-descriptor is 16 bytes, the system writes 24, and in that
+ * build the 8 bytes past it are a saved register of the caller (measured on hardware by the author, fix 48efe06 of 29.09.2026,
+ * in the source only, no release yet). The "log" build of the same source keeps a dead local there and runs. So the app carries
+ * the "log" build (it writes /app0/dlc_emu.log), and a "nolog" 0.3 in a game counts as faulty and is replaced (15.10.2026).
  *
  * What is done, per file of the game's fakelib:
  *   current   the build of the app (or its log variant): nothing, only a missing execute bit is set
- *   older     an older release of the project (known by its SHA-256): replaced, the old copy stays as <name>.old
+ *   older     an older release of the project (known by its SHA-256), or one known to be faulty: replaced, the old copy stays
+ *             as <name>.old
  *   unknown   another build: left alone and reported
  *   missing   only the DLC modules, and only when the game has a dlc_emu.ini (without that file they would hide the real DLC)
  * The PlayGo stub is never added to a game that has none: it is for games that treat PlayGo content as missing, and a game
@@ -28,38 +34,39 @@
 #include "sha256.h"
 #include "third_party/cJSON.h"
 
-typedef struct { const char *version, *variant, *sha256; } release_t;
+typedef struct { const char *version, *variant, *sha256; int faulty; } release_t;
 
-/* every build drakmor published; the first "nolog" entry is the one the app carries */
+/* every build drakmor published; the first entry's version is the current one. faulty: a build of the current version that must
+   not stay in a game (see the top of the file) */
 static const release_t PLAYGO[] = {
-  { "0.6", "nolog", "f5fdb0ed6cc7413e6dcac79a62e0efd8cfbae04cca0bf932e7a741aed850d213" },
-  { "0.6", "log",   "7595924889d67c33149dc152903d2f2492abbc3e846196d536c4f16a7b5560f6" },
-  { "0.5", "nolog", "645caa464a7d28fab7019ba547b204ecc007f87ccec072d330eb2b72a3e9ddac" },
-  { "0.5", "log",   "305e6e117ca3a16cb6062007e3ddee7eb184ca19c3e353d5b12a6161bc92a3bd" },
-  { "0.4", "nolog", "a0f20f40107713523ba1a3a0281fb7c4e238b2b5d3fda9354119352d9393d2f0" },
-  { "0.4", "log",   "39c508a84208a81042dfe637619ece44a6b1d7f737076523aa8096e5eba3457f" },
+  { "0.6", "nolog", "f5fdb0ed6cc7413e6dcac79a62e0efd8cfbae04cca0bf932e7a741aed850d213", 0 },
+  { "0.6", "log",   "7595924889d67c33149dc152903d2f2492abbc3e846196d536c4f16a7b5560f6", 0 },
+  { "0.5", "nolog", "645caa464a7d28fab7019ba547b204ecc007f87ccec072d330eb2b72a3e9ddac", 0 },
+  { "0.5", "log",   "305e6e117ca3a16cb6062007e3ddee7eb184ca19c3e353d5b12a6161bc92a3bd", 0 },
+  { "0.4", "nolog", "a0f20f40107713523ba1a3a0281fb7c4e238b2b5d3fda9354119352d9393d2f0", 0 },
+  { "0.4", "log",   "39c508a84208a81042dfe637619ece44a6b1d7f737076523aa8096e5eba3457f", 0 },
 };
 static const release_t APPCONTENT[] = {
-  { "0.3", "nolog", "53e485e22970c693ab70c05bd78b8f627442ed41ca9a49692b38615046494a6b" },
-  { "0.3", "log",   "6ca6d0e10399422eeb6a4c1085d0ef6c166b8e0dacc1a458c17aac5408140c86" },
-  { "0.2", "nolog", "79f25d1ef1206e368e43f7e3316018ce14a114f8088dcb563c471293f88a2fe2" },
-  { "0.2", "log",   "064ee21a3c0110f7a5ab7f682ee3fc70efb831f2cccf041263e19ea9aca50c18" },
-  { "0.1", "nolog", "80af9b73508d2cdf318ca18d4d869ef276ad1fb96c550db0c58bcd68eac76cc3" },
-  { "0.1", "log",   "db7ce6d3c5766f1c8d7d405b1c5cd51a8a654ee26d079f0701bad25fab4a8513" },
+  { "0.3", "nolog", "53e485e22970c693ab70c05bd78b8f627442ed41ca9a49692b38615046494a6b", 1 },
+  { "0.3", "log",   "6ca6d0e10399422eeb6a4c1085d0ef6c166b8e0dacc1a458c17aac5408140c86", 0 },
+  { "0.2", "nolog", "79f25d1ef1206e368e43f7e3316018ce14a114f8088dcb563c471293f88a2fe2", 0 },
+  { "0.2", "log",   "064ee21a3c0110f7a5ab7f682ee3fc70efb831f2cccf041263e19ea9aca50c18", 0 },
+  { "0.1", "nolog", "80af9b73508d2cdf318ca18d4d869ef276ad1fb96c550db0c58bcd68eac76cc3", 0 },
+  { "0.1", "log",   "db7ce6d3c5766f1c8d7d405b1c5cd51a8a654ee26d079f0701bad25fab4a8513", 0 },
 };
 static const release_t GAMEUPDATE[] = {
-  { "0.3", "nolog", "1e31ddbe4809b7c5ec117e9b7e1227befe757c31d1f5f73e6c7d5a3d2d238973" },
-  { "0.3", "log",   "6a3e65faf26356393ff4d7e68b95df46c18521fe8d92c3b7920c8509227fdf15" },
-  { "0.2", "nolog", "2d66f588a19c461af572bc7b3138b4100120091fec42c4ce11370080b51dc127" },
-  { "0.2", "log",   "5f38340ffc0748a1277c14db59b213ef035ec5ed33c64be9a3e7542d815bf104" },
+  { "0.3", "nolog", "1e31ddbe4809b7c5ec117e9b7e1227befe757c31d1f5f73e6c7d5a3d2d238973", 1 },
+  { "0.3", "log",   "6a3e65faf26356393ff4d7e68b95df46c18521fe8d92c3b7920c8509227fdf15", 0 },
+  { "0.2", "nolog", "2d66f588a19c461af572bc7b3138b4100120091fec42c4ce11370080b51dc127", 0 },
+  { "0.2", "log",   "5f38340ffc0748a1277c14db59b213ef035ec5ed33c64be9a3e7542d815bf104", 0 },
 };
 static const release_t ENTITLEMENT[] = {
-  { "0.3", "nolog", "3f1826f20e174ff0f7aaa8d7f3f7e386dfcca1136c9e4c0e72a49e041c0b1488" },
-  { "0.3", "log",   "51871d03aef46163cf5e4165f8641284c509cf57d9baeeba222b168f83806eb3" },
-  { "0.2", "nolog", "5333b83a263fe5e8e2ae5ee53d43f0b11c5c519151e1aa367c22621e6020a0bd" },
-  { "0.2", "log",   "1fc44ef546aa621fef73a13eb1b2c74ac60db0d9f0cf2e680e2b733cb062d707" },
-  { "0.1", "nolog", "9315332b065a7039708f09bc489602d5ddedc0802690ec6192bbb3ba916d4b98" },
-  { "0.1", "log",   "98f8e33dd8d5276756a4c3f8b6f674eefec131cc5c2949b65acf9edad215ea74" },
+  { "0.3", "nolog", "3f1826f20e174ff0f7aaa8d7f3f7e386dfcca1136c9e4c0e72a49e041c0b1488", 1 },
+  { "0.3", "log",   "51871d03aef46163cf5e4165f8641284c509cf57d9baeeba222b168f83806eb3", 0 },
+  { "0.2", "nolog", "5333b83a263fe5e8e2ae5ee53d43f0b11c5c519151e1aa367c22621e6020a0bd", 0 },
+  { "0.2", "log",   "1fc44ef546aa621fef73a13eb1b2c74ac60db0d9f0cf2e680e2b733cb062d707", 0 },
+  { "0.1", "nolog", "9315332b065a7039708f09bc489602d5ddedc0802690ec6192bbb3ba916d4b98", 0 },
+  { "0.1", "log",   "98f8e33dd8d5276756a4c3f8b6f674eefec131cc5c2949b65acf9edad215ea74", 0 },
 };
 
 typedef struct {
@@ -69,18 +76,18 @@ typedef struct {
   int                     nknown;
   const ps5tm_emu_blob_t *blobs;         /* the table of the built-in files */
   const unsigned         *nblobs;
-  const char             *blob_nolog;    /* the built-in file names */
-  const char             *blob_log;      /* NULL when only nolog is built in */
+  const char             *blob;          /* the built-in file that goes into a game */
+  const char             *blob_log;      /* the built-in "log" build for a game that had one; NULL: always blob */
 } plugin_t;
 
 enum { P_PLAYGO, P_APPCONTENT, P_GAMEUPDATE, P_ENTITLEMENT, P_N };
 static const plugin_t PLUGINS[P_N] = {
   { "libScePlayGo.sprx", "pgo_stub", PLAYGO, 6, ps5tm_playgo_blobs, &ps5tm_playgo_blob_count,
     "libScePlayGo.sprx-0.6-nolog", "libScePlayGo.sprx-0.6-log" },
-  { "libSceAppContent.sprx", "dlc_emu", APPCONTENT, 6, ps5tm_dlc_blobs, &ps5tm_dlc_blob_count, "libSceAppContent.sprx-0.3-nolog", NULL },
-  { "libSceGameUpdate.sprx", "dlc_emu", GAMEUPDATE, 4, ps5tm_dlc_blobs, &ps5tm_dlc_blob_count, "libSceGameUpdate.sprx-0.3-nolog", NULL },
+  { "libSceAppContent.sprx", "dlc_emu", APPCONTENT, 6, ps5tm_dlc_blobs, &ps5tm_dlc_blob_count, "libSceAppContent.sprx-0.3-log", NULL },
+  { "libSceGameUpdate.sprx", "dlc_emu", GAMEUPDATE, 4, ps5tm_dlc_blobs, &ps5tm_dlc_blob_count, "libSceGameUpdate.sprx-0.3-log", NULL },
   { "libSceNpEntitlementAccess.sprx", "dlc_emu", ENTITLEMENT, 6, ps5tm_dlc_blobs, &ps5tm_dlc_blob_count,
-    "libSceNpEntitlementAccess.sprx-0.3-nolog", NULL },
+    "libSceNpEntitlementAccess.sprx-0.3-log", NULL },
 };
 
 typedef enum { S_ABSENT, S_CURRENT, S_OLDER, S_UNKNOWN, S_UNREADABLE } fstate_t;
@@ -123,6 +130,7 @@ typedef struct {
   fstate_t st;
   char     version[8];
   int      is_log;
+  int      faulty;       /* a build known to crash (dlc_emu 0.3 "nolog"): replaced like an older one */
   int      noexec;       /* the file has no execute bit: the loader refuses it */
 } pfile_t;
 
@@ -144,7 +152,8 @@ classify(const plugin_t *p, const char *path, pfile_t *out) {
     if(strcmp(hex, p->known[i].sha256)) continue;
     snprintf(out->version, sizeof(out->version), "%s", p->known[i].version);
     out->is_log = !strcmp(p->known[i].variant, "log");
-    out->st = !strcmp(p->known[i].version, p->known[0].version) ? S_CURRENT : S_OLDER;
+    out->faulty = p->known[i].faulty;
+    out->st = !out->faulty && !strcmp(p->known[i].version, p->known[0].version) ? S_CURRENT : S_OLDER;
     return;
   }
 }
@@ -204,7 +213,7 @@ state_name(const eval_t *ev, int i) {
   const pfile_t *f = &ev->f[i];
   if(f->st == S_ABSENT) return ev->need[i] ? "missing" : "not_needed";
   if(f->st == S_UNREADABLE) return "unknown";
-  if(f->st == S_OLDER) return "older";
+  if(f->st == S_OLDER) return f->faulty ? "faulty" : "older";
   if(f->st == S_UNKNOWN) return "unknown";
   return f->noexec ? "noexec" : "current";
 }
@@ -274,7 +283,7 @@ ps5tm_plugins_info(const char *id, int *http) {
     cJSON_AddBoolToObject(e, "needed", ev.need[i]);
     cJSON_AddItemToArray(files, e);
     if(strcmp(s, "not_needed")) any = 1;
-    if(!strcmp(s, "older") || !strcmp(s, "missing") || !strcmp(s, "noexec")) update = 1;
+    if(!strcmp(s, "older") || !strcmp(s, "faulty") || !strcmp(s, "missing") || !strcmp(s, "noexec")) update = 1;
     if(!strcmp(s, "unknown")) unknown = 1;
   }
   if(ev.amp.st == S_CURRENT && ev.amp.noexec) {
@@ -336,7 +345,7 @@ ps5tm_plugins_apply(const char *id, char *msg, size_t n, cJSON **detail) {
       continue;
     }
     if(f->st == S_ABSENT && !ev.need[i]) continue;
-    const char *want = (f->is_log && p->blob_log) ? p->blob_log : p->blob_nolog;
+    const char *want = (f->is_log && p->blob_log) ? p->blob_log : p->blob;
     const ps5tm_emu_blob_t *b = find_blob(p, want);
     if(!b) continue;
     uint8_t *data = NULL;

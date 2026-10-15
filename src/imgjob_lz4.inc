@@ -68,14 +68,32 @@ typedef struct {
   char path[PATH_MAX];
 } lz4prof_t;
 
+/* the tested profiles built into the app (gen/lz4prof_blob.c): id "builtin:<id>", the path is the id too */
+#define LZ4_BUILTIN "builtin:"
+
+static const ps5tm_lz4prof_t *
+lz4_builtin(const char *id) {
+  if(!id || strncmp(id, LZ4_BUILTIN, sizeof(LZ4_BUILTIN) - 1)) return NULL;
+  for(unsigned i = 0; i < ps5tm_lz4prof_count; i++)
+    if(!strcmp(ps5tm_lz4profs[i].id, id + sizeof(LZ4_BUILTIN) - 1)) return &ps5tm_lz4profs[i];
+  return NULL;
+}
+
 static unsigned
 lz4_profiles(lz4prof_t *out, unsigned max) {
+  unsigned n = 0;
+  for(unsigned i = 0; i < ps5tm_lz4prof_count && n < max; i++) {
+    lz4prof_t *o = &out[n++];
+    snprintf(o->name, sizeof(o->name), "%s", ps5tm_lz4profs[i].label);
+    snprintf(o->where, sizeof(o->where), "builtin");
+    snprintf(o->id, sizeof(o->id), LZ4_BUILTIN "%s", ps5tm_lz4profs[i].id);
+    snprintf(o->path, sizeof(o->path), "%s", o->id);
+  }
   static const struct { const char *where; const char *dir; } dirs[] = {
     { "app", PS5TM_DATA_DIR "/LZ4_Profile" },
     { "usb0", "/mnt/usb0/LZ4_Profile" }, { "usb1", "/mnt/usb1/LZ4_Profile" }, { "usb2", "/mnt/usb2/LZ4_Profile" },
     { "usb3", "/mnt/usb3/LZ4_Profile" }, { "usb4", "/mnt/usb4/LZ4_Profile" }, { "usb5", "/mnt/usb5/LZ4_Profile" },
     { "ext0", "/mnt/ext0/LZ4_Profile" }, { "ext1", "/mnt/ext1/LZ4_Profile" } };
-  unsigned n = 0;
   mkdir(PS5TM_DATA_DIR, 0777);
   mkdir(PS5TM_DATA_DIR "/LZ4_Profile", 0777);
   for(unsigned i = 0; i < sizeof(dirs) / sizeof(dirs[0]) && n < max; i++) {
@@ -143,7 +161,14 @@ lz4_last_set(const char *id, int bytewise, uint64_t files, uint64_t bytes) {
 
 static int
 lz4_fail(const char *err, int rc) {
-  finish(rc == ECANCELED || cancelled() ? IJ_CANCELLED : IJ_FAILED, err[0] ? err : "Das ging nicht.");
+  char m[300];
+  if(!err[0]) {                                          /* no reason given: at least the step it failed in */
+    pthread_mutex_lock(&g_lock);
+    snprintf(m, sizeof(m), "Gescheitert bei: %s", g_job.phase[0] ? g_job.phase : "Vorbereitung");
+    pthread_mutex_unlock(&g_lock);
+    err = m;
+  }
+  finish(rc == ECANCELED || cancelled() ? IJ_CANCELLED : IJ_FAILED, err);
   return -1;
 }
 
@@ -157,7 +182,7 @@ lz4_job_stats(const lzp_stats_t *s, uint64_t loose) {
   pthread_mutex_unlock(&g_lock);
 }
 
-/* the APR-EMU that reads LZ4 packs in the game: kept when there is one, else test-pack goes in (amprlib.c) */
+/* the APR-EMU that reads LZ4 packs in the game: kept when there is one (any build with the reader), else test-pack goes in (amprlib.c) */
 static int
 lz4_install_apr(const char *id, const char *root, int backport, char *why, size_t wn) {
   int http = 0;
@@ -165,7 +190,7 @@ lz4_install_apr(const char *id, const char *root, int backport, char *why, size_
   int have = 0;
   if(st) {
     const cJSON *ins = cJSON_GetObjectItem(st, "installed");
-    const cJSON *pk = ins ? cJSON_GetObjectItem(ins, "pack") : NULL;
+    const cJSON *pk = ins ? cJSON_GetObjectItem(ins, "reads_packs") : NULL;
     const cJSON *pr = ins ? cJSON_GetObjectItem(ins, "present") : NULL;
     have = cJSON_IsTrue(pk) && cJSON_IsTrue(pr) && !backport;
     cJSON_Delete(st);
@@ -190,8 +215,9 @@ static int
 cp_file(cp_t *c, const char *src, const char *dst, const struct stat *st) {
   int in = open(src, O_RDONLY);
   if(in < 0) { snprintf(c->why, sizeof(c->why), "Eine Datei ließ sich nicht lesen: %s", src + c->srclen + 1); return -1; }
-  int out = open(dst, O_WRONLY | O_CREAT | O_EXCL, 0666);
+  int out = open(dst, O_WRONLY | O_CREAT | O_EXCL, LZP_FILE_MODE);
   if(out < 0) { close(in); snprintf(c->why, sizeof(c->why), "Eine Datei ließ sich nicht anlegen (%s): %s", ps5tm_io_strerror(errno), dst + c->dstlen + 1); return -1; }
+  (void)fchmod(out, LZP_FILE_MODE);
   uint32_t crc = 0;
   uint64_t total = 0;
   for(;;) {
@@ -215,7 +241,12 @@ cp_file(cp_t *c, const char *src, const char *dst, const struct stat *st) {
   }
   close(in);
   in = -1;
-  if(fsync(out) != 0 || close(out) != 0) { out = -1; snprintf(c->why, sizeof(c->why), "Schreiben schlug fehl (%s): %s", ps5tm_io_strerror(errno), dst + c->dstlen + 1); goto bad; }
+  {
+    int werr = fsync(out) != 0 ? errno : 0;              /* closed in any case (review 15.10.2026) */
+    if(close(out) != 0 && !werr) werr = errno ? errno : EIO;
+    out = -1;
+    if(werr) { snprintf(c->why, sizeof(c->why), "Schreiben schlug fehl (%s): %s", ps5tm_io_strerror(werr), dst + c->dstlen + 1); goto bad; }
+  }
   out = -1;
   /* read back */
   int rb = open(dst, O_RDONLY);
@@ -255,17 +286,31 @@ cp_walk(cp_t *c, char *src, size_t sl, char *dst, size_t dl, int depth) {
   if(!d) { snprintf(c->why, sizeof(c->why), "Ein Ordner ließ sich nicht lesen: %s", src + c->srclen); c->rc = -1; return -1; }
   struct dirent *e;
   int rc = 0;
-  while((e = readdir(d))) {
+  for(;;) {
+    errno = 0;
+    if(!(e = readdir(d))) {
+      if(errno) { snprintf(c->why, sizeof(c->why), "Ein Ordner ließ sich nicht ganz lesen (%s): %s", ps5tm_io_strerror(errno), src + c->srclen); c->rc = -1; rc = -1; }
+      break;
+    }
     if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
     size_t n = strlen(e->d_name);
     if(sl + 1 + n >= PATH_MAX - 8 || dl + 1 + n >= PATH_MAX - 8) { snprintf(c->why, sizeof(c->why), "Ein Pfad ist zu lang: %s", e->d_name); c->rc = -1; rc = -1; break; }
     src[sl] = '/'; memcpy(src + sl + 1, e->d_name, n + 1);
     dst[dl] = '/'; memcpy(dst + dl + 1, e->d_name, n + 1);
     struct stat st;
-    if(lstat(src, &st) != 0) { src[sl] = 0; dst[dl] = 0; continue; }
+    if(lstat(src, &st) != 0) {
+      int le = errno;
+      if(le != ENOENT) {                                  /* gone meanwhile is fine; unreadable would leave the copy short */
+        snprintf(c->why, sizeof(c->why), "Eine Datei ließ sich nicht ansehen (%s): %s", ps5tm_io_strerror(le), src + c->srclen + 1);
+        c->rc = -1; rc = -1;
+      }
+      src[sl] = 0; dst[dl] = 0;
+      if(rc != 0) break;
+      continue;
+    }
     if(S_ISDIR(st.st_mode)) {
       if(mkdir(dst, 0777) != 0 && errno != EEXIST) { snprintf(c->why, sizeof(c->why), "Ein Ordner ließ sich nicht anlegen (%s): %s", ps5tm_io_strerror(errno), dst + c->dstlen + 1); c->rc = -1; rc = -1; }
-      else rc = cp_walk(c, src, sl + 1 + n, dst, dl + 1 + n, depth + 1);
+      else { (void)chmod(dst, LZP_FILE_MODE); rc = cp_walk(c, src, sl + 1 + n, dst, dl + 1 + n, depth + 1); }
     } else if(S_ISREG(st.st_mode)) {
       const char *rel = src + c->srclen + 1;
       if(!lzp_list_has(c->packed, rel)) rc = cp_file(c, src, dst, &st);
@@ -283,6 +328,8 @@ cp_walk(cp_t *c, char *src, size_t sl, char *dst, size_t dl, int depth) {
 
 static int
 lz4_make_cfg(const lz4arg_t *a, lzc_cfg_t *cfg, char *err, size_t en) {
+  const ps5tm_lz4prof_t *b = lz4_builtin(a->profile);
+  if(b) return lzc_load_text(b->text, b->size, cfg, err, en);
   if(a->profile[0]) return lzc_load(a->profile, cfg, err, en);
   lzc_automatic(cfg, a->level, 16, 1);
   if(!cfg->rules || !cfg->groups) { snprintf(err, en, "Kein Speicher."); return -1; }
@@ -316,6 +363,17 @@ lz4_free(const char *path) {
   struct statvfs sv;
   if(statvfs(path, &sv) != 0) return 0;
   return (uint64_t)sv.f_bavail * (sv.f_frsize ? sv.f_frsize : sv.f_bsize);
+}
+
+/* Takes the packs of a failed pack away again and says truthfully whether that worked (review 15.10.2026). */
+static const char *
+lz4_rollback(int copy, const char *tmp, const char *root) {
+  if(copy) { rm_tree(tmp, 0); return "die Pakete wurden wieder entfernt"; }
+  char e2[300] = "";
+  if(lzp_remove_set(root, e2, sizeof(e2)) == 0) return "die Pakete wurden wieder entfernt";
+  PS5TM_WARN("lz4_rollback_failed", "LZ4: Die Pakete in %.120s ließen sich nicht wieder entfernen: %.120s", root, e2);
+  return "ACHTUNG: Die Pakete ließen sich nicht ganz wieder entfernen (siehe Protokoll). Bitte „LZ4 entpacken“ wählen oder die "
+         "Dateien ampr_assets* im Spielordner löschen";
 }
 
 static void
@@ -390,6 +448,7 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   const char *outdir = root;
   if(copy) {
     if(mkdir(tmp, 0777) != 0) { char m[300]; snprintf(m, sizeof(m), "Der Zielordner lässt sich nicht anlegen: %s", ps5tm_io_strerror(errno)); lz4_fail(m, -1); goto out; }
+    (void)chmod(tmp, LZP_FILE_MODE);
     made_tmp = 1;
     outdir = tmp;
   }
@@ -404,10 +463,11 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   lzp_stats_t vs;
   if(lzp_verify(outdir, root, &vs, &ui, err, sizeof(err)) != 0) {                   /* byte for byte against the originals */
     int c = cancelled();
-    if(copy) rm_tree(tmp, 0); else lzp_remove_set(root, NULL, 0);
-    char m[600];
-    snprintf(m, sizeof(m), "%s%s", c ? "" : "Die Prüfung gegen die Originale ist fehlgeschlagen, die Pakete wurden wieder entfernt: ", err);
-    lz4_fail(c ? "Abgebrochen." : m, c ? ECANCELED : -1);
+    const char *rb = lz4_rollback(copy, tmp, root);
+    char m[900];
+    if(c) snprintf(m, sizeof(m), "Abgebrochen, %s.", rb);
+    else snprintf(m, sizeof(m), "Die Prüfung gegen die Originale ist fehlgeschlagen, %s: %s", rb, err);
+    lz4_fail(m, c ? ECANCELED : -1);
     goto out;
   }
   lz4_last_set(id, 1, vs.files_packed, vs.logical_bytes);
@@ -441,9 +501,9 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   set_phase("Die APR-EMU-Datei wird eingebaut");
   char awhy[300] = "";
   if(lz4_install_apr(id, copy ? tmp : root, backport, awhy, sizeof(awhy)) != 0) {
-    if(copy) rm_tree(tmp, 0); else lzp_remove_set(root, NULL, 0);
-    char m[500];
-    snprintf(m, sizeof(m), "Die APR-EMU-Datei, die Pakete liest, ließ sich nicht einbauen (%s). Die Pakete wurden wieder entfernt.", awhy[0] ? awhy : "ohne Angabe");
+    const char *rb = lz4_rollback(copy, tmp, root);
+    char m[800];
+    snprintf(m, sizeof(m), "Die APR-EMU-Datei, die Pakete liest, ließ sich nicht einbauen (%s), %s.", awhy[0] ? awhy : "ohne Angabe", rb);
     lz4_fail(m, -1);
     goto out;
   }
@@ -461,6 +521,18 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
       goto out;
     }
   }
+  {                                                            /* originals that came as 0666 (an .exfat copy) crash the packed game */
+    unsigned mf = 0, mfail = 0;
+    lzp_fix_modes(copy ? fin : root, &mf, &mfail);
+    if(mf) PS5TM_INFO("lz4_pack_modes", "LZ4-Pakete für %s: Rechte an %u Einträgen auf 0777 gesetzt.", id, mf);
+    if(mfail) {                                                /* said, not swallowed: such a file can crash the game */
+      PS5TM_WARN("lz4_pack_modes_failed", "LZ4-Pakete für %s: Rechte an %u Einträgen ließen sich nicht auf 0777 setzen.", id, mfail);
+      pthread_mutex_lock(&g_lock);
+      snprintf(g_job.note, sizeof(g_job.note), "Rechte an %u Dateien oder Ordnern ließen sich nicht auf 0777 setzen. Startet das Spiel nicht, "
+               "„Pakete prüfen“ wählen.", mfail);
+      pthread_mutex_unlock(&g_lock);
+    }
+  }
   ps5tm_library_forget();
   PS5TM_INFO("lz4_pack_done", "LZ4-Pakete für %s: %llu Dateien, %.1f → %.1f GB%s.", id, (unsigned long long)st.files_packed,
              (double)st.logical_bytes / 1e9, (double)st.stored_bytes / 1e9, copy ? " (in einem neuen Ordner)" : "");
@@ -472,6 +544,9 @@ out:
 
 /* ---------------------------------------------------------------- verify, unpack */
 
+/* Reads every block, then repairs what good packs need besides themselves (after LZ4 Compression 1.4.3, read on 15.10.2026):
+   the APR-EMU that reads them, the files the PS5 looks for on disk (a set made before that rule holds them only packed) and the
+   modes of the game folder (0777). The game is not running (checked at the start). */
 static void
 lz4_run_verify(const char *id, const char *root, const lz4arg_t *a) {
   (void)a;
@@ -481,6 +556,46 @@ lz4_run_verify(const char *id, const char *root, const lz4arg_t *a) {
   if(lzp_verify(root, NULL, &st, &ui, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
   lz4_job_stats(&st, 0);
   lz4_last_set(id, 0, st.files_packed, st.logical_bytes);
+
+  set_phase("Die APR-EMU-Datei wird geprüft");
+  char warn[640] = "", why[300] = "";
+  int apr = ps5tm_amprlib_pack_check(id, root, 1, warn, sizeof(warn), why, sizeof(why));
+  if(apr < 0 || apr == 2) {
+    char m[600];
+    snprintf(m, sizeof(m), apr < 0 ? "Die Pakete sind in Ordnung, aber die APR-EMU-Datei, die sie liest, ließ sich nicht einbauen: %s"
+                                   : "Die Pakete sind in Ordnung, aber das Spiel bekäme keine APR-EMU, die sie liest: %s", why[0] ? why : "ohne Angabe");
+    lz4_fail(m, -1);
+    return;
+  }
+  set_phase("Die Dateien, die die PS5 auf der Platte sucht, werden geprüft");
+  unsigned missing = 0, restored = 0;
+  if(lzp_restore_disk_files(root, 1, &missing, &restored, err, sizeof(err)) != 0) {
+    char m[600];
+    snprintf(m, sizeof(m), "Die Pakete sind in Ordnung, aber Dateien, die die PS5 auf der Platte sucht, ließen sich nicht aus ihnen zurückholen: %s", err);
+    lz4_fail(m, -1);
+    return;
+  }
+  set_phase("Die Rechte im Spielordner werden geprüft");
+  unsigned fixed = 0, failed = 0;
+  lzp_fix_modes(root, &fixed, &failed);
+  pthread_mutex_lock(&g_lock);
+  g_job.lz4_apr_fixed = apr == 1;
+  g_job.lz4_restored = restored;
+  g_job.lz4_modes = fixed;
+  snprintf(g_job.note, sizeof(g_job.note), "%s", warn);
+  if(failed) {
+    size_t nl = strlen(g_job.note);
+    snprintf(g_job.note + nl, sizeof(g_job.note) - nl, "%sRechte an %u Dateien oder Ordnern ließen sich nicht auf 0777 setzen.", nl ? " " : "", failed);
+  }
+  pthread_mutex_unlock(&g_lock);
+  if(failed)
+    PS5TM_WARN("lz4_verify_modes_failed", "LZ4-Pakete von %s: Rechte an %u Einträgen ließen sich nicht auf 0777 setzen.", id, failed);
+  if(apr == 1)
+    PS5TM_INFO("lz4_verify_repaired", "LZ4-Pakete von %s geprüft und repariert: APR-EMU neu eingebaut, %u Dateien zurück auf die Platte, Rechte an %u Einträgen gesetzt (%u ließen sich nicht ändern).",
+               id, restored, fixed, failed);
+  else if(restored || fixed)
+    PS5TM_INFO("lz4_verify_repaired", "LZ4-Pakete von %s geprüft und repariert: %u Dateien zurück auf die Platte, Rechte an %u Einträgen gesetzt (%u ließen sich nicht ändern).",
+               id, restored, fixed, failed);
   finish(IJ_DONE, NULL);
 }
 
@@ -648,6 +763,92 @@ ps5tm_lz4_ampr_import(const char *game_dir) {
   return lz4_ampr_import(game_dir);
 }
 
+/* ---------------------------------------------------------------- which tested profile fits a game (after LZ4 Compression 1.4.0) */
+
+/* one of the comma separated entries, upper and lower case alike */
+static int
+lz4_csv_has(const char *csv, const char *v) {
+  size_t n = strlen(v);
+  for(const char *p = csv; n && p && *p;) {
+    const char *c = strchr(p, ',');
+    size_t l = c ? (size_t)(c - p) : strlen(p);
+    if(l == n && !strncasecmp(p, v, n)) return 1;
+    p = c ? c + 1 : NULL;
+  }
+  return 0;
+}
+
+/* one of the comma separated words (4 letters or more) stands in text */
+static int
+lz4_csv_in(const char *csv, const char *text) {
+  char w[64];
+  for(const char *p = csv; text[0] && p && *p;) {
+    const char *c = strchr(p, ',');
+    size_t l = c ? (size_t)(c - p) : strlen(p);
+    if(l >= 4 && l < sizeof(w)) {
+      memcpy(w, p, l);
+      w[l] = 0;
+      if(strstr(text, w)) return 1;
+    }
+    p = c ? c + 1 : NULL;
+  }
+  return 0;
+}
+
+static int
+lz4_isdir(const char *p) {
+  struct stat st;
+  return stat(p, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+static int
+lz4_isfile(const char *p) {
+  struct stat st;
+  return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+/* The engines the profiles cover, by the file layout (told apart as LZ4 Compression 1.5.0 does it): Insomniac keeps toc, dag
+   and a folder d at the top; Unity has StreamingAssets next to its Data files, at the top or under Media. "" for neither. */
+static const char *
+lz4_engine(const char *root) {
+  char a[PATH_MAX], b[PATH_MAX], c[PATH_MAX];
+  snprintf(a, sizeof(a), "%s/toc", root);
+  snprintf(b, sizeof(b), "%s/dag", root);
+  snprintf(c, sizeof(c), "%s/d", root);
+  if(lz4_isfile(a) && lz4_isfile(b) && lz4_isdir(c)) return "insomniac";
+  static const char *const bases[] = { "", "/Media" };
+  static const char *const marks[] = { "Data/globalgamemanagers", "Data/data.unity3d", "Data/Managed/Metadata/global-metadata.dat" };
+  for(unsigned i = 0; i < 2; i++) {
+    snprintf(a, sizeof(a), "%s%s/StreamingAssets", root, bases[i]);
+    if(!lz4_isdir(a)) continue;
+    for(unsigned k = 0; k < 2; k++)
+      for(unsigned m = 0; m < 3; m++) {
+        snprintf(b, sizeof(b), "%s%s/%s", root, bases[k], marks[m]);
+        if(lz4_isfile(b)) return "unity";
+      }
+  }
+  return "";
+}
+
+/* The built-in profile for a game: by Title ID or a word of the name first (made and tested for that game), then by the
+   engine. *how: "title", "name" or "engine". NULL when none fits. */
+static const ps5tm_lz4prof_t *
+lz4_suggest(const char *id, const char *name, const char *root, const char **how) {
+  char nm[160];
+  size_t j = 0;
+  for(const char *s = name; *s && j + 1 < sizeof(nm); s++)                 /* letters and digits, lower case: "ASTRO BOT™" -> "astrobot" */
+    if(isalnum((unsigned char)*s) && (unsigned char)*s < 0x80) nm[j++] = (char)tolower((unsigned char)*s);
+  nm[j] = 0;
+  for(unsigned i = 0; i < ps5tm_lz4prof_count; i++)
+    if(lz4_csv_has(ps5tm_lz4profs[i].title_ids, id)) { *how = "title"; return &ps5tm_lz4profs[i]; }
+  for(unsigned i = 0; i < ps5tm_lz4prof_count; i++)
+    if(lz4_csv_in(ps5tm_lz4profs[i].names, nm)) { *how = "name"; return &ps5tm_lz4profs[i]; }
+  const char *eng = lz4_engine(root);
+  for(unsigned i = 0; eng[0] && i < ps5tm_lz4prof_count; i++)
+    if(!strcmp(ps5tm_lz4profs[i].engine, eng)) { *how = "engine"; return &ps5tm_lz4profs[i]; }
+  return NULL;
+}
+
 struct cJSON *
 ps5tm_lz4_info(const char *id, int *http) {
   *http = 200;
@@ -698,14 +899,34 @@ ps5tm_lz4_info(const char *id, int *http) {
   lz4prof_t *l = malloc(LZ4_PROF_MAX * sizeof(*l));
   if(l) {
     unsigned c = lz4_profiles(l, LZ4_PROF_MAX);
+    const char *own = NULL;                                                   /* a profile of the person for this game wins */
     for(unsigned i = 0; i < c; i++) {
       cJSON *e = cJSON_CreateObject();
       cJSON_AddStringToObject(e, "id", l[i].id);
       cJSON_AddStringToObject(e, "name", l[i].name);
       cJSON_AddStringToObject(e, "where", l[i].where);
+      const ps5tm_lz4prof_t *b = lz4_builtin(l[i].id);
+      if(b) {
+        cJSON_AddStringToObject(e, "tested", b->tested);
+        cJSON_AddStringToObject(e, "source", b->source);
+      } else if(!own && !strncasecmp(l[i].name, id, strlen(id))) own = l[i].id;
       cJSON_AddItemToArray(arr, e);
     }
+    if(own) cJSON_AddStringToObject(o, "own_profile", own);
     free(l);
+  }
+  const char *how = "";
+  const ps5tm_lz4prof_t *sg = lz4_suggest(id, li.name, li.path, &how);
+  if(sg) {
+    cJSON *s = cJSON_AddObjectToObject(o, "suggest");
+    char sid[64];
+    snprintf(sid, sizeof(sid), LZ4_BUILTIN "%s", sg->id);
+    cJSON_AddStringToObject(s, "id", sid);
+    cJSON_AddStringToObject(s, "label", sg->label);
+    cJSON_AddStringToObject(s, "tested", sg->tested);
+    cJSON_AddStringToObject(s, "source", sg->source);
+    cJSON_AddStringToObject(s, "how", how);
+    if(sg->engine[0]) cJSON_AddStringToObject(s, "engine", sg->engine);
   }
   return o;
 }

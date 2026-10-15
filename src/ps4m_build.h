@@ -11,6 +11,7 @@
 typedef struct {
     uint8_t *data;
     size_t len, cap;
+    int failed; /* (app) memory ran out: the content is incomplete and must not be written (PS4Mount PR #18) */
 } buf_t;
 
 void p4m_buf_put(buf_t *b, const void *data, size_t len);

@@ -102,7 +102,17 @@ ps5tm_hist_add(const char *kind, const char *title, const char *detail, const ch
   cJSON_AddStringToObject(o, "title", title ? title : "");
   if(detail && detail[0]) cJSON_AddStringToObject(o, "detail", detail);
   cJSON_AddStringToObject(o, "result", result ? result : "done");
-  if(error && error[0]) cJSON_AddStringToObject(o, "error", error);
+  if(error && error[0]) {
+    /* shortened (at a character's start) rather than the whole line dropped for being longer than HIST_LINE: the longest
+       errors were exactly the ones that vanished (review 15.10.2026) */
+    char e2[900];
+    snprintf(e2, sizeof(e2), "%s", error);
+    size_t el = strlen(e2);
+    if(el == sizeof(e2) - 1)
+      while(el && ((unsigned char)e2[el - 1] & 0xC0) == 0x80) e2[--el] = 0;
+    if(el && ((unsigned char)e2[el - 1] & 0xC0) == 0xC0) e2[--el] = 0;  /* a lead byte left without its rest */
+    cJSON_AddStringToObject(o, "error", e2);
+  }
   if(bytes) cJSON_AddNumberToObject(o, "bytes", (double)bytes);
   cJSON_AddNumberToObject(o, "ms", (double)dur_ms);
   char *txt = cJSON_PrintUnformatted(o);
@@ -131,7 +141,7 @@ ps5tm_hist_add(const char *kind, const char *title, const char *detail, const ch
     if(g_lines > HIST_KEEP + HIST_TRIM) trim_locked();
   } else if(!g_warned) {
     g_warned = 1;
-    PS5TM_WARN("history_write_failed", "Der Verlauf ließ sich nicht schreiben (%s).", HIST_FILE);
+    PS5TM_WARN("history_write_failed", "Der Verlauf ließ sich nicht schreiben (%s, errno %d).", HIST_FILE, errno);
   }
   pthread_mutex_unlock(&g_lock);
 }

@@ -180,6 +180,26 @@ lzc_protected(const char *rel) {
   return 0;
 }
 
+/* Files the PS5 looks for on disk outside the game process, where the APR-EMU cannot show packed files: PlayGo's chunk
+ * markers and the Sucker Punch boot files Ghost of Yotei needs to get past a black screen (PPSA26344 02.002.000). The list is
+ * that of LZ4 Compression 1.4.3 by Husam Osman (GPL-3.0, read on 15.10.2026; the files were found by edu-ruiz- on Reddit).
+ * Empty files stay too: PlayGo's language placeholders are empty. Upper and lower case do not count. */
+int
+lzc_keep_on_disk(const char *rel, uint64_t size) {
+  if(size == 0) return 1;
+  static const char *const keep[] = {
+    "cache_ps5/pgc_*_dummy_file", "cache_ps5/playgo.pgm", "cache_ps5/load_menu_catalog.log", "cache_ps5/all_shaders.texmeshman",
+    "cache_ps5/game.sprig.packman", "cache_ps5/game.sprig.texmeshman", "cache_ps5/pulse.sprig.texmeshman",
+    "sounds/scream/_generated/buss_config.bus", "sounds/scream/_generated/distance_model.dml",
+    "sounds/scream/_generated/group_mix.gmx", NULL };
+  char l[1100];
+  norm_path(rel, l, sizeof(l));
+  lower_copy(l, l, sizeof(l));
+  for(int i = 0; keep[i]; i++)
+    if(lzc_glob(keep[i], l)) return 1;
+  return 0;
+}
+
 /* Media that is already compressed: the automatic profile leaves it loose (packing it would only cost decoding). */
 static int
 media_ext(const char *rel) {
@@ -498,6 +518,8 @@ parse_value(ps_t *ps, tv_t *v) {
     skip_ws(ps, 1);
     if(ps->p >= ps->end) { tv_free(v); return perr(ps, "Eine Liste ist nicht geschlossen."); }
     if(*ps->p == ']') { ps->p++; break; }
+    /* refused before going down: "[[[[…" in a profile from a USB drive would otherwise recurse until the stack runs out */
+    if(*ps->p == '[' || *ps->p == '{') { tv_free(v); return perr(ps, "Verschachtelte Listen werden nicht unterstützt."); }
     tv_t e;
     if(parse_value(ps, &e) != 0) { tv_free(v); return -1; }
     if(e.t == TV_ARR) { tv_free(&e); tv_free(v); return perr(ps, "Verschachtelte Listen werden nicht unterstützt."); }
@@ -533,7 +555,7 @@ enum { SEC_ROOT, SEC_PACK, SEC_GROUP, SEC_RULE, SEC_RUNTIME, SEC_OTHER };
 typedef struct {
   lzc_cfg_t  *c;
   prule_t    *rules;  unsigned nrules;
-  char       *dir;                  /* the folder of the TOML file */
+  const char *dir;                  /* the folder of the TOML file; NULL for a built-in profile (no lists beside it) */
   char       *err; size_t errn;
   int         have_rt[4];
   int         have_payload;
@@ -758,6 +780,7 @@ static int
 load_pattern_files(pstate_t *st, char **names, unsigned n, const char *field, char ***arr, unsigned *cnt) {
   for(unsigned i = 0; i < n; i++) {
     const char *nm = names[i];
+    if(!st->dir) { snprintf(st->err, st->errn, "%s: Ein mitgeliefertes Profil liest keine Listen nach.", field); return -1; }
     if(nm[0] == '/' || nm[0] == '\\' || strstr(nm, "..") || strchr(nm, ':')) {
       snprintf(st->err, st->errn, "%s: \"%s\" muss ein Name neben der TOML-Datei sein.", field, nm);
       return -1;
@@ -798,18 +821,10 @@ read_key(ps_t *ps, char *key, size_t n) {
   return j ? 0 : perr(ps, "Ein Schlüssel wird erwartet.");
 }
 
-int
-lzc_load(const char *path, lzc_cfg_t *c, char *err, size_t errn) {
-  cfg_defaults(c);
-  char *buf = NULL;
-  size_t len = 0;
-  int rc = read_whole(path, &buf, &len, 8u << 20);
-  if(rc) { snprintf(err, errn, "Die Profildatei ließ sich nicht lesen: %s", strerror(rc)); return -1; }
+/* the parser; buf (len bytes, NUL after them) is freed here. dir: where include_from / exclude_from lists are, NULL for none */
+static int
+load_buf(char *buf, size_t len, const char *dir, lzc_cfg_t *c, char *err, size_t errn) {
   pstate_t st = { .c = c, .err = err, .errn = errn };
-  char dir[PATH_MAX];
-  snprintf(dir, sizeof(dir), "%s", path);
-  char *sl = strrchr(dir, '/');
-  if(sl) *sl = 0; else strcpy(dir, ".");
   st.dir = dir;
   ps_t ps = { buf, buf + len, 1, err, errn };
   int section = SEC_ROOT;
@@ -982,4 +997,28 @@ done:
     return -1;
   }
   return 0;
+}
+
+int
+lzc_load(const char *path, lzc_cfg_t *c, char *err, size_t errn) {
+  cfg_defaults(c);
+  char *buf = NULL;
+  size_t len = 0;
+  int rc = read_whole(path, &buf, &len, 8u << 20);
+  if(rc) { snprintf(err, errn, "Die Profildatei ließ sich nicht lesen: %s", strerror(rc)); return -1; }
+  char dir[PATH_MAX];
+  snprintf(dir, sizeof(dir), "%s", path);
+  char *sl = strrchr(dir, '/');
+  if(sl) *sl = 0; else strcpy(dir, ".");
+  return load_buf(buf, len, dir, c, err, errn);
+}
+
+int
+lzc_load_text(const char *text, size_t n, lzc_cfg_t *c, char *err, size_t errn) {
+  cfg_defaults(c);
+  char *buf = malloc(n + 1);
+  if(!buf) { snprintf(err, errn, "Kein Speicher."); return -1; }
+  memcpy(buf, text, n);
+  buf[n] = 0;
+  return load_buf(buf, n, NULL, c, err, errn);
 }

@@ -158,6 +158,47 @@ set_mtime(const char *path, int64_t mtime) {
   utimes(path, tv);
 }
 
+/* One packed file written to dst: as <dst>.ps5cc-teil first, CRC-checked block by block, 0777, then renamed, with the mtime of
+   the manifest. *rep counts the bytes not yet reported to the page. 0, -1 with err, or ECANCELED. */
+static int
+write_packed(set_t *s, const frec_t *f, const char *rel, const char *dst, lzp_stats_t *st, const lzp_ui_t *ui, uint64_t *rep,
+             char *err, size_t en) {
+  char parent[PATH_MAX], tmp[PATH_MAX + 16];
+  snprintf(parent, sizeof(parent), "%s", dst);
+  char *sl = strrchr(parent, '/');
+  if(sl) { *sl = 0; int mr = mkdir_p(parent); if(mr) { say(err, en, "Ein Ordner ließ sich nicht anlegen (%s): %s", strerror(mr), rel); return -1; } }
+  snprintf(tmp, sizeof(tmp), "%s%s", dst, LZP_PART_SUFFIX);
+  int ofd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, LZP_FILE_MODE);
+  if(ofd < 0) { say(err, en, "Eine Datei ließ sich nicht anlegen (%s): %s", strerror(errno), rel); return -1; }
+  (void)fchmod(ofd, LZP_FILE_MODE);
+  int rc = -1;
+  for(uint32_t k = 0; k < f->count; k++) {
+    size_t ci = f->first + k;
+    uint32_t rs = raw_of(f, k);
+    if(chunk_read(&s->m, &s->v, s->crcs, ci, rs, s->stored, s->raw, err, en) != 0) {
+      char t2[300];
+      snprintf(t2, sizeof(t2), "%s (Datei %s, Block %u)", err, rel, (unsigned)k);
+      snprintf(err, en, "%s", t2);
+      goto out;
+    }
+    if(write_all(ofd, s->raw, rs) != 0) { say(err, en, "Schreiben schlug fehl (%s): %s", strerror(errno), rel); goto out; }
+    st->logical_bytes += rs;
+    st->chunks++;
+    *rep += rs;
+    if(*rep >= (4u << 20)) { ui_work(ui, *rep); *rep = 0; if(cancelled(ui)) { say(err, en, "Abgebrochen."); rc = ECANCELED; goto out; } }
+  }
+  if(fsync(ofd) != 0 || close(ofd) != 0) { ofd = -1; say(err, en, "Schreiben schlug fehl (%s): %s", strerror(errno), rel); goto out; }
+  ofd = -1;
+  if(rename(tmp, dst) != 0) { say(err, en, "Eine Datei ließ sich nicht umbenennen (%s): %s", strerror(errno), rel); goto out; }
+  tmp[0] = 0;
+  set_mtime(dst, f->mtime);
+  rc = 0;
+out:
+  if(ofd >= 0) close(ofd);
+  if(tmp[0]) unlink(tmp);
+  return rc;
+}
+
 int
 lzp_unpack(const char *dir, const char *destroot, lzp_stats_t *st, const lzp_ui_t *ui, char *err, size_t en) {
   lzp_stats_t zs;
@@ -172,8 +213,7 @@ lzp_unpack(const char *dir, const char *destroot, lzp_stats_t *st, const lzp_ui_
   ui_total(ui, total);
   ui_files(ui, 0, nfiles);
   ui_phase(ui, "Die Dateien werden aus den Paketen geschrieben");
-  int rc = -1, ofd = -1;
-  char tmp[PATH_MAX + 16] = "";
+  int rc = -1;
   unsigned done = 0;
   uint64_t rep = 0;
   for(size_t id = 0; id < s.m.nf; id++) {
@@ -183,33 +223,8 @@ lzp_unpack(const char *dir, const char *destroot, lzp_stats_t *st, const lzp_ui_
     ui_current(ui, rel);
     char dst[PATH_MAX];
     if(snprintf(dst, sizeof(dst), "%s/%s", destroot, rel) >= (int)sizeof(dst) - 16) { say(err, en, "Ein Pfad ist zu lang: %s", rel); goto out; }
-    char parent[PATH_MAX];
-    snprintf(parent, sizeof(parent), "%s", dst);
-    char *sl = strrchr(parent, '/');
-    if(sl) { *sl = 0; int mr = mkdir_p(parent); if(mr) { say(err, en, "Ein Ordner ließ sich nicht anlegen (%s): %s", strerror(mr), rel); goto out; } }
-    snprintf(tmp, sizeof(tmp), "%s%s", dst, LZP_PART_SUFFIX);
-    ofd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if(ofd < 0) { say(err, en, "Eine Datei ließ sich nicht anlegen (%s): %s", strerror(errno), rel); tmp[0] = 0; goto out; }
-    for(uint32_t k = 0; k < f->count; k++) {
-      size_t ci = f->first + k;
-      uint32_t rs = raw_of(f, k);
-      if(chunk_read(&s.m, &s.v, s.crcs, ci, rs, s.stored, s.raw, err, en) != 0) {
-        char t2[300];
-        snprintf(t2, sizeof(t2), "%s (Datei %s, Block %u)", err, rel, (unsigned)k);
-        snprintf(err, en, "%s", t2);
-        goto out;
-      }
-      if(write_all(ofd, s.raw, rs) != 0) { say(err, en, "Schreiben schlug fehl (%s): %s", strerror(errno), rel); goto out; }
-      st->logical_bytes += rs;
-      st->chunks++;
-      rep += rs;
-      if(rep >= (4u << 20)) { ui_work(ui, rep); rep = 0; if(cancelled(ui)) { say(err, en, "Abgebrochen."); rc = ECANCELED; goto out; } }
-    }
-    if(fsync(ofd) != 0 || close(ofd) != 0) { ofd = -1; say(err, en, "Schreiben schlug fehl (%s): %s", strerror(errno), rel); goto out; }
-    ofd = -1;
-    if(rename(tmp, dst) != 0) { say(err, en, "Eine Datei ließ sich nicht umbenennen (%s): %s", strerror(errno), rel); goto out; }
-    tmp[0] = 0;
-    set_mtime(dst, f->mtime);
+    int wr = write_packed(&s, f, rel, dst, st, ui, &rep, err, en);
+    if(wr != 0) { rc = wr; goto out; }
     st->files_packed++;
     done++;
     ui_files(ui, done, nfiles);
@@ -217,10 +232,77 @@ lzp_unpack(const char *dir, const char *destroot, lzp_stats_t *st, const lzp_ui_
   ui_work(ui, rep);
   rc = 0;
 out:
-  if(ofd >= 0) close(ofd);
-  if(tmp[0]) unlink(tmp);
   set_close(&s);
   return rc;
+}
+
+/* ---------------------------------------------------------------- repairs of the check */
+
+int
+lzp_restore_disk_files(const char *dir, int repair, unsigned *missing, unsigned *restored, char *err, size_t en) {
+  *missing = *restored = 0;
+  set_t s;
+  if(set_open(dir, &s, 0, err, en) != 0) return -1;
+  lzp_stats_t st;
+  memset(&st, 0, sizeof(st));
+  lzp_ui_t quiet;
+  memset(&quiet, 0, sizeof(quiet));
+  uint64_t rep = 0;
+  int rc = -1;
+  for(size_t id = 0; id < s.m.nf; id++) {
+    const frec_t *f = &s.m.f[id];
+    if(!(f->flags & FF_PACKED)) continue;
+    const char *rel = file_rel(&s, id);
+    if(!lzc_keep_on_disk(rel, f->logical) || !safe_rel(rel)) continue;
+    char dst[PATH_MAX];
+    if(snprintf(dst, sizeof(dst), "%s/%s", dir, rel) >= (int)sizeof(dst) - 16) { say(err, en, "Ein Pfad ist zu lang: %s", rel); goto out; }
+    struct stat sst;
+    if(lstat(dst, &sst) == 0 && S_ISREG(sst.st_mode) && (uint64_t)sst.st_size == f->logical) continue;
+    (*missing)++;
+    if(!repair) continue;
+    if(write_packed(&s, f, rel, dst, &st, &quiet, &rep, err, en) != 0) goto out;
+    (*restored)++;
+  }
+  rc = 0;
+out:
+  set_close(&s);
+  return rc;
+}
+
+static void
+fix_modes_walk(char *path, size_t len, int depth, unsigned *fixed, unsigned *failed) {
+  struct stat st;
+  if(depth > 64 || lstat(path, &st) != 0) return;
+  if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) return;     /* links and the rest stay as they are */
+  if((st.st_mode & 07777) != LZP_FILE_MODE) {
+    struct stat now;                                            /* a drive without modes says yes and changes nothing */
+    if(chmod(path, LZP_FILE_MODE) == 0 && lstat(path, &now) == 0 && (now.st_mode & 07777) == LZP_FILE_MODE) (*fixed)++;
+    else (*failed)++;
+  }
+  if(!S_ISDIR(st.st_mode)) return;
+  DIR *d = opendir(path);
+  if(!d) return;
+  struct dirent *e;
+  while((e = readdir(d)) != NULL) {
+    if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+    size_t n = strlen(e->d_name);
+    if(len + 1 + n >= PATH_MAX) continue;
+    path[len] = '/';
+    memcpy(path + len + 1, e->d_name, n + 1);
+    fix_modes_walk(path, len + 1 + n, depth + 1, fixed, failed);
+    path[len] = 0;
+  }
+  closedir(d);
+}
+
+void
+lzp_fix_modes(const char *root, unsigned *fixed, unsigned *failed) {
+  *fixed = *failed = 0;
+  char *p = malloc(PATH_MAX);
+  if(!p) return;
+  snprintf(p, PATH_MAX, "%s", root);
+  fix_modes_walk(p, strlen(p), 0, fixed, failed);
+  free(p);
 }
 
 /* ---------------------------------------------------------------- remove the sources */
@@ -242,6 +324,7 @@ lzp_remove_sources(const char *dir, const char *root, int empty_dirs, lzp_stats_
     if(!(f->flags & FF_PACKED)) continue;
     const char *rel = m.str + f->path_off + 6;
     if(lzc_protected(rel)) { say(err, en, "Das Verzeichnis nennt eine geschützte Datei als gepackt: %s", rel); goto out; }
+    if(lzc_keep_on_disk(rel, f->logical)) continue;           /* the PS5 needs it on disk: it stays even when it is packed */
     char sp[PATH_MAX];
     snprintf(sp, sizeof(sp), "%s/%s", root, rel);
     struct stat sst;
@@ -256,6 +339,7 @@ lzp_remove_sources(const char *dir, const char *root, int empty_dirs, lzp_stats_
     const frec_t *f = &m.f[id];
     if(!(f->flags & FF_PACKED)) continue;
     const char *rel = m.str + f->path_off + 6;
+    if(lzc_keep_on_disk(rel, f->logical)) continue;
     char sp[PATH_MAX];
     snprintf(sp, sizeof(sp), "%s/%s", root, rel);
     if(unlink(sp) != 0) { say(err, en, "Eine Datei ließ sich nicht entfernen (%s): %s", strerror(errno), rel); goto out; }

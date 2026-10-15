@@ -13,6 +13,7 @@
 
 #include "third_party/libdeflate/libdeflate.h"
 #include "ps4m.h"
+#include "ioerr.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 
@@ -1335,7 +1336,7 @@ handle_library_cache_clear(int fd) {
   int rc = ps5tm_libcache_clear(&titles, &bytes);
   if(rc) {
     char msg[160];
-    snprintf(msg, sizeof(msg), "Der Ordner ließ sich nicht lesen: %s", strerror(rc));
+    snprintf(msg, sizeof(msg), "Der Ordner ließ sich nicht lesen: %s", ps5tm_io_strerror(rc));
     ps5tm_http_send_error(fd, 500, "clear_failed", msg);
     return;
   }
@@ -3294,7 +3295,8 @@ handle_saves_delete(int fd, const ps5tm_request_t *req) {
               *m = root ? cJSON_GetObjectItem(root, "mount") : NULL;
   char err[640] = "";
   int st = ps5tm_saves_delete_start(cJSON_IsString(u) ? u->valuestring : NULL, cJSON_IsString(i) ? i->valuestring : NULL,
-                                    cJSON_IsString(m) ? m->valuestring : "", err, sizeof(err));
+                                    cJSON_IsString(m) ? m->valuestring : "",
+                                    cJSON_IsTrue(root ? cJSON_GetObjectItem(root, "no_backup") : NULL), err, sizeof(err));
   cJSON_Delete(root);
   saves_started(fd, st, "saves_refused", err);
 }
@@ -3655,7 +3657,7 @@ receive_klog_save(int fd, const char *query, const char *prefix, size_t prefix_l
   int  ofd = ps5tm_klogfiles_create("klog", query_tz(query), name, sizeof(name));
   if(ofd < 0) {
     char msg[160];
-    snprintf(msg, sizeof(msg), "Die Datei ließ sich nicht anlegen: %s", strerror(-ofd));
+    snprintf(msg, sizeof(msg), "Die Datei ließ sich nicht anlegen: %s", ps5tm_io_strerror(-ofd));
     ps5tm_http_send_error(fd, 500, "write_failed", msg);
     return;
   }
@@ -3708,7 +3710,7 @@ handle_klog_files_clear(int fd) {
   int rc = ps5tm_klogfiles_clear(&deleted, &bytes, &kept);
   if(rc) {
     char msg[160];
-    snprintf(msg, sizeof(msg), "Der Ordner ließ sich nicht lesen: %s", strerror(rc));
+    snprintf(msg, sizeof(msg), "Der Ordner ließ sich nicht lesen: %s", ps5tm_io_strerror(rc));
     ps5tm_http_send_error(fd, 500, "clear_failed", msg);
     return;
   }
@@ -4203,7 +4205,8 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
-  /* PS4Mount inside the app (ps4m_core.c): GET the list and state, POST {action: enable|disable|scan|add|remove|config, ...}. */
+  /* PS4Mount inside the app (ps4m_core.c): GET the list and state,
+     POST {action: enable|disable|scan|add|remove|restore|restore_all|restored_forget|config, ...}. */
   if(!strcmp(req->path, "/api/v1/ps4mount")) {
     if(is_get) {
       char *s = ps4m_state_json();
@@ -4236,9 +4239,29 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
         }
       }
       enc[o] = 0;
-      snprintf(form, sizeof(form), "batch=%d&batch_size=%d&dlc=%d&paths=%s",
-               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? (int)js->valuedouble : 5, cJSON_IsTrue(jd) ? 1 : 0, enc);
+      /* restore_batch (since 0.5.0): games per group when moving pkgs back; left out, the module keeps its value */
+      const cJSON *jr = cJSON_GetObjectItem(b, "restore_batch");
+      char rb[32] = "";
+      if(cJSON_IsNumber(jr)) snprintf(rb, sizeof(rb), "&restore_batch=%d", (int)jr->valuedouble);
+      snprintf(form, sizeof(form), "batch=%d&batch_size=%d&dlc=%d%s&paths=%s",
+               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? (int)js->valuedouble : 5, cJSON_IsTrue(jd) ? 1 : 0, rb, enc);
       rc = ps4m_do_config(form, msg, sizeof(msg));
+    } else if(!strcmp(action, "restore") && cJSON_IsArray(cJSON_GetObjectItem(b, "ids"))) {
+      /* several games at once (since 0.5.0): {"action":"restore","ids":["CUSA…",…]}; the module checks each title id */
+      static char ids[256 * 10 + 1];
+      static pthread_mutex_t ids_mu = PTHREAD_MUTEX_INITIALIZER;
+      pthread_mutex_lock(&ids_mu);
+      size_t used = 0;
+      int bad = 0;
+      const cJSON *e;
+      cJSON_ArrayForEach(e, cJSON_GetObjectItem(b, "ids")) {
+        if(!cJSON_IsString(e) || strlen(e->valuestring) != 9 || used + 10 >= sizeof(ids)) { bad = 1; break; }
+        used += (size_t)snprintf(ids + used, sizeof(ids) - used, "%s%s", used ? "," : "", e->valuestring);
+      }
+      ids[used] = 0;
+      if(bad) snprintf(msg, sizeof(msg), "Ungültige Liste von Titel-IDs");
+      else rc = ps4m_do_action("restore", ids, msg, sizeof(msg));
+      pthread_mutex_unlock(&ids_mu);
     } else {
       rc = ps4m_do_action(action, id, msg, sizeof(msg));
     }
@@ -4280,6 +4303,23 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     snprintf(url, sizeof(url), "http://127.0.0.1:%d", PS5TM_TILE_DEEPLINK_PORT);
     int rc = ps5tm_open_ui(url);
     ps5tm_http_send_json(fd, rc == 0 ? 200 : 503, rc == 0 ? "{\"ok\":true}" : "{\"ok\":false}");
+    return;
+  }
+  /* A script error of the page (window.onerror): into the log, so that a dead button in the PS5's browser leaves a trace
+     (review 15.10.2026). The page sends at most a few a minute; the text is plain data and shortened. */
+  if(!strcmp(req->path, "/api/v1/log/client")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jm = b ? cJSON_GetObjectItem(b, "msg") : NULL, *jw = b ? cJSON_GetObjectItem(b, "where") : NULL;
+    static uint64_t last_ms;
+    static unsigned in_window;
+    uint64_t now = ps5tm_mono_ms();
+    if(now - __atomic_load_n(&last_ms, __ATOMIC_RELAXED) > 60000) { __atomic_store_n(&last_ms, now, __ATOMIC_RELAXED); __atomic_store_n(&in_window, 0, __ATOMIC_RELAXED); }
+    if(__atomic_add_fetch(&in_window, 1, __ATOMIC_RELAXED) <= 10 && cJSON_IsString(jm))
+      PS5TM_WARN("ui_error", "Fehler in der Weboberfläche (%s, %.60s): %.150s", req->peer, cJSON_IsString(jw) ? jw->valuestring : "?",
+                 jm->valuestring);
+    cJSON_Delete(b);
+    ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
     return;
   }
   /* The plugins of a game (plugins.c): GET ?id= the state, POST {id, action: apply} brings them up to date. */

@@ -32,16 +32,16 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   Ordner `/data/PS5-Cooling-Center/PlayGo` oder in ein Spiel (`src/amprlib.c`). Quelltext der Programme:
   <https://github.com/drakmor/pgo_stub>.
 - **dlc_emu** (drakmor, GPL-3.0): Drei Bauten der DLC-Module (`libSceAppContent.sprx`, `libSceGameUpdate.sprx`,
-  `libSceNpEntitlementAccess.sprx`, Fassung 0.3, „nolog“, siehe `third_party/dlc_emu/ORIGIN.md`) sind gepackt in die App
+  `libSceNpEntitlementAccess.sprx`, Fassung 0.3, „log“, siehe `third_party/dlc_emu/ORIGIN.md`) sind gepackt in die App
   eingebettet; sie kommen nur in ein Spiel, dessen Ordner eine `dlc_emu.ini` enthält (`src/plugins.c`). Quelltext der Programme:
   <https://github.com/drakmor/dlc_emu>.
 - **ps5-native-app-boilerplate** (BlackBearReloaded, GPL-3.0-or-later): Für die Starter-Kachel (`starter/`) sind das Linker-Skript
   (`starter/title/title.ld`), die Symboltabelle (`starter/title/symbols.map`) und `starter/sce_module/libc.prx` (Kompatibilitäts-Stubs
   und Startcode, kein Sony-Code, siehe `starter/sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt. <https://github.com/BlackBearReloaded/ps5-native-app-boilerplate>
-- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.4.4): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
+- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.5.0): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
-  (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
+  (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
   Vorlagen unter `third_party/ps4mount/`. Der Schlüssel in `src/ps4m_keys.h` stammt aus LibOrbisPkg (maxton, LGPL-3.0). Quelltext der
   Vorlage: <https://github.com/gasb07/ps4mount>.
@@ -52,6 +52,15 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 - **ampr_emu, LZ4-Pakete** (drakmor, GPL-3.0): Format und Regeln der LZ4-Pakete (AMPRPAK4, AMPRDAT3, AMPRCRC1, die TOML-Profile) sind ein
   C-Nachbau von `tools/ampr_pack.py` und `ampr_pack_format.py` (`src/lz4pack.c`, `src/lz4cfg.c`); gelesen am 12.10.2026 in
   <https://github.com/drakmor/ampr_emu> (`docs/ASSET_PACKS.md`). Gegenprobe in beide Richtungen mit dessen Python-Werkzeug.
+- **Getestete LZ4-Profile** (danthespal, GPL-3.0, veröffentlicht mit MkPFS.CSharp): `astrobot.toml`, `ufc6-PPSA23566.toml`,
+  `insomniac.toml` und `unity.toml` sind unverändert eingebettet (`third_party/lz4_profiles/`, `gen/lz4prof_blob.c`), übernommen aus
+  PS5 LZ4 Compression 1.5.0 samt dessen Liste `index.json` (zwei Anzeigenamen eingedeutscht). Herkunft und Prüfsummen:
+  `third_party/lz4_profiles/ORIGIN.md`. <https://github.com/danthespal/MkPFS.CSharp>
+- **PS5 LZ4 Compression** 1.4.3–1.5.0 (theghostonline / Husam Osman, GPL-3.0-or-later): Vorbild für die Dateien, die immer lose
+  bleiben (PlayGo-Marker, leere Dateien, die Startdateien von Ghost of Yōtei, gefunden von edu-ruiz-), für die Rechte 0777 aller
+  geschriebenen Spieldateien (SIGBUS/CE-108255-1, gemeldet von OmgWhatIsThisss), für die Reparatur beim Prüfen der Pakete und für
+  die Auswahl eines getesteten Profils nach Titel-ID, Name oder Engine (`src/lz4cfg.c`, `src/lz4pack_read.inc`, `src/amprlib.c`,
+  `src/imgjob_lz4.inc`); nachgebaut, kein Quelltext übernommen. <https://github.com/theghostonline/PS5-LZ4-Compression>
 - **LZ4** 1.10.0 (Yann Collet, BSD-2-Clause): `src/third_party/lz4/` (`lz4.c`, `lz4hc.c`), unverändert; die Fassung, die auch die APR-EMU
   zum Entpacken benutzt. Lizenztext: `src/third_party/lz4/LICENSE`.
 - **PS5 Dump & Image Converter** (eigenes Projekt des Autors, Modul `shadowmount_generation.py` und der

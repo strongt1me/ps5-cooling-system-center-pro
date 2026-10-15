@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PS4Mount</title>
+<script>
+/* The browser of older firmwares has no <dialog>: it gets its own page. */
+if (typeof document.createElement('dialog').showModal !== 'function') location.replace('/legacy');
+</script>
 <style>
 :root{--bg:#0e1116;--panel:#171b22;--line:#262c36;--fg:#e8eaed;--muted:#97a0ab;--accent:#3d7bfd;--ok:#2f9e57;--warn:#c98b1f;--bad:#c2453b}
 *{box-sizing:border-box}
@@ -32,16 +36,25 @@ main{padding:20px;max-width:1400px;margin:0 auto}
 .actions{display:flex;gap:8px;padding:0 14px 14px;flex-wrap:wrap}
 .empty{color:var(--muted);text-align:center;padding:60px 0}
 .warn{color:#f0c060;font-size:13px;background:#3a2e12;border:1px solid #5c4818;border-radius:8px;padding:6px 8px;margin-top:4px}
-dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:12px;max-width:min(900px,95vw);width:900px}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:12px;max-width:95vw;max-width:min(900px,95vw);width:900px}
 dialog::backdrop{background:#000a}
 pre{white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto;background:#0b0d11;padding:12px;border-radius:8px}
 form.settings{display:flex;flex-direction:column;gap:14px}
 form.settings label{display:flex;flex-direction:column;gap:6px}
 form.settings label.check{flex-direction:row;align-items:center;gap:10px}
-form.settings textarea,form.settings input[type=number]{background:#0b0d11;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}
+form.settings textarea,form.settings input[type=number],form.settings input[type=text]{background:#0b0d11;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}
 form.settings textarea{min-height:90px;resize:vertical;font-family:ui-monospace,Consolas,monospace}
 form.settings .hint{color:var(--muted);font-size:13px}
 form.settings .row{display:flex;gap:8px;justify-content:flex-end}
+form.settings fieldset{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+form.settings legend{font-weight:600;padding:0 6px}
+form.settings input.num{width:6em}
+.picker{width:100%;border-collapse:collapse;font-size:14px}
+.picker th,.picker td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+.picker td.c,.picker th.c{width:36px;text-align:center}
+.picker .meta{font-size:12px}
+.pickwrap{max-height:55vh;overflow:auto;margin:10px 0}
+.note{color:#f0c060;font-size:13px}
 #toast{position:fixed;right:20px;bottom:20px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 16px;display:none;max-width:420px}
 </style>
 </head>
@@ -73,8 +86,30 @@ form.settings .row{display:flex;gap:8px;justify-content:flex-end}
     <span class="hint">Smaller groups are gentler on the system when many games are added at once.</span>
   </label>
   <label class="check"><input type="checkbox" id="s-dlc"> Install add-ons (DLC)</label>
+  <fieldset><legend>Restore games to the original path</legend>
+    <span class="hint">Moves the pkgs of a game (game, update and all its add-ons) back to where they came from,
+      with their original names, and takes the game out of the library. No pkg is deleted. The open game is closed first.</span>
+    <label><span>Games removed from the library per group (1 to <span class="rmax">10</span>)</span>
+      <input type="text" class="num" id="s-rsize" inputmode="numeric" pattern="[0-9]*" maxlength="2">
+    </label>
+    <div class="row" style="justify-content:flex-start;flex-wrap:wrap">
+      <button type="button" class="danger" id="s-restore">Move all games back</button>
+      <button type="button" id="s-pick">Restore selected games</button>
+      <button type="button" id="s-forget">Pick up moved-back pkgs again</button>
+    </div>
+  </fieldset>
   <div class="row"><button type="button" id="s-cancel">Cancel</button><button class="primary" type="submit">Save</button></div>
 </form></dialog>
+<dialog id="pickdlg"><h3>Restore selected games</h3>
+<div class="note">Each selected game is moved back with its update and all its add-ons (DLC). The open game is closed first.</div>
+<div class="pickwrap"><table class="picker">
+  <thead><tr><th class="c"><input type="checkbox" id="p-all" title="Select all"></th><th>Game</th><th>Moved back</th></tr></thead>
+  <tbody id="p-rows"></tbody>
+</table></div>
+<div class="hint" id="p-info"></div>
+<div class="row" style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+  <button type="button" id="p-cancel">Cancel</button><button type="button" class="danger" id="p-go" disabled>Move selected back</button>
+</div></dialog>
 <dialog id="logdlg"><h3>Log</h3><pre id="log"></pre><form method="dialog"><button>Close</button></form></dialog>
 <div id="toast"></div>
 <script>
@@ -82,14 +117,33 @@ var games = [], busy = {};
 var labels = {ready: 'Ready', running: 'Running', removed: 'Not in library', internal: 'Installed on console', pending: 'Adding', duplicate: 'On another drive'};
 
 function $(id) { return document.getElementById(id); }
+
 function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
 function gb(n) { return (n / 1073741824).toFixed(n >= 10737418240 ? 0 : 1) + ' GB'; }
 function toast(msg) { var t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = 'none'; }, 4000); }
 
-function api(path, method) {
-  return fetch(path, {method: method || 'GET', cache: 'no-store'}).then(function (r) {
+function api(path, method, body) {
+  var opt = {method: method || 'GET', cache: 'no-store'};
+  if (body !== undefined) { opt.body = body; opt.headers = {'Content-Type': 'application/x-www-form-urlencoded'}; }
+  return fetch(path, opt).then(function (r) {
     return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; });
   });
+}
+var maxRestore = 10;
+function addons(g) { return g.dlc ? g.dlc + ' add-on' + (g.dlc > 1 ? 's' : '') : 'no add-ons'; }
+function movedBack(g) { return 'Game' + (g.has_patch ? ', update' : '') + (g.dlc ? ' and ' + addons(g) : ''); }
+/* Games per group when moving back: digits only, 1 to maxRestore. */
+function restoreSize() {
+  var v = $('s-rsize').value;
+  if (!/^[0-9]+$/.test(v) || +v < 1 || +v > maxRestore) { toast('Games per group must be a number from 1 to ' + maxRestore); return 0; }
+  return +v;
+}
+/* Saves the group size, then starts moving back (body: selected games, or none for all). */
+function startRestore(size, body) {
+  return api('/api/config', 'POST', 'restore_batch=' + size)
+    .then(function () { return api('/api/restore', 'POST', body); })
+    .then(function (j) { toast(j.message); $('pickdlg').close(); $('setdlg').close(); setTimeout(load, 3000); })
+    .catch(function (err) { toast('Error: ' + err.message); });
 }
 
 function render() {
@@ -102,6 +156,8 @@ function render() {
     if (g.state === 'removed') act = '<button class="primary" data-a="mount" data-t="' + g.title_id + '">Add to library</button>';
     else if (g.state === 'ready') act = '<button class="danger" data-a="unmount" data-t="' + g.title_id + '">Remove from library</button>';
     else if (g.state === 'running') act = '<button disabled>Close the game to remove it</button>';
+    if (g.state !== 'internal')
+      act += '<button data-a="restore" data-t="' + g.title_id + '">Move pkgs back</button>';
     if (busy[g.title_id]) act = '<button disabled>Please wait…</button>';
     html += '<div class="card"><div class="art" style="background-image:url(/icon/' + g.title_id + ')">' +
       '<span class="badge b-' + g.state + '">' + esc(labels[g.state] || g.state) + '</span></div>' +
@@ -129,6 +185,9 @@ $('grid').addEventListener('click', function (e) {
   if (!b) return;
   var tid = b.getAttribute('data-t'), a = b.getAttribute('data-a');
   if (a === 'unmount' && !confirm('Remove ' + tid + ' from the library? The pkg stays on the USB drive.')) return;
+  if (a === 'restore' && !confirm('Move the pkgs of ' + tid + ' (game, update and all its add-ons) back to where they came from, ' +
+      'with their original names?\n\nThe open game is closed first. The game leaves the library and PS4Mount stops picking ' +
+      'these pkgs up. No pkg is deleted.')) return;
   busy[tid] = 1; render();
   api('/api/' + a + '?title_id=' + tid, 'POST').then(function (j) { toast(j.message); })
     .catch(function (err) { toast('Error: ' + err.message); })
@@ -144,15 +203,75 @@ $('settingsbtn').onclick = function () {
     $('s-size').value = c.batch_size;
     $('s-dlc').checked = c.dlc;
     $('s-size').disabled = !c.batch;
+    maxRestore = c.max_restore_batch || 10;
+    $('s-rsize').value = c.restore_batch || 5;
+    var spans = document.querySelectorAll('.rmax');
+    for (var i = 0; i < spans.length; i++) spans[i].textContent = maxRestore;
     $('setdlg').showModal();
   }).catch(function (e) { toast('Could not read the settings: ' + e.message); });
 };
 $('s-batch').onchange = function () { $('s-size').disabled = !this.checked; };
 $('s-cancel').onclick = function () { $('setdlg').close(); };
+$('s-rsize').oninput = function () {
+  var v = this.value.replace(/[^0-9]/g, '');
+  if (v !== '' && +v > maxRestore) v = String(maxRestore);
+  if (v !== this.value) this.value = v;
+};
+$('s-restore').onclick = function () {
+  var size = restoreSize();
+  if (!size) return;
+  if (!confirm('WARNING: this moves the pkgs of ALL ' + games.length + ' games (game, update and all add-ons) back to where ' +
+      'they came from, with their original names.\n\nThe open game is closed now, without saving. All PS4Mount games leave ' +
+      'the library, ' + size + ' at a time, and PS4Mount stops picking these pkgs up. No pkg is deleted.\n\nContinue?')) return;
+  startRestore(size);
+};
+function pickUpdate() {
+  var boxes = $('p-rows').getElementsByTagName('input'), n = 0, size = +$('s-rsize').value || 0;
+  for (var i = 0; i < boxes.length; i++) n += boxes[i].checked ? 1 : 0;
+  $('p-all').checked = n > 0 && n === boxes.length;
+  $('p-go').disabled = !n;
+  $('p-info').textContent = n ? n + ' game(s) selected' + (size && n > size ? ', removed from the library ' + size + ' at a time' : '') : 'No games selected';
+}
+$('s-pick').onclick = function () {
+  if (!restoreSize()) return;
+  var rows = '';
+  games.forEach(function (g) {
+    if (g.state === 'internal') return;
+    rows += '<tr><td class="c"><input type="checkbox" value="' + g.title_id + '"></td>' +
+      '<td>' + esc(g.name) + '<div class="meta">' + g.title_id + ' · ' + esc(g.source) + '</div></td>' +
+      '<td>' + esc(movedBack(g)) + '</td></tr>';
+  });
+  $('p-rows').innerHTML = rows || '<tr><td colspan="3">No PS4Mount games on the connected drives</td></tr>';
+  pickUpdate();
+  $('pickdlg').showModal();
+};
+$('p-rows').onchange = pickUpdate;
+$('p-all').onchange = function () {
+  var boxes = $('p-rows').getElementsByTagName('input');
+  for (var i = 0; i < boxes.length; i++) boxes[i].checked = this.checked;
+  pickUpdate();
+};
+$('p-cancel').onclick = function () { $('pickdlg').close(); };
+$('p-go').onclick = function () {
+  var size = restoreSize(), boxes = $('p-rows').getElementsByTagName('input'), tids = [];
+  if (!size) return;
+  for (var i = 0; i < boxes.length; i++) if (boxes[i].checked) tids.push(boxes[i].value);
+  if (!tids.length) return;
+  if (!confirm('Move the pkgs of ' + tids.length + ' game(s), each with its update and all its add-ons, back to where they ' +
+      'came from?\n\nThe open game is closed now, without saving. The games leave the library' +
+      (tids.length > size ? ', ' + size + ' at a time' : '') + '. No pkg is deleted.')) return;
+  startRestore(size, 'title_ids=' + tids.join(','));
+};
+$('s-forget').onclick = function () {
+  if (!confirm('Pick up the pkgs that were moved back again? They are moved into the ps4 folder and added on the next scan.')) return;
+  api('/api/restored/forget', 'POST').then(function (j) { toast(j.message); })
+    .catch(function (err) { toast('Error: ' + err.message); });
+};
 $('setform').onsubmit = function (e) {
   e.preventDefault();
+  if (!restoreSize()) return;
   var body = 'batch=' + ($('s-batch').checked ? 1 : 0) + '&batch_size=' + encodeURIComponent($('s-size').value) +
-    '&dlc=' + ($('s-dlc').checked ? 1 : 0) + '&paths=' + encodeURIComponent($('s-paths').value);
+    '&dlc=' + ($('s-dlc').checked ? 1 : 0) + '&restore_batch=' + $('s-rsize').value + '&paths=' + encodeURIComponent($('s-paths').value);
   fetch('/api/config', {method: 'POST', cache: 'no-store', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: body})
     .then(function (r) { return r.json(); })
     .then(function (j) { toast(j.message || j.error); if (j.ok) $('setdlg').close(); })

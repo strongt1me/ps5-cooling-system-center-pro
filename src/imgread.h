@@ -48,6 +48,9 @@ typedef struct {
    cb returns non-zero to stop. 0 when the walk is complete, 1 when cb stopped it, -1 when the root cannot be read or
    the tree is nested too deeply. A folder that cannot be read is reported with damaged set and the walk goes on. */
 int     imgr_walk(imgr_t *r, int (*cb)(const imgr_entry_t *e, void *ctx), void *ctx);
+/* The same; *skipped (may be NULL) counts the names that could not be taken (empty, with a slash, too long for a path). Also -1
+   past 4,000,000 entries (a broken image that points at the same folders again and again). */
+int     imgr_walk2(imgr_t *r, int (*cb)(const imgr_entry_t *e, void *ctx), void *ctx, uint64_t *skipped);
 /* Reads up to n bytes of a file from off (like imgr_pread, without looking the path up again). */
 long    imgr_read_entry(imgr_t *r, const imgr_entry_t *e, uint64_t off, void *buf, size_t n);
 /* Whether the file's data lies where the file system says: every cluster or block of it is inside the image and in a

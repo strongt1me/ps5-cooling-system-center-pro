@@ -40,6 +40,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "ioerr.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 
@@ -464,7 +465,7 @@ ps5tm_klogrec_start(int tz_min, char *err, size_t err_len) {
              (unsigned long long)(fr >> 20), (unsigned long long)(LIM_MIN_FREE >> 20));
     status = 409;
   } else if((fd = ps5tm_klogfiles_create("aufnahme", tz_min, name, sizeof(name))) < 0) {
-    snprintf(err, err_len, "Die Datei ließ sich nicht anlegen: %s", strerror(-fd));
+    snprintf(err, err_len, "Die Datei ließ sich nicht anlegen: %s", ps5tm_io_strerror(-fd));
     status = 500;
   } else if(!(a = malloc(sizeof(*a)))) {
     snprintf(err, err_len, "Kein Speicher.");

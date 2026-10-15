@@ -558,8 +558,12 @@ job_fail(const char *fmt, ...) {
   va_start(ap, fmt);
   pthread_mutex_lock(&g_lock);
   vsnprintf(g_job.error, sizeof(g_job.error), fmt, ap);
+  char tid[12], why[200];
+  snprintf(tid, sizeof(tid), "%s", g_job.title_id);
+  snprintf(why, sizeof(why), "%s", g_job.error);
   pthread_mutex_unlock(&g_lock);
   va_end(ap);
+  PS5TM_WARN("copy_failed", "Kopieren von %s gescheitert: %s", tid, why);   /* also the checks before the copy (review 15.10.2026) */
   job_state(JOB_FAILED);
 }
 
@@ -635,12 +639,15 @@ copy_file(const char *src, const char *dst, char *buf, const cp_ctx_t *cx,
   if(in < 0) return SRC_SIDE | (errno ? errno : EIO);
   struct stat st;
   uint64_t hint = fstat(in, &st) == 0 ? (uint64_t)st.st_size : 0;
-  int out = open(dst, O_WRONLY | O_CREAT | O_EXCL, 0666);
+  /* 0777 whatever the umask says: a game whose eboot.bin or modules lack the
+     execute bit crashes at the start (SIGBUS, CE-108255-1, see lz4pack.h). */
+  int out = open(dst, O_WRONLY | O_CREAT | O_EXCL, 0777);
   if(out < 0) {
     int e = errno ? errno : EIO;
     close(in);
     return e;
   }
+  (void)fchmod(out, 0777);
   /* Between two drives a big file is read ahead on a thread of its own while
      the last piece is written; with no room for that thread it is read as
      before. */
@@ -733,8 +740,11 @@ copy_tree(char *src, size_t slen, char *dst, size_t dlen, size_t root,
       rc = SRC_SIDE | (errno ? errno : EIO);
     } else if(S_ISDIR(st.st_mode)) {
       if(mkdir(dst, 0777) != 0) rc = errno ? errno : EIO;
-      else rc = copy_tree(src, slen + 1 + n, dst, dlen + 1 + n, root,
-                          depth + 1, buf, cx);
+      else {
+        (void)chmod(dst, 0777);
+        rc = copy_tree(src, slen + 1 + n, dst, dlen + 1 + n, root,
+                       depth + 1, buf, cx);
+      }
     } else if(S_ISREG(st.st_mode) && !is_deferred(src + root + 1)) {
       char name[PATH_MAX + 256];
       sums_name(name, sizeof(name), cx, src + root + 1);
@@ -868,6 +878,7 @@ copy_run(void *arg) {
   if(slash) *slash = 0;
   int rc = mkdir_p(parent);
   if(!rc && !single && mkdir(a.target, 0777) != 0) rc = errno ? errno : EIO;
+  if(!rc && !single) (void)chmod(a.target, 0777);
   if(rc) {
     job_fail("Der Zielordner ließ sich nicht anlegen: %s", errno_text(rc));
     free(buf);
