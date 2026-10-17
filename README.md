@@ -6,7 +6,7 @@
 
 **Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser der Konsole oder von jedem Gerät im Heimnetz, in sechs Sprachen.**
 
-![Version](https://img.shields.io/badge/Version-1.68.1-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.69.0-1f6feb)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
 ![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -27,7 +27,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Kühlung</h3>
-      Ruhige Lüfterregelung auf eine Zieltemperatur (60–91 °C), Betriebsarten, Profile pro Spiel, Sicherheitsgrenze in der Hardware.
+      Ruhige Lüfterregelung auf eine Zieltemperatur (60–91 °C), Betriebsarten, Profile pro Spiel, Nachtmodus mit leiserem Ziel, Lüfter-Selbsttest, Sicherheitsgrenze in der Hardware.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Messwerte</h3>
@@ -150,7 +150,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 1. Aus den [Releases](../../releases) die Datei `PS5_Cooling_System_Center_v<Version>.elf` laden.
 2. An die Konsole senden (ELF-Lader, Port **9021**), zum Beispiel:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.68.1.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.69.0.elf
    ```
 3. Im Browser öffnen: **`http://<PS5-IP>:8086`** (die Adresse zeigt auch die Meldung oben links auf dem Fernseher).
 
@@ -198,7 +198,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.43** gebaut, dessen Startcode die Firmw
 
 | Dokument | Inhalt |
 | --- | --- |
-| [Handbuch](docs/HANDBUCH.md) | Bedienung im Detail (auch in der App und als PDF in sechs Sprachen) |
+| [Handbuch](docs/HANDBUCH.md) | Bedienung im Detail (auch in der App, in sechs Sprachen) |
 | [API](docs/API.md) | Alle Endpunkte und Konfigurationsfelder |
 | [Entwicklung](docs/ENTWICKLUNG.md) | Bauen, Senden, Fehlersuche, Quellcode-Aufbau |
 | [Änderungen](CHANGELOG.md) | Was sich in welcher Version geändert hat |
@@ -228,7 +228,7 @@ Ergebnis ist `PS5_Cooling_Center.elf`; die Starter-Kachel baut `tools/make_start
 ## Rechtliches und Haftungsausschluss
 
 > [!CAUTION]
-> **Kein Sony-Produkt, keine Piraterie, keine Haftung.** Dieses Projekt steht in keiner Verbindung zu Sony. Es enthält keine Spiele, keine Firmware, keine Schlüssel und keinen Code zum Umgehen von Kopierschutz, und es lädt nichts aus dem Internet. Das Modifizieren einer Konsole kann Garantie und Konto kosten; das Risiko trägt, wer es tut. Das Programm wird **ohne jede Gewährleistung** bereitgestellt.
+> **Kein Sony-Produkt, keine Piraterie, keine Haftung.** Dieses Projekt steht in keiner Verbindung zu Sony. Es enthält keine Spiele, keine Firmware, keine Sony-Schlüssel (nur einen öffentlich bekannten Schlüssel für selbst gebaute Test-Pakete, siehe THIRD_PARTY_NOTICES.md) und keinen Code zum Umgehen von Kopierschutz, und es lädt nichts aus dem Internet. Das Modifizieren einer Konsole kann Garantie und Konto kosten; das Risiko trägt, wer es tut. Das Programm wird **ohne jede Gewährleistung** bereitgestellt.
 
 <details>
 <summary>Vollständiger Text</summary>
