@@ -124,6 +124,8 @@ Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola l
 - Mantiene una temperatura obiettivo (predefinita 66 °C, regolabile 60–91 °C) con media mobile, zona morta e tendenza, e cambia la velocità solo a piccoli passi.
 - Modalità silenziosa, bilanciata e fresca, scelte rapide e regole per gioco.
 - Oltre la temperatura di sicurezza (predefinita 78 °C) decide solo l'hardware; se l'app non è in esecuzione, la console regola da sola.
+- Modalità notte: tra due orari vale un obiettivo più silenzioso; l'orario è quello del dispositivo su cui è aperta la pagina.
+- Autotest della ventola con un pulsante (la ventola risponde alla soglia?) e velocità minima della console appresa (20 % a riposo, 34 % in gioco), mostrata nella diagnostica.
 
 **Giochi**
 - Avviare (dal browser della console la pagina si chiude subito), chiudere, copiare su altre unità, spostare o estrarre con ShadowMountPlus.
@@ -136,6 +138,7 @@ Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola l
 - File manager: visualizzare, scaricare e caricare, creare cartelle, rinominare, copiare, spostare, eliminare (modifiche solo sulle unità e in `/data`).
 - Payload: vedere e fermare quelli in esecuzione, avviare i propri `.elf` da una cartella o da una chiavetta USB, profili come sequenza di avvio.
 - Profilo: nome visualizzato e immagine del profilo (30 immagini integrate o un file proprio).
+- Tema: standard, chiaro, scuro e ottimale (il più veloce da disegnare, pensato per il televisore); ogni dispositivo ricorda la sua scelta.
 - Sistema: modello, firmware, tempo di attività, memoria, rete; sensori grezzi e diagnostica in modalità esperto.
 - Intestazione su ogni pagina: modalità riposo, riavvio, spegnimento, modalità provvisoria (due clic ciascuno).
 

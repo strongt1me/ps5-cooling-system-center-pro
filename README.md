@@ -124,6 +124,8 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 - Hält eine Zieltemperatur (Standard 66 °C, einstellbar 60–91 °C) mit gleitendem Mittelwert, Totzone und Trend und ändert die Drehzahl nur in kleinen Schritten.
 - Betriebsarten leise, ausgewogen und kühl, Schnellwahl und eigene Regeln je Spiel.
 - Ab der Sicherheitstemperatur (Standard 78 °C) gilt nur noch die Hardware; läuft die App nicht, regelt die Konsole selbst.
+- Nachtmodus: Zwischen zwei Uhrzeiten gilt ein leiseres Nachtziel; die Uhrzeit ist die des Geräts, auf dem die Seite offen ist.
+- Lüfter-Selbsttest per Knopf (antwortet der Lüfter auf die Schwelle?) und gelernte Mindestdrehzahl der Konsole (20 % im Leerlauf, 34 % im Spiel), die in der Diagnose steht.
 
 **Spiele**
 - Starten (aus dem Konsolen-Browser schließt sich die Seite sofort), beenden, auf andere Laufwerke kopieren, mit ShadowMountPlus verschieben oder entpacken.
@@ -136,6 +138,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 - Dateimanager: ansehen, herunter- und hochladen, Ordner anlegen, umbenennen, kopieren, verschieben, löschen (Ändern nur auf Laufwerken und in `/data`).
 - Payloads: laufende ansehen und beenden, eigene `.elf` aus einem Ordner oder vom USB-Stick starten, Profile als Startfolge.
 - Profil: Anzeigename und Profilbild (30 eingebaute Bilder oder eigene Datei).
+- Design: Standard, Hell, Dunkel und Optimal (am schnellsten gezeichnet, gedacht für den Fernseher); jedes Gerät merkt sich seine Wahl.
 - System: Modell, Firmware, Laufzeit, Speicher, Netzwerk; Rohsensoren und Diagnose im Expertenmodus.
 - Kopfzeile auf jeder Seite: Ruhemodus, Neu starten, Ausschalten, abgesicherter Modus (je zwei Klicks).
 

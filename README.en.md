@@ -124,6 +124,8 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 - Holds a target temperature (default 66 °C, adjustable 60–91 °C) with a moving average, dead band and trend, and changes the fan speed only in small steps.
 - Quiet, balanced and cool modes, quick picks and per-game rules.
 - Above the safety temperature (default 78 °C) only the hardware decides; when the app is not running, the console regulates on its own.
+- Night mode: a quieter target between two clock times; the time is that of the device the page is open on.
+- Fan self-test at the press of a button (does the fan answer to the threshold?) and the console's learned minimum fan speed (20 % idle, 34 % in a game), shown in the diagnosis.
 
 **Games**
 - Start (from the console's browser the page closes at once), close, copy to other drives, move or unpack with ShadowMountPlus.
@@ -136,6 +138,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 - File manager: view, download and upload, create folders, rename, copy, move, delete (changes only on drives and in `/data`).
 - Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence.
 - Profile: display name and profile picture (30 built-in pictures or your own file).
+- Design: Standard, Light, Dark and Optimal (fastest to draw, meant for the TV); every device remembers its choice.
 - System: model, firmware, uptime, storage, network; raw sensors and diagnostics in expert mode.
 - Header on every page: rest mode, restart, power off, safe mode (two clicks each).
 
