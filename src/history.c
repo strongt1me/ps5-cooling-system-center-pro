@@ -123,7 +123,10 @@ ps5tm_history_load(void) {
     if(days > 0)
       keep_ms = (uint64_t)days * 24ull * 3600ull * 1000ull;
   }
-  uint64_t cutoff = keep_ms ? (ps5tm_now_ms() - keep_ms) : 0;
+  /* now < keep_ms (clock not set yet, or clock_gettime failed and gave 0) must not wrap to a huge cutoff: that would drop
+     every stored row, and the next flush would overwrite history.csv with nothing. */
+  uint64_t now_ms = ps5tm_now_ms();
+  uint64_t cutoff = (keep_ms && now_ms > keep_ms) ? (now_ms - keep_ms) : 0;
 
   pthread_mutex_lock(&g_lock);
   char line[128];

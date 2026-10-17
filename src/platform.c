@@ -185,7 +185,8 @@ ps5tm_platform_page_stats(int *cpu_used, int *cpu_total,
 static atomic_int g_fan_available = 0;
 /* The fan's state as a sentence, read by the page and the log while the fan thread may write it: two buffers, the one not being
    read is written and then made current, and only when the text changes (it is set on every fan write). Review 15.10.2026. */
-static char            g_fan_msg[2][224] = { "Lüftersteuerung noch nicht geprüft.", "" };
+#define FAN_MSG_SLOTS 4           /* a reader keeps the pointer it got with no copy: it takes three changes while it reads to hurt it */
+static char            g_fan_msg[FAN_MSG_SLOTS][224] = { "Lüftersteuerung noch nicht geprüft.", "" };
 static atomic_int      g_fan_msg_i = 0;
 static pthread_mutex_t g_fan_msg_mu = PTHREAD_MUTEX_INITIALIZER;
 
@@ -200,8 +201,9 @@ fan_msg(const char *fmt, ...) {
   pthread_mutex_lock(&g_fan_msg_mu);
   int cur = atomic_load(&g_fan_msg_i);
   if(strcmp(g_fan_msg[cur], t)) {
-    memcpy(g_fan_msg[1 - cur], t, sizeof(t));
-    atomic_store(&g_fan_msg_i, 1 - cur);
+    int nxt = (cur + 1) % FAN_MSG_SLOTS;
+    memcpy(g_fan_msg[nxt], t, strlen(t) + 1);          /* the text and its NUL, not the unset rest of t */
+    atomic_store(&g_fan_msg_i, nxt);
   }
   pthread_mutex_unlock(&g_fan_msg_mu);
 }

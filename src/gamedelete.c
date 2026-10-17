@@ -258,8 +258,13 @@ shrink_big(const char *path, const struct stat *st, walk_t *w) {
 
 /* Counts (count_only) or removes path and all below it: no link is followed (a link is removed as a link), nothing on
    another drive is entered, and the depth is bounded. */
+#define DL_PATH 1024
+
+/* `path` is one buffer of DL_PATH bytes shared by all levels: a child's name is appended in place and cut off again after
+   the call, so a level costs a few dozen bytes of stack, not a path (the delete worker and the request threads that count
+   sizes have small stacks, and the depth goes to DL_MAX_DEPTH). */
 static void
-walk(const char *path, int depth, walk_t *w) {
+walk(char *path, size_t plen, int depth, walk_t *w) {
   if(w->err) return;
   if(depth > DL_MAX_DEPTH) { w->err = ELOOP; return; }
   struct stat st;
@@ -270,11 +275,14 @@ walk(const char *path, int depth, walk_t *w) {
     DIR *d = opendir(path);
     if(!d) { w->err = errno; return; }
     struct dirent *e;
-    char child[1024];
     while(!w->err && (e = readdir(d)) != NULL) {
       if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
-      if(snprintf(child, sizeof(child), "%s/%s", path, e->d_name) >= (int)sizeof(child)) { w->err = ENAMETOOLONG; break; }
-      walk(child, depth + 1, w);
+      size_t nl = strlen(e->d_name);
+      if(plen + 1 + nl >= DL_PATH) { w->err = ENAMETOOLONG; break; }
+      path[plen] = '/';
+      memcpy(path + plen + 1, e->d_name, nl + 1);
+      walk(path, plen + 1 + nl, depth + 1, w);
+      path[plen] = 0;
     }
     closedir(d);
     if(!w->err && !w->count_only && rmdir(path) != 0) w->err = errno;
@@ -287,6 +295,15 @@ walk(const char *path, int depth, walk_t *w) {
   if(w->live) job_done_bytes(w->bytes);
 }
 
+static void
+walk_top(const char *path, walk_t *w) {
+  char buf[DL_PATH];
+  size_t n = strlen(path);
+  if(n >= sizeof(buf)) { w->err = ENAMETOOLONG; return; }
+  memcpy(buf, path, n + 1);
+  walk(buf, n, 0, w);
+}
+
 /* The size of a file or a folder; -1 when it could not be counted (too many entries, unreadable). */
 static int64_t
 size_of(const char *path) {
@@ -294,7 +311,7 @@ size_of(const char *path) {
   if(lstat(path, &st) != 0) return -1;
   if(!S_ISDIR(st.st_mode)) return (int64_t)st.st_size;
   walk_t w = { st.st_dev, 0, 0, 0, 1, 0, 0 };
-  walk(path, 0, &w);
+  walk_top(path, &w);
   return w.err ? -1 : (int64_t)w.bytes;
 }
 
@@ -312,7 +329,7 @@ delete_path(const char *path, int lo, int hi, uint64_t *files, uint64_t *bytes, 
   int64_t total = size_of(path);                        /* -1 (not countable): the bar stays at lo until the end */
   job_stage(lo, hi, total > 0 ? (uint64_t)total : 0);
   walk_t w = { st.st_dev, 0, 0, 0, 0, 0, 1 };
-  walk(path, 0, &w);
+  walk_top(path, &w);
   *files += w.files;
   *bytes += w.bytes;
   if(w.err) {
@@ -822,6 +839,7 @@ ps5tm_gamedelete_start(const char *kind, const char *id, const char *token, char
   pthread_attr_t at;
   pthread_attr_init(&at);
   pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&at, 512 * 1024);       /* like every other worker: the default is not ours to rely on */
   int rc = pthread_create(&th, &at, delete_thread, a);
   pthread_attr_destroy(&at);
   if(rc != 0) {

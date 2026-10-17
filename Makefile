@@ -1,6 +1,6 @@
 # PS5 Cooling & System Center - Pro — advanced cooling & thermal management for PlayStation 5.
 #
-#   make                       build PS5_Temperature_Manager.elf
+#   make                       build PS5_Cooling_Center.elf
 #   make deploy PS5_HOST=<ip>  build and send it to elfldr
 #   make clean
 #
@@ -157,7 +157,7 @@ TILE_FILES := $(wildcard tile/sce_sys/*)
 # installer.elf carries the package for exactly that. The app still installs a
 # tile when it finds a package on disk — the installer leaves one there.
 #
-#   make                      the app, ~3 MB (web UI, converters, libraries)
+#   make                      the app, ~9 MB (web UI, converters, libraries)
 #   make TILE_PKG=pkg/out/x.pkg   embeds a package anyway
 TILE_PKG ?=
 
@@ -199,12 +199,13 @@ FAST_OBJS := $(patsubst src/%.c,gen/fast/%.o,$(FAST_SRCS))
 # they are the largest part of the web UI, about 1.4 MB.
 # web/lang holds the dictionaries of the interface languages (07.10.2026); a changed
 # translation alone has to rebuild the ELF as well.
-WEB_FILES := $(wildcard web/*) $(wildcard web/img/*) $(wildcard web/avatars/*) $(wildcard web/lang/*)
+WEB_FILES := $(wildcard web/*) $(wildcard web/img/*) $(wildcard web/avatars/*) $(wildcard web/lang/*) $(wildcard web/credits/*)
 
 CFLAGS := -Os -Wall -Wextra -Werror -Isrc -Isrc/third_party -Igen
 CFLAGS += -ffunction-sections -fdata-sections
 CFLAGS += -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-ident
 CFLAGS += -DPS5TM_BUILD=$(BUILD_DATE)
+CFLAGS += $(EXTRA_CFLAGS)
 
 LDFLAGS := -Wl,--gc-sections
 
@@ -391,7 +392,7 @@ release: $(BIN)
 	  exit 1; }
 	@if [ -d "$(RELEASE)" ]; then \
 	  foreign=$$(ls -A "$(RELEASE)" | grep -v -x -F \
-	    -e "$(RELEASE_MAIN)" -e "$(RELEASE_INST)" -e LIESMICH.txt \
+	    -e "$(RELEASE_MAIN)" -e "$(RELEASE_INST)" -e LIESMICH.txt -e PPSA86921.zip \
 	    -e Thumbs.db -e desktop.ini $(if $(RELEASE_PKG),-e "$(notdir $(RELEASE_PKG))")); \
 	  if [ -n "$$foreign" ]; then \
 	    echo "release: In \"$(RELEASE)\" liegt, was dieses Ziel nicht selbst anlegt — es löscht nichts:" >&2; \

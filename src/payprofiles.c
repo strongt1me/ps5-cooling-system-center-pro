@@ -422,6 +422,11 @@ startup_thread(void *arg) {
 
 void
 ps5tm_payprof_start(void) {
+  /* main() calls this inside its bind loop, which runs again after a lost listener or a changed port: the start profile
+     must run once per start of the app, not once per bind (and a second thread would remove the loop marker of the
+     first one's run). Like the other starters there: a no-op after the first call. */
+  static int started = 0;
+  if(started) return;
   pthread_t th;
-  if(pthread_create(&th, NULL, startup_thread, NULL) == 0) pthread_detach(th);
+  if(pthread_create(&th, NULL, startup_thread, NULL) == 0) { started = 1; pthread_detach(th); }
 }

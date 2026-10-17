@@ -5,4 +5,4 @@ contact_links:
     about: Please report security problems privately, not as a public issue. Bitte Sicherheitslücken nicht öffentlich melden.
   - name: Manual and FAQ / Handbuch und FAQ
     url: https://github.com/strongt1me/ps5-cooling-system-center-pro/releases/latest
-    about: The manual and the FAQ (PDF and HTML, six languages) are attached to every release and built into the app.
+    about: The manual and the FAQ (six languages) are built into the app (sidebar, under Credits).

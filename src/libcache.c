@@ -57,11 +57,13 @@ typedef struct {
   uint64_t        hash;                      /* of the text last written, or read           */
   int             used;
   int             on_disk;                   /* meta.json is there with that text           */
+  uint64_t        tick;                      /* when last looked up: the oldest makes room when the table is full */
 } entry_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;   /* the table                   */
 static pthread_mutex_t g_io   = PTHREAD_MUTEX_INITIALIZER;   /* one write at a time; taken first */
 static entry_t        *g_tab;                                /* LC_MAX_TITLES, on first use */
+static uint64_t        g_tick;                               /* counts the lookups, under g_lock */
 
 
 /* ------------------------------------------------------------------ small things */
@@ -104,15 +106,23 @@ find_locked(const char *tid, int create) {
   entry_t *t = table();
   if(!t) return NULL;
   entry_t *free_slot = NULL;
+  entry_t *oldest = NULL;
   for(int i = 0; i < LC_MAX_TITLES; i++) {
     if(t[i].used) {
-      if(!strcmp(t[i].m.title_id, tid)) return &t[i];
+      if(!strcmp(t[i].m.title_id, tid)) { t[i].tick = ++g_tick; return &t[i]; }
+      if(!oldest || t[i].tick < oldest->tick) oldest = &t[i];
     } else if(!free_slot) {
       free_slot = &t[i];
     }
   }
-  if(!create || !free_slot) return NULL;
+  if(!create) return NULL;
+  /* Full: folders of games that are long gone also sit in the table (nothing is ever deleted from the disk), and without this
+     every title after the 256th would never be saved or get its cover copied. The one untouched longest makes room; its
+     files on the disk stay as they are, only its place in memory is reused. */
+  if(!free_slot) free_slot = oldest;
+  if(!free_slot) return NULL;
   memset(free_slot, 0, sizeof(*free_slot));
+  free_slot->tick = ++g_tick;
   free_slot->used = 1;
   SET(free_slot->m.title_id, tid);
   free_slot->m.platform = -1;

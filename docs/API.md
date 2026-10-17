@@ -11,7 +11,7 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
-| GET | `/api/v1/status` | Momentaufnahme (Temperaturen, Lüfter, Adapter) |
+| GET | `/api/v1/status` | Momentaufnahme (Temperaturen, Lüfter, Adapter); seit 17.10.2026 zusätzlich `fan.floor_pct`/`floor_idle_pct`/`floor_game_pct` (die gelernte Mindestdrehzahl der Konsole, −1 solange unbekannt) und `control.night_active` (der Nachtmodus gilt gerade; `control.effective_target_c` ist dann das Nachtziel), `control.lead_c10` und `control.lead_max_c10` (der Vorhalt bei steilem Anstieg in Zehntelgrad: was der letzte Regelschritt zur gelesenen Temperatur addiert hat, und der höchste Wert seit dem Start; 0 bei flacher oder fallender Temperatur und bei Ziel unter 85 °C) |
 | GET/POST | `/api/v1/history` | Temperaturverlauf der letzten 24 Stunden (ein Punkt pro Minute) samt Spitzenwerten; `POST` setzt ihn zurück |
 | GET | `/api/v1/cooling-health` | Langzeitauswertung der Kühlleistung je Woche (aus `thermal-health.csv`); seit 1.54.1 zählen nur Wochen unter den jetzt geltenden Einstellungen (Einstellungs-Stempel): zusätzlich `weeks_needed` (4), `since_ms` (seit wann diese Einstellungen gelten) und `older_weeks` (davon ausgeschlossene Wochen) |
 | POST | `/api/v1/cooling-health` | „Vergleich neu beginnen“: erhöht den Zähler im Stempel, alle bisherigen Wochen bleiben in der Datei, zählen aber nicht mehr mit |
@@ -98,11 +98,13 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | POST | `/api/v1/playgo/install` | Wie `/api/v1/ampr-emu/install`, für die PlayGo-Stubs (Ordner `/data/PS5-Cooling-Center/PlayGo`) |
 | GET | `/api/v1/playgo` | Wie `/api/v1/ampr-emu`, für die PlayGo-Stubs (`libScePlayGo.sprx-0.6-log`/`-nolog`; Kennung `playgo_stub.dat`; `pack` immer `false`, `debug` bei „log“); die Antworten tragen `lib` (`ampr`/`playgo`) |
 | GET | `/api/v1/library/emu?id=PPSA20396&lib=playgo` | Wie die nächste Zeile; `lib` ist `ampr` (Standard) oder `playgo` (`libScePlayGo.sprx`, `packed` immer `false`); eine andere Angabe gibt 400 |
-| GET | `/api/v1/library/trace?id=PPSA06328` | Der Mitschnitt eines Spiels (trace.c): ob er laufen kann (`can_start`, sonst `why`), ob `fakelib2` mit der Debug-APR-EMU liegt (`active`), die eingesammelten Sitzungen und das erzeugte Profil |
+| GET | `/api/v1/library/trace?id=PPSA06328` | Der Mitschnitt eines Spiels (trace.c): ob er laufen kann (`can`, sonst `why`), ob `fakelib2` mit der Debug-APR-EMU liegt (`enabled`), die Anzahl der eingesammelten Sitzungen (`sessions`), ob neue Daten im Journal liegen (`journal_new`), `game_running`, ein laufender Vorgang (`busy`, `phase`) mit seiner Meldung (`msg`, `msg_err`) und das erzeugte Profil (`profile`) |
 | POST | `/api/v1/library/trace` | `{"id":…,"action":"start"\|"collect"\|"generate"\|"stop"}`: Mitschnitt starten (legt `fakelib2` an), die Sitzung nach `/data/PS5-Cooling-Center/traces/<Titel-ID>/<n>/` einsammeln, aus allen Sitzungen das Profil `<Titel-ID>-mitschnitt.toml` in `LZ4_Profile` erzeugen, Mitschnitt beenden (entfernt `fakelib2`); Antwort `{ok, message}`, bei Ablehnung 4xx `trace_refused` |
-| GET | `/api/v1/library/plugins?id=PPSA06328` | Die Spiel-Plugins (plugins.c): je Bibliothek (`libScePlayGo.sprx`, DLC-Module) Zustand (`missing`, `current`, `old`, `unknown`, `noexec`), Fassung und ob die App sie ändern darf |
-| GET | `/api/v1/ps4mount` | PS4Mount (src/ps4m_core.c): `enabled`, `running`, `standalone` (nur wenn eingeschaltet und wartend: warum, das eigenständige `ps4mount.elf` läuft), `version`, `config` (`batch`, `batch_size`, `dlc`, `paths`) und `games` (je `title_id`, `name`, `version`, `has_patch`, `size`, `state` = `ready`/`running`/`pending`/`removed`/`internal`/`duplicate`, `mount`, `source`, `dlc`, `update_issue`) |
-| POST | `/api/v1/ps4mount` | `{"action":"enable"\|"disable"\|"scan"\|"add"\|"remove"\|"config"}`; `add` und `remove` mit `"id":"CUSAxxxxx"`, `config` mit `batch`, `batch_size`, `dlc`, `paths` (eine Zeile je Ordner); Antwort `{ok, message}`, 409 bei Ablehnung |
+| GET | `/api/v1/library/plugins?id=PPSA06328` | Die Spiel-Plugins (plugins.c): je Bibliothek (`libScePlayGo.sprx`, DLC-Module) Zustand (`missing`, `current`, `older`, `not_needed`, `unknown`, `faulty`, `noexec`), Fassung und ob die App sie ändern darf |
+| GET | `/api/v1/fan/selftest` | Der Lüfter-Selbsttest: `state` (`idle`/`requested`/`running`/`finished`), `verdict` (`none`/`responds`/`no_response`/`aborted`/`not_possible`), `why` (ein Satz, bei „aborted“ und „not_possible“ der Grund), `baseline_pct`, `peak_pct`, `rise_pct`, `threshold_c` (die Testschwelle), `hottest_c`, `elapsed_s`, `limit_s`, `samples` (Drehzahl je Sekunde ab Beginn), `finished_ms` |
+| POST | `/api/v1/fan/selftest` | `{"action":"start"\|"abort"}`: Test starten oder abbrechen; 409 `selftest_busy`, wenn er läuft, 409 `selftest_refused` mit Grund, wenn die Konsole zu warm ist, über dem Ziel liegt, die Sicherheitsregelung läuft, die Drehzahl nicht lesbar oder die Lüftersteuerung nicht verfügbar ist |
+| GET | `/api/v1/ps4mount` | PS4Mount (src/ps4m_core.c): `enabled`, `running`, `standalone` (nur wenn eingeschaltet und wartend: warum, das eigenständige `ps4mount.elf` läuft), `version`, `busy` (beschäftigt: die Antwort stammt aus der letzten Liste, `config` kann dann leer sein), `config` (`batch`, `batch_size`, `dlc`, `paths`, `restore_batch`, `max_restore_batch`) und `games` (je `title_id`, `name`, `version`, `has_patch`, `size`, `state` = `ready`/`running`/`pending`/`removed`/`internal`/`duplicate`, `mount`, `source`, `dlc`, `update_issue`) |
+| POST | `/api/v1/ps4mount` | `{"action":"enable"\|"disable"\|"scan"\|"add"\|"remove"\|"config"\|"restore"\|"restore_all"\|"restored_forget"}`; `add` und `remove` mit `"id":"CUSAxxxxx"`, `config` mit `batch`, `batch_size`, `dlc`, `paths` (eine Zeile je Ordner) und `restore_batch`; `restore` mit `id` oder `ids[]` schiebt die PKGs der Spiele an ihren alten Ort zurück, `restore_all` alle, `restored_forget` vergisst die Zurückverschobenen; Antwort `{ok, message}`, 409 bei Ablehnung |
 | GET | `/api/v1/ps4mount/icon?id=CUSAxxxxx` | `icon0.png` des Spiels (aus der Konsole oder dem Paket) |
 | GET | `/api/v1/ps4mount/log` | Ende des Protokolls (`/data/ps4mount/log.txt`) als `{log}` |
 | POST | `/api/v1/library/plugins` | `{"id":…}`: bringt die Plugins des Spiels auf den neuesten Stand (alte Datei als `.old`, Ausführungsrecht gesetzt); Antwort `{ok, message, detail}` |
@@ -182,6 +184,13 @@ Neue Konfigurationsfelder:
    Liste legt dann Titelbilder und langsam zu ermittelnde Angaben im Ordner
    `/data/PS5-Cooling-Center/covers_and_more` ab und nutzt sie. Teil von Export und Import
    der Einstellungen.
+- Nachtmodus (seit 17.10.2026, Teil von Export und Import): `night_enabled` (0/1, ab Werk 0), `night_start_min` und
+   `night_end_min` (Minuten seit Mitternacht der Ortszeit, 0-1439, ab Werk 1380 und 420; das Fenster darf über Mitternacht
+   gehen, gleiche Werte heißen „nie“), `night_target_c` (60-91, ab Werk 75) und `night_tz_offset_min` (Minuten östlich von UTC,
+   −720 bis 840): Die Konsole kennt keine Zeitzone, die Seite schickt den Versatz ihres Geräts beim Speichern mit. Im Fenster gilt
+   statt `target_temp_c` das Nachtziel, außer eine Spielregel ist in Kraft. Wie bei allen Feldern werden Werte außerhalb
+   des Bereichs begrenzt (Ziel auf 60–91, Versatz auf −720 bis 840, Minuten auf 0–1439), nicht abgelehnt; die Seite prüft vorher
+   und zeigt eine Fehlermeldung.
 
 Probe-Maske (`probe_mask`) Bits:
 

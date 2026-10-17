@@ -191,6 +191,18 @@ retire_siblings(unsigned own_port) {
 }
 
 
+/* SIGTERM and SIGINT: ask the fan thread to hand the fan back to the console and end the process (fan.c). Only a flag is set
+ * here. If the thread cannot get to it (it waits in a system call, or never started), SIGALRM ends the process: its default
+ * action is to terminate. SIGKILL, which the app's own take-over and the process manager use, cannot be caught, so for those
+ * the old behaviour stays: the last threshold remains until the console's next change of state resets it. */
+static void
+on_stop_signal(int sig) {
+  (void)sig;
+  ps5tm_fan_request_stop();
+  alarm(5);
+}
+
+
 int
 main(int argc, char **argv) {
   (void)argc; (void)argv;
@@ -215,6 +227,8 @@ main(int argc, char **argv) {
   /* SIGHUP too: when the sending connection goes away the loader hangs up on
      whatever it started. A background service has no terminal to lose. */
   signal(SIGHUP, SIG_IGN);
+  signal(SIGTERM, on_stop_signal);
+  signal(SIGINT,  on_stop_signal);
 
   /* NOTHING here may touch the process structure. Learned the hard way.
    *

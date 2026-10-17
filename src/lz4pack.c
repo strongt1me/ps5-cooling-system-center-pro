@@ -518,7 +518,12 @@ vols_open(const char *dir, const man_t *m, vols_t *v, char *err, size_t en) {
   v->fd = malloc((m->np ? m->np : 1) * sizeof(int));
   v->begin = calloc(m->np ? m->np : 1, sizeof(uint64_t));
   v->end = calloc(m->np ? m->np : 1, sizeof(uint64_t));
-  if(!v->fd || !v->begin || !v->end) { vols_close(v); say(err, en, "Kein Speicher."); return -1; }
+  if(!v->fd || !v->begin || !v->end) {
+    v->n = 0;                                   /* fd[] is not filled yet: vols_close must only free, never close() what is in it */
+    vols_close(v);
+    say(err, en, "Kein Speicher.");
+    return -1;
+  }
   for(unsigned i = 0; i < v->n; i++) v->fd[i] = -1;
   for(unsigned i = 0; i < v->n; i++) {
     const prec_t *p = &m->p[i];

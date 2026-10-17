@@ -1408,6 +1408,28 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 .cr-featured .cr-text b { font-size: 17px; }
 .cr-featured .cr-text p { font-size: 14px; }
 .cr-outro { margin: 26px 2px 4px; font-size: 13px; line-height: 1.5; max-width: 90ch; }
+.cr-outro-links { margin: 8px 2px 0; }
+
+/* Nachtmodus (index.html #night-card) */
+.night-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; margin: 14px 0 4px; }
+.night-grid label { display: grid; gap: 4px; font-size: 13px; align-content: start; }
+.night-grid label > span { color: var(--ink-2); }
+.night-grid input { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset); color: var(--ink);
+  font: inherit; min-width: 0; }
+#night-card .note { margin: 10px 0 12px; }
+@media (max-width: 560px) { .night-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .night-grid label:last-child { grid-column: 1 / -1; } }
+
+/* Lüfter-Selbsttest (index.html #fan-test) */
+.fan-test { margin: 16px 0 6px; padding: 12px 14px; border-radius: 12px; background: var(--inset); }
+.fan-test-head { display: flex; gap: 14px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.fan-test-head > div { flex: 1 1 280px; min-width: 0; }
+.fan-test-head small { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 12px; line-height: 1.45; max-width: 64ch; }
+.fan-test-body { margin-top: 12px; }
+.fan-test-state { font-size: 13.5px; line-height: 1.5; }
+.fan-test-spark { display: block; width: 100%; height: 48px; margin-top: 8px; }
+.fan-test-spark .mini-measured { fill: none; stroke: var(--s3); stroke-width: 2; vector-effect: non-scaling-stroke;
+  stroke-linejoin: round; stroke-linecap: round; }
+.fan-test-meta { margin-top: 4px; color: var(--ink-muted); font-size: 12px; line-height: 1.45; }
 /* Handbuch und FAQ: Links in der Seitenleiste, aussehend wie die Knöpfe */
 a.tab { text-decoration: none; color: inherit; }
 .tab-doc { opacity: .92; }

@@ -96,7 +96,7 @@ background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0f
 .langs{display:inline-flex;flex-wrap:wrap;gap:6px;margin:0 0 10px 10px;vertical-align:top}
 .langs a{padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#aebbd4;text-decoration:none;font-size:14px}
 .langs a:hover{border-color:rgba(59,130,246,.6);color:#fff}.langs a.on{background:rgba(59,130,246,.22);color:#fff;border-color:rgba(59,130,246,.55)}
-.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.68.1</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#apr'>AMPR index, APR-EMU, PlayGo and history</a></li><li><a href='#assetpacks'>LZ4 asset packs: step by step</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
+.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.69.0</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#apr'>AMPR index, APR-EMU, PlayGo and history</a></li><li><a href='#assetpacks'>LZ4 asset packs: step by step</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
 <p><b>PS5 Cooling &amp; System Center - Pro</b> is a homebrew program (ELF) for a jailbroken PS5. It controls the
 fan according to a calm, freely adjustable target temperature and comes with a web interface that you open from any device on your
 home network: phone, tablet, PC or the console's own browser. On top of that come game management, packages,
@@ -118,8 +118,8 @@ web interface work, but fan control then reports “not available”.</li>
 </ul>
 </section><section class='ch' id='installation'><div class='ch-head'><div class='ch-num'>3</div><h2>Installation &amp; first start</h2></div>
 <ol class='steps'>
-<li>Send <code>PS5_Cooling_System_Center_v1.68.1.elf</code> to the console, port <code>9021</code>, e.g.:<br>
-<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.68.1.elf</code></li>
+<li>Send <code>PS5_Cooling_System_Center_v1.69.0.elf</code> to the console, port <code>9021</code>, e.g.:<br>
+<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.69.0.elf</code></li>
 <li>A notification with the address of the web interface appears at the top left of the TV.</li>
 <li>Open it in the browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
 </ol>
@@ -154,7 +154,7 @@ and stays on the section you were on. Numbers, dates and times follow the langua
 <div class="info">Notifications that the console itself shows on the TV (at start or with a warning) are in German.</div>
 <h3>Manual and FAQ</h3>
 <p>Under “Credits” in the sidebar, <b>Manual</b> and <b>FAQ</b> open these texts directly in the app, in the chosen language (without the
-screenshots, so that the app stays small). With pictures, both are available as PDF and HTML for download with every release.</p>
+screenshots, so that the app stays small).</p>
 <h3>Windows and the right stick</h3>
 <p>When a window opens (e.g. for deleting), the background is dimmed and stays still. In the PS5's browser, the right stick
 then only scrolls the window itself.</p>
@@ -186,6 +186,18 @@ target. “Quiet” is recommended.</p>
 <h3>Automatic mode</h3>
 <p>If “Automatic mode” is off, the app hands control back to the PS5 and only shows values. If the app is not running, the
 console controls the fan itself again anyway.</p>
+<h3>Night mode</h3>
+<p>Below “Target temperature” and “Operating mode” you will find the <b>Night mode</b> card: between two times (for example 23:00 to 07:00)
+the <b>night target</b> applies instead of the target temperature, usually a warmer and therefore quieter one. A game's own rule takes precedence. The
+time is the one on the device where you opened the page – the console knows no time zone.</p>
+<h3>Fan self-test</h3>
+<p>In the expert view, in the “Fan diagnostics (target / actual / clamp)” card, <b>Test the fan now</b> checks whether the fan responds to the threshold –
+even without heat. The app briefly lowers the threshold below the temperature and reads the fan speed. If it rises by at least 8
+percentage points, the fan responds; otherwise it says “The fan does not respond”. The fan gets audibly louder for up to 30 seconds in the process, and
+the test only runs when the console is cool.</p>
+<h3>The console's minimum fan speed</h3>
+<p>The console never turns the fan below its own minimum value (measured: 20 % at idle, 34 % in a game). The app learns it during
+operation and shows it in the fan diagnosis; the target/actual deviation is calculated with it.</p>
 <h3>Display via the mute button</h3>
 <p>Press the controller's mute button <b>twice quickly</b>: the processor temperature and fan speed appear at the top left (without a sound) – even without the web interface. The microphone is toggled twice in the process and ends up as it was before.</p>
 <p>The <b>fan</b> is a drawn <b>speedometer</b>: the needle shows the measured value from left (0 %) to right (100 %) and moves smoothly to every new reading; the rainbow arc lights up only as far as the needle. Needle, number and glowing edge go from blue through green and yellow to red (grey without a reading).</p></section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Games</h2></div>
@@ -423,4 +435,4 @@ profile picture, name and links. The links can only be clicked if the browser ha
 <tr><td>Error 403 in the browser</td><td>Open the page directly via the console's IP address, not via another name or another website.</td></tr>
 </table>
 <p>More answers are in the <b>FAQ</b>.</p>
-</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.68.1 · As of 7 October 2026 · Not a Sony product; “PlayStation” and “PS5” are trademarks of Sony Interactive Entertainment Inc. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.69.0 · As of 7 October 2026 · Not a Sony product; “PlayStation” and “PS5” are trademarks of Sony Interactive Entertainment Inc. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>

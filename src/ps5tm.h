@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.68.1"
+#define PS5TM_VERSION        "1.69.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -272,6 +272,16 @@ typedef struct {
   unsigned        lightbar_enabled;
   unsigned        lightbar_warn_c;
   unsigned        lightbar_hot_c;
+
+  /* Night mode: inside the window from night_start_min to night_end_min (minutes since midnight of the local time;
+     the window may cross midnight, equal values mean "never") the target is night_target_c, a quieter one, unless a
+     per-title rule is in force. Local time = the wall clock + night_tz_offset_min (minutes east of UTC): the console
+     has no time zone of its own, so the page that saves the schedule supplies its offset. */
+  unsigned        night_enabled;
+  unsigned        night_start_min;     /* 0..1439 */
+  unsigned        night_end_min;       /* 0..1439 */
+  unsigned        night_target_c;      /* PS5TM_TARGET_MIN_C..PS5TM_TARGET_MAX_C */
+  int             night_tz_offset_min; /* -720..840 */
 
   /* Processor temperature and fan speed as a system notification when the
      controller's microphone button is pressed twice in quick succession (at
@@ -1563,6 +1573,19 @@ typedef struct {
       it last set. Measured on FW 12.00: 91 °C at game launch. */
    unsigned        override_count;
    int             last_override_c;
+
+   /* Night mode is in force (effective_target_c is then the night target). */
+   int             night_active;
+   /* The lowest fan speed the console showed while the threshold rested at the top, i.e. while there was nothing for
+      the fan to do: what the console does by itself. Learned while running (the model's 13 % is not what it does:
+      20 % idle, 34 % in a game, measured 17.10.2026). -1 = not learned yet. */
+   int             floor_idle_pct;
+   int             floor_game_pct;
+   int             floor_pct;           /* the one that fits the situation now */
+   /* The lead on a steep rise (fan.c): what the last control pass added to the temperature it read, in hundredths of a
+      degree, and the highest value since the start. 0 = none (flat or falling temperature, target below 85 °C). */
+   int             lead_c100;
+   int             lead_max_c100;
 } ps5tm_snapshot_t;
 
 /* 0 when the controller thread runs (or already did), -1 when it could not be
@@ -1578,6 +1601,30 @@ int  ps5tm_fan_apply_manual(int temp_c, int *errno_out);
 int  ps5tm_fan_duty_to_threshold(int duty_pct);
 int  ps5tm_fan_threshold_to_duty(int threshold_c);
 int  ps5tm_fan_curve_eval(const ps5tm_config_t *cfg, int temp_c);
+
+/* The fan self-test: the threshold is put well below the temperature for a short while and the fan speed is watched.
+   That proves the whole chain (write, firmware, fan) independently of the temperature, which the regulation itself
+   can only show when the console gets hot. Runs in the fan thread; everything else about the fan waits meanwhile. */
+#define PS5TM_SELFTEST_SAMPLES 40
+typedef struct {
+  int      state;                    /* 0 never run, 1 requested, 2 running, 3 finished */
+  int      verdict;                  /* 0 none, 1 the fan reacts, 2 the fan does not react, 3 aborted, 4 not possible */
+  char     why[112];                 /* the reason for 3 and 4, and a sentence for the others */
+  int      baseline_pct, peak_pct, rise_pct;
+  int      threshold_c;              /* what was written for the test */
+  int      hottest_c;                /* temperature at the start */
+  int      elapsed_s, limit_s;
+  int      nsamples;
+  int      samples[PS5TM_SELFTEST_SAMPLES];   /* measured fan speed, one per second from the start */
+  uint64_t finished_ms;              /* wall clock, 0 while not finished */
+} ps5tm_fan_selftest_t;
+/* 0: the test is requested (it starts within a second). -1: one is running already. -2: not possible now (why says why). */
+int  ps5tm_fan_selftest_start(char *why, size_t why_len);
+void ps5tm_fan_selftest_abort(void);
+void ps5tm_fan_selftest_get(ps5tm_fan_selftest_t *out);
+
+/* A request to end the app (SIGTERM/SIGINT, see main.c): the fan thread hands the fan back to the console and exits. */
+void ps5tm_fan_request_stop(void);
 
 
 /* ------------------------------------------------------------------ tile */

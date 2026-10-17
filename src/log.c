@@ -203,11 +203,19 @@ ps5tm_log(const char *level, const char *code, const char *fmt, ...) {
    *
    * And the first mirror must not be able to take the second one down with
    * it: see out_mirror() for what happens when the sender stops reading. */
-  char line[320];
+  char line[512];
   int  n = snprintf(line, sizeof(line), "[%s] %s: %s\n",
                     e.level, e.code, e.message);
   if(n < 0) n = 0;
-  if((size_t)n >= sizeof(line)) n = (int)sizeof(line) - 1;
+  if((size_t)n >= sizeof(line)) {
+    /* Too long: cut at a character border (not inside a UTF-8 sequence) and keep the line break, or the next line of the
+       mirror is glued to this one. */
+    n = (int)sizeof(line) - 2;
+    while(n > 0 && ((unsigned char)line[n - 1] & 0xC0) == 0x80) n--;      /* continuation bytes of a cut character */
+    if(n > 0 && ((unsigned char)line[n - 1] & 0x80)) n--;                  /* and its lead byte */
+    line[n++] = '\n';
+    line[n] = 0;
+  }
   int err = 0;
   int out = out_mirror(line, (size_t)n, &err);
 

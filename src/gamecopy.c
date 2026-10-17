@@ -1333,6 +1333,7 @@ ps5tm_gamecopy_start(const char *title_id, const char *mount, const char *mode,
   pthread_attr_t attr;
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&attr, 1024 * 1024);    /* copy_tree recurses with a path buffer per level; the default is not ours to rely on */
   pthread_t th;
   int rc = pthread_create(&th, &attr, copy_thread, a);
   pthread_attr_destroy(&attr);

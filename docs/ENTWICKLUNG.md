@@ -90,7 +90,7 @@ export PS5_PAYLOAD_SDK=$HOME/ps5sdk/sdk
 make
 ```
 
-Ergebnis: `PS5_Cooling_Center.elf` (~6,1 MB — Web-UI samt den 30 Profilbildern,
+Ergebnis: `PS5_Cooling_Center.elf` (~9 MB — Web-UI samt den 30 Profilbildern,
 Konverter, Bibliotheken und die Dateien der Kachel (1,7 MB) eingebettet; das Kachel-Paket nicht: Es kostete 10,5 MB Speicher,
 und die Konsole konnte dann keine einzige Anfrage mehr bedienen. Mit
 `make TILE_PKG=pkg/out/x.pkg` lässt es sich trotzdem einbetten. Der Installer
@@ -330,6 +330,7 @@ src/log.c           Ereignis-Ringpuffer (gespiegelt ins Kernelprotokoll); Steuer
 src/klogown.h       erkennt Zeilen der App selbst im Kernel-Puffer; die Leser (Spiel, Takt, Controller, Mikrofon-Taste) überspringen sie
 src/sysinfo.c       Modell, Laufzeit, Speicherplatz (zwischengespeichert)
 src/netdisp.c       Netzwerkverbindung und angeschlossener Bildschirm
+src/qr.c           QR-Code für die Adresse der Oberfläche (System-Seite); der Encoder stammt aus webhb von slopmaster33 (GPL-3.0)
 src/telemetry.c     Stromschienen, Takt live, Bildrate
 src/clocks.c        Taktgrenzen aus der Energiezustandstabelle der Konsole
 src/chanlog.c       Aufzeichnung aller SoC-Sensorkanäle (zum Zuordnen)
@@ -342,6 +343,7 @@ src/notify.c        Bildschirmmeldungen, Adresse im Heimnetz
 src/power.c         Ausschalten und Neustart
 src/procmgr.c       Laufende Payloads auflisten und beenden
 src/payloads.c      Payload-Dateien (interner Ordner, USB): starten, kopieren, löschen
+src/payprofiles.c  Payload-Profile: benannte Folgen von Payloads mit Pausen, ein Startprofil, Abbruch zwischen zwei Einträgen
 src/profile.c       Anzeigename und Profilbild des Benutzers
 src/regstats.c      Konsolenname aus der Registry (nur lesend)
 src/library.c       Spiele des Startbildschirms, Start, Cover
@@ -350,6 +352,16 @@ src/smp.c           Schnittstelle zu ShadowMountPlus (Port 10101)
 src/gamecopy.c      Spiele kopieren (jede Datei zurücklesen, Prüfsummen-Datei)
 src/gameconvert.c   Spiele konvertieren (exFAT, ffpfsc, ffpkg), Ergebnis zurücklesen und prüfen
 src/gamemove.c      Verschieben und Entpacken über ShadowMountPlus
+src/filemgr.c      Dateimanager: ansehen, laden, hochladen, kopieren, verschieben, umbenennen, löschen; ändern nur unter den Laufwerken und /data, nie über Verknüpfungen
+src/jobhist.c      Verlauf der Aufträge (history.jsonl): eine Zeile je beendetem Kopieren, Konvertieren, Installieren, Löschen, Dateimanager-Auftrag usw.
+src/imgread.c      nur-lesender Leser für exFAT-, PFS/PFSC- (.ffpfsc) und UFS2-Abbilder (.ffpkg); alles gegen die Größen der Köpfe geprüft, Fehler statt wilder Lesezugriffe
+src/imgjob.c       Abbild prüfen, in einen Ordner entpacken und reparieren (mit imgjob_lz4.inc für LZ4-Pakete)
+src/amprindex.c    AMPR-Index (ampr_emu.index, AMPRIDX3) eines Spiels bauen: C-Portierung von build_ampr_index.py aus drakmors ampr_emu
+src/amprlib.c      APR-EMU- und PlayGo-Datei eines Spiels: Fassung wählen, einsetzen, entfernen, das Original zurücklegen; die Fassungen sind eingebettet (gen/*_blob.c)
+src/lz4pack.c      LZ4-Asset-Packs eines Spiels (AMPRPAK4/AMPRDAT3): packen, prüfen, entpacken (mit lz4pack_write.inc und lz4pack_read.inc)
+src/lz4cfg.c       Packprofil der LZ4-Packs: eingebaute Regeln und ein Leser für die TOML-Profile von drakmors ampr_pack.py
+src/plugins.c      Spiel-Plugins (PlayGo-Stub, DLC-Module von drakmor) im fakelib eines Spiels aktuell halten
+src/trace.c        Mitschnitt: ein Profil für die LZ4-Packs aus dem echten Leseverhalten eines Spiels (Debug-APR-EMU, Journal AMPRCMD1)
 src/conv_exfat.c    exFAT-Abbild schreiben (aus MkPFS portiert)
 src/conv_pfs.c      PFS-Container mit PFSC-Kompression (aus MkPFS portiert), vollständige Prüfung
 src/conv_ufs2.c     UFS2-Abbild (ffpkg) nach dem Vorbild von UFS2Tool, Prüfsumme je Datei
@@ -366,16 +378,20 @@ src/libcache.c      Zwischenspeicher der Spieleliste (covers_and_more: meta.json
 src/pkgparse.c      Paket-Dateien lesen (PS4 CNT, PS5 FIH, geteilte PS5MPKG1): Titel, Version, Art, Bild; jede Angabe der Datei wird gegen ihre Größe geprüft
 src/pkgscan.c       Pakete suchen (Wurzel und Ordner pkg der Laufwerke, im Hintergrund), Liste mit Kennungen, geteilte Pakete als ein Eintrag
 src/pkgsplit.c      ein Paket in Teile (PS5MPKG1) aufteilen: Zwischennamen, Zurücklesen mit SHA-256, Namen erst am Ende, Abbruch räumt auf
+src/pkglive.c      Paket direkt vom PC: der Browser schickt Stücke zu 1 MB, die Konsole installiert, ohne dass vorher etwas auf ein Laufwerk geschrieben wird
+src/pkgqueue.c     Warteschlange: mehrere Pakete nacheinander installieren; jedes wird erst an seiner Reihe befragt
 src/pkgstream.c     kleiner HTTP-Server nur auf 127.0.0.1:18851: liefert das Paket (ein geteiltes als ein Strom) mit Range an die Installation der Konsole, nur den einen gepinnten Namen
 src/pkginstall.c    Paket installieren: Plan, ein Auftrag je Installation, Hilfsprogramm starten und befragen, Fertig erst bei Systemstatus + alle Bytes, danach Suche in der Datenbank (vier Enden: installiert, als fertig gemeldet, geliefert ohne Bestätigung, fehlgeschlagen); die Verbindung zum Hilfsprogramm liegt ab fd 200
 src/pkginst.h       Aufteilung des Pakets in Stücke (Slices) und der Server; src/pkginst_ipc.h die Nachrichten zwischen App und Hilfsprogramm
 src/helper/pkginst_helper.c  das Hilfsprogramm (eigene ELF, in die App eingebettet): ruft sceAppInstUtil* auf; höchstens ein Installationsaufruf je Prozess, fragt nach dem Fortschritt (auch als Ersatz für ein gestorbenes); beendet die Bibliothek nie, steigt mit _exit aus; gibt sceAppInstUtilGetInstallStatus einen eigenen 16-KiB-Puffer (die Funktion schreibt 712 Bytes, das bekannte Feld hat 600) und hält die Verbindung zur App ab fd 100
 tools/gen_blob.py   macht aus der Hilfs-ELF ein C-Feld und prüft, dass die Kennungsstelle genau einmal vorkommt
 src/savebackup.c    Spielstände: sichern, prüfen, zurückspielen (rohe Kopie mit Zurücklesen, Liste mit SHA-256, Stand vor dem Zurückspielen), ein Thread je Vorgang
+src/ps4m_core.c    PS4Mount 0.5.1 (gasb07, GPL-3.0) in der App: PS4-Fake-PKGs auf USB erkennen, ohne Installation einbinden, zurückverschieben; ps4m_pkg.c, ps4m_build.c, ps4m_crypto.c, ps4m_fw.c, ps4m_origin.c und ps4m_keys.h gehören dazu (Quelle: third_party/ps4mount/)
 src/tile.c          Kachel-Installation über AppInstUtil (Ordner aus eingebetteten Dateien, Paket als Rückfall)
 src/dynsym.c        Symbolsuche in Sony-Modulen
 src/sony_api_lock.c gemeinsame Sperre für empfindliche Systemaufrufe
-src/third_party/    cJSON, libdeflate
+src/third_party/    cJSON, libdeflate, lz4
+third_party/        eingebettete Fassungen fremder Programme (drakmor: ampr_emu, dlc_emu, playgo; gasb07: ps4mount) und LZ4-Profile
 web/                Web-Oberfläche (per tools/gen_assets.py eingebettet, gzip), Profilbilder in web/avatars/, Wörterbücher in web/lang/
 tile/               Dateien der Kachel (sce_sys), eingebettet über tools/gen_tile_files.py
 installer/          eigenständiger Kachel-Installer (ELF)

@@ -34,8 +34,7 @@ Konfigurationen ziehen beim ersten Start automatisch um.
 
 Darunter öffnen **Handbuch** und **FAQ** (seit 1.49.1) das eingebaute Benutzerhandbuch und die häufigen Fragen,
 am PC in einem neuen Tab; oben steht „← Zurück zur App“. Sie erscheinen in der gewählten Sprache (seit 1.50.0 sechs, siehe
-„Sprache der Oberfläche“ unten). Die eingebauten Fassungen haben keine Bildschirmfotos (die Fassungen mit Bildern gibt es als PDF
-und HTML zum Release).
+„Sprache der Oberfläche“ unten). Die eingebauten Fassungen haben keine Bildschirmfotos, damit die App klein bleibt.
 
 In der **Kopfzeile**, auf jeder Seite, stehen die **Power-Optionen**: vier Knöpfe, mit denen
 sich die Konsole steuern lässt. Ein gemeinsamer Rahmen zeigt, dass sie zusammengehören; sie sitzen
@@ -563,8 +562,7 @@ Uhrzeit folgen der Sprache (`de-DE`, `en-GB`, `it-IT`, `es-ES`, `fr-FR`, `ru-RU`
   deutsch. Auch Meldungen aus der Konsole in der Oberfläche (z. B. Fehlertexte eines Auftrags) werden übersetzt, soweit das
   Wörterbuch sie kennt; seltene Texte können deutsch bleiben. Wer eine Lücke findet, kann sie als Issue melden
   („Translation“) – Näheres zum Ergänzen steht in [ENTWICKLUNG.md](ENTWICKLUNG.md#übersetzungen).
-- **Handbuch und FAQ** gibt es in allen sechs Sprachen: in der App (Seitenleiste, unter „Credits“; ohne Bildschirmfotos) und
-  mit Bildern als PDF und HTML bei jeder Veröffentlichung.
+- **Handbuch und FAQ** gibt es in allen sechs Sprachen: in der App (Seitenleiste, unter „Credits“; ohne Bildschirmfotos).
 
 ## Credits (seit 06.10.2026)
 
@@ -1173,6 +1171,70 @@ proportional zum Abstand über der Schwelle hoch und gibt schon innerhalb von et
 die bei 85 °C gehalten werden soll, nie so leise laufen, wie das Ziel verspricht. Bei einem Ziel von 91 °C ist die
 Ruhelage die 91 °C, die die Konsole selbst einstellt. Überschreitet die Temperatur das Ziel, senkt der Servo die Schwelle
 wie bisher in Schritten von höchstens 3 °C alle 6 Sekunden, bis die Drehzahl zum Bedarf passt.
+
+### Schnellere Reaktion bei hohem Ziel (seit 17.10.2026)
+
+Bei einem Ziel ab **85 °C** liegen nur wenige Grad zwischen Ziel und Notfallgrenze (Ziel + 4 °C): Das Band, in dem die
+Drehzahl mit der Temperatur wächst, kann sich gar nicht entwickeln, bevor die Notfallregelung übernimmt. Die Simulation
+mit einem Ziel von 91 °C ließ die Konsole bis 98 °C steigen. Steigt die Temperatur deutlich schneller als Messrauschen
+(mehr als 6 °C pro Minute, gemessen am Mittelwert über 15 Sekunden), liest die App das Band deshalb bei der Temperatur,
+die in etwa 20 Sekunden zu erwarten ist, höchstens 6 °C voraus. Bei gleichbleibender oder fallender Temperatur und bei
+Zielen unter 85 °C ändert sich nichts: Für sie gilt das Verhalten, das bisher getestet wurde.
+
+### Nachtmodus (seit 17.10.2026)
+
+Auf der Kühlungsseite, unter „Zieltemperatur“ und „Betriebsart“, gibt es die Karte **Nachtmodus**: Zwischen zwei
+Uhrzeiten (zum Beispiel 23:00 bis 07:00, das Fenster darf über Mitternacht gehen) gilt statt der Zieltemperatur das
+**Nachtziel**, meist ein wärmeres und damit leiseres. Eine eigene **Spielregel** geht vor: Läuft ein Spiel mit Regel, gilt
+deren Ziel. Gleiche Uhrzeiten bedeuten „nie“.
+
+- Die Konsole kennt keine Zeitzone. Die Seite schickt deshalb beim Speichern den Zeitversatz des Geräts mit, auf dem sie
+  geöffnet ist (aus dem Browser). Ändert sich dieser (Sommer-/Winterzeit), zieht die Seite ihn beim nächsten Öffnen
+  still nach.
+- Das Nachtziel liegt wie jedes Ziel zwischen 60 und 91 °C; die Notfallgrenze bleibt mindestens 4 °C darüber.
+- Im Protokoll stehen `night_mode_on` und `night_mode_off`; im Status zeigt `control.night_active`, ob er gerade gilt, und
+  `control.effective_target_c` das Ziel, nach dem geregelt wird.
+
+### Lüfter-Selbsttest (seit 17.10.2026)
+
+In der Expertenansicht, in der Karte „Lüfterdiagnose“, prüft der Knopf **Lüfter jetzt testen**, ob der Lüfter überhaupt
+auf die Schwelle antwortet – unabhängig von der Temperatur. Die Regelung zeigt das sonst nur, wenn die Konsole heiß wird.
+Der Test setzt die Schwelle 8 °C unter die aktuelle Temperatur (nicht unter 30 °C) und liest die Drehzahl jede Sekunde.
+Steigt sie um mindestens 8 Prozentpunkte (frühestens nach 6 Sekunden), gilt der Lüfter als **reagierend**; passiert das
+binnen 30 Sekunden nicht, steht dort **reagiert nicht**, mit den möglichen Ursachen (die Firmware beachtet die Schwelle
+nicht, kstuff ist nicht geladen, die Lüftersteuerung ist nicht verfügbar). Danach übernimmt die Regelung wieder, ohne
+Umweg über die Testschwelle; im Modus „Beobachten“ bekommt die Konsole ihre eigene Einstellung zurück.
+
+- Er läuft nur bei kühler Konsole (höchstens 72 °C, und im Modus Automatik unter dem Ziel), nicht während der
+  Notfallregelung und nur, wenn die Drehzahl lesbar ist; sonst wird er mit einem Grund abgelehnt.
+- Der Lüfter wird dabei bis zu 30 Sekunden hörbar lauter. Der Knopf bricht einen laufenden Test ab.
+- Das Ergebnis (Drehzahl vorher und höchstens, Dauer, Schwelle) bleibt bis zum nächsten Neustart der App stehen.
+
+### Mindestdrehzahl der Konsole (seit 17.10.2026)
+
+Die Konsole dreht den Lüfter nie unter einen eigenen Mindestwert, ganz gleich, wie niedrig die App ihn verlangt. Gemessen am
+17.10.2026: **20 %** im Leerlauf, **34 %** in Spielen (in allen 18 aufgezeichneten Sitzungen bei 41 bis 66 °C). Die App
+lernt diesen Wert während des Betriebs (das Minimum der letzten zehn Minuten, solange die Schwelle in der Ruhelage steht
+und die Temperatur deutlich unter Ziel und Schwelle liegt, getrennt für Leerlauf und Spiel) und zeigt ihn in der
+Lüfterdiagnose als „Mindestdrehzahl der Konsole“. Die Soll-Ist-Abweichung rechnet mit ihm: Im Leerlauf steht dort nicht mehr
+dauerhaft „−7 %“, weil das Modell 13 % annahm und die Konsole 20 % hält.
+
+### Ein einzelner ausgefallener Sensor (seit 17.10.2026)
+
+Antwortet nur einer der beiden Temperatursensoren (Prozessor, Hauptchip) nicht, gilt dessen letzter Wert bis zu 10
+Sekunden weiter, damit der Durchschnitt nicht um die Differenz der beiden fällt (im Spiel liegt der Hauptchip etwa 10 °C
+unter dem Prozessor). Bleibt der Prozessor-Sensor länger weg, regelt die App nach dem Hauptchip allein und sagt es einmal im
+Protokoll (`sensor_single`). Fallen beide aus, bleibt es bei der bisherigen Regel: nach 10 Sekunden hält die App den
+Lüfter auf mindestens 70 %.
+
+### Beenden der App
+
+Beendet jemand die App mit SIGTERM oder SIGINT, gibt sie die Lüftersteuerung zuerst an die Konsole zurück (Protokoll
+`fan_stop`) und endet innerhalb einer Sekunde; klemmt der Lüfterfaden, beendet ein Alarm sie nach 5 Sekunden. **SIGKILL**
+lässt sich nicht abfangen: Damit beendet die App ihre ältere Ausführung beim Neustart, und so beenden auch Werkzeuge wie
+der Prozess-Manager Programme. Dann bleibt, wie bisher, die letzte Schwelle stehen, bis die Konsole sie beim nächsten
+Zustandswechsel (Spielstart oder -ende, Ruhemodus) selbst auf 91 °C setzt. Das ist nie mehr als das, was die Konsole ohne
+die App einstellt; die App kann den Lüfter nur schneller machen, nicht langsamer als im Auslieferungszustand.
 
 ### Vergleich mit ShadowMountPlus (`fan_target_temperature`)
 

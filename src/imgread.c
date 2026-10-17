@@ -162,7 +162,7 @@ pfsc_cl(bs_t *s) {
 /* Takes over under. NULL (under is closed) when it is not a PFS container of this layout. */
 static bs_t *
 pfsc_open(bs_t *under) {
-  uint8_t h[PFS_BS];
+  uint8_t h[4 * PFS_INODE];                 /* header (0x40) and the first four inodes; not a whole block: this runs on small thread stacks */
   pfsc_bs_t *p = NULL;
   if(under->rd(under, 0, h, 0x40) != 0 || rd64(h) != 2 || rd64(h + 8) != 20130315 || rd32(h + 0x20) != PFS_BS) goto bad;
   if(under->rd(under, PFS_BS, h, 4 * PFS_INODE) != 0) goto bad;

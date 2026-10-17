@@ -1432,6 +1432,12 @@ ps5tm_trace_action(const char *id, const char *action, char *msg, size_t n) {
     snprintf(j->game, sizeof(j->game), "%s", li.path);
     j->generate = gen;
     pthread_mutex_lock(&g_lock);
+    if(g_tr.busy) {                              /* the check at the top and this set are two lock holds: a double click got both */
+      pthread_mutex_unlock(&g_lock);
+      free(j);
+      snprintf(msg, n, "Es läuft schon ein Vorgang des Mitschnitts.");
+      return 409;
+    }
     g_tr.busy = 1;
     g_tr.msg[0] = 0;
     snprintf(g_tr.id, sizeof(g_tr.id), "%s", id);

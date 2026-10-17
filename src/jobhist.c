@@ -70,13 +70,13 @@ trim_locked(void) {
   int total = 0;
   for(size_t i = 0; i < len; i++) if(buf[i] == '\n') total++;
   int skip = total - HIST_KEEP;
-  char *start = buf;
-  while(skip > 0 && *start) { if(*start == '\n') skip--; start++; }
+  char *start = buf, *end = buf + len;                    /* by length, not by NUL: a power cut can leave a zero-filled block */
+  while(skip > 0 && start < end) { if(*start == '\n') skip--; start++; }
   char tmp[sizeof(HIST_FILE) + 8];
   snprintf(tmp, sizeof(tmp), "%s.tmp", HIST_FILE);
   int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if(fd >= 0) {
-    size_t n = strlen(start), off = 0;
+    size_t n = (size_t)(end - start), off = 0;
     int ok = 1;
     while(off < n) {
       ssize_t w = write(fd, start + off, n - off);

@@ -160,6 +160,11 @@ ps5tm_config_defaults(ps5tm_config_t *cfg) {
   cfg->lightbar_hot_c = 76;
   cfg->ps_button_status = 1;
   cfg->library_cache = 0;
+  cfg->night_enabled = 0;
+  cfg->night_start_min = 23 * 60;
+  cfg->night_end_min = 7 * 60;
+  cfg->night_target_c = 75;
+  cfg->night_tz_offset_min = 0;
 
   /* "Quiet when idle, cool under load."
    *
@@ -301,6 +306,12 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
   cfg->lightbar_enabled = cfg->lightbar_enabled ? 1u : 0u;
   cfg->ps_button_status = cfg->ps_button_status ? 1u : 0u;
   cfg->library_cache = cfg->library_cache ? 1u : 0u;
+  cfg->night_enabled = cfg->night_enabled ? 1u : 0u;
+  cfg->night_start_min = clampu(cfg->night_start_min, 0, 1439);
+  cfg->night_end_min = clampu(cfg->night_end_min, 0, 1439);
+  cfg->night_target_c = clampu(cfg->night_target_c, PS5TM_TARGET_MIN_C, PS5TM_TARGET_MAX_C);
+  if(cfg->night_tz_offset_min < -720) cfg->night_tz_offset_min = -720;
+  if(cfg->night_tz_offset_min > 840)  cfg->night_tz_offset_min = 840;
   cfg->lightbar_warn_c = clampu(cfg->lightbar_warn_c, 55, 90);
   cfg->lightbar_hot_c = clampu(cfg->lightbar_hot_c, 56, 95);
   if(cfg->lightbar_hot_c <= cfg->lightbar_warn_c)
@@ -375,9 +386,12 @@ ps5tm_config_load(void) {
 
   int migrated = 0;
   FILE *f = fopen(PS5TM_CONFIG_PATH, "r");
-  if(!f && errno != ENOENT)                              /* there, but not readable: not the same as "none yet" */
-    PS5TM_WARN("config_unreadable", "Konfiguration %s nicht lesbar (errno %d) – Standardwerte aktiv.", PS5TM_CONFIG_PATH, errno);
-  if(!f) {
+  int open_errno = f ? 0 : errno;                        /* before anything else can change it */
+  if(!f && open_errno != ENOENT)                         /* there, but not readable: not the same as "none yet" */
+    PS5TM_WARN("config_unreadable", "Konfiguration %s nicht lesbar (errno %d) – Standardwerte aktiv.", PS5TM_CONFIG_PATH, open_errno);
+  if(!f && open_errno == ENOENT) {                       /* only a missing file is a reason to look at the old places: a current
+                                                            file that cannot be read must not be replaced by a stale old one (and
+                                                            then saved over it as "migrated") */
     /* The data directory has been renamed twice; read the old locations once
        so an existing install does not quietly fall back to defaults. Newest
        first, because a console may well carry both. */
@@ -467,6 +481,16 @@ ps5tm_config_load(void) {
     g_config.ps_button_status = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "library_cache")))
     g_config.library_cache = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_enabled")))
+    g_config.night_enabled = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_start_min")))
+    g_config.night_start_min = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_end_min")))
+    g_config.night_end_min = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_target_c")))
+    g_config.night_target_c = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_tz_offset_min")))
+    g_config.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "lightbar_warn_c")))
     g_config.lightbar_warn_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "lightbar_hot_c")))
@@ -665,6 +689,11 @@ ps5tm_config_save(void) {
           "  \"lightbar_hot_c\": %u,\n"
           "  \"ps_button_status\": %u,\n"
           "  \"library_cache\": %u,\n"
+          "  \"night_enabled\": %u,\n"
+          "  \"night_start_min\": %u,\n"
+          "  \"night_end_min\": %u,\n"
+          "  \"night_target_c\": %u,\n"
+          "  \"night_tz_offset_min\": %d,\n"
           "  \"profile\": \"%s\",\n"
           "  \"curve\": [\n",
           c.probe_mask,
@@ -678,6 +707,7 @@ ps5tm_config_save(void) {
           c.lightbar_hot_c,
           c.ps_button_status,
           c.library_cache,
+          c.night_enabled, c.night_start_min, c.night_end_min, c.night_target_c, c.night_tz_offset_min,
           c.profile == PS5TM_PROFILE_COOL       ? "cool"
           : c.profile == PS5TM_PROFILE_BALANCED ? "balanced"
                                                 : "comfort");

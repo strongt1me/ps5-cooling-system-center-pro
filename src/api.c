@@ -326,6 +326,11 @@ handle_status(int fd) {
     cJSON_AddNumberToObject(f, "override_count",   (double)snap.override_count);
     if(snap.override_count)
       cJSON_AddNumberToObject(f, "last_override_c", snap.last_override_c);
+
+    /* The lowest speed the console holds by itself (learned while resting at the top): -1 while unknown. */
+    cJSON_AddNumberToObject(f, "floor_pct",      snap.floor_pct);
+    cJSON_AddNumberToObject(f, "floor_idle_pct", snap.floor_idle_pct);
+    cJSON_AddNumberToObject(f, "floor_game_pct", snap.floor_game_pct);
   }
 
   /* ---- what the controller is thinking ---- */
@@ -351,6 +356,9 @@ handle_status(int fd) {
     /* What the controller is really aiming at — a per-game rule may have
        replaced the configured target. */
     cJSON_AddNumberToObject(c, "effective_target_c", snap.effective_target_c);
+    cJSON_AddBoolToObject  (c, "night_active",       snap.night_active);
+    cJSON_AddNumberToObject(c, "lead_c10",           snap.lead_c100 / 10);       /* tenths of a degree read ahead */
+    cJSON_AddNumberToObject(c, "lead_max_c10",       snap.lead_max_c100 / 10);
     char active_rule[16];
     ps5tm_fan_active_rule(active_rule, sizeof(active_rule));
     cJSON_AddStringToObject(c, "active_game_rule",   active_rule);
@@ -571,6 +579,10 @@ handle_game_rules_import(int fd, const ps5tm_request_t *req) {
     return;
   }
 
+  ps5tm_config_lock();                                  /* g_config is written by other requests: read it under the lock */
+  unsigned def_target = g_config.target_temp_c;
+  ps5tm_config_unlock();
+
   ps5tm_game_rule_t tmp[PS5TM_MAX_GAME_RULES];
   unsigned n = 0;
   const cJSON *e;
@@ -587,7 +599,7 @@ handle_game_rules_import(int fd, const ps5tm_request_t *req) {
       ps5tm_copy_utf8(tmp[n].title_name, sizeof(tmp[n].title_name), nm->valuestring);
 
     const cJSON *tt = cJSON_GetObjectItem(e, "target_temp_c");
-    unsigned v = cJSON_IsNumber(tt) ? ps5tm_num_u32(tt->valuedouble) : g_config.target_temp_c;
+    unsigned v = cJSON_IsNumber(tt) ? ps5tm_num_u32(tt->valuedouble) : def_target;
     if(v < PS5TM_TARGET_MIN_C) v = PS5TM_TARGET_MIN_C;
     if(v > PS5TM_TARGET_MAX_C) v = PS5TM_TARGET_MAX_C;
     tmp[n].target_temp_c = v;
@@ -2374,6 +2386,69 @@ handle_profile_username(int fd, const ps5tm_request_t *req) {
 }
 
 
+/* -------------------------------------------------------------- fan self-test */
+
+static const char *
+selftest_state_name(int s) {
+  return s == 1 ? "requested" : s == 2 ? "running" : s == 3 ? "finished" : "idle";
+}
+
+static const char *
+selftest_verdict_name(int v) {
+  return v == 1 ? "responds" : v == 2 ? "no_response" : v == 3 ? "aborted" : v == 4 ? "not_possible" : "none";
+}
+
+static void
+handle_fan_selftest(int fd, const ps5tm_request_t *req, int is_get, int is_post) {
+  if(is_get) {
+    ps5tm_fan_selftest_t t;
+    ps5tm_fan_selftest_get(&t);
+    cJSON *o = cJSON_CreateObject();
+    if(!o) { ps5tm_http_send_error(fd, 503, "no_memory", "Zu wenig Speicher."); return; }
+    cJSON_AddBoolToObject  (o, "ok", 1);
+    cJSON_AddStringToObject(o, "state",   selftest_state_name(t.state));
+    cJSON_AddStringToObject(o, "verdict", selftest_verdict_name(t.verdict));
+    cJSON_AddStringToObject(o, "why",     t.why);
+    cJSON_AddNumberToObject(o, "baseline_pct", t.baseline_pct);
+    cJSON_AddNumberToObject(o, "peak_pct",     t.peak_pct);
+    cJSON_AddNumberToObject(o, "rise_pct",     t.rise_pct);
+    cJSON_AddNumberToObject(o, "threshold_c",  t.threshold_c);
+    cJSON_AddNumberToObject(o, "hottest_c",    t.hottest_c);
+    cJSON_AddNumberToObject(o, "elapsed_s",    t.elapsed_s);
+    cJSON_AddNumberToObject(o, "limit_s",      t.limit_s);
+    cJSON_AddNumberToObject(o, "finished_ms",  (double)t.finished_ms);
+    cJSON *a = cJSON_AddArrayToObject(o, "samples");
+    for(int i = 0; a && i < t.nsamples && i < PS5TM_SELFTEST_SAMPLES; i++)
+      cJSON_AddItemToArray(a, cJSON_CreateNumber(t.samples[i]));
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!is_post) {
+    ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt.");
+    return;
+  }
+  cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *ja = b ? cJSON_GetObjectItem(b, "action") : NULL;
+  char action[16] = "";
+  if(cJSON_IsString(ja)) snprintf(action, sizeof(action), "%s", ja->valuestring);
+  cJSON_Delete(b);
+  if(!strcmp(action, "abort")) {
+    ps5tm_fan_selftest_abort();
+    ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+    return;
+  }
+  if(strcmp(action, "start")) {
+    ps5tm_http_send_error(fd, 400, "invalid_action", "action muss \"start\" oder \"abort\" sein.");
+    return;
+  }
+  char why[112] = "";
+  int rc = ps5tm_fan_selftest_start(why, sizeof(why));
+  if(rc == -1) { ps5tm_http_send_error(fd, 409, "selftest_busy", "Der Lüftertest läuft schon."); return; }
+  if(rc != 0)  { ps5tm_http_send_error(fd, 409, "selftest_refused", why); return; }
+  ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+}
+
+
 /* ------------------------------------------------------------------- config */
 
 static void
@@ -2416,6 +2491,8 @@ handle_config_get(int fd) {
       "\"lightbar_hot_c\":%u,"
       "\"ps_button_status\":%u,"
       "\"library_cache\":%u,"
+      "\"night_enabled\":%u,\"night_start_min\":%u,\"night_end_min\":%u,"
+      "\"night_target_c\":%u,\"night_tz_offset_min\":%d,"
       "\"profile\":\"%s\","
       "\"curve\":[",
       g_config.schema_version,
@@ -2438,6 +2515,8 @@ handle_config_get(int fd) {
       g_config.lightbar_hot_c,
       g_config.ps_button_status,
       g_config.library_cache,
+      g_config.night_enabled, g_config.night_start_min, g_config.night_end_min,
+      g_config.night_target_c, g_config.night_tz_offset_min,
       g_config.profile == PS5TM_PROFILE_COOL       ? "cool"
       : g_config.profile == PS5TM_PROFILE_BALANCED ? "balanced"
                                                    : "comfort");
@@ -2564,6 +2643,16 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
     next.ps_button_status = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "library_cache")))
     next.library_cache = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_enabled")))
+    next.night_enabled = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_start_min")))
+    next.night_start_min = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_end_min")))
+    next.night_end_min = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_target_c")))
+    next.night_target_c = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_tz_offset_min")))
+    next.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
 
   /* control_band_c, deadband_c, control_interval_s, average_window_s and
      max_step_pct are deliberately NOT read here.
@@ -2659,6 +2748,11 @@ handle_config_export(int fd) {
   cJSON_AddNumberToObject(cfg, "lightbar_hot_c", g_config.lightbar_hot_c);
   cJSON_AddNumberToObject(cfg, "ps_button_status", g_config.ps_button_status);
   cJSON_AddNumberToObject(cfg, "library_cache", g_config.library_cache);
+  cJSON_AddNumberToObject(cfg, "night_enabled", g_config.night_enabled);
+  cJSON_AddNumberToObject(cfg, "night_start_min", g_config.night_start_min);
+  cJSON_AddNumberToObject(cfg, "night_end_min", g_config.night_end_min);
+  cJSON_AddNumberToObject(cfg, "night_target_c", g_config.night_target_c);
+  cJSON_AddNumberToObject(cfg, "night_tz_offset_min", g_config.night_tz_offset_min);
   cJSON_AddStringToObject(cfg, "profile",
       g_config.profile == PS5TM_PROFILE_COOL ? "cool"
       : g_config.profile == PS5TM_PROFILE_BALANCED ? "balanced"
@@ -2764,6 +2858,16 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
     next.ps_button_status = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "library_cache")))
     next.library_cache = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_enabled")))
+    next.night_enabled = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_start_min")))
+    next.night_start_min = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_end_min")))
+    next.night_end_min = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_target_c")))
+    next.night_target_c = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_tz_offset_min")))
+    next.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
   if(cJSON_IsString(it = cJSON_GetObjectItem(cfg, "profile"))) {
     next.profile = !strcmp(it->valuestring, "cool")     ? PS5TM_PROFILE_COOL
                  : !strcmp(it->valuestring, "balanced") ? PS5TM_PROFILE_BALANCED
@@ -3338,9 +3442,10 @@ static void
 handle_logs_tail(int fd, const ps5tm_request_t *req) {
   unsigned want = 40;
   if(req->query[0]) {
-    const char *p = strstr(req->query, "count=");
-    if(p) {
-      unsigned v = (unsigned)strtoul(p + 6, NULL, 10);
+    char cnt[16];
+    query_param(req->query, "count", cnt, sizeof(cnt));        /* the whole key, not "discount=" */
+    if(cnt[0]) {
+      unsigned v = (unsigned)strtoul(cnt, NULL, 10);
       if(v >= 1 && v <= LOG_PAGE) want = v;
     }
   }
@@ -4678,6 +4783,11 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(is_post) { handle_config_import(fd, req); return; }
     ps5tm_http_send_error(fd, 405, "method_not_allowed",
                           "Nur POST erlaubt.");
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/fan/selftest")) {
+    handle_fan_selftest(fd, req, is_get, is_post);
     return;
   }
 

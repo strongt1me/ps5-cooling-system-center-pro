@@ -76,6 +76,12 @@
 #define BLIND_AFTER_PASSES 10
 #define BLIND_MIN_DUTY_PCT 70
 
+/* One of the two sensors (processor, main chip) answers nothing while the other does: the regulation must not quietly
+   continue on the cooler one alone (in a game the processor runs about 10 K above the chip's channels, so the average
+   would fall by that much for every dropout and the fan with it). For this many passes the last valid value of the
+   missing sensor stands in for it; if it stays away longer, the regulation goes on with the other one and says so once. */
+#define SENSOR_HOLD_PASSES 10
+
 /* The same for the fan-speed register: after this many passes without a valid
  * read the smoothed value is dropped, because a stale one makes the servo steer
  * by a speed the fan no longer has. */
@@ -94,7 +100,8 @@ static atomic_int g_manual_threshold_c = 0;
 
 static int g_cpu_warning_logged = 0;
 static int g_soc_warning_logged = 0;
-static uint64_t g_warning_since_ms = 0;
+static uint64_t g_warning_since_ms = 0;     /* monotonic: the countdown is a difference */
+static uint64_t g_warning_since_wall = 0;   /* the same moment as wall-clock time, for the snapshot and the API */
 
 /* Which per-title rule is currently overriding the global settings, so the
    dashboard can say so and the log only reports the transitions. */
@@ -384,7 +391,7 @@ static int
 comfort_step(int duty, int avg_c100, int trend_c100,
              const ps5tm_config_t *cfg, uint64_t now,
              uint64_t *last_down_ms, int *safety_out,
-             int at_min_cooling, int measured_duty) {
+             int at_min_cooling, int measured_duty, int lead_c100) {
   int safety = (int)cfg->safety_temp_c * 100;
 
   /* Hardware first: above the safety limit the band, the trend and the
@@ -396,6 +403,10 @@ comfort_step(int duty, int avg_c100, int trend_c100,
   *safety_out = 0;
 
   int want    = band_duty(avg_c100, cfg);
+  if(lead_c100 > 0) {                        /* a steep rise at a high target: read the band a few seconds ahead */
+    int ahead = band_duty(avg_c100 + lead_c100, cfg);
+    if(ahead > want) want = ahead;
+  }
   int ceiling = comfort_ceiling(cfg);
   if(want > ceiling) want = ceiling;
 
@@ -453,7 +464,8 @@ comfort_step(int duty, int avg_c100, int trend_c100,
        speed corresponds to, not a hair. Otherwise the fan hunts around every
        small fluctuation, which is more noticeable than a slightly high but
        steady speed. */
-    int hyst = (int)cfg->deadband_c * 100 / (int)cfg->control_band_c;
+    int band = (int)cfg->control_band_c;                 /* ps5tm_config_clamp always sets it; this line must not depend on that */
+    int hyst = (int)cfg->deadband_c * 100 / (band < 1 ? 1 : band);
     if(hyst < 1) hyst = 1;
     if(want > duty - hyst) return duty;
 
@@ -659,6 +671,158 @@ check_warnings(const ps5tm_sensors_t *s, int *warn_cpu, int *warn_soc) {
 }
 
 
+/* ===================================================================== 17.10.2026
+ * Lead on a steep rise, fan self-test, learned fan floor, night mode, graceful stop. */
+
+/* Lead (only for high targets). With a target of 85 °C and more there are few degrees between the target and the safety
+ * limit, and the band cannot develop before the safety path takes over: in the closed-loop simulation a target of 91 let
+ * the die reach 98 °C. For a rise that is clearly steeper than noise the band is read at the temperature expected a few
+ * seconds from now. The slope is taken from the averaged value across LEAD_SPAN_S passes (the raw trend of the ring is
+ * noise at 1 Hz) and counts only above a dead zone. Falling or flat temperatures are not touched, and neither are the
+ * lower targets: for them the behaviour stays exactly as it was tested. */
+#ifdef PS5TM_LEAD_MIN_TARGET_C           /* test builds only: lowers the gate so the lead can be watched at temperatures a console really reaches */
+#define LEAD_MIN_TARGET_C        PS5TM_LEAD_MIN_TARGET_C
+#else
+#define LEAD_MIN_TARGET_C        85
+#endif
+#define LEAD_SPAN_S              15
+#define LEAD_HORIZON_S           20
+#define LEAD_DEADZONE_C100_PER_S 10      /* 0.10 K/s = 6 K per minute */
+#define LEAD_MAX_C100            600     /* at most 6 K ahead */
+
+/* Self-test. The threshold is put SELFTEST_GAP_C below the temperature (down to the hardware minimum) and the speed of
+ * the fan is watched: it has to gain SELFTEST_RISE_PCT percentage points within SELFTEST_LIMIT_S seconds. */
+#define SELFTEST_LIMIT_S         30
+#define SELFTEST_MIN_S           6
+#define SELFTEST_RISE_PCT        8
+#define SELFTEST_MAX_START_C     72
+#define SELFTEST_GAP_C           8
+#define SELFTEST_HW_MIN_C        30      /* the ICC hardware minimum (platform.c) */
+
+/* Learned floor: the lowest speed the console shows while the threshold rests at the top and the temperature is well below
+ * it. The minimum of the last FLOOR_BUCKETS buckets of FLOOR_BUCKET_PASSES passes. Idle and game apart: the console holds
+ * a different minimum in a game (34 % against 20 %, measured 17.10.2026). */
+#define FLOOR_BUCKETS            10
+#define FLOOR_BUCKET_PASSES      60
+#define FLOOR_MIN_GAP_C          20      /* the firmware keeps a little extra speed within about 20 K below the threshold */
+
+typedef struct { int b[FLOOR_BUCKETS]; int idx, n; } floor_track_t;
+
+static void
+floor_reset(floor_track_t *t) {
+  for(int i = 0; i < FLOOR_BUCKETS; i++) t->b[i] = -1;
+  t->idx = 0;
+  t->n = 0;
+}
+
+static void
+floor_feed(floor_track_t *t, int v) {
+  if(v < 0) return;
+  if(t->b[t->idx] < 0 || v < t->b[t->idx]) t->b[t->idx] = v;
+  if(++t->n >= FLOOR_BUCKET_PASSES) {
+    t->n = 0;
+    t->idx = (t->idx + 1) % FLOOR_BUCKETS;
+    t->b[t->idx] = -1;
+  }
+}
+
+static int
+floor_value(const floor_track_t *t) {
+  int m = -1;
+  for(int i = 0; i < FLOOR_BUCKETS; i++)
+    if(t->b[i] >= 0 && (m < 0 || t->b[i] < m)) m = t->b[i];
+  return m;
+}
+
+/* Is the wall clock inside the night window? The window may cross midnight; equal start and end mean never. */
+static int
+night_window_active(const ps5tm_config_t *cfg, uint64_t wall_ms) {
+  if(!cfg->night_enabled || cfg->night_start_min == cfg->night_end_min) return 0;
+  if(wall_ms < 86400000ull) return 0;                          /* the clock is not set yet */
+  int64_t m = (int64_t)(wall_ms / 60000ull) + (int64_t)cfg->night_tz_offset_min;
+  int local = (int)(((m % 1440) + 1440) % 1440);
+  int s = (int)cfg->night_start_min, e = (int)cfg->night_end_min;
+  return s < e ? (local >= s && local < e) : (local >= s || local < e);
+}
+
+static pthread_mutex_t     g_st_lock = PTHREAD_MUTEX_INITIALIZER;   /* the test's progress and result */
+static ps5tm_fan_selftest_t g_st;
+static int                 g_st_abort = 0;
+static atomic_int          g_stop_req = 0;
+
+void
+ps5tm_fan_request_stop(void) {
+  atomic_store(&g_stop_req, 1);
+}
+
+void
+ps5tm_fan_selftest_get(ps5tm_fan_selftest_t *out) {
+  pthread_mutex_lock(&g_st_lock);
+  *out = g_st;
+  pthread_mutex_unlock(&g_st_lock);
+}
+
+/* Caller holds g_st_lock. The text says WHY for aborted and impossible tests; for the other two it is a plain sentence. */
+static void
+selftest_end_locked(int verdict, const char *why) {
+  g_st.state       = 3;
+  g_st.verdict     = verdict;
+  g_st.finished_ms = ps5tm_now_ms();
+  g_st_abort       = 0;
+  const char *w = why;
+  if(!w) w = verdict == 1 ? "Der Lüfter reagiert." : verdict == 2 ? "Der Lüfter reagiert nicht." : "";
+  snprintf(g_st.why, sizeof(g_st.why), "%s", w);
+}
+
+/* Why the test cannot run now, or NULL. hottest < 0: no valid temperature. */
+static const char *
+selftest_refusal(int hottest, int fan_available, int duty_valid, int safety, int automatic, int target_c) {
+  if(!fan_available)  return "Die Lüftersteuerung ist nicht verfügbar.";
+  if(hottest < 0)     return "Es gibt keinen gültigen Temperaturwert.";
+  if(safety)          return "Die Sicherheitsregelung ist gerade aktiv.";
+  if(hottest > SELFTEST_MAX_START_C)
+    return "Die Konsole ist zu warm für den Test. Bitte erst abkühlen lassen.";
+  if(automatic && hottest >= target_c)
+    return "Die Konsole liegt auf oder über dem Ziel; der Test würde die Regelung stören.";
+  if(!duty_valid)     return "Die Drehzahl lässt sich nicht lesen, der Test könnte nichts messen.";
+  return NULL;
+}
+
+int
+ps5tm_fan_selftest_start(char *why, size_t why_len) {
+  ps5tm_snapshot_t sn;
+  ps5tm_fan_snapshot(&sn);
+  int hot = -1;
+  if(sn.sensors.cpu_valid && sn.sensors.cpu_c > hot) hot = sn.sensors.cpu_c;
+  if(sn.sensors.soc_valid && sn.sensors.soc_c > hot) hot = sn.sensors.soc_c;
+  const char *r = selftest_refusal(hot, sn.fan_available, sn.sensors.fan_duty_valid, sn.safety_active, sn.automatic,
+                                   sn.effective_target_c);
+  if(r) {
+    if(why && why_len) snprintf(why, why_len, "%s", r);
+    return -2;
+  }
+  pthread_mutex_lock(&g_st_lock);
+  if(g_st.state == 1 || g_st.state == 2) {
+    pthread_mutex_unlock(&g_st_lock);
+    return -1;
+  }
+  memset(&g_st, 0, sizeof(g_st));
+  g_st.state   = 1;
+  g_st.limit_s = SELFTEST_LIMIT_S;
+  g_st_abort   = 0;
+  pthread_mutex_unlock(&g_st_lock);
+  return 0;
+}
+
+void
+ps5tm_fan_selftest_abort(void) {
+  pthread_mutex_lock(&g_st_lock);
+  if(g_st.state == 1)      selftest_end_locked(3, "Abgebrochen.");
+  else if(g_st.state == 2) g_st_abort = 1;                     /* the fan thread ends it at its next pass */
+  pthread_mutex_unlock(&g_st_lock);
+}
+
+
 /* What the fan thread may wait for.
  *
  * It is the only thing that regulates the fan and nothing watches it: when it
@@ -726,8 +890,24 @@ fan_worker(void *arg) {
      clock moved on while this thread did not. */
   int      blind             = 0;   /* no valid temperature for a while       */
   int      blind_passes      = 0;
+  int      last_cpu_c        = -1, last_soc_c = -1;     /* last valid reading of each sensor */
+  int      cpu_miss          = 0,  soc_miss   = 0;      /* passes in a row without one       */
+  int      single_logged     = 0;
   int      duty_dead_passes  = 0;   /* passes in a row without a duty reading */
   int      duty_lost_logged  = 0;
+
+  /* Lead on a steep rise: the averaged temperature of the last passes. */
+  int      avg_hist[LEAD_SPAN_S + 1];
+  unsigned avg_hist_n        = 0;
+  int      lead_last_c100    = 0, lead_peak_c100 = 0;   /* the last one worked out, and the highest since the start (status) */
+  /* The self-test, while it runs in this thread. */
+  int      st_running        = 0, st_auto = 0, st_threshold = 0, st_blind = 0;
+  uint64_t st_t0             = 0;
+  /* Learned fan floor: [0] idle, [1] in a game. */
+  floor_track_t floor_t[2];
+  floor_reset(&floor_t[0]);
+  floor_reset(&floor_t[1]);
+  int      night_logged      = 0;
 
   /* Watchdog state — see the block inside the loop. `readback_ok` starts
      hopeful. It is cleared when the controller could not be read
@@ -744,13 +924,31 @@ fan_worker(void *arg) {
   uint64_t last_override_log = 0;
 
   for(;;) {
-    uint64_t now = ps5tm_now_ms();
+    /* Zwei Uhren mit Bedacht:
+       - Die monotone Uhr (now) treibt alle Regel-Intervalle und Fristen. Differenzen
+         auf ihr überstehen einen NTP-Zeitsprung (typisch kurz nach dem Boot), der sonst
+         jedes Intervall-Gatter auf einmal auslösen und den Warn-Countdown springen ließe.
+       - Die Resume-Erkennung braucht dagegen die Wanduhr (wall): nur sie zählt im
+         Ruhemodus weiter, wenn der Faden steht, und verrät so die lange Pause nach dem
+         Aufwachen. Ein seltener NTP-Vorsprung löst hier höchstens eine harmlose
+         Neu-Absicherung aus. */
+    uint64_t now  = ps5tm_mono_ms();
+    uint64_t wall = ps5tm_now_ms();
 
-    if(last_loop_ms && now > last_loop_ms && now - last_loop_ms >= RESUME_GAP_MS) {
+    if(atomic_load(&g_stop_req)) {
+      /* SIGTERM/SIGINT (main.c): hand the fan back to the console the way switching the automatic off does, then end. */
+      int eno = 0;
+      if(last_applied > 0 || atomic_load(&g_manual_threshold_c) > 0)
+        ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno);
+      PS5TM_INFO("fan_stop", "Beenden angefordert – die Lüftereinstellung geht an die Konsole zurück.");
+      _exit(0);
+    }
+
+    if(last_loop_ms && wall > last_loop_ms && wall - last_loop_ms >= RESUME_GAP_MS) {
       PS5TM_WARN("resume_detected",
                  "Lange Schleifenpause (%llus) erkannt – Rechte und "
                  "Lüftervorgabe werden erneut abgesichert.",
-                 (unsigned long long)((now - last_loop_ms) / 1000ull));
+                 (unsigned long long)((wall - last_loop_ms) / 1000ull));
 
       if(ps5tm_platform_escalate() != 0)
         PS5TM_WARN("resume_escalation_failed",
@@ -764,14 +962,17 @@ fan_worker(void *arg) {
       last_servo_ms = 0;
       duty_ema_x10  = -1;
       fan_error_logged = 0;
+      avg_hist_n    = 0;                         /* the slope across a pause means nothing */
     }
-    last_loop_ms = now;
+    last_loop_ms = wall;
 
     ps5tm_sensors_t s;
     int sensors_ok = (ps5tm_platform_read_sensors(&s) == 0);
 
     ps5tm_gamestate_t gs;
     ps5tm_gamestate_get(&gs);
+    int in_game   = (gs.foreground && gs.title_id[0] && ps5tm_gamestate_age_ms() <= 60000);
+    int night_now = 0;
     int activity_fg = (gs.foreground && gs.title_id[0]) ? 1 : 0;
 
     /* The worker already holds a full sensor sweep once a second, so the
@@ -833,6 +1034,23 @@ fan_worker(void *arg) {
         }
       }
 
+      /* Night mode: inside the window the quieter night target stands in for the global one. A title's own rule is more
+         specific and wins. Nothing is written to the configuration, as with the rules. */
+      if(!active_rule && night_window_active(&cfg, wall)) {
+        night_now = 1;
+        cfg.target_temp_c = clamp_target_c(cfg.night_target_c);
+        if(cfg.safety_temp_c < cfg.target_temp_c + 4)
+          cfg.safety_temp_c = cfg.target_temp_c + 4;
+      }
+      if(night_now != night_logged) {
+        night_logged = night_now;
+        if(night_now) {
+          PS5TM_INFO("night_mode_on", "Nachtmodus beginnt – Ziel %u °C.", cfg.target_temp_c);
+        } else {
+          PS5TM_INFO("night_mode_off", "Nachtmodus endet – zurück auf das normale Ziel.");
+        }
+      }
+
       if(active_rule && !g_rule_active) {
         g_rule_active = 1;
         PS5TM_INFO("game_rule_applied",
@@ -863,6 +1081,24 @@ fan_worker(void *arg) {
     int hottest = -1;
     if(s.cpu_valid && s.cpu_c > hottest) hottest = s.cpu_c;
     if(s.soc_valid && s.soc_c > hottest) hottest = s.soc_c;
+    /* a single missing sensor (see SENSOR_HOLD_PASSES); both missing stays what it was: the blind logic below */
+    if(s.cpu_valid) { last_cpu_c = s.cpu_c; cpu_miss = 0; } else if(cpu_miss < 1000) cpu_miss++;
+    if(s.soc_valid) { last_soc_c = s.soc_c; soc_miss = 0; } else if(soc_miss < 1000) soc_miss++;
+    if(s.cpu_valid != s.soc_valid) {
+      int miss = s.cpu_valid ? soc_miss : cpu_miss;
+      int last = s.cpu_valid ? last_soc_c : last_cpu_c;
+      if(miss <= SENSOR_HOLD_PASSES && last > hottest) hottest = last;
+      if(miss > SENSOR_HOLD_PASSES && !s.cpu_valid && !single_logged && cfg.mode == PS5TM_MODE_AUTOMATIC) {
+        /* only this way round matters: without the processor the cooler chip alone steers; without the chip the hotter
+           processor still does */
+        single_logged = 1;
+        PS5TM_WARN("sensor_single",
+                   "Der Prozessor-Sensor liefert seit mehr als %d s keinen Wert. Geregelt wird nach dem Hauptchip allein; "
+                   "der liegt im Spiel meist etwa 10 °C tiefer als der Prozessor.", SENSOR_HOLD_PASSES);
+      }
+    } else if(s.cpu_valid) {
+      single_logged = 0;                                     /* both answer again */
+    }
     if(hottest >= 0) {
       if(blind) {
         /* Readings are back. What is still in the ring was taken before the
@@ -898,6 +1134,8 @@ fan_worker(void *arg) {
 
     int avg_c100   = ring_avg_c100(&ring);
     int trend_c100 = ring_trend_c100(&ring);
+    if(avg_c100 >= 0) avg_hist[avg_hist_n++ % (LEAD_SPAN_S + 1)] = avg_c100;
+    else              avg_hist_n = 0;
 
     if(s.fan_duty_valid) {
       int m10 = s.fan_duty_pct * 10;
@@ -930,16 +1168,16 @@ fan_worker(void *arg) {
       if(s.cpu_valid && s.cpu_c > hottest) hottest = s.cpu_c;
       if(s.soc_valid && s.soc_c > hottest) hottest = s.soc_c;
 
-      int warn_limit = (int)cfg.warning_cpu_c;
-      if((int)cfg.warning_soc_c < warn_limit) warn_limit = (int)cfg.warning_soc_c;
-
       lightbar_state = 0;
       if(hottest >= (int)cfg.lightbar_hot_c) lightbar_state = 2;
       else if(hottest >= (int)cfg.lightbar_warn_c) lightbar_state = 1;
 
-      if(hottest >= 0 && hottest >= warn_limit) {
+      /* The countdown follows the very same limits as the warning itself (check_warnings: raised with the target in
+         force, +5 for the main chip). The raw configured values would start a countdown the warning never gives, and at
+         a target of 91 show "Warn-Countdown aktiv: noch 0s" for a whole game. */
+      if(warn_cpu || warn_soc) {
         warning_active = 1;
-        if(g_warning_since_ms == 0) g_warning_since_ms = now;
+        if(g_warning_since_ms == 0) { g_warning_since_ms = now; g_warning_since_wall = wall; }
 
         uint64_t elapsed_ms = now - g_warning_since_ms;
         uint64_t total_ms = (uint64_t)cfg.warning_countdown_s * 1000ull;
@@ -950,6 +1188,7 @@ fan_worker(void *arg) {
         warning_active = 0;
         warning_left_s = -1;
         g_warning_since_ms = 0;
+        g_warning_since_wall = 0;
       }
 
       {
@@ -984,8 +1223,100 @@ fan_worker(void *arg) {
       desired_duty = -1;
       duty_ema_x10 = -1;
       logged_threshold = 0;
+      /* The safety ramp belongs to Automatic. These are only written inside its control block, so without this a user who
+         switched to Observe during a safety phase kept "safety" in the snapshot, a red lightbar and the playtime flag
+         until Automatic was selected again. */
+      safety_active = 0;
+      safety_logged = 0;
     }
     was_automatic = automatic;
+
+    /* ---- fan self-test (ps5tm_fan_selftest_start) ----
+       While it runs the threshold below is forced; the regulation itself goes on unchanged behind it and takes over
+       again at the end, from a clean start. */
+    {
+      pthread_mutex_lock(&g_st_lock);
+      int st_state = g_st.state;
+      pthread_mutex_unlock(&g_st_lock);
+
+      if(st_state == 1 && !st_running) {
+        const char *refuse = selftest_refusal(hottest, ps5tm_platform_fan_available(), s.fan_duty_valid, safety_active,
+                                              automatic, (int)cfg.target_temp_c);
+        pthread_mutex_lock(&g_st_lock);
+        if(g_st_abort) {
+          selftest_end_locked(3, "Abgebrochen.");
+        } else if(refuse) {
+          selftest_end_locked(4, refuse);
+        } else {
+          st_running   = 1;
+          st_auto      = automatic;
+          st_t0        = now;
+          st_blind     = 0;
+          st_threshold = hottest - SELFTEST_GAP_C;
+          if(st_threshold < SELFTEST_HW_MIN_C) st_threshold = SELFTEST_HW_MIN_C;
+          g_st.state        = 2;
+          g_st.verdict      = 0;
+          g_st.why[0]       = 0;
+          g_st.baseline_pct = s.fan_duty_pct;
+          g_st.peak_pct     = s.fan_duty_pct;
+          g_st.rise_pct     = 0;
+          g_st.threshold_c  = st_threshold;
+          g_st.hottest_c    = hottest;
+          g_st.elapsed_s    = 0;
+          g_st.nsamples     = 0;
+        }
+        int ended = (g_st.state == 3), vd = g_st.verdict;
+        pthread_mutex_unlock(&g_st_lock);
+        if(st_running)
+          PS5TM_INFO("fan_selftest_start", "Lüftertest: Schwelle %d °C bei %d °C, Ausgangsdrehzahl %d %%.",
+                     st_threshold, hottest, s.fan_duty_pct);
+        else if(ended)
+          PS5TM_INFO("fan_selftest_done", "Lüftertest nicht gestartet (Ergebnis %d).", vd);
+      }
+
+      if(st_running) {
+        int verdict = 0, el = 0, base = 0, peak = 0;
+        const char *why = NULL;
+        pthread_mutex_lock(&g_st_lock);
+        el = (int)((now - st_t0) / 1000ull);
+        g_st.elapsed_s = el;
+        if(s.fan_duty_valid) {
+          st_blind = 0;
+          if(g_st.nsamples < PS5TM_SELFTEST_SAMPLES) g_st.samples[g_st.nsamples++] = s.fan_duty_pct;
+          if(s.fan_duty_pct > g_st.peak_pct) g_st.peak_pct = s.fan_duty_pct;
+        } else {
+          st_blind++;
+        }
+        g_st.rise_pct = g_st.peak_pct - g_st.baseline_pct;
+        if(g_st_abort)                                          { verdict = 3; why = "Abgebrochen."; }
+        else if(automatic != st_auto)                           { verdict = 3; why = "Die Betriebsart wurde gewechselt."; }
+        else if(safety_active || hottest > SELFTEST_MAX_START_C + 8) { verdict = 3; why = "Die Konsole ist zu warm geworden."; }
+        else if(st_blind >= 5)                                  { verdict = 3; why = "Die Drehzahl ließ sich nicht mehr lesen."; }
+        else if(g_st.rise_pct >= SELFTEST_RISE_PCT && el >= SELFTEST_MIN_S) verdict = 1;
+        else if(el >= SELFTEST_LIMIT_S)                         verdict = 2;
+        base = g_st.baseline_pct;
+        peak = g_st.peak_pct;
+        if(verdict) selftest_end_locked(verdict, why);
+        pthread_mutex_unlock(&g_st_lock);
+
+        if(verdict) {
+          st_running = 0;
+          PS5TM_INFO("fan_selftest_done", "Lüftertest beendet (Ergebnis %d): Drehzahl %d %% → höchstens %d %% in %d s.",
+                     verdict, base, peak, el);
+          /* Back to normal from a clean start: the regulation would otherwise find the test threshold as its last
+             value and walk away from it in small steps, with the fan loud meanwhile. */
+          if(automatic) {
+            desired_duty = 0;
+            duty_ema_x10 = -1;
+            last_servo_ms = 0;
+          } else if(atomic_load(&g_manual_threshold_c) <= 0) {
+            int eno = 0;
+            ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno);
+          }
+          last_applied = 0;
+        }
+      }
+    }
 
     /* ---- comfort controller: only every control_interval_s ---- */
     if(automatic && avg_c100 >= 0) {
@@ -1009,9 +1340,20 @@ fan_worker(void *arg) {
            maximum and the fan is turning faster than we are asking for. */
         int at_min = (last_applied >= rest_threshold_c(&cfg)) &&
                      (measured >= 0) && (measured >= desired_duty);
+        int lead_c100 = 0;
+        if((int)cfg.target_temp_c >= LEAD_MIN_TARGET_C && avg_hist_n > LEAD_SPAN_S) {
+          int old    = avg_hist[(avg_hist_n - 1 - LEAD_SPAN_S) % (LEAD_SPAN_S + 1)];
+          int per_s  = (avg_c100 - old) / LEAD_SPAN_S;                 /* hundredths of a degree per second */
+          if(per_s > LEAD_DEADZONE_C100_PER_S) {
+            lead_c100 = (per_s - LEAD_DEADZONE_C100_PER_S) * LEAD_HORIZON_S;
+            if(lead_c100 > LEAD_MAX_C100) lead_c100 = LEAD_MAX_C100;
+          }
+        }
+        lead_last_c100 = lead_c100;
+        if(lead_c100 > lead_peak_c100) lead_peak_c100 = lead_c100;
         desired_duty = comfort_step(desired_duty, avg_c100, trend_c100,
                                     &cfg, now, &last_down_ms, &safety_active,
-                                    at_min, measured);
+                                    at_min, measured, lead_c100);
         last_control_ms = now;
 
         if(safety_active && !safety_logged) {
@@ -1064,6 +1406,8 @@ fan_worker(void *arg) {
       int pinned = atomic_load(&g_manual_threshold_c);
       desired_threshold = pinned > 0 ? pinned : 0;
     }
+
+    if(st_running) desired_threshold = st_threshold;      /* the self-test owns the threshold for now */
 
     /* Ask the controller what it is really holding.
      *
@@ -1183,13 +1527,22 @@ fan_worker(void *arg) {
       }
     }
 
+    /* What the console does by itself: only while there is nothing for the fan to do — the temperature is clearly under the
+       target and far enough below the threshold that the firmware adds no speed of its own — and the speed is read. Whether
+       the threshold sits at its rest position does not matter (on the console it ends up at 91 because the floor is above
+       the wish, in the host model it stays near 75), and neither does the wish of the regulation: at rest it follows the
+       measured floor (see comfort_step), it is not 0. */
+    if(automatic && !st_running && !safety_active && s.fan_duty_valid && hottest >= 0 && avg_c100 >= 0 &&
+       avg_c100 + 300 <= target_c100(&cfg) && last_applied > 0 && last_applied - hottest >= FLOOR_MIN_GAP_C)
+      floor_feed(&floor_t[in_game ? 1 : 0], s.fan_duty_pct);
+
     ps5tm_history_tick(s.cpu_c, s.cpu_valid, s.soc_c, s.soc_valid,
                        s.fan_duty_pct, s.fan_duty_valid,
                        (int)cfg.target_temp_c);
 
     pthread_mutex_lock(&g_snapshot_lock);
     g_snapshot.sensors             = s;
-    g_snapshot.sampled_at_ms       = now;
+    g_snapshot.sampled_at_ms       = wall;     /* a wall-clock time: the status JSON (chart, "Zeitpunkt") and playtime.c compare it with the wall clock */
     g_snapshot.applied_threshold_c = last_applied;
     g_snapshot.observed_threshold_c = readback_ok ? observed_c : -1;
     g_snapshot.readback_available   = readback_ok;
@@ -1210,11 +1563,17 @@ fan_worker(void *arg) {
     g_snapshot.samples             = (int)ring.count;
     g_snapshot.effective_target_c  = (int)cfg.target_temp_c;
     g_snapshot.warning_active      = warning_active;
-    g_snapshot.warning_since_ms    = g_warning_since_ms;
+    g_snapshot.warning_since_ms    = g_warning_since_wall;   /* exported as wall-clock time, like sampled_at_ms */
     g_snapshot.warning_countdown_s = warning_left_s;
     g_snapshot.lightbar_enabled    = cfg.lightbar_enabled ? 1 : 0;
     g_snapshot.lightbar_supported  = ps5tm_pad_lightbar_supported();
     g_snapshot.lightbar_state      = safety_active ? 2 : lightbar_state;
+    g_snapshot.night_active        = night_now;
+    g_snapshot.floor_idle_pct      = floor_value(&floor_t[0]);
+    g_snapshot.floor_game_pct      = floor_value(&floor_t[1]);
+    g_snapshot.floor_pct           = in_game ? g_snapshot.floor_game_pct : g_snapshot.floor_idle_pct;
+    g_snapshot.lead_c100           = automatic ? lead_last_c100 : 0;
+    g_snapshot.lead_max_c100       = lead_peak_c100;
     pthread_mutex_unlock(&g_snapshot_lock);
 
     sleep(1);
@@ -1343,5 +1702,8 @@ ps5tm_fan_init(void) {
              "Automatik läuft – Zieltemperatur %u °C ±%u, Messung jede "
              "Sekunde, Nachregeln alle %u s, geglättet über %u s.",
              target, dead, interval, window);
+#ifdef PS5TM_LEAD_MIN_TARGET_C
+  PS5TM_WARN("lead_test_build", "TESTBAU: Der Vorhalt gilt schon ab Ziel %d °C (Auslieferung: 85 °C).", LEAD_MIN_TARGET_C);
+#endif
   return 0;
 }

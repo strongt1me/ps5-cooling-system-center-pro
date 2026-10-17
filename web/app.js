@@ -21,7 +21,21 @@
   const MON_ALERT_HOT_C_KEY = "ps5tm.monitorAlert.hotC";
   const MON_ALERT_FAN_MIN_KEY = "ps5tm.monitorAlert.fanMinPct";
   const FAN_CURVE_TEMP_MIN = 45;
-  const FAN_CURVE_TEMP_MAX = 80;
+  const FAN_CURVE_TEMP_MAX = 91;      /* = PS5TM_THRESHOLD_MAX_C (the backend clamps to 45..91 since 07.10.2026; it was 80) */
+  /* Die Soll-Drehzahl für die Anzeige: Die Konsole dreht im Leerlauf nie unter ihren eigenen Mindestwert (gelernt, fan.floor_pct); darunter
+     gibt es keine „Abweichung“, die der Regelung anzulasten wäre. */
+  const fanSoll = (F) => {
+    const t = F.target_duty_pct, fl = F.floor_pct;
+    return (F.automatic && Number.isFinite(fl) && fl > t) ? fl : t;
+  };
+  const floorText = (F) => {
+    const has = (v) => Number.isFinite(v) && v >= 0;
+    if (has(F.floor_idle_pct) && has(F.floor_game_pct)) return `${F.floor_idle_pct} % im Leerlauf · ${F.floor_game_pct} % im Spiel`;
+    if (has(F.floor_idle_pct)) return `${F.floor_idle_pct} % im Leerlauf`;
+    if (has(F.floor_game_pct)) return `${F.floor_game_pct} % im Spiel`;
+    return "wird gelernt …";
+  };
+  let probeDirty = false;             /* the "Zusatzabfragen" boxes were ticked but not saved: a reload of the settings must not undo that */
   const FAN_CURVE_MAX_POINTS = 8;
   const FAN_CURVE_DEFAULT = [
     { temperature_c: 45, duty_pct: 0 },
@@ -388,50 +402,6 @@
     return merged.slice(0, FAN_CURVE_MAX_POINTS);
   };
 
-  /* Rows in screen order, exactly as typed. The "Entfernen" index refers to
-     the row that was clicked, not to the sorted and merged list that goes to
-     the console: after retyping a temperature the two no longer match. */
-  const readCurveEditorRows = () => $$("#fan-curve-list [data-curve-row]").map((row) => {
-    const t = row.querySelector(".fan-curve-temp");
-    const d = row.querySelector(".fan-curve-duty");
-    return {
-      temperature_c: Number(t && t.value),
-      duty_pct: Number(d && d.value)
-    };
-  });
-
-  const readCurveEditorPoints = () => normalizeCurvePoints(readCurveEditorRows());
-
-  const renderCurveEditor = (points) => {
-    const host = $("#fan-curve-list");
-    if (!host) return;
-    const normalized = normalizeCurvePoints(points);
-    host.innerHTML = normalized.map((p, idx) => `
-      <div class="row-gap mt-10" data-curve-row>
-        <label><span>Punkt ${idx + 1} · Temperatur (°C)</span>
-          <input class="fan-curve-temp" type="number" min="${FAN_CURVE_TEMP_MIN}" max="${FAN_CURVE_TEMP_MAX}" value="${p.temperature_c}">
-        </label>
-        <label><span>Punkt ${idx + 1} · Ziel-Lüfter (%)</span>
-          <input class="fan-curve-duty" type="number" min="0" max="100" value="${p.duty_pct}">
-        </label>
-        <button class="btn ghost" data-curve-remove="${idx}" ${normalized.length <= 2 ? "disabled" : ""}>Entfernen</button>
-      </div>`).join("");
-
-    $$("#fan-curve-list [data-curve-remove]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const idx = Number(btn.getAttribute("data-curve-remove"));
-        const cur = readCurveEditorRows();
-        if (!Number.isFinite(idx) || idx < 0 || idx >= cur.length) return;
-        cur.splice(idx, 1);
-        if (cur.length < 2) {
-          toast("Eine Lüfterkurve braucht mindestens 2 Punkte.", "error");
-          return;
-        }
-        renderCurveEditor(cur);
-      });
-    });
-  };
-
   const fmtDelta = (cur, ref, unit = "") => {
     const a = safeNum(cur);
     const b = safeNum(ref);
@@ -530,7 +500,7 @@
       ? Number(c.effective_target_c)
       : Number(c.target_temp_c);
     const measuredFan = f.measured_valid ? Number(f.measured_duty_pct) : null;
-    const targetFan = Number.isFinite(f.target_duty_pct) ? Number(f.target_duty_pct) : null;
+    const targetFan = (Number.isFinite(f.target_duty_pct) && (f.automatic || f.target_duty_pct > 0)) ? Number(fanSoll(f)) : null;
     const deltaFan = (measuredFan !== null && targetFan !== null)
       ? measuredFan - targetFan
       : null;
@@ -1133,8 +1103,11 @@
       if (e && e.name === "AbortError")
         throw new Error("Die Konsole antwortet nicht.");
       /* fetch itself failed: no connection at all ("Failed to fetch" said nothing to anyone) */
-      if (e instanceof TypeError)
-        throw new Error("Keine Verbindung zur Konsole. Läuft die App noch, und ist dieses Gerät im selben Netz?");
+      if (e instanceof TypeError) {
+        const ne = new Error("Keine Verbindung zur Konsole. Läuft die App noch, und ist dieses Gerät im selben Netz?");
+        ne.network = true;                      /* callers that expect the connection to drop (the app restarts itself) test this */
+        throw ne;
+      }
       throw e;
     } finally {
       clearTimeout(timer);
@@ -1164,7 +1137,7 @@
    * `holdMs`: so lange nach dem ersten Klick bleibt ein zweiter wirkungslos.
    * Ein Doppelklick wäre sonst Bewaffnen und Bestätigen in einem, ehe jemand
    * den Hinweis lesen konnte (bei „Ausschalten“ nicht harmlos). */
-  const armConfirm = (btn, armedLabel, run, warn, holdMs = 0) => {
+  const armConfirm = (btn, armedLabel, run, warn, holdMs = 800) => {      /* 800 ms for every caller: a double click is not a "yes" */
     const label = btn.textContent;
     let timer = 0, armedAt = 0;
     /* data-armed lässt ein Stylesheet den bereiten Zustand zeigen (die Kopfzeilenknöpfe tun es). */
@@ -1464,7 +1437,8 @@
        Verglichen wird mit dem Grundwert, denn nur den setzt eine
        Voreinstellung. */
     const target = Number.isFinite(C.effective_target_c) ? C.effective_target_c : C.target_temp_c;
-    const shown = auto ? C.target_temp_c : F.threshold_c;
+    /* Außerhalb der Automatik meldet das Backend 0, solange keine Schwelle gesetzt ist (nach „Automatik aus“): das ist kein Wert. */
+    const shown = auto ? C.target_temp_c : (F.threshold_c > 0 ? F.threshold_c : NaN);
     const byRule = auto && Number.isFinite(C.effective_target_c) && C.effective_target_c !== C.target_temp_c;
 
     /* Unter dem Ring steht, wie weit der wärmste Punkt vom Ziel entfernt ist.
@@ -1476,7 +1450,7 @@
     const diff = hot !== null && Number.isFinite(ref) ? Math.round(hot - ref) : null;
     const goal = auto ? "dem Ziel" : "der Schwelle";
     const rule = byRule ? " (Spielregel)" : "";
-    txt("#hero-diff", diff === null ? "wird gelesen …"
+    txt("#hero-diff", diff === null ? (!auto && !Number.isFinite(ref) ? "Noch kein Wert gesetzt." : "wird gelesen …")
       : diff > 0 ? `${diff} °C über ${goal}${rule}`
       : diff < 0 ? `${-diff} °C unter ${goal}${rule}`
       : `${auto ? "genau am Ziel" : "genau an der Schwelle"}${rule}`);
@@ -1765,7 +1739,7 @@
        Regelmodus und erkennbare Clamp-Lage. */
     const clampText = (() => {
       if (C.safety_active) return "Notfallmodus aktiv (Sicherheitsgrenze)";
-      if (!F.automatic) return Number.isFinite(F.threshold_c)
+      if (!F.automatic) return F.threshold_c > 0
         ? `manueller Wert ${F.threshold_c} °C`
         : "manueller Wert ohne Rückmeldung";
       /* Die Schwelle der Konsole, nicht das Ziel: unten der Anschlag der App, oben die Ruhelage
@@ -1790,14 +1764,16 @@
         : `${C.target_temp_c} °C`);
     txt("#f-rule", (C.active_game_rule && C.active_game_rule !== "-")
       ? C.active_game_rule : "keine");
-    txt("#f-delta", F.measured_valid
-      ? `${(F.measured_duty_pct - F.target_duty_pct) >= 0 ? "+" : ""}`
-        + `${num(F.measured_duty_pct - F.target_duty_pct, 1)} %`
+    txt("#f-delta", (F.measured_valid && (F.automatic || F.target_duty_pct > 0))     /* ohne gesetztes Soll gibt es keine Abweichung */
+      ? `${(F.measured_duty_pct - fanSoll(F)) >= 0 ? "+" : ""}`
+        + `${num(F.measured_duty_pct - fanSoll(F), 1)} %`
       : "--");
     txt("#f-raw", F.measured_valid
       ? `${F.measured_duty_raw} (0x${(F.measured_duty_raw >>> 0).toString(16).toUpperCase()})`
       : "--");
     txt("#f-clamp", clampText);
+    txt("#f-floor", floorText(F));
+    if (typeof nightRender === "function") nightRender(s);
     txt("#f-profile", `${C.profile || "--"} / ${C.samples || 0}`);
 
     const fanTarget = $("#fan-balance-target");
@@ -1822,7 +1798,7 @@
 
     const adviceEl = $("#fan-diag-advice");
     if (adviceEl) {
-      const delta = F.measured_valid ? (F.measured_duty_pct - F.target_duty_pct) : null;
+      const delta = (F.measured_valid && (F.automatic || F.target_duty_pct > 0)) ? (F.measured_duty_pct - fanSoll(F)) : null;
       let sev = "ok";
       let msg = "Regelung wirkt stabil. Keine auffällige Soll-Ist-Abweichung.";
       let primaryStep = "Keine Aktion nötig. Werte weiter normal beobachten.";
@@ -1861,7 +1837,11 @@
         primaryStep = "Verlauf eine Minute beobachten, ohne Profilwechsel.";
       }
 
-      if (F.automatic && clampText.startsWith("oberer Anschlag")) {
+      /* Der obere Anschlag ist die Ruhelage: bei einer Konsole, die klar unter dem Ziel liegt, ist das der Normalzustand
+         und kein Grund, das Ziel zu senken. Der Rat gilt erst, wenn die Temperatur sich dem Ziel nähert. */
+      const goalNow = Number.isFinite(C.effective_target_c) ? C.effective_target_c : C.target_temp_c;
+      const nearGoal = Number.isFinite(C.avg_temp_c10) && Number.isFinite(goalNow) && C.avg_temp_c10 / 10 >= goalNow - 3;
+      if (F.automatic && clampText.startsWith("oberer Anschlag") && nearGoal) {
         msg += " Automatik ist am oberen Anschlag; bei steigender Temperatur Zieltemperatur etwas senken.";
         optionalSteps.push("Bei dauerhaft oberem Anschlag Zieltemperatur schrittweise (-1 °C) anpassen.");
       }
@@ -2077,7 +2057,6 @@
     if ($("#s-lightbar-warn")) $("#s-lightbar-warn").value = c.lightbar_warn_c ?? 70;
     if ($("#s-lightbar-hot")) $("#s-lightbar-hot").value = c.lightbar_hot_c ?? 76;
     if ($("#s-fan-reapply")) $("#s-fan-reapply").value = c.fan_reapply_sec ?? 15;
-    renderCurveEditor(c.curve);
 
     txt("#eff-band", Number.isFinite(c.control_band_c) ? `${c.control_band_c} °C` : "--");
     txt("#eff-deadband", Number.isFinite(c.deadband_c) ? `±${c.deadband_c} °C` : "--");
@@ -2108,10 +2087,11 @@
        was gespeichert war — und weil „Übernehmen" den Wert aus ihnen
        zusammensetzt, hätte ein Klick alles abgeschaltet, was eingeschaltet
        war. Die Funktion existierte, sie wurde nur nie aufgerufen. */
-    showProbes(c.probe_mask ?? 0);
+    if (!probeDirty) showProbes(c.probe_mask ?? 0);
     /* A timed revert still pending on the console is this page's diagnosis
        session too, e.g. after a reload or on a second device. */
     syncProbeDiagSession(c);
+    if (typeof nightFill === "function") nightFill();
   };
 
   /* The first load is the one every form depends on. A single failed attempt
@@ -2335,7 +2315,7 @@
   const renderPayloadFiles = (d) => {
     const internal = Array.isArray(d.internal) ? d.internal : [];
     plInternal = internal;
-    if (plEdit) plRenderEdit();
+    if (plEdit) { plEditSync(); plRenderEdit(); }        /* take over what is typed before the editor is drawn again from plEdit */
     const dir = d.dir || "/data/PS5-Cooling-Center/payloads";
     txt("#pl-dir", dir);
     txt("#pl-count-stored", plCount(internal.length, "Datei", "Dateien"));
@@ -2451,9 +2431,8 @@
     } catch (e) {
       /* Startet das Payload diese App selbst neu, reißt die Verbindung ab,
          bevor die Antwort kommt — das ist kein Fehlschlag. */
-      toast(e.name === "TypeError"
-        ? "Die Verbindung wurde unterbrochen — möglicherweise hat sich die App selbst neu gestartet."
-        : e.message, "error");
+      if (e && e.network) toast("Die Verbindung wurde unterbrochen — möglicherweise hat sich die App selbst neu gestartet.");
+      else toast(e.message, "error");
     } finally {
       setTimeout(() => { b.innerHTML = label; b.disabled = false; }, 2500);
     }
@@ -3081,7 +3060,7 @@
     }
     const every = Math.max(10, Number(state.riskyAutoIntervalSec) || 15) * 1000;
     state.riskyAutoTimer = setInterval(() => {
-      if (state.page !== "system") return;
+      if (state.page !== "system" || document.hidden) return;        /* like the other pollers: not for a tab nobody looks at */
       loadRiskyTelemetry({ silent: true }).catch(() => {});
     }, every);
     updateRiskyAutoState();
@@ -3120,6 +3099,7 @@
   };
 
   const showProbes = (mask) => {
+    probeDirty = false;
     Object.entries(PROBE_BITS).forEach(([sel, bit]) => {
       const el = $(sel);
       if (el) el.checked = (mask & bit) !== 0;
@@ -3133,6 +3113,7 @@
     ["#probe-risky", "#probe-drive"].forEach((sel) => {
       const el = $(sel);
       if (el) el.addEventListener("change", () => {
+        probeDirty = true;
         updateProbeLiveState();
         updateRiskyAutoState();
       });
@@ -3765,6 +3746,7 @@
 
   /* Die Adresse der Seite als QR-Code (Konsole: qr.c). Wird neu geholt, wenn sich die Adresse der Konsole ändert. */
   let qrKey = null;
+  let qrBusy = false;
   const loadQr = async () => {
     const img = $("#qr-img");
     if (!img) return;
@@ -3773,9 +3755,11 @@
       img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(d.svg)}`;
       img.hidden = false;
       txt("#qr-url", d.url);
+      return true;
     } catch {
       img.hidden = true;
       txt("#qr-url", "keine Netzwerkadresse");
+      return false;
     }
   };
 
@@ -3783,7 +3767,11 @@
     let sys;
     try { sys = await api("/api/v1/system"); } catch { return; }
     const qrNow = sys && sys.network ? String(sys.network.ip || "") : "";
-    if (qrNow !== qrKey) { qrKey = qrNow; loadQr(); }
+    /* The key counts as done only when the picture came: one timed-out request must not leave the code gone until a reload. */
+    if (qrNow !== qrKey && !qrBusy) {
+      qrBusy = true;
+      loadQr().then((ok) => { if (ok) qrKey = qrNow; }).finally(() => { qrBusy = false; });
+    }
 
     let diag = null;
     try { diag = await api("/api/v1/controller/diag"); } catch {}
@@ -3948,7 +3936,7 @@
       const cls = pct >= 92 ? "hot" : pct >= 80 ? "warn" : "s1";
       return `<div class="vol">
         <div class="vol-head"><b>${esc(v.label)}</b>
-          <span>${bytes(v.free_bytes)} frei von ${bytes(v.total_bytes)}</span></div>
+          <span>${v.free_bytes === 0 && v.total_bytes > 0 ? "0 B" : bytes(v.free_bytes)} frei von ${bytes(v.total_bytes)}</span></div>
         <div class="bar"><span class="${cls}" style="width:${pct}%"></span></div>
       </div>`;
     }).join("") : `<p class="muted">Keine Laufwerke lesbar.</p>`;
@@ -5441,6 +5429,7 @@
       toast("Die Kopie wird abgebrochen.");
     } catch (e) {
       toast(e.message, "error");
+      btn.disabled = false;                 /* the cancel did not go through: the button must work again */
     }
     cpPoll();
   };
@@ -5641,6 +5630,7 @@
       toast("ShadowMountPlus bricht den Auftrag ab.");
     } catch (e) {
       toast(e.message, "error");
+      btn.disabled = false;                 /* the cancel did not go through: the button must work again */
     }
     mvPoll();
   };
@@ -5906,6 +5896,7 @@
       toast("Das Konvertieren wird abgebrochen.");
     } catch (e) {
       toast(e.message, "error");
+      btn.disabled = false;                 /* the cancel did not go through: the button must work again */
     }
     cvPoll();
   };
@@ -6534,7 +6525,9 @@
     p4mPickButtons();
     $("#p4m-restore-all").disabled = !d.running || !movable.length;
     $$("#p4m-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
-    if (!p4m.cfgShown && d.config) {
+    /* A busy PS4Mount answers with "config":{} (ps4m_core.c): that is not the setting, and filling the form from it would
+       write defaults over the real ones with the next save or restore. */
+    if (!p4m.cfgShown && d.config && d.config.batch_size !== undefined) {
       p4m.cfgShown = true;
       $("#p4m-dlc").checked = !!d.config.dlc;
       $("#p4m-batch").checked = !!d.config.batch;
@@ -6596,11 +6589,13 @@
       clearTimeout(p4m.armTimer);
       if (p4m.armed !== id) {
         p4m.armed = id;
+        p4m.armedAt = performance.now();
         toast("Spiel, Update und Zusatzinhalte gehen an ihren alten Ort zurück, das Spiel verlässt die Bibliothek. Ein laufendes Spiel wird vorher geschlossen. Zum Bestätigen noch einmal klicken.");
         p4m.armTimer = setTimeout(() => { p4m.armed = ""; p4mRender(); }, 10000);
         p4mRender();
         return;
       }
+      if (performance.now() - (p4m.armedAt || 0) < 800) return;              /* a double click is not a "yes" */
       p4m.armed = "";
       p4mRestore({ action: "restore", id });
       return;
@@ -7250,7 +7245,9 @@
       if (job.active || ij.active || (trace && trace.busy)) apr.timer = setTimeout(aprLoad, 1000);
     } catch (e) {
       if (my !== apr.gen) return;
-      $("#cp-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
+      const bodyEl = $("#cp-body");
+      if (!bodyEl) return;                         /* the dialog was closed while the request was failing */
+      bodyEl.innerHTML = `<p class="cp-err">${esc(e.message)}</p>
         <div class="cp-actions"><button type="button" class="btn primary" data-cp="close">Schließen</button></div>`;
     }
   };
@@ -7389,7 +7386,7 @@
       apr.view = "unpack"; apr.plan = null; apr.planErr = ""; apr.drive = "";
       aprRender();
       const my = apr.gen;
-      try { apr.plan = await api(`/api/v1/library/image/plan?id=${encodeURIComponent(apr.id)}`); }
+      try { apr.plan = await api(`/api/v1/library/image/plan?id=${encodeURIComponent(apr.id)}`, { timeoutMs: 120000 }); }
       catch (err) { apr.planErr = err.message; }
       if (apr.view === "unpack" && my === apr.gen) aprRender();
     } else if (b.hasAttribute("data-apr-drive")) {
@@ -7459,7 +7456,8 @@
     $("#dl-body").innerHTML = `<p class="muted">Die Konsole prüft, was gelöscht würde …</p>`;
     o.hidden = false;
     try {
-      dl.plan = await api("/api/v1/library/delete/plan", { method: "POST", body: JSON.stringify({ kind, id }) });
+      /* The plan counts the whole tree (a big game on a USB disk takes a while): 2 minutes like the plans of copy/move/convert. */
+      dl.plan = await api("/api/v1/library/delete/plan", { method: "POST", body: JSON.stringify({ kind, id }), timeoutMs: 120000 });
       dlRenderPlan();
     } catch (e) {
       $("#dl-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
@@ -8133,7 +8131,7 @@
     const url = URL.createObjectURL(new Blob(["\ufeff" + out.join("\r\n") + "\r\n"],
                                              { type: "text/csv;charset=utf-8" }));
     Object.assign(document.createElement("a"), { href: url, download: "ps5-spielzeit.csv" }).click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   });
 
   /* Zwei Klicks statt einer Rückfrage-Box: wie überall auf dieser Oberfläche. */
@@ -8875,7 +8873,10 @@
     try {
       const buf = await lv.file.slice(n * LV_SEG, Math.min(lv.file.size, (n + 1) * LV_SEG)).arrayBuffer();
       const d = await lvJson(`/api/v1/packages/live/segment?id=${encodeURIComponent(lv.id)}&n=${n}`, { method: "PUT", body: buf });
-      if (gen === lv.gen) { lv.sent += buf.byteLength; lv.fails = 0; if (d && d.state) lv.st = d; }
+      if (gen === lv.gen) {
+        lv.sent += buf.byteLength; lv.fails = 0; if (d && d.state) lv.st = d;
+        if (lv.err && lv.err.startsWith("Das Senden scheitert")) lv.err = "";        /* it works again */
+      }
     } catch (e) {
       if (gen !== lv.gen) return;
       if (e.status === 410 || e.status === 404) lv.ended = e.message;               /* die Konsole hat die Übertragung beendet */
@@ -8903,6 +8904,7 @@
       try {
         st = await lvJson(`/api/v1/packages/live/state?id=${encodeURIComponent(lv.id)}${ver >= 0 ? `&since=${ver}&wait=1000` : ""}`);
         bad = 0;
+        if (lv.err === "Die Seite erreicht die App nicht mehr.") lv.err = "";        /* the connection is back: the message must go too */
       } catch (e) {
         if (e.status === 404) {
           st = { state: "ended", error: "Die Übertragung gibt es nicht mehr." };
@@ -9259,9 +9261,13 @@
       pk.error = "";
       /* Noch nie gesucht: das tut die erste Ansicht von selbst. */
       if (!d.ever && !d.scanning && !scan) { loadPackages(true); return; }
-      const j = await api("/api/v1/packages/job");
-      if (j && typeof j.state === "string") pk.job = j;
-      await pqRefresh();
+      /* The list is in: a side question that fails (the console is busy searching) must not throw it away, or the polling
+         that would fetch it again ends with it. */
+      try {
+        const j = await api("/api/v1/packages/job");
+        if (j && typeof j.state === "string") pk.job = j;
+      } catch { /* the next poll asks again */ }
+      try { await pqRefresh(); } catch { /* same */ }
       /* eine Installation, die schon läuft, zeigt sich auch nach dem Neuladen; scheitert die Frage, wird sie bald wiederholt */
       if (await pkiRefresh()) pk.ijobRetry = 0;
       else if (!pk.ijobTimer) { pk.ijobRetry = 0; pk.ijobTimer = setTimeout(pkiRetry, 2500); }
@@ -9469,6 +9475,8 @@
       if (pt.tab === "saves") loadSaves();
       if (pt.tab === "pkg") loadPackages();
       if (pt.tab === "p4m") { loadP4m(); loadP4mLog(); }
+      if (pt.tab === "bk") loadBackups();         /* these two have no poll: coming back must show what happened meanwhile */
+      if (pt.tab === "hist") loadHistory2();
     }
     syncPlaytime();
     svSync();
@@ -9498,15 +9506,8 @@
     else if (e.key === "F7" || e.key === "F8") { e.preventDefault(); scrollPage(e.key === "F7" ? -1 : 1); }
   });
 
-  /* Nach dem Umschalten der Sprache lädt die Seite neu (i18n.js); sie öffnet dann wieder die Seite, auf der man war. */
-  try {
-    const back = sessionStorage.getItem("ps5restore");
-    if (back) {
-      sessionStorage.removeItem("ps5restore");
-      const tab = $(`.tab[data-page="${back}"]`);
-      if (tab) tab.click();
-    }
-  } catch { /* ohne Speicher: es bleibt bei der Kühlung */ }
+  /* (Das Zurückkehren auf die Seite nach dem Sprachwechsel steht am Ende der Datei: Der Klick führt den Tab-Handler aus,
+     und der braucht Funktionen, die weiter unten als const stehen — an dieser Stelle wirft das einen ReferenceError.) */
 
   $("#target-range").addEventListener("input", (e) => {
     state.targetDirty = true;
@@ -9648,46 +9649,6 @@
     b.disabled = true;
     try { await presetApply(b.dataset.kind); } finally { b.disabled = false; }
   }));
-
-  const curveAdd = $("#fan-curve-add");
-  if (curveAdd) {
-    curveAdd.addEventListener("click", () => {
-      const points = readCurveEditorPoints();
-      if (points.length >= FAN_CURVE_MAX_POINTS) {
-        toast(`Maximal ${FAN_CURVE_MAX_POINTS} Punkte erlaubt.`, "error");
-        return;
-      }
-      const last = points[points.length - 1] || { temperature_c: 70, duty_pct: 30 };
-      points.push({
-        temperature_c: Math.min(FAN_CURVE_TEMP_MAX, last.temperature_c + 2),
-        duty_pct: Math.min(100, last.duty_pct + 10)
-      });
-      renderCurveEditor(points);
-    });
-  }
-
-  const curveSave = $("#fan-curve-save");
-  if (curveSave) {
-    curveSave.addEventListener("click", async () => {
-      /* Before the first load the editor holds nothing, and normalising an
-         empty list yields the default curve, which would overwrite the real one. */
-      if (!needCfg()) return;
-      const points = readCurveEditorPoints();
-      try {
-        await saveConfig({ curve: points }, "Lüfterkurve gespeichert.");
-      } catch (e) {
-        toast(e.message, "error");
-      }
-    });
-  }
-
-  const curveReset = $("#fan-curve-reset");
-  if (curveReset) {
-    curveReset.addEventListener("click", () => {
-      renderCurveEditor(FAN_CURVE_DEFAULT);
-      toast("Standardkurve geladen. Mit \"Kurve speichern\" übernehmen.");
-    });
-  }
 
   const bindLan = $("#bind-lan");
   if (bindLan) bindLan.addEventListener("click", () => {
@@ -9859,7 +9820,7 @@
     if (!text) { toast("Keine Zeilen zum Herunterladen."); return; }
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     Object.assign(document.createElement("a"), { href: url, download: "ps5-kernel-log.log" }).click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   });
 
   $("#kl-save").addEventListener("click", async () => {
@@ -9953,7 +9914,7 @@
       const url = URL.createObjectURL(await res.blob());
       Object.assign(document.createElement("a"),
         { href: url, download: "ps5-temperatur-manager.log" }).click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
     } catch (e) { toast(e.message, "error"); }
   });
 
@@ -9966,7 +9927,7 @@
         const url = URL.createObjectURL(await res.blob());
         Object.assign(document.createElement("a"),
           { href: url, download: "ps5tm-game-rules.json" }).click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
       } catch (e) { toast(e.message, "error"); }
     });
   }
@@ -9995,7 +9956,7 @@
         const url = URL.createObjectURL(await res.blob());
         Object.assign(document.createElement("a"),
           { href: url, download: "ps5tm-config.json" }).click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
       } catch (e) { toast(e.message, "error"); }
     });
   }
@@ -10031,7 +9992,7 @@
           href: url,
           download: `ps5tm-web-profile-${stamp}.json`
         }).click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
         toast("Web-Profil exportiert.");
       } catch (e) {
         toast(e.message || "Web-Profil-Export fehlgeschlagen.", "error");
@@ -10066,7 +10027,7 @@
         if (backend.target_temp_c !== undefined)
           patch.target_temp_c = clampInt(backend.target_temp_c, 60, 91, 66);
         if (backend.fan_threshold_c !== undefined)
-          patch.fan_threshold_c = clampInt(backend.fan_threshold_c, 45, 80, 65);
+          patch.fan_threshold_c = clampInt(backend.fan_threshold_c, 45, 91, 65);     /* the server and the input field allow 45..91 */
         if (backend.fan_reapply_sec !== undefined)
           patch.fan_reapply_sec = clampInt(backend.fan_reapply_sec, 1, 300, 15);
         if (backend.warning_cpu_c !== undefined)
@@ -10243,7 +10204,7 @@
           href: url,
           download: `ps5tm-diagnose-snapshot-${stamp}.json`
         }).click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
         toast("Diagnose-Snapshot exportiert.");
       } catch (e) {
         toast(e.message || "Snapshot-Export fehlgeschlagen.", "error");
@@ -10488,6 +10449,148 @@
     loadSystem().finally(() => { pollBusy.system = false; });
   };
 
+  /* ── Nachtmodus und Lüfter-Selbsttest (fan.c, 17.10.2026) ─────────────────────────────────────────────── */
+
+  /* Nachtmodus: zwischen zwei Uhrzeiten gilt das Nachtziel (control.night_active im Status). Die Uhrzeit ist die des Geräts,
+     auf dem die Seite offen ist; die Konsole kennt keine Zeitzone und bekommt den Versatz beim Speichern mit. */
+  const minToHHMM = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const hhmmToMin = (v) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || ""));
+    if (!m) return NaN;
+    const h = Number(m[1]), mi = Number(m[2]);
+    return h > 23 || mi > 59 ? NaN : h * 60 + mi;
+  };
+  const localTzOffsetMin = () => -new Date().getTimezoneOffset();     /* Minuten östlich von UTC */
+  let nightDirty = false;
+  let nightTzSent = false;
+
+  const nightFill = () => {
+    const c = state.cfg;
+    if (!c || !$("#night-on")) return;
+    if (!nightDirty) {
+      $("#night-on").checked = !!c.night_enabled;
+      $("#night-from").value = minToHHMM(Number.isFinite(c.night_start_min) ? c.night_start_min : 1380);
+      $("#night-to").value = minToHHMM(Number.isFinite(c.night_end_min) ? c.night_end_min : 420);
+      $("#night-target").value = Number.isFinite(c.night_target_c) ? c.night_target_c : 75;
+    }
+    /* Sommer-/Winterzeit: stimmt der gespeicherte Versatz nicht mehr mit diesem Gerät überein, wird er still nachgezogen. */
+    if (c.night_enabled && !nightTzSent && Number.isFinite(c.night_tz_offset_min) && c.night_tz_offset_min !== localTzOffsetMin()) {
+      nightTzSent = true;
+      api("/api/v1/config", { method: "PUT", body: JSON.stringify({ night_tz_offset_min: localTzOffsetMin() }) })
+        .then(() => loadConfig()).catch(() => {});
+    }
+    nightRender(state.status);
+  };
+
+  const nightRender = (s) => {
+    const note = $("#night-note");
+    const c = state.cfg;
+    if (!note || !c) return;
+    const from = minToHHMM(c.night_start_min), to = minToHHMM(c.night_end_min);
+    let t;
+    if (!c.night_enabled) t = "Aus. Der Lüfter richtet sich immer nach der Zieltemperatur.";
+    else if (c.night_start_min === c.night_end_min) t = "Beginn und Ende sind gleich – der Nachtmodus wird nie aktiv.";
+    else if (s && s.control && s.control.night_active) t = `Aktiv: jetzt gilt das Nachtziel ${c.night_target_c} °C, bis ${to} Uhr.`;
+    else t = `Nicht aktiv. Beginnt um ${from} Uhr mit dem Nachtziel ${c.night_target_c} °C.`;
+    if (note.textContent !== t) note.textContent = t;
+  };
+
+  const nightSave = async () => {
+    if (!needCfg()) return;
+    const from = hhmmToMin($("#night-from").value), to = hhmmToMin($("#night-to").value);
+    const tgt = Math.round(Number($("#night-target").value));
+    if (!Number.isFinite(from) || !Number.isFinite(to)) { toast("Bitte beide Uhrzeiten eintragen.", "error"); return; }
+    const lo = state.cfg.target_min_c ?? 60, hi = state.cfg.target_max_c ?? 91;
+    if (!Number.isFinite(tgt) || tgt < lo || tgt > hi) { toast(`Das Nachtziel muss zwischen ${lo} und ${hi} °C liegen.`, "error"); return; }
+    try {
+      await saveConfig({ night_enabled: $("#night-on").checked ? 1 : 0, night_start_min: from, night_end_min: to,
+                         night_target_c: tgt, night_tz_offset_min: localTzOffsetMin() }, "Nachtmodus gespeichert.");
+      nightDirty = false;
+      nightTzSent = true;
+      nightFill();
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  ["#night-on", "#night-from", "#night-to", "#night-target"].forEach((sel) => {
+    const el = $(sel);
+    if (el) el.addEventListener("input", () => { nightDirty = true; });
+  });
+  if ($("#night-save")) $("#night-save").addEventListener("click", nightSave);
+
+  /* Lüfter-Selbsttest: der Knopf startet ihn oder bricht den laufenden ab; die Seite fragt jede Sekunde nach, solange er läuft. */
+  const fanTest = { timer: 0, last: null };
+  const ftRunning = (r) => !!r && (r.state === "requested" || r.state === "running");
+
+  const ftRender = (r) => {
+    const body = $("#fan-test-body"), go = $("#fan-test-go");
+    if (!body || !go) return;
+    const running = ftRunning(r);
+    go.textContent = running ? "Test abbrechen" : "Lüfter jetzt testen";
+    if (!r || r.state === "idle") { body.hidden = true; return; }
+    body.hidden = false;
+    const smp = Array.isArray(r.samples) ? r.samples : [];
+    const lastV = smp.length ? smp[smp.length - 1] : r.baseline_pct;
+    let tag = "warn", line = "";
+    if (r.state === "requested") { line = "Der Test beginnt …"; }
+    else if (r.state === "running") {
+      line = `Test läuft: ${r.elapsed_s} s von höchstens ${r.limit_s} s · Drehzahl jetzt ${lastV} % (Start ${r.baseline_pct} %)`;
+    } else if (r.verdict === "responds") {
+      tag = "ok";
+      line = `Der Lüfter reagiert: Drehzahl von ${r.baseline_pct} % auf ${r.peak_pct} % in ${r.elapsed_s} s.`;
+    } else if (r.verdict === "no_response") {
+      tag = "hot";
+      line = `Der Lüfter reagiert nicht: höchstens ${r.peak_pct} % (Start ${r.baseline_pct} %) nach ${r.elapsed_s} s.`;
+    } else if (r.verdict === "aborted") {
+      line = `Abgebrochen: ${r.why}`;
+    } else {
+      line = `Nicht möglich: ${r.why}`;
+    }
+    const label = tag === "ok" ? "OK" : tag === "hot" ? "ROT" : "GELB";
+    $("#fan-test-state").innerHTML = `<i class="reason-tag ${tag}">${label}</i> ${esc(line)}`;
+
+    /* Verlauf der Drehzahl als kleine Linie */
+    const path = $("#fan-test-path");
+    if (path) {
+      const top = Math.max(40, ...smp, r.peak_pct || 0);
+      const span = Math.max(smp.length, 12) - 1;
+      path.setAttribute("d", smp.map((v, i) => `${i ? "L" : "M"}${(i * 280 / span).toFixed(1)},${(46 - (v / top) * 44).toFixed(1)}`).join(" "));
+    }
+    /* Zwei getrennte Zeilen statt eines angehängten Satzes: Übersetzt wird immer ein ganzer Text. */
+    let meta = "", hint = "";
+    if (r.state === "finished" && r.verdict !== "not_possible") {
+      meta = `Schwelle während des Tests: ${r.threshold_c} °C bei ${r.hottest_c} °C`;
+      if (r.verdict === "no_response")
+        hint = "Mögliche Ursachen: Die Firmware beachtet die Schwelle nicht, kstuff ist nicht geladen oder die Lüftersteuerung ist nicht verfügbar.";
+    }
+    const m = $("#fan-test-meta"), h = $("#fan-test-hint");
+    if (m && m.textContent !== meta) m.textContent = meta;
+    if (h && h.textContent !== hint) h.textContent = hint;
+  };
+
+  const ftPoll = async () => {
+    clearTimeout(fanTest.timer);
+    fanTest.timer = 0;
+    let r = null;
+    try { r = await api("/api/v1/fan/selftest"); } catch { r = null; }
+    fanTest.last = r;
+    ftRender(r);
+    if (ftRunning(r)) fanTest.timer = setTimeout(ftPoll, 1000);
+  };
+
+  if ($("#fan-test-go")) $("#fan-test-go").addEventListener("click", async () => {
+    const go = $("#fan-test-go");
+    go.disabled = true;
+    try {
+      await api("/api/v1/fan/selftest", { method: "POST", body: JSON.stringify({ action: ftRunning(fanTest.last) ? "abort" : "start" }) });
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      go.disabled = false;
+    }
+    ftPoll();
+  });
+  ftPoll();
+
   /* A page that is not in front needs no live data. The beat keeps running
      but idles while document.hidden and takes up again by itself, so a browser
      that never sends visibilitychange cannot leave it stopped. */
@@ -10530,5 +10633,18 @@
     syncPlaytime();
     svSync();
     pkSync();
+    p4mSync();                                  /* its 5 s poll stopped for a hidden tab like the others, and starts again */
   });
+
+  /* Nach dem Umschalten der Sprache lädt die Seite neu (i18n.js); sie öffnet dann wieder die Seite, auf der man war.
+     Ganz am Ende, weil der Klick den Tab-Handler ausführt und der alles braucht, was oben als const definiert ist
+     (klRecSync, klFilesLoad ...): davor brach er mit einem ReferenceError ab, bevor die Seite ihre Daten lud. */
+  try {
+    const back = sessionStorage.getItem("ps5restore");
+    if (back) {
+      sessionStorage.removeItem("ps5restore");
+      const tab = $(`.tab[data-page="${back}"]`);
+      if (tab) tab.click();
+    }
+  } catch { /* ohne Speicher: es bleibt bei der Kühlung */ }
 })();
