@@ -29,6 +29,7 @@
 #include <unistd.h>
 
 #include "ps5tm.h"
+#include "titleid.h"
 
 /* Layout from ps5-payload-manager; only app_id is actually read. */
 typedef struct {
@@ -213,17 +214,10 @@ ps5tm_procmgr_log_identity(void) {
 }
 
 
-/* A real game's title id: PPSA or CUSA followed by five digits.
-   Restricted on purpose — "four capitals plus five digits" also matches
-   Sony's own applications (NPXS40000 and friends), which would turn the
-   home screen into a "running game". ShadowMountPlus applies the same rule. */
+/* A real game's title id (titleid.h): PPSA or CUSA followed by five digits. */
 static int
 is_game_title_id(const char *s) {
-  if(!s || strlen(s) != 9) return 0;
-  if(strncmp(s, "PPSA", 4) && strncmp(s, "CUSA", 4)) return 0;
-  for(int i = 4; i < 9; i++)
-    if(s[i] < '0' || s[i] > '9') return 0;
-  return 1;
+  return ps5tm_is_game_title_id(s);
 }
 
 
@@ -259,27 +253,39 @@ ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_len) {
   if(!buf) return -1;
 
   int rc = -1;
-  for(char *p = buf; p < (char *)buf + need; ) {
-    struct kinfo_proc *ki = (struct kinfo_proc *)p;
-    if(ki->ki_structsize == 0) break;
-    p += ki->ki_structsize;
+  int starter_has_focus = 0;
+  /* A second pass only when the focus holder asked for in the first one is the starter tile (titleid.h): it holds the pad for
+     the few seconds it takes to hand the app over, and a game that is resident meanwhile stays the game, as if the tile were
+     not there (the play-time record would otherwise end its session and begin it again). Any other focus holder that is no
+     game - the store, the settings - still means "no game". */
+  for(int pass = 0; pass < 2 && rc != 0; pass++) {
+    if(pass == 1 && !starter_has_focus) break;
+    const uint32_t want = pass ? 0 : want_app_id;
+    for(char *p = buf; p < (char *)buf + need; ) {
+      struct kinfo_proc *ki = (struct kinfo_proc *)p;
+      if(ki->ki_structsize == 0) break;
+      p += ki->ki_structsize;
 
-    app_info_t info;
-    memset(&info, 0, sizeof(info));
-    if(p_sceKernelGetAppInfo(ki->ki_pid, &info) != 0) continue;
-    if(info.app_id == 0) continue;
-    if(want_app_id && info.app_id != want_app_id) continue;
+      app_info_t info;
+      memset(&info, 0, sizeof(info));
+      if(p_sceKernelGetAppInfo(ki->ki_pid, &info) != 0) continue;
+      if(info.app_id == 0) continue;
+      if(want && info.app_id != want) continue;
 
-    /* title_id is not guaranteed to be terminated inside its 14 bytes. */
-    char t[sizeof(info.title_id) + 1];
-    memcpy(t, info.title_id, sizeof(info.title_id));
-    t[sizeof(info.title_id)] = '\0';
+      /* title_id is not guaranteed to be terminated inside its 14 bytes. */
+      char t[sizeof(info.title_id) + 1];
+      memcpy(t, info.title_id, sizeof(info.title_id));
+      t[sizeof(info.title_id)] = '\0';
 
-    if(!is_game_title_id(t)) continue;
+      if(!ps5tm_counts_as_game(t)) {            /* the starter tile is not a game, see titleid.h */
+        if(want && ps5tm_is_game_title_id(t)) starter_has_focus = 1;
+        continue;
+      }
 
-    snprintf(out, out_len, "%s", t);
-    rc = 0;
-    break;
+      snprintf(out, out_len, "%s", t);
+      rc = 0;
+      break;
+    }
   }
 
   free(buf);

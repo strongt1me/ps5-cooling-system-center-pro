@@ -199,7 +199,7 @@ FAST_OBJS := $(patsubst src/%.c,gen/fast/%.o,$(FAST_SRCS))
 # they are the largest part of the web UI, about 1.4 MB.
 # web/lang holds the dictionaries of the interface languages (07.10.2026); a changed
 # translation alone has to rebuild the ELF as well.
-WEB_FILES := $(wildcard web/*) $(wildcard web/img/*) $(wildcard web/avatars/*) $(wildcard web/lang/*) $(wildcard web/credits/*)
+WEB_FILES := $(wildcard web/*) $(wildcard web/img/*) $(wildcard web/avatars/*) $(wildcard web/avatars/t/*) $(wildcard web/lang/*) $(wildcard web/credits/*)
 
 CFLAGS := -Os -Wall -Wextra -Werror -Isrc -Isrc/third_party -Igen
 CFLAGS += -ffunction-sections -fdata-sections

@@ -1404,7 +1404,11 @@
       f.setAttribute("aria-label", valid ? `Lüfter ${p} Prozent` : "Lüfter ohne Messwert");
     });
     const rgb = model ? (valid ? model.colorAt(p) : model.GREY) : [116, 130, 151];
-    document.documentElement.style.setProperty("--fan-rgb", rgb.join(","));
+    /* Auf der Kühlungsseite statt am Wurzelelement: Nur dort wird die Farbe gebraucht. Am Wurzelelement ließ jede Änderung der
+       Drehzahl um einen Prozentpunkt (im Spiel alle paar Sekunden) die Stilberechnung des ganzen Dokuments von vorn beginnen, auf
+       jeder Seite; am PS5-Browser war das ein Flackern der Spiele-Seite (Meldung des Users 17.10.2026). */
+    const fanHost = $("#page-cooling") || document.documentElement;
+    fanHost.style.setProperty("--fan-rgb", rgb.join(","));
     const tile = $("#fan-tile");
     if (tile && tile.closest(".ov-tile")) tile.closest(".ov-tile").classList.add("fan-glow");
   };
@@ -2177,10 +2181,15 @@
 
   const profileLabel = { comfort: "Leise", balanced: "Ausgewogen", cool: "Kühl" };
 
-  const loadRules = async () => {
+  let ruleSig = "";
+  const loadRules = async (quiet) => {
     let d;
     try { d = await api("/api/v1/games"); } catch { return; }
     state.rules = d.rules || [];
+    /* der Takt (quiet) baut die Liste nur neu, wenn sich etwas geändert hat */
+    const sig = JSON.stringify(d);
+    if (quiet && sig === ruleSig) return;
+    ruleSig = sig;
 
     /* Title name and id are free text: a game's own metadata, or a profile
        file imported from anywhere. Both go through esc(), also inside the
@@ -3598,7 +3607,7 @@
         const label = String(im.label || im.file);
         return `<button type="button" class="av-thumb" data-file="${esc(im.file)}" `
           + `data-label="${esc(label)}" aria-pressed="false" title="${esc(label)}">`
-          + `<img src="/avatars/${esc(encodeURIComponent(im.file))}" alt="${esc(label)}" `
+          + `<img src="/avatars/t/${esc(encodeURIComponent(im.file))}" alt="${esc(label)}" `       /* Vorschau 132 px; ein Klick lädt die volle Datei */
           + `width="88" height="88" loading="lazy" decoding="async"></button>`;
       }).join("");
       txt("#av-gallery-count", String(list.length));
@@ -4441,7 +4450,8 @@
             </div>`;
   };
 
-  const loadLog = async () => {
+  let logSig = "";
+  const loadLog = async (quiet) => {
     try {
       const d = await api("/api/v1/logs");
       txt("#log-count", `${d.entries.length} Einträge`);
@@ -4450,11 +4460,18 @@
       txt("#lg-total", d.entries.length);
       txt("#lg-warn", byLevel("WARN"));
       txt("#lg-err", byLevel("ERROR"));
-      $("#log-list").innerHTML = d.entries.length
-        ? d.entries.slice().reverse().map(logEntryHtml).join("")
-        : `<div class="empty-state"><img src="/img/empty-log.png" alt="">
-            <p class="muted">Noch keine Ereignisse.</p></div>`;
+      /* Hunderte Einträge neu zu bauen, obwohl nichts dazukam, ruckelte das Scrollen: Der Takt (quiet) lässt die Liste dann stehen. */
+      const first = d.entries[0] || {}, last = d.entries[d.entries.length - 1] || {};
+      const sig = `${d.entries.length}|${first.timestamp_ms}|${last.timestamp_ms}|${last.code}|${last.message}`;
+      if (!(quiet && sig === logSig)) {
+        logSig = sig;
+        $("#log-list").innerHTML = d.entries.length
+          ? d.entries.slice().reverse().map(logEntryHtml).join("")
+          : `<div class="empty-state"><img src="/img/empty-log.png" alt="">
+              <p class="muted">Noch keine Ereignisse.</p></div>`;
+      }
     } catch (err) {
+      logSig = "";
       $("#log-list").innerHTML = `<p class="muted">${esc(err.message)}</p>`;
     }
   };
@@ -4468,9 +4485,13 @@
       const d = await api("/api/v1/logs/tail?count=25");
       const box = $("#log-tail-box");
       if (!box) return;
-      box.innerHTML = (d.entries || []).length
-        ? d.entries.slice().reverse().map(logEntryHtml).join("")
-        : `<p class="muted">Noch keine Live-Einträge.</p>`;
+      const tailSig = JSON.stringify(d.entries || []);
+      if (tailSig !== state.logTailSig) {            /* nur neu zeichnen, wenn etwas dazukam */
+        state.logTailSig = tailSig;
+        box.innerHTML = (d.entries || []).length
+          ? d.entries.slice().reverse().map(logEntryHtml).join("")
+          : `<p class="muted">Noch keine Live-Einträge.</p>`;
+      }
     } catch (e) {
       const box = $("#log-tail-box");
       if (box) box.innerHTML = `<p class="muted">${esc(e.message)}</p>`;
@@ -5975,17 +5996,24 @@
     } catch { /* die Anzeige bleibt, wie sie war */ }
   };
 
-  const loadGames = async () => {
+  /* `quiet` ist der Minutentakt. Die Liste ändert sich selten; ohne Änderung wird das Raster nicht neu gebaut. Das kostete jede
+     Minute alle Karten samt Bildern (am PS5-Browser ein Ruckeln beim Scrollen) und nahm einem halb bestätigten Knopf auf einer
+     Karte die Bestätigung. Wer die Liste selbst neu lädt oder etwas ändert, bekommt sie immer neu gezeichnet. */
+  const loadGames = async (quiet) => {
+    let sig = "";
     try {
       const d = await api("/api/v1/library");
       gm.list  = Array.isArray(d.games) ? d.games : [];
       gm.meta  = d;
       gm.error = "";
+      sig = JSON.stringify(Object.assign({}, d, { age_s: 0 }));        /* age_s zählt nur hoch */
     } catch (e) {
       gm.error = e.message || "nicht verfügbar";
     }
+    const same = !!quiet && gm.loaded && sig !== "" && sig === gm.sig;
+    gm.sig = sig;
     gm.loaded = true;
-    renderGames();
+    if (!same) renderGames();
     gcLoad();
   };
 
@@ -6115,7 +6143,14 @@
     else if (kind === "convert") { cpShell(); cvRenderJob(); }
     else cpOpen("");
   });
-  $("#gm-search").addEventListener("input", (e) => { gm.q = e.target.value; renderGames(); });
+  /* Eine Eingabe pro Zeichen baute das ganze Raster samt Bildern neu (am Fernseher tippt man mit dem Bildschirmtastenfeld):
+     jetzt erst nach einer kurzen Pause. */
+  let gmSearchTimer = 0;
+  $("#gm-search").addEventListener("input", (e) => {
+    gm.q = e.target.value;
+    clearTimeout(gmSearchTimer);
+    gmSearchTimer = setTimeout(renderGames, 160);
+  });
   $("#gm-reload").addEventListener("click", async (e) => {
     const b = e.currentTarget;
     b.disabled = true;
@@ -10596,11 +10631,11 @@
      that never sends visibilitychange cannot leave it stopped. */
   setInterval(() => { if (!document.hidden) pollStatus(); }, 1000);
   setInterval(() => { if (!document.hidden) pollSystem(); }, 10000);
-  setInterval(() => { if (!document.hidden && state.page === "log" && kl.tab === "app") loadLog(); }, 5000);
+  setInterval(() => { if (!document.hidden && state.page === "log" && kl.tab === "app") loadLog(true); }, 5000);
   /* A minute is the sampling period, so anything faster would redraw the
      same picture. */
   setInterval(() => { if (!document.hidden && state.page === "cooling") loadHistory(); }, 60000);
-  setInterval(() => { if (!document.hidden && state.page === "cooling") loadRules(); }, 15000);
+  setInterval(() => { if (!document.hidden && state.page === "cooling") loadRules(true); }, 15000);
   /* Payloads: was läuft, ändert sich nach jedem Start; die Dateilisten nur,
      wenn jemand einen Stick steckt oder per FTP kopiert. Neu gezeichnet wird
      nur bei einer Änderung (plLast), damit ein halb bestätigtes „Löschen"
@@ -10608,7 +10643,7 @@
   setInterval(() => { if (!document.hidden && state.page === "payloads") loadPayloads(); }, 8000);
   setInterval(() => { if (!document.hidden && state.page === "payloads") loadPayloadFiles(); }, 15000);
   /* Spielzeit und „zuletzt gespielt" ändern sich erst nach einer Sitzung. */
-  setInterval(() => { if (!document.hidden && state.page === "games") loadGames(); }, 60000);
+  setInterval(() => { if (!document.hidden && state.page === "games") loadGames(true); }, 60000);
 
   /* Back in front: look at once instead of waiting for the next beat. The
      two-minute charts run by sample, not by time, so after a longer pause they
