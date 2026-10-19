@@ -5,24 +5,23 @@ Advanced Cooling & Thermal Management for PlayStation 5
 WAS HIER DRIN LIEGT
 ===================
 
-PS5_Cooling_System_Center_v1.69.1.elf
+PS5_Cooling_System_Center_v1.70.0.elf
     Das Hauptprogramm: Lüftersteuerung und Web-Oberfläche. Das ist die
     Datei, die du nach jedem Neustart der Konsole sendest.
 
-cooling-center-launcher-installer_v1.69.1.elf
-    Installiert nur die Startmenü-Kachel, sonst nichts. Als Rückfallweg
-    gedacht, falls die Kachel-Installation im Hauptprogramm klemmt: hier
-    siehst du den nackten Fehlercode, ohne dass die App dazwischenfunkt.
+PPSA86921.zip
+    Die Starter-Kachel: den Ordner PPSA86921 nach /data/homebrew/ kopieren
+    (z. B. mit ShadowMountPlus oder einem FTP-Programm). Ein Tipp auf die
+    Kachel startet die App und öffnet die Web-Oberfläche.
 
-IV9999-PSCC69690_00-PS5COOLINGCNTR01-A0100-V0100.pkg
-    Das Kachel-Paket allein, falls du es lieber über einen PKG-Installer
-    einspielst. Es steckt bereits im Installer-ELF.
+Einen eigenen Kachel-Installer (ELF) und ein Kachel-Paket (.pkg) gibt es
+nicht mehr: Das Hauptprogramm legt seine Kachel selbst an.
 
 
 SO WIRD ES BENUTZT
 ==================
 
-1. PS5_Cooling_System_Center_v1.69.1.elf an die Konsole senden (Port 9021).
+1. PS5_Cooling_System_Center_v1.70.0.elf an die Konsole senden (Port 9021).
 2. Auf dem Fernseher erscheint eine Meldung mit der Adresse der
    Web-Oberfläche.
 3. Im Browser aufrufen:  http://<PS5-IP>:8086/
@@ -30,13 +29,11 @@ SO WIRD ES BENUTZT
 Die Kachel im Startmenü ("Medien") legt das Hauptprogramm beim ersten Start
 selbst an; ein Installer ist dafür nicht nötig. Sie überlebt Neustarts. Hast
 du sie in der Konsole gelöscht, kommt sie nicht von allein zurück: Auf der
-Systemseite legt "Kachel installieren" sie wieder an. Die Datei
-cooling-center-launcher-installer_v1.69.1.elf bleibt als Rückfallweg, falls
-das nicht klappt.
+Systemseite legt "Kachel installieren" sie wieder an.
 
 Neues Kachelbild: Die Kachel zuerst in der Konsole löschen (Kachel auswählen,
 Options-Taste, Löschen) und danach auf der Systemseite "Kachel installieren"
-drücken. Der Installer lässt eine vorhandene Kachel unverändert. Die App und
+drücken. Eine vorhandene Kachel bleibt sonst unverändert. Die App und
 ihre Einstellungen bleiben dabei unberührt.
 
 Wichtig: Die Kachel startet das Programm NICHT. Sie öffnet nur die
@@ -138,7 +135,7 @@ mehrwöchige Kühlleistungs-Aufzeichnung. Ein umbenannter Ordner würde
 beides auf null zurücksetzen.
 
 Die Startmenü-Kachel behält ihre Kennung PSCC69690, es entsteht also nie
-eine zweite. Eine schon installierte Kachel lässt der Installer aber
+eine zweite. Eine schon installierte Kachel bleibt aber
 stehen, wie sie ist. Den neuen Namen zeigt sie erst, wenn man sie vorher
 löscht (siehe oben, "Neues Kachelbild").
 
@@ -156,7 +153,9 @@ Konto oder Konsole führen. Das Risiko trägt, wer das tut.
 Keine Piraterie. Das Programm enthält keine Spiele, keine Firmware, keine
 Schlüssel und nichts, was einen Kopierschutz umgeht. Es lädt nichts aus dem
 Internet (nur die Seite "Credits" prüft im Browser, ob github.com erreichbar
-ist). Kopieren, Verschieben und Konvertieren wirken nur auf Spiele, die
+ist) außer, wenn man sie einschaltet, den offiziellen Updates der eigenen
+Spiele und, auf Knopfdruck, der Payload-Liste und der Payloads von GitHub
+("Payloads herunterladen"). Kopieren, Verschieben und Konvertieren wirken nur auf Spiele, die
 schon auf der eigenen Konsole liegen; Pakete finden, aufteilen und installieren
 nur auf Pakete, die du selbst auf die Konsole oder ein Laufwerk gelegt hast.
 Raubkopien zu beschaffen oder zu

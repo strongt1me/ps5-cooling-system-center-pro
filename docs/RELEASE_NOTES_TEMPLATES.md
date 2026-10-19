@@ -1,70 +1,49 @@
-# Release Notes Templates
+# Vorlage für Release-Notizen
 
-Diese Vorlagen sind für private Releases dieses Projekts gedacht.
-
-## 1) Kurzfassung (Endnutzer)
-
-```md
-## Release Notes
-
-### Neu
-- [Kurz die wichtigsten neuen Funktionen/Verbesserungen]
-
-### Verbesserungen
-- [Stabilität/Performance/Usability in 1-3 Punkten]
-
-### Assets
-- PS5_Cooling_System_Center_v<Version>.elf
-- cooling-center-launcher-installer_v<Version>.elf
-- IV9999-PSCC69690_00-PS5COOLINGCNTR01-A0100-V0100.pkg
-- LIESMICH.txt
-
-### Installation
-1. [Haupt-ELF oder Installer-ELF auf die PS5 laden]
-2. [Web-UI aufrufen: http://<PS5-IP>:8086]
-3. [Optionales kurzes Troubleshooting]
-```
-
-## 2) Langfassung (Entwickler)
+Aufbau wie bei drakmor, itsPLK, EchoStretch und Gezine (seit 19.10.2026): kurz, nach Wichtigkeit, jede Zeile eine
+Aussage. Die Langfassung jeder Änderung steht im CHANGELOG.md; die Notizen fassen sie zusammen. Keine Herstellernamen in
+eigenen Sätzen, keine Versionen von Testständen, keine Interna (Dateinamen im Quelltext nur, wo der Nutzer sie braucht).
 
 ```md
-## Release Notes
+# PS5 Cooling & System Center – Pro v<Version>
 
-Diese Version fokussiert [Schwerpunkt: z.B. Stabilität/Automation/Feature-Ausbau].
+## Highlights
+- **<Funktion>** – ein Satz, was man damit tun kann
+- (2–4 Punkte, das Wichtigste zuerst)
 
-### Neu
-- [Feature A]
-- [Feature B]
+## Neu
+### <Bereich>
+- eine Zeile je Neuerung
 
-### Build & Tooling
-- [Build-System / Makefile / Skripte]
-- [Neue Tools oder Automatisierung]
+## Verbesserungen
+- eine Zeile je Verbesserung (was schneller, ruhiger, bequemer wurde)
 
-### Fixes
-- [Bugfix 1]
-- [Bugfix 2]
+## Fehlerbehebungen
+- was falsch war, aus Sicht des Nutzers, eine Zeile je Fehler
 
-### Qualität & Verifikation
-- [Tests/Checks die durchlaufen wurden]
-- [Pre-Release-Check, Asset-Verifikation, Release-Upload]
+## Hinweise
+- **Dateien / Starter-Kachel / Internet / Firmware:** was man beim Aktualisieren wissen muss
 
-### Assets
-- PS5_Cooling_System_Center_v<Version>.elf
-- cooling-center-launcher-installer_v<Version>.elf
-- IV9999-PSCC69690_00-PS5COOLINGCNTR01-A0100-V0100.pkg
-- LIESMICH.txt
+## Downloads
+| Datei | Wofür |
+|---|---|
+| `PS5_Cooling_System_Center_v<Version>.elf` | die App – nach jedem Neustart der Konsole an Port 9021 senden |
+| `PPSA86921.zip` | Starter-Kachel für `/data/homebrew/` (startet die App per Tipp) |
+| `LIESMICH.txt` | Kurzanleitung |
 
-### Kompatibilität / Hinweise
-- [FW-/Jailbreak-/kstuff-Hinweise]
-- [Bekannte Einschränkungen]
+## Danke
+- **<Name>** – wofür
+
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v<vorher>...v<Version>
 ```
 
-## Schneller Einsatz mit gh CLI
+Eine kleine Fehlerbehebungs-Version kommt ohne „Highlights“ und „Neu“ aus:
 
-Release Notes aus Datei setzen:
+```md
+# PS5 Cooling & System Center – Pro v<Version>
 
-```powershell
-gh release edit v<Version> --repo strongt1me/ps5-cooling-system-center-pro --notes-file .\docs\RELEASE_NOTES.md
+## Fehlerbehebungen
+- …
+
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v<vorher>...v<Version>
 ```
-
-Tipp: Lege vorab eine konkrete Datei (z.B. docs/RELEASE_NOTES.md) an, kopiere eine der Vorlagen hinein und ersetze alle Platzhalter.

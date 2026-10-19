@@ -6,7 +6,7 @@
 
 **Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser der Konsole oder von jedem Gerät im Heimnetz, in sechs Sprachen.**
 
-![Version](https://img.shields.io/badge/Version-1.69.1-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.70.0-1f6feb)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
 ![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -49,7 +49,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
     </td>
     <td valign="top">
       <h3>📁 Dateien & Payloads</h3>
-      Dateimanager für Konsole und Laufwerke; Payloads starten, beenden und als Profile nacheinander laden.
+      Dateimanager für Konsole und Laufwerke; Payloads herunterladen (Liste des Payload Managers), starten, beenden und als Profile nacheinander laden.
     </td>
   </tr>
   <tr>
@@ -136,7 +136,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 
 **Verwaltung**
 - Dateimanager: ansehen, herunter- und hochladen, Ordner anlegen, umbenennen, kopieren, verschieben, löschen (Ändern nur auf Laufwerken und in `/data`).
-- Payloads: laufende ansehen und beenden, eigene `.elf` aus einem Ordner oder vom USB-Stick starten, Profile als Startfolge.
+- Payloads: laufende ansehen und beenden, eigene `.elf` aus einem Ordner oder vom USB-Stick starten, Profile als Startfolge; die Payloads aus der Liste des Payload Managers von itsPLK herunterladen und aktualisieren (mit SHA-256-Prüfung).
 - Profil: Anzeigename und Profilbild (30 eingebaute Bilder oder eigene Datei).
 - Design: Standard, Hell, Dunkel und Optimal (am schnellsten gezeichnet, gedacht für den Fernseher); jedes Gerät merkt sich seine Wahl.
 - System: Modell, Firmware, Laufzeit, Speicher, Netzwerk; Rohsensoren und Diagnose im Expertenmodus.
@@ -144,7 +144,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 
 **Technik**
 - Eigener HTTP-Server ohne Fremdbibliothek, dokumentierte [JSON-Schnittstelle](docs/API.md), Einstellungen unter `/data/PS5-Cooling-Center/config.json`.
-- Kein Zugriff aufs Internet: Die App spricht nur mit Programmen auf der Konsole und mit den Browsern im Heimnetz.
+- Kein Zugriff aufs Internet, außer man schaltet die **Spiel-Updates** ein (aus ab Werk): Dann fragt die App Sonys Download-Server und, für ältere Patches, prosperopatches.com bzw. orbispatches.com nach den Updates der eigenen Spiele. Ebenso lädt „Payloads herunterladen“ erst auf Knopfdruck die Payload-Liste und die Dateien von GitHub. Sonst spricht sie nur mit Programmen auf der Konsole und mit den Browsern im Heimnetz.
 
 </details>
 
@@ -153,7 +153,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 1. Aus den [Releases](../../releases) die Datei `PS5_Cooling_System_Center_v<Version>.elf` laden.
 2. An die Konsole senden (ELF-Lader, Port **9021**), zum Beispiel:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.69.1.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.70.0.elf
    ```
 3. Im Browser öffnen: **`http://<PS5-IP>:8086`** (die Adresse zeigt auch die Meldung oben links auf dem Fernseher).
 
@@ -176,7 +176,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 <details>
 <summary>Firmware und SDK im Detail</summary>
 
-Die ELF ist mit dem PS5-Payload-SDK **v0.43** gebaut, dessen Startcode die Firmware **bis 13.60** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
+Die ELF ist mit dem PS5-Payload-SDK **v0.44** gebaut, dessen Startcode die Firmware **bis 13.60** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
 </details>
 
 ## Bedienung
@@ -186,7 +186,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.43** gebaut, dessen Startcode die Firmw
 | **Kühlung** | Status, Verlauf, Sensoren, Zieltemperatur, Betriebsart, Profile pro Spiel |
 | **Spiele** | Bibliothek, Spielzeit, Spielstände, Pakete, PS4 von USB, Sicherungen, Verlauf |
 | **Dateimanager** | Ordner der Konsole und der Laufwerke |
-| **Payloads** | laufende, gespeicherte und auf USB liegende Payloads, Profile |
+| **Payloads** | laufende, gespeicherte und auf USB liegende Payloads, Profile, Payloads herunterladen |
 | **System** | Konsole, Speicher, Netzwerk, Diagnose |
 | **Profil** | Anzeigename und Profilbild |
 | **Protokoll** | Ereignisse der App und Kernel-Log live |
@@ -212,7 +212,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.43** gebaut, dessen Startcode die Firmw
 <details>
 <summary><b>Aus dem Quellcode bauen</b></summary>
 
-Voraussetzung ist das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk) **ab v0.42** (getestet mit v0.43); der Bau prüft das und bricht mit einem zu alten SDK ab. Unter Windows genügt Git Bash mit LLVM 21:
+Voraussetzung ist das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk) **ab v0.42** (getestet mit v0.44); der Bau prüft das und bricht mit einem zu alten SDK ab. Unter Windows genügt Git Bash mit LLVM 21:
 
 ```bash
 tools/build-windows.sh
@@ -231,7 +231,7 @@ Ergebnis ist `PS5_Cooling_Center.elf`; die Starter-Kachel baut `tools/make_start
 ## Rechtliches und Haftungsausschluss
 
 > [!CAUTION]
-> **Kein Sony-Produkt, keine Piraterie, keine Haftung.** Dieses Projekt steht in keiner Verbindung zu Sony. Es enthält keine Spiele, keine Firmware, keine Sony-Schlüssel (nur einen öffentlich bekannten Schlüssel für selbst gebaute Test-Pakete, siehe THIRD_PARTY_NOTICES.md) und keinen Code zum Umgehen von Kopierschutz, und es lädt nichts aus dem Internet. Das Modifizieren einer Konsole kann Garantie und Konto kosten; das Risiko trägt, wer es tut. Das Programm wird **ohne jede Gewährleistung** bereitgestellt.
+> **Kein Sony-Produkt, keine Piraterie, keine Haftung.** Dieses Projekt steht in keiner Verbindung zu Sony. Es enthält keine Spiele, keine Firmware, keine Sony-Schlüssel (nur einen öffentlich bekannten Schlüssel für selbst gebaute Test-Pakete, siehe THIRD_PARTY_NOTICES.md) und keinen Code zum Umgehen von Kopierschutz, und es lädt nichts aus dem Internet außer, wenn man sie einschaltet, den offiziellen Updates der eigenen Spiele von Sonys Servern. Das Modifizieren einer Konsole kann Garantie und Konto kosten; das Risiko trägt, wer es tut. Das Programm wird **ohne jede Gewährleistung** bereitgestellt.
 
 <details>
 <summary>Vollständiger Text</summary>
@@ -243,7 +243,7 @@ Ergebnis ist `PS5_Cooling_Center.elf`; die Starter-Kachel baut `tools/make_start
 - **Keine Piraterie.** Dieses Projekt ist **nicht** dafür gedacht, Raubkopien zu beschaffen, zu verbreiten oder zu nutzen, und es unterstützt das nicht. Kopieren, Verschieben und Konvertieren wirken nur auf Spiele, die schon auf der eigenen Konsole liegen, und sind für Sicherungen rechtmäßig erworbener Spiele gedacht. Pakete finden, aufteilen, installieren und von USB einbinden wirken nur auf Pakete, die du selbst auf die Konsole oder ein Laufwerk gelegt hast; die App besorgt keine. Das Verbreiten urheberrechtlich geschützter Inhalte ist in den meisten Ländern strafbar. Hilfe dazu gibt es hier nicht, auch nicht in Issues.
 - **Keine Dateien von Sony im Repository.** Systembibliotheken, Firmware und proprietäre SDK-Dateien werden weder mitgeliefert noch angenommen (siehe [CONTRIBUTING](CONTRIBUTING.md)). Die 30 Profilbilder hat der Autor selbst erzeugt.
 - **Keine Gewährleistung, keine Haftung.** Das Programm greift in die Lüftersteuerung und in Systemfunktionen der Konsole ein. Es wird so bereitgestellt, wie es ist, **ohne jede Gewährleistung** (GNU GPL, Abschnitte 15 und 16). Der Autor haftet nicht für Schäden an Konsole, Daten oder Konten. Eine verstaubte Konsole kühlt schlechter, egal wie der Lüfter geregelt wird.
-- **Datenschutz.** Verläufe, Protokoll und Einstellungen bleiben auf der Konsole unter `/data/PS5-Cooling-Center/`. Die App sendet keine Daten ins Internet. Einzige Ausnahme im Browser: Die Seite „Credits“ lädt einmal das kleine Symbolbild von github.com, um zu sehen, ob der Browser Internet hat; nur dann sind die Links anklickbar.
+- **Datenschutz.** Verläufe, Protokoll und Einstellungen bleiben auf der Konsole unter `/data/PS5-Cooling-Center/`. Die App sendet keine Daten ins Internet; nur mit eingeschalteten Spiel-Updates fragt sie Sonys Server und DNS-Anbieter nach den Titel-IDs der eigenen Spiele. Einzige Ausnahme im Browser: Die Seite „Credits“ lädt einmal das kleine Symbolbild von github.com, um zu sehen, ob der Browser Internet hat; nur dann sind die Links anklickbar.
 - **Drittprojekte** stehen unter ihren eigenen Lizenzen, siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 </details>
 
@@ -274,6 +274,8 @@ Dieses Projekt steht auf den Schultern der PS5-Homebrew-Gemeinschaft. **Vielen D
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): Profilfunktion und Format des Profilbilds.
 - **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR-Encoder.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): die vier getesteten LZ4-Profile (ASTRO BOT, EA Sports UFC 6, Insomniac-Engine, Unity-Engine), unverändert eingebettet.
+- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): Ablauf der Spiel-Updates von Sonys Servern (Versionsliste, Paketliste, Prüfsummen, DNS-Weg, ältere Patches über SC-Links), eigener Code nach diesem Vorbild.
+- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS für die Spiel-Updates.
 - **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
 </details>
 
@@ -284,7 +286,7 @@ Dieses Projekt steht auf den Schultern der PS5-Homebrew-Gemeinschaft. **Vielen D
 - **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: Liste für „Automatisch“, Mitschnitt zur Profil-Erzeugung, Pflege der Spiel-Plugins.
 - **theghostonline (Husam Osman), [PS5 LZ4 Compression](https://github.com/theghostonline/PS5-LZ4-Compression)**: Dateien, die beim Packen lose bleiben müssen, Rechte 0777, Reparatur beim Prüfen der Pakete, Auswahl der getesteten Profile.
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: Parameter für `.ffpkg`-Abbilder.
-- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) und [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager).
+- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) und [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (Vorbild und Liste für „Payloads herunterladen“, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): Erkennung des laufenden Spiels.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** und **[onionHEN](https://github.com/aydencharles/onionHEN)**: Systemaufrufe, Messwerte, Bildrate.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: Vorbild für viele Funktionen (Code jeweils neu geschrieben).

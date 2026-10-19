@@ -6,7 +6,7 @@
 
 **Contrôle du ventilateur, surveillance de la température et centre système pour la PlayStation 5 jailbreakée,<br>utilisable dans le navigateur de la console ou depuis tout appareil du réseau domestique, en six langues.**
 
-![Version](https://img.shields.io/badge/Version-1.69.1-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.70.0-1f6feb)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0--or--later-blue)
 ![Plateforme](https://img.shields.io/badge/Plateforme-PS5%20Payload-003791)
 ![Langues](https://img.shields.io/badge/Langues-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -49,7 +49,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
     </td>
     <td valign="top">
       <h3>📁 Fichiers et payloads</h3>
-      Gestionnaire de fichiers pour la console et les disques ; lancer et arrêter des payloads, les charger à la suite comme profils.
+      Gestionnaire de fichiers pour la console et les disques ; télécharger des payloads (la liste du Payload Manager), les lancer et les arrêter, les charger à la suite comme profils.
     </td>
   </tr>
   <tr>
@@ -136,7 +136,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 
 **Gestion**
 - Gestionnaire de fichiers : afficher, télécharger et envoyer, créer des dossiers, renommer, copier, déplacer, supprimer (modifications seulement sur les disques et dans `/data`).
-- Payloads : voir et arrêter ceux en cours, lancer ses propres `.elf` depuis un dossier ou une clé USB, profils comme séquence de démarrage.
+- Payloads : voir et arrêter ceux en cours, lancer ses propres `.elf` depuis un dossier ou une clé USB, profils comme séquence de démarrage ; télécharger et mettre à jour les payloads de la liste du Payload Manager d'itsPLK (vérification SHA-256).
 - Profil : nom affiché et image de profil (30 images intégrées ou un fichier personnel).
 - Thème : standard, clair, sombre et optimal (le plus rapide à dessiner, pensé pour le téléviseur) ; chaque appareil retient son choix.
 - Système : modèle, firmware, durée de fonctionnement, stockage, réseau ; capteurs bruts et diagnostic en mode expert.
@@ -144,7 +144,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 
 **Technique**
 - Serveur HTTP maison sans bibliothèque tierce, [interface JSON](docs/API.md) documentée, réglages dans `/data/PS5-Cooling-Center/config.json`.
-- Aucun accès à Internet : l'appli ne parle qu'aux programmes de la console et aux navigateurs du réseau domestique.
+- Aucun accès à Internet, sauf si vous activez les **mises à jour des jeux** (désactivées par défaut) : l'appli interroge alors les serveurs de téléchargement de Sony et, pour les anciens patchs, prosperopatches.com ou orbispatches.com au sujet des mises à jour de vos propres jeux. De même, « Télécharger des payloads » ne récupère la liste et les fichiers sur GitHub qu'après un clic sur le bouton. Sinon, elle ne parle qu'aux programmes de la console et aux navigateurs du réseau domestique.
 
 </details>
 
@@ -153,7 +153,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 1. Télécharger `PS5_Cooling_System_Center_v<version>.elf` depuis les [Releases](../../releases).
 2. L'envoyer à la console (chargeur ELF, port **9021**), par exemple :
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.69.1.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.70.0.elf
    ```
 3. Ouvrir **`http://<IP-PS5>:8086`** dans un navigateur (la notification en haut à gauche de la TV affiche aussi l'adresse).
 
@@ -176,7 +176,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 <details>
 <summary>Firmware et SDK en détail</summary>
 
-L'ELF est compilé avec le PS5 payload SDK **v0.43**, dont le code de démarrage connaît le firmware **jusqu'à 13.60**. Un firmware que le code de démarrage ne connaît pas n'atteint jamais `main()` : le programme ne démarre pas du tout et n'écrit rien dans le journal. Pour 13.00 à 13.40 il n'y a pas encore de retour (le code de démarrage les connaît). La température du GPU n'existe que sur la Pro.
+L'ELF est compilé avec le PS5 payload SDK **v0.44**, dont le code de démarrage connaît le firmware **jusqu'à 13.60**. Un firmware que le code de démarrage ne connaît pas n'atteint jamais `main()` : le programme ne démarre pas du tout et n'écrit rien dans le journal. Pour 13.00 à 13.40 il n'y a pas encore de retour (le code de démarrage les connaît). La température du GPU n'existe que sur la Pro.
 </details>
 
 ## Utilisation
@@ -186,7 +186,7 @@ L'ELF est compilé avec le PS5 payload SDK **v0.43**, dont le code de démarrage
 | **Refroidissement** | État, historique, capteurs, température cible, mode, profils par jeu |
 | **Jeux** | Bibliothèque, temps de jeu, sauvegardes, paquets, PS4 depuis USB, copies, historique |
 | **Gestionnaire de fichiers** | Dossiers de la console et des disques |
-| **Payloads** | Payloads en cours, enregistrés et sur USB, profils |
+| **Payloads** | Payloads en cours, enregistrés et sur USB, profils, télécharger des payloads |
 | **Système** | Console, stockage, réseau, diagnostic |
 | **Profil** | Nom affiché et image de profil |
 | **Journal** | Événements de l'appli et journal du noyau en direct |
@@ -212,7 +212,7 @@ L'ELF est compilé avec le PS5 payload SDK **v0.43**, dont le code de démarrage
 <details>
 <summary><b>Compiler depuis le code source</b></summary>
 
-Il faut le [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 ou plus récent** (testé avec v0.43) ; la compilation le vérifie et s'arrête avec un SDK plus ancien. Sous Windows, Git Bash avec LLVM 21 suffit :
+Il faut le [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 ou plus récent** (testé avec v0.44) ; la compilation le vérifie et s'arrête avec un SDK plus ancien. Sous Windows, Git Bash avec LLVM 21 suffit :
 
 ```bash
 tools/build-windows.sh
@@ -231,7 +231,7 @@ Le résultat est `PS5_Cooling_Center.elf` ; `tools/make_starter.sh` crée la vig
 ## Mentions légales et clause de non-responsabilité
 
 > [!CAUTION]
-> **Pas un produit Sony, pas de piratage, aucune responsabilité.** Ce projet n'a aucun lien avec Sony. Il ne contient ni jeux, ni firmware, ni clés Sony (seulement une clé publiquement connue pour des paquets de test créés soi-même, voir THIRD_PARTY_NOTICES.md), ni code pour contourner une protection contre la copie, et il ne télécharge rien depuis Internet. Modifier une console peut coûter la garantie et le compte ; le risque est pour qui le fait. Le programme est fourni **sans aucune garantie**.
+> **Pas un produit Sony, pas de piratage, aucune responsabilité.** Ce projet n'a aucun lien avec Sony. Il ne contient ni jeux, ni firmware, ni clés Sony (seulement une clé publiquement connue pour des paquets de test créés soi-même, voir THIRD_PARTY_NOTICES.md), ni code pour contourner une protection contre la copie, et il ne télécharge rien depuis Internet sauf, si vous les activez, les mises à jour officielles de vos propres jeux depuis les serveurs de Sony. Modifier une console peut coûter la garantie et le compte ; le risque est pour qui le fait. Le programme est fourni **sans aucune garantie**.
 
 <details>
 <summary>Texte complet</summary>
@@ -243,7 +243,7 @@ Le résultat est `PS5_Cooling_Center.elf` ; `tools/make_starter.sh` crée la vig
 - **Pas de piratage.** Ce projet n'est **pas** fait pour obtenir, diffuser ou utiliser des copies pirates, et ne le soutient pas. Copier, déplacer et convertir n'agissent que sur des jeux déjà présents sur ta console et servent aux sauvegardes de jeux acquis légalement. Trouver, découper, installer et monter des paquets depuis USB n'agissent que sur des paquets que tu as toi-même mis sur la console ou un disque ; l'appli n'en procure aucun. Diffuser des contenus protégés par le droit d'auteur est une infraction dans la plupart des pays. Aucune aide à ce sujet ici, ni dans les issues.
 - **Aucun fichier Sony dans le dépôt.** Bibliothèques système, firmware et fichiers propriétaires du SDK ne sont ni fournis ni acceptés (voir [CONTRIBUTING](CONTRIBUTING.md)). Les 30 images de profil ont été créées par l'auteur.
 - **Aucune garantie, aucune responsabilité.** Le programme intervient sur le contrôle du ventilateur et sur des fonctions système de la console. Il est fourni tel quel, **sans aucune garantie** (GNU GPL, sections 15 et 16). L'auteur n'est pas responsable des dommages aux consoles, données ou comptes. Une console poussiéreuse refroidit moins bien, quelle que soit la régulation du ventilateur.
-- **Confidentialité.** Historique, journal et réglages restent sur la console dans `/data/PS5-Cooling-Center/`. L'appli n'envoie aucune donnée sur Internet. Seule exception dans le navigateur : la page « Crédits » charge une fois la petite icône de github.com pour voir si le navigateur a Internet ; ce n'est qu'alors que les liens sont cliquables.
+- **Confidentialité.** Historique, journal et réglages restent sur la console dans `/data/PS5-Cooling-Center/`. L'appli n'envoie aucune donnée sur Internet ; seulement avec les mises à jour des jeux activées, elle interroge les serveurs de Sony et des fournisseurs DNS sur les ID de titre de vos propres jeux. Seule exception dans le navigateur : la page « Crédits » charge une fois la petite icône de github.com pour voir si le navigateur a Internet ; ce n'est qu'alors que les liens sont cliquables.
 - **Les projets tiers** sont sous leurs propres licences, voir [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 </details>
 

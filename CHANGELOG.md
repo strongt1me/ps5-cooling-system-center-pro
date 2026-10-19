@@ -1,5 +1,63 @@
 # Changelog
 
+## v1.70.0
+
+### Payloads herunterladen (nach dem Payload Manager 0.6.3 von itsPLK)
+- **Neuer Bereich auf der Payloads-Seite:** die Liste des Payload Managers von itsPLK (`ps5-payloads-mirror`, jeden Tag aktualisiert, zurzeit 28 Payloads: ShadowMountPlus, etaHEN, kstuff-lite, ftpsrv, elfldr, ps5upload, PKG-Manager u. v. m.) mit Suche und Kategorien. Herunterladen, Aktualisieren, Starten und Löschen mit einem Klick
+- Jede Datei wird vor dem Speichern mit der **SHA-256-Prüfsumme** aus der Liste verglichen; eine abweichende wird verworfen. Gespeichert wird im Payload-Ordner der App, wo Profile und Startprofil sie finden
+- **Updates erkannt** wie im Payload Manager (Versionsvergleich, bei gleicher Version die Prüfsumme): die Karte zeigt „alt → neu“ und „Aktualisieren“; die alte Datei wird ersetzt
+- Eine Datei gleichen Namens, die nicht aus der Liste stammt, wird erst nach einem zweiten Klick ersetzt; gelöscht wird nur, was die App selbst geladen hat
+- **Ins Internet nur auf Wunsch:** Die Liste lädt erst „Liste laden“; danach wird sie beim Öffnen der Seite höchstens alle drei Stunden erneuert. Nur GitHub (https, feste Wurzelzertifikate)
+- Payloads mit der Endung `.bin` (etaHEN) lassen sich jetzt wie `.elf` starten, mit derselben Prüfung des Inhalts
+
+### Spiel-Updates (nach PatchDL 0.3.0 von Knutwurst)
+- **Neuer Reiter „Updates“ auf der Spiele-Seite:** lädt das offizielle Update jedes PS5- und PS4-Spiels direkt von Sonys Servern und installiert es. Nur für Spiele, die Sony signiert hat (Disc, PlayStation Store); Spiele über ShadowMountPlus, Fake-PKGs und Homebrew werden nicht angefragt. **Aus**, bis man den Schalter umlegt
+- **Passend zur Firmware:** Angeboten wird die neueste Version, die auf dieser Firmware läuft. Braucht Sonys neuestes Update eine neuere Firmware, nennt die Karte die neueste passende Version aus Prospero Patches bzw. Orbis Patches; ihren SC-Link fügt man ein (am Handy über einen QR-Code). Passt die Paketgröße nicht zur gewählten Version, fragt die App nach
+- **Warteschlange, Fortsetzen, Prüfsummen:** Ein Update nach dem anderen, 1 bis 16 Verbindungen; Anhalten und Fortsetzen auch nach einem Neustart der App; jedes Stück wird mit Sonys Prüfsumme verglichen (PS5 SHA-256, PS4 SHA-1), ein falsches neu geladen; der Fortschritt steht live auf der Seite
+- **Aufräumen:** Das Paket in `/data/PS5-Cooling-Center/updates` wird gelöscht, sobald das Spiel nach der Installation die neue Version meldet (abschaltbar); die Liste der Pakete im Ordner steht in den Einstellungen des Reiters. Ein schon vorhandenes Paket der richtigen Größe wird Stück für Stück geprüft, nur falsche Stücke werden neu geladen
+- **DNS wie PatchDL:** eigene Anfragen an Cloudflare, Google und Quad9 (UDP, dann TCP, dann DNS über HTTPS, zuletzt die gemerkte Adresse); die DNS-Einstellungen der Konsole bleiben unverändert. TLS mit BearSSL 0.6 (MIT) und festen Wurzelzertifikaten: Sonys eigenes für die Download-Server, öffentliche für DNS über HTTPS und die Patch-Seiten
+- **Schneller wie PatchDL 0.3.1:** Was ankommt, wird in Blöcken von 1 MiB geschrieben statt in vielen kleinen Stücken, und jede Verbindung bekommt einen Empfangspuffer von 2 MiB
+- **Sicherheit:** Jedes Stück wird immer mit seiner Prüfsumme verglichen (eine Paketliste ohne Prüfsummen wird abgelehnt), und vor der Installation muss das geladene Paket offiziell signiert sein; eine Antwort, die ohne sauberes TLS-Ende abbricht, gilt als unvollständig
+- **Stabiler:** Das Warten auf die Installation endet nie mehr in einer Endlosschleife (Ergebnisse werden je Auftrag aufbewahrt, Höchstdauer 6 Stunden), `job.json` wird nie von zwei Verbindungen zugleich geschrieben, Ausschalten leert die Warteschlange, „Fortsetzen“ klappt auch direkt nach einem Neustart der App, während der Installation lässt sich nichts anhalten oder löschen
+- Neue Schnittstellen `/api/v1/updates`, `/api/v1/updates/packages`, `/api/v1/updates/versions`, `/api/v1/updates/qr`; Handbuch in allen sechs Sprachen ergänzt
+- Die Oberfläche nennt keinen Herstellernamen mehr („offizielle Update-Server“, „offiziell signiert“)
+
+### Stabilität und Tempo (Durchsicht 19.10.2026: vier Prüf-Agenten über das ganze Projekt)
+- **Oberfläche flüssiger:** Die Statusabfrage zeichnet jede Sekunde nur noch, was auf der sichtbaren Seite steht (vorher auch Kerne, Sensoren, Diagramme und Diagnose der anderen Seiten), und schreibt Texte und Listen nur, wenn sie sich geändert haben. Die Systemabfrage fragt Controller, Kanäle und Laufwerke nur noch auf der Systemseite ab
+- **Seiten-Dateien werden zwischengespeichert:** Oberfläche, Skripte und Wörterbücher bekommen ein ETag; der Browser lädt sie nur neu, wenn sich die App geändert hat (vorher bei jedem Aufruf, das Wörterbuch allein 0,4–0,5 MB)
+- **Controller:** Fenster (Kopieren, Löschen, Dateimanager) holen den Fokus, geben ihn beim Schließen zurück und schließen mit der Kreis-Taste/Escape; L1/R1 blättert hinter einem offenen Fenster nicht mehr um
+- **Pakete:** Während einer Suche wird nur noch die Liste abgefragt und nur bei Änderung neu gebaut (vorher jede Sekunde vier Abfragen und alle Karten)
+- **Fehler behoben:** schlummernder Stapelüberlauf beim Lesen der Netzwerkdaten (Puffer jetzt doppelt so groß wie Sonys Struktur); zwei Abbild-/LZ4-/AMPR-Aufträge konnten im selben Augenblick starten; ein fragmentiertes exFAT-Abbild wurde beim Prüfen und Entpacken quadratisch langsam gelesen; die Abfrage bei ShadowMountPlus hielt bis zu 5,5 s eine Sperre, auf die andere Seiten warteten; nach Verschieben/Entpacken/Löschen konnten Aufträge mit der alten Spieleliste geplant werden; Installationsergebnis konnte von einer gleichzeitig startenden Installation überschrieben werden; ein Update-Paket konnte gelöscht werden, während es installiert wurde; fehlende Speicherprüfung in PS4Mount; der Lüfter-Thread nahm nach einer langen Pause mitten in einer Kachel-Installation seine Identität zurück; Fehlermeldungen bei zu großen Anfragen kamen als Verbindungsabbruch an; Import der Einstellungen übernahm den Schalter „Covers & Metadaten speichern“ erst später; ein Schritt eines Payload-Profils scheiterte, wenn gleichzeitig etwas kopiert wurde
+- **Robuster:** langsame Clients belegen keine Verbindungsplätze mehr unbegrenzt (Mindesttempo 64 KiB je 30 s); Löschen großer Spiele gibt regelmäßig Rechenzeit ab; die Sicherungsliste misst Ordnergrößen nicht mehr bei jeder Anfrage neu; Kanalaufzeichnung, Prozessliste und das Alter von Leistungs- und Taktwerten rechnen mit der monotonen Uhr; ein Installationshelfer, der schon beim Start hängt, wird gefunden und beendet statt bei jedem neuen Versuch liegen zu bleiben; Löschen-Dialog verwirft verspätete Antworten eines vorher geöffneten Dialogs; der Reiter „Updates“ aktualisiert sich nach einem Seitenwechsel wieder; die Verbindungsanzeige wird nach einem Ausfall sicher wieder grün
+- **cJSON:** Schutz vor NULL in `cJSON_SetNumberHelper` (upstream b2890c8, noch in keinem Release)
+
+### Auslieferung
+- **Kein Kachel-Installer und kein Kachel-Paket mehr:** Die App legt ihre Kachel seit 1.47.0 selbst an; `cooling-center-launcher-installer_v….elf` und `IV9999-PSCC69690_00-….pkg` werden nicht mehr gebaut und nicht mehr ausgeliefert. Die Veröffentlichung besteht aus der App, `PPSA86921.zip` (Starter-Kachel) und der LIESMICH
+
+### Pakete
+- **Rückportier-Patches erkannt** (nach ps5-pkg-manager 1.5.1): Ein PS5-Paket mit dem Kopf `LIH`, das früher als „Unbekanntes Paket“ übersprungen wurde, wird gelesen und als **Update** gezeigt, ebenso ein Paket, dessen Inhaltsmarke (`0x40000000` oder `0x00100000`) es als Patch ausweist, auch wenn sonst nichts im Paket darauf hindeutet
+- **SDK-Ziel:** Bei einem PS5-Paket steht jetzt „SDK 5.xx“ (o. ä.) als leise Marke auf der Karte, gelesen aus den Prozessparametern des Hauptprogramms. Es wird nur gelesen, wenn das Programm unverschlüsselt und unkomprimiert im Paket liegt und eindeutig ist (höchstens 16 Blöcke zu 8 KiB und 24 Byte am Ende); sonst steht keine Marke da, und das Paket bleibt trotzdem lesbar. Geprüft mit künstlichen Paketen (FIH, LIH, Versatz über 4 GiB, beschädigte Felder) unter ASan/UBSan und mit 300 beschädigten Abbildern
+
+### PS4-Spiele von USB (PS4Mount 0.6.0)
+- Neuer Schalter **„Neue Spiele schneller anmelden“** in den Einstellungen (**aus**): Die Anmeldung der Konsole geht sonst jeden Ordner in `/user/app` durch, etwa eine Dreiviertelsekunde je Spiel der Bibliothek, auch für schon angemeldete. Mit dem Schalter sieht sie nur die neuen Spiele (bis zu zwei Minuten, nur wenn kein Spiel läuft); danach sind wieder alle da. Hinzufügen, Entfernen und Zurückverschieben warten in dieser Zeit, und ein Neustart der App räumt eine liegen gebliebene Einbindung weg. Noch nicht an der Konsole erprobt, deshalb aus
+
+### Spiele (nach exFAT2AMPR 1.104 von V-10)
+- **Doppelte Abbilder:** Liegt ein Spiel in mehr als einem Abbild auf den Laufwerken (oberste Ebene und eine Ordnerebene darunter, dazu `homebrew` und `etaHEN/games`), zeigt die Spiele-Seite eine Karte „Doppelte Abbilder“ mit allen Quellen; die Quelle, die ShadowMountPlus gerade nimmt, ist markiert. **Beiseitelegen** benennt ein Abbild in `….off` um, ShadowMountPlus nimmt es dann nicht mehr (zwei Quellen ließen es sonst bei jeder Suche umhängen); **Zurückholen** macht es rückgängig. Gelöscht wird nichts. Ein eingehängtes Abbild oder eines, dessen Spiel läuft, lässt sich nicht beiseitelegen. Welches Spiel ein Abbild enthält, liest die App aus dem Abbild selbst (`param.json`/`param.sfo`), ohne es einzuhängen
+
+### LZ4-Packer
+- **Dauer vorab:** Das Packfenster nennt, wie lange Packen und Prüfen etwa dauern; bei Stufe 10 bis 12 auch, wie lange Stufe 9 bräuchte (die Stufen 10–12 sparen meist weniger als ein Prozent Platz). Zuerst sind es Schätzwerte (die von exFAT2AMPR 1.104), nach jedem Packen lernt die App die Geschwindigkeit dieser Konsole (`lz4-speed.txt` im Datenordner)
+- **Verknüpfungen werden abgelehnt:** Liegt im Spielordner eine Verknüpfung oder etwas, das weder Datei noch Ordner ist, oder lässt sich ein Ordner nicht ganz lesen, beginnt das Packen gar nicht erst und nennt die Stelle. Vorher wurden Verknüpfungen still übergangen; in einer gepackten Kopie fehlten sie dann
+- **Startprüfung:** Bei einem gepackten Spiel warnt die Zeile „LZ4-Asset-Packs“, wenn `eboot.bin` nicht ausgeführt werden darf oder ShadowMountPlus für das Spiel keine fakelib einbindet (fakelib-Modus „Deaktiviert“ seit ShadowMountPlus 1.7beta5, oder global ausgeschaltet): Dann fehlt beim Start die APR-EMU, die die Pakete liest. Die App fragt dafür nur die Spieleliste von ShadowMountPlus ab, die sie ohnehin liest
+- Die Paketverzeichnisse von Remedys Spielen (`*.rmdtoc`) bleiben jetzt immer lose, gleich mit welchem Profil: Alan Wake 2 öffnet sie ohne APR und bricht gepackt mit „No packfiles found!“ ab (gefunden mit MkPFS.CSharp 2.5.0 von danthespal; die `.rmdblob`-Daten bleiben gepackt). Schon gepackte Spiele holt „Pakete prüfen“ wie die anderen Marker-Dateien auf die Platte zurück (unter „Repariert“)
+
+### Starter-Kachel
+- `sce_sys/param.json` der Starter-Kachel (`PPSA86921`) erklärt der Konsole jetzt, dass die App HDR ausgibt und kein VRR braucht (`attribute` `0x62000000`, `attribute3` `0x100000`, die Werte der Vorlage ps5-native-app-boilerplate seit deren Änderung vom 11.10.2026). Mit `0` und `0` schaltet die Konsole bei einem Fernseher mit VRR und HDR „wenn unterstützt“ beim Start der Kachel und noch einmal beim Ende die Bildausgabe um, und der Bildschirm bleibt ein bis zwei Sekunden schwarz. An dieser Konsole noch nicht geprüft; zu ersetzen genügt die `param.json` im Ordner `/data/homebrew/PPSA86921/sce_sys/`
+
+### Werkzeuge
+- Gebaut wird jetzt mit dem **PS5-Payload-SDK v0.44** (vorher v0.43; neu im SDK: Stub-Bibliotheken `libSceAgc` und `libSceAgcDriver`, `killpg()`, Verbesserungen der Werkzeugkette). Die ELF ist bis auf die zufällige 16-Byte-Build-ID dieselbe wie mit v0.43; das Archiv stimmt mit dem offiziellen Release-Anhang überein (SHA-256 `4d06eab7…`)
+
+---
+
 ## v1.69.1
 
 ### Oberfläche

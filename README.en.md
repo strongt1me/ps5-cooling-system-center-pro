@@ -6,7 +6,7 @@
 
 **Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in the console's own browser or from any device on your home network, in six languages.**
 
-![Version](https://img.shields.io/badge/Version-1.69.1-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.70.0-1f6feb)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
 ![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
 ![Languages](https://img.shields.io/badge/Languages-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -49,7 +49,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
     </td>
     <td valign="top">
       <h3>📁 Files & payloads</h3>
-      File manager for the console and drives; start and stop payloads, load them one after another as profiles.
+      File manager for the console and drives; download payloads (the Payload Manager's list), start and stop them, load them one after another as profiles.
     </td>
   </tr>
   <tr>
@@ -136,7 +136,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 
 **Management**
 - File manager: view, download and upload, create folders, rename, copy, move, delete (changes only on drives and in `/data`).
-- Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence.
+- Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence; download and update the payloads from itsPLK's Payload Manager list (SHA-256 checked).
 - Profile: display name and profile picture (30 built-in pictures or your own file).
 - Design: Standard, Light, Dark and Optimal (fastest to draw, meant for the TV); every device remembers its choice.
 - System: model, firmware, uptime, storage, network; raw sensors and diagnostics in expert mode.
@@ -144,7 +144,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 
 **Technology**
 - Its own HTTP server without a third-party library, a documented [JSON interface](docs/API.md), settings in `/data/PS5-Cooling-Center/config.json`.
-- No internet access: the app only talks to programs on the console and to the browsers on your home network.
+- No internet access unless you switch on **game updates** (off by default): then the app asks Sony's download servers and, for older patches, prosperopatches.com or orbispatches.com for the updates of your own games. Likewise “Download payloads” fetches the payload list and the files from GitHub only when you press the button. Otherwise it only talks to programs on the console and to the browsers on your home network.
 
 </details>
 
@@ -153,7 +153,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 1. Download `PS5_Cooling_System_Center_v<version>.elf` from the [Releases](../../releases).
 2. Send it to the console (ELF loader, port **9021**), for example:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.69.1.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.70.0.elf
    ```
 3. Open **`http://<PS5-IP>:8086`** in a browser (the notification at the top left of the TV shows the address too).
 
@@ -176,7 +176,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 <details>
 <summary>Firmware and SDK in detail</summary>
 
-The ELF is built with PS5 payload SDK **v0.43**, whose start-up code knows firmware **up to 13.60**. A firmware the start-up code does not know never reaches `main()`: the program then does not start at all and writes nothing to the log. There are no reports yet for 13.00 to 13.40 (the start-up code knows them). The GPU temperature exists on the Pro only.
+The ELF is built with PS5 payload SDK **v0.44**, whose start-up code knows firmware **up to 13.60**. A firmware the start-up code does not know never reaches `main()`: the program then does not start at all and writes nothing to the log. There are no reports yet for 13.00 to 13.40 (the start-up code knows them). The GPU temperature exists on the Pro only.
 </details>
 
 ## Usage
@@ -186,7 +186,7 @@ The ELF is built with PS5 payload SDK **v0.43**, whose start-up code knows firmw
 | **Cooling** | Status, history, sensors, target temperature, mode, per-game profiles |
 | **Games** | Library, play time, saves, packages, PS4 from USB, backups, history |
 | **File manager** | Folders of the console and the drives |
-| **Payloads** | Running, saved and USB payloads, profiles |
+| **Payloads** | Running, saved and USB payloads, profiles, download payloads |
 | **System** | Console, storage, network, diagnostics |
 | **Profile** | Display name and profile picture |
 | **Log** | App events and the live kernel log |
@@ -212,7 +212,7 @@ The ELF is built with PS5 payload SDK **v0.43**, whose start-up code knows firmw
 <details>
 <summary><b>Building from source</b></summary>
 
-You need the [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 or newer** (tested with v0.43); the build checks this and stops with an older SDK. On Windows, Git Bash with LLVM 21 is enough:
+You need the [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 or newer** (tested with v0.44); the build checks this and stops with an older SDK. On Windows, Git Bash with LLVM 21 is enough:
 
 ```bash
 tools/build-windows.sh
@@ -231,7 +231,7 @@ The result is `PS5_Cooling_Center.elf`; `tools/make_starter.sh` builds the start
 ## Legal notice and disclaimer
 
 > [!CAUTION]
-> **Not a Sony product, no piracy, no liability.** This project has no connection to Sony. It contains no games, no firmware, no Sony keys (only a publicly known key for self-built test packages, see THIRD_PARTY_NOTICES.md) and no code to circumvent copy protection, and it downloads nothing from the internet. Modifying a console can cost you your warranty and account; the risk lies with whoever does it. The program is provided **without any warranty**.
+> **Not a Sony product, no piracy, no liability.** This project has no connection to Sony. It contains no games, no firmware, no Sony keys (only a publicly known key for self-built test packages, see THIRD_PARTY_NOTICES.md) and no code to circumvent copy protection, and it downloads nothing from the internet except, when you switch them on, the official updates of your own games from Sony's servers. Modifying a console can cost you your warranty and account; the risk lies with whoever does it. The program is provided **without any warranty**.
 
 <details>
 <summary>Full text</summary>
@@ -243,7 +243,7 @@ The result is `PS5_Cooling_Center.elf`; `tools/make_starter.sh` builds the start
 - **No piracy.** This project is **not** meant to obtain, distribute or use pirated copies, and it does not support that. Copying, moving and converting only work on games already on your own console and are meant for backups of legitimately acquired games. Finding, splitting, installing and mounting packages from USB only work on packages you put on the console or a drive yourself; the app does not obtain any. Distributing copyrighted content is a criminal offence in most countries. There is no help with that here, not in issues either.
 - **No Sony files in the repository.** System libraries, firmware and proprietary SDK files are neither shipped nor accepted (see [CONTRIBUTING](CONTRIBUTING.md)). The 30 profile pictures were created by the author.
 - **No warranty, no liability.** The program interferes with the console's fan control and system functions. It is provided as is, **without any warranty** (GNU GPL, sections 15 and 16). The author is not liable for damage to consoles, data or accounts. A dusty console cools worse, however the fan is driven.
-- **Privacy.** History, log and settings stay on the console in `/data/PS5-Cooling-Center/`. The app sends no data to the internet. The only exception is in the browser: the "Credits" page loads the small icon from github.com once to see whether the browser has internet access; only then are the links clickable.
+- **Privacy.** History, log and settings stay on the console in `/data/PS5-Cooling-Center/`. The app sends no data to the internet; only with game updates switched on does it ask Sony's servers and DNS providers about the title IDs of your own games. The only exception is in the browser: the "Credits" page loads the small icon from github.com once to see whether the browser has internet access; only then are the links clickable.
 - **Third-party projects** are under their own licences, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 </details>
 
