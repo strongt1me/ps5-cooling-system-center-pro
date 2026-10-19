@@ -381,7 +381,10 @@ target_locked(const title_t *t, char *ver, size_t vn, char *url, size_t un, int 
 
 static const char *
 status_locked(const title_t *t) {
-  if(t->source != SRC_OFFICIAL) return t->source == SRC_SMP ? "not_official_smp" : t->source == SRC_FAKE ? "not_official_fake" : "not_official_unknown";
+  /* SMP games can receive updates the same way as official ones (the PS5 update mechanism only checks the title ID,
+     not how the base game was installed). Only fake PKGs and unknown sources are excluded. */
+  if(t->source == SRC_FAKE) return "not_official_fake";
+  if(t->source == SRC_UNKNOWN) return "not_official_unknown";
   if(t->state != ST_IDLE) return k_state[t->state];
   char v[16], u[512];
   int m;
@@ -404,7 +407,7 @@ check_thread(void *arg) {
   char (*ids)[12] = calloc((size_t)(n ? n : 1), 12);
   int k = 0;
   for(int i = 0; ids && i < n; i++)
-    if(g_t[i].source == SRC_OFFICIAL) snprintf(ids[k++], 12, "%s", g_t[i].tid);
+    if(g_t[i].source == SRC_OFFICIAL || g_t[i].source == SRC_SMP) snprintf(ids[k++], 12, "%s", g_t[i].tid);
   g_check_total = k;
   g_check_done = 0;
   uint32_t fw = g_fw;
@@ -986,6 +989,7 @@ ps5tm_updates_json(void) {
     cJSON_AddNumberToObject(e, "plat", t->plat);
     cJSON_AddStringToObject(e, "version", t->ver);
     cJSON_AddStringToObject(e, "status", status_locked(t));
+    cJSON_AddBoolToObject(e, "via_smp", t->source == SRC_SMP);
     char tv[16], tu[512];
     int manual;
     target_locked(t, tv, sizeof tv, tu, sizeof tu, &manual);
@@ -1140,7 +1144,7 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
       char v[16], u[512];
       int m;
       target_locked(t, v, sizeof v, u, sizeof u, &m);
-      if(t->source != SRC_OFFICIAL || t->in_queue || t->deleting || !strcmp(g_job_tid, t->tid)) continue;
+      if((t->source != SRC_OFFICIAL && t->source != SRC_SMP) || t->in_queue || t->deleting || !strcmp(g_job_tid, t->tid)) continue;
       if((v[0] && (t->state == ST_IDLE || t->state == ST_FAILED || t->state == ST_PAUSED)) || t->state == ST_READY) {
         t->in_queue = 1;
         t->qorder = ++g_qseq;
@@ -1156,7 +1160,7 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
   if(!t) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); rc = 404; goto out; }
   if(t->deleting) { snprintf(msg, mn, "Das Update dieses Spiels wird gerade gelöscht."); rc = 409; goto out; }
   if(!strcmp(a, "download") || !strcmp(a, "resume") || !strcmp(a, "install")) {
-    if(t->source != SRC_OFFICIAL) { snprintf(msg, mn, "Nur für Spiele von Disc oder aus dem PlayStation Store (offiziell signiert)."); rc = 403; goto out; }
+    if(t->source != SRC_OFFICIAL && t->source != SRC_SMP) { snprintf(msg, mn, "Nur für Spiele von Disc, aus dem PlayStation Store oder über ShadowMountPlus."); rc = 403; goto out; }
     if(t->in_queue || !strcmp(g_job_tid, t->tid)) { snprintf(msg, mn, "Dieses Update steht schon in der Warteschlange."); goto out; }
     char v[16], u[512];
     int m;
@@ -1209,7 +1213,7 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
     int force = cJSON_IsTrue(cJSON_GetObjectItem(b, "force"));
     const char *in = cJSON_IsString(ju) ? ju->valuestring : "", *ver = cJSON_IsString(jv) ? jv->valuestring : "";
     char canon[512], label[16] = "";
-    if(t->source != SRC_OFFICIAL) { snprintf(msg, mn, "Nur für Spiele von Disc oder aus dem PlayStation Store (offiziell signiert)."); rc = 403; goto out; }
+    if(t->source != SRC_OFFICIAL && t->source != SRC_SMP) { snprintf(msg, mn, "Nur für Spiele von Disc, aus dem PlayStation Store oder über ShadowMountPlus."); rc = 403; goto out; }
     if(!ver[0] || strlen(ver) >= sizeof t->link_ver || strspn(ver, "0123456789.") != strlen(ver)) { snprintf(msg, mn, "Die Version fehlt oder ist ungültig."); rc = 400; goto out; }
     const char *bad = strlen(in) < 600 ? upd_site_manifest_from_link(t->tid, in, canon, sizeof canon) : "url_too_long";
     if(bad) {
@@ -1275,7 +1279,7 @@ pkg_path_for(const char *id, char *path, size_t n, char *tid, size_t tn) {
   pthread_mutex_lock(&g_lock);
   title_t *t = find_locked(id + 4);
   /* only while the update queue itself installs this title: then nobody can delete the file under the installer */
-  int ok = t && t->source == SRC_OFFICIAL && t->state == ST_INSTALLING && !strcmp(g_job_tid, t->tid);
+  int ok = t && (t->source == SRC_OFFICIAL || t->source == SRC_SMP) && t->state == ST_INSTALLING && !strcmp(g_job_tid, t->tid);
   pthread_mutex_unlock(&g_lock);
   return ok ? 0 : -1;
 }

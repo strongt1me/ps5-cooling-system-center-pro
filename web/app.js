@@ -6353,12 +6353,24 @@
    * Knöpfe, die etwas verändern. */
   const dup = { data: null, busy: false, armed: "", armTimer: 0, armedAt: 0, loaded: false };
 
+  const dupSetOpen = (open) => {
+    $("#dup-card").classList.toggle("dup-open", open);
+    try { sessionStorage.setItem("dup-open", open ? "1" : "0"); } catch {}
+  };
+
   const dupRender = () => {
     const card = $("#dup-card");
     const d = dup.data;
     const groups = (d && d.groups) || [], aside = (d && d.aside) || [];
+    const wasHidden = card.hidden;
     card.hidden = !groups.length && !aside.length;
-    if (card.hidden) return;
+    if (card.hidden) { card.classList.remove("dup-open"); return; }
+    /* Beim ersten Sichtbarwerden: gespeicherten Zustand lesen; Standard = zugeklappt */
+    if (wasHidden) {
+      let open = false;
+      try { open = sessionStorage.getItem("dup-open") === "1"; } catch {}
+      card.classList.toggle("dup-open", open);
+    }
     txt("#dup-sub", groups.length ? `${groups.length} Spiel(e) in mehr als einer Quelle` : "keine doppelten Abbilder");
     const btn = (path, undo, label, disabled, why) => {
       const armed = dup.armed === path;
@@ -6386,6 +6398,15 @@
     finally { dup.busy = false; b.disabled = false; }
     dupRender();
   };
+
+  /* Karte auf-/zuklappen (Klick auf Kopfzeile, Leertaste/Enter per Tastatur) */
+  $("#dup-head").addEventListener("click", (e) => {
+    if (e.target.closest("#dup-reload")) return;   /* Knopf „Neu suchen" klappt nicht auf */
+    dupSetOpen(!$("#dup-card").classList.contains("dup-open"));
+  });
+  $("#dup-head").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#dup-head").click(); }
+  });
 
   $("#dup-reload").addEventListener("click", loadDup);
   $("#dup-list").addEventListener("click", async (e) => {
@@ -6907,8 +6928,8 @@
       btns = `<button type="button" class="btn ghost" data-upd-old="${esc(t.title_id)}">${upd.open === t.title_id ? "Schließen" : "Älteren Patch holen …"}</button>`;
     }
     if (t.status === "check_failed") info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`;
-    if (off) info = `<div class="p4m-meta">${t.status === "not_official_smp" ? "Läuft über ShadowMountPlus: Updates gehören dort in den Backport- bzw. Patch-Ordner."
-      : t.status === "not_official_fake" ? "Nicht offiziell signiert: keine offiziellen Updates." : "Die Paketdatei ließ sich nicht lesen."}</div>`;
+    if (off) info = `<div class="p4m-meta">${t.status === "not_official_fake" ? "Nicht offiziell signiert: keine offiziellen Updates." : "Die Paketdatei ließ sich nicht lesen."}</div>`;
+    if (t.via_smp && !off) info += `<div class="p4m-meta">${esc("Läuft über ShadowMountPlus. Das Update wird normal installiert – ob es auf das eingehängte Abbild angewendet wird, hängt vom Spiel ab.")}</div>`;
     if (t.error) info += `<div class="p4m-meta cp-why">${esc(t.error)}</div>`;
     if (t.from_link) info += `<div class="p4m-meta">${esc("Aus einem SC-Link (ältere Firmware).")}</div>`;
     const pct = t.total > 0 && t.have > 0 && t.status !== "downloading" ? ` · ${Math.floor(t.have * 100 / t.total)} %` : "";

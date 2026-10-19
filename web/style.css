@@ -1111,7 +1111,14 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 @media (max-width: 640px) { .p4m-row { flex-wrap: wrap; } .p4m-btns { width: 100%; justify-content: flex-start; } }
 .p4m-field { display: grid; gap: 4px; font-size: 13px; }
 .p4m-fasthint { margin: -4px 0 0; font-size: 12.5px; line-height: 1.45; }
-.dup-intro { margin: 0 0 10px; font-size: 13px; line-height: 1.45; }
+.dup-intro { margin: 4px 0 10px; font-size: 13px; line-height: 1.45; }
+.dup-body { overflow: hidden; max-height: 0; transition: max-height .25s ease; }
+#dup-card.dup-open .dup-body { max-height: 1400px; }
+.dup-chev { flex: none; width: 20px; height: 20px; opacity: .55; transition: transform .2s ease; pointer-events: none; }
+.dup-chev path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#dup-card.dup-open .dup-chev { transform: rotate(180deg); }
+#dup-head { cursor: pointer; user-select: none; border-radius: inherit; }
+#dup-head:focus-visible { outline: 2px solid var(--accent, #2f7cff); outline-offset: -3px; border-radius: 10px; }
 .upd-intro { margin: 0 0 6px; font-size: 13px; line-height: 1.45; }
 .upd-hint { margin: 0; font-size: 12.5px; line-height: 1.45; }
 .upd-job { margin: 0 0 14px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--hairline); background: var(--card-top); }
