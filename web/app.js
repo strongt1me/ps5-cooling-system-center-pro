@@ -6400,13 +6400,16 @@
   };
 
   /* Karte auf-/zuklappen (Klick auf Kopfzeile, Leertaste/Enter per Tastatur) */
-  $("#dup-head").addEventListener("click", (e) => {
-    if (e.target.closest("#dup-reload")) return;   /* Knopf „Neu suchen" klappt nicht auf */
-    dupSetOpen(!$("#dup-card").classList.contains("dup-open"));
-  });
-  $("#dup-head").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#dup-head").click(); }
-  });
+  const dupHead = $("#dup-head");
+  if (dupHead) {
+    dupHead.addEventListener("click", (e) => {
+      if (e.target.closest("#dup-reload")) return;   /* Knopf „Neu suchen" klappt nicht auf */
+      dupSetOpen(!$("#dup-card").classList.contains("dup-open"));
+    });
+    dupHead.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dupHead.click(); }
+    });
+  }
 
   $("#dup-reload").addEventListener("click", loadDup);
   $("#dup-list").addEventListener("click", async (e) => {

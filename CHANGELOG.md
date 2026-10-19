@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.71.1
+
+### Fehler
+- Die App startete nach 1.71.0 nicht richtig: Die Seite blieb leer und keine Schaltfläche reagierte (falsche Anführungszeichen in der Karte „Doppelte Abbilder“ brachen die Oberfläche beim Start ab); behoben, zusätzlich stürzt ein fehlendes Element die Oberfläche nicht mehr ab
+
 ## v1.71.0
 
 ### Updates für SMP-Spiele
