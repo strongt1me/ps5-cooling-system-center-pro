@@ -6,7 +6,7 @@
 
 **Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser der Konsole oder von jedem Gerät im Heimnetz, in sechs Sprachen.**
 
-![Version](https://img.shields.io/badge/Version-1.70.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.71.0-1f6feb)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
 ![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -153,7 +153,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 1. Aus den [Releases](../../releases) die Datei `PS5_Cooling_System_Center_v<Version>.elf` laden.
 2. An die Konsole senden (ELF-Lader, Port **9021**), zum Beispiel:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.70.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.71.0.elf
    ```
 3. Im Browser öffnen: **`http://<PS5-IP>:8086`** (die Adresse zeigt auch die Meldung oben links auf dem Fernseher).
 

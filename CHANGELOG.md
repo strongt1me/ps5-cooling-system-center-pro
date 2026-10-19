@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.71.0
+
+### Updates für SMP-Spiele
+- Spiele, die über ShadowMountPlus laufen (exFAT- oder ffpkg-Abbilder), werden jetzt auf Updates geprüft und können heruntergeladen und installiert werden – genau wie Disc- und Store-Spiele
+- Unter jedem SMP-Spiel mit Update steht ein Hinweis, dass das Update normal installiert wird; ob es auf das eingehängte Abbild wirkt, hängt vom Spiel ab
+- Fake-PKGs bleiben weiterhin ausgeschlossen (keine offiziellen Retail-Updates möglich)
+
+### Doppelte Abbilder
+- Die Karte „Doppelte Abbilder" auf der Spiele-Seite startet jetzt eingeklappt; ein Klick auf die Kopfzeile klappt die Liste auf und zu
+- Der Zustand (auf-/zugeklappt) wird innerhalb der Sitzung gespeichert
+- „Neu suchen" funktioniert weiterhin ohne Aufklappen
+
 ## v1.70.0
 
 ### Payloads herunterladen (nach dem Payload Manager 0.6.3 von itsPLK)
