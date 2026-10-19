@@ -151,23 +151,21 @@ if (-not (Test-Path $releaseDir)) {
 }
 
 $mainElf = Join-Path $releaseDir "PS5_Cooling_System_Center_v$version.elf"
-$installerElf = Join-Path $releaseDir "cooling-center-launcher-installer_v$version.elf"
+$starterZip = Join-Path $releaseDir "PPSA86921.zip"
 $liesmich = Join-Path $releaseDir "LIESMICH.txt"
-$pkg = Get-ChildItem -Path $releaseDir -Filter "*.pkg" -File | Select-Object -First 1
 
-foreach ($p in @($mainElf, $installerElf, $liesmich)) {
+foreach ($p in @($mainElf, $starterZip, $liesmich)) {
   if (-not (Test-Path $p)) {
     throw "Missing release asset: $p"
   }
 }
-if (-not $pkg) {
-  throw "Missing release package (*.pkg) in $releaseDir"
+if (Get-ChildItem -Path $releaseDir -Filter "*.pkg" -File) {
+  throw "A *.pkg lies in $releaseDir: since 19.10.2026 no tile package ships (the app installs the tile itself)."
 }
 
 Write-Host "Local release assets: OK" -ForegroundColor Green
 Write-Host "- $(Split-Path $mainElf -Leaf)"
-Write-Host "- $(Split-Path $installerElf -Leaf)"
-Write-Host "- $($pkg.Name)"
+Write-Host "- $(Split-Path $starterZip -Leaf)"
 Write-Host "- $(Split-Path $liesmich -Leaf)"
 
 if (-not $SkipGitHub) {
@@ -179,8 +177,7 @@ if (-not $SkipGitHub) {
 
   $requiredAssetNames = @(
     (Split-Path $mainElf -Leaf),
-    (Split-Path $installerElf -Leaf),
-    $pkg.Name,
+    (Split-Path $starterZip -Leaf),
     (Split-Path $liesmich -Leaf)
   )
 
@@ -192,7 +189,7 @@ if (-not $SkipGitHub) {
 
   if ($CreateOrUpdateRelease) {
     if (-not $releaseExists) {
-      & gh release create $Tag $mainElf $installerElf $pkg.FullName $liesmich `
+      & gh release create $Tag $mainElf $starterZip $liesmich `
         --repo $Repo --title "PS5 Cooling & System Center - Pro $Tag" `
         --notes "Automated pre-release upload for $Tag"
       if ($LASTEXITCODE -ne 0) {
@@ -201,7 +198,7 @@ if (-not $SkipGitHub) {
       $releaseViewRaw = & gh release view $Tag --repo $Repo --json url,assets
     }
     else {
-      & gh release upload $Tag $mainElf $installerElf $pkg.FullName $liesmich `
+      & gh release upload $Tag $mainElf $starterZip $liesmich `
         --repo $Repo --clobber
       if ($LASTEXITCODE -ne 0) {
         throw "gh release upload failed."

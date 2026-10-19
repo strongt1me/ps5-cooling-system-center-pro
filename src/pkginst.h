@@ -61,6 +61,9 @@ void ps5tm_pkgstream_stats(ps5tm_pkgstream_stats_t *st);
    upload, not from a file. */
 #define PKGLIVE_PREFIX "live:"
 int  ps5tm_pkglive_find(const char *id, ps5tm_pkg_t *out);
+/* A downloaded game update (updates.c) under the id "upd-<TITLE ID>": the finished package file as one slice. */
+int  ps5tm_updates_pkg_find(const char *id, ps5tm_pkg_t *out);
+int  ps5tm_updates_pkg_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsigned *n, uint64_t *total, char *err, size_t err_len);
 int  ps5tm_pkglive_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsigned *n, uint64_t *total,
                           char *err, size_t err_len);
 /* Exactly n bytes at off of the package of the session `id`; waits for the browser to send what is not there yet.

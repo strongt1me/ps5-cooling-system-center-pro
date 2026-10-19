@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 gasb07 (PS4Mount 0.5.1), adapted for PS5 Cooling & System Center - Pro
+ * Copyright (C) 2026 gasb07 (PS4Mount 0.6.0), adapted for PS5 Cooling & System Center - Pro
  *
  * PS4Mount inside the app: scans USB drives for PS4 fake PKGs, registers them without installing them (nullfs mounts of internal
  * folders that hold symlinks to the packages), follows the kernel log and offers its list and actions to the web page.
@@ -80,7 +80,7 @@ int ps4m_standalone_active(char *why, size_t n) {
 #include "sqlite_ro.h"
 #include <ps5/kernel.h>
 
-#define VERSION "PS4Mount 0.5.1"
+#define VERSION "PS4Mount 0.6.0"
 #define LOCK_PORT 9032
 #define SCAN_SECONDS 10
 #define STATE_DIR "/data/ps4mount"
@@ -106,11 +106,12 @@ typedef struct {
     char paths[MAX_SCAN_PATHS][128]; /* folders searched for pkgs, relative to each drive; "" is the root */
     int npaths;
     int restore_batch; /* games removed from the library per group when moving pkgs back */
+    int fast_reg;   /* (app) PS4Mount 0.6.0: /user/app shows only the new games while the system registers them; off by default */
 } config_t;
 
 #define MAX_RESTORE_BATCH 10
 
-static config_t g_cfg = {1, 5, 1, {""}, 1, 5};
+static config_t g_cfg = {1, 5, 1, {""}, 1, 5, 0};
 static int g_enabled;     /* switched on in the page; kept in config.txt (key enabled=) */
 
 
@@ -852,7 +853,20 @@ static int title_running(const char *tid) {
 
 static void unmount_all_layers(const char *target, int force);
 
+/* Set while /user/app shows only the games being registered (see mask_user_app): the
+ * other game folders are hidden then, and must not be mounted or unmounted. */
+static int g_masked;
+
+static int masked_path(const char *target) {
+    if (!g_masked || strncmp(target, "/user/app/", 10))
+        return 0;
+    printf("[mount] %s: skipped while /user/app shows only the new games\n", target);
+    return 1;
+}
+
 static int mount_dir(const char *dir, const char *target) {
+    if (masked_path(target))
+        return 0;
     /* /user/patch and /user/addcont only exist once the console installed an update or
      * an add-on the normal way: create the parent like the system does (0770) */
     char parent[64];
@@ -882,6 +896,8 @@ static int mount_dir(const char *dir, const char *target) {
 }
 
 static void unmount_all_layers(const char *target, int force) {
+    if (masked_path(target))
+        return;
     for (int i = 0; i < 8 && (mounted_from(target, NULL, 0) || layers_on(target) > 0); i++)
         if (unmount(target, force ? MNT_FORCE : 0)) {
             printf("[mount] unmount %s: %s\n", target, strerror(errno));
@@ -1187,13 +1203,119 @@ static void wait_db_quiet(int quiet, int limit) {
 
 /* ShellCore registers every new title under /user/app itself; this also refreshes the
  * home screen and fetches the PSN concept. Waits while titles keep arriving. */
+/* AppInstallAll walks every folder of /system_ex/app, /system_ex/rnps/apps and /user/app
+ * (about 0.7 s per PS4 game, registered or not). While it runs, /user/app shows only the
+ * games being added: an empty staging folder is mounted over /user/app and each new
+ * game's folder on top of it. The other games stay registered (their rows are not
+ * touched) and their own mounts stay in place underneath. (PS4Mount 0.6.0; in the app
+ * only when the setting "fast_reg" is on, which is off by default.) */
+#define STAGE_DIR HOLD_DIR "/stage"
+
+static int open_games(uint32_t *ids, char (*tids)[10], int max);
+
+static void stage_clear(void) {
+    DIR *d = opendir(STAGE_DIR);
+    if (!d)
+        return;
+    struct dirent *e;
+    char p[PATH_MAX];
+    while ((e = readdir(d)))
+        if (e->d_name[0] != '.') {
+            snprintf(p, sizeof(p), STAGE_DIR "/%s", e->d_name);
+            rmdir(p);
+        }
+    closedir(d);
+}
+
+static int user_app_masked(void) {
+    struct statfs sf;
+    return !statfs("/user/app", &sf) && !strcmp(sf.f_mntonname, "/user/app") && !strcmp(sf.f_mntfromname, STAGE_DIR);
+}
+
+static void unmask_user_app(char (*tids)[10], int n) {
+    char target[64];
+    for (int i = 0; i < n; i++) {
+        snprintf(target, sizeof(target), "/user/app/%s", tids[i]);
+        if (user_app_masked() && mounted_from(target, NULL, 0) && unmount(target, 0) && unmount(target, MNT_FORCE))
+            printf("[reg] unmount %s: %s\n", target, strerror(errno));
+    }
+    /* the system keeps the folder open for a moment after AppInstallAll returned */
+    for (int i = 0; i < 12 && user_app_masked(); i++) {
+        if (!unmount("/user/app", 0))
+            break;
+        pump_events(250);
+    }
+    if (user_app_masked() && unmount("/user/app", MNT_FORCE))
+        printf("[reg] unmount /user/app: %s\n", strerror(errno));
+    if (user_app_masked())
+        printf("[reg] /user/app still shows only the new games\n");
+    g_masked = 0;
+    stage_clear();
+}
+
+/* The app (or the daemon) ended while /user/app showed only the new games: show all of them again. */
+static void unmask_leftover(void) {
+    static char tids[MAX_TITLES][10];
+    int n = 0;
+    DIR *d = opendir(STAGE_DIR);
+    struct dirent *e;
+    while (d && (e = readdir(d)) && n < MAX_TITLES)
+        if (strlen(e->d_name) == 9)
+            snprintf(tids[n++], 10, "%s", e->d_name);
+    if (d)
+        closedir(d);
+    printf("[reg] /user/app showed only %d game(s) from an earlier run, restoring it\n", n);
+    g_masked = 1;
+    unmask_user_app(tids, n);
+}
+
+/* Returns 1 when /user/app now shows only the games of tids that are not registered. */
+static int mask_user_app(char (*tids)[10], int n) {
+    uint32_t ids[4];
+    char open[4][10];
+    if (!g_cfg.fast_reg || g_reg_mode != REG_ALL || open_games(ids, open, 4))
+        return 0; /* off, or an open game (or an unknown state) keeps its folder in use: plain AppInstallAll */
+    if (user_app_masked())
+        unmask_leftover();
+    stage_clear();
+    mkdirs(STAGE_DIR, 0777);
+    char new_tids[MAX_TITLES][10];
+    int nn = 0;
+    for (int i = 0; i < n && nn < MAX_TITLES; i++)
+        if (!p4m_db_is_registered(tids[i])) {
+            char p[PATH_MAX];
+            snprintf(p, sizeof(p), STAGE_DIR "/%s", tids[i]);
+            if (mkdir(p, 0777) && errno != EEXIST)
+                return 0;
+            snprintf(new_tids[nn++], 10, "%s", tids[i]);
+        }
+    if (!nn || nullfs_mount(STAGE_DIR, "/user/app"))
+        return 0;
+    for (int i = 0; i < nn; i++) {
+        char hold[PATH_MAX], target[64];
+        hold_path(hold, sizeof(hold), "app", new_tids[i]);
+        snprintf(target, sizeof(target), "/user/app/%s", new_tids[i]);
+        if (nullfs_mount(hold, target)) {
+            unmask_user_app(new_tids, i);
+            return 0;
+        }
+    }
+    g_masked = 1;
+    printf("[reg] /user/app shows only the %d new game(s) during AppInstallAll\n", nn);
+    return 1;
+}
+
 static void install_all(char (*tids)[10], int n) {
     int need = 0;
     for (int i = 0; i < n; i++)
         need += !p4m_db_is_registered(tids[i]);
     if (!need)
         return;
-    install_all_start(tids, n);
+    int masked = mask_user_app(tids, n);
+    if (install_all_start(tids, n) && masked) {
+        unmask_user_app(tids, n);
+        masked = 0;
+    }
     int done = n - need, idle = 0;
     while (done < n && idle < 30) {
         pump_events(1000);
@@ -1202,7 +1324,17 @@ static void install_all(char (*tids)[10], int n) {
             now += p4m_db_is_registered(tids[i]);
         idle = now > done ? 0 : idle + 1;
         done = now;
+        if (masked && !g_install_busy) {
+            unmask_user_app(tids, n);
+            masked = 0;
+        }
     }
+    /* the rows can be there before AppInstallAll returns: the other games stay hidden
+     * until it does (at most two minutes) */
+    for (int i = 0; masked && g_install_busy && i < 120; i++)
+        pump_events(1000);
+    if (masked)
+        unmask_user_app(tids, n);
     printf("[reg] %s=%s0x%08x: %d of %d title(s) registered\n", reg_mode_name(), g_install_busy ? "(still running) " : "",
            g_install_rc, done, n);
 }
@@ -2741,8 +2873,8 @@ static int clean_scan_path(const char *in, char *out, size_t n, char *why, size_
 
 static void config_save(void) {
     buf_t b = {0};
-    p4m_buf_printf(&b, "batch=%d\nbatch_size=%d\ndlc=%d\nrestore_batch=%d\nenabled=%d\n", g_cfg.batch, g_cfg.batch_size, g_cfg.dlc,
-               g_cfg.restore_batch, g_enabled);
+    p4m_buf_printf(&b, "batch=%d\nbatch_size=%d\ndlc=%d\nrestore_batch=%d\nenabled=%d\nfast_reg=%d\n", g_cfg.batch, g_cfg.batch_size, g_cfg.dlc,
+               g_cfg.restore_batch, g_enabled, g_cfg.fast_reg);
     for (int i = 0; i < g_cfg.npaths; i++)
         p4m_buf_printf(&b, "path=%s\n", g_cfg.paths[i]);
     if (b.failed) /* (app) PS4Mount PR #18 */
@@ -2769,6 +2901,8 @@ static void config_load(void) {
             c.dlc = atoi(line + 4) != 0;
         else if (!strncmp(line, "enabled=", 8))
             g_enabled = atoi(line + 8) != 0;
+        else if (!strncmp(line, "fast_reg=", 9))
+            c.fast_reg = atoi(line + 9) != 0;
         else if (!strncmp(line, "restore_batch=", 14))
             c.restore_batch = atoi(line + 14);
         else if (!strncmp(line, "path=", 5) && c.npaths < MAX_SCAN_PATHS &&
@@ -2783,14 +2917,14 @@ static void config_load(void) {
     if (!c.npaths)
         c.npaths = 1; /* the root */
     g_cfg = c;
-    printf("[config] batch=%d batch_size=%d dlc=%d restore_batch=%d folders=%d\n", g_cfg.batch, g_cfg.batch_size,
-           g_cfg.dlc, g_cfg.restore_batch, g_cfg.npaths);
+    printf("[config] batch=%d batch_size=%d dlc=%d restore_batch=%d fast_reg=%d folders=%d\n", g_cfg.batch, g_cfg.batch_size,
+           g_cfg.dlc, g_cfg.restore_batch, g_cfg.fast_reg, g_cfg.npaths);
 }
 
 void ps4m_config_json(buf_t *out) {
-    p4m_buf_printf(out, "{\"batch\":%s,\"batch_size\":%d,\"dlc\":%s,\"restore_batch\":%d,\"max_restore_batch\":%d,\"paths\":[",
+    p4m_buf_printf(out, "{\"batch\":%s,\"batch_size\":%d,\"dlc\":%s,\"restore_batch\":%d,\"max_restore_batch\":%d,\"fast_reg\":%s,\"paths\":[",
                g_cfg.batch ? "true" : "false", g_cfg.batch_size, g_cfg.dlc ? "true" : "false", g_cfg.restore_batch,
-               MAX_RESTORE_BATCH);
+               MAX_RESTORE_BATCH, g_cfg.fast_reg ? "true" : "false");
     for (int i = 0; i < g_cfg.npaths; i++) {
         char shown[130];
         snprintf(shown, sizeof(shown), "/%s", g_cfg.paths[i]);
@@ -2832,6 +2966,8 @@ int ps4m_config_set(const char *body, char *msg, size_t cap) {
                 c.batch_size = atoi(value);
             else if (k == 3 && !strncmp(p, "dlc", 3))
                 c.dlc = atoi(value) != 0;
+            else if (k == 8 && !strncmp(p, "fast_reg", 8))
+                c.fast_reg = atoi(value) != 0;
             else if (k == 13 && !strncmp(p, "restore_batch", 13)) {
                 char *end;
                 long v = strtol(value, &end, 10);
@@ -2874,8 +3010,8 @@ int ps4m_config_set(const char *body, char *msg, size_t cap) {
     }
     g_cfg = c;
     config_save();
-    printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d folders=%d\n", c.batch, c.batch_size, c.dlc,
-           c.restore_batch, c.npaths);
+    printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d fast_reg=%d folders=%d\n", c.batch, c.batch_size, c.dlc,
+           c.restore_batch, c.fast_reg, c.npaths);
     g_next_scan = 0;
     snprintf(msg, cap, "Einstellungen gespeichert");
     return 0;
@@ -3089,6 +3225,8 @@ static void *ps4m_worker(void *arg) {
         ps5tm_klog_fetch(0, 1, one, &newest, &more, &lost);
         g_klog_after = newest;
     }
+    if (user_app_masked())   /* 0.6.0: an earlier run ended while /user/app showed only the new games (after the klog anchor: waiting polls it) */
+        unmask_leftover();
     g_stop = 0;
     g_next_scan = 0;
     unlink(STATE_DIR "/stop");
@@ -3405,6 +3543,11 @@ static int tid_ok(const char *t) {
 int ps4m_do_action(const char *action, const char *tid, char *msg, size_t n) {
     int rc = -1;
     if (lock_for_page(3000)) {
+        snprintf(msg, n, P4M_BUSY);
+        return -1;
+    }
+    if (g_masked) { /* 0.6.0: the other games are hidden for a moment; adding, removing and moving wait until they show again */
+        pthread_mutex_unlock(&g_mu);
         snprintf(msg, n, P4M_BUSY);
         return -1;
     }

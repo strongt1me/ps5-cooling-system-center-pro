@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -234,6 +235,7 @@ typedef struct {
   int      count_only;
   uint64_t seen;
   int      live;            /* removing: tell the job how far it is (bytes gone) */
+  unsigned steps;           /* every 256 entries the CPU is given up once: a game runs on the same five cores */
 } walk_t;
 
 /* A big regular file, shortened from its end in steps, each step reported; it is removed afterwards by the caller.
@@ -251,6 +253,7 @@ shrink_big(const char *path, const struct stat *st, walk_t *w) {
       left -= (off_t)DL_TRUNC_STEP;
       if(ftruncate(fd, left) != 0) break;
       if(w->live) job_done_bytes(w->bytes + (uint64_t)(fs.st_size - left));
+      sched_yield();
     }
   }
   close(fd);
@@ -270,6 +273,7 @@ walk(char *path, size_t plen, int depth, walk_t *w) {
   struct stat st;
   if(lstat(path, &st) != 0) { w->err = errno; return; }
   if(w->count_only && ++w->seen > DL_SIZE_FILES_MAX) { w->err = E2BIG; return; }
+  if((++w->steps & 255) == 0) sched_yield();
   if(S_ISDIR(st.st_mode)) {
     if(st.st_dev != w->dev) { w->err = EXDEV; return; }
     DIR *d = opendir(path);
@@ -310,9 +314,41 @@ size_of(const char *path) {
   struct stat st;
   if(lstat(path, &st) != 0) return -1;
   if(!S_ISDIR(st.st_mode)) return (int64_t)st.st_size;
-  walk_t w = { st.st_dev, 0, 0, 0, 1, 0, 0 };
+  walk_t w = { st.st_dev, 0, 0, 0, 1, 0, 0, 0 };
   walk_top(path, &w);
   return w.err ? -1 : (int64_t)w.bytes;
+}
+
+/* The backups list measured every folder backup in full on every request (and on every delete plan): sizes of folders
+   are kept here by path and change time of the folder (review 19.10.2026). A backup is a finished copy; one that is
+   still being written shows the size from when it was last measured until its folder changes. */
+#define SIZE_CACHE 64
+static struct { char path[400]; int64_t mtime, size; } g_size_cache[SIZE_CACHE];
+static unsigned g_size_next;
+static pthread_mutex_t g_size_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int64_t
+size_of_cached(const char *path) {
+  struct stat st;
+  if(lstat(path, &st) != 0) return -1;
+  if(!S_ISDIR(st.st_mode) || strlen(path) >= sizeof(g_size_cache[0].path)) return size_of(path);
+  pthread_mutex_lock(&g_size_lock);
+  for(unsigned i = 0; i < SIZE_CACHE; i++)
+    if(g_size_cache[i].mtime == (int64_t)st.st_mtime && !strcmp(g_size_cache[i].path, path)) {
+      int64_t s = g_size_cache[i].size;
+      pthread_mutex_unlock(&g_size_lock);
+      return s;
+    }
+  pthread_mutex_unlock(&g_size_lock);
+  int64_t s = size_of(path);
+  if(s < 0) return s;
+  pthread_mutex_lock(&g_size_lock);
+  unsigned k = g_size_next++ % SIZE_CACHE;
+  snprintf(g_size_cache[k].path, sizeof(g_size_cache[k].path), "%s", path);
+  g_size_cache[k].mtime = (int64_t)st.st_mtime;
+  g_size_cache[k].size = s;
+  pthread_mutex_unlock(&g_size_lock);
+  return s;
 }
 
 /* Deletes path (a file or a folder) and, next to it, its checksum file, moving the bar from lo to hi as the bytes go.
@@ -328,7 +364,7 @@ delete_path(const char *path, int lo, int hi, uint64_t *files, uint64_t *bytes, 
   }
   int64_t total = size_of(path);                        /* -1 (not countable): the bar stays at lo until the end */
   job_stage(lo, hi, total > 0 ? (uint64_t)total : 0);
-  walk_t w = { st.st_dev, 0, 0, 0, 0, 0, 1 };
+  walk_t w = { st.st_dev, 0, 0, 0, 0, 0, 1, 0 };
   walk_top(path, &w);
   *files += w.files;
   *bytes += w.bytes;
@@ -404,7 +440,7 @@ list_backups(backup_t *out, int max) {
         snprintf(k->type, sizeof(k->type), "%s", dot && strlen(dot) < sizeof(k->type) ? dot + 1 : "Datei");
         k->unfinished = strstr(nm, ".ps5cc-") != NULL;
       }
-      k->size = size_of(k->path);
+      k->size = size_of_cached(k->path);
       char sums[400];
       struct stat ss;
       snprintf(sums, sizeof(sums), "%s" PS5TM_SUMS_EXT, k->path);

@@ -41,16 +41,56 @@
 static atomic_int g_connections;
 
 
+/* A client that reads too slowly holds its connection thread (24 at most) for as long as the answer takes; a stuck phone
+   or a deliberate trickle could take all of them. Each write may block 10 s (SO_SNDTIMEO); besides, an answer must move
+   at least 64 KiB in every 30 s, or the connection is given up (review 19.10.2026). One thread serves one connection,
+   so the counters are per thread. */
+#define SLOW_WINDOW_MS  30000
+#define SLOW_MIN_BYTES  (64 * 1024)
+static __thread uint64_t t_win_ms;
+static __thread size_t   t_win_bytes;
+
 static int
 write_all(int fd, const void *buf, size_t len) {
   const char *p = buf;
   while(len) {
     ssize_t n = write(fd, p, len);
-    if(n > 0) { p += n; len -= (size_t)n; continue; }
+    if(n > 0) {
+      p += n;
+      len -= (size_t)n;
+      uint64_t now = ps5tm_mono_ms();
+      t_win_bytes += (size_t)n;
+      if(!t_win_ms) t_win_ms = now;
+      if(now - t_win_ms >= SLOW_WINDOW_MS) {
+        if(t_win_bytes < SLOW_MIN_BYTES && len) return -1;
+        t_win_ms = now;
+        t_win_bytes = 0;
+      }
+      continue;
+    }
     if(n < 0 && errno == EINTR) continue;
     return -1;
   }
   return 0;
+}
+
+/* Closing a socket with unread request bytes in it makes TCP send a reset, and the browser shows a network error
+   instead of the answer just written. So: end the sending side, read away what the client still sends (1 s, 64 KiB
+   at most), then close. */
+static void
+close_after_answer(int fd) {
+  shutdown(fd, SHUT_WR);
+  struct timeval tv = { 1, 0 };
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+  char sink[4096];
+  size_t total = 0;
+  uint64_t t0 = ps5tm_mono_ms();
+  while(total < 64 * 1024 && ps5tm_mono_ms() - t0 < 1000) {
+    ssize_t n = read(fd, sink, sizeof(sink));
+    if(n <= 0) break;
+    total += (size_t)n;
+  }
+  close(fd);
 }
 
 
@@ -58,6 +98,15 @@ void
 ps5tm_http_send(int fd, int status, const char *status_text,
                 const char *ctype, const void *body, size_t len,
                 const char *extra_headers) {
+  ps5tm_http_send_cc(fd, status, status_text, ctype, body, len, extra_headers, "no-store");
+}
+
+/* The same with a Cache-Control of the caller's choice: the pages of the web interface go out with "no-cache" and an
+   ETag, so a browser keeps them and only asks whether they are still current (19.10.2026). */
+void
+ps5tm_http_send_cc(int fd, int status, const char *status_text,
+                   const char *ctype, const void *body, size_t len,
+                   const char *extra_headers, const char *cache_control) {
   /* Room for the page's security headers on top of the usual five lines. When
      it does not fit, nothing is sent at all, which is why this is not tight. */
   char head[1024];
@@ -65,11 +114,11 @@ ps5tm_http_send(int fd, int status, const char *status_text,
                    "HTTP/1.1 %d %s\r\n"
                    "Content-Type: %s\r\n"
                    "Content-Length: %zu\r\n"
-                   "Cache-Control: no-store\r\n"
+                   "Cache-Control: %s\r\n"
                    "Connection: close\r\n"
                    "X-Content-Type-Options: nosniff\r\n"
                    "%s\r\n",
-                   status, status_text, ctype, len,
+                   status, status_text, ctype, len, cache_control,
                    extra_headers ? extra_headers : "");
   if(n < 0 || n >= (int)sizeof(head)) return;
 
@@ -188,7 +237,11 @@ ps5tm_http_send_json(int fd, int status, const char *json) {
                    : status == 404 ? "Not Found"
                    : status == 405 ? "Method Not Allowed"
                    : status == 409 ? "Conflict"
+                   : status == 413 ? "Payload Too Large"
+                   : status == 414 ? "URI Too Long"
+                   : status == 502 ? "Bad Gateway"
                    : status == 503 ? "Service Unavailable"
+                   : status == 507 ? "Insufficient Storage"
                    : "Internal Server Error";
   ps5tm_http_send(fd, status, text, "application/json",
                   json, strlen(json), NULL);
@@ -445,7 +498,7 @@ serve_connection(void *arg) {
   if(!header_end) {
     ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Anfrage.");
     free(raw);
-    close(fd);
+    close_after_answer(fd);
     return NULL;
   }
   *header_end = 0;
@@ -513,6 +566,8 @@ serve_connection(void *arg) {
     if(header_value(headers, "Accept-Encoding", enc, sizeof(enc)) > 0)
       for(const char *c = enc; *c; c++)
         if(!strncasecmp(c, "gzip", 4)) { req.gzip_ok = 1; break; }
+    req.if_none_match[0] = 0;
+    if(header_value(headers, "If-None-Match", req.if_none_match, sizeof(req.if_none_match)) <= 0) req.if_none_match[0] = 0;
   }
 
   const char *cl = find_header(headers, "Content-Length");
@@ -526,7 +581,7 @@ serve_connection(void *arg) {
     if(!(*cl >= '0' && *cl <= '9') || errno || (ce && *ce && *ce != '\r' && *ce != '\n' && *ce != ' ')) {
       ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Content-Length.");
       free(raw);
-      close(fd);
+      close_after_answer(fd);
       return NULL;
     }
     want = (size_t)v;
@@ -589,7 +644,7 @@ serve_connection(void *arg) {
     ps5tm_http_send_error(fd, 400, "payload_too_large",
                           "Anfrage ist zu groß.");
     free(raw);
-    close(fd);
+    close_after_answer(fd);
     return NULL;
   }
 

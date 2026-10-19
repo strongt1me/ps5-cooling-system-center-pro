@@ -264,7 +264,9 @@
   api.misses = function () { return Array.from(misses.keys()); };
   api.stats = function () { return { exact: exact.size, patterns: floating.length + Array.from(byLead.values()).reduce(function (a, l) { return a + l.length; }, 0), cache: cache.size }; };
 
-  fetch("/lang/" + lang + ".json", { cache: "no-store" })
+  /* "no-cache": the browser keeps the dictionary and only asks whether it is still current (the app answers 304 by ETag;
+     19.10.2026 — before, 0.4–0.5 MB came again on every page load) */
+  fetch("/lang/" + lang + ".json", { cache: "no-cache" })
     .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function (d) {
       build(d.t || {});

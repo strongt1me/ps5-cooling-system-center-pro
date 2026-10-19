@@ -148,10 +148,12 @@ utf8_ok(const char *s) {
   return 1;
 }
 
+/* ".elf", and ".bin" since 19.10.2026: the payload store has payloads named so (etaHEN). The content check (an x86-64
+   ELF) is the same for both. */
 static int
 has_elf_ext(const char *name) {
   size_t n = strlen(name);
-  return n > 4 && !strcasecmp(name + n - 4, ".elf");
+  return n > 4 && (!strcasecmp(name + n - 4, ".elf") || !strcasecmp(name + n - 4, ".bin"));
 }
 
 /* A name this module will handle: one path component, no hidden files (the
@@ -486,7 +488,7 @@ resolve(const char *source, const char *mount, const char *dir, const char *name
         char *path, size_t path_len, ps5tm_payload_result_t *r) {
   if(!name_ok(name))
     return fail(r, 400, "invalid_name",
-                "Der Dateiname ist ungültig (erlaubt: ein Name auf .elf, ohne Pfad).");
+                "Der Dateiname ist ungültig (erlaubt: ein Name auf .elf oder .bin, ohne Pfad).");
   if(!source || (strcmp(source, "internal") && strcmp(source, "usb")))
     return fail(r, 400, "invalid_source", "Ort fehlt oder ist unbekannt.");
 
@@ -642,15 +644,36 @@ send_all(int fd, const char *buf, size_t len, uint64_t deadline) {
   return 0;
 }
 
+/* A step of a payload profile waits for a start, copy or delete under way (up to 30 s) instead of failing with
+   "busy", and may start the same file twice in a row (a profile like "a.elf, !1000, a.elf" means it). */
+static int start_impl(const char *source, const char *mount, const char *dir, const char *name,
+                      ps5tm_payload_result_t *r, int for_profile);
+
 int
 ps5tm_payload_start(const char *source, const char *mount, const char *dir,
                     const char *name, ps5tm_payload_result_t *r) {
+  return start_impl(source, mount, dir, name, r, 0);
+}
+
+int
+ps5tm_payload_start_step(const char *name, ps5tm_payload_result_t *r) {
+  return start_impl("internal", "", "", name, r, 1);
+}
+
+static int
+start_impl(const char *source, const char *mount, const char *dir, const char *name,
+           ps5tm_payload_result_t *r, int for_profile) {
   memset(r, 0, sizeof(*r));
   char path[PL_PATH_MAX];
   int st = resolve(source, mount, dir, name, path, sizeof(path), r);
   if(st) return st;
 
-  if(pthread_mutex_trylock(&g_op_lock) != 0)
+  int locked = pthread_mutex_trylock(&g_op_lock) == 0;
+  for(int i = 0; !locked && for_profile && i < 300; i++) {
+    usleep(100 * 1000);
+    locked = pthread_mutex_trylock(&g_op_lock) == 0;
+  }
+  if(!locked)
     return fail(r, 409, "busy",
                 "Es läuft gerade ein anderer Start, ein Kopiervorgang oder ein Löschen.");
 
@@ -677,7 +700,7 @@ ps5tm_payload_start(const char *source, const char *mount, const char *dir,
   }
 
   uint64_t now = ps5tm_mono_ms();
-  if(g_last_start_ms && now - g_last_start_ms < PL_START_GAP_MS &&
+  if(!for_profile && g_last_start_ms && now - g_last_start_ms < PL_START_GAP_MS &&
      !strcmp(g_last_start_name, name)) {
     close(fd);
     pthread_mutex_unlock(&g_op_lock);

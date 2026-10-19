@@ -13,7 +13,8 @@
  * other part has to be present.
  *
  * Format knowledge: the public description of the package container (psdevwiki) and the open-source
- * PS5 PKG Manager 1.4.1 by itsPLK (GPL-3.0), named in the README. The code is our own. */
+ * PS5 PKG Manager 1.5.1 by itsPLK (GPL-3.0), named in the README (1.5.1 added the LIH header of backport patches and the SDK
+ * version probe). The code is our own. */
 
 #include <ctype.h>
 #include <errno.h>
@@ -363,14 +364,98 @@ parse_multipart(int fd, ps5tm_pkg_t *out) {
   return 0;
 }
 
+static int
+sdk_fits(uint64_t off, uint64_t size, uint64_t limit) { return off <= limit && size <= limit - off; }
+
+/* The SDK version a PS5 executable was built with, from the process parameters of the main executable (the
+   4-byte value after the "ORBI" magic): the image begins with SELF files, one every 64 KiB at most, of which the
+   main one has a segment 0x61000001 in its ELF program headers. Only a plain, uncompressed, unencrypted layout is
+   read; anything else (and any doubt) gives 0, and a missing version never makes the package unreadable. 16
+   blocks of 8 KiB and 24 bytes at the end are the most that is read. image_end is where the container begins. */
+static uint32_t
+read_sdk(const pkg_src_t *src, uint64_t image_start, uint64_t image_end) {
+  if(image_start >= image_end) return 0;
+  uint32_t sdk = 0;
+  int main_count = 0;
+  for(unsigned block = 0; block < 16; block++) {
+    uint64_t base = image_start + (uint64_t)block * 0x10000;
+    if(base >= image_end) break;
+    uint8_t h[8192];
+    size_t size = image_end - base < sizeof(h) ? (size_t)(image_end - base) : sizeof(h);
+    if(size < 32) break;
+    if(src_read(src, h, size, base) != 0) return 0;
+    if(le32(h) != 0xEEF51454) continue;
+    uint64_t self_size = le64(h + 0x10);
+    uint16_t segments = le16(h + 0x18);
+    size_t elf = 32 + (size_t)segments * 32;
+    if(!segments || segments > 64 || !sdk_fits(base, self_size, image_end) || self_size < elf + 64 || elf + 64 > size) continue;
+    const uint8_t *eh = h + elf;
+    if(memcmp(eh, "\x7f" "ELF", 4) || eh[4] != 2 || eh[5] != 1 || eh[6] != 1 || le16(eh + 18) != 62) continue;
+    uint64_t phoff = le64(eh + 32);
+    uint16_t phsize = le16(eh + 54), count = le16(eh + 56);
+    if(phsize != 56 || !count || count > 64 || phoff < 64 || !sdk_fits(elf, phoff, size) ||
+       !sdk_fits(elf + phoff, (uint64_t)count * 56, size)) continue;
+    const uint8_t *ph = h + elf + phoff;
+    for(uint16_t p = 0; p < count; p++) {
+      const uint8_t *param = ph + (size_t)p * 56;
+      if(le32(param) != 0x61000001) continue;
+      if(++main_count > 1) return 0;
+      uint64_t poff = le64(param + 8), plen = le64(param + 32);
+      if(plen < 24) return 0;
+      for(uint16_t l = 0; l < count; l++) {
+        const uint8_t *load = ph + (size_t)l * 56;
+        uint64_t loff = le64(load + 8), llen = le64(load + 32);
+        if(le32(load) != 1 || poff < loff || !sdk_fits(poff - loff, plen, llen)) continue;
+        for(uint16_t s = 0; s < segments; s++) {
+          const uint8_t *seg = h + 32 + (size_t)s * 32;
+          uint64_t flags = le64(seg), off = le64(seg + 8), stored = le64(seg + 16), unpacked = le64(seg + 24);
+          if((flags >> 20) != l || !(flags & 0x800)) continue;
+          if((flags & 0xA) || stored != unpacked || off < elf + phoff + (uint64_t)count * 56 ||
+             !sdk_fits(off, stored, self_size) || !sdk_fits(poff - loff, plen, stored)) return 0;
+          uint8_t proc[24];
+          if(src_read(src, proc, sizeof(proc), base + off + (poff - loff)) != 0 || le32(proc + 8) != 0x4942524F ||
+             le64(proc) < 24 || le64(proc) > plen) return 0;
+          uint32_t value = le32(proc + 20);
+          unsigned major = value >> 24;
+          if(!major || (major >> 4) > 9 || (major & 15) > 9) return 0;
+          sdk = value;
+        }
+      }
+    }
+  }
+  return main_count == 1 ? sdk : 0;
+}
+
+/* Where the SDK probe starts reading, for the two PS5 image layouts: a FIH header (the image follows at the offset
+   it names) and a LIH one (a backport patch: a FIH header sits inside it, and the image follows that). 0 when the
+   header is neither or the numbers do not fit. cnt is where the container begins; the image lies before it. */
+static uint64_t
+image_start_of(const pkg_src_t *src, const uint8_t *hdr, uint64_t cnt) {
+  if(!memcmp(hdr, "\x7f" "FIH", 4)) return le64(hdr + 0x10);
+  if(!memcmp(hdr, "\x7f" "LIH", 4)) {
+    uint64_t inner = le64(hdr + 0x20);
+    uint8_t fih[0x80];
+    if(!inner || !sdk_fits(inner, sizeof(fih), cnt) || src_read(src, fih, sizeof(fih), inner) != 0 || memcmp(fih, "\x7f" "FIH", 4)) return 0;
+    uint64_t rel = le64(fih + 0x10);
+    if(!rel || !sdk_fits(inner, rel, cnt)) return 0;
+    return inner + rel;
+  }
+  return 0;
+}
+
 /* The container of a package: the header the first 0x200 bytes of it make (already read into hdr), the entry table,
    param.json / param.sfo and the icon. src is the package from its first byte to its last. */
 static int
 parse_container(const pkg_src_t *src, const uint8_t *hdr, size_t hr, ps5tm_pkg_t *out) {
   uint64_t cnt = 0;
-  int found = 0;
+  int found = 0, is_lih = 0;
   if(!memcmp(hdr, "\x7f" "CNT", 4)) {
     found = 1;
+  } else if(!memcmp(hdr, "\x7f" "LIH", 4)) {                              /* a backport patch: the container lies where the header says */
+    uint64_t cand = le64(hdr + 0x30);
+    uint8_t magic[4];
+    if(le16(hdr + 6) == 1 && cand >= 0x80 && sdk_fits(cand, 0x80, out->size) && src_read(src, magic, 4, cand) == 0 &&
+       !memcmp(magic, "\x7f" "CNT", 4)) { cnt = cand; found = 1; is_lih = 1; }
   } else if(!memcmp(hdr, "\x7f" "FIH", 4)) {
     uint64_t cand = le64(hdr + 0x58);
     uint8_t magic[4];
@@ -453,9 +538,10 @@ parse_container(const pkg_src_t *src, const uint8_t *hdr, size_t hr, ps5tm_pkg_t
   free(names);
 
   int delta_type = ((type_magic & 0xFF) == 0x1E || (type_magic & 0xFF000000) == 0x41000000);
+  uint32_t content_flags = be32(ch + 0x78);       /* 0x40000000 / 0x00100000: a patch, also when nothing else in the package says so */
   const char *c = m.category;
   const char *kind;
-  if(has_playgo || has_delta || delta_type || !strncmp(c, "gp", 2)) kind = "update";
+  if(is_lih || (content_flags & 0x40100000) || has_playgo || has_delta || delta_type || !strncmp(c, "gp", 2)) kind = "update";
   else if(!strncmp(c, "ac", 2) || !strncmp(c, "al", 2) || !strcmp(c, "addcont")) kind = "dlc";
   else if(sfo_category && (!strncmp(c, "gd", 2) || !strncmp(c, "bd", 2) || !strncmp(c, "gc", 2) || !strncmp(c, "wt", 2))) kind = "base";
   else if((type_magic & 0xFF) == 1 && !has_base_meta) kind = "dlc";        /* PS5 DLC; a PS4 base package can also have type 1: its category decided above */
@@ -476,6 +562,10 @@ parse_container(const pkg_src_t *src, const uint8_t *hdr, size_t hr, ps5tm_pkg_t
   pick_name(&m, sfo_title, out->name, sizeof(out->name));
   if(!out->name[0]) SET(out->name, out->title_id[0] ? out->title_id : "Unbekanntes Paket");
   out->plat = platform_of(out->title_id, has_json ? 5 : 4);
+  if(!strncmp(out->title_id, "PPSA", 4)) {
+    uint64_t start = image_start_of(src, hdr, cnt);
+    if(start) out->sdk = read_sdk(src, start, cnt);
+  }
   clean_all(out);
   out->valid = 1;
   return 0;

@@ -314,7 +314,7 @@ run_thread(void *arg) {
     }
     if(stop_wanted()) { stopped = 1; break; }
     ps5tm_payload_result_t r;
-    int st = ps5tm_payload_start("internal", "", "", it, &r);
+    int st = ps5tm_payload_start_step(it, &r);
     if(st == 200) { res_add(it, 1, "gesendet"); }
     else { bad++; res_add(it, 0, r.msg[0] ? r.msg : "nicht gestartet"); PS5TM_WARN("payprof_item", "Profil: %.100s nicht gestartet: %.150s", it, r.msg); }
     usleep(400 * 1000);                 /* the loader takes one file at a time */

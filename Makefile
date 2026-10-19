@@ -25,7 +25,7 @@ PYTHON ?= python3
 # (crt1.o) holds the kernel offsets of every firmware it knows, and before
 # main() it refuses one it does not: with v0.41, which stops at 13.40, an app on
 # a console with 13.60 never gets going and writes no line anywhere. The case
-# for 13.60 came with v0.42; this project builds with v0.43. The build checks
+# for 13.60 came with v0.42; this project builds with v0.44. The build checks
 # the SDK before it starts (tools/check_sdk_firmware.py) and the ELF after it
 # is linked, and stops when a firmware named here has no case. FW_NEED= (empty)
 # switches the check off, for building with an older SDK on purpose; naming
@@ -104,6 +104,9 @@ SRCS += src/lz4cfg.c src/lz4pack.c
 SRCS += src/trace.c src/plugins.c
 SRCS += src/ps4m_core.c src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_fw.c src/ps4m_origin.c
 SRCS += src/qr.c
+SRCS += src/dupimg.c
+SRCS += src/updates.c src/upd_http.c src/upd_dns.c src/upd_sony.c src/upd_site.c
+SRCS += src/paystore.c
 
 # ⚠ Die Kopfdateien gehören in die Abhängigkeiten.
 #
@@ -153,9 +156,10 @@ TILE_FILES := $(wildcard tile/sce_sys/*)
 # accepted and immediately dropped. The fan kept working, which made it look
 # like a networking fault rather than an allocation one.
 #
-# The tile only ever needs installing once, and cooling-center-launcher-
-# installer.elf carries the package for exactly that. The app still installs a
-# tile when it finds a package on disk — the installer leaves one there.
+# Since the folder way works (see above) no separate installer and no package
+# ship any more (19.10.2026): the release is the app, the starter tile and the
+# LIESMICH. The app still installs a tile from a package it finds on disk or is
+# given in the web UI, as a fallback.
 #
 #   make                      the app, ~9 MB (web UI, converters, libraries)
 #   make TILE_PKG=pkg/out/x.pkg   embeds a package anyway
@@ -187,6 +191,13 @@ DEFLATE_OBJS := $(patsubst src/third_party/libdeflate/lib/%.c,gen/libdeflate/%.o
 # LZ4 1.10.0 (BSD-2-Clause) for the asset packs (lz4pack.c): the compressor and the decoder, built at -O2 like libdeflate.
 LZ4_OBJS := gen/lz4/lz4.o gen/lz4/lz4hc.o
 LZ4_HDRS := $(wildcard src/third_party/lz4/*.h)
+
+# BearSSL 0.6 (MIT) for the game updates (upd_http.c): TLS to Sony's download servers, the DNS-over-HTTPS resolvers and the patch
+# history sites. Built at -O2 into an archive, so the link takes only the parts the app uses.
+BSSL_DIR  := src/third_party/bearssl
+BSSL_SRCS := $(wildcard $(BSSL_DIR)/src/*.c $(BSSL_DIR)/src/*/*.c)
+BSSL_OBJS := $(patsubst $(BSSL_DIR)/src/%.c,gen/bearssl/%.o,$(BSSL_SRCS))
+BSSL_LIB  := gen/libbearssl.a
 
 # SHA-256 is the other hot loop: it hashes every byte of a backup when that is
 # read back (checkfile.c). At -Os the compiler leaves its rounds rolled up.
@@ -324,6 +335,17 @@ gen/lz4/%.o: src/third_party/lz4/%.c $(LZ4_HDRS) Makefile gen/sdk.stamp | gen
 	mkdir -p $(dir $@)
 	$(CC) -O2 -ffunction-sections -fdata-sections -c -o $@ $<
 
+gen/bearssl/%.o: $(BSSL_DIR)/src/%.c Makefile gen/sdk.stamp | gen
+	mkdir -p $(dir $@)
+	$(CC) -O2 -w -I$(BSSL_DIR)/inc -I$(BSSL_DIR)/src -ffunction-sections -fdata-sections -c -o $@ $<
+
+# Packed in portions: one command line with all 277 objects is cut short on Windows (the last ones went missing).
+$(BSSL_LIB): $(BSSL_OBJS)
+	rm -f $@
+	$(file >gen/bearssl.lst,$(BSSL_OBJS))
+	tr ' ' '\n' < gen/bearssl.lst | grep . | xargs -n 30 "$(PS5_PAYLOAD_SDK)/bin/prospero-ar" qc $@
+	"$(PS5_PAYLOAD_SDK)/bin/prospero-ar" s $@
+
 gen/fast/%.o: src/%.c $(HDRS) Makefile gen/sdk.stamp | gen
 	mkdir -p $(dir $@)
 	$(CC) -O2 -Wall -Wextra -Werror -Isrc -Isrc/third_party \
@@ -343,9 +365,9 @@ gen/sdk.stamp: FORCE | gen
 check-sdk-firmware:
 	@$(PYTHON) tools/check_sdk_firmware.py sdk "$(PS5_PAYLOAD_SDK)" $(FW_NEED)
 
-$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) \
+$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
         $(SHELLUI_STUB) gen/sdk.stamp | check-sdk-firmware
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(LDADD)
+	$(CC) $(CFLAGS) -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
 	"$(PS5_PAYLOAD_SDK)/bin/prospero-strip" --strip-all $@
 	@$(PYTHON) tools/check_sdk_firmware.py elf $@ $(FW_NEED) >/dev/null || { rm -f $@; exit 1; }
 
@@ -364,16 +386,10 @@ deploy: $(BIN)
 # by the recipe.
 RELEASE := PS5 Cooling and System Center v$(VERSION)
 RELEASE_MAIN := PS5_Cooling_System_Center_v$(VERSION).elf
-RELEASE_INST := cooling-center-launcher-installer_v$(VERSION).elf
 
-# Das Paket, das mitgeliefert wird, und das, das der Installer einbettet, sind
-# EIN und dieselbe Datei: die einzige in pkg/out. Früher nahm der Installer die
-# erste, die der Verzeichniseintrag lieferte, und das Release kopierte alle —
-# bei zwei Paketen stand im Ordner nicht, was im Installer steckte. Jetzt
-# bricht das Release bei mehreren ab, und der Installer bekommt das Paket
-# ausdrücklich genannt (ohne Paket: leer, er sucht dann zur Laufzeit).
-TILE_PKGS_OUT := $(sort $(wildcard pkg/out/*.pkg))
-RELEASE_PKG   := $(firstword $(TILE_PKGS_OUT))
+# Ausgeliefert werden nur noch die App, PPSA86921.zip (tools/make_starter.sh)
+# und die LIESMICH. Installer-ELF und Kachel-Paket entfallen seit 19.10.2026:
+# Die App legt die Kachel selbst als Ordner an (src/tile.c).
 
 # Dieses Ziel löscht nichts, was es nicht selbst angelegt hat. Früher räumte
 # `rm -rf` den Ordner der Version leer, auch wenn dort von Hand Dazugelegtes
@@ -386,14 +402,10 @@ release: $(BIN)
 	@[ -n "$(VERSION)" ] || { \
 	  echo "release: PS5TM_VERSION ließ sich nicht lesen (PYTHON=$(PYTHON)) — der Ordnername wäre falsch." >&2; \
 	  exit 1; }
-	@[ $(words $(TILE_PKGS_OUT)) -le 1 ] || { \
-	  echo "release: pkg/out enthält mehrere Pakete: $(TILE_PKGS_OUT)" >&2; \
-	  echo "Genau eines darf dort liegen; sonst steht nicht fest, welches der Installer einbettet." >&2; \
-	  exit 1; }
 	@if [ -d "$(RELEASE)" ]; then \
 	  foreign=$$(ls -A "$(RELEASE)" | grep -v -x -F \
-	    -e "$(RELEASE_MAIN)" -e "$(RELEASE_INST)" -e LIESMICH.txt -e PPSA86921.zip \
-	    -e Thumbs.db -e desktop.ini $(if $(RELEASE_PKG),-e "$(notdir $(RELEASE_PKG))")); \
+	    -e "$(RELEASE_MAIN)" -e LIESMICH.txt -e PPSA86921.zip \
+	    -e Thumbs.db -e desktop.ini); \
 	  if [ -n "$$foreign" ]; then \
 	    echo "release: In \"$(RELEASE)\" liegt, was dieses Ziel nicht selbst anlegt — es löscht nichts:" >&2; \
 	    printf '  %s\n' "$$foreign" >&2; \
@@ -401,23 +413,15 @@ release: $(BIN)
 	    exit 1; \
 	  fi; \
 	fi
-	$(MAKE) -C installer TILE_PKG=$(if $(RELEASE_PKG),../$(RELEASE_PKG))
 	mkdir -p "$(RELEASE)"
 	cp -f $(BIN) "$(RELEASE)/$(RELEASE_MAIN)"
-	cp -f installer/cooling-center-launcher-installer.elf "$(RELEASE)/$(RELEASE_INST)"
-	@# The package always ships, whether or not it is embedded in the app.
-	@[ -z "$(RELEASE_PKG)" ] || cp -f "$(RELEASE_PKG)" "$(RELEASE)/"
 	@if [ -f docs/LIESMICH.txt ]; then cp -f docs/LIESMICH.txt "$(RELEASE)/"; \
 	 else echo "release: docs/LIESMICH.txt fehlt — der Ordner bekommt keine LIESMICH." >&2; fi
 	@echo ""
 	@ls -la "$(RELEASE)"
 
-# Auch der Installer: Sein ELF und sein eingebettetes Paket bleiben sonst über
-# ein `make clean && make release` hinweg liegen und gelangen unbesehen in den
-# neuen Ordner.
 clean:
 	rm -rf $(BIN) gen
-	$(MAKE) -C installer clean
 
 FORCE:
 

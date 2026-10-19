@@ -324,6 +324,160 @@ cp_walk(cp_t *c, char *src, size_t sl, char *dst, size_t dl, int depth) {
   return rc;
 }
 
+/* ---------------------------------------------------------------- how long packing takes (after exFAT2AMPR 1.104 by V-10)
+
+   The speed of the packing phase per LZ4 level and of the check against the originals, as this console measured them
+   (PS5TM_DATA_DIR/lz4-speed.txt, lines "pack <level> <bytes/s>" and "verify <bytes/s>"), else a first guess. The guesses
+   are those exFAT2AMPR 1.104 uses for its own packer on the PS5 (read on 18.10.2026): levels 10 to 12 switch LZ4 HC to
+   its optimal parser, several times slower for less than one per cent of room. A level not measured yet is scaled from the
+   nearest one that was, by the ratio of the guesses. Each new run moves the stored value halfway towards what it measured. */
+#define LZ4_SPEED_FILE  PS5TM_DATA_DIR "/lz4-speed.txt"
+static const double LZ4_PACK_GUESS[13] = { 0, 220e6, 220e6, 220e6, 190e6, 180e6, 170e6, 150e6, 130e6, 110e6, 35e6, 30e6, 25e6 };
+#define LZ4_VERIFY_GUESS 400e6
+#ifndef LZ4_SPEED_MIN_MS
+#define LZ4_SPEED_MIN_MS    20000           /* shorter phases say little about the speed */
+#endif
+#ifndef LZ4_SPEED_MIN_BYTES
+#define LZ4_SPEED_MIN_BYTES (512ull << 20)
+#endif
+static pthread_mutex_t g_lz4_speed_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void
+lz4_speed_load(double pack[13], double *verify) {
+  memset(pack, 0, 13 * sizeof(*pack));
+  *verify = 0;
+  FILE *f = fopen(LZ4_SPEED_FILE, "r");
+  if(!f) return;
+  char line[96];
+  while(fgets(line, sizeof(line), f)) {
+    int lv = 0;
+    double v = 0;
+    if(sscanf(line, "pack %d %lf", &lv, &v) == 2 && lv >= 1 && lv <= 12 && v > 1e5 && v < 1e11) pack[lv] = v;
+    else if(sscanf(line, "verify %lf", &v) == 1 && v > 1e5 && v < 1e11) *verify = v;
+  }
+  fclose(f);
+}
+
+/* bytes per second of packing at this level; *learned 1 when this console measured this or another level */
+static double
+lz4_pack_rate(int level, int *learned) {
+  if(level < 1 || level > 12) level = 9;
+  double pack[13], ver;
+  pthread_mutex_lock(&g_lz4_speed_lock);
+  lz4_speed_load(pack, &ver);
+  pthread_mutex_unlock(&g_lz4_speed_lock);
+  *learned = 1;
+  if(pack[level] > 0) return pack[level];
+  for(int d = 1; d <= 11; d++)
+    for(int s = -1; s <= 1; s += 2) {
+      int o = level + s * d;
+      if(o >= 1 && o <= 12 && pack[o] > 0) return pack[o] * LZ4_PACK_GUESS[level] / LZ4_PACK_GUESS[o];
+    }
+  *learned = 0;
+  return LZ4_PACK_GUESS[level];
+}
+
+static double
+lz4_verify_rate(void) {
+  double pack[13], ver;
+  pthread_mutex_lock(&g_lz4_speed_lock);
+  lz4_speed_load(pack, &ver);
+  pthread_mutex_unlock(&g_lz4_speed_lock);
+  return ver > 0 ? ver : LZ4_VERIFY_GUESS;
+}
+
+/* seconds for packing and checking bytes at level (the removal of the originals is quick beside them) */
+static double
+lz4_estimate_s(uint64_t bytes, int level, int *learned) {
+  return (double)bytes / lz4_pack_rate(level, learned) + (double)bytes / lz4_verify_rate();
+}
+
+/* what a finished pack measured; short runs say little and are not kept */
+static void
+lz4_speed_note(int level, uint64_t bytes, uint64_t pack_ms, uint64_t verify_ms) {
+  if(level < 1 || level > 12 || bytes < LZ4_SPEED_MIN_BYTES) return;
+  double pack[13], ver;
+  pthread_mutex_lock(&g_lz4_speed_lock);
+  lz4_speed_load(pack, &ver);
+  if(pack_ms >= LZ4_SPEED_MIN_MS) {
+    double v = (double)bytes * 1000.0 / (double)pack_ms;
+    pack[level] = pack[level] > 0 ? (pack[level] + v) / 2 : v;
+  }
+  if(verify_ms >= LZ4_SPEED_MIN_MS) {
+    double v = (double)bytes * 1000.0 / (double)verify_ms;
+    ver = ver > 0 ? (ver + v) / 2 : v;
+  }
+  char b[600];
+  size_t at = 0;
+  for(int i = 1; i <= 12; i++)
+    if(pack[i] > 0 && at < sizeof(b)) at += (size_t)snprintf(b + at, sizeof(b) - at, "pack %d %.0f\n", i, pack[i]);
+  if(ver > 0 && at < sizeof(b)) at += (size_t)snprintf(b + at, sizeof(b) - at, "verify %.0f\n", ver);
+  if(at > sizeof(b)) at = sizeof(b);
+  char tmp[sizeof(LZ4_SPEED_FILE) + 8];
+  snprintf(tmp, sizeof(tmp), "%s.tmp", LZ4_SPEED_FILE);
+  FILE *f = fopen(tmp, "w");
+  int ok = f && fwrite(b, 1, at, f) == at;
+  if(f && fclose(f) != 0) ok = 0;
+  if(ok && rename(tmp, LZ4_SPEED_FILE) != 0) ok = 0;
+  if(!ok) unlink(tmp);
+  pthread_mutex_unlock(&g_lz4_speed_lock);
+}
+
+/* ---------------------------------------------------------------- what the game folder holds (after exFAT2AMPR 1.95)
+
+   Before anything is packed: every entry of the game folder is a file or a folder that can be read. A link would not be
+   packed and, in a copy, would not be copied: the packed game would lack it. Something else (a device, a socket), a name
+   that cannot be looked at or a folder that cannot be read all the way leave the same doubt. 0, or -1 with why. */
+static int
+lz4_tree_walk(char *path, size_t len, size_t rootlen, int depth, char *why, size_t wn) {
+  if(depth > 64) { snprintf(why, wn, "Der Spielordner ist zu tief verschachtelt: %s", path + rootlen); return -1; }
+  DIR *d = opendir(path);
+  if(!d) { snprintf(why, wn, "Ein Ordner im Spiel ließ sich nicht lesen (%s): %s", ps5tm_io_strerror(errno), len > rootlen ? path + rootlen + 1 : "/"); return -1; }
+  int rc = 0;
+  for(;;) {
+    errno = 0;
+    struct dirent *e = readdir(d);
+    if(!e) {
+      if(errno) { snprintf(why, wn, "Ein Ordner im Spiel ließ sich nicht ganz lesen (%s): %s", ps5tm_io_strerror(errno), len > rootlen ? path + rootlen + 1 : "/"); rc = -1; }
+      break;
+    }
+    if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+    size_t n = strlen(e->d_name);
+    if(len + 1 + n >= PATH_MAX - 8) { snprintf(why, wn, "Ein Pfad im Spiel ist zu lang: %s", e->d_name); rc = -1; break; }
+    path[len] = '/';
+    memcpy(path + len + 1, e->d_name, n + 1);
+    struct stat st;
+    if(lstat(path, &st) != 0) {
+      snprintf(why, wn, "Eine Datei im Spiel ließ sich nicht ansehen (%s): %s", ps5tm_io_strerror(errno), path + rootlen + 1);
+      rc = -1;
+    } else if(S_ISLNK(st.st_mode)) {
+      snprintf(why, wn, "Im Spielordner liegt eine Verknüpfung: %s. Verknüpfungen werden nicht mitgepackt, das gepackte Spiel wäre "
+               "unvollständig. Bitte sie durch die Datei selbst ersetzen oder entfernen.", path + rootlen + 1);
+      rc = -1;
+    } else if(S_ISDIR(st.st_mode)) {
+      rc = lz4_tree_walk(path, len + 1 + n, rootlen, depth + 1, why, wn);
+    } else if(!S_ISREG(st.st_mode)) {
+      snprintf(why, wn, "Im Spielordner liegt etwas, das weder Datei noch Ordner ist: %s. So lässt sich das Spiel nicht vollständig packen.",
+               path + rootlen + 1);
+      rc = -1;
+    }
+    path[len] = 0;
+    if(rc != 0 || cancelled()) break;
+  }
+  closedir(d);
+  return rc;
+}
+
+static int
+lz4_tree_check(const char *root, char *why, size_t wn) {
+  char *p = malloc(PATH_MAX);
+  if(!p) { snprintf(why, wn, "Kein Speicher."); return -1; }
+  snprintf(p, PATH_MAX, "%s", root);
+  int rc = lz4_tree_walk(p, strlen(p), strlen(p), 0, why, wn);
+  free(p);
+  return rc;
+}
+
 /* ---------------------------------------------------------------- pack (in place or into a copy) */
 
 static int
@@ -393,6 +547,8 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   if(copy && backport) { lz4_fail("Dieses Spiel hat einen Backport-Ordner (ShadowMountPlus liest ihn zuerst): Eine Kopie bekäme keine eigene APR-EMU-Datei. Bitte im Spielordner packen.", -1); return; }
   if(pwhy[0] && !backport && !place[0]) { lz4_fail(pwhy, -1); return; }
 
+  set_phase("Der Spielordner wird geprüft");
+  if(lz4_tree_check(root, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
   set_phase("Der AMPR-Index wird gebaut");
   unsigned nf = 0, coll = 0;
   if(ps5tm_ampr_build_dir(root, &nf, &coll, &g_cancel, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
@@ -453,14 +609,17 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     outdir = tmp;
   }
 
+  uint64_t t_pack = ps5tm_mono_ms();
   if(lzp_pack(root, outdir, &cfg, &st, &ui, err, sizeof(err)) != 0) {
     int c = cancelled();
     if(copy) rm_tree(tmp, 0);
     lz4_fail(err, c ? ECANCELED : -1);
     goto out;
   }
+  uint64_t pack_ms = ps5tm_mono_ms() - t_pack;
   lz4_job_stats(&st, st.files_loose);
   lzp_stats_t vs;
+  uint64_t t_verify = ps5tm_mono_ms();
   if(lzp_verify(outdir, root, &vs, &ui, err, sizeof(err)) != 0) {                   /* byte for byte against the originals */
     int c = cancelled();
     const char *rb = lz4_rollback(copy, tmp, root);
@@ -471,6 +630,7 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     goto out;
   }
   lz4_last_set(id, 1, vs.files_packed, vs.logical_bytes);
+  lz4_speed_note(cfg.fast ? 1 : cfg.level, pl.pack_bytes, pack_ms, ps5tm_mono_ms() - t_verify);
 
   if(copy) {
     /* the files that stay loose, copied and read back */
@@ -662,6 +822,7 @@ typedef struct {
   char         err[300];
   char         profile[PATH_MAX];
   int          level;
+  int          eff_level;              /* the level of the configuration (a profile names its own); LZ4 fast counts as 1 */
 } lz4planarg_t;
 
 static void *
@@ -675,6 +836,7 @@ lz4_plan_thread(void *arg) {
   lzp_ui_t ui;
   memset(&ui, 0, sizeof(ui));
   p->rc = lzp_plan(p->root, &p->cfg, &p->plan, &ui, p->err, sizeof(p->err));
+  p->eff_level = p->cfg.fast ? 1 : p->cfg.level;
   lzc_free(&p->cfg);
   return NULL;
 }
@@ -884,6 +1046,25 @@ ps5tm_lz4_info(const char *id, int *http) {
     cJSON_AddBoolToObject(p, "has_crc", inf.has_crc);
     cJSON_AddBoolToObject(p, "has_runtime", inf.has_runtime);
     cJSON_AddStringToObject(p, "build_id", inf.build_id);
+    /* what would keep the packed game from starting, as far as the app can see it (the start check of exFAT2AMPR 1.104 by
+       V-10): eboot.bin without the right to run, and ShadowMountPlus mounting no fakelib for it (then the APR-EMU that reads
+       the packs is not loaded). The APR-EMU itself, fakelib2 and the backport folder are the row "APR-EMU im Spiel". */
+    cJSON *sp = cJSON_AddArrayToObject(o, "start_problems");
+    char eb[PATH_MAX];
+    snprintf(eb, sizeof(eb), "%s/eboot.bin", li.path);
+    struct stat est;
+    if(stat(eb, &est) == 0 && !(est.st_mode & 0111))
+      cJSON_AddItemToArray(sp, cJSON_CreateString("eboot.bin darf nicht ausgeführt werden. „Pakete prüfen“ setzt die Rechte im Spielordner auf 0777."));
+    ps5tm_smp_game_t sg;
+    if(ps5tm_smp_find(id, &sg) == 0) {
+      if(!strcmp(sg.fakelib_mode, "disabled"))
+        cJSON_AddItemToArray(sp, cJSON_CreateString("ShadowMountPlus bindet für dieses Spiel keine fakelib ein (fakelib-Modus „Deaktiviert“). "
+                             "Dann fehlt beim Start die APR-EMU, die die Pakete liest, und das Spiel startet nicht. In der Weboberfläche von "
+                             "ShadowMountPlus den Modus des Spiels auf „Emulatoren“ oder „Voll“ stellen."));
+      else if(sg.fakelib_effective == 0)
+        cJSON_AddItemToArray(sp, cJSON_CreateString("ShadowMountPlus bindet beim Start keine fakelib ein (in seinen Einstellungen ist das "
+                             "Einbinden ausgeschaltet). Dann fehlt die APR-EMU, die die Pakete liest, und das Spiel startet nicht."));
+    }
   } else if(inf.why[0]) cJSON_AddStringToObject(o, "pack_why", inf.why);
   pthread_mutex_lock(&g_lock);
   for(unsigned i = 0; i < IJ_LAST_MAX; i++) {
@@ -959,6 +1140,12 @@ ps5tm_lz4_plan(const char *id, int level, const char *profile, int *http) {
     cJSON_AddNumberToObject(o, "loose_bytes", (double)p->plan.loose_bytes);
     cJSON_AddNumberToObject(o, "chunks", (double)p->plan.chunks);
     cJSON_AddNumberToObject(o, "block_shift", p->plan.block_shift);
+    int learned = 0, l9 = 0;
+    double est = lz4_estimate_s(p->plan.pack_bytes, p->eff_level, &learned);
+    cJSON_AddNumberToObject(o, "est_s", (double)(uint64_t)(est + 0.5));
+    cJSON_AddBoolToObject(o, "est_learned", learned);
+    cJSON_AddNumberToObject(o, "est_level", p->eff_level);
+    if(p->eff_level >= 10) cJSON_AddNumberToObject(o, "est9_s", (double)(uint64_t)(lz4_estimate_s(p->plan.pack_bytes, 9, &l9) + 0.5));
   }
   free(p);
   return o;
@@ -997,7 +1184,6 @@ ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *prof
     struct stat st0;
     if(lstat(fin, &st0) == 0) { snprintf(err, n, "Den Ordner %s-lz4 gibt es schon. Bitte ihn zuerst umbenennen oder löschen.", base); return 409; }
   }
-  if(other_job(err, n)) return 409;
   lz4arg_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, n, "Kein Speicher."); return 500; }
   snprintf(a->kind, sizeof(a->kind), "%s", kind);
@@ -1016,6 +1202,14 @@ ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *prof
   g_job.started_ms = ps5tm_mono_ms();
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
+  /* claim first, then ask the others (they do the same): of two starts at the same moment one gives way (review 19.10.2026) */
+  if(other_job(err, n)) {
+    pthread_mutex_lock(&g_lock);
+    memset(&g_job, 0, sizeof(g_job));
+    pthread_mutex_unlock(&g_lock);
+    free(a);
+    return 409;
+  }
   pthread_t th;
   pthread_attr_t at;
   pthread_attr_init(&at);

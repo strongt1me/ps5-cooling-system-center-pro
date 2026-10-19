@@ -686,7 +686,6 @@ ai_start(const char *kind, const char *lib, const char *op, const char *store, c
     cJSON_Delete(info);
   }
   if(ps5tm_procmgr_title_running(id) == 1) { snprintf(err, n, "Das Spiel läuft gerade. Bitte zuerst beenden."); return 409; }
-  if(other_job(err, n)) return 409;
   pthread_mutex_lock(&g_lock);
   if(g_job.state == AI_RUNNING) { pthread_mutex_unlock(&g_lock); snprintf(err, n, "Es wird gerade schon ein Index gebaut."); return 409; }
   memset(&g_job, 0, sizeof(g_job));
@@ -701,6 +700,13 @@ ai_start(const char *kind, const char *lib, const char *op, const char *store, c
   g_job.started_ms = ps5tm_mono_ms();
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
+  /* claim first, then ask the others (they do the same): of two starts at the same moment one gives way (review 19.10.2026) */
+  if(other_job(err, n)) {
+    pthread_mutex_lock(&g_lock);
+    memset(&g_job, 0, sizeof(g_job));
+    pthread_mutex_unlock(&g_lock);
+    return 409;
+  }
   ai_args_t *a = calloc(1, sizeof(*a));
   if(!a) { finish(AI_FAILED, "Kein Speicher."); snprintf(err, n, "Kein Speicher."); return 500; }
   snprintf(a->id, sizeof(a->id), "%s", id);

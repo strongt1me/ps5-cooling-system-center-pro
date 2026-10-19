@@ -296,8 +296,7 @@ runner_main(void *arg) {
       halt("failed", "");
       continue;
     }
-    ps5tm_pkginst_result(r);
-    if(r->seq != seq || r->state == 0) {
+    if(ps5tm_pkginst_result_of(seq, r) != 1) {
       finish_item(id, PQ_FAIL, "Das Ergebnis der Installation ließ sich nicht feststellen.", 0);
       halt("failed", "");
       PS5TM_WARN("pkg_queue_lost", "Pakete: Das Ergebnis der Installation von „%.60s“ ließ sich nicht feststellen.", name);

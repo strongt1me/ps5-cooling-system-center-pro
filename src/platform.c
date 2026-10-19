@@ -770,7 +770,7 @@ rank_threads(const usage_bank_t *old, const usage_bank_t *cur, double span) {
 
 static void
 update_top_threads(void) {
-  uint64_t now = ps5tm_now_ms();
+  uint64_t now = ps5tm_mono_ms();
   if(g_top_bank_filled && now - g_top_ms < TOP_INTERVAL_MS) return;
 
   if(g_top_bank_filled) {

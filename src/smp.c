@@ -194,68 +194,86 @@ copy_str(const cJSON *j, const char *key, char *out, size_t out_len) {
 
 /* The list and the version, at most every SMP_GAMES_TTL; after a failed ask
    not again for SMP_DOWN_TTL, so a console without ShadowMountPlus pays one
-   refused connection now and then. Called with g_lock held. */
+   refused connection now and then. Called with g_lock held, and returns with it
+   held; the asking itself runs WITHOUT the lock (up to 5.5 s when ShadowMountPlus
+   is slow, and every other caller waited that long; review 19.10.2026). One ask at
+   a time: a caller that comes meanwhile waits for its answer instead of asking too. */
+static int            g_refreshing;
+static pthread_cond_t g_refresh_cv = PTHREAD_COND_INITIALIZER;
+
 static void
 refresh_locked(void) {
+  while(g_refreshing) pthread_cond_wait(&g_refresh_cv, &g_lock);
   uint64_t now = ps5tm_mono_ms();
   uint64_t ttl = g_count < 0 ? SMP_DOWN_TTL : SMP_GAMES_TTL;
   if(g_games_ms && now - g_games_ms < ttl) return;
   g_games_ms = now;
+  g_refreshing = 1;
+  pthread_mutex_unlock(&g_lock);
+
+  char version[sizeof(g_version)] = "", caps[sizeof(g_caps)] = ",";
+  ps5tm_smp_game_t *games_out = NULL;
+  int count = -1;
 
   cJSON *ver = post("/version", "{}", 1500);
-  if(!status_ok(ver)) {
-    cJSON_Delete(ver);
-    g_count      = -1;
-    g_version[0] = 0;
-    g_caps[0]    = 0;
-    return;
-  }
-  copy_str(ver, "shadowmount_version", g_version, sizeof(g_version));
-  snprintf(g_caps, sizeof(g_caps), ",");
-  const cJSON *caps = cJSON_GetObjectItem(ver, "capabilities");
-  const cJSON *c;
-  cJSON_ArrayForEach(c, caps) {
-    if(!cJSON_IsString(c)) continue;
-    size_t used = strlen(g_caps);
-    snprintf(g_caps + used, sizeof(g_caps) - used, "%s,", c->valuestring);
+  if(status_ok(ver)) {
+    copy_str(ver, "shadowmount_version", version, sizeof(version));
+    const cJSON *capl = cJSON_GetObjectItem(ver, "capabilities");
+    const cJSON *c;
+    cJSON_ArrayForEach(c, capl) {
+      if(!cJSON_IsString(c)) continue;
+      size_t used = strlen(caps);
+      snprintf(caps + used, sizeof(caps) - used, "%s,", c->valuestring);
+    }
+    cJSON *list = post("/games", "{\"include_size\":false}", 4000);
+    const cJSON *games = status_ok(list) ? cJSON_GetObjectItem(list, "games") : NULL;
+    if(cJSON_IsArray(games) && (games_out = calloc(PS5TM_SMP_MAX_GAMES, sizeof(ps5tm_smp_game_t)))) {
+      int n = cJSON_GetArraySize(games);
+      if(n > PS5TM_SMP_MAX_GAMES) n = PS5TM_SMP_MAX_GAMES;
+      int k = 0;
+      const cJSON *g;
+      cJSON_ArrayForEach(g, games) {
+        if(k >= n) break;
+        ps5tm_smp_game_t *e = &games_out[k];
+        memset(e, 0, sizeof(*e));
+        copy_str(g, "title_id", e->title_id, sizeof(e->title_id));
+        /* A path that does not fit is left out: cut short it would name another folder, and the app copies,
+           moves and deletes by these paths. */
+        int fits = copy_str(g, "path", e->path, sizeof(e->path));
+        fits &= copy_str(g, "runtime_path", e->runtime_path, sizeof(e->runtime_path));
+        copy_str(g, "source_type", e->source_type, sizeof(e->source_type));
+        copy_str(g, "image_type", e->image_type, sizeof(e->image_type));
+        e->mounted   = cJSON_IsTrue(cJSON_GetObjectItem(g, "mounted"));
+        e->available = cJSON_IsTrue(cJSON_GetObjectItem(g, "source_available"));
+        copy_str(g, "fakelib_mode", e->fakelib_mode, sizeof(e->fakelib_mode));       /* 1.7beta5: the mode it resolved */
+        const cJSON *fe = cJSON_GetObjectItem(g, "fakelib_effective_enabled");
+        e->fakelib_effective = cJSON_IsBool(fe) ? cJSON_IsTrue(fe) : -1;
+        /* Only absolute paths without a way up: they are shown, copied from and
+           handed back to ShadowMountPlus. */
+        if(!fits || !e->title_id[0] || e->path[0] != '/' || ps5tm_path_has_dotdot(e->path))
+          continue;
+        k++;
+      }
+      count = k;
+    }
+    cJSON_Delete(list);
   }
   cJSON_Delete(ver);
 
-  cJSON *list = post("/games", "{\"include_size\":false}", 4000);
-  const cJSON *games = status_ok(list) ? cJSON_GetObjectItem(list, "games") : NULL;
-  if(!cJSON_IsArray(games)) {
-    cJSON_Delete(list);
-    g_count = -1;
-    return;
+  pthread_mutex_lock(&g_lock);
+  if(count >= 0) {
+    free(g_games);
+    g_games = games_out;
+    snprintf(g_version, sizeof(g_version), "%s", version);
+    snprintf(g_caps, sizeof(g_caps), "%s", caps);
+  } else {
+    free(games_out);
+    g_version[0] = 0;
+    g_caps[0] = 0;
   }
-  int n = cJSON_GetArraySize(games);
-  if(n > PS5TM_SMP_MAX_GAMES) n = PS5TM_SMP_MAX_GAMES;
-  if(!g_games) g_games = calloc(PS5TM_SMP_MAX_GAMES, sizeof(ps5tm_smp_game_t));
-  if(!g_games) { cJSON_Delete(list); g_count = -1; return; }
-
-  int k = 0;
-  const cJSON *g;
-  cJSON_ArrayForEach(g, games) {
-    if(k >= n) break;
-    ps5tm_smp_game_t *e = &g_games[k];
-    memset(e, 0, sizeof(*e));
-    copy_str(g, "title_id", e->title_id, sizeof(e->title_id));
-    /* A path that does not fit is left out: cut short it would name another folder, and the app copies,
-       moves and deletes by these paths. */
-    int fits = copy_str(g, "path", e->path, sizeof(e->path));
-    fits &= copy_str(g, "runtime_path", e->runtime_path, sizeof(e->runtime_path));
-    copy_str(g, "source_type", e->source_type, sizeof(e->source_type));
-    copy_str(g, "image_type", e->image_type, sizeof(e->image_type));
-    e->mounted   = cJSON_IsTrue(cJSON_GetObjectItem(g, "mounted"));
-    e->available = cJSON_IsTrue(cJSON_GetObjectItem(g, "source_available"));
-    /* Only absolute paths without a way up: they are shown, copied from and
-       handed back to ShadowMountPlus. */
-    if(!fits || !e->title_id[0] || e->path[0] != '/' || ps5tm_path_has_dotdot(e->path))
-      continue;
-    k++;
-  }
-  g_count = k;
-  cJSON_Delete(list);
+  g_count = count;
+  g_refreshing = 0;
+  pthread_cond_broadcast(&g_refresh_cv);
 }
 
 int

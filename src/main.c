@@ -451,6 +451,7 @@ main(int argc, char **argv) {
     ps5tm_library_probe_start();
     ps5tm_payprof_start();
     ps4m_boot();                       /* PS4Mount, when it was switched on in the page */
+    ps5tm_updates_boot();              /* game updates: settings only, nothing goes out on the network */
 
     ps5tm_http_run(srv, port);
   }

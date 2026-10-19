@@ -247,6 +247,9 @@ typedef struct {
   uint8_t  fat_page[4096];
   uint64_t fat_page_base;
   int      fat_page_ok;
+  /* where the last read of a FAT chain ended: reading a file front to back in 1 MiB steps then walks each link once,
+     not from the first cluster every time (a fragmented 20 GiB file took millions of FAT reads; review 19.10.2026) */
+  uint32_t cur_first, cur_idx, cur_c;
 } exfat_t;
 
 typedef struct { uint32_t first; uint64_t size; int nofat; int is_dir; } exf_node_t;
@@ -286,15 +289,18 @@ exf_read(exfat_t *x, uint32_t first, int nofat, uint64_t off, void *buf, size_t 
   if(nofat) {
     c = first + idx;
   } else {
-    for(uint32_t i = 0; i < idx; i++) {
+    uint32_t i = 0;
+    if(x->cur_first == first && x->cur_c && x->cur_idx <= idx) { i = x->cur_idx; c = x->cur_c; }
+    for(; i < idx; i++) {
       uint32_t nx;
-      if(exf_fat_next(x, c, &nx) != 0 || !exf_valid_cluster(x, nx)) return -1;
+      if(exf_fat_next(x, c, &nx) != 0 || !exf_valid_cluster(x, nx)) { x->cur_first = 0; return -1; }
       c = nx;
     }
   }
   uint64_t in = off & (csize - 1);
   while(n) {
-    if(!exf_valid_cluster(x, c)) return -1;
+    if(!exf_valid_cluster(x, c)) { x->cur_first = 0; return -1; }
+    if(!nofat) { x->cur_first = first; x->cur_idx = idx; x->cur_c = c; }
     size_t take = (size_t)(csize - in);
     if(take > n) take = n;
     uint64_t pos = x->heap_off + ((uint64_t)(c - 2) << x->clu_shift) + in;
@@ -304,8 +310,9 @@ exf_read(exfat_t *x, uint32_t first, int nofat, uint64_t off, void *buf, size_t 
       if(nofat) c++;
       else {
         uint32_t nx;
-        if(exf_fat_next(x, c, &nx) != 0) return -1;
+        if(exf_fat_next(x, c, &nx) != 0) { x->cur_first = 0; return -1; }
         c = nx;
+        idx++;
       }
     }
   }

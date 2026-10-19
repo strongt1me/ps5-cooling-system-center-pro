@@ -230,6 +230,7 @@
               <button type="button" class="gm-chip" id="gm-tab-time" role="tab" aria-selected="false">Spielzeit</button>
               <button type="button" class="gm-chip" id="gm-tab-saves" role="tab" aria-selected="false">Spielstände</button>
               <button type="button" class="gm-chip" id="gm-tab-pkg" role="tab" aria-selected="false">Pakete</button>
+              <button type="button" class="gm-chip" id="gm-tab-upd" role="tab" aria-selected="false">Updates</button>
               <button type="button" class="gm-chip" id="gm-tab-p4m" role="tab" aria-selected="false">PS4 von USB</button>
               <button type="button" class="gm-chip" id="gm-tab-bk" role="tab" aria-selected="false">Sicherungen</button>
               <button type="button" class="gm-chip" id="gm-tab-hist" role="tab" aria-selected="false">Verlauf</button>
@@ -274,6 +275,19 @@
                   </select>
                 </label>
               </div>
+            </article>
+
+            <!-- Dasselbe Spiel in mehreren Abbildern (dupimg.c, nach „Set aside“ von exFAT2AMPR, V-10); nur sichtbar, wenn es welche gibt -->
+            <article class="card" id="dup-card" hidden>
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pad"/></svg></span><div class="ck-text"><h2>Doppelte Abbilder</h2>
+                  <p class="sub" id="dup-sub"></p></div></div>
+                <div class="row-gap"><button class="btn ghost" id="dup-reload" type="button">Neu suchen</button></div>
+              </div>
+              <p class="muted dup-intro">Liegt ein Spiel in mehr als einem Abbild auf den Laufwerken, nimmt ShadowMountPlus mal das eine, mal das andere.
+                „Beiseitelegen“ benennt ein Abbild in <code>….off</code> um; ShadowMountPlus nimmt es dann nicht mehr. Gelöscht wird nichts,
+                „Zurückholen“ macht es rückgängig.</p>
+              <div id="dup-list"></div>
             </article>
 
             <!-- Laufende oder gerade beendete Kopie; ein Klick öffnet ihr Fenster (app.js) -->
@@ -438,6 +452,53 @@
           </div>
 
           <!-- PS4Mount in der App (ps4m_core.c, GPL-3.0, gasb07): PS4-Fake-PKGs vom USB-Laufwerk ohne Installation -->
+          <!-- Spiel-Updates von den offiziellen Update-Servern (updates.c, nach PatchDL 0.3.0 von Knutwurst) -->
+          <div id="gm-pane-upd" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pad"/></svg></span><div class="ck-text"><h2>Spiel-Updates</h2><p class="sub" id="upd-sub">wird gelesen …</p></div></div>
+                <div class="row-gap">
+                  <label class="xswitch" for="upd-on" title="Erst wenn das eingeschaltet ist, fragt die App die Update-Server nach Updates.">
+                    <span>Einschalten</span>
+                    <span class="switch"><input type="checkbox" id="upd-on"><i></i></span>
+                  </label>
+                  <button class="btn ghost" id="upd-check" type="button">Nach Updates suchen</button>
+                  <button class="btn primary" id="upd-all" type="button">Alle aktualisieren</button>
+                </div>
+              </div>
+              <p class="muted upd-intro">Lädt das offizielle Update jedes PS5- und PS4-Spiels direkt von den offiziellen Update-Servern und installiert es. Nur für Spiele
+                von Disc oder aus dem PlayStation Store (offiziell signiert). Spiele über ShadowMountPlus, Fake-PKGs und Homebrew bleiben,
+                wie sie sind. Angeboten werden nur Updates, die auf dieser Firmware laufen. Die App erreicht die Update-Server über eigene
+                DNS-Anfragen (Cloudflare, Google, Quad9) und ändert nichts an den DNS-Einstellungen der Konsole; eine Sperre gegen
+                System-Updates bleibt also bestehen.</p>
+              <div class="pt-note" id="upd-note" hidden></div>
+            </article>
+            <div class="upd-job" id="upd-job" hidden></div>
+            <article class="card">
+              <div class="card-head">
+                <div class="gm-chips" role="group" aria-label="Auswahl">
+                  <button type="button" class="gm-chip active" data-upd-f="">Alle</button>
+                  <button type="button" class="gm-chip" data-upd-f="update">Mit Update</button>
+                  <button type="button" class="gm-chip" data-upd-f="oldfw">Ältere Firmware</button>
+                  <button type="button" class="gm-chip" data-upd-f="other">Ohne Updates</button>
+                </div>
+              </div>
+              <div id="upd-list"></div>
+            </article>
+            <article class="card">
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gear"/></svg></span><div class="ck-text"><h2>Einstellungen</h2><p class="sub">gelten sofort</p></div></div></div>
+              <div class="p4m-set">
+                <label class="p4m-field"><span>Gleichzeitige Verbindungen je Download (1 bis 16)</span>
+                  <select id="upd-conns"></select></label>
+                <label class="xswitch" for="upd-del"><span>Paket nach erfolgreicher Installation löschen</span>
+                  <span class="switch"><input type="checkbox" id="upd-del"><i></i></span></label>
+                <p class="muted upd-hint">Gelöscht wird erst, wenn das Spiel die neue Version meldet. Pakete, die noch im Ordner
+                  <code>/data/PS5-Cooling-Center/updates</code> liegen:</p>
+                <div id="upd-pkgs"></div>
+              </div>
+            </article>
+          </div>
+
           <div id="gm-pane-p4m" hidden>
             <article class="card">
               <div class="card-head">
@@ -468,6 +529,11 @@
                   <span class="switch"><input type="checkbox" id="p4m-batch"><i></i></span></label>
                 <label class="p4m-field"><span>Spiele pro Gruppe</span>
                   <input type="number" id="p4m-size" min="1" max="50" step="1"></label>
+                <label class="xswitch" for="p4m-fast"><span>Neue Spiele schneller anmelden (verbirgt dabei kurz die anderen Spiele)</span>
+                  <span class="switch"><input type="checkbox" id="p4m-fast"><i></i></span></label>
+                <p class="muted p4m-fasthint">Die Anmeldung dauert sonst für jedes Spiel in der Bibliothek etwa eine Dreiviertelsekunde, auch für die schon angemeldeten.
+                  Mit dieser Wahl zeigt die Konsole der Anmeldung nur die neuen Spiele (bis zu zwei Minuten lang), danach wieder alle. Das geschieht nur, wenn kein Spiel läuft.
+                  Ausgeschaltet ist es die bisherige, langsamere Weise.</p>
                 <label class="p4m-field"><span>Ordner mit PKG-Dateien (einer pro Zeile, „/“ = oberste Ebene des Laufwerks)</span>
                   <textarea id="p4m-paths" rows="3" spellcheck="false"></textarea></label>
                 <div class="cp-actions"><button type="button" class="btn primary" id="p4m-save">Einstellungen speichern</button></div>
@@ -600,6 +666,28 @@
             </header>
             <p class="pl-where">Ordner auf der Konsole: <code id="pl-dir">/data/PS5-Cooling-Center/payloads</code></p>
             <div class="pl-grid" id="pl-stored"><p class="muted">wird gelesen …</p></div>
+          </section>
+
+          <!-- Payloads herunterladen (paystore.c, 19.10.2026): die Liste des Payload Managers von itsPLK -->
+          <section class="pl-sec" aria-labelledby="pl-h-store">
+            <header class="pl-sec-head">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M4.5 17.5v2h15v-2"/></svg>
+              <h3 id="pl-h-store">Payloads herunterladen</h3>
+              <span class="pl-count" id="pl-count-store">–</span>
+              <span class="pl-head-actions">
+                <button class="btn" id="ps-refresh" type="button">Liste laden</button>
+              </span>
+            </header>
+            <p class="pl-where">Dieselbe Liste wie im Payload Manager von itsPLK (<code>ps5-payloads-mirror</code>, jeden Tag
+              aktualisiert): die neueste Fassung jedes Payloads. Jede Datei wird vor dem Speichern mit ihrer SHA-256-Prüfsumme aus der
+              Liste verglichen und landet im Ordner oben. Die App geht nur dafür ins Internet, und erst nach „Liste laden“.</p>
+            <p class="pl-badtxt ps-err" id="ps-err" hidden></p>
+            <div class="gm-tools ps-tools" id="ps-tools" hidden>
+              <input type="search" id="ps-q" placeholder="Name oder Beschreibung" autocomplete="off" spellcheck="false" aria-label="Payloads durchsuchen">
+              <div class="gm-chips" role="group" aria-label="Kategorie" id="ps-cats"></div>
+            </div>
+            <div class="ps-job" id="ps-job" hidden></div>
+            <div class="pl-grid" id="ps-list"><p class="muted">wird gelesen …</p></div>
           </section>
 
           <section class="pl-sec" aria-labelledby="pl-h-usb">
@@ -1835,6 +1923,16 @@
                 <p>PS4Mount: Vorlage und Code für den Reiter „PS4 von USB“, PS4-Spiele (Fake-PKG) vom USB-Laufwerk ohne Installation. Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/gasb07/ps4mount" target="_blank" rel="noopener noreferrer">ps4mount</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <span class="cr-pic cr-initials" aria-hidden="true">kw</span>
+              <div class="cr-text">
+                <b>Knutwurst</b> <a class="cr-login" href="https://github.com/knutwurst" target="_blank" rel="noopener noreferrer">@knutwurst</a>
+                <p>PatchDL: Vorbild für den Reiter „Updates“, offizielle Spiel-Updates von den Update-Servern laden, prüfen und installieren. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/knutwurst/ps5-patchdl" target="_blank" rel="noopener noreferrer">ps5-patchdl</a>
                 </div>
               </div>
             </article>

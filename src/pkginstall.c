@@ -143,6 +143,8 @@ sys_code(int c) { return (c <= -1 && c >= -2100) ? 0 : c; }
 static int
 active_locked(void) { return g_job.state >= J_PREPARE && g_job.state <= J_FINISH; }
 
+static void keep_result_locked(void);   /* further down, beside the result functions */
+
 int
 ps5tm_pkginst_busy(void) {
   pthread_mutex_lock(&g_lock);
@@ -1071,6 +1073,18 @@ helper_start(helper_t *h, char *why, size_t why_len, int keep_log) {
     if(strays || turned_away) PS5TM_WARN("pkg_helper_strays", "Am Anschluss des Installationshelfers: %d Verbindung(en) ohne Meldung oder mit fremdem Inhalt, %d mit falscher Kennung.", strays, turned_away);
     dump_helper_log();
     helper_close(h);
+    /* A helper that never said who it is cannot be ended by its number (it sends that only once it is connected): if it
+       hangs in the library's start-up, each retry would leave one more behind (review 19.10.2026). It names itself
+       "ps5cc-inst.elf" as its first act, and only one installation runs at a time, so a process of that name now is
+       one of ours that got stuck: it goes. */
+    if(!answered)
+      for(int i = 0; i < 4; i++) {
+        int stray = ps5tm_procmgr_pid_by_name("ps5cc-inst.elf");
+        if(stray <= 1 || stray == (int)getpid()) break;
+        PS5TM_WARN("pkg_helper_stuck", "Ein Installationshelfer (PID %d) hing beim Start und wird beendet.", stray);
+        kill((pid_t)stray, SIGKILL);
+        usleep(200 * 1000);
+      }
     if(turned_away) snprintf(why, why_len, "Der Installationshelfer hat sich mit der falschen Kennung gemeldet.");
     else if(answered) snprintf(why, why_len, "Der Installationshelfer hat sich nicht richtig gemeldet.");
     else snprintf(why, why_len, "Der Installationshelfer hat sich nicht gemeldet: Entweder wurde er nicht gestartet, oder die Installationsbibliothek der Konsole hängt schon beim Start. Einzelheiten stehen in %s.", "pkginst-helper.log");
@@ -1657,6 +1671,7 @@ start_impl(const char *id, char *err, size_t err_len, int *transient, unsigned *
     if(transient) *transient = 1;
     return 409;
   }
+  keep_result_locked();
   memset(&g_job, 0, sizeof(g_job));
   g_job.seq = ++g_job_seq;
   g_job.state = J_PREPARE;
@@ -1718,10 +1733,48 @@ ps5tm_pkginst_start_q(const char *id, char *err, size_t err_len, int *transient,
 }
 
 /* How the last job ended, for the queue: 0 still going (or never run), 1 done, 2 failed, 3 stopped. */
+/* The results of the last few jobs, by number: a new start clears g_job, and the queue or the game updates may only get
+   to read their result after someone else started the next package (review 19.10.2026). */
+#define DONE_KEEP 8
+static ps5tm_pkginst_result_t g_done[DONE_KEEP];
+static unsigned g_done_next;
+
+static void fill_result_locked(ps5tm_pkginst_result_t *r);
+
+static void
+keep_result_locked(void) {
+  if(!g_job.seq || (g_job.state != J_DONE && g_job.state != J_FAILED && g_job.state != J_CANCELLED)) return;
+  fill_result_locked(&g_done[g_done_next % DONE_KEEP]);
+  g_done_next++;
+}
+
+int
+ps5tm_pkginst_result_of(unsigned seq, ps5tm_pkginst_result_t *r) {
+  memset(r, 0, sizeof(*r));
+  int rc = -1;
+  pthread_mutex_lock(&g_lock);
+  if(g_job.seq == seq) {
+    fill_result_locked(r);
+    rc = r->state != 0 ? 1 : 0;
+  } else {
+    for(unsigned i = 0; i < DONE_KEEP; i++)
+      if(g_done[i].seq == seq && seq) { *r = g_done[i]; rc = 1; break; }
+  }
+  pthread_mutex_unlock(&g_lock);
+  return rc;
+}
+
 void
 ps5tm_pkginst_result(ps5tm_pkginst_result_t *r) {
   memset(r, 0, sizeof(*r));
   pthread_mutex_lock(&g_lock);
+  fill_result_locked(r);
+  pthread_mutex_unlock(&g_lock);
+}
+
+static void
+fill_result_locked(ps5tm_pkginst_result_t *r) {
+  memset(r, 0, sizeof(*r));
   r->seq = g_job.seq;
   switch(g_job.state) {
   case J_DONE:      r->state = 1; break;
@@ -1735,7 +1788,6 @@ ps5tm_pkginst_result(ps5tm_pkginst_result_t *r) {
   r->error_code = g_job.error_code;
   snprintf(r->error, sizeof(r->error), "%s", g_job.error);
   snprintf(r->note, sizeof(r->note), "%s", g_job.note);
-  pthread_mutex_unlock(&g_lock);
 }
 
 cJSON *

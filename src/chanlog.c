@@ -52,7 +52,7 @@ void
 ps5tm_chanlog_sample(const ps5tm_sensors_t *s) {
   if(!s) return;
 
-  uint64_t now = ps5tm_now_ms();
+  uint64_t now = ps5tm_mono_ms();   /* intervals and the time axis: a clock jump must not bend them */
 
   pthread_mutex_lock(&g_lock);
 

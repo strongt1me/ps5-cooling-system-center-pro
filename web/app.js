@@ -89,7 +89,27 @@
 
   const $  = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
-  const txt = (sel, v) => { const n = $(sel); if (n) n.textContent = v; };
+  /* Schreibt nur, wenn sich etwas geändert hat (Durchsicht 19.10.2026): Die Statusabfrage setzt jede Sekunde Dutzende
+     Texte, meist dieselben; jedes Schreiben löste Layout und in anderen Sprachen die Übersetzung erneut aus. __t ist der
+     zuletzt gesetzte Wert, __tc der Text, der danach dastand (nach einer Übersetzung ein anderer) — so fällt auch auf,
+     wenn jemand den Knoten zwischendurch anders beschrieben hat. */
+  const txt = (sel, v) => {
+    const n = $(sel);
+    if (!n) return;
+    if (n.__t === v) {
+      if (n.__tc === undefined) { n.__tc = n.textContent; return; }
+      if (n.__tc === n.textContent) return;
+    }
+    n.__t = v;
+    n.__tc = undefined;
+    n.textContent = v;
+  };
+  /* dasselbe für ganze Blöcke: neu gebaut wird nur bei geändertem HTML */
+  const setHtml = (el, html) => {
+    if (!el || el.__h === html) return;
+    el.__h = html;
+    el.innerHTML = html;
+  };
 
   /* ── Hilfen ─────────────────────────────────────────────────────── */
 
@@ -1602,7 +1622,7 @@
         fan: F.measured_valid ? F.measured_duty_pct : null
       });
       if (state.hist.length > HISTORY) state.hist.shift();
-      renderCharts();
+      if (state.page === "cooling") renderCharts();   /* the other pages only collect; switching to Kühlung draws */
     }
 
     /* Prozessor.
@@ -1622,7 +1642,7 @@
       tot.textContent = L.cpu_valid ? `${Math.round(pct)}%` : "--";
     }
 
-    /* Takt: bevorzugt aus Sonys Energiezustands-Tabelle, weil die alle acht
+    /* Takt: bevorzugt aus der Energiezustands-Tabelle des Systems, weil die alle acht
        Kerne einzeln nennt. sceKernelGetCpuFrequency liefert nur eine Zahl —
        gemessen 800 MHz, während vier Kerne auf 3200 liefen. Diese eine Zahl
        war nicht falsch, aber irreführend.
@@ -1662,9 +1682,9 @@
     txt("#cpu-sub", meta.join(" · ") || "Die Konsole meldet keinen Takt.");
 
     const coreBox = $("#cores");
-    if (coreBox) {
+    if (coreBox && state.page === "cooling") {
       const cores = L.cores || [];
-      coreBox.innerHTML = cores.length
+      setHtml(coreBox, cores.length
         ? cores.map((v, i) => {
             /* −1 heißt „nicht gemessen". Eine leere Spur mit Strich sagt das
                ehrlich; eine 0 wäre eine erfundene Zahl zwischen echten. */
@@ -1681,7 +1701,7 @@
               <u>${esc(v)} %</u>
             </div>`;
           }).join("")
-        : `<p class="muted">Die Konsole meldet keine Werte je Kern.</p>`;
+        : `<p class="muted">Die Konsole meldet keine Werte je Kern.</p>`);
     }
 
     /* Was übrig bleibt: alles, was keine Prozessorauslastung ist. */
@@ -1717,8 +1737,8 @@
     if (fps !== null)
       cells.push(`<div class="sensor"><span>Bilder pro Sekunde</span>
         <b>${Math.round(fps)}<em>fps</em></b></div>`);
-    $("#sensor-grid").innerHTML = cells.join("") ||
-      `<p class="muted">Keine weiteren Sensoren verfügbar.</p>`;
+    if (state.page === "cooling")
+      setHtml($("#sensor-grid"), cells.join("") || `<p class="muted">Keine weiteren Sensoren verfügbar.</p>`);
     updateProbeLiveState();
 
     /* Regelzustand */
@@ -1882,7 +1902,7 @@
       for (let i = 1; i < numberedSteps.length; i++) {
         lines.push(`<span class=\"reason-tag info\">${i + 1}</span> ${esc(numberedSteps[i].replace(/^\d+\.\s*/, ""))}`);
       }
-      adviceEl.innerHTML = lines.join("<br>");
+      setHtml(adviceEl, lines.join("<br>"));
 
       if (state.lastFanDiagLevel !== sev) {
         if (state.lastFanDiagLevel !== null)
@@ -1974,12 +1994,13 @@
 
       /* Only the two rows built above from fixed markup carry HTML; the rest
          includes the console's own message strings. */
-      liveHealth.innerHTML = liveRows
-        .map(([k, v]) => {
-          if (k === "Ampelstatus" || k === "Ampelgrund")
-            return `<div><span>${k}</span><b class="${k === "Ampelgrund" ? "multiline" : ""}">${v}</b></div>`;
-          return `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`;
-        }).join("");
+      if (state.page === "system")
+        setHtml(liveHealth, liveRows
+          .map(([k, v]) => {
+            if (k === "Ampelstatus" || k === "Ampelgrund")
+              return `<div><span>${k}</span><b class="${k === "Ampelgrund" ? "multiline" : ""}">${v}</b></div>`;
+            return `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`;
+          }).join(""));
 
       const warnNote = $("#warning-countdown-note");
       if (warnNote) {
@@ -2015,7 +2036,7 @@
             state.lastAmpelLevel, ampelLevel);
         state.lastAmpelLevel = ampelLevel;
       }
-      renderDiagEvents();
+      if (state.page === "system") renderDiagEvents();
     }
 
     /* Verbindung */
@@ -2415,7 +2436,157 @@
     renderPayloadFiles(d);
   };
 
-  const loadPayloadsPage = () => { loadPayloads(); loadPayloadFiles(); loadProfiles(); };
+  /* ── Payloads herunterladen (paystore.c, 19.10.2026) ──────────────────────────────────────────────
+     Die Liste des Payload Managers von itsPLK. Beim Öffnen der Seite fragt die App nur dann im Internet nach, wenn schon einmal
+     eine Liste geladen wurde und sie älter als drei Stunden ist (?refresh=1); das erste Mal lädt erst „Liste laden“. */
+  const ps = { data: null, q: "", cat: "", timer: 0, sig: "" };
+  const PS_CAT = { "Utilities & Tools": "Werkzeuge", "Networking & Servers": "Netzwerk & Server",
+                   "System & Jailbreak": "System & Jailbreak", "Loaders": "Lader" };
+  const psCat = (c) => PS_CAT[c] || c || "Sonstiges";
+  const psRunning = () => !!(ps.data && ps.data.job && ps.data.job.state === "running");
+  const psLoad = async (mode) => {
+    try { ps.data = await api(`/api/v1/paystore?refresh=${mode || 0}`, { timeoutMs: 60000 }); }
+    catch (e) { ps.data = ps.data || null; txt("#pl-count-store", "nicht verfügbar"); $("#ps-list").innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+    psRender();
+    psSync();
+  };
+  const psSync = () => {
+    clearTimeout(ps.timer);
+    ps.timer = 0;
+    if (state.page === "payloads" && !document.hidden && psRunning())
+      ps.timer = setTimeout(async () => {
+        const was = psRunning();
+        await psLoad(0);
+        if (was && !psRunning()) {
+          const j = ps.data.job;
+          if (j.state === "done") { toast(`${j.name} geladen.`); loadPayloadFiles(true); }
+          else if (j.state === "failed") toast(j.error || "Der Download ist gescheitert.", "error");
+        }
+      }, 700);
+  };
+  const psPost = async (body) => {
+    try {
+      const r = await api("/api/v1/paystore", { method: "POST", body: JSON.stringify(body), timeoutMs: 60000 });
+      if (r.message) toast(r.message);
+      return true;
+    } catch (e) {
+      /* ein fremdes File gleichen Namens: der zweite Klick ersetzt es */
+      if (e.code === "paystore_conflict" && body.action === "install") ps.force = body.id;
+      toast(e.message, "error");
+      return false;
+    } finally {
+      await psLoad(0);
+      if (body.action === "delete" || body.action === "install") loadPayloadFiles(true);
+    }
+  };
+  const psRender = () => {
+    const d = ps.data;
+    if (!d) return;
+    const items = Array.isArray(d.items) ? d.items : [];
+    const err = $("#ps-err");
+    err.hidden = !d.error;
+    err.textContent = d.error || "";
+    $("#ps-refresh").textContent = d.loaded ? "Liste aktualisieren" : "Liste laden";
+    $("#ps-refresh").disabled = !!d.fetching;
+    const age = d.age_s >= 0 ? (d.age_s < 90 ? "gerade geladen" : d.age_s < 5400 ? `Stand vor ${Math.round(d.age_s / 60)} Min.`
+      : d.age_s < 172800 ? `Stand vor ${Math.round(d.age_s / 3600)} Std.` : `Stand vor ${Math.round(d.age_s / 86400)} Tagen`) : "";
+    const upd = items.filter((i) => i.update).length;
+    txt("#pl-count-store", d.loaded ? [plCount(items.length, "Payload", "Payloads"), upd ? `${upd} mit Update` : "", age].filter(Boolean).join(" · ") : "noch nicht geladen");
+    $("#ps-tools").hidden = !d.loaded;
+
+    /* Kategorien als Chips; „Geladen“ zeigt nur, was schon im Ordner liegt */
+    const cats = Array.from(new Set(items.map((i) => psCat(i.category)))).sort();
+    const chips = [["", "Alle"], ["@mine", "Geladen"], ["@upd", "Mit Update"]].concat(cats.map((c) => [c, c]));
+    const chipSig = JSON.stringify(chips) + ps.cat;
+    if (chipSig !== ps.chipSig) {
+      ps.chipSig = chipSig;
+      $("#ps-cats").innerHTML = chips.map(([k, l]) =>
+        `<button type="button" class="gm-chip${ps.cat === k ? " active" : ""}" data-ps-cat="${esc(k)}">${esc(l)}</button>`).join("");
+    }
+
+    const job = d.job || {};
+    const jb = $("#ps-job");
+    if (job.state === "running") {
+      const pc = job.total > 0 ? Math.min(100, Math.floor(job.done / job.total * 100)) : 0;
+      jb.hidden = false;
+      setHtml(jb, `<div class="ps-job-row"><b>${esc(job.name)} wird geladen</b><span>${job.total > 0 ? `${pc} % · ${plSize(job.done)} von ${plSize(job.total)}` : plSize(job.done)}</span>
+        <button type="button" class="btn" data-ps-cancel>Abbrechen</button></div>
+        <div class="cp-bar" role="progressbar" aria-label="Fortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>`);
+    } else {
+      jb.hidden = true;
+      jb.__h = "";
+    }
+
+    if (!d.loaded) {
+      setHtml($("#ps-list"), `<p class="muted">Noch keine Liste geladen. „Liste laden“ holt sie einmal von GitHub
+        (rund 20 KB); danach steht sie auch ohne Internet hier.</p>`);
+      return;
+    }
+    const q = ps.q.trim().toLowerCase();
+    const shown = items.filter((i) => {
+      if (ps.cat === "@mine" && !i.installed) return false;
+      if (ps.cat === "@upd" && !i.update) return false;
+      if (ps.cat && ps.cat[0] !== "@" && psCat(i.category) !== ps.cat) return false;
+      return !q || `${i.name} ${i.description} ${i.filename}`.toLowerCase().includes(q);
+    });
+    const html = shown.length ? shown.map((i) => {
+      const ins = i.installed;
+      const busy = job.state === "running" && job.id === i.id;
+      const any = job.state === "running";
+      const state = ins ? (i.update ? `Update: ${esc(ins.version)} → ${esc(i.version)}` : `geladen · ${esc(ins.version)}`) : "";
+      const line = [psCat(i.category), i.last_update ? `vom ${i.last_update}` : "", i.filename].filter(Boolean).join(" · ");
+      const acts = (ins ? `<button class="btn pl-act" data-ps-start="${esc(i.id)}">${PL_SVG.play}Starten</button>` : "")
+        + (!ins || i.update
+          ? `<button class="btn ${ins ? "primary " : ""}pl-act" data-ps-install="${esc(i.id)}"${any ? " disabled" : ""}>${busy ? "lädt …" : ps.force === i.id ? "Ersetzen" : ins ? "Aktualisieren" : "Herunterladen"}</button>`
+          : "")
+        + (ins ? `<button class="pl-trash" data-ps-del="${esc(i.id)}" title="Aus dem Ordner löschen" aria-label="${esc(i.name)} löschen"${busy ? " disabled" : ""}>${PL_SVG.trash}<span class="pl-trash-ask">Wirklich löschen?</span></button>` : "");
+      return `<div class="pl-card ps-card${i.update ? " ps-upd" : ""}${ins ? " ps-mine" : ""}">
+        <div class="pl-ico ps-ico" aria-hidden="true">${esc((i.name.match(/[A-Za-z0-9]/g) || ["?"]).slice(0, 2).join("").toUpperCase())}</div>
+        <div class="pl-info">
+          <b class="pl-name" title="${esc(i.name)}">${esc(i.name)} <span class="pl-ver">${esc(i.version)}</span></b>
+          ${state ? `<span class="${i.update ? "pl-badtxt" : "pl-live"}">${state}</span>` : i.name_taken ? `<span class="pl-badtxt">Eine Datei gleichen Namens liegt schon im Ordner</span>` : ""}
+          <small class="ps-desc" data-no-i18n title="${esc(i.description)}">${esc(i.description)}</small>
+          <small class="pl-path" title="${esc(line)}">${esc(line)}</small>
+        </div>
+        <div class="pl-actions">${acts}</div>
+      </div>`;
+    }).join("") : `<p class="muted">Nichts in dieser Auswahl.</p>`;
+    setHtml($("#ps-list"), html);
+  };
+  $("#ps-refresh").addEventListener("click", async () => {
+    $("#ps-refresh").disabled = true;
+    txt("#pl-count-store", "wird geladen …");
+    await psPost({ action: "refresh" });
+  });
+  $("#ps-q").addEventListener("input", (e) => { ps.q = e.target.value; psRender(); });
+  $("#ps-cats").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ps-cat]");
+    if (!b) return;
+    ps.cat = b.dataset.psCat;
+    psRender();
+  });
+  $("#ps-job").addEventListener("click", (e) => { if (e.target.closest("[data-ps-cancel]")) psPost({ action: "cancel" }); });
+  $("#ps-list").addEventListener("click", async (e) => {
+    const ins = e.target.closest("[data-ps-install]"), st = e.target.closest("[data-ps-start]"), del = e.target.closest("[data-ps-del]");
+    if (ins && !ins.disabled) {
+      const body = { action: "install", id: ins.dataset.psInstall };
+      if (ps.force === body.id) { body.force = true; ps.force = ""; }
+      ins.disabled = true;
+      await psPost(body);
+    } else if (st) {
+      await psPost({ action: "start", id: st.dataset.psStart });
+    } else if (del && !del.disabled) {
+      /* zwei Klicks wie bei den gespeicherten Payloads */
+      if (!del.classList.contains("armed")) {
+        del.classList.add("armed");
+        setTimeout(() => del.classList.remove("armed"), 8000);
+        return;
+      }
+      await psPost({ action: "delete", id: del.dataset.psDel });
+    }
+  });
+
+  const loadPayloadsPage = () => { loadPayloads(); loadPayloadFiles(); loadProfiles(); psLoad(1); };
 
   const plPost = (route, body, timeoutMs) =>
     api(`/api/v1/payload-files/${route}`, { method: "POST", body: JSON.stringify(body), timeoutMs });
@@ -3782,20 +3953,25 @@
       loadQr().then((ok) => { if (ok) qrKey = qrNow; }).finally(() => { qrBusy = false; });
     }
 
+    /* Away from the system page only the header, the footer and the power history need /system; the three other
+       questions (one of them reads the drives on the console) and the lists wait until the page is shown
+       (review 19.10.2026: all four ran every 10 s on every page). */
+    const onSys = state.page === "system" || !state.sysOnce;
+
     let diag = null;
-    try { diag = await api("/api/v1/controller/diag"); } catch {}
-
     let chan = null;
-    try { chan = await api("/api/v1/channels"); } catch {}
-
     let drive = null;
     let driveErr = "";
     let driveOff = false;
-    try { drive = await api("/api/v1/drives"); }
-    catch (e) {
-      driveErr = e.message || "nicht verfügbar";
-      /* The console answers 409 while the probe is switched off. */
-      driveOff = e.code === "drive_probe_disabled";
+    if (onSys) {
+      try { diag = await api("/api/v1/controller/diag"); } catch {}
+      try { chan = await api("/api/v1/channels"); } catch {}
+      try { drive = await api("/api/v1/drives"); }
+      catch (e) {
+        driveErr = e.message || "nicht verfügbar";
+        /* The console answers 409 while the probe is switched off. */
+        driveOff = e.code === "drive_probe_disabled";
+      }
     }
 
     txt("#console-model", sys.model || "PlayStation 5");
@@ -3807,6 +3983,9 @@
     txt("#sy-model", sys.model || "--");
     txt("#sy-fw", sys.firmware_version || "--");
     txt("#sy-uptime", sys.uptime_sec ? duration(sys.uptime_sec) : "--");
+
+    if (!onSys) { capturePowerHistory(sys, state.status); return; }
+    state.sysOnce = true;
 
     const rows = [
       ["Modell", sys.model || "--"],
@@ -4670,7 +4849,12 @@
     let s = null;
     try { s = await api("/api/v1/status"); } catch { s = null; }
     if (s) {
-      /* Ein Fehler beim Zeichnen ist keine verlorene Verbindung: er wird gemeldet, die Seite bleibt „verbunden“. */
+      /* Ein Fehler beim Zeichnen ist keine verlorene Verbindung: er wird gemeldet, die Seite bleibt „verbunden“.
+         Deshalb wird „verbunden“ vor dem Zeichnen gesetzt (Durchsicht 19.10.2026: ein Fehler im Zeichnen ließ die
+         Anzeige nach einem Ausfall rot stehen). */
+      const conn = $("#conn");
+      conn.classList.add("on"); conn.classList.remove("off");
+      document.body.classList.remove("offline");
       try {
         renderStatus(s);
         evaluateMonitorAlert(s);
@@ -6010,6 +6194,9 @@
     } catch (e) {
       gm.error = e.message || "nicht verfügbar";
     }
+    /* Im Minutentakt ändert ein Fehlschlag bei vorhandener Liste nichts: die alte bleibt stehen, ohne Neubau, und die
+       Signatur bleibt erhalten (sonst folgte nach der Erholung noch ein Neubau; Durchsicht 19.10.2026). */
+    if (quiet && !sig && gm.loaded && gm.list.length) { gcLoad(); return; }
     const same = !!quiet && gm.loaded && sig !== "" && sig === gm.sig;
     gm.sig = sig;
     gm.loaded = true;
@@ -6155,7 +6342,73 @@
     const b = e.currentTarget;
     b.disabled = true;
     try { await loadGames(); } finally { b.disabled = false; }
+    loadDup();
   });
+
+  /* ── Doppelte Abbilder (18.10.2026, nach „Set aside“ von exFAT2AMPR 1.95, V-10) ──
+   * Dasselbe Spiel in zwei Abbildern lässt ShadowMountPlus zwischen ihnen hin und her
+   * wechseln. Die Konsole sucht die Abbilder (dupimg.c); die Karte erscheint nur, wenn es
+   * doppelte oder beiseitegelegte gibt. Gesucht wird beim ersten Öffnen und mit „Neu suchen“,
+   * nicht im Takt. Beiseitelegen und Zurückholen wollen zwei Klicks wie die anderen
+   * Knöpfe, die etwas verändern. */
+  const dup = { data: null, busy: false, armed: "", armTimer: 0, armedAt: 0, loaded: false };
+
+  const dupRender = () => {
+    const card = $("#dup-card");
+    const d = dup.data;
+    const groups = (d && d.groups) || [], aside = (d && d.aside) || [];
+    card.hidden = !groups.length && !aside.length;
+    if (card.hidden) return;
+    txt("#dup-sub", groups.length ? `${groups.length} Spiel(e) in mehr als einer Quelle` : "keine doppelten Abbilder");
+    const btn = (path, undo, label, disabled, why) => {
+      const armed = dup.armed === path;
+      return `<button type="button" class="btn${armed ? " danger" : " ghost"}" data-dup-path="${esc(path)}" data-dup-undo="${undo ? 1 : 0}"
+        ${disabled ? `disabled title="${esc(why)}"` : ""}>${armed ? "Wirklich? Nochmal klicken" : label}</button>`;
+    };
+    const rows = groups.map((g) => `<div class="dup-group"><b>${esc(g.name || g.title_id)} <span class="muted">${esc(g.title_id)}</span></b>
+      ${g.sources.map((s) => `<div class="dup-src"><div><code>${esc(s.path)}</code>
+          <span>${s.folder ? `<span class="badge quiet">Ordner</span>` : `<span class="badge quiet">${esc(bytes(s.size))}</span>`}${s.smp_uses ? `<span class="badge ok">nimmt ShadowMountPlus gerade</span>` : ""}${s.mounted ? `<span class="badge warn">eingehängt</span>` : ""}</span></div>
+          ${s.folder ? "" : btn(s.path, false, "Beiseitelegen", s.mounted, "ShadowMountPlus hat es gerade eingehängt.")}</div>`).join("")}</div>`).join("");
+    const back = aside.length ? `<div class="dup-group"><b>Beiseitegelegt</b>
+      ${aside.map((a) => `<div class="dup-src"><div><code>${esc(a.path)}</code>
+          <span><span class="badge quiet">${esc(bytes(a.size))}</span>${a.title_id ? `<span class="badge quiet">${esc(a.title_id)}</span>` : ""}</span></div>
+          ${btn(a.path, true, "Zurückholen", false, "")}</div>`).join("")}</div>` : "";
+    $("#dup-list").innerHTML = rows + back;
+  };
+
+  const loadDup = async () => {
+    if (dup.busy) return;
+    dup.busy = true;
+    const b = $("#dup-reload");
+    b.disabled = true;
+    try { dup.data = await api("/api/v1/library/duplicates"); dup.loaded = true; }
+    catch (e) { if (dup.data) toast(e.message, "error"); }
+    finally { dup.busy = false; b.disabled = false; }
+    dupRender();
+  };
+
+  $("#dup-reload").addEventListener("click", loadDup);
+  $("#dup-list").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-dup-path]");
+    if (!b || b.disabled) return;
+    const path = b.dataset.dupPath, undo = b.dataset.dupUndo === "1";
+    clearTimeout(dup.armTimer);
+    if (dup.armed !== path) {
+      dup.armed = path;
+      dup.armedAt = performance.now();
+      dup.armTimer = setTimeout(() => { dup.armed = ""; dupRender(); }, 10000);
+      dupRender();
+      return;
+    }
+    if (performance.now() - dup.armedAt < 800) return;                      /* ein Doppelklick ist kein „Ja“ */
+    dup.armed = "";
+    try {
+      const r = await api("/api/v1/library/duplicates", { method: "POST", body: JSON.stringify({ path, undo }) });
+      if (r.message) toast(r.message);
+    } catch (err) { toast(err.message, "error"); }
+    await loadDup();
+  });
+
   $("#gm-sort").addEventListener("change", (e) => { gm.sort = e.target.value; renderGames(); });
   /* Nur die Auswahl dieser Seite: Die Reiter der Protokollseite und die Voreinstellungen
      des Kernel-Logs tragen dieselbe Klasse, und ein Klick darauf nahm der Spieleliste
@@ -6459,9 +6712,10 @@
     $("#gm-pane-saves").hidden = which !== "saves";
     $("#gm-pane-pkg").hidden   = which !== "pkg";
     $("#gm-pane-p4m").hidden   = which !== "p4m";
+    $("#gm-pane-upd").hidden   = which !== "upd";
     $("#gm-pane-bk").hidden    = which !== "bk";
     $("#gm-pane-hist").hidden  = which !== "hist";
-    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["p4m", "#gm-tab-p4m"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
+    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["upd", "#gm-tab-upd"], ["p4m", "#gm-tab-p4m"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
       const b = $(sel);
       b.classList.toggle("active", which === k);
       b.setAttribute("aria-selected", which === k ? "true" : "false");
@@ -6470,12 +6724,14 @@
     if (which === "saves") loadSaves();
     if (which === "pkg") loadPackages();
     if (which === "p4m") { loadP4m(); loadP4mLog(); }
+    if (which === "upd") loadUpd();
     if (which === "bk") loadBackups();
     if (which === "hist") loadHistory2();
     syncPlaytime();
     svSync();
     pkSync();
     if (typeof p4mSync === "function") p4mSync();
+    if (typeof updSync === "function") updSync();
   };
   $("#gm-tab-lib").addEventListener("click", () => ptSelectTab("lib"));
   $("#gm-tab-time").addEventListener("click", () => ptSelectTab("time"));
@@ -6566,6 +6822,7 @@
       p4m.cfgShown = true;
       $("#p4m-dlc").checked = !!d.config.dlc;
       $("#p4m-batch").checked = !!d.config.batch;
+      $("#p4m-fast").checked = !!d.config.fast_reg;
       $("#p4m-size").value = d.config.batch_size;
       $("#p4m-paths").value = (d.config.paths || ["/"]).join("\n");
       $("#p4m-rsize").value = d.config.restore_batch || 5;
@@ -6595,13 +6852,217 @@
   };
 
   $("#gm-tab-p4m").addEventListener("click", () => ptSelectTab("p4m"));
+
+  /* ── Spiel-Updates (19.10.2026, nach PatchDL 0.3.0 von Knutwurst) ──
+   * /api/v1/updates (updates.c): jedes Spiel mit seiner Version, dem Update, das hier läuft, und dem Stand des Downloads.
+   * Geladen wird nur nach einem Klick; der laufende Download erscheint oben mit Fortschritt. Für ältere Firmware führt die
+   * Zeile „Älteren Patch holen“ zu Prospero/Orbis Patches: Version wählen, SC-Link kopieren, hier einfügen. */
+  const upd = { data: null, timer: 0, f: "", open: "", vers: {}, qr: {}, armed: "", armTimer: 0, armedAt: 0, pkgs: null, sig: "", wantOpen: "" };
+  const UPD_ST = {
+    update: ["warn", "Update verfügbar"], current: ["ok", "aktuell"], unchecked: ["", "noch nicht geprüft"], check_failed: ["warn", "Prüfung gescheitert"],
+    needs_newer_fw: ["warn", "neuester Patch braucht neuere Firmware"], queued: ["", "wartet"], downloading: ["", "wird geladen"], paused: ["warn", "angehalten"],
+    verifying: ["", "wird geprüft"], ready: ["ok", "geladen, bereit zur Installation"], installing: ["", "wird installiert"], installed: ["ok", "installiert"],
+    failed: ["warn", "gescheitert"], not_official_smp: ["", "über ShadowMountPlus"], not_official_fake: ["", "Fake-PKG"], not_official_unknown: ["", "Herkunft unbekannt"] };
+
+  const updCover = (tid) => { const g = (gm.list || []).find((x) => x.title_id === tid); return g && g.cover ? g.cover : ""; };
+  const updGroup = (t) => t.status === "update" || ["queued", "downloading", "paused", "verifying", "ready", "installing", "failed"].includes(t.status) ? "update"
+    : t.status === "needs_newer_fw" ? "oldfw" : "other";
+
+  const updBtn = (act, tid, label, cls) => {
+    const armed = upd.armed === act + ":" + tid;
+    return `<button type="button" class="btn ${armed ? "danger" : cls || "ghost"}" data-upd-act="${esc(act)}" data-upd-id="${esc(tid)}">${armed ? "Wirklich? Nochmal klicken" : esc(label)}</button>`;
+  };
+
+  const updOldPanel = (t) => {
+    const s = t.site, q = upd.qr[t.title_id], v = upd.vers[t.title_id];
+    const site = t.plat === 4 ? "orbispatches.com" : "prosperopatches.com";
+    const vl = v && v.versions ? `<div class="upd-vers">${v.versions.map((x) => `<button type="button" class="btn ghost" data-upd-pick="${esc(x.version)}" data-upd-size="${esc(x.size)}" data-upd-id="${esc(t.title_id)}" ${x.runs ? "" : "disabled"}>
+        ${esc(`${x.version} · ab Firmware ${x.fw} · ${x.size}`)}${x.runs ? "" : esc(" · läuft hier nicht")}</button>`).join("")}</div>`
+      : v && v.error ? `<p class="cp-err">${esc(`Die Liste ließ sich nicht laden (${v.error}).`)}</p>` : `<button type="button" class="btn ghost" data-upd-vers="${esc(t.title_id)}">Alle Versionen anzeigen</button>`;
+    return `<div class="upd-old">
+        <div class="upd-qr">${q && q.svg ? q.svg : ""}<div>
+          <p class="cp-step">So geht es</p>
+          <small>1. Öffne <code>${esc(`https://${site}/${t.title_id}`)}</code> (am Handy: QR-Code scannen, er öffnet diese Seite für das Spiel).</small>
+          <small>2. ${s ? esc(`Wähle Version ${s.version} (braucht Firmware ${s.fw}, ${s.size})`) : "Wähle eine Version, die auf dieser Firmware läuft"} und bestätige die menschliche Prüfung, falls sie erscheint.</small>
+          <small>3. Kopiere den <b>SC</b>-Link und füge ihn unten ein. Geladen wird von den offiziellen Update-Servern.</small></div></div>
+        <label class="p4m-field"><span>SC-Link</span><input type="url" id="upd-link-${esc(t.title_id)}" placeholder="https://sgst.prod.dl.playstation.net/…_sc.pkg" autocomplete="off" spellcheck="false"></label>
+        <label class="p4m-field"><span>Version</span><input type="text" id="upd-lver-${esc(t.title_id)}" value="${esc(s ? s.version : "")}" inputmode="decimal" autocomplete="off"></label>
+        <div class="cp-actions"><button type="button" class="btn primary" data-upd-link="${esc(t.title_id)}">Laden und installieren</button></div>
+        ${vl}</div>`;
+  };
+
+  const updRow = (t) => {
+    const [cls, label] = UPD_ST[t.status] || ["", t.status];
+    const cov = updCover(t.title_id);
+    const ver = `${esc(t.version || "?")}${t.target && t.target !== t.version ? ` → ${esc(t.target)}` : ""}`;
+    let info = "", btns = "";
+    const off = t.status.startsWith("not_official");
+    if (t.status === "update") btns = updBtn("download", t.title_id, "Laden und installieren", "primary");
+    else if (t.status === "paused") btns = updBtn("resume", t.title_id, "Fortsetzen", "primary") + updBtn("cancel", t.title_id, "Löschen");
+    else if (t.status === "ready") btns = updBtn("install", t.title_id, "Installieren", "primary") + updBtn("cancel", t.title_id, "Löschen");
+    else if (t.status === "failed") btns = updBtn("resume", t.title_id, "Erneut versuchen", "primary") + updBtn("cancel", t.title_id, "Löschen");
+    else if (t.status === "queued" || t.status === "downloading" || t.status === "verifying") btns = updBtn("pause", t.title_id, "Anhalten") + updBtn("cancel", t.title_id, "Abbrechen");
+    else if (t.status === "needs_newer_fw") {
+      info = `<div class="p4m-meta">${esc(`Der neueste offizielle Patch ${t.latest} braucht Firmware ${t.latest_fw || "?"}.`)}${t.site ? esc(` Version ${t.site.version} läuft hier (ab Firmware ${t.site.fw}).`) : t.site_why ? esc(` Die Liste von Prospero/Orbis ließ sich nicht laden.`) : ""}</div>`;
+      btns = `<button type="button" class="btn ghost" data-upd-old="${esc(t.title_id)}">${upd.open === t.title_id ? "Schließen" : "Älteren Patch holen …"}</button>`;
+    }
+    if (t.status === "check_failed") info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`;
+    if (off) info = `<div class="p4m-meta">${t.status === "not_official_smp" ? "Läuft über ShadowMountPlus: Updates gehören dort in den Backport- bzw. Patch-Ordner."
+      : t.status === "not_official_fake" ? "Nicht offiziell signiert: keine offiziellen Updates." : "Die Paketdatei ließ sich nicht lesen."}</div>`;
+    if (t.error) info += `<div class="p4m-meta cp-why">${esc(t.error)}</div>`;
+    if (t.from_link) info += `<div class="p4m-meta">${esc("Aus einem SC-Link (ältere Firmware).")}</div>`;
+    const pct = t.total > 0 && t.have > 0 && t.status !== "downloading" ? ` · ${Math.floor(t.have * 100 / t.total)} %` : "";
+    return `<div class="p4m-row" data-upd-row="${esc(t.title_id)}">
+        ${cov ? `<img class="p4m-icon" src="${esc(cov)}" alt="" loading="lazy" decoding="async">` : `<div class="p4m-icon"></div>`}
+        <div class="p4m-main"><div class="p4m-name" title="${esc(t.name)}">${esc(t.name)}</div>
+          <div class="p4m-meta">${esc(t.title_id)} · ${t.plat === 4 ? "PS4" : "PS5"} · <span class="upd-ver">${ver}</span>${pct}</div>${info}</div>
+        <span class="p4m-state ${cls}">${esc(label)}</span>
+        <div class="p4m-btns">${btns}</div></div>
+      ${upd.open === t.title_id ? updOldPanel(t) : ""}`;
+  };
+
+  const updRender = () => {
+    const d = upd.data;
+    if (!d) return;
+    const on = !!d.enabled;
+    $("#upd-on").checked = on;
+    $("#upd-check").disabled = !on || d.checking;
+    const nUpd = (d.titles || []).filter((t) => t.status === "update").length;
+    $("#upd-all").disabled = !on || !nUpd;
+    txt("#upd-sub", !on ? "ausgeschaltet" : d.checking ? `prüft ${d.check_done} von ${d.check_total} Spielen …`
+      : `${(d.titles || []).length} Spiele · Firmware ${d.firmware} · ${nUpd} mit Update`);
+    const note = $("#upd-note");
+    note.hidden = on;
+    if (!on) note.textContent = "Ausgeschaltet: Die App fragt keine Update-Server. Zum Einschalten den Schalter oben rechts benutzen.";
+    /* der laufende Download */
+    const j = d.job, jb = $("#upd-job");
+    jb.hidden = !j;
+    if (j) {
+      const pc = j.total > 0 ? Math.min(100, j.done * 100 / j.total) : 0;
+      const stat = j.state === "installing" ? "Die Konsole installiert das Update."
+        : `${bytes(j.done)} von ${bytes(j.total)}${j.bytes_per_s > 0 ? ` · ${bytes(j.bytes_per_s)}/s` : ""}${j.eta_s > 0 ? ` · noch etwa ${duration(j.eta_s)}` : ""}`;
+      jb.innerHTML = `<b>${esc(`${j.name} ${j.version}`)}</b>
+        <div class="upd-bar"><i style="width:${pc.toFixed(1)}%"></i></div>
+        <small>${esc(stat)}${j.phase ? ` · ${esc(j.phase)}` : ""}${j.queued ? esc(` · danach noch ${j.queued} in der Warteschlange`) : ""}</small>`;
+    }
+    const list = (d.titles || []).filter((t) => !upd.f || updGroup(t) === upd.f);
+    const sig = JSON.stringify([list, upd.open, upd.armed, Object.keys(upd.vers), Object.keys(upd.qr), (gm.list || []).length]);
+    if (sig !== upd.sig) {                                        /* nur neu zeichnen, wenn sich etwas geändert hat */
+      upd.sig = sig;
+      const keep = upd.open ? ($(`#upd-link-${upd.open}`) || {}).value : "";
+      $("#upd-list").innerHTML = list.length ? list.map(updRow).join("") : `<p class="muted">${on ? "Keine Spiele in dieser Auswahl." : "Noch nichts geprüft."}</p>`;
+      if (keep && $(`#upd-link-${upd.open}`)) $(`#upd-link-${upd.open}`).value = keep;
+    }
+    const s = d.settings || {};
+    const cs = $("#upd-conns");
+    if (!cs.options.length) cs.innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+    if (document.activeElement !== cs) cs.value = String(s.connections || 8);
+    $("#upd-del").checked = !!s.delete_after;
+  };
+
+  const updPkgsRender = () => {
+    const p = upd.pkgs && upd.pkgs.packages || [];
+    $("#upd-pkgs").innerHTML = p.length ? p.map((x) => `<div class="p4m-row"><div class="p4m-main"><div class="p4m-name">${esc(x.name)}</div>
+        <div class="p4m-meta">${esc(`${x.title_id} · Version ${x.version || "?"} · ${bytes(x.size)}${x.complete ? "" : " · unvollständig"}`)}</div></div>
+        <div class="p4m-btns">${x.busy ? "" : updBtn("delete_pkg", x.title_id, "Löschen")}</div></div>`).join("") : `<p class="muted">Keine.</p>`;
+  };
+
+  const loadUpd = async () => {
+    try { upd.data = await api("/api/v1/updates"); updRender(); } catch (e) { txt("#upd-sub", e.message); }
+    try { upd.pkgs = await api("/api/v1/updates/packages"); updPkgsRender(); } catch { /* bleibt */ }
+    if (upd.wantOpen && upd.data) { const id = upd.wantOpen; upd.wantOpen = ""; updOpenOld(id); }
+  };
+  const updSync = () => {
+    const run = state.page === "games" && pt.tab === "upd" && !document.hidden;
+    const fast = upd.data && (upd.data.job || upd.data.checking);
+    clearTimeout(upd.timer);
+    upd.timer = run ? setTimeout(async () => { await loadUpd(); updSync(); }, fast ? 2000 : 15000) : 0;
+  };
+  const updPost = async (body) => {
+    try { const r = await api("/api/v1/updates", { method: "POST", body: JSON.stringify(body) }); if (r.message) toast(r.message); }
+    catch (e) { toast(e.message, "error"); }
+    await loadUpd();
+    updSync();
+  };
+  const updOpenOld = async (id) => {
+    upd.open = upd.open === id ? "" : id;
+    updRender();
+    if (upd.open && !upd.qr[id]) {
+      try { upd.qr[id] = await api(`/api/v1/updates/qr?id=${encodeURIComponent(id)}`); } catch { upd.qr[id] = {}; }
+      updRender();
+    }
+  };
+
+  $("#gm-tab-upd").addEventListener("click", () => ptSelectTab("upd"));
+  $("#upd-on").addEventListener("change", (e) => updPost({ action: e.target.checked ? "enable" : "disable" }));
+  $("#upd-check").addEventListener("click", () => updPost({ action: "check" }));
+  $("#upd-all").addEventListener("click", () => updPost({ action: "update_all" }));
+  $("#upd-conns").addEventListener("change", (e) => updPost({ action: "settings", connections: Number(e.target.value) }));
+  $("#upd-del").addEventListener("change", (e) => updPost({ action: "settings", delete_after: e.target.checked }));
+  $$("#gm-pane-upd [data-upd-f]").forEach((b) => b.addEventListener("click", () => {
+    upd.f = b.dataset.updF;
+    $$("#gm-pane-upd [data-upd-f]").forEach((x) => x.classList.toggle("active", x === b));
+    updRender();
+  }));
+  $("#gm-pane-upd").addEventListener("click", async (e) => {
+    const old = e.target.closest("[data-upd-old]");
+    if (old) { updOpenOld(old.dataset.updOld); return; }
+    const vs = e.target.closest("[data-upd-vers]");
+    if (vs) {
+      const id = vs.dataset.updVers;
+      vs.disabled = true;
+      try { upd.vers[id] = await api(`/api/v1/updates/versions?id=${encodeURIComponent(id)}`); } catch (err) { upd.vers[id] = { error: err.message }; }
+      updRender();
+      return;
+    }
+    const pick = e.target.closest("[data-upd-pick]");
+    if (pick) { const f = $(`#upd-lver-${pick.dataset.updId}`); if (f) f.value = pick.dataset.updPick; upd.pickSize = pick.dataset.updSize; return; }
+    const lk = e.target.closest("[data-upd-link]");
+    if (lk) {
+      const id = lk.dataset.updLink, url = ($(`#upd-link-${id}`) || {}).value || "", version = ($(`#upd-lver-${id}`) || {}).value || "";
+      if (!url.trim() || !version.trim()) { toast("Bitte SC-Link und Version angeben.", "error"); return; }
+      lk.disabled = true;
+      const body = { action: "link", id, url: url.trim(), version: version.trim() };
+      if (upd.pickSize) body.size = upd.pickSize;
+      try {
+        const r = await api("/api/v1/updates", { method: "POST", body: JSON.stringify(body) });
+        if (r.message) toast(r.message);
+        upd.open = "";
+      } catch (err) {
+        if (/andere[rn]? Version/.test(err.message) && confirm(`${err.message}\n\nTrotzdem laden?`)) {
+          try { const r2 = await api("/api/v1/updates", { method: "POST", body: JSON.stringify(Object.assign(body, { force: true })) }); if (r2.message) toast(r2.message); upd.open = ""; }
+          catch (e2) { toast(e2.message, "error"); }
+        } else toast(err.message, "error");
+      }
+      lk.disabled = false;
+      await loadUpd();
+      updSync();
+      return;
+    }
+    const b = e.target.closest("[data-upd-act]");
+    if (!b) return;
+    const act = b.dataset.updAct, id = b.dataset.updId;
+    if (act === "cancel" || act === "delete_pkg") {                 /* löscht Teile: zwei Klicks */
+      const key = act + ":" + id;
+      clearTimeout(upd.armTimer);
+      if (upd.armed !== key) {
+        upd.armed = key; upd.armedAt = performance.now();
+        upd.armTimer = setTimeout(() => { upd.armed = ""; upd.sig = ""; updRender(); updPkgsRender(); }, 10000);
+        upd.sig = ""; updRender(); updPkgsRender();
+        return;
+      }
+      if (performance.now() - upd.armedAt < 800) return;
+      upd.armed = "";
+    }
+    updPost({ action: act, id });
+  });
   $("#p4m-reload").addEventListener("click", () => { loadP4m(); loadP4mLog(); });
   $("#p4m-log-reload").addEventListener("click", loadP4mLog);
   $("#p4m-on").addEventListener("change", (e) => p4mPost({ action: e.target.checked ? "enable" : "disable" }));
   $("#p4m-scan").addEventListener("click", () => p4mPost({ action: "scan" }));
   /* Die Einstellungen als Ganzes: die Seite schickt immer alle, sonst setzt die Konsole fehlende auf ihre Grundwerte. */
   const p4mConfig = () => ({
-    action: "config", dlc: $("#p4m-dlc").checked, batch: $("#p4m-batch").checked,
+    action: "config", dlc: $("#p4m-dlc").checked, batch: $("#p4m-batch").checked, fast_reg: $("#p4m-fast").checked,
     batch_size: Number($("#p4m-size").value) || 5, paths: $("#p4m-paths").value, restore_batch: Number($("#p4m-rsize").value) || 5
   });
   /* Zurückverschieben: zuerst die Gruppengröße speichern (wie im Original), dann den Auftrag geben. */
@@ -6798,6 +7259,7 @@
       return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
           <small>Das Spiel liegt in LZ4-Paketen. Es läuft nur mit einer APR-EMU-Version, die Pakete liest („pack“). Starte es jetzt: läuft es nicht, bringt „LZ4 entpacken“ alles zurück.</small>
           <span class="apr-state ok">✓ gepackt · ${bytes(pk.logical_bytes)} → ${bytes(pk.stored_bytes)} (${pct} %)</span>
+          ${(z.start_problems || []).map((t) => `<p class="cp-warn">${esc(t)}</p>`).join("")}
           ${lastLine}${prog}${result}</div>
           ${run ? cancel : `<button type="button" class="btn primary" data-apr-lz4="verify" ${anyRunning ? "disabled" : ""}>Pakete prüfen</button>`}</div>
         <div class="apr-row"><div><b>Zurück zu losen Dateien</b>
@@ -6924,7 +7386,13 @@
     else if (s.planErr) est = `<p class="cp-err">${esc(s.planErr)}</p>`;
     else if (s.plan) {
       const pl = s.plan, need = pl.pack_bytes / 2 + 268435456 + (s.copy ? pl.loose_bytes : 0);
-      est = `<p class="muted apr-est">${`Gepackt werden ${num(pl.pack_files)} Dateien (${bytes(pl.pack_bytes)}), ${num(pl.loose_files)} bleiben lose (${bytes(pl.loose_bytes)}).`}</p>`
+      /* Dauer nach exFAT2AMPR 1.104 (V-10): gemessen auf dieser Konsole, sonst eine erste Schätzung */
+      const estDur = (s) => duration(Math.max(60, s));                  /* nie „0 Min.“ */
+      const dur = pl.est_s > 0 ? `<p class="muted apr-est">${pl.est_learned
+          ? `Dauer: etwa ${estDur(pl.est_s)} für Packen und Prüfen, gerechnet mit der Geschwindigkeit, die diese Konsole beim letzten Packen hatte.`
+          : `Dauer: etwa ${estDur(pl.est_s)} für Packen und Prüfen (erste Schätzung; nach dem ersten Packen rechnet die App mit der Geschwindigkeit dieser Konsole).`}`
+          + (pl.est9_s > 0 ? ` ${`Mit Stufe 9 wären es etwa ${estDur(pl.est9_s)}; die Stufen 10 bis 12 sparen gegenüber Stufe 9 meist weniger als ein Prozent Platz.`}` : "") + `</p>` : "";
+      est = `<p class="muted apr-est">${`Gepackt werden ${num(pl.pack_files)} Dateien (${bytes(pl.pack_bytes)}), ${num(pl.loose_files)} bleiben lose (${bytes(pl.loose_bytes)}).`}</p>` + dur
         + (z.free_bytes < need ? `<p class="cp-why">${`Das könnte knapp werden: frei sind ${bytes(z.free_bytes)}, die App rechnet für diese Auswahl mit etwa ${bytes(need)}.`}</p>` : "");
     }
     const base = (z.path || "").split("/").pop();
@@ -6993,7 +7461,10 @@
     }
     if (el.id === "lz4-prof") { s.profile = el.value; aprLz4Plan(); return; }
     if (el.id === "lz4-tested") s.tested = !!el.checked;
-    else if (el.name === "lz4-level") s.level = +el.value;
+    else if (el.name === "lz4-level") {
+      s.level = +el.value;
+      if (s.mode === "auto") { aprLz4Plan(); return; }                 /* die Dauer hängt an der Stufe (ein Profil nennt seine eigene) */
+    }
     else if (el.name === "lz4-where") s.copy = el.value === "copy";
     else if (el.name === "lz4-mode") {
       s.mode = el.value;
@@ -7440,7 +7911,9 @@
      oder eine Sicherung der App. Der Plan der Konsole sagt genau, was weggeht, und gibt ein Kennwort aus, ohne das
      nichts gelöscht wird. Gefragt wird zweimal: ein Häkchen „endgültig“, dann zwei Klicks auf „Endgültig löschen“.
      Die Spielstände bleiben immer. */
-  const dl = { kind: "", id: "", plan: null, timer: 0, armed: 0, poll: 0 };
+  /* seq: jedes Öffnen und Schließen zählt hoch; eine Antwort, die zu einem früheren Öffnen gehört, wird verworfen
+     (Durchsicht 19.10.2026: der Plan von Spiel A konnte im Dialog für Spiel B landen) */
+  const dl = { kind: "", id: "", plan: null, timer: 0, armed: 0, poll: 0, seq: 0 };
   const dlShell = () => {
     let o = $("#dl-overlay");
     if (o) return o;
@@ -7470,6 +7943,7 @@
     return o;
   };
   const dlClose = () => {
+    dl.seq++;
     const o = $("#dl-overlay");
     if (o) o.hidden = true;
     clearTimeout(dl.timer);
@@ -7484,6 +7958,7 @@
   };
   const dlOpen = async (kind, id) => {
     const o = dlShell();
+    const seq = ++dl.seq;
     dl.kind = kind;
     dl.id = id;
     dl.plan = null;
@@ -7492,9 +7967,12 @@
     o.hidden = false;
     try {
       /* The plan counts the whole tree (a big game on a USB disk takes a while): 2 minutes like the plans of copy/move/convert. */
-      dl.plan = await api("/api/v1/library/delete/plan", { method: "POST", body: JSON.stringify({ kind, id }), timeoutMs: 120000 });
+      const plan = await api("/api/v1/library/delete/plan", { method: "POST", body: JSON.stringify({ kind, id }), timeoutMs: 120000 });
+      if (seq !== dl.seq) return;
+      dl.plan = plan;
       dlRenderPlan();
     } catch (e) {
+      if (seq !== dl.seq) return;
       $("#dl-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
         <div class="cp-actions"><button type="button" class="btn" data-dl="close">Schließen</button></div>`;
     }
@@ -7923,8 +8401,14 @@
         <p class="muted cp-cur"><code>${esc(it.f.name)}</code> · ${esc(bytes(it.f.size))} nach ${esc(it.dir)}</p>`,
         `<button type="button" class="btn" id="fm-upcancel">Abbrechen</button>`);
     };
+    let shownPc = 0;
     show(0);
-    x.upload.onprogress = (e) => { if (e.lengthComputable) show(Math.floor((e.loaded / e.total) * 100)); };
+    /* nur bei einem neuen Prozentwert zeichnen: der Browser meldet den Fortschritt viel öfter (Durchsicht 19.10.2026) */
+    x.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pc = Math.floor((e.loaded / e.total) * 100);
+      if (pc !== shownPc) { shownPc = pc; show(pc); }
+    };
     const fail = (m) => {
       fm.upQueue = [];
       fm.xhr = null;
@@ -8586,6 +9070,11 @@
                ipanel: "", iplan: null, iplanErr: "", ijob: null, idismissed: "",
                igen: 0, iplanTok: 0, ipollFail: 0, ijobRetry: 0, ijobTimer: 0 };
   const PK_KIND = { base: "Spiel", update: "Update", dlc: "Zusatzinhalt" };
+  /* Die SDK-Version einer PS5-Datei (0x05000033), wie sie gedruckt wird: die Hauptnummer ist hexadezimal-dezimal gepackt (0x11 = 11.xx). */
+  const pkSdk = (v) => {
+    const major = (Number(v) >>> 24) & 255;
+    return major && (major >> 4) <= 9 && (major & 15) <= 9 ? `${(major >> 4) * 10 + (major & 15)}.xx` : "";
+  };
   const PK_PRESET = {
     fat32: { mb: 4095, label: "FAT32-Stick", sub: "Teile bis 4095 MB (eine Datei darf dort nicht größer sein)" },
     bd25:  { mb: 23 * 1024, label: "Blu-ray, 25 GB", sub: "Teile von höchstens 23 GB" },
@@ -8744,7 +9233,7 @@
       <div class="pk-ico">${p.has_icon ? `<img src="/api/v1/packages/icon?id=${esc(p.id)}&m=${esc(String(p.mtime))}" alt="" loading="lazy">` : ""}<span>${esc(pkInitials(p.name))}</span></div>
       <div class="pk-main"><b title="${esc(p.name)}">${esc(p.name)}</b>
         <small>${esc(p.title_id)}${p.version ? " · " + esc(p.version) : ""}</small>
-        <div class="pk-badges"><span class="badge">${esc(PK_KIND[p.kind] || "Paket")}</span>${plat ? `<span class="badge quiet">${plat}</span>` : ""}
+        <div class="pk-badges"><span class="badge">${esc(PK_KIND[p.kind] || "Paket")}</span>${plat ? `<span class="badge quiet">${plat}</span>` : ""}${p.sdk && pkSdk(p.sdk) ? `<span class="badge quiet" title="Gebaut mit dem SDK der Firmware-Reihe ${esc(pkSdk(p.sdk))}">SDK ${esc(pkSdk(p.sdk))}</span>` : ""}
           ${parts ? `<span class="badge ${parts.complete ? "quiet" : "warn"}">${parts.complete ? "geteilt, vollständig" : `Teile: ${esc(String(parts.found))} von ${esc(String(parts.total))}`}</span>` : ""}</div>
         ${parts && !parts.complete ? `<small>Es fehlt: ${parts.missing.map((n) => "Teil " + esc(String(n))).join(", ")}. Die fehlenden Teile liegen vielleicht auf einem anderen Laufwerk.</small>` : ""}
         <small class="pk-path" title="${esc(p.path)}">${esc(p.path)}</small></div>
@@ -9357,7 +9846,22 @@
           if (was.running && !pq.data.running) await loadPackages();        /* die Liste neu: was installiert wurde, steht jetzt dort */
         }
       }
-      if (wasScan) await loadPackages();
+      /* Während der Suche nur die Liste fragen und nur bei Änderung neu bauen; die ganze Runde (vier Fragen, alle Karten)
+         erst, wenn die Suche fertig ist (Durchsicht 19.10.2026: jede Sekunde alles neu, der Controller verlor den Fokus). */
+      if (wasScan) {
+        try {
+          const d = await api("/api/v1/packages");
+          if (d && Array.isArray(d.packages) && Array.isArray(d.drives)) {
+            if (!d.scanning) { pk.scanSig = ""; await loadPackages(); }
+            else {
+              pk.data = d;
+              const sig = JSON.stringify(d.packages);
+              if (sig !== pk.scanSig) { pk.scanSig = sig; pkRender(); }
+              else txt("#pk-sub", `Die Suche läuft … ${d.parsed} gelesen${d.current ? " · " + d.current : ""}`);
+            }
+          }
+        } catch { /* die nächste Runde fragt wieder */ }
+      }
       pkSync();
     } catch { /* die nächste Runde versucht es wieder */ }
     pk.polling = false;
@@ -9506,10 +10010,12 @@
     if (state.page === "profile") loadProfile();
     if (state.page === "games") {
       loadGames(); cpPoll(); mvPoll(); cvPoll();
+      if (!dup.loaded) loadDup();                 /* doppelte Abbilder: einmal je Sitzung, danach mit „Neu suchen“ */
       if (pt.tab === "time") loadPlaytime();
       if (pt.tab === "saves") loadSaves();
       if (pt.tab === "pkg") loadPackages();
       if (pt.tab === "p4m") { loadP4m(); loadP4mLog(); }
+      if (pt.tab === "upd") loadUpd();
       if (pt.tab === "bk") loadBackups();         /* these two have no poll: coming back must show what happened meanwhile */
       if (pt.tab === "hist") loadHistory2();
     }
@@ -9517,16 +10023,73 @@
     svSync();
     pkSync();
     p4mSync();
+    updSync();
     syncLogTail();
   }));
 
   /* L1 und R1 des Controllers schalten zwischen den Seiten um (14.10.2026): L1 zurück, R1 weiter. Der Browser der Konsole meldet
    * sie als Tastendrücke F5 (L1) und F6 (R1), L2 und R2 als F7 und F8, nicht über die Gamepad-Schnittstelle (gemessen an der Konsole). */
   const stepPage = (d) => {
+    /* hinter einem offenen Fenster wird nicht umgeblättert (Durchsicht 19.10.2026: der Fokus blieb sonst auf einer
+       ausgeblendeten Seite) */
+    if (openOverlay()) return;
     const tabs = $$(".tab[data-page]");
     const i = tabs.findIndex((x) => x.classList.contains("active"));
-    if (tabs.length && i >= 0) tabs[(i + d + tabs.length) % tabs.length].click();
+    if (tabs.length && i >= 0) {
+      const t = tabs[(i + d + tabs.length) % tabs.length];
+      t.click();
+      try { t.focus({ preventScroll: true }); } catch { t.focus(); }
+    }
   };
+
+  /* ── Fenster (Kopieren, Löschen, Dateimanager …) mit dem Controller (Durchsicht 19.10.2026) ──
+     Öffnet sich ein Fenster, kommt der Fokus hinein (auf den ersten Knopf seines Inhalts, sonst auf „×“); schließt es,
+     geht er zurück zu dem, was ihn vorher hatte. Escape (am PS5-Browser die Kreis-Taste) schließt es über sein „×“.
+     Solange es offen ist, bleibt der Fokus darin: Mit dem Steuerkreuz landete man sonst hinter dem Fenster und löste
+     unsichtbare Knöpfe aus. */
+  const openOverlay = () => {
+    const all = $$(".gm-overlay").filter((o) => !o.hidden && o.isConnected && o.querySelector(".cp-dialog"));
+    return all.length ? all[all.length - 1] : null;
+  };
+  const FOCUSABLE = "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+  const ovFocusFirst = (o) => {
+    const box = o.querySelector(".cp-dialog") || o;
+    const items = Array.from(box.querySelectorAll(FOCUSABLE)).filter((x) => x.offsetParent !== null);
+    const first = items.find((x) => !x.classList.contains("cp-x")) || items[0];
+    if (first) { try { first.focus({ preventScroll: true }); } catch { first.focus(); } }
+  };
+  const ovWatch = new MutationObserver(() => {
+    $$(".gm-overlay").forEach((o) => {
+      if (!o.querySelector(".cp-dialog")) return;
+      const open = !o.hidden && o.isConnected;
+      if (open && !o.__open) {
+        o.__open = true;
+        o.__opener = document.activeElement;
+        setTimeout(() => { if (!o.hidden && !o.contains(document.activeElement)) ovFocusFirst(o); }, 0);
+      } else if (!open && o.__open) {
+        o.__open = false;
+        const back = o.__opener;
+        o.__opener = null;
+        if (back && back.isConnected && back.offsetParent !== null) { try { back.focus({ preventScroll: true }); } catch { back.focus(); } }
+      }
+    });
+  });
+  ovWatch.observe(document.body, { childList: true, subtree: false, attributes: true, attributeFilter: ["hidden"], attributeOldValue: false });
+  /* die Fenster hängen direkt an body; ihr hidden-Attribut wird an ihnen selbst gesetzt */
+  const ovAttach = () => $$(".gm-overlay").forEach((o) => { if (!o.__watched) { o.__watched = true; ovWatch.observe(o, { attributes: true, attributeFilter: ["hidden"] }); } });
+  new MutationObserver(ovAttach).observe(document.body, { childList: true });
+  ovAttach();
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const o = openOverlay();
+    if (!o) return;
+    const x = o.querySelector(".cp-x");
+    if (x) { e.preventDefault(); x.click(); }
+  });
+  document.addEventListener("focusin", (e) => {
+    const o = openOverlay();
+    if (o && !o.contains(e.target)) ovFocusFirst(o);
+  });
   /* L2 (F7) rollt die Seite nach oben, R2 (F8) nach unten, je knapp eine Bildschirmhöhe. */
   const scrollPage = (d) => {
     const top = d * Math.round(window.innerHeight * 0.8);
@@ -10669,6 +11232,8 @@
     svSync();
     pkSync();
     p4mSync();                                  /* its 5 s poll stopped for a hidden tab like the others, and starts again */
+    updSync();                                  /* the updates tab as well (review 19.10.2026: it stopped for good) */
+    psSync();
   });
 
   /* Nach dem Umschalten der Sprache lädt die Seite neu (i18n.js); sie öffnet dann wieder die Seite, auf der man war.

@@ -52,6 +52,8 @@ Sekunden ohne zweiten Klick ist der Knopf wieder gewöhnlich.
 
 ## Die Seite „Spiele“
 
+**Doppelte Abbilder** (seit 18.10.2026, nach exFAT2AMPR 1.104 von V-10). Liegt ein Spiel in mehr als einem Abbild auf den Laufwerken, nimmt ShadowMountPlus bei jeder Suche mal das eine, mal das andere. Die App sucht beim Öffnen der Seite (und mit „Neu suchen“ oder „Aktualisieren“) in der obersten Ebene jedes Laufwerks und eine Ordnerebene darunter sowie in `homebrew` und `etaHEN/games` nach `.exfat`, `.ffpkg`, `.ffpfs` und `.ffpfsc`, liest aus jedem Abbild die Titel-ID (`sce_sys/param.json` oder `param.sfo`; bei `.ffpfs` aus dem Dateinamen) und zeigt die Karte **Doppelte Abbilder**, wenn es welche gibt. Den Ordner, den ShadowMountPlus für das Spiel nimmt, zählt sie mit. **Beiseitelegen** (zwei Klicks) benennt ein Abbild in `<Name>.off` um; ShadowMountPlus nimmt es danach nicht mehr. **Zurückholen** benennt es zurück. Nichts wird gelöscht. Ein Abbild, das ShadowMountPlus gerade eingehängt hat, oder eines, dessen Spiel läuft, bleibt, wie es ist.
+
 **Woher die Liste kommt.** Aus der App-Datenbank der Konsole
 (`/system_data/priv/mms/app.db`): die sichtbaren Kacheln der Spiele-Reihe für
 den angemeldeten Benutzer, mit Spielzeit und „zuletzt gespielt“, so wie die PS5
@@ -384,6 +386,7 @@ Der Reiter **PS4 von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) dir
 3. **Warten.** Beim ersten Mal sortiert die App die Pakete in `ps4/CUSAxxxxx/` (`app.pkg`, `patch.pkg`, `addcont/…`) und meldet jedes Spiel, sobald es spielbereit ist. Das Spiel erscheint mit Symbol auf dem Startbildschirm.
 - Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Aus Bibliothek entfernen“, verschwindet es nur aus der Bibliothek, die PKG bleibt.
 - Updates (`patch.pkg`) und Zusatzinhalte (DLC) werden mit eingebunden; Zusatzinhalte nur, wenn der Schalter in den Einstellungen an ist.
+- **Neue Spiele schneller anmelden** (seit PS4Mount 0.6.0, in den Einstellungen, ausgeschaltet): Die Anmeldung der Konsole (`AppInstallAll`) geht jeden Ordner in `/user/app` durch, für jedes PS4-Spiel etwa eine Dreiviertelsekunde, auch für die schon angemeldeten. Mit dem Schalter zeigt die Konsole ihr nur die neuen Spiele: Über `/user/app` liegt ein leerer Ordner, und darauf kommt der Ordner jedes neuen Spiels. Die anderen Spiele bleiben angemeldet; für höchstens zwei Minuten sind sie nur unsichtbar. Das geschieht nur, wenn kein Spiel läuft und die Firmware den Weg über `AppInstallAll` nimmt; in dieser Zeit weist die App Hinzufügen, Entfernen und Zurückverschieben mit „beschäftigt“ ab. Endet die App in dieser Zeit, räumt sie beim nächsten Start (`[reg] /user/app showed only … game(s) from an earlier run`) auf; ein Neustart der Konsole genügt ebenfalls, denn die Einbindung bleibt nicht bestehen.
 - Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Läuft PS4Mount schon als eigenes Payload (`ps4mount.elf`), lädt die App ihr PS4Mount nicht ein zweites Mal: Der Reiter zeigt „wartet“, und sobald das eigenständige beendet ist, übernimmt die App von selbst. Erkannt wird es an seinem Web-Panel (Port 8770), an der Sperre auf Port 9032 oder am Prozessnamen; taucht es später doch auf, etwa nach dem Ruhemodus, hält die App ihres an. Umgekehrt startet die Seite Payloads (auch ein Startprofil) keine `ps4mount.elf`, solange schon ein PS4Mount läuft.
 - Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. An einer PS5 Pro mit 12.00 ist der Einbau geprüft: PS4-Spiele vom USB-Laufwerk werden eingebunden und laufen. Er ist ausgeschaltet, bis man ihn einschaltet.
 
@@ -417,6 +420,9 @@ schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes
   würde seine Dateien in den Paketen nicht wiederfinden. Solche Spiele lassen sich nur zu einem `.ffpfsc`-Abbild komprimieren
   (Knopf **Konvertieren**). Lässt sich `eboot.bin` nicht lesen, entscheidet die App nicht.
 - ShadowMountPlus in einer aktuellen Version, Abbilder schreibgeschützt eingehängt (der Standard).
+- Im Spielordner liegen nur Dateien und Ordner. Eine Verknüpfung würde nicht mitgepackt; die App lehnt das Packen dann ab und nennt sie.
+- **Dauer:** Das Packfenster nennt, wie lange Packen und Prüfen etwa dauern, bei Stufe 10 bis 12 auch die Zeit für Stufe 9. Anfangs sind es Schätzwerte; nach jedem Packen, das länger als 20 Sekunden lief, rechnet die App mit der Geschwindigkeit dieser Konsole.
+- **Startprüfung:** Bei einem gepackten Spiel warnt die Zeile „LZ4-Asset-Packs“, wenn `eboot.bin` nicht ausgeführt werden darf oder ShadowMountPlus für das Spiel keine fakelib einbindet (fakelib-Modus „Deaktiviert“ oder global aus). Dann fehlt beim Start die APR-EMU, die die Pakete liest; in ShadowMountPlus den Modus auf „Emulatoren“ oder „Voll“ stellen.
 - Platz: Beim Packen im Spielordner braucht die App zusätzlich etwa die Hälfte der Spieldaten, bis die Originale entfernt sind.
 
 ### Schritt für Schritt
@@ -453,8 +459,10 @@ weniger, bleibt aber sicher.
 ### Was immer lose bleibt
 
 Gleich mit welchem Profil: Leere Dateien, die PlayGo-Marker (`cache_ps5/pgc_*_dummy_file`, `cache_ps5/playgo.pgm`) und die
-Startdateien, die Ghost of Yōtei vor dem schwarzen Bildschirm braucht, bleiben lose. Die PS5 sucht sie außerhalb des Spiels auf
-der Platte, wo die APR-EMU nicht hilft (gefunden für LZ4 Compression 1.4.3). Alles, was die App in einen Spielordner schreibt,
+Startdateien, die Ghost of Yōtei vor dem schwarzen Bildschirm braucht, bleiben lose, ebenso die Paketverzeichnisse von Remedys Spielen
+(`*.rmdtoc`, Alan Wake 2 öffnet sie ohne APR und bricht sonst mit „No packfiles found!“ ab; ihre `.rmdblob`-Daten werden weiter gepackt).
+Die PS5 sucht sie außerhalb des Spiels auf der Platte, wo die APR-EMU nicht hilft (gefunden für LZ4 Compression 1.4.3 und MkPFS.CSharp 2.5.0).
+Wurden sie von einer älteren Fassung schon gepackt, holt „Pakete prüfen“ sie wie die anderen Marker-Dateien auf die Platte zurück (unter **Repariert**). Alles, was die App in einen Spielordner schreibt,
 bekommt die Rechte 0777, auch beim Kopieren, beim Entpacken eines Abbilds und im Dateimanager.
 
 ### Was „Automatisch“ lose lässt
@@ -789,7 +797,10 @@ einer Paket-Verwaltung nach dem Vorbild des PS5 PKG Managers von itsPLK (siehe d
 - **Was gelesen wird.** Von jedem Paket nur ein paar Stellen im Kopf, einige Kilobyte einer Datei, die
   zig Gigabyte groß sein kann: Titel-ID, Name (der deutsche Titel zuerst, sonst die Standardsprache
   des Pakets), Version, Content-ID, die Art (Spiel, Update, Zusatzinhalt), PS4 oder PS5 und das Bild des
-  Pakets. Es wird nichts geschrieben, und kein Paket wird ganz gelesen. Eine Datei, die kein Paket ist
+  Pakets; bei einem PS5-Paket außerdem das **SDK-Ziel** (die Zahl, mit der das Programm gebaut wurde, als „SDK 5.xx“ im Kopf der Karte, aus den
+  Prozessparametern des Hauptprogramms; nur wenn die Datei sie unverschlüsselt und eindeutig zeigt, sonst steht nichts da). Ein **Rückportier-Patch**
+  (Kopf `LIH`, wie ihn manche Quellen für ältere Spiele auf neuer Firmware bieten) gilt als Update, ebenso ein Paket, dessen Inhaltsmarke
+  (`0x40000000` oder `0x00100000`) sagt, dass es ein Patch ist. Es wird nichts geschrieben, und kein Paket wird ganz gelesen. Eine Datei, die kein Paket ist
   oder beschädigt, wird übersprungen (ihre Zahl steht als `failed` in der Antwort der Konsole). Alles, was
   eine Datei über sich sagt, wird gegen ihre Größe geprüft, ehe es benutzt wird.
 - **Suchen.** Beim ersten Öffnen sucht die Seite von selbst, danach mit „Neu suchen“; die Konsole sucht
@@ -935,6 +946,19 @@ stellt es ihr nur bereit und zeigt den Fortschritt.
   Hilfsprogramms) und `pkg_loader_output` (was der Lader gesagt hat). Ein Zeilenumbruch in einem Paketnamen kann im Protokoll keine zweite
   Zeile erzeugen.
 
+## Spiel-Updates (seit 19.10.2026, nach PatchDL 0.3.0 von Knutwurst)
+
+Der Reiter **Updates** auf der Spiele-Seite lädt offizielle Updates direkt von Sonys Servern und installiert sie.
+
+- **Einschalten:** Der Schalter oben rechts ist zuerst aus; bis dahin fragt die App nirgends nach.
+- **Nach Updates suchen** prüft jedes von Sony signierte Spiel (Disc oder PlayStation Store) über die Versionsliste, die die Konsole selbst benutzt. Spiele über ShadowMountPlus, Fake-PKGs und Homebrew werden nicht angefragt; ihre Karten sagen, warum.
+- **Passend zur Firmware:** Angeboten wird die neueste Version, die auf dieser Firmware läuft. Braucht Sonys neuestes Update eine neuere Firmware, zeigt die Karte die neueste passende Version laut prosperopatches.com (PS5) bzw. orbispatches.com (PS4) und **Älteren Patch holen …**: Seite öffnen (am Handy über den QR-Code), die menschliche Prüfung bestätigen, den SC-Link der Version kopieren und einfügen. Die App nimmt nur Links auf Sonys Download-Server und zum selben Spiel; passt die Größe nicht zur gewählten Version, fragt sie nach.
+- **Laden und installieren / Alle aktualisieren:** Die Updates kommen in eine Warteschlange und werden nacheinander geladen, über 1 bis 16 Verbindungen (Einstellung). Anhalten und Fortsetzen geht jederzeit, auch nach einem Neustart der App (der Stand steht in `job.json`). Jedes Stück wird mit Sonys Prüfsumme verglichen (PS5 SHA-256, PS4 SHA-1); ein falsches wird bis zu dreimal neu geladen. Danach installiert die Konsole das Paket wie unter „Pakete installieren“.
+- **Aufräumen:** Das Paket liegt in `/data/PS5-Cooling-Center/updates/<Titel-ID>/update.pkg`. Es wird gelöscht, sobald das Spiel nach der Installation die neue Version meldet (Schalter „Paket nach erfolgreicher Installation löschen“). Meldet das Spiel weiter die alte Version, bleibt das Paket liegen. Die Einstellungen zeigen alle Pakete im Ordner.
+- **Vorhandene Pakete:** Liegt schon ein Paket der richtigen Größe im Ordner (auch ohne `job.json`), prüft die App seine Stücke und lädt nur die falschen neu.
+- **DNS:** Die App fragt Cloudflare, Google und Quad9 selbst (UDP, dann TCP, dann DNS über HTTPS, zuletzt die gemerkte Adresse) und ändert nichts an den DNS-Einstellungen der Konsole; eine Sperre gegen System-Updates bleibt bestehen. Eine gefälschte Antwort (`0.0.0.0`, private Adresse) wird verworfen.
+- **Platz:** Nötig ist Platz für das Paket und 1 GB Reserve; die Installation braucht noch einmal etwa so viel.
+
 ## Kernel-Log live
 
 Auf der Seite **Protokoll** zeigt der zweite Reiter, **Kernel-Log live**, die
@@ -1002,7 +1026,7 @@ Programm.
 
 ## Firmware
 
-Die App ist mit dem PS5-Payload-SDK **v0.43** gebaut. Dessen Startcode kennt die
+Die App ist mit dem PS5-Payload-SDK **v0.44** gebaut. Dessen Startcode kennt die
 Firmware **bis einschließlich 13.60**; v0.41, mit dem die Versionen bis 1.46.0
 gebaut waren, endete bei 13.40. Eine Firmware, die der Startcode nicht kennt,
 kommt nicht bis `main()`: Das Programm startet dann nicht und schreibt nichts ins
@@ -1032,6 +1056,32 @@ Original bleibt); aus dem internen Ordner lässt sie sich löschen (zwei Klicks)
   oder kurz nach dem ersten auf dieselbe Datei wird abgewiesen.
 - Startet ein Payload diese App selbst neu, reißt die Verbindung kurz ab; die
   Seite findet die neue Ausführung von allein wieder.
+
+### Payloads herunterladen (seit 19.10.2026)
+
+Der Bereich **Payloads herunterladen** auf der Payloads-Seite zeigt dieselbe Liste wie der
+Payload Manager von itsPLK: `https://itsplk.github.io/ps5-payloads-mirror/payloads_v2.json`. Ein
+Ablauf dort holt jeden Tag die neueste Fassung jedes Payloads (zurzeit 28, darunter
+ShadowMountPlus, etaHEN, kstuff-lite, elfldr, ftpsrv, ps5upload, PKG-Manager) und trägt Name,
+Version, Kategorie, Beschreibung, Datei und SHA-256 ein.
+
+- **Liste laden:** Erst dieser Knopf geht ins Internet. Danach steht die Liste auch ohne Internet
+  da; beim Öffnen der Seite wird sie höchstens alle drei Stunden erneuert. Suche und Kategorien
+  (Werkzeuge, Netzwerk & Server, System & Jailbreak, Lader) filtern, „Geladen“ und „Mit Update“
+  zeigen, was schon da ist.
+- **Herunterladen:** Die Datei kommt in den Payload-Ordner (`/data/PS5-Cooling-Center/payloads`),
+  zuerst unter einem versteckten Namen; erst wenn ihre SHA-256 zur Liste passt, bekommt sie ihren
+  Namen. Eine Datei, die nicht passt, wird verworfen. Ein Download auf einmal, mit Fortschritt und
+  „Abbrechen“.
+- **Aktualisieren:** Steht in der Liste eine neuere Version (Vergleich wie im Payload Manager),
+  zeigt die Karte „alt → neu“; „Aktualisieren“ ersetzt die alte Datei.
+- **Starten** schickt die Datei wie gewohnt an den ELF-Lader (Port 9021); die Datei taucht auch
+  unter „Gespeicherte Payloads“ auf und lässt sich in Profile aufnehmen.
+- **Löschen** entfernt nur Dateien, die die App selbst heruntergeladen hat (`payload-store/installed.json`).
+  Liegt im Ordner schon eine fremde Datei gleichen Namens, ersetzt erst ein zweiter Klick sie.
+- Verbunden wird nur mit GitHub (https, nur über die App-eigene Namensauflösung und feste
+  Wurzelzertifikate). Die Payloads stammen von ihren Autoren; die App prüft nur, dass die Datei
+  die aus der Liste ist.
 
 ### Profile: Abläufe aus mehreren Payloads (ab 1.51.0)
 
@@ -1392,10 +1442,10 @@ dafür nicht mehr nötig:
 /mnt/usb1/PS5_Cooling_Center.pkg
 ```
 
-Das Paket (`IV9999-PSCC69690_00-PS5COOLINGCNTR01-A0100-V0100.pkg`, 8,2 MB) liegt der
-Veröffentlichung bei und steckt im Installer
-`cooling-center-launcher-installer_v<Version>.elf`: einmal senden, er installiert nur
-die Kachel und zeigt den nackten Fehlercode. Im Hauptprogramm ist das Paket nicht
+Seit 19.10.2026 liegen der Veröffentlichung kein Kachel-Paket und kein eigener
+Installer (`cooling-center-launcher-installer_v<Version>.elf`) mehr bei: Der Ordnerweg
+oben reicht. Wer noch ein Paket aus einer älteren Veröffentlichung hat
+(`IV9999-PSCC69690_00-PS5COOLINGCNTR01-A0100-V0100.pkg`), kann es weiter verwenden. Im Hauptprogramm ist das Paket nicht
 eingebaut: Es kostete dort 10,5 MB Speicher, und die Konsole konnte dann keine
 Anfrage mehr bedienen (siehe [ENTWICKLUNG.md](ENTWICKLUNG.md#bauen)). Über die
 Systemseite lässt sich ein Paket auch hochladen.

@@ -11,14 +11,15 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 | Bestandteil | Wo | Lizenz | Herkunft |
 |---|---|---|---|
 | **MkPFS** (RenanGBarreto, rdmrocha und Mitwirkende, PSBrew) — exFAT-Schreiber, PFS-/PFSC-Aufbau, exFAT-Großschreibtabelle, nach C übertragen | `src/conv_exfat.c`, `src/conv_pfs.c`, `src/conv_exfat_upcase.inc` | GPL-3.0 | <https://github.com/PSBrew/MkPFS>, Stand Commit `78eda0a` |
-| **UFS2Tool** (SvenGDK) — dessen Aufbau eines UFS2-Abbilds (Superblock, Zylindergruppen, Inodes, Verzeichniseinträge, Wiederherstellungsblock; `newfs -D` mit den Parametern, die ShadowMountPlus empfiehlt) als Vorlage für einen eigenen UFS2/ffpkg-Schreiber nach C übertragen; nichts davon wird mitgeliefert oder verteilt, nur die Formatkenntnis daraus portiert | `src/conv_ufs2.c` | BSD-2-Clause | <https://github.com/SvenGDK/UFS2Tool> |
+| **UFS2Tool** v4.1 (SvenGDK) — dessen Aufbau eines UFS2-Abbilds (Superblock, Zylindergruppen, Inodes, Verzeichniseinträge, Wiederherstellungsblock; `newfs -D` mit den Parametern, die ShadowMountPlus empfiehlt) als Vorlage für einen eigenen UFS2/ffpkg-Schreiber nach C übertragen; nichts davon wird mitgeliefert oder verteilt, nur die Formatkenntnis daraus portiert | `src/conv_ufs2.c` | BSD-2-Clause | <https://github.com/SvenGDK/UFS2Tool> |
 | **ps5upload** (phantomptr) — Profilfunktion (lokalen Anzeigenamen lesen und ändern, Profilbild-Dateien einsetzen) nach C übertragen; Format, Größen und Vorlage der Profilbild-Dateien im Browser-Teil | `src/profile.c`, Profilbild-Teil von `web/app.js` | GPL-3.0 (README und LICENSE des Projekts; GitHub erkennt die Datei nicht automatisch) | <https://github.com/phantomptr/ps5upload> |
-| **ps5-pkg-manager** 1.4.1 (itsPLK) — Aufbau der PS4-/PS5-Pakete (Kopf, Tabelle, `param.json`/`param.sfo`, Bild), das Teile-Format `PS5MPKG1` und der Ordnerplan der Suche; für das Installieren der Ablauf (die Konsole liest das Paket von einem kleinen Server auf der eigenen Adresse, ein eigener Prozess ruft die Installationsbibliothek AppInstUtil auf und fragt den Stand ab, die Wiederholung bei kurzzeitigen Fehlern) und der Aufbau der Strukturen, die diesem Aufruf übergeben werden. Die Programme `pkgparse.c`, `pkgscan.c`, `pkgsplit.c`, `pkgstream.c`, `pkginstall.c` und das Hilfsprogramm `helper/pkginst_helper.c` sind eigener Code nach diesem Wissen und nach dem öffentlich beschriebenen Paketformat; nichts davon ist eingebettet oder mitgeliefert (das Hilfsprogramm ist unser eigenes und steckt als Bytefolge in der App) | `src/pkgparse.c`, `src/pkgscan.c`, `src/pkgsplit.c`, `src/pkgstream.c`, `src/pkginstall.c`, `src/helper/pkginst_helper.c` | GPL-3.0 | <https://github.com/itsPLK/ps5-pkg-manager>, Version 1.4.1 |
-| **webhb** 0.4.1 (slopmaster33, aus ps5-app-dumper von EchoStretch gelöst) — der QR-Encoder in `src/qr.c` (Byte-Modus, Stufe M, Version 1 bis 6) ist daraus übernommen, GPL-3.0-or-later wie diese App; geändert nur der Name der Funktion und der Kopf. | `src/qr.c` | GPL-3.0-or-later | <https://github.com/slopmaster33/webhb> |
+| **ps5-pkg-manager** 1.5.1 (itsPLK) — Aufbau der PS4-/PS5-Pakete (Kopf, Tabelle, `param.json`/`param.sfo`, Bild), seit 1.5.1 dazu die Erkennung der Rückportier-Patches (Kopf `LIH`, Inhaltsmarken `0x40100000`) und das Lesen der SDK-Version des Programms, das Teile-Format `PS5MPKG1` und der Ordnerplan der Suche; für das Installieren der Ablauf (die Konsole liest das Paket von einem kleinen Server auf der eigenen Adresse, ein eigener Prozess ruft die Installationsbibliothek AppInstUtil auf und fragt den Stand ab, die Wiederholung bei kurzzeitigen Fehlern) und der Aufbau der Strukturen, die diesem Aufruf übergeben werden. Die Programme `pkgparse.c`, `pkgscan.c`, `pkgsplit.c`, `pkgstream.c`, `pkginstall.c` und das Hilfsprogramm `helper/pkginst_helper.c` sind eigener Code nach diesem Wissen und nach dem öffentlich beschriebenen Paketformat; nichts davon ist eingebettet oder mitgeliefert (das Hilfsprogramm ist unser eigenes und steckt als Bytefolge in der App) | `src/pkgparse.c`, `src/pkgscan.c`, `src/pkgsplit.c`, `src/pkgstream.c`, `src/pkginstall.c`, `src/helper/pkginst_helper.c` | GPL-3.0 | <https://github.com/itsPLK/ps5-pkg-manager>, Version 1.5.1 |
+| **webhb** 0.4.1 (slopmaster33, aus ps5-app-dumper von EchoStretch gelöst) — der QR-Encoder in `src/qr.c` (Byte-Modus, Stufe M, Version 1 bis 6) ist daraus übernommen, GPL-3.0-or-later wie diese App; geändert nur der Name der Funktion und der Kopf. | `src/qr.c` | GPL-3.0-or-later | <https://github.com/slopmaster33/webhb> (seit Oktober 2026 nicht mehr erreichbar) |
 | **libdeflate** 1.26 (Eric Biggers, Google LLC) — zlib-Kompression und -Dekompression sowie CRC-32, unverändert bis auf eine ergänzte Datei: `lib/crc32.c` (der Einstieg `libdeflate_crc32()`, eigen geschrieben nach dem Muster von `adler32.c`; die Tabellen und Routinen darunter sind libdeflates; siehe `README.PS5TM` dort) | `src/third_party/libdeflate/` | MIT (`COPYING` dort) | <https://github.com/ebiggers/libdeflate>, Tag `v1.26` |
 | **ampr_emu** (drakmor) — das Format des AMPR-Index (`AMPRIDX3`) und die Bauregeln aus `build_ampr_index.py`, nach C übertragen | `src/amprindex.c` | GPL-3.0 | <https://github.com/drakmor/ampr_emu> |
+| **BearSSL** 0.6 (Thomas Pornin) — TLS-Client der Spiel-Updates, unverändert (nur `src/` und `inc/` des Archivs) | `src/third_party/bearssl/` | MIT (`LICENSE.txt` dort) | <https://bearssl.org/>, Archiv `bearssl-0.6.tar.gz` |
 | **cJSON** 1.7.19 (Dave Gamble und Mitwirkende) | `src/third_party/cJSON*` | MIT | <https://github.com/DaveGamble/cJSON> |
-| **PS5-Payload-SDK** v0.43 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird; mindestens v0.42 nötig (Firmware 13.60), der Bau prüft das | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
+| **PS5-Payload-SDK** v0.44 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird; mindestens v0.42 nötig (Firmware 13.60), der Bau prüft das | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
 
 ## Eingebettete Fassungen, einzelne übernommene Dateien, Vorbilder und Schnittstellen (bei jedem Eintrag steht, was genau übernommen ist)
 
@@ -39,15 +40,23 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   (`starter/title/title.ld`), die Symboltabelle (`starter/title/symbols.map`) und `starter/sce_module/libc.prx` (Kompatibilitäts-Stubs
   und Startcode, kein Sony-Code, siehe `starter/sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt. <https://github.com/BlackBearReloaded/ps5-native-app-boilerplate>
-- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.5.1): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
+- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.6.0): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
   (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
   Vorlagen unter `third_party/ps4mount/`. Der Schlüssel in `src/ps4m_keys.h` stammt aus LibOrbisPkg (maxton, LGPL-3.0). Quelltext der
   Vorlage: <https://github.com/gasb07/ps4mount>.
+- **PatchDL** 0.3.0 (Knutwurst, GPL-3.0): Vorbild für die Spiel-Updates (`src/updates.c`, `src/upd_*.c`): die Server
+  und Adressen von Sonys Versionslisten und Paketlisten, der Schlüssel der PS4-Versionsadresse, die Prüfung, ob ein Spiel
+  von Sony signiert ist, der DNS-Weg (UDP, TCP, DNS über HTTPS, gemerkte Adressen) und das Holen älterer Patches über
+  prosperopatches.com/orbispatches.com und SC-Links. Der Code ist eigener (andere TLS-Bibliothek, eigene Warteschlange);
+  übernommen sind nur diese Fakten und die öffentlichen Wurzelzertifikate (Sony, DNS-Anbieter), aus denen
+  `tools/mk_upd_ta.py` die Vertrauensanker in `src/upd_ca.h` erzeugt. <https://github.com/knutwurst/ps5-patchdl>.
 - **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0 mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
   lose lässt, für den Mitschnitt zur Profil-Erzeugung (`src/trace.c`, ein C-Nachbau von `ampr_pack_profile.py`, Gegenprobe mit
-  dem Python-Werkzeug) und für die Prüfsummen-Tabelle der Spiel-Plugins; kein Quelltext von V-10 ist übernommen.
+  dem Python-Werkzeug) und für die Prüfsummen-Tabelle der Spiel-Plugins; seit 1.104 (gelesen am 18.10.2026) auch für das Beiseitelegen
+  doppelter Abbilder (`src/dupimg.c`), die Startprüfung gepackter Spiele, das Ablehnen von Verknüpfungen vor dem Packen und die Zeitschätzung je
+  LZ4-Stufe (deren Startwerte sind die von exFAT2AMPR). Kein Quelltext von V-10 ist übernommen.
   <https://github.com/exFAT2AMPR/exfat2ampr>.
 - **ampr_emu, LZ4-Pakete** (drakmor, GPL-3.0): Format und Regeln der LZ4-Pakete (AMPRPAK4, AMPRDAT3, AMPRCRC1, die TOML-Profile) sind ein
   C-Nachbau von `tools/ampr_pack.py` und `ampr_pack_format.py` (`src/lz4pack.c`, `src/lz4cfg.c`); gelesen am 12.10.2026 in
@@ -60,7 +69,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   bleiben (PlayGo-Marker, leere Dateien, die Startdateien von Ghost of Yōtei, gefunden von edu-ruiz-), für die Rechte 0777 aller
   geschriebenen Spieldateien (SIGBUS/CE-108255-1, gemeldet von OmgWhatIsThisss), für die Reparatur beim Prüfen der Pakete und für
   die Auswahl eines getesteten Profils nach Titel-ID, Name oder Engine (`src/lz4cfg.c`, `src/lz4pack_read.inc`, `src/amprlib.c`,
-  `src/imgjob_lz4.inc`); nachgebaut, kein Quelltext übernommen. <https://github.com/theghostonline/PS5-LZ4-Compression>
+  `src/imgjob_lz4.inc`); nachgebaut, kein Quelltext übernommen. <https://github.com/theghostonline/PS5-LZ4-Compression> (seit Oktober 2026 nicht mehr erreichbar; Konto und Projekt wurden gelöscht oder umbenannt)
 - **LZ4** 1.10.0 (Yann Collet, BSD-2-Clause): `src/third_party/lz4/` (`lz4.c`, `lz4hc.c`), unverändert; die Fassung, die auch die APR-EMU
   zum Entpacken benutzt. Lizenztext: `src/third_party/lz4/LICENSE`.
 - **PS5 Dump & Image Converter** (eigenes Projekt des Autors, Modul `shadowmount_generation.py` und der
@@ -81,9 +90,17 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 - **ps5-payload-dev/websrv** (John Törnblom): der Startweg über
   `sceSystemServiceLaunchApp` (`src/library.c`).
   <https://github.com/ps5-payload-dev/websrv>
-- **ps5-payload-manager** (itsPLK): die Regel, welche Prozesse als Payload gelten
+- **ps5-payload-manager** (itsPLK, GPL-3.0): die Regel, welche Prozesse als Payload gelten
   und beendet werden dürfen (`src/procmgr.c`), und das Vorbild für den Aufbau der
-  Seite „Payloads“. <https://github.com/itsPLK/ps5-payload-manager>
+  Seite „Payloads“; seit 19.10.2026 (Fassung 0.6.3) auch für „Payloads herunterladen“
+  (`src/paystore.c`, eigener Code): die Adresse der Liste, ihr Format, die Regeln für
+  Versionsvergleich, Kennung und Prüfsumme. <https://github.com/itsPLK/ps5-payload-manager>
+- **ps5-payloads-mirror** (itsPLK): die Liste `payloads_v2.json`, die „Payloads
+  herunterladen“ zur Laufzeit von <https://itsplk.github.io/ps5-payloads-mirror/> lädt,
+  samt den dort gespiegelten Dateien. Nichts davon ist Teil der App; die Payloads gehören
+  ihren jeweiligen Autoren und stehen unter deren Lizenzen.
+- **Wurzelzertifikate für GitHub** (ISRG Root X1/X2, USERTrust ECC/RSA; öffentlich, aus
+  dem CA-Paket von Debian): `src/upd_ca.h`, Satz `UPD_WEB_*`, erzeugt von `tools/mk_upd_ta.py`.
 - **ps-game-state-lib** (StonedModder, MIT): die Muster im Kernelprotokoll, an
   denen sich das laufende Spiel erkennen lässt (`src/gamestate.c`). Der Code ist
   eigen; es wurden nur diese Muster übernommen.

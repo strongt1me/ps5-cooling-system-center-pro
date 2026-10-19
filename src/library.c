@@ -1178,21 +1178,27 @@ done:
    time; a caller that finds a read already under way takes the list as it is
    rather than queue behind a drive, except for the very first read, which has
    nothing to fall back on and is waited for. */
+/* Set by ps5tm_library_forget(): something changed on disk (a move, an unpack, a delete). The next caller reads afresh
+   whatever it asks for, and waits for that read: a job must not be planned against the list from before the change
+   (review 19.10.2026: single-title lookups skipped the TTL and kept the old list until the games page asked). */
+static int g_dirty;
+
 static void
 ensure_fresh(int ttl_applies) {
   pthread_mutex_lock(&g_lock);
-  int first = (g_state == 0);
-  int stale = first || (ttl_applies && ps5tm_mono_ms() - g_read_ms >= LIBRARY_TTL_MS);
+  int first = (g_state == 0), dirty = g_dirty;
+  int stale = first || dirty || (ttl_applies && ps5tm_mono_ms() - g_read_ms >= LIBRARY_TTL_MS);
   pthread_mutex_unlock(&g_lock);
   if(!stale) return;
 
-  if(first) pthread_mutex_lock(&g_refresh_lock);
+  if(first || dirty) pthread_mutex_lock(&g_refresh_lock);
   else if(pthread_mutex_trylock(&g_refresh_lock) != 0) return;
 
   /* The thread ahead of us may just have finished the very read we came for. */
   pthread_mutex_lock(&g_lock);
-  int need = (g_state == 0) ||
+  int need = (g_state == 0) || g_dirty ||
              (ttl_applies && ps5tm_mono_ms() - g_read_ms >= LIBRARY_TTL_MS);
+  g_dirty = 0;                                   /* a forget from now on asks for the read after this one */
   pthread_mutex_unlock(&g_lock);
   if(need) refresh();
   pthread_mutex_unlock(&g_refresh_lock);
@@ -1202,6 +1208,7 @@ void
 ps5tm_library_forget(void) {
   pthread_mutex_lock(&g_lock);
   g_read_ms = 0;
+  g_dirty = 1;
   pthread_mutex_unlock(&g_lock);
 }
 
@@ -1312,6 +1319,70 @@ ps5tm_library_title_info(const char *title_id, char *ver, size_t ver_len) {
   free(tab);
   free(file);
   if(rc < 0) lookup_failed("die Version eines Titels", err);
+  return rc;
+}
+
+/* The games of the app database for the game updates (updates.c, 19.10.2026, as PatchDL 0.3.0 reads them in
+   patchdl_appdb.c): titleId, titleName, contentId, and from AppInfoJson CONTENT_VERSION (APP_VER for PS4) and
+   VERSION_FILE_URI (Sony pads it with spaces). */
+typedef struct {
+  ps5tm_libupd_t *out;
+  int             max, n;
+  int             c_tid, c_name, c_cid, c_json;
+} updrows_ctx_t;
+
+static int
+updrows_row(void *ctx, const sqlro_table_t *t, const sqlro_row_t *r) {
+  updrows_ctx_t *c = ctx;
+  (void)t;
+  if(c->n >= c->max) return 1;
+  char tid[24];
+  if(sqlro_text(r, c->c_tid, tid, sizeof(tid)) != 0 || strlen(tid) != 9 || (strncmp(tid, "PPSA", 4) && strncmp(tid, "CUSA", 4))) return 0;
+  for(int i = 4; i < 9; i++)
+    if(tid[i] < '0' || tid[i] > '9') return 0;
+  for(int i = 0; i < c->n; i++)
+    if(!strcmp(c->out[i].title_id, tid)) return 0;
+  ps5tm_libupd_t *e = &c->out[c->n];
+  memset(e, 0, sizeof(*e));
+  snprintf(e->title_id, sizeof(e->title_id), "%s", tid);
+  if(c->c_name >= 0) sqlro_text(r, c->c_name, e->name, sizeof(e->name));
+  if(c->c_cid >= 0) sqlro_text(r, c->c_cid, e->content_id, sizeof(e->content_id));
+  if(c->c_json >= 0 && c->c_json < r->ncols && r->kind[c->c_json] == SQLRO_TEXT && r->len[c->c_json] > 2) {
+    cJSON *j = cJSON_ParseWithLength((const char *)r->data[c->c_json], r->len[c->c_json]);
+    if(j) {
+      const cJSON *ver = cJSON_GetObjectItem(j, "CONTENT_VERSION");
+      if(!cJSON_IsString(ver)) ver = cJSON_GetObjectItem(j, "APP_VER");
+      if(cJSON_IsString(ver)) snprintf(e->version, sizeof(e->version), "%s", ver->valuestring);
+      const cJSON *u = cJSON_GetObjectItem(j, "VERSION_FILE_URI");
+      if(cJSON_IsString(u) && !strncmp(u->valuestring, "https://", 8)) {
+        snprintf(e->ver_uri, sizeof(e->ver_uri), "%s", u->valuestring);
+        size_t l = strlen(e->ver_uri);
+        while(l && (e->ver_uri[l - 1] == ' ' || e->ver_uri[l - 1] == '\t' || e->ver_uri[l - 1] == '\r' || e->ver_uri[l - 1] == '\n')) e->ver_uri[--l] = 0;
+      }
+      cJSON_Delete(j);
+    }
+  }
+  if(!e->name[0]) snprintf(e->name, sizeof(e->name), "%s", tid);
+  c->n++;
+  return 0;
+}
+
+int
+ps5tm_library_update_titles(ps5tm_libupd_t *out, int max) {
+  if(!out || max <= 0) return -1;
+  char err[160] = "";
+  size_t size = 0;
+  unsigned char *file = read_appdb(&size, err, sizeof(err));
+  sqlro_table_t *tab  = malloc(sizeof(sqlro_table_t));
+  sqlro_db_t     db;
+  int rc = -1;
+  if(file && tab && sqlro_open_mem(&db, file, size) == 0 && sqlro_find_table(&db, "tbl_contentinfo", tab) == 0) {
+    updrows_ctx_t c = { out, max, 0, sqlro_col(tab, "titleId"), sqlro_col(tab, "titleName"), sqlro_col(tab, "contentId"), sqlro_col(tab, "AppInfoJson") };
+    if(c.c_tid >= 0 && sqlro_scan(&db, tab, updrows_row, &c) >= 0) rc = c.n;
+  }
+  free(tab);
+  free(file);
+  if(rc < 0) lookup_failed("die Spiele für die Updates", err);
   return rc;
 }
 

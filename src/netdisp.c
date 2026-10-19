@@ -37,10 +37,11 @@
 /* ── network ─────────────────────────────────────────────────────────── */
 
 /* sceNetCtlGetInfo() fills a union sized for the largest member; the code
-   only ever reads the member matching the code it asked for. 64 bytes covers
-   every documented variant with room to spare. */
+   only ever reads the member matching the code it asked for. Sony's union is
+   256 bytes, and code 16 was seen writing past 64 (16.10.2026), so the buffer
+   is twice Sony's size: a firmware that copies the whole union stays inside. */
 typedef union {
-  unsigned char raw[64];
+  unsigned char raw[512];
   char          str[64];
   uint32_t      u32;
   uint8_t       u8;

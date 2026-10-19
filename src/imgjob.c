@@ -1139,7 +1139,6 @@ ps5tm_imgjob_start(const char *kind, const char *id, const char *mount, char *er
   snprintf(image, sizeof(image), "%s", li.path);
   snprintf(name, sizeof(name), "%s", li.name);
   free(x);
-  if(other_job(err, n)) return 409;
   pthread_mutex_lock(&g_lock);
   if(active_locked()) { pthread_mutex_unlock(&g_lock); snprintf(err, n, "Es läuft schon ein Vorgang an einem Abbild."); return 409; }
   memset(&g_job, 0, sizeof(g_job));
@@ -1153,6 +1152,13 @@ ps5tm_imgjob_start(const char *kind, const char *id, const char *mount, char *er
   g_job.started_ms = ps5tm_mono_ms();
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
+  /* claim first, then ask the others (they do the same): of two starts at the same moment one gives way (review 19.10.2026) */
+  if(other_job(err, n)) {
+    pthread_mutex_lock(&g_lock);
+    memset(&g_job, 0, sizeof(g_job));
+    pthread_mutex_unlock(&g_lock);
+    return 409;
+  }
 
   char *arg = is_unpack ? strdup(mount) : NULL;
   if(is_unpack && !arg) { finish(IJ_FAILED, "Kein Speicher."); snprintf(err, n, "Kein Speicher."); return 500; }

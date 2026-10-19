@@ -109,7 +109,7 @@ add_live_clocks(cJSON *l, const ps5tm_sensors_t *s) {
       cJSON_AddItemToArray(cores, cJSON_CreateNumber(c->core_mhz[i]));
   }
   cJSON_AddNumberToObject(k, "age_s",
-    c->sampled_ms ? (double)((ps5tm_now_ms() - c->sampled_ms) / 1000) : -1);
+    c->sampled_ms ? (double)((ps5tm_mono_ms() - c->sampled_ms) / 1000) : -1);
 }
 
 /* The power rails. Power, not utilisation: nothing on the PS5 counts GPU
@@ -148,7 +148,7 @@ add_power(cJSON *root, const ps5tm_sensors_t *s) {
   cJSON *w = cJSON_AddArrayToObject(aux, "words");
   for(int i = 0; i < 3; i++) cJSON_AddItemToArray(w, cJSON_CreateNumber(p->aux_word[i]));
   cJSON_AddNumberToObject(o, "age_s",
-    p->sampled_ms ? (double)((ps5tm_now_ms() - p->sampled_ms) / 1000) : -1);
+    p->sampled_ms ? (double)((ps5tm_mono_ms() - p->sampled_ms) / 1000) : -1);
 }
 
 static void
@@ -2925,12 +2925,15 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
     }
   }
 
+  unsigned before_cache = g_config.library_cache;
   g_config = next;
   ps5tm_config_clamp(&g_config);
   ps5tm_config_probe_revert_cancel();     /* an import is an explicit setting */
+  unsigned after_cache = g_config.library_cache;
   ps5tm_config_unlock();
   cJSON_Delete(root);
   int saved = (ps5tm_config_save() == 0);
+  if(before_cache != after_cache) ps5tm_library_forget();   /* as PUT does: the switch takes effect now */
 
   if(!saved) {
     ps5tm_http_send_error(fd, 500, "config_save_failed",
@@ -4348,8 +4351,12 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
       const cJSON *jr = cJSON_GetObjectItem(b, "restore_batch");
       char rb[32] = "";
       if(cJSON_IsNumber(jr)) snprintf(rb, sizeof(rb), "&restore_batch=%d", (int)jr->valuedouble);
-      snprintf(form, sizeof(form), "batch=%d&batch_size=%d&dlc=%d%s&paths=%s",
-               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? (int)js->valuedouble : 5, cJSON_IsTrue(jd) ? 1 : 0, rb, enc);
+      /* fast_reg (since 0.6.0): /user/app shows only the new games while the system registers them; left out, the module keeps its value */
+      const cJSON *jf = cJSON_GetObjectItem(b, "fast_reg");
+      char fr[16] = "";
+      if(cJSON_IsBool(jf)) snprintf(fr, sizeof(fr), "&fast_reg=%d", cJSON_IsTrue(jf) ? 1 : 0);
+      snprintf(form, sizeof(form), "batch=%d&batch_size=%d&dlc=%d%s%s&paths=%s",
+               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? (int)js->valuedouble : 5, cJSON_IsTrue(jd) ? 1 : 0, rb, fr, enc);
       rc = ps4m_do_config(form, msg, sizeof(msg));
     } else if(!strcmp(action, "restore") && cJSON_IsArray(cJSON_GetObjectItem(b, "ids"))) {
       /* several games at once (since 0.5.0): {"action":"restore","ids":["CUSA…",…]}; the module checks each title id */
@@ -4451,6 +4458,108 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     cJSON_AddBoolToObject(o, "ok", 1);
     cJSON_AddStringToObject(o, "message", msg);
     if(detail) cJSON_AddItemToObject(o, "detail", detail);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  /* Images of the same game (dupimg.c): GET the titles with two or more sources and what is set aside; POST {path, undo}
+     renames one to <name>.off or back. */
+  /* Game updates (updates.c): GET the state, POST an action; /packages the files in the folder, /versions?id= what Prospero
+     or Orbis Patches list for a title; /qr?id= a QR code of this page for that title (the phone opens it to paste a link). */
+  if(!strcmp(req->path, "/api/v1/updates")) {
+    if(is_get) { send_cjson(fd, 200, ps5tm_updates_json()); return; }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    if(!cJSON_IsObject(b)) { cJSON_Delete(b); ps5tm_http_send_error(fd, 400, "bad_request", "Kein gültiger Auftrag."); return; }
+    char msg[400];
+    int http = ps5tm_updates_action(b, msg, sizeof(msg));
+    cJSON_Delete(b);
+    if(http != 200) { ps5tm_http_send_error(fd, http, "updates_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/updates/packages")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    send_cjson(fd, 200, ps5tm_updates_packages_json());
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/updates/versions")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char id[16] = "";
+    query_param(req->query, "id", id, sizeof(id));
+    int http = 200;
+    cJSON *o = ps5tm_updates_versions_json(id, &http);
+    if(!o) { ps5tm_http_send_error(fd, http, "versions_refused", http == 409 ? "Spiel-Updates sind ausgeschaltet." : "Ungültige Titel-ID."); return; }
+    send_cjson(fd, 200, o);
+    return;
+  }
+  /* Payload store (paystore.c): GET the list (?refresh=1 when old, 2 always), POST {action, id, force} */
+  if(!strcmp(req->path, "/api/v1/paystore")) {
+    if(is_get) {
+      char rf[4] = "";
+      query_param(req->query, "refresh", rf, sizeof(rf));
+      int mode = rf[0] == '2' ? 2 : rf[0] == '1' ? 1 : 0;
+      cJSON *o = ps5tm_paystore_json(mode);
+      if(!o) { ps5tm_http_send_error(fd, 500, "no_memory", "Kein Speicher."); return; }
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    if(!cJSON_IsObject(b)) { cJSON_Delete(b); ps5tm_http_send_error(fd, 400, "bad_request", "Kein gültiger Auftrag."); return; }
+    char msg[400];
+    int http = ps5tm_paystore_action(b, msg, sizeof(msg));
+    cJSON_Delete(b);
+    if(http != 200) { ps5tm_http_send_error(fd, http, http == 409 ? "paystore_conflict" : "paystore_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/updates/qr")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char id[16] = "", ip[32], url[96];
+    query_param(req->query, "id", id, sizeof(id));
+    int ok = strlen(id) == 9;
+    for(int i = 0; ok && i < 9; i++) ok = (i < 4 ? (id[i] >= 'A' && id[i] <= 'Z') : (id[i] >= '0' && id[i] <= '9'));
+    if(!ok) { ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Titel-ID."); return; }
+    if(ps5tm_local_ip(ip, sizeof(ip)) != 0) { ps5tm_http_send_error(fd, 404, "no_address", "Die Konsole hat gerade keine Netzwerkadresse."); return; }
+    ps5tm_config_lock();
+    unsigned port = g_config.http_port;
+    ps5tm_config_unlock();
+    snprintf(url, sizeof(url), "http://%s:%u/#upd-%s", ip, port, id);
+    char *svg = malloc(8192);
+    if(!svg || ps5tm_qr_svg(url, svg, 8192) != 0) { free(svg); ps5tm_http_send_error(fd, 500, "qr_failed", "Der QR-Code ließ sich nicht erzeugen."); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "url", url);
+    cJSON_AddStringToObject(o, "svg", svg);
+    free(svg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/library/duplicates")) {
+    if(is_get) {
+      cJSON *o = ps5tm_dupimg_list();
+      if(!o) { ps5tm_http_send_error(fd, 500, "no_memory", "Die Suche ließ sich nicht starten."); return; }
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jp = b ? cJSON_GetObjectItem(b, "path") : NULL;
+    int undo = b && cJSON_IsTrue(cJSON_GetObjectItem(b, "undo"));
+    char path[512] = "", msg[400] = "";
+    if(cJSON_IsString(jp) && strlen(jp->valuestring) < sizeof(path)) snprintf(path, sizeof(path), "%s", jp->valuestring);
+    cJSON_Delete(b);
+    int http = ps5tm_dupimg_set_aside(path, undo, msg, sizeof(msg));
+    if(http != 200) { ps5tm_http_send_error(fd, http, "set_aside_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
     send_cjson(fd, 200, o);
     return;
   }

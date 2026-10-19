@@ -7,9 +7,9 @@ Bauen, auf die Konsole senden, Fehlersuche und Aufbau des Quellcodes.
 ## Bauen
 
 Voraussetzung: das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk)
-**ab v0.42**; gebaut und getestet ist mit **v0.43**
+**ab v0.42**; gebaut und getestet ist mit **v0.44**
 (`ps5-payload-sdk.zip`, SHA-256
-`a9cc9929f21b2b2c5d5b309f3bab4997067c45281c0622cf4838b1aecba66fcb`, so auch
+`4d06eab777bb135705b5a6816688c9132efb246093fe606ac488ab6cf65ca5b0`, so auch
 von GitHub als Prüfsumme der Datei angegeben).
 `tools/build-windows.sh` erwartet eine Kopie im Projektordner unter
 `PS5_PAYLOAD_SDK/` (Git ignoriert diesen Ordner); ein anderer Ort lässt sich mit
@@ -24,7 +24,10 @@ Versionen, für die es Kernel-Offsets hat. Eine Firmware ohne Fall endet vor
 v0.42 brachte 13.60 dazu, v0.43 nur Kleinigkeiten (`kernel_iommu_copyin()`,
 ein optionales `payload_args->payloadout`); beim Wechsel von v0.41 auf v0.43
 blieb alles Übrige im SDK gleich, bis auf die Kopfdatei `ps5/kernel.h`, die nur
-neue Deklarationen bekam.
+neue Deklarationen bekam. v0.44 (10.10.2026) ergänzt die Stub-Bibliotheken `libSceAgc` und
+`libSceAgcDriver`, `killpg()` in der libc und Verbesserungen der Werkzeugkette; die App kommt davon nicht
+zum Zug: mit v0.44 gebaut ist die ELF bis auf die zufällige 16-Byte-Build-ID dieselbe wie mit v0.43
+(18.10.2026 verglichen).
 
 Darum prüft der Bau selbst (`tools/check_sdk_firmware.py`, in `Makefile` und
 `installer/Makefile`):
@@ -386,11 +389,15 @@ src/pkginst.h       Aufteilung des Pakets in Stücke (Slices) und der Server; sr
 src/helper/pkginst_helper.c  das Hilfsprogramm (eigene ELF, in die App eingebettet): ruft sceAppInstUtil* auf; höchstens ein Installationsaufruf je Prozess, fragt nach dem Fortschritt (auch als Ersatz für ein gestorbenes); beendet die Bibliothek nie, steigt mit _exit aus; gibt sceAppInstUtilGetInstallStatus einen eigenen 16-KiB-Puffer (die Funktion schreibt 712 Bytes, das bekannte Feld hat 600) und hält die Verbindung zur App ab fd 100
 tools/gen_blob.py   macht aus der Hilfs-ELF ein C-Feld und prüft, dass die Kennungsstelle genau einmal vorkommt
 src/savebackup.c    Spielstände: sichern, prüfen, zurückspielen (rohe Kopie mit Zurücklesen, Liste mit SHA-256, Stand vor dem Zurückspielen), ein Thread je Vorgang
-src/ps4m_core.c    PS4Mount 0.5.1 (gasb07, GPL-3.0) in der App: PS4-Fake-PKGs auf USB erkennen, ohne Installation einbinden, zurückverschieben; ps4m_pkg.c, ps4m_build.c, ps4m_crypto.c, ps4m_fw.c, ps4m_origin.c und ps4m_keys.h gehören dazu (Quelle: third_party/ps4mount/)
+src/ps4m_core.c    PS4Mount 0.6.0 (gasb07, GPL-3.0) in der App: PS4-Fake-PKGs auf USB erkennen, ohne Installation einbinden, zurückverschieben; ps4m_pkg.c, ps4m_build.c, ps4m_crypto.c, ps4m_fw.c, ps4m_origin.c und ps4m_keys.h gehören dazu (Quelle: third_party/ps4mount/)
+src/dupimg.c        doppelte Abbilder eines Spiels finden und beiseitelegen (`….off`), nach exFAT2AMPR 1.104 (V-10)
+src/updates.c       Spiel-Updates (nach PatchDL 0.3.0, Knutwurst): Schalter, Prüfung je Spiel, Warteschlange, Download über N Verbindungen mit job.json, Prüfsummen, Installation über pkginstall (Kennung `upd-<Titel-ID>`), Aufräumen
+src/paystore.c      Payloads herunterladen: Liste des Payload Managers von itsPLK (itsplk.github.io), Download mit SHA-256-Prüfung in den Payload-Ordner, installed.json, Aktualisieren/Löschen
+src/upd_http.c      HTTP/1.1 über TCP oder TLS 1.2 (BearSSL, Vertrauensanker aus src/upd_ca.h, erzeugt mit tools/mk_upd_ta.py), Umleitungen nur nach Regel; upd_dns.c eigene DNS-Anfragen (UDP, TCP, DNS über HTTPS, gemerkte Adressen); upd_sony.c Versions- und Paketlisten, Stücke; upd_site.c prosperopatches.com/orbispatches.com und SC-Links
 src/tile.c          Kachel-Installation über AppInstUtil (Ordner aus eingebetteten Dateien, Paket als Rückfall)
 src/dynsym.c        Symbolsuche in Sony-Modulen
 src/sony_api_lock.c gemeinsame Sperre für empfindliche Systemaufrufe
-src/third_party/    cJSON, libdeflate, lz4
+src/third_party/    cJSON, libdeflate, lz4, bearssl
 third_party/        eingebettete Fassungen fremder Programme (drakmor: ampr_emu, dlc_emu, playgo; gasb07: ps4mount) und LZ4-Profile
 web/                Web-Oberfläche (per tools/gen_assets.py eingebettet, gzip), Profilbilder in web/avatars/, Wörterbücher in web/lang/
 tile/               Dateien der Kachel (sce_sys), eingebettet über tools/gen_tile_files.py

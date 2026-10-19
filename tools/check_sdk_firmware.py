@@ -9,7 +9,7 @@ versions it has kernel offsets for, one case after the other:
 
 A firmware that has no case there makes the start fail before main(), with no
 line in any log. SDK v0.41 stops at 13.40; the case for 13.60 came with v0.42,
-and v0.43 is what this project is built with.
+and v0.44 is what this project is built with.
 
 This script looks for those comparisons in the machine code:
 
@@ -88,7 +88,7 @@ def main(argv):
         if at is not None:
             print(f"  {fw}: found, compared at file offset 0x{at:x}")
         elif weak:
-            print(f"  {fw}: found, but not as a comparison - check by hand if this SDK is newer than v0.43")
+            print(f"  {fw}: found, but not as a comparison - check by hand if this SDK is newer than v0.44")
         else:
             print(f"  {fw}: MISSING")
             missing.append(fw)
@@ -98,7 +98,7 @@ def main(argv):
         what = "This SDK's CRT" if mode == "sdk" else "This ELF"
         print(f"{what} has no case for firmware {', '.join(missing)}: a console on that "
               "firmware would not get past the start-up code, and nothing would be logged.\n"
-              "Build with ps5-payload-sdk v0.43 or newer "
+              "Build with ps5-payload-sdk v0.44 or newer "
               "(https://github.com/ps5-payload-dev/sdk/releases), "
               "or name the firmware you need with FW_NEED=... when you build for older ones.",
               file=sys.stderr)

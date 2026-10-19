@@ -883,6 +883,7 @@ fan_worker(void *arg) {
   int      fan_error_logged  = 0;
   int      was_automatic     = -1;  /* -1 = first pass, mode not seen yet */
   uint64_t last_loop_ms      = 0;
+  int      reescalate_pending = 0;
 
   /* Sensor loss and a dead fan-speed register, counted in passes — one a
      second while this thread runs. Passes rather than clock time on purpose:
@@ -950,6 +951,18 @@ fan_worker(void *arg) {
                  "Lüftervorgabe werden erneut abgesichert.",
                  (unsigned long long)((wall - last_loop_ms) / 1000ull));
 
+      reescalate_pending = 1;
+      last_apply_ms = 0;
+      last_servo_ms = 0;
+      duty_ema_x10  = -1;
+      fan_error_logged = 0;
+      avg_hist_n    = 0;                         /* the slope across a pause means nothing */
+    }
+    /* The identity is set again only under the Sony lock, and never waited for: a tile install holds the lock and
+       ShellCore's identity for up to ~40 s, and switching back in the middle of it made the install fail (19.10.2026).
+       Until it is done the next loops try again. */
+    if(reescalate_pending && ps5tm_sony_api_trylock()) {
+      reescalate_pending = 0;
       if(ps5tm_platform_escalate() != 0)
         PS5TM_WARN("resume_escalation_failed",
                    "Rechteausweitung nach Pause fehlgeschlagen."
@@ -957,12 +970,8 @@ fan_worker(void *arg) {
       else
         PS5TM_INFO("resume_escalation_ok",
                    "Rechteausweitung nach Pause bestätigt.");
-
+      ps5tm_sony_api_unlock();
       last_apply_ms = 0;
-      last_servo_ms = 0;
-      duty_ema_x10  = -1;
-      fan_error_logged = 0;
-      avg_hist_n    = 0;                         /* the slope across a pause means nothing */
     }
     last_loop_ms = wall;
 

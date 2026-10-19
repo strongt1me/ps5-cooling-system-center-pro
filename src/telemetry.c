@@ -454,7 +454,7 @@ ps5tm_telemetry_update(ps5tm_sensors_t *out, int with_power_clocks,
                        int with_fps) {
   if(!out) return;
 
-  uint64_t now = ps5tm_now_ms();
+  uint64_t now = ps5tm_mono_ms();   /* ages and staleness only: a clock jump must not make samples look fresh or stale */
 
   /* Read outside the Sony lock, so no lock is ever taken inside it. */
   int fps_enabled = 0, game_in_front = 0;

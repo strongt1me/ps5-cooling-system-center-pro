@@ -183,7 +183,9 @@ lzc_protected(const char *rel) {
 /* Files the PS5 looks for on disk outside the game process, where the APR-EMU cannot show packed files: PlayGo's chunk
  * markers and the Sucker Punch boot files Ghost of Yotei needs to get past a black screen (PPSA26344 02.002.000). The list is
  * that of LZ4 Compression 1.4.3 by Husam Osman (GPL-3.0, read on 15.10.2026; the files were found by edu-ruiz- on Reddit).
- * Empty files stay too: PlayGo's language placeholders are empty. Upper and lower case do not count. */
+ * Empty files stay too: PlayGo's language placeholders are empty. Remedy's pack tables (*.rmdtoc) stay since 18.10.2026: Alan Wake 2
+ * opens them with a plain open that the APR-EMU does not serve from packs and then stops with "No packfiles found!" (found with
+ * MkPFS.CSharp 2.5.0 by danthespal; the .rmdblob data is read through APR and is still packed). Upper and lower case do not count. */
 int
 lzc_keep_on_disk(const char *rel, uint64_t size) {
   if(size == 0) return 1;
@@ -191,7 +193,7 @@ lzc_keep_on_disk(const char *rel, uint64_t size) {
     "cache_ps5/pgc_*_dummy_file", "cache_ps5/playgo.pgm", "cache_ps5/load_menu_catalog.log", "cache_ps5/all_shaders.texmeshman",
     "cache_ps5/game.sprig.packman", "cache_ps5/game.sprig.texmeshman", "cache_ps5/pulse.sprig.texmeshman",
     "sounds/scream/_generated/buss_config.bus", "sounds/scream/_generated/distance_model.dml",
-    "sounds/scream/_generated/group_mix.gmx", NULL };
+    "sounds/scream/_generated/group_mix.gmx", "*.rmdtoc", NULL };
   char l[1100];
   norm_path(rel, l, sizeof(l));
   lower_copy(l, l, sizeof(l));

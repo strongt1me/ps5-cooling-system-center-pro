@@ -249,22 +249,30 @@ static void pdb_from_template(buf_t *out, const uint8_t *t, size_t tlen, const p
     p4m_buf_put(out, crc, 4);
 }
 
-static void chunk_lists(const uint8_t *pg, size_t len, uint8_t **loci, uint8_t **list, uint16_t *chunks) {
+/* -1 when memory is short (the count comes from the package); nothing is left allocated then. */
+static int chunk_lists(const uint8_t *pg, size_t len, uint8_t **loci, uint8_t **list, uint16_t *chunks) {
     *chunks = p4m_playgo_chunk_count(pg, len);
-    *loci = malloc(*chunks);
-    *list = malloc(*chunks * 4u);
+    *loci = malloc(*chunks ? *chunks : 1);
+    *list = malloc(*chunks ? *chunks * 4u : 4u);
+    if (!*loci || !*list) {
+        free(*loci);
+        free(*list);
+        *loci = *list = NULL;
+        return -1;
+    }
     for (unsigned i = 0; i < *chunks; i++) {
         (*loci)[i] = 3;
         put_le16(*list + i * 4, (uint16_t)i);
         put_le16(*list + i * 4 + 2, 3);
     }
+    return 0;
 }
 
 int p4m_build_pdb(buf_t *out, const pkg_t *pkg, const char *ver, const char *url, const buf_t *app_json,
               const uint8_t *pg, size_t len, const patch_ref_t *patch) {
     uint8_t *loci, *list, size[8], vi[4];
     uint16_t chunks;
-    chunk_lists(pg, len, &loci, &list, &chunks);
+    if (chunk_lists(pg, len, &loci, &list, &chunks) != 0) return -1;
     put_le64(size, pkg->pkg_size + (patch ? patch->pkg->pkg_size : 0));
     ver_int(vi, ver);
     pdb_override_t ov[] = {
@@ -286,7 +294,7 @@ int p4m_build_pdb(buf_t *out, const pkg_t *pkg, const char *ver, const char *url
 int p4m_build_patch_pdb(buf_t *out, const patch_ref_t *patch) {
     uint8_t *loci, *list, size[8];
     uint16_t chunks;
-    chunk_lists(patch->playgo, patch->playgo_len, &loci, &list, &chunks);
+    if (chunk_lists(patch->playgo, patch->playgo_len, &loci, &list, &chunks) != 0) return -1;
     put_le64(size, patch->pkg->pkg_size);
     char base_ref[64];
     snprintf(base_ref, sizeof(base_ref), "0000000000000000-%.36s", patch->pkg->content_id);

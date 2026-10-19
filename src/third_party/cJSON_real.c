@@ -410,6 +410,11 @@ loop_end:
 /* don't ask me, but the original cJSON_SetNumberValue returns an integer or double */
 CJSON_PUBLIC(double) cJSON_SetNumberHelper(cJSON *object, double number)
 {
+    if (object == NULL) /* upstream b2890c8 (#991), not yet in a release */
+    {
+        return (double)NAN;
+    }
+
     if (object == NULL)
     {
         return (double)NAN;

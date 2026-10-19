@@ -1,6 +1,6 @@
-# PS4Mount 0.5.1 (gasb07)
+# PS4Mount 0.6.0 (gasb07)
 
-Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom User am 15.10.2026 bereitgestellt; davor 0.5.0 vom selben Tag, 0.4.4 vom 14.10. und 0.4.1 vom 13.10.), Lizenz GPL-3.0-or-later
+Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom User am 15.10.2026 bereitgestellt; davor 0.5.0 vom selben Tag, 0.4.4 vom 14.10. und 0.4.1 vom 13.10.), dazu am 18.10.2026 die Änderungen von 0.5.1 auf 0.6.0 (Quelltext des Tags `v0.6.0`, gelesen und nachgebaut), Lizenz GPL-3.0-or-later
 (`LICENSE` hier). Der Quelltext ist unter `src/ps4m_*.c` übernommen:
 
 | Original | Hier | Änderung |
@@ -13,6 +13,16 @@ Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom U
 | `src/db.c` | entfällt | Die Abfrage `tbl_contentinfo` liest `ps5tm_library_installed_ids` (ohne SQLite) |
 | `src/web.c`, `web/index.html` | entfallen | Die Weboberfläche ist der Reiter „PS4 von USB“ der App (`web/app.js`); die Originalseite liegt als `panel-index.html` zum Vergleich |
 | `test/unit.c` | `third_party/ps4mount/test/unit.c` | Vorsatz; 125 Prüfungen, laufen ohne Konsole |
+
+Seit 0.6.0 (18.10.2026): **Anmeldung nur der neuen Spiele** (`main.c`: `mask_user_app`, `unmask_user_app`, `unmask_leftover`, `masked_path`, die
+Änderungen an `install_all`, `mount_dir` und `unmount_all_layers`). Während `AppInstallAll` zeigt `/user/app` nur die neuen Spiele (ein leerer
+Ordner `/system_data/ps4mount/stage` darüber, auf jedem neuen Spiel sein Ordner), damit die Konsole nicht jeden Ordner durchgeht. In der App ist das
+**ausgeschaltet** und ein Schalter in den Einstellungen („Neue Spiele schneller anmelden“, Schlüssel `fast_reg=` in `config.txt`), weil es an der
+Konsole noch nicht erprobt ist; dazu weist die App Hinzufügen/Entfernen/Zurückverschieben ab, solange `/user/app` verborgen ist (im Original
+bedient der Webserver in dieser Zeit niemanden), und räumt beim Start des Fadens auf (`unmask_leftover`). Nicht übernommen: die Änderung an
+`logts.c` (der Dämon schloss `stdout`; die App hat ihr eigenes Protokoll) und die Zahlenfelder der Originalseite (die Felder der App sind schon
+`type=number`). Diese Teile sind von Hand in `src/ps4m_core.c` eingefügt (mit „0.6.0“ im Kommentar); die Übernahmeskripte der früheren Fassungen
+wurden dafür nicht erneuert, die Datei wird seitdem unmittelbar gepflegt.
 
 Zusätzlich übernommen (15.10.2026), mit „(app)“ und „PS4Mount PR #18“ im Code markiert: die Korrekturen aus dem noch nicht
 zusammengeführten Pull Request <https://github.com/gasb07/ps4mount/pull/18> (EzioRamesha, „Stability fixes“) für die Teile, die

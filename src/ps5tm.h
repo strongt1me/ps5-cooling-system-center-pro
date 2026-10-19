@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.69.1"
+#define PS5TM_VERSION        "1.70.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -631,6 +631,16 @@ int           ps5tm_library_installed_ids(char (*ids)[12], int max);
 /* One title of the app database, for checking an installation: 1 when it is listed (ver gets the version its
    AppInfoJson names, "" when it names none), 0 when it is not, -1 when the database cannot be read. */
 int           ps5tm_library_title_info(const char *title_id, char *ver, size_t ver_len);
+/* Every PS5 (PPSA) and PS4 (CUSA) game of the app database with what the game updates need (updates.c): its version
+   (CONTENT_VERSION, APP_VER for PS4), content id, name and Sony's update list (VERSION_FILE_URI, PS5). How many, or -1. */
+typedef struct {
+  char title_id[12];
+  char name[128];
+  char content_id[40];
+  char version[16];
+  char ver_uri[256];
+} ps5tm_libupd_t;
+int           ps5tm_library_update_titles(ps5tm_libupd_t *out, int max);
 /* Is a content id (a DLC's, for one) listed in the app database? 1, 0, or -1 when it cannot be read. */
 int           ps5tm_library_content_listed(const char *content_id);
 int           ps5tm_library_cover(const char *title_id, char *path,
@@ -784,6 +794,26 @@ int           ps5tm_lz4_start(const char *kind, const char *title_id, int level,
 /* 1 when the game folder holds a pack set (ampr_assets.index) */
 int           ps5tm_lz4_packed_dir(const char *dir);
 
+/* The same game in several images on the drives, and setting one aside as <name>.off (dupimg.c). */
+struct cJSON *ps5tm_dupimg_list(void);
+int           ps5tm_dupimg_set_aside(const char *path, int undo, char *msg, size_t n);
+
+/* Game updates from Sony's servers (updates.c, after PatchDL 0.3.0): the state of every game and of the running job, the
+   packages in the folder, the versions Prospero/Orbis Patches list for a title, and the actions (body {action, id, ...}:
+   enable, disable, settings, check, update_all, download, resume, install, pause, cancel, delete_pkg, link, forget_link).
+   ps5tm_updates_action returns an HTTP status with a sentence in msg. */
+struct cJSON *ps5tm_updates_json(void);
+/* Payload store (paystore.c): payloads to download from the list of itsPLK's Payload Manager. refresh: 0 the saved list,
+   1 fetch it again when it is older than three hours (and was loaded once), 2 always. */
+struct cJSON *ps5tm_paystore_json(int refresh);
+int ps5tm_paystore_action(const struct cJSON *body, char *msg, size_t msg_len);
+int ps5tm_paystore_busy(void);
+struct cJSON *ps5tm_updates_packages_json(void);
+struct cJSON *ps5tm_updates_versions_json(const char *title_id, int *http);
+int           ps5tm_updates_action(const struct cJSON *body, char *msg, size_t n);
+void          ps5tm_updates_boot(void);
+int           ps5tm_updates_busy(void);
+
 /* ShadowMountPlus's own interface on 127.0.0.1:10101 — see smp.c. */
 #define PS5TM_SMP_MAX_GAMES 256
 typedef struct {
@@ -794,6 +824,8 @@ typedef struct {
   char image_type[12];     /* "exfatfs", "ufs", "pfs", "pfsc"           */
   int  mounted;
   int  available;          /* the source is reachable                   */
+  char fakelib_mode[12];   /* since 1.7beta5: "full", "emulators", "disabled"; "" when not told */
+  int  fakelib_effective;  /* 1/0 whether a fakelib is mounted at launch (the global switch counted), -1 not told */
 } ps5tm_smp_game_t;
 
 /* 0 and *out filled when ShadowMountPlus manages this title. */
@@ -1124,6 +1156,7 @@ void  ps5tm_payloads_init(void);
 char *ps5tm_payload_list(void);
 /* Each returns an HTTP status (200 on success) and fills the result.
    source is "internal" or "usb"; mount and dir are only read for "usb". */
+int   ps5tm_payload_start_step(const char *name, ps5tm_payload_result_t *r);   /* a profile step: waits, no repeat guard */
 int   ps5tm_payload_start(const char *source, const char *mount, const char *dir,
                           const char *name, ps5tm_payload_result_t *r);
 int   ps5tm_payload_copy(const char *mount, const char *dir, const char *name,
@@ -1313,6 +1346,7 @@ typedef struct {
   uint64_t data_size, part_off;  /* parts: its size, and where it begins in the whole package */
   uint64_t icon_off;             /* where icon0.png lies in this file */
   uint32_t icon_size;
+  uint32_t sdk;                  /* PS5 packages: the SDK version the executable was built with (0x05000033 = 5.xx), else 0 */
 } ps5tm_pkg_t;
 
 int  ps5tm_pkg_parse(const char *path, ps5tm_pkg_t *out);
@@ -1367,6 +1401,8 @@ typedef struct {
 } ps5tm_pkginst_result_t;
 int  ps5tm_pkginst_start_q(const char *id, char *err, size_t err_len, int *transient, unsigned *seq);
 void ps5tm_pkginst_result(ps5tm_pkginst_result_t *r);
+/* The result of job seq: 1 it has ended (r filled), 0 it is still going, -1 unknown (too old). */
+int  ps5tm_pkginst_result_of(unsigned seq, ps5tm_pkginst_result_t *r);
 void ps5tm_pkginst_cancel(void);
 int  ps5tm_pkginst_busy(void);
 struct cJSON *ps5tm_pkginst_job_json(void);
@@ -1692,6 +1728,8 @@ typedef struct {
   char   peer[16];
   /* The browser's Accept-Encoding names gzip: stored pages go out as they are, else they are unpacked first. */
   int    gzip_ok;
+  /* If-None-Match: the ETag of the copy the browser has (the pages answer 304 when it is still the one) */
+  char   if_none_match[48];
 } ps5tm_request_t;
 
 /* The file manager's requests (/api/v1/files/...): 1 when it answered, 0 when the path is not its own. */
@@ -1743,6 +1781,8 @@ typedef struct {
 
 /* Serves one of the embedded pages for a GET (assets.c): 1 when the path is one of them. */
 int ps5tm_asset_serve(int fd, const ps5tm_request_t *req);
+void ps5tm_http_send_cc(int fd, int status, const char *status_text, const char *ctype, const void *body, size_t len,
+                        const char *extra_headers, const char *cache_control);
 
 extern const ps5tm_asset_t ps5tm_assets[];
 extern const unsigned      ps5tm_assets_count;

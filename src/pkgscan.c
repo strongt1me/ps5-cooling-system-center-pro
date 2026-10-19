@@ -346,6 +346,7 @@ ps5tm_pkgscan_json(void) {
     cJSON_AddNumberToObject(o, "total", (double)p->total);
     cJSON_AddNumberToObject(o, "mtime", (double)p->mtime);
     cJSON_AddBoolToObject(o, "has_icon", p->icon_size > 0);
+    if(p->sdk) cJSON_AddNumberToObject(o, "sdk", p->sdk);          /* PS5: 0x05000033 = built for 5.xx */
     if(p->parts > 0) {
       cJSON *pt = cJSON_AddObjectToObject(o, "parts");
       cJSON_AddNumberToObject(pt, "total", p->parts);
@@ -365,6 +366,7 @@ ps5tm_pkgscan_json(void) {
 int
 ps5tm_pkgscan_find(const char *id, ps5tm_pkg_t *out) {
   if(id && !strncmp(id, "live-", 5)) return ps5tm_pkglive_find(id, out);        /* a package the browser is uploading */
+  if(id && !strncmp(id, "upd-", 4)) return ps5tm_updates_pkg_find(id, out);     /* a game update the app downloaded (updates.c) */
   if(!id || strlen(id) != 16) return -1;
   int rc = -1;
   pthread_mutex_lock(&g_lock);
@@ -386,6 +388,7 @@ ps5tm_pkgscan_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsign
   *n = 0;
   *total = 0;
   if(id && !strncmp(id, "live-", 5)) return ps5tm_pkglive_slices(id, out, max, n, total, err, err_len);
+  if(id && !strncmp(id, "upd-", 4)) return ps5tm_updates_pkg_slices(id, out, max, n, total, err, err_len);
   if(!id || strlen(id) != 16) { snprintf(err, err_len, "Dieses Paket kennt die letzte Suche nicht."); return -1; }
   int rc = -1;
   pthread_mutex_lock(&g_lock);
