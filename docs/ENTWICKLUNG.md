@@ -399,7 +399,6 @@ src/third_party/    cJSON, libdeflate, lz4, bearssl
 third_party/        eingebettete Fassungen fremder Programme (drakmor: ampr_emu, dlc_emu, playgo; gasb07: ps4mount) und LZ4-Profile
 web/                Web-Oberfläche (per tools/gen_assets.py eingebettet, gzip), Profilbilder in web/avatars/, Wörterbücher in web/lang/
 tile/               Dateien der Kachel (sce_sys), eingebettet über tools/gen_tile_files.py
-installer/          früherer Kachel-Installer (nicht mehr Teil der Veröffentlichung)
 tools/              Build-, Release- und Diagnose-Skripte
 test/               Stubs der früheren Host-Tests
 docs/               Handbuch, API, Entwicklung, Versionshinweise, Entscheidungsprotokoll
