@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.71.4
+
+### Fehler
+- „Ausschalten“ in den Power-Optionen schaltet die Konsole jetzt wirklich aus: Der bisherige Aufruf folgte der Ruhemodus-Einstellung der PS5 und schickte sie in den Ruhemodus. Die App nutzt nun den direkten Ausschalt-Aufruf des Systems (mit dem alten als Rückfall, falls die Firmware ihn nicht bietet)
+
 ## v1.71.3
 
 ### Fehler

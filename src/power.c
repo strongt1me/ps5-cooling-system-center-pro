@@ -33,6 +33,7 @@ typedef int (*fn_int_t)(int);
 typedef int (*fn_dialog_t)(int, const char *);
 
 static fn_void_t   p_power_off  = NULL;
+static fn_int_t    p_turn_off   = NULL;
 static fn_void_t   p_reboot     = NULL;
 static fn_void_t   p_standby    = NULL;
 static fn_void_t   p_standby_ok = NULL;
@@ -48,6 +49,9 @@ resolve(void) {
 
   p_power_off = (fn_void_t)dlsym(RTLD_DEFAULT,
                                  "sceSystemServiceRequestPowerOff");
+  /* The direct power-off of the system state manager. RequestPowerOff goes through the power-button flow and follows
+     the rest-mode setting, so "Ausschalten" ended in rest mode (report 20.10.2026). */
+  p_turn_off  = (fn_int_t)dlsym(RTLD_DEFAULT, "sceSystemStateMgrTurnOff");
   p_reboot    = (fn_void_t)dlsym(RTLD_DEFAULT,
                                  "sceSystemServiceRequestReboot");
   p_standby   = (fn_void_t)dlsym(RTLD_DEFAULT,
@@ -64,7 +68,7 @@ int
 ps5tm_power_off(void) {
   ps5tm_sony_api_lock();
   resolve();
-  if(!p_power_off) {
+  if(!p_turn_off && !p_power_off) {
     ps5tm_sony_api_unlock();
     PS5TM_WARN("power_off_unavailable",
                "Ausschalten wird von dieser Firmware nicht angeboten.");
@@ -72,7 +76,8 @@ ps5tm_power_off(void) {
   }
 
   PS5TM_WARN("power_off_requested", "Ausschalten der Konsole angefordert.");
-  int rc = p_power_off();
+  /* Called with an int argument 0: if the symbol takes none the register is ignored, otherwise 0 is a normal shutdown. */
+  int rc = p_turn_off ? p_turn_off(0) : p_power_off();
   ps5tm_sony_api_unlock();
   if(rc != 0)
     PS5TM_ERROR("power_off_failed",
