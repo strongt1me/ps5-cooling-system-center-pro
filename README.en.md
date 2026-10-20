@@ -6,7 +6,7 @@
 
 **Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in the console's own browser or from any device on your home network, in six languages.**
 
-![Version](https://img.shields.io/badge/Version-1.71.4-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.72.0-1f6feb)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
 ![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
 ![Languages](https://img.shields.io/badge/Languages-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -153,7 +153,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 1. Download `PS5_Cooling_System_Center_v<version>.elf` from the [Releases](../../releases).
 2. Send it to the console (ELF loader, port **9021**), for example:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.71.4.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.72.0.elf
    ```
 3. Open **`http://<PS5-IP>:8086`** in a browser (the notification at the top left of the TV shows the address too).
 

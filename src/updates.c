@@ -328,6 +328,7 @@ titles_refresh(int force) {
   if(n < 0) { free(rows); free(nt); return; }
   int k = 0;
   for(int i = 0; i < n && k < UPD_MAX_TITLES; i++) {
+    if(ps5tm_library_is_game(rows[i].title_id) == 0) continue;   /* apps such as YouTube and homebrew tools are no games to update */
     title_t *t = &nt[k++];
     snprintf(t->tid, sizeof t->tid, "%s", rows[i].title_id);
     snprintf(t->name, sizeof t->name, "%s", rows[i].name);
@@ -990,6 +991,9 @@ ps5tm_updates_json(void) {
     cJSON_AddStringToObject(e, "version", t->ver);
     cJSON_AddStringToObject(e, "status", status_locked(t));
     cJSON_AddBoolToObject(e, "via_smp", t->source == SRC_SMP);
+    /* Expose the auto-downloadable version so the version picker can mark it */
+    if(t->compat_ver[0] && ver_gt(t->compat_ver, t->ver))
+      cJSON_AddStringToObject(e, "compat_ver", t->compat_ver);
     char tv[16], tu[512];
     int manual;
     target_locked(t, tv, sizeof tv, tu, sizeof tu, &manual);
@@ -1060,6 +1064,11 @@ ps5tm_updates_versions_json(const char *tid, int *http) {
   init_locked();
   int en = g_set.enabled;
   uint32_t fw = g_fw;
+  /* auto_ver: the version the app can download directly from Sony (no SC link) */
+  char auto_ver[16] = "";
+  title_t *ta = find_locked(tid);
+  if(ta && ta->compat_ver[0] && ver_gt(ta->compat_ver, ta->ver))
+    snprintf(auto_ver, sizeof auto_ver, "%s", ta->compat_ver);
   pthread_mutex_unlock(&g_lock);
   if(!en) { *http = 409; return NULL; }
   upd_site_version_t *v = calloc(UPD_SITE_MAX_VERSIONS, sizeof *v);
@@ -1082,6 +1091,8 @@ ps5tm_updates_versions_json(const char *tid, int *http) {
       cJSON_AddItemToArray(arr, e);
     }
   }
+  /* auto_ver: clicking this version in the picker starts a direct Sony download (no SC link) */
+  if(auto_ver[0]) cJSON_AddStringToObject(o, "auto_ver", auto_ver);
   cJSON_AddStringToObject(o, "site", upd_site_base(tid));
   free(v);
   return o;

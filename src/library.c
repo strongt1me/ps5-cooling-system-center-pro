@@ -1386,6 +1386,19 @@ ps5tm_library_update_titles(ps5tm_libupd_t *out, int max) {
   return rc;
 }
 
+/* Is the title one the games page lists (a game tile, not YouTube or a homebrew tool)? 1, 0, or -1 when the list is unknown. */
+int
+ps5tm_library_is_game(const char *title_id) {
+  if(!title_id) return -1;
+  ensure_fresh(1);
+  pthread_mutex_lock(&g_lock);
+  int rc = g_state == 1 ? 0 : -1;
+  for(int i = 0; rc == 0 && i < g_count; i++)
+    if(!strcmp(g_games[i].title_id, title_id)) rc = 1;
+  pthread_mutex_unlock(&g_lock);
+  return rc;
+}
+
 /* Is a content id (a DLC's, for one) listed in the app database? 1, 0, or -1 when the database cannot be read. */
 typedef struct { const char *cid; int found, c_cid; } cinfo_ctx_t;
 

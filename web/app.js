@@ -6903,16 +6903,27 @@
   const updOldPanel = (t) => {
     const s = t.site, q = upd.qr[t.title_id], v = upd.vers[t.title_id];
     const site = t.plat === 4 ? "orbispatches.com" : "prosperopatches.com";
-    const vl = v && v.versions ? `<div class="upd-vers">${v.versions.map((x) => `<button type="button" class="btn ghost" data-upd-pick="${esc(x.version)}" data-upd-size="${esc(x.size)}" data-upd-id="${esc(t.title_id)}" ${x.runs ? "" : "disabled"}>
-        ${esc(`${x.version} · ab Firmware ${x.fw} · ${x.size}`)}${x.runs ? "" : esc(" · läuft hier nicht")}</button>`).join("")}</div>`
-      : v && v.error ? `<p class="cp-err">${esc(`Die Liste ließ sich nicht laden (${v.error}).`)}</p>` : `<button type="button" class="btn ghost" data-upd-vers="${esc(t.title_id)}">Alle Versionen anzeigen</button>`;
+    const autoVer = v && v.auto_ver ? v.auto_ver : (t.compat_ver || "");
+    /* Version list from Prospero/Orbis: auto_ver = direkt ladbar, SC-Link für alle anderen */
+    const vl = v && v.versions ? `<div class="upd-vers">${v.versions.map((x) => {
+      const isAuto = autoVer && x.version === autoVer;
+      const dis = !x.runs || (!isAuto && x.runs === false);
+      return `<button type="button" class="btn ${isAuto ? "primary" : "ghost"}${dis ? " disabled" : ""}"
+        ${isAuto ? `data-upd-act="download" data-upd-id="${esc(t.title_id)}"` : `data-upd-pick="${esc(x.version)}" data-upd-size="${esc(x.size)}" data-upd-id="${esc(t.title_id)}"`}
+        ${dis ? "disabled" : ""}>
+        ${esc(`${x.version} · ab Firmware ${x.fw} · ${x.size}`)}${isAuto ? " ✓ direkt laden" : ""}${!x.runs ? esc(" · läuft hier nicht") : ""}
+        </button>`;
+    }).join("")}</div>`
+      : v && v.error ? `<p class="cp-err">${esc(`Die Liste ließ sich nicht laden (${v.error}).`)}</p>`
+      : `<button type="button" class="btn ghost" data-upd-vers="${esc(t.title_id)}">Alle Versionen anzeigen</button>`;
     return `<div class="upd-old">
         <div class="upd-qr">${q && q.svg ? q.svg : ""}<div>
-          <p class="cp-step">So geht es</p>
-          <small>1. Öffne <code>${esc(`https://${site}/${t.title_id}`)}</code> (am Handy: QR-Code scannen, er öffnet diese Seite für das Spiel).</small>
+          <p class="cp-step">Versionen</p>
+          ${autoVer ? `<small>Version <b>${esc(autoVer)}</b> kann direkt geladen werden (kein SC-Link nötig). Für ältere Versionen: SC-Link von ${esc(site)} kopieren und unten einfügen.</small>` : `<small>1. Öffne <code>${esc(`https://${site}/${t.title_id}`)}</code> (am Handy: QR-Code scannen).</small>
           <small>2. ${s ? esc(`Wähle Version ${s.version} (braucht Firmware ${s.fw}, ${s.size})`) : "Wähle eine Version, die auf dieser Firmware läuft"} und bestätige die menschliche Prüfung, falls sie erscheint.</small>
-          <small>3. Kopiere den <b>SC</b>-Link und füge ihn unten ein. Geladen wird von den offiziellen Update-Servern.</small></div></div>
-        <label class="p4m-field"><span>SC-Link</span><input type="url" id="upd-link-${esc(t.title_id)}" placeholder="https://sgst.prod.dl.playstation.net/…_sc.pkg" autocomplete="off" spellcheck="false"></label>
+          <small>3. Kopiere den <b>SC</b>-Link und füge ihn unten ein.</small>`}
+          </div></div>
+        <label class="p4m-field"><span>SC-Link (ältere Version)</span><input type="url" id="upd-link-${esc(t.title_id)}" placeholder="https://sgst.prod.dl.playstation.net/…_sc.pkg" autocomplete="off" spellcheck="false"></label>
         <label class="p4m-field"><span>Version</span><input type="text" id="upd-lver-${esc(t.title_id)}" value="${esc(s ? s.version : "")}" inputmode="decimal" autocomplete="off"></label>
         <div class="cp-actions"><button type="button" class="btn primary" data-upd-link="${esc(t.title_id)}">Laden und installieren</button></div>
         ${vl}</div>`;
@@ -6924,7 +6935,8 @@
     const ver = `${esc(t.version || "?")}${t.target && t.target !== t.version ? ` → ${esc(t.target)}` : ""}`;
     let info = "", btns = "";
     const off = t.status.startsWith("not_official");
-    if (t.status === "update") btns = updBtn("download", t.title_id, "Laden und installieren", "primary");
+    const versBtn = `<button type="button" class="btn ghost" data-upd-old="${esc(t.title_id)}">${upd.open === t.title_id ? "Schließen" : "Versionen …"}</button>`;
+    if (t.status === "update") btns = updBtn("download", t.title_id, "Laden und installieren", "primary") + versBtn;
     else if (t.status === "paused") btns = updBtn("resume", t.title_id, "Fortsetzen", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "ready") btns = updBtn("install", t.title_id, "Installieren", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "failed") btns = updBtn("resume", t.title_id, "Erneut versuchen", "primary") + updBtn("cancel", t.title_id, "Löschen");
@@ -6933,7 +6945,8 @@
       info = `<div class="p4m-meta">${esc(`Der neueste offizielle Patch ${t.latest} braucht Firmware ${t.latest_fw || "?"}.`)}${t.site ? esc(` Version ${t.site.version} läuft hier (ab Firmware ${t.site.fw}).`) : t.site_why ? esc(` Die Liste von Prospero/Orbis ließ sich nicht laden.`) : ""}</div>`;
       btns = `<button type="button" class="btn ghost" data-upd-old="${esc(t.title_id)}">${upd.open === t.title_id ? "Schließen" : "Älteren Patch holen …"}</button>`;
     }
-    if (t.status === "check_failed") info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`;
+    else if (t.status === "current") btns = versBtn;
+    if (t.status === "check_failed") { info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`; btns = versBtn; }
     if (off) info = `<div class="p4m-meta">${t.status === "not_official_fake" ? "Nicht offiziell signiert: keine offiziellen Updates." : "Die Paketdatei ließ sich nicht lesen."}</div>`;
     if (t.via_smp && !off) info += `<div class="p4m-meta">${esc("Läuft über ShadowMountPlus. Das Update wird normal installiert – ob es auf das eingehängte Abbild angewendet wird, hängt vom Spiel ab.")}</div>`;
     if (t.error) info += `<div class="p4m-meta cp-why">${esc(t.error)}</div>`;

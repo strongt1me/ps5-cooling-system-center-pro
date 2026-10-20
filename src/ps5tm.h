@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.71.4"
+#define PS5TM_VERSION        "1.72.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -641,6 +641,8 @@ typedef struct {
   char ver_uri[256];
 } ps5tm_libupd_t;
 int           ps5tm_library_update_titles(ps5tm_libupd_t *out, int max);
+/* 1 when the games page lists the title, 0 for apps and homebrew tiles (YouTube...), -1 when the list is unknown. */
+int           ps5tm_library_is_game(const char *title_id);
 /* Is a content id (a DLC's, for one) listed in the app database? 1, 0, or -1 when it cannot be read. */
 int           ps5tm_library_content_listed(const char *content_id);
 int           ps5tm_library_cover(const char *title_id, char *path,

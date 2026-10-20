@@ -1,20 +1,23 @@
-# PS5 Cooling & System Center – Pro v1.71.4
+# PS5 Cooling & System Center – Pro v1.72.0
+
+## Neu
+- **Updates: Versionsauswahl für alle Spiele.** Im Reiter „Updates“ gibt es jetzt bei jedem Spiel (nicht mehr nur bei „neuere Firmware nötig“) die Schaltfläche „Versionen …“ mit der vollständigen Liste von Prospero Patches bzw. Orbis Patches. Die neueste zur Firmware passende Version ist als „✓ direkt laden“ markiert und lädt direkt von Sonys Servern, ohne SC-Link; ältere Versionen laufen weiterhin über den SC-Link (nach dem Vorbild von PatchDL 0.3.3 von Knutwurst)
 
 ## Fehler
-- **„Ausschalten“ schaltet die Konsole wirklich aus.** Bisher landete die PS5 nach zweimaligem Klicken im Ruhemodus, weil der verwendete Aufruf der Ruhemodus-Einstellung folgte. Jetzt wird der direkte Ausschalt-Aufruf des Systems benutzt
+- Apps wie YouTube und Homebrew-Werkzeuge erscheinen nicht mehr im Reiter „Updates“ – geprüft werden nur noch Titel, die auch auf der Spiele-Seite stehen
 
 ## Downloads
 | Datei | Wofür |
 |---|---|
-| `PS5_Cooling_System_Center_v1.71.4.elf` | die App – nach jedem Neustart der Konsole an Port 9021 senden |
+| `PS5_Cooling_System_Center_v1.72.0.elf` | die App – nach jedem Neustart der Konsole an Port 9021 senden |
 | `PPSA86921.zip` | Starter-Kachel für `/data/homebrew/` (startet die App per Tipp) |
 | `LIESMICH.txt` | Kurzanleitung |
 
 **SHA-256**
 ```
-a28a94ce89b5caadcf78da1b9cae723064f3a436c4013724ac711b85ac26c216  LIESMICH.txt
-8a91f2afffd6b0740dc0cbc1208a0cfe0f00564f502ff330064b97973a6b2f8e  PPSA86921.zip
-a80aef271651dea375720c9b43b443624d95482f6a1659c854c69aa98871f7ca  PS5_Cooling_System_Center_v1.71.4.elf
+3570b8dfd6e8b8f19a8949be082167f9afbeb623e68ed8e5fbe73a0b6d1631fb  LIESMICH.txt
+d436786cb8082fb4a001462ebed79dcb6bfb1c9a258982489b409c554d127f53  PPSA86921.zip
+3e6bb0675a17271b00fe583098872d1d404d7b8bec16b7fe60f9703ed0630559  PS5_Cooling_System_Center_v1.72.0.elf
 ```
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.71.3...v1.71.4
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.71.4...v1.72.0

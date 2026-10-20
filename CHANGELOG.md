@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.72.0
+
+### Updates: Versionsauswahl für alle Spiele
+- Im Reiter „Updates“ gibt es jetzt bei jedem Spiel (nicht nur bei „neuere Firmware nötig“) die Schaltfläche „Versionen …“ mit der vollständigen Liste von Prospero Patches bzw. Orbis Patches
+- Die neueste zur Firmware passende Version ist als „✓ direkt laden“ markiert und startet den Download direkt von Sonys Servern, ohne SC-Link; alle älteren Versionen laufen weiterhin über den SC-Link (wie bisher)
+- Nach dem Vorbild von PatchDL 0.3.3 (Knutwurst)
+
+### Fehler
+- Apps wie YouTube und Homebrew-Werkzeuge erscheinen nicht mehr im Reiter „Updates“ – geprüft werden nur noch Titel, die auch auf der Spiele-Seite stehen
+
 ## v1.71.4
 
 ### Fehler
