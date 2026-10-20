@@ -21,4 +21,11 @@
 | `PPSA86921.zip` | Starter-Kachel für `/data/homebrew/` (startet die App per Tipp) |
 | `LIESMICH.txt` | Kurzanleitung |
 
+**SHA-256**
+```
+1661971a47195c55da2b9254444cd4613b9e71cc2c063df22a13b34e76a79657  PS5_Cooling_System_Center_v1.71.3.elf
+48920974daea5bda8a408328d78eee2f2089cca5927f290c98a30ea9c9cd7624  PPSA86921.zip
+028c021009bbd579f7cecbb6e4af573e0da78c52db20fcfea2ca85462cf30ba0  LIESMICH.txt
+```
+
 **Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.71.2...v1.71.3
