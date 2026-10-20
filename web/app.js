@@ -3966,7 +3966,10 @@
     if (onSys) {
       try { diag = await api("/api/v1/controller/diag"); } catch {}
       try { chan = await api("/api/v1/channels"); } catch {}
-      try { drive = await api("/api/v1/drives"); }
+      /* Sonde aus (Bit 0x10 in probe_mask): gar nicht erst fragen, sonst meldet der Browser jedes Mal ein rotes 409 in der Konsole. */
+      const probeKnownOff = state.cfg && Number.isFinite(state.cfg.probe_mask) && !(state.cfg.probe_mask & 0x10);
+      if (probeKnownOff) driveOff = true;
+      else try { drive = await api("/api/v1/drives"); }
       catch (e) {
         driveErr = e.message || "nicht verfügbar";
         /* The console answers 409 while the probe is switched off. */
@@ -11213,24 +11216,33 @@
   });
   ftPoll();
 
+  /* Beim Scrollen ruht das Nachzeichnen (PS5-Browser: Zeichnen und Scrollen teilen sich die CPU). Läuft ein Beat in ein Scrollen,
+     fällt er aus; 250 ms nach dem letzten Scroll-Schritt wird der Status sofort nachgeholt. */
+  let scrolling = false, scrollTimer = 0, scrollSkipped = false;
+  addEventListener("scroll", () => {
+    scrolling = true;
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => { scrolling = false; if (scrollSkipped) { scrollSkipped = false; pollStatus(); } }, 250);
+  }, { passive: true, capture: true });
+
   /* A page that is not in front needs no live data. The beat keeps running
      but idles while document.hidden and takes up again by itself, so a browser
      that never sends visibilitychange cannot leave it stopped. */
-  setInterval(() => { if (!document.hidden) pollStatus(); }, 1000);
-  setInterval(() => { if (!document.hidden) pollSystem(); }, 10000);
-  setInterval(() => { if (!document.hidden && state.page === "log" && kl.tab === "app") loadLog(true); }, 5000);
+  setInterval(() => { if (document.hidden) return; if (scrolling) { scrollSkipped = true; return; } pollStatus(); }, 1000);
+  setInterval(() => { if (!document.hidden && !scrolling) pollSystem(); }, 10000);
+  setInterval(() => { if (!document.hidden && !scrolling && state.page === "log" && kl.tab === "app") loadLog(true); }, 5000);
   /* A minute is the sampling period, so anything faster would redraw the
      same picture. */
-  setInterval(() => { if (!document.hidden && state.page === "cooling") loadHistory(); }, 60000);
-  setInterval(() => { if (!document.hidden && state.page === "cooling") loadRules(true); }, 15000);
+  setInterval(() => { if (!document.hidden && !scrolling && state.page === "cooling") loadHistory(); }, 60000);
+  setInterval(() => { if (!document.hidden && !scrolling && state.page === "cooling") loadRules(true); }, 15000);
   /* Payloads: was läuft, ändert sich nach jedem Start; die Dateilisten nur,
      wenn jemand einen Stick steckt oder per FTP kopiert. Neu gezeichnet wird
      nur bei einer Änderung (plLast), damit ein halb bestätigtes „Löschen"
      nicht mitten im Klick verschwindet. */
-  setInterval(() => { if (!document.hidden && state.page === "payloads") loadPayloads(); }, 8000);
-  setInterval(() => { if (!document.hidden && state.page === "payloads") loadPayloadFiles(); }, 15000);
+  setInterval(() => { if (!document.hidden && !scrolling && state.page === "payloads") loadPayloads(); }, 8000);
+  setInterval(() => { if (!document.hidden && !scrolling && state.page === "payloads") loadPayloadFiles(); }, 15000);
   /* Spielzeit und „zuletzt gespielt" ändern sich erst nach einer Sitzung. */
-  setInterval(() => { if (!document.hidden && state.page === "games") loadGames(true); }, 60000);
+  setInterval(() => { if (!document.hidden && !scrolling && state.page === "games") loadGames(true); }, 60000);
 
   /* Back in front: look at once instead of waiting for the next beat. The
      two-minute charts run by sample, not by time, so after a longer pause they

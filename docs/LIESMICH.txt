@@ -5,7 +5,7 @@ Advanced Cooling & Thermal Management for PlayStation 5
 WAS HIER DRIN LIEGT
 ===================
 
-PS5_Cooling_System_Center_v1.71.1.elf
+PS5_Cooling_System_Center_v1.71.2.elf
     Das Hauptprogramm: Lüftersteuerung und Web-Oberfläche. Das ist die
     Datei, die du nach jedem Neustart der Konsole sendest.
 
@@ -21,7 +21,7 @@ nicht mehr: Das Hauptprogramm legt seine Kachel selbst an.
 SO WIRD ES BENUTZT
 ==================
 
-1. PS5_Cooling_System_Center_v1.71.1.elf an die Konsole senden (Port 9021).
+1. PS5_Cooling_System_Center_v1.71.2.elf an die Konsole senden (Port 9021).
 2. Auf dem Fernseher erscheint eine Meldung mit der Adresse der
    Web-Oberfläche.
 3. Im Browser aufrufen:  http://<PS5-IP>:8086/

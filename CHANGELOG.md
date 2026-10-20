@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.71.2
+
+### Verbesserungen
+- Das Scrollen in der Web-Oberfläche ruckelt im Design „Standard“ im PS5-Browser weniger: Der Hintergrund ist jetzt einfarbig statt eines Musterbilds, und während des Scrollens pausieren die regelmäßigen Aktualisierungen kurz (danach holen sie auf)
+- Die Oberfläche fragt die Laufwerkstemperaturen nicht mehr ab, wenn diese Messung ausgeschaltet ist; damit entfällt die ständige Fehlermeldung „409 Conflict“ in der Browser-Konsole
+
 ## v1.71.1
 
 ### Fehler

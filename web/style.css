@@ -64,9 +64,9 @@ html { overflow-x: hidden; }
 body {
   margin: 0;
   min-height: 100vh;
-  /* Feines Platinenmuster des Users (nahtlos, 1000 px), Grundfarbe = --plane.
-     Scrollt mit (kein fixed: das zwänge die PS5 zum Neuzeichnen). */
-  background: var(--plane) url(/img/bg-pattern.jpg) repeat;
+  /* Einfarbig (20.10.2026): Das Platinenmuster (bg-pattern.jpg) lief als Kachel über die ganze Seite mit und ließ den PS5-Browser
+     beim Scrollen ruckeln; optisch kaum zu sehen. */
+  background: var(--plane);
   color: var(--ink);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
