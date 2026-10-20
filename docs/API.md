@@ -119,6 +119,10 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET | `/api/v1/updates/packages` | Pakete im Ordner `/data/PS5-Cooling-Center/updates`: `packages:[{title_id, name, version, size, complete, busy}]` |
 | GET | `/api/v1/updates/versions?id=` | Versionen eines Titels laut Prospero Patches (PS5) bzw. Orbis Patches (PS4): `versions:[{version, fw, size, runs}]`; 409 wenn ausgeschaltet |
 | GET | `/api/v1/updates/qr?id=` | QR-Code (`svg`) und `url` dieser Seite für den Titel, zum Einfügen des SC-Links am Handy |
+| POST | `/api/v1/library/probe` | Fordert eine sofortige Prüfung der Abbilder an (202); 503, wenn die Prüfung nicht läuft |
+| POST | `/api/v1/open-ui` | Öffnet die Oberfläche im PS5-Browser; nur von der Konsole selbst (`127.0.0.1`), sonst 403 |
+| POST | `/api/v1/log/client` | `{"msg":…, "where":…}`: Skriptfehler der Seite ins Protokoll (höchstens 10 je Minute) |
+| GET | `/api/v1/saves/avatar?…` | Profilbild eines Kontos der Spielstände |
 | GET | `/api/v1/library/duplicates` | Spiele in mehr als einer Quelle (dupimg.c): `groups:[{title_id, name, sources:[{path, size, smp_uses, mounted, folder?}]}]`, `aside:[{path, title_id, size}]` (beiseitegelegte `….off`), `images` |
 | POST | `/api/v1/library/duplicates` | `{"path":…}` benennt ein Abbild in `<Name>.off` um, `{"path":"….off","undo":true}` zurück; 400 (kein Abbild, nicht auf einem Laufwerk), 404 (fehlt), 409 (eingehängt, Spiel läuft, Name belegt) |
 | POST | `/api/v1/library/lz4` | Starten (`{"id":…,"kind":"pack"\|"copy"\|"verify"\|"unpack","level":9,"profile":""}`); läuft im Platz der Abbild-Aufträge (Fortschritt `/api/v1/library/image/job` mit `kind` `lz4pack`/`lz4copy`/`lz4verify`/`lz4unpack` und `lz4_logical`, `lz4_stored`, `lz4_packed`, `lz4_loose`; Abbrechen `/api/v1/library/image/cancel`); 409, wenn das Spiel läuft, ein anderer Vorgang läuft, es schon gepackt ist (`pack`/`copy`), nicht gepackt ist (`verify`/`unpack`) oder der Ordner `<Name>-lz4` schon besteht |

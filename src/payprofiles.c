@@ -92,7 +92,7 @@ item_ok(const char *s) {
     return v >= 1 && v <= PP_DELAY_MAX;
   }
   if(s[0] == '.' || strchr(s, '/') || strchr(s, '\\')) return 0;
-  if(n < 5 || strcasecmp(s + n - 4, ".elf") != 0) return 0;
+  if(n < 5 || (strcasecmp(s + n - 4, ".elf") != 0 && strcasecmp(s + n - 4, ".bin") != 0)) return 0;
   for(size_t i = 0; i < n; i++) if((unsigned char)s[i] < 0x20) return 0;
   return 1;
 }
@@ -396,12 +396,14 @@ ps5tm_payprof_status_json(void) {
 
 /* ------------------------------------------------------------ startup */
 
+static time_t g_boot;   /* when this start of the app began: older loop markers are leftovers of a run that never ended */
+
 static void *
 startup_thread(void *arg) {
   (void)arg;
   /* A marker left by a run that never ended: do not run it again (boot-loop protection). */
   struct stat st;
-  if(stat(PP_MARK, &st) == 0) {
+  if(stat(PP_MARK, &st) == 0 && st.st_mtime < g_boot) {   /* a marker made since this start belongs to a manual run */
     remove(PP_MARK);
     PS5TM_WARN("payprof_loop", "Das Startprofil wird diesmal nicht ausgeführt: Der letzte Ablauf wurde nicht beendet "
                "(ein Payload darin hat die App oder die Konsole neu gestartet).");
@@ -427,6 +429,7 @@ ps5tm_payprof_start(void) {
      first one's run). Like the other starters there: a no-op after the first call. */
   static int started = 0;
   if(started) return;
+  g_boot = time(NULL);
   pthread_t th;
   if(pthread_create(&th, NULL, startup_thread, NULL) == 0) { started = 1; pthread_detach(th); }
 }

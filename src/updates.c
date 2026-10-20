@@ -829,7 +829,7 @@ static title_t *
 next_queued_locked(void) {
   title_t *best = NULL;
   for(int i = 0; i < g_n; i++)
-    if(g_t[i].in_queue && (!best || g_t[i].qorder < best->qorder)) best = &g_t[i];
+    if(g_t[i].in_queue && !g_t[i].deleting && (!best || g_t[i].qorder < best->qorder)) best = &g_t[i];
   return best;
 }
 

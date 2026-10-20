@@ -4275,7 +4275,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     const cJSON *jl = b ? cJSON_GetObjectItem(b, "level") : NULL;
     const cJSON *jp = b ? cJSON_GetObjectItem(b, "profile") : NULL;
     char kind[12] = "", id[16] = "", profile[128] = "";
-    int level = cJSON_IsNumber(jl) ? (int)jl->valuedouble : 9;
+    int level = cJSON_IsNumber(jl) ? ps5tm_num_i32(jl->valuedouble) : 9;
     if(cJSON_IsString(jk)) snprintf(kind, sizeof(kind), "%s", jk->valuestring);
     if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
     if(cJSON_IsString(jp)) snprintf(profile, sizeof(profile), "%s", jp->valuestring);
@@ -4350,13 +4350,13 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
       /* restore_batch (since 0.5.0): games per group when moving pkgs back; left out, the module keeps its value */
       const cJSON *jr = cJSON_GetObjectItem(b, "restore_batch");
       char rb[32] = "";
-      if(cJSON_IsNumber(jr)) snprintf(rb, sizeof(rb), "&restore_batch=%d", (int)jr->valuedouble);
+      if(cJSON_IsNumber(jr)) snprintf(rb, sizeof(rb), "&restore_batch=%d", ps5tm_num_i32(jr->valuedouble));
       /* fast_reg (since 0.6.0): /user/app shows only the new games while the system registers them; left out, the module keeps its value */
       const cJSON *jf = cJSON_GetObjectItem(b, "fast_reg");
       char fr[16] = "";
       if(cJSON_IsBool(jf)) snprintf(fr, sizeof(fr), "&fast_reg=%d", cJSON_IsTrue(jf) ? 1 : 0);
       snprintf(form, sizeof(form), "batch=%d&batch_size=%d&dlc=%d%s%s&paths=%s",
-               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? (int)js->valuedouble : 5, cJSON_IsTrue(jd) ? 1 : 0, rb, fr, enc);
+               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? ps5tm_num_i32(js->valuedouble) : 5, cJSON_IsTrue(jd) ? 1 : 0, rb, fr, enc);
       rc = ps4m_do_config(form, msg, sizeof(msg));
     } else if(!strcmp(action, "restore") && cJSON_IsArray(cJSON_GetObjectItem(b, "ids"))) {
       /* several games at once (since 0.5.0): {"action":"restore","ids":["CUSA…",…]}; the module checks each title id */

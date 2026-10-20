@@ -351,13 +351,42 @@ size_of_cached(const char *path) {
   return s;
 }
 
+/* No folder on the way to path is a link, and path itself is not another file system hung in below its parent. The
+   walk below refuses links and other file systems inside the target, but a link further up would carry the whole
+   delete somewhere else (a link in /data pointing at /system), and a drive mounted at the target would be emptied. */
+static int
+path_is_plain(const char *path, const char *root) {
+  char part[300];
+  size_t l = strlen(path);
+  if(l >= sizeof(part)) return 0;
+  struct stat st, up;
+  int have_up = 0;
+  for(size_t i = strlen(root) + 1; i <= l; i++) {
+    if(path[i] != '/' && path[i] != 0) continue;
+    memcpy(part, path, i);
+    part[i] = 0;
+    if(lstat(part, &st) != 0) return 0;
+    if(S_ISLNK(st.st_mode)) return 0;
+    if(path[i] != 0 && !S_ISDIR(st.st_mode)) return 0;
+    if(path[i] == 0 && have_up && st.st_dev != up.st_dev) return 0;
+    up = st;
+    have_up = 1;
+  }
+  return 1;
+}
+
 /* Deletes path (a file or a folder) and, next to it, its checksum file, moving the bar from lo to hi as the bytes go.
    0, or an errno with the reason in why. */
 static int
 delete_path(const char *path, int lo, int hi, uint64_t *files, uint64_t *bytes, char *why, size_t why_len) {
-  if(!deletable_root(path)) { snprintf(why, why_len, "Dieser Ort ist zum Löschen nicht erlaubt: %s", path); return EPERM; }
+  const char *root = deletable_root(path);
+  if(!root) { snprintf(why, why_len, "Dieser Ort ist zum Löschen nicht erlaubt: %s", path); return EPERM; }
   struct stat st;
   if(lstat(path, &st) != 0) { snprintf(why, why_len, "%s ist nicht (mehr) da: %s", path, ps5tm_io_strerror(errno)); return errno ? errno : ENOENT; }
+  if(!path_is_plain(path, root)) {
+    snprintf(why, why_len, "%s liegt hinter einer Verknüpfung oder ist ein eingehängtes Laufwerk und wird nicht gelöscht.", path);
+    return EPERM;
+  }
   if(S_ISLNK(st.st_mode) || !(S_ISDIR(st.st_mode) || S_ISREG(st.st_mode))) {
     snprintf(why, why_len, "%s ist weder Datei noch Ordner (eine Verknüpfung wird nicht gelöscht).", path);
     return EPERM;

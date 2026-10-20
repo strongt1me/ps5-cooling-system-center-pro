@@ -312,6 +312,24 @@ find_header(const char *headers, const char *name) {
 }
 
 
+/* How many times a header appears. Two Content-Length lines are how a request
+   gets read differently by two parties; this server takes the first, so it
+   refuses a request that has a second. */
+static int
+count_header(const char *headers, const char *name) {
+  size_t nlen = strlen(name);
+  int    n    = 0;
+  for(const char *p = headers; *p; ) {
+    const char *eol      = strstr(p, "\r\n");
+    size_t      line_len = eol ? (size_t)(eol - p) : strlen(p);
+    if(line_len > nlen && strncasecmp(p, name, nlen) == 0 && p[nlen] == ':') n++;
+    if(!eol) break;
+    p = eol + 2;
+  }
+  return n;
+}
+
+
 /* Copies one header's value, trimmed, into `out`. 0 = header absent,
    -1 = present but too long for `out` (treated as hostile), else its length. */
 static int
@@ -572,6 +590,12 @@ serve_connection(void *arg) {
 
   const char *cl = find_header(headers, "Content-Length");
   size_t want = 0;
+  if(cl && count_header(headers, "Content-Length") > 1) {
+    ps5tm_http_send_error(fd, 400, "bad_request", "Mehrere Content-Length-Angaben.");
+    free(raw);
+    close_after_answer(fd);
+    return NULL;
+  }
   if(cl) {
     /* digits only: strtoul("-1") is the largest number there is, and would pass the size checks of the uploads */
     while(*cl == ' ' || *cl == '\t') cl++;

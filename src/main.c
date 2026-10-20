@@ -88,11 +88,19 @@ sibling_on_port(unsigned port, int *pid_out) {
         len += (size_t)n;
       buf[len] = '\0';
 
-      /* Only our own API answers with this pair of keys. */
-      if(strstr(buf, "\"ok\":true") && strstr(buf, "\"adapters\"")) {
+      /* Only our own API answers with this set of keys. Several of them, not
+         two: a positive answer ends in kill(), so a stranger on the port that
+         merely echoes "ok" must not be enough. */
+      if(strstr(buf, "\"ok\":true") && strstr(buf, "\"adapters\"") &&
+         strstr(buf, "\"warnings\"") && strstr(buf, "\"messages\"") &&
+         strstr(buf, "\"tile\"")) {
         found = 1;
         const char *p = strstr(buf, "\"pid\":");
-        if(p && pid_out) *pid_out = atoi(p + 6);
+        if(p && pid_out) {
+          char *end = NULL;
+          long v = strtol(p + 6, &end, 10);
+          *pid_out = (end != p + 6 && v > 1 && v < 1000000) ? (int)v : 0;
+        }
       }
     }
   }

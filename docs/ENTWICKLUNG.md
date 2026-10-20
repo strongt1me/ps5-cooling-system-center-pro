@@ -29,8 +29,7 @@ neue Deklarationen bekam. v0.44 (10.10.2026) ergänzt die Stub-Bibliotheken `lib
 zum Zug: mit v0.44 gebaut ist die ELF bis auf die zufällige 16-Byte-Build-ID dieselbe wie mit v0.43
 (18.10.2026 verglichen).
 
-Darum prüft der Bau selbst (`tools/check_sdk_firmware.py`, in `Makefile` und
-`installer/Makefile`):
+Darum prüft der Bau selbst (`tools/check_sdk_firmware.py`, in `Makefile`):
 
 - **vor dem Bauen** das `crt1.o` des SDK: Hat es keinen Fall für 13.00, 13.20,
   13.40 und 13.60, bricht `make` ab;
@@ -96,11 +95,11 @@ make
 Ergebnis: `PS5_Cooling_Center.elf` (~9 MB — Web-UI samt den 30 Profilbildern,
 Konverter, Bibliotheken und die Dateien der Kachel (1,7 MB) eingebettet; das Kachel-Paket nicht: Es kostete 10,5 MB Speicher,
 und die Konsole konnte dann keine einzige Anfrage mehr bedienen. Mit
-`make TILE_PKG=pkg/out/x.pkg` lässt es sich trotzdem einbetten. Der Installer
-trägt es mit sich).
+`make TILE_PKG=pkg/out/x.pkg` lässt es sich trotzdem einbetten. Der frühere Installer
+entfällt seit 1.70.0).
 
 `make release` legt zusätzlich einen Ordner `PS5 Cooling and System Center v<Version>/`
-mit beiden ELF-Dateien, dem PKG und der LIESMICH an. Es löscht dabei nichts:
+mit der ELF und der LIESMICH an (die Starter-Kachel `PPSA86921.zip` entsteht mit `tools/make_starter.sh <elf>`, benötigt WSL, und wird mit Python zu einer Zip mit Schrägstrich-Pfaden gepackt). Es löscht dabei nichts:
 Liegt in dem Ordner etwas, das es nicht selbst anlegt, bricht es mit einer
 Liste ab; ebenso bei mehr als einem Paket in `pkg/out/`. Nach Änderungen an
 einem Header, an `src/*.inc` oder am Makefile selbst baut `make` neu.
@@ -280,8 +279,7 @@ Seit 1.47.0 trägt die ELF die Dateien der Kachel selbst: `tile/sce_sys/` (`para
 `icon0.png`, `pic0.png`, `pic1.png`). `tools/gen_tile_files.py` prüft sie (JSON, PNG-Kennung,
 Title-ID gleich `PS5TM_TITLE_ID` in `src/tile.c`, höchstens 4 MB), legt gleiche Dateien nur
 einmal ab und schreibt `gen/tile_files.c`; `src/tile.c` macht daraus beim Start die Kachel
-(siehe das [Handbuch](HANDBUCH.md#homescreen-kachel)). Das Paket unten bleibt der Rückfall und
-steckt im Installer.
+(siehe das [Handbuch](HANDBUCH.md#homescreen-kachel)). Das Paket unten ist nur noch ein Rückfall.
 
 Gebaut wird sie mit `pkg/build.ps1` (Bilder skalieren → `LibProsperoPkg.dll`
 bereitstellen → `dotnet run`). Voraussetzung ist das **.NET-10-SDK**.
@@ -401,7 +399,7 @@ src/third_party/    cJSON, libdeflate, lz4, bearssl
 third_party/        eingebettete Fassungen fremder Programme (drakmor: ampr_emu, dlc_emu, playgo; gasb07: ps4mount) und LZ4-Profile
 web/                Web-Oberfläche (per tools/gen_assets.py eingebettet, gzip), Profilbilder in web/avatars/, Wörterbücher in web/lang/
 tile/               Dateien der Kachel (sce_sys), eingebettet über tools/gen_tile_files.py
-installer/          eigenständiger Kachel-Installer (ELF)
+installer/          früherer Kachel-Installer (nicht mehr Teil der Veröffentlichung)
 tools/              Build-, Release- und Diagnose-Skripte
 test/               Stubs der früheren Host-Tests
 docs/               Handbuch, API, Entwicklung, Versionshinweise, Entscheidungsprotokoll

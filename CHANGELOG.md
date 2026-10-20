@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.71.3
+
+### Fehler
+- Updates: Ein Titel, der gerade gelöscht wird, kommt nicht mehr aus der Warteschlange wieder an die Reihe
+- Payload-Profile und Startprofil nehmen jetzt auch Dateien mit der Endung `.bin` an; die Startmarke eines früheren Starts wird nur noch entfernt, wenn sie älter als der aktuelle Programmstart ist
+- Payloads herunterladen: Ein zweites „Aktualisieren“ während die Liste noch lädt meldet jetzt „Die Liste wird gerade geladen.“ statt zu kollidieren; beim Löschen wird die Prüfsumme verglichen – eine inzwischen geänderte Datei bleibt liegen, nur der Eintrag verschwindet
+- Temperaturprotokoll schreibt im Hintergrund (kein Warten mehr auf das Laufwerk); doppelte `Content-Length`-Kopfzeilen werden mit 400 abgelehnt; Schutz gegen zweite App-Instanz auf dem Port verbessert; Löschen und Dateimanager prüfen Pfade und Änderungszeiten strenger
+
+### Verbesserungen
+- Bessere Kompatibilität mit älteren Browsern (PS5-Browser): Stilregeln mit `:hover` und `:focus-visible` sowie `:has()` sind getrennt, sodass ein nicht unterstütztes Selektorstück nicht mehr die ganze Regel verwirft
+- Benutzerhandbuch und FAQ (App, HTML, PDF, alle sechs Sprachen) sind vollständig auf dem Stand: Updates für SMP-Spiele, eingeklappte Karte „Doppelte Abbilder“, `.bin`-Hinweis bei Payloads, neue FAQ zum Ruckeln beim Scrollen; die Handbuch-Bilder liegen wieder im Projekt (`docs/shots/`)
+- Dokumentation (HANDBUCH, API, ENTWICKLUNG) bereinigt: kein Installer mehr, neue Routen ergänzt
+
 ## v1.71.2
 
 ### Verbesserungen

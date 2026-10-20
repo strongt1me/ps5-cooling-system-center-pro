@@ -157,6 +157,18 @@ adopt_stamp_locked(uint32_t cur, uint64_t now) {
    reported once and not once a minute. */
 static int g_flush_failed;
 
+/* The file is written by a short-lived thread of its own, never by the caller:
+ * the caller is the fan thread (or an HTTP handler waiting on g_lock), and a
+ * drive that a copy job keeps busy can hold fopen()/rename() for seconds.
+ * flush_locked() only builds the text under g_lock; g_io serialises the
+ * writers, and a sequence number makes a slow older job give way to a newer
+ * one that has already been written. */
+static pthread_mutex_t g_io = PTHREAD_MUTEX_INITIALIZER;
+static uint32_t        g_seq;          /* numbers the jobs, under g_lock */
+static uint32_t        g_written_seq;  /* newest job written, under g_io  */
+
+typedef struct { char *buf; size_t len; uint32_t seq; } flush_job_t;
+
 /* Rewrites the whole file. The old one is replaced only by a new one that got
  * all the way through: a full drive shows up in the stream's error flag or in
  * fclose(), not necessarily in fflush(), and renaming a file that came up
@@ -165,54 +177,99 @@ static int g_flush_failed;
  * file stays as it is and the data stays in memory, to be tried again at the
  * next flush.
  *
- * No fsync, unlike the settings file: this runs on the fan thread, and an
- * fsync on a drive that a copy job has busy can take seconds. */
-static void
-flush_locked(void) {
-  if(!g_dirty) return;
-
-  mkdir(PS5TM_DATA_DIR, 0755);
-
-  char tmp[sizeof(THERMAL_PATH) + 8];
-  snprintf(tmp, sizeof(tmp), "%s.tmp", THERMAL_PATH);
-
-  int ok  = 0;
+ * No fsync, unlike the settings file: an fsync on a busy drive can take
+ * seconds. */
+static void *
+flush_thread(void *arg) {
+  flush_job_t *job = (flush_job_t *)arg;
+  int ok  = 1;
   int eno = 0;
-  FILE *f = fopen(tmp, "w");
-  if(!f) {
-    eno = errno;
-  } else {
-    fprintf(f, "# week,samples,sum_temp,sum_fan,sum_load10,sum_activity,stamp\n");
-    fprintf(f, "#state,%u,%08x,%llu\n", g_epoch, g_stamp,
-            (unsigned long long)g_since_ms);
-    fprintf(f, "# Fenster: Last %d-%d%%, Lüfter %d-%d%%\n",
-            WIN_LOAD_MIN, WIN_LOAD_MAX, WIN_FAN_MIN, WIN_FAN_MAX);
-    for(unsigned i = 0; i < g_count; i++)
-          fprintf(f, "%u,%u,%llu,%llu,%llu,%llu,%08x\n",
-              g_weeks[i].week, g_weeks[i].samples,
-              (unsigned long long)g_weeks[i].sum_temp,
-              (unsigned long long)g_weeks[i].sum_fan,
-            (unsigned long long)g_weeks[i].sum_load10,
-            (unsigned long long)g_weeks[i].sum_activity,
-            g_weeks[i].stamp);
 
-    ok  = (fflush(f) == 0 && !ferror(f));
-    eno = errno;
-    if(fclose(f) != 0 && ok) { ok = 0; eno = errno; }
-    if(ok && rename(tmp, THERMAL_PATH) != 0) { ok = 0; eno = errno; }
-    if(!ok) unlink(tmp);
+  pthread_mutex_lock(&g_io);
+  if((int32_t)(job->seq - g_written_seq) > 0) {
+    mkdir(PS5TM_DATA_DIR, 0755);
+
+    char tmp[sizeof(THERMAL_PATH) + 8];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", THERMAL_PATH);
+
+    ok = 0;
+    FILE *f = fopen(tmp, "w");
+    if(!f) {
+      eno = errno;
+    } else {
+      size_t w = fwrite(job->buf, 1, job->len, f);
+      ok  = (w == job->len && fflush(f) == 0 && !ferror(f));
+      eno = errno;
+      if(fclose(f) != 0 && ok) { ok = 0; eno = errno; }
+      if(ok && rename(tmp, THERMAL_PATH) != 0) { ok = 0; eno = errno; }
+      if(!ok) unlink(tmp);
+    }
+    if(ok) g_written_seq = job->seq;
   }
+  pthread_mutex_unlock(&g_io);
 
+  pthread_mutex_lock(&g_lock);
   if(ok) {
-    g_dirty        = 0;
     g_flush_failed = 0;
-  } else if(!g_flush_failed) {
-    g_flush_failed = 1;
+  } else {
+    g_dirty = 1;
+  }
+  int first_failure = (!ok && !g_flush_failed);
+  if(first_failure) g_flush_failed = 1;
+  pthread_mutex_unlock(&g_lock);
+
+  if(first_failure)
     PS5TM_WARN("thermal_save_failed",
                "Kühlleistungs-Aufzeichnung konnte nicht gespeichert werden "
                "(Fehler %d: %s) – die vorhandene Datei bleibt unverändert, im "
                "Speicher läuft die Aufzeichnung weiter.", eno, strerror(eno));
+
+  free(job->buf);
+  free(job);
+  return NULL;
+}
+
+/* Builds the file's text and hands it to flush_thread. Call with g_lock held. */
+static void
+flush_locked(void) {
+  if(!g_dirty) return;
+
+  size_t cap = 512 + (size_t)g_count * 160;
+  char *buf = (char *)malloc(cap);
+  flush_job_t *job = (flush_job_t *)malloc(sizeof(*job));
+  if(!buf || !job) { free(buf); free(job); return; }   /* stays dirty */
+
+  size_t n = 0;
+#define APPEND(...) do { \
+    int r_ = snprintf(buf + n, cap - n, __VA_ARGS__); \
+    if(r_ > 0) n += ((size_t)r_ < cap - n) ? (size_t)r_ : cap - n - 1; \
+  } while(0)
+  APPEND("# week,samples,sum_temp,sum_fan,sum_load10,sum_activity,stamp\n");
+  APPEND("#state,%u,%08x,%llu\n", g_epoch, g_stamp,
+         (unsigned long long)g_since_ms);
+  APPEND("# Fenster: Last %d-%d%%, Lüfter %d-%d%%\n",
+         WIN_LOAD_MIN, WIN_LOAD_MAX, WIN_FAN_MIN, WIN_FAN_MAX);
+  for(unsigned i = 0; i < g_count; i++)
+    APPEND("%u,%u,%llu,%llu,%llu,%llu,%08x\n",
+           g_weeks[i].week, g_weeks[i].samples,
+           (unsigned long long)g_weeks[i].sum_temp,
+           (unsigned long long)g_weeks[i].sum_fan,
+           (unsigned long long)g_weeks[i].sum_load10,
+           (unsigned long long)g_weeks[i].sum_activity,
+           g_weeks[i].stamp);
+#undef APPEND
+
+  job->buf = buf;
+  job->len = n;
+  job->seq = ++g_seq;
+
+  pthread_t th;
+  if(pthread_create(&th, NULL, flush_thread, job) != 0) {
+    free(buf); free(job);                                /* stays dirty */
+    return;
   }
+  pthread_detach(th);
+  g_dirty = 0;
 }
 
 
@@ -286,9 +343,12 @@ ps5tm_thermal_sample(int temp_c, int temp_valid,
   uint64_t now = ps5tm_now_ms();
   if(!now) return;
 
-  /* g_epoch is only raised by restart(): a stale read here costs one sample
+  /* g_epoch is only raised by restart(): a stale value here costs one sample
      with the old stamp, which the next call corrects. */
-  uint32_t cur = settings_stamp(g_epoch);
+  pthread_mutex_lock(&g_lock);
+  uint32_t ep = g_epoch;
+  pthread_mutex_unlock(&g_lock);
+  uint32_t cur = settings_stamp(ep);
 
   pthread_mutex_lock(&g_lock);
 
@@ -345,7 +405,10 @@ unsigned
 ps5tm_thermal_snapshot(ps5tm_thermal_week_t *out, unsigned max) {
   if(!out || max == 0) return 0;
 
-  uint32_t cur = settings_stamp(g_epoch);
+  pthread_mutex_lock(&g_lock);
+  uint32_t ep = g_epoch;
+  pthread_mutex_unlock(&g_lock);
+  uint32_t cur = settings_stamp(ep);
   pthread_mutex_lock(&g_lock);
   adopt_stamp_locked(cur, ps5tm_now_ms());
   unsigned n = g_count < max ? g_count : max;

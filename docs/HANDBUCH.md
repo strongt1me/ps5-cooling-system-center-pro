@@ -52,7 +52,7 @@ Sekunden ohne zweiten Klick ist der Knopf wieder gewöhnlich.
 
 ## Die Seite „Spiele“
 
-**Doppelte Abbilder** (seit 18.10.2026, nach exFAT2AMPR 1.104 von V-10). Liegt ein Spiel in mehr als einem Abbild auf den Laufwerken, nimmt ShadowMountPlus bei jeder Suche mal das eine, mal das andere. Die App sucht beim Öffnen der Seite (und mit „Neu suchen“ oder „Aktualisieren“) in der obersten Ebene jedes Laufwerks und eine Ordnerebene darunter sowie in `homebrew` und `etaHEN/games` nach `.exfat`, `.ffpkg`, `.ffpfs` und `.ffpfsc`, liest aus jedem Abbild die Titel-ID (`sce_sys/param.json` oder `param.sfo`; bei `.ffpfs` aus dem Dateinamen) und zeigt die Karte **Doppelte Abbilder**, wenn es welche gibt. Den Ordner, den ShadowMountPlus für das Spiel nimmt, zählt sie mit. **Beiseitelegen** (zwei Klicks) benennt ein Abbild in `<Name>.off` um; ShadowMountPlus nimmt es danach nicht mehr. **Zurückholen** benennt es zurück. Nichts wird gelöscht. Ein Abbild, das ShadowMountPlus gerade eingehängt hat, oder eines, dessen Spiel läuft, bleibt, wie es ist.
+**Doppelte Abbilder** (seit 18.10.2026, nach exFAT2AMPR 1.104 von V-10). Liegt ein Spiel in mehr als einem Abbild auf den Laufwerken, nimmt ShadowMountPlus bei jeder Suche mal das eine, mal das andere. Die App sucht beim Öffnen der Seite (und mit „Neu suchen“ oder „Aktualisieren“) in der obersten Ebene jedes Laufwerks und eine Ordnerebene darunter sowie in `homebrew` und `etaHEN/games` nach `.exfat`, `.ffpkg`, `.ffpfs` und `.ffpfsc`, liest aus jedem Abbild die Titel-ID (`sce_sys/param.json` oder `param.sfo`; bei `.ffpfs` aus dem Dateinamen) und zeigt die Karte **Doppelte Abbilder**, wenn es welche gibt. Den Ordner, den ShadowMountPlus für das Spiel nimmt, zählt sie mit. **Beiseitelegen** (zwei Klicks) benennt ein Abbild in `<Name>.off` um; ShadowMountPlus nimmt es danach nicht mehr. **Zurückholen** benennt es zurück. Nichts wird gelöscht. Die Karte startet eingeklappt; ein Klick auf die Kopfzeile klappt die Liste auf und zu (der Zustand bleibt innerhalb der Sitzung), „Neu suchen“ funktioniert auch ohne Aufklappen. Ein Abbild, das ShadowMountPlus gerade eingehängt hat, oder eines, dessen Spiel läuft, bleibt, wie es ist.
 
 **Woher die Liste kommt.** Aus der App-Datenbank der Konsole
 (`/system_data/priv/mms/app.db`): die sichtbaren Kacheln der Spiele-Reihe für
@@ -951,7 +951,7 @@ stellt es ihr nur bereit und zeigt den Fortschritt.
 Der Reiter **Updates** auf der Spiele-Seite lädt offizielle Updates direkt von Sonys Servern und installiert sie.
 
 - **Einschalten:** Der Schalter oben rechts ist zuerst aus; bis dahin fragt die App nirgends nach.
-- **Nach Updates suchen** prüft jedes von Sony signierte Spiel (Disc oder PlayStation Store) über die Versionsliste, die die Konsole selbst benutzt. Spiele über ShadowMountPlus, Fake-PKGs und Homebrew werden nicht angefragt; ihre Karten sagen, warum.
+- **Nach Updates suchen** prüft jedes von Sony signierte Spiel (Disc oder PlayStation Store) über die Versionsliste, die die Konsole selbst benutzt. Seit 1.71.0 gilt das auch für Spiele über ShadowMountPlus (exFAT- oder ffpkg-Abbilder): Unter ihrer Karte steht ein Hinweis, dass das Update normal installiert wird; ob es auf das eingehängte Abbild wirkt, hängt vom Spiel ab. Fake-PKGs und Homebrew werden nicht angefragt; ihre Karten sagen, warum.
 - **Passend zur Firmware:** Angeboten wird die neueste Version, die auf dieser Firmware läuft. Braucht Sonys neuestes Update eine neuere Firmware, zeigt die Karte die neueste passende Version laut prosperopatches.com (PS5) bzw. orbispatches.com (PS4) und **Älteren Patch holen …**: Seite öffnen (am Handy über den QR-Code), die menschliche Prüfung bestätigen, den SC-Link der Version kopieren und einfügen. Die App nimmt nur Links auf Sonys Download-Server und zum selben Spiel; passt die Größe nicht zur gewählten Version, fragt sie nach.
 - **Laden und installieren / Alle aktualisieren:** Die Updates kommen in eine Warteschlange und werden nacheinander geladen, über 1 bis 16 Verbindungen (Einstellung). Anhalten und Fortsetzen geht jederzeit, auch nach einem Neustart der App (der Stand steht in `job.json`). Jedes Stück wird mit Sonys Prüfsumme verglichen (PS5 SHA-256, PS4 SHA-1); ein falsches wird bis zu dreimal neu geladen. Danach installiert die Konsole das Paket wie unter „Pakete installieren“.
 - **Aufräumen:** Das Paket liegt in `/data/PS5-Cooling-Center/updates/<Titel-ID>/update.pkg`. Es wird gelöscht, sobald das Spiel nach der Installation die neue Version meldet (Schalter „Paket nach erfolgreicher Installation löschen“). Meldet das Spiel weiter die alte Version, bleibt das Paket liegen. Die Einstellungen zeigen alle Pakete im Ordner.
@@ -1049,7 +1049,7 @@ Original bleibt); aus dem internen Ordner lässt sie sich löschen (zwei Klicks)
   vorhandener bleibt unberührt: kein erneutes Anlegen, keine geänderten Rechte.
 - Die Seite nennt der Konsole nie einen Pfad, nur Ort, Ordner und Dateiname aus
   deren eigener Liste; geprüft wird dort noch einmal. Gestartet wird nur, was
-  auf `.elf` endet, eine gewöhnliche Datei ist (kein Link) und mit dem Kopf eines
+  auf `.elf` oder `.bin` endet, eine gewöhnliche Datei ist (kein Link) und mit dem Kopf eines
   64-Bit-x86-64-ELF beginnt. Andere Dateien erscheinen markiert und bleiben
   gesperrt.
 - Ein Start nach dem anderen: Ein zweiter Klick während eines laufenden Starts
@@ -1077,7 +1077,7 @@ Version, Kategorie, Beschreibung, Datei und SHA-256 ein.
   zeigt die Karte „alt → neu“; „Aktualisieren“ ersetzt die alte Datei.
 - **Starten** schickt die Datei wie gewohnt an den ELF-Lader (Port 9021); die Datei taucht auch
   unter „Gespeicherte Payloads“ auf und lässt sich in Profile aufnehmen.
-- **Löschen** entfernt nur Dateien, die die App selbst heruntergeladen hat (`payload-store/installed.json`).
+- **Löschen** entfernt nur Dateien, die die App selbst heruntergeladen hat (`payload-store/installed.json`). Hat sich die Datei seit dem Laden geändert (Prüfsumme weicht ab), bleibt sie liegen und nur der Eintrag verschwindet. Ein zweites „Aktualisieren“, während die Liste noch lädt, meldet „Die Liste wird gerade geladen.“
   Liegt im Ordner schon eine fremde Datei gleichen Namens, ersetzt erst ein zweiter Klick sie.
 - Verbunden wird nur mit GitHub (https, nur über die App-eigene Namensauflösung und feste
   Wurzelzertifikate). Die Payloads stammen von ihren Autoren; die App prüft nur, dass die Datei

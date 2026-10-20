@@ -33,3 +33,5 @@ starter/out/
 starter/build/
 starter/eboot.bin
 starter/payload.elf
+
+build/

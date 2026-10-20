@@ -284,7 +284,7 @@ load_saved_locked(void) {
 static int
 fetch_catalog(void) {
   pthread_mutex_lock(&g_lock);
-  if(g_fetching) { pthread_mutex_unlock(&g_lock); return 0; }
+  if(g_fetching) { pthread_mutex_unlock(&g_lock); return 1; }   /* another fetch is running: nothing new yet */
   g_fetching = 1;
   pthread_mutex_unlock(&g_lock);
 
@@ -642,7 +642,9 @@ ps5tm_paystore_action(const cJSON *b, char *msg, size_t mn) {
   int force = cJSON_IsTrue(cJSON_GetObjectItem(b, "force"));
 
   if(!strcmp(a, "refresh")) {
-    if(fetch_catalog() != 0) {
+    int fr = fetch_catalog();
+    if(fr > 0) { snprintf(msg, mn, "Die Liste wird gerade geladen."); return 409; }
+    if(fr != 0) {
       pthread_mutex_lock(&g_lock);
       snprintf(msg, mn, "%s", g_cat_err);
       pthread_mutex_unlock(&g_lock);
@@ -693,6 +695,16 @@ ps5tm_paystore_action(const cJSON *b, char *msg, size_t mn) {
     if(busy) { cJSON_Delete(idx); snprintf(msg, mn, "Dieses Payload wird gerade geladen."); return 409; }
     char p[512];
     snprintf(p, sizeof p, PS_PAY_DIR "/%s", fn);
+    char hex[65] = "";
+    const char *want = idx_str(e, "checksum");
+    if(want[0] && (file_sha256(p, hex) != 0 || strcasecmp(hex, want))) {
+      /* the file is no longer what the store put there (replaced by hand): forget the entry, keep the file */
+      cJSON_DeleteItemFromObject(idx, id);
+      index_save(idx);
+      cJSON_Delete(idx);
+      snprintf(msg, mn, "Die Datei wurde seit dem Laden geändert und bleibt liegen; der Eintrag wurde entfernt.");
+      return 200;
+    }
     if(unlink(p) != 0 && errno != ENOENT) {
       cJSON_Delete(idx);
       snprintf(msg, mn, "Die Datei ließ sich nicht löschen: %s", strerror(errno));

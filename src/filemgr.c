@@ -1121,7 +1121,8 @@ run_delete(fm_args_t *a) {
 /* After a move between drives: removes from the source exactly what the copy holds (same name, a file of the same size), then
    the folders that became empty. What was made or changed in the source meanwhile (an upload, a renamed entry, a file that
    grew) is not in the copy and stays; *kept counts it (review 15.10.2026: the source used to be walked anew and deleted
-   whole). s and d are PATH_MAX buffers that grow while going down. 0 or an errno. */
+   whole). A file counts as the one copied only if it is not newer than its copy (the copy gets the time it was written at,
+   so a source changed after the copy is newer, even when its size did not change). s and d are PATH_MAX buffers that grow while going down. 0 or an errno. */
 static int
 delete_copied(char *s, size_t sl, char *d, size_t dl, int depth, unsigned *kept) {
   if(depth > 64) return ELOOP;
@@ -1144,7 +1145,7 @@ delete_copied(char *s, size_t sl, char *d, size_t dl, int depth, unsigned *kept)
         if(errno == ENOTEMPTY || errno == EEXIST) (*kept)++;
         else rc = errno ? errno : EIO;
       }
-    } else if(S_ISREG(dst.st_mode) && S_ISREG(sst.st_mode) && dst.st_size == sst.st_size) {
+    } else if(S_ISREG(dst.st_mode) && S_ISREG(sst.st_mode) && dst.st_size == sst.st_size && sst.st_mtime <= dst.st_mtime) {
       if(unlink(s) != 0) rc = errno ? errno : EIO;
     } else (*kept)++;
     s[sl] = 0;
@@ -1160,7 +1161,7 @@ move_cleanup(const char *rs, const char *rt, unsigned *kept) {
   if(lstat(rs, &ss) != 0) return errno == ENOENT ? 0 : (errno ? errno : EIO);
   if(lstat(rt, &ts) != 0) return errno ? errno : EIO;
   if(!S_ISDIR(ss.st_mode)) {
-    if(S_ISREG(ss.st_mode) && S_ISREG(ts.st_mode) && ss.st_size == ts.st_size) return unlink(rs) == 0 ? 0 : (errno ? errno : EIO);
+    if(S_ISREG(ss.st_mode) && S_ISREG(ts.st_mode) && ss.st_size == ts.st_size && ss.st_mtime <= ts.st_mtime) return unlink(rs) == 0 ? 0 : (errno ? errno : EIO);
     (*kept)++;
     return 0;
   }
