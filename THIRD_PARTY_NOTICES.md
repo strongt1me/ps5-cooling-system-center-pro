@@ -47,7 +47,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
   Vorlagen unter `third_party/ps4mount/`. Der Schlüssel in `src/ps4m_keys.h` stammt aus LibOrbisPkg (maxton, LGPL-3.0). Quelltext der
   Vorlage: <https://github.com/gasb07/ps4mount>.
-- **PatchDL** 0.3.0 (Knutwurst, GPL-3.0): Vorbild für die Spiel-Updates (`src/updates.c`, `src/upd_*.c`): die Server
+- **PatchDL** 0.3.0 bis 0.3.4 (Knutwurst, GPL-3.0): Vorbild für die Spiel-Updates (`src/updates.c`, `src/upd_*.c`): die Server
   und Adressen der offiziellen Versionslisten und Paketlisten, der Schlüssel der PS4-Versionsadresse, die Prüfung, ob ein Spiel
   offiziell signiert ist, der DNS-Weg (UDP, TCP, DNS über HTTPS, gemerkte Adressen). Der Code ist eigener (andere TLS-Bibliothek, eigene Warteschlange);
   übernommen sind nur diese Fakten und die öffentlichen Wurzelzertifikate (Update-Server, DNS-Anbieter), aus denen
@@ -75,7 +75,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 - **PS5 Dump & Image Converter** (eigenes Projekt des Autors, Modul `shadowmount_generation.py` und der
   fakelib-Manager): Vorbild für die Ablage der APR-EMU-Datei (`fakelib` statt `fakelib2`, Sicherung der
   Spieldatei als `.orig`, Erkennung eines früheren Emulators an `[AMPR_EMU]`) und für die Suchreihenfolge von
-  ShadowMountPlus 1.7beta6-fix2 (Backport-Ordner vor Spiel, auch mit Namenszusatz).
+  ShadowMountPlus 1.7beta7 (Backport-Ordner vor Spiel, auch mit Namenszusatz).
 - **ShadowMountPlus** (drakmor, GPL-3.0): Seine Web-Schnittstelle liefert Format
   und Speicherort der Spiele und übernimmt Verschieben und Entpacken
   (`src/smp.c`, `src/gamemove.c`); seine README nennt die Parameter für

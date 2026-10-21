@@ -4,7 +4,7 @@
  * where they differ.
  *
  * How ShadowMountPlus finds the file (checked at its source by the converter this follows, "PS5 Dump & Image Converter",
- * shadowmount_generation.py, and by ShadowMountPlus 1.7beta1 to 1.7beta6-fix2): first in
+ * shadowmount_generation.py, and by ShadowMountPlus 1.7beta1 to 1.7beta7): first in
  * <scanpath>/backports/<TITLE_ID>/ (fakelib2, then fakelib; since beta6 also a folder that only begins with the title id,
  * "PPSA12345 Game Name": the exact name wins, else the first in byte order), then in the game (fakelib2 since 1.7beta1, then fakelib);
  * the first folder that exists wins, even an empty one, and only that one is used. Folders are named exactly fakelib

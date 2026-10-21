@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -812,12 +813,41 @@ ps5tm_http_port_free(unsigned port) {
 }
 
 
+/* Can a client still connect to the listener? The console drops listening sockets when the network changes (Wi-Fi off and on, a
+   cable pulled): the process runs on, select() sees nothing wrong, and nobody gets in any more (the same trap PatchDL 0.3.4 fixed
+   for its web server). A connect to the socket's own address that is refused says the listener is gone; a timeout or any other
+   error says nothing about it. The connection is closed at once, the server reads an empty request and drops it. */
+static int
+listener_refused(int srv) {
+  struct sockaddr_in sa;
+  socklen_t          sl = sizeof(sa);
+  if(getsockname(srv, (struct sockaddr *)&sa, &sl) != 0 || sa.sin_family != AF_INET) return 0;
+  if(sa.sin_addr.s_addr == htonl(INADDR_ANY)) sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  if(fd < 0) return 0;
+  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+  int refused = 0;
+  if(connect(fd, (struct sockaddr *)&sa, sizeof(sa)) != 0) {
+    if(errno == ECONNREFUSED) refused = 1;
+    else if(errno == EINPROGRESS) {
+      struct pollfd pfd = { fd, POLLOUT, 0 };
+      int err = 0;
+      socklen_t el = sizeof(err);
+      if(poll(&pfd, 1, 2000) == 1 && getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) == 0) refused = err == ECONNREFUSED;
+    }
+  }
+  close(fd);
+  return refused;
+}
+
+
 int
 ps5tm_http_run(int srv, unsigned port) {
   PS5TM_INFO("http_started",
              "Weboberfläche gestartet "
              "(Port %u).", port);
 
+  unsigned idle = 0;
   for(;;) {
     /* A one-second accept timeout keeps the loop responsive to a port
        change made through the settings page. */
@@ -865,7 +895,20 @@ ps5tm_http_run(int srv, unsigned port) {
       return 0;
     }
 
-    if(rc == 0) continue;                      /* the one-second idle tick */
+    if(rc == 0) {                              /* the one-second idle tick */
+      if(++idle >= 10) {                       /* every ten seconds: is the listener still there? */
+        idle = 0;
+        if(listener_refused(srv)) {
+          close(srv);
+          PS5TM_WARN("http_listener_refused",
+                     "Die Weboberfläche nimmt keine Verbindungen mehr an (die Konsole hat den Zugang nach einem "
+                     "Netzwerkwechsel beendet). Sie wird auf Port %u neu geöffnet; die Lüftersteuerung lief weiter.", port);
+          return 0;
+        }
+      }
+      continue;
+    }
+    idle = 0;
     if(!FD_ISSET(srv, &rfds)) continue;
 
     int cl_fd = accept(srv, NULL, NULL);

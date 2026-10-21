@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.73.1
+
+### PatchDL 0.3.4: Weboberfläche nach Netzwerkwechsel
+- Wird das WLAN aus- und wieder eingeschaltet oder das Kabel gezogen, beendet die Konsole mitunter den Zugang der Weboberfläche, obwohl die App weiterläuft. PatchDL 0.3.4 merkt das und öffnet seinen Webserver neu; die App prüft jetzt ebenso alle zehn Sekunden, ob ihr Zugang noch Verbindungen annimmt (ein Verbindungsversuch an die eigene Adresse), und öffnet ihn bei „Verbindung abgelehnt“ von selbst neu. Handbuch (sechs Sprachen): Hinweis im Kapitel „Wenn etwas nicht klappt“
+
+### ShadowMountPlus 1.7beta7
+- Auf dem Stand von ShadowMountPlus 1.7beta7 (Quelltext und ELF verglichen mit 1.7beta6-fix2): geändert hat sich nur das Aushängen der Sandbox-Ebenen eines USB-Laufwerks, das mitten im Betrieb abgezogen wurde (kein Hängenbleiben mehr, wenn die Konsole den Zugriff mit „Broken pipe“ oder „Try again“ abweist). Schnittstelle, Backport-Ordner, Konfiguration und APR-EMU-Regeln sind unverändert; an der App war nichts zu ändern
+- Die Prüfliste der Fremdbausteine (`tools/upstream.json`) führt jetzt 1.7beta7
+
 ## v1.73.0
 
 ### Vor dem Packen zu ffpfsc, neues Symbol

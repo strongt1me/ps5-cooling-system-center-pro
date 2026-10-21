@@ -1515,6 +1515,10 @@ Prozess des laufenden Spiels einklinken und dessen Renderer hooken. Die
 Systembenachrichtigung erscheint dafür zuverlässig über Spielen und Menüs,
 ohne irgendetwas zu destabilisieren.
 
+## Weboberfläche nach einem Netzwerkwechsel (seit 21.10.2026, nach PatchDL 0.3.4)
+
+Wird das WLAN aus- und wieder eingeschaltet oder das Kabel gezogen, beendet die Konsole mitunter den Zugang der Weboberfläche, obwohl die App (und die Lüftersteuerung) weiterläuft: `select()` meldet nichts, ein Verbindungsversuch wird aber abgelehnt. Bisher hat die App nur reagiert, wenn `select()` oder `accept()` einen Fehler lieferten. Jetzt macht die Schleife in `src/http.c` alle zehn Sekunden Leerlauf einen Verbindungsversuch an die eigene Adresse (bei „alle Adressen“ an `127.0.0.1`); „Verbindung abgelehnt“ gibt den Zugang zurück, die Schleife in `main.c` öffnet einen neuen und das Protokoll sagt `http_listener_refused`. Ein Zeitüberschreiten oder ein anderer Fehler gilt nicht als abgelehnt.
+
 ## Einstellungen
 
 Alles wird in `/data/PS5-Cooling-Center/config.json` gespeichert und beim
