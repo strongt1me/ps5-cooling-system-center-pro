@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="web/img/app-mark.png" alt="" width="96" height="96">
+<img src="docs/images/header.jpg" alt="PS5 Cooling &amp; System Center - Pro" width="860">
 
 # PS5 Cooling & System Center - Pro
 
 **Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak,<br>usabile nel browser della console o da qualsiasi dispositivo della rete domestica, in sei lingue.**
 
-![Versione](https://img.shields.io/badge/Versione-1.72.0-1f6feb)
+![Versione](https://img.shields.io/badge/Versione-1.73.0-1f6feb)
 ![Licenza](https://img.shields.io/badge/Licenza-GPL--3.0--or--later-blue)
 ![Piattaforma](https://img.shields.io/badge/Piattaforma-PS5%20Payload-003791)
 ![Lingue](https://img.shields.io/badge/Lingue-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -132,6 +132,7 @@ Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola l
 - Convertire in immagini exFAT, ffpkg e ffpfsc senza PC; tutto viene riletto e verificato dopo la scrittura, con un file `.sha256`.
 - Asset pack LZ4, indice AMPR, APR-EMU, stub PlayGo e moduli DLC per gioco; verificare, estrarre e riparare immagini.
 - PS4 da USB: PKG falsi PS4 da un'unità USB nella libreria senza installarli (PS4Mount di gasb07).
+- Disc: mostra quale disco c'è nell'unità (PS2/PS3/PS4/PS5, ID titolo) e crea un'immagine di DVD PS2 e dischi PS3 con CRC-32, MD5 e SHA-1, verificata con Redump se si vuole (secondo ps-disc-detect).
 - Tempo di gioco con temperature, backup e ripristino dei salvataggi, trovare, dividere e installare pacchetti, cronologia di tutte le operazioni.
 
 **Gestione**
@@ -144,7 +145,7 @@ Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola l
 
 **Tecnica**
 - Server HTTP proprio senza librerie esterne, [interfaccia JSON](docs/API.md) documentata, impostazioni in `/data/PS5-Cooling-Center/config.json`.
-- Nessun accesso a Internet, a meno che non attivi gli **aggiornamenti dei giochi** (disattivati di serie): allora l'app interroga i server di download di Sony e, per le patch precedenti, prosperopatches.com o orbispatches.com sugli aggiornamenti dei tuoi giochi. Allo stesso modo «Scarica payload» prende l'elenco e i file da GitHub solo premendo il pulsante. Altrimenti parla solo con programmi sulla console e con i browser della rete domestica.
+- Nessun accesso a Internet, a meno che non attivi gli **aggiornamenti dei giochi** (disattivati di serie): allora l'app interroga i server di download ufficiali sugli aggiornamenti dei tuoi giochi. Allo stesso modo «Scarica payload» prende l'elenco e i file da GitHub solo premendo il pulsante. Altrimenti parla solo con programmi sulla console e con i browser della rete domestica.
 
 </details>
 
@@ -153,7 +154,7 @@ Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola l
 1. Scaricare `PS5_Cooling_System_Center_v<versione>.elf` dalle [Release](../../releases).
 2. Inviarlo alla console (loader ELF, porta **9021**), per esempio:
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.72.0.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.73.0.elf
    ```
 3. Aprire **`http://<IP-PS5>:8086`** nel browser (l'indirizzo compare anche nella notifica in alto a sinistra sulla TV).
 
@@ -231,19 +232,19 @@ Il risultato è `PS5_Cooling_Center.elf`; `tools/make_starter.sh` crea il riquad
 ## Note legali ed esclusione di responsabilità
 
 > [!CAUTION]
-> **Non è un prodotto Sony, niente pirateria, nessuna responsabilità.** Questo progetto non ha legami con Sony. Non contiene giochi, firmware, chiavi Sony (solo una chiave pubblicamente nota per pacchetti di prova autocostruiti, vedi THIRD_PARTY_NOTICES.md) né codice per aggirare protezioni anticopia, e non scarica nulla da Internet tranne, se li attivi, gli aggiornamenti ufficiali dei tuoi giochi dai server di Sony. Modificare una console può costare garanzia e account; il rischio è di chi lo fa. Il programma è fornito **senza alcuna garanzia**.
+> **Non è un prodotto ufficiale, niente pirateria, nessuna responsabilità.** Questo progetto non ha legami con i titolari dei diritti della console. Non contiene giochi, firmware, chiavi di terzi (solo una chiave pubblicamente nota per pacchetti di prova autocostruiti, vedi THIRD_PARTY_NOTICES.md) né codice per aggirare protezioni anticopia, e non scarica nulla da Internet tranne, se li attivi, gli aggiornamenti ufficiali dei tuoi giochi dai server ufficiali. Modificare una console può costare garanzia e account; il rischio è di chi lo fa. Il programma è fornito **senza alcuna garanzia**.
 
 <details>
 <summary>Testo completo</summary>
 
 > Questa sezione è un'informazione generale e non una consulenza legale. Chi usa il progetto è responsabile di verificare che l'uso sia consentito nel proprio paese e nei confronti dei propri partner contrattuali.
 
-- **Non è un prodotto Sony.** "PlayStation", "PS5" e i relativi loghi sono marchi di Sony Interactive Entertainment Inc. Questo progetto non ha legami con Sony e non è né supportato né approvato da Sony. Tutti gli altri nomi appartengono ai rispettivi proprietari.
+- **Non è un prodotto ufficiale.** "PlayStation", "PS5" e i relativi loghi sono marchi dei rispettivi proprietari. Questo progetto non ha legami con loro e non è né supportato né approvato da loro. Tutti gli altri nomi appartengono ai rispettivi proprietari.
 - **La tua console, la tua responsabilità.** Il programma funziona solo su una console modificata dal proprietario. La modifica può violare le condizioni d'uso e portare alla perdita della garanzia o al blocco dell'account o della console, e in alcuni paesi a conseguenze legali. Il rischio è di chi modifica la console e usa questo programma.
 - **Niente pirateria.** Questo progetto **non** serve a procurarsi, distribuire o usare copie pirata, e non lo sostiene. Copiare, spostare e convertire agiscono solo su giochi già presenti sulla propria console e servono per i backup di giochi acquistati legalmente. Trovare, dividere, installare e montare pacchetti da USB agiscono solo su pacchetti messi da te sulla console o su un'unità; l'app non ne procura. La distribuzione di contenuti protetti dal diritto d'autore è un reato nella maggior parte dei paesi. Qui non c'è aiuto in merito, nemmeno nelle issue.
-- **Nessun file Sony nel repository.** Librerie di sistema, firmware e file proprietari dell'SDK non sono né forniti né accettati (vedi [CONTRIBUTING](CONTRIBUTING.md)). Le 30 immagini del profilo sono state create dall'autore.
+- **Nessun file di sistema di terzi nel repository.** Librerie di sistema, firmware e file proprietari dell'SDK non sono né forniti né accettati (vedi [CONTRIBUTING](CONTRIBUTING.md)). Le 30 immagini del profilo sono state create dall'autore.
 - **Nessuna garanzia, nessuna responsabilità.** Il programma interviene sul controllo della ventola e sulle funzioni di sistema della console. È fornito così com'è, **senza alcuna garanzia** (GNU GPL, sezioni 15 e 16). L'autore non risponde di danni a console, dati o account. Una console impolverata raffredda peggio, comunque sia regolata la ventola.
-- **Privacy.** Storico, registro e impostazioni restano sulla console in `/data/PS5-Cooling-Center/`. L'app non invia dati a Internet; solo con gli aggiornamenti dei giochi attivi interroga i server di Sony e i provider DNS sugli ID titolo dei tuoi giochi. Unica eccezione nel browser: la pagina "Riconoscimenti" carica una volta la piccola icona da github.com per vedere se il browser ha Internet; solo allora i link sono cliccabili.
+- **Privacy.** Storico, registro e impostazioni restano sulla console in `/data/PS5-Cooling-Center/`. L'app non invia dati a Internet; solo con gli aggiornamenti dei giochi attivi interroga i server di aggiornamento ufficiali e i provider DNS sugli ID titolo dei tuoi giochi. Unica eccezione nel browser: la pagina "Riconoscimenti" carica una volta la piccola icona da github.com per vedere se il browser ha Internet; solo allora i link sono cliccabili.
 - **I progetti di terzi** sono sotto le proprie licenze, vedi [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 </details>
 

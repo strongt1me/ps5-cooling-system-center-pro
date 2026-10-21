@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="web/img/app-mark.png" alt="" width="96" height="96">
+<img src="docs/images/header.jpg" alt="PS5 Cooling &amp; System Center - Pro" width="860">
 
 # PS5 Cooling & System Center - Pro
 
 **Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in the console's own browser or from any device on your home network, in six languages.**
 
-![Version](https://img.shields.io/badge/Version-1.72.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.73.0-1f6feb)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
 ![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
 ![Languages](https://img.shields.io/badge/Languages-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -132,6 +132,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 - Convert to exFAT, ffpkg and ffpfsc images without a PC; everything is read back and checked after writing, with a `.sha256` file.
 - LZ4 asset packs, AMPR index, APR-EMU, PlayGo stub and DLC modules per game; check, unpack and repair images.
 - PS4 from USB: PS4 fake PKGs from a USB drive into the library without installing them (PS4Mount by gasb07).
+- Disc: shows which disc is in the drive (PS2/PS3/PS4/PS5, title ID) and makes an image of PS2 DVDs and PS3 discs with CRC-32, MD5 and SHA-1, checked against Redump if wanted (after ps-disc-detect).
 - Play time with temperatures, back up and restore saves, find, split and install packages, history of all jobs.
 
 **Management**
@@ -144,7 +145,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 
 **Technology**
 - Its own HTTP server without a third-party library, a documented [JSON interface](docs/API.md), settings in `/data/PS5-Cooling-Center/config.json`.
-- No internet access unless you switch on **game updates** (off by default): then the app asks Sony's download servers and, for older patches, prosperopatches.com or orbispatches.com for the updates of your own games. Likewise “Download payloads” fetches the payload list and the files from GitHub only when you press the button. Otherwise it only talks to programs on the console and to the browsers on your home network.
+- No internet access unless you switch on **game updates** (off by default): then the app asks the official download servers for the updates of your own games. Likewise “Download payloads” fetches the payload list and the files from GitHub only when you press the button. Otherwise it only talks to programs on the console and to the browsers on your home network.
 
 </details>
 
@@ -153,7 +154,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 1. Download `PS5_Cooling_System_Center_v<version>.elf` from the [Releases](../../releases).
 2. Send it to the console (ELF loader, port **9021**), for example:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.72.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.73.0.elf
    ```
 3. Open **`http://<PS5-IP>:8086`** in a browser (the notification at the top left of the TV shows the address too).
 
@@ -231,19 +232,19 @@ The result is `PS5_Cooling_Center.elf`; `tools/make_starter.sh` builds the start
 ## Legal notice and disclaimer
 
 > [!CAUTION]
-> **Not a Sony product, no piracy, no liability.** This project has no connection to Sony. It contains no games, no firmware, no Sony keys (only a publicly known key for self-built test packages, see THIRD_PARTY_NOTICES.md) and no code to circumvent copy protection, and it downloads nothing from the internet except, when you switch them on, the official updates of your own games from Sony's servers. Modifying a console can cost you your warranty and account; the risk lies with whoever does it. The program is provided **without any warranty**.
+> **Not an official product, no piracy, no liability.** This project has no connection to the console's rights holders. It contains no games, no firmware, no third-party keys (only a publicly known key for self-built test packages, see THIRD_PARTY_NOTICES.md) and no code to circumvent copy protection, and it downloads nothing from the internet except, when you switch them on, the official updates of your own games from the official servers. Modifying a console can cost you your warranty and account; the risk lies with whoever does it. The program is provided **without any warranty**.
 
 <details>
 <summary>Full text</summary>
 
 > This section is general information, not legal advice. Anyone using the project is responsible for making sure that their use is permitted in their country and towards their contractual partners.
 
-- **Not a Sony product.** "PlayStation", "PS5" and the related logos are trademarks of Sony Interactive Entertainment Inc. This project has no connection to Sony and is neither supported nor endorsed by Sony. All other names belong to their respective owners.
+- **Not an official product.** "PlayStation", "PS5" and the related logos are trademarks of their respective owners. This project has no connection to them and is neither supported nor endorsed by them. All other names belong to their respective owners.
 - **Your console, your responsibility.** The program only runs on a console its owner has modified. Modifying it may breach terms of use and lead to loss of warranty or a ban of the account or console, and in some countries to legal consequences. The risk lies with whoever modifies the console and uses this program.
 - **No piracy.** This project is **not** meant to obtain, distribute or use pirated copies, and it does not support that. Copying, moving and converting only work on games already on your own console and are meant for backups of legitimately acquired games. Finding, splitting, installing and mounting packages from USB only work on packages you put on the console or a drive yourself; the app does not obtain any. Distributing copyrighted content is a criminal offence in most countries. There is no help with that here, not in issues either.
-- **No Sony files in the repository.** System libraries, firmware and proprietary SDK files are neither shipped nor accepted (see [CONTRIBUTING](CONTRIBUTING.md)). The 30 profile pictures were created by the author.
+- **No third-party system files in the repository.** System libraries, firmware and proprietary SDK files are neither shipped nor accepted (see [CONTRIBUTING](CONTRIBUTING.md)). The 30 profile pictures were created by the author.
 - **No warranty, no liability.** The program interferes with the console's fan control and system functions. It is provided as is, **without any warranty** (GNU GPL, sections 15 and 16). The author is not liable for damage to consoles, data or accounts. A dusty console cools worse, however the fan is driven.
-- **Privacy.** History, log and settings stay on the console in `/data/PS5-Cooling-Center/`. The app sends no data to the internet; only with game updates switched on does it ask Sony's servers and DNS providers about the title IDs of your own games. The only exception is in the browser: the "Credits" page loads the small icon from github.com once to see whether the browser has internet access; only then are the links clickable.
+- **Privacy.** History, log and settings stay on the console in `/data/PS5-Cooling-Center/`. The app sends no data to the internet; only with game updates switched on does it ask the official update servers and DNS providers about the title IDs of your own games. The only exception is in the browser: the "Credits" page loads the small icon from github.com once to see whether the browser has internet access; only then are the links clickable.
 - **Third-party projects** are under their own licences, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 </details>
 

@@ -1,10 +1,39 @@
 # Changelog
 
+## v1.73.0
+
+### Vor dem Packen zu ffpfsc, neues Symbol
+- Vor dem Konvertieren zu `.ffpfsc` sieht die App nach, ob das Spiel viele Daten oder Texture-Streaming hat (ab 40 GB Daten, große Streaming-Container wie `.ucas`/`.utoc`/`.pak`/`.forge`/`.streamdb`/`.resources`/`.cas`/`.rpf` ab 4 GB zusammen, oder ein Streaming-Ordner ab 2 GB; Dump-Ordner, `.exfat`, `.ffpkg` und `.ffpfs`, Abbilder ohne Entpacken). Trifft das zu, steht im Fenster ein Hinweis, und beim Start fragt die App, ob das Spiel trotzdem umgewandelt werden soll: „OK“ macht normal weiter, „Abbrechen“ beendet den Vorgang. Der Plan liefert dafür `stream_risk`
+- Neues App-Symbol (Oberfläche, Kachel, Starter-Kachel, Benachrichtigung); in den READMEs steht oben stattdessen das Hintergrundbild der App
+### Disc im Laufwerk (nach ps-disc-detect)
+- Neuer Reiter **Disc** auf der Spiele-Seite: zeigt, welche Disc im Laufwerk liegt (PS2, PS3, PS4, PS5), mit Profil und Titelkennung wie bei der Konsole; aus ab Werk, die App fragt das Laufwerk erst nach dem Einschalten (alle 1,5 s)
+- Von einer PS2-DVD oder PS3-Disc legt der Knopf „Abbild erstellen“ ein ISO in `/data/PS5-Cooling-Center/disc/` an (Fortschritt, Geschwindigkeit, Restzeit, Abbrechen; CRC-32, MD5, SHA-1; Platzprüfung, Ruhemodus-Sperre, Eintrag im Verlauf); ein zweiter Schalter sichert neue Discs automatisch (aus ab Werk)
+- Mit einer Redump-Liste unter `/data/redump.db` (gebaut mit `tools/build_redump_db.py` aus ps-disc-detect) bekommt das Abbild den Namen aus der Liste und wird gegen sie geprüft
+- PS4- und PS5-Discs werden nur erkannt; PS1-/PS2-CDs kann das Laufwerk der PS5 nicht lesen
+- Schnittstellen `GET`/`POST /api/v1/disc`; Handbuch (sechs Sprachen), FAQ, Wörterbücher ergänzt
+- `sqlite_ro.c` liest jetzt auch WITHOUT-ROWID-Tabellen (Index-Bäume)
+
+### Fremdbausteine auf dem neuesten Stand (21.10.2026)
+- **PS4Mount 0.6.1** (gasb07): Ein Laufwerk, das nach einem Neustart unter anderem Namen wiederkommt (`usb1` statt `usb0`), behält seine angemeldeten PS4-Spiele; die Verknüpfungen werden nur umgeschrieben. Handbuch: Hinweis, keine zusammengeführten PKGs zu verwenden
+- **PatchDL 0.3.3** (Knutwurst): Schreibblöcke der Spiel-Updates 2 MiB statt 1 MiB, Empfangspuffer 4 MiB angefragt (die Konsole begrenzt auf ihr Maximum)
+- Geprüft und schon aktuell: APR-EMU 0.4.2.1, PlayGo-Stub 0.6, DLC-Module 0.3, Payload Manager 0.6.3, SDK 0.44, libdeflate 1.26, LZ4 1.10.0, exFAT2AMPR 1.104. MkPFS 1.1.0: nimmt ISA-L nicht mehr automatisch, weil dessen Datenströme vom Hardware-Entpacker der PS5 für manche Spiele abgelehnt werden (Fehler 132); die App nutzt libdeflate, keine Änderung nötig
+
+### ShadowMountPlus 1.7beta6-fix2
+- Backport-Ordner: ShadowMountPlus nimmt seit 1.7beta6 unter `<Scanpfad>/backports/` auch einen Ordner, dessen Name nur mit der Titel-ID beginnt (etwa `PPSA12345 Spielname`): der genau so benannte gewinnt, sonst der erste in Byte-Reihenfolge. Die Marke „Backport“, APR-EMU und PlayGo (Ablage, Prüfung, Entfernen) erkennen diese Ordner jetzt ebenfalls
+- Handbuch (alle sechs Sprachen), Repo-Handbuch und Kommentare auf den Stand von 1.7beta6-fix2 gebracht; neu in dieser Fassung außerdem: laufende `FAKE*`/`LAPY*`-Anwendungen blockieren Suche, Kopieren, Verschieben und Löschen anderer Titel nicht mehr, und die globale fakelib lässt sich je Spiel ausschließen (`ignore_global_fakelib`, von der App weder gelesen noch geändert)
+
+### Updates
+- Nur noch der Direktdownload: Der SC-Link-Weg samt „Versionen …“, „Älteren Patch holen …“, QR-Code und der Abfrage von Prospero/Orbis Patches ist entfernt (Schnittstellen `/api/v1/updates/versions` und `/api/v1/updates/qr` und die Aktionen `link`/`forget_link` entfallen)
+- Die Adresse der Versionsliste wird zuerst aus der `sce_sys/param.json` des Spiels gelesen (Abbild `.exfat`/`.ffpkg`/`.ffpfs`/`.ffpfsc` oder Ordner, ohne Entpacken), sonst aus `AppInfoJson` der App-Datenbank, sonst aus `tbl_appbrowse`
+- Die Abbild-Leser kennen jetzt auch `.ffpfs` (unkomprimierter PFS-Container)
+- Bei Spielen über ShadowMountPlus zählt die Version aus dem Abbild, wenn sie höher ist als die der App-Datenbank
+- Der Name des Herstellers kommt in Oberfläche, Handbuch, FAQ und Dokumentation nicht mehr vor
+
 ## v1.72.0
 
 ### Updates: Versionsauswahl für alle Spiele
-- Im Reiter „Updates“ gibt es jetzt bei jedem Spiel (nicht nur bei „neuere Firmware nötig“) die Schaltfläche „Versionen …“ mit der vollständigen Liste von Prospero Patches bzw. Orbis Patches
-- Die neueste zur Firmware passende Version ist als „✓ direkt laden“ markiert und startet den Download direkt von Sonys Servern, ohne SC-Link; alle älteren Versionen laufen weiterhin über den SC-Link (wie bisher)
+- Im Reiter „Updates“ gibt es jetzt bei jedem Spiel (nicht nur bei „neuere Firmware nötig“) die Schaltfläche „Versionen …“ mit der Liste der Versionen
+- Die neueste zur Firmware passende Version ist als „✓ direkt laden“ markiert und startet den Download direkt von den offiziellen Servern
 - Nach dem Vorbild von PatchDL 0.3.3 (Knutwurst)
 
 ### Fehler
@@ -62,15 +91,15 @@
 - Payloads mit der Endung `.bin` (etaHEN) lassen sich jetzt wie `.elf` starten, mit derselben Prüfung des Inhalts
 
 ### Spiel-Updates (nach PatchDL 0.3.0 von Knutwurst)
-- **Neuer Reiter „Updates“ auf der Spiele-Seite:** lädt das offizielle Update jedes PS5- und PS4-Spiels direkt von Sonys Servern und installiert es. Nur für Spiele, die Sony signiert hat (Disc, PlayStation Store); Spiele über ShadowMountPlus, Fake-PKGs und Homebrew werden nicht angefragt. **Aus**, bis man den Schalter umlegt
-- **Passend zur Firmware:** Angeboten wird die neueste Version, die auf dieser Firmware läuft. Braucht Sonys neuestes Update eine neuere Firmware, nennt die Karte die neueste passende Version aus Prospero Patches bzw. Orbis Patches; ihren SC-Link fügt man ein (am Handy über einen QR-Code). Passt die Paketgröße nicht zur gewählten Version, fragt die App nach
-- **Warteschlange, Fortsetzen, Prüfsummen:** Ein Update nach dem anderen, 1 bis 16 Verbindungen; Anhalten und Fortsetzen auch nach einem Neustart der App; jedes Stück wird mit Sonys Prüfsumme verglichen (PS5 SHA-256, PS4 SHA-1), ein falsches neu geladen; der Fortschritt steht live auf der Seite
+- **Neuer Reiter „Updates“ auf der Spiele-Seite:** lädt das offizielle Update jedes PS5- und PS4-Spiels direkt von den offiziellen Servern und installiert es. Nur für Spiele, die offiziell signiert sind (Disc, PlayStation Store); Spiele über ShadowMountPlus, Fake-PKGs und Homebrew werden nicht angefragt. **Aus**, bis man den Schalter umlegt
+- **Passend zur Firmware:** Angeboten wird die neueste Version, die auf dieser Firmware läuft. Braucht das neueste offizielle Update eine neuere Firmware, sagt das die Karte
+- **Warteschlange, Fortsetzen, Prüfsummen:** Ein Update nach dem anderen, 1 bis 16 Verbindungen; Anhalten und Fortsetzen auch nach einem Neustart der App; jedes Stück wird mit der offiziellen Prüfsumme verglichen (PS5 SHA-256, PS4 SHA-1), ein falsches neu geladen; der Fortschritt steht live auf der Seite
 - **Aufräumen:** Das Paket in `/data/PS5-Cooling-Center/updates` wird gelöscht, sobald das Spiel nach der Installation die neue Version meldet (abschaltbar); die Liste der Pakete im Ordner steht in den Einstellungen des Reiters. Ein schon vorhandenes Paket der richtigen Größe wird Stück für Stück geprüft, nur falsche Stücke werden neu geladen
-- **DNS wie PatchDL:** eigene Anfragen an Cloudflare, Google und Quad9 (UDP, dann TCP, dann DNS über HTTPS, zuletzt die gemerkte Adresse); die DNS-Einstellungen der Konsole bleiben unverändert. TLS mit BearSSL 0.6 (MIT) und festen Wurzelzertifikaten: Sonys eigenes für die Download-Server, öffentliche für DNS über HTTPS und die Patch-Seiten
+- **DNS wie PatchDL:** eigene Anfragen an Cloudflare, Google und Quad9 (UDP, dann TCP, dann DNS über HTTPS, zuletzt die gemerkte Adresse); die DNS-Einstellungen der Konsole bleiben unverändert. TLS mit BearSSL 0.6 (MIT) und festen Wurzelzertifikaten: das der Download-Server und öffentliche für DNS über HTTPS
 - **Schneller wie PatchDL 0.3.1:** Was ankommt, wird in Blöcken von 1 MiB geschrieben statt in vielen kleinen Stücken, und jede Verbindung bekommt einen Empfangspuffer von 2 MiB
 - **Sicherheit:** Jedes Stück wird immer mit seiner Prüfsumme verglichen (eine Paketliste ohne Prüfsummen wird abgelehnt), und vor der Installation muss das geladene Paket offiziell signiert sein; eine Antwort, die ohne sauberes TLS-Ende abbricht, gilt als unvollständig
 - **Stabiler:** Das Warten auf die Installation endet nie mehr in einer Endlosschleife (Ergebnisse werden je Auftrag aufbewahrt, Höchstdauer 6 Stunden), `job.json` wird nie von zwei Verbindungen zugleich geschrieben, Ausschalten leert die Warteschlange, „Fortsetzen“ klappt auch direkt nach einem Neustart der App, während der Installation lässt sich nichts anhalten oder löschen
-- Neue Schnittstellen `/api/v1/updates`, `/api/v1/updates/packages`, `/api/v1/updates/versions`, `/api/v1/updates/qr`; Handbuch in allen sechs Sprachen ergänzt
+- Neue Schnittstellen `/api/v1/updates`, `/api/v1/updates/packages`; Handbuch in allen sechs Sprachen ergänzt
 - Die Oberfläche nennt keinen Herstellernamen mehr („offizielle Update-Server“, „offiziell signiert“)
 
 ### Stabilität und Tempo (Durchsicht 19.10.2026: vier Prüf-Agenten über das ganze Projekt)
@@ -78,7 +107,7 @@
 - **Seiten-Dateien werden zwischengespeichert:** Oberfläche, Skripte und Wörterbücher bekommen ein ETag; der Browser lädt sie nur neu, wenn sich die App geändert hat (vorher bei jedem Aufruf, das Wörterbuch allein 0,4–0,5 MB)
 - **Controller:** Fenster (Kopieren, Löschen, Dateimanager) holen den Fokus, geben ihn beim Schließen zurück und schließen mit der Kreis-Taste/Escape; L1/R1 blättert hinter einem offenen Fenster nicht mehr um
 - **Pakete:** Während einer Suche wird nur noch die Liste abgefragt und nur bei Änderung neu gebaut (vorher jede Sekunde vier Abfragen und alle Karten)
-- **Fehler behoben:** schlummernder Stapelüberlauf beim Lesen der Netzwerkdaten (Puffer jetzt doppelt so groß wie Sonys Struktur); zwei Abbild-/LZ4-/AMPR-Aufträge konnten im selben Augenblick starten; ein fragmentiertes exFAT-Abbild wurde beim Prüfen und Entpacken quadratisch langsam gelesen; die Abfrage bei ShadowMountPlus hielt bis zu 5,5 s eine Sperre, auf die andere Seiten warteten; nach Verschieben/Entpacken/Löschen konnten Aufträge mit der alten Spieleliste geplant werden; Installationsergebnis konnte von einer gleichzeitig startenden Installation überschrieben werden; ein Update-Paket konnte gelöscht werden, während es installiert wurde; fehlende Speicherprüfung in PS4Mount; der Lüfter-Thread nahm nach einer langen Pause mitten in einer Kachel-Installation seine Identität zurück; Fehlermeldungen bei zu großen Anfragen kamen als Verbindungsabbruch an; Import der Einstellungen übernahm den Schalter „Covers & Metadaten speichern“ erst später; ein Schritt eines Payload-Profils scheiterte, wenn gleichzeitig etwas kopiert wurde
+- **Fehler behoben:** schlummernder Stapelüberlauf beim Lesen der Netzwerkdaten (Puffer jetzt doppelt so groß wie die Struktur des Systems); zwei Abbild-/LZ4-/AMPR-Aufträge konnten im selben Augenblick starten; ein fragmentiertes exFAT-Abbild wurde beim Prüfen und Entpacken quadratisch langsam gelesen; die Abfrage bei ShadowMountPlus hielt bis zu 5,5 s eine Sperre, auf die andere Seiten warteten; nach Verschieben/Entpacken/Löschen konnten Aufträge mit der alten Spieleliste geplant werden; Installationsergebnis konnte von einer gleichzeitig startenden Installation überschrieben werden; ein Update-Paket konnte gelöscht werden, während es installiert wurde; fehlende Speicherprüfung in PS4Mount; der Lüfter-Thread nahm nach einer langen Pause mitten in einer Kachel-Installation seine Identität zurück; Fehlermeldungen bei zu großen Anfragen kamen als Verbindungsabbruch an; Import der Einstellungen übernahm den Schalter „Covers & Metadaten speichern“ erst später; ein Schritt eines Payload-Profils scheiterte, wenn gleichzeitig etwas kopiert wurde
 - **Robuster:** langsame Clients belegen keine Verbindungsplätze mehr unbegrenzt (Mindesttempo 64 KiB je 30 s); Löschen großer Spiele gibt regelmäßig Rechenzeit ab; die Sicherungsliste misst Ordnergrößen nicht mehr bei jeder Anfrage neu; Kanalaufzeichnung, Prozessliste und das Alter von Leistungs- und Taktwerten rechnen mit der monotonen Uhr; ein Installationshelfer, der schon beim Start hängt, wird gefunden und beendet statt bei jedem neuen Versuch liegen zu bleiben; Löschen-Dialog verwirft verspätete Antworten eines vorher geöffneten Dialogs; der Reiter „Updates“ aktualisiert sich nach einem Seitenwechsel wieder; die Verbindungsanzeige wird nach einem Ausfall sicher wieder grün
 - **cJSON:** Schutz vor NULL in `cJSON_SetNumberHelper` (upstream b2890c8, noch in keinem Release)
 

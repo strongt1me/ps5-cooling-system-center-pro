@@ -1,4 +1,4 @@
-/* Reads rowid tables out of a SQLite 3 database held in memory — read only,
+/* Reads rowid and WITHOUT ROWID tables out of a SQLite 3 database held in memory — read only,
  * without SQLite. See sqlite_ro.c for why and how.
  *
  * Deliberately free of ps5tm.h and of any system call: the file is loaded by
@@ -30,6 +30,7 @@ typedef struct {
   uint32_t root;
   int      ncols;
   int      ipk;                     /* INTEGER PRIMARY KEY column, or -1   */
+  int      without_rowid;           /* an index b-tree: the record is the key, columns primary key first */
   char     col[SQLRO_MAX_COLS][SQLRO_NAME_LEN];
 } sqlro_table_t;
 

@@ -96,7 +96,7 @@ background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0f
 .langs{display:inline-flex;flex-wrap:wrap;gap:6px;margin:0 0 10px 10px;vertical-align:top}
 .langs a{padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#aebbd4;text-decoration:none;font-size:14px}
 .langs a:hover{border-color:rgba(59,130,246,.6);color:#fff}.langs a.on{background:rgba(59,130,246,.22);color:#fff;border-color:rgba(59,130,246,.55)}
-.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.71.4</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#apr'>AMPR index, APR-EMU, PlayGo and history</a></li><li><a href='#assetpacks'>LZ4 asset packs: step by step</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#updates'>Game updates</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
+.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.73.0</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#apr'>AMPR index, APR-EMU, PlayGo and history</a></li><li><a href='#assetpacks'>LZ4 asset packs: step by step</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#updates'>Game updates</a></li><li><a href='#disc'>Disc in the drive</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
 <p><b>PS5 Cooling &amp; System Center - Pro</b> is a homebrew program (ELF) for a jailbroken PS5. It controls the
 fan according to a calm, freely adjustable target temperature and comes with a web interface that you open from any device on your
 home network: phone, tablet, PC or the console's own browser. On top of that come game management, packages,
@@ -118,8 +118,8 @@ web interface work, but fan control then reports “not available”.</li>
 </ul>
 </section><section class='ch' id='installation'><div class='ch-head'><div class='ch-num'>3</div><h2>Installation &amp; first start</h2></div>
 <ol class='steps'>
-<li>Send <code>PS5_Cooling_System_Center_v1.71.4.elf</code> to the console, port <code>9021</code>, e.g.:<br>
-<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.71.4.elf</code></li>
+<li>Send <code>PS5_Cooling_System_Center_v1.73.0.elf</code> to the console, port <code>9021</code>, e.g.:<br>
+<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.73.0.elf</code></li>
 <li>A notification with the address of the web interface appears at the top left of the TV.</li>
 <li>Open it in the browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
 </ol>
@@ -230,6 +230,8 @@ and verified; nothing is overwritten.</p>
 <ul>
 <li>The PKG files stay on the drive; only small management files go to the console. Deleting a game on the console or with “Remove from library” only removes it from the library, the PKG stays.</li>
 <li>Updates (<code>patch.pkg</code>) and add-ons (DLC) are included; add-ons only when the switch in the settings is on.</li>
+<li><b>Drive under another name</b> (since PS4Mount 0.6.1): if the same drive comes back as <code>usb1</code> instead of <code>usb0</code> after a restart, the games stay registered; the app only rewrites the links to the new folder.</li>
+<li><b>No merged PKGs:</b> game PKGs with patches, add-ons or updates already merged into them may not work. Better use the original game PKG and put the update and add-ons beside it as separate <code>.pkg</code> files. A game PKG is only used from the folder of its own title ID.</li>
 <li>The app has to be running for the games to stay visible after a console restart. If PS4Mount already runs as a payload of its own (<code>ps4mount.elf</code>), the app does not load its PS4Mount a second time: the tab shows “waiting”, and once the stand-alone one has ended, the app takes over by itself. It is recognised by its web panel (port 8770), the lock on port 9032 or its process name; if it turns up later, for example after rest mode, the app stops its own. The other way round, the Payloads page (a startup profile too) does not start a <code>ps4mount.elf</code> while a PS4Mount is already running.</li>
 <li>Firmware (since PS4Mount 0.4.4): from 6.00 the console registers the games the usual way (tested on 13.20, reported on 6.50); below 6.00 one at a time, and where that function is missing no games are added, to protect the database. The notification at switch-on names the way. This version inside the app has been checked on a PS5 Pro with 12.00: PS4 games from a USB drive are added and run. It is switched off until you switch it on.</li>
 </ul>
@@ -239,7 +241,9 @@ and verified; nothing is overwritten.</p>
 <li>Two or more connected drives (partitions count too) can make the console interface slow, with or without PS4Mount. Then connect a single drive with one partition.</li>
 <li>A running game can use at most about 30 packages (game, update and roughly 29 add-ons). This is a console limit that applies to installed games too.</li>
 </ul>
-<!--p4m--></section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
+<!--p4m-->
+<p><b>Before packing to ffpfsc:</b> the console has to unpack a compressed file over and over while playing, so games with a great deal of data or texture streaming can stutter. Before the app converts a game (dump folder, <code>.exfat</code>, <code>.ffpkg</code> or <code>.ffpfs</code>) to <code>.ffpfsc</code> it looks: from about 40 GB of data, with large streaming containers (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB together or more) or with a streaming folder (2 GB or more) the window shows a note, and at the start the app asks whether to convert the game anyway. “OK” carries on as usual, “Cancel” stops the job. This is an estimate from file names and sizes, not from the game engine.</p>
+</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
 <p>Every game card has the button <b>LZ4 asset packs …</b> under <b>Convert</b>. It opens a window with tools around APR-EMU. For now it holds the <b>AMPR index</b>.</p>
 <ul>
 <li>The <b>AMPR index</b> (<code>ampr_emu.index</code>) is the list of all of the game's files that APR-EMU needs to find them. The window shows whether there is one and how many files it knows.</li>
@@ -250,7 +254,7 @@ and verified; nothing is overwritten.</p>
 <h3>APR-EMU in the game</h3>
 <p>The row <b>APR-EMU in the game</b> shows which <code>libSceAmpr.sprx</code> a game loads and lets you choose a version and put it in, bring the game's original back or remove the file. The versions are files in <code>/data/PS5-Cooling-Center/AMPR_EMU</code>, named like drakmor's releases (<code>libSceAmpr.sprx-0.4.2.1-test-pack</code>). Five versions are bundled with the app: they show in the list even when they are not in the folder yet, and get there when you build one in or with <b>Put the bundled versions into the folder</b> (the folder is made when needed). Add more with <b>Add file</b>. Every file is checked (SELF header, the mark “[AMPR_EMU]”). Variants with “pack” in the name can read LZ4 packs, “debug” writes a log.</p>
 <ul>
-<li>Where the file goes follows ShadowMountPlus (1.7beta1 and newer): it looks first in the backport folder <code>&lt;scan path&gt;/backports/&lt;title id&gt;/</code>, then in the game, and the first folder that exists counts alone. For a <b>game folder, .exfat or .ffpkg</b> it goes to <code>fakelib/libSceAmpr.sprx</code> in the game (an image is briefly mounted for writing by ShadowMountPlus). A <b>compressed .ffpfsc</b> cannot be written: a backport folder is made there and the game stays untouched; because it hides the game's <code>fakelib</code>, its files are copied in. If a backport folder already exists, it is used for every format.</li>
+<li>Where the file goes follows ShadowMountPlus (1.7beta1 and newer): it looks first in the backport folder <code>&lt;scan path&gt;/backports/&lt;title id&gt;/</code> (since 1.7beta6 also a folder whose name only begins with the title id, such as “PPSA12345 Game Name”: the one named exactly like it wins, otherwise the first in byte order), then in the game, and the first folder that exists counts alone. For a <b>game folder, .exfat or .ffpkg</b> it goes to <code>fakelib/libSceAmpr.sprx</code> in the game (an image is briefly mounted for writing by ShadowMountPlus). A <b>compressed .ffpfsc</b> cannot be written: a backport folder is made there and the game stays untouched; because it hides the game's <code>fakelib</code>, its files are copied in. If a backport folder already exists, it is used for every format.</li>
 <li>The file the game brought itself is kept once as <code>libSceAmpr.sprx.orig</code> and never overwritten; an earlier APR-EMU does not count as an original. <b>Restore original</b> puts it back. <b>Remove</b> deletes only the APR-EMU file.</li>
 <li>The window warns when a <code>fakelib2</code> lies beside <code>fakelib</code> (ShadowMountPlus from 1.7beta1 then reads only that one), and when ShadowMountPlus replaces the file at the start of a game from <code>/data/shadowmount/emus</code> (<code>update_emulators=1</code>). A game in LZ4 packs accepts only versions with “pack” and cannot otherwise be changed.</li>
 </ul>
@@ -381,13 +385,22 @@ download list, with “Delete”.</div>
 <ul>
 <li>First turn on the <b>Switch on</b> switch: until then the app asks nobody.</li>
 <li><b>Check for updates</b> checks every officially signed game (disc or PlayStation Store) and, since 1.71.0, also games running through ShadowMountPlus (exFAT or ffpkg images). Under such a game a note says the update is installed the normal way; whether it affects the mounted image depends on the game. Fake PKGs and homebrew are not looked up.</li>
-<li>The newest version that runs on this firmware is offered. If the newest official update needs newer firmware, the card shows <b>Get an older patch …</b>: open prosperopatches.com (PS5) or orbispatches.com (PS4) – on a phone through the QR code –, copy the SC link and paste it. If the size does not fit the chosen version, the app asks.</li>
+<li>The newest version that runs on this firmware is offered – straight from the official update servers, with no link to paste. If the newest official update needs newer firmware, the card says so and nothing is downloaded.</li>
 <li><b>Download and install</b> or <b>Update all</b> puts the updates in a queue; they are downloaded one after another over several connections. Pause and resume work at any time, also after a restart of the app. Every piece is compared with the official checksum (PS5 SHA-256, PS4 SHA-1); a wrong one is downloaded again.</li>
 <li>The package lives in <code>/data/PS5-Cooling-Center/updates/&lt;title ID&gt;</code>. After the install it is deleted once the game reports the new version (can be switched off). If a package of the right size is already there, the app checks its pieces and downloads only the wrong ones again.</li>
 <li>The app reaches the update servers through its own DNS queries (Cloudflare, Google, Quad9, if need be over HTTPS). The console's DNS settings stay as they are; a block against system updates stays in place.</li>
 <li>Space for the package plus 1 GB reserve is needed; the install needs about as much again.</li>
 </ul>
-</section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>14</div><h2>Files – the file manager</h2></div>
+</section><section class='ch' id='disc'><div class='ch-head'><div class='ch-num'>14</div><h2>Disc in the drive</h2></div>
+<p>The <b>Disc</b> tab on the Games page shows which disc is in the drive and, on request, makes an image (ISO) of a PS2 DVD or a PS3 disc. It is based on ps-disc-detect (GPL-3.0), whose approach the app has rewritten.</p>
+<ul>
+<li><b>Switch on:</b> only when the switch is on does the app ask the drive (every second and a half). It stays on across a restart of the app.</li>
+<li><b>Detection:</b> the card shows the kind of disc (PS2 DVD-ROM, PS3 BD-ROM, PS4 BD-ROM, PS5 BD-ROM …) and its title ID, such as <code>SLES-52780</code>. PS4 and PS5 discs are only recognised, not copied. A console without a drive (Digital Edition) reports “no drive found”. The PS5's drive cannot read PS1 and PS2 CDs.</li>
+<li><b>Create image:</b> for a PS2 DVD or PS3 disc the button writes an ISO to <code>/data/PS5-Cooling-Center/disc/</code>, with progress, speed and time left. CRC-32, MD5 and SHA-1 are then shown with the image. “Cancel” deletes the unfinished file. While it runs, detection stays on and the console does not go into rest mode by itself. An image that is already there (also one made by ps-disc-detect in <code>/data</code>) is not read again.</li>
+<li><b>Copy new discs automatically:</b> the second switch makes the image right away when such a disc is inserted (off by default).</li>
+<li><b>Redump:</b> if <code>/data/redump.db</code> is on the console, the image gets its name from the list (when the title ID has exactly one) and is compared with the checksums (“checked against Redump”); otherwise it is named like the title ID. Build the list on a PC with <code>tools/build_redump_db.py</code> from the ps-disc-detect project (it downloads the files from redump.info); it may be up to 64 MB.</li>
+<li>Delete an image with “Delete” or in the file manager.</li>
+</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>Files – the file manager</h2></div>
 <p>Viewing the console's folders and downloading files works everywhere. <b>Changing</b> – uploading, new folder, renaming,
 copying, moving, deleting – only works on the <b>drives</b> and in <code>/data</code>. Everywhere else it says “View only”.</p>
 
@@ -410,7 +423,7 @@ copying, moving, deleting – only works on the <b>drives</b> and in <code>/data
 progress per file.</p>
 <div class='tip'>Protected: nothing is ever overwritten, links are never followed, and in the app's folder
 (<code>/data/PS5-Cooling-Center</code>) only <code>payloads</code> can be changed – ideal for uploading payloads.</div>
-</section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>15</div><h2>Payloads</h2></div>
+</section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payloads</h2></div>
 <p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>
 or from the USB stick (root or folder <code>payloads</code>). They are started via the console's payload loader
 (port 9021).</p>
@@ -418,10 +431,10 @@ or from the USB stick (root or folder <code>payloads</code>). They are started v
 <p><b>Download payloads:</b> the same list as in itsPLK's Payload Manager (updated every day, currently 28 payloads), with search and categories. “Load list” fetches it once from GitHub; after that it is refreshed at most every three hours when the page is opened. “Download” puts the file into the payload folder, but only after its SHA-256 checksum matches the list. If the list has a newer version, the card shows “old → new” and “Update”. “Delete” only removes what the app downloaded itself; a foreign file of the same name is replaced only after a second click.</p>
 
 <p>Files ending in <code>.elf</code> and <code>.bin</code> (etaHEN) count as payloads; both can be started and used in profiles, with the same check of the content.</p>
-</section><section class='ch' id='profil'><div class='ch-head'><div class='ch-num'>16</div><h2>Profile</h2></div>
+</section><section class='ch' id='profil'><div class='ch-head'><div class='ch-num'>17</div><h2>Profile</h2></div>
 <p>Change the console's display name and choose a profile picture – your own or one of the 30 built-in ones.</p>
 
-</section><section class='ch' id='system'><div class='ch-head'><div class='ch-num'>17</div><h2>System &amp; log</h2></div>
+</section><section class='ch' id='system'><div class='ch-head'><div class='ch-num'>18</div><h2>System &amp; log</h2></div>
 <p><b>System</b> shows the console, firmware, uptime, the storage of all drives, network, display and the
 cooling performance over the weeks; this is also where you reinstall the tile.</p>
 <p><b>System</b> also shows a QR code with this page’s address: point the phone’s camera at it and the page opens on the phone (on the same network).</p>
@@ -429,18 +442,18 @@ cooling performance over the weeks; this is also where you reinstall the tile.</
 <p><b>Log</b> lists every measurement, control action and message of the app (exportable). The <b>Live kernel log</b> tab shows
 the console's log as it is written – with filter, pause, save, download and recording.</p>
 
-</section><section class='ch' id='credits'><div class='ch-head'><div class='ch-num'>18</div><h2>Credits</h2></div>
+</section><section class='ch' id='credits'><div class='ch-head'><div class='ch-num'>19</div><h2>Credits</h2></div>
 <p>The page thanks the developers whose work is in the app, and other well-known developers of the community – with
 profile picture, name and links. The links can only be clicked if the browser has internet access.</p>
 
-</section><section class='ch' id='sicherheit'><div class='ch-head'><div class='ch-num'>19</div><h2>Security on the home network</h2></div>
+</section><section class='ch' id='sicherheit'><div class='ch-head'><div class='ch-num'>20</div><h2>Security on the home network</h2></div>
 <ul>
 <li>The interface has <b>no login</b>: every device on the home network can read and change things.</li>
 <li>The console does not belong on the open internet – <b>do not set up port forwarding</b> to port 8086.</li>
 <li>If you only want to use it on the device itself, set the network binding in the settings to <code>127.0.0.1</code>.</li>
 <li>The app refuses requests that recognisably come from outside websites (error 403).</li>
 </ul>
-</section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>20</div><h2>If something does not work</h2></div>
+</section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>21</div><h2>If something does not work</h2></div>
 <table>
 <tr><th>Problem</th><th>Solution</th></tr>
 <tr><td>Web interface not reachable</td><td>Send the ELF again (port 9021); only one instance; check the address <code>http://&lt;PS5-IP&gt;:8086/</code>.</td></tr>
@@ -451,4 +464,4 @@ profile picture, name and links. The links can only be clicked if the browser ha
 <tr><td>Error 403 in the browser</td><td>Open the page directly via the console's IP address, not via another name or another website.</td></tr>
 </table>
 <p>More answers are in the <b>FAQ</b>.</p>
-</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.71.4 · As of 7 October 2026 · Not a Sony product; “PlayStation” and “PS5” are trademarks of Sony Interactive Entertainment Inc. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.73.0 · As of 7 October 2026 · Not an official product; “PlayStation” and “PS5” are trademarks of their respective owners. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>

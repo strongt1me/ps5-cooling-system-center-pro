@@ -38,19 +38,19 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   <https://github.com/drakmor/dlc_emu>.
 - **ps5-native-app-boilerplate** (BlackBearReloaded, GPL-3.0-or-later): Für die Starter-Kachel (`starter/`) sind das Linker-Skript
   (`starter/title/title.ld`), die Symboltabelle (`starter/title/symbols.map`) und `starter/sce_module/libc.prx` (Kompatibilitäts-Stubs
-  und Startcode, kein Sony-Code, siehe `starter/sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
+  und Startcode, kein fremder Systemcode, siehe `starter/sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt. <https://github.com/BlackBearReloaded/ps5-native-app-boilerplate>
-- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.6.0): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
+- **ps-disc-detect** (GPL-3.0-or-later; „disc detect“, Archiv `ps-disc-detect-main.zip`, vom User am 21.10.2026 bereitgestellt): Vorbild und Wissen für den Reiter „Disc“ (`src/disc.c`): der Weg zum Laufwerk (`/dev/xpt0`, CAMIOCOMMAND mit GET CONFIGURATION, READ DISC STRUCTURE, SET STREAMING), die Profilnummern, wo die Titelkennung liegt (`SYSTEM.CNF`, `PARAM.SFO`, `param.json`), das Lesen von `/dev/cd0` in 128-KiB-Stücken, das Benennen nach Redump und das Schema der Redump-Datenbank. Der Code ist neu geschrieben (kein CD-Abbild, kein IRD, keine eingebettete Liste); die MD5- und SHA-1-Rechnungen sind eigene Fassungen der veröffentlichten Verfahren.
+- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.6.1): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
   (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
   Vorlagen unter `third_party/ps4mount/`. Der Schlüssel in `src/ps4m_keys.h` stammt aus LibOrbisPkg (maxton, LGPL-3.0). Quelltext der
   Vorlage: <https://github.com/gasb07/ps4mount>.
 - **PatchDL** 0.3.0 (Knutwurst, GPL-3.0): Vorbild für die Spiel-Updates (`src/updates.c`, `src/upd_*.c`): die Server
-  und Adressen von Sonys Versionslisten und Paketlisten, der Schlüssel der PS4-Versionsadresse, die Prüfung, ob ein Spiel
-  von Sony signiert ist, der DNS-Weg (UDP, TCP, DNS über HTTPS, gemerkte Adressen) und das Holen älterer Patches über
-  prosperopatches.com/orbispatches.com und SC-Links. Der Code ist eigener (andere TLS-Bibliothek, eigene Warteschlange);
-  übernommen sind nur diese Fakten und die öffentlichen Wurzelzertifikate (Sony, DNS-Anbieter), aus denen
+  und Adressen der offiziellen Versionslisten und Paketlisten, der Schlüssel der PS4-Versionsadresse, die Prüfung, ob ein Spiel
+  offiziell signiert ist, der DNS-Weg (UDP, TCP, DNS über HTTPS, gemerkte Adressen). Der Code ist eigener (andere TLS-Bibliothek, eigene Warteschlange);
+  übernommen sind nur diese Fakten und die öffentlichen Wurzelzertifikate (Update-Server, DNS-Anbieter), aus denen
   `tools/mk_upd_ta.py` die Vertrauensanker in `src/upd_ca.h` erzeugt. <https://github.com/knutwurst/ps5-patchdl>.
 - **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0 mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
   lose lässt, für den Mitschnitt zur Profil-Erzeugung (`src/trace.c`, ein C-Nachbau von `ampr_pack_profile.py`, Gegenprobe mit
@@ -75,7 +75,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 - **PS5 Dump & Image Converter** (eigenes Projekt des Autors, Modul `shadowmount_generation.py` und der
   fakelib-Manager): Vorbild für die Ablage der APR-EMU-Datei (`fakelib` statt `fakelib2`, Sicherung der
   Spieldatei als `.orig`, Erkennung eines früheren Emulators an `[AMPR_EMU]`) und für die Suchreihenfolge von
-  ShadowMountPlus 1.7 (Backport-Ordner vor Spiel).
+  ShadowMountPlus 1.7beta6-fix2 (Backport-Ordner vor Spiel, auch mit Namenszusatz).
 - **ShadowMountPlus** (drakmor, GPL-3.0): Seine Web-Schnittstelle liefert Format
   und Speicherort der Spiele und übernimmt Verschieben und Entpacken
   (`src/smp.c`, `src/gamemove.c`); seine README nennt die Parameter für

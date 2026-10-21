@@ -12,7 +12,7 @@ dort aufgeführten DLC als gekauft. Die Liste ersetzt die der Konsole (nichts wi
 diese Fassung bei jedem Spielstart ab: Der Ausgabe-Beschreiber des IPC-Aufrufs ist 24 Byte groß, im Quelltext 0.3 aber nur 16, und
 die 8 Byte dahinter waren im „nolog“-Bau ein gesichertes Register des Aufrufers (auf der Konsole gemessen; behoben in Commit
 48efe06 vom 29.09.2026, zusammengeführt am 10.10.2026, bisher ohne neue Veröffentlichung). Im „log“-Bau liegt an dieser Stelle eine
-unbenutzte Variable, er läuft. Selbst bauen lässt sich der Quelltext nur mit Sonys lizenziertem Prospero SDK, deshalb bleibt es bis
+unbenutzte Variable, er läuft. Selbst bauen lässt sich der Quelltext nur mit dem lizenzierten Prospero SDK, deshalb bleibt es bis
 zu einer neuen Veröffentlichung bei den „log“-Bauten. Die App erkennt einen „nolog“-Bau 0.3 in einem Spiel an seiner Prüfsumme als
 fehlerhaft und ersetzt ihn mit „Aktualisieren“ (die alte Datei bleibt als `.old`).
 

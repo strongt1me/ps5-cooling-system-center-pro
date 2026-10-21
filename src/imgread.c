@@ -1,4 +1,4 @@
-/* A read-only reader for exFAT, PFS/PFSC (.ffpfsc) and UFS2 (.ffpkg) images — see imgread.h.
+/* A read-only reader for exFAT, PFS/PFSC (.ffpfsc, .ffpfs) and UFS2 (.ffpkg) images — see imgread.h.
  *
  * Three layers: a byte stream (the image file itself, or the unpacked view of a PFSC file inside a PFS container), a file
  * system on top of it (exFAT or UFS2) and the small operations the app needs, pread of one file and the names of one folder.
@@ -197,6 +197,52 @@ bad:
 }
 
 
+/* The raw (uncompressed) view of the one file in a PFS container (.ffpfs): same layout as .ffpfsc (pfsc_open above,
+   conv_pfs.c's inode_put), but the file's inode has FLAG_COMPRESSED (0x1) clear and its bytes lie, uncompressed and
+   contiguous, straight after the inode table — size at inode offset 0x08, first block (db[0]) at 0x64. */
+typedef struct { bs_t b; bs_t *under; uint64_t base; } pfsraw_bs_t;
+
+static int
+pfsraw_rd(bs_t *s, uint64_t off, void *buf, size_t n) {
+  pfsraw_bs_t *p = (pfsraw_bs_t *)s;
+  if(off > s->size || n > s->size - off) return -1;
+  return p->under->rd(p->under, p->base + off, buf, n);
+}
+
+static void
+pfsraw_cl(bs_t *s) {
+  pfsraw_bs_t *p = (pfsraw_bs_t *)s;
+  p->under->cl(p->under);
+  free(p);
+}
+
+/* Takes over under. NULL (under is closed) when it is not a PFS container of this layout. */
+static bs_t *
+pfs_raw_open(bs_t *under) {
+  uint8_t h[4 * PFS_INODE];
+  pfsraw_bs_t *p = NULL;
+  if(under->rd(under, 0, h, 0x40) != 0 || rd64(h) != 2 || rd64(h + 8) != 20130315 || rd32(h + 0x20) != PFS_BS) goto bad;
+  if(under->rd(under, PFS_BS, h, 4 * PFS_INODE) != 0) goto bad;
+  const uint8_t *fi = h + 3 * PFS_INODE;
+  if(rd32(fi + 0x04) & 0x1) goto bad;                                    /* compressed: pfsc_open's job, not this one's */
+  uint64_t first_block = rd32(fi + 0x64), size = rd64(fi + 0x08);
+  if(first_block == 0 || first_block > under->size / PFS_BS || size == 0) goto bad;
+  uint64_t base = first_block * PFS_BS;
+  if(base > under->size || size > under->size - base) goto bad;
+  p = calloc(1, sizeof(*p));
+  if(!p) goto bad;
+  p->under = under;
+  p->base = base;
+  p->b.rd = pfsraw_rd;
+  p->b.cl = pfsraw_cl;
+  p->b.size = size;
+  return &p->b;
+bad:
+  under->cl(under);
+  return NULL;
+}
+
+
 /* ------------------------------------------------------------------ file systems */
 
 typedef struct fsx fsx_t;
@@ -215,7 +261,7 @@ struct fsx {
 
 struct imgr {
   fsx_t *fs;
-  const char *kind_name;           /* "exfat", "ffpfsc" or "ffpkg" */
+  const char *kind_name;           /* "exfat", "ffpfsc", "ffpfs" or "ffpkg" */
 };
 
 static int
@@ -816,17 +862,18 @@ imgr_open(const char *image_path, char *err, size_t err_len) {
   if(!b) return NULL;
   imgr_t *r = calloc(1, sizeof(*r));
   if(!r) { b->cl(b); snprintf(err, err_len, "Kein Speicher."); return NULL; }
-  uint8_t h[0x40];
+  uint8_t h[0x40], ib[4 * PFS_INODE];
   fsx_t *fs = NULL;
   const char *name = NULL;
   if(b->rd(b, 0, h, sizeof(h)) == 0 && rd64(h) == 2 && rd64(h + 8) == 20130315) {
-    bs_t *inner = pfsc_open(b);                       /* takes over b */
+    int compressed = b->rd(b, PFS_BS, ib, sizeof(ib)) == 0 && (rd32(ib + 3 * PFS_INODE + 0x04) & 0x1);
+    bs_t *inner = compressed ? pfsc_open(b) : pfs_raw_open(b);   /* either takes over b */
     b = NULL;
     if(inner) {
       fs = exf_open(inner);
       if(!fs) fs = ufs_open(inner);
       if(!fs) inner->cl(inner);
-      name = "ffpfsc";
+      name = compressed ? "ffpfsc" : "ffpfs";
     }
   } else {
     fs = exf_open(b);

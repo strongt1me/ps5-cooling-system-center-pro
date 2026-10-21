@@ -186,9 +186,11 @@ Ordner entpackt ebenfalls ShadowMountPlus.
   etwa 0,5 % freier Platz, mindestens 64 MB und höchstens 512 MB, wie ihn auch
   `mkufs2.sh` von ShadowMountPlus lässt; der Dialog nennt die genaue Größe, bevor es
   losgeht, und die Platzprüfung rechnet damit.
-- **`.ffpfsc`** (exFAT innen, komprimiert): der Aufbau, den MkPFS und
+- **`.ffpfsc`** (exFAT innen, komprimiert; Warnung vor dem Packen bei Spielen mit vielen Daten oder Texture-Streaming, siehe unten): der Aufbau, den MkPFS und
   ShadowMountPlus empfehlen. Auch ein exFAT-, ffpkg- oder ffpfs-Abbild lässt sich
   so zu `.ffpfsc` machen.
+
+**Warnung vor dem Packen zu ffpfsc** (seit 21.10.2026). Ein komprimiertes Abbild muss die Konsole beim Spielen ständig entpacken; bei Spielen mit sehr vielen Daten oder Texture-Streaming sind Ruckler möglich. Der Plan des Konvertierens (`GET /api/v1/library/convert/plan`) sieht deshalb vorab nach (Dump-Ordner, `.exfat`, `.ffpkg`, `.ffpfs`; Abbilder ohne Entpacken über den Abbild-Leser) und liefert `stream_risk`: ab 40 GB Daten (`big_data`), große Streaming-Container (`.ucas`, `.utoc`, `.pak`, `.forge`, `.streamdb`, `.resources`, `.cas`, `.rpf`, zusammen ab 4 GB) oder ein Ordner, dessen Name mit „stream“ beginnt (ab 2 GB). Trifft etwas zu, steht beim Eintrag „ffpfsc“ ein Hinweis, und beim Start fragt das Fenster: „Trotzdem in das Format ffpfsc umwandeln?“. „OK“ macht normal weiter, „Abbrechen“ beendet den Vorgang, ohne dass etwas angelegt wird. Es ist eine Schätzung an Namen und Größen, nicht an der Spiel-Engine; die Schwellen stehen als `STREAM_*` in `src/gameconvert.c`.
 
 Der Programmcode für exFAT und ffpfsc ist aus [MkPFS](https://github.com/PSBrew/MkPFS)
 (GPL-3.0) übertragen, der für ffpkg aus [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)
@@ -299,7 +301,7 @@ test-debug) sind in der App mitgeliefert: Sie stehen in der Auswahl, auch wenn s
 beim Einbauen oder mit „Mitgelieferte Versionen in den Ordner legen“ dorthin (Ordner `AMPR_EMU`, wird bei Bedarf angelegt).
 Weitere Fassungen legt „Datei hinzufügen“ im Fenster in denselben Ordner. Wohin die
 Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backport-Ordner
-`<Suchpfad>/backports/<Titel-ID>/` mit `fakelib2` vor `fakelib`, dann das Spiel mit `fakelib2` vor
+`<Suchpfad>/backports/<Titel-ID>/` (seit 1.7beta6 auch ein Ordner, dessen Name nur mit der Titel-ID beginnt, etwa „PPSA12345 Spielname“: der genau so benannte gewinnt, sonst der erste in Byte-Reihenfolge) mit `fakelib2` vor `fakelib`, dann das Spiel mit `fakelib2` vor
 `fakelib`; der erste vorhandene Ordner gilt allein, auch ein leerer):
 
 - **Spielordner, `.exfat`, `.ffpkg`:** `fakelib/libSceAmpr.sprx` im Spiel; ein Abbild hängt ShadowMountPlus
@@ -386,6 +388,8 @@ Der Reiter **PS4 von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) dir
 3. **Warten.** Beim ersten Mal sortiert die App die Pakete in `ps4/CUSAxxxxx/` (`app.pkg`, `patch.pkg`, `addcont/…`) und meldet jedes Spiel, sobald es spielbereit ist. Das Spiel erscheint mit Symbol auf dem Startbildschirm.
 - Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Aus Bibliothek entfernen“, verschwindet es nur aus der Bibliothek, die PKG bleibt.
 - Updates (`patch.pkg`) und Zusatzinhalte (DLC) werden mit eingebunden; Zusatzinhalte nur, wenn der Schalter in den Einstellungen an ist.
+- **Laufwerk unter anderem Namen** (seit PS4Mount 0.6.1): Kommt dasselbe Laufwerk nach einem Neustart als `usb1` statt `usb0` wieder, bleiben die Spiele angemeldet; die App schreibt nur die Verknüpfungen auf den neuen Ordner um.
+- **Keine zusammengeführten PKGs:** Spiel-PKGs, in die Patches, Zusatzinhalte oder Updates schon eingebaut sind, laufen womöglich nicht. Besser das ursprüngliche Spiel-PKG nehmen und Update und Zusatzinhalte als eigene `.pkg`-Dateien daneben legen. Eine Spiel-PKG wird nur aus dem Ordner ihrer eigenen Titel-ID genommen.
 - **Neue Spiele schneller anmelden** (seit PS4Mount 0.6.0, in den Einstellungen, ausgeschaltet): Die Anmeldung der Konsole (`AppInstallAll`) geht jeden Ordner in `/user/app` durch, für jedes PS4-Spiel etwa eine Dreiviertelsekunde, auch für die schon angemeldeten. Mit dem Schalter zeigt die Konsole ihr nur die neuen Spiele: Über `/user/app` liegt ein leerer Ordner, und darauf kommt der Ordner jedes neuen Spiels. Die anderen Spiele bleiben angemeldet; für höchstens zwei Minuten sind sie nur unsichtbar. Das geschieht nur, wenn kein Spiel läuft und die Firmware den Weg über `AppInstallAll` nimmt; in dieser Zeit weist die App Hinzufügen, Entfernen und Zurückverschieben mit „beschäftigt“ ab. Endet die App in dieser Zeit, räumt sie beim nächsten Start (`[reg] /user/app showed only … game(s) from an earlier run`) auf; ein Neustart der Konsole genügt ebenfalls, denn die Einbindung bleibt nicht bestehen.
 - Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Läuft PS4Mount schon als eigenes Payload (`ps4mount.elf`), lädt die App ihr PS4Mount nicht ein zweites Mal: Der Reiter zeigt „wartet“, und sobald das eigenständige beendet ist, übernimmt die App von selbst. Erkannt wird es an seinem Web-Panel (Port 8770), an der Sperre auf Port 9032 oder am Prozessnamen; taucht es später doch auf, etwa nach dem Ruhemodus, hält die App ihres an. Umgekehrt startet die Seite Payloads (auch ein Startprofil) keine `ps4mount.elf`, solange schon ein PS4Mount läuft.
 - Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. An einer PS5 Pro mit 12.00 ist der Einbau geprüft: PS4-Spiele vom USB-Laufwerk werden eingebunden und laufen. Er ist ausgeschaltet, bis man ihn einschaltet.
@@ -948,16 +952,27 @@ stellt es ihr nur bereit und zeigt den Fortschritt.
 
 ## Spiel-Updates (seit 19.10.2026, nach PatchDL 0.3.0 von Knutwurst)
 
-Der Reiter **Updates** auf der Spiele-Seite lädt offizielle Updates direkt von Sonys Servern und installiert sie.
+Der Reiter **Updates** auf der Spiele-Seite lädt offizielle Updates direkt von den offiziellen Update-Servern und installiert sie.
 
 - **Einschalten:** Der Schalter oben rechts ist zuerst aus; bis dahin fragt die App nirgends nach.
-- **Nach Updates suchen** prüft jedes von Sony signierte Spiel (Disc oder PlayStation Store) über die Versionsliste, die die Konsole selbst benutzt. Seit 1.71.0 gilt das auch für Spiele über ShadowMountPlus (exFAT- oder ffpkg-Abbilder): Unter ihrer Karte steht ein Hinweis, dass das Update normal installiert wird; ob es auf das eingehängte Abbild wirkt, hängt vom Spiel ab. Fake-PKGs und Homebrew werden nicht angefragt; ihre Karten sagen, warum.
-- **Passend zur Firmware:** Angeboten wird die neueste Version, die auf dieser Firmware läuft. Braucht Sonys neuestes Update eine neuere Firmware, zeigt die Karte die neueste passende Version laut prosperopatches.com (PS5) bzw. orbispatches.com (PS4) und **Älteren Patch holen …**: Seite öffnen (am Handy über den QR-Code), die menschliche Prüfung bestätigen, den SC-Link der Version kopieren und einfügen. Die App nimmt nur Links auf Sonys Download-Server und zum selben Spiel; passt die Größe nicht zur gewählten Version, fragt sie nach.
-- **Laden und installieren / Alle aktualisieren:** Die Updates kommen in eine Warteschlange und werden nacheinander geladen, über 1 bis 16 Verbindungen (Einstellung). Anhalten und Fortsetzen geht jederzeit, auch nach einem Neustart der App (der Stand steht in `job.json`). Jedes Stück wird mit Sonys Prüfsumme verglichen (PS5 SHA-256, PS4 SHA-1); ein falsches wird bis zu dreimal neu geladen. Danach installiert die Konsole das Paket wie unter „Pakete installieren“.
+- **Nach Updates suchen** prüft jedes offiziell signierte Spiel (Disc oder PlayStation Store) über die Versionsliste, die die Konsole selbst benutzt. Seit 1.71.0 gilt das auch für Spiele über ShadowMountPlus (exFAT- oder ffpkg-Abbilder): Unter ihrer Karte steht ein Hinweis, dass das Update normal installiert wird; ob es auf das eingehängte Abbild wirkt, hängt vom Spiel ab. Fake-PKGs und Homebrew werden nicht angefragt; ihre Karten sagen, warum.
+- **Passend zur Firmware:** Angeboten wird die neueste Version, die auf dieser Firmware läuft. Es wird direkt von den offiziellen Update-Servern geladen, ohne einen Link zum Einfügen. Braucht das neueste offizielle Update eine neuere Firmware, steht das auf der Karte; geladen wird dann nichts. Die Adresse der Versionsliste liest die App zuerst aus der `sce_sys/param.json` des Spiels (Abbild oder Ordner, ohne Entpacken), sonst aus der App-Datenbank der Konsole.
+- **Laden und installieren / Alle aktualisieren:** Die Updates kommen in eine Warteschlange und werden nacheinander geladen, über 1 bis 16 Verbindungen (Einstellung). Anhalten und Fortsetzen geht jederzeit, auch nach einem Neustart der App (der Stand steht in `job.json`). Jedes Stück wird mit der offiziellen Prüfsumme verglichen (PS5 SHA-256, PS4 SHA-1); ein falsches wird bis zu dreimal neu geladen. Danach installiert die Konsole das Paket wie unter „Pakete installieren“.
 - **Aufräumen:** Das Paket liegt in `/data/PS5-Cooling-Center/updates/<Titel-ID>/update.pkg`. Es wird gelöscht, sobald das Spiel nach der Installation die neue Version meldet (Schalter „Paket nach erfolgreicher Installation löschen“). Meldet das Spiel weiter die alte Version, bleibt das Paket liegen. Die Einstellungen zeigen alle Pakete im Ordner.
 - **Vorhandene Pakete:** Liegt schon ein Paket der richtigen Größe im Ordner (auch ohne `job.json`), prüft die App seine Stücke und lädt nur die falschen neu.
 - **DNS:** Die App fragt Cloudflare, Google und Quad9 selbst (UDP, dann TCP, dann DNS über HTTPS, zuletzt die gemerkte Adresse) und ändert nichts an den DNS-Einstellungen der Konsole; eine Sperre gegen System-Updates bleibt bestehen. Eine gefälschte Antwort (`0.0.0.0`, private Adresse) wird verworfen.
 - **Platz:** Nötig ist Platz für das Paket und 1 GB Reserve; die Installation braucht noch einmal etwa so viel.
+
+## Disc im Laufwerk (seit 21.10.2026, nach ps-disc-detect)
+
+Der Reiter **Disc** auf der Spiele-Seite zeigt, welche Disc im Laufwerk liegt, und legt von einer PS2-DVD oder einer PS3-Disc auf Wunsch ein Abbild (ISO) an. Er beruht auf ps-disc-detect (GPL-3.0); die App hat dessen Vorgehen neu geschrieben (`src/disc.c`).
+
+- **Einschalten:** Erst wenn der Schalter an ist, fragt die App das Laufwerk (alle anderthalb Sekunden: `/dev/xpt0` nennt das Durchreichgerät von `cd0`, dann GET CONFIGURATION für das Profil und READ DISC STRUCTURE für den DVD-Typ). Aus ab Werk, bleibt über einen Neustart der App hinweg an.
+- **Erkennung:** Profil wie bei der Konsole (PS2 DVD-ROM `0xFF61`, PS3 DVD/BD `0xFF70`/`0xFF71`, PS4 BD `0xFF80`, PS5 BD `0xFF90`; PS1/PS2-CDs `0xFF50`/`0xFF60` kommen an der PS5 nicht vor). Titelkennung: PS1/PS2 aus `SYSTEM.CNF` (`BOOT`/`BOOT2`), PS3 aus `PS3_GAME/PARAM.SFO`, PS4 aus `bd/param.sfo`, PS5 aus `bd/param.json` (erster Eintrag `PS5GD`, Bytes 7 bis 15 der Content-ID), sonst der erste neunstellige Ordner unter `app/`; nichts lesbar ergibt `GENERIC_PSn`. Gelesen wird die eingehängte Disc unter `/mnt/disc`.
+- **Abbild:** nur PS2-DVD und PS3-Disc (PS4/PS5 werden nicht kopiert, CDs kann das Laufwerk nicht lesen). `/dev/cd0` wird in Stücken zu 128 KiB in eine `.iso.part` gelesen (vorher: höchste Lesegeschwindigkeit per SET STREAMING), dabei CRC-32, MD5 und SHA-1; danach `fsync` und Umbenennen. Ziel `/data/PS5-Cooling-Center/disc/`, mit Platzprüfung (Größe der Disc plus 512 MiB). Ein schon vorhandenes Abbild gleicher Größe, auch eines von ps-disc-detect in `/data`, wird nicht noch einmal gelesen. Während des Auftrags hält die App die Ruhemodus-Uhr zurück, die Beobachtung pausiert, und ein Datei-Auftrag (Kopie, Konvertierung, Dateimanager) lässt sich nicht gleichzeitig starten. Eine Zeile im Verlauf entsteht am Ende. Neben dem Abbild liegt `<Name>.hash.json` (Titelkennung, Prüfsummen, Redump-Treffer).
+- **Neue Disc automatisch sichern:** zweiter Schalter, aus ab Werk.
+- **Redump:** `/data/redump.db` (mit `tools/build_redump_db.py` aus ps-disc-detect gebaut, Tabellen `serials`, `images`, `tracks`, bis 64 MB) liefert den Namen, wenn die Titelkennung genau einen hat, und die Prüfung des fertigen Abbilds (Größe, CRC-32, MD5, SHA-1 gegen `images`, Art `iso`). Bei einem Treffer wird nach dem Redump-Namen benannt, sonst nach der Titelkennung. Die Datei wird nur für diese Abfragen kurz in den Speicher gelesen. Nicht übernommen: CD-Abbilder (`.bin`/`.cue`), der IRD für PS3 (das Laufwerk gibt den Schlüssel nicht her), die eingebettete Liste (die Nutzlast der App ist ohnehin an ihrer Größengrenze).
+- Schnittstelle: `GET /api/v1/disc`, `POST /api/v1/disc` (siehe API.md).
 
 ## Kernel-Log live
 
@@ -1117,12 +1132,15 @@ Code zu übernehmen.
 
 Die Marken „Backport“, „AMPR EMU“ und „PlayGo“ folgen jetzt der Wahl von
 ShadowMountPlus: Ein Ordner `fakelib2` ersetzt `fakelib` (er ersetzt, er ergänzt
-nicht), und ein Ordner `<Scanpfad>/backports/<TITEL-ID>/` mit `fakelib2` oder
-`fakelib` hat Vorrang vor den Bibliotheken im Spiel. Die Detailansicht des Spiels
+nicht), und ein Ordner `<Scanpfad>/backports/<TITEL-ID>/` (ab ShadowMountPlus 1.7beta6
+auch `<TITEL-ID> Spielname`: der genau so benannte gewinnt, sonst der erste in
+Byte-Reihenfolge) mit `fakelib2` oder `fakelib` hat Vorrang vor den Bibliotheken im Spiel. Die Detailansicht des Spiels
 nennt, aus welchem Ordner die Bibliotheken kommen. Gesucht wird neben dem Spiel
 (bzw. seinem Abbild) und in `/data/homebrew`, `/data/etaHEN/games`, auf `ext0`/`ext1`
 und auf USB unter `etaHEN/games`. Die globale Bibliothek unter
-`/data/shadowmount/fakelib` zeigt die App nicht je Spiel an: Sie gälte für alle.
+`/data/shadowmount/fakelib` zeigt die App nicht je Spiel an: Sie gälte für alle. (ShadowMountPlus ab
+1.7beta6 kann sie je Spiel ausschließen, `ignore_global_fakelib` in seiner Schnittstelle; die App
+liest und ändert das nicht.)
 
 ## Der Lüfter in der Oberfläche: der Tacho (ab 1.56.0, vorher ein drehender Lüfter ab 1.53.0)
 

@@ -4480,19 +4480,25 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
+  /* The optical drive (disc.c): GET the state, POST {action, ...} */
+  if(!strcmp(req->path, "/api/v1/disc")) {
+    if(is_get) { send_cjson(fd, 200, ps5tm_disc_json()); return; }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    if(!cJSON_IsObject(b)) { cJSON_Delete(b); ps5tm_http_send_error(fd, 400, "bad_request", "Kein gültiger Auftrag."); return; }
+    char msg[400];
+    int http = ps5tm_disc_action(b, msg, sizeof(msg));
+    cJSON_Delete(b);
+    if(http != 200) { ps5tm_http_send_error(fd, http, "disc_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
   if(!strcmp(req->path, "/api/v1/updates/packages")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
     send_cjson(fd, 200, ps5tm_updates_packages_json());
-    return;
-  }
-  if(!strcmp(req->path, "/api/v1/updates/versions")) {
-    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
-    char id[16] = "";
-    query_param(req->query, "id", id, sizeof(id));
-    int http = 200;
-    cJSON *o = ps5tm_updates_versions_json(id, &http);
-    if(!o) { ps5tm_http_send_error(fd, http, "versions_refused", http == 409 ? "Spiel-Updates sind ausgeschaltet." : "Ungültige Titel-ID."); return; }
-    send_cjson(fd, 200, o);
     return;
   }
   /* Payload store (paystore.c): GET the list (?refresh=1 when old, 2 always), POST {action, id, force} */
@@ -4516,28 +4522,6 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", 1);
     cJSON_AddStringToObject(o, "message", msg);
-    send_cjson(fd, 200, o);
-    return;
-  }
-  if(!strcmp(req->path, "/api/v1/updates/qr")) {
-    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
-    char id[16] = "", ip[32], url[96];
-    query_param(req->query, "id", id, sizeof(id));
-    int ok = strlen(id) == 9;
-    for(int i = 0; ok && i < 9; i++) ok = (i < 4 ? (id[i] >= 'A' && id[i] <= 'Z') : (id[i] >= '0' && id[i] <= '9'));
-    if(!ok) { ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Titel-ID."); return; }
-    if(ps5tm_local_ip(ip, sizeof(ip)) != 0) { ps5tm_http_send_error(fd, 404, "no_address", "Die Konsole hat gerade keine Netzwerkadresse."); return; }
-    ps5tm_config_lock();
-    unsigned port = g_config.http_port;
-    ps5tm_config_unlock();
-    snprintf(url, sizeof(url), "http://%s:%u/#upd-%s", ip, port, id);
-    char *svg = malloc(8192);
-    if(!svg || ps5tm_qr_svg(url, svg, 8192) != 0) { free(svg); ps5tm_http_send_error(fd, 500, "qr_failed", "Der QR-Code ließ sich nicht erzeugen."); return; }
-    cJSON *o = cJSON_CreateObject();
-    cJSON_AddBoolToObject(o, "ok", 1);
-    cJSON_AddStringToObject(o, "url", url);
-    cJSON_AddStringToObject(o, "svg", svg);
-    free(svg);
     send_cjson(fd, 200, o);
     return;
   }

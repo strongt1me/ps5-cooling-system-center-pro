@@ -1,13 +1,14 @@
-/* Game updates (19.10.2026): the newest official update of every PS5 and PS4 game on the console, from Sony's servers,
- * downloaded and installed by the app. After PatchDL 0.3.0 by Knutwurst (GPL-3.0-or-later); its rules are kept, the code
- * around them is the app's own (PatchDL runs as a payload with its own web server, libcurl and OpenSSL).
+/* Game updates (19.10.2026, simplified 21.10.2026): the newest official update of every PS5 and PS4 game on the
+ * console, from Sony's servers, downloaded and installed by the app. After PatchDL 0.3.0 by Knutwurst
+ * (GPL-3.0-or-later); its rules are kept, the code around them is the app's own (PatchDL runs as a payload with its
+ * own web server, libcurl and OpenSSL).
  *
  * What PatchDL does, and so does this:
  *   - only games installed from disc or the PlayStation Store: their app.pkg is signed by Sony ("\x7FFIH" byte 5 bit 0x80,
  *     "\x7FCNT" byte 4 bit 1); ShadowMountPlus games, fake packages and homebrew are listed, never updated
  *   - the update list is the game's own version.xml (VERSION_FILE_URI in the app database for PS5, the HMAC path for PS4);
- *     only versions the firmware runs are offered. When Sony's newest needs a newer firmware, Prospero Patches (PS5) or
- *     Orbis Patches (PS4) name the newest version that runs, and a link copied from there (SC link) fetches it from Sony
+ *     only versions the firmware runs are offered. Direct from Sony only: when Sony's newest needs a newer firmware,
+ *     the title just says so (no update that runs here) — no link of any kind is pasted in or fetched
  *   - the package is assembled from the pieces of Sony's JSON manifest, each piece checked against its SHA-256 (SHA-1 for
  *     PS4) when the check is on; up to 16 connections; progress kept after every finished part, so a pause, a crash or a
  *     power cut costs only the parts under way; a package already in the folder is checked piece by piece and only the
@@ -18,7 +19,7 @@
  *   - the network: Sony's hosts only (one root certificate), the app's own resolver (upd_dns.c), never the console's DNS
  *
  * The switch is off until the person turns it on; no request leaves the console before that, and none without a click
- * ("Nach Updates suchen", a download). Folder: PS5TM_DATA_DIR/updates (settings.json, links.json, <TITLE ID>/). */
+ * ("Nach Updates suchen", a download). Folder: PS5TM_DATA_DIR/updates (settings.json, <TITLE ID>/). */
 
 #include <ctype.h>
 #include <dirent.h>
@@ -39,12 +40,10 @@
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 #include "upd_http.h"
-#include "upd_site.h"
 #include "upd_sony.h"
 
 #define UPD_DIR          PS5TM_DATA_DIR "/updates"
 #define UPD_SETTINGS     UPD_DIR "/settings.json"
-#define UPD_LINKS        UPD_DIR "/links.json"
 #define UPD_MAX_TITLES   256
 #ifndef UPD_SEG
 #define UPD_SEG          (64LL << 20)        /* a download part: pieces are split into these for parallel connections */
@@ -73,10 +72,6 @@ typedef struct {
   int      checked;                  /* 0 never, 1 done, -1 failed */
   char     check_why[64];
   char     compat_ver[16], latest_ver[16], latest_fw[16], patch_url[512];
-  int      site_done, site_found;
-  char     site_ver[16], site_fw[16], site_size[16], site_why[48];
-  /* a link copied from Prospero/Orbis */
-  char     link_url[512], link_ver[16];
   /* the download */
   int      state;
   char     err[240];
@@ -221,44 +216,6 @@ settings_save_locked(void) {
   if(write_atomic(UPD_SETTINGS, b, (size_t)n) != 0) PS5TM_WARN("upd_settings", "Spiel-Updates: Die Einstellungen ließen sich nicht speichern.");
 }
 
-/* links.json: {"PPSA01234":{"url":"https://...json","version":"01.003.000"}} */
-static void
-links_apply_locked(void) {
-  char *b = read_small(UPD_LINKS, 256 * 1024);
-  cJSON *j = b ? cJSON_Parse(b) : NULL;
-  free(b);
-  for(int i = 0; i < g_n; i++) {
-    const cJSON *o = j ? cJSON_GetObjectItem(j, g_t[i].tid) : NULL;
-    const cJSON *u = o ? cJSON_GetObjectItem(o, "url") : NULL, *v = o ? cJSON_GetObjectItem(o, "version") : NULL;
-    char canon[512];
-    /* a link from the disk is only taken when it still passes the same check as one typed in */
-    if(cJSON_IsString(u) && cJSON_IsString(v) && strlen(v->valuestring) < sizeof g_t[i].link_ver &&
-       !upd_site_manifest_from_link(g_t[i].tid, u->valuestring, canon, sizeof canon) && !strcmp(canon, u->valuestring)) {
-      snprintf(g_t[i].link_url, sizeof g_t[i].link_url, "%s", canon);
-      snprintf(g_t[i].link_ver, sizeof g_t[i].link_ver, "%s", v->valuestring);
-    }
-  }
-  cJSON_Delete(j);
-}
-
-static void
-links_save_locked(void) {
-  cJSON *j = cJSON_CreateObject();
-  for(int i = 0; i < g_n; i++)
-    if(g_t[i].link_url[0]) {
-      cJSON *o = cJSON_AddObjectToObject(j, g_t[i].tid);
-      cJSON_AddStringToObject(o, "url", g_t[i].link_url);
-      cJSON_AddStringToObject(o, "version", g_t[i].link_ver);
-    }
-  char *s = cJSON_PrintUnformatted(j);
-  cJSON_Delete(j);
-  if(s) {
-    mkdir(UPD_DIR, 0777);
-    write_atomic(UPD_LINKS, s, strlen(s));
-    free(s);
-  }
-}
-
 /* ---------------------------------------------------------------- the games */
 
 /* Sony-signed or not, from the first bytes of the installed app.pkg (PatchDL's test, the same Itemzflow uses). */
@@ -338,6 +295,16 @@ titles_refresh(int force) {
     t->plat = !strncmp(t->tid, "CUSA", 4) ? 4 : 5;
     t->sign = pkg_sign(t->tid);
     t->source = t->sign == SIGN_RETAIL ? SRC_OFFICIAL : t->sign == SIGN_FAKE ? SRC_FAKE : t->sign == SIGN_NONE ? SRC_SMP : SRC_UNKNOWN;
+    if(t->source == SRC_SMP || t->source == SRC_OFFICIAL) {   /* the game's own param.json first (no unpacking), app.db is the fallback */
+      ps5tm_libdel_t li;
+      char real_ver[16], real_uri[256];
+      if(ps5tm_library_delete_info(t->tid, &li) == 0 && li.path[0] &&
+         ps5tm_library_param_info(li.path, li.format, real_ver, sizeof real_ver, real_uri, sizeof real_uri) == 0) {
+        if(real_uri[0]) snprintf(t->ver_uri, sizeof t->ver_uri, "%s", real_uri);
+        /* never lower than app.db: an update installed through the console is in app.db, not in the image's base param.json */
+        if(t->source == SRC_SMP && real_ver[0] && ver_gt(real_ver, t->ver)) snprintf(t->ver, sizeof t->ver, "%s", real_ver);
+      }
+    }
   }
   free(rows);
   pthread_mutex_lock(&g_lock);
@@ -351,29 +318,21 @@ titles_refresh(int force) {
     snprintf(nt[i].ver_uri, sizeof nt[i].ver_uri, "%s", keep.ver_uri);
     nt[i].sign = keep.sign;
     nt[i].source = keep.source;
-    if(strcmp(nt[i].ver, keep.ver)) { nt[i].checked = 0; nt[i].site_done = 0; }   /* the game changed: check it again */
+    if(strcmp(nt[i].ver, keep.ver)) nt[i].checked = 0;   /* the game changed: check it again */
     snprintf(nt[i].ver, sizeof nt[i].ver, "%s", keep.ver);
   }
   free(g_t);
   g_t = nt;
   g_n = k;
-  links_apply_locked();
   for(int i = 0; i < g_n; i++) disk_state_locked(&g_t[i]);
   pthread_mutex_unlock(&g_lock);
 }
 
-/* The version and URL this title would download now: a link copied from Prospero/Orbis goes first, else Sony's newest that
-   runs here. "" when there is none newer than the installed version. */
+/* The version and URL this title would download now, straight from Sony: "" when there is none newer than the
+   installed version that runs on this firmware. */
 static void
-target_locked(const title_t *t, char *ver, size_t vn, char *url, size_t un, int *manual) {
+target_locked(const title_t *t, char *ver, size_t vn, char *url, size_t un) {
   ver[0] = url[0] = 0;
-  *manual = 0;
-  if(t->link_url[0] && ver_gt(t->link_ver, t->ver)) {
-    snprintf(ver, vn, "%s", t->link_ver);
-    snprintf(url, un, "%s", t->link_url);
-    *manual = 1;
-    return;
-  }
   if(t->checked == 1 && t->patch_url[0] && ver_gt(t->compat_ver, t->ver)) {
     snprintf(ver, vn, "%s", t->compat_ver);
     snprintf(url, un, "%s", t->patch_url);
@@ -388,8 +347,7 @@ status_locked(const title_t *t) {
   if(t->source == SRC_UNKNOWN) return "not_official_unknown";
   if(t->state != ST_IDLE) return k_state[t->state];
   char v[16], u[512];
-  int m;
-  target_locked(t, v, sizeof v, u, sizeof u, &m);
+  target_locked(t, v, sizeof v, u, sizeof u);
   if(v[0]) return "update";
   if(t->checked == 0) return "unchecked";
   if(t->checked < 0) return "check_failed";
@@ -439,27 +397,6 @@ check_thread(void *arg) {
         snprintf(t->patch_url, sizeof t->patch_url, "%s", vi.compatible_url);
       }
     }
-    /* Sony's newest needs a newer firmware and nothing that runs here is newer than what is installed: ask the site */
-    int ask = t && rc == 0 && ver_gt(t->latest_ver, t->ver) && !ver_gt(t->compat_ver, t->ver) && !t->site_done;
-    pthread_mutex_unlock(&g_lock);
-    if(ask) {
-      upd_site_version_t best;
-      char swhy[48] = "";
-      int src = upd_site_best(tid, fw, &best, swhy, sizeof swhy);
-      pthread_mutex_lock(&g_lock);
-      if((t = find_locked(tid))) {
-        t->site_done = 1;
-        t->site_found = src == 1 && ver_gt(best.version, t->ver);
-        snprintf(t->site_why, sizeof t->site_why, "%s", src < 0 ? swhy : "");
-        if(t->site_found) {
-          snprintf(t->site_ver, sizeof t->site_ver, "%s", best.version);
-          snprintf(t->site_fw, sizeof t->site_fw, "%s", best.required_fw);
-          snprintf(t->site_size, sizeof t->site_size, "%s", best.size);
-        }
-      }
-      pthread_mutex_unlock(&g_lock);
-    }
-    pthread_mutex_lock(&g_lock);
     g_check_done = i + 1;
     pthread_mutex_unlock(&g_lock);
   }
@@ -843,10 +780,9 @@ queue_thread(void *arg) {
     if(!t || !g_set.enabled) { g_worker_up = 0; g_job_tid[0] = 0; pthread_mutex_unlock(&g_lock); return NULL; }
     t->in_queue = 0;
     char tid[12], ver[16], url[512];
-    int manual = 0;
     snprintf(tid, sizeof tid, "%s", t->tid);
     if(t->state == ST_READY) { snprintf(ver, sizeof ver, "%s", t->job_ver); snprintf(url, sizeof url, "%s", t->job_url); }
-    else target_locked(t, ver, sizeof ver, url, sizeof url, &manual);
+    else target_locked(t, ver, sizeof ver, url, sizeof url);
     if((!ver[0] || !url[0]) && t->job_ver[0] && t->job_url[0]) {   /* the URL is checked against the host rules on use */
       snprintf(ver, sizeof ver, "%s", t->job_ver);
       snprintf(url, sizeof url, "%s", t->job_url);
@@ -886,8 +822,7 @@ queue_thread(void *arg) {
       else {
         t->state = ST_INSTALLED;
         snprintf(t->err, sizeof t->err, "%s", irc > 0 ? why : "");
-        if(irc == 0) { snprintf(t->ver, sizeof t->ver, "%s", ver); t->checked = 0; t->site_done = 0; }
-        if(irc == 0 && t->link_url[0] && !strcmp(t->link_ver, ver)) { t->link_url[0] = t->link_ver[0] = 0; links_save_locked(); }
+        if(irc == 0) { snprintf(t->ver, sizeof t->ver, "%s", ver); t->checked = 0; }
       }
     }
     g_job_tid[0] = 0;
@@ -991,24 +926,12 @@ ps5tm_updates_json(void) {
     cJSON_AddStringToObject(e, "version", t->ver);
     cJSON_AddStringToObject(e, "status", status_locked(t));
     cJSON_AddBoolToObject(e, "via_smp", t->source == SRC_SMP);
-    /* Expose the auto-downloadable version so the version picker can mark it */
-    if(t->compat_ver[0] && ver_gt(t->compat_ver, t->ver))
-      cJSON_AddStringToObject(e, "compat_ver", t->compat_ver);
     char tv[16], tu[512];
-    int manual;
-    target_locked(t, tv, sizeof tv, tu, sizeof tu, &manual);
+    target_locked(t, tv, sizeof tv, tu, sizeof tu);
     cJSON_AddStringToObject(e, "target", t->state != ST_IDLE && t->job_ver[0] ? t->job_ver : tv);
-    cJSON_AddBoolToObject(e, "from_link", manual);
     cJSON_AddStringToObject(e, "latest", t->latest_ver);
     cJSON_AddStringToObject(e, "latest_fw", t->latest_fw);
     cJSON_AddStringToObject(e, "check_why", t->check_why);
-    if(t->site_found) {
-      cJSON *si = cJSON_AddObjectToObject(e, "site");
-      cJSON_AddStringToObject(si, "version", t->site_ver);
-      cJSON_AddStringToObject(si, "fw", t->site_fw);
-      cJSON_AddStringToObject(si, "size", t->site_size);
-    }
-    if(t->site_why[0]) cJSON_AddStringToObject(e, "site_why", t->site_why);
     cJSON_AddBoolToObject(e, "queued", t->in_queue);
     cJSON_AddNumberToObject(e, "total", (double)t->total);
     cJSON_AddNumberToObject(e, "have", (double)t->have);
@@ -1052,49 +975,6 @@ ps5tm_updates_packages_json(void) {
     cJSON_AddItemToArray(arr, x);
   }
   if(d) closedir(d);
-  return o;
-}
-
-/* The versions Prospero/Orbis list for a title (the dialog for an older patch). */
-cJSON *
-ps5tm_updates_versions_json(const char *tid, int *http) {
-  *http = 200;
-  if(!tid_ok(tid)) { *http = 400; return NULL; }
-  pthread_mutex_lock(&g_lock);
-  init_locked();
-  int en = g_set.enabled;
-  uint32_t fw = g_fw;
-  /* auto_ver: the version the app can download directly from Sony (no SC link) */
-  char auto_ver[16] = "";
-  title_t *ta = find_locked(tid);
-  if(ta && ta->compat_ver[0] && ver_gt(ta->compat_ver, ta->ver))
-    snprintf(auto_ver, sizeof auto_ver, "%s", ta->compat_ver);
-  pthread_mutex_unlock(&g_lock);
-  if(!en) { *http = 409; return NULL; }
-  upd_site_version_t *v = calloc(UPD_SITE_MAX_VERSIONS, sizeof *v);
-  if(!v) { *http = 500; return NULL; }
-  int n = 0;
-  char why[48];
-  cJSON *o = cJSON_CreateObject();
-  if(upd_site_versions(tid, v, UPD_SITE_MAX_VERSIONS, &n, why, sizeof why) != 0) {
-    cJSON_AddBoolToObject(o, "ok", 0);
-    cJSON_AddStringToObject(o, "error", why);
-  } else {
-    cJSON_AddBoolToObject(o, "ok", 1);
-    cJSON *arr = cJSON_AddArrayToObject(o, "versions");
-    for(int i = 0; i < n; i++) {
-      cJSON *e = cJSON_CreateObject();
-      cJSON_AddStringToObject(e, "version", v[i].version);
-      cJSON_AddStringToObject(e, "fw", v[i].required_fw);
-      cJSON_AddStringToObject(e, "size", v[i].size);
-      cJSON_AddBoolToObject(e, "runs", v[i].fw_bin <= fw);
-      cJSON_AddItemToArray(arr, e);
-    }
-  }
-  /* auto_ver: clicking this version in the picker starts a direct Sony download (no SC link) */
-  if(auto_ver[0]) cJSON_AddStringToObject(o, "auto_ver", auto_ver);
-  cJSON_AddStringToObject(o, "site", upd_site_base(tid));
-  free(v);
   return o;
 }
 
@@ -1153,8 +1033,7 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
     for(int i = 0; i < g_n; i++) {
       title_t *t = &g_t[i];
       char v[16], u[512];
-      int m;
-      target_locked(t, v, sizeof v, u, sizeof u, &m);
+      target_locked(t, v, sizeof v, u, sizeof u);
       if((t->source != SRC_OFFICIAL && t->source != SRC_SMP) || t->in_queue || t->deleting || !strcmp(g_job_tid, t->tid)) continue;
       if((v[0] && (t->state == ST_IDLE || t->state == ST_FAILED || t->state == ST_PAUSED)) || t->state == ST_READY) {
         t->in_queue = 1;
@@ -1174,8 +1053,7 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
     if(t->source != SRC_OFFICIAL && t->source != SRC_SMP) { snprintf(msg, mn, "Nur für Spiele von Disc, aus dem PlayStation Store oder über ShadowMountPlus."); rc = 403; goto out; }
     if(t->in_queue || !strcmp(g_job_tid, t->tid)) { snprintf(msg, mn, "Dieses Update steht schon in der Warteschlange."); goto out; }
     char v[16], u[512];
-    int m;
-    target_locked(t, v, sizeof v, u, sizeof u, &m);
+    target_locked(t, v, sizeof v, u, sizeof u);
     if(t->state != ST_READY && t->state != ST_PAUSED && !v[0]) { snprintf(msg, mn, "Für dieses Spiel gibt es kein Update, das hier läuft."); rc = 409; goto out; }
     if(t->state == ST_PAUSED && t->job_url[0] && !v[0]) { /* a paused job whose target is no longer offered: resume it as it was */ }
     t->in_queue = 1;
@@ -1215,62 +1093,6 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
     pthread_mutex_lock(&g_lock);
     if((t = find_locked(tidc))) t->deleting = 0;
     snprintf(msg, mn, "Gelöscht.");
-    goto out;
-  }
-  if(!strcmp(a, "link")) {
-    /* a link copied off Prospero/Orbis: the manifest is loaded now, so a dead or wrong link fails with a reason right away,
-       and its size is compared with what the site lists */
-    const cJSON *ju = cJSON_GetObjectItem(b, "url"), *jv = cJSON_GetObjectItem(b, "version"), *js = cJSON_GetObjectItem(b, "size");
-    int force = cJSON_IsTrue(cJSON_GetObjectItem(b, "force"));
-    const char *in = cJSON_IsString(ju) ? ju->valuestring : "", *ver = cJSON_IsString(jv) ? jv->valuestring : "";
-    char canon[512], label[16] = "";
-    if(t->source != SRC_OFFICIAL && t->source != SRC_SMP) { snprintf(msg, mn, "Nur für Spiele von Disc, aus dem PlayStation Store oder über ShadowMountPlus."); rc = 403; goto out; }
-    if(!ver[0] || strlen(ver) >= sizeof t->link_ver || strspn(ver, "0123456789.") != strlen(ver)) { snprintf(msg, mn, "Die Version fehlt oder ist ungültig."); rc = 400; goto out; }
-    const char *bad = strlen(in) < 600 ? upd_site_manifest_from_link(t->tid, in, canon, sizeof canon) : "url_too_long";
-    if(bad) {
-      snprintf(msg, mn, "%s", !strcmp(bad, "url_title_mismatch") ? "Der Link gehört zu einem anderen Spiel." : !strcmp(bad, "not_an_sc_link") ? "Das ist kein SC-Link (er endet auf _sc.pkg, .crc oder .json)." :
-               !strcmp(bad, "url_not_allowed") ? "Der Link zeigt nicht auf die offiziellen Download-Server." : "Der Link ist ungültig.");
-      rc = 400;
-      goto out;
-    }
-    if(!strcmp(g_job_tid, t->tid) || t->state == ST_PAUSED || t->state == ST_READY) { snprintf(msg, mn, "Es gibt schon einen Download für dieses Spiel. Bitte ihn zuerst löschen."); rc = 409; goto out; }
-    if(cJSON_IsString(js)) snprintf(label, sizeof label, "%.15s", js->valuestring);
-    else if(t->site_found && !strcmp(t->site_ver, ver)) snprintf(label, sizeof label, "%s", t->site_size);
-    char tidc[12];
-    snprintf(tidc, sizeof tidc, "%s", t->tid);
-    pthread_mutex_unlock(&g_lock);
-    upd_manifest_t mf;
-    char mwhy[64];
-    int mrc = upd_sony_manifest(canon, &mf, mwhy, sizeof mwhy);
-    int64_t found = mrc == 0 ? mf.total : 0;
-    if(mrc == 0) upd_manifest_free(&mf);
-    pthread_mutex_lock(&g_lock);
-    if(mrc != 0) { snprintf(msg, mn, "Die offizielle Paketliste zu diesem Link ließ sich nicht laden (%s).", mwhy); rc = 502; goto out; }
-    if(!force && upd_site_size_mismatch(label, found)) {
-      snprintf(msg, mn, "Das Paket ist %.1f GB groß, die Seite nennt für Version %s aber %s. Wahrscheinlich ist es der Link einer anderen Version.", (double)found / 1073741824.0, ver, label);
-      rc = 409;
-      goto out;
-    }
-    if(!(t = find_locked(tidc))) { snprintf(msg, mn, "Dieses Spiel ist nicht mehr in der Liste."); rc = 404; goto out; }
-    if(!strcmp(g_job_tid, t->tid) || t->in_queue || t->deleting || t->state == ST_PAUSED || t->state == ST_READY || t->state == ST_INSTALLING) {
-      snprintf(msg, mn, "Es gibt schon einen Download für dieses Spiel. Bitte ihn zuerst löschen.");
-      rc = 409;
-      goto out;
-    }
-    snprintf(t->link_url, sizeof t->link_url, "%s", canon);
-    snprintf(t->link_ver, sizeof t->link_ver, "%s", ver);
-    links_save_locked();
-    t->in_queue = 1;
-    t->qorder = ++g_qseq;
-    t->state = ST_QUEUED;
-    kick_worker_locked();
-    snprintf(msg, mn, "Version %s wird geladen.", ver);
-    goto out;
-  }
-  if(!strcmp(a, "forget_link")) {
-    t->link_url[0] = t->link_ver[0] = 0;
-    links_save_locked();
-    snprintf(msg, mn, "Der Link ist vergessen.");
     goto out;
   }
   snprintf(msg, mn, "Unbekannte Aktion.");

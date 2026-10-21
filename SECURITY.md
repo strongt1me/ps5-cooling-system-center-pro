@@ -48,7 +48,7 @@ Zum Beispiel:
   will, setzt `bind_address` auf `127.0.0.1`.
 - Schwachstellen in der Konsole selbst, im Jailbreak, in kstuff, im Payload-Lader
   oder in anderen Homebrew-Programmen. Bitte melde sie dort.
-- Das Umgehen von Schutzmaßnahmen von Sony. Dieses Projekt enthält dafür keinen
+- Das Umgehen von Schutzmaßnahmen des Herstellers. Dieses Projekt enthält dafür keinen
   Code und leistet dazu keine Hilfe.
 
 ## Rechtliches

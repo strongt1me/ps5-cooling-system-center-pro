@@ -1137,13 +1137,6 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .upd-bar { height: 8px; border-radius: 999px; background: var(--inset); overflow: hidden; margin: 8px 0 6px; }
 .upd-bar i { display: block; height: 100%; background: linear-gradient(90deg, #2f7cff, #3fd0ff); }
 .upd-ver { font-variant-numeric: tabular-nums; }
-.upd-old { margin: 8px 0 4px; padding: 12px; border-radius: 12px; background: var(--inset); display: grid; gap: 10px; }
-.upd-old .upd-qr { display: flex; gap: 14px; align-items: center; }
-.upd-old .upd-qr svg { width: 132px; height: 132px; background: #fff; border-radius: 8px; padding: 6px; flex: none; }
-.upd-old input { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline); background: var(--card-top); color: var(--ink); font: inherit; width: 100%; }
-.upd-vers { display: grid; gap: 2px; max-height: 200px; overflow: auto; font-size: 12.5px; }
-.upd-vers button { text-align: left; }
-.upd-old small { display: block; margin-top: 4px; line-height: 1.45; }
 #upd-conns { justify-self: start; min-width: 96px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
 .dup-group { padding: 10px 0 4px; border-top: 1px solid var(--hairline); }
 .dup-group > b { display: block; margin-bottom: 4px; }

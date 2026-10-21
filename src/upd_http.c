@@ -186,7 +186,7 @@ conn_open_tcp(conn_t *c, const char *ip, int port, int connect_ms) {
   setsockopt(c->fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof one);
 #endif
   /* a large receive window: a single connection to a CDN far away is limited by it, not by the line (PatchDL 0.3.1) */
-  int rcvbuf = 2 * 1024 * 1024;
+  int rcvbuf = 4 * 1024 * 1024;   /* asked for more than the console gives: it clamps to its maximum (PatchDL 0.3.3) */
   setsockopt(c->fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
   fcntl(c->fd, F_SETFL, fcntl(c->fd, F_GETFL, 0) | O_NONBLOCK);
   if(connect(c->fd, (struct sockaddr *)&sa, sizeof sa) != 0 && errno != EINPROGRESS) { close(c->fd); c->fd = -1; return -1; }

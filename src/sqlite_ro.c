@@ -21,6 +21,10 @@
  *   schema      sqlite_master on page 1: type, name, tbl_name, rootpage, sql;
  *               the column names come from the CREATE TABLE text
  *
+ * WITHOUT ROWID tables (a Redump database, disc.c) are index b-trees: page
+ * types 0x0A leaf and 0x02 interior, cells without a rowid, interior cells that
+ * carry a record of their own and are read between their two children.
+ *
  * Nothing here writes, locks or reads a journal. The system rewrites the file
  * while the shell runs, so a read may catch it halfway: every offset taken
  * from the file is checked before use, a page is visited at most once per
@@ -101,8 +105,8 @@ sqlro_open_mem(sqlro_db_t *db, const unsigned char *buf, size_t size) {
 /* How much of a payload sits in the cell itself; the rest is in overflow
    pages. Straight from the file format: X, M and K as named there. */
 static uint32_t
-local_payload(uint32_t usable, uint64_t total) {
-  uint32_t x = usable - 35;
+local_payload(uint32_t usable, uint64_t total, int index) {
+  uint32_t x = index ? ((usable - 12) * 64 / 255) - 23 : usable - 35;
   if(total <= x) return (uint32_t)total;
   uint32_t m = ((usable - 12) * 32 / 255) - 23;
   uint32_t k = m + (uint32_t)((total - m) % (usable - 4));
@@ -177,21 +181,23 @@ typedef struct {
 } walk_t;
 
 static int
-emit_cell(walk_t *w, const unsigned char *pg, uint32_t off) {
+emit_cell(walk_t *w, const unsigned char *pg, uint32_t off, int index) {
   const sqlro_db_t *db  = w->db;
   uint32_t          lim = db->usable;
   if(off >= lim) return -1;
 
-  uint64_t total, rowid;
+  uint64_t total, rowid = 0;
   size_t k = varint(pg + off, lim - off, &total);
   if(!k) return -1;
   off += (uint32_t)k;
-  k = varint(pg + off, lim - off, &rowid);
-  if(!k) return -1;
-  off += (uint32_t)k;
+  if(!index) {                                        /* an index cell has no rowid */
+    k = varint(pg + off, lim - off, &rowid);
+    if(!k) return -1;
+    off += (uint32_t)k;
+  }
   if(total > MAX_PAYLOAD) return -1;
 
-  uint32_t local = local_payload(lim, total);
+  uint32_t local = local_payload(lim, total, index);
   if(local > lim - off) return -1;
 
   const unsigned char *rec  = pg + off;
@@ -248,10 +254,34 @@ walk(walk_t *w, uint32_t pgno, int depth) {
     uint32_t cp = hdr + 8;
     if(cp + 2 * ncell > lim) return -1;
     for(uint32_t i = 0; i < ncell; i++) {
-      int rc = emit_cell(w, pg, be16(pg + cp + 2 * i));
+      int rc = emit_cell(w, pg, be16(pg + cp + 2 * i), 0);
       if(rc) return rc;
     }
     return 0;
+  }
+
+  if(type == 0x0A) {                                  /* index leaf */
+    uint32_t cp = hdr + 8;
+    if(cp + 2 * ncell > lim) return -1;
+    for(uint32_t i = 0; i < ncell; i++) {
+      int rc = emit_cell(w, pg, be16(pg + cp + 2 * i), 1);
+      if(rc) return rc;
+    }
+    return 0;
+  }
+
+  if(type == 0x02) {                                  /* index interior: child, own record, next child ... */
+    uint32_t cp = hdr + 12;
+    if(cp + 2 * ncell > lim) return -1;
+    for(uint32_t i = 0; i < ncell; i++) {
+      uint32_t off = be16(pg + cp + 2 * i);
+      if(off > lim - 8) return -1;
+      int rc = walk(w, be32(pg + off), depth + 1);
+      if(rc) return rc;
+      rc = emit_cell(w, pg, off + 4, 1);
+      if(rc) return rc;
+    }
+    return walk(w, be32(pg + hdr + 8), depth + 1);
   }
 
   if(type == 0x05) {                                  /* table interior */
@@ -266,7 +296,7 @@ walk(walk_t *w, uint32_t pgno, int depth) {
     return walk(w, be32(pg + hdr + 8), depth + 1);   /* right-most child */
   }
 
-  return -1;                    /* an index page, a free page, or torn */
+  return -1;                    /* a free page, or torn */
 }
 
 int
@@ -367,7 +397,7 @@ parse_columns(const char *sql, size_t len, sqlro_table_t *t) {
   while(close > open + 1 && close[-1] != ')') close--;
   if(close <= open + 1) return -1;
   close--;                                           /* at the last ')' */
-  if(contains(close, end, "WITHOUT ROWID")) return -1;
+  t->without_rowid = contains(close, end, "WITHOUT ROWID");
 
   t->ncols = 0;
   t->ipk   = -1;

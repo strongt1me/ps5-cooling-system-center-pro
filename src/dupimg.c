@@ -7,8 +7,8 @@
  *
  * Where the app looks: the top level of every drive and the folders one below it, and the homebrew and etaHEN game folders
  * (the places ShadowMountPlus and the dump tools use). Which game an image holds is read from it (sce_sys/param.json, or
- * param.sfo of a PS4 game) with the image reader, without mounting anything; an image the reader does not know (.ffpfs)
- * is taken by the title id in its name. What was read is kept by path, size and time, so a second look costs only the
+ * param.sfo of a PS4 game) with the image reader, without mounting anything; an image the reader does not know is
+ * taken by the title id in its name. What was read is kept by path, size and time, so a second look costs only the
  * listing. The folder ShadowMountPlus uses for the game counts as a source too, but only images are ever renamed. */
 
 #include <ctype.h>

@@ -399,8 +399,35 @@ scan_fakelib(const char *root, lib_mods_t *m) {
   scan_libdir(path, m);
 }
 
+/* The backport folder of a title under <scan_root>/backports, the way ShadowMountPlus (1.7beta6) picks it: the folder named
+   exactly like the title id wins; else the first folder, in byte order of the names, that begins with the title id
+   ("PPSA12345 Game Name"). Files are no candidates. 1 and the path in out, or 0 when there is none. */
+int
+ps5tm_backport_dir(const char *scan_root, const char *title_id, char *out, size_t out_len) {
+  if(!scan_root || !title_id || !title_id[0] || !out || out_len < 2) return 0;
+  char root[300], path[512];
+  struct stat st;
+  snprintf(root, sizeof(root), "%s/backports", scan_root);
+  snprintf(path, sizeof(path), "%s/%s", root, title_id);
+  if(stat(path, &st) == 0 && S_ISDIR(st.st_mode)) { snprintf(out, out_len, "%s", path); return 1; }
+  DIR *d = opendir(root);
+  if(!d) return 0;
+  size_t tl = strlen(title_id);
+  char best[256] = "";
+  struct dirent *e;
+  while((e = readdir(d))) {
+    if(strncmp(e->d_name, title_id, tl) != 0 || (best[0] && strcmp(e->d_name, best) >= 0)) continue;
+    snprintf(path, sizeof(path), "%s/%s", root, e->d_name);
+    if(stat(path, &st) == 0 && S_ISDIR(st.st_mode)) snprintf(best, sizeof(best), "%s", e->d_name);
+  }
+  closedir(d);
+  if(!best[0]) return 0;
+  snprintf(out, out_len, "%s/%s", root, best);
+  return 1;
+}
+
 /* The external backport folder ShadowMountPlus prefers over the game's own libraries:
-   <scanpath>/backports/<TITLE_ID>/fakelib2, else .../fakelib. Looked for beside the game (or its image) and in the
+   <scanpath>/backports/<TITLE_ID>[ suffix]/fakelib2, else .../fakelib. Looked for beside the game (or its image) and in the
    places ShadowMountPlus scans by default. Not cached: a few stat calls. */
 static void
 overlay_backports(const lib_game_t *g, lib_mods_t *m) {
@@ -421,7 +448,7 @@ overlay_backports(const lib_game_t *g, lib_mods_t *m) {
 
   for(int i = 0; i < n; i++) {
     char base[240], p2[300];
-    snprintf(base, sizeof(base), "%s/backports/%s", roots[i], g->title_id);
+    if(!ps5tm_backport_dir(roots[i], g->title_id, base, sizeof(base))) continue;
     lib_mods_t t;
     memset(&t, 0, sizeof(t));
     snprintf(p2, sizeof(p2), "%s/fakelib2", base);
@@ -1367,6 +1394,42 @@ updrows_row(void *ctx, const sqlro_table_t *t, const sqlro_row_t *r) {
   return 0;
 }
 
+/* The older form (firmware before 12): the update address sits in tbl_appbrowse, one row per title, in a column of its own
+   (or in an AppInfoJson there). Only fills titles whose address the new form did not give. */
+typedef struct {
+  ps5tm_libupd_t *out;
+  int             n;
+  int             c_tid, c_uri, c_json;
+} browse_ctx_t;
+
+static void
+uri_clean(char *s) {
+  size_t l = strlen(s);
+  while(l && (s[l - 1] == ' ' || s[l - 1] == '\t' || s[l - 1] == '\r' || s[l - 1] == '\n')) s[--l] = 0;
+}
+
+static int
+browse_row(void *ctx, const sqlro_table_t *t, const sqlro_row_t *r) {
+  browse_ctx_t *c = ctx;
+  (void)t;
+  char tid[24], uri[256] = "";
+  if(sqlro_text(r, c->c_tid, tid, sizeof(tid)) != 0) return 0;
+  ps5tm_libupd_t *e = NULL;
+  for(int i = 0; i < c->n; i++)
+    if(!strcmp(c->out[i].title_id, tid)) { e = &c->out[i]; break; }
+  if(!e || e->ver_uri[0]) return 0;
+  if(c->c_uri >= 0) sqlro_text(r, c->c_uri, uri, sizeof(uri));
+  if(!uri[0] && c->c_json >= 0 && c->c_json < r->ncols && r->kind[c->c_json] == SQLRO_TEXT && r->len[c->c_json] > 2) {
+    cJSON *j = cJSON_ParseWithLength((const char *)r->data[c->c_json], r->len[c->c_json]);
+    const cJSON *u = j ? cJSON_GetObjectItem(j, "VERSION_FILE_URI") : NULL;
+    if(cJSON_IsString(u)) snprintf(uri, sizeof(uri), "%s", u->valuestring);
+    cJSON_Delete(j);
+  }
+  uri_clean(uri);
+  if(!strncmp(uri, "https://", 8)) snprintf(e->ver_uri, sizeof(e->ver_uri), "%s", uri);
+  return 0;
+}
+
 int
 ps5tm_library_update_titles(ps5tm_libupd_t *out, int max) {
   if(!out || max <= 0) return -1;
@@ -1379,6 +1442,11 @@ ps5tm_library_update_titles(ps5tm_libupd_t *out, int max) {
   if(file && tab && sqlro_open_mem(&db, file, size) == 0 && sqlro_find_table(&db, "tbl_contentinfo", tab) == 0) {
     updrows_ctx_t c = { out, max, 0, sqlro_col(tab, "titleId"), sqlro_col(tab, "titleName"), sqlro_col(tab, "contentId"), sqlro_col(tab, "AppInfoJson") };
     if(c.c_tid >= 0 && sqlro_scan(&db, tab, updrows_row, &c) >= 0) rc = c.n;
+    if(rc > 0 && sqlro_find_table(&db, "tbl_appbrowse", tab) == 0) {
+      browse_ctx_t b = { out, rc, sqlro_col(tab, "titleId"), sqlro_col(tab, "VERSION_FILE_URI"), sqlro_col(tab, "AppInfoJson") };
+      if(b.c_uri < 0) b.c_uri = sqlro_col(tab, "versionFileUri");
+      if(b.c_tid >= 0 && (b.c_uri >= 0 || b.c_json >= 0)) sqlro_scan(&db, tab, browse_row, &b);
+    }
   }
   free(tab);
   free(file);
@@ -1890,6 +1958,53 @@ ps5tm_library_delete_info(const char *title_id, ps5tm_libdel_t *out) {
 }
 
 
+#define IMG_PARAM_MAX (64u * 1024)   /* sce_sys/param.json is a few KB; this is generous, not a size limit worth enforcing */
+
+/* What the title's own sce_sys/param.json says, read where the data lies without unpacking or mounting anything: inside an
+   image (imgread.c: exfat, ffpkg, ffpfs, ffpfsc) or in a dump folder. For an SMP-managed title app.db only holds what
+   ShadowMountPlus reported, so the file itself is the better source: its real version, and versionFileUri, the address of
+   Sony's update list (game-specific, not derivable; tried first, app.db is the fallback). ver/uri set to "" when param.json
+   has no such key; 0 when param.json was read, -1 when not (the caller keeps what app.db said). */
+int
+ps5tm_library_param_info(const char *path, const char *format, char *ver, size_t ver_len, char *uri, size_t uri_len) {
+  if(!path || !*path || !format || !ver || ver_len < 2 || !uri || uri_len < 2) return -1;
+  ver[0] = uri[0] = 0;
+  char *buf = malloc(IMG_PARAM_MAX);
+  if(!buf) return -1;
+  long n = -1;
+  if(!strcmp(format, "folder")) {
+    char pp[512];
+    snprintf(pp, sizeof(pp), "%s/sce_sys/param.json", path);
+    FILE *f = fopen(pp, "rb");
+    if(f) { n = (long)fread(buf, 1, IMG_PARAM_MAX, f); fclose(f); }
+  } else if(!strcmp(format, "exfat") || !strcmp(format, "ffpkg") || !strcmp(format, "ffpfs") || !strcmp(format, "ffpfsc")) {
+    char err[160];
+    imgr_t *r = imgr_open(path, err, sizeof(err));
+    if(r) { n = imgr_pread(r, "/sce_sys/param.json", 0, buf, IMG_PARAM_MAX); imgr_close(r); }
+  }
+  if(n <= 0) { free(buf); return -1; }
+  cJSON *j = cJSON_ParseWithLength(buf, (size_t)n);
+  free(buf);
+  if(!j) return -1;
+  static const char *const vkeys[] = { "contentVersion", "CONTENT_VERSION", "appVersion", "APP_VER", NULL };
+  for(int i = 0; vkeys[i] && !ver[0]; i++) {
+    const cJSON *v = cJSON_GetObjectItem(j, vkeys[i]);
+    if(cJSON_IsString(v)) snprintf(ver, ver_len, "%s", v->valuestring);
+  }
+  const cJSON *u = cJSON_GetObjectItem(j, "versionFileUri");
+  if(!cJSON_IsString(u)) u = cJSON_GetObjectItem(j, "VERSION_FILE_URI");
+  if(cJSON_IsString(u)) {
+    char t[256];
+    snprintf(t, sizeof(t), "%s", u->valuestring);
+    size_t l = strlen(t);
+    while(l && (t[l - 1] == ' ' || t[l - 1] == '\t' || t[l - 1] == '\r' || t[l - 1] == '\n')) t[--l] = 0;
+    if(!strncmp(t, "https://", 8) && l > 12 && !strcasecmp(t + l - 4, ".xml")) snprintf(uri, uri_len, "%s", t);
+  }
+  cJSON_Delete(j);
+  return 0;
+}
+
+/* The cover as the database names it, else where the system keeps covers. 0 and the path, or -1. */
 /* The cover as the database names it, else where the system keeps covers — or, with the cache
    on, the copy libcache.c made of it, which is there when the system's file is not.
    Only titles on the list: the route serves nothing else. */

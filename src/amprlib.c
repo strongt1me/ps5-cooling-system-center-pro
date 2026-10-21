@@ -4,8 +4,9 @@
  * where they differ.
  *
  * How ShadowMountPlus finds the file (checked at its source by the converter this follows, "PS5 Dump & Image Converter",
- * shadowmount_generation.py, and by ShadowMountPlus 1.7beta1/beta2/beta3/beta4): first in
- * <scanpath>/backports/<TITLE_ID>/ (fakelib2, then fakelib), then in the game (fakelib2 since 1.7beta1, then fakelib);
+ * shadowmount_generation.py, and by ShadowMountPlus 1.7beta1 to 1.7beta6-fix2): first in
+ * <scanpath>/backports/<TITLE_ID>/ (fakelib2, then fakelib; since beta6 also a folder that only begins with the title id,
+ * "PPSA12345 Game Name": the exact name wins, else the first in byte order), then in the game (fakelib2 since 1.7beta1, then fakelib);
  * the first folder that exists wins, even an empty one, and only that one is used. Folders are named exactly fakelib
  * or fakelib2. Only the name fakelib is read by every version, so that is the one this app writes; a fakelib2 beside
  * it would win from 1.7beta1 on and leave the file unused, which is why the page warns about it.
@@ -467,7 +468,7 @@ typedef struct {
   uint64_t lib_size;
   char     lib_sha[65];
   char     scanpath[256];
-  char     bp_dir[300];            /* <scanpath>/backports/<id> that exists, or the one that would be made */
+  char     bp_dir[300];            /* <scanpath>/backports/<id>[ suffix] that exists, or the one that would be made */
   int      bp_exists, bp_fakelib, bp_fakelib2, bp_lib_present, bp_lib_emu, bp_lib_packs, bp_has_orig;
   char     bp_sha[65];
   uint64_t bp_lib_size;
@@ -484,13 +485,12 @@ parent_of(const char *path, char *out, size_t n) {
 
 static void
 probe_backport(al_probe_t *p, const char *id) {
-  char cand[2][300];
-  snprintf(cand[0], sizeof(cand[0]), "%s/backports/%s", p->scanpath, id);
-  snprintf(cand[1], sizeof(cand[1]), "%s/backports/%s", AL_BP_FALLBACK, id);
-  snprintf(p->bp_dir, sizeof(p->bp_dir), "%s", cand[0]);
+  const char *roots[2] = { p->scanpath, AL_BP_FALLBACK };
+  snprintf(p->bp_dir, sizeof(p->bp_dir), "%s/backports/%s", p->scanpath, id);
   for(int i = 0; i < 2; i++) {
-    if(!is_dir(cand[i])) continue;
-    snprintf(p->bp_dir, sizeof(p->bp_dir), "%s", cand[i]);
+    char found[300];
+    if(!ps5tm_backport_dir(roots[i], id, found, sizeof(found))) continue;
+    snprintf(p->bp_dir, sizeof(p->bp_dir), "%s", found);
     p->bp_exists = 1;
     break;
   }

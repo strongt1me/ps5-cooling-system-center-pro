@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 gasb07 (PS4Mount 0.6.0), adapted for PS5 Cooling & System Center - Pro
+ * Copyright (C) 2026 gasb07 (PS4Mount 0.6.1), adapted for PS5 Cooling & System Center - Pro
  *
  * PS4Mount inside the app: scans USB drives for PS4 fake PKGs, registers them without installing them (nullfs mounts of internal
  * folders that hold symlinks to the packages), follows the kernel log and offers its list and actions to the web page.
@@ -80,7 +80,7 @@ int ps4m_standalone_active(char *why, size_t n) {
 #include "sqlite_ro.h"
 #include <ps5/kernel.h>
 
-#define VERSION "PS4Mount 0.6.0"
+#define VERSION "PS4Mount 0.6.1"
 #define LOCK_PORT 9032
 #define SCAN_SECONDS 10
 #define STATE_DIR "/data/ps4mount"
@@ -1007,7 +1007,18 @@ static int installed_internally(const char *tid) {
     return exists(p);
 }
 
-static int marker_matches(const char *tid, const char *expected) {
+/* PS4Mount 0.6.1: the marker without the drive name: "/mnt/usb0/ps4/<TID>..." -> "/ps4/<TID>...".
+ * Drives are named in the order they are mounted, so the same drive can come back
+ * under another name; the registration does not depend on it. */
+static const char *skip_drive(const char *marker) {
+    if (strncmp(marker, "/mnt/", 5))
+        return marker;
+    const char *s = strchr(marker + 5, '/');
+    return s ? s : marker;
+}
+
+/* The stored marker, without the drive name, is expected; it is copied to stored. */
+static int marker_matches(const char *tid, const char *expected, char *stored, size_t len) {
     char path[64], buf[PATH_MAX + 256] = {0};
     snprintf(path, sizeof(path), STATE_DIR "/%s.src", tid);
     int fd = open(path, O_RDONLY);
@@ -1015,7 +1026,8 @@ static int marker_matches(const char *tid, const char *expected) {
         return 0;
     ssize_t n = read(fd, buf, sizeof(buf) - 1);
     close(fd);
-    return n > 0 && !strcmp(buf, expected);
+    snprintf(stored, len, "%s", buf);
+    return n > 0 && !strcmp(skip_drive(buf), skip_drive(expected));
 }
 
 /* 1 = needs (re)registration, 0 = registered here, -1 = skip. */
@@ -1039,6 +1051,24 @@ static int served_elsewhere(const title_src_t *t) {
     return exists(pkg);
 }
 
+/* PS4Mount 0.6.1: a registered game whose drive came back under another name: the links and records
+ * that hold the pkg path are written again for the new folder, without registering the
+ * game again. */
+static int relocate(title_src_t *t, char *stored) {
+    if (!strcmp(stored, t->marker))
+        return 0;
+    char was[PATH_MAX];
+    snprintf(was, sizeof(was), "%.*s", (int)strcspn(stored, "\n"), stored);
+    if (place_files(t)) {
+        printf("[scan] %s: drive renamed (was %s), could not move its files\n", t->dir, was);
+        return -1;
+    }
+    printf("[scan] %s: drive renamed (was %s), kept registered\n", t->dir, was);
+    char path[64]; /* named after the folder, which src_open matched to the pkg */
+    snprintf(path, sizeof(path), STATE_DIR "/%s.src", strrchr(t->dir, '/') + 1);
+    return write_file(path, t->marker, strlen(t->marker), 0666);
+}
+
 static int title_state(title_src_t *t) {
     const char *tid = t->app.title_id;
     if (installed_internally(tid) || removed(tid))
@@ -1050,9 +1080,12 @@ static int title_state(title_src_t *t) {
     }
     char pdb[PATH_MAX];
     snprintf(pdb, sizeof(pdb), "/user/playgo/app/%s/00/d0.pdb", t->app.content_id);
+    char stored[PATH_MAX + 256];
+    if (!p4m_db_is_registered(tid) || !exists(pdb) || !marker_matches(tid, t->marker, stored, sizeof(stored)) ||
+        relocate(t, stored))
+        return 1;
     /* folders set up by 0.3.1 and older lack the internal folder: registered again */
-    return !p4m_db_is_registered(tid) || !exists(pdb) || !marker_matches(tid, t->marker) ||
-           !hold_ready("app", tid, "app.pkg") || (t->has_patch && !hold_ready("patch", tid, "patch.pkg")) ||
+    return !hold_ready("app", tid, "app.pkg") || (t->has_patch && !hold_ready("patch", tid, "patch.pkg")) ||
            !dlc_ready(t);
 }
 

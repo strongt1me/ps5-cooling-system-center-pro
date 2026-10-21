@@ -392,9 +392,9 @@ upd_sony_manifest(const char *url, upd_manifest_t *out, char *why, size_t wn) {
 
 /* ---------------------------------------------------------------- one byte range of a piece */
 
-/* What came in is collected and written in blocks of 1 MiB instead of one pwrite per network read (a few KiB): the
-   idea of PatchDL 0.3.1, which went from 8 to 117 MB/s on a gigabit line with it (19.10.2026). */
-#define SINK_BUF (1u << 20)
+/* What came in is collected and written in blocks of 2 MiB instead of one pwrite per network read (a few KiB): the
+   idea of PatchDL 0.3.1, which went from 8 to 117 MB/s on a gigabit line with it (19.10.2026); 2 MiB as in 0.3.3. */
+#define SINK_BUF (2u << 20)
 
 typedef struct {
   int               fd;

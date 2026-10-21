@@ -5872,6 +5872,18 @@
   /* What the result is, by its name: the job view and the end of it say it, not only the choice before. */
   const CV_FMT = { ffpfsc: "ffpfsc (komprimiertes PFS)", ffpkg: "ffpkg (UFS2-Abbild)", exfat: "exFAT-Abbild (.exfat)" };
 
+  /* Games with a lot of data or texture streaming can stutter from a compressed image: the reasons the scan found (gameconvert.c,
+     stream_risk), in words; "" when there are none. */
+  const cvStreamReasons = (p) => {
+    const r = p && p.stream_risk;
+    if (!r || !r.risky) return [];
+    const out = [];
+    if (r.big_data) out.push(`Es hat sehr viele Daten (${bytes(r.data_bytes)}).`);
+    if (r.container_bytes > 0) out.push(`Es enthält große Streaming-Container (${(r.containers || []).join(", ")}, zusammen ${bytes(r.container_bytes)}).`);
+    if (r.stream_dir) out.push(`Es hat einen Streaming-Ordner („${r.stream_dir}“, ${bytes(r.stream_dir_bytes)}).`);
+    return out;
+  };
+
   const cvBlocked = (d) => {
     const p = cv.plan;
     /* A .ffpkg is as big as its own image, which is not the exFAT one's size. */
@@ -5905,7 +5917,8 @@
         <input type="radio" name="cv-op" value="${esc(op)}" ${cv.op === op ? "checked" : ""} ${off ? "disabled" : ""}>
         <span class="cp-choice-text"><b>${esc(CV_OPS[op].t)}${op === "ffpfsc" && p.kind === "folder" ? " (empfohlen)" : ""}</b>
           <span class="muted">${esc(CV_OPS[op].d(p))}</span>
-          ${off ? `<span class="cp-why">Bei diesem Spiel nicht möglich: ${esc(p.ffpkg_error)}</span>` : ""}</span></label>`;
+          ${off ? `<span class="cp-why">Bei diesem Spiel nicht möglich: ${esc(p.ffpkg_error)}</span>` : ""}
+          ${op === "ffpfsc" && cvStreamReasons(p).length ? `<span class="cp-why">Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder Texture-Streaming). Die App fragt beim Start noch einmal.</span>` : ""}</span></label>`;
     }).join("")
       + (g && g.can_unpack ? `<label class="cp-choice">
         <input type="radio" name="cv-op" value="unpack">
@@ -6083,6 +6096,11 @@
   };
 
   const cvStart = async (btn) => {
+    const why = cv.op === "ffpfsc" ? cvStreamReasons(cv.plan) : [];
+    if (why.length && !confirm([`Bei „${cv.plan.name}“ sind Ruckler möglich, wenn es als komprimiertes Abbild (ffpfsc) gepackt wird:`, "",
+        ...why.map((w) => `• ${w}`), "",
+        "Die Konsole muss ein komprimiertes Abbild beim Spielen ständig entpacken. Spiele mit vielen Daten oder Texture-Streaming können dadurch ruckeln.", "",
+        "Trotzdem in das Format ffpfsc umwandeln?"].join("\n"))) return;
     btn.disabled = true;
     try {
       cv.job = await api("/api/v1/library/convert", { method: "POST",
@@ -6740,9 +6758,10 @@
     $("#gm-pane-pkg").hidden   = which !== "pkg";
     $("#gm-pane-p4m").hidden   = which !== "p4m";
     $("#gm-pane-upd").hidden   = which !== "upd";
+    $("#gm-pane-disc").hidden  = which !== "disc";
     $("#gm-pane-bk").hidden    = which !== "bk";
     $("#gm-pane-hist").hidden  = which !== "hist";
-    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["upd", "#gm-tab-upd"], ["p4m", "#gm-tab-p4m"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
+    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["upd", "#gm-tab-upd"], ["p4m", "#gm-tab-p4m"], ["disc", "#gm-tab-disc"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
       const b = $(sel);
       b.classList.toggle("active", which === k);
       b.setAttribute("aria-selected", which === k ? "true" : "false");
@@ -6752,6 +6771,7 @@
     if (which === "pkg") loadPackages();
     if (which === "p4m") { loadP4m(); loadP4mLog(); }
     if (which === "upd") loadUpd();
+    if (which === "disc") loadDisc();
     if (which === "bk") loadBackups();
     if (which === "hist") loadHistory2();
     syncPlaytime();
@@ -6759,6 +6779,7 @@
     pkSync();
     if (typeof p4mSync === "function") p4mSync();
     if (typeof updSync === "function") updSync();
+    if (typeof discSync === "function") discSync();
   };
   $("#gm-tab-lib").addEventListener("click", () => ptSelectTab("lib"));
   $("#gm-tab-time").addEventListener("click", () => ptSelectTab("time"));
@@ -6878,13 +6899,131 @@
     else if (!run && p4m.timer) { clearInterval(p4m.timer); p4m.timer = 0; }
   };
 
+  /* ── Das Laufwerk (disc.c, 21.10.2026, nach ps-disc-detect, GPL-3.0) ──
+   * /api/v1/disc: welche Disc liegt drin, Titelkennung, Abbild einer PS2-DVD oder PS3-Disc mit CRC-32, MD5, SHA-1.
+   * Gefragt wird das Laufwerk nur, wenn der Schalter an ist. */
+  const disc = { data: null, timer: 0 };
+
+  const discSubText = (d) => {
+    if (!d.enabled) return "ausgeschaltet";
+    if (d.drive === "none") return "kein Laufwerk gefunden";
+    if (d.drive !== "ok") return "fragt das Laufwerk …";
+    return d.present ? d.type : "keine Disc im Laufwerk";
+  };
+
+  const discNow = (d) => {
+    if (!d.enabled) return `<div class="pt-note">Ausgeschaltet: Die App fragt das Laufwerk nicht. Zum Einschalten den Schalter oben rechts benutzen.</div>`;
+    if (d.drive === "none") return `<div class="pt-note">Die App findet kein Laufwerk. Eine Konsole ohne Laufwerk (Digital Edition) hat keins.</div>`;
+    if (!d.present) return `<p class="muted">Keine Disc im Laufwerk. Legt man eine ein, steht sie hier mit ihrer Titelkennung.</p>`;
+    const job = d.job || {};
+    const busy = job.state === "running" || job.state === "verifying";
+    let state = ["", "erkannt"], info = "", btn = "";
+    if (d.dumpable) {
+      state = ["ok", "bereit zum Sichern"];
+      btn = busy ? `<button type="button" class="btn ghost" data-disc-act="cancel">Abbrechen</button>`
+                 : `<button type="button" class="btn primary" data-disc-act="dump">Abbild erstellen</button>`;
+      if (d.title_state === "generic") info = "Die Titelkennung ließ sich nicht lesen (GENERIC). Das Abbild wird unter diesem Namen angelegt und nach Redump umbenannt, wenn die Prüfsummen passen.";
+    } else if (d.has_title && (d.profile === 0xFF80 || d.profile === 0xFF90)) {
+      info = "PS4- und PS5-Discs werden erkannt, aber nicht kopiert.";
+    } else if (d.has_title && d.title_state === "wait") {
+      state = ["", "wird gelesen"];
+    } else if (!d.has_title) {
+      info = "Zu dieser Disc gibt es keine Titelkennung; sie wird nur angezeigt.";
+    }
+    const title = d.serial ? `Titelkennung ${esc(d.serial)}` : (d.has_title ? "Titelkennung wird gelesen …" : "ohne Titelkennung");
+    const rname = d.name ? ` · ${esc(d.name)}` : (d.names > 1 ? ` · ${esc(`${d.names} Namen in der Redump-Liste`)}` : "");
+    const size = d.image_bytes > 0 ? ` · ${esc(bytes(d.image_bytes))}` : "";
+    return `<div class="p4m-row"><div class="p4m-icon"></div>
+        <div class="p4m-main"><div class="p4m-name">${esc(d.name || d.type)}</div>
+          <div class="p4m-meta">${esc(d.type)} · ${title}${rname}${size}</div>${info ? `<div class="p4m-meta">${esc(info)}</div>` : ""}</div>
+        <span class="p4m-state ${state[0]}">${esc(state[1])}</span><div class="p4m-btns">${btn}</div></div>`;
+  };
+
+  const discJob = (d) => {
+    const j = d.job || {};
+    if (!j.state || j.state === "idle") return "";
+    const pc = j.total > 0 ? Math.min(100, j.done * 100 / j.total) : 0;
+    let line;
+    if (j.state === "running") line = `${bytes(j.done)} von ${bytes(j.total)}${j.bytes_per_s > 0 ? ` · ${bytes(j.bytes_per_s)}/s` : ""}${j.eta_s > 0 ? ` · noch etwa ${duration(j.eta_s)}` : ""}`;
+    else if (j.state === "verifying") line = "Die Prüfsummen werden mit der Redump-Liste verglichen …";
+    else if (j.state === "done") line = j.note || "Fertig.";
+    else line = j.error || (j.state === "cancelled" ? "Abgebrochen." : "Gescheitert.");
+    const head = j.state === "done" ? `${j.name} – fertig` : j.state === "failed" ? `${j.name} – gescheitert` : j.state === "cancelled" ? `${j.name} – abgebrochen` : j.name;
+    return `<b>${esc(head)}</b>
+        ${j.state === "running" || j.state === "verifying" ? `<div class="upd-bar"><i style="width:${pc.toFixed(1)}%"></i></div>` : ""}
+        <small>${esc(line)}</small>`;
+  };
+
+  const discDumps = (d) => {
+    const l = d.dumps || [];
+    if (!l.length) return `<p class="muted">Noch keine Abbilder.</p>`;
+    return l.slice().sort((a, b) => b.mtime - a.mtime).map((x) => `<div class="p4m-row"><div class="p4m-icon"></div>
+        <div class="p4m-main"><div class="p4m-name" title="${esc(x.name)}">${esc(x.name)}</div>
+          <div class="p4m-meta">${esc(bytes(x.size))}${x.serial ? ` · ${esc(x.serial)}` : ""}${x.crc32 ? ` · CRC-32 ${esc(x.crc32)}` : ""}</div>
+          ${x.md5 ? `<div class="p4m-meta">MD5 ${esc(x.md5)}</div>` : ""}${x.sha1 ? `<div class="p4m-meta">SHA-1 ${esc(x.sha1)}</div>` : ""}</div>
+        <span class="p4m-state ${x.verified ? "ok" : ""}">${x.verified ? "Redump geprüft" : "nicht geprüft"}</span>
+        <div class="p4m-btns"><button type="button" class="btn ghost" data-disc-del="${esc(x.name)}">Löschen</button></div></div>`).join("");
+  };
+
+  const discRender = () => {
+    const d = disc.data;
+    if (!d) return;
+    $("#disc-on").checked = !!d.enabled;
+    $("#disc-auto").checked = !!d.auto_dump;
+    $("#disc-auto").disabled = !d.enabled;
+    txt("#disc-sub", discSubText(d));
+    setHtml($("#disc-now"), discNow(d));
+    const jb = $("#disc-job"), jh = discJob(d);
+    jb.hidden = !jh;
+    setHtml(jb, jh);
+    setHtml($("#disc-dumps"), discDumps(d));
+    txt("#disc-dir-sub", `${d.dir}${d.free_bytes >= 0 ? ` · ${bytes(d.free_bytes)} frei` : ""}`);
+    const r = d.redump || {};
+    txt("#disc-redump-sub", r.present ? (r.usable ? `${r.path} · ${bytes(r.size)} · wird benutzt` : `${r.path} · nicht zu gebrauchen`) : "keine Liste auf der Konsole");
+    txt("#disc-redump-hint", r.present
+      ? (r.usable ? "Namen und Prüfung kommen aus dieser Liste. Eine neuere Liste ersetzt sie, indem man die Datei austauscht."
+                  : "Die Datei ist größer als 64 MB oder keine SQLite-Datei und bleibt ungenutzt.")
+      : "Ohne Liste heißen die Abbilder wie ihre Titelkennung und werden nicht geprüft. Die Liste baut man am PC mit tools/build_redump_db.py aus dem Projekt ps-disc-detect (sie lädt die Dateien von redump.info) und legt die erzeugte redump.db nach /data/redump.db.");
+    const ev = d.events || [];
+    setHtml($("#disc-events"), ev.length ? ev.map((e) => `<div class="p4m-meta">${esc(new Date(e.time).toLocaleTimeString())} · ${esc(e.text)}</div>`).join("") : `<p class="muted">Noch nichts.</p>`);
+  };
+
+  const loadDisc = async () => {
+    try { disc.data = await api("/api/v1/disc"); discRender(); } catch (e) { txt("#disc-sub", e.message); }
+  };
+  const discSync = () => {
+    const run = state.page === "games" && pt.tab === "disc" && !document.hidden;
+    const fast = disc.data && disc.data.enabled;
+    clearTimeout(disc.timer);
+    disc.timer = run ? setTimeout(async () => { await loadDisc(); discSync(); }, fast ? 2000 : 10000) : 0;
+  };
+  const discPost = async (body) => {
+    try { const r = await api("/api/v1/disc", { method: "POST", body: JSON.stringify(body) }); if (r.message) toast(r.message); }
+    catch (e) { toast(e.message, "error"); }
+    await loadDisc();
+    discSync();
+  };
+
+  $("#gm-tab-disc").addEventListener("click", () => ptSelectTab("disc"));
+  $("#disc-on").addEventListener("change", (e) => discPost({ action: e.target.checked ? "enable" : "disable" }));
+  $("#disc-auto").addEventListener("change", (e) => discPost({ action: "settings", auto_dump: e.target.checked }));
+  $("#gm-pane-disc").addEventListener("click", (e) => {
+    const del = e.target.closest("[data-disc-del]");
+    if (del) {
+      if (confirm(`„${del.dataset.discDel}“ wirklich löschen?`)) discPost({ action: "delete", name: del.dataset.discDel });
+      return;
+    }
+    const b = e.target.closest("[data-disc-act]");
+    if (b) discPost({ action: b.dataset.discAct });
+  });
+
   $("#gm-tab-p4m").addEventListener("click", () => ptSelectTab("p4m"));
 
   /* ── Spiel-Updates (19.10.2026, nach PatchDL 0.3.0 von Knutwurst) ──
    * /api/v1/updates (updates.c): jedes Spiel mit seiner Version, dem Update, das hier läuft, und dem Stand des Downloads.
-   * Geladen wird nur nach einem Klick; der laufende Download erscheint oben mit Fortschritt. Für ältere Firmware führt die
-   * Zeile „Älteren Patch holen“ zu Prospero/Orbis Patches: Version wählen, SC-Link kopieren, hier einfügen. */
-  const upd = { data: null, timer: 0, f: "", open: "", vers: {}, qr: {}, armed: "", armTimer: 0, armedAt: 0, pkgs: null, sig: "", wantOpen: "" };
+   * Geladen wird nur nach einem Klick; der laufende Download erscheint oben mit Fortschritt. Nur direkt von den Update-Servern,
+   * kein Link zum Einfügen. */
+  const upd = { data: null, timer: 0, f: "", armed: "", armTimer: 0, armedAt: 0, pkgs: null, sig: "" };
   const UPD_ST = {
     update: ["warn", "Update verfügbar"], current: ["ok", "aktuell"], unchecked: ["", "noch nicht geprüft"], check_failed: ["warn", "Prüfung gescheitert"],
     needs_newer_fw: ["warn", "neuester Patch braucht neuere Firmware"], queued: ["", "wartet"], downloading: ["", "wird geladen"], paused: ["warn", "angehalten"],
@@ -6900,65 +7039,29 @@
     return `<button type="button" class="btn ${armed ? "danger" : cls || "ghost"}" data-upd-act="${esc(act)}" data-upd-id="${esc(tid)}">${armed ? "Wirklich? Nochmal klicken" : esc(label)}</button>`;
   };
 
-  const updOldPanel = (t) => {
-    const s = t.site, q = upd.qr[t.title_id], v = upd.vers[t.title_id];
-    const site = t.plat === 4 ? "orbispatches.com" : "prosperopatches.com";
-    const autoVer = v && v.auto_ver ? v.auto_ver : (t.compat_ver || "");
-    /* Version list from Prospero/Orbis: auto_ver = direkt ladbar, SC-Link für alle anderen */
-    const vl = v && v.versions ? `<div class="upd-vers">${v.versions.map((x) => {
-      const isAuto = autoVer && x.version === autoVer;
-      const dis = !x.runs || (!isAuto && x.runs === false);
-      return `<button type="button" class="btn ${isAuto ? "primary" : "ghost"}${dis ? " disabled" : ""}"
-        ${isAuto ? `data-upd-act="download" data-upd-id="${esc(t.title_id)}"` : `data-upd-pick="${esc(x.version)}" data-upd-size="${esc(x.size)}" data-upd-id="${esc(t.title_id)}"`}
-        ${dis ? "disabled" : ""}>
-        ${esc(`${x.version} · ab Firmware ${x.fw} · ${x.size}`)}${isAuto ? " ✓ direkt laden" : ""}${!x.runs ? esc(" · läuft hier nicht") : ""}
-        </button>`;
-    }).join("")}</div>`
-      : v && v.error ? `<p class="cp-err">${esc(`Die Liste ließ sich nicht laden (${v.error}).`)}</p>`
-      : `<button type="button" class="btn ghost" data-upd-vers="${esc(t.title_id)}">Alle Versionen anzeigen</button>`;
-    return `<div class="upd-old">
-        <div class="upd-qr">${q && q.svg ? q.svg : ""}<div>
-          <p class="cp-step">Versionen</p>
-          ${autoVer ? `<small>Version <b>${esc(autoVer)}</b> kann direkt geladen werden (kein SC-Link nötig). Für ältere Versionen: SC-Link von ${esc(site)} kopieren und unten einfügen.</small>` : `<small>1. Öffne <code>${esc(`https://${site}/${t.title_id}`)}</code> (am Handy: QR-Code scannen).</small>
-          <small>2. ${s ? esc(`Wähle Version ${s.version} (braucht Firmware ${s.fw}, ${s.size})`) : "Wähle eine Version, die auf dieser Firmware läuft"} und bestätige die menschliche Prüfung, falls sie erscheint.</small>
-          <small>3. Kopiere den <b>SC</b>-Link und füge ihn unten ein.</small>`}
-          </div></div>
-        <label class="p4m-field"><span>SC-Link (ältere Version)</span><input type="url" id="upd-link-${esc(t.title_id)}" placeholder="https://sgst.prod.dl.playstation.net/…_sc.pkg" autocomplete="off" spellcheck="false"></label>
-        <label class="p4m-field"><span>Version</span><input type="text" id="upd-lver-${esc(t.title_id)}" value="${esc(s ? s.version : "")}" inputmode="decimal" autocomplete="off"></label>
-        <div class="cp-actions"><button type="button" class="btn primary" data-upd-link="${esc(t.title_id)}">Laden und installieren</button></div>
-        ${vl}</div>`;
-  };
-
   const updRow = (t) => {
     const [cls, label] = UPD_ST[t.status] || ["", t.status];
     const cov = updCover(t.title_id);
     const ver = `${esc(t.version || "?")}${t.target && t.target !== t.version ? ` → ${esc(t.target)}` : ""}`;
     let info = "", btns = "";
     const off = t.status.startsWith("not_official");
-    const versBtn = `<button type="button" class="btn ghost" data-upd-old="${esc(t.title_id)}">${upd.open === t.title_id ? "Schließen" : "Versionen …"}</button>`;
-    if (t.status === "update") btns = updBtn("download", t.title_id, "Laden und installieren", "primary") + versBtn;
+    if (t.status === "update") btns = updBtn("download", t.title_id, "Laden und installieren", "primary");
     else if (t.status === "paused") btns = updBtn("resume", t.title_id, "Fortsetzen", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "ready") btns = updBtn("install", t.title_id, "Installieren", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "failed") btns = updBtn("resume", t.title_id, "Erneut versuchen", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "queued" || t.status === "downloading" || t.status === "verifying") btns = updBtn("pause", t.title_id, "Anhalten") + updBtn("cancel", t.title_id, "Abbrechen");
-    else if (t.status === "needs_newer_fw") {
-      info = `<div class="p4m-meta">${esc(`Der neueste offizielle Patch ${t.latest} braucht Firmware ${t.latest_fw || "?"}.`)}${t.site ? esc(` Version ${t.site.version} läuft hier (ab Firmware ${t.site.fw}).`) : t.site_why ? esc(` Die Liste von Prospero/Orbis ließ sich nicht laden.`) : ""}</div>`;
-      btns = `<button type="button" class="btn ghost" data-upd-old="${esc(t.title_id)}">${upd.open === t.title_id ? "Schließen" : "Älteren Patch holen …"}</button>`;
-    }
-    else if (t.status === "current") btns = versBtn;
-    if (t.status === "check_failed") { info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`; btns = versBtn; }
+    else if (t.status === "needs_newer_fw") info = `<div class="p4m-meta">${esc(`Der neueste offizielle Patch ${t.latest} braucht Firmware ${t.latest_fw || "?"}; für diese Firmware gibt es kein Update.`)}</div>`;
+    if (t.status === "check_failed") info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`;
     if (off) info = `<div class="p4m-meta">${t.status === "not_official_fake" ? "Nicht offiziell signiert: keine offiziellen Updates." : "Die Paketdatei ließ sich nicht lesen."}</div>`;
     if (t.via_smp && !off) info += `<div class="p4m-meta">${esc("Läuft über ShadowMountPlus. Das Update wird normal installiert – ob es auf das eingehängte Abbild angewendet wird, hängt vom Spiel ab.")}</div>`;
     if (t.error) info += `<div class="p4m-meta cp-why">${esc(t.error)}</div>`;
-    if (t.from_link) info += `<div class="p4m-meta">${esc("Aus einem SC-Link (ältere Firmware).")}</div>`;
     const pct = t.total > 0 && t.have > 0 && t.status !== "downloading" ? ` · ${Math.floor(t.have * 100 / t.total)} %` : "";
     return `<div class="p4m-row" data-upd-row="${esc(t.title_id)}">
         ${cov ? `<img class="p4m-icon" src="${esc(cov)}" alt="" loading="lazy" decoding="async">` : `<div class="p4m-icon"></div>`}
         <div class="p4m-main"><div class="p4m-name" title="${esc(t.name)}">${esc(t.name)}</div>
           <div class="p4m-meta">${esc(t.title_id)} · ${t.plat === 4 ? "PS4" : "PS5"} · <span class="upd-ver">${ver}</span>${pct}</div>${info}</div>
         <span class="p4m-state ${cls}">${esc(label)}</span>
-        <div class="p4m-btns">${btns}</div></div>
-      ${upd.open === t.title_id ? updOldPanel(t) : ""}`;
+        <div class="p4m-btns">${btns}</div></div>`;
   };
 
   const updRender = () => {
@@ -6986,12 +7089,10 @@
         <small>${esc(stat)}${j.phase ? ` · ${esc(j.phase)}` : ""}${j.queued ? esc(` · danach noch ${j.queued} in der Warteschlange`) : ""}</small>`;
     }
     const list = (d.titles || []).filter((t) => !upd.f || updGroup(t) === upd.f);
-    const sig = JSON.stringify([list, upd.open, upd.armed, Object.keys(upd.vers), Object.keys(upd.qr), (gm.list || []).length]);
+    const sig = JSON.stringify([list, upd.armed, (gm.list || []).length]);
     if (sig !== upd.sig) {                                        /* nur neu zeichnen, wenn sich etwas geändert hat */
       upd.sig = sig;
-      const keep = upd.open ? ($(`#upd-link-${upd.open}`) || {}).value : "";
       $("#upd-list").innerHTML = list.length ? list.map(updRow).join("") : `<p class="muted">${on ? "Keine Spiele in dieser Auswahl." : "Noch nichts geprüft."}</p>`;
-      if (keep && $(`#upd-link-${upd.open}`)) $(`#upd-link-${upd.open}`).value = keep;
     }
     const s = d.settings || {};
     const cs = $("#upd-conns");
@@ -7010,7 +7111,6 @@
   const loadUpd = async () => {
     try { upd.data = await api("/api/v1/updates"); updRender(); } catch (e) { txt("#upd-sub", e.message); }
     try { upd.pkgs = await api("/api/v1/updates/packages"); updPkgsRender(); } catch { /* bleibt */ }
-    if (upd.wantOpen && upd.data) { const id = upd.wantOpen; upd.wantOpen = ""; updOpenOld(id); }
   };
   const updSync = () => {
     const run = state.page === "games" && pt.tab === "upd" && !document.hidden;
@@ -7024,15 +7124,6 @@
     await loadUpd();
     updSync();
   };
-  const updOpenOld = async (id) => {
-    upd.open = upd.open === id ? "" : id;
-    updRender();
-    if (upd.open && !upd.qr[id]) {
-      try { upd.qr[id] = await api(`/api/v1/updates/qr?id=${encodeURIComponent(id)}`); } catch { upd.qr[id] = {}; }
-      updRender();
-    }
-  };
-
   $("#gm-tab-upd").addEventListener("click", () => ptSelectTab("upd"));
   $("#upd-on").addEventListener("change", (e) => updPost({ action: e.target.checked ? "enable" : "disable" }));
   $("#upd-check").addEventListener("click", () => updPost({ action: "check" }));
@@ -7045,40 +7136,6 @@
     updRender();
   }));
   $("#gm-pane-upd").addEventListener("click", async (e) => {
-    const old = e.target.closest("[data-upd-old]");
-    if (old) { updOpenOld(old.dataset.updOld); return; }
-    const vs = e.target.closest("[data-upd-vers]");
-    if (vs) {
-      const id = vs.dataset.updVers;
-      vs.disabled = true;
-      try { upd.vers[id] = await api(`/api/v1/updates/versions?id=${encodeURIComponent(id)}`); } catch (err) { upd.vers[id] = { error: err.message }; }
-      updRender();
-      return;
-    }
-    const pick = e.target.closest("[data-upd-pick]");
-    if (pick) { const f = $(`#upd-lver-${pick.dataset.updId}`); if (f) f.value = pick.dataset.updPick; upd.pickSize = pick.dataset.updSize; return; }
-    const lk = e.target.closest("[data-upd-link]");
-    if (lk) {
-      const id = lk.dataset.updLink, url = ($(`#upd-link-${id}`) || {}).value || "", version = ($(`#upd-lver-${id}`) || {}).value || "";
-      if (!url.trim() || !version.trim()) { toast("Bitte SC-Link und Version angeben.", "error"); return; }
-      lk.disabled = true;
-      const body = { action: "link", id, url: url.trim(), version: version.trim() };
-      if (upd.pickSize) body.size = upd.pickSize;
-      try {
-        const r = await api("/api/v1/updates", { method: "POST", body: JSON.stringify(body) });
-        if (r.message) toast(r.message);
-        upd.open = "";
-      } catch (err) {
-        if (/andere[rn]? Version/.test(err.message) && confirm(`${err.message}\n\nTrotzdem laden?`)) {
-          try { const r2 = await api("/api/v1/updates", { method: "POST", body: JSON.stringify(Object.assign(body, { force: true })) }); if (r2.message) toast(r2.message); upd.open = ""; }
-          catch (e2) { toast(e2.message, "error"); }
-        } else toast(err.message, "error");
-      }
-      lk.disabled = false;
-      await loadUpd();
-      updSync();
-      return;
-    }
     const b = e.target.closest("[data-upd-act]");
     if (!b) return;
     const act = b.dataset.updAct, id = b.dataset.updId;
@@ -10056,6 +10113,7 @@
       if (pt.tab === "pkg") loadPackages();
       if (pt.tab === "p4m") { loadP4m(); loadP4mLog(); }
       if (pt.tab === "upd") loadUpd();
+      if (pt.tab === "disc") loadDisc();
       if (pt.tab === "bk") loadBackups();         /* these two have no poll: coming back must show what happened meanwhile */
       if (pt.tab === "hist") loadHistory2();
     }
@@ -10064,6 +10122,7 @@
     pkSync();
     p4mSync();
     updSync();
+    discSync();
     syncLogTail();
   }));
 

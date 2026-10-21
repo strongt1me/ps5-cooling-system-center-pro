@@ -128,7 +128,7 @@ Seiten der Oberfläche: **Profil · Spiele · Payloads · Kühlung · System · 
 - **USB-Abbrüche („Device not configured“)** waren bei uns das Kabel. Die App sagt es jetzt in Klartext.
 - **Spielzeit der App** beginnt mit dem ersten Start der Fassung, die sie zählt, und ist nicht die Spielzeit der Kartenanzeige der Konsole.
 - **Keine Piraterie.** Keine Spiele, Firmware, Schlüssel oder Kopierschutz-Umgehung enthalten, nichts wird aus dem Internet geladen. Kopieren, Konvertieren, Aufteilen und Installieren wirken nur auf Dateien, die du selbst auf der Konsole oder an einem Laufwerk hast. Hilfe zu Raubkopien gibt es hier nicht.
-- **Kein Sony-Produkt**, ohne jede Gewährleistung und Haftung. Das Modifizieren der Konsole geschieht auf eigenes Risiko (Garantie, Sperre, rechtliche Folgen je nach Land).
+- **Kein offizielles Produkt**, ohne jede Gewährleistung und Haftung. Das Modifizieren der Konsole geschieht auf eigenes Risiko (Garantie, Sperre, rechtliche Folgen je nach Land).
 
 ---
 

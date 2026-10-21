@@ -23,7 +23,7 @@
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.72.0"
+#define PS5TM_VERSION        "1.73.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -681,6 +681,12 @@ typedef struct {
 } ps5tm_libdel_t;
 /* 0 and *out filled for a title on the list. */
 int           ps5tm_library_delete_info(const char *title_id, ps5tm_libdel_t *out);
+/* What the title's own sce_sys/param.json says (library.c), read in an image or dump folder without unpacking: its real version
+   and versionFileUri (Sony's update list; "" when absent or not an https .xml). 0 when param.json was read, -1 when not. */
+int           ps5tm_library_param_info(const char *path, const char *format, char *ver, size_t ver_len, char *uri, size_t uri_len);
+/* The backport folder of a title under <scan_root>/backports as ShadowMountPlus picks it (exact title id, else the first folder
+   starting with it, e.g. "PPSA12345 Game Name"). 1 and the path in out, 0 when there is none (library.c). */
+int           ps5tm_backport_dir(const char *scan_root, const char *title_id, char *out, size_t out_len);
 
 /* Deleting a game or one of the app's backups (gamedelete.c). The plan names exactly what would go and hands out a
    token; only a start with that token (once, for ten minutes) deletes. Saved games are never touched. */
@@ -800,10 +806,10 @@ int           ps5tm_lz4_packed_dir(const char *dir);
 struct cJSON *ps5tm_dupimg_list(void);
 int           ps5tm_dupimg_set_aside(const char *path, int undo, char *msg, size_t n);
 
-/* Game updates from Sony's servers (updates.c, after PatchDL 0.3.0): the state of every game and of the running job, the
-   packages in the folder, the versions Prospero/Orbis Patches list for a title, and the actions (body {action, id, ...}:
-   enable, disable, settings, check, update_all, download, resume, install, pause, cancel, delete_pkg, link, forget_link).
-   ps5tm_updates_action returns an HTTP status with a sentence in msg. */
+/* Game updates from Sony's servers (updates.c, after PatchDL 0.3.0): the state of every game and of the running job and the
+   packages in the folder. Direct from Sony only, no link of any kind. The actions (body {action, id, ...}: enable,
+   disable, settings, check, update_all, download, resume, install, pause, cancel, delete_pkg). ps5tm_updates_action
+   returns an HTTP status with a sentence in msg. */
 struct cJSON *ps5tm_updates_json(void);
 /* Payload store (paystore.c): payloads to download from the list of itsPLK's Payload Manager. refresh: 0 the saved list,
    1 fetch it again when it is older than three hours (and was loaded once), 2 always. */
@@ -811,10 +817,17 @@ struct cJSON *ps5tm_paystore_json(int refresh);
 int ps5tm_paystore_action(const struct cJSON *body, char *msg, size_t msg_len);
 int ps5tm_paystore_busy(void);
 struct cJSON *ps5tm_updates_packages_json(void);
-struct cJSON *ps5tm_updates_versions_json(const char *title_id, int *http);
 int           ps5tm_updates_action(const struct cJSON *body, char *msg, size_t n);
 void          ps5tm_updates_boot(void);
 int           ps5tm_updates_busy(void);
+
+/* The optical drive (disc.c, after ps-disc-detect): which disc is in it, its title ID, and an ISO of a PS2 DVD or PS3 disc with
+   CRC-32/MD5/SHA-1 checked against an optional /data/redump.db. GET /api/v1/disc, POST {action: enable, disable, settings
+   (auto_dump), dump, cancel, delete (name)}; ps5tm_disc_action returns an HTTP status with a sentence in msg. */
+struct cJSON *ps5tm_disc_json(void);
+int           ps5tm_disc_action(const struct cJSON *body, char *msg, size_t n);
+int           ps5tm_disc_busy(void);
+void          ps5tm_disc_boot(void);
 
 /* ShadowMountPlus's own interface on 127.0.0.1:10101 — see smp.c. */
 #define PS5TM_SMP_MAX_GAMES 256

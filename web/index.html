@@ -232,6 +232,7 @@
               <button type="button" class="gm-chip" id="gm-tab-pkg" role="tab" aria-selected="false">Pakete</button>
               <button type="button" class="gm-chip" id="gm-tab-upd" role="tab" aria-selected="false">Updates</button>
               <button type="button" class="gm-chip" id="gm-tab-p4m" role="tab" aria-selected="false">PS4 von USB</button>
+              <button type="button" class="gm-chip" id="gm-tab-disc" role="tab" aria-selected="false">Disc</button>
               <button type="button" class="gm-chip" id="gm-tab-bk" role="tab" aria-selected="false">Sicherungen</button>
               <button type="button" class="gm-chip" id="gm-tab-hist" role="tab" aria-selected="false">Verlauf</button>
             </div>
@@ -498,6 +499,43 @@
                   <code>/data/PS5-Cooling-Center/updates</code> liegen:</p>
                 <div id="upd-pkgs"></div>
               </div>
+            </article>
+          </div>
+
+          <!-- Das Laufwerk (disc.c, nach ps-disc-detect, GPL-3.0): welche Disc liegt drin, Titelkennung, Abbild einer PS2-DVD oder PS3-Disc -->
+          <div id="gm-pane-disc" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-drive"/></svg></span><div class="ck-text"><h2>Laufwerk</h2><p class="sub" id="disc-sub">wird gelesen …</p></div></div>
+                <div class="row-gap">
+                  <label class="xswitch" for="disc-on" title="Erst wenn das eingeschaltet ist, fragt die App das Laufwerk (alle anderthalb Sekunden) nach der Disc.">
+                    <span>Einschalten</span>
+                    <span class="switch"><input type="checkbox" id="disc-on"><i></i></span>
+                  </label>
+                  <label class="xswitch" for="disc-auto" title="Legt man eine PS2-DVD oder PS3-Disc ein, wird sofort ein Abbild angelegt.">
+                    <span>Neue Disc automatisch sichern</span>
+                    <span class="switch"><input type="checkbox" id="disc-auto"><i></i></span>
+                  </label>
+                </div>
+              </div>
+              <p class="muted upd-intro">Zeigt, welche Disc im Laufwerk liegt (PS2, PS3, PS4, PS5) und welche Titelkennung sie hat, so wie es die Konsole selbst meldet.
+                Von einer PS2-DVD oder einer PS3-Disc legt die App auf Wunsch ein Abbild (ISO) an und rechnet CRC-32, MD5 und SHA-1 aus.
+                Liegt auf der Konsole eine Redump-Liste (<code>/data/redump.db</code>), bekommt das Abbild den Namen aus der Liste und wird dagegen geprüft.
+                PS1- und PS2-CDs kann das Laufwerk der PS5 nicht lesen, PS4- und PS5-Discs werden erkannt und nicht kopiert.</p>
+              <div id="disc-now"></div>
+            </article>
+            <div class="upd-job" id="disc-job" hidden></div>
+            <article class="card">
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-image"/></svg></span><div class="ck-text"><h2>Abbilder</h2><p class="sub" id="disc-dir-sub"></p></div></div></div>
+              <div id="disc-dumps"></div>
+            </article>
+            <article class="card">
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-list"/></svg></span><div class="ck-text"><h2>Redump-Liste</h2><p class="sub" id="disc-redump-sub"></p></div></div></div>
+              <p class="muted upd-hint" id="disc-redump-hint"></p>
+            </article>
+            <article class="card">
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-log"/></svg></span><div class="ck-text"><h2>Ereignisse</h2><p class="sub">die letzten am Laufwerk</p></div></div></div>
+              <div id="disc-events"></div>
             </article>
           </div>
 

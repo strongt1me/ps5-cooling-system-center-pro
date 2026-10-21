@@ -8,6 +8,7 @@
  * Formats (found by what the first blocks say, not by the file name):
  *   .exfat   an exFAT file system
  *   .ffpfsc  a PFS container (version 2) holding one PFSC-compressed file, which is an exFAT image
+ *   .ffpfs   the same container, holding that one file uncompressed
  *   .ffpkg   a UFS2 file system
  * Anything else: imgr_open() answers NULL and the caller keeps its other way.
  *
@@ -23,7 +24,7 @@ typedef struct imgr imgr_t;
 /* NULL when the file is not readable or not an image of a known kind; err (may be NULL) gets the reason. */
 imgr_t *imgr_open(const char *image_path, char *err, size_t err_len);
 void    imgr_close(imgr_t *r);
-/* "exfat", "ffpfsc" or "ffpkg". */
+/* "exfat", "ffpfsc", "ffpfs" or "ffpkg". */
 const char *imgr_kind(const imgr_t *r);
 
 /* Reads up to n bytes of the file at path from offset off. Returns the bytes read (0 at the end), -1 when there is no

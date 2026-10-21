@@ -37,6 +37,7 @@
  * ShadowMountPlus move or unpack: they would share the drives' room, and a
  * move deletes what a conversion reads. */
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -59,6 +60,7 @@
 #include "conv_pfs.h"
 #include "conv_ufs2.h"
 #include "ioerr.h"
+#include "imgread.h"
 #include "iopolicy.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
@@ -687,6 +689,128 @@ cleanup:
 }
 
 
+/* ------------------------------------------------------- compression and streaming games (21.10.2026) */
+
+/* A compressed image (ffpfsc) is unpacked by the console again and again while the game reads. Games with a great deal of data
+   or with texture streaming can stutter then. Nothing here can know a game's engine; it looks for what such games have in
+   common and the page asks before it packs one: a lot of data altogether, big streaming containers (Unreal's .ucas/.utoc/.pak,
+   Anvil's .forge, id Tech's .streamdb/.resources, Frostbite's .cas, Rockstar's .rpf) or a folder named for streaming. */
+#define STREAM_DATA_MIN     (40ull << 30)
+#define STREAM_CONTAINER_MIN (4ull << 30)
+#define STREAM_DIR_MIN      (2ull << 30)
+#define STREAM_MAX_ENTRIES  3000000u
+
+typedef struct {
+  uint64_t data, container, sdir;
+  char     exts[4][10];
+  int      n_exts;
+  char     dir_name[64];
+  unsigned entries;
+} stream_scan_t;
+
+static void
+stream_note(stream_scan_t *x, const char *path, uint64_t size) {
+  x->data += size;
+  const char *sl = strrchr(path, '/');
+  const char *name = sl ? sl + 1 : path;
+  const char *dot = strrchr(name, '.');
+  static const char *const cont[] = { ".ucas", ".utoc", ".pak", ".forge", ".streamdb", ".resources", ".cas", ".rpf", NULL };
+  if(dot) {
+    for(int i = 0; cont[i]; i++) {
+      if(strcasecmp(dot, cont[i]) != 0) continue;
+      x->container += size;
+      int have = 0;
+      for(int k = 0; k < x->n_exts; k++) if(!strcasecmp(x->exts[k], cont[i])) have = 1;
+      if(!have && x->n_exts < 4) snprintf(x->exts[x->n_exts++], sizeof x->exts[0], "%s", cont[i]);
+      break;
+    }
+  }
+  /* a folder whose name says streaming: StreamingAssets, Streaming, streamed ... */
+  for(const char *c = path; *c;) {
+    while(*c == '/') c++;
+    const char *e = strchr(c, '/');
+    if(!e) break;                                       /* the last part is the file */
+    if(!strncasecmp(c, "stream", 6)) {
+      x->sdir += size;
+      if(!x->dir_name[0]) snprintf(x->dir_name, sizeof x->dir_name, "%.*s", (int)(e - c), c);
+      break;
+    }
+    c = e;
+  }
+}
+
+static void
+stream_walk_dir(stream_scan_t *x, const char *dir, const char *rel, int depth) {
+  if(depth > 24) return;
+  DIR *d = opendir(dir);
+  if(!d) return;
+  struct dirent *e;
+  while((e = readdir(d)) && x->entries < STREAM_MAX_ENTRIES) {
+    if(e->d_name[0] == '.' && (!e->d_name[1] || (e->d_name[1] == '.' && !e->d_name[2]))) continue;
+    char full[PATH_MAX], r[PATH_MAX];
+    struct stat st;
+    if(snprintf(full, sizeof full, "%s/%s", dir, e->d_name) >= (int)sizeof full) continue;
+    if(snprintf(r, sizeof r, "%s/%s", rel, e->d_name) >= (int)sizeof r) continue;
+    if(lstat(full, &st) != 0) continue;
+    x->entries++;
+    if(S_ISDIR(st.st_mode)) stream_walk_dir(x, full, r, depth + 1);
+    else if(S_ISREG(st.st_mode)) stream_note(x, r, (uint64_t)st.st_size);
+  }
+  closedir(d);
+}
+
+static int
+stream_img_cb(const imgr_entry_t *e, void *ctx) {
+  stream_scan_t *x = ctx;
+  if(!e->is_dir) stream_note(x, e->path, e->size);
+  return ++x->entries >= STREAM_MAX_ENTRIES;
+}
+
+typedef struct { const char *source; int folder; stream_scan_t res; } stream_job_t;
+
+/* On a thread of its own with a large stack: an image goes through imgread.c, whose readers do not fit a connection thread's. */
+static void *
+stream_thread(void *arg) {
+  stream_job_t *j = arg;
+  if(j->folder) stream_walk_dir(&j->res, j->source, "", 0);
+  else {
+    char err[160];
+    imgr_t *r = imgr_open(j->source, err, sizeof err);
+    if(r) { imgr_walk(r, stream_img_cb, &j->res); imgr_close(r); }
+  }
+  return NULL;
+}
+
+/* {risky, data_bytes, big_data, container_bytes, containers:[".pak"...], stream_dir, stream_dir_bytes}; never fails: when the
+   source cannot be read the answer is "not risky" (the page then does not ask). */
+static cJSON *
+stream_risk_json(const char *source, int folder, uint64_t raw_bytes) {
+  stream_job_t *j = calloc(1, sizeof *j);
+  cJSON *o = cJSON_CreateObject();
+  if(!j) return o;
+  j->source = source;
+  j->folder = folder;
+  pthread_t th;
+  pthread_attr_t at;
+  pthread_attr_init(&at);
+  pthread_attr_setstacksize(&at, 1u << 20);
+  if(pthread_create(&th, &at, stream_thread, j) == 0) pthread_join(th, NULL);
+  pthread_attr_destroy(&at);
+  stream_scan_t *x = &j->res;
+  uint64_t data = x->data ? x->data : raw_bytes;
+  int big = data >= STREAM_DATA_MIN, cont = x->container >= STREAM_CONTAINER_MIN, sdir = x->sdir >= STREAM_DIR_MIN;
+  cJSON_AddBoolToObject(o, "risky", big || cont || sdir);
+  cJSON_AddNumberToObject(o, "data_bytes", (double)data);
+  cJSON_AddBoolToObject(o, "big_data", big);
+  cJSON_AddNumberToObject(o, "container_bytes", cont ? (double)x->container : 0);
+  cJSON *ex = cJSON_AddArrayToObject(o, "containers");
+  if(cont) for(int k = 0; k < x->n_exts; k++) cJSON_AddItemToArray(ex, cJSON_CreateString(x->exts[k]));
+  cJSON_AddStringToObject(o, "stream_dir", sdir ? x->dir_name : "");
+  cJSON_AddNumberToObject(o, "stream_dir_bytes", sdir ? (double)x->sdir : 0);
+  free(j);
+  return o;
+}
+
 /* --------------------------------------------------------------- interface */
 
 cJSON *
@@ -745,6 +869,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   cJSON_AddStringToObject(root, "kind", folder ? "folder" : "file");
   cJSON_AddStringToObject(root, "stem", stem);
   cJSON_AddNumberToObject(root, "raw_bytes", (double)raw);
+  cJSON_AddItemToObject  (root, "stream_risk", stream_risk_json(source, folder, raw));
   cJSON_AddNumberToObject(root, "ffpkg_bytes", (double)ffpkg_bytes);
   if(ffpkg_why[0]) cJSON_AddStringToObject(root, "ffpkg_error", ffpkg_why);
   cJSON_AddNumberToObject(root, "files", files);

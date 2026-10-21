@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="web/img/app-mark.png" alt="" width="96" height="96">
+<img src="docs/images/header.jpg" alt="PS5 Cooling &amp; System Center - Pro" width="860">
 
 # PS5 Cooling & System Center - Pro
 
 **Contrôle du ventilateur, surveillance de la température et centre système pour la PlayStation 5 jailbreakée,<br>utilisable dans le navigateur de la console ou depuis tout appareil du réseau domestique, en six langues.**
 
-![Version](https://img.shields.io/badge/Version-1.72.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.73.0-1f6feb)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0--or--later-blue)
 ![Plateforme](https://img.shields.io/badge/Plateforme-PS5%20Payload-003791)
 ![Langues](https://img.shields.io/badge/Langues-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -132,6 +132,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 - Convertir en images exFAT, ffpkg et ffpfsc sans PC ; tout est relu et vérifié après écriture, avec un fichier `.sha256`.
 - Asset packs LZ4, index AMPR, APR-EMU, stub PlayGo et modules DLC par jeu ; vérifier, décompresser et réparer des images.
 - PS4 depuis USB : faux PKG PS4 d'un disque USB dans la bibliothèque sans installation (PS4Mount de gasb07).
+- Disc : indique quel disque est dans le lecteur (PS2/PS3/PS4/PS5, ID de titre) et crée une image des DVD PS2 et des disques PS3 avec CRC-32, MD5 et SHA-1, vérifiée avec Redump si on le souhaite (d'après ps-disc-detect).
 - Temps de jeu avec températures, sauvegarde et restauration des données de jeu, trouver, découper et installer des paquets, historique de toutes les tâches.
 
 **Gestion**
@@ -144,7 +145,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 
 **Technique**
 - Serveur HTTP maison sans bibliothèque tierce, [interface JSON](docs/API.md) documentée, réglages dans `/data/PS5-Cooling-Center/config.json`.
-- Aucun accès à Internet, sauf si vous activez les **mises à jour des jeux** (désactivées par défaut) : l'appli interroge alors les serveurs de téléchargement de Sony et, pour les anciens patchs, prosperopatches.com ou orbispatches.com au sujet des mises à jour de vos propres jeux. De même, « Télécharger des payloads » ne récupère la liste et les fichiers sur GitHub qu'après un clic sur le bouton. Sinon, elle ne parle qu'aux programmes de la console et aux navigateurs du réseau domestique.
+- Aucun accès à Internet, sauf si vous activez les **mises à jour des jeux** (désactivées par défaut) : l'appli interroge alors les serveurs de téléchargement officiels au sujet des mises à jour de vos propres jeux. De même, « Télécharger des payloads » ne récupère la liste et les fichiers sur GitHub qu'après un clic sur le bouton. Sinon, elle ne parle qu'aux programmes de la console et aux navigateurs du réseau domestique.
 
 </details>
 
@@ -153,7 +154,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 1. Télécharger `PS5_Cooling_System_Center_v<version>.elf` depuis les [Releases](../../releases).
 2. L'envoyer à la console (chargeur ELF, port **9021**), par exemple :
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.72.0.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.73.0.elf
    ```
 3. Ouvrir **`http://<IP-PS5>:8086`** dans un navigateur (la notification en haut à gauche de la TV affiche aussi l'adresse).
 
@@ -231,19 +232,19 @@ Le résultat est `PS5_Cooling_Center.elf` ; `tools/make_starter.sh` crée la vig
 ## Mentions légales et clause de non-responsabilité
 
 > [!CAUTION]
-> **Pas un produit Sony, pas de piratage, aucune responsabilité.** Ce projet n'a aucun lien avec Sony. Il ne contient ni jeux, ni firmware, ni clés Sony (seulement une clé publiquement connue pour des paquets de test créés soi-même, voir THIRD_PARTY_NOTICES.md), ni code pour contourner une protection contre la copie, et il ne télécharge rien depuis Internet sauf, si vous les activez, les mises à jour officielles de vos propres jeux depuis les serveurs de Sony. Modifier une console peut coûter la garantie et le compte ; le risque est pour qui le fait. Le programme est fourni **sans aucune garantie**.
+> **Pas un produit officiel, pas de piratage, aucune responsabilité.** Ce projet n'a aucun lien avec les détenteurs des droits de la console. Il ne contient ni jeux, ni firmware, ni clés de tiers (seulement une clé publiquement connue pour des paquets de test créés soi-même, voir THIRD_PARTY_NOTICES.md), ni code pour contourner une protection contre la copie, et il ne télécharge rien depuis Internet sauf, si vous les activez, les mises à jour officielles de vos propres jeux depuis les serveurs officiels. Modifier une console peut coûter la garantie et le compte ; le risque est pour qui le fait. Le programme est fourni **sans aucune garantie**.
 
 <details>
 <summary>Texte complet</summary>
 
 > Cette section est une information générale et non un conseil juridique. Toute personne utilisant le projet est responsable de s'assurer que son usage est autorisé dans son pays et vis-à-vis de ses partenaires contractuels.
 
-- **Pas un produit Sony.** « PlayStation », « PS5 » et les logos associés sont des marques de Sony Interactive Entertainment Inc. Ce projet n'a aucun lien avec Sony et n'est ni soutenu ni approuvé par Sony. Les autres noms appartiennent à leurs propriétaires respectifs.
+- **Pas un produit officiel.** « PlayStation », « PS5 » et les logos associés sont des marques de leurs détenteurs respectifs. Ce projet n'a aucun lien avec eux et n'est ni soutenu ni approuvé par eux. Les autres noms appartiennent à leurs propriétaires respectifs.
 - **Ta console, ta responsabilité.** Le programme ne fonctionne que sur une console modifiée par son propriétaire. La modification peut enfreindre les conditions d'utilisation et entraîner la perte de la garantie ou le blocage du compte ou de la console, et dans certains pays des suites juridiques. Le risque est pour qui modifie la console et utilise ce programme.
 - **Pas de piratage.** Ce projet n'est **pas** fait pour obtenir, diffuser ou utiliser des copies pirates, et ne le soutient pas. Copier, déplacer et convertir n'agissent que sur des jeux déjà présents sur ta console et servent aux sauvegardes de jeux acquis légalement. Trouver, découper, installer et monter des paquets depuis USB n'agissent que sur des paquets que tu as toi-même mis sur la console ou un disque ; l'appli n'en procure aucun. Diffuser des contenus protégés par le droit d'auteur est une infraction dans la plupart des pays. Aucune aide à ce sujet ici, ni dans les issues.
-- **Aucun fichier Sony dans le dépôt.** Bibliothèques système, firmware et fichiers propriétaires du SDK ne sont ni fournis ni acceptés (voir [CONTRIBUTING](CONTRIBUTING.md)). Les 30 images de profil ont été créées par l'auteur.
+- **Aucun fichier système de tiers dans le dépôt.** Bibliothèques système, firmware et fichiers propriétaires du SDK ne sont ni fournis ni acceptés (voir [CONTRIBUTING](CONTRIBUTING.md)). Les 30 images de profil ont été créées par l'auteur.
 - **Aucune garantie, aucune responsabilité.** Le programme intervient sur le contrôle du ventilateur et sur des fonctions système de la console. Il est fourni tel quel, **sans aucune garantie** (GNU GPL, sections 15 et 16). L'auteur n'est pas responsable des dommages aux consoles, données ou comptes. Une console poussiéreuse refroidit moins bien, quelle que soit la régulation du ventilateur.
-- **Confidentialité.** Historique, journal et réglages restent sur la console dans `/data/PS5-Cooling-Center/`. L'appli n'envoie aucune donnée sur Internet ; seulement avec les mises à jour des jeux activées, elle interroge les serveurs de Sony et des fournisseurs DNS sur les ID de titre de vos propres jeux. Seule exception dans le navigateur : la page « Crédits » charge une fois la petite icône de github.com pour voir si le navigateur a Internet ; ce n'est qu'alors que les liens sont cliquables.
+- **Confidentialité.** Historique, journal et réglages restent sur la console dans `/data/PS5-Cooling-Center/`. L'appli n'envoie aucune donnée sur Internet ; seulement avec les mises à jour des jeux activées, elle interroge les serveurs de mise à jour officiels et des fournisseurs DNS sur les ID de titre de vos propres jeux. Seule exception dans le navigateur : la page « Crédits » charge une fois la petite icône de github.com pour voir si le navigateur a Internet ; ce n'est qu'alors que les liens sont cliquables.
 - **Les projets tiers** sont sous leurs propres licences, voir [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 </details>
 
