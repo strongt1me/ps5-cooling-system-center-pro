@@ -645,6 +645,42 @@
               <div id="sv-backups"></div>
               <p class="muted sv-hint sv-unfinished" id="sv-unfinished" hidden></p>
             </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6"/><path d="M16 19h6m-3-3v6"/><path d="M8 10h8M8 14h5"/></svg></span><div class="ck-text"><h2>Spielstand neu signieren</h2><p class="sub" id="sg-sub">PS4 und PS5 · Slot auf anderen Benutzer übertragen</p></div></div>
+              </div>
+              <p class="muted sv-intro">Überträgt einen verschlüsselten Spielstand so, dass ein anderer Benutzer auf dieser Konsole ihn öffnen kann.
+                Bei PS4-Spielständen wird ein vorhandener Spielstand des Zielbenutzers für dasselbe Spiel als Vorlage benötigt.
+                Läuft gerade ein Spiel, ist diese Funktion gesperrt.</p>
+              <div class="sg-form">
+                <div class="sg-row">
+                  <div class="sg-col">
+                    <label class="sv-label" for="sg-src">Quellbenutzer</label>
+                    <select id="sg-src" class="sv-sel"><option value="">— Benutzer wählen —</option></select>
+                  </div>
+                  <div class="sg-col">
+                    <label class="sv-label" for="sg-dst">Zielbenutzer</label>
+                    <select id="sg-dst" class="sv-sel"><option value="">— Benutzer wählen —</option></select>
+                  </div>
+                </div>
+                <div class="sg-row">
+                  <div class="sg-col">
+                    <label class="sv-label" for="sg-title">Spiel</label>
+                    <select id="sg-title" class="sv-sel"><option value="">— erst Benutzer wählen —</option></select>
+                  </div>
+                  <div class="sg-col">
+                    <label class="sv-label" for="sg-slot">Slot</label>
+                    <select id="sg-slot" class="sv-sel"><option value="">— erst Spiel wählen —</option></select>
+                  </div>
+                </div>
+              </div>
+              <p class="muted sv-hint" id="sg-hint"></p>
+              <div class="cp-actions sv-actions">
+                <button type="button" class="btn ghost" id="sg-view" disabled>Slot-Inhalt ansehen</button>
+                <button type="button" class="btn primary" id="sg-start" disabled>Slot signieren</button>
+              </div>
+            </article>
           </div>
         </section>
 

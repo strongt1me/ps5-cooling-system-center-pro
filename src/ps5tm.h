@@ -1117,6 +1117,22 @@ int  ps5tm_saves_delete_start(const char *uid, const char *id, const char *targe
 void ps5tm_saves_cancel(void);
 int  ps5tm_saves_busy(void);                    /* 1 while a job with the saved games is under way */
 
+/* Re-sign a save for a different user (savesign.c).
+ * src_uid / dst_uid: 8-char hex user-folder names.
+ * title_id: PPSA…/CUSA… string.  slot: dir_name (no leading "sdimg_").
+ * Returns HTTP status code; err receives a German error message on failure. */
+int  ps5tm_savesign_start(const char *src_uid, const char *dst_uid,
+                          const char *title_id, const char *slot,
+                          char *err, size_t err_len);
+
+/* View the contents of one save image as a cJSON array of {name, size} objects.
+ * Returns 0 on success (*out_json caller-owned), -1 on failure. */
+int  ps5tm_savesign_view(const char *uid, const char *title_id,
+                         const char *slot, struct cJSON **out_json);
+
+/* Return 1 when uid is a valid 8-char lowercase hex user-folder name. */
+int  ps5tm_savesign_uid_valid(const char *uid);
+
 
 /* ------------------------------------------------------ running payloads */
 

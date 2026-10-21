@@ -3442,6 +3442,45 @@ handle_saves_restore(int fd, const ps5tm_request_t *req) {
 }
 
 static void
+handle_saves_resign(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *js = body ? cJSON_GetObjectItem(body, "src_uid")  : NULL;
+  const cJSON *jd = body ? cJSON_GetObjectItem(body, "dst_uid")  : NULL;
+  const cJSON *jt = body ? cJSON_GetObjectItem(body, "title_id") : NULL;
+  const cJSON *jl = body ? cJSON_GetObjectItem(body, "slot")     : NULL;
+  char err[640] = "";
+  int st = ps5tm_savesign_start(
+      cJSON_IsString(js) ? js->valuestring : NULL,
+      cJSON_IsString(jd) ? jd->valuestring : NULL,
+      cJSON_IsString(jt) ? jt->valuestring : NULL,
+      cJSON_IsString(jl) ? jl->valuestring : NULL,
+      err, sizeof(err));
+  cJSON_Delete(body);
+  saves_started(fd, st, "resign_refused", err);
+}
+
+static void
+handle_saves_view(int fd, const ps5tm_request_t *req) {
+  char uid[16] = "", title[20] = "", slot[72] = "";
+  query_param(req->query, "uid",   uid,   sizeof(uid));
+  query_param(req->query, "title", title, sizeof(title));
+  query_param(req->query, "slot",  slot,  sizeof(slot));
+  if(!ps5tm_savesign_uid_valid(uid) || !title[0] || !slot[0]) {
+    ps5tm_http_send_error(fd, 400, "bad_request",
+                          "uid, title und slot erforderlich.");
+    return;
+  }
+  cJSON *arr = NULL;
+  if(ps5tm_savesign_view(uid, title, slot, &arr) != 0 || !arr) {
+    ps5tm_http_send_error(fd, 500, "view_failed",
+                          "Spielstand konnte nicht gemountet oder gelesen werden.");
+    return;
+  }
+  send_cjson(fd, 200, arr);
+  cJSON_Delete(arr);
+}
+
+static void
 handle_logs_tail(int fd, const ps5tm_request_t *req) {
   unsigned want = 40;
   if(req->query[0]) {
@@ -4999,10 +5038,16 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
+  if(!strcmp(req->path, "/api/v1/saves/view")) {
+    handle_saves_view(fd, req);
+    return;
+  }
+
   if(!strcmp(req->path, "/api/v1/saves/backup") ||
      !strcmp(req->path, "/api/v1/saves/verify") ||
      !strcmp(req->path, "/api/v1/saves/restore") ||
      !strcmp(req->path, "/api/v1/saves/delete") ||
+     !strcmp(req->path, "/api/v1/saves/resign") ||
      !strcmp(req->path, "/api/v1/saves/cancel")) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                          "Nur POST erlaubt."); return; }
@@ -5010,6 +5055,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     else if(!strcmp(req->path, "/api/v1/saves/verify"))  handle_saves_verify(fd, req);
     else if(!strcmp(req->path, "/api/v1/saves/restore")) handle_saves_restore(fd, req);
     else if(!strcmp(req->path, "/api/v1/saves/delete"))  handle_saves_delete(fd, req);
+    else if(!strcmp(req->path, "/api/v1/saves/resign"))  handle_saves_resign(fd, req);
     else { ps5tm_saves_cancel(); send_cjson(fd, 200, ps5tm_saves_job_json()); }
     return;
   }

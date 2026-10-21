@@ -8992,6 +8992,7 @@
     svRenderStart();
     svRenderBackups();
     svRenderJob();
+    if (typeof svRenderSg === "function") svRenderSg();
   };
 
   const loadSaves = async () => {
@@ -9153,6 +9154,109 @@
         });
     }
   });
+
+  /* ── Spielstand neu signieren ───────────────────────────────────────
+   * Überträgt einen verschlüsselten Spielstand auf einen anderen Benutzer.
+   * Benutzt sv.data (von loadSaves) für Benutzer- und Titellisten. */
+  const sgPane = $("#gm-pane-saves");
+
+  const sgPopulateUsers = () => {
+    const users = sv.data ? sv.data.users : [];
+    ["sg-src", "sg-dst"].forEach((id) => {
+      const sel = $(`#${id}`);
+      const prev = sel.value;
+      sel.innerHTML = `<option value="">— Benutzer wählen —</option>`
+        + users.map((u) => `<option value="${esc(u.uid)}"${u.uid === prev ? " selected" : ""}>${esc(u.uid)}${u.name ? " · " + esc(u.name) : ""}</option>`).join("");
+    });
+    sgPopulateTitles();
+  };
+
+  const sgPopulateTitles = () => {
+    const srcUid = $("#sg-src").value;
+    const user = sv.data && srcUid ? sv.data.users.find((u) => u.uid === srcUid) : null;
+    const titles = user ? user.titles : [];
+    const tSel = $("#sg-title");
+    const prev = tSel.value;
+    tSel.innerHTML = `<option value="">— ${srcUid ? "Spiel wählen" : "erst Benutzer wählen"} —</option>`
+      + titles.map((t) => `<option value="${esc(t.id)}"${t.id === prev ? " selected" : ""}>${esc(t.id)}${t.name ? " · " + esc(t.name) : ""}</option>`).join("");
+    sgPopulateSlots();
+  };
+
+  const sgPopulateSlots = () => {
+    const srcUid = $("#sg-src").value;
+    const titleId = $("#sg-title").value;
+    const user = sv.data && srcUid ? sv.data.users.find((u) => u.uid === srcUid) : null;
+    const title = user && titleId ? user.titles.find((t) => t.id === titleId) : null;
+    const slots = title && title.slots ? title.slots : [];
+    const sSel = $("#sg-slot");
+    const prev = sSel.value;
+    sSel.innerHTML = `<option value="">— ${titleId ? "Slot wählen" : "erst Spiel wählen"} —</option>`
+      + slots.map((s) => `<option value="${esc(s)}"${s === prev ? " selected" : ""}>${esc(s)}</option>`).join("");
+    sgUpdateHint();
+  };
+
+  const sgUpdateHint = () => {
+    const src = $("#sg-src").value, dst = $("#sg-dst").value;
+    const title = $("#sg-title").value, slot = $("#sg-slot").value;
+    const hint = $("#sg-hint");
+    const ok = src && dst && title && slot && src !== dst;
+    const busy = svActive();
+    $("#sg-start").disabled = !ok || busy;
+    $("#sg-view").disabled  = !(src && title && slot);
+    if (busy) {
+      hint.textContent = "Ein anderer Spielstand-Vorgang läuft gerade.";
+    } else if (!ok) {
+      hint.textContent = (src && dst && src === dst) ? "Quell- und Zielbenutzer sind gleich." : "";
+    } else {
+      const ps4 = title.startsWith("CUSA") || title.startsWith("PCSE") || title.startsWith("PCSA");
+      hint.textContent = ps4
+        ? `PS4-Spielstand: Der Zielbenutzer muss für „${title}" bereits einen eigenen Spielstand haben.`
+        : "Vor dem Überschreiben wird der bisherige Spielstand des Zielbenutzers automatisch gesichert.";
+    }
+  };
+
+  sgPane.addEventListener("change", (e) => {
+    if (e.target.id === "sg-src") { sgPopulateTitles(); return; }
+    if (e.target.id === "sg-title") { sgPopulateSlots(); return; }
+    if (e.target.id === "sg-dst") { sgUpdateHint(); return; }
+    if (e.target.id === "sg-slot") { sgUpdateHint(); return; }
+  });
+
+  sgPane.addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+
+    if (b.id === "sg-view") {
+      const uid = $("#sg-src").value, title = $("#sg-title").value, slot = $("#sg-slot").value;
+      if (!uid || !title || !slot) return;
+      b.disabled = true;
+      try {
+        const files = await api(`/api/v1/saves/view?uid=${encodeURIComponent(uid)}&title=${encodeURIComponent(title)}&slot=${encodeURIComponent(slot)}`);
+        if (!Array.isArray(files) || !files.length) { toast("Keine Dateien im Slot gefunden.", "info"); return; }
+        const lines = files.map((f) => `${f.name}  (${(f.size / 1024).toFixed(1)} KiB)`).join("\n");
+        toast(`Slot-Inhalt (${files.length} Dateien):\n${lines}`, "info", 8000);
+      } catch (err) { toast(err.message, "error"); }
+      finally { b.disabled = false; }
+      return;
+    }
+
+    if (b.id === "sg-start") {
+      const src = $("#sg-src").value, dst = $("#sg-dst").value;
+      const title = $("#sg-title").value, slot = $("#sg-slot").value;
+      if (!src || !dst || !title || !slot) return;
+      b.disabled = true;
+      try {
+        svStarted(await api("/api/v1/saves/resign", { method: "POST",
+          body: JSON.stringify({ src_uid: src, dst_uid: dst, title_id: title, slot }) }));
+      } catch (err) { toast(err.message, "error"); }
+      finally { b.disabled = false; }
+    }
+  });
+
+  /* Wenn sv.data sich ändert, Dropdowns neu befüllen.
+   * svRender ist eine const — wir hängen uns an loadSaves heran, indem sgPopulateUsers()
+   * am Ende von svRender aufgerufen wird. Der Aufruf steht in svRenderSg (unten). */
+  const svRenderSg = () => { sgPopulateUsers(); };
 
   /* ── Pakete (04.10.2026) ─────────────────────────────────────────────
    * Spiel-Pakete (.pkg) auf Sticks, Discs und im Konsolenspeicher (pkgscan.c, /api/v1/packages):

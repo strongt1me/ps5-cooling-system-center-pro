@@ -1,5 +1,19 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Spielstand neu signieren
+- Neuer Bereich **Spielstand neu signieren** auf der Spielstände-Seite: überträgt einen verschlüsselten Spielstand so, dass ein anderer Benutzer auf dieser Konsole ihn öffnen kann
+- PS5-Spielstände: `ACCOUNT_ID` und `USER_ID` im eingebetteten `param.sfo` werden auf den Zielbenutzer gesetzt; der bisherige Spielstand des Zielbenutzers wird davor automatisch gesichert
+- PS4-Spielstände: der `PARAMS`-Block (1024 Byte, enthält den per-Benutzer-HMAC) wird aus einem vorhandenen Spielstand des Zielbenutzers für dasselbe Spiel übernommen; ohne Vorlage gibt die App eine klare Fehlermeldung
+- Die Konsolen-Datenbank (`savedata[_prospero].db`) wird nach dem Umschreiben aktualisiert
+- Schaltfläche **Slot-Inhalt ansehen** zeigt die Dateien im Spielstand-Image (schreibgeschützt)
+- Vorgang teilt den Auftrags-Slot mit der Sicherungsfunktion (kein gleichzeitiger Betrieb); Fortschritt und Ergebnis erscheinen in der Auftragskarte
+- Neue Quelldateien: `src/savesfo.c`, `src/savemount.c`, `src/savedb.c`, `src/savesign.c`; SQLite 3.46.0 (Public Domain) als eingebettete Schreibbibliothek für den DB-Zugriff
+
+### PS4 von USB
+- Die Suche nach PKG-Dateien nimmt ab Werk die oberste Ebene **und** den Ordner `pkg` jedes Laufwerks (vorher nur die oberste Ebene); wer schon Ordner in den Einstellungen hat, behält seine Liste
+
 ## v1.73.1
 
 ### PatchDL 0.3.4: Weboberfläche nach Netzwerkwechsel
