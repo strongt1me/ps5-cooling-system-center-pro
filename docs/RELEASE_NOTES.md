@@ -20,7 +20,9 @@
 
 **SHA-256**
 ```
-SHA256_PLACEHOLDER
+c0b440f6032cbf3785685bd01e826dddc5dc7e98d37dd4a4b3a027ca81ef122f  LIESMICH.txt
+dd8116e215f186b2b96354abad86c15ac1744575463a3d11510f0ae8efdabf87  PPSA86921.zip
+1378dd6a0622b9186e21214016dc70e5b349a3d44cfffe8f065d9e0c6b38c52f  PS5_Cooling_System_Center_v1.73.1.elf
 ```
 
 **Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.73.0...v1.73.1
