@@ -225,7 +225,7 @@ read_ampridx3(const char *file, ents_t *out, char *err, size_t en) {
   size_t len = (size_t)st.st_size;
   if(memcmp(b, "AMPRIDX3", 8) || g32(b, 8) != 3 || g32(b, 12) != 24) { free(b); say(err, en, "Der AMPR-Index hat ein unbekanntes Format."); return -1; }
   uint64_t count = g64(b, 16), path_bytes = g64(b, 24);
-  if(count > MAX_FILES || 48 + count * 24 + path_bytes > len) { free(b); say(err, en, "Der AMPR-Index ist abgeschnitten."); return -1; }
+  if(count > MAX_FILES || path_bytes > len || 48 + count * 24 + path_bytes > len) { free(b); say(err, en, "Der AMPR-Index ist abgeschnitten."); return -1; }
   ent_t *e = calloc(count ? count : 1, sizeof(ent_t));
   if(!e) { free(b); say(err, en, "Kein Speicher."); return -1; }
   size_t blob = 48 + (size_t)count * 24;
@@ -370,7 +370,8 @@ man_load(const char *path, man_t *m, int heavy, char *err, size_t en) {
   if(nf > MAX_FILES || nc > MAX_CHUNKS || np > MAX_PACKS) BADM("zu viele Einträge");
   uint64_t files_off = INDEX_HEADER_SIZE, chunks_off = files_off + nf * FILE_REC, packs_off = chunks_off + nc * CHUNK_REC;
   uint64_t strings_off = packs_off + (uint64_t)np * PACK_REC;
-  if(g64(b, 72) != files_off || g64(b, 80) != chunks_off || g64(b, 88) != packs_off || g64(b, 96) != strings_off || strings_off + g64(b, 104) != len) BADM("Aufbau");
+  if(g64(b, 72) != files_off || g64(b, 80) != chunks_off || g64(b, 88) != packs_off || g64(b, 96) != strings_off || strings_off > len ||
+     strings_off + g64(b, 104) != len) BADM("Aufbau");
   memcpy(m->build, b + 24, 16);
   m->nf = (size_t)nf; m->nc = (size_t)nc; m->np = np; m->nstr = (size_t)g64(b, 104);
   m->f = calloc(nf ? nf : 1, sizeof(frec_t));

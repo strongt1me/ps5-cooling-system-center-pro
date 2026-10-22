@@ -360,9 +360,10 @@ list_versions(const al_kind_t *k, al_ver_t **out) {
     al_ver_t x;
     if(!read_version(k, e->d_name, &x)) continue;
     if(n == cap) {
-      al_ver_t *nv = realloc(v, (cap *= 2) * sizeof(*v));
-      if(!nv) break;
+      al_ver_t *nv = realloc(v, cap * 2 * sizeof(*v));
+      if(!nv) break;                       /* cap stays what v really holds */
       v = nv;
+      cap *= 2;
     }
     v[n++] = x;
   }

@@ -817,6 +817,10 @@ struct cJSON *ps5tm_paystore_json(int refresh);
 int ps5tm_paystore_action(const struct cJSON *body, char *msg, size_t msg_len);
 int ps5tm_paystore_busy(void);
 struct cJSON *ps5tm_updates_packages_json(void);
+/* The test of one game's update path (update list, package list, first bytes of a piece, room). NULL with an HTTP status in *http. */
+struct cJSON *ps5tm_updates_diag(const char *title_id, char *msg, size_t n, int *http);
+/* The versions the history sites (prosperopatches.com / orbispatches.com) list for a game, asked for after a click. NULL with an HTTP status in *http. */
+struct cJSON *ps5tm_updates_versions(const char *title_id, char *msg, size_t n, int *http);
 int           ps5tm_updates_action(const struct cJSON *body, char *msg, size_t n);
 void          ps5tm_updates_boot(void);
 int           ps5tm_updates_busy(void);
@@ -1116,23 +1120,6 @@ int  ps5tm_saves_restore_start(const char *path, const char *uid, const char *ti
 int  ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, int no_backup, char *err, size_t err_len);
 void ps5tm_saves_cancel(void);
 int  ps5tm_saves_busy(void);                    /* 1 while a job with the saved games is under way */
-
-/* Re-sign a save for a different user (savesign.c).
- * src_uid / dst_uid: 8-char hex user-folder names.
- * title_id: PPSA…/CUSA… string.  slot: dir_name (no leading "sdimg_").
- * Returns HTTP status code; err receives a German error message on failure. */
-int  ps5tm_savesign_start(const char *src_uid, const char *dst_uid,
-                          const char *title_id, const char *slot,
-                          char *err, size_t err_len);
-
-/* View the contents of one save image as a cJSON array of {name, size} objects.
- * Returns 0 on success (*out_json caller-owned), -1 on failure. */
-int  ps5tm_savesign_view(const char *uid, const char *title_id,
-                         const char *slot, struct cJSON **out_json);
-
-/* Return 1 when uid is a valid 8-char lowercase hex user-folder name. */
-int  ps5tm_savesign_uid_valid(const char *uid);
-
 
 /* ------------------------------------------------------ running payloads */
 

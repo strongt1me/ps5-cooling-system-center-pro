@@ -87,10 +87,6 @@ SRCS += src/powerguard.c
 SRCS += src/klog.c
 SRCS += src/playtime.c
 SRCS += src/savebackup.c
-SRCS += src/savesfo.c
-SRCS += src/savemount.c
-SRCS += src/savedb.c
-SRCS += src/savesign.c
 SRCS += src/klogfiles.c
 SRCS += src/libcache.c
 SRCS += src/pkgparse.c
@@ -109,7 +105,7 @@ SRCS += src/trace.c src/plugins.c
 SRCS += src/ps4m_core.c src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_fw.c src/ps4m_origin.c
 SRCS += src/qr.c
 SRCS += src/dupimg.c
-SRCS += src/updates.c src/upd_http.c src/upd_dns.c src/upd_sony.c
+SRCS += src/updates.c src/upd_http.c src/upd_dns.c src/upd_sony.c src/upd_patchsite.c
 SRCS += src/disc.c
 SRCS += src/paystore.c
 
@@ -134,8 +130,7 @@ DEFLATE_HDRS := $(wildcard src/third_party/libdeflate/*.h \
                 src/third_party/libdeflate/lib/*.h \
                 src/third_party/libdeflate/lib/x86/*.h)
 HDRS := $(wildcard src/*.h) $(wildcard src/*.inc) \
-        $(wildcard src/third_party/*.h) $(DEFLATE_HDRS) $(wildcard src/third_party/lz4/*.h) \
-        $(wildcard src/third_party/sqlite3/*.h)
+        $(wildcard src/third_party/*.h) $(DEFLATE_HDRS) $(wildcard src/third_party/lz4/*.h)
 
 GEN_SRCS := gen/assets.c
 GEN_SRCS += gen/tile_pkg.c
@@ -181,10 +176,6 @@ PKGI_HELPER_LIBS := -lpthread -lSceNetCtl -lSceUserService -lSceSystemService -l
 
 # cJSON is built separately: upstream trips several of our warning flags.
 CJSON_OBJ := gen/cJSON.o
-
-# SQLite 3.46.0 (public domain) for savedata.db writes (savedb.c).
-# Built separately so the amalgamation's warnings do not trip -Werror.
-SQLITE_OBJ := gen/sqlite3.o
 
 # libdeflate 1.26 (MIT) for compressing and checking .ffpfsc images
 # (conv_pfs.c). Built separately like cJSON, and at -O2: it is the one place
@@ -337,12 +328,6 @@ $(CJSON_OBJ): src/third_party/cJSON.c src/third_party/cJSON_real.c \
 	$(CC) -Os -Isrc -Isrc/third_party -ffunction-sections -fdata-sections \
 	    -c -o $@ src/third_party/cJSON.c
 
-$(SQLITE_OBJ): src/third_party/sqlite3/sqlite3.c src/third_party/sqlite3/sqlite3.h \
-               Makefile gen/sdk.stamp | gen
-	$(CC) -Os -Isrc -Isrc/third_party/sqlite3 -ffunction-sections -fdata-sections \
-	    -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_WAL -w \
-	    -c -o $@ src/third_party/sqlite3/sqlite3.c
-
 gen/libdeflate/%.o: src/third_party/libdeflate/lib/%.c $(DEFLATE_HDRS) Makefile gen/sdk.stamp | gen
 	mkdir -p $(dir $@)
 	$(CC) -O2 -ffunction-sections -fdata-sections -c -o $@ $<
@@ -381,9 +366,9 @@ gen/sdk.stamp: FORCE | gen
 check-sdk-firmware:
 	@$(PYTHON) tools/check_sdk_firmware.py sdk "$(PS5_PAYLOAD_SDK)" $(FW_NEED)
 
-$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(SQLITE_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
+$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
         $(SHELLUI_STUB) gen/sdk.stamp | check-sdk-firmware
-	$(CC) $(CFLAGS) -Isrc/third_party/sqlite3 -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(SQLITE_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
+	$(CC) $(CFLAGS) -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
 	"$(PS5_PAYLOAD_SDK)/bin/prospero-strip" --strip-all $@
 	@$(PYTHON) tools/check_sdk_firmware.py elf $@ $(FW_NEED) >/dev/null || { rm -f $@; exit 1; }
 

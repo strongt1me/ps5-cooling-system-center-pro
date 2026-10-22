@@ -7021,22 +7021,86 @@
 
   /* ── Spiel-Updates (19.10.2026, nach PatchDL 0.3.0 von Knutwurst) ──
    * /api/v1/updates (updates.c): jedes Spiel mit seiner Version, dem Update, das hier läuft, und dem Stand des Downloads.
-   * Geladen wird nur nach einem Klick; der laufende Download erscheint oben mit Fortschritt. Nur direkt von den Update-Servern,
-   * kein Link zum Einfügen. */
-  const upd = { data: null, timer: 0, f: "", armed: "", armTimer: 0, armedAt: 0, pkgs: null, sig: "" };
+   * Geladen wird nur nach einem Klick; der laufende Download erscheint oben mit Fortschritt. Pakete kommen nur von den Update-Servern; die Versionslisten der Verlaufsseiten
+   * werden nur nach einem Klick geholt, ein eingefügter Link wird zur Paketliste des offiziellen Servers umgebaut. */
+  const upd = { data: null, timer: 0, f: "", armed: "", armTimer: 0, armedAt: 0, pkgs: null, sig: "", diag: null, ver: null, qr: "" };
   const UPD_ST = {
     update: ["warn", "Update verfügbar"], current: ["ok", "aktuell"], unchecked: ["", "noch nicht geprüft"], check_failed: ["warn", "Prüfung gescheitert"],
-    needs_newer_fw: ["warn", "neuester Patch braucht neuere Firmware"], queued: ["", "wartet"], downloading: ["", "wird geladen"], paused: ["warn", "angehalten"],
+    needs_newer_fw: ["warn", "neuester Patch braucht neuere Firmware"], update_old_fw: ["warn", "älterer Patch passt"], queued: ["", "wartet"], downloading: ["", "wird geladen"], paused: ["warn", "angehalten"],
     verifying: ["", "wird geprüft"], ready: ["ok", "geladen, bereit zur Installation"], installing: ["", "wird installiert"], installed: ["ok", "installiert"],
-    failed: ["warn", "gescheitert"], not_official_smp: ["", "über ShadowMountPlus"], not_official_fake: ["", "Fake-PKG"], not_official_unknown: ["", "Herkunft unbekannt"] };
+    failed: ["warn", "gescheitert"], blocked: ["", "Updates aus"], not_official_smp: ["", "über ShadowMountPlus"], not_official_fake: ["", "Fake-PKG"], not_official_unknown: ["", "Herkunft unbekannt"] };
 
   const updCover = (tid) => { const g = (gm.list || []).find((x) => x.title_id === tid); return g && g.cover ? g.cover : ""; };
   const updGroup = (t) => t.status === "update" || ["queued", "downloading", "paused", "verifying", "ready", "installing", "failed"].includes(t.status) ? "update"
-    : t.status === "needs_newer_fw" ? "oldfw" : "other";
+    : t.status === "needs_newer_fw" || t.status === "update_old_fw" ? "oldfw" : "other";
 
   const updBtn = (act, tid, label, cls) => {
     const armed = upd.armed === act + ":" + tid;
     return `<button type="button" class="btn ${armed ? "danger" : cls || "ghost"}" data-upd-act="${esc(act)}" data-upd-id="${esc(tid)}">${armed ? "Wirklich? Nochmal klicken" : esc(label)}</button>`;
+  };
+
+  const updDiagText = (d) => d.data ? [`Diagnose ${d.data.title_id} ${d.data.name} (Version ${d.data.version || "?"})`,
+    `Firmware ${d.data.firmware}, App ${d.data.app_version}, Ordner: ${d.data.folder}`,
+    ...(d.data.steps || []).map((x) => `${x.ok ? "OK" : "FEHLER"} · ${x.label}: ${x.detail}`)].join("\n") : "";
+
+  const updDiagPanel = (d) => {
+    const rows = d.busy ? `<p class="muted upd-hint">Die Verbindung zu den offiziellen Update-Servern wird geprüft …</p>`
+      : d.err ? `<p class="muted upd-hint cp-why">${esc(d.err)}</p>`
+      : (d.data.steps || []).map((x) => `<div class="upd-diag-row"><span>${esc(x.label)}</span><span class="${x.ok ? "ok" : "bad"}">${esc(x.detail)}</span></div>`).join("");
+    const rep = d.data ? `<textarea readonly rows="${(d.data.steps || []).length + 2}" data-upd-report>${esc(updDiagText(d))}</textarea>` : "";
+    return `<div class="upd-diag">${rows}${rep}<div class="p4m-btns">
+      ${d.data ? `<button type="button" class="btn ghost" data-upd-act="diag_copy">Bericht kopieren</button>` : ""}
+      <button type="button" class="btn ghost" data-upd-act="diag" data-upd-id="${esc(d.id)}">Erneut prüfen</button>
+      <button type="button" class="btn ghost" data-upd-act="diag_close">Schließen</button></div></div>`;
+  };
+
+  /* Andere Versionen / älterer Patch: die Versionsliste von prosperopatches.com bzw. orbispatches.com, dann die Anleitung, einen
+   * Link der gewählten Version einzufügen. Geladen wird das Paket immer von den offiziellen Update-Servern. */
+  const UPD_VST = { ok: "wählbar", installed: "installiert", older: "älter als installiert", needs_fw: "braucht neuere Firmware" };
+  const updPage = (id) => `https://${id.startsWith("CUSA") ? "orbispatches.com" : "prosperopatches.com"}/${id}`;
+  const updVerPanel = (v) => {
+    const site = v.id.startsWith("CUSA") ? "orbispatches.com" : "prosperopatches.com";
+    const page = (v.data && v.data.page) || updPage(v.id);
+    let body = "";
+    if (v.busy) body = `<p class="muted upd-hint">Die Versionsliste wird von ${esc(site)} geladen …</p>`;
+    else if (v.err) body = `<p class="muted upd-hint cp-why">${esc(v.err)}</p>`;
+    else if (v.pick) {
+      body = `<div class="upd-guide"><p><b>Version ${esc(v.pick.version)}${v.pick.size ? ` (${esc(v.pick.size)})` : ""} holen</b></p>
+        <ol class="upd-steps">
+          <li>Öffne <a href="${esc(page)}" target="_blank" rel="noopener">${esc(site)}</a> am Handy oder in diesem Browser und tippe auf Version ${esc(v.pick.version)}. Erscheint eine Prüfung „Bist du ein Mensch“, bestätige sie.</li>
+          <li>Kopiere den Link: unter „Additional Files“ den Knopf <b>SC</b> gedrückt halten und „Link kopieren“ wählen. Bei PS4-Spielen einen Stück-Link, oder „Copy all links“.</li>
+          <li>Füge den Link hier ein. Das Paket wird von den offiziellen Update-Servern geladen, sobald der Link da ist.</li></ol>
+        ${upd.qr ? `<div class="upd-qr"><img src="${esc(upd.qr)}" alt="QR-Code dieser Seite"><span class="muted">Am Handy diese Seite öffnen und dort weitermachen.</span></div>` : ""}
+        <div class="upd-linkrow"><input type="text" data-upd-link placeholder="https://…" autocomplete="off" spellcheck="false" value="${esc(v.link || "")}">
+          <button type="button" class="btn primary" data-upd-act="vers_start" data-upd-id="${esc(v.id)}">${v.force ? "Trotzdem starten" : "Start"}</button></div>
+        ${v.msg ? `<p class="muted upd-hint cp-why">${esc(v.msg)}</p>` : ""}</div>`;
+    } else if (v.data) {
+      const list = (v.data.versions || []);
+      body = `<p class="muted upd-hint">${esc(`Liste von ${site}. Installiert: ${v.data.installed || "?"}. Wähle eine neuere Version, die auf dieser Firmware läuft.`)}</p>`
+        + (list.length ? list.map((x) => `<div class="upd-diag-row"><span>${esc(x.version)}${x.size ? ` · ${esc(x.size)}` : ""}${x.fw && !v.data.ps4 ? ` · Firmware ${esc(x.fw)}` : ""}</span>
+            <span class="${x.state === "ok" ? "ok" : ""}">${x.state === "ok" ? `<button type="button" class="btn ghost" data-upd-act="vers_pick" data-upd-id="${esc(v.id)}" data-upd-ver="${esc(x.version)}" data-upd-size="${esc(x.size)}">Holen</button>` : esc(UPD_VST[x.state] || x.state)}</span></div>`).join("")
+          : `<p class="muted upd-hint">Die Seite listet keine Versionen.</p>`);
+    }
+    return `<div class="upd-diag">${body}<div class="p4m-btns">
+      ${v.pick && v.data ? `<button type="button" class="btn ghost" data-upd-act="vers_back" data-upd-id="${esc(v.id)}">Zur Liste</button>` : ""}
+      <button type="button" class="btn ghost" data-upd-act="vers_close">Schließen</button></div></div>`;
+  };
+
+  /* navigator.clipboard is missing in the console's browser (plain http): the old way through a hidden field, else the text is shown */
+  const updCopy = (text, done) => {
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) toast(done); else toast(text);
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast(done)).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
   };
 
   const updRow = (t) => {
@@ -7051,9 +7115,21 @@
     else if (t.status === "failed") btns = updBtn("resume", t.title_id, "Erneut versuchen", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "queued" || t.status === "downloading" || t.status === "verifying") btns = updBtn("pause", t.title_id, "Anhalten") + updBtn("cancel", t.title_id, "Abbrechen");
     else if (t.status === "needs_newer_fw") info = `<div class="p4m-meta">${esc(`Der neueste offizielle Patch ${t.latest} braucht Firmware ${t.latest_fw || "?"}; für diese Firmware gibt es kein Update.`)}</div>`;
+    else if (t.status === "update_old_fw") {
+      info = `<div class="p4m-meta">${esc(`Der neueste offizielle Patch ${t.latest} braucht Firmware ${t.latest_fw || "?"}. Auf prosperopatches.com steht Version ${t.old_ver}${t.old_size ? ` (${t.old_size})` : ""}, die hier läuft. Den Link dazu musst du selbst einfügen.`)}</div>`;
+      btns = updBtn("vers_old", t.title_id, "Anleitung", "primary");
+    }
     if (t.status === "check_failed") info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`;
-    if (off) info = `<div class="p4m-meta">${t.status === "not_official_fake" ? "Nicht offiziell signiert: keine offiziellen Updates." : "Die Paketdatei ließ sich nicht lesen."}</div>`;
+    if (off) info = `<div class="p4m-meta">Die Paketdatei ließ sich nicht lesen.</div>`;
     if (t.via_smp && !off) info += `<div class="p4m-meta">${esc("Läuft über ShadowMountPlus. Das Update wird normal installiert – ob es auf das eingehängte Abbild angewendet wird, hängt vom Spiel ab.")}</div>`;
+    if (t.source === "fake" && !off) info += `<div class="p4m-meta">${esc("Fake-PKG / fpkg. Das Update stammt direkt von den offiziellen Update-Servern.")}</div>`;
+    if (t.patch_url) btns += `<button type="button" class="btn ghost" data-upd-act="copy_url" data-upd-url="${esc(t.patch_url)}" title="${esc(t.patch_url)}">Link</button>`;
+    if (!off && t.status !== "blocked") btns += `<button type="button" class="btn ghost" data-upd-act="vers" data-upd-id="${esc(t.title_id)}">Andere Versionen</button>`;
+    if (!off) btns += `<button type="button" class="btn ghost" data-upd-act="diag" data-upd-id="${esc(t.title_id)}">Diagnose</button>`;
+    if (!off) btns = `<label class="upd-sw" title="Updates für dieses Spiel erlauben"><input type="checkbox" data-upd-allow="${esc(t.title_id)}"${t.allowed ? " checked" : ""}> Updates</label>`
+      + `<label class="upd-sw" title="Nach dem Download installieren (nur dieses Spiel)"><input type="checkbox" data-upd-inst="${esc(t.title_id)}"${t.install_after ? " checked" : ""}> Installieren</label>` + btns;
+    if (upd.diag && upd.diag.id === t.title_id) info += updDiagPanel(upd.diag);
+    if (upd.ver && upd.ver.id === t.title_id) info += updVerPanel(upd.ver);
     if (t.error) info += `<div class="p4m-meta cp-why">${esc(t.error)}</div>`;
     const pct = t.total > 0 && t.have > 0 && t.status !== "downloading" ? ` · ${Math.floor(t.have * 100 / t.total)} %` : "";
     return `<div class="p4m-row" data-upd-row="${esc(t.title_id)}">
@@ -7089,8 +7165,9 @@
         <small>${esc(stat)}${j.phase ? ` · ${esc(j.phase)}` : ""}${j.queued ? esc(` · danach noch ${j.queued} in der Warteschlange`) : ""}</small>`;
     }
     const list = (d.titles || []).filter((t) => !upd.f || updGroup(t) === upd.f);
-    const sig = JSON.stringify([list, upd.armed, (gm.list || []).length]);
-    if (sig !== upd.sig) {                                        /* nur neu zeichnen, wenn sich etwas geändert hat */
+    const sig = JSON.stringify([list, upd.armed, (gm.list || []).length, upd.diag ? [upd.diag.id, upd.diag.busy, upd.diag.err, !!upd.diag.data] : 0, d.drives, upd.ver ? [upd.ver.id, upd.ver.busy, upd.ver.err, !!upd.ver.data, upd.ver.pick && upd.ver.pick.version, upd.ver.force, upd.ver.msg, !!upd.qr] : 0]);
+    const typing = document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute("data-upd-link");
+    if (sig !== upd.sig && !(typing && upd.ver && upd.ver.pick)) {                                        /* nur neu zeichnen, wenn sich etwas geändert hat */
       upd.sig = sig;
       $("#upd-list").innerHTML = list.length ? list.map(updRow).join("") : `<p class="muted">${on ? "Keine Spiele in dieser Auswahl." : "Noch nichts geprüft."}</p>`;
     }
@@ -7099,6 +7176,20 @@
     if (!cs.options.length) cs.innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
     if (document.activeElement !== cs) cs.value = String(s.connections || 8);
     $("#upd-del").checked = !!s.delete_after;
+    if (document.activeElement !== $("#upd-policy")) $("#upd-policy").value = s.default_policy === "deny" ? "deny" : "allow";
+    $("#upd-inst").checked = s.install_after !== false;
+    $("#upd-verify").checked = s.verify !== false;
+    const dr = $("#upd-drive");
+    if (document.activeElement !== dr) {
+      const gb = (b) => (b / 1e9).toFixed(0);
+      dr.innerHTML = `<option value="">Interner Speicher (/data)</option>`
+        + (d.drives || []).map((x) => `<option value="${esc(x.mount)}">${esc(`${x.label || x.mount} (${x.mount}) · ${gb(x.free_bytes)} GB frei`)}</option>`).join("")
+        + (s.download_drive && !(d.drives || []).some((x) => x.mount === s.download_drive) ? `<option value="${esc(s.download_drive)}">${esc(`${s.download_drive} (nicht angeschlossen)`)}</option>` : "");
+      dr.value = s.download_drive || "";
+    }
+    const dn = $("#upd-drive-note");
+    dn.hidden = !s.drive_missing;
+    if (s.drive_missing) dn.textContent = "Das gewählte Laufwerk ist nicht angeschlossen. Neue Downloads gehen solange in den internen Speicher; bereits geladene Pakete bleiben, wo sie liegen.";
   };
 
   const updPkgsRender = () => {
@@ -7130,6 +7221,67 @@
   $("#upd-all").addEventListener("click", () => updPost({ action: "update_all" }));
   $("#upd-conns").addEventListener("change", (e) => updPost({ action: "settings", connections: Number(e.target.value) }));
   $("#upd-del").addEventListener("change", (e) => updPost({ action: "settings", delete_after: e.target.checked }));
+  $("#upd-policy").addEventListener("change", (e) => updPost({ action: "settings", default_policy: e.target.value }));
+  $("#upd-drive").addEventListener("change", (e) => updPost({ action: "settings", download_drive: e.target.value }));
+  $("#upd-inst").addEventListener("change", (e) => updPost({ action: "settings", install_after: e.target.checked }));
+  $("#upd-verify").addEventListener("change", (e) => updPost({ action: "settings", verify: e.target.checked }));
+  $("#gm-pane-upd").addEventListener("change", (e) => {
+    const a = e.target.dataset && e.target.dataset.updAllow, i = e.target.dataset && e.target.dataset.updInst;
+    if (a) updPost({ action: "title_settings", id: a, allowed: e.target.checked });
+    else if (i) updPost({ action: "title_settings", id: i, install_after: e.target.checked });
+  });
+  const updDiag = async (id) => {
+    const dg = { id, busy: true, data: null, err: "" };
+    upd.diag = dg; upd.sig = ""; updRender();
+    try { dg.data = await api("/api/v1/updates/diag?title=" + encodeURIComponent(id), { timeoutMs: 120000 }); }
+    catch (e) { dg.err = e.message; }
+    dg.busy = false;
+    if (upd.diag === dg) { upd.sig = ""; updRender(); }
+  };
+  const updQr = async () => {
+    if (upd.qr) return;
+    try {
+      const d = await api("/api/v1/qr");
+      upd.qr = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(d.svg)}`;
+      upd.sig = ""; updRender();
+    } catch (e) { /* ohne QR-Code */ }
+  };
+  const updVerOpen = async (id, old) => {
+    if (old) {
+      const t = ((upd.data && upd.data.titles) || []).find((x) => x.title_id === id) || {};
+      upd.ver = { id, busy: false, data: null, err: "", pick: { version: t.old_ver || "", size: t.old_size || "" }, link: "", force: false, msg: "" };
+      upd.sig = ""; updRender(); updQr();
+      return;
+    }
+    const v = { id, busy: true, data: null, err: "", pick: null, link: "", force: false, msg: "" };
+    upd.ver = v; upd.sig = ""; updRender();
+    try { v.data = await api("/api/v1/updates/versions?title=" + encodeURIComponent(id), { timeoutMs: 120000 }); }
+    catch (e) { v.err = e.message; }
+    v.busy = false;
+    if (upd.ver === v) { upd.sig = ""; updRender(); }
+  };
+  const updVerStart = async () => {
+    const v = upd.ver;
+    if (!v || !v.pick) return;
+    const link = (v.link || "").trim();
+    if (!link) { v.msg = "Füge zuerst den Link ein."; upd.sig = ""; updRender(); return; }
+    v.msg = "";
+    try {
+      const r = await api("/api/v1/updates", { method: "POST", timeoutMs: 90000,
+        body: JSON.stringify({ action: "download_url", id: v.id, url: link, version: v.pick.version, size: v.pick.size || "", force: !!v.force }) });
+      if (r.message) toast(r.message);
+      upd.ver = null; upd.sig = "";
+      await loadUpd();
+      updSync();
+    } catch (e) {
+      v.msg = e.message;
+      v.force = String(e.message).startsWith("Die Größe stimmt nicht");
+      upd.sig = ""; updRender();
+    }
+  };
+  $("#gm-pane-upd").addEventListener("input", (e) => {
+    if (e.target.hasAttribute && e.target.hasAttribute("data-upd-link") && upd.ver) upd.ver.link = e.target.value;
+  });
   $$("#gm-pane-upd [data-upd-f]").forEach((b) => b.addEventListener("click", () => {
     upd.f = b.dataset.updF;
     $$("#gm-pane-upd [data-upd-f]").forEach((x) => x.classList.toggle("active", x === b));
@@ -7139,6 +7291,19 @@
     const b = e.target.closest("[data-upd-act]");
     if (!b) return;
     const act = b.dataset.updAct, id = b.dataset.updId;
+    if (act === "copy_url") { updCopy(b.dataset.updUrl || "", "Link kopiert."); return; }
+    if (act === "vers") { updVerOpen(id, false); return; }
+    if (act === "vers_old") { updVerOpen(id, true); return; }
+    if (act === "vers_close") { upd.ver = null; upd.sig = ""; updRender(); return; }
+    if (act === "vers_back") { if (upd.ver) { upd.ver.pick = null; upd.ver.msg = ""; upd.ver.force = false; upd.sig = ""; updRender(); } return; }
+    if (act === "vers_pick") {
+      if (upd.ver) { upd.ver.pick = { version: b.dataset.updVer || "", size: b.dataset.updSize || "" }; upd.ver.link = ""; upd.ver.msg = ""; upd.ver.force = false; upd.sig = ""; updRender(); updQr(); }
+      return;
+    }
+    if (act === "vers_start") { updVerStart(); return; }
+    if (act === "diag") { updDiag(id); return; }
+    if (act === "diag_close") { upd.diag = null; upd.sig = ""; updRender(); return; }
+    if (act === "diag_copy") { updCopy(updDiagText(upd.diag || {}), "Bericht kopiert."); return; }
     if (act === "cancel" || act === "delete_pkg") {                 /* löscht Teile: zwei Klicks */
       const key = act + ":" + id;
       clearTimeout(upd.armTimer);
@@ -8992,7 +9157,6 @@
     svRenderStart();
     svRenderBackups();
     svRenderJob();
-    if (typeof svRenderSg === "function") svRenderSg();
   };
 
   const loadSaves = async () => {
@@ -9154,109 +9318,6 @@
         });
     }
   });
-
-  /* ── Spielstand neu signieren ───────────────────────────────────────
-   * Überträgt einen verschlüsselten Spielstand auf einen anderen Benutzer.
-   * Benutzt sv.data (von loadSaves) für Benutzer- und Titellisten. */
-  const sgPane = $("#gm-pane-saves");
-
-  const sgPopulateUsers = () => {
-    const users = sv.data ? sv.data.users : [];
-    ["sg-src", "sg-dst"].forEach((id) => {
-      const sel = $(`#${id}`);
-      const prev = sel.value;
-      sel.innerHTML = `<option value="">— Benutzer wählen —</option>`
-        + users.map((u) => `<option value="${esc(u.uid)}"${u.uid === prev ? " selected" : ""}>${esc(u.uid)}${u.name ? " · " + esc(u.name) : ""}</option>`).join("");
-    });
-    sgPopulateTitles();
-  };
-
-  const sgPopulateTitles = () => {
-    const srcUid = $("#sg-src").value;
-    const user = sv.data && srcUid ? sv.data.users.find((u) => u.uid === srcUid) : null;
-    const titles = user ? user.titles : [];
-    const tSel = $("#sg-title");
-    const prev = tSel.value;
-    tSel.innerHTML = `<option value="">— ${srcUid ? "Spiel wählen" : "erst Benutzer wählen"} —</option>`
-      + titles.map((t) => `<option value="${esc(t.id)}"${t.id === prev ? " selected" : ""}>${esc(t.id)}${t.name ? " · " + esc(t.name) : ""}</option>`).join("");
-    sgPopulateSlots();
-  };
-
-  const sgPopulateSlots = () => {
-    const srcUid = $("#sg-src").value;
-    const titleId = $("#sg-title").value;
-    const user = sv.data && srcUid ? sv.data.users.find((u) => u.uid === srcUid) : null;
-    const title = user && titleId ? user.titles.find((t) => t.id === titleId) : null;
-    const slots = title && title.slots ? title.slots : [];
-    const sSel = $("#sg-slot");
-    const prev = sSel.value;
-    sSel.innerHTML = `<option value="">— ${titleId ? "Slot wählen" : "erst Spiel wählen"} —</option>`
-      + slots.map((s) => `<option value="${esc(s)}"${s === prev ? " selected" : ""}>${esc(s)}</option>`).join("");
-    sgUpdateHint();
-  };
-
-  const sgUpdateHint = () => {
-    const src = $("#sg-src").value, dst = $("#sg-dst").value;
-    const title = $("#sg-title").value, slot = $("#sg-slot").value;
-    const hint = $("#sg-hint");
-    const ok = src && dst && title && slot && src !== dst;
-    const busy = svActive();
-    $("#sg-start").disabled = !ok || busy;
-    $("#sg-view").disabled  = !(src && title && slot);
-    if (busy) {
-      hint.textContent = "Ein anderer Spielstand-Vorgang läuft gerade.";
-    } else if (!ok) {
-      hint.textContent = (src && dst && src === dst) ? "Quell- und Zielbenutzer sind gleich." : "";
-    } else {
-      const ps4 = title.startsWith("CUSA") || title.startsWith("PCSE") || title.startsWith("PCSA");
-      hint.textContent = ps4
-        ? `PS4-Spielstand: Der Zielbenutzer muss für „${title}" bereits einen eigenen Spielstand haben.`
-        : "Vor dem Überschreiben wird der bisherige Spielstand des Zielbenutzers automatisch gesichert.";
-    }
-  };
-
-  sgPane.addEventListener("change", (e) => {
-    if (e.target.id === "sg-src") { sgPopulateTitles(); return; }
-    if (e.target.id === "sg-title") { sgPopulateSlots(); return; }
-    if (e.target.id === "sg-dst") { sgUpdateHint(); return; }
-    if (e.target.id === "sg-slot") { sgUpdateHint(); return; }
-  });
-
-  sgPane.addEventListener("click", async (e) => {
-    const b = e.target.closest("button");
-    if (!b) return;
-
-    if (b.id === "sg-view") {
-      const uid = $("#sg-src").value, title = $("#sg-title").value, slot = $("#sg-slot").value;
-      if (!uid || !title || !slot) return;
-      b.disabled = true;
-      try {
-        const files = await api(`/api/v1/saves/view?uid=${encodeURIComponent(uid)}&title=${encodeURIComponent(title)}&slot=${encodeURIComponent(slot)}`);
-        if (!Array.isArray(files) || !files.length) { toast("Keine Dateien im Slot gefunden.", "info"); return; }
-        const lines = files.map((f) => `${f.name}  (${(f.size / 1024).toFixed(1)} KiB)`).join("\n");
-        toast(`Slot-Inhalt (${files.length} Dateien):\n${lines}`, "info", 8000);
-      } catch (err) { toast(err.message, "error"); }
-      finally { b.disabled = false; }
-      return;
-    }
-
-    if (b.id === "sg-start") {
-      const src = $("#sg-src").value, dst = $("#sg-dst").value;
-      const title = $("#sg-title").value, slot = $("#sg-slot").value;
-      if (!src || !dst || !title || !slot) return;
-      b.disabled = true;
-      try {
-        svStarted(await api("/api/v1/saves/resign", { method: "POST",
-          body: JSON.stringify({ src_uid: src, dst_uid: dst, title_id: title, slot }) }));
-      } catch (err) { toast(err.message, "error"); }
-      finally { b.disabled = false; }
-    }
-  });
-
-  /* Wenn sv.data sich ändert, Dropdowns neu befüllen.
-   * svRender ist eine const — wir hängen uns an loadSaves heran, indem sgPopulateUsers()
-   * am Ende von svRender aufgerufen wird. Der Aufruf steht in svRenderSg (unten). */
-  const svRenderSg = () => { sgPopulateUsers(); };
 
   /* ── Pakete (04.10.2026) ─────────────────────────────────────────────
    * Spiel-Pakete (.pkg) auf Sticks, Discs und im Konsolenspeicher (pkgscan.c, /api/v1/packages):

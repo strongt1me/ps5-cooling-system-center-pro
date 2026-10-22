@@ -595,6 +595,7 @@ exf_open(bs_t *b) {
   if(b->rd(b, 0, h, sizeof(h)) != 0 || memcmp(h + 3, "EXFAT   ", 8) != 0) return NULL;
   exfat_t *x = calloc(1, sizeof(*x));
   if(!x) return NULL;
+  if(h[108] < 9 || h[108] > 12 || h[109] + h[108] > 25) { free(x); return NULL; }     /* before the shifts below: a shift count of 64 or more is undefined */
   x->sec_shift = h[108];
   x->clu_shift = h[109] + h[108];
   x->fat_off   = (uint64_t)rd32(h + 80) << x->sec_shift;

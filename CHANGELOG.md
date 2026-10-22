@@ -2,14 +2,27 @@
 
 ## Unveröffentlicht
 
-### Spielstand neu signieren
-- Neuer Bereich **Spielstand neu signieren** auf der Spielstände-Seite: überträgt einen verschlüsselten Spielstand so, dass ein anderer Benutzer auf dieser Konsole ihn öffnen kann
-- PS5-Spielstände: `ACCOUNT_ID` und `USER_ID` im eingebetteten `param.sfo` werden auf den Zielbenutzer gesetzt; der bisherige Spielstand des Zielbenutzers wird davor automatisch gesichert
-- PS4-Spielstände: der `PARAMS`-Block (1024 Byte, enthält den per-Benutzer-HMAC) wird aus einem vorhandenen Spielstand des Zielbenutzers für dasselbe Spiel übernommen; ohne Vorlage gibt die App eine klare Fehlermeldung
-- Die Konsolen-Datenbank (`savedata[_prospero].db`) wird nach dem Umschreiben aktualisiert
-- Schaltfläche **Slot-Inhalt ansehen** zeigt die Dateien im Spielstand-Image (schreibgeschützt)
-- Vorgang teilt den Auftrags-Slot mit der Sicherungsfunktion (kein gleichzeitiger Betrieb); Fortschritt und Ergebnis erscheinen in der Auftragskarte
-- Neue Quelldateien: `src/savesfo.c`, `src/savemount.c`, `src/savedb.c`, `src/savesign.c`; SQLite 3.46.0 (Public Domain) als eingebettete Schreibbibliothek für den DB-Zugriff
+### Spiel-Updates: PKG und fpkg
+
+- Fake-PKGs und fpkgs nehmen jetzt am Update-Prüfvorgang und am direkten Download teil – genau wie Disc- und Store-Spiele und ShadowMountPlus-Titel
+- Der direkte Download-Link (CDN-URL) aus der offiziellen Versionsliste wird nach jeder Prüfung je Spiel gespeichert und über **Link** in der Zeile in die Zwischenablage kopiert; damit lassen sich Updates auch ohne die eingebaute Installationsfunktion herunterladen
+- Hinweis in der Zeile erklärt, wenn ein Spiel als Fake-PKG installiert ist
+
+### Spiel-Updates: Regeln, Ordner und Diagnose (nach PatchDL 0.3.4)
+- **Standardregel** „Updates erlauben/verweigern“ und je Spiel ein eigener Schalter **Updates**; ausgeschaltete Spiele werden nicht geprüft, nicht in „Alle aktualisieren“ aufgenommen und nicht geladen
+- **Nach dem Download installieren** als Einstellung für alle und je Spiel; ohne Installation bleibt das Paket „bereit“ und wird mit dem Knopf **Installieren** eingespielt. „Alle aktualisieren“ installiert bereitliegende Pakete nur bei Spielen, bei denen das eingeschaltet ist
+- **Prüfsummen-Schalter**: Jedes Stück wird wie bisher mit der offiziellen Prüfsumme (SHA-256) geprüft; ausgeschaltet entfällt die Prüfung, ein schon vorhandenes, unfertiges Paket wird dann neu geladen
+- **Download-Ordner** wählbar: interner Speicher oder ein angeschlossenes USB-Laufwerk (Ordner `PS5-Updates`). Schon geladene Pakete bleiben, wo sie liegen, und werden dort weiter gefunden; fehlt das gewählte Laufwerk, geht es in den internen Speicher, mit Hinweis
+- **Diagnose** je Spiel (`GET /api/v1/updates/diag?title=`): prüft Update-Liste, Paketliste, die ersten Bytes des ersten Stücks und den freien Platz und liefert einen Bericht zum Kopieren; ohne IP-Adresse und Konsolenname
+- Die Einstellungen stehen in `settings.json` (`default_policy`, `title_policy`, `install_after`, `install_after_title`, `verify`, `download_drive`); ältere Dateien gelten weiter
+
+### Spiel-Updates: Andere Versionen und Patches für ältere Firmware (nach PatchDL 0.3.4)
+- **Andere Versionen** je Spiel (`GET /api/v1/updates/versions?title=`): die Versionsliste von prosperopatches.com (PS5) bzw. orbispatches.com (PS4), jede Version mit Größe und nötiger Firmware; wählbar sind nur Versionen, die neuer als die installierte sind und auf dieser Firmware laufen. Die Liste wird nur nach einem Klick geholt, nie im Hintergrund, und nur bei eingeschalteten Spiel-Updates
+- Das Paket selbst kommt weiter nur von den offiziellen Update-Servern: Nach der Wahl einer Version fügst du einen Link von der Verlaufsseite ein (SC-Link, bei PS4 ein Stück-Link, oder „Copy all links“; Anleitung mit Link zur Seite und QR-Code für das Handy in der Zeile). Die App baut daraus die Adresse der Paketliste im selben Ordner des offiziellen Servers neu zusammen (nur erlaubte Hosts, https, keine `..`, die Titel-ID muss in Ordner und Dateiname stehen) und holt den eingefügten Link nie selbst
+- Vorab werden die Paketliste geladen, der freie Platz geprüft und die Größe mit der Liste verglichen; passt sie nicht (Link einer anderen Version), fragt die App mit „Trotzdem starten“ nach. Keine Downgrades
+- **Patch für ältere Firmware**: Braucht der neueste offizielle Patch eine neuere Firmware, sucht die Prüfung („Nach Updates suchen“) auf der Verlaufsseite die neueste Version, die hier läuft, und zeigt „älterer Patch passt“ mit Anleitung. Fehlt die Firmware-Angabe der Seite, bleibt es bei „braucht neuere Firmware“ – es wird nie geraten (nur PS5; PS4-Listen kennen keine solche Grenze)
+- Neu: `src/upd_patchsite.c/.h` (Verlaufsseiten, Link-Umbau); Antworten der Seiten sind auf 512 KB begrenzt, ihr Text wird auf einfache Zeichen gefiltert. Die Antwortformate der Seiten konnten nicht live geprüft werden (ungetestet an der Konsole)
+- Die neuen Texte stehen nur auf Deutsch; in en/es/fr/it/ru fehlen sie
 
 ### PS4 von USB
 - Die Suche nach PKG-Dateien nimmt ab Werk die oberste Ebene **und** den Ordner `pkg` jedes Laufwerks (vorher nur die oberste Ebene); wer schon Ordner in den Einstellungen hat, behält seine Liste

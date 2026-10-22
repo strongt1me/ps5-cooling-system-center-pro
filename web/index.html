@@ -469,9 +469,9 @@
                   <button class="btn primary" id="upd-all" type="button">Alle aktualisieren</button>
                 </div>
               </div>
-              <p class="muted upd-intro">Lädt das offizielle Update jedes PS5- und PS4-Spiels direkt von den offiziellen Update-Servern und installiert es. Nur für Spiele
-                von Disc oder aus dem PlayStation Store (offiziell signiert). Spiele über ShadowMountPlus, Fake-PKGs und Homebrew bleiben,
-                wie sie sind. Angeboten werden nur Updates, die auf dieser Firmware laufen. Die App erreicht die Update-Server über eigene
+              <p class="muted upd-intro">Lädt das offizielle Update jedes PS5- und PS4-Spiels direkt von den offiziellen Update-Servern und installiert es.
+                Das gilt für Spiele von Disc oder aus dem PlayStation Store ebenso wie für ShadowMountPlus-Spiele und Fake-PKGs; Spiele, deren
+                Paketdatei sich nicht lesen lässt, werden nicht angeboten. Angeboten werden zuerst Updates, die auf dieser Firmware laufen. Ältere Versionen und Patches für ältere Firmware zeigt die Liste von prosperopatches.com bzw. orbispatches.com (nur nach Klick auf „Andere Versionen“); das Paket kommt dann nach dem Einfügen eines Links von den offiziellen Update-Servern. Die App erreicht die Update-Server über eigene
                 DNS-Anfragen (Cloudflare, Google, Quad9) und ändert nichts an den DNS-Einstellungen der Konsole; eine Sperre gegen
                 System-Updates bleibt also bestehen.</p>
               <div class="pt-note" id="upd-note" hidden></div>
@@ -491,12 +491,22 @@
             <article class="card">
               <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gear"/></svg></span><div class="ck-text"><h2>Einstellungen</h2><p class="sub">gelten sofort</p></div></div></div>
               <div class="p4m-set">
+                <label class="p4m-field"><span>Standardregel für Spiele</span>
+                  <select id="upd-policy"><option value="allow">Updates erlauben</option><option value="deny">Updates verweigern</option></select></label>
+                <p class="muted upd-hint">Jedes Spiel hat in der Liste einen eigenen Schalter „Updates“, der die Regel für dieses Spiel ändert.</p>
+                <label class="p4m-field"><span>Download-Ordner</span>
+                  <select id="upd-drive"></select></label>
+                <p class="muted upd-hint" id="upd-drive-note" hidden></p>
                 <label class="p4m-field"><span>Gleichzeitige Verbindungen je Download (1 bis 16)</span>
                   <select id="upd-conns"></select></label>
+                <label class="xswitch" for="upd-inst"><span>Nach dem Download installieren</span>
+                  <span class="switch"><input type="checkbox" id="upd-inst"><i></i></span></label>
+                <label class="xswitch" for="upd-verify"><span>Jedes Stück mit der offiziellen Prüfsumme (SHA-256) prüfen</span>
+                  <span class="switch"><input type="checkbox" id="upd-verify"><i></i></span></label>
+                <p class="muted upd-hint">Ohne Prüfung bleibt ein beschädigtes Stück unbemerkt; die Konsole prüft die Signatur erst beim Installieren.</p>
                 <label class="xswitch" for="upd-del"><span>Paket nach erfolgreicher Installation löschen</span>
                   <span class="switch"><input type="checkbox" id="upd-del"><i></i></span></label>
-                <p class="muted upd-hint">Gelöscht wird erst, wenn das Spiel die neue Version meldet. Pakete, die noch im Ordner
-                  <code>/data/PS5-Cooling-Center/updates</code> liegen:</p>
+                <p class="muted upd-hint">Gelöscht wird erst, wenn das Spiel die neue Version meldet. Pakete, die in den Download-Ordnern liegen:</p>
                 <div id="upd-pkgs"></div>
               </div>
             </article>
@@ -646,41 +656,6 @@
               <p class="muted sv-hint sv-unfinished" id="sv-unfinished" hidden></p>
             </article>
 
-            <article class="card">
-              <div class="card-head">
-                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6"/><path d="M16 19h6m-3-3v6"/><path d="M8 10h8M8 14h5"/></svg></span><div class="ck-text"><h2>Spielstand neu signieren</h2><p class="sub" id="sg-sub">PS4 und PS5 · Slot auf anderen Benutzer übertragen</p></div></div>
-              </div>
-              <p class="muted sv-intro">Überträgt einen verschlüsselten Spielstand so, dass ein anderer Benutzer auf dieser Konsole ihn öffnen kann.
-                Bei PS4-Spielständen wird ein vorhandener Spielstand des Zielbenutzers für dasselbe Spiel als Vorlage benötigt.
-                Läuft gerade ein Spiel, ist diese Funktion gesperrt.</p>
-              <div class="sg-form">
-                <div class="sg-row">
-                  <div class="sg-col">
-                    <label class="sv-label" for="sg-src">Quellbenutzer</label>
-                    <select id="sg-src" class="sv-sel"><option value="">— Benutzer wählen —</option></select>
-                  </div>
-                  <div class="sg-col">
-                    <label class="sv-label" for="sg-dst">Zielbenutzer</label>
-                    <select id="sg-dst" class="sv-sel"><option value="">— Benutzer wählen —</option></select>
-                  </div>
-                </div>
-                <div class="sg-row">
-                  <div class="sg-col">
-                    <label class="sv-label" for="sg-title">Spiel</label>
-                    <select id="sg-title" class="sv-sel"><option value="">— erst Benutzer wählen —</option></select>
-                  </div>
-                  <div class="sg-col">
-                    <label class="sv-label" for="sg-slot">Slot</label>
-                    <select id="sg-slot" class="sv-sel"><option value="">— erst Spiel wählen —</option></select>
-                  </div>
-                </div>
-              </div>
-              <p class="muted sv-hint" id="sg-hint"></p>
-              <div class="cp-actions sv-actions">
-                <button type="button" class="btn ghost" id="sg-view" disabled>Slot-Inhalt ansehen</button>
-                <button type="button" class="btn primary" id="sg-start" disabled>Slot signieren</button>
-              </div>
-            </article>
           </div>
         </section>
 

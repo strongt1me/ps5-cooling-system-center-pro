@@ -1336,6 +1336,7 @@ job_launch(void *(*fn)(void *), job_args_t *a, const char *kind, char *err, size
   pthread_attr_t attr;
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&attr, 512 * 1024);   /* bk_write/restore_main hold ~30 KB of path buffers: not the small default stack */
   pthread_t t;
   sv_run_t *run = malloc(sizeof(*run));
   int rc = -1;
@@ -2493,115 +2494,4 @@ ps5tm_saves_json(void) {
   cJSON_Delete(names);
   cJSON_AddItemToObject(root, "job", ps5tm_saves_job_json());
   return root;
-}
-
-
-/* ──────────────────────────────────────────────────────────────────────────
- * Helpers for savesign.c: start a simple job + update job state.
- * These are declared in savebackup.h. */
-
-/* Wrapper thread: calls fn(arg), then records history. */
-typedef struct { void *(*fn)(void *); void *arg; } simple_run_t;
-
-static void *simple_thread(void *vr)
-{
-  simple_run_t *r = (simple_run_t *)vr;
-  void *(*fn)(void *) = r->fn;
-  void *arg           = r->arg;
-  free(r);
-
-  fn(arg);   /* fn frees arg and sets job state itself */
-
-  pthread_mutex_lock(&g_lock);
-  int st = g_job.state;
-  char kind[24], detail[340], error[640];
-  snprintf(kind,   sizeof(kind),   "saves_%s", g_job.kind);
-  snprintf(detail, sizeof(detail), "%s",       g_job.path);
-  snprintf(error,  sizeof(error),  "%s",       g_job.error);
-  uint64_t bytes = g_job.bytes_total;
-  uint64_t dur   = g_job.finished_ms > g_job.started_ms
-                   ? g_job.finished_ms - g_job.started_ms : 0;
-  pthread_mutex_unlock(&g_lock);
-
-  if(st == J_DONE || st == J_FAILED || st == J_CANCELLED)
-    ps5tm_hist_add(kind, "Spielstände", detail,
-                   st == J_DONE ? "done" : st == J_FAILED ? "failed" : "cancelled",
-                   error, bytes, dur);
-  return NULL;
-}
-
-int
-ps5tm_saves_run_simple(const char *kind, void *(*fn)(void *), void *arg,
-                       char *err, size_t err_len)
-{
-  pthread_mutex_lock(&g_lock);
-  if(job_active_locked()) {
-    pthread_mutex_unlock(&g_lock);
-    snprintf(err, err_len, "Es läuft schon ein Vorgang mit den Spielständen.");
-    return 409;
-  }
-  memset(&g_job, 0, sizeof(g_job));
-  g_job.state = J_SCAN;
-  snprintf(g_job.kind,  sizeof(g_job.kind),  "%s", kind);
-  snprintf(g_job.phase, sizeof(g_job.phase), "Vorbereiten");
-  g_job.started_ms = ps5tm_mono_ms();
-  pthread_mutex_unlock(&g_lock);
-  __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
-  __atomic_store_n(&g_nocancel, 0, __ATOMIC_RELEASE);
-
-  if(other_job_active(err, err_len)) {
-    pthread_mutex_lock(&g_lock);
-    memset(&g_job, 0, sizeof(g_job));
-    pthread_mutex_unlock(&g_lock);
-    return 409;
-  }
-
-  simple_run_t *run = malloc(sizeof(*run));
-  if(!run) {
-    pthread_mutex_lock(&g_lock);
-    g_job.state = J_IDLE;
-    pthread_mutex_unlock(&g_lock);
-    snprintf(err, err_len, "Kein Arbeitsspeicher.");
-    return 503;
-  }
-  run->fn  = fn;
-  run->arg = arg;
-
-  pthread_attr_t attr;
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  pthread_t t;
-  int rc = pthread_create(&t, &attr, simple_thread, run);
-  pthread_attr_destroy(&attr);
-  if(rc != 0) {
-    free(run);
-    pthread_mutex_lock(&g_lock);
-    g_job.state = J_IDLE;
-    pthread_mutex_unlock(&g_lock);
-    snprintf(err, err_len, "Der Vorgang ließ sich nicht starten.");
-    return 503;
-  }
-  return 200;
-}
-
-void
-ps5tm_saves_job_fail(const char *msg)
-{
-  pthread_mutex_lock(&g_lock);
-  if(msg)
-    snprintf(g_job.error, sizeof(g_job.error), "%s", msg);
-  g_job.state = J_FAILED;
-  g_job.finished_ms = ps5tm_mono_ms();
-  pthread_mutex_unlock(&g_lock);
-}
-
-void
-ps5tm_saves_job_done(const char *msg)
-{
-  pthread_mutex_lock(&g_lock);
-  if(msg)
-    snprintf(g_job.note, sizeof(g_job.note), "%s", msg);
-  g_job.state = J_DONE;
-  g_job.finished_ms = ps5tm_mono_ms();
-  pthread_mutex_unlock(&g_lock);
 }

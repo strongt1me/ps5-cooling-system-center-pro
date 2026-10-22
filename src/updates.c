@@ -40,6 +40,7 @@
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 #include "upd_http.h"
+#include "upd_patchsite.h"
 #include "upd_sony.h"
 
 #define UPD_DIR          PS5TM_DATA_DIR "/updates"
@@ -72,6 +73,8 @@ typedef struct {
   int      checked;                  /* 0 never, 1 done, -1 failed */
   char     check_why[64];
   char     compat_ver[16], latest_ver[16], latest_fw[16], patch_url[512];
+  char     old_ver[16], old_size[16], old_fw[16];   /* the newest patch the history sites know that runs on this firmware */
+  char     man_ver[16], man_url[512];               /* a package the person chose with a pasted link */
   /* the download */
   int      state;
   char     err[240];
@@ -83,15 +86,24 @@ typedef struct {
 } title_t;
 
 typedef struct {
-  int enabled, conns, delete_after;
+  int  enabled, conns, delete_after;
+  int  allow_default;                /* 1: every game may get updates unless it is switched off */
+  int  install_after;                /* 1: a finished download is installed at once */
+  int  verify;                       /* 1: every piece is checked against the offered checksum */
+  char drive[40];                    /* mount of the chosen USB drive, "" the console's own storage */
 } settings_t;
+
+typedef struct { char tid[12]; int v; } ovr_t;      /* a game's own choice beside the general one */
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static title_t        *g_t;                 /* UPD_MAX_TITLES */
 static int             g_n;
 static uint64_t        g_titles_ms;
-static settings_t      g_set = { 0, 8, 1 };
+static settings_t      g_set = { 0, 8, 1, 1, 1, 1, "" };
 static int             g_set_loaded;
+static ovr_t           g_ov_allow[UPD_MAX_TITLES], g_ov_inst[UPD_MAX_TITLES];
+static int             g_ov_allow_n, g_ov_inst_n;
+static volatile int    g_job_verify = 1;    /* the running job's choice: settings may change meanwhile */
 static int             g_checking, g_check_done, g_check_total;
 static int             g_worker_up;
 static unsigned        g_qseq;
@@ -117,11 +129,102 @@ tid_ok(const char *t) {
   return 1;
 }
 
-static void
-title_dir(const char *tid, char *out, size_t n) { snprintf(out, n, UPD_DIR "/%s", tid); }
+/* The download folders: g_roots[0] is the console's own, then one per USB drive. g_roots[g_cur] takes new downloads; a game whose
+   folder already lies in another root keeps using that one. Leaf lock: nothing is called while it is held. */
+#define UPD_ROOT_LEN 96
+static pthread_mutex_t g_root_mx = PTHREAD_MUTEX_INITIALIZER;
+static char            g_roots[1 + PS5TM_MAX_VOLUMES][UPD_ROOT_LEN] = { UPD_DIR };
+static int             g_nroots = 1, g_cur, g_drive_missing;
 
 static void
-title_file(const char *tid, const char *name, char *out, size_t n) { snprintf(out, n, UPD_DIR "/%s/%s", tid, name); }
+title_dir(const char *tid, char *out, size_t n) {
+  char roots[1 + PS5TM_MAX_VOLUMES][UPD_ROOT_LEN];
+  int nr, cur;
+  pthread_mutex_lock(&g_root_mx);
+  nr = g_nroots;
+  cur = g_cur;
+  memcpy(roots, g_roots, sizeof roots[0] * (size_t)nr);
+  pthread_mutex_unlock(&g_root_mx);
+  for(int k = 0; k < nr; k++) {
+    int i = k == 0 ? cur : k <= cur ? k - 1 : k;        /* the current root first, then the others in order */
+    struct stat st;
+    snprintf(out, n, "%s/%s", roots[i], tid);
+    if(stat(out, &st) == 0 && S_ISDIR(st.st_mode)) return;
+  }
+  snprintf(out, n, "%s/%s", roots[cur], tid);
+}
+
+static void
+title_file(const char *tid, const char *name, char *out, size_t n) {
+  char d[PATH_MAX];
+  title_dir(tid, d, sizeof d);
+  snprintf(out, n, "%s/%s", d, name);
+}
+
+static void
+roots_get(char (*out)[UPD_ROOT_LEN], int *n) {
+  pthread_mutex_lock(&g_root_mx);
+  *n = g_nroots;
+  memcpy(out, g_roots, sizeof out[0] * (size_t)g_nroots);
+  pthread_mutex_unlock(&g_root_mx);
+}
+
+/* Reads the drives and settles where new downloads go: the chosen drive if it is there, else the console's storage. */
+static void
+roots_refresh(void) {
+  ps5tm_pkgdrive_t dr[PS5TM_MAX_VOLUMES];
+  unsigned nd = ps5tm_pkg_drives(dr, PS5TM_MAX_VOLUMES);
+  char want[40];
+  pthread_mutex_lock(&g_lock);
+  snprintf(want, sizeof want, "%s", g_set.drive);
+  pthread_mutex_unlock(&g_lock);
+  char nr[1 + PS5TM_MAX_VOLUMES][UPD_ROOT_LEN] = { UPD_DIR };
+  int n = 1, cur = 0;
+  for(unsigned i = 0; i < nd && n < 1 + PS5TM_MAX_VOLUMES; i++) {
+    if(dr[i].internal) continue;
+    if(snprintf(nr[n], UPD_ROOT_LEN, "%s/PS5-Updates", dr[i].base) >= UPD_ROOT_LEN) continue;
+    if(want[0] && !strcmp(dr[i].mount, want)) cur = n;
+    n++;
+  }
+  pthread_mutex_lock(&g_root_mx);
+  g_nroots = n;
+  g_cur = cur;
+  g_drive_missing = want[0] && !cur;
+  memcpy(g_roots, nr, sizeof nr[0] * (size_t)n);
+  pthread_mutex_unlock(&g_root_mx);
+}
+
+static int
+ovr_get(const ovr_t *a, int n, const char *tid) {
+  for(int i = 0; i < n; i++)
+    if(!strcmp(a[i].tid, tid)) return a[i].v;
+  return -1;
+}
+
+static void
+ovr_set(ovr_t *a, int *n, const char *tid, int v) {      /* v < 0 takes the game's own choice away */
+  for(int i = 0; i < *n; i++)
+    if(!strcmp(a[i].tid, tid)) {
+      if(v < 0) a[i] = a[--*n];
+      else a[i].v = v;
+      return;
+    }
+  if(v < 0 || *n >= UPD_MAX_TITLES) return;
+  snprintf(a[*n].tid, sizeof a[*n].tid, "%s", tid);
+  a[(*n)++].v = v;
+}
+
+static int
+allowed_locked(const char *tid) {
+  int o = ovr_get(g_ov_allow, g_ov_allow_n, tid);
+  return o >= 0 ? o : g_set.allow_default;
+}
+
+static int
+install_after_locked(const char *tid) {
+  int o = ovr_get(g_ov_inst, g_ov_inst_n, tid);
+  return o >= 0 ? o : g_set.install_after;
+}
 
 static int
 write_atomic(const char *path, const char *data, size_t n) {
@@ -195,7 +298,7 @@ static void
 settings_load_locked(void) {
   if(g_set_loaded) return;
   g_set_loaded = 1;
-  char *b = read_small(UPD_SETTINGS, 4096);
+  char *b = read_small(UPD_SETTINGS, 64 * 1024);
   cJSON *j = b ? cJSON_Parse(b) : NULL;
   free(b);
   if(!j) return;
@@ -203,17 +306,44 @@ settings_load_locked(void) {
   if(cJSON_IsBool(v = cJSON_GetObjectItem(j, "enabled"))) g_set.enabled = cJSON_IsTrue(v);
   if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "connections")) && v->valuedouble >= 1 && v->valuedouble <= UPD_MAX_CONNS) g_set.conns = (int)v->valuedouble;
   if(cJSON_IsBool(v = cJSON_GetObjectItem(j, "delete_after"))) g_set.delete_after = cJSON_IsTrue(v);
+  if(cJSON_IsString(v = cJSON_GetObjectItem(j, "default_policy"))) g_set.allow_default = strcmp(v->valuestring, "deny") != 0;
+  if(cJSON_IsBool(v = cJSON_GetObjectItem(j, "install_after"))) g_set.install_after = cJSON_IsTrue(v);
+  if(cJSON_IsBool(v = cJSON_GetObjectItem(j, "verify"))) g_set.verify = cJSON_IsTrue(v);
+  if(cJSON_IsString(v = cJSON_GetObjectItem(j, "download_drive")) && strlen(v->valuestring) < sizeof g_set.drive)
+    snprintf(g_set.drive, sizeof g_set.drive, "%s", v->valuestring);
+  static const char *const ovr_keys[2] = { "title_policy", "install_after_title" };
+  for(int k = 0; k < 2; k++) {
+    const cJSON *o = cJSON_GetObjectItem(j, ovr_keys[k]), *e;
+    cJSON_ArrayForEach(e, o) {
+      if(!cJSON_IsBool(e) || !e->string || !tid_ok(e->string)) continue;
+      if(k == 0) ovr_set(g_ov_allow, &g_ov_allow_n, e->string, cJSON_IsTrue(e));
+      else ovr_set(g_ov_inst, &g_ov_inst_n, e->string, cJSON_IsTrue(e));
+    }
+  }
   cJSON_Delete(j);
 }
 
 static void
 settings_save_locked(void) {
-  char b[256];
-  int n = snprintf(b, sizeof b, "{\"enabled\":%s,\"connections\":%d,\"delete_after\":%s}\n", g_set.enabled ? "true" : "false",
-                   g_set.conns, g_set.delete_after ? "true" : "false");
+  cJSON *o = cJSON_CreateObject();
+  if(!o) return;
+  cJSON_AddBoolToObject(o, "enabled", g_set.enabled);
+  cJSON_AddNumberToObject(o, "connections", g_set.conns);
+  cJSON_AddBoolToObject(o, "delete_after", g_set.delete_after);
+  cJSON_AddStringToObject(o, "default_policy", g_set.allow_default ? "allow" : "deny");
+  cJSON_AddBoolToObject(o, "install_after", g_set.install_after);
+  cJSON_AddBoolToObject(o, "verify", g_set.verify);
+  cJSON_AddStringToObject(o, "download_drive", g_set.drive);
+  cJSON *pa = cJSON_AddObjectToObject(o, "title_policy"), *pi = cJSON_AddObjectToObject(o, "install_after_title");
+  for(int i = 0; pa && i < g_ov_allow_n; i++) cJSON_AddBoolToObject(pa, g_ov_allow[i].tid, g_ov_allow[i].v);
+  for(int i = 0; pi && i < g_ov_inst_n; i++) cJSON_AddBoolToObject(pi, g_ov_inst[i].tid, g_ov_inst[i].v);
+  char *s = cJSON_PrintUnformatted(o);
+  cJSON_Delete(o);
+  if(!s) return;
   mkdir(PS5TM_DATA_DIR, 0777);
   mkdir(UPD_DIR, 0777);
-  if(write_atomic(UPD_SETTINGS, b, (size_t)n) != 0) PS5TM_WARN("upd_settings", "Spiel-Updates: Die Einstellungen ließen sich nicht speichern.");
+  if(write_atomic(UPD_SETTINGS, s, strlen(s)) != 0) PS5TM_WARN("upd_settings", "Spiel-Updates: Die Einstellungen ließen sich nicht speichern.");
+  free(s);
 }
 
 /* ---------------------------------------------------------------- the games */
@@ -277,6 +407,7 @@ titles_refresh(int force) {
   if(!force && g_t && g_titles_ms && now - g_titles_ms < 20000) { pthread_mutex_unlock(&g_lock); return; }
   g_titles_ms = now;
   pthread_mutex_unlock(&g_lock);
+  roots_refresh();
 
   ps5tm_libupd_t *rows = calloc(UPD_MAX_TITLES, sizeof *rows);
   title_t *nt = calloc(UPD_MAX_TITLES, sizeof *nt);
@@ -295,7 +426,7 @@ titles_refresh(int force) {
     t->plat = !strncmp(t->tid, "CUSA", 4) ? 4 : 5;
     t->sign = pkg_sign(t->tid);
     t->source = t->sign == SIGN_RETAIL ? SRC_OFFICIAL : t->sign == SIGN_FAKE ? SRC_FAKE : t->sign == SIGN_NONE ? SRC_SMP : SRC_UNKNOWN;
-    if(t->source == SRC_SMP || t->source == SRC_OFFICIAL) {   /* the game's own param.json first (no unpacking), app.db is the fallback */
+    if(t->source == SRC_SMP || t->source == SRC_OFFICIAL || t->source == SRC_FAKE) {   /* the game's own param.json first (no unpacking), app.db is the fallback */
       ps5tm_libdel_t li;
       char real_ver[16], real_uri[256];
       if(ps5tm_library_delete_info(t->tid, &li) == 0 && li.path[0] &&
@@ -333,6 +464,11 @@ titles_refresh(int force) {
 static void
 target_locked(const title_t *t, char *ver, size_t vn, char *url, size_t un) {
   ver[0] = url[0] = 0;
+  if(t->man_url[0] && ver_gt(t->man_ver, t->ver)) {
+    snprintf(ver, vn, "%s", t->man_ver);
+    snprintf(url, un, "%s", t->man_url);
+    return;
+  }
   if(t->checked == 1 && t->patch_url[0] && ver_gt(t->compat_ver, t->ver)) {
     snprintf(ver, vn, "%s", t->compat_ver);
     snprintf(url, un, "%s", t->patch_url);
@@ -341,17 +477,17 @@ target_locked(const title_t *t, char *ver, size_t vn, char *url, size_t un) {
 
 static const char *
 status_locked(const title_t *t) {
-  /* SMP games can receive updates the same way as official ones (the PS5 update mechanism only checks the title ID,
-     not how the base game was installed). Only fake PKGs and unknown sources are excluded. */
-  if(t->source == SRC_FAKE) return "not_official_fake";
+  /* The PS5 update mechanism only checks the title ID, not how the base game was installed — official, SMP and fake
+     PKG games can all receive updates. Only games whose app.pkg was unreadable are excluded (SIGN_UNREAD). */
   if(t->source == SRC_UNKNOWN) return "not_official_unknown";
   if(t->state != ST_IDLE) return k_state[t->state];
+  if(!allowed_locked(t->tid)) return "blocked";
   char v[16], u[512];
   target_locked(t, v, sizeof v, u, sizeof u);
   if(v[0]) return "update";
   if(t->checked == 0) return "unchecked";
   if(t->checked < 0) return "check_failed";
-  if(ver_gt(t->latest_ver, t->ver)) return "needs_newer_fw";
+  if(ver_gt(t->latest_ver, t->ver)) return t->old_ver[0] && ver_gt(t->old_ver, t->ver) ? "update_old_fw" : "needs_newer_fw";
   return "current";
 }
 
@@ -366,7 +502,8 @@ check_thread(void *arg) {
   char (*ids)[12] = calloc((size_t)(n ? n : 1), 12);
   int k = 0;
   for(int i = 0; ids && i < n; i++)
-    if(g_t[i].source == SRC_OFFICIAL || g_t[i].source == SRC_SMP) snprintf(ids[k++], 12, "%s", g_t[i].tid);
+    if((g_t[i].source == SRC_OFFICIAL || g_t[i].source == SRC_SMP || g_t[i].source == SRC_FAKE) && allowed_locked(g_t[i].tid))
+      snprintf(ids[k++], 12, "%s", g_t[i].tid);
   g_check_total = k;
   g_check_done = 0;
   uint32_t fw = g_fw;
@@ -386,8 +523,35 @@ check_thread(void *arg) {
     char why[64] = "";
     int rc = url[0] ? upd_sony_verxml(url, fw, &vi, why, sizeof why) : (snprintf(why, sizeof why, "no_update_list"), -1);
     if(rc != 0 && !strncmp(why, "http_status 404", 15)) { memset(&vi, 0, sizeof vi); rc = 0; why[0] = 0; }   /* no update was ever published */
+    /* the newest official patch needs a newer firmware: the history site may know one that runs here */
+    char o_ver[16] = "", o_size[16] = "", o_fw[16] = "";
+    if(rc == 0 && !strncmp(tid, "PPSA", 4) && vi.latest_version[0]) {
+      char inst[16] = "";
+      pthread_mutex_lock(&g_lock);
+      if((t = find_locked(tid))) snprintf(inst, sizeof inst, "%s", t->ver);
+      pthread_mutex_unlock(&g_lock);
+      if(inst[0] && ver_gt(vi.latest_version, inst) && !ver_gt(vi.compatible_version, inst)) {
+        upd_pver_t *pl = calloc(UPD_PS_MAX, sizeof *pl);
+        int pn = 0;
+        char pw[32];
+        if(pl && upd_patchsite_versions(tid, pl, UPD_PS_MAX, &pn, pw, sizeof pw) == 0) {
+          int best = -1;
+          for(int q = 0; q < pn; q++)
+            if(pl[q].fw_bin <= fw && ver_gt(pl[q].version, inst) && (best < 0 || strcmp(pl[q].version, pl[best].version) > 0)) best = q;
+          if(best >= 0) {
+            snprintf(o_ver, sizeof o_ver, "%s", pl[best].version);
+            snprintf(o_size, sizeof o_size, "%s", pl[best].size);
+            snprintf(o_fw, sizeof o_fw, "%s", pl[best].required_fw);
+          }
+        }
+        free(pl);
+      }
+    }
     pthread_mutex_lock(&g_lock);
     if((t = find_locked(tid))) {
+      snprintf(t->old_ver, sizeof t->old_ver, "%s", o_ver);
+      snprintf(t->old_size, sizeof t->old_size, "%s", o_size);
+      snprintf(t->old_fw, sizeof t->old_fw, "%s", o_fw);
       t->checked = rc == 0 ? 1 : -1;
       snprintf(t->check_why, sizeof t->check_why, "%s", why);
       if(rc == 0) {
@@ -475,6 +639,7 @@ piece_complete_locked(job_t *j, int piece) {
 /* Checks a piece whose parts are all on disk. 0 good (or nothing to check), -1 it does not match: its parts go again. */
 static int
 verify_piece(job_t *j, int p) {
+  if(!g_job_verify) return 0;
   const upd_piece_t *pc = &j->mf.pieces[p];
   char hex[80];
   pthread_mutex_lock(&g_lock);
@@ -589,7 +754,7 @@ download(const char *tid, const char *ver, const char *url, int conns, char *why
     goto out;
   }
   /* every piece is checked (pieces may come over plain http): one without a checksum makes the list unusable */
-  for(int p = 0; p < j->mf.count; p++)
+  for(int p = 0; g_job_verify && p < j->mf.count; p++)
     if(!j->mf.pieces[p].hash[0]) { snprintf(why, wn, "Die Paketliste nennt für Stück %d keine Prüfsumme.", p + 1); goto out; }
   char dir[PATH_MAX], pkg[PATH_MAX], jp[PATH_MAX];
   title_dir(tid, dir, sizeof dir);
@@ -597,7 +762,20 @@ download(const char *tid, const char *ver, const char *url, int conns, char *why
   title_file(tid, UPD_JOB_NAME, jp, sizeof jp);
   mkdir(PS5TM_DATA_DIR, 0777);
   mkdir(UPD_DIR, 0777);
+  {
+    char root[UPD_ROOT_LEN];
+    snprintf(root, sizeof root, "%s", dir);
+    char *sl = strrchr(root, '/');
+    if(sl) { *sl = 0; mkdir(root, 0777); }
+  }
   mkdir(dir, 0777);
+  {
+    struct stat ds;
+    if(stat(dir, &ds) != 0 || !S_ISDIR(ds.st_mode)) {
+      snprintf(why, wn, "Der Download-Ordner ist nicht erreichbar (Laufwerk abgezogen?). Wähle in den Einstellungen einen anderen Ordner.");
+      goto out;
+    }
+  }
 
   /* the parts */
   int nseg = 0;
@@ -631,7 +809,7 @@ download(const char *tid, const char *ver, const char *url, int conns, char *why
       for(int i = 0; i < j->nseg; i++) j->seg[i].done = d->valuestring[i] == '1';
   }
   cJSON_Delete(jj);
-  if(!resume && have_file && st.st_size == j->mf.total) reuse = 1;           /* a package already there: check it */
+  if(!resume && have_file && st.st_size == j->mf.total && g_job_verify) reuse = 1;   /* a package already there: check it (unchecked, it is fetched again) */
   j->fd = open(pkg, O_RDWR | O_CREAT | O_NOFOLLOW, 0666);
   if(j->fd < 0) { snprintf(why, wn, "Die Paketdatei ließ sich nicht anlegen: %s", strerror(errno)); goto out; }
   if(!resume && !reuse) {
@@ -649,6 +827,7 @@ download(const char *tid, const char *ver, const char *url, int conns, char *why
       for(int i = 0; i < j->nseg; i++)
         if(j->seg[i].piece == p && !j->seg[i].done && !reuse) whole = 0;
       if(!whole) continue;
+      if(!g_job_verify) { j->piece_ok[p] = 1; continue; }
       char hex[80];
       pthread_mutex_lock(&g_lock);
       snprintf(g_phase, sizeof g_phase, "Vorhandenes Stück %d von %d wird geprüft", p + 1, j->mf.count);
@@ -779,6 +958,12 @@ queue_thread(void *arg) {
     title_t *t = next_queued_locked();
     if(!t || !g_set.enabled) { g_worker_up = 0; g_job_tid[0] = 0; pthread_mutex_unlock(&g_lock); return NULL; }
     t->in_queue = 0;
+    if(!allowed_locked(t->tid) && t->state != ST_READY) {      /* switched off while it waited */
+      t->state = ST_IDLE;
+      disk_state_locked(t);
+      pthread_mutex_unlock(&g_lock);
+      continue;
+    }
     char tid[12], ver[16], url[512];
     snprintf(tid, sizeof tid, "%s", t->tid);
     if(t->state == ST_READY) { snprintf(ver, sizeof ver, "%s", t->job_ver); snprintf(url, sizeof url, "%s", t->job_url); }
@@ -801,28 +986,34 @@ queue_thread(void *arg) {
     g_rate = 0;
     g_rate_ms = 0;
     int conns = g_set.conns, del = g_set.delete_after;
+    int ia = ready || install_after_locked(tid);       /* a package that is ready is installed when asked for */
+    g_job_verify = g_set.verify;
     pthread_mutex_unlock(&g_lock);
 
     char why[300] = "";
     int rc = ready ? 0 : download(tid, ver, url, conns, why, sizeof why);
     if(rc == 0 && !ready) {
-      pthread_mutex_lock(&g_lock);
-      if((t = find_locked(tid))) t->state = ST_INSTALLING;
-      pthread_mutex_unlock(&g_lock);
-      PS5TM_INFO("upd_downloaded", "Spiel-Updates: %s %s ist geladen und geprüft.", tid, ver);
+      if(ia) {
+        pthread_mutex_lock(&g_lock);
+        if((t = find_locked(tid))) t->state = ST_INSTALLING;
+        pthread_mutex_unlock(&g_lock);
+      }
+      PS5TM_INFO("upd_downloaded", "Spiel-Updates: %s %s ist geladen%s.", tid, ver, g_job_verify ? " und geprüft" : "");
     }
-    int irc = 0;
-    if(rc == 0 && !g_abort) irc = install(tid, ver, why, sizeof why);
+    int irc = 0, noinst = rc == 0 && !ia;
+    if(rc == 0 && !g_abort && ia) irc = install(tid, ver, why, sizeof why);
     pthread_mutex_lock(&g_lock);
     int cancelled = g_cancel_req;
     if((t = find_locked(tid))) {
+      if(cancelled) t->man_ver[0] = t->man_url[0] = 0;
       if(rc == 1 || (rc == 0 && g_abort)) t->state = cancelled ? ST_IDLE : ST_PAUSED;
       else if(rc < 0) { t->state = ST_FAILED; snprintf(t->err, sizeof t->err, "%s", why); }
+      else if(noinst) { t->state = ST_READY; t->err[0] = 0; }
       else if(irc < 0) { t->state = ST_READY; snprintf(t->err, sizeof t->err, "%s", why); }
       else {
         t->state = ST_INSTALLED;
         snprintf(t->err, sizeof t->err, "%s", irc > 0 ? why : "");
-        if(irc == 0) { snprintf(t->ver, sizeof t->ver, "%s", ver); t->checked = 0; }
+        if(irc == 0) { snprintf(t->ver, sizeof t->ver, "%s", ver); t->checked = 0; t->man_ver[0] = t->man_url[0] = 0; }
       }
     }
     g_job_tid[0] = 0;
@@ -830,12 +1021,13 @@ queue_thread(void *arg) {
     char dir[PATH_MAX];
     title_dir(tid, dir, sizeof dir);
     /* the installer may still read the file (its wait above can end before it does): never delete under it */
-    if(cancelled || (rc == 0 && irc == 0 && del))
+    if(cancelled || (rc == 0 && irc == 0 && ia && del))
       for(int i = 0; i < 600 && ps5tm_pkginst_busy(); i++) sleep(1);
     if(cancelled) rm_dir_files(dir);
-    else if(rc == 0 && irc == 0 && del) rm_dir_files(dir);
+    else if(rc == 0 && irc == 0 && ia && del) rm_dir_files(dir);
     if(rc < 0) PS5TM_WARN("upd_failed", "Spiel-Updates: %s %s: %s", tid, ver, why);
-    if(rc == 0 && irc == 0) {
+    if(noinst && !g_abort) ps5tm_notify("Update geladen, bereit zur Installation: %s %s", tid, ver);
+    else if(rc == 0 && irc == 0) {
       PS5TM_INFO("upd_installed", "Spiel-Updates: %s ist jetzt auf Version %s.", tid, ver);
       ps5tm_notify("Update installiert: %s %s", tid, ver);
     }
@@ -880,6 +1072,8 @@ job_rate_locked(int64_t done) {
 cJSON *
 ps5tm_updates_json(void) {
   titles_refresh(0);
+  ps5tm_pkgdrive_t dr[PS5TM_MAX_VOLUMES];
+  unsigned nd = ps5tm_pkg_drives(dr, PS5TM_MAX_VOLUMES);
   pthread_mutex_lock(&g_lock);
   init_locked();
   cJSON *o = cJSON_CreateObject();
@@ -888,6 +1082,22 @@ ps5tm_updates_json(void) {
   cJSON *s = cJSON_AddObjectToObject(o, "settings");
   cJSON_AddNumberToObject(s, "connections", g_set.conns);
   cJSON_AddBoolToObject(s, "delete_after", g_set.delete_after);
+  cJSON_AddStringToObject(s, "default_policy", g_set.allow_default ? "allow" : "deny");
+  cJSON_AddBoolToObject(s, "install_after", g_set.install_after);
+  cJSON_AddBoolToObject(s, "verify", g_set.verify);
+  cJSON_AddStringToObject(s, "download_drive", g_set.drive);
+  pthread_mutex_lock(&g_root_mx);
+  cJSON_AddBoolToObject(s, "drive_missing", g_drive_missing);
+  pthread_mutex_unlock(&g_root_mx);
+  cJSON *da = cJSON_AddArrayToObject(o, "drives");
+  for(unsigned i = 0; da && i < nd; i++) {
+    if(dr[i].internal) continue;
+    cJSON *d = cJSON_CreateObject();
+    cJSON_AddStringToObject(d, "mount", dr[i].mount);
+    cJSON_AddStringToObject(d, "label", dr[i].label);
+    cJSON_AddNumberToObject(d, "free_bytes", (double)dr[i].free_bytes);
+    cJSON_AddItemToArray(da, d);
+  }
   char fw[16];
   upd_fw_text(g_fw, fw, sizeof fw);
   cJSON_AddStringToObject(o, "firmware", fw);
@@ -926,11 +1136,20 @@ ps5tm_updates_json(void) {
     cJSON_AddStringToObject(e, "version", t->ver);
     cJSON_AddStringToObject(e, "status", status_locked(t));
     cJSON_AddBoolToObject(e, "via_smp", t->source == SRC_SMP);
+    cJSON_AddBoolToObject(e, "allowed", allowed_locked(t->tid));
+    cJSON_AddBoolToObject(e, "install_after", install_after_locked(t->tid));
+    cJSON_AddStringToObject(e, "source", t->source == SRC_OFFICIAL ? "official" : t->source == SRC_SMP ? "smp" : t->source == SRC_FAKE ? "fake" : "unknown");
+    if(t->patch_url[0]) cJSON_AddStringToObject(e, "patch_url", t->patch_url);
     char tv[16], tu[512];
     target_locked(t, tv, sizeof tv, tu, sizeof tu);
     cJSON_AddStringToObject(e, "target", t->state != ST_IDLE && t->job_ver[0] ? t->job_ver : tv);
     cJSON_AddStringToObject(e, "latest", t->latest_ver);
     cJSON_AddStringToObject(e, "latest_fw", t->latest_fw);
+    if(t->old_ver[0] && ver_gt(t->old_ver, t->ver)) {
+      cJSON_AddStringToObject(e, "old_ver", t->old_ver);
+      cJSON_AddStringToObject(e, "old_size", t->old_size);
+      cJSON_AddStringToObject(e, "old_fw", t->old_fw);
+    }
     cJSON_AddStringToObject(e, "check_why", t->check_why);
     cJSON_AddBoolToObject(e, "queued", t->in_queue);
     cJSON_AddNumberToObject(e, "total", (double)t->total);
@@ -948,10 +1167,18 @@ ps5tm_updates_packages_json(void) {
   cJSON *o = cJSON_CreateObject();
   cJSON_AddBoolToObject(o, "ok", 1);
   cJSON *arr = cJSON_AddArrayToObject(o, "packages");
-  DIR *d = opendir(UPD_DIR);
+  char roots[1 + PS5TM_MAX_VOLUMES][UPD_ROOT_LEN];
+  int nr;
+  roots_get(roots, &nr);
+  for(int ri = 0; ri < nr; ri++) {
+  DIR *d = opendir(roots[ri]);
   struct dirent *e;
   while(d && (e = readdir(d))) {
     if(!tid_ok(e->d_name)) continue;
+    char want[PATH_MAX], here[PATH_MAX];            /* a game's folder counts once: in the root title_dir picks */
+    title_dir(e->d_name, want, sizeof want);
+    snprintf(here, sizeof here, "%s/%s", roots[ri], e->d_name);
+    if(strcmp(want, here)) continue;
     char pp[PATH_MAX], jp[PATH_MAX];
     title_file(e->d_name, UPD_PKG_NAME, pp, sizeof pp);
     title_file(e->d_name, UPD_JOB_NAME, jp, sizeof jp);
@@ -975,7 +1202,290 @@ ps5tm_updates_packages_json(void) {
     cJSON_AddItemToArray(arr, x);
   }
   if(d) closedir(d);
+  }
   return o;
+}
+
+/* The test behind "Diagnose": the update list, the package list and the first bytes of the first piece, each from the
+   official servers (only their hosts, after a click). No address of the console and no name goes into the report. */
+static void
+diag_step(cJSON *arr, const char *label, int ok, const char *detail) {
+  cJSON *s = cJSON_CreateObject();
+  if(!s) return;
+  cJSON_AddStringToObject(s, "label", label);
+  cJSON_AddBoolToObject(s, "ok", ok);
+  cJSON_AddStringToObject(s, "detail", detail);
+  cJSON_AddItemToArray(arr, s);
+}
+
+cJSON *
+ps5tm_updates_diag(const char *tid, char *msg, size_t mn, int *http) {
+  static volatile int busy;
+  *http = 200;
+  msg[0] = 0;
+  if(!tid_ok(tid)) { snprintf(msg, mn, "Kein gültiges Spiel."); *http = 400; return NULL; }
+  char url[512] = "", name[128] = "", ver[16] = "", dir[PATH_MAX];
+  int plat = 5;
+  uint32_t fw;
+  pthread_mutex_lock(&g_lock);
+  init_locked();
+  title_t *t = find_locked(tid);
+  int enabled = g_set.enabled;
+  if(t) {
+    snprintf(url, sizeof url, "%s", t->ver_uri);
+    snprintf(name, sizeof name, "%s", t->name);
+    snprintf(ver, sizeof ver, "%s", t->ver);
+    plat = t->plat;
+  }
+  fw = g_fw;
+  pthread_mutex_unlock(&g_lock);
+  if(!t) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); *http = 404; return NULL; }
+  if(!enabled) { snprintf(msg, mn, "Spiel-Updates sind ausgeschaltet."); *http = 409; return NULL; }
+  if(__atomic_exchange_n(&busy, 1, __ATOMIC_ACQUIRE)) { snprintf(msg, mn, "Eine Diagnose läuft schon."); *http = 409; return NULL; }
+
+  cJSON *o = cJSON_CreateObject();
+  cJSON *steps = o ? cJSON_AddArrayToObject(o, "steps") : NULL;
+  upd_verinfo_t *vi = calloc(1, sizeof *vi);
+  if(!o || !steps || !vi) { cJSON_Delete(o); free(vi); __atomic_store_n(&busy, 0, __ATOMIC_RELEASE); snprintf(msg, mn, "Kein Speicher."); *http = 500; return NULL; }
+  char fwt[16];
+  upd_fw_text(fw, fwt, sizeof fwt);
+  title_dir(tid, dir, sizeof dir);
+  cJSON_AddStringToObject(o, "title_id", tid);
+  cJSON_AddStringToObject(o, "name", name);
+  cJSON_AddStringToObject(o, "version", ver);
+  cJSON_AddStringToObject(o, "firmware", fwt);
+  cJSON_AddStringToObject(o, "app_version", PS5TM_VERSION);
+  cJSON_AddStringToObject(o, "folder", strncmp(dir, PS5TM_DATA_DIR, strlen(PS5TM_DATA_DIR)) ? "USB-Laufwerk" : "interner Speicher");
+
+  char why[64] = "", detail[200];
+  if(plat == 4) upd_sony_ps4_url(tid, url, sizeof url);
+  int rc = url[0] ? upd_sony_verxml(url, fw, vi, why, sizeof why) : (snprintf(why, sizeof why, "keine Adresse bekannt"), -1);
+  if(rc != 0 && !strncmp(why, "http_status 404", 15)) {
+    diag_step(steps, "Update-Liste der offiziellen Server", 1, "Für dieses Spiel wurde nie ein Update veröffentlicht.");
+  } else if(rc != 0) {
+    snprintf(detail, sizeof detail, "Keine Antwort: %s", why);
+    diag_step(steps, "Update-Liste der offiziellen Server", 0, detail);
+  } else {
+    snprintf(detail, sizeof detail, "Neueste Version %s, für diese Firmware passt %s.", vi->latest_version[0] ? vi->latest_version : "?",
+             vi->compatible_version[0] ? vi->compatible_version : "keine");
+    diag_step(steps, "Update-Liste der offiziellen Server", 1, detail);
+  }
+
+  upd_manifest_t mf;
+  memset(&mf, 0, sizeof mf);
+  if(rc == 0 && vi->compatible_url[0]) {
+    why[0] = 0;
+    if(upd_sony_manifest(vi->compatible_url, &mf, why, sizeof why) != 0) {
+      snprintf(detail, sizeof detail, "Die Paketliste ließ sich nicht laden: %s", why);
+      diag_step(steps, "Paketliste", 0, detail);
+    } else if(mf.count < 1) {
+      diag_step(steps, "Paketliste", 0, "Die Paketliste ist leer.");
+    } else {
+      snprintf(detail, sizeof detail, "%d Stück(e), zusammen %.2f GB.", mf.count, (double)mf.total / 1e9);
+      diag_step(steps, "Paketliste", 1, detail);
+      int64_t len = mf.pieces[0].size < 4096 ? mf.pieces[0].size : 4096;
+      char tmp[PATH_MAX];
+      snprintf(tmp, sizeof tmp, "%s/.diag", UPD_DIR);
+      mkdir(PS5TM_DATA_DIR, 0777);
+      mkdir(UPD_DIR, 0777);
+      int fd = open(tmp, O_RDWR | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+      if(fd < 0) diag_step(steps, "Erstes Stück", 0, "Die Testdatei ließ sich nicht anlegen.");
+      else {
+        volatile int64_t done = 0;
+        volatile int ab = 0;
+        why[0] = 0;
+        int fr = upd_sony_fetch_range(mf.pieces[0].url, fd, 0, 0, len, &done, &ab, why, sizeof why);
+        if(fr == 0) snprintf(detail, sizeof detail, "Die ersten %lld Bytes kamen an.", (long long)len);
+        else if(fr == -3) snprintf(detail, sizeof detail, "Der Server beantwortet keine Teilanfragen; geladen wird dann in einem Stück.");
+        else snprintf(detail, sizeof detail, "Der Abruf scheiterte: %s", why);
+        diag_step(steps, "Erstes Stück", fr == 0 || fr == -3, detail);
+        close(fd);
+        unlink(tmp);
+      }
+    }
+  } else if(rc == 0) {
+    snprintf(detail, sizeof detail, "Für diese Firmware gibt es kein Paket (neuester Patch braucht Firmware %s).", vi->latest_required_fw[0] ? vi->latest_required_fw : "?");
+    diag_step(steps, "Paketliste", 0, detail);
+  }
+
+  char parent[PATH_MAX];
+  snprintf(parent, sizeof parent, "%s", dir);
+  char *sl = strrchr(parent, '/');
+  if(sl) *sl = 0;
+  int64_t fb = free_bytes(parent);
+  if(fb < 0) fb = free_bytes(PS5TM_DATA_DIR);
+  if(fb < 0) diag_step(steps, "Speicherplatz im Download-Ordner", 0, "Der freie Platz ließ sich nicht lesen.");
+  else {
+    int enough = mf.total <= 0 || fb >= mf.total + UPD_RESERVE;
+    snprintf(detail, sizeof detail, "%.1f GB frei%s.", (double)fb / 1e9, enough ? "" : ", das reicht für das Update nicht");
+    diag_step(steps, "Speicherplatz im Download-Ordner", enough, detail);
+  }
+  upd_manifest_free(&mf);
+  free(vi);
+  __atomic_store_n(&busy, 0, __ATOMIC_RELEASE);
+  return o;
+}
+
+/* ---------------------------------------------------------------- other versions (the history sites) */
+
+/* Every version prosperopatches.com / orbispatches.com list for a game, each marked by what can be done with it here.
+   Asked for only after a click and only while the game updates are switched on. */
+cJSON *
+ps5tm_updates_versions(const char *tid, char *msg, size_t mn, int *http) {
+  static volatile int busy;
+  *http = 200;
+  msg[0] = 0;
+  if(!tid_ok(tid)) { snprintf(msg, mn, "Kein gültiges Spiel."); *http = 400; return NULL; }
+  char inst[16] = "";
+  uint32_t fw;
+  pthread_mutex_lock(&g_lock);
+  init_locked();
+  title_t *t = find_locked(tid);
+  int enabled = g_set.enabled;
+  if(t) snprintf(inst, sizeof inst, "%s", t->ver);
+  fw = g_fw;
+  pthread_mutex_unlock(&g_lock);
+  if(!t) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); *http = 404; return NULL; }
+  if(!enabled) { snprintf(msg, mn, "Spiel-Updates sind ausgeschaltet."); *http = 409; return NULL; }
+  if(__atomic_exchange_n(&busy, 1, __ATOMIC_ACQUIRE)) { snprintf(msg, mn, "Die Versionsliste wird schon geladen."); *http = 409; return NULL; }
+  upd_pver_t *list = calloc(UPD_PS_MAX, sizeof *list);
+  cJSON *o = list ? cJSON_CreateObject() : NULL;
+  int n = 0;
+  char why[48] = "";
+  if(!o) { free(list); __atomic_store_n(&busy, 0, __ATOMIC_RELEASE); snprintf(msg, mn, "Kein Speicher."); *http = 500; return NULL; }
+  if(upd_patchsite_versions(tid, list, UPD_PS_MAX, &n, why, sizeof why) != 0) {
+    snprintf(msg, mn, "Die Versionsliste ließ sich nicht laden (%s). Später noch einmal versuchen.", why);
+    *http = 502;
+    cJSON_Delete(o);
+    free(list);
+    __atomic_store_n(&busy, 0, __ATOMIC_RELEASE);
+    return NULL;
+  }
+  int ps4 = !strncmp(tid, "CUSA", 4);
+  char page[80];
+  snprintf(page, sizeof page, "https://%s/%s", ps4 ? "orbispatches.com" : "prosperopatches.com", tid);
+  cJSON_AddBoolToObject(o, "ok", 1);
+  cJSON_AddStringToObject(o, "site", ps4 ? "Orbis Patches" : "Prospero Patches");
+  cJSON_AddStringToObject(o, "page", page);
+  cJSON_AddBoolToObject(o, "ps4", ps4);
+  cJSON_AddStringToObject(o, "installed", inst);
+  cJSON *arr = cJSON_AddArrayToObject(o, "versions");
+  for(int i = 0; arr && i < n; i++) {
+    const char *st = inst[0] && !strcmp(list[i].version, inst) ? "installed"
+                   : inst[0] && strcmp(list[i].version, inst) < 0 ? "older"
+                   : !ps4 && list[i].fw_bin > fw ? "needs_fw" : "ok";
+    cJSON *e = cJSON_CreateObject();
+    if(!e) break;
+    cJSON_AddStringToObject(e, "version", list[i].version);
+    cJSON_AddStringToObject(e, "fw", list[i].required_fw);
+    cJSON_AddStringToObject(e, "size", list[i].size);
+    cJSON_AddStringToObject(e, "state", st);
+    cJSON_AddItemToArray(arr, e);
+  }
+  free(list);
+  __atomic_store_n(&busy, 0, __ATOMIC_RELEASE);
+  return o;
+}
+
+/* "71.7 GB" / "8.7GB" against the bytes the package list adds up to: the sites round up, so a gap of 2 % or 0.15 unit passes.
+   1 when the package clearly is not the size of the chosen version (a link of another version, most likely). */
+static int
+size_mismatch(const char *label, int64_t found) {
+  double v;
+  char unit[8] = "";
+  if(!label || sscanf(label, "%lf %7s", &v, unit) != 2) return 0;
+  double ub = !strcmp(unit, "TB") ? 1099511627776.0 : !strcmp(unit, "GB") ? 1073741824.0 : !strcmp(unit, "MB") ? 1048576.0 : 0;
+  if(ub == 0) return 0;
+  double expect = v * ub, diff = (double)found - expect, tol = expect * 0.02;
+  if(diff < 0) diff = -diff;
+  if(tol < 0.15 * ub) tol = 0.15 * ub;
+  return diff > tol;
+}
+
+static const char *
+link_reason_text(const char *r) {
+  if(!strcmp(r, "url_invalid")) return "Der Link enthält Zeichen, die nicht erlaubt sind.";
+  if(!strcmp(r, "url_not_allowed")) return "Der Link zeigt nicht auf die offiziellen Update-Server.";
+  if(!strcmp(r, "not_an_sc_link")) return "Das ist kein Link der gesuchten Art. Kopiere den SC-Link (bei PS4 einen Stück-Link) oder \"Copy all links\".";
+  if(!strcmp(r, "url_title_mismatch")) return "Der Link gehört zu einem anderen Spiel.";
+  return "Der Link ist zu lang.";
+}
+
+/* Starts the download of a package the person chose: the pasted link is turned into the manifest URL of the very same
+   package folder on the official servers (upd_patchsite_link), never fetched as it is. */
+static int
+download_url_action(const cJSON *b, char *msg, size_t mn) {
+  const cJSON *jid = cJSON_GetObjectItem(b, "id"), *ju = cJSON_GetObjectItem(b, "url"), *jv = cJSON_GetObjectItem(b, "version"),
+              *js = cJSON_GetObjectItem(b, "size"), *jf = cJSON_GetObjectItem(b, "force");
+  const char *tid = cJSON_IsString(jid) ? jid->valuestring : "", *in = cJSON_IsString(ju) ? ju->valuestring : "",
+             *ver = cJSON_IsString(jv) ? jv->valuestring : "", *size = cJSON_IsString(js) ? js->valuestring : "";
+  msg[0] = 0;
+  if(!tid_ok(tid)) { snprintf(msg, mn, "Kein gültiges Spiel."); return 400; }
+  size_t vl = strlen(ver);
+  if(!vl || vl >= 16) { snprintf(msg, mn, "Die Version fehlt."); return 400; }
+  for(const char *p = ver; *p; p++)
+    if(!isdigit((unsigned char)*p) && *p != '.') { snprintf(msg, mn, "Die Version ist ungültig."); return 400; }
+  char canon[512];
+  const char *why = upd_patchsite_link(tid, in, canon, sizeof canon);
+  if(why) { snprintf(msg, mn, "%s", link_reason_text(why)); return 400; }
+
+  titles_refresh(0);
+  pthread_mutex_lock(&g_lock);
+  init_locked();
+  title_t *t = find_locked(tid);
+  int rc = 200;
+  if(!g_set.enabled) { snprintf(msg, mn, "Spiel-Updates sind ausgeschaltet."); rc = 409; }
+  else if(!t) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); rc = 404; }
+  else if(t->source == SRC_UNKNOWN) { snprintf(msg, mn, "Die Paketdatei ließ sich nicht lesen."); rc = 403; }
+  else if(!allowed_locked(tid)) { snprintf(msg, mn, "Updates für dieses Spiel sind ausgeschaltet."); rc = 403; }
+  else if(t->deleting || t->in_queue || !strcmp(g_job_tid, tid) || (t->state != ST_IDLE && t->state != ST_INSTALLED)) {
+    snprintf(msg, mn, "Für dieses Spiel gibt es schon einen Download. Lösche ihn zuerst, dann geht es weiter.");
+    rc = 409;
+  }
+  else if(!ver_gt(ver, t->ver)) { snprintf(msg, mn, "Diese Version ist nicht neuer als die installierte."); rc = 409; }
+  pthread_mutex_unlock(&g_lock);
+  if(rc != 200) return rc;
+
+  upd_manifest_t mf;
+  memset(&mf, 0, sizeof mf);
+  char mwhy[64] = "";
+  if(upd_sony_manifest(canon, &mf, mwhy, sizeof mwhy) != 0) {
+    snprintf(msg, mn, "Die Paketliste zu diesem Link ließ sich nicht laden (%s). Ist es der Link der richtigen Version?", mwhy);
+    return 502;
+  }
+  int64_t total = mf.total;
+  upd_manifest_free(&mf);
+  if(!cJSON_IsTrue(jf) && size_mismatch(size, total)) {
+    snprintf(msg, mn, "Die Größe stimmt nicht: Das Paket hat %.1f GB, die Liste nennt %s. Wahrscheinlich ist es der Link einer anderen Version.",
+             (double)total / 1073741824.0, size);
+    return 409;
+  }
+  char dir[PATH_MAX];
+  title_dir(tid, dir, sizeof dir);
+  char *sl = strrchr(dir, '/');
+  if(sl) *sl = 0;
+  int64_t fb = free_bytes(dir);
+  if(fb >= 0 && fb < total + UPD_RESERVE) {
+    snprintf(msg, mn, "Zu wenig Platz: nötig sind %.1f GB, frei sind %.1f GB.", (double)(total + UPD_RESERVE) / 1e9, (double)fb / 1e9);
+    return 507;
+  }
+
+  pthread_mutex_lock(&g_lock);
+  t = find_locked(tid);
+  if(!t || !g_set.enabled || t->deleting || t->in_queue || !strcmp(g_job_tid, tid) || (t->state != ST_IDLE && t->state != ST_INSTALLED)) {
+    snprintf(msg, mn, "Der Zustand des Spiels hat sich geändert. Bitte noch einmal versuchen.");
+    rc = 409;
+  } else {
+    snprintf(t->man_ver, sizeof t->man_ver, "%s", ver);
+    snprintf(t->man_url, sizeof t->man_url, "%s", canon);
+    t->in_queue = 1;
+    t->qorder = ++g_qseq;
+    t->state = ST_QUEUED;
+    kick_worker_locked();
+    snprintf(msg, mn, "Version %s steht in der Warteschlange.", ver);
+  }
+  pthread_mutex_unlock(&g_lock);
+  return rc;
 }
 
 /* Actions. 200 done, else an HTTP status with the reason in msg. */
@@ -984,7 +1494,22 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
   msg[0] = 0;
   const cJSON *ja = cJSON_GetObjectItem(b, "action"), *jid = cJSON_GetObjectItem(b, "id");
   const char *a = cJSON_IsString(ja) ? ja->valuestring : "";
+  if(!strcmp(a, "download_url")) return download_url_action(b, msg, mn);
   const char *tid = cJSON_IsString(jid) ? jid->valuestring : "";
+  /* a chosen drive must be one of the connected ones (the page never names a path); looked up before the lock is taken */
+  int drive_set = 0, drive_ok = 1;
+  char drive_new[sizeof g_set.drive] = "";
+  const cJSON *jdv = !strcmp(a, "settings") ? cJSON_GetObjectItem(b, "download_drive") : NULL;
+  if(cJSON_IsString(jdv)) {
+    drive_set = 1;
+    if(jdv->valuestring[0]) {
+      ps5tm_pkgdrive_t dr[PS5TM_MAX_VOLUMES];
+      unsigned nd = ps5tm_pkg_drives(dr, PS5TM_MAX_VOLUMES);
+      drive_ok = 0;
+      for(unsigned i = 0; i < nd; i++)
+        if(!dr[i].internal && !strcmp(dr[i].mount, jdv->valuestring)) { drive_ok = 1; snprintf(drive_new, sizeof drive_new, "%s", dr[i].mount); }
+    }
+  }
   titles_refresh(0);
   pthread_mutex_lock(&g_lock);
   init_locked();
@@ -1007,7 +1532,29 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
       if(v->valuedouble < 1 || v->valuedouble > UPD_MAX_CONNS) { snprintf(msg, mn, "Verbindungen: 1 bis %d.", UPD_MAX_CONNS); rc = 400; goto out; }
       g_set.conns = (int)v->valuedouble;
     }
+    if(cJSON_IsString(v = cJSON_GetObjectItem(b, "default_policy")) && strcmp(v->valuestring, "allow") && strcmp(v->valuestring, "deny")) {
+      snprintf(msg, mn, "Standardregel: erlauben oder verweigern.");
+      rc = 400;
+      goto out;
+    }
+    if(drive_set && !drive_ok) { snprintf(msg, mn, "Dieses Laufwerk ist nicht angeschlossen."); rc = 400; goto out; }
     if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "delete_after"))) g_set.delete_after = cJSON_IsTrue(v);
+    if(cJSON_IsString(v = cJSON_GetObjectItem(b, "default_policy"))) g_set.allow_default = !strcmp(v->valuestring, "allow");
+    if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "install_after"))) g_set.install_after = cJSON_IsTrue(v);
+    if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "verify"))) g_set.verify = cJSON_IsTrue(v);
+    if(drive_set) snprintf(g_set.drive, sizeof g_set.drive, "%s", drive_new);
+    settings_save_locked();
+    snprintf(msg, mn, "Gespeichert.");
+    goto out;
+  }
+  if(!strcmp(a, "title_settings")) {
+    title_t *ts = tid_ok(tid) ? find_locked(tid) : NULL;
+    if(!ts) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); rc = 404; goto out; }
+    const cJSON *v;
+    if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "allowed"))) ovr_set(g_ov_allow, &g_ov_allow_n, ts->tid, cJSON_IsTrue(v));
+    v = cJSON_GetObjectItem(b, "install_after");
+    if(cJSON_IsBool(v)) ovr_set(g_ov_inst, &g_ov_inst_n, ts->tid, cJSON_IsTrue(v));
+    else if(cJSON_IsNull(v)) ovr_set(g_ov_inst, &g_ov_inst_n, ts->tid, -1);
     settings_save_locked();
     snprintf(msg, mn, "Gespeichert.");
     goto out;
@@ -1034,8 +1581,9 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
       title_t *t = &g_t[i];
       char v[16], u[512];
       target_locked(t, v, sizeof v, u, sizeof u);
-      if((t->source != SRC_OFFICIAL && t->source != SRC_SMP) || t->in_queue || t->deleting || !strcmp(g_job_tid, t->tid)) continue;
-      if((v[0] && (t->state == ST_IDLE || t->state == ST_FAILED || t->state == ST_PAUSED)) || t->state == ST_READY) {
+      if(t->source == SRC_UNKNOWN || t->in_queue || t->deleting || !strcmp(g_job_tid, t->tid) || !allowed_locked(t->tid)) continue;
+      if((v[0] && (t->state == ST_IDLE || t->state == ST_FAILED || t->state == ST_PAUSED)) ||
+         (t->state == ST_READY && install_after_locked(t->tid))) {
         t->in_queue = 1;
         t->qorder = ++g_qseq;
         if(t->state != ST_READY) t->state = ST_QUEUED;
@@ -1050,7 +1598,8 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
   if(!t) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); rc = 404; goto out; }
   if(t->deleting) { snprintf(msg, mn, "Das Update dieses Spiels wird gerade gelöscht."); rc = 409; goto out; }
   if(!strcmp(a, "download") || !strcmp(a, "resume") || !strcmp(a, "install")) {
-    if(t->source != SRC_OFFICIAL && t->source != SRC_SMP) { snprintf(msg, mn, "Nur für Spiele von Disc, aus dem PlayStation Store oder über ShadowMountPlus."); rc = 403; goto out; }
+    if(t->source == SRC_UNKNOWN) { snprintf(msg, mn, "Die Paketdatei ließ sich nicht lesen."); rc = 403; goto out; }
+    if(!allowed_locked(t->tid) && strcmp(a, "install")) { snprintf(msg, mn, "Updates für dieses Spiel sind ausgeschaltet."); rc = 403; goto out; }
     if(t->in_queue || !strcmp(g_job_tid, t->tid)) { snprintf(msg, mn, "Dieses Update steht schon in der Warteschlange."); goto out; }
     char v[16], u[512];
     target_locked(t, v, sizeof v, u, sizeof u);
@@ -1084,6 +1633,7 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
     t->state = ST_IDLE;
     t->total = t->have = 0;
     t->err[0] = 0;
+    t->man_ver[0] = t->man_url[0] = 0;
     char dir[PATH_MAX], tidc[12];
     title_dir(t->tid, dir, sizeof dir);
     snprintf(tidc, sizeof tidc, "%s", t->tid);
@@ -1099,6 +1649,7 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
   rc = 400;
 out:
   pthread_mutex_unlock(&g_lock);
+  if(drive_set && rc == 200) roots_refresh();
   return rc;
 }
 
@@ -1112,7 +1663,7 @@ pkg_path_for(const char *id, char *path, size_t n, char *tid, size_t tn) {
   pthread_mutex_lock(&g_lock);
   title_t *t = find_locked(id + 4);
   /* only while the update queue itself installs this title: then nobody can delete the file under the installer */
-  int ok = t && (t->source == SRC_OFFICIAL || t->source == SRC_SMP) && t->state == ST_INSTALLING && !strcmp(g_job_tid, t->tid);
+  int ok = t && t->source != SRC_UNKNOWN && t->state == ST_INSTALLING && !strcmp(g_job_tid, t->tid);
   pthread_mutex_unlock(&g_lock);
   return ok ? 0 : -1;
 }
@@ -1152,6 +1703,7 @@ ps5tm_updates_boot(void) {
   pthread_mutex_lock(&g_lock);
   init_locked();
   pthread_mutex_unlock(&g_lock);
+  roots_refresh();
 }
 
 int

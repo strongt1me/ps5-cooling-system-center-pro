@@ -532,7 +532,7 @@ serve_connection(void *arg) {
   if(sscanf(raw, "%7s %3583s", req.method, target) != 2) {
     ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Statuszeile.");
     free(raw);
-    close(fd);
+    close_after_answer(fd);
     return NULL;
   }
 
@@ -540,7 +540,7 @@ serve_connection(void *arg) {
   if(strlen(target) >= sizeof(target) - 1) {
     ps5tm_http_send_error(fd, 414, "uri_too_long", "Die Adresse ist zu lang.");
     free(raw);
-    close(fd);
+    close_after_answer(fd);
     return NULL;
   }
   char *qmark = strchr(target, '?');
@@ -550,7 +550,7 @@ serve_connection(void *arg) {
   if(strlen(target) >= sizeof(req.path) || (qmark && strlen(qmark + 1) >= sizeof(req.query))) {
     ps5tm_http_send_error(fd, 414, "uri_too_long", "Die Adresse ist zu lang.");
     free(raw);
-    close(fd);
+    close_after_answer(fd);
     return NULL;
   }
   if(qmark) snprintf(req.query, sizeof(req.query), "%s", qmark + 1);
