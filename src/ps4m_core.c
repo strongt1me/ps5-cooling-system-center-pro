@@ -1610,7 +1610,9 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
         snprintf(path, sizeof(path), "%s/%s", dir, e->d_name);
         struct stat rs;
         if (!stat(path, &rs) && p4m_restored_has(RESTORED_LIST, drive_rel(root, path), (uint64_t)rs.st_size)) {
-            if (first_time(path))
+            char key[PATH_MAX + 4]; /* its own key: the real reason shows once the pkg is taken up again */
+            snprintf(key, sizeof(key), "%s#r", path);
+            if (first_time(key))
                 printf("[scan] skip %s (moved back from ps4/ on request)\n", path);
             continue;
         }
@@ -2947,8 +2949,11 @@ static void config_load(void) {
         c.batch_size = 5;
     if (c.restore_batch < 1 || c.restore_batch > MAX_RESTORE_BATCH)
         c.restore_batch = 5;
-    if (!c.npaths)
-        c.npaths = 1; /* the root */
+    if (!c.npaths) { /* the root and the folder pkg (the app's addition: many people keep their pkgs there) */
+        c.paths[0][0] = 0;
+        snprintf(c.paths[1], sizeof(c.paths[1]), "pkg");
+        c.npaths = 2;
+    }
     g_cfg = c;
     printf("[config] batch=%d batch_size=%d dlc=%d restore_batch=%d fast_reg=%d folders=%d\n", g_cfg.batch, g_cfg.batch_size,
            g_cfg.dlc, g_cfg.restore_batch, g_cfg.fast_reg, g_cfg.npaths);

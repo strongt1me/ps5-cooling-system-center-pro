@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.74.0
 
 ### Spiel-Updates: PKG und fpkg
 
@@ -23,6 +23,13 @@
 - **Patch für ältere Firmware**: Braucht der neueste offizielle Patch eine neuere Firmware, sucht die Prüfung („Nach Updates suchen“) auf der Verlaufsseite die neueste Version, die hier läuft, und zeigt „älterer Patch passt“ mit Anleitung. Fehlt die Firmware-Angabe der Seite, bleibt es bei „braucht neuere Firmware“ – es wird nie geraten (nur PS5; PS4-Listen kennen keine solche Grenze)
 - Neu: `src/upd_patchsite.c/.h` (Verlaufsseiten, Link-Umbau); Antworten der Seiten sind auf 512 KB begrenzt, ihr Text wird auf einfache Zeichen gefiltert. Die Antwortformate der Seiten konnten nicht live geprüft werden (ungetestet an der Konsole)
 - Die neuen Texte stehen nur auf Deutsch; in en/es/fr/it/ru fehlen sie
+
+### Fehlerbehebungen
+- „Alle aktualisieren“ nahm Fake-PKG-Spiele nicht auf, obwohl die Liste sie mit Update zeigte
+- Überläufe beim Lesen fremder Dateien behoben: Längenprüfungen in `lz4pack.c` und `amprlib.c` (Speicherfehler bei fehlgeschlagener Vergrößerung), Schiebezahl im Abbild-Leser `imgread.c`
+- Der Arbeitsfaden der Spielstand-Sicherung bekommt einen eigenen, größeren Stapel
+- Fehlertexte der Weboberfläche gelangen nur noch als einfacher Text in das Protokoll
+- Antworten auf zu lange oder ungültige Adressen kommen im Browser als Meldung an statt als Netzwerkfehler
 
 ### PS4 von USB
 - Die Suche nach PKG-Dateien nimmt ab Werk die oberste Ebene **und** den Ordner `pkg` jedes Laufwerks (vorher nur die oberste Ebene); wer schon Ordner in den Einstellungen hat, behält seine Liste
