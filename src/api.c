@@ -4452,6 +4452,10 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
       /* The settings as the form string of the original panel: batch, batch_size, dlc, paths (one folder per line). */
       const cJSON *jb = cJSON_GetObjectItem(b, "batch"), *js = cJSON_GetObjectItem(b, "batch_size");
       const cJSON *jd = cJSON_GetObjectItem(b, "dlc"), *jp = cJSON_GetObjectItem(b, "paths");
+      /* dlc_copy (0.7.0): add-ons are copied to internal storage by the system instead of mounted; left out, the module keeps its value */
+      const cJSON *jdc = cJSON_GetObjectItem(b, "dlc_copy");
+      char dc[20] = "";
+      if(cJSON_IsBool(jdc)) snprintf(dc, sizeof(dc), "&dlc_copy=%d", cJSON_IsTrue(jdc) ? 1 : 0);
       char form[1600], enc[1300];
       size_t o = 0;
       if(cJSON_IsString(jp)) {
@@ -4470,8 +4474,8 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
       const cJSON *jf = cJSON_GetObjectItem(b, "fast_reg");
       char fr[16] = "";
       if(cJSON_IsBool(jf)) snprintf(fr, sizeof(fr), "&fast_reg=%d", cJSON_IsTrue(jf) ? 1 : 0);
-      snprintf(form, sizeof(form), "batch=%d&batch_size=%d&dlc=%d%s%s&paths=%s",
-               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? ps5tm_num_i32(js->valuedouble) : 5, cJSON_IsTrue(jd) ? 1 : 0, rb, fr, enc);
+      snprintf(form, sizeof(form), "batch=%d&batch_size=%d&dlc=%d%s%s%s&paths=%s",
+               cJSON_IsTrue(jb) ? 1 : 0, cJSON_IsNumber(js) ? ps5tm_num_i32(js->valuedouble) : 5, cJSON_IsTrue(jd) ? 1 : 0, dc, rb, fr, enc);
       rc = ps4m_do_config(form, msg, sizeof(msg));
     } else if(!strcmp(action, "restore") && cJSON_IsArray(cJSON_GetObjectItem(b, "ids"))) {
       /* several games at once (since 0.5.0): {"action":"restore","ids":["CUSA…",…]}; the module checks each title id */
@@ -4519,6 +4523,63 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     cJSON_AddStringToObject(o, "log", s ? s : "");
     free(s);
     send_cjson(fd, 200, o);
+    return;
+  }
+  /* PS4Mount 0.7.0: the updates and add-ons of one game, and the panel's choices for them. */
+  if(!strcmp(req->path, "/api/v1/ps4mount/game")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char id[16] = "", msg[200] = "";
+    query_param(req->query, "id", id, sizeof(id));
+    char *s = ps4m_game_json(id, msg, sizeof(msg));
+    if(!s) { ps5tm_http_send_error(fd, 404, "not_found", msg); return; }
+    ps5tm_http_send_json(fd, 200, s);
+    free(s);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/ps4mount/update")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL, *jf = b ? cJSON_GetObjectItem(b, "file") : NULL;
+    char id[16] = "", file[80] = "", msg[200] = "";
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    if(cJSON_IsString(jf)) snprintf(file, sizeof(file), "%s", jf->valuestring);
+    int rc = ps4m_choose_update(id, file, msg, sizeof(msg));
+    cJSON_Delete(b);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", rc == 0);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, rc == 0 ? 200 : 409, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/ps4mount/dlc")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL, *jo = b ? cJSON_GetObjectItem(b, "on") : NULL;
+    char id[16] = "", msg[200] = "";
+    static char on[64 * 37 + 1];
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    snprintf(on, sizeof(on), "%s", cJSON_IsString(jo) ? jo->valuestring : "");
+    int rc = ps4m_choose_dlc(id, on, msg, sizeof(msg));
+    cJSON_Delete(b);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", rc == 0);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, rc == 0 ? 200 : 409, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/ps4mount/launch")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL, *jfo = b ? cJSON_GetObjectItem(b, "force") : NULL;
+    char id[16] = "", msg[200] = "";
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    int rc = ps4m_launch(id, cJSON_IsTrue(jfo), msg, sizeof(msg));
+    cJSON_Delete(b);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", rc == 0);
+    if(rc == 1) cJSON_AddBoolToObject(o, "confirm", 1); /* another game is open: the page asks before it is closed */
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, rc < 0 ? 409 : 200, o);
     return;
   }
   /* The starter app (starter/, a tile that starts this payload) asks for the web UI in the console's browser. Only the page of this

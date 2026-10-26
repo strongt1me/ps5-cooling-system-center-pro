@@ -317,6 +317,49 @@ ver_cmp(const char *a, const char *b) {
   return 0;
 }
 
+/* The version a param.sfo at path names, or "" — a PS4 title under backward compatibility: it has no param.json
+   anywhere (checked on the console 26.10.2026, CUSA44880: /system_data/priv/appmeta/<TID>/param.sfo was the only file
+   with its version, APP_VER "01.02" right after an update that installed_state() could not see, since only
+   param_json_version() existed). Same key order as pkgparse.c's parse_param_sfo (a package's own embedded param.sfo),
+   duplicated rather than shared: that one reads from a buffer already in memory, this one from a loose file. */
+static void
+param_sfo_version(const char *path, char *out, size_t n) {
+  out[0] = 0;
+  int fd = open(path, O_RDONLY | O_NONBLOCK);
+  if(fd < 0) return;
+  const size_t cap = 65536;
+  uint8_t *buf = malloc(cap);
+  if(!buf) { close(fd); return; }
+  ssize_t r = read(fd, buf, cap);
+  close(fd);
+  if(r < 20 || memcmp(buf, "\x00PSF", 4)) { free(buf); return; }
+  size_t len = (size_t)r;
+  uint32_t kt, dt, count;
+  memcpy(&kt, buf + 8, 4); memcpy(&dt, buf + 12, 4); memcpy(&count, buf + 16, 4);
+  if(kt >= len || dt >= len || count > 1024) { free(buf); return; }
+  char app_ver[24] = "", version[24] = "";
+  for(uint32_t i = 0; i < count; i++) {
+    if((uint64_t)20 + (uint64_t)(i + 1) * 16 > len) break;
+    const uint8_t *e = buf + 20 + (size_t)i * 16;
+    uint16_t koff; uint32_t dlen, doff;
+    memcpy(&koff, e, 2); memcpy(&dlen, e + 4, 4); memcpy(&doff, e + 12, 4);
+    if((uint64_t)kt + koff >= len) continue;
+    const char *key = (const char *)(buf + kt + koff);
+    if(!memchr(key, 0, len - (kt + koff))) continue;
+    if((uint64_t)dt + doff + dlen > len) continue;
+    const uint8_t *d = buf + dt + doff;
+    char *dst = !strcmp(key, "APP_VER") ? app_ver : !strcmp(key, "VERSION") ? version : NULL;
+    if(!dst || dst[0]) continue;
+    size_t k = dlen < sizeof(app_ver) - 1 ? dlen : sizeof(app_ver) - 1;
+    while(k > 0 && d[k - 1] == 0) k--;
+    memcpy(dst, d, k);
+    dst[k] = 0;
+    for(size_t j = 0; j < k; j++) if((unsigned char)dst[j] < 32) { dst[j] = 0; break; }
+  }
+  free(buf);
+  snprintf(out, n, "%s", app_ver[0] ? app_ver : version);
+}
+
 /* The version a param.json at path names, or "". */
 static void
 param_json_version(const char *path, char *out, size_t n) {
@@ -367,6 +410,19 @@ installed_state(const char *title_id, char *ver, size_t ver_len) {
     char path[160], cand[48], norm[48];
     snprintf(path, sizeof(path), where[i], title_id);
     param_json_version(path, cand, sizeof(cand));
+    if(!cand[0]) continue;
+    norm_version(cand, norm, sizeof(norm));
+    if(!best[0] || ver_cmp(norm, best) > 0) snprintf(best, sizeof(best), "%s", norm);
+  }
+  /* A PS4 title under backward compatibility: no param.json anywhere, only the console's own param.sfo, updated in
+     place (no separate "patch" folder — checked on the console 26.10.2026). */
+  static const char *const where_sfo[] = {
+    "/system_data/priv/appmeta/%s/param.sfo", "/user/appmeta/%s/param.sfo"
+  };
+  for(unsigned i = 0; i < sizeof(where_sfo) / sizeof(where_sfo[0]); i++) {
+    char path[160], cand[48], norm[48];
+    snprintf(path, sizeof(path), where_sfo[i], title_id);
+    param_sfo_version(path, cand, sizeof(cand));
     if(!cand[0]) continue;
     norm_version(cand, norm, sizeof(norm));
     if(!best[0] || ver_cmp(norm, best) > 0) snprintf(best, sizeof(best), "%s", norm);

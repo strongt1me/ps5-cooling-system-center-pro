@@ -1,7 +1,7 @@
 {
   "_comment": "Stand der Fremdbausteine, die diese App nutzt. 'current' ist die Fassung, die im Projekt steckt (nicht die neueste). tools/upstream_check.py vergleicht mit GitHub; der Skill 'upstream-update' (.claude/skills) arbeitet die Unterschiede ab und trägt die neue Fassung hier ein.",
   "components": [
-    {"id": "ps4mount", "repo": "gasb07/ps4mount", "current": "v0.6.1", "prereleases": false,
+    {"id": "ps4mount", "repo": "gasb07/ps4mount", "current": "v0.7.0", "prereleases": false,
      "where": "src/ps4m_*.c (Port von src/main.c -> ps4m_core.c), third_party/ps4mount/ORIGIN.md, Handbuch-Kapitel PS4 von USB",
      "how": "Vergleich v<alt>...v<neu> mit gh api repos/gasb07/ps4mount/compare; Änderungen von Hand in src/ps4m_core.c (und ps4m_pkg/build/crypto) übernehmen; logts.c und web.c entfallen"},
     {"id": "shadowmountplus", "repo": "drakmor/ShadowMountPlus", "current": "1.7beta7", "prereleases": true,

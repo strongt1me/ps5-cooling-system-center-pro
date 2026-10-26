@@ -6850,7 +6850,7 @@
   const P4M_STATE = {
     ready: ["ok", "Bereit"], running: ["ok", "Läuft"], pending: ["warn", "Wird hinzugefügt"],
     removed: ["", "Aus der Bibliothek entfernt"], internal: ["", "Auf der Konsole installiert"],
-    duplicate: ["", "Liegt auch auf einem anderen Laufwerk"]
+    duplicate: ["", "Liegt auch auf einem anderen Laufwerk"], addons: ["warn", "Zusatzinhalte werden kopiert"]
   };
 
   const p4mPost = async (body) => {
@@ -6923,6 +6923,7 @@
     if (!p4m.cfgShown && d.config && d.config.batch_size !== undefined) {
       p4m.cfgShown = true;
       $("#p4m-dlc").checked = !!d.config.dlc;
+      $("#p4m-dlccopy").checked = !!d.config.dlc_copy;
       $("#p4m-batch").checked = !!d.config.batch;
       $("#p4m-fast").checked = !!d.config.fast_reg;
       $("#p4m-size").value = d.config.batch_size;
@@ -6939,7 +6940,11 @@
       if (r.busy && p4m.data && !(r.games && r.games.length)) p4m.data = Object.assign({}, p4m.data, { busy: true });
       else p4m.data = r;
       p4mRender();
-    } catch (e) { txt("#p4m-sub", e.message); }
+      if (state.page === "ps4mount") p4mountRender();
+    } catch (e) {
+      txt("#p4m-sub", e.message);
+      if (state.page === "ps4mount") txt("#p4mp-sub", e.message);
+    }
   };
 
   const loadP4mLog = async () => {
@@ -6948,10 +6953,194 @@
   };
 
   const p4mSync = () => {
-    const run = state.page === "games" && pt.tab === "p4m" && !document.hidden;
+    const run = ((state.page === "games" && pt.tab === "p4m") || state.page === "ps4mount") && !document.hidden;
     if (run && !p4m.timer) p4m.timer = setInterval(loadP4m, 5000);
     else if (!run && p4m.timer) { clearInterval(p4m.timer); p4m.timer = 0; }
   };
+
+  /* ── PS4Mount-Spiele: Updates wählen, Zusatzinhalte an/aus, Starten (eigene Seitenleisten-Seite, 26.10.2026) ──
+   * Dieselbe Liste wie „PS4 von USB" (p4m.data.games, /api/v1/ps4mount), aber nur die drei neuen Funktionen von
+   * PS4Mount 0.7.0; Suche und Einstellungen bleiben auf der Spiele-Seite. Ein eigenes, schlankes Fenster
+   * (wie Kopieren/Konvertieren, aber ohne deren Zustand zu teilen) zeigt wahlweise die Updates oder die
+   * Zusatzinhalte eines Spiels (/api/v1/ps4mount/game); „view" sagt, welche Ansicht gerade drin ist. */
+  const p4mg = { id: "", name: "", view: "", data: null, sel: "", seq: 0 };
+
+  const p4mountRender = () => {
+    const d = p4m.data;
+    const games = ((d && d.games) || []).filter((g) => g.state !== "internal" && g.state !== "removed");
+    txt("#p4mp-sub", d ? `${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken` : "wird gelesen …");
+    const note = $("#p4mp-note");
+    note.hidden = !d || !!d.enabled;
+    if (d && !d.enabled) note.textContent = "PS4Mount ist ausgeschaltet. Einschalten auf der Spiele-Seite unter „PS4 von USB“, damit Spiele gefunden werden.";
+    $("#p4mp-list").innerHTML = games.length ? games.map((g) => {
+      const st = P4M_STATE[g.state] || ["", g.state];
+      const meta = [g.title_id, `Version ${g.version}`];
+      if (g.updates > 1) meta.push(`${g.updates} Updates`);
+      if (g.dlc_total) meta.push(g.dlc === g.dlc_total ? `${g.dlc} Zusatzinhalt${g.dlc_total === 1 ? "" : "e"}` : `${g.dlc} von ${g.dlc_total} Zusatzinhalten an`);
+      const busy = g.state === "running";
+      return `<div class="p4m-row">
+        <img class="p4m-icon" src="/api/v1/ps4mount/icon?id=${esc(g.title_id)}" alt="" loading="lazy">
+        <div class="p4m-main"><div class="p4m-name">${esc(g.name)}</div>
+          <div class="p4m-meta">${esc(meta.join(" · "))}</div></div>
+        <span class="p4m-state ${st[0]}">${esc(st[1])}</span>
+        <div class="p4m-btns">
+          ${g.updates > 1 ? `<button type="button" class="btn ghost" data-p4mg="upd" data-id="${esc(g.title_id)}" data-name="${esc(g.name)}">Updates</button>` : ""}
+          ${g.dlc_total ? `<button type="button" class="btn ghost" data-p4mg="dlc" data-id="${esc(g.title_id)}" data-name="${esc(g.name)}">Zusatzinhalte</button>` : ""}
+          <button type="button" class="btn primary" data-p4mg="launch" data-id="${esc(g.title_id)}" data-name="${esc(g.name)}" ${busy ? "disabled" : ""}>Starten</button>
+        </div></div>`;
+    }).join("") : `<p class="muted">${d ? "Keine PS4-Spiele auf den angeschlossenen Laufwerken gefunden." : "wird gelesen …"}</p>`;
+  };
+
+  const p4mgClose = () => {
+    const o = $("#p4mg-overlay");
+    if (o) o.remove();
+    p4mg.view = "";
+    p4mg.seq++;
+  };
+
+  const p4mgShell = () => {
+    let o = $("#p4mg-overlay");
+    if (!o) {
+      o = document.createElement("div");
+      o.id = "p4mg-overlay";
+      o.className = "gm-overlay";
+      o.innerHTML = `<div class="cp-dialog" role="dialog" aria-modal="true" aria-labelledby="p4mg-title">
+          <div class="cp-head"><h3 id="p4mg-title"></h3>
+            <button type="button" class="cp-x" data-p4mg="close" aria-label="Schließen">×</button></div>
+          <div id="p4mg-body"></div>
+        </div>`;
+      document.body.appendChild(o);
+      o.addEventListener("click", (e) => {
+        if (e.target === o) { p4mgClose(); return; }
+        const b = e.target.closest("[data-p4mg]");
+        if (!b || b.disabled) return;
+        const act = b.dataset.p4mg;
+        if (act === "close") p4mgClose();
+        else if (act === "upd-go") p4mgSubmitUpd(b);
+        else if (act === "dlc-all") p4mgDlcAll(b);
+        else if (act === "dlc-go") p4mgSubmitDlc(b);
+      });
+      o.addEventListener("change", (e) => {
+        if (p4mg.view === "upd" && e.target.name === "p4mg-upd") p4mg.sel = e.target.value;
+      });
+    }
+    o.hidden = false;
+    return o;
+  };
+
+  const P4MG_COPY = {
+    "": "", missing: "wartet", installing: "wird kopiert", installed: "kopiert", store: "schon vorhanden",
+    problem: "fehlgeschlagen"
+  };
+
+  const p4mgRenderUpd = () => {
+    const j = p4mg.data;
+    if (!j) return;
+    const rows = (j.updates || []).map((u, i) => `<label class="cp-check p4m-pickrow">
+        <input type="radio" name="p4mg-upd" value="${esc(u.file)}" ${u.file === p4mg.sel ? "checked" : ""}>
+        <span><b>${esc(u.name)}</b> <span class="muted">${esc(`Version ${u.version}`)}</span>${u.active ? " <b>· benutzt</b>" : ""}</span></label>`).join("");
+    $("#p4mg-body").innerHTML = `<p class="muted">Ein Update ist jeweils benutzt. Ein anderes gewählt, wird das Spiel damit neu zur Bibliothek hinzugefügt.</p>
+      <div class="p4m-pick">${rows || `<p class="muted">Keine Updates gefunden.</p>`}</div>
+      <div class="cp-actions"><button type="button" class="btn" data-p4mg="close">Schließen</button>
+        <button type="button" class="btn primary" data-p4mg="upd-go" ${p4mg.sel ? "" : "disabled"}>Dieses Update benutzen</button></div>`;
+  };
+
+  const p4mgRenderDlc = () => {
+    const j = p4mg.data;
+    if (!j) return;
+    const limit = j.dlc_limit || 29;
+    const on = (j.dlcs || []).filter((d) => d.on).length;
+    const rows = (j.dlcs || []).map((d) => `<label class="cp-check p4m-pickrow">
+        <input type="checkbox" data-p4mg-dlc="${esc(d.content_id)}" ${d.on ? "checked" : ""}>
+        <span><b>${esc(d.name)}</b> <span class="muted">${esc(d.data ? "mit Daten" : "nur Freischaltung")}${d.copy ? ` · ${P4MG_COPY[d.copy] || d.copy}` : ""}${d.reason ? ` (${esc(d.reason)})` : ""}</span></span></label>`).join("");
+    $("#p4mg-body").innerHTML = `<p class="muted">Höchstens ${limit} Zusatzinhalte können gleichzeitig an sein (${on} von ${(j.dlcs || []).length} jetzt an). Geändert, wird das Spiel damit neu zur Bibliothek hinzugefügt.</p>
+      <label class="cp-check p4m-pickrow"><input type="checkbox" data-p4mg="dlc-all"><span><b>Alle an</b> (bis zum Höchstwert)</span></label>
+      <div class="p4m-pick">${rows || `<p class="muted">Keine Zusatzinhalte gefunden.</p>`}</div>
+      <div class="cp-actions"><button type="button" class="btn" data-p4mg="close">Schließen</button>
+        <button type="button" class="btn primary" data-p4mg="dlc-go">Speichern</button></div>`;
+  };
+
+  const p4mgOpen = async (kind, id, name) => {
+    p4mgShell();
+    const seq = ++p4mg.seq;
+    p4mg.id = id; p4mg.name = name; p4mg.view = kind; p4mg.data = null; p4mg.sel = "";
+    txt("#p4mg-title", `${kind === "upd" ? "Updates" : "Zusatzinhalte"} von „${name}“`);
+    $("#p4mg-body").innerHTML = `<p class="muted">wird geladen …</p>`;
+    try {
+      const j = await api(`/api/v1/ps4mount/game?id=${encodeURIComponent(id)}`);
+      if (seq !== p4mg.seq || !$("#p4mg-overlay")) return;
+      p4mg.data = j;
+      const active = (j.updates || []).find((u) => u.active);
+      p4mg.sel = active ? active.file : "";
+      if (kind === "upd") p4mgRenderUpd(); else p4mgRenderDlc();
+    } catch (e) {
+      if (seq !== p4mg.seq || !$("#p4mg-overlay")) return;
+      $("#p4mg-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
+        <div class="cp-actions"><button type="button" class="btn primary" data-p4mg="close">Schließen</button></div>`;
+    }
+  };
+
+  const p4mgDlcAll = (b) => {
+    const limit = (p4mg.data && p4mg.data.dlc_limit) || 29;
+    const boxes = $$("#p4mg-body input[data-p4mg-dlc]");
+    boxes.forEach((box, i) => { box.checked = b.checked && i < limit; });
+  };
+
+  const p4mgSubmitUpd = async (b) => {
+    if (!p4mg.sel) return;
+    b.disabled = true;
+    try {
+      const r = await api("/api/v1/ps4mount/update", { method: "POST", body: JSON.stringify({ id: p4mg.id, file: p4mg.sel }) });
+      toast(r.message);
+      p4mgClose();
+      loadP4m();
+    } catch (e) { toast(e.message, "error"); b.disabled = false; }
+  };
+
+  const p4mgSubmitDlc = async (b) => {
+    b.disabled = true;
+    const on = $$("#p4mg-body input[data-p4mg-dlc]").filter((box) => box.checked).map((box) => box.dataset.p4mgDlc).join(",");
+    try {
+      const r = await api("/api/v1/ps4mount/dlc", { method: "POST", body: JSON.stringify({ id: p4mg.id, on }) });
+      toast(r.message);
+      p4mgClose();
+      loadP4m();
+    } catch (e) { toast(e.message, "error"); b.disabled = false; }
+  };
+
+  /* Starten: läuft schon ein anderes Spiel, fragt die Konsole zurück ({confirm:true,message:"<Name>"}); zweimal
+     klicken bestätigt (force:true), wie beim Zurückverschieben. */
+  const p4mgLaunch = async (id, name, btn) => {
+    const armedKey = `launch:${id}`;
+    if (btn.dataset.armed !== "1") {
+      try {
+        const r = await api("/api/v1/ps4mount/launch", { method: "POST", body: JSON.stringify({ id }) });
+        if (r.confirm) {
+          btn.dataset.armed = "1";
+          const was = btn.textContent;
+          btn.textContent = `„${r.message}“ schließen und starten? Nochmal klicken`;
+          setTimeout(() => { if (btn.isConnected) { btn.textContent = was; delete btn.dataset.armed; } }, 8000);
+          return;
+        }
+        toast(r.message);
+      } catch (e) { toast(e.message, "error"); }
+      return;
+    }
+    delete btn.dataset.armed;
+    try {
+      const r = await api("/api/v1/ps4mount/launch", { method: "POST", body: JSON.stringify({ id, force: true }) });
+      toast(r.message);
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  $("#p4mp-reload").addEventListener("click", loadP4m);
+  $("#p4mp-list").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-p4mg]");
+    if (!b || b.disabled) return;
+    const id = b.dataset.id, name = b.dataset.name;
+    if (b.dataset.p4mg === "launch") p4mgLaunch(id, name, b);
+    else p4mgOpen(b.dataset.p4mg, id, name);
+  });
 
   /* ── Das Laufwerk (disc.c, 21.10.2026, nach ps-disc-detect, GPL-3.0) ──
    * /api/v1/disc: welche Disc liegt drin, Titelkennung, Abbild einer PS2-DVD oder PS3-Disc mit CRC-32, MD5, SHA-1.
@@ -7082,7 +7271,8 @@
     update: ["warn", "Update verfügbar"], current: ["ok", "aktuell"], unchecked: ["", "noch nicht geprüft"], check_failed: ["warn", "Prüfung gescheitert"],
     needs_newer_fw: ["warn", "neuester Patch braucht neuere Firmware"], update_old_fw: ["warn", "älterer Patch passt"], queued: ["", "wartet"], downloading: ["", "wird geladen"], paused: ["warn", "angehalten"],
     verifying: ["", "wird geprüft"], ready: ["ok", "geladen, bereit zur Installation"], installing: ["", "wird installiert"], installed: ["ok", "installiert"],
-    failed: ["warn", "gescheitert"], blocked: ["", "Updates aus"], not_official_smp: ["", "über ShadowMountPlus"], not_official_fake: ["", "Fake-PKG"], not_official_unknown: ["", "Herkunft unbekannt"] };
+    failed: ["warn", "gescheitert"], blocked: ["", "Updates aus"], not_official_smp: ["", "über ShadowMountPlus"], not_official_fake: ["", "Fake-PKG"], not_official_unknown: ["", "Herkunft unbekannt"],
+    ps4mount: ["", "über PS4Mount"] };
 
   const updCover = (tid) => { const g = (gm.list || []).find((x) => x.title_id === tid); return g && g.cover ? g.cover : ""; };
   const updGroup = (t) => t.status === "update" || ["queued", "downloading", "paused", "verifying", "ready", "installing", "failed"].includes(t.status) ? "update"
@@ -7162,8 +7352,9 @@
     const cov = updCover(t.title_id);
     const ver = `${esc(t.version || "?")}${t.target && t.target !== t.version ? ` → ${esc(t.target)}` : ""}`;
     let info = "", btns = "";
-    const off = t.status.startsWith("not_official");
-    if (t.status === "update") btns = updBtn("download", t.title_id, "Laden und installieren", "primary");
+    const off = t.status.startsWith("not_official") || t.status === "ps4mount";
+    if (t.status === "ps4mount") info = `<div class="p4m-meta">${esc("Dieses Spiel kommt von PS4Mount (USB-Laufwerk). Die normale Installation erreicht es nicht; ein neues Paket gehört neben die app.pkg auf dem Laufwerk, PS4Mount übernimmt es von dort.")}</div>`;
+    else if (t.status === "update") btns = updBtn("download", t.title_id, "Laden und installieren", "primary");
     else if (t.status === "paused") btns = updBtn("resume", t.title_id, "Fortsetzen", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "ready") btns = updBtn("install", t.title_id, "Installieren", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "failed") btns = updBtn("resume", t.title_id, "Erneut versuchen", "primary") + updBtn("cancel", t.title_id, "Löschen");
@@ -7174,8 +7365,9 @@
       btns = updBtn("vers_old", t.title_id, "Anleitung", "primary");
     }
     if (t.status === "check_failed") info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`;
-    if (off) info = `<div class="p4m-meta">Die Paketdatei ließ sich nicht lesen.</div>`;
+    if (off && t.status !== "ps4mount") info = `<div class="p4m-meta">Die Paketdatei ließ sich nicht lesen.</div>`;
     if (t.via_smp && !off) info += `<div class="p4m-meta">${esc("Läuft über ShadowMountPlus. Das Update wird normal installiert – ob es auf das eingehängte Abbild angewendet wird, hängt vom Spiel ab.")}</div>`;
+    if (t.via_ps4mount && !off) info += `<div class="p4m-meta">${esc("Kommt von PS4Mount (USB-Laufwerk). Das Update wird geladen und auf das Laufwerk gelegt, nicht installiert; PS4Mount ordnet es beim nächsten Suchen ein.")}</div>`;
     if (t.source === "fake" && !off) info += `<div class="p4m-meta">${esc("Fake-PKG / fpkg. Das Update stammt direkt von den offiziellen Update-Servern.")}</div>`;
     if (t.patch_url) btns += `<button type="button" class="btn ghost" data-upd-act="copy_url" data-upd-url="${esc(t.patch_url)}" title="${esc(t.patch_url)}">Link</button>`;
     if (!off && t.status !== "blocked") btns += `<button type="button" class="btn ghost" data-upd-act="vers" data-upd-id="${esc(t.title_id)}">Andere Versionen</button>`;
@@ -7378,8 +7570,9 @@
   $("#p4m-scan").addEventListener("click", () => p4mPost({ action: "scan" }));
   /* Die Einstellungen als Ganzes: die Seite schickt immer alle, sonst setzt die Konsole fehlende auf ihre Grundwerte. */
   const p4mConfig = () => ({
-    action: "config", dlc: $("#p4m-dlc").checked, batch: $("#p4m-batch").checked, fast_reg: $("#p4m-fast").checked,
-    batch_size: Number($("#p4m-size").value) || 5, paths: $("#p4m-paths").value, restore_batch: Number($("#p4m-rsize").value) || 5
+    action: "config", dlc: $("#p4m-dlc").checked, dlc_copy: $("#p4m-dlccopy").checked, batch: $("#p4m-batch").checked,
+    fast_reg: $("#p4m-fast").checked, batch_size: Number($("#p4m-size").value) || 5, paths: $("#p4m-paths").value,
+    restore_batch: Number($("#p4m-rsize").value) || 5
   });
   /* Zurückverschieben: zuerst die Gruppengröße speichern (wie im Original), dann den Auftrag geben. */
   const p4mRestore = async (body) => {
@@ -10861,6 +11054,7 @@
     }
     if (state.page === "cooling") { loadRules(); renderCharts(); loadHistory(); }
     if (state.page === "payloads") loadPayloadsPage();
+    if (state.page === "ps4mount") loadP4m();
     if (state.page === "profile") loadProfile();
     if (state.page === "games") {
       loadGames(); cpPoll(); mvPoll(); cvPoll();

@@ -41,7 +41,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   und Startcode, kein fremder Systemcode, siehe `starter/sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt. <https://github.com/BlackBearReloaded/ps5-native-app-boilerplate>
 - **ps-disc-detect** (GPL-3.0-or-later; „disc detect“, Archiv `ps-disc-detect-main.zip`, vom User am 21.10.2026 bereitgestellt): Vorbild und Wissen für den Reiter „Disc“ (`src/disc.c`): der Weg zum Laufwerk (`/dev/xpt0`, CAMIOCOMMAND mit GET CONFIGURATION, READ DISC STRUCTURE, SET STREAMING), die Profilnummern, wo die Titelkennung liegt (`SYSTEM.CNF`, `PARAM.SFO`, `param.json`), das Lesen von `/dev/cd0` in 128-KiB-Stücken, das Benennen nach Redump und das Schema der Redump-Datenbank. Der Code ist neu geschrieben (kein CD-Abbild, kein IRD, keine eingebettete Liste); die MD5- und SHA-1-Rechnungen sind eigene Fassungen der veröffentlichten Verfahren.
-- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.6.1): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
+- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.7.0): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
   (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 gasb07 (PS4Mount 0.6.1), adapted for PS5 Cooling & System Center - Pro
+ * Copyright (C) 2026 gasb07 (PS4Mount 0.7.0), adapted for PS5 Cooling & System Center - Pro
  *
  * PS4Mount inside the app: scans USB drives for PS4 fake PKGs, registers them without installing them (nullfs mounts of internal
  * folders that hold symlinks to the packages), follows the kernel log and offers its list and actions to the web page.
@@ -47,6 +47,12 @@ int ps4m_standalone_active(char *why, size_t n) {
     snprintf(why, n, "Sein Web-Panel antwortet auf Port 8770.");
     return 1;
 }
+int ps4m_title_managed(const char *tid) { (void)tid; return 0; }
+char *ps4m_game_json(const char *tid, char *msg, size_t cap) { (void)tid; snprintf(msg, cap, "Host-Test"); return NULL; }
+int ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap) { (void)tid; (void)rel; snprintf(msg, cap, "Host-Test"); return -1; }
+int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) { (void)tid; (void)on; snprintf(msg, cap, "Host-Test"); return -1; }
+int ps4m_launch(const char *tid, int force, char *msg, size_t cap) { (void)tid; (void)force; snprintf(msg, cap, "Host-Test"); return -1; }
+int ps4m_place_update(const char *tid, const char *pkg_path, char *msg, size_t cap) { (void)tid; (void)pkg_path; snprintf(msg, cap, "Host-Test"); return -1; }
 #else
 #include <dirent.h>
 #include <errno.h>
@@ -71,6 +77,7 @@ int ps4m_standalone_active(char *why, size_t n) {
 #include <unistd.h>
 
 #include "ps4m.h"
+#include "ps4m_accopy.h"
 #include "ps4m_build.h"
 #include "ps4m_crypto.h"
 #include "ps4m_fw.h"
@@ -80,7 +87,7 @@ int ps4m_standalone_active(char *why, size_t n) {
 #include "sqlite_ro.h"
 #include <ps5/kernel.h>
 
-#define VERSION "PS4Mount 0.6.1"
+#define VERSION "PS4Mount 0.7.0"
 #define LOCK_PORT 9032
 #define SCAN_SECONDS 10
 #define STATE_DIR "/data/ps4mount"
@@ -103,6 +110,7 @@ typedef struct {
     int batch;      /* new games are added in groups */
     int batch_size; /* games per group */
     int dlc;        /* add-ons are moved and installed */
+    int dlc_copy;   /* add-ons are copied to internal storage by the system, not mounted (PS4Mount 0.7.0) */
     char paths[MAX_SCAN_PATHS][128]; /* folders searched for pkgs, relative to each drive; "" is the root */
     int npaths;
     int restore_batch; /* games removed from the library per group when moving pkgs back */
@@ -110,8 +118,9 @@ typedef struct {
 } config_t;
 
 #define MAX_RESTORE_BATCH 10
+#define DLC_LIMIT 29 /* add-ons a running game can use (PS4Mount 0.7.0 README) */
 
-static config_t g_cfg = {1, 5, 1, {""}, 1, 5, 0};
+static config_t g_cfg = {1, 5, 1, 0, {""}, 1, 5, 0};
 static int g_enabled;     /* switched on in the page; kept in config.txt (key enabled=) */
 
 
@@ -119,6 +128,18 @@ static int g_enabled;     /* switched on in the page; kept in config.txt (key en
 int sceAppInstUtilInitialize(void) __attribute__((weak));
 int sceAppInstUtilAppInstallAll(void *) __attribute__((weak));
 int sceAppInstUtilAppUnInstall(const char *) __attribute__((weak));
+/* PS4Mount 0.7.0: "launch a game from the panel" and "the panel's own add-on copy mode". */
+int sceUserServiceGetForegroundUser(int *user) __attribute__((weak));
+int sceSystemServiceLaunchApp(const char *title_id, const char **argv, void *param) __attribute__((weak));
+
+/* One lock for all state. The worker holds it while it works and lets go of it in pump_events (every wait of the original loop),
+ * which is where the stand-alone payload served its web panel; the calls of the page take it there. Declared here (not
+ * with the rest of the app-facing calls further down) so that ps4m_choose_update/ps4m_choose_dlc/ps4m_launch, which run
+ * earlier in the file, can also use it (PS4Mount 0.7.0). */
+static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
+static int lock_for_page(int ms);
+void ps4m_rescan(void);
+#define P4M_BUSY "PS4Mount ist gerade beschäftigt: Es fügt hinzu, entfernt oder verschiebt. Bitte gleich noch einmal versuchen."
 
 static void mkdirs(const char *path, mode_t mode);
 static int p4m_db_is_registered(const char *tid);
@@ -256,6 +277,24 @@ static int layers_on(const char *path) {
     return count;
 }
 
+/* Mounts of the game's package images (/mnt/sandbox/pfsmnt/<TID>-app0 and others). The
+ * system releases them a while after the game process ended (PS4Mount 0.7.0). */
+static int pfs_mounts(const char *tid) {
+    int n = getfsstat(NULL, 0, MNT_NOWAIT), count = 0;
+    if (n <= 0)
+        return 0;
+    struct statfs *list = malloc(sizeof(*list) * (size_t)(n + 16));
+    if (!list)
+        return 0;
+    char tag[32];
+    snprintf(tag, sizeof(tag), "/pfsmnt/%s-", tid);
+    n = getfsstat(list, (long)(sizeof(*list) * (size_t)(n + 16)), MNT_NOWAIT);
+    for (int i = 0; i < n; i++)
+        count += strstr(list[i].f_mntonname, tag) != NULL;
+    free(list);
+    return count;
+}
+
 /* A layer is on path but cannot be read: its drive was disconnected (and maybe
  * connected again, which gives it a new mount). */
 static int dead_layer(const char *path) {
@@ -309,6 +348,33 @@ typedef struct {
     int data; /* 1: has data (mounted by the game), 0: only unlocks content */
 } dlc_src_t;
 
+/* STATE_DIR/<GAME TID>.dlcoff: content IDs of the add-ons turned off in the panel, one per line (PS4Mount 0.7.0).
+ * Without the file, the first DLC_LIMIT add-ons (by content ID) are on. */
+static char *dlc_off_read(const char *tid) {
+    char path[64];
+    snprintf(path, sizeof(path), STATE_DIR "/%s.dlcoff", tid);
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return NULL;
+    char *s = calloc(1, MAX_DLC * 40 + 2);
+    if (s) {
+        s[0] = '\n';
+        ssize_t n = read(fd, s + 1, MAX_DLC * 40);
+        if (n < 0)
+            n = 0;
+        if (n && s[n] != '\n')
+            s[n + 1] = '\n';
+    }
+    close(fd);
+    return s;
+}
+
+static int dlc_listed(const char *list, const char *cid) {
+    char line[40];
+    snprintf(line, sizeof(line), "\n%.36s\n", cid);
+    return strstr(list, line) != NULL;
+}
+
 /* One library folder: <root>/ps4/<TID>/app.pkg plus an optional patch.pkg and add-ons. */
 typedef struct {
     char dir[PATH_MAX], app_path[PATH_MAX], patch_path[PATH_MAX];
@@ -317,8 +383,8 @@ typedef struct {
     sfo_t app_sfo, patch_sfo;
     char name[128], ver[8], marker[PATH_MAX + 160];
     char update_issue[256]; /* why patch.pkg was ignored, empty when used or absent */
-    dlc_src_t *dlc;
-    int ndlc;
+    dlc_src_t *dlc; /* add-ons in use, then the ones turned off up to ndlc_all (PS4Mount 0.7.0) */
+    int ndlc, ndlc_all;
     char dlc_tids[MAX_DLC_TIDS][10]; /* add-on title IDs: /user/addcont/<TID> folders */
     int ndlc_tids;
 } title_src_t;
@@ -335,11 +401,11 @@ static void src_close(title_src_t *t) {
     p4m_pkg_close(&t->app);
     if (t->has_patch)
         p4m_pkg_close(&t->patch);
-    for (int i = 0; i < t->ndlc; i++)
+    for (int i = 0; i < t->ndlc_all; i++)
         p4m_pkg_close(&t->dlc[i].pkg);
     free(t->dlc);
     t->dlc = NULL;
-    t->ndlc = 0;
+    t->ndlc = t->ndlc_all = 0;
 }
 
 static int dlc_cmp(const void *a, const void *b) {
@@ -395,17 +461,40 @@ static void dlc_open(title_src_t *t) {
             }
             a->data = a->pkg.header[0x77] == 0x1b; /* content type: 0x1b with data, 0x1c license only */
             t->ndlc++;
-            int known = 0;
-            for (int i = 0; i < t->ndlc_tids; i++)
-                known |= !strcmp(t->dlc_tids[i], e->d_name);
-            if (!known && t->ndlc_tids < MAX_DLC_TIDS)
-                snprintf(t->dlc_tids[t->ndlc_tids++], 10, "%s", e->d_name);
         }
         closedir(l);
     }
     closedir(d);
-    if (t->ndlc)
-        qsort(t->dlc, (size_t)t->ndlc, sizeof(*t->dlc), dlc_cmp);
+    if (!t->ndlc)
+        return;
+    qsort(t->dlc, (size_t)t->ndlc, sizeof(*t->dlc), dlc_cmp);
+    t->ndlc_all = t->ndlc;
+    /* the add-ons turned off go after the ones in use, in the same order (PS4Mount 0.7.0) */
+    char *off = dlc_off_read(t->app.title_id);
+    dlc_src_t *sorted = malloc(sizeof(*sorted) * (size_t)t->ndlc);
+    if (!sorted) {
+        free(off);
+        return;
+    }
+    int on = 0, k = 0;
+    for (int pass = 0; pass < 2; pass++)
+        for (int i = 0; i < t->ndlc; i++) {
+            int is_off = off ? dlc_listed(off, t->dlc[i].pkg.content_id) : i >= DLC_LIMIT;
+            if (is_off == pass)
+                sorted[k++] = t->dlc[i];
+            on += !pass && !is_off;
+        }
+    free(off);
+    memcpy(t->dlc, sorted, sizeof(*sorted) * (size_t)t->ndlc);
+    free(sorted);
+    t->ndlc = on;
+    for (int i = 0; i < t->ndlc; i++) {
+        int known = 0;
+        for (int j = 0; j < t->ndlc_tids; j++)
+            known |= !strcmp(t->dlc_tids[j], t->dlc[i].pkg.title_id);
+        if (!known && t->ndlc_tids < MAX_DLC_TIDS)
+            snprintf(t->dlc_tids[t->ndlc_tids++], 10, "%s", t->dlc[i].pkg.title_id);
+    }
 }
 
 static int first_time(const char *path);
@@ -647,9 +736,25 @@ static int place_dlc(dlc_src_t *a) {
     return rc ? -1 : 0;
 }
 
+/* An add-on turned off: its internal folder and records go, so the game no longer sees it (PS4Mount 0.7.0). */
+static void drop_dlc(const pkg_t *pkg) {
+    char p[PATH_MAX];
+    snprintf(p, sizeof(p), HOLD_DIR "/addcont/%s/%s", pkg->title_id, pkg->content_id + 20);
+    if (!exists(p))
+        return;
+    rm_tree(p);
+    snprintf(p, sizeof(p), "/user/playgo/addcont/%s", pkg->content_id);
+    rm_tree(p);
+    snprintf(p, sizeof(p), "/user/appmeta/addcont/%s/%s", pkg->title_id, pkg->content_id + 20);
+    rm_tree(p);
+    printf("[reg] add-on %s turned off\n", pkg->content_id);
+}
+
 /* The ac.pkg link of every add-on exists and reaches its pkg. */
 static int dlc_ready(const title_src_t *t) {
     char p[PATH_MAX];
+    if (g_cfg.dlc_copy)
+        return 1; /* copy mode keeps no links (PS4Mount 0.7.0, ac_reconcile does the rest) */
     for (int i = 0; i < t->ndlc; i++) {
         snprintf(p, sizeof(p), HOLD_DIR "/addcont/%s/%s/ac.pkg", t->dlc[i].pkg.title_id,
                  t->dlc[i].pkg.content_id + 20);
@@ -657,6 +762,456 @@ static int dlc_ready(const title_src_t *t) {
             return 0;
     }
     return 1;
+}
+
+/* --- add-ons copied to internal storage (copy mode, PS4Mount 0.7.0) --- */
+
+/* sceAppInstUtilInstallByPackage arguments: the system copies the pkg at uri into
+ * /user/addcont/<ADD-ON TID>/<LABEL>/ and writes the add-on's addcont.db row itself. */
+typedef struct {
+    const char *uri, *ex_uri, *playgo_scenario_id, *content_id, *content_name, *icon_url;
+    uint64_t unknown_30;
+    uint64_t reserved[7];
+} ac_meta_t;
+typedef struct {
+    char content_id[0x30];
+    int content_type, content_platform;
+} ac_pkg_t;
+typedef struct {
+    char languages[30][8];
+    char scenario_ids[64][3];
+    char content_ids[64][0x30];
+    unsigned char unknown[6480];
+} ac_playgo_t;
+int sceAppInstUtilInstallByPackage(ac_meta_t *, ac_pkg_t *, ac_playgo_t *) __attribute__((weak));
+int sceAppInstUtilAppUnInstallAddcont(const char *title_id, const char *addcont_name) __attribute__((weak));
+
+#define AC_POLL_SECONDS 2
+#define AC_NOT_FOUND 0x80A30004 /* AppInstUtil: no such add-on */
+
+/* One batch of copies at a time: all add-ons to install, of every game, are handed to the
+ * system together after a scan, which copies them one by one in that order. The calls run in their own
+ * thread; the main loop follows each copy in ac_poll (klog copy lines, then the file size). */
+#define AC_RETURN_S 60 /* a call still running this long after the copy reached full size is not waited for */
+#define AC_MAX_JOBS MAX_DLC
+
+typedef struct {
+    int data, started, ended, copy_start, copy_end; /* copy_*: klog lines seen */
+    int no_progress; /* ac.pkg was fully allocated at once: written space shows no progress */
+    volatile int called, rc;
+    time_t full_at; /* when the copy reached full size */
+    char cid[40], game[10], pkg_path[PATH_MAX], name[128], title[128]; /* title: the game's name */
+    uint64_t size;
+    p4m_acwait_t wait;
+} ac_job_t;
+
+static ac_job_t g_acj[AC_MAX_JOBS];
+static char g_ac_left[MAX_TITLES][10]; /* games with add-ons past the full batch: not ready after it */
+static int g_ac_nleft;
+static int g_acn, g_ac_ok, g_ac_bad;
+static volatile int g_ac_gen; /* a new batch changes it: late returns of older calls are ignored */
+static time_t g_ac_next, g_ac_since;
+static ac_playgo_t g_ac_playgo;
+
+static int g_ac_submitted; /* the batch was handed to the system; before that it is still being built */
+
+static int ac_busy(void) { return g_acn > 0; }
+
+static ac_job_t *ac_job_of(const char *cid) {
+    for (int i = 0; i < g_acn; i++)
+        if (!g_acj[i].ended && !strcmp(g_acj[i].cid, cid))
+            return &g_acj[i];
+    return NULL;
+}
+
+static void ac_copy_path(char *out, size_t n, const char *cid) {
+    snprintf(out, n, "/user/addcont/%.9s/%s/ac.pkg", cid + 7, cid + 20);
+}
+
+/* <CID>.acpend: written with .accopy when a copy starts, removed when it succeeded. Left
+ * behind, it means a failed or partial copy that ac_reconcile still has to clean up. */
+static void ac_pend_path(char *out, size_t n, const char *cid) { snprintf(out, n, STATE_DIR "/%s.acpend", cid); }
+
+static void *ac_install_thread(void *arg) {
+    int gen = (int)(intptr_t)arg;
+    for (int i = 0; i < g_acn && g_ac_gen == gen; i++) {
+        ac_job_t *j = &g_acj[i];
+        ac_meta_t meta;
+        ac_pkg_t info;
+        char name[32];
+        memset(&meta, 0, sizeof(meta));
+        memset(&info, 0, sizeof(info));
+        memset(&g_ac_playgo, 0, sizeof(g_ac_playgo));
+        snprintf(name, sizeof(name), "%s (Zusatzinhalt)", j->game);
+        meta.uri = j->pkg_path;
+        meta.ex_uri = meta.playgo_scenario_id = meta.content_id = meta.icon_url = "";
+        meta.content_name = name;
+        int rc = sceAppInstUtilInstallByPackage ? sceAppInstUtilInstallByPackage(&meta, &info, &g_ac_playgo) : -1; /* (app) weak */
+        printf("[accopy] %s: InstallByPackage=0x%08x\n", meta.uri, rc);
+        if (g_ac_gen != gen)
+            break; /* given up on: a newer batch owns the jobs */
+        j->rc = rc;
+        j->called = 1;
+    }
+    return NULL;
+}
+
+/* Adds one add-on to the batch being built. 0 when added; 1 when the batch is full (it goes
+ * in the next one, not a failure); -1 with why set. The free space
+ * must hold every add-on of the batch. */
+static int ac_queue(const dlc_src_t *a, const char *game_tid, char *why, size_t cap) {
+    struct statfs sf;
+    if (g_acn == AC_MAX_JOBS) {
+        return 1;
+    }
+    if (statfs("/user", &sf)) {
+        snprintf(why, cap, "freier Speicher unbekannt (%s)", strerror(errno));
+        return -1;
+    }
+    uint64_t queued = 0;
+    for (int i = 0; i < g_acn; i++)
+        queued += g_acj[i].size;
+    if (!p4m_accopy_space_ok((uint64_t)sf.f_bavail * sf.f_bsize, queued + a->pkg.pkg_size)) {
+        snprintf(why, cap, "nicht genug freier Speicher");
+        return -1;
+    }
+    ac_job_t *j = &g_acj[g_acn];
+    memset(j, 0, sizeof(*j));
+    j->data = a->data;
+    snprintf(j->cid, sizeof(j->cid), "%s", a->pkg.content_id);
+    snprintf(j->game, sizeof(j->game), "%s", game_tid);
+    snprintf(j->pkg_path, sizeof(j->pkg_path), "%s", a->path);
+    const sfo_item_t *it = p4m_sfo_get(&a->sfo, "TITLE");
+    snprintf(j->name, sizeof(j->name), "%s", it && !it->is_int ? it->sval : a->pkg.content_id);
+    j->size = a->pkg.pkg_size;
+    char pend[96];
+    ac_pend_path(pend, sizeof(pend), j->cid);
+    if (p4m_accopy_mark(STATE_DIR, j->cid, a->path) || write_file(pend, "", 0, 0666)) {
+        snprintf(why, cap, "Statusdateien ließen sich nicht schreiben");
+        return -1;
+    }
+    g_acn++;
+    printf("[accopy] %s: queued %s (%llu bytes)\n", j->cid, a->path, (unsigned long long)j->size);
+    return 0;
+}
+
+/* Hands the batch to the system. */
+static void ac_submit(void) {
+    if (!g_acn || g_ac_submitted)
+        return;
+    g_ac_submitted = 1;
+    int gen = ++g_ac_gen;
+    g_ac_ok = g_ac_bad = 0;
+    g_ac_since = time(NULL);
+    g_ac_next = g_ac_since + AC_POLL_SECONDS;
+    for (int i = 0; i < g_acn; i++)
+        p4m_acwait_start(&g_acj[i].wait, g_ac_since);
+    printf("[accopy] installing %d add-on(s)\n", g_acn);
+    pthread_t th;
+    if (pthread_create(&th, NULL, ac_install_thread, (void *)(intptr_t)gen)) {
+        for (int i = 0; i < g_acn; i++) {
+            g_acj[i].called = 1;
+            g_acj[i].rc = -1; /* failed at the next poll; the partial-copy cleanup undoes the marks */
+        }
+        return;
+    }
+    pthread_detach(th);
+}
+
+/* klog: the system's copy of an add-on started or ended ("...transferSessionId = 0..0-<CID>"). */
+static void ac_copy_event(const char *line) {
+    const char *p = strstr(line, "transferSessionId = ");
+    if (!p || !ac_busy())
+        return;
+    p += 20;
+    const char *dash = strchr(p, '-');
+    if (!dash)
+        return;
+    char cid[40];
+    snprintf(cid, sizeof(cid), "%.36s", dash + 1);
+    ac_job_t *j = ac_job_of(cid);
+    if (!j)
+        return;
+    if (strstr(line, "SendDownloadCopyEnd")) {
+        j->copy_end = 1;
+        g_ac_next = 0; /* followed at once, not at the next poll */
+    } else {
+        j->copy_start = 1;
+        if (!j->started) {
+            j->started = 1;
+            p4m_acwait_start(&j->wait, time(NULL));
+        }
+    }
+}
+
+/* Uninstalls an add-on PS4Mount installed: by label, then by content ID. "Not found"
+ * counts as done (the system may have removed it already). */
+static int ac_uninstall(const char *cid) {
+    char dtid[10];
+    snprintf(dtid, sizeof(dtid), "%.9s", cid + 7);
+    int rc = sceAppInstUtilAppUnInstallAddcont ? sceAppInstUtilAppUnInstallAddcont(dtid, cid + 20) : -1; /* (app) weak */
+    printf("[accopy] %s: uninstall by label 0x%08x\n", cid, rc);
+    if (rc) {
+        int rc2 = sceAppInstUtilAppUnInstallAddcont ? sceAppInstUtilAppUnInstallAddcont(dtid, cid) : -1;
+        printf("[accopy] %s: uninstall by content id 0x%08x\n", cid, rc2);
+        if (!rc2 || (rc == (int)AC_NOT_FOUND && rc2 == (int)AC_NOT_FOUND))
+            rc = 0;
+    }
+    return rc;
+}
+
+/* Uninstalls the add-ons PS4Mount copied for game (every game when NULL): their .accopy
+ * file holds the pkg path, <root>/ps4/<GAME>/addcont/... */
+static void ac_uninstall_copies(const char *game) {
+    DIR *d = opendir(STATE_DIR);
+    if (!d)
+        return;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        if (strlen(e->d_name) != 36 + 7 || strcmp(e->d_name + 36, ".accopy"))
+            continue;
+        char cid[40], path[96], pkg[PATH_MAX] = "", tag[16];
+        snprintf(cid, sizeof(cid), "%.36s", e->d_name);
+        snprintf(path, sizeof(path), STATE_DIR "/%s", e->d_name);
+        int fd = open(path, O_RDONLY);
+        if (fd >= 0) {
+            ssize_t n = read(fd, pkg, sizeof(pkg) - 1);
+            pkg[n > 0 ? n : 0] = 0;
+            close(fd);
+        }
+        snprintf(tag, sizeof(tag), "/ps4/%s/", game ? game : "");
+        if (game && !strstr(pkg, tag))
+            continue;
+        char copy[PATH_MAX];
+        ac_copy_path(copy, sizeof(copy), cid);
+        if (ac_uninstall(cid) || exists(copy))
+            continue;
+        p4m_accopy_unmark(STATE_DIR, cid);
+        p4m_acfail_clear(STATE_DIR, cid);
+        snprintf(path, sizeof(path), STATE_DIR "/%s.acpg", cid);
+        unlink(path);
+        ac_pend_path(path, sizeof(path), cid);
+        unlink(path);
+        printf("[accopy] %s: uninstalled\n", cid);
+    }
+    closedir(d);
+}
+
+/* Copy status of an add-on for the panel: "installed", "installing", "problem" (why set),
+ * "store", "missing" (not copied) or "" (mount mode). */
+static const char *ac_status(const dlc_src_t *a, int on, char *why, size_t cap) {
+    const char *cid = a->pkg.content_id;
+    char p[PATH_MAX];
+    if (!g_cfg.dlc_copy)
+        return "";
+    if (ac_job_of(cid))
+        return "installing";
+    int marked = p4m_accopy_marked(STATE_DIR, cid);
+    ac_pend_path(p, sizeof(p), cid);
+    int pending = exists(p);
+    ac_copy_path(p, sizeof(p), cid);
+    if (!pending && marked && (!a->data || exists(p)))
+        return "installed";
+    if (!pending && a->data && exists(p))
+        return "store";
+    if (on && p4m_acfail_get(STATE_DIR, cid, why, cap) >= P4M_ACFAIL_MAX)
+        return "problem";
+    why[0] = 0;
+    return "missing";
+}
+
+/* Copy mode: an add-on turned on is not in yet (copying or still to copy). A problem add-on
+ * is never tried again, so it does not hold the game. */
+static int ac_game_waiting(const title_src_t *t) {
+    char why[64];
+    for (int i = 0; i < t->ndlc; i++) {
+        const char *st = ac_status(&t->dlc[i], 1, why, sizeof(why));
+        if (!strcmp(st, "installing") || !strcmp(st, "missing"))
+            return 1;
+    }
+    return 0;
+}
+
+/* Work that waits for the copy in progress: back to mount mode, games removed. */
+static int g_ac_revert;
+static char g_ac_drop[MAX_TITLES][10];
+static int g_ac_ndrop;
+
+static void ac_drop_game(const char *tid) {
+    if (g_ac_ndrop < MAX_TITLES)
+        snprintf(g_ac_drop[g_ac_ndrop++], 10, "%s", tid);
+}
+
+static void ac_tasks(int deleting) {
+    if (ac_busy() || deleting)
+        return;
+    if (g_ac_revert && !g_cfg.dlc_copy) {
+        printf("[accopy] mount mode: removing the copies\n");
+        ac_uninstall_copies(NULL);
+    }
+    g_ac_revert = 0;
+    for (int i = 0; i < g_ac_ndrop; i++)
+        ac_uninstall_copies(g_ac_drop[i]);
+    g_ac_ndrop = 0;
+}
+
+/* STATE_DIR/<CID>.acpg: the system install made /user/playgo/addcont/<CID>, so losing it
+ * later (a registration of the game removes it) means the copy must be installed again. */
+static void ac_playgo_note(const char *cid) {
+    char p[PATH_MAX], q[96];
+    snprintf(p, sizeof(p), "/user/playgo/addcont/%s", cid);
+    snprintf(q, sizeof(q), STATE_DIR "/%s.acpg", cid);
+    if (exists(p))
+        write_file(q, "", 0, 0666);
+    else
+        unlink(q);
+}
+
+static int ac_playgo_ok(const char *cid) {
+    char p[PATH_MAX], q[96];
+    snprintf(p, sizeof(p), "/user/playgo/addcont/%s", cid);
+    snprintf(q, sizeof(q), STATE_DIR "/%s.acpg", cid);
+    return !exists(q) || exists(p);
+}
+
+/* One job of the batch: 1 done, -1 failed (why set), 0 still running. A copy only counts
+ * as running from its klog start line, or once every job before it ended (the system copies
+ * in order), so add-ons waiting in the queue are not taken for stalled. */
+/* The copy is over but its result is not known from the call: done only if the system
+ * wrote its files, after giving the call AC_RETURN_S to return. 1, -1 or 0 (waiting). */
+static int ac_files_written(ac_job_t *j, time_t now, char *why, size_t cap) {
+    if (j->called)
+        return 1;
+    if (!j->full_at)
+        j->full_at = now;
+    if (now - j->full_at < AC_RETURN_S)
+        return 0;
+    char dir[PATH_MAX], q[PATH_MAX + 16];
+    snprintf(dir, sizeof(dir), "/user/addcont/%.9s/%s", j->cid + 7, j->cid + 20);
+    snprintf(q, sizeof(q), "%s/ac.json", dir);
+    int ok = exists(q);
+    snprintf(q, sizeof(q), "%s/ac.pbm", dir);
+    ok = ok && exists(q);
+    printf("[accopy] %s: copy over, call not returned after %d s, ac.json/ac.pbm %s\n", j->cid, AC_RETURN_S,
+           ok ? "present" : "missing");
+    if (ok)
+        return 1;
+    snprintf(why, cap, "Installation wurde nicht fertig");
+    return -1;
+}
+
+static int ac_job_step(ac_job_t *j, int head, int next_started, time_t now, char *why, size_t cap) {
+    char p[PATH_MAX];
+    if (j->called && j->rc) {
+        snprintf(why, cap, "Installationsaufruf 0x%08x", j->rc);
+        return -1;
+    }
+    if (!exists(j->pkg_path)) {
+        snprintf(why, cap, "Laufwerk getrennt");
+        return -1;
+    }
+    if (!j->data) {
+        /* unlock only: nothing is copied, the call's result is the answer */
+        if (j->called)
+            return 1;
+        if (p4m_acwait_step(&j->wait, 0, 1, now) == P4M_ACW_TIMEOUT) {
+            snprintf(why, cap, "Installationsaufruf kam nie zurück");
+            return -1;
+        }
+        return 0;
+    }
+    if (!j->started) {
+        if (!head)
+            return 0;
+        j->started = 1;
+        p4m_acwait_start(&j->wait, now);
+    }
+    /* the system creates ac.pkg at full size first: progress is the space really written,
+     * and only the klog end line says the copy is done */
+    struct stat st;
+    ac_copy_path(p, sizeof(p), j->cid);
+    uint64_t cur = stat(p, &st) ? 0 : (uint64_t)st.st_blocks * 512;
+    int r = p4m_acwait_step(&j->wait, cur < j->size ? cur : j->size - 1, j->size, now);
+    if (j->copy_end)
+        return j->called ? 1 : ac_files_written(j, now, why, cap);
+    if (next_started)
+        return ac_files_written(j, now, why, cap); /* the system moved on: its end line was missed */
+    if (r == P4M_ACW_TIMEOUT) {
+        snprintf(why, cap, "Kopieren abgebrochen (Zeitlimit)");
+        return -1;
+    }
+    if (cur >= j->size - j->size / 64 && cur && !j->copy_end && j->wait.last == cur && now == j->wait.grew)
+        j->no_progress |= now - j->wait.start < 2 * AC_POLL_SECONDS + 1;
+    if (r == P4M_ACW_STALL && !j->no_progress) {
+        snprintf(why, cap, "Kopieren gestoppt");
+        return -1;
+    }
+    return 0;
+}
+
+/* Called from the main loop: follows the batch, at most every AC_POLL_SECONDS. A failed copy
+ * releases nothing for the others: each job ends on its own. */
+static void ac_poll(void) {
+    if (!g_ac_submitted || time(NULL) < g_ac_next)
+        return;
+    time_t now = time(NULL);
+    g_ac_next = now + AC_POLL_SECONDS;
+    int head = 1, left = 0;
+    for (int i = 0; i < g_acn; i++) {
+        ac_job_t *j = &g_acj[i];
+        if (j->ended)
+            continue;
+        char why[64] = "";
+        int next_started = 0;
+        for (int k = i + 1; k < g_acn; k++)
+            next_started |= g_acj[k].data && g_acj[k].started && g_acj[k].copy_start;
+        int r = ac_job_step(j, head, next_started, now, why, sizeof(why));
+        if (j->data && !r)
+            head = 0;
+        if (!r) {
+            left++;
+            continue;
+        }
+        j->ended = 1;
+        if (r > 0) {
+            j->ended = 2;
+            char pend[96];
+            ac_pend_path(pend, sizeof(pend), j->cid);
+            unlink(pend);
+            p4m_acfail_clear(STATE_DIR, j->cid);
+            ac_playgo_note(j->cid);
+            printf("[accopy] %s: copied\n", j->cid);
+            g_ac_ok++;
+        } else {
+            /* .accopy and .acpend stay: ac_reconcile removes the partial copy */
+            int n = p4m_acfail_add(STATE_DIR, j->cid, why);
+            printf("[accopy] %s: failed (%s), %d of %d\n", j->cid, why, n, P4M_ACFAIL_MAX);
+            notify("%s: Zusatzinhalt %s nicht installiert (%s)", j->game, j->name, why);
+            g_ac_bad++;
+        }
+    }
+    if (left)
+        return;
+    printf("[accopy] batch done in %ld s, %d installed, %d failed\n", (long)(now - g_ac_since), g_ac_ok, g_ac_bad);
+    if (g_ac_ok)
+        notify("%d Zusatzinhalt(e) installiert", g_ac_ok);
+    /* a game is ready to play once all of its add-ons in the batch are in */
+    for (int i = 0; i < g_acn; i++) {
+        int first = 1, all = 1;
+        for (int k = 0; k < g_acn; k++)
+            if (!strcmp(g_acj[k].game, g_acj[i].game)) {
+                first &= k >= i;
+                all &= g_acj[k].ended == 2;
+            }
+        for (int k = 0; k < g_ac_nleft; k++)
+            all &= strcmp(g_ac_left[k], g_acj[i].game) != 0;
+        if (first && all)
+            notify("%s ist spielbereit", g_acj[i].title[0] ? g_acj[i].title : g_acj[i].game);
+    }
+    g_ac_gen++; /* a call that has not returned yet is ignored */
+    g_acn = 0;
+    g_ac_nleft = 0;
+    g_ac_submitted = 0;
 }
 
 static int place_files(title_src_t *t) {
@@ -684,8 +1239,12 @@ static int place_files(title_src_t *t) {
 
     if (place_license(app))
         return -1;
-    for (int i = 0; i < t->ndlc; i++)
-        rc |= place_dlc(&t->dlc[i]);
+    if (!g_cfg.dlc_copy) { /* copy mode: the system installs them (ac_reconcile), PS4Mount 0.7.0 */
+        for (int i = 0; i < t->ndlc; i++)
+            rc |= place_dlc(&t->dlc[i]);
+        for (int i = t->ndlc; i < t->ndlc_all; i++)
+            drop_dlc(&t->dlc[i].pkg);
+    }
 
     size_t pl = 0, ppl = 0;
     uint8_t *pg = p4m_pkg_entry(app, 0x1001, &pl), *ppg = pat ? p4m_pkg_entry(pat, 0x1001, &ppl) : NULL;
@@ -778,6 +1337,7 @@ typedef struct {
 
 static managed_t g_managed[MAX_TITLES];
 static int g_manual_scan; /* "Scan for games" in the panel */
+static int g_scan_again; /* games were just added: scan again without waiting (PS4Mount 0.7.0) */
 static int g_deleting; /* a delete screen is open: game folders are unmounted */
 static time_t g_deleting_since;
 static time_t g_deleting_close_at; /* set when the uninstall finished */
@@ -787,6 +1347,27 @@ static managed_t *managed_by(const char *tid, const char *cid) {
         if (g_managed[i].used && ((tid && !strcmp(g_managed[i].tid, tid)) || (cid && !strcmp(g_managed[i].cid, cid))))
             return &g_managed[i];
     return NULL;
+}
+
+/* Whether this title is PS4Mount's: its /user/app/<TID> is a nullfs mount of our own hold folder, in turn a symlink
+ * to the .pkg on a USB drive, never the title's own, fully installed copy under internal storage. The game-update
+ * download/install path (updates.c) must not run its normal AppInstUtil install against such a title: tried on
+ * CUSA44880 ("Hot Wheels Monster Trucks: Stunt Mayhem") on 26.10.2026, the console reported the install done, but
+ * afterwards /user/app/CUSA44880/app.json still named the unchanged file on the USB drive and param.sfo still held
+ * the base game's APP_VER — the "update" never reached the game PS4Mount actually starts from the drive.
+ *
+ * Checked by the actual mount, not g_managed: that list is the worker's own bookkeeping, built only while it scans,
+ * so it is empty whenever the module is switched off — and a switched-off module's games stay mounted ("Eingebundene
+ * Spiele bleiben, bis die Konsole neu startet oder Sie sie entfernen", ps4m_set_enabled). Found 26.10.2026: with
+ * PS4Mount off, this returned false for every PS4Mount title, which would have sent the update bridge above right
+ * back into the bug it exists to avoid. mounted_from needs no lock — it only reads the mount table. */
+int ps4m_title_managed(const char *tid) {
+    if (!tid || !tid[0]) return 0;
+    char target[64], from[PATH_MAX], hold[PATH_MAX];
+    snprintf(target, sizeof(target), "/user/app/%s", tid);
+    if (!mounted_from(target, from, sizeof(from))) return 0;
+    hold_path(hold, sizeof(hold), "app", tid);
+    return !strcmp(from, hold);
 }
 
 /* Top mount on target: 0 none, 1 our folder, -1 something else (like a USB
@@ -936,6 +1517,124 @@ static int addcont_installed(const char *dtid) {
     return used;
 }
 
+/* The game was registered after the copy started (STATE_DIR/<GAME>.src is written by each
+ * registration): a copy lost now was removed by that registration, not by the user (PS4Mount 0.7.0). */
+static int ac_rereg(const char *tid, const char *cid) {
+    char a[64], b[96];
+    struct stat sa, sb;
+    snprintf(a, sizeof(a), STATE_DIR "/%s.src", tid);
+    snprintf(b, sizeof(b), STATE_DIR "/%s.accopy", cid);
+    return !stat(a, &sa) && !stat(b, &sb) && sa.st_mtime > sb.st_mtime;
+}
+
+/* Copy mode, once per scan for a game already in the library: releases add-on folders
+ * still mounted by the mount mode, then takes one step for each add-on (install, uninstall,
+ * turn off). At most one copy runs at a time (PS4Mount 0.7.0). */
+static void ac_reconcile(title_src_t *t) {
+    if (!g_cfg.dlc_copy || !t->ndlc_all)
+        return;
+    const char *tid = t->app.title_id;
+    for (int i = 0; i < t->ndlc_tids; i++) {
+        char target[64], hold[PATH_MAX], from[PATH_MAX];
+        snprintf(target, sizeof(target), "/user/addcont/%s", t->dlc_tids[i]);
+        if (!mounted_from(target, from, sizeof(from)))
+            continue;
+        hold_path(hold, sizeof(hold), "addcont", t->dlc_tids[i]);
+        if (strcmp(from, hold)) {
+            printf("[accopy] %s mounted from %s, add-ons not copied\n", target, from);
+            return;
+        }
+        unmount_all_layers(target, 1);
+        if (mounted_from(target, NULL, 0))
+            return;
+        for (int k = 0; k < t->ndlc_all; k++)
+            if (!strcmp(t->dlc[k].pkg.title_id, t->dlc_tids[i]))
+                drop_dlc(&t->dlc[k].pkg);
+        printf("[accopy] %s: mounted add-ons released for copying\n", target);
+    }
+    int submit_later = g_ac_submitted; /* a batch is running: these add-ons go in the next one */
+    for (int i = 0; i < t->ndlc_all; i++) {
+        dlc_src_t *a = &t->dlc[i];
+        const char *cid = a->pkg.content_id;
+        char p[PATH_MAX], why[64];
+        ac_copy_path(p, sizeof(p), cid);
+        char pend[96];
+        ac_pend_path(pend, sizeof(pend), cid);
+        int busy = ac_job_of(cid) != NULL;
+        if (!busy && exists(pend)) {
+            /* a failed or partial copy: removed before anything else is tried */
+            ac_uninstall(cid);
+            if (!exists(p)) {
+                p4m_accopy_unmark(STATE_DIR, cid);
+                unlink(pend);
+                printf("[accopy] %s: failed copy removed\n", cid);
+            }
+            continue;
+        }
+        p4m_acin_t in = {0};
+        in.on = i < t->ndlc;
+        in.marked = p4m_accopy_marked(STATE_DIR, cid);
+        /* unlock-only add-ons leave no ac.pkg: only our mark says they are there */
+        in.files = a->data ? exists(p) : in.marked;
+        in.store = in.files && !in.marked;
+        in.rereg = in.marked && ac_rereg(tid, cid);
+        in.playgo = ac_playgo_ok(cid);
+        in.fails = p4m_acfail_get(STATE_DIR, cid, NULL, 0);
+        in.busy = busy;
+        switch (p4m_accopy_decide(&in)) {
+        case P4M_AC_REINSTALL:
+            if (submit_later)
+                break;
+            printf("[accopy] %s: lost after the game was registered again, installing again\n", cid);
+            ac_uninstall(cid);
+            if (exists(p))
+                break; /* still there: tried again next scan */
+            p4m_accopy_unmark(STATE_DIR, cid);
+            /* fall through */
+        case P4M_AC_INSTALL:
+            if (submit_later)
+                break;
+            int q = ac_queue(a, tid, why, sizeof(why));
+            if (!q) {
+                snprintf(g_acj[g_acn - 1].title, sizeof(g_acj[0].title), "%s", t->name);
+            } else if (q > 0) {
+                int k = 0;
+                while (k < g_ac_nleft && strcmp(g_ac_left[k], tid))
+                    k++;
+                if (k == g_ac_nleft && g_ac_nleft < MAX_TITLES)
+                    snprintf(g_ac_left[g_ac_nleft++], 10, "%s", tid);
+            } else {
+                int n = p4m_acfail_add(STATE_DIR, cid, why);
+                printf("[accopy] %s: not started (%s), %d of %d\n", cid, why, n, P4M_ACFAIL_MAX);
+                notify("%s: Zusatzinhalt %s nicht installiert (%s)", tid, cid + 20, why);
+            }
+            break;
+        case P4M_AC_UNINSTALL:
+            if (!ac_uninstall(cid) && !(a->data && exists(p))) {
+                p4m_accopy_unmark(STATE_DIR, cid);
+                printf("[accopy] %s: uninstalled (turned off)\n", cid);
+            }
+            break;
+        case P4M_AC_TURN_OFF: {
+            /* deleted from the system storage screen: off until turned on in the panel */
+            char path[64];
+            buf_t off = {0};
+            for (int k = t->ndlc; k < t->ndlc_all; k++)
+                p4m_buf_printf(&off, "%s\n", t->dlc[k].pkg.content_id);
+            p4m_buf_printf(&off, "%s\n", cid);
+            snprintf(path, sizeof(path), STATE_DIR "/%s.dlcoff", tid);
+            write_file(path, off.data, off.len, 0666);
+            p4m_buf_free(&off);
+            p4m_accopy_unmark(STATE_DIR, cid);
+            printf("[accopy] %s: deleted on the console, turned off\n", cid);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+}
+
 /* /user/app/<TID> always, /user/patch/<TID> only with an update and
  * /user/addcont/<ADD-ON TID> for each add-on title. */
 static int mount_paths(const char *tid, int has_patch, char (*dtids)[10], int ndtids) {
@@ -948,7 +1647,14 @@ static int mount_paths(const char *tid, int has_patch, char (*dtids)[10], int nd
     hold_path(hold, sizeof(hold), "patch", tid);
     if (has_patch ? mount_dir(hold, target) : (unmount_all_layers(target, 1), 0))
         return -1;
-    for (int i = 0; i < ndtids; i++) {
+    for (int i = 0; !g_cfg.dlc_copy && i < ndtids; i++) {
+        int copying = 0;
+        for (int k = 0; k < g_acn; k++)
+            copying |= !g_acj[k].ended && !strncmp(g_acj[k].cid + 7, dtids[i], 9);
+        if (copying) {
+            printf("[mount] /user/addcont/%s: a copy is still running, not mounted\n", dtids[i]);
+            continue;
+        }
         if (addcont_installed(dtids[i])) {
             printf("[mount] /user/addcont/%s holds add-ons installed the normal way, not mounted\n", dtids[i]);
             continue;
@@ -1593,6 +2299,27 @@ static int adopt_dlc(const char *root, const char *name, const char *path, pkg_t
 /* Moves PS4 game (gd) and update (gp) pkgs found in dir (the drive root or a scan
  * folder) into <root>/ps4/<TID>/app.pkg and patch.pkg, then add-ons (ac) next to
  * their game. */
+/* A free name for an update kept aside: replaced/patch-<time>.pkg, with -1, -2... when two are kept in the same
+ * second (PS4Mount PR #18: rename() would otherwise silently replace an existing one of the same name). Relative to
+ * game (<root>/ps4/<TID>), used both by the scan (adopt_dir_pkgs) and by a choice made in the panel
+ * (apply_update_choice). 0 found, -1 none free in 100 tries. */
+static int aside_name(const char *game, char *rel, size_t n) {
+    char p[PATH_MAX + 64];
+    snprintf(p, sizeof(p), "%s/replaced", game);
+    mkdirs(p, 0777);
+    long now = (long)time(NULL);
+    for (int k = 0; k < 100; k++) {
+        if (k)
+            snprintf(rel, n, "replaced/patch-%ld-%d.pkg", now, k);
+        else
+            snprintf(rel, n, "replaced/patch-%ld.pkg", now);
+        snprintf(p, sizeof(p), "%s/%s", game, rel);
+        if (!exists(p))
+            return 0;
+    }
+    return -1;
+}
+
 static int adopt_dir_pkgs(const char *root, const char *dir) {
     int moved = 0;
     DIR *d = opendir(dir);
@@ -1672,9 +2399,15 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
         snprintf(dst, sizeof(dst), "%s/ps4/%s/%s", root, tid, is_app ? "app.pkg" : "patch.pkg");
         if (exists(dst)) {
             pkg_t cur;
+            char cur_ver[16] = "";
             int same = !p4m_pkg_open(&cur, dst) && !memcmp(cur.digest, digest, sizeof(digest));
-            if (cur.fd > 0)
+            if (cur.fd > 0) {
+                sfo_t cs;
+                const sfo_item_t *cv = read_sfo(&cur, &cs) ? NULL : p4m_sfo_get(&cs, "APP_VER");
+                if (cv && !cv->is_int)
+                    snprintf(cur_ver, sizeof(cur_ver), "%s", cv->sval);
                 p4m_pkg_close(&cur);
+            }
             if (same || is_app) {
                 /* duplicates, and a second copy of a game, stay where they are */
                 if (first_time(path))
@@ -1683,24 +2416,34 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
                            e->d_name, tid);
                 continue;
             }
-            /* a different update: it replaces the current one, which is kept aside */
-            char old[PATH_MAX];
-            snprintf(old, sizeof(old), "%s/ps4/%s/replaced", root, tid);
-            mkdirs(old, 0777);
-            long now = (long)time(NULL);
-            struct stat taken;
-            snprintf(old, sizeof(old), "%s/ps4/%s/replaced/patch-%ld.pkg", root, tid, now);
-            for (int k = 2; !stat(old, &taken) && k < 100; k++) /* (app) rename() would replace it (PS4Mount PR #18) */
-                snprintf(old, sizeof(old), "%s/ps4/%s/replaced/patch-%ld-%d.pkg", root, tid, now, k);
+            char game[PATH_MAX], rel[64], old[PATH_MAX + 64], was[PATH_MAX];
+            snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
+            if (aside_name(game, rel, sizeof(rel)))
+                continue;
+            snprintf(old, sizeof(old), "%s/%s", game, rel);
+            if (cur_ver[0] && strcmp(ver, cur_ver) < 0) {
+                /* the newly found update is OLDER than the one in use: it is the one kept aside, not the current one
+                   (PS4Mount 0.7.0) — without this check a freshly connected drive with an old update file would
+                   silently demote a game that was already on a newer one. */
+                if (rename(path, old)) {
+                    printf("[scan] keep %s aside: %s\n", path, strerror(errno));
+                    continue;
+                }
+                printf("[scan] moved %s -> %s\n", path, old);
+                record_origin(root, tid, rel, path);
+                notify("Älteres Update für %s (v%s): liegt jetzt in ps4/%s/replaced, v%s bleibt in Benutzung", tid, ver,
+                       tid, cur_ver);
+                moved++;
+                continue;
+            }
+            /* a newer (or unversioned) update: it replaces the current one, which is kept aside */
             if (rename(dst, old)) {
                 printf("[scan] keep %s aside: %s\n", dst, strerror(errno));
                 continue;
             }
             /* the update kept aside keeps its original name */
-            char game[PATH_MAX], was[PATH_MAX];
-            snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
             if (!p4m_origin_find(game, "patch.pkg", was, sizeof(was)))
-                p4m_origin_add(game, old + strlen(game) + 1, was);
+                p4m_origin_add(game, rel, was);
             notify("Neues Update für %s (v%s): Das bisherige liegt jetzt in ps4/%s/replaced", tid, ver, tid);
         }
         if (rename(path, dst)) {
@@ -1911,6 +2654,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         }
         if (mount_title(&src))
             notify("%s (%s) ließ sich nicht einbinden", src.name, t->tid);
+        ac_reconcile(&src);
         src_close(&src);
     }
     if (!pending)
@@ -1984,7 +2728,9 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             } else {
                 retry_clear(t->tid);
                 ok++;
-                if (!grouped)
+                if (!grouped && g_cfg.dlc_copy && t->ndlc)
+                    notify("%s hinzugefügt, die Zusatzinhalte werden als Nächstes installiert", t->name);
+                else if (!grouped)
                     notify("%s ist spielbereit", t->name);
             }
             src_close(&src);
@@ -1994,6 +2740,8 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     free(members);
     free(ids);
     free(prepared);
+    if (ok)
+        g_scan_again = 1; /* their add-on copies start at the next pass, right away (PS4Mount 0.7.0) */
     if (pending > 1)
         notify("%s: %d von %d Spielen hinzugefügt%s", label, ok, pending, ok == pending ? ", spielbereit" : "");
 }
@@ -2045,6 +2793,7 @@ static void scan_all(void) {
             scan_root(root, !seen[i] || g_manual_scan, !seen[i] && !first);
         seen[i] = present;
     }
+    ac_submit(); /* the add-ons of every game, in one batch (PS4Mount 0.7.0) */
     first = 0;
     g_manual_scan = 0;
 }
@@ -2166,6 +2915,8 @@ static void handle_klog_line(const char *line) {
     } else if ((p = after(line, "system file disagree ["))) {
         snprintf(id, sizeof(id), "%.9s", p);
         disagree_seen(id);
+    } else if (strstr(line, "[BGFT/Telemetry] SendDownloadCopy")) {
+        ac_copy_event(line); /* copy mode: the system's own copy of an add-on started or ended (PS4Mount 0.7.0) */
     } else if ((p = after(line, "[PlayGoService][End] end ("))) {
         snprintf(id, sizeof(id), "%.9s", p);
         managed_t *m = managed_by(id, NULL);
@@ -2191,9 +2942,10 @@ static void handle_klog_line(const char *line) {
             rm_tree(hold);
             hold_path(hold, sizeof(hold), "patch", m->tid);
             rm_tree(hold);
+            ac_drop_game(m->tid);
             notify("%s ist aus der Bibliothek entfernt. Die PKG bleibt auf dem USB-Laufwerk.", m->name);
             m->used = 0;
-        } else if (strlen(id) == 36 && g_deleting) {
+        } else if (strlen(id) == 36 && g_deleting && !g_cfg.dlc_copy) {
             /* an add-on of one of our games deleted on a delete screen: keep it out until the
              * drive is reconnected. Outside those screens the uninstall is the system's own:
              * registering a game again uninstalls its add-ons' PlayGo data, and taking that
@@ -2254,6 +3006,393 @@ static int find_root(const char *tid, char *root, size_t n) {
     return -1;
 }
 
+/* --- updates and add-ons chosen in the panel, starting a game (PS4Mount 0.7.0) --- */
+
+typedef struct {
+    char rel[64]; /* in the game folder: patch.pkg (in use) or replaced/<name> */
+    char ver[16], name[256];
+} update_t;
+
+static int update_cmp(const void *a, const void *b) {
+    const update_t *x = a, *y = b;
+    int ax = !strcmp(x->rel, "patch.pkg"), ay = !strcmp(y->rel, "patch.pkg");
+    if (ax != ay)
+        return ay - ax; /* the one in use first */
+    return strcmp(y->ver, x->ver); /* then the newest */
+}
+
+/* The updates of the game folder: patch.pkg and the ones kept in replaced/. */
+static int list_updates(const char *game, const char *tid, update_t *out, int max) {
+    int n = 0;
+    char sub[PATH_MAX], p[PATH_MAX + 64];
+    snprintf(sub, sizeof(sub), "%s/replaced", game);
+    DIR *d = opendir(sub);
+    struct dirent *e = NULL;
+    for (int first = 1; n < max && (first || (d && (e = readdir(d)))); first = 0) {
+        update_t *u = &out[n];
+        if (first)
+            snprintf(u->rel, sizeof(u->rel), "patch.pkg");
+        else if (!e)
+            break;
+        else {
+            size_t len = strlen(e->d_name);
+            if (e->d_name[0] == '.' || len < 5 || len > 50 || strcasecmp(e->d_name + len - 4, ".pkg"))
+                continue;
+            snprintf(u->rel, sizeof(u->rel), "replaced/%s", e->d_name);
+        }
+        snprintf(p, sizeof(p), "%s/%s", game, u->rel);
+        pkg_t pkg;
+        if (p4m_pkg_open(&pkg, p))
+            continue;
+        sfo_t sfo;
+        const sfo_item_t *v = read_sfo(&pkg, &sfo) ? NULL : p4m_sfo_get(&sfo, "APP_VER");
+        int ok = !strcmp(pkg.title_id, tid);
+        snprintf(u->ver, sizeof(u->ver), "%s", v && !v->is_int ? v->sval : "?");
+        p4m_pkg_close(&pkg);
+        if (!ok)
+            continue;
+        char was[PATH_MAX];
+        if (p4m_origin_find(game, u->rel, was, sizeof(was)))
+            snprintf(was, sizeof(was), "%s", u->rel);
+        const char *base = strrchr(was, '/');
+        snprintf(u->name, sizeof(u->name), "%s", base ? base + 1 : was);
+        n++;
+    }
+    if (d)
+        closedir(d);
+    qsort(out, (size_t)n, sizeof(*out), update_cmp);
+    return n;
+}
+
+/* Number of .pkg files kept in replaced/ (cheap: no pkg is opened). */
+static int count_aside(const char *game) {
+    char sub[PATH_MAX];
+    snprintf(sub, sizeof(sub), "%s/replaced", game);
+    DIR *d = opendir(sub);
+    if (!d)
+        return 0;
+    int n = 0;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        size_t len = strlen(e->d_name);
+        n += e->d_name[0] != '.' && len >= 5 && !strcasecmp(e->d_name + len - 4, ".pkg");
+    }
+    closedir(d);
+    return n;
+}
+
+/* The updates and add-ons of one PS4Mount game, for the panel's dialogs: {"title_id","name","dlc_limit",
+ * "updates":[{"file","version","name","active"}],"dlcs":[{"content_id","name","on","data","copy","reason"}]}, malloc'd.
+ * NULL when the title is not found. Runs on the big-stack thread of p4m_call (title_src_t is large) — see ps4m_game_json. */
+static char *game_json_impl(const char *tid) {
+    char root[32];
+    title_src_t t;
+    if (find_root(tid, root, sizeof(root)) || src_open(&t, root, tid))
+        return NULL;
+    buf_t out = {0};
+    static update_t ups[32];
+    int nu = list_updates(t.dir, tid, ups, 32);
+    p4m_buf_printf(&out, "{\"title_id\":\"%s\",\"name\":", tid);
+    json_str(&out, t.name);
+    p4m_buf_printf(&out, ",\"dlc_limit\":%d,\"updates\":[", DLC_LIMIT);
+    for (int i = 0; i < nu; i++) {
+        p4m_buf_printf(&out, "%s{\"file\":", i ? "," : "");
+        json_str(&out, ups[i].rel);
+        p4m_buf_printf(&out, ",\"version\":");
+        json_str(&out, ups[i].ver);
+        p4m_buf_printf(&out, ",\"name\":");
+        json_str(&out, ups[i].name);
+        p4m_buf_printf(&out, ",\"active\":%s}", !strcmp(ups[i].rel, "patch.pkg") && t.has_patch ? "true" : "false");
+    }
+    p4m_buf_printf(&out, "],\"dlcs\":[");
+    for (int i = 0; i < t.ndlc_all; i++) {
+        const sfo_item_t *n = p4m_sfo_get(&t.dlc[i].sfo, "TITLE");
+        p4m_buf_printf(&out, "%s{\"content_id\":\"%s\",\"name\":", i ? "," : "", t.dlc[i].pkg.content_id);
+        json_str(&out, n && !n->is_int ? n->sval : t.dlc[i].pkg.content_id + 20);
+        p4m_buf_printf(&out, ",\"on\":%s,\"data\":%s", i < t.ndlc ? "true" : "false", t.dlc[i].data ? "true" : "false");
+        char why[128] = "";
+        p4m_buf_printf(&out, ",\"copy\":\"%s\",\"reason\":", ac_status(&t.dlc[i], i < t.ndlc, why, sizeof(why)));
+        json_str(&out, why);
+        p4m_buf_printf(&out, "}");
+    }
+    p4m_buf_printf(&out, "]}");
+    src_close(&t);
+    return (char *)out.data;
+}
+
+static int game_open(const char *tid) {
+    managed_t *m = managed_by(tid, NULL);
+    return (m && m->running) || title_running(tid);
+}
+
+/* Changes asked in the panel, made by the worker loop between scans (PS4Mount 0.7.0). */
+static char g_upd_tid[10], g_upd_rel[64], g_dlc_tid[10], *g_dlc_on;
+
+int ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap) {
+    char root[32];
+    const char *name = rel + 9;
+    if (strncmp(rel, "replaced/", 9) || strlen(rel) >= sizeof(g_upd_rel) || strchr(name, '/') || name[0] == '.' ||
+        strlen(name) < 5 || strcasecmp(name + strlen(name) - 4, ".pkg")) {
+        snprintf(msg, cap, "ungültige Update-Datei");
+        return -1;
+    }
+    if (lock_for_page(3000)) {
+        snprintf(msg, cap, P4M_BUSY);
+        return -1;
+    }
+    int rc = -1;
+    if (find_root(tid, root, sizeof(root)))
+        snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
+    else if (game_open(tid))
+        snprintf(msg, cap, "Erst das Spiel beenden, bevor sein Update gewechselt wird");
+    else if (g_upd_tid[0] || g_dlc_tid[0])
+        snprintf(msg, cap, "Gerade läuft schon eine Änderung, bitte gleich nochmal versuchen");
+    else {
+        snprintf(g_upd_rel, sizeof(g_upd_rel), "%s", rel);
+        snprintf(g_upd_tid, sizeof(g_upd_tid), "%s", tid);
+        snprintf(msg, cap, "Update von %s wird gewechselt: das Spiel wird damit neu hinzugefügt", tid);
+        rc = 0;
+    }
+    pthread_mutex_unlock(&g_mu);
+    return rc;
+}
+
+/* on: content IDs of the add-ons to keep on, comma separated (empty: all off). */
+int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) {
+    char root[32];
+    int n = 0;
+    for (const char *p = on; *p;) {
+        size_t len = strcspn(p, ",");
+        if (len != 36 || strspn(p, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_") < 36) {
+            snprintf(msg, cap, "ungültiger Zusatzinhalt: %.40s", p);
+            return -1;
+        }
+        n++;
+        p += len;
+        if (*p == ',')
+            p++;
+    }
+    if (n > DLC_LIMIT) {
+        snprintf(msg, cap, "Höchstens %d Zusatzinhalte können an sein", DLC_LIMIT);
+        return -1;
+    }
+    if (lock_for_page(3000)) {
+        snprintf(msg, cap, P4M_BUSY);
+        return -1;
+    }
+    int rc = -1;
+    if (find_root(tid, root, sizeof(root)))
+        snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
+    else if (game_open(tid))
+        snprintf(msg, cap, "Erst das Spiel beenden, bevor seine Zusatzinhalte geändert werden");
+    else if (g_upd_tid[0] || g_dlc_tid[0])
+        snprintf(msg, cap, "Gerade läuft schon eine Änderung, bitte gleich nochmal versuchen");
+    else {
+        free(g_dlc_on);
+        if (!(g_dlc_on = strdup(on)))
+            snprintf(msg, cap, "kein Speicher mehr frei");
+        else {
+            snprintf(g_dlc_tid, sizeof(g_dlc_tid), "%s", tid);
+            snprintf(msg, cap, "Zusatzinhalte von %s werden geändert: das Spiel wird damit neu hinzugefügt", tid);
+            rc = 0;
+        }
+    }
+    pthread_mutex_unlock(&g_mu);
+    return rc;
+}
+
+/* The update chosen in the panel becomes patch.pkg; the one in use is kept aside. Both
+ * keep their original names for "Move pkgs back" (PS4Mount 0.7.0). */
+static void apply_update_choice(const char *tid, const char *rel) {
+    char root[32], game[PATH_MAX], from[PATH_MAX + 64], cur[PATH_MAX + 16], aside[64], old[PATH_MAX + 64];
+    char was_cur[PATH_MAX], was_new[PATH_MAX];
+    if (find_root(tid, root, sizeof(root)) || game_open(tid))
+        return;
+    snprintf(game, sizeof(game), "%s/ps4/%s", root, tid);
+    snprintf(from, sizeof(from), "%s/%s", game, rel);
+    snprintf(cur, sizeof(cur), "%s/patch.pkg", game);
+    if (!exists(from) || aside_name(game, aside, sizeof(aside)))
+        return;
+    snprintf(old, sizeof(old), "%s/%s", game, aside);
+    int had = exists(cur), have_cur = !p4m_origin_find(game, "patch.pkg", was_cur, sizeof(was_cur)),
+        have_new = !p4m_origin_find(game, rel, was_new, sizeof(was_new));
+    if (had && rename(cur, old)) {
+        notify("Update von %s ließ sich nicht wechseln: %s", tid, strerror(errno));
+        return;
+    }
+    if (rename(from, cur)) {
+        notify("Update von %s ließ sich nicht wechseln: %s", tid, strerror(errno));
+        if (had)
+            rename(old, cur);
+        return;
+    }
+    if (had && have_cur)
+        p4m_origin_add(game, aside, was_cur);
+    /* without a record, the last one for patch.pkg would name the update kept aside */
+    p4m_origin_add(game, "patch.pkg", have_new ? was_new : rel + 9);
+    printf("[panel] %s: update %s now in use, %s kept as %s\n", tid, rel, had ? "patch.pkg" : "none", aside);
+    notify("%s: Update gewechselt, das Spiel wird neu hinzugefügt", tid);
+}
+
+/* The add-ons not in on are turned off (written to <TID>.dlcoff) (PS4Mount 0.7.0). */
+static void apply_dlc_choice(const char *tid, const char *on) {
+    char root[32], path[64];
+    title_src_t t;
+    if (find_root(tid, root, sizeof(root)) || game_open(tid) || src_open(&t, root, tid))
+        return;
+    char *list = malloc(strlen(on) + 3);
+    buf_t off = {0};
+    if (list) {
+        snprintf(list, strlen(on) + 3, "\n%s\n", on);
+        for (char *c = list; *c; c++)
+            if (*c == ',')
+                *c = '\n';
+        for (int i = 0; i < t.ndlc_all; i++)
+            if (!dlc_listed(list, t.dlc[i].pkg.content_id))
+                p4m_buf_printf(&off, "%s\n", t.dlc[i].pkg.content_id);
+            else if (i >= t.ndlc)
+                p4m_acfail_clear(STATE_DIR, t.dlc[i].pkg.content_id); /* turned on again: tried anew */
+        snprintf(path, sizeof(path), STATE_DIR "/%s.dlcoff", tid);
+        write_file(path, off.data ? (const char *)off.data : "", off.len, 0666);
+        printf("[panel] %s: add-ons changed, %zu bytes of turned-off ids\n", tid, off.len);
+        notify("%s: Zusatzinhalte geändert, das Spiel wird neu hinzugefügt", tid);
+    }
+    free(list);
+    p4m_buf_free(&off);
+    src_close(&t);
+}
+
+static int open_games(uint32_t *ids, char (*tids)[10], int max);
+static int close_open_games(const char *why);
+static char g_launch_tid[10];
+
+/* Starts a game of the library for the foreground user (PS4Mount 0.7.0). */
+static int launch_now(const char *tid, char *msg, size_t cap) {
+    struct {
+        uint32_t size, user, opt;
+        uint64_t report;
+        uint32_t flag;
+    } param = {0};
+    int user = -1, rc = sceUserServiceGetForegroundUser ? sceUserServiceGetForegroundUser(&user) : -1; /* (app) weak */
+    if (rc || user <= 0) {
+        snprintf(msg, cap, "Es ist niemand angemeldet (0x%08x)", rc);
+        return -1;
+    }
+    param.size = sizeof(param);
+    param.user = (uint32_t)user;
+    const char *argv[] = {NULL};
+    rc = sceSystemServiceLaunchApp ? sceSystemServiceLaunchApp(tid, argv, &param) : -1; /* (app) weak */
+    printf("[panel] launch %s: 0x%08x\n", tid, rc);
+    if (rc < 0) {
+        snprintf(msg, cap, "Das Spiel ließ sich nicht starten (0x%08x)", rc);
+        return -1;
+    }
+    snprintf(msg, cap, "%s wird gestartet", tid);
+    return 0;
+}
+
+/* 1 (msg names the open game) when another game is open and force is 0: the panel asks
+ * first, since that game is closed without saving. With force, the open game is closed by
+ * the worker loop, which then starts this one (PS4Mount 0.7.0). */
+int ps4m_launch(const char *tid, int force, char *msg, size_t cap) {
+    char target[64];
+    snprintf(target, sizeof(target), "/user/app/%s", tid);
+    if (!p4m_db_is_registered(tid) || !mounted_from(target, NULL, 0)) {
+        snprintf(msg, cap, "%s ist nicht spielbereit", tid);
+        return -1;
+    }
+    if (lock_for_page(3000)) {
+        snprintf(msg, cap, P4M_BUSY);
+        return -1;
+    }
+    uint32_t ids[8];
+    char tids[8][10];
+    int n = open_games(ids, tids, 8), rc;
+    if (!n) {
+        rc = launch_now(tid, msg, cap);
+    } else if (!strcmp(tids[0], tid)) {
+        snprintf(msg, cap, "%s ist schon offen", tid);
+        rc = -1;
+    } else {
+        managed_t *m = managed_by(tids[0], NULL);
+        if (!force) {
+            snprintf(msg, cap, "%s", m ? m->name : tids[0]);
+            rc = 1;
+        } else if (g_launch_tid[0]) {
+            snprintf(msg, cap, "Gerade wird schon ein anderes Spiel gestartet, bitte gleich nochmal versuchen");
+            rc = -1;
+        } else {
+            snprintf(g_launch_tid, sizeof(g_launch_tid), "%s", tid);
+            snprintf(msg, cap, "%s wird geschlossen, dann startet %s", m ? m->name : tids[0], tid);
+            rc = 0;
+        }
+    }
+    pthread_mutex_unlock(&g_mu);
+    return rc;
+}
+
+/* The deferred start: closes the open game and waits until the system let go of its files (PS4Mount 0.7.0). */
+static void launch_after_close(const char *tid) {
+    char msg[128];
+    if (close_open_games("um ein anderes Spiel zu starten")) {
+        notify("Das offene Spiel schloss nicht; %s wurde nicht gestartet", tid);
+        return;
+    }
+    if (launch_now(tid, msg, sizeof(msg)))
+        notify("%s", msg);
+}
+
+/* Copies a downloaded, verified update package (updates.c) to the root of tid's PS4Mount drive and starts a rescan:
+ * the next pass sorts it in exactly like one dropped there by hand (adopt_dir_pkgs, PS4Mount 0.7.0 bridge). The
+ * byte copy itself runs without g_mu — it can take a while for a large update, and nothing else here needs it held
+ * for that long; find_root and the rescan trigger each take it only briefly. */
+int ps4m_place_update(const char *tid, const char *pkg_path, char *msg, size_t cap) {
+    char root[32];
+    if (lock_for_page(3000)) {
+        snprintf(msg, cap, P4M_BUSY);
+        return -1;
+    }
+    int found = !find_root(tid, root, sizeof(root));
+    pthread_mutex_unlock(&g_mu);
+    if (!found) {
+        snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
+        return -1;
+    }
+    char dst[PATH_MAX];
+    snprintf(dst, sizeof(dst), "%s/ps5tm-update-%s-%ld.pkg", root, tid, (long)time(NULL));
+    int in = open(pkg_path, O_RDONLY);
+    if (in < 0) {
+        snprintf(msg, cap, "Die heruntergeladene Datei fehlt: %s", strerror(errno));
+        return -1;
+    }
+    int out = open(dst, O_WRONLY | O_CREAT | O_EXCL, 0666);
+    if (out < 0) {
+        close(in);
+        snprintf(msg, cap, "Auf dem Laufwerk ließ sich keine Datei anlegen: %s", strerror(errno));
+        return -1;
+    }
+    char buf[65536];
+    ssize_t r;
+    int ok = 1;
+    while (ok && (r = read(in, buf, sizeof(buf))) > 0)
+        ok = write(out, buf, (size_t)r) == r;
+    ok = ok && r == 0;
+    close(in);
+    close(out);
+    if (!ok) {
+        unlink(dst);
+        snprintf(msg, cap, "Kopieren auf das Laufwerk fehlgeschlagen");
+        return -1;
+    }
+    if (!lock_for_page(3000)) {
+        ps4m_rescan();
+        pthread_mutex_unlock(&g_mu);
+    }
+    printf("[panel] %s: update placed at %s for the next scan\n", tid, dst);
+    snprintf(msg, cap, "Update liegt für PS4Mount bereit, wird beim nächsten Suchen eingeordnet");
+    return 0;
+}
+
 void ps4m_games_json(buf_t *out) {
     p4m_buf_printf(out, "{\"version\":");
     json_str(out, VERSION);
@@ -2299,7 +3438,7 @@ void ps4m_games_json(buf_t *out) {
             else if (m && m->running)
                 state = "running";
             else if (mounted && p4m_db_is_registered(tid))
-                state = "ready";
+                state = g_cfg.dlc_copy && ac_game_waiting(&t) ? "addons" : "ready";
             else
                 state = "pending";
             p4m_buf_printf(out, "%s{\"title_id\":\"%s\",\"name\":", first ? "" : ",", tid);
@@ -2310,7 +3449,8 @@ void ps4m_games_json(buf_t *out) {
                        t.has_patch ? "true" : "false",
                        (unsigned long long)(t.app.pkg_size + (t.has_patch ? t.patch.pkg_size : 0)), state, mount);
             json_str(out, t.dir);
-            p4m_buf_printf(out, ",\"dlc\":%d,\"update_issue\":", t.ndlc);
+            p4m_buf_printf(out, ",\"dlc\":%d,\"dlc_total\":%d,\"updates\":%d,\"update_issue\":", t.ndlc, t.ndlc_all,
+                       t.has_patch + count_aside(t.dir));
             json_str(out, t.update_issue);
             p4m_buf_printf(out, "}");
             first = 0;
@@ -2433,6 +3573,8 @@ int ps4m_remove(const char *tid, char *msg, size_t cap) {
     int rc = p4m_db_is_registered(tid) ? uninstall_title(tid) : 0;
     if (m)
         m->used = 0;
+    if (!rc)
+        ac_drop_game(tid);
     printf("[web] remove %s: uninstall=0x%08x\n", tid, rc);
     if (rc == -2)
         snprintf(msg, cap, "Die Konsole hat %s noch nicht fertig entfernt; bitte gleich noch einmal versuchen", tid);
@@ -2687,8 +3829,9 @@ static int open_games(uint32_t *ids, char (*tids)[10], int max) {
 
 /* Every pkg operation that takes games out of the library closes the open game first,
  * whichever it is: a game left open keeps reading pkgs that are being moved. 0 once no
- * game is open; -1 when one did not close within 30 seconds. */
-static int close_open_games(void) {
+ * game is open; -1 when one did not close within 30 seconds. why names the reason shown
+ * in the notification (PS4Mount 0.7.0: also used to close a game before starting another). */
+static int close_open_games(const char *why) {
     uint32_t ids[8];
     char tids[8][10];
     int n = open_games(ids, tids, 8);
@@ -2700,9 +3843,9 @@ static int close_open_games(void) {
         return 0;
     for (int i = 0; i < n && i < 8; i++) {
         managed_t *m = managed_by(tids[i], NULL);
-        notify("%s wird geschlossen, um die PKGs zurückzuverschieben", m ? m->name : tids[i]);
+        notify("%s wird geschlossen, %s", m ? m->name : tids[i], why);
         int rc = ps5tm_procmgr_close_game(tids[i], 5000); /* (app) SIGKILL, as "Spiel beenden" */
-        printf("[restore] close %s (app 0x%08x): %d\n", tids[i], ids[i], rc);
+        printf("[close] %s (app 0x%08x): %d\n", tids[i], ids[i], rc);
     }
     char closing[8][10];
     int nc = n < 8 ? n : 8;
@@ -2713,6 +3856,16 @@ static int close_open_games(void) {
         for (int i = 0; i < nc; i++)
             mounted |= title_running(closing[i]);
         if (!open_games(ids, tids, 8) && !mounted) {
+            /* its package images are released last: a game started before that cannot read its own files
+               (0x80020060), measured on PS4Mount 0.7.0 */
+            for (int w = 0; w < 20; w++) {
+                int left = 0;
+                for (int i = 0; i < nc; i++)
+                    left += pfs_mounts(closing[i]);
+                if (!left)
+                    break;
+                pump_events(1000);
+            }
             pump_events(2000); /* let the system finish unmounting the game */
             for (int i = 0; i < MAX_TITLES; i++)
                 g_managed[i].running = 0;
@@ -2782,7 +3935,7 @@ static void run_restore(char (*only)[10], int nonly) {
         notify("Keine PS4Mount-Spiele zum Zurückverschieben");
         return;
     }
-    if (close_open_games()) {
+    if (close_open_games("um die PKGs zurückzuverschieben")) {
         notify("Das laufende Spiel ließ sich nicht schließen; es wurden keine PKGs zurückverschoben");
         return;
     }
@@ -2908,8 +4061,8 @@ static int clean_scan_path(const char *in, char *out, size_t n, char *why, size_
 
 static void config_save(void) {
     buf_t b = {0};
-    p4m_buf_printf(&b, "batch=%d\nbatch_size=%d\ndlc=%d\nrestore_batch=%d\nenabled=%d\nfast_reg=%d\n", g_cfg.batch, g_cfg.batch_size, g_cfg.dlc,
-               g_cfg.restore_batch, g_enabled, g_cfg.fast_reg);
+    p4m_buf_printf(&b, "batch=%d\nbatch_size=%d\ndlc=%d\ndlc_copy=%d\nrestore_batch=%d\nenabled=%d\nfast_reg=%d\n", g_cfg.batch,
+               g_cfg.batch_size, g_cfg.dlc, g_cfg.dlc_copy, g_cfg.restore_batch, g_enabled, g_cfg.fast_reg);
     for (int i = 0; i < g_cfg.npaths; i++)
         p4m_buf_printf(&b, "path=%s\n", g_cfg.paths[i]);
     if (b.failed) /* (app) PS4Mount PR #18 */
@@ -2934,6 +4087,8 @@ static void config_load(void) {
             c.batch_size = atoi(line + 11);
         else if (!strncmp(line, "dlc=", 4))
             c.dlc = atoi(line + 4) != 0;
+        else if (!strncmp(line, "dlc_copy=", 9))
+            c.dlc_copy = atoi(line + 9) != 0;
         else if (!strncmp(line, "enabled=", 8))
             g_enabled = atoi(line + 8) != 0;
         else if (!strncmp(line, "fast_reg=", 9))
@@ -2960,9 +4115,11 @@ static void config_load(void) {
 }
 
 void ps4m_config_json(buf_t *out) {
-    p4m_buf_printf(out, "{\"batch\":%s,\"batch_size\":%d,\"dlc\":%s,\"restore_batch\":%d,\"max_restore_batch\":%d,\"fast_reg\":%s,\"paths\":[",
-               g_cfg.batch ? "true" : "false", g_cfg.batch_size, g_cfg.dlc ? "true" : "false", g_cfg.restore_batch,
-               MAX_RESTORE_BATCH, g_cfg.fast_reg ? "true" : "false");
+    p4m_buf_printf(out,
+               "{\"batch\":%s,\"batch_size\":%d,\"dlc\":%s,\"dlc_copy\":%s,\"restore_batch\":%d,\"max_restore_batch\":%d,"
+               "\"fast_reg\":%s,\"paths\":[",
+               g_cfg.batch ? "true" : "false", g_cfg.batch_size, g_cfg.dlc ? "true" : "false",
+               g_cfg.dlc_copy ? "true" : "false", g_cfg.restore_batch, MAX_RESTORE_BATCH, g_cfg.fast_reg ? "true" : "false");
     for (int i = 0; i < g_cfg.npaths; i++) {
         char shown[130];
         snprintf(shown, sizeof(shown), "/%s", g_cfg.paths[i]);
@@ -3004,6 +4161,8 @@ int ps4m_config_set(const char *body, char *msg, size_t cap) {
                 c.batch_size = atoi(value);
             else if (k == 3 && !strncmp(p, "dlc", 3))
                 c.dlc = atoi(value) != 0;
+            else if (k == 8 && !strncmp(p, "dlc_copy", 8))
+                c.dlc_copy = atoi(value) != 0;
             else if (k == 8 && !strncmp(p, "fast_reg", 8))
                 c.fast_reg = atoi(value) != 0;
             else if (k == 13 && !strncmp(p, "restore_batch", 13)) {
@@ -3046,6 +4205,8 @@ int ps4m_config_set(const char *body, char *msg, size_t cap) {
         snprintf(msg, cap, "Nicht gespeichert: Mindestens ein Ordner nötig (/ ist die oberste Ebene des Laufwerks)");
         return -1;
     }
+    if (g_cfg.dlc_copy && !c.dlc_copy)
+        g_ac_revert = 1; /* back to mount mode: the copies are removed again (PS4Mount 0.7.0) */
     g_cfg = c;
     config_save();
     printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d fast_reg=%d folders=%d\n", c.batch, c.batch_size, c.dlc,
@@ -3058,9 +4219,6 @@ int ps4m_config_set(const char *body, char *msg, size_t cap) {
 
 /* --- the app's side: lock, klog, worker thread, calls from the page --- */
 
-/* One lock for all state. The worker holds it while it works and lets go of it in pump_events (every wait of the original loop),
- * which is where the stand-alone payload served its web panel; the calls of the page take it there. */
-static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
 static volatile int g_alive;          /* the worker thread is running */
 static int g_lock_sock = -1;          /* single-instance lock on port 9032 (as the stand-alone PS4Mount) */
 static uint64_t g_klog_after;         /* the newest kernel-log line seen */
@@ -3319,11 +4477,28 @@ static void *ps4m_worker(void *arg) {
             g_restore_all = 0;
             continue;
         }
+        if (g_launch_tid[0]) {
+            char tid[10];
+            snprintf(tid, sizeof(tid), "%s", g_launch_tid);
+            launch_after_close(tid);
+            g_launch_tid[0] = 0;
+            continue;
+        }
+        if ((g_upd_tid[0] || g_dlc_tid[0]) && !g_deleting) {
+            if (g_upd_tid[0])
+                apply_update_choice(g_upd_tid, g_upd_rel);
+            if (g_dlc_tid[0])
+                apply_dlc_choice(g_dlc_tid, g_dlc_on ? g_dlc_on : "");
+            g_upd_tid[0] = g_dlc_tid[0] = 0;
+            g_next_scan = 0;
+            continue;
+        }
         if (g_readd_tid[0] && !g_deleting) {
             char tid[10];
             snprintf(tid, sizeof(tid), "%s", g_readd_tid);
             g_readd_tid[0] = 0;
             readd_title(tid);
+            g_next_scan = 0; /* its add-on copies start now, not at the next scan (PS4Mount 0.7.0) */
             continue;
         }
         if (time(NULL) >= g_next_scan && !g_deleting) {
@@ -3332,8 +4507,11 @@ static void *ps4m_worker(void *arg) {
             else if (g_manual_scan)
                 notify("Firmware %s wird noch nicht unterstützt: Es werden keine Spiele hinzugefügt", g_fw_text);
             g_manual_scan = 0;
-            g_next_scan = time(NULL) + SCAN_SECONDS;
+            g_next_scan = time(NULL) + (g_scan_again ? 0 : SCAN_SECONDS);
+            g_scan_again = 0;
         }
+        ac_poll();
+        ac_tasks(g_deleting);
         pump_events(1000);
     }
     if (give_way) {
@@ -3366,8 +4544,6 @@ static int lock_for_page(int ms) {
         usleep(50 * 1000);
     }
 }
-
-#define P4M_BUSY "PS4Mount ist gerade beschäftigt: Es fügt hinzu, entfernt oder verschiebt. Bitte gleich noch einmal versuchen."
 
 #define P4M_WAITS "Das eigenständige PS4Mount (ps4mount.elf) läuft schon. Die App lädt PS4Mount deshalb nicht ein zweites Mal und übernimmt von selbst, sobald es beendet ist."
 
@@ -3658,8 +4834,10 @@ static void *p4m_call_main(void *p) {
     p4m_call_t *c = p;
     if (c->which == 0)
         c->json = state_json_impl();
-    else
+    else if (c->which == 1)
         c->rc = icon_impl(c->tid, c->data, c->len);
+    else
+        c->json = game_json_impl(c->tid);
     return NULL;
 }
 
@@ -3689,6 +4867,23 @@ int ps4m_icon_png(const char *tid, unsigned char **data, size_t *len) {
     c.data = data;
     c.len = len;
     return p4m_call(&c) ? -1 : c.rc;
+}
+
+/* The updates and add-ons of one PS4Mount game, malloc'd JSON (PS4Mount 0.7.0, game_json_impl does the work on the
+   big-stack thread). NULL with a sentence in msg when the title is not found. */
+char *ps4m_game_json(const char *tid, char *msg, size_t cap) {
+    if (!tid_ok(tid)) {
+        snprintf(msg, cap, "ungültige Titel-ID");
+        return NULL;
+    }
+    p4m_call_t c = {0};
+    c.which = 2;
+    c.tid = tid;
+    if (p4m_call(&c) || !c.json) {
+        snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
+        return NULL;
+    }
+    return c.json;
 }
 
 /* The last bytes of the module's log as a malloc'd string. */

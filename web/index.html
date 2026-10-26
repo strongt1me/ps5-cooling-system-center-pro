@@ -34,6 +34,10 @@
           <button class="tab" data-page="games" role="tab">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="10" rx="5"/><path d="M7.5 10.5v3M6 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg>Spiele
           </button>
+          <!-- Seit 26.10.2026: Updates, Zusatzinhalte und Starten für PS4Mount-Spiele (ps4m_core.c, PS4Mount 0.7.0). -->
+          <button class="tab" data-page="ps4mount" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/><circle cx="7" cy="14" r="1"/><circle cx="10" cy="14" r="1"/></svg>PS4Mount
+          </button>
           <!-- Seit 06.10.2026: der Dateimanager (filemgr.c). -->
           <button class="tab" data-page="files" role="tab">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>Dateimanager
@@ -663,6 +667,9 @@
               <div class="p4m-set">
                 <label class="xswitch" for="p4m-dlc"><span>Zusatzinhalte (DLC) einbinden</span>
                   <span class="switch"><input type="checkbox" id="p4m-dlc"><i></i></span></label>
+                <label class="xswitch" for="p4m-dlccopy" title="Statt vom USB-Laufwerk einzuhängen, kopiert die Konsole jeden Zusatzinhalt auf ihren internen Speicher, wie bei einem normal installierten Spiel. Braucht mehr Platz und Zeit, dafür zeigt die Konsole sie wie gewohnt im Speicherbildschirm.">
+                  <span>Zusatzinhalte auf den internen Speicher kopieren</span>
+                  <span class="switch"><input type="checkbox" id="p4m-dlccopy"><i></i></span></label>
                 <label class="xswitch" for="p4m-batch"><span>Neue Spiele in Gruppen hinzufügen</span>
                   <span class="switch"><input type="checkbox" id="p4m-batch"><i></i></span></label>
                 <label class="p4m-field"><span>Spiele pro Gruppe</span>
@@ -745,6 +752,25 @@
             </article>
 
           </div>
+        </section>
+
+        <!-- ══════════════════════ PS4MOUNT ══════════════════════
+             Seit 26.10.2026: Updates wählen, Zusatzinhalte an/aus und Starten für PS4Mount-Spiele (ps4m_core.c,
+             PS4Mount 0.7.0). Die Suche selbst und ihre Einstellungen stehen weiter auf der Spiele-Seite unter
+             „PS4 von USB" (gm-pane-p4m); diese Seite ist für die Spiele, die dort schon gefunden wurden. -->
+        <section class="page" id="page-ps4mount">
+          <article class="card">
+            <div class="card-head">
+              <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-usb"/></svg></span><div class="ck-text"><h2>PS4Mount-Spiele</h2><p class="sub" id="p4mp-sub">wird gelesen …</p></div></div>
+              <div class="row-gap"><button class="btn ghost" id="p4mp-reload" type="button">Aktualisieren</button></div>
+            </div>
+            <p class="muted p4m-intro">Für jedes vom USB-Laufwerk eingebundene Spiel (ohne Installation): welches Update
+              benutzt wird, welche Zusatzinhalte an sind, und das Spiel direkt starten. Die Suche nach Spielen und ihre
+              Einstellungen (einschalten, Ordner, Zusatzinhalte auf den internen Speicher kopieren) stehen auf der
+              Spiele-Seite unter „PS4 von USB".</p>
+            <div class="pt-note" id="p4mp-note" hidden></div>
+            <div id="p4mp-list"></div>
+          </article>
         </section>
 
         <!-- ══════════════════════ PAYLOADS ══════════════════════

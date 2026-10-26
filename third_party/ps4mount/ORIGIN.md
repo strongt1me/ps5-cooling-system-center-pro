@@ -1,4 +1,4 @@
-# PS4Mount 0.6.1 (gasb07)
+# PS4Mount 0.7.0 (gasb07)
 
 Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom User am 15.10.2026 bereitgestellt; davor 0.5.0 vom selben Tag, 0.4.4 vom 14.10. und 0.4.1 vom 13.10.), dazu am 18.10.2026 die Änderungen von 0.5.1 auf 0.6.0 (Quelltext des Tags `v0.6.0`, gelesen und nachgebaut), Lizenz GPL-3.0-or-later
 (`LICENSE` hier). Der Quelltext ist unter `src/ps4m_*.c` übernommen:
@@ -12,7 +12,7 @@ Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom U
 | `src/logts.c` (neu in 0.5.1) | entfällt | Datum und Uhrzeit am Anfang jeder Protokollzeile schreibt `p4m_printf` in `ps4m_core.c` selbst, im selben Format („2026-10-15 18:08:35.284 “) |
 | `src/db.c` | entfällt | Die Abfrage `tbl_contentinfo` liest `ps5tm_library_installed_ids` (ohne SQLite) |
 | `src/web.c`, `web/index.html` | entfallen | Die Weboberfläche ist der Reiter „PS4 von USB“ der App (`web/app.js`); die Originalseite liegt als `panel-index.html` zum Vergleich |
-| `test/unit.c` | `third_party/ps4mount/test/unit.c` | Vorsatz; 125 Prüfungen, laufen ohne Konsole |
+| `test/unit.c` | `third_party/ps4mount/test/unit.c` | Vorsatz; 150 Prüfungen, laufen ohne Konsole |
 
 Seit 0.6.1 (21.10.2026, Quelltext des Tags `v0.6.1`, Vergleich `v0.6.0...v0.6.1`): ein unter anderem Namen wiedergekommenes Laufwerk behält seine angemeldeten Spiele (`skip_drive`, `marker_matches` mit gespeichertem Marker, `relocate` in `src/ps4m_core.c`: nur die Verknüpfungen und Dateien werden auf den neuen Ordner umgeschrieben, keine neue Anmeldung); eine Spiel-PKG wird nur aus dem Ordner ihrer eigenen Titel-ID genommen (in der App schon seit PR #18 so). Nicht übernommen: Protokoll unter 10 MB halten (`logts.c`, die App rotiert `log.txt` selbst) und der Hinweis der README auf zusammengeführte PKGs (steht im Handbuch).
 
@@ -35,5 +35,28 @@ beiseitegelegtes Update wird nicht vom zweiten in derselben Sekunde überschrieb
 rotiert `log.txt` selbst), Zeitlimits des Webservers (die App hat einen eigenen), Titel-ID-Prüfung im Webserver (die App prüft
 selbst).
 
-Test: `clang -Igen -Isrc -o unit third_party/ps4mount/test/unit.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_pkg.c && ./unit`
-(vorher `python tools/gen_p4m_templates.py gen/pdb_template.h`).
+Seit 0.7.0 (26.10.2026, Quelltext des Tags `v0.7.0`, Vergleich `v0.6.1...v0.7.0` per `gh api repos/gasb07/ps4mount/compare`;
+Archiv `ps4mount-0.7.0.zip` vom User bereitgestellt): Ein gefundenes Update wird jetzt nach Versionsnummer behandelt (`APP_VER` aus
+`param.sfo` des schon vorhandenen und des neu gefundenen Pakets): ist das neu gefundene Update **älter** als das benutzte, legt es
+sich selbst beiseite statt das benutzte zu verdrängen (vorher ersetzte jedes andere Update das vorhandene, auch ein älteres). Beim
+Schließen eines Spiels vor dem Zurückverschieben wartet die App zusätzlich, bis die PFS-Einhängungen des Spiels
+(`/mnt/sandbox/pfsmnt/<TID>-app0` u. a.) wirklich freigegeben sind (`pfs_mounts` in `src/ps4m_core.c`), bis zu 20 s — vorher konnte
+ein zu früh neu gestartetes Spiel seine eigenen Dateien kurz nicht lesen (Fehler `0x80020060`).
+
+**Nachträglich übernommen (26.10.2026, auf Wunsch des Users):** „Add-ons intern kopieren“ — Add-ons werden statt eingehängt auf
+den internen Speicher kopiert (wahlweise mit allen Daten oder nur zur Freischaltung), dazu Update wählen, einzelne Add-ons an/aus
+und das Spiel direkt starten. `accopy.c`/`.h` sind als `src/ps4m_accopy.c`/`.h` mit `p4m_`-Vorsatz übernommen (Dateiname, Funktions-
+und Typnamen geändert, sonst unverändert); der rund 1200 Zeilen große Rest aus `main.c` liegt verteilt in `src/ps4m_core.c`
+(Zustandsautomat für die Kopien direkt nach `dlc_ready`, `ac_reconcile` nach `addcont_installed`, die Panel-Funktionen nach
+`find_root`), in deutscher Sprache für `notify()` und mit `ps4m_`-Vorsatz für die drei neuen, von außen aufgerufenen Funktionen
+(`ps4m_game_json`, `ps4m_choose_update`, `ps4m_choose_dlc`, `ps4m_launch`; dazu `ps4m_title_managed`, `docs/API.md`). Eigene,
+neue Bedienoberfläche: Seitenleisten-Seite „PS4Mount“ (`web/index.html`, `web/app.js`), der Schalter `dlc_copy` liegt bei den
+übrigen PS4Mount-Einstellungen auf der Spiele-Seite. Zusätzlich, nicht im Original: Die Spiele-Update-Seite (`src/updates.c`)
+legt ein heruntergeladenes Update für ein PS4Mount-Spiel jetzt selbst auf dessen Laufwerk (`ps4m_place_update`), statt es wie
+jedes andere Spiel zu installieren — das schrieb sonst in einen Ordner, den PS4Mount nie liest (gefunden 26.10.2026, CUSA44880).
+Noch nicht übernommen: `logts.c`/`web.c`/`db.c` entfallen wie bisher, der Hinweis zur lokalen IP-Adresse in der Start-Meldung (das
+eigenständige `ps4mount.elf` hat einen eigenen Webserver auf Port 8770, die App nicht) und der Sonderfall „dasselbe Spiel auf zwei
+Laufwerken“ beim Zurückverschieben (`restore_collect`, `other`-Markierung; seltener Randfall, nicht nachgebaut).
+
+Test: `gcc -Igen -Isrc -o unit third_party/ps4mount/test/unit.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_pkg.c src/ps4m_origin.c && ./unit`
+(vorher `python tools/gen_p4m_templates.py gen/pdb_template.h`; unter WSL, nicht mit dem PS5-Toolchain).

@@ -2,6 +2,22 @@
 
 ## Unveröffentlicht
 
+### Spiel-Updates: PS4Mount-Spiele bekommen ihr Update jetzt auf das Laufwerk statt in die Installation
+- **Ursache gefunden:** Ein Update für ein PS4Mount-Spiel (USB-Laufwerk) lief über die normale Installation, die Konsole meldete sie als fertig, aber `app.json` des Titels zeigte danach weiter auf die unveränderte Datei auf dem USB-Laufwerk und `param.sfo` behielt die alte Version – das Update erreichte nie das Spiel, das PS4Mount tatsächlich startet. Geprüft an der Pro: CUSA44880 blieb nach einem „erfolgreichen“ Update auf 01.00 statt 01.02
+- Die Spiele-Update-Seite erkennt PS4Mount-Spiele jetzt (neue Funktion `ps4m_title_managed`) und legt ein geladenes, geprüftes Update für sie auf ihrem Laufwerk ab (`ps4m_place_update`), statt es zu installieren – PS4Mounts eigene Suche ordnet es beim nächsten Mal ein, mit derselben Versionsprüfung wie ein von Hand aufs Laufwerk gelegtes Update (siehe PS4Mount 0.7.0 unten). Die Liste zeigt dazu `via_ps4mount`
+- Zusätzlich behoben: `installed_state()` (prüft, ob eine Installation in der Konsolenliste angekommen ist) kannte nur `param.json`, aber PS4-Titel unter Abwärtskompatibilität haben nur `param.sfo` (binäres Format) – ein neuer Leser dafür ist ergänzt, betrifft normal installierte PS4-Spiele
+
+### Neue Seite „PS4Mount“: Updates wählen, Zusatzinhalte an/aus, Spiel starten
+- Eigener Knopf in der Seitenleiste unterhalb von „Spiele“ (Suche und Einstellungen bleiben auf der Spiele-Seite unter „PS4 von USB“). Je PS4Mount-Spiel: **Updates** (welche der vorhandenen Versionen benutzt wird, auch eine ältere, in `replaced/` abgelegte), **Zusatzinhalte** (einzeln an/aus, mit dem Höchstwert von PS4Mount) und **Starten** (läuft ein anderes Spiel, fragt die App erst nach, zweimal klicken bestätigt)
+- Neuer Schalter bei den PS4Mount-Einstellungen: **Zusatzinhalte auf den internen Speicher kopieren** – statt vom USB-Laufwerk einzuhängen, kopiert die Konsole jeden Zusatzinhalt wie bei einem normal installierten Spiel; braucht mehr Platz und Zeit, zeigt sie dafür wie gewohnt im Speicherbildschirm
+- Neue API-Routen: `GET /api/v1/ps4mount/game`, `POST /api/v1/ps4mount/update`, `/dlc`, `/launch` (siehe `docs/API.md`)
+
+### Fremdbausteine: PS4Mount 0.6.1 -> 0.7.0
+- Ein gefundenes Update wird jetzt nach Versionsnummer behandelt: Ist das neu gefundene Update älter als das benutzte, legt es sich selbst in `replaced/` statt das benutzte zu verdrängen (vorher ersetzte jedes andere Update das vorhandene, auch ein älteres)
+- Beim Schließen eines Spiels vor dem Zurückverschieben wartet die App zusätzlich, bis die PFS-Einhängungen des Spiels wirklich freigegeben sind (bis zu 20 s) – vorher konnte ein zu früh neu gestartetes Spiel seine eigenen Dateien kurz nicht lesen (Fehler 0x80020060)
+- **Nachträglich übernommen:** „Add-ons intern kopieren“ (`src/ps4m_accopy.c`/`.h`, neu) mit eigener Bedienoberfläche – siehe oben „Neue Seite „PS4Mount““ und `third_party/ps4mount/ORIGIN.md`
+
+
 ### Lüfterregelung reagiert in Sekunden statt in Minuten
 - **Ursache gemessen, nicht vermutet:** Aufzeichnung an der Pro (CFI-7021) mit zwei bis sieben Messungen pro Sekunde (Temperatur, Schwelle, Sollwert, gemessene Drehzahl) bei Zielwechsel 91 ↔ 50 °C. Die Firmware folgt einer neuen Schwelle in **unter einer Sekunde**; die Zeit ging in der Regelung der App verloren: Zielwechsel wurden erst im nächsten 5-Sekunden-Takt bemerkt (gemessen 5,5 s), der Sollwert kroch bei 0 % los, obwohl der Lüfter schon auf dem Spiel-Mindestwert von 33 % stand, und die Schwelle wanderte in Schritten von 91 °C zur Temperatur, die Firmware antwortet aber erst, wenn die Schwelle die Temperatur erreicht (bis zu 20 s). Weit unter dem Ziel dauerte das Herunterfahren fünf Minuten (1 % je Takt)
 - **Takte:** Regeltakt aller Profile 1 s (vorher 4–5 s), Schwellen-Nachstellung (Servo) 2 s (vorher 6 s), Temperatur-Mittelung 3–4 s (vorher 8–12 s)

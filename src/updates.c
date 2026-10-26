@@ -37,6 +37,7 @@
 #include <unistd.h>
 
 #include "pkginst.h"
+#include "ps4m.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 #include "upd_http.h"
@@ -478,7 +479,11 @@ target_locked(const title_t *t, char *ver, size_t vn, char *url, size_t un) {
 static const char *
 status_locked(const title_t *t) {
   /* The PS5 update mechanism only checks the title ID, not how the base game was installed — official, SMP and fake
-     PKG games can all receive updates. Only games whose app.pkg was unreadable are excluded (SIGN_UNREAD). */
+     PKG games can all receive updates. Only games whose app.pkg was unreadable are excluded (SIGN_UNREAD).
+     A PS4Mount game is checked and downloaded the same way; only the final step differs (queue_thread calls
+     ps4m_place_update instead of install — a PS4Mount game's /user/app/<TID> is a mount of a USB drive, and the
+     normal install call writes nowhere PS4Mount reads from: tried once, the console reported it done while the title
+     stayed on its old version, found 26.10.2026, CUSA44880). via_ps4mount in the JSON says so. */
   if(t->source == SRC_UNKNOWN) return "not_official_unknown";
   if(t->state != ST_IDLE) return k_state[t->state];
   if(!allowed_locked(t->tid)) return "blocked";
@@ -1001,7 +1006,18 @@ queue_thread(void *arg) {
       PS5TM_INFO("upd_downloaded", "Spiel-Updates: %s %s ist geladen%s.", tid, ver, g_job_verify ? " und geprüft" : "");
     }
     int irc = 0, noinst = rc == 0 && !ia;
-    if(rc == 0 && !g_abort && ia) irc = install(tid, ver, why, sizeof why);
+    /* A PS4Mount game: the normal install call writes nowhere PS4Mount reads from (found 26.10.2026, CUSA44880), so
+       the downloaded, verified package is placed on its drive instead, where PS4Mount's own scan sorts it in. */
+    int to_ps4m = ia && ps4m_title_managed(tid);
+    if(rc == 0 && !g_abort && ia) {
+      if(to_ps4m) {
+        char pkg[PATH_MAX];
+        title_file(tid, UPD_PKG_NAME, pkg, sizeof pkg);
+        irc = ps4m_place_update(tid, pkg, why, sizeof why);
+      } else {
+        irc = install(tid, ver, why, sizeof why);
+      }
+    }
     pthread_mutex_lock(&g_lock);
     int cancelled = g_cancel_req;
     if((t = find_locked(tid))) {
@@ -1010,7 +1026,13 @@ queue_thread(void *arg) {
       else if(rc < 0) { t->state = ST_FAILED; snprintf(t->err, sizeof t->err, "%s", why); }
       else if(noinst) { t->state = ST_READY; t->err[0] = 0; }
       else if(irc < 0) { t->state = ST_READY; snprintf(t->err, sizeof t->err, "%s", why); }
-      else {
+      else if(to_ps4m) {
+        /* PS4Mount's own scan decides the real version from here, not this job */
+        t->state = ST_IDLE;
+        t->err[0] = 0;
+        t->checked = 0;
+        t->man_ver[0] = t->man_url[0] = 0;
+      } else {
         t->state = ST_INSTALLED;
         snprintf(t->err, sizeof t->err, "%s", irc > 0 ? why : "");
         if(irc == 0) { snprintf(t->ver, sizeof t->ver, "%s", ver); t->checked = 0; t->man_ver[0] = t->man_url[0] = 0; }
@@ -1027,7 +1049,10 @@ queue_thread(void *arg) {
     else if(rc == 0 && irc == 0 && ia && del) rm_dir_files(dir);
     if(rc < 0) PS5TM_WARN("upd_failed", "Spiel-Updates: %s %s: %s", tid, ver, why);
     if(noinst && !g_abort) ps5tm_notify("Update geladen, bereit zur Installation: %s %s", tid, ver);
-    else if(rc == 0 && irc == 0) {
+    else if(rc == 0 && irc == 0 && to_ps4m) {
+      PS5TM_INFO("upd_placed_ps4mount", "Spiel-Updates: %s %s liegt für PS4Mount bereit.", tid, ver);
+      ps5tm_notify("Update für PS4Mount bereitgelegt: %s %s", tid, ver);
+    } else if(rc == 0 && irc == 0) {
       PS5TM_INFO("upd_installed", "Spiel-Updates: %s ist jetzt auf Version %s.", tid, ver);
       ps5tm_notify("Update installiert: %s %s", tid, ver);
     }
@@ -1136,6 +1161,7 @@ ps5tm_updates_json(void) {
     cJSON_AddStringToObject(e, "version", t->ver);
     cJSON_AddStringToObject(e, "status", status_locked(t));
     cJSON_AddBoolToObject(e, "via_smp", t->source == SRC_SMP);
+    cJSON_AddBoolToObject(e, "via_ps4mount", ps4m_title_managed(t->tid));
     cJSON_AddBoolToObject(e, "allowed", allowed_locked(t->tid));
     cJSON_AddBoolToObject(e, "install_after", install_after_locked(t->tid));
     cJSON_AddStringToObject(e, "source", t->source == SRC_OFFICIAL ? "official" : t->source == SRC_SMP ? "smp" : t->source == SRC_FAKE ? "fake" : "unknown");
