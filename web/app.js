@@ -28,6 +28,22 @@
     const t = F.target_duty_pct, fl = F.floor_pct;
     return (F.automatic && Number.isFinite(fl) && fl > t) ? fl : t;
   };
+  /* fanPctNum: measured fan duty as a number with one decimal place.
+     Uses measured_duty_pct10 (tenths, 0-1024 scaled) when available so
+     small PWM steps show as 19.5 % instead of rounding everything to 20 %.
+     Falls back to the integer measured_duty_pct for older firmware builds. */
+  const fanPctNum = (F) => {
+    if (!F.measured_valid) return null;
+    return (F.measured_duty_pct10 != null && Number.isFinite(F.measured_duty_pct10))
+      ? F.measured_duty_pct10 / 10
+      : F.measured_duty_pct;
+  };
+  /* fanPctStr: formatted string, one decimal place (e.g. "19.5") */
+  const fanPctStr = (F) => {
+    const v = fanPctNum(F);
+    return v === null ? "--" : v.toFixed(1);
+  };
+  let lastFanPctStr = "--";
   const floorText = (F) => {
     const has = (v) => Number.isFinite(v) && v >= 0;
     if (has(F.floor_idle_pct) && has(F.floor_game_pct)) return `${F.floor_idle_pct} % im Leerlauf · ${F.floor_game_pct} % im Spiel`;
@@ -519,7 +535,7 @@
     const target = Number.isFinite(c.effective_target_c)
       ? Number(c.effective_target_c)
       : Number(c.target_temp_c);
-    const measuredFan = f.measured_valid ? Number(f.measured_duty_pct) : null;
+    const measuredFan = fanPctNum(f);
     const targetFan = (Number.isFinite(f.target_duty_pct) && (f.automatic || f.target_duty_pct > 0)) ? Number(fanSoll(f)) : null;
     const deltaFan = (measuredFan !== null && targetFan !== null)
       ? measuredFan - targetFan
@@ -871,7 +887,7 @@
         `${ct.gpu_valid ? `${num(ct.gpu_c, 1)} °C` : "--"} (Delta ${fmtDelta(
           ct.gpu_valid ? ct.gpu_c : undefined, rt.gpu_valid ? rt.gpu_c : undefined, " °C")})`
       ]] : []),
-      ["Lüfter Ist", `${cf.measured_valid ? `${num(cf.measured_duty_pct, 1)} %` : "--"} (Delta ${fmtDelta(cf.measured_duty_pct, rf.measured_duty_pct, " %")})`],
+      ["Lüfter Ist", `${cf.measured_valid ? `${fanPctStr(cf)} %` : "--"} (Delta ${fmtDelta(fanPctNum(cf), fanPctNum(rf), " %")})`],
       ["Lüfter Soll", `${num(cf.target_duty_pct ?? -1, 1)} % (Delta ${fmtDelta(cf.target_duty_pct, rf.target_duty_pct, " %")})`],
       ["SoC-Leistung risky", `${Number.isFinite(cr.soc_power_w) ? `${num(cr.soc_power_w, 1)} W` : "--"} (Delta ${fmtDelta(cr.soc_power_w, rr.soc_power_w, " W")})`],
       ["CPU-Takt risky", `${cr.cpu_mhz_valid ? `${num(cr.cpu_mhz, 0)} MHz` : "--"} (Delta ${fmtDelta(cr.cpu_mhz, rr.cpu_mhz, " MHz")})`],
@@ -961,11 +977,11 @@
       reasons.push("Ist-Drehzahl nicht verfügbar");
     }
     if (F.measured_valid && Number.isFinite(hotNow)
-        && F.measured_duty_pct <= state.monitorFanMinPct
+        && (fanPctNum(F) ?? 0) <= state.monitorFanMinPct
         && hotNow >= (state.monitorWarnC - 2)
         && level === "ok") {
       level = "warn";
-      reasons.push(`Lüfter niedrig (${num(F.measured_duty_pct, 0)} %) bei hoher Temperatur`);
+      reasons.push(`Lüfter niedrig (${fanPctStr(F)} %) bei hoher Temperatur`);
     }
 
     const detail = reasons.length ? reasons.join("; ") : "Keine Grenzwertverletzung";
@@ -1454,7 +1470,8 @@
     const T = s.temperatures, F = s.fan, C = s.control;
     /* Ring: wärmster Punkt, gleiche Skala 30–90 °C wie früher die Einzelringe */
     ringArc("#ov-hot-ring", T.hottest_c, T.hottest_c >= 0);
-    fanVisual(F.measured_valid ? F.measured_duty_pct : NaN, !!F.measured_valid);
+    lastFanPctStr = fanPctStr(F);
+    fanVisual(fanPctNum(F) ?? NaN, !!F.measured_valid);
 
     const auto = !!F.automatic;
     /* Wirksames Ziel (eine Spielregel kann es überschreiben) wird gezeigt.
@@ -1533,7 +1550,8 @@
        nur ohne Messwert oder ohne Tacho steht sie hier. */
     const fanTileEl = $("#fan-tile");
     if (!F.measured_valid || !fanTileEl || !fanTileEl.setTelemetry)
-      $("#t-fan").innerHTML = `${F.measured_valid ? F.measured_duty_pct : "--"}<i>%</i>`;
+      lastFanPctStr = fanPctStr(F);
+    $("#t-fan").innerHTML = `${lastFanPctStr}<i>%</i>`;
     /* Not every firmware reports CPU utilisation. Rather than leave a tile
        showing "--" forever, it falls back to the figure the controller is
        actually working towards. */
@@ -1550,7 +1568,7 @@
 
     setBar("#b-cpu", ((T.cpu_c - 30) / 60) * 100, 70);
     setBar("#b-soc", ((T.soc_c - 30) / 60) * 100, 70);
-    setBar("#b-fan", F.measured_valid ? F.measured_duty_pct : 0);
+    setBar("#b-fan", fanPctNum(F) ?? 0);
     setBar("#b-load", L.cpu_valid ? L.cpu_pct
                                   : ((C.target_temp_c - 55) / 20) * 100);
 
@@ -1748,14 +1766,14 @@
                   : tr > 0 ? `steigend (+${num(tr / 100, 2)} °C)`
                            : `fallend (${num(tr / 100, 2)} °C)`);
     txt("#c-tduty", `${F.target_duty_pct} %`);
-    txt("#c-rduty", F.measured_valid ? `${F.measured_duty_pct} %` : "--");
+    txt("#c-rduty", F.measured_valid ? `${fanPctStr(F)} %` : "--");
     txt("#c-thr", F.threshold_c ? `${F.threshold_c} °C`
                                 : (F.automatic ? "--" : "nicht gesetzt"));
     txt("#c-safety", C.safety_active ? "aktiv" : "aus");
 
     state.fanDiagHist.push({
       target: Number.isFinite(F.target_duty_pct) ? F.target_duty_pct : null,
-      measured: F.measured_valid ? F.measured_duty_pct : null
+      measured: fanPctNum(F)
     });
     if (state.fanDiagHist.length > 60) state.fanDiagHist.shift();
 
@@ -1789,8 +1807,8 @@
     txt("#f-rule", (C.active_game_rule && C.active_game_rule !== "-")
       ? C.active_game_rule : "keine");
     txt("#f-delta", (F.measured_valid && (F.automatic || F.target_duty_pct > 0))     /* ohne gesetztes Soll gibt es keine Abweichung */
-      ? `${(F.measured_duty_pct - fanSoll(F)) >= 0 ? "+" : ""}`
-        + `${num(F.measured_duty_pct - fanSoll(F), 1)} %`
+      ? `${(fanPctNum(F) - fanSoll(F)) >= 0 ? "+" : ""}`
+        + `${num(fanPctNum(F) - fanSoll(F), 1)} %`
       : "--");
     txt("#f-raw", F.measured_valid
       ? `${F.measured_duty_raw} (0x${(F.measured_duty_raw >>> 0).toString(16).toUpperCase()})`
@@ -1806,7 +1824,7 @@
     const fanMeasured = $("#fan-balance-measured");
     if (fanMeasured)
       fanMeasured.style.width = `${Math.max(0, Math.min(100,
-        F.measured_valid ? F.measured_duty_pct : 0))}%`;
+        fanPctNum(F) ?? 0))}%`;
 
     const miniTarget = state.fanDiagHist.map((r) => r.target);
     const miniMeasured = state.fanDiagHist.map((r) => r.measured);
@@ -1822,7 +1840,7 @@
 
     const adviceEl = $("#fan-diag-advice");
     if (adviceEl) {
-      const delta = (F.measured_valid && (F.automatic || F.target_duty_pct > 0)) ? (F.measured_duty_pct - fanSoll(F)) : null;
+      const delta = (F.measured_valid && (F.automatic || F.target_duty_pct > 0)) ? ((fanPctNum(F) ?? 0) - fanSoll(F)) : null;
       let sev = "ok";
       let msg = "Regelung wirkt stabil. Keine auffällige Soll-Ist-Abweichung.";
       let primaryStep = "Keine Aktion nötig. Werte weiter normal beobachten.";
@@ -1983,7 +2001,7 @@
         ["Regelziel", Number.isFinite(C.effective_target_c)
           ? `${C.effective_target_c} °C` : `${C.target_temp_c} °C`],
         ["Lüfter Soll / Ist", F.measured_valid
-          ? `${F.target_duty_pct} % / ${F.measured_duty_pct} %`
+          ? `${F.target_duty_pct} % / ${fanPctStr(F)} %`
           : `${F.target_duty_pct} % / --`]
       ];
 
@@ -11629,7 +11647,7 @@
         if (typeof backend.mode === "string") patch.mode = backend.mode;
         if (typeof backend.profile === "string") patch.profile = backend.profile;
         if (backend.target_temp_c !== undefined)
-          patch.target_temp_c = clampInt(backend.target_temp_c, 60, 91, 66);
+          patch.target_temp_c = clampInt(backend.target_temp_c, 50, 91, 66);
         if (backend.fan_threshold_c !== undefined)
           patch.fan_threshold_c = clampInt(backend.fan_threshold_c, 45, 91, 65);     /* the server and the input field allow 45..91 */
         if (backend.fan_reapply_sec !== undefined)
@@ -11987,7 +12005,7 @@
   fanMotionApply();
   { const ft = $("#fan-tile");
     if (ft) ft.addEventListener("fan-display", (e) => {
-      if (ft.telemetryConnected) $("#t-fan").innerHTML = `${e.detail.percent}<i>%</i>`;
+      if (ft.telemetryConnected) $("#t-fan").innerHTML = `${lastFanPctStr}<i>%</i>`;
     }); }
 
   /* Dateiauswahl: Das Feld des Browsers schreibt seine Texte („Choose File“, „No file chosen“) in der Sprache des Browsers, und der

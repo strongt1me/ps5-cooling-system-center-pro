@@ -311,9 +311,30 @@ handle_status(int fd) {
     cJSON *f = cJSON_AddObjectToObject(root, "fan");
     cJSON_AddNumberToObject(f, "threshold_c",       snap.applied_threshold_c);
     cJSON_AddNumberToObject(f, "target_duty_pct",   snap.target_duty_pct);
-    cJSON_AddNumberToObject(f, "measured_duty_pct", s->fan_duty_pct);
-    cJSON_AddBoolToObject  (f, "measured_valid",    s->fan_duty_valid);
-    cJSON_AddNumberToObject(f, "measured_duty_raw", s->fan_duty_raw);
+    cJSON_AddNumberToObject(f, "measured_duty_pct",   s->fan_duty_pct);
+    /* Tenths of a percent with 0-1024 scaling (ShellCore convention):
+       195 = 19.5 %, 1000 = 100.0 %.  Gives one decimal place of resolution
+       so small PWM steps are visible without rounding to the same integer. */
+    cJSON_AddNumberToObject(f, "measured_duty_pct10", s->fan_duty_pct10);
+    cJSON_AddBoolToObject  (f, "measured_valid",      s->fan_duty_valid);
+    cJSON_AddNumberToObject(f, "measured_duty_raw",   s->fan_duty_raw);
+
+    /* Diagnostic bytes — content undocumented, captured to discover
+       whether scratch or the direct ICC ioctl encode RPM or finer duty. */
+    if(s->fan_duty_scratch_valid) {
+      cJSON *sc = cJSON_AddArrayToObject(f, "duty_scratch_8");
+      for(int i = 0; i < 8; i++)
+        cJSON_AddItemToArray(sc, cJSON_CreateNumber(s->fan_duty_scratch[i]));
+    }
+    if(s->fan_icc_raw_valid == 1) {
+      cJSON *ir = cJSON_AddArrayToObject(f, "icc_raw_6");
+      for(int i = 0; i < 6; i++)
+        cJSON_AddItemToArray(ir, cJSON_CreateNumber(s->fan_icc_raw[i]));
+      /* Bytes 0-1 as uint16_le for easy comparison with measured_duty_raw */
+      int icc_duty = (int)s->fan_icc_raw[0] | ((int)s->fan_icc_raw[1] << 8);
+      cJSON_AddNumberToObject(f, "icc_raw_duty16", icc_duty);
+    }
+
     cJSON_AddBoolToObject  (f, "automatic",         snap.automatic);
     cJSON_AddBoolToObject  (f, "available",         snap.fan_available);
 
@@ -798,6 +819,53 @@ handle_channels(int fd) {
       cJSON_AddItemToArray(moved, cJSON_CreateBool(seen && bmax != bmin));
       cJSON_AddItemToArray(lo, seen ? cJSON_CreateNumber(bmin) : cJSON_CreateNull());
       cJSON_AddItemToArray(hi, seen ? cJSON_CreateNumber(bmax) : cJSON_CreateNull());
+    }
+  }
+
+  /* Diagnostic extension: duty_scratch and icc_direct series, one per byte.
+     Same "moved/min/max" summary per byte so the analysis page can highlight
+     which bytes changed without scanning all columns. */
+  {
+    cJSON *diag = cJSON_AddObjectToObject(root, "fan_diag");
+
+    cJSON *sc_bytes = cJSON_AddArrayToObject(diag, "scratch_bytes");
+    cJSON *sc_moved = cJSON_AddArrayToObject(diag, "scratch_moved");
+    cJSON *sc_lo    = cJSON_AddArrayToObject(diag, "scratch_min");
+    cJSON *sc_hi    = cJSON_AddArrayToObject(diag, "scratch_max");
+    for(unsigned b = 0; b < 8; b++) {
+      cJSON *series = cJSON_CreateArray();
+      int seen = 0, bmin = 0, bmax = 0;
+      for(unsigned i = 0; i < n; i++) {
+        if(!buf[i].diag_valid) { cJSON_AddItemToArray(series, cJSON_CreateNull()); continue; }
+        int v = buf[i].duty_scratch[b];
+        cJSON_AddItemToArray(series, cJSON_CreateNumber(v));
+        if(!seen) { bmin = bmax = v; seen = 1; }
+        else { if(v < bmin) bmin = v; if(v > bmax) bmax = v; }
+      }
+      cJSON_AddItemToArray(sc_bytes, series);
+      cJSON_AddItemToArray(sc_moved, cJSON_CreateBool(seen && bmax != bmin));
+      cJSON_AddItemToArray(sc_lo,    seen ? cJSON_CreateNumber(bmin) : cJSON_CreateNull());
+      cJSON_AddItemToArray(sc_hi,    seen ? cJSON_CreateNumber(bmax) : cJSON_CreateNull());
+    }
+
+    cJSON *ir_bytes = cJSON_AddArrayToObject(diag, "icc_direct_bytes");
+    cJSON *ir_moved = cJSON_AddArrayToObject(diag, "icc_direct_moved");
+    cJSON *ir_lo    = cJSON_AddArrayToObject(diag, "icc_direct_min");
+    cJSON *ir_hi    = cJSON_AddArrayToObject(diag, "icc_direct_max");
+    for(unsigned b = 0; b < 6; b++) {
+      cJSON *series = cJSON_CreateArray();
+      int seen = 0, bmin = 0, bmax = 0;
+      for(unsigned i = 0; i < n; i++) {
+        if(!buf[i].diag_valid) { cJSON_AddItemToArray(series, cJSON_CreateNull()); continue; }
+        int v = buf[i].icc_direct[b];
+        cJSON_AddItemToArray(series, cJSON_CreateNumber(v));
+        if(!seen) { bmin = bmax = v; seen = 1; }
+        else { if(v < bmin) bmin = v; if(v > bmax) bmax = v; }
+      }
+      cJSON_AddItemToArray(ir_bytes, series);
+      cJSON_AddItemToArray(ir_moved, cJSON_CreateBool(seen && bmax != bmin));
+      cJSON_AddItemToArray(ir_lo,    seen ? cJSON_CreateNumber(bmin) : cJSON_CreateNull());
+      cJSON_AddItemToArray(ir_hi,    seen ? cJSON_CreateNumber(bmax) : cJSON_CreateNull());
     }
   }
 

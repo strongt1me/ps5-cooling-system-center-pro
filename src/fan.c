@@ -30,7 +30,7 @@
 /* ------------------------------------------------------------- servo tuning */
 
 #define SERVO_TOLERANCE_PCT 4   /* accept this much duty error, then act    */
-#define SERVO_INTERVAL_SEC  6   /* the fan needs time to reach a new speed  */
+#define SERVO_INTERVAL_SEC  2   /* measured 26.10.2026: the firmware follows a threshold change in under a second */
 #define SERVO_STEP_MAX_C    3   /* threshold movement per servo correction  */
 #define SERVO_IDLE_DUTY_PCT 5   /* below this the fan is left entirely alone*/
 
@@ -419,6 +419,11 @@ comfort_step(int duty, int avg_c100, int trend_c100,
   if(avg_c100 >= safety - 300) step *= 2;    /* near the limit, hurry */
 
   if(want > duty) {
+    /* Start from what the fan really does. On a game's floor of 33 % a wish that begins at
+       0 % spends five seconds climbing through speeds the console is already above (measured
+       26.10.2026), and nothing happens until it passes the floor. */
+    if(measured_duty > duty && want > measured_duty) duty = measured_duty;
+
     /* Already falling on its own? Then the current speed is doing its job. */
     if(trend_c100 <= -TREND_SIGNIFICANT_C100 && avg_c100 < safety - 300)
       return duty;
@@ -449,7 +454,7 @@ comfort_step(int duty, int avg_c100, int trend_c100,
      * and the sound is a swell rather than a jump. The floor stays at the
      * configured step, so nothing gets slower than it was. */
     int gap = want - duty;
-    int fast = gap / 4;
+    int fast = gap / 2;
     if(fast > step) step = fast;
 
     int next = duty + step;
@@ -480,12 +485,29 @@ comfort_step(int duty, int avg_c100, int trend_c100,
 
     int below = target_c100(cfg) - avg_c100;
     if(below < 0) below = 0;
+
+    /* 8 K and more under the target the speed is not something to ease off from: it goes
+       to what the band asks for at once, within the same second the temperature says so
+       (user, 26.10.2026: a minute was too long, five seconds is the bar). */
+    if(below >= 800) {
+      *last_down_ms = now;
+      return clamp_duty(want);
+    }
+
     if(now - *last_down_ms <
        (uint64_t)cooldown_hold_sec(cfg, below) * 1000)
       return duty;
 
+    /* Far under the target the speed is a leftover, not a setting worth easing off from one
+       percent at a time: from 63 % down to rest that took five minutes at 91 °C target and
+       53 °C (measured 26.10.2026). Proportional to the gap there, one percent near the target
+       where small steps are what keeps the fan from hunting. */
+    int drop = 1;
+    if(below >= 300) drop = (duty - want) / 4;
+    if(drop < 1) drop = 1;
+
     *last_down_ms = now;
-    int next = duty - 1;
+    int next = duty - drop;
     return clamp_duty(next < want ? want : next);
   }
 
@@ -516,7 +538,12 @@ servo_step(int current, int target_duty, int measured_duty,
   /* Asymmetric on purpose: falling behind while the console is hot is the
      failure that matters, so adding cooling may move further per step than
      taking it away. */
-  int cap = (err > 0) ? SERVO_STEP_MAX_C : 1;
+  /* A big miss is a load step, not noise: one degree per six seconds walked the threshold
+     back from 58 to 91 °C in over three minutes while the fan stayed loud. Small misses keep
+     the small steps. */
+  int cap;
+  if(err > 0) cap = (mag >= 20) ? 2 * SERVO_STEP_MAX_C : SERVO_STEP_MAX_C;
+  else        cap = (mag >= 20) ? 4 : (mag >= 10) ? 2 : 1;
   if(step > cap) step = cap;
 
   /* A lower threshold widens the gap to the temperature, which is what makes
@@ -869,6 +896,7 @@ fan_worker(void *arg) {
   int      last_applied      = 0;
   uint64_t last_apply_ms     = 0;   /* any write, including refreshes       */
   uint64_t last_servo_ms     = 0;
+  int      ff_floor          = -1;      /* the fan's speed with the threshold above the temperature */
   uint64_t last_control_ms   = 0;
   uint64_t last_down_ms      = 0;
   int      duty_ema_x10      = -1;
@@ -1343,7 +1371,10 @@ fan_worker(void *arg) {
            the controller continues from this value at its normal pace. */
         if(desired_duty < BLIND_MIN_DUTY_PCT) desired_duty = BLIND_MIN_DUTY_PCT;
       } else if(now - last_control_ms >=
-                (uint64_t)cfg.control_interval_s * 1000) {
+                (uint64_t)cfg.control_interval_s * 1000 ||
+                (desired_duty > SERVO_IDLE_DUTY_PCT &&
+                 avg_c100 <= target_c100(&cfg) - 800 &&
+                 now - last_control_ms >= 1000)) {
         int was_safety = safety_active;
         /* "Nothing more to give": the threshold is already parked at its
            maximum and the fan is turning faster than we are asking for. */
@@ -1414,6 +1445,24 @@ fan_worker(void *arg) {
     } else if(!automatic) {
       int pinned = atomic_load(&g_manual_threshold_c);
       desired_threshold = pinned > 0 ? pinned : 0;
+    }
+
+    /* Feed-forward: the threshold follows the wish at once instead of being walked there by
+       the servo, which then only trims. Measured 26.10.2026 on the Pro: the firmware gives
+       about 5.6 % of speed per degree between temperature and threshold above its floor
+       (1.5 K -> 43 %, 5 K -> 61 %, 7 K -> 72 % from 33 %), and answers within a second. The
+       floor is what the fan does while the threshold sits above the temperature. The model
+       is for that first jump out of rest only: applied again while the fan was drifting a few
+       percent under the wish it threw the speed from 65 % to 83 % (measured, same day) —
+       from there the servo trims. It only ever adds cooling; taking it away stays with the servo and the rest value. */
+    if(automatic && avg_c100 >= 0 && !blind && measured >= 0 && hottest > 0) {
+      if(last_applied > hottest) ff_floor = measured;
+      if(ff_floor >= 0 && last_applied >= hottest && desired_duty > SERVO_IDLE_DUTY_PCT && desired_duty > ff_floor &&
+         desired_duty > measured + SERVO_TOLERANCE_PCT) {
+        int th = hottest - ((desired_duty - ff_floor) * 10 + 28) / 56;
+        if(th < PS5TM_THRESHOLD_MIN_C) th = PS5TM_THRESHOLD_MIN_C;
+        if(desired_threshold <= 0 || th < desired_threshold) desired_threshold = th;
+      }
     }
 
     if(st_running) desired_threshold = st_threshold;      /* the self-test owns the threshold for now */

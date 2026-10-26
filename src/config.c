@@ -148,8 +148,8 @@ ps5tm_config_defaults(ps5tm_config_t *cfg) {
      scale instead of sitting at one end. */
   cfg->control_band_c     = 14;
   cfg->deadband_c         = 1;
-  cfg->control_interval_s = 5;
-  cfg->average_window_s   = 12;
+  cfg->control_interval_s = 1;
+  cfg->average_window_s   = 4;
   cfg->max_step_pct       = 1;
   cfg->safety_temp_c      = 78;
   cfg->profile            = PS5TM_PROFILE_COMFORT;
@@ -236,22 +236,22 @@ apply_profile_presets(ps5tm_config_t *cfg) {
     case PS5TM_PROFILE_COOL:
       cfg->control_band_c     = 7;
       cfg->deadband_c         = 1;
-      cfg->control_interval_s = 4;
-      cfg->average_window_s   = 8;
+      cfg->control_interval_s = 1;
+      cfg->average_window_s   = 3;
       cfg->max_step_pct       = 3;
       break;
     case PS5TM_PROFILE_BALANCED:
       cfg->control_band_c     = 10;
       cfg->deadband_c         = 1;
-      cfg->control_interval_s = 5;
-      cfg->average_window_s   = 10;
+      cfg->control_interval_s = 1;
+      cfg->average_window_s   = 4;
       cfg->max_step_pct       = 2;
       break;
     default:                    /* COMFORT — the values proven on hardware */
       cfg->control_band_c     = 14;
       cfg->deadband_c         = 1;
-      cfg->control_interval_s = 5;
-      cfg->average_window_s   = 12;
+      cfg->control_interval_s = 1;
+      cfg->average_window_s   = 4;
       cfg->max_step_pct       = 1;
       break;
   }

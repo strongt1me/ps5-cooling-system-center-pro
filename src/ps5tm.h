@@ -505,9 +505,27 @@ typedef struct {
   double gpu_load_pct; int gpu_load_valid;
 
   int fan_duty_pct;    int fan_duty_valid;
+  /* Tenths of a percent (0-1000 = 0-100%), scaled with ShellCore's 0-1024
+     convention: raw * 1000 / 1024.  Gives one decimal place of resolution
+     (e.g. 19.5 % instead of 20 %) so small firmware PWM changes become
+     visible. fan_duty_pct is derived from this: (fan_duty_pct10 + 5) / 10. */
+  int fan_duty_pct10;
   /* Unscaled controller register. The unit is not documented — exposed raw
      so the reading can be interpreted instead of guessed at. */
   int fan_duty_raw;
+
+  /* Diagnostic: first 8 bytes of the scratch buffer that sceKernelGetCurrentFanDuty
+     writes alongside the duty register. Content undocumented — recorded to discover
+     whether any byte tracks RPM or a finer duty value. */
+  uint8_t fan_duty_scratch[8];
+  int     fan_duty_scratch_valid;
+
+  /* Diagnostic: raw 6-byte response from the ICC fan ioctl 0xC0068F06
+     (icc_fan_get_fan_manual_duty), read directly without going through the kernel
+     wrapper. Bytes 0-1 likely hold the same duty as fan_duty_raw; bytes 2-5 unknown.
+     -1 in fan_icc_raw_valid means the ioctl is unavailable on this firmware. */
+  uint8_t fan_icc_raw[6];
+  int     fan_icc_raw_valid;
 } ps5tm_sensors_t;
 
 
@@ -1249,6 +1267,14 @@ typedef struct {
      answers this, an argument does not. */
   uint8_t  icc[PS5TM_ICC_FAN_CONFIG_SIZE];
   int8_t   icc_valid;
+
+  /* Diagnostic bytes added alongside icc[]. Same motivation: record now,
+     decode later once we see which bytes move with the fan.
+     duty_scratch[8]: first 8 bytes of sceKernelGetCurrentFanDuty's scratch.
+     icc_direct[6]:   raw 6-byte response of ICC ioctl 0xC0068F06. */
+  uint8_t  duty_scratch[8];
+  uint8_t  icc_direct[6];
+  int8_t   diag_valid;          /* 1 when both arrays above were filled */
 
   /* Since 1.45.0: the power rails and the frame rate beside the channels. A
      channel that follows the GPU rail and not the CPU one sits at the GPU —

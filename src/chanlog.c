@@ -87,6 +87,10 @@ ps5tm_chanlog_sample(const ps5tm_sensors_t *s) {
   e.icc_valid = (int8_t)(icc_ok ? 1 : 0);
   if(icc_ok) memcpy(e.icc, icc, sizeof(e.icc));
 
+  e.diag_valid = (int8_t)(s->fan_duty_scratch_valid && s->fan_icc_raw_valid == 1 ? 1 : 0);
+  if(s->fan_duty_scratch_valid) memcpy(e.duty_scratch, s->fan_duty_scratch, 8);
+  if(s->fan_icc_raw_valid == 1) memcpy(e.icc_direct,  s->fan_icc_raw,      6);
+
   for(int i = 0; i < PS5TM_SOC_CHANNELS; i++)
     e.ch[i] = s->soc_raw_valid[i] ? (int16_t)s->soc_raw[i] : (int16_t)-1;
 

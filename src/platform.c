@@ -403,32 +403,61 @@ ps5tm_platform_read_fan_config(unsigned char *out, int *errno_out) {
 
 
 /* Reads the controller's duty register. Returns -1 when unavailable, else the
-   raw register value; `pct_out` receives a best-effort percentage.
+   raw register value; `pct_out` receives a whole-percent value, `pct10_out`
+   receives tenths of a percent (0-1000 = 0-100 %).
+   `scratch_out` — if non-NULL — receives the first 8 bytes of the scratch
+   buffer the kernel fills alongside the duty value.
 
-   The unit is undocumented. Treating anything >100 as a 0..255 PWM value
-   silently pinned the display at 100 % on real hardware, which made the
-   readback useless for diagnosis — so the raw value is now carried through
-   and the scaling is only a hint. */
+   Scaling: ShellCore uses SHELLCORE_FAN_DUTY_TO_PERCENT = 100.0/1024.0
+   (drakmor/ps5-hwinfo main.c), so the register range is 0-1024 (10-bit PWM),
+   not 0-1000 as assumed before.  The corrected formula:
+     pct10 = raw * 1000 / 1024  (rounded, tenths of a percent)
+     pct   = (pct10 + 5) / 10   (whole percent)
+   This gives 10× more resolution: raw 200 → 19.5 %, raw 201 → 19.6 %,
+   making small firmware PWM steps visible instead of all rounding to 20 %. */
 static int
-read_fan_duty(int *pct_out) {
+read_fan_duty(int *pct_out, int *pct10_out, uint8_t scratch_out[8]) {
   uint16_t duty = 0;
   uint8_t  scratch[64] = {0};
   if(!sceKernelGetCurrentFanDuty) return -1;
   if(sceKernelGetCurrentFanDuty(&duty, scratch) != 0) return -1;
 
-  /* The register counts tenths of a percent (0..1000). Measured on FW 12.00:
-     131 with the fan idling, 236/480/729 as cooling ramped up. An earlier
-     guess of 0..255 scaled these to a constant 100 %, which hid the fact
-     that the fan really was pegged. */
   int raw = (int)duty;
-  /* More than 1000 cannot be a reading (0xFFFF right after rest mode, for one): treated as none, so the
-     controller falls back to its open-loop way instead of taking it for a fan already at 100 %. */
-  if(raw > 1000) return -1;
-  int pct = (raw + 5) / 10;
+  /* Values above 1024 cannot be a valid 10-bit reading (0xFFFF after rest
+     mode, for example).  Reject them so the controller never mistakes a
+     saturated value for 100 % and backs off unnecessarily. */
+  if(raw > 1024) return -1;
+
+  /* pct10: tenths of a percent, scaled to the 0-1024 range ShellCore uses.
+     +512 rounds to nearest instead of truncating. */
+  int pct10 = (raw * 1000 + 512) / 1024;
+  if(pct10 > 1000) pct10 = 1000;
+  if(pct10 < 0)    pct10 = 0;
+  int pct = (pct10 + 5) / 10;
   if(pct > 100) pct = 100;
-  if(pct < 0)   pct = 0;
-  if(pct_out) *pct_out = pct;
+
+  if(pct_out)     *pct_out   = pct;
+  if(pct10_out)   *pct10_out = pct10;
+  if(scratch_out) memcpy(scratch_out, scratch, 8);
   return raw;
+}
+
+/* Reads the ICC fan device directly via ioctl 0xC0068F06 (icc_fan_get_fan_manual_duty).
+   This is the raw call that sceKernelGetCurrentFanDuty wraps; reading it independently
+   lets us compare whether the kernel wrapper returns the same data or hides extra bytes.
+   Returns 0 on success and fills out[6]; returns -1 when the device is unavailable. */
+static int
+read_icc_manual_duty_raw(uint8_t out[6]) {
+  int fd = open(ICC_FAN_DEVICE, O_RDWR | ICC_FAN_OPEN_DIRECT);
+  if(fd < 0) fd = open(ICC_FAN_DEVICE, O_RDONLY);
+  if(fd < 0) return -1;
+  uint8_t buf[6] = {0};
+  int rc  = ioctl(fd, ICC_FAN_GET_MANUAL_DUTY, buf);
+  int eno = errno;
+  close(fd);
+  if(rc != 0) { (void)eno; return -1; }
+  memcpy(out, buf, 6);
+  return 0;
 }
 
 
@@ -1239,15 +1268,23 @@ ps5tm_platform_read_sensors(ps5tm_sensors_t *out) {
   out->gpu_load_valid = 0;
   out->gpu_load_pct   = 0.0;
 
-  int pct = -1;
-  int raw = read_fan_duty(&pct);
+  int pct = -1, pct10 = -1;
+  uint8_t scratch8[8] = {0};
+  int raw = read_fan_duty(&pct, &pct10, scratch8);
   if(raw >= 0) {
-    out->fan_duty_raw   = raw;
-    out->fan_duty_pct   = pct >= 0 ? pct : 0;
-    out->fan_duty_valid = (pct >= 0);
+    out->fan_duty_raw            = raw;
+    out->fan_duty_pct            = pct >= 0 ? pct : 0;
+    out->fan_duty_pct10          = pct10 >= 0 ? pct10 : 0;
+    out->fan_duty_valid          = (pct >= 0);
+    memcpy(out->fan_duty_scratch, scratch8, 8);
+    out->fan_duty_scratch_valid  = 1;
   } else {
-    out->fan_duty_raw = -1;
+    out->fan_duty_raw            = -1;
+    out->fan_duty_pct10          = 0;
+    out->fan_duty_scratch_valid  = 0;
   }
+
+  out->fan_icc_raw_valid = (read_icc_manual_duty_raw(out->fan_icc_raw) == 0) ? 1 : -1;
 
   return (out->cpu_valid || out->soc_valid) ? 0 : -1;
 }
