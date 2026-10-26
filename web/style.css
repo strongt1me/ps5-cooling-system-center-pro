@@ -994,7 +994,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .pl-title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
 .pl-title span { color: var(--accent); }
 .pl-sec { margin: 0 0 28px; }
-.pl-sec-head { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; }
+.pl-sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: 0 0 12px; }
 .pl-sec-head svg { width: 17px; height: 17px; flex: none; fill: none; stroke: var(--accent);
   stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .pl-sec-head h3 { margin: 0; color: var(--ink-2); font-size: 12px; font-weight: 800;
@@ -1444,7 +1444,7 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 .fm-open:hover { color: var(--accent); text-decoration: underline; }
 .fm-open:focus-visible { color: var(--accent); text-decoration: underline; }
 .fm-main small { font-size: 12px; }
-.fm-acts { display: flex; gap: 6px; }
+.fm-acts { display: flex; flex-wrap: wrap; gap: 6px; }
 .fm-act { padding: 5px 10px; font-size: 12px; text-decoration: none; }
 .fm-empty { padding: 18px 6px; }
 .fm-field { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; font-size: 13px; color: var(--ink-2); }

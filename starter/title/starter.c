@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
 
 #define PORT_UI     8086
@@ -96,6 +97,10 @@ static int open_ui(void) {
     char buf[256];
     int s = connect_local(PORT_UI);
     if (s < 0) return 0;
+    /* an app that accepts the connection but never answers (stuck) must not hold the starter for good */
+    struct timeval tv = { 5, 0 };
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     send_all(s, (const unsigned char *)req, length(req));
     while (recv(s, buf, sizeof(buf), 0) > 0) {}
     close(s);

@@ -1284,7 +1284,16 @@ ps5tm_platform_read_sensors(ps5tm_sensors_t *out) {
     out->fan_duty_scratch_valid  = 0;
   }
 
-  out->fan_icc_raw_valid = (read_icc_manual_duty_raw(out->fan_icc_raw) == 0) ? 1 : -1;
+  /* Diagnostic only, and so far all zeros on both consoles: opened every fifth pass, not every second, and the last
+     answer carried in between (the fan thread is the only caller). */
+  {
+    static uint8_t icc_cache[6];
+    static int     icc_cache_valid = -1, icc_pass = 0;
+    if(icc_pass++ % 5 == 0)
+      icc_cache_valid = (read_icc_manual_duty_raw(icc_cache) == 0) ? 1 : -1;
+    memcpy(out->fan_icc_raw, icc_cache, sizeof(icc_cache));
+    out->fan_icc_raw_valid = icc_cache_valid;
+  }
 
   return (out->cpu_valid || out->soc_valid) ? 0 : -1;
 }

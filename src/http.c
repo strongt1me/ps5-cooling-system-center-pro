@@ -41,6 +41,43 @@
 
 static atomic_int g_connections;
 
+/* One client may hold at most MAX_PER_PEER of the connections (loopback excepted: the app's own helpers). Measured
+   26.10.2026: 40 half-sent requests from one machine filled all 24 places for the whole header budget and every other
+   client, the console's own browser included, got a 503. */
+#define MAX_PER_PEER 16
+#define PEER_SLOTS   32
+static pthread_mutex_t g_peer_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct { uint32_t ip; int n; } g_peer[PEER_SLOTS];
+
+static int
+peer_acquire(uint32_t ip) {
+  if((ntohl(ip) >> 24) == 127) return 1;
+  int ok = 1, free_slot = -1;
+  pthread_mutex_lock(&g_peer_lock);
+  for(int i = 0; i < PEER_SLOTS; i++) {
+    if(g_peer[i].n > 0 && g_peer[i].ip == ip) {
+      if(g_peer[i].n >= MAX_PER_PEER) ok = 0; else g_peer[i].n++;
+      free_slot = -2;
+      break;
+    }
+    if(g_peer[i].n == 0 && free_slot == -1) free_slot = i;
+  }
+  if(free_slot >= 0) { g_peer[free_slot].ip = ip; g_peer[free_slot].n = 1; }
+  pthread_mutex_unlock(&g_peer_lock);
+  return ok;
+}
+
+static void
+peer_release(uint32_t ip) {
+  if((ntohl(ip) >> 24) == 127) return;
+  pthread_mutex_lock(&g_peer_lock);
+  for(int i = 0; i < PEER_SLOTS; i++)
+    if(g_peer[i].n > 0 && g_peer[i].ip == ip) { g_peer[i].n--; break; }
+  pthread_mutex_unlock(&g_peer_lock);
+}
+
+typedef struct { int fd; uint32_t peer; } conn_arg_t;
+
 
 /* A client that reads too slowly holds its connection thread (24 at most) for as long as the answer takes; a stuck phone
    or a deliberate trickle could take all of them. Each write may block 10 s (SO_SNDTIMEO); besides, an answer must move
@@ -712,7 +749,10 @@ serve_connection(void *arg) {
 
 static void *
 connection_thread(void *arg) {
-  serve_connection(arg);
+  conn_arg_t ca = *(conn_arg_t *)arg;
+  free(arg);
+  serve_connection((void *)(intptr_t)ca.fd);
+  peer_release(ca.peer);
   atomic_fetch_sub(&g_connections, 1);
   return NULL;
 }
@@ -911,7 +951,10 @@ ps5tm_http_run(int srv, unsigned port) {
     idle = 0;
     if(!FD_ISSET(srv, &rfds)) continue;
 
-    int cl_fd = accept(srv, NULL, NULL);
+    struct sockaddr_in peer;
+    socklen_t peer_len = sizeof(peer);
+    memset(&peer, 0, sizeof(peer));
+    int cl_fd = accept(srv, (struct sockaddr *)&peer, &peer_len);
     if(cl_fd < 0) {
       /* A single connection going away between select() and accept() is
          routine and says nothing about the listener. Anything else means the
@@ -939,7 +982,25 @@ ps5tm_http_run(int srv, unsigned port) {
       close(cl_fd);
       continue;
     }
+    if(!peer_acquire(peer.sin_addr.s_addr)) {
+      struct timeval sndtv = { 1, 0 };
+      setsockopt(cl_fd, SOL_SOCKET, SO_SNDTIMEO, &sndtv, sizeof(sndtv));
+      ps5tm_http_send_error(cl_fd, 503, "too_many_connections_peer",
+                            "Zu viele gleichzeitige Verbindungen von dieser Adresse.");
+      close(cl_fd);
+      continue;
+    }
     atomic_fetch_add(&g_connections, 1);
+
+    conn_arg_t *ca = malloc(sizeof(*ca));
+    if(!ca) {
+      peer_release(peer.sin_addr.s_addr);
+      atomic_fetch_sub(&g_connections, 1);
+      close(cl_fd);
+      continue;
+    }
+    ca->fd = cl_fd;
+    ca->peer = peer.sin_addr.s_addr;
 
     pthread_t tid;
     pthread_attr_t attr;
@@ -948,9 +1009,10 @@ ps5tm_http_run(int srv, unsigned port) {
     /* A stack of known size instead of the system's small default: handlers parse JSON and build answers on it
        (review 15.10.2026; 24 connections at most, so at most 12 MiB). */
     pthread_attr_setstacksize(&attr, 512 * 1024);
-    int trc = pthread_create(&tid, &attr, connection_thread,
-                             (void *)(intptr_t)cl_fd);
+    int trc = pthread_create(&tid, &attr, connection_thread, ca);
     if(trc != 0) {
+      free(ca);
+      peer_release(peer.sin_addr.s_addr);
       atomic_fetch_sub(&g_connections, 1);
       /* The other way a request can die without a trace: no thread, so
          nobody ever reads it. From the outside this is indistinguishable

@@ -34,7 +34,7 @@ flags=(-target x86_64-sie-ps5 -fvisibility-nodllstorageclass=default -isysroot "
     --as-needed "$PS5_PAYLOAD_SDK"/target/lib/*.so
 
 # Only these imports are meant to be there (libkernel, libSceSystemService) - anything else would be NULL at run time
-allowed="close connect recv sceKernelDebugOutText sceKernelSendNotificationRequest sceKernelUsleep sceSystemServiceLoadExec send socket"
+allowed="close connect recv sceKernelDebugOutText sceKernelSendNotificationRequest sceKernelUsleep sceSystemServiceLoadExec send setsockopt socket"
 imports=$("$PS5_PAYLOAD_SDK/bin/llvm-nm" -D --undefined-only "$B/pie.elf" | awk '{ sub(/@.*/, "", $2); print $2 }' | sort -u)
 for sym in $imports; do
     [[ " $allowed " == *" $sym "* ]] || { echo "unexpected import: $sym" >&2; exit 1; }

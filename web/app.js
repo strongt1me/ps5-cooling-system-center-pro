@@ -38,10 +38,10 @@
       ? F.measured_duty_pct10 / 10
       : F.measured_duty_pct;
   };
-  /* fanPctStr: formatted string, one decimal place (e.g. "19.5") */
+  /* fanPctStr: formatted string, one decimal place in the page language (e.g. "19,5") */
   const fanPctStr = (F) => {
     const v = fanPctNum(F);
-    return v === null ? "--" : v.toFixed(1);
+    return v === null ? "--" : num(v, 1);
   };
   let lastFanPctStr = "--";
   const floorText = (F) => {

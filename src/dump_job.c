@@ -2222,8 +2222,11 @@ ps5tm_dump_action(const cJSON *b, char *msg, size_t n) {
   const cJSON *jo = cJSON_GetObjectItem(b, "overwrite");
 
   if(!strncmp(act, "queue_", 6)) return ps5tm_dumpq_action(b, msg, n);
-  if(!strcmp(act, "start")) return dump_start(id, target, cJSON_IsTrue(jo), 0, NULL, msg, n);
-  if(!strcmp(act, "dlc_only")) return dump_start(id, target, 0, 1, NULL, msg, n);
+  if(!strcmp(act, "start") || !strcmp(act, "dlc_only")) {
+    /* the queue starts its titles itself; a dump begun by hand in between would make its next title fail */
+    if(ps5tm_dumpq_active()) { snprintf(msg, n, "Die Dump-Warteschlange läuft. Einzelne Dumps lassen sich erst nach ihrem Ende oder ihrem Stopp starten."); return 409; }
+    return !strcmp(act, "start") ? dump_start(id, target, cJSON_IsTrue(jo), 0, NULL, msg, n) : dump_start(id, target, 0, 1, NULL, msg, n);
+  }
   if(!strcmp(act, "cancel")) {
     if(!ps5tm_dump_busy()) { snprintf(msg, n, "Es läuft kein Dump."); return 409; }
     __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);

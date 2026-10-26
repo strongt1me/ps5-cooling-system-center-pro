@@ -1722,6 +1722,8 @@ typedef struct {
       20 % idle, 34 % in a game, measured 17.10.2026). -1 = not learned yet. */
    int             floor_idle_pct;
    int             floor_game_pct;
+   int             model_gain_x10;     /* what the console gave per kelvin of gap, in 0.1 % (fan.c feed-forward; learned, kept per firmware) */
+   int             model_floor_pct;    /* the speed it holds with the threshold above the temperature, -1 until learned */
    int             floor_pct;           /* the one that fits the situation now */
    /* The lead on a steep rise (fan.c): what the last control pass added to the temperature it read, in hundredths of a
       degree, and the highest value since the start. 0 = none (flat or falling temperature, target below 85 °C). */

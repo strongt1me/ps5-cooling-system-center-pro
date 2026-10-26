@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -462,6 +463,20 @@ comfort_step(int duty, int avg_c100, int trend_c100,
   }
 
   if(want < duty) {
+    int below = target_c100(cfg) - avg_c100;
+    if(below < 0) below = 0;
+
+    /* 8 K and more under the target the speed is not something to ease off from: it goes
+       to what the band asks for at once, within the same second the temperature says so
+       (user, 26.10.2026: a minute was too long, five seconds is the bar). Ahead of the trend
+       test on purpose: with a four-sample window one degree of sensor noise reads as a
+       rising trend and held the fan up for several seconds (simulated, 1 K noise: up to 6 s).
+       Not at the console's own floor, where the figure below follows the real speed. */
+    if(below >= 800 && !(at_min_cooling && measured_duty > 0 && measured_duty > want)) {
+      *last_down_ms = now;
+      return clamp_duty(want);
+    }
+
     if(trend_c100 >= TREND_SIGNIFICANT_C100) return duty;
 
     /* Asymmetric hysteresis, expressed in the degrees the user set: the
@@ -482,17 +497,6 @@ comfort_step(int duty, int avg_c100, int trend_c100,
        floor instead. */
     if(at_min_cooling && measured_duty > 0 && measured_duty > want)
       return measured_duty;
-
-    int below = target_c100(cfg) - avg_c100;
-    if(below < 0) below = 0;
-
-    /* 8 K and more under the target the speed is not something to ease off from: it goes
-       to what the band asks for at once, within the same second the temperature says so
-       (user, 26.10.2026: a minute was too long, five seconds is the bar). */
-    if(below >= 800) {
-      *last_down_ms = now;
-      return clamp_duty(want);
-    }
 
     if(now - *last_down_ms <
        (uint64_t)cooldown_hold_sec(cfg, below) * 1000)
@@ -870,6 +874,37 @@ ps5tm_fan_selftest_abort(void) {
  *     log's mirror to the sender's socket, which has a timeout and switches
  *     itself off when it is not met (log.c).
  */
+/* The feed-forward's gain is the console's own answer, so it is kept: a restart starts from what this console gave, not
+   from the Pro's figure. It is kept per firmware — another firmware may answer differently (which sensor leads, how
+   steep) — and a file from another firmware, another format or with an absurd value is ignored. The first jump after a
+   fresh install or a firmware change therefore starts from the default and corrects itself within one load change. */
+#define FANMODEL_FILE    PS5TM_DATA_DIR "/fan_model.txt"
+#define FANMODEL_DEFAULT 56
+
+static int
+fanmodel_load(void) {
+  FILE *f = fopen(FANMODEL_FILE, "r");
+  if(!f) return FANMODEL_DEFAULT;
+  unsigned fw = 0;
+  int gain = 0;
+  int n = fscanf(f, "fw=%x gain=%d", &fw, &gain);
+  fclose(f);
+  if(n != 2 || fw != (unsigned)ps5tm_platform_firmware() || gain < 30 || gain > 100) return FANMODEL_DEFAULT;
+  return gain;
+}
+
+static void
+fanmodel_save(int gain) {
+  char tmp[sizeof(FANMODEL_FILE) + 8];
+  snprintf(tmp, sizeof(tmp), "%s.tmp", FANMODEL_FILE);
+  FILE *f = fopen(tmp, "w");
+  if(!f) return;
+  int ok = fprintf(f, "fw=%08x gain=%d\n", (unsigned)ps5tm_platform_firmware(), gain) > 0;
+  ok = fclose(f) == 0 && ok;
+  if(ok) rename(tmp, FANMODEL_FILE);
+  else unlink(tmp);
+}
+
 static void *
 fan_worker(void *arg) {
   (void)arg;
@@ -896,7 +931,12 @@ fan_worker(void *arg) {
   int      last_applied      = 0;
   uint64_t last_apply_ms     = 0;   /* any write, including refreshes       */
   uint64_t last_servo_ms     = 0;
-  int      ff_floor          = -1;      /* the fan's speed with the threshold above the temperature */
+  int      ff_floor          = -1;      /* the fan's speed with the threshold above the temperature (learned at rest, -1 = not yet) */
+  int      ff_gain           = fanmodel_load(); /* speed per kelvin between temperature and threshold, in 0.1 %: the Pro's 5.6 until measured, then this console's own, kept per firmware */
+  int      ff_rest_n         = 0;       /* passes in a row the fan has held still at rest */
+  int      ff_prev           = -1;      /* the speed of the previous pass */
+  uint64_t ff_jump_ms        = 0;       /* when the last jump out of rest was made (0 = none waiting to be measured) */
+  int      ff_jump_th        = 0;       /* the threshold that jump wrote */
   uint64_t last_control_ms   = 0;
   uint64_t last_down_ms      = 0;
   int      duty_ema_x10      = -1;
@@ -1371,10 +1411,7 @@ fan_worker(void *arg) {
            the controller continues from this value at its normal pace. */
         if(desired_duty < BLIND_MIN_DUTY_PCT) desired_duty = BLIND_MIN_DUTY_PCT;
       } else if(now - last_control_ms >=
-                (uint64_t)cfg.control_interval_s * 1000 ||
-                (desired_duty > SERVO_IDLE_DUTY_PCT &&
-                 avg_c100 <= target_c100(&cfg) - 800 &&
-                 now - last_control_ms >= 1000)) {
+                (uint64_t)cfg.control_interval_s * 1000) {
         int was_safety = safety_active;
         /* "Nothing more to give": the threshold is already parked at its
            maximum and the fan is turning faster than we are asking for. */
@@ -1456,13 +1493,53 @@ fan_worker(void *arg) {
        percent under the wish it threw the speed from 65 % to 83 % (measured, same day) —
        from there the servo trims. It only ever adds cooling; taking it away stays with the servo and the rest value. */
     if(automatic && avg_c100 >= 0 && !blind && measured >= 0 && hottest > 0) {
-      if(last_applied > hottest) ff_floor = measured;
+      int still = ff_prev >= 0 && measured - ff_prev <= 1 && ff_prev - measured <= 1;
+      ff_prev = measured;
+
+      /* The floor is learned only from a fan that has held still for four passes with the threshold above the
+         temperature. A fan still spinning down from a load, or one the firmware is lifting for another reason, is
+         not at its floor, and taking it for one would make every later jump too small. */
+      if(last_applied > hottest) {
+        ff_rest_n = still ? ff_rest_n + 1 : 0;
+        if(ff_rest_n >= 4) ff_floor = measured;
+      } else {
+        ff_rest_n = 0;
+      }
+
+      /* What the last jump actually gave: once the fan has settled on it (threshold untouched by the servo, speed
+         still), the speed above the floor per kelvin of gap is this console's own figure. The Pro's 5.6 % per kelvin
+         is where it starts; the firmware's answer depends on which of its sensors leads, so it is measured, not
+         assumed, and moved only half-way each time. */
+      if(ff_jump_ms) {
+        if(last_applied != ff_jump_th || now - ff_jump_ms > 12000ull) {
+          ff_jump_ms = 0;
+        } else if(now - ff_jump_ms >= 4000ull && still && ff_floor >= 0) {
+          int gap = hottest - last_applied;
+          if(gap >= 2 && measured > ff_floor) {
+            int g = ((measured - ff_floor) * 10 + gap / 2) / gap;
+            if(g < 30) g = 30;
+            if(g > 100) g = 100;
+            int ng = (ff_gain + g + 1) / 2;
+            if(ng != ff_gain) { ff_gain = ng; fanmodel_save(ff_gain); }
+          }
+          ff_jump_ms = 0;
+        }
+      }
+
       if(ff_floor >= 0 && last_applied >= hottest && desired_duty > SERVO_IDLE_DUTY_PCT && desired_duty > ff_floor &&
          desired_duty > measured + SERVO_TOLERANCE_PCT) {
-        int th = hottest - ((desired_duty - ff_floor) * 10 + 28) / 56;
+        int th = hottest - ((desired_duty - ff_floor) * 10 + ff_gain / 2) / ff_gain;
         if(th < PS5TM_THRESHOLD_MIN_C) th = PS5TM_THRESHOLD_MIN_C;
-        if(desired_threshold <= 0 || th < desired_threshold) desired_threshold = th;
+        if(desired_threshold <= 0 || th < desired_threshold) {
+          desired_threshold = th;
+          ff_jump_ms = now;
+          ff_jump_th = th;
+        }
       }
+    } else {
+      ff_prev = -1;
+      ff_rest_n = 0;
+      ff_jump_ms = 0;
     }
 
     if(st_running) desired_threshold = st_threshold;      /* the self-test owns the threshold for now */
@@ -1629,6 +1706,8 @@ fan_worker(void *arg) {
     g_snapshot.night_active        = night_now;
     g_snapshot.floor_idle_pct      = floor_value(&floor_t[0]);
     g_snapshot.floor_game_pct      = floor_value(&floor_t[1]);
+    g_snapshot.model_gain_x10      = ff_gain;
+    g_snapshot.model_floor_pct     = ff_floor;
     g_snapshot.floor_pct           = in_game ? g_snapshot.floor_game_pct : g_snapshot.floor_idle_pct;
     g_snapshot.lead_c100           = automatic ? lead_last_c100 : 0;
     g_snapshot.lead_max_c100       = lead_peak_c100;

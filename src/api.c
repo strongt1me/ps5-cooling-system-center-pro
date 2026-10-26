@@ -352,6 +352,8 @@ handle_status(int fd) {
     cJSON_AddNumberToObject(f, "floor_pct",      snap.floor_pct);
     cJSON_AddNumberToObject(f, "floor_idle_pct", snap.floor_idle_pct);
     cJSON_AddNumberToObject(f, "floor_game_pct", snap.floor_game_pct);
+    cJSON_AddNumberToObject(f, "model_gain_x10", snap.model_gain_x10);
+    cJSON_AddNumberToObject(f, "model_floor_pct", snap.model_floor_pct);
   }
 
   /* ---- what the controller is thinking ---- */
