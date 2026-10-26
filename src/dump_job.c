@@ -132,7 +132,7 @@ typedef struct {
   int      console;           /* the drive is the console's own storage */
   int      overwrite, dlc_only;
   dj_cfg_t cfg;
-  char     origin[16];        /* "disc-tab" or "library": which list may show this dump (dump_lib.c) */
+  char     origin[16];        /* "disc-tab": the Disc tab lists only the dumps it made itself (dump_lib.c) */
 } dj_args_t;
 
 typedef struct {
@@ -2038,7 +2038,7 @@ ps5tm_dump_busy(void) {
 
 static int
 dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, const ps5tm_dumpopt_t *opt,
-           const char *origin, char *err, size_t en) {
+           char *err, size_t en) {
   if(!is_tid(tid)) {
     snprintf(err, en, "Das ist keine Titelkennung eines PS5- oder PS4-Spiels.");
     return 400;
@@ -2101,7 +2101,7 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
   }
 
   snprintf(a->title_id, sizeof(a->title_id), "%s", tid);
-  snprintf(a->origin, sizeof(a->origin), "%s", origin && !strcmp(origin, "library") ? "library" : "disc-tab");
+  snprintf(a->origin, sizeof(a->origin), "disc-tab");
   ps5tm_gamestate_t gs;
   ps5tm_gamestate_get(&gs);
   char link[16], nm[128] = "";
@@ -2165,7 +2165,7 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
 
 int
 ps5tm_dump_start_item(const char *tid, int overwrite, const ps5tm_dumpopt_t *opt, char *msg, size_t n) {
-  return dump_start(tid, "", overwrite, 0, opt, "disc-tab", msg, n);
+  return dump_start(tid, "", overwrite, 0, opt, msg, n);
 }
 
 void
@@ -2220,12 +2220,10 @@ ps5tm_dump_action(const cJSON *b, char *msg, size_t n) {
   const cJSON *jt = cJSON_GetObjectItem(b, "target");
   const char *target = cJSON_IsString(jt) ? jt->valuestring : "";
   const cJSON *jo = cJSON_GetObjectItem(b, "overwrite");
-  const cJSON *jf = cJSON_GetObjectItem(b, "from");
-  const char *from = cJSON_IsString(jf) && !strcmp(jf->valuestring, "library") ? "library" : "disc-tab";
 
   if(!strncmp(act, "queue_", 6)) return ps5tm_dumpq_action(b, msg, n);
-  if(!strcmp(act, "start")) return dump_start(id, target, cJSON_IsTrue(jo), 0, NULL, from, msg, n);
-  if(!strcmp(act, "dlc_only")) return dump_start(id, target, 0, 1, NULL, from, msg, n);
+  if(!strcmp(act, "start")) return dump_start(id, target, cJSON_IsTrue(jo), 0, NULL, msg, n);
+  if(!strcmp(act, "dlc_only")) return dump_start(id, target, 0, 1, NULL, msg, n);
   if(!strcmp(act, "cancel")) {
     if(!ps5tm_dump_busy()) { snprintf(msg, n, "Es läuft kein Dump."); return 409; }
     __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
@@ -2358,13 +2356,6 @@ ps5tm_dump_json(const char *title_id) {
       if(find_existing(dest, title_id, old, &worst)) exists = worst == 2 ? "unfinished" : "done";
     }
     cJSON_AddStringToObject(t, "exists", exists);
-    char lmount[40], ldir[128], lfolder[64];
-    if(ps5tm_dumplib_find_library(title_id, lmount, sizeof(lmount), ldir, sizeof(ldir), lfolder, sizeof(lfolder))) {
-      cJSON *ld = cJSON_AddObjectToObject(t, "last_dump");
-      cJSON_AddStringToObject(ld, "mount", lmount);
-      cJSON_AddStringToObject(ld, "dir", ldir);
-      cJSON_AddStringToObject(ld, "folder", lfolder);
-    }
   }
 
   cJSON_AddItemToObject(o, "queue", ps5tm_dumpq_json());

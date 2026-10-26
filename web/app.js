@@ -5049,15 +5049,15 @@
     const pkg = x.format === "pkg";
     const why = {
       launch: "Für diese Kachel gibt es keinen Startlink.",
-      copy: !x.path ? "Wo die Spieldaten dieses Titels liegen, ist nicht bekannt."
+      copy: pkg ? "Installierte Spiele (PKG) lassen sich nicht kopieren: Es gibt weder einen Ordner noch eine Abbilddatei."
+        : !x.path ? "Wo die Spieldaten dieses Titels liegen, ist nicht bekannt."
         : "Dieses Spiel lässt sich nicht kopieren.",
       move: pkg ? "Installierte Spiele (PKG) lassen sich nicht verschieben."
         : !x.smp ? "Nur für Spiele, die ShadowMountPlus verwaltet."
         : "ShadowMountPlus kann dieses Spiel gerade nicht verschieben (Laufwerk nicht erreichbar, oder es bietet die Funktion nicht an).",
-      convert: pkg ? "Installierte Spiele (PKG): Das Paket (app.pkg) selbst lässt sich nicht in ein Abbild umwandeln, nur die eigenen, entschlüsselten Dateien eines Spiels."
+      convert: pkg ? "Installierte Spiele (PKG) lassen sich nicht konvertieren."
         : !x.path ? "Wo die Spieldaten dieses Titels liegen, ist nicht bekannt."
-        : "Konvertieren geht nur bei Dump-Ordnern und bei Abbildern (exFAT, ffpkg, ffpfs, ffpfsc).",
-      dump: "Das Spiel muss laufen. Bitte zuerst auf „Starten“ drücken und warten, bis es geladen ist."
+        : "Konvertieren geht nur bei Dump-Ordnern und bei Abbildern (exFAT, ffpkg, ffpfs, ffpfsc)."
     };
     const btn = (cls, attrs, label, ok, reason) =>
       `<button type="button" class="btn${cls}" ${attrs}${ok ? "" : ` disabled title="${esc(reason)}"`}>${label}</button>`;
@@ -5072,10 +5072,9 @@
             ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy)}
             ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move)}
             ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert)}
-            ${pkg ? btn("", `data-pkgdump="${id}"`, "Dumpen", !!x.dump_mounted, why.dump) : ""}
-            ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-Asset-Packs …", !pkg && !!x.path, pkg ? "Nur für die eigenen, entschlüsselten Dateien eines Spiels, nicht für ein installiertes Paket (PKG)." : why.copy)}
+            ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-Asset-Packs …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
             ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
-            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Der Ordner eines installierten Pakets (PKG) öffnet sich hier nicht; „Kopieren“ sichert ihn." : why.copy)}
+            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy)}
           </div>`;
   };
 
@@ -6365,8 +6364,6 @@
     if (store) { if (!store.disabled) mvOpen(store.dataset.id, store.dataset.store); return; }
     const conv = e.target.closest("button[data-convert]");
     if (conv) { if (!conv.disabled) cvOpen(conv.dataset.convert); return; }
-    const pkgd = e.target.closest("button[data-pkgdump]");
-    if (pkgd) { if (!pkgd.disabled) pkgdOpen(pkgd.dataset.pkgdump); return; }
     const gop = e.target.closest("button[data-gopath]");
     if (gop) {
       if (gop.disabled) return;
@@ -9553,171 +9550,6 @@
       toast(e.message, "error");
       btn.disabled = false;
     }
-  };
-
-  /* ── Dumpen von der eigenen Spielkarte (26.10.2026) ──────────────────
-   * Derselbe Dump wie im Disc-Reiter (dump_job.c), nur ausgelöst von einem
-   * installierten PKG-/fPKG-Spiel statt einem Disc-Spiel: „from":"library" in
-   * der Info-Datei hält ihn aus der Disc-Reiter-Liste heraus. Ein schlankes,
-   * eigenes Fenster (wie Kopieren/Konvertieren, aber ohne deren Zustand zu
-   * teilen); die Einstellungen (Entschlüsseln, Backport, Ziel) sind dieselben
-   * wie im Disc-Reiter und werden dort geändert. Nach einem fertigen PS5-Dump
-   * öffnet „Als Abbild bauen" denselben Dialog wie im Disc-Reiter (dimgOpen). */
-  const pkgd = { id: "", data: null, timer: 0, gen: 0 };
-
-  const pkgdClose = () => {
-    const o = $("#pkgd-overlay");
-    if (o) o.remove();
-    clearTimeout(pkgd.timer);
-    pkgd.timer = 0;
-    pkgd.gen++;
-  };
-
-  const pkgdShell = () => {
-    let o = $("#pkgd-overlay");
-    if (o) return o;
-    o = document.createElement("div");
-    o.id = "pkgd-overlay";
-    o.className = "gm-overlay";
-    o.innerHTML = `<div class="cp-dialog" role="dialog" aria-modal="true" aria-labelledby="pkgd-title">
-        <div class="cp-head"><h3 id="pkgd-title">Dumpen</h3>
-          <button type="button" class="cp-x" data-pkgd="close" aria-label="Schließen">×</button></div>
-        <div id="pkgd-body"></div>
-      </div>`;
-    document.body.appendChild(o);
-    o.addEventListener("click", (e) => {
-      if (e.target === o) { pkgdClose(); return; }
-      const b = e.target.closest("[data-pkgd]");
-      if (!b || b.disabled) return;
-      const act = b.dataset.pkgd;
-      if (act === "close") pkgdClose();
-      else if (act === "start") pkgdStart(b, false);
-      else if (act === "start-over") pkgdStart(b, true);
-      else if (act === "cancel") pkgdCancel(b);
-      else if (act === "image") { const last = JSON.parse(b.dataset.last); pkgdClose(); dimgOpen(last); }
-    });
-    return o;
-  };
-
-  const pkgdPoll = async () => {
-    const my = pkgd.gen;
-    let d;
-    try { d = await api(`/api/v1/dump?title=${encodeURIComponent(pkgd.id)}`); }
-    catch (e) {
-      if (my !== pkgd.gen || !$("#pkgd-overlay")) return;
-      $("#pkgd-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
-        <div class="cp-actions"><button type="button" class="btn primary" data-pkgd="close">Schließen</button></div>`;
-      return;
-    }
-    if (my !== pkgd.gen || !$("#pkgd-overlay")) return;
-    pkgd.data = d;
-    pkgdRender();
-    const j = d.job;
-    if (j && j.active && j.title_id === pkgd.id) pkgd.timer = setTimeout(pkgdPoll, 1000);
-  };
-
-  const pkgdRender = () => {
-    const d = pkgd.data;
-    const body = $("#pkgd-body");
-    if (!d || !body) return;
-    const g = (gm.list || []).find((x) => x.title_id === pkgd.id);
-    txt("#pkgd-title", `„${g ? g.name : pkgd.id}“ dumpen`);
-    const t = d.title || {};
-    const j = d.job || {};
-    const mine = j.title_id === pkgd.id;
-
-    if (mine && j.active) {
-      const withVer = !!j.verify;
-      const work = j.done_bytes + (withVer ? j.checked_bytes : 0);
-      const pc = j.total_bytes > 0 ? Math.min(100, work * 100 / (j.total_bytes * (withVer ? 2 : 1))) : 0;
-      let stat = `${bytes(j.done_bytes)} von ${bytes(j.total_bytes)}`;
-      if (j.rate > 0) stat += ` · ${bytes(j.rate)}/s`;
-      if (j.eta_s > 0) stat += ` · ${cpEta(j.eta_s)}`;
-      const files = `${cpFiles(j.files_done)} von ${num(j.files_total)}`
-        + (j.dlc_total ? ` · DLC ${j.dlc_done} von ${j.dlc_total}` : "")
-        + (j.dec_total ? ` · Entschlüsselt: ${num(j.dec_done)} von ${num(j.dec_total)} Dateien` : "")
-        + (j.bp_total ? ` · Backport: ${num(j.bp_done)} von ${num(j.bp_total)} Dateien` : "");
-      body.innerHTML = `<b>${esc(j.stage || "Dumpen …")}</b>
-        <div class="upd-bar"><i style="width:${pc.toFixed(1)}%"></i></div>
-        <small>${esc(stat)} · ${esc(files)}</small>
-        ${j.current ? `<div class="p4m-meta" data-no-i18n>${esc(j.current)}</div>` : ""}
-        <div class="cp-actions"><button type="button" class="btn danger" data-pkgd="cancel">Stoppen</button></div>`;
-      return;
-    }
-    if (mine && (j.state === "done" || j.state === "failed" || j.state === "cancelled")) {
-      const head = j.state === "done" ? "Dump fertig" : j.state === "cancelled" ? "Abgebrochen" : "Gescheitert";
-      const canImg = j.state === "done" && j.kind !== "dlc" && t.last_dump;
-      body.innerHTML = `<b>${esc(head)}</b>
-        <small>${esc(bytes(j.done_bytes || 0))} · <code>${esc(j.dest || "")}/${esc(j.folder || "")}</code></small>
-        ${j.error ? `<p class="cp-why">${esc(j.error)}</p>` : ""}
-        ${j.note ? `<p class="muted">${esc(j.note)}</p>` : ""}
-        ${j.state === "cancelled" ? `<p class="cp-why">Was bis dahin geschrieben wurde, bleibt unfertig im Ziel. Der nächste Dump entfernt es zuerst.</p>` : ""}
-        <div class="cp-actions">
-          <button type="button" class="btn" data-pkgd="close">Schließen</button>
-          ${canImg ? `<button type="button" class="btn primary" data-pkgd="image" data-last='${esc(JSON.stringify(t.last_dump))}'>Als Abbild bauen</button>` : ""}
-          <button type="button" class="btn${canImg ? "" : " primary"}" data-pkgd="start">Erneut dumpen</button>
-        </div>`;
-      return;
-    }
-
-    if (!t.mounted) {
-      body.innerHTML = `<p class="muted">Das Spiel muss laufen, damit sich seine Dateien lesen lassen. Bitte zuerst auf „Starten“ drücken.</p>
-        <div class="cp-actions"><button type="button" class="btn" data-pkgd="close">Schließen</button></div>`;
-      return;
-    }
-    const busy = j.active && j.title_id !== pkgd.id;
-    const s = d.settings || {};
-    const tgt = (d.targets || []).find((x) => x.mount === s.target);
-    const tags = [s.decrypt ? "entschlüsselt" : "", s.backport ? "Backport" : ""].filter(Boolean).join(" · ");
-    body.innerHTML = `
-      <p class="muted">Kopiert die Dateien des laufenden Spiels (und eingehängte DLC) auf ein Laufwerk, mit denselben Einstellungen wie im Disc-Reiter.${tags ? ` (${esc(tags)})` : ""}</p>
-      <p class="muted">Ziel: <b>${esc(tgt ? tgt.label : (s.target || "noch keines gewählt"))}</b>${!s.target ? " — im Disc-Reiter unter „Einstellungen“ wählen." : ""}</p>
-      ${t.exists === "done" ? `<p class="cp-why">Am Ziel liegt schon ein fertiger Dump dieses Spiels. Er wird nur nach einer Bestätigung ersetzt.</p>` : ""}
-      ${busy ? `<p class="cp-err">Es läuft gerade ein anderer Dump.</p>` : ""}
-      <div class="cp-actions">
-        <button type="button" class="btn" data-pkgd="close">Abbrechen</button>
-        <button type="button" class="btn primary" data-pkgd="start" ${!s.target || busy ? "disabled" : ""}>Dumpen starten</button>
-      </div>`;
-  };
-
-  const pkgdStart = async (btn, overwrite) => {
-    btn.disabled = true;
-    try {
-      await api("/api/v1/dump", { method: "POST",
-        body: JSON.stringify({ action: "start", id: pkgd.id, from: "library", overwrite: !!overwrite }) });
-      jobBanner();
-      pkgdPoll();
-    } catch (e) {
-      if (!overwrite && /schon ein fertiger Dump/.test(e.message)) {
-        $("#pkgd-body").insertAdjacentHTML("beforeend",
-          `<p class="cp-err">${esc(e.message)}</p>
-           <div class="cp-actions"><button type="button" class="btn danger" data-pkgd="start-over">Ersetzen und starten</button></div>`);
-        return;
-      }
-      toast(e.message, "error");
-      btn.disabled = false;
-    }
-  };
-
-  const pkgdCancel = async (btn) => {
-    btn.disabled = true;
-    try {
-      await api("/api/v1/dump", { method: "POST", body: JSON.stringify({ action: "cancel" }) });
-      toast("Der Dump wird gestoppt.");
-    } catch (e) {
-      toast(e.message, "error");
-      btn.disabled = false;
-    }
-    pkgdPoll();
-  };
-
-  const pkgdOpen = async (id) => {
-    pkgdShell().hidden = false;
-    pkgd.id = id;
-    pkgd.data = null;
-    clearTimeout(pkgd.timer);
-    $("#pkgd-body").innerHTML = `<p class="muted">wird geladen …</p>`;
-    await pkgdPoll();
   };
 
   $("#dp-list").addEventListener("click", async (e) => {

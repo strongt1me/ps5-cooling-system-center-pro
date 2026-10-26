@@ -196,7 +196,6 @@ typedef struct {
   int      decrypt, fself, backport, split;   /* -1 not known */
   int64_t  started, finished;
   int      origin_ok;                    /* the info file says it was made from the Disc tab */
-  int      origin_lib;                   /* the info file says it was made from an installed game's own card */
 } dump_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -290,10 +289,7 @@ read_info(const char *path, dump_t *d) {
   const cJSON *v;
   if(cJSON_IsString(v = cJSON_GetObjectItem(j, "state"))) snprintf(d->state, sizeof(d->state), "%s", v->valuestring);
   if(cJSON_IsString(v = cJSON_GetObjectItem(j, "title"))) snprintf(d->title, sizeof(d->title), "%s", v->valuestring);
-  if(cJSON_IsString(v = cJSON_GetObjectItem(j, "origin"))) {
-    if(!strcmp(v->valuestring, "disc-tab")) d->origin_ok = 1;
-    else if(!strcmp(v->valuestring, "library")) d->origin_lib = 1;
-  }
+  if(cJSON_IsString(v = cJSON_GetObjectItem(j, "origin")) && !strcmp(v->valuestring, "disc-tab")) d->origin_ok = 1;
   if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "bytes")) && v->valuedouble > 0) d->bytes = (uint64_t)v->valuedouble;
   if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "started"))) d->started = (int64_t)v->valuedouble;
   if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "finished"))) d->finished = (int64_t)v->valuedouble;
@@ -329,9 +325,7 @@ add_entry(ctx_t *c, const char *rel, const char *dest, const char *name, int kin
   char info[640];
   snprintf(info, sizeof(info), "%s/%s" INFO_SUFFIX, dest, name);
   read_info(info, d);
-  /* dumps made from the game list (not the Disc tab) stay in the list below for measuring, GEDUMPT marks and the image
-     builder, but never in the Disc tab's own JSON (ps5tm_dumplib_json filters on origin_ok there). */
-  if(!d->origin_ok && !d->origin_lib) { c->n--; return; }
+  if(!d->origin_ok) { c->n--; return; }
   for(int i = 0; i < c->nlib; i++) {
     if(strcmp(c->lib[i].title_id, d->title_id) || !c->lib[i].name[0]) continue;
     /* the installed title's name wins over what the info file kept (it was written in whatever language came first);
@@ -517,7 +511,6 @@ ps5tm_dumplib_json(void) {
   cJSON *list = cJSON_AddArrayToObject(root, "dumps");
   for(unsigned i = 0; i < g_n; i++) {
     const dump_t *d = &g_list[i];
-    if(!d->origin_ok) continue;             /* the Disc tab shows only what it made itself */
     cJSON *o = cJSON_CreateObject();
     cJSON_AddStringToObject(o, "mount", d->mount);
     cJSON_AddStringToObject(o, "dir", d->dir);
@@ -595,42 +588,6 @@ ps5tm_dumplib_source(const char *mount, const char *dir, const char *folder, ps5
   return 200;
 }
 
-/* The folder of a finished PS5 dump for the image builder (gameconvert.c): one flat folder, never paired with an update
-   like a PS4 dump (ShadowMountPlus applies a PS5 update to the installed game, not to a dump). The three strings of the
-   list entry name it — the browser never names a path. Returns 200, else an HTTP status with a sentence in err. */
-int
-ps5tm_dumplib_source_ps5(const char *mount, const char *dir, const char *folder, ps5tm_dumpsrc_t *out, char *err, size_t err_len) {
-  memset(out, 0, sizeof(*out));
-  if(!mount || !dir || !folder || !mount[0] || !folder[0]) { snprintf(err, err_len, "Dieser Dump ist nicht angegeben."); return 400; }
-  dump_t sel;
-  memset(&sel, 0, sizeof(sel));
-  int found = 0;
-  pthread_mutex_lock(&g_lock);
-  for(unsigned i = 0; i < g_n; i++) {
-    const dump_t *d = &g_list[i];
-    if(!strcmp(d->mount, mount) && !strcmp(d->dir, dir) && !strcmp(d->folder, folder)) { sel = *d; found = 1; break; }
-  }
-  pthread_mutex_unlock(&g_lock);
-  if(!found) { snprintf(err, err_len, "Diesen Dump kennt die Suche nicht (mehr)."); return 404; }
-  if(sel.kind != 0) { snprintf(err, err_len, "Nur ein Spiel-Dump lässt sich als Abbild bauen."); return 400; }
-  if(strncmp(sel.title_id, "PPSA", 4)) { snprintf(err, err_len, "Das ist kein PS5-Dump."); return 400; }
-  if(sel.state[0] && strcmp(sel.state, "done")) { snprintf(err, err_len, "Dieser Dump ist nicht fertig."); return 409; }
-
-  ps5tm_pkgdrive_t *dr = calloc(PS5TM_MAX_VOLUMES, sizeof(*dr));
-  if(!dr) { snprintf(err, err_len, "Kein Speicher."); return 500; }
-  unsigned nd = ps5tm_pkg_drives(dr, PS5TM_MAX_VOLUMES);
-  const char *root = NULL;
-  for(unsigned i = 0; i < nd; i++) if(!strcmp(dr[i].mount, sel.mount)) { root = dr[i].base; break; }
-  if(!root) { free(dr); snprintf(err, err_len, "Das Laufwerk des Dumps ist nicht mehr da."); return 409; }
-  int n = sel.dir[0] ? snprintf(out->base, sizeof(out->base), "%s/%s/%s", root, sel.dir, sel.folder)
-                     : snprintf(out->base, sizeof(out->base), "%s/%s", root, sel.folder);
-  free(dr);
-  if(n < 0 || n >= (int)sizeof(out->base)) { snprintf(err, err_len, "Der Pfad des Dumps ist zu lang."); return 400; }
-  snprintf(out->title_id, sizeof(out->title_id), "%s", sel.title_id);
-  snprintf(out->title, sizeof(out->title), "%s", sel.title);
-  return 200;
-}
-
 /* The folder that holds a dump of the list (dest, "<drive>[/dir]") and its state; the three strings are those of a list entry. */
 int
 ps5tm_dumplib_locate(const char *mount, const char *dir, const char *folder, char *dest, size_t dest_len, char *state,
@@ -678,27 +635,6 @@ dump_state_of(const char *title_id) {
     if(d->kind == 2 || strcmp(d->title_id, title_id)) continue;
     if(!d->state[0] || !strcmp(d->state, "done")) { found = 1; break; }
     found = 2;
-  }
-  pthread_mutex_unlock(&g_lock);
-  return found;
-}
-
-/* The newest finished dump of a title made from its own game-list card (origin "library", not the Disc tab): the three
-   fields the image builder needs, so the card can offer "Als Abbild bauen" right after a successful dump without the
-   browser ever naming a path. 0 when there is none. */
-int
-ps5tm_dumplib_find_library(const char *title_id, char *mount, size_t mount_len, char *dir, size_t dir_len,
-                           char *folder, size_t folder_len) {
-  int found = 0;
-  pthread_mutex_lock(&g_lock);
-  for(unsigned i = 0; i < g_n; i++) {
-    const dump_t *d = &g_list[i];
-    if(d->kind != 0 || !d->origin_lib || strcmp(d->title_id, title_id) || strcmp(d->state, "done")) continue;
-    snprintf(mount, mount_len, "%s", d->mount);
-    snprintf(dir, dir_len, "%s", d->dir);
-    snprintf(folder, folder_len, "%s", d->folder);
-    found = 1;
-    break;
   }
   pthread_mutex_unlock(&g_lock);
   return found;

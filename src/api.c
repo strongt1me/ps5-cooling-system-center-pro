@@ -5240,17 +5240,14 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     }
     cJSON_Delete(b);
     char err[640] = "";
-    int is_ps5 = !strncmp(folder, "PPSA", 4);   /* the dump's own folder names say which console it is for */
     if(!strcmp(req->path, "/api/v1/dumps/image/plan")) {
       int http = 200;
-      cJSON *root = is_ps5 ? ps5tm_gameconvert_dump_plan_ps5(mount, dir, folder, err, sizeof(err), &http)
-                           : ps5tm_gameconvert_dump_plan(mount, dir, folder, err, sizeof(err), &http);
+      cJSON *root = ps5tm_gameconvert_dump_plan(mount, dir, folder, err, sizeof(err), &http);
       if(!root) { ps5tm_http_send_error(fd, http, "dump_image_refused", err); return; }
       send_cjson(fd, 200, root);
       return;
     }
-    int status = is_ps5 ? ps5tm_gameconvert_dump_start_ps5(mount, dir, folder, op, target, err, sizeof(err))
-                        : ps5tm_gameconvert_dump_start(mount, dir, folder, op, target, err, sizeof(err));
+    int status = ps5tm_gameconvert_dump_start(mount, dir, folder, op, target, err, sizeof(err));
     if(status != 200) { ps5tm_http_send_error(fd, status, "dump_image_refused", err); return; }
     send_cjson(fd, 200, ps5tm_gameconvert_status());
     return;

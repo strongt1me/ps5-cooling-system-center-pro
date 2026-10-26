@@ -1440,21 +1440,12 @@ typedef struct {
   char title[128];
 } ps5tm_dumpsrc_t;
 int  ps5tm_dumplib_source(const char *mount, const char *dir, const char *folder, ps5tm_dumpsrc_t *out, char *err, size_t err_len);
-/* The same, for a flat PS5 dump (out->patch stays empty): gameconvert.c builds an exFAT, ffpfsc or ffpkg image from it directly. */
-int  ps5tm_dumplib_source_ps5(const char *mount, const char *dir, const char *folder, ps5tm_dumpsrc_t *out, char *err, size_t err_len);
-/* The newest finished dump of a title made from its own card (origin "library"): its three list fields, for the image
-   builder. 1 when found (mount/dir/folder filled), else 0. */
-int  ps5tm_dumplib_find_library(const char *title_id, char *mount, size_t mount_len, char *dir, size_t dir_len,
-                                char *folder, size_t folder_len);
 /* A PS4 dump laid over its update and packed into an exFAT or ffpfsc image on a USB or M.2 drive (gameconvert.c, dump_image.c): the plan
    (JSON, NULL with an HTTP status in *http and a sentence in err) and the start (an HTTP status; 200 started). The job is the conversion's. */
 struct cJSON *ps5tm_gameconvert_dump_plan(const char *mount, const char *dir, const char *folder, char *err, size_t err_len, int *http);
 int  ps5tm_gameconvert_dump_start(const char *mount, const char *dir, const char *folder, const char *op, const char *target,
                                   char *err, size_t err_len);
 /* The same for a finished PS5 dump (gameconvert.c, 26.10.2026): no update to lay over it, no param.sfo to rebuild. */
-struct cJSON *ps5tm_gameconvert_dump_plan_ps5(const char *mount, const char *dir, const char *folder, char *err, size_t err_len, int *http);
-int  ps5tm_gameconvert_dump_start_ps5(const char *mount, const char *dir, const char *folder, const char *op, const char *target,
-                                      char *err, size_t err_len);
 /* The folder that holds a dump of the list in the Disc tab (dest) and its state, named by the list entry's three fields. 200, else an HTTP status. */
 int  ps5tm_dumplib_locate(const char *mount, const char *dir, const char *folder, char *dest, size_t dest_len, char *state,
                           size_t state_len, char *err, size_t err_len);
