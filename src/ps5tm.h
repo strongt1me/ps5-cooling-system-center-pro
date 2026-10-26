@@ -199,7 +199,7 @@ typedef enum {
  * limit follows (target + 4, see ps5tm_config_clamp), while the warning limit
  * (warning_cpu_c, 80 °C unless changed) stays where it is and so lies at or
  * below a high target. */
-#define PS5TM_TARGET_MIN_C   60
+#define PS5TM_TARGET_MIN_C   50
 #define PS5TM_TARGET_MAX_C   91
 
 /* The proportional band: how many degrees above the target the fan needs to
@@ -1385,6 +1385,76 @@ typedef struct {
   int      internal;
 } ps5tm_pkgdrive_t;
 unsigned ps5tm_pkg_drives(ps5tm_pkgdrive_t *out, unsigned max);
+
+/* Marks on a game of the games list and the search for existing dumps — see dump_lib.c. Read only. */
+#define PS5TM_MARK_DLC 8
+typedef struct {
+  int      disc;                      /* 0 package, 1 disc game (disc out or unknown), 2 disc game with its disc in the drive */
+  int      install_pct;               /* -1 not told, else 0..100 of the package's blocks that are here */
+  int      install_pending;           /* 1 while blocks are still arriving */
+  int      pg_chunks, pg_wanted, pg_here;   /* the shell's PlayGo status; zero when it has none */
+  unsigned dlc_count;
+  char     dlc[PS5TM_MARK_DLC][20];
+  uint64_t dlc_bytes[PS5TM_MARK_DLC];
+  int      dump;                      /* 0 nothing known, 1 a finished dump, 2 only dumps cut short */
+} ps5tm_title_marks_t;
+void ps5tm_title_marks(const char *title_id, ps5tm_title_marks_t *m);
+int  ps5tm_dumplib_start(int measure);          /* 1 started, 0 one is under way, -1 failed */
+struct cJSON *ps5tm_dumplib_json(void);
+/* Dumping a running PS5 game and its DLC (dump_job.c): GET the settings, the drives, the title and the job; POST {action: start |
+   dlc_only | cancel | settings, ...}, which answers an HTTP status with a sentence in msg. */
+struct cJSON *ps5tm_dump_json(const char *title_id);
+int  ps5tm_dump_action(const struct cJSON *body, char *msg, size_t msg_len);
+/* A PS4 dump found by the search, as the image builder needs it (dump_lib.c): the dump's folder and the update's folder beside it. The
+   three strings of the list entry name the dump — the browser never names a path. Returns 200, else an HTTP status with a sentence in err. */
+typedef struct {
+  char base[512];                     /* <CUSA>-app0 or a flat dump */
+  char patch[512];                    /* <CUSA>-patch0, "" when there is none */
+  char title_id[12];
+  char title[128];
+} ps5tm_dumpsrc_t;
+int  ps5tm_dumplib_source(const char *mount, const char *dir, const char *folder, ps5tm_dumpsrc_t *out, char *err, size_t err_len);
+/* The same, for a flat PS5 dump (out->patch stays empty): gameconvert.c builds an exFAT, ffpfsc or ffpkg image from it directly. */
+int  ps5tm_dumplib_source_ps5(const char *mount, const char *dir, const char *folder, ps5tm_dumpsrc_t *out, char *err, size_t err_len);
+/* The newest finished dump of a title made from its own card (origin "library"): its three list fields, for the image
+   builder. 1 when found (mount/dir/folder filled), else 0. */
+int  ps5tm_dumplib_find_library(const char *title_id, char *mount, size_t mount_len, char *dir, size_t dir_len,
+                                char *folder, size_t folder_len);
+/* A PS4 dump laid over its update and packed into an exFAT or ffpfsc image on a USB or M.2 drive (gameconvert.c, dump_image.c): the plan
+   (JSON, NULL with an HTTP status in *http and a sentence in err) and the start (an HTTP status; 200 started). The job is the conversion's. */
+struct cJSON *ps5tm_gameconvert_dump_plan(const char *mount, const char *dir, const char *folder, char *err, size_t err_len, int *http);
+int  ps5tm_gameconvert_dump_start(const char *mount, const char *dir, const char *folder, const char *op, const char *target,
+                                  char *err, size_t err_len);
+/* The same for a finished PS5 dump (gameconvert.c, 26.10.2026): no update to lay over it, no param.sfo to rebuild. */
+struct cJSON *ps5tm_gameconvert_dump_plan_ps5(const char *mount, const char *dir, const char *folder, char *err, size_t err_len, int *http);
+int  ps5tm_gameconvert_dump_start_ps5(const char *mount, const char *dir, const char *folder, const char *op, const char *target,
+                                      char *err, size_t err_len);
+/* The folder that holds a dump of the list in the Disc tab (dest) and its state, named by the list entry's three fields. 200, else an HTTP status. */
+int  ps5tm_dumplib_locate(const char *mount, const char *dir, const char *folder, char *dest, size_t dest_len, char *state,
+                          size_t state_len, char *err, size_t err_len);
+int  ps5tm_dump_delete(const char *mount, const char *dir, const char *folder, char *msg, size_t msg_len);   /* HTTP status */
+int  ps5tm_dump_busy(void);                      /* 1 while a dump runs; ps5tm_gamecopy_busy() includes it */
+int  ps5tm_dump_mounted(const char *title_id);   /* the running title's folder under /mnt/sandbox/pfsmnt is there */
+int  ps5tm_filejobs_busy_for_dump(char *err, size_t err_len);   /* gamecopy.c: a copy or another file job runs, with the reason */
+/* What the dump queue (dump_queue.c) asks of the dump: settings of a queued title of its own (set = 0: the global ones), the start
+   of one dump with them (an HTTP status; 200 started), the stop, how the last dump ended, whether the title has a dump at the chosen
+   drive (0 none, 1 finished, 2 cut short) and the global settings with the chosen target. */
+typedef struct { int set, decrypt, fself, backport, bp_ps4, bp_ps5, ps4_split; } ps5tm_dumpopt_t;
+int  ps5tm_dump_start_item(const char *tid, int overwrite, const ps5tm_dumpopt_t *opt, char *msg, size_t msg_len);
+void ps5tm_dump_abort(void);
+int  ps5tm_dump_last(char *state, size_t state_len, char *msg, size_t msg_len);
+int  ps5tm_dump_present(const char *tid);
+void ps5tm_dump_settings(ps5tm_dumpopt_t *o, char *target, size_t target_len);
+/* The queue of the Disc tab (dump_queue.c): its state as JSON for GET /api/v1/dump, the POST actions queue_add | queue_remove |
+   queue_clear | queue_set | queue_start | queue_stop | queue_skip | queue_settings (an HTTP status, a sentence in msg), and 1 while it runs. */
+struct cJSON *ps5tm_dumpq_json(void);
+int  ps5tm_dumpq_action(const struct cJSON *body, char *msg, size_t msg_len);
+int  ps5tm_dumpq_active(void);
+/* Disc games seen so far (dump_lib.c, the file disc_titles.txt): a disc in the drive for the title, and what is remembered. */
+int  ps5tm_title_on_disc(const char *title_id);
+void ps5tm_title_remember_disc(const char *title_id);
+/* Starts a game from the dump queue's worker: another running game is closed first (api.c). 0 started or already up, else -1 with err. */
+int  ps5tm_library_switch(const char *title_id, char *err, size_t err_len);
 
 int  ps5tm_pkgscan_start(void);                 /* 1 started, 0 one is under way, -1 failed */
 int  ps5tm_pkgscan_busy(void);

@@ -25,7 +25,7 @@ PYTHON ?= python3
 # (crt1.o) holds the kernel offsets of every firmware it knows, and before
 # main() it refuses one it does not: with v0.41, which stops at 13.40, an app on
 # a console with 13.60 never gets going and writes no line anywhere. The case
-# for 13.60 came with v0.42; this project builds with v0.44. The build checks
+# for 13.60 came with v0.42; this project builds with v0.45. The build checks
 # the SDK before it starts (tools/check_sdk_firmware.py) and the ELF after it
 # is linked, and stops when a firmware named here has no case. FW_NEED= (empty)
 # switches the check off, for building with an older SDK on purpose; naming
@@ -108,6 +108,10 @@ SRCS += src/dupimg.c
 SRCS += src/updates.c src/upd_http.c src/upd_dns.c src/upd_sony.c src/upd_patchsite.c
 SRCS += src/disc.c
 SRCS += src/paystore.c
+SRCS += src/dump_lib.c
+SRCS += src/dump_job.c
+SRCS += src/dump_unpkg.c src/dump_ps4.c src/dump_image.c
+SRCS += src/dump_self.c src/dump_fself.c src/dump_backport.c src/dump_queue.c
 
 # ⚠ Die Kopfdateien gehören in die Abhängigkeiten.
 #

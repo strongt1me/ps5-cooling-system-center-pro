@@ -2055,7 +2055,7 @@
     state.cfg = c;
 
     if (!state.targetDirty) {
-      $("#target-range").min = c.target_min_c ?? 60;
+      $("#target-range").min = c.target_min_c ?? 50;
       $("#target-range").max = c.target_max_c ?? 91;
       $("#target-range").value = c.target_temp_c;
       txt("#target-out", `${c.target_temp_c} °C`);
@@ -2092,7 +2092,7 @@
     const directInput = $("#s-direct-threshold");
     if (directInput) {
       if (c.mode === "automatic") {
-        directInput.min = String(c.target_min_c ?? 60);
+        directInput.min = String(c.target_min_c ?? 50);
         directInput.max = String(c.target_max_c ?? 91);
         directInput.value = String(c.target_temp_c ?? 66);
       } else {
@@ -2104,7 +2104,7 @@
     const directNote = $("#s-direct-threshold-note");
     if (directNote) {
       directNote.textContent = c.mode === "automatic"
-        ? `Automatik: setzt die Zieltemperatur (${c.target_min_c ?? 60}-${c.target_max_c ?? 91} °C, bis 72 °C empfohlen).`
+        ? `Automatik: setzt die Zieltemperatur (${c.target_min_c ?? 50}-${c.target_max_c ?? 91} °C, bis 72 °C empfohlen).`
         : `Beobachten: setzt eine feste Lüfterschwelle (${c.threshold_min_c ?? 45}-${c.threshold_max_c ?? 91} °C).`;
     }
 
@@ -4961,12 +4961,38 @@
     return GM_FORMAT_TAGS[x.format] || "";
   };
 
+  /* Marken aus der Konsole (dump_lib.c): Disc, Stand der Installation, DLC, vorhandener Dump. Nur Anzeige. */
+  const gmMarks = (x) => {
+    const t = [];
+    if (x.disc === "in")
+      t.push(`<span class="gm-tag fmt" title="${esc("Spiel von Disc. Die Disc liegt im Laufwerk.")}">DISC</span>`);
+    else if (x.disc === "out")
+      t.push(`<span class="gm-tag bp" title="${esc("Spiel von Disc. Die Disc liegt nicht im Laufwerk.")}">${esc("Disc raus")}</span>`);
+    const ins = x.install;
+    if (ins) {
+      const parts = ins.wanted
+        ? ` ${`Laut Konsole sind ${ins.here} von ${ins.wanted} gewünschten Teilen da (${ins.chunks} insgesamt).`}` : "";
+      if (ins.pending)
+        t.push(`<span class="gm-tag bp" title="${esc(`Die Konsole lädt noch Teile dieses Spiels: ${ins.pct} % der Blöcke sind da.` + parts)}">${esc(`Installiert ${ins.pct} %`)}</span>`);
+      else
+        t.push(`<span class="gm-tag fmt" title="${esc(`${ins.pct} % der Blöcke sind da. Die Konsole holt oft nur die Teile, die sie braucht (Sprachen, Region); das Spiel kann trotzdem vollständig sein.` + parts)}">${esc(`${ins.pct} % installiert`)}</span>`);
+    }
+    if (x.dlc && x.dlc.length)
+      t.push(`<span class="gm-tag fmt" title="${esc(x.dlc.map((d) => `${d.label} (${bytes(d.bytes)})`).join(" · "))}">${esc(`${x.dlc.length} DLC`)}</span>`);
+    if (x.dump === "done")
+      t.push(`<span class="gm-tag pg" title="${esc("Auf einem Laufwerk liegt ein Dump dieses Spiels (siehe Reiter Disc).")}">GEDUMPT</span>`);
+    else if (x.dump === "unfinished")
+      t.push(`<span class="gm-tag bp" title="${esc("Es gibt nur einen Dump, der nicht fertig wurde (siehe Reiter Disc).")}">UNFERTIG</span>`);
+    return t;
+  };
+
   const gmTags = (x) => {
     const m = x.mods;
     const fmt = gmFormatLabel(x);
     const t = fmt
       ? [`<span class="gm-tag fmt" title="${esc(GM_FORMATS[x.format] || x.format)}">${esc(fmt)}</span>`]
       : [];
+    gmMarks(x).forEach((s) => t.push(s));
     if (!m) return t.join("");
     if (m.state !== "checked") {
       /* Kurz, damit die Marke neben dem Format in eine Zeile passt; der Grund
@@ -5005,15 +5031,15 @@
     const pkg = x.format === "pkg";
     const why = {
       launch: "Für diese Kachel gibt es keinen Startlink.",
-      copy: pkg ? "Installierte Spiele (PKG) lassen sich nicht kopieren: Es gibt weder einen Ordner noch eine Abbilddatei."
-        : !x.path ? "Wo die Spieldaten dieses Titels liegen, ist nicht bekannt."
+      copy: !x.path ? "Wo die Spieldaten dieses Titels liegen, ist nicht bekannt."
         : "Dieses Spiel lässt sich nicht kopieren.",
       move: pkg ? "Installierte Spiele (PKG) lassen sich nicht verschieben."
         : !x.smp ? "Nur für Spiele, die ShadowMountPlus verwaltet."
         : "ShadowMountPlus kann dieses Spiel gerade nicht verschieben (Laufwerk nicht erreichbar, oder es bietet die Funktion nicht an).",
-      convert: pkg ? "Installierte Spiele (PKG) lassen sich nicht konvertieren."
+      convert: pkg ? "Installierte Spiele (PKG): Das Paket (app.pkg) selbst lässt sich nicht in ein Abbild umwandeln, nur die eigenen, entschlüsselten Dateien eines Spiels."
         : !x.path ? "Wo die Spieldaten dieses Titels liegen, ist nicht bekannt."
-        : "Konvertieren geht nur bei Dump-Ordnern und bei Abbildern (exFAT, ffpkg, ffpfs, ffpfsc)."
+        : "Konvertieren geht nur bei Dump-Ordnern und bei Abbildern (exFAT, ffpkg, ffpfs, ffpfsc).",
+      dump: "Das Spiel muss laufen. Bitte zuerst auf „Starten“ drücken und warten, bis es geladen ist."
     };
     const btn = (cls, attrs, label, ok, reason) =>
       `<button type="button" class="btn${cls}" ${attrs}${ok ? "" : ` disabled title="${esc(reason)}"`}>${label}</button>`;
@@ -5028,9 +5054,10 @@
             ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy)}
             ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move)}
             ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert)}
-            ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-Asset-Packs …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
+            ${pkg ? btn("", `data-pkgdump="${id}"`, "Dumpen", !!x.dump_mounted, why.dump) : ""}
+            ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-Asset-Packs …", !pkg && !!x.path, pkg ? "Nur für die eigenen, entschlüsselten Dateien eines Spiels, nicht für ein installiertes Paket (PKG)." : why.copy)}
             ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
-            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy)}
+            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Der Ordner eines installierten Pakets (PKG) öffnet sich hier nicht; „Kopieren“ sichert ihn." : why.copy)}
           </div>`;
   };
 
@@ -5336,6 +5363,11 @@
         if (n === "cp-mode") cp.mode = e.target.value;
         if (n === "mv-dest") mv.dest = e.target.value;
         if (n === "mv-del") mv.del = e.target.checked;
+        if (n === "di-op" || n === "di-drive") {
+          if (n === "di-op") dimg.op = e.target.value; else dimg.drive = e.target.value;
+          dimgRenderPlan();
+          return;
+        }
         if (n === "cv-drive") cv.drive = e.target.value;
         if (n === "cv-mode") cv.mode = e.target.value;
         if (n === "cv-ampr") cv.ampr = e.target.checked;
@@ -6003,7 +6035,7 @@
     const body = $("#cp-body");
     if (!j || !body) return;
     cp.view = "cvjob";
-    txt("#cp-title", `„${j.name || j.title_id}“ konvertieren`);
+    txt("#cp-title", j.dump_image ? `„${j.name || j.title_id}“ als Abbild bauen` : `„${j.name || j.title_id}“ konvertieren`);
     const pct = j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0;
     const where = `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(j.target || "")}</code></p>`
       + (CV_FMT[j.op] ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[j.op])}</b></p>` : "");
@@ -6031,7 +6063,8 @@
       html = `<p class="cp-ok">✓ Fertig und geprüft: ${bytes(j.output_bytes)}${j.op === "ffpfsc" && ratio
           ? ` statt ${bytes(j.total_bytes)} (${ratio} %)` : ""}.</p>${where}
         ${cpSums(j, "das Ergebnis")}
-        ${j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das neue Abbild bei seinem
+        ${j.dump_image ? `<p class="muted">ShadowMountPlus findet das Abbild bei seinem nächsten Durchlauf im Ordner „homebrew“ des Laufwerks. Ob das Spiel läuft, zeigt erst ein Test; Trophäen werden bei PS4-Spielen aus Abbildern nicht registriert, und manche Titel bleiben im Ladebildschirm hängen. Der Dump bleibt unverändert liegen.</p>`
+        : j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das neue Abbild bei seinem
           nächsten Durchlauf. Das Spiel liegt jetzt zweimal vor. Lösche das Original erst, wenn das
           neue Abbild startet.</p>` : `<p class="muted">Die Sicherung wird nicht eingebunden.</p>`}`;
     } else if (j.state === "cancelled") {
@@ -6096,6 +6129,7 @@
   };
 
   const cvStart = async (btn) => {
+    if (cp.view === "cvdump") { dimgStart(btn); return; }
     const why = cv.op === "ffpfsc" ? cvStreamReasons(cv.plan) : [];
     if (why.length && !confirm([`Bei „${cv.plan.name}“ sind Ruckler möglich, wenn es als komprimiertes Abbild (ffpfsc) gepackt wird:`, "",
         ...why.map((w) => `• ${w}`), "",
@@ -6313,6 +6347,8 @@
     if (store) { if (!store.disabled) mvOpen(store.dataset.id, store.dataset.store); return; }
     const conv = e.target.closest("button[data-convert]");
     if (conv) { if (!conv.disabled) cvOpen(conv.dataset.convert); return; }
+    const pkgd = e.target.closest("button[data-pkgdump]");
+    if (pkgd) { if (!pkgd.disabled) pkgdOpen(pkgd.dataset.pkgdump); return; }
     const gop = e.target.closest("button[data-gopath]");
     if (gop) {
       if (gop.disabled) return;
@@ -6772,6 +6808,8 @@
     if (which === "p4m") { loadP4m(); loadP4mLog(); }
     if (which === "upd") loadUpd();
     if (which === "disc") loadDisc();
+    if (which === "disc" && typeof dpOpen === "function") dpOpen();
+    if (which === "disc" && typeof dmOpen === "function") dmOpen();
     if (which === "bk") loadBackups();
     if (which === "hist") loadHistory2();
     syncPlaytime();
@@ -6780,6 +6818,7 @@
     if (typeof p4mSync === "function") p4mSync();
     if (typeof updSync === "function") updSync();
     if (typeof discSync === "function") discSync();
+    if (typeof dpSync === "function") dpSync();
   };
   $("#gm-tab-lib").addEventListener("click", () => ptSelectTab("lib"));
   $("#gm-tab-time").addEventListener("click", () => ptSelectTab("time"));
@@ -9319,6 +9358,709 @@
     }
   });
 
+  /* ── Dumps (22.10.2026) ──────────────────────────────────────────────
+   * Die Dumps, die auf den Laufwerken liegen (dump_lib.c, /api/v1/dumps): nur Anzeige. Die Suche läuft auf der Konsole
+   * im Hintergrund; die Seite fragt, solange sie läuft und man sie sieht. */
+  const dp = { data: null, error: "", timer: 0, armed: "", armTimer: 0, armedAt: 0 };
+  const DP_STATE = { done: ["ok", "fertig"], running: ["warn", "läuft noch"], failed: ["warn", "fehlgeschlagen"], aborted: ["warn", "abgebrochen"], "": ["", "ohne Info-Datei"] };
+
+  const dpRender = () => {
+    const d = dp.data;
+    if (!d) { txt("#dp-sub", dp.error || "wird gelesen …"); return; }
+    const n = (d.dumps || []).length;
+    const when = d.ever && d.scanned_at ? new Date(d.scanned_at * 1000).toLocaleString() : "";
+    txt("#dp-sub", d.scanning ? "die Suche läuft …" : !d.ever ? "noch nicht gesucht"
+      : `${n} ${n === 1 ? "Dump" : "Dumps"} · gesucht ${when}${d.truncated ? " · Liste gekürzt" : ""}`);
+    $("#dp-scan").disabled = !!d.scanning;
+    const rows = (d.dumps || []).map((x) => {
+      const st = DP_STATE[x.state] || ["", x.state];
+      const size = x.measured != null ? bytes(x.measured) : x.bytes > 0 ? bytes(x.bytes) : "";
+      const tags = [];
+      if (x.kind === "dlc") tags.push("DLC");
+      if (x.kind === "patch") tags.push("Patch");
+      if (x.decrypt) tags.push("entschlüsselt");
+      if (x.fself) tags.push("FSELF");
+      if (x.backport) tags.push("Backport");
+      const where = `${x.mount}${x.dir ? "/" + x.dir : ""}`;
+      /* a PS4 game's dump (the update beside it comes along): an image ShadowMountPlus can mount */
+      const fields = `data-mount="${esc(x.mount)}" data-dir="${esc(x.dir)}" data-folder="${esc(x.folder)}"`;
+      const canImg = x.kind === "game" && /^CUSA/.test(x.title_id || "") && (x.state === "" || x.state === "done");
+      const dkey = `${x.mount}|${x.dir}|${x.folder}`;
+      const armed = dp.armed === dkey;
+      const img = `<div class="p4m-btns">${canImg ? `<button type="button" class="btn ghost" data-dimg="1" ${fields}>Als Abbild bauen</button>` : ""}`
+        + (x.state === "running" ? "" : `<button type="button" class="btn ${armed ? "danger" : "ghost"}" data-dpdel="1" data-key="${esc(dkey)}" ${fields}>${armed ? "Wirklich? Nochmal klicken" : "Löschen"}</button>`)
+        + "</div>";
+      return `<div class="p4m-row">
+        <div class="p4m-main"><div class="p4m-name" title="${esc(x.title || x.folder)}">${esc(x.title || x.folder)}</div>
+          <div class="p4m-meta">${esc(x.folder)} · ${esc(where)}${size ? " · " + esc(size) : ""}${tags.length ? " · " + esc(tags.join(", ")) : ""}</div></div>
+        <span class="p4m-state ${st[0]}">${esc(st[1])}</span>${img}</div>`;
+    });
+    setHtml($("#dp-list"), rows.length ? rows.join("")
+      : `<p class="muted">${d.ever ? "Aus diesem Reiter ist noch kein Dump entstanden." : "Die Suche hat noch nicht stattgefunden."}</p>`);
+  };
+
+  const loadDumps = async () => {
+    try { dp.data = await api("/api/v1/dumps"); dp.error = ""; } catch (e) { dp.error = e.message; }
+    dpRender();
+  };
+  const dpSync = () => {
+    clearTimeout(dp.timer);
+    const run = state.page === "games" && pt.tab === "disc" && !document.hidden && dp.data && dp.data.scanning;
+    dp.timer = run ? setTimeout(async () => { await loadDumps(); dpSync(); }, 2000) : 0;
+  };
+  const dpScan = async () => {
+    try { dp.data = await api("/api/v1/dumps/scan", { method: "POST", body: JSON.stringify({ measure: $("#dp-measure").checked }) }); dp.error = ""; }
+    catch (e) { toast(e.message, "error"); }
+    dpRender();
+    dpSync();
+  };
+  const dpOpen = async () => {
+    await loadDumps();
+    const old = dp.data && dp.data.ever && dp.data.now - dp.data.scanned_at > 60;
+    if (dp.data && !dp.data.scanning && (!dp.data.ever || old)) await dpScan();
+    dpSync();
+  };
+  $("#dp-scan").addEventListener("click", dpScan);
+
+  /* ── PS4-Dump als Abbild (23.10.2026) ────────────────────────────────
+   * Aus dem Dump-Ordner eines PS4-Spiels (und dem Update daneben) baut die Konsole ein exFAT- oder ffpfsc-Abbild auf einem
+   * USB- oder M.2-Laufwerk, das ShadowMountPlus einhängt (gameconvert.c, dump_image.c). Der Auftrag ist der der Konvertierung
+   * (cvRenderJob). Der Browser nennt den Dump nur mit den drei Feldern seines Eintrags in der Liste, nie mit einem Pfad. */
+  const dimg = { x: null, plan: null, op: "", drive: "" };
+  const DIMG_OPS = {
+    ffpfsc: ["ffpfsc · komprimiert (empfohlen)", "Das Spiel wird als exFAT-Abbild in einen komprimierten PFS-Container gepackt, in einem Durchgang ohne Zwischendatei."],
+    ffpkg: ["ffpkg (UFS2) · unkomprimiert", "Ein UFS2-Abbild direkt aus den Ordnern, im Aufbau mit 64-KiB-Blöcken, den ShadowMountPlus empfiehlt."],
+    exfat: ["exFAT-Abbild · unkomprimiert", "Ein exFAT-Abbild mit 64-KiB-Clustern. Größer, dafür muss die Konsole beim Spielen nichts entpacken."]
+  };
+
+  const dimgBlocked = (d) => {
+    const p = dimg.plan;
+    /* An .ffpkg is as big as its own image, which is not the exFAT one's size. */
+    const need = dimg.op === "ffpkg" && p.ffpkg_bytes ? p.ffpkg_bytes : p.raw_bytes;
+    const fat32 = dimg.op === "ffpkg" && d.fat32_too_big_ffpkg !== undefined ? d.fat32_too_big_ffpkg : d.fat32_too_big;
+    if (fat32) return "FAT32 nimmt keine Datei über 4 GB auf";
+    if (!d.enough_space) return `Zu wenig Platz: Nötig sind bis zu ${bytes(need)}`;
+    const t = d.homebrew && d.homebrew[dimg.op];
+    if (t && t.enough_space === false) return `Zu wenig Platz: Nötig sind bis zu ${bytes(need)}`;
+    if (t && t.exists) return "Dort gibt es diese Datei schon";
+    return "";
+  };
+
+  const dimgRenderPlan = () => {
+    const p = dimg.plan;
+    const body = $("#cp-body");
+    if (!p || !body) return;
+    cp.view = "cvdump";
+    txt("#cp-title", `„${p.name}“ als Abbild bauen`);
+    const ops = p.ops.filter((op) => DIMG_OPS[op]).map((op) => {
+      const off = op === "ffpkg" && p.ffpkg_error;
+      return `<label class="cp-choice${off ? " off" : ""}">
+        <input type="radio" name="di-op" value="${esc(op)}" ${dimg.op === op ? "checked" : ""} ${off ? "disabled" : ""}>
+        <span class="cp-choice-text"><b>${esc(DIMG_OPS[op][0])}</b><span class="muted">${esc(DIMG_OPS[op][1])}${op === "ffpkg" && p.ffpkg_bytes && !off ? esc(` Das Abbild wird ${bytes(p.ffpkg_bytes)} groß.`) : ""}</span>
+          ${off ? `<span class="cp-why">Bei diesem Spiel nicht möglich: ${esc(p.ffpkg_error)}</span>` : ""}</span></label>`;
+    }).join("");
+    const drives = p.targets.map((d) => {
+      const why = dimgBlocked(d);
+      if (why && dimg.drive === d.mount) dimg.drive = "";
+      return `<label class="cp-choice${why ? " off" : ""}">
+          <input type="radio" name="di-drive" value="${esc(d.mount)}" ${dimg.drive === d.mount ? "checked" : ""} ${why ? "disabled" : ""}>
+          <span class="cp-choice-text"><b>${esc(d.label)}</b>
+            <span class="muted">${cpBytes(d.free_bytes)} frei${d.fs ? ` · ${esc(cpFs(d.fs))}` : ""}${d.source_here ? " · hier liegt der Dump" : ""}</span>
+            ${why ? `<span class="cp-why">${esc(why)}</span>` : ""}</span></label>`;
+    }).join("");
+    const sel = p.targets.find((d) => d.mount === dimg.drive);
+    const tgt = sel && sel.homebrew ? sel.homebrew[dimg.op] : null;
+    const blockedRun = p.busy ? "Es läuft schon eine Konvertierung."
+                     : p.other_busy ? "Es läuft gerade eine Kopie. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig." : "";
+    const isPs5 = /^PPSA/.test(p.title_id || "");
+    body.innerHTML = `
+      <p class="cp-src"><span class="muted">Quelle</span> <code>${esc(p.source)}</code>
+        <span>${p.patch ? "mit Update darüber · " : ""}Version ${esc(p.app_ver || "")} · ${cpFiles(p.files)}, als exFAT-Abbild ${bytes(p.raw_bytes)}</span></p>
+      <h4 class="cp-step">1. Was soll entstehen?</h4>
+      <div class="cp-list">${ops}</div>
+      <h4 class="cp-step">2. Wohin?</h4>
+      <div class="cp-list">${drives || `<p class="muted">Kein USB- oder M.2-Laufwerk gefunden.</p>`}</div>
+      ${tgt ? `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(tgt.path)}</code>
+        ${tgt.unfinished ? `<span class="cp-why">Dort liegt eine unfertige Datei dieser App, sie wird ersetzt.</span>` : ""}</p>` : ""}
+      <div class="cp-warn"><b>⚠ Bitte beachten</b>
+        <ul>
+          ${isPs5
+            ? "<li>Nur auf ein USB- oder M.2-Laufwerk, nie in den internen Speicher.</li>"
+            : `<li>Nur auf ein USB- oder M.2-Laufwerk, nie in den internen Speicher: Ein PS4-Titel von dort bringt die Konsole zum Absturz.</li>
+               <li>Trophäen werden bei PS4-Spielen aus Abbildern nicht registriert.</li>`}
+          <li>Manche Titel bleiben im Ladebildschirm hängen.</li>
+          <li>Ob ein Titel läuft, zeigt erst ein Test. ShadowMountPlus findet das Abbild im Ordner „homebrew“ des Laufwerks.</li>
+        </ul></div>
+      ${blockedRun ? `<p class="cp-err">${esc(blockedRun)}</p>` : ""}
+      <p class="muted">${isPs5 ? "Der Dump selbst wird nur gelesen; er hat sein param.json schon."
+        : "Der Dump selbst wird nur gelesen. Basis und Update werden nicht kopiert, sondern beim Schreiben übereinandergelegt. Aus der param.sfo entsteht die param.json, die ShadowMountPlus liest."} Danach liest die PS5 das ganze Ergebnis zur Prüfung noch einmal vom Laufwerk.</p>
+      ${tgt ? `<p class="muted">Daneben entsteht die Prüfsummen-Datei <code>${esc(tgt.path)}.sha256</code>.</p>` : ""}
+      <div class="cp-actions">
+        <button type="button" class="btn" data-cp="close">Abbrechen</button>
+        <button type="button" class="btn primary" data-cp="start" ${tgt && !blockedRun ? "" : "disabled"}>Abbild bauen</button>
+      </div>`;
+  };
+
+  const dimgOpen = async (x) => {
+    cpShell();
+    const seq = ++dlg.seq;
+    if (cv.job && cv.job.active) { cvRenderJob(); return; }
+    dimg.x = x; dimg.plan = null; dimg.op = ""; dimg.drive = ""; cp.view = "cvdumpload";
+    txt("#cp-title", /^PPSA/.test(x.folder || "") ? "PS5-Dump als Abbild bauen" : "PS4-Dump als Abbild bauen");
+    $("#cp-body").innerHTML = `<p class="muted">Der Dump wird vermessen …</p>`;
+    try {
+      const plan = await api("/api/v1/dumps/image/plan", { method: "POST", body: JSON.stringify(x), timeoutMs: 120000 });
+      if (seq !== dlg.seq || !$("#cp-overlay")) return;
+      dimg.plan = plan;
+      dimg.op = plan.ops.includes("ffpfsc") ? "ffpfsc" : (plan.ops.find((op) => !(op === "ffpkg" && plan.ffpkg_error)) || "");
+      const first = plan.targets.find((d) => !d.source_here && d.enough_space && !d.fat32_too_big)
+                 || plan.targets.find((d) => d.enough_space && !d.fat32_too_big);
+      dimg.drive = first ? first.mount : "";
+      dimgRenderPlan();
+    } catch (e) {
+      if (seq !== dlg.seq || !$("#cp-overlay")) return;
+      $("#cp-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
+        <div class="cp-actions"><button type="button" class="btn primary" data-cp="close">Schließen</button></div>`;
+    }
+  };
+
+  const dimgStart = async (btn) => {
+    btn.disabled = true;
+    try {
+      cv.job = await api("/api/v1/dumps/image", { method: "POST", body: JSON.stringify({ ...dimg.x, op: dimg.op, target: dimg.drive }) });
+      cvRenderJob();
+      jobBanner();
+      cv.timer = setTimeout(cvPoll, 1000);
+    } catch (e) {
+      toast(e.message, "error");
+      btn.disabled = false;
+    }
+  };
+
+  /* ── Dumpen von der eigenen Spielkarte (26.10.2026) ──────────────────
+   * Derselbe Dump wie im Disc-Reiter (dump_job.c), nur ausgelöst von einem
+   * installierten PKG-/fPKG-Spiel statt einem Disc-Spiel: „from":"library" in
+   * der Info-Datei hält ihn aus der Disc-Reiter-Liste heraus. Ein schlankes,
+   * eigenes Fenster (wie Kopieren/Konvertieren, aber ohne deren Zustand zu
+   * teilen); die Einstellungen (Entschlüsseln, Backport, Ziel) sind dieselben
+   * wie im Disc-Reiter und werden dort geändert. Nach einem fertigen PS5-Dump
+   * öffnet „Als Abbild bauen" denselben Dialog wie im Disc-Reiter (dimgOpen). */
+  const pkgd = { id: "", data: null, timer: 0, gen: 0 };
+
+  const pkgdClose = () => {
+    const o = $("#pkgd-overlay");
+    if (o) o.remove();
+    clearTimeout(pkgd.timer);
+    pkgd.timer = 0;
+    pkgd.gen++;
+  };
+
+  const pkgdShell = () => {
+    let o = $("#pkgd-overlay");
+    if (o) return o;
+    o = document.createElement("div");
+    o.id = "pkgd-overlay";
+    o.className = "gm-overlay";
+    o.innerHTML = `<div class="cp-dialog" role="dialog" aria-modal="true" aria-labelledby="pkgd-title">
+        <div class="cp-head"><h3 id="pkgd-title">Dumpen</h3>
+          <button type="button" class="cp-x" data-pkgd="close" aria-label="Schließen">×</button></div>
+        <div id="pkgd-body"></div>
+      </div>`;
+    document.body.appendChild(o);
+    o.addEventListener("click", (e) => {
+      if (e.target === o) { pkgdClose(); return; }
+      const b = e.target.closest("[data-pkgd]");
+      if (!b || b.disabled) return;
+      const act = b.dataset.pkgd;
+      if (act === "close") pkgdClose();
+      else if (act === "start") pkgdStart(b, false);
+      else if (act === "start-over") pkgdStart(b, true);
+      else if (act === "cancel") pkgdCancel(b);
+      else if (act === "image") { const last = JSON.parse(b.dataset.last); pkgdClose(); dimgOpen(last); }
+    });
+    return o;
+  };
+
+  const pkgdPoll = async () => {
+    const my = pkgd.gen;
+    let d;
+    try { d = await api(`/api/v1/dump?title=${encodeURIComponent(pkgd.id)}`); }
+    catch (e) {
+      if (my !== pkgd.gen || !$("#pkgd-overlay")) return;
+      $("#pkgd-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
+        <div class="cp-actions"><button type="button" class="btn primary" data-pkgd="close">Schließen</button></div>`;
+      return;
+    }
+    if (my !== pkgd.gen || !$("#pkgd-overlay")) return;
+    pkgd.data = d;
+    pkgdRender();
+    const j = d.job;
+    if (j && j.active && j.title_id === pkgd.id) pkgd.timer = setTimeout(pkgdPoll, 1000);
+  };
+
+  const pkgdRender = () => {
+    const d = pkgd.data;
+    const body = $("#pkgd-body");
+    if (!d || !body) return;
+    const g = (gm.list || []).find((x) => x.title_id === pkgd.id);
+    txt("#pkgd-title", `„${g ? g.name : pkgd.id}“ dumpen`);
+    const t = d.title || {};
+    const j = d.job || {};
+    const mine = j.title_id === pkgd.id;
+
+    if (mine && j.active) {
+      const withVer = !!j.verify;
+      const work = j.done_bytes + (withVer ? j.checked_bytes : 0);
+      const pc = j.total_bytes > 0 ? Math.min(100, work * 100 / (j.total_bytes * (withVer ? 2 : 1))) : 0;
+      let stat = `${bytes(j.done_bytes)} von ${bytes(j.total_bytes)}`;
+      if (j.rate > 0) stat += ` · ${bytes(j.rate)}/s`;
+      if (j.eta_s > 0) stat += ` · ${cpEta(j.eta_s)}`;
+      const files = `${cpFiles(j.files_done)} von ${num(j.files_total)}`
+        + (j.dlc_total ? ` · DLC ${j.dlc_done} von ${j.dlc_total}` : "")
+        + (j.dec_total ? ` · Entschlüsselt: ${num(j.dec_done)} von ${num(j.dec_total)} Dateien` : "")
+        + (j.bp_total ? ` · Backport: ${num(j.bp_done)} von ${num(j.bp_total)} Dateien` : "");
+      body.innerHTML = `<b>${esc(j.stage || "Dumpen …")}</b>
+        <div class="upd-bar"><i style="width:${pc.toFixed(1)}%"></i></div>
+        <small>${esc(stat)} · ${esc(files)}</small>
+        ${j.current ? `<div class="p4m-meta" data-no-i18n>${esc(j.current)}</div>` : ""}
+        <div class="cp-actions"><button type="button" class="btn danger" data-pkgd="cancel">Stoppen</button></div>`;
+      return;
+    }
+    if (mine && (j.state === "done" || j.state === "failed" || j.state === "cancelled")) {
+      const head = j.state === "done" ? "Dump fertig" : j.state === "cancelled" ? "Abgebrochen" : "Gescheitert";
+      const canImg = j.state === "done" && j.kind !== "dlc" && t.last_dump;
+      body.innerHTML = `<b>${esc(head)}</b>
+        <small>${esc(bytes(j.done_bytes || 0))} · <code>${esc(j.dest || "")}/${esc(j.folder || "")}</code></small>
+        ${j.error ? `<p class="cp-why">${esc(j.error)}</p>` : ""}
+        ${j.note ? `<p class="muted">${esc(j.note)}</p>` : ""}
+        ${j.state === "cancelled" ? `<p class="cp-why">Was bis dahin geschrieben wurde, bleibt unfertig im Ziel. Der nächste Dump entfernt es zuerst.</p>` : ""}
+        <div class="cp-actions">
+          <button type="button" class="btn" data-pkgd="close">Schließen</button>
+          ${canImg ? `<button type="button" class="btn primary" data-pkgd="image" data-last='${esc(JSON.stringify(t.last_dump))}'>Als Abbild bauen</button>` : ""}
+          <button type="button" class="btn${canImg ? "" : " primary"}" data-pkgd="start">Erneut dumpen</button>
+        </div>`;
+      return;
+    }
+
+    if (!t.mounted) {
+      body.innerHTML = `<p class="muted">Das Spiel muss laufen, damit sich seine Dateien lesen lassen. Bitte zuerst auf „Starten“ drücken.</p>
+        <div class="cp-actions"><button type="button" class="btn" data-pkgd="close">Schließen</button></div>`;
+      return;
+    }
+    const busy = j.active && j.title_id !== pkgd.id;
+    const s = d.settings || {};
+    const tgt = (d.targets || []).find((x) => x.mount === s.target);
+    const tags = [s.decrypt ? "entschlüsselt" : "", s.backport ? "Backport" : ""].filter(Boolean).join(" · ");
+    body.innerHTML = `
+      <p class="muted">Kopiert die Dateien des laufenden Spiels (und eingehängte DLC) auf ein Laufwerk, mit denselben Einstellungen wie im Disc-Reiter.${tags ? ` (${esc(tags)})` : ""}</p>
+      <p class="muted">Ziel: <b>${esc(tgt ? tgt.label : (s.target || "noch keines gewählt"))}</b>${!s.target ? " — im Disc-Reiter unter „Einstellungen“ wählen." : ""}</p>
+      ${t.exists === "done" ? `<p class="cp-why">Am Ziel liegt schon ein fertiger Dump dieses Spiels. Er wird nur nach einer Bestätigung ersetzt.</p>` : ""}
+      ${busy ? `<p class="cp-err">Es läuft gerade ein anderer Dump.</p>` : ""}
+      <div class="cp-actions">
+        <button type="button" class="btn" data-pkgd="close">Abbrechen</button>
+        <button type="button" class="btn primary" data-pkgd="start" ${!s.target || busy ? "disabled" : ""}>Dumpen starten</button>
+      </div>`;
+  };
+
+  const pkgdStart = async (btn, overwrite) => {
+    btn.disabled = true;
+    try {
+      await api("/api/v1/dump", { method: "POST",
+        body: JSON.stringify({ action: "start", id: pkgd.id, from: "library", overwrite: !!overwrite }) });
+      jobBanner();
+      pkgdPoll();
+    } catch (e) {
+      if (!overwrite && /schon ein fertiger Dump/.test(e.message)) {
+        $("#pkgd-body").insertAdjacentHTML("beforeend",
+          `<p class="cp-err">${esc(e.message)}</p>
+           <div class="cp-actions"><button type="button" class="btn danger" data-pkgd="start-over">Ersetzen und starten</button></div>`);
+        return;
+      }
+      toast(e.message, "error");
+      btn.disabled = false;
+    }
+  };
+
+  const pkgdCancel = async (btn) => {
+    btn.disabled = true;
+    try {
+      await api("/api/v1/dump", { method: "POST", body: JSON.stringify({ action: "cancel" }) });
+      toast("Der Dump wird gestoppt.");
+    } catch (e) {
+      toast(e.message, "error");
+      btn.disabled = false;
+    }
+    pkgdPoll();
+  };
+
+  const pkgdOpen = async (id) => {
+    pkgdShell().hidden = false;
+    pkgd.id = id;
+    pkgd.data = null;
+    clearTimeout(pkgd.timer);
+    $("#pkgd-body").innerHTML = `<p class="muted">wird geladen …</p>`;
+    await pkgdPoll();
+  };
+
+  $("#dp-list").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-dimg]");
+    if (b) { dimgOpen({ mount: b.dataset.mount, dir: b.dataset.dir, folder: b.dataset.folder }); return; }
+    const del = e.target.closest("button[data-dpdel]");
+    if (!del) return;
+    const key = del.dataset.key;
+    clearTimeout(dp.armTimer);
+    if (dp.armed !== key) {                                  /* löscht Dateien: zwei Klicks */
+      dp.armed = key; dp.armedAt = performance.now();
+      dp.armTimer = setTimeout(() => { dp.armed = ""; dpRender(); }, 8000);
+      dpRender();
+      return;
+    }
+    if (performance.now() - dp.armedAt < 600) return;
+    dp.armed = "";
+    try {
+      const r = await api("/api/v1/dumps/delete", { method: "POST", body: JSON.stringify({ mount: del.dataset.mount, dir: del.dataset.dir, folder: del.dataset.folder }) });
+      if (r.message) toast(r.message);
+    } catch (err) { toast(err.message, "error"); }
+    await loadDumps();
+    dpSync();
+    if (typeof loadGames === "function") loadGames();
+  });
+
+  /* ── Spiel dumpen (23.10.2026) ───────────────────────────────────────
+   * Ein laufendes PS5- oder PS4-Spiel samt Metadaten und eingehängten DLC auf ein Laufwerk (dump_job.c, /api/v1/dump). Die Konsole
+   * kopiert und führt Buch; die Seite fragt, solange ein Dump läuft und man sie sieht. Pfade nennt der Browser nie: Das Ziel
+   * ist eines der Laufwerke aus der Liste der Konsole, der Ordner darunter wird dort geprüft. */
+  const dm = { data: null, sel: "", err: "", timer: 0, armed: "", armTimer: 0, armedAt: 0, hidden: "", was: false };
+
+  /* Die Disc-Spiele (library.c, Marke „disc“): von Disc installierte PS5- und PS4-Spiele, an jedem „Starten“ oder – läuft es – „Dumpen“. */
+  const dgRunning = (x) => !!x.dump_mounted || (dm.sel === x.title_id && !!(dm.data && dm.data.title && dm.data.title.mounted));
+  const dgRender = () => {
+    const el = $("#dg-list");
+    if (!el) return;
+    const rows = (gm.list || []).filter((x) => (x.platform === "PS5" || x.platform === "PS4") && x.disc);
+    txt("#dg-sub", !gm.loaded ? "wird gelesen …" : rows.length ? `${rows.length} ${rows.length === 1 ? "Spiel" : "Spiele"} von Disc` : "keine Disc-Spiele gefunden");
+    const j = dm.data && dm.data.job;
+    const busy = !!(j && j.active);
+    setHtml(el, rows.length ? rows.map((x) => {
+      const id = esc(x.title_id);
+      const run = dgRunning(x);
+      const size = x.size_bytes > 0 ? ` · ${esc(bytes(x.size_bytes))}` : "";
+      const note = !run && x.disc === "out" ? `<div class="p4m-meta">${esc("Die Disc liegt nicht im Laufwerk. Zum Starten und Dumpen muss sie drin liegen.")}</div>` : "";
+      const q = dqData();
+      const queued = (q.items || []).some((it) => it.id === x.title_id);
+      const act = (run
+        ? `<button type="button" class="btn primary" data-dg="dump" data-id="${id}"${busy || q.active ? ` disabled title="${esc("Es läuft schon ein Dump.")}"` : ""}>Dumpen</button>`
+        : `<button type="button" class="btn primary" data-dg="launch" data-id="${id}"${x.can_launch ? "" : ` disabled title="${esc("Für dieses Spiel gibt es keinen Startlink.")}"`}>Starten</button>`)
+        + `<button type="button" class="btn ghost" data-dg="queue" data-id="${id}"${queued || q.active ? ` disabled title="${esc(queued ? "Dieses Spiel steht schon in der Warteschlange." : "Die Warteschlange läuft, die Liste lässt sich jetzt nicht ändern.")}"` : ""}>${queued ? "In der Warteschlange" : "In die Warteschlange"}</button>`;
+      return `<div class="p4m-row">
+        ${x.cover ? `<img class="p4m-icon" src="${esc(x.cover)}" alt="" loading="lazy" decoding="async">` : `<div class="p4m-icon"></div>`}
+        <div class="p4m-main"><div class="p4m-name" title="${esc(x.name)}">${esc(x.name)}</div>
+          <div class="p4m-meta">${id} · ${esc(x.platform)}${size}</div><div class="gm-tags">${gmMarks(x).join("")}</div>${note}</div>
+        <span class="p4m-state ${run ? "ok" : ""}">${run ? "läuft" : "läuft nicht"}</span>
+        <div class="p4m-btns">${act}</div></div>`;
+    }).join("") : `<p class="muted">${gm.loaded ? "Auf der Konsole ist kein Spiel von Disc installiert. Eine Disc muss erst installiert sein; die Konsole kopiert sie beim Einlegen." : "wird gelesen …"}</p>`);
+  };
+  $("#dg-list").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-dg]");
+    if (!b || b.disabled) return;
+    const id = b.dataset.id;
+    if (b.dataset.dg === "queue") { dmPost({ action: "queue_add", id, disc: true }); return; }
+    const g = (gm.list || []).find((x) => x.title_id === id);
+    dm.sel = id;
+    dm.hidden = dm.data && dm.data.job && dm.data.job.state ? dmJobKey(dm.data.job) : dm.hidden;
+    if (b.dataset.dg === "launch") { gmLaunch(id, b); dmOpen(); return; }
+    /* ein fertiger Dump liegt schon da: die Karte „Dump“ fragt vor dem Ersetzen */
+    if (g && g.dump === "done") {
+      dmOpen();
+      const c = $("#dm-card");
+      if (c) c.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    dmPost({ action: "start", id });
+  });
+
+  const dmName = (id) => { const g = (gm.list || []).find((x) => x.title_id === id); return g ? g.name : id; };
+  const dmJobKey = (j) => `${j.title_id}|${j.kind}|${j.state}|${j.started || ""}`;
+
+  /* Zwei Klicks für das, was etwas ersetzt oder abbricht: der erste schärft, der zweite (nicht zu schnell) führt aus. */
+  const dmConfirm = (key) => {
+    clearTimeout(dm.armTimer);
+    if (dm.armed === key && performance.now() - dm.armedAt > 600) { dm.armed = ""; return true; }
+    if (dm.armed === key) return false;
+    dm.armed = key; dm.armedAt = performance.now();
+    dm.armTimer = setTimeout(() => { dm.armed = ""; dmRender(); }, 8000);
+    dmRender();
+    return false;
+  };
+  const dmBtn = (act, label, cls, key, dis, why) => {
+    const armed = key && dm.armed === key;
+    return `<button type="button" class="btn ${armed ? "danger" : cls}" data-dm="${esc(act)}"${key ? ` data-dm-key="${esc(key)}"` : ""}${dis ? ` disabled title="${esc(why || "")}"` : ""}>${armed ? "Wirklich? Nochmal klicken" : esc(label)}</button>`;
+  };
+
+  const DM_RUN_PS5 = "So startest du den Dump: ShadowMountPlus findet einen Ordner nur, wenn er direkt in einem seiner Suchordner liegt (zum Beispiel „homebrew“ auf dem Laufwerk) und darin „sce_sys/param.json“ hat. Im Standardordner „homebrew/ps5-app-dumper/dumps“ sucht es nicht. Trage dafür oben bei „Ordner auf dem Ziel“ „homebrew“ ein.";
+  const DM_RUN_PS4 = "Dieser PS4-Dump ist eine Sicherung. ShadowMountPlus startet nur PS5-Spiele (es liest „sce_sys/param.json“), und „PS4 von USB“ liest nur PKG-Dateien. Ein PS4-Dump-Ordner lässt sich deshalb nicht direkt starten. In der Liste „Dumps aus dem Disc-Bereich“ baut „Als Abbild bauen“ aus dem Dump ein Abbild, das ShadowMountPlus einhängt.";
+  const dmJobHtml = (j) => {
+    const act = !!j.active;
+    const withVer = !!j.verify;
+    const work = j.done_bytes + (withVer ? j.checked_bytes : 0);
+    const pc = j.total_bytes > 0 ? Math.min(100, work * 100 / (j.total_bytes * (withVer ? 2 : 1))) : 0;
+    const head = act ? `${j.name} · ${j.stage || ""}`
+      : j.state === "done" ? `${j.name} · Dump fertig`
+      : j.state === "cancelled" ? `${j.name} · abgebrochen` : `${j.name} · gescheitert`;
+    let stat = `${bytes(j.done_bytes)} von ${bytes(j.total_bytes)}`;
+    if (act && j.rate > 0) stat += ` · ${bytes(j.rate)}/s`;
+    if (act && j.eta_s > 0) stat += ` · ${cpEta(j.eta_s)}`;
+    const files = `${cpFiles(j.files_done)} von ${num(j.files_total)}${j.dlc_total ? ` · DLC ${j.dlc_done} von ${j.dlc_total}` : ""}${j.dec_total ? ` · Entschlüsselt: ${num(j.dec_done)} von ${num(j.dec_total)} Dateien` : ""}${j.dec_failed ? ` · ${num(j.dec_failed)} nicht entschlüsselt` : ""}${j.bp_total ? ` · Backport: ${num(j.bp_done)} von ${num(j.bp_total)} Dateien` : ""}`;
+    let out = `<b>${esc(head)}</b>`;
+    if (act || j.state === "done") out += `<div class="upd-bar"><i style="width:${(j.state === "done" ? 100 : pc).toFixed(1)}%"></i></div>`;
+    out += `<small>${esc(stat)} · ${esc(files)}${withVer && act ? esc(` · zurückgelesen ${bytes(j.checked_bytes)}`) : ""}</small>`;
+    if (act && j.current) out += `<div class="p4m-meta" data-no-i18n>${esc(j.current)}</div>`;
+    out += `<div class="p4m-meta">${esc(`${j.kind === "dlc" ? "nur DLC" : "Spiel"} · ${j.drive || ""} · `)}<code>${esc(j.dest || "")}/${esc(j.folder || "")}</code></div>`;
+    if (j.state === "cancelled") out += `<p class="cp-why">${esc("Was bis dahin geschrieben wurde, bleibt unfertig im Ziel. Der nächste Dump dieses Spiels entfernt es zuerst.")}</p>`;
+    if (j.error) out += `<p class="cp-why">${esc(j.error)}</p>`;
+    if (j.note) out += `<p class="muted">${esc(j.note)}</p>`;
+    if (j.state === "done" && j.kind !== "dlc") out += `<p class="muted">${esc(/^CUSA/.test(j.folder || "") ? DM_RUN_PS4 : DM_RUN_PS5)}</p>`;
+    if (j.log) out += `<p class="muted">${esc("Protokoll:")} <code>${esc(j.log)}</code></p>`;
+    out += `<div class="cp-actions">${act ? dmBtn("cancel", "Stoppen", "ghost", "cancel") : dmBtn("close", "Schließen", "ghost", "")}</div>`;
+    return out;
+  };
+
+  const dmTitleHtml = (d) => {
+    const t = d.title;
+    const j = d.job || {};
+    if (!dm.sel || !t) return `<p class="muted">${esc("Noch kein Spiel gewählt. Oben bei „Disc-Spiele dumpen“ auf „Starten“ drücken, und wenn das Spiel läuft, auf „Dumpen“.")}</p>`;
+    const busy = !!j.active;
+    const noTarget = !d.settings.target || !(d.targets || []).some((x) => x.mount === d.settings.target);
+    let out = `<div class="p4m-row"><div class="p4m-main"><div class="p4m-name">${esc(dmName(dm.sel))}</div>
+      <div class="p4m-meta">${esc(dm.sel)} · ${t.mounted ? esc("läuft, der Dump kann beginnen") : esc("läuft nicht")}${t.dlc.length ? ` · ${esc(`${t.dlc.length} DLC eingehängt`)}` : ""}</div></div></div>`;
+    const why = busy ? "Es läuft schon ein Dump." : "Bitte unten ein Ziel wählen.";
+    if (!t.mounted) {
+      out += `<p class="muted">${esc("Das Spiel muss laufen. Auf „Starten“ drücken und warten, bis es geladen ist; diese Seite merkt es nach einigen Sekunden.")}</p>`;
+      out += `<div class="cp-actions">${dmBtn("launch", "Starten", "primary", "", false)}${dmBtn("reload", "Erneut prüfen", "ghost", "", false)}</div>`;
+      return out;
+    }
+    if (noTarget) out += `<p class="cp-why">${esc("Bitte unten bei den Einstellungen ein Ziel wählen.")}</p>`;
+    if (t.exists === "unfinished") out += `<p class="muted">${esc("Am Ziel liegt ein unfertiger Dump dieses Spiels; er wird zuerst entfernt.")}</p>`;
+    const dis = busy || noTarget;
+    if (t.exists === "done") {
+      out += `<p class="cp-why">${esc("Am Ziel liegt schon ein fertiger Dump dieses Spiels. Er wird nur nach einer Bestätigung ersetzt.")}</p>`;
+      out += `<div class="cp-actions">${dmBtn("start_over", "Vorhandenen Dump ersetzen und starten", "primary", "over", dis, why)}`;
+    } else {
+      out += `<div class="cp-actions">${dmBtn("start", "Dump starten", "primary", "", dis, why)}`;
+    }
+    if (t.dlc.length) out += dmBtn("dlc", `Nur DLC (${t.dlc.length})`, "ghost", "", dis, why);
+    out += "</div>";
+    return out;
+  };
+
+  const dmRender = () => {
+    const d = dm.data;
+    if (!d) { txt("#dm-sub", dm.err || "wird gelesen …"); return; }
+    const j = d.job || {};
+    const last = { done: "zuletzt: fertig", failed: "zuletzt: gescheitert", cancelled: "zuletzt: abgebrochen" }[j.state] || "bereit";
+    txt("#dm-sub", j.active ? `läuft: ${j.name}` : last);
+    const showJob = !!j.state && j.state !== "idle" && dm.hidden !== dmJobKey(j);
+    $("#dm-job").hidden = !showJob;
+    if (showJob) setHtml($("#dm-job"), dmJobHtml(j));
+    setHtml($("#dm-title"), dmTitleHtml(d));
+    const sel = $("#dm-target");
+    if (document.activeElement !== sel) {
+      sel.innerHTML = `<option value="">— Ziel wählen —</option>` + (d.targets || []).map((x) =>
+        `<option value="${esc(x.mount)}">${esc(`${x.label || x.mount} · ${bytes(x.free_bytes)} frei${x.console ? " (10 GB bleiben frei)" : ""}${x.fs ? " · " + cpFs(x.fs) : ""}`)}</option>`).join("");
+      sel.value = (d.targets || []).some((x) => x.mount === d.settings.target) ? d.settings.target : "";
+    }
+    if (document.activeElement !== $("#dm-subdir")) $("#dm-subdir").value = d.settings.subdir;
+    $("#dm-titles").checked = !!d.settings.folder_titles;
+    $("#dm-dlc").checked = !!d.settings.dump_dlc;
+    $("#dm-verify").checked = !!d.settings.verify;
+    $("#dm-split").value = String(d.settings.ps4_split === undefined ? 3 : d.settings.ps4_split);
+    const dec = $("#dm-decrypt"), fs = $("#dm-fself");
+    dec.checked = !!d.settings.decrypt;
+    fs.checked = !!d.settings.fself && dec.checked;
+    fs.disabled = !dec.checked;
+    const bp = $("#dm-bp");
+    bp.checked = !!d.settings.backport && dec.checked;
+    bp.disabled = !dec.checked;
+    if (document.activeElement !== $("#dm-bp4")) $("#dm-bp4").value = String(d.settings.ps4_backport_level || 4);
+    if (document.activeElement !== $("#dm-bp5")) $("#dm-bp5").value = String(d.settings.ps5_backport_level || 1);
+    $("#dm-bp4").disabled = $("#dm-bp5").disabled = !bp.checked;
+    if (d.settings.decrypt_supported === false) {
+      txt("#dm-decrypt-hint", "Diese Firmware kennt die Entschlüsselung nicht: Der Dump läuft dann ohne Entschlüsseln weiter. Sonst schreibt das Entschlüsseln kurz in den Kernel der Konsole und ist noch nicht an der Konsole erprobt.");
+    }
+    dgRender();
+    dqRender();
+  };
+
+  const dmLoad = async () => {
+    try {
+      dm.data = await api("/api/v1/dump" + (dm.sel ? "?title=" + encodeURIComponent(dm.sel) : ""));
+      dm.err = "";
+    } catch (e) { dm.err = e.message; }
+    /* Ein Dump ist gerade zu Ende gegangen: die Spieleliste kennt ihn dann als GEDUMPT. */
+    const act = !!(dm.data && ((dm.data.job && dm.data.job.active) || (dm.data.queue && dm.data.queue.active)));
+    if (dm.was && !act && typeof loadGames === "function") Promise.resolve(loadGames()).then(() => { loadDumps(); dgRender(); });
+    dm.was = act;
+    dmRender();
+  };
+  const dmSync = () => {
+    clearTimeout(dm.timer);
+    const j = dm.data && dm.data.job;
+    const waiting = !!(dm.sel && dm.data && dm.data.title && !dm.data.title.mounted);
+    const qa = !!(dm.data && dm.data.queue && dm.data.queue.active);
+    const run = state.page === "games" && pt.tab === "disc" && !document.hidden && ((j && j.active) || qa || waiting);
+    dm.timer = run ? setTimeout(async () => { await dmLoad(); dmSync(); }, (j && j.active) || qa ? 1000 : 4000) : 0;
+  };
+  const dmPost = async (body, quiet) => {
+    try {
+      const r = await api("/api/v1/dump", { method: "POST", body: JSON.stringify(body) });
+      if (r.message && !quiet) toast(r.message);
+    } catch (e) { toast(e.message, "error"); }
+    await dmLoad();
+    dmSync();
+  };
+  const dmOpen = async () => { await dmLoad(); dmSync(); };
+  const dmOpenFor = (id) => {
+    dm.sel = id;
+    dm.hidden = dm.data && dm.data.job && dm.data.job.state ? dmJobKey(dm.data.job) : dm.hidden;
+    ptSelectTab("disc");
+    dmOpen();
+    const c = $("#dm-card");
+    if (c) c.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const dmSettings = () => dmPost({ action: "settings", target: $("#dm-target").value, subdir: $("#dm-subdir").value.trim(),
+    folder_titles: $("#dm-titles").checked, dump_dlc: $("#dm-dlc").checked, verify: $("#dm-verify").checked,
+    ps4_split: Number($("#dm-split").value), decrypt: $("#dm-decrypt").checked,
+    fself: $("#dm-decrypt").checked && $("#dm-fself").checked,
+    backport: $("#dm-decrypt").checked && $("#dm-bp").checked,
+    ps4_backport_level: Math.min(6, Math.max(1, Math.round(Number($("#dm-bp4").value)) || 4)),
+    ps5_backport_level: Math.min(10, Math.max(1, Math.round(Number($("#dm-bp5").value)) || 1)) }, true);
+  ["#dm-target", "#dm-titles", "#dm-dlc", "#dm-verify", "#dm-split", "#dm-decrypt", "#dm-fself", "#dm-bp", "#dm-bp4", "#dm-bp5"].forEach((s) => $(s).addEventListener("change", dmSettings));
+  $("#dm-subdir").addEventListener("change", dmSettings);
+  $("#dm-card").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-dm]");
+    if (!b || b.disabled) return;
+    const act = b.dataset.dm;
+    if (b.dataset.dmKey && !dmConfirm(b.dataset.dmKey)) return;
+    if (act === "start") dmPost({ action: "start", id: dm.sel });
+    else if (act === "start_over") dmPost({ action: "start", id: dm.sel, overwrite: true });
+    else if (act === "dlc") dmPost({ action: "dlc_only", id: dm.sel });
+    else if (act === "cancel") dmPost({ action: "cancel" });
+    else if (act === "reload") dmLoad();
+    else if (act === "launch") gmLaunch(dm.sel, b);
+    else if (act === "close") {
+      const j = dm.data && dm.data.job;
+      if (j) dm.hidden = dmJobKey(j);
+      dmRender();
+    }
+  });
+
+  /* ── Dump-Warteschlange (25.10.2026) ─────────────────────────────────
+   * Mehrere Spiele nacheinander dumpen (dump_queue.c): Liste, Einstellungen je Titel, Start, Stopp. Die Liste liegt auf der Konsole
+   * und kommt mit GET /api/v1/dump (Feld „queue“); alles läuft über POST /api/v1/dump {action: queue_…}. */
+  const dq = { open: "" };
+  const DQ_ST = { pending: ["", "wartet"], waiting_disc: ["warn", "wartet auf die Disc"], launching: ["", "wird gestartet"],
+    settling: ["", "lädt"], dumping: ["", "wird gedumpt"], done: ["ok", "fertig"], failed: ["warn", "gescheitert"], skipped: ["", "übersprungen"] };
+  function dqData() { return (dm && dm.data && dm.data.queue) || { items: [], active: false }; }
+  const dqBtn = (act, label, cls, key, id, dis, why) => {
+    const armed = key && dm.armed === key;
+    return `<button type="button" class="btn ${armed ? "danger" : cls}" data-dq="${esc(act)}"${id ? ` data-id="${esc(id)}"` : ""}${key ? ` data-dq-key="${esc(key)}"` : ""}${dis ? ` disabled title="${esc(why || "")}"` : ""}>${armed ? "Wirklich? Nochmal klicken" : esc(label)}</button>`;
+  };
+
+  const dqPanel = (it) => {
+    const o = it.options || {};
+    return `<div class="p4m-set" data-dq-panel="${esc(it.id)}">
+      <label class="xswitch"><span>Ausführbare Dateien entschlüsseln</span><span class="switch"><input type="checkbox" data-dq-o="decrypt"${o.decrypt ? " checked" : ""}><i></i></span></label>
+      <label class="xswitch"><span>Als FSELF neu signieren</span><span class="switch"><input type="checkbox" data-dq-o="fself"${o.fself ? " checked" : ""}><i></i></span></label>
+      <label class="xswitch"><span>SDK-Versionen herunterpatchen (Backport)</span><span class="switch"><input type="checkbox" data-dq-o="backport"${o.backport ? " checked" : ""}><i></i></span></label>
+      <label class="p4m-field"><span>PS4-SDK-Ziel (1–6)</span><input type="number" min="1" max="6" step="1" data-dq-o="ps4_backport_level" value="${esc(String(o.ps4_backport_level || 4))}"></label>
+      <label class="p4m-field"><span>PS5-SDK-Ziel (1–10)</span><input type="number" min="1" max="10" step="1" data-dq-o="ps5_backport_level" value="${esc(String(o.ps5_backport_level || 1))}"></label>
+      <label class="p4m-field"><span>PS4-Aufteilung</span><select data-dq-o="ps4_split">
+        <option value="3"${o.ps4_split === 3 ? " selected" : ""}>App und Patch getrennt</option>
+        <option value="1"${o.ps4_split === 1 ? " selected" : ""}>Nur App</option>
+        <option value="2"${o.ps4_split === 2 ? " selected" : ""}>Nur Patch</option>
+        <option value="0"${o.ps4_split === 0 ? " selected" : ""}>Nicht aufteilen</option></select></label>
+      <div class="cp-actions">${dqBtn("opt_save", "Für dieses Spiel speichern", "primary", "", it.id)}${it.custom ? dqBtn("opt_reset", "Wie die Einstellungen oben", "ghost", "", it.id) : ""}</div></div>`;
+  };
+
+  const dqRender = () => {
+    const card = $("#dq-card");
+    if (!card) return;
+    const q = dqData();
+    const items = q.items || [];
+    const act = !!q.active;
+    const cur = items[q.current];
+    txt("#dq-sub", act ? `läuft: ${q.current + 1} von ${items.length}${cur ? " · " + cur.name : ""}` : !items.length ? "leer" : `${items.length} Titel bereit`);
+    setHtml($("#dq-notice"), q.interrupted ? `<p class="cp-why">${esc("Die Warteschlange wurde unterbrochen, weil die App neu gestartet wurde. Die Liste ist weg; lege die Spiele noch einmal hinein.")}</p>` : "");
+    setHtml($("#dq-list"), items.length ? items.map((it, i) => {
+      const [cls, label] = DQ_ST[it.state] || ["", it.state];
+      const tags = [
+        `<button type="button" class="gm-tag ${it.disc ? "fmt" : "unk"}" data-dq="disc" data-id="${esc(it.id)}"${act ? " disabled" : ""} title="${esc(act ? "Die Liste lässt sich jetzt nicht ändern." : "Klicken, um zwischen DISC und PKG zu wechseln. Bei DISC wartet die Warteschlange auf die Disc.")}">${it.disc ? "DISC" : "PKG"}</button>`,
+        it.disc && !it.disc_in ? `<span class="gm-tag bp" title="${esc("Die Disc liegt nicht im Laufwerk.")}">${esc("Disc raus")}</span>` : "",
+        it.custom ? `<span class="gm-tag ampr" title="${esc("Dieses Spiel wird mit eigenen Einstellungen gedumpt.")}">EIGENE</span>` : "",
+        it.dumped ? `<span class="gm-tag pg" title="${esc("Auf einem Laufwerk liegt ein fertiger Dump dieses Spiels.")}">GEDUMPT</span>` : ""
+      ].join("");
+      const wait = act && i === q.current && q.wait > 0 ? ` · noch ${q.wait} s` : "";
+      return `<div class="p4m-row" data-dq-row="${esc(it.id)}">
+        <div class="p4m-main"><div class="p4m-name">${i + 1}. ${esc(it.name)}</div>
+          <div class="p4m-meta">${esc(it.id)}${esc(wait)}</div><div class="gm-tags">${tags}</div>
+          ${it.message ? `<div class="p4m-meta${it.state === "failed" ? " cp-why" : ""}">${esc(it.message)}</div>` : ""}</div>
+        <span class="p4m-state ${cls}">${esc(label)}</span>
+        <div class="p4m-btns">${dqBtn("opts", "Einstellungen", "ghost", "", it.id, act, "Die Liste lässt sich jetzt nicht ändern.")}${dqBtn("remove", "Entfernen", "ghost", "", it.id, act, "Die Liste lässt sich jetzt nicht ändern.")}</div>
+        ${dq.open === it.id && !act ? dqPanel(it) : ""}</div>`;
+    }).join("") : `<p class="muted">${esc("Die Warteschlange ist leer. Oben bei „Disc-Spiele dumpen“ auf „In die Warteschlange“ drücken oder unten ein Spiel hinzufügen.")}</p>`);
+
+    const add = $("#dq-add");
+    if (add && !add.contains(document.activeElement)) {
+      const have = new Set(items.map((x) => x.id));
+      const cand = (gm.list || []).filter((x) => (x.platform === "PS5" || x.platform === "PS4") && !have.has(x.title_id) && !(x.smp && x.format !== "pkg"));
+      setHtml(add, `<div class="row-gap"><select id="dq-pick"${act ? " disabled" : ""}><option value="">— weiteres Spiel wählen —</option>${cand.map((x) => `<option value="${esc(x.title_id)}">${esc(`${x.name} (${x.title_id})`)}</option>`).join("")}</select>
+        ${dqBtn("add", "Hinzufügen", "ghost", "", "", act || items.length >= (q.max || 64), "Die Liste lässt sich jetzt nicht ändern.")}</div>`);
+    }
+    const rep = $("#dq-replace"), del = $("#dq-delay");
+    if (document.activeElement !== rep) rep.value = q.replace ? "1" : "0";
+    if (document.activeElement !== del) del.value = String(q.delay || 30);
+    rep.disabled = del.disabled = act;
+
+    let acts = "";
+    if (!act) {
+      acts += dqBtn("start", q.replace ? "Warteschlange starten (ersetzt vorhandene Dumps)" : "Warteschlange starten", "primary", "qstart", "", !items.length, "Die Warteschlange ist leer.");
+      acts += dqBtn("clear", "Liste leeren", "ghost", "", "", !items.length, "Die Liste ist leer.");
+    } else {
+      acts += dqBtn("stop", "Warteschlange stoppen", "ghost", "qstop", "");
+      if (cur && ["waiting_disc", "launching", "settling"].includes(cur.state)) acts += dqBtn("skip", "Diesen Titel überspringen", "ghost", "", "");
+      if (cur && cur.state === "dumping") acts += dqBtn("skip", "Diesen Dump stoppen", "ghost", "qskip", "");
+    }
+    setHtml($("#dq-actions"), acts + (!act && items.length ? `<p class="muted upd-hint">${esc("Beim Start wird ein laufendes Spiel beendet, sobald der erste Titel startet. Beim Stoppen eines laufenden Dumps bleiben die bisher geschriebenen Dateien unvollständig im Ziel.")}</p>` : ""));
+  };
+
+  const dqOptions = (panel) => {
+    const v = (k) => panel.querySelector(`[data-dq-o="${k}"]`);
+    return { decrypt: v("decrypt").checked, fself: v("fself").checked, backport: v("backport").checked,
+      ps4_backport_level: Number(v("ps4_backport_level").value) || 4, ps5_backport_level: Number(v("ps5_backport_level").value) || 1,
+      ps4_split: Number(v("ps4_split").value) };
+  };
+  $("#dq-card").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-dq]");
+    if (!b || b.disabled) return;
+    const act = b.dataset.dq, id = b.dataset.id;
+    if (b.dataset.dqKey && !dmConfirm(b.dataset.dqKey)) { dqRender(); return; }
+    const q = dqData();
+    if (act === "add") { const p = $("#dq-pick"); if (p && p.value) dmPost({ action: "queue_add", id: p.value }); }
+    else if (act === "remove") dmPost({ action: "queue_remove", id });
+    else if (act === "clear") dmPost({ action: "queue_clear" });
+    else if (act === "disc") { const it = (q.items || []).find((x) => x.id === id); if (it) dmPost({ action: "queue_set", id, disc: !it.disc }, true); }
+    else if (act === "opts") { dq.open = dq.open === id ? "" : id; dqRender(); }
+    else if (act === "opt_save") { const pn = b.closest("[data-dq-panel]"); if (pn) { dq.open = ""; dmPost({ action: "queue_set", id, options: dqOptions(pn) }); } }
+    else if (act === "opt_reset") { dq.open = ""; dmPost({ action: "queue_set", id, reset: true }); }
+    else if (act === "start") dmPost({ action: "queue_start", confirm_close: true });
+    else if (act === "stop") dmPost({ action: "queue_stop" });
+    else if (act === "skip") dmPost({ action: "queue_skip" });
+  });
+  const dqSettings = () => dmPost({ action: "queue_settings", replace: $("#dq-replace").value === "1",
+    delay: Math.min(600, Math.max(5, Math.round(Number($("#dq-delay").value)) || 30)) }, true);
+  $("#dq-replace").addEventListener("change", dqSettings);
+  $("#dq-delay").addEventListener("change", dqSettings);
+
   /* ── Pakete (04.10.2026) ─────────────────────────────────────────────
    * Spiel-Pakete (.pkg) auf Sticks, Discs und im Konsolenspeicher (pkgscan.c, /api/v1/packages):
    * finden, anzeigen und große Pakete in Teile aufteilen (pkgsplit.c), die auf einen FAT32-Stick
@@ -10493,7 +11235,7 @@
     let value = PRESETS[auto ? "automatic" : "observe"][kind];
     if (value === undefined) return Promise.resolve();
     if (auto) {
-      const lo = state.cfg && Number.isFinite(state.cfg.target_min_c) ? state.cfg.target_min_c : 60;
+      const lo = state.cfg && Number.isFinite(state.cfg.target_min_c) ? state.cfg.target_min_c : 50;
       const hi = state.cfg && Number.isFinite(state.cfg.target_max_c) ? state.cfg.target_max_c : 91;
       value = Math.max(lo, Math.min(hi, value));
     }
@@ -11362,7 +12104,7 @@
     const from = hhmmToMin($("#night-from").value), to = hhmmToMin($("#night-to").value);
     const tgt = Math.round(Number($("#night-target").value));
     if (!Number.isFinite(from) || !Number.isFinite(to)) { toast("Bitte beide Uhrzeiten eintragen.", "error"); return; }
-    const lo = state.cfg.target_min_c ?? 60, hi = state.cfg.target_max_c ?? 91;
+    const lo = state.cfg.target_min_c ?? 50, hi = state.cfg.target_max_c ?? 91;
     if (!Number.isFinite(tgt) || tgt < lo || tgt > hi) { toast(`Das Nachtziel muss zwischen ${lo} und ${hi} °C liegen.`, "error"); return; }
     try {
       await saveConfig({ night_enabled: $("#night-on").checked ? 1 : 0, night_start_min: from, night_end_min: to,

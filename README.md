@@ -27,7 +27,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Kühlung</h3>
-      Ruhige Lüfterregelung auf eine Zieltemperatur (60–91 °C), Betriebsarten, Profile pro Spiel, Nachtmodus mit leiserem Ziel, Lüfter-Selbsttest, Sicherheitsgrenze in der Hardware.
+      Ruhige Lüfterregelung auf eine Zieltemperatur (50–91 °C), Betriebsarten, Profile pro Spiel, Nachtmodus mit leiserem Ziel, Lüfter-Selbsttest, Sicherheitsgrenze in der Hardware.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Messwerte</h3>
@@ -121,7 +121,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 <summary><b>Alle Funktionen im Detail</b></summary>
 
 **Kühlung**
-- Hält eine Zieltemperatur (Standard 66 °C, einstellbar 60–91 °C) mit gleitendem Mittelwert, Totzone und Trend und ändert die Drehzahl nur in kleinen Schritten.
+- Hält eine Zieltemperatur (Standard 66 °C, einstellbar 50–91 °C) mit gleitendem Mittelwert, Totzone und Trend und ändert die Drehzahl nur in kleinen Schritten.
 - Betriebsarten leise, ausgewogen und kühl, Schnellwahl und eigene Regeln je Spiel.
 - Ab der Sicherheitstemperatur (Standard 78 °C) gilt nur noch die Hardware; läuft die App nicht, regelt die Konsole selbst.
 - Nachtmodus: Zwischen zwei Uhrzeiten gilt ein leiseres Nachtziel; die Uhrzeit ist die des Geräts, auf dem die Seite offen ist.

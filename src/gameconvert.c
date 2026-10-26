@@ -59,6 +59,7 @@
 #include "conv_exfat.h"
 #include "conv_pfs.h"
 #include "conv_ufs2.h"
+#include "dump_image.h"
 #include "ioerr.h"
 #include "imgread.h"
 #include "iopolicy.h"
@@ -113,6 +114,7 @@ typedef struct {
   double   rate;
   uint64_t cwindow_ms, cwindow_bytes;
   double   crate;             /* the same, for reading back               */
+  int      dump;              /* a PS4 dump packed into an image (dump_image.c) */
 } cv_job_t;
 
 typedef struct {
@@ -124,6 +126,9 @@ typedef struct {
   char inner[40];
   int  folder;
   int  ampr;                  /* build ampr_emu.index in the folder first (amprindex.c) */
+  int  nroots;                /* a PS4 dump: the folders laid over each other (base, update, overlay), else 0 */
+  char roots[3][256];
+  char overlay[256];          /* the folder of our own files among them, removed when the job is over */
 } cv_args_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -240,11 +245,23 @@ ext_of(const char *path) {
 
 /* What a source can become; "" when nothing. ffpkg (UFS2) is direct-from-
    folder only, like MkPFS's own "folder into exFAT" step — repacking an
-   existing image into ffpkg isn't a thing ShadowMountPlus expects. */
+   existing image into ffpkg isn't a thing ShadowMountPlus expects.
+   A folder only counts when it is a game's own folder — sce_sys/param.json is what ShadowMountPlus itself looks
+   for (see gamecopy.c). Since 25.10.2026 ps5tm_library_copy_info() also hands out an installed package's folder
+   (format "pkg": app.pkg and the installer's own files, not the game's decrypted own files, so this check leaves
+   it with nothing to convert into — correctly, since packing app.pkg itself into an exFAT or ffpfsc image would
+   not be a game ShadowMountPlus could run). */
 static void
 ops_for(const char *source, int *can_exfat, int *can_ffpfsc, int *can_ffpkg) {
   *can_exfat = *can_ffpfsc = *can_ffpkg = 0;
-  if(is_dir(source)) { *can_exfat = *can_ffpfsc = *can_ffpkg = 1; return; }
+  if(is_dir(source)) {
+    char param[PATH_MAX];
+    struct stat st;
+    if(snprintf(param, sizeof(param), "%s/sce_sys/param.json", source) < (int)sizeof(param) &&
+       stat(param, &st) == 0 && S_ISREG(st.st_mode))
+      *can_exfat = *can_ffpfsc = *can_ffpkg = 1;
+    return;
+  }
   const char *e = ext_of(source);
   if(!strcasecmp(e, ".exfat") || !strcasecmp(e, ".ffpkg") || !strcasecmp(e, ".ffpfs"))
     *can_ffpfsc = 1;
@@ -360,13 +377,36 @@ exfat_read(void *ctx, void *buf, size_t len) {
 
 static void *cv_run(void *arg);
 
+/* The UFS2 writer over the one folder of a game, or over a PS4 dump's folders laid over each other (dump_image.c). */
+static int
+cv_ufs2_plan(const cv_args_t *a, uint64_t *size, char *err, size_t err_len) {
+  if(a->nroots > 0) {
+    const char *rt[3] = { a->roots[0], a->roots[1], a->roots[2] };
+    return ufs2_plan_size_roots(rt, (unsigned)a->nroots, size, err, err_len);
+  }
+  return ufs2_plan_size(a->source, size, err, err_len);
+}
+
+static int
+cv_ufs2_write(const cv_args_t *a, int fd, const int *cancel, void (*progress)(void *, uint64_t), uint64_t *size,
+              ufs2_sums_t **sums, char *err, size_t err_len) {
+  if(a->nroots > 0) {
+    const char *rt[3] = { a->roots[0], a->roots[1], a->roots[2] };
+    return ufs2_write_tree_roots(fd, rt, (unsigned)a->nroots, cancel, progress, NULL, size, sums, err, err_len);
+  }
+  return ufs2_write_tree(fd, a->source, cancel, progress, NULL, size, sums, err, err_len);
+}
+
 /* The console stays awake for as long as the job runs, whichever way it ends
    (powerguard.c). */
 static void *
 cv_thread(void *arg) {
+  char overlay[256];
+  snprintf(overlay, sizeof(overlay), "%s", ((cv_args_t *)arg)->overlay);
   ps5tm_powerguard_hold();
   void *r = cv_run(arg);
   ps5tm_powerguard_release();
+  if(overlay[0]) dimg_remove_overlay(overlay);
   /* one line in the history (jobhist.c) */
   pthread_mutex_lock(&g_lock);
   int st = g_job.state;
@@ -408,7 +448,12 @@ cv_run(void *arg) {
     err[0] = 0;
   }
   if(a.folder) {
-    img = exfat_image_plan(a.source, serial_for(a.title_id), err, sizeof(err));
+    if(a.nroots > 0) {
+      const char *rt[3] = { a.roots[0], a.roots[1], a.roots[2] };
+      img = exfat_image_plan_roots(rt, (unsigned)a.nroots, serial_for(a.title_id), err, sizeof(err));
+    } else {
+      img = exfat_image_plan(a.source, serial_for(a.title_id), err, sizeof(err));
+    }
     if(!img) { cv_fail("%s", err); return NULL; }
     raw   = exfat_image_size(img);
     files = exfat_image_files(img);
@@ -428,7 +473,7 @@ cv_run(void *arg) {
   uint64_t need_bytes = raw;
   if(!strcmp(a.op, "ffpkg") && a.folder) {
     uint64_t ffpkg_size = 0;
-    if(ufs2_plan_size(a.source, &ffpkg_size, err, sizeof(err)) != 0) { cv_fail("%s", err); goto cleanup; }
+    if(cv_ufs2_plan(&a, &ffpkg_size, err, sizeof(err)) != 0) { cv_fail("%s", err); goto cleanup; }
     need_bytes = ffpkg_size;
   }
 
@@ -567,8 +612,7 @@ cv_run(void *arg) {
     }
   } else if(!strcmp(a.op, "ffpkg")) {
     ufs2_sums_t *usums = NULL;
-    rc = ufs2_write_tree(out, a.source, &g_cancel, cv_progress, NULL, &size, &usums,
-                         err, sizeof(err));
+    rc = cv_ufs2_write(&a, out, &g_cancel, cv_progress, &size, &usums, err, sizeof(err));
     if(!rc) {
       /* The blocks of this writer go down in no order, so the image as a whole
          has no CRC to compare. What it has is one per file, taken while the
@@ -999,6 +1043,69 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
   return 0;
 }
 
+/* Claims the one place for a file job and starts the worker. Takes over a; frees it on every refusal. */
+static int
+cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *source, const char *op, const char *mode,
+          const char *label, char *err, size_t err_len) {
+  /* One file job at a time. Asked before this one is claimed, so a refusal
+     leaves the last job's result on the page untouched. */
+  if(other_job_active(1, err, err_len)) {
+    free(a);
+    return 409;
+  }
+
+  pthread_mutex_lock(&g_lock);
+  if(active_locked()) {
+    pthread_mutex_unlock(&g_lock);
+    free(a);
+    snprintf(err, err_len, "Es läuft schon eine Konvertierung.");
+    return 409;
+  }
+  memset(&g_job, 0, sizeof(g_job));
+  g_job.state = CV_SCANNING;
+  snprintf(g_job.title_id, sizeof(g_job.title_id), "%s", title_id);
+  snprintf(g_job.name, sizeof(g_job.name), "%s", name);
+  snprintf(g_job.op, sizeof(g_job.op), "%s", op);
+  snprintf(g_job.mode, sizeof(g_job.mode), "%s", mode);
+  snprintf(g_job.source, sizeof(g_job.source), "%s", source);
+  snprintf(g_job.target, sizeof(g_job.target), "%s", a->target);
+  snprintf(g_job.drive, sizeof(g_job.drive), "%s", label);
+  g_job.dump = a->nroots > 0;
+  g_job.started_ms = ps5tm_mono_ms();
+  __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
+  pthread_mutex_unlock(&g_lock);
+
+  /* A copy that claimed ITS place in the same instant: each of the two sees
+     the other now, and both stand down — neither runs, which is safe, and the
+     person starts again. (The check above and the claim are not one step; this
+     closes the gap.) */
+  if(other_job_active(0, err, err_len)) {
+    pthread_mutex_lock(&g_lock);
+    memset(&g_job, 0, sizeof(g_job));              /* idle again */
+    pthread_mutex_unlock(&g_lock);
+    free(a);
+    return 409;
+  }
+
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  /* the AMPR index walk (amprindex.c) recurses with ~4 KB per folder level: never the small default stack */
+  pthread_attr_setstacksize(&attr, 1024 * 1024);
+  pthread_t th;
+  int rc = pthread_create(&th, &attr, cv_thread, a);
+  pthread_attr_destroy(&attr);
+  if(rc != 0) {
+    free(a);
+    cv_fail("Das Konvertieren ließ sich nicht starten.");
+    snprintf(err, err_len, "Das Konvertieren ließ sich nicht starten.");
+    return 500;
+  }
+  PS5TM_INFO("game_convert_started", "Konvertieren von %s (%s) nach %s gestartet.",
+             title_id, source, g_job.target);
+  return 200;
+}
+
 int
 ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, const char *mount,
                         const char *mode, char *err, size_t err_len) {
@@ -1057,63 +1164,354 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
     snprintf(a->inner, sizeof(a->inner), "%s%s", title_id, e);
   }
 
-  /* One file job at a time. Asked before this one is claimed, so a refusal
-     leaves the last job's result on the page untouched. */
-  if(other_job_active(1, err, err_len)) {
-    free(a);
-    return 409;
-  }
+  return cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
+}
 
+
+/* ------------------------------------------------- a PS4 dump as an image (23.10.2026, dump_image.c) */
+
+/* Only the drives a person plugs in: a PS4 title from the console's own storage panics the console (the converter this
+   follows says so), and a mount of the system is no place for one either. */
+static int
+image_drive_ok(const char *mount) {
+  return mount && (!strncmp(mount, "/mnt/usb", 8) || !strncmp(mount, "/mnt/ext", 8)) && !strstr(mount, "..");
+}
+
+cJSON *
+ps5tm_gameconvert_dump_plan(const char *mount, const char *dir, const char *folder, char *err, size_t err_len, int *http) {
+  ps5tm_dumpsrc_t *src = calloc(1, sizeof(*src));
+  if(!src) { snprintf(err, err_len, "Kein Speicher."); *http = 500; return NULL; }
+  *http = ps5tm_dumplib_source(mount, dir, folder, src, err, err_len);
+  if(*http != 200) { free(src); return NULL; }
+  dimg_info_t info;
+  if(dimg_check(src->base, src->patch, &info, err, err_len) != 0) { free(src); *http = 409; return NULL; }
+
+  /* the size without our two small files: a megabyte of room is added for them */
+  const char *rt[2] = { src->base, src->patch };
+  exfat_image_t *img = exfat_image_plan_roots(rt, src->patch[0] ? 2 : 1, serial_for(info.title_id), err, err_len);
+  if(!img) { free(src); *http = 409; return NULL; }
+  uint64_t raw = exfat_image_size(img) + (1ull << 20);
+  unsigned files = exfat_image_files(img);
+  exfat_image_free(img);
+
+  /* An .ffpkg is as big as its own UFS2 image, not the exFAT one; the room is asked for that size, plus a little for our two files. */
+  uint64_t ffpkg_bytes = 0;
+  char ffpkg_why[700] = "";
+  if(ufs2_plan_size_roots(rt, src->patch[0] ? 2 : 1, &ffpkg_bytes, ffpkg_why, sizeof(ffpkg_why)) != 0) ffpkg_bytes = 0;
+  else { ffpkg_why[0] = 0; ffpkg_bytes += 1ull << 20; }
+
+  char stem[200];
+  dimg_stem(info.title, info.title_id, stem, sizeof(stem));
   pthread_mutex_lock(&g_lock);
-  if(active_locked()) {
-    pthread_mutex_unlock(&g_lock);
-    free(a);
-    snprintf(err, err_len, "Es läuft schon eine Konvertierung.");
-    return 409;
-  }
-  memset(&g_job, 0, sizeof(g_job));
-  g_job.state = CV_SCANNING;
-  snprintf(g_job.title_id, sizeof(g_job.title_id), "%s", title_id);
-  snprintf(g_job.name, sizeof(g_job.name), "%s", name);
-  snprintf(g_job.op, sizeof(g_job.op), "%s", op);
-  snprintf(g_job.mode, sizeof(g_job.mode), "%s", mode);
-  snprintf(g_job.source, sizeof(g_job.source), "%s", source);
-  snprintf(g_job.target, sizeof(g_job.target), "%s", a->target);
-  snprintf(g_job.drive, sizeof(g_job.drive), "%s", label);
-  g_job.started_ms = ps5tm_mono_ms();
-  __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
+  int busy = active_locked();
   pthread_mutex_unlock(&g_lock);
 
-  /* A copy that claimed ITS place in the same instant: each of the two sees
-     the other now, and both stand down — neither runs, which is safe, and the
-     person starts again. (The check above and the claim are not one step; this
-     closes the gap.) */
-  if(other_job_active(0, err, err_len)) {
-    pthread_mutex_lock(&g_lock);
-    memset(&g_job, 0, sizeof(g_job));              /* idle again */
-    pthread_mutex_unlock(&g_lock);
-    free(a);
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddBoolToObject  (root, "ok", 1);
+  cJSON_AddStringToObject(root, "title_id", info.title_id);
+  cJSON_AddStringToObject(root, "name", info.title);
+  cJSON_AddStringToObject(root, "source", src->base);
+  cJSON_AddStringToObject(root, "patch", src->patch);
+  cJSON_AddStringToObject(root, "app_ver", info.app_ver);
+  cJSON_AddStringToObject(root, "stem", stem);
+  cJSON_AddNumberToObject(root, "raw_bytes", (double)raw);
+  cJSON_AddNumberToObject(root, "files", files);
+  cJSON_AddNumberToObject(root, "ffpkg_bytes", (double)ffpkg_bytes);
+  if(ffpkg_why[0]) cJSON_AddStringToObject(root, "ffpkg_error", ffpkg_why);
+  cJSON *ops = cJSON_AddArrayToObject(root, "ops");
+  cJSON_AddItemToArray(ops, cJSON_CreateString("ffpfsc"));
+  cJSON_AddItemToArray(ops, cJSON_CreateString("ffpkg"));
+  cJSON_AddItemToArray(ops, cJSON_CreateString("exfat"));
+  cJSON_AddBoolToObject  (root, "busy", busy);
+  cJSON_AddBoolToObject  (root, "other_busy", ps5tm_gamecopy_busy());
+
+  ps5tm_sysinfo_t *si = calloc(1, sizeof(*si));
+  cJSON *arr = cJSON_AddArrayToObject(root, "targets");
+  if(si) {
+    ps5tm_sysinfo_get(si);
+    uint64_t need = raw + SPACE_RESERVE;
+    uint64_t need_ffpkg = ffpkg_bytes ? ffpkg_bytes + SPACE_RESERVE : need;
+    for(unsigned i = 0; i < si->volume_count; i++) {
+      char base[64], label[40], fs[16];
+      uint64_t avail = 0;
+      if(!image_drive_ok(si->volumes[i].path) ||
+         drive_base(si->volumes[i].path, base, sizeof(base), label, sizeof(label)) != 0 ||
+         drive_space(base, &avail, fs, sizeof(fs)) != 0)
+        continue;
+      cJSON *d = cJSON_CreateObject();
+      cJSON_AddStringToObject(d, "mount", si->volumes[i].path);
+      cJSON_AddStringToObject(d, "label", label);
+      cJSON_AddStringToObject(d, "fs", fs);
+      cJSON_AddNumberToObject(d, "free_bytes", (double)avail);
+      size_t bl = strlen(base);
+      cJSON_AddBoolToObject  (d, "source_here", !strncmp(src->base, base, bl) && src->base[bl] == '/');
+      cJSON_AddBoolToObject  (d, "fat32_too_big", !strcmp(fs, "msdosfs") && raw > FAT32_MAX_FILE);
+      cJSON_AddBoolToObject  (d, "fat32_too_big_ffpkg", !strcmp(fs, "msdosfs") && (ffpkg_bytes ? ffpkg_bytes : raw) > FAT32_MAX_FILE);
+      char dd[128];
+      int fits_any = 0;
+      if(dest_dir(base, "homebrew", dd, sizeof(dd)) == 0) {
+        static const char *const exts[] = { ".ffpfsc", ".ffpkg", ".exfat" };
+        static const char *const keys[] = { "ffpfsc", "ffpkg", "exfat" };
+        cJSON *o = cJSON_AddObjectToObject(d, "homebrew");
+        cJSON_AddStringToObject(o, "dir", dd);
+        for(int e = 0; e < 3; e++) {
+          char path[400];
+          snprintf(path, sizeof(path), "%s/%s%s", dd, stem, exts[e]);
+          int      ts   = target_state(path);
+          uint64_t back = ts == 2 ? leftover_bytes(path) : 0;
+          int      fits = avail + back >= (e == 1 ? need_ffpkg : need);
+          if(fits) fits_any = 1;
+          cJSON *t = cJSON_AddObjectToObject(o, keys[e]);
+          cJSON_AddStringToObject(t, "path", path);
+          cJSON_AddBoolToObject  (t, "exists", ts == 1);
+          cJSON_AddBoolToObject  (t, "unfinished", ts == 2);
+          cJSON_AddNumberToObject(t, "unfinished_bytes", (double)back);
+          cJSON_AddBoolToObject  (t, "enough_space", fits);
+        }
+      }
+      cJSON_AddBoolToObject(d, "enough_space", fits_any);
+      cJSON_AddItemToArray(arr, d);
+    }
+    free(si);
+  }
+  free(src);
+  return root;
+}
+
+int
+ps5tm_gameconvert_dump_start(const char *mount, const char *dir, const char *folder, const char *op, const char *target,
+                             char *err, size_t err_len) {
+  if(!op || !target || (strcmp(op, "exfat") && strcmp(op, "ffpfsc") && strcmp(op, "ffpkg"))) {
+    snprintf(err, err_len, "Diese Umwandlung gibt es für einen PS4-Dump nicht.");
+    return 400;
+  }
+  if(!image_drive_ok(target)) {
+    snprintf(err, err_len, "Das Abbild eines PS4-Spiels darf nur auf ein USB- oder M.2-Laufwerk, nie in den "
+             "Speicher der Konsole: Ein PS4-Titel von dort bringt die Konsole zum Absturz.");
+    return 400;
+  }
+  ps5tm_dumpsrc_t *src = calloc(1, sizeof(*src));
+  cv_args_t *a = calloc(1, sizeof(*a));
+  if(!src || !a) { free(src); free(a); snprintf(err, err_len, "Kein Speicher."); return 500; }
+  int http = ps5tm_dumplib_source(mount, dir, folder, src, err, err_len);
+  dimg_info_t info;
+  if(http == 200 && dimg_check(src->base, src->patch, &info, err, err_len) != 0) http = 409;
+  if(http != 200) { free(src); free(a); return http; }
+
+  char label[40], dd[128], stem[200];
+  dimg_stem(info.title, info.title_id, stem, sizeof(stem));
+  if(drive_base(target, a->base, sizeof(a->base), label, sizeof(label)) != 0 || strncmp(a->base, "/mnt/", 5) ||
+     dest_dir(a->base, "homebrew", dd, sizeof(dd)) != 0 ||
+     snprintf(a->target, sizeof(a->target), "%s/%s%s", dd, stem,
+              !strcmp(op, "exfat") ? ".exfat" : !strcmp(op, "ffpkg") ? ".ffpkg" : ".ffpfsc") >= (int)sizeof(a->target)) {
+    free(src); free(a);
+    snprintf(err, err_len, "Dieses Ziel gibt es nicht.");
+    return 400;
+  }
+  if(target_state(a->target) == 1) {
+    snprintf(err, err_len, "Am Ziel gibt es %s schon.", a->target);
+    free(src); free(a);
     return 409;
   }
 
-  pthread_attr_t attr;
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  /* the AMPR index walk (amprindex.c) recurses with ~4 KB per folder level: never the small default stack */
-  pthread_attr_setstacksize(&attr, 1024 * 1024);
-  pthread_t th;
-  int rc = pthread_create(&th, &attr, cv_thread, a);
-  pthread_attr_destroy(&attr);
-  if(rc != 0) {
-    free(a);
-    cv_fail("Das Konvertieren ließ sich nicht starten.");
-    snprintf(err, err_len, "Das Konvertieren ließ sich nicht starten.");
+  /* Refused before anything is written: one file job at a time. The overlay is written only once this job may start. */
+  if(other_job_active(1, err, err_len)) { free(src); free(a); return 409; }
+  pthread_mutex_lock(&g_lock);
+  int busy = active_locked();
+  pthread_mutex_unlock(&g_lock);
+  if(busy) { snprintf(err, err_len, "Es läuft schon eine Konvertierung."); free(src); free(a); return 409; }
+
+  snprintf(a->overlay, sizeof(a->overlay), "%s/dump-image/%s", PS5TM_DATA_DIR, info.title_id);
+  int repaired = 0;
+  if(dimg_write_overlay(src->base, src->patch, a->overlay, &info, &repaired, err, err_len) != 0) {
+    dimg_remove_overlay(a->overlay);
+    free(src); free(a);
     return 500;
   }
-  PS5TM_INFO("game_convert_started", "Konvertieren von %s (%s) nach %s gestartet.",
-             title_id, source, g_job.target);
-  return 200;
+  snprintf(a->roots[0], sizeof(a->roots[0]), "%s", src->base);
+  a->nroots = 1;
+  if(src->patch[0]) snprintf(a->roots[a->nroots++], sizeof(a->roots[0]), "%s", src->patch);
+  snprintf(a->roots[a->nroots++], sizeof(a->roots[0]), "%s", a->overlay);
+  a->folder = 1;
+  snprintf(a->title_id, sizeof(a->title_id), "%s", info.title_id);
+  snprintf(a->op, sizeof(a->op), "%s", op);
+  snprintf(a->source, sizeof(a->source), "%s", src->base);
+  snprintf(a->inner, sizeof(a->inner), "%s.exfat", info.title_id);
+  PS5TM_INFO("dump_image", "PS4-Dump %s: param.json aus der param.sfo gebaut%s%s.", info.title_id,
+             repaired ? ", npbind.dat-Prüfsumme korrigiert" : "", src->patch[0] ? ", Update darübergelegt" : "");
+  char overlay[256];
+  snprintf(overlay, sizeof(overlay), "%s", a->overlay);
+  char source[256];
+  snprintf(source, sizeof(source), "%s", src->base);
+  char name[128];
+  snprintf(name, sizeof(name), "%s", info.title);
+  free(src);
+  int rc = cv_launch(a, info.title_id, name, source, op, "homebrew", label, err, err_len);
+  if(rc != 200) dimg_remove_overlay(overlay);        /* cv_launch freed a; the worker would have removed it otherwise */
+  return rc;
 }
+
+
+/* ------------------------------------------------- a PS5 dump as an image (26.10.2026) */
+
+/* Unlike a PS4 dump, a finished PS5 dump already has sce_sys/param.json (dump_job.c copies it last, the same file
+   ShadowMountPlus itself looks for) and is one flat folder — no update to lay over it, no param.sfo to rebuild, no
+   npbind.dat repair. Building an image from it is therefore the plain folder-to-image path ops_for()/cv_launch()
+   already do for an installed game's own folder, just with the source resolved from the dump list instead of
+   ps5tm_library_copy_info(). */
+cJSON *
+ps5tm_gameconvert_dump_plan_ps5(const char *mount, const char *dir, const char *folder, char *err, size_t err_len, int *http) {
+  ps5tm_dumpsrc_t *src = calloc(1, sizeof(*src));
+  if(!src) { snprintf(err, err_len, "Kein Speicher."); *http = 500; return NULL; }
+  *http = ps5tm_dumplib_source_ps5(mount, dir, folder, src, err, err_len);
+  if(*http != 200) { free(src); return NULL; }
+  int can_exfat, can_ffpfsc, can_ffpkg;
+  ops_for(src->base, &can_exfat, &can_ffpfsc, &can_ffpkg);
+  if(!can_exfat) { free(src); snprintf(err, err_len, "Dieser Dump lässt sich nicht als Abbild bauen."); *http = 409; return NULL; }
+
+  const char *rt[1] = { src->base };
+  exfat_image_t *img = exfat_image_plan_roots(rt, 1, serial_for(src->title_id), err, err_len);
+  if(!img) { free(src); *http = 409; return NULL; }
+  uint64_t raw = exfat_image_size(img) + (1ull << 20);
+  unsigned files = exfat_image_files(img);
+  exfat_image_free(img);
+
+  uint64_t ffpkg_bytes = 0;
+  char ffpkg_why[700] = "";
+  if(ufs2_plan_size_roots(rt, 1, &ffpkg_bytes, ffpkg_why, sizeof(ffpkg_why)) != 0) ffpkg_bytes = 0;
+  else { ffpkg_why[0] = 0; ffpkg_bytes += 1ull << 20; }
+
+  char stem[200];
+  dimg_stem(src->title, src->title_id, stem, sizeof(stem));
+  pthread_mutex_lock(&g_lock);
+  int busy = active_locked();
+  pthread_mutex_unlock(&g_lock);
+
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddBoolToObject  (root, "ok", 1);
+  cJSON_AddStringToObject(root, "title_id", src->title_id);
+  cJSON_AddStringToObject(root, "name", src->title);
+  cJSON_AddStringToObject(root, "source", src->base);
+  cJSON_AddStringToObject(root, "stem", stem);
+  cJSON_AddNumberToObject(root, "raw_bytes", (double)raw);
+  cJSON_AddNumberToObject(root, "files", files);
+  cJSON_AddNumberToObject(root, "ffpkg_bytes", (double)ffpkg_bytes);
+  if(ffpkg_why[0]) cJSON_AddStringToObject(root, "ffpkg_error", ffpkg_why);
+  cJSON *ops = cJSON_AddArrayToObject(root, "ops");
+  cJSON_AddItemToArray(ops, cJSON_CreateString("ffpfsc"));
+  cJSON_AddItemToArray(ops, cJSON_CreateString("ffpkg"));
+  cJSON_AddItemToArray(ops, cJSON_CreateString("exfat"));
+  cJSON_AddBoolToObject  (root, "busy", busy);
+  cJSON_AddBoolToObject  (root, "other_busy", ps5tm_gamecopy_busy());
+
+  ps5tm_sysinfo_t *si = calloc(1, sizeof(*si));
+  cJSON *arr = cJSON_AddArrayToObject(root, "targets");
+  if(si) {
+    ps5tm_sysinfo_get(si);
+    uint64_t need = raw + SPACE_RESERVE;
+    uint64_t need_ffpkg = ffpkg_bytes ? ffpkg_bytes + SPACE_RESERVE : need;
+    for(unsigned i = 0; i < si->volume_count; i++) {
+      char base[64], label[40], fs[16];
+      uint64_t avail = 0;
+      if(!image_drive_ok(si->volumes[i].path) ||
+         drive_base(si->volumes[i].path, base, sizeof(base), label, sizeof(label)) != 0 ||
+         drive_space(base, &avail, fs, sizeof(fs)) != 0)
+        continue;
+      cJSON *d = cJSON_CreateObject();
+      cJSON_AddStringToObject(d, "mount", si->volumes[i].path);
+      cJSON_AddStringToObject(d, "label", label);
+      cJSON_AddStringToObject(d, "fs", fs);
+      cJSON_AddNumberToObject(d, "free_bytes", (double)avail);
+      size_t bl = strlen(base);
+      cJSON_AddBoolToObject  (d, "source_here", !strncmp(src->base, base, bl) && src->base[bl] == '/');
+      cJSON_AddBoolToObject  (d, "fat32_too_big", !strcmp(fs, "msdosfs") && raw > FAT32_MAX_FILE);
+      cJSON_AddBoolToObject  (d, "fat32_too_big_ffpkg", !strcmp(fs, "msdosfs") && (ffpkg_bytes ? ffpkg_bytes : raw) > FAT32_MAX_FILE);
+      char dd[128];
+      int fits_any = 0;
+      if(dest_dir(base, "homebrew", dd, sizeof(dd)) == 0) {
+        static const char *const exts[] = { ".ffpfsc", ".ffpkg", ".exfat" };
+        static const char *const keys[] = { "ffpfsc", "ffpkg", "exfat" };
+        cJSON *o = cJSON_AddObjectToObject(d, "homebrew");
+        cJSON_AddStringToObject(o, "dir", dd);
+        for(int e = 0; e < 3; e++) {
+          char path[400];
+          snprintf(path, sizeof(path), "%s/%s%s", dd, stem, exts[e]);
+          int      ts   = target_state(path);
+          uint64_t back = ts == 2 ? leftover_bytes(path) : 0;
+          int      fits = avail + back >= (e == 1 ? need_ffpkg : need);
+          if(fits) fits_any = 1;
+          cJSON *t = cJSON_AddObjectToObject(o, keys[e]);
+          cJSON_AddStringToObject(t, "path", path);
+          cJSON_AddBoolToObject  (t, "exists", ts == 1);
+          cJSON_AddBoolToObject  (t, "unfinished", ts == 2);
+          cJSON_AddNumberToObject(t, "unfinished_bytes", (double)back);
+          cJSON_AddBoolToObject  (t, "enough_space", fits);
+        }
+      }
+      cJSON_AddBoolToObject(d, "enough_space", fits_any);
+      cJSON_AddItemToArray(arr, d);
+    }
+    free(si);
+  }
+  free(src);
+  return root;
+}
+
+int
+ps5tm_gameconvert_dump_start_ps5(const char *mount, const char *dir, const char *folder, const char *op, const char *target,
+                                 char *err, size_t err_len) {
+  if(!op || !target || (strcmp(op, "exfat") && strcmp(op, "ffpfsc") && strcmp(op, "ffpkg"))) {
+    snprintf(err, err_len, "Diese Umwandlung gibt es für einen PS5-Dump nicht.");
+    return 400;
+  }
+  if(!image_drive_ok(target)) {
+    snprintf(err, err_len, "Das Abbild darf nur auf ein USB- oder M.2-Laufwerk, nie in den Speicher der Konsole.");
+    return 400;
+  }
+  ps5tm_dumpsrc_t *src = calloc(1, sizeof(*src));
+  cv_args_t *a = calloc(1, sizeof(*a));
+  if(!src || !a) { free(src); free(a); snprintf(err, err_len, "Kein Speicher."); return 500; }
+  int http = ps5tm_dumplib_source_ps5(mount, dir, folder, src, err, err_len);
+  if(http != 200) { free(src); free(a); return http; }
+  int can_exfat, can_ffpfsc, can_ffpkg;
+  ops_for(src->base, &can_exfat, &can_ffpfsc, &can_ffpkg);
+  if(!can_exfat) { free(src); free(a); snprintf(err, err_len, "Dieser Dump lässt sich nicht als Abbild bauen."); return 409; }
+
+  char label[40], dd[128], stem[200];
+  dimg_stem(src->title, src->title_id, stem, sizeof(stem));
+  if(drive_base(target, a->base, sizeof(a->base), label, sizeof(label)) != 0 || strncmp(a->base, "/mnt/", 5) ||
+     dest_dir(a->base, "homebrew", dd, sizeof(dd)) != 0 ||
+     snprintf(a->target, sizeof(a->target), "%s/%s%s", dd, stem,
+              !strcmp(op, "exfat") ? ".exfat" : !strcmp(op, "ffpkg") ? ".ffpkg" : ".ffpfsc") >= (int)sizeof(a->target)) {
+    free(src); free(a);
+    snprintf(err, err_len, "Dieses Ziel gibt es nicht.");
+    return 400;
+  }
+  if(target_state(a->target) == 1) {
+    snprintf(err, err_len, "Am Ziel gibt es %s schon.", a->target);
+    free(src); free(a);
+    return 409;
+  }
+  if(other_job_active(1, err, err_len)) { free(src); free(a); return 409; }
+  pthread_mutex_lock(&g_lock);
+  int busy = active_locked();
+  pthread_mutex_unlock(&g_lock);
+  if(busy) { snprintf(err, err_len, "Es läuft schon eine Konvertierung."); free(src); free(a); return 409; }
+
+  a->folder = 1;
+  snprintf(a->title_id, sizeof(a->title_id), "%s", src->title_id);
+  snprintf(a->op, sizeof(a->op), "%s", op);
+  snprintf(a->source, sizeof(a->source), "%s", src->base);
+  snprintf(a->inner, sizeof(a->inner), "%s.exfat", src->title_id);
+  char source[256], name[128];
+  snprintf(source, sizeof(source), "%s", src->base);
+  snprintf(name, sizeof(name), "%s", src->title);
+  char title_id[12];
+  snprintf(title_id, sizeof(title_id), "%s", src->title_id);
+  free(src);
+  return cv_launch(a, title_id, name, source, op, "homebrew", label, err, err_len);
+}
+
 
 cJSON *
 ps5tm_gameconvert_status(void) {
@@ -1128,6 +1526,7 @@ ps5tm_gameconvert_status(void) {
   if(j.state == CV_IDLE) return root;
   cJSON_AddStringToObject(root, "title_id", j.title_id);
   cJSON_AddStringToObject(root, "name", j.name);
+  cJSON_AddBoolToObject  (root, "dump_image", j.dump);
   cJSON_AddStringToObject(root, "op", j.op);
   cJSON_AddStringToObject(root, "mode", j.mode);
   cJSON_AddStringToObject(root, "source", j.source);

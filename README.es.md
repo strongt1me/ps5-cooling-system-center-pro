@@ -27,7 +27,7 @@ Un payload homebrew (ELF) que lee los sensores de temperatura de la PS5, regula 
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Refrigeración</h3>
-      Regulación silenciosa del ventilador hacia una temperatura objetivo (60–91 °C), modos, perfiles por juego, modo nocturno con objetivo más silencioso, autotest del ventilador, límite de seguridad en el hardware.
+      Regulación silenciosa del ventilador hacia una temperatura objetivo (50–91 °C), modos, perfiles por juego, modo nocturno con objetivo más silencioso, autotest del ventilador, límite de seguridad en el hardware.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Mediciones</h3>
@@ -121,7 +121,7 @@ Un payload homebrew (ELF) que lee los sensores de temperatura de la PS5, regula 
 <summary><b>Todas las funciones en detalle</b></summary>
 
 **Refrigeración**
-- Mantiene una temperatura objetivo (66 °C por defecto, ajustable 60–91 °C) con media móvil, zona muerta y tendencia, y cambia la velocidad solo en pasos pequeños.
+- Mantiene una temperatura objetivo (66 °C por defecto, ajustable 50–91 °C) con media móvil, zona muerta y tendencia, y cambia la velocidad solo en pasos pequeños.
 - Modos silencioso, equilibrado y fresco, selección rápida y reglas por juego.
 - Por encima de la temperatura de seguridad (78 °C por defecto) solo decide el hardware; si la app no está en marcha, la consola regula sola.
 - Modo nocturno: entre dos horas se aplica un objetivo más silencioso; la hora es la del dispositivo en el que está abierta la página.

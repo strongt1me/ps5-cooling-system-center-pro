@@ -8,6 +8,13 @@
 
 typedef struct exfat_image exfat_image_t;
 
+#define EXFAT_MAX_ROOTS 4
+
+/* The same for several source folders laid over each other (a game, then its update, then a few files of our own): a file
+   that is in more than one is read from the last, a folder in more than one is merged. Nothing is copied. */
+exfat_image_t *exfat_image_plan_roots(const char *const *roots, unsigned nroots, uint32_t serial,
+                                      char *err, size_t err_len);
+
 /* Scans source_root and lays the whole volume out; nothing is written yet.
    NULL with a reason in err on failure — also for two names in one directory
    that exFAT cannot tell apart (equal after up-casing). */

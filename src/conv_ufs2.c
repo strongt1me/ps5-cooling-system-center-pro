@@ -283,9 +283,12 @@ ignored_name(const char *n) {
   return 0;
 }
 
+/* By name; the same name twice (in two source roots) next to each other. */
 static int
 ent_cmp(const void *a, const void *b) {
-  return strcasecmp(((const scan_ent_t *)a)->name, ((const scan_ent_t *)b)->name);
+  const scan_ent_t *x = a, *y = b;
+  int c = strcasecmp(x->name, y->name);
+  return c ? c : strcmp(x->name, y->name);
 }
 
 static void
@@ -294,17 +297,62 @@ free_scan_ents(scan_ent_t *ents, unsigned n) {
   free(ents);
 }
 
-/* Lists path's own children (no recursion), filtered and case-insensitively
-   sorted — same idiom as conv_exfat.c's scan_dir. UFS2 itself doesn't care
-   about directory-entry order (confirmed from UFS2Tool's own writer, which
-   uses raw unsorted OS enumeration); sorting here only makes a conversion's
-   output reproducible. */
+/* Several source folders laid over each other (a game, the update on top of it, a few files of our own): the writer sees them as
+   one tree below roots[0]. A folder in more than one root is merged, a file in more than one is read from the last. Set by the
+   *_roots entry points for the duration of one call; the writer is single-threaded and so is every caller. */
+static _Thread_local char     g_roots[UFS2_MAX_ROOTS][1024];
+static _Thread_local unsigned g_nroots;
+
+/* The part of a path below root 0, or NULL when it is not below it. */
+static const char *
+rel_of(const char *vpath) {
+  size_t l = strlen(g_roots[0]);
+  if(strncmp(vpath, g_roots[0], l) != 0) return NULL;
+  if(vpath[l] == '/') return vpath + l + 1;
+  return vpath[l] == 0 ? vpath + l : NULL;
+}
+
 static int
-scan_and_sort_dir(const char *path, scan_ent_t **out_ents, unsigned *out_n,
-                  char *err, size_t err_len) {
+root_join(unsigned r, const char *rel, char *out, size_t out_len) {
+  int n = rel[0] ? snprintf(out, out_len, "%s/%s", g_roots[r], rel) : snprintf(out, out_len, "%s", g_roots[r]);
+  return (n > 0 && (size_t)n < out_len) ? 0 : -1;
+}
+
+/* The file a path of the merged tree stands for: in the last root that has it as a file. */
+static const char *
+real_file(const char *vpath, char *buf, size_t buf_len) {
+  if(g_nroots < 2) return vpath;
+  const char *rel = rel_of(vpath);
+  if(!rel) return vpath;
+  for(unsigned r = g_nroots; r-- > 0;) {
+    struct stat st;
+    if(root_join(r, rel, buf, buf_len) == 0 && lstat(buf, &st) == 0 && S_ISREG(st.st_mode)) return buf;
+  }
+  return vpath;
+}
+
+static int
+set_roots(const char *const *roots, unsigned n, char *err, size_t err_len) {
+  if(!roots || n < 1 || n > UFS2_MAX_ROOTS) { snprintf(err, err_len, "Falsche Zahl von Quellordnern."); return -1; }
+  for(unsigned r = 0; r < n; r++) {
+    if(strlen(roots[r]) >= sizeof(g_roots[r])) { snprintf(err, err_len, "Ein Pfad ist zu lang."); return -1; }
+    snprintf(g_roots[r], sizeof(g_roots[r]), "%s", roots[r]);
+    size_t len = strlen(g_roots[r]);
+    while(len > 1 && g_roots[r][len - 1] == '/') g_roots[r][--len] = 0;
+  }
+  g_nroots = n;
+  return 0;
+}
+
+/* Appends path's own children (no recursion) to the list, filtered; the caller sorts. UFS2 itself doesn't care
+   about directory-entry order (confirmed from UFS2Tool's own writer, which uses raw unsorted OS enumeration);
+   sorting only makes a conversion's output reproducible. On an error the list holds what was read so far. */
+static int
+scan_collect(const char *path, scan_ent_t **out_ents, unsigned *out_n, unsigned *out_cap,
+             char *err, size_t err_len) {
   DIR *d = opendir(path);
   if(!d) { snprintf(err, err_len, "%s ist nicht lesbar: %s", path, ps5tm_io_strerror(errno)); return -1; }
-  scan_ent_t *ents = NULL; unsigned n = 0, cap = 0;
+  scan_ent_t *ents = *out_ents; unsigned n = *out_n, cap = *out_cap;
   int rc = 0, rd_errno = 0;
   struct dirent *e;
   char child[PATH_MAX];
@@ -341,8 +389,56 @@ scan_and_sort_dir(const char *path, scan_ent_t **out_ents, unsigned *out_n,
     snprintf(err, err_len, "Der Ordner %s ließ sich nicht vollständig lesen: %s", path, ps5tm_io_strerror(rd_errno));
     rc = -1;
   }
+  *out_ents = ents; *out_n = n; *out_cap = cap;
+  return rc;
+}
+
+/* Lists path's own children, filtered and case-insensitively sorted — same idiom as conv_exfat.c's scan_dir. With several
+   source roots the folder is listed in each that has it and the lists are merged. */
+static int
+scan_and_sort_dir(const char *path, scan_ent_t **out_ents, unsigned *out_n,
+                  char *err, size_t err_len) {
+  scan_ent_t *ents = NULL; unsigned n = 0, cap = 0;
+  const char *rel = g_nroots > 1 ? rel_of(path) : NULL;
+  int rc = 0;
+  if(!rel) {
+    rc = scan_collect(path, &ents, &n, &cap, err, err_len);
+  } else {
+    unsigned found = 0;
+    for(unsigned r = 0; r < g_nroots && !rc; r++) {
+      char dp[PATH_MAX];
+      struct stat st;
+      if(root_join(r, rel, dp, sizeof(dp)) != 0) { snprintf(err, err_len, "Ein Pfad ist zu lang."); rc = -1; break; }
+      if(lstat(dp, &st) != 0) {
+        if(errno == ENOENT) continue;                    /* this root does not have the folder */
+        snprintf(err, err_len, "%s: %s", dp, ps5tm_io_strerror(errno)); rc = -1; break;
+      }
+      if(!S_ISDIR(st.st_mode)) continue;
+      found++;
+      rc = scan_collect(dp, &ents, &n, &cap, err, err_len);
+    }
+    if(!rc && !found) { snprintf(err, err_len, "%s ist nicht lesbar: %s", path, ps5tm_io_strerror(ENOENT)); rc = -1; }
+  }
   if(rc) { free_scan_ents(ents, n); return -1; }
   if(n) qsort(ents, n, sizeof(*ents), ent_cmp);
+  if(g_nroots > 1 && n > 1) {                            /* the same name in several roots: one entry */
+    unsigned o = 0;
+    for(unsigned i = 0; i < n; i++) {
+      if(o && !strcmp(ents[o - 1].name, ents[i].name)) {
+        if(ents[o - 1].is_dir != ents[i].is_dir) {
+          snprintf(err, err_len, "„%s“ ist in einem Teil ein Ordner und im anderen eine Datei (%s).", ents[i].name, path);
+          for(unsigned k = 0; k < o; k++) free(ents[k].name);
+          for(unsigned k = i; k < n; k++) free(ents[k].name);
+          free(ents);
+          return -1;
+        }
+        free(ents[i].name);
+      } else {
+        ents[o++] = ents[i];
+      }
+    }
+    n = o;
+  }
   *out_ents = ents; *out_n = n;
   return 0;
 }
@@ -405,7 +501,8 @@ calc_dir_sizes_recurse(const char *path, dirsize_acc_t *acc, int depth,
       rc = calc_dir_sizes_recurse(child, acc, depth + 1, err, err_len);
     } else {
       struct stat st;
-      if(stat(child, &st) != 0) { snprintf(err, err_len, "%s: %s", child, ps5tm_io_strerror(errno)); rc = -1; break; }
+      char rb[PATH_MAX];
+      if(stat(real_file(child, rb, sizeof(rb)), &st) != 0) { snprintf(err, err_len, "%s: %s", child, ps5tm_io_strerror(errno)); rc = -1; break; }
       uint64_t len = (uint64_t)st.st_size;
       /* The limit is checked here, with the whole tree still untouched: it
          used to be met only when the copy reached the file, after everything
@@ -1174,7 +1271,9 @@ write_double_indirect_block(file_wr_t *fw, uint64_t count) {
 static int
 write_file_entry(populate_ctx_t *pc, const char *path, uint32_t this_inode) {
   struct stat st;
-  if(stat(path, &st) != 0) { snprintf(pc->err, pc->err_len, "%s: %s", path, ps5tm_io_strerror(errno)); return -1; }
+  char rb[PATH_MAX];
+  const char *rp = real_file(path, rb, sizeof(rb));
+  if(stat(rp, &st) != 0) { snprintf(pc->err, pc->err_len, "%s: %s", path, ps5tm_io_strerror(errno)); return -1; }
   uint64_t size = (uint64_t)st.st_size;
   if(size > UFS2_MAX_FILE_BYTES) {
     snprintf(pc->err, pc->err_len, "Eine Datei ist zu groß für ein ffpkg-Abbild (%llu Bytes, höchstens %llu): %s",
@@ -1189,7 +1288,7 @@ write_file_entry(populate_ctx_t *pc, const char *path, uint32_t this_inode) {
   uint32_t crc = 0;                  /* of the data as it is read, in order */
 
   if(size > 0) {
-    int src = open(path, O_RDONLY);
+    int src = open(rp, O_RDONLY);
     if(src < 0) { snprintf(pc->err, pc->err_len, "%s: %s", path, ps5tm_io_strerror(errno)); return -1; }
     uint64_t blocks_needed = ceil_div(size, BLOCK_SIZE);
 
@@ -1626,6 +1725,24 @@ ufs2_plan_size(const char *source_root, uint64_t *image_size, char *err, size_t 
   if(plan_image(source_root, &plan, err, err_len) != 0) return -1;
   *image_size = plan.total_size;
   return 0;
+}
+
+int
+ufs2_plan_size_roots(const char *const *roots, unsigned nroots, uint64_t *image_size, char *err, size_t err_len) {
+  if(set_roots(roots, nroots, err, err_len) != 0) return -1;
+  int rc = ufs2_plan_size(g_roots[0], image_size, err, err_len);
+  g_nroots = 0;
+  return rc;
+}
+
+int
+ufs2_write_tree_roots(int fd, const char *const *roots, unsigned nroots, const int *cancel,
+                      void (*progress)(void *ctx, uint64_t done_bytes), void *progress_ctx,
+                      uint64_t *image_size, ufs2_sums_t **sums, char *err, size_t err_len) {
+  if(set_roots(roots, nroots, err, err_len) != 0) return -1;
+  int rc = ufs2_write_tree(fd, g_roots[0], cancel, progress, progress_ctx, image_size, sums, err, err_len);
+  g_nroots = 0;
+  return rc;
 }
 
 int

@@ -178,7 +178,7 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 Konfiguration liegt unter `/data/PS5-Cooling-Center/config.json`.
 
 Bereiche, die `GET /api/v1/config` meldet (seit 07.10.2026; die Werte setzt die App, nicht der Client): `target_min_c` /
-`target_max_c` (Zieltemperatur der Automatik, 60–91 °C), `threshold_min_c` / `threshold_max_c` (Lüfterschwelle, 45–91 °C: der
+`target_max_c` (Zieltemperatur der Automatik, 50–91 °C), `threshold_min_c` / `threshold_max_c` (Lüfterschwelle, 45–91 °C: der
 feste Wert der Betriebsart „Beobachten“ und das, was die Regelung einstellen darf) und `safety_min_c` / `safety_max_c`
 (Notfallgrenze, 72–95 °C; sie liegt immer mindestens 4 °C über dem Ziel und wird beim Speichern dorthin angehoben). Werte
 außerhalb werden auf den Bereich begrenzt, nicht abgelehnt.
@@ -199,10 +199,10 @@ Neue Konfigurationsfelder:
    der Einstellungen.
 - Nachtmodus (seit 17.10.2026, Teil von Export und Import): `night_enabled` (0/1, ab Werk 0), `night_start_min` und
    `night_end_min` (Minuten seit Mitternacht der Ortszeit, 0-1439, ab Werk 1380 und 420; das Fenster darf über Mitternacht
-   gehen, gleiche Werte heißen „nie“), `night_target_c` (60-91, ab Werk 75) und `night_tz_offset_min` (Minuten östlich von UTC,
+   gehen, gleiche Werte heißen „nie“), `night_target_c` (50-91, ab Werk 75) und `night_tz_offset_min` (Minuten östlich von UTC,
    −720 bis 840): Die Konsole kennt keine Zeitzone, die Seite schickt den Versatz ihres Geräts beim Speichern mit. Im Fenster gilt
    statt `target_temp_c` das Nachtziel, außer eine Spielregel ist in Kraft. Wie bei allen Feldern werden Werte außerhalb
-   des Bereichs begrenzt (Ziel auf 60–91, Versatz auf −720 bis 840, Minuten auf 0–1439), nicht abgelehnt; die Seite prüft vorher
+   des Bereichs begrenzt (Ziel auf 50–91, Versatz auf −720 bis 840, Minuten auf 0–1439), nicht abgelehnt; die Seite prüft vorher
    und zeigt eine Fehlermeldung.
 
 Probe-Maske (`probe_mask`) Bits:

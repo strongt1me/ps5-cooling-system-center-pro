@@ -27,7 +27,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Cooling</h3>
-      Quiet fan control towards a target temperature (60–91 °C), modes, per-game profiles, a quieter target at night, a fan self-test, a safety limit left to the hardware.
+      Quiet fan control towards a target temperature (50–91 °C), modes, per-game profiles, a quieter target at night, a fan self-test, a safety limit left to the hardware.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Readings</h3>
@@ -121,7 +121,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 <summary><b>All features in detail</b></summary>
 
 **Cooling**
-- Holds a target temperature (default 66 °C, adjustable 60–91 °C) with a moving average, dead band and trend, and changes the fan speed only in small steps.
+- Holds a target temperature (default 66 °C, adjustable 50–91 °C) with a moving average, dead band and trend, and changes the fan speed only in small steps.
 - Quiet, balanced and cool modes, quick picks and per-game rules.
 - Above the safety temperature (default 78 °C) only the hardware decides; when the app is not running, the console regulates on its own.
 - Night mode: a quieter target between two clock times; the time is that of the device the page is open on.

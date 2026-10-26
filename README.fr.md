@@ -27,7 +27,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Refroidissement</h3>
-      Régulation silencieuse vers une température cible (60–91 °C), modes, profils par jeu, mode nuit avec une cible plus silencieuse, auto-test du ventilateur, limite de sécurité laissée au matériel.
+      Régulation silencieuse vers une température cible (50–91 °C), modes, profils par jeu, mode nuit avec une cible plus silencieuse, auto-test du ventilateur, limite de sécurité laissée au matériel.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Mesures</h3>
@@ -121,7 +121,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 <summary><b>Toutes les fonctions en détail</b></summary>
 
 **Refroidissement**
-- Maintient une température cible (66 °C par défaut, réglable de 60 à 91 °C) avec moyenne glissante, zone morte et tendance, et ne change la vitesse que par petits pas.
+- Maintient une température cible (66 °C par défaut, réglable de 50 à 91 °C) avec moyenne glissante, zone morte et tendance, et ne change la vitesse que par petits pas.
 - Modes silencieux, équilibré et frais, choix rapides et règles par jeu.
 - Au-delà de la température de sécurité (78 °C par défaut) seul le matériel décide ; quand l'appli ne tourne pas, la console régule seule.
 - Mode nuit : entre deux heures, une cible plus silencieuse s'applique ; l'heure est celle de l'appareil sur lequel la page est ouverte.

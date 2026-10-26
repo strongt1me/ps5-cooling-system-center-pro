@@ -1169,7 +1169,7 @@ ps5tm_gamecopy_busy(void) {
   pthread_mutex_lock(&g_lock);
   int busy = job_active_locked();
   pthread_mutex_unlock(&g_lock);
-  return busy;
+  return busy || ps5tm_dump_busy() || ps5tm_dumpq_active();   /* a dump (dump_job.c) and a running dump queue are file jobs too: every other one asks this */
 }
 
 /* The reason in err when another file job — a conversion, or a
@@ -1218,6 +1218,19 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
     return 1;
   }
   return 0;
+}
+
+/* For the dump (dump_job.c): the reason in err when a copy or any other file job is running; 0 when none is. */
+int
+ps5tm_filejobs_busy_for_dump(char *err, size_t err_len) {
+  pthread_mutex_lock(&g_lock);
+  int own = job_active_locked();
+  pthread_mutex_unlock(&g_lock);
+  if(own) {
+    snprintf(err, err_len, "Es läuft gerade eine Kopie. Kopieren und Dumpen laufen nicht gleichzeitig.");
+    return 1;
+  }
+  return other_job_active(1, err, err_len);
 }
 
 int

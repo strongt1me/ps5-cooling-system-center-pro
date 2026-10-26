@@ -535,6 +535,94 @@
               <div id="disc-now"></div>
             </article>
             <div class="upd-job" id="disc-job" hidden></div>
+            <article class="card" id="dg-card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-image"/></svg></span><div class="ck-text"><h2>Disc-Spiele dumpen</h2><p class="sub" id="dg-sub">wird gelesen …</p></div></div>
+              </div>
+              <p class="muted upd-intro">Zeigt die PS5- und PS4-Spiele auf der Konsole, die von Disc installiert sind. Zum Dumpen muss das Spiel laufen und die Disc im Laufwerk liegen: „Starten“ drücken, warten, bis es geladen ist, dann „Dumpen“. Das Spiel läuft beim Dumpen weiter.</p>
+              <div id="dg-list"></div>
+            </article>
+            <article class="card" id="dq-card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-list"/></svg></span><div class="ck-text"><h2>Dump-Warteschlange</h2><p class="sub" id="dq-sub">leer</p></div></div>
+              </div>
+              <p class="muted upd-intro">Dumpt mehrere Spiele nacheinander. Jedes wird gestartet (ein laufendes Spiel wird dabei beendet), bekommt die Ladezeit und wird dann gedumpt. Liegt die Disc eines Disc-Spiels nicht im Laufwerk, wartet die Warteschlange so lange, wie es dauert, und erinnert die Konsole alle zwei Minuten daran. Sie läuft auf der Konsole weiter, auch wenn diese Seite geschlossen wird.</p>
+              <div id="dq-notice"></div>
+              <div id="dq-list"></div>
+              <div id="dq-add"></div>
+              <div class="p4m-set">
+                <label class="p4m-field"><span>Vorhandene Dumps</span>
+                  <select id="dq-replace">
+                    <option value="0">Überspringen</option>
+                    <option value="1">Ersetzen</option>
+                  </select></label>
+                <label class="p4m-field"><span>Ladezeit nach dem Start (Sekunden, 5–600)</span>
+                  <input type="number" id="dq-delay" min="5" max="600" step="1"></label>
+                <p class="muted upd-hint">Die Ladezeit gibt dem Spiel Zeit, ganz zu laden, bevor der Dump beginnt. „Ersetzen“ löscht einen vorhandenen, fertigen Dump des Spiels am Ziel und dumpt neu.</p>
+              </div>
+              <div class="cp-actions" id="dq-actions"></div>
+            </article>
+            <article class="card" id="dm-card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-image"/></svg></span><div class="ck-text"><h2>Dump</h2><p class="sub" id="dm-sub">wird gelesen …</p></div></div>
+              </div>
+              <p class="muted upd-intro">Kopiert die Dateien des gewählten PS5- oder PS4-Spiels samt Metadaten und eingehängten DLC auf ein Laufwerk. Auf Wunsch werden die ausführbaren Dateien entschlüsselt (siehe Einstellungen). Nur für Sicherungen eigener Spiele.</p>
+              <div class="upd-job" id="dm-job" hidden></div>
+              <div id="dm-title"></div>
+            </article>
+            <article class="card">
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gear"/></svg></span><div class="ck-text"><h2>Einstellungen</h2><p class="sub">gelten für den nächsten Dump</p></div></div></div>
+              <div class="p4m-set">
+                <label class="p4m-field"><span>Ziel</span>
+                  <select id="dm-target"></select></label>
+                <label class="p4m-field"><span>Ordner auf dem Ziel</span>
+                  <input type="text" id="dm-subdir" maxlength="95" autocomplete="off" spellcheck="false"></label>
+                <p class="muted upd-hint">Höchstens drei Ebenen; erlaubt sind Buchstaben, Ziffern, Punkt, Strich, Unterstrich und Leerzeichen. Auf dem Konsolenspeicher bleiben 10 GB frei.</p>
+                <label class="xswitch" for="dm-titles"><span>Spieltitel im Ordnernamen</span>
+                  <span class="switch"><input type="checkbox" id="dm-titles"><i></i></span></label>
+                <label class="p4m-field"><span>PS4-Aufteilung</span>
+                  <select id="dm-split">
+                    <option value="3">App und Patch getrennt</option>
+                    <option value="1">Nur App</option>
+                    <option value="2">Nur Patch</option>
+                    <option value="0">Nicht aufteilen</option>
+                  </select></label>
+                <p class="muted upd-hint">Gilt für PS4-Spiele: getrennt gibt es die Ordner <code>CUSA…-app0</code> und <code>CUSA…-patch0</code>, ungeteilt einen Ordner, in dem der Patch über der App liegt.</p>
+                <label class="xswitch" for="dm-dlc"><span>DLC mitdumpen</span>
+                  <span class="switch"><input type="checkbox" id="dm-dlc"><i></i></span></label>
+                <label class="xswitch" for="dm-decrypt"><span>Ausführbare Dateien entschlüsseln</span>
+                  <span class="switch"><input type="checkbox" id="dm-decrypt"><i></i></span></label>
+                <p class="muted upd-hint" id="dm-decrypt-hint">Schreibt kurz in den Kernel der Konsole. Noch nicht an der Konsole erprobt. Nach dem Kopieren werden die Programmdateien (eboot.bin, .self, .prx, .sprx, .elf) im Dump durch ihre entschlüsselte Fassung ersetzt; Dateien, die sich nicht entschlüsseln lassen, bleiben, wie die Konsole sie zeigt. Dann gibt es keine Prüfsummen-Datei.</p>
+                <label class="xswitch" for="dm-fself"><span>Als FSELF neu signieren</span>
+                  <span class="switch"><input type="checkbox" id="dm-fself"><i></i></span></label>
+                <p class="muted upd-hint">Nur mit „Ausführbare Dateien entschlüsseln“. Die Programmdateien werden zu FSELF-Dateien; die einfachen ELF-Dateien liegen zusätzlich im Ordner „decrypted“ des Dumps.</p>
+                <label class="xswitch" for="dm-bp"><span>SDK-Versionen herunterpatchen (Backport)</span>
+                  <span class="switch"><input type="checkbox" id="dm-bp"><i></i></span></label>
+                <p class="muted upd-hint cp-why">Fortgeschritten, kann den Dump kaputt machen. Nur mit „Ausführbare Dateien entschlüsseln“. Ändert die Dateien im Dump, nicht auf der Konsole. Die unveränderten Dateien liegen zusätzlich im Ordner „decrypted“ des Dumps. Mit „Als FSELF neu signieren“ bleiben die Programmdateien unangetastet (FSELF-Dateien werden übersprungen), nur param.sfo und param.json werden angepasst.</p>
+                <label class="p4m-field"><span>PS4-SDK-Ziel (1–6)</span>
+                  <input type="number" id="dm-bp4" min="1" max="6" step="1"></label>
+                <label class="p4m-field"><span>PS5-SDK-Ziel (1–10)</span>
+                  <input type="number" id="dm-bp5" min="1" max="10" step="1"></label>
+                <p class="muted upd-hint">PS4-Spiele: Stufe 1 = SDK 5.05, 2 = 6.00, 3 = 7.00, 4 = 9.00 (Vorgabe), 5 = 10.00, 6 = 11.00. PS5-Spiele: Stufe 1 bis 10 steht für SDK 1.00 bis 10.00 (Vorgabe: 1). Werte außerhalb des Bereichs werden in ihn gezogen.</p>
+                <label class="xswitch" for="dm-verify"><span>Jede Datei nach dem Schreiben zurücklesen und prüfen</span>
+                  <span class="switch"><input type="checkbox" id="dm-verify"><i></i></span></label>
+                <p class="muted upd-hint">Das Zurücklesen dauert etwa so lange wie das Dumpen selbst und legt neben dem Dump eine Datei mit SHA-256-Summen an.</p>
+              </div>
+            </article>
+            <article class="card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-image"/></svg></span><div class="ck-text"><h2>Dumps aus dem Disc-Bereich</h2><p class="sub" id="dp-sub">wird gelesen …</p></div></div>
+                <div class="row-gap">
+                  <label class="xswitch" for="dp-measure" title="Zählt bei jeder Suche die Größe aller Dateien eines Dumps nach. Bei großen Dumps dauert das einige Minuten.">
+                    <span>Größe nachmessen</span>
+                    <span class="switch"><input type="checkbox" id="dp-measure"><i></i></span>
+                  </label>
+                  <button type="button" class="btn ghost" id="dp-scan">Aktualisieren</button>
+                </div>
+              </div>
+              <p class="muted upd-intro">Zeigt nur die Dumps, die in diesem Reiter entstanden sind, auf USB-Laufwerken, M.2-Laufwerken und im Ordner <code>homebrew</code> des Konsolenspeichers. Dumps anderer Herkunft erscheinen hier nicht. Bei einem PS4-Dump baut „Als Abbild bauen“ ein Abbild, das ShadowMountPlus einhängt.</p>
+              <div id="dp-list"></div>
+            </article>
             <article class="card">
               <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-image"/></svg></span><div class="ck-text"><h2>Abbilder</h2><p class="sub" id="disc-dir-sub"></p></div></div></div>
               <div id="disc-dumps"></div>

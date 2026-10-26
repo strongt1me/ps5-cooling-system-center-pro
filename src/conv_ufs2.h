@@ -39,6 +39,15 @@ int ufs2_write_tree(int fd, const char *source_root, const int *cancel,
    0 with the size in *image_size; -1 with a reason in err. */
 int ufs2_plan_size(const char *source_root, uint64_t *image_size, char *err, size_t err_len);
 
+#define UFS2_MAX_ROOTS 4
+
+/* The same two over several source folders laid over each other (a game, then its update, then a few files of our own): a
+   folder in more than one is merged, a file in more than one is read from the last. Nothing is copied. */
+int ufs2_plan_size_roots(const char *const *roots, unsigned nroots, uint64_t *image_size, char *err, size_t err_len);
+int ufs2_write_tree_roots(int fd, const char *const *roots, unsigned nroots, const int *cancel,
+                          void (*progress)(void *ctx, uint64_t done_bytes), void *progress_ctx,
+                          uint64_t *image_size, ufs2_sums_t **sums, char *err, size_t err_len);
+
 /* How many bytes of file data ufs2_verify_tree() reads when it has sums. */
 uint64_t ufs2_sums_bytes(const ufs2_sums_t *sums);
 void     ufs2_sums_free(ufs2_sums_t *sums);

@@ -1504,6 +1504,35 @@ platform_name(int p) {
   return p == 0 ? "PS5" : p == 1 ? "PS4" : "";
 }
 
+/* Disc, install state, DLC and dumps of one title (dump_lib.c), as fields of its entry in the games list. */
+static void
+add_marks(cJSON *e, const char *title_id) {
+  ps5tm_title_marks_t m;
+  ps5tm_title_marks(title_id, &m);
+  if(m.disc) cJSON_AddStringToObject(e, "disc", m.disc == 2 ? "in" : "out");
+  if(m.install_pct >= 0 && m.install_pct < 100) {
+    cJSON *o = cJSON_AddObjectToObject(e, "install");
+    cJSON_AddNumberToObject(o, "pct", m.install_pct);
+    cJSON_AddBoolToObject(o, "pending", m.install_pending);
+    if(m.pg_chunks) {
+      cJSON_AddNumberToObject(o, "chunks", m.pg_chunks);
+      cJSON_AddNumberToObject(o, "wanted", m.pg_wanted);
+      cJSON_AddNumberToObject(o, "here", m.pg_here);
+    }
+  }
+  if(m.dlc_count) {
+    cJSON *a = cJSON_AddArrayToObject(e, "dlc");
+    for(unsigned i = 0; i < m.dlc_count; i++) {
+      cJSON *d = cJSON_CreateObject();
+      cJSON_AddStringToObject(d, "label", m.dlc[i]);
+      cJSON_AddNumberToObject(d, "bytes", (double)m.dlc_bytes[i]);
+      cJSON_AddItemToArray(a, d);
+    }
+  }
+  if(m.dump) cJSON_AddStringToObject(e, "dump", m.dump == 1 ? "done" : "unfinished");
+  if(!strncmp(title_id, "PPSA", 4) || !strncmp(title_id, "CUSA", 4)) cJSON_AddBoolToObject(e, "dump_mounted", ps5tm_dump_mounted(title_id));
+}
+
 struct cJSON *
 ps5tm_library_json(void) {
   ensure_fresh(1);
@@ -1531,9 +1560,13 @@ ps5tm_library_json(void) {
   cJSON_AddStringToObject(root, "console_fw", fw);
 
   cJSON *arr = cJSON_AddArrayToObject(root, "games");
+  /* the marks (disc, install state, DLC, dumps) read files: they are added after the lock is let go */
+  cJSON **mark_obj = calloc((size_t)(g_count ? g_count : 1), sizeof(*mark_obj));
+  char (*mark_id)[12] = calloc((size_t)(g_count ? g_count : 1), sizeof(*mark_id));
   for(int i = 0; i < g_count; i++) {
     const lib_game_t *g = &g_games[i];
     cJSON *e = cJSON_CreateObject();
+    if(mark_obj && mark_id) { mark_obj[i] = e; snprintf(mark_id[i], 12, "%s", g->title_id); }
     cJSON_AddStringToObject(e, "title_id", g->title_id);
     cJSON_AddStringToObject(e, "name", g->name[0] ? g->name : g->title_id);
     if(g->content_id[0]) cJSON_AddStringToObject(e, "content_id", g->content_id);
@@ -1585,9 +1618,10 @@ ps5tm_library_json(void) {
     if(g->deeplink[0]) cJSON_AddStringToObject(e, "launch_url", g->deeplink);
 
     /* Where it lies and in what form (detect_storage), and what may be done
-       with it: a folder or a known image file the app copies itself
-       (gamecopy.c); moving and unpacking only through ShadowMountPlus
-       (gamemove.c), for titles it manages. */
+       with it: a folder (an installed package's own folder counts, since
+       25.10.2026) or a known image file the app copies itself (gamecopy.c);
+       moving and unpacking only through ShadowMountPlus (gamemove.c), for
+       titles it manages. */
     if(g->format[0])    cJSON_AddStringToObject(e, "format", g->format);
     if(g->real_path[0]) cJSON_AddStringToObject(e, "path", g->real_path);
     int is_file = strcmp(g->format, "folder") && strcmp(g->format, "pkg") &&
@@ -1595,11 +1629,16 @@ ps5tm_library_json(void) {
     cJSON_AddBoolToObject(e, "smp", g->smp);
     if(g->smp) cJSON_AddBoolToObject(e, "mounted", g->smp_mounted);
     cJSON_AddBoolToObject(e, "can_copy", g->real_path[0] == '/' &&
-                          (!strcmp(g->format, "folder") || is_file));
+                          (!strcmp(g->format, "folder") || !strcmp(g->format, "pkg") || is_file));
     cJSON_AddBoolToObject(e, "can_move", g->smp_can_move && strcmp(g->format, "pkg"));
     cJSON_AddBoolToObject(e, "can_unpack", g->smp_can_unpack && is_file);
     /* Converting is the app's own (gameconvert.c): a folder becomes .exfat
-       or .ffpfsc, an uncompressed image .ffpfsc. */
+       or .ffpfsc, an uncompressed image .ffpfsc. An installed package's own
+       folder (format "pkg") is deliberately left out here: it holds app.pkg
+       and the installer's own files, not the game's decrypted own files, so
+       gameconvert.c's ops_for() would find no sce_sys/param.json in it and
+       refuse anyway — excluded here too so the button reads disabled
+       instead of failing on click. */
     cJSON_AddBoolToObject(e, "can_convert", g->real_path[0] == '/' &&
                           (!strcmp(g->format, "folder") || !strcmp(g->format, "exfat") ||
                            !strcmp(g->format, "ffpkg") || !strcmp(g->format, "ffpfs")));
@@ -1609,7 +1648,11 @@ ps5tm_library_json(void) {
     cJSON_AddStringToObject(e, "cover", url);
     cJSON_AddItemToArray(arr, e);
   }
+  int nmarks = g_count;
   pthread_mutex_unlock(&g_lock);
+  for(int i = 0; mark_obj && mark_id && i < nmarks; i++) add_marks(mark_obj[i], mark_id[i]);
+  free(mark_obj);
+  free(mark_id);
   return root;
 }
 
@@ -1907,7 +1950,12 @@ ps5tm_library_launch_info(const char *title_id, char *name, size_t name_len,
 
 
 /* For copying: the name and the folder the title runs from, for a title on
-   the list only. The folder never comes from the request. */
+   the list only. The folder never comes from the request.
+   "pkg" is let through since 25.10.2026: an installed package's own folder (/user/app/<id> or the matching
+   extended-storage root) holds its app.pkg, in full, whether the game runs or not — unlike a disc game, which only
+   gets its real content once mounted. Copying it is a plain, honest file copy either way; converting it is a
+   different question, since it is not a folder of the game's own decrypted files — gameconvert.c's ops_for()
+   answers that one by itself (no sce_sys/param.json inside, so nothing offers to convert it). */
 int
 ps5tm_library_copy_info(const char *title_id, char *name, size_t name_len,
                         char *source, size_t source_len) {
@@ -1918,8 +1966,7 @@ ps5tm_library_copy_info(const char *title_id, char *name, size_t name_len,
   for(int i = 0; i < g_count; i++) {
     const lib_game_t *g = &g_games[i];
     if(strcmp(g->title_id, title_id)) continue;
-    if(g->real_path[0] == '/' && strcmp(g->format, "pkg") &&
-       strcmp(g->format, "image")) {
+    if(g->real_path[0] == '/' && strcmp(g->format, "image")) {
       snprintf(name, name_len, "%s", g->name[0] ? g->name : g->title_id);
       snprintf(source, source_len, "%s", g->real_path);
       rc = 0;

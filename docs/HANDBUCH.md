@@ -1170,7 +1170,7 @@ DashLaunch.
 
 | Parameter | Standard | Bedeutung |
 | --- | --- | --- |
-| `target_temp_c` | 66 °C | zu haltende Temperatur (60–91, bis 72 empfohlen) |
+| `target_temp_c` | 66 °C | zu haltende Temperatur (50–91, bis 72 empfohlen) |
 | `deadband_c` | 1 °C | innerhalb passiert nichts |
 | `control_interval_s` | 5 s | Messung bleibt bei 1 s |
 | `average_window_s` | 12 s | gleitender Mittelwert |
@@ -1312,7 +1312,7 @@ Beide Programme stellen am Ende **dieselbe Größe** ein: die Schwelle, die die 
 
 | | SMP | diese App |
 | --- | --- | --- |
-| Was | schreibt einen **festen Wert** (50–91 °C) als Schwelle | hält eine **Temperatur** (60–91 °C) und stellt die Schwelle dafür laufend nach |
+| Was | schreibt einen **festen Wert** (50–91 °C) als Schwelle | hält eine **Temperatur** (50–91 °C) und stellt die Schwelle dafür laufend nach |
 | Wann | einmal, wenn ein Spiel den Fokus bekommt; ab Werk `system` = schreibt nichts | Sekundentakt; mindestens alle 15 s neu gesetzt, sofort zurückgeholt, wenn die Firmware sie zurücksetzt |
 | Rückmeldung | keine: der Wert gilt, ganz gleich, wie warm es wird | liest Temperatur und Drehzahl zurück, Mittelwert, Trend, Totzone, Notfallgrenze |
 | Schutz nach oben | nur die Firmware der Konsole | zusätzlich die Notfallgrenze (Ziel + 4 °C, höchstens 95 °C) |

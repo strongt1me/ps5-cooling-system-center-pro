@@ -1612,6 +1612,51 @@ sw_start(const char *close_id, const char *close_name, const char *then_id,
   return 0;
 }
 
+/* The dump queue (dump_queue.c) starts the next game itself, on its worker thread: a game running meanwhile — the one dumped
+ * before — is closed first (the page asked the person at the queue's start), the shell is given time to let go (sw_wait_for_shell),
+ * then the launcher is asked as sw_thread does it. A title that already runs is never launched again (START_GUARD_MS). 0 when the
+ * title runs or was started; -1 with a sentence in err. */
+int
+ps5tm_library_switch(const char *id, char *err, size_t err_len) {
+  char name[128], link[96];
+  if(ps5tm_library_launch_info(id, name, sizeof(name), link, sizeof(link)) != 0) {
+    snprintf(err, err_len, "Dieses Spiel steht nicht in der Spieleliste oder hat keinen Startlink.");
+    return -1;
+  }
+  if(ps5tm_procmgr_title_running(id) == 1) return 0;
+  char rid[16] = "";
+  if(ps5tm_procmgr_game_title(0, rid, sizeof(rid)) == 0 && rid[0] && strcmp(rid, id)) {
+    int rc = ps5tm_procmgr_close_game(rid, 6000);
+    if(rc < 0) {
+      snprintf(err, err_len, "Das laufende Spiel ließ sich nicht beenden.");
+      return -1;
+    }
+    if(rc == 0) PS5TM_INFO("game_closed", "Beendet: %s (für die Dump-Warteschlange).", rid);
+    char waited[64] = "";
+    sw_wait_for_shell(rid, waited, sizeof(waited));
+  }
+  if(!claim_start(id)) return 0;
+  int lrc = -1, other = 0, anyway = 0, tries = 0;
+  while(tries < SW_TRIES) {
+    lrc = ps5tm_library_start(id);
+    tries++;
+    if(lrc >= 0) break;
+    if((anyway = launched_anyway(id, lrc)) != 0) break;
+    unsigned c = (unsigned)lrc;
+    if(c == 0xFFFFFFFFu || c == 0x80940033u) break;
+    if(c != 0x80940010u && c != 0x80020010u && ++other >= SW_OTHER_TRIES) break;
+    sw_pause(SW_RETRY_MS);
+  }
+  if(lrc >= 0 || anyway) {
+    remember_started(id);
+    PS5TM_INFO("library_started", "Gestartet: %s (%s) für die Dump-Warteschlange, %d. Startaufruf.", name, id, tries);
+    return 0;
+  }
+  release_start(id);
+  snprintf(err, err_len, "Die Konsole ließ das Spiel nicht starten (0x%08X).", (unsigned)lrc);
+  return -1;
+}
+
 /* Another game is running: nothing is started or offered. The page shows the
    name in a notice; only a request naming that game closes it. */
 static void
@@ -5047,6 +5092,99 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     else if(!strcmp(req->path, "/api/v1/saves/restore")) handle_saves_restore(fd, req);
     else if(!strcmp(req->path, "/api/v1/saves/delete"))  handle_saves_delete(fd, req);
     else { ps5tm_saves_cancel(); send_cjson(fd, 200, ps5tm_saves_job_json()); }
+    return;
+  }
+
+  /* The dumps that exist on the drives (dump_lib.c): GET the list of the last search, POST /scan starts a new one
+     ({"measure":true} also counts the bytes of each dump). Read only. */
+  if(!strcmp(req->path, "/api/v1/dumps")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    send_cjson(fd, 200, ps5tm_dumplib_json());
+    return;
+  }
+  /* Dumping a running game (dump_job.c): GET the settings, drives and job (?title= adds that game), POST {action, ...}. */
+  if(!strcmp(req->path, "/api/v1/dump")) {
+    if(is_get) {
+      char tid[16] = "";
+      query_param(req->query, "title", tid, sizeof(tid));
+      send_cjson(fd, 200, ps5tm_dump_json(tid));
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    if(!cJSON_IsObject(b)) { cJSON_Delete(b); ps5tm_http_send_error(fd, 400, "bad_request", "Kein gültiger Auftrag."); return; }
+    char msg[400];
+    int http = ps5tm_dump_action(b, msg, sizeof(msg));
+    cJSON_Delete(b);
+    if(http != 200) { ps5tm_http_send_error(fd, http, "dump_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/dumps/scan")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    int measure = b && cJSON_IsTrue(cJSON_GetObjectItem(b, "measure"));
+    cJSON_Delete(b);
+    if(ps5tm_dumplib_start(measure) < 0) {
+      ps5tm_http_send_error(fd, 503, "scan_failed", "Die Suche ließ sich nicht starten.");
+      return;
+    }
+    send_cjson(fd, 200, ps5tm_dumplib_json());
+    return;
+  }
+  /* Deletes one dump of the Disc tab's list, named by the three fields of its list entry (dump_job.c). */
+  if(!strcmp(req->path, "/api/v1/dumps/delete")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    char mount[40] = "", dir[128] = "", folder[64] = "";
+    const cJSON *v;
+    if(cJSON_IsObject(b)) {
+      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "mount")) && strlen(v->valuestring) < sizeof(mount)) snprintf(mount, sizeof(mount), "%s", v->valuestring);
+      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "dir")) && strlen(v->valuestring) < sizeof(dir)) snprintf(dir, sizeof(dir), "%s", v->valuestring);
+      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "folder")) && strlen(v->valuestring) < sizeof(folder)) snprintf(folder, sizeof(folder), "%s", v->valuestring);
+    }
+    cJSON_Delete(b);
+    char msg[400] = "";
+    int http = ps5tm_dump_delete(mount, dir, folder, msg, sizeof(msg));
+    if(http != 200) { ps5tm_http_send_error(fd, http, "dump_delete_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  /* A PS4 dump as an image for ShadowMountPlus (gameconvert.c, dump_image.c): the plan, then the start. The job is the conversion's
+     (/api/v1/library/convert). The dump is named by the three fields of its entry in the list, never by a path. */
+  if(!strcmp(req->path, "/api/v1/dumps/image/plan") || !strcmp(req->path, "/api/v1/dumps/image")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    char mount[40] = "", dir[128] = "", folder[64] = "", op[12] = "", target[40] = "";
+    const cJSON *v;
+    if(cJSON_IsObject(b)) {
+      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "mount")) && strlen(v->valuestring) < sizeof(mount)) snprintf(mount, sizeof(mount), "%s", v->valuestring);
+      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "dir")) && strlen(v->valuestring) < sizeof(dir)) snprintf(dir, sizeof(dir), "%s", v->valuestring);
+      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "folder")) && strlen(v->valuestring) < sizeof(folder)) snprintf(folder, sizeof(folder), "%s", v->valuestring);
+      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "op")) && strlen(v->valuestring) < sizeof(op)) snprintf(op, sizeof(op), "%s", v->valuestring);
+      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "target")) && strlen(v->valuestring) < sizeof(target)) snprintf(target, sizeof(target), "%s", v->valuestring);
+    }
+    cJSON_Delete(b);
+    char err[640] = "";
+    int is_ps5 = !strncmp(folder, "PPSA", 4);   /* the dump's own folder names say which console it is for */
+    if(!strcmp(req->path, "/api/v1/dumps/image/plan")) {
+      int http = 200;
+      cJSON *root = is_ps5 ? ps5tm_gameconvert_dump_plan_ps5(mount, dir, folder, err, sizeof(err), &http)
+                           : ps5tm_gameconvert_dump_plan(mount, dir, folder, err, sizeof(err), &http);
+      if(!root) { ps5tm_http_send_error(fd, http, "dump_image_refused", err); return; }
+      send_cjson(fd, 200, root);
+      return;
+    }
+    int status = is_ps5 ? ps5tm_gameconvert_dump_start_ps5(mount, dir, folder, op, target, err, sizeof(err))
+                        : ps5tm_gameconvert_dump_start(mount, dir, folder, op, target, err, sizeof(err));
+    if(status != 200) { ps5tm_http_send_error(fd, status, "dump_image_refused", err); return; }
+    send_cjson(fd, 200, ps5tm_gameconvert_status());
     return;
   }
 

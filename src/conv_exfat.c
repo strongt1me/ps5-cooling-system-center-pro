@@ -99,6 +99,9 @@ struct exfat_image {
   int       fd;
   char      where[256];
   int       error;
+
+  char      roots[EXFAT_MAX_ROOTS][1024];   /* the folders the volume is read from, a later one over an earlier one */
+  unsigned  nroots;
 };
 
 
@@ -233,11 +236,19 @@ typedef struct {
   char    *name;
   int      is_dir;
   uint64_t size;
+  uint8_t  root;            /* files: the source root the data is read from (the last one that has it) */
+  uint8_t  mask;            /* directories: the source roots that have this folder */
 } scan_ent_t;
 
+/* By name as exFAT folds it; equal names (the same file in two roots) next to each other, the later root last. */
 static int
 ent_cmp(const void *a, const void *b) {
-  return strcasecmp(((const scan_ent_t *)a)->name, ((const scan_ent_t *)b)->name);
+  const scan_ent_t *x = a, *y = b;
+  int c = strcasecmp(x->name, y->name);
+  if(c) return c;
+  c = strcmp(x->name, y->name);
+  if(c) return c;
+  return (int)x->root - (int)y->root;
 }
 
 static int
@@ -320,52 +331,101 @@ check_name_clashes(const exfat_image_t *im, uint32_t first, const scan_ent_t *en
   return rc;
 }
 
+/* The absolute path of rel inside source root r; -1 when it does not fit. */
 static int
-scan_dir(exfat_image_t *im, uint32_t dir, char *path, size_t len, int depth,
+root_path(const exfat_image_t *im, unsigned r, const char *rel, char *out, size_t out_len) {
+  int n = rel[0] ? snprintf(out, out_len, "%s/%s", im->roots[r], rel) : snprintf(out, out_len, "%s", im->roots[r]);
+  return (n > 0 && (size_t)n < out_len) ? 0 : -1;
+}
+
+/* Scans the folder rel (relative to every source root in mask) and everything below it. With several roots a
+   file that is in more than one is taken from the last, a folder in more than one is merged: the way an update
+   is laid over a game. */
+static int
+scan_dir(exfat_image_t *im, uint32_t dir, char *rel, size_t rlen, int depth, uint8_t mask,
          char *err, size_t err_len) {
   if(depth > MAX_DEPTH) {
     snprintf(err, err_len, "Der Ordner ist zu tief verschachtelt.");
     return -1;
   }
-  DIR *d = opendir(path);
-  if(!d) {
-    snprintf(err, err_len, "%s ist nicht lesbar: %s", path, ps5tm_io_strerror(errno));
-    return -1;
-  }
   scan_ent_t *ents = NULL;
   uint32_t n = 0, cap = 0;
-  int rc = 0, rd_errno = 0;
-  struct dirent *e;
-  for(;;) {
-    /* readdir() returns NULL at the end and on an error alike; only errno tells them apart. A listing that broke off
-       half way must not pass for a folder that ends there: the image would lack the rest and every check would pass. */
-    errno = 0;
-    e = readdir(d);
-    if(!e) { rd_errno = errno; break; }
-    if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..") || ignored_name(e->d_name))
-      continue;
-    size_t nl = strlen(e->d_name);
-    if(len + 1 + nl >= 1024) { snprintf(err, err_len, "Ein Pfad ist zu lang."); rc = -1; break; }
-    path[len] = '/';
-    memcpy(path + len + 1, e->d_name, nl + 1);
-    struct stat st;
-    int ok = lstat(path, &st) == 0;
-    path[len] = 0;
-    if(!ok) { snprintf(err, err_len, "%s: %s", e->d_name, ps5tm_io_strerror(errno)); rc = -1; break; }
-    if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) continue;   /* links, devices */
-    if(grow((void **)&ents, &cap, n + 1, sizeof(*ents)) != 0 ||
-       !(ents[n].name = strdup(e->d_name))) { rc = -1; break; }
-    ents[n].is_dir = S_ISDIR(st.st_mode);
-    ents[n].size   = S_ISREG(st.st_mode) ? (uint64_t)st.st_size : 0;
-    n++;
-  }
-  closedir(d);
-  if(!rc && rd_errno) {
-    snprintf(err, err_len, "Der Ordner %s ließ sich nicht vollständig lesen: %s", path, ps5tm_io_strerror(rd_errno));
-    rc = -1;
+  int rc = 0;
+  char path[1024], full[1024];
+  for(unsigned r = 0; r < im->nroots && !rc; r++) {
+    if(!(mask & (1u << r))) continue;
+    if(root_path(im, r, rel, path, sizeof(path)) != 0) {
+      snprintf(err, err_len, "Ein Pfad ist zu lang.");
+      rc = -1;
+      break;
+    }
+    DIR *d = opendir(path);
+    if(!d) {
+      snprintf(err, err_len, "%s ist nicht lesbar: %s", path, ps5tm_io_strerror(errno));
+      rc = -1;
+      break;
+    }
+    int rd_errno = 0;
+    struct dirent *e;
+    for(;;) {
+      /* readdir() returns NULL at the end and on an error alike; only errno tells them apart. A listing that broke off
+         half way must not pass for a folder that ends there: the image would lack the rest and every check would pass. */
+      errno = 0;
+      e = readdir(d);
+      if(!e) { rd_errno = errno; break; }
+      if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..") || ignored_name(e->d_name))
+        continue;
+      if(snprintf(full, sizeof(full), "%s/%s", path, e->d_name) >= (int)sizeof(full)) {
+        snprintf(err, err_len, "Ein Pfad ist zu lang.");
+        rc = -1;
+        break;
+      }
+      struct stat st;
+      if(lstat(full, &st) != 0) { snprintf(err, err_len, "%s: %s", e->d_name, ps5tm_io_strerror(errno)); rc = -1; break; }
+      if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) continue;   /* links, devices */
+      if(grow((void **)&ents, &cap, n + 1, sizeof(*ents)) != 0 ||
+         !(ents[n].name = strdup(e->d_name))) { rc = -1; break; }
+      ents[n].is_dir = S_ISDIR(st.st_mode);
+      ents[n].size   = S_ISREG(st.st_mode) ? (uint64_t)st.st_size : 0;
+      ents[n].root   = (uint8_t)r;
+      ents[n].mask   = (uint8_t)(1u << r);
+      n++;
+    }
+    closedir(d);
+    if(!rc && rd_errno) {
+      snprintf(err, err_len, "Der Ordner %s ließ sich nicht vollständig lesen: %s", path, ps5tm_io_strerror(rd_errno));
+      rc = -1;
+    }
   }
 
   if(!rc && n) qsort(ents, n, sizeof(*ents), ent_cmp);
+  if(!rc && im->nroots > 1) {          /* the same name in several roots: one entry */
+    uint32_t o = 0;
+    for(uint32_t i = 0; i < n && !rc; i++) {
+      if(o && !strcmp(ents[o - 1].name, ents[i].name)) {
+        if(ents[o - 1].is_dir != ents[i].is_dir) {
+          snprintf(err, err_len, "„%s“ ist in einem Teil ein Ordner und im anderen eine Datei (Ordner %s).",
+                   ents[i].name, rel[0] ? rel : "/");
+          rc = -1;
+          for(uint32_t k = 0; k < o; k++) free(ents[k].name);       /* the kept ones ... */
+          for(uint32_t k = i; k < n; k++) free(ents[k].name);       /* ... and the rest, nothing is freed twice */
+          n = 0;
+          o = 0;
+          break;
+        } else if(ents[i].is_dir) {
+          ents[o - 1].mask |= ents[i].mask;
+        } else {
+          ents[o - 1].size = ents[i].size;
+          ents[o - 1].root = ents[i].root;
+        }
+        free(ents[i].name);
+        ents[i].name = NULL;
+      } else {
+        ents[o++] = ents[i];
+      }
+    }
+    if(!rc) n = o;
+  }
 
   uint32_t first = im->nnodes;
   if(!rc && grow((void **)&im->nodes, &im->cap_nodes, im->nnodes + n, sizeof(xnode_t)) != 0)
@@ -377,18 +437,19 @@ scan_dir(exfat_image_t *im, uint32_t dir, char *path, size_t len, int depth,
     nd->size   = ents[i].size;
     if(add_name(im, nd, ents[i].name, err, err_len) != 0) { rc = -1; break; }
     if(!nd->is_dir) {
-      size_t nl = strlen(ents[i].name);
-      path[len] = '/';
-      memcpy(path + len + 1, ents[i].name, nl + 1);
-      int prc = add_path(im, &im->nodes[im->nnodes], path);
-      path[len] = 0;
-      if(prc != 0) { rc = -1; break; }
+      if(root_path(im, ents[i].root, rel, path, sizeof(path)) != 0 ||
+         snprintf(full, sizeof(full), "%s/%s", path, ents[i].name) >= (int)sizeof(full)) {
+        snprintf(err, err_len, "Ein Pfad ist zu lang.");
+        rc = -1;
+        break;
+      }
+      if(add_path(im, &im->nodes[im->nnodes], full) != 0) { rc = -1; break; }
       im->files++;
       im->payload += ents[i].size;
     }
     im->nnodes++;
   }
-  if(!rc) rc = check_name_clashes(im, first, ents, n, path, err, err_len);
+  if(!rc) rc = check_name_clashes(im, first, ents, n, rel[0] ? rel : "/", err, err_len);
   if(!rc) {
     im->nodes[dir].first_child = first;
     im->nodes[dir].nchildren   = n;
@@ -396,10 +457,12 @@ scan_dir(exfat_image_t *im, uint32_t dir, char *path, size_t len, int depth,
   for(uint32_t i = 0; !rc && i < n; i++) {
     if(!ents[i].is_dir) continue;
     size_t nl = strlen(ents[i].name);
-    path[len] = '/';
-    memcpy(path + len + 1, ents[i].name, nl + 1);
-    rc = scan_dir(im, first + i, path, len + 1 + nl, depth + 1, err, err_len);
-    path[len] = 0;
+    size_t at = rlen ? rlen + 1 : 0;
+    if(at + nl >= 1024) { snprintf(err, err_len, "Ein Pfad ist zu lang."); rc = -1; break; }
+    if(rlen) rel[rlen] = '/';
+    memcpy(rel + at, ents[i].name, nl + 1);
+    rc = scan_dir(im, first + i, rel, at + nl, depth + 1, ents[i].mask, err, err_len);
+    rel[rlen] = 0;
   }
   for(uint32_t i = 0; i < n; i++) free(ents[i].name);
   free(ents);
@@ -504,7 +567,16 @@ build_boot(exfat_image_t *im) {
 
 exfat_image_t *
 exfat_image_plan(const char *source_root, uint32_t serial, char *err, size_t err_len) {
+  return exfat_image_plan_roots(&source_root, 1, serial, err, err_len);
+}
+
+exfat_image_t *
+exfat_image_plan_roots(const char *const *roots, unsigned nroots, uint32_t serial, char *err, size_t err_len) {
   err[0] = 0;
+  if(!roots || nroots < 1 || nroots > EXFAT_MAX_ROOTS) {
+    snprintf(err, err_len, "Falsche Zahl von Quellordnern.");
+    return NULL;
+  }
   exfat_image_t *im = calloc(1, sizeof(*im));
   if(!im) { snprintf(err, err_len, "Kein Speicher."); return NULL; }
   im->fd     = -1;
@@ -518,15 +590,18 @@ exfat_image_plan(const char *source_root, uint32_t serial, char *err, size_t err
   im->nodes[0].is_dir = 1;
   im->nnodes = 1;
 
-  char path[1024];
-  if(strlen(source_root) >= sizeof(path)) {     /* a cut-off path could be another folder */
-    snprintf(err, err_len, "Ein Pfad ist zu lang.");
-    goto fail;
+  for(unsigned r = 0; r < nroots; r++) {
+    if(strlen(roots[r]) >= sizeof(im->roots[r])) {     /* a cut-off path could be another folder */
+      snprintf(err, err_len, "Ein Pfad ist zu lang.");
+      goto fail;
+    }
+    snprintf(im->roots[r], sizeof(im->roots[r]), "%s", roots[r]);
+    size_t len = strlen(im->roots[r]);
+    while(len > 1 && im->roots[r][len - 1] == '/') im->roots[r][--len] = 0;
   }
-  snprintf(path, sizeof(path), "%s", source_root);
-  size_t len = strlen(path);
-  while(len > 1 && path[len - 1] == '/') path[--len] = 0;
-  if(scan_dir(im, 0, path, len, 0, err, err_len) != 0) goto fail;
+  im->nroots = nroots;
+  char rel[1024] = "";
+  if(scan_dir(im, 0, rel, 0, 0, (uint8_t)((1u << nroots) - 1), err, err_len) != 0) goto fail;
 
   im->upcase_clusters = (uint32_t)ceil_div(EXFAT_UPCASE_SIZE, CLUSTER);
   uint64_t content = node_clusters(im, 0, 1) + sum_clusters(im, 0) + im->upcase_clusters;
