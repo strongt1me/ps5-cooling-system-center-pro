@@ -154,7 +154,15 @@ struct StoreItem
     std::string installed_version; // "" when not downloaded
     bool update = false;           // a newer version than the one downloaded
     bool name_taken = false;       // a file of that name exists that the store did not load
+    std::string owner;             // GitHub account of the source, "" when it is not on GitHub
+    bool avatar = false;           // the console app has that account's picture
 };
+
+// The texture key of a developer picture in covers() (games use their title id).
+inline std::string avatar_key(const std::string &owner)
+{
+    return "avatar:" + owner;
+}
 
 struct StoreJob
 {

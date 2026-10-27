@@ -869,6 +869,8 @@ void HttpSource::poll_store()
         s.installed_version = str(cJSON_GetObjectItemCaseSensitive(item, "installed"), "version");
         s.update = flag(item, "update");
         s.name_taken = flag(item, "name_taken");
+        s.owner = str(item, "owner");
+        s.avatar = flag(item, "avatar");
         items.push_back(std::move(s));
     }
     StoreJob job;
@@ -1052,13 +1054,27 @@ void HttpSource::poll_library()
 
 void HttpSource::fetch_cover()
 {
+    // Game covers first, then the developer pictures the console app has cached, under keys of their own.
     std::vector<Game> games;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!data_.games_loaded)
-            return;
-        games = data_.games;
+        if (data_.games_loaded)
+            games = data_.games;
+        for (const StoreItem &s : data_.store)
+        {
+            if (!s.avatar || s.owner.empty())
+                continue;
+            const std::string key = avatar_key(s.owner);
+            if (std::any_of(games.begin(), games.end(), [&](const Game &g) { return g.id == key; }))
+                continue;
+            Game g;
+            g.id = key;
+            g.cover = "/api/v1/paystore/avatar?owner=" + s.owner;
+            games.push_back(std::move(g));
+        }
     }
+    if (games.empty())
+        return;
     const CoverWant want = covers().next_wanted(games);
     if (want.path.empty())
         return;

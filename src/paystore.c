@@ -553,6 +553,160 @@ install_thread(void *arg) {
   return NULL;
 }
 
+/* ---------------------------------------------------------------- developer pictures
+ *
+ * A payload has no picture of its own, so the full-screen app shows the GitHub picture of whoever publishes it (wish of
+ * the user, 27.10.2026). The owner is the first path part of the item's "source" (https://github.com/<owner>/...). The
+ * pictures belong to their owners and are not shipped with the app: after a list load a background thread fetches the
+ * missing ones from avatars.githubusercontent.com (a *.githubusercontent.com host, so hop_ok and the GitHub roots of
+ * the store already cover it; checked 27.10.2026: Let's Encrypt up to ISRG Root X1, 200 without a redirect, a JPEG of
+ * a few KB) into payload-avatars/<owner>.img. Each owner is tried once per run, failures included; no network means
+ * nothing happens. */
+
+#define PS_AV_DIR      PS5TM_DATA_DIR "/payload-avatars"
+#define PS_AV_MAX      (256u << 10)
+#define PS_AV_OWNERS   PS_MAX_ITEMS
+
+static int     g_av_running;
+static int     g_av_net_logged;
+static int64_t g_av_scanned_at = -1;               /* the list (g_cat_at) the last pass went through */
+static char g_av_tried[PS_AV_OWNERS][40];
+static int  g_av_ntried;
+
+/* GitHub's rules for an account name: letters, digits and "-", 1 to 39 characters; never a path */
+static int
+owner_ok(const char *o) {
+  size_t n = strlen(o);
+  if(n < 1 || n > 39) return 0;
+  for(size_t i = 0; i < n; i++)
+    if(!isalnum((unsigned char)o[i]) && o[i] != '-') return 0;
+  return 1;
+}
+
+static void
+owner_of(const char *source, char *out, size_t n) {
+  static const char pre[] = "https://github.com/";
+  out[0] = 0;
+  if(strncasecmp(source, pre, sizeof pre - 1)) return;
+  const char *p = source + sizeof pre - 1;
+  size_t k = 0;
+  while(p[k] && p[k] != '/' && p[k] != '?' && p[k] != '#' && k + 1 < n) k++;
+  if(p[k] && p[k] != '/' && p[k] != '?' && p[k] != '#') return;      /* longer than the buffer */
+  memcpy(out, p, k);
+  out[k] = 0;
+  if(!owner_ok(out)) out[0] = 0;
+}
+
+static const char *
+image_type(const unsigned char *b, size_t n) {
+  if(n >= 8 && !memcmp(b, "\x89PNG\r\n\x1a\n", 8)) return "image/png";
+  if(n >= 3 && b[0] == 0xff && b[1] == 0xd8 && b[2] == 0xff) return "image/jpeg";
+  return NULL;
+}
+
+int
+ps5tm_paystore_avatar(const char *owner, char *path, size_t path_len, const char **ctype) {
+  if(!owner || !owner_ok(owner)) return -2;
+  snprintf(path, path_len, PS_AV_DIR "/%s.img", owner);
+  int fd = open(path, O_RDONLY | O_NOFOLLOW);
+  if(fd < 0) return -1;
+  unsigned char h[8];
+  ssize_t r = read(fd, h, sizeof h);
+  close(fd);
+  const char *t = r > 0 ? image_type(h, (size_t)r) : NULL;
+  if(!t) return -1;
+  if(ctype) *ctype = t;
+  return 0;
+}
+
+static int
+avatar_cached(const char *owner) {
+  char p[160];
+  return ps5tm_paystore_avatar(owner, p, sizeof p, NULL) == 0;
+}
+
+/* Under g_lock: the owner was already tried in this run; marks it tried otherwise. */
+static int
+av_tried_locked(const char *owner) {
+  for(int i = 0; i < g_av_ntried; i++)
+    if(!strcmp(g_av_tried[i], owner)) return 1;
+  if(g_av_ntried < PS_AV_OWNERS) snprintf(g_av_tried[g_av_ntried++], sizeof g_av_tried[0], "%s", owner);
+  return 0;
+}
+
+static void *
+avatar_thread(void *arg) {
+  (void)arg;
+  for(;;) {
+    char owner[40] = "";
+    pthread_mutex_lock(&g_lock);
+    for(int i = 0; i < g_n && !owner[0]; i++) {
+      char o[40];
+      owner_of(g_items[i].source, o, sizeof o);
+      if(o[0] && !avatar_cached(o) && !av_tried_locked(o)) snprintf(owner, sizeof owner, "%s", o);
+    }
+    if(!owner[0]) g_av_running = 0;
+    pthread_mutex_unlock(&g_lock);
+    if(!owner[0]) return NULL;
+
+    char url[96];
+    snprintf(url, sizeof url, "https://avatars.githubusercontent.com/%s?s=160", owner);
+    upd_req_t r;
+    memset(&r, 0, sizeof r);
+    r.url = url;
+    r.trust = UPD_TRUST_WEB;
+    r.max_redirects = 3;
+    r.hop_ok = hop_ok;
+    r.connect_ms = 8000;
+    r.idle_ms = 10000;
+    r.total_ms = 20000;
+    r.range_from = -1;
+    r.range_to = -1;
+    r.extra_header = "Accept: image/png, image/jpeg";
+    upd_res_t res;
+    char *buf = NULL;
+    size_t len = 0;
+    int rc = upd_http_fetch(&r, PS_AV_MAX, &buf, &len, &res);
+    const char *t = rc == 0 ? image_type((const unsigned char *)buf, len) : NULL;
+    if(t) {
+      char path[160];
+      snprintf(path, sizeof path, PS_AV_DIR "/%s.img", owner);
+      mkdir(PS5TM_DATA_DIR, 0777);
+      mkdir(PS_AV_DIR, 0777);
+      if(write_atomic(path, buf, len) != 0)
+        PS5TM_WARN("paystore_avatar", "Entwicklerbild von %s ließ sich nicht speichern (%s).", owner, strerror(errno));
+    } else if(rc != 0 && !res.status && !g_av_net_logged) {
+      g_av_net_logged = 1;                         /* no answer at all: offline, said once */
+      PS5TM_INFO("paystore_avatar", "Entwicklerbilder: keine Verbindung zu GitHub (%s), es bleibt bei den Kacheln.",
+                 res.step[0] ? res.step : "Netz");
+    }
+    free(buf);
+    usleep(400 * 1000);                            /* a background nicety, never a burst */
+  }
+}
+
+/* Starts the background fetch of missing pictures, once per list and once at a time: the list is asked for every few
+   seconds while the payloads page is open. */
+static void
+avatars_kick(void) {
+  pthread_mutex_lock(&g_lock);
+  int start = g_n > 0 && !g_av_running && g_av_scanned_at != g_cat_at;
+  if(start) { g_av_running = 1; g_av_scanned_at = g_cat_at; }
+  pthread_mutex_unlock(&g_lock);
+  if(!start) return;
+  pthread_attr_t a;
+  pthread_attr_init(&a);
+  pthread_attr_setdetachstate(&a, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&a, 256 * 1024);
+  pthread_t th;
+  if(pthread_create(&th, &a, avatar_thread, NULL) != 0) {
+    pthread_mutex_lock(&g_lock);
+    g_av_running = 0;
+    pthread_mutex_unlock(&g_lock);
+  }
+  pthread_attr_destroy(&a);
+}
+
 /* ---------------------------------------------------------------- the API */
 
 static const ps_item_t *
@@ -595,6 +749,10 @@ ps5tm_paystore_json(int refresh) {
     cJSON_AddStringToObject(x, "description", it->description);
     cJSON_AddStringToObject(x, "last_update", it->last_update);
     cJSON_AddStringToObject(x, "source", it->source);
+    char owner[40];
+    owner_of(it->source, owner, sizeof owner);
+    cJSON_AddStringToObject(x, "owner", owner);
+    cJSON_AddBoolToObject(x, "avatar", owner[0] && avatar_cached(owner));
     const cJSON *e = cJSON_GetObjectItem(idx, it->id);
     const char *fn = idx_str(e, "filename");
     if(e && fn[0] && file_exists(fn)) {
@@ -621,6 +779,7 @@ ps5tm_paystore_json(int refresh) {
   cJSON_AddBoolToObject(o, "fetching", g_fetching);
   pthread_mutex_unlock(&g_lock);
   cJSON_Delete(idx);
+  avatars_kick();                                  /* a list is there: fetch pictures still missing, in the background */
   return o;
 }
 

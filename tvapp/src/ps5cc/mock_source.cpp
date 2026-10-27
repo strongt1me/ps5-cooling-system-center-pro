@@ -448,18 +448,22 @@ class MockSource final : public Source
         {
             const char *id, *name, *version, *category, *description, *installed;
             bool update;
+            const char *owner; // invented accounts: a picture for some, none for others
+            bool avatar;
         };
         static constexpr Item kItems[] = {
             {"shadowmountplus", "ShadowMountPlus", "1.7beta7", "Utilities & Tools",
-             "Ein automatischer Mounter für Spiele-Abbilder im Hintergrund.", "1.7beta7", false},
+             "Ein automatischer Mounter für Spiele-Abbilder im Hintergrund.", "1.7beta7", false, "mountsmith", true},
             {"pldmgr", "pldmgr", "v0.6.4", "Utilities & Tools", "Payloads verwalten und automatisch laden.", "v0.6.3",
-             true},
+             true, "loadkeeper", true},
             {"ps5upload", "ps5upload", "v8.4.0", "Networking & Servers",
-             "Schnelle Übertragung vom Rechner auf die PS5 (braucht die PC-App).", "", false},
-            {"ftpsrv", "ftpsrv", "v0.15", "Networking & Servers", "FTP-Server auf Port 2121.", "", false},
-            {"kstuff", "kstuff", "v1.6.7", "System & Jailbreak", "Kernel-Hilfen für den Jailbreak.", "", false},
-            {"elfldr", "elfldr", "v0.21", "Loaders", "Der ELF-Loader auf Port 9021.", "", false},
+             "Schnelle Übertragung vom Rechner auf die PS5 (braucht die PC-App).", "", false, "uplinker", true},
+            {"ftpsrv", "ftpsrv", "v0.15", "Networking & Servers", "FTP-Server auf Port 2121.", "", false, "portwright",
+             false},
+            {"kstuff", "kstuff", "v1.6.7", "System & Jailbreak", "Kernel-Hilfen für den Jailbreak.", "", false, "", false},
+            {"elfldr", "elfldr", "v0.21", "Loaders", "Der ELF-Loader auf Port 9021.", "", false, "portwright", false},
         };
+        std::size_t seed = 3;
         for (const Item &i : kItems)
         {
             StoreItem s;
@@ -471,6 +475,10 @@ class MockSource final : public Source
             s.description = i.description;
             s.installed_version = i.installed;
             s.update = i.update;
+            s.owner = i.owner;
+            s.avatar = i.avatar;
+            if (s.avatar)
+                covers().deliver(avatar_key(s.owner), invented_cover(seed++));
             data_.store.push_back(s);
         }
         data_.store_loaded = true;

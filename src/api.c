@@ -4809,6 +4809,18 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, ps5tm_updates_packages_json());
     return;
   }
+  /* The cached GitHub picture of a store payload's developer (paystore.c) */
+  if(!strcmp(req->path, "/api/v1/paystore/avatar")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char owner[48] = "", path[160];
+    const char *ctype = "image/png";
+    query_param(req->query, "owner", owner, sizeof(owner));
+    int rc = ps5tm_paystore_avatar(owner, path, sizeof(path), &ctype);
+    if(rc == -2) { ps5tm_http_send_error(fd, 400, "bad_owner", "Ungültiger Name."); return; }
+    if(rc != 0 || ps5tm_http_send_file(fd, path, ctype, 256u * 1024, 86400) != 0)
+      ps5tm_http_send_error(fd, 404, "no_avatar", "Für diesen Entwickler liegt kein Bild vor.");
+    return;
+  }
   /* Payload store (paystore.c): GET the list (?refresh=1 when old, 2 always), POST {action, id, force} */
   if(!strcmp(req->path, "/api/v1/paystore")) {
     if(is_get) {

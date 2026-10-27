@@ -34,7 +34,7 @@ Die Vollbild-App für die Konsole (die Kachel von „PS5 Cooling & System Center
 - `src/platform/ps5/payload_blob.c` – die App-ELF in der Kachel (`.incbin`)
 - `src/third_party/cjson/` – cJSON 1.7.19 (MIT), dieselbe Fassung wie in `src/third_party/` der App
 - `src/ps5cc/covers.*` – Spiel-Cover: der HTTP-Faden lädt sie einzeln (`/api/v1/library/cover`, das Spiel im Fokus zuerst), dekodiert und verkleinert sie auf 160×160; das Hauptprogramm macht daraus höchstens zwei Texturen je Bild (höchstens 400 Cover, etwa 40 MiB)
-- `src/third_party/stb/stb_image.inc`, `image.c`, `image.h` – stb_image v2.30 (Public Domain oder MIT), unverändert vom stb-Commit in `src/third_party/stb/UPSTREAM`, nur PNG und ohne stdio; Git-Blob `9eedabed…53272ec`, SHA-256 `594c2fe3…e4200b3` (vollständig in `THIRD_PARTY_NOTICES.md`)
+- `src/third_party/stb/stb_image.inc`, `image.c`, `image.h` – stb_image v2.30 (Public Domain oder MIT), unverändert vom stb-Commit in `src/third_party/stb/UPSTREAM`, nur PNG und JPEG (seit 27.10.2026 für die Entwicklerbilder der Payloads) und ohne stdio; Git-Blob `9eedabed…53272ec`, SHA-256 `594c2fe3…e4200b3` (vollständig in `THIRD_PARTY_NOTICES.md`)
 
 ## Bauen
 

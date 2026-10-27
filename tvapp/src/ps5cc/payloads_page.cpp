@@ -2,6 +2,7 @@
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "ps5cc/covers.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
 #include "ps5cc/payload_tile.hpp"
@@ -62,8 +63,8 @@ class PayloadsPage final : public Page
             if (!tile_of(item, tile))
                 return;
             const float side = std::min(52.0f, row.h - 20.0f);
-            draw_payload_tile(canvas, {row.x + 16.0f, row.y + (row.h - side) * 0.5f, side, side}, tile,
-                              item.disabled ? 0.45f : 1.0f);
+            draw_icon(canvas, {row.x + 16.0f, row.y + (row.h - side) * 0.5f, side, side}, item, tile,
+                      item.disabled ? 0.45f : 1.0f);
         };
         list_.set_bounds({kMargin, kListTop, kLeftW, kBottom - kListTop});
 
@@ -224,7 +225,8 @@ class PayloadsPage final : public Page
                               tile_of(list_.items()[static_cast<std::size_t>(list_.focus())], tile);
         if (has_tile)
         {
-            draw_payload_tile(canvas, {card.x + card.w - 30.0f - 96.0f, card.y + 30.0f, 96.0f, 96.0f}, tile);
+            draw_icon(canvas, {card.x + card.w - 30.0f - 96.0f, card.y + 30.0f, 96.0f, 96.0f},
+                      list_.items()[static_cast<std::size_t>(list_.focus())], tile, 1.0f);
             title_w -= 116.0f;
         }
         float y = card.y + 64.0f;
@@ -284,6 +286,42 @@ class PayloadsPage final : public Page
         const RunningPayload *running = nullptr;
         const StoreItem *store = nullptr;
     };
+
+    // The GitHub account whose picture the console app has for this row: a store item's own, or for a file or a running
+    // payload the one of the store item with the same name stem. "" when there is none.
+    std::string owner_of(const ui::ListItem &item) const
+    {
+        if (item.header || item.tag < 0)
+            return {};
+        const std::size_t at = static_cast<std::size_t>(item.tag);
+        if (view_ == kStore)
+            return at < store_.size() && store_[at].avatar ? store_[at].owner : std::string();
+        std::string stem;
+        if (view_ == kFiles && at < files_.size())
+            stem = payload_stem(files_[at].name);
+        else if (view_ == kRunning && at < running_.size())
+            stem = payload_stem(running_[at].name);
+        if (stem.empty())
+            return {};
+        for (const StoreItem &s : store_)
+            if (s.avatar && !s.owner.empty() && (payload_stem(s.filename) == stem || payload_stem(s.name) == stem))
+                return s.owner;
+        return {};
+    }
+
+    // The developer's picture once it is loaded (faded in over the tile), the coloured tile until then or without one.
+    void draw_icon(ui::Canvas &canvas, const Rect &box, const ui::ListItem &item, const PayloadTile &tile,
+                   float alpha) const
+    {
+        const std::string owner = owner_of(item);
+        const CoverShown pic = owner.empty() ? CoverShown{} : covers().texture_of(avatar_key(owner));
+        const float shown = pic.texture == 0 ? 0.0f : pic.alpha;
+        if (shown < 1.0f)
+            draw_payload_tile(canvas, box, tile, alpha);
+        if (shown > 0.0f)
+            canvas.list.image(pic.texture, box, gfx::kFullUv, gfx::Color{1.0f, 1.0f, 1.0f, shown * alpha},
+                              box.w * 0.22f);
+    }
 
     // The row's payload as a tile; false for section titles and notes.
     bool tile_of(const ui::ListItem &item, PayloadTile &out) const

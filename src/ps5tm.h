@@ -834,6 +834,9 @@ struct cJSON *ps5tm_updates_json(void);
 struct cJSON *ps5tm_paystore_json(int refresh);
 int ps5tm_paystore_action(const struct cJSON *body, char *msg, size_t msg_len);
 int ps5tm_paystore_busy(void);
+/* The cached GitHub picture of a store payload's developer (paystore.c): 0 with the file and its type, -1 not (yet)
+   cached, -2 not a valid owner name. */
+int ps5tm_paystore_avatar(const char *owner, char *path, size_t path_len, const char **ctype);
 struct cJSON *ps5tm_updates_packages_json(void);
 /* The test of one game's update path (update list, package list, first bytes of a piece, room). NULL with an HTTP status in *http. */
 struct cJSON *ps5tm_updates_diag(const char *title_id, char *msg, size_t n, int *http);

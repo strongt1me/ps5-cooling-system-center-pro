@@ -163,5 +163,6 @@ renamed to `.inc` so the build, which compiles every `.c` file under `src/`, doe
 `src/third_party/stb/LICENSE`), taken unchanged from <https://github.com/nothings/stb> at the commit in
 `src/third_party/stb/UPSTREAM` (2c980bb59875b0d32144a71867fbdebb2f77cd20, the same as stb_vorbis):
 `stb_image.h`, git blob 9eedabedc45b3e6fd88fae6f14a160b4d53272ec, SHA-256
-594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3. It is compiled once by `image.c` with PNG only
-and without stdio, and decodes the game covers the console app serves.
+594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3. It is compiled once by `image.c` with PNG and JPEG only
+and without stdio, and decodes the game covers and the payload developers' GitHub pictures the console app serves.
+Those pictures belong to their owners; they are not part of this app and are fetched by the console app at run time.
