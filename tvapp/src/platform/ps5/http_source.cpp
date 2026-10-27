@@ -230,35 +230,68 @@ void HttpSource::push(Request request)
 
 void HttpSource::set_target(int celsius)
 {
-    push({Request::Kind::target, celsius, {}});
+    push({Request::Kind::target, celsius, {}, {}});
 }
 void HttpSource::launch(const std::string &id)
 {
-    push({Request::Kind::launch, 0, id});
+    push({Request::Kind::launch, 0, id, {}});
 }
 void HttpSource::close_game(const std::string &id)
 {
-    push({Request::Kind::close, 0, id});
+    push({Request::Kind::close, 0, id, {}});
 }
 void HttpSource::cancel_job(JobKind kind)
 {
-    push({Request::Kind::cancel, static_cast<int>(kind), {}});
+    push({Request::Kind::cancel, static_cast<int>(kind), {}, {}});
 }
 void HttpSource::open_web_ui()
 {
-    push({Request::Kind::web, 0, {}});
+    push({Request::Kind::web, 0, {}, {}});
 }
 void HttpSource::reload()
 {
-    push({Request::Kind::reload, 0, {}});
+    push({Request::Kind::reload, 0, {}, {}});
 }
 void HttpSource::retry()
 {
     retry_ = true;
 }
-void HttpSource::watch_jobs(bool watching)
+void HttpSource::watch(Watch page)
 {
-    watching_ = watching;
+    watching_ = page;
+}
+void HttpSource::save_config(const std::string &patch)
+{
+    push({Request::Kind::config, 0, {}, patch});
+}
+void HttpSource::selftest(bool start)
+{
+    push({Request::Kind::selftest, start ? 1 : 0, {}, {}});
+}
+void HttpSource::power(const std::string &action)
+{
+    push({Request::Kind::power, 0, action, {}});
+}
+void HttpSource::start_payload(const PayloadFile &file)
+{
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "source", file.source.c_str());
+    if (file.source == "usb")
+        cJSON_AddStringToObject(root, "mount", file.mount.c_str());
+    cJSON_AddStringToObject(root, "dir", file.dir.c_str());
+    cJSON_AddStringToObject(root, "name", file.name.c_str());
+    char *text = cJSON_PrintUnformatted(root);
+    push({Request::Kind::payload_start, 0, file.name, text != nullptr ? text : "{}"});
+    cJSON_free(text);
+    cJSON_Delete(root);
+}
+void HttpSource::kill_payload(int pid)
+{
+    push({Request::Kind::payload_kill, pid, {}, {}});
+}
+void HttpSource::store_action(const std::string &action, const std::string &id)
+{
+    push({Request::Kind::store, 0, id, action});
 }
 void HttpSource::quit_app()
 {
@@ -341,6 +374,7 @@ bool HttpSource::connect_phase()
 void HttpSource::run()
 {
     std::int64_t last_status = 0, last_library = 0, last_jobs = 0, last_history = 0, last_cover = 0;
+    std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_store = 0, last_log = 0, last_klog = 0;
     bool library_wanted = true;
     for (;;)
     {
@@ -352,7 +386,9 @@ void HttpSource::run()
                 status_failures_ = 0;
                 set_link(Link::online, {});
                 library_wanted = true;
+                config_wanted_ = true;
                 last_status = last_jobs = last_history = 0;
+                last_selftest = last_payloads = last_store = last_log = last_klog = 0;
             }
             else
             {
@@ -436,16 +472,68 @@ void HttpSource::run()
             }
             return false;
         }();
-        const std::int64_t jobs_every = watching_ || busy ? 1000000 : 10000000;
+        const Watch page = watching_.load();
+        const bool jobs_open = page == Watch::jobs;
+        const std::int64_t jobs_every = jobs_open || busy ? 1000000 : 10000000;
         if (now - last_jobs >= jobs_every)
         {
             last_jobs = now;
             poll_jobs();
         }
-        if (now - last_history >= (watching_ ? 10000000 : 60000000))
+        if (now - last_history >= (jobs_open ? 10000000 : 60000000))
         {
             last_history = now;
             poll_history();
+        }
+        // Each page's data only while it is open (the config also once at the start: the settings page opens filled).
+        if (config_wanted_.exchange(false) || (page == Watch::settings && now - last_config >= 15000000))
+        {
+            last_config = now;
+            poll_config();
+        }
+        if (page == Watch::settings)
+        {
+            const bool testing = [&]
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                return data_.selftest.state == "running" || data_.selftest.state == "requested";
+            }();
+            if (now - last_selftest >= (testing ? 1000000 : 5000000))
+            {
+                last_selftest = now;
+                poll_selftest();
+            }
+        }
+        if (page == Watch::payloads)
+        {
+            if (now - last_payloads >= 4000000)
+            {
+                last_payloads = now;
+                poll_payloads();
+            }
+            const bool storing = [&]
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                return data_.store_job.state == "running" || data_.store_fetching || !data_.store_loaded;
+            }();
+            if (now - last_store >= (storing ? 1500000 : 10000000))
+            {
+                last_store = now;
+                poll_store();
+            }
+        }
+        if (page == Watch::logs)
+        {
+            if (now - last_log >= 2000000)
+            {
+                last_log = now;
+                poll_log();
+            }
+            if (now - last_klog >= 1000000)
+            {
+                last_klog = now;
+                poll_klog();
+            }
         }
         sys::sleep_us(100000);
     }
@@ -558,6 +646,318 @@ void HttpSource::handle(const Request &request)
     case Request::Kind::reload:
         notice(Notice::Kind::info, "Daten werden neu geladen");
         break;
+    case Request::Kind::config:
+        if (exchange("PUT", "/api/v1/config", request.text, &status, &body) == Net::ok && status < 300)
+            notice(Notice::Kind::success, "Gespeichert");
+        else
+            notice(Notice::Kind::error, "Nicht gespeichert", message_of(body, "Die App hat nicht geantwortet."));
+        poll_config();
+        poll_status();
+        break;
+    case Request::Kind::selftest:
+        if (exchange("POST", "/api/v1/fan/selftest", request.value != 0 ? "{\"action\":\"start\"}" : "{\"action\":\"abort\"}",
+                     &status, &body) != Net::ok ||
+            status >= 300)
+            notice(Notice::Kind::error, request.value != 0 ? "Selbsttest nicht möglich" : "Abbrechen nicht möglich",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_selftest();
+        break;
+    case Request::Kind::power:
+    {
+        std::snprintf(payload, sizeof(payload), "{\"action\":\"%.16s\"}", request.id.c_str());
+        if (exchange("POST", "/api/v1/power", payload, &status, &body) == Net::ok && status < 300)
+            notice(Notice::Kind::info, "Befehl angenommen", message_of(body, ""));
+        else
+            notice(Notice::Kind::error, "Nicht ausgeführt", message_of(body, "Die App hat nicht geantwortet."));
+        break;
+    }
+    case Request::Kind::payload_start:
+        if (exchange("POST", "/api/v1/payload-files/start", request.text, &status, &body, 10) == Net::ok &&
+            status < 300)
+            notice(Notice::Kind::success, "„" + request.id + "“ gestartet", "An den ELF-Loader gesendet.");
+        else
+            notice(Notice::Kind::error, "„" + request.id + "“ nicht gestartet",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_payloads();
+        break;
+    case Request::Kind::payload_kill:
+        std::snprintf(payload, sizeof(payload), "{\"pid\":%d}", request.value);
+        if (exchange("POST", "/api/v1/payloads/kill", payload, &status, &body) == Net::ok && status < 300)
+            notice(Notice::Kind::info, "Payload beendet");
+        else
+            notice(Notice::Kind::error, "Beenden nicht möglich", message_of(body, "Die App hat nicht geantwortet."));
+        poll_payloads();
+        break;
+    case Request::Kind::store:
+    {
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "action", request.text.c_str());
+        if (!request.id.empty())
+            cJSON_AddStringToObject(root, "id", request.id.c_str());
+        char *text = cJSON_PrintUnformatted(root);
+        const Net net = exchange("POST", "/api/v1/paystore", text != nullptr ? text : "{}", &status, &body, 10);
+        cJSON_free(text);
+        cJSON_Delete(root);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Payload-Store", message_of(body, "Die App hat nicht geantwortet."));
+        else if (request.text == "start")
+            notice(Notice::Kind::success, "Gestartet", "An den ELF-Loader gesendet.");
+        else if (request.text == "refresh")
+            notice(Notice::Kind::info, "Liste wird neu geladen");
+        poll_store();
+        break;
+    }
+    }
+}
+
+void HttpSource::poll_config()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/config", {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    Config c;
+    c.valid = true;
+    c.mode = str(root, "mode");
+    c.profile = str(root, "profile");
+    c.target_min_c = static_cast<int>(num(root, "target_min_c", 50));
+    c.target_max_c = static_cast<int>(num(root, "target_max_c", 91));
+    c.safety_temp_c = static_cast<int>(num(root, "safety_temp_c", 78));
+    c.safety_min_c = static_cast<int>(num(root, "safety_min_c", 72));
+    c.safety_max_c = static_cast<int>(num(root, "safety_max_c", 95));
+    c.night_enabled = num(root, "night_enabled", 0) != 0.0;
+    c.night_start_min = static_cast<int>(num(root, "night_start_min", 1380));
+    c.night_end_min = static_cast<int>(num(root, "night_end_min", 420));
+    c.night_target_c = static_cast<int>(num(root, "night_target_c", 75));
+    c.tz_offset_min = static_cast<int>(num(root, "night_tz_offset_min", 0));
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.config = c;
+    ++data_.serial;
+}
+
+void HttpSource::poll_selftest()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/fan/selftest", {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    SelfTest t;
+    t.state = str(root, "state");
+    t.verdict = str(root, "verdict");
+    t.why = str(root, "why");
+    t.baseline_pct = static_cast<int>(num(root, "baseline_pct"));
+    t.peak_pct = static_cast<int>(num(root, "peak_pct"));
+    t.rise_pct = static_cast<int>(num(root, "rise_pct"));
+    t.threshold_c = static_cast<int>(num(root, "threshold_c"));
+    t.hottest_c = static_cast<int>(num(root, "hottest_c"));
+    t.elapsed_s = static_cast<int>(num(root, "elapsed_s"));
+    t.limit_s = static_cast<int>(num(root, "limit_s"));
+    const cJSON *sample = nullptr;
+    cJSON_ArrayForEach(sample, cJSON_GetObjectItemCaseSensitive(root, "samples"))
+    {
+        if (cJSON_IsNumber(sample))
+            t.samples.push_back(static_cast<int>(sample->valuedouble));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.selftest = t;
+    ++data_.serial;
+}
+
+void HttpSource::poll_payloads()
+{
+    int status = 0;
+    std::string body;
+    std::vector<PayloadFile> files;
+    bool files_ok = false;
+    if (exchange("GET", "/api/v1/payload-files", {}, &status, &body, 6) == Net::ok && status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            files_ok = true;
+            const auto add = [&](const cJSON *item, const char *source, const std::string &mount,
+                                 const std::string &where)
+            {
+                PayloadFile f;
+                f.source = source;
+                f.mount = mount;
+                f.where = where;
+                f.dir = str(item, "dir");
+                f.name = str(item, "name");
+                f.size = static_cast<std::uint64_t>(num(item, "size"));
+                f.mtime = static_cast<std::int64_t>(num(item, "mtime"));
+                const cJSON *valid = cJSON_GetObjectItemCaseSensitive(item, "valid");
+                f.valid = !cJSON_IsBool(valid) || cJSON_IsTrue(valid);
+                f.why = str(item, "why");
+                if (f.why.empty())
+                    f.why = str(item, "reason");
+                files.push_back(std::move(f));
+            };
+            const cJSON *item = nullptr;
+            cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "internal"))
+                add(item, "internal", {}, "Intern");
+            const cJSON *usb = nullptr;
+            cJSON_ArrayForEach(usb, cJSON_GetObjectItemCaseSensitive(root, "usb"))
+            {
+                const std::string mount = str(usb, "mount");
+                const std::string label = str(usb, "label");
+                cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(usb, "items"))
+                    add(item, "usb", mount, label.empty() ? mount : label);
+            }
+            cJSON_Delete(root);
+        }
+    }
+    std::vector<RunningPayload> running;
+    bool running_ok = false;
+    if (exchange("GET", "/api/v1/payloads", {}, &status, &body, 6) == Net::ok && status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            running_ok = true;
+            const cJSON *item = nullptr;
+            cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "payloads"))
+            {
+                RunningPayload p;
+                p.pid = static_cast<int>(num(item, "pid"));
+                p.name = str(item, "name");
+                p.memory_mb = static_cast<int>(num(item, "memory_mb"));
+                p.self = flag(item, "is_self");
+                running.push_back(std::move(p));
+            }
+            cJSON_Delete(root);
+        }
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (files_ok)
+    {
+        data_.payload_files = std::move(files);
+        data_.payload_files_loaded = true;
+    }
+    if (running_ok)
+        data_.running = std::move(running);
+    if (files_ok || running_ok)
+        ++data_.serial;
+}
+
+void HttpSource::poll_store()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/paystore?refresh=1", {}, &status, &body, 15) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    std::vector<StoreItem> items;
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "items"))
+    {
+        StoreItem s;
+        s.id = str(item, "id");
+        s.name = str(item, "name");
+        s.filename = str(item, "filename");
+        s.version = str(item, "version");
+        s.category = str(item, "category");
+        s.description = str(item, "description");
+        s.installed_version = str(cJSON_GetObjectItemCaseSensitive(item, "installed"), "version");
+        s.update = flag(item, "update");
+        s.name_taken = flag(item, "name_taken");
+        items.push_back(std::move(s));
+    }
+    StoreJob job;
+    const cJSON *j = cJSON_GetObjectItemCaseSensitive(root, "job");
+    job.state = str(j, "state");
+    job.id = str(j, "id");
+    job.name = str(j, "name");
+    job.error = str(j, "error");
+    job.done = num(j, "done");
+    job.total = num(j, "total");
+    const bool loaded = flag(root, "loaded");
+    const bool fetching = flag(root, "fetching");
+    const std::string error = str(root, "error");
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (data_.store_job.state == "running" && job.state == "done")
+        notices_.push_back({Notice::Kind::success, "„" + job.name + "“ geladen", {}, {}, {}, {}, {}});
+    if (data_.store_job.state == "running" && job.state == "failed")
+        notices_.push_back({Notice::Kind::error, "„" + job.name + "“ nicht geladen", job.error, {}, {}, {}, {}});
+    data_.store = std::move(items);
+    data_.store_job = job;
+    data_.store_loaded = loaded;
+    data_.store_fetching = fetching;
+    data_.store_error = error;
+    ++data_.serial;
+}
+
+void HttpSource::poll_log()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/logs/tail?count=150", {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    std::vector<LogEntry> log;
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "entries"))
+    {
+        LogEntry e;
+        e.t_ms = static_cast<std::int64_t>(num(item, "timestamp_ms"));
+        e.level = str(item, "level");
+        e.code = str(item, "code");
+        e.message = str(item, "message");
+        log.push_back(std::move(e));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.log = std::move(log);
+    ++data_.serial;
+}
+
+void HttpSource::poll_klog()
+{
+    std::int64_t after = 0;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!data_.klog.empty())
+            after = data_.klog.back().n;
+    }
+    char path[96];
+    std::snprintf(path, sizeof(path), "/api/v1/klog?after=%lld&max=%d", static_cast<long long>(after),
+                  after == 0 ? 300 : 500);
+    int status = 0;
+    std::string body;
+    if (exchange("GET", path, {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    std::vector<KlogLine> fresh;
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "lines"))
+    {
+        KlogLine line;
+        line.n = static_cast<std::int64_t>(num(item, "n"));
+        line.t_ms = static_cast<std::int64_t>(num(item, "t"));
+        line.text = str(item, "s");
+        fresh.push_back(std::move(line));
+    }
+    const bool lost = flag(root, "lost");
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    const bool added = klog_append(data_.klog, fresh, kKlogKeep);
+    if (added || lost != data_.klog_lost)
+    {
+        data_.klog_lost = data_.klog_lost || lost;
+        ++data_.serial;
     }
 }
 

@@ -131,6 +131,18 @@ class MockSource final : public Source
             {1793070000, "convert", "Iron Tide", "exFAT → ffpkg", "cancelled", 0},
             {1793060000, "copy", "Sky Drifters", "→ Interne SSD", "failed", 0},
         };
+        data_.config.valid = true;
+        data_.config.mode = "automatic";
+        data_.config.profile = "comfort";
+        data_.config.safety_temp_c = 82;
+        data_.config.night_enabled = true;
+        data_.config.night_start_min = 23 * 60;
+        data_.config.night_end_min = 7 * 60;
+        data_.config.night_target_c = 80;
+        data_.config.tz_offset_min = 60;
+        fill_payloads();
+        fill_store();
+        fill_logs();
         refresh_status();
     }
 
@@ -181,6 +193,98 @@ class MockSource final : public Source
             if (copy.active && copy.done < copy.total)
                 copy.done = std::fmin(copy.total, copy.done + copy.total * 0.002);
             refresh_status();
+            step_selftest();
+            step_store();
+            add_klog_lines(2);
+            changed();
+        }
+    }
+
+    void watch(Watch page) override
+    {
+        (void)page;
+    }
+
+    void save_config(const std::string &patch) override
+    {
+        (void)patch;
+        notice(Notice::Kind::success, "Gespeichert");
+    }
+
+    void selftest(bool start) override
+    {
+        SelfTest &t = data_.selftest;
+        if (!start)
+        {
+            if (t.state == "running")
+            {
+                t.state = "finished";
+                t.verdict = "aborted";
+                t.why = "Abgebrochen.";
+                changed();
+            }
+            return;
+        }
+        t = SelfTest{};
+        t.state = "running";
+        t.limit_s = 30;
+        t.threshold_c = 45;
+        t.hottest_c = 52;
+        t.baseline_pct = 20;
+        t.samples = {20};
+        changed();
+    }
+
+    void power(const std::string &action) override
+    {
+        notice(Notice::Kind::info, "Befehl angenommen", "Vorschau am PC: „" + action + "“ wird nicht ausgeführt.");
+    }
+
+    void start_payload(const PayloadFile &file) override
+    {
+        notice(Notice::Kind::success, "„" + file.name + "“ gestartet", "An den ELF-Loader gesendet.");
+    }
+
+    void kill_payload(int pid) override
+    {
+        for (std::size_t i = 0; i < data_.running.size(); ++i)
+        {
+            if (data_.running[i].pid != pid)
+                continue;
+            notice(Notice::Kind::info, "„" + data_.running[i].name + "“ beendet");
+            data_.running.erase(data_.running.begin() + static_cast<std::ptrdiff_t>(i));
+            changed();
+            return;
+        }
+    }
+
+    void store_action(const std::string &action, const std::string &id) override
+    {
+        if (action == "refresh")
+        {
+            notice(Notice::Kind::info, "Liste wird neu geladen");
+            return;
+        }
+        const StoreItem *item = nullptr;
+        for (const StoreItem &s : data_.store)
+        {
+            if (s.id == id)
+                item = &s;
+        }
+        if (item == nullptr)
+            return;
+        if (action == "start")
+        {
+            notice(Notice::Kind::success, "„" + item->name + "“ gestartet");
+            return;
+        }
+        if (action == "install")
+        {
+            data_.store_job.state = "running";
+            data_.store_job.id = item->id;
+            data_.store_job.name = item->name;
+            data_.store_job.total = 4.2e6;
+            data_.store_job.done = 0.0;
             changed();
         }
     }
@@ -249,11 +353,6 @@ class MockSource final : public Source
         changed();
     }
 
-    void watch_jobs(bool watching) override
-    {
-        (void)watching;
-    }
-
     void quit_app() override
     {
         notice(Notice::Kind::info, "Beenden", "In der Vorschau am PC gibt es nichts zu beenden.");
@@ -304,6 +403,158 @@ class MockSource final : public Source
         s.automatic = true;
     }
 
+    void fill_payloads()
+    {
+        struct File
+        {
+            const char *source, *mount, *where, *name;
+            double mb;
+            bool valid;
+        };
+        static constexpr File kFiles[] = {
+            {"internal", "", "Intern", "ShadowMountPlus_1.7beta7.elf", 2.5, true},
+            {"internal", "", "Intern", "PKG-Manager_v1.5.1.elf", 2.0, true},
+            {"internal", "", "Intern", "pldmgr_v0.6.3.elf", 2.8, true},
+            {"internal", "", "Intern", "nanodns_v0.4.elf", 0.13, true},
+            {"internal", "", "Intern", "kaputt.elf", 0.0, false},
+            {"usb", "/mnt/usb0", "USB-Speicher 1", "ps4mount_v0.7.0.elf", 1.1, true},
+        };
+        for (const File &f : kFiles)
+        {
+            PayloadFile p;
+            p.source = f.source;
+            p.mount = f.mount;
+            p.where = f.where;
+            p.name = f.name;
+            p.size = static_cast<std::uint64_t>(f.mb * 1e6);
+            p.mtime = 1792448650;
+            p.valid = f.valid;
+            if (!f.valid)
+                p.why = "Keine ELF-Datei (die ersten Bytes passen nicht).";
+            data_.payload_files.push_back(p);
+        }
+        data_.payload_files_loaded = true;
+        data_.running = {{236, "PS5 Cooling & System Center - Pro (diese App)", 25, true},
+                         {194, "shadowmountplus.elf", 101, false},
+                         {114, "elfldr.elf", 15, false},
+                         {112, "ftpsrv.elf", 3, false},
+                         {111, "klogsrv.elf", 2, false},
+                         {106, "kstuff.elf", 4, false}};
+    }
+
+    void fill_store()
+    {
+        struct Item
+        {
+            const char *id, *name, *version, *category, *description, *installed;
+            bool update;
+        };
+        static constexpr Item kItems[] = {
+            {"shadowmountplus", "ShadowMountPlus", "1.7beta7", "Utilities & Tools",
+             "Ein automatischer Mounter für Spiele-Abbilder im Hintergrund.", "1.7beta7", false},
+            {"pldmgr", "pldmgr", "v0.6.4", "Utilities & Tools", "Payloads verwalten und automatisch laden.", "v0.6.3",
+             true},
+            {"ps5upload", "ps5upload", "v8.4.0", "Networking & Servers",
+             "Schnelle Übertragung vom Rechner auf die PS5 (braucht die PC-App).", "", false},
+            {"ftpsrv", "ftpsrv", "v0.15", "Networking & Servers", "FTP-Server auf Port 2121.", "", false},
+            {"kstuff", "kstuff", "v1.6.7", "System & Jailbreak", "Kernel-Hilfen für den Jailbreak.", "", false},
+            {"elfldr", "elfldr", "v0.21", "Loaders", "Der ELF-Loader auf Port 9021.", "", false},
+        };
+        for (const Item &i : kItems)
+        {
+            StoreItem s;
+            s.id = i.id;
+            s.name = i.name;
+            s.filename = std::string(i.name) + "_" + i.version + ".elf";
+            s.version = i.version;
+            s.category = i.category;
+            s.description = i.description;
+            s.installed_version = i.installed;
+            s.update = i.update;
+            data_.store.push_back(s);
+        }
+        data_.store_loaded = true;
+    }
+
+    void fill_logs()
+    {
+        static constexpr const char *kLog[][3] = {
+            {"INFO", "target_temp_changed", "Zieltemperatur auf 75 °C gesetzt."},
+            {"INFO", "library_after_exit", "Start von Crash Bandicoot 4 (PPSA02433) vorgemerkt."},
+            {"INFO", "playtime_session", "Spielzeit: Titel PPSA02433 – Sitzung beginnt."},
+            {"WARN", "fan_threshold_overridden", "Die Konsole hat die Lüftereinstellung auf 91 °C gesetzt. Zurückgestellt auf 80 °C."},
+            {"INFO", "fan_threshold_applied", "An die Konsole übergeben: 78 °C – Durchschnitt 71,4 °C, gewünschte Drehzahl 46 %."},
+            {"ERROR", "paystore_fetch_failed", "Die Liste der Payloads ließ sich nicht laden (Zeitüberschreitung)."},
+            {"INFO", "paystore_loaded", "34 Payloads in der Liste."},
+        };
+        std::int64_t t = 1793114617243;
+        for (const auto &line : kLog)
+        {
+            data_.log.push_back({t, line[0], line[1], line[2]});
+            t += 41000;
+        }
+        add_klog_lines(40);
+    }
+
+    void add_klog_lines(int count)
+    {
+        static constexpr const char *kLines[] = {
+            "icc_fan_get_fan_manual_duty: duty: 0000",
+            "[dce-ft:1131 Info]<236>0x0: opened",
+            "[dce-ft:1303 Info]<236>0x0: closed",
+            "[SceShellUI] I/PSM.UI : SceneQ : Loaded[0.00msec] : SplashScreen.PPSA86921 : SplashScreen",
+            "[SceLncService] launchApp(PPSA02433)",
+            "[AvControl] Waiting for the pstate event : done",
+            "[Syscore Umd] Set memory pstate (hasRunningGame=1, hasRunningMiniApp=0, isSplashDisplayed=0)",
+        };
+        std::vector<KlogLine> fresh;
+        for (int i = 0; i < count; ++i)
+        {
+            ++klog_n_;
+            fresh.push_back({klog_n_, 1793116465587 + klog_n_ * 480, kLines[klog_n_ % 7]});
+        }
+        klog_append(data_.klog, fresh, kKlogKeep);
+    }
+
+    void step_selftest()
+    {
+        SelfTest &t = data_.selftest;
+        if (t.state != "running")
+            return;
+        ++t.elapsed_s;
+        const int pct = std::min(20 + t.elapsed_s * 4, 62);
+        t.samples.push_back(pct);
+        t.peak_pct = std::max(t.peak_pct, pct);
+        t.rise_pct = t.peak_pct - t.baseline_pct;
+        if (t.elapsed_s >= 12)
+        {
+            t.state = "finished";
+            t.verdict = "responds";
+            t.why = "Der Lüfter reagiert.";
+        }
+    }
+
+    void step_store()
+    {
+        StoreJob &job = data_.store_job;
+        if (job.state != "running")
+            return;
+        job.done = std::min(job.total, job.done + job.total * 0.18);
+        if (job.done >= job.total)
+        {
+            job.state = "done";
+            for (StoreItem &s : data_.store)
+            {
+                if (s.id == job.id)
+                {
+                    s.installed_version = s.version;
+                    s.update = false;
+                }
+            }
+            notice(Notice::Kind::success, "„" + job.name + "“ geladen");
+        }
+    }
+
     void notice(Notice::Kind kind, std::string title, std::string body = {})
     {
         Notice n;
@@ -326,6 +577,7 @@ class MockSource final : public Source
     float target_at_ = 0.0f;
     std::string closing_;
     float close_at_ = 0.0f;
+    std::int64_t klog_n_ = 51400;
 };
 
 Source *g_source = nullptr;
@@ -380,6 +632,57 @@ std::string format_playtime(std::uint64_t seconds)
     if (seconds < 3600)
         return std::to_string((seconds + 59) / 60) + " min";
     return format_decimal(static_cast<float>(seconds) / 3600.0f, 1) + " h";
+}
+
+std::string format_clock(int minutes)
+{
+    const int m = ((minutes % 1440) + 1440) % 1440;
+    char text[8];
+    std::snprintf(text, sizeof(text), "%02d:%02d", m / 60, m % 60);
+    return text;
+}
+
+std::string format_time_of_day(std::int64_t ms, int tz_offset_min)
+{
+    const std::int64_t s = ms / 1000 + static_cast<std::int64_t>(tz_offset_min) * 60;
+    const std::int64_t day = ((s % 86400) + 86400) % 86400;
+    char text[12];
+    std::snprintf(text, sizeof(text), "%02d:%02d:%02d", static_cast<int>(day / 3600),
+                  static_cast<int>(day / 60 % 60), static_cast<int>(day % 60));
+    return text;
+}
+
+std::string format_date(std::int64_t seconds)
+{
+    // Civil date from days since 1970 (Howard Hinnant's algorithm): no time zone database on the console.
+    std::int64_t z = (seconds >= 0 ? seconds : seconds - 86399) / 86400 + 719468;
+    const std::int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+    const std::int64_t doe = z - era * 146097;
+    const std::int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    const std::int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    const std::int64_t mp = (5 * doy + 2) / 153;
+    const int d = static_cast<int>(doy - (153 * mp + 2) / 5 + 1);
+    const int m = static_cast<int>(mp < 10 ? mp + 3 : mp - 9);
+    const int y = static_cast<int>(yoe + era * 400 + (m <= 2 ? 1 : 0));
+    char text[16];
+    std::snprintf(text, sizeof(text), "%02d.%02d.%04d", d, m, y);
+    return text;
+}
+
+bool klog_append(std::vector<KlogLine> &ring, const std::vector<KlogLine> &fresh, std::size_t keep)
+{
+    const std::int64_t last = ring.empty() ? 0 : ring.back().n;
+    bool added = false;
+    for (const KlogLine &line : fresh)
+    {
+        if (line.n <= last)
+            continue;
+        ring.push_back(line);
+        added = true;
+    }
+    if (ring.size() > keep)
+        ring.erase(ring.begin(), ring.begin() + static_cast<std::ptrdiff_t>(ring.size() - keep));
+    return added;
 }
 
 } // namespace hui::ps5cc

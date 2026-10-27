@@ -29,7 +29,13 @@ class HttpSource final : public Source
     void open_web_ui() override;
     void reload() override;
     void retry() override;
-    void watch_jobs(bool watching) override;
+    void watch(Watch page) override;
+    void save_config(const std::string &patch) override;
+    void selftest(bool start) override;
+    void power(const std::string &action) override;
+    void start_payload(const PayloadFile &file) override;
+    void kill_payload(int pid) override;
+    void store_action(const std::string &action, const std::string &id) override;
     void quit_app() override;
 
     // The worker; public only for the thread entry.
@@ -46,9 +52,16 @@ class HttpSource final : public Source
             cancel,
             web,
             reload,
+            config,
+            selftest,
+            power,
+            payload_start,
+            payload_kill,
+            store,
         } kind;
         int value = 0;
         std::string id;
+        std::string text; // a JSON body, or the store's action
     };
 
     void push(Request request);
@@ -60,6 +73,12 @@ class HttpSource final : public Source
     void poll_library();
     void poll_jobs();
     void poll_history();
+    void poll_config();
+    void poll_selftest();
+    void poll_payloads();
+    void poll_store();
+    void poll_log();
+    void poll_klog();
     void fetch_cover();
     std::string game_name(const std::string &id);
 
@@ -67,7 +86,8 @@ class HttpSource final : public Source
     Snapshot data_;
     std::deque<Notice> notices_;
     std::deque<Request> requests_;
-    std::atomic<bool> watching_{false};
+    std::atomic<Watch> watching_{Watch::none};
+    std::atomic<bool> config_wanted_{true};
     std::atomic<bool> retry_{false};
     bool online_ = false;
     bool payload_sent_ = false;

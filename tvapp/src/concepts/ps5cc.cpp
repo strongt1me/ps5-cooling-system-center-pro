@@ -1,4 +1,4 @@
-// ps5cc - The console screen of PS5 Cooling & System Center: cooling, games, jobs.
+// ps5cc - The console screen of PS5 Cooling & System Center: cooling, games, jobs, settings, payloads, logs.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -11,14 +11,18 @@
 #include "core/tween.hpp"
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/look.hpp"
+#include "ps5cc/pages.hpp"
 #include "ui/components.hpp"
 #include "ui/glyphs.hpp"
 #include "ui/motion.hpp"
 #include "ui/widgets.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <deque>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -33,21 +37,20 @@ using gfx::Rect;
 using ps5cc::JobKind;
 using ps5cc::Link;
 
-const Color kNavy = Color::rgb(0x070d1f);
-const Color kNavyHigh = Color::rgb(0x0d1732);
-const Color kBlue = Color::rgb(0x3880ff);
-const Color kGood = Color::rgb(0x0ca30c);
-const Color kWarning = Color::rgb(0xfab219);
-const Color kCritical = Color::rgb(0xd03b3b);
-const Color kInk = Color::rgb(0xe8eefc);
-const Color kMuted = Color::rgb(0x93a1c4);
-
-constexpr float kMargin = 96.0f;
-constexpr float kTop = 160.0f;
-constexpr float kBottom = 960.0f;
-constexpr float kLeftW = 1060.0f;
-constexpr float kRightX = 1180.0f;
-constexpr float kRightW = 1824.0f - kRightX;
+using ps5cc::kBlue;
+using ps5cc::kBottom;
+using ps5cc::kCritical;
+using ps5cc::kGood;
+using ps5cc::kInk;
+using ps5cc::kLeftW;
+using ps5cc::kMargin;
+using ps5cc::kMuted;
+using ps5cc::kNavy;
+using ps5cc::kNavyHigh;
+using ps5cc::kRightW;
+using ps5cc::kRightX;
+using ps5cc::kTop;
+using ps5cc::kWarning;
 constexpr int kTargetMin = 50;
 constexpr int kTargetMax = 91;
 constexpr float kApplyDelay = 0.6f;
@@ -59,13 +62,24 @@ enum Tab
     kCooling = 0,
     kGames = 1,
     kJobs = 2,
+    kSettings = 3,
+    kPayloads = 4,
+    kLogs = 5,
+    kTabs = 6,
 };
+
+// The pages from kSettings on live in src/ps5cc/*_page.cpp.
+constexpr int kFirstPage = kSettings;
 
 enum MenuTag
 {
     kMenuWeb = 1,
     kMenuReload = 2,
     kMenuQuit = 3,
+    kMenuStandby = 4,
+    kMenuReboot = 5,
+    kMenuOff = 6,
+    kMenuSafe = 7,
 };
 
 enum DialogPurpose
@@ -73,6 +87,7 @@ enum DialogPurpose
     kDialogNone,
     kDialogOtherRunning,
     kDialogCancelJob,
+    kDialogPower,
 };
 
 constexpr const char *kTechniques[] = {
@@ -199,11 +214,16 @@ class Ps5cc final : public app::Concept
         tabs_.style.theme = theme_;
         tabs_.style.kind = ui::TabKind::pill;
         tabs_.style.width = ui::TabWidth::equal;
-        tabs_.style.text_size = 26.0f;
-        tabs_.style.height = 60.0f;
-        tabs_.set_tabs({{"Kühlung"}, {"Spiele"}, {"Aufträge"}});
-        tabs_.set_bounds({1920.0f * 0.5f - 330.0f, 44.0f, 660.0f, 64.0f});
+        tabs_.style.text_size = 24.0f;
+        tabs_.style.height = 56.0f;
+        tabs_.style.padding = 22.0f;
+        // Six pages: a row of their own under the title line, centred, the shoulder glyphs beside it.
+        tabs_.set_tabs({{"Kühlung"}, {"Spiele"}, {"Aufträge"}, {"Einstellungen"}, {"Payloads"}, {"Protokoll"}});
+        tabs_.set_bounds({kMargin + 110.0f, 78.0f, 1824.0f - kMargin - 220.0f, 60.0f});
         tabs_.set_active(kCooling, true);
+        pages_ = {ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page()};
+        for (const std::unique_ptr<ps5cc::Page> &page : pages_)
+            page->init(theme_);
 
         gauge_.style.theme = theme_;
         gauge_.style.sweep = 4.712389f;
@@ -302,7 +322,7 @@ class Ps5cc final : public app::Concept
         history_.set_bounds({kRightX, kTop + 64.0f, kRightW, kBottom - kTop - 64.0f});
 
         menu_.style.theme = theme_;
-        menu_.style.width = 470.0f;
+        menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         {
             ui::MenuItem web;
@@ -314,10 +334,21 @@ class Ps5cc final : public app::Concept
             ui::MenuItem line;
             line.separator = true;
             ui::MenuItem quit;
-            quit.label = "Beenden";
+            quit.label = "App beenden";
             quit.tag = kMenuQuit;
-            quit.danger = true;
-            menu_.set_items({web, reload, line, quit});
+            // Power-Optionen: each asks first (answer_dialog).
+            const auto power = [](const char *label, int tag, bool danger)
+            {
+                ui::MenuItem item;
+                item.label = label;
+                item.tag = tag;
+                item.danger = danger;
+                item.shortcut = tag == kMenuStandby ? "Power-Optionen" : "";
+                return item;
+            };
+            menu_.set_items({web, reload, quit, line, power("Ruhemodus", kMenuStandby, false),
+                             power("Neu starten", kMenuReboot, false), power("Ausschalten", kMenuOff, true),
+                             power("Abgesicherter Modus", kMenuSafe, true)});
         }
 
         dialog_.style.theme = theme_;
@@ -341,7 +372,7 @@ class Ps5cc final : public app::Concept
         loader_.subtitle = "Die App wird gestartet …";
         loader_.set_tips({"Die Oberfläche holt alle Werte von der App auf der Konsole (Port 8086).",
                           "Die volle Weboberfläche gibt es weiter am Handy oder PC.",
-                          "L1 und R1 wechseln zwischen Kühlung, Spielen und Aufträgen."});
+                          "L1 und R1 wechseln zwischen den sechs Seiten, Options öffnet die Power-Optionen."});
 
         for (ui::Chip &chip : chips_)
         {
@@ -421,6 +452,8 @@ class Ps5cc final : public app::Concept
         for (ui::ProgressBar &bar : bars_)
             bar.update(dt);
         history_.update(dt);
+        for (const std::unique_ptr<ps5cc::Page> &page : pages_)
+            page->update(dt);
         menu_.update(dt);
         dialog_.update(dt);
         link_dialog_.update(dt);
@@ -438,7 +471,8 @@ class Ps5cc final : public app::Concept
     {
         frame.backdrop = theme_.backdrop;
         frame.backdrop.time = clock_;
-        frame.glass = sheet_.visible() || dialog_.visible() || link_dialog_.visible();
+        const ps5cc::Page *page = current_page();
+        frame.glass = sheet_.visible() || dialog_.visible() || link_dialog_.visible() || (page != nullptr && page->modal());
 
         ui::Canvas canvas{frame.scene, context_.fonts, 0, clock_};
         draw_header(canvas);
@@ -450,13 +484,19 @@ class Ps5cc final : public app::Concept
         case kGames:
             draw_games(canvas);
             break;
-        default:
+        case kJobs:
             draw_jobs(canvas);
+            break;
+        default:
+            if (page != nullptr)
+                page->draw(canvas);
             break;
         }
         draw_footer(canvas);
 
         ui::Canvas top{frame.overlay, context_.fonts, frame.glass_texture, clock_};
+        if (page != nullptr)
+            page->draw_overlay(top);
         sheet_.draw(top);
         menu_.draw(top);
         dialog_.draw(top);
@@ -492,7 +532,47 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::back)},
             {0.5f, action_bit(Action::menu)},
             {0.8f, 0, Direction::none, "optionen"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "ausschalten"},
+            {0.3f, action_bit(Action::back)},
+            {0.5f, action_bit(Action::page_next)},
+            {1.0f, 0, Direction::none, "einstellungen"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.9f, 0, Direction::none, "einstellung-geaendert"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {4.0f, 0, Direction::none, "selbsttest"},
+            {0.5f, action_bit(Action::page_next)},
+            {1.0f, 0, Direction::none, "payloads"},
+            {0.4f, action_bit(Action::jump_next)},
+            {0.2f, 0, Direction::down},
+            {0.8f, 0, Direction::none, "payloads-laufend"},
+            {0.2f, action_bit(Action::west)},
+            {0.8f, 0, Direction::none, "payload-beenden"},
             {0.2f, action_bit(Action::back)},
+            {0.4f, action_bit(Action::jump_next)},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {1.2f, 0, Direction::none, "payload-store"},
+            {0.5f, action_bit(Action::page_next)},
+            {1.0f, 0, Direction::none, "protokoll"},
+            {0.4f, action_bit(Action::jump_next)},
+            {1.5f, 0, Direction::none, "kernel-log"},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.6f, 0, Direction::none, "kernel-log-angehalten"},
+            {0.4f, action_bit(Action::page_next)},
             {0.5f, action_bit(Action::r3)},
             {1.3f, 0, Direction::none, "laden"},
             {0.2f, action_bit(Action::r3)},
@@ -523,6 +603,16 @@ class Ps5cc final : public app::Concept
         rebuild_chips();
         if (sheet_.is_open())
             fill_details();
+        for (const std::unique_ptr<ps5cc::Page> &page : pages_)
+            page->absorb(data_);
+    }
+
+    ps5cc::Page *current_page() const
+    {
+        const int tab = tabs_.active();
+        if (tab < kFirstPage || tab >= kTabs)
+            return nullptr;
+        return pages_[static_cast<std::size_t>(tab - kFirstPage)].get();
     }
 
     void sample_chart(float dt)
@@ -781,6 +871,12 @@ class Ps5cc final : public app::Concept
             sheet_.handle(input, feedback);
             return;
         }
+        ps5cc::Page *page = current_page();
+        if (page != nullptr && page->modal())
+        {
+            page->handle(input, feedback);
+            return;
+        }
         if (menu_.is_open())
         {
             if (menu_.handle(input, feedback) == ui::Event::activated)
@@ -792,6 +888,8 @@ class Ps5cc final : public app::Concept
                     src.reload();
                 else if (tag == kMenuQuit)
                     src.quit_app();
+                else if (tag >= kMenuStandby && tag <= kMenuSafe)
+                    ask_power(tag, feedback);
             }
             return;
         }
@@ -816,15 +914,26 @@ class Ps5cc final : public app::Concept
         case kGames:
             route_games(input, feedback);
             break;
-        default:
+        case kJobs:
             route_jobs(input, feedback);
+            break;
+        default:
+            if (page != nullptr)
+                page->handle(input, feedback);
             break;
         }
     }
 
     void switched()
     {
-        ps5cc::source().watch_jobs(tabs_.active() == kJobs);
+        const int tab = tabs_.active();
+        ps5cc::source().watch(tab == kJobs       ? ps5cc::Watch::jobs
+                              : tab == kSettings ? ps5cc::Watch::settings
+                              : tab == kPayloads ? ps5cc::Watch::payloads
+                              : tab == kLogs     ? ps5cc::Watch::logs
+                                                 : ps5cc::Watch::none);
+        if (ps5cc::Page *page = current_page())
+            page->enter();
         if (tabs_.active() == kGames)
             games_.enter();
         if (tabs_.active() == kCooling)
@@ -924,7 +1033,51 @@ class Ps5cc final : public app::Concept
             ps5cc::source().close_game(running_id_);
         if (dialog_purpose_ == kDialogCancelJob && dialog_.choice() == 1)
             ps5cc::source().cancel_job(static_cast<JobKind>(job_focus_));
+        if (dialog_purpose_ == kDialogPower && dialog_.choice() == 1)
+            ps5cc::source().power(power_action_);
         dialog_purpose_ = kDialogNone;
+    }
+
+    // Power-Optionen: every one interrupts what runs, so the question names the consequence (as on the web page).
+    void ask_power(int tag, app::Feedback &feedback)
+    {
+        ui::DialogContent content;
+        content.icon = tag == kMenuStandby ? ui::StatusKind::info : ui::StatusKind::warning;
+        bool destructive = false;
+        const char *button = "";
+        switch (tag)
+        {
+        case kMenuStandby:
+            power_action_ = "standby";
+            content.title = "Ruhemodus?";
+            content.body = "Die Konsole geht in den Ruhemodus. Ein laufendes Spiel wird pausiert.";
+            button = "Ruhemodus";
+            break;
+        case kMenuReboot:
+            power_action_ = "reboot";
+            content.title = "Neu starten?";
+            content.body = "Die Konsole startet neu. Nicht gespeicherte Spielstände gehen verloren.";
+            button = "Neu starten";
+            break;
+        case kMenuOff:
+            power_action_ = "off";
+            content.title = "Ausschalten?";
+            content.body = "Die Konsole wird ausgeschaltet. Nicht gespeicherte Spielstände gehen verloren.";
+            button = "Ausschalten";
+            destructive = true;
+            break;
+        default:
+            power_action_ = "safemode";
+            content.title = "Abgesicherter Modus?";
+            content.body = "Die Konsole startet neu und bleibt im Menü des abgesicherten Modus stehen. Von dort führt "
+                           "„PS5 neu starten“ ganz normal zurück – es wird nichts gelöscht.";
+            button = "Abgesicherter Modus";
+            destructive = true;
+            break;
+        }
+        content.buttons = {{"Abbrechen"}, {button, ui::ButtonKind::primary, destructive}};
+        dialog_purpose_ = kDialogPower;
+        dialog_.open(content, feedback);
     }
 
     void show_notice(const ps5cc::Notice &n, app::Feedback &feedback)
@@ -987,9 +1140,9 @@ class Ps5cc final : public app::Concept
     {
         gfx::DrawList &list = canvas.list;
         const ui::Fonts &fonts = canvas.fonts;
-        ui::text(list, fonts.semibold, "PS5 COOLING & SYSTEM CENTER", kMargin, 72.0f, 18.0f, kBlue,
-                 gfx::Align::left, 3.0f);
-        ui::text(list, fonts.display, "Pro", kMargin, 112.0f, 30.0f, kInk);
+        const float brand = ui::text(list, fonts.semibold, "PS5 COOLING & SYSTEM CENTER", kMargin, 52.0f, 18.0f,
+                                     kBlue, gfx::Align::left, 3.0f);
+        ui::text(list, fonts.display, "Pro", kMargin + brand + 14.0f, 53.0f, 22.0f, kInk);
 
         const ui::GlyphStyle glyphs = ui::GlyphStyle::dark();
         // The bar centres its tabs in its bounds: the shoulder glyphs go beside the tabs themselves.
@@ -1001,14 +1154,13 @@ class Ps5cc final : public app::Concept
         ui::draw_button(list, fonts, glyphs, ui::Button::r1, last.x + last.w + 30.0f, cy, 40.0f);
         tabs_.draw(canvas);
 
-        // What runs on the console right now, top right.
+        // What runs on the console right now, top right on the title line.
         const ps5cc::Status &s = data_.status;
-        const std::string line = !s.game_name.empty() ? s.game_name : "Kein Spiel";
-        ui::text(list, fonts.regular, s.game_name.empty() ? "Startbildschirm" : "Im Spiel", 1824.0f,
-                 72.0f, 18.0f, kMuted, gfx::Align::right);
         ui::Painter paint(list, fonts, theme_);
-        ui::text(list, fonts.semibold, ui::fit_label(paint, line, 24.0f, 420.0f), 1824.0f, 106.0f, 24.0f,
-                 kInk, gfx::Align::right);
+        const std::string name = ui::fit_label(paint, s.game_name.empty() ? "Kein Spiel" : s.game_name, 22.0f, 640.0f);
+        const float w = ui::text(list, fonts.semibold, name, 1824.0f, 53.0f, 22.0f, kInk, gfx::Align::right);
+        ui::text(list, fonts.regular, s.game_name.empty() ? "Startbildschirm ·" : "Im Spiel ·", 1824.0f - w - 10.0f,
+                 53.0f, 18.0f, kMuted, gfx::Align::right);
     }
 
     void draw_cooling(ui::Canvas &canvas) const
@@ -1195,7 +1347,7 @@ class Ps5cc final : public app::Concept
     {
         gfx::DrawList &list = canvas.list;
         const ui::GlyphStyle glyphs = ui::GlyphStyle::dark();
-        ui::Hint hints[4];
+        ui::Hint hints[5];
         int count = 0;
         hints[count++] = {ui::Button::l1, "Seiten", ui::Button::r1};
         switch (tabs_.active())
@@ -1208,9 +1360,13 @@ class Ps5cc final : public app::Concept
             hints[count++] = {ui::Button::cross, "Starten"};
             hints[count++] = {ui::Button::triangle, "Details"};
             break;
-        default:
+        case kJobs:
             hints[count++] = {ui::Button::dpad, "Auswählen"};
             hints[count++] = {ui::Button::square, "Abbrechen"};
+            break;
+        default:
+            if (const ps5cc::Page *page = current_page())
+                count += page->hints(hints + count);
             break;
         }
         list.line(kMargin, 966.0f, 1824.0f, 966.0f, 1.0f, Color::rgb(0x3880ff, 0.18f));
@@ -1257,9 +1413,11 @@ class Ps5cc final : public app::Concept
     int job_focus_ = 0;
     ui::SpringRect job_focus_amount_;
 
+    std::array<std::unique_ptr<ps5cc::Page>, kTabs - kFirstPage> pages_;
     ui::Menu menu_;
     ui::Dialog dialog_;
     DialogPurpose dialog_purpose_ = kDialogNone;
+    std::string power_action_;
     std::string running_id_;
     float leave_in_ = 0.0f; // seconds until the app ends itself for a booked launch
     ui::Dialog link_dialog_;

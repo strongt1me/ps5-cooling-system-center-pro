@@ -11,6 +11,7 @@
 - **Cover** in der Spieleliste und in den Details: Der Netzwerk-Faden lädt sie nacheinander (das Spiel im Fokus zuerst), verkleinert sie auf 160×160 und blendet sie über die Buchstaben-Kachel ein; PNG-Decoder stb_image 2.30 (gemeinfrei/MIT, Prüfsumme in `tvapp/ORIGIN.md`)
 - Behoben: Die Details (△) flackerten und sprangen, weil sie mit jeder Status-Aktualisierung neu befüllt wurden und dabei ihre Einblend-Animation neu begann; Werte bleiben einzeilig
 - Der Verlauf auf „Kühlung“ reicht immer bis mindestens 91 °C (Achse 20–100), damit eine normale Temperatur nicht wie „am Anschlag“ aussieht
+- **Neue Reiter** (sechs in einer eigenen Leiste, L1/R1; L2/R2 wechselt innerhalb einer Seite): **Einstellungen** (Modus, Betriebsart, Sicherheitsgrenze, Nachtmodus mit Beginn/Ende/Nachtziel, gespeichert 0,6 s nach der letzten Änderung; Lüfter-Selbsttest mit Verlauf), **Payloads** (eigene starten, laufende beenden, Payload-Store mit Laden/Aktualisieren/Starten), **Protokoll** (App-Protokoll und Kernel-Log live, hält beim Hochblättern an). Das Menü hat die **Power-Optionen** (Ruhemodus, Neu starten, Ausschalten, Abgesicherter Modus, jeweils mit Rückfrage). Abgefragt wird nur, solange der Reiter offen ist. Auf der Konsole noch nicht durchgetestet
 
 ### Dateimanager: ganze Ordner hochladen
 - Neuer Knopf **„Ordner hochladen“**, und Ordner lassen sich auf die Liste ziehen: Die Ordnerstruktur wird auf der Konsole angelegt, dann laufen die Dateien einzeln mit Fortschritt; Dateien, die es am Ziel schon gibt, werden übersprungen und gezählt, nie überschrieben
