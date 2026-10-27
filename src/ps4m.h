@@ -38,10 +38,6 @@ char *ps4m_game_json(const char *tid, char *msg, size_t cap);
 int   ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap);
 /* Picks which add-ons stay on: a comma-separated list of content ids ("" = all off). 0 = taken over. */
 int   ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap);
-/* Starts a PS4Mount game for the signed-in user. 1 with the open game's name in msg when another one must be closed
-   first (ask, then call again with force); 0 = starting; -1 refused (msg says why). */
-int   ps4m_launch(const char *tid, int force, char *msg, size_t cap);
-
 /* Copies a downloaded, verified update package (updates.c) to the root of the drive tid's PS4Mount folder is on and
    starts a rescan: the next pass sorts it in exactly like one dropped there by hand (adopt_dir_pkgs), including the
    version check that keeps an older file from demoting a newer one already in use. The normal AppInstUtil install

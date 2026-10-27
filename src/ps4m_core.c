@@ -51,7 +51,6 @@ int ps4m_title_managed(const char *tid) { (void)tid; return 0; }
 char *ps4m_game_json(const char *tid, char *msg, size_t cap) { (void)tid; snprintf(msg, cap, "Host-Test"); return NULL; }
 int ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap) { (void)tid; (void)rel; snprintf(msg, cap, "Host-Test"); return -1; }
 int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) { (void)tid; (void)on; snprintf(msg, cap, "Host-Test"); return -1; }
-int ps4m_launch(const char *tid, int force, char *msg, size_t cap) { (void)tid; (void)force; snprintf(msg, cap, "Host-Test"); return -1; }
 int ps4m_place_update(const char *tid, const char *pkg_path, char *msg, size_t cap) { (void)tid; (void)pkg_path; snprintf(msg, cap, "Host-Test"); return -1; }
 #else
 #include <dirent.h>
@@ -128,9 +127,6 @@ static int g_enabled;     /* switched on in the page; kept in config.txt (key en
 int sceAppInstUtilInitialize(void) __attribute__((weak));
 int sceAppInstUtilAppInstallAll(void *) __attribute__((weak));
 int sceAppInstUtilAppUnInstall(const char *) __attribute__((weak));
-/* PS4Mount 0.7.0: "launch a game from the panel" and "the panel's own add-on copy mode". */
-int sceUserServiceGetForegroundUser(int *user) __attribute__((weak));
-int sceSystemServiceLaunchApp(const char *title_id, const char **argv, void *param) __attribute__((weak));
 
 /* One lock for all state. The worker holds it while it works and lets go of it in pump_events (every wait of the original loop),
  * which is where the stand-alone payload served its web panel; the calls of the page take it there. Declared here (not
@@ -3262,86 +3258,6 @@ static void apply_dlc_choice(const char *tid, const char *on) {
     src_close(&t);
 }
 
-static int open_games(uint32_t *ids, char (*tids)[10], int max);
-static int close_open_games(const char *why);
-static char g_launch_tid[10];
-
-/* Starts a game of the library for the foreground user (PS4Mount 0.7.0). */
-static int launch_now(const char *tid, char *msg, size_t cap) {
-    struct {
-        uint32_t size, user, opt;
-        uint64_t report;
-        uint32_t flag;
-    } param = {0};
-    int user = -1, rc = sceUserServiceGetForegroundUser ? sceUserServiceGetForegroundUser(&user) : -1; /* (app) weak */
-    if (rc || user <= 0) {
-        snprintf(msg, cap, "Es ist niemand angemeldet (0x%08x)", rc);
-        return -1;
-    }
-    param.size = sizeof(param);
-    param.user = (uint32_t)user;
-    const char *argv[] = {NULL};
-    rc = sceSystemServiceLaunchApp ? sceSystemServiceLaunchApp(tid, argv, &param) : -1; /* (app) weak */
-    printf("[panel] launch %s: 0x%08x\n", tid, rc);
-    if (rc < 0) {
-        snprintf(msg, cap, "Das Spiel ließ sich nicht starten (0x%08x)", rc);
-        return -1;
-    }
-    snprintf(msg, cap, "%s wird gestartet", tid);
-    return 0;
-}
-
-/* 1 (msg names the open game) when another game is open and force is 0: the panel asks
- * first, since that game is closed without saving. With force, the open game is closed by
- * the worker loop, which then starts this one (PS4Mount 0.7.0). */
-int ps4m_launch(const char *tid, int force, char *msg, size_t cap) {
-    char target[64];
-    snprintf(target, sizeof(target), "/user/app/%s", tid);
-    if (!p4m_db_is_registered(tid) || !mounted_from(target, NULL, 0)) {
-        snprintf(msg, cap, "%s ist nicht spielbereit", tid);
-        return -1;
-    }
-    if (lock_for_page(3000)) {
-        snprintf(msg, cap, P4M_BUSY);
-        return -1;
-    }
-    uint32_t ids[8];
-    char tids[8][10];
-    int n = open_games(ids, tids, 8), rc;
-    if (!n) {
-        rc = launch_now(tid, msg, cap);
-    } else if (!strcmp(tids[0], tid)) {
-        snprintf(msg, cap, "%s ist schon offen", tid);
-        rc = -1;
-    } else {
-        managed_t *m = managed_by(tids[0], NULL);
-        if (!force) {
-            snprintf(msg, cap, "%s", m ? m->name : tids[0]);
-            rc = 1;
-        } else if (g_launch_tid[0]) {
-            snprintf(msg, cap, "Gerade wird schon ein anderes Spiel gestartet, bitte gleich nochmal versuchen");
-            rc = -1;
-        } else {
-            snprintf(g_launch_tid, sizeof(g_launch_tid), "%s", tid);
-            snprintf(msg, cap, "%s wird geschlossen, dann startet %s", m ? m->name : tids[0], tid);
-            rc = 0;
-        }
-    }
-    pthread_mutex_unlock(&g_mu);
-    return rc;
-}
-
-/* The deferred start: closes the open game and waits until the system let go of its files (PS4Mount 0.7.0). */
-static void launch_after_close(const char *tid) {
-    char msg[128];
-    if (close_open_games("um ein anderes Spiel zu starten")) {
-        notify("Das offene Spiel schloss nicht; %s wurde nicht gestartet", tid);
-        return;
-    }
-    if (launch_now(tid, msg, sizeof(msg)))
-        notify("%s", msg);
-}
-
 /* Copies a downloaded, verified update package (updates.c) to the root of tid's PS4Mount drive and starts a rescan:
  * the next pass sorts it in exactly like one dropped there by hand (adopt_dir_pkgs, PS4Mount 0.7.0 bridge). The
  * byte copy itself runs without g_mu — it can take a while for a large update, and nothing else here needs it held
@@ -4475,13 +4391,6 @@ static void *ps4m_worker(void *arg) {
             run_restore(g_restore_all ? NULL : g_restore_tids, g_restore_n);
             g_restore_n = 0;
             g_restore_all = 0;
-            continue;
-        }
-        if (g_launch_tid[0]) {
-            char tid[10];
-            snprintf(tid, sizeof(tid), "%s", g_launch_tid);
-            launch_after_close(tid);
-            g_launch_tid[0] = 0;
             continue;
         }
         if ((g_upd_tid[0] || g_dlc_tid[0]) && !g_deleting) {

@@ -7,15 +7,15 @@
 - Die Spiele-Update-Seite erkennt PS4Mount-Spiele jetzt (neue Funktion `ps4m_title_managed`) und legt ein geladenes, geprüftes Update für sie auf ihrem Laufwerk ab (`ps4m_place_update`), statt es zu installieren – PS4Mounts eigene Suche ordnet es beim nächsten Mal ein, mit derselben Versionsprüfung wie ein von Hand aufs Laufwerk gelegtes Update (siehe PS4Mount 0.7.0 unten). Die Liste zeigt dazu `via_ps4mount`
 - Zusätzlich behoben: `installed_state()` (prüft, ob eine Installation in der Konsolenliste angekommen ist) kannte nur `param.json`, aber PS4-Titel unter Abwärtskompatibilität haben nur `param.sfo` (binäres Format) – ein neuer Leser dafür ist ergänzt, betrifft normal installierte PS4-Spiele
 
-### Neue Seite „PS4Mount“: Updates wählen, Zusatzinhalte an/aus, Spiel starten
-- Eigener Knopf in der Seitenleiste unterhalb von „Spiele“ (Suche und Einstellungen bleiben auf der Spiele-Seite unter „PS4 von USB“). Je PS4Mount-Spiel: **Updates** (welche der vorhandenen Versionen benutzt wird, auch eine ältere, in `replaced/` abgelegte), **Zusatzinhalte** (einzeln an/aus, mit dem Höchstwert von PS4Mount) und **Starten** (läuft ein anderes Spiel, fragt die App erst nach, zweimal klicken bestätigt)
+### PS4-Spiele von USB: Updates wählen, Zusatzinhalte an/aus
+- Jedes PS4Mount-Spiel mit mehr als einem Update oder mit Zusatzinhalten bekommt in der schon vorhandenen Liste „PS4 von USB“ zwei neue Knöpfe: **Updates** (welche der vorhandenen Versionen benutzt wird, auch eine ältere, in `replaced/` abgelegte) und **Zusatzinhalte** (einzeln an/aus, mit dem Höchstwert von PS4Mount). Kein eigener Knopf in der Seitenleiste und kein „Starten“ – die Bibliothek deckt das Starten schon ab, eine eigene Seite wäre sonst nur dieselbe Liste noch einmal gewesen (Wunsch des Users, 26.10.2026)
 - Neuer Schalter bei den PS4Mount-Einstellungen: **Zusatzinhalte auf den internen Speicher kopieren** – statt vom USB-Laufwerk einzuhängen, kopiert die Konsole jeden Zusatzinhalt wie bei einem normal installierten Spiel; braucht mehr Platz und Zeit, zeigt sie dafür wie gewohnt im Speicherbildschirm
-- Neue API-Routen: `GET /api/v1/ps4mount/game`, `POST /api/v1/ps4mount/update`, `/dlc`, `/launch` (siehe `docs/API.md`)
+- Neue API-Routen: `GET /api/v1/ps4mount/game`, `POST /api/v1/ps4mount/update`, `/dlc` (siehe `docs/API.md`)
 
 ### Fremdbausteine: PS4Mount 0.6.1 -> 0.7.0
 - Ein gefundenes Update wird jetzt nach Versionsnummer behandelt: Ist das neu gefundene Update älter als das benutzte, legt es sich selbst in `replaced/` statt das benutzte zu verdrängen (vorher ersetzte jedes andere Update das vorhandene, auch ein älteres)
 - Beim Schließen eines Spiels vor dem Zurückverschieben wartet die App zusätzlich, bis die PFS-Einhängungen des Spiels wirklich freigegeben sind (bis zu 20 s) – vorher konnte ein zu früh neu gestartetes Spiel seine eigenen Dateien kurz nicht lesen (Fehler 0x80020060)
-- **Nachträglich übernommen:** „Add-ons intern kopieren“ (`src/ps4m_accopy.c`/`.h`, neu) mit eigener Bedienoberfläche – siehe oben „Neue Seite „PS4Mount““ und `third_party/ps4mount/ORIGIN.md`
+- **Nachträglich übernommen:** „Add-ons intern kopieren“ (`src/ps4m_accopy.c`/`.h`, neu) – siehe oben „PS4-Spiele von USB“ und `third_party/ps4mount/ORIGIN.md`. Das Starten eines Spiels aus dem Panel (`ps4m_launch`) ist bewusst nicht übernommen, die Bibliothek deckt das schon ab
 
 
 ### Lüfterregelung reagiert in Sekunden statt in Minuten

@@ -44,14 +44,16 @@ Schließen eines Spiels vor dem Zurückverschieben wartet die App zusätzlich, b
 ein zu früh neu gestartetes Spiel seine eigenen Dateien kurz nicht lesen (Fehler `0x80020060`).
 
 **Nachträglich übernommen (26.10.2026, auf Wunsch des Users):** „Add-ons intern kopieren“ — Add-ons werden statt eingehängt auf
-den internen Speicher kopiert (wahlweise mit allen Daten oder nur zur Freischaltung), dazu Update wählen, einzelne Add-ons an/aus
-und das Spiel direkt starten. `accopy.c`/`.h` sind als `src/ps4m_accopy.c`/`.h` mit `p4m_`-Vorsatz übernommen (Dateiname, Funktions-
-und Typnamen geändert, sonst unverändert); der rund 1200 Zeilen große Rest aus `main.c` liegt verteilt in `src/ps4m_core.c`
-(Zustandsautomat für die Kopien direkt nach `dlc_ready`, `ac_reconcile` nach `addcont_installed`, die Panel-Funktionen nach
-`find_root`), in deutscher Sprache für `notify()` und mit `ps4m_`-Vorsatz für die drei neuen, von außen aufgerufenen Funktionen
-(`ps4m_game_json`, `ps4m_choose_update`, `ps4m_choose_dlc`, `ps4m_launch`; dazu `ps4m_title_managed`, `docs/API.md`). Eigene,
-neue Bedienoberfläche: Seitenleisten-Seite „PS4Mount“ (`web/index.html`, `web/app.js`), der Schalter `dlc_copy` liegt bei den
-übrigen PS4Mount-Einstellungen auf der Spiele-Seite. Zusätzlich, nicht im Original: Die Spiele-Update-Seite (`src/updates.c`)
+den internen Speicher kopiert (wahlweise mit allen Daten oder nur zur Freischaltung), dazu Update wählen und einzelne Add-ons
+an/aus. `accopy.c`/`.h` sind als `src/ps4m_accopy.c`/`.h` mit `p4m_`-Vorsatz übernommen (Dateiname, Funktions- und Typnamen
+geändert, sonst unverändert); der rund 1200 Zeilen große Rest aus `main.c` liegt verteilt in `src/ps4m_core.c` (Zustandsautomat
+für die Kopien direkt nach `dlc_ready`, `ac_reconcile` nach `addcont_installed`, die Panel-Funktionen nach `find_root`), in
+deutscher Sprache für `notify()` und mit `ps4m_`-Vorsatz für die von außen aufgerufenen Funktionen (`ps4m_game_json`,
+`ps4m_choose_update`, `ps4m_choose_dlc`; dazu `ps4m_title_managed`, `docs/API.md`). Bewusst nicht übernommen: das Spiel direkt aus
+dem Panel starten (`ps4m_launch`/`launch_now`/`launch_after_close`) — die Bibliothek der App deckt das schon ab. Eigene Bedien-
+oberfläche: zwei neue Knöpfe („Updates“, „Zusatzinhalte“) in der schon vorhandenen Liste „PS4 von USB“ (`web/index.html`,
+`web/app.js`), kein eigener Seitenleisten-Knopf — eine eigene Seite wäre nur dieselbe Liste noch einmal gewesen. Der Schalter
+`dlc_copy` liegt bei den übrigen PS4Mount-Einstellungen auf der Spiele-Seite. Zusätzlich, nicht im Original: Die Spiele-Update-Seite (`src/updates.c`)
 legt ein heruntergeladenes Update für ein PS4Mount-Spiel jetzt selbst auf dessen Laufwerk (`ps4m_place_update`), statt es wie
 jedes andere Spiel zu installieren — das schrieb sonst in einen Ordner, den PS4Mount nie liest (gefunden 26.10.2026, CUSA44880).
 Noch nicht übernommen: `logts.c`/`web.c`/`db.c` entfallen wie bisher, der Hinweis zur lokalen IP-Adresse in der Start-Meldung (das

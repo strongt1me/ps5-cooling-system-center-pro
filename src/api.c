@@ -4567,21 +4567,6 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, rc == 0 ? 200 : 409, o);
     return;
   }
-  if(!strcmp(req->path, "/api/v1/ps4mount/launch")) {
-    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
-    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
-    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL, *jfo = b ? cJSON_GetObjectItem(b, "force") : NULL;
-    char id[16] = "", msg[200] = "";
-    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
-    int rc = ps4m_launch(id, cJSON_IsTrue(jfo), msg, sizeof(msg));
-    cJSON_Delete(b);
-    cJSON *o = cJSON_CreateObject();
-    cJSON_AddBoolToObject(o, "ok", rc == 0);
-    if(rc == 1) cJSON_AddBoolToObject(o, "confirm", 1); /* another game is open: the page asks before it is closed */
-    cJSON_AddStringToObject(o, "message", msg);
-    send_cjson(fd, rc < 0 ? 409 : 200, o);
-    return;
-  }
   /* The starter app (starter/, a tile that starts this payload) asks for the web UI in the console's browser. Only the page of this
      very app can be opened, whatever the request says. */
   if(!strcmp(req->path, "/api/v1/open-ui")) {
