@@ -336,6 +336,7 @@ main(int argc, char **argv) {
                    "werden.\nDer Lüfter bleibt bei der zuletzt gesetzten "
                    "Schwelle.");
   }
+  ps5tm_fanguard_start();
 
   /* The probe thread deliberately does NOT start here — see below. */
 

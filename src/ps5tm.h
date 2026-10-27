@@ -1658,6 +1658,8 @@ int ps5tm_platform_page_stats(int *cpu_used, int *cpu_total,
 /* Writes the ICC fan ramp-up threshold. `errno_out` may be NULL.
    Returns 0 on success, -1 on failure. */
 int ps5tm_platform_set_fan_threshold(int temp_c, int *errno_out);
+/* The same write with nothing but open/ioctl/close, for a signal handler. */
+int ps5tm_platform_set_fan_threshold_signal_safe(int temp_c);
 
 /* Reads that block back out of the controller — the counterpart to the write
    above, and the only way to learn what the controller really holds rather
@@ -1768,6 +1770,16 @@ void ps5tm_fan_selftest_get(ps5tm_fan_selftest_t *out);
 
 /* A request to end the app (SIGTERM/SIGINT, see main.c): the fan thread hands the fan back to the console and exits. */
 void ps5tm_fan_request_stop(void);
+
+/* The independent fan guard (fanguard.c): its own thread, its own sensor reads. */
+#define PS5TM_GUARD_IDLE    0
+#define PS5TM_GUARD_HOT     1   /* over-temperature the regulation did not catch: full cooling */
+#define PS5TM_GUARD_DEADMAN 2   /* the regulation stopped beating: fan back to the console (or full cooling when hot) */
+int  ps5tm_fanguard_start(void);
+void ps5tm_fanguard_beat(void);              /* once per fan-loop pass */
+void ps5tm_fanguard_publish(int safety_c);   /* the safety limit the loop has in force */
+int  ps5tm_fanguard_state(void);
+int  ps5tm_fanguard_holding(void);           /* 1: the guard owns the fan, the loop writes nothing */
 
 
 /* ------------------------------------------------------------------ tile */

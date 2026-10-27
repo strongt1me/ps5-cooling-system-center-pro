@@ -375,6 +375,7 @@ handle_status(int fd) {
     cJSON_AddNumberToObject(c, "avg_temp_c10",  snap.avg_temp_c10);
     cJSON_AddNumberToObject(c, "trend_c100",    snap.trend_c100);
     cJSON_AddBoolToObject  (c, "safety_active", snap.safety_active);
+    cJSON_AddNumberToObject(c, "guard_state",   ps5tm_fanguard_state());   /* 0 idle, 1 over-temperature, 2 regulation silent */
     cJSON_AddNumberToObject(c, "samples",       snap.samples);
     /* What the controller is really aiming at — a per-game rule may have
        replaced the configured target. */

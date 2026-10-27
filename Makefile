@@ -46,6 +46,7 @@ SRCS += src/api.c
 SRCS += src/config.c
 SRCS += src/platform.c
 SRCS += src/fan.c
+SRCS += src/fanguard.c
 SRCS += src/tile.c
 SRCS += src/log.c
 SRCS += src/regstats.c

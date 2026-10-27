@@ -237,6 +237,20 @@ Invoke-RestMethod -Uri "http://<PS5-IP>:8086/api/v1/config" -Method Get -Timeout
 5. Spielprofile nach Config-Import prüfen:
    Erwartung: Regeln bleiben enthalten (Export/Import umfasst `game_rules`).
 
+## Regelkreis-Simulation (Lüfter + Wächter)
+
+`test/sim/fansim.c` bindet `src/fan.c` direkt ein und lässt die echte Regelschleife samt `src/fanguard.c` gegen ein
+Modell aus Firmware (Drehzahl je Kelvin über der Schwelle, Rücksetzung auf 91 °C bei Spielwechsel), Lüfterträgheit und
+Zwei-Knoten-Wärmemodell laufen, in virtueller Zeit (eine Stunde in unter einer Sekunde). Unter WSL/Linux mit gcc:
+
+```bash
+sh test/sim/run.sh             # alle Szenarien, eine Zeile Messwerte je Szenario
+sh test/sim/run.sh step_t78    # eines; SIMV=1 zeigt das Protokoll, SIMTRACE=datei.csv schreibt den Verlauf
+```
+
+Das Modell ist nicht an einer Konsole vermessen (nur die Firmware-Kennlinie ist es); die Ergebnisse zeigen Tendenzen
+und Wechselwirkungen, keine Grade.
+
 ## Host-Test
 
 > [!WARNING]

@@ -271,6 +271,25 @@ ps5tm_platform_escalate_as(unsigned long long authid) {
 
 
 int
+ps5tm_platform_set_fan_threshold_signal_safe(int temp_c) {
+  if(temp_c < ICC_FAN_HW_MIN_C) temp_c = ICC_FAN_HW_MIN_C;
+  if(temp_c > ICC_FAN_HW_MAX_C) temp_c = ICC_FAN_HW_MAX_C;
+#ifdef PS5TM_HOST_TEST
+  { extern int g_sim_threshold_c; g_sim_threshold_c = temp_c; }
+  return 0;
+#else
+  int fd = open(ICC_FAN_DEVICE, O_RDONLY);
+  if(fd < 0) return -1;
+  unsigned char data[PS5TM_ICC_FAN_CONFIG_SIZE] = {0};
+  data[ICC_FAN_TARGET_OFFSET] = (unsigned char)temp_c;
+  int rc = ioctl(fd, ICC_FAN_THRESHOLD_IOCTL, data);
+  close(fd);
+  return rc == 0 ? 0 : -1;
+#endif
+}
+
+
+int
 ps5tm_platform_set_fan_threshold(int temp_c, int *errno_out) {
   if(errno_out) *errno_out = 0;
   if(temp_c < ICC_FAN_HW_MIN_C) temp_c = ICC_FAN_HW_MIN_C;

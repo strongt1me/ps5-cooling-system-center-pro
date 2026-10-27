@@ -952,6 +952,12 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   border: 1px solid var(--hairline); border-radius: 11px; background: var(--surface-2);
   color: var(--ink-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .cp-banner.live { border-color: rgba(59,130,246,.45); color: var(--ink); }
+/* Farbig unterlegt (Hinweis eines Nutzers): Kopie/Konvertieren im Hintergrund fiel zwischen den Karten nicht auf. */
+.cp-banner[data-outcome] { padding: 16px 20px; border-width: 2px; border-radius: 13px; font-size: 17px; font-weight: 700; color: var(--ink); }
+.cp-banner[data-outcome="run"]     { background: rgba(59,130,246,.26); border-color: rgba(59,130,246,.85); }
+.cp-banner[data-outcome="done"]    { background: rgba(12,163,12,.26);  border-color: rgba(12,163,12,.85); }
+.cp-banner[data-outcome="failed"]  { background: rgba(208,59,59,.28);  border-color: rgba(208,59,59,.9); }
+.cp-banner[data-outcome="aborted"] { background: rgba(250,178,25,.24); border-color: rgba(250,178,25,.85); }
 .cp-banner[hidden] { display: none; }
 
 .sub-head { margin: 22px 0 12px; padding-top: 18px; font-size: 14px;

@@ -388,6 +388,39 @@ band_duty(int avg_c100, const ps5tm_config_t *cfg) {
 
 /* Returns the fan speed the controller wants next: the band says where to end
    up, the rate limit decides how quickly it gets there. */
+/* The speed the safety ramp found, kept after it lets go (27.10.2026).
+ *
+ * With targets of about 72-82 °C the safety limit sits only 4 K above the target, while the band
+ * asks for the speed a 100 W game needs only several kelvin further up. So the console climbed
+ * into the limit, the ramp pushed the fan to near full speed, the console cooled, the ramp let go
+ * and the band dropped the fan straight back to its low figure — and round again every 6-10
+ * minutes, 36 <-> 100 % at a target of 75 (closed-loop simulation, test/sim). Now the speed the
+ * ramp ended on stays as a lower bound. It is worn down by one point per SAFETY_HOLD_DECAY_S only
+ * while the console is clearly (SAFETY_HOLD_BAND_C100) under the limit, so it settles on the speed
+ * that keeps the console just below it, and it is dropped as soon as the console is back under the
+ * target — when the game ends, say. Only the fan thread uses it. */
+#define SAFETY_HOLD_DECAY_S    15   /* the heat sink takes minutes: wear it down slowly */
+#define SAFETY_HOLD_RISE_S      3
+#define SAFETY_HOLD_BAND_C100  200  /* this close to the limit and still rising: add a point */
+#define SAFETY_HOLD_DECAY_C100 400  /* worn down only this far under the limit ... */
+#define SAFETY_HOLD_UNDER_C100 100  /* ... and this far under the target */
+#define SAFETY_HOLD_FAST_C100  300  /* this far under the target it is worn down at SAFETY_HOLD_FAST_S */
+#define SAFETY_HOLD_FAST_S       6
+#define SAFETY_HOLD_CLEAR_C100 1000 /* this far under the target ... (a ramp at full speed cools the die by 8-9 K, a game ending by 15+) */
+#define SAFETY_HOLD_CLEAR_S      45 /* ... for this long: the load is gone */
+static int      g_safety_hold        = 0;
+static uint64_t g_safety_hold_ms     = 0;
+static uint64_t g_safety_hold_far_ms = 0;
+
+/* Below this the held speed is more than the console needs. Between it and the limit minus
+   SAFETY_HOLD_BAND_C100 the held speed stays as it is: that window is where it settles. */
+static int
+hold_decay_below(const ps5tm_config_t *cfg, int safety_c100) {
+  int a = safety_c100 - SAFETY_HOLD_DECAY_C100;
+  int b = target_c100(cfg) - SAFETY_HOLD_UNDER_C100;
+  return a < b ? a : b;
+}
+
 static int
 comfort_step(int duty, int avg_c100, int trend_c100,
              const ps5tm_config_t *cfg, uint64_t now,
@@ -399,9 +432,41 @@ comfort_step(int duty, int avg_c100, int trend_c100,
      comfort ceiling are all ignored and the fan is pushed up hard. */
   if(avg_c100 >= safety) {
     *safety_out = 1;
-    return clamp_duty(duty + 10);
+    g_safety_hold    = clamp_duty(duty + 10);
+    g_safety_hold_ms = now;
+    return g_safety_hold;
   }
   *safety_out = 0;
+
+  if(g_safety_hold > 0) {
+    int gone = avg_c100 < target_c100(cfg) - SAFETY_HOLD_CLEAR_C100;
+    if(!gone)                       g_safety_hold_far_ms = 0;
+    else if(!g_safety_hold_far_ms)  g_safety_hold_far_ms = now;
+
+    if(gone && now - g_safety_hold_far_ms >= (uint64_t)SAFETY_HOLD_CLEAR_S * 1000) {
+      g_safety_hold = 0;                     /* far under the target for a while: the load is gone */
+      g_safety_hold_far_ms = 0;
+    } else if(avg_c100 < hold_decay_below(cfg, safety)) {
+      /* The ramp overshoots and the die cools within seconds while the heat sink does not: well under
+         the target that is no reason to drop everything, only to wear the speed down faster. */
+      int every = avg_c100 < target_c100(cfg) - SAFETY_HOLD_FAST_C100 ? SAFETY_HOLD_FAST_S : SAFETY_HOLD_DECAY_S;
+      if(now - g_safety_hold_ms >= (uint64_t)every * 1000) {
+        g_safety_hold--;
+        g_safety_hold_ms = now;
+      }
+    } else if(avg_c100 >= safety - SAFETY_HOLD_BAND_C100) {
+      /* Close to the limit: still climbing means this speed is not enough — add a point now
+         rather than let the console run into the hard ramp again. */
+      if(trend_c100 < TREND_SIGNIFICANT_C100) {
+        g_safety_hold_ms = now;
+      } else if(now - g_safety_hold_ms >= (uint64_t)SAFETY_HOLD_RISE_S * 1000) {
+        g_safety_hold = clamp_duty(g_safety_hold + 1);
+        g_safety_hold_ms = now;
+      }
+    } else {
+      g_safety_hold_ms = now;                /* between the two: this speed is what holds it */
+    }
+  }
 
   int want    = band_duty(avg_c100, cfg);
   if(lead_c100 > 0) {                        /* a steep rise at a high target: read the band a few seconds ahead */
@@ -410,6 +475,7 @@ comfort_step(int duty, int avg_c100, int trend_c100,
   }
   int ceiling = comfort_ceiling(cfg);
   if(want > ceiling) want = ceiling;
+  if(want < g_safety_hold) want = g_safety_hold;
 
   /* Without a rate limit a load step would move the fan to its new speed in a
      single cycle — exactly the jump this design exists to prevent. One
@@ -1043,6 +1109,17 @@ fan_worker(void *arg) {
     }
     last_loop_ms = wall;
 
+    ps5tm_fanguard_beat();
+    if(ps5tm_fanguard_holding()) {
+      /* The guard (fanguard.c) has the fan. Nothing is written until it lets go; then the threshold is applied afresh. */
+      last_applied  = 0;
+      observed_c    = -1;
+      last_apply_ms = 0;
+      last_servo_ms = 0;
+      sleep(1);
+      continue;
+    }
+
     ps5tm_sensors_t s;
     int sensors_ok = (ps5tm_platform_read_sensors(&s) == 0);
 
@@ -1304,6 +1381,7 @@ fan_worker(void *arg) {
          switched to Observe during a safety phase kept "safety" in the snapshot, a red lightbar and the playtime flag
          until Automatic was selected again. */
       safety_active = 0;
+      g_safety_hold = 0;
       safety_logged = 0;
     }
     was_automatic = automatic;
@@ -1620,7 +1698,8 @@ fan_worker(void *arg) {
                       : (now - last_apply_ms) >=
                         (uint64_t)cfg.fan_reapply_sec * 1000;
 
-      if(changed || last_applied == 0 || refresh) {
+      /* A pass that hung while the guard took over must not write its stale value once it wakes up. */
+      if((changed || last_applied == 0 || refresh) && !ps5tm_fanguard_holding()) {
         int eno = 0;
         if(ps5tm_platform_set_fan_threshold(desired_threshold, &eno) == 0) {
           if(changed) last_servo_ms = now;
@@ -1712,6 +1791,7 @@ fan_worker(void *arg) {
     g_snapshot.lead_c100           = automatic ? lead_last_c100 : 0;
     g_snapshot.lead_max_c100       = lead_peak_c100;
     pthread_mutex_unlock(&g_snapshot_lock);
+    ps5tm_fanguard_publish((int)cfg.safety_temp_c);
 
     sleep(1);
   }

@@ -1769,7 +1769,9 @@
     txt("#c-rduty", F.measured_valid ? `${fanPctStr(F)} %` : "--");
     txt("#c-thr", F.threshold_c ? `${F.threshold_c} °C`
                                 : (F.automatic ? "--" : "nicht gesetzt"));
-    txt("#c-safety", C.safety_active ? "aktiv" : "aus");
+    txt("#c-safety", C.guard_state === 1 ? "Wächter: volle Kühlung"
+                   : C.guard_state === 2 ? "Wächter: Regelung reagiert nicht"
+                   : C.safety_active ? "aktiv" : "aus");
 
     state.fanDiagHist.push({
       target: Number.isFinite(F.target_duty_pct) ? F.target_duty_pct : null,
@@ -1780,6 +1782,8 @@
     /* Erweiterte Lüfterdiagnose: Soll/Ist-Differenz, wirksames Ziel,
        Regelmodus und erkennbare Clamp-Lage. */
     const clampText = (() => {
+      if (C.guard_state === 1) return "Wächter hält volle Kühlung (Übertemperatur)";
+      if (C.guard_state === 2) return "Wächter: Regelung reagiert nicht, Lüfter bei der Konsole";
       if (C.safety_active) return "Notfallmodus aktiv (Sicherheitsgrenze)";
       if (!F.automatic) return F.threshold_c > 0
         ? `manueller Wert ${F.threshold_c} °C`
@@ -5575,7 +5579,7 @@
     const c = cp.job && cp.job.state !== "idle" ? cp.job : null;
     const m = mv.job && mv.job.job_id > 0 && (mv.job.active || mv.job.job_id === mv.seen) ? mv.job : null;
     const k = cv.job && cv.job.state !== "idle" ? cv.job : null;
-    let label = "", live = false, kind = "";
+    let label = "", live = false, kind = "", outcome = "";
     if (k && k.active) {
       const pct = k.total_bytes > 0 ? Math.min(100, Math.floor(k.done_bytes * 100 / k.total_bytes)) : 0;
       const cpct = k.check_total_bytes > 0
@@ -5598,20 +5602,24 @@
       label = `ShadowMountPlus · ${mvVerb(m.operation)} ${m.state === "completed" ? "fertig"
         : m.state === "failed" ? "gescheitert" : "abgebrochen"}: „${gmName(m.title_id)}“`;
       kind = "store";
+      outcome = m.state === "completed" ? "done" : m.state === "failed" ? "failed" : "aborted";
     } else if (k) {
       label = k.state === "done" ? `Konvertieren fertig: „${k.name || k.title_id}“ → ${k.target || ""}`
         : k.state === "failed" ? `Konvertieren gescheitert: „${k.name || k.title_id}“`
         : `Konvertieren abgebrochen: „${k.name || k.title_id}“`;
       kind = "convert";
+      outcome = k.state === "done" ? "done" : k.state === "failed" ? "failed" : "aborted";
     } else if (c) {
       label = c.state === "done" ? `Kopie fertig: „${c.name || c.title_id}“ → ${c.drive || ""}`
         : c.state === "failed" ? `Kopie gescheitert: „${c.name || c.title_id}“`
         : `Kopie abgebrochen: „${c.name || c.title_id}“`;
       kind = "copy";
+      outcome = c.state === "done" ? "done" : c.state === "failed" ? "failed" : "aborted";
     }
     b.hidden = !label;
     b.textContent = label;
     b.dataset.kind = kind;
+    b.dataset.outcome = live ? "run" : outcome;
     b.classList.toggle("live", live);
   };
   const cpBanner = jobBanner;
@@ -6421,7 +6429,7 @@
    * Dasselbe Spiel in zwei Abbildern lässt ShadowMountPlus zwischen ihnen hin und her
    * wechseln. Die Konsole sucht die Abbilder (dupimg.c); die Karte erscheint nur, wenn es
    * doppelte oder beiseitegelegte gibt. Gesucht wird beim ersten Öffnen und mit „Neu suchen“,
-   * nicht im Takt. Beiseitelegen und Zurückholen wollen zwei Klicks wie die anderen
+   * nicht im Takt. Deaktivieren und Aktivieren wollen zwei Klicks wie die anderen
    * Knöpfe, die etwas verändern. */
   const dup = { data: null, busy: false, armed: "", armTimer: 0, armedAt: 0, loaded: false };
 
@@ -6452,11 +6460,11 @@
     const rows = groups.map((g) => `<div class="dup-group"><b>${esc(g.name || g.title_id)} <span class="muted">${esc(g.title_id)}</span></b>
       ${g.sources.map((s) => `<div class="dup-src"><div><code>${esc(s.path)}</code>
           <span>${s.folder ? `<span class="badge quiet">Ordner</span>` : `<span class="badge quiet">${esc(bytes(s.size))}</span>`}${s.smp_uses ? `<span class="badge ok">nimmt ShadowMountPlus gerade</span>` : ""}${s.mounted ? `<span class="badge warn">eingehängt</span>` : ""}</span></div>
-          ${s.folder ? "" : btn(s.path, false, "Beiseitelegen", s.mounted, "ShadowMountPlus hat es gerade eingehängt.")}</div>`).join("")}</div>`).join("");
-    const back = aside.length ? `<div class="dup-group"><b>Beiseitegelegt</b>
+          ${s.folder ? "" : btn(s.path, false, "Deaktivieren", s.mounted, "ShadowMountPlus hat es gerade eingehängt.")}</div>`).join("")}</div>`).join("");
+    const back = aside.length ? `<div class="dup-group"><b>Deaktiviert</b>
       ${aside.map((a) => `<div class="dup-src"><div><code>${esc(a.path)}</code>
           <span><span class="badge quiet">${esc(bytes(a.size))}</span>${a.title_id ? `<span class="badge quiet">${esc(a.title_id)}</span>` : ""}</span></div>
-          ${btn(a.path, true, "Zurückholen", false, "")}</div>`).join("")}</div>` : "";
+          ${btn(a.path, true, "Aktivieren", false, "")}</div>`).join("")}</div>` : "";
     $("#dup-list").innerHTML = rows + back;
   };
 
