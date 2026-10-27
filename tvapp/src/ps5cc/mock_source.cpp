@@ -2,18 +2,53 @@
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <deque>
+#include <vector>
 
 namespace hui::ps5cc
 {
 
 namespace
 {
+
+// A diagonal two-colour gradient with a soft light, different for every seed. No artwork of any real game.
+std::vector<std::uint8_t> invented_cover(std::size_t seed)
+{
+    static constexpr std::uint8_t kPalette[][3] = {{0x2b, 0x3a, 0x8c}, {0xc0, 0x4b, 0xd6}, {0x0c, 0x8f, 0x7a},
+                                                   {0xf0, 0x99, 0x3b}, {0x3a, 0x5b, 0xd9}, {0xd8, 0x5a, 0x30},
+                                                   {0x53, 0x4a, 0xb7}, {0x1d, 0x9e, 0x75}};
+    const std::uint8_t *a = kPalette[seed % 8];
+    const std::uint8_t *b = kPalette[(seed * 3 + 5) % 8];
+    const float lx = 0.25f + 0.5f * static_cast<float>((seed * 37) % 100) / 100.0f;
+    std::vector<std::uint8_t> out(static_cast<std::size_t>(kCoverSize) * kCoverSize * 4u);
+    for (int y = 0; y < kCoverSize; ++y)
+    {
+        for (int x = 0; x < kCoverSize; ++x)
+        {
+            const float u = static_cast<float>(x) / kCoverSize;
+            const float v = static_cast<float>(y) / kCoverSize;
+            const float t = std::clamp((u + v) * 0.5f, 0.0f, 1.0f);
+            const float dx = u - lx;
+            const float dy = v - 0.3f;
+            const float light = std::max(0.0f, 1.0f - std::sqrt(dx * dx + dy * dy) * 2.2f) * 0.45f;
+            std::uint8_t *p = out.data() + (static_cast<std::size_t>(y) * kCoverSize + x) * 4u;
+            for (int c = 0; c < 3; ++c)
+            {
+                const float base = static_cast<float>(a[c]) * (1.0f - t) + static_cast<float>(b[c]) * t;
+                p[c] = static_cast<std::uint8_t>(std::min(255.0f, base + light * 255.0f));
+            }
+            p[3] = 255;
+        }
+    }
+    return out;
+}
 
 struct MockGame
 {
@@ -74,6 +109,9 @@ class MockSource final : public Source
             data_.games.push_back(g);
         }
         data_.games_loaded = true;
+        // Invented covers for every other game, so the preview shows covers next to initials.
+        for (std::size_t i = 0; i < data_.games.size(); i += 2)
+            covers().deliver(data_.games[i].id, invented_cover(i));
         data_.status.game_id = "PPSA02433";
         data_.status.game_name = "Crash Bandicoot 4: It's About Time";
         data_.status.game_state = "im Spiel";

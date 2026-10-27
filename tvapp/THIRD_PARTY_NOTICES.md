@@ -156,3 +156,12 @@ No proprietary runtime module, encryption key, or game file is included.
 licence (the full text is at the top of `cJSON_real.inc`), <https://github.com/DaveGamble/cJSON>.
 The same files as in the console app (`src/third_party/` of the repository); `cJSON_real.c` is
 renamed to `.inc` so the build, which compiles every `.c` file under `src/`, does not compile it twice.
+
+## stb_image (ps5cc)
+
+`src/third_party/stb/stb_image.inc` is stb_image v2.30 by Sean Barrett (public domain or MIT, see
+`src/third_party/stb/LICENSE`), taken unchanged from <https://github.com/nothings/stb> at the commit in
+`src/third_party/stb/UPSTREAM` (2c980bb59875b0d32144a71867fbdebb2f77cd20, the same as stb_vorbis):
+`stb_image.h`, git blob 9eedabedc45b3e6fd88fae6f14a160b4d53272ec, SHA-256
+594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3. It is compiled once by `image.c` with PNG only
+and without stdio, and decodes the game covers the console app serves.

@@ -23,6 +23,7 @@
 #include "gfx/gl_program.hpp"
 #include "gfx/renderer.hpp"
 #include "manifest.hpp"
+#include "ps5cc/covers.hpp"
 #include "ui/fonts.hpp"
 
 #include <EGL/egl.h>
@@ -264,8 +265,16 @@ int main(int argc, char **argv)
     std::vector<unsigned char> pixels(static_cast<std::size_t>(width * height * 4));
     stbi_flip_vertically_on_write(1);
     bool ok = true;
+    // The mock's covers: all at once and fully faded in, so every picture shows them.
+    const auto upload_covers = [&]()
+    {
+        hui::ps5cc::covers().upload_pending([&](int w, int h, const std::uint8_t *rgba)
+                                            { return renderer.batch().create_texture(w, h, rgba); },
+                                            1000, 1.0f);
+    };
     const auto render = [&](const std::string &name)
     {
+        upload_covers();
         shell.compose(renderer);
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glClearColor(0, 0, 0, 1);
@@ -310,6 +319,7 @@ int main(int argc, char **argv)
         Recorder recorder(reel, width, height, 60 / kEvery);
         const auto record = [&]()
         {
+            upload_covers();
             shell.compose(renderer);
             glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
             glClearColor(0, 0, 0, 1);

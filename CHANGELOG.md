@@ -8,6 +8,9 @@
 - **Spiel starten aus der Vollbild-App:** Weil die Kachel selbst ein Titel ist, hielt die Konsole sie für das laufende Spiel und lehnte den Start ab. Neu: `POST /api/v1/library/launch` mit `"after_exit":"<Titel-ID der Kachel>"` – die App sagt sofort zu (202 `state: after_exit`), die Vollbild-App beendet sich über das System, danach startet das Spiel. Die Vollbild-App selbst taucht nicht mehr in der Spieleliste und nicht als „Im Spiel“ auf
 - Medien-Bereich: `applicationCategoryType` 65536, `contentBadgeType` 2; die Seitentabellen sind dort auf höchstens 128 MiB begrenzt (mit 256 MiB startete sie nicht: CE-100022-5)
 - An der Pro (FW 12.00) vom User getestet: Vollbild, Controller, Ton, Zieltemperatur, Spieleliste, Spielstart, Menü
+- **Cover** in der Spieleliste und in den Details: Der Netzwerk-Faden lädt sie nacheinander (das Spiel im Fokus zuerst), verkleinert sie auf 160×160 und blendet sie über die Buchstaben-Kachel ein; PNG-Decoder stb_image 2.30 (gemeinfrei/MIT, Prüfsumme in `tvapp/ORIGIN.md`)
+- Behoben: Die Details (△) flackerten und sprangen, weil sie mit jeder Status-Aktualisierung neu befüllt wurden und dabei ihre Einblend-Animation neu begann; Werte bleiben einzeilig
+- Der Verlauf auf „Kühlung“ reicht immer bis mindestens 91 °C (Achse 20–100), damit eine normale Temperatur nicht wie „am Anschlag“ aussieht
 
 ### Dateimanager: ganze Ordner hochladen
 - Neuer Knopf **„Ordner hochladen“**, und Ordner lassen sich auf die Liste ziehen: Die Ordnerstruktur wird auf der Konsole angelegt, dann laufen die Dateien einzeln mit Fortschritt; Dateien, die es am Ziel schon gibt, werden übersprungen und gezählt, nie überschrieben

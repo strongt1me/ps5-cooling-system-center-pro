@@ -504,6 +504,10 @@ void BarChart::retarget()
         low = std::min(low, 0.0f);
         high = std::max(high, 0.0f);
     }
+    if (std::isfinite(style.axis.include_low))
+        low = std::min(low, style.axis.include_low);
+    if (std::isfinite(style.axis.include_high))
+        high = std::max(high, style.axis.include_high);
     scale_ = nice_scale(low, high, style.axis.ticks);
     high_.target = scale_.high;
     low_.target = scale_.low;
@@ -935,6 +939,10 @@ void LineChart::rescale()
         low = std::min(low, 0.0f);
         high = std::max(high, 0.0f);
     }
+    if (std::isfinite(style.axis.include_low))
+        low = first ? style.axis.include_low : std::min(low, style.axis.include_low);
+    if (std::isfinite(style.axis.include_high))
+        high = first ? style.axis.include_high : std::max(high, style.axis.include_high);
     scale_ = nice_scale(low, high, style.axis.ticks);
     high_.target = scale_.high;
     low_.target = scale_.low;

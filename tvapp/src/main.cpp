@@ -24,6 +24,7 @@
 #include "platform/ps5/http_source.hpp"
 #include "platform/ps5/pad.hpp"
 #include "platform/ps5/system.hpp"
+#include "ps5cc/covers.hpp"
 #include "ui/fonts.hpp"
 
 #include <cstring>
@@ -311,6 +312,10 @@ int main()
         }
         music.pump(dt);
 
+        // Covers decoded by the HTTP worker become textures here, two a frame at most.
+        ps5cc::covers().upload_pending([&](int w, int h, const std::uint8_t *rgba)
+                                       { return renderer.batch().create_texture(w, h, rgba); },
+                                       2, dt);
         shell.compose(renderer);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

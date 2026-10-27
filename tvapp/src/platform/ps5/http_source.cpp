@@ -10,6 +10,7 @@
 #include "platform/ps5/http_source.hpp"
 
 #include "platform/ps5/system.hpp"
+#include "ps5cc/covers.hpp"
 #include "third_party/cjson/cJSON.h"
 
 #include <algorithm>
@@ -339,7 +340,7 @@ bool HttpSource::connect_phase()
 
 void HttpSource::run()
 {
-    std::int64_t last_status = 0, last_library = 0, last_jobs = 0, last_history = 0;
+    std::int64_t last_status = 0, last_library = 0, last_jobs = 0, last_history = 0, last_cover = 0;
     bool library_wanted = true;
     for (;;)
     {
@@ -416,6 +417,14 @@ void HttpSource::run()
             library_wanted = false;
             last_library = now;
             poll_library();
+            covers().forget_failures();
+        }
+        // One cover per pass (the loop sleeps 100 ms): about 380 KB of PNG each, decoded and shrunk here so the
+        // frame only uploads 100 KiB.
+        if (now - last_cover >= 250000)
+        {
+            last_cover = now;
+            fetch_cover();
         }
         const bool busy = [&]
         {
@@ -621,6 +630,10 @@ void HttpSource::poll_library()
         g.version = str(item, "version");
         g.format = str(item, "format");
         g.path = str(item, "path");
+        g.cover = str(item, "cover");
+        // Only the app's own route: the bytes are fetched from 127.0.0.1 and must not lead anywhere else.
+        if (g.cover.rfind("/api/v1/library/cover?", 0) != 0)
+            g.cover.clear();
         g.last_played = str(item, "last_played");
         g.size_bytes = static_cast<std::uint64_t>(num(item, "size_bytes"));
         g.played_s = static_cast<std::uint64_t>(num(item, "played_s"));
@@ -635,6 +648,33 @@ void HttpSource::poll_library()
     data_.games = std::move(games);
     data_.games_loaded = true;
     ++data_.serial;
+}
+
+void HttpSource::fetch_cover()
+{
+    std::vector<Game> games;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!data_.games_loaded)
+            return;
+        games = data_.games;
+    }
+    const CoverWant want = covers().next_wanted(games);
+    if (want.path.empty())
+        return;
+    int status = 0;
+    std::string body;
+    if (exchange("GET", want.path.c_str(), {}, &status, &body, 8) != Net::ok || status != 200)
+    {
+        covers().fail(want.id);
+        return;
+    }
+    std::vector<std::uint8_t> rgba =
+        decode_cover(reinterpret_cast<const std::uint8_t *>(body.data()), body.size());
+    if (rgba.empty())
+        covers().fail(want.id);
+    else
+        covers().deliver(want.id, std::move(rgba));
 }
 
 void HttpSource::poll_jobs()

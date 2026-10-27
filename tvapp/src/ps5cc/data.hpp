@@ -48,6 +48,7 @@ struct Game
     std::string version;
     std::string format;
     std::string path;
+    std::string cover;       // where the app serves its cover ("/api/v1/library/cover?id=…"), "" when none
     std::string last_played; // ISO date as the app sends it, empty when never
     std::uint64_t size_bytes = 0;
     std::uint64_t played_s = 0;

@@ -60,6 +60,7 @@ class HttpSource final : public Source
     void poll_library();
     void poll_jobs();
     void poll_history();
+    void fetch_cover();
     std::string game_name(const std::string &id);
 
     std::mutex mutex_;

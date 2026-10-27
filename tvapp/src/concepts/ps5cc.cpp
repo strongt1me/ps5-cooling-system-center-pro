@@ -9,6 +9,7 @@
 #include "concepts/concepts.hpp"
 
 #include "core/tween.hpp"
+#include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
 #include "ui/components.hpp"
 #include "ui/glyphs.hpp"
@@ -225,6 +226,9 @@ class Ps5cc final : public app::Concept
         chart_.style.legend = ui::LegendPlacement::top;
         chart_.style.axis.ticks = 4;
         chart_.style.axis.from_zero = false;
+        // Up to the highest target (91 °C): a scale fitted to the data put 72 °C at the top and looked too hot.
+        chart_.style.axis.include_low = 20.0f;
+        chart_.style.axis.include_high = 91.0f;
         chart_.title = "Verlauf der letzten 2 Minuten";
         std::vector<std::string> labels(kChartPoints);
         labels.front() = "–2 min";
@@ -247,8 +251,10 @@ class Ps5cc final : public app::Concept
                                 int index, float focus)
         {
             (void)focus;
-            (void)index;
-            draw_initials(canvas, {row.x + 18.0f, row.y + 12.0f, 60.0f, 60.0f}, item.title, 24.0f);
+            const std::string id = index >= 0 && index < static_cast<int>(data_.games.size())
+                                       ? data_.games[static_cast<std::size_t>(index)].id
+                                       : std::string();
+            draw_cover(canvas, {row.x + 18.0f, row.y + 12.0f, 60.0f, 60.0f}, id, item.title, 24.0f);
         };
         games_.set_bounds({kMargin, kTop + 10.0f, 1060.0f, kBottom - kTop - 10.0f});
 
@@ -261,7 +267,9 @@ class Ps5cc final : public app::Concept
 
         details_.style.theme = theme_;
         details_.style.panel = false;
-        details_.style.max_lines = 3;
+        // One line per value: wrapped, the path put the content right at the height that needs a scrollbar, the scrollbar
+        // narrowed the rows, the path rewrapped, and the sheet jumped up and down every frame (console, 27.10.2026).
+        details_.style.max_lines = 1;
         sheet_.style.theme = theme_;
         sheet_.style.size = 720.0f;
         sheet_.style.footer = 120.0f;
@@ -392,6 +400,9 @@ class Ps5cc final : public app::Concept
 
         if (data_.link == Link::online)
             route(input, feedback);
+        // The worker fetches the cover of the game in focus before the others.
+        if (const ps5cc::Game *g = focused_game())
+            ps5cc::covers().prefer(g->id);
 
         if (pending_target_ > 0)
         {
@@ -615,6 +626,13 @@ class Ps5cc final : public app::Concept
         items.push_back({"Zuletzt gespielt", german_date(g->last_played)});
         items.push_back({"Speicherort", g->path});
         items.push_back({"Starten", g->can_launch ? "möglich" : "nicht möglich"});
+        // The data changes every second (temperatures); refilling unchanged rows reset the list each time.
+        std::string key = g->name;
+        for (const ui::DetailItem &item : items)
+            key += '\n' + item.label + '\t' + item.value;
+        if (key == details_key_)
+            return;
+        details_key_ = std::move(key);
         details_.set_items(items);
         details_.set_bounds(sheet_.content_rect());
     }
@@ -947,6 +965,18 @@ class Ps5cc final : public app::Concept
                  box.y + box.h * 0.5f + size * 0.36f, size, Color::rgb(0xffffff), gfx::Align::center);
     }
 
+    // The game's cover once the worker has brought it, faded in over the initials it replaces.
+    void draw_cover(ui::Canvas &canvas, const Rect &box, const std::string &id, const std::string &name,
+                    float size) const
+    {
+        const ps5cc::CoverShown cover = id.empty() ? ps5cc::CoverShown{} : ps5cc::covers().texture_of(id);
+        const float alpha = cover.texture == 0 ? 0.0f : context_.settings.reduced_motion ? 1.0f : cover.alpha;
+        if (alpha < 1.0f)
+            draw_initials(canvas, box, name, size);
+        if (alpha > 0.0f)
+            canvas.list.image(cover.texture, box, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, alpha}, box.w * 0.22f);
+    }
+
     void panel(ui::Canvas &canvas, const Rect &r) const
     {
         ui::Painter paint(canvas.list, canvas.fonts, theme_);
@@ -1097,7 +1127,7 @@ class Ps5cc final : public app::Concept
         const ps5cc::Game *g = focused_game();
         if (g == nullptr)
             return;
-        draw_initials(canvas, {card.x + 36.0f, card.y + 36.0f, 150.0f, 150.0f}, g->name, 56.0f);
+        draw_cover(canvas, {card.x + 36.0f, card.y + 36.0f, 150.0f, 150.0f}, g->id, g->name, 56.0f);
         float y = card.y + 70.0f;
         const float text_x = card.x + 212.0f;
         const float text_w = card.w - 248.0f;
@@ -1217,6 +1247,7 @@ class Ps5cc final : public app::Concept
     ui::ListView games_;
     ui::DetailList game_info_;
     ui::DetailList details_;
+    std::string details_key_; // what details_ shows, to skip refilling it unchanged
     ui::Sheet sheet_;
     std::size_t shown_games_ = static_cast<std::size_t>(-1);
     std::string shown_running_ = "\x01";
