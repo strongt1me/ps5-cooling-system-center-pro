@@ -42,6 +42,10 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   nicht mehr auf GitHub; verwendet wird die erhaltene Kopie `JMUtechnologies/ps5-homebrew-ui`, das OpenGL-SDK wird beim Bauen geladen und
   gegen die im Baukasten fest eingetragene SHA-256-Prüfsumme geprüft. Herkunft, Änderungen und Prüfsummen: `tvapp/ORIGIN.md`, die
   Lizenzen der Schriften und übrigen Teile: `tvapp/THIRD_PARTY_NOTICES.md`.
+  Für die zweite Kachel, die Browser-Kachel (`PPSA86922`, `starter/browser/`), sind aus ps5-native-app-boilerplate das Linker-Skript
+  (`starter/browser/title/title.ld`), die Symboltabelle (`title/symbols.map`) und `sce_module/libc.prx` (Kompatibilitäts-Stubs und
+  Startcode, kein fremder Systemcode, siehe `sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
+  Signatur) folgt dem Projekt.
 - **ps-disc-detect** (GPL-3.0-or-later; „disc detect“, Archiv `ps-disc-detect-main.zip`, vom User am 21.10.2026 bereitgestellt): Vorbild und Wissen für den Reiter „Disc“ (`src/disc.c`): der Weg zum Laufwerk (`/dev/xpt0`, CAMIOCOMMAND mit GET CONFIGURATION, READ DISC STRUCTURE, SET STREAMING), die Profilnummern, wo die Titelkennung liegt (`SYSTEM.CNF`, `PARAM.SFO`, `param.json`), das Lesen von `/dev/cd0` in 128-KiB-Stücken, das Benennen nach Redump und das Schema der Redump-Datenbank. Der Code ist neu geschrieben (kein CD-Abbild, kein IRD, keine eingebettete Liste); die MD5- und SHA-1-Rechnungen sind eigene Fassungen der veröffentlichten Verfahren.
 - **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.7.0): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien

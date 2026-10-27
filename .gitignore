@@ -30,8 +30,8 @@ build.err.txt
 
 # Starter app dump folder (tools/make_starter.sh)
 starter/out/
-starter/build/
-starter/eboot.bin
-starter/payload.elf
+starter/browser/build/
+starter/browser/eboot.bin
+starter/browser/payload.elf
 
 build/

@@ -152,9 +152,10 @@ if (-not (Test-Path $releaseDir)) {
 
 $mainElf = Join-Path $releaseDir "PS5_Cooling_System_Center_v$version.elf"
 $starterZip = Join-Path $releaseDir "PPSA86921.zip"
+$browserZip = Join-Path $releaseDir "PPSA86922.zip"
 $liesmich = Join-Path $releaseDir "LIESMICH.txt"
 
-foreach ($p in @($mainElf, $starterZip, $liesmich)) {
+foreach ($p in @($mainElf, $starterZip, $browserZip, $liesmich)) {
   if (-not (Test-Path $p)) {
     throw "Missing release asset: $p"
   }
@@ -166,6 +167,7 @@ if (Get-ChildItem -Path $releaseDir -Filter "*.pkg" -File) {
 Write-Host "Local release assets: OK" -ForegroundColor Green
 Write-Host "- $(Split-Path $mainElf -Leaf)"
 Write-Host "- $(Split-Path $starterZip -Leaf)"
+Write-Host "- $(Split-Path $browserZip -Leaf)"
 Write-Host "- $(Split-Path $liesmich -Leaf)"
 
 if (-not $SkipGitHub) {

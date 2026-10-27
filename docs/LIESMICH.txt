@@ -10,9 +10,16 @@ PS5_Cooling_System_Center_v1.74.0.elf
     Datei, die du nach jedem Neustart der Konsole sendest.
 
 PPSA86921.zip
-    Die Starter-Kachel: den Ordner PPSA86921 nach /data/homebrew/ kopieren
+    Die Vollbild-Kachel: den Ordner PPSA86921 nach /data/homebrew/ kopieren
     (z. B. mit ShadowMountPlus oder einem FTP-Programm). Ein Tipp auf die
-    Kachel startet die App und öffnet die Web-Oberfläche.
+    Kachel startet die App und zeigt sie im Vollbild mit Controller-
+    Bedienung (Kühlung, Spiele, Aufträge, Einstellungen, Payloads,
+    Protokoll).
+
+PPSA86922.zip
+    Die Browser-Kachel: wie oben nach /data/homebrew/ kopieren. Ein Tipp
+    startet die App und öffnet die Web-Oberfläche im Browser der Konsole.
+    Beide Kacheln können nebeneinander liegen.
 
 Einen eigenen Kachel-Installer (ELF) und ein Kachel-Paket (.pkg) gibt es
 nicht mehr: Das Hauptprogramm legt seine Kachel selbst an.
