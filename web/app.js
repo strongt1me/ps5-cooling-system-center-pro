@@ -8607,6 +8607,8 @@
     $("#fm-mkdir").disabled = !d.writable;
     $("#fm-upload-lbl").classList.toggle("disabled", !d.writable);
     $("#fm-upload").disabled = !d.writable;
+    $("#fm-updir-lbl").classList.toggle("disabled", !d.writable);
+    $("#fm-updir").disabled = !d.writable;
     $("#fm-up").disabled = !d.parent;
     fm.sorted = fmSortList(d.entries);
     const sortSel = $("#fm-sort");
@@ -8843,12 +8845,85 @@
     [...files].forEach((f) => fm.upQueue.push({ f, dir }));
     if (!fm.xhr) fmUpNext(0, fm.upQueue.length);
   };
+
+  /* Ganze Ordner: erst legt die Konsole die Ordner an (von oben nach unten, ein schon vorhandener zählt als da), dann
+     laufen die Dateien durch dieselbe Warteschlange wie einzelne. Was es am Ziel schon gibt, wird übersprungen, nie
+     überschrieben. items: [{ f, rel: "Ordner/unter/datei" }], dirs: leere Ordner als relative Pfade. */
+  const fmUploadTree = async (items, dirs = []) => {
+    if (!fm.list || !fm.list.writable) { toast("Hierhin darf nichts geladen werden (nur auf die Laufwerke und nach /data).", "error"); return; }
+    const base = fm.path;
+    const need = new Set(dirs.filter(Boolean));
+    items.forEach(({ rel }) => {
+      const parts = rel.split("/").slice(0, -1);
+      for (let i = 1; i <= parts.length; i++) need.add(parts.slice(0, i).join("/"));
+    });
+    const sorted = [...need].sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b));
+    const box = $("#fm-uploads");
+    box.hidden = false;
+    let made = 0;
+    for (const rel of sorted) {
+      const parts = rel.split("/");
+      const parent = parts.slice(0, -1).reduce((p, s) => fmJoin(p, s), base);
+      box.innerHTML = `<p class="cp-num"><b>Ordner werden angelegt</b> · ${made + 1} von ${sorted.length}</p>
+        <p class="muted cp-cur"><code>${esc(rel)}</code></p>`;
+      try {
+        await api("/api/v1/files/mkdir", { method: "POST", body: JSON.stringify({ path: parent, name: parts[parts.length - 1] }) });
+      } catch (e) {
+        if (e.status !== 409) {
+          box.innerHTML = `<p class="cp-err">Ordner „${esc(rel)}“: ${esc(e.message)}</p>
+            <div class="cp-actions"><button type="button" class="btn ghost" id="fm-uphide">Ausblenden</button></div>`;
+          fmLoad(fm.path);
+          return;
+        }
+      }
+      made++;
+    }
+    items.forEach(({ f, rel }) => {
+      const dir = rel.split("/").slice(0, -1).reduce((p, s) => fmJoin(p, s), base);
+      fm.upQueue.push({ f, dir, rel, skipExisting: true });
+    });
+    if (!items.length) {
+      box.innerHTML = `<p class="dl-done">${made} ${made === 1 ? "Ordner" : "Ordner"} angelegt, keine Dateien darin.</p>
+        <div class="cp-actions"><button type="button" class="btn ghost" id="fm-uphide">Ausblenden</button></div>`;
+      fmLoad(fm.path);
+      return;
+    }
+    if (!fm.xhr) { fm.upSkipped = 0; fmUpNext(0, fm.upQueue.length); }
+  };
+
+  /* Beim Hineinziehen: Ordner über die Einträge des Browsers ablaufen (readEntries liefert in Portionen). */
+  const fmReadDrop = async (dt) => {
+    const items = [], dirs = [];
+    const all = (r) => new Promise((ok, no) => {
+      const out = [];
+      const more = () => r.readEntries((es) => { if (!es.length) ok(out); else { out.push(...es); more(); } }, no);
+      more();
+    });
+    const walk = async (en, prefix) => {
+      const rel = prefix ? `${prefix}/${en.name}` : en.name;
+      if (en.isFile) {
+        const f = await new Promise((ok, no) => en.file(ok, no));
+        items.push({ f, rel });
+      } else if (en.isDirectory) {
+        const kids = await all(en.createReader());
+        if (!kids.length) dirs.push(rel);
+        for (const k of kids) await walk(k, rel);
+      }
+    };
+    const entries = [...dt.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    for (const en of entries) await walk(en, "");
+    return { items, dirs };
+  };
+
   const fmUpNext = (done, total) => {
     const box = $("#fm-uploads");
     const it = fm.upQueue.shift();
     if (!it) {
       fm.xhr = null;
-      box.innerHTML = `<p class="dl-done">${done} ${done === 1 ? "Datei" : "Dateien"} hochgeladen.</p>
+      const sk = fm.upSkipped || 0;
+      fm.upSkipped = 0;
+      const up = done - sk;
+      box.innerHTML = `<p class="dl-done">${up} ${up === 1 ? "Datei" : "Dateien"} hochgeladen.${sk ? ` ${sk} übersprungen, weil es sie am Ziel schon gibt.` : ""}</p>
         <div class="cp-actions"><button type="button" class="btn ghost" id="fm-uphide">Ausblenden</button></div>`;
       fmLoad(fm.path);
       return;
@@ -8859,7 +8934,7 @@
     const show = (pc) => {
       paintJob(box, `<p class="cp-num"><b>Hochladen ${done + 1} von ${total}</b> · ${pc} %</p>
         <div class="cp-bar" role="progressbar" aria-label="Fortschritt beim Hochladen" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>
-        <p class="muted cp-cur"><code>${esc(it.f.name)}</code> · ${esc(bytes(it.f.size))} nach ${esc(it.dir)}</p>`,
+        <p class="muted cp-cur"><code>${esc(it.rel || it.f.name)}</code> · ${esc(bytes(it.f.size))} nach ${esc(it.dir)}</p>`,
         `<button type="button" class="btn" id="fm-upcancel">Abbrechen</button>`);
     };
     let shownPc = 0;
@@ -8881,6 +8956,7 @@
       let d = null;
       try { d = JSON.parse(x.responseText); } catch { /* keine Antwort */ }
       if (x.status === 200 && d && d.ok) fmUpNext(done + 1, total);
+      else if (it.skipExisting && x.status === 409 && d && d.code === "exists") { fm.upSkipped = (fm.upSkipped || 0) + 1; fmUpNext(done + 1, total); }
       else fail((d && d.message) || `HTTP ${x.status}`);
     };
     x.onerror = () => fail("Die Verbindung brach ab.");
@@ -9029,6 +9105,10 @@
     } else if (c.id === "fm-upload" && c.files && c.files.length) {
       fmUpload(c.files);
       c.value = "";
+    } else if (c.id === "fm-updir" && c.files && c.files.length) {
+      const items = [...c.files].map((f) => ({ f, rel: f.webkitRelativePath || f.name }));
+      c.value = "";
+      fmUploadTree(items);
     } else if (c.id === "fm-sort") {
       /* Größe und Datum: das Größte und Neueste zuerst; Name: von A bis Z */
       fm.sort = ["name", "size", "date"].includes(c.value) ? c.value : "name";
@@ -9046,9 +9126,15 @@
   fmDrop.addEventListener("dragleave", () => fmDrop.classList.remove("drop"));
   fmDrop.addEventListener("drop", (e) => {
     fmDrop.classList.remove("drop");
-    if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+    const dt = e.dataTransfer;
+    if (!dt || !dt.files.length) return;
     e.preventDefault();
-    fmUpload(e.dataTransfer.files);
+    /* Ein Ordner kommt als Eintrag ohne Inhalt an: dann über die Einträge gehen, sonst wie bisher Datei für Datei.
+       Die Einträge nur hier, im Ereignis selbst, holen – danach gibt der Browser sie nicht mehr heraus. */
+    const hasDir = [...(dt.items || [])].some((i) => { const en = i.webkitGetAsEntry && i.webkitGetAsEntry(); return en && en.isDirectory; });
+    if (!hasDir) { fmUpload(dt.files); return; }
+    fmReadDrop(dt).then(({ items, dirs }) => fmUploadTree(items, dirs))
+      .catch((er) => toast(`Der Ordner ließ sich nicht lesen: ${er.message || er}`, "error"));
   });
 
   /* Die Sicherungen der App, mit „Löschen“ je Eintrag. */

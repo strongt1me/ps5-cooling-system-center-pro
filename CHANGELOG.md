@@ -2,6 +2,20 @@
 
 ## Unveröffentlicht
 
+### Die Kachel ist jetzt eine Vollbild-App mit Controller
+- **Statt des kleinen Browserfensters** öffnet die Kachel (PPSA86921, im Medien-Bereich) eine Vollbild-Oberfläche: Reiter **Kühlung** (Temperaturen, Lüfter, Zieltemperatur mit dem Steuerkreuz ändern, Statusanzeigen, Verlauf der letzten 2 Minuten), **Spiele** (Liste mit Details, Starten) und **Aufträge** (Kopieren, Konvertieren, Abbild mit Fortschritt und Abbrechen, Verlauf); L1/R1 wechselt die Reiter, Options öffnet das Menü mit „Weboberfläche im Browser öffnen“, „Neu laden“ und „Beenden“. Läuft die App noch nicht, startet die Kachel sie wie bisher selbst (die ELF steckt in der `eboot.bin`)
+- Gebaut auf dem Oberflächen-Baukasten **ps5-homebrew-ui** (BlackBearReloaded, GPL-3.0-or-later; erhaltene Kopie, OpenGL-SDK per SHA-256 geprüft), Quelltext in `tvapp/`, Herkunft in `tvapp/ORIGIN.md`; `tools/make_starter.sh` baut die Kachel jetzt über `tools/tvapp-build.sh` (WSL). Der alte Browser-Starter (`starter/title/`) ist entfernt
+- **Spiel starten aus der Vollbild-App:** Weil die Kachel selbst ein Titel ist, hielt die Konsole sie für das laufende Spiel und lehnte den Start ab. Neu: `POST /api/v1/library/launch` mit `"after_exit":"<Titel-ID der Kachel>"` – die App sagt sofort zu (202 `state: after_exit`), die Vollbild-App beendet sich über das System, danach startet das Spiel. Die Vollbild-App selbst taucht nicht mehr in der Spieleliste und nicht als „Im Spiel“ auf
+- Medien-Bereich: `applicationCategoryType` 65536, `contentBadgeType` 2; die Seitentabellen sind dort auf höchstens 128 MiB begrenzt (mit 256 MiB startete sie nicht: CE-100022-5)
+- An der Pro (FW 12.00) vom User getestet: Vollbild, Controller, Ton, Zieltemperatur, Spieleliste, Spielstart, Menü
+
+### Dateimanager: ganze Ordner hochladen
+- Neuer Knopf **„Ordner hochladen“**, und Ordner lassen sich auf die Liste ziehen: Die Ordnerstruktur wird auf der Konsole angelegt, dann laufen die Dateien einzeln mit Fortschritt; Dateien, die es am Ziel schon gibt, werden übersprungen und gezählt, nie überschrieben
+
+### Oberfläche
+- Der Streifen über der Bibliothek (Kopieren, Konvertieren, Aufträge von ShadowMountPlus) ist farbig und größer: läuft blau, fertig grün, gescheitert rot, abgebrochen gelb (Hinweis eines Nutzers: im Hintergrund fiel er nicht auf)
+- Doppelte Abbilder: „Beiseitelegen“ heißt jetzt **„Deaktivieren“**, „Zurückholen“ **„Aktivieren“**
+
 ### Lüfter: unabhängiger Wächter, kein Pendeln mehr bei Zielen um 72–82 °C
 - **Wächter (neu, `src/fanguard.c`):** eigener Faden mit eigenen Sensorabfragen, unabhängig von der Regelung. Meldet sich die Regelschleife 20 s nicht, geht der Lüfter an die Konsole zurück (bei Hitze volle Kühlung), bis sie wieder läuft; nach dem Ruhemodus löst er nicht aus. Liegt die Konsole 10 s über Sicherheitsgrenze + 6 °C (mindestens 84 °C), während der Lüfter unter 90 % läuft, hält er volle Kühlung (mindestens 30 s, bis 8 °C unter der Grenze); die Regelung schreibt solange nichts. Bei einem Absturz (SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT) wird die Lüftereinstellung noch an die Konsole zurückgegeben (SIGKILL lässt sich nicht abfangen; an der Konsole noch nicht geprüft). Status: `control.guard_state` in `GET /api/v1/status`, Anzeige in der Lüfterdiagnose
 - **Pendeln behoben:** Bei Zielen um 72–82 °C liegt die automatische Sicherheitsgrenze nur 4 K über dem Ziel, das Band verlangt die nötige Drehzahl aber erst weiter oben. Unter Volllast lief die Konsole in die Grenze, die Notrampe trieb den Lüfter fast auf 100 %, danach fiel er auf den niedrigen Bandwert zurück – alle 6–10 Minuten, bei Ziel 75 zwischen 36 und 100 %. Jetzt bleibt die Drehzahl, auf der die Notrampe endet, als Untergrenze stehen: unter dem Ziel wird sie langsam abgebaut (1 % je 15 s, weit darunter je 6 s), knapp unter der Grenze bei steigender Temperatur aufgebaut (1 % je 3 s), dazwischen gehalten; gelöscht wird sie erst 45 s nach einem Fall von 10 K unter das Ziel (Spielende)

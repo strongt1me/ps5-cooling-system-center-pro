@@ -1760,15 +1760,100 @@ running_by_kernel(char *id, size_t id_len, char *name, size_t name_len) {
   return 0;
 }
 
+/* The full-screen app of the tile (tvapp/) is a real title, so the kernel counts it as the running game and a start from it would
+ * be refused as "another game is running" (console test 27.10.2026: the app offered to close itself and nothing started). It
+ * therefore names itself in "after_exit": the start is answered at once, the app ends itself through the system, and only then
+ * is the game launched. Closing it from here instead would kill a title that is rendering, which the kit's notes connect with
+ * lost consoles. Only the app's own two title ids are accepted. */
+#define TV_EXIT_WAIT_MS 20000
+#define TV_EXIT_SETTLE_MS 1500
+
+static int
+tv_title(const char *id) {
+  return !strcmp(id, "PPSA86921") || !strcmp(id, "PPSA86922");
+}
+
+typedef struct { char tv[16], id[16], name[128], link[96]; } after_exit_t;
+
+static void *
+after_exit_thread(void *arg) {
+  after_exit_t *a = arg;
+  int waited = 0;
+  while(ps5tm_procmgr_title_running(a->tv) == 1 && waited < TV_EXIT_WAIT_MS) {
+    usleep(200 * 1000);
+    waited += 200;
+  }
+  if(waited >= TV_EXIT_WAIT_MS) {
+    PS5TM_WARN("library_after_exit", "Start von %s abgebrochen: %s hat sich nicht beendet.", a->id, a->tv);
+    ps5tm_notify("„%s“ wurde nicht gestartet: die Vollbild-App hat sich nicht beendet.", a->name);
+    release_start(a->id);
+    free(a);
+    return NULL;
+  }
+  /* a title started in the middle of another one's teardown can leave that one's sandbox behind (starter.c, 12.10.2026) */
+  usleep(TV_EXIT_SETTLE_MS * 1000);
+
+  unsigned slow = slow_start_begin(a->name);
+  int rc = ps5tm_library_start(a->id);
+  slow_start_end(slow);
+  if(rc >= 0 || launched_anyway(a->id, rc)) {
+    remember_started(a->id);
+    PS5TM_INFO("library_started", "Gestartet: %s (%s) nach dem Ende der Vollbild-App (0x%08X).", a->name, a->id, (unsigned)rc);
+  } else if((unsigned)rc == 0x80940010u) {
+    char run_id[16] = "", run_name[128] = "";
+    release_start(a->id);
+    if(running_by_kernel(run_id, sizeof(run_id), run_name, sizeof(run_name)) == 0)
+      ps5tm_notify("„%s“ läuft noch und muss zuerst beendet werden.", run_name);
+    else
+      ps5tm_notify("Es läuft noch ein anderes Spiel. Bitte schließe es zuerst über das Menü der PS-Taste.");
+  } else {
+    char icon[160];
+    if(ps5tm_library_cover(a->id, icon, sizeof(icon)) != 0) icon[0] = 0;
+    if(ps5tm_notify_action(a->name, "Zum Spielen „Starten“ wählen", icon[0] ? icon : NULL, "Starten", a->link) == 0)
+      remember_started(a->id);
+    else {
+      release_start(a->id);
+      ps5tm_notify("„%s“ ließ sich nicht starten (0x%08X).", a->name, (unsigned)rc);
+    }
+  }
+  free(a);
+  return NULL;
+}
+
+static int
+after_exit_spawn(const char *tv, const char *id, const char *name, const char *link) {
+  after_exit_t *a = calloc(1, sizeof(*a));
+  if(!a) return -1;
+  snprintf(a->tv, sizeof(a->tv), "%s", tv);
+  snprintf(a->id, sizeof(a->id), "%s", id);
+  snprintf(a->name, sizeof(a->name), "%s", name);
+  snprintf(a->link, sizeof(a->link), "%s", link);
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&attr, 256 * 1024);
+  pthread_t th;
+  int rc = pthread_create(&th, &attr, after_exit_thread, a);
+  pthread_attr_destroy(&attr);
+  if(rc != 0) { free(a); return -1; }
+  return 0;
+}
+
 static void
 handle_library_launch(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
   const cJSON *jid    = body ? cJSON_GetObjectItem(body, "id") : NULL;
   const cJSON *jclose = body ? cJSON_GetObjectItem(body, "close") : NULL;
-  char id[16] = "", close_id[16] = "";
+  const cJSON *jafter = body ? cJSON_GetObjectItem(body, "after_exit") : NULL;
+  char id[16] = "", close_id[16] = "", after_id[16] = "";
   if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
   if(cJSON_IsString(jclose)) snprintf(close_id, sizeof(close_id), "%s", jclose->valuestring);
+  if(cJSON_IsString(jafter)) snprintf(after_id, sizeof(after_id), "%s", jafter->valuestring);
   cJSON_Delete(body);
+  if(after_id[0] && !tv_title(after_id)) {
+    ps5tm_http_send_error(fd, 400, "bad_after_exit", "after_exit nennt nicht die Vollbild-App.");
+    return;
+  }
 
   char name[128], link[96], icon[160];
   if(ps5tm_library_launch_info(id, name, sizeof(name), link, sizeof(link)) != 0) {
@@ -1817,9 +1902,34 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
     }
   }
 
+  /* The full-screen app asking for a start is not "another game": it is about to end itself (after_exit_thread). A real game
+     paused behind it still is, if the reading names that one. */
+  if(after_id[0] && gs.title_id[0] && (!strcmp(gs.title_id, after_id) || tv_title(gs.title_id)))
+    gs.title_id[0] = '\0';
+
   int same_running  = gs.title_id[0] && !strcmp(gs.title_id, id);
   int other_running = gs.title_id[0] && !same_running;
   char out[256];
+
+  if(after_id[0] && !other_running) {
+    if(same_running || !game_link) {
+      ps5tm_http_send_error(fd, 409, "not_after_exit", "Dieser Titel lässt sich so nicht starten.");
+      return;
+    }
+    if(!claim_start(id)) {
+      ps5tm_http_send_json(fd, 200, "{\"ok\":true,\"started\":true,\"already_starting\":true}");
+      return;
+    }
+    if(after_exit_spawn(after_id, id, name, link) != 0) {
+      release_start(id);
+      ps5tm_http_send_error(fd, 503, "busy", "Der Start ließ sich nicht vormerken.");
+      return;
+    }
+    PS5TM_INFO("library_after_exit", "Start von %s (%s) vorgemerkt, sobald %s beendet ist.", name, id, after_id);
+    snprintf(out, sizeof(out), "{\"ok\":true,\"state\":\"after_exit\",\"then\":\"%s\"}", id);
+    ps5tm_http_send_json(fd, 202, out);
+    return;
+  }
 
   if(same_running && gs.foreground && !on_console) {
     ps5tm_http_send_json(fd, 200,

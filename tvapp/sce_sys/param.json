@@ -1,0 +1,43 @@
+{
+  "ageLevel": {
+    "default": 0
+  },
+  "amm": {
+    "multimapVaRangeInGib": 512,
+    "pagetableMemorySizeInMib": 256,
+    "vaRangeInGib": 512
+  },
+  "applicationCategoryType": 65536,
+  "applicationDrmType": "free",
+  "attribute": 1644167168,
+  "attribute2": 0,
+  "attribute3": 1048576,
+  "conceptId": "86921",
+  "contentBadgeType": 2,
+  "contentId": "IV9999-PPSA86921_00-PS5COOLINGSTART1",
+  "contentVersion": "01.000.010",
+  "downloadDataSize": 256,
+  "kernel": {
+    "cpuPageTableSize": 134217728,
+    "gpuPageTableSize": 134217728
+  },
+  "localizedParameters": {
+    "defaultLanguage": "en-US",
+    "en-US": {
+      "titleName": "PS5 Cooling & System Center - Pro"
+    },
+    "de-DE": {
+      "titleName": "PS5 Cooling & System Center - Pro"
+    }
+  },
+  "masterVersion": "01.00",
+  "pubtools": {
+    "creationDate": "2026-08-22 00:00:00",
+    "loudnessSnd0": "-28.00",
+    "toolVersion": "2.00"
+  },
+  "requiredSystemSoftwareVersion": "0x0000000000000000",
+  "sdkVersion": "0x0000000000000000",
+  "titleId": "PPSA86921",
+  "versionFileUri": ""
+}
