@@ -4,6 +4,7 @@
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
+#include "ps5cc/payload_tile.hpp"
 
 #include <algorithm>
 #include <array>
@@ -52,6 +53,18 @@ class PayloadsPage final : public Page
         list_.style.value_size = 20.0f;
         list_.style.header_size = 18.0f;
         list_.style.highlight.kind = ui::HighlightKind::bar;
+        list_.style.leading_width = 72.0f;
+        list_.leading = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item, int index, float focus)
+        {
+            (void)index;
+            (void)focus;
+            PayloadTile tile;
+            if (!tile_of(item, tile))
+                return;
+            const float side = std::min(52.0f, row.h - 20.0f);
+            draw_payload_tile(canvas, {row.x + 16.0f, row.y + (row.h - side) * 0.5f, side, side}, tile,
+                              item.disabled ? 0.45f : 1.0f);
+        };
         list_.set_bounds({kMargin, kListTop, kLeftW, kBottom - kListTop});
 
         info_.style.theme = theme;
@@ -205,9 +218,18 @@ class PayloadsPage final : public Page
                                    : view_ == kStore ? "Liste: itsPLK ps5-payloads-mirror."
                                                      : "";
         }
+        float title_w = card.w - 60.0f;
+        PayloadTile tile;
+        const bool has_tile = list_.focus() >= 0 && list_.focus() < static_cast<int>(list_.items().size()) &&
+                              tile_of(list_.items()[static_cast<std::size_t>(list_.focus())], tile);
+        if (has_tile)
+        {
+            draw_payload_tile(canvas, {card.x + card.w - 30.0f - 96.0f, card.y + 30.0f, 96.0f, 96.0f}, tile);
+            title_w -= 116.0f;
+        }
         float y = card.y + 64.0f;
         int lines = 0;
-        for (const std::string &line : fonts.display.font->wrap(title, 32.0f, card.w - 60.0f))
+        for (const std::string &line : fonts.display.font->wrap(title, 32.0f, title_w))
         {
             if (++lines > 2)
                 break;
@@ -216,6 +238,9 @@ class PayloadsPage final : public Page
         }
         y += 4.0f;
         lines = 0;
+        // Beside the tile while the text is still level with it.
+        if (has_tile && y < card.y + 30.0f + 96.0f + 10.0f)
+            y = card.y + 30.0f + 96.0f + 34.0f;
         for (const std::string &line : fonts.regular.font->wrap(text, 21.0f, card.w - 60.0f))
         {
             if (++lines > 4)
@@ -259,6 +284,23 @@ class PayloadsPage final : public Page
         const RunningPayload *running = nullptr;
         const StoreItem *store = nullptr;
     };
+
+    // The row's payload as a tile; false for section titles and notes.
+    bool tile_of(const ui::ListItem &item, PayloadTile &out) const
+    {
+        if (item.header || item.tag < 0)
+            return false;
+        const std::size_t at = static_cast<std::size_t>(item.tag);
+        if (view_ == kFiles && at < files_.size())
+            out = payload_tile(files_[at].name);
+        else if (view_ == kRunning && at < running_.size())
+            out = payload_tile(running_[at].name);
+        else if (view_ == kStore && at < store_.size())
+            out = payload_tile(store_[at].filename.empty() ? store_[at].name : store_[at].filename, store_[at].category);
+        else
+            return false;
+        return true;
+    }
 
     static const char *store_verb(const StoreItem &s)
     {
