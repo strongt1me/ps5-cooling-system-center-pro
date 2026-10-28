@@ -106,25 +106,13 @@ typedef struct {
 
 /* ------------------------------------------------------------------ small things */
 
-/* The app's own tile that is running now, if one is; its id in out. */
-static int
-own_tile_running(char *out, size_t out_len) {
-  static const char *const ids[] = { PS5TM_TV_TITLE_ID, PS5TM_BROWSER_TITLE_ID, "PPSA86921", "PPSA86922" };
-  for(size_t i = 0; i < sizeof(ids) / sizeof(ids[0]); i++)
-    if(ps5tm_procmgr_title_running(ids[i]) == 1) {
-      snprintf(out, out_len, "%s", ids[i]);
-      return 1;
-    }
-  return 0;
-}
-
 /* ShadowMountPlus refused with "a game is active" and the only title running is one of the app's own tiles. Up to
    1.7beta5fix1 it counts every title it mounted (PPSA, CUSA, LAPY, FAKE) as a game and refuses every uninstall while one
    runs; the tiles are mounted by it from /data/homebrew, so an open tile blocks it (console test 28.10.2026). */
 static int
 blocked_by_own_tile(const char *err, char *tile, size_t tile_len) {
   char game[16];
-  return strstr(err, "game is active") && own_tile_running(tile, tile_len) &&
+  return strstr(err, "game is active") && ps5tm_procmgr_own_tile_running(tile, tile_len) &&
          ps5tm_procmgr_game_title(0, game, sizeof(game)) != 0;
 }
 
@@ -801,7 +789,7 @@ run_smp(const dl_args_t *a) {
     uint64_t t0 = ps5tm_mono_ms();
     while(!r && ps5tm_mono_ms() - t0 < (uint64_t)DL_TILE_WAIT_S * 1000) {
       usleep(2000 * 1000);
-      if(own_tile_running(tile, sizeof(tile))) continue;
+      if(ps5tm_procmgr_own_tile_running(tile, sizeof(tile))) continue;
       err[0] = '\0';
       r = ps5tm_smp_call("/games/uninstall", body, 30000, err, sizeof(err));
       if(!r && !strstr(err, "game is active")) break;   /* another reason: report it */

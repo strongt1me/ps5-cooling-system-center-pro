@@ -49,6 +49,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include <ps5/kernel.h>
+
 #include "pkginst_ipc.h"
 
 #ifndef PKGI_CONNECT_TRIES
@@ -114,6 +116,29 @@ extern int sceAppInstUtilAppUnInstallPat(const char *title_id);
 extern int sceAppInstUtilAppUnInstallAddcont(const char *title_id);
 
 /* Four capital letters and five digits, nothing else: what reaches the system's uninstall is a title id. */
+/* ShellCore's authid, for the one call (PatchDL 0.3.9, after ps5upload): the authid is the process's, so it goes back
+   right after. A process kept under it longer saw the console restart in the middle of an installation there. */
+#define PKGI_SHELLCORE_AUTHID 0x3800000000000010ULL
+
+static void plog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
+static int
+uninstall_call(const char *title_id, int patch, int shellcore) {
+  pid_t pid = getpid();
+  uint64_t saved = 0;
+  if(shellcore && (saved = kernel_get_ucred_authid(pid)) != 0 && kernel_set_ucred_authid(pid, PKGI_SHELLCORE_AUTHID) != 0)
+    saved = 0;
+  plog("serve: %s %s%s\n", patch ? "sceAppInstUtilAppUnInstallPat" : "sceAppInstUtilAppUnInstall", title_id,
+       saved ? " as ShellCore" : "");
+  int rc = patch ? sceAppInstUtilAppUnInstallPat(title_id) : sceAppInstUtilAppUnInstall(title_id);
+  for(int i = 0; saved && i < 3; i++) {
+    kernel_set_ucred_authid(pid, saved);
+    if(kernel_get_ucred_authid(pid) == saved) break;
+  }
+  plog("serve: -> 0x%08X (errno %d)\n", (unsigned)rc, errno);
+  return rc;
+}
+
 static int
 title_id_ok(const char *s) {
   if(!memchr(s, 0, 16) || strlen(s) != 9) return 0;
@@ -391,9 +416,16 @@ serve(int fd) {
         rsp.result = PKGI_E_BADREPLY;
         plog("serve: uninstall refused: not a title id\n");
       } else {
-        plog("serve: sceAppInstUtilAppUnInstall %s (game only)\n", req.title_id);
-        rsp.result = sceAppInstUtilAppUnInstall(req.title_id);
-        plog("serve: sceAppInstUtilAppUnInstall -> 0x%08X (errno %d)\n", (unsigned)rsp.result, errno);
+        rsp.result = uninstall_call(req.title_id, 0, req.as_shellcore != 0);
+      }
+    } else if(req.op == PKGI_OP_UNINSTALL_PATCH && !used) {
+      /* A PS4 game's patch alone (PatchDL's PS4 downgrade): the game stays, the older patch goes on after it. */
+      used = 1;
+      if(!title_id_ok(req.title_id) || strncmp(req.title_id, "CUSA", 4)) {
+        rsp.result = PKGI_E_BADREPLY;
+        plog("serve: patch removal refused: not a PS4 title id\n");
+      } else {
+        rsp.result = uninstall_call(req.title_id, 1, req.as_shellcore != 0);
       }
     } else if(req.op == PKGI_OP_UNINSTALL && !used) {
       /* The game first, then what belongs to it (as the PKG Manager does for leftovers): the system removes the

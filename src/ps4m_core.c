@@ -51,7 +51,6 @@ int ps4m_title_managed(const char *tid) { (void)tid; return 0; }
 char *ps4m_game_json(const char *tid, char *msg, size_t cap) { (void)tid; snprintf(msg, cap, "Host-Test"); return NULL; }
 int ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap) { (void)tid; (void)rel; snprintf(msg, cap, "Host-Test"); return -1; }
 int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) { (void)tid; (void)on; snprintf(msg, cap, "Host-Test"); return -1; }
-int ps4m_place_update(const char *tid, const char *pkg_path, char *msg, size_t cap) { (void)tid; (void)pkg_path; snprintf(msg, cap, "Host-Test"); return -1; }
 #else
 #include <dirent.h>
 #include <errno.h>
@@ -3256,57 +3255,6 @@ static void apply_dlc_choice(const char *tid, const char *on) {
     free(list);
     p4m_buf_free(&off);
     src_close(&t);
-}
-
-/* Copies a downloaded, verified update package (updates.c) to the root of tid's PS4Mount drive and starts a rescan:
- * the next pass sorts it in exactly like one dropped there by hand (adopt_dir_pkgs, PS4Mount 0.7.0 bridge). The
- * byte copy itself runs without g_mu — it can take a while for a large update, and nothing else here needs it held
- * for that long; find_root and the rescan trigger each take it only briefly. */
-int ps4m_place_update(const char *tid, const char *pkg_path, char *msg, size_t cap) {
-    char root[32];
-    if (lock_for_page(3000)) {
-        snprintf(msg, cap, P4M_BUSY);
-        return -1;
-    }
-    int found = !find_root(tid, root, sizeof(root));
-    pthread_mutex_unlock(&g_mu);
-    if (!found) {
-        snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
-        return -1;
-    }
-    char dst[PATH_MAX];
-    snprintf(dst, sizeof(dst), "%s/ps5tm-update-%s-%ld.pkg", root, tid, (long)time(NULL));
-    int in = open(pkg_path, O_RDONLY);
-    if (in < 0) {
-        snprintf(msg, cap, "Die heruntergeladene Datei fehlt: %s", strerror(errno));
-        return -1;
-    }
-    int out = open(dst, O_WRONLY | O_CREAT | O_EXCL, 0666);
-    if (out < 0) {
-        close(in);
-        snprintf(msg, cap, "Auf dem Laufwerk ließ sich keine Datei anlegen: %s", strerror(errno));
-        return -1;
-    }
-    char buf[65536];
-    ssize_t r;
-    int ok = 1;
-    while (ok && (r = read(in, buf, sizeof(buf))) > 0)
-        ok = write(out, buf, (size_t)r) == r;
-    ok = ok && r == 0;
-    close(in);
-    close(out);
-    if (!ok) {
-        unlink(dst);
-        snprintf(msg, cap, "Kopieren auf das Laufwerk fehlgeschlagen");
-        return -1;
-    }
-    if (!lock_for_page(3000)) {
-        ps4m_rescan();
-        pthread_mutex_unlock(&g_mu);
-    }
-    printf("[panel] %s: update placed at %s for the next scan\n", tid, dst);
-    snprintf(msg, cap, "Update liegt für PS4Mount bereit, wird beim nächsten Suchen eingeordnet");
-    return 0;
 }
 
 void ps4m_games_json(buf_t *out) {

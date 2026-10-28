@@ -177,7 +177,7 @@ TILE_PKG ?=
 # -lSceIpmi is what the SDK's own install_app sample links beside AppInstUtil: without that service
 # sceAppInstUtilInitialize() blocks for good.
 PKGI_HELPER_ELF := gen/pkginst_helper.elf
-PKGI_HELPER_LIBS := -lpthread -lSceNetCtl -lSceUserService -lSceSystemService -lSceIpmi -lSceAppInstUtil -lSceNet
+PKGI_HELPER_LIBS := -lpthread -lSceNetCtl -lSceUserService -lSceSystemService -lSceIpmi -lSceAppInstUtil -lSceNet -lkernel_sys
 
 # cJSON is built separately: upstream trips several of our warning flags.
 CJSON_OBJ := gen/cJSON.o

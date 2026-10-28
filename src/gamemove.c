@@ -21,6 +21,7 @@
  * the folder it unpacks into is <destination>/<title id>. */
 
 #include <errno.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,7 @@
 #define SPACE_RESERVE    (256ull * 1024 * 1024)
 #define FAT32_MAX_FILE   0xFFFFFFFFull
 #define MAX_DESTS        40
+#define TILE_WAIT_S      600          /* how long a refused job waits for the app's own tile to close */
 
 typedef struct {
   char     path[96];
@@ -235,6 +237,161 @@ ps5tm_gamemove_plan(const char *title_id, const char *op, char *err, size_t err_
   return root;
 }
 
+/* ---------------------------------------------------------------- the app's own tile in the way
+
+   ShadowMountPlus up to 1.7beta5fix1 accepts a move, then ends it at once with "game_active" (or "runtime_prepared")
+   while any title it mounted runs - the app's own full-screen tile included, which it mounts from /data/homebrew (console
+   test 28.10.2026, the same lock as for a delete, gamedelete.c). A watcher follows every job this app starts: when it
+   ends for that reason and only the app's tile runs, it waits until the tile has closed (the full-screen app closes itself
+   when the status says "waiting_for":"tile"), starts the same job again and reports its end as a notification. */
+
+typedef struct {
+  char   title_id[12], op[8], dest[256], name[128];
+  int    delete_source;
+  double job_id;
+} watch_t;
+
+static pthread_mutex_t g_wlock = PTHREAD_MUTEX_INITIALIZER;
+static struct { int on, watching; double watch_job; char title_id[12], op[8], tile[16]; } g_wait;
+
+static cJSON *
+smp_start(const watch_t *w, char *err, size_t err_len) {
+  cJSON *body = cJSON_CreateObject();
+  cJSON_AddStringToObject(body, "title_id", w->title_id);
+  cJSON_AddStringToObject(body, "destination_dir", w->dest);
+  if(!strcmp(w->op, "unpack"))
+    cJSON_AddBoolToObject(body, "delete_source", w->delete_source ? 1 : 0);
+  cJSON *ans = ps5tm_smp_call(!strcmp(w->op, "move") ? "/games/move" : "/games/unpack", body, 8000, err, err_len);
+  cJSON_Delete(body);
+  return ans;
+}
+
+static double
+job_id_of(const cJSON *o) {
+  const cJSON *id = cJSON_GetObjectItem(o, "job_id");
+  return cJSON_IsNumber(id) ? id->valuedouble : 0;
+}
+
+static int
+tile_reason(const char *reason) {
+  return !strcmp(reason, "game_active") || !strcmp(reason, "runtime_prepared");
+}
+
+/* Waits for ShadowMountPlus's job job_id to end: 1 done, 0 failed (reason and message), -1 lost sight of it. */
+static int
+follow_job(double job_id, char *reason, size_t reason_len, char *msg, size_t msg_len) {
+  reason[0] = msg[0] = '\0';
+  for(int misses = 0; misses < 20; ) {
+    usleep(1500 * 1000);
+    char err[160];
+    cJSON *s = ps5tm_smp_call("/games/storage/status", NULL, 4000, err, sizeof(err));
+    if(!s) { misses++; continue; }
+    misses = 0;
+    if(job_id > 0 && job_id_of(s) != job_id) { cJSON_Delete(s); return -1; }
+    if(cJSON_IsTrue(cJSON_GetObjectItem(s, "active"))) { cJSON_Delete(s); continue; }
+    const cJSON *rs = cJSON_GetObjectItem(s, "result_status");
+    const cJSON *rr = cJSON_GetObjectItem(s, "result_error_reason");
+    const cJSON *re = cJSON_GetObjectItem(s, "result_error");
+    int ok = !cJSON_IsNumber(rs) || rs->valuedouble == 0;
+    snprintf(reason, reason_len, "%s", cJSON_IsString(rr) ? rr->valuestring : "");
+    snprintf(msg, msg_len, "%s", cJSON_IsString(re) ? re->valuestring : "");
+    cJSON_Delete(s);
+    return ok;
+  }
+  return -1;
+}
+
+static void *
+watch_thread(void *arg) {
+  watch_t *w = arg;
+  char reason[64], msg[200], tile[16], game[16];
+  int r = follow_job(w->job_id, reason, sizeof(reason), msg, sizeof(msg));
+  if(r == 0 && tile_reason(reason) && ps5tm_procmgr_own_tile_running(tile, sizeof(tile)) &&
+     ps5tm_procmgr_game_title(0, game, sizeof(game)) != 0) {
+    pthread_mutex_lock(&g_wlock);
+    g_wait.on = 1;
+    snprintf(g_wait.title_id, sizeof(g_wait.title_id), "%s", w->title_id);
+    snprintf(g_wait.op, sizeof(g_wait.op), "%s", w->op);
+    snprintf(g_wait.tile, sizeof(g_wait.tile), "%s", tile);
+    pthread_mutex_unlock(&g_wlock);
+    PS5TM_INFO("game_storage_wait_tile", "%s von %s wartet, bis %s geschlossen ist (ShadowMountPlus sperrt solange).",
+               !strcmp(w->op, "move") ? "Verschieben" : "Entpacken", w->title_id, tile);
+    const char *what = !strcmp(w->op, "move") ? "verschoben" : "entpackt";
+    uint64_t t0 = ps5tm_mono_ms();
+    int started = 0;
+    char err[300] = "";
+    while(ps5tm_mono_ms() - t0 < (uint64_t)TILE_WAIT_S * 1000) {
+      usleep(2000 * 1000);
+      if(ps5tm_procmgr_own_tile_running(tile, sizeof(tile))) continue;
+      err[0] = '\0';
+      cJSON *ans = smp_start(w, err, sizeof(err));
+      if(!ans) {
+        if(strstr(err, "game is active")) continue;        /* the tile's exit is still being cleaned up */
+        break;
+      }
+      double id = job_id_of(ans);
+      cJSON_Delete(ans);
+      ps5tm_smp_forget();
+      pthread_mutex_lock(&g_wlock);
+      g_wait.on = 0;                                       /* from here on ShadowMountPlus's own record tells the progress */
+      pthread_mutex_unlock(&g_wlock);
+      r = follow_job(id, reason, sizeof(reason), msg, sizeof(msg));
+      if(r == 0 && tile_reason(reason)) continue;
+      started = 1;
+      break;
+    }
+    pthread_mutex_lock(&g_wlock);
+    g_wait.on = 0;
+    pthread_mutex_unlock(&g_wlock);
+    ps5tm_smp_forget();
+    ps5tm_library_forget();
+    if(started && r == 1) ps5tm_notify("„%s“ ist %s.", w->name, what);
+    else if(started && r == 0) ps5tm_notify("„%s“ wurde nicht %s: %.120s", w->name, what, msg[0] ? msg : reason);
+    else if(!started) ps5tm_notify("„%s“ wurde nicht %s: %.120s", w->name, what,
+                                   err[0] ? err : "die Vollbild-App wurde nicht geschlossen");
+  }
+  pthread_mutex_lock(&g_wlock);
+  g_wait.watching = 0;
+  pthread_mutex_unlock(&g_wlock);
+  free(w);
+  return NULL;
+}
+
+static void
+watch_spawn(const watch_t *req, double job_id) {
+  watch_t *w = calloc(1, sizeof(*w));
+  if(!w) return;
+  *w = *req;
+  w->job_id = job_id;
+  char link[96];
+  if(ps5tm_library_launch_info(w->title_id, w->name, sizeof(w->name), link, sizeof(link)) != 0)
+    snprintf(w->name, sizeof(w->name), "%s", w->title_id);
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&attr, 256 * 1024);
+  pthread_mutex_lock(&g_wlock);
+  g_wait.watching = 1;
+  g_wait.watch_job = job_id;
+  pthread_mutex_unlock(&g_wlock);
+  pthread_t th;
+  if(pthread_create(&th, &attr, watch_thread, w) != 0) {
+    pthread_mutex_lock(&g_wlock);
+    g_wait.watching = 0;
+    pthread_mutex_unlock(&g_wlock);
+    free(w);
+  }
+  pthread_attr_destroy(&attr);
+}
+
+static int
+waiting_for_tile(void) {
+  pthread_mutex_lock(&g_wlock);
+  int on = g_wait.on;
+  pthread_mutex_unlock(&g_wlock);
+  return on;
+}
+
 int
 ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
                      int delete_source, char *err, size_t err_len) {
@@ -243,6 +400,10 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
   if(st != 200) return st;
   if(game_running(title_id)) {
     snprintf(err, err_len, "Das Spiel läuft gerade. Bitte erst beenden.");
+    return 409;
+  }
+  if(waiting_for_tile()) {
+    snprintf(err, err_len, "Ein Auftrag von ShadowMountPlus wartet noch darauf, dass die Vollbild-App geschlossen wird.");
     return 409;
   }
 
@@ -343,15 +504,13 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
     return 500;
   }
 
-  cJSON *body = cJSON_CreateObject();
-  cJSON_AddStringToObject(body, "title_id", title_id);
-  cJSON_AddStringToObject(body, "destination_dir", dest_dir);
-  if(!strcmp(op, "unpack"))
-    cJSON_AddBoolToObject(body, "delete_source", delete_source ? 1 : 0);
-  cJSON *ans = ps5tm_smp_call(!strcmp(op, "move") ? "/games/move" : "/games/unpack",
-                              body, 8000, err, err_len);
-  cJSON_Delete(body);
+  watch_t req = { .delete_source = delete_source };
+  snprintf(req.title_id, sizeof(req.title_id), "%s", title_id);
+  snprintf(req.op, sizeof(req.op), "%s", op);
+  snprintf(req.dest, sizeof(req.dest), "%s", dest_dir);
+  cJSON *ans = smp_start(&req, err, err_len);
   if(!ans) return 503;
+  watch_spawn(&req, job_id_of(ans));
   cJSON_Delete(ans);
   ps5tm_smp_forget();
   PS5TM_INFO("game_storage_started", "ShadowMountPlus: %s %s nach %s%s.",
@@ -362,8 +521,45 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
 
 cJSON *
 ps5tm_gamemove_status(char *err, size_t err_len) {
+  pthread_mutex_lock(&g_wlock);
+  int on = g_wait.on, watching = g_wait.watching;
+  double watch_job = g_wait.watch_job;
+  char id[12], op[8], tile[16];
+  snprintf(id, sizeof(id), "%s", g_wait.title_id);
+  snprintf(op, sizeof(op), "%s", g_wait.op);
+  snprintf(tile, sizeof(tile), "%s", g_wait.tile);
+  pthread_mutex_unlock(&g_wlock);
+  if(on) {
+    /* ShadowMountPlus's own record shows the refused job; what goes on is the wait. */
+    cJSON *w = cJSON_CreateObject();
+    cJSON_AddBoolToObject(w, "ok", 1);
+    cJSON_AddNumberToObject(w, "job_id", 0);
+    cJSON_AddStringToObject(w, "operation", op);
+    cJSON_AddStringToObject(w, "state", "waiting");
+    cJSON_AddBoolToObject(w, "active", 1);
+    cJSON_AddBoolToObject(w, "cancellable", 0);
+    cJSON_AddStringToObject(w, "title_id", id);
+    cJSON_AddStringToObject(w, "phase", "Wartet, bis die Vollbild-App geschlossen ist");
+    cJSON_AddStringToObject(w, "waiting_for", "tile");
+    cJSON_AddStringToObject(w, "tile", tile);
+    return w;
+  }
   cJSON *ans = ps5tm_smp_call("/games/storage/status", NULL, 4000, err, err_len);
   if(!ans) return NULL;
+  /* Refused for the app's own tile a moment ago: the watcher is about to wait for it, so that is what to show (a
+     "failed" in between would read as the end of it). */
+  const cJSON *rr = cJSON_GetObjectItem(ans, "result_error_reason");
+  if(watching && job_id_of(ans) == watch_job &&
+     !cJSON_IsTrue(cJSON_GetObjectItem(ans, "active")) && cJSON_IsString(rr) && tile_reason(rr->valuestring) &&
+     ps5tm_procmgr_own_tile_running(tile, sizeof(tile))) {
+    cJSON_ReplaceItemInObject(ans, "active", cJSON_CreateBool(1));
+    cJSON_ReplaceItemInObject(ans, "state", cJSON_CreateString("waiting"));
+    cJSON_AddStringToObject(ans, "phase", "Wartet, bis die Vollbild-App geschlossen ist");
+    cJSON_AddStringToObject(ans, "waiting_for", "tile");
+    cJSON_AddStringToObject(ans, "tile", tile);
+    cJSON_AddBoolToObject(ans, "ok", 1);
+    return ans;
+  }
   /* Once it has finished, ShadowMountPlus's list shows the new place. */
   if(!cJSON_IsTrue(cJSON_GetObjectItem(ans, "active"))) {
     ps5tm_smp_forget();
@@ -380,6 +576,7 @@ ps5tm_gamemove_status(char *err, size_t err_len) {
    the person from copying. */
 int
 ps5tm_gamemove_busy(void) {
+  if(waiting_for_tile()) return 1;
   char err[128];
   cJSON *job = ps5tm_smp_call("/games/storage/status", NULL, 1500, err, sizeof(err));
   if(!job) return 0;

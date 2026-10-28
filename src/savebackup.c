@@ -813,6 +813,13 @@ title_kind(const char *id) {
   return kind == 'a' ? "app" : "game";
 }
 
+/* Apps (YouTube, browsers, system apps) are left alone entirely: not listed, not backed up, never restored or deleted
+   (wish of the user, 28.10.2026). Their data is not touched, not even read. */
+static int
+title_is_app(const char *id) { return !strcmp(title_kind(id), "app"); }
+
+#define SV_APP_REFUSED "Das ist eine App, kein Spiel. Bei Apps (zum Beispiel YouTube) ändert die App nichts."
+
 /* TITLE out of a param.sfo (the PS4 key/value file). */
 static int
 sfo_title(const unsigned char *b, size_t n, char *out, size_t out_len) {
@@ -2038,6 +2045,7 @@ titles_of(const char *uid, tsel_t *out, unsigned max) {
       struct stat st;
       snprintf(full, sizeof(full), "%s/%s", dir, e->d_name);
       if(stat(full, &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+      if(title_is_app(e->d_name)) continue;
       snprintf(out[n].uid, sizeof(out[n].uid), "%s", uid);
       snprintf(out[n].id, sizeof(out[n].id), "%s", e->d_name);
       out[n].area = a;
@@ -2109,6 +2117,7 @@ ps5tm_saves_backup_start(const char *target_mount, const char **users, unsigned 
       memcpy(uid, s, 8); uid[8] = 0;
       memcpy(id, s + 9, 9); id[9] = 0;
       if(!uid_ok(uid) || !tid_ok(id)) { args_free(a); snprintf(err, err_len, "Ein Titel ist falsch angegeben."); return 400; }
+      if(title_is_app(id)) { args_free(a); snprintf(err, err_len, SV_APP_REFUSED); return 403; }
       int in_users = 0;
       for(unsigned k = 0; k < a->nusers; k++) if(!strcmp(a->users[k], uid)) in_users = 1;
       if(!in_users) continue;
@@ -2147,6 +2156,7 @@ ps5tm_saves_restore_start(const char *path, const char *uid, const char *title,
                           char *err, size_t err_len) {
   char dir[PATH_MAX];
   if(!uid_ok(uid) || !tid_ok(title)) { snprintf(err, err_len, "Benutzer oder Titel sind falsch angegeben."); return 400; }
+  if(title_is_app(title)) { snprintf(err, err_len, SV_APP_REFUSED); return 403; }
   if(backup_path_resolve(path, NULL, dir, sizeof(dir)) != 0) {
     snprintf(err, err_len, "Diese Sicherung gibt es nicht (mehr).");
     return 404;
@@ -2203,6 +2213,7 @@ ps5tm_saves_restore_start(const char *path, const char *uid, const char *title,
 int
 ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, int no_backup, char *err, size_t err_len) {
   if(!uid_ok(uid) || !tid_ok(id)) { snprintf(err, err_len, "Benutzer oder Titel sind falsch angegeben."); return 400; }
+  if(title_is_app(id)) { snprintf(err, err_len, SV_APP_REFUSED); return 403; }
   char gid[16];
   if(game_running(gid, sizeof(gid))) {
     snprintf(err, err_len, "Es läuft ein Spiel (%s). Spielstände werden nur gelöscht, wenn kein Spiel läuft, auch kein "
@@ -2472,6 +2483,7 @@ ps5tm_saves_json(void) {
       cJSON *nm = cJSON_GetObjectItem(x, "name"), *pl = cJSON_GetObjectItem(x, "platform");
       cJSON *tb = cJSON_GetObjectItem(x, "bytes");
       if(!cJSON_IsString(uid) || !cJSON_IsString(id) || !uid_ok(uid->valuestring) || !tid_ok(id->valuestring)) continue;
+      if(title_is_app(id->valuestring)) continue;           /* an older backup may hold an app: not offered */
       cJSON *tj = cJSON_CreateObject();
       cJSON_AddStringToObject(tj, "uid", uid->valuestring);
       cJSON_AddStringToObject(tj, "id", id->valuestring);

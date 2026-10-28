@@ -53,9 +53,10 @@ deutscher Sprache für `notify()` und mit `ps4m_`-Vorsatz für die von außen au
 dem Panel starten (`ps4m_launch`/`launch_now`/`launch_after_close`) — die Bibliothek der App deckt das schon ab. Eigene Bedien-
 oberfläche: zwei neue Knöpfe („Updates“, „Zusatzinhalte“) in der schon vorhandenen Liste „PS4 von USB“ (`web/index.html`,
 `web/app.js`), kein eigener Seitenleisten-Knopf — eine eigene Seite wäre nur dieselbe Liste noch einmal gewesen. Der Schalter
-`dlc_copy` liegt bei den übrigen PS4Mount-Einstellungen auf der Spiele-Seite. Zusätzlich, nicht im Original: Die Spiele-Update-Seite (`src/updates.c`)
-legt ein heruntergeladenes Update für ein PS4Mount-Spiel jetzt selbst auf dessen Laufwerk (`ps4m_place_update`), statt es wie
-jedes andere Spiel zu installieren — das schrieb sonst in einen Ordner, den PS4Mount nie liest (gefunden 26.10.2026, CUSA44880).
+`dlc_copy` liegt bei den übrigen PS4Mount-Einstellungen auf der Spiele-Seite. Die Spiele-Update-Seite (`src/updates.c`) legte
+ab dem 26.10.2026 heruntergeladene Updates für PS4Mount-Spiele auf deren Laufwerk (`ps4m_place_update`); seit dem 28.10.2026 nicht
+mehr: Die Updates der offiziellen Server sind Retail-PKGs, PS4Mount hängt nur Fake-PKGs ein („Retail PKGs are not supported“).
+PS4Mount-Spiele werden dort nur noch geprüft, ein Update bringt man als Fake-Update-PKG selbst auf das Laufwerk.
 Noch nicht übernommen: `logts.c`/`web.c`/`db.c` entfallen wie bisher, der Hinweis zur lokalen IP-Adresse in der Start-Meldung (das
 eigenständige `ps4mount.elf` hat einen eigenen Webserver auf Port 8770, die App nicht) und der Sonderfall „dasselbe Spiel auf zwei
 Laufwerken“ beim Zurückverschieben (`restore_collect`, `other`-Markierung; seltener Randfall, nicht nachgebaut).

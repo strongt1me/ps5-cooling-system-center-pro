@@ -1416,6 +1416,17 @@ void HttpSource::read_storage_job(const cJSON *root, Job &job)
     job.done = num(root, "processed_bytes");
     job.error = str(root, "result_error");
     job.cancellable = flag(root, "cancellable") && !flag(root, "cancel_requested");
+    // As for a delete: ShadowMountPlus up to 1.7beta5fix1 refused the job while this app runs; the app starts it again
+    // once this app has ended, so it ends itself (once per wait).
+    const bool waits = active && str(root, "waiting_for") == "tile" && str(root, "tile") == own_title_id();
+    if (waits)
+    {
+        job.detail = str(root, "phase");
+        if (!leaving_for_storage_)
+            notice(Notice::Kind::leaving, "„" + job.name + "“: " + verb,
+                   "Die Vollbild-App schließt sich dafür. Das Ergebnis kommt als Meldung.");
+    }
+    leaving_for_storage_ = waits;
 }
 
 void HttpSource::read_delete_job(const cJSON *root, Job &job)

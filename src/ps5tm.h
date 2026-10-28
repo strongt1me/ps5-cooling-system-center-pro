@@ -1169,6 +1169,8 @@ int      ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_le
 int      ps5tm_procmgr_close_game(const char *title_id, unsigned timeout_ms);
 /* Whether that game title's eboot.bin is running: 1 yes, 0 no, -1 unknown. */
 int      ps5tm_procmgr_title_running(const char *title_id);
+/* 1 and the id in out when one of the app's own tiles (titleid.h) is running now. */
+int      ps5tm_procmgr_own_tile_running(char *out, size_t out_len);
 /* 1 when the kernel route above is available at all, so that a failed lookup
    means "not a game" rather than "cannot ask". */
 int      ps5tm_procmgr_appinfo_ready(void);
@@ -1536,7 +1538,9 @@ void ps5tm_pkgqueue_clear(int all);                                /* the finish
    own. Synchronous. 0, or the system's code / a PKGI_E_ code with the reason in why. */
 int  ps5tm_pkginst_uninstall(const char *title_id, int *res_pat, int *res_addcont, char *why, size_t why_len);
 /* The game alone, for a fresh installation of its update (updates.c): add-ons and saved games stay. 0, or a code and why. */
-int  ps5tm_pkginst_uninstall_game(const char *title_id, char *why, size_t why_len);
+int  ps5tm_pkginst_uninstall_game(const char *title_id, int shellcore, char *why, size_t why_len);
+/* A PS4 game's installed patch alone (PatchDL 0.3.9's PS4 downgrade): the game stays on its base version. */
+int  ps5tm_pkginst_uninstall_patch(const char *title_id, int shellcore, char *why, size_t why_len);
 
 /* Probe thread, once a second: on a double press of the controller's
    microphone button, processor temperature and fan speed as a system

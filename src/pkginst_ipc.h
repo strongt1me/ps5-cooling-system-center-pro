@@ -16,7 +16,7 @@
 #include <stdint.h>
 
 #define PKGI_MAGIC        0x50434931u      /* "PCI1" */
-#define PKGI_VERSION      4u
+#define PKGI_VERSION      5u
 #ifndef PKGI_IPC_PORT
 #define PKGI_IPC_PORT     18853            /* the helper connects here; not the port of other package tools */
 #endif
@@ -43,8 +43,10 @@ enum {
   PKGI_OP_CLOSE,       /* app -> helper: leave (without ending the library's session: see pkginst_helper.c) */
   PKGI_OP_UNINSTALL,   /* app -> helper: take title_id off the console the system's way (the game, then its updates and
                           add-ons); saved games stay. Like an installation, one per helper. */
-  PKGI_OP_UNINSTALL_GAME /* app -> helper: the game alone, for a fresh installation of its update (PatchDL 0.3.6): its
+  PKGI_OP_UNINSTALL_GAME, /* app -> helper: the game alone, for a fresh installation of its update (PatchDL 0.3.6): its
                           add-ons and saved games stay. One per helper. */
+  PKGI_OP_UNINSTALL_PATCH /* app -> helper: a PS4 game's installed patch alone, before an older one goes on (PatchDL 0.3.9);
+                          the game stays on its base version. One per helper. */
 };
 
 /* Local failures, distinct from what the system library returns. */
@@ -61,6 +63,8 @@ typedef struct {
   char     icon_url[512];
   char     content_id[48];       /* PKGI_OP_STATUS: the installation asked about (what the answer to the call named) */
   char     title_id[16];         /* PKGI_OP_UNINSTALL: the title to take off */
+  uint32_t as_shellcore;         /* PKGI_OP_UNINSTALL_GAME/_PATCH: make the call under ShellCore's authid (PatchDL 0.3.9's
+                                    second try: a plain call may answer 0 and leave the title where it is) */
 } pkgi_request_t;
 
 typedef struct {

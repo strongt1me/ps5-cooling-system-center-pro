@@ -399,6 +399,18 @@ ps5tm_procmgr_title_running(const char *title_id) {
 }
 
 
+int
+ps5tm_procmgr_own_tile_running(char *out, size_t out_len) {
+  static const char *const ids[] = { PS5TM_TV_TITLE_ID, PS5TM_BROWSER_TITLE_ID, "PPSA86921", "PPSA86922" };
+  for(size_t i = 0; i < sizeof(ids) / sizeof(ids[0]); i++)
+    if(ps5tm_procmgr_title_running(ids[i]) == 1) {
+      if(out && out_len) snprintf(out, out_len, "%s", ids[i]);
+      return 1;
+    }
+  return 0;
+}
+
+
 /* Whether the kernel route above can answer at all. gamestate.c needs to tell
    "that process is not a game" apart from "there is no way to ask", and a
    failed ps5tm_procmgr_game_title() alone means either. */

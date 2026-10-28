@@ -111,6 +111,7 @@ class HttpSource final : public Source
     std::atomic<std::int64_t> storage_seen_{0};
     std::atomic<bool> jobs_wanted_{false};    // a tool started: ask for the jobs at once
     bool leaving_for_delete_ = false;         // the app ends itself for a delete (worker thread only)
+    bool leaving_for_storage_ = false;        // ... or for a move or an unpack of ShadowMountPlus
     std::atomic<bool> library_wanted_{false}; // a job ended: games may have moved or gone
     std::atomic<Watch> watching_{Watch::none};
     std::atomic<bool> config_wanted_{true};

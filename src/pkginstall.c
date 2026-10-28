@@ -1175,7 +1175,7 @@ helper_start(helper_t *h, char *why, size_t why_len, int keep_log) {
    its updates and add-ons; saved games are not touched by any of these calls. Synchronous, for the delete job, which
    never runs beside an installation. 0 when the system took it; else the system's code or a PKGI_E_ one, and why. */
 static int
-uninstall_op(uint32_t op, const char *title_id, int *res_pat, int *res_addcont, char *why, size_t why_len) {
+uninstall_op(uint32_t op, const char *title_id, int shellcore, int *res_pat, int *res_addcont, char *why, size_t why_len) {
   *res_pat = *res_addcont = 0;
   why[0] = 0;
   pthread_mutex_lock(&g_lock);
@@ -1191,14 +1191,17 @@ uninstall_op(uint32_t op, const char *title_id, int *res_pat, int *res_addcont, 
   pkgi_response_t rsp;
   memset(&req, 0, sizeof(req));
   req.op = op;
+  req.as_shellcore = shellcore ? 1 : 0;
   snprintf(req.title_id, sizeof(req.title_id), "%s", title_id);
   rc = helper_ask(&h, &req, &rsp, PI_UNINSTALL_MS, 0);
   if(rc == 0) {
     rc = rsp.result;
     *res_pat = rsp.result_pat;
     *res_addcont = rsp.result_addcont;
-    if(op == PKGI_OP_UNINSTALL_GAME)
-      PS5TM_INFO("pkg_uninstall_called", "Deinstallieren von %s (nur das Spiel): Ergebnis 0x%08X nach %u ms.", title_id, (unsigned)rc, (unsigned)rsp.native_ms);
+    if(op == PKGI_OP_UNINSTALL_GAME || op == PKGI_OP_UNINSTALL_PATCH)
+      PS5TM_INFO("pkg_uninstall_called", "Deinstallieren von %s (%s%s): Ergebnis 0x%08X nach %u ms.", title_id,
+                 op == PKGI_OP_UNINSTALL_PATCH ? "nur das Update" : "nur das Spiel", shellcore ? ", als ShellCore" : "",
+                 (unsigned)rc, (unsigned)rsp.native_ms);
     else
       PS5TM_INFO("pkg_uninstall_called", "Deinstallieren von %s: Ergebnis 0x%08X nach %u ms (Updates 0x%08X, Zusatzinhalte 0x%08X).",
                  title_id, (unsigned)rc, (unsigned)rsp.native_ms, (unsigned)rsp.result_pat, (unsigned)rsp.result_addcont);
@@ -1214,14 +1217,22 @@ uninstall_op(uint32_t op, const char *title_id, int *res_pat, int *res_addcont, 
 
 int
 ps5tm_pkginst_uninstall(const char *title_id, int *res_pat, int *res_addcont, char *why, size_t why_len) {
-  return uninstall_op(PKGI_OP_UNINSTALL, title_id, res_pat, res_addcont, why, why_len);
+  return uninstall_op(PKGI_OP_UNINSTALL, title_id, 0, res_pat, res_addcont, why, why_len);
 }
 
-/* The game alone, for a fresh installation of its update (updates.c, PatchDL 0.3.6): add-ons and saved games stay. */
+/* The game alone, for a fresh installation of its update (updates.c, PatchDL 0.3.6): add-ons and saved games stay.
+   shellcore: the call under ShellCore's authid (PatchDL 0.3.9's second try). */
 int
-ps5tm_pkginst_uninstall_game(const char *title_id, char *why, size_t why_len) {
+ps5tm_pkginst_uninstall_game(const char *title_id, int shellcore, char *why, size_t why_len) {
   int pat, add;
-  return uninstall_op(PKGI_OP_UNINSTALL_GAME, title_id, &pat, &add, why, why_len);
+  return uninstall_op(PKGI_OP_UNINSTALL_GAME, title_id, shellcore, &pat, &add, why, why_len);
+}
+
+/* A PS4 game's installed patch alone, before an older one goes on (updates.c, PatchDL 0.3.9): the game stays. */
+int
+ps5tm_pkginst_uninstall_patch(const char *title_id, int shellcore, char *why, size_t why_len) {
+  int pat, add;
+  return uninstall_op(PKGI_OP_UNINSTALL_PATCH, title_id, shellcore, &pat, &add, why, why_len);
 }
 
 /* ------------------------------------------------------------------ the job */

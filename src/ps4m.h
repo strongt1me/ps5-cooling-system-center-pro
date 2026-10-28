@@ -43,6 +43,5 @@ int   ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap);
    version check that keeps an older file from demoting a newer one already in use. The normal AppInstUtil install
    writes nowhere PS4Mount reads from, so this is what updates.c calls instead for a PS4Mount game. 0 = placed,
    -1 with a sentence in msg. */
-int   ps4m_place_update(const char *tid, const char *pkg_path, char *msg, size_t cap);
 
 #endif

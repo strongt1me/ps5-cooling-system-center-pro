@@ -4966,7 +4966,8 @@
     const close = live
       ? `<button type="button" class="btn gm-close" data-close="${id}" title="Beendet das Spiel sofort, ohne Rückfrage. Was darin nicht gespeichert ist, geht verloren.">Spiel beenden</button>`
       : "";
-    return `${btn(" primary gm-start", `data-launch="${id}"`, "Starten", !!x.can_launch, why.launch)}
+    /* läuft das Spiel schon, ist „Starten“ aus: ein zweiter Start desselben Titels kann die Konsole abstürzen lassen */
+    return `${btn(" primary gm-start", `data-launch="${id}"`, "Starten", !!x.can_launch && !live, live ? "Das Spiel läuft schon." : why.launch)}
           ${close}
           <div class="gm-more">
             ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy)}
@@ -5588,7 +5589,8 @@
                seen: 0, timer: 0, misses: 0 };
 
   const MV_STATES = { preparing: "Wird vorbereitet", measuring: "Wird vermessen",
-    transferring: "", deleting: "Alter Ort wird geräumt", finalizing: "Wird abgeschlossen" };
+    transferring: "", deleting: "Alter Ort wird geräumt", finalizing: "Wird abgeschlossen",
+    waiting: "Wartet, bis die Vollbild-App geschlossen ist" };
 
   const mvBlocked = (d) => {
     const p = mv.plan;
@@ -7092,7 +7094,7 @@
     update: ["warn", "Update verfügbar"], current: ["ok", "aktuell"], unchecked: ["", "noch nicht geprüft"], check_failed: ["warn", "Prüfung gescheitert"],
     needs_newer_fw: ["warn", "neuester Patch braucht neuere Firmware"], update_old_fw: ["warn", "älterer Patch passt"], queued: ["", "wartet"], downloading: ["", "wird geladen"], paused: ["warn", "angehalten"],
     verifying: ["", "wird geprüft"], ready: ["ok", "geladen, bereit zur Installation"], installing: ["", "wird installiert"], installed: ["ok", "installiert"],
-    failed: ["warn", "gescheitert"], blocked: ["", "Updates aus"], not_official_smp: ["", "über ShadowMountPlus"], not_official_fake: ["", "Fake-PKG"], not_official_unknown: ["", "Herkunft unbekannt"] };
+    failed: ["warn", "gescheitert"], blocked: ["", "Updates aus"], not_official_smp: ["", "über ShadowMountPlus"], not_official_fake: ["", "Fake-PKG"], ps4_fake: ["", "nur Prüfung"], not_official_unknown: ["", "Herkunft unbekannt"] };
 
   const updCover = (tid) => { const g = (gm.list || []).find((x) => x.title_id === tid); return g && g.cover ? g.cover : ""; };
   const updGroup = (t) => t.status === "update" || ["queued", "downloading", "paused", "verifying", "ready", "installing", "failed"].includes(t.status) ? "update"
@@ -7138,7 +7140,15 @@
     if (p.version && p.state === "ready" && !f.orphan) rows.push(["Passt?", fitTxt[1], fitTxt[0]]);
     if (p.version && f.plat === 5) rows.push(["Installation", p.manifest ? "über die offizielle Paketliste (wie ein Update der Konsole)" : "mit dem Paket selbst", ""]);
     let act = "";
-    if (f.fresh_ok && p.state === "ready" && p.version) {
+    if (f.fresh_ok && f.plat === 4 && p.state === "ready" && p.version && p.held) {
+      /* PS4 (PatchDL 0.3.9): only the installed update comes off, the game stays, then the older update goes on */
+      const block = f.running ? "Das Spiel läuft gerade. Bitte erst beenden." : f.busy ? "Für dieses Spiel läuft schon ein Vorgang." : !f.enabled ? "Spiel-Updates sind ausgeschaltet." : "";
+      act = `<div class="upd-fresh"><p class="cp-why"><b>Achtung:</b> ${esc(`Das installierte Update wird zuerst entfernt, das Spiel selbst bleibt. Danach wird Version ${p.version} installiert.`)}
+        ${esc("Spielstände bleiben erhalten; ein Spielstand der neueren Version lädt in der älteren aber vielleicht nicht.")}
+        ${esc("Nach einem Downgrade schaltet die App die Updates für dieses Spiel aus. Schalte auch die automatischen Updates der Konsole für dieses Spiel aus, sonst holt sie die neue Version zurück.")}</p>
+        <div class="p4m-btns"><button type="button" class="btn danger" data-upd-act="reinstall" data-upd-id="${esc(v.id)}"${block ? " disabled" : ""}>${esc(`Downgrade auf ${p.version} installieren`)}</button></div>
+        ${block ? `<p class="muted upd-hint">${esc(block)}</p>` : ""}</div>`;
+    } else if (f.fresh_ok && f.plat === 5 && p.state === "ready" && p.version) {
       const label = f.orphan ? "Neuinstallation fortsetzen" : p.older && p.version !== i.version ? `Downgrade auf ${p.version} installieren` : `Version ${p.version} neu installieren`;
       const block = f.running ? "Das Spiel läuft gerade. Bitte erst beenden." : f.busy ? "Für dieses Spiel läuft schon ein Vorgang." : !f.enabled ? "Spiel-Updates sind ausgeschaltet." : "";
       act = `<div class="upd-fresh"><p class="cp-why"><b>Achtung:</b> ${esc(f.orphan
@@ -7168,16 +7178,19 @@
           <li>Öffne <a href="${esc(page)}" target="_blank" rel="noopener">${esc(site)}</a> am Handy oder in diesem Browser und tippe auf Version ${esc(v.pick.version)}. Erscheint eine Prüfung „Bist du ein Mensch“, bestätige sie.</li>
           <li>Kopiere den Link: unter „Additional Files“ den Knopf <b>SC</b> gedrückt halten und „Link kopieren“ wählen. Bei PS4-Spielen einen Stück-Link, oder „Copy all links“.</li>
           <li>Füge den Link hier ein. Das Paket wird von den offiziellen Update-Servern geladen, sobald der Link da ist.</li></ol>
-        ${v.pick.older ? `<p class="cp-why">${esc(`Version ${v.pick.version} ist nicht neuer als die installierte. Sie wird nur geladen; installiert wird sie erst, wenn du danach unter „Versionen“ „Neu installieren“ wählst – dabei wird das Spiel deinstalliert (Spielstände bleiben).`)}</p>` : ""}
+        ${v.pick.older ? `<p class="cp-why">${esc(ps5 ? `Version ${v.pick.version} ist nicht neuer als die installierte. Sie wird nur geladen; installiert wird sie erst, wenn du danach unter „Versionen“ „Neu installieren“ wählst – dabei wird das Spiel deinstalliert (Spielstände bleiben).`
+          : `Version ${v.pick.version} ist älter als die installierte. Sie wird nur geladen; installiert wird sie erst, wenn du danach unter „Versionen“ den Downgrade wählst – dabei wird nur das installierte Update entfernt, das Spiel bleibt.`)}</p>` : ""}
         ${upd.qr ? `<div class="upd-qr"><img src="${esc(upd.qr)}" alt="QR-Code dieser Seite"><span class="muted">Am Handy diese Seite öffnen und dort weitermachen.</span></div>` : ""}
         <div class="upd-linkrow"><input type="text" data-upd-link placeholder="https://…" autocomplete="off" spellcheck="false" value="${esc(v.link || "")}">
           <button type="button" class="btn primary" data-upd-act="vers_start" data-upd-id="${esc(v.id)}">Start</button></div>
         ${v.msg ? `<p class="muted upd-hint cp-why">${esc(v.msg)}</p>` : ""}</div>`;
     } else if (v.data) {
       const list = (v.data.versions || []);
-      /* PS5-Spiele von Disc/aus dem Store: auch ältere (Downgrade) und die installierte (Reparatur) lassen sich holen */
-      const pickable = (x) => x.state === "ok" || (ps5 && fresh && (x.state === "older" || x.state === "installed"));
+      /* Spiele von Disc/aus dem Store: auch ältere (Downgrade) lassen sich holen, bei PS5 auch die installierte (Reparatur);
+         ein PS4-Downgrade tauscht nur das Update (PatchDL 0.3.9) */
+      const pickable = (x) => x.state === "ok" || (fresh && (x.state === "older" || (ps5 && x.state === "installed")));
       body = `<p class="muted upd-hint">${esc(ps5 && fresh ? `Liste von ${site}. Installiert: ${v.data.installed || "?"}. Neuere Versionen werden wie ein Update installiert, ältere und die installierte nur als Neuinstallation.`
+        : fresh ? `Liste von ${site}. Installiert: ${v.data.installed || "?"}. Neuere Versionen werden wie ein Update installiert; bei einer älteren wird das installierte Update gegen sie getauscht.`
         : `Liste von ${site}. Installiert: ${v.data.installed || "?"}. Wähle eine neuere Version, die auf dieser Firmware läuft.`)}</p>`
         + (list.length ? list.map((x) => `<div class="upd-diag-row"><span>${esc(x.version)}${x.size ? ` · ${esc(x.size)}` : ""}${x.fw && !v.data.ps4 ? ` · Firmware ${esc(x.fw)}` : ""}</span>
             <span class="${x.state === "ok" ? "ok" : ""}">${pickable(x) ? `<button type="button" class="btn ghost" data-upd-act="vers_pick" data-upd-id="${esc(v.id)}" data-upd-ver="${esc(x.version)}" data-upd-size="${esc(x.size)}"${x.state === "ok" ? "" : ` data-upd-older="1"`}>${x.state === "ok" ? "Holen" : x.state === "installed" ? "Neu holen (Reparatur)" : "Holen (Downgrade)"}</button>` : esc(UPD_VST[x.state] || x.state)}</span></div>`).join("")
@@ -7232,8 +7245,6 @@
     if (t.status === "check_failed") info = `<div class="p4m-meta">${esc(`Der Update-Server antwortete nicht (${t.check_why || "?"}).`)}</div>`;
     if (off) info = `<div class="p4m-meta">Die Paketdatei ließ sich nicht lesen.</div>`;
     if (t.via_smp && !off) info += `<div class="p4m-meta">${esc("Läuft über ShadowMountPlus. Das Update wird normal installiert – ob es auf das eingehängte Abbild angewendet wird, hängt vom Spiel ab.")}</div>`;
-    if (t.via_ps4mount && !off) info += `<div class="p4m-meta">${esc("Kommt von PS4Mount (USB-Laufwerk). Das Update wird geladen und auf das Laufwerk gelegt, nicht installiert; PS4Mount ordnet es beim nächsten Suchen ein.")}</div>`;
-    if (t.source === "fake" && !off) info += `<div class="p4m-meta">${esc("Fake-PKG / fpkg. Das Update stammt direkt von den offiziellen Update-Servern.")}</div>`;
     if (t.patch_url) btns += `<button type="button" class="btn ghost" data-upd-act="copy_url" data-upd-url="${esc(t.patch_url)}" title="${esc(t.patch_url)}">Link</button>`;
     if (!off && (t.status !== "blocked" || t.fresh_ok)) btns += `<button type="button" class="btn ${t.orphan || t.held || t.fit === 0 ? "primary" : "ghost"}" data-upd-act="vers" data-upd-id="${esc(t.title_id)}">Versionen</button>`;
     if (!off) btns += `<button type="button" class="btn ghost" data-upd-act="diag" data-upd-id="${esc(t.title_id)}">Diagnose</button>`;
@@ -7306,8 +7317,9 @@
 
   const updPkgsRender = () => {
     const p = upd.pkgs && upd.pkgs.packages || [];
+    const kindTxt = (k) => k === "update" ? "Update" : k === "base" ? "Ganzes Spiel" : k === "dlc" ? "Zusatzinhalt" : "Paket";
     $("#upd-pkgs").innerHTML = p.length ? p.map((x) => `<div class="p4m-row"><div class="p4m-main"><div class="p4m-name">${esc(x.name)}</div>
-        <div class="p4m-meta">${esc(`${x.title_id} · Version ${x.version || "?"} · ${bytes(x.size)}${x.complete ? "" : " · unvollständig"}`)}</div></div>
+        <div class="p4m-meta">${esc(`${kindTxt(x.kind)} · ${x.title_id} · Version ${x.version || "?"} · ${bytes(x.size)}${x.complete ? "" : " · unvollständig"}`)}</div></div>
         <div class="p4m-btns">${x.busy ? "" : updBtn("delete_pkg", x.title_id, "Löschen")}</div></div>`).join("") : `<p class="muted">Keine.</p>`;
   };
 
@@ -9087,7 +9099,7 @@
   const svActive = () => !!(sv.job && sv.job.active);
   const SV_KIND = { backup: "Sicherung", verify: "Prüfung", restore: "Zurückspielen", delete: "Löschen" };
   /* PS5 und PS4 getrennt, Spiele und Apps getrennt (YouTube & Co. sind keine Spiele). */
-  const SV_GROUPS = [["PS5", "game", "PS5-Spiele"], ["PS5", "app", "PS5-Apps"], ["PS4", "game", "PS4-Spiele"], ["PS4", "app", "PS4-Apps"]];
+  const SV_GROUPS = [["PS5", "game", "PS5-Spiele"], ["PS4", "game", "PS4-Spiele"]];   /* apps are never listed (the app leaves them alone) */
 
   const svSyncSelection = () => {
     const keys = new Set();

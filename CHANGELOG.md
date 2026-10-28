@@ -2,10 +2,33 @@
 
 ## Unveröffentlicht
 
+### Spiele-Seite: „Starten“ aus, solange das Spiel läuft
+- Auf der Karte des laufenden Spiels ist „Starten“ ausgegraut (Hinweis „Das Spiel läuft schon.“); daneben bleibt „Spiel beenden“. Die Vollbild-App behält auf ✕ „Nach vorn holen“, weil sie selbst vor dem Spiel liegt
+
+### Apps wie YouTube bleiben unberührt
+- **Spielstände:** Apps (YouTube, Browser, System-Apps; erkannt an `applicationCategoryType` ≠ 0 bzw. `CATEGORY` ohne „g“) stehen nicht mehr in der Liste, werden nicht mehr gesichert (auch nicht bei „alles sichern“), nicht zurückgespielt und nicht gelöscht; ältere Sicherungen bieten sie nicht mehr an, die Schnittstelle antwortet 403. Die Gruppen „PS5-Apps“ und „PS4-Apps“ sind entfallen
+- **Spiel-Updates:** Nur was die Spiele-Seite als Spiel führt, kommt in die Liste. Ist diese Liste einmal nicht lesbar, steht nichts drin (vorher wäre dann auch eine App hineingeraten). PS5-Titel ohne Adresse einer offiziellen Versionsliste (Homebrew-Apps wie Gitarren Tuner oder SurfStation, die bisher mit „Prüfung fehlgeschlagen“ dastanden) stehen ebenfalls nicht mehr in der Liste
+
+### Spiel-Updates: keine Updates mehr für Fake-PKGs und PS4Mount-Spiele
+- **Fehler:** Die App lud für PS4Mount-Spiele offizielle Updates und legte sie als `ps5tm-update-<Titel-ID>-<Zeit>.pkg` in den Hauptordner des USB-Laufwerks. Diese Pakete sind offiziell signiert (Retail); PS4Mount hängt nur Fake-PKGs ein. Bei Indiana Jones (CUSA41353) war das „Update“ ein ganzes Spielpaket: PS4Mount meldete bei jeder Suche „hat schon ein Spielpaket“, die Datei wurde zweimal geladen, und nach dem Zurückverschieben des Spiels nahm PS4Mount sie als Spiel auf – das dann nicht startete (0x80a4000c)
+- **Jetzt wie in PatchDL** („fake“: prüfen ja, laden und installieren nein): PS4Mount-Spiele und installierte Fake-PKGs (PS4 und PS5) stehen nicht mehr in der Update-Liste und werden weder geladen noch installiert. Schon geladene Pakete bleiben in den Einstellungen zum Löschen. Laden, Installieren, „Alle aktualisieren“ und Links von Hand werden mit einer Erklärung abgelehnt; ein schon eingereihter Auftrag läuft nicht mehr los. `ps4m_place_update` ist entfernt
+- **Update beim Spielstart:** Das „No Title · Update-Datei“, das die Konsole beim Start von Two Point Hospital (installiertes Fake-PKG) lud und dann nicht installieren konnte (CE-109596-0), kam nicht von der App, sondern von der automatischen Update-Funktion der Konsole (`/user/download/CUSA15884`). Handbuch und Karte sagen jetzt, wo man sie abschaltet
+
+### Spiel-Updates: geladene Pakete mit Namen
+- In den Einstellungen der Spiel-Updates stand bei Paketen von Spielen, die nicht (mehr) in der Liste sind, nur die Titel-ID. Die App liest Name und Art jetzt aus dem Kopf des Pakets und zeigt „Update“, „Ganzes Spiel“ oder „Zusatzinhalt“ davor (`GET /api/v1/updates/packages` mit `kind`)
+- Die Spieleliste meldet `fresh_ok` jetzt auch für PS4-Spiele von Disc/aus dem Store (wie der Bereich „Versionen“), damit der Knopf „Versionen“ bei einem gesperrten PS4-Spiel nicht fehlt
+
+### Fremdbausteine: PatchDL 0.3.8 -> 0.3.9
+- **PS4-Spiele können auf eine ältere Version zurück:** Ein PS4-Update baut immer auf dem Grundspiel auf. Die App entfernt nur das installierte Update (`sceAppInstUtilAppUnInstallPat` im Installationshelfer, neue Operation `PKGI_OP_UNINSTALL_PATCH`), das Spiel bleibt, dann geht die ältere Version drauf. Im Bereich „Versionen“ lassen sich bei PS4-Spielen von Disc oder aus dem Store jetzt ältere Versionen holen, der Knopf heißt „Downgrade auf … installieren“
+- **Kein halbstündiges Warten mehr beim Ersetzen:** Entfernt die Konsole die alte Version nicht, versucht es die App ein zweites Mal unter der Kennung von ShellCore (wie ps5upload; nur für den einen Aufruf) und wartet 60 s bzw. 5 min statt bis zu 30 Minuten. Klappt beides nicht, kommt „Läuft das Spiel noch? Dann schließen und noch einmal versuchen“ – verloren ist nichts. Geprüft wird jetzt `app.json` auf allen Laufwerken der Konsole (`/user/app`, `/mnt/ext0|1/user/app`)
+- **Schalter pro Spiel:** Er hält ein Spiel nur noch aus „Alle aktualisieren“ und dem normalen Update heraus. Eine Version von Hand lässt sich weiter holen – so kann ein Spiel nach einem Downgrade wieder wechseln
+- Nicht übernommen: das Mitwandern der Spieleliste zwischen den Reitern (eigene Oberfläche) und PatchDLs eigenes Diagnose-Protokoll (die App schreibt ins eigene)
+
 ### Kacheln mit neuer Titel-ID
 
 - **Löschen bei offener Kachel:** Die Kacheln heißen jetzt **`FAKE86921`** (Vollbild) und **`FAKE86922`** (Browser) statt `PPSA86921`/`PPSA86922`. ShadowMountPlus hielt eine offene PPSA-Kachel für ein laufendes Spiel und lehnte Löschen, Aushängen, Verschieben und Entpacken ab („a game is active or awaiting exit“, Konsolentest 28.10.2026 mit Tetris). Die alten Ordner in `/data/homebrew/` und ihre Kacheln löschen; die App erkennt die alten IDs weiterhin als eigene Kacheln
 - **Löschen aus der Vollbild-App mit ShadowMountPlus 1.7beta5fix1:** Diese Fassung sperrt jedes Abmelden, solange irgendein von ihr eingehängter Titel läuft – auch die eigene Kachel mit FAKE-ID (Protokoll 28.10.2026: `uninstall blocked … a game is active`, während FAKE86921 lief). Der Lösch-Auftrag wartet jetzt bis zu 10 Minuten, bis die eigene Kachel geschlossen ist, und fragt dann erneut; die Vollbild-App schließt sich dafür selbst („„…“ wird gelöscht – Die Vollbild-App schließt sich dafür“), das Ergebnis kommt als Meldung der Konsole. Mit ShadowMountPlus 1.7beta9 sperrt die FAKE-Kachel nicht, dann wird ohne Schließen gelöscht
+- **Verschieben und Entpacken über ShadowMountPlus** genauso: ShadowMountPlus 1.7beta5fix1 nimmt den Auftrag an und bricht ihn gleich mit „game_active“ ab, solange die Vollbild-App läuft. Ein Wächter der App sieht das, wartet bis zu 10 Minuten auf das Schließen der Kachel (Status „Wartet, bis die Vollbild-App geschlossen ist“), startet denselben Auftrag neu und meldet das Ende („… ist verschoben/entpackt“); die Vollbild-App schließt sich dafür selbst
 - Die Bau-Prüfungen der Vollbild-App (`tvapp/tools/build.sh`, `lint.sh`, `deploy.sh`, `console-tour.py`) nehmen jede Titel-ID aus vier Großbuchstaben und fünf Ziffern statt nur PPSA
 
 ### Die Kachel ist jetzt eine Vollbild-App mit Controller
