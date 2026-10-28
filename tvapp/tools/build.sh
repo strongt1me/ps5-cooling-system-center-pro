@@ -40,11 +40,11 @@ with open(sys.argv[1], encoding="utf-8") as source:
 title_id = value.get("titleId", "")
 concept_id = value.get("conceptId", "")
 content_id = value.get("contentId", "")
-if not re.fullmatch(r"PPSA\d{5}", title_id):
-    raise SystemExit("param.json titleId must use PPSA followed by five digits")
+if not re.fullmatch(r"[A-Z]{4}\d{5}", title_id):
+    raise SystemExit("param.json titleId must use four capitals followed by five digits")
 if not re.fullmatch(r"\d{5}", concept_id):
     raise SystemExit("param.json conceptId must contain five digits")
-if (not re.fullmatch(r"[A-Z]{2}\d{4}-PPSA\d{5}_00-[A-Z0-9]{16}", content_id)
+if (not re.fullmatch(r"[A-Z]{2}\d{4}-[A-Z]{4}\d{5}_00-[A-Z0-9]{16}", content_id)
         or title_id not in content_id):
     raise SystemExit("param.json contentId must be valid and contain titleId")
 if not re.fullmatch(r"\d{2}\.\d{3}\.\d{3}", value.get("contentVersion", "")):

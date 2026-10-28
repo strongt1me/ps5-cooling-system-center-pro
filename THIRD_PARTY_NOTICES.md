@@ -37,12 +37,12 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   eingebettet; sie kommen nur in ein Spiel, dessen Ordner eine `dlc_emu.ini` enthält (`src/plugins.c`). Quelltext der Programme:
   <https://github.com/drakmor/dlc_emu>.
 - **ps5-homebrew-ui** und **ps5-native-app-boilerplate** (BlackBearReloaded, GPL-3.0-or-later) mit **ps5-opengl 1.0.2**: Seit dem
-  27.10.2026 ist die Kachel (`PPSA86921`) eine Vollbild-App mit Controller-Bedienung (`tvapp/`), gebaut auf dem Oberflächen-Baukasten
+  27.10.2026 ist die Kachel (`FAKE86921`) eine Vollbild-App mit Controller-Bedienung (`tvapp/`), gebaut auf dem Oberflächen-Baukasten
   ps5-homebrew-ui (Zeichnen, Bedienelemente, Schriften, Klänge, Bauweg mit `libc.prx`-Shim aus der Boilerplate). Die Originale sind
   nicht mehr auf GitHub; verwendet wird die erhaltene Kopie `JMUtechnologies/ps5-homebrew-ui`, das OpenGL-SDK wird beim Bauen geladen und
   gegen die im Baukasten fest eingetragene SHA-256-Prüfsumme geprüft. Herkunft, Änderungen und Prüfsummen: `tvapp/ORIGIN.md`, die
   Lizenzen der Schriften und übrigen Teile: `tvapp/THIRD_PARTY_NOTICES.md`.
-  Für die zweite Kachel, die Browser-Kachel (`PPSA86922`, `starter/browser/`), sind aus ps5-native-app-boilerplate das Linker-Skript
+  Für die zweite Kachel, die Browser-Kachel (`FAKE86922`, `starter/browser/`), sind aus ps5-native-app-boilerplate das Linker-Skript
   (`starter/browser/title/title.ld`), die Symboltabelle (`title/symbols.map`) und `sce_module/libc.prx` (Kompatibilitäts-Stubs und
   Startcode, kein fremder Systemcode, siehe `sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt.

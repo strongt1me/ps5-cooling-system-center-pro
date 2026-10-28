@@ -28,8 +28,8 @@ eigenen Sätzen, keine Versionen von Testständen, keine Interna (Dateinamen im 
 | Datei | Wofür |
 |---|---|
 | `PS5_Cooling_System_Center_v<Version>.elf` | die App – nach jedem Neustart der Konsole an Port 9021 senden |
-| `PPSA86921.zip` | Vollbild-Kachel für `/data/homebrew/` (startet die App, Bedienung mit dem Controller) |
-| `PPSA86922.zip` | Browser-Kachel für `/data/homebrew/` (startet die App, öffnet die Weboberfläche) |
+| `FAKE86921.zip` | Vollbild-Kachel für `/data/homebrew/` (startet die App, Bedienung mit dem Controller) |
+| `FAKE86922.zip` | Browser-Kachel für `/data/homebrew/` (startet die App, öffnet die Weboberfläche) |
 | `LIESMICH.txt` | Kurzanleitung |
 
 ## Danke

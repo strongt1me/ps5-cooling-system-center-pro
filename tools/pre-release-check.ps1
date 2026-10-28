@@ -151,8 +151,8 @@ if (-not (Test-Path $releaseDir)) {
 }
 
 $mainElf = Join-Path $releaseDir "PS5_Cooling_System_Center_v$version.elf"
-$starterZip = Join-Path $releaseDir "PPSA86921.zip"
-$browserZip = Join-Path $releaseDir "PPSA86922.zip"
+$starterZip = Join-Path $releaseDir "FAKE86921.zip"
+$browserZip = Join-Path $releaseDir "FAKE86922.zip"
 $liesmich = Join-Path $releaseDir "LIESMICH.txt"
 
 foreach ($p in @($mainElf, $starterZip, $browserZip, $liesmich)) {

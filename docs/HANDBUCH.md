@@ -1496,18 +1496,23 @@ Systemseite lässt sich ein Paket auch hochladen.
 Wie die Kachel-Dateien eingebettet und das Paket gebaut werden, steht in
 [ENTWICKLUNG.md](ENTWICKLUNG.md#kachel-dateien-und-kachel-paket-bauen).
 
-## Kacheln `PPSA86921` (Vollbild) und `PPSA86922` (Browser)
+## Kacheln `FAKE86921` (Vollbild) und `FAKE86922` (Browser)
 
-Mit den Kacheln muss die ELF nicht mehr gesendet werden. Aus der Veröffentlichung `PPSA86921.zip` und/oder
-`PPSA86922.zip` entpacken und die Ordner nach `/data/homebrew/` kopieren (per FTP oder mit dem Dateimanager);
+Mit den Kacheln muss die ELF nicht mehr gesendet werden. Aus der Veröffentlichung `FAKE86921.zip` und/oder
+`FAKE86922.zip` entpacken und die Ordner nach `/data/homebrew/` kopieren (per FTP oder mit dem Dateimanager);
 ShadowMountPlus legt dafür Kacheln im Medien-Bereich an. Beide können nebeneinander liegen.
 
-- **`PPSA86921`, die Vollbild-App** (neu nach 1.74): startet die App, falls sie noch nicht läuft, und zeigt sie im
+**Neue Titel-IDs ab 1.74.1:** Bis 1.74.0 hießen die Kacheln `PPSA86921` und `PPSA86922`. ShadowMountPlus hielt eine
+offene PPSA-Kachel für ein laufendes Spiel und lehnte währenddessen Löschen, Aushängen, Verschieben und Entpacken ab
+(„game_active“). Mit `FAKE…` geschieht das nicht. Die alten Ordner `/data/homebrew/PPSA86921` und `/data/homebrew/PPSA86922`
+und ihre Kacheln danach löschen.
+
+- **`FAKE86921`, die Vollbild-App** (neu nach 1.74): startet die App, falls sie noch nicht läuft, und zeigt sie im
   Vollbild mit Controller-Bedienung – Kühlung, Spiele (mit Cover, Starten), Aufträge, Einstellungen, Payloads (mit
   Payload-Store und den GitHub-Bildern der Entwickler) und Protokoll; L1/R1 wechselt die Reiter, Options öffnet das
   Menü mit „Weboberfläche im Browser öffnen“ und den Power-Optionen. Gebaut auf dem Oberflächen-Baukasten
   ps5-homebrew-ui (`tvapp/`).
-- **`PPSA86922`, die Browser-Kachel** (bis 1.74 die einzige Kachel, damals unter `PPSA86921`): startet die App, falls sie
+- **`FAKE86922`, die Browser-Kachel** (bis 1.74 die einzige Kachel, damals unter `PPSA86921`): startet die App, falls sie
   noch nicht läuft (die `eboot.bin` schickt die eingebettete ELF an den Lader auf `127.0.0.1:9021`), wartet, bis die
   Oberfläche antwortet, und öffnet sie über `POST /api/v1/open-ui` im Browser der Konsole. Läuft die App schon, öffnet
   sie nur die Oberfläche.

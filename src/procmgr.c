@@ -277,8 +277,8 @@ ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_len) {
       memcpy(t, info.title_id, sizeof(info.title_id));
       t[sizeof(info.title_id)] = '\0';
 
-      if(!ps5tm_counts_as_game(t)) {            /* the starter tile is not a game, see titleid.h */
-        if(want && ps5tm_is_game_title_id(t)) starter_has_focus = 1;
+      if(!ps5tm_counts_as_game(t)) {            /* the app's tiles are no games, see titleid.h */
+        if(want && ps5tm_is_own_tile(t)) starter_has_focus = 1;
         continue;
       }
 
@@ -369,7 +369,7 @@ ps5tm_procmgr_title_running(const char *title_id) {
   (void)title_id;
   return -1;
 #else
-  if(!is_game_title_id(title_id)) return -1;
+  if(!is_game_title_id(title_id) && !ps5tm_is_own_tile(title_id)) return -1;
   resolve();
   if(!p_sceKernelGetAppInfo) return -1;
 

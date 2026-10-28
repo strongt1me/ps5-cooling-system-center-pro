@@ -46,8 +46,8 @@ Die Vollbild-App für die Konsole (die Kachel von „PS5 Cooling & System Center
 
 ```bash
 make deps                                   # einmal: Payload-SDK, zlib, Testbibliothek
-make init TITLE_ID=PPSA86922 APP_NAME="PS5 Cooling & System Center - Pro"
-USE_CCACHE=0 make app PAYLOAD_ELF=../PS5_Cooling_Center.elf   # Ordner in dist/PPSA86922
+make init TITLE_ID=FAKE86922 APP_NAME="PS5 Cooling & System Center - Pro"
+USE_CCACHE=0 make app PAYLOAD_ELF=../PS5_Cooling_Center.elf   # Ordner in dist/FAKE86922
 tools/host-snapshots.sh build/snapshots ps5cc                 # Vorschau am PC, Bilder in build/snapshots
 make test-unit
 ```

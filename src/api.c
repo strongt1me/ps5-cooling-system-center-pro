@@ -15,6 +15,7 @@
 #include "ps4m.h"
 #include "ioerr.h"
 #include "ps5tm.h"
+#include "titleid.h"
 #include "third_party/cJSON.h"
 
 #define JB(v) ((v) ? "true" : "false")
@@ -1770,7 +1771,7 @@ running_by_kernel(char *id, size_t id_len, char *name, size_t name_len) {
 
 static int
 tv_title(const char *id) {
-  return !strcmp(id, "PPSA86921") || !strcmp(id, "PPSA86922");
+  return ps5tm_is_own_tile(id);
 }
 
 typedef struct { char tv[16], id[16], name[128], link[96]; } after_exit_t;

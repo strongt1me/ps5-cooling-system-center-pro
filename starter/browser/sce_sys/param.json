@@ -9,7 +9,7 @@
   "attribute3": 1048576,
   "conceptId": "86922",
   "contentBadgeType": 1,
-  "contentId": "IV9999-PPSA86922_00-PS5COOLINGBROWSE",
+  "contentId": "IV9999-FAKE86922_00-PS5COOLINGBROWSE",
   "contentVersion": "01.000.000",
   "downloadDataSize": 256,
   "gameIntent": {
@@ -35,6 +35,6 @@
   },
   "requiredSystemSoftwareVersion": "0x0000000000000000",
   "sdkVersion": "0x0000000000000000",
-  "titleId": "PPSA86922",
+  "titleId": "FAKE86922",
   "versionFileUri": ""
 }

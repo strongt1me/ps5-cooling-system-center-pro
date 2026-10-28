@@ -77,7 +77,7 @@ int open_local(int port, int timeout_s, Net *why)
     return s;
 }
 
-// This title's id from its own param.json ("PPSA86921"), read once; "" when it cannot be read.
+// This title's id from its own param.json ("FAKE86921"), read once; "" when it cannot be read.
 const std::string &own_title_id()
 {
     static const std::string id = [] {
@@ -1236,8 +1236,9 @@ void HttpSource::poll_library()
     {
         Game g;
         g.id = str(item, "title_id");
-        // This app and its test slot are titles of their own, not games to start from here.
-        if (g.id == own_title_id() || g.id == "PPSA86921" || g.id == "PPSA86922")
+        // The app's two tiles (and their ids before 1.74.1) are titles of their own, not games to start from here.
+        if (g.id == own_title_id() || g.id == "FAKE86921" || g.id == "FAKE86922" || g.id == "PPSA86921" ||
+            g.id == "PPSA86922")
             continue;
         g.name = str(item, "name");
         g.platform = str(item, "platform");

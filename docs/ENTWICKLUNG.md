@@ -100,7 +100,7 @@ und die Konsole konnte dann keine einzige Anfrage mehr bedienen. Mit
 entfällt seit 1.70.0).
 
 `make release` legt zusätzlich einen Ordner `PS5 Cooling and System Center v<Version>/`
-mit der ELF und der LIESMICH an (die Starter-Kachel `PPSA86921.zip` entsteht mit `tools/make_starter.sh <elf>`, benötigt WSL, und wird mit Python zu einer Zip mit Schrägstrich-Pfaden gepackt). Es löscht dabei nichts:
+mit der ELF und der LIESMICH an (die Starter-Kachel `FAKE86921.zip` entsteht mit `tools/make_starter.sh <elf>`, benötigt WSL, und wird mit Python zu einer Zip mit Schrägstrich-Pfaden gepackt). Es löscht dabei nichts:
 Liegt in dem Ordner etwas, das es nicht selbst anlegt, bricht es mit einer
 Liste ab; ebenso bei mehr als einem Paket in `pkg/out/`. Nach Änderungen an
 einem Header, an `src/*.inc` oder am Makefile selbst baut `make` neu.

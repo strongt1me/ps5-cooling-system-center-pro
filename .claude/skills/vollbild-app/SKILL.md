@@ -1,6 +1,6 @@
 ---
 name: vollbild-app
-description: Neue Funktionen der PS5-App in der Vollbild-App (Kachel PPSA86921, tvapp/ auf ps5-homebrew-ui) bauen – und vorher fragen, ob die Funktion in die Browser-Oberfläche (web/), in die Vollbild-App oder in beide gehört. Zu benutzen bei jeder neuen Funktion, Seite, Anzeige oder Einstellung („bau …“, „füge … hinzu“, „ich hätte gern …“), bei „Vollbild“, „Kachel“, „tvapp“, „Controller-Bedienung“ und bei Fehlern in der Vollbild-App.
+description: Neue Funktionen der PS5-App in der Vollbild-App (Kachel FAKE86921, tvapp/ auf ps5-homebrew-ui) bauen – und vorher fragen, ob die Funktion in die Browser-Oberfläche (web/), in die Vollbild-App oder in beide gehört. Zu benutzen bei jeder neuen Funktion, Seite, Anzeige oder Einstellung („bau …“, „füge … hinzu“, „ich hätte gern …“), bei „Vollbild“, „Kachel“, „tvapp“, „Controller-Bedienung“ und bei Fehlern in der Vollbild-App.
 ---
 
 # Vollbild-App bauen
@@ -11,8 +11,8 @@ Antworten auf Deutsch, Commit-Nachrichten englisch. Arbeitsordner `PS5_Temperatu
 
 Vorgabe des Users vom 27.10.2026: **Alles, was die Browser-App kann, soll auch die Vollbild-App können.** Jede neue Funktion daher in beide Oberflächen bauen:
 
-- **Browser-Oberfläche** (`web/app.js`, `web/index.html`, Sprachdateien `web/lang/*.json`): am Handy/PC und über die Browser-Kachel PPSA86922.
-- **Vollbild-App** (`tvapp/`): auf dem Fernseher mit Controller, Kachel PPSA86921.
+- **Browser-Oberfläche** (`web/app.js`, `web/index.html`, Sprachdateien `web/lang/*.json`): am Handy/PC und über die Browser-Kachel FAKE86922.
+- **Vollbild-App** (`tvapp/`): auf dem Fernseher mit Controller, Kachel FAKE86921.
 
 Nicht mehr „Browser oder Vollbild?“ fragen. Nur nachfragen, wenn etwas mit dem Controller wirklich nicht geht (z. B. Dateien vom PC hochladen) – dann eine Vollbild-Variante vorschlagen (Hinweis/QR-Code auf die Browser-Seite, Bildschirmtastatur des Kits für kurze Eingaben).
 
@@ -34,8 +34,8 @@ Nicht mehr „Browser oder Vollbild?“ fragen. Nur nachfragen, wenn etwas mit d
 2. Ändern im Repo (`tvapp/`). Der WSL-Baum `~/ps5cc-tvapp` (Ubuntu-26.04) ist nur zum Bauen; `tools/tvapp-build.sh` gleicht ihn ab.
 3. Vorschau: im WSL-Baum `USE_CCACHE=0 tools/host-snapshots.sh build/snapshots ps5cc`, für neue Zustände `tour()`-Schritte mit Bildnamen ergänzen, **jedes Bild ansehen** (Überlauf, abgeschnittene Texte, Umlaute), dem User die wichtigsten mit SendUserFile zeigen.
 4. Tests: `USE_CCACHE=0 make test-unit` im WSL-Baum, alle grün; neue Hilfsfunktionen bekommen Tests (ohne OpenGL).
-5. Bauen: zuerst die App-ELF `bash tools/build-windows.sh`, dann `bash tools/make_starter.sh` – baut beide Kacheln (`starter/out/PPSA86921` Vollbild, `starter/out/PPSA86922` Browser).
-6. Auf die Konsole nur nach „Ja“: Kachel-Ordner per FTP nach `/data/homebrew/PPSA86921/` (alle Dateien, Größe der `eboot.bin` vergleichen). **Die Vollbild-App muss geschlossen sein**, sonst lehnt FTP die `eboot.bin` ab (550). Neue App-Routen brauchen auch die neue ELF (Port 9021, getrennter Aufruf).
+5. Bauen: zuerst die App-ELF `bash tools/build-windows.sh`, dann `bash tools/make_starter.sh` – baut beide Kacheln (`starter/out/FAKE86921` Vollbild, `starter/out/FAKE86922` Browser).
+6. Auf die Konsole nur nach „Ja“: Kachel-Ordner per FTP nach `/data/homebrew/FAKE86921/` (alle Dateien, Größe der `eboot.bin` vergleichen). **Die Vollbild-App muss geschlossen sein**, sonst lehnt FTP die `eboot.bin` ab (550). Neue App-Routen brauchen auch die neue ELF (Port 9021, getrennter Aufruf).
 7. CHANGELOG („Unveröffentlicht“, Abschnitt der Vollbild-App), bei neuen Routen `docs/API.md`; committen nur nach „commit das“.
 
 ## Fallen, die schon Zeit gekostet haben

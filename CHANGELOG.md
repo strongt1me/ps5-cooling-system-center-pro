@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+### Kacheln mit neuer Titel-ID
+
+- **Löschen bei offener Kachel:** Die Kacheln heißen jetzt **`FAKE86921`** (Vollbild) und **`FAKE86922`** (Browser) statt `PPSA86921`/`PPSA86922`. ShadowMountPlus hielt eine offene PPSA-Kachel für ein laufendes Spiel und lehnte Löschen, Aushängen, Verschieben und Entpacken ab („a game is active or awaiting exit“, Konsolentest 28.10.2026 mit Tetris). Die alten Ordner in `/data/homebrew/` und ihre Kacheln löschen; die App erkennt die alten IDs weiterhin als eigene Kacheln
+- Die Bau-Prüfungen der Vollbild-App (`tvapp/tools/build.sh`, `lint.sh`, `deploy.sh`, `console-tour.py`) nehmen jede Titel-ID aus vier Großbuchstaben und fünf Ziffern statt nur PPSA
+
 ### Die Kachel ist jetzt eine Vollbild-App mit Controller
 - **Statt des kleinen Browserfensters** öffnet die Kachel (PPSA86921, im Medien-Bereich) eine Vollbild-Oberfläche: Reiter **Kühlung** (Temperaturen, Lüfter, Zieltemperatur mit dem Steuerkreuz ändern, Statusanzeigen, Verlauf der letzten 2 Minuten), **Spiele** (Liste mit Details, Starten) und **Aufträge** (Kopieren, Konvertieren, Abbild mit Fortschritt und Abbrechen, Verlauf); L1/R1 wechselt die Reiter, Options öffnet das Menü mit „Weboberfläche im Browser öffnen“, „Neu laden“ und „Beenden“. Läuft die App noch nicht, startet die Kachel sie wie bisher selbst (die ELF steckt in der `eboot.bin`)
 - **Die Browser-Kachel bleibt** als zweite Kachel **PPSA86922** („PS5 Cooling & System Center - Browser“, `starter/browser/`): ein Tipp startet die App und öffnet die Weboberfläche im Browser der Konsole, wie die bisherige Kachel. `tools/make_starter.sh` baut beide, ins Release gehören `PPSA86921.zip` und `PPSA86922.zip`

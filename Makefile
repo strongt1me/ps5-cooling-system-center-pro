@@ -393,7 +393,7 @@ deploy: $(BIN)
 RELEASE := PS5 Cooling and System Center v$(VERSION)
 RELEASE_MAIN := PS5_Cooling_System_Center_v$(VERSION).elf
 
-# Ausgeliefert werden nur noch die App, PPSA86921.zip (tools/make_starter.sh)
+# Ausgeliefert werden nur noch die App, FAKE86921.zip (tools/make_starter.sh)
 # und die LIESMICH. Installer-ELF und Kachel-Paket entfallen seit 19.10.2026:
 # Die App legt die Kachel selbst als Ordner an (src/tile.c).
 
@@ -410,7 +410,7 @@ release: $(BIN)
 	  exit 1; }
 	@if [ -d "$(RELEASE)" ]; then \
 	  foreign=$$(ls -A "$(RELEASE)" | grep -v -x -F \
-	    -e "$(RELEASE_MAIN)" -e LIESMICH.txt -e PPSA86921.zip \
+	    -e "$(RELEASE_MAIN)" -e LIESMICH.txt -e FAKE86921.zip \
 	    -e Thumbs.db -e desktop.ini); \
 	  if [ -n "$$foreign" ]; then \
 	    echo "release: In \"$(RELEASE)\" liegt, was dieses Ziel nicht selbst anlegt — es löscht nichts:" >&2; \

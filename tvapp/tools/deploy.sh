@@ -40,7 +40,7 @@ title_id=$(python3 - "$root/sce_sys/param.json" <<'PY'
 import json, re, sys
 with open(sys.argv[1], encoding="utf-8") as source:
     title_id = json.load(source)["titleId"]
-if not re.fullmatch(r"PPSA\d{5}", title_id):
+if not re.fullmatch(r"[A-Z]{4}\d{5}", title_id):
     raise SystemExit("param.json contains an invalid titleId")
 print(title_id)
 PY

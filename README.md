@@ -159,7 +159,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 3. Im Browser öffnen: **`http://<PS5-IP>:8086`** (die Adresse zeigt auch die Meldung oben links auf dem Fernseher).
 
 > [!TIP]
-> **Ohne Senden starten:** `PPSA86921.zip` (Vollbild-App mit Controller) und/oder `PPSA86922.zip` (Weboberfläche im Browser) aus dem Release entpacken und die Ordner nach `/data/homebrew/` kopieren. ShadowMountPlus legt die Kacheln an; ein Tipp startet die App.
+> **Ohne Senden starten:** `FAKE86921.zip` (Vollbild-App mit Controller) und/oder `FAKE86922.zip` (Weboberfläche im Browser) aus dem Release entpacken und die Ordner nach `/data/homebrew/` kopieren. ShadowMountPlus legt die Kacheln an; ein Tipp startet die App.
 
 > [!IMPORTANT]
 > Es darf immer nur **eine** Instanz laufen, sonst regeln zwei Programme gegeneinander am Lüfter. Eine alte Instanz lässt sich auf der Seite „Payloads“ beenden. Mehr in der [LIESMICH](docs/LIESMICH.txt).

@@ -32,6 +32,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -147,7 +148,7 @@ class Console:
 
 def running_titles(console):
     names = console.names("/mnt/sandbox") or []
-    return sorted({name.split("_")[0] for name in names if name.startswith("PPSA")})
+    return sorted({name.split("_")[0] for name in names if re.fullmatch(r"[A-Z]{4}\d{5}", name.split("_")[0])})
 
 
 def record_klog(host, port, path, done):

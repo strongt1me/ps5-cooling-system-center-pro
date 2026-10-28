@@ -159,7 +159,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 3. Ouvrir **`http://<IP-PS5>:8086`** dans un navigateur (la notification en haut à gauche de la TV affiche aussi l'adresse).
 
 > [!TIP]
-> **Démarrer sans envoi :** décompresser `PPSA86921.zip` de la release et copier le dossier dans `/data/homebrew/`. ShadowMountPlus crée une vignette ; un appui lance l'appli et ouvre l'interface.
+> **Démarrer sans envoi :** décompresser `FAKE86921.zip` de la release et copier le dossier dans `/data/homebrew/`. ShadowMountPlus crée une vignette ; un appui lance l'appli et ouvre l'interface.
 
 > [!IMPORTANT]
 > Une seule **instance** à la fois, sinon deux programmes se disputent le ventilateur. Une ancienne instance s'arrête sur la page « Payloads ». Plus dans le [LIESMICH](docs/LIESMICH.txt) (en allemand).

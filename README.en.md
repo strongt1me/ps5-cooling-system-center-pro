@@ -159,7 +159,7 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 3. Open **`http://<PS5-IP>:8086`** in a browser (the notification at the top left of the TV shows the address too).
 
 > [!TIP]
-> **Start without sending:** unpack `PPSA86921.zip` from the release and copy the folder to `/data/homebrew/`. ShadowMountPlus adds a tile; one tap on it starts the app and opens the interface.
+> **Start without sending:** unpack `FAKE86921.zip` from the release and copy the folder to `/data/homebrew/`. ShadowMountPlus adds a tile; one tap on it starts the app and opens the interface.
 
 > [!IMPORTANT]
 > Only **one** instance may run at a time, otherwise two programs fight over the fan. An old instance can be stopped on the "Payloads" page. More in the [LIESMICH](docs/LIESMICH.txt) (German).

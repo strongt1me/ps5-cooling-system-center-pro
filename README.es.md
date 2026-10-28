@@ -159,7 +159,7 @@ Un payload homebrew (ELF) que lee los sensores de temperatura de la PS5, regula 
 3. Abrir **`http://<IP-PS5>:8086`** en el navegador (la notificación arriba a la izquierda en la TV también muestra la dirección).
 
 > [!TIP]
-> **Iniciar sin enviar:** descomprimir `PPSA86921.zip` de la release y copiar la carpeta a `/data/homebrew/`. ShadowMountPlus crea un mosaico; un toque inicia la app y abre la interfaz.
+> **Iniciar sin enviar:** descomprimir `FAKE86921.zip` de la release y copiar la carpeta a `/data/homebrew/`. ShadowMountPlus crea un mosaico; un toque inicia la app y abre la interfaz.
 
 > [!IMPORTANT]
 > Solo puede funcionar **una** instancia a la vez; si no, dos programas regulan el ventilador uno contra otro. Una instancia antigua se detiene en la página "Payloads". Más en el [LIESMICH](docs/LIESMICH.txt) (en alemán).

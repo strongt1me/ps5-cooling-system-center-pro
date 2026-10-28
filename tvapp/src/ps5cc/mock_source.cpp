@@ -67,7 +67,7 @@ struct MockGame
 // to reach a realistic length.
 constexpr MockGame kGames[] = {
     {"PPSA02433", "Crash Bandicoot 4: It's About Time", "PS5", "01.000.002", "exfat", 47.8, 2.9},
-    {"PPSA86922", "PS5CC Vollbild-Test", "PS5", "01.000.010", "folder", 0.06, 0.03},
+    {"FAKE86922", "PS5CC Vollbild-Test", "PS5", "01.000.010", "folder", 0.06, 0.03},
     {"PPSA01325", "ASTRO BOT", "PS5", "01.008.000", "ffpkg", 31.2, 14.5},
     {"PPSA01862", "Maneater", "PS5", "01.000.004", "ffpfs", 22.0, 6.1},
     {"CUSA44880", "Moorhuhn Remake", "PS4", "01.02", "fpkg", 1.4, 0.8},
@@ -879,7 +879,7 @@ class MockSource final : public Source
             "icc_fan_get_fan_manual_duty: duty: 0000",
             "[dce-ft:1131 Info]<236>0x0: opened",
             "[dce-ft:1303 Info]<236>0x0: closed",
-            "[SceShellUI] I/PSM.UI : SceneQ : Loaded[0.00msec] : SplashScreen.PPSA86921 : SplashScreen",
+            "[SceShellUI] I/PSM.UI : SceneQ : Loaded[0.00msec] : SplashScreen.FAKE86921 : SplashScreen",
             "[SceLncService] launchApp(PPSA02433)",
             "[AvControl] Waiting for the pstate event : done",
             "[Syscore Umd] Set memory pstate (hasRunningGame=1, hasRunningMiniApp=0, isSplashDisplayed=0)",
