@@ -38,6 +38,7 @@
 #include "checkfile.h"
 #include "ioerr.h"
 #include "ps5tm.h"
+#include "titleid.h"
 #include "third_party/cJSON.h"
 
 #ifndef DL_WAIT_GONE_S
@@ -45,6 +46,9 @@
 #endif
 #ifndef DL_TOKEN_MS
 #define DL_TOKEN_MS       600000       /* a plan's token is good for ten minutes */
+#endif
+#ifndef DL_TILE_WAIT_S
+#define DL_TILE_WAIT_S    600          /* how long a delete waits for the app's own tile to close */
 #endif
 #define DL_MAX_DEPTH      64
 #define DL_SIZE_FILES_MAX 400000       /* a folder's size is counted up to this many entries */
@@ -79,6 +83,8 @@ typedef struct {
      have the rest). total 0: nothing to count, the bar stands at pct_lo. */
   uint64_t total, done;
   int      pct_lo, pct_hi;
+  char     wait_tile[16];             /* the app's own tile the job waits for ("" when it does not) */
+  int      waited_tile;               /* it did wait: the tile is closed, so the result comes as a notification */
 } dl_job_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -99,6 +105,28 @@ typedef struct {
 
 
 /* ------------------------------------------------------------------ small things */
+
+/* The app's own tile that is running now, if one is; its id in out. */
+static int
+own_tile_running(char *out, size_t out_len) {
+  static const char *const ids[] = { PS5TM_TV_TITLE_ID, PS5TM_BROWSER_TITLE_ID, "PPSA86921", "PPSA86922" };
+  for(size_t i = 0; i < sizeof(ids) / sizeof(ids[0]); i++)
+    if(ps5tm_procmgr_title_running(ids[i]) == 1) {
+      snprintf(out, out_len, "%s", ids[i]);
+      return 1;
+    }
+  return 0;
+}
+
+/* ShadowMountPlus refused with "a game is active" and the only title running is one of the app's own tiles. Up to
+   1.7beta5fix1 it counts every title it mounted (PPSA, CUSA, LAPY, FAKE) as a game and refuses every uninstall while one
+   runs; the tiles are mounted by it from /data/homebrew, so an open tile blocks it (console test 28.10.2026). */
+static int
+blocked_by_own_tile(const char *err, char *tile, size_t tile_len) {
+  char game[16];
+  return strstr(err, "game is active") && own_tile_running(tile, tile_len) &&
+         ps5tm_procmgr_game_title(0, game, sizeof(game)) != 0;
+}
 
 static int
 title_id_ok(const char *s) {
@@ -761,6 +789,30 @@ run_smp(const dl_args_t *a) {
   cJSON_AddStringToObject(body, "title_id", a->id);
   char err[300] = "";
   cJSON *r = ps5tm_smp_call("/games/uninstall", body, 30000, err, sizeof(err));
+  /* Refused only because one of the app's own tiles is open: wait until it has closed (the full-screen app closes itself
+     when it sees "waiting_for":"tile"), then ask again. */
+  char tile[16];
+  if(!r && blocked_by_own_tile(err, tile, sizeof(tile))) {
+    pthread_mutex_lock(&g_lock);
+    snprintf(g_job.wait_tile, sizeof(g_job.wait_tile), "%s", tile);
+    pthread_mutex_unlock(&g_lock);
+    job_phase("Wartet, bis die Vollbild-App geschlossen ist");
+    PS5TM_INFO("game_delete_wait_tile", "Löschen von %s wartet, bis %s geschlossen ist (ShadowMountPlus sperrt solange).", a->id, tile);
+    uint64_t t0 = ps5tm_mono_ms();
+    while(!r && ps5tm_mono_ms() - t0 < (uint64_t)DL_TILE_WAIT_S * 1000) {
+      usleep(2000 * 1000);
+      if(own_tile_running(tile, sizeof(tile))) continue;
+      err[0] = '\0';
+      r = ps5tm_smp_call("/games/uninstall", body, 30000, err, sizeof(err));
+      if(!r && !strstr(err, "game is active")) break;   /* another reason: report it */
+    }
+    pthread_mutex_lock(&g_lock);
+    g_job.wait_tile[0] = '\0';
+    g_job.waited_tile = 1;
+    pthread_mutex_unlock(&g_lock);
+    if(!r && !err[0]) snprintf(err, sizeof(err), "die Vollbild-App wurde nicht geschlossen");
+    job_phase("ShadowMountPlus meldet das Spiel ab");
+  }
   cJSON_Delete(body);
   if(!r) {
     char e[640];
@@ -837,6 +889,9 @@ delete_thread(void *arg) {
   snprintf(error, sizeof(error), "%s", g_job.error);
   uint64_t bytes = g_job.bytes, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
   pthread_mutex_unlock(&g_lock);
+  int waited = g_job.waited_tile;
+  if(waited && st == DL_DONE) ps5tm_notify("„%s“ ist gelöscht.", name);
+  else if(waited && st == DL_FAILED) ps5tm_notify("„%s“ wurde nicht gelöscht: %.120s", name, error);
   if(st == DL_DONE || st == DL_FAILED)
     ps5tm_hist_add("delete", name, !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : "Spiel",
                    st == DL_DONE ? "done" : "failed", error, bytes, dur);
@@ -940,6 +995,8 @@ ps5tm_gamedelete_status(void) {
   cJSON_AddStringToObject(o, "phase", j.phase);
   cJSON_AddStringToObject(o, "error", j.error);
   cJSON_AddStringToObject(o, "note", j.note);
+  cJSON_AddStringToObject(o, "waiting_for", j.wait_tile[0] ? "tile" : "");
+  cJSON_AddStringToObject(o, "tile", j.wait_tile);
   cJSON_AddNumberToObject(o, "files", (double)j.files);
   cJSON_AddNumberToObject(o, "bytes", (double)j.bytes);
   double pct = 0;

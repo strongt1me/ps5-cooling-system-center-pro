@@ -5,6 +5,7 @@
 ### Kacheln mit neuer Titel-ID
 
 - **Löschen bei offener Kachel:** Die Kacheln heißen jetzt **`FAKE86921`** (Vollbild) und **`FAKE86922`** (Browser) statt `PPSA86921`/`PPSA86922`. ShadowMountPlus hielt eine offene PPSA-Kachel für ein laufendes Spiel und lehnte Löschen, Aushängen, Verschieben und Entpacken ab („a game is active or awaiting exit“, Konsolentest 28.10.2026 mit Tetris). Die alten Ordner in `/data/homebrew/` und ihre Kacheln löschen; die App erkennt die alten IDs weiterhin als eigene Kacheln
+- **Löschen aus der Vollbild-App mit ShadowMountPlus 1.7beta5fix1:** Diese Fassung sperrt jedes Abmelden, solange irgendein von ihr eingehängter Titel läuft – auch die eigene Kachel mit FAKE-ID (Protokoll 28.10.2026: `uninstall blocked … a game is active`, während FAKE86921 lief). Der Lösch-Auftrag wartet jetzt bis zu 10 Minuten, bis die eigene Kachel geschlossen ist, und fragt dann erneut; die Vollbild-App schließt sich dafür selbst („„…“ wird gelöscht – Die Vollbild-App schließt sich dafür“), das Ergebnis kommt als Meldung der Konsole. Mit ShadowMountPlus 1.7beta9 sperrt die FAKE-Kachel nicht, dann wird ohne Schließen gelöscht
 - Die Bau-Prüfungen der Vollbild-App (`tvapp/tools/build.sh`, `lint.sh`, `deploy.sh`, `console-tour.py`) nehmen jede Titel-ID aus vier Großbuchstaben und fünf Ziffern statt nur PPSA
 
 ### Die Kachel ist jetzt eine Vollbild-App mit Controller

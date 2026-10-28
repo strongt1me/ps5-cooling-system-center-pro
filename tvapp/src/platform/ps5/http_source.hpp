@@ -110,6 +110,7 @@ class HttpSource final : public Source
     // ShadowMountPlus keeps reporting its last job for ever: one that ended is shown only when it ran in this session.
     std::atomic<std::int64_t> storage_seen_{0};
     std::atomic<bool> jobs_wanted_{false};    // a tool started: ask for the jobs at once
+    bool leaving_for_delete_ = false;         // the app ends itself for a delete (worker thread only)
     std::atomic<bool> library_wanted_{false}; // a job ended: games may have moved or gone
     std::atomic<Watch> watching_{Watch::none};
     std::atomic<bool> config_wanted_{true};

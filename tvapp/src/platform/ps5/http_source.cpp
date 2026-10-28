@@ -1438,6 +1438,14 @@ void HttpSource::read_delete_job(const cJSON *root, Job &job)
     job.done = num(root, "bytes_done");
     job.error = str(root, "error");
     job.cancellable = false;
+    // ShadowMountPlus up to 1.7beta5fix1 refuses every uninstall while any title it mounted runs, this app included: the
+    // delete waits until this app has ended, so it ends itself (once per job; the app reports the result as a notification).
+    if (job.active && str(root, "waiting_for") == "tile" && str(root, "tile") == own_title_id() && !leaving_for_delete_)
+    {
+        leaving_for_delete_ = true;
+        notice(Notice::Kind::leaving, "„" + job.name + "“ wird gelöscht",
+               "Die Vollbild-App schließt sich dafür. Das Ergebnis kommt als Meldung.");
+    }
 }
 
 void HttpSource::poll_history()
