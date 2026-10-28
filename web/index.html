@@ -571,42 +571,46 @@
               <div id="dm-title"></div>
             </article>
             <article class="card">
-              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gear"/></svg></span><div class="ck-text"><h2>Einstellungen</h2><p class="sub">gelten für den nächsten Dump</p></div></div></div>
-              <div class="p4m-set">
-                <label class="p4m-field"><span>Ziel</span>
-                  <select id="dm-target"></select></label>
-                <label class="p4m-field"><span>Ordner auf dem Ziel</span>
-                  <input type="text" id="dm-subdir" maxlength="95" autocomplete="off" spellcheck="false"></label>
-                <p class="muted upd-hint">Höchstens drei Ebenen; erlaubt sind Buchstaben, Ziffern, Punkt, Strich, Unterstrich und Leerzeichen. Auf dem Konsolenspeicher bleiben 10 GB frei.</p>
-                <label class="xswitch" for="dm-titles"><span>Spieltitel im Ordnernamen</span>
-                  <span class="switch"><input type="checkbox" id="dm-titles"><i></i></span></label>
-                <label class="p4m-field"><span>PS4-Aufteilung</span>
-                  <select id="dm-split">
-                    <option value="3">App und Patch getrennt</option>
-                    <option value="1">Nur App</option>
-                    <option value="2">Nur Patch</option>
-                    <option value="0">Nicht aufteilen</option>
-                  </select></label>
-                <p class="muted upd-hint">Gilt für PS4-Spiele: getrennt gibt es die Ordner <code>CUSA…-app0</code> und <code>CUSA…-patch0</code>, ungeteilt einen Ordner, in dem der Patch über der App liegt.</p>
-                <label class="xswitch" for="dm-dlc"><span>DLC mitdumpen</span>
-                  <span class="switch"><input type="checkbox" id="dm-dlc"><i></i></span></label>
-                <label class="xswitch" for="dm-decrypt"><span>Ausführbare Dateien entschlüsseln</span>
-                  <span class="switch"><input type="checkbox" id="dm-decrypt"><i></i></span></label>
-                <p class="muted upd-hint" id="dm-decrypt-hint">Schreibt kurz in den Kernel der Konsole. Noch nicht an der Konsole erprobt. Nach dem Kopieren werden die Programmdateien (eboot.bin, .self, .prx, .sprx, .elf) im Dump durch ihre entschlüsselte Fassung ersetzt; Dateien, die sich nicht entschlüsseln lassen, bleiben, wie die Konsole sie zeigt. Dann gibt es keine Prüfsummen-Datei.</p>
-                <label class="xswitch" for="dm-fself"><span>Als FSELF neu signieren</span>
-                  <span class="switch"><input type="checkbox" id="dm-fself"><i></i></span></label>
-                <p class="muted upd-hint">Nur mit „Ausführbare Dateien entschlüsseln“. Die Programmdateien werden zu FSELF-Dateien; die einfachen ELF-Dateien liegen zusätzlich im Ordner „decrypted“ des Dumps.</p>
-                <label class="xswitch" for="dm-bp"><span>SDK-Versionen herunterpatchen (Backport)</span>
-                  <span class="switch"><input type="checkbox" id="dm-bp"><i></i></span></label>
-                <p class="muted upd-hint cp-why">Fortgeschritten, kann den Dump kaputt machen. Nur mit „Ausführbare Dateien entschlüsseln“. Ändert die Dateien im Dump, nicht auf der Konsole. Die unveränderten Dateien liegen zusätzlich im Ordner „decrypted“ des Dumps. Mit „Als FSELF neu signieren“ bleiben die Programmdateien unangetastet (FSELF-Dateien werden übersprungen), nur param.sfo und param.json werden angepasst.</p>
-                <label class="p4m-field"><span>PS4-SDK-Ziel (1–6)</span>
-                  <input type="number" id="dm-bp4" min="1" max="6" step="1"></label>
-                <label class="p4m-field"><span>PS5-SDK-Ziel (1–10)</span>
-                  <input type="number" id="dm-bp5" min="1" max="10" step="1"></label>
-                <p class="muted upd-hint">PS4-Spiele: Stufe 1 = SDK 5.05, 2 = 6.00, 3 = 7.00, 4 = 9.00 (Vorgabe), 5 = 10.00, 6 = 11.00. PS5-Spiele: Stufe 1 bis 10 steht für SDK 1.00 bis 10.00 (Vorgabe: 1). Werte außerhalb des Bereichs werden in ihn gezogen.</p>
-                <label class="xswitch" for="dm-verify"><span>Jede Datei nach dem Schreiben zurücklesen und prüfen</span>
-                  <span class="switch"><input type="checkbox" id="dm-verify"><i></i></span></label>
-                <p class="muted upd-hint">Das Zurücklesen dauert etwa so lange wie das Dumpen selbst und legt neben dem Dump eine Datei mit SHA-256-Summen an.</p>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gear"/></svg></span><div class="ck-text"><h2>Einstellungen</h2><p class="sub">für PS5- und PS4-Spiele · gelten für den nächsten Dump</p></div></div></div>
+              <div class="dm-set">
+                <section class="dm-group"><h3>Speicherort</h3>
+                  <div class="dm-two">
+                    <label class="dm-field"><span>Ziel</span><select id="dm-target"></select></label>
+                    <label class="dm-field"><span>Ordner</span><input type="text" id="dm-subdir" maxlength="95" autocomplete="off" spellcheck="false"><small>Bis zu 3 Ordner tief</small></label>
+                  </div>
+                  <label class="dm-row" for="dm-titles"><span><b>Spielname im Ordnernamen</b><small>z. B. PPSA01234_Astro_Bot statt nur PPSA01234</small></span>
+                    <span class="switch"><input type="checkbox" id="dm-titles"><i></i></span></label>
+                </section>
+                <section class="dm-group"><h3>Was wird gedumpt</h3>
+                  <label class="dm-row" for="dm-dlc"><span><b>DLC mitdumpen</b><small>Zusatzinhalte gleich mitsichern</small></span>
+                    <span class="switch"><input type="checkbox" id="dm-dlc"><i></i></span></label>
+                  <label class="dm-row" for="dm-verify"><span><b>Nach dem Schreiben prüfen</b><small>Sicherer, dauert aber doppelt so lange</small></span>
+                    <span class="switch"><input type="checkbox" id="dm-verify"><i></i></span></label>
+                  <label class="dm-field"><span>Nur bei PS4-Spielen: Spiel und Update</span>
+                    <select id="dm-split">
+                      <option value="3">Spiel und Update getrennt (Standard)</option>
+                      <option value="1">Nur Spiel</option>
+                      <option value="2">Nur Update</option>
+                      <option value="0">Spiel und Update in einem Ordner</option>
+                    </select></label>
+                </section>
+                <section class="dm-group"><h3>Spielbar machen</h3>
+                  <p class="dm-note">Beide an: Nur dann zeigt die Konsole den Dump im Startbildschirm, ShadowMountPlus bindet ihn ein und er lässt sich spielen.</p>
+                  <label class="dm-row" for="dm-decrypt"><span><b>Programmdateien entschlüsseln</b><small id="dm-decrypt-hint">Nötig zum Spielen · noch nicht an der Konsole getestet</small></span>
+                    <span class="switch"><input type="checkbox" id="dm-decrypt"><i></i></span></label>
+                  <label class="dm-row" for="dm-fself"><span><b>Als FSELF signieren</b><small>Nötig zum Spielen · braucht „Entschlüsseln“</small></span>
+                    <span class="switch"><input type="checkbox" id="dm-fself"><i></i></span></label>
+                </section>
+                <details class="dm-adv" id="dm-adv"><summary><span>Für Fortgeschrittene <small>· Backport für ältere Firmware</small></span><span aria-hidden="true">▾</span></summary>
+                  <section class="dm-group">
+                    <label class="dm-row warn" for="dm-bp"><span><b>SDK herunterpatchen (Backport)</b><small>Nur für ältere Firmware nötig · kann den Dump beschädigen · braucht „Entschlüsseln“</small></span>
+                    <span class="switch"><input type="checkbox" id="dm-bp"><i></i></span></label>
+                    <div class="dm-two">
+                      <label class="dm-field"><span>PS4-Ziel</span><select id="dm-bp4"><option value="1">SDK 5.05</option><option value="2">SDK 6.00</option><option value="3">SDK 7.00</option><option value="4">SDK 9.00 (Standard)</option><option value="5">SDK 10.00</option><option value="6">SDK 11.00</option></select></label>
+                      <label class="dm-field"><span>PS5-Ziel</span><select id="dm-bp5"><option value="1">SDK 1.00 (Standard)</option><option value="2">SDK 2.00</option><option value="3">SDK 3.00</option><option value="4">SDK 4.00</option><option value="5">SDK 5.00</option><option value="6">SDK 6.00</option><option value="7">SDK 7.00</option><option value="8">SDK 8.00</option><option value="9">SDK 9.00</option><option value="10">SDK 10.00</option></select></label>
+                    </div>
+                  </section>
+                </details>
               </div>
             </article>
             <article class="card">

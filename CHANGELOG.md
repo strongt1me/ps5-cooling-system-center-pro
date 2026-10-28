@@ -2,6 +2,14 @@
 
 ## Unveröffentlicht
 
+### Reiter Disc: Dump-Einstellungen aufgeräumt
+- Drei Abschnitte (Speicherort, Was wird gedumpt, Spielbar machen) und „Für Fortgeschrittene“ zugeklappt (klappt von selbst auf, wenn der Backport an ist). Je Schalter eine kurze Zeile statt eines Absatzes, mehr Abstand, Auswahllisten im Stil der App
+- „Spielbar machen“ sagt deutlich: Entschlüsseln und FSELF müssen beide an sein, sonst zeigt die Konsole den Dump nicht, ShadowMountPlus bindet ihn nicht ein und er lässt sich nicht spielen
+- Klarere Namen: „Nur bei PS4-Spielen: Spiel und Update“ (getrennt, nur Spiel, nur Update, in einem Ordner); die SDK-Ziele sind Auswahllisten mit Klartext („SDK 9.00 (Standard)“) statt Zahlenfeldern mit Stufen. Dieselben Namen in den Einstellungen je Spiel der Warteschlange. Gespeichert wird wie bisher
+
+### Bedienung mit dem Controller: Stick verstellt keine Auswahl mehr
+- Im Browser der Konsole kommt der Stick als Pfeiltaste an. Stand der Fokus auf einer Auswahlliste, einem Optionsknopf oder einem Zahlenfeld (etwa im Reiter Disc), verstellte Hoch/Runter still den gewählten Wert. Jetzt gehen die Pfeiltasten dort zum vorigen/nächsten Bedienelement, auf der ganzen Seite und in jedem Fenster; gewählt wird nur noch mit ✕. Ein Schieberegler behält links/rechts für seinen Wert, Rollen über einem Zahlenfeld rollt die Seite
+
 ### Spiele-Seite: „Starten“ aus, solange das Spiel läuft
 - Auf der Karte des laufenden Spiels ist „Starten“ ausgegraut (Hinweis „Das Spiel läuft schon.“); daneben bleibt „Spiel beenden“. Die Vollbild-App behält auf ✕ „Nach vorn holen“, weil sie selbst vor dem Spiel liegt
 

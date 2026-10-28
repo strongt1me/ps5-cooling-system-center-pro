@@ -2031,3 +2031,31 @@ button.apr-drive:disabled { cursor: default; }
 .ps-job-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
 .ps-job-row span { color: var(--ink-muted); font-size: 12.5px; }
 .ps-job-row .btn { margin-left: auto; }
+
+/* Dump-Einstellungen (Reiter Disc, 28.10.2026): Abschnitte, eine kurze Zeile je Schalter, Fortgeschrittenes zugeklappt */
+.dm-set { display: grid; gap: 22px; }
+.dm-group { display: grid; gap: 10px; }
+.dm-group > h3 { margin: 0 0 2px; font-size: 11.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-muted); font-weight: 700; }
+.dm-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 16px;
+  border: 1px solid var(--hairline); border-radius: 14px; background: var(--surface-1); cursor: pointer; }
+.dm-row b { display: block; font-size: 14px; color: var(--ink); font-weight: 600; }
+.dm-row small { display: block; margin-top: 3px; font-size: 12.5px; color: var(--ink-muted); line-height: 1.4; font-weight: 400; }
+.dm-row.warn small { color: #ffd57b; }
+.dm-field { display: grid; gap: 6px; }
+.dm-field > span { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.dm-field > small { font-size: 12.5px; color: var(--ink-muted); }
+.dm-field select, .dm-field input { padding: 11px 12px; border-radius: 11px; border: 1px solid var(--hairline);
+  background: var(--inset); color: var(--ink); font: inherit; font-size: 14px; width: 100%; box-sizing: border-box; }
+.dm-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.dm-field select { -webkit-appearance: none; appearance: none; padding-right: 36px; line-height: 1.3;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-muted) 50%), linear-gradient(135deg, var(--ink-muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.dm-field input { line-height: 1.3; }
+@media (max-width: 640px) { .dm-two { grid-template-columns: 1fr; } }
+.dm-adv { border: 1px solid var(--hairline); border-radius: 14px; padding: 0 16px; }
+.dm-adv > summary { list-style: none; cursor: pointer; padding: 14px 0; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; gap: 12px; }
+.dm-adv > summary::-webkit-details-marker { display: none; }
+.dm-adv > summary small { color: var(--ink-muted); font-weight: 400; font-size: 12.5px; }
+.dm-adv[open] > summary { border-bottom: 1px solid var(--hairline); margin-bottom: 14px; }
+.dm-adv .dm-group { padding-bottom: 16px; }
+.dm-note { margin: 0; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.45; background: rgba(47,124,255,.10); border: 1px solid rgba(47,124,255,.35); color: var(--ink-2); }

@@ -9788,8 +9788,10 @@
     if (document.activeElement !== $("#dm-bp4")) $("#dm-bp4").value = String(d.settings.ps4_backport_level || 4);
     if (document.activeElement !== $("#dm-bp5")) $("#dm-bp5").value = String(d.settings.ps5_backport_level || 1);
     $("#dm-bp4").disabled = $("#dm-bp5").disabled = !bp.checked;
+    /* „Für Fortgeschrittene“ ist zu; ein eingeschalteter Backport klappt es beim ersten Anzeigen auf, damit er nicht übersehen wird */
+    if (!dm.advShown) { dm.advShown = true; if (bp.checked) $("#dm-adv").open = true; }
     if (d.settings.decrypt_supported === false) {
-      txt("#dm-decrypt-hint", "Diese Firmware kennt die Entschlüsselung nicht: Der Dump läuft dann ohne Entschlüsseln weiter. Sonst schreibt das Entschlüsseln kurz in den Kernel der Konsole und ist noch nicht an der Konsole erprobt.");
+      txt("#dm-decrypt-hint", "Diese Firmware kann nicht entschlüsseln: Der Dump läuft ohne weiter.");
     }
     dgRender();
     dqRender();
@@ -9870,16 +9872,12 @@
   const dqPanel = (it) => {
     const o = it.options || {};
     return `<div class="p4m-set" data-dq-panel="${esc(it.id)}">
-      <label class="xswitch"><span>Ausführbare Dateien entschlüsseln</span><span class="switch"><input type="checkbox" data-dq-o="decrypt"${o.decrypt ? " checked" : ""}><i></i></span></label>
-      <label class="xswitch"><span>Als FSELF neu signieren</span><span class="switch"><input type="checkbox" data-dq-o="fself"${o.fself ? " checked" : ""}><i></i></span></label>
-      <label class="xswitch"><span>SDK-Versionen herunterpatchen (Backport)</span><span class="switch"><input type="checkbox" data-dq-o="backport"${o.backport ? " checked" : ""}><i></i></span></label>
-      <label class="p4m-field"><span>PS4-SDK-Ziel (1–6)</span><input type="number" min="1" max="6" step="1" data-dq-o="ps4_backport_level" value="${esc(String(o.ps4_backport_level || 4))}"></label>
-      <label class="p4m-field"><span>PS5-SDK-Ziel (1–10)</span><input type="number" min="1" max="10" step="1" data-dq-o="ps5_backport_level" value="${esc(String(o.ps5_backport_level || 1))}"></label>
-      <label class="p4m-field"><span>PS4-Aufteilung</span><select data-dq-o="ps4_split">
-        <option value="3"${o.ps4_split === 3 ? " selected" : ""}>App und Patch getrennt</option>
-        <option value="1"${o.ps4_split === 1 ? " selected" : ""}>Nur App</option>
-        <option value="2"${o.ps4_split === 2 ? " selected" : ""}>Nur Patch</option>
-        <option value="0"${o.ps4_split === 0 ? " selected" : ""}>Nicht aufteilen</option></select></label>
+      <label class="dm-row"><span><b>Programmdateien entschlüsseln</b><small>Nötig zum Spielen · noch nicht an der Konsole getestet</small></span><span class="switch"><input type="checkbox" data-dq-o="decrypt"${o.decrypt ? " checked" : ""}><i></i></span></label>
+      <label class="dm-row"><span><b>Als FSELF signieren</b><small>Nötig zum Spielen · braucht „Entschlüsseln“</small></span><span class="switch"><input type="checkbox" data-dq-o="fself"${o.fself ? " checked" : ""}><i></i></span></label>
+      <label class="dm-row warn"><span><b>SDK herunterpatchen (Backport)</b><small>Nur für ältere Firmware nötig · kann den Dump beschädigen · braucht „Entschlüsseln“</small></span><span class="switch"><input type="checkbox" data-dq-o="backport"${o.backport ? " checked" : ""}><i></i></span></label>
+      <div class="dm-two"><label class="dm-field"><span>PS4-Ziel</span><select data-dq-o="ps4_backport_level"><option value="1"${(o.ps4_backport_level || 4) === 1 ? " selected" : ""}>SDK 5.05</option><option value="2"${(o.ps4_backport_level || 4) === 2 ? " selected" : ""}>SDK 6.00</option><option value="3"${(o.ps4_backport_level || 4) === 3 ? " selected" : ""}>SDK 7.00</option><option value="4"${(o.ps4_backport_level || 4) === 4 ? " selected" : ""}>SDK 9.00 (Standard)</option><option value="5"${(o.ps4_backport_level || 4) === 5 ? " selected" : ""}>SDK 10.00</option><option value="6"${(o.ps4_backport_level || 4) === 6 ? " selected" : ""}>SDK 11.00</option></select></label>
+        <label class="dm-field"><span>PS5-Ziel</span><select data-dq-o="ps5_backport_level"><option value="1"${(o.ps5_backport_level || 1) === 1 ? " selected" : ""}>SDK 1.00 (Standard)</option><option value="2"${(o.ps5_backport_level || 1) === 2 ? " selected" : ""}>SDK 2.00</option><option value="3"${(o.ps5_backport_level || 1) === 3 ? " selected" : ""}>SDK 3.00</option><option value="4"${(o.ps5_backport_level || 1) === 4 ? " selected" : ""}>SDK 4.00</option><option value="5"${(o.ps5_backport_level || 1) === 5 ? " selected" : ""}>SDK 5.00</option><option value="6"${(o.ps5_backport_level || 1) === 6 ? " selected" : ""}>SDK 6.00</option><option value="7"${(o.ps5_backport_level || 1) === 7 ? " selected" : ""}>SDK 7.00</option><option value="8"${(o.ps5_backport_level || 1) === 8 ? " selected" : ""}>SDK 8.00</option><option value="9"${(o.ps5_backport_level || 1) === 9 ? " selected" : ""}>SDK 9.00</option><option value="10"${(o.ps5_backport_level || 1) === 10 ? " selected" : ""}>SDK 10.00</option></select></label></div>
+      <label class="dm-field"><span>Nur bei PS4-Spielen: Spiel und Update</span><select data-dq-o="ps4_split"><option value="3"${o.ps4_split === 3 ? " selected" : ""}>Spiel und Update getrennt (Standard)</option><option value="1"${o.ps4_split === 1 ? " selected" : ""}>Nur Spiel</option><option value="2"${o.ps4_split === 2 ? " selected" : ""}>Nur Update</option><option value="0"${o.ps4_split === 0 ? " selected" : ""}>Spiel und Update in einem Ordner</option></select></label>
       <div class="cp-actions">${dqBtn("opt_save", "Für dieses Spiel speichern", "primary", "", it.id)}${it.custom ? dqBtn("opt_reset", "Wie die Einstellungen oben", "ghost", "", it.id) : ""}</div></div>`;
   };
 
@@ -11005,6 +11003,36 @@
     const t = box || window;
     try { t.scrollBy({ top, behavior: "smooth" }); } catch { t.scrollBy(0, top); }
   };
+  /* Der Stick der Konsole kommt als Pfeiltaste an. Auf einer Auswahlliste, einem Optionsknopf oder einem Zahlenfeld
+     änderten Hoch/Runter sonst still den gewählten Wert (Reiter Disc, 28.10.2026), statt weiterzugehen; dort gehen sie
+     zum vorigen/nächsten Bedienelement. Gewählt wird nur mit ✕ (die Liste öffnet sich) – ein Schieberegler behält
+     links/rechts für seinen Wert. */
+  const navFocusables = (scope) => [...scope.querySelectorAll("a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])")]
+    .filter((el) => !el.disabled && el.type !== "hidden" && el.offsetParent !== null && !el.closest("[hidden]"));
+  const navGuard = (t, key) => {
+    if (t.tagName === "SELECT") return true;
+    if (t.tagName !== "INPUT") return false;
+    if (t.type === "radio" || t.type === "number") return true;
+    return t.type === "range" && (key === "ArrowUp" || key === "ArrowDown");
+  };
+  window.addEventListener("keydown", (e) => {
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) || e.altKey || e.ctrlKey || e.metaKey) return;
+    const t = e.target;
+    if (!t || !navGuard(t, e.key)) return;
+    e.preventDefault();
+    const scope = t.closest(".gm-overlay:not([hidden])") || document;
+    const all = navFocusables(scope);
+    const i = all.indexOf(t);
+    const next = all[i + (e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 1)];
+    if (!next) return;
+    try { next.focus({ preventScroll: true }); } catch { next.focus(); }
+    try { next.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch { next.scrollIntoView(); }
+  }, true);
+  /* Rollen über einem gewählten Zahlenfeld änderte dessen Wert: das Feld gibt den Fokus ab, die Seite rollt */
+  window.addEventListener("wheel", () => {
+    const a = document.activeElement;
+    if (a && a.tagName === "INPUT" && a.type === "number") a.blur();
+  }, { passive: true, capture: true });
   window.addEventListener("keydown", (e) => {
     if (e.key === "F5" || e.key === "F6") { e.preventDefault(); stepPage(e.key === "F5" ? -1 : 1); }
     else if (e.key === "F7" || e.key === "F8") { e.preventDefault(); scrollPage(e.key === "F7" ? -1 : 1); }
