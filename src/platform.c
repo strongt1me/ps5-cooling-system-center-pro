@@ -1340,7 +1340,8 @@ ps5tm_platform_probe_risky_once(ps5tm_sensors_t *out) {
  * main(), which is why the build checks the SDK (tools/check_sdk_firmware.py).
  * Up to 12.70 they follow "Kernel Offsets 3.00-12.70.txt", shipped with the
  * project earlier; 13.00 to 13.60 came with SDK v0.40 to v0.42 (13.00, 13.20,
- * 13.40, 13.42 and 13.60 are the versions it has a case for).
+ * 13.40, 13.42 and 13.60 are the versions it has a case for), 14.00 and 14.10
+ * with v0.45.
  * kernel_get_fw_version() returns a packed BCD word, e.g. 0x03000000 for 3.00
  * and 0x13600000 for 13.60; the two high bytes carry major/minor.
  */
@@ -1383,6 +1384,7 @@ ps5tm_platform_firmware_group(uint32_t fw) {
   if(v >= 1100 && v <= 1160) return "11.00-11.60";
   if(v >= 1200 && v <= 1270) return "12.00-12.70";
   if(v >= 1300 && v <= 1360) return "13.00-13.60";
+  if(v >= 1400 && v <= 1410) return "14.00-14.10";
   return "unbekannt";
 }
 

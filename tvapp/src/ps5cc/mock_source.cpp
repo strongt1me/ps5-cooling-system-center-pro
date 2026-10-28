@@ -4,6 +4,8 @@
 
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/plans.hpp"
+#include "third_party/cjson/cJSON.h"
 
 #include <algorithm>
 #include <cmath>
@@ -73,7 +75,7 @@ constexpr MockGame kGames[] = {
     {"PPSA05522", "Asterix & Obelix Heroes", "PS5", "01.000.001", "ffpkg", 6.4, 3.2},
     {"PPSA07788", "Double Dragon Revive", "PS5", "01.000.003", "exfat", 9.7, 1.1},
     {"PPSA09912", "Arcade Game Zone", "PS5", "01.000.000", "folder", 2.3, 0.4},
-    {"CUSA05041", "Two Point Hospital", "PS4", "01.15", "ffpkg", 12.6, 22.0},
+    {"CUSA05041", "Two Point Hospital", "PS4", "01.15", "folder", 12.6, 22.0},
     {"PPSA13001", "Arkanoid – Eternal Battle", "PS5", "01.000.002", "folder", 4.1, 0.2},
     {"PPSA11420", "Styx: Blades of Greed", "PS5", "01.000.001", "exfat", 28.9, 5.7},
     {"PPSA03860", "Lantern Pass", "PS5", "01.002.000", "ffpfsc", 18.5, 9.4},
@@ -102,7 +104,18 @@ class MockSource final : public Source
             g.platform = m.platform;
             g.version = m.version;
             g.format = m.format;
-            g.path = std::string("/mnt/usb0/homebrew/") + m.id;
+            const std::string format = m.format;
+            const bool folder = format == "folder";
+            const bool installed = format == "fpkg";
+            g.path = installed ? std::string("/user/app/") + m.id
+                               : std::string("/mnt/usb0/homebrew/") + m.id + (folder ? "" : "." + format);
+            // The library's rules (library.c): copy a folder or an image file, convert a folder or an uncompressed
+            // image, move and unpack through ShadowMountPlus.
+            g.can_copy = !installed;
+            g.can_convert = folder || format == "exfat" || format == "ffpkg" || format == "ffpfs";
+            g.can_move = !installed;
+            g.can_unpack = !installed && !folder;
+            g.ampr_emu = std::string(m.id) == "PPSA01325";
             g.size_bytes = static_cast<std::uint64_t>(m.gigabytes * 1e9);
             g.played_s = static_cast<std::uint64_t>(m.hours * 3600.0);
             g.last_played = m.hours > 0.0 ? "2026-10-27T10:29:26Z" : "";
@@ -117,13 +130,14 @@ class MockSource final : public Source
         data_.status.game_state = "im Spiel";
         data_.status.game_foreground = false;
         data_.status.target_c = 75;
-        Job &copy = data_.jobs[static_cast<std::size_t>(JobKind::copy)];
-        copy.active = true;
-        copy.state = "running";
-        copy.name = "ASTRO BOT";
-        copy.detail = "→ Interne SSD";
-        copy.total = 31.2e9;
-        copy.done = copy.total * 0.42;
+        // A move by ShadowMountPlus that crawls through the whole preview; the app's own kinds stay free for the tools.
+        Job &move = data_.jobs[static_cast<std::size_t>(JobKind::storage)];
+        move.active = true;
+        move.state = "transferring";
+        move.name = "Maneater";
+        move.detail = "Verschieben → /mnt/ext0/homebrew";
+        move.total = 22.0e9;
+        move.done = move.total * 0.42;
         data_.history = {
             {1793098000, "convert", "Maneater", "ffpfs → /mnt/usb0/exfat", "done", 22000000000ull},
             {1793091000, "copy", "Double Dragon Revive", "→ USB-Laufwerk", "done", 9700000000ull},
@@ -186,12 +200,32 @@ class MockSource final : public Source
             closing_.clear();
             changed();
         }
+        if (plan_at_ > 0.0f && clock_ >= plan_at_)
+        {
+            plan_at_ = 0.0f;
+            data_.plan = make_plan(plan_tool_, plan_id_);
+            data_.plan.ticket = plan_ticket_;
+            changed();
+        }
         if (second_ >= 1.0f)
         {
             second_ = 0.0f;
-            Job &copy = data_.jobs[static_cast<std::size_t>(JobKind::copy)];
-            if (copy.active && copy.done < copy.total)
-                copy.done = std::fmin(copy.total, copy.done + copy.total * 0.002);
+            for (std::size_t i = 0; i < data_.jobs.size(); ++i)
+            {
+                Job &job = data_.jobs[i];
+                if (!job.active || job.total <= 0.0)
+                    continue;
+                // The move of the opening screen crawls; the jobs started from the tools finish within the preview.
+                const bool crawl = i == static_cast<std::size_t>(JobKind::storage) && job.name == "Maneater";
+                job.done = std::fmin(job.total, job.done + job.total * (crawl ? 0.002 : 0.04));
+                if (job.done >= job.total)
+                {
+                    job.active = false;
+                    job.finished = true;
+                    job.state = "done";
+                    notice(Notice::Kind::success, "„" + job.name + "“ fertig");
+                }
+            }
             refresh_status();
             step_selftest();
             step_store();
@@ -289,6 +323,79 @@ class MockSource final : public Source
         }
     }
 
+    std::uint64_t request_plan(Tool tool, const std::string &id) override
+    {
+        plan_ticket_ += 1;
+        plan_tool_ = tool;
+        plan_id_ = id;
+        // As long as a small game takes to measure on the console, so the "wird vermessen" state shows too.
+        plan_at_ = clock_ + 0.6f;
+        return plan_ticket_;
+    }
+
+    void start_tool(Tool tool, const std::string &id, const std::string &body) override
+    {
+        (void)body;
+        const Game *game = find(id);
+        const std::string name = game != nullptr ? game->name : id;
+        const JobKind kind = tool == Tool::copy      ? JobKind::copy
+                             : tool == Tool::convert ? JobKind::convert
+                             : tool == Tool::move || tool == Tool::unpack ? JobKind::storage
+                             : tool == Tool::erase                        ? JobKind::deletion
+                                                                          : JobKind::image;
+        Job &job = data_.jobs[static_cast<std::size_t>(kind)];
+        if (job.active)
+        {
+            // What the console app answers with 409 while one of its kind runs.
+            notice(Notice::Kind::error, "Nicht gestartet", "Es läuft schon ein Auftrag dieser Art. Bitte danach noch einmal.");
+            return;
+        }
+        job = Job{};
+        job.active = true;
+        job.state = "running";
+        job.name = name;
+        job.total = game != nullptr ? static_cast<double>(game->size_bytes) : 1e9;
+        job.cancellable = kind != JobKind::deletion;
+        switch (tool)
+        {
+        case Tool::copy:
+            job.detail = "→ USB-Laufwerk 2";
+            job.total *= 2.0; // written and read back
+            break;
+        case Tool::convert:
+            job.detail = "→ /mnt/ext0/homebrew/" + id + ".ffpfsc";
+            break;
+        case Tool::move:
+            job.detail = "Verschieben → /mnt/ext0/homebrew";
+            break;
+        case Tool::unpack:
+            job.detail = "Entpacken → /mnt/ext0/homebrew/" + id;
+            break;
+        case Tool::image_check:
+            job.detail = "Prüfen";
+            break;
+        case Tool::image_repair:
+            job.detail = "Reparieren";
+            break;
+        case Tool::image_unpack:
+            job.detail = "Entpacken";
+            break;
+        case Tool::erase:
+            job.detail = "Wird gelöscht";
+            break;
+        case Tool::count:
+            break;
+        }
+        job.done = job.total * 0.07;
+        Notice n;
+        n.kind = Notice::Kind::job_started;
+        n.title = std::string(tool_label(tool)) + " gestartet";
+        n.body = "„" + name + "“";
+        n.job = kind;
+        notices_.push_back(n);
+        changed();
+    }
+
     void set_target(int celsius) override
     {
         pending_target_ = celsius;
@@ -319,8 +426,7 @@ class MockSource final : public Source
         if (data_.status.game_id != id)
             return;
         closing_ = id;
-        close_at_ = clock_ + 1.5f;
-        notice(Notice::Kind::info, "„" + data_.status.game_name + "“ wird beendet …");
+        close_at_ = clock_ + 1.5f; // silent like the console source: the screen says it itself
     }
 
     void cancel_job(JobKind kind) override
@@ -379,6 +485,269 @@ class MockSource final : public Source
     }
 
   private:
+    struct MockDrive
+    {
+        const char *mount, *label, *fs;
+        double free_gb;
+    };
+    // One of each case the dialogs know: too little room, the source's own drive, a good one, FAT32.
+    static constexpr MockDrive kDrives[] = {{"/data", "Interne SSD", "ufs", 24.0},
+                                            {"/mnt/usb0", "USB-Laufwerk 1", "exfatfs", 1210.0},
+                                            {"/mnt/ext0", "M.2-Laufwerk", "exfatfs", 640.0},
+                                            {"/mnt/usb1", "USB-Stick", "msdosfs", 59.0}};
+
+    // Every plan goes through JSON and ps5cc/plans.cpp, as the console app's answers do.
+    PlanReply make_plan(Tool tool, const std::string &id) const
+    {
+        PlanReply reply;
+        reply.tool = tool;
+        reply.id = id;
+        const Game *g = find(id);
+        if (g == nullptr)
+        {
+            reply.error = "Das Spiel ist nicht in der Liste.";
+            return reply;
+        }
+        const double size = static_cast<double>(g->size_bytes);
+        const double largest = std::min(size, 6.2e9);
+        const bool folder = g->format == "folder";
+        const bool running = g->id == data_.status.game_id;
+        const std::string leaf = folder ? g->id : g->id + "." + g->format;
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddBoolToObject(root, "ok", 1);
+        cJSON_AddStringToObject(root, tool == Tool::erase || tool >= Tool::image_unpack ? "id" : "title_id",
+                                g->id.c_str());
+        cJSON_AddStringToObject(root, "name", g->name.c_str());
+        cJSON_AddBoolToObject(root, "running", running);
+        const auto job_active = [this](JobKind kind) { return data_.jobs[static_cast<std::size_t>(kind)].active; };
+        const auto drive_base = [&](cJSON *d, const MockDrive &m)
+        {
+            cJSON_AddStringToObject(d, "mount", m.mount);
+            cJSON_AddStringToObject(d, "label", m.label);
+            cJSON_AddStringToObject(d, "base", m.mount);
+            cJSON_AddStringToObject(d, "fs", m.fs);
+            cJSON_AddNumberToObject(d, "free_bytes", m.free_gb * 1e9);
+            cJSON_AddBoolToObject(d, "source_here", g->path.rfind(std::string(m.mount) + "/", 0) == 0);
+        };
+        const auto fat32 = [](const MockDrive &m, double file) { return std::string(m.fs) == "msdosfs" && file > 4.29e9; };
+        switch (tool)
+        {
+        case Tool::copy:
+        {
+            cJSON_AddStringToObject(root, "source", g->path.c_str());
+            cJSON_AddStringToObject(root, "kind", folder ? "folder" : "file");
+            cJSON_AddNumberToObject(root, "size_bytes", size);
+            cJSON_AddNumberToObject(root, "files", folder ? 2312 : 1);
+            cJSON_AddNumberToObject(root, "largest_bytes", largest);
+            cJSON_AddNumberToObject(root, "skipped", 0);
+            cJSON_AddBoolToObject(root, "busy", job_active(JobKind::copy));
+            // The preview starts every kind beside the others; the console app keeps copy and convert apart.
+            cJSON_AddBoolToObject(root, "other_busy", 0);
+            cJSON *targets = cJSON_AddArrayToObject(root, "targets");
+            for (const MockDrive &m : kDrives)
+            {
+                cJSON *d = cJSON_CreateObject();
+                drive_base(d, m);
+                cJSON_AddBoolToObject(d, "fat32_too_big", fat32(m, largest));
+                cJSON_AddBoolToObject(d, "enough_space", m.free_gb * 1e9 >= size);
+                for (int mode = 0; mode < kModes; ++mode)
+                {
+                    cJSON *o = cJSON_AddObjectToObject(d, kModeKeys[mode]);
+                    const std::string path = std::string(m.mount) + (mode == 0 ? "/homebrew/" : "/PS5-Sicherung/Spiele/") + leaf;
+                    const bool leftover = mode == 1 && std::string(m.mount) == "/mnt/ext0";
+                    cJSON_AddStringToObject(o, "path", path.c_str());
+                    cJSON_AddBoolToObject(o, "exists", path == g->path);
+                    cJSON_AddBoolToObject(o, "unfinished", leftover);
+                    cJSON_AddNumberToObject(o, "unfinished_bytes", leftover ? 2.1e9 : 0.0);
+                    cJSON_AddBoolToObject(o, "enough_space", m.free_gb * 1e9 >= size);
+                    cJSON_AddBoolToObject(o, "path_too_long", 0);
+                }
+                cJSON_AddItemToArray(targets, d);
+            }
+            break;
+        }
+        case Tool::convert:
+        {
+            const bool ps4 = g->platform == "PS4" && folder;
+            const double raw = size * 1.02;
+            const double ffpkg = folder ? size * 1.04 : 0.0;
+            cJSON_AddStringToObject(root, "source", g->path.c_str());
+            cJSON_AddStringToObject(root, "kind", folder ? "folder" : "file");
+            cJSON_AddBoolToObject(root, "ps4", ps4);
+            cJSON_AddStringToObject(root, "stem", g->id.c_str());
+            cJSON_AddNumberToObject(root, "raw_bytes", raw);
+            cJSON *risk = cJSON_AddObjectToObject(root, "stream_risk");
+            const bool big = size > 30e9;
+            cJSON_AddBoolToObject(risk, "risky", big);
+            cJSON_AddNumberToObject(risk, "data_bytes", size);
+            cJSON_AddBoolToObject(risk, "big_data", big);
+            cJSON_AddNumberToObject(risk, "container_bytes", big ? size * 0.4 : 0.0);
+            cJSON *names = cJSON_AddArrayToObject(risk, "containers");
+            if (big)
+                cJSON_AddItemToArray(names, cJSON_CreateString("streaming.pak"));
+            cJSON_AddStringToObject(risk, "stream_dir", "");
+            cJSON_AddNumberToObject(risk, "stream_dir_bytes", 0);
+            cJSON_AddNumberToObject(root, "ffpkg_bytes", ffpkg);
+            cJSON_AddNumberToObject(root, "files", folder ? 2312 : 1);
+            cJSON *ops = cJSON_AddArrayToObject(root, "ops");
+            cJSON_AddItemToArray(ops, cJSON_CreateString("ffpfsc"));
+            if (folder)
+            {
+                cJSON_AddItemToArray(ops, cJSON_CreateString("ffpkg"));
+                cJSON_AddItemToArray(ops, cJSON_CreateString("exfat"));
+            }
+            cJSON_AddBoolToObject(root, "busy", job_active(JobKind::convert));
+            cJSON_AddBoolToObject(root, "other_busy", 0);
+            cJSON *targets = cJSON_AddArrayToObject(root, "targets");
+            for (const MockDrive &m : kDrives)
+            {
+                // A PS4 title from the console's own storage brings it down: the app lists only USB and M.2.
+                if (ps4 && std::string(m.mount) == "/data")
+                    continue;
+                cJSON *d = cJSON_CreateObject();
+                drive_base(d, m);
+                cJSON_AddBoolToObject(d, "fat32_too_big", fat32(m, raw));
+                cJSON_AddBoolToObject(d, "fat32_too_big_ffpkg", fat32(m, ffpkg > 0.0 ? ffpkg : raw));
+                cJSON_AddBoolToObject(d, "enough_space", m.free_gb * 1e9 >= raw);
+                for (int mode = 0; mode < kModes; ++mode)
+                {
+                    cJSON *o = cJSON_AddObjectToObject(d, kModeKeys[mode]);
+                    const std::string dir = std::string(m.mount) + (mode == 0 ? "/homebrew" : "/PS5-Sicherung/Spiele");
+                    cJSON_AddStringToObject(o, "dir", dir.c_str());
+                    for (const char *op : kOpKeys)
+                    {
+                        cJSON *t = cJSON_AddObjectToObject(o, op);
+                        const std::string path = dir + "/" + g->id + "." + op;
+                        cJSON_AddStringToObject(t, "path", path.c_str());
+                        cJSON_AddBoolToObject(t, "exists", path == g->path);
+                        cJSON_AddBoolToObject(t, "unfinished", 0);
+                        cJSON_AddNumberToObject(t, "unfinished_bytes", 0);
+                        cJSON_AddBoolToObject(t, "enough_space", m.free_gb * 1e9 >= raw);
+                    }
+                }
+                cJSON_AddItemToArray(targets, d);
+            }
+            break;
+        }
+        case Tool::move:
+        case Tool::unpack:
+        {
+            const bool unpack = tool == Tool::unpack;
+            const std::size_t slash = g->path.find_last_of('/');
+            const std::string here = g->path.substr(0, slash);
+            cJSON_AddStringToObject(root, "op", unpack ? "unpack" : "move");
+            cJSON_AddStringToObject(root, "source", g->path.c_str());
+            cJSON_AddStringToObject(root, "source_dir", here.c_str());
+            cJSON_AddStringToObject(root, "source_type", folder ? "folder" : "image");
+            cJSON_AddStringToObject(root, "image_type", g->format == "ffpfsc" ? "pfsc" : g->format.c_str());
+            cJSON_AddNumberToObject(root, "size_bytes", size);
+            cJSON *dests = cJSON_AddArrayToObject(root, "destinations");
+            for (const MockDrive &m : kDrives)
+            {
+                cJSON *d = cJSON_CreateObject();
+                const std::string path = std::string(m.mount) + "/homebrew";
+                const std::string target = path + "/" + (unpack ? g->id : g->path.substr(slash + 1));
+                cJSON_AddStringToObject(d, "path", path.c_str());
+                cJSON_AddStringToObject(d, "drive", m.label);
+                cJSON_AddStringToObject(d, "fs", m.fs);
+                cJSON_AddNumberToObject(d, "free_bytes", m.free_gb * 1e9);
+                cJSON_AddBoolToObject(d, "exists", 1);
+                cJSON_AddBoolToObject(d, "here", path == here);
+                cJSON_AddBoolToObject(d, "enough_space", path == here && !unpack ? 1 : m.free_gb * 1e9 >= size);
+                cJSON_AddBoolToObject(d, "fat32_too_big", fat32(m, largest));
+                cJSON_AddStringToObject(d, "target", target.c_str());
+                cJSON_AddBoolToObject(d, "target_exists", target == g->path);
+                cJSON_AddItemToArray(dests, d);
+            }
+            break;
+        }
+        case Tool::image_unpack:
+        {
+            cJSON_AddStringToObject(root, "image", g->path.c_str());
+            cJSON_AddNumberToObject(root, "size_bytes", size);
+            cJSON_AddNumberToObject(root, "files", 2312);
+            cJSON_AddNumberToObject(root, "largest_bytes", largest);
+            cJSON_AddBoolToObject(root, "damaged", 0);
+            cJSON_AddBoolToObject(root, "busy", job_active(JobKind::image));
+            cJSON *targets = cJSON_AddArrayToObject(root, "targets");
+            for (const MockDrive &m : kDrives)
+            {
+                cJSON *d = cJSON_CreateObject();
+                drive_base(d, m);
+                const std::string path = std::string(m.mount) + "/homebrew/" + g->id;
+                cJSON_AddStringToObject(d, "path", path.c_str());
+                cJSON_AddBoolToObject(d, "exists", 0);
+                cJSON_AddBoolToObject(d, "enough_space", m.free_gb * 1e9 >= size + 268435456.0);
+                cJSON_AddBoolToObject(d, "fat32_too_big", fat32(m, largest));
+                cJSON_AddBoolToObject(d, "path_too_long", 0);
+                cJSON_AddItemToArray(targets, d);
+            }
+            break;
+        }
+        case Tool::image_check:
+        case Tool::image_repair:
+        {
+            cJSON_AddStringToObject(root, "format", g->format.c_str());
+            cJSON_AddNumberToObject(root, "image_bytes", size);
+            cJSON_AddBoolToObject(root, "can_check", 1);
+            cJSON_AddBoolToObject(root, "can_unpack", 1);
+            cJSON *repair = cJSON_AddObjectToObject(root, "repair");
+            if (g->format != "ffpfsc")
+            {
+                cJSON_AddStringToObject(repair, "state", "na");
+            }
+            else if (g->id == "PPSA03860")
+            {
+                cJSON_AddStringToObject(repair, "state", "fixable");
+                cJSON_AddNumberToObject(repair, "declared", size);
+                cJSON_AddNumberToObject(repair, "actual", size + 65536.0);
+            }
+            else
+            {
+                cJSON_AddStringToObject(repair, "state", "fine");
+            }
+            cJSON *last = cJSON_AddObjectToObject(root, "last_check");
+            cJSON_AddNumberToObject(last, "when", 1792800000);
+            cJSON_AddBoolToObject(last, "clean", 1);
+            cJSON_AddNumberToObject(last, "files", 2312);
+            cJSON_AddNumberToObject(last, "bad_files", 0);
+            cJSON_AddArrayToObject(last, "bad");
+            break;
+        }
+        case Tool::erase:
+        {
+            const bool installed = g->format == "fpkg";
+            cJSON_AddStringToObject(root, "kind", installed ? "installed" : "smp");
+            cJSON_AddStringToObject(root, "path", g->path.c_str());
+            cJSON_AddStringToObject(root, "format", g->format.c_str());
+            cJSON_AddStringToObject(root, "version", g->version.c_str());
+            cJSON_AddNumberToObject(root, "size_bytes", size);
+            cJSON *items = cJSON_AddArrayToObject(root, "items");
+            const std::string what = (folder ? "Der Spielordner " : "Die Abbilddatei ") + g->path;
+            cJSON_AddItemToArray(items, cJSON_CreateString(installed ? "Das installierte Spiel (über die Deinstallation "
+                                                                       "der Konsole)"
+                                                                     : what.c_str()));
+            cJSON_AddItemToArray(items, cJSON_CreateString("Die Kachel auf dem Startbildschirm"));
+            if (!installed)
+                cJSON_AddItemToArray(items, cJSON_CreateString("Der Eintrag bei ShadowMountPlus"));
+            cJSON_AddBoolToObject(root, "saves_kept", 1);
+            cJSON_AddBoolToObject(root, "can_delete", !running);
+            if (running)
+                cJSON_AddStringToObject(root, "why", "Das Spiel läuft gerade. Bitte erst beenden.");
+            cJSON_AddStringToObject(root, "confirm", "4f9c2a17");
+            break;
+        }
+        case Tool::count:
+            break;
+        }
+        char *text = cJSON_PrintUnformatted(root);
+        reply.json = text != nullptr ? text : "{}";
+        cJSON_free(text);
+        cJSON_Delete(root);
+        reply.ok = true;
+        return reply;
+    }
+
     const Game *find(const std::string &id) const
     {
         for (const Game &g : data_.games)
@@ -586,6 +955,10 @@ class MockSource final : public Source
     std::string closing_;
     float close_at_ = 0.0f;
     std::int64_t klog_n_ = 51400;
+    std::uint64_t plan_ticket_ = 0;
+    Tool plan_tool_ = Tool::copy;
+    std::string plan_id_;
+    float plan_at_ = 0.0f;
 };
 
 Source *g_source = nullptr;

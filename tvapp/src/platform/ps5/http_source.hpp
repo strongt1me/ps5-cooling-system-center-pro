@@ -11,6 +11,8 @@
 #include <mutex>
 #include <string>
 
+struct cJSON;
+
 namespace hui::ps5cc
 {
 
@@ -37,9 +39,14 @@ class HttpSource final : public Source
     void kill_payload(int pid) override;
     void store_action(const std::string &action, const std::string &id) override;
     void quit_app() override;
+    std::uint64_t request_plan(Tool tool, const std::string &id) override;
+    void start_tool(Tool tool, const std::string &id, const std::string &body) override;
 
-    // The worker; public only for the thread entry.
+    // The workers; public only for the thread entries.
     void run();
+    // Plans and starts of the game tools: a plan measures a whole game and may take a minute, so it has a thread of
+    // its own and the temperatures keep coming meanwhile.
+    void run_tools();
 
   private:
     struct Request
@@ -64,7 +71,17 @@ class HttpSource final : public Source
         std::string text; // a JSON body, or the store's action
     };
 
+    struct ToolRequest
+    {
+        bool start = false; // false: the plan
+        Tool tool = Tool::copy;
+        std::string id;
+        std::string body;
+        std::uint64_t ticket = 0;
+    };
+
     void push(Request request);
+    void handle_tool(const ToolRequest &request);
     void notice(Notice::Kind kind, std::string title, std::string body = {});
     void set_link(Link link, std::string detail);
     bool connect_phase();
@@ -72,6 +89,8 @@ class HttpSource final : public Source
     bool poll_status();
     void poll_library();
     void poll_jobs();
+    void read_storage_job(const cJSON *root, Job &job);
+    void read_delete_job(const cJSON *root, Job &job);
     void poll_history();
     void poll_config();
     void poll_selftest();
@@ -86,6 +105,12 @@ class HttpSource final : public Source
     Snapshot data_;
     std::deque<Notice> notices_;
     std::deque<Request> requests_;
+    std::deque<ToolRequest> tool_requests_;
+    std::uint64_t next_ticket_ = 0;
+    // ShadowMountPlus keeps reporting its last job for ever: one that ended is shown only when it ran in this session.
+    std::atomic<std::int64_t> storage_seen_{0};
+    std::atomic<bool> jobs_wanted_{false};    // a tool started: ask for the jobs at once
+    std::atomic<bool> library_wanted_{false}; // a job ended: games may have moved or gone
     std::atomic<Watch> watching_{Watch::none};
     std::atomic<bool> config_wanted_{true};
     std::atomic<bool> retry_{false};

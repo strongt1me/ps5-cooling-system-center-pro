@@ -19,7 +19,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 | **ampr_emu** (drakmor) — das Format des AMPR-Index (`AMPRIDX3`) und die Bauregeln aus `build_ampr_index.py`, nach C übertragen | `src/amprindex.c` | GPL-3.0 | <https://github.com/drakmor/ampr_emu> |
 | **BearSSL** 0.6 (Thomas Pornin) — TLS-Client der Spiel-Updates, unverändert (nur `src/` und `inc/` des Archivs) | `src/third_party/bearssl/` | MIT (`LICENSE.txt` dort) | <https://bearssl.org/>, Archiv `bearssl-0.6.tar.gz` |
 | **cJSON** 1.7.19 (Dave Gamble und Mitwirkende) | `src/third_party/cJSON*` | MIT | <https://github.com/DaveGamble/cJSON> |
-| **PS5-Payload-SDK** v0.44 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird; mindestens v0.42 nötig (Firmware 13.60), der Bau prüft das | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
+| **PS5-Payload-SDK** v0.45 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird; mindestens v0.42 nötig (Firmware 13.60), v0.45 kennt auch 14.00 und 14.10, der Bau prüft das | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
 
 ## Eingebettete Fassungen, einzelne übernommene Dateien, Vorbilder und Schnittstellen (bei jedem Eintrag steht, was genau übernommen ist)
 
@@ -53,11 +53,15 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
   Vorlagen unter `third_party/ps4mount/`. Der Schlüssel in `src/ps4m_keys.h` stammt aus LibOrbisPkg (maxton, LGPL-3.0). Quelltext der
   Vorlage: <https://github.com/gasb07/ps4mount>.
-- **PatchDL** 0.3.0 bis 0.3.4 (Knutwurst, GPL-3.0): Vorbild für die Spiel-Updates (`src/updates.c`, `src/upd_*.c`): die Server
+- **PatchDL** 0.3.0 bis 0.3.8 (Knutwurst, GPL-3.0): Vorbild für die Spiel-Updates (`src/updates.c`, `src/upd_*.c`): die Server
   und Adressen der offiziellen Versionslisten und Paketlisten, der Schlüssel der PS4-Versionsadresse, die Prüfung, ob ein Spiel
   offiziell signiert ist, der DNS-Weg (UDP, TCP, DNS über HTTPS, gemerkte Adressen). Der Code ist eigener (andere TLS-Bibliothek, eigene Warteschlange);
   übernommen sind nur diese Fakten und die öffentlichen Wurzelzertifikate (Update-Server, DNS-Anbieter), aus denen
   `tools/mk_upd_ta.py` die Vertrauensanker in `src/upd_ca.h` erzeugt. <https://github.com/knutwurst/ps5-patchdl>.
+  Aus **0.3.5 bis 0.3.8** ist Code portiert (GPL-3.0, Herkunft in `third_party/patchdl/ORIGIN.md`): die lokale Paketliste
+  (`write_local_manifest` → `ps5tm_updates_pkg_manifest` in `src/updates.c`, Paketstücke im Server `src/pkgstream.c`), die
+  Grundversions-Prüfung (`doc_field`, `origin_from_block`, `sc_offset_from_json` in `src/updates.c`), das Nachholen der Paketliste
+  (`ensure_local_manifest`) und der Ablauf der Neuinstallation (`do_replace_install`/`replace_thread` → `fresh_install`).
 - **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0 mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
   lose lässt, für den Mitschnitt zur Profil-Erzeugung (`src/trace.c`, ein C-Nachbau von `ampr_pack_profile.py`, Gegenprobe mit
   dem Python-Werkzeug) und für die Prüfsummen-Tabelle der Spiel-Plugins; seit 1.104 (gelesen am 18.10.2026) auch für das Beiseitelegen
@@ -85,7 +89,8 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 - **ShadowMountPlus** (drakmor, GPL-3.0): Seine Web-Schnittstelle liefert Format
   und Speicherort der Spiele und übernimmt Verschieben und Entpacken
   (`src/smp.c`, `src/gamemove.c`); seine README nennt die Parameter für
-  `.ffpkg`-Abbilder (`src/conv_ufs2.c`). <https://github.com/drakmor/ShadowMountPlus>
+  `.ffpkg`-Abbilder (`src/conv_ufs2.c`). Abgeglichen bis 1.7beta9 (Auftragsstatus
+  `operation=install`, Backport-Ordner `/data/homebrew/backports`). <https://github.com/drakmor/ShadowMountPlus>
 - **exFAT Image Builder** (kerrdec97): zeigt, mit welchen UFS2Tool-Parametern ein
   `.ffpkg` für ShadowMountPlus gebaut wird (`-b 65536 -f 65536 -m 0 -S 512 -i 262144`);
   nur Wissen, nichts davon übernommen (`src/conv_ufs2.c`).

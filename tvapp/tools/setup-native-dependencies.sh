@@ -16,8 +16,10 @@ zlib_version="1.3.2"
 zlib_source="$zlib_directory/zlib-$zlib_version"
 zlib_archive="$zlib_directory/zlib-$zlib_version.tar.gz"
 zlib_stamp="$zlib_root/.source-version"
-sdk_url="https://github.com/ps5-payload-dev/sdk/releases/download/v0.42/ps5-payload-sdk.zip"
-sdk_hash="8cfbc7cd5811e719eb4f0c47eea668d3dc7b40bc8ab11c4a5031d40c23ec02da"
+# ps5cc: v0.45 like the rest of the project (kernel offsets up to firmware 14.10); was v0.42 in the kit (8cfbc7cd...).
+sdk_url="https://github.com/ps5-payload-dev/sdk/releases/download/v0.45/ps5-payload-sdk.zip"
+sdk_hash="5fac64093d0e3e69f2584ce7935f24f703f622d9681f1495c85b9f00d1291a2c"
+sdk_stamp="$sdk/.pinned-sha256"
 zlib_urls=(
     "https://github.com/madler/zlib/releases/download/v$zlib_version/zlib-$zlib_version.tar.gz"
     "https://zlib.net/fossils/zlib-$zlib_version.tar.gz"
@@ -47,13 +49,16 @@ ranlib=$(command -v llvm-ranlib-18 || command -v llvm-ranlib || command -v ranli
 }
 
 mkdir -p "$cache"
-if ! $skip_sdk && [[ ! -x "$sdk/bin/prospero-lld" ]]; then
+# ps5cc: a cached SDK of another pinned version is replaced, not reused.
+if ! $skip_sdk && [[ ! -x "$sdk/bin/prospero-lld" || ! -f $sdk_stamp || $(<"$sdk_stamp") != "$sdk_hash" ]]; then
     archive="$cache/ps5-payload-sdk.zip"
     temporary="$archive.download"
     wget -q "$sdk_url" -O "$temporary"
     printf '%s  %s\n' "$sdk_hash" "$temporary" | sha256sum --check --strict
     mv "$temporary" "$archive"
+    rm -rf -- "$sdk"
     unzip -q -o "$archive" -d "$cache"
+    printf '%s\n' "$sdk_hash" >"$sdk_stamp"
 fi
 if ! $skip_sdk && [[ ! -x "$sdk/bin/prospero-lld" || ! -d "$sdk/target/include" ]]; then
     echo "the pinned PS5 payload SDK is incomplete" >&2

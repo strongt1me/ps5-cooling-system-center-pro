@@ -243,19 +243,37 @@ ext_of(const char *path) {
   return dot && (!sl || dot > sl) ? dot : "";
 }
 
+static int image_drive_ok(const char *mount);
+
+/* A PS4 game folder: sce_sys/param.sfo and eboot.bin, no param.json. ShadowMountPlus mounts images of these since
+   1.7beta8 (param.sfo at the image root, any of its image formats). They are converted the way a PS4 dump is
+   (dump_image.c): a param.json built from the param.sfo is laid over the folder, so older versions mount them too. */
+static int
+ps4_folder(const char *source) {
+  char p[PATH_MAX];
+  struct stat st;
+  if(!is_dir(source)) return 0;
+  if(snprintf(p, sizeof(p), "%s/sce_sys/param.json", source) >= (int)sizeof(p) || stat(p, &st) == 0) return 0;
+  snprintf(p, sizeof(p), "%s/sce_sys/param.sfo", source);
+  if(stat(p, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
+  snprintf(p, sizeof(p), "%s/eboot.bin", source);
+  return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+}
+
 /* What a source can become; "" when nothing. ffpkg (UFS2) is direct-from-
    folder only, like MkPFS's own "folder into exFAT" step — repacking an
    existing image into ffpkg isn't a thing ShadowMountPlus expects.
    A folder only counts when it is a game's own folder — sce_sys/param.json is what ShadowMountPlus itself looks
-   for (see gamecopy.c); a folder without it has nothing to convert into. */
+   for (see gamecopy.c), or a PS4 game's sce_sys/param.sfo (ps4_folder); a folder without either has nothing to
+   convert into. */
 static void
 ops_for(const char *source, int *can_exfat, int *can_ffpfsc, int *can_ffpkg) {
   *can_exfat = *can_ffpfsc = *can_ffpkg = 0;
   if(is_dir(source)) {
     char param[PATH_MAX];
     struct stat st;
-    if(snprintf(param, sizeof(param), "%s/sce_sys/param.json", source) < (int)sizeof(param) &&
-       stat(param, &st) == 0 && S_ISREG(st.st_mode))
+    if((snprintf(param, sizeof(param), "%s/sce_sys/param.json", source) < (int)sizeof(param) &&
+        stat(param, &st) == 0 && S_ISREG(st.st_mode)) || ps4_folder(source))
       *can_exfat = *can_ffpfsc = *can_ffpkg = 1;
     return;
   }
@@ -864,6 +882,15 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   int can_exfat, can_ffpfsc, can_ffpkg;
   ops_for(source, &can_exfat, &can_ffpfsc, &can_ffpkg);
   int folder = is_dir(source);
+  int ps4 = folder && ps4_folder(source);
+  if(ps4) {
+    dimg_info_t pi;
+    if(dimg_check(source, NULL, &pi, err, err_len) != 0) return NULL;
+    if(strcmp(pi.title_id, title_id) != 0) {
+      snprintf(err, err_len, "Die param.sfo im Ordner nennt %s, nicht %s.", pi.title_id, title_id);
+      return NULL;
+    }
+  }
 
   uint64_t raw = 0;
   unsigned files = 1;
@@ -873,6 +900,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     raw   = exfat_image_size(img);
     files = exfat_image_files(img);
     exfat_image_free(img);
+    if(ps4) raw += 1ull << 20;                         /* room for the param.json laid over it (dump_image.c) */
   } else {
     struct stat st;
     if(stat(source, &st) != 0) {
@@ -891,7 +919,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   char ffpkg_why[700] = "";
   if(folder && can_ffpkg) {
     if(ufs2_plan_size(source, &ffpkg_bytes, ffpkg_why, sizeof(ffpkg_why)) != 0) ffpkg_bytes = 0;
-    else ffpkg_why[0] = 0;
+    else { ffpkg_why[0] = 0; if(ps4) ffpkg_bytes += 1ull << 20; }
   }
 
   char stem[200];
@@ -908,6 +936,9 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   cJSON_AddStringToObject(root, "name", name);
   cJSON_AddStringToObject(root, "source", source);
   cJSON_AddStringToObject(root, "kind", folder ? "folder" : "file");
+  /* A PS4 folder: only USB/M.2 targets are listed (a PS4 title from the console's own storage panics it), no AMPR
+     index (a PS5 thing), and a param.json from the param.sfo goes into the image. */
+  cJSON_AddBoolToObject  (root, "ps4", ps4);
   cJSON_AddStringToObject(root, "stem", stem);
   cJSON_AddNumberToObject(root, "raw_bytes", (double)raw);
   cJSON_AddItemToObject  (root, "stream_risk", stream_risk_json(source, folder, raw));
@@ -931,7 +962,8 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   for(unsigned i = 0; i < info.volume_count; i++) {
     char base[64], label[40], fs[16];
     uint64_t avail = 0;
-    if(drive_base(info.volumes[i].path, base, sizeof(base), label, sizeof(label)) != 0 ||
+    if((ps4 && !image_drive_ok(info.volumes[i].path)) ||
+       drive_base(info.volumes[i].path, base, sizeof(base), label, sizeof(label)) != 0 ||
        drive_space(base, &avail, fs, sizeof(fs)) != 0)
       continue;
     cJSON *d = cJSON_CreateObject();
@@ -1121,11 +1153,26 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
     return 400;
   }
 
+  int ps4 = ps4_folder(source);
+  dimg_info_t pi;
+  if(ps4) {
+    if(!image_drive_ok(mount)) {
+      snprintf(err, err_len, "Das Abbild eines PS4-Spiels darf nur auf ein USB- oder M.2-Laufwerk, nie in den "
+               "Speicher der Konsole: Ein PS4-Titel von dort bringt die Konsole zum Absturz.");
+      return 400;
+    }
+    if(dimg_check(source, NULL, &pi, err, err_len) != 0) return 409;
+    if(strcmp(pi.title_id, title_id) != 0) {
+      snprintf(err, err_len, "Die param.sfo im Ordner nennt %s, nicht %s.", pi.title_id, title_id);
+      return 409;
+    }
+  }
+
   cv_args_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 500; }
   char label[40], dir[128], stem[200];
   a->folder = is_dir(source);
-  a->ampr = a->folder && ampr_index;
+  a->ampr = a->folder && ampr_index && !ps4;
   stem_of(source, a->folder, stem, sizeof(stem));
   if(drive_base(mount, a->base, sizeof(a->base), label, sizeof(label)) != 0 ||
      dest_dir(a->base, mode, dir, sizeof(dir)) != 0 ||
@@ -1160,8 +1207,32 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
     for(char *p = e; *p; p++) if(*p >= 'A' && *p <= 'Z') *p = (char)(*p + 32);
     snprintf(a->inner, sizeof(a->inner), "%s%s", title_id, e);
   }
+  if(!ps4) return cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
 
-  return cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
+  /* A PS4 folder: the folder with our param.json (and a repaired npbind.dat, if needed) laid over it, as for a dump.
+     The overlay is written only once this job may start, and the worker removes it when it is over. */
+  if(other_job_active(1, err, err_len)) { free(a); return 409; }
+  pthread_mutex_lock(&g_lock);
+  int busy = active_locked();
+  pthread_mutex_unlock(&g_lock);
+  if(busy) { snprintf(err, err_len, "Es läuft schon eine Konvertierung."); free(a); return 409; }
+  snprintf(a->overlay, sizeof(a->overlay), "%s/dump-image/%s", PS5TM_DATA_DIR, title_id);
+  int repaired = 0;
+  if(dimg_write_overlay(source, NULL, a->overlay, &pi, &repaired, err, err_len) != 0) {
+    dimg_remove_overlay(a->overlay);
+    free(a);
+    return 500;
+  }
+  snprintf(a->roots[0], sizeof(a->roots[0]), "%s", source);
+  snprintf(a->roots[1], sizeof(a->roots[1]), "%s", a->overlay);
+  a->nroots = 2;
+  PS5TM_INFO("ps4_image", "PS4-Ordner %s: param.json aus der param.sfo gebaut%s.", title_id,
+             repaired ? ", npbind.dat-Prüfsumme korrigiert" : "");
+  char overlay[256];
+  snprintf(overlay, sizeof(overlay), "%s", a->overlay);
+  int rc = cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
+  if(rc != 200) dimg_remove_overlay(overlay);        /* cv_launch freed a; the worker would have removed it otherwise */
+  return rc;
 }
 
 

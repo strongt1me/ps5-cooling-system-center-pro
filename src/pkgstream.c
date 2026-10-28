@@ -57,7 +57,7 @@
 #define PS_LOG_ODD      6              /* ... and refused or odd ones */
 #define PS_COV_MAX      1024
 #define PS_MAX_SLICES   512
-#define PS_PREFIX       "/stream/install/"
+#define PS_PREFIX       PS5TM_PKGSTREAM_PATH
 
 static struct {
   pthread_mutex_t lock;
@@ -71,6 +71,13 @@ static struct {
   char            name[160], icon_name[160];
   unsigned char  *icon;
   size_t          icon_n;
+  char           *manifest;                       /* the local manifest of an official update, or NULL */
+  size_t          manifest_n;
+  char            manifest_name[160];
+  unsigned char  *crc;                            /* its PlayGo chunk CRC file, or NULL */
+  size_t          crc_n;
+  char            crc_name[160];
+  int             crc_served;                     /* the console asked for the CRC file (it does so at the end) */
   unsigned        conns, peak_conns;
   int             cfd[PS_MAX_CONNS];             /* the connections' sockets, -1 for a free place: stop() shuts them down */
   uint64_t        served, requests, read_errors, last_io_ms;
@@ -151,6 +158,8 @@ ps5tm_pkgstream_stats(ps5tm_pkgstream_stats_t *st) {
   st->conns = g.conns;
   st->peak_conns = g.peak_conns;
   st->idle_ms = g.last_io_ms ? ps5tm_mono_ms() - g.last_io_ms : 0;
+  st->has_crc = g.crc != NULL;
+  st->crc_served = g.crc_served;
   pthread_mutex_unlock(&g.lock);
 }
 
@@ -400,13 +409,38 @@ serve_one(int fd, const req_t *r, rdr_t *rd, unsigned char **buf) {
   if(q) *q = 0;
   int is_pkg = under_prefix(path, g.name);
   int is_icon = !is_pkg && g.icon && g.icon_name[0] && under_prefix(path, g.icon_name);
-  if(!is_pkg && !is_icon) {
+  int is_man = !is_pkg && !is_icon && g.manifest && g.manifest_name[0] && under_prefix(path, g.manifest_name);
+  int is_crc = !is_pkg && !is_icon && !is_man && g.crc && g.crc_name[0] && under_prefix(path, g.crc_name);
+  /* a piece of the manifest: "p/<offset>/<size>/<package name>", those bytes of the package as a file of their own */
+  uint64_t base = 0, piece_n = 0;
+  int is_piece = 0;
+  if(!is_pkg && !is_icon && !is_man && !is_crc && g.manifest &&
+     !strncmp(path, PS_PREFIX PS5TM_PKGSTREAM_PIECE, sizeof(PS_PREFIX PS5TM_PKGSTREAM_PIECE) - 1)) {
+    const char *s = path + sizeof(PS_PREFIX PS5TM_PKGSTREAM_PIECE) - 1;
+    char *e1 = NULL, *e2 = NULL;
+    if(*s >= '0' && *s <= '9') {
+      unsigned long long o = strtoull(s, &e1, 10);
+      if(e1 && *e1 == '/' && e1[1] >= '0' && e1[1] <= '9') {
+        unsigned long long z = strtoull(e1 + 1, &e2, 10);
+        if(e2 && *e2 == '/' && !strcmp(e2 + 1, g.name) && z > 0 && o < g.total && z <= g.total - o) {
+          base = o;
+          piece_n = z;
+          is_piece = 1;
+        }
+      }
+    }
+  }
+  if(!is_pkg && !is_icon && !is_man && !is_crc && !is_piece) {
     LOG_ODD("Server: nach %.80s wurde gefragt, es gibt nur das Paket (und sein Bild): 404.", path);
     send_simple(fd, 404, "Not Found", NULL, keep);
     return keep;
   }
+  int is_data = is_pkg || is_piece;                       /* bytes of the package (counted as covered) */
+  const char *ctype = is_data || is_crc ? "application/octet-stream" : is_man ? "application/json" : "image/png";
+  const char *fname = is_pkg || is_piece ? g.name : is_icon ? g.icon_name : is_man ? g.manifest_name : g.crc_name;
+  const char *what = is_pkg ? "Paket" : is_piece ? "Paketstück" : is_icon ? "Bild" : is_man ? "Paketliste" : "Prüfdatei";
 
-  uint64_t total = is_pkg ? g.total : g.icon_n;
+  uint64_t total = is_pkg ? g.total : is_piece ? piece_n : is_icon ? g.icon_n : is_man ? g.manifest_n : g.crc_n;
   uint64_t a = 0, b = total ? total - 1 : 0;
   int partial = 0;
   if(r->has_range && total) {
@@ -429,30 +463,33 @@ serve_one(int fd, const req_t *r, rdr_t *rd, unsigned char **buf) {
                   "HTTP/1.1 206 Partial Content\r\nDate: %s\r\nLast-Modified: Thu, 01 Jan 2026 00:00:00 GMT\r\n"
                   "Content-Type: %s\r\nAccept-Ranges: bytes\r\nContent-Range: bytes %llu-%llu/%llu\r\n"
                   "Content-Length: %llu\r\nContent-Disposition: attachment; filename=\"%s\"\r\nConnection: %s\r\n\r\n",
-                  date, is_pkg ? "application/octet-stream" : "image/png", (unsigned long long)a, (unsigned long long)b,
-                  (unsigned long long)total, (unsigned long long)n, is_pkg ? g.name : g.icon_name,
+                  date, ctype, (unsigned long long)a, (unsigned long long)b,
+                  (unsigned long long)total, (unsigned long long)n, fname,
                   keep ? "keep-alive" : "close");
   else
     hl = snprintf(head, sizeof(head),
                   "HTTP/1.1 200 OK\r\nDate: %s\r\nLast-Modified: Thu, 01 Jan 2026 00:00:00 GMT\r\n"
                   "Content-Type: %s\r\nAccept-Ranges: bytes\r\nContent-Length: %llu\r\n"
                   "Content-Disposition: attachment; filename=\"%s\"\r\nConnection: %s\r\n\r\n",
-                  date, is_pkg ? "application/octet-stream" : "image/png", (unsigned long long)n,
-                  is_pkg ? g.name : g.icon_name, keep ? "keep-alive" : "close");
+                  date, ctype, (unsigned long long)n, fname, keep ? "keep-alive" : "close");
   if(send_all(fd, head, (size_t)hl) != 0) return 0;
 
   pthread_mutex_lock(&g.lock);
   g.requests++;
   g.last_io_ms = ps5tm_mono_ms();
+  if(is_crc && !head_only) g.crc_served = 1;
   pthread_mutex_unlock(&g.lock);
-  LOG_REQ("Server: %s %s %s %llu Bytes: %d.", r->method, is_pkg ? "Paket" : "Bild",
-          partial ? "Bereich" : "ganz,", (unsigned long long)n, partial ? 206 : 200);
+  if(is_man || is_crc) PS5TM_INFO("pkg_stream_extra", "Server: %s %s %llu Bytes: %d.", r->method, what, (unsigned long long)n, partial ? 206 : 200);
+  else LOG_REQ("Server: %s %s %s %llu Bytes: %d.", r->method, what,
+               partial ? "Bereich" : "ganz,", (unsigned long long)n, partial ? 206 : 200);
   if(head_only || n == 0) return keep;
 
-  if(is_icon) {
-    if(send_all(fd, g.icon + a, (size_t)n) != 0) return 0;
+  if(!is_data) {
+    const unsigned char *src = is_icon ? g.icon : is_man ? (const unsigned char *)g.manifest : g.crc;
+    if(send_all(fd, src + a, (size_t)n) != 0) return 0;
     return keep;
   }
+  a += base;                                              /* a piece: its bytes, at their place in the package */
   if(!*buf) {
     *buf = malloc(PS_CHUNK);
     if(!*buf) return 0;
@@ -629,7 +666,12 @@ ps5tm_pkgstream_start(const ps5tm_pkgstream_cfg_t *cfg, char *err, size_t err_le
   if(!cfg || !cfg->slices || cfg->nslices == 0 || cfg->nslices > PS_MAX_SLICES || !cfg->name || !cfg->name[0] ||
      strlen(cfg->name) >= sizeof(g.name) || strchr(cfg->name, '/') || strchr(cfg->name, '"') ||
      (cfg->icon && (!cfg->icon_name || !cfg->icon_name[0] || strlen(cfg->icon_name) >= sizeof(g.icon_name) ||
-                    strchr(cfg->icon_name, '/') || strchr(cfg->icon_name, '"')))) {
+                    strchr(cfg->icon_name, '/') || strchr(cfg->icon_name, '"'))) ||
+     (cfg->manifest && (!cfg->manifest_n || !cfg->manifest_name || !cfg->manifest_name[0] ||
+                        strlen(cfg->manifest_name) >= sizeof(g.manifest_name) || strchr(cfg->manifest_name, '/') ||
+                        strchr(cfg->manifest_name, '"'))) ||
+     (cfg->crc && (!cfg->manifest || !cfg->crc_n || !cfg->crc_name || !cfg->crc_name[0] || strlen(cfg->crc_name) >= sizeof(g.crc_name) ||
+                   strchr(cfg->crc_name, '/') || strchr(cfg->crc_name, '"')))) {
     snprintf(err, err_len, "Die Angaben zum Bereitstellen des Pakets sind ungültig.");
     return -1;
   }
@@ -650,6 +692,8 @@ ps5tm_pkgstream_start(const ps5tm_pkgstream_cfg_t *cfg, char *err, size_t err_le
   if(g.leaked && g.conns == 0) {                                          /* the stuck connection has ended since: its slices can go */
     free(g.slices); g.slices = NULL;
     free(g.icon); g.icon = NULL;
+    free(g.manifest); g.manifest = NULL;
+    free(g.crc); g.crc = NULL;
     g.nslices = 0;
     g.leaked = 0;
     PS5TM_INFO("pkg_stream_recovered", "Server: die hängende Verbindung der letzten Installation ist zu Ende, es geht wieder.");
@@ -686,9 +730,13 @@ ps5tm_pkgstream_start(const ps5tm_pkgstream_cfg_t *cfg, char *err, size_t err_le
 
   ps5tm_pkgslice_t *sl = malloc(sizeof(*sl) * cfg->nslices);
   unsigned char *icon = cfg->icon && cfg->icon_n ? malloc(cfg->icon_n) : NULL;
-  if(!sl || (cfg->icon && cfg->icon_n && !icon)) {
+  char *man = cfg->manifest ? malloc(cfg->manifest_n) : NULL;
+  unsigned char *crc = cfg->crc ? malloc(cfg->crc_n) : NULL;
+  if(!sl || (cfg->icon && cfg->icon_n && !icon) || (cfg->manifest && !man) || (cfg->crc && !crc)) {
     free(sl);
     free(icon);
+    free(man);
+    free(crc);
     close(fd);
     pthread_mutex_lock(&g.lock);
     g.running = 0;
@@ -698,6 +746,8 @@ ps5tm_pkgstream_start(const ps5tm_pkgstream_cfg_t *cfg, char *err, size_t err_le
   }
   memcpy(sl, cfg->slices, sizeof(*sl) * cfg->nslices);
   if(icon) memcpy(icon, cfg->icon, cfg->icon_n);
+  if(man) memcpy(man, cfg->manifest, cfg->manifest_n);
+  if(crc) memcpy(crc, cfg->crc, cfg->crc_n);
 
   pthread_mutex_lock(&g.lock);
   g.slices = sl;
@@ -707,6 +757,13 @@ ps5tm_pkgstream_start(const ps5tm_pkgstream_cfg_t *cfg, char *err, size_t err_le
   snprintf(g.icon_name, sizeof(g.icon_name), "%s", icon ? cfg->icon_name : "");
   g.icon = icon;
   g.icon_n = icon ? cfg->icon_n : 0;
+  g.manifest = man;
+  g.manifest_n = man ? cfg->manifest_n : 0;
+  snprintf(g.manifest_name, sizeof(g.manifest_name), "%s", man ? cfg->manifest_name : "");
+  g.crc = crc;
+  g.crc_n = crc ? cfg->crc_n : 0;
+  snprintf(g.crc_name, sizeof(g.crc_name), "%s", crc ? cfg->crc_name : "");
+  g.crc_served = 0;
   g.conns = g.peak_conns = 0;
   g.served = g.requests = g.read_errors = g.last_io_ms = 0;
   g.ncov = 0;
@@ -722,14 +779,16 @@ ps5tm_pkgstream_start(const ps5tm_pkgstream_cfg_t *cfg, char *err, size_t err_le
     pthread_mutex_lock(&g.lock);
     free(g.slices); g.slices = NULL;
     free(g.icon); g.icon = NULL;
+    free(g.manifest); g.manifest = NULL;
+    free(g.crc); g.crc = NULL;
     g.nslices = 0;
     g.running = 0;
     pthread_mutex_unlock(&g.lock);
     snprintf(err, err_len, "Der Server für die Installation ließ sich nicht starten.");
     return -1;
   }
-  PS5TM_INFO("pkg_stream_up", "Server läuft auf 127.0.0.1:%d: %llu Bytes in %u Teilen%s.", port, (unsigned long long)cfg->total,
-             cfg->nslices, icon ? ", mit Bild" : "");
+  PS5TM_INFO("pkg_stream_up", "Server läuft auf 127.0.0.1:%d: %llu Bytes in %u Teilen%s%s%s.", port, (unsigned long long)cfg->total,
+             cfg->nslices, icon ? ", mit Bild" : "", man ? ", mit Paketliste" : "", crc ? " und Prüfdatei" : "");
   return 0;
 }
 
@@ -771,6 +830,8 @@ ps5tm_pkgstream_stop(void) {
   } else {
     free(g.slices); g.slices = NULL;
     free(g.icon); g.icon = NULL;
+    free(g.manifest); g.manifest = NULL;
+    free(g.crc); g.crc = NULL;
     g.nslices = 0;
   }
   g.running = 0;

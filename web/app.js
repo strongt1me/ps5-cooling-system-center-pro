@@ -1158,39 +1158,13 @@
     }
   };
 
-  /* Rückfrage im Knopf statt confirm().
-   *
-   * Native Dialoge sind hier nicht verlässlich: der Browser des Users
-   * beantwortet sie stillschweigend mit Nein, und ein abgelehnter Dialog ist
-   * von einem toten Knopf nicht zu unterscheiden — beim Profilbild hat genau
-   * das eine Fehlersuche gekostet. Zwei Klicks auf denselben Knopf sind
-   * ebenso eindeutig, sichtbar, und lassen sich nicht unterdrücken.
-   *
-   * `warn` wird beim Bewaffnen als Hinweis gezeigt, damit die Folge genannt
-   * ist, bevor sie eintritt. Nach zehn Sekunden entschärft sich der Knopf
-   * von selbst.
-   *
-   * `holdMs`: so lange nach dem ersten Klick bleibt ein zweiter wirkungslos.
-   * Ein Doppelklick wäre sonst Bewaffnen und Bestätigen in einem, ehe jemand
-   * den Hinweis lesen konnte (bei „Ausschalten“ nicht harmlos). */
-  const armConfirm = (btn, armedLabel, run, warn, holdMs = 800) => {      /* 800 ms for every caller: a double click is not a "yes" */
-    const label = btn.textContent;
-    let timer = 0, armedAt = 0;
-    /* data-armed lässt ein Stylesheet den bereiten Zustand zeigen (die Kopfzeilenknöpfe tun es). */
-    const disarm = () => { clearTimeout(timer); timer = 0; btn.textContent = label; delete btn.dataset.armed; };
-
+  /* One click runs the action (wish of the user, 27.10.2026: nothing needs a second confirmation). While it runs the
+     button is disabled, so a double click does not start it twice. */
+  const oneClick = (btn, run) => {
     btn.addEventListener("click", async () => {
-      if (!timer) {
-        btn.textContent = armedLabel;
-        btn.dataset.armed = "1";
-        if (warn) toast(warn);
-        timer = setTimeout(disarm, 10000);
-        armedAt = performance.now();
-        return;
-      }
-      if (performance.now() - armedAt < holdMs) return;
-      disarm();
-      await run();
+      if (btn.dataset.running) return;
+      btn.dataset.running = "1";
+      try { await run(); } finally { delete btn.dataset.running; }
     });
   };
 
@@ -2352,15 +2326,14 @@
       : `<p class="muted">Keine weiteren Zusatzprogramme gefunden.</p>`;
 
     $$("#pl-list [data-kill]").forEach((b) =>
-      armConfirm(b, "Wirklich? Nochmal klicken", async () => {
+      oneClick(b, async () => {
         try {
           await api("/api/v1/payloads/kill", { method: "POST",
             body: JSON.stringify({ pid: Number(b.dataset.kill) }) });
           toast(`${b.dataset.name} beendet.`);
           loadPayloads(true);
         } catch (e) { toast(e.message, "error"); }
-      }, `${b.dataset.name} wird sofort angehalten — alles, was dieses Programm `
-       + `noch nicht gespeichert hat, geht verloren.`));
+      }));
   };
 
   /* Gespeicherte Payloads und USB-Speicher */
@@ -2379,7 +2352,7 @@
       line: plFileLine(`${dir}/${f.name}`, f),
       actions:
         `<button class="btn primary pl-act" data-pl-start data-src="internal" data-name="${esc(f.name)}"${f.valid ? "" : " disabled"}>${PL_SVG.play}Starten</button>`
-        + `<button class="pl-trash" data-pl-del data-name="${esc(f.name)}" title="Aus dem Ordner löschen" aria-label="${esc(f.name)} löschen">${PL_SVG.trash}<span class="pl-trash-ask">Wirklich löschen?</span></button>`
+        + `<button class="pl-trash" data-pl-del data-name="${esc(f.name)}" title="Aus dem Ordner löschen" aria-label="${esc(f.name)} löschen">${PL_SVG.trash}</button>`
     })).join("")
       : `<p class="muted">${d.dir_exists === false
           ? "Den Ordner gibt es gerade nicht — die App legt ihn beim nächsten Start an."
@@ -2412,33 +2385,14 @@
     }).join("")
       : `<p class="muted">Kein USB-Speicher gefunden. Stick einstecken und „Aktualisieren" drücken.</p>`;
 
-    /* Zwei Klicks wie bei armConfirm(), aber der Knopf zeigt ein Symbol: Dessen
-       Beschriftung würde armConfirm() beim Entschärfen durch Leere ersetzen.
-       Hier zeigt die Klasse „armed" den Fragetext, und er verschwindet von
-       selbst nach acht Sekunden. */
-    $$("#pl-stored [data-pl-del]").forEach((b) => {
-      let timer = 0;
-      const disarm = () => {
-        clearTimeout(timer);
-        timer = 0;
-        b.classList.remove("armed");
-        b.title = "Aus dem Ordner löschen";
-      };
-      b.addEventListener("click", async () => {
-        if (!timer) {
-          b.classList.add("armed");
-          b.title = "Noch einmal klicken, um zu löschen";
-          timer = setTimeout(disarm, 8000);
-          return;
-        }
-        disarm();
+    $$("#pl-stored [data-pl-del]").forEach((b) =>
+      oneClick(b, async () => {
         try {
           await plPost("delete", { name: b.dataset.name });
           toast(`„${b.dataset.name}" gelöscht.`);
           await loadPayloadFiles(true);
         } catch (e) { toast(e.message, "error"); }
-      });
-    });
+      }));
   };
 
   const loadPayloadFiles = async (force) => {
@@ -2492,8 +2446,11 @@
       if (r.message) toast(r.message);
       return true;
     } catch (e) {
-      /* ein fremdes File gleichen Namens: der zweite Klick ersetzt es */
-      if (e.code === "paystore_conflict" && body.action === "install") ps.force = body.id;
+      /* a foreign file of the same name: replaced in the same click (nothing needs a second confirmation) */
+      if (e.code === "paystore_conflict" && body.action === "install" && !body.force) {
+        toast("Eine Datei gleichen Namens lag schon im Ordner; sie wird ersetzt.");
+        return psPost({ ...body, force: true });
+      }
       toast(e.message, "error");
       return false;
     } finally {
@@ -2559,9 +2516,9 @@
       const line = [psCat(i.category), i.last_update ? `vom ${i.last_update}` : "", i.filename].filter(Boolean).join(" · ");
       const acts = (ins ? `<button class="btn pl-act" data-ps-start="${esc(i.id)}">${PL_SVG.play}Starten</button>` : "")
         + (!ins || i.update
-          ? `<button class="btn ${ins ? "primary " : ""}pl-act" data-ps-install="${esc(i.id)}"${any ? " disabled" : ""}>${busy ? "lädt …" : ps.force === i.id ? "Ersetzen" : ins ? "Aktualisieren" : "Herunterladen"}</button>`
+          ? `<button class="btn ${ins ? "primary " : ""}pl-act" data-ps-install="${esc(i.id)}"${any ? " disabled" : ""}>${busy ? "lädt …" : ins ? "Aktualisieren" : "Herunterladen"}</button>`
           : "")
-        + (ins ? `<button class="pl-trash" data-ps-del="${esc(i.id)}" title="Aus dem Ordner löschen" aria-label="${esc(i.name)} löschen"${busy ? " disabled" : ""}>${PL_SVG.trash}<span class="pl-trash-ask">Wirklich löschen?</span></button>` : "");
+        + (ins ? `<button class="pl-trash" data-ps-del="${esc(i.id)}" title="Aus dem Ordner löschen" aria-label="${esc(i.name)} löschen"${busy ? " disabled" : ""}>${PL_SVG.trash}</button>` : "");
       return `<div class="pl-card ps-card${i.update ? " ps-upd" : ""}${ins ? " ps-mine" : ""}">
         <div class="pl-ico ps-ico" aria-hidden="true">${esc((i.name.match(/[A-Za-z0-9]/g) || ["?"]).slice(0, 2).join("").toUpperCase())}</div>
         <div class="pl-info">
@@ -2592,18 +2549,12 @@
     const ins = e.target.closest("[data-ps-install]"), st = e.target.closest("[data-ps-start]"), del = e.target.closest("[data-ps-del]");
     if (ins && !ins.disabled) {
       const body = { action: "install", id: ins.dataset.psInstall };
-      if (ps.force === body.id) { body.force = true; ps.force = ""; }
       ins.disabled = true;
       await psPost(body);
     } else if (st) {
       await psPost({ action: "start", id: st.dataset.psStart });
     } else if (del && !del.disabled) {
-      /* zwei Klicks wie bei den gespeicherten Payloads */
-      if (!del.classList.contains("armed")) {
-        del.classList.add("armed");
-        setTimeout(() => del.classList.remove("armed"), 8000);
-        return;
-      }
+      del.disabled = true;
       await psPost({ action: "delete", id: del.dataset.psDel });
     }
   });
@@ -3716,7 +3667,7 @@
 
     /* Ein gewähltes Bild — aus einer Datei oder aus der eingebauten Auswahl —
        wird immer auf dieselbe Weise übernommen: Vorschau, vier Größen,
-       Sicherung, zweiter Klick. Einen zweiten Weg zur Konsole gibt es nicht. */
+       Sicherung. Einen zweiten Weg zur Konsole gibt es nicht. */
     const adopt = (bmp, what) => {
       state.avImg = bmp;
       hasStagePack = false;
@@ -3812,43 +3763,13 @@
       if (btn && gallery.contains(btn)) pickBuiltin(btn);
     });
 
-    /* Die Rückfrage steckt im Knopf, nicht in einem confirm().
-     *
-     * Der native Dialog ist die einzige Stelle im ganzen Ablauf, die
-     * außerhalb unserer Kontrolle liegt: Browser unterdrücken ihn — etwa
-     * wenn jemand einmal „weitere Dialoge verhindern" angehakt hat — und
-     * liefern dann stillschweigend `false`. Auf der Konsole des Users war
-     * genau das der Fall, und weil der Abbruchpfad zuerst schwieg, sah es
-     * nach einem toten Knopf aus. Zwei Klicks auf denselben Knopf sind
-     * genauso eindeutig und können nicht unterdrückt werden. */
-    const APPLY_LABEL = "Profilbild übernehmen";
-    let armTimer = 0;
-
-    const disarm = () => {
-      clearTimeout(armTimer);
-      armTimer = 0;
-      apply.textContent = APPLY_LABEL;
-    };
-
+    /* One click (nothing needs a second confirmation); the previous picture is backed up first and
+       „Vorheriges zurückholen“ brings it back. */
     apply.addEventListener("click", async () => {
       if (!state.avImg && !hasStagePack) {
         say("Erst ein Bild auswählen.", true);
         return;
       }
-
-      if (!armTimer) {
-        apply.textContent = "Wirklich ersetzen? Nochmal klicken";
-        say("Das bisherige Bild wird vorher gesichert und lässt sich mit "
-            + "„Vorheriges zurückholen“ wiederherstellen. Zum Bestätigen "
-            + "noch einmal klicken.");
-        armTimer = setTimeout(() => {
-          disarm();
-          say("Rückfrage abgelaufen — es wurde nichts geändert.");
-        }, 10000);
-        return;
-      }
-      disarm();
-
       apply.disabled = true;
       try {
         if (state.avImg) {
@@ -3871,22 +3792,7 @@
       }
     });
 
-    const RESTORE_LABEL = "Vorheriges zurückholen";
-    let restoreTimer = 0;
-
     if (restore) restore.addEventListener("click", async () => {
-      if (!restoreTimer) {
-        restore.textContent = "Sicherung zurückspielen? Nochmal klicken";
-        restoreTimer = setTimeout(() => {
-          restoreTimer = 0;
-          restore.textContent = RESTORE_LABEL;
-        }, 10000);
-        return;
-      }
-      clearTimeout(restoreTimer);
-      restoreTimer = 0;
-      restore.textContent = RESTORE_LABEL;
-
       restore.disabled = true;
       try {
         say("Sicherung wird zurückgespielt …");
@@ -3912,35 +3818,25 @@
 
   /* ── Power-Optionen ─────────────────────────────────────────────── */
 
-  /* Jeder dieser Befehle unterbricht, was gerade läuft, deshalb wird immer
-     gefragt — und die Frage benennt die Folge, nicht nur die Aktion. Sie
-     läuft über armConfirm(): der native Dialog wurde auf dieser Konsole
-     unterdrückt und machte alle vier Knöpfe wirkungslos. */
+  /* One click each (wish of the user: nothing needs a second confirmation). */
   const POWER_ACTIONS = {
-    "#pw-standby": ["standby", "Ruhemodus",
-      "Die Konsole geht in den Ruhemodus. Ein laufendes Spiel wird pausiert."],
-    "#pw-reboot": ["reboot", "Neustart",
-      "Die Konsole startet neu. Nicht gespeicherte Spielstände gehen verloren."],
-    "#pw-off": ["off", "Ausschalten",
-      "Die Konsole wird ausgeschaltet. Nicht gespeicherte Spielstände gehen verloren."],
-    "#pw-safe": ["safemode", "Abgesicherter Modus",
-      "Die Konsole startet neu und bleibt im Menü des abgesicherten Modus " +
-      "stehen. Von dort führt „PS5 neu starten“ ganz normal zurück — es wird " +
-      "nichts gelöscht."]
+    "#pw-standby": "standby",
+    "#pw-reboot": "reboot",
+    "#pw-off": "off",
+    "#pw-safe": "safemode"
   };
 
   const wirePower = () => {
-    Object.entries(POWER_ACTIONS).forEach(([sel, [action, , warn]]) => {
+    Object.entries(POWER_ACTIONS).forEach(([sel, action]) => {
       const el = $(sel);
       if (!el) return;
-      /* In der Kopfzeile ist wenig Platz: das Etikett bleibt kurz, die Folge nennt der Hinweis. */
-      armConfirm(el, "Wirklich? Nochmal klicken", async () => {
+      oneClick(el, async () => {
         try {
           const r = await api("/api/v1/power", { method: "POST",
             body: JSON.stringify({ action }) });
           toast(r.message || "Befehl angenommen.");
         } catch (e) { toast(e.message, "error"); }
-      }, warn, 800);
+      });
     });
   };
 
@@ -5206,24 +5102,6 @@
     if (closing) setTimeout(() => { if (o.isConnected) o.innerHTML = box(circle); }, 6000);
   };
 
-  /* Ein Hinweis ohne Knopf (Wunsch vom 03.10.2026), als Overlay wie
-     gmShowStarted: Er schließt sich nach `ms` von selbst, ein Tipp darauf
-     schließt ihn sofort. Namen gehen durch esc(): Sie stammen aus den
-     Metadaten der Spiele. */
-  const gmNotice = (title, text, ms = 5000) => {
-    const o = document.createElement("div");
-    o.className = "gm-overlay";
-    o.innerHTML = `<div class="gm-overlay-box" role="alertdialog" aria-live="assertive">
-        <b>${esc(title)}</b>
-        <p>${esc(text)}</p>
-      </div>`;
-    let timer = 0;
-    const done = () => { clearTimeout(timer); o.remove(); };
-    timer = setTimeout(done, ms);
-    o.addEventListener("click", done);
-    document.body.appendChild(o);
-  };
-
   /* Das Beenden läuft auf der Konsole weiter, auch wenn diese Seite dabei
      verschwindet (im PS5-Browser schließt der Start den Browser). Solange sie
      da ist, fragt sie nach, wie es ausging. `next`: das Spiel, das danach
@@ -5261,12 +5139,17 @@
     if (btn) setTimeout(() => { btn.disabled = false; }, 2000);
   };
 
-  const gmLaunch = async (id, btn) => {
+  const gmLaunch = async (id, btn, close) => {
     const g = gm.list.find((x) => x.title_id === id);
     const name = g ? g.name : id;
     btn.disabled = true;
     try {
-      const r = await api("/api/v1/library/launch", { method: "POST", body: JSON.stringify({ id }) });
+      const r = await api("/api/v1/library/launch", { method: "POST", body: JSON.stringify(close ? { id, close: close.id } : { id }) });
+      if (r.state === "closing") {
+        toast(`„${close.name}“ wird geschlossen, danach startet „${name}“.`);
+        setTimeout(() => { btn.disabled = false; }, 3000);
+        return;
+      }
       if (r.already_starting) {
         toast(`„${name}“ startet bereits. Bitte einen Moment warten.`);
         setTimeout(() => { btn.disabled = false; }, 3000);
@@ -5287,18 +5170,11 @@
           ? `Es läuft noch ein anderes Spiel. Auf der PS5 „Starten“ wählen, die Konsole fragt vor dem Schließen nach.`
           : `„${name}“: Meldung an die PS5 geschickt. Dort oben rechts „Starten“ wählen.`);
     } catch (e) {
-      if (e.code === "other_running" && e.data && e.data.running) {
-        /* Nur ein Hinweis, kein Knopf, nach 5 s wieder weg (Wunsch vom
-           03.10.2026). Beendet wird ausdrücklich über „Spiel beenden“ — auf der
-           Karte des laufenden Spiels oder bei „Läuft gerade“ —, gestartet
-           danach mit einem eigenen Tipp auf „Starten“. */
+      if (e.code === "other_running" && e.data && e.data.running && e.data.running.id && !close) {
+        /* Nichts muss doppelt bestätigt werden (Wunsch vom 27.10.2026): „Starten“ schließt das laufende Spiel und
+           startet das neue in einem Zug – die Konsole tut das nur, wenn die Anfrage genau dieses Spiel nennt (close). */
         const run = e.data.running;
-        gm.wanted = { id, name, at: Date.now() };
-        gmNotice(`„${run.name}“ läuft noch`,
-          `Bevor „${name}“ starten kann, beende „${run.name}“ zuerst mit „Spiel beenden“ `
-          + `(auf seiner Karte oder bei „Läuft gerade“). Achtung: Das Spiel wird sofort `
-          + `geschlossen und speichert vorher nicht – was du darin nicht selbst gespeichert `
-          + `hast, geht verloren.`);
+        return gmLaunch(id, btn, { id: run.id, name: run.name || run.id });
       } else {
         toast(e.message, "error");
       }
@@ -5572,7 +5448,10 @@
      auch aus seiner eigenen Oberfläche, bleiben deshalb weg. */
   const gmName = (id) => { const g = gm.list.find((x) => x.title_id === id); return g ? g.name : id; };
   const mvVerb = (op) => ({ move: "Verschieben", unpack: "Entpacken", copy: "Kopieren",
-                           delete: "Löschen" }[op] || op || "Auftrag");
+                           delete: "Löschen", install: "Installieren" }[op] || op || "Auftrag");
+  /* since 1.7beta8 ShadowMountPlus also reports its own installs here, a PKG or a source folder/image without a title id */
+  const mvName = (j) => j.title_id ? gmName(j.title_id)
+    : (j.title_name || j.name || String(j.source || "").split("/").pop() || "Paket");
   const jobBanner = () => {
     const b = $("#gm-copy-banner");
     if (!b) return;
@@ -5590,7 +5469,7 @@
       live = true; kind = "convert";
     } else if (m && m.active) {
       const pct = Math.floor(Number(m.progress_percent) || 0);
-      label = `ShadowMountPlus · ${mvVerb(m.operation)}: „${gmName(m.title_id)}“ · ${pct} %`;
+      label = `ShadowMountPlus · ${mvVerb(m.operation)}: „${mvName(m)}“ · ${pct} %`;
       live = true; kind = "store";
     } else if (c && c.active) {
       /* written and read back count together, as in the dialog */
@@ -5600,7 +5479,7 @@
       live = true; kind = "copy";
     } else if (m) {
       label = `ShadowMountPlus · ${mvVerb(m.operation)} ${m.state === "completed" ? "fertig"
-        : m.state === "failed" ? "gescheitert" : "abgebrochen"}: „${gmName(m.title_id)}“`;
+        : m.state === "failed" ? "gescheitert" : "abgebrochen"}: „${mvName(m)}“`;
       kind = "store";
       outcome = m.state === "completed" ? "done" : m.state === "failed" ? "failed" : "aborted";
     } else if (k) {
@@ -5785,7 +5664,7 @@
     const body = $("#cp-body");
     if (!j || !body) return;
     cp.view = "mvjob";
-    txt("#cp-title", `„${gmName(j.title_id)}“ · ${mvVerb(j.operation)}`);
+    txt("#cp-title", `„${mvName(j)}“ · ${mvVerb(j.operation)}`);
     const pct = Math.max(0, Math.min(100, Math.floor(Number(j.progress_percent) || 0)));
     const route = `<p class="cp-dest"><span class="muted">Von</span> <code>${esc(j.source || "")}</code>
         <span class="muted">nach</span> <code>${esc(j.destination || "")}</code></p>`;
@@ -5975,7 +5854,7 @@
         <span class="cp-choice-text"><b>${esc(CV_OPS[op].t)}${op === "ffpfsc" && p.kind === "folder" ? " (empfohlen)" : ""}</b>
           <span class="muted">${esc(CV_OPS[op].d(p))}</span>
           ${off ? `<span class="cp-why">Bei diesem Spiel nicht möglich: ${esc(p.ffpkg_error)}</span>` : ""}
-          ${op === "ffpfsc" && cvStreamReasons(p).length ? `<span class="cp-why">Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder Texture-Streaming). Die App fragt beim Start noch einmal.</span>` : ""}</span></label>`;
+          ${op === "ffpfsc" && cvStreamReasons(p).length ? `<span class="cp-why">Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder Texture-Streaming): ein komprimiertes Abbild muss beim Spielen ständig entpackt werden.</span>` : ""}</span></label>`;
     }).join("")
       + (g && g.can_unpack ? `<label class="cp-choice">
         <input type="radio" name="cv-op" value="unpack">
@@ -6007,9 +5886,14 @@
           ? `${cpFiles(p.files)}, als exFAT-Abbild ${bytes(p.raw_bytes)}`
           : bytes(p.raw_bytes)}</span></p>
 
+      ${p.ps4 ? `<div class="cp-warn"><b>PS4-Spiel</b>: ShadowMountPlus bindet PS4-Abbilder ab Version 1.7beta8 ein,
+          in allen drei Formaten. Die App legt eine <code>param.json</code> aus der <code>param.sfo</code> mit ins Abbild,
+          damit auch ältere Versionen es finden. Ziel ist nur ein USB- oder M.2-Laufwerk: Ein PS4-Titel aus dem Speicher
+          der Konsole bringt sie zum Absturz. Trophäen werden bei PS4-Spielen aus Abbildern nicht registriert, und manche
+          Titel bleiben im Ladebildschirm hängen.</div>` : ""}
       <h4 class="cp-step">1. Was soll entstehen?</h4>
       <div class="cp-list">${ops}</div>
-      ${p.kind === "folder" ? `<label class="cp-choice cv-ampr">
+      ${p.kind === "folder" && !p.ps4 ? `<label class="cp-choice cv-ampr">
         <input type="checkbox" name="cv-ampr" ${cv.ampr ? "checked" : ""}>
         <span class="cp-choice-text"><b>AMPR-Index vorher bauen</b>
           <span class="muted">Für Spiele mit APR-EMU: legt <code>ampr_emu.index</code> (die Liste aller Dateien) in den Ordner,
@@ -6038,7 +5922,9 @@
           startet.</div>` : ""}
 
       <h4 class="cp-step">3. Wohin?</h4>
-      <div class="cp-list">${drives || `<p class="muted">Kein Laufwerk gefunden.</p>`}</div>
+      <div class="cp-list">${drives || (p.ps4
+        ? `<p class="muted">Kein USB- oder M.2-Laufwerk gefunden. Ein PS4-Abbild darf nicht in den Speicher der Konsole.</p>`
+        : `<p class="muted">Kein Laufwerk gefunden.</p>`)}</div>
 
       ${target ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[cv.op] || cv.op)}</b></p>
         <p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(target)}</code>
@@ -6155,16 +6041,12 @@
 
   const cvStart = async (btn) => {
     if (cp.view === "cvdump") { dimgStart(btn); return; }
-    const why = cv.op === "ffpfsc" ? cvStreamReasons(cv.plan) : [];
-    if (why.length && !confirm([`Bei „${cv.plan.name}“ sind Ruckler möglich, wenn es als komprimiertes Abbild (ffpfsc) gepackt wird:`, "",
-        ...why.map((w) => `• ${w}`), "",
-        "Die Konsole muss ein komprimiertes Abbild beim Spielen ständig entpacken. Spiele mit vielen Daten oder Texture-Streaming können dadurch ruckeln.", "",
-        "Trotzdem in das Format ffpfsc umwandeln?"].join("\n"))) return;
+    /* The stream-risk warning stands in the dialog beside ffpfsc; no second question (nothing needs a second confirmation). */
     btn.disabled = true;
     try {
       cv.job = await api("/api/v1/library/convert", { method: "POST",
         body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode,
-                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && cv.ampr) }) });
+                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr) }) });
       cvRenderJob();
       jobBanner();
       cv.timer = setTimeout(cvPoll, 1000);
@@ -6298,14 +6180,14 @@
     }
     box.disabled = false;
   });
-  armConfirm($("#gm-cache-clear"), "Wirklich leeren? Nochmal klicken", async () => {
+  oneClick($("#gm-cache-clear"), async () => {
     try {
       const r = await api("/api/v1/library/cache/clear", { method: "POST" });
       toast(r.titles ? `${num(r.titles)} ${r.titles === 1 ? "Spiel" : "Spiele"} aus dem Ordner entfernt (${bytes(r.bytes)}).`
                      : "Es gab nichts zu löschen.");
       loadGames();                       /* ist der Schalter an, füllt sich der Ordner mit dieser Liste neu */
     } catch (e) { toast(e.message, "error"); }
-  }, "Alles im Ordner covers_and_more wird gelöscht. Ihre Spiele bleiben unberührt. Zum Bestätigen noch einmal klicken.");
+  });
 
   /* Infos-Fenster: eines für alle Karten, fest über der Seite. Es sitzt über dem
      Knopf (oder darunter, wenn oben kein Platz ist) und folgt ihm beim Scrollen;
@@ -6429,9 +6311,8 @@
    * Dasselbe Spiel in zwei Abbildern lässt ShadowMountPlus zwischen ihnen hin und her
    * wechseln. Die Konsole sucht die Abbilder (dupimg.c); die Karte erscheint nur, wenn es
    * doppelte oder beiseitegelegte gibt. Gesucht wird beim ersten Öffnen und mit „Neu suchen“,
-   * nicht im Takt. Deaktivieren und Aktivieren wollen zwei Klicks wie die anderen
-   * Knöpfe, die etwas verändern. */
-  const dup = { data: null, busy: false, armed: "", armTimer: 0, armedAt: 0, loaded: false };
+   * nicht im Takt. Deaktivieren und Aktivieren wirken beim ersten Klick. */
+  const dup = { data: null, busy: false, loaded: false };
 
   const dupSetOpen = (open) => {
     $("#dup-card").classList.toggle("dup-open", open);
@@ -6452,11 +6333,9 @@
       card.classList.toggle("dup-open", open);
     }
     txt("#dup-sub", groups.length ? `${groups.length} Spiel(e) in mehr als einer Quelle` : "keine doppelten Abbilder");
-    const btn = (path, undo, label, disabled, why) => {
-      const armed = dup.armed === path;
-      return `<button type="button" class="btn${armed ? " danger" : " ghost"}" data-dup-path="${esc(path)}" data-dup-undo="${undo ? 1 : 0}"
-        ${disabled ? `disabled title="${esc(why)}"` : ""}>${armed ? "Wirklich? Nochmal klicken" : label}</button>`;
-    };
+    const btn = (path, undo, label, disabled, why) =>
+      `<button type="button" class="btn ghost" data-dup-path="${esc(path)}" data-dup-undo="${undo ? 1 : 0}"
+        ${disabled ? `disabled title="${esc(why)}"` : ""}>${label}</button>`;
     const rows = groups.map((g) => `<div class="dup-group"><b>${esc(g.name || g.title_id)} <span class="muted">${esc(g.title_id)}</span></b>
       ${g.sources.map((s) => `<div class="dup-src"><div><code>${esc(s.path)}</code>
           <span>${s.folder ? `<span class="badge quiet">Ordner</span>` : `<span class="badge quiet">${esc(bytes(s.size))}</span>`}${s.smp_uses ? `<span class="badge ok">nimmt ShadowMountPlus gerade</span>` : ""}${s.mounted ? `<span class="badge warn">eingehängt</span>` : ""}</span></div>
@@ -6496,16 +6375,7 @@
     const b = e.target.closest("[data-dup-path]");
     if (!b || b.disabled) return;
     const path = b.dataset.dupPath, undo = b.dataset.dupUndo === "1";
-    clearTimeout(dup.armTimer);
-    if (dup.armed !== path) {
-      dup.armed = path;
-      dup.armedAt = performance.now();
-      dup.armTimer = setTimeout(() => { dup.armed = ""; dupRender(); }, 10000);
-      dupRender();
-      return;
-    }
-    if (performance.now() - dup.armedAt < 800) return;                      /* ein Doppelklick ist kein „Ja“ */
-    dup.armed = "";
+    b.disabled = true;
     try {
       const r = await api("/api/v1/library/duplicates", { method: "POST", body: JSON.stringify({ path, undo }) });
       if (r.message) toast(r.message);
@@ -6854,7 +6724,7 @@
   /* ── PS4 von USB (ps4m_core.c, 14.10.2026) ──────────────────────────
    * PS4Mount von gasb07 (GPL-3.0) in der App: PS4-Fake-PKGs vom USB-Laufwerk ohne Installation. Die Seite zeigt die Liste, schaltet
    * den Dienst ein und aus, löst eine Suche aus, nimmt Spiele aus der Bibliothek und wieder hinein und speichert die Einstellungen. */
-  const p4m = { data: null, timer: 0, busy: false, sel: new Set(), armed: "", armTimer: 0 };
+  const p4m = { data: null, timer: 0, busy: false, sel: new Set() };
   const P4M_STATE = {
     ready: ["ok", "Bereit"], running: ["ok", "Läuft"], pending: ["warn", "Wird hinzugefügt"],
     removed: ["", "Aus der Bibliothek entfernt"], internal: ["", "Auf der Konsole installiert"],
@@ -6873,7 +6743,7 @@
   const p4mPickButtons = () => {
     const b = $("#p4m-restore-sel");
     b.disabled = !(p4m.data && p4m.data.running) || !p4m.sel.size;
-    if (!b.dataset.armed) b.textContent = p4m.sel.size > 1 ? `${p4m.sel.size} Spiele zurückverschieben` : "Ausgewählte zurückverschieben";
+    b.textContent = p4m.sel.size > 1 ? `${p4m.sel.size} Spiele zurückverschieben` : "Ausgewählte zurückverschieben";
   };
 
   const p4mRender = () => {
@@ -6903,10 +6773,9 @@
         : (g.state === "ready" || g.state === "pending")
           ? `<button type="button" class="btn ghost" data-p4m="remove" data-id="${esc(g.title_id)}">Aus Bibliothek entfernen</button>` : "";
       /* PS4Mount 0.5.0: die PKGs dorthin zurück, woher sie kamen; nicht bei Spielen, die fest auf der Konsole installiert sind */
-      const armed = p4m.armed === g.title_id;
       const back = g.state !== "internal"
-        ? `<button type="button" class="btn ${armed ? "danger" : "ghost"}" data-p4m-back="${esc(g.title_id)}" ${armed ? 'data-armed="1"' : ""}
-            title="Spiel, Update und Zusatzinhalte gehen an ihren alten Ort zurück; das Spiel verlässt die Bibliothek. Ein laufendes Spiel wird vorher geschlossen.">${armed ? "Wirklich? Nochmal klicken" : "Zurückverschieben"}</button>` : "";
+        ? `<button type="button" class="btn ghost" data-p4m-back="${esc(g.title_id)}"
+            title="Spiel, Update und Zusatzinhalte gehen an ihren alten Ort zurück; das Spiel verlässt die Bibliothek. Ein laufendes Spiel wird vorher geschlossen.">Zurückverschieben</button>` : "";
       /* PS4Mount 0.7.0: welches Update benutzt wird bzw. welche Zusatzinhalte an sind, nur wenn es etwas zu wählen gibt */
       const upd = g.updates > 1
         ? `<button type="button" class="btn ghost" data-p4mg="upd" data-id="${esc(g.title_id)}" data-name="${esc(g.name)}">Updates</button>` : "";
@@ -7205,7 +7074,7 @@
   $("#gm-pane-disc").addEventListener("click", (e) => {
     const del = e.target.closest("[data-disc-del]");
     if (del) {
-      if (confirm(`„${del.dataset.discDel}“ wirklich löschen?`)) discPost({ action: "delete", name: del.dataset.discDel });
+      discPost({ action: "delete", name: del.dataset.discDel });
       return;
     }
     const b = e.target.closest("[data-disc-act]");
@@ -7218,7 +7087,7 @@
    * /api/v1/updates (updates.c): jedes Spiel mit seiner Version, dem Update, das hier läuft, und dem Stand des Downloads.
    * Geladen wird nur nach einem Klick; der laufende Download erscheint oben mit Fortschritt. Pakete kommen nur von den Update-Servern; die Versionslisten der Verlaufsseiten
    * werden nur nach einem Klick geholt, ein eingefügter Link wird zur Paketliste des offiziellen Servers umgebaut. */
-  const upd = { data: null, timer: 0, f: "", armed: "", armTimer: 0, armedAt: 0, pkgs: null, sig: "", diag: null, ver: null, qr: "" };
+  const upd = { data: null, timer: 0, f: "", pkgs: null, sig: "", diag: null, ver: null, qr: "" };
   const UPD_ST = {
     update: ["warn", "Update verfügbar"], current: ["ok", "aktuell"], unchecked: ["", "noch nicht geprüft"], check_failed: ["warn", "Prüfung gescheitert"],
     needs_newer_fw: ["warn", "neuester Patch braucht neuere Firmware"], update_old_fw: ["warn", "älterer Patch passt"], queued: ["", "wartet"], downloading: ["", "wird geladen"], paused: ["warn", "angehalten"],
@@ -7229,10 +7098,8 @@
   const updGroup = (t) => t.status === "update" || ["queued", "downloading", "paused", "verifying", "ready", "installing", "failed"].includes(t.status) ? "update"
     : t.status === "needs_newer_fw" || t.status === "update_old_fw" ? "oldfw" : "other";
 
-  const updBtn = (act, tid, label, cls) => {
-    const armed = upd.armed === act + ":" + tid;
-    return `<button type="button" class="btn ${armed ? "danger" : cls || "ghost"}" data-upd-act="${esc(act)}" data-upd-id="${esc(tid)}">${armed ? "Wirklich? Nochmal klicken" : esc(label)}</button>`;
-  };
+  const updBtn = (act, tid, label, cls) =>
+    `<button type="button" class="btn ${cls || "ghost"}" data-upd-act="${esc(act)}" data-upd-id="${esc(tid)}">${esc(label)}</button>`;
 
   const updDiagText = (d) => d.data ? [`Diagnose ${d.data.title_id} ${d.data.name} (Version ${d.data.version || "?"})`,
     `Firmware ${d.data.firmware}, App ${d.data.app_version}, Ordner: ${d.data.folder}`,
@@ -7253,9 +7120,45 @@
    * Link der gewählten Version einzufügen. Geladen wird das Paket immer von den offiziellen Update-Servern. */
   const UPD_VST = { ok: "wählbar", installed: "installiert", older: "älter als installiert", needs_fw: "braucht neuere Firmware" };
   const updPage = (id) => `https://${id.startsWith("CUSA") ? "orbispatches.com" : "prosperopatches.com"}/${id}`;
+  /* Bereich „Versionen“ (nach PatchDL 0.3.6–0.3.8): installierte Version und Grundversion, das geladene Paket, ob beide
+   * zusammenpassen, und die Neuinstallation (Neu installieren, Downgrade) – ein Klick; den Namen, den die Konsole zur
+   * Sicherheit verlangt, schickt die Seite selbst mit (nichts muss doppelt bestätigt werden). */
+  const updFitPanel = (v) => {
+    const f = v.fit;
+    if (v.fitBusy) return `<p class="muted upd-hint">Die Versionen werden gelesen …</p>`;
+    if (v.fitErr) return `<p class="muted upd-hint cp-why">${esc(v.fitErr)}</p>`;
+    if (!f) return "";
+    const i = f.installed || {}, p = f.package || {};
+    const base = (x) => x.base ? `${x.base} / ${x.master || "?"}` : "unbekannt";
+    const fitTxt = f.fit === 1 ? ["ok", "passt zum installierten Spiel"] : f.fit === 0 ? ["bad", "andere Grundversion – passt nur als Neuinstallation"] : ["", "nicht feststellbar"];
+    const rows = [
+      ["Installiert", f.orphan ? "nicht installiert (Neuinstallation begonnen)" : `${i.version || "?"} · Grundversion ${base(i)}`, ""],
+      ["Geladenes Paket", p.version ? `${p.version} · ${p.state === "ready" ? "vollständig" : "unvollständig"}${p.base ? ` · Grundversion ${base(p)}` : ""}` : "keins", ""],
+    ];
+    if (p.version && p.state === "ready" && !f.orphan) rows.push(["Passt?", fitTxt[1], fitTxt[0]]);
+    if (p.version && f.plat === 5) rows.push(["Installation", p.manifest ? "über die offizielle Paketliste (wie ein Update der Konsole)" : "mit dem Paket selbst", ""]);
+    let act = "";
+    if (f.fresh_ok && p.state === "ready" && p.version) {
+      const label = f.orphan ? "Neuinstallation fortsetzen" : p.older && p.version !== i.version ? `Downgrade auf ${p.version} installieren` : `Version ${p.version} neu installieren`;
+      const block = f.running ? "Das Spiel läuft gerade. Bitte erst beenden." : f.busy ? "Für dieses Spiel läuft schon ein Vorgang." : !f.enabled ? "Spiel-Updates sind ausgeschaltet." : "";
+      act = `<div class="upd-fresh"><p class="cp-why"><b>Achtung:</b> ${esc(f.orphan
+        ? `Das Spiel ist nicht mehr installiert. Das geladene Paket (Version ${p.version}) wird jetzt als ganzes Spiel installiert.`
+        : `Das Spiel wird zuerst deinstalliert. Danach wird das geladene Paket (Version ${p.version}) als ganzes Spiel installiert. Geht dabei etwas schief, fehlt das Spiel, bis die Neuinstallation fortgesetzt wird.`)}
+        ${esc("Spielstände und Zusatzinhalte bleiben erhalten, ein Disc-Spiel braucht weiter seine Disc.")}
+        ${p.older ? esc("Nach einem Downgrade schaltet die App die Updates für dieses Spiel aus. Schalte auch die automatischen Updates der Konsole für dieses Spiel aus, sonst holt sie die neue Version zurück.") : ""}</p>
+        <div class="p4m-btns"><button type="button" class="btn danger" data-upd-act="reinstall" data-upd-id="${esc(v.id)}"${block ? " disabled" : ""}>${esc(label)}</button></div>
+        ${block ? `<p class="muted upd-hint">${esc(block)}</p>` : ""}</div>`;
+    } else if (f.plat === 5 && !f.fresh_ok) {
+      act = `<p class="muted upd-hint">${esc(f.via_ps4mount ? "Das Spiel kommt von PS4Mount; dort gibt es keine Neuinstallation." : "Neu installieren und Downgrade gibt es nur für Spiele, die von Disc oder aus dem Store installiert sind.")}</p>`;
+    } else if (f.plat === 5) {
+      act = `<p class="muted upd-hint">${esc("Für eine Neuinstallation oder einen Downgrade zuerst eine Version laden: unten die Versionsliste laden und eine Version holen.")}</p>`;
+    }
+    return `<div class="upd-vsec"><p><b>Versionen</b></p>${rows.map((r) => `<div class="upd-diag-row"><span>${esc(r[0])}</span><span class="${r[2]}">${esc(r[1])}</span></div>`).join("")}${act}</div>`;
+  };
   const updVerPanel = (v) => {
     const site = v.id.startsWith("CUSA") ? "orbispatches.com" : "prosperopatches.com";
     const page = (v.data && v.data.page) || updPage(v.id);
+    const ps5 = !v.id.startsWith("CUSA"), fresh = !!(v.fit && v.fit.fresh_ok);
     let body = "";
     if (v.busy) body = `<p class="muted upd-hint">Die Versionsliste wird von ${esc(site)} geladen …</p>`;
     else if (v.err) body = `<p class="muted upd-hint cp-why">${esc(v.err)}</p>`;
@@ -7265,18 +7168,24 @@
           <li>Öffne <a href="${esc(page)}" target="_blank" rel="noopener">${esc(site)}</a> am Handy oder in diesem Browser und tippe auf Version ${esc(v.pick.version)}. Erscheint eine Prüfung „Bist du ein Mensch“, bestätige sie.</li>
           <li>Kopiere den Link: unter „Additional Files“ den Knopf <b>SC</b> gedrückt halten und „Link kopieren“ wählen. Bei PS4-Spielen einen Stück-Link, oder „Copy all links“.</li>
           <li>Füge den Link hier ein. Das Paket wird von den offiziellen Update-Servern geladen, sobald der Link da ist.</li></ol>
+        ${v.pick.older ? `<p class="cp-why">${esc(`Version ${v.pick.version} ist nicht neuer als die installierte. Sie wird nur geladen; installiert wird sie erst, wenn du danach unter „Versionen“ „Neu installieren“ wählst – dabei wird das Spiel deinstalliert (Spielstände bleiben).`)}</p>` : ""}
         ${upd.qr ? `<div class="upd-qr"><img src="${esc(upd.qr)}" alt="QR-Code dieser Seite"><span class="muted">Am Handy diese Seite öffnen und dort weitermachen.</span></div>` : ""}
         <div class="upd-linkrow"><input type="text" data-upd-link placeholder="https://…" autocomplete="off" spellcheck="false" value="${esc(v.link || "")}">
-          <button type="button" class="btn primary" data-upd-act="vers_start" data-upd-id="${esc(v.id)}">${v.force ? "Trotzdem starten" : "Start"}</button></div>
+          <button type="button" class="btn primary" data-upd-act="vers_start" data-upd-id="${esc(v.id)}">Start</button></div>
         ${v.msg ? `<p class="muted upd-hint cp-why">${esc(v.msg)}</p>` : ""}</div>`;
     } else if (v.data) {
       const list = (v.data.versions || []);
-      body = `<p class="muted upd-hint">${esc(`Liste von ${site}. Installiert: ${v.data.installed || "?"}. Wähle eine neuere Version, die auf dieser Firmware läuft.`)}</p>`
+      /* PS5-Spiele von Disc/aus dem Store: auch ältere (Downgrade) und die installierte (Reparatur) lassen sich holen */
+      const pickable = (x) => x.state === "ok" || (ps5 && fresh && (x.state === "older" || x.state === "installed"));
+      body = `<p class="muted upd-hint">${esc(ps5 && fresh ? `Liste von ${site}. Installiert: ${v.data.installed || "?"}. Neuere Versionen werden wie ein Update installiert, ältere und die installierte nur als Neuinstallation.`
+        : `Liste von ${site}. Installiert: ${v.data.installed || "?"}. Wähle eine neuere Version, die auf dieser Firmware läuft.`)}</p>`
         + (list.length ? list.map((x) => `<div class="upd-diag-row"><span>${esc(x.version)}${x.size ? ` · ${esc(x.size)}` : ""}${x.fw && !v.data.ps4 ? ` · Firmware ${esc(x.fw)}` : ""}</span>
-            <span class="${x.state === "ok" ? "ok" : ""}">${x.state === "ok" ? `<button type="button" class="btn ghost" data-upd-act="vers_pick" data-upd-id="${esc(v.id)}" data-upd-ver="${esc(x.version)}" data-upd-size="${esc(x.size)}">Holen</button>` : esc(UPD_VST[x.state] || x.state)}</span></div>`).join("")
+            <span class="${x.state === "ok" ? "ok" : ""}">${pickable(x) ? `<button type="button" class="btn ghost" data-upd-act="vers_pick" data-upd-id="${esc(v.id)}" data-upd-ver="${esc(x.version)}" data-upd-size="${esc(x.size)}"${x.state === "ok" ? "" : ` data-upd-older="1"`}>${x.state === "ok" ? "Holen" : x.state === "installed" ? "Neu holen (Reparatur)" : "Holen (Downgrade)"}</button>` : esc(UPD_VST[x.state] || x.state)}</span></div>`).join("")
           : `<p class="muted upd-hint">Die Seite listet keine Versionen.</p>`);
+    } else if (!v.fitBusy) {
+      body = `<div class="p4m-btns"><button type="button" class="btn ghost" data-upd-act="vers_list" data-upd-id="${esc(v.id)}">${esc(`Versionsliste von ${site} laden`)}</button></div>`;
     }
-    return `<div class="upd-diag">${body}<div class="p4m-btns">
+    return `<div class="upd-diag">${v.old || v.pick ? "" : updFitPanel(v)}${body}<div class="p4m-btns">
       ${v.pick && v.data ? `<button type="button" class="btn ghost" data-upd-act="vers_back" data-upd-id="${esc(v.id)}">Zur Liste</button>` : ""}
       <button type="button" class="btn ghost" data-upd-act="vers_close">Schließen</button></div></div>`;
   };
@@ -7306,6 +7215,12 @@
     const off = t.status.startsWith("not_official");
     if (t.status === "update") btns = updBtn("download", t.title_id, "Laden und installieren", "primary");
     else if (t.status === "paused") btns = updBtn("resume", t.title_id, "Fortsetzen", "primary") + updBtn("cancel", t.title_id, "Löschen");
+    else if (t.status === "ready" && t.orphan) info = `<div class="p4m-meta cp-why">${esc("Das Spiel ist nicht installiert: Eine Neuinstallation wurde begonnen und nicht beendet. Unter „Versionen“ fortsetzen.")}</div>`;
+    else if (t.status === "ready" && (t.held || t.fit === 0)) {
+      info = `<div class="p4m-meta">${esc(t.held ? `Version ${t.pkg_version} ist geladen. Sie ist nicht neuer als die installierte und lässt sich nur unter „Versionen“ neu installieren.`
+        : "Das Update baut auf einer anderen Grundversion auf als das installierte Spiel. Es passt nur als Neuinstallation (unter „Versionen“).")}</div>`;
+      btns = updBtn("cancel", t.title_id, "Löschen");
+    }
     else if (t.status === "ready") btns = updBtn("install", t.title_id, "Installieren", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "failed") btns = updBtn("resume", t.title_id, "Erneut versuchen", "primary") + updBtn("cancel", t.title_id, "Löschen");
     else if (t.status === "queued" || t.status === "downloading" || t.status === "verifying") btns = updBtn("pause", t.title_id, "Anhalten") + updBtn("cancel", t.title_id, "Abbrechen");
@@ -7320,7 +7235,7 @@
     if (t.via_ps4mount && !off) info += `<div class="p4m-meta">${esc("Kommt von PS4Mount (USB-Laufwerk). Das Update wird geladen und auf das Laufwerk gelegt, nicht installiert; PS4Mount ordnet es beim nächsten Suchen ein.")}</div>`;
     if (t.source === "fake" && !off) info += `<div class="p4m-meta">${esc("Fake-PKG / fpkg. Das Update stammt direkt von den offiziellen Update-Servern.")}</div>`;
     if (t.patch_url) btns += `<button type="button" class="btn ghost" data-upd-act="copy_url" data-upd-url="${esc(t.patch_url)}" title="${esc(t.patch_url)}">Link</button>`;
-    if (!off && t.status !== "blocked") btns += `<button type="button" class="btn ghost" data-upd-act="vers" data-upd-id="${esc(t.title_id)}">Andere Versionen</button>`;
+    if (!off && (t.status !== "blocked" || t.fresh_ok)) btns += `<button type="button" class="btn ${t.orphan || t.held || t.fit === 0 ? "primary" : "ghost"}" data-upd-act="vers" data-upd-id="${esc(t.title_id)}">Versionen</button>`;
     if (!off) btns += `<button type="button" class="btn ghost" data-upd-act="diag" data-upd-id="${esc(t.title_id)}">Diagnose</button>`;
     if (!off) btns = `<label class="upd-sw" title="Updates für dieses Spiel erlauben"><input type="checkbox" data-upd-allow="${esc(t.title_id)}"${t.allowed ? " checked" : ""}> Updates</label>`
       + `<label class="upd-sw" title="Nach dem Download installieren (nur dieses Spiel)"><input type="checkbox" data-upd-inst="${esc(t.title_id)}"${t.install_after ? " checked" : ""}> Installieren</label>` + btns;
@@ -7361,9 +7276,10 @@
         <small>${esc(stat)}${j.phase ? ` · ${esc(j.phase)}` : ""}${j.queued ? esc(` · danach noch ${j.queued} in der Warteschlange`) : ""}</small>`;
     }
     const list = (d.titles || []).filter((t) => !upd.f || updGroup(t) === upd.f);
-    const sig = JSON.stringify([list, upd.armed, (gm.list || []).length, upd.diag ? [upd.diag.id, upd.diag.busy, upd.diag.err, !!upd.diag.data] : 0, d.drives, upd.ver ? [upd.ver.id, upd.ver.busy, upd.ver.err, !!upd.ver.data, upd.ver.pick && upd.ver.pick.version, upd.ver.force, upd.ver.msg, !!upd.qr] : 0]);
-    const typing = document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute("data-upd-link");
-    if (sig !== upd.sig && !(typing && upd.ver && upd.ver.pick)) {                                        /* nur neu zeichnen, wenn sich etwas geändert hat */
+    const sig = JSON.stringify([list, (gm.list || []).length, upd.diag ? [upd.diag.id, upd.diag.busy, upd.diag.err, !!upd.diag.data] : 0, d.drives, upd.ver ? [upd.ver.id, upd.ver.busy, upd.ver.err, !!upd.ver.data, upd.ver.pick && upd.ver.pick.version, upd.ver.msg, !!upd.qr, upd.ver.fitBusy, upd.ver.fitErr, upd.ver.fit] : 0]);
+    const ae = document.activeElement;
+    const typing = ae && ae.hasAttribute && (ae.hasAttribute("data-upd-link"));
+    if (sig !== upd.sig && !(typing && upd.ver)) {                                        /* nur neu zeichnen, wenn sich etwas geändert hat */
       upd.sig = sig;
       $("#upd-list").innerHTML = list.length ? list.map(updRow).join("") : `<p class="muted">${on ? "Keine Spiele in dieser Auswahl." : "Noch nichts geprüft."}</p>`;
     }
@@ -7445,18 +7361,40 @@
   const updVerOpen = async (id, old) => {
     if (old) {
       const t = ((upd.data && upd.data.titles) || []).find((x) => x.title_id === id) || {};
-      upd.ver = { id, busy: false, data: null, err: "", pick: { version: t.old_ver || "", size: t.old_size || "" }, link: "", force: false, msg: "" };
+      upd.ver = { id, old: true, busy: false, data: null, err: "", pick: { version: t.old_ver || "", size: t.old_size || "" }, link: "", msg: "" };
       upd.sig = ""; updRender(); updQr();
       return;
     }
-    const v = { id, busy: true, data: null, err: "", pick: null, link: "", force: false, msg: "" };
+    /* der Bereich „Versionen“: erst nur, was auf der Konsole liegt; die Versionsliste aus dem Netz erst nach einem Klick */
+    const v = { id, busy: false, data: null, err: "", pick: null, link: "", msg: "", fit: null, fitBusy: true, fitErr: "" };
     upd.ver = v; upd.sig = ""; updRender();
-    try { v.data = await api("/api/v1/updates/versions?title=" + encodeURIComponent(id), { timeoutMs: 120000 }); }
+    await updFitLoad(v);
+  };
+  const updFitLoad = async (v) => {
+    try { v.fit = await api("/api/v1/updates/fit?title=" + encodeURIComponent(v.id), { timeoutMs: 30000 }); v.fitErr = ""; }
+    catch (e) { v.fitErr = e.message; }
+    v.fitBusy = false;
+    if (upd.ver === v) { upd.sig = ""; updRender(); }
+  };
+  const updVerList = async (v) => {
+    v.busy = true; v.err = ""; upd.sig = ""; updRender();
+    try { v.data = await api("/api/v1/updates/versions?title=" + encodeURIComponent(v.id), { timeoutMs: 120000 }); }
     catch (e) { v.err = e.message; }
     v.busy = false;
     if (upd.ver === v) { upd.sig = ""; updRender(); }
   };
-  const updVerStart = async () => {
+  const updReinstall = async () => {
+    const v = upd.ver;
+    if (!v || !v.fit) return;
+    try {
+      const r = await api("/api/v1/updates", { method: "POST", timeoutMs: 60000, body: JSON.stringify({ action: "reinstall", id: v.id, confirm: v.fit.name || "" }) });
+      if (r.message) toast(r.message);
+    } catch (e) { toast(e.message, "error"); }
+    await loadUpd();
+    if (upd.ver === v) await updFitLoad(v);
+    updSync();
+  };
+  const updVerStart = async (force) => {
     const v = upd.ver;
     if (!v || !v.pick) return;
     const link = (v.link || "").trim();
@@ -7464,14 +7402,16 @@
     v.msg = "";
     try {
       const r = await api("/api/v1/updates", { method: "POST", timeoutMs: 90000,
-        body: JSON.stringify({ action: "download_url", id: v.id, url: link, version: v.pick.version, size: v.pick.size || "", force: !!v.force }) });
+        body: JSON.stringify({ action: "download_url", id: v.id, url: link, version: v.pick.version, size: v.pick.size || "", force: !!force,
+          ...(v.pick.older ? { older: true, confirm: (v.fit && v.fit.name) || "" } : {}) }) });
       if (r.message) toast(r.message);
       upd.ver = null; upd.sig = "";
       await loadUpd();
       updSync();
     } catch (e) {
+      /* a size that differs from the list is said, then the download goes ahead in the same click */
+      if (!force && String(e.message).startsWith("Die Größe stimmt nicht")) { toast(e.message); return updVerStart(true); }
       v.msg = e.message;
-      v.force = String(e.message).startsWith("Die Größe stimmt nicht");
       upd.sig = ""; updRender();
     }
   };
@@ -7491,27 +7431,17 @@
     if (act === "vers") { updVerOpen(id, false); return; }
     if (act === "vers_old") { updVerOpen(id, true); return; }
     if (act === "vers_close") { upd.ver = null; upd.sig = ""; updRender(); return; }
-    if (act === "vers_back") { if (upd.ver) { upd.ver.pick = null; upd.ver.msg = ""; upd.ver.force = false; upd.sig = ""; updRender(); } return; }
+    if (act === "vers_back") { if (upd.ver) { upd.ver.pick = null; upd.ver.msg = ""; upd.sig = ""; updRender(); } return; }
     if (act === "vers_pick") {
-      if (upd.ver) { upd.ver.pick = { version: b.dataset.updVer || "", size: b.dataset.updSize || "" }; upd.ver.link = ""; upd.ver.msg = ""; upd.ver.force = false; upd.sig = ""; updRender(); updQr(); }
+      if (upd.ver) { upd.ver.pick = { version: b.dataset.updVer || "", size: b.dataset.updSize || "", older: b.dataset.updOlder === "1" }; upd.ver.link = ""; upd.ver.msg = ""; upd.sig = ""; updRender(); updQr(); }
       return;
     }
+    if (act === "vers_list") { if (upd.ver) updVerList(upd.ver); return; }
+    if (act === "reinstall") { updReinstall(); return; }
     if (act === "vers_start") { updVerStart(); return; }
     if (act === "diag") { updDiag(id); return; }
     if (act === "diag_close") { upd.diag = null; upd.sig = ""; updRender(); return; }
     if (act === "diag_copy") { updCopy(updDiagText(upd.diag || {}), "Bericht kopiert."); return; }
-    if (act === "cancel" || act === "delete_pkg") {                 /* löscht Teile: zwei Klicks */
-      const key = act + ":" + id;
-      clearTimeout(upd.armTimer);
-      if (upd.armed !== key) {
-        upd.armed = key; upd.armedAt = performance.now();
-        upd.armTimer = setTimeout(() => { upd.armed = ""; upd.sig = ""; updRender(); updPkgsRender(); }, 10000);
-        upd.sig = ""; updRender(); updPkgsRender();
-        return;
-      }
-      if (performance.now() - upd.armedAt < 800) return;
-      upd.armed = "";
-    }
     updPost({ action: act, id });
   });
   $("#p4m-reload").addEventListener("click", () => { loadP4m(); loadP4mLog(); });
@@ -7539,20 +7469,9 @@
   };
   $("#p4m-list").addEventListener("click", (e) => {
     const back = e.target.closest("[data-p4m-back]");
-    if (back) {                                                             /* zweimal klicken, wie bei den anderen Knöpfen, die etwas bewegen */
-      const id = back.dataset.p4mBack;
-      clearTimeout(p4m.armTimer);
-      if (p4m.armed !== id) {
-        p4m.armed = id;
-        p4m.armedAt = performance.now();
-        toast("Spiel, Update und Zusatzinhalte gehen an ihren alten Ort zurück, das Spiel verlässt die Bibliothek. Ein laufendes Spiel wird vorher geschlossen. Zum Bestätigen noch einmal klicken.");
-        p4m.armTimer = setTimeout(() => { p4m.armed = ""; p4mRender(); }, 10000);
-        p4mRender();
-        return;
-      }
-      if (performance.now() - (p4m.armedAt || 0) < 800) return;              /* a double click is not a "yes" */
-      p4m.armed = "";
-      p4mRestore({ action: "restore", id });
+    if (back) {
+      back.disabled = true;
+      p4mRestore({ action: "restore", id: back.dataset.p4mBack });
       return;
     }
     const g = e.target.closest("[data-p4mg]");
@@ -7567,12 +7486,9 @@
     p4mPickButtons();
   });
   $("#p4m-save").addEventListener("click", () => p4mPost(p4mConfig()));
-  armConfirm($("#p4m-restore-sel"), "Wirklich? Nochmal klicken", () => p4mRestore({ action: "restore", ids: Array.from(p4m.sel) }),
-    "Die ausgewählten Spiele gehen mit Update und Zusatzinhalten an ihren alten Ort zurück und verlassen die Bibliothek. Ein laufendes Spiel wird vorher geschlossen. Zum Bestätigen noch einmal klicken.");
-  armConfirm($("#p4m-restore-all"), "Wirklich ALLE? Nochmal klicken", () => p4mRestore({ action: "restore_all" }),
-    "Die PKGs ALLER PS4Mount-Spiele gehen an ihren alten Ort zurück, alle diese Spiele verlassen die Bibliothek. Ein laufendes Spiel wird vorher geschlossen. Zum Bestätigen noch einmal klicken.");
-  armConfirm($("#p4m-forget"), "Wirklich? Nochmal klicken", () => p4mPost({ action: "restored_forget" }),
-    "Zurückverschobene PKGs werden bei der nächsten Suche wieder in den Ordner ps4 sortiert und hinzugefügt. Zum Bestätigen noch einmal klicken.");
+  oneClick($("#p4m-restore-sel"), () => p4mRestore({ action: "restore", ids: Array.from(p4m.sel) }));
+  oneClick($("#p4m-restore-all"), () => p4mRestore({ action: "restore_all" }));
+  oneClick($("#p4m-forget"), () => p4mPost({ action: "restored_forget" }));
 
   /* ── Verlauf (jobhist.c, 11.10.2026) ────────────────────────────────
      Alle Vorgänge der App mit Ergebnis, aus /api/v1/jobs/history, das neueste zuerst. */
@@ -7619,10 +7535,10 @@
     hv.filter = b.dataset.hv;
     hvRender();
   });
-  armConfirm($("#hv-clear"), "Wirklich leeren? Nochmal klicken", async () => {
+  oneClick($("#hv-clear"), async () => {
     try { await api("/api/v1/jobs/history/clear", { method: "POST" }); hv.list = []; hvRender(); toast("Verlauf geleert."); }
     catch (e) { toast(e.message, "error"); }
-  }, "Alle Einträge des Verlaufs werden gelöscht. Zum Bestätigen noch einmal klicken.");
+  });
 
   /* ── APR & LZ4 (amprindex.c, imgjob.c, 11.10.2026) ──────────────────
      Ein Fenster je Spiel (dasselbe wie Kopieren, cp-overlay): der AMPR-Index, dazu bei einem Abbild Prüfen, In einen
@@ -8370,11 +8286,11 @@
   /* ── Löschen (gamedelete.c) ─────────────────────────────────────────
      Ein Spiel (installiert: über die Deinstallation der Konsole; ShadowMountPlus: abmelden, dann die Datei löschen)
      oder eine Sicherung der App. Der Plan der Konsole sagt genau, was weggeht, und gibt ein Kennwort aus, ohne das
-     nichts gelöscht wird. Gefragt wird zweimal: ein Häkchen „endgültig“, dann zwei Klicks auf „Endgültig löschen“.
-     Die Spielstände bleiben immer. */
+     nichts gelöscht wird. Die Seite holt den Plan still und löscht sofort (nichts muss doppelt bestätigt werden);
+     der Dialog zeigt, was weggeht, und bleibt nur bei einer Ablehnung mit dem Grund stehen. Die Spielstände bleiben immer. */
   /* seq: jedes Öffnen und Schließen zählt hoch; eine Antwort, die zu einem früheren Öffnen gehört, wird verworfen
      (Durchsicht 19.10.2026: der Plan von Spiel A konnte im Dialog für Spiel B landen) */
-  const dl = { kind: "", id: "", plan: null, timer: 0, armed: 0, poll: 0, seq: 0 };
+  const dl = { kind: "", id: "", plan: null, poll: 0, seq: 0 };
   const dlShell = () => {
     let o = $("#dl-overlay");
     if (o) return o;
@@ -8393,13 +8309,6 @@
       const b = e.target.closest("[data-dl]");
       if (!b || b.disabled) return;
       if (b.dataset.dl === "close") dlClose();
-      else if (b.dataset.dl === "go") dlGo(b);
-    });
-    o.addEventListener("change", (e) => {
-      if (e.target.id === "dl-ack") {
-        const go = $("#dl-go");
-        if (go) { go.disabled = !e.target.checked; dlDisarm(go); }
-      }
     });
     return o;
   };
@@ -8407,15 +8316,8 @@
     dl.seq++;
     const o = $("#dl-overlay");
     if (o) o.hidden = true;
-    clearTimeout(dl.timer);
     clearTimeout(dl.poll);
     dl.poll = 0;
-  };
-  const dlDisarm = (go) => {
-    clearTimeout(dl.timer);
-    dl.armed = 0;
-    go.removeAttribute("data-armed");
-    go.textContent = "Endgültig löschen";
   };
   const dlOpen = async (kind, id) => {
     const o = dlShell();
@@ -8432,6 +8334,7 @@
       if (seq !== dl.seq) return;
       dl.plan = plan;
       dlRenderPlan();
+      if (plan.can_delete) dlGo();
     } catch (e) {
       if (seq !== dl.seq) return;
       $("#dl-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
@@ -8453,31 +8356,19 @@
       ${items ? `<p>Gelöscht wird:</p><ul class="dl-items">${items}</ul>` : ""}
       ${p.keeps ? `<p class="muted">Bleibt liegen: <code>${esc(p.keeps)}</code> – die Spieldaten, auf die das Spiel verweist. Welche Dateien dazugehören, weiß die App nicht sicher; sie lassen sich danach von Hand löschen.</p>` : ""}
       <p class="dl-keep">Deine Spielstände bleiben erhalten.</p>
-      ${ok ? `<label class="dl-ack"><input type="checkbox" id="dl-ack"> <span>Ich verstehe: Das Löschen ist endgültig und lässt sich nicht rückgängig machen.</span></label>`
-           : `<p class="cp-err">${esc(p.why || "Das lässt sich gerade nicht löschen.")}</p>`}
-      <div class="cp-actions">
-        <button type="button" class="btn" data-dl="close">${ok ? "Abbrechen" : "Schließen"}</button>
-        ${ok ? `<button type="button" class="btn danger" id="dl-go" data-dl="go" disabled>Endgültig löschen</button>` : ""}
-      </div>`;
+      ${ok ? `<p class="muted">Wird gelöscht …</p>`
+           : `<p class="cp-err">${esc(p.why || "Das lässt sich gerade nicht löschen.")}</p>
+      <div class="cp-actions"><button type="button" class="btn" data-dl="close">Schließen</button></div>`}`;
   };
-  const dlGo = async (go) => {
-    const ack = $("#dl-ack");
-    if (!ack || !ack.checked || !dl.plan) return;
-    if (!dl.armed) {
-      dl.armed = Date.now();
-      go.setAttribute("data-armed", "");
-      go.textContent = "Wirklich? Nochmal klicken";
-      dl.timer = setTimeout(() => dlDisarm(go), 10000);
-      return;
-    }
-    if (Date.now() - dl.armed < 800) return;            /* ein Doppelklick ist keine zweite Bestätigung */
-    clearTimeout(dl.timer);
-    go.disabled = true;
+  const dlGo = async () => {
+    if (!dl.plan) return;
+    const seq = dl.seq;
     try {
       await api("/api/v1/library/delete", { method: "POST",
         body: JSON.stringify({ kind: dl.kind, id: dl.id, confirm: dl.plan.confirm }) });
-      dlFollow();
+      if (seq === dl.seq) dlFollow();
     } catch (e) {
+      if (seq !== dl.seq) return;
       $("#dl-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
         <div class="cp-actions"><button type="button" class="btn" data-dl="close">Schließen</button></div>`;
     }
@@ -8512,11 +8403,11 @@
   /* ── Dateimanager (06.10.2026) ──────────────────────────────────────
      Was geändert werden darf, entscheidet die Konsole (filemgr.c); die Seite zeigt es nur an (writable je Ordner
      und Eintrag). Kopieren und Verschieben gehen über eine Zwischenablage: auswählen, „Kopieren“ oder
-     „Ausschneiden“, in den Zielordner gehen, „Hier einfügen“. Löschen fragt wie bei den Spielen: Plan mit
-     Kennwort, Häkchen, zwei Klicks. Hochladen läuft je Datei über XMLHttpRequest, weil nur das den Fortschritt
+     „Ausschneiden“, in den Zielordner gehen, „Hier einfügen“. Löschen wirkt wie bei den Spielen sofort (Plan
+     mit Kennwort, still geholt). Hochladen läuft je Datei über XMLHttpRequest, weil nur das den Fortschritt
      des Sendens meldet. Namen kommen von der Konsole und gehen durch esc(); Knöpfe tragen nur Nummern. */
   const fm = { path: "", places: [], list: null, sel: new Set(), clip: null, poll: 0, xhr: null, upQueue: [],
-               plan: null, armed: 0, timer: 0, loaded: false,
+               loaded: false,
                sort: "name", desc: false, sorted: [], sizes: new Map(), sizing: false, viewSeq: 0 };
   /* Die Sortierung merkt sich der Browser (nur eine Annehmlichkeit, nichts davon hängt daran). */
   try {
@@ -8693,13 +8584,6 @@
       if (!b || b.disabled) return;
       if (b.dataset.fmd === "close") fmClose();
       else if (b.dataset.fmd === "name") fmNameOk();
-      else if (b.dataset.fmd === "del") fmDelGo(b);
-    });
-    o.addEventListener("change", (e) => {
-      if (e.target.id === "fm-ack") {
-        const go = $("#fm-del-go");
-        if (go) { go.disabled = !e.target.checked; fmDisarm(go); }
-      }
     });
     o.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "fm-name") { e.preventDefault(); fmNameOk(); } });
     return o;
@@ -8707,11 +8591,8 @@
   const fmClose = () => {
     const o = $("#fm-overlay");
     if (o) { o.hidden = true; o.querySelector(".cp-dialog").classList.remove("fm-view"); }
-    clearTimeout(fm.timer);
-    fm.armed = 0;
     fm.viewSeq++;                                     /* eine noch laufende Vorschau darf nichts mehr einsetzen */
   };
-  const fmDisarm = (go) => { clearTimeout(fm.timer); fm.armed = 0; go.removeAttribute("data-armed"); go.textContent = "Endgültig löschen"; };
 
   let fmNameAct = null;
   const fmAskName = (title, label, value, act) => {
@@ -8740,46 +8621,18 @@
     } catch (e) { err.textContent = e.message; err.hidden = false; }
   };
 
-  /* Löschen: der Plan der Konsole, ein Häkchen, zwei Klicks */
+  /* Löschen: die Seite holt den Plan der Konsole (mit seinem Kennwort) still und löscht sofort – nichts muss doppelt
+     bestätigt werden. Der Dialog bleibt nur stehen, wenn die Konsole ablehnt, und nennt den Grund. */
   const fmDelete = async () => {
     const paths = fmSelected().map((e) => fmJoin(fm.path, e.name));
     if (!paths.length) return;
     const o = fmShell();
     txt("#fm-dlg-title", "Löschen");
-    $("#fm-dlg-body").innerHTML = `<p class="muted">Die Konsole prüft, was gelöscht würde …</p>`;
+    $("#fm-dlg-body").innerHTML = `<p class="muted">Wird gelöscht …</p>`;
     o.hidden = false;
     try {
-      fm.plan = await api("/api/v1/files/delete/plan", { method: "POST", body: JSON.stringify({ paths }), timeoutMs: 60000 });
-    } catch (e) {
-      $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
-        <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
-      return;
-    }
-    const p = fm.plan;
-    const shown = p.paths.slice(0, 8).map((x) => `<li><code>${esc(x)}</code></li>`).join("");
-    const more = p.paths.length > 8 ? `<li class="muted">… und ${p.paths.length - 8} weitere</li>` : "";
-    const what = [p.folders ? `${num(p.folders)} ${p.folders === 1 ? "Ordner" : "Ordner"}` : "", `${num(p.files)} ${p.files === 1 ? "Datei" : "Dateien"}`, bytes(p.bytes)].filter(Boolean).join(" · ");
-    $("#fm-dlg-body").innerHTML = `<p><b>${num(p.items)} ${p.items === 1 ? "Eintrag" : "Einträge"}</b> · ${esc(what)}</p>
-      <ul class="dl-items">${shown}${more}</ul>
-      <label class="dl-ack"><input type="checkbox" id="fm-ack"> <span>Ich verstehe: Das Löschen ist endgültig und lässt sich nicht rückgängig machen.</span></label>
-      <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Abbrechen</button>
-        <button type="button" class="btn danger" id="fm-del-go" data-fmd="del" disabled>Endgültig löschen</button></div>`;
-  };
-  const fmDelGo = async (go) => {
-    const ack = $("#fm-ack");
-    if (!ack || !ack.checked || !fm.plan) return;
-    if (!fm.armed) {
-      fm.armed = Date.now();
-      go.setAttribute("data-armed", "");
-      go.textContent = "Wirklich? Nochmal klicken";
-      fm.timer = setTimeout(() => fmDisarm(go), 10000);
-      return;
-    }
-    if (Date.now() - fm.armed < 800) return;            /* ein Doppelklick ist keine zweite Bestätigung */
-    clearTimeout(fm.timer);
-    go.disabled = true;
-    try {
-      await api("/api/v1/files/delete", { method: "POST", body: JSON.stringify({ paths: fm.plan.paths, confirm: fm.plan.confirm }) });
+      const plan = await api("/api/v1/files/delete/plan", { method: "POST", body: JSON.stringify({ paths }), timeoutMs: 60000 });
+      await api("/api/v1/files/delete", { method: "POST", body: JSON.stringify({ paths: plan.paths, confirm: plan.confirm }) });
       fmClose();
       fm.sel.clear();
       fmFollow();
@@ -9200,16 +9053,14 @@
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   });
 
-  /* Zwei Klicks statt einer Rückfrage-Box: wie überall auf dieser Oberfläche. */
-  armConfirm($("#pt-reset"), "Wirklich löschen? Nochmal klicken", async () => {
+  oneClick($("#pt-reset"), async () => {
     try {
       await api("/api/v1/playtime/reset", { method: "POST" });
       toast("Spielzeit-Verlauf gelöscht.");
       pt.shown = 15;
       loadPlaytime();
     } catch (e) { toast(e.message, "error"); }
-  }, "Alle gespeicherten Sitzungen werden gelöscht. Ein Spiel, das gerade läuft, zählt weiter. "
-   + "Zum Bestätigen noch einmal klicken.");
+  });
 
   /* ── Spielstände (04.10.2026) ────────────────────────────────────────
    * Sichern und Zurückspielen der Spielstände (savebackup.c, /api/v1/saves). Die Seite
@@ -9221,7 +9072,7 @@
    * Klicks auf denselben Knopf (wie das Löschen anderswo hier), und die Anfrage trägt
    * "confirm": true — die Konsole nimmt sie sonst nicht an. */
   const sv = { data: null, error: "", loaded: false, sel: new Set(), known: new Set(), drive: "",
-               open: new Set(), timer: 0, polling: false, job: null, dismissed: "", armed: new Map() };
+               open: new Set(), timer: 0, polling: false, job: null, dismissed: "" };
 
   const svWhen = (sec) => (sec > 0
     ? new Date(sec * 1000).toLocaleString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric",
@@ -9328,8 +9179,6 @@
   };
 
   const svRenderBackups = () => {
-    sv.armed.forEach((a) => clearTimeout(a.timer));
-    sv.armed.clear();
     const list = sv.data.backups;
     txt("#sv-bk-sub", list.length ? `${list.length} ${list.length === 1 ? "Sicherung" : "Sicherungen"}, die neueste zuerst` : "");
     const un = sv.data.unfinished > 0 ? sv.data.unfinished : 0;
@@ -9510,24 +9359,6 @@
     } catch (e) { toast(e.message, "error"); }
   };
 
-  /* Zwei Klicks auf denselben Knopf, innerhalb von zehn Sekunden. */
-  const svArm = (btn, key, label, warn, run) => {
-    const armed = sv.armed.get(key);
-    if (!armed) {
-      const orig = btn.textContent;
-      btn.textContent = label;
-      toast(warn);
-      sv.armed.set(key, { orig, at: performance.now(), timer: setTimeout(() => { sv.armed.delete(key); btn.textContent = orig; }, 10000) });
-      return;
-    }
-    /* Ein Doppelklick wäre Bewaffnen und Bestätigen in einem, ehe jemand die Warnung lesen konnte. */
-    if (performance.now() - armed.at < 800) return;
-    clearTimeout(armed.timer);
-    sv.armed.delete(key);
-    btn.textContent = armed.orig;
-    run();
-  };
-
   const svPane = $("#gm-pane-saves");
   svPane.addEventListener("change", (e) => {
     const t = e.target;
@@ -9582,32 +9413,32 @@
     if (b.dataset.svDelete) {
       const key = b.dataset.svDelete, name = b.dataset.name;
       const [uid, id] = key.split("/");
-      svArm(b, `del|${key}`, "Wirklich löschen?",
-        `Die Spielstände von „${name}“ werden gelöscht. Der Stand davor wird zuerst auf dem gewählten Ziel gesichert und lässt `
-        + "sich dann zurückspielen. Das geht nur, wenn kein Spiel läuft. Zum Bestätigen noch einmal klicken.", async () => {
-          try {
-            svStarted(await api("/api/v1/saves/delete", { method: "POST", body: JSON.stringify({ uid, id, mount: sv.drive || "" }) }));
-          } catch (err) { toast(err.message, "error"); }
-        });
+      /* One click: the state before is backed up first to the chosen drive (the first suitable one by default);
+         with no drive at all the console allows no_backup, and the toast says so. */
+      b.disabled = true;
+      try {
+        if (!sv.drive) toast(`Kein Laufwerk für eine Sicherung da: Die Spielstände von „${name}“ werden ohne Sicherung gelöscht.`);
+        svStarted(await api("/api/v1/saves/delete", { method: "POST",
+          body: JSON.stringify(sv.drive ? { uid, id, mount: sv.drive } : { uid, id, no_backup: true }) }));
+      } catch (err) { toast(err.message, "error"); } finally { b.disabled = false; }
       return;
     }
     if (b.dataset.svRestore) {
       const path = b.dataset.svRestore, uid = b.dataset.uid, id = b.dataset.id, name = b.dataset.name;
-      svArm(b, `${path}|${uid}|${id}`, "Wirklich? Nochmal klicken",
-        `„${name}“ wird zurückgespielt. Der jetzige Stand davon wird vorher als eigene Sicherung abgelegt. `
-        + "Das geht nur, wenn kein Spiel läuft. Zum Bestätigen noch einmal klicken.", async () => {
-          try {
-            svStarted(await api("/api/v1/saves/restore", { method: "POST",
-              body: JSON.stringify({ path, user: uid, title: id, confirm: true }) }));
-          } catch (err) { toast(err.message, "error"); }
-        });
+      /* one click; the state now is kept as its own backup first (on the console's side) */
+      b.disabled = true;
+      try {
+        svStarted(await api("/api/v1/saves/restore", { method: "POST",
+          body: JSON.stringify({ path, user: uid, title: id, confirm: true }) }));
+        toast(`„${name}“ wird zurückgespielt; der jetzige Stand wird vorher gesichert.`);
+      } catch (err) { toast(err.message, "error"); } finally { b.disabled = false; }
     }
   });
 
   /* ── Dumps (22.10.2026) ──────────────────────────────────────────────
    * Die Dumps, die auf den Laufwerken liegen (dump_lib.c, /api/v1/dumps): nur Anzeige. Die Suche läuft auf der Konsole
    * im Hintergrund; die Seite fragt, solange sie läuft und man sie sieht. */
-  const dp = { data: null, error: "", timer: 0, armed: "", armTimer: 0, armedAt: 0 };
+  const dp = { data: null, error: "", timer: 0 };
   const DP_STATE = { done: ["ok", "fertig"], running: ["warn", "läuft noch"], failed: ["warn", "fehlgeschlagen"], aborted: ["warn", "abgebrochen"], "": ["", "ohne Info-Datei"] };
 
   const dpRender = () => {
@@ -9632,9 +9463,8 @@
       const fields = `data-mount="${esc(x.mount)}" data-dir="${esc(x.dir)}" data-folder="${esc(x.folder)}"`;
       const canImg = x.kind === "game" && /^CUSA/.test(x.title_id || "") && (x.state === "" || x.state === "done");
       const dkey = `${x.mount}|${x.dir}|${x.folder}`;
-      const armed = dp.armed === dkey;
       const img = `<div class="p4m-btns">${canImg ? `<button type="button" class="btn ghost" data-dimg="1" ${fields}>Als Abbild bauen</button>` : ""}`
-        + (x.state === "running" ? "" : `<button type="button" class="btn ${armed ? "danger" : "ghost"}" data-dpdel="1" data-key="${esc(dkey)}" ${fields}>${armed ? "Wirklich? Nochmal klicken" : "Löschen"}</button>`)
+        + (x.state === "running" ? "" : `<button type="button" class="btn ghost" data-dpdel="1" ${fields}>Löschen</button>`)
         + "</div>";
       return `<div class="p4m-row">
         <div class="p4m-main"><div class="p4m-name" title="${esc(x.title || x.folder)}">${esc(x.title || x.folder)}</div>
@@ -9788,16 +9618,7 @@
     if (b) { dimgOpen({ mount: b.dataset.mount, dir: b.dataset.dir, folder: b.dataset.folder }); return; }
     const del = e.target.closest("button[data-dpdel]");
     if (!del) return;
-    const key = del.dataset.key;
-    clearTimeout(dp.armTimer);
-    if (dp.armed !== key) {                                  /* löscht Dateien: zwei Klicks */
-      dp.armed = key; dp.armedAt = performance.now();
-      dp.armTimer = setTimeout(() => { dp.armed = ""; dpRender(); }, 8000);
-      dpRender();
-      return;
-    }
-    if (performance.now() - dp.armedAt < 600) return;
-    dp.armed = "";
+    del.disabled = true;                                     /* löscht beim ersten Klick */
     try {
       const r = await api("/api/v1/dumps/delete", { method: "POST", body: JSON.stringify({ mount: del.dataset.mount, dir: del.dataset.dir, folder: del.dataset.folder }) });
       if (r.message) toast(r.message);
@@ -9811,7 +9632,7 @@
    * Ein laufendes PS5- oder PS4-Spiel samt Metadaten und eingehängten DLC auf ein Laufwerk (dump_job.c, /api/v1/dump). Die Konsole
    * kopiert und führt Buch; die Seite fragt, solange ein Dump läuft und man sie sieht. Pfade nennt der Browser nie: Das Ziel
    * ist eines der Laufwerke aus der Liste der Konsole, der Ordner darunter wird dort geprüft. */
-  const dm = { data: null, sel: "", err: "", timer: 0, armed: "", armTimer: 0, armedAt: 0, hidden: "", was: false };
+  const dm = { data: null, sel: "", err: "", timer: 0, hidden: "", was: false };
 
   /* Die Disc-Spiele (library.c, Marke „disc“): von Disc installierte PS5- und PS4-Spiele, an jedem „Starten“ oder – läuft es – „Dumpen“. */
   const dgRunning = (x) => !!x.dump_mounted || (dm.sel === x.title_id && !!(dm.data && dm.data.title && dm.data.title.mounted));
@@ -9863,20 +9684,10 @@
   const dmName = (id) => { const g = (gm.list || []).find((x) => x.title_id === id); return g ? g.name : id; };
   const dmJobKey = (j) => `${j.title_id}|${j.kind}|${j.state}|${j.started || ""}`;
 
-  /* Zwei Klicks für das, was etwas ersetzt oder abbricht: der erste schärft, der zweite (nicht zu schnell) führt aus. */
-  const dmConfirm = (key) => {
-    clearTimeout(dm.armTimer);
-    if (dm.armed === key && performance.now() - dm.armedAt > 600) { dm.armed = ""; return true; }
-    if (dm.armed === key) return false;
-    dm.armed = key; dm.armedAt = performance.now();
-    dm.armTimer = setTimeout(() => { dm.armed = ""; dmRender(); }, 8000);
-    dmRender();
-    return false;
-  };
-  const dmBtn = (act, label, cls, key, dis, why) => {
-    const armed = key && dm.armed === key;
-    return `<button type="button" class="btn ${armed ? "danger" : cls}" data-dm="${esc(act)}"${key ? ` data-dm-key="${esc(key)}"` : ""}${dis ? ` disabled title="${esc(why || "")}"` : ""}>${armed ? "Wirklich? Nochmal klicken" : esc(label)}</button>`;
-  };
+  /* Ersetzen und Abbrechen wirken beim ersten Klick (nichts muss doppelt bestätigt werden); key bleibt in der
+     Signatur, damit die Aufrufer gleich bleiben. */
+  const dmBtn = (act, label, cls, key, dis, why) =>
+    `<button type="button" class="btn ${cls}" data-dm="${esc(act)}"${dis ? ` disabled title="${esc(why || "")}"` : ""}>${esc(label)}</button>`;
 
   const DM_RUN_PS5 = "So startest du den Dump: ShadowMountPlus findet einen Ordner nur, wenn er direkt in einem seiner Suchordner liegt (zum Beispiel „homebrew“ auf dem Laufwerk) und darin „sce_sys/param.json“ hat. Im Standardordner „homebrew/ps5-app-dumper/dumps“ sucht es nicht. Trage dafür oben bei „Ordner auf dem Ziel“ „homebrew“ ein.";
   const DM_RUN_PS4 = "Dieser PS4-Dump ist eine Sicherung. ShadowMountPlus startet nur PS5-Spiele (es liest „sce_sys/param.json“), und „PS4 von USB“ liest nur PKG-Dateien. Ein PS4-Dump-Ordner lässt sich deshalb nicht direkt starten. In der Liste „Dumps aus dem Disc-Bereich“ baut „Als Abbild bauen“ aus dem Dump ein Abbild, das ShadowMountPlus einhängt.";
@@ -9924,7 +9735,7 @@
     if (t.exists === "unfinished") out += `<p class="muted">${esc("Am Ziel liegt ein unfertiger Dump dieses Spiels; er wird zuerst entfernt.")}</p>`;
     const dis = busy || noTarget;
     if (t.exists === "done") {
-      out += `<p class="cp-why">${esc("Am Ziel liegt schon ein fertiger Dump dieses Spiels. Er wird nur nach einer Bestätigung ersetzt.")}</p>`;
+      out += `<p class="cp-why">${esc("Am Ziel liegt schon ein fertiger Dump dieses Spiels. „Vorhandenen Dump ersetzen und starten“ überschreibt ihn.")}</p>`;
       out += `<div class="cp-actions">${dmBtn("start_over", "Vorhandenen Dump ersetzen und starten", "primary", "over", dis, why)}`;
     } else {
       out += `<div class="cp-actions">${dmBtn("start", "Dump starten", "primary", "", dis, why)}`;
@@ -10021,7 +9832,6 @@
     const b = e.target.closest("[data-dm]");
     if (!b || b.disabled) return;
     const act = b.dataset.dm;
-    if (b.dataset.dmKey && !dmConfirm(b.dataset.dmKey)) return;
     if (act === "start") dmPost({ action: "start", id: dm.sel });
     else if (act === "start_over") dmPost({ action: "start", id: dm.sel, overwrite: true });
     else if (act === "dlc") dmPost({ action: "dlc_only", id: dm.sel });
@@ -10042,10 +9852,8 @@
   const DQ_ST = { pending: ["", "wartet"], waiting_disc: ["warn", "wartet auf die Disc"], launching: ["", "wird gestartet"],
     settling: ["", "lädt"], dumping: ["", "wird gedumpt"], done: ["ok", "fertig"], failed: ["warn", "gescheitert"], skipped: ["", "übersprungen"] };
   function dqData() { return (dm && dm.data && dm.data.queue) || { items: [], active: false }; }
-  const dqBtn = (act, label, cls, key, id, dis, why) => {
-    const armed = key && dm.armed === key;
-    return `<button type="button" class="btn ${armed ? "danger" : cls}" data-dq="${esc(act)}"${id ? ` data-id="${esc(id)}"` : ""}${key ? ` data-dq-key="${esc(key)}"` : ""}${dis ? ` disabled title="${esc(why || "")}"` : ""}>${armed ? "Wirklich? Nochmal klicken" : esc(label)}</button>`;
-  };
+  const dqBtn = (act, label, cls, key, id, dis, why) =>
+    `<button type="button" class="btn ${cls}" data-dq="${esc(act)}"${id ? ` data-id="${esc(id)}"` : ""}${dis ? ` disabled title="${esc(why || "")}"` : ""}>${esc(label)}</button>`;
 
   const dqPanel = (it) => {
     const o = it.options || {};
@@ -10124,7 +9932,6 @@
     const b = e.target.closest("button[data-dq]");
     if (!b || b.disabled) return;
     const act = b.dataset.dq, id = b.dataset.id;
-    if (b.dataset.dqKey && !dmConfirm(b.dataset.dqKey)) { dqRender(); return; }
     const q = dqData();
     if (act === "add") { const p = $("#dq-pick"); if (p && p.value) dmPost({ action: "queue_add", id: p.value }); }
     else if (act === "remove") dmPost({ action: "queue_remove", id });
@@ -11582,15 +11389,14 @@
     }
   };
   $("#kl-files-reload").addEventListener("click", () => klFilesLoad());
-  armConfirm($("#kl-files-clear"), "Wirklich leeren? Nochmal klicken", async () => {
+  oneClick($("#kl-files-clear"), async () => {
     try {
       const r = await api("/api/v1/klog/files/clear", { method: "POST" });
       toast(r.deleted ? `${r.deleted} ${r.deleted === 1 ? "Datei" : "Dateien"} gelöscht (${bytes(r.bytes)}).` +
                         (r.kept ? ` ${r.kept} bleibt: die laufende Aufnahme.` : "") : "Es gab nichts zu löschen.");
       klFilesLoad();
     } catch (e) { toast(e.message, "error"); }
-  }, "Alle gespeicherten Auszüge und Aufnahmen im Ordner klog-live-log werden gelöscht. Eine laufende Aufnahme bleibt. " +
-     "Zum Bestätigen noch einmal klicken.");
+  });
 
   $("#export-log").addEventListener("click", async () => {
     try {

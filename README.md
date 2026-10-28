@@ -141,7 +141,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 - Profil: Anzeigename und Profilbild (30 eingebaute Bilder oder eigene Datei).
 - Design: Standard, Hell, Dunkel und Optimal (am schnellsten gezeichnet, gedacht für den Fernseher); jedes Gerät merkt sich seine Wahl.
 - System: Modell, Firmware, Laufzeit, Speicher, Netzwerk; Rohsensoren und Diagnose im Expertenmodus.
-- Kopfzeile auf jeder Seite: Ruhemodus, Neu starten, Ausschalten, abgesicherter Modus (je zwei Klicks).
+- Kopfzeile auf jeder Seite: Ruhemodus, Neu starten, Ausschalten, abgesicherter Modus (je ein Klick).
 
 **Technik**
 - Eigener HTTP-Server ohne Fremdbibliothek, dokumentierte [JSON-Schnittstelle](docs/API.md), Einstellungen unter `/data/PS5-Cooling-Center/config.json`.
@@ -177,7 +177,7 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 <details>
 <summary>Firmware und SDK im Detail</summary>
 
-Die ELF ist mit dem PS5-Payload-SDK **v0.44** gebaut, dessen Startcode die Firmware **bis 13.60** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
+Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmware **bis 14.10** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
 </details>
 
 ## Bedienung
@@ -213,7 +213,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.44** gebaut, dessen Startcode die Firmw
 <details>
 <summary><b>Aus dem Quellcode bauen</b></summary>
 
-Voraussetzung ist das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk) **ab v0.42** (getestet mit v0.44); der Bau prüft das und bricht mit einem zu alten SDK ab. Unter Windows genügt Git Bash mit LLVM 21:
+Voraussetzung ist das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk) **ab v0.42** (getestet mit v0.45); der Bau prüft das und bricht mit einem zu alten SDK ab. Unter Windows genügt Git Bash mit LLVM 21:
 
 ```bash
 tools/build-windows.sh

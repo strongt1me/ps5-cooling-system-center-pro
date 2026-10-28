@@ -41,8 +41,10 @@ enum {
   PKGI_OP_STATUS,      /* app -> helper: how far is it; the content id says which installation, so that a helper that
                           did not make the call (a new one, after the first had gone) can ask as well */
   PKGI_OP_CLOSE,       /* app -> helper: leave (without ending the library's session: see pkginst_helper.c) */
-  PKGI_OP_UNINSTALL    /* app -> helper: take title_id off the console the system's way (the game, then its updates and
+  PKGI_OP_UNINSTALL,   /* app -> helper: take title_id off the console the system's way (the game, then its updates and
                           add-ons); saved games stay. Like an installation, one per helper. */
+  PKGI_OP_UNINSTALL_GAME /* app -> helper: the game alone, for a fresh installation of its update (PatchDL 0.3.6): its
+                          add-ons and saved games stay. One per helper. */
 };
 
 /* Local failures, distinct from what the system library returns. */

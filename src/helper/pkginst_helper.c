@@ -384,6 +384,17 @@ serve(int fd) {
       memcpy(rsp.error_type, st.error_info.type, sizeof(rsp.error_type));
       memcpy(rsp.error_desc, st.error_info.description, sizeof(rsp.error_desc));
       rsp.local_copy_percent = st.local_copy_percent; rsp.copy_only = st.is_copy_only ? 1 : 0;
+    } else if(req.op == PKGI_OP_UNINSTALL_GAME && !used) {
+      /* The game alone (PatchDL's replace step): its add-ons and saved games stay where they are. */
+      used = 1;
+      if(!title_id_ok(req.title_id)) {
+        rsp.result = PKGI_E_BADREPLY;
+        plog("serve: uninstall refused: not a title id\n");
+      } else {
+        plog("serve: sceAppInstUtilAppUnInstall %s (game only)\n", req.title_id);
+        rsp.result = sceAppInstUtilAppUnInstall(req.title_id);
+        plog("serve: sceAppInstUtilAppUnInstall -> 0x%08X (errno %d)\n", (unsigned)rsp.result, errno);
+      }
     } else if(req.op == PKGI_OP_UNINSTALL && !used) {
       /* The game first, then what belongs to it (as the PKG Manager does for leftovers): the system removes the
          title's updates and add-ons only when asked. Saved games are not part of any of these. */

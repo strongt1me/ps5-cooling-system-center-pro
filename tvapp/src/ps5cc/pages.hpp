@@ -9,6 +9,7 @@
 
 #include "core/input.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/look.hpp"
 #include "ui/components.hpp"
 #include "ui/glyphs.hpp"
 
@@ -43,6 +44,28 @@ class Page
     // The page's own hints for the hint row (at most three); the screen adds L1/R1 before and Options after.
     virtual int hints(ui::Hint *out) const = 0;
 };
+
+// The sub-tabs of a page (L2/R2): one look for every page, in the row above the content.
+inline void style_subtabs(ui::TabBar &tabs, const ui::Theme &theme, int count)
+{
+    tabs.style.theme = theme;
+    tabs.style.kind = ui::TabKind::segmented;
+    tabs.style.width = ui::TabWidth::fill;
+    tabs.style.text_size = 22.0f;
+    tabs.style.height = 52.0f;
+    tabs.set_bounds({kLeftX + 56.0f, kTabY, 280.0f * static_cast<float>(count), kTabH});
+}
+
+// The L2 and R2 glyphs beside the sub-tabs.
+inline void draw_subtab_glyphs(ui::Canvas &canvas, const ui::TabBar &tabs)
+{
+    const gfx::Rect &r = tabs.bounds();
+    const ui::GlyphStyle glyphs = ui::GlyphStyle::dark();
+    const float cy = r.y + r.h * 0.5f;
+    ui::draw_button(canvas.list, canvas.fonts, glyphs, ui::Button::l2,
+                    r.x - 14.0f - ui::button_width(ui::Button::l2, 38.0f), cy, 38.0f);
+    ui::draw_button(canvas.list, canvas.fonts, glyphs, ui::Button::r2, r.x + r.w + 14.0f, cy, 38.0f);
+}
 
 std::unique_ptr<Page> make_settings_page();
 std::unique_ptr<Page> make_payloads_page();

@@ -16,7 +16,7 @@ Antworten und Doku-Texte auf Deutsch, Commit-Nachrichten englisch. Arbeitsordner
 - Vorschau vor Gestaltungsänderungen: erst Screenshot zeigen, erst nach „Ja“ bauen.
 - SMP-Schnittstelle (Port 10101) nie ohne Absprache anfassen; `POST /api/v1/debug-log` ist die Ausnahme (nur lesend).
 - Die Nutzlast der App darf nicht auf ~10 MB wachsen (die Konsole lud 10,5 MB nicht): neue eingebettete Dateien nur sparsam.
-- Windows-Bau: `bash tools/build-windows.sh` (LLVM 21, SDK 0.44); Kacheln: `bash tools/make_starter.sh PS5_Cooling_Center.elf` (WSL) baut **beide**: `starter/out/PPSA86921` (Vollbild-App, `tvapp/`) und `starter/out/PPSA86922` (Browser-Kachel, `starter/browser/`). Senden-Skripte (ELF per Socket und Kachel-Ordner per FTP) **in getrennten Aufrufen**, sonst blockt der Virenschutz.
+- Windows-Bau: `bash tools/build-windows.sh` (LLVM 21, **SDK 0.45** – seit 27.10.2026 Vorgabe des Users: nur noch damit bauen, auch die Vollbild-App und die Browser-Kachel); Kacheln: `bash tools/make_starter.sh PS5_Cooling_Center.elf` (WSL) baut **beide**: `starter/out/PPSA86921` (Vollbild-App, `tvapp/`) und `starter/out/PPSA86922` (Browser-Kachel, `starter/browser/`). Senden-Skripte (ELF per Socket und Kachel-Ordner per FTP) **in getrennten Aufrufen**, sonst blockt der Virenschutz.
 - **Kacheln an der Konsole:** jede Kachel trägt eine eigene Kopie der App-ELF; nach einem Bau immer **beide** Ordner nach `/data/homebrew/PPSA86921` und `/data/homebrew/PPSA86922` kopieren (nur nach „Ja“). Die Vollbild-App muss dafür geschlossen sein, sonst lehnt FTP ihre `eboot.bin` ab (550). `tvapp/sce_sys/param.json` nicht anfassen (Medien-Bereich: Kategorie 65536, Badge 2, Seitentabellen höchstens 128 MiB – mehr startet nicht, CE-100022-5).
 
 ## Ablauf

@@ -25,12 +25,12 @@ PYTHON ?= python3
 # (crt1.o) holds the kernel offsets of every firmware it knows, and before
 # main() it refuses one it does not: with v0.41, which stops at 13.40, an app on
 # a console with 13.60 never gets going and writes no line anywhere. The case
-# for 13.60 came with v0.42; this project builds with v0.45. The build checks
+# for 13.60 came with v0.42, 14.00 and 14.10 with v0.45; this project builds with v0.45. The build checks
 # the SDK before it starts (tools/check_sdk_firmware.py) and the ELF after it
 # is linked, and stops when a firmware named here has no case. FW_NEED= (empty)
 # switches the check off, for building with an older SDK on purpose; naming
 # fewer firmwares keeps it for those.
-FW_NEED ?= 13.00 13.20 13.40 13.60
+FW_NEED ?= 13.00 13.20 13.40 13.60 14.00 14.10
 
 BUILD_DATE_CMD := $(PYTHON) tools/build_date.py
 VERSION_CMD := $(PYTHON) tools/read_version.py

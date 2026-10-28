@@ -41,18 +41,17 @@ sich die Konsole steuern lässt. Ein gemeinsamer Rahmen zeigt, dass sie zusammen
 zwischen dem Seitentitel und den Schaltern „Vollbild“, „Expertenmodus“ und der
 Verbindungsanzeige: **Ruhemodus**, **Neu starten**, **Ausschalten** und
 **Abgesicherter Modus** (bis 1.47.0 eine Karte auf der Systemseite). Jeder Befehl
-unterbricht, was gerade läuft, und verlangt deshalb zwei Klicks auf denselben Knopf: Der
-erste färbt ihn gelb („Wirklich? Nochmal klicken“) und nennt die Folge (nicht gespeicherte
-Spielstände gehen beim Ausschalten und beim Neustart verloren; der abgesicherte Modus ist ein
-Menü beim Hochfahren, von dort führt „PS5 neu starten“ ganz normal zurück). Ein zweiter Klick
-in der ersten knappen Sekunde zählt nicht, damit ein Doppelklick nichts auslöst; nach zehn
-Sekunden ohne zweiten Klick ist der Knopf wieder gewöhnlich.
+wirkt beim ersten Klick, ohne Rückfrage (Wunsch vom 27.10.2026: nichts muss doppelt bestätigt
+werden). Nicht gespeicherte Spielstände gehen beim Ausschalten und beim Neustart verloren; der
+abgesicherte Modus ist ein Menü beim Hochfahren, von dort führt „PS5 neu starten“ ganz normal
+zurück. Solange der Befehl läuft, ist der Knopf gesperrt, damit ein Doppelklick ihn nicht
+zweimal auslöst.
 
 **Design.** Neben der Sprache wählst du eines von vier Designs: **Standard** (dunkelblau mit leuchtenden Rändern), **Hell** (gedämpftes Grau-Blau, blendet nicht), **Dunkel** (fast schwarz, ohne Leuchten) und **Optimal** (für Fernseher und PS5: kräftiger Kontrast, größere Schrift, ohne Durchscheinen und Schatten, am schnellsten gezeichnet). Jedes Gerät merkt sich seine Wahl selbst (im Browser), etwa „Optimal“ am Fernseher und „Hell“ am Handy.
 
 ## Die Seite „Spiele“
 
-**Doppelte Abbilder** (seit 18.10.2026, nach exFAT2AMPR 1.104 von V-10). Liegt ein Spiel in mehr als einem Abbild auf den Laufwerken, nimmt ShadowMountPlus bei jeder Suche mal das eine, mal das andere. Die App sucht beim Öffnen der Seite (und mit „Neu suchen“ oder „Aktualisieren“) in der obersten Ebene jedes Laufwerks und eine Ordnerebene darunter sowie in `homebrew` und `etaHEN/games` nach `.exfat`, `.ffpkg`, `.ffpfs` und `.ffpfsc`, liest aus jedem Abbild die Titel-ID (`sce_sys/param.json` oder `param.sfo`; bei `.ffpfs` aus dem Dateinamen) und zeigt die Karte **Doppelte Abbilder**, wenn es welche gibt. Den Ordner, den ShadowMountPlus für das Spiel nimmt, zählt sie mit. **Beiseitelegen** (zwei Klicks) benennt ein Abbild in `<Name>.off` um; ShadowMountPlus nimmt es danach nicht mehr. **Zurückholen** benennt es zurück. Nichts wird gelöscht. Die Karte startet eingeklappt; ein Klick auf die Kopfzeile klappt die Liste auf und zu (der Zustand bleibt innerhalb der Sitzung), „Neu suchen“ funktioniert auch ohne Aufklappen. Ein Abbild, das ShadowMountPlus gerade eingehängt hat, oder eines, dessen Spiel läuft, bleibt, wie es ist.
+**Doppelte Abbilder** (seit 18.10.2026, nach exFAT2AMPR 1.104 von V-10). Liegt ein Spiel in mehr als einem Abbild auf den Laufwerken, nimmt ShadowMountPlus bei jeder Suche mal das eine, mal das andere. Die App sucht beim Öffnen der Seite (und mit „Neu suchen“ oder „Aktualisieren“) in der obersten Ebene jedes Laufwerks und eine Ordnerebene darunter sowie in `homebrew` und `etaHEN/games` nach `.exfat`, `.ffpkg`, `.ffpfs` und `.ffpfsc`, liest aus jedem Abbild die Titel-ID (`sce_sys/param.json` oder `param.sfo`; bei `.ffpfs` aus dem Dateinamen) und zeigt die Karte **Doppelte Abbilder**, wenn es welche gibt. Den Ordner, den ShadowMountPlus für das Spiel nimmt, zählt sie mit. **Deaktivieren** benennt ein Abbild in `<Name>.off` um; ShadowMountPlus nimmt es danach nicht mehr. **Aktivieren** benennt es zurück. Nichts wird gelöscht. Die Karte startet eingeklappt; ein Klick auf die Kopfzeile klappt die Liste auf und zu (der Zustand bleibt innerhalb der Sitzung), „Neu suchen“ funktioniert auch ohne Aufklappen. Ein Abbild, das ShadowMountPlus gerade eingehängt hat, oder eines, dessen Spiel läuft, bleibt, wie es ist.
 
 **Woher die Liste kommt.** Aus der App-Datenbank der Konsole
 (`/system_data/priv/mms/app.db`): die sichtbaren Kacheln der Spiele-Reihe für
@@ -109,7 +108,7 @@ nutzt sie diese Dateien: Bilder kommen aus der Kopie, und ein Spielordner, desse
 weniger als sechs Stunden gemessen wurde, wird nicht noch einmal durchgezählt. Was sich seither
 geändert hat (eine andere `eboot.bin`, eine neue Ersatzbibliothek, ein anderes Bild), erkennt die
 App und liest es neu. Kommt ein Spiel dazu, wird es mit dem nächsten Lesen mitgespeichert.
-Neben dem Schalter steht, wie viel im Ordner liegt, und „Ordner leeren“ (zwei Klicks) räumt
+Neben dem Schalter steht, wie viel im Ordner liegt, und „Ordner leeren“ räumt
 ihn auf: Gelöscht wird nur, was die App selbst angelegt hat (Ordner mit einer Titel-ID als Namen
 und darin `meta.json`, `icon0.png` und deren Zwischendateien), nie etwas anderes, und nie ein Spiel.
 Ausschalten löscht nichts; die Dateien bleiben liegen, werden dann aber nicht benutzt. Ein Bild über
@@ -122,14 +121,13 @@ App es nach vorn. Im Browser der Konsole schließt sich der Browser dabei sofort
 beim Tippen, noch bevor das Spiel lädt, damit das Spiel vorn ist; sagt die Konsole
 etwas dazu (eine Absage, ein Angebot „Starten“), zeigt sie es als Meldung oben rechts.
 
-- **Läuft schon ein anderes Spiel**, auch pausiert im Hintergrund, startet die
-  App nichts. Sie zeigt fünf Sekunden lang einen Hinweis ohne Knopf (ein Tipp
-  schließt ihn früher): „Tetris® Ultimate läuft noch. Bevor Assassin's Creed
-  Shadows starten kann, beende Tetris® Ultimate zuerst mit „Spiel beenden“ …“,
-  mit der Warnung, dass das Spiel sofort geschlossen wird und vorher nicht
-  speichert. Beendet wird dann über „Spiel beenden“, gestartet danach mit einem
-  eigenen Tipp auf „Starten“, nie im selben Zug (Wunsch vom 03.10.2026). Die
-  Meldung nach dem Beenden nennt das Spiel, das starten sollte. „Beendet“ meldet
+- **Läuft schon ein anderes Spiel**, auch pausiert im Hintergrund, schließt
+  „Starten“ es und startet das gewählte in einem Zug (seit 27.10.2026: nichts muss
+  doppelt bestätigt werden; die Seite nennt der Konsole dafür genau das laufende
+  Spiel, `close` bei `POST /api/v1/library/launch`). Eine Meldung sagt „Tetris®
+  Ultimate wird geschlossen, danach startet Assassin's Creed Shadows.“ Das laufende
+  Spiel speichert vorher nicht – was darin nicht selbst gespeichert wurde, geht
+  verloren. „Spiel beenden“ schließt ein Spiel ebenso sofort. „Beendet“ meldet
   die App erst, wenn die Konsole das alte Spiel ganz losgelassen hat: wenn das
   System seinen Bereich (`/mnt/sandbox/<ID>_000`) entfernt hat, und eine Sekunde
   später, in der ShadowMountPlus seine Abbilder aushängt. Danach startet das
@@ -170,7 +168,10 @@ Schluss einen Zwischennamen.
 
 **Verschieben** erledigt ShadowMountPlus selbst, damit es weiß, wo das Spiel danach
 liegt; zur Wahl stehen nur Ordner, in denen es sucht. Ein Abbild zurück zu einem
-Ordner entpackt ebenfalls ShadowMountPlus.
+Ordner entpackt ebenfalls ShadowMountPlus. Der Streifen über der Bibliothek zeigt
+diese Aufträge und – seit ShadowMountPlus 1.7beta8 – auch Installationen, die
+ShadowMountPlus selbst ausführt (ein PKG oder ein Spielordner aus seiner eigenen
+Oberfläche); ohne Titel-ID steht dort der Paket- oder Dateiname.
 
 **Konvertieren** macht die App auf der PS5, in diese Formate:
 
@@ -190,7 +191,16 @@ Ordner entpackt ebenfalls ShadowMountPlus.
   ShadowMountPlus empfehlen. Auch ein exFAT-, ffpkg- oder ffpfs-Abbild lässt sich
   so zu `.ffpfsc` machen.
 
-**Warnung vor dem Packen zu ffpfsc** (seit 21.10.2026). Ein komprimiertes Abbild muss die Konsole beim Spielen ständig entpacken; bei Spielen mit sehr vielen Daten oder Texture-Streaming sind Ruckler möglich. Der Plan des Konvertierens (`GET /api/v1/library/convert/plan`) sieht deshalb vorab nach (Dump-Ordner, `.exfat`, `.ffpkg`, `.ffpfs`; Abbilder ohne Entpacken über den Abbild-Leser) und liefert `stream_risk`: ab 40 GB Daten (`big_data`), große Streaming-Container (`.ucas`, `.utoc`, `.pak`, `.forge`, `.streamdb`, `.resources`, `.cas`, `.rpf`, zusammen ab 4 GB) oder ein Ordner, dessen Name mit „stream“ beginnt (ab 2 GB). Trifft etwas zu, steht beim Eintrag „ffpfsc“ ein Hinweis, und beim Start fragt das Fenster: „Trotzdem in das Format ffpfsc umwandeln?“. „OK“ macht normal weiter, „Abbrechen“ beendet den Vorgang, ohne dass etwas angelegt wird. Es ist eine Schätzung an Namen und Größen, nicht an der Spiel-Engine; die Schwellen stehen als `STREAM_*` in `src/gameconvert.c`.
+**PS4-Spielordner** (nur `sce_sys/param.sfo` und `eboot.bin`, keine `param.json`) lassen sich ebenso in alle drei
+Formate konvertieren: ShadowMountPlus bindet PS4-Abbilder ab 1.7beta8 ein (es sucht `param.json` oder `param.sfo` an der
+Wurzel des Abbilds, für alle seine Formate gleich). Die App geht dabei den Weg der PS4-Dumps (`dump_image.c`): Eine
+`param.json` aus der `param.sfo` und, falls nötig, eine korrigierte `npbind.dat` werden über den Ordner gelegt und
+kommen mit ins Abbild, damit auch ältere ShadowMountPlus-Versionen es finden; der Ordner selbst bleibt unverändert.
+Ziel ist nur ein USB- oder M.2-Laufwerk (ein PS4-Titel aus dem Speicher der Konsole bringt sie zum Absturz), einen
+AMPR-Index gibt es für PS4-Spiele nicht. Der Plan meldet solche Ordner mit `"ps4": true`. Trophäen werden bei
+PS4-Spielen aus Abbildern nicht registriert, und manche Titel bleiben im Ladebildschirm hängen.
+
+**Warnung vor dem Packen zu ffpfsc** (seit 21.10.2026). Ein komprimiertes Abbild muss die Konsole beim Spielen ständig entpacken; bei Spielen mit sehr vielen Daten oder Texture-Streaming sind Ruckler möglich. Der Plan des Konvertierens (`GET /api/v1/library/convert/plan`) sieht deshalb vorab nach (Dump-Ordner, `.exfat`, `.ffpkg`, `.ffpfs`; Abbilder ohne Entpacken über den Abbild-Leser) und liefert `stream_risk`: ab 40 GB Daten (`big_data`), große Streaming-Container (`.ucas`, `.utoc`, `.pak`, `.forge`, `.streamdb`, `.resources`, `.cas`, `.rpf`, zusammen ab 4 GB) oder ein Ordner, dessen Name mit „stream“ beginnt (ab 2 GB). Trifft etwas zu, steht beim Eintrag „ffpfsc“ ein Hinweis; eine zweite Frage beim Start gibt es nicht mehr (seit 27.10.2026: nichts muss doppelt bestätigt werden). Es ist eine Schätzung an Namen und Größen, nicht an der Spiel-Engine; die Schwellen stehen als `STREAM_*` in `src/gameconvert.c`.
 
 Der Programmcode für exFAT und ffpfsc ist aus [MkPFS](https://github.com/PSBrew/MkPFS)
 (GPL-3.0) übertragen, der für ffpkg aus [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)
@@ -555,8 +565,8 @@ angefangenen Eintrag schon geschrieben war. Nichts wird überschrieben: Gibt es 
 und die Meldung nennt ihn. Verschieben innerhalb eines Laufwerks ist ein Umbenennen; zwischen zwei Laufwerken wird
 kopiert, und das Original erst gelöscht, wenn die Kopie vollständig ist. Vorher prüft die Konsole den freien Platz.
 
-**Löschen** fragt wie bei den Spielen: Die Konsole nennt, was weggeht (Einträge, Dateien, Größe), dann ein Häkchen
-„endgültig“ und zwei Klicks auf **Endgültig löschen**. Ein Balken zeigt den Fortschritt.
+**Löschen** wirkt wie bei den Spielen sofort: Die Seite holt den Plan der Konsole (mit seinem Kennwort) still und
+löscht direkt. Nur wenn die Konsole ablehnt, bleibt ein Fenster mit dem Grund stehen. Ein Balken zeigt den Fortschritt.
 
 Während Kopieren, Verschieben oder Löschen läuft, startet kein zweiter solcher Auftrag; der Dateimanager startet nicht,
 solange ein anderer Vorgang der App läuft (Spiel kopieren, konvertieren, installieren …). Jede Änderung steht im Protokoll.
@@ -604,11 +614,10 @@ mit Laufwerk, Größe, Datum und den Hinweisen „unfertig“ und „mit Prüfsu
 
 **Die Spielstände bleiben immer erhalten.** Keiner dieser Wege fasst sie an.
 
-**Bestätigung:** Der Dialog zeigt genau, was gelöscht wird (Name, Art, Ort, Größe). Der rote Knopf **Endgültig
-löschen** ist erst nach dem Häkchen „Ich verstehe: Das Löschen ist endgültig“ bedienbar, und er braucht zwei Klicks:
-Der erste färbt ihn („Wirklich? Nochmal klicken“), der zweite löscht. Ein Doppelklick zählt nicht, nach zehn Sekunden
-ohne zweiten Klick ist er wieder gewöhnlich. Die Konsole löscht nur mit einem Kennwort, das sie zum gezeigten Plan
-ausgegeben hat (einmal gültig, zehn Minuten lang, nur für genau dieses Spiel oder diese Sicherung).
+**Ohne Rückfrage:** Ein Klick auf „Löschen“ genügt (seit 27.10.2026: nichts muss doppelt bestätigt werden). Die
+Seite holt den Plan still, zeigt im Dialog, was gelöscht wird (Name, Art, Ort, Größe), und löscht sofort. Lehnt die
+Konsole ab (etwa weil das Spiel läuft), bleibt der Dialog mit dem Grund stehen. Die Konsole löscht weiter nur mit
+einem Kennwort, das sie zum Plan ausgegeben hat (einmal gültig, zehn Minuten lang, nur für genau dieses Spiel oder diese Sicherung).
 
 **Fortschritt:** Während des Löschens zeigt der Dialog den Schritt, einen Fortschrittsbalken mit Prozent und „x von y
 gelöscht“. Bei Abbildern und Sicherungen zählen die gelöschten Bytes; eine große Datei wird dafür in Schritten von
@@ -683,7 +692,7 @@ die Liste der Spiele.
   bis die Erkennung wieder etwas Eindeutiges meldet.
 - **Als Tabelle speichern und Löschen.** „Als Tabelle speichern“ legt alle Sitzungen als
   `ps5-spielzeit.csv` ab (Semikolon als Trenner, mit der Ortszeit des Browsers, für Excel
-  und Calc). „Verlauf löschen“ verlangt zwei Klicks und löscht die gespeicherten
+  und Calc). „Verlauf löschen“ löscht beim ersten Klick die gespeicherten
   Sitzungen; ein Spiel, das gerade läuft, zählt weiter und wird wie jedes andere
   gespeichert, wenn es endet.
 
@@ -706,8 +715,9 @@ ihre Trophäen gehören nicht dazu.
   ungleich 0 (YouTube: 65536, Spiele: 0), bei PS4-Titeln eine `CATEGORY` in `param.sfo`, die nicht mit „g“ beginnt, und
   die System-Anwendungen `NPXS…`. Fehlt jede Beschreibung, gilt der Titel als Spiel. Neben der Titel-ID steht der Name,
   auch bei nicht mehr installierten Titeln, soweit ihn die Konsole noch kennt.
-- **Löschen (ab 1.51.0).** Jeder Titel hat einen Knopf „Löschen“ (zwei Klicks). Die App sichert den jetzigen Stand
-  zuerst auf dem gewählten Ziel (als „Stand vor dem Löschen“, derselbe Weg wie beim Zurückspielen; er lässt sich
+- **Löschen (ab 1.51.0).** Jeder Titel hat einen Knopf „Löschen“; er wirkt beim ersten Klick. Die App sichert den
+  jetzigen Stand zuerst auf dem gewählten Ziel (vorgewählt ist das erste passende Laufwerk; gibt es keines, wird ohne
+  Sicherung gelöscht, und ein Hinweis sagt das) (als „Stand vor dem Löschen“, derselbe Weg wie beim Zurückspielen; er lässt sich
   zurückspielen) und entfernt dann die Spielstand-Ordner dieses Titels für diesen Benutzer. Das geht nur, wenn
   kein Spiel läuft, auch kein pausiertes. Die Spielstand-Datenbank der Konsole (`savedata.db`) fasst die App nicht an.
 - **Sichern.** Die Seite listet je Benutzer (bis zu 16, so viele Konten hat eine PS5) die Titel
@@ -738,7 +748,7 @@ ihre Trophäen gehören nicht dazu.
   mit der SHA-256 aus der Liste: nach dem Umstecken eines Sticks, oder wenn man ihr länger
   nicht getraut hat.
 - **Zurückspielen.** Unter „Titel anzeigen“ hat jeder Titel einer Sicherung den Knopf
-  „Zurückspielen“; er verlangt zwei Klicks. Die App geht dann so vor:
+  „Zurückspielen“; er wirkt beim ersten Klick. Die App geht dann so vor:
   1. Die Sicherung wird ganz geprüft. Ist eine Datei des Titels beschädigt, wird nichts
      geändert.
   2. Der jetzige Stand des Titels wird als eigene Sicherung abgelegt („Stand vor dem
@@ -963,6 +973,16 @@ Der Reiter **Updates** auf der Spiele-Seite lädt offizielle Updates direkt von 
 - **DNS:** Die App fragt Cloudflare, Google und Quad9 selbst (UDP, dann TCP, dann DNS über HTTPS, zuletzt die gemerkte Adresse) und ändert nichts an den DNS-Einstellungen der Konsole; eine Sperre gegen System-Updates bleibt bestehen. Eine gefälschte Antwort (`0.0.0.0`, private Adresse) wird verworfen.
 - **Platz:** Nötig ist Platz für das Paket und 1 GB Reserve; die Installation braucht noch einmal etwa so viel.
 
+### Installation über die Paketliste, Bereich „Versionen“ (seit 27.10.2026, nach PatchDL 0.3.5–0.3.8)
+
+- **Wie ein Update der Konsole (0.3.5):** Bei PS5-Spielen von Disc oder aus dem Store legt die App neben `update.pkg` die offizielle Paketliste (`update.manifest.json`) und ihre PlayGo-Prüfdatei (`update.crc`). Zur Installation baut sie daraus eine lokale Paketliste, deren Stücke auf ihren eigenen Server zeigen (`/stream/install/p/<Versatz>/<Größe>/<Paketname>`), dazu die Prüfdatei; Größe, Stück-Prüfsummen und die Paket-Prüfsumme bleiben die offiziellen. So schreibt die Konsole ihre `app.json` wie nach einem eigenen Update. Lehnt sie die Paketliste ab, installiert die App im selben Auftrag das Paket wie bisher (`pkg_install_manifest_refused` im Protokoll). Ohne Prüfdatei, bei PS4-, ShadowMountPlus- und Fake-PKG-Spielen bleibt es beim Paket selbst. Nach dem letzten Byte wartet der Server bis zu einer Minute, bis die Konsole die Prüfdatei abgeholt hat.
+- **Ältere Downloads (0.3.7):** Fehlt die Paketliste, holt die Warteschlange sie vor der Installation einmal von den offiziellen Servern und legt sie nur ab, wenn sie Byte für Byte das Paket im Ordner beschreibt.
+- **Grundversion (0.3.6):** Jedes Update baut auf einer Grundversion auf (`contentVersion` und `masterVersion` der Grund-`param.json` im `_sc`-Teil). Die App vergleicht die des installierten Spiels (über dessen `app.json`) mit der des Pakets. Weichen sie ab (typisch bei Disc-Spielen), installiert sie nicht auf dem normalen Weg, sondern meldet „passt nur als Neuinstallation“. Lässt es sich nicht feststellen (Spiel in einem Stück installiert), wird wie bisher installiert.
+- **Bereich „Versionen“:** Der Knopf **Versionen** an jedem Spiel zeigt installierte Version und Grundversion, das geladene Paket (Version, Grundversion, ob eine Paketliste da ist) und ob beides zusammenpasst. Die Versionsliste von prosperopatches.com lädt erst ein Klick; eine Version wird wie bisher über den eingefügten Link geholt und immer von den offiziellen Servern geladen.
+- **Neu installieren / Downgrade (0.3.6, 0.3.8):** Nur PS5-Spiele von Disc oder aus dem Store, nicht über PS4Mount. Eine ältere oder die installierte Version lässt sich holen; sie wird nie auf dem normalen Weg installiert. Erst nach **Neu installieren** (den Namen des Spiels, den die Konsole als Sicherung verlangt, schickt die Seite seit 27.10.2026 selbst mit): Prüfung (Spiel läuft nicht, Paket vollständig, offiziell signiert, Inhalts-ID enthält `-<Titel-ID>_`, Platz: frei plus alte Spielgröße ≥ Paket + 1 GB), Markierung `fresh.json`, Deinstallieren nur des Spiels (Spielstände und Zusatzinhalte bleiben; ein Disc-Spiel braucht weiter seine Disc), Warten, bis `/user/app/<Titel-ID>/app.json` verschwunden ist (höchstens 30 Minuten), dann Installation des Pakets als ganzes Spiel. Jeder Schritt steht im Protokoll (`upd_fresh_*`) und im Verlauf (Deinstallieren und Installieren je eine Zeile).
+- **Abbruch nach dem Deinstallieren:** Das Spiel bleibt dank `fresh.json` mit seinem Paket in der Liste; **Neuinstallation fortsetzen** versucht es erneut. Das Paket lässt sich solange nicht löschen.
+- **Nach einem Downgrade** schaltet die App die Updates für dieses Spiel aus (sonst holte „Alle aktualisieren“ die neue Version zurück). Die automatischen Updates der Konsole für dieses Spiel müssen von Hand aus.
+
 ## Disc im Laufwerk (seit 21.10.2026, nach ps-disc-detect)
 
 Der Reiter **Disc** auf der Spiele-Seite zeigt, welche Disc im Laufwerk liegt, und legt von einer PS2-DVD oder einer PS3-Disc auf Wunsch ein Abbild (ISO) an. Er beruht auf ps-disc-detect (GPL-3.0); die App hat dessen Vorgehen neu geschrieben (`src/disc.c`).
@@ -1022,7 +1042,7 @@ Programm.
     Ende und der Grund stehen am Ende der Datei, und die Seite meldet es.
 - **Die Dateien auf der Konsole.** Unter dem Log listet eine Karte alles, was im Ordner liegt (neueste
   zuerst, mit Art, Datum und Größe) und lässt jede Datei herunterladen. **„Ordner leeren“** löscht
-  die gespeicherten Auszüge und Aufnahmen nach zwei Klicks; eine Aufnahme, die gerade läuft, bleibt.
+  die gespeicherten Auszüge und Aufnahmen sofort; eine Aufnahme, die gerade läuft, bleibt.
   Gelöscht werden nur Dateien, die diese App angelegt hat (Namen `klog-….log` und `aufnahme-….log`);
   Unterordner und Dateien mit anderen Namen bleiben, und Verknüpfungen werden nie verfolgt.
 - **Grenzen.** Die App hält die letzten 3000 Zeilen, die Seite bis zu 5000, im Fenster
@@ -1041,8 +1061,8 @@ Programm.
 
 ## Firmware
 
-Die App ist mit dem PS5-Payload-SDK **v0.44** gebaut. Dessen Startcode kennt die
-Firmware **bis einschließlich 13.60**; v0.41, mit dem die Versionen bis 1.46.0
+Die App ist mit dem PS5-Payload-SDK **v0.45** gebaut. Dessen Startcode kennt die
+Firmware **bis einschließlich 14.10** (14.00 und 14.10 seit v0.45); v0.41, mit dem die Versionen bis 1.46.0
 gebaut waren, endete bei 13.40. Eine Firmware, die der Startcode nicht kennt,
 kommt nicht bis `main()`: Das Programm startet dann nicht und schreibt nichts ins
 Protokoll. Getestet ist nur die **Firmware 12.00** auf einer PS5 Pro; mehrere Nutzer melden, dass die App auch auf **13.60** läuft. Ob
@@ -1058,7 +1078,7 @@ angesteckten USB-Sticks — im Hauptverzeichnis des Sticks und im Ordner `payloa
 darin. „Starten“ schickt die Datei an den Payload-Lader der Konsole (elfldr,
 Port 9021), genau das, was sonst vom PC aus geschieht, nur ohne PC. Von einem
 Stick lässt sich eine Datei außerdem in den internen Ordner kopieren (das
-Original bleibt); aus dem internen Ordner lässt sie sich löschen (zwei Klicks).
+Original bleibt); aus dem internen Ordner lässt sie sich löschen (ein Klick).
 
 - Der Ordner wird beim Start der App angelegt, **wenn es ihn nicht gibt**. Ein
   vorhandener bleibt unberührt: kein erneutes Anlegen, keine geänderten Rechte.
@@ -1338,6 +1358,11 @@ eigenen LAN, und eine Kennwortabfrage brachte dort keinen Nutzen, sondern
 nur eine Hürde. Wer das anders braucht, setzt `bind_address` in der
 Konfiguration auf `127.0.0.1`; dann antwortet der Server nur noch der
 Konsole selbst.
+
+ShadowMountPlus nimmt seit 1.7beta8 ebenfalls standardmäßig Anfragen aus dem
+ganzen Heimnetz an (Port 10101, ohne Anmeldung). Wer das nicht möchte, setzt
+in dessen `config.ini` `api_bind_address=127.0.0.1`; die App spricht
+ShadowMountPlus ohnehin über `127.0.0.1` an.
 
 Offen heißt nicht „für jede Webseite". Eine Seite, die im Browser eines
 Geräts im Heimnetz geöffnet ist, kann dessen Verbindungen zur Konsole

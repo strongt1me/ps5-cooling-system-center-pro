@@ -4804,6 +4804,17 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
+  /* The area "Versionen" of one game (updates.c, PatchDL 0.3.6-0.3.8) */
+  if(!strcmp(req->path, "/api/v1/updates/fit")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    char id[16] = "", msg[200];
+    int http = 200;
+    query_param(req->query, "title", id, sizeof(id));
+    cJSON *o = ps5tm_updates_fit_json(id, msg, sizeof(msg), &http);
+    if(!o) { ps5tm_http_send_error(fd, http, "fit_refused", msg); return; }
+    send_cjson(fd, 200, o);
+    return;
+  }
   if(!strcmp(req->path, "/api/v1/updates/packages")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
     send_cjson(fd, 200, ps5tm_updates_packages_json());

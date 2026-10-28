@@ -25,8 +25,8 @@ enum View
     kKernel = 1,
 };
 
-constexpr float kListTop = kTop + 82.0f;
-constexpr float kListW = 1824.0f - kMargin;
+constexpr float kListTop = kTop + 10.0f;
+constexpr float kListW = 1824.0f - kLeftX;
 
 Color level_color(const std::string &level)
 {
@@ -52,13 +52,8 @@ class LogsPage final : public Page
     void init(const ui::Theme &theme) override
     {
         theme_ = theme;
-        views_.style.theme = theme;
-        views_.style.kind = ui::TabKind::segmented;
-        views_.style.width = ui::TabWidth::fill;
-        views_.style.text_size = 22.0f;
-        views_.style.height = 52.0f;
+        style_subtabs(views_, theme, 2);
         views_.set_tabs({{"App-Protokoll"}, {"Kernel-Log live"}});
-        views_.set_bounds({kMargin, kTop + 8.0f, 760.0f, 56.0f});
         views_.set_active(kApp, true);
 
         list_.style.theme = theme;
@@ -76,7 +71,7 @@ class LogsPage final : public Page
             (void)focus;
             draw_line(canvas, row, item.tag);
         };
-        list_.set_bounds({kMargin, kListTop, kListW, kBottom - kListTop});
+        list_.set_bounds({kLeftX, kListTop, kListW, kBottom - kListTop});
     }
 
     void absorb(const Snapshot &data) override
@@ -132,15 +127,17 @@ class LogsPage final : public Page
     void draw(ui::Canvas &canvas) const override
     {
         views_.draw(canvas);
+        draw_subtab_glyphs(canvas, views_);
         gfx::DrawList &list = canvas.list;
         const ui::Fonts &fonts = canvas.fonts;
         const std::size_t count = view_ == kApp ? log_.size() : klog_.size();
         char text[96];
         std::snprintf(text, sizeof(text), "%zu Zeilen · %s", count, follow_ ? "läuft mit" : "angehalten");
-        ui::text(list, fonts.regular, text, 1824.0f, kTop + 46.0f, 21.0f, follow_ ? kMuted : kWarning,
+        const float baseline = kTabY + kTabH * 0.5f + 8.0f;
+        ui::text(list, fonts.regular, text, 1824.0f, baseline, 21.0f, follow_ ? kMuted : kWarning,
                  gfx::Align::right);
         if (view_ == kKernel && lost_)
-            ui::text(list, fonts.semibold, "Zeilen verpasst", 1824.0f - 330.0f, kTop + 46.0f, 21.0f, kWarning,
+            ui::text(list, fonts.semibold, "Zeilen verpasst", 1824.0f - 330.0f, baseline, 21.0f, kWarning,
                      gfx::Align::right);
         list_.draw(canvas);
     }

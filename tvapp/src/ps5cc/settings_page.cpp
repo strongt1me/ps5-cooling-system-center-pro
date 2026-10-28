@@ -93,7 +93,7 @@ class SettingsPage final : public Page
         form_.style.off_text = "Aus";
         form_.style.label_ratio = 0.42f;
         form_.style.control_width = 360.0f;
-        form_.set_bounds({kMargin, kTop + 10.0f, kLeftW, kBottom - kTop - 10.0f});
+        form_.set_bounds({kLeftX, kTop + 10.0f, kLeftW, kBottom - kTop - 10.0f});
         build(Config{});
 
         info_.style.theme = theme;

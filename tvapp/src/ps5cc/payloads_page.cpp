@@ -29,7 +29,7 @@ enum View
     kViews = 3,
 };
 
-constexpr float kListTop = kTop + 82.0f;
+constexpr float kListTop = kTop + 10.0f;
 
 class PayloadsPage final : public Page
 {
@@ -37,13 +37,8 @@ class PayloadsPage final : public Page
     void init(const ui::Theme &theme) override
     {
         theme_ = theme;
-        views_.style.theme = theme;
-        views_.style.kind = ui::TabKind::segmented;
-        views_.style.width = ui::TabWidth::fill;
-        views_.style.text_size = 22.0f;
-        views_.style.height = 52.0f;
+        style_subtabs(views_, theme, 3);
         views_.set_tabs({{"Meine Payloads"}, {"Laufend"}, {"Payload-Store"}});
-        views_.set_bounds({kMargin, kTop + 8.0f, kLeftW, 56.0f});
         views_.set_active(kFiles, true);
 
         list_.style.theme = theme;
@@ -66,7 +61,7 @@ class PayloadsPage final : public Page
             draw_icon(canvas, {row.x + 16.0f, row.y + (row.h - side) * 0.5f, side, side}, item, tile,
                       item.disabled ? 0.45f : 1.0f);
         };
-        list_.set_bounds({kMargin, kListTop, kLeftW, kBottom - kListTop});
+        list_.set_bounds({kLeftX, kListTop, kLeftW, kBottom - kListTop});
 
         info_.style.theme = theme;
         info_.style.panel = false;
@@ -81,7 +76,6 @@ class PayloadsPage final : public Page
         bar_.style.text_size = 20.0f;
         bar_.set_bounds({kRightX + 30.0f, kBottom - 150.0f, kRightW - 60.0f, 48.0f});
 
-        dialog_.style.theme = theme;
         // Under at most two lines of title and four of text.
         info_.set_bounds({kRightX + 30.0f, kTop + 300.0f, kRightW - 60.0f, kBottom - kTop - 480.0f});
     }
@@ -116,19 +110,8 @@ class PayloadsPage final : public Page
         list_.enter();
     }
 
-    bool modal() const override
-    {
-        return dialog_.is_open() || dialog_.visible();
-    }
-
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
-        if (dialog_.is_open())
-        {
-            if (dialog_.handle(input, feedback) == ui::Event::activated && dialog_.choice() == 1 && kill_pid_ > 0)
-                source().kill_payload(kill_pid_);
-            return;
-        }
         if (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next))
         {
             focus_[static_cast<std::size_t>(view_)] = list_.focus();
@@ -161,13 +144,9 @@ class PayloadsPage final : public Page
                     feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
                     return;
                 }
-                kill_pid_ = item.running->pid;
-                ui::DialogContent content;
-                content.icon = ui::StatusKind::warning;
-                content.title = "„" + item.running->name + "“ beenden?";
-                content.body = "Der Prozess wird sofort beendet. Was er gerade tut, bricht ab.";
-                content.buttons = {{"Laufen lassen"}, {"Beenden", ui::ButtonKind::primary, true}};
-                dialog_.open(content, feedback);
+                // □ ends it at once – nothing is asked twice (user, 27.10.2026).
+                feedback.play(audio::Cue::select);
+                source().kill_payload(item.running->pid);
             }
         }
     }
@@ -180,12 +159,12 @@ class PayloadsPage final : public Page
             refresh_info();
         info_.update(dt);
         bar_.update(dt);
-        dialog_.update(dt);
     }
 
     void draw(ui::Canvas &canvas) const override
     {
         views_.draw(canvas);
+        draw_subtab_glyphs(canvas, views_);
         list_.draw(canvas);
 
         gfx::DrawList &list = canvas.list;
@@ -255,15 +234,10 @@ class PayloadsPage final : public Page
             bar_.draw(canvas);
     }
 
-    void draw_overlay(ui::Canvas &canvas) const override
-    {
-        dialog_.draw(canvas);
-    }
-
     int hints(ui::Hint *out) const override
     {
         int n = 0;
-        out[n++] = {ui::Button::l2, "Bereich", ui::Button::r2};
+        out[n++] = {ui::Button::l2, "Ansicht", ui::Button::r2};
         const ListItemRef item = focused();
         if (view_ == kFiles && item.file != nullptr && item.file->valid)
             out[n++] = {ui::Button::cross, "Starten"};
@@ -530,11 +504,9 @@ class PayloadsPage final : public Page
     ui::ListView list_;
     ui::DetailList info_;
     ui::ProgressBar bar_;
-    ui::Dialog dialog_;
     int view_ = kFiles;
     std::array<int, kViews> focus_{};
     std::string key_;
-    int kill_pid_ = 0;
     int info_for_ = -2;
 
     std::vector<PayloadFile> files_;

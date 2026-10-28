@@ -53,6 +53,11 @@ typedef struct {
 int  upd_sony_parse_manifest(const char *json, upd_manifest_t *out);
 /* Fetches (twice more after a network failure) and parses. 0, or -1 (step in why). */
 int  upd_sony_manifest(const char *url, upd_manifest_t *out, char *why, size_t wn);
+/* The same, and the manifest's own text in *raw (malloc'd, NUL-terminated; NULL on failure) for the local manifest an
+   install is given (PatchDL 0.3.5). */
+int  upd_sony_manifest_raw(const char *url, upd_manifest_t *out, char **raw, char *why, size_t wn);
+/* A small file beside the pieces (the PlayGo chunk CRC file) into a malloc'd buffer of at most max bytes. 0, or -1. */
+int  upd_sony_fetch_small(const char *url, size_t max, char **out, size_t *len, char *why, size_t wn);
 void upd_manifest_free(upd_manifest_t *m);
 
 /* Downloads bytes [from, from+len) of a piece URL and pwrites them into fd at file_off. *done counts the bytes written so far

@@ -105,7 +105,7 @@ datos guardados, un gestor de archivos, payloads, perfil e información del sist
 <div class='card'><b class='t'>Silencioso en lugar de ruidoso</b>La regulación mantiene una temperatura objetivo, de forma suave y pausada, sin subidas y bajadas constantes.</div>
 <div class='card'><b class='t'>Todo en el navegador</b>No hace falta instalar nada en el PC: abre la dirección y listo.</div>
 <div class='card'><b class='t'>Sin Internet</b>La app solo se conecta con programas de la consola y con los navegadores de la red doméstica.</div>
-<div class='card'><b class='t'>Uso seguro</b>Eliminar y las órdenes de alimentación piden confirmación; lo importante está protegido.</div>
+<div class='card'><b class='t'>Uso seguro</b>Cada acción se ejecuta con el primer clic; los juegos en marcha y las partidas guardadas están protegidos.</div>
 </div>
 <div class='info'>Probado en una PS5 Pro (CFI-7021) con firmware 12.00. Otros firmwares pueden funcionar, pero no se han probado.</div>
 </section><section class='ch' id='voraussetzungen'><div class='ch-head'><div class='ch-num'>2</div><h2>Requisitos</h2></div>
@@ -143,9 +143,7 @@ la página «Sistema», pulsa <b>Instalar icono</b>.</div>
 indicador de conexión.</p>
 <p><b>Diseño.</b> Junto al idioma eliges uno de cuatro diseños: <b>Estándar</b> (azul oscuro con bordes luminosos), <b>Claro</b> (gris azulado suave, no deslumbra), <b>Oscuro</b> (casi negro, sin brillo) y <b>Óptimo</b> (para el televisor y la PS5: contraste fuerte, letra más grande, sin transparencias ni sombras, el más rápido de dibujar). Cada dispositivo recuerda su propia elección, por ejemplo «Óptimo» en el televisor y «Claro» en el móvil.</p>
 <h3>Opciones de alimentación</h3>
-<p><b>Modo de reposo</b>, <b>Reiniciar</b>, <b>Apagar</b> y <b>Modo seguro</b>. Cada orden necesita dos clics:
-el primero pone el botón en amarillo («¿Seguro? Haz clic otra vez») e indica la consecuencia; el segundo la ejecuta. Un doble clic
-no cuenta; a los diez segundos, el botón vuelve a la normalidad.</p>
+<p><b>Modo de reposo</b>, <b>Reiniciar</b>, <b>Apagar</b> y <b>Modo seguro</b>. Cada orden se ejecuta con el primer clic; mientras se ejecuta, el botón queda bloqueado, así que un doble clic no la lanza dos veces.</p>
 <div class='warn'>Al apagar y al reiniciar se pierden los datos no guardados.</div>
 <h3>Idioma</h3>
 <p>Arriba a la derecha, en la barra superior, eliges el idioma de la interfaz: <b>Deutsch, English, Italiano, Español, Français</b> o <b>Русский</b>.
@@ -208,17 +206,18 @@ filtrar por PS5, PS4 o «Backport · AMPR · PlayGo»; y ordenar como en la pant
 <h3>Iniciar y cerrar</h3>
 <ul>
 <li><b>Iniciar</b> inicia el juego directamente. En el navegador de la consola, el navegador se cierra al instante al pulsar, antes de que cargue el juego, para que el juego pase a primer plano. Si la consola tiene algo que decir (un rechazo, una oferta «Iniciar»), lo muestra como aviso arriba a la derecha.</li>
-<li>Si ya se está ejecutando otro juego, la app no inicia nada y te lo indica. <b>Cerrar juego</b> cierra el juego en ejecución
-<b>al instante y sin pedir confirmación</b>: se pierde lo que no se haya guardado.</li>
+<li>Si ya se está ejecutando otro juego, <b>Iniciar</b> lo cierra e inicia el elegido de una vez: se pierde lo que no se haya guardado en el juego en marcha. <b>Cerrar juego</b> cierra el juego en ejecución <b>al instante</b>.</li>
 <li>Un juego nunca se inicia dos veces; un segundo clic en un plazo de 30 segundos no hace nada.</li>
 </ul>
 <h3>Imágenes duplicadas</h3>
-<p>Si un juego existe en más de una imagen en las unidades (<code>.exfat</code>, <code>.ffpkg</code>, <code>.ffpfs</code>, <code>.ffpfsc</code>), ShadowMountPlus elige en cada búsqueda unas veces una y otras la otra. Entonces la página Juegos muestra la tarjeta <b>Imágenes duplicadas</b>. Empieza plegada; un clic en la cabecera abre y cierra la lista (el estado se mantiene durante la sesión) y «Buscar de nuevo» funciona también plegada. La fuente que ShadowMountPlus usa en ese momento está marcada. <b>Apartar</b> renombra una imagen a <code>….off</code>, y ShadowMountPlus ya no la toma; <b>Recuperar</b> lo deshace. No se elimina nada. Una imagen montada, o cuyo juego está en ejecución, no se puede apartar.</p>
+<p>Si un juego existe en más de una imagen en las unidades (<code>.exfat</code>, <code>.ffpkg</code>, <code>.ffpfs</code>, <code>.ffpfsc</code>), ShadowMountPlus elige en cada búsqueda unas veces una y otras la otra. Entonces la página Juegos muestra la tarjeta <b>Imágenes duplicadas</b>. Empieza plegada; un clic en la cabecera abre y cierra la lista (el estado se mantiene durante la sesión) y «Buscar de nuevo» funciona también plegada. La fuente que ShadowMountPlus usa en ese momento está marcada. <b>Desactivar</b> renombra una imagen a <code>….off</code>, y ShadowMountPlus ya no la toma; <b>Activar</b> lo deshace. No se elimina nada. Una imagen montada, o cuyo juego está en ejecución, no se puede desactivar.</p>
+<p>La franja sobre la biblioteca muestra, además de las tareas propias de la app, los traslados, las extracciones y –desde ShadowMountPlus 1.7beta8– las instalaciones que realiza el propio ShadowMountPlus (por ejemplo, un PKG o una carpeta de juego desde su propia interfaz); sin ID de título muestra el nombre del paquete o del archivo.</p>
 <h3>Copiar, mover, convertir</h3>
 <p>Las carpetas de volcado se pueden copiar, mover y convertir directamente en la consola a <b>ffpfsc</b> (comprimido, recomendado),
 <b>ffpkg</b> o <b>exFAT</b>, ya sea en versión jugable en la carpeta <code>homebrew</code> del destino (ShadowMountPlus
 lo encuentra allí) o como copia de seguridad en <code>PS5-Sicherung/Spiele</code>. Cada copia se vuelve a leer y se verifica tras escribirla;
 no se sobrescribe nada.</p>
+<p>Las <b>carpetas de juegos de PS4</b> (solo <code>sce_sys/param.sfo</code>, sin <code>param.json</code>) ahora también se pueden convertir: ShadowMountPlus monta imágenes de PS4 a partir de la 1.7beta8, en los tres formatos. La app añade a la imagen un <code>param.json</code> creado a partir del <code>param.sfo</code>, para que también lo encuentren versiones anteriores. El destino solo puede ser una unidad USB o M.2: un título de PS4 desde el almacenamiento de la consola la hace fallar. Los trofeos no se registran en juegos de PS4 desde imágenes, y algunos títulos se quedan colgados en la pantalla de carga.</p>
 
 <div class='warn'>Vuelve a crear las imágenes <code>.ffpkg</code> de versiones anteriores a la 1.48.0 (estructura antigua).</div>
 <h3>Juegos de PS4 desde USB (PS4Mount)</h3>
@@ -243,7 +242,7 @@ no se sobrescribe nada.</p>
 <li>Un juego en marcha puede usar como máximo unos 30 paquetes (juego, actualización y unos 29 contenidos adicionales). Es un límite de la consola, también para juegos instalados.</li>
 </ul>
 <!--p4m-->
-<p><b>Antes de empaquetar a ffpfsc:</b> la consola tiene que descomprimir un archivo comprimido continuamente mientras se juega, así que los juegos con muchísimos datos o streaming de texturas pueden ir a tirones. Antes de que la app convierta un juego (carpeta de volcado, <code>.exfat</code>, <code>.ffpkg</code> o <code>.ffpfs</code>) a <code>.ffpfsc</code>, comprueba: con unos 40 GB de datos, con grandes contenedores de streaming (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB o más en total) o con una carpeta de streaming (2 GB o más) la ventana muestra un aviso y, al iniciar, la app pregunta si se debe convertir el juego de todos modos. «Aceptar» sigue con normalidad, «Cancelar» detiene el proceso. Es una estimación por nombres y tamaños de archivo, no por el motor del juego.</p>
+<p><b>Antes de empaquetar a ffpfsc:</b> la consola tiene que descomprimir un archivo comprimido continuamente mientras se juega, así que los juegos con muchísimos datos o streaming de texturas pueden ir a tirones. Antes de que la app convierta un juego (carpeta de volcado, <code>.exfat</code>, <code>.ffpkg</code> o <code>.ffpfs</code>) a <code>.ffpfsc</code>, comprueba: con unos 40 GB de datos, con grandes contenedores de streaming (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB o más en total) o con una carpeta de streaming (2 GB o más) la ventana muestra un aviso junto a «ffpfsc». No hay una segunda pregunta: «Iniciar» convierte. Es una estimación por nombres y tamaños de archivo, no por el motor del juego.</p>
 </section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>Índice AMPR, APR-EMU, PlayGo e historial</h2></div>
 <p>Cada tarjeta de juego tiene el botón <b>Asset packs LZ4 …</b> bajo <b>Convertir</b>. Abre una ventana con herramientas de APR-EMU. Por ahora contiene el <b>índice AMPR</b>.</p>
 <ul>
@@ -280,7 +279,7 @@ no se sobrescribe nada.</p>
 <li><b>Reparar</b>: solo donde es seguro. Si el tamaño de un archivo <code>.ffpfsc</code> no coincide con la cabecera de la imagen, pero los datos están completos y los bytes sobrantes vacíos, la app corrige el tamaño y vuelve a leer todo el contenedor. Los bloques dañados no se pueden rehacer solo con la imagen. La reparación se bloquea mientras ShadowMountPlus tenga la imagen montada.</li>
 </ul>
 <h3>Historial</h3>
-<p>En la página de juegos, la pestaña <b>Historial</b> muestra todas las operaciones de la app – copiar, mover, convertir, dividir paquete, instalar, borrar, gestor de archivos, partidas guardadas e índice AMPR – con resultado (hecho, error, cancelado), tamaño, duración y hora. Las últimas 500 se guardan en la consola en <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Vaciar historial</b> las borra (dos clics).</p>
+<p>En la página de juegos, la pestaña <b>Historial</b> muestra todas las operaciones de la app – copiar, mover, convertir, dividir paquete, instalar, borrar, gestor de archivos, partidas guardadas e índice AMPR – con resultado (hecho, error, cancelado), tamaño, duración y hora. Las últimas 500 se guardan en la consola en <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Vaciar historial</b> las borra al instante.</p>
 <h3>Plugins del juego</h3>
 <p>La fila <b>Plugins del juego</b> mantiene al día en la carpeta <code>fakelib</code> del juego los módulos de reemplazo de drakmor: el stub de PlayGo (<code>libScePlayGo.sprx</code>, pgo_stub 0.6) y los módulos de DLC (<code>libSceAppContent.sprx</code>, <code>libSceGameUpdate.sprx</code>, <code>libSceNpEntitlementAccess.sprx</code>, dlc_emu 0.3, versión «log»: escribe <code>/app0/dlc_emu.log</code> en el juego; la versión sin registro fallaba al iniciar el juego y se sustituye como «versión defectuosa»), que muestran como adquiridos los DLC de la <code>dlc_emu.ini</code> del juego.</p>
 <ul>
@@ -346,10 +345,9 @@ no se sobrescribe nada.</p>
 <li>Las <b>copias de seguridad de la app</b> (copias y conversiones) se eliminan junto con su archivo de sumas de comprobación.</li>
 </ul>
 <ol class='steps'>
-<li>Toca <b>Eliminar</b>: la ventana muestra exactamente lo que se va a eliminar.</li>
-<li>Marca la casilla «Entiendo que la eliminación es definitiva».</li>
-<li>Pulsa dos veces <b>Eliminar definitivamente</b> (el primer clic pregunta «¿Seguro?»).</li>
+<li>Toca <b>Eliminar</b>: la app pregunta en silencio a la consola qué se va a eliminar y lo elimina al instante. La ventana muestra lo que se elimina.</li>
 <li>Una barra de progreso con porcentaje muestra cuánto se ha avanzado.</li>
+<li>Si la consola se niega (por ejemplo, porque el juego está en marcha), la ventana se queda abierta con el motivo y no se elimina nada.</li>
 </ol>
 <div class='tip'>Tus <b>datos guardados se conservan siempre</b>. Nunca se elimina un juego en ejecución.</div>
 <p>Solo se elimina lo que realmente está dentro de la carpeta del juego o de la imagen: si la ruta pasa por un enlace o es una unidad montada, la app no elimina nada y lo indica.</p>
@@ -366,7 +364,7 @@ memoria USB, un disco o el SSD interno (<code>PS5-Sicherung/Spielstaende/&lt;Dat
 al lado, los verifica y solo entonces sustituye.</p>
 <div class='warn'>Las copias de seguridad y las restauraciones solo se hacen cuando <b>no hay ningún juego en ejecución</b>, ni siquiera en pausa. Las copias de seguridad de
 otra consola no se pueden restaurar.</div>
-<p>Por usuario, separados en juegos de PS5, apps de PS5, juegos de PS4 y apps de PS4. «Eliminar» (dos clics) borra los datos guardados de un título; la app guarda antes el estado actual y permite recuperarlo.</p>
+<p>Por usuario, separados en juegos de PS5, apps de PS5, juegos de PS4 y apps de PS4. «Eliminar» borra al instante los datos guardados de un título; la app guarda antes el estado actual en la unidad elegida (si no, en la primera adecuada) y permite recuperarlo. Si no hay ninguna unidad, un aviso indica que se borra sin copia de seguridad.</p>
 
 </section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>12</div><h2>Paquetes</h2></div>
 <p>Encuentra archivos <code>.pkg</code> en unidades USB, discos y en el almacenamiento de la consola (carpeta <code>pkg</code>) y muestra imagen,
@@ -391,6 +389,17 @@ lista de descargas, con «Eliminar».</div>
 <li>El paquete está en <code>/data/PS5-Cooling-Center/updates/&lt;ID de título&gt;</code>. Tras la instalación se borra en cuanto el juego indica la nueva versión (desactivable). Si ya hay un paquete del tamaño correcto, la app comprueba sus piezas y solo descarga de nuevo las incorrectas.</li>
 <li>La app llega a los servidores de actualizaciones con sus propias consultas DNS (Cloudflare, Google, Quad9, si hace falta por HTTPS). Los ajustes DNS de la consola no cambian; un bloqueo de las actualizaciones del sistema se mantiene.</li>
 <li>Hace falta espacio para el paquete más 1 GB de reserva; la instalación necesita aproximadamente lo mismo otra vez.</li>
+</ul>
+<h3>Instalación mediante la lista de paquetes y el área «Versiones»</h3>
+<p>Adoptado de PatchDL 0.3.5–0.3.8:</p>
+<ul>
+<li><b>Instalado como una actualización de la consola:</b> en juegos de PS5 de disco o de la tienda, la app guarda junto al paquete la lista oficial de paquetes y su archivo de comprobación. La consola recibe una lista cuyos fragmentos apuntan a la app y después escribe sus datos del juego como tras una actualización propia. Si la consola lo rechaza, la app instala el paquete ella misma como antes (el registro indica el motivo). En descargas antiguas sin lista, la app la obtiene una vez antes de instalar y solo la usa si coincide byte a byte con el paquete.</li>
+<li><b>Versión base:</b> cada actualización se basa en una versión base concreta del juego. Un juego de disco puede tener otra distinta; entonces la app no la instala por la vía normal y muestra «solo sirve como reinstalación».</li>
+<li>El botón <b>Versiones</b> de cada juego abre su propia área: versión instalada y versión base, el paquete descargado y si ambos encajan. La lista de versiones de prosperopatches.com solo se carga tras un clic; obtener una versión funciona como antes con el enlace pegado, la descarga siempre viene de los servidores oficiales.</li>
+<li><b>Reinstalar</b> y <b>downgrade</b> (solo juegos de PS5 de disco o de la tienda, no mediante PS4Mount): se puede obtener una versión anterior o la instalada; nunca se instala por la vía normal. Solo cuando eliges <b>Reinstalar</b> en el área «Versiones», la app desinstala el juego (solo el juego: las partidas guardadas y los complementos se conservan, un juego de disco sigue necesitando su disco), espera a que la consola lo libere e instala el paquete como juego completo. El nombre del juego, que la consola pide como medida de seguridad, lo envía la propia página. Si el juego está en marcha, la app lo rechaza. Cada paso queda en el registro y en el historial.</li>
+<li>Si la instalación se interrumpe tras la desinstalación, el juego sigue en la lista con su paquete: <b>Continuar la reinstalación</b> lo vuelve a intentar. Mientras falte el juego, el paquete no se puede borrar.</li>
+<li>Tras un downgrade, la app desactiva las actualizaciones de este juego. Desactiva también las actualizaciones automáticas de la consola para este juego; si no, volverá a traer la versión nueva.</li>
+<li>Espacio: la reinstalación necesita espacio libre para el paquete más 1 GB; se cuenta también el espacio del juego antiguo.</li>
 </ul>
 </section><section class='ch' id='disc'><div class='ch-head'><div class='ch-num'>14</div><h2>Disco en la unidad</h2></div>
 <p>La pestaña <b>Disc</b> de la página Juegos muestra qué disco hay en la unidad y, si se pide, crea una imagen (ISO) de un DVD de PS2 o de un disco de PS3. Se basa en ps-disc-detect (GPL-3.0), cuyo procedimiento la app ha reescrito.</p>
@@ -453,6 +462,7 @@ imagen de perfil, nombre y enlaces. Los enlaces solo se pueden pulsar si el nave
 <li>La consola no debe quedar expuesta a Internet: <b>no configures ningún reenvío de puertos</b> al puerto 8086.</li>
 <li>Si solo quieres usarla desde el propio dispositivo, pon la dirección de enlace en <code>127.0.0.1</code> en los ajustes.</li>
 <li>La app rechaza las solicitudes que claramente proceden de páginas web ajenas (error 403).</li>
+<li><b>ShadowMountPlus</b> acepta desde la 1.7beta8 peticiones de toda la red doméstica de forma predeterminada (puerto 10101, también sin inicio de sesión). Si no lo quieres, pon <code>api_bind_address=127.0.0.1</code> en su <code>config.ini</code>; la app se comunica con ShadowMountPlus por <code>127.0.0.1</code> de todos modos.</li>
 </ul>
 </section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>21</div><h2>Si algo no funciona</h2></div>
 <table>

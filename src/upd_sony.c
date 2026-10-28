@@ -362,7 +362,31 @@ upd_sony_parse_manifest(const char *json, upd_manifest_t *out) {
 
 int
 upd_sony_manifest(const char *url, upd_manifest_t *out, char *why, size_t wn) {
+  return upd_sony_manifest_raw(url, out, NULL, why, wn);
+}
+
+int
+upd_sony_fetch_small(const char *url, size_t max, char **out, size_t *len, char *why, size_t wn) {
+  if(why && wn) why[0] = 0;
+  *out = NULL;
+  *len = 0;
+  upd_req_t r;
+  upd_res_t res;
+  std_req(&r, url);
+  r.hop_ok = upd_sony_piece_hop_ok;     /* the CRC file lies beside the pieces, on the same (possibly plain http) edges */
+  r.max_redirects = 5;
+  r.total_ms = 60000;
+  if(upd_http_fetch(&r, max, out, len, &res) != 0) {
+    if(why) snprintf(why, wn, "%s%s%d", res.step[0] ? res.step : "http_status", res.status ? " " : "", res.status);
+    return -1;
+  }
+  return 0;
+}
+
+int
+upd_sony_manifest_raw(const char *url, upd_manifest_t *out, char **raw, char *why, size_t wn) {
   static const unsigned pause_s[] = { 2, 5 };
+  if(raw) *raw = NULL;
   memset(out, 0, sizeof *out);
   if(why && wn) why[0] = 0;
   char *buf = NULL;
@@ -385,7 +409,8 @@ upd_sony_manifest(const char *url, upd_manifest_t *out, char *why, size_t wn) {
     return -1;
   }
   int rc = upd_sony_parse_manifest(buf, out);
-  free(buf);
+  if(rc == 0 && raw) *raw = buf;
+  else free(buf);
   if(rc != 0 && why) snprintf(why, wn, "bad_manifest");
   return rc;
 }

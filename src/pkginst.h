@@ -28,7 +28,20 @@ typedef struct {
   size_t                  icon_n;
   const char             *icon_name;
   int                     port;           /* 0: PKGI_STREAM_PORT */
+  /* optional, an official game update (PatchDL 0.3.5): the local manifest under manifest_name and the PlayGo chunk CRC
+     file under crc_name. The manifest's pieces point at PS5TM_PKGSTREAM_PIECE "<offset>/<size>/" + name, which serves
+     those bytes of the package as a file of their own. */
+  const char             *manifest;
+  size_t                  manifest_n;
+  const char             *manifest_name;
+  const unsigned char    *crc;
+  size_t                  crc_n;
+  const char             *crc_name;
 } ps5tm_pkgstream_cfg_t;
+
+/* where the server serves its files, and the path below it that a piece of the package is served under */
+#define PS5TM_PKGSTREAM_PATH  "/stream/install/"
+#define PS5TM_PKGSTREAM_PIECE "p/"
 
 typedef struct {
   int      running;
@@ -41,6 +54,7 @@ typedef struct {
   uint64_t read_errors;                   /* a slice that could not be read (the file changed or went away) */
   unsigned conns, peak_conns;
   uint64_t idle_ms;                       /* since the last byte moved; 0 while nothing has */
+  int      has_crc, crc_served;           /* an update installed through its manifest: the console fetches the CRC file last */
 } ps5tm_pkgstream_stats_t;
 
 /* The pieces of the package under a search id (pkgscan.c): one slice for a package in one file, a slice per part for a
@@ -64,6 +78,12 @@ int  ps5tm_pkglive_find(const char *id, ps5tm_pkg_t *out);
 /* A downloaded game update (updates.c) under the id "upd-<TITLE ID>": the finished package file as one slice. */
 int  ps5tm_updates_pkg_find(const char *id, ps5tm_pkg_t *out);
 int  ps5tm_updates_pkg_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsigned *n, uint64_t *total, char *err, size_t err_len);
+/* Its local manifest (PatchDL 0.3.5): 0 with the manifest and the CRC file (malloc'd), 1 not for this package, -1 error;
+   the reason in why for both. */
+int  ps5tm_updates_pkg_manifest(const char *id, const char *pkg_name, const char *crc_name, int port,
+                                char **json, size_t *json_n, unsigned char **crc, size_t *crc_n, char *why, size_t wn);
+/* 1 while that package goes on as the whole game, after the game was uninstalled (PatchDL 0.3.6/0.3.8) */
+int  ps5tm_updates_pkg_fresh(const char *id);
 int  ps5tm_pkglive_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsigned *n, uint64_t *total,
                           char *err, size_t err_len);
 /* Exactly n bytes at off of the package of the session `id`; waits for the browser to send what is not there yet.

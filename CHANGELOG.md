@@ -16,6 +16,18 @@
 - **Entwicklerbilder statt Kacheln:** Für Payloads aus dem Store (und eigene oder laufende Payloads, deren Name zu einem Store-Eintrag passt) zeigt die Vollbild-App das GitHub-Profilbild des Entwicklers. Die App lädt fehlende Bilder nach jedem Laden der Payload-Liste im Hintergrund von `avatars.githubusercontent.com` (gleiche GitHub-Zertifikate wie der Store, je Entwickler einmal pro Lauf, höchstens 256 KB, nur PNG/JPEG) nach `/data/PS5-Cooling-Center/payload-avatars/`; ohne Internet bleibt es bei den Kacheln. Die Bilder gehören ihren Inhabern und werden nicht mit der App verteilt. Neu: `owner`/`avatar` je Eintrag in `GET /api/v1/paystore`, `GET /api/v1/paystore/avatar?owner=…`
 - **Payload-Kacheln:** Payloads haben kein eigenes Bild; sie bekommen jetzt Kacheln wie Spiele ohne Cover – bekannte mit festem Kürzel (SM ShadowMountPlus, P4 PS4Mount, PK PKG-Manager, eH etaHEN, KS kstuff, EL elfldr, FT ftpsrv, CC diese App …), andere mit ihren Anfangsbuchstaben; die Farbe zeigt die Art (Netzwerk, System/Jailbreak, Lader, Werkzeuge, Cheats)
 
+### Keine doppelten Bestätigungen mehr
+- **Jede Aktion wirkt beim ersten Klick** (Browser-Oberfläche): Löschen (Spiele, Sicherungen, Dateimanager, Spielstände, Dumps, Payloads), Power-Optionen, Payload beenden, Zurückverschieben (PS4Mount), Deaktivieren/Aktivieren, Ordner und Verläufe leeren, Avatar übernehmen/zurückholen, Aufträge abbrechen, Dump ersetzen – kein Häkchen, kein „Wirklich? Nochmal klicken“, keine „Trotzdem?“-Frage. Solange eine Aktion läuft, ist ihr Knopf gesperrt
+- Löschen mit Plan (`/library/delete/plan`, `/files/delete/plan`): Die Seite holt Plan und Kennwort still und löscht direkt; ein Fenster bleibt nur bei einer Ablehnung mit dem Grund stehen
+- **Starten bei laufendem Spiel** schließt das laufende und startet das gewählte in einem Zug (`close` bei `/library/launch`)
+- Spielstände löschen sichert vorher automatisch auf das erste passende Laufwerk; ohne Laufwerk wird mit `no_backup` gelöscht, und ein Hinweis sagt das
+- Updates/Versionen: Den Spielnamen für „Neu installieren“ und ältere Versionen schickt die Seite selbst mit (die Prüfung der Konsole bleibt); weicht die Größe von der Liste ab, wird es gesagt und trotzdem geladen
+- Payload-Store: Liegt schon eine Datei gleichen Namens im Ordner, wird sie ersetzt und es gibt einen Hinweis
+- Die Ruckler-Warnung vor ffpfsc bleibt als Hinweis im Fenster, ohne zweite Frage
+
+### Konvertieren: auch PS4-Spielordner
+- Ordner mit nur `sce_sys/param.sfo` (PS4-Spiele) lassen sich jetzt in exFAT, ffpkg und ffpfsc umwandeln – ShadowMountPlus bindet PS4-Abbilder seit 1.7beta8 ein. Wie bei den PS4-Dumps legt die App eine `param.json` aus der `param.sfo` (und bei Bedarf eine korrigierte `npbind.dat`) mit ins Abbild, damit auch ältere Versionen es finden; der Ordner bleibt unverändert. Ziel nur USB/M.2 (ein PS4-Titel aus dem Speicher der Konsole bringt sie zum Absturz), kein AMPR-Index. Plan-Feld `ps4`. An der Konsole noch nicht getestet
+
 ### Dateimanager: ganze Ordner hochladen
 - Neuer Knopf **„Ordner hochladen“**, und Ordner lassen sich auf die Liste ziehen: Die Ordnerstruktur wird auf der Konsole angelegt, dann laufen die Dateien einzeln mit Fortschritt; Dateien, die es am Ziel schon gibt, werden übersprungen und gezählt, nie überschrieben
 
@@ -37,6 +49,28 @@
 - Jedes PS4Mount-Spiel mit mehr als einem Update oder mit Zusatzinhalten bekommt in der schon vorhandenen Liste „PS4 von USB“ zwei neue Knöpfe: **Updates** (welche der vorhandenen Versionen benutzt wird, auch eine ältere, in `replaced/` abgelegte) und **Zusatzinhalte** (einzeln an/aus, mit dem Höchstwert von PS4Mount). Kein eigener Knopf in der Seitenleiste und kein „Starten“ – die Bibliothek deckt das Starten schon ab, eine eigene Seite wäre sonst nur dieselbe Liste noch einmal gewesen (Wunsch des Users, 26.10.2026)
 - Neuer Schalter bei den PS4Mount-Einstellungen: **Zusatzinhalte auf den internen Speicher kopieren** – statt vom USB-Laufwerk einzuhängen, kopiert die Konsole jeden Zusatzinhalt wie bei einem normal installierten Spiel; braucht mehr Platz und Zeit, zeigt sie dafür wie gewohnt im Speicherbildschirm
 - Neue API-Routen: `GET /api/v1/ps4mount/game`, `POST /api/v1/ps4mount/update`, `/dlc` (siehe `docs/API.md`)
+
+### Spiel-Updates: Installation über die Paketliste, Bereich „Versionen“ mit Neuinstallation und Downgrade
+- **Wie ein Update der Konsole:** PS5-Updates von Spielen von Disc oder aus dem Store gehen jetzt über eine lokale Paketliste an die Konsole (die offizielle, deren Stücke auf den Server der App zeigen, mit PlayGo-Prüfdatei). Die Konsole schreibt dann ihre Spieldaten wie nach einem eigenen Update. Lehnt sie das ab, installiert die App das Paket im selben Auftrag wie bisher; im Protokoll steht, warum. Downloads ohne gespeicherte Paketliste holen sie vor der Installation einmal nach
+- **Grundversion:** Ein Update, das auf einer anderen Grundversion aufbaut als das installierte Spiel (häufig bei Disc-Spielen), wird nicht mehr normal installiert, sondern als „passt nur als Neuinstallation“ gemeldet
+- **Neuer Bereich „Versionen“** je Spiel (ersetzt „Andere Versionen“): installierte Version und Grundversion, das geladene Paket, ob beide passen; die Versionsliste lädt erst ein Klick. **Neu installieren** und **Downgrade** (nur PS5, Disc/Store): ältere oder die installierte Version holen, dann – nur mit eingetipptem Spielnamen, nie während das Spiel läuft – das Spiel deinstallieren (Spielstände und Zusatzinhalte bleiben) und das Paket als ganzes Spiel installieren; ein Abbruch dazwischen lässt sich fortsetzen; nach einem Downgrade sind die Updates des Spiels in der App aus
+- Neu: `GET /api/v1/updates/fit`, Aktion `reinstall`, `download_url` mit `older`/`confirm`, Felder `pkg_version`, `orphan`, `fresh`, `held`, `fit`, `fresh_ok` je Spiel; der Installationshelfer kennt „nur das Spiel deinstallieren“; der Paket-Server liefert Paketliste, Prüfdatei und Paketstücke (`/stream/install/p/<Versatz>/<Größe>/<Name>`)
+- An der Konsole noch nicht getestet
+
+### Fremdbausteine: PatchDL 0.3.4 -> 0.3.8
+- Übernommen (GPL-3.0, jetzt auch als Code-Port mit Herkunftsangabe): 0.3.5 Installation über die Paketliste, 0.3.6 Grundversions-Prüfung und Neuinstallation, 0.3.7 Paketliste für ältere Downloads nachholen und Prüfung über das `_sc`-Stück, 0.3.8 Downgrade (PS5)
+- Nicht übernommen: der eigene Webserver, die Kachel-/Cover-Anzeige von PatchDL und das Herauslösen des Covers aus dem Paket (die App zeigt das Bild aus dem Paket bei der Installation schon selbst); PS4-Downgrade (erst PatchDL 0.3.9)
+- Weiter nur Direktdownload: keine SC-Links werden unverändert abgerufen, keine zusätzlichen Abfragen bei Prospero/Orbis Patches
+
+### Fremdbausteine: PS5-Payload-SDK v0.44 -> v0.45
+- Gebaut wird mit **v0.45** (offizielles `ps5-payload-sdk.zip`, SHA-256 `5fac6409…1a2c`, Dateien gleich mit dem Projekt-SDK; v0.44 als Sicherung neben dem Projekt). Neu ist nur der Startcode: Er kennt jetzt auch **Firmware 14.00 und 14.10** (`crt1.o`, `libkernel_sys.so`). Der Bau prüft das mit (`FW_NEED` = 13.00 bis 14.10), die Systemseite nennt die Gruppe „14.00-14.10“. Auf 14.xx ist die App nicht getestet
+- Auch die Kacheln bauen mit v0.45: die Browser-Kachel über das Projekt-SDK, die Vollbild-App über die im Baukasten festgelegte Fassung (`tvapp/`, Prüfsumme dort eingetragen)
+
+### Fremdbausteine: ShadowMountPlus 1.7beta7 -> 1.7beta9
+- ShadowMountPlus meldet über seinen Auftragsstatus seit 1.7beta8 auch eigene Installationen (`operation=install`: ein PKG oder ein Spielordner/Abbild aus seiner Oberfläche, teils ohne Titel-ID). Der Streifen über der Bibliothek nennt sie jetzt „Installieren“ und zeigt ohne Titel-ID den Paket- oder Dateinamen statt einer leeren Angabe (`web/app.js`)
+- Handbuch (sechs Sprachen): die Installationen im Streifen und der Hinweis, dass die Schnittstelle von ShadowMountPlus seit 1.7beta8 standardmäßig im ganzen Heimnetz erreichbar ist (`api_bind_address=127.0.0.1` in dessen `config.ini` schränkt das ein; die App spricht es ohnehin über `127.0.0.1` an)
+- Geprüft, ohne Änderung nötig: Die von der App benutzten Routen (`games/move`, `games/unpack`, `games/storage/status|cancel`, `debug-log`) sind unverändert; Backports, die ShadowMountPlus selbst installiert, landen in `/data/homebrew/backports`, das die App schon durchsucht; Kopieren und Dumps legen `param.json` und `param.sfo` schon zuletzt ab (ShadowMountPlus erkennt Spielordner jetzt auch an `param.sfo` und `eboot2.bin`)
+- Nicht übernommen: SMB-Freigaben, die Paket-Warteschlange und das Installieren aus Ordnern/Abbildern von ShadowMountPlus (eigene Funktionen von ShadowMountPlus, die App ruft sie nicht auf)
 
 ### Fremdbausteine: PS4Mount 0.6.1 -> 0.7.0
 - Ein gefundenes Update wird jetzt nach Versionsnummer behandelt: Ist das neu gefundene Update älter als das benutzte, legt es sich selbst in `replaced/` statt das benutzte zu verdrängen (vorher ersetzte jedes andere Update das vorhandene, auch ein älteres)

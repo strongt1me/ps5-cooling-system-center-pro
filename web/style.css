@@ -370,7 +370,6 @@ body.offline .offline-note { display: flex; }
   cursor: pointer; white-space: nowrap; }
 .pw-btn:hover { color: var(--ink); border-color: rgba(255,255,255,.22); }
 .pw-btn:focus-visible { color: var(--ink); border-color: rgba(255,255,255,.22); }
-.pw-btn[data-armed] { color: #ffd57b; border-color: rgba(250,178,25,.6); background: rgba(250,178,25,.14); }
 
 /* Schmal (Handy, geteilter Bildschirm): Seitenleiste wird zur Leiste oben */
 @media (max-width: 980px) {
@@ -927,14 +926,9 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .gm-more .gm-del, .bk-row .gm-del { color: #ff9b9b; }
 .btn.danger { background: rgba(208,59,59,.22); border-color: rgba(208,59,59,.7); color: #ffd4d4; }
 .btn.danger:disabled { opacity: .45; cursor: not-allowed; }
-.btn.danger[data-armed] { background: #d03b3b; border-color: #ff8a8a; color: #fff; }
-/* every button waiting for its second click shows it, not only by its text (review 15.10.2026; same look as the power options) */
-.btn[data-armed]:not(.danger) { color: #ffd57b; border-color: rgba(250,178,25,.6); background: rgba(250,178,25,.14); }
 .dl-name { margin: 0 0 6px; line-height: 1.5; }
 .dl-items { margin: 4px 0 10px 18px; padding: 0; font-size: 13.5px; line-height: 1.55; }
 .dl-keep { color: #8fe08f; font-size: 13px; margin: 6px 0; }
-.dl-ack { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 6px; font-size: 13.5px; line-height: 1.45; cursor: pointer; }
-.dl-ack input { margin-top: 3px; }
 .dl-done { font-size: 15px; font-weight: 600; }
 .bk-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0;
   border-top: 1px solid var(--hairline); }
@@ -1045,9 +1039,6 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .pl-trash:hover { background: rgba(208,59,59,.2); }
 .pl-trash:focus-visible { background: rgba(208,59,59,.2); }
-.pl-trash .pl-trash-ask { display: none; white-space: nowrap; }
-.pl-trash.armed { background: rgba(208,59,59,.4); color: #fff; }
-.pl-trash.armed .pl-trash-ask { display: inline; }
 .pl-live { color: var(--good); font-size: 12px; font-weight: 700; }
 .pl-drive { display: flex; align-items: center; gap: 9px; margin: 20px 0 10px; font-size: 13px; }
 .pl-drive svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--ink-muted);
@@ -1155,6 +1146,10 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .upd-qr img { width: 92px; height: 92px; background: #fff; padding: 4px; border-radius: 6px; }
 .upd-linkrow { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .upd-linkrow input { flex: 1; min-width: 0; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--hairline); background: var(--card-top); color: var(--ink); font: 12px ui-monospace, monospace; }
+.upd-vsec { padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--hairline); }
+.upd-vsec > p { margin: 0 0 4px; }
+.upd-fresh { margin-top: 8px; padding: 8px 10px; border-radius: 8px; border: 1px solid #d9534f; }
+.upd-fresh > p { margin: 0 0 6px; line-height: 1.45; }
 #upd-conns, #upd-policy, #upd-drive { justify-self: start; min-width: 96px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
 .dup-group { padding: 10px 0 4px; border-top: 1px solid var(--hairline); }
 .dup-group > b { display: block; margin-bottom: 4px; }
@@ -1971,7 +1966,6 @@ button.apr-drive:disabled { cursor: default; }
 /* Hell: die hellen Statusfarben der dunklen Designs, abgedunkelt im selben Farbton */
 /* >>> Hell: Statusfarben (erzeugt von tools/gen_theme_hell.py, nicht von Hand ändern) */
 :root[data-theme="hell"] .co-preset.on span { color: #0b3a8e; }
-:root[data-theme="hell"] .pw-btn[data-armed] { color: #8e640b; }
 :root[data-theme="hell"] .badge.ok { color: #0b8e0b; }
 :root[data-theme="hell"] .badge.warn { color: #8e640b; }
 :root[data-theme="hell"] .badge.hot { color: #8e0b0b; }
@@ -1994,7 +1988,6 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-theme="hell"] .cp-err { color: #8e0b0b; }
 :root[data-theme="hell"] .gm-more .gm-del, :root[data-theme="hell"] .bk-row .gm-del { color: #8e0b0b; }
 :root[data-theme="hell"] .btn.danger { color: #8e0b0b; }
-:root[data-theme="hell"] .btn[data-armed]:not(.danger) { color: #8e640b; }
 :root[data-theme="hell"] .dl-keep { color: #217821; }
 :root[data-theme="hell"] .cp-ok { color: #1e7b59; }
 :root[data-theme="hell"] .pl-ver { color: #0b3a8e; }

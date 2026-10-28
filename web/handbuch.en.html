@@ -105,7 +105,7 @@ saved data, a file manager, payloads, profile and system information.</p>
 <div class='card'><b class='t'>Quiet, not loud</b>The control holds a target temperature – gently and slowly, without constant ups and downs.</div>
 <div class='card'><b class='t'>Everything in the browser</b>No installation on a PC needed: open the address, done.</div>
 <div class='card'><b class='t'>No internet</b>The app only connects to programs on the console and to the browsers on your home network.</div>
-<div class='card'><b class='t'>Safe to use</b>Deleting and power commands require a confirmation; important things are protected.</div>
+<div class='card'><b class='t'>Safe to use</b>Every action works on the first click; running games and saved data are protected.</div>
 </div>
 <div class='info'>Tested on a PS5 Pro (CFI-7021) with firmware 12.00. Other firmware may work but has not been checked.</div>
 </section><section class='ch' id='voraussetzungen'><div class='ch-head'><div class='ch-num'>2</div><h2>Requirements</h2></div>
@@ -143,9 +143,7 @@ the “System” page press <b>Install tile</b>.</div>
 connection indicator.</p>
 <p><b>Design.</b> Next to the language you choose one of four designs: <b>Standard</b> (dark blue with glowing edges), <b>Light</b> (muted grey-blue, does not dazzle), <b>Dark</b> (almost black, without glow) and <b>Optimal</b> (for the TV and the PS5: strong contrast, larger text, no translucency or shadows, the fastest to draw). Every device remembers its own choice, for example “Optimal” on the TV and “Light” on the phone.</p>
 <h3>Power options</h3>
-<p><b>Rest Mode</b>, <b>Restart</b>, <b>Turn off</b> and <b>Safe Mode</b>. Every command needs two clicks:
-the first turns the button yellow (“Really? Click again”) and states the consequence, the second carries it out. A double click
-does not count; after ten seconds the button returns to normal.</p>
+<p><b>Rest Mode</b>, <b>Restart</b>, <b>Turn off</b> and <b>Safe Mode</b>. Every command works on the first click; while it runs the button is locked, so a double click does not trigger it twice.</p>
 <div class='warn'>When turning off or restarting, unsaved game progress is lost.</div>
 <h3>Language</h3>
 <p>At the top right of the header you choose the language of the interface: <b>Deutsch, English, Italiano, Español, Français</b> or <b>Русский</b>.
@@ -207,17 +205,18 @@ filter by PS5, PS4 or “Backport · AMPR · PlayGo”; and sort by Home screen 
 <h3>Starting and closing</h3>
 <ul>
 <li><b>Start</b> starts the game directly. In the console's browser, the browser closes at once when you tap, before the game loads, so that the game is in front. If the console has something to say (a refusal, an offer “Start”), it shows it as a notification at the top right.</li>
-<li>If another game is already running, the app starts nothing and tells you so. <b>Close game</b> closes the running game
-<b>immediately and without asking</b> – anything not saved is lost.</li>
+<li>If another game is already running, <b>Start</b> closes it and starts the chosen one in one go – anything not saved in the running game is lost. <b>Close game</b> closes the running game <b>immediately</b>.</li>
 <li>A game is never started twice; a second click within 30 seconds does nothing.</li>
 </ul>
 <h3>Duplicate images</h3>
-<p>If a game exists in more than one image on the drives (<code>.exfat</code>, <code>.ffpkg</code>, <code>.ffpfs</code>, <code>.ffpfsc</code>), ShadowMountPlus picks one or the other on each scan. The Games page then shows a <b>Duplicate images</b> card. It starts collapsed; a click on its header opens and closes the list (the state is kept for the session), and “Search again” works while collapsed. The source ShadowMountPlus is using at the moment is marked. <b>Set aside</b> renames an image to <code>….off</code>, so ShadowMountPlus no longer takes it; <b>Bring back</b> undoes that. Nothing is deleted. A mounted image, or one whose game is running, cannot be set aside.</p>
+<p>If a game exists in more than one image on the drives (<code>.exfat</code>, <code>.ffpkg</code>, <code>.ffpfs</code>, <code>.ffpfsc</code>), ShadowMountPlus picks one or the other on each scan. The Games page then shows a <b>Duplicate images</b> card. It starts collapsed; a click on its header opens and closes the list (the state is kept for the session), and “Search again” works while collapsed. The source ShadowMountPlus is using at the moment is marked. <b>Deactivate</b> renames an image to <code>….off</code>, so ShadowMountPlus no longer takes it; <b>Activate</b> undoes that. Nothing is deleted. A mounted image, or one whose game is running, cannot be deactivated.</p>
+<p>The bar above the library shows, besides the app's own jobs, moves, unpacks and – since ShadowMountPlus 1.7beta8 – installations that ShadowMountPlus runs itself (a PKG or a game folder from its own interface, for example); without a title ID it shows the package or file name.</p>
 <h3>Copying, moving, converting</h3>
 <p>Dump folders can be copied, moved and converted directly on the console into <b>ffpfsc</b> (compressed, recommended),
 <b>ffpkg</b> or <b>exFAT</b> – either playable in the folder <code>homebrew</code> of the destination (ShadowMountPlus
 finds it there) or as a backup in <code>PS5-Sicherung/Spiele</code>. Every copy is read back after writing
 and verified; nothing is overwritten.</p>
+<p><b>PS4 game folders</b> (only <code>sce_sys/param.sfo</code>, no <code>param.json</code>) can now be converted too: ShadowMountPlus mounts PS4 images from 1.7beta8 on, in all three formats. The app puts a <code>param.json</code> built from the <code>param.sfo</code> into the image, so older versions find it as well. The target can only be a USB or M.2 drive – a PS4 title from the console's storage crashes it. Trophies are not registered for PS4 games from images, and some titles stay stuck on the loading screen.</p>
 
 <div class='warn'>Please recreate <code>.ffpkg</code> images made with versions before 1.48.0 (old structure).</div>
 <h3>PS4 games from USB (PS4Mount)</h3>
@@ -242,7 +241,7 @@ and verified; nothing is overwritten.</p>
 <li>A running game can use at most about 30 packages (game, update and roughly 29 add-ons). This is a console limit that applies to installed games too.</li>
 </ul>
 <!--p4m-->
-<p><b>Before packing to ffpfsc:</b> the console has to unpack a compressed file over and over while playing, so games with a great deal of data or texture streaming can stutter. Before the app converts a game (dump folder, <code>.exfat</code>, <code>.ffpkg</code> or <code>.ffpfs</code>) to <code>.ffpfsc</code> it looks: from about 40 GB of data, with large streaming containers (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB together or more) or with a streaming folder (2 GB or more) the window shows a note, and at the start the app asks whether to convert the game anyway. “OK” carries on as usual, “Cancel” stops the job. This is an estimate from file names and sizes, not from the game engine.</p>
+<p><b>Before packing to ffpfsc:</b> the console has to unpack a compressed file over and over while playing, so games with a great deal of data or texture streaming can stutter. Before the app converts a game (dump folder, <code>.exfat</code>, <code>.ffpkg</code> or <code>.ffpfs</code>) to <code>.ffpfsc</code> it looks: from about 40 GB of data, with large streaming containers (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB together or more) or with a streaming folder (2 GB or more) the window shows a note next to “ffpfsc”. There is no second question: “Start” converts. This is an estimate from file names and sizes, not from the game engine.</p>
 </section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
 <p>Every game card has the button <b>LZ4 asset packs …</b> under <b>Convert</b>. It opens a window with tools around APR-EMU. For now it holds the <b>AMPR index</b>.</p>
 <ul>
@@ -279,7 +278,7 @@ and verified; nothing is overwritten.</p>
 <li><b>Repair</b>: only where it is safe. If the size of an <code>.ffpfsc</code> file does not match the image's header, but the data is complete and the extra bytes are empty, the app sets the size right and reads the container in full once more. Damaged blocks cannot be made again from the image alone. Repair is locked while ShadowMountPlus has the image mounted.</li>
 </ul>
 <h3>History</h3>
-<p>On the games page the <b>History</b> tab lists all of the app's jobs – copy, move, convert, split package, install, delete, file manager, saved data and AMPR index – with result (done, failed, cancelled), size, duration and time. The last 500 are kept on the console in <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Clear history</b> deletes them (click twice).</p>
+<p>On the games page the <b>History</b> tab lists all of the app's jobs – copy, move, convert, split package, install, delete, file manager, saved data and AMPR index – with result (done, failed, cancelled), size, duration and time. The last 500 are kept on the console in <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Clear history</b> deletes them at once.</p>
 <h3>Game plugins</h3>
 <p>The row <b>Game plugins</b> keeps drakmor's replacement modules in the game's <code>fakelib</code> folder up to date: the PlayGo stub (<code>libScePlayGo.sprx</code>, pgo_stub 0.6) and the DLC modules (<code>libSceAppContent.sprx</code>, <code>libSceGameUpdate.sprx</code>, <code>libSceNpEntitlementAccess.sprx</code>, dlc_emu 0.3, “log” build: it writes <code>/app0/dlc_emu.log</code> into the game; the build without logging crashed at game start and is replaced as a “faulty build”) that show the DLC listed in the game's <code>dlc_emu.ini</code> as owned.</p>
 <ul>
@@ -345,10 +344,9 @@ and verified; nothing is overwritten.</p>
 <li><b>The app's backups</b> (copies and conversions) are deleted together with their checksum file.</li>
 </ul>
 <ol class='steps'>
-<li>Tap <b>Delete</b>: the window shows exactly what will go.</li>
-<li>Tick “I understand: deleting is final”.</li>
-<li>Press <b>Delete for good</b> twice (the first click asks “Really?”).</li>
+<li>Tap <b>Delete</b>: the app quietly asks the console what will go and deletes at once. The window shows what is being deleted.</li>
 <li>A progress bar with a percentage shows how far it has got.</li>
+<li>If the console refuses (for example because the game is running), the window stays open with the reason and nothing is deleted.</li>
 </ol>
 <div class='tip'>Your <b>saved data is always kept</b>. A running game is never deleted.</div>
 <p>Only what really lies inside the game folder or image is deleted: if the path is behind a link or is a mounted drive, the app deletes nothing and says so.</p>
@@ -365,7 +363,7 @@ USB stick, a disk or the internal SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datu
 verifies them and only then replaces the old ones.</p>
 <div class='warn'>Backing up and restoring only happen when <b>no game is running</b> – not even a paused one. Backups from another
 console cannot be restored.</div>
-<p>Per user, split into PS5 games, PS5 apps, PS4 games and PS4 apps. “Delete” (two clicks) removes the saved games of one title; the app backs up the current state first and lets you put it back.</p>
+<p>Per user, split into PS5 games, PS5 apps, PS4 games and PS4 apps. “Delete” removes the saved games of one title at once; the app first backs up the current state to the chosen drive (otherwise the first suitable one) and lets you put it back. If there is no drive at all, a note says that it is deleted without a backup.</p>
 
 </section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>12</div><h2>Packages</h2></div>
 <p>Finds <code>.pkg</code> files on USB drives, disks and in console storage (folder <code>pkg</code>) and shows the picture,
@@ -390,6 +388,17 @@ download list, with “Delete”.</div>
 <li>The package lives in <code>/data/PS5-Cooling-Center/updates/&lt;title ID&gt;</code>. After the install it is deleted once the game reports the new version (can be switched off). If a package of the right size is already there, the app checks its pieces and downloads only the wrong ones again.</li>
 <li>The app reaches the update servers through its own DNS queries (Cloudflare, Google, Quad9, if need be over HTTPS). The console's DNS settings stay as they are; a block against system updates stays in place.</li>
 <li>Space for the package plus 1 GB reserve is needed; the install needs about as much again.</li>
+</ul>
+<h3>Installing through the package list and the “Versions” area</h3>
+<p>Taken over from PatchDL 0.3.5–0.3.8:</p>
+<ul>
+<li><b>Installed like an update of the console:</b> for PS5 games from disc or the store, the app keeps the official package list and its check file next to the package. The console gets a package list whose pieces point at the app and afterwards writes its game data as after an update of its own. If the console refuses that, the app installs the package itself as before (the log says why). For older downloads without a list, the app fetches it once before installing, and only uses it if it matches the package byte for byte.</li>
+<li><b>Base version:</b> every update builds on a certain base version of the game. A disc game can have a different one than the update; then the app does not install it the normal way but shows “fits only as a fresh installation”.</li>
+<li>The <b>Versions</b> button of each game opens its own area: installed version and base version, the downloaded package and whether the two fit. The version list from prosperopatches.com is only loaded after a click; getting a version works as before through the pasted link, the download always comes from the official servers.</li>
+<li><b>Reinstall</b> and <b>downgrade</b> (only PS5 games from disc or the store, not via PS4Mount): an older version or the installed one can be fetched; it is never installed the normal way. Only when you choose <b>Reinstall</b> in the “Versions” area does the app uninstall the game (only the game – saved games and add-ons stay, a disc game still needs its disc), wait until the console releases it, and then install the package as the whole game. The page sends the game's name, which the console asks for as a safeguard, by itself. While the game is running the app refuses. Every step is in the log and in the history.</li>
+<li>If the installation stops after the uninstall, the game stays in the list with its package: <b>Continue fresh installation</b> tries again. The package cannot be deleted while the game is missing.</li>
+<li>After a downgrade the app turns off updates for this game. Also turn off the console's automatic updates for this game, or it will bring the new version back.</li>
+<li>Space: the fresh installation needs free space for the package plus 1 GB; the space of the old game is counted in.</li>
 </ul>
 </section><section class='ch' id='disc'><div class='ch-head'><div class='ch-num'>14</div><h2>Disc in the drive</h2></div>
 <p>The <b>Disc</b> tab on the Games page shows which disc is in the drive and, on request, makes an image (ISO) of a PS2 DVD or a PS3 disc. It is based on ps-disc-detect (GPL-3.0), whose approach the app has rewritten.</p>
@@ -452,6 +461,7 @@ profile picture, name and links. The links can only be clicked if the browser ha
 <li>The console does not belong on the open internet – <b>do not set up port forwarding</b> to port 8086.</li>
 <li>If you only want to use it on the device itself, set the network binding in the settings to <code>127.0.0.1</code>.</li>
 <li>The app refuses requests that recognisably come from outside websites (error 403).</li>
+<li><b>ShadowMountPlus</b> accepts requests from the whole home network by default since 1.7beta8 (port 10101, also without a login). If you don't want that, set <code>api_bind_address=127.0.0.1</code> in its <code>config.ini</code>; the app talks to ShadowMountPlus over <code>127.0.0.1</code> anyway.</li>
 </ul>
 </section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>21</div><h2>If something does not work</h2></div>
 <table>

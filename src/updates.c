@@ -1,4 +1,8 @@
-/* Game updates (19.10.2026, simplified 21.10.2026): the newest official update of every PS5 and PS4 game on the
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ * Parts ported from PatchDL 0.3.5-0.3.8, Copyright (C) 2026 Knutwurst (GPL-3.0): the local manifest, the base check and
+ * the fresh installation (third_party/patchdl/ORIGIN.md).
+ *
+ * Game updates (19.10.2026, simplified 21.10.2026): the newest official update of every PS5 and PS4 game on the
  * console, from Sony's servers, downloaded and installed by the app. After PatchDL 0.3.0 by Knutwurst
  * (GPL-3.0-or-later); its rules are kept, the code around them is the app's own (PatchDL runs as a payload with its
  * own web server, libcurl and OpenSSL).
@@ -17,6 +21,17 @@
  *     installer, pkginstall.c, the console's installer reads it from the app); after the install the game's version in the
  *     app database is compared with the update's, and only then is the package deleted (switchable)
  *   - the network: Sony's hosts only (one root certificate), the app's own resolver (upd_dns.c), never the console's DNS
+ *
+ * After PatchDL 0.3.5-0.3.8 (27.10.2026, ported under the GPL):
+ *   - a PS5 update is installed through a local manifest: the official package list with every piece pointing at the
+ *     app's own stream server (pkgstream.c), and its PlayGo chunk CRC file beside it. Installed that way the console
+ *     writes its app.json as after an update of its own; the plain package stays the fallback when the console refuses
+ *     the manifest (pkginstall.c). Downloads without a saved list get it once more from the official server (0.3.7)
+ *   - the base check: an update builds on one base version (contentVersion + masterVersion of the base param.json in
+ *     the _sc part). A disc game can have another base than the update; then only a fresh installation works: the game
+ *     is uninstalled (saved games and add-ons stay) and the update goes on as the whole game (0.3.6)
+ *   - the same fresh installation for a chosen older version (downgrade, 0.3.8) or the same one (repair), each only
+ *     after the person typed the game's name; afterwards the app's updates for that game are switched off
  *
  * The switch is off until the person turns it on; no request leaves the console before that, and none without a click
  * ("Nach Updates suchen", a download). Folder: PS5TM_DATA_DIR/updates (settings.json, <TITLE ID>/). */
@@ -58,6 +73,14 @@
 #define UPD_RESERVE      (1LL << 30)         /* left free on the drive */
 #define UPD_PKG_NAME     "update.pkg"
 #define UPD_JOB_NAME     "job.json"
+#define UPD_MAN_NAME     "update.manifest.json"  /* the official package list as it came (PatchDL 0.3.5) */
+#define UPD_CRC_NAME     "update.crc"            /* the PlayGo chunk CRC file it names */
+#define UPD_FRESH_NAME   "fresh.json"            /* a fresh installation was begun: the game may be gone already */
+#define UPD_CRC_MAX      (16u << 20)
+#define UPD_MAN_MAX      (4u << 20)
+#define UPD_ORIGIN_BLOCK (64 * 1024)             /* read from the start of the _sc part: param.json and its base */
+#define UPD_APPJSON_MAX  (256 * 1024)
+#define UPD_GONE_WAIT_S  (30 * 60)               /* how long the console may take to let go of an uninstalled game */
 #define UPD_SEG_TRIES    6
 
 enum { SIGN_NONE = 0, SIGN_RETAIL, SIGN_FAKE, SIGN_UNREAD };
@@ -84,6 +107,12 @@ typedef struct {
   int      in_queue;
   unsigned qorder;
   int      deleting;                 /* its folder is being deleted: nothing may start meanwhile */
+  /* versions (PatchDL 0.3.6-0.3.8) */
+  int      fresh;                    /* queued for a fresh installation: the game goes, the package goes on as the whole game */
+  int      dg;                       /* the chosen package is not newer than the game: never installed the normal way */
+  int      orphan;                   /* not installed any more, a fresh installation of it was begun (fresh.json) */
+  int      fit;                      /* the package against the installed game: 1 fits, 0 needs a fresh installation, -1 unknown */
+  char     fit_ver[16];              /* the package version fit was found for ("" not looked at) */
 } title_t;
 
 typedef struct {
@@ -119,6 +148,7 @@ static uint64_t        g_job_t0, g_rate_ms;
 static int64_t         g_rate_bytes;
 static double          g_rate;               /* bytes/s, smoothed */
 static char            g_phase[96];
+static char            g_fresh_tid[12];      /* the game whose package goes on as the whole game right now (pkginstall.c asks) */
 
 /* ---------------------------------------------------------------- small helpers */
 
@@ -400,6 +430,47 @@ disk_state_locked(title_t *t) {
   else t->state = ST_IDLE;
 }
 
+/* Games a fresh installation was begun for and that are not installed now (the uninstall went through, the installation
+   did not): their folder holds fresh.json and the package. They stay in the list, so the installation can be finished. */
+static void
+orphans_add(title_t *nt, int *k) {
+  char roots[1 + PS5TM_MAX_VOLUMES][UPD_ROOT_LEN];
+  int nr;
+  roots_get(roots, &nr);
+  for(int ri = 0; ri < nr && *k < UPD_MAX_TITLES; ri++) {
+    DIR *d = opendir(roots[ri]);
+    struct dirent *e;
+    while(d && (e = readdir(d)) && *k < UPD_MAX_TITLES) {
+      if(!tid_ok(e->d_name) || strncmp(e->d_name, "PPSA", 4)) continue;
+      int known = 0;
+      for(int i = 0; i < *k && !known; i++) known = !strcmp(nt[i].tid, e->d_name);
+      if(known) continue;
+      char mp[PATH_MAX], pp[PATH_MAX];
+      snprintf(mp, sizeof mp, "%s/%s/" UPD_FRESH_NAME, roots[ri], e->d_name);
+      snprintf(pp, sizeof pp, "%s/%s/" UPD_PKG_NAME, roots[ri], e->d_name);
+      struct stat st;
+      if(stat(pp, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+      char *b = read_small(mp, 64 * 1024);
+      cJSON *j = b ? cJSON_Parse(b) : NULL;
+      free(b);
+      if(!j) continue;
+      title_t *t = &nt[(*k)++];
+      memset(t, 0, sizeof *t);
+      const cJSON *v = cJSON_GetObjectItem(j, "name");
+      snprintf(t->tid, sizeof t->tid, "%s", e->d_name);
+      snprintf(t->name, sizeof t->name, "%s", cJSON_IsString(v) ? v->valuestring : e->d_name);
+      if(cJSON_IsString(v = cJSON_GetObjectItem(j, "content_id"))) snprintf(t->cid, sizeof t->cid, "%s", v->valuestring);
+      cJSON_Delete(j);
+      t->plat = 5;
+      t->sign = SIGN_NONE;
+      t->source = SRC_OFFICIAL;                            /* checked as a package once more before anything goes on */
+      t->orphan = 1;
+      t->fit = -1;
+    }
+    if(d) closedir(d);
+  }
+}
+
 /* Builds the list again from the app database, keeping what was learned about each title. */
 static void
 titles_refresh(int force) {
@@ -419,6 +490,7 @@ titles_refresh(int force) {
   for(int i = 0; i < n && k < UPD_MAX_TITLES; i++) {
     if(ps5tm_library_is_game(rows[i].title_id) == 0) continue;   /* apps such as YouTube and homebrew tools are no games to update */
     title_t *t = &nt[k++];
+    t->fit = -1;
     snprintf(t->tid, sizeof t->tid, "%s", rows[i].title_id);
     snprintf(t->name, sizeof t->name, "%s", rows[i].name);
     snprintf(t->cid, sizeof t->cid, "%s", rows[i].content_id);
@@ -439,6 +511,7 @@ titles_refresh(int force) {
     }
   }
   free(rows);
+  orphans_add(nt, &k);
   pthread_mutex_lock(&g_lock);
   for(int i = 0; i < k; i++) {                             /* carry over what the old list knew */
     title_t *o = find_locked(nt[i].tid);
@@ -450,7 +523,9 @@ titles_refresh(int force) {
     snprintf(nt[i].ver_uri, sizeof nt[i].ver_uri, "%s", keep.ver_uri);
     nt[i].sign = keep.sign;
     nt[i].source = keep.source;
-    if(strcmp(nt[i].ver, keep.ver)) nt[i].checked = 0;   /* the game changed: check it again */
+    nt[i].orphan = keep.orphan;
+    nt[i].plat = keep.plat;
+    if(strcmp(nt[i].ver, keep.ver)) { nt[i].checked = 0; nt[i].fit_ver[0] = 0; nt[i].fit = -1; }   /* the game changed: check it again */
     snprintf(nt[i].ver, sizeof nt[i].ver, "%s", keep.ver);
   }
   free(g_t);
@@ -465,7 +540,7 @@ titles_refresh(int force) {
 static void
 target_locked(const title_t *t, char *ver, size_t vn, char *url, size_t un) {
   ver[0] = url[0] = 0;
-  if(t->man_url[0] && ver_gt(t->man_ver, t->ver)) {
+  if(t->man_url[0] && (ver_gt(t->man_ver, t->ver) || t->dg)) {   /* dg: an older (or the same) version, chosen in "Versionen" */
     snprintf(ver, vn, "%s", t->man_ver);
     snprintf(url, un, "%s", t->man_url);
     return;
@@ -507,7 +582,7 @@ check_thread(void *arg) {
   char (*ids)[12] = calloc((size_t)(n ? n : 1), 12);
   int k = 0;
   for(int i = 0; ids && i < n; i++)
-    if((g_t[i].source == SRC_OFFICIAL || g_t[i].source == SRC_SMP || g_t[i].source == SRC_FAKE) && allowed_locked(g_t[i].tid))
+    if((g_t[i].source == SRC_OFFICIAL || g_t[i].source == SRC_SMP || g_t[i].source == SRC_FAKE) && !g_t[i].orphan && allowed_locked(g_t[i].tid))
       snprintf(ids[k++], 12, "%s", g_t[i].tid);
   g_check_total = k;
   g_check_done = 0;
@@ -588,6 +663,7 @@ typedef struct {
 
 typedef struct {
   upd_manifest_t mf;
+  char         *raw;              /* the package list as it came, kept beside the package (PS5) */
   seg_t        *seg;
   int           nseg;
   unsigned char *piece_ok;        /* verified (or no hash to check) */
@@ -741,6 +817,199 @@ worker_main(void *arg) {
   return NULL;
 }
 
+/* ---------------------------------------------------------------- the local manifest (PatchDL 0.3.5) */
+
+/* Keeps the official package list and the CRC file it names beside the package (PS5 only): the installation builds its
+   local manifest from them. 0 kept, -1 not (why); without them the package is installed the plain way. */
+static int
+keep_manifest(const char *tid, const char *raw, const upd_manifest_t *mf, char *why, size_t wn) {
+  char mp[PATH_MAX], cp[PATH_MAX];
+  title_file(tid, UPD_MAN_NAME, mp, sizeof mp);
+  title_file(tid, UPD_CRC_NAME, cp, sizeof cp);
+  unlink(mp);
+  unlink(cp);
+  if(!raw || !raw[0]) { snprintf(why, wn, "no_manifest_text"); return -1; }
+  if(mf->crc_url[0]) {
+    char *crc = NULL;
+    size_t cn = 0;
+    if(upd_sony_fetch_small(mf->crc_url, UPD_CRC_MAX, &crc, &cn, why, wn) != 0 || !cn) { free(crc); if(!why[0]) snprintf(why, wn, "crc_empty"); return -1; }
+    int w = write_atomic(cp, crc, cn);
+    free(crc);
+    if(w != 0) { snprintf(why, wn, "crc_write: %s", strerror(errno)); return -1; }
+  }
+  if(write_atomic(mp, raw, strlen(raw)) != 0) { snprintf(why, wn, "manifest_write: %s", strerror(errno)); unlink(cp); return -1; }
+  return 0;
+}
+
+/* A download from before 0.3.5 (or one whose list could not be kept): the list is fetched once more, and kept only when
+   it describes the package on disk to the byte (PatchDL 0.3.7). Network: only the official servers, only from the queue. */
+static void
+ensure_manifest(const char *tid, const char *url) {
+  if(strncmp(tid, "PPSA", 4) || !url || !url[0]) return;
+  char mp[PATH_MAX], pp[PATH_MAX];
+  title_file(tid, UPD_MAN_NAME, mp, sizeof mp);
+  title_file(tid, UPD_PKG_NAME, pp, sizeof pp);
+  struct stat st, ms;
+  if(stat(pp, &st) != 0 || stat(mp, &ms) == 0) return;
+  upd_manifest_t mf;
+  char *raw = NULL, why[64] = "";
+  pthread_mutex_lock(&g_lock);
+  snprintf(g_phase, sizeof g_phase, "Die Paketliste wird für die Installation geholt");
+  pthread_mutex_unlock(&g_lock);
+  if(upd_sony_manifest_raw(url, &mf, &raw, why, sizeof why) != 0) {
+    PS5TM_WARN("upd_manifest_refetch", "Spiel-Updates: %s, die Paketliste ließ sich nicht noch einmal holen (%s); es wird ohne sie installiert.", tid, why);
+  } else if(mf.total != (int64_t)st.st_size) {
+    PS5TM_WARN("upd_manifest_refetch", "Spiel-Updates: %s, die Paketliste beschreibt ein anderes Paket (%lld statt %lld Bytes); es wird ohne sie installiert.",
+               tid, (long long)mf.total, (long long)st.st_size);
+  } else if(keep_manifest(tid, raw, &mf, why, sizeof why) != 0) {
+    PS5TM_WARN("upd_manifest_refetch", "Spiel-Updates: %s, die Paketliste ließ sich nicht ablegen (%s); es wird ohne sie installiert.", tid, why);
+  } else {
+    PS5TM_INFO("upd_manifest_refetch", "Spiel-Updates: %s, die Paketliste wurde nachgeholt.", tid);
+  }
+  free(raw);
+  upd_manifest_free(&mf);
+  pthread_mutex_lock(&g_lock);
+  g_phase[0] = 0;
+  pthread_mutex_unlock(&g_lock);
+}
+
+/* ---------------------------------------------------------------- the base check (PatchDL 0.3.6/0.3.7) */
+
+/* which base game a PS5 package builds on: contentVersion and masterVersion of the base's param.json */
+typedef struct { char content[16]; char master[8]; } origin_t;
+
+/* a top-level "key": "value" in [p, end): the metadata is pretty-printed */
+static int
+doc_field(const char *p, const char *end, const char *key, char *out, size_t sz) {
+  char needle[48];
+  snprintf(needle, sizeof needle, "\n  \"%s\": \"", key);
+  size_t nl = strlen(needle);
+  for(const char *q = p; q + nl < end; q++) {
+    if(memcmp(q, needle, nl)) continue;
+    const char *v = q + nl;
+    size_t n = 0;
+    while(v + n < end && v[n] != '"' && n < sz - 1) n++;
+    if(v + n >= end || v[n] != '"') return -1;
+    memcpy(out, v, n);
+    out[n] = 0;
+    return 0;
+  }
+  return -1;
+}
+
+/* From the start of the _sc part: param.json, then origin-param.json. A package without originContentVersion is its own
+   base; the first document with one is a patch's param.json, its base comes next. */
+static int
+origin_from_block(const char *b, size_t n, origin_t *o) {
+  const char *end = b + n, *p = b;
+  int doc = 0;
+  memset(o, 0, sizeof *o);
+  while(p < end) {
+    const char *s = NULL, *e = NULL;
+    char cv[16] = "", mv[8] = "", ov[16] = "";
+    for(const char *q = p; q + 5 < end; q++) {                /* "{", a newline (CRLF in the official files), an indented key */
+      const char *k = q + 1;
+      if(q[0] != '{') continue;
+      if(*k == '\r') k++;
+      if(k + 3 < end && k[0] == '\n' && k[1] == ' ' && k[2] == ' ' && k[3] == '"') { s = q; break; }
+    }
+    if(!s) break;
+    for(const char *q = s; q + 1 < end; q++)
+      if(q[0] == '\n' && q[1] == '}') { e = q + 2; break; }
+    if(!e) break;
+    p = e;
+    if(doc_field(s, e, "contentVersion", cv, sizeof cv)) continue;
+    doc_field(s, e, "masterVersion", mv, sizeof mv);
+    doc_field(s, e, "originContentVersion", ov, sizeof ov);
+    if(doc++ == 0 && ov[0]) continue;                          /* a patch's param.json: the base comes next */
+    if(ov[0]) continue;                                        /* target-param.json */
+    snprintf(o->content, sizeof o->content, "%s", cv);
+    snprintf(o->master, sizeof o->master, "%s", mv);
+    return mv[0] ? 0 : -1;
+  }
+  return -1;
+}
+
+static const char *
+find_in(const char *p, const char *end, const char *needle) {
+  size_t nl = strlen(needle);
+  for(; p + nl <= end; p++)
+    if(!memcmp(p, needle, nl)) return p;
+  return NULL;
+}
+
+/* Where the _sc part starts, from app.json or a package list: the piece named *_sc.pkg, else the last of several.
+   -1 for an installation in one piece. */
+static long long
+sc_offset_from_json(const char *j) {
+  const char *a = strstr(j, "\"pieces\""), *z, *p;
+  long long last = -1, sc = -1;
+  int pieces = 0;
+  if(!a || !(a = strchr(a, '['))) return -1;
+  z = strchr(a, ']');
+  for(p = a; (p = strchr(p, '{')) && (!z || p < z);) {
+    const char *e = strchr(p, '}'), *f, *u;
+    if(!e) break;
+    if((f = find_in(p, e, "\"fileOffset\":"))) {
+      long long off = strtoll(f + 13, NULL, 10);
+      pieces++;
+      last = off;
+      if((u = find_in(p, e, "_sc.pkg\"")) && u > p) sc = off;
+    }
+    p = e + 1;
+  }
+  return sc >= 0 ? sc : pieces > 1 ? last : -1;
+}
+
+static int
+origin_at(const char *pkg, long long off, origin_t *o) {
+  if(off < 0) return -1;
+  char *blk = malloc(UPD_ORIGIN_BLOCK);
+  int fd = blk ? open(pkg, O_RDONLY) : -1, rc = -1;
+  if(fd >= 0) {
+    ssize_t r = pread(fd, blk, UPD_ORIGIN_BLOCK, (off_t)off);
+    if(r > 0) rc = origin_from_block(blk, (size_t)r, o);
+    close(fd);
+  }
+  free(blk);
+  return rc;
+}
+
+/* the installed game, through its app.json */
+static int
+installed_origin(const char *tid, origin_t *o) {
+  char aj[96], ap[96];
+  snprintf(aj, sizeof aj, UPD_APP_ROOT "/%s/app.json", tid);
+  snprintf(ap, sizeof ap, UPD_APP_ROOT "/%s/app.pkg", tid);
+  char *j = read_small(aj, UPD_APPJSON_MAX);
+  long long off = j ? sc_offset_from_json(j) : -1;
+  free(j);
+  return origin_at(ap, off, o);
+}
+
+/* the downloaded package, through the package list beside it */
+static int
+package_origin(const char *tid, origin_t *o) {
+  char mp[PATH_MAX], pp[PATH_MAX];
+  title_file(tid, UPD_MAN_NAME, mp, sizeof mp);
+  title_file(tid, UPD_PKG_NAME, pp, sizeof pp);
+  char *j = read_small(mp, UPD_MAN_MAX);
+  long long off = j ? sc_offset_from_json(j) : -1;
+  free(j);
+  return origin_at(pp, off, o);
+}
+
+/* 1 the package builds on the installed game, 0 it needs a fresh installation, -1 cannot be told (then it is installed
+   the usual way). Only for a PS5 game installed from disc or the store. */
+static int
+fit_check(const char *tid, origin_t *inst, origin_t *pkg) {
+  memset(inst, 0, sizeof *inst);
+  memset(pkg, 0, sizeof *pkg);
+  int a = installed_origin(tid, inst), b = package_origin(tid, pkg);
+  if(a != 0 || b != 0) return -1;
+  return !strcmp(inst->content, pkg->content) && !strcmp(inst->master, pkg->master);
+}
+
 /* Downloads (or resumes) the update of tid. 0 complete and checked, 1 paused/cancelled, -1 failed (why). */
 static int
 download(const char *tid, const char *ver, const char *url, int conns, char *why, size_t wn) {
@@ -754,7 +1023,7 @@ download(const char *tid, const char *ver, const char *url, int conns, char *why
   pthread_mutex_lock(&g_lock);
   snprintf(g_phase, sizeof g_phase, "Die Paketliste wird abgerufen");
   pthread_mutex_unlock(&g_lock);
-  if(upd_sony_manifest(url, &j->mf, mwhy, sizeof mwhy) != 0) {
+  if(upd_sony_manifest_raw(url, &j->mf, &j->raw, mwhy, sizeof mwhy) != 0) {
     snprintf(why, wn, "Die offizielle Paketliste ließ sich nicht laden (%s).", mwhy);
     goto out;
   }
@@ -780,6 +1049,13 @@ download(const char *tid, const char *ver, const char *url, int conns, char *why
       snprintf(why, wn, "Der Download-Ordner ist nicht erreichbar (Laufwerk abgezogen?). Wähle in den Einstellungen einen anderen Ordner.");
       goto out;
     }
+  }
+  {                                                          /* a list kept for an earlier package is no list for this one */
+    char mp[PATH_MAX], cp[PATH_MAX];
+    title_file(tid, UPD_MAN_NAME, mp, sizeof mp);
+    title_file(tid, UPD_CRC_NAME, cp, sizeof cp);
+    unlink(mp);
+    unlink(cp);
   }
 
   /* the parts */
@@ -884,10 +1160,20 @@ download(const char *tid, const char *ver, const char *url, int conns, char *why
     j->piece_ok[p] = 1;
   }
   if(fsync(j->fd) != 0) { snprintf(why, wn, "Die Paketdatei ließ sich nicht sichern: %s", strerror(errno)); goto out; }
+  /* the list and its CRC file for the installation through a local manifest (PS5); without them it goes the plain way */
+  if(!strncmp(tid, "PPSA", 4)) {
+    char kw[64] = "";
+    pthread_mutex_lock(&g_lock);
+    snprintf(g_phase, sizeof g_phase, "Die Paketliste wird für die Installation abgelegt");
+    pthread_mutex_unlock(&g_lock);
+    if(keep_manifest(tid, j->raw, &j->mf, kw, sizeof kw) != 0)
+      PS5TM_WARN("upd_manifest_keep", "Spiel-Updates: %s, die Paketliste ließ sich nicht ablegen (%s); es wird ohne sie installiert.", tid, kw);
+  }
   job_save(j, ver, url, 1);
   rc = 0;
 out:
   if(j->fd >= 0) close(j->fd);
+  free(j->raw);
   upd_manifest_free(&j->mf);
   free(j->seg);
   free(j->piece_ok);
@@ -945,6 +1231,140 @@ install(const char *tid, const char *ver, char *why, size_t wn) {
   return 1;
 }
 
+static int
+game_running(const char *tid) {
+  ps5tm_gamestate_t gs;
+  ps5tm_gamestate_get(&gs);
+  return gs.title_id[0] && !strcmp(gs.title_id, tid);
+}
+
+/* The rules before a fresh installation, also asked when the person clicks: a PS5 game from disc or the store (or one
+   whose fresh installation was begun), not running, the package complete, officially signed and of this very game.
+   0, or -1 with the reason in why. */
+static int
+fresh_allowed(const char *tid, char *why, size_t wn) {
+  char pkg[PATH_MAX];
+  title_file(tid, UPD_PKG_NAME, pkg, sizeof pkg);
+  if(strncmp(tid, "PPSA", 4)) { snprintf(why, wn, "Neu installieren gibt es nur für PS5-Spiele."); return -1; }
+  if(game_running(tid)) { snprintf(why, wn, "Das Spiel läuft gerade. Bitte erst beenden."); return -1; }
+  ps5tm_pkg_t *p = calloc(1, sizeof *p);
+  if(!p) { snprintf(why, wn, "Kein Speicher."); return -1; }
+  int rc = 0;
+  char tag[16];
+  snprintf(tag, sizeof tag, "-%s_", tid);
+  if(ps5tm_pkg_parse(pkg, p) != 0 || !p->valid || file_sign(pkg) != SIGN_RETAIL) { snprintf(why, wn, "Die Paketdatei ist nicht lesbar oder nicht offiziell signiert."); rc = -1; }
+  else if(strcmp(p->title_id, tid) || !strstr(p->content_id, tag)) { snprintf(why, wn, "Das Paket gehört nicht zu diesem Spiel."); rc = -1; }
+  free(p);
+  return rc;
+}
+
+/* The room: the old game's comes back before the new one goes on (PatchDL's rule). 0 enough or not known, -1 not. */
+static int
+fresh_room(const char *tid, int installed, char *why, size_t wn) {
+  char pkg[PATH_MAX];
+  title_file(tid, UPD_PKG_NAME, pkg, sizeof pkg);
+  struct stat st;
+  if(stat(pkg, &st) != 0) { snprintf(why, wn, "Die Paketdatei fehlt."); return -1; }
+  ps5tm_pkgdrive_t dr[PS5TM_MAX_VOLUMES];
+  unsigned nd = ps5tm_pkg_drives(dr, PS5TM_MAX_VOLUMES);
+  int64_t free_b = -1, old = 0;
+  for(unsigned i = 0; i < nd; i++)
+    if(dr[i].internal) { free_b = (int64_t)dr[i].free_bytes; break; }
+  if(free_b < 0) return 0;
+  if(installed) {
+    char aj[96];
+    snprintf(aj, sizeof aj, UPD_APP_ROOT "/%s/app.json", tid);
+    char *j = read_small(aj, UPD_APPJSON_MAX);
+    const char *k = j ? strstr(j, "\"originalFileSize\":") : NULL;
+    if(k) old = strtoll(k + 19, NULL, 10);
+    free(j);
+  }
+  int64_t need = (int64_t)st.st_size + UPD_RESERVE;
+  if(free_b + old < need) {
+    snprintf(why, wn, "Zu wenig Platz auf der Konsole: nötig sind %.1f GB, frei wären nach dem Deinstallieren %.1f GB.", (double)need / 1e9, (double)(free_b + old) / 1e9);
+    return -1;
+  }
+  return 0;
+}
+
+/* A fresh installation (PatchDL 0.3.6/0.3.8): the game is uninstalled the system's way (saved games and add-ons stay; a
+   disc game keeps using its disc as the licence), the console is waited for until it has let go of the title, then the
+   package goes on as the whole game. fresh.json marks it begun: should the installation fail after the uninstall, the
+   game stays in the list and the installation can be finished. 0 done, -1 not (why), 1 installed but not confirmed. */
+static int
+fresh_install(const char *tid, const char *ver, const char *name, char *why, size_t wn) {
+  if(fresh_allowed(tid, why, wn) != 0) return -1;
+  char now[24] = "", aj[96], mark[PATH_MAX];
+  snprintf(aj, sizeof aj, UPD_APP_ROOT "/%s/app.json", tid);
+  title_file(tid, UPD_FRESH_NAME, mark, sizeof mark);
+  struct stat st;
+  int listed = ps5tm_library_title_info(tid, now, sizeof now) == 1;
+  int installed = listed || stat(aj, &st) == 0;
+  if(!installed && stat(mark, &st) != 0) { snprintf(why, wn, "Das Spiel ist nicht installiert."); return -1; }
+  if(fresh_room(tid, installed, why, wn) != 0) return -1;
+  /* the mark first: without it nothing is uninstalled */
+  {
+    cJSON *o = cJSON_CreateObject();
+    char *s = NULL;
+    if(o) {
+      cJSON_AddStringToObject(o, "title_id", tid);
+      cJSON_AddStringToObject(o, "name", name);
+      cJSON_AddStringToObject(o, "version", ver);
+      cJSON_AddStringToObject(o, "old_version", now);
+      cJSON_AddNumberToObject(o, "started", (double)time(NULL));
+      s = cJSON_PrintUnformatted(o);
+      cJSON_Delete(o);
+    }
+    int w = s ? write_atomic(mark, s, strlen(s)) : -1;
+    free(s);
+    if(w != 0) { snprintf(why, wn, "Die Markierung der Neuinstallation ließ sich nicht schreiben; es wird nichts deinstalliert."); return -1; }
+  }
+  if(installed) {
+    pthread_mutex_lock(&g_lock);
+    snprintf(g_phase, sizeof g_phase, "Das Spiel wird deinstalliert (Spielstände bleiben)");
+    pthread_mutex_unlock(&g_lock);
+    PS5TM_INFO("upd_fresh_uninstall", "Spiel-Updates: %s, Neuinstallation von Version %s (installiert %s): das Spiel wird deinstalliert, Spielstände und Zusatzinhalte bleiben.",
+               tid, ver, now[0] ? now : "?");
+    uint64_t t0 = ps5tm_mono_ms();
+    char w[300] = "";
+    int rc = ps5tm_pkginst_uninstall_game(tid, w, sizeof w);
+    ps5tm_hist_add("delete", name, "installiertes Spiel (Neuinstallation)", rc == 0 ? "done" : "failed", rc == 0 ? "" : w, 0, ps5tm_mono_ms() - t0);
+    if(rc != 0) {
+      unlink(mark);
+      snprintf(why, wn, "Die Konsole hat das Deinstallieren abgelehnt: %s. Am Spiel hat sich nichts geändert.", w[0] ? w : "ohne Angabe");
+      return -1;
+    }
+    int gone = 0;
+    for(int i = 0; i < UPD_GONE_WAIT_S && !gone; i++) {
+      gone = stat(aj, &st) != 0;
+      if(gone) break;
+      if(i % 5 == 0) {
+        pthread_mutex_lock(&g_lock);
+        snprintf(g_phase, sizeof g_phase, "Wartet, bis die Konsole das Spiel freigibt (%d s)", i);
+        pthread_mutex_unlock(&g_lock);
+      }
+      sleep(1);
+    }
+    ps5tm_library_forget();
+    if(!gone) {
+      snprintf(why, wn, "Die Konsole hat das Spiel nach %d Minuten noch nicht freigegeben. Das Paket bleibt; „Neuinstallation fortsetzen“ versucht es noch einmal.", UPD_GONE_WAIT_S / 60);
+      return -1;
+    }
+    PS5TM_INFO("upd_fresh_gone", "Spiel-Updates: %s ist deinstalliert, das Paket geht jetzt als ganzes Spiel auf die Konsole.", tid);
+  } else {
+    PS5TM_INFO("upd_fresh_resume", "Spiel-Updates: %s, die begonnene Neuinstallation wird fortgesetzt (Version %s).", tid, ver);
+  }
+  pthread_mutex_lock(&g_lock);
+  snprintf(g_fresh_tid, sizeof g_fresh_tid, "%s", tid);
+  pthread_mutex_unlock(&g_lock);
+  int rc = install(tid, ver, why, wn);
+  pthread_mutex_lock(&g_lock);
+  g_fresh_tid[0] = 0;
+  pthread_mutex_unlock(&g_lock);
+  if(rc >= 0) unlink(mark);                                   /* the console says it is done: the game is there again */
+  return rc;
+}
+
 /* ---------------------------------------------------------------- the queue */
 
 static title_t *
@@ -979,6 +1399,11 @@ queue_thread(void *arg) {
     }
     if(!ver[0] || !url[0]) { t->state = ST_IDLE; pthread_mutex_unlock(&g_lock); continue; }
     int ready = t->state == ST_READY;
+    int fresh = ready && t->fresh, held = t->dg;           /* held: an older or the same version, only ever as a fresh installation */
+    int official5 = t->plat == 5 && (t->source == SRC_OFFICIAL || t->orphan);
+    char name[128], old_ver[16];
+    snprintf(name, sizeof name, "%s", t->name);
+    snprintf(old_ver, sizeof old_ver, "%s", t->ver);
     t->state = ready ? ST_INSTALLING : ST_DOWNLOADING;
     t->err[0] = 0;
     snprintf(t->job_ver, sizeof t->job_ver, "%s", ver);
@@ -991,7 +1416,8 @@ queue_thread(void *arg) {
     g_rate = 0;
     g_rate_ms = 0;
     int conns = g_set.conns, del = g_set.delete_after;
-    int ia = ready || install_after_locked(tid);       /* a package that is ready is installed when asked for */
+    int ia = fresh || (!held && (ready || install_after_locked(tid)));   /* a package that is ready is installed when asked for */
+    if(ready && !ia) t->state = ST_READY;
     g_job_verify = g_set.verify;
     pthread_mutex_unlock(&g_lock);
 
@@ -1015,13 +1441,46 @@ queue_thread(void *arg) {
         title_file(tid, UPD_PKG_NAME, pkg, sizeof pkg);
         irc = ps4m_place_update(tid, pkg, why, sizeof why);
       } else {
-        irc = install(tid, ver, why, sizeof why);
+        if(official5) ensure_manifest(tid, url);
+        int f = -1;
+        if(official5 && !fresh) {
+          /* the base check (PatchDL 0.3.6): an update of another base than the installed game is refused by the console
+             or breaks the game; it only goes on as a fresh installation, and that only after the person said so */
+          origin_t oi, op;
+          f = fit_check(tid, &oi, &op);
+          pthread_mutex_lock(&g_lock);
+          if((t = find_locked(tid))) { t->fit = f; snprintf(t->fit_ver, sizeof t->fit_ver, "%s", ver); }
+          pthread_mutex_unlock(&g_lock);
+          if(f == 0) {
+            irc = -1;
+            snprintf(why, sizeof why, "Das Update baut auf einer anderen Grundversion auf als das installierte Spiel (installiert %s/%s, Update %s/%s). Es passt nur als Neuinstallation: unter „Versionen“ „Neu installieren“ wählen. Spielstände bleiben erhalten.",
+                     oi.content, oi.master, op.content, op.master);
+            PS5TM_WARN("upd_base_mismatch", "Spiel-Updates: %s %s baut auf %s/%s auf, installiert ist %s/%s: nicht installiert, nur als Neuinstallation möglich.",
+                       tid, ver, op.content, op.master, oi.content, oi.master);
+          } else if(f < 0) {
+            PS5TM_INFO("upd_base_unknown", "Spiel-Updates: %s, die Grundversion ließ sich nicht vergleichen; es wird wie üblich installiert.", tid);
+          }
+        }
+        if(fresh) irc = fresh_install(tid, ver, name, why, sizeof why);
+        else if(f != 0) irc = install(tid, ver, why, sizeof why);
       }
     }
     pthread_mutex_lock(&g_lock);
     int cancelled = g_cancel_req;
     if((t = find_locked(tid))) {
-      if(cancelled) t->man_ver[0] = t->man_url[0] = 0;
+      t->fresh = 0;                                          /* a fresh installation is asked for anew each time */
+      if(fresh && irc >= 0) {
+        t->dg = 0;
+        t->orphan = 0;
+        t->fit_ver[0] = 0;
+        if(old_ver[0] && !ver_gt(ver, old_ver)) {
+          /* an older (or the same) version: "Alle aktualisieren" would bring the newer one straight back */
+          ovr_set(g_ov_allow, &g_ov_allow_n, tid, 0);
+          settings_save_locked();
+          PS5TM_INFO("upd_fresh_policy", "Spiel-Updates: %s läuft jetzt auf %s statt %s; Updates für dieses Spiel sind in der App ausgeschaltet.", tid, ver, old_ver);
+        }
+      }
+      if(cancelled) { t->man_ver[0] = t->man_url[0] = 0; t->dg = 0; }
       if(rc == 1 || (rc == 0 && g_abort)) t->state = cancelled ? ST_IDLE : ST_PAUSED;
       else if(rc < 0) { t->state = ST_FAILED; snprintf(t->err, sizeof t->err, "%s", why); }
       else if(noinst) { t->state = ST_READY; t->err[0] = 0; }
@@ -1180,6 +1639,13 @@ ps5tm_updates_json(void) {
     cJSON_AddBoolToObject(e, "queued", t->in_queue);
     cJSON_AddNumberToObject(e, "total", (double)t->total);
     cJSON_AddNumberToObject(e, "have", (double)t->have);
+    /* versions (PatchDL 0.3.6-0.3.8) */
+    cJSON_AddStringToObject(e, "pkg_version", t->state != ST_IDLE ? t->job_ver : "");
+    cJSON_AddBoolToObject(e, "orphan", t->orphan);
+    cJSON_AddBoolToObject(e, "fresh", t->fresh);
+    cJSON_AddBoolToObject(e, "held", t->dg || (t->state == ST_READY && t->job_ver[0] && !ver_gt(t->job_ver, t->ver)));
+    cJSON_AddNumberToObject(e, "fit", t->fit_ver[0] && !strcmp(t->fit_ver, t->job_ver) ? t->fit : -1);
+    cJSON_AddBoolToObject(e, "fresh_ok", t->plat == 5 && (t->source == SRC_OFFICIAL || t->orphan) && !ps4m_title_managed(t->tid));
     if(t->err[0]) cJSON_AddStringToObject(e, "error", t->err);
     cJSON_AddItemToArray(arr, e);
   }
@@ -1413,6 +1879,91 @@ ps5tm_updates_versions(const char *tid, char *msg, size_t mn, int *http) {
   return o;
 }
 
+/* The area "Versionen" of one game: the installed version and its base, the downloaded package and its base, whether
+   the two fit, and what can be done (PatchDL 0.3.6-0.3.8). Reads the console and the folder only, nothing from the net. */
+cJSON *
+ps5tm_updates_fit_json(const char *tid, char *msg, size_t mn, int *http) {
+  *http = 200;
+  msg[0] = 0;
+  if(!tid_ok(tid)) { snprintf(msg, mn, "Kein gültiges Spiel."); *http = 400; return NULL; }
+  titles_refresh(0);
+  char name[128] = "", inst[16] = "", pver[16] = "", state[16] = "";
+  int plat = 5, official = 0, orphan = 0, busy = 0, held = 0, enabled;
+  int64_t total = 0;
+  pthread_mutex_lock(&g_lock);
+  init_locked();
+  enabled = g_set.enabled;
+  title_t *t = find_locked(tid);
+  if(t) {
+    snprintf(name, sizeof name, "%s", t->name);
+    snprintf(inst, sizeof inst, "%s", t->ver);
+    snprintf(pver, sizeof pver, "%s", t->state != ST_IDLE ? t->job_ver : "");
+    snprintf(state, sizeof state, "%s", k_state[t->state]);
+    plat = t->plat;
+    official = t->source == SRC_OFFICIAL;
+    orphan = t->orphan;
+    busy = t->in_queue || t->deleting || !strcmp(g_job_tid, tid);
+    held = t->dg;
+    total = t->total;
+  }
+  pthread_mutex_unlock(&g_lock);
+  if(!t) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); *http = 404; return NULL; }
+
+  int ps4m = ps4m_title_managed(tid);
+  int fresh_ok = plat == 5 && (official || orphan) && !ps4m;
+  origin_t oi, op;
+  memset(&oi, 0, sizeof oi);
+  memset(&op, 0, sizeof op);
+  int have_i = plat == 5 && !orphan && installed_origin(tid, &oi) == 0;
+  int ready = !strcmp(state, "ready");
+  int have_p = plat == 5 && ready && package_origin(tid, &op) == 0;
+  int fit = have_i && have_p ? (!strcmp(oi.content, op.content) && !strcmp(oi.master, op.master)) : -1;
+  if(ready && have_i && have_p) {
+    pthread_mutex_lock(&g_lock);
+    if((t = find_locked(tid)) && !strcmp(t->job_ver, pver)) { t->fit = fit; snprintf(t->fit_ver, sizeof t->fit_ver, "%s", pver); }
+    pthread_mutex_unlock(&g_lock);
+  }
+  char mp[PATH_MAX], cp[PATH_MAX];
+  struct stat st;
+  title_file(tid, UPD_MAN_NAME, mp, sizeof mp);
+  title_file(tid, UPD_CRC_NAME, cp, sizeof cp);
+
+  cJSON *o = cJSON_CreateObject();
+  if(!o) { snprintf(msg, mn, "Kein Speicher."); *http = 500; return NULL; }
+  cJSON_AddBoolToObject(o, "ok", 1);
+  cJSON_AddBoolToObject(o, "enabled", enabled);
+  cJSON_AddStringToObject(o, "title_id", tid);
+  cJSON_AddStringToObject(o, "name", name);
+  cJSON_AddNumberToObject(o, "plat", plat);
+  cJSON_AddBoolToObject(o, "fresh_ok", fresh_ok);
+  cJSON_AddBoolToObject(o, "via_ps4mount", ps4m);
+  cJSON_AddBoolToObject(o, "running", game_running(tid));
+  cJSON_AddBoolToObject(o, "busy", busy);
+  cJSON_AddBoolToObject(o, "orphan", orphan);
+  cJSON *ji = cJSON_AddObjectToObject(o, "installed");
+  if(ji) {
+    cJSON_AddBoolToObject(ji, "present", !orphan);
+    cJSON_AddStringToObject(ji, "version", orphan ? "" : inst);
+    cJSON_AddStringToObject(ji, "base", oi.content);
+    cJSON_AddStringToObject(ji, "master", oi.master);
+  }
+  cJSON *jp = cJSON_AddObjectToObject(o, "package");
+  if(jp) {
+    cJSON_AddStringToObject(jp, "state", state);
+    cJSON_AddStringToObject(jp, "version", pver);
+    cJSON_AddNumberToObject(jp, "size", (double)total);
+    cJSON_AddStringToObject(jp, "base", op.content);
+    cJSON_AddStringToObject(jp, "master", op.master);
+    cJSON_AddBoolToObject(jp, "manifest", stat(mp, &st) == 0);
+    cJSON_AddBoolToObject(jp, "crc", stat(cp, &st) == 0);
+    cJSON_AddBoolToObject(jp, "older", pver[0] && !orphan && !ver_gt(pver, inst));
+    cJSON_AddBoolToObject(jp, "held", held);
+  }
+  cJSON_AddNumberToObject(o, "fit", fit);
+  cJSON_AddBoolToObject(o, "can_reinstall", enabled && fresh_ok && ready && !busy);
+  return o;
+}
+
 /* "71.7 GB" / "8.7GB" against the bytes the package list adds up to: the sites round up, so a gap of 2 % or 0.15 unit passes.
    1 when the package clearly is not the size of the chosen version (a link of another version, most likely). */
 static int
@@ -1439,10 +1990,74 @@ link_reason_text(const char *r) {
 
 /* Starts the download of a package the person chose: the pasted link is turned into the manifest URL of the very same
    package folder on the official servers (upd_patchsite_link), never fetched as it is. */
+/* The person typed the game's name to confirm (spaces around it and the case of letters do not count). */
+static int
+name_confirmed(const cJSON *b, const char *name) {
+  const cJSON *jc = cJSON_GetObjectItem(b, "confirm");
+  if(!cJSON_IsString(jc) || !name[0]) return 0;
+  const char *s = jc->valuestring;
+  while(*s == ' ') s++;
+  size_t n = strlen(s);
+  while(n && s[n - 1] == ' ') n--;
+  return n == strlen(name) && !strncasecmp(s, name, n);
+}
+
+/* "Neu installieren" (PatchDL 0.3.6/0.3.8): the ready package of a PS5 game goes on as the whole game, after the game
+   was uninstalled. Only with the game's name typed in, never while it runs. */
+static int
+reinstall_action(const cJSON *b, char *msg, size_t mn) {
+  const cJSON *jid = cJSON_GetObjectItem(b, "id");
+  const char *tid = cJSON_IsString(jid) ? jid->valuestring : "";
+  msg[0] = 0;
+  if(!tid_ok(tid)) { snprintf(msg, mn, "Kein gültiges Spiel."); return 400; }
+  titles_refresh(0);
+  int rc = 200;
+  char name[128] = "", ver[16] = "", inst[16] = "";
+  pthread_mutex_lock(&g_lock);
+  init_locked();
+  title_t *t = find_locked(tid);
+  if(!g_set.enabled) { snprintf(msg, mn, "Spiel-Updates sind ausgeschaltet."); rc = 409; }
+  else if(!t) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); rc = 404; }
+  else if(t->plat != 5) { snprintf(msg, mn, "Neu installieren gibt es nur für PS5-Spiele."); rc = 409; }
+  else if(t->source != SRC_OFFICIAL && !t->orphan) { snprintf(msg, mn, "Neu installieren gibt es nur für Spiele, die von Disc oder aus dem Store installiert sind."); rc = 403; }
+  else if(t->deleting || t->in_queue || !strcmp(g_job_tid, tid)) { snprintf(msg, mn, "Für dieses Spiel läuft schon ein Vorgang."); rc = 409; }
+  else if(t->state != ST_READY) { snprintf(msg, mn, "Zuerst muss ein Paket vollständig geladen sein (unter „Versionen“ eine Version holen)."); rc = 409; }
+  else if(!name_confirmed(b, t->name)) { snprintf(msg, mn, "Zum Bestätigen den Namen des Spiels genau so eintippen, wie er hier steht."); rc = 400; }
+  if(rc == 200) {
+    snprintf(name, sizeof name, "%s", t->name);
+    snprintf(ver, sizeof ver, "%s", t->job_ver);
+    snprintf(inst, sizeof inst, "%s", t->ver);
+  }
+  pthread_mutex_unlock(&g_lock);
+  if(rc != 200) return rc;
+  if(ps4m_title_managed(tid)) { snprintf(msg, mn, "Das Spiel kommt von PS4Mount; dort gibt es keine Neuinstallation."); return 409; }
+  if(fresh_allowed(tid, msg, mn) != 0) return 409;
+
+  pthread_mutex_lock(&g_lock);
+  t = find_locked(tid);
+  if(!t || !g_set.enabled || t->deleting || t->in_queue || !strcmp(g_job_tid, tid) || t->state != ST_READY || strcmp(t->job_ver, ver)) {
+    snprintf(msg, mn, "Der Zustand des Spiels hat sich geändert. Bitte noch einmal versuchen.");
+    rc = 409;
+  } else {
+    t->fresh = 1;
+    t->in_queue = 1;
+    t->qorder = ++g_qseq;
+    t->err[0] = 0;
+    kick_worker_locked();
+    snprintf(msg, mn, "Neuinstallation von Version %s steht in der Warteschlange: Zuerst wird das Spiel deinstalliert (Spielstände bleiben), dann das Paket als ganzes Spiel installiert.", ver);
+  }
+  pthread_mutex_unlock(&g_lock);
+  if(rc == 200)
+    PS5TM_INFO("upd_fresh_queued", "Spiel-Updates: %s „%.60s“, Neuinstallation von Version %s bestätigt (installiert %s).", tid, name, ver, inst[0] ? inst : "nichts");
+  return rc;
+}
+
 static int
 download_url_action(const cJSON *b, char *msg, size_t mn) {
   const cJSON *jid = cJSON_GetObjectItem(b, "id"), *ju = cJSON_GetObjectItem(b, "url"), *jv = cJSON_GetObjectItem(b, "version"),
               *js = cJSON_GetObjectItem(b, "size"), *jf = cJSON_GetObjectItem(b, "force");
+  /* older: a version not newer than the installed one, for a fresh installation later (PatchDL 0.3.8), with the name typed */
+  const int older = cJSON_IsTrue(cJSON_GetObjectItem(b, "older"));
   const char *tid = cJSON_IsString(jid) ? jid->valuestring : "", *in = cJSON_IsString(ju) ? ju->valuestring : "",
              *ver = cJSON_IsString(jv) ? jv->valuestring : "", *size = cJSON_IsString(js) ? js->valuestring : "";
   msg[0] = 0;
@@ -1468,7 +2083,10 @@ download_url_action(const cJSON *b, char *msg, size_t mn) {
     snprintf(msg, mn, "Für dieses Spiel gibt es schon einen Download. Lösche ihn zuerst, dann geht es weiter.");
     rc = 409;
   }
-  else if(!ver_gt(ver, t->ver)) { snprintf(msg, mn, "Diese Version ist nicht neuer als die installierte."); rc = 409; }
+  else if(!older && !ver_gt(ver, t->ver)) { snprintf(msg, mn, "Diese Version ist nicht neuer als die installierte."); rc = 409; }
+  else if(older && ver_gt(ver, t->ver)) { snprintf(msg, mn, "Diese Version ist neuer als die installierte; sie wird wie ein Update geholt."); rc = 409; }
+  else if(older && (t->plat != 5 || t->source != SRC_OFFICIAL)) { snprintf(msg, mn, "Ältere Versionen gibt es nur für PS5-Spiele, die von Disc oder aus dem Store installiert sind."); rc = 403; }
+  else if(older && !name_confirmed(b, t->name)) { snprintf(msg, mn, "Zum Bestätigen den Namen des Spiels genau so eintippen, wie er hier steht."); rc = 400; }
   pthread_mutex_unlock(&g_lock);
   if(rc != 200) return rc;
 
@@ -1504,13 +2122,16 @@ download_url_action(const cJSON *b, char *msg, size_t mn) {
   } else {
     snprintf(t->man_ver, sizeof t->man_ver, "%s", ver);
     snprintf(t->man_url, sizeof t->man_url, "%s", canon);
+    t->dg = older;
     t->in_queue = 1;
     t->qorder = ++g_qseq;
     t->state = ST_QUEUED;
     kick_worker_locked();
-    snprintf(msg, mn, "Version %s steht in der Warteschlange.", ver);
+    if(older) snprintf(msg, mn, "Version %s wird geladen. Installiert wird sie erst, wenn du unter „Versionen“ „Neu installieren“ bestätigst.", ver);
+    else snprintf(msg, mn, "Version %s steht in der Warteschlange.", ver);
   }
   pthread_mutex_unlock(&g_lock);
+  if(rc == 200 && older) PS5TM_INFO("upd_older_queued", "Spiel-Updates: %s, ältere Version %s für eine Neuinstallation bestellt.", tid, ver);
   return rc;
 }
 
@@ -1521,6 +2142,7 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
   const cJSON *ja = cJSON_GetObjectItem(b, "action"), *jid = cJSON_GetObjectItem(b, "id");
   const char *a = cJSON_IsString(ja) ? ja->valuestring : "";
   if(!strcmp(a, "download_url")) return download_url_action(b, msg, mn);
+  if(!strcmp(a, "reinstall")) return reinstall_action(b, msg, mn);
   const char *tid = cJSON_IsString(jid) ? jid->valuestring : "";
   /* a chosen drive must be one of the connected ones (the page never names a path); looked up before the lock is taken */
   int drive_set = 0, drive_ok = 1;
@@ -1608,6 +2230,8 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
       char v[16], u[512];
       target_locked(t, v, sizeof v, u, sizeof u);
       if(t->source == SRC_UNKNOWN || t->in_queue || t->deleting || !strcmp(g_job_tid, t->tid) || !allowed_locked(t->tid)) continue;
+      /* never the normal way: a game whose fresh installation is under way, an older package, one of another base */
+      if(t->orphan || t->dg || (t->state == ST_READY && (!ver_gt(t->job_ver, t->ver) || (t->fit == 0 && !strcmp(t->fit_ver, t->job_ver))))) continue;
       if((v[0] && (t->state == ST_IDLE || t->state == ST_FAILED || t->state == ST_PAUSED)) ||
          (t->state == ST_READY && install_after_locked(t->tid))) {
         t->in_queue = 1;
@@ -1623,8 +2247,19 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
   title_t *t = tid_ok(tid) ? find_locked(tid) : NULL;
   if(!t) { snprintf(msg, mn, "Dieses Spiel ist nicht (mehr) in der Liste."); rc = 404; goto out; }
   if(t->deleting) { snprintf(msg, mn, "Das Update dieses Spiels wird gerade gelöscht."); rc = 409; goto out; }
-  if(!strcmp(a, "download") || !strcmp(a, "resume") || !strcmp(a, "install")) {
+  if(!strcmp(a, "download")|| !strcmp(a, "resume") || !strcmp(a, "install")) {
     if(t->source == SRC_UNKNOWN) { snprintf(msg, mn, "Die Paketdatei ließ sich nicht lesen."); rc = 403; goto out; }
+    if(t->orphan) { snprintf(msg, mn, "Das Spiel ist nicht installiert. Unter „Versionen“ „Neuinstallation fortsetzen“ wählen."); rc = 409; goto out; }
+    if(t->state == ST_READY && !strcmp(a, "install") && (t->dg || !ver_gt(t->job_ver, t->ver))) {
+      snprintf(msg, mn, "Version %s ist nicht neuer als die installierte (%s). Sie lässt sich nur unter „Versionen“ neu installieren.", t->job_ver, t->ver);
+      rc = 409;
+      goto out;
+    }
+    if(t->state == ST_READY && !strcmp(a, "install") && t->fit == 0 && !strcmp(t->fit_ver, t->job_ver)) {
+      snprintf(msg, mn, "Das Update baut auf einer anderen Grundversion auf als das installierte Spiel. Es passt nur als Neuinstallation (unter „Versionen“).");
+      rc = 409;
+      goto out;
+    }
     if(!allowed_locked(t->tid) && strcmp(a, "install")) { snprintf(msg, mn, "Updates für dieses Spiel sind ausgeschaltet."); rc = 403; goto out; }
     if(t->in_queue || !strcmp(g_job_tid, t->tid)) { snprintf(msg, mn, "Dieses Update steht schon in der Warteschlange."); goto out; }
     char v[16], u[512];
@@ -1655,11 +2290,18 @@ ps5tm_updates_action(const cJSON *b, char *msg, size_t mn) {
       snprintf(msg, mn, "Wird abgebrochen, die Teile werden gelöscht.");
       goto out;
     }
+    if(t->orphan) {                                          /* the package is all that is left of the game */
+      snprintf(msg, mn, "Das Spiel ist nicht installiert, dieses Paket ist alles, was davon übrig ist. Erst die Neuinstallation fortsetzen (unter „Versionen“) oder das Spiel anders installieren.");
+      rc = 409;
+      goto out;
+    }
     t->in_queue = 0;
     t->state = ST_IDLE;
     t->total = t->have = 0;
     t->err[0] = 0;
     t->man_ver[0] = t->man_url[0] = 0;
+    t->dg = 0;
+    t->fit_ver[0] = 0;
     char dir[PATH_MAX], tidc[12];
     title_dir(t->tid, dir, sizeof dir);
     snprintf(tidc, sizeof tidc, "%s", t->tid);
@@ -1721,6 +2363,107 @@ ps5tm_updates_pkg_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, un
   *n = 1;
   *total = (uint64_t)st.st_size;
   return 0;
+}
+
+/* 1 while the queue puts this package on as the whole game (after the game was uninstalled): the installer then takes
+   an update for a game that is not installed (pkginstall.c). */
+int
+ps5tm_updates_pkg_fresh(const char *id) {
+  if(!id || strncmp(id, "upd-", 4) || !tid_ok(id + 4)) return 0;
+  pthread_mutex_lock(&g_lock);
+  int f = g_fresh_tid[0] && !strcmp(g_fresh_tid, id + 4) && !strcmp(g_job_tid, id + 4);
+  pthread_mutex_unlock(&g_lock);
+  return f;
+}
+
+static int
+hex_only(const char *s) {
+  if(!s || !*s) return 0;
+  for(; *s; s++)
+    if(!isxdigit((unsigned char)*s)) return 0;
+  return 1;
+}
+
+/* The local manifest of a PS5 update (PatchDL 0.3.5): the official package list with every piece pointing at the stream
+   server (port, pkg_name: the name the package is served under there) and its CRC file under crc_name. 0 with the
+   manifest in *json and the CRC file in *crc (both malloc'd; *crc may stay NULL when the list names none), 1 not for
+   this package (why says so: the plain package is installed), -1 an error (why). */
+int
+ps5tm_updates_pkg_manifest(const char *id, const char *pkg_name, const char *crc_name, int port,
+                           char **json, size_t *json_n, unsigned char **crc, size_t *crc_n, char *why, size_t wn) {
+  *json = NULL;
+  *json_n = 0;
+  *crc = NULL;
+  *crc_n = 0;
+  why[0] = 0;
+  char path[PATH_MAX], tid[12];
+  if(pkg_path_for(id, path, sizeof path, tid, sizeof tid) != 0) { snprintf(why, wn, "Dieses Update ist nicht (mehr) bereit."); return -1; }
+  if(strncmp(tid, "PPSA", 4)) { snprintf(why, wn, "ein PS4-Spiel"); return 1; }
+  pthread_mutex_lock(&g_lock);
+  title_t *t = find_locked(tid);
+  int official = t && (t->source == SRC_OFFICIAL || t->orphan);
+  pthread_mutex_unlock(&g_lock);
+  if(!official) { snprintf(why, wn, "das Spiel ist nicht von Disc oder aus dem Store installiert"); return 1; }
+  char mp[PATH_MAX], cp[PATH_MAX];
+  title_file(tid, UPD_MAN_NAME, mp, sizeof mp);
+  title_file(tid, UPD_CRC_NAME, cp, sizeof cp);
+  char *raw = read_small(mp, UPD_MAN_MAX);
+  if(!raw) { snprintf(why, wn, "keine Paketliste abgelegt"); return 1; }
+  upd_manifest_t mf;
+  struct stat st;
+  int rc = 1;
+  cJSON *src = NULL, *o = NULL;
+  if(upd_sony_parse_manifest(raw, &mf) != 0) { snprintf(why, wn, "die Paketliste ist nicht lesbar"); free(raw); return 1; }
+  if(stat(path, &st) != 0 || mf.total != (int64_t)st.st_size) { snprintf(why, wn, "die Paketliste beschreibt ein anderes Paket"); goto out; }
+  src = cJSON_Parse(raw);
+  const cJSON *dg = src ? cJSON_GetObjectItem(src, "packageDigest") : NULL, *ch = src ? cJSON_GetObjectItem(src, "playgoChunkCrcHashValue") : NULL;
+  const char *digest = cJSON_IsString(dg) && hex_only(dg->valuestring) ? dg->valuestring : NULL;
+  const char *crch = cJSON_IsString(ch) && hex_only(ch->valuestring) ? ch->valuestring : NULL;
+  /* the CRC file only with its checksum (as PatchDL); a list that names one without the file here: the plain way */
+  if(mf.crc_url[0] && crch) {
+    char *c = read_small(cp, UPD_CRC_MAX);
+    if(!c) { snprintf(why, wn, "die Prüfdatei der Paketliste fehlt"); goto out; }
+    struct stat cs;
+    if(stat(cp, &cs) != 0 || cs.st_size <= 0) { free(c); snprintf(why, wn, "die Prüfdatei der Paketliste ist leer"); goto out; }
+    *crc = (unsigned char *)c;
+    *crc_n = (size_t)cs.st_size;
+  }
+  o = cJSON_CreateObject();
+  if(!o) { rc = -1; snprintf(why, wn, "Kein Speicher."); goto out; }
+  cJSON *pa;                                                  /* the fields in the order PatchDL writes them */
+  cJSON_AddNumberToObject(o, "originalFileSize", (double)mf.total);
+  cJSON_AddNumberToObject(o, "numberOfSplitFiles", mf.count);
+  if(digest) cJSON_AddStringToObject(o, "packageDigest", digest);
+  char u[400];
+  if(*crc) {
+    cJSON_AddStringToObject(o, "playgoChunkCrcHashValue", crch);
+    snprintf(u, sizeof u, "http://127.0.0.1:%d%s%s", port, PS5TM_PKGSTREAM_PATH, crc_name);
+    cJSON_AddStringToObject(o, "playgoChunkCrcUrl", u);
+  }
+  pa = cJSON_AddArrayToObject(o, "pieces");
+  for(int i = 0; pa && i < mf.count; i++) {
+    cJSON *p = cJSON_CreateObject();
+    if(!p) { pa = NULL; break; }
+    snprintf(u, sizeof u, "http://127.0.0.1:%d%s" PS5TM_PKGSTREAM_PIECE "%lld/%lld/%s", port, PS5TM_PKGSTREAM_PATH,
+             (long long)mf.pieces[i].offset, (long long)mf.pieces[i].size, pkg_name);
+    cJSON_AddStringToObject(p, "url", u);
+    cJSON_AddNumberToObject(p, "fileOffset", (double)mf.pieces[i].offset);
+    cJSON_AddNumberToObject(p, "fileSize", (double)mf.pieces[i].size);
+    if(hex_only(mf.pieces[i].hash)) cJSON_AddStringToObject(p, "hashValue", mf.pieces[i].hash);
+    cJSON_AddItemToArray(pa, p);
+  }
+  char *s = pa ? cJSON_PrintUnformatted(o) : NULL;
+  if(!s) { rc = -1; snprintf(why, wn, "Kein Speicher."); goto out; }
+  *json = s;
+  *json_n = strlen(s);
+  rc = 0;
+out:
+  if(rc != 0) { free(*crc); *crc = NULL; *crc_n = 0; }
+  cJSON_Delete(o);
+  cJSON_Delete(src);
+  upd_manifest_free(&mf);
+  free(raw);
+  return rc;
 }
 
 /* A job the app was running when it ended is shown as paused (its parts are on disk); nothing starts by itself. */

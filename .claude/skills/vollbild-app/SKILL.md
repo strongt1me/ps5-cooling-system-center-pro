@@ -7,15 +7,16 @@ description: Neue Funktionen der PS5-App in der Vollbild-App (Kachel PPSA86921, 
 
 Antworten auf Deutsch, Commit-Nachrichten englisch. Arbeitsordner `PS5_Temperature_Manager_src`.
 
-## Zuerst fragen: Browser, Vollbild oder beides?
+## Grundsatz: beide Oberflächen können dasselbe
 
-Bevor eine **neue Funktion** gebaut wird, mit AskUserQuestion fragen (Wunsch des Users vom 27.10.2026):
+Vorgabe des Users vom 27.10.2026: **Alles, was die Browser-App kann, soll auch die Vollbild-App können.** Jede neue Funktion daher in beide Oberflächen bauen:
 
 - **Browser-Oberfläche** (`web/app.js`, `web/index.html`, Sprachdateien `web/lang/*.json`): am Handy/PC und über die Browser-Kachel PPSA86922.
 - **Vollbild-App** (`tvapp/`): auf dem Fernseher mit Controller, Kachel PPSA86921.
-- **Beides** (Empfehlung, wenn die Funktion am Fernseher sinnvoll bedienbar ist).
 
-Nicht fragen bei reinen Fehlerbehebungen oder wenn der User es schon gesagt hat. Funktionen, die nur mit Tastatur/Maus sinnvoll sind (lange Texte eingeben, Dateien hochladen), eher nur Browser – das in der Frage als Empfehlung kennzeichnen.
+Nicht mehr „Browser oder Vollbild?“ fragen. Nur nachfragen, wenn etwas mit dem Controller wirklich nicht geht (z. B. Dateien vom PC hochladen) – dann eine Vollbild-Variante vorschlagen (Hinweis/QR-Code auf die Browser-Seite, Bildschirmtastatur des Kits für kurze Eingaben).
+
+**Nichts doppelt bestätigen** (Vorgabe des Users, gilt für die ganze App, Browser und Vollbild): Löschen, Power-Optionen, Payload beenden, Auftrag abbrechen, Deaktivieren/Aktivieren, Leeren … passieren sofort beim Wählen – kein Schalter, kein zweiter Druck, kein „Wirklich?“/„Trotzdem?“. Ein `confirm`-Kennwort holt die Oberfläche still aus dem Plan; einen Dialog gibt es nur bei einer Ablehnung. Warnungen (z. B. Ruckler bei ffpfsc) bleiben sichtbar, ohne Zusatzschritt.
 
 ## Aufbau
 

@@ -53,6 +53,13 @@ struct Game
     std::uint64_t size_bytes = 0;
     std::uint64_t played_s = 0;
     bool can_launch = true;
+    // What the game tools may do with it (GET /api/v1/library): copy and convert are the console app's own, move
+    // and unpack go through ShadowMountPlus.
+    bool can_copy = false;
+    bool can_convert = false;
+    bool can_move = false;
+    bool can_unpack = false;
+    bool ampr_emu = false; // mods.ampr_emu: the conversion builds the AMPR index first by default
 };
 
 enum class JobKind : std::uint8_t
@@ -60,6 +67,8 @@ enum class JobKind : std::uint8_t
     copy,
     convert,
     image,
+    storage,  // a move or unpack by ShadowMountPlus
+    deletion, // a game being deleted
     count,
 };
 
@@ -73,6 +82,32 @@ struct Job
     double done = 0.0;
     double total = 0.0; // 0: unknown
     std::string error;
+    bool cancellable = true; // a delete cannot be stopped; ShadowMountPlus says whether its job can
+};
+
+// The game tools of Spiele → Bibliothek, in the order of their menu.
+enum class Tool : std::uint8_t
+{
+    copy,
+    convert,
+    move,         // ShadowMountPlus
+    unpack,       // ShadowMountPlus: an image into a dump folder
+    image_unpack, // the console app's own reader: an image into a folder
+    image_check,
+    image_repair,
+    erase,
+    count,
+};
+
+// The answer to a plan request, as it came: parsed by ps5cc/plans.hpp.
+struct PlanReply
+{
+    std::uint64_t ticket = 0; // the number request_plan() returned
+    Tool tool = Tool::copy;
+    std::string id;
+    bool ok = false;
+    std::string error; // the app's message when ok is false
+    std::string json;
 };
 
 struct HistoryEntry
@@ -211,11 +246,13 @@ struct Notice
         error,
         other_running, // launch refused: another game runs (running_* / target_*)
         leaving,       // launch booked for after this app has ended: the screen ends the app
+        job_started,   // a game tool's job was accepted: `job` names its card
     };
     Kind kind = Kind::info;
     std::string title;
     std::string body;
     std::string running_id, running_name, target_id, target_name;
+    JobKind job = JobKind::count;
 };
 
 // Everything the screen shows, copied out of the source in one piece.
@@ -241,6 +278,7 @@ struct Snapshot
     std::vector<LogEntry> log; // oldest first
     std::vector<KlogLine> klog; // oldest first, at most kKlogKeep
     bool klog_lost = false;     // lines went by faster than they were fetched
+    PlanReply plan;             // the last plan that came back
     std::uint64_t serial = 0;   // grows whenever anything above changes
 };
 
@@ -280,6 +318,12 @@ class Source
     virtual void kill_payload(int pid) = 0;
     // POST /api/v1/paystore: "refresh", "install", "start", "cancel" (id where it needs one).
     virtual void store_action(const std::string &action, const std::string &id) = 0;
+    // A game tool's plan for one game; it arrives as Snapshot::plan with the ticket returned here. Plans can take a
+    // minute (the console app measures the whole game), so they never wait behind the status.
+    virtual std::uint64_t request_plan(Tool tool, const std::string &id) = 0;
+    // Starts the tool with this POST body (ps5cc/plans.hpp builds it). Accepted: a job_started notice; refused: an
+    // error notice with the app's message.
+    virtual void start_tool(Tool tool, const std::string &id, const std::string &body) = 0;
     // Ends the app on the console (the preview only says so).
     virtual void quit_app() = 0;
     // Preview only: steps the link through starting / failed / online so

@@ -141,7 +141,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 - Profil : nom affiché et image de profil (30 images intégrées ou un fichier personnel).
 - Thème : standard, clair, sombre et optimal (le plus rapide à dessiner, pensé pour le téléviseur) ; chaque appareil retient son choix.
 - Système : modèle, firmware, durée de fonctionnement, stockage, réseau ; capteurs bruts et diagnostic en mode expert.
-- En-tête sur chaque page : mode repos, redémarrer, éteindre, mode sans échec (deux clics chacun).
+- En-tête sur chaque page : mode repos, redémarrer, éteindre, mode sans échec (un clic chacun).
 
 **Technique**
 - Serveur HTTP maison sans bibliothèque tierce, [interface JSON](docs/API.md) documentée, réglages dans `/data/PS5-Cooling-Center/config.json`.
@@ -177,7 +177,7 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 <details>
 <summary>Firmware et SDK en détail</summary>
 
-L'ELF est compilé avec le PS5 payload SDK **v0.44**, dont le code de démarrage connaît le firmware **jusqu'à 13.60**. Un firmware que le code de démarrage ne connaît pas n'atteint jamais `main()` : le programme ne démarre pas du tout et n'écrit rien dans le journal. Pour 13.00 à 13.40 il n'y a pas encore de retour (le code de démarrage les connaît). La température du GPU n'existe que sur la Pro.
+L'ELF est compilé avec le PS5 payload SDK **v0.45**, dont le code de démarrage connaît le firmware **jusqu'à 14.10**. Un firmware que le code de démarrage ne connaît pas n'atteint jamais `main()` : le programme ne démarre pas du tout et n'écrit rien dans le journal. Pour 13.00 à 13.40 il n'y a pas encore de retour (le code de démarrage les connaît). La température du GPU n'existe que sur la Pro.
 </details>
 
 ## Utilisation
@@ -213,7 +213,7 @@ L'ELF est compilé avec le PS5 payload SDK **v0.44**, dont le code de démarrage
 <details>
 <summary><b>Compiler depuis le code source</b></summary>
 
-Il faut le [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 ou plus récent** (testé avec v0.44) ; la compilation le vérifie et s'arrête avec un SDK plus ancien. Sous Windows, Git Bash avec LLVM 21 suffit :
+Il faut le [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 ou plus récent** (testé avec v0.45) ; la compilation le vérifie et s'arrête avec un SDK plus ancien. Sous Windows, Git Bash avec LLVM 21 suffit :
 
 ```bash
 tools/build-windows.sh

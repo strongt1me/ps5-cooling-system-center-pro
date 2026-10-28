@@ -186,6 +186,31 @@ void *thread_main(void *self)
     return nullptr;
 }
 
+void *tools_main(void *self)
+{
+    static_cast<HttpSource *>(self)->run_tools();
+    return nullptr;
+}
+
+// A title id for a query string: letters, digits, '-' and '_' as they are, everything else percent-encoded.
+std::string url_encoded(const std::string &text)
+{
+    std::string out;
+    for (const char c : text)
+    {
+        const auto u = static_cast<unsigned char>(c);
+        if ((u >= '0' && u <= '9') || (u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') || u == '-' || u == '_')
+        {
+            out += c;
+            continue;
+        }
+        char hex[4];
+        std::snprintf(hex, sizeof(hex), "%%%02X", u);
+        out += hex;
+    }
+    return out;
+}
+
 } // namespace
 
 void HttpSource::start()
@@ -198,8 +223,10 @@ void HttpSource::start()
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     pthread_t thread;
     const int rc = pthread_create(&thread, &attr, thread_main, this);
+    pthread_t tools;
+    const int rc_tools = pthread_create(&tools, &attr, tools_main, this);
     pthread_attr_destroy(&attr);
-    sys::log("[PS5CC] http thread rc=%d", rc);
+    sys::log("[PS5CC] http thread rc=%d tools rc=%d", rc, rc_tools);
 }
 
 bool HttpSource::fetch(Snapshot &out, std::uint64_t &seen)
@@ -296,6 +323,190 @@ void HttpSource::store_action(const std::string &action, const std::string &id)
 void HttpSource::quit_app()
 {
     sys::quit();
+}
+std::uint64_t HttpSource::request_plan(Tool tool, const std::string &id)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    ToolRequest r;
+    r.tool = tool;
+    r.id = id;
+    r.ticket = ++next_ticket_;
+    // Only the newest plan matters: one asked for earlier and still waiting is dropped.
+    tool_requests_.erase(std::remove_if(tool_requests_.begin(), tool_requests_.end(),
+                                        [](const ToolRequest &q) { return !q.start; }),
+                         tool_requests_.end());
+    tool_requests_.push_back(std::move(r));
+    return next_ticket_;
+}
+void HttpSource::start_tool(Tool tool, const std::string &id, const std::string &body)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    ToolRequest r;
+    r.start = true;
+    r.tool = tool;
+    r.id = id;
+    r.body = body;
+    tool_requests_.push_back(std::move(r));
+}
+
+void HttpSource::run_tools()
+{
+    for (;;)
+    {
+        ToolRequest request;
+        bool have = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!tool_requests_.empty())
+            {
+                request = tool_requests_.front();
+                tool_requests_.pop_front();
+                have = true;
+            }
+        }
+        if (have)
+            handle_tool(request);
+        else
+            sys::sleep_us(100000);
+    }
+}
+
+void HttpSource::handle_tool(const ToolRequest &request)
+{
+    int status = 0;
+    std::string body;
+    const std::string id = url_encoded(request.id);
+    if (!request.start)
+    {
+        std::string path;
+        const char *method = "GET";
+        std::string payload;
+        switch (request.tool)
+        {
+        case Tool::copy:
+            path = "/api/v1/library/copy/plan?id=" + id;
+            break;
+        case Tool::convert:
+            path = "/api/v1/library/convert/plan?id=" + id;
+            break;
+        case Tool::move:
+        case Tool::unpack:
+            path = "/api/v1/library/storage/plan?id=" + id + "&op=" + (request.tool == Tool::move ? "move" : "unpack");
+            break;
+        case Tool::image_unpack:
+            path = "/api/v1/library/image/plan?id=" + id;
+            break;
+        case Tool::erase:
+        {
+            path = "/api/v1/library/delete/plan";
+            method = "POST";
+            cJSON *root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "kind", "game");
+            cJSON_AddStringToObject(root, "id", request.id.c_str());
+            char *text = cJSON_PrintUnformatted(root);
+            payload = text != nullptr ? text : "{}";
+            cJSON_free(text);
+            cJSON_Delete(root);
+            break;
+        }
+        default: // check and repair read the image's description
+            path = "/api/v1/library/image?id=" + id;
+            break;
+        }
+        // Two minutes, as the web app waits: the plan measures the whole game.
+        const Net net = exchange(method, path.c_str(), payload, &status, &body, 120);
+        PlanReply reply;
+        reply.ticket = request.ticket;
+        reply.tool = request.tool;
+        reply.id = request.id;
+        reply.ok = net == Net::ok && status == 200;
+        if (reply.ok)
+            reply.json = std::move(body);
+        else
+            reply.error = net == Net::ok ? message_of(body, "Die App hat keinen Plan geliefert.")
+                                         : "Die App hat nicht rechtzeitig geantwortet.";
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.plan = std::move(reply);
+        ++data_.serial;
+        return;
+    }
+
+    static const char *const kStart[] = {"/api/v1/library/copy",    "/api/v1/library/convert",
+                                         "/api/v1/library/storage", "/api/v1/library/storage",
+                                         "/api/v1/library/image",   "/api/v1/library/image",
+                                         "/api/v1/library/image",   "/api/v1/library/delete"};
+    const int index = std::clamp(static_cast<int>(request.tool), 0, 7);
+    const Net net = exchange("POST", kStart[index], request.body, &status, &body, 20);
+    const std::string name = "„" + game_name(request.id) + "“";
+    std::string label = "Auftrag";
+    switch (request.tool)
+    {
+    case Tool::copy:
+        label = "Kopieren";
+        break;
+    case Tool::convert:
+        label = "Konvertieren";
+        break;
+    case Tool::move:
+        label = "Verschieben";
+        break;
+    case Tool::unpack:
+    case Tool::image_unpack:
+        label = "Entpacken";
+        break;
+    case Tool::image_check:
+        label = "Prüfen";
+        break;
+    case Tool::image_repair:
+        label = "Reparieren";
+        break;
+    case Tool::erase:
+        label = "Löschen";
+        break;
+    case Tool::count:
+        break;
+    }
+    if (net != Net::ok || status < 200 || status >= 300)
+    {
+        // Busy, other_busy, a running game, a target that is gone: the app's own words (409 and the rest).
+        notice(Notice::Kind::error, label + " nicht gestartet",
+               net == Net::ok ? message_of(body, "Unbekannter Fehler.") : "Die App hat nicht geantwortet.");
+        return;
+    }
+    if (request.tool == Tool::move || request.tool == Tool::unpack)
+    {
+        cJSON *reply = cJSON_Parse(body.c_str());
+        const double job_id = num(reply, "job_id");
+        if (job_id > 0.0)
+            storage_seen_ = static_cast<std::int64_t>(job_id);
+        cJSON_Delete(reply);
+    }
+    Notice n;
+    n.kind = Notice::Kind::job_started;
+    n.title = label + " gestartet";
+    n.body = name;
+    switch (request.tool)
+    {
+    case Tool::copy:
+        n.job = JobKind::copy;
+        break;
+    case Tool::convert:
+        n.job = JobKind::convert;
+        break;
+    case Tool::move:
+    case Tool::unpack:
+        n.job = JobKind::storage;
+        break;
+    case Tool::erase:
+        n.job = JobKind::deletion;
+        break;
+    default:
+        n.job = JobKind::image;
+        break;
+    }
+    jobs_wanted_ = true;
+    std::lock_guard<std::mutex> lock(mutex_);
+    notices_.push_back(std::move(n));
 }
 
 void HttpSource::notice(Notice::Kind kind, std::string title, std::string body)
@@ -396,7 +607,7 @@ void HttpSource::run()
                 continue;
             }
         }
-        if (retry_.exchange(false))
+        if (retry_.exchange(false) || library_wanted_.exchange(false))
             library_wanted = true;
 
         for (;;)
@@ -475,7 +686,7 @@ void HttpSource::run()
         const Watch page = watching_.load();
         const bool jobs_open = page == Watch::jobs;
         const std::int64_t jobs_every = jobs_open || busy ? 1000000 : 10000000;
-        if (now - last_jobs >= jobs_every)
+        if (now - last_jobs >= jobs_every || jobs_wanted_.exchange(false))
         {
             last_jobs = now;
             poll_jobs();
@@ -618,18 +829,17 @@ void HttpSource::handle(const Request &request)
     case Request::Kind::close:
     {
         std::snprintf(payload, sizeof(payload), "{\"id\":\"%.20s\"}", request.id.c_str());
-        if (exchange("POST", "/api/v1/library/close", payload, &status, &body) == Net::ok && status < 300)
-            notice(Notice::Kind::info, "„" + game_name(request.id) + "“ wird beendet …",
-                   "Danach das neue Spiel noch einmal starten.");
-        else
+        // On success the screen has said it already ("… wird beendet, danach startet …"); only a refusal is news.
+        if (exchange("POST", "/api/v1/library/close", payload, &status, &body) != Net::ok || status >= 300)
             notice(Notice::Kind::error, "Beenden nicht möglich", message_of(body, "Unbekannter Fehler."));
         break;
     }
     case Request::Kind::cancel:
     {
+        // A delete has no way back once it started: the screen never asks to cancel one.
         static const char *const kRoutes[] = {"/api/v1/library/copy/cancel", "/api/v1/library/convert/cancel",
-                                              "/api/v1/library/image/cancel"};
-        const int index = std::clamp(request.value, 0, 2);
+                                              "/api/v1/library/image/cancel", "/api/v1/library/storage/cancel"};
+        const int index = std::clamp(request.value, 0, 3);
         if (exchange("POST", kRoutes[index], "{}", &status, &body) == Net::ok && status < 300)
             notice(Notice::Kind::info, "Auftrag wird abgebrochen");
         else
@@ -887,9 +1097,11 @@ void HttpSource::poll_store()
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
     if (data_.store_job.state == "running" && job.state == "done")
-        notices_.push_back({Notice::Kind::success, "„" + job.name + "“ geladen", {}, {}, {}, {}, {}});
+        notices_.push_back(
+            {Notice::Kind::success, "„" + job.name + "“ geladen", {}, {}, {}, {}, {}, JobKind::count});
     if (data_.store_job.state == "running" && job.state == "failed")
-        notices_.push_back({Notice::Kind::error, "„" + job.name + "“ nicht geladen", job.error, {}, {}, {}, {}});
+        notices_.push_back(
+            {Notice::Kind::error, "„" + job.name + "“ nicht geladen", job.error, {}, {}, {}, {}, JobKind::count});
     data_.store = std::move(items);
     data_.store_job = job;
     data_.store_loaded = loaded;
@@ -1041,6 +1253,11 @@ void HttpSource::poll_library()
         g.played_s = static_cast<std::uint64_t>(num(item, "played_s"));
         const cJSON *can = cJSON_GetObjectItemCaseSensitive(item, "can_launch");
         g.can_launch = !cJSON_IsBool(can) || cJSON_IsTrue(can);
+        g.can_copy = flag(item, "can_copy");
+        g.can_convert = flag(item, "can_convert");
+        g.can_move = flag(item, "can_move");
+        g.can_unpack = flag(item, "can_unpack");
+        g.ampr_emu = flag(cJSON_GetObjectItemCaseSensitive(item, "mods"), "ampr_emu");
         if (g.name.empty())
             g.name = g.id;
         games.push_back(std::move(g));
@@ -1096,18 +1313,32 @@ void HttpSource::fetch_cover()
 void HttpSource::poll_jobs()
 {
     static const char *const kRoutes[] = {"/api/v1/library/copy", "/api/v1/library/convert",
-                                          "/api/v1/library/image/job"};
+                                          "/api/v1/library/image/job", "/api/v1/library/storage",
+                                          "/api/v1/library/delete"};
     std::array<Job, static_cast<std::size_t>(JobKind::count)> jobs{};
     for (std::size_t i = 0; i < jobs.size(); ++i)
     {
         int status = 0;
         std::string body;
+        // Without ShadowMountPlus its route answers 503: the card simply stays empty.
         if (exchange("GET", kRoutes[i], {}, &status, &body) != Net::ok || status != 200)
             continue;
         cJSON *root = cJSON_Parse(body.c_str());
         if (root == nullptr)
             continue;
         Job &job = jobs[i];
+        if (i == static_cast<std::size_t>(JobKind::storage))
+        {
+            read_storage_job(root, job);
+            cJSON_Delete(root);
+            continue;
+        }
+        if (i == static_cast<std::size_t>(JobKind::deletion))
+        {
+            read_delete_job(root, job);
+            cJSON_Delete(root);
+            continue;
+        }
         job.state = str(root, "state");
         job.error = str(root, "error");
         const bool idle = job.state.empty() || job.state == "idle";
@@ -1147,8 +1378,65 @@ void HttpSource::poll_jobs()
         cJSON_Delete(root);
     }
     std::lock_guard<std::mutex> lock(mutex_);
+    // A job that just ended may have moved, unpacked or deleted a game: the list is read again.
+    for (std::size_t i = 0; i < jobs.size(); ++i)
+    {
+        if (data_.jobs[i].active && !jobs[i].active)
+            library_wanted_ = true;
+    }
     data_.jobs = jobs;
     ++data_.serial;
+}
+
+void HttpSource::read_storage_job(const cJSON *root, Job &job)
+{
+    const std::int64_t id = static_cast<std::int64_t>(num(root, "job_id"));
+    const bool active = flag(root, "active");
+    if (active && id > 0)
+        storage_seen_ = id;
+    if (!active && (id <= 0 || id != storage_seen_.load()))
+        return; // an old job of ShadowMountPlus, perhaps from its own interface
+    const std::string state = str(root, "state");
+    job.active = active;
+    job.finished = !active;
+    job.state = active                  ? state
+                : state == "completed"  ? "done"
+                : state == "failed"     ? "failed"
+                                        : "cancelled";
+    std::string tid = str(root, "title_id");
+    job.name = !tid.empty() ? game_name(tid) : str(root, "title_name");
+    if (job.name.empty())
+        job.name = str(root, "name");
+    const std::string op = str(root, "operation");
+    const std::string verb = op == "move" ? "Verschieben" : op == "unpack" ? "Entpacken" : op == "install" ? "Installieren" : op;
+    const std::string dest = str(root, "destination");
+    job.detail = verb + (dest.empty() ? "" : " → " + dest);
+    job.total = num(root, "total_bytes");
+    job.done = num(root, "processed_bytes");
+    job.error = str(root, "result_error");
+    job.cancellable = flag(root, "cancellable") && !flag(root, "cancel_requested");
+}
+
+void HttpSource::read_delete_job(const cJSON *root, Job &job)
+{
+    job.state = str(root, "state");
+    if (job.state.empty() || job.state == "idle")
+        return;
+    job.active = flag(root, "active");
+    // The app keeps the last delete until it restarts; an hour later it is no news any more.
+    const double ago = num(root, "finished_ago_s", -1.0);
+    if (!job.active && (ago < 0.0 || ago > 3600.0))
+    {
+        job = Job{};
+        return;
+    }
+    job.finished = !job.active;
+    job.name = str(root, "name");
+    job.detail = job.active ? str(root, "phase") : str(root, "note");
+    job.total = num(root, "bytes_total");
+    job.done = num(root, "bytes_done");
+    job.error = str(root, "error");
+    job.cancellable = false;
 }
 
 void HttpSource::poll_history()

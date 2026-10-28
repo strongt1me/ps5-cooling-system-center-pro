@@ -36,6 +36,12 @@ Die Vollbild-App für die Konsole (die Kachel von „PS5 Cooling & System Center
 - `src/ps5cc/covers.*` – Spiel-Cover: der HTTP-Faden lädt sie einzeln (`/api/v1/library/cover`, das Spiel im Fokus zuerst), dekodiert und verkleinert sie auf 160×160; das Hauptprogramm macht daraus höchstens zwei Texturen je Bild (höchstens 400 Cover, etwa 40 MiB)
 - `src/third_party/stb/stb_image.inc`, `image.c`, `image.h` – stb_image v2.30 (Public Domain oder MIT), unverändert vom stb-Commit in `src/third_party/stb/UPSTREAM`, nur PNG und JPEG (seit 27.10.2026 für die Entwicklerbilder der Payloads) und ohne stdio; Git-Blob `9eedabed…53272ec`, SHA-256 `594c2fe3…e4200b3` (vollständig in `THIRD_PARTY_NOTICES.md`)
 
+- `tools/setup-native-dependencies.sh` – **Payload-SDK v0.45 statt v0.42** (27.10.2026, wie die übrige App): offizielles
+  `ps5-payload-sdk.zip` von github.com/ps5-payload-dev/sdk, 8 838 658 Bytes, SHA-256
+  `5fac64093d0e3e69f2584ce7935f24f703f622d9681f1495c85b9f00d1291a2c` (die Prüfsumme, die GitHub für die Datei angibt;
+  das Kit hatte v0.42 mit `8cfbc7cd5811e719eb4f0c47eea668d3dc7b40bc8ab11c4a5031d40c23ec02da`). Ein zwischengespeichertes SDK
+  anderer Fassung wird ersetzt (Markierung `.deps/native/ps5-payload-sdk/.pinned-sha256`).
+
 ## Bauen
 
 ```bash

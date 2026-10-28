@@ -7,9 +7,9 @@ Bauen, auf die Konsole senden, Fehlersuche und Aufbau des Quellcodes.
 ## Bauen
 
 Voraussetzung: das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk)
-**ab v0.42**; gebaut und getestet ist mit **v0.44**
-(`ps5-payload-sdk.zip`, SHA-256
-`4d06eab777bb135705b5a6816688c9132efb246093fe606ac488ab6cf65ca5b0`, so auch
+**ab v0.42**; gebaut und getestet ist mit **v0.45**
+(`ps5-payload-sdk.zip`, 8 838 658 Bytes, SHA-256
+`5fac64093d0e3e69f2584ce7935f24f703f622d9681f1495c85b9f00d1291a2c`, so auch
 von GitHub als Prüfsumme der Datei angegeben).
 `tools/build-windows.sh` erwartet eine Kopie im Projektordner unter
 `PS5_PAYLOAD_SDK/` (Git ignoriert diesen Ordner); ein anderer Ort lässt sich mit
@@ -27,12 +27,13 @@ blieb alles Übrige im SDK gleich, bis auf die Kopfdatei `ps5/kernel.h`, die nur
 neue Deklarationen bekam. v0.44 (10.10.2026) ergänzt die Stub-Bibliotheken `libSceAgc` und
 `libSceAgcDriver`, `killpg()` in der libc und Verbesserungen der Werkzeugkette; die App kommt davon nicht
 zum Zug: mit v0.44 gebaut ist die ELF bis auf die zufällige 16-Byte-Build-ID dieselbe wie mit v0.43
-(18.10.2026 verglichen).
+(18.10.2026 verglichen). v0.45 (21.10.2026) bringt die Kernel-Offsets für Firmware 14.00 und 14.10
+(geändert sind nur `target/lib/crt1.o` und `libkernel_sys.so`, gleiche Dateiliste mit 2926 Dateien).
 
 Darum prüft der Bau selbst (`tools/check_sdk_firmware.py`, in `Makefile`):
 
 - **vor dem Bauen** das `crt1.o` des SDK: Hat es keinen Fall für 13.00, 13.20,
-  13.40 und 13.60, bricht `make` ab;
+  13.40, 13.60, 14.00 und 14.10, bricht `make` ab;
 - **nach dem Binden** die fertige ELF, in die der Startcode eingelinkt ist:
   Fehlt dort ein Fall, wird sie gelöscht.
 
