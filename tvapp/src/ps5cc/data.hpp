@@ -211,6 +211,82 @@ struct StoreJob
     double total = 0.0;
 };
 
+// One package of the last search (GET /api/v1/packages).
+struct Package
+{
+    std::string id; // valid for the last search only
+    std::string name;
+    std::string file;
+    std::string drive;       // the drive's mount ("/mnt/usb0", "/user")
+    std::string drive_label; // "USB-Speicher 1", from the list's drives
+    std::string title_id;
+    std::string content_id;
+    std::string version;
+    std::string kind; // base, update, dlc
+    int plat = 0;     // 5 PS5, 4 PS4, 0 unknown
+    std::uint64_t size = 0;
+    std::uint64_t total = 0; // a split package: all of it (size: the parts found)
+    int parts_total = 0;     // 0 for a single file
+    int parts_found = 0;
+    bool has_icon = false;
+};
+
+// The texture key of a package's picture in covers().
+inline std::string package_key(const std::string &id)
+{
+    return "pkg:" + id;
+}
+
+struct PackageScan
+{
+    bool loaded = false;
+    bool ever = false; // searched at least once since the app started
+    bool scanning = false;
+    int parsed = 0;
+    std::string current; // the file being read
+};
+
+// GET /api/v1/packages/install/job
+struct PackageInstall
+{
+    std::string state = "idle"; // idle, preparing, starting, installing, finishing, done, failed, cancelled
+    bool active = false;
+    bool can_cancel = false;
+    bool cancelling = false;
+    std::string name;
+    std::string version;
+    std::string error;
+    std::string note;
+    double bytes_total = 0.0;
+    double bytes_done = 0.0;
+    int percent = -1;  // -1 unknown
+    int remain_s = -1; // -1 unknown
+};
+
+struct PackageQueueItem
+{
+    std::string id;
+    std::string name;
+    std::string version;
+    std::string kind;
+    std::string state; // waiting, running, done, failed, skipped, cancelled
+    std::string message;
+    std::uint64_t size = 0;
+};
+
+// GET /api/v1/packages/queue
+struct PackageQueue
+{
+    bool running = false;
+    bool pause_requested = false;
+    bool halted = false;
+    std::string halt_reason;
+    int waiting = 0;
+    int done = 0;
+    int failed = 0; // failed, skipped and cancelled
+    std::vector<PackageQueueItem> items;
+};
+
 // GET /api/v1/logs/tail
 struct LogEntry
 {
@@ -236,6 +312,7 @@ enum class Watch : std::uint8_t
     settings,
     payloads,
     logs,
+    packages,
 };
 
 // Something an action came back with, for the screen to show once.
@@ -281,6 +358,10 @@ struct Snapshot
     std::vector<KlogLine> klog; // oldest first, at most kKlogKeep
     bool klog_lost = false;     // lines went by faster than they were fetched
     PlanReply plan;             // the last plan that came back
+    std::vector<Package> packages;
+    PackageScan package_scan;
+    PackageInstall package_install;
+    PackageQueue package_queue;
     std::vector<BackdropSetting> backdrops; // GET /api/v1/backdrops, in the sidebar's order
     bool backdrops_loaded = false;
     std::uint64_t serial = 0;   // grows whenever anything above changes
@@ -328,6 +409,9 @@ class Source
     // Starts the tool with this POST body (ps5cc/plans.hpp builds it). Accepted: a job_started notice; refused: an
     // error notice with the app's message.
     virtual void start_tool(Tool tool, const std::string &id, const std::string &body) = 0;
+    // The Pakete page: "scan", "install" (id), "install_cancel", "queue_add" / "queue_remove" (id), "queue_start",
+    // "queue_pause", "queue_retry", "queue_clear" (the finished ones).
+    virtual void package_action(const std::string &action, const std::string &id) = 0;
     // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture (uploaded in the browser).
     virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;
     // Ends the app on the console (the preview only says so).

@@ -305,6 +305,10 @@ void HttpSource::set_backdrop(const std::string &area, BackdropMode mode)
     const char *const names[] = {"standard", "custom", "off"};
     push({Request::Kind::backdrop, 0, area, names[static_cast<int>(mode)]});
 }
+void HttpSource::package_action(const std::string &action, const std::string &id)
+{
+    push({Request::Kind::package, 0, id, action});
+}
 void HttpSource::watch(Watch page)
 {
     watching_ = page;
@@ -608,7 +612,8 @@ void HttpSource::run()
 {
     std::int64_t last_status = 0, last_library = 0, last_jobs = 0, last_history = 0, last_cover = 0;
     std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_store = 0, last_log = 0, last_klog = 0;
-    std::int64_t last_backdrops = 0;
+    std::int64_t last_backdrops = 0, last_packages = 0, last_pkg_install = 0, last_pkg_queue = 0;
+    bool packages_open = false;
     bool library_wanted = true;
     for (;;)
     {
@@ -763,6 +768,44 @@ void HttpSource::run()
                 last_store = now;
                 poll_store();
             }
+        }
+        // Pakete: the list while a search runs (every second) or now and then, the install and the queue faster while
+        // they run. The first visit with nothing searched yet starts a search, as the web page does.
+        if (page == Watch::packages)
+        {
+            const bool entered = !packages_open;
+            packages_open = true;
+            PackageScan scan;
+            bool installing = false, queue_running = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                scan = data_.package_scan;
+                installing = data_.package_install.active;
+                queue_running = data_.package_queue.running;
+            }
+            if (entered || now - last_packages >= (scan.scanning ? 1000000 : 20000000))
+            {
+                last_packages = now;
+                poll_packages(false);
+                std::lock_guard<std::mutex> lock(mutex_);
+                scan = data_.package_scan;
+            }
+            if (scan.loaded && !scan.ever && !scan.scanning)
+                poll_packages(true);
+            if (entered || now - last_pkg_install >= (installing ? 1000000 : 4000000))
+            {
+                last_pkg_install = now;
+                poll_package_install();
+            }
+            if (entered || now - last_pkg_queue >= (queue_running ? 1500000 : 5000000))
+            {
+                last_pkg_queue = now;
+                poll_package_queue();
+            }
+        }
+        else
+        {
+            packages_open = false;
         }
         if (page == Watch::logs)
         {
@@ -929,6 +972,64 @@ void HttpSource::handle(const Request &request)
             notice(Notice::Kind::error, "Beenden nicht möglich", message_of(body, "Die App hat nicht geantwortet."));
         poll_payloads();
         break;
+    case Request::Kind::package:
+    {
+        const std::string &a = request.text;
+        std::string route, json = "{}";
+        if (a == "scan")
+        {
+            poll_packages(true);
+            break;
+        }
+        if (a == "install")
+            route = "/api/v1/packages/install";
+        else if (a == "install_cancel")
+            route = "/api/v1/packages/install/cancel";
+        else if (a == "queue_clear")
+        {
+            route = "/api/v1/packages/queue/clear";
+            json = "{\"all\":false}";
+        }
+        else if (a.rfind("queue_", 0) == 0)
+            route = "/api/v1/packages/queue/" + a.substr(6);
+        else
+            break;
+        if (!request.id.empty())
+        {
+            cJSON *root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "id", request.id.c_str());
+            char *text = cJSON_PrintUnformatted(root);
+            json = text != nullptr ? text : "{}";
+            cJSON_free(text);
+            cJSON_Delete(root);
+        }
+        const Net net = exchange("POST", route.c_str(), json, &status, &body, 10);
+        if (net != Net::ok || status >= 300)
+        {
+            const char *title = a == "install"          ? "Installation nicht gestartet"
+                                : a == "install_cancel" ? "Abbrechen nicht möglich"
+                                                        : "Warteschlange";
+            notice(Notice::Kind::error, title, message_of(body, "Die App hat nicht geantwortet."));
+        }
+        else if (a == "queue_add")
+        {
+            cJSON *reply = cJSON_Parse(body.c_str());
+            const int added = reply != nullptr ? static_cast<int>(num(reply, "added")) : 0;
+            const std::string msg = reply != nullptr ? str(reply, "message") : "";
+            cJSON_Delete(reply);
+            if (added > 0)
+                notice(Notice::Kind::success, "In die Warteschlange gelegt");
+            else
+                notice(Notice::Kind::info, "Schon in der Warteschlange", msg);
+        }
+        else if (a == "install")
+        {
+            notice(Notice::Kind::success, "Installation gestartet");
+        }
+        poll_package_install();
+        poll_package_queue();
+        break;
+    }
     case Request::Kind::backdrop:
     {
         cJSON *root = cJSON_CreateObject();
@@ -1335,6 +1436,19 @@ void HttpSource::fetch_cover()
             g.cover = "/api/v1/paystore/avatar?owner=" + s.owner;
             games.push_back(std::move(g));
         }
+        // The pictures of the packages, only while the Pakete page is open (ids hold for one search).
+        if (watching_.load() == Watch::packages)
+        {
+            for (const Package &p : data_.packages)
+            {
+                if (!p.has_icon)
+                    continue;
+                Game g;
+                g.id = package_key(p.id);
+                g.cover = "/api/v1/packages/icon?id=" + url_encoded(p.id);
+                games.push_back(std::move(g));
+            }
+        }
     }
     if (games.empty())
         return;
@@ -1354,6 +1468,150 @@ void HttpSource::fetch_cover()
         covers().fail(want.id);
     else
         covers().deliver(want.id, std::move(rgba));
+}
+
+void HttpSource::poll_packages(bool scan)
+{
+    int status = 0;
+    std::string body;
+    if (exchange(scan ? "POST" : "GET", scan ? "/api/v1/packages/scan" : "/api/v1/packages", scan ? "{}" : "", &status,
+                 &body, 8) != Net::ok ||
+        status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    PackageScan s;
+    s.loaded = true;
+    s.ever = flag(root, "ever");
+    s.scanning = flag(root, "scanning");
+    s.parsed = static_cast<int>(num(root, "parsed"));
+    s.current = str(root, "current");
+    std::vector<std::pair<std::string, std::string>> labels;
+    const cJSON *d = nullptr;
+    cJSON_ArrayForEach(d, cJSON_GetObjectItemCaseSensitive(root, "drives"))
+        labels.emplace_back(str(d, "mount"), str(d, "label"));
+    std::vector<Package> list;
+    const cJSON *p = nullptr;
+    cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(root, "packages"))
+    {
+        Package k;
+        k.id = str(p, "id");
+        k.name = str(p, "name");
+        k.file = str(p, "file");
+        k.drive = str(p, "drive");
+        for (const auto &[mount, label] : labels)
+        {
+            if (mount == k.drive)
+                k.drive_label = label;
+        }
+        if (k.drive_label.empty())
+            k.drive_label = k.drive;
+        k.title_id = str(p, "title_id");
+        k.content_id = str(p, "content_id");
+        k.version = str(p, "version");
+        k.kind = str(p, "kind");
+        k.plat = static_cast<int>(num(p, "plat"));
+        k.size = static_cast<std::uint64_t>(num(p, "size"));
+        k.total = static_cast<std::uint64_t>(num(p, "total"));
+        k.has_icon = flag(p, "has_icon");
+        if (const cJSON *parts = cJSON_GetObjectItemCaseSensitive(p, "parts"))
+        {
+            k.parts_total = static_cast<int>(num(parts, "total"));
+            k.parts_found = static_cast<int>(num(parts, "found"));
+        }
+        if (!k.id.empty())
+            list.push_back(std::move(k));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.package_scan = s;
+    data_.packages = std::move(list);
+    ++data_.serial;
+}
+
+void HttpSource::poll_package_install()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/packages/install/job", {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    PackageInstall j;
+    j.state = str(root, "state");
+    j.active = flag(root, "active");
+    j.can_cancel = flag(root, "can_cancel");
+    j.cancelling = flag(root, "cancelling");
+    j.name = str(root, "name");
+    j.version = str(root, "version");
+    j.error = str(root, "error");
+    j.note = str(root, "note");
+    j.bytes_total = num(root, "bytes_total");
+    j.bytes_done = num(root, "bytes_done");
+    j.percent = static_cast<int>(num(root, "percent", -1));
+    j.remain_s = static_cast<int>(num(root, "remain_s", -1));
+    if (j.state.empty())
+        j.state = "idle";
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    const PackageInstall &o = data_.package_install;
+    if (o.state == j.state && o.active == j.active && o.cancelling == j.cancelling && o.name == j.name &&
+        o.percent == j.percent && o.bytes_done == j.bytes_done && o.error == j.error && o.remain_s == j.remain_s)
+        return;
+    // A run that ended: the library may have a new game now.
+    if (o.active && !j.active)
+        library_wanted_ = true;
+    data_.package_install = j;
+    ++data_.serial;
+}
+
+void HttpSource::poll_package_queue()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/packages/queue", {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    PackageQueue q;
+    q.running = flag(root, "running");
+    q.pause_requested = flag(root, "pause_requested");
+    q.halted = flag(root, "halted");
+    q.halt_reason = str(root, "halt_reason");
+    const cJSON *counts = cJSON_GetObjectItemCaseSensitive(root, "counts");
+    q.waiting = static_cast<int>(num(counts, "waiting"));
+    q.done = static_cast<int>(num(counts, "done"));
+    q.failed = static_cast<int>(num(counts, "failed") + num(counts, "skipped") + num(counts, "cancelled"));
+    const cJSON *it = nullptr;
+    cJSON_ArrayForEach(it, cJSON_GetObjectItemCaseSensitive(root, "items"))
+    {
+        PackageQueueItem i;
+        i.id = str(it, "id");
+        i.name = str(it, "name");
+        i.version = str(it, "version");
+        i.kind = str(it, "kind");
+        i.state = str(it, "state");
+        i.message = str(it, "message");
+        i.size = static_cast<std::uint64_t>(num(it, "size"));
+        q.items.push_back(std::move(i));
+    }
+    cJSON_Delete(root);
+    const auto key_of = [](const PackageQueue &x)
+    {
+        std::string key = std::to_string(x.running) + std::to_string(x.pause_requested) + std::to_string(x.halted) +
+                          x.halt_reason;
+        for (const PackageQueueItem &i : x.items)
+            key += ';' + i.id + i.state + i.message;
+        return key;
+    };
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (key_of(q) == key_of(data_.package_queue))
+        return;
+    data_.package_queue = std::move(q);
+    ++data_.serial;
 }
 
 void HttpSource::poll_backdrops()

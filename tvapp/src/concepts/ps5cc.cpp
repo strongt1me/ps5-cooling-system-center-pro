@@ -84,6 +84,7 @@ enum View
     kCooling,
     kSettings,
     kGames,
+    kPackages,
     kJobs,
     kPayloads,
     kLogs,
@@ -96,7 +97,8 @@ enum PageIndex
     kPageSettings = 0,
     kPagePayloads = 1,
     kPageLogs = 2,
-    kPageCount = 3,
+    kPagePackages = 3,
+    kPageCount = 4,
 };
 
 // The sidebar's icons, drawn with the kit's shapes (no artwork files): one per area.
@@ -331,11 +333,12 @@ class Ps5cc final : public app::Concept
         ps5cc::style_subtabs(cooling_tabs_, theme_, 2);
         cooling_tabs_.set_tabs({{"Übersicht"}, {"Einstellungen"}});
         cooling_tabs_.set_active(0, true);
-        ps5cc::style_subtabs(games_tabs_, theme_, 2);
-        games_tabs_.set_tabs({{"Bibliothek"}, {"Aufträge"}});
+        ps5cc::style_subtabs(games_tabs_, theme_, 3);
+        games_tabs_.set_tabs({{"Bibliothek"}, {"Pakete"}, {"Aufträge"}});
         games_tabs_.set_active(0, true);
 
-        pages_ = {ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page()};
+        pages_ = {ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
+                  ps5cc::make_packages_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -704,6 +707,7 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::north)},
             {1.2f, 0, Direction::none, "auftrag-laeuft"},
             {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
             {0.5f, action_bit(Action::west)},
             {0.3f, 0, Direction::down},
             {0.2f, 0, Direction::down},
@@ -736,6 +740,7 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::confirm)},
             {1.2f, 0, Direction::none, "loeschen-gestartet"},
             {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
             // A PS4 title (Two Point Hospital, a folder): converting lists only USB and M.2.
             {0.4f, 0, Direction::down},
             {0.15f, 0, Direction::down},
@@ -749,6 +754,17 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::confirm)},
             {1.0f, 0, Direction::none, "plan-ps4"},
             {0.2f, action_bit(Action::back)},
+            // Spiele → Pakete: the list, an install started with ✕, one more into the queue with □, the △ menu.
+            {0.5f, action_bit(Action::jump_next)},
+            {1.0f, 0, Direction::none, "pakete"},
+            {0.3f, action_bit(Action::confirm)},
+            {3.5f, 0, Direction::none, "paket-installation"},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::west)},
+            {0.8f, 0, Direction::none, "paket-warteschlange"},
+            {0.3f, action_bit(Action::north)},
+            {0.8f, 0, Direction::none, "pakete-menue"},
+            {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "auftraege"},
             {0.2f, 0, Direction::down},
@@ -836,7 +852,7 @@ class Ps5cc final : public app::Concept
         case kAreaCooling:
             return cooling_tabs_.active() == 0 ? kCooling : kSettings;
         case kAreaGames:
-            return games_tabs_.active() == 0 ? kGames : kJobs;
+            return games_tabs_.active() == 0 ? kGames : games_tabs_.active() == 1 ? kPackages : kJobs;
         case kAreaPayloads:
             return kPayloads;
         case kAreaLogs:
@@ -866,6 +882,8 @@ class Ps5cc final : public app::Concept
             return pages_[kPagePayloads].get();
         case kLogs:
             return pages_[kPageLogs].get();
+        case kPackages:
+            return pages_[kPagePackages].get();
         default:
             return nullptr;
         }
@@ -1265,6 +1283,7 @@ class Ps5cc final : public app::Concept
                               : v == kSettings ? ps5cc::Watch::settings
                               : v == kPayloads ? ps5cc::Watch::payloads
                               : v == kLogs     ? ps5cc::Watch::logs
+                              : v == kPackages ? ps5cc::Watch::packages
                                                : ps5cc::Watch::none);
         if (ps5cc::Page *page = current_page())
             page->enter();
@@ -1405,7 +1424,7 @@ class Ps5cc final : public app::Concept
                          n.body + (here ? "" : " · Fortschritt unter Spiele → Aufträge"));
             if (here && n.job != JobKind::count)
             {
-                games_tabs_.set_active(1);
+                games_tabs_.set_active(2);
                 job_focus_ = static_cast<int>(n.job);
                 feedback.play(audio::Cue::tab);
                 switched();

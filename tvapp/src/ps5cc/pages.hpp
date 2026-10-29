@@ -1,4 +1,4 @@
-// ps5cc - The pages after cooling, games and jobs: settings, payloads, logs.
+// ps5cc - The pages after cooling, games and jobs: settings, packages, payloads, logs.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -69,6 +69,7 @@ inline void draw_subtab_glyphs(ui::Canvas &canvas, const ui::TabBar &tabs)
 
 std::unique_ptr<Page> make_settings_page();
 std::unique_ptr<Page> make_payloads_page();
+std::unique_ptr<Page> make_packages_page();
 std::unique_ptr<Page> make_logs_page();
 
 } // namespace hui::ps5cc

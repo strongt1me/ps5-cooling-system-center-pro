@@ -155,6 +155,7 @@ class MockSource final : public Source
         data_.config.night_target_c = 80;
         data_.config.tz_offset_min = 60;
         fill_backdrops();
+        fill_packages();
         fill_payloads();
         fill_store();
         fill_logs();
@@ -183,6 +184,7 @@ class MockSource final : public Source
     {
         clock_ += dt;
         second_ += dt;
+        tick_packages(dt);
         if (pending_target_ > 0 && clock_ >= target_at_)
         {
             data_.status.target_c = pending_target_;
@@ -457,6 +459,102 @@ class MockSource final : public Source
     {
         data_.link = Link::starting;
         data_.link_detail = "Warte auf die App …";
+        changed();
+    }
+
+    void package_action(const std::string &action, const std::string &id) override
+    {
+        PackageInstall &job = data_.package_install;
+        PackageQueue &q = data_.package_queue;
+        const Package *pkg = nullptr;
+        for (const Package &k : data_.packages)
+        {
+            if (k.id == id)
+                pkg = &k;
+        }
+        if (action == "scan")
+        {
+            data_.package_scan.scanning = true;
+            data_.package_scan.parsed = 0;
+            scan_left_ = 2.0f;
+        }
+        else if (action == "install" && pkg != nullptr)
+        {
+            if (job.active)
+            {
+                notice(Notice::Kind::error, "Installation nicht gestartet",
+                       "Es läuft schon eine Installation. Warte, bis sie fertig ist.");
+                return;
+            }
+            if (pkg->parts_total > 0 && pkg->parts_found < pkg->parts_total)
+            {
+                notice(Notice::Kind::error, "Installation nicht gestartet",
+                       "Es fehlen Teile dieses Pakets: " + std::to_string(pkg->parts_found) + " von " +
+                           std::to_string(pkg->parts_total) + " gefunden.");
+                return;
+            }
+            job = PackageInstall{};
+            job.state = "installing";
+            job.active = true;
+            job.can_cancel = true;
+            job.name = pkg->name;
+            job.version = pkg->version;
+            job.bytes_total = static_cast<double>(pkg->total > 0 ? pkg->total : pkg->size);
+            job.percent = 0;
+            notice(Notice::Kind::success, "Installation gestartet");
+        }
+        else if (action == "install_cancel" && job.active)
+        {
+            job.active = false;
+            job.state = "cancelled";
+            notice(Notice::Kind::info, "Installation abgebrochen");
+        }
+        else if (action == "queue_add" && pkg != nullptr)
+        {
+            for (const PackageQueueItem &i : q.items)
+            {
+                if (i.id == id && (i.state == "waiting" || i.state == "running"))
+                {
+                    notice(Notice::Kind::info, "Schon in der Warteschlange");
+                    return;
+                }
+            }
+            PackageQueueItem i;
+            i.id = pkg->id;
+            i.name = pkg->name;
+            i.version = pkg->version;
+            i.kind = pkg->kind;
+            i.state = "waiting";
+            i.size = pkg->size;
+            q.items.push_back(i);
+            notice(Notice::Kind::success, "In die Warteschlange gelegt");
+        }
+        else if (action == "queue_remove")
+        {
+            std::erase_if(q.items, [&](const PackageQueueItem &i) { return i.id == id && i.state != "running"; });
+        }
+        else if (action == "queue_start")
+        {
+            q.running = true;
+            q.halted = false;
+        }
+        else if (action == "queue_pause")
+        {
+            q.pause_requested = true;
+        }
+        else if (action == "queue_retry")
+        {
+            for (PackageQueueItem &i : q.items)
+            {
+                if (i.state == "failed" || i.state == "skipped" || i.state == "cancelled")
+                    i.state = "waiting";
+            }
+        }
+        else if (action == "queue_clear")
+        {
+            std::erase_if(q.items, [](const PackageQueueItem &i) { return i.state == "done"; });
+        }
+        count_queue();
         changed();
     }
 
@@ -792,6 +890,134 @@ class MockSource final : public Source
         s.automatic = true;
     }
 
+    // Two drives with a handful of packages: a PS5 game with its update and add-on, a PS4 game, a split package with a
+    // part missing; one already waits in the queue.
+    void fill_packages()
+    {
+        struct Seed
+        {
+            const char *id, *name, *drive, *label, *title, *version, *kind;
+            int plat;
+            double gb;
+            int parts, found;
+        };
+        static const Seed kSeeds[] = {
+            {"a1f04c2e9b7d3016", "Lantern Pass", "/mnt/usb0", "USB-Speicher 1", "PPSA04211", "01.000", "base", 5, 38.2, 0, 0},
+            {"b2e15d3fac8e4127", "Lantern Pass", "/mnt/usb0", "USB-Speicher 1", "PPSA04211", "01.020", "update", 5, 4.6, 0, 0},
+            {"c3d26e40bd9f5238", "Lantern Pass – Nordwind-Paket", "/mnt/usb0", "USB-Speicher 1", "PPSA04211", "01.000", "dlc", 5,
+             1.1, 0, 0},
+            {"d4c37f51ce0a6349", "Iron Tide", "/mnt/usb0", "USB-Speicher 1", "CUSA18842", "01.000", "base", 4, 22.7, 0, 0},
+            {"e5b48062df1b745a", "Sky Drifters", "/user", "Konsolenspeicher", "PPSA07730", "01.000", "base", 5, 61.0, 3, 2},
+            {"f6a59173e02c856b", "Paper Harbor", "/user", "Konsolenspeicher", "PPSA02954", "01.003", "base", 5, 12.4, 0, 0},
+        };
+        data_.packages.clear();
+        for (const Seed &s : kSeeds)
+        {
+            Package k;
+            k.id = s.id;
+            k.name = s.name;
+            k.drive = s.drive;
+            k.drive_label = s.label;
+            k.title_id = s.title;
+            k.content_id = std::string("EP0000-") + s.title + "_00-0000000000000000";
+            k.version = s.version;
+            k.kind = s.kind;
+            k.plat = s.plat;
+            k.total = static_cast<std::uint64_t>(s.gb * 1e9);
+            k.parts_total = s.parts;
+            k.parts_found = s.found;
+            k.size = s.parts > 0 ? k.total / static_cast<std::uint64_t>(s.parts) * static_cast<std::uint64_t>(s.found)
+                                 : k.total;
+            k.file = std::string(s.title) + "-" + s.version + (s.parts > 0 ? ".pkg (geteilt)" : ".pkg");
+            data_.packages.push_back(k);
+        }
+        data_.package_scan.loaded = true;
+        data_.package_scan.ever = true;
+        data_.package_scan.parsed = static_cast<int>(data_.packages.size());
+        PackageQueueItem waiting;
+        waiting.id = "f6a59173e02c856b";
+        waiting.name = "Paper Harbor";
+        waiting.version = "01.003";
+        waiting.kind = "base";
+        waiting.state = "waiting";
+        data_.package_queue.items = {waiting};
+        count_queue();
+    }
+
+    void count_queue()
+    {
+        PackageQueue &q = data_.package_queue;
+        q.waiting = q.done = q.failed = 0;
+        for (const PackageQueueItem &i : q.items)
+        {
+            q.waiting += i.state == "waiting" ? 1 : 0;
+            q.done += i.state == "done" ? 1 : 0;
+            q.failed += i.state == "failed" || i.state == "skipped" || i.state == "cancelled" ? 1 : 0;
+        }
+    }
+
+    // A search takes two seconds; an install about eight, then the queue takes the next one.
+    void tick_packages(float dt)
+    {
+        if (scan_left_ > 0.0f)
+        {
+            scan_left_ -= dt;
+            data_.package_scan.parsed = static_cast<int>(data_.packages.size() * (1.0f - scan_left_ / 2.0f));
+            if (scan_left_ <= 0.0f)
+            {
+                data_.package_scan.scanning = false;
+                data_.package_scan.parsed = static_cast<int>(data_.packages.size());
+            }
+            changed();
+        }
+        PackageInstall &job = data_.package_install;
+        if (job.active)
+        {
+            job.bytes_done = std::min(job.bytes_total, job.bytes_done + job.bytes_total * dt / 8.0);
+            job.percent = job.bytes_total > 0.0 ? static_cast<int>(job.bytes_done * 100.0 / job.bytes_total) : -1;
+            job.remain_s = static_cast<int>((job.bytes_total - job.bytes_done) / std::max(job.bytes_total / 8.0, 1.0));
+            if (job.bytes_done >= job.bytes_total)
+            {
+                job.active = false;
+                job.state = "done";
+                job.percent = 100;
+                notice(Notice::Kind::success, "„" + job.name + "“ installiert");
+                for (PackageQueueItem &i : data_.package_queue.items)
+                {
+                    if (i.state == "running")
+                        i.state = "done";
+                }
+                count_queue();
+            }
+            changed();
+        }
+        PackageQueue &q = data_.package_queue;
+        if (q.running && !job.active)
+        {
+            const auto next = std::find_if(q.items.begin(), q.items.end(),
+                                           [](const PackageQueueItem &i) { return i.state == "waiting"; });
+            if (next == q.items.end() || q.pause_requested)
+            {
+                q.running = false;
+                q.pause_requested = false;
+            }
+            else
+            {
+                next->state = "running";
+                job = PackageInstall{};
+                job.state = "installing";
+                job.active = true;
+                job.can_cancel = true;
+                job.name = next->name;
+                job.version = next->version;
+                job.bytes_total = 12.4e9;
+                job.percent = 0;
+            }
+            count_queue();
+            changed();
+        }
+    }
+
     // Every area on the tile's own picture; Spiele has one of the user's as well (set aside).
     void fill_backdrops()
     {
@@ -986,6 +1212,7 @@ class MockSource final : public Source
     }
 
     Snapshot data_;
+    float scan_left_ = 0.0f;
     std::deque<Notice> notices_;
     float clock_ = 0.0f;
     float second_ = 0.0f;

@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: Spiele → Pakete (Phase 2)
+- Neuer Unterreiter „Pakete“ zwischen Bibliothek und Aufträge (L2/R2), wie der Reiter Pakete der Browser-App: die gefundenen Pakete nach Laufwerk, je mit Bild (oder Marke P5/P4/UP/DLC), Art, Version, Plattform, Titel-ID und Größe; Marken für die Warteschlange (WARTET, LÄUFT, FERTIG, FEHLER) und für geteilte Pakete mit fehlenden Teilen
+- ✕ installiert das Paket sofort (lehnt die Konsole ab, sagt ein Hinweis warum), □ legt es in die Warteschlange oder nimmt es heraus, △ öffnet „Neu suchen“, „Warteschlange starten/anhalten/fortsetzen“, „Installation abbrechen“, „Fehlgeschlagene wiederholen“ und „Erledigte entfernen“ – alles ohne Rückfrage
+- Rechts die Angaben zum Paket, darunter der Stand der Warteschlange und die laufende Installation mit Fortschritt und Restzeit. Beim ersten Öffnen ohne frühere Suche sucht die Seite selbst
+- Aufteilen und Senden vom PC bleiben in der Browser-App
+
 ### Vollbild-App: Bilder hinter den Bereichen, auch eigene
 - Jeder Bereich der Vollbild-App (Kühlung, Spiele, Dateien, Payloads, System, Profil, Protokoll) hat ein eigenes Hintergrundbild, links, oben und unten abgedunkelt, damit die Schrift lesbar bleibt; die Flächen lassen etwas davon durchscheinen. Die sieben Bilder (1280 × 720, je etwa 70–110 KB) liegen nur in der Vollbild-Kachel (`tvapp/assets/backdrops`), nicht in der App-ELF
 - Eigene Bilder: In der Browser-App unter System → „Hintergründe der Vollbild-App“ je Bereich „Bild hochladen“ (die Seite schneidet auf 1280 × 720 zu, Mitte, und schickt ein JPEG), dazu die Wahl Standardbild / Eigenes Bild / Kein Bild und „Löschen“. Die Konsole legt die Bilder in `/data/PS5-Cooling-Center/backdrops` ab (`src/backdrops.c`, Routen `/api/v1/backdrops*`); die laufende Vollbild-App fragt alle 5 s nach und zeigt ein neues Bild ohne Neustart
