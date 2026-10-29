@@ -3861,7 +3861,81 @@
     }
   };
 
+  /* Hintergründe der Vollbild-App (backdrops.c). Das Bild wird hier zugeschnitten (1280 × 720, Mitte, wie
+     „cover“) und als JPEG geschickt: Die Konsole speichert es nur, die Kachel lädt es nach ein paar Sekunden. */
+  const bd = { once: false, area: "" };
+  const BD_MODES = [["standard", "Standardbild"], ["custom", "Eigenes Bild"], ["off", "Kein Bild"]];
+  const bdShow = (d) => {
+    const grid = $("#bd-grid");
+    if (!grid || !d || !Array.isArray(d.areas)) return;
+    grid.innerHTML = d.areas.map((a) => {
+      const id = esc(a.id);
+      const pic = a.custom
+        ? `<img src="/api/v1/backdrops/image?area=${id}&v=${encodeURIComponent(a.stamp || "")}" alt="">`
+        : `<span>${a.mode === "off" ? "Kein Bild" : "Standardbild"}</span>`;
+      const opts = BD_MODES.map(([m, label]) =>
+        `<option value="${m}"${m === a.mode ? " selected" : ""}${m === "custom" && !a.custom ? " disabled" : ""}>${label}</option>`).join("");
+      return `<div class="bd-item${a.mode === "off" ? " is-off" : ""}">
+          <div class="bd-pic">${pic}</div>
+          <div class="bd-name">${esc(a.label)}</div>
+          <select data-bd-mode="${id}" aria-label="Hintergrund ${esc(a.label)}">${opts}</select>
+          <div class="row-gap">
+            <button class="btn" data-bd-up="${id}">Bild hochladen</button>
+            ${a.custom ? `<button class="btn" data-bd-del="${id}">Löschen</button>` : ""}
+          </div>
+        </div>`;
+    }).join("");
+  };
+  const bdLoad = async () => {
+    try { bdShow(await api("/api/v1/backdrops")); bd.once = true; }
+    catch (e) { const g = $("#bd-grid"); if (g) g.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  };
+  const bdPost = async (body) => {
+    try { bdShow(await api("/api/v1/backdrops", { method: "POST", body: JSON.stringify(body) })); }
+    catch (e) { toast(e.message, "error"); bdLoad(); }
+  };
+  const bdJpeg = async (file) => {
+    const W = 1280, H = 720;
+    const img = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.max(W / img.width, H / img.height);
+    const sw = W / scale, sh = H / scale;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    g.imageSmoothingQuality = "high";
+    g.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, 0, 0, W, H);
+    if (img.close) img.close();
+    return new Promise((ok, fail) => c.toBlob((b) => (b ? ok(b) : fail(new Error("Das Bild ließ sich nicht umwandeln."))), "image/jpeg", 0.88));
+  };
+  const bdGrid = $("#bd-grid");
+  if (bdGrid) {
+    bdGrid.addEventListener("change", (ev) => {
+      const s = ev.target.closest("[data-bd-mode]");
+      if (s) bdPost({ area: s.dataset.bdMode, mode: s.value });
+    });
+    bdGrid.addEventListener("click", (ev) => {
+      const up = ev.target.closest("[data-bd-up]");
+      const del = ev.target.closest("[data-bd-del]");
+      if (up) { bd.area = up.dataset.bdUp; $("#bd-file").value = ""; $("#bd-file").click(); }
+      else if (del) bdPost({ area: del.dataset.bdDel, delete: true });
+    });
+  }
+  const bdFile = $("#bd-file");
+  if (bdFile) bdFile.addEventListener("change", async () => {
+    const f = bdFile.files[0];
+    if (!f || !bd.area) return;
+    try {
+      const blob = await bdJpeg(f);
+      bdShow(await api(`/api/v1/backdrops/upload?area=${encodeURIComponent(bd.area)}`, {
+        method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" }, timeoutMs: 60000 }));
+      toast("Hintergrundbild gespeichert. Die Vollbild-App zeigt es gleich.");
+    } catch (e) {
+      toast(e && e.name === "InvalidStateError" ? "Diese Datei ist kein lesbares Bild." : e.message, "error");
+    }
+  });
+
   const loadSystem = async () => {
+    if (state.page === "system" && !bd.once) bdLoad();
     let sys;
     try { sys = await api("/api/v1/system"); } catch { return; }
     const qrNow = sys && sys.network ? String(sys.network.ip || "") : "";

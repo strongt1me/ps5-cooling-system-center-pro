@@ -24,6 +24,7 @@
 #include "platform/ps5/http_source.hpp"
 #include "platform/ps5/pad.hpp"
 #include "platform/ps5/system.hpp"
+#include "ps5cc/backdrops.hpp"
 #include "ps5cc/covers.hpp"
 #include "ui/fonts.hpp"
 
@@ -211,6 +212,7 @@ int main()
     sys::log("[HUI] sounds files=%d rejected=%d", bank.files, bank.rejected);
     for (const std::string &error : bank.errors)
         sys::log("[HUI] sound rejected %s", error.c_str());
+    sys::log("[HUI] backdrops %d", ps5cc::backdrops().load(kAssets));
 
     app::Shell shell(fonts, catalog, kDataRoot, renderer.glass_texture());
     const std::string version = read_content_version("/app0/sce_sys/param.json");
@@ -316,6 +318,13 @@ int main()
         ps5cc::covers().upload_pending([&](int w, int h, const std::uint8_t *rgba)
                                        { return renderer.batch().create_texture(w, h, rgba); },
                                        2, dt);
+        ps5cc::backdrops().upload_pending([&](std::uint32_t reuse, int w, int h, const std::uint8_t *rgba)
+                                          {
+                if (reuse == 0)
+                    return renderer.batch().create_texture(w, h, rgba);
+                renderer.batch().replace_texture(reuse, w, h, rgba);
+                return reuse;
+            });
         shell.compose(renderer);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

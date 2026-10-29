@@ -283,6 +283,28 @@ void HttpSource::retry()
 {
     retry_ = true;
 }
+void HttpSource::set_backdrop(const std::string &area, BackdropMode mode)
+{
+    if (mode == BackdropMode::custom)
+    {
+        bool have = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (const BackdropSetting &b : data_.backdrops)
+                have = have || (b.id == area && b.custom);
+            if (!have)
+                ++data_.serial; // the page shows the setting as it was again
+        }
+        if (!have)
+        {
+            notice(Notice::Kind::error, "Kein eigenes Bild",
+                   "Lade es zuerst in der Browser-App hoch: System → Hintergründe der Vollbild-App.");
+            return;
+        }
+    }
+    const char *const names[] = {"standard", "custom", "off"};
+    push({Request::Kind::backdrop, 0, area, names[static_cast<int>(mode)]});
+}
 void HttpSource::watch(Watch page)
 {
     watching_ = page;
@@ -586,6 +608,7 @@ void HttpSource::run()
 {
     std::int64_t last_status = 0, last_library = 0, last_jobs = 0, last_history = 0, last_cover = 0;
     std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_store = 0, last_log = 0, last_klog = 0;
+    std::int64_t last_backdrops = 0;
     bool library_wanted = true;
     for (;;)
     {
@@ -599,7 +622,7 @@ void HttpSource::run()
                 library_wanted = true;
                 config_wanted_ = true;
                 last_status = last_jobs = last_history = 0;
-                last_selftest = last_payloads = last_store = last_log = last_klog = 0;
+                last_selftest = last_payloads = last_store = last_log = last_klog = last_backdrops = 0;
             }
             else
             {
@@ -673,6 +696,14 @@ void HttpSource::run()
             last_cover = now;
             fetch_cover();
         }
+        // The pictures behind the areas: a small list every 5 s, so one uploaded in the browser shows up soon; a
+        // changed picture is fetched in the same pass (one at a time, about 150 KB of JPEG).
+        if (now - last_backdrops >= 5000000)
+        {
+            last_backdrops = now;
+            poll_backdrops();
+        }
+        fetch_backdrop();
         const bool busy = [&]
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -898,6 +929,20 @@ void HttpSource::handle(const Request &request)
             notice(Notice::Kind::error, "Beenden nicht möglich", message_of(body, "Die App hat nicht geantwortet."));
         poll_payloads();
         break;
+    case Request::Kind::backdrop:
+    {
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "area", request.id.c_str());
+        cJSON_AddStringToObject(root, "mode", request.text.c_str());
+        char *text = cJSON_PrintUnformatted(root);
+        const Net net = exchange("POST", "/api/v1/backdrops", text != nullptr ? text : "{}", &status, &body);
+        cJSON_free(text);
+        cJSON_Delete(root);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Hintergrund nicht geändert", message_of(body, "Die App hat nicht geantwortet."));
+        poll_backdrops();
+        break;
+    }
     case Request::Kind::store:
     {
         cJSON *root = cJSON_CreateObject();
@@ -1309,6 +1354,65 @@ void HttpSource::fetch_cover()
         covers().fail(want.id);
     else
         covers().deliver(want.id, std::move(rgba));
+}
+
+void HttpSource::poll_backdrops()
+{
+    int status = 0;
+    std::string body;
+    // An app without the route (older than 29.10.2026) answers 404: every area keeps the tile's own picture.
+    if (exchange("GET", "/api/v1/backdrops", {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    std::vector<BackdropSetting> list;
+    const cJSON *areas = cJSON_GetObjectItemCaseSensitive(root, "areas");
+    const cJSON *a = nullptr;
+    cJSON_ArrayForEach(a, areas)
+    {
+        BackdropSetting b;
+        b.id = str(a, "id");
+        b.label = str(a, "label");
+        const std::string mode = str(a, "mode");
+        b.mode = mode == "custom" ? BackdropMode::custom : mode == "off" ? BackdropMode::off : BackdropMode::standard;
+        b.custom = flag(a, "custom");
+        b.stamp = str(a, "stamp");
+        if (backdrop_area(b.id) >= 0)
+            list.push_back(std::move(b));
+    }
+    cJSON_Delete(root);
+    backdrops().apply(list);
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto same = [](const BackdropSetting &x, const BackdropSetting &y)
+    { return x.id == y.id && x.mode == y.mode && x.custom == y.custom && x.stamp == y.stamp && x.label == y.label; };
+    if (data_.backdrops_loaded && std::equal(list.begin(), list.end(), data_.backdrops.begin(), data_.backdrops.end(), same))
+        return;
+    data_.backdrops = std::move(list);
+    data_.backdrops_loaded = true;
+    ++data_.serial;
+}
+
+void HttpSource::fetch_backdrop()
+{
+    const BackdropWant want = backdrops().wanted_custom();
+    if (want.area < 0)
+        return;
+    const std::string path = std::string("/api/v1/backdrops/image?area=") + backdrop_name(want.area);
+    int status = 0;
+    std::string body;
+    if (exchange("GET", path.c_str(), {}, &status, &body, 8) != Net::ok || status != 200)
+    {
+        backdrops().fail_custom(want.area, want.stamp);
+        return;
+    }
+    std::vector<std::uint8_t> rgba =
+        decode_backdrop(reinterpret_cast<const std::uint8_t *>(body.data()), body.size());
+    sys::log("[PS5CC] backdrop %s %zu bytes ok=%d", backdrop_name(want.area), body.size(), rgba.empty() ? 0 : 1);
+    if (rgba.empty())
+        backdrops().fail_custom(want.area, want.stamp);
+    else
+        backdrops().deliver_custom(want.area, want.stamp, std::move(rgba));
 }
 
 void HttpSource::poll_jobs()

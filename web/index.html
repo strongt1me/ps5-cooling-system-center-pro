@@ -1408,6 +1408,15 @@
             </div>
           </article>
 
+          <!-- Hintergrundbilder der Vollbild-App (backdrops.c, GET/POST /api/v1/backdrops); app.js (bdLoad) füllt es. -->
+          <article class="card" id="bd-card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-display"/></svg></span><div class="ck-text"><h2>Hintergründe der Vollbild-App</h2>
+              <p class="sub">Ein eigenes Bild für jeden Bereich</p></div></div></div>
+            <div class="bd-grid" id="bd-grid"><p class="muted">wird gelesen …</p></div>
+            <input type="file" id="bd-file" accept="image/*" hidden>
+            <p class="note">Jedes Bild wird auf 1280 × 720 zugeschnitten und als JPEG gespeichert. Die Vollbild-App zeigt es nach wenigen Sekunden.</p>
+          </article>
+
           <!-- ══ Expertenbereich ══ -->
           <div class="expert-only">
             <div class="ov-expert-head">

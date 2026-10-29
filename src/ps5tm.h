@@ -1319,6 +1319,16 @@ int  ps5tm_klogrec_start(int tz_min, char *err, size_t err_len);   /* 200, else 
 int  ps5tm_klogrec_stop(void);
 struct cJSON *ps5tm_klogrec_json(void);
 
+/* The full-screen app's area pictures in /data/PS5-Cooling-Center/backdrops — see backdrops.c. Areas are the names
+   "kuehlung" … "protokoll" (index 0..6), modes "standard", "custom", "off"; the ints are 0 or an errno. */
+int  ps5tm_backdrops_area(const char *name);                       /* -1 when it is none of them */
+int  ps5tm_backdrops_path(int area, char *out, size_t n);
+struct cJSON *ps5tm_backdrops_json(void);
+int  ps5tm_backdrops_set_mode(int area, const char *mode);
+int  ps5tm_backdrops_take(int area, const char *part);             /* moves an uploaded JPEG into place */
+int  ps5tm_backdrops_remove(int area);
+void ps5tm_api_receive_backdrop(int fd, const char *query, const char *prefix, size_t prefix_len, size_t total);
+
 /* The games list's memory between scans, on the drive: /data/PS5-Cooling-Center/covers_and_more
    (libcache.c). What a scan found about one title that is slow to find out again: how big
    its folder or image is, whether it is a backport, where it lies — kept in

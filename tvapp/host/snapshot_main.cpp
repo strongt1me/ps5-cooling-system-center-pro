@@ -23,6 +23,7 @@
 #include "gfx/gl_program.hpp"
 #include "gfx/renderer.hpp"
 #include "manifest.hpp"
+#include "ps5cc/backdrops.hpp"
 #include "ps5cc/covers.hpp"
 #include "ui/fonts.hpp"
 
@@ -182,6 +183,7 @@ int main(int argc, char **argv)
         !load_font(renderer, assets + "/fonts/press-start-2p.huifont", &pixel, &fonts.pixel) ||
         !load_font(renderer, assets + "/fonts/patrick-hand.huifont", &hand, &fonts.hand))
         return 1;
+    hui::ps5cc::backdrops().load(assets);
     hui::demo::Catalog catalog;
     if (!catalog.build_covers(renderer, fonts))
     {
@@ -271,6 +273,14 @@ int main(int argc, char **argv)
         hui::ps5cc::covers().upload_pending([&](int w, int h, const std::uint8_t *rgba)
                                             { return renderer.batch().create_texture(w, h, rgba); },
                                             1000, 1.0f);
+        for (int i = 0; i < hui::ps5cc::kBackdropAreas; ++i)
+            hui::ps5cc::backdrops().upload_pending([&](std::uint32_t reuse, int w, int h, const std::uint8_t *rgba)
+                                                   {
+                if (reuse == 0)
+                    return renderer.batch().create_texture(w, h, rgba);
+                renderer.batch().replace_texture(reuse, w, h, rgba);
+                return reuse;
+            });
     };
     const auto render = [&](const std::string &name)
     {

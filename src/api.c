@@ -4029,6 +4029,93 @@ ps5tm_api_receive_klog_save(int fd, const char *query, const char *prefix, size_
   pthread_mutex_unlock(&g_upload_lock);
 }
 
+/* ------------------------------------------- full-screen pictures (backdrops.c) */
+
+#define BACKDROP_MAX (3u * 1024 * 1024)
+
+static void
+receive_backdrop(int fd, const char *query, const char *prefix, size_t prefix_len, size_t total) {
+  char name[24], path[160], part[176];
+  query_param(query, "area", name, sizeof(name));
+  int area = ps5tm_backdrops_area(name);
+  if(area < 0 || ps5tm_backdrops_path(area, path, sizeof(path)) != 0) {
+    ps5tm_http_send_error(fd, 400, "bad_area", "Unbekannter Bereich.");
+    return;
+  }
+  if(total == 0 || total > BACKDROP_MAX) {
+    ps5tm_http_send_error(fd, 400, "bad_upload", "Ungültige Größe (höchstens 3 MB).");
+    return;
+  }
+  mkdir(PS5TM_DATA_DIR, 0755);
+  mkdir(PS5TM_DATA_DIR "/backdrops", 0755);
+  snprintf(part, sizeof(part), "%s.part", path);
+  FILE *f = fopen(part, "wb");
+  if(!f) {
+    ps5tm_http_send_error(fd, 500, "write_failed", "Die Datei ließ sich nicht anlegen.");
+    return;
+  }
+  size_t written = receive_body(fd, f, prefix, prefix_len, total, AVATAR_UPLOAD_BUDGET_MS);
+  int    flushed = close_file_ok(f);
+  if(written != total || !flushed) {
+    unlink(part);
+    ps5tm_http_send_error(fd, 500, "upload_incomplete", "Die Übertragung wurde abgebrochen.");
+    return;
+  }
+  int rc = ps5tm_backdrops_take(area, part);
+  if(rc == EILSEQ) { ps5tm_http_send_error(fd, 400, "not_jpeg", "Das ist kein JPEG-Bild."); return; }
+  if(rc) {
+    char msg[160];
+    snprintf(msg, sizeof(msg), "Das Bild ließ sich nicht ablegen: %s", ps5tm_io_strerror(rc));
+    ps5tm_http_send_error(fd, 500, "write_failed", msg);
+    return;
+  }
+  send_cjson(fd, 200, ps5tm_backdrops_json());
+}
+
+void
+ps5tm_api_receive_backdrop(int fd, const char *query, const char *prefix, size_t prefix_len, size_t total) {
+  if(pthread_mutex_trylock(&g_upload_lock) != 0) {
+    ps5tm_http_send_error(fd, 409, "upload_busy", "Es läuft bereits eine Übertragung.");
+    return;
+  }
+  receive_backdrop(fd, query, prefix, prefix_len, total);
+  pthread_mutex_unlock(&g_upload_lock);
+}
+
+static void
+handle_backdrop_image(int fd, const char *query) {
+  char name[24], path[160];
+  query_param(query, "area", name, sizeof(name));
+  int area = ps5tm_backdrops_area(name);
+  if(area < 0 || ps5tm_backdrops_path(area, path, sizeof(path)) != 0 ||
+     ps5tm_http_send_download(fd, path, "image/jpeg", "hintergrund.jpg", BACKDROP_MAX) != 0)
+    ps5tm_http_send_error(fd, 404, "no_backdrop", "Für diesen Bereich gibt es kein eigenes Bild.");
+}
+
+/* {"area":"spiele","mode":"standard"|"custom"|"off"} or {"area":"spiele","delete":true}. */
+static void
+handle_backdrop_post(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *ja = body ? cJSON_GetObjectItem(body, "area") : NULL;
+  const cJSON *jm = body ? cJSON_GetObjectItem(body, "mode") : NULL;
+  int area = cJSON_IsString(ja) ? ps5tm_backdrops_area(ja->valuestring) : -1;
+  int del = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "delete"));
+  char mode[16] = "";
+  if(cJSON_IsString(jm)) snprintf(mode, sizeof(mode), "%s", jm->valuestring);
+  cJSON_Delete(body);
+  if(area < 0) { ps5tm_http_send_error(fd, 400, "bad_area", "Unbekannter Bereich."); return; }
+  int rc = del ? ps5tm_backdrops_remove(area) : ps5tm_backdrops_set_mode(area, mode);
+  if(rc == EINVAL) { ps5tm_http_send_error(fd, 400, "bad_mode", "Unbekannte Einstellung."); return; }
+  if(rc == ENOENT) { ps5tm_http_send_error(fd, 409, "no_backdrop", "Für diesen Bereich ist noch kein eigenes Bild hochgeladen."); return; }
+  if(rc) {
+    char msg[160];
+    snprintf(msg, sizeof(msg), "Die Einstellung ließ sich nicht speichern: %s", ps5tm_io_strerror(rc));
+    ps5tm_http_send_error(fd, 500, "write_failed", msg);
+    return;
+  }
+  send_cjson(fd, 200, ps5tm_backdrops_json());
+}
+
 /* One of our log files as a download. Only names klogfiles.c itself makes. */
 static void
 handle_klog_file(int fd, const ps5tm_request_t *req) {
@@ -5209,6 +5296,20 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
     handle_klog_file(fd, req);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/backdrops")) {
+    if(is_get) { send_cjson(fd, 200, ps5tm_backdrops_json()); return; }
+    if(is_post) { handle_backdrop_post(fd, req); return; }
+    ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET oder POST erlaubt.");
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/backdrops/image")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                        "Nur GET erlaubt."); return; }
+    handle_backdrop_image(fd, req->query);
     return;
   }
 

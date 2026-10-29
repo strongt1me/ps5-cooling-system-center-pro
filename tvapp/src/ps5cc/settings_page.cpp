@@ -1,4 +1,4 @@
-// ps5cc - The Settings page: how the fan is regulated, the night mode, the fan self-test.
+// ps5cc - The Settings page: how the fan is regulated, the night mode, the fan self-test, the area pictures.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -6,6 +6,7 @@
 #include "ps5cc/pages.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <map>
 #include <string>
@@ -30,9 +31,13 @@ enum Row
     kNightEnd,
     kNightTarget,
     kSelfTest,
+    kBackdrop, // kBackdrop + area, one row per area
 };
 
 constexpr float kSaveDelay = 0.6f;
+constexpr const char *kAreaLabels[kBackdropAreas] = {"Kühlung", "Spiele", "Dateien", "Payloads",
+                                                     "System",  "Profil", "Protokoll"};
+constexpr const char *kNoCustom = "Eigene Bilder lädst du in der Browser-App hoch: System → Hintergründe.";
 constexpr const char *kProfiles[] = {"comfort", "balanced", "cool"};
 
 int profile_index(const std::string &profile)
@@ -126,6 +131,17 @@ class SettingsPage final : public Page
             {
                 applied_ = key;
                 apply(data.config);
+            }
+        }
+        if (data.backdrops_loaded)
+        {
+            std::string key;
+            for (const BackdropSetting &b : data.backdrops)
+                key += b.id + ':' + std::to_string(static_cast<int>(b.mode)) + (b.custom ? "+" : "-") + ';';
+            if (key != backdrops_key_)
+            {
+                backdrops_key_ = key;
+                show_backdrops(data.backdrops);
             }
         }
         const std::string test_key = data.selftest.state + data.selftest.verdict +
@@ -244,6 +260,12 @@ class SettingsPage final : public Page
         form_.add_header("LÜFTER-SELBSTTEST");
         form_.add_action(kSelfTest, "Selbsttest starten").description =
             "Senkt die Schwelle für höchstens 30 s und misst, ob der Lüfter schneller wird.";
+        form_.add_header("HINTERGRÜNDE");
+        for (int i = 0; i < kBackdropAreas; ++i)
+        {
+            ui::FormRow &row = form_.add_choice(kBackdrop + i, kAreaLabels[i], {"Standard", "Eigenes Bild", "Aus"}, 0);
+            row.description = kNoCustom;
+        }
         night_rows(c.night_enabled);
     }
 
@@ -278,6 +300,26 @@ class SettingsPage final : public Page
 
     void changed(int id)
     {
+        if (id >= kBackdrop && id < kBackdrop + kBackdropAreas)
+        {
+            const auto area = static_cast<std::size_t>(id - kBackdrop);
+            int choice = std::clamp(form_.choice_index(id), 0, 2);
+            // Without the user's picture "Eigenes Bild" is stepped over in the direction it was reached from, so
+            // Standard and Aus stay one press apart (the row's description says where pictures come from).
+            if (choice == 1 && !has_custom_[area])
+            {
+                choice = shown_mode_[area] == 0 ? 2 : 0;
+                form_.set_choice(id, choice);
+            }
+            if (choice == shown_mode_[area])
+                return;
+            shown_mode_[area] = choice;
+            source().set_backdrop(backdrop_name(static_cast<int>(area)),
+                                  choice == 1   ? BackdropMode::custom
+                                  : choice == 2 ? BackdropMode::off
+                                                : BackdropMode::standard);
+            return;
+        }
         const auto number = [&](int row) { return std::to_string(static_cast<int>(form_.slider_value(row) + 0.5f)); };
         switch (id)
         {
@@ -326,6 +368,22 @@ class SettingsPage final : public Page
         source().save_config(json);
     }
 
+    void show_backdrops(const std::vector<BackdropSetting> &list)
+    {
+        for (const BackdropSetting &b : list)
+        {
+            const int area = backdrop_area(b.id);
+            if (area < 0)
+                continue;
+            const int choice = b.mode == BackdropMode::custom ? 1 : b.mode == BackdropMode::off ? 2 : 0;
+            has_custom_[static_cast<std::size_t>(area)] = b.custom;
+            shown_mode_[static_cast<std::size_t>(area)] = choice;
+            form_.set_choice(kBackdrop + area, choice);
+            if (ui::FormRow *row = form_.row(kBackdrop + area))
+                row->description = b.custom ? "Ein eigenes Bild ist hochgeladen." : kNoCustom;
+        }
+    }
+
     void show_test(const SelfTest &t)
     {
         test_ = t;
@@ -364,6 +422,9 @@ class SettingsPage final : public Page
     std::string applied_; // the config the form shows
     std::string test_key_;
     SelfTest test_;
+    std::string backdrops_key_;
+    std::array<bool, kBackdropAreas> has_custom_{};
+    std::array<int, kBackdropAreas> shown_mode_{};
 };
 
 } // namespace

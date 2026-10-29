@@ -154,6 +154,7 @@ class MockSource final : public Source
         data_.config.night_end_min = 7 * 60;
         data_.config.night_target_c = 80;
         data_.config.tz_offset_min = 60;
+        fill_backdrops();
         fill_payloads();
         fill_store();
         fill_logs();
@@ -456,6 +457,25 @@ class MockSource final : public Source
     {
         data_.link = Link::starting;
         data_.link_detail = "Warte auf die App …";
+        changed();
+    }
+
+    void set_backdrop(const std::string &area, BackdropMode mode) override
+    {
+        for (BackdropSetting &b : data_.backdrops)
+        {
+            if (b.id != area)
+                continue;
+            if (mode == BackdropMode::custom && !b.custom)
+            {
+                notice(Notice::Kind::error, "Kein eigenes Bild",
+                       "Lade es zuerst in der Browser-App hoch: System → Hintergründe der Vollbild-App.");
+                changed();
+                return;
+            }
+            b.mode = mode;
+        }
+        backdrops().apply(data_.backdrops);
         changed();
     }
 
@@ -770,6 +790,25 @@ class MockSource final : public Source
         s.hottest_c = std::max(s.cpu_c, std::max(s.soc_c, s.gpu_c));
         s.fan_pct = static_cast<float>(std::round(((playing ? 46.3 : 20.4) + 2.2 * std::sin(t * 0.09)) * 10.0) / 10.0);
         s.automatic = true;
+    }
+
+    // Every area on the tile's own picture; Spiele has one of the user's as well (set aside).
+    void fill_backdrops()
+    {
+        static const char *const kLabels[kBackdropAreas] = {"Kühlung", "Spiele", "Dateien", "Payloads",
+                                                            "System",  "Profil", "Protokoll"};
+        data_.backdrops.clear();
+        for (int i = 0; i < kBackdropAreas; ++i)
+        {
+            BackdropSetting b;
+            b.id = backdrop_name(i);
+            b.label = kLabels[i];
+            b.custom = i == 1;
+            b.stamp = b.custom ? "1793098000-412000" : "";
+            data_.backdrops.push_back(b);
+        }
+        data_.backdrops_loaded = true;
+        backdrops().apply(data_.backdrops);
     }
 
     void fill_payloads()

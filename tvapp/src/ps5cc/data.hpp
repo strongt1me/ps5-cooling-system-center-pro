@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "ps5cc/backdrops.hpp"
+
 #include <array>
 #include <cstdint>
 #include <string>
@@ -279,6 +281,8 @@ struct Snapshot
     std::vector<KlogLine> klog; // oldest first, at most kKlogKeep
     bool klog_lost = false;     // lines went by faster than they were fetched
     PlanReply plan;             // the last plan that came back
+    std::vector<BackdropSetting> backdrops; // GET /api/v1/backdrops, in the sidebar's order
+    bool backdrops_loaded = false;
     std::uint64_t serial = 0;   // grows whenever anything above changes
 };
 
@@ -324,6 +328,8 @@ class Source
     // Starts the tool with this POST body (ps5cc/plans.hpp builds it). Accepted: a job_started notice; refused: an
     // error notice with the app's message.
     virtual void start_tool(Tool tool, const std::string &id, const std::string &body) = 0;
+    // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture (uploaded in the browser).
+    virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;
     // Ends the app on the console (the preview only says so).
     virtual void quit_app() = 0;
     // Preview only: steps the link through starting / failed / online so

@@ -36,6 +36,8 @@ class GlBatch
     std::uint32_t create_font_texture(const Font &font);
     // Uploads RGBA8 pixels as a single-level texture; returns its name.
     std::uint32_t create_texture(int width, int height, const std::uint8_t *rgba);
+    // Gives a texture made by create_texture() new pixels (any size), so a picture that changes keeps its name.
+    void replace_texture(std::uint32_t texture, int width, int height, const std::uint8_t *rgba);
 
     // Draws into the currently bound framebuffer of the given size.
     void draw(const DrawList &list, const Viewport &viewport, int surface_width,

@@ -38,6 +38,7 @@ class HttpSource final : public Source
     void start_payload(const PayloadFile &file) override;
     void kill_payload(int pid) override;
     void store_action(const std::string &action, const std::string &id) override;
+    void set_backdrop(const std::string &area, BackdropMode mode) override;
     void quit_app() override;
     std::uint64_t request_plan(Tool tool, const std::string &id) override;
     void start_tool(Tool tool, const std::string &id, const std::string &body) override;
@@ -65,6 +66,7 @@ class HttpSource final : public Source
             payload_start,
             payload_kill,
             store,
+            backdrop,
         } kind;
         int value = 0;
         std::string id;
@@ -99,6 +101,8 @@ class HttpSource final : public Source
     void poll_log();
     void poll_klog();
     void fetch_cover();
+    void poll_backdrops();
+    void fetch_backdrop();
     std::string game_name(const std::string &id);
 
     std::mutex mutex_;

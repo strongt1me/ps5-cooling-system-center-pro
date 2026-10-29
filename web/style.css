@@ -1549,6 +1549,16 @@ html.i18n-wait body { visibility: hidden; }
 #pk-live { margin-top: 8px; }
 /* QR-Code */
 .qr-box { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+/* Hintergründe der Vollbild-App (29.10.2026): ein Kärtchen je Bereich, das Bild in 16:9. */
+.bd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-top: 6px; }
+.bd-item { display: flex; flex-direction: column; gap: 9px; padding: 12px; border-radius: var(--r-md);
+  background: var(--inset); border: 1px solid var(--hairline); }
+.bd-pic { aspect-ratio: 16 / 9; border-radius: var(--r-sm); overflow: hidden; display: flex; align-items: center;
+  justify-content: center; background: linear-gradient(135deg, #102048, #070d1f); color: var(--ink-muted); font-size: .9em; }
+.bd-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bd-item.is-off .bd-pic { background: var(--plane); }
+.bd-name { font-weight: 600; }
+.bd-item select { width: 100%; }
 #qr-img { background: #fff; padding: 6px; border-radius: 10px; flex: none; }
 .qr-url code { font-size: 15px; word-break: break-all; }
 #pl-count-prof { margin-left: 0; }

@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: Bilder hinter den Bereichen, auch eigene
+- Jeder Bereich der Vollbild-App (Kühlung, Spiele, Dateien, Payloads, System, Profil, Protokoll) hat ein eigenes Hintergrundbild, links, oben und unten abgedunkelt, damit die Schrift lesbar bleibt; die Flächen lassen etwas davon durchscheinen. Die sieben Bilder (1280 × 720, je etwa 70–110 KB) liegen nur in der Vollbild-Kachel (`tvapp/assets/backdrops`), nicht in der App-ELF
+- Eigene Bilder: In der Browser-App unter System → „Hintergründe der Vollbild-App“ je Bereich „Bild hochladen“ (die Seite schneidet auf 1280 × 720 zu, Mitte, und schickt ein JPEG), dazu die Wahl Standardbild / Eigenes Bild / Kein Bild und „Löschen“. Die Konsole legt die Bilder in `/data/PS5-Cooling-Center/backdrops` ab (`src/backdrops.c`, Routen `/api/v1/backdrops*`); die laufende Vollbild-App fragt alle 5 s nach und zeigt ein neues Bild ohne Neustart
+- In der Vollbild-App dieselbe Wahl unter Kühlung → Einstellungen → „Hintergründe“ (◀ ▶ je Bereich, sofort wirksam). Ohne hochgeladenes Bild springt die Wahl über „Eigenes Bild“ hinweg
+- Kit: `GlBatch::replace_texture()` gibt einer Textur neue Pixel, damit ein ausgetauschtes Bild keinen Grafikspeicher verliert
+
 ### Spiele: leuchtende Linie um das laufende Spiel wieder sichtbar
 - Die grüne Linie und das Schild „läuft“ hingen daran, dass das Spiel im Vordergrund steht – im Browser der Konsole steht es nie vorn, solange die Seite offen ist. Sie erscheinen jetzt, sobald das Spiel läuft, wie „Spiel beenden“
 

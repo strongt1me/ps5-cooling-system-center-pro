@@ -9,6 +9,7 @@
 #include "concepts/concepts.hpp"
 
 #include "core/tween.hpp"
+#include "ps5cc/backdrops.hpp"
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
 #include "ps5cc/game_tools.hpp"
@@ -261,8 +262,9 @@ ui::Theme make_theme()
     t.page = kNavy;
     t.page_text = kInk;
     t.page_text_muted = kMuted;
-    t.surface = Color::rgb(0x0f1a38);
-    t.surface_high = Color::rgb(0x1a2850);
+    // A little of the area's picture shows through the panels (29.10.2026); the list rows and focus stay solid enough.
+    t.surface = Color::rgb(0x0f1a38, 0.78f);
+    t.surface_high = Color::rgb(0x1a2850, 0.88f);
     t.text = kInk;
     t.text_muted = kMuted;
     t.primary = kBlue;
@@ -610,6 +612,7 @@ class Ps5cc final : public app::Concept
                       (page != nullptr && page->modal());
 
         ui::Canvas canvas{frame.scene, context_.fonts, 0, clock_};
+        draw_area_picture(canvas);
         draw_header(canvas);
         switch (view())
         {
@@ -667,6 +670,13 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {4.0f, 0, Direction::none, "selbsttest"},
+            // The area pictures: Kühlung switched off (its picture goes) and back to the standard one.
+            {0.25f, 0, Direction::down},
+            {0.8f, 0, Direction::none, "hintergruende"},
+            {0.25f, 0, Direction::right},
+            {1.0f, 0, Direction::none, "hintergrund-aus"},
+            {0.25f, 0, Direction::left},
+            {0.6f},
             {0.3f, action_bit(Action::page_next)},
             {0.9f, 0, Direction::down},
             {0.35f, 0, Direction::down},
@@ -1435,6 +1445,21 @@ class Ps5cc final : public app::Concept
             draw_initials(canvas, box, name, size);
         if (alpha > 0.0f)
             canvas.list.image(cover.texture, box, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, alpha}, box.w * 0.22f);
+    }
+
+    // The area's picture behind everything (user, 29.10.2026), dimmed so text stays readable: darker on the left
+    // (sidebar, titles) and at the top and bottom (title line, hint row), the picture showing most on the right.
+    void draw_area_picture(ui::Canvas &canvas) const
+    {
+        const std::uint32_t tex = ps5cc::backdrops().texture(nav_.current());
+        if (tex == 0)
+            return;
+        gfx::DrawList &list = canvas.list;
+        const Rect screen{0.0f, 0.0f, 1920.0f, 1080.0f};
+        list.image(tex, screen, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, 1.0f}, 0.0f);
+        list.gradient_rect_h(screen, 0.0f, kNavy.with_alpha(0.80f), kNavy.with_alpha(0.12f));
+        list.gradient_rect({0.0f, 0.0f, 1920.0f, 200.0f}, 0.0f, kNavy.with_alpha(0.75f), kNavy.with_alpha(0.0f));
+        list.gradient_rect({0.0f, 860.0f, 1920.0f, 220.0f}, 0.0f, kNavy.with_alpha(0.0f), kNavy.with_alpha(0.85f));
     }
 
     void panel(ui::Canvas &canvas, const Rect &r) const

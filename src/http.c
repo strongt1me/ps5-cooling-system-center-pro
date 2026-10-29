@@ -683,6 +683,15 @@ serve_connection(void *arg) {
     return NULL;
   }
 
+  /* A picture for the full-screen app (backdrops.c): a JPEG of a few hundred kilobytes the page made. */
+  if(!strcmp(req.path, "/api/v1/backdrops/upload") && !strcmp(req.method, "POST")) {
+    rcv_timeout_until(fd, ps5tm_mono_ms() + 10000);
+    ps5tm_api_receive_backdrop(fd, req.query, body_start, body_have, want);
+    free(raw);
+    close(fd);
+    return NULL;
+  }
+
   /* One megabyte of a package the browser sends while the console installs it: straight into the ring in memory
      (pkglive.c), one piece per request. */
   if(!strcmp(req.path, "/api/v1/packages/live/segment") && (!strcmp(req.method, "PUT") || !strcmp(req.method, "POST"))) {
