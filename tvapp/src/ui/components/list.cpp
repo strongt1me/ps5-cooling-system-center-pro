@@ -18,6 +18,7 @@ void ListView::set_items(std::vector<ListItem> items)
 {
     items_ = std::move(items);
     tops_.clear();
+    badge_column_w_ = -1.0f;
     float y = 0.0f;
     for (std::size_t i = 0; i < items_.size(); ++i)
     {
@@ -299,15 +300,45 @@ void ListView::draw(Canvas &canvas) const
                         list.line(cx + 4.0f, row.cy(), cx - 5.0f, row.cy() + 9.0f, 2.5f, quiet);
                         right -= 30.0f;
                     }
-                    if (!item.value.empty())
+                    if (style.value_width > 0.0f)
+                    {
+                        // a fixed column: an empty or a short value leaves the badge where the others are
+                        float used = 0.0f;
+                        if (!item.value.empty())
+                            used = paint.label(item.value, right, row.cy() + style.value_size * 0.34f,
+                                               style.value_size, quiet, gfx::Align::right);
+                        right -= std::max(used, style.value_width) + 18.0f;
+                    }
+                    else if (!item.value.empty())
                     {
                         right -= paint.label(item.value, right, row.cy() + style.value_size * 0.34f,
                                              style.value_size, quiet, gfx::Align::right);
                         right -= 18.0f;
                     }
-                    if (!item.badge.empty())
+                    const float size = style.subtitle_size * 0.9f;
+                    if (style.badge_column && badge_column_w_ < 0.0f)
                     {
-                        const float size = style.subtitle_size * 0.9f;
+                        badge_column_w_ = 0.0f;
+                        for (const ListItem &other : items_)
+                        {
+                            if (!other.header && !other.badge.empty())
+                                badge_column_w_ = std::max(badge_column_w_, paint.label_width(other.badge, size) + 24.0f);
+                        }
+                    }
+                    if (style.badge_column && badge_column_w_ > 0.0f)
+                    {
+                        if (!item.badge.empty())
+                        {
+                            const float width = paint.label_width(item.badge, size) + 24.0f;
+                            const Rect pill{right - badge_column_w_ * 0.5f - width * 0.5f, row.cy() - 15.0f, width, 30.0f};
+                            paint.fill(pill, theme.pill_chips ? 15.0f : std::min(theme.radius, 15.0f), theme.accent);
+                            paint.label(item.badge, pill.cx(), pill.cy() + size * 0.34f, size, Painter::on(theme.accent),
+                                        gfx::Align::center);
+                        }
+                        right -= badge_column_w_ + 18.0f;
+                    }
+                    else if (!item.badge.empty())
+                    {
                         const float width = paint.label_width(item.badge, size) + 24.0f;
                         const Rect pill{right - width, row.cy() - 15.0f, width, 30.0f};
                         paint.fill(pill, theme.pill_chips ? 15.0f : std::min(theme.radius, 15.0f),

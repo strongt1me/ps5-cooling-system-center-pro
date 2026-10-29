@@ -8,6 +8,7 @@
 #include "third_party/cjson/cJSON.h"
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -168,6 +169,7 @@ class MockSource final : public Source
         fill_disc();
         fill_volumes();
         fill_phase4();
+        fill_files();
         fill_payloads();
         fill_store();
         fill_logs();
@@ -680,6 +682,77 @@ class MockSource final : public Source
         }
         d.seq = data_.ps4_detail.seq + 1;
         data_.ps4_detail = d;
+        changed();
+    }
+
+    void files_open(const std::string &path) override
+    {
+        FsList &l = data_.fs_list;
+        l = FsList{};
+        l.loaded = true;
+        l.path = path;
+        ++fs_seq_;
+        l.seq = fs_seq_;
+        auto it = fs_tree_.find(path);
+        if (!path.empty() && it == fs_tree_.end())
+            l.error = "Der Ordner lässt sich nicht lesen.";
+        else if (it != fs_tree_.end())
+        {
+            l.entries = it->second;
+            l.total = static_cast<int>(l.entries.size());
+            l.writable = path.rfind("/mnt/usb0", 0) == 0 || path.rfind("/data", 0) == 0;
+            l.free_bytes = static_cast<std::int64_t>(247e9);
+            const std::size_t slash = path.find_last_of('/');
+            l.parent = path == "/" ? "" : slash == 0 ? "/" : path.substr(0, slash);
+        }
+        changed();
+    }
+
+    void files_post(const std::string &route, const std::string &json) override
+    {
+        if (route == "copy" || route == "move")
+        {
+            FsJob &j = data_.fs_job;
+            j = FsJob{};
+            j.active = true;
+            j.state = "copying";
+            j.kind = route;
+            j.dest = "/mnt/usb0/homebrew";
+            j.current = "eboot.bin";
+            j.percent = 37;
+            j.bytes_total = static_cast<std::uint64_t>(3.2e9);
+            j.bytes_done = static_cast<std::uint64_t>(1.18e9);
+        }
+        else if (route == "mkdir")
+            notice(Notice::Kind::success, "Dateien", "Der Ordner ist angelegt.");
+        (void)json;
+        changed();
+    }
+
+    void files_delete(const std::vector<std::string> &paths) override
+    {
+        notice(Notice::Kind::info, "Dateien", std::to_string(paths.size()) + " Eintrag/Einträge werden gelöscht.");
+        changed();
+    }
+
+    void files_view(const std::string &path) override
+    {
+        FsView &v = data_.fs_view;
+        v = FsView{};
+        v.seq = ++fs_seq_;
+        v.path = path;
+        v.text = "[general]\nautomount = 1\nscan_interval = 30\nbackport = auto\n\n[paths]\n/mnt/usb0/homebrew\n"
+                 "/mnt/ext1/homebrew\n/data/homebrew\n";
+        v.size = v.text.size();
+        changed();
+    }
+
+    void files_size(const std::string &path) override
+    {
+        FsSize s;
+        s.bytes = static_cast<std::uint64_t>(41.7e9);
+        s.files = 1284;
+        data_.fs_sizes[path] = s;
         changed();
     }
 
@@ -1347,6 +1420,42 @@ class MockSource final : public Source
         }
     }
 
+    // Dateien: three places and a few folders under the USB drive.
+    void fill_files()
+    {
+        const auto place = [](const char *label, const char *path, double free_gb, bool writable)
+        {
+            FsPlace p;
+            p.label = label;
+            p.path = path;
+            p.free_bytes = free_gb < 0 ? -1 : static_cast<std::int64_t>(free_gb * 1e9);
+            p.writable = writable;
+            return p;
+        };
+        data_.fs_places = {place("USB-Speicher 1", "/mnt/usb0", 247.1, true),
+                           place("Daten der Konsole", "/data", 612.4, true),
+                           place("Ganzes System (nur ansehen)", "/", -1, false)};
+        const auto entry = [](const char *name, const char *type, double mb, int days, bool writable)
+        {
+            FsEntry e;
+            e.name = name;
+            e.type = type;
+            e.size = static_cast<std::uint64_t>(mb * 1e6);
+            e.mtime = 1793275200 - static_cast<std::int64_t>(days) * 86400;
+            e.writable = writable;
+            return e;
+        };
+        fs_tree_["/mnt/usb0"] = {entry("homebrew", "dir", 0, 2, true),     entry("ps4", "dir", 0, 1, true),
+                                 entry("PS5-Sicherung", "dir", 0, 5, true), entry("payloads", "dir", 0, 9, true),
+                                 entry("shadowmount.ini", "file", 0.002, 3, true),
+                                 entry("Lantern Pass.ffpfsc", "file", 31200, 6, true),
+                                 entry("notes.txt", "file", 0.004, 12, true)};
+        fs_tree_["/mnt/usb0/homebrew"] = {entry("PPSA01325", "dir", 0, 2, true), entry("CUSA05041", "dir", 0, 4, true)};
+        fs_tree_["/data"] = {entry("homebrew", "dir", 0, 1, true), entry("PS5-Cooling-Center", "dir", 0, 0, false)};
+        fs_tree_["/"] = {entry("data", "dir", 0, 0, false), entry("mnt", "dir", 0, 0, false),
+                         entry("system", "dir", 0, 30, false), entry("user", "dir", 0, 0, false)};
+    }
+
     // Spielzeit, Spielstände and Sicherungen: a few weeks of play, two users with saves, two backups of games.
     void fill_phase4()
     {
@@ -1777,6 +1886,8 @@ class MockSource final : public Source
     std::string closing_;
     float close_at_ = 0.0f;
     float eject_at_ = 0.0f;
+    std::map<std::string, std::vector<FsEntry>> fs_tree_;
+    std::uint64_t fs_seq_ = 0;
     std::int64_t klog_n_ = 51400;
     std::uint64_t plan_ticket_ = 0;
     Tool plan_tool_ = Tool::copy;

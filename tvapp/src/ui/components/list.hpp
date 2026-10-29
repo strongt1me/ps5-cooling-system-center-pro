@@ -34,6 +34,9 @@ struct ListStyle : ComponentStyle
     float gap = 6.0f;            // between rows
     float padding = 26.0f;       // inside a row, left and right
     float leading_width = 0.0f;  // room reserved for the `leading` slot
+    float value_width = 0.0f;    // a column of this width for the value in every row, so the badges before it line up
+                                 // whatever the value says or whether there is one; 0: as wide as each value
+    bool badge_column = false;   // the badges share a column as wide as the widest of them, each centred in it
     float panel_padding = 14.0f; // between the panel and the rows (panel = true)
     // ---- type ----
     float title_size = 28.0f;
@@ -125,6 +128,7 @@ class ListView
 
     std::vector<ListItem> items_;
     std::vector<float> tops_;
+    mutable float badge_column_w_ = -1.0f; // measured at the first draw after set_items (fonts arrive in draw)
     gfx::Rect bounds_{0.0f, 0.0f, 600.0f, 400.0f};
     int focus_ = 0;
     bool active_ = true;

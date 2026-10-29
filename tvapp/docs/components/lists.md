@@ -59,6 +59,8 @@ list.draw(canvas);
 | `gap` | 6 | Space between rows |
 | `padding` | 26 | Space inside a row, left and right |
 | `leading_width` | 0 | Room reserved at the start of a row for the `leading` slot |
+| `value_width` | 0 | A column of this width for the value in every row, so badges line up whatever the value says; 0: each value as wide as its text |
+| `badge_column` | false | The badges share a column as wide as the widest of them, each centred in it |
 | `panel_padding` | 14 | Space between the panel and the rows when `panel` is on |
 | `title_size`, `subtitle_size`, `value_size`, `header_size` | 28, 20, 24, 18 | Text sizes |
 | `highlight` | tint | A `HighlightStyle`: kind (ring, fill, tint, bar, underline, glow, none), colour, radius, thickness, grow, breathe |

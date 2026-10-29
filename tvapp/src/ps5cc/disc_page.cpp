@@ -140,6 +140,8 @@ class DiscPage final : public Page
         list_.style.value_size = 20.0f;
         list_.style.header_size = 18.0f;
         list_.style.highlight.kind = ui::HighlightKind::bar;
+        list_.style.badge_column = true;
+        list_.style.value_width = 200.0f; // the badges line up
         list_.style.leading_width = 76.0f;
         list_.leading = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item, int, float)
         {

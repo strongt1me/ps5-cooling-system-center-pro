@@ -47,6 +47,11 @@ class HttpSource final : public Source
     void playtime_reset() override;
     void saves_post(const std::string &route, const std::string &json) override;
     void backup_delete(const std::string &path) override;
+    void files_open(const std::string &path) override;
+    void files_post(const std::string &route, const std::string &json) override;
+    void files_delete(const std::vector<std::string> &paths) override;
+    void files_view(const std::string &path) override;
+    void files_size(const std::string &path) override;
     void quit_app() override;
     std::uint64_t request_plan(Tool tool, const std::string &id) override;
     void start_tool(Tool tool, const std::string &id, const std::string &body) override;
@@ -83,6 +88,11 @@ class HttpSource final : public Source
             playtime_reset,
             saves,
             backup_delete,
+            fs_open,
+            fs_post,
+            fs_delete,
+            fs_view,
+            fs_size,
         } kind;
         int value = 0;
         std::string id;
@@ -127,6 +137,9 @@ class HttpSource final : public Source
     void poll_saves();
     void poll_save_job();
     void poll_game_backups();
+    void poll_fs_places();
+    void poll_fs_list(const std::string &path);
+    void poll_fs_job();
     void fetch_ps4_detail(const std::string &id);
     void fetch_ps4_log();
     void poll_disc();

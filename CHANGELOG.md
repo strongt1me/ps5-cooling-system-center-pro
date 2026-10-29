@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: Dateien (Phase 5) und bündige Marken
+- Der Bereich **Dateien** ist jetzt der Dateimanager (wie im Browser, `src/filemgr.c`): Orte (Laufwerke, Daten der Konsole, ganzes System nur ansehen), Ordner öffnen, „..“ hoch; Quadrat-Taste: Auswählen, Ansehen (Text), Größe messen, Kopieren, Ausschneiden, Umbenennen, Löschen (sofort); Mehr: Hier einfügen, Ablage leeren, Neuer Ordner, alle/keine auswählen, sortieren nach Name/Größe/Datum, Auftrag abbrechen. Namen über die Bildschirmtastatur mit eigener Seite äöüß. Ändern nur auf den Laufwerken und in /data (sonst „Nur ansehen“). Hochladen, Herunterladen und die Bildvorschau bleiben im Browser
+- Listen: Die Marken (BEREIT, AUSGEWÄHLT …) verrutschten mit der Länge des Werts daneben. Neue Kit-Einstellungen `value_width` (feste Spalte für den Wert) und `badge_column` (eine Spalte für die Marken, jede darin zentriert), in allen zehn Listen mit Marken eingeschaltet
+
 ### Vollbild-App: Spielzeit, Spielstände, Sicherungen (Phase 4)
 - Spiele hat jetzt die Unterreiter der Browser-App in derselben Reihenfolge: Bibliothek · Spielzeit · Spielstände · Pakete · PS4 von USB · (Disc) · Sicherungen · Aufträge (je so breit wie das Wort)
 - **Spielzeit:** laufendes Spiel, meistgespielt (Anteil, Schnitt, zuletzt, höchste Temperatur), letzte Sitzungen (X-Taste: mehr); rechts Heute / 7 / 30 Tage / Insgesamt und die letzten 14 Tage als Balken; Mehr → Verlauf löschen. Gerechnet wie im Browser (eine Sitzung über Mitternacht zählt anteilig an beiden Tagen), `tvapp/src/ps5cc/playtime_rules.*` mit Tests. Die CSV-Ausfuhr bleibt im Browser

@@ -35,6 +35,8 @@ class StoragePage final : public Page
         list_.style.subtitle_size = 19.0f;
         list_.style.value_size = 21.0f;
         list_.style.highlight.kind = ui::HighlightKind::bar;
+        list_.style.badge_column = true;
+        list_.style.value_width = 80.0f; // the badges line up
         list_.set_bounds({kLeftX, kTop + 10.0f, kLeftW, kBottom - kTop - 10.0f});
 
         info_.style.theme = theme;

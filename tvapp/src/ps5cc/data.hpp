@@ -7,6 +7,7 @@
 #include "ps5cc/backdrops.hpp"
 
 #include <array>
+#include <map>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -446,6 +447,77 @@ struct GameBackups
     std::vector<GameBackup> backups;
 };
 
+// ---- Phase 5 (29.10.2026): Dateien, as the web app's file manager (src/filemgr.c, /api/v1/files/*) ----
+// Changes only below the drives and /data (the console says so with writable); looking is allowed everywhere.
+
+struct FsPlace
+{
+    std::string label;
+    std::string path;
+    std::int64_t free_bytes = -1;
+    bool writable = false;
+};
+
+struct FsEntry
+{
+    std::string name;
+    std::string type; // dir, file, dirlink, link, other
+    std::uint64_t size = 0;
+    std::int64_t mtime = 0;
+    bool writable = false;
+};
+
+struct FsList
+{
+    bool loaded = false;
+    std::uint64_t seq = 0; // grows with every answer
+    std::string path;      // "" = the places
+    std::string parent;
+    std::string error;
+    bool writable = false;
+    std::int64_t free_bytes = -1;
+    int total = 0;
+    bool truncated = false;
+    std::vector<FsEntry> entries;
+};
+
+struct FsJob
+{
+    bool active = false;
+    std::string state; // idle counting copying deleting done failed cancelled
+    std::string kind;  // copy move delete
+    std::string dest;
+    std::string current;
+    std::string error;
+    std::string note;
+    int percent = 0;
+    std::uint64_t bytes_total = 0;
+    std::uint64_t bytes_done = 0;
+    int files_total = 0;
+    int files_done = 0;
+    int finished_ago_s = -1;
+};
+
+// A text file's beginning (GET /api/v1/files/view).
+struct FsView
+{
+    std::uint64_t seq = 0;
+    std::string path;
+    std::string text;
+    std::string error;
+    bool truncated = false;
+    std::uint64_t size = 0;
+};
+
+// A folder measured (GET /api/v1/files/size): at most 8 s of counting, partial = at least this much.
+struct FsSize
+{
+    std::uint64_t bytes = 0;
+    int files = 0;
+    bool partial = false;
+    bool failed = false;
+};
+
 // A drive of the console (GET /api/v1/system, "volumes"); USB drives can be ejected (29.10.2026).
 struct Volume
 {
@@ -697,6 +769,7 @@ enum class Watch : std::uint8_t
     playtime,
     saves,
     backups,
+    files,
 };
 
 // Something an action came back with, for the screen to show once.
@@ -753,6 +826,11 @@ struct Snapshot
     DiscState disc;
     DumpState dump;
     DumpList dumps;
+    std::vector<FsPlace> fs_places;
+    FsList fs_list;
+    FsJob fs_job;
+    FsView fs_view;
+    std::map<std::string, FsSize> fs_sizes; // by path
     Playtime playtime;
     Saves saves;
     GameBackups game_backups;
@@ -825,6 +903,13 @@ class Source
     virtual void saves_post(const std::string &route, const std::string &json) = 0;
     // Sicherungen: a game backup deleted at once (plan, then the delete with its one-time word).
     virtual void backup_delete(const std::string &path) = 0;
+    // Dateien: open a folder ("" = the places), POST /api/v1/files/<route> (mkdir, rename, copy, move, job/cancel),
+    // delete paths at once (plan, then the delete with its one-time word), view a text file, measure a folder.
+    virtual void files_open(const std::string &path) = 0;
+    virtual void files_post(const std::string &route, const std::string &json) = 0;
+    virtual void files_delete(const std::vector<std::string> &paths) = 0;
+    virtual void files_view(const std::string &path) = 0;
+    virtual void files_size(const std::string &path) = 0;
     // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture (uploaded in the browser).
     virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;
     // Ends the app on the console (the preview only says so).

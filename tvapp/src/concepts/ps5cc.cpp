@@ -93,6 +93,7 @@ enum View
     kPlaytime,
     kSaves,
     kBackups,
+    kFiles,       // Dateien (29.10.2026)
     kStorage,     // System → Speicher, the first part of the System area (29.10.2026)
     kPlaceholder, // Dateien, Profil until their pages exist
 };
@@ -110,7 +111,8 @@ enum PageIndex
     kPagePlaytime = 7,
     kPageSaves = 8,
     kPageBackups = 9,
-    kPageCount = 10,
+    kPageFiles = 10,
+    kPageCount = 11,
 };
 
 // The sidebar's icons, drawn with the kit's shapes (no artwork files): one per area.
@@ -354,7 +356,7 @@ class Ps5cc final : public app::Concept
         pages_ = {ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
                   ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
                   ps5cc::make_storage_page(), ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
-                  ps5cc::make_backups_page()};
+                  ps5cc::make_backups_page(), ps5cc::make_files_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -400,6 +402,8 @@ class Ps5cc final : public app::Concept
         games_.style.value_size = 22.0f;
         games_.style.panel = true;
         games_.style.highlight.kind = ui::HighlightKind::bar;
+        games_.style.badge_column = true;
+        games_.style.value_width = 110.0f; // the badges line up
         games_.leading = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item,
                                 int index, float focus)
         {
@@ -869,6 +873,25 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "ausschalten"},
             {0.5f, action_bit(Action::page_next)},
             {0.9f, 0, Direction::none, "dateien"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "dateien-ordner"},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::west)},
+            {0.7f, 0, Direction::none, "dateien-aktionen"},
+            {0.3f, action_bit(Action::back)},
+            {0.4f, action_bit(Action::north)},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "dateien-neuer-ordner"},
+            {0.3f, action_bit(Action::back)},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "dateien-ansehen"},
+            {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "payloads"},
             {0.4f, action_bit(Action::jump_next)},
@@ -999,6 +1022,8 @@ class Ps5cc final : public app::Concept
             return kLogs;
         case kAreaSystem:
             return kStorage;
+        case kAreaFiles:
+            return kFiles;
         default:
             return kPlaceholder;
         }
@@ -1038,6 +1063,8 @@ class Ps5cc final : public app::Concept
             return pages_[kPageSaves].get();
         case kBackups:
             return pages_[kPageBackups].get();
+        case kFiles:
+            return pages_[kPageFiles].get();
         default:
             return nullptr;
         }
@@ -1444,6 +1471,7 @@ class Ps5cc final : public app::Concept
                               : v == kPlaytime ? ps5cc::Watch::playtime
                               : v == kSaves    ? ps5cc::Watch::saves
                               : v == kBackups  ? ps5cc::Watch::backups
+                              : v == kFiles    ? ps5cc::Watch::files
                                                : ps5cc::Watch::none);
         if (ps5cc::Page *page = current_page())
             page->enter();

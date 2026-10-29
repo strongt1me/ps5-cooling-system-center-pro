@@ -76,6 +76,7 @@ std::unique_ptr<Page> make_storage_page();
 std::unique_ptr<Page> make_playtime_page();
 std::unique_ptr<Page> make_saves_page();
 std::unique_ptr<Page> make_backups_page();
+std::unique_ptr<Page> make_files_page();
 std::unique_ptr<Page> make_logs_page();
 
 } // namespace hui::ps5cc

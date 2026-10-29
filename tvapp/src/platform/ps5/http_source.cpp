@@ -337,6 +337,33 @@ void HttpSource::backup_delete(const std::string &path)
 {
     push({Request::Kind::backup_delete, 0, path, {}});
 }
+void HttpSource::files_open(const std::string &path)
+{
+    push({Request::Kind::fs_open, 0, path, {}});
+}
+void HttpSource::files_post(const std::string &route, const std::string &json)
+{
+    push({Request::Kind::fs_post, 0, route, json});
+}
+void HttpSource::files_delete(const std::vector<std::string> &paths)
+{
+    cJSON *root = cJSON_CreateObject();
+    cJSON *list = cJSON_AddArrayToObject(root, "paths");
+    for (const std::string &p : paths)
+        cJSON_AddItemToArray(list, cJSON_CreateString(p.c_str()));
+    char *text = cJSON_PrintUnformatted(root);
+    push({Request::Kind::fs_delete, 0, {}, text != nullptr ? text : "{}"});
+    cJSON_free(text);
+    cJSON_Delete(root);
+}
+void HttpSource::files_view(const std::string &path)
+{
+    push({Request::Kind::fs_view, 0, path, {}});
+}
+void HttpSource::files_size(const std::string &path)
+{
+    push({Request::Kind::fs_size, 0, path, {}});
+}
 void HttpSource::watch(Watch page)
 {
     watching_ = page;
@@ -648,6 +675,8 @@ void HttpSource::run()
     bool storage_open = false;
     std::int64_t last_playtime = 0, last_save_job = 0;
     bool playtime_open = false, saves_open = false, backups_open = false, backup_deleting = false;
+    std::int64_t last_fs_job = 0;
+    bool files_open_ = false;
     std::int64_t last_disc = 0, last_dump = 0, last_dumps = 0;
     bool disc_open = false;
     bool library_wanted = true;
@@ -946,6 +975,36 @@ void HttpSource::run()
         else
         {
             backups_open = false;
+        }
+        // Dateien: the job every 0.8 s while one runs (3 s otherwise); the open folder again when it has just ended.
+        if (page == Watch::files)
+        {
+            bool active = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                active = data_.fs_job.active;
+            }
+            if (!files_open_ || now - last_fs_job >= (active ? 800000 : 3000000))
+            {
+                last_fs_job = now;
+                if (!files_open_)
+                    poll_fs_places();
+                poll_fs_job();
+                bool ended = false;
+                std::string folder;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    ended = active && !data_.fs_job.active;
+                    folder = data_.fs_list.path;
+                }
+                if (ended)
+                    poll_fs_list(folder);
+            }
+            files_open_ = true;
+        }
+        else
+        {
+            files_open_ = false;
         }
         // System → Speicher: the drives every 4 s, every second while an eject runs; at once when it opens.
         if (page == Watch::storage)
@@ -1303,6 +1362,112 @@ void HttpSource::handle(const Request &request)
             notice(Notice::Kind::error, "Sicherung", message_of(body, "Die App hat nicht geantwortet."));
         else
             notice(Notice::Kind::info, "Sicherung", "„" + name + "“ wird gelöscht.");
+        break;
+    }
+    case Request::Kind::fs_open:
+        if (request.id.empty())
+            poll_fs_places();
+        poll_fs_list(request.id);
+        break;
+    case Request::Kind::fs_post:
+    {
+        const std::string route = "/api/v1/files/" + request.id;
+        // copy and move count everything first: up to two minutes, as the web app waits
+        const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 120);
+        if (net != Net::ok || status >= 300)
+        {
+            std::string msg = message_of(body, "Die App hat nicht geantwortet.");
+            // the names that are in the way, as the web page lists them
+            if (cJSON *root = cJSON_Parse(body.c_str()))
+            {
+                const cJSON *c = nullptr;
+                int n = 0;
+                cJSON_ArrayForEach(c, cJSON_GetObjectItemCaseSensitive(root, "conflicts"))
+                {
+                    if (cJSON_IsString(c) && n++ < 5)
+                        msg += std::string(n == 1 ? " (" : ", ") + c->valuestring;
+                }
+                if (n > 0)
+                    msg += n > 5 ? " …)" : ")";
+                cJSON_Delete(root);
+            }
+            notice(Notice::Kind::error, "Dateien", msg);
+        }
+        poll_fs_job();
+        std::string folder;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            folder = data_.fs_list.path;
+        }
+        if (request.id == "mkdir" || request.id == "rename")
+            poll_fs_list(folder);
+        break;
+    }
+    case Request::Kind::fs_delete:
+    {
+        // As the web page: the plan brings the one-time word for exactly these paths; then the delete, at once.
+        const Net net = exchange("POST", "/api/v1/files/delete/plan", request.text, &status, &body, 60);
+        cJSON *plan = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
+        if (plan == nullptr)
+        {
+            notice(Notice::Kind::error, "Dateien", message_of(body, "Die App hat keinen Plan geliefert."));
+            break;
+        }
+        const std::string confirm = str(plan, "confirm");
+        cJSON *root = cJSON_Parse(request.text.c_str());
+        if (root != nullptr)
+            cJSON_AddStringToObject(root, "confirm", confirm.c_str());
+        char *text = root != nullptr ? cJSON_PrintUnformatted(root) : nullptr;
+        const std::string start = text != nullptr ? text : "{}";
+        cJSON_free(text);
+        cJSON_Delete(root);
+        cJSON_Delete(plan);
+        const Net started = exchange("POST", "/api/v1/files/delete", start, &status, &body, 20);
+        if (started != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Dateien", message_of(body, "Die App hat nicht geantwortet."));
+        poll_fs_job();
+        break;
+    }
+    case Request::Kind::fs_view:
+    {
+        FsView v;
+        v.path = request.id;
+        const std::string path = "/api/v1/files/view?path=" + url_encoded(request.id);
+        const Net net = exchange("GET", path.c_str(), {}, &status, &body, 20);
+        if (net == Net::ok && status == 200)
+        {
+            v.text = std::move(body);
+            v.size = v.text.size();
+            // the console sends only the beginning (256 KB); X-Fm-Truncated is not read here, the size tells it
+            v.truncated = v.size >= 256 * 1024;
+        }
+        else
+            v.error = net == Net::ok ? message_of(body, "Die Datei lässt sich nicht ansehen.")
+                                     : "Die App hat nicht rechtzeitig geantwortet.";
+        std::lock_guard<std::mutex> lock(mutex_);
+        v.seq = data_.fs_view.seq + 1;
+        data_.fs_view = std::move(v);
+        ++data_.serial;
+        break;
+    }
+    case Request::Kind::fs_size:
+    {
+        const std::string path = "/api/v1/files/size?path=" + url_encoded(request.id);
+        const Net net = exchange("GET", path.c_str(), {}, &status, &body, 20);
+        FsSize s;
+        cJSON *root = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
+        if (root == nullptr)
+            s.failed = true;
+        else
+        {
+            s.bytes = static_cast<std::uint64_t>(num(root, "bytes"));
+            s.files = static_cast<int>(num(root, "files"));
+            s.partial = flag(root, "partial");
+            cJSON_Delete(root);
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.fs_sizes[request.id] = s;
+        ++data_.serial;
         break;
     }
     case Request::Kind::eject:
@@ -2148,6 +2313,104 @@ void HttpSource::poll_game_backups()
     }
     std::lock_guard<std::mutex> lock(mutex_);
     data_.game_backups = std::move(g);
+    ++data_.serial;
+}
+
+void HttpSource::poll_fs_places()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/files/places", {}, &status, &body, 10) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    std::vector<FsPlace> places;
+    const cJSON *p = nullptr;
+    cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(root, "places"))
+    {
+        FsPlace x;
+        x.label = str(p, "label");
+        x.path = str(p, "path");
+        x.free_bytes = static_cast<std::int64_t>(num(p, "free_bytes", -1));
+        x.writable = flag(p, "writable");
+        places.push_back(std::move(x));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.fs_places = std::move(places);
+    ++data_.serial;
+}
+
+void HttpSource::poll_fs_list(const std::string &path)
+{
+    FsList l;
+    l.loaded = true;
+    l.path = path;
+    if (!path.empty())
+    {
+        int status = 0;
+        std::string body;
+        const std::string route = "/api/v1/files/list?path=" + url_encoded(path);
+        const Net net = exchange("GET", route.c_str(), {}, &status, &body, 30);
+        cJSON *root = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
+        if (root == nullptr)
+            l.error = net == Net::ok ? message_of(body, "Der Ordner lässt sich nicht lesen.")
+                                     : "Die App hat nicht rechtzeitig geantwortet.";
+        else
+        {
+            l.path = str(root, "path");
+            l.parent = str(root, "parent");
+            l.writable = flag(root, "writable");
+            l.free_bytes = static_cast<std::int64_t>(num(root, "free_bytes", -1));
+            l.total = static_cast<int>(num(root, "total"));
+            l.truncated = flag(root, "truncated");
+            const cJSON *e = nullptr;
+            cJSON_ArrayForEach(e, cJSON_GetObjectItemCaseSensitive(root, "entries"))
+            {
+                FsEntry x;
+                x.name = str(e, "name");
+                x.type = str(e, "type");
+                x.size = static_cast<std::uint64_t>(num(e, "size"));
+                x.mtime = static_cast<std::int64_t>(num(e, "mtime"));
+                x.writable = flag(e, "writable");
+                l.entries.push_back(std::move(x));
+            }
+            cJSON_Delete(root);
+        }
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    l.seq = data_.fs_list.seq + 1;
+    data_.fs_list = std::move(l);
+    ++data_.serial;
+}
+
+void HttpSource::poll_fs_job()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/files/job", {}, &status, &body, 6) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    FsJob j;
+    j.active = flag(root, "active");
+    j.state = str(root, "state");
+    j.kind = str(root, "kind");
+    j.dest = str(root, "dest");
+    j.current = str(root, "current");
+    j.error = str(root, "error");
+    j.note = str(root, "note");
+    j.percent = static_cast<int>(num(root, "percent"));
+    j.bytes_total = static_cast<std::uint64_t>(num(root, "bytes_total"));
+    j.bytes_done = static_cast<std::uint64_t>(num(root, "bytes_done"));
+    j.files_total = static_cast<int>(num(root, "files_total"));
+    j.files_done = static_cast<int>(num(root, "files_done"));
+    j.finished_ago_s = static_cast<int>(num(root, "finished_ago_s", -1));
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.fs_job = std::move(j);
     ++data_.serial;
 }
 
