@@ -26,6 +26,9 @@ class GameTools
   public:
     // A short message of the tools' own (a refusal before anything was asked).
     std::function<void(ui::StatusKind kind, const std::string &title, const std::string &body)> toast;
+    // The menu's last two entries (Phase 6, 29.10.2026): the game's extras and the library's tools.
+    std::function<void(const Game &game, ui::Feedback &feedback)> on_extras;
+    std::function<void(ui::Feedback &feedback)> on_library;
 
     void init(const ui::Theme &theme);
     // □ in the library: the menu of what this game allows. `running` refuses the delete at once.

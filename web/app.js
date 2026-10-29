@@ -2283,10 +2283,38 @@
   };
   const plCount = (n, one, many) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
 
+  /* Geladen oder nicht (29.10.2026): ein Punkt an jedem Payload, grün leuchtend, wenn er läuft. Die Konsole nennt den
+     laufenden Prozess nach dem Payload ohne Version („shadowmountplus.elf"), die Datei trägt sie
+     („ShadowMountPlus_1.7beta10.elf"). Hat die App ihn gestartet, kennt sie die Datei (Feld „file"), und nur diese
+     Fassung leuchtet; sonst nur, wenn es von dem Payload genau eine Datei gibt. Dieselbe Regel wie in der Vollbild-App
+     (tvapp/src/ps5cc/payload_match.cpp). */
+  let plRunning = [];   // [{name, file}] ohne diese App
+  let plFolder = [];    // die Namen aller Payload-Dateien (intern und USB)
+  const plKey = (name) => {
+    let s = String(name || "").toLowerCase().replace(/\.(elf|bin|self)$/, "");
+    const m = /[_\- ]v?\d/.exec(s.slice(1));
+    if (m) s = s.slice(0, m.index + 1);
+    return s.replace(/[^a-z0-9]/g, "");
+  };
+  const plSame = (a, b) => {
+    const x = plKey(a), y = plKey(b);
+    if (!x || !y) return false;
+    if (x === y) return true;
+    const [s, l] = x.length < y.length ? [x, y] : [y, x];
+    return s.length >= 6 && l.startsWith(s);
+  };
+  const plFileLoaded = (file) => {
+    if (!file) return false;
+    if (plRunning.some((r) => r.file && r.file === file)) return true;
+    const kin = plFolder.filter((f) => plSame(f, file)).length;
+    return kin <= 1 && plRunning.some((r) => !r.file && plSame(r.name, file));
+  };
+  const plDot = (on) => `<span class="pl-dot${on ? "" : " off"}" title="${on ? "geladen" : "nicht geladen"}"></span>`;
+
   /* Eine Karte; alles, was von außen kommt, geht durch esc(). */
-  const plCard = ({ icon, title, ver, bad, line, actions, cls }) => `
+  const plCard = ({ icon, title, ver, bad, line, actions, cls, loaded }) => `
     <div class="pl-card${cls ? ` ${cls}` : ""}${bad ? " bad" : ""}">
-      <div class="pl-ico">${icon}</div>
+      <div class="pl-ico">${icon}${loaded === undefined ? "" : plDot(loaded)}</div>
       <div class="pl-info">
         <b class="pl-name" title="${esc(title)}">${esc(title)}</b>
         ${bad ? `<span class="pl-badtxt">${esc(bad)}</span>`
@@ -2300,11 +2328,19 @@
 
   let plLast = { running: "", files: "" };
 
-  /* Laufende Payloads (Prozesse) */
+  /* Bereits geladene Payloads (Prozesse); jeder trägt einen leuchtenden grünen Punkt am Symbol (29.10.2026) */
   const loadPayloads = async (force) => {
     let d;
     try { d = await api("/api/v1/payloads"); } catch { return; }
     const list = d.payloads || [];
+    const runSig = JSON.stringify(list.filter((p) => !p.is_self).map((p) => [p.name, p.file || ""]));
+    plRunning = list.filter((p) => !p.is_self).map((p) => ({ name: p.name, file: p.file || "" }));
+    /* läuft etwas anderes, bekommen Meine Payloads und der Store die richtigen Punkte */
+    if (runSig !== plLast.runSig) {
+      plLast.runSig = runSig;
+      if (plLast.filesData) renderPayloadFiles(plLast.filesData);
+      try { psRender(); } catch (e) { /* the store part is set up later on the first load */ }
+    }
     /* ohne den Speicher: der ändert sich ständig, und jedes Neuzeichnen nahm einem halb bestätigten „Beenden“ die Bestätigung */
     const sig = JSON.stringify(list.map((p) => Object.assign({}, p, { memory_mb: 0 })));
     if (!force && sig === plLast.running) return;
@@ -2314,7 +2350,7 @@
     /* Process names come from whatever runs on the console. */
     $("#pl-list").innerHTML = list.length ? list.map((p) => `
       <div class="pl-card${p.is_self ? " self" : ""}">
-        <div class="pl-ico">${PL_SVG.box}</div>
+        <div class="pl-ico">${PL_SVG.box}${plDot(true)}</div>
         <div class="pl-info">
           <b class="pl-name" title="${esc(p.name)}">${esc(p.name)}</b>
           <small class="pl-path">Nr. ${esc(p.pid)}${p.memory_mb ? ` · ${esc(p.memory_mb)} MB Speicher` : ""}${p.is_self ? " · diese App" : ""}</small>
@@ -2340,6 +2376,9 @@
   const renderPayloadFiles = (d) => {
     const internal = Array.isArray(d.internal) ? d.internal : [];
     plInternal = internal;
+    plLast.filesData = d;
+    plFolder = internal.map((f) => f.name)
+      .concat(...(Array.isArray(d.usb) ? d.usb : []).map((u) => (u.items || []).map((f) => f.name)));
     if (plEdit) { plEditSync(); plRenderEdit(); }        /* take over what is typed before the editor is drawn again from plEdit */
     const dir = d.dir || "/data/PS5-Cooling-Center/payloads";
     txt("#pl-dir", dir);
@@ -2347,7 +2386,7 @@
     const have = new Map(internal.map((f) => [f.name.toLowerCase(), f]));
 
     $("#pl-stored").innerHTML = internal.length ? internal.map((f) => plCard({
-      icon: PL_SVG.box, title: plTitle(f.name), ver: plVersion(f.name),
+      icon: PL_SVG.box, title: plTitle(f.name), ver: plVersion(f.name), loaded: plFileLoaded(f.name),
       bad: f.valid ? "" : `Nicht startbar: ${f.why || "kein gültiges ELF"}`,
       line: plFileLine(`${dir}/${f.name}`, f),
       actions:
@@ -2369,7 +2408,7 @@
         const attrs = `data-src="usb" data-mount="${esc(u.mount)}" data-dir="${esc(f.dir)}" data-name="${esc(f.name)}"`;
         return plCard({
           cls: "pl-wide",
-          icon: PL_SVG.usb, title: plTitle(f.name), ver: plVersion(f.name),
+          icon: PL_SVG.usb, title: plTitle(f.name), ver: plVersion(f.name), loaded: plFileLoaded(f.name),
           bad: f.valid ? "" : `Nicht startbar: ${f.why || "kein gültiges ELF"}`,
           line: plFileLine(where, f),
           actions:
@@ -2512,7 +2551,8 @@
       const ins = i.installed;
       const busy = job.state === "running" && job.id === i.id;
       const any = job.state === "running";
-      const state = ins ? (i.update ? `Update: ${esc(ins.version)} → ${esc(i.version)}` : `geladen · ${esc(ins.version)}`) : "";
+      /* „gespeichert", nicht „geladen": geladen heißt jetzt „läuft", das zeigt der Punkt (29.10.2026) */
+      const state = ins ? (i.update ? `Update: ${esc(ins.version)} → ${esc(i.version)}` : `gespeichert · ${esc(ins.version)}`) : "";
       const line = [psCat(i.category), i.last_update ? `vom ${i.last_update}` : "", i.filename].filter(Boolean).join(" · ");
       const acts = (ins ? `<button class="btn pl-act" data-ps-start="${esc(i.id)}">${PL_SVG.play}Starten</button>` : "")
         + (!ins || i.update
@@ -2520,7 +2560,7 @@
           : "")
         + (ins ? `<button class="pl-trash" data-ps-del="${esc(i.id)}" title="Aus dem Ordner löschen" aria-label="${esc(i.name)} löschen"${busy ? " disabled" : ""}>${PL_SVG.trash}</button>` : "");
       return `<div class="pl-card ps-card${i.update ? " ps-upd" : ""}${ins ? " ps-mine" : ""}">
-        <div class="pl-ico ps-ico" aria-hidden="true">${esc((i.name.match(/[A-Za-z0-9]/g) || ["?"]).slice(0, 2).join("").toUpperCase())}</div>
+        <div class="pl-ico ps-ico">${esc((i.name.match(/[A-Za-z0-9]/g) || ["?"]).slice(0, 2).join("").toUpperCase())}${ins ? plDot(plFileLoaded(ins.filename)) : ""}</div>
         <div class="pl-info">
           <b class="pl-name" title="${esc(i.name)}">${esc(i.name)} <span class="pl-ver">${esc(i.version)}</span></b>
           ${state ? `<span class="${i.update ? "pl-badtxt" : "pl-live"}">${state}</span>` : i.name_taken ? `<span class="pl-badtxt">Eine Datei gleichen Namens liegt schon im Ordner</span>` : ""}

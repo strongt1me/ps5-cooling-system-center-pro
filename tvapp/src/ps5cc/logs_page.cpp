@@ -78,6 +78,7 @@ class LogsPage final : public Page
     {
         tz_ = data.config.tz_offset_min;
         lost_ = data.klog_lost;
+        record_ = data.klog_record;
         const bool app_changed = data.log.size() != log_.size() ||
                                  (!data.log.empty() && data.log.back().t_ms != log_.back().t_ms);
         const bool kernel_changed = data.klog.size() != klog_.size() ||
@@ -104,6 +105,13 @@ class LogsPage final : public Page
                 follow_ = true;
                 rebuild();
             }
+            return;
+        }
+        // Triangle in the kernel log: record it into a file, as the web app's "Aufnahme" (download it there)
+        if (input.is_pressed(Action::north) && view_ == kKernel)
+        {
+            feedback.play(audio::Cue::select);
+            source().klog_record(!record_.recording);
             return;
         }
         if (input.is_pressed(Action::west))
@@ -136,7 +144,12 @@ class LogsPage final : public Page
         const float baseline = kTabY + kTabH * 0.5f + 8.0f;
         ui::text(list, fonts.regular, text, 1824.0f, baseline, 21.0f, follow_ ? kMuted : kWarning,
                  gfx::Align::right);
-        if (view_ == kKernel && lost_)
+        if (view_ == kKernel && record_.recording)
+        {
+            const std::string rec = "Aufnahme läuft · " + format_bytes(record_.bytes) + " · " + record_.file;
+            ui::text(list, fonts.semibold, rec, 1824.0f - 330.0f, baseline, 21.0f, kCritical, gfx::Align::right);
+        }
+        else if (view_ == kKernel && lost_)
             ui::text(list, fonts.semibold, "Zeilen verpasst", 1824.0f - 330.0f, baseline, 21.0f, kWarning,
                      gfx::Align::right);
         list_.draw(canvas);
@@ -147,6 +160,11 @@ class LogsPage final : public Page
         out[0] = {ui::Button::l2, "Ansicht", ui::Button::r2};
         out[1] = {ui::Button::dpad, "Blättern"};
         out[2] = {ui::Button::square, "Zum Ende"};
+        if (view_ == kKernel) // at most three: the recording takes the place of the scrolling hint
+        {
+            out[1] = out[2];
+            out[2] = {ui::Button::triangle, record_.recording ? "Aufnahme beenden" : "Aufnahme"};
+        }
         return 3;
     }
 
@@ -228,6 +246,7 @@ class LogsPage final : public Page
     int tz_ = 0;
     std::vector<LogEntry> log_;
     std::vector<KlogLine> klog_;
+    KlogRecord record_;
 };
 
 } // namespace

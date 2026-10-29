@@ -47,6 +47,13 @@ class HttpSource final : public Source
     void playtime_reset() override;
     void saves_post(const std::string &route, const std::string &json) override;
     void backup_delete(const std::string &path) override;
+    void extras_open(const std::string &id) override;
+    void extras_post(const std::string &route, const std::string &json) override;
+    void extras_versions(const std::string &lib) override;
+    void extras_lz4_plan(const std::string &id, int level, const std::string &profile) override;
+    void library_tools_fetch() override;
+    void library_tools_post(const std::string &route, const std::string &json) override;
+    void klog_record(bool on) override;
     void files_open(const std::string &path) override;
     void files_post(const std::string &route, const std::string &json) override;
     void files_delete(const std::vector<std::string> &paths) override;
@@ -88,6 +95,12 @@ class HttpSource final : public Source
             playtime_reset,
             saves,
             backup_delete,
+            extras_post,
+            extras_versions,
+            extras_plan,
+            lib_tools,
+            lib_tools_post,
+            klog_record,
             fs_open,
             fs_post,
             fs_delete,
@@ -137,6 +150,9 @@ class HttpSource final : public Source
     void poll_saves();
     void poll_save_job();
     void poll_game_backups();
+    void poll_extras(const std::string &id);
+    void poll_library_tools();
+    void poll_klog_record();
     void poll_fs_places();
     void poll_fs_list(const std::string &path);
     void poll_fs_job();
@@ -152,6 +168,7 @@ class HttpSource final : public Source
     Snapshot data_;
     std::deque<Notice> notices_;
     std::deque<Request> requests_;
+    std::string extras_id_; // the game whose extras window is open (under mutex_)
     std::deque<ToolRequest> tool_requests_;
     std::uint64_t next_ticket_ = 0;
     // ShadowMountPlus keeps reporting its last job for ever: one that ended is shown only when it ran in this session.

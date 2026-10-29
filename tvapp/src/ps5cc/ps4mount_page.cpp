@@ -231,7 +231,7 @@ class Ps4MountPage final : public Page
         info_.style.max_lines = 1;
         info_.set_bounds({kRightX + 30.0f, kTop + 170.0f, kRightW - 60.0f, 330.0f});
 
-        menu_.style.theme = theme;
+        menu_.style.theme = solid_theme(theme);
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
@@ -428,7 +428,9 @@ class Ps4MountPage final : public Page
         const float rise = 24.0f * (1.0f - amount);
         const Rect panel{kPanel.x, kPanel.y + rise, kPanel.w, kPanel.h};
         ui::Painter paint(list, fonts, theme_);
-        paint.panel(panel);
+        solid_floor(list, panel, theme_.radius_card);
+        solid_floor(list, panel, theme_.radius_card);
+    paint.panel(panel);
         ui::text(list, fonts.display, ui::fit_label(paint, dialog_title(), 36.0f, panel.w - 80.0f), panel.x + 40.0f,
                  panel.y + 66.0f, 36.0f, kInk);
         ui::text(list, fonts.regular, dialog_about(), panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
@@ -963,7 +965,7 @@ class Ps4MountPage final : public Page
                          "Mehr → PS4Mount einschalten: Dann sucht die App PS4-Spiele (Fake-PKG) auf den USB-Laufwerken.")};
         if (!mount_.running && !mount_.standalone.empty())
             return {note("Das eigenständige PS4Mount läuft",
-                         "Die App übernimmt von selbst, sobald es beendet ist (Payloads → Laufend).")};
+                         "Die App übernimmt von selbst, sobald es beendet ist (Payloads → Bereits geladen).")};
         if (mount_.games.empty() && mount_.skipped.empty())
             return {note("Keine PS4-Spiele gefunden",
                          "Spiel, Update und Zusatzinhalte (.pkg) in die oberste Ebene eines exFAT-Laufwerks legen, dann "

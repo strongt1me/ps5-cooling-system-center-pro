@@ -12,6 +12,7 @@
 #include "ps5cc/backdrops.hpp"
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/game_extras.hpp"
 #include "ps5cc/game_tools.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
@@ -281,9 +282,10 @@ ui::Theme make_theme()
     t.page = kNavy;
     t.page_text = kInk;
     t.page_text_muted = kMuted;
-    // A little of the area's picture shows through the panels (29.10.2026); the list rows and focus stay solid enough.
-    t.surface = Color::rgb(0x0f1a38, 0.78f);
-    t.surface_high = Color::rgb(0x1a2850, 0.88f);
+    // The area's picture shows through the panels (29.10.2026; more of it on the user's wish the same evening); the
+    // list rows and the focus stay solid enough to read.
+    t.surface = Color::rgb(0x0f1a38, 0.62f);
+    t.surface_high = Color::rgb(0x1a2850, 0.76f);
     t.text = kInk;
     t.text_muted = kMuted;
     t.primary = kBlue;
@@ -427,7 +429,7 @@ class Ps5cc final : public app::Concept
         // One line per value: wrapped, the path put the content right at the height that needs a scrollbar, the scrollbar
         // narrowed the rows, the path rewrapped, and the sheet jumped up and down every frame (console, 27.10.2026).
         details_.style.max_lines = 1;
-        sheet_.style.theme = theme_;
+        sheet_.style.theme = ps5cc::solid_theme(theme_);
         sheet_.style.size = 720.0f;
         sheet_.style.footer = 120.0f;
         sheet_.content = [this](ui::Canvas &canvas, const Rect &area, float opacity)
@@ -447,6 +449,9 @@ class Ps5cc final : public app::Concept
             bars_[i].set_bounds({r.x + 32.0f, r.y + 62.0f, r.w - 64.0f, 52.0f});
         }
         tools_.init(theme_);
+        extras_.init(theme_);
+        tools_.on_extras = [this](const ps5cc::Game &g, ui::Feedback &feedback) { extras_.open_game(g, feedback); };
+        tools_.on_library = [this](ui::Feedback &feedback) { extras_.open_library(feedback); };
         tools_.toast = [this](ui::StatusKind kind, const std::string &title, const std::string &body)
         { toasts_.push(kind, title, body); };
         job_focus_amount_.snap(job_rect(0));
@@ -461,7 +466,7 @@ class Ps5cc final : public app::Concept
         history_.set_active(false);
         history_.set_bounds({kRightX, kTop + 54.0f, kRightW, kBottom - kTop - 54.0f});
 
-        menu_.style.theme = theme_;
+        menu_.style.theme = ps5cc::solid_theme(theme_);
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         {
@@ -491,11 +496,11 @@ class Ps5cc final : public app::Concept
                              power("Abgesicherter Modus", kMenuSafe, true)});
         }
 
-        link_dialog_.style.theme = theme_;
+        link_dialog_.style.theme = ps5cc::solid_theme(theme_);
         link_dialog_.style.dismissable = false;
         link_dialog_.style.frosted = false;
         link_dialog_.style.scrim = 0.85f;
-        toasts_.style.theme = theme_;
+        toasts_.style.theme = ps5cc::solid_theme(theme_);
         toasts_.style.width = 560.0f;
         toasts_.style.anchor = ui::ToastAnchor::bottom_right;
         toasts_.style.margin = 0.0f;
@@ -609,6 +614,7 @@ class Ps5cc final : public app::Concept
         details_.update(dt);
         sheet_.update(dt);
         tools_.update(dt);
+        extras_.update(dt);
         for (ui::ProgressBar &bar : bars_)
             bar.update(dt);
         history_.update(dt);
@@ -631,7 +637,7 @@ class Ps5cc final : public app::Concept
         frame.backdrop = theme_.backdrop;
         frame.backdrop.time = clock_;
         const ps5cc::Page *page = current_page();
-        frame.glass = sheet_.visible() || link_dialog_.visible() || tools_.visible() ||
+        frame.glass = sheet_.visible() || link_dialog_.visible() || tools_.visible() || extras_.visible() ||
                       (page != nullptr && page->modal());
 
         ui::Canvas canvas{frame.scene, context_.fonts, 0, clock_};
@@ -664,6 +670,7 @@ class Ps5cc final : public app::Concept
             page->draw_overlay(top);
         sheet_.draw(top);
         tools_.draw_overlay(top);
+        extras_.draw_overlay(top);
         menu_.draw(top);
         toasts_.draw(top);
         if (loader_.visible())
@@ -784,6 +791,23 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::confirm)},
             {1.0f, 0, Direction::none, "plan-ps4"},
             {0.2f, action_bit(Action::back)},
+            // the extras of the focused game (a folder), its APR-EMU versions, the LZ4 settings; the library tools
+            {0.4f, action_bit(Action::west)},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "extras"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "extras-versionen"},
+            {0.3f, action_bit(Action::back)},
+            {0.3f, action_bit(Action::back)},
+            {0.4f, action_bit(Action::west)},
+            {0.2f, 0, Direction::up},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "bibliothek-werkzeuge"},
+            {0.3f, action_bit(Action::back)},
             // Spiele → Spielzeit, then Spielstände (a game picked off with the X button, the triangle menu), then Pakete.
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "spielzeit"},
@@ -917,6 +941,9 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {0.6f, 0, Direction::none, "kernel-log-angehalten"},
+            {0.3f, action_bit(Action::north)},
+            {0.6f, 0, Direction::none, "kernel-log-aufnahme"},
+            {0.3f, action_bit(Action::north)},
             {0.4f, action_bit(Action::touch)},
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
@@ -1003,6 +1030,7 @@ class Ps5cc final : public app::Concept
         if (sheet_.is_open())
             fill_details();
         tools_.absorb(data_);
+        extras_.absorb(data_);
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->absorb(data_);
     }
@@ -1315,6 +1343,11 @@ class Ps5cc final : public app::Concept
     void route(const InputFrame &input, app::Feedback &feedback)
     {
         ps5cc::Source &src = ps5cc::source();
+        if (extras_.modal())
+        {
+            extras_.handle(input, feedback);
+            return;
+        }
         if (tools_.modal())
         {
             tools_.handle(input, feedback);
@@ -2038,6 +2071,7 @@ class Ps5cc final : public app::Concept
     ui::ToastStack toasts_;
     ui::LoadingScreen loader_;
     ps5cc::GameTools tools_;
+    ps5cc::GameExtras extras_;
 };
 
 } // namespace

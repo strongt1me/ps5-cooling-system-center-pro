@@ -166,7 +166,7 @@ class DiscPage final : public Page
         bar_.style.text_size = 20.0f;
         bar_.set_bounds({kRightX + 30.0f, kTop + 532.0f, kRightW - 60.0f, 48.0f});
 
-        menu_.style.theme = theme;
+        menu_.style.theme = solid_theme(theme);
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
@@ -325,7 +325,9 @@ class DiscPage final : public Page
         const float rise = 24.0f * (1.0f - amount);
         const Rect panel{kPanel.x, kPanel.y + rise, kPanel.w, kPanel.h};
         ui::Painter paint(list, fonts, theme_);
-        paint.panel(panel);
+        solid_floor(list, panel, theme_.radius_card);
+        solid_floor(list, panel, theme_.radius_card);
+    paint.panel(panel);
         const bool events = dialog_ == kEventsDialog;
         ui::text(list, fonts.display, events ? "Ereignisse am Laufwerk" : "Dump-Einstellungen", panel.x + 40.0f,
                  panel.y + 66.0f, 36.0f, kInk);

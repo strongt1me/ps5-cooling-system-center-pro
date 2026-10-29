@@ -51,7 +51,7 @@ class BackupsPage final : public Page
         info_.style.max_lines = 1;
         info_.set_bounds({kRightX + 30.0f, kTop + 110.0f, kRightW - 60.0f, 300.0f});
 
-        menu_.style.theme = theme;
+        menu_.style.theme = solid_theme(theme);
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});

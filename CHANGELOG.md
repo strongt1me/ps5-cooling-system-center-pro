@@ -2,6 +2,13 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: Spiel-Extras (Phase 6), Fenster deckend, Payloads „Bereits geladen“
+- **Extras je Spiel** (Bibliothek → Quadrat-Taste → „Extras: AMPR, PlayGo, LZ4 …“, nur für Spiele mit eigenem Ordner oder Abbild): AMPR-Index bauen, APR-EMU und PlayGo (Version wählen, mitgelieferte in den Ordner legen, Original wiederherstellen, entfernen), Plugins aktualisieren/prüfen, LZ4 packen (Stufe, Profil, im Ordner oder als Kopie, mit Plan und Pflicht-Häkchen „ungepackt getestet“), prüfen, entpacken, Optimierung per Mitschnitt (starten, einsammeln, Profil erzeugen, beenden); je Bereich der Zustand, rechts Erklärung und laufender Auftrag (`tvapp/src/ps5cc/game_extras.*`)
+- **Bibliothek: Doppelte & Covers**: doppelte Abbilder deaktivieren/aktivieren, Covers & Metadaten speichern an/aus, Ordner leeren
+- **Protokoll → Kernel-Log**: Dreieck startet/beendet die Aufnahme in eine Datei (Herunterladen im Browser)
+- Seitenflächen durchsichtiger (62 %/76 % statt 78 %/88 %); Fenster, Menüs, Details und Meldungen decken jetzt ganz ab, nichts von der Seite dahinter scheint durch (`solid_theme`, `solid_floor` in `look.hpp`)
+- Payloads: „Laufend“ heißt „Bereits geladen“ (beide Oberflächen), mit Überschrift. Jeder Payload trägt einen Punkt: grün leuchtend, wenn er läuft, grau, wenn nicht; nicht heruntergeladene Store-Einträge haben keinen. Die App merkt sich, aus welcher Datei sie einen Payload gestartet hat (`/data/PS5-Cooling-Center/payload-starts.json`, Feld `file` in `GET /api/v1/payloads`), damit bei zwei Fassungen nur die gestartete leuchtet. Im Store heißt „geladen“ jetzt „gespeichert“
+
 ### Vollbild-App: Dateien (Phase 5) und bündige Marken
 - Der Bereich **Dateien** ist jetzt der Dateimanager (wie im Browser, `src/filemgr.c`): Orte (Laufwerke, Daten der Konsole, ganzes System nur ansehen), Ordner öffnen, „..“ hoch; Quadrat-Taste: Auswählen, Ansehen (Text), Größe messen, Kopieren, Ausschneiden, Umbenennen, Löschen (sofort); Mehr: Hier einfügen, Ablage leeren, Neuer Ordner, alle/keine auswählen, sortieren nach Name/Größe/Datum, Auftrag abbrechen. Namen über die Bildschirmtastatur mit eigener Seite äöüß. Ändern nur auf den Laufwerken und in /data (sonst „Nur ansehen“). Hochladen, Herunterladen und die Bildvorschau bleiben im Browser
 - Listen: Die Marken (BEREIT, AUSGEWÄHLT …) verrutschten mit der Länge des Werts daneben. Neue Kit-Einstellungen `value_width` (feste Spalte für den Wert) und `badge_column` (eine Spalte für die Marken, jede darin zentriert), in allen zehn Listen mit Marken eingeschaltet

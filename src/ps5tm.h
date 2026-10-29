@@ -1136,6 +1136,7 @@ typedef struct {
   char name[64];
   int  memory_mb;
   int  is_self;      /* this very app — never offered for killing */
+  long long start_s; /* when it started, seconds since 1970 (0 unknown) */
 } ps5tm_process_t;
 
 unsigned ps5tm_procmgr_list(ps5tm_process_t *out, unsigned max);
@@ -1185,6 +1186,10 @@ char *ps5tm_payload_list(void);
 /* Each returns an HTTP status (200 on success) and fills the result.
    source is "internal" or "usb"; mount and dir are only read for "usb". */
 int   ps5tm_payload_start_step(const char *name, ps5tm_payload_result_t *r);   /* a profile step: waits, no repeat guard */
+/* The file a running payload was started from, when this app started it (29.10.2026): the console names the process
+   after the payload ("shadowmountplus.elf") without its version, so two versions of one payload in the folder could
+   not be told apart. 1 with the file name, 0 when unknown. */
+int   ps5tm_payload_file_of(const char *proc_name, long long proc_start_s, char *file, size_t n);
 int   ps5tm_payload_start(const char *source, const char *mount, const char *dir,
                           const char *name, ps5tm_payload_result_t *r);
 int   ps5tm_payload_copy(const char *mount, const char *dir, const char *name,

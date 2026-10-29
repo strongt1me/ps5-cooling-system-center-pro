@@ -17,6 +17,10 @@ namespace hui::ps5cc
 namespace
 {
 
+constexpr int kExtrasTag = 200;
+constexpr int kLibraryTag = 201;
+
+
 using gfx::Color;
 using gfx::Rect;
 
@@ -120,7 +124,7 @@ const char *loading_text(Tool tool)
 void GameTools::init(const ui::Theme &theme)
 {
     theme_ = theme;
-    menu_.style.theme = theme;
+    menu_.style.theme = solid_theme(theme);
     menu_.style.width = 520.0f;
     menu_.style.scrim = 0.35f;
     menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
@@ -186,6 +190,20 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
             item.shortcut = "mit Prüfung";
         items.push_back(item);
     }
+    // the extras of the web app's per-game window, then the tools for the whole library
+    ui::MenuItem line;
+    line.separator = true;
+    items.push_back(line);
+    ui::MenuItem extras;
+    extras.label = "Extras: AMPR, PlayGo, LZ4 …";
+    extras.tag = kExtrasTag;
+    // as in the web app: only for games with a folder or image of their own, not for installed packages
+    extras.disabled = game.path.empty() || game.format == "pkg" || game.format == "fpkg" || game.format == "ps4mount";
+    items.push_back(extras);
+    ui::MenuItem library;
+    library.label = "Bibliothek: Doppelte & Covers …";
+    library.tag = kLibraryTag;
+    items.push_back(library);
     menu_.set_items(items);
     // Above the card's "□ Aktionen", so the game's cover and name stay in sight.
     menu_.open({kRightX + 360.0f, kBottom - 80.0f, 140.0f, 44.0f}, feedback);
@@ -456,7 +474,21 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         {
             const int focus = menu_.focus();
             if (focus >= 0 && focus < static_cast<int>(menu_.items().size()))
-                open_tool(static_cast<Tool>(menu_.items()[static_cast<std::size_t>(focus)].tag), feedback);
+            {
+                const int tag = menu_.items()[static_cast<std::size_t>(focus)].tag;
+                if (tag == kExtrasTag)
+                {
+                    if (on_extras)
+                        on_extras(game_, feedback);
+                }
+                else if (tag == kLibraryTag)
+                {
+                    if (on_library)
+                        on_library(feedback);
+                }
+                else
+                    open_tool(static_cast<Tool>(tag), feedback);
+            }
         }
         return;
     }
@@ -755,7 +787,9 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
         const float rise = 24.0f * (1.0f - amount);
         const Rect panel{kPanel.x, kPanel.y + rise, kPanel.w, kPanel.h};
         ui::Painter paint(list, fonts, theme_);
-        paint.panel(panel);
+        solid_floor(list, panel, theme_.radius_card);
+        solid_floor(list, panel, theme_.radius_card);
+    paint.panel(panel);
         if (tool_ == Tool::erase)
             list.rounded_rect({panel.x, panel.y + 26.0f, 6.0f, 76.0f}, 3.0f, kCritical);
         ui::text(list, fonts.display, ui::fit_label(paint, title(), 36.0f, panel.w - 80.0f), panel.x + 40.0f,

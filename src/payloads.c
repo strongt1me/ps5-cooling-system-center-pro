@@ -32,6 +32,7 @@
  * that finds a scan running gets the last answer instead of starting a second
  * scan behind the first. */
 
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -48,6 +49,7 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "ps4m.h"
@@ -93,6 +95,123 @@ static pthread_mutex_t g_scan_lock  = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_cache_lock = PTHREAD_MUTEX_INITIALIZER;
 static char     *g_cache_json;
 static uint64_t  g_cache_ms;
+/* ---- which file a running payload came from (29.10.2026) ----
+   Every start is noted with the time in /data/PS5-Cooling-Center/payload-starts.json (the last 32), so it is still
+   known after a restart of the app. A process matches the newest start of a file with the same name key that was sent
+   shortly before the process began (the loader runs it within seconds). */
+#define PL_STARTS_FILE "/data/PS5-Cooling-Center/payload-starts.json"
+#define PL_STARTS_MAX  32
+
+static pthread_mutex_t g_starts_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct { char file[PL_NAME_MAX]; long long at; } g_starts[PL_STARTS_MAX];
+static int g_nstarts = -1; /* -1: not read yet */
+
+/* "ShadowMountPlus_1.7beta10.elf" -> "shadowmountplus"; the same rule as the web page and the fullscreen app */
+static void
+name_key(const char *name, char *key, size_t n) {
+  char low[PL_NAME_MAX];
+  size_t l = 0;
+  for(; name[l] && l + 1 < sizeof(low); l++) low[l] = (char)tolower((unsigned char)name[l]);
+  low[l] = 0;
+  static const char *const ext[] = { ".elf", ".bin", ".self" };
+  for(size_t e = 0; e < sizeof(ext) / sizeof(ext[0]); e++) {
+    size_t el = strlen(ext[e]);
+    if(l > el && !strcmp(low + l - el, ext[e])) { l -= el; low[l] = 0; }
+  }
+  for(size_t i = 1; i < l; i++) {
+    if(low[i] != '_' && low[i] != '-' && low[i] != ' ') continue;
+    size_t d = i + 1 < l && low[i + 1] == 'v' ? i + 2 : i + 1;
+    if(d < l && isdigit((unsigned char)low[d])) { low[i] = 0; break; }
+  }
+  size_t k = 0;
+  for(size_t i = 0; low[i] && k + 1 < n; i++)
+    if(isalnum((unsigned char)low[i])) key[k++] = low[i];
+  key[k] = 0;
+}
+
+static int
+same_key(const char *a, const char *b) {
+  char x[PL_NAME_MAX], y[PL_NAME_MAX];
+  name_key(a, x, sizeof(x));
+  name_key(b, y, sizeof(y));
+  if(!x[0] || !y[0]) return 0;
+  if(!strcmp(x, y)) return 1;
+  size_t lx = strlen(x), ly = strlen(y);
+  size_t s = lx < ly ? lx : ly;
+  return s >= 6 && !strncmp(x, y, s);
+}
+
+static void
+starts_read_locked(void) {
+  if(g_nstarts >= 0) return;
+  g_nstarts = 0;
+  FILE *f = fopen(PL_STARTS_FILE, "r");
+  if(!f) return;
+  char buf[8192];
+  size_t got = fread(buf, 1, sizeof(buf) - 1, f);
+  fclose(f);
+  buf[got] = 0;
+  cJSON *root = cJSON_Parse(buf);
+  const cJSON *e = NULL;
+  cJSON_ArrayForEach(e, root) {
+    const cJSON *fi = cJSON_GetObjectItem(e, "file"), *at = cJSON_GetObjectItem(e, "at");
+    if(!cJSON_IsString(fi) || !cJSON_IsNumber(at) || g_nstarts >= PL_STARTS_MAX) continue;
+    snprintf(g_starts[g_nstarts].file, sizeof(g_starts[0].file), "%s", fi->valuestring);
+    g_starts[g_nstarts].at = (long long)at->valuedouble;
+    g_nstarts++;
+  }
+  cJSON_Delete(root);
+}
+
+static void
+note_start(const char *file) {
+  pthread_mutex_lock(&g_starts_lock);
+  starts_read_locked();
+  if(g_nstarts == PL_STARTS_MAX) {
+    memmove(&g_starts[0], &g_starts[1], sizeof(g_starts[0]) * (PL_STARTS_MAX - 1));
+    g_nstarts--;
+  }
+  snprintf(g_starts[g_nstarts].file, sizeof(g_starts[0].file), "%s", file);
+  g_starts[g_nstarts].at = (long long)time(NULL);
+  g_nstarts++;
+  cJSON *arr = cJSON_CreateArray();
+  for(int i = 0; i < g_nstarts; i++) {
+    cJSON *e = cJSON_CreateObject();
+    cJSON_AddStringToObject(e, "file", g_starts[i].file);
+    cJSON_AddNumberToObject(e, "at", (double)g_starts[i].at);
+    cJSON_AddItemToArray(arr, e);
+  }
+  pthread_mutex_unlock(&g_starts_lock);
+  char *txt = cJSON_PrintUnformatted(arr);
+  cJSON_Delete(arr);
+  if(txt) {
+    FILE *f = fopen(PL_STARTS_FILE ".tmp", "w");
+    if(f) {
+      fputs(txt, f);
+      fclose(f);
+      rename(PL_STARTS_FILE ".tmp", PL_STARTS_FILE);
+    }
+    free(txt);
+  }
+}
+
+int
+ps5tm_payload_file_of(const char *proc_name, long long proc_start_s, char *file, size_t n) {
+  int found = 0;
+  pthread_mutex_lock(&g_starts_lock);
+  starts_read_locked();
+  for(int i = g_nstarts - 1; i >= 0 && !found; i--) {
+    /* sent at most 2 minutes before the process began, never after (a little slack for the clocks) */
+    long long d = proc_start_s - g_starts[i].at;
+    if(proc_start_s > 0 && (d < -5 || d > 120)) continue;
+    if(!same_key(g_starts[i].file, proc_name)) continue;
+    snprintf(file, n, "%s", g_starts[i].file);
+    found = 1;
+  }
+  pthread_mutex_unlock(&g_starts_lock);
+  return found;
+}
+
 static uint64_t  g_last_start_ms;
 static char      g_last_start_name[PL_NAME_MAX];
 
@@ -774,6 +893,7 @@ start_impl(const char *source, const char *mount, const char *dir, const char *n
   g_last_start_ms = ps5tm_mono_ms();
   snprintf(g_last_start_name, sizeof(g_last_start_name), "%s", name);
   pthread_mutex_unlock(&g_op_lock);
+  note_start(name);
 
   char shown[PL_NAME_MAX];
   PS5TM_INFO("payload_started",

@@ -337,6 +337,35 @@ void HttpSource::backup_delete(const std::string &path)
 {
     push({Request::Kind::backup_delete, 0, path, {}});
 }
+void HttpSource::extras_open(const std::string &id)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    extras_id_ = id;
+}
+void HttpSource::extras_post(const std::string &route, const std::string &json)
+{
+    push({Request::Kind::extras_post, 0, route, json});
+}
+void HttpSource::extras_versions(const std::string &lib)
+{
+    push({Request::Kind::extras_versions, 0, lib, {}});
+}
+void HttpSource::extras_lz4_plan(const std::string &id, int level, const std::string &profile)
+{
+    push({Request::Kind::extras_plan, level, id, profile});
+}
+void HttpSource::library_tools_fetch()
+{
+    push({Request::Kind::lib_tools, 0, {}, {}});
+}
+void HttpSource::library_tools_post(const std::string &route, const std::string &json)
+{
+    push({Request::Kind::lib_tools_post, 0, route, json});
+}
+void HttpSource::klog_record(bool on)
+{
+    push({Request::Kind::klog_record, on ? 1 : 0, {}, {}});
+}
 void HttpSource::files_open(const std::string &path)
 {
     push({Request::Kind::fs_open, 0, path, {}});
@@ -677,6 +706,8 @@ void HttpSource::run()
     bool playtime_open = false, saves_open = false, backups_open = false, backup_deleting = false;
     std::int64_t last_fs_job = 0;
     bool files_open_ = false;
+    std::int64_t last_extras = 0, last_record = 0;
+    std::string extras_polled_;
     std::int64_t last_disc = 0, last_dump = 0, last_dumps = 0;
     bool disc_open = false;
     bool library_wanted = true;
@@ -975,6 +1006,33 @@ void HttpSource::run()
         else
         {
             backups_open = false;
+        }
+        // Extras of a game: every second while a job or a recording step runs there, every 5 s otherwise.
+        {
+            std::string id;
+            bool busy = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                id = extras_id_;
+                const ExtrasState &e = data_.extras;
+                busy = e.ampr_job.find("\"active\":true") != std::string::npos ||
+                       e.image_job.find("\"active\":true") != std::string::npos ||
+                       e.trace.find("\"busy\":true") != std::string::npos;
+            }
+            if (!id.empty() && (id != extras_polled_ || now - last_extras >= (busy ? 1000000 : 5000000)))
+            {
+                last_extras = now;
+                extras_polled_ = id;
+                poll_extras(id);
+            }
+            if (id.empty())
+                extras_polled_.clear();
+        }
+        // Protokoll: whether the kernel log is being recorded, every 2 s.
+        if (page == Watch::logs && now - last_record >= 2000000)
+        {
+            last_record = now;
+            poll_klog_record();
         }
         // Dateien: the job every 0.8 s while one runs (3 s otherwise); the open folder again when it has just ended.
         if (page == Watch::files)
@@ -1364,6 +1422,86 @@ void HttpSource::handle(const Request &request)
             notice(Notice::Kind::info, "Sicherung", "„" + name + "“ wird gelöscht.");
         break;
     }
+    case Request::Kind::extras_post:
+    {
+        const std::string route = "/api/v1/" + request.id;
+        const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 30);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Extras", message_of(body, "Die App hat nicht geantwortet."));
+        else
+        {
+            const std::string msg = message_of(body, "");
+            if (!msg.empty())
+                notice(Notice::Kind::success, "Extras", msg);
+        }
+        std::string id;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            id = extras_id_;
+        }
+        if (!id.empty())
+            poll_extras(id);
+        break;
+    }
+    case Request::Kind::extras_versions:
+    {
+        const char *route = request.id == "playgo" ? "/api/v1/playgo" : "/api/v1/ampr-emu";
+        const Net net = exchange("GET", route, {}, &status, &body, 10);
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.extras_versions.seq++;
+        data_.extras_versions.lib = request.id;
+        data_.extras_versions.json = net == Net::ok && status == 200 ? body : std::string();
+        ++data_.serial;
+        break;
+    }
+    case Request::Kind::extras_plan:
+    {
+        const std::string route = "/api/v1/library/lz4/plan?id=" + url_encoded(request.id) +
+                                  "&level=" + std::to_string(request.value) + "&profile=" + url_encoded(request.text);
+        const Net net = exchange("GET", route.c_str(), {}, &status, &body, 30);
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.extras_lz4_plan.seq++;
+        data_.extras_lz4_plan.json = net == Net::ok && status == 200 ? body : std::string();
+        ++data_.serial;
+        break;
+    }
+    case Request::Kind::lib_tools:
+        poll_library_tools();
+        break;
+    case Request::Kind::lib_tools_post:
+    {
+        const std::string route = "/api/v1/" + request.id;
+        const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 30);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Bibliothek", message_of(body, "Die App hat nicht geantwortet."));
+        else
+        {
+            const std::string msg = message_of(body, "");
+            notice(Notice::Kind::success, "Bibliothek", msg.empty() ? "Erledigt." : msg);
+        }
+        poll_library_tools();
+        break;
+    }
+    case Request::Kind::klog_record:
+    {
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddBoolToObject(root, "on", request.value != 0);
+        int tz = 0;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            tz = data_.config.tz_offset_min;
+        }
+        cJSON_AddNumberToObject(root, "tz", tz);
+        char *text = cJSON_PrintUnformatted(root);
+        const std::string payload = text != nullptr ? text : "{}";
+        cJSON_free(text);
+        cJSON_Delete(root);
+        const Net net = exchange("POST", "/api/v1/klog/record", payload, &status, &body, 10);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Kernel-Log", message_of(body, "Die App hat nicht geantwortet."));
+        poll_klog_record();
+        break;
+    }
     case Request::Kind::fs_open:
         if (request.id.empty())
             poll_fs_places();
@@ -1639,6 +1777,7 @@ void HttpSource::poll_payloads()
                 p.name = str(item, "name");
                 p.memory_mb = static_cast<int>(num(item, "memory_mb"));
                 p.self = flag(item, "is_self");
+                p.file = str(item, "file");
                 running.push_back(std::move(p));
             }
             cJSON_Delete(root);
@@ -1677,6 +1816,7 @@ void HttpSource::poll_store()
         s.category = str(item, "category");
         s.description = str(item, "description");
         s.installed_version = str(cJSON_GetObjectItemCaseSensitive(item, "installed"), "version");
+        s.installed_file = str(cJSON_GetObjectItemCaseSensitive(item, "installed"), "filename");
         s.update = flag(item, "update");
         s.name_taken = flag(item, "name_taken");
         s.owner = str(item, "owner");
@@ -2313,6 +2453,82 @@ void HttpSource::poll_game_backups()
     }
     std::lock_guard<std::mutex> lock(mutex_);
     data_.game_backups = std::move(g);
+    ++data_.serial;
+}
+
+void HttpSource::poll_extras(const std::string &id)
+{
+    // the nine questions of the web app's window, in its order
+    const std::string q = url_encoded(id);
+    const std::string routes[9] = {"/api/v1/library/ampr/job",
+                                   "/api/v1/library/image/job",
+                                   "/api/v1/library/ampr?id=" + q,
+                                   "/api/v1/library/image?id=" + q,
+                                   "/api/v1/library/emu?id=" + q + "&lib=ampr",
+                                   "/api/v1/library/emu?id=" + q + "&lib=playgo",
+                                   "/api/v1/library/lz4?id=" + q,
+                                   "/api/v1/library/trace?id=" + q,
+                                   "/api/v1/library/plugins?id=" + q};
+    std::string answers[9];
+    for (int i = 0; i < 9; ++i)
+    {
+        int status = 0;
+        std::string body;
+        if (exchange("GET", routes[i].c_str(), {}, &status, &body, 20) == Net::ok && status == 200)
+            answers[i] = std::move(body);
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    ExtrasState &e = data_.extras;
+    e.id = id;
+    e.ampr_job = std::move(answers[0]);
+    e.image_job = std::move(answers[1]);
+    e.ampr = std::move(answers[2]);
+    e.image = std::move(answers[3]);
+    e.emu_ampr = std::move(answers[4]);
+    e.emu_playgo = std::move(answers[5]);
+    e.lz4 = std::move(answers[6]);
+    e.trace = std::move(answers[7]);
+    e.plugins = std::move(answers[8]);
+    ++e.seq;
+    ++data_.serial;
+}
+
+void HttpSource::poll_library_tools()
+{
+    int status = 0;
+    std::string dup, cache, body;
+    if (exchange("GET", "/api/v1/library/duplicates", {}, &status, &body, 30) == Net::ok && status == 200)
+        dup = std::move(body);
+    if (exchange("GET", "/api/v1/library/cache", {}, &status, &body, 10) == Net::ok && status == 200)
+        cache = std::move(body);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.library_tools.duplicates = std::move(dup);
+    data_.library_tools.cache = std::move(cache);
+    ++data_.library_tools.seq;
+    ++data_.serial;
+}
+
+void HttpSource::poll_klog_record()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/klog/record", {}, &status, &body, 6) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    KlogRecord r;
+    r.loaded = true;
+    r.recording = flag(root, "recording");
+    r.file = str(root, "file");
+    r.reason = str(root, "reason");
+    r.bytes = static_cast<std::uint64_t>(num(root, "bytes"));
+    r.max_bytes = static_cast<std::uint64_t>(num(root, "max_bytes"));
+    r.lines = static_cast<int>(num(root, "lines"));
+    r.elapsed_s = static_cast<int>(num(root, "elapsed_s"));
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.klog_record = std::move(r);
     ++data_.serial;
 }
 

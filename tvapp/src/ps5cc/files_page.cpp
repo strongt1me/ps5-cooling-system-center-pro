@@ -141,7 +141,7 @@ class FilesPage final : public Page
         info_.style.max_lines = 1;
         info_.set_bounds({kRightX + 30.0f, kTop + 110.0f, kRightW - 60.0f, 220.0f});
 
-        menu_.style.theme = theme;
+        menu_.style.theme = solid_theme(theme);
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
@@ -357,7 +357,9 @@ class FilesPage final : public Page
         list.push_opacity(amount);
         const Rect panel{kPanel.x, kPanel.y + 24.0f * (1.0f - amount), kPanel.w, kPanel.h};
         ui::Painter paint(list, fonts, theme_);
-        paint.panel(panel);
+        solid_floor(list, panel, theme_.radius_card);
+        solid_floor(list, panel, theme_.radius_card);
+    paint.panel(panel);
         ui::HintLayout layout;
         layout.size = 34.0f;
         layout.text_size = 21.0f;

@@ -158,6 +158,7 @@ ps5tm_procmgr_list(ps5tm_process_t *out, unsigned max) {
     e->memory_mb = (int)((double)ki->ki_rssize * (double)PAGE_SIZE /
                          (1024.0 * 1024.0));
     e->is_self   = (ki->ki_pid == self);
+    e->start_s   = (long long)ki->ki_start.tv_sec;
   }
 
   free(buf);

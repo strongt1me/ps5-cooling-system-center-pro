@@ -48,7 +48,7 @@ class PlaytimePage final : public Page
         list_.style.value_width = 190.0f; // the badges line up
         list_.set_bounds({kLeftX, kTop + 10.0f, kLeftW, kBottom - kTop - 10.0f});
 
-        menu_.style.theme = theme;
+        menu_.style.theme = solid_theme(theme);
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});

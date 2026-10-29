@@ -133,7 +133,7 @@ class PackagesPage final : public Page
         bar_.style.text_size = 20.0f;
         bar_.set_bounds({kRightX + 30.0f, kStatusY + 62.0f, kRightW - 60.0f, 48.0f});
 
-        menu_.style.theme = theme;
+        menu_.style.theme = solid_theme(theme);
         menu_.style.width = 520.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});

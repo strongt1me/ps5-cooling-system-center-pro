@@ -685,6 +685,101 @@ class MockSource final : public Source
         changed();
     }
 
+    void extras_open(const std::string &id) override
+    {
+        ExtrasState &e = data_.extras;
+        if (id.empty())
+        {
+            e = ExtrasState{};
+            changed();
+            return;
+        }
+        e.id = id;
+        ++e.seq;
+        e.ampr_job = R"({"ok":true,"state":"idle","active":false})";
+        e.image_job = R"({"ok":true,"state":"idle","active":false})";
+        e.ampr = R"({"ok":true,"has_index":true,"files":18342,"mtime":1793100000,"can_build":true,"why":"","format":"exfat"})";
+        e.image = R"({"ok":true,"can_check":true,"format":"exfat"})";
+        e.emu_ampr = R"({"ok":true,"place":"game","format":"exfat","can_change":true,"why":"","packed":false,)"
+                     R"("installed":{"present":true,"known":true,"label":"0.4.2.1 test-pack","has_orig":true},"emus":{}})";
+        e.emu_playgo = R"({"ok":true,"place":"game","can_change":true,"why":"","installed":{"present":false},"emus":{}})";
+        e.lz4 = R"({"ok":true,"can":true,"why":"","ampr_import":1,"has_index":true,"free_bytes":240000000000,"packed":false,)"
+                R"("profiles":[{"id":"builtin-lantern","name":"Lantern Pass","where":"builtin","tested":true}],"own_profile":"",)"
+                R"("suggest":{"id":"builtin-lantern","label":"Getestetes Profil für dieses Spiel","tested":true}})";
+        e.trace = R"({"ok":true,"can":true,"why":"","enabled":false,"sessions":0,"journal_new":false,"game_running":false,)"
+                  R"("profile":"PPSA01325-mitschnitt.toml","busy":false,"msg":""})";
+        e.plugins = R"({"ok":true,"can":true,"why":"","state":"update","files":[)"
+                    R"({"name":"cheats.prx","project":"Cheat-Plugin","state":"older","version":"1.2"},)"
+                    R"({"name":"fps.prx","project":"FPS-Anzeige","state":"current","version":"0.3"}]})";
+        changed();
+    }
+
+    void extras_post(const std::string &route, const std::string &json) override
+    {
+        (void)json;
+        if (route == "library/ampr")
+            data_.extras.ampr_job = R"({"ok":true,"state":"running","active":true,"kind":"index","phase":"Dateien werden gelesen","files":6120})";
+        notice(Notice::Kind::success, "Extras", "Auftrag angenommen.");
+        changed();
+    }
+
+    void extras_versions(const std::string &lib) override
+    {
+        ExtrasVersions &v = data_.extras_versions;
+        ++v.seq;
+        v.lib = lib;
+        v.json = lib == "playgo"
+                     ? R"({"ok":true,"versions":[{"name":"libScePlayGo.sprx-0.3","label":"0.3","valid":true,"bundled":true,"sha256":"b1"}]})"
+                     : R"({"ok":true,"versions":[{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
+                       R"("valid":true,"bundled":true,"sha256":"a1"},{"name":"libSceAmpr.sprx-0.4.2.1-debug","label":"0.4.2.1 mit Protokoll",)"
+                       R"("debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.1","label":"0.4.1",)"
+                       R"("valid":true,"bundled":false,"sha256":"a3"}]})";
+        changed();
+    }
+
+    void extras_lz4_plan(const std::string &id, int level, const std::string &profile) override
+    {
+        (void)id;
+        (void)profile;
+        ExtrasLz4Plan &l = data_.extras_lz4_plan;
+        ++l.seq;
+        l.json = std::string(R"({"ok":true,"valid":true,"pack_files":812,"pack_bytes":29000000000,"loose_files":44,)") +
+                 R"("loose_bytes":1200000000,"chunks":118000,"est_s":)" + std::to_string(level == 12 ? 4200 : level == 3 ? 900 : 1860) + "}";
+        changed();
+    }
+
+    void library_tools_fetch() override
+    {
+        LibraryTools &l = data_.library_tools;
+        ++l.seq;
+        l.duplicates = R"({"ok":true,"images":5,"groups":[{"title_id":"PPSA01325","name":"Lantern Pass","sources":[)"
+                       R"({"path":"/mnt/usb0/homebrew/Lantern Pass.ffpfsc","size":31200000000,"folder":false,"set_aside":false,"smp_uses":true,"mounted":true},)"
+                       R"({"path":"/mnt/ext1/homebrew/Lantern Pass.exfat","size":41000000000,"folder":false,"set_aside":false,"smp_uses":false,"mounted":false}]}],)"
+                       R"("aside":[{"path":"/mnt/usb0/homebrew/Iron Tide.exfat.off","title_id":"CUSA18842","size":22000000000}]})";
+        l.cache = R"({"ok":true,"enabled":true,"dir":"/data/PS5-Cooling-Center/covers_and_more","titles":36,"covers":36,"bytes":9400000})";
+        changed();
+    }
+
+    void library_tools_post(const std::string &route, const std::string &json) override
+    {
+        (void)route;
+        (void)json;
+        notice(Notice::Kind::success, "Bibliothek", "Erledigt.");
+        changed();
+    }
+
+    void klog_record(bool on) override
+    {
+        KlogRecord &r = data_.klog_record;
+        r.loaded = true;
+        r.recording = on;
+        r.file = on ? "klog-2026-10-29_1205.txt" : r.file;
+        r.bytes = on ? 182000 : r.bytes;
+        r.max_bytes = 64ull * 1024 * 1024;
+        r.lines = on ? 1840 : r.lines;
+        changed();
+    }
+
     void files_open(const std::string &path) override
     {
         FsList &l = data_.fs_list;
@@ -1712,6 +1807,7 @@ class MockSource final : public Source
         };
         static constexpr File kFiles[] = {
             {"internal", "", "Intern", "ShadowMountPlus_1.7beta7.elf", 2.5, true},
+            {"internal", "", "Intern", "ShadowMountPlus_1.7beta10.elf", 3.6, true},
             {"internal", "", "Intern", "PKG-Manager_v1.5.1.elf", 2.0, true},
             {"internal", "", "Intern", "pldmgr_v0.6.3.elf", 2.8, true},
             {"internal", "", "Intern", "nanodns_v0.4.elf", 0.13, true},
@@ -1733,12 +1829,13 @@ class MockSource final : public Source
             data_.payload_files.push_back(p);
         }
         data_.payload_files_loaded = true;
-        data_.running = {{236, "PS5 Cooling & System Center - Pro (diese App)", 25, true},
-                         {194, "shadowmountplus.elf", 101, false},
-                         {114, "elfldr.elf", 15, false},
-                         {112, "ftpsrv.elf", 3, false},
-                         {111, "klogsrv.elf", 2, false},
-                         {106, "kstuff.elf", 4, false}};
+        data_.running = {{236, "PS5 Cooling & System Center - Pro (diese App)", 25, true, ""},
+                         {194, "shadowmountplus.elf", 101, false, "ShadowMountPlus_1.7beta10.elf"},
+                         {121, "nanodns.elf", 2, false, ""},
+                         {114, "elfldr.elf", 15, false, ""},
+                         {112, "ftpsrv.elf", 3, false, ""},
+                         {111, "klogsrv.elf", 2, false, ""},
+                         {106, "kstuff.elf", 4, false, ""}};
     }
 
     void fill_store()
@@ -1773,6 +1870,8 @@ class MockSource final : public Source
             s.category = i.category;
             s.description = i.description;
             s.installed_version = i.installed;
+            if (!s.installed_version.empty())
+                s.installed_file = s.filename;
             s.update = i.update;
             s.owner = i.owner;
             s.avatar = i.avatar;

@@ -5,9 +5,11 @@
 #include "ps5cc/covers.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
+#include "ps5cc/payload_match.hpp"
 #include "ps5cc/payload_tile.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <cstdio>
 #include <string>
@@ -38,7 +40,7 @@ class PayloadsPage final : public Page
     {
         theme_ = theme;
         style_subtabs(views_, theme, 3);
-        views_.set_tabs({{"Meine Payloads"}, {"Laufend"}, {"Payload-Store"}});
+        views_.set_tabs({{"Meine Payloads"}, {"Bereits geladen"}, {"Payload-Store"}});
         views_.set_active(kFiles, true);
 
         list_.style.theme = theme;
@@ -60,8 +62,27 @@ class PayloadsPage final : public Page
             if (!tile_of(item, tile))
                 return;
             const float side = std::min(52.0f, row.h - 20.0f);
-            draw_icon(canvas, {row.x + 16.0f, row.y + (row.h - side) * 0.5f, side, side}, item, tile,
-                      item.disabled ? 0.45f : 1.0f);
+            const Rect box{row.x + 16.0f, row.y + (row.h - side) * 0.5f, side, side};
+            draw_icon(canvas, box, item, tile, item.disabled ? 0.45f : 1.0f);
+            // every payload carries a dot on its picture's corner: softly glowing green when it is loaded, a dark one
+            // that does not glow when it is not (user, 29.10.2026; Meine Payloads, Bereits geladen, Payload-Store)
+            // a store entry not yet downloaded has none: there is nothing on the console that could run
+            const bool none = view_ == kStore && item.tag >= 0 && static_cast<std::size_t>(item.tag) < store_.size() &&
+                              store_[static_cast<std::size_t>(item.tag)].installed_file.empty();
+            if (item.tag >= 0 && !none)
+            {
+                const float cx = box.x + box.w - 3.0f, cy = box.y + box.h - 3.0f;
+                canvas.list.circle(cx, cy, 8.5f, kNavy);
+                if (loaded(item))
+                {
+                    const float pulse = 0.5f + 0.5f * std::sin(canvas.time * 2.6f + static_cast<float>(item.tag) * 0.7f);
+                    canvas.list.circle(cx, cy, 13.0f + 3.0f * pulse, kGood.with_alpha(0.18f + 0.22f * pulse));
+                    canvas.list.circle(cx, cy, 8.5f, kNavy);
+                    canvas.list.circle(cx, cy, 6.5f, gfx::Color::rgb(0x2fd44a));
+                }
+                else
+                    canvas.list.circle(cx, cy, 6.0f, gfx::Color::rgb(0x4a5677));
+            }
         };
         list_.set_bounds({kLeftX, kListTop, kLeftW, kBottom - kListTop});
 
@@ -195,7 +216,7 @@ class PayloadsPage final : public Page
         }
         else
         {
-            title = view_ == kStore ? "Payload-Store" : view_ == kRunning ? "Laufende Payloads" : "Meine Payloads";
+            title = view_ == kStore ? "Payload-Store" : view_ == kRunning ? "Bereits geladene Payloads" : "Meine Payloads";
             text = view_ == kFiles ? "Payloads aus /data/PS5-Cooling-Center/payloads und von USB-Sticks."
                                    : view_ == kStore ? "Liste: itsPLK ps5-payloads-mirror."
                                                      : "";
@@ -411,6 +432,9 @@ class PayloadsPage final : public Page
         }
         if (view_ == kRunning)
         {
+            // a title above the list, as the other two views have their folders and categories (user, 29.10.2026)
+            if (!running_.empty())
+                out.push_back(header("BEREITS GELADENE PAYLOADS (" + std::to_string(running_.size()) + ")"));
             for (std::size_t i = 0; i < running_.size(); ++i)
             {
                 const RunningPayload &p = running_[i];
@@ -446,7 +470,8 @@ class PayloadsPage final : public Page
             ui::ListItem item;
             item.title = s.name + "  " + s.version;
             item.subtitle = s.description;
-            item.value = s.installed_version.empty() ? "" : s.update ? "Update" : "geladen";
+            // "gespeichert", not "geladen": loaded means running now, which the dot shows (29.10.2026)
+            item.value = s.installed_version.empty() ? "" : s.update ? "Update" : "gespeichert";
             if (job_.state == "running" && job_.id == s.id)
                 item.value = "lädt …";
             item.tag = static_cast<int>(i);
@@ -510,6 +535,29 @@ class PayloadsPage final : public Page
     std::array<int, kViews> focus_{};
     std::string key_;
     int info_for_ = -2;
+
+    // Whether the row's payload runs: the running list always; a file or a store entry when a running name is it.
+    bool loaded(const ui::ListItem &item) const
+    {
+        if (item.tag < 0)
+            return false;
+        const std::size_t i = static_cast<std::size_t>(item.tag);
+        if (view_ == kRunning)
+            return i < running_.size();
+        std::vector<RunningRef> running;
+        for (const RunningPayload &r : running_)
+        {
+            if (!r.self)
+                running.push_back({r.name, r.file});
+        }
+        // the payload folder of the console (the store downloads into it): what two versions are judged against
+        std::vector<std::string> folder;
+        for (const PayloadFile &f : files_)
+            folder.push_back(f.name);
+        if (view_ == kFiles)
+            return i < files_.size() && payload_file_loaded(files_[i].name, folder, running);
+        return i < store_.size() && payload_file_loaded(store_[i].installed_file, folder, running);
+    }
 
     std::vector<PayloadFile> files_;
     bool files_loaded_ = false;

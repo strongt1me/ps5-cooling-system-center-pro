@@ -181,6 +181,7 @@ struct RunningPayload
     std::string name;
     int memory_mb = 0;
     bool self = false;
+    std::string file; // the file it was started from, when the console app started it ("" unknown)
 };
 
 // GET /api/v1/paystore
@@ -193,6 +194,7 @@ struct StoreItem
     std::string category;
     std::string description;
     std::string installed_version; // "" when not downloaded
+    std::string installed_file;    // the downloaded file's name
     bool update = false;           // a newer version than the one downloaded
     bool name_taken = false;       // a file of that name exists that the store did not load
     std::string owner;             // GitHub account of the source, "" when it is not on GitHub
@@ -445,6 +447,49 @@ struct GameBackups
     bool loaded = false;
     std::string error;
     std::vector<GameBackup> backups;
+};
+
+// ---- Phase 6 (29.10.2026): the game extras of the web app's per-game window (AMPR index, APR-EMU, PlayGo, plugins,
+// LZ4 packs, recording), the library's duplicate images and cover cache, the kernel-log recording. The answers are
+// kept as the console sent them (JSON) and read by the dialog itself: there are many fields, and most are shown once.
+
+struct ExtrasState
+{
+    std::string id;        // the game the window is open for
+    std::uint64_t seq = 0; // grows with every answer
+    std::string ampr_job, image_job, ampr, image, emu_ampr, emu_playgo, lz4, trace, plugins;
+};
+
+struct ExtrasVersions
+{
+    std::uint64_t seq = 0;
+    std::string lib; // ampr, playgo
+    std::string json; // GET /api/v1/ampr-emu or /api/v1/playgo
+};
+
+struct ExtrasLz4Plan
+{
+    std::uint64_t seq = 0;
+    std::string json; // GET /api/v1/library/lz4/plan
+};
+
+struct LibraryTools
+{
+    std::uint64_t seq = 0;
+    std::string duplicates; // GET /api/v1/library/duplicates
+    std::string cache;      // GET /api/v1/library/cache
+};
+
+struct KlogRecord
+{
+    bool loaded = false;
+    bool recording = false;
+    std::string file;
+    std::string reason;
+    std::uint64_t bytes = 0;
+    std::uint64_t max_bytes = 0;
+    int lines = 0;
+    int elapsed_s = 0;
 };
 
 // ---- Phase 5 (29.10.2026): Dateien, as the web app's file manager (src/filemgr.c, /api/v1/files/*) ----
@@ -826,6 +871,11 @@ struct Snapshot
     DiscState disc;
     DumpState dump;
     DumpList dumps;
+    ExtrasState extras;
+    ExtrasVersions extras_versions;
+    ExtrasLz4Plan extras_lz4_plan;
+    LibraryTools library_tools;
+    KlogRecord klog_record;
     std::vector<FsPlace> fs_places;
     FsList fs_list;
     FsJob fs_job;
@@ -905,6 +955,17 @@ class Source
     virtual void backup_delete(const std::string &path) = 0;
     // Dateien: open a folder ("" = the places), POST /api/v1/files/<route> (mkdir, rename, copy, move, job/cancel),
     // delete paths at once (plan, then the delete with its one-time word), view a text file, measure a folder.
+    // Extras of a game: open the window ("" closes it; while open the console is asked again and again), POST
+    // /api/v1/<route> with a JSON body, the versions of APR-EMU (ampr) or PlayGo, the plan of an LZ4 pack.
+    virtual void extras_open(const std::string &id) = 0;
+    virtual void extras_post(const std::string &route, const std::string &json) = 0;
+    virtual void extras_versions(const std::string &lib) = 0;
+    virtual void extras_lz4_plan(const std::string &id, int level, const std::string &profile) = 0;
+    // The library's duplicate images and cover cache: fetch both, or POST /api/v1/<route>.
+    virtual void library_tools_fetch() = 0;
+    virtual void library_tools_post(const std::string &route, const std::string &json) = 0;
+    // The kernel log recorded into a file (on) or not (off).
+    virtual void klog_record(bool on) = 0;
     virtual void files_open(const std::string &path) = 0;
     virtual void files_post(const std::string &route, const std::string &json) = 0;
     virtual void files_delete(const std::vector<std::string> &paths) = 0;

@@ -946,6 +946,10 @@ handle_payloads_get(int fd) {
     cJSON_AddStringToObject(e, "name",      list[i].name);
     cJSON_AddNumberToObject(e, "memory_mb", list[i].memory_mb);
     cJSON_AddBoolToObject  (e, "is_self",   list[i].is_self);
+    /* the file it came from, when this app started it: tells two versions of one payload apart (29.10.2026) */
+    char file[128];
+    if(!list[i].is_self && ps5tm_payload_file_of(list[i].name, list[i].start_s, file, sizeof(file)))
+      cJSON_AddStringToObject(e, "file", file);
     cJSON_AddItemToArray(arr, e);
   }
   cJSON_AddNumberToObject(root, "count", n);
