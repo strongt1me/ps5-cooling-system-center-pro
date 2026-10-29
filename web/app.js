@@ -4117,9 +4117,13 @@
     $("#storage-list").innerHTML = vols.length ? vols.map((v) => {
       const pct = Math.round((v.used_bytes / v.total_bytes) * 100);
       const cls = pct >= 92 ? "hot" : pct >= 80 ? "warn" : "s1";
+      /* 29.10.2026: USB-Laufwerke lassen sich über ShadowMountPlus auswerfen, aber nur, solange kein Auftrag der App
+         läuft (usbeject.c prüft das und sagt sonst, welcher) */
+      const eject = v.ejectable ? `<button type="button" class="btn ghost vol-eject" data-eject="${esc(v.path)}"
+        ${usbEject.running ? "disabled" : ""} title="Sicher auswerfen. Läuft noch ein Auftrag der App, wird nicht ausgeworfen, und die App sagt, welcher Auftrag es ist.">Auswerfen</button>` : "";
       return `<div class="vol">
         <div class="vol-head"><b>${esc(v.label)}</b>
-          <span>${v.free_bytes === 0 && v.total_bytes > 0 ? "0 B" : bytes(v.free_bytes)} frei von ${bytes(v.total_bytes)}</span></div>
+          <span>${v.free_bytes === 0 && v.total_bytes > 0 ? "0 B" : bytes(v.free_bytes)} frei von ${bytes(v.total_bytes)}</span>${eject}</div>
         <div class="bar"><span class="${cls}" style="width:${pct}%"></span></div>
       </div>`;
     }).join("") : `<p class="muted">Keine Laufwerke lesbar.</p>`;
@@ -4947,7 +4951,11 @@
     ffpfsc: "ffpfsc",
     image:  "Abbild"
   };
+  /* 29.10.2026: ein PS4Mount-Spiel liegt auch als app.pkg in /user/app, läuft aber vom USB-Laufwerk (library.c meldet
+     "ps4mount"); es heißt „PS4Mount“, damit man es nicht für ein vom Paket-Installer installiertes hält. */
   const gmFormatLabel = (x) => {
+    if (x.format === "pkg" && x.ps4mount)
+      return "PS4Mount";
     if (x.format === "pkg")
       return "Installiert";
     return GM_FORMAT_TAGS[x.format] || "";
@@ -4982,7 +4990,7 @@
     const m = x.mods;
     const fmt = gmFormatLabel(x);
     const t = fmt
-      ? [`<span class="gm-tag fmt" title="${esc(GM_FORMATS[x.format] || x.format)}">${esc(fmt)}</span>`]
+      ? [`<span class="gm-tag fmt" title="${esc(x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : GM_FORMATS[x.format] || x.format)}">${esc(fmt)}</span>`]
       : [];
     gmMarks(x).forEach((s) => t.push(s));
     if (!m) return t.join("");
@@ -5086,7 +5094,7 @@
                x.size_bytes > 0 ? bytes(x.size_bytes) : "—"]);
     /* Wo die Daten wirklich liegen: bei einem Abbild die Datei, nicht der
        Ordner unter /mnt/shadowmnt, in den ShadowMountPlus es einhängt. */
-    if (x.format) rows.push(["Format", x.format === "pkg" && x.platform
+    if (x.format) rows.push(["Format", x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : x.format === "pkg" && x.platform
       ? `${x.platform} PKG (installiert)` : (GM_FORMATS[x.format] || x.format)]);
     if (x.path) {
       const drive = gmDrive(x.path);
@@ -5337,11 +5345,6 @@
         if (n === "cp-mode") cp.mode = e.target.value;
         if (n === "mv-dest") mv.dest = e.target.value;
         if (n === "mv-del") mv.del = e.target.checked;
-        if (n === "di-op" || n === "di-drive") {
-          if (n === "di-op") dimg.op = e.target.value; else dimg.drive = e.target.value;
-          dimgRenderPlan();
-          return;
-        }
         if (n === "cv-drive") cv.drive = e.target.value;
         if (n === "cv-mode") cv.mode = e.target.value;
         if (n === "cv-ampr") cv.ampr = e.target.checked;
@@ -6023,7 +6026,7 @@
     const body = $("#cp-body");
     if (!j || !body) return;
     cp.view = "cvjob";
-    txt("#cp-title", j.dump_image ? `„${j.name || j.title_id}“ als Abbild bauen` : `„${j.name || j.title_id}“ konvertieren`);
+    txt("#cp-title", `„${j.name || j.title_id}“ konvertieren`);
     const pct = j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0;
     const where = `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(j.target || "")}</code></p>`
       + (CV_FMT[j.op] ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[j.op])}</b></p>` : "");
@@ -6051,7 +6054,7 @@
       html = `<p class="cp-ok">✓ Fertig und geprüft: ${bytes(j.output_bytes)}${j.op === "ffpfsc" && ratio
           ? ` statt ${bytes(j.total_bytes)} (${ratio} %)` : ""}.</p>${where}
         ${cpSums(j, "das Ergebnis")}
-        ${j.dump_image ? `<p class="muted">ShadowMountPlus findet das Abbild bei seinem nächsten Durchlauf im Ordner „homebrew“ des Laufwerks. Ob das Spiel läuft, zeigt erst ein Test. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“). Der Dump bleibt unverändert liegen.</p>`
+        ${/^CUSA/.test(j.title_id || "") && j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das Abbild bei seinem nächsten Durchlauf im Ordner „homebrew“ des Laufwerks. Ob das Spiel läuft, zeigt erst ein Test. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“).</p>`
         : j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das neue Abbild bei seinem
           nächsten Durchlauf. Das Spiel liegt jetzt zweimal vor. Lösche das Original erst, wenn das
           neue Abbild startet.</p>` : `<p class="muted">Die Sicherung wird nicht eingebunden.</p>`}`;
@@ -6117,7 +6120,6 @@
   };
 
   const cvStart = async (btn) => {
-    if (cp.view === "cvdump") { dimgStart(btn); return; }
     /* The stream-risk warning stands in the dialog beside ffpfsc; no second question (nothing needs a second confirmation). */
     btn.disabled = true;
     try {
@@ -6796,13 +6798,43 @@
   $("#gm-tab-hist").addEventListener("click", () => ptSelectTab("hist"));
 
 
+  /* ── USB auswerfen (usbeject.c, 29.10.2026) ──────────────────────────
+   * Über ShadowMountPlus (ab 1.7beta10), aber nur, wenn kein Auftrag der App läuft und kein Ordner des Laufwerks
+   * woanders eingehängt ist (PS4Mount-Spiele). Die Konsole sagt sonst, was noch läuft; nichts wird doppelt bestätigt. */
+  const usbEject = { running: false, timer: 0 };
+  const usbEjectPoll = async () => {
+    try {
+      const r = await api("/api/v1/storage/eject");
+      if (r.running) return;
+      clearInterval(usbEject.timer);
+      usbEject.timer = 0;
+      usbEject.running = false;
+      if (r.message) toast(r.message, r.state === "done" ? "" : "error");
+      if (typeof loadSystem === "function") loadSystem();
+    } catch (e) { /* die nächste Runde fragt wieder */ }
+  };
+  $("#storage-list").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-eject]");
+    if (!b || usbEject.running) return;
+    b.disabled = true;
+    try {
+      const r = await api("/api/v1/storage/eject", { method: "POST", body: JSON.stringify({ mount: b.dataset.eject }) });
+      toast(r.started || r.message || "Wird ausgeworfen …");
+      usbEject.running = true;
+      if (!usbEject.timer) usbEject.timer = setInterval(usbEjectPoll, 1500);
+    } catch (err) {
+      toast(err.message, "error");
+      b.disabled = false;
+    }
+  });
+
   /* ── PS4 von USB (ps4m_core.c, 14.10.2026) ──────────────────────────
    * PS4Mount von gasb07 (GPL-3.0) in der App: PS4-Fake-PKGs vom USB-Laufwerk ohne Installation. Die Seite zeigt die Liste, schaltet
    * den Dienst ein und aus, löst eine Suche aus, nimmt Spiele aus der Bibliothek und wieder hinein und speichert die Einstellungen. */
-  const p4m = { data: null, timer: 0, busy: false, sel: new Set() };
+  const p4m = { data: null, timer: 0, busy: false, sel: new Set(), skipOpen: false, skipKey: "" };
   const P4M_STATE = {
     ready: ["ok", "Bereit"], running: ["ok", "Läuft"], pending: ["warn", "Wird hinzugefügt"],
-    removed: ["", "Aus der Bibliothek entfernt"], internal: ["", "Auf der Konsole installiert"],
+    removed: ["", "Kachel entfernt"], internal: ["warn", "Auf der Konsole installiert, läuft nicht von USB"],
     duplicate: ["", "Liegt auch auf einem anderen Laufwerk"], addons: ["warn", "Zusatzinhalte werden kopiert"]
   };
 
@@ -6818,7 +6850,7 @@
   const p4mPickButtons = () => {
     const b = $("#p4m-restore-sel");
     b.disabled = !(p4m.data && p4m.data.running) || !p4m.sel.size;
-    b.textContent = p4m.sel.size > 1 ? `${p4m.sel.size} Spiele zurückverschieben` : "Ausgewählte zurückverschieben";
+    b.textContent = p4m.sel.size > 1 ? `${p4m.sel.size} Spiele nicht mehr von USB spielen` : "Ausgewählte nicht mehr von USB spielen";
   };
 
   const p4mRender = () => {
@@ -6844,13 +6876,14 @@
       if (g.has_patch) meta.push("mit Update");
       if (g.dlc) meta.push(`${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}`);
       const btn = g.state === "removed"
-        ? `<button type="button" class="btn ghost" data-p4m="add" data-id="${esc(g.title_id)}">Hinzufügen</button>`
+        ? `<button type="button" class="btn ghost" data-p4m="add" data-id="${esc(g.title_id)}">Kachel wieder anlegen</button>`
         : (g.state === "ready" || g.state === "pending")
-          ? `<button type="button" class="btn ghost" data-p4m="remove" data-id="${esc(g.title_id)}">Aus Bibliothek entfernen</button>` : "";
+          ? `<button type="button" class="btn ghost" data-p4m="remove" data-id="${esc(g.title_id)}"
+              title="Die Kachel verschwindet vom Startbildschirm, die PKG bleibt auf dem USB-Laufwerk. „Kachel wieder anlegen“ holt sie zurück.">Kachel entfernen</button>` : "";
       /* PS4Mount 0.5.0: die PKGs dorthin zurück, woher sie kamen; nicht bei Spielen, die fest auf der Konsole installiert sind */
       const back = g.state !== "internal"
         ? `<button type="button" class="btn ghost" data-p4m-back="${esc(g.title_id)}"
-            title="Spiel, Update und Zusatzinhalte gehen an ihren alten Ort zurück; das Spiel verlässt die Bibliothek. Ein laufendes Spiel wird vorher geschlossen.">Zurückverschieben</button>` : "";
+            title="Die Kachel verschwindet, Spiel, Update und Zusatzinhalte kommen an ihren alten Platz auf dem Laufwerk zurück, und die Suche nimmt das Spiel nicht wieder auf. Ein laufendes Spiel wird vorher geschlossen.">Nicht mehr von USB spielen</button>` : "";
       /* PS4Mount 0.7.0: welches Update benutzt wird bzw. welche Zusatzinhalte an sind, nur wenn es etwas zu wählen gibt */
       const upd = g.updates > 1
         ? `<button type="button" class="btn ghost" data-p4mg="upd" data-id="${esc(g.title_id)}" data-name="${esc(g.name)}">Updates</button>` : "";
@@ -6862,7 +6895,9 @@
           <div class="p4m-meta">${esc(meta.join(" · "))}</div>
           ${g.update_issue ? `<div class="p4m-meta">${esc(g.update_issue)}</div>` : ""}</div>
         <span class="p4m-state ${st[0]}">${esc(st[1])}</span><div class="p4m-btns">${btn}${upd}${dlcBtn}${back}</div></div>`;
-    }).join("") : `<p class="muted">Keine PS4-Spiele auf den angeschlossenen Laufwerken gefunden.</p>`;
+    }).join("") : `<p class="muted">${(d.skipped || []).length ? "Kein PS4-Spiel ist eingebunden. Was auf den Laufwerken gefunden wurde, steht unten mit dem Grund."
+      : "Keine PS4-Spiele auf den angeschlossenen Laufwerken gefunden."}</p>`;
+    p4mSkipRender(d.skipped || []);
     /* die Auswahl zum Zurückverschieben: jedes Spiel, das nicht fest installiert ist; was mitgeht, steht dabei */
     const movable = games.filter((g) => g.state !== "internal");
     for (const id of Array.from(p4m.sel)) if (!movable.some((g) => g.title_id === id)) p4m.sel.delete(id);
@@ -6871,7 +6906,7 @@
         : g.has_patch ? "Spiel und Update" : g.dlc ? `Spiel und ${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}` : "Spiel";
       return `<label class="cp-check p4m-pickrow"><input type="checkbox" data-p4m-sel="${esc(g.title_id)}" ${p4m.sel.has(g.title_id) ? "checked" : ""}>
         <span><b>${esc(g.name)}</b> <span class="muted">${esc(`${g.title_id} · ${what}`)}</span></span></label>`;
-    }).join("") : `<p class="muted">Keine Spiele zum Zurückverschieben.</p>`;
+    }).join("") : `<p class="muted">Kein Spiel wird gerade von USB gespielt.</p>`;
     p4mPickButtons();
     $("#p4m-restore-all").disabled = !d.running || !movable.length;
     $$("#p4m-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
@@ -6888,6 +6923,42 @@
       $("#p4m-rsize").value = d.config.restore_batch || 5;
       $("#p4m-rsize").max = d.config.max_restore_batch || 10;
     }
+  };
+
+  /* 29.10.2026: die PKGs, die die Suche liegen lässt, mit dem Grund (ps4m_core.c skip_note). Vorher stand nur
+     „Keine PS4-Spiele gefunden“ da, obwohl die PKGs auf dem Laufwerk lagen, etwa weil das Spiel schon installiert ist. */
+  const P4M_WHY = {
+    internal: "Schon auf der Konsole installiert. Um es von USB zu spielen, erst das installierte Spiel löschen.",
+    restored: "Mit „Nicht mehr von USB spielen“ herausgenommen. „Herausgenommene wieder zulassen“ (weiter unten) holt es zurück.",
+    not_ps4: "Kein PS4-Paket, zum Beispiel ein PS5-PKG. Solche Pakete installiert der Reiter „Pakete“.",
+    not_fake: "Kein Fake-PKG. Von USB spielen lassen sich nur Fake-PKGs.",
+    dlc_foreign: "Zusatzinhalt, der zu keinem PS4-Spiel gehört.",
+    dlc_off: "Zusatzinhalt. Zusatzinhalte sind in den Einstellungen ausgeschaltet.",
+    duplicate: "Eine zweite Kopie einer Datei, die schon benutzt wird.",
+    second_game: "Für dieses Spiel wird schon ein anderes Spielpaket benutzt.",
+    damaged: "Das Spielpaket ist beschädigt (Kennungen in der param.sfo fehlerhaft). Es wird nicht angemeldet, weil so ein Paket die Konsole abstürzen lassen und ihren Speicher beschädigen kann."
+  };
+  const p4mSkipRender = (list) => {
+    const box = $("#p4m-skip");
+    box.hidden = !list.length;
+    if (!list.length) { box.innerHTML = ""; p4m.skipKey = ""; return; }
+    /* zugeklappt, bis man es öffnet (Wunsch des Users); aufgeklappt bleibt es auch beim Nachladen alle 5 s, und gleicher
+       Inhalt wird nicht neu gezeichnet */
+    const key = JSON.stringify(list);
+    if (key === p4m.skipKey) return;
+    p4m.skipKey = key;
+    box.innerHTML = `<details class="p4m-skipbox"${p4m.skipOpen ? " open" : ""}><summary class="p4m-skiphead">Auf USB gefunden, nicht eingebunden (${list.length})</summary>` + list.map((s) => {
+      const file = s.path.slice(s.path.lastIndexOf("/") + 1);
+      const meta = [s.mount.replace("/mnt/", ""), s.title_id, s.name ? file : ""].filter(Boolean);
+      const icon = /^CUSA\d{5}$/.test(s.title_id) ? `<img class="p4m-icon" src="/api/v1/ps4mount/icon?id=${esc(s.title_id)}" alt="" loading="lazy">`
+        : `<span class="p4m-icon"></span>`;
+      return `<div class="p4m-row p4m-skiprow">${icon}
+        <div class="p4m-main"><div class="p4m-name">${esc(s.name || file)}</div>
+          <div class="p4m-meta">${esc(meta.join(" · "))}</div>
+          <div class="p4m-meta p4m-why">${esc(P4M_WHY[s.why] || s.why)}</div></div></div>`;
+    }).join("") + "</details>";
+    box.querySelector("details").addEventListener("toggle", (e) => { p4m.skipOpen = e.target.open; });
+    $$("#p4m-skip img.p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
   };
 
   const loadP4m = async () => {
@@ -7180,7 +7251,7 @@
   /* Zurückverschieben: zuerst die Gruppengröße speichern (wie im Original), dann den Auftrag geben. */
   const p4mRestore = async (body) => {
     const n = Number($("#p4m-rsize").value), max = Number($("#p4m-rsize").max) || 10;
-    if (!(n >= 1 && n <= max)) { toast(`Spiele pro Gruppe beim Zurückverschieben: eine Zahl von 1 bis ${max}.`, "error"); return; }
+    if (!(n >= 1 && n <= max)) { toast(`Spiele pro Gruppe beim Herausnehmen: eine Zahl von 1 bis ${max}.`, "error"); return; }
     try {
       await api("/api/v1/ps4mount", { method: "POST", body: JSON.stringify(p4mConfig()) });
       const r = await api("/api/v1/ps4mount", { method: "POST", body: JSON.stringify(body) });
@@ -9182,13 +9253,8 @@
       if (x.fself) tags.push("FSELF");
       if (x.backport) tags.push("Backport");
       const where = `${x.mount}${x.dir ? "/" + x.dir : ""}`;
-      /* a PS4 game's dump (the update beside it comes along): an image ShadowMountPlus can mount */
       const fields = `data-mount="${esc(x.mount)}" data-dir="${esc(x.dir)}" data-folder="${esc(x.folder)}"`;
-      const canImg = x.kind === "game" && /^CUSA/.test(x.title_id || "") && (x.state === "" || x.state === "done");
-      const dkey = `${x.mount}|${x.dir}|${x.folder}`;
-      const img = `<div class="p4m-btns">${canImg ? `<button type="button" class="btn ghost" data-dimg="1" ${fields}>Als Abbild bauen</button>` : ""}`
-        + (x.state === "running" ? "" : `<button type="button" class="btn ghost" data-dpdel="1" ${fields}>Löschen</button>`)
-        + "</div>";
+      const img = `<div class="p4m-btns">${x.state === "running" ? "" : `<button type="button" class="btn ghost" data-dpdel="1" ${fields}>Löschen</button>`}</div>`;
       return `<div class="p4m-row">
         <div class="p4m-main"><div class="p4m-name" title="${esc(x.title || x.folder)}">${esc(x.title || x.folder)}</div>
           <div class="p4m-meta">${esc(x.folder)} · ${esc(where)}${size ? " · " + esc(size) : ""}${tags.length ? " · " + esc(tags.join(", ")) : ""}</div></div>
@@ -9221,124 +9287,7 @@
   };
   $("#dp-scan").addEventListener("click", dpScan);
 
-  /* ── PS4-Dump als Abbild (23.10.2026) ────────────────────────────────
-   * Aus dem Dump-Ordner eines PS4-Spiels (und dem Update daneben) baut die Konsole ein exFAT- oder ffpfsc-Abbild auf einem
-   * USB- oder M.2-Laufwerk, das ShadowMountPlus einhängt (gameconvert.c, dump_image.c). Der Auftrag ist der der Konvertierung
-   * (cvRenderJob). Der Browser nennt den Dump nur mit den drei Feldern seines Eintrags in der Liste, nie mit einem Pfad. */
-  const dimg = { x: null, plan: null, op: "", drive: "" };
-  const DIMG_OPS = {
-    ffpfsc: ["ffpfsc · komprimiert (empfohlen)", "Das Spiel wird als exFAT-Abbild in einen komprimierten PFS-Container gepackt, in einem Durchgang ohne Zwischendatei."],
-    ffpkg: ["ffpkg (UFS2) · unkomprimiert", "Ein UFS2-Abbild direkt aus den Ordnern, im Aufbau mit 64-KiB-Blöcken, den ShadowMountPlus empfiehlt."],
-    exfat: ["exFAT-Abbild · unkomprimiert", "Ein exFAT-Abbild mit 64-KiB-Clustern. Größer, dafür muss die Konsole beim Spielen nichts entpacken."]
-  };
-
-  const dimgBlocked = (d) => {
-    const p = dimg.plan;
-    /* An .ffpkg is as big as its own image, which is not the exFAT one's size. */
-    const need = dimg.op === "ffpkg" && p.ffpkg_bytes ? p.ffpkg_bytes : p.raw_bytes;
-    const fat32 = dimg.op === "ffpkg" && d.fat32_too_big_ffpkg !== undefined ? d.fat32_too_big_ffpkg : d.fat32_too_big;
-    if (fat32) return "FAT32 nimmt keine Datei über 4 GB auf";
-    if (!d.enough_space) return `Zu wenig Platz: Nötig sind bis zu ${bytes(need)}`;
-    const t = d.homebrew && d.homebrew[dimg.op];
-    if (t && t.enough_space === false) return `Zu wenig Platz: Nötig sind bis zu ${bytes(need)}`;
-    if (t && t.exists) return "Dort gibt es diese Datei schon";
-    return "";
-  };
-
-  const dimgRenderPlan = () => {
-    const p = dimg.plan;
-    const body = $("#cp-body");
-    if (!p || !body) return;
-    cp.view = "cvdump";
-    txt("#cp-title", `„${p.name}“ als Abbild bauen`);
-    const ops = p.ops.filter((op) => DIMG_OPS[op]).map((op) => {
-      const off = op === "ffpkg" && p.ffpkg_error;
-      return `<label class="cp-choice${off ? " off" : ""}">
-        <input type="radio" name="di-op" value="${esc(op)}" ${dimg.op === op ? "checked" : ""} ${off ? "disabled" : ""}>
-        <span class="cp-choice-text"><b>${esc(DIMG_OPS[op][0])}</b><span class="muted">${esc(DIMG_OPS[op][1])}${op === "ffpkg" && p.ffpkg_bytes && !off ? esc(` Das Abbild wird ${bytes(p.ffpkg_bytes)} groß.`) : ""}</span>
-          ${off ? `<span class="cp-why">Bei diesem Spiel nicht möglich: ${esc(p.ffpkg_error)}</span>` : ""}</span></label>`;
-    }).join("");
-    const drives = p.targets.map((d) => {
-      const why = dimgBlocked(d);
-      if (why && dimg.drive === d.mount) dimg.drive = "";
-      return `<label class="cp-choice${why ? " off" : ""}">
-          <input type="radio" name="di-drive" value="${esc(d.mount)}" ${dimg.drive === d.mount ? "checked" : ""} ${why ? "disabled" : ""}>
-          <span class="cp-choice-text"><b>${esc(d.label)}</b>
-            <span class="muted">${cpBytes(d.free_bytes)} frei${d.fs ? ` · ${esc(cpFs(d.fs))}` : ""}${d.source_here ? " · hier liegt der Dump" : ""}</span>
-            ${why ? `<span class="cp-why">${esc(why)}</span>` : ""}</span></label>`;
-    }).join("");
-    const sel = p.targets.find((d) => d.mount === dimg.drive);
-    const tgt = sel && sel.homebrew ? sel.homebrew[dimg.op] : null;
-    const blockedRun = p.busy ? "Es läuft schon eine Konvertierung."
-                     : p.other_busy ? "Es läuft gerade eine Kopie. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig." : "";
-    const isPs5 = /^PPSA/.test(p.title_id || "");
-    body.innerHTML = `
-      <p class="cp-src"><span class="muted">Quelle</span> <code>${esc(p.source)}</code>
-        <span>${p.patch ? "mit Update darüber · " : ""}Version ${esc(p.app_ver || "")} · ${cpFiles(p.files)}, als exFAT-Abbild ${bytes(p.raw_bytes)}</span></p>
-      <h4 class="cp-step">1. Was soll entstehen?</h4>
-      <div class="cp-list">${ops}</div>
-      <h4 class="cp-step">2. Wohin?</h4>
-      <div class="cp-list">${drives || `<p class="muted">Kein USB- oder M.2-Laufwerk gefunden.</p>`}</div>
-      ${tgt ? `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(tgt.path)}</code>
-        ${tgt.unfinished ? `<span class="cp-why">Dort liegt eine unfertige Datei dieser App, sie wird ersetzt.</span>` : ""}</p>` : ""}
-      <div class="cp-warn"><b>⚠ Bitte beachten</b>
-        <ul>
-          ${isPs5
-            ? "<li>Nur auf ein USB- oder M.2-Laufwerk, nie in den internen Speicher.</li>"
-            : `<li>Nur auf ein USB- oder M.2-Laufwerk, nie in den internen Speicher: Ein PS4-Titel von dort bringt die Konsole zum Absturz.</li>
-               <li>Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618): Dafür muss das Spiel installiert sein (Reiter „Pakete“).</li>`}
-          <li>Manche Titel bleiben im Ladebildschirm hängen.</li>
-          <li>Ob ein Titel läuft, zeigt erst ein Test. ShadowMountPlus findet das Abbild im Ordner „homebrew“ des Laufwerks.</li>
-        </ul></div>
-      ${blockedRun ? `<p class="cp-err">${esc(blockedRun)}</p>` : ""}
-      <p class="muted">${isPs5 ? "Der Dump selbst wird nur gelesen; er hat sein param.json schon."
-        : "Der Dump selbst wird nur gelesen. Basis und Update werden nicht kopiert, sondern beim Schreiben übereinandergelegt. Aus der param.sfo entsteht die param.json, die ShadowMountPlus liest."} Danach liest die PS5 das ganze Ergebnis zur Prüfung noch einmal vom Laufwerk.</p>
-      ${tgt ? `<p class="muted">Daneben entsteht die Prüfsummen-Datei <code>${esc(tgt.path)}.sha256</code>.</p>` : ""}
-      <div class="cp-actions">
-        <button type="button" class="btn" data-cp="close">Abbrechen</button>
-        <button type="button" class="btn primary" data-cp="start" ${tgt && !blockedRun ? "" : "disabled"}>Abbild bauen</button>
-      </div>`;
-  };
-
-  const dimgOpen = async (x) => {
-    cpShell();
-    const seq = ++dlg.seq;
-    if (cv.job && cv.job.active) { cvRenderJob(); return; }
-    dimg.x = x; dimg.plan = null; dimg.op = ""; dimg.drive = ""; cp.view = "cvdumpload";
-    txt("#cp-title", /^PPSA/.test(x.folder || "") ? "PS5-Dump als Abbild bauen" : "PS4-Dump als Abbild bauen");
-    $("#cp-body").innerHTML = `<p class="muted">Der Dump wird vermessen …</p>`;
-    try {
-      const plan = await api("/api/v1/dumps/image/plan", { method: "POST", body: JSON.stringify(x), timeoutMs: 120000 });
-      if (seq !== dlg.seq || !$("#cp-overlay")) return;
-      dimg.plan = plan;
-      dimg.op = plan.ops.includes("ffpfsc") ? "ffpfsc" : (plan.ops.find((op) => !(op === "ffpkg" && plan.ffpkg_error)) || "");
-      const first = plan.targets.find((d) => !d.source_here && d.enough_space && !d.fat32_too_big)
-                 || plan.targets.find((d) => d.enough_space && !d.fat32_too_big);
-      dimg.drive = first ? first.mount : "";
-      dimgRenderPlan();
-    } catch (e) {
-      if (seq !== dlg.seq || !$("#cp-overlay")) return;
-      $("#cp-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
-        <div class="cp-actions"><button type="button" class="btn primary" data-cp="close">Schließen</button></div>`;
-    }
-  };
-
-  const dimgStart = async (btn) => {
-    btn.disabled = true;
-    try {
-      cv.job = await api("/api/v1/dumps/image", { method: "POST", body: JSON.stringify({ ...dimg.x, op: dimg.op, target: dimg.drive }) });
-      cvRenderJob();
-      jobBanner();
-      cv.timer = setTimeout(cvPoll, 1000);
-    } catch (e) {
-      toast(e.message, "error");
-      btn.disabled = false;
-    }
-  };
-
   $("#dp-list").addEventListener("click", async (e) => {
-    const b = e.target.closest("button[data-dimg]");
-    if (b) { dimgOpen({ mount: b.dataset.mount, dir: b.dataset.dir, folder: b.dataset.folder }); return; }
     const del = e.target.closest("button[data-dpdel]");
     if (!del) return;
     del.disabled = true;                                     /* löscht beim ersten Klick */
@@ -9413,7 +9362,7 @@
     `<button type="button" class="btn ${cls}" data-dm="${esc(act)}"${dis ? ` disabled title="${esc(why || "")}"` : ""}>${esc(label)}</button>`;
 
   const DM_RUN_PS5 = "So startest du den Dump: ShadowMountPlus findet einen Ordner nur, wenn er direkt in einem seiner Suchordner liegt (zum Beispiel „homebrew“ auf dem Laufwerk) und darin „sce_sys/param.json“ hat. Im Standardordner „homebrew/ps5-app-dumper/dumps“ sucht es nicht. Trage dafür oben bei „Ordner auf dem Ziel“ „homebrew“ ein.";
-  const DM_RUN_PS4 = "Dieser PS4-Dump ist eine Sicherung. ShadowMountPlus startet nur PS5-Spiele (es liest „sce_sys/param.json“), und „PS4 von USB“ liest nur PKG-Dateien. Ein PS4-Dump-Ordner lässt sich deshalb nicht direkt starten. In der Liste „Dumps aus dem Disc-Bereich“ baut „Als Abbild bauen“ aus dem Dump ein Abbild, das ShadowMountPlus einhängt.";
+  const DM_RUN_PS4 = "Dieser PS4-Dump ist eine Sicherung. ShadowMountPlus startet nur PS5-Spiele (es liest „sce_sys/param.json“), und „PS4 von USB“ liest nur PKG-Dateien. Ein PS4-Dump-Ordner lässt sich deshalb nicht direkt starten.";
   const dmJobHtml = (j) => {
     const act = !!j.active;
     const withVer = !!j.verify;

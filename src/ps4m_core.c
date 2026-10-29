@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 gasb07 (PS4Mount 0.7.0), adapted for PS5 Cooling & System Center - Pro
+ * Copyright (C) 2026 gasb07 (PS4Mount 0.7.1), adapted for PS5 Cooling & System Center - Pro
  *
  * PS4Mount inside the app: scans USB drives for PS4 fake PKGs, registers them without installing them (nullfs mounts of internal
  * folders that hold symlinks to the packages), follows the kernel log and offers its list and actions to the web page.
@@ -85,7 +85,7 @@ int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) { (v
 #include "sqlite_ro.h"
 #include <ps5/kernel.h>
 
-#define VERSION "PS4Mount 0.7.0"
+#define VERSION "PS4Mount 0.7.1"
 #define LOCK_PORT 9032
 #define SCAN_SECONDS 10
 #define STATE_DIR "/data/ps4mount"
@@ -493,6 +493,7 @@ static void dlc_open(title_src_t *t) {
 }
 
 static int first_time(const char *path);
+static void skip_note(const char *path, const char *tid, const char *name, const char *why);
 
 static int src_open(title_src_t *t, const char *root, const char *tid) {
     memset(t, 0, sizeof(*t));
@@ -506,6 +507,22 @@ static int src_open(title_src_t *t, const char *root, const char *tid) {
     }
     if (strcmp(t->app.title_id, tid)) { /* (app) the folder carries the header's id: another one is a changed pkg */
         printf("[scan] %s: title id %s in the pkg, not %s\n", t->app_path, t->app.title_id, tid);
+        p4m_pkg_close(&t->app);
+        return -1;
+    }
+    /* PS4Mount 0.7.1: a damaged param.sfo has powered the console off and damaged its storage: never registered */
+    char why[64];
+    if (p4m_sfo_check(&t->app_sfo, why, sizeof(why))) {
+        printf("[scan] %s: not added, its param.sfo is damaged (%s)\n", t->app_path, why);
+        if (first_time(t->app_path)) {
+            const sfo_item_t *title = p4m_sfo_get(&t->app_sfo, "TITLE");
+            notify("%s: nicht hinzugefügt, das Spielpaket ist beschädigt (%s)", title ? title->sval : tid, why);
+        }
+        {
+            /* (app) shown under "Auf USB gefunden, nicht eingebunden": sorted into ps4/ already, it would be in no list */
+            const sfo_item_t *title = p4m_sfo_get(&t->app_sfo, "TITLE");
+            skip_note(t->app_path, tid, title && !title->is_int ? title->sval : "", "damaged");
+        }
         p4m_pkg_close(&t->app);
         return -1;
     }
@@ -524,6 +541,10 @@ static int src_open(title_src_t *t, const char *root, const char *tid) {
                 snprintf(t->update_issue, sizeof(t->update_issue),
                          "Update ignoriert: Es gehört zu %s Version %s, das Spiel ist %s Version %s", t->patch.title_id, uver,
                          tid, gver);
+                p4m_pkg_close(&t->patch);
+            } else if (p4m_sfo_check(&t->patch_sfo, why, sizeof(why))) {
+                snprintf(t->update_issue, sizeof(t->update_issue),
+                         "Update ignoriert: Das Update-Paket ist beschädigt (%s)", why);
                 p4m_pkg_close(&t->patch);
             } else {
                 t->has_patch = 1;
@@ -2113,6 +2134,47 @@ static int first_time(const char *path) {
     return 1;
 }
 
+/* (app, 29.10.2026) The pkgs the scan leaves where they are, with the reason, for the page ("skipped" in the list): the
+ * log alone left users with an empty list and no idea why. Kept beside first_time, which only quiets the log; a file
+ * that is gone (sorted into ps4/, deleted, drive unplugged) drops out when the list is read. */
+#define MAX_SKIPPED 128
+
+typedef struct {
+    char path[PATH_MAX], tid[10], name[128], why[16];
+} skipped_t;
+
+static skipped_t g_skipped[MAX_SKIPPED];
+static int g_nskipped;
+static pthread_mutex_t g_skip_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static void skip_note(const char *path, const char *tid, const char *name, const char *why) {
+    pthread_mutex_lock(&g_skip_mu);
+    int i = 0;
+    while (i < g_nskipped && strcmp(g_skipped[i].path, path))
+        i++;
+    if (i < MAX_SKIPPED) {
+        if (i == g_nskipped)
+            g_nskipped++;
+        skipped_t *s = &g_skipped[i];
+        snprintf(s->path, sizeof(s->path), "%s", path);
+        snprintf(s->tid, sizeof(s->tid), "%s", tid ? tid : "");
+        snprintf(s->name, sizeof(s->name), "%s", name ? name : "");
+        snprintf(s->why, sizeof(s->why), "%s", why);
+    }
+    pthread_mutex_unlock(&g_skip_mu);
+}
+
+/* The file was taken up after all (sorted into ps4/): it is no longer skipped. */
+static void skip_drop(const char *path) {
+    pthread_mutex_lock(&g_skip_mu);
+    for (int i = 0; i < g_nskipped; i++)
+        if (!strcmp(g_skipped[i].path, path)) {
+            g_skipped[i] = g_skipped[--g_nskipped];
+            break;
+        }
+    pthread_mutex_unlock(&g_skip_mu);
+}
+
 
 /* 1 when sfo lists the add-on prefix (UP0000-CUSA00000_00) as one of its add-on services. */
 static int sfo_serves(const sfo_t *sfo, const char *prefix) {
@@ -2336,6 +2398,7 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
             snprintf(key, sizeof(key), "%s#r", path);
             if (first_time(key))
                 printf("[scan] skip %s (moved back from ps4/ on request)\n", path);
+            skip_note(path, NULL, NULL, "restored");
             continue;
         }
         waiting_t *w = waiting_find(path);
@@ -2345,12 +2408,17 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
         if (p4m_pkg_open(&pkg, path)) {
             if (pass == 0 && first_time(path))
                 printf("[scan] skip %s (cannot read the pkg header: not a PS4 pkg, or unreadable)\n", path);
+            if (pass == 0)
+                skip_note(path, NULL, NULL, "not_ps4");
             continue;
         }
         sfo_t sfo;
-        const sfo_item_t *cat = NULL;
-        if (!read_sfo(&pkg, &sfo))
+        const sfo_item_t *cat = NULL, *title = NULL;
+        if (!read_sfo(&pkg, &sfo)) {
             cat = p4m_sfo_get(&sfo, "CATEGORY");
+            title = p4m_sfo_get(&sfo, "TITLE");
+        }
+        const char *tname = title && !title->is_int ? title->sval : NULL;
         int is_app = cat && !strcmp(cat->sval, "gd"), is_patch = cat && !strcmp(cat->sval, "gp");
         int is_dlc = cat && !strcmp(cat->sval, "ac");
         if (is_dlc || pass == 1) {
@@ -2358,22 +2426,29 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
             if (pass == 1 && is_dlc && strncmp(pkg.title_id, "CUSA", 4)) {
                 if (first_time(path))
                     printf("[scan] skip %s (add-on %s is not for a PS4 title)\n", path, pkg.content_id);
+                skip_note(path, pkg.title_id, tname, "dlc_foreign");
             } else if (pass == 1 && is_dlc) {
                 if (!g_cfg.dlc) {
                     if (first_time(path))
                         printf("[scan] skip %s (add-ons are turned off)\n", path);
-                } else if (p4m_pkg_fake_key(&pkg))
+                    skip_note(path, pkg.title_id, tname, "dlc_off");
+                } else if (p4m_pkg_fake_key(&pkg)) {
+                    skip_drop(path);
                     moved += adopt_dlc(root, e->d_name, path, &pkg);
-                else if (first_time(path))
-                    printf("[scan] skip %s (not a fake add-on pkg)\n", path);
+                } else {
+                    if (first_time(path))
+                        printf("[scan] skip %s (not a fake add-on pkg)\n", path);
+                    skip_note(path, pkg.title_id, tname, "not_fake");
+                }
             }
             p4m_pkg_close(&pkg);
             continue;
         }
         int ok = (is_app || is_patch) && !strncmp(pkg.title_id, "CUSA", 4) && p4m_pkg_fake_key(&pkg);
-        char tid[10], ver[16] = "";
+        char tid[10], ver[16] = "", name[128];
         uint8_t digest[32];
         snprintf(tid, sizeof(tid), "%s", pkg.title_id);
+        snprintf(name, sizeof(name), "%s", tname ? tname : "");
         memcpy(digest, pkg.digest, sizeof(digest));
         const sfo_item_t *av = ok ? p4m_sfo_get(&sfo, "APP_VER") : NULL;
         if (av && !av->is_int)
@@ -2382,11 +2457,14 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
         if (!ok) {
             if (first_time(path))
                 printf("[scan] skip %s (not a fake PS4 game or update pkg)\n", path);
+            /* a PS5 pkg reads as one with a header but no PS4 title: it is not for this tab */
+            skip_note(path, tid, name, strncmp(tid, "CUSA", 4) ? "not_ps4" : "not_fake");
             continue;
         }
         if (installed_internally(tid)) {
             if (first_time(path))
                 printf("[scan] skip %s (%s is installed internally)\n", path, tid);
+            skip_note(path, tid, name, "internal");
             continue;
         }
         snprintf(dst, sizeof(dst), "%s/ps4/%s", root, tid);
@@ -2409,6 +2487,7 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
                     notify(same ? "%s wird schon für %s benutzt; die Kopie blieb im Hauptordner des USB-Laufwerks"
                                 : "%s: %s hat schon ein Spielpaket; das neue blieb im Hauptordner des USB-Laufwerks",
                            e->d_name, tid);
+                skip_note(path, tid, name, same ? "duplicate" : "second_game");
                 continue;
             }
             char game[PATH_MAX], rel[64], old[PATH_MAX + 64], was[PATH_MAX];
@@ -2446,6 +2525,7 @@ static int adopt_dir_pkgs(const char *root, const char *dir) {
         } else {
             printf("[scan] moved %s -> %s\n", path, dst);
             record_origin(root, tid, is_app ? "app.pkg" : "patch.pkg", path);
+            skip_drop(path);
             moved++;
         }
     }
@@ -3322,6 +3402,30 @@ void ps4m_games_json(buf_t *out) {
         }
         closedir(d);
     }
+    /* (app) the pkgs the scan left where they are: path, the drive (/mnt/usb0), title ID and name when the header has
+       them, and why (skip_note) */
+    p4m_buf_printf(out, "],\"skipped\":[");
+    pthread_mutex_lock(&g_skip_mu);
+    first = 1;
+    for (int i = 0; i < g_nskipped;) {
+        const skipped_t *s = &g_skipped[i];
+        if (!exists(s->path)) {
+            g_skipped[i] = g_skipped[--g_nskipped];
+            continue;
+        }
+        const char *slash = strncmp(s->path, "/mnt/", 5) ? NULL : strchr(s->path + 5, '/');
+        int ml = slash ? (int)(slash - s->path) : 0;
+        p4m_buf_printf(out, "%s{\"path\":", first ? "" : ",");
+        json_str(out, s->path);
+        p4m_buf_printf(out, ",\"mount\":\"%.*s\",\"title_id\":", ml, s->path);
+        json_str(out, s->tid);
+        p4m_buf_printf(out, ",\"name\":");
+        json_str(out, s->name);
+        p4m_buf_printf(out, ",\"why\":\"%s\"}", s->why);
+        first = 0;
+        i++;
+    }
+    pthread_mutex_unlock(&g_skip_mu);
     p4m_buf_printf(out, "]}");
 }
 

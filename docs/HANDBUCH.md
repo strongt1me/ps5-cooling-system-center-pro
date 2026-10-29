@@ -193,8 +193,8 @@ Oberfläche); ohne Titel-ID steht dort der Paket- oder Dateiname.
 
 **PS4-Spielordner** (nur `sce_sys/param.sfo` und `eboot.bin`, keine `param.json`) lassen sich ebenso in alle drei
 Formate konvertieren: ShadowMountPlus bindet PS4-Abbilder ab 1.7beta8 ein (es sucht `param.json` oder `param.sfo` an der
-Wurzel des Abbilds, für alle seine Formate gleich). Die App geht dabei den Weg der PS4-Dumps (`dump_image.c`): Eine
-`param.json` aus der `param.sfo` und, falls nötig, eine korrigierte `npbind.dat` werden über den Ordner gelegt und
+Wurzel des Abbilds, für alle seine Formate gleich). Die App legt dabei (`dump_image.c`) eine
+`param.json` aus der `param.sfo` und, falls nötig, eine korrigierte `npbind.dat` über den Ordner; sie
 kommen mit ins Abbild, damit auch ältere ShadowMountPlus-Versionen es finden; der Ordner selbst bleibt unverändert.
 Ziel ist nur ein USB- oder M.2-Laufwerk (ein PS4-Titel aus dem Speicher der Konsole bringt sie zum Absturz), einen
 AMPR-Index gibt es für PS4-Spiele nicht. Der Plan meldet solche Ordner mit `"ps4": true`. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“).
@@ -395,21 +395,22 @@ Der Reiter **PS4 von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) dir
 1. **Vorbereiten.** Auf einem exFAT-Laufwerk liegen Spiel, Update und Zusatzinhalte als `.pkg` in der obersten Ebene oder im Ordner `pkg` (oder in Ordnern, die in den Einstellungen stehen). Die Dateinamen sind egal.
 2. **Einschalten.** Der Schalter „Einschalten“ startet die Suche; er bleibt über einen Neustart der App hinweg an. „Jetzt suchen“ löst eine Suche sofort aus.
 3. **Warten.** Beim ersten Mal sortiert die App die Pakete in `ps4/CUSAxxxxx/` (`app.pkg`, `patch.pkg`, `addcont/…`) und meldet jedes Spiel, sobald es spielbereit ist. Das Spiel erscheint mit Symbol auf dem Startbildschirm.
-- Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Aus Bibliothek entfernen“, verschwindet es nur aus der Bibliothek, die PKG bleibt.
+- Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Kachel entfernen“, verschwindet nur die Kachel, die PKG bleibt; „Kachel wieder anlegen“ holt sie zurück.
+- **Auf USB gefunden, nicht eingebunden** (seit 29.10.2026): Unter den Spielen zeigt der Reiter die PKGs, die die Suche liegen lässt, jeweils mit dem Grund: schon auf der Konsole installiert (dann erst das installierte Spiel löschen, um es von USB zu spielen), mit „Nicht mehr von USB spielen“ herausgenommen, kein PS4-Paket (etwa ein PS5-PKG, das der Reiter „Pakete“ installiert), kein Fake-PKG, Zusatzinhalt ohne PS4-Spiel oder bei ausgeschalteten Zusatzinhalten, zweite Kopie einer benutzten Datei, beschädigtes Spielpaket (seit PS4Mount 0.7.1: fehlerhafte Kennungen in der param.sfo; so ein Paket kann die Konsole ausschalten und ihren Speicher beschädigen, darum wird es nie angemeldet). Die Liste steht auch in der Vollbild-App.
 - Updates (`patch.pkg`) und Zusatzinhalte (DLC) werden mit eingebunden; Zusatzinhalte nur, wenn der Schalter in den Einstellungen an ist.
 - **Laufwerk unter anderem Namen** (seit PS4Mount 0.6.1): Kommt dasselbe Laufwerk nach einem Neustart als `usb1` statt `usb0` wieder, bleiben die Spiele angemeldet; die App schreibt nur die Verknüpfungen auf den neuen Ordner um.
 - **Keine zusammengeführten PKGs:** Spiel-PKGs, in die Patches, Zusatzinhalte oder Updates schon eingebaut sind, laufen womöglich nicht. Besser das ursprüngliche Spiel-PKG nehmen und Update und Zusatzinhalte als eigene `.pkg`-Dateien daneben legen. Eine Spiel-PKG wird nur aus dem Ordner ihrer eigenen Titel-ID genommen.
-- **Neue Spiele schneller anmelden** (seit PS4Mount 0.6.0, in den Einstellungen, ausgeschaltet): Die Anmeldung der Konsole (`AppInstallAll`) geht jeden Ordner in `/user/app` durch, für jedes PS4-Spiel etwa eine Dreiviertelsekunde, auch für die schon angemeldeten. Mit dem Schalter zeigt die Konsole ihr nur die neuen Spiele: Über `/user/app` liegt ein leerer Ordner, und darauf kommt der Ordner jedes neuen Spiels. Die anderen Spiele bleiben angemeldet; für höchstens zwei Minuten sind sie nur unsichtbar. Das geschieht nur, wenn kein Spiel läuft und die Firmware den Weg über `AppInstallAll` nimmt; in dieser Zeit weist die App Hinzufügen, Entfernen und Zurückverschieben mit „beschäftigt“ ab. Endet die App in dieser Zeit, räumt sie beim nächsten Start (`[reg] /user/app showed only … game(s) from an earlier run`) auf; ein Neustart der Konsole genügt ebenfalls, denn die Einbindung bleibt nicht bestehen.
+- **Neue Spiele schneller anmelden** (seit PS4Mount 0.6.0, in den Einstellungen, ausgeschaltet): Die Anmeldung der Konsole (`AppInstallAll`) geht jeden Ordner in `/user/app` durch, für jedes PS4-Spiel etwa eine Dreiviertelsekunde, auch für die schon angemeldeten. Mit dem Schalter zeigt die Konsole ihr nur die neuen Spiele: Über `/user/app` liegt ein leerer Ordner, und darauf kommt der Ordner jedes neuen Spiels. Die anderen Spiele bleiben angemeldet; für höchstens zwei Minuten sind sie nur unsichtbar. Das geschieht nur, wenn kein Spiel läuft und die Firmware den Weg über `AppInstallAll` nimmt; in dieser Zeit weist die App Kachel anlegen, Kachel entfernen und „Nicht mehr von USB spielen“ mit „beschäftigt“ ab. Endet die App in dieser Zeit, räumt sie beim nächsten Start (`[reg] /user/app showed only … game(s) from an earlier run`) auf; ein Neustart der Konsole genügt ebenfalls, denn die Einbindung bleibt nicht bestehen.
 - Die App muss laufen, damit die Spiele nach einem Neustart der Konsole sichtbar bleiben. Läuft PS4Mount schon als eigenes Payload (`ps4mount.elf`), lädt die App ihr PS4Mount nicht ein zweites Mal: Der Reiter zeigt „wartet“, und sobald das eigenständige beendet ist, übernimmt die App von selbst. Erkannt wird es an seinem Web-Panel (Port 8770), an der Sperre auf Port 9032 oder am Prozessnamen; taucht es später doch auf, etwa nach dem Ruhemodus, hält die App ihres an. Umgekehrt startet die Seite Payloads (auch ein Startprofil) keine `ps4mount.elf`, solange schon ein PS4Mount läuft.
 - Firmware (seit PS4Mount 0.4.4): Ab 6.00 meldet die Konsole die Spiele auf dem üblichen Weg an (geprüft auf 13.20, gemeldet auf 6.50); unter 6.00 einzeln, und fehlt dort die nötige Funktion, werden zum Schutz der Datenbank keine Spiele hinzugefügt. Die Meldung beim Einschalten nennt den Weg. An einer PS5 Pro mit 12.00 ist der Einbau geprüft: PS4-Spiele vom USB-Laufwerk werden eingebunden und laufen. Er ist ausgeschaltet, bis man ihn einschaltet.
 
-**PKGs zurückverschieben** (seit PS4Mount 0.5.0): PS4Mount merkt sich in `ps4/CUSAxxxxx/origin.txt`, woher jede PKG kam.
-„Zurückverschieben“ bei einem Spiel, „Ausgewählte zurückverschieben“ oder „Alle Spiele zurückverschieben“ legt Spiel, Update,
-ältere Updates und Zusatzinhalte mit ihren ursprünglichen Namen an ihren alten Ort zurück und nimmt das Spiel aus der Bibliothek.
+**Nicht mehr von USB spielen** (seit PS4Mount 0.5.0): PS4Mount merkt sich in `ps4/CUSAxxxxx/origin.txt`, woher jede PKG kam.
+„Nicht mehr von USB spielen“ bei einem Spiel, „Ausgewählte nicht mehr von USB spielen“ oder „Alle nicht mehr von USB spielen“
+legt Spiel, Update, ältere Updates und Zusatzinhalte mit ihren ursprünglichen Namen an ihren alten Platz zurück und nimmt das Spiel aus der Bibliothek.
 Ein laufendes Spiel wird vorher geschlossen, auch ein PS5-Spiel. Fehlt ein Ordner, wird er angelegt; eine vorhandene Datei wird
 nie ersetzt (dann kommt „ (1)“ an den Namen). PKGs, die ältere Versionen verschoben haben, landen in der obersten Ebene als
-`CUSAxxxxx - Name - game.pkg`. Keine PKG wird gelöscht. Zurückverschobene PKGs nimmt die Suche nicht wieder auf, bis man
-„Zurückverschobene wieder aufnehmen“ wählt.
+`CUSAxxxxx - Name - game.pkg`. Keine PKG wird gelöscht. Herausgenommene Spiele nimmt die Suche nicht wieder auf, bis man
+„Herausgenommene wieder zulassen“ wählt.
 
 - **Vor dem Ruhemodus PS4Mount-Spiele schließen.** Der Ruhemodus schaltet das Laufwerk ab; ein offenes Spiel kann danach nicht
   mehr lesen und hängt.
@@ -1483,7 +1484,7 @@ ShadowMountPlus legt dafür Kacheln im Medien-Bereich an. Beide können nebenein
 
 **Neue Titel-IDs ab 1.74.1:** Bis 1.74.0 hießen die Kacheln `PPSA86921` und `PPSA86922`. ShadowMountPlus hielt eine
 offene PPSA-Kachel für ein laufendes Spiel und lehnte währenddessen Löschen, Aushängen, Verschieben und Entpacken ab
-(„game_active“). Mit `FAKE…` geschieht das nicht. Die alten Ordner `/data/homebrew/PPSA86921` und `/data/homebrew/PPSA86922`
+(„game_active“; so bis ShadowMountPlus 1.7beta9, ab 1.7beta10 sperrt ein laufendes Spiel nur noch sich selbst und seine Quellen). Mit `FAKE…` geschieht das nicht. Die alten Ordner `/data/homebrew/PPSA86921` und `/data/homebrew/PPSA86922`
 und ihre Kacheln danach löschen.
 
 - **`FAKE86921`, die Vollbild-App** (neu nach 1.74): startet die App, falls sie noch nicht läuft, und zeigt sie im
@@ -1554,6 +1555,14 @@ Expertenmodus-Schalter) und ist für schnelle Profilwechsel gedacht.
 
 Auf der Systemseite gibt es zusätzlich:
 
+- **USB-Laufwerk auswerfen (seit 29.10.2026)**: Unter „Speicher“ steht bei jedem USB-Laufwerk (`/mnt/usb0` bis `usb7`,
+  `/mnt/ext0`) der Knopf **Auswerfen**; in der Vollbild-App unter System → Speicher die X-Taste. Ausgeworfen wird über
+  ShadowMountPlus (ab 1.7beta10), aber nur, wenn kein Auftrag der App läuft (Kopieren, Konvertieren, Verschieben, Löschen,
+  Dateimanager, Spielstände, Pakete installieren oder teilen, AMPR-Index, Disc-Abbild) und PS4Mount keine Spiele von diesem
+  Laufwerk spielt. Sonst wirft die App nicht aus und sagt, was noch läuft. Danach meldet die Konsole „… ist ausgeworfen und
+  kann abgezogen werden“ oder den Grund, aus dem ShadowMountPlus abgelehnt hat (etwa ein laufendes Spiel von diesem
+  Laufwerk). **Wichtig:** Der Auswerfen-Knopf auf der Seite von ShadowMountPlus selbst kennt die Aufträge dieser App nicht
+  und lässt sich von ihr nicht aufhalten; während eines Auftrags nur über diese App auswerfen.
 - **Am Handy öffnen (ab 1.52.0)**: ein QR-Code mit der Adresse dieser Seite (`http://<Adresse der Konsole>:<Port>/`). Die Kamera des Handys
   darauf halten, und die Seite geht auf; das Handy muss im selben Netzwerk sein. Der Code enthält nur die Adresse, keine Zugangsdaten und
   keinen Text, den jemand anders bestimmen könnte (die Konsole erzeugt ihn nur für ihre eigene Adresse). Der Encoder (Byte-Modus, Stufe M,

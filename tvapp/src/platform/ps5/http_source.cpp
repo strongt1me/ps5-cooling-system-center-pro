@@ -309,6 +309,22 @@ void HttpSource::package_action(const std::string &action, const std::string &id
 {
     push({Request::Kind::package, 0, id, action});
 }
+void HttpSource::ps4mount_post(const std::string &route, const std::string &json)
+{
+    push({Request::Kind::ps4mount, 0, route, json});
+}
+void HttpSource::ps4mount_fetch(const std::string &what, const std::string &id)
+{
+    push({Request::Kind::ps4mount_fetch, 0, id, what});
+}
+void HttpSource::disc_post(const std::string &route, const std::string &json)
+{
+    push({Request::Kind::disc, 0, route, json});
+}
+void HttpSource::usb_eject(const std::string &mount)
+{
+    push({Request::Kind::eject, 0, mount, {}});
+}
 void HttpSource::watch(Watch page)
 {
     watching_ = page;
@@ -614,6 +630,12 @@ void HttpSource::run()
     std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_store = 0, last_log = 0, last_klog = 0;
     std::int64_t last_backdrops = 0, last_packages = 0, last_pkg_install = 0, last_pkg_queue = 0;
     bool packages_open = false;
+    std::int64_t last_ps4mount = 0;
+    bool ps4_open = false;
+    std::int64_t last_storage = 0;
+    bool storage_open = false;
+    std::int64_t last_disc = 0, last_dump = 0, last_dumps = 0;
+    bool disc_open = false;
     bool library_wanted = true;
     for (;;)
     {
@@ -806,6 +828,85 @@ void HttpSource::run()
         else
         {
             packages_open = false;
+        }
+        // Disc: the drive every 2 s while it is switched on (10 s off), the dump every second while one runs (4 s
+        // otherwise), the list of dumps while a search runs. Away from the page only the drive, every 30 s: whether the
+        // console has one at all decides whether the tab is there.
+        if (page == Watch::disc)
+        {
+            const bool entered = !disc_open;
+            disc_open = true;
+            bool drive_on = false, dumping = false, searching = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                drive_on = data_.disc.enabled;
+                dumping = data_.dump.job.active || data_.dump.queue.active;
+                searching = data_.dumps.scanning;
+            }
+            if (entered || now - last_disc >= (drive_on ? 2000000 : 10000000))
+            {
+                last_disc = now;
+                poll_disc();
+            }
+            if (entered || now - last_dump >= (dumping ? 1000000 : 4000000))
+            {
+                last_dump = now;
+                poll_dump();
+            }
+            if (entered || (searching && now - last_dumps >= 2000000))
+            {
+                last_dumps = now;
+                poll_dumps(false);
+                bool never = false;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    never = data_.dumps.loaded && !data_.dumps.ever && !data_.dumps.scanning;
+                }
+                if (entered && never)
+                    poll_dumps(true);
+            }
+        }
+        else
+        {
+            disc_open = false;
+            if (last_disc == 0 || now - last_disc >= 30000000)
+            {
+                last_disc = now;
+                poll_disc();
+            }
+        }
+        // System → Speicher: the drives every 4 s, every second while an eject runs; at once when it opens.
+        if (page == Watch::storage)
+        {
+            bool ejecting = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                ejecting = data_.usb_eject.running;
+            }
+            if (!storage_open || now - last_storage >= (ejecting ? 1000000 : 4000000))
+            {
+                last_storage = now;
+                poll_storage();
+            }
+            storage_open = true;
+        }
+        else
+        {
+            storage_open = false;
+        }
+        // PS4 von USB: every 5 s while it is open, as the web page; at once when it opens.
+        if (page == Watch::ps4mount)
+        {
+            if (!ps4_open || now - last_ps4mount >= 5000000)
+            {
+                last_ps4mount = now;
+                poll_ps4mount();
+            }
+            ps4_open = true;
+        }
+        else
+        {
+            ps4_open = false;
         }
         if (page == Watch::logs)
         {
@@ -1028,6 +1129,63 @@ void HttpSource::handle(const Request &request)
         }
         poll_package_install();
         poll_package_queue();
+        break;
+    }
+    case Request::Kind::ps4mount:
+    {
+        const std::string route = request.id.empty() ? "/api/v1/ps4mount" : "/api/v1/ps4mount/" + request.id;
+        // Adding, removing and moving back can take a while: PS4Mount answers when it is done.
+        const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 30);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "PS4Mount", message_of(body, "Die App hat nicht geantwortet."));
+        else
+        {
+            const std::string msg = message_of(body, "");
+            if (!msg.empty())
+                notice(Notice::Kind::success, "PS4Mount", msg);
+        }
+        poll_ps4mount();
+        break;
+    }
+    case Request::Kind::ps4mount_fetch:
+        if (request.text == "game")
+            fetch_ps4_detail(request.id);
+        else
+            fetch_ps4_log();
+        break;
+    case Request::Kind::disc:
+    {
+        const std::string route = "/api/v1/" + request.id;
+        const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 15);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, request.id == "disc" ? "Laufwerk" : "Dump",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        else
+        {
+            const std::string msg = message_of(body, "");
+            if (!msg.empty())
+                notice(Notice::Kind::success, request.id == "disc" ? "Laufwerk" : "Dump", msg);
+        }
+        if (request.id == "disc")
+            poll_disc();
+        else if (request.id == "dump")
+            poll_dump();
+        else
+            poll_dumps(false);
+        break;
+    }
+    case Request::Kind::eject:
+    {
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "mount", request.id.c_str());
+        char *text = cJSON_PrintUnformatted(root);
+        cJSON_Delete(root);
+        const Net net = exchange("POST", "/api/v1/storage/eject", text != nullptr ? text : "{}", &status, &body, 15);
+        cJSON_free(text);
+        // A refusal (a job of the app runs, PS4Mount games on the drive) says why; the end comes with the next poll.
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Nicht ausgeworfen", message_of(body, "Die App hat nicht geantwortet."));
+        poll_storage();
         break;
     }
     case Request::Kind::backdrop:
@@ -1390,6 +1548,9 @@ void HttpSource::poll_library()
         g.platform = str(item, "platform");
         g.version = str(item, "version");
         g.format = str(item, "format");
+        // A PS4Mount game is an installed package to the system; shown as what it is, not as installed (29.10.2026).
+        if (g.format == "pkg" && flag(item, "ps4mount"))
+            g.format = "ps4mount";
         g.path = str(item, "path");
         g.cover = str(item, "cover");
         // Only the app's own route: the bytes are fetched from 127.0.0.1 and must not lead anywhere else.
@@ -1405,6 +1566,9 @@ void HttpSource::poll_library()
         g.can_move = flag(item, "can_move");
         g.can_unpack = flag(item, "can_unpack");
         g.ampr_emu = flag(cJSON_GetObjectItemCaseSensitive(item, "mods"), "ampr_emu");
+        g.disc = str(item, "disc");
+        g.dump_mounted = flag(item, "dump_mounted");
+        g.dump = str(item, "dump");
         if (g.name.empty())
             g.name = g.id;
         games.push_back(std::move(g));
@@ -1435,6 +1599,17 @@ void HttpSource::fetch_cover()
             g.id = key;
             g.cover = "/api/v1/paystore/avatar?owner=" + s.owner;
             games.push_back(std::move(g));
+        }
+        // The PS4Mount games' pictures, only while that page is open.
+        if (watching_.load() == Watch::ps4mount)
+        {
+            for (const Ps4Game &p : data_.ps4mount.games)
+            {
+                Game g;
+                g.id = ps4_key(p.title_id);
+                g.cover = "/api/v1/ps4mount/icon?id=" + url_encoded(p.title_id);
+                games.push_back(std::move(g));
+            }
         }
         // The pictures of the packages, only while the Pakete page is open (ids hold for one search).
         if (watching_.load() == Watch::packages)
@@ -1611,6 +1786,401 @@ void HttpSource::poll_package_queue()
     if (key_of(q) == key_of(data_.package_queue))
         return;
     data_.package_queue = std::move(q);
+    ++data_.serial;
+}
+
+void HttpSource::poll_storage()
+{
+    int status = 0;
+    std::string body;
+    std::vector<Volume> volumes;
+    bool got = false;
+    if (exchange("GET", "/api/v1/system", {}, &status, &body, 8) == Net::ok && status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            got = true;
+            const cJSON *v = nullptr;
+            cJSON_ArrayForEach(v, cJSON_GetObjectItemCaseSensitive(root, "volumes"))
+            {
+                Volume x;
+                x.label = str(v, "label");
+                x.path = str(v, "path");
+                x.total_bytes = static_cast<std::uint64_t>(num(v, "total_bytes"));
+                x.used_bytes = static_cast<std::uint64_t>(num(v, "used_bytes"));
+                x.free_bytes = static_cast<std::uint64_t>(num(v, "free_bytes"));
+                x.ejectable = flag(v, "ejectable");
+                volumes.push_back(std::move(x));
+            }
+            cJSON_Delete(root);
+        }
+    }
+    UsbEject e;
+    if (exchange("GET", "/api/v1/storage/eject", {}, &status, &body, 4) == Net::ok && status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            e.loaded = true;
+            e.available = flag(root, "available");
+            e.running = flag(root, "running");
+            e.state = str(root, "state");
+            e.mount = str(root, "mount");
+            e.message = str(root, "message");
+            cJSON_Delete(root);
+        }
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (got)
+    {
+        data_.volumes = std::move(volumes);
+        data_.volumes_loaded = true;
+    }
+    if (e.loaded)
+        data_.usb_eject = std::move(e);
+    ++data_.serial;
+}
+
+void HttpSource::poll_ps4mount()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/ps4mount", {}, &status, &body, 8) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    Ps4Mount m;
+    m.loaded = true;
+    m.enabled = flag(root, "enabled");
+    m.running = flag(root, "running");
+    m.busy = flag(root, "busy");
+    m.standalone = str(root, "standalone");
+    m.version = str(root, "version");
+    const cJSON *cfg = cJSON_GetObjectItemCaseSensitive(root, "config");
+    if (cJSON_GetObjectItemCaseSensitive(cfg, "batch_size") != nullptr)
+    {
+        m.config.valid = true;
+        m.config.batch = flag(cfg, "batch");
+        m.config.dlc = flag(cfg, "dlc");
+        m.config.dlc_copy = flag(cfg, "dlc_copy");
+        m.config.fast_reg = flag(cfg, "fast_reg");
+        m.config.batch_size = static_cast<int>(num(cfg, "batch_size", 5));
+        m.config.restore_batch = static_cast<int>(num(cfg, "restore_batch", 5));
+        m.config.max_restore_batch = static_cast<int>(num(cfg, "max_restore_batch", 10));
+        const cJSON *path = nullptr;
+        cJSON_ArrayForEach(path, cJSON_GetObjectItemCaseSensitive(cfg, "paths"))
+        {
+            if (cJSON_IsString(path) && path->valuestring != nullptr)
+                m.config.paths.emplace_back(path->valuestring);
+        }
+    }
+    const cJSON *g = nullptr;
+    cJSON_ArrayForEach(g, cJSON_GetObjectItemCaseSensitive(root, "games"))
+    {
+        Ps4Game x;
+        x.title_id = str(g, "title_id");
+        x.name = str(g, "name");
+        x.version = str(g, "version");
+        x.state = str(g, "state");
+        x.mount = str(g, "mount");
+        x.update_issue = str(g, "update_issue");
+        x.has_patch = flag(g, "has_patch");
+        x.size = static_cast<std::uint64_t>(num(g, "size"));
+        x.dlc = static_cast<int>(num(g, "dlc"));
+        x.dlc_total = static_cast<int>(num(g, "dlc_total"));
+        x.updates = static_cast<int>(num(g, "updates"));
+        if (!x.title_id.empty())
+            m.games.push_back(std::move(x));
+    }
+    const cJSON *s = nullptr;
+    cJSON_ArrayForEach(s, cJSON_GetObjectItemCaseSensitive(root, "skipped"))
+    {
+        Ps4Skipped x;
+        x.path = str(s, "path");
+        x.mount = str(s, "mount");
+        x.title_id = str(s, "title_id");
+        x.name = str(s, "name");
+        x.why = str(s, "why");
+        if (!x.path.empty())
+            m.skipped.push_back(std::move(x));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    // Busy, PS4Mount answers from its last list or with none: an empty list then is not news, the old one stays.
+    if (m.busy && m.games.empty() && data_.ps4mount.loaded)
+    {
+        data_.ps4mount.busy = true;
+        ++data_.serial;
+        return;
+    }
+    if (!m.config.valid && data_.ps4mount.config.valid)
+        m.config = data_.ps4mount.config;
+    data_.ps4mount = std::move(m);
+    ++data_.serial;
+}
+
+void HttpSource::fetch_ps4_detail(const std::string &id)
+{
+    Ps4GameDetail d;
+    d.id = id;
+    d.loaded = true;
+    int status = 0;
+    std::string body;
+    const std::string path = "/api/v1/ps4mount/game?id=" + url_encoded(id);
+    if (exchange("GET", path.c_str(), {}, &status, &body, 8) != Net::ok || status != 200)
+    {
+        d.error = message_of(body, "Die App hat nicht geantwortet.");
+    }
+    else if (cJSON *root = cJSON_Parse(body.c_str()))
+    {
+        d.dlc_limit = static_cast<int>(num(root, "dlc_limit", 29));
+        const cJSON *u = nullptr;
+        cJSON_ArrayForEach(u, cJSON_GetObjectItemCaseSensitive(root, "updates"))
+        {
+            Ps4Update x;
+            x.file = str(u, "file");
+            x.version = str(u, "version");
+            x.name = str(u, "name");
+            x.active = flag(u, "active");
+            d.updates.push_back(std::move(x));
+        }
+        const cJSON *c = nullptr;
+        cJSON_ArrayForEach(c, cJSON_GetObjectItemCaseSensitive(root, "dlcs"))
+        {
+            Ps4Dlc x;
+            x.content_id = str(c, "content_id");
+            x.name = str(c, "name");
+            x.on = flag(c, "on");
+            x.data = flag(c, "data");
+            x.copy = str(c, "copy");
+            x.reason = str(c, "reason");
+            d.dlcs.push_back(std::move(x));
+        }
+        cJSON_Delete(root);
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    d.seq = data_.ps4_detail.seq + 1;
+    data_.ps4_detail = std::move(d);
+    ++data_.serial;
+}
+
+void HttpSource::fetch_ps4_log()
+{
+    int status = 0;
+    std::string body;
+    std::string log;
+    if (exchange("GET", "/api/v1/ps4mount/log", {}, &status, &body, 8) == Net::ok && status == 200)
+    {
+        cJSON *root = cJSON_Parse(body.c_str());
+        log = root != nullptr ? str(root, "log") : "";
+        cJSON_Delete(root);
+    }
+    else
+    {
+        log = message_of(body, "Das Protokoll ließ sich nicht lesen.");
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.ps4_log = log.empty() ? "(leer)" : log;
+    ++data_.ps4_log_seq;
+    ++data_.serial;
+}
+
+void HttpSource::poll_disc()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/disc", {}, &status, &body, 6) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    DiscState d;
+    d.loaded = true;
+    const cJSON *has = cJSON_GetObjectItemCaseSensitive(root, "has_drive");
+    d.has_drive = !cJSON_IsFalse(has);
+    d.enabled = flag(root, "enabled");
+    d.auto_dump = flag(root, "auto_dump");
+    d.drive = str(root, "drive");
+    d.present = flag(root, "present");
+    d.has_title = flag(root, "has_title");
+    d.dumpable = flag(root, "dumpable");
+    d.type = str(root, "type");
+    d.serial = str(root, "serial");
+    d.name = str(root, "name");
+    d.title_state = str(root, "title_state");
+    d.image_bytes = static_cast<std::uint64_t>(num(root, "image_bytes"));
+    const cJSON *job = cJSON_GetObjectItemCaseSensitive(root, "job");
+    d.job_state = str(job, "state");
+    if (d.job_state.empty())
+        d.job_state = "idle";
+    d.job_name = str(job, "name");
+    d.job_error = str(job, "error");
+    d.job_note = str(job, "note");
+    d.job_done = num(job, "done");
+    d.job_total = num(job, "total");
+    d.job_eta_s = static_cast<int>(num(job, "eta_s"));
+    const cJSON *e = nullptr;
+    cJSON_ArrayForEach(e, cJSON_GetObjectItemCaseSensitive(root, "events"))
+        d.events.push_back(str(e, "text"));
+    const cJSON *x = nullptr;
+    cJSON_ArrayForEach(x, cJSON_GetObjectItemCaseSensitive(root, "dumps"))
+    {
+        DiscImage i;
+        i.name = str(x, "name");
+        i.serial = str(x, "serial");
+        i.crc32 = str(x, "crc32");
+        i.size = static_cast<std::uint64_t>(num(x, "size"));
+        i.verified = flag(x, "verified");
+        d.images.push_back(std::move(i));
+    }
+    d.dir = str(root, "dir");
+    d.redump = flag(cJSON_GetObjectItemCaseSensitive(root, "redump"), "usable");
+    cJSON_Delete(root);
+    const auto key_of = [](const DiscState &s)
+    {
+        std::string k = std::to_string(s.has_drive) + s.drive + std::to_string(s.enabled) + std::to_string(s.auto_dump) +
+                        std::to_string(s.present) + s.type + s.serial + s.name + s.title_state + s.job_state +
+                        std::to_string(static_cast<long long>(s.job_done)) + s.job_error +
+                        std::to_string(s.events.size()) + std::to_string(s.images.size());
+        for (const DiscImage &i : s.images)
+            k += i.name;
+        return k;
+    };
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (data_.disc.loaded && key_of(d) == key_of(data_.disc))
+        return;
+    data_.disc = std::move(d);
+    ++data_.serial;
+}
+
+void HttpSource::poll_dump()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/dump", {}, &status, &body, 6) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    DumpState d;
+    d.loaded = true;
+    const cJSON *s = cJSON_GetObjectItemCaseSensitive(root, "settings");
+    if (cJSON_IsObject(s))
+    {
+        DumpSettings &o = d.settings;
+        o.valid = true;
+        o.target = str(s, "target");
+        o.subdir = str(s, "subdir");
+        o.folder_titles = flag(s, "folder_titles");
+        o.dump_dlc = flag(s, "dump_dlc");
+        o.verify = flag(s, "verify");
+        o.decrypt = flag(s, "decrypt");
+        o.fself = flag(s, "fself");
+        o.backport = flag(s, "backport");
+        o.decrypt_supported = !cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(s, "decrypt_supported"));
+        o.ps4_split = static_cast<int>(num(s, "ps4_split", 3));
+        o.ps4_backport_level = static_cast<int>(num(s, "ps4_backport_level", 4));
+        o.ps5_backport_level = static_cast<int>(num(s, "ps5_backport_level", 1));
+    }
+    const cJSON *t = nullptr;
+    cJSON_ArrayForEach(t, cJSON_GetObjectItemCaseSensitive(root, "targets"))
+    {
+        DumpTarget x;
+        x.mount = str(t, "mount");
+        x.label = str(t, "label");
+        x.fs = str(t, "fs");
+        x.free_bytes = static_cast<std::uint64_t>(num(t, "free_bytes"));
+        x.console = flag(t, "console");
+        d.targets.push_back(std::move(x));
+    }
+    const cJSON *q = cJSON_GetObjectItemCaseSensitive(root, "queue");
+    d.queue.active = flag(q, "active");
+    d.queue.current = static_cast<int>(num(q, "current", -1));
+    d.queue.delay = static_cast<int>(num(q, "delay", 30));
+    d.queue.wait = static_cast<int>(num(q, "wait"));
+    d.queue.max = static_cast<int>(num(q, "max", 64));
+    d.queue.replace = flag(q, "replace");
+    d.queue.interrupted = flag(q, "interrupted");
+    const cJSON *it = nullptr;
+    cJSON_ArrayForEach(it, cJSON_GetObjectItemCaseSensitive(q, "items"))
+    {
+        DumpQueueItem x;
+        x.id = str(it, "id");
+        x.name = str(it, "name");
+        x.state = str(it, "state");
+        x.message = str(it, "message");
+        x.disc_out = flag(it, "disc") && !flag(it, "disc_in");
+        x.custom = flag(it, "custom");
+        x.dumped = flag(it, "dumped");
+        d.queue.items.push_back(std::move(x));
+    }
+    const cJSON *j = cJSON_GetObjectItemCaseSensitive(root, "job");
+    DumpJob &o = d.job;
+    o.state = str(j, "state");
+    if (o.state.empty())
+        o.state = "idle";
+    o.active = flag(j, "active");
+    o.verify = flag(j, "verify");
+    o.name = str(j, "name");
+    o.title_id = str(j, "title_id");
+    o.stage = str(j, "stage");
+    o.kind = str(j, "kind");
+    o.drive = str(j, "drive");
+    o.dest = str(j, "dest");
+    o.folder = str(j, "folder");
+    o.error = str(j, "error");
+    o.note = str(j, "note");
+    o.done_bytes = num(j, "done_bytes");
+    o.total_bytes = num(j, "total_bytes");
+    o.checked_bytes = num(j, "checked_bytes");
+    o.rate = num(j, "rate");
+    o.eta_s = static_cast<int>(num(j, "eta_s"));
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    // A dump or a queue that just ended: the library knows the game as dumped now, the list of dumps has one more.
+    const bool was = data_.dump.job.active || data_.dump.queue.active;
+    if (was && !d.job.active && !d.queue.active)
+        library_wanted_ = true;
+    data_.dump = std::move(d);
+    ++data_.serial;
+}
+
+void HttpSource::poll_dumps(bool scan)
+{
+    int status = 0;
+    std::string body;
+    if (exchange(scan ? "POST" : "GET", scan ? "/api/v1/dumps/scan" : "/api/v1/dumps", scan ? "{}" : "", &status, &body,
+                 8) != Net::ok ||
+        status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    DumpList l;
+    l.loaded = true;
+    l.scanning = flag(root, "scanning");
+    l.ever = flag(root, "ever");
+    const cJSON *x = nullptr;
+    cJSON_ArrayForEach(x, cJSON_GetObjectItemCaseSensitive(root, "dumps"))
+    {
+        DumpEntry e;
+        e.mount = str(x, "mount");
+        e.dir = str(x, "dir");
+        e.folder = str(x, "folder");
+        e.title_id = str(x, "title_id");
+        e.title = str(x, "title");
+        e.state = str(x, "state");
+        e.kind = str(x, "kind");
+        const double measured = num(x, "measured", -1.0);
+        e.bytes = static_cast<std::uint64_t>(measured >= 0.0 ? measured : num(x, "bytes"));
+        e.decrypt = flag(x, "decrypt");
+        e.fself = flag(x, "fself");
+        e.backport = flag(x, "backport");
+        l.dumps.push_back(std::move(e));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.dumps = std::move(l);
     ++data_.serial;
 }
 

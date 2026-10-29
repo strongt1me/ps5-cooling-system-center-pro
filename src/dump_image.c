@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * A PS4 dump as an image ShadowMountPlus can mount (23.10.2026).
+ * What a PS4 game folder needs to become an image ShadowMountPlus can mount (23.10.2026). Built for PS4 dumps; since
+ * 29.10.2026 only the conversion of PS4 game folders (gameconvert.c) uses it, the dump-as-image feature is gone.
  *
  * What it takes, and what this file does of it, follows PS4FFPFSC 0.2.9 (GPL-3.0-or-later; ps4ffpsc/dump_source.py,
  * sfo.py, npbind.py, pipeline.py), which does the same on a PC: check that the dump has an eboot.bin and a param.sfo with a
@@ -537,26 +538,4 @@ dimg_remove_overlay(const char *overlay_dir) {
   snprintf(p, sizeof(p), "%s/sce_sys", overlay_dir);
   rmdir(p);
   rmdir(overlay_dir);
-}
-
-void
-dimg_stem(const char *title, const char *title_id, char *out, size_t out_len) {
-  char t[128];
-  size_t o = 0;
-  int space = 1;                                   /* no leading blank, none doubled */
-  for(const unsigned char *p = (const unsigned char *)title; *p && o < 100; p++) {
-    if(o >= 90 && (*p < 0x80 || *p >= 0xC0)) break;     /* stop between characters, never inside one */
-    if(*p == ' ' || *p == '	') {
-      if(!space) t[o++] = ' ';
-      space = 1;
-      continue;
-    }
-    if(!(*p >= 0x80 || isalnum(*p) || strchr("._-()[]&+'!,#@", *p))) continue;
-    t[o++] = (char)*p;
-    space = 0;
-  }
-  while(o > 0 && (t[o - 1] == ' ' || t[o - 1] == '.')) o--;
-  t[o] = 0;
-  if(t[0]) snprintf(out, out_len, "%s [%s]", t, title_id);
-  else snprintf(out, out_len, "%s", title_id);
 }

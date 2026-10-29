@@ -66,6 +66,7 @@
 
 #include "dynsym.h"
 #include "imgread.h"
+#include "ps4m.h"
 #include "ps5tm.h"
 #include "sqlite_ro.h"
 #include "third_party/cJSON.h"
@@ -129,6 +130,7 @@ typedef struct {
      the call can wait on its socket, and the answer is made under g_lock. */
   int      smp_can_move;
   int      smp_can_unpack;
+  int      ps4mount;            /* an installed package that PS4Mount serves from a USB drive (29.10.2026) */
 } lib_game_t;
 
 /* The folder checks read the USB drive; their result is kept per title and
@@ -695,6 +697,10 @@ detect_storage(lib_game_t *g) {
     }
   }
   snprintf(g->format, sizeof(g->format), "%s", fmt);
+  /* A PS4Mount game looks like any installed package (an app.pkg in /user/app), but plays from the USB drive: the
+     list says so, so it is not taken for one the package installer put on the console. The format stays "pkg", the
+     same things may (not) be done with it. */
+  g->ps4mount = !strcmp(fmt, "pkg") && ps4m_title_managed(g->title_id);
 
   if(g->real_path[0] == '/' && strcmp(fmt, "pkg")) {
     int64_t sz = real_size(g->real_path, !strcmp(fmt, "folder"));
@@ -1627,6 +1633,7 @@ ps5tm_library_json(void) {
                   strcmp(g->format, "image") && g->format[0];
     cJSON_AddBoolToObject(e, "smp", g->smp);
     if(g->smp) cJSON_AddBoolToObject(e, "mounted", g->smp_mounted);
+    if(g->ps4mount) cJSON_AddBoolToObject(e, "ps4mount", 1);
     cJSON_AddBoolToObject(e, "can_copy", g->real_path[0] == '/' &&
                           (!strcmp(g->format, "folder") || is_file));
     cJSON_AddBoolToObject(e, "can_move", g->smp_can_move && strcmp(g->format, "pkg"));
@@ -2082,8 +2089,8 @@ ps5tm_library_cover(const char *title_id, char *path, size_t path_len) {
  * again (POST /games/unmount) — one title at a time, a few seconds each.
  *
  * Careful by design: it runs only when ShadowMountPlus offers both calls, no game is up, and none of this app's own jobs
- * is working on a drive; the first refusal of ShadowMountPlus (it answers EBUSY while a game is active, while it scans or
- * while another mount is going on) ends the round, and the next one comes half an hour later — never a retry in a loop.
+ * is working on a drive; the first refusal of ShadowMountPlus (up to 1.7beta9 it answered EBUSY while any game was active; since 1.7beta10
+ * only for the running title's own sources — and while it scans or while another mount is going on) ends the round, and the next one comes half an hour later — never a retry in a loop.
  * Before a mount the title's id is written to a small file, removed after the release; one that is still there at the
  * start means the last run ended with the image mounted, and it is released first. */
 

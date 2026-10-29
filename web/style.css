@@ -727,8 +727,10 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .vol:last-child { border-bottom: 0; }
 .vol-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   margin-bottom: 8px; }
-.vol-head b { font-size: 14px; }
+.vol-head b { font-size: 14px; white-space: nowrap; }
 .vol-head span { color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.vol-head span { margin-left: auto; }
+.vol-head .vol-eject { padding: 4px 12px; font-size: 12px; min-height: 0; align-self: center; }
 .vol .bar { height: 9px; }
 
 /* ── Spielprofile ──────────────────────────────────────────────────── */
@@ -1111,6 +1113,11 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .p4m-state { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hairline); font-size: 12px; white-space: nowrap; }
 .p4m-state.ok { border-color: rgba(12,163,12,.5); color: #7ee07e; }
 .p4m-state.warn { border-color: rgba(250,178,25,.5); color: #fab219; }
+.p4m-skipbox { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hairline); }
+.p4m-skiphead { font-size: 14px; font-weight: 700; color: var(--ink-2); cursor: pointer; padding: 4px 0; }
+.p4m-skipbox[open] .p4m-skiphead { margin-bottom: 4px; }
+.p4m-skiprow .p4m-icon { width: 40px; height: 40px; }
+.p4m-why { color: var(--warning); }
 .p4m-set { display: grid; gap: 12px; }
 .p4m-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .p4m-pick { display: grid; gap: 2px; max-height: 260px; overflow: auto; padding: 4px 10px; border-radius: 10px; background: var(--inset); }

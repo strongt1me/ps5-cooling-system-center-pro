@@ -454,7 +454,7 @@ class PackagesPage final : public Page
             if (scan_.scanning || !scan_.ever)
                 return {note("Die Suche läuft …", "USB-Speicher, M.2 und /data/pkg werden nach .pkg-Dateien durchsucht.")};
             return {note("Keine Pakete gefunden",
-                         "Leg .pkg-Dateien auf einen USB-Speicher oder nach /data/pkg; △ → Neu suchen.")};
+                         "Leg .pkg-Dateien auf einen USB-Speicher oder nach /data/pkg; Mehr → Neu suchen.")};
         }
         // By drive, in the order the app found them.
         std::vector<std::string> drives;

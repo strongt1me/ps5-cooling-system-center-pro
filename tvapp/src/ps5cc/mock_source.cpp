@@ -85,7 +85,7 @@ constexpr MockGame kGames[] = {
     {"PPSA08455", "Iron Tide", "PS5", "01.003.001", "exfat", 55.2, 12.0},
     {"PPSA09001", "Northwind Rally", "PS5", "01.000.004", "ffpfsc", 24.3, 7.2},
     {"PPSA09330", "Quiet Orbit", "PS5", "01.000.000", "folder", 3.3, 0.0},
-    {"CUSA20220", "Brick Breakers HD", "PS4", "01.04", "fpkg", 0.7, 1.9},
+    {"CUSA20220", "Brick Breakers HD", "PS4", "01.04", "ps4mount", 0.7, 1.9},
     {"PPSA10777", "Echo Valley", "PS5", "01.001.000", "ffpkg", 15.0, 2.2},
     {"PPSA12345", "Starlight Express Tour", "PS5", "01.000.000", "exfat", 11.1, 0.7},
 };
@@ -106,7 +106,7 @@ class MockSource final : public Source
             g.format = m.format;
             const std::string format = m.format;
             const bool folder = format == "folder";
-            const bool installed = format == "fpkg";
+            const bool installed = format == "fpkg" || format == "ps4mount";
             g.path = installed ? std::string("/user/app/") + m.id
                                : std::string("/mnt/usb0/homebrew/") + m.id + (folder ? "" : "." + format);
             // The library's rules (library.c): copy a folder or an image file, convert a folder or an uncompressed
@@ -119,6 +119,14 @@ class MockSource final : public Source
             g.size_bytes = static_cast<std::uint64_t>(m.gigabytes * 1e9);
             g.played_s = static_cast<std::uint64_t>(m.hours * 3600.0);
             g.last_played = m.hours > 0.0 ? "2026-10-27T10:29:26Z" : "";
+            // Two games installed from disc: one with its disc in the drive and running, one without its disc.
+            if (g.id == "PPSA03860")
+            {
+                g.disc = "in";
+                g.dump_mounted = true;
+            }
+            if (g.id == "CUSA12100")
+                g.disc = "out";
             data_.games.push_back(g);
         }
         data_.games_loaded = true;
@@ -156,6 +164,9 @@ class MockSource final : public Source
         data_.config.tz_offset_min = 60;
         fill_backdrops();
         fill_packages();
+        fill_ps4mount();
+        fill_disc();
+        fill_volumes();
         fill_payloads();
         fill_store();
         fill_logs();
@@ -192,6 +203,17 @@ class MockSource final : public Source
             std::snprintf(text, sizeof(text), "Zieltemperatur %d °C übernommen", pending_target_);
             notice(Notice::Kind::success, text);
             pending_target_ = 0;
+            changed();
+        }
+        if (data_.usb_eject.running && clock_ >= eject_at_)
+        {
+            UsbEject &e = data_.usb_eject;
+            e.running = false;
+            e.state = "done";
+            e.message = "USB-Speicher 1 ist ausgeworfen und kann abgezogen werden.";
+            data_.volumes.erase(std::remove_if(data_.volumes.begin(), data_.volumes.end(),
+                                               [&](const Volume &v) { return v.path == e.mount; }),
+                                data_.volumes.end());
             changed();
         }
         if (!closing_.empty() && clock_ >= close_at_)
@@ -558,6 +580,221 @@ class MockSource final : public Source
         changed();
     }
 
+    // Enough of PS4Mount for the preview: switching it, adding and removing, the settings, updates and add-ons.
+    void ps4mount_post(const std::string &route, const std::string &json) override
+    {
+        Ps4Mount &m = data_.ps4mount;
+        const auto has = [&](const char *text) { return json.find(text) != std::string::npos; };
+        const auto id_in = [&]() -> Ps4Game *
+        {
+            for (Ps4Game &g : m.games)
+            {
+                if (has(("\"" + g.title_id + "\"").c_str()))
+                    return &g;
+            }
+            return nullptr;
+        };
+        std::string msg;
+        if (route == "update")
+            msg = "Das Update wird gewechselt, das Spiel wird neu hinzugefügt.";
+        else if (route == "dlc")
+            msg = "Die Zusatzinhalte sind gespeichert, das Spiel wird neu hinzugefügt.";
+        else if (has("\"enable\""))
+        {
+            m.enabled = m.running = true;
+            msg = "PS4Mount ist eingeschaltet.";
+        }
+        else if (has("\"disable\""))
+        {
+            m.enabled = m.running = false;
+            msg = "PS4Mount ist ausgeschaltet.";
+        }
+        else if (has("\"scan\""))
+            msg = "Die Suche läuft.";
+        else if (has("\"config\""))
+        {
+            m.config.dlc = has("\"dlc\":true");
+            m.config.dlc_copy = has("\"dlc_copy\":true");
+            m.config.batch = has("\"batch\":true");
+            m.config.fast_reg = has("\"fast_reg\":true");
+            msg = "Einstellungen gespeichert.";
+        }
+        else if (has("\"add\""))
+        {
+            if (Ps4Game *g = id_in())
+                g->state = "ready";
+            msg = "Das Spiel wird hinzugefügt.";
+        }
+        else if (has("\"remove\""))
+        {
+            if (Ps4Game *g = id_in())
+                g->state = "removed";
+            msg = "Die Kachel ist entfernt, die PKG bleibt auf dem USB-Laufwerk.";
+        }
+        else if (has("\"restored_forget\""))
+            msg = "Die herausgenommenen Spiele sind wieder zugelassen.";
+        else if (has("\"restore"))
+            msg = "Die Spiele werden herausgenommen, die PKGs kommen an ihren alten Platz.";
+        if (!msg.empty())
+            notice(Notice::Kind::success, "PS4Mount", msg);
+        changed();
+    }
+
+    void ps4mount_fetch(const std::string &what, const std::string &id) override
+    {
+        if (what == "log")
+        {
+            data_.ps4_log = "2026-10-29 10:12:01.120 [scan] /mnt/usb0: 3 Spiele gefunden\n"
+                            "2026-10-29 10:12:01.480 [reg] CUSA18842: Update 01.020 benutzt\n"
+                            "2026-10-29 10:12:02.010 [reg] CUSA18842: 3 Zusatzinhalte eingehängt\n"
+                            "2026-10-29 10:12:02.700 [panel] Iron Tide ist bereit\n"
+                            "2026-10-29 10:14:40.300 [remove] CUSA09911: aus der Bibliothek entfernt";
+            ++data_.ps4_log_seq;
+            changed();
+            return;
+        }
+        Ps4GameDetail d;
+        d.id = id;
+        d.loaded = true;
+        d.dlc_limit = 29;
+        Ps4Update a;
+        a.file = "replaced/patch-01.010.pkg";
+        a.version = "01.010";
+        a.name = "Update 01.010";
+        Ps4Update b;
+        b.file = "patch-01.020.pkg";
+        b.version = "01.020";
+        b.name = "Update 01.020";
+        b.active = true;
+        d.updates = {a, b};
+        const char *const names[] = {"Seefahrer-Paket", "Kapitänsuniform", "Soundtrack"};
+        for (int i = 0; i < 3; ++i)
+        {
+            Ps4Dlc x;
+            x.content_id = "EP0000-CUSA18842_00-DLC0000000000" + std::to_string(i + 1);
+            x.name = names[i];
+            x.on = i < 2;
+            x.data = i == 0;
+            d.dlcs.push_back(x);
+        }
+        d.seq = data_.ps4_detail.seq + 1;
+        data_.ps4_detail = d;
+        changed();
+    }
+
+    void usb_eject(const std::string &mount) override
+    {
+        UsbEject &e = data_.usb_eject;
+        e.running = true;
+        e.state = "running";
+        e.mount = mount;
+        e.message = "USB-Speicher 1 wird ausgeworfen …";
+        eject_at_ = clock_ + 1.5f;
+        changed();
+    }
+
+    void disc_post(const std::string &route, const std::string &json) override
+    {
+        const auto has = [&](const char *text) { return json.find(text) != std::string::npos; };
+        DiscState &d = data_.disc;
+        DumpState &m = data_.dump;
+        std::string msg;
+        if (route == "disc")
+        {
+            if (has("\"enable\""))
+                d.enabled = true;
+            else if (has("\"disable\""))
+                d.enabled = false;
+            else if (has("\"settings\""))
+                d.auto_dump = has("\"auto_dump\":true");
+            else if (has("\"dump\""))
+            {
+                d.job_state = "running";
+                d.job_name = d.name;
+                d.job_total = static_cast<double>(d.image_bytes);
+                d.job_done = d.job_total * 0.3;
+                d.job_eta_s = 240;
+                msg = "Das Abbild wird angelegt.";
+            }
+            else if (has("\"cancel\""))
+                d.job_state = "cancelled";
+        }
+        else if (route == "dump")
+        {
+            if (has("\"start\"") || has("\"dlc_only\""))
+            {
+                m.job = DumpJob{};
+                m.job.state = "running";
+                m.job.active = true;
+                m.job.verify = m.settings.verify;
+                m.job.name = "Lantern Pass";
+                m.job.title_id = "PPSA03860";
+                m.job.stage = "Dateien werden kopiert";
+                m.job.kind = has("\"dlc_only\"") ? "dlc" : "game";
+                m.job.drive = "USB-Speicher 1";
+                m.job.dest = m.settings.subdir;
+                m.job.folder = "PPSA03860_Lantern_Pass";
+                m.job.total_bytes = 18.5e9;
+                m.job.done_bytes = 6.1e9;
+                m.job.rate = 92e6;
+                m.job.eta_s = 135;
+                msg = "Der Dump hat begonnen.";
+            }
+            else if (has("\"cancel\""))
+            {
+                m.job.active = false;
+                m.job.state = "cancelled";
+            }
+            else if (has("\"queue_add\""))
+            {
+                DumpQueueItem i;
+                i.id = has("CUSA12100") ? "CUSA12100" : "PPSA03860";
+                i.name = i.id == "CUSA12100" ? "Pixel Garden" : "Lantern Pass";
+                i.state = "pending";
+                i.disc_out = i.id == "CUSA12100";
+                m.queue.items.push_back(i);
+                msg = "In die Warteschlange gelegt.";
+            }
+            else if (has("\"queue_remove\""))
+            {
+                for (std::size_t i = 0; i < m.queue.items.size(); ++i)
+                {
+                    if (has(("\"" + m.queue.items[i].id + "\"").c_str()))
+                    {
+                        m.queue.items.erase(m.queue.items.begin() + static_cast<std::ptrdiff_t>(i));
+                        break;
+                    }
+                }
+            }
+            else if (has("\"queue_clear\""))
+                m.queue.items.clear();
+            else if (has("\"queue_start\""))
+            {
+                m.queue.active = !m.queue.items.empty();
+                m.queue.current = 0;
+            }
+            else if (has("\"queue_stop\""))
+                m.queue.active = false;
+            else if (has("\"settings\""))
+            {
+                m.settings.verify = has("\"verify\":true");
+                m.settings.decrypt = has("\"decrypt\":true");
+                m.settings.fself = has("\"fself\":true");
+                m.settings.backport = has("\"backport\":true");
+            }
+            else if (has("\"queue_settings\""))
+                m.queue.replace = has("\"replace\":true");
+        }
+        else if (route == "dumps/delete" && !data_.dumps.dumps.empty())
+        {
+            data_.dumps.dumps.erase(data_.dumps.dumps.begin());
+            msg = "Der Dump ist gelöscht.";
+        }
+        if (!msg.empty())
+            notice(Notice::Kind::success, route == "disc" ? "Laufwerk" : "Dump", msg);
+        changed();
+    }
+
     void set_backdrop(const std::string &area, BackdropMode mode) override
     {
         for (BackdropSetting &b : data_.backdrops)
@@ -834,7 +1071,7 @@ class MockSource final : public Source
         }
         case Tool::erase:
         {
-            const bool installed = g->format == "fpkg";
+            const bool installed = g->format == "fpkg" || g->format == "ps4mount";
             cJSON_AddStringToObject(root, "kind", installed ? "installed" : "smp");
             cJSON_AddStringToObject(root, "path", g->path.c_str());
             cJSON_AddStringToObject(root, "format", g->format.c_str());
@@ -1016,6 +1253,155 @@ class MockSource final : public Source
             count_queue();
             changed();
         }
+    }
+
+    // PS4Mount on, three games on the USB drive: one ready with an update and add-ons, one taken out of the library,
+    // one installed on the console as well.
+    void fill_ps4mount()
+    {
+        Ps4Mount &m = data_.ps4mount;
+        m.loaded = m.enabled = m.running = true;
+        m.version = "PS4Mount 0.7.0";
+        m.config.valid = true;
+        m.config.paths = {"/", "/pkg"};
+        struct Seed
+        {
+            const char *id, *name, *version, *state;
+            double gb;
+            bool patch;
+            int dlc, dlc_total, updates;
+        };
+        static const Seed kSeeds[] = {
+            {"CUSA18842", "Iron Tide", "01.020", "ready", 22.7, true, 2, 3, 2},
+            {"CUSA09911", "Harbor Lights", "01.000", "removed", 8.4, false, 0, 0, 0},
+            {"CUSA05530", "Moorhen Racer", "01.050", "internal", 14.1, true, 0, 0, 1},
+        };
+        for (const Seed &s : kSeeds)
+        {
+            Ps4Game g;
+            g.title_id = s.id;
+            g.name = s.name;
+            g.version = s.version;
+            g.state = s.state;
+            g.mount = "/mnt/usb0";
+            g.size = static_cast<std::uint64_t>(s.gb * 1e9);
+            g.has_patch = s.patch;
+            g.dlc = s.dlc;
+            g.dlc_total = s.dlc_total;
+            g.updates = s.updates;
+            m.games.push_back(g);
+        }
+        // What the search left on the drive: a game installed on the console, a PS5 pkg, one taken out earlier.
+        struct Skip
+        {
+            const char *file, *id, *name, *why;
+        };
+        static const Skip kSkips[] = {
+            {"CUSA20417 - Lantern Bay - game.pkg", "CUSA20417", "Lantern Bay", "internal"},
+            {"UP4402-PPSA07710_00-GLASSHARBOR00000.pkg", "", "", "not_ps4"},
+            {"CUSA11208 - Copper Meadow - game.pkg", "", "", "restored"},
+        };
+        for (const Skip &s : kSkips)
+        {
+            Ps4Skipped x;
+            x.path = std::string("/mnt/usb0/") + s.file;
+            x.mount = "/mnt/usb0";
+            x.title_id = s.id;
+            x.name = s.name;
+            x.why = s.why;
+            m.skipped.push_back(x);
+        }
+    }
+
+    // The internal SSD, a USB drive that can be ejected, the M.2 drive that cannot.
+    void fill_volumes()
+    {
+        struct Seed
+        {
+            const char *label, *path;
+            double total_gb, free_gb;
+            bool eject;
+        };
+        static const Seed kSeeds[] = {
+            {"Interne SSD", "/user", 1840.0, 612.4, false},
+            {"USB-Speicher 1", "/mnt/usb0", 2000.4, 247.1, true},
+            {"M.2-Erweiterung", "/mnt/ext1", 1000.2, 388.6, false},
+        };
+        for (const Seed &s : kSeeds)
+        {
+            Volume v;
+            v.label = s.label;
+            v.path = s.path;
+            v.total_bytes = static_cast<std::uint64_t>(s.total_gb * 1e9);
+            v.free_bytes = static_cast<std::uint64_t>(s.free_gb * 1e9);
+            v.used_bytes = v.total_bytes - v.free_bytes;
+            v.ejectable = s.eject;
+            data_.volumes.push_back(v);
+        }
+        data_.volumes_loaded = true;
+        data_.usb_eject.loaded = data_.usb_eject.available = true;
+    }
+
+    // A console with a drive: a PS2-DVD in it, one image made earlier, one dump of the Disc tab on the USB drive.
+    void fill_disc()
+    {
+        DiscState &d = data_.disc;
+        d.loaded = d.has_drive = d.enabled = true;
+        d.drive = "ok";
+        d.present = d.has_title = d.dumpable = true;
+        d.type = "PS2-DVD";
+        d.serial = "SLES-50330";
+        d.name = "Harbor Racer (Europe)";
+        d.title_state = "ok";
+        d.image_bytes = static_cast<std::uint64_t>(3.9e9);
+        d.dir = "/data/PS5-Cooling-Center/disc";
+        d.redump = true;
+        d.events = {"Disc eingelegt: PS2-DVD, SLES-50330", "Laufwerk eingeschaltet"};
+        DiscImage img;
+        img.name = "Quiet Orbit (Europe).iso";
+        img.serial = "SLES-51002";
+        img.crc32 = "5A1C93E4";
+        img.size = static_cast<std::uint64_t>(4.2e9);
+        img.verified = true;
+        d.images = {img};
+
+        DumpState &m = data_.dump;
+        m.loaded = true;
+        m.settings.valid = true;
+        m.settings.target = "/mnt/usb0";
+        m.settings.subdir = "homebrew";
+        DumpTarget ssd;
+        ssd.mount = "/user";
+        ssd.label = "Interne SSD";
+        ssd.fs = "nullfs";
+        ssd.free_bytes = static_cast<std::uint64_t>(1.83e12);
+        ssd.console = true;
+        DumpTarget usb;
+        usb.mount = "/mnt/usb0";
+        usb.label = "USB-Speicher 1";
+        usb.fs = "exfatfs";
+        usb.free_bytes = static_cast<std::uint64_t>(247e9);
+        m.targets = {ssd, usb};
+        DumpQueueItem q;
+        q.id = "CUSA12100";
+        q.name = "Pixel Garden";
+        q.state = "pending";
+        q.disc_out = true;
+        m.queue.items = {q};
+
+        DumpList &l = data_.dumps;
+        l.loaded = l.ever = true;
+        DumpEntry e;
+        e.mount = "/mnt/usb0";
+        e.dir = "homebrew";
+        e.folder = "CUSA12100-app0_Pixel_Garden";
+        e.title_id = "CUSA12100";
+        e.title = "Pixel Garden";
+        e.state = "done";
+        e.kind = "game";
+        e.bytes = static_cast<std::uint64_t>(0.9e9);
+        e.decrypt = e.fself = true;
+        l.dumps = {e};
     }
 
     // Every area on the tile's own picture; Spiele has one of the user's as well (set aside).
@@ -1220,6 +1606,7 @@ class MockSource final : public Source
     float target_at_ = 0.0f;
     std::string closing_;
     float close_at_ = 0.0f;
+    float eject_at_ = 0.0f;
     std::int64_t klog_n_ = 51400;
     std::uint64_t plan_ticket_ = 0;
     Tool plan_tool_ = Tool::copy;

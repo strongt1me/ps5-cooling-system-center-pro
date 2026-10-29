@@ -1324,6 +1324,13 @@ struct cJSON *ps5tm_klogrec_json(void);
 int  ps5tm_backdrops_area(const char *name);                       /* -1 when it is none of them */
 int  ps5tm_backdrops_path(int area, char *out, size_t n);
 struct cJSON *ps5tm_backdrops_json(void);
+
+/* usbeject.c (29.10.2026): a USB drive ejected through ShadowMountPlus (1.7beta10, storage_eject), only while none of
+   this app's jobs runs and no folder of the drive is mounted elsewhere. start: 202 started, else the HTTP status of the
+   refusal, msg says why. */
+int           ps5tm_usbeject_path_ok(const char *mount);
+int           ps5tm_usbeject_start(const char *mount, char *msg, size_t n);
+struct cJSON *ps5tm_usbeject_json(void);
 int  ps5tm_backdrops_set_mode(int area, const char *mode);
 int  ps5tm_backdrops_take(int area, const char *part);             /* moves an uploaded JPEG into place */
 int  ps5tm_backdrops_remove(int area);
@@ -1433,21 +1440,6 @@ struct cJSON *ps5tm_dumplib_json(void);
    dlc_only | cancel | settings, ...}, which answers an HTTP status with a sentence in msg. */
 struct cJSON *ps5tm_dump_json(const char *title_id);
 int  ps5tm_dump_action(const struct cJSON *body, char *msg, size_t msg_len);
-/* A PS4 dump found by the search, as the image builder needs it (dump_lib.c): the dump's folder and the update's folder beside it. The
-   three strings of the list entry name the dump — the browser never names a path. Returns 200, else an HTTP status with a sentence in err. */
-typedef struct {
-  char base[512];                     /* <CUSA>-app0 or a flat dump */
-  char patch[512];                    /* <CUSA>-patch0, "" when there is none */
-  char title_id[12];
-  char title[128];
-} ps5tm_dumpsrc_t;
-int  ps5tm_dumplib_source(const char *mount, const char *dir, const char *folder, ps5tm_dumpsrc_t *out, char *err, size_t err_len);
-/* A PS4 dump laid over its update and packed into an exFAT or ffpfsc image on a USB or M.2 drive (gameconvert.c, dump_image.c): the plan
-   (JSON, NULL with an HTTP status in *http and a sentence in err) and the start (an HTTP status; 200 started). The job is the conversion's. */
-struct cJSON *ps5tm_gameconvert_dump_plan(const char *mount, const char *dir, const char *folder, char *err, size_t err_len, int *http);
-int  ps5tm_gameconvert_dump_start(const char *mount, const char *dir, const char *folder, const char *op, const char *target,
-                                  char *err, size_t err_len);
-/* The same for a finished PS5 dump (gameconvert.c, 26.10.2026): no update to lay over it, no param.sfo to rebuild. */
 /* The folder that holds a dump of the list in the Disc tab (dest) and its state, named by the list entry's three fields. 200, else an HTTP status. */
 int  ps5tm_dumplib_locate(const char *mount, const char *dir, const char *folder, char *dest, size_t dest_len, char *state,
                           size_t state_len, char *err, size_t err_len);

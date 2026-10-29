@@ -5,9 +5,10 @@
 
 /* The app's two tiles (tools/make_starter.sh): the full-screen app (tvapp/) and the browser tile (starter/browser/). Each is a
  * title of its own while it runs. Up to 1.74.0 they were PPSA86921/PPSA86922, and ShadowMountPlus took a PPSA title in front for
- * a running game: it refused every unmount, delete and move while the tile was open ("game_active", console test 28.10.2026,
+ * a running game: up to 1.7beta9 it refused every unmount, delete and move while the tile was open ("game_active", console test 28.10.2026,
  * sm_game_lifecycle.c treats only PPSA/CUSA as ordinary games). FAKE ids are accepted by every ShadowMountPlus version (1.7beta2
- * allowed PPSA, CUSA and FAKE) and never block it. The old ids are still recognised in case an old tile is left installed. */
+ * allowed PPSA, CUSA and FAKE) and never block it. Since 1.7beta10 a running game locks only its own title, its
+ * sources, image chain, fakelib and backport sources, also while it is in front. The old ids are still recognised in case an old tile is left installed. */
 #define PS5TM_TV_TITLE_ID      "FAKE86921"
 #define PS5TM_BROWSER_TITLE_ID "FAKE86922"
 

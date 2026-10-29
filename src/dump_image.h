@@ -27,8 +27,6 @@ int dimg_write_overlay(const char *base, const char *patch, const char *overlay_
 /* Removes the files dimg_write_overlay made, and the folders if they are empty by then. */
 void dimg_remove_overlay(const char *overlay_dir);
 
-/* "<Title> [<CUSA12345>]" as a file name stem: characters a drive refuses are left out. */
-void dimg_stem(const char *title, const char *title_id, char *out, size_t out_len);
 
 /* ---- the parts, for tests ---- */
 

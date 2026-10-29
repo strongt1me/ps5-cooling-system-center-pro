@@ -252,6 +252,50 @@ static void touch(const char *path) {
         fclose(f);
 }
 
+static void sfo_set(sfo_t *s, const char *key, const char *val) {
+    sfo_item_t *it = &s->items[s->count++];
+    snprintf(it->key, sizeof(it->key), "%s", key);
+    snprintf(it->sval, sizeof(it->sval), "%s", val);
+}
+
+/* A well formed update param.sfo; damaged ones differ in one field (PS4Mount 0.7.1). */
+static void good_sfo(sfo_t *s) {
+    memset(s, 0, sizeof(*s));
+    sfo_set(s, "TITLE_ID", "CUSA00810");
+    sfo_set(s, "CONTENT_ID", "UP9000-CUSA00810_00-LBP3GAME00000001");
+    sfo_set(s, "APP_VER", "01.28");
+    sfo_set(s, "VERSION", "01.00");
+    sfo_set(s, "TITLE", "LittleBigPlanet\xe2\x84\xa2" "3 (LATAM)");
+    sfo_set(s, "SERVICE_ID_ADDCONT_ADD_1", "UP9000-CUSA00473_00");
+    sfo_set(s, "SERVICE_ID_ADDCONT_ADD_2", "");
+}
+
+static void test_sfo_check(void) {
+    printf("param.sfo check\n");
+    sfo_t s;
+    char why[64] = "";
+    good_sfo(&s);
+    CHECK(p4m_sfo_check(&s, why, sizeof(why)) == 0);
+    /* a real damaged update: line breaks in the unused add-on service IDs */
+    sfo_set(&s, "SERVICE_ID_ADDCONT_ADD_4", "\r\n  ");
+    CHECK(p4m_sfo_check(&s, why, sizeof(why)) == -1 && !strcmp(why, "SERVICE_ID_ADDCONT_ADD_4 is malformed"));
+    good_sfo(&s);
+    sfo_set(&s, "SERVICE_ID_ADDCONT_ADD_8", "UP9000-CUSA0047_00");
+    CHECK(p4m_sfo_check(&s, why, sizeof(why)) == -1 && !strcmp(why, "SERVICE_ID_ADDCONT_ADD_8 is malformed"));
+    good_sfo(&s);
+    snprintf(s.items[1].sval, sizeof(s.items[1].sval), "UP9000-CUSA00810_00-LBP3GAME0000001\n");
+    CHECK(p4m_sfo_check(&s, why, sizeof(why)) == -1 && !strcmp(why, "CONTENT_ID is malformed"));
+    good_sfo(&s);
+    snprintf(s.items[0].sval, sizeof(s.items[0].sval), "CUSA0081");
+    CHECK(p4m_sfo_check(&s, why, sizeof(why)) == -1 && !strcmp(why, "TITLE_ID is malformed"));
+    good_sfo(&s);
+    snprintf(s.items[2].sval, sizeof(s.items[2].sval), "1.28");
+    CHECK(p4m_sfo_check(&s, why, sizeof(why)) == -1 && !strcmp(why, "APP_VER is malformed"));
+    good_sfo(&s);
+    s.items[0].key[0] = 'X'; /* no TITLE_ID */
+    CHECK(p4m_sfo_check(&s, why, sizeof(why)) == -1 && !strcmp(why, "TITLE_ID is missing"));
+}
+
 static void test_origin(void) {
     printf("origin records and restored list\n");
     char root[] = "/tmp/ps4mount-test-XXXXXX", game[128], list[128], out[256], p[256];
@@ -314,6 +358,7 @@ int main(void) {
     test_ac_pdb();
     test_license();
     test_sfo();
+    test_sfo_check();
     test_origin();
     printf("%d checks, %d failed\n", g_checks, g_failed);
     return g_failed ? 1 : 0;

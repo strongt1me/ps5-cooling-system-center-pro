@@ -532,62 +532,6 @@ ps5tm_dumplib_json(void) {
   return root;
 }
 
-/* The folders of a PS4 dump for the image builder. The list entry is named by the three fields the page got from the list; it must
-   still be in the list (the page cannot name a path), be a finished dump of a PS4 game, and its other half — the update beside the
-   game, or the game under the update — is looked for on the same drive. */
-int
-ps5tm_dumplib_source(const char *mount, const char *dir, const char *folder, ps5tm_dumpsrc_t *out, char *err, size_t err_len) {
-  memset(out, 0, sizeof(*out));
-  if(!mount || !dir || !folder || !mount[0] || !folder[0]) { snprintf(err, err_len, "Dieser Dump ist nicht angegeben."); return 400; }
-  dump_t base_e, patch_e, sel;
-  memset(&base_e, 0, sizeof(base_e));
-  memset(&patch_e, 0, sizeof(patch_e));
-  memset(&sel, 0, sizeof(sel));
-  int have_base = 0, have_patch = 0, found = 0;
-  pthread_mutex_lock(&g_lock);
-  for(unsigned i = 0; i < g_n; i++) {
-    const dump_t *d = &g_list[i];
-    if(!strcmp(d->mount, mount) && !strcmp(d->dir, dir) && !strcmp(d->folder, folder)) { sel = *d; found = 1; break; }
-  }
-  if(found) {
-    for(unsigned i = 0; i < g_n; i++) {
-      const dump_t *d = &g_list[i];
-      if(d->kind == 2 || strcmp(d->title_id, sel.title_id) || strcmp(d->mount, sel.mount)) continue;
-      if(d->state[0] && strcmp(d->state, "done")) continue;                           /* only finished dumps */
-      int same_dir = !strcmp(d->dir, sel.dir);
-      if(d->kind == 0 && (!have_base || (same_dir && strcmp(base_e.dir, sel.dir)))) { base_e = *d; have_base = 1; }
-      if(d->kind == 1 && (!have_patch || (same_dir && strcmp(patch_e.dir, sel.dir)))) { patch_e = *d; have_patch = 1; }
-    }
-  }
-  pthread_mutex_unlock(&g_lock);
-  if(!found) { snprintf(err, err_len, "Diesen Dump kennt die Suche nicht (mehr). Bitte in der Liste der Dumps im Disc-Reiter auf „Aktualisieren“ drücken."); return 404; }
-  if(sel.kind == 2) { snprintf(err, err_len, "Ein DLC-Ordner lässt sich nicht für sich als Abbild bauen."); return 400; }
-  if(strncmp(sel.title_id, "CUSA", 4)) { snprintf(err, err_len, "Das ist kein PS4-Dump. PS5-Dumps lassen sich mit ShadowMountPlus direkt aus dem Ordner starten."); return 400; }
-  if(sel.state[0] && strcmp(sel.state, "done")) { snprintf(err, err_len, "Dieser Dump ist nicht fertig."); return 409; }
-  if(!have_base) { snprintf(err, err_len, "Zu diesem Update fehlt der Dump des Spiels selbst."); return 409; }
-
-  ps5tm_pkgdrive_t *dr = calloc(PS5TM_MAX_VOLUMES, sizeof(*dr));
-  if(!dr) { snprintf(err, err_len, "Kein Speicher."); return 500; }
-  unsigned nd = ps5tm_pkg_drives(dr, PS5TM_MAX_VOLUMES);
-  const char *root = NULL;
-  for(unsigned i = 0; i < nd; i++) if(!strcmp(dr[i].mount, sel.mount)) { root = dr[i].base; break; }
-  if(!root) { free(dr); snprintf(err, err_len, "Das Laufwerk des Dumps ist nicht mehr da."); return 409; }
-  int bad = 0;
-  const dump_t *parts[2] = { &base_e, have_patch ? &patch_e : NULL };
-  char *dst[2] = { out->base, out->patch };
-  for(int k = 0; k < 2 && !bad; k++) {
-    if(!parts[k]) continue;
-    int n = parts[k]->dir[0] ? snprintf(dst[k], 512, "%s/%s/%s", root, parts[k]->dir, parts[k]->folder)
-                             : snprintf(dst[k], 512, "%s/%s", root, parts[k]->folder);
-    if(n < 0 || n >= 512) bad = 1;
-  }
-  free(dr);
-  if(bad) { snprintf(err, err_len, "Der Pfad des Dumps ist zu lang."); return 400; }
-  snprintf(out->title_id, sizeof(out->title_id), "%s", sel.title_id);
-  snprintf(out->title, sizeof(out->title), "%s", base_e.title[0] ? base_e.title : sel.title);
-  return 200;
-}
-
 /* The folder that holds a dump of the list (dest, "<drive>[/dir]") and its state; the three strings are those of a list entry. */
 int
 ps5tm_dumplib_locate(const char *mount, const char *dir, const char *folder, char *dest, size_t dest_len, char *state,

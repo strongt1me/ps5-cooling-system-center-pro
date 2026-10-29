@@ -85,10 +85,13 @@ enum View
     kSettings,
     kGames,
     kPackages,
+    kPs4,
+    kDisc,
     kJobs,
     kPayloads,
     kLogs,
-    kPlaceholder, // Dateien, System, Profil until their pages exist
+    kStorage,     // System → Speicher, the first part of the System area (29.10.2026)
+    kPlaceholder, // Dateien, Profil until their pages exist
 };
 
 // The pages that live in src/ps5cc/*_page.cpp.
@@ -98,7 +101,10 @@ enum PageIndex
     kPagePayloads = 1,
     kPageLogs = 2,
     kPagePackages = 3,
-    kPageCount = 4,
+    kPagePs4 = 4,
+    kPageDisc = 5,
+    kPageStorage = 6,
+    kPageCount = 7,
 };
 
 // The sidebar's icons, drawn with the kit's shapes (no artwork files): one per area.
@@ -229,8 +235,11 @@ const char *format_label(const std::string &format)
         return "ffpfs";
     if (format == "ffpfsc")
         return "ffpfsc";
-    if (format == "fpkg")
+    if (format == "fpkg" || format == "pkg")
         return "Installiert";
+    // installed as far as the system knows, but played from the USB drive by PS4Mount (http_source: "ps4mount")
+    if (format == "ps4mount")
+        return "PS4Mount (USB)";
     return format.c_str();
 }
 
@@ -333,12 +342,12 @@ class Ps5cc final : public app::Concept
         ps5cc::style_subtabs(cooling_tabs_, theme_, 2);
         cooling_tabs_.set_tabs({{"Übersicht"}, {"Einstellungen"}});
         cooling_tabs_.set_active(0, true);
-        ps5cc::style_subtabs(games_tabs_, theme_, 3);
-        games_tabs_.set_tabs({{"Bibliothek"}, {"Pakete"}, {"Aufträge"}});
+        set_game_tabs(false);
         games_tabs_.set_active(0, true);
 
         pages_ = {ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
-                  ps5cc::make_packages_page()};
+                  ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
+                  ps5cc::make_storage_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -708,6 +717,8 @@ class Ps5cc final : public app::Concept
             {1.2f, 0, Direction::none, "auftrag-laeuft"},
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
             {0.5f, action_bit(Action::west)},
             {0.3f, 0, Direction::down},
             {0.2f, 0, Direction::down},
@@ -741,6 +752,8 @@ class Ps5cc final : public app::Concept
             {1.2f, 0, Direction::none, "loeschen-gestartet"},
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
             // A PS4 title (Two Point Hospital, a folder): converting lists only USB and M.2.
             {0.4f, 0, Direction::down},
             {0.15f, 0, Direction::down},
@@ -764,6 +777,44 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "paket-warteschlange"},
             {0.3f, action_bit(Action::north)},
             {0.8f, 0, Direction::none, "pakete-menue"},
+            {0.3f, action_bit(Action::back)},
+            // Spiele → PS4 von USB: the list, □ on a game, its add-ons, △ and the settings.
+            {0.5f, action_bit(Action::jump_next)},
+            {1.0f, 0, Direction::none, "ps4-usb"},
+            {0.3f, action_bit(Action::west)},
+            {0.7f, 0, Direction::none, "ps4-aktionen"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "ps4-zusatzinhalte"},
+            {0.3f, action_bit(Action::back)},
+            {0.4f, action_bit(Action::north)},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "ps4-einstellungen"},
+            {0.3f, action_bit(Action::back)},
+            // past the three games: the folded list of pkgs the search left on the drive, opened with ✕, the first one
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "ps4-zugeklappt"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.3f, 0, Direction::down},
+            {0.9f, 0, Direction::none, "ps4-uebersprungen"},
+            // Spiele → Disc (the preview has a drive): the list, a running disc game dumped with ✕, △ and the settings.
+            {0.5f, action_bit(Action::jump_next)},
+            {1.0f, 0, Direction::none, "disc"},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "disc-dump"},
+            {0.4f, action_bit(Action::north)},
+            {0.7f, 0, Direction::none, "disc-menue"},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "disc-einstellungen"},
             {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "auftraege"},
@@ -795,6 +846,10 @@ class Ps5cc final : public app::Concept
             {1.2f, 0, Direction::none, "payload-store"},
             {0.5f, action_bit(Action::page_next)},
             {0.9f, 0, Direction::none, "system"},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.6f, 0, Direction::none, "speicher-auswerfen"},
+            {2.0f, 0, Direction::none, "speicher-ausgeworfen"},
             {0.5f, action_bit(Action::page_next)},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "protokoll"},
@@ -824,8 +879,51 @@ class Ps5cc final : public app::Concept
   private:
     // ---------------------------------------------------------------- data
 
+    // Spiele's sub-tabs: Disc only on a console with a drive (as the web app, 29.10.2026). The view shown stays when
+    // the tab comes or goes; was it Disc itself, the library takes its place.
+    void set_game_tabs(bool disc)
+    {
+        const View shown = game_views_.empty() ? kGames : view_of_game_tab();
+        game_views_ = {kGames, kPackages, kPs4};
+        std::vector<ui::TabItem> tabs = {{"Bibliothek"}, {"Pakete"}, {"PS4 von USB"}};
+        if (disc)
+        {
+            game_views_.push_back(kDisc);
+            tabs.push_back({"Disc"});
+        }
+        game_views_.push_back(kJobs);
+        tabs.push_back({"Aufträge"});
+        disc_tab_ = disc;
+        ps5cc::style_subtabs(games_tabs_, theme_, static_cast<int>(tabs.size()));
+        games_tabs_.set_tabs(tabs);
+        games_tabs_.set_active(game_tab_of(shown), true);
+    }
+
+    View view_of_game_tab() const
+    {
+        return game_views_[static_cast<std::size_t>(
+            std::clamp(games_tabs_.active(), 0, static_cast<int>(game_views_.size()) - 1))];
+    }
+
+    int game_tab_of(View v) const
+    {
+        for (std::size_t i = 0; i < game_views_.size(); ++i)
+        {
+            if (game_views_[i] == v)
+                return static_cast<int>(i);
+        }
+        return 0;
+    }
+
     void absorb()
     {
+        if (data_.disc.loaded && data_.disc.has_drive != disc_tab_)
+        {
+            const bool here = nav_.current() == kAreaGames;
+            set_game_tabs(data_.disc.has_drive);
+            if (here)
+                switched();
+        }
         const ps5cc::Status &s = data_.status;
         if (s.valid && s.fan_pct >= 0.0f)
             gauge_.set_value(std::clamp(s.fan_pct / 100.0f, 0.0f, 1.0f), !gauge_started_);
@@ -852,11 +950,14 @@ class Ps5cc final : public app::Concept
         case kAreaCooling:
             return cooling_tabs_.active() == 0 ? kCooling : kSettings;
         case kAreaGames:
-            return games_tabs_.active() == 0 ? kGames : games_tabs_.active() == 1 ? kPackages : kJobs;
+            return game_views_[static_cast<std::size_t>(
+                std::clamp(games_tabs_.active(), 0, static_cast<int>(game_views_.size()) - 1))];
         case kAreaPayloads:
             return kPayloads;
         case kAreaLogs:
             return kLogs;
+        case kAreaSystem:
+            return kStorage;
         default:
             return kPlaceholder;
         }
@@ -884,6 +985,12 @@ class Ps5cc final : public app::Concept
             return pages_[kPageLogs].get();
         case kPackages:
             return pages_[kPagePackages].get();
+        case kPs4:
+            return pages_[kPagePs4].get();
+        case kDisc:
+            return pages_[kPageDisc].get();
+        case kStorage:
+            return pages_[kPageStorage].get();
         default:
             return nullptr;
         }
@@ -1284,6 +1391,9 @@ class Ps5cc final : public app::Concept
                               : v == kPayloads ? ps5cc::Watch::payloads
                               : v == kLogs     ? ps5cc::Watch::logs
                               : v == kPackages ? ps5cc::Watch::packages
+                              : v == kPs4      ? ps5cc::Watch::ps4mount
+                              : v == kDisc     ? ps5cc::Watch::disc
+                              : v == kStorage  ? ps5cc::Watch::storage
                                                : ps5cc::Watch::none);
         if (ps5cc::Page *page = current_page())
             page->enter();
@@ -1424,7 +1534,7 @@ class Ps5cc final : public app::Concept
                          n.body + (here ? "" : " · Fortschritt unter Spiele → Aufträge"));
             if (here && n.job != JobKind::count)
             {
-                games_tabs_.set_active(2);
+                games_tabs_.set_active(game_tab_of(kJobs));
                 job_focus_ = static_cast<int>(n.job);
                 feedback.play(audio::Cue::tab);
                 switched();
@@ -1808,6 +1918,8 @@ class Ps5cc final : public app::Concept
     tween::Spring nav_veil_;
     ui::TabBar cooling_tabs_;
     ui::TabBar games_tabs_;
+    std::vector<View> game_views_; // what each of Spiele's sub-tabs shows
+    bool disc_tab_ = false;
     float placeholder_age_ = 0.0f;
     ui::ProgressRing gauge_;
     bool gauge_started_ = false;

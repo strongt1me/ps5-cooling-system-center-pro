@@ -40,6 +40,10 @@ class HttpSource final : public Source
     void store_action(const std::string &action, const std::string &id) override;
     void set_backdrop(const std::string &area, BackdropMode mode) override;
     void package_action(const std::string &action, const std::string &id) override;
+    void ps4mount_post(const std::string &route, const std::string &json) override;
+    void ps4mount_fetch(const std::string &what, const std::string &id) override;
+    void disc_post(const std::string &route, const std::string &json) override;
+    void usb_eject(const std::string &mount) override;
     void quit_app() override;
     std::uint64_t request_plan(Tool tool, const std::string &id) override;
     void start_tool(Tool tool, const std::string &id, const std::string &body) override;
@@ -69,6 +73,10 @@ class HttpSource final : public Source
             store,
             backdrop,
             package,
+            ps4mount,
+            ps4mount_fetch,
+            disc,
+            eject,
         } kind;
         int value = 0;
         std::string id;
@@ -107,6 +115,13 @@ class HttpSource final : public Source
     void poll_packages(bool scan);
     void poll_package_install();
     void poll_package_queue();
+    void poll_ps4mount();
+    void poll_storage();
+    void fetch_ps4_detail(const std::string &id);
+    void fetch_ps4_log();
+    void poll_disc();
+    void poll_dump();
+    void poll_dumps(bool scan);
     void fetch_backdrop();
     std::string game_name(const std::string &id);
 

@@ -62,6 +62,9 @@ struct Game
     bool can_move = false;
     bool can_unpack = false;
     bool ampr_emu = false; // mods.ampr_emu: the conversion builds the AMPR index first by default
+    std::string disc;          // installed from disc: "in" (the disc is in the drive) or "out"; "" otherwise
+    bool dump_mounted = false; // the game runs (mounted), so it can be dumped
+    std::string dump;          // a dump of it lies on a drive: "done", "unfinished", ""
 };
 
 enum class JobKind : std::uint8_t
@@ -287,6 +290,260 @@ struct PackageQueue
     std::vector<PackageQueueItem> items;
 };
 
+// One game of PS4Mount (GET /api/v1/ps4mount).
+struct Ps4Game
+{
+    std::string title_id;
+    std::string name;
+    std::string version;
+    std::string state; // ready, running, pending, removed, internal, duplicate, addons
+    std::string mount;
+    std::string update_issue;
+    bool has_patch = false;
+    std::uint64_t size = 0;
+    int dlc = 0;       // add-ons in use
+    int dlc_total = 0; // add-ons found
+    int updates = 0;   // updates found
+};
+
+// The texture key of a PS4Mount game's picture in covers().
+inline std::string ps4_key(const std::string &title_id)
+{
+    return "p4m:" + title_id;
+}
+
+struct Ps4MountConfig
+{
+    bool valid = false; // a busy PS4Mount answers without its settings: never save defaults over them
+    bool batch = true;
+    bool dlc = true;
+    bool dlc_copy = false;
+    bool fast_reg = false;
+    int batch_size = 5;
+    int restore_batch = 5;
+    int max_restore_batch = 10;
+    std::vector<std::string> paths;
+};
+
+// A drive of the console (GET /api/v1/system, "volumes"); USB drives can be ejected (29.10.2026).
+struct Volume
+{
+    std::string label;
+    std::string path;
+    std::uint64_t total_bytes = 0;
+    std::uint64_t used_bytes = 0;
+    std::uint64_t free_bytes = 0;
+    bool ejectable = false;
+};
+
+// The last eject through ShadowMountPlus (GET /api/v1/storage/eject): only while no job of the app runs.
+struct UsbEject
+{
+    bool loaded = false;
+    bool available = false; // ShadowMountPlus 1.7beta10 or newer runs
+    bool running = false;
+    std::string state;      // "" never, running, done, failed
+    std::string mount;
+    std::string message;
+};
+
+// A pkg on a drive that the search leaves where it is, and why ("skipped" in /api/v1/ps4mount, 29.10.2026).
+struct Ps4Skipped
+{
+    std::string path;
+    std::string mount;    // "/mnt/usb0"
+    std::string title_id; // empty when the header could not be read
+    std::string name;
+    std::string why; // internal, restored, not_ps4, not_fake, dlc_foreign, dlc_off, duplicate, second_game
+};
+
+struct Ps4Mount
+{
+    bool loaded = false;
+    bool enabled = false;
+    bool running = false;
+    bool busy = false;
+    std::string standalone; // why it waits: the stand-alone ps4mount.elf runs
+    std::string version;
+    Ps4MountConfig config;
+    std::vector<Ps4Game> games;
+    std::vector<Ps4Skipped> skipped;
+};
+
+struct Ps4Update
+{
+    std::string file;
+    std::string version;
+    std::string name;
+    bool active = false;
+};
+
+struct Ps4Dlc
+{
+    std::string content_id;
+    std::string name;
+    bool on = false;
+    bool data = false; // with data, or only an unlock
+    std::string copy;  // "", missing, installing, installed, store, problem
+    std::string reason;
+};
+
+// GET /api/v1/ps4mount/game?id=… : what one game can choose.
+struct Ps4GameDetail
+{
+    std::string id;
+    std::uint64_t seq = 0; // new with every answer, so a dialog never takes an older one for its own
+    bool loaded = false;
+    std::string error;
+    int dlc_limit = 29;
+    std::vector<Ps4Update> updates;
+    std::vector<Ps4Dlc> dlcs;
+};
+
+// The drive and its images (GET /api/v1/disc, disc.c).
+struct DiscImage
+{
+    std::string name;
+    std::string serial;
+    std::string crc32;
+    std::uint64_t size = 0;
+    bool verified = false;
+};
+
+struct DiscState
+{
+    bool loaded = false;
+    bool has_drive = true; // false: the console has no drive, the Disc tab is not shown
+    bool enabled = false;
+    bool auto_dump = false;
+    std::string drive; // ok, none, unknown
+    bool present = false;
+    bool has_title = false;
+    bool dumpable = false;
+    std::string type; // "PS2-DVD", "PS5-Disc", ...
+    std::string serial;
+    std::string name;
+    std::string title_state; // ok, generic, wait, none
+    std::uint64_t image_bytes = 0;
+    // the image being made
+    std::string job_state = "idle"; // idle, running, verifying, done, failed, cancelled
+    std::string job_name;
+    std::string job_error;
+    std::string job_note;
+    double job_done = 0.0;
+    double job_total = 0.0;
+    int job_eta_s = 0;
+    std::vector<std::string> events;
+    std::vector<DiscImage> images;
+    std::string dir;
+    bool redump = false; // a usable Redump list lies on the console
+};
+
+struct DumpTarget
+{
+    std::string mount;
+    std::string label;
+    std::string fs;
+    std::uint64_t free_bytes = 0;
+    bool console = false;
+};
+
+// The dump settings of GET /api/v1/dump.
+struct DumpSettings
+{
+    bool valid = false;
+    std::string target;
+    std::string subdir;
+    bool folder_titles = true;
+    bool dump_dlc = true;
+    bool verify = true;
+    bool decrypt = true;
+    bool fself = true;
+    bool backport = false;
+    bool decrypt_supported = true;
+    int ps4_split = 3; // 3 separate, 1 only the game, 2 only the update, 0 in one folder
+    int ps4_backport_level = 4;
+    int ps5_backport_level = 1;
+};
+
+struct DumpQueueItem
+{
+    std::string id;
+    std::string name;
+    std::string state; // pending, waiting_disc, launching, settling, dumping, done, failed, skipped
+    std::string message;
+    bool disc_out = false; // a disc game whose disc is not in the drive
+    bool custom = false;   // settings of its own
+    bool dumped = false;   // a finished dump of it lies on a drive
+};
+
+struct DumpQueue
+{
+    bool active = false;
+    int current = -1;
+    int delay = 30;
+    int wait = 0;
+    int max = 64;
+    bool replace = true;
+    bool interrupted = false;
+    std::vector<DumpQueueItem> items;
+};
+
+struct DumpJob
+{
+    std::string state = "idle"; // idle, running, done, failed, cancelled
+    bool active = false;
+    bool verify = false;
+    std::string name;
+    std::string title_id;
+    std::string stage;
+    std::string kind; // game, dlc
+    std::string drive;
+    std::string dest;
+    std::string folder;
+    std::string error;
+    std::string note;
+    double done_bytes = 0.0;
+    double total_bytes = 0.0;
+    double checked_bytes = 0.0;
+    double rate = 0.0;
+    int eta_s = 0;
+};
+
+// GET /api/v1/dump
+struct DumpState
+{
+    bool loaded = false;
+    DumpSettings settings;
+    std::vector<DumpTarget> targets;
+    DumpQueue queue;
+    DumpJob job;
+};
+
+// One dump of GET /api/v1/dumps: only those the Disc tab made.
+struct DumpEntry
+{
+    std::string mount;
+    std::string dir;
+    std::string folder;
+    std::string title_id;
+    std::string title;
+    std::string state; // done, running, failed, aborted, ""
+    std::string kind;  // game, dlc, patch
+    std::uint64_t bytes = 0;
+    bool decrypt = false;
+    bool fself = false;
+    bool backport = false;
+};
+
+struct DumpList
+{
+    bool loaded = false;
+    bool scanning = false;
+    bool ever = false;
+    std::vector<DumpEntry> dumps;
+};
+
 // GET /api/v1/logs/tail
 struct LogEntry
 {
@@ -313,6 +570,9 @@ enum class Watch : std::uint8_t
     payloads,
     logs,
     packages,
+    ps4mount,
+    disc,
+    storage,
 };
 
 // Something an action came back with, for the screen to show once.
@@ -362,6 +622,16 @@ struct Snapshot
     PackageScan package_scan;
     PackageInstall package_install;
     PackageQueue package_queue;
+    Ps4Mount ps4mount;
+    Ps4GameDetail ps4_detail; // the game last asked for with ps4mount_fetch("game", id)
+    std::string ps4_log;      // the end of PS4Mount's log, after ps4mount_fetch("log")
+    std::uint64_t ps4_log_seq = 0;
+    DiscState disc;
+    DumpState dump;
+    DumpList dumps;
+    std::vector<Volume> volumes;
+    bool volumes_loaded = false;
+    UsbEject usb_eject;
     std::vector<BackdropSetting> backdrops; // GET /api/v1/backdrops, in the sidebar's order
     bool backdrops_loaded = false;
     std::uint64_t serial = 0;   // grows whenever anything above changes
@@ -412,6 +682,16 @@ class Source
     // The Pakete page: "scan", "install" (id), "install_cancel", "queue_add" / "queue_remove" (id), "queue_start",
     // "queue_pause", "queue_retry", "queue_clear" (the finished ones).
     virtual void package_action(const std::string &action, const std::string &id) = 0;
+    // PS4 von USB: a JSON body for POST /api/v1/ps4mount (route ""), /ps4mount/update ("update") or /ps4mount/dlc
+    // ("dlc"); the answer's message comes back as a notice.
+    virtual void ps4mount_post(const std::string &route, const std::string &json) = 0;
+    // "game" (with the title id): Snapshot::ps4_detail; "log": Snapshot::ps4_log.
+    virtual void ps4mount_fetch(const std::string &what, const std::string &id) = 0;
+    // The Disc page: a JSON body for POST /api/v1/<route>, route "disc", "dump", "dumps/scan" or "dumps/delete"; the
+    // answer's message comes back as a notice.
+    virtual void disc_post(const std::string &route, const std::string &json) = 0;
+    // A USB drive ejected through ShadowMountPlus ("/mnt/usb0"); the app refuses while one of its jobs runs.
+    virtual void usb_eject(const std::string &mount) = 0;
     // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture (uploaded in the browser).
     virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;
     // Ends the app on the console (the preview only says so).

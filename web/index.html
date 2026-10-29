@@ -566,7 +566,7 @@
                   <button type="button" class="btn ghost" id="dp-scan">Aktualisieren</button>
                 </div>
               </div>
-              <p class="muted upd-intro">Zeigt nur die Dumps, die in diesem Reiter entstanden sind, auf USB-Laufwerken, M.2-Laufwerken und im Ordner <code>homebrew</code> des Konsolenspeichers. Dumps anderer Herkunft erscheinen hier nicht. Bei einem PS4-Dump baut „Als Abbild bauen“ ein Abbild, das ShadowMountPlus einhängt.</p>
+              <p class="muted upd-intro">Zeigt nur die Dumps, die in diesem Reiter entstanden sind, auf USB-Laufwerken, M.2-Laufwerken und im Ordner <code>homebrew</code> des Konsolenspeichers. Dumps anderer Herkunft erscheinen hier nicht.</p>
               <div id="dp-list"></div>
             </article>
             <article class="card">
@@ -603,6 +603,7 @@
                 einem Neustart der Konsole muss die App laufen, damit die Spiele sichtbar bleiben.</p>
               <div class="pt-note" id="p4m-note" hidden></div>
               <div id="p4m-list"></div>
+              <div id="p4m-skip" hidden></div>
             </article>
             <article class="card">
               <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gear"/></svg></span><div class="ck-text"><h2>Einstellungen</h2><p class="sub">gelten für die Suche nach PS4-Spielen</p></div></div></div>
@@ -628,19 +629,19 @@
             </article>
             <!-- PS4Mount 0.5.0: die PKGs eines Spiels dorthin zurück, woher sie kamen (origin.txt im Spielordner auf dem Laufwerk) -->
             <article class="card">
-              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-undo"/></svg></span><div class="ck-text"><h2>PKGs zurückverschieben</h2><p class="sub">dorthin, woher sie kamen</p></div></div></div>
-              <p class="muted p4m-intro">Verschiebt die PKGs eines Spiels (Spiel, Update und alle Zusatzinhalte) mit ihren ursprünglichen
-                Namen dorthin zurück, woher sie kamen, und nimmt das Spiel aus der Bibliothek. Keine PKG wird gelöscht. Ein laufendes
-                Spiel wird vorher geschlossen, auch ein PS5-Spiel. Zurückverschobene PKGs nimmt die Suche nicht wieder auf, bis Sie
-                „Zurückverschobene wieder aufnehmen“ wählen.</p>
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-undo"/></svg></span><div class="ck-text"><h2>Nicht mehr von USB spielen</h2><p class="sub">Kachel weg, PKG-Dateien zurück an ihren alten Platz</p></div></div></div>
+              <p class="muted p4m-intro">Nimmt Spiele aus „PS4 von USB“ heraus: Die Kachel verschwindet, und die PKGs (Spiel, Update
+                und alle Zusatzinhalte) kommen mit ihren ursprünglichen Namen an den Platz zurück, an dem sie vor dem Einsortieren in
+                <code>ps4/CUSAxxxxx</code> lagen. Keine PKG wird gelöscht. Ein laufendes Spiel wird vorher geschlossen, auch ein
+                PS5-Spiel. Herausgenommene Spiele nimmt die Suche nicht wieder auf, bis Sie „Herausgenommene wieder zulassen“ wählen.</p>
               <div class="p4m-set">
-                <label class="p4m-field"><span>Spiele pro Gruppe beim Zurückverschieben (1 bis 10)</span>
+                <label class="p4m-field"><span>Spiele pro Gruppe beim Herausnehmen (1 bis 10)</span>
                   <input type="number" id="p4m-rsize" min="1" max="10" step="1"></label>
                 <div class="p4m-pick" id="p4m-pick"></div>
                 <div class="cp-actions">
-                  <button type="button" class="btn ghost" id="p4m-forget">Zurückverschobene wieder aufnehmen</button>
-                  <button type="button" class="btn danger" id="p4m-restore-all">Alle Spiele zurückverschieben</button>
-                  <button type="button" class="btn primary" id="p4m-restore-sel" disabled>Ausgewählte zurückverschieben</button>
+                  <button type="button" class="btn ghost" id="p4m-forget" title="Die Suche nimmt alle Spiele, die mit „Nicht mehr von USB spielen“ herausgenommen wurden, wieder auf.">Herausgenommene wieder zulassen</button>
+                  <button type="button" class="btn danger" id="p4m-restore-all">Alle nicht mehr von USB spielen</button>
+                  <button type="button" class="btn primary" id="p4m-restore-sel" disabled>Ausgewählte nicht mehr von USB spielen</button>
                 </div>
               </div>
             </article>

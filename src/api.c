@@ -2534,6 +2534,7 @@ handle_system(int fd) {
     cJSON_AddNumberToObject(v, "total_bytes", (double)info.volumes[i].total_bytes);
     cJSON_AddNumberToObject(v, "used_bytes",  (double)info.volumes[i].used_bytes);
     cJSON_AddNumberToObject(v, "free_bytes",  (double)info.volumes[i].free_bytes);
+    if(ps5tm_usbeject_path_ok(info.volumes[i].path)) cJSON_AddBoolToObject(v, "ejectable", 1);
     cJSON_AddItemToArray(vols, v);
   }
 
@@ -4092,6 +4093,21 @@ handle_backdrop_image(int fd, const char *query) {
     ps5tm_http_send_error(fd, 404, "no_backdrop", "Für diesen Bereich gibt es kein eigenes Bild.");
 }
 
+/* {"mount":"/mnt/usb0"}: the drive ejected through ShadowMountPlus, unless a job of the app runs (usbeject.c). */
+static void
+handle_usb_eject(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *jm = body ? cJSON_GetObjectItem(body, "mount") : NULL;
+  char mount[16] = "", msg[300];
+  if(cJSON_IsString(jm)) snprintf(mount, sizeof(mount), "%s", jm->valuestring);
+  cJSON_Delete(body);
+  int rc = ps5tm_usbeject_start(mount, msg, sizeof(msg));
+  if(rc != 202) { ps5tm_http_send_error(fd, rc, rc == 400 ? "bad_mount" : "eject_refused", msg); return; }
+  cJSON *o = ps5tm_usbeject_json();
+  cJSON_AddStringToObject(o, "started", msg);
+  send_cjson(fd, 202, o);
+}
+
 /* {"area":"spiele","mode":"standard"|"custom"|"off"} or {"area":"spiele","delete":true}. */
 static void
 handle_backdrop_post(int fd, const ps5tm_request_t *req) {
@@ -5299,6 +5315,13 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
+  if(!strcmp(req->path, "/api/v1/storage/eject")) {
+    if(is_get) { send_cjson(fd, 200, ps5tm_usbeject_json()); return; }
+    if(is_post) { handle_usb_eject(fd, req); return; }
+    ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET oder POST erlaubt.");
+    return;
+  }
+
   if(!strcmp(req->path, "/api/v1/backdrops")) {
     if(is_get) { send_cjson(fd, 200, ps5tm_backdrops_json()); return; }
     if(is_post) { handle_backdrop_post(fd, req); return; }
@@ -5455,35 +5478,6 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
-  /* A PS4 dump as an image for ShadowMountPlus (gameconvert.c, dump_image.c): the plan, then the start. The job is the conversion's
-     (/api/v1/library/convert). The dump is named by the three fields of its entry in the list, never by a path. */
-  if(!strcmp(req->path, "/api/v1/dumps/image/plan") || !strcmp(req->path, "/api/v1/dumps/image")) {
-    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
-    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
-    char mount[40] = "", dir[128] = "", folder[64] = "", op[12] = "", target[40] = "";
-    const cJSON *v;
-    if(cJSON_IsObject(b)) {
-      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "mount")) && strlen(v->valuestring) < sizeof(mount)) snprintf(mount, sizeof(mount), "%s", v->valuestring);
-      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "dir")) && strlen(v->valuestring) < sizeof(dir)) snprintf(dir, sizeof(dir), "%s", v->valuestring);
-      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "folder")) && strlen(v->valuestring) < sizeof(folder)) snprintf(folder, sizeof(folder), "%s", v->valuestring);
-      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "op")) && strlen(v->valuestring) < sizeof(op)) snprintf(op, sizeof(op), "%s", v->valuestring);
-      if(cJSON_IsString(v = cJSON_GetObjectItem(b, "target")) && strlen(v->valuestring) < sizeof(target)) snprintf(target, sizeof(target), "%s", v->valuestring);
-    }
-    cJSON_Delete(b);
-    char err[640] = "";
-    if(!strcmp(req->path, "/api/v1/dumps/image/plan")) {
-      int http = 200;
-      cJSON *root = ps5tm_gameconvert_dump_plan(mount, dir, folder, err, sizeof(err), &http);
-      if(!root) { ps5tm_http_send_error(fd, http, "dump_image_refused", err); return; }
-      send_cjson(fd, 200, root);
-      return;
-    }
-    int status = ps5tm_gameconvert_dump_start(mount, dir, folder, op, target, err, sizeof(err));
-    if(status != 200) { ps5tm_http_send_error(fd, status, "dump_image_refused", err); return; }
-    send_cjson(fd, 200, ps5tm_gameconvert_status());
-    return;
-  }
-
   if(!strcmp(req->path, "/api/v1/packages")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }

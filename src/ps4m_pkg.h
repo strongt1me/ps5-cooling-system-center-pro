@@ -51,3 +51,6 @@ typedef struct {
 
 int p4m_sfo_parse(const uint8_t *data, size_t len, sfo_t *out);
 const sfo_item_t *p4m_sfo_get(const sfo_t *sfo, const char *key);
+/* Checks the ID fields the system parses (title and content IDs, versions, add-on service
+ * IDs). 0 when they are well formed; otherwise -1 with the first bad field named in why (PS4Mount 0.7.1). */
+int p4m_sfo_check(const sfo_t *sfo, char *why, size_t n);
