@@ -4752,23 +4752,6 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   }
   /* Images of the same game (dupimg.c): GET the titles with two or more sources and what is set aside; POST {path, undo}
      renames one to <name>.off or back. */
-  /* Game updates (updates.c): GET the state, POST an action; /packages the files in the folder, /versions?id= what Prospero
-     or Orbis Patches list for a title; /qr?id= a QR code of this page for that title (the phone opens it to paste a link). */
-  if(!strcmp(req->path, "/api/v1/updates")) {
-    if(is_get) { send_cjson(fd, 200, ps5tm_updates_json()); return; }
-    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
-    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
-    if(!cJSON_IsObject(b)) { cJSON_Delete(b); ps5tm_http_send_error(fd, 400, "bad_request", "Kein gültiger Auftrag."); return; }
-    char msg[400];
-    int http = ps5tm_updates_action(b, msg, sizeof(msg));
-    cJSON_Delete(b);
-    if(http != 200) { ps5tm_http_send_error(fd, http, "updates_refused", msg); return; }
-    cJSON *o = cJSON_CreateObject();
-    cJSON_AddBoolToObject(o, "ok", 1);
-    cJSON_AddStringToObject(o, "message", msg);
-    send_cjson(fd, 200, o);
-    return;
-  }
   /* The optical drive (disc.c): GET the state, POST {action, ...} */
   if(!strcmp(req->path, "/api/v1/disc")) {
     if(is_get) { send_cjson(fd, 200, ps5tm_disc_json()); return; }
@@ -4783,42 +4766,6 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     cJSON_AddBoolToObject(o, "ok", 1);
     cJSON_AddStringToObject(o, "message", msg);
     send_cjson(fd, 200, o);
-    return;
-  }
-  if(!strcmp(req->path, "/api/v1/updates/diag")) {
-    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
-    char id[16] = "", msg[200];
-    int http = 200;
-    query_param(req->query, "title", id, sizeof(id));
-    cJSON *o = ps5tm_updates_diag(id, msg, sizeof(msg), &http);
-    if(!o) { ps5tm_http_send_error(fd, http, "diag_refused", msg); return; }
-    send_cjson(fd, 200, o);
-    return;
-  }
-  if(!strcmp(req->path, "/api/v1/updates/versions")) {
-    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
-    char id[16] = "", msg[200];
-    int http = 200;
-    query_param(req->query, "title", id, sizeof(id));
-    cJSON *o = ps5tm_updates_versions(id, msg, sizeof(msg), &http);
-    if(!o) { ps5tm_http_send_error(fd, http, "versions_refused", msg); return; }
-    send_cjson(fd, 200, o);
-    return;
-  }
-  /* The area "Versionen" of one game (updates.c, PatchDL 0.3.6-0.3.8) */
-  if(!strcmp(req->path, "/api/v1/updates/fit")) {
-    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
-    char id[16] = "", msg[200];
-    int http = 200;
-    query_param(req->query, "title", id, sizeof(id));
-    cJSON *o = ps5tm_updates_fit_json(id, msg, sizeof(msg), &http);
-    if(!o) { ps5tm_http_send_error(fd, http, "fit_refused", msg); return; }
-    send_cjson(fd, 200, o);
-    return;
-  }
-  if(!strcmp(req->path, "/api/v1/updates/packages")) {
-    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
-    send_cjson(fd, 200, ps5tm_updates_packages_json());
     return;
   }
   /* The cached GitHub picture of a store payload's developer (paystore.c) */

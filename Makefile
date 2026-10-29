@@ -106,7 +106,7 @@ SRCS += src/trace.c src/plugins.c
 SRCS += src/ps4m_core.c src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_fw.c src/ps4m_origin.c src/ps4m_accopy.c
 SRCS += src/qr.c
 SRCS += src/dupimg.c
-SRCS += src/updates.c src/upd_http.c src/upd_dns.c src/upd_sony.c src/upd_patchsite.c
+SRCS += src/upd_http.c src/upd_dns.c
 SRCS += src/disc.c
 SRCS += src/paystore.c
 SRCS += src/dump_lib.c
@@ -177,7 +177,7 @@ TILE_PKG ?=
 # -lSceIpmi is what the SDK's own install_app sample links beside AppInstUtil: without that service
 # sceAppInstUtilInitialize() blocks for good.
 PKGI_HELPER_ELF := gen/pkginst_helper.elf
-PKGI_HELPER_LIBS := -lpthread -lSceNetCtl -lSceUserService -lSceSystemService -lSceIpmi -lSceAppInstUtil -lSceNet -lkernel_sys
+PKGI_HELPER_LIBS := -lpthread -lSceNetCtl -lSceUserService -lSceSystemService -lSceIpmi -lSceAppInstUtil -lSceNet
 
 # cJSON is built separately: upstream trips several of our warning flags.
 CJSON_OBJ := gen/cJSON.o

@@ -649,7 +649,7 @@ int           ps5tm_library_installed_ids(char (*ids)[12], int max);
 /* One title of the app database, for checking an installation: 1 when it is listed (ver gets the version its
    AppInfoJson names, "" when it names none), 0 when it is not, -1 when the database cannot be read. */
 int           ps5tm_library_title_info(const char *title_id, char *ver, size_t ver_len);
-/* Every PS5 (PPSA) and PS4 (CUSA) game of the app database with what the game updates need (updates.c): its version
+/* Every PS5 (PPSA) and PS4 (CUSA) game of the app database with its version
    (CONTENT_VERSION, APP_VER for PS4), content id, name and Sony's update list (VERSION_FILE_URI, PS5). How many, or -1. */
 typedef struct {
   char title_id[12];
@@ -824,12 +824,6 @@ int           ps5tm_lz4_packed_dir(const char *dir);
 struct cJSON *ps5tm_dupimg_list(void);
 int           ps5tm_dupimg_set_aside(const char *path, int undo, char *msg, size_t n);
 
-/* Game updates from Sony's servers (updates.c, after PatchDL 0.3.0): the state of every game and of the running job and the
-   packages in the folder. Direct from Sony only, no link of any kind. The actions (body {action, id, ...}: enable,
-   disable, settings, check, update_all, download, resume, install, pause, cancel, delete_pkg, download_url, reinstall).
-   ps5tm_updates_action
-   returns an HTTP status with a sentence in msg. */
-struct cJSON *ps5tm_updates_json(void);
 /* Payload store (paystore.c): payloads to download from the list of itsPLK's Payload Manager. refresh: 0 the saved list,
    1 fetch it again when it is older than three hours (and was loaded once), 2 always. */
 struct cJSON *ps5tm_paystore_json(int refresh);
@@ -838,17 +832,6 @@ int ps5tm_paystore_busy(void);
 /* The cached GitHub picture of a store payload's developer (paystore.c): 0 with the file and its type, -1 not (yet)
    cached, -2 not a valid owner name. */
 int ps5tm_paystore_avatar(const char *owner, char *path, size_t path_len, const char **ctype);
-struct cJSON *ps5tm_updates_packages_json(void);
-/* The test of one game's update path (update list, package list, first bytes of a piece, room). NULL with an HTTP status in *http. */
-struct cJSON *ps5tm_updates_diag(const char *title_id, char *msg, size_t n, int *http);
-/* The versions the history sites (prosperopatches.com / orbispatches.com) list for a game, asked for after a click. NULL with an HTTP status in *http. */
-struct cJSON *ps5tm_updates_versions(const char *title_id, char *msg, size_t n, int *http);
-/* The area "Versionen" of one game (PatchDL 0.3.6-0.3.8): installed version and base, the downloaded package and its base,
-   whether they fit, what can be done. Reads the console and the folder only. NULL with an HTTP status in *http. */
-struct cJSON *ps5tm_updates_fit_json(const char *title_id, char *msg, size_t n, int *http);
-int           ps5tm_updates_action(const struct cJSON *body, char *msg, size_t n);
-void          ps5tm_updates_boot(void);
-int           ps5tm_updates_busy(void);
 
 /* The optical drive (disc.c, after ps-disc-detect): which disc is in it, its title ID, and an ISO of a PS2 DVD or PS3 disc with
    CRC-32/MD5/SHA-1 checked against an optional /data/redump.db. GET /api/v1/disc, POST {action: enable, disable, settings
@@ -1537,10 +1520,6 @@ void ps5tm_pkgqueue_clear(int all);                                /* the finish
 /* The system's uninstall of a title (the game, its updates and add-ons; saved games stay), through a helper of its
    own. Synchronous. 0, or the system's code / a PKGI_E_ code with the reason in why. */
 int  ps5tm_pkginst_uninstall(const char *title_id, int *res_pat, int *res_addcont, char *why, size_t why_len);
-/* The game alone, for a fresh installation of its update (updates.c): add-ons and saved games stay. 0, or a code and why. */
-int  ps5tm_pkginst_uninstall_game(const char *title_id, int shellcore, char *why, size_t why_len);
-/* A PS4 game's installed patch alone (PatchDL 0.3.9's PS4 downgrade): the game stays on its base version. */
-int  ps5tm_pkginst_uninstall_patch(const char *title_id, int shellcore, char *why, size_t why_len);
 
 /* Probe thread, once a second: on a double press of the controller's
    microphone button, processor temperature and fan speed as a system

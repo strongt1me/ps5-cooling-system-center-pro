@@ -405,9 +405,8 @@ src/savebackup.c    Spielstände: sichern, prüfen, zurückspielen (rohe Kopie m
 src/ps4m_core.c    PS4Mount 0.6.1 (gasb07, GPL-3.0) in der App: PS4-Fake-PKGs auf USB erkennen, ohne Installation einbinden, zurückverschieben; ps4m_pkg.c, ps4m_build.c, ps4m_crypto.c, ps4m_fw.c, ps4m_origin.c und ps4m_keys.h gehören dazu (Quelle: third_party/ps4mount/)
 src/dupimg.c        doppelte Abbilder eines Spiels finden und beiseitelegen (`….off`), nach exFAT2AMPR 1.104 (V-10)
 src/disc.c          Das Laufwerk (nach ps-disc-detect, GPL-3.0): CAM-Durchreichgerät, Disc-Profil, Titelkennung, Abbild einer PS2-DVD/PS3-Disc mit CRC-32/MD5/SHA-1, optionale Redump-Liste (sqlite_ro.c liest ihre WITHOUT-ROWID-Tabellen)
-src/updates.c       Spiel-Updates (nach PatchDL 0.3.0, Knutwurst): Schalter, Prüfung je Spiel, Warteschlange, Download über N Verbindungen mit job.json, Prüfsummen, Installation über pkginstall (Kennung `upd-<Titel-ID>`), Aufräumen
 src/paystore.c      Payloads herunterladen: Liste des Payload Managers von itsPLK (itsplk.github.io), Download mit SHA-256-Prüfung in den Payload-Ordner, installed.json, Aktualisieren/Löschen
-src/upd_http.c      HTTP/1.1 über TCP oder TLS 1.2 (BearSSL, Vertrauensanker aus src/upd_ca.h, erzeugt mit tools/mk_upd_ta.py), Umleitungen nur nach Regel; upd_dns.c eigene DNS-Anfragen (UDP, TCP, DNS über HTTPS, gemerkte Adressen); upd_sony.c Versions- und Paketlisten, Stücke
+src/upd_http.c      HTTP/1.1 über TCP oder TLS 1.2 (BearSSL, Vertrauensanker aus src/upd_ca.h, erzeugt mit tools/mk_upd_ta.py), Umleitungen nur nach Regel; upd_dns.c eigene DNS-Anfragen (UDP, TCP, DNS über HTTPS, gemerkte Adressen)
 src/tile.c          Kachel-Installation über AppInstUtil (Ordner aus eingebetteten Dateien, Paket als Rückfall)
 src/dynsym.c        Symbolsuche in Systemmodulen
 src/sony_api_lock.c gemeinsame Sperre für empfindliche Systemaufrufe

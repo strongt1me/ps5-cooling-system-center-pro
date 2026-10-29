@@ -612,8 +612,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         {
             heading("PS4-Spiel", kWarning);
             para("Ziel ist nur ein USB- oder M.2-Laufwerk: Ein PS4-Titel aus dem Speicher der Konsole bringt sie zum "
-                 "Absturz. Kein AMPR-Index. Trophäen werden aus Abbildern nicht registriert, manche Titel bleiben im "
-                 "Ladebildschirm hängen.",
+                 "Absturz. Kein AMPR-Index. Keine Trophäen aus Abbildern, manche Titel hängen bei „Bitte warten“: "
+                 "Beides geht nur installiert (Pakete).",
                  kWarning, 5);
         }
         if (choice_.op >= 0)

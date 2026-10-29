@@ -53,16 +53,10 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
   Vorlagen unter `third_party/ps4mount/`. Der Schlüssel in `src/ps4m_keys.h` stammt aus LibOrbisPkg (maxton, LGPL-3.0). Quelltext der
   Vorlage: <https://github.com/gasb07/ps4mount>.
-- **PatchDL** 0.3.0 bis 0.3.9 (Knutwurst, GPL-3.0): Vorbild für die Spiel-Updates (`src/updates.c`, `src/upd_*.c`): die Server
-  und Adressen der offiziellen Versionslisten und Paketlisten, der Schlüssel der PS4-Versionsadresse, die Prüfung, ob ein Spiel
-  offiziell signiert ist, der DNS-Weg (UDP, TCP, DNS über HTTPS, gemerkte Adressen). Der Code ist eigener (andere TLS-Bibliothek, eigene Warteschlange);
-  übernommen sind nur diese Fakten und die öffentlichen Wurzelzertifikate (Update-Server, DNS-Anbieter), aus denen
-  `tools/mk_upd_ta.py` die Vertrauensanker in `src/upd_ca.h` erzeugt. <https://github.com/knutwurst/ps5-patchdl>.
-  Aus **0.3.5 bis 0.3.9** ist Code portiert (GPL-3.0, Herkunft in `third_party/patchdl/ORIGIN.md`): die lokale Paketliste
-  (`write_local_manifest` → `ps5tm_updates_pkg_manifest` in `src/updates.c`, Paketstücke im Server `src/pkgstream.c`), die
-  Grundversions-Prüfung (`doc_field`, `origin_from_block`, `sc_offset_from_json` in `src/updates.c`), das Nachholen der Paketliste
-  (`ensure_local_manifest`) und der Ablauf der Neuinstallation (`do_replace_install`/`replace_thread` → `fresh_install`, seit 0.3.9 mit PS4-Downgrade und
-  zwei Entfernen-Versuchen, der zweite unter ShellCores Kennung).
+- **PatchDL** (Knutwurst, GPL-3.0) – <https://github.com/knutwurst/ps5-patchdl>. Aus 0.3.0 stammen die eigene Namensauflösung
+  (`src/upd_dns.c`, aus `patchdl_dns.c`), der HTTPS-Abruf (`src/upd_http.c`) und die Stammzertifikate (`src/upd_ca.h`); der
+  Payload-Store benutzt sie. Die Spiel-Updates, für die mehr aus PatchDL portiert war, sind seit dem 29.10.2026 entfernt.
+  Einzelheiten: `third_party/patchdl/ORIGIN.md`.
 - **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0 mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
   lose lässt, für den Mitschnitt zur Profil-Erzeugung (`src/trace.c`, ein C-Nachbau von `ampr_pack_profile.py`, Gegenprobe mit
   dem Python-Werkzeug) und für die Prüfsummen-Tabelle der Spiel-Plugins; seit 1.104 (gelesen am 18.10.2026) auch für das Beiseitelegen

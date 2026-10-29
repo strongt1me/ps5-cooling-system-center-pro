@@ -1,6 +1,6 @@
 ---
 name: upstream-update
-description: Prüft täglich (oder auf Zuruf), ob die Fremdbausteine der PS5-App neuere Fassungen haben (PS4Mount, ShadowMountPlus, ampr_emu, pgo_stub, dlc_emu, PatchDL, Payload Manager, SDK, MkPFS, libdeflate, LZ4, cJSON …), liest, was neu ist, und arbeitet es in Code, Handbuch (6 Sprachen), FAQ, CHANGELOG und Hinweise ein. Zu benutzen bei „aktualisiere die App“, „gibt es Updates für ps4mount/shadowmountplus/…“, „Fremdbausteine prüfen“ und für die tägliche Prüfung.
+description: Prüft täglich (oder auf Zuruf), ob die Fremdbausteine der PS5-App neuere Fassungen haben (PS4Mount, ShadowMountPlus, ampr_emu, pgo_stub, dlc_emu, Payload Manager, SDK, MkPFS, libdeflate, LZ4, cJSON …), liest, was neu ist, und arbeitet es in Code, Handbuch (6 Sprachen), FAQ, CHANGELOG und Hinweise ein. Zu benutzen bei „aktualisiere die App“, „gibt es Updates für ps4mount/shadowmountplus/…“, „Fremdbausteine prüfen“ und für die tägliche Prüfung.
 ---
 
 # Fremdbausteine prüfen und einarbeiten
@@ -36,7 +36,6 @@ Antworten und Doku-Texte auf Deutsch, Commit-Nachrichten englisch. Arbeitsordner
 - **ps4mount (gasb07):** `src/ps4m_core.c` ist der Port von `src/main.c`; `src/ps4m_pkg|build|crypto.c` aus `pkg.c|build.c|crypto.c`. Übernommen werden Änderungen an Suche/Anmeldung/Marker/Einhängen; nicht übernommen `logts.c` (eigenes Protokoll), `web.c`, `db.c`. `VERSION`-Zeichenkette und Kopf der Datei mitziehen.
 - **ShadowMountPlus (drakmor):** Release-ZIP + Quell-ZIP liegen oft vom User in `Downloads`; sonst Quellcode des Tags per `gh`. Prüfen: README (Backport/fakelib/emulators), `docs/api.md`, `include/sm_api_protocol.h`, `src/sm_path_utils.c`, `config.ini.example`. App-Stellen: `src/smp.c`, `src/library.c` (`ps5tm_backport_dir`, `overlay_backports`), `src/amprlib.c` (`probe_backport`, `al_emus_t`), Handbuch AMPR-/Backport-Kapitel. Die ELF selbst sendet man nur auf ausdrücklichen Wunsch an die Konsole.
 - **ampr_emu / pgo_stub / dlc_emu (drakmor):** Anhänge laden, SELF-Kopf `4F 15 3D 1D` und Kennung (`[AMPR_EMU]`, `playgo_stub.dat`, `dlc_emu`) prüfen, ablegen als `<lib>.sprx-<version>-<variante>`, `tools/gen_emu_blob.py` baut sie gepackt ein. Handbuch: Versionstabelle im AMPR-/PlayGo-Kapitel.
-- **PatchDL (Knutwurst):** nur Regeln/Zahlen (`src/upd_sony.c`, `upd_http.c`, `updates.c`): Hosts, Schlüssel der PS4-Adresse, Puffer- und Blockgrößen, Prüfsummen. **Direktdownload only** — kein SC-Link, keine Prospero/Orbis-Abfrage (vom User ausdrücklich gestrichen).
 - **Payload Manager (itsPLK):** Regeln für `src/paystore.c` / `payloads.c` (Versionsvergleich, Prozessregel).
 - **MkPFS (PSBrew):** `src/conv_pfs.c`/`conv_exfat.c` bleiben formatgleich; Änderungen an Block-/Inode-Layout, Schwellen (5 %-Regel) oder Verifizierung nachziehen; Hinweise zu Kompressoren (ISA-L-Fehler #132) in die Doku.
 - **libdeflate / LZ4 / cJSON:** Dateien tauschen, Makefile-Liste unverändert; LZ4 nur mit Absprache (die APR-EMU liest dessen Format).

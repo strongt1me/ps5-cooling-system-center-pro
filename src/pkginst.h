@@ -75,15 +75,6 @@ void ps5tm_pkgstream_stats(ps5tm_pkgstream_stats_t *st);
    upload, not from a file. */
 #define PKGLIVE_PREFIX "live:"
 int  ps5tm_pkglive_find(const char *id, ps5tm_pkg_t *out);
-/* A downloaded game update (updates.c) under the id "upd-<TITLE ID>": the finished package file as one slice. */
-int  ps5tm_updates_pkg_find(const char *id, ps5tm_pkg_t *out);
-int  ps5tm_updates_pkg_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsigned *n, uint64_t *total, char *err, size_t err_len);
-/* Its local manifest (PatchDL 0.3.5): 0 with the manifest and the CRC file (malloc'd), 1 not for this package, -1 error;
-   the reason in why for both. */
-int  ps5tm_updates_pkg_manifest(const char *id, const char *pkg_name, const char *crc_name, int port,
-                                char **json, size_t *json_n, unsigned char **crc, size_t *crc_n, char *why, size_t wn);
-/* 1 while that package goes on as the whole game, after the game was uninstalled (PatchDL 0.3.6/0.3.8) */
-int  ps5tm_updates_pkg_fresh(const char *id);
 int  ps5tm_pkglive_slices(const char *id, ps5tm_pkgslice_t *out, unsigned max, unsigned *n, uint64_t *total,
                           char *err, size_t err_len);
 /* Exactly n bytes at off of the package of the session `id`; waits for the browser to send what is not there yet.

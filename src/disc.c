@@ -1427,8 +1427,34 @@ list_dumps(cJSON *arr) {
   return n;
 }
 
+/* Whether the console has a drive at all, even with the watching off (user, 29.10.2026: no Disc tab without one). Only the
+   pass-through device is looked up, the drive gets no command; asked again at most every 30 s (a Pro's drive can be
+   attached later). 1 yes, 0 no. */
+static int
+has_drive(void) {
+  static pthread_mutex_t lk = PTHREAD_MUTEX_INITIALIZER;
+  static int known = -1;
+  static uint64_t asked_ms;
+  pthread_mutex_lock(&g_lock);
+  int seen = g_drive == 1 || g_job.state == JOB_RUNNING || g_job.state == JOB_VERIFY;
+  pthread_mutex_unlock(&g_lock);
+  if(seen) return 1;
+  pthread_mutex_lock(&lk);
+  uint64_t now = ps5tm_mono_ms();
+  if(known < 0 || now - asked_ms >= 30000) {
+    pass_t p;
+    known = pass_open(&p) == 0;
+    if(known) pass_close(&p);
+    asked_ms = now;
+  }
+  int r = known;
+  pthread_mutex_unlock(&lk);
+  return r;
+}
+
 cJSON *
 ps5tm_disc_json(void) {
+  const int drive_here = has_drive();
   pthread_mutex_lock(&g_lock);
   settings_load_locked();
   cJSON *o = cJSON_CreateObject();
@@ -1436,6 +1462,7 @@ ps5tm_disc_json(void) {
   cJSON_AddBoolToObject(o, "enabled", g_enabled);
   cJSON_AddBoolToObject(o, "auto_dump", g_auto);
   cJSON_AddStringToObject(o, "drive", g_drive == 1 ? "ok" : g_drive == 0 ? "none" : "unknown");
+  cJSON_AddBoolToObject(o, "has_drive", drive_here);
   int present = g_enabled && g_drive == 1 && g_type != D_NOT_PRESENT && g_type != D_NO_PROFILE;
   cJSON_AddBoolToObject(o, "present", present);
   cJSON_AddNumberToObject(o, "profile", g_type);

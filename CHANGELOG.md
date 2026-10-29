@@ -2,6 +2,31 @@
 
 ## Unveröffentlicht
 
+### Spiele: leuchtende Linie um das laufende Spiel wieder sichtbar
+- Die grüne Linie und das Schild „läuft“ hingen daran, dass das Spiel im Vordergrund steht – im Browser der Konsole steht es nie vorn, solange die Seite offen ist. Sie erscheinen jetzt, sobald das Spiel läuft, wie „Spiel beenden“
+
+### Reiter Disc nur mit Laufwerk
+- Hat die Konsole kein Laufwerk, blendet die Spiele-Seite den Reiter „Disc“ aus. `GET /api/v1/disc` meldet dafür `has_drive`: die App sucht nur das Durchreichgerät von `cd0` (kein Befehl an ein Laufwerk), auch bei ausgeschalteter Erkennung, höchstens alle 30 s neu – eine später angesteckte Pro-Laufwerkseinheit erscheint beim nächsten Öffnen der Spiele-Seite
+
+### Dump-Warteschlange nur für Disc-Spiele
+- „Weiteres Spiel wählen“ bot jedes installierte PKG-Spiel an, und jedes Spiel ließ sich in der Liste zwischen DISC und PKG umschalten; ein Umschalten auf DISC merkte sich die App dauerhaft (`disc_titles.txt`), so trug etwa Tetris (ein installiertes PKG) die Marke „DISC“. Jetzt nimmt die Warteschlange nur Spiele, die laut Konsole von Disc installiert sind – wie die Liste „Disc-Spiele dumpen“ darüber; die Auswahl zeigt nur diese, der Schalter DISC/PKG ist weg, und was die Seite behauptet, merkt sich die App nicht mehr
+
+### Spiel-Updates entfernt
+- Die Funktion „Spiel-Updates“ (Reiter „Updates“ unter Spiele, dazu „Versionen“, Diagnose, Neuinstallation und PS4-Downgrade) ist wieder aus der App genommen (Wunsch des Users, 29.10.2026). Entfernt: `src/updates.c`, `src/upd_sony.c`, `src/upd_patchsite.c`, die Routen `/api/v1/updates*`, die Paketlisten-Installation (`upd-<Titel-ID>`) und die nur dafür gebauten Befehle des Installationshelfers (nur das Spiel / nur das Update deinstallieren, ShellCore-Kennung; Protokoll `PKGI_VERSION` 6). Ebenso der eben gebaute Unterreiter „Updates“ der Vollbild-App
+- PatchDL wird nicht mehr als Fremdbaustein verfolgt. Geblieben ist nur, was der Payload-Store braucht: die eigene Namensauflösung (`upd_dns.c`) und der HTTPS-Abruf (`upd_http.c`) mit den Stammzertifikaten; dafür bleibt der Dank an PatchDL in den Credits und in `THIRD_PARTY_NOTICES.md`
+- Internet braucht die App damit nur noch für „Payloads herunterladen“ (FAQ und README angepasst). Der Ordner `/data/PS5-Cooling-Center/updates` auf der Konsole wird nicht mehr benutzt; die App löscht ihn nicht selbst
+
+### Trophäen bei PS4-Spielen aus Abbildern: klare Auskunft statt Versuch
+- Ein Versuch vom 28.10.2026, die Trophäendateien eines PS4-Spiels aus einem Abbild selbst abzulegen, ist wieder ausgebaut: An der Konsole (Tetris Ultimate als `.ffpkg`, 29.10.2026) kam trotzdem „Trophy registration failed (0x80551618)“, obwohl der Trophäen-Ordner `/user/trophy/conf/NPWR06412_00` mit `TROPHY.TRP` vorhanden war, und das Spiel blieb bei „Bitte warten“ stehen. Das deckt sich mit den Messungen im PS5 Dump & Image Converter (22.08.2026): Die alte PS4-Trophäenkette verlangt ein echt installiertes Paket, Nachlegen von Dateien ändert nichts; dasselbe Paket installiert läuft und registriert seine Trophäen
+- Die Hinweise beim Konvertieren eines PS4-Spiels (Browser, Vollbild, Handbuch, 6 Sprachen) sagen das jetzt so und nennen den Weg: das Paket im Reiter „Pakete“ installieren
+
+### Pakete: Installieren mit einem Klick
+- „Installieren“ an einem Paket startet die Installation sofort; vorher öffnete der erste Klick einen Plan mit einem zweiten Knopf „Jetzt installieren“. Lehnt die Konsole ab, öffnet sich der Plan und zeigt, was im Weg ist
+
+### Vollbild-App: Spiele → Updates (Phase 2, Teil 1)
+- Neuer Unterreiter „Updates“ zwischen Bibliothek und Aufträge (L2/R2), wie der Reiter Updates der Browser-App: oben „Nach Updates suchen“ und „Alle aktualisieren“ (bzw. „Spiel-Updates einschalten“), darunter jedes Spiel mit Version → angebotener Version und Zustand. ✕ macht den nächsten Schritt (Laden und installieren, Fortsetzen, Installieren, Anhalten), □ bricht ab oder löscht das Paket (sofort, ohne Rückfrage), △ schaltet die Updates des Spiels an/aus. Rechts Titel-ID, Versionen, Tempo und der Fortschritt des laufenden Downloads mit Restzeit
+- Ältere Versionen („Versionen“, mit eingetipptem Spielnamen) bleiben in der Browser-App; die Karte sagt das, wenn ein geladenes Paket nur so passt
+
 ### Reiter Disc: Dump-Einstellungen aufgeräumt
 - Drei Abschnitte (Speicherort, Was wird gedumpt, Spielbar machen) und „Für Fortgeschrittene“ zugeklappt (klappt von selbst auf, wenn der Backport an ist). Je Schalter eine kurze Zeile statt eines Absatzes, mehr Abstand, Auswahllisten im Stil der App
 - „Spielbar machen“ sagt deutlich: Entschlüsseln und FSELF müssen beide an sein, sonst zeigt die Konsole den Dump nicht, ShadowMountPlus bindet ihn nicht ein und er lässt sich nicht spielen

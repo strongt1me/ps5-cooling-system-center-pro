@@ -606,15 +606,7 @@ evaluate(const char *id, eval_t *e) {
       e->http = 409;
       return;
     }
-    if(!strcmp(p->kind, "update") && ps5tm_updates_pkg_fresh(id)) {
-      /* a fresh installation (updates.c): the game was uninstalled on purpose, the update goes on as the whole game */
-      if(e->installed == 1) {
-        snprintf(e->block, sizeof(e->block), "Das Spiel ist noch installiert. Die Neuinstallation braucht es deinstalliert.");
-        e->http = 409;
-        return;
-      }
-      if(e->installed < 0) add_warn(e, "Ob das Spiel schon deinstalliert ist, ließ sich nicht feststellen.");
-    } else if(!strcmp(p->kind, "update")) {
+    if(!strcmp(p->kind, "update")) {
       if(e->installed == 0) {
         snprintf(e->block, sizeof(e->block), "Das Spiel ist nicht installiert. Ein Update braucht das installierte Spiel.");
         e->http = 409;
@@ -1175,7 +1167,7 @@ helper_start(helper_t *h, char *why, size_t why_len, int keep_log) {
    its updates and add-ons; saved games are not touched by any of these calls. Synchronous, for the delete job, which
    never runs beside an installation. 0 when the system took it; else the system's code or a PKGI_E_ one, and why. */
 static int
-uninstall_op(uint32_t op, const char *title_id, int shellcore, int *res_pat, int *res_addcont, char *why, size_t why_len) {
+uninstall_op(uint32_t op, const char *title_id, int *res_pat, int *res_addcont, char *why, size_t why_len) {
   *res_pat = *res_addcont = 0;
   why[0] = 0;
   pthread_mutex_lock(&g_lock);
@@ -1191,19 +1183,13 @@ uninstall_op(uint32_t op, const char *title_id, int shellcore, int *res_pat, int
   pkgi_response_t rsp;
   memset(&req, 0, sizeof(req));
   req.op = op;
-  req.as_shellcore = shellcore ? 1 : 0;
   snprintf(req.title_id, sizeof(req.title_id), "%s", title_id);
   rc = helper_ask(&h, &req, &rsp, PI_UNINSTALL_MS, 0);
   if(rc == 0) {
     rc = rsp.result;
     *res_pat = rsp.result_pat;
     *res_addcont = rsp.result_addcont;
-    if(op == PKGI_OP_UNINSTALL_GAME || op == PKGI_OP_UNINSTALL_PATCH)
-      PS5TM_INFO("pkg_uninstall_called", "Deinstallieren von %s (%s%s): Ergebnis 0x%08X nach %u ms.", title_id,
-                 op == PKGI_OP_UNINSTALL_PATCH ? "nur das Update" : "nur das Spiel", shellcore ? ", als ShellCore" : "",
-                 (unsigned)rc, (unsigned)rsp.native_ms);
-    else
-      PS5TM_INFO("pkg_uninstall_called", "Deinstallieren von %s: Ergebnis 0x%08X nach %u ms (Updates 0x%08X, Zusatzinhalte 0x%08X).",
+    PS5TM_INFO("pkg_uninstall_called", "Deinstallieren von %s: Ergebnis 0x%08X nach %u ms (Updates 0x%08X, Zusatzinhalte 0x%08X).",
                  title_id, (unsigned)rc, (unsigned)rsp.native_ms, (unsigned)rsp.result_pat, (unsigned)rsp.result_addcont);
     if(rc != 0) describe_native(rc, why, why_len);
   } else {
@@ -1217,22 +1203,7 @@ uninstall_op(uint32_t op, const char *title_id, int shellcore, int *res_pat, int
 
 int
 ps5tm_pkginst_uninstall(const char *title_id, int *res_pat, int *res_addcont, char *why, size_t why_len) {
-  return uninstall_op(PKGI_OP_UNINSTALL, title_id, 0, res_pat, res_addcont, why, why_len);
-}
-
-/* The game alone, for a fresh installation of its update (updates.c, PatchDL 0.3.6): add-ons and saved games stay.
-   shellcore: the call under ShellCore's authid (PatchDL 0.3.9's second try). */
-int
-ps5tm_pkginst_uninstall_game(const char *title_id, int shellcore, char *why, size_t why_len) {
-  int pat, add;
-  return uninstall_op(PKGI_OP_UNINSTALL_GAME, title_id, shellcore, &pat, &add, why, why_len);
-}
-
-/* A PS4 game's installed patch alone, before an older one goes on (updates.c, PatchDL 0.3.9): the game stays. */
-int
-ps5tm_pkginst_uninstall_patch(const char *title_id, int shellcore, char *why, size_t why_len) {
-  int pat, add;
-  return uninstall_op(PKGI_OP_UNINSTALL_PATCH, title_id, shellcore, &pat, &add, why, why_len);
+  return uninstall_op(PKGI_OP_UNINSTALL, title_id, res_pat, res_addcont, why, why_len);
 }
 
 /* ------------------------------------------------------------------ the job */
@@ -1242,7 +1213,7 @@ typedef struct {
   ps5tm_pkgslice_t slices[PI_MAX_SLICES];
   unsigned         nslices;
   uint64_t         total;
-  char             id[48];                 /* the search id: "upd-<TITLE ID>" for a game update (updates.c) */
+  char             id[48];                 /* the search id */
 } args_t;
 
 static void
@@ -1251,14 +1222,6 @@ names_for(char *pkg_name, size_t pn, char *icon_name, size_t in, uint64_t *ts) {
   unsigned seq = ++g_seq;
   snprintf(pkg_name, pn, "package-%llu-%u.pkg", (unsigned long long)*ts, seq);
   snprintf(icon_name, in, "icon-%llu-%u.png", (unsigned long long)*ts, seq);
-}
-
-/* The name of the manifest or the CRC file beside a package name: "package-1-2.pkg" -> "package-1-2.json". */
-static void
-name_beside(const char *pkg_name, const char *ext, char *out, size_t n) {
-  size_t l = strlen(pkg_name);
-  if(l > 4 && !strcmp(pkg_name + l - 4, ".pkg")) l -= 4;
-  snprintf(out, n, "%.*s%s", (int)l, pkg_name, ext);
 }
 
 static void
@@ -1306,9 +1269,6 @@ install_run(void *arg) {
   uint64_t began_ms = mono_ms();
   ps5tm_pkgstream_stats_t fin;
   memset(&fin, 0, sizeof(fin));
-  /* An official PS5 game update goes through its local manifest (PatchDL 0.3.5): the console then writes its app.json
-     as after an update of its own. The plain package stays the fallback, for one refusal of the manifest. */
-  int try_man = !strncmp(a->id, "upd-", 4), man_used = 0;
 
   for(unsigned attempt = 1; attempt <= PI_ATTEMPTS; attempt++) {
     pthread_mutex_lock(&g_lock);
@@ -1321,35 +1281,9 @@ install_run(void *arg) {
     names_for(pkg_name, sizeof(pkg_name), icon_name, sizeof(icon_name), &ts);
     ps5tm_pkgstream_cfg_t cfg = { a->slices, a->nslices, a->total, pkg_name, icon, icon_n, icon_name, PKGI_STREAM_PORT,
                                   NULL, 0, NULL, NULL, 0, NULL };
-    char man_name[96] = "", crc_name[96] = "";
-    char *man = NULL;
-    unsigned char *crc = NULL;
-    size_t man_n = 0, crc_n = 0;
-    man_used = 0;
-    if(try_man) {
-      char mwhy[200];
-      name_beside(pkg_name, ".json", man_name, sizeof(man_name));
-      name_beside(pkg_name, ".crc", crc_name, sizeof(crc_name));
-      int mr = ps5tm_updates_pkg_manifest(a->id, pkg_name, crc_name, PKGI_STREAM_PORT, &man, &man_n, &crc, &crc_n, mwhy, sizeof(mwhy));
-      if(mr == 0) {
-        cfg.manifest = man;
-        cfg.manifest_n = man_n;
-        cfg.manifest_name = man_name;
-        cfg.crc = crc;
-        cfg.crc_n = crc_n;
-        cfg.crc_name = crc ? crc_name : NULL;
-        man_used = 1;
-      } else {
-        try_man = 0;
-        if(mr < 0) PS5TM_WARN("pkg_install_manifest_skip", "Pakete: die Paketliste ließ sich nicht aufbauen (%.150s); es wird mit dem Paket selbst installiert.", mwhy);
-        else PS5TM_INFO("pkg_install_manifest_skip", "Pakete: ohne Paketliste installiert: %.150s.", mwhy);
-      }
-    }
     if(stream_up) { if(live_id) ps5tm_pkglive_kick(); ps5tm_pkgstream_stop(); stream_up = 0; }
     job_phase(J_START, attempt == 1 ? "Der Server für die Konsole wird gestartet" : "Neuer Versuch (%u von %u): der Server wird gestartet", attempt, PI_ATTEMPTS);
     int srv = ps5tm_pkgstream_start(&cfg, err, sizeof(err));
-    free(man);                                       /* the server keeps copies of its own */
-    free(crc);
     if(srv != 0) { job_fail(0, "%s", err); result = J_FAILED; goto out; }
     stream_up = 1;
 
@@ -1371,9 +1305,8 @@ install_run(void *arg) {
 
     job_phase(J_START, "Die Konsole liest das Paket");
     char uri[300], icon_url[300];
-    snprintf(uri, sizeof(uri), "http://127.0.0.1:%d" PS5TM_PKGSTREAM_PATH "%s", PKGI_STREAM_PORT, man_used ? man_name : pkg_name);
+    snprintf(uri, sizeof(uri), "http://127.0.0.1:%d" PS5TM_PKGSTREAM_PATH "%s", PKGI_STREAM_PORT, pkg_name);
     snprintf(icon_url, sizeof(icon_url), "http://127.0.0.1:%d" PS5TM_PKGSTREAM_PATH "%s", PKGI_STREAM_PORT, icon_name);
-    if(man_used) PS5TM_INFO("pkg_install_manifest", "Pakete: die Konsole bekommt die Paketliste (%u Bytes%s) statt des Pakets.", (unsigned)man_n, crc_n ? ", mit Prüfdatei" : "");
     pkgi_request_t req;
     pkgi_response_t rsp;
     memset(&req, 0, sizeof(req));
@@ -1394,15 +1327,6 @@ install_run(void *arg) {
                (unsigned)rsp.result, (unsigned)rsp.native_ms, rsp.content_id, (int)rsp.type, (int)rsp.platform);
     if(rsp.result != 0) {
       describe_native(rsp.result, why, sizeof(why));
-      if(man_used) {
-        /* the console does not take the manifest: the package itself, as before (PatchDL keeps the same order) */
-        PS5TM_WARN("pkg_install_manifest_refused", "Pakete: die Konsole lehnt die Installation über die Paketliste ab (0x%08X: %.150s); es wird mit dem Paket selbst installiert.",
-                   (unsigned)rsp.result, why);
-        try_man = 0;
-        helper_close(&h);
-        attempt--;                                   /* the fallback is no attempt of its own; it comes once */
-        continue;
-      }
       if(is_transient(rsp.result) && attempt < PI_ATTEMPTS) {
         PS5TM_WARN("pkg_install_retry", "Pakete: Versuch %u von %d: die Konsole lehnt den Aufruf ab (0x%08X), neuer Versuch.", attempt, PI_ATTEMPTS, (unsigned)rsp.result);
         job_note("%s Neuer Versuch …", why);
@@ -1668,20 +1592,6 @@ install_run(void *arg) {
        result is looked for in the app database. With nobody to ask, the database is all there is to go by, so it is
        watched for longer, the system needs its time after the last byte; and what it shows then is not taken for the
        system's word. */
-    /* through the manifest the console fetches the CRC file last: the server stays until it has (at most a minute) */
-    if(man_used) {
-      ps5tm_pkgstream_stats_t cs;
-      ps5tm_pkgstream_stats(&cs);
-      if(cs.has_crc && !cs.crc_served) {
-        job_phase(J_FINISH, "Die Konsole holt die Prüfdatei");
-        for(int i = 0; i < 120 && !cancelled() && !cs.crc_served; i++) {
-          sleep_ms_cancellable(500);
-          ps5tm_pkgstream_stats(&cs);
-        }
-        if(!cs.crc_served) PS5TM_WARN("pkg_install_crc_unfetched", "Pakete: die Konsole hat die Prüfdatei der Paketliste nicht abgeholt (eine Minute gewartet).");
-      }
-      PS5TM_INFO("pkg_install_manifest_done", "Pakete: über die Paketliste installiert%s.", cs.has_crc ? (cs.crc_served ? ", Prüfdatei abgeholt" : ", Prüfdatei nicht abgeholt") : "");
-    }
     job_phase(J_FINISH, "Das Ergebnis wird geprüft");
     const int verify_s = blind_done ? PI_BLIND_VERIFY_S : PI_VERIFY_S;
     int present = -1;

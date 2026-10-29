@@ -230,7 +230,6 @@
               <button type="button" class="gm-chip" id="gm-tab-time" role="tab" aria-selected="false">Spielzeit</button>
               <button type="button" class="gm-chip" id="gm-tab-saves" role="tab" aria-selected="false">Spielstände</button>
               <button type="button" class="gm-chip" id="gm-tab-pkg" role="tab" aria-selected="false">Pakete</button>
-              <button type="button" class="gm-chip" id="gm-tab-upd" role="tab" aria-selected="false">Updates</button>
               <button type="button" class="gm-chip" id="gm-tab-p4m" role="tab" aria-selected="false">PS4 von USB</button>
               <button type="button" class="gm-chip" id="gm-tab-disc" role="tab" aria-selected="false">Disc</button>
               <button type="button" class="gm-chip" id="gm-tab-bk" role="tab" aria-selected="false">Sicherungen</button>
@@ -455,63 +454,6 @@
           </div>
 
           <!-- PS4Mount in der App (ps4m_core.c, GPL-3.0, gasb07): PS4-Fake-PKGs vom USB-Laufwerk ohne Installation -->
-          <!-- Spiel-Updates von den offiziellen Update-Servern (updates.c, nach PatchDL 0.3.0 von Knutwurst) -->
-          <div id="gm-pane-upd" hidden>
-            <article class="card">
-              <div class="card-head">
-                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pad"/></svg></span><div class="ck-text"><h2>Spiel-Updates</h2><p class="sub" id="upd-sub">wird gelesen …</p></div></div>
-                <div class="row-gap">
-                  <label class="xswitch" for="upd-on" title="Erst wenn das eingeschaltet ist, fragt die App die Update-Server nach Updates.">
-                    <span>Einschalten</span>
-                    <span class="switch"><input type="checkbox" id="upd-on"><i></i></span>
-                  </label>
-                  <button class="btn ghost" id="upd-check" type="button">Nach Updates suchen</button>
-                  <button class="btn primary" id="upd-all" type="button">Alle aktualisieren</button>
-                </div>
-              </div>
-              <p class="muted upd-intro">Lädt das offizielle Update jedes PS5- und PS4-Spiels direkt von den offiziellen Update-Servern und installiert es.
-                Das gilt für Spiele von Disc oder aus dem PlayStation Store ebenso wie für ShadowMountPlus-Spiele und Fake-PKGs; Spiele, deren
-                Paketdatei sich nicht lesen lässt, werden nicht angeboten. Angeboten werden zuerst Updates, die auf dieser Firmware laufen. Ältere Versionen und Patches für ältere Firmware zeigt die Liste von prosperopatches.com bzw. orbispatches.com (nur nach Klick auf „Andere Versionen“); das Paket kommt dann nach dem Einfügen eines Links von den offiziellen Update-Servern. Die App erreicht die Update-Server über eigene
-                DNS-Anfragen (Cloudflare, Google, Quad9) und ändert nichts an den DNS-Einstellungen der Konsole; eine Sperre gegen
-                System-Updates bleibt also bestehen.</p>
-              <div class="pt-note" id="upd-note" hidden></div>
-            </article>
-            <div class="upd-job" id="upd-job" hidden></div>
-            <article class="card">
-              <div class="card-head">
-                <div class="gm-chips" role="group" aria-label="Auswahl">
-                  <button type="button" class="gm-chip active" data-upd-f="">Alle</button>
-                  <button type="button" class="gm-chip" data-upd-f="update">Mit Update</button>
-                  <button type="button" class="gm-chip" data-upd-f="oldfw">Ältere Firmware</button>
-                  <button type="button" class="gm-chip" data-upd-f="other">Ohne Updates</button>
-                </div>
-              </div>
-              <div id="upd-list"></div>
-            </article>
-            <article class="card">
-              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gear"/></svg></span><div class="ck-text"><h2>Einstellungen</h2><p class="sub">gelten sofort</p></div></div></div>
-              <div class="p4m-set">
-                <label class="p4m-field"><span>Standardregel für Spiele</span>
-                  <select id="upd-policy"><option value="allow">Updates erlauben</option><option value="deny">Updates verweigern</option></select></label>
-                <p class="muted upd-hint">Jedes Spiel hat in der Liste einen eigenen Schalter „Updates“, der die Regel für dieses Spiel ändert.</p>
-                <label class="p4m-field"><span>Download-Ordner</span>
-                  <select id="upd-drive"></select></label>
-                <p class="muted upd-hint" id="upd-drive-note" hidden></p>
-                <label class="p4m-field"><span>Gleichzeitige Verbindungen je Download (1 bis 16)</span>
-                  <select id="upd-conns"></select></label>
-                <label class="xswitch" for="upd-inst"><span>Nach dem Download installieren</span>
-                  <span class="switch"><input type="checkbox" id="upd-inst"><i></i></span></label>
-                <label class="xswitch" for="upd-verify"><span>Jedes Stück mit der offiziellen Prüfsumme (SHA-256) prüfen</span>
-                  <span class="switch"><input type="checkbox" id="upd-verify"><i></i></span></label>
-                <p class="muted upd-hint">Ohne Prüfung bleibt ein beschädigtes Stück unbemerkt; die Konsole prüft die Signatur erst beim Installieren.</p>
-                <label class="xswitch" for="upd-del"><span>Paket nach erfolgreicher Installation löschen</span>
-                  <span class="switch"><input type="checkbox" id="upd-del"><i></i></span></label>
-                <p class="muted upd-hint">Gelöscht wird erst, wenn das Spiel die neue Version meldet. Pakete, die in den Download-Ordnern liegen:</p>
-                <div id="upd-pkgs"></div>
-              </div>
-            </article>
-          </div>
-
           <!-- Das Laufwerk (disc.c, nach ps-disc-detect, GPL-3.0): welche Disc liegt drin, Titelkennung, Abbild einer PS2-DVD oder PS3-Disc -->
           <div id="gm-pane-disc" hidden>
             <article class="card">
@@ -2078,7 +2020,7 @@
               <span class="cr-pic cr-initials" aria-hidden="true">kw</span>
               <div class="cr-text">
                 <b>Knutwurst</b> <a class="cr-login" href="https://github.com/knutwurst" target="_blank" rel="noopener noreferrer">@knutwurst</a>
-                <p>PatchDL: Vorbild für den Reiter „Updates“, offizielle Spiel-Updates von den Update-Servern laden, prüfen und installieren. Danke!</p>
+                <p>PatchDL: Die eigene Namensauflösung und der HTTPS-Abruf der App (für den Payload-Store) stammen daraus. Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/knutwurst/ps5-patchdl" target="_blank" rel="noopener noreferrer">ps5-patchdl</a>
                 </div>

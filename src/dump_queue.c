@@ -547,10 +547,11 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
       snprintf(msg, n, "Dieses Spiel steht nicht in der Spieleliste.");
       return 404;
     }
+    /* Only games installed from a disc (user, 29.10.2026): what the console itself says (disc_info.dat, the disc in the
+       drive), never what the page claims, so that no installed PKG game is taken for one. */
     ps5tm_title_marks_t m;
     ps5tm_title_marks(id, &m);
-    const cJSON *jd = cJSON_GetObjectItem(b, "disc");
-    int disc = cJSON_IsBool(jd) ? cJSON_IsTrue(jd) : m.disc != 0;
+    if(!m.disc) { snprintf(msg, n, "Die Warteschlange ist nur für Spiele, die von Disc installiert sind."); return 409; }
     pthread_mutex_lock(&g_lock);
     if(g_n > 0 && g_item[0].state >= Q_DONE) {   /* the list of a finished run is replaced by the new one */
       g_n = 0;
@@ -562,10 +563,9 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
     memset(it, 0, sizeof(*it));
     snprintf(it->id, sizeof(it->id), "%s", id);
     snprintf(it->name, sizeof(it->name), "%s", name[0] ? name : id);
-    it->disc = disc;
+    it->disc = 1;
     g_interrupted = 0;
     pthread_mutex_unlock(&g_lock);
-    if(disc) ps5tm_title_remember_disc(id);       /* what the person knows about a title is worth keeping */
     snprintf(msg, n, "In die Warteschlange gelegt.");
     return 200;
   }
@@ -583,16 +583,10 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
   }
 
   if(!strcmp(act, "queue_set")) {
-    const cJSON *v, *jo = cJSON_GetObjectItem(b, "options");
-    int remember = 0;
-    if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "disc"))) {
-      g_item[at].disc = cJSON_IsTrue(v);
-      remember = g_item[at].disc;
-    }
+    const cJSON *jo = cJSON_GetObjectItem(b, "options");
     if(cJSON_IsTrue(cJSON_GetObjectItem(b, "reset"))) memset(&g_item[at].opt, 0, sizeof(g_item[at].opt));
     else if(cJSON_IsObject(jo)) read_opt(jo, &g_item[at].opt);
     pthread_mutex_unlock(&g_lock);
-    if(remember) ps5tm_title_remember_disc(id);
     snprintf(msg, n, "Gespeichert.");
     return 200;
   }
