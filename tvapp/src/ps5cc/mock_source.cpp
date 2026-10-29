@@ -167,6 +167,7 @@ class MockSource final : public Source
         fill_ps4mount();
         fill_disc();
         fill_volumes();
+        fill_phase4();
         fill_payloads();
         fill_store();
         fill_logs();
@@ -679,6 +680,39 @@ class MockSource final : public Source
         }
         d.seq = data_.ps4_detail.seq + 1;
         data_.ps4_detail = d;
+        changed();
+    }
+
+    void playtime_reset() override
+    {
+        data_.playtime.sessions.clear();
+        data_.playtime.total = 0;
+        notice(Notice::Kind::success, "Spielzeit", "Der Verlauf ist gelöscht.");
+        changed();
+    }
+
+    void saves_post(const std::string &route, const std::string &json) override
+    {
+        SaveJob &j = data_.saves.job;
+        j = SaveJob{};
+        j.active = j.can_cancel = route != "cancel";
+        j.kind = route;
+        j.state = route == "cancel" ? "cancelled" : "copying";
+        j.phase = route == "verify" ? "wird geprüft" : "Dateien werden kopiert";
+        j.percent = 42;
+        j.files_done = 17;
+        j.files_total = 40;
+        j.current = "CUSA18842/savedata0/sce_sys/param.sfo";
+        j.elapsed_s = 12;
+        (void)json;
+        changed();
+    }
+
+    void backup_delete(const std::string &path) override
+    {
+        auto &b = data_.game_backups.backups;
+        b.erase(std::remove_if(b.begin(), b.end(), [&](const GameBackup &x) { return x.path == path; }), b.end());
+        notice(Notice::Kind::info, "Sicherung", "Die Sicherung wird gelöscht.");
         changed();
     }
 
@@ -1311,6 +1345,142 @@ class MockSource final : public Source
             x.why = s.why;
             m.skipped.push_back(x);
         }
+    }
+
+    // Spielzeit, Spielstände and Sicherungen: a few weeks of play, two users with saves, two backups of games.
+    void fill_phase4()
+    {
+        Playtime &p = data_.playtime;
+        p.loaded = true;
+        p.now = 1793275200; // 29.10.2026 12:00 UTC
+        struct Seed
+        {
+            const char *id, *name;
+            int days_ago, hour, minutes, cpu;
+        };
+        static const Seed kSeeds[] = {
+            {"PPSA01325", "Lantern Pass", 0, 9, 95, 71},     {"CUSA18842", "Iron Tide", 1, 20, 140, 68},
+            {"PPSA01325", "Lantern Pass", 2, 18, 60, 70},    {"PPSA04311", "Harbor Lights", 3, 21, 45, 66},
+            {"CUSA18842", "Iron Tide", 4, 19, 210, 69},      {"PPSA01325", "Lantern Pass", 6, 17, 30, 70},
+            {"CUSA12100", "Pixel Garden", 8, 15, 25, 58},    {"CUSA18842", "Iron Tide", 9, 22, 120, 72},
+            {"PPSA04311", "Harbor Lights", 11, 20, 80, 67}, {"PPSA01325", "Lantern Pass", 12, 19, 150, 71},
+            {"CUSA12100", "Pixel Garden", 20, 16, 40, 57},
+        };
+        for (const Seed &s : kSeeds)
+        {
+            PlaySession x;
+            x.id = s.id;
+            x.name = s.name;
+            x.start = p.now - static_cast<std::int64_t>(s.days_ago) * 86400 - 12 * 3600 + s.hour * 3600;
+            x.end = x.start + s.minutes * 60 + 300;
+            x.play = s.minutes * 60;
+            x.cpu_max = s.cpu;
+            x.soc_max = s.cpu - 3;
+            x.fan_avg = 34;
+            p.sessions.insert(p.sessions.begin(), x);
+        }
+        p.total = static_cast<int>(p.sessions.size());
+        p.kept = 2000;
+        p.live = true;
+        p.live_state = "front";
+        p.current.id = "CUSA18842";
+        p.current.name = "Iron Tide";
+        p.current.start = p.now - 2400;
+        p.current.play = 2280;
+        p.current.cpu_max = 69;
+        p.current.soc_max = 66;
+
+        Saves &s = data_.saves;
+        s.loaded = true;
+        struct Title
+        {
+            const char *uid, *id, *name, *platform;
+            double mb;
+            bool installed;
+        };
+        static const Title kTitles[] = {
+            {"10000001", "PPSA01325", "Lantern Pass", "PS5", 48.2, true},
+            {"10000001", "PPSA04311", "Harbor Lights", "PS5", 12.5, true},
+            {"10000001", "CUSA18842", "Iron Tide", "PS4", 3.1, true},
+            {"10000002", "CUSA12100", "Pixel Garden", "PS4", 0.8, false},
+        };
+        for (const char *uid : {"10000001", "10000002"})
+        {
+            SaveUser u;
+            u.uid = uid;
+            u.name = std::string(uid) == "10000001" ? "Mira" : "Jonas";
+            for (const Title &x : kTitles)
+            {
+                if (std::string(x.uid) != uid)
+                    continue;
+                SaveTitle st;
+                st.uid = uid;
+                st.id = x.id;
+                st.name = x.name;
+                st.platform = x.platform;
+                st.installed = x.installed;
+                st.bytes = static_cast<std::uint64_t>(x.mb * 1e6);
+                st.mtime = p.now - 86400;
+                u.bytes += st.bytes;
+                u.titles.push_back(st);
+            }
+            s.users.push_back(u);
+        }
+        SaveDrive usb;
+        usb.mount = "/mnt/usb0";
+        usb.label = "USB-Speicher 1";
+        usb.free_bytes = static_cast<std::uint64_t>(247e9);
+        SaveDrive ssd;
+        ssd.mount = "/user";
+        ssd.label = "Interne SSD";
+        ssd.free_bytes = static_cast<std::uint64_t>(612e9);
+        s.drives = {usb, ssd};
+        SaveBackup b;
+        b.created = p.now - 3 * 86400;
+        b.path = "/mnt/usb0/PS5-Sicherung/Spielstaende/2026-10-26_1830";
+        b.label = "USB-Speicher 1";
+        b.kind = "backup";
+        b.bytes = static_cast<std::uint64_t>(63.8e6);
+        b.user_names = {"Mira"};
+        for (const Title &x : kTitles)
+        {
+            if (std::string(x.uid) != "10000001")
+                continue;
+            SaveTitle st;
+            st.uid = x.uid;
+            st.id = x.id;
+            st.name = x.name;
+            st.platform = x.platform;
+            st.bytes = static_cast<std::uint64_t>(x.mb * 1e6);
+            b.titles.push_back(st);
+        }
+        s.backups.push_back(b);
+        SaveBackup undo = b;
+        undo.created = p.now - 9 * 86400;
+        undo.path = "/mnt/usb0/PS5-Sicherung/Spielstaende/2026-10-20_2110-vorher";
+        undo.kind = "undo";
+        undo.titles.resize(1);
+        undo.bytes = undo.titles[0].bytes;
+        s.backups.push_back(undo);
+
+        GameBackups &g = data_.game_backups;
+        g.loaded = true;
+        GameBackup a;
+        a.path = "/mnt/usb0/PS5-Sicherung/Spiele/PPSA01325_Lantern_Pass";
+        a.name = "Lantern Pass";
+        a.drive = "USB-Speicher 1";
+        a.type = "Ordner";
+        a.size_bytes = static_cast<std::uint64_t>(41.7e9);
+        a.modified = p.now - 5 * 86400;
+        a.sums = true;
+        GameBackup c = a;
+        c.path = "/mnt/usb0/PS5-Sicherung/Spiele/CUSA18842_Iron_Tide";
+        c.name = "Iron Tide";
+        c.size_bytes = static_cast<std::uint64_t>(22.7e9);
+        c.modified = p.now - 12 * 86400;
+        c.sums = false;
+        c.unfinished = true;
+        g.backups = {a, c};
     }
 
     // The internal SSD, a USB drive that can be ejected, the M.2 drive that cannot.

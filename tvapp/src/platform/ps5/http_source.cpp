@@ -325,6 +325,18 @@ void HttpSource::usb_eject(const std::string &mount)
 {
     push({Request::Kind::eject, 0, mount, {}});
 }
+void HttpSource::playtime_reset()
+{
+    push({Request::Kind::playtime_reset, 0, {}, {}});
+}
+void HttpSource::saves_post(const std::string &route, const std::string &json)
+{
+    push({Request::Kind::saves, 0, route, json});
+}
+void HttpSource::backup_delete(const std::string &path)
+{
+    push({Request::Kind::backup_delete, 0, path, {}});
+}
 void HttpSource::watch(Watch page)
 {
     watching_ = page;
@@ -634,6 +646,8 @@ void HttpSource::run()
     bool ps4_open = false;
     std::int64_t last_storage = 0;
     bool storage_open = false;
+    std::int64_t last_playtime = 0, last_save_job = 0;
+    bool playtime_open = false, saves_open = false, backups_open = false, backup_deleting = false;
     std::int64_t last_disc = 0, last_dump = 0, last_dumps = 0;
     bool disc_open = false;
     bool library_wanted = true;
@@ -874,6 +888,64 @@ void HttpSource::run()
                 last_disc = now;
                 poll_disc();
             }
+        }
+        // Spielzeit: every 5 s while it is open, as the web page; Spielstände: the list on entry and after a job, the
+        // job every second while one runs; Sicherungen: on entry, and again when a deletion has ended.
+        if (page == Watch::playtime)
+        {
+            if (!playtime_open || now - last_playtime >= 5000000)
+            {
+                last_playtime = now;
+                poll_playtime();
+            }
+            playtime_open = true;
+        }
+        else
+        {
+            playtime_open = false;
+        }
+        if (page == Watch::saves)
+        {
+            bool job = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                job = data_.saves.job.active;
+            }
+            if (!saves_open)
+                poll_saves();
+            else if (now - last_save_job >= (job ? 1000000 : 5000000))
+            {
+                last_save_job = now;
+                poll_save_job();
+                bool ended = false;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    ended = job && !data_.saves.job.active;
+                }
+                if (ended)
+                    poll_saves();
+            }
+            saves_open = true;
+        }
+        else
+        {
+            saves_open = false;
+        }
+        if (page == Watch::backups)
+        {
+            bool deleting = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                deleting = data_.jobs[static_cast<std::size_t>(JobKind::deletion)].active;
+            }
+            if (!backups_open || (backup_deleting && !deleting))
+                poll_game_backups();
+            backup_deleting = deleting;
+            backups_open = true;
+        }
+        else
+        {
+            backups_open = false;
         }
         // System → Speicher: the drives every 4 s, every second while an eject runs; at once when it opens.
         if (page == Watch::storage)
@@ -1172,6 +1244,65 @@ void HttpSource::handle(const Request &request)
             poll_dump();
         else
             poll_dumps(false);
+        break;
+    }
+    case Request::Kind::playtime_reset:
+    {
+        const Net net = exchange("POST", "/api/v1/playtime/reset", "{}", &status, &body, 10);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Spielzeit", message_of(body, "Die App hat nicht geantwortet."));
+        else
+            notice(Notice::Kind::success, "Spielzeit", "Der Verlauf ist gelöscht.");
+        poll_playtime();
+        break;
+    }
+    case Request::Kind::saves:
+    {
+        const std::string route = "/api/v1/saves/" + request.id;
+        const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 20);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Spielstände", message_of(body, "Die App hat nicht geantwortet."));
+        poll_save_job();
+        break;
+    }
+    case Request::Kind::backup_delete:
+    {
+        // As the web app's delete dialog: the plan says whether it may go and brings the one-time word; then at once.
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "kind", "backup");
+        cJSON_AddStringToObject(root, "id", request.id.c_str());
+        char *text = cJSON_PrintUnformatted(root);
+        const std::string plan_body = text != nullptr ? text : "{}";
+        cJSON_free(text);
+        cJSON_Delete(root);
+        const Net net = exchange("POST", "/api/v1/library/delete/plan", plan_body, &status, &body, 120);
+        cJSON *plan = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
+        if (plan == nullptr)
+        {
+            notice(Notice::Kind::error, "Sicherung", message_of(body, "Die App hat keinen Plan geliefert."));
+            break;
+        }
+        const bool can = flag(plan, "can_delete");
+        const std::string why = str(plan, "why"), confirm = str(plan, "confirm"), name = str(plan, "name");
+        cJSON_Delete(plan);
+        if (!can)
+        {
+            notice(Notice::Kind::error, "Sicherung", why.empty() ? "Diese Sicherung lässt sich nicht löschen." : why);
+            break;
+        }
+        root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "kind", "backup");
+        cJSON_AddStringToObject(root, "id", request.id.c_str());
+        cJSON_AddStringToObject(root, "confirm", confirm.c_str());
+        text = cJSON_PrintUnformatted(root);
+        const std::string start_body = text != nullptr ? text : "{}";
+        cJSON_free(text);
+        cJSON_Delete(root);
+        const Net started = exchange("POST", "/api/v1/library/delete", start_body, &status, &body, 20);
+        if (started != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Sicherung", message_of(body, "Die App hat nicht geantwortet."));
+        else
+            notice(Notice::Kind::info, "Sicherung", "„" + name + "“ wird gelöscht.");
         break;
     }
     case Request::Kind::eject:
@@ -1786,6 +1917,237 @@ void HttpSource::poll_package_queue()
     if (key_of(q) == key_of(data_.package_queue))
         return;
     data_.package_queue = std::move(q);
+    ++data_.serial;
+}
+
+void HttpSource::poll_playtime()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/playtime", {}, &status, &body, 10) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    Playtime p;
+    p.loaded = true;
+    p.enabled = cJSON_GetObjectItemCaseSensitive(root, "enabled") == nullptr || flag(root, "enabled");
+    p.now = static_cast<std::int64_t>(num(root, "now"));
+    p.total = static_cast<int>(num(root, "total"));
+    p.kept = static_cast<int>(num(root, "kept"));
+    const cJSON *titles = cJSON_GetObjectItemCaseSensitive(root, "titles");
+    const auto name_of = [&](const std::string &id)
+    {
+        const cJSON *n = cJSON_GetObjectItemCaseSensitive(titles, id.c_str());
+        return cJSON_IsString(n) && n->valuestring != nullptr && n->valuestring[0] ? std::string(n->valuestring) : id;
+    };
+    const auto read = [&](const cJSON *o)
+    {
+        PlaySession s;
+        s.id = str(o, "id");
+        s.start = static_cast<std::int64_t>(num(o, "start"));
+        s.end = static_cast<std::int64_t>(num(o, "end"));
+        s.play = static_cast<int>(num(o, "play"));
+        s.cpu_max = static_cast<int>(num(o, "cpu_max", -1));
+        s.soc_max = static_cast<int>(num(o, "soc_max", -1));
+        s.fan_avg = static_cast<int>(num(o, "fan_avg", -1));
+        s.flags = static_cast<int>(num(o, "flags"));
+        return s;
+    };
+    const cJSON *o = nullptr;
+    cJSON_ArrayForEach(o, cJSON_GetObjectItemCaseSensitive(root, "sessions"))
+    {
+        PlaySession s = read(o);
+        s.name = name_of(s.id);
+        if (!s.id.empty())
+            p.sessions.push_back(std::move(s));
+    }
+    const cJSON *live = cJSON_GetObjectItemCaseSensitive(root, "live");
+    if (cJSON_IsObject(live))
+    {
+        p.live = true;
+        p.current = read(live);
+        p.current.name = str(live, "name");
+        if (p.current.name.empty())
+            p.current.name = name_of(p.current.id);
+        p.live_state = str(live, "state");
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.playtime = std::move(p);
+    ++data_.serial;
+}
+
+namespace
+{
+SaveJob read_save_job(const cJSON *j)
+{
+    SaveJob x;
+    x.active = flag(j, "active");
+    x.can_cancel = flag(j, "can_cancel");
+    x.state = str(j, "state");
+    x.kind = str(j, "kind");
+    x.phase = str(j, "phase");
+    x.percent = static_cast<int>(num(j, "percent"));
+    x.files_done = static_cast<int>(num(j, "files_done"));
+    x.files_total = static_cast<int>(num(j, "files_total"));
+    x.current = str(j, "current");
+    x.error = str(j, "error");
+    x.note = str(j, "note");
+    x.path = str(j, "path");
+    x.undo = str(j, "undo");
+    x.ok_files = static_cast<int>(num(j, "ok_files"));
+    x.elapsed_s = static_cast<int>(num(j, "elapsed_s"));
+    x.finished_ago_s = static_cast<int>(num(j, "finished_ago_s", -1));
+    return x;
+}
+} // namespace
+
+void HttpSource::poll_saves()
+{
+    int status = 0;
+    std::string body;
+    const Net net = exchange("GET", "/api/v1/saves", {}, &status, &body, 20);
+    cJSON *root = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
+    Saves s;
+    s.loaded = true;
+    if (root == nullptr)
+    {
+        s.error = net == Net::ok ? message_of(body, "Die Spielstände ließen sich nicht lesen.")
+                                 : "Die App hat nicht rechtzeitig geantwortet.";
+        std::lock_guard<std::mutex> lock(mutex_);
+        s.users = data_.saves.users;
+        s.backups = data_.saves.backups;
+        s.drives = data_.saves.drives;
+        s.job = data_.saves.job;
+        data_.saves = std::move(s);
+        ++data_.serial;
+        return;
+    }
+    s.game_running = flag(root, "game_running");
+    s.game_id = str(root, "game_id");
+    s.unfinished = static_cast<int>(num(root, "unfinished"));
+    const cJSON *u = nullptr;
+    cJSON_ArrayForEach(u, cJSON_GetObjectItemCaseSensitive(root, "users"))
+    {
+        SaveUser user;
+        user.uid = str(u, "uid");
+        user.name = str(u, "name");
+        user.bytes = static_cast<std::uint64_t>(num(u, "bytes"));
+        const cJSON *t = nullptr;
+        cJSON_ArrayForEach(t, cJSON_GetObjectItemCaseSensitive(u, "titles"))
+        {
+            // apps never: their data is not a save (the web page leaves them out too)
+            if (str(t, "kind") == "app")
+                continue;
+            SaveTitle x;
+            x.uid = user.uid;
+            x.id = str(t, "id");
+            x.name = str(t, "name");
+            x.platform = str(t, "platform");
+            x.installed = flag(t, "installed");
+            x.bytes = static_cast<std::uint64_t>(num(t, "bytes"));
+            x.mtime = static_cast<std::int64_t>(num(t, "mtime"));
+            user.titles.push_back(std::move(x));
+        }
+        s.users.push_back(std::move(user));
+    }
+    const cJSON *d = nullptr;
+    cJSON_ArrayForEach(d, cJSON_GetObjectItemCaseSensitive(root, "drives"))
+    {
+        SaveDrive x;
+        x.mount = str(d, "mount");
+        x.label = str(d, "label");
+        x.free_bytes = static_cast<std::uint64_t>(num(d, "free_bytes"));
+        s.drives.push_back(std::move(x));
+    }
+    const cJSON *b = nullptr;
+    cJSON_ArrayForEach(b, cJSON_GetObjectItemCaseSensitive(root, "backups"))
+    {
+        SaveBackup x;
+        x.created = static_cast<std::int64_t>(num(b, "created"));
+        x.path = str(b, "path");
+        x.label = str(b, "label");
+        x.kind = str(b, "kind");
+        x.bytes = static_cast<std::uint64_t>(num(b, "bytes"));
+        x.this_console = flag(b, "this_console");
+        const cJSON *bu = nullptr;
+        cJSON_ArrayForEach(bu, cJSON_GetObjectItemCaseSensitive(b, "users"))
+        {
+            x.user_names.push_back(str(bu, "name"));
+        }
+        const cJSON *t = nullptr;
+        cJSON_ArrayForEach(t, cJSON_GetObjectItemCaseSensitive(b, "titles"))
+        {
+            SaveTitle y;
+            y.uid = str(t, "uid");
+            y.id = str(t, "id");
+            y.name = str(t, "name");
+            y.platform = str(t, "platform");
+            y.bytes = static_cast<std::uint64_t>(num(t, "bytes"));
+            x.titles.push_back(std::move(y));
+        }
+        s.backups.push_back(std::move(x));
+    }
+    std::sort(s.backups.begin(), s.backups.end(),
+              [](const SaveBackup &a, const SaveBackup &c) { return a.created > c.created; });
+    if (s.backups.size() > 40)
+        s.backups.resize(40);
+    s.job = read_save_job(cJSON_GetObjectItemCaseSensitive(root, "job"));
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.saves = std::move(s);
+    ++data_.serial;
+}
+
+void HttpSource::poll_save_job()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/saves/job", {}, &status, &body, 6) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    SaveJob j = read_save_job(root);
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.saves.job = std::move(j);
+    ++data_.serial;
+}
+
+void HttpSource::poll_game_backups()
+{
+    int status = 0;
+    std::string body;
+    const Net net = exchange("GET", "/api/v1/library/backups", {}, &status, &body, 30);
+    cJSON *root = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
+    GameBackups g;
+    g.loaded = true;
+    if (root == nullptr)
+        g.error = net == Net::ok ? message_of(body, "Die Sicherungen ließen sich nicht lesen.")
+                                 : "Die App hat nicht rechtzeitig geantwortet.";
+    else
+    {
+        const cJSON *b = nullptr;
+        cJSON_ArrayForEach(b, cJSON_GetObjectItemCaseSensitive(root, "backups"))
+        {
+            GameBackup x;
+            x.path = str(b, "path");
+            x.name = str(b, "name");
+            x.drive = str(b, "drive");
+            x.type = str(b, "type");
+            x.size_bytes = static_cast<std::uint64_t>(num(b, "size_bytes"));
+            x.modified = static_cast<std::int64_t>(num(b, "modified"));
+            x.unfinished = flag(b, "unfinished");
+            x.sums = flag(b, "sums");
+            if (!x.path.empty())
+                g.backups.push_back(std::move(x));
+        }
+        cJSON_Delete(root);
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.game_backups = std::move(g);
     ++data_.serial;
 }
 

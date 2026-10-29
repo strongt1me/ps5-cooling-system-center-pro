@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: Spielzeit, Spielstände, Sicherungen (Phase 4)
+- Spiele hat jetzt die Unterreiter der Browser-App in derselben Reihenfolge: Bibliothek · Spielzeit · Spielstände · Pakete · PS4 von USB · (Disc) · Sicherungen · Aufträge (je so breit wie das Wort)
+- **Spielzeit:** laufendes Spiel, meistgespielt (Anteil, Schnitt, zuletzt, höchste Temperatur), letzte Sitzungen (X-Taste: mehr); rechts Heute / 7 / 30 Tage / Insgesamt und die letzten 14 Tage als Balken; Mehr → Verlauf löschen. Gerechnet wie im Browser (eine Sitzung über Mitternacht zählt anteilig an beiden Tagen), `tvapp/src/ps5cc/playtime_rules.*` mit Tests. Die CSV-Ausfuhr bleibt im Browser
+- **Spielstände:** je Benutzer, X-Taste wählt für die nächste Sicherung, Mehr → Ausgewählte sichern / Ziel / alle / keine / abbrechen; Quadrat-Taste → Löschen (vorher gesichert); bei einer Sicherung Prüfen und je Spiel Zurückspielen (nur dieselbe Konsole, der Stand davor wird gesichert); Fortschritt rechts
+- **Sicherungen:** die Spiel-Sicherungen der App mit UNFERTIG / MIT PRÜFSUMME; Quadrat-Taste → löschen (sofort, läuft unter Aufträge)
+
 ### USB-Laufwerk sicher auswerfen
 - Neu, auf Wunsch des Users: In der Browser-App unter System → Speicher hat jedes USB-Laufwerk einen Knopf **Auswerfen**, in der Vollbild-App die neue Seite **System → Speicher** (Laufwerke mit Belegung; X-Taste wirft aus). Ausgeworfen wird über ShadowMountPlus 1.7beta10 (`POST /api/v1/storage/eject` dort), aber nur, wenn **kein Auftrag der App läuft** und PS4Mount keine Spiele von dem Laufwerk spielt – sonst lehnt die App ab und nennt den Auftrag. Neue Routen `POST`/`GET /api/v1/storage/eject`, Feld `ejectable` in `/api/v1/system` (`src/usbeject.c`)
 - Grenze: Das Auswerfen auf der eigenen Seite von ShadowMountPlus lässt sich nicht aufhalten. Laut seinem Quelltext (`sm_api_service.c`, `run_usb_eject_job`) prüft es nur seine eigenen Einbindungen, Abbilder und das laufende Spiel; eine Sperre ließe sich nur durch eine gefälschte Spiel-Einbindung samt `mount.lnk` erzwingen, und das macht die App nicht. Das Handbuch sagt es

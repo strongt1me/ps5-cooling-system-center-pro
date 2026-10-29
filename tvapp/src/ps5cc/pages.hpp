@@ -73,6 +73,9 @@ std::unique_ptr<Page> make_packages_page();
 std::unique_ptr<Page> make_ps4mount_page();
 std::unique_ptr<Page> make_disc_page();
 std::unique_ptr<Page> make_storage_page();
+std::unique_ptr<Page> make_playtime_page();
+std::unique_ptr<Page> make_saves_page();
+std::unique_ptr<Page> make_backups_page();
 std::unique_ptr<Page> make_logs_page();
 
 } // namespace hui::ps5cc

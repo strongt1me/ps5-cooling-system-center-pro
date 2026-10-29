@@ -325,6 +325,127 @@ struct Ps4MountConfig
     std::vector<std::string> paths;
 };
 
+// ---- Phase 4 (29.10.2026): Spielzeit, Spielstände, Sicherungen, as the web app's tabs of the same names ----
+
+// One game session (GET /api/v1/playtime, "sessions"); -1 = not measured.
+struct PlaySession
+{
+    std::string id;
+    std::string name; // from "titles", or the id
+    std::int64_t start = 0; // s since 1970
+    std::int64_t end = 0;
+    int play = 0; // seconds in front
+    int cpu_max = -1;
+    int soc_max = -1;
+    int fan_avg = -1;
+    int flags = 0; // 1 safety mode, 2 warning, 4 end estimated
+};
+
+struct Playtime
+{
+    bool loaded = false;
+    bool enabled = true;
+    std::int64_t now = 0; // the console's clock, s
+    int total = 0;        // sessions ever recorded
+    int kept = 0;         // how many are kept
+    bool live = false;    // a game runs now
+    PlaySession current;  // its session so far
+    std::string live_state; // front, back, gone
+    std::vector<PlaySession> sessions; // oldest first
+};
+
+// A save folder of one game of one user (GET /api/v1/saves).
+struct SaveTitle
+{
+    std::string uid;
+    std::string id;
+    std::string name;
+    std::string platform; // PS5, PS4
+    bool installed = true;
+    std::uint64_t bytes = 0;
+    std::int64_t mtime = 0;
+};
+
+struct SaveUser
+{
+    std::string uid;
+    std::string name;
+    std::uint64_t bytes = 0;
+    std::vector<SaveTitle> titles;
+};
+
+struct SaveDrive
+{
+    std::string mount;
+    std::string label;
+    std::uint64_t free_bytes = 0;
+};
+
+struct SaveBackup
+{
+    std::int64_t created = 0;
+    std::string path;
+    std::string label; // the drive
+    std::string kind;  // backup, undo (the state before a restore)
+    std::uint64_t bytes = 0;
+    bool this_console = true;
+    std::vector<std::string> user_names;
+    std::vector<SaveTitle> titles;
+};
+
+struct SaveJob
+{
+    bool active = false;
+    bool can_cancel = false;
+    std::string state; // idle scanning copying verifying applying done failed cancelled
+    std::string kind;  // backup verify restore delete
+    std::string phase;
+    int percent = 0;
+    int files_done = 0;
+    int files_total = 0;
+    std::string current;
+    std::string error;
+    std::string note;
+    std::string path;
+    std::string undo;
+    int ok_files = 0;
+    int elapsed_s = 0;
+    int finished_ago_s = -1;
+};
+
+struct Saves
+{
+    bool loaded = false;
+    std::string error;
+    bool game_running = false;
+    std::string game_id;
+    int unfinished = 0;
+    std::vector<SaveUser> users;
+    std::vector<SaveDrive> drives;
+    std::vector<SaveBackup> backups; // newest first
+    SaveJob job;
+};
+
+// A game backup of the app (GET /api/v1/library/backups, folder PS5-Sicherung/Spiele).
+struct GameBackup
+{
+    std::string path;
+    std::string name;
+    std::string drive;
+    std::string type;
+    std::uint64_t size_bytes = 0;
+    std::int64_t modified = 0;
+    bool unfinished = false;
+    bool sums = false;
+};
+
+struct GameBackups
+{
+    bool loaded = false;
+    std::string error;
+    std::vector<GameBackup> backups;
+};
+
 // A drive of the console (GET /api/v1/system, "volumes"); USB drives can be ejected (29.10.2026).
 struct Volume
 {
@@ -573,6 +694,9 @@ enum class Watch : std::uint8_t
     ps4mount,
     disc,
     storage,
+    playtime,
+    saves,
+    backups,
 };
 
 // Something an action came back with, for the screen to show once.
@@ -629,6 +753,9 @@ struct Snapshot
     DiscState disc;
     DumpState dump;
     DumpList dumps;
+    Playtime playtime;
+    Saves saves;
+    GameBackups game_backups;
     std::vector<Volume> volumes;
     bool volumes_loaded = false;
     UsbEject usb_eject;
@@ -692,6 +819,12 @@ class Source
     virtual void disc_post(const std::string &route, const std::string &json) = 0;
     // A USB drive ejected through ShadowMountPlus ("/mnt/usb0"); the app refuses while one of its jobs runs.
     virtual void usb_eject(const std::string &mount) = 0;
+    // Spielzeit: the recorded sessions forgotten (the running one keeps counting).
+    virtual void playtime_reset() = 0;
+    // Spielstände: POST /api/v1/saves/<route> (backup, delete, verify, restore, cancel) with a JSON body.
+    virtual void saves_post(const std::string &route, const std::string &json) = 0;
+    // Sicherungen: a game backup deleted at once (plan, then the delete with its one-time word).
+    virtual void backup_delete(const std::string &path) = 0;
     // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture (uploaded in the browser).
     virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;
     // Ends the app on the console (the preview only says so).

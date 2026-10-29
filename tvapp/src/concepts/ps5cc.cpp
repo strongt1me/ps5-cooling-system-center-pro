@@ -90,6 +90,9 @@ enum View
     kJobs,
     kPayloads,
     kLogs,
+    kPlaytime,
+    kSaves,
+    kBackups,
     kStorage,     // System → Speicher, the first part of the System area (29.10.2026)
     kPlaceholder, // Dateien, Profil until their pages exist
 };
@@ -104,7 +107,10 @@ enum PageIndex
     kPagePs4 = 4,
     kPageDisc = 5,
     kPageStorage = 6,
-    kPageCount = 7,
+    kPagePlaytime = 7,
+    kPageSaves = 8,
+    kPageBackups = 9,
+    kPageCount = 10,
 };
 
 // The sidebar's icons, drawn with the kit's shapes (no artwork files): one per area.
@@ -347,7 +353,8 @@ class Ps5cc final : public app::Concept
 
         pages_ = {ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
                   ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
-                  ps5cc::make_storage_page()};
+                  ps5cc::make_storage_page(), ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
+                  ps5cc::make_backups_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -719,6 +726,9 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
             {0.5f, action_bit(Action::west)},
             {0.3f, 0, Direction::down},
             {0.2f, 0, Direction::down},
@@ -754,6 +764,9 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
+            {0.3f, action_bit(Action::jump_prev)},
             // A PS4 title (Two Point Hospital, a folder): converting lists only USB and M.2.
             {0.4f, 0, Direction::down},
             {0.15f, 0, Direction::down},
@@ -767,6 +780,24 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::confirm)},
             {1.0f, 0, Direction::none, "plan-ps4"},
             {0.2f, action_bit(Action::back)},
+            // Spiele → Spielzeit, then Spielstände (a game picked off with the X button, the triangle menu), then Pakete.
+            {0.5f, action_bit(Action::jump_next)},
+            {1.0f, 0, Direction::none, "spielzeit"},
+            {0.5f, action_bit(Action::jump_next)},
+            {1.0f, 0, Direction::none, "spielstaende"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.4f, action_bit(Action::north)},
+            {0.7f, 0, Direction::none, "spielstaende-menue"},
+            {0.3f, action_bit(Action::back)},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "spielstaende-sicherung"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.7f, 0, Direction::none, "spielstaende-zurueck"},
+            {0.3f, action_bit(Action::back)},
             // Spiele → Pakete: the list, an install started with ✕, one more into the queue with □, the △ menu.
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "pakete"},
@@ -815,6 +846,11 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::up},
             {0.3f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "disc-einstellungen"},
+            {0.3f, action_bit(Action::back)},
+            {0.5f, action_bit(Action::jump_next)},
+            {1.0f, 0, Direction::none, "sicherungen"},
+            {0.3f, action_bit(Action::west)},
+            {0.7f, 0, Direction::none, "sicherungen-menue"},
             {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "auftraege"},
@@ -884,17 +920,22 @@ class Ps5cc final : public app::Concept
     void set_game_tabs(bool disc)
     {
         const View shown = game_views_.empty() ? kGames : view_of_game_tab();
-        game_views_ = {kGames, kPackages, kPs4};
-        std::vector<ui::TabItem> tabs = {{"Bibliothek"}, {"Pakete"}, {"PS4 von USB"}};
+        game_views_ = {kGames, kPlaytime, kSaves, kPackages, kPs4};
+        std::vector<ui::TabItem> tabs = {{"Bibliothek"}, {"Spielzeit"}, {"Spielstände"}, {"Pakete"}, {"PS4 von USB"}};
         if (disc)
         {
             game_views_.push_back(kDisc);
             tabs.push_back({"Disc"});
         }
+        game_views_.push_back(kBackups);
+        tabs.push_back({"Sicherungen"});
         game_views_.push_back(kJobs);
         tabs.push_back({"Aufträge"});
         disc_tab_ = disc;
+        // eight tabs do not fit at the usual width: each as wide as its word, the row scrolls if it must (29.10.2026)
         ps5cc::style_subtabs(games_tabs_, theme_, static_cast<int>(tabs.size()));
+        games_tabs_.style.width = ui::TabWidth::fit;
+        games_tabs_.set_bounds({kLeftX + 56.0f, ps5cc::kTabY, 1824.0f - kLeftX - 112.0f, ps5cc::kTabH});
         games_tabs_.set_tabs(tabs);
         games_tabs_.set_active(game_tab_of(shown), true);
     }
@@ -991,6 +1032,12 @@ class Ps5cc final : public app::Concept
             return pages_[kPageDisc].get();
         case kStorage:
             return pages_[kPageStorage].get();
+        case kPlaytime:
+            return pages_[kPagePlaytime].get();
+        case kSaves:
+            return pages_[kPageSaves].get();
+        case kBackups:
+            return pages_[kPageBackups].get();
         default:
             return nullptr;
         }
@@ -1394,6 +1441,9 @@ class Ps5cc final : public app::Concept
                               : v == kPs4      ? ps5cc::Watch::ps4mount
                               : v == kDisc     ? ps5cc::Watch::disc
                               : v == kStorage  ? ps5cc::Watch::storage
+                              : v == kPlaytime ? ps5cc::Watch::playtime
+                              : v == kSaves    ? ps5cc::Watch::saves
+                              : v == kBackups  ? ps5cc::Watch::backups
                                                : ps5cc::Watch::none);
         if (ps5cc::Page *page = current_page())
             page->enter();
