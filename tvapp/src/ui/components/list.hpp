@@ -48,6 +48,7 @@ struct ListStyle : ComponentStyle
     bool panel = false;       // a themed panel behind the whole list
     bool cards = false;       // every row is a themed surface of its own
     bool dividers = false;    // hairlines between rows
+    bool header_rule = false; // a hairline after each section title, as Form's
     bool scroll_thumb = true; // shown only when the list overflows
     // ---- behaviour ----
     bool wrap = false;           // past the last row comes the first

@@ -40,6 +40,7 @@ enum MenuTag
     kNone,
     kCancel,
     kReload,
+    kDrive = 60, // + index into the drives
 };
 
 std::string json_text(const std::string &s)
@@ -63,6 +64,7 @@ class SavesPage final : public Page
         theme_ = theme;
         list_.style.theme = theme;
         list_.style.panel = true;
+        list_.style.header_rule = true; // title and line, as the forms (user, 29.10.2026)
         list_.style.row_height = 80.0f;
         list_.style.title_size = 24.0f;
         list_.style.subtitle_size = 18.0f;
@@ -409,7 +411,8 @@ class SavesPage final : public Page
         const SaveDrive *d = target();
         std::vector<ui::MenuItem> items;
         items.push_back(item("Ausgewählte sichern (" + std::to_string(picked_.size()) + ")", kBackup, !blocked().empty()));
-        items.push_back(item("Ziel: " + (d != nullptr ? d->label : std::string("keins")), kTarget, saves_.drives.size() < 2));
+        items.push_back(item("Ziel wählen: " + (d != nullptr ? d->label : std::string("keins")) + " …", kTarget,
+                             saves_.drives.empty()));
         items.push_back(item("Alle auswählen", kAll, titles_.empty()));
         items.push_back(item("Keine auswählen", kNone, picked_.empty()));
         if (saves_.job.active && saves_.job.can_cancel)
@@ -419,9 +422,37 @@ class SavesPage final : public Page
         menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
     }
 
+    // The drives to back up to, each with its free space; the chosen one is marked. Cycling through them on each
+    // press left it unclear whether the press already saved (user, 29.10.2026).
+    void open_drive_menu(ui::Feedback &feedback)
+    {
+        std::vector<ui::MenuItem> items;
+        int chosen = 0;
+        for (std::size_t i = 0; i < saves_.drives.size() && i < 30; ++i)
+        {
+            const SaveDrive &d = saves_.drives[i];
+            const bool on = d.mount == target_;
+            if (on)
+                chosen = static_cast<int>(i);
+            items.push_back(item((on ? "Gewählt: " : "") + d.label + " · " + format_bytes(d.free_bytes) + " frei",
+                                 kDrive + static_cast<int>(i)));
+        }
+        menu_.set_items(items);
+        menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
+        menu_.set_focus(chosen);
+    }
+
     void run(int tag, ui::Feedback &feedback)
     {
         feedback.play(audio::Cue::select);
+        if (tag >= kDrive && tag < kRestore)
+        {
+            const std::size_t i = static_cast<std::size_t>(tag - kDrive);
+            if (i < saves_.drives.size())
+                target_ = saves_.drives[i].mount;
+            open_page_menu(feedback);
+            return;
+        }
         if (tag >= kRestore)
         {
             const std::size_t i = static_cast<std::size_t>(tag - kRestore);
@@ -464,18 +495,8 @@ class SavesPage final : public Page
             break;
         }
         case kTarget:
-        {
-            // the next drive, round
-            for (std::size_t i = 0; i < saves_.drives.size(); ++i)
-            {
-                if (saves_.drives[i].mount == target_)
-                {
-                    target_ = saves_.drives[(i + 1) % saves_.drives.size()].mount;
-                    break;
-                }
-            }
+            open_drive_menu(feedback);
             break;
-        }
         case kAll:
             for (const SaveTitle &t : titles_)
                 picked_.insert(t.uid + "/" + t.id);

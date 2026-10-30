@@ -33,6 +33,69 @@ const Rect kPanel{200.0f, 92.0f, 1520.0f, 864.0f};
 constexpr int kPlaceTag = 100;  // + index into the places
 constexpr int kUpTag = 99;      // ".." up one folder
 constexpr int kEntryTag = 1000; // + index into entries_ (sorted)
+constexpr int kJumpRows = 8;    // L2 / R2: a page of rows at a time
+constexpr float kBarH = 50.0f;  // the path bar above the list
+// The page has no sub-tabs: it starts level with the sidebar's top (user, 30.10.2026).
+constexpr float kFilesTop = kTabY;
+
+const Color kFolderInk = Color::rgb(0x6f9dff);
+const Color kFileInk = Color::rgb(0xaab4d4);
+
+enum class Glyph
+{
+    folder,
+    file,
+    link,
+    up,
+    drive,
+    picked,
+};
+
+// The row's sign, drawn with the kit's shapes like the sidebar's icons (29.10.2026: the list looked bare).
+void draw_glyph(gfx::DrawList &list, Glyph glyph, float cx, float cy, float s, Color ink)
+{
+    const float x = cx - s * 0.5f;
+    const float y = cy - s * 0.5f;
+    const float t = std::max(2.0f, s * 0.08f);
+    const Color clear{ink.r, ink.g, ink.b, 0.0f};
+    switch (glyph)
+    {
+    case Glyph::folder:
+        list.rounded_rect({x + s * 0.04f, y + s * 0.18f, s * 0.4f, s * 0.2f}, s * 0.06f, ink);
+        list.rounded_rect({x + s * 0.04f, y + s * 0.28f, s * 0.92f, s * 0.56f}, s * 0.1f, ink);
+        break;
+    case Glyph::link:
+        list.rounded_rect({x + s * 0.04f, y + s * 0.18f, s * 0.4f, s * 0.2f}, s * 0.06f, ink);
+        list.bordered_rect({x + s * 0.04f, y + s * 0.28f, s * 0.92f, s * 0.56f}, s * 0.1f, clear, t, ink);
+        list.line(x + s * 0.36f, y + s * 0.7f, x + s * 0.64f, y + s * 0.46f, t, ink);
+        list.line(x + s * 0.48f, y + s * 0.46f, x + s * 0.64f, y + s * 0.46f, t, ink);
+        list.line(x + s * 0.64f, y + s * 0.46f, x + s * 0.64f, y + s * 0.6f, t, ink);
+        break;
+    case Glyph::file:
+        list.bordered_rect({x + s * 0.18f, y + s * 0.06f, s * 0.64f, s * 0.88f}, s * 0.1f, clear, t, ink);
+        for (int i = 0; i < 3; ++i)
+        {
+            const float ly = y + s * (0.36f + 0.17f * static_cast<float>(i));
+            list.line(x + s * 0.34f, ly, x + s * (i == 2 ? 0.54f : 0.66f), ly, t * 0.9f, ink);
+        }
+        break;
+    case Glyph::up:
+        list.line(cx, y + s * 0.24f, cx, y + s * 0.86f, t * 1.2f, ink);
+        list.line(cx, y + s * 0.2f, x + s * 0.24f, y + s * 0.48f, t * 1.2f, ink);
+        list.line(cx, y + s * 0.2f, x + s * 0.76f, y + s * 0.48f, t * 1.2f, ink);
+        break;
+    case Glyph::drive:
+        list.bordered_rect({x + s * 0.04f, y + s * 0.26f, s * 0.92f, s * 0.48f}, s * 0.12f, clear, t, ink);
+        list.circle(x + s * 0.76f, cy, s * 0.07f, ink);
+        list.line(x + s * 0.2f, cy, x + s * 0.5f, cy, t, ink);
+        break;
+    case Glyph::picked:
+        list.rounded_rect({x + s * 0.06f, y + s * 0.06f, s * 0.88f, s * 0.88f}, s * 0.22f, Color::rgb(0x3880ff));
+        list.line(x + s * 0.28f, y + s * 0.52f, x + s * 0.44f, y + s * 0.68f, t * 1.3f, Color::rgb(0xffffff));
+        list.line(x + s * 0.44f, y + s * 0.68f, x + s * 0.74f, y + s * 0.34f, t * 1.3f, Color::rgb(0xffffff));
+        break;
+    }
+}
 
 enum MenuTag
 {
@@ -131,7 +194,10 @@ class FilesPage final : public Page
         list_.style.highlight.kind = ui::HighlightKind::bar;
         list_.style.badge_column = true;
         list_.style.value_width = 130.0f; // the badges line up
-        list_.set_bounds({kLeftX, kTop + 62.0f, kLeftW, kBottom - kTop - 62.0f});
+        list_.style.leading_width = 40.0f;
+        list_.leading = [this](ui::Canvas &canvas, const Rect &box, const ui::ListItem &item, int, float)
+        { draw_glyph(canvas.list, glyph_of(item), box.cx(), box.cy(), 34.0f, ink_of(item)); };
+        list_.set_bounds({kLeftX, kFilesTop + kBarH + 14.0f, kLeftW, kBottom - kFilesTop - kBarH - 14.0f});
 
         info_.style.theme = theme;
         info_.style.panel = false;
@@ -139,7 +205,7 @@ class FilesPage final : public Page
         info_.style.value_size = 21.0f;
         info_.style.row_height = 40.0f;
         info_.style.max_lines = 1;
-        info_.set_bounds({kRightX + 30.0f, kTop + 110.0f, kRightW - 60.0f, 220.0f});
+        info_.set_bounds({kRightX + 30.0f, kFilesTop + 158.0f, kRightW - 60.0f, 220.0f}); // under the sign and the line
 
         menu_.style.theme = solid_theme(theme);
         menu_.style.width = 560.0f;
@@ -244,6 +310,13 @@ class FilesPage final : public Page
                 view_top_ = std::max(0, view_top_ - 1);
             return;
         }
+        if (input.is_pressed(Action::back) && !folder_.path.empty())
+        {
+            go_back(feedback);
+            return;
+        }
+        if (jump(input, feedback))
+            return;
         const int before = list_.focus();
         const ui::Event event = list_.handle(input, feedback);
         if (list_.focus() != before)
@@ -279,37 +352,40 @@ class FilesPage final : public Page
         gfx::DrawList &list = canvas.list;
         const ui::Fonts &fonts = canvas.fonts;
         ui::Painter paint(list, fonts, theme_);
-        // where we are, above the list
         const std::string where = folder_.path.empty() ? "Orte" : folder_.path;
-        ui::text(list, fonts.semibold, ui::fit_label(paint, where, 24.0f, kLeftW - 20.0f), kLeftX + 10.0f, kTop + 40.0f,
-                 24.0f, kInk);
+        draw_path_bar(canvas, paint);
         list_.draw(canvas);
 
-        const Rect card{kRightX, kTop + 10.0f, kRightW, kBottom - kTop - 10.0f};
+        const Rect card{kRightX, kFilesTop, kRightW, kBottom - kFilesTop};
         paint.panel(card);
         const FsEntry *e = focused_entry();
         const FsPlace *pl = focused_place();
-        const std::string title = e != nullptr ? e->name : pl != nullptr ? pl->label : where;
-        ui::text(list, fonts.display, ui::fit_label(paint, title, 30.0f, card.w - 60.0f), card.x + 30.0f, card.y + 62.0f,
-                 30.0f, kInk);
+        const std::string title = e != nullptr ? e->name : pl != nullptr ? pl->label : base_or_root(where);
+        // a large sign beside the name, then what it is
+        const Glyph sign = e != nullptr ? entry_glyph(*e) : pl != nullptr ? Glyph::drive : Glyph::folder;
+        const Rect tile{card.x + 30.0f, card.y + 30.0f, 84.0f, 84.0f};
+        list.rounded_rect(tile, 20.0f, Color::rgb(0x3880ff, 0.14f));
+        draw_glyph(list, sign, tile.cx(), tile.cy(), 50.0f, sign == Glyph::file ? kFileInk : kFolderInk);
+        ui::text(list, fonts.display, ui::fit_label(paint, title, 30.0f, card.w - 180.0f), tile.x + tile.w + 24.0f,
+                 card.y + 70.0f, 30.0f, kInk);
+        ui::text(list, fonts.regular, ui::fit_label(paint, card_subtitle(e, pl, where), 19.0f, card.w - 180.0f),
+                 tile.x + tile.w + 24.0f, card.y + 102.0f, 19.0f, kMuted);
+        list.line(card.x + 30.0f, card.y + 140.0f, card.x + card.w - 30.0f, card.y + 140.0f, 1.0f,
+                  Color::rgb(0x3880ff, 0.18f));
         info_.draw(canvas);
 
-        float y = card.y + 360.0f;
+        float y = card.y + 400.0f;
         if (!folder_.path.empty() && !folder_.writable)
-            y = paragraph(canvas, "Nur ansehen: Hier darf nichts geändert werden. Ändern geht auf den Laufwerken und in /data.",
-                          card.x + 30.0f, y, card.w - 60.0f, kWarning, 3) +
-                10.0f;
+            y = note_card(canvas, paint, card, y, "Nur ansehen",
+                          "Hier darf nichts geändert werden. Ändern geht auf den Laufwerken und in /data.", kWarning);
         if (!clip_paths_.empty())
-            y = paragraph(canvas,
+            y = note_card(canvas, paint, card, y,
                           std::string(clip_move_ ? "Ausgeschnitten: " : "Kopiert: ") + std::to_string(clip_paths_.size()) +
-                              (clip_paths_.size() == 1 ? " Eintrag aus " : " Einträge aus ") + clip_from_ +
-                              ". Mehr → Hier einfügen.",
-                          card.x + 30.0f, y, card.w - 60.0f, kInk, 3) +
-                10.0f;
+                              (clip_paths_.size() == 1 ? " Eintrag" : " Einträge"),
+                          "aus " + clip_from_ + " · Mehr → Hier einfügen", kBlue);
         if (!picked_.empty())
-            y = paragraph(canvas, std::to_string(picked_.size()) + " ausgewählt", card.x + 30.0f, y, card.w - 60.0f,
-                          kBlue, 1) +
-                10.0f;
+            y = note_card(canvas, paint, card, y, std::to_string(picked_.size()) + " ausgewählt",
+                          "Quadrat-Taste: Kopieren, Ausschneiden, Löschen …", kBlue);
 
         // the job at the bottom
         const float jy = kBottom - 170.0f;
@@ -487,7 +563,37 @@ class FilesPage final : public Page
     void open(const std::string &path, ui::Feedback &feedback)
     {
         feedback.play(audio::Cue::select);
+        if (history_.size() >= 64)
+            history_.erase(history_.begin());
+        history_.push_back(folder_.path); // where O leads back to
         source().files_open(path);
+    }
+
+    // O: back where the user was before opening this folder (a place opened from Orte goes back to Orte, not to /mnt),
+    // with the focus on the folder just left (user, 30.10.2026). Without a way back: up one folder.
+    void go_back(ui::Feedback &feedback)
+    {
+        while (!history_.empty() && history_.back() == folder_.path)
+            history_.pop_back();
+        std::string target = folder_.parent;
+        if (!history_.empty())
+        {
+            target = history_.back();
+            history_.pop_back();
+        }
+        came_from_ = folder_.path;
+        source().files_open(target);
+        feedback.play(audio::Cue::back);
+    }
+
+    // The row "Übergeordneter Ordner": always the folder above.
+    void go_up(ui::Feedback &feedback)
+    {
+        came_from_ = folder_.path;
+        while (!history_.empty() && history_.back() == folder_.parent)
+            history_.pop_back();
+        source().files_open(folder_.parent);
+        feedback.play(audio::Cue::back);
     }
 
     void activate(ui::Feedback &feedback)
@@ -499,7 +605,7 @@ class FilesPage final : public Page
         }
         if (focused_tag() == kUpTag)
         {
-            open(folder_.parent, feedback);
+            go_up(feedback);
             return;
         }
         const FsEntry *e = focused_entry();
@@ -555,7 +661,7 @@ class FilesPage final : public Page
         items.push_back(item("Umbenennen", kRename, !e->writable || !pickable(*e)));
         items.push_back(item("Löschen" + count, kDelete, !all_writable || job_.active, true));
         menu_.set_items(items);
-        menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
+        menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
     }
 
     void open_page_menu(ui::Feedback &feedback)
@@ -577,7 +683,7 @@ class FilesPage final : public Page
             items.push_back(item("Auftrag abbrechen", kCancel, false, true));
         items.push_back(item("Aktualisieren", kReload));
         menu_.set_items(items);
-        menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
+        menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
     }
 
     std::string paths_json(const std::vector<std::string> &paths) const
@@ -759,8 +865,8 @@ class FilesPage final : public Page
             return out;
         }
         ui::ListItem up;
-        up.title = "..";
-        up.subtitle = folder_.parent.empty() ? "zurück zu den Orten" : "hoch zu " + folder_.parent;
+        up.title = "Übergeordneter Ordner";
+        up.subtitle = folder_.parent.empty() ? "zurück zu den Orten" : folder_.parent;
         up.tag = kUpTag;
         out.push_back(up);
         if (!folder_.error.empty())
@@ -793,9 +899,8 @@ class FilesPage final : public Page
                 item.value = format_bytes(e.size);
             else if (s != sizes_.end())
                 item.value = s->second.failed ? "?" : format_bytes(s->second.bytes) + (s->second.partial ? "+" : "");
-            if (picked_.count(e.name))
-                item.badge = "AUSGEWÄHLT";
-            else if (!clip_paths_.empty() && std::find(clip_paths_.begin(), clip_paths_.end(), full) != clip_paths_.end())
+            // picked: the sign turns into a check (glyph_of), no badge
+            if (picked_.count(e.name) == 0 && !clip_paths_.empty() && std::find(clip_paths_.begin(), clip_paths_.end(), full) != clip_paths_.end())
                 item.badge = clip_move_ ? "AUSGESCHNITTEN" : "KOPIERT";
             item.tag = kEntryTag + static_cast<int>(i);
             out.push_back(item);
@@ -825,14 +930,42 @@ class FilesPage final : public Page
         std::string key = folder_.path;
         for (const ui::ListItem &i : next)
             key += '\n' + i.title + '\t' + i.subtitle + '\t' + i.value + '\t' + i.badge;
+        for (const std::string &name : picked_)
+            key += "\n+" + name;
         if (key != key_)
         {
             key_ = std::move(key);
             const int keep = list_.focus();
             list_.set_items(next);
             list_.set_focus(std::clamp(keep, 0, std::max(static_cast<int>(next.size()) - 1, 0)));
+            focus_came_from();
         }
         refresh_info();
+    }
+
+    // After going up: the row of the folder we came out of, once the parent's list is here.
+    void focus_came_from()
+    {
+        if (came_from_.empty() || came_from_ == folder_.path)
+            return;
+        const std::vector<ui::ListItem> &rows = list_.items();
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int tag = rows[i].tag;
+            std::string path;
+            if (tag >= kEntryTag && tag - kEntryTag < static_cast<int>(entries_.size()))
+                path = join(folder_.path, entries_[static_cast<std::size_t>(tag - kEntryTag)].name);
+            else if (tag >= kPlaceTag && tag < kEntryTag && tag - kPlaceTag < static_cast<int>(places_.size()))
+                path = places_[static_cast<std::size_t>(tag - kPlaceTag)].path;
+            if (!path.empty() && path == came_from_)
+            {
+                list_.set_focus(static_cast<int>(i));
+                came_from_.clear();
+                return;
+            }
+        }
+        if (folder_.path.empty() ? !places_.empty() : !entries_.empty())
+            came_from_.clear(); // the list is here and the folder is not in it
     }
 
     void refresh_info()
@@ -879,6 +1012,199 @@ class FilesPage final : public Page
         info_.set_items(rows);
     }
 
+    static Glyph entry_glyph(const FsEntry &e)
+    {
+        if (e.type == "dir")
+            return Glyph::folder;
+        if (e.type == "dirlink" || e.type == "link")
+            return Glyph::link;
+        return Glyph::file;
+    }
+
+    Glyph glyph_of(const ui::ListItem &item) const
+    {
+        if (item.tag == kUpTag)
+            return Glyph::up;
+        if (item.tag >= kPlaceTag && item.tag < kEntryTag)
+            return Glyph::drive;
+        const int i = item.tag - kEntryTag;
+        if (i >= 0 && i < static_cast<int>(entries_.size()))
+        {
+            const FsEntry &e = entries_[static_cast<std::size_t>(i)];
+            return picked_.count(e.name) != 0 ? Glyph::picked : entry_glyph(e);
+        }
+        return Glyph::file;
+    }
+
+    Color ink_of(const ui::ListItem &item) const
+    {
+        const Glyph g = glyph_of(item);
+        if (item.tag < 0)
+            return {0.0f, 0.0f, 0.0f, 0.0f}; // "Wird gelesen", "leer": no sign
+        return g == Glyph::file || g == Glyph::up ? kFileInk : kFolderInk;
+    }
+
+    static std::string base_or_root(const std::string &path)
+    {
+        const std::size_t cut = path.find_last_of('/');
+        if (cut == std::string::npos || cut + 1 >= path.size())
+            return path;
+        return path.substr(cut + 1);
+    }
+
+    std::string card_subtitle(const FsEntry *e, const FsPlace *pl, const std::string &where) const
+    {
+        if (e != nullptr)
+            return join(folder_.path, e->name);
+        if (pl != nullptr)
+            return pl->path;
+        if (focused_tag() == kUpTag)
+            return folder_.parent.empty() ? "zurück zu den Orten" : "hoch nach " + folder_.parent;
+        return where;
+    }
+
+    // Where we are: the folders from the root, the last one bright; on the right how many and in which order, and that
+    // L2 and R2 turn the pages.
+    void draw_path_bar(ui::Canvas &canvas, ui::Painter &paint) const
+    {
+        gfx::DrawList &list = canvas.list;
+        const ui::Fonts &fonts = canvas.fonts;
+        const Rect bar{kLeftX, kFilesTop, kLeftW, kBarH};
+        list.rounded_rect(bar, bar.h * 0.5f, Color::rgb(0x0b1430, 0.72f));
+        list.bordered_rect(bar, bar.h * 0.5f, {0.0f, 0.0f, 0.0f, 0.0f}, 1.0f, Color::rgb(0x3880ff, 0.28f));
+        const float base = bar.y + bar.h * 0.5f + 7.0f;
+        draw_glyph(list, folder_.path.empty() ? Glyph::drive : Glyph::folder, bar.x + 32.0f, bar.y + bar.h * 0.5f, 24.0f,
+                   kFolderInk);
+
+        // right: count · order, then the L2 R2 glyphs
+        const char *order = sort_ == 1 ? "Größe" : sort_ == 2 ? "Datum" : "Name";
+        const std::string right =
+            folder_.path.empty() ? std::to_string(places_.size()) + " Orte"
+                                 : std::to_string(entries_.size()) + " Einträge · nach " + order;
+        const ui::GlyphStyle glyphs = ui::GlyphStyle::dark();
+        const float r2w = ui::button_width(ui::Button::r2, 30.0f);
+        const float l2w = ui::button_width(ui::Button::l2, 30.0f);
+        float rx = bar.x + bar.w - 22.0f;
+        const float jump_w = fonts.regular.measure("Blättern", 18.0f);
+        ui::text(list, fonts.regular, "Blättern", rx, base - 1.0f, 18.0f, kMuted, gfx::Align::right);
+        rx -= jump_w + 10.0f + r2w;
+        ui::draw_button(list, fonts, glyphs, ui::Button::r2, rx, bar.y + bar.h * 0.5f, 30.0f);
+        rx -= 6.0f + l2w;
+        ui::draw_button(list, fonts, glyphs, ui::Button::l2, rx, bar.y + bar.h * 0.5f, 30.0f);
+        rx -= 26.0f;
+        ui::text(list, fonts.regular, right, rx, base - 1.0f, 18.0f, kMuted, gfx::Align::right);
+        const float right_w = fonts.regular.measure(right, 18.0f);
+
+        // left: the crumbs, dropped from the front with "…" when they do not fit
+        std::vector<std::string> parts;
+        if (folder_.path.empty())
+            parts.push_back("Orte");
+        else
+        {
+            parts.push_back("Orte");
+            std::size_t from = 1;
+            while (from < folder_.path.size())
+            {
+                const std::size_t to = folder_.path.find('/', from);
+                const std::string part = folder_.path.substr(from, to == std::string::npos ? std::string::npos : to - from);
+                if (!part.empty())
+                    parts.push_back(part);
+                if (to == std::string::npos)
+                    break;
+                from = to + 1;
+            }
+        }
+        const float left = bar.x + 58.0f;
+        const float room = rx - right_w - 30.0f - left;
+        const auto width_of = [&](std::size_t first)
+        {
+            float w = first > 0 ? fonts.regular.measure("…", 20.0f) + 30.0f : 0.0f;
+            for (std::size_t i = first; i < parts.size(); ++i)
+                w += fonts.semibold.measure(parts[i], 20.0f) + (i + 1 < parts.size() ? 30.0f : 0.0f);
+            return w;
+        };
+        std::size_t first = 0;
+        while (first + 1 < parts.size() && width_of(first) > room)
+            ++first;
+        float x = left;
+        const auto chevron = [&](float at)
+        {
+            const float cy = bar.y + bar.h * 0.5f;
+            list.line(at + 10.0f, cy - 6.0f, at + 16.0f, cy, 2.0f, kMuted);
+            list.line(at + 16.0f, cy, at + 10.0f, cy + 6.0f, 2.0f, kMuted);
+        };
+        if (first > 0)
+        {
+            ui::text(list, fonts.regular, "…", x, base, 20.0f, kMuted);
+            x += fonts.regular.measure("…", 20.0f);
+            chevron(x);
+            x += 30.0f;
+        }
+        for (std::size_t i = first; i < parts.size(); ++i)
+        {
+            const bool last = i + 1 == parts.size();
+            const std::string shown = last ? ui::fit_label(paint, parts[i], 20.0f, std::max(room - (x - left), 40.0f))
+                                           : parts[i];
+            ui::text(list, last ? fonts.semibold : fonts.regular, shown, x, base, 20.0f, last ? kInk : kMuted);
+            x += (last ? fonts.semibold : fonts.regular).measure(shown, 20.0f);
+            if (!last)
+            {
+                chevron(x);
+                x += 30.0f;
+            }
+        }
+    }
+
+    // A small framed note on the right card: a bold line and a quiet one.
+    float note_card(ui::Canvas &canvas, ui::Painter &paint, const Rect &card, float y, const std::string &title,
+                    const std::string &text, Color accent) const
+    {
+        gfx::DrawList &list = canvas.list;
+        const Rect box{card.x + 30.0f, y, card.w - 60.0f, 92.0f};
+        list.rounded_rect(box, 16.0f, accent.with_alpha(0.12f));
+        list.rounded_rect({box.x, box.y + 14.0f, 4.0f, box.h - 28.0f}, 2.0f, accent);
+        ui::text(list, canvas.fonts.semibold, ui::fit_label(paint, title, 22.0f, box.w - 48.0f), box.x + 24.0f,
+                 box.y + 38.0f, 22.0f, kInk);
+        ui::text(list, canvas.fonts.regular, ui::fit_label(paint, text, 18.0f, box.w - 48.0f), box.x + 24.0f,
+                 box.y + 70.0f, 18.0f, kMuted);
+        return box.y + box.h + 14.0f;
+    }
+
+    // L2 / R2: a page of rows up or down; held, it goes on after a moment, like the D-pad.
+    bool jump(const InputFrame &input, ui::Feedback &feedback)
+    {
+        const bool down = input.is_held(Action::jump_next);
+        const bool up = input.is_held(Action::jump_prev);
+        if (!down && !up)
+        {
+            jump_since_ = -1.0f;
+            return false;
+        }
+        const bool fresh = input.is_pressed(Action::jump_next) || input.is_pressed(Action::jump_prev);
+        if (fresh)
+        {
+            jump_since_ = clock_;
+            jump_next_ = clock_ + 0.35f;
+        }
+        else if (jump_since_ < 0.0f || clock_ < jump_next_)
+            return true;
+        else
+            jump_next_ = clock_ + 0.09f;
+        const int count = static_cast<int>(list_.items().size());
+        const int from = list_.focus();
+        const int to = std::clamp(from + (down ? kJumpRows : -kJumpRows), 0, std::max(count - 1, 0));
+        if (to == from)
+        {
+            if (fresh)
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.4f);
+            return true;
+        }
+        list_.set_focus(to, false);
+        feedback.play(audio::Cue::focus);
+        refresh_info();
+        return true;
+    }
+
     float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width, Color ink,
                     int max_lines) const
     {
@@ -900,6 +1226,8 @@ class FilesPage final : public Page
     ui::Keyboard keys_;
     tween::Spring shown_;
     float clock_ = 0.0f;
+    float jump_since_ = -1.0f; // L2 / R2 held since, -1 when neither
+    float jump_next_ = 0.0f;
     std::string key_;
     std::string info_key_ = "\x01";
     bool entered_ = false;
@@ -918,6 +1246,8 @@ class FilesPage final : public Page
     bool clip_move_ = false;
     std::string clip_from_;
     std::vector<std::string> clip_paths_;
+    std::string came_from_;            // the folder just left with O, until its row has the focus
+    std::vector<std::string> history_; // the folders opened from, for O ("" = Orte)
 
     Dialog dialog_ = kNone;
     FsEntry menu_entry_;

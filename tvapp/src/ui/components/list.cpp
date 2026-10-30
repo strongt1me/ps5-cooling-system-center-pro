@@ -43,6 +43,15 @@ void ListView::set_focus(int index, bool snap)
     if (items_.empty())
         return;
     focus_ = std::clamp(index, 0, static_cast<int>(items_.size()) - 1);
+    // a section title never holds the focus: the next row below it, else the one above
+    if (items_[static_cast<std::size_t>(focus_)].header)
+    {
+        int row = step(focus_, 1);
+        if (row < 0)
+            row = step(focus_, -1);
+        if (row >= 0)
+            focus_ = row;
+    }
     retarget(snap);
 }
 
@@ -245,9 +254,14 @@ void ListView::draw(Canvas &canvas) const
 
         if (item.header)
         {
-            paint.label(upper(item.title), row.x + style.padding, row.y + row.h - 14.0f,
-                        style.header_size,
-                        style.panel || style.cards ? theme.text_muted : paint.page_text_muted());
+            const Color muted = style.panel || style.cards ? theme.text_muted : paint.page_text_muted();
+            const float baseline = row.y + row.h - 14.0f;
+            const float left = row.x + style.padding;
+            const float width = paint.label(upper(item.title), left, baseline, style.header_size, muted);
+            if (style.header_rule)
+                list.rounded_rect({left + width + 16.0f, baseline - style.header_size * 0.36f,
+                                   std::max(row.w - 2.0f * style.padding - width - 16.0f, 0.0f), 1.5f},
+                                  0.0f, muted.with_alpha(0.25f));
         }
         else
         {

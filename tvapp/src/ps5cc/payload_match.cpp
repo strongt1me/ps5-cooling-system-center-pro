@@ -4,7 +4,9 @@
 
 #include "ps5cc/payload_match.hpp"
 
+#include <algorithm>
 #include <cctype>
+#include <set>
 
 namespace hui::ps5cc
 {
@@ -64,6 +66,29 @@ bool payload_loaded(const std::string &name, const std::vector<std::string> &run
     return false;
 }
 
+std::string payload_version(const std::string &name)
+{
+    std::string lower;
+    for (const char c : name)
+        lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (const char *ext : {".elf", ".bin", ".self"})
+    {
+        const std::string e(ext);
+        if (lower.size() > e.size() && lower.compare(lower.size() - e.size(), e.size(), e) == 0)
+            lower.resize(lower.size() - e.size());
+    }
+    std::string all;
+    for (const char c : lower)
+    {
+        if (std::isalnum(static_cast<unsigned char>(c)))
+            all += c;
+    }
+    std::string rest = all.substr(std::min(all.size(), payload_key(name).size()));
+    if (!rest.empty() && rest[0] == 'v')
+        rest.erase(0, 1);
+    return rest;
+}
+
 bool payload_file_loaded(const std::string &file, const std::vector<std::string> &folder,
                          const std::vector<RunningRef> &running)
 {
@@ -74,12 +99,14 @@ bool payload_file_loaded(const std::string &file, const std::vector<std::string>
         if (!r.file.empty() && r.file == file)
             return true;
     }
-    int kin = 0;
+    // the versions of this payload in the folder; the same one twice (internal and on USB) counts once
+    std::set<std::string> versions;
     for (const std::string &f : folder)
     {
         if (payload_same(f, file))
-            ++kin;
+            versions.insert(payload_version(f));
     }
+    const std::size_t kin = versions.size();
     for (const RunningRef &r : running)
     {
         if (r.file.empty() && payload_same(r.name, file) && kin <= 1)

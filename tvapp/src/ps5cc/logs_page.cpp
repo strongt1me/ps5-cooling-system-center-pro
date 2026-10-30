@@ -144,14 +144,22 @@ class LogsPage final : public Page
         const float baseline = kTabY + kTabH * 0.5f + 8.0f;
         ui::text(list, fonts.regular, text, 1824.0f, baseline, 21.0f, follow_ ? kMuted : kWarning,
                  gfx::Align::right);
+        // Starts after the R2 glyph: right-aligned, a long file name ran back over it. The file loses its fixed
+        // "aufnahme-" and ".log" so the line stays clear of the line count on the right.
+        const Rect &tabs = views_.bounds();
+        const float status_x = tabs.x + tabs.w + 14.0f + ui::button_width(ui::Button::r2, 38.0f) + 22.0f;
         if (view_ == kKernel && record_.recording)
         {
-            const std::string rec = "Aufnahme läuft · " + format_bytes(record_.bytes) + " · " + record_.file;
-            ui::text(list, fonts.semibold, rec, 1824.0f - 330.0f, baseline, 21.0f, kCritical, gfx::Align::right);
+            std::string file = record_.file;
+            if (file.rfind("aufnahme-", 0) == 0)
+                file.erase(0, 9);
+            if (file.size() > 4 && file.compare(file.size() - 4, 4, ".log") == 0)
+                file.resize(file.size() - 4);
+            const std::string rec = "Aufnahme läuft · " + format_bytes(record_.bytes) + " · " + file;
+            ui::text(list, fonts.semibold, rec, status_x, baseline, 21.0f, kCritical);
         }
         else if (view_ == kKernel && lost_)
-            ui::text(list, fonts.semibold, "Zeilen verpasst", 1824.0f - 330.0f, baseline, 21.0f, kWarning,
-                     gfx::Align::right);
+            ui::text(list, fonts.semibold, "Zeilen verpasst", status_x, baseline, 21.0f, kWarning);
         list_.draw(canvas);
     }
 

@@ -64,7 +64,6 @@ class GameExtras
     ExtrasVersions versions_;
     ExtrasLz4Plan plan_;
     LibraryTools library_;
-    bool cache_on_ = true;
     std::string lib_; // ampr or playgo, for the versions view
     std::vector<std::string> version_names_;
     std::vector<std::string> profile_ids_; // the choices of the LZ4 mode, "" = automatic

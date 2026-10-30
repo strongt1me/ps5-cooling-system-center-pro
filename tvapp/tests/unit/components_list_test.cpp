@@ -7,6 +7,8 @@
 
 #include <gtest/gtest.h>
 
+#include <vector>
+
 namespace
 {
 
@@ -51,6 +53,19 @@ TEST_F(ComponentsList, FocusSkipsHeaders)
     EXPECT_EQ(list_view_.focus(), 1);
     EXPECT_EQ(send(nav(Direction::up)), Event::refused);
     EXPECT_EQ(list_view_.focus(), 1);
+}
+
+TEST_F(ComponentsList, SetFocusOnAHeaderTakesTheRowBelow)
+{
+    list_view_.set_focus(0);
+    EXPECT_EQ(list_view_.focus(), 1);
+    std::vector<ListItem> items(2);
+    items[0].title = "Row";
+    items[1].title = "Trailing section";
+    items[1].header = true;
+    list_view_.set_items(items);
+    list_view_.set_focus(1);
+    EXPECT_EQ(list_view_.focus(), 0);
 }
 
 TEST_F(ComponentsList, MovesAndPlaysTheMoveCue)

@@ -37,9 +37,10 @@ ps5tm_usbeject_path_ok(const char *mount) {
 }
 
 /* The app's own jobs, any of them: most read or write USB drives, and which drive a job uses is not always known
-   beforehand (a copy from the SSD to usb1, a backup, the file manager). 1 with the reason. */
-static int
-app_job_running(char *why, size_t n) {
+   beforehand (a copy from the SSD to usb1, a backup, the file manager). 1 with what runs. Also asked before a game is
+   mounted or unmounted (smpremount.c). */
+int
+ps5tm_app_job_running(char *why, size_t n) {
   static const struct { int (*busy)(void); const char *what; } jobs[] = {
     { ps5tm_gamecopy_busy,    "Es läuft eine Kopie oder ein Dump" },
     { ps5tm_gameconvert_busy, "Es läuft eine Konvertierung" },
@@ -56,7 +57,7 @@ app_job_running(char *why, size_t n) {
   };
   for(size_t i = 0; i < sizeof(jobs) / sizeof(jobs[0]); i++)
     if(jobs[i].busy()) {
-      snprintf(why, n, "%s. Solange ein Auftrag der App läuft, wirft die App kein Laufwerk aus.", jobs[i].what);
+      snprintf(why, n, "%s", jobs[i].what);
       return 1;
     }
   return 0;
@@ -197,7 +198,14 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     return 409;
   }
   char why[240];
-  if(app_job_running(why, sizeof(why)) || drive_in_use(mount, why, sizeof(why))) {
+  if(ps5tm_app_job_running(why, sizeof(why))) {
+    snprintf(msg, n, "%s wurde nicht ausgeworfen: %s. Solange ein Auftrag der App läuft, wirft die App kein Laufwerk aus.",
+             label, why);
+    PS5TM_INFO("usb_eject_held", "%s", msg);
+    finish("failed", msg);
+    return 409;
+  }
+  if(drive_in_use(mount, why, sizeof(why))) {
     snprintf(msg, n, "%s wurde nicht ausgeworfen: %s", label, why);
     PS5TM_INFO("usb_eject_held", "%s", msg);
     finish("failed", msg);

@@ -19,6 +19,7 @@ namespace
 
 constexpr int kExtrasTag = 200;
 constexpr int kLibraryTag = 201;
+constexpr int kRemountTag = 202; // + 0 remount, 1 unmount, 2 mount
 
 
 using gfx::Color;
@@ -200,8 +201,30 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
     // as in the web app: only for games with a folder or image of their own, not for installed packages
     extras.disabled = game.path.empty() || game.format == "pkg" || game.format == "fpkg" || game.format == "ps4mount";
     items.push_back(extras);
+    // Taken out of ShadowMountPlus and put back (30.10.2026): for a game that hangs or should be found anew after
+    // copying, moving or deleting. Mounted: "Neu einhängen" and "Aushängen", else "Einhängen". Never while it runs.
+    if (game.can_remount)
+    {
+        const bool live = game.id == running_id_;
+        const auto add = [&](const char *label, int offset)
+        {
+            ui::MenuItem m;
+            m.label = label;
+            m.tag = kRemountTag + offset;
+            m.shortcut = live ? "läuft gerade" : "ShadowMountPlus";
+            m.disabled = live;
+            items.push_back(m);
+        };
+        if (game.smp_mounted)
+        {
+            add("Neu einhängen", 0);
+            add("Aushängen", 1);
+        }
+        else
+            add("Einhängen", 2);
+    }
     ui::MenuItem library;
-    library.label = "Bibliothek: Doppelte & Covers …";
+    library.label = "Bibliothek: Doppelte Abbilder …";
     library.tag = kLibraryTag;
     items.push_back(library);
     menu_.set_items(items);
@@ -485,6 +508,13 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
                 {
                     if (on_library)
                         on_library(feedback);
+                }
+                else if (tag >= kRemountTag && tag <= kRemountTag + 2)
+                {
+                    // at once, nothing asked twice; the answer comes as a notice
+                    static const char *const kActions[3] = {"remount", "unmount", "mount"};
+                    feedback.play(audio::Cue::select);
+                    source().remount_game(game_.id, kActions[tag - kRemountTag]);
                 }
                 else
                     open_tool(static_cast<Tool>(tag), feedback);

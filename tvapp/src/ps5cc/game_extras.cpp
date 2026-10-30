@@ -44,8 +44,6 @@ enum Row
     kTarget,
     kPlanText,
     kPackStart,
-    kCache = 80,
-    kCacheClear,
     kStatus = 90,   // + section: the state, always in sight
     kVersion = 100, // + index
     kDup = 300,     // + index
@@ -223,7 +221,7 @@ void GameExtras::build()
     else if (view_ == kLz4)
         key += extras_.lz4;
     else
-        key += library_.duplicates + library_.cache;
+        key += library_.duplicates;
     if (key == key_)
     {
         if (view_ == kLz4)
@@ -513,16 +511,7 @@ void GameExtras::build_library()
     }
     if (rows == 0)
         form_.add_value(kDup, library_.duplicates.empty() ? "Wird gesucht …" : "Keine doppelten Abbilder", "");
-    Json c(library_.cache);
-    form_.add_header("COVERS & METADATEN");
-    cache_on_ = c.root == nullptr || yes(c.root, "enabled");
-    form_.add_toggle(kCache, "Covers & Metadaten speichern", cache_on_).description =
-        "Damit die Bibliothek nach einem Neustart sofort mit Bildern da ist.";
-    const int titles = static_cast<int>(num(c.root, "titles"));
-    ui::FormRow &clear = form_.add_action(kCacheClear, "Ordner leeren");
-    clear.description = std::to_string(titles) + " Spiele gespeichert · " +
-                        format_bytes(static_cast<std::uint64_t>(num(c.root, "bytes")));
-    clear.disabled = titles <= 0;
+    // Covers & Metadaten live under System → Speicher (user, 29.10.2026).
 }
 
 std::string GameExtras::plan_text() const
@@ -641,9 +630,6 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         build();
         break;
     }
-    case kCacheClear:
-        source().library_tools_post("library/cache/clear", "{}");
-        break;
     default:
         break;
     }
@@ -673,8 +659,6 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         else if (id == kLevel || id == kMode)
             ask_plan();
-        else if (id == kCache)
-            source().save_config(std::string("{\"library_cache\":") + (form_.toggle_value(kCache) ? "1" : "0") + "}");
     }
 }
 
@@ -746,7 +730,7 @@ void GameExtras::draw_overlay(ui::Canvas &canvas) const
     ui::Painter paint(list, fonts, theme_);
     solid_floor(list, panel, theme_.radius_card);
     paint.panel(panel);
-    const std::string title = view_ == kLibrary   ? "Bibliothek: Doppelte Abbilder & Covers"
+    const std::string title = view_ == kLibrary   ? "Bibliothek: Doppelte Abbilder"
                               : view_ == kVersions ? std::string(lib_ == "playgo" ? "PlayGo" : "APR-EMU") + " · " + game_.name
                               : view_ == kLz4      ? "Mit LZ4 packen · " + game_.name
                                                    : "Extras · " + game_.name;

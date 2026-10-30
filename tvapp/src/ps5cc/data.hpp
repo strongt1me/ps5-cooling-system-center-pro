@@ -62,6 +62,8 @@ struct Game
     bool can_convert = false;
     bool can_move = false;
     bool can_unpack = false;
+    bool can_remount = false; // ShadowMountPlus can take it out and put it back (1.7beta10)
+    bool smp_mounted = false; // ShadowMountPlus has it mounted now
     bool ampr_emu = false; // mods.ampr_emu: the conversion builds the AMPR index first by default
     std::string disc;          // installed from disc: "in" (the disc is in the drive) or "out"; "" otherwise
     bool dump_mounted = false; // the game runs (mounted), so it can be dumped
@@ -913,6 +915,8 @@ class Source
     virtual void set_target(int celsius) = 0;
     virtual void launch(const std::string &id) = 0;
     virtual void close_game(const std::string &id) = 0;
+    // One game "unmount", "mount" or "remount" through ShadowMountPlus; the answer comes as a notice.
+    virtual void remount_game(const std::string &id, const std::string &action) = 0;
     virtual void cancel_job(JobKind kind) = 0;
     virtual void open_web_ui() = 0;
     virtual void reload() = 0;

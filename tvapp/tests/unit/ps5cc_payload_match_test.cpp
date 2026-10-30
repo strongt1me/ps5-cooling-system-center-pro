@@ -49,6 +49,12 @@ TEST(Ps5ccPayloadMatch, OnlyTheVersionStartedGlows)
     EXPECT_FALSE(payload_file_loaded("ShadowMountPlus_1.7beta7.elf", folder, unknown));
     // a single file of its kind is the one
     EXPECT_TRUE(payload_file_loaded("nanodns_v0.4.elf", folder, unknown));
+    // the same version internal and on USB, written differently, is still one version
+    const std::vector<std::string> twice = {"ShadowMountPlus_1.7beta10.elf", "shadowmountplus_v1.7_Beta10.elf"};
+    const std::vector<hui::ps5cc::RunningRef> smp = {{"shadowmountplus.elf", ""}};
+    EXPECT_EQ(hui::ps5cc::payload_version(twice[0]), hui::ps5cc::payload_version(twice[1]));
+    EXPECT_TRUE(payload_file_loaded(twice[0], twice, smp));
+    EXPECT_TRUE(payload_file_loaded(twice[1], twice, smp));
 }
 
 } // namespace

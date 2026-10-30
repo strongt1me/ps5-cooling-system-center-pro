@@ -27,6 +27,7 @@ class HttpSource final : public Source
     void set_target(int celsius) override;
     void launch(const std::string &id) override;
     void close_game(const std::string &id) override;
+    void remount_game(const std::string &id, const std::string &action) override;
     void cancel_job(JobKind kind) override;
     void open_web_ui() override;
     void reload() override;
@@ -77,6 +78,7 @@ class HttpSource final : public Source
             target,
             launch,
             close,
+            remount,
             cancel,
             web,
             reload,

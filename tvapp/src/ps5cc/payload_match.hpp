@@ -16,6 +16,8 @@ namespace hui::ps5cc
 
 // "ShadowMountPlus_1.7beta10.elf" -> "shadowmountplus", "pldmgr_v0.6.3.elf" -> "pldmgr"
 std::string payload_key(const std::string &name);
+// "ShadowMountPlus_1.7beta10.elf" and "shadowmountplus_v1.7_Beta10.elf" -> "17beta10"
+std::string payload_version(const std::string &name);
 // The same payload: equal keys, or one of at least six characters the start of the other.
 bool payload_same(const std::string &a, const std::string &b);
 // Whether any of the running names is this payload.

@@ -4831,6 +4831,24 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
   /* The plugins of a game (plugins.c): GET ?id= the state, POST {id, action: apply} brings them up to date. */
+  /* One game taken out of ShadowMountPlus and put back (smpremount.c): {"id", "action": mount|unmount|remount}. */
+  if(!strcmp(req->path, "/api/v1/library/remount")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
+    const cJSON *jact = b ? cJSON_GetObjectItem(b, "action") : NULL;
+    char id[16] = "", action[12] = "", msg[400] = "";
+    if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
+    if(cJSON_IsString(jact)) snprintf(action, sizeof(action), "%s", jact->valuestring);
+    cJSON_Delete(b);
+    int http = ps5tm_smpremount(id, action, msg, sizeof(msg));
+    if(http != 200) { ps5tm_http_send_error(fd, http, "remount_refused", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
   if(!strcmp(req->path, "/api/v1/library/plugins")) {
     if(is_get) {
       char id[16] = "";

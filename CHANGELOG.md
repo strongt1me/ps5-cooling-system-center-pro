@@ -2,6 +2,21 @@
 
 ## Unveröffentlicht
 
+### Einzelnes Spiel über ShadowMountPlus aus- und einhängen
+- Browser (Spielkarte) und Vollbild (Spiele → Quadrat → Aktionen): eingehängt „Neu einhängen“ und „Aushängen“, ausgehängt „Einhängen“. Hilft, wenn ein Spiel hängt oder nach Kopieren, Verschieben oder Löschen neu erkannt werden soll. Ohne Rückfrage; die Meldung sagt, was geschah.
+- Nur für Ordner und Abbilder, die ShadowMountPlus verwaltet (nicht für installierte Pakete), ab SMP 1.7beta10 (`mount_game`/`unmount_game`). Gesperrt, solange das Spiel läuft oder ein Auftrag der App läuft.
+- Neue Route `POST /api/v1/library/remount` (`src/smpremount.c`); die Spielliste meldet `can_remount`.
+
+### Vollbild-App: Ziel der Spielstand-Sicherung als Liste, Covers unter System
+- Spielstände → Dreieck → „Ziel wählen …“ klappt eine Liste aller Speicherorte mit freiem Platz auf; der gewählte ist markiert. Vorher wechselte jeder Druck das Ziel, und man sah nicht, ob schon gesichert wurde.
+- „Covers & Metadaten speichern“ und „Covers-Ordner leeren“ stehen jetzt unter System → Speicher statt im Fenster „Bibliothek: Doppelte Abbilder“.
+- Kernel-Log: „Aufnahme läuft …“ beginnt rechts neben der R2-Marke und überdeckt sie nicht mehr.
+- Neue Symbole in der Seitenleiste: Lüfter (Kühlung), zwei Ordner (Dateien), Rakete (Payloads), Zahnrad (System), Person im Kreis (Profil), Klemmbrett (Protokoll); der Controller (Spiele) bleibt.
+- System ist in Abschnitte geteilt: Laufwerke, Covers & Metadaten, Hintergrundbilder. Die Hintergrundbilder der Bereiche sind von Kühlung → Einstellungen hierher gezogen und aufklappbar; die X-Taste wechselt je Bereich zwischen Standard, Eigenes Bild und Aus.
+- Dateimanager aufgeräumt: Pfadleiste mit Ordnerkette, Anzahl und Sortierung; Symbole je Zeile (Ordner, Datei, Verknüpfung, Laufwerk, „Übergeordneter Ordner“ mit Pfeil); ausgewählte Einträge mit Häkchen statt Marke; rechts großes Symbol mit Pfad, Auswahl und Ablage als kleine Karten. Die Seite beginnt auf Höhe der Seitenleiste. L2/R2 blättern 8 Zeilen, gehalten weiter. Der Bereich heißt jetzt „Dateimanager“. Die O-Taste führt zurück, wo man vor dem Öffnen des Ordners war (ein Ort aus „Orte“ zurück zu „Orte“), der Fokus steht auf dem verlassenen Ordner; ein offenes Fenster oder Menü schließt O wie bisher zuerst.
+- Abschnittstitel in den Listen (System, Spielstände, Pakete, Spielzeit, Payloads, Disc) haben eine Linie wie in den Einstellungen.
+- Payloads (Browser und Vollbild): Dieselbe Fassung zweimal (intern und auf USB, anders geschrieben, z. B. „ShadowMountPlus_1.7beta10“ und „shadowmountplus_v1.7_Beta10“) zählt als eine Version – der Lade-Punkt leuchtet dann.
+
 ### Vollbild-App: Spiel-Extras (Phase 6), Fenster deckend, Payloads „Bereits geladen“
 - **Extras je Spiel** (Bibliothek → Quadrat-Taste → „Extras: AMPR, PlayGo, LZ4 …“, nur für Spiele mit eigenem Ordner oder Abbild): AMPR-Index bauen, APR-EMU und PlayGo (Version wählen, mitgelieferte in den Ordner legen, Original wiederherstellen, entfernen), Plugins aktualisieren/prüfen, LZ4 packen (Stufe, Profil, im Ordner oder als Kopie, mit Plan und Pflicht-Häkchen „ungepackt getestet“), prüfen, entpacken, Optimierung per Mitschnitt (starten, einsammeln, Profil erzeugen, beenden); je Bereich der Zustand, rechts Erklärung und laufender Auftrag (`tvapp/src/ps5cc/game_extras.*`)
 - **Bibliothek: Doppelte & Covers**: doppelte Abbilder deaktivieren/aktivieren, Covers & Metadaten speichern an/aus, Ordner leeren

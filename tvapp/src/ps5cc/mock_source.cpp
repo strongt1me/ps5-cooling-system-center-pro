@@ -116,6 +116,8 @@ class MockSource final : public Source
             g.can_convert = folder || format == "exfat" || format == "ffpkg" || format == "ffpfs";
             g.can_move = !installed;
             g.can_unpack = !installed && !folder;
+            g.can_remount = !installed;
+            g.smp_mounted = !installed;
             g.ampr_emu = std::string(m.id) == "PPSA01325";
             g.size_bytes = static_cast<std::uint64_t>(m.gigabytes * 1e9);
             g.played_s = static_cast<std::uint64_t>(m.hours * 3600.0);
@@ -447,6 +449,20 @@ class MockSource final : public Source
             return;
         }
         notice(Notice::Kind::success, "„" + name + "“ wird gestartet");
+    }
+
+    void remount_game(const std::string &id, const std::string &action) override
+    {
+        for (Game &g : data_.games)
+        {
+            if (g.id != id)
+                continue;
+            g.smp_mounted = action != "unmount";
+            notice(Notice::Kind::success, g.name,
+                   action == "unmount" ? "Ausgehängt." : action == "remount" ? "Neu eingehängt." : "Eingehängt.");
+            changed();
+            return;
+        }
     }
 
     void close_game(const std::string &id) override
@@ -1781,7 +1797,7 @@ class MockSource final : public Source
     // Every area on the tile's own picture; Spiele has one of the user's as well (set aside).
     void fill_backdrops()
     {
-        static const char *const kLabels[kBackdropAreas] = {"Kühlung", "Spiele", "Dateien", "Payloads",
+        static const char *const kLabels[kBackdropAreas] = {"Kühlung", "Spiele", "Dateimanager", "Payloads",
                                                             "System",  "Profil", "Protokoll"};
         data_.backdrops.clear();
         for (int i = 0; i < kBackdropAreas; ++i)

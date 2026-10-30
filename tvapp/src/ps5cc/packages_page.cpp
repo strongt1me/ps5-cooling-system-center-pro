@@ -100,6 +100,7 @@ class PackagesPage final : public Page
         theme_ = theme;
         list_.style.theme = theme;
         list_.style.panel = true;
+        list_.style.header_rule = true; // title and line, as the forms (user, 29.10.2026)
         list_.style.row_height = 80.0f;
         list_.style.title_size = 24.0f;
         list_.style.subtitle_size = 18.0f;

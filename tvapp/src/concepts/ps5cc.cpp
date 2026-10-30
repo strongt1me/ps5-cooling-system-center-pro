@@ -22,6 +22,7 @@
 #include "ui/widgets.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <cstdio>
 #include <deque>
@@ -128,11 +129,17 @@ void draw_area_icon(gfx::DrawList &list, int area, const Rect &box, Color ink)
     const Color clear{ink.r, ink.g, ink.b, 0.0f};
     switch (area)
     {
-    case kAreaCooling: // a fan: hub, three blades, housing
-        list.ring(cx, cy, s * 0.46f, t * 0.8f, ink);
+    case kAreaCooling: // a fan: three blades round a hub (29.10.2026: the old ring and dot read as a record button)
         for (int i = 0; i < 3; ++i)
-            list.arc(cx, cy, s * 0.22f, s * 0.2f, static_cast<float>(i) * kPi * 2.0f / 3.0f, kPi * 0.42f, ink);
-        list.circle(cx, cy, s * 0.08f, ink);
+        {
+            const float a = static_cast<float>(i) * kPi * 2.0f / 3.0f - kPi * 0.5f;
+            // each blade leans off the radius, so the three read as turning
+            const float bx = cx + std::cos(a + 0.35f) * s * 0.22f;
+            const float by = cy + std::sin(a + 0.35f) * s * 0.22f;
+            list.rotated_rect({bx - s * 0.17f, by - s * 0.12f, s * 0.34f, s * 0.24f}, s * 0.12f, a + 1.1f, ink);
+        }
+        list.circle(cx, cy, s * 0.1f, ink);
+        list.ring(cx, cy, s * 0.48f, t * 0.8f, ink);
         break;
     case kAreaGames: // a controller: body, d-pad, two buttons
         list.bordered_rect({x + s * 0.02f, y + s * 0.24f, s * 0.96f, s * 0.54f}, s * 0.27f, clear, t, ink);
@@ -141,36 +148,42 @@ void draw_area_icon(gfx::DrawList &list, int area, const Rect &box, Color ink)
         list.circle(x + s * 0.68f, cy - s * 0.05f, s * 0.06f, ink);
         list.circle(x + s * 0.8f, cy + s * 0.07f, s * 0.06f, ink);
         break;
-    case kAreaFiles: // a folder: tab and body
-        list.rounded_rect({x + s * 0.04f, y + s * 0.16f, s * 0.42f, s * 0.2f}, s * 0.06f, ink);
-        list.rounded_rect({x + s * 0.04f, y + s * 0.28f, s * 0.92f, s * 0.58f}, s * 0.1f, ink);
+    case kAreaFiles: // two folders: one outlined behind, one in front
+        list.bordered_rect({x + s * 0.24f, y + s * 0.1f, s * 0.72f, s * 0.54f}, s * 0.09f, clear, t * 0.8f, ink);
+        list.rounded_rect({x + s * 0.04f, y + s * 0.3f, s * 0.32f, s * 0.16f}, s * 0.05f, ink);
+        list.rounded_rect({x + s * 0.04f, y + s * 0.38f, s * 0.74f, s * 0.52f}, s * 0.09f, ink);
         break;
-    case kAreaPayloads: // a box with a play mark: something that runs
-        list.bordered_rect({x + s * 0.06f, y + s * 0.06f, s * 0.88f, s * 0.88f}, s * 0.18f, clear, t, ink);
-        list.triangle({x + s * 0.36f, y + s * 0.3f, s * 0.36f, s * 0.4f}, ink, 0.0f, kPi * 0.5f);
+    case kAreaPayloads: // a rocket: body with a window, two fins, the flame
+        list.bordered_rect({x + s * 0.32f, y + s * 0.02f, s * 0.36f, s * 0.74f}, s * 0.18f, clear, t, ink);
+        list.circle(cx, y + s * 0.32f, s * 0.08f, ink);
+        list.rotated_rect({x + s * 0.1f, y + s * 0.56f, s * 0.3f, s * 0.15f}, s * 0.075f, -0.9f, ink);
+        list.rotated_rect({x + s * 0.6f, y + s * 0.56f, s * 0.3f, s * 0.15f}, s * 0.075f, 0.9f, ink);
+        list.triangle({cx - s * 0.1f, y + s * 0.8f, s * 0.2f, s * 0.18f}, ink, 0.0f, kPi);
         break;
-    case kAreaSystem: // a chip with pins
-        list.bordered_rect({x + s * 0.2f, y + s * 0.2f, s * 0.6f, s * 0.6f}, s * 0.08f, clear, t, ink);
-        list.rounded_rect({x + s * 0.38f, y + s * 0.38f, s * 0.24f, s * 0.24f}, s * 0.04f, ink);
-        for (int i = 0; i < 3; ++i)
+    case kAreaSystem: // a gear: eight teeth, a ring, the hole
+        for (int i = 0; i < 8; ++i)
         {
-            const float p = s * (0.32f + 0.18f * static_cast<float>(i));
-            list.line(x + p, y + s * 0.02f, x + p, y + s * 0.2f, t * 0.8f, ink);
-            list.line(x + p, y + s * 0.8f, x + p, y + s * 0.98f, t * 0.8f, ink);
-            list.line(x + s * 0.02f, y + p, x + s * 0.2f, y + p, t * 0.8f, ink);
-            list.line(x + s * 0.8f, y + p, x + s * 0.98f, y + p, t * 0.8f, ink);
+            const float a = static_cast<float>(i) * kPi * 0.25f;
+            const float tx = cx + std::cos(a) * s * 0.36f;
+            const float ty = cy + std::sin(a) * s * 0.36f;
+            list.rotated_rect({tx - s * 0.08f, ty - s * 0.08f, s * 0.16f, s * 0.16f}, s * 0.03f, a, ink);
         }
+        list.ring(cx, cy, s * 0.33f, s * 0.14f, ink);
+        list.ring(cx, cy, s * 0.13f, t, ink);
         break;
-    case kAreaProfile: // a person
-        list.circle(cx, y + s * 0.3f, s * 0.2f, ink);
-        list.rounded_rect({x + s * 0.12f, y + s * 0.58f, s * 0.76f, s * 0.36f}, s * 0.18f, ink);
+    case kAreaProfile: // a person in a circle
+        list.ring(cx, cy, s * 0.47f, t * 0.8f, ink);
+        list.circle(cx, y + s * 0.38f, s * 0.14f, ink);
+        list.rounded_rect({x + s * 0.25f, y + s * 0.6f, s * 0.5f, s * 0.22f}, s * 0.11f, ink);
         break;
-    default: // the log: lines with a dot each
+    default: // the log: a clipboard with lines (user's choice, 29.10.2026)
+        list.bordered_rect({x + s * 0.16f, y + s * 0.1f, s * 0.68f, s * 0.86f}, s * 0.1f, clear, t, ink);
+        list.rounded_rect({x + s * 0.34f, y + s * 0.02f, s * 0.32f, s * 0.16f}, s * 0.06f, ink);
         for (int i = 0; i < 3; ++i)
         {
-            const float ly = y + s * (0.22f + 0.28f * static_cast<float>(i));
-            list.circle(x + s * 0.1f, ly, s * 0.07f, ink);
-            list.line(x + s * 0.28f, ly, x + s * 0.96f, ly, t, ink);
+            const float ly = y + s * (0.4f + 0.18f * static_cast<float>(i));
+            list.circle(x + s * 0.32f, ly, s * 0.04f, ink);
+            list.line(x + s * 0.42f, ly, x + s * 0.68f, ly, t * 0.8f, ink);
         }
         break;
     }
@@ -332,7 +345,7 @@ class Ps5cc final : public app::Concept
         nav_.icon = [](ui::Canvas &canvas, const Rect &box, const ui::NavEntry &entry, int, float, Color ink)
         { draw_area_icon(canvas.list, entry.tag, box, ink); };
         {
-            const char *const labels[kAreas] = {"Kühlung", "Spiele", "Dateien", "Payloads", "System", "Profil",
+            const char *const labels[kAreas] = {"Kühlung", "Spiele", "Dateimanager", "Payloads", "System", "Profil",
                                                 "Protokoll"};
             std::vector<ui::NavEntry> entries;
             for (int i = 0; i < kAreas; ++i)
@@ -700,13 +713,6 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {4.0f, 0, Direction::none, "selbsttest"},
-            // The area pictures: Kühlung switched off (its picture goes) and back to the standard one.
-            {0.25f, 0, Direction::down},
-            {0.8f, 0, Direction::none, "hintergruende"},
-            {0.25f, 0, Direction::right},
-            {1.0f, 0, Direction::none, "hintergrund-aus"},
-            {0.25f, 0, Direction::left},
-            {0.6f},
             {0.3f, action_bit(Action::page_next)},
             {0.9f, 0, Direction::down},
             {0.35f, 0, Direction::down},
@@ -720,6 +726,12 @@ class Ps5cc final : public app::Concept
             // The game tools on ASTRO BOT (an ffpkg image): the menu, then each plan.
             {0.4f, action_bit(Action::west)},
             {0.7f, 0, Direction::none, "aktionen-menue"},
+            // the menu wraps: two up are "Aushängen" near its end, with "Neu einhängen" above
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {6.0f, 0, Direction::none, "aktionen-einhaengen"}, // after the notices of the start have gone
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
             {0.2f, action_bit(Action::confirm)},
             {0.4f, 0, Direction::none, "plan-laedt"},
             {0.5f, 0, Direction::right},
@@ -816,6 +828,9 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.4f, action_bit(Action::north)},
             {0.7f, 0, Direction::none, "spielstaende-menue"},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.7f, 0, Direction::none, "spielstaende-ziel"},
             {0.3f, action_bit(Action::back)},
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
@@ -899,10 +914,16 @@ class Ps5cc final : public app::Concept
             {0.9f, 0, Direction::none, "dateien"},
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "dateien-ordner"},
+            {0.3f, action_bit(Action::jump_next)},
+            {0.7f, 0, Direction::none, "dateien-blaettern"},
+            {0.3f, action_bit(Action::jump_prev)},
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::west)},
             {0.7f, 0, Direction::none, "dateien-aktionen"},
-            {0.3f, action_bit(Action::back)},
+            {0.3f, action_bit(Action::confirm)},
+            {0.7f, 0, Direction::none, "dateien-ausgewaehlt"},
+            {0.3f, action_bit(Action::west)},
+            {0.3f, action_bit(Action::confirm)},
             {0.4f, action_bit(Action::north)},
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "dateien-neuer-ordner"},
@@ -916,6 +937,9 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "dateien-ansehen"},
             {0.3f, action_bit(Action::back)},
+            // O in a folder: up again, the focus on the place it came from
+            {0.3f, action_bit(Action::back)},
+            {0.8f, 0, Direction::none, "dateien-zurueck"},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "payloads"},
             {0.4f, action_bit(Action::jump_next)},
@@ -933,6 +957,27 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.6f, 0, Direction::none, "speicher-auswerfen"},
             {2.0f, 0, Direction::none, "speicher-ausgeworfen"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.7f, 0, Direction::none, "speicher-covers"},
+            // The area pictures, folded in: opened with X, Kühlung switched off (its picture goes) and back.
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "hintergrundbilder"},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {1.0f, 0, Direction::none, "hintergrund-aus"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.6f},
             {0.5f, action_bit(Action::page_next)},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "protokoll"},
@@ -1937,7 +1982,7 @@ class Ps5cc final : public app::Concept
         const int area = nav_.current();
         const float cx = card.x + card.w * 0.5f;
         draw_area_icon(list, area, {cx - 60.0f, card.y + 150.0f, 120.0f, 120.0f}, Color::rgb(0x3880ff, 0.85f));
-        const char *title = area == kAreaFiles ? "Dateien" : area == kAreaSystem ? "System" : "Profil";
+        const char *title = area == kAreaFiles ? "Dateimanager" : area == kAreaSystem ? "System" : "Profil";
         const char *what = area == kAreaFiles    ? "Ordner der Konsole und der Laufwerke ansehen, kopieren, verschieben und löschen."
                            : area == kAreaSystem ? "Konsole, Speicherplatz, Netzwerk, Langzeitverlauf und Expertenansichten."
                                                  : "Anzeigename, Profilbild und die Sicherung der Einstellungen.";

@@ -263,6 +263,11 @@ void HttpSource::launch(const std::string &id)
 {
     push({Request::Kind::launch, 0, id, {}});
 }
+void HttpSource::remount_game(const std::string &id, const std::string &action)
+{
+    push({Request::Kind::remount, 0, id, action});
+}
+
 void HttpSource::close_game(const std::string &id)
 {
     push({Request::Kind::close, 0, id, {}});
@@ -1198,6 +1203,18 @@ void HttpSource::handle(const Request &request)
             notice(Notice::Kind::error, "Beenden nicht möglich", message_of(body, "Unbekannter Fehler."));
         break;
     }
+    case Request::Kind::remount:
+    {
+        std::snprintf(payload, sizeof(payload), "{\"id\":\"%.20s\",\"action\":\"%.10s\"}", request.id.c_str(),
+                      request.text.c_str());
+        // ShadowMountPlus takes some seconds for an image; the answer says what happened
+        if (exchange("POST", "/api/v1/library/remount", payload, &status, &body, 70) == Net::ok && status < 300)
+            notice(Notice::Kind::success, request.id, message_of(body, "Erledigt."));
+        else
+            notice(Notice::Kind::error, "Aus- oder Einhängen nicht möglich", message_of(body, "Unbekannter Fehler."));
+        poll_library();
+        break;
+    }
     case Request::Kind::cancel:
     {
         // A delete has no way back once it started: the screen never asks to cancel one.
@@ -2001,6 +2018,8 @@ void HttpSource::poll_library()
         g.can_convert = flag(item, "can_convert");
         g.can_move = flag(item, "can_move");
         g.can_unpack = flag(item, "can_unpack");
+        g.can_remount = flag(item, "can_remount");
+        g.smp_mounted = flag(item, "mounted");
         g.ampr_emu = flag(cJSON_GetObjectItemCaseSensitive(item, "mods"), "ampr_emu");
         g.disc = str(item, "disc");
         g.dump_mounted = flag(item, "dump_mounted");

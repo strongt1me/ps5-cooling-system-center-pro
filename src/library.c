@@ -1633,6 +1633,9 @@ ps5tm_library_json(void) {
                   strcmp(g->format, "image") && g->format[0];
     cJSON_AddBoolToObject(e, "smp", g->smp);
     if(g->smp) cJSON_AddBoolToObject(e, "mounted", g->smp_mounted);
+    /* Taken out and put back through ShadowMountPlus (smpremount.c): its folders and images, not installed packages. */
+    cJSON_AddBoolToObject(e, "can_remount", g->smp && strcmp(g->format, "pkg") && ps5tm_smp_can("mount_game") &&
+                          ps5tm_smp_can("unmount_game"));
     if(g->ps4mount) cJSON_AddBoolToObject(e, "ps4mount", 1);
     cJSON_AddBoolToObject(e, "can_copy", g->real_path[0] == '/' &&
                           (!strcmp(g->format, "folder") || is_file));

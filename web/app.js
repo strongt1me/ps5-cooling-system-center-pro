@@ -2303,10 +2303,16 @@
     const [s, l] = x.length < y.length ? [x, y] : [y, x];
     return s.length >= 6 && l.startsWith(s);
   };
+  const plVer = (name) => {
+    const s = String(name || "").toLowerCase().replace(/\.(elf|bin|self)$/, "").replace(/[^a-z0-9]/g, "");
+    return s.slice(plKey(name).length).replace(/^v/, "");
+  };
   const plFileLoaded = (file) => {
     if (!file) return false;
     if (plRunning.some((r) => r.file && r.file === file)) return true;
-    const kin = plFolder.filter((f) => plSame(f, file)).length;
+    /* gleich geschriebene Fassungen zählen einmal: „ShadowMountPlus_1.7beta10“ intern und „shadowmountplus_v1.7_Beta10“
+       auf USB sind dieselbe Version */
+    const kin = new Set(plFolder.filter((f) => plSame(f, file)).map(plVer)).size;
     return kin <= 1 && plRunning.some((r) => !r.file && plSame(r.name, file));
   };
   const plDot = (on) => `<span class="pl-dot${on ? "" : " off"}" title="${on ? "geladen" : "nicht geladen"}"></span>`;
@@ -5088,6 +5094,18 @@
     const close = live
       ? `<button type="button" class="btn gm-close" data-close="${id}" title="Beendet das Spiel sofort, ohne Rückfrage. Was darin nicht gespeichert ist, geht verloren.">Spiel beenden</button>`
       : "";
+    /* Aus- und einhängen über ShadowMountPlus (30.10.2026): hilft, wenn ein Spiel hängt oder nach Kopieren, Verschieben,
+       Löschen neu erkannt werden soll. Eingehängt: „Neu einhängen“ und „Aushängen“, ausgehängt: „Einhängen“. Nicht, solange
+       das Spiel läuft. */
+    const rmWhy = pkg ? "Installierte Spiele (PKG) hängt ShadowMountPlus nicht ein."
+      : !x.smp ? "Nur für Spiele, die ShadowMountPlus verwaltet."
+      : live ? "Das Spiel läuft gerade. Erst beenden, dann aus- oder einhängen."
+      : "Aus- und Einhängen braucht ShadowMountPlus ab 1.7beta10.";
+    const rmOk = !!x.can_remount && !live;
+    const remount = x.mounted
+      ? `${btn("", `data-remount="remount" data-id="${id}"`, "Neu einhängen", rmOk, rmWhy)}
+            ${btn("", `data-remount="unmount" data-id="${id}"`, "Aushängen", rmOk, rmWhy)}`
+      : btn("", `data-remount="mount" data-id="${id}"`, "Einhängen", rmOk, rmWhy);
     /* läuft das Spiel schon, ist „Starten“ aus: ein zweiter Start desselben Titels kann die Konsole abstürzen lassen */
     return `${btn(" primary gm-start", `data-launch="${id}"`, "Starten", !!x.can_launch && !live, live ? "Das Spiel läuft schon." : why.launch)}
           ${close}
@@ -5098,6 +5116,7 @@
             ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-Asset-Packs …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
             ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
             ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy)}
+            ${remount}
           </div>`;
   };
 
@@ -5262,6 +5281,22 @@
       toast(e.message, "error");
     }
     if (btn) setTimeout(() => { btn.disabled = false; }, 2000);
+  };
+
+  /* Ein Spiel über ShadowMountPlus aus- oder einhängen, ohne Rückfrage; danach zeigt die Liste den neuen Stand. */
+  const gmRemount = async (id, action, btn) => {
+    const g = gm.list.find((x) => x.title_id === id);
+    const name = g ? g.name : id;
+    btn.disabled = true;
+    toast(action === "unmount" ? `„${name}“ wird ausgehängt …`
+      : action === "remount" ? `„${name}“ wird neu eingehängt …` : `„${name}“ wird eingehängt …`);
+    try {
+      const r = await api("/api/v1/library/remount", { method: "POST", body: JSON.stringify({ id, action }), timeoutMs: 70000 });
+      toast(`„${name}“: ${r.message || "erledigt."}`);
+    } catch (e) {
+      toast(e.message, "error");
+    }
+    await loadGames();
   };
 
   const gmLaunch = async (id, btn, close) => {
@@ -6386,6 +6421,8 @@
       if (tab) tab.click();
       return;
     }
+    const rm = e.target.closest("button[data-remount]");
+    if (rm) { if (!rm.disabled) gmRemount(rm.dataset.id, rm.dataset.remount, rm); return; }
     const apr = e.target.closest("button[data-apr]");
     if (apr) { if (!apr.disabled) aprOpen(apr.dataset.apr); return; }
     const del = e.target.closest("button[data-delete]");

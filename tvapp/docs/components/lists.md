@@ -67,6 +67,7 @@ list.draw(canvas);
 | `panel` | false | A themed panel behind the whole list |
 | `cards` | false | Every row is a themed surface of its own |
 | `dividers` | false | Hairlines between rows |
+| `header_rule` | false | A hairline after each section title, as `Form`'s |
 | `scroll_thumb` | true | A thin position marker, only when the list overflows |
 | `wrap` | false | Past the last row comes the first (not on a held direction) |
 | `focus_shift` | 8 | How far the focused row's text moves right |
