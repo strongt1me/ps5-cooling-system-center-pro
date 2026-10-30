@@ -619,6 +619,8 @@ class Ps5cc final : public app::Concept
         cooling_tabs_.update(dt);
         games_tabs_.update(dt);
         nav_veil_.target = nav_focus_ ? 1.0f : 0.0f;
+        if (!nav_focus_ && nav_veil_.value < 0.02f)
+            nav_.style.theme = theme_;
         nav_veil_.update(dt, 16.0f);
         gauge_.update(dt);
         chart_.update(dt);
@@ -1493,6 +1495,10 @@ class Ps5cc final : public app::Concept
         nav_focus_ = focus;
         nav_.set_focused(focus);
         nav_.set_expanded(focus);
+        // Opened over the page it covers it fully (user, 30.10.2026); folded back it is a see-through panel again, once
+        // it has slid in (see update()).
+        if (focus)
+            nav_.style.theme = ps5cc::solid_theme(theme_);
         if (focus)
             nav_.set_focus(nav_.current(), true);
         feedback.play(focus ? audio::Cue::open : audio::Cue::back);

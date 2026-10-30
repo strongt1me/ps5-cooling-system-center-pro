@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+### Dateimanager-Name, Seitenleiste deckend
+- Browser: Die Seite des Dateimanagers heißt in der Überschrift „Dateien & Ordner“ (der Reiter bleibt „Dateimanager“).
+- Vollbild: Die aufgeklappte Seitenleiste deckt die Seite dahinter ganz ab; zugeklappt bleibt sie durchsichtig wie die anderen Flächen.
+
 ### Einzelnes Spiel über ShadowMountPlus aus- und einhängen
 - Browser (Spielkarte) und Vollbild (Spiele → Quadrat → Aktionen): eingehängt „Neu einhängen“ und „Aushängen“, ausgehängt „Einhängen“. Hilft, wenn ein Spiel hängt oder nach Kopieren, Verschieben oder Löschen neu erkannt werden soll. Ohne Rückfrage; die Meldung sagt, was geschah.
 - Nur für Ordner und Abbilder, die ShadowMountPlus verwaltet (nicht für installierte Pakete), ab SMP 1.7beta10 (`mount_game`/`unmount_game`). Gesperrt, solange das Spiel läuft oder ein Auftrag der App läuft.
