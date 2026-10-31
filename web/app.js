@@ -4933,7 +4933,7 @@
     if (!p) return "";
     if (/^\/(data|user)\//.test(p)) return "Interne SSD";
     const usb = p.match(/^\/mnt\/usb(\d)/);
-    if (usb) return `USB-Speicher ${Number(usb[1]) + 1}`;
+    if (usb) return `usb${usb[1]}`;   /* wie die Konsole sie nennt (31.10.2026) */
     if (/^\/mnt\/ext[01]\//.test(p)) return "M.2-Erweiterung";
     return "";
   };

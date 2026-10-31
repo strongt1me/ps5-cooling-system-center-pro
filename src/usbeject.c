@@ -181,7 +181,7 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
   }
   char label[24];
   if(!strcmp(mount, "/mnt/ext0")) snprintf(label, sizeof(label), "Erweiterter Speicher");
-  else snprintf(label, sizeof(label), "USB-Speicher %d", mount[8] - '0' + 1);
+  else snprintf(label, sizeof(label), "usb%d", mount[8] - '0');   /* as the console names it */
 
   pthread_mutex_lock(&g_lock);
   int busy = g_job.running;

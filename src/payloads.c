@@ -421,7 +421,7 @@ usb_mounts(pl_usb_t *out, unsigned room) {
     for(char *tok = strtok_r(tmp, ",", &save); tok && n < room;
         tok = strtok_r(NULL, ",", &save)) {
       snprintf(out[n].mount, sizeof(out[n].mount), "%s", tok);
-      snprintf(out[n].label, sizeof(out[n].label), "USB-Speicher %u", n + 1);
+      snprintf(out[n].label, sizeof(out[n].label), "usb%u", n);
       n++;
     }
   }

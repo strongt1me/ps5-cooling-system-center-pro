@@ -275,7 +275,7 @@ refresh(ps5tm_sysinfo_t *info) {
   if(usb_storage_present()) {
     for(unsigned i = 0; i < 8; i++) {
       char label[40], path[40];
-      snprintf(label, sizeof(label), "USB-Speicher %u", i + 1);
+      snprintf(label, sizeof(label), "usb%u", i);   /* named as the console names it (user, 31.10.2026) */
       snprintf(path,  sizeof(path),  "/mnt/usb%u", i);
       add_volume(info, label, path);
     }
