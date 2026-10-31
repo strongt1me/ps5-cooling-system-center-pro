@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
 #include <cstring>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -435,6 +436,15 @@ void HttpSource::apply_avatar(const std::string &file)
         ++data_.serial;
     }
     push({Request::Kind::avatar_apply, 0, file, {}});
+}
+void HttpSource::apply_own_avatar(const std::string &path)
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.avatar_busy = true;
+        ++data_.serial;
+    }
+    push({Request::Kind::avatar_apply, 1, path, {}});
 }
 void HttpSource::restore_avatar()
 {
@@ -1249,6 +1259,7 @@ void HttpSource::run()
         {
             last_profile = now;
             poll_profile();
+            poll_own_pictures(); // a stick put in shows its pictures within a few seconds
         }
         if (page == Watch::logs && now - last_record >= 2000000)
         {
@@ -1899,8 +1910,11 @@ void HttpSource::handle(const Request &request)
             name = data_.profile.username;
         }
         std::string fail;
-        const std::string path = "/avatars/" + path_encoded(request.id);
-        if (exchange("GET", path.c_str(), {}, &status, &body, 10) != Net::ok || status != 200)
+        // value 1: a picture of one's own, read through the file manager (up to 16 MB)
+        const std::string path = request.value == 1
+                                     ? "/api/v1/files/view?path=" + url_encoded(request.id)
+                                     : "/avatars/" + path_encoded(request.id);
+        if (exchange("GET", path.c_str(), {}, &status, &body, 30) != Net::ok || status != 200)
             fail = "Das Bild ließ sich nicht laden.";
         std::vector<std::pair<std::string, std::vector<std::uint8_t>>> files;
         if (fail.empty())
@@ -2672,6 +2686,13 @@ void HttpSource::fetch_cover()
             current.id = profile_picture_key(data_.avatar_revision);
             current.cover = "/api/v1/profile/avatar/current";
             own.push_back(std::move(current));
+            for (const OwnPicture &o : data_.own_pictures)
+            {
+                Game g;
+                g.id = own_picture_key(o.path);
+                g.cover = "/api/v1/files/view?path=" + url_encoded(o.path);
+                own.push_back(std::move(g));
+            }
             for (const AvatarChoice &a : data_.avatars)
             {
                 Game g;
@@ -2720,7 +2741,8 @@ void HttpSource::fetch_cover()
         return;
     }
     // the profile pictures are drawn at about 200 px: a larger texture keeps them sharp
-    const bool large = want.id.rfind("avatarpick:", 0) == 0 || want.id.rfind("profilepic:", 0) == 0;
+    const bool large = want.id.rfind("avatarpick:", 0) == 0 ||
+                       want.id.rfind("profilepic:", 0) == 0 || want.id.rfind("ownpic:", 0) == 0;
     std::vector<std::uint8_t> rgba =
         decode_cover(reinterpret_cast<const std::uint8_t *>(body.data()), body.size(),
                      large ? kLargeCoverSize : kCoverSize);
@@ -3230,6 +3252,80 @@ void HttpSource::poll_klog_files()
     std::lock_guard<std::mutex> lock(mutex_);
     data_.klog_files = std::move(files);
     data_.klog_files_loaded = true;
+    ++data_.serial;
+}
+
+// Pictures of one's own: JPG and PNG in /data/PS5-Cooling-Center/Profilbilder, at the root of every
+// USB drive and in its Profilbilder folder (GET /api/v1/files/places and .../list).
+void HttpSource::poll_own_pictures()
+{
+    int status = 0;
+    std::string body;
+    // a folder of their own, apart from the app's staging folder "avatar" (user, 31.10.2026); the
+    // app makes it at its start
+    std::vector<std::pair<std::string, std::string>> folders = {
+        {"/data/PS5-Cooling-Center/Profilbilder", "Konsole"}};
+    if (exchange("GET", "/api/v1/files/places", {}, &status, &body, 10) == Net::ok && status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            const cJSON *p = nullptr;
+            cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(root, "places"))
+            {
+                const std::string path = str(p, "path");
+                if (path.rfind("/mnt/usb", 0) != 0 && path.rfind("/mnt/ext", 0) != 0)
+                    continue;
+                const std::string where = path.substr(path.find_last_of('/') + 1);
+                folders.emplace_back(path, where);
+                folders.emplace_back(path + "/Profilbilder", where);
+            }
+            cJSON_Delete(root);
+        }
+    }
+    const auto picture = [](const std::string &name)
+    {
+        std::string low;
+        for (const char c : name)
+            low += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        const auto ends = [&](const char *e)
+        {
+            const std::size_t n = std::strlen(e);
+            return low.size() > n && low.compare(low.size() - n, n, e) == 0;
+        };
+        return ends(".jpg") || ends(".jpeg") || ends(".png");
+    };
+    std::vector<OwnPicture> found;
+    for (const auto &[folder, where] : folders)
+    {
+        if (found.size() >= 60)
+            break;
+        const std::string route = "/api/v1/files/list?path=" + url_encoded(folder);
+        if (exchange("GET", route.c_str(), {}, &status, &body, 10) != Net::ok || status != 200)
+            continue;
+        cJSON *root = cJSON_Parse(body.c_str());
+        if (root == nullptr)
+            continue;
+        const cJSON *e = nullptr;
+        cJSON_ArrayForEach(e, cJSON_GetObjectItemCaseSensitive(root, "entries"))
+        {
+            const std::string name = str(e, "name");
+            const auto size = static_cast<std::uint64_t>(num(e, "size"));
+            if (str(e, "type") != "file" || !picture(name) || size == 0 || size > (16u << 20))
+                continue;
+            OwnPicture pic;
+            pic.path = folder + "/" + name;
+            pic.name = name;
+            pic.where = where;
+            pic.size = size;
+            found.push_back(std::move(pic));
+            if (found.size() >= 60)
+                break;
+        }
+        cJSON_Delete(root);
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.own_pictures = std::move(found);
+    data_.own_pictures_loaded = true;
     ++data_.serial;
 }
 

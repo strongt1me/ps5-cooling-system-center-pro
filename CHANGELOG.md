@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: Seitenleiste nur mit dem Touchpad
+- Links auf dem Steuerkreuz öffnet die Seitenleiste nicht mehr (vorher auf jeder Seite außer Kühlung); sie öffnet nur noch die Touchpad-Taste. Links gehört damit überall der Seite.
+- Profil: eigene Bilder (JPG, PNG bis 16 MB) aus `/data/PS5-Cooling-Center/Profilbilder` (legt die App beim Start an, getrennt von ihrem Zwischenordner `avatar`), dem Hauptverzeichnis eines USB-Laufwerks oder dessen Ordner `Profilbilder` stehen vorn im Raster („EIGENES“) und werden mit der X-Taste wie die mitgelieferten übernommen.
+
 ### USB-Laufwerke heißen wie auf der Konsole
 - Statt „USB-Speicher 1“ für `/mnt/usb0` heißen die Laufwerke jetzt `usb0`, `usb1` … – überall (System, Dateimanager, Payloads, Pakete, Auswerfen, Browser und Vollbild). Hinweis eines Nutzers: die Zählung ab 1 passte nicht zu den Pfaden der Konsole.
 - Vollbild, Profil: die Profilbilder im Raster werden in voller Größe geladen (256 px statt der 132-px-Vorschau) und sind scharf; auf der Profil-Seite kommen ihre Bilder zuerst und bis zu vier auf einmal. Links bleibt im Raster (die Seitenleiste öffnet das Touchpad). Behoben: Bilder und Upload scheiterten am kodierten Punkt im Dateinamen („Das Bild ließ sich nicht laden“, „Unbekannter Dateiname“).

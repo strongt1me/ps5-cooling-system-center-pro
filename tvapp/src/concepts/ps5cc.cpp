@@ -1587,16 +1587,8 @@ class Ps5cc final : public app::Concept
                 return;
             }
         }
-        // Left from a page that has no use for it opens the sidebar (Kühlung and Einstellungen turn
-        // values with it).
+        // The sidebar opens with the touchpad only: left belongs to the page (user, 31.10.2026).
         const View v = view();
-        const ps5cc::Page *left_page = current_page();
-        if (input.nav == Direction::left && !input.nav_repeat && v != kCooling && v != kSettings &&
-            (left_page == nullptr || !left_page->wants_left()))
-        {
-            set_nav_focus(true, feedback);
-            return;
-        }
 
         switch (v)
         {

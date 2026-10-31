@@ -4,8 +4,9 @@
 //
 // As the web app's Profil and Credits pages. ✕ on a built-in picture makes it the profile picture
 // at once (the files are built here, avatar_build.cpp, and sent as the web page sends them), □ gets
-// the one before back, △ changes the name on the on-screen keyboard. A picture of one's own, the
-// export and import of profiles and the links of the Danke page stay in the web app.
+// the one before back, △ changes the name on the on-screen keyboard. Pictures of one's own come
+// from a USB drive or /data/PS5-Cooling-Center/Profilbilder (31.10.2026). The export and import of
+// profiles and the links of the Danke page stay in the web app.
 
 #include "ps5cc/covers.hpp"
 #include "ps5cc/credits.hpp"
@@ -69,7 +70,9 @@ class ProfilePage final : public Page
                        float focus)
         {
             (void)focus;
-            const CoverShown pic = covers().texture_of(avatar_choice_key(item.subtitle));
+            // tag 1: a picture of one's own (subtitle = its path), else a built-in one
+            const CoverShown pic = covers().texture_of(
+                item.tag == 1 ? own_picture_key(item.subtitle) : avatar_choice_key(item.subtitle));
             canvas.list.rounded_rect(art, radius, kNavy);
             if (pic.texture != 0)
                 canvas.list.image(pic.texture, art, gfx::kFullUv,
@@ -139,12 +142,25 @@ class ProfilePage final : public Page
         revision_ = data.avatar_revision;
         busy_ = data.avatar_busy;
         std::string key;
+        for (const OwnPicture &o : data.own_pictures)
+            key += o.path + '\n';
         for (const AvatarChoice &a : data.avatars)
             key += a.file + '\n';
         if (key == avatars_key_)
             return;
         avatars_key_ = key;
         std::vector<ui::CardItem> items;
+        // one's own pictures first, marked, then the built-in ones
+        for (const OwnPicture &o : data.own_pictures)
+        {
+            ui::CardItem c;
+            const std::size_t dot = o.name.find_last_of('.');
+            c.title = dot == std::string::npos ? o.name : o.name.substr(0, dot);
+            c.subtitle = o.path;
+            c.badge = "EIGENES";
+            c.tag = 1;
+            items.push_back(c);
+        }
         for (const AvatarChoice &a : data.avatars)
         {
             ui::CardItem c;
@@ -167,13 +183,6 @@ class ProfilePage final : public Page
     bool modal() const override
     {
         return naming_;
-    }
-
-    // Left always moves through the pictures (at a row's start onto the end of the row above); the
-    // sidebar opens with the touchpad (user, 31.10.2026).
-    bool wants_left() const override
-    {
-        return view_ == kProfile && grid_.count() > 0;
     }
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
@@ -257,7 +266,11 @@ class ProfilePage final : public Page
                 feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
                 return;
             }
-            source().apply_avatar(grid_.items()[static_cast<std::size_t>(i)].subtitle);
+            const ui::CardItem &item = grid_.items()[static_cast<std::size_t>(i)];
+            if (item.tag == 1)
+                source().apply_own_avatar(item.subtitle);
+            else
+                source().apply_avatar(item.subtitle);
         }
     }
 
@@ -319,8 +332,9 @@ class ProfilePage final : public Page
         const char *note =
             busy_ ? "Das Profilbild wird umgerechnet und übertragen …"
                   : "Name und Bild erscheinen im Startmenü nach einem Benutzerwechsel. Die "
-                    "Quadrat-Taste holt das vorherige Bild zurück. Ein eigenes Bild lädt man in "
-                    "der Browser-App hoch.";
+                    "Quadrat-Taste holt das vorherige Bild zurück. Eigene Bilder (JPG, PNG): in "
+                    "den Ordner Profilbilder eines USB-Sticks oder nach /data/PS5-Cooling-Center/"
+                    "Profilbilder legen, sie erscheinen vorn als EIGENES.";
         int lines = 0;
         for (const std::string &line : fonts.regular.font->wrap(note, 20.0f, card.w - 60.0f))
         {

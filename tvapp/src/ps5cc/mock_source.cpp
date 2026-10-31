@@ -1012,6 +1012,15 @@ class MockSource final : public Source
         changed();
     }
 
+    void apply_own_avatar(const std::string &path) override
+    {
+        (void)path;
+        ++data_.avatar_revision;
+        notice(Notice::Kind::success, "Profilbild übernommen",
+               "Im Startmenü erscheint es nach einem Benutzerwechsel.");
+        changed();
+    }
+
     void restore_avatar() override
     {
         ++data_.avatar_revision;
@@ -1611,14 +1620,14 @@ class MockSource final : public Source
             int parts, found;
         };
         static const Seed kSeeds[] = {
-            {"a1f04c2e9b7d3016", "Lantern Pass", "/mnt/usb0", "usb0", "PPSA04211",
-             "01.000", "base", 5, 38.2, 0, 0},
-            {"b2e15d3fac8e4127", "Lantern Pass", "/mnt/usb0", "usb0", "PPSA04211",
-             "01.020", "update", 5, 4.6, 0, 0},
-            {"c3d26e40bd9f5238", "Lantern Pass – Nordwind-Paket", "/mnt/usb0", "usb0",
-             "PPSA04211", "01.000", "dlc", 5, 1.1, 0, 0},
-            {"d4c37f51ce0a6349", "Iron Tide", "/mnt/usb0", "usb0", "CUSA18842", "01.000",
-             "base", 4, 22.7, 0, 0},
+            {"a1f04c2e9b7d3016", "Lantern Pass", "/mnt/usb0", "usb0", "PPSA04211", "01.000", "base",
+             5, 38.2, 0, 0},
+            {"b2e15d3fac8e4127", "Lantern Pass", "/mnt/usb0", "usb0", "PPSA04211", "01.020",
+             "update", 5, 4.6, 0, 0},
+            {"c3d26e40bd9f5238", "Lantern Pass – Nordwind-Paket", "/mnt/usb0", "usb0", "PPSA04211",
+             "01.000", "dlc", 5, 1.1, 0, 0},
+            {"d4c37f51ce0a6349", "Iron Tide", "/mnt/usb0", "usb0", "CUSA18842", "01.000", "base", 4,
+             22.7, 0, 0},
             {"e5b48062df1b745a", "Sky Drifters", "/user", "Konsolenspeicher", "PPSA07730", "01.000",
              "base", 5, 61.0, 3, 2},
             {"f6a59173e02c856b", "Paper Harbor", "/user", "Konsolenspeicher", "PPSA02954", "01.003",
@@ -2213,6 +2222,10 @@ class MockSource final : public Source
         data_.klog_files = {{"aufnahme-2026-10-30_2214.log", "rec", 4200000, 1793398440, false},
                             {"auszug-2026-10-29_1931.log", "save", 86000, 1793302260, false}};
         data_.klog_files_loaded = true;
+        data_.own_pictures = {
+            {"/mnt/usb0/Profilbilder/urlaub.jpg", "urlaub.jpg", "usb0", 2400000},
+            {"/data/PS5-Cooling-Center/Profilbilder/katze.png", "katze.png", "Konsole", 880000}};
+        data_.own_pictures_loaded = true;
         data_.profile.loaded = true;
         data_.profile.valid = true;
         data_.profile.username = "Spieler1";

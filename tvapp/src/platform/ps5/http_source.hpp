@@ -68,6 +68,7 @@ class HttpSource final : public Source
     void klog_record(bool on) override;
     void set_username(const std::string &name) override;
     void apply_avatar(const std::string &file) override;
+    void apply_own_avatar(const std::string &path) override;
     void restore_avatar() override;
     void klog_save(const std::string &text) override;
     void klog_files_clear() override;
@@ -187,6 +188,7 @@ class HttpSource final : public Source
     void poll_library_tools();
     void poll_klog_record();
     void poll_profile();
+    void poll_own_pictures();
     void poll_klog_files();
     void poll_fs_places();
     void poll_fs_list(const std::string &path);

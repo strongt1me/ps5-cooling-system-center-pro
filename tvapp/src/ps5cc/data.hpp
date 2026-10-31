@@ -938,6 +938,21 @@ struct AvatarChoice
     std::string label;
 };
 
+// A picture of one's own on the console (JPG or PNG in /data/PS5-Cooling-Center/Avatars, at the
+// root of a USB drive or in its Avatars folder), offered as a profile picture.
+struct OwnPicture
+{
+    std::string path; // the full path on the console
+    std::string name;
+    std::string where; // "usb0", "Konsole"
+    std::uint64_t size = 0;
+};
+
+inline std::string own_picture_key(const std::string &path)
+{
+    return "ownpic:" + path;
+}
+
 // The texture keys of the Profil page's pictures in covers().
 inline std::string avatar_choice_key(const std::string &file)
 {
@@ -1023,6 +1038,8 @@ struct Snapshot
     KlogRecord klog_record;
     ProfileInfo profile;
     std::vector<AvatarChoice> avatars;
+    std::vector<OwnPicture> own_pictures;
+    bool own_pictures_loaded = false;
     int avatar_revision = 0; // goes up with every picture applied: a new texture key
     bool avatar_busy = false;
     std::vector<KlogFile> klog_files;
@@ -1148,6 +1165,8 @@ class Source
     // files, sent and applied as the web page does; the picture before it back.
     virtual void set_username(const std::string &name) = 0;
     virtual void apply_avatar(const std::string &file) = 0;
+    // The same with a picture of one's own, by its path on the console.
+    virtual void apply_own_avatar(const std::string &path) = 0;
     virtual void restore_avatar() = 0;
     // POST /api/v1/klog/save (the text as it is, a few MB at most) and /klog/files/clear (all but
     // the recording that runs).

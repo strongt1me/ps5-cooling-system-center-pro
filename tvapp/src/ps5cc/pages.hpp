@@ -37,12 +37,6 @@ class Page
     {
         return false;
     }
-    // True when left moves something on the page right now (a grid not in its first column);
-    // otherwise left opens the sidebar.
-    virtual bool wants_left() const
-    {
-        return false;
-    }
     virtual void handle(const InputFrame &input, ui::Feedback &feedback) = 0;
     virtual void update(float dt) = 0;
     virtual void draw(ui::Canvas &canvas) const = 0;
