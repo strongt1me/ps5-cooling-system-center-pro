@@ -21,6 +21,7 @@ namespace
 constexpr int kExtrasTag = 200;
 constexpr int kLibraryTag = 201;
 constexpr int kRemountTag = 202; // + 0 remount, 1 unmount, 2 mount
+constexpr int kCloseTag = 205;
 
 using gfx::Color;
 using gfx::Rect;
@@ -175,12 +176,24 @@ void GameTools::init(const ui::Theme &theme)
 void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback)
 {
     game_ = game;
-    (void)running;
     menu_tools_ = tools_for(game);
     std::vector<ui::MenuItem> items;
+    // The running game can be closed from here (user, 31.10.2026), at once like the web app's
+    // "Spiel beenden": what is not saved in it is lost.
+    if (running || game.id == running_id_)
+    {
+        ui::MenuItem close;
+        close.label = "Spiel beenden";
+        close.tag = kCloseTag;
+        close.shortcut = "sofort";
+        items.push_back(close);
+        ui::MenuItem line;
+        line.separator = true;
+        items.push_back(line);
+    }
     for (const Tool tool : menu_tools_)
     {
-        if (tool == Tool::erase && !items.empty())
+        if (tool == Tool::erase && !items.empty() && !items.back().separator)
         {
             ui::MenuItem line;
             line.separator = true;
@@ -518,7 +531,13 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             if (focus >= 0 && focus < static_cast<int>(menu_.items().size()))
             {
                 const int tag = menu_.items()[static_cast<std::size_t>(focus)].tag;
-                if (tag == kExtrasTag)
+                if (tag == kCloseTag)
+                {
+                    // nothing asked twice; the status line says when it is gone
+                    feedback.play(audio::Cue::select);
+                    source().close_game(game_.id);
+                }
+                else if (tag == kExtrasTag)
                 {
                     if (on_extras)
                         on_extras(game_, feedback);

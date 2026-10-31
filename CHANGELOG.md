@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: laufendes Spiel im Aktionen-Menü beenden
+- Spiele → Bibliothek → Quadrat-Taste: Beim laufenden Spiel steht oben „Spiel beenden“. Es beendet das Spiel sofort, ohne Rückfrage, wie „Spiel beenden“ in der Browser-App; nicht Gespeichertes geht verloren.
+
 ### Vollbild-App: System (Phase 7), Startmenü-Kachel entfernt, Durchsicht 31.10.
 - **System** in fünf Unterreitern (L2/R2): Konsole, Speicher, Kühlleistung, Zusatzabfragen, Experte – wie die Systemseite im Browser (`tvapp/src/ps5cc/system_page.cpp`). Fühler-Schalter speichern sofort, reagieren erst mit geladenen Einstellungen, ein gewünschter Wert verfällt nach 12 s; fehlende Anteile zeigen „–“; Laufwerke ohne Temperatur sagen das, der Grund steht darunter. Die Zeile „CPU-Modus“ entfällt.
 - **Startmenü-Kachel** (Abschnitt und „Kachel installieren“) aus beiden Oberflächen entfernt: seit FAKE86921/FAKE86922 nicht mehr nötig. Handbuch-Tipp in allen Sprachen angepasst; eine gelöschte alte Kachel wird nicht neu angelegt.
