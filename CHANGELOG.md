@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: `make lint` im Projektordner
+- `tools/setup-native-dependencies.sh` baut zlib in einem Ordner ohne Leerzeichen (zlibs Makefile verträgt keine im Zielpfad); `tools/fetch-opengl-sdk.sh` lädt ps5-opengl 1.0.2 von der erhaltenen Kopie (JMUtechnologies), weil das Original-Repository fehlt – Prüfsumme unverändert. `make lint` läuft damit im Projektordner vollständig durch.
+
 ### Vollbild-App: laufendes Spiel im Aktionen-Menü beenden
 - Spiele → Bibliothek → Quadrat-Taste: Beim laufenden Spiel steht oben „Spiel beenden“. Es beendet das Spiel sofort, ohne Rückfrage, wie „Spiel beenden“ in der Browser-App; nicht Gespeichertes geht verloren.
 

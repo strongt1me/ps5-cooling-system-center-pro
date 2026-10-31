@@ -94,15 +94,21 @@ if [[ -z $zlib_library || ! -f $zlib_root/usr/include/zlib.h ||
     }
     printf '%s  %s\n' "$zlib_hash" "$zlib_archive" | sha256sum --check --strict >/dev/null
     rm -rf -- "$zlib_source" "$zlib_root"
-    tar -xzf "$zlib_archive" -C "$zlib_directory"
+    # ps5cc: zlib's configure and Makefile break on a path with spaces (DESTDIR is used unquoted),
+    # so it is built and installed in a temporary folder without any and copied into the cache.
+    work=$(mktemp -d)
+    trap 'rm -rf -- "$work"' EXIT
+    tar -xzf "$zlib_archive" -C "$work"
     mkdir -p "$zlib_root"
     jobs=${BUILD_JOBS:-$(nproc 2>/dev/null || printf '2')}
     (
-        cd "$zlib_source"
+        cd "$work/zlib-$zlib_version"
         CC="$compiler" AR="$archiver" RANLIB="$ranlib" ./configure --static --prefix=/usr
         make -j "$jobs" CC="$compiler" AR="$archiver" RANLIB="$ranlib"
-        make DESTDIR="$zlib_root" install
+        make DESTDIR="$work/root" install
     ) >"$zlib_directory/build.log"
+    cp -a "$work/root/." "$zlib_root/"
+    mv "$work/zlib-$zlib_version" "$zlib_source"
     printf '%s\n' "$zlib_version" >"$zlib_stamp"
     zlib_library=$(find "$zlib_root" -type f -name libz.a -print -quit 2>/dev/null || true)
 fi
