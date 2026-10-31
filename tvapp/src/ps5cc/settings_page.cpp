@@ -1,5 +1,5 @@
-// ps5cc - The Settings page: how the fan is regulated, the night mode, the fan self-test, the area
-// pictures.
+// ps5cc - The Settings page: how the fan is regulated, warnings, the light bar, game profiles,
+// the night mode and the fan self-test.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -32,7 +32,24 @@ enum Row
     kNightEnd,
     kNightTarget,
     kSelfTest,
+    kWarnCpu,
+    kWarnCountdown,
+    kLightbar,
+    kLightWarn,
+    kLightHot,
+    kRuleSave,
+    kRuleNone,
+    kRuleBase = 100, // + index of the kept game profile
 };
+
+const char *profile_word(const std::string &profile)
+{
+    if (profile == "cool")
+        return "Kühl";
+    if (profile == "balanced")
+        return "Ausgewogen";
+    return "Leise";
+}
 
 constexpr float kSaveDelay = 0.6f;
 constexpr const char *kProfiles[] = {"comfort", "balanced", "cool"};
@@ -122,6 +139,36 @@ class SettingsPage final : public Page
 
     void absorb(const Snapshot &data) override
     {
+        if (data.config.valid)
+            config_ = data.config;
+        // The game profiles change the form's rows: rebuilt only when they or the running game
+        // change, and never over an edit not yet saved.
+        if (data.config.valid && pending_.empty())
+        {
+            std::string rules = data.status.game_id + "|" + data.status.game_name + "|" +
+                                data.active_rule + "|" + (data.rules_loaded ? "1" : "0");
+            for (const GameRule &r : data.game_rules)
+                rules += "|" + r.title_id + ":" + r.title_name + ":" + std::to_string(r.target_c) +
+                         ":" + r.profile;
+            if (rules != rules_key_)
+            {
+                rules_key_ = rules;
+                game_id_ = data.status.game_id;
+                game_name_ = data.status.game_name;
+                rules_ = data.game_rules;
+                active_rule_ = data.active_rule;
+                rules_loaded_ = data.rules_loaded;
+                const int keep = form_.focus_id();
+                build(data.config);
+                applied_.clear();
+                if (keep >= 0 && form_.row(keep) != nullptr)
+                    form_.focus_row(keep);
+                else if (keep >= kRuleBase)
+                    form_.focus_row(rules_.empty()
+                                        ? kRuleSave
+                                        : kRuleBase + static_cast<int>(rules_.size()) - 1);
+            }
+        }
         if (data.config.valid && pending_.empty())
         {
             const std::string key = config_key(data.config);
@@ -154,6 +201,24 @@ class SettingsPage final : public Page
             changed(form_.changed_id());
         else if (event == ui::Event::activated && form_.changed_id() == kSelfTest)
             source().selftest(!testing(test_));
+        else if (event == ui::Event::activated && form_.changed_id() == kRuleSave &&
+                 !game_id_.empty())
+        {
+            // the setting in force now, as the web page's "Aktuelle Einstellung merken"
+            GameRule rule;
+            rule.title_id = game_id_;
+            rule.title_name = game_name_.empty() ? game_id_ : game_name_;
+            rule.target_c = config_.target_temp_c;
+            rule.profile = config_.profile;
+            source().save_game_rule(rule);
+        }
+        else if (event == ui::Event::activated && form_.changed_id() >= kRuleBase)
+        {
+            // at once, nothing asked twice
+            const std::size_t index = static_cast<std::size_t>(form_.changed_id() - kRuleBase);
+            if (index < rules_.size())
+                source().remove_game_rule(rules_[index].title_id);
+        }
     }
 
     void update(float dt) override
@@ -209,17 +274,29 @@ class SettingsPage final : public Page
             out[1] = {ui::Button::cross, testing(test_) ? "Test abbrechen" : "Test starten"};
             return 2;
         }
+        if (form_.focus_id() == kRuleSave && !game_id_.empty())
+        {
+            out[1] = {ui::Button::cross, "Für dieses Spiel merken"};
+            return 2;
+        }
+        if (form_.focus_id() >= kRuleBase)
+        {
+            out[1] = {ui::Button::cross, "Spielprofil entfernen"};
+            return 2;
+        }
         return 1;
     }
 
   private:
     static std::string config_key(const Config &c)
     {
-        char text[160];
-        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d", c.mode.c_str(),
-                      c.profile.c_str(), c.safety_temp_c, c.safety_min_c, c.safety_max_c,
-                      c.night_enabled ? 1 : 0, c.night_start_min, c.night_end_min, c.night_target_c,
-                      c.target_min_c, c.target_max_c);
+        char text[200];
+        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
+                      c.mode.c_str(), c.profile.c_str(), c.safety_temp_c, c.safety_min_c,
+                      c.safety_max_c, c.night_enabled ? 1 : 0, c.night_start_min, c.night_end_min,
+                      c.night_target_c, c.target_min_c, c.target_max_c, c.warning_cpu_c,
+                      c.warning_countdown_s, c.lightbar_enabled ? 1 : 0, c.lightbar_warn_c,
+                      c.lightbar_hot_c, c.target_temp_c);
         return text;
     }
 
@@ -238,6 +315,57 @@ class SettingsPage final : public Page
             static_cast<float>(c.safety_min_c), static_cast<float>(c.safety_max_c), 1.0f);
         safety.unit = " °C";
         safety.description = "Darüber regelt der Lüfter ohne Rücksicht auf die Lautstärke hoch.";
+        form_.add_header("WARNUNGEN");
+        ui::FormRow &warn = form_.add_slider(
+            kWarnCpu, "Warnung ab", static_cast<float>(c.warning_cpu_c), 40.0f, 110.0f, 1.0f);
+        warn.unit = " °C";
+        warn.description = "Meldung auf dem Fernseher, wenn der Prozessor so warm wird. Der Chip "
+                           "warnt 5 °C später, im Automatikbetrieb nie unter Ziel + 2 °C.";
+        ui::FormRow &countdown =
+            form_.add_slider(kWarnCountdown, "Warn-Countdown",
+                             static_cast<float>(c.warning_countdown_s), 30.0f, 900.0f, 30.0f);
+        countdown.format = [](float seconds)
+        {
+            const int v = static_cast<int>(seconds + 0.5f);
+            return v % 60 == 0 ? std::to_string(v / 60) + " min" : std::to_string(v) + " s";
+        };
+        countdown.description = "Läuft ab dem Beginn einer Warnung; System zeigt die Restzeit.";
+        form_.add_header("LICHTLEISTE");
+        form_.add_toggle(kLightbar, "Lichtleiste als Temperaturampel", c.lightbar_enabled)
+            .description = "Färbt das Licht des Controllers grün, gelb oder rot. Braucht die "
+                           "Zusatzabfrage „Controller“ unter System.";
+        ui::FormRow &yellow = form_.add_slider(
+            kLightWarn, "Gelb ab", static_cast<float>(c.lightbar_warn_c), 55.0f, 90.0f, 1.0f);
+        yellow.unit = " °C";
+        ui::FormRow &red = form_.add_slider(
+            kLightHot, "Rot ab", static_cast<float>(c.lightbar_hot_c), 56.0f, 95.0f, 1.0f);
+        red.unit = " °C";
+        red.description = "Liegt immer über Gelb.";
+        form_.add_header("SPIELPROFILE");
+        {
+            const std::string game = game_name_.empty() ? game_id_ : game_name_;
+            ui::FormRow &save = form_.add_action(
+                kRuleSave, game_id_.empty() ? "Kein Spiel läuft" : "„" + game + "“ merken");
+            if (!game_id_.empty())
+                save.text = std::to_string(c.target_temp_c) + " °C · " + profile_word(c.profile);
+            save.disabled = game_id_.empty();
+            save.description = game_id_.empty()
+                                   ? "Ein Spielprofil merkt sich Ziel und Betriebsart für das "
+                                     "laufende Spiel; dafür muss die Spielerkennung an sein."
+                                   : "Ziel und Betriebsart von jetzt gelten künftig, sobald dieses "
+                                     "Spiel läuft.";
+        }
+        for (std::size_t i = 0; i < rules_.size(); ++i)
+        {
+            const GameRule &r = rules_[i];
+            ui::FormRow &row = form_.add_action(kRuleBase + static_cast<int>(i),
+                                                r.title_name.empty() ? r.title_id : r.title_name);
+            row.text = std::to_string(r.target_c) + " °C · " + profile_word(r.profile) +
+                       (r.title_id == active_rule_ ? " · aktiv" : "");
+            row.description = r.title_id + " · Die X-Taste entfernt das Profil sofort.";
+        }
+        if (rules_.empty() && rules_loaded_)
+            form_.add_value(kRuleNone, "Noch keine Spielprofile gespeichert", "");
         form_.add_header("NACHTMODUS");
         form_.add_toggle(kNight, "Nachtmodus", c.night_enabled).description =
             "In dieser Zeit gilt das Nachtziel statt der Zieltemperatur.";
@@ -279,7 +407,21 @@ class SettingsPage final : public Page
             row->maximum = static_cast<float>(c.target_max_c);
         }
         form_.set_slider(kNightTarget, static_cast<float>(c.night_target_c));
+        form_.set_slider(kWarnCpu, static_cast<float>(c.warning_cpu_c));
+        form_.set_slider(kWarnCountdown, static_cast<float>(c.warning_countdown_s));
+        form_.set_toggle(kLightbar, c.lightbar_enabled);
+        form_.set_slider(kLightWarn, static_cast<float>(c.lightbar_warn_c));
+        form_.set_slider(kLightHot, static_cast<float>(c.lightbar_hot_c));
+        if (ui::FormRow *row = form_.row(kRuleSave); row != nullptr && !game_id_.empty())
+            row->text = std::to_string(c.target_temp_c) + " °C · " + profile_word(c.profile);
         night_rows(c.night_enabled);
+        light_rows(c.lightbar_enabled);
+    }
+
+    void light_rows(bool on)
+    {
+        form_.set_disabled(kLightWarn, !on);
+        form_.set_disabled(kLightHot, !on);
     }
 
     void night_rows(bool on)
@@ -317,6 +459,33 @@ class SettingsPage final : public Page
             break;
         case kNightTarget:
             pending_["night_target_c"] = number(kNightTarget);
+            break;
+        case kWarnCpu:
+            pending_["warning_cpu_c"] = number(kWarnCpu);
+            break;
+        case kWarnCountdown:
+            pending_["warning_countdown_s"] = number(kWarnCountdown);
+            break;
+        case kLightbar:
+            pending_["lightbar_enabled"] = form_.toggle_value(kLightbar) ? "1" : "0";
+            light_rows(form_.toggle_value(kLightbar));
+            break;
+        case kLightWarn:
+            // red stays above yellow, as the app keeps it (config.c): it follows up
+            pending_["lightbar_warn_c"] = number(kLightWarn);
+            if (form_.slider_value(kLightHot) <= form_.slider_value(kLightWarn))
+            {
+                form_.set_slider(kLightHot, form_.slider_value(kLightWarn) + 1.0f);
+                pending_["lightbar_hot_c"] = number(kLightHot);
+            }
+            break;
+        case kLightHot:
+            pending_["lightbar_hot_c"] = number(kLightHot);
+            if (form_.slider_value(kLightWarn) >= form_.slider_value(kLightHot))
+            {
+                form_.set_slider(kLightWarn, form_.slider_value(kLightHot) - 1.0f);
+                pending_["lightbar_warn_c"] = number(kLightWarn);
+            }
             break;
         default:
             return;
@@ -379,6 +548,12 @@ class SettingsPage final : public Page
     std::map<std::string, std::string> pending_; // field -> JSON value, waiting for the save
     float save_in_ = 0.0f;
     std::string applied_; // the config the form shows
+    Config config_;       // the last one from the app: what a game profile keeps
+    std::string rules_key_;
+    std::string game_id_, game_name_;
+    std::vector<GameRule> rules_;
+    std::string active_rule_;
+    bool rules_loaded_ = false;
     std::string test_key_;
     SelfTest test_;
 };

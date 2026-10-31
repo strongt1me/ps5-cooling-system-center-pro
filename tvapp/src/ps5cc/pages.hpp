@@ -37,6 +37,12 @@ class Page
     {
         return false;
     }
+    // True when left moves something on the page right now (a grid not in its first column);
+    // otherwise left opens the sidebar.
+    virtual bool wants_left() const
+    {
+        return false;
+    }
     virtual void handle(const InputFrame &input, ui::Feedback &feedback) = 0;
     virtual void update(float dt) = 0;
     virtual void draw(ui::Canvas &canvas) const = 0;
@@ -97,6 +103,9 @@ inline int refocus(const ui::ListView &list, const std::vector<ui::ListItem> &ne
     return std::clamp(keep, 0, std::max(static_cast<int>(next.size()) - 1, 0));
 }
 
+// The on-screen keyboard's pages: letters, the German ones (ä ö ü ß), symbols (files_page.cpp).
+std::vector<ui::KeyboardLayout> german_layouts();
+
 std::unique_ptr<Page> make_settings_page();
 std::unique_ptr<Page> make_payloads_page();
 std::unique_ptr<Page> make_packages_page();
@@ -111,5 +120,6 @@ std::unique_ptr<Page> make_saves_page();
 std::unique_ptr<Page> make_backups_page();
 std::unique_ptr<Page> make_files_page();
 std::unique_ptr<Page> make_logs_page();
+std::unique_ptr<Page> make_profile_page();
 
 } // namespace hui::ps5cc

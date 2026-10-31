@@ -1,4 +1,5 @@
-// ps5cc - The Payloads page: own payloads to start, the running ones, the payload store.
+// ps5cc - The Payloads page: own payloads to start, copy and delete, the running ones, the payload
+// store, and payload profiles (sequences with pauses, a startup profile).
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -9,8 +10,10 @@
 #include "ps5cc/payload_tile.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <array>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -28,10 +31,105 @@ enum View
     kFiles = 0,
     kRunning = 1,
     kStore = 2,
-    kViews = 3,
+    kProfiles = 3,
+    kViews = 4,
 };
 
 constexpr float kListTop = kTop + 10.0f;
+
+// Tags of the profile view and the editor that are not an index into a list.
+constexpr int kNewProfile = -2;
+constexpr int kEditAddPayload = -3;
+constexpr int kEditAddPause = -4;
+constexpr int kEditName = -5;
+constexpr int kEditSave = -6;
+constexpr int kEditDiscard = -7;
+
+// Menu tags.
+enum MenuTag
+{
+    kMenuRun = 1,
+    kMenuEdit,
+    kMenuStartup,
+    kMenuDelete,
+    kMenuUp,
+    kMenuDown,
+    kMenuRemove,
+    kMenuPause1,
+    kMenuPause2,
+    kMenuPause5,
+    kMenuPause10,
+    kMenuFileBase = 100, // + index into the internal payload files
+};
+
+const Rect kDialog{360.0f, 150.0f, 1200.0f, 760.0f};
+
+// "!2000" -> 2000, -1 when the entry is a file.
+int pause_ms(const std::string &item)
+{
+    if (item.size() < 2 || item[0] != '!')
+        return -1;
+    return std::atoi(item.c_str() + 1);
+}
+
+std::string pause_text(int ms)
+{
+    if (ms % 1000 == 0)
+        return "Pause " + std::to_string(ms / 1000) + " s";
+    char text[32];
+    std::snprintf(text, sizeof(text), "Pause %.1f s", static_cast<double>(ms) / 1000.0);
+    return text;
+}
+
+std::string item_text(const std::string &item)
+{
+    const int ms = pause_ms(item);
+    return ms >= 0 ? pause_text(ms) : item;
+}
+
+// "a.elf → Pause 2 s → b.elf"
+std::string profile_summary(const PayloadProfile &p)
+{
+    if (p.items.empty())
+        return "leer";
+    std::string out;
+    for (const std::string &item : p.items)
+    {
+        if (!out.empty())
+            out += " → ";
+        out += item_text(item);
+    }
+    return out;
+}
+
+// An id from the name, as the web page makes it (a-z0-9-_), unique among the others.
+std::string make_id(const std::string &name, const std::vector<PayloadProfile> &taken)
+{
+    std::string base;
+    for (const char c : name)
+    {
+        const unsigned char u = static_cast<unsigned char>(c);
+        if (std::isalnum(u))
+            base += static_cast<char>(std::tolower(u));
+        else if (!base.empty() && base.back() != '-')
+            base += '-';
+        if (base.size() >= 24)
+            break;
+    }
+    while (!base.empty() && base.back() == '-')
+        base.pop_back();
+    if (base.empty())
+        base = "profil";
+    std::string id = base;
+    for (int n = 2;; ++n)
+    {
+        const bool used = std::any_of(taken.begin(), taken.end(),
+                                      [&](const PayloadProfile &p) { return p.id == id; });
+        if (!used)
+            return id;
+        id = base + "-" + std::to_string(n);
+    }
+}
 
 class PayloadsPage final : public Page
 {
@@ -39,8 +137,8 @@ class PayloadsPage final : public Page
     void init(const ui::Theme &theme) override
     {
         theme_ = theme;
-        style_subtabs(views_, theme, 3);
-        views_.set_tabs({{"Meine Payloads"}, {"Bereits geladen"}, {"Payload-Store"}});
+        style_subtabs(views_, theme, 4);
+        views_.set_tabs({{"Meine Payloads"}, {"Bereits geladen"}, {"Payload-Store"}, {"Profile"}});
         views_.set_active(kFiles, true);
 
         list_.style.theme = theme;
@@ -108,6 +206,36 @@ class PayloadsPage final : public Page
         // Under at most two lines of title and four of text.
         info_.set_bounds(
             {kRightX + 30.0f, kTop + 300.0f, kRightW - 60.0f, kBottom - kTop - 480.0f});
+
+        menu_.style.theme = solid_theme(theme);
+        menu_.style.width = 560.0f;
+        menu_.style.scrim = 0.35f;
+        menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
+
+        keys_.style.theme = theme;
+        keys_.style.bindings = ui::KeyboardBindings::standard();
+        keys_.style.space_label = "Leer";
+        keys_.style.done_label = "Fertig";
+        keys_.style.max_length = 60;
+        keys_.set_layouts(german_layouts());
+        keys_.set_bounds({kDialog.x + 60.0f, kDialog.y + 250.0f, kDialog.w - 120.0f, 400.0f});
+        keys_.on_text = [this](std::string_view utf8)
+        {
+            if (name_.size() + utf8.size() <= 60)
+                name_.append(utf8);
+        };
+        keys_.on_backspace = [this]
+        {
+            while (!name_.empty() && (static_cast<unsigned char>(name_.back()) & 0xC0) == 0x80)
+                name_.pop_back();
+            if (!name_.empty())
+                name_.pop_back();
+        };
+    }
+
+    bool modal() const override
+    {
+        return menu_.is_open() || naming_ || editing_;
     }
 
     void absorb(const Snapshot &data) override
@@ -120,6 +248,10 @@ class PayloadsPage final : public Page
         store_fetching_ = data.store_fetching;
         store_error_ = data.store_error;
         job_ = data.store_job;
+        profiles_ = data.payload_profiles;
+        startup_ = data.profile_startup;
+        profiles_loaded_ = data.profiles_loaded;
+        run_ = data.profile_run;
         rebuild(false);
         const bool known = job_.total > 0.0;
         bar_.style.mode = job_.state == "running" && !known ? ui::ProgressMode::indeterminate
@@ -145,6 +277,43 @@ class PayloadsPage final : public Page
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (menu_.is_open())
+        {
+            if (menu_.handle(input, feedback) == ui::Event::activated)
+                run_menu(menu_.items()[static_cast<std::size_t>(menu_.focus())].tag, feedback);
+            return;
+        }
+        if (naming_)
+        {
+            keys_.set_length(static_cast<int>(name_.size()));
+            const ui::Event event = keys_.handle(input, feedback);
+            if (event == ui::Event::cancelled)
+            {
+                naming_ = false;
+                feedback.play(audio::Cue::back);
+            }
+            else if (event == ui::Event::activated)
+            {
+                std::string trimmed = name_;
+                while (!trimmed.empty() && trimmed.back() == ' ')
+                    trimmed.pop_back();
+                if (trimmed.empty())
+                {
+                    feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                    return;
+                }
+                draft_.name = trimmed;
+                naming_ = false;
+                feedback.play(audio::Cue::select);
+                rebuild(true);
+            }
+            return;
+        }
+        if (editing_)
+        {
+            handle_editor(input, feedback);
+            return;
+        }
         if (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next))
         {
             focus_[static_cast<std::size_t>(view_)] = list_.focus();
@@ -164,11 +333,64 @@ class PayloadsPage final : public Page
             activate(item, feedback);
             return;
         }
+        if (view_ == kProfiles && input.is_pressed(Action::north))
+        {
+            const PayloadProfile *prof = focused_profile();
+            if (prof == nullptr)
+            {
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                return;
+            }
+            menu_profile_ = prof->id;
+            const bool runs = run_.running && run_.id == prof->id;
+            std::vector<ui::MenuItem> items;
+            items.push_back(menu_item(runs ? "Anhalten" : "Ausführen", kMenuRun));
+            items.push_back(menu_item("Bearbeiten …", kMenuEdit));
+            items.push_back(menu_item(startup_ == prof->id ? "Nicht mehr beim Start ausführen"
+                                                           : "Beim Start der App ausführen",
+                                      kMenuStartup));
+            ui::MenuItem line;
+            line.separator = true;
+            items.push_back(line);
+            ui::MenuItem del = menu_item("Profil löschen", kMenuDelete);
+            del.danger = true;
+            items.push_back(del);
+            menu_.set_items(items);
+            menu_.open({kRightX + 360.0f, kBottom - 80.0f, 140.0f, 44.0f}, feedback);
+            return;
+        }
         if (input.is_pressed(Action::west))
         {
             if (view_ == kStore)
             {
                 source().store_action("refresh", {});
+                return;
+            }
+            if (view_ == kFiles && item.file != nullptr)
+            {
+                // at once, nothing asked twice: an internal file goes, a USB file is copied in
+                // (never over one of the same name)
+                if (item.file->source == "internal")
+                {
+                    feedback.play(audio::Cue::select);
+                    source().delete_payload_file(*item.file);
+                }
+                else if (internal_has(item.file->name))
+                    feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                else
+                {
+                    feedback.play(audio::Cue::select);
+                    source().copy_payload_file(*item.file);
+                }
+                return;
+            }
+            if (view_ == kProfiles)
+            {
+                if (const PayloadProfile *prof = focused_profile())
+                {
+                    feedback.play(audio::Cue::select);
+                    open_editor(*prof);
+                }
                 return;
             }
             if (view_ == kRunning && item.running != nullptr)
@@ -189,6 +411,12 @@ class PayloadsPage final : public Page
     {
         views_.update(dt);
         list_.update(dt);
+        menu_.update(dt);
+        clock_ += dt;
+        if (naming_)
+            keys_.update(dt);
+        shown_.target = naming_ ? 1.0f : 0.0f;
+        shown_.update(dt, 14.0f);
         if (list_.focus() != info_for_)
             refresh_info();
         info_.update(dt);
@@ -209,11 +437,43 @@ class PayloadsPage final : public Page
         const ListItemRef item = focused();
         std::string title;
         std::string text;
-        if (item.file != nullptr)
+        const PayloadProfile *prof = view_ == kProfiles && !editing_ ? focused_profile() : nullptr;
+        if (editing_)
+        {
+            title = draft_.name.empty() ? "Neues Profil" : draft_.name;
+            text = "Die Einträge laufen der Reihe nach, Pausen warten so lange. Nur Payloads aus "
+                   "dem internen Ordner. Die Dreieck-Taste ordnet oder entfernt einen Eintrag; "
+                   "Speichern schreibt "
+                   "alle Profile.";
+        }
+        else if (prof != nullptr)
+        {
+            title = prof->name;
+            const bool runs = run_.running && run_.id == prof->id;
+            text = runs ? "Läuft: Schritt " + std::to_string(run_.step) + " von " +
+                              std::to_string(run_.total) + "."
+                        : profile_summary(*prof);
+            if (startup_ == prof->id)
+                text += " Wird kurz nach dem Start der App ausgeführt.";
+        }
+        else if (view_ == kProfiles)
+        {
+            title = "Payload-Profile";
+            text = "Mehrere Payloads nacheinander starten, mit Pausen dazwischen. Ein Profil kann "
+                   "beim Start der App von selbst laufen. Laden und Sichern als Datei geht in der "
+                   "Browser-App.";
+        }
+        else if (item.file != nullptr)
         {
             title = item.file->name;
             text = item.file->valid ? "Wird beim Starten an den ELF-Loader (Port 9021) gesendet."
                                     : item.file->why;
+            if (item.file->source == "internal")
+                text += " Die Quadrat-Taste löscht die Datei sofort.";
+            else if (internal_has(item.file->name))
+                text += " Im internen Ordner gibt es sie schon.";
+            else
+                text += " Die Quadrat-Taste kopiert sie in den internen Ordner.";
         }
         else if (item.running != nullptr)
         {
@@ -273,11 +533,74 @@ class PayloadsPage final : public Page
             bar_.draw(canvas);
     }
 
+    void draw_overlay(ui::Canvas &canvas) const override
+    {
+        menu_.draw(canvas);
+        const float amount = shown_.value;
+        if (amount <= 0.01f)
+            return;
+        gfx::DrawList &list = canvas.list;
+        const ui::Fonts &fonts = canvas.fonts;
+        list.rounded_rect({0.0f, 0.0f, 1920.0f, 1080.0f}, 0.0f, kNavy.with_alpha(0.78f * amount));
+        list.push_opacity(amount);
+        const Rect panel{kDialog.x, kDialog.y + 24.0f * (1.0f - amount), kDialog.w, kDialog.h};
+        ui::Painter paint(list, fonts, theme_);
+        solid_floor(list, panel, theme_.radius_card);
+        paint.panel(panel);
+        ui::text(list, fonts.display, "Name des Profils", panel.x + 40.0f, panel.y + 66.0f, 36.0f,
+                 kInk);
+        const Rect field{panel.x + 60.0f, panel.y + 120.0f, panel.w - 120.0f, 84.0f};
+        list.rounded_rect(field, 14.0f, gfx::Color::rgb(0x3880ff, 0.12f));
+        const std::string shown = ui::fit_label(paint, name_, 32.0f, field.w - 60.0f);
+        ui::text(list, fonts.semibold, shown, field.x + 28.0f, field.y + 54.0f, 32.0f, kInk);
+        if (std::fmod(clock_, 1.0f) < 0.6f)
+        {
+            const float cx = field.x + 30.0f + fonts.semibold.font->measure(shown, 32.0f);
+            list.rounded_rect({cx, field.y + 22.0f, 3.0f, 40.0f}, 1.5f, kBlue);
+        }
+        keys_.draw(canvas);
+        list.pop_opacity();
+    }
+
     int hints(ui::Hint *out) const override
     {
         int n = 0;
+        if (editing_)
+        {
+            const int tag = focused_tag();
+            if (tag >= 0)
+                out[n++] = {ui::Button::triangle, "Ordnen, entfernen"};
+            else if (tag == kEditSave || tag == kEditDiscard || tag == kEditName ||
+                     tag == kEditAddPayload || tag == kEditAddPause)
+                out[n++] = {ui::Button::cross, "Auswählen"};
+            out[n++] = {ui::Button::circle, "Verwerfen"};
+            return n;
+        }
         out[n++] = {ui::Button::l2, "Ansicht", ui::Button::r2};
+        if (view_ == kProfiles)
+        {
+            const PayloadProfile *prof = focused_profile();
+            if (prof != nullptr)
+            {
+                out[n++] = {ui::Button::cross,
+                            run_.running && run_.id == prof->id ? "Anhalten" : "Ausführen"};
+                out[n++] = {ui::Button::square, "Bearbeiten"};
+            }
+            else if (focused_tag() == kNewProfile)
+                out[n++] = {ui::Button::cross, "Neues Profil"};
+            return n;
+        }
         const ListItemRef item = focused();
+        if (view_ == kFiles && item.file != nullptr)
+        {
+            if (item.file->valid)
+                out[n++] = {ui::Button::cross, "Starten"};
+            if (item.file->source == "internal")
+                out[n++] = {ui::Button::square, "Löschen"};
+            else if (!internal_has(item.file->name))
+                out[n++] = {ui::Button::square, "Intern kopieren"};
+            return n;
+        }
         if (view_ == kFiles && item.file != nullptr && item.file->valid)
             out[n++] = {ui::Button::cross, "Starten"};
         if (view_ == kRunning && item.running != nullptr && !item.running->self)
@@ -386,6 +709,40 @@ class PayloadsPage final : public Page
 
     void activate(const ListItemRef &item, ui::Feedback &feedback)
     {
+        if (view_ == kProfiles)
+        {
+            if (focused_tag() == kNewProfile)
+            {
+                if (profiles_.size() >= 24)
+                {
+                    feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                    return;
+                }
+                PayloadProfile fresh;
+                fresh.name = "Neues Profil";
+                open_editor(fresh);
+                naming_ = true;
+                name_ = fresh.name;
+                keys_.set_layout(0);
+                keys_.set_length(static_cast<int>(name_.size()));
+                keys_.set_active(true);
+                keys_.enter();
+                return;
+            }
+            if (const PayloadProfile *prof = focused_profile())
+            {
+                feedback.play(audio::Cue::select);
+                if (run_.running && run_.id == prof->id)
+                    source().stop_payload_profile();
+                else if (run_.running)
+                    feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                else
+                    source().run_payload_profile(prof->id);
+                return;
+            }
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
         if (item.file != nullptr && item.file->valid)
         {
             source().start_payload(*item.file);
@@ -426,6 +783,70 @@ class PayloadsPage final : public Page
     std::vector<ui::ListItem> items() const
     {
         std::vector<ui::ListItem> out;
+        if (editing_)
+        {
+            out.push_back(header("EINTRÄGE (" + std::to_string(draft_.items.size()) + " von 64)"));
+            for (std::size_t i = 0; i < draft_.items.size(); ++i)
+            {
+                ui::ListItem row;
+                row.title = std::to_string(i + 1) + ". " + item_text(draft_.items[i]);
+                const int ms = pause_ms(draft_.items[i]);
+                row.subtitle = ms >= 0 ? "wartet, bevor der nächste Eintrag startet"
+                               : internal_has(draft_.items[i]) ? "aus dem internen Ordner"
+                                                               : "fehlt im internen Ordner";
+                row.tag = static_cast<int>(i);
+                out.push_back(row);
+            }
+            if (draft_.items.empty())
+                out.push_back(note("Noch keine Einträge", "Füge unten Payloads und Pausen hinzu."));
+            out.push_back(header("BEARBEITEN"));
+            const auto action = [&](const char *title, const char *sub, int tag)
+            {
+                ui::ListItem row;
+                row.title = title;
+                row.subtitle = sub;
+                row.tag = tag;
+                out.push_back(row);
+            };
+            action("Payload hinzufügen …", "aus dem internen Ordner", kEditAddPayload);
+            action("Pause hinzufügen", "2 Sekunden; die Dreieck-Taste ändert die Dauer",
+                   kEditAddPause);
+            action("Name ändern …", "", kEditName);
+            action("Speichern", "", kEditSave);
+            action("Verwerfen", "Die Änderungen gehen verloren.", kEditDiscard);
+            return out;
+        }
+        if (view_ == kProfiles)
+        {
+            if (!profiles_loaded_)
+                return {note("Wird geladen …", "Die App liest die Profile.")};
+            if (run_.running)
+                out.push_back(header("LÄUFT: " + run_.name + " (Schritt " +
+                                     std::to_string(run_.step) + " von " +
+                                     std::to_string(run_.total) + ")"));
+            out.push_back(header("PROFILE (" + std::to_string(profiles_.size()) + ")"));
+            for (std::size_t i = 0; i < profiles_.size(); ++i)
+            {
+                const PayloadProfile &prof = profiles_[i];
+                ui::ListItem row;
+                row.title = prof.name;
+                row.subtitle = profile_summary(prof);
+                if (startup_ == prof.id)
+                    row.badge = "BEIM START";
+                if (run_.running && run_.id == prof.id)
+                    row.value = "läuft";
+                row.tag = static_cast<int>(i);
+                out.push_back(row);
+            }
+            ui::ListItem add;
+            add.title = "Neues Profil …";
+            add.subtitle =
+                profiles_.size() >= 24 ? "Höchstens 24 Profile." : "Name, dann Payloads und Pausen";
+            add.disabled = profiles_.size() >= 24;
+            add.tag = kNewProfile;
+            out.push_back(add);
+            return out;
+        }
         if (view_ == kFiles)
         {
             if (!files_loaded_)
@@ -512,13 +933,15 @@ class PayloadsPage final : public Page
     void rebuild(bool switched)
     {
         std::vector<ui::ListItem> next = items();
-        std::string key = std::to_string(view_);
+        std::string key = std::to_string(view_) + (editing_ ? "e" : "") + draft_.name;
         for (const ui::ListItem &i : next)
             key += '\n' + i.title + '\t' + i.subtitle + '\t' + i.value + '\t' + i.badge;
         if (!switched && key == key_)
             return;
         key_ = std::move(key);
         const int keep = switched ? focus_[static_cast<std::size_t>(view_)] : list_.focus();
+        // profiles and their entries have no picture: no empty column for one
+        list_.style.leading_width = view_ == kProfiles ? 0.0f : 72.0f;
         list_.set_items(next);
         const int count = static_cast<int>(next.size());
         int focus = std::clamp(keep, 0, std::max(count - 1, 0));
@@ -542,6 +965,18 @@ class PayloadsPage final : public Page
         {
             rows.push_back({"PID", std::to_string(item.running->pid)});
             rows.push_back({"Speicher", std::to_string(item.running->memory_mb) + " MB"});
+        }
+        else if (view_ == kProfiles && !editing_ && focused_profile() != nullptr)
+        {
+            const PayloadProfile &prof = *focused_profile();
+            rows.push_back({"Einträge", std::to_string(prof.items.size())});
+            rows.push_back({"Beim Start", startup_ == prof.id ? "ja" : "nein"});
+            if (run_.id == prof.id && !run_.results.empty())
+            {
+                const ProfileRunResult &last = run_.results.back();
+                rows.push_back({"Zuletzt", item_text(last.item) +
+                                               (last.ok ? " · gestartet" : " – " + last.message)});
+            }
         }
         else if (item.store != nullptr)
         {
@@ -590,6 +1025,256 @@ class PayloadsPage final : public Page
             return i < files_.size() && payload_file_loaded(files_[i].name, folder, running);
         return i < store_.size() && payload_file_loaded(store_[i].installed_file, folder, running);
     }
+
+    // ---- profiles ----
+
+    static ui::MenuItem menu_item(const char *label, int tag)
+    {
+        ui::MenuItem m;
+        m.label = label;
+        m.tag = tag;
+        return m;
+    }
+
+    int focused_tag() const
+    {
+        const int i = list_.focus();
+        if (i < 0 || i >= static_cast<int>(list_.items().size()))
+            return -1000;
+        const ui::ListItem &item = list_.items()[static_cast<std::size_t>(i)];
+        return item.header ? -1000 : item.tag;
+    }
+
+    const PayloadProfile *focused_profile() const
+    {
+        if (view_ != kProfiles || editing_)
+            return nullptr;
+        const int tag = focused_tag();
+        return tag >= 0 && static_cast<std::size_t>(tag) < profiles_.size()
+                   ? &profiles_[static_cast<std::size_t>(tag)]
+                   : nullptr;
+    }
+
+    bool internal_has(const std::string &name) const
+    {
+        return std::any_of(files_.begin(), files_.end(), [&](const PayloadFile &f)
+                           { return f.source == "internal" && f.name == name; });
+    }
+
+    void open_editor(const PayloadProfile &prof)
+    {
+        draft_ = prof;
+        editing_ = true;
+        focus_[kProfiles] = list_.focus();
+        rebuild(true);
+        list_.set_focus(0);
+        list_.enter();
+    }
+
+    void close_editor()
+    {
+        editing_ = false;
+        naming_ = false;
+        rebuild(true);
+        list_.enter();
+    }
+
+    void save_draft(ui::Feedback &feedback)
+    {
+        std::vector<PayloadProfile> all = profiles_;
+        if (draft_.id.empty())
+        {
+            draft_.id = make_id(draft_.name, all);
+            all.push_back(draft_);
+        }
+        else
+        {
+            bool found = false;
+            for (PayloadProfile &p : all)
+            {
+                if (p.id == draft_.id)
+                {
+                    p = draft_;
+                    found = true;
+                }
+            }
+            if (!found)
+                all.push_back(draft_);
+        }
+        feedback.play(audio::Cue::select);
+        source().save_payload_profiles(all, startup_);
+        profiles_ = all;
+        close_editor();
+    }
+
+    void handle_editor(const InputFrame &input, ui::Feedback &feedback)
+    {
+        if (input.is_pressed(Action::back))
+        {
+            feedback.play(audio::Cue::back);
+            close_editor();
+            return;
+        }
+        const ui::Event event = list_.handle(input, feedback);
+        const int tag = focused_tag();
+        if (input.is_pressed(Action::north) && tag >= 0)
+        {
+            edit_index_ = tag;
+            std::vector<ui::MenuItem> items;
+            items.push_back(menu_item("Nach oben", kMenuUp));
+            items.push_back(menu_item("Nach unten", kMenuDown));
+            if (pause_ms(draft_.items[static_cast<std::size_t>(tag)]) >= 0)
+            {
+                items.push_back(menu_item("Pause 1 s", kMenuPause1));
+                items.push_back(menu_item("Pause 2 s", kMenuPause2));
+                items.push_back(menu_item("Pause 5 s", kMenuPause5));
+                items.push_back(menu_item("Pause 10 s", kMenuPause10));
+            }
+            ui::MenuItem line;
+            line.separator = true;
+            items.push_back(line);
+            ui::MenuItem del = menu_item("Entfernen", kMenuRemove);
+            del.danger = true;
+            items.push_back(del);
+            menu_.set_items(items);
+            menu_.open({kRightX + 360.0f, kBottom - 80.0f, 140.0f, 44.0f}, feedback);
+            return;
+        }
+        if (event != ui::Event::activated)
+            return;
+        if (tag == kEditAddPayload)
+        {
+            std::vector<ui::MenuItem> items;
+            for (std::size_t i = 0; i < files_.size(); ++i)
+            {
+                const PayloadFile &f = files_[i];
+                if (f.source != "internal" || !f.valid)
+                    continue;
+                items.push_back(menu_item(f.name.c_str(), kMenuFileBase + static_cast<int>(i)));
+            }
+            if (items.empty() || draft_.items.size() >= 64)
+            {
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                return;
+            }
+            menu_.set_items(items);
+            menu_.open({kRightX + 360.0f, kBottom - 80.0f, 140.0f, 44.0f}, feedback);
+        }
+        else if (tag == kEditAddPause)
+        {
+            if (draft_.items.size() >= 64)
+            {
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                return;
+            }
+            draft_.items.emplace_back("!2000");
+            feedback.play(audio::Cue::select);
+            rebuild(false);
+        }
+        else if (tag == kEditName)
+        {
+            naming_ = true;
+            name_ = draft_.name;
+            keys_.set_layout(0);
+            keys_.set_length(static_cast<int>(name_.size()));
+            keys_.set_active(true);
+            keys_.enter();
+        }
+        else if (tag == kEditSave)
+            save_draft(feedback);
+        else if (tag == kEditDiscard)
+        {
+            feedback.play(audio::Cue::back);
+            close_editor();
+        }
+    }
+
+    void run_menu(int tag, ui::Feedback &feedback)
+    {
+        if (editing_)
+        {
+            if (tag >= kMenuFileBase)
+            {
+                const std::size_t i = static_cast<std::size_t>(tag - kMenuFileBase);
+                if (i < files_.size() && draft_.items.size() < 64)
+                    draft_.items.push_back(files_[i].name);
+                rebuild(false);
+                return;
+            }
+            const std::size_t i = static_cast<std::size_t>(edit_index_);
+            if (i >= draft_.items.size())
+                return;
+            if (tag == kMenuUp && i > 0)
+                std::swap(draft_.items[i], draft_.items[i - 1]);
+            else if (tag == kMenuDown && i + 1 < draft_.items.size())
+                std::swap(draft_.items[i], draft_.items[i + 1]);
+            else if (tag == kMenuRemove)
+                draft_.items.erase(draft_.items.begin() + static_cast<std::ptrdiff_t>(i));
+            else if (tag == kMenuPause1 || tag == kMenuPause2 || tag == kMenuPause5 ||
+                     tag == kMenuPause10)
+            {
+                const int ms = tag == kMenuPause1   ? 1000
+                               : tag == kMenuPause2 ? 2000
+                               : tag == kMenuPause5 ? 5000
+                                                    : 10000;
+                draft_.items[i] = "!" + std::to_string(ms);
+            }
+            else
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            rebuild(false);
+            return;
+        }
+        const auto it =
+            std::find_if(profiles_.begin(), profiles_.end(),
+                         [&](const PayloadProfile &p) { return p.id == menu_profile_; });
+        if (it == profiles_.end())
+            return;
+        if (tag == kMenuRun)
+        {
+            if (run_.running && run_.id == it->id)
+                source().stop_payload_profile();
+            else if (!run_.running)
+                source().run_payload_profile(it->id);
+            else
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+        }
+        else if (tag == kMenuEdit)
+            open_editor(*it);
+        else if (tag == kMenuStartup)
+        {
+            // at once; the whole document goes, as the web page sends it
+            const std::string startup = startup_ == it->id ? std::string() : it->id;
+            source().save_payload_profiles(profiles_, startup);
+            startup_ = startup;
+            rebuild(false);
+        }
+        else if (tag == kMenuDelete)
+        {
+            std::vector<PayloadProfile> all = profiles_;
+            const std::string gone = it->id;
+            std::erase_if(all, [&](const PayloadProfile &p) { return p.id == gone; });
+            const std::string startup = startup_ == gone ? std::string() : startup_;
+            source().save_payload_profiles(all, startup);
+            profiles_ = all;
+            startup_ = startup;
+            rebuild(false);
+        }
+    }
+
+    std::vector<PayloadProfile> profiles_;
+    std::string startup_;
+    bool profiles_loaded_ = false;
+    ProfileRun run_;
+    bool editing_ = false;
+    PayloadProfile draft_; // the profile in the editor (id "" for a new one)
+    int edit_index_ = -1;  // the entry the △ menu is about
+    std::string menu_profile_;
+    ui::Menu menu_;
+    ui::Keyboard keys_;
+    bool naming_ = false;
+    std::string name_;
+    tween::Spring shown_;
+    float clock_ = 0.0f;
 
     std::vector<PayloadFile> files_;
     bool files_loaded_ = false;

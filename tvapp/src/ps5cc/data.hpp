@@ -144,7 +144,22 @@ struct Config
     int night_start_min = 23 * 60;
     int night_end_min = 7 * 60;
     int night_target_c = 75;
-    int tz_offset_min = 0; // minutes east of UTC, as the web page last told the app
+    int tz_offset_min = 0;         // minutes east of UTC, as the web page last told the app
+    int target_temp_c = 68;        // what a game profile remembers
+    int warning_cpu_c = 85;        // 40..110; the chip's own limit is 5 °C more (config.c)
+    int warning_countdown_s = 120; // 30..900
+    bool lightbar_enabled = false;
+    int lightbar_warn_c = 70; // 55..90: yellow from here
+    int lightbar_hot_c = 80;  // 56..95: red from here, always above yellow
+};
+
+// GET /api/v1/games: a cooling profile kept for one game (Phase 8).
+struct GameRule
+{
+    std::string title_id;
+    std::string title_name;
+    int target_c = 68;
+    std::string profile = "comfort"; // comfort, balanced, cool
 };
 
 // GET /api/v1/fan/selftest
@@ -175,6 +190,29 @@ struct PayloadFile
     std::int64_t mtime = 0;
     bool valid = true;
     std::string why; // why it is not valid
+};
+
+// GET /api/v1/payload-profiles: a named sequence of payload files with pauses ("!2000" = 2 s).
+struct PayloadProfile
+{
+    std::string id; // a-z0-9-_
+    std::string name;
+    std::vector<std::string> items;
+};
+
+// GET /api/v1/payload-profiles/status
+struct ProfileRunResult
+{
+    std::string item;
+    bool ok = false;
+    std::string message;
+};
+struct ProfileRun
+{
+    bool running = false;
+    std::string id, name;
+    int step = 0, total = 0;
+    std::vector<ProfileRunResult> results;
 };
 
 // GET /api/v1/payloads
@@ -253,6 +291,29 @@ struct PackageScan
     bool scanning = false;
     int parsed = 0;
     std::string current; // the file being read
+};
+
+// GET /api/v1/packages: a drive a package can be split onto.
+struct PackageDrive
+{
+    std::string mount;
+    std::string label;
+    std::uint64_t free_bytes = 0;
+};
+
+// GET /api/v1/packages/job: splitting a package into parts (pkgsplit.c).
+struct PackageSplit
+{
+    std::string state = "idle"; // idle, splitting, verifying, done, failed, cancelled
+    bool active = false;
+    bool can_cancel = false;
+    std::string phase;
+    std::string name;
+    int parts = 0;
+    int part = 0;
+    int percent = 0;
+    std::string error;
+    std::string note;
 };
 
 // GET /api/v1/packages/install/job
@@ -501,6 +562,16 @@ struct LibraryTools
     std::uint64_t seq = 0;
     std::string duplicates; // GET /api/v1/library/duplicates
     std::string cache;      // GET /api/v1/library/cache
+};
+
+// GET /api/v1/klog/files: what lies in the console's kernel-log folder.
+struct KlogFile
+{
+    std::string name;
+    std::string kind; // "rec" (Aufnahme) or "save" (Auszug)
+    std::uint64_t size = 0;
+    std::int64_t mtime = 0;
+    bool active = false; // the recording that runs
 };
 
 struct KlogRecord
@@ -844,7 +915,42 @@ enum class Watch : std::uint8_t
     saves,
     backups,
     files,
+    profile,
 };
+
+// GET /api/v1/system "user" and the console: the Profil page.
+struct ProfileInfo
+{
+    bool loaded = false;
+    bool valid = false; // a user is signed in
+    std::string username;
+    std::string uid_hex;
+    std::string console_name;
+    std::string model;
+    int name_max = 16;
+    bool can_rename = false;
+};
+
+// /avatars/index.json: a built-in profile picture (web/avatars, thumbnails in /avatars/t).
+struct AvatarChoice
+{
+    std::string file;
+    std::string label;
+};
+
+// The texture keys of the Profil page's pictures in covers().
+inline std::string avatar_choice_key(const std::string &file)
+{
+    return "avatarpick:" + file;
+}
+inline std::string credit_key(const std::string &file)
+{
+    return "credit:" + file;
+}
+inline std::string profile_picture_key(int revision)
+{
+    return "profilepic:" + std::to_string(revision);
+}
 
 // Something an action came back with, for the screen to show once.
 struct Notice
@@ -876,8 +982,15 @@ struct Snapshot
     std::array<Job, static_cast<std::size_t>(JobKind::count)> jobs{};
     std::vector<HistoryEntry> history;
     Config config;
+    std::vector<GameRule> game_rules;
+    std::string active_rule; // the title id whose profile is in force, "" for none
+    bool rules_loaded = false;
     SelfTest selftest;
     std::vector<PayloadFile> payload_files;
+    std::vector<PayloadProfile> payload_profiles;
+    std::string profile_startup; // the id run a little after the app has started, "" for none
+    bool profiles_loaded = false;
+    ProfileRun profile_run;
     bool payload_files_loaded = false;
     std::vector<RunningPayload> running;
     std::vector<StoreItem> store;
@@ -892,6 +1005,8 @@ struct Snapshot
     std::vector<Package> packages;
     PackageScan package_scan;
     PackageInstall package_install;
+    std::vector<PackageDrive> package_drives;
+    PackageSplit package_split;
     PackageQueue package_queue;
     Ps4Mount ps4mount;
     Ps4GameDetail ps4_detail; // the game last asked for with ps4mount_fetch("game", id)
@@ -906,6 +1021,12 @@ struct Snapshot
     LibraryTools library_tools;
     SystemData system_data;
     KlogRecord klog_record;
+    ProfileInfo profile;
+    std::vector<AvatarChoice> avatars;
+    int avatar_revision = 0; // goes up with every picture applied: a new texture key
+    bool avatar_busy = false;
+    std::vector<KlogFile> klog_files;
+    bool klog_files_loaded = false;
     std::vector<FsPlace> fs_places;
     FsList fs_list;
     FsJob fs_job;
@@ -955,10 +1076,22 @@ class Source
     virtual void watch(Watch page) = 0;
     // PUT /api/v1/config with these fields only ({"profile":"cool"}).
     virtual void save_config(const std::string &patch) = 0;
+    // PUT /api/v1/games: keep the current setting for a game, or forget a game's profile.
+    virtual void save_game_rule(const GameRule &rule) = 0;
+    virtual void remove_game_rule(const std::string &title_id) = 0;
     virtual void selftest(bool start) = 0;
     // POST /api/v1/power: "standby", "reboot", "off" or "safemode".
     virtual void power(const std::string &action) = 0;
     virtual void start_payload(const PayloadFile &file) = 0;
+    // POST /api/v1/payload-files/copy (a USB file into the internal folder, never overwriting) and
+    // /delete (an internal file).
+    virtual void copy_payload_file(const PayloadFile &file) = 0;
+    virtual void delete_payload_file(const PayloadFile &file) = 0;
+    // POST /api/v1/payload-profiles: the whole document; /run and /stop.
+    virtual void save_payload_profiles(const std::vector<PayloadProfile> &profiles,
+                                       const std::string &startup) = 0;
+    virtual void run_payload_profile(const std::string &id) = 0;
+    virtual void stop_payload_profile() = 0;
     virtual void kill_payload(int pid) = 0;
     // POST /api/v1/paystore: "refresh", "install", "start", "cancel" (id where it needs one).
     virtual void store_action(const std::string &action, const std::string &id) = 0;
@@ -972,6 +1105,9 @@ class Source
     // The Pakete page: "scan", "install" (id), "install_cancel", "queue_add" / "queue_remove" (id),
     // "queue_start", "queue_pause", "queue_retry", "queue_clear" (the finished ones).
     virtual void package_action(const std::string &action, const std::string &id) = 0;
+    // POST /api/v1/packages/split: into parts of part_mb on the drive target ("split_cancel" as a
+    // package_action stops it).
+    virtual void split_package(const std::string &id, const std::string &target, int part_mb) = 0;
     // PS4 von USB: a JSON body for POST /api/v1/ps4mount (route ""), /ps4mount/update ("update") or
     // /ps4mount/dlc
     // ("dlc"); the answer's message comes back as a notice.
@@ -1008,6 +1144,15 @@ class Source
     virtual void library_tools_post(const std::string &route, const std::string &json) = 0;
     // The kernel log recorded into a file (on) or not (off).
     virtual void klog_record(bool on) = 0;
+    // POST /api/v1/profile/username; a built-in picture (/avatars/<file>) made into the console's
+    // files, sent and applied as the web page does; the picture before it back.
+    virtual void set_username(const std::string &name) = 0;
+    virtual void apply_avatar(const std::string &file) = 0;
+    virtual void restore_avatar() = 0;
+    // POST /api/v1/klog/save (the text as it is, a few MB at most) and /klog/files/clear (all but
+    // the recording that runs).
+    virtual void klog_save(const std::string &text) = 0;
+    virtual void klog_files_clear() = 0;
     virtual void files_open(const std::string &path) = 0;
     virtual void files_post(const std::string &route, const std::string &json) = 0;
     virtual void files_delete(const std::vector<std::string> &paths) = 0;

@@ -10,7 +10,9 @@
 #include "platform/ps5/http_source.hpp"
 
 #include "platform/ps5/system.hpp"
+#include "ps5cc/avatar_build.hpp"
 #include "ps5cc/covers.hpp"
+#include "ps5cc/credits.hpp"
 #include "third_party/cjson/cJSON.h"
 
 #include <algorithm>
@@ -197,6 +199,10 @@ void *tools_main(void *self)
 
 // A title id for a query string: letters, digits, '-' and '_' as they are, everything else
 // percent-encoded.
+// A file name inside a path (/avatars/<file>): as url_encoded, but the dot stays, since the
+// console app serves its files by the name as it is and does not decode the path.
+std::string path_encoded(const std::string &text);
+
 std::string url_encoded(const std::string &text)
 {
     std::string out;
@@ -214,6 +220,18 @@ std::string url_encoded(const std::string &text)
         out += hex;
     }
     return out;
+}
+
+std::string path_encoded(const std::string &text)
+{
+    std::string out;
+    std::size_t from = 0;
+    for (std::size_t dot = text.find('.'); dot != std::string::npos; dot = text.find('.', from))
+    {
+        out += url_encoded(text.substr(from, dot - from)) + ".";
+        from = dot + 1;
+    }
+    return out + url_encoded(text.substr(from));
 }
 
 } // namespace
@@ -320,6 +338,19 @@ void HttpSource::package_action(const std::string &action, const std::string &id
 {
     push({Request::Kind::package, 0, id, action});
 }
+void HttpSource::split_package(const std::string &id, const std::string &target, int part_mb)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "id", id.c_str());
+    cJSON_AddStringToObject(o, "target", target.c_str());
+    cJSON_AddNumberToObject(o, "part_mb", part_mb);
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::package, 0, text, "split"});
+    cJSON_free(text);
+}
 void HttpSource::ps4mount_post(const std::string &route, const std::string &json)
 {
     push({Request::Kind::ps4mount, 0, route, json});
@@ -385,6 +416,43 @@ void HttpSource::klog_record(bool on)
 {
     push({Request::Kind::klog_record, on ? 1 : 0, {}, {}});
 }
+void HttpSource::set_username(const std::string &name)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "name", name.c_str());
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::profile_name, 0, name, text});
+    cJSON_free(text);
+}
+void HttpSource::apply_avatar(const std::string &file)
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.avatar_busy = true;
+        ++data_.serial;
+    }
+    push({Request::Kind::avatar_apply, 0, file, {}});
+}
+void HttpSource::restore_avatar()
+{
+    push({Request::Kind::avatar_restore, 0, {}, "{}"});
+}
+void HttpSource::klog_save(const std::string &text)
+{
+    int tz = 0; // the file is named after the local time, as the web page's tz
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        tz = data_.config.tz_offset_min;
+    }
+    push({Request::Kind::klog_save, tz, {}, text});
+}
+void HttpSource::klog_files_clear()
+{
+    push({Request::Kind::klog_clear, 0, {}, "{}"});
+}
 void HttpSource::files_open(const std::string &path)
 {
     push({Request::Kind::fs_open, 0, path, {}});
@@ -420,6 +488,33 @@ void HttpSource::save_config(const std::string &patch)
 {
     push({Request::Kind::config, 0, {}, patch});
 }
+void HttpSource::save_game_rule(const GameRule &rule)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "title_id", rule.title_id.c_str());
+    cJSON_AddStringToObject(o, "title_name", rule.title_name.c_str());
+    cJSON_AddNumberToObject(o, "target_temp_c", rule.target_c);
+    cJSON_AddStringToObject(o, "profile", rule.profile.c_str());
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::rule, 1, rule.title_name, text});
+    cJSON_free(text);
+}
+void HttpSource::remove_game_rule(const std::string &title_id)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "title_id", title_id.c_str());
+    cJSON_AddBoolToObject(o, "remove", 1);
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::rule, 0, title_id, text});
+    cJSON_free(text);
+}
+
 void HttpSource::selftest(bool start)
 {
     push({Request::Kind::selftest, start ? 1 : 0, {}, {}});
@@ -441,6 +536,70 @@ void HttpSource::start_payload(const PayloadFile &file)
     cJSON_free(text);
     cJSON_Delete(root);
 }
+void HttpSource::copy_payload_file(const PayloadFile &file)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "source", "usb");
+    cJSON_AddStringToObject(o, "mount", file.mount.c_str());
+    cJSON_AddStringToObject(o, "dir", file.dir.c_str());
+    cJSON_AddStringToObject(o, "name", file.name.c_str());
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::payload_post, 0, file.name, text});
+    cJSON_free(text);
+}
+void HttpSource::delete_payload_file(const PayloadFile &file)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "name", file.name.c_str());
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::payload_post, 1, file.name, text});
+    cJSON_free(text);
+}
+void HttpSource::save_payload_profiles(const std::vector<PayloadProfile> &profiles,
+                                       const std::string &startup)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "startup", startup.c_str());
+    cJSON *list = cJSON_AddArrayToObject(o, "profiles");
+    for (const PayloadProfile &p : profiles)
+    {
+        cJSON *e = cJSON_CreateObject();
+        cJSON_AddStringToObject(e, "id", p.id.c_str());
+        cJSON_AddStringToObject(e, "name", p.name.c_str());
+        cJSON *items = cJSON_AddArrayToObject(e, "items");
+        for (const std::string &item : p.items)
+            cJSON_AddItemToArray(items, cJSON_CreateString(item.c_str()));
+        cJSON_AddItemToArray(list, e);
+    }
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::payload_post, 2, {}, text});
+    cJSON_free(text);
+}
+void HttpSource::run_payload_profile(const std::string &id)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "id", id.c_str());
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::payload_post, 3, id, text});
+    cJSON_free(text);
+}
+void HttpSource::stop_payload_profile()
+{
+    push({Request::Kind::payload_post, 4, {}, "{}"});
+}
+
 void HttpSource::kill_payload(int pid)
 {
     push({Request::Kind::payload_kill, pid, {}, {}});
@@ -719,8 +878,8 @@ bool HttpSource::connect_phase()
 void HttpSource::run()
 {
     std::int64_t last_status = 0, last_library = 0, last_jobs = 0, last_history = 0, last_cover = 0;
-    std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_store = 0,
-                 last_log = 0, last_klog = 0;
+    std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_profile_status = 0,
+                 last_store = 0, last_log = 0, last_klog = 0;
     std::int64_t last_backdrops = 0, last_packages = 0, last_pkg_install = 0, last_pkg_queue = 0;
     bool packages_open = false;
     std::int64_t last_ps4mount = 0;
@@ -731,7 +890,7 @@ void HttpSource::run()
     bool playtime_open = false, saves_open = false, backups_open = false, backup_deleting = false;
     std::int64_t last_fs_job = 0;
     bool files_open_ = false;
-    std::int64_t last_extras = 0, last_record = 0;
+    std::int64_t last_extras = 0, last_record = 0, last_klog_files = 0, last_profile = 0;
     std::string extras_polled_;
     std::int64_t last_disc = 0, last_dump = 0, last_dumps = 0;
     bool disc_open = false;
@@ -821,7 +980,10 @@ void HttpSource::run()
         if (now - last_cover >= 250000)
         {
             last_cover = now;
-            fetch_cover();
+            // the Profil page's pictures are small (JPEGs of about 40 KB): several per pass
+            const int burst = watching_.load() == Watch::profile ? 4 : 1;
+            for (int i = 0; i < burst; ++i)
+                fetch_cover();
         }
         // The pictures behind the areas: a small list every 5 s, so one uploaded in the browser
         // shows up soon; a changed picture is fetched in the same pass (one at a time, about 150 KB
@@ -862,6 +1024,8 @@ void HttpSource::run()
         {
             last_config = now;
             poll_config();
+            if (page == Watch::settings)
+                poll_rules();
         }
         if (page == Watch::settings)
         {
@@ -878,10 +1042,21 @@ void HttpSource::run()
         }
         if (page == Watch::payloads)
         {
+            const bool profile_runs = [&]
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                return data_.profile_run.running;
+            }();
             if (now - last_payloads >= 4000000)
             {
                 last_payloads = now;
                 poll_payloads();
+                poll_profiles(false);
+            }
+            else if (profile_runs && now - last_profile_status >= 1200000)
+            {
+                last_profile_status = now;
+                poll_profiles(true);
             }
             const bool storing = [&]
             {
@@ -919,10 +1094,16 @@ void HttpSource::run()
             }
             if (scan.loaded && !scan.ever && !scan.scanning)
                 poll_packages(true);
-            if (entered || now - last_pkg_install >= (installing ? 1000000 : 4000000))
+            bool splitting = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                splitting = data_.package_split.active;
+            }
+            if (entered || now - last_pkg_install >= (installing || splitting ? 1000000 : 4000000))
             {
                 last_pkg_install = now;
                 poll_package_install();
+                poll_package_split();
             }
             if (entered || now - last_pkg_queue >= (queue_running ? 1500000 : 5000000))
             {
@@ -1064,10 +1245,20 @@ void HttpSource::run()
                 extras_polled_.clear();
         }
         // Protokoll: whether the kernel log is being recorded, every 2 s.
+        if (page == Watch::profile && now - last_profile >= 10000000)
+        {
+            last_profile = now;
+            poll_profile();
+        }
         if (page == Watch::logs && now - last_record >= 2000000)
         {
             last_record = now;
             poll_klog_record();
+            if (now - last_klog_files >= 6000000)
+            {
+                last_klog_files = now;
+                poll_klog_files();
+            }
         }
         // Dateien: the job every 0.8 s while one runs (3 s otherwise); the open folder again when
         // it has just ended.
@@ -1290,6 +1481,17 @@ void HttpSource::handle(const Request &request)
         poll_config();
         poll_status();
         break;
+    case Request::Kind::rule:
+        if (exchange("PUT", "/api/v1/games", request.text, &status, &body) == Net::ok &&
+            status < 300)
+            notice(Notice::Kind::success,
+                   request.value != 0 ? "Spielprofil gespeichert" : "Spielprofil entfernt",
+                   request.value != 0 ? request.id : std::string());
+        else
+            notice(Notice::Kind::error, "Spielprofil nicht geändert",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_rules();
+        break;
     case Request::Kind::selftest:
         if (exchange("POST", "/api/v1/fan/selftest",
                      request.value != 0 ? "{\"action\":\"start\"}" : "{\"action\":\"abort\"}",
@@ -1321,6 +1523,36 @@ void HttpSource::handle(const Request &request)
                    message_of(body, "Die App hat nicht geantwortet."));
         poll_payloads();
         break;
+    case Request::Kind::payload_post:
+    {
+        static const char *const kRoute[] = {
+            "/api/v1/payload-files/copy", "/api/v1/payload-files/delete",
+            "/api/v1/payload-profiles", "/api/v1/payload-profiles/run",
+            "/api/v1/payload-profiles/stop"};
+        static const char *const kDone[] = {"kopiert", "gelöscht", "Profile gespeichert",
+                                            "Profil gestartet", "Profil wird angehalten"};
+        static const char *const kFail[] = {"Kopieren nicht möglich", "Löschen nicht möglich",
+                                            "Profile nicht gespeichert", "Profil nicht gestartet",
+                                            "Anhalten nicht möglich"};
+        const int v = std::clamp(request.value, 0, 4);
+        // copying waits for the drive: the app allows itself up to two minutes for it
+        if (exchange("POST", kRoute[v], request.text, &status, &body, v == 0 ? 130 : 10) ==
+                Net::ok &&
+            status < 300)
+        {
+            if (v <= 1)
+                notice(Notice::Kind::success, "„" + request.id + "“ " + kDone[v]);
+            else
+                notice(v == 4 ? Notice::Kind::info : Notice::Kind::success, kDone[v]);
+        }
+        else
+            notice(Notice::Kind::error, kFail[v],
+                   message_of(body, "Die App hat nicht geantwortet."));
+        if (v <= 1)
+            poll_payloads();
+        poll_profiles(false);
+        break;
+    }
     case Request::Kind::payload_kill:
         std::snprintf(payload, sizeof(payload), "{\"pid\":%d}", request.value);
         if (exchange("POST", "/api/v1/payloads/kill", payload, &status, &body) == Net::ok &&
@@ -1338,6 +1570,21 @@ void HttpSource::handle(const Request &request)
         if (a == "scan")
         {
             poll_packages(true);
+            break;
+        }
+        if (a == "split" || a == "split_cancel")
+        {
+            const bool split = a == "split";
+            if (exchange("POST", split ? "/api/v1/packages/split" : "/api/v1/packages/cancel",
+                         split ? request.id : std::string("{}"), &status, &body, 10) == Net::ok &&
+                status < 300)
+                notice(Notice::Kind::info,
+                       split ? "Paket wird aufgeteilt" : "Aufteilen wird abgebrochen");
+            else
+                notice(Notice::Kind::error,
+                       split ? "Aufteilen nicht gestartet" : "Abbrechen nicht möglich",
+                       message_of(body, "Die App hat nicht geantwortet."));
+            poll_package_split();
             break;
         }
         if (a == "install")
@@ -1599,6 +1846,113 @@ void HttpSource::handle(const Request &request)
         poll_library_tools();
         break;
     }
+    case Request::Kind::klog_save:
+    {
+        char path[64];
+        std::snprintf(path, sizeof(path), "/api/v1/klog/save?tz=%d", request.value);
+        if (exchange("POST", path, request.text, &status, &body, 30) == Net::ok && status < 300)
+        {
+            std::string name;
+            if (cJSON *root = cJSON_Parse(body.c_str()))
+            {
+                name = str(root, "name");
+                cJSON_Delete(root);
+            }
+            notice(Notice::Kind::success, "Auszug gespeichert",
+                   name.empty() ? std::string("Ordner klog-live-log") : name);
+        }
+        else
+            notice(Notice::Kind::error, "Auszug nicht gespeichert",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_klog_files();
+        break;
+    }
+    case Request::Kind::klog_clear:
+        if (exchange("POST", "/api/v1/klog/files/clear", request.text, &status, &body, 10) ==
+                Net::ok &&
+            status < 300)
+            notice(Notice::Kind::success, "Ordner geleert",
+                   "Die laufende Aufnahme bleibt, wenn eine läuft.");
+        else
+            notice(Notice::Kind::error, "Ordner nicht geleert",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_klog_files();
+        break;
+    case Request::Kind::profile_name:
+        if (exchange("POST", "/api/v1/profile/username", request.text, &status, &body, 10) ==
+                Net::ok &&
+            status < 300)
+            notice(Notice::Kind::success, "Name geändert",
+                   "Im Startmenü erscheint er nach einem Benutzerwechsel.");
+        else
+            notice(Notice::Kind::error, "Name nicht geändert",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_profile();
+        break;
+    case Request::Kind::avatar_apply:
+    {
+        // As buildAvatarFiles in the web page: the picture from the console app, made into the
+        // DDS and PNG files here, each sent, then applied.
+        std::string name;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            name = data_.profile.username;
+        }
+        std::string fail;
+        const std::string path = "/avatars/" + path_encoded(request.id);
+        if (exchange("GET", path.c_str(), {}, &status, &body, 10) != Net::ok || status != 200)
+            fail = "Das Bild ließ sich nicht laden.";
+        std::vector<std::pair<std::string, std::vector<std::uint8_t>>> files;
+        if (fail.empty())
+        {
+            files = avatar_files(reinterpret_cast<const std::uint8_t *>(body.data()), body.size(),
+                                 name);
+            if (files.empty())
+                fail = "Das Bild ließ sich nicht umrechnen.";
+        }
+        for (const auto &[file, bytes] : files)
+        {
+            if (!fail.empty())
+                break;
+            // the name as it is: the console app compares it with its list (avatar_name_ok)
+            const std::string route = "/api/v1/profile/avatar/file?name=" + path_encoded(file);
+            if (exchange("POST", route.c_str(), std::string(bytes.begin(), bytes.end()), &status,
+                         &body, 15) != Net::ok ||
+                status >= 300)
+                fail = message_of(body, "Eine Datei des Bildes kam nicht an.");
+        }
+        if (fail.empty() && (exchange("POST", "/api/v1/profile/avatar/apply", "{}", &status, &body,
+                                      15) != Net::ok ||
+                             status >= 300))
+            fail = message_of(body, "Die App hat das Bild nicht übernommen.");
+        if (fail.empty())
+            notice(Notice::Kind::success, "Profilbild übernommen",
+                   "Im Startmenü erscheint es nach einem Benutzerwechsel.");
+        else
+            notice(Notice::Kind::error, "Profilbild nicht übernommen", fail);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            data_.avatar_busy = false;
+            if (fail.empty())
+                ++data_.avatar_revision;
+            ++data_.serial;
+        }
+        break;
+    }
+    case Request::Kind::avatar_restore:
+        if (exchange("POST", "/api/v1/profile/avatar/restore", request.text, &status, &body, 15) ==
+                Net::ok &&
+            status < 300)
+        {
+            notice(Notice::Kind::success, "Vorheriges Profilbild zurückgeholt");
+            std::lock_guard<std::mutex> lock(mutex_);
+            ++data_.avatar_revision;
+            ++data_.serial;
+        }
+        else
+            notice(Notice::Kind::error, "Nicht zurückgeholt",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        break;
     case Request::Kind::klog_record:
     {
         cJSON *root = cJSON_CreateObject();
@@ -1811,9 +2165,119 @@ void HttpSource::poll_config()
     c.night_end_min = static_cast<int>(num(root, "night_end_min", 420));
     c.night_target_c = static_cast<int>(num(root, "night_target_c", 75));
     c.tz_offset_min = static_cast<int>(num(root, "night_tz_offset_min", 0));
+    c.target_temp_c = static_cast<int>(num(root, "target_temp_c", 68));
+    c.warning_cpu_c = static_cast<int>(num(root, "warning_cpu_c", 85));
+    c.warning_countdown_s = static_cast<int>(num(root, "warning_countdown_s", 120));
+    c.lightbar_enabled = num(root, "lightbar_enabled", 0) != 0.0;
+    c.lightbar_warn_c = static_cast<int>(num(root, "lightbar_warn_c", 70));
+    c.lightbar_hot_c = static_cast<int>(num(root, "lightbar_hot_c", 80));
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
     data_.config = c;
+    ++data_.serial;
+}
+
+// GET /api/v1/games: the kept game profiles and which one is in force.
+void HttpSource::poll_rules()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/games", {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    std::vector<GameRule> rules;
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "rules"))
+    {
+        GameRule r;
+        r.title_id = str(item, "title_id");
+        r.title_name = str(item, "title_name");
+        r.target_c = static_cast<int>(num(item, "target_temp_c", 68));
+        r.profile = str(item, "profile");
+        if (!r.title_id.empty())
+            rules.push_back(std::move(r));
+    }
+    const std::string active = str(root, "active");
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.game_rules = std::move(rules);
+    data_.active_rule = active;
+    data_.rules_loaded = true;
+    ++data_.serial;
+}
+
+// GET /api/v1/payload-profiles (unless only the run is asked for) and .../status.
+void HttpSource::poll_profiles(bool status_only)
+{
+    int status = 0;
+    std::string body;
+    std::vector<PayloadProfile> profiles;
+    std::string startup;
+    bool have_profiles = false;
+    if (!status_only &&
+        exchange("GET", "/api/v1/payload-profiles", {}, &status, &body) == Net::ok && status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            startup = str(root, "startup");
+            const cJSON *p = nullptr;
+            cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(root, "profiles"))
+            {
+                PayloadProfile prof;
+                prof.id = str(p, "id");
+                prof.name = str(p, "name");
+                const cJSON *item = nullptr;
+                cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(p, "items"))
+                {
+                    if (cJSON_IsString(item) && item->valuestring != nullptr)
+                        prof.items.emplace_back(item->valuestring);
+                }
+                if (!prof.id.empty())
+                    profiles.push_back(std::move(prof));
+            }
+            cJSON_Delete(root);
+            have_profiles = true;
+        }
+    }
+    ProfileRun run;
+    bool have_run = false;
+    if (exchange("GET", "/api/v1/payload-profiles/status", {}, &status, &body) == Net::ok &&
+        status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            const cJSON *r = cJSON_GetObjectItemCaseSensitive(root, "running");
+            run.running = cJSON_IsTrue(r);
+            run.id = str(root, "id");
+            run.name = str(root, "name");
+            run.step = static_cast<int>(num(root, "step"));
+            run.total = static_cast<int>(num(root, "total"));
+            const cJSON *e = nullptr;
+            cJSON_ArrayForEach(e, cJSON_GetObjectItemCaseSensitive(root, "results"))
+            {
+                ProfileRunResult res;
+                res.item = str(e, "item");
+                res.ok = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(e, "ok"));
+                res.message = str(e, "msg");
+                run.results.push_back(std::move(res));
+            }
+            cJSON_Delete(root);
+            have_run = true;
+        }
+    }
+    if (!have_profiles && !have_run)
+        return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (have_profiles)
+    {
+        data_.payload_profiles = std::move(profiles);
+        data_.profile_startup = startup;
+        data_.profiles_loaded = true;
+    }
+    if (have_run)
+        data_.profile_run = std::move(run);
     ++data_.serial;
 }
 
@@ -2199,6 +2663,35 @@ void HttpSource::fetch_cover()
                 games.push_back(std::move(g));
             }
         }
+        // The Profil page: the picture in use, the built-in ones and the people thanked.
+        if (watching_.load() == Watch::profile)
+        {
+            // before the game covers: on this page its own pictures come first
+            std::vector<Game> own;
+            Game current;
+            current.id = profile_picture_key(data_.avatar_revision);
+            current.cover = "/api/v1/profile/avatar/current";
+            own.push_back(std::move(current));
+            for (const AvatarChoice &a : data_.avatars)
+            {
+                Game g;
+                g.id = avatar_choice_key(a.file);
+                // the full picture (440 px, about 40 KB): the 132 px preview looked blurred at
+                // the size the grid draws it (user, 31.10.2026)
+                g.cover = "/avatars/" + path_encoded(a.file);
+                own.push_back(std::move(g));
+            }
+            for (const Credit &c : kCredits)
+            {
+                if (c.picture[0] == 0)
+                    continue;
+                Game g;
+                g.id = credit_key(c.picture);
+                g.cover = "/credits/" + path_encoded(c.picture);
+                own.push_back(std::move(g));
+            }
+            games.insert(games.begin(), own.begin(), own.end());
+        }
         // The pictures of the packages, only while the Pakete page is open (ids hold for one
         // search).
         if (watching_.load() == Watch::packages)
@@ -2226,8 +2719,11 @@ void HttpSource::fetch_cover()
         covers().fail(want.id);
         return;
     }
+    // the profile pictures are drawn at about 200 px: a larger texture keeps them sharp
+    const bool large = want.id.rfind("avatarpick:", 0) == 0 || want.id.rfind("profilepic:", 0) == 0;
     std::vector<std::uint8_t> rgba =
-        decode_cover(reinterpret_cast<const std::uint8_t *>(body.data()), body.size());
+        decode_cover(reinterpret_cast<const std::uint8_t *>(body.data()), body.size(),
+                     large ? kLargeCoverSize : kCoverSize);
     if (rgba.empty())
         covers().fail(want.id);
     else
@@ -2252,9 +2748,18 @@ void HttpSource::poll_packages(bool scan)
     s.parsed = static_cast<int>(num(root, "parsed"));
     s.current = str(root, "current");
     std::vector<std::pair<std::string, std::string>> labels;
+    std::vector<PackageDrive> drives;
     const cJSON *d = nullptr;
     cJSON_ArrayForEach(d, cJSON_GetObjectItemCaseSensitive(root, "drives"))
+    {
         labels.emplace_back(str(d, "mount"), str(d, "label"));
+        PackageDrive drive;
+        drive.mount = str(d, "mount");
+        drive.label = str(d, "label");
+        drive.free_bytes = static_cast<std::uint64_t>(num(d, "free_bytes"));
+        if (!drive.mount.empty())
+            drives.push_back(std::move(drive));
+    }
     std::vector<Package> list;
     const cJSON *p = nullptr;
     cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(root, "packages"))
@@ -2291,6 +2796,36 @@ void HttpSource::poll_packages(bool scan)
     std::lock_guard<std::mutex> lock(mutex_);
     data_.package_scan = s;
     data_.packages = std::move(list);
+    data_.package_drives = std::move(drives);
+    ++data_.serial;
+}
+
+// GET /api/v1/packages/job: the split that runs, or the last one.
+void HttpSource::poll_package_split()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/packages/job", {}, &status, &body) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    PackageSplit j;
+    j.state = str(root, "state");
+    if (j.state.empty())
+        j.state = "idle";
+    j.active = flag(root, "active");
+    j.can_cancel = flag(root, "can_cancel");
+    j.phase = str(root, "phase");
+    j.name = str(root, "name");
+    j.parts = static_cast<int>(num(root, "parts"));
+    j.part = static_cast<int>(num(root, "part"));
+    j.percent = static_cast<int>(num(root, "percent"));
+    j.error = str(root, "error");
+    j.note = str(root, "note");
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.package_split = j;
     ++data_.serial;
 }
 
@@ -2666,6 +3201,90 @@ void HttpSource::poll_library_tools()
     data_.library_tools.duplicates = std::move(dup);
     data_.library_tools.cache = std::move(cache);
     ++data_.library_tools.seq;
+    ++data_.serial;
+}
+
+void HttpSource::poll_klog_files()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/klog/files", {}, &status, &body, 6) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    std::vector<KlogFile> files;
+    const cJSON *f = nullptr;
+    cJSON_ArrayForEach(f, cJSON_GetObjectItemCaseSensitive(root, "files"))
+    {
+        KlogFile k;
+        k.name = str(f, "name");
+        k.kind = str(f, "kind");
+        k.size = static_cast<std::uint64_t>(num(f, "size"));
+        k.mtime = static_cast<std::int64_t>(num(f, "mtime"));
+        k.active = flag(f, "active");
+        if (!k.name.empty())
+            files.push_back(std::move(k));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.klog_files = std::move(files);
+    data_.klog_files_loaded = true;
+    ++data_.serial;
+}
+
+// GET /api/v1/system for the user and the console; /avatars/index.json once.
+void HttpSource::poll_profile()
+{
+    int status = 0;
+    std::string body;
+    ProfileInfo info;
+    if (exchange("GET", "/api/v1/system", {}, &status, &body, 8) == Net::ok && status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            info.loaded = true;
+            info.console_name = str(root, "console_name");
+            info.model = str(root, "model");
+            if (const cJSON *u = cJSON_GetObjectItemCaseSensitive(root, "user"))
+            {
+                info.valid = flag(u, "valid");
+                info.username = str(u, "username");
+                info.uid_hex = str(u, "uid_hex");
+                info.name_max = static_cast<int>(num(u, "name_max", 16));
+                info.can_rename = flag(u, "can_rename");
+            }
+            cJSON_Delete(root);
+        }
+    }
+    bool want_avatars = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        want_avatars = data_.avatars.empty();
+    }
+    std::vector<AvatarChoice> avatars;
+    if (want_avatars && exchange("GET", "/avatars/index.json", {}, &status, &body, 6) == Net::ok &&
+        status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            const cJSON *item = nullptr;
+            cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "images"))
+            {
+                AvatarChoice a;
+                a.file = str(item, "file");
+                a.label = str(item, "label");
+                if (!a.file.empty())
+                    avatars.push_back(std::move(a));
+            }
+            cJSON_Delete(root);
+        }
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (info.loaded)
+        data_.profile = info;
+    if (!avatars.empty())
+        data_.avatars = std::move(avatars);
     ++data_.serial;
 }
 

@@ -170,6 +170,16 @@ class MockSource final : public Source
         data_.config.night_end_min = 7 * 60;
         data_.config.night_target_c = 80;
         data_.config.tz_offset_min = 60;
+        data_.config.target_temp_c = 68;
+        data_.config.warning_cpu_c = 85;
+        data_.config.warning_countdown_s = 120;
+        data_.config.lightbar_enabled = true;
+        data_.config.lightbar_warn_c = 70;
+        data_.config.lightbar_hot_c = 80;
+        data_.game_rules = {{"PPSA01284", "ASTRO BOT", 72, "balanced"},
+                            {"PPSA02433", "Crash Bandicoot 4: It's About Time", 66, "cool"}};
+        data_.active_rule = "PPSA02433";
+        data_.rules_loaded = true;
         fill_backdrops();
         fill_packages();
         fill_ps4mount();
@@ -220,7 +230,7 @@ class MockSource final : public Source
             UsbEject &e = data_.usb_eject;
             e.running = false;
             e.state = "done";
-            e.message = "USB-Speicher 1 ist ausgeworfen und kann abgezogen werden.";
+            e.message = "usb0 ist ausgeworfen und kann abgezogen werden.";
             data_.volumes.erase(std::remove_if(data_.volumes.begin(), data_.volumes.end(),
                                                [&](const Volume &v) { return v.path == e.mount; }),
                                 data_.volumes.end());
@@ -282,6 +292,32 @@ class MockSource final : public Source
         notice(Notice::Kind::success, "Gespeichert");
     }
 
+    void save_game_rule(const GameRule &rule) override
+    {
+        for (GameRule &r : data_.game_rules)
+        {
+            if (r.title_id == rule.title_id)
+            {
+                r = rule;
+                notice(Notice::Kind::success, "Spielprofil gespeichert", rule.title_name);
+                changed();
+                return;
+            }
+        }
+        data_.game_rules.push_back(rule);
+        notice(Notice::Kind::success, "Spielprofil gespeichert", rule.title_name);
+        changed();
+    }
+
+    void remove_game_rule(const std::string &title_id) override
+    {
+        std::erase_if(data_.game_rules, [&](const GameRule &r) { return r.title_id == title_id; });
+        if (data_.active_rule == title_id)
+            data_.active_rule.clear();
+        notice(Notice::Kind::success, "Spielprofil entfernt");
+        changed();
+    }
+
     void selftest(bool start) override
     {
         SelfTest &t = data_.selftest;
@@ -316,6 +352,71 @@ class MockSource final : public Source
     {
         notice(Notice::Kind::success, "„" + file.name + "“ gestartet",
                "An den ELF-Loader gesendet.");
+    }
+
+    void copy_payload_file(const PayloadFile &file) override
+    {
+        for (const PayloadFile &f : data_.payload_files)
+        {
+            if (f.source == "internal" && f.name == file.name)
+            {
+                notice(Notice::Kind::error, "Kopieren nicht möglich",
+                       "Im internen Ordner gibt es diese Datei schon.");
+                return;
+            }
+        }
+        PayloadFile copy = file;
+        copy.source = "internal";
+        copy.mount.clear();
+        copy.where = "Intern";
+        data_.payload_files.insert(data_.payload_files.begin(), copy);
+        notice(Notice::Kind::success, "„" + file.name + "“ kopiert");
+        changed();
+    }
+
+    void delete_payload_file(const PayloadFile &file) override
+    {
+        std::erase_if(data_.payload_files, [&](const PayloadFile &f)
+                      { return f.source == "internal" && f.name == file.name; });
+        notice(Notice::Kind::success, "„" + file.name + "“ gelöscht");
+        changed();
+    }
+
+    void save_payload_profiles(const std::vector<PayloadProfile> &profiles,
+                               const std::string &startup) override
+    {
+        data_.payload_profiles = profiles;
+        data_.profile_startup = startup;
+        notice(Notice::Kind::success, "Profile gespeichert");
+        changed();
+    }
+
+    void run_payload_profile(const std::string &id) override
+    {
+        for (const PayloadProfile &p : data_.payload_profiles)
+        {
+            if (p.id != id)
+                continue;
+            ProfileRun &r = data_.profile_run;
+            r = ProfileRun{};
+            r.running = true;
+            r.id = p.id;
+            r.name = p.name;
+            r.total = static_cast<int>(p.items.size());
+            r.step = 1;
+            if (!p.items.empty())
+                r.results.push_back({p.items.front(), true, "gesendet"});
+            notice(Notice::Kind::success, "Profil gestartet");
+            changed();
+            return;
+        }
+    }
+
+    void stop_payload_profile() override
+    {
+        data_.profile_run.running = false;
+        notice(Notice::Kind::info, "Profil wird angehalten");
+        changed();
     }
 
     void kill_payload(int pid) override
@@ -516,8 +617,40 @@ class MockSource final : public Source
         changed();
     }
 
+    void split_package(const std::string &id, const std::string &target, int part_mb) override
+    {
+        (void)target;
+        PackageSplit &j = data_.package_split;
+        for (const Package &k : data_.packages)
+        {
+            if (k.id != id)
+                continue;
+            j = PackageSplit{};
+            j.state = "splitting";
+            j.active = true;
+            j.can_cancel = true;
+            j.name = k.name;
+            j.phase = "Teile schreiben";
+            const std::uint64_t part = static_cast<std::uint64_t>(part_mb) << 20;
+            j.parts = static_cast<int>((k.size + part - 1) / part);
+            j.part = 1;
+            j.percent = 12;
+            notice(Notice::Kind::info, "Paket wird aufgeteilt");
+            changed();
+            return;
+        }
+    }
+
     void package_action(const std::string &action, const std::string &id) override
     {
+        if (action == "split_cancel")
+        {
+            data_.package_split.active = false;
+            data_.package_split.state = "cancelled";
+            notice(Notice::Kind::info, "Aufteilen wird abgebrochen");
+            changed();
+            return;
+        }
         PackageInstall &job = data_.package_install;
         PackageQueue &q = data_.package_queue;
         const Package *pkg = nullptr;
@@ -850,6 +983,49 @@ class MockSource final : public Source
         changed();
     }
 
+    void klog_save(const std::string &text) override
+    {
+        KlogFile f;
+        f.name = "auszug-2026-10-31_2010.log";
+        f.kind = "save";
+        f.size = text.size();
+        f.mtime = 1793476200;
+        data_.klog_files.insert(data_.klog_files.begin(), f);
+        notice(Notice::Kind::success, "Auszug gespeichert", f.name);
+        changed();
+    }
+
+    void set_username(const std::string &name) override
+    {
+        data_.profile.username = name;
+        notice(Notice::Kind::success, "Name geändert",
+               "Im Startmenü erscheint er nach einem Benutzerwechsel.");
+        changed();
+    }
+
+    void apply_avatar(const std::string &file) override
+    {
+        (void)file;
+        ++data_.avatar_revision;
+        notice(Notice::Kind::success, "Profilbild übernommen",
+               "Im Startmenü erscheint es nach einem Benutzerwechsel.");
+        changed();
+    }
+
+    void restore_avatar() override
+    {
+        ++data_.avatar_revision;
+        notice(Notice::Kind::success, "Vorheriges Profilbild zurückgeholt");
+        changed();
+    }
+
+    void klog_files_clear() override
+    {
+        std::erase_if(data_.klog_files, [](const KlogFile &f) { return !f.active; });
+        notice(Notice::Kind::success, "Ordner geleert");
+        changed();
+    }
+
     void files_open(const std::string &path) override
     {
         FsList &l = data_.fs_list;
@@ -964,7 +1140,7 @@ class MockSource final : public Source
         e.running = true;
         e.state = "running";
         e.mount = mount;
-        e.message = "USB-Speicher 1 wird ausgeworfen …";
+        e.message = "usb0 wird ausgeworfen …";
         eject_at_ = clock_ + 1.5f;
         changed();
     }
@@ -1007,7 +1183,7 @@ class MockSource final : public Source
                 m.job.title_id = "PPSA03860";
                 m.job.stage = "Dateien werden kopiert";
                 m.job.kind = has("\"dlc_only\"") ? "dlc" : "game";
-                m.job.drive = "USB-Speicher 1";
+                m.job.drive = "usb0";
                 m.job.dest = m.settings.subdir;
                 m.job.folder = "PPSA03860_Lantern_Pass";
                 m.job.total_bytes = 18.5e9;
@@ -1435,13 +1611,13 @@ class MockSource final : public Source
             int parts, found;
         };
         static const Seed kSeeds[] = {
-            {"a1f04c2e9b7d3016", "Lantern Pass", "/mnt/usb0", "USB-Speicher 1", "PPSA04211",
+            {"a1f04c2e9b7d3016", "Lantern Pass", "/mnt/usb0", "usb0", "PPSA04211",
              "01.000", "base", 5, 38.2, 0, 0},
-            {"b2e15d3fac8e4127", "Lantern Pass", "/mnt/usb0", "USB-Speicher 1", "PPSA04211",
+            {"b2e15d3fac8e4127", "Lantern Pass", "/mnt/usb0", "usb0", "PPSA04211",
              "01.020", "update", 5, 4.6, 0, 0},
-            {"c3d26e40bd9f5238", "Lantern Pass – Nordwind-Paket", "/mnt/usb0", "USB-Speicher 1",
+            {"c3d26e40bd9f5238", "Lantern Pass – Nordwind-Paket", "/mnt/usb0", "usb0",
              "PPSA04211", "01.000", "dlc", 5, 1.1, 0, 0},
-            {"d4c37f51ce0a6349", "Iron Tide", "/mnt/usb0", "USB-Speicher 1", "CUSA18842", "01.000",
+            {"d4c37f51ce0a6349", "Iron Tide", "/mnt/usb0", "usb0", "CUSA18842", "01.000",
              "base", 4, 22.7, 0, 0},
             {"e5b48062df1b745a", "Sky Drifters", "/user", "Konsolenspeicher", "PPSA07730", "01.000",
              "base", 5, 61.0, 3, 2},
@@ -1471,6 +1647,9 @@ class MockSource final : public Source
                 std::string(s.title) + "-" + s.version + (s.parts > 0 ? ".pkg (geteilt)" : ".pkg");
             data_.packages.push_back(k);
         }
+        data_.package_drives = {{"/mnt/usb0", "usb0", 182ull << 30},
+                                {"/mnt/ext1", "M.2-Speicher", 640ull << 30},
+                                {"/data", "Konsolenspeicher", 9ull << 30}};
         data_.package_scan.loaded = true;
         data_.package_scan.ever = true;
         data_.package_scan.parsed = static_cast<int>(data_.packages.size());
@@ -1635,7 +1814,7 @@ class MockSource final : public Source
             p.writable = writable;
             return p;
         };
-        data_.fs_places = {place("USB-Speicher 1", "/mnt/usb0", 247.1, true),
+        data_.fs_places = {place("usb0", "/mnt/usb0", 247.1, true),
                            place("Daten der Konsole", "/data", 612.4, true),
                            place("Ganzes System (nur ansehen)", "/", -1, false)};
         const auto entry =
@@ -1752,7 +1931,7 @@ class MockSource final : public Source
         }
         SaveDrive usb;
         usb.mount = "/mnt/usb0";
-        usb.label = "USB-Speicher 1";
+        usb.label = "usb0";
         usb.free_bytes = static_cast<std::uint64_t>(247e9);
         SaveDrive ssd;
         ssd.mount = "/user";
@@ -1762,7 +1941,7 @@ class MockSource final : public Source
         SaveBackup b;
         b.created = p.now - 3 * 86400;
         b.path = "/mnt/usb0/PS5-Sicherung/Spielstaende/2026-10-26_1830";
-        b.label = "USB-Speicher 1";
+        b.label = "usb0";
         b.kind = "backup";
         b.bytes = static_cast<std::uint64_t>(63.8e6);
         b.user_names = {"Mira"};
@@ -1792,7 +1971,7 @@ class MockSource final : public Source
         GameBackup a;
         a.path = "/mnt/usb0/PS5-Sicherung/Spiele/PPSA01325_Lantern_Pass";
         a.name = "Lantern Pass";
-        a.drive = "USB-Speicher 1";
+        a.drive = "usb0";
         a.type = "Ordner";
         a.size_bytes = static_cast<std::uint64_t>(41.7e9);
         a.modified = p.now - 5 * 86400;
@@ -1818,7 +1997,7 @@ class MockSource final : public Source
         };
         static const Seed kSeeds[] = {
             {"Interne SSD", "/user", 1840.0, 612.4, false},
-            {"USB-Speicher 1", "/mnt/usb0", 2000.4, 247.1, true},
+            {"usb0", "/mnt/usb0", 2000.4, 247.1, true},
             {"M.2-Erweiterung", "/mnt/ext1", 1000.2, 388.6, false},
         };
         for (const Seed &s : kSeeds)
@@ -1946,7 +2125,7 @@ class MockSource final : public Source
         ssd.console = true;
         DumpTarget usb;
         usb.mount = "/mnt/usb0";
-        usb.label = "USB-Speicher 1";
+        usb.label = "usb0";
         usb.fs = "exfatfs";
         usb.free_bytes = static_cast<std::uint64_t>(247e9);
         m.targets = {ssd, usb};
@@ -2006,7 +2185,7 @@ class MockSource final : public Source
             {"internal", "", "Intern", "pldmgr_v0.6.3.elf", 2.8, true},
             {"internal", "", "Intern", "nanodns_v0.4.elf", 0.13, true},
             {"internal", "", "Intern", "kaputt.elf", 0.0, false},
-            {"usb", "/mnt/usb0", "USB-Speicher 1", "ps4mount_v0.7.0.elf", 1.1, true},
+            {"usb", "/mnt/usb0", "usb0", "ps4mount_v0.7.0.elf", 1.1, true},
         };
         for (const File &f : kFiles)
         {
@@ -2023,6 +2202,30 @@ class MockSource final : public Source
             data_.payload_files.push_back(p);
         }
         data_.payload_files_loaded = true;
+        data_.payload_profiles = {
+            {"start",
+             "Nach dem Start",
+             {"ShadowMountPlus_1.7beta10.elf", "!2000", "nanodns_v0.4.elf"}},
+            {"pkg", "Pakete installieren", {"PKG-Manager_v1.5.1.elf"}},
+        };
+        data_.profile_startup = "start";
+        data_.profiles_loaded = true;
+        data_.klog_files = {{"aufnahme-2026-10-30_2214.log", "rec", 4200000, 1793398440, false},
+                            {"auszug-2026-10-29_1931.log", "save", 86000, 1793302260, false}};
+        data_.klog_files_loaded = true;
+        data_.profile.loaded = true;
+        data_.profile.valid = true;
+        data_.profile.username = "Spieler1";
+        data_.profile.uid_hex = "1EA2F4D9";
+        data_.profile.console_name = "PS5-054";
+        data_.profile.model = "PS5 Pro (CFI-7021)";
+        data_.profile.name_max = 16;
+        data_.profile.can_rename = true;
+        data_.avatars = {
+            {"01-neon-portraet.jpg", "Neon-Porträt"}, {"02-neon-fuchs.jpg", "Neon-Fuchs"},
+            {"03-neon-roboter.jpg", "Neon-Roboter"},  {"04-neon-pilz.jpg", "Neon-Pilz"},
+            {"05-blau-astronaut.jpg", "Astronaut"},   {"06-blau-katze.jpg", "Katze"},
+            {"07-gruen-drache.jpg", "Drache"},        {"08-gold-loewe.jpg", "Löwe"}};
         data_.running = {{236, "PS5 Cooling & System Center - Pro (diese App)", 25, true, ""},
                          {194, "shadowmountplus.elf", 101, false, "ShadowMountPlus_1.7beta10.elf"},
                          {121, "nanodns.elf", 2, false, ""},

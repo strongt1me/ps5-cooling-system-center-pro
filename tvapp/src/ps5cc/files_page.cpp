@@ -24,6 +24,39 @@
 namespace hui::ps5cc
 {
 
+// The keyboard with the German letters on a page of their own.
+std::vector<ui::KeyboardLayout> german_layouts()
+{
+    ui::KeyboardLayout de;
+    de.name = "äöü";
+    de.columns = 10;
+    std::vector<ui::KeyboardKey> row;
+    for (const char *c : {"ä", "ö", "ü", "ß", "-", "_", "(", ")", "&", "+"})
+    {
+        ui::KeyboardKey k;
+        k.text = c;
+        if (std::string(c) == "ä")
+            k.shifted = "Ä";
+        else if (std::string(c) == "ö")
+            k.shifted = "Ö";
+        else if (std::string(c) == "ü")
+            k.shifted = "Ü";
+        row.push_back(k);
+    }
+    de.add_row(row);
+    const auto wide = [](ui::KeyKind kind, int span)
+    {
+        ui::KeyboardKey k;
+        k.kind = kind;
+        k.span = span;
+        return k;
+    };
+    de.add_row({wide(ui::KeyKind::shift, 2), wide(ui::KeyKind::layout, 1),
+                wide(ui::KeyKind::space, 3), wide(ui::KeyKind::backspace, 2),
+                wide(ui::KeyKind::done, 2)});
+    return {ui::KeyboardLayout::letters(), de, ui::KeyboardLayout::symbols()};
+}
+
 namespace
 {
 
@@ -154,39 +187,6 @@ std::string base_of(const std::string &path)
 {
     const std::size_t s = path.find_last_of('/');
     return s == std::string::npos ? path : path.substr(s + 1);
-}
-
-// The keyboard with the German letters on a page of their own.
-std::vector<ui::KeyboardLayout> german_layouts()
-{
-    ui::KeyboardLayout de;
-    de.name = "äöü";
-    de.columns = 10;
-    std::vector<ui::KeyboardKey> row;
-    for (const char *c : {"ä", "ö", "ü", "ß", "-", "_", "(", ")", "&", "+"})
-    {
-        ui::KeyboardKey k;
-        k.text = c;
-        if (std::string(c) == "ä")
-            k.shifted = "Ä";
-        else if (std::string(c) == "ö")
-            k.shifted = "Ö";
-        else if (std::string(c) == "ü")
-            k.shifted = "Ü";
-        row.push_back(k);
-    }
-    de.add_row(row);
-    const auto wide = [](ui::KeyKind kind, int span)
-    {
-        ui::KeyboardKey k;
-        k.kind = kind;
-        k.span = span;
-        return k;
-    };
-    de.add_row({wide(ui::KeyKind::shift, 2), wide(ui::KeyKind::layout, 1),
-                wide(ui::KeyKind::space, 3), wide(ui::KeyKind::backspace, 2),
-                wide(ui::KeyKind::done, 2)});
-    return {ui::KeyboardLayout::letters(), de, ui::KeyboardLayout::symbols()};
 }
 
 class FilesPage final : public Page

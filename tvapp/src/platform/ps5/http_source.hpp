@@ -34,13 +34,22 @@ class HttpSource final : public Source
     void retry() override;
     void watch(Watch page) override;
     void save_config(const std::string &patch) override;
+    void save_game_rule(const GameRule &rule) override;
+    void remove_game_rule(const std::string &title_id) override;
     void selftest(bool start) override;
     void power(const std::string &action) override;
     void start_payload(const PayloadFile &file) override;
+    void copy_payload_file(const PayloadFile &file) override;
+    void delete_payload_file(const PayloadFile &file) override;
+    void save_payload_profiles(const std::vector<PayloadProfile> &profiles,
+                               const std::string &startup) override;
+    void run_payload_profile(const std::string &id) override;
+    void stop_payload_profile() override;
     void kill_payload(int pid) override;
     void store_action(const std::string &action, const std::string &id) override;
     void set_backdrop(const std::string &area, BackdropMode mode) override;
     void package_action(const std::string &action, const std::string &id) override;
+    void split_package(const std::string &id, const std::string &target, int part_mb) override;
     void ps4mount_post(const std::string &route, const std::string &json) override;
     void ps4mount_fetch(const std::string &what, const std::string &id) override;
     void disc_post(const std::string &route, const std::string &json) override;
@@ -57,6 +66,11 @@ class HttpSource final : public Source
     void system_post(const std::string &route, const std::string &json) override;
     void risky_measure() override;
     void klog_record(bool on) override;
+    void set_username(const std::string &name) override;
+    void apply_avatar(const std::string &file) override;
+    void restore_avatar() override;
+    void klog_save(const std::string &text) override;
+    void klog_files_clear() override;
     void files_open(const std::string &path) override;
     void files_post(const std::string &route, const std::string &json) override;
     void files_delete(const std::vector<std::string> &paths) override;
@@ -85,10 +99,12 @@ class HttpSource final : public Source
             web,
             reload,
             config,
+            rule,
             selftest,
             power,
             payload_start,
             payload_kill,
+            payload_post, // value: 0 copy, 1 delete, 2 profiles, 3 run, 4 stop; id: the name shown
             store,
             backdrop,
             package,
@@ -107,6 +123,11 @@ class HttpSource final : public Source
             sys_post,
             risky,
             klog_record,
+            profile_name,
+            avatar_apply,
+            avatar_restore,
+            klog_save,
+            klog_clear,
             fs_open,
             fs_post,
             fs_delete,
@@ -141,7 +162,9 @@ class HttpSource final : public Source
     void poll_history();
     void poll_config();
     void poll_selftest();
+    void poll_rules();
     void poll_payloads();
+    void poll_profiles(bool status_only);
     void poll_store();
     void poll_log();
     void poll_klog();
@@ -149,6 +172,7 @@ class HttpSource final : public Source
     void poll_backdrops();
     void poll_packages(bool scan);
     void poll_package_install();
+    void poll_package_split();
     void poll_package_queue();
     void poll_ps4mount();
     void poll_storage();
@@ -162,6 +186,8 @@ class HttpSource final : public Source
     void poll_extras(const std::string &id);
     void poll_library_tools();
     void poll_klog_record();
+    void poll_profile();
+    void poll_klog_files();
     void poll_fs_places();
     void poll_fs_list(const std::string &path);
     void poll_fs_job();

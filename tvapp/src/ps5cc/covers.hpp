@@ -27,6 +27,8 @@ namespace hui::ps5cc
 // The edge of a stored cover. The list draws it at 60 px and the details panel
 // at 150 px, so 160 keeps both sharp at 1080p for 100 KiB a cover.
 constexpr int kCoverSize = 160;
+// The edge of a picture drawn at about 200 px (the profile pictures): sharp there, 256 KiB each.
+constexpr int kLargeCoverSize = 256;
 // At most this many textures (about 40 MiB): later games keep their initials.
 constexpr std::size_t kCoverLimit = 400;
 
@@ -70,6 +72,7 @@ class Covers
     {
         std::string id;
         std::vector<std::uint8_t> rgba;
+        int edge = kCoverSize;
     };
     mutable std::mutex mutex_;
     std::map<std::string, CoverShown> textures_;
@@ -81,9 +84,11 @@ class Covers
 
 Covers &covers();
 
-// PNG bytes to a kCoverSize square of RGBA (centre crop, box filter); empty
-// when the bytes are not a picture.
-std::vector<std::uint8_t> decode_cover(const std::uint8_t *png, std::size_t size);
+// PNG or JPEG bytes to an `edge` square of RGBA (centre crop, box filter); empty
+// when the bytes are not a picture. Pictures drawn larger than a cover (the
+// profile pictures, 31.10.2026) ask for kLargeCoverSize.
+std::vector<std::uint8_t> decode_cover(const std::uint8_t *png, std::size_t size,
+                                       int edge = kCoverSize);
 
 // Box-filters the centred square of an RGBA picture down (or up) to size x size.
 std::vector<std::uint8_t> square_rgba(const std::uint8_t *rgba, int width, int height, int size);

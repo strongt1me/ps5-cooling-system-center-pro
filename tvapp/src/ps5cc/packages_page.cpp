@@ -5,15 +5,18 @@
 //
 // As the web app's Pakete tab: ✕ installs the package in focus at once (the console app checks
 // everything again and says no in words when something is in the way), □ puts it into the queue or
-// takes it out, △ opens the rest (search again, start or stop the queue, cancel the install).
-// Splitting a package and sending one from the PC stay in the web app.
+// takes it out, △ opens the rest (search again, start or stop the queue, cancel the install, split
+// the package into parts: the drive, then the size of a part). Sending one from the PC stays in the
+// web app.
 
 #include "ps5cc/covers.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -37,7 +40,42 @@ enum MenuTag
     kInstallCancel,
     kQueueRetry,
     kQueueClear,
+    kSplit,
+    kSplitCancel,
+    kDriveBase = 100, // + index into the drives
+    kSizeBase = 200,  // + index into kSizes
 };
+
+// The part sizes the web app offers, in MB.
+struct PartSize
+{
+    int mb;
+    const char *label;
+};
+constexpr PartSize kSizes[] = {
+    {4095, "4 GB · FAT32-Stick"},
+    {23552, "23 GB · Blu-ray 25 GB"},
+    {47104, "46 GB · Blu-ray 50 GB"},
+    {1024, "1 GB"},
+    {2048, "2 GB"},
+    {8192, "8 GB"},
+    {16384, "16 GB"},
+};
+
+const char *split_state(const PackageSplit &j)
+{
+    if (j.state == "splitting")
+        return "wird aufgeteilt";
+    if (j.state == "verifying")
+        return "wird geprüft";
+    if (j.state == "done")
+        return "aufgeteilt";
+    if (j.state == "failed")
+        return "Aufteilen gescheitert";
+    if (j.state == "cancelled")
+        return "Aufteilen abgebrochen";
+    return "";
+}
 
 const char *kind_label(const std::string &kind)
 {
@@ -137,6 +175,9 @@ class PackagesPage final : public Page
         bar_.style.text_size = 20.0f;
         bar_.set_bounds({kRightX + 30.0f, kStatusY + 62.0f, kRightW - 60.0f, 48.0f});
 
+        split_bar_.style = bar_.style;
+        split_bar_.set_bounds(bar_.bounds());
+
         menu_.style.theme = solid_theme(theme);
         menu_.style.width = 520.0f;
         menu_.style.scrim = 0.35f;
@@ -149,7 +190,21 @@ class PackagesPage final : public Page
         scan_ = data.package_scan;
         job_ = data.package_install;
         queue_ = data.package_queue;
+        drives_ = data.package_drives;
+        split_ = data.package_split;
         rebuild();
+        split_bar_.style.mode = ui::ProgressMode::determinate;
+        split_bar_.style.percent = true;
+        split_bar_.style.status = split_.state == "failed"      ? ui::Status::danger
+                                  : split_.state == "cancelled" ? ui::Status::warning
+                                  : split_.active               ? ui::Status::accent
+                                                                : ui::Status::success;
+        std::string split_label = "„" + split_.name + "“ " + split_state(split_);
+        if (split_.active && split_.parts > 0)
+            split_label += " · Teil " + std::to_string(std::max(split_.part, 1)) + " von " +
+                           std::to_string(split_.parts);
+        split_bar_.label = split_label;
+        split_bar_.set_value(std::clamp(static_cast<float>(split_.percent) / 100.0f, 0.0f, 1.0f));
         const bool known = job_.bytes_total > 0.0 && job_.percent >= 0;
         bar_.style.mode =
             job_.active && !known ? ui::ProgressMode::indeterminate : ui::ProgressMode::determinate;
@@ -228,6 +283,7 @@ class PackagesPage final : public Page
         list_.update(dt);
         info_.update(dt);
         bar_.update(dt);
+        split_bar_.update(dt);
         menu_.update(dt);
         // The worker fetches the picture in focus before the others.
         if (const Package *p = focused())
@@ -266,8 +322,7 @@ class PackagesPage final : public Page
             float ty = card.y + 120.0f;
             for (const std::string &line :
                  fonts.regular.font->wrap("Pakete (.pkg) auf USB-Speichern, M.2 und in /data/pkg. "
-                                          "Aufteilen und vom PC senden geht in der "
-                                          "Browser-App.",
+                                          "Vom PC senden geht in der Browser-App.",
                                           21.0f, card.w - 60.0f))
             {
                 ui::text(list, fonts.regular, line, card.x + 30.0f, ty, 21.0f, kMuted);
@@ -285,7 +340,17 @@ class PackagesPage final : public Page
                   Color::rgb(0x3880ff, 0.18f));
         ui::text(list, fonts.semibold, queue_line(), card.x + 30.0f, line_y + 38.0f, 21.0f,
                  queue_.halted ? kWarning : kMuted);
-        if (job_.state != "idle")
+        if (showing_split())
+        {
+            split_bar_.draw(canvas);
+            const std::string why = !split_.error.empty() ? split_.error : split_.note;
+            if (!why.empty() && !split_.active)
+                ui::text(list, fonts.regular,
+                         fonts.regular.font->wrap(why, 19.0f, card.w - 60.0f).front(),
+                         card.x + 30.0f, kStatusY + 150.0f, 19.0f,
+                         split_.state == "failed" ? kCritical : kMuted);
+        }
+        else if (job_.state != "idle")
         {
             bar_.draw(canvas);
             const std::string why = !job_.error.empty() ? job_.error : job_.note;
@@ -379,6 +444,20 @@ class PackagesPage final : public Page
                               box.w * 0.22f);
     }
 
+    // The split shows in the card's bottom while it runs, and afterwards as long as no install
+    // has anything to say.
+    bool showing_split() const
+    {
+        return split_.active || (split_.state != "idle" && job_.state == "idle");
+    }
+
+    // As the web app's canSplit: a single file of at least 128 MB, nothing else running.
+    bool can_split(const Package &p) const
+    {
+        return p.parts_total == 0 && p.size >= (128ull << 20) && !split_.active && !job_.active &&
+               !queue_.running && !scan_.scanning;
+    }
+
     std::string queue_line() const
     {
         if (queue_.items.empty())
@@ -424,6 +503,75 @@ class PackagesPage final : public Page
             add("Fehlgeschlagene wiederholen", kQueueRetry);
         if (queue_.done > 0)
             add("Erledigte entfernen", kQueueClear);
+        if (split_.active)
+            add("Aufteilen abbrechen", kSplitCancel, true);
+        else if (const Package *p = focused())
+        {
+            add("Aufteilen …", kSplit);
+            items.back().disabled = !can_split(*p);
+            if (p->parts_total > 0)
+                items.back().shortcut = "schon geteilt";
+            else if (p->size < (128ull << 20))
+                items.back().shortcut = "unter 128 MB";
+            else if (job_.active)
+                items.back().shortcut = "Installation läuft";
+            else if (queue_.running)
+                items.back().shortcut = "Warteschlange läuft";
+            else if (scan_.scanning)
+                items.back().shortcut = "Suche läuft";
+        }
+        menu_.set_items(items);
+        menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
+    }
+
+    // Splitting, first step: where the parts go. A drive without room for all of them is shown,
+    // with the reason, and cannot be chosen.
+    void open_drives(ui::Feedback &feedback)
+    {
+        const Package *p = focused();
+        if (p == nullptr)
+            return;
+        split_id_ = p->id;
+        split_size_ = p->size;
+        std::vector<ui::MenuItem> items;
+        for (std::size_t i = 0; i < drives_.size(); ++i)
+        {
+            const PackageDrive &d = drives_[i];
+            ui::MenuItem m;
+            m.label = d.label.empty() ? d.mount : d.label;
+            m.tag = kDriveBase + static_cast<int>(i);
+            const bool room = d.free_bytes >= p->size + (256ull << 20);
+            m.shortcut = room ? format_bytes(d.free_bytes) + " frei" : "zu wenig Platz";
+            m.disabled = !room;
+            items.push_back(m);
+        }
+        if (items.empty())
+        {
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        menu_.set_items(items);
+        menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
+    }
+
+    // Second step: how big a part may be. Sizes that give one part or more than 256 are refused, as
+    // the app would.
+    void open_sizes(ui::Feedback &feedback)
+    {
+        std::vector<ui::MenuItem> items;
+        for (std::size_t i = 0; i < std::size(kSizes); ++i)
+        {
+            const std::uint64_t part = static_cast<std::uint64_t>(kSizes[i].mb) << 20;
+            const std::uint64_t parts = (split_size_ + part - 1) / part;
+            ui::MenuItem m;
+            m.label = kSizes[i].label;
+            m.tag = kSizeBase + static_cast<int>(i);
+            m.disabled = parts < 2 || parts > 256;
+            m.shortcut = parts < 2     ? "passt in einen Teil"
+                         : parts > 256 ? "zu viele Teile"
+                                       : std::to_string(parts) + " Teile";
+            items.push_back(m);
+        }
         menu_.set_items(items);
         menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
     }
@@ -431,6 +579,29 @@ class PackagesPage final : public Page
     // Each fires at once – nothing is asked twice (user, 27.10.2026).
     void run(int tag, ui::Feedback &feedback)
     {
+        if (tag == kSplit)
+        {
+            open_drives(feedback);
+            return;
+        }
+        if (tag >= kDriveBase && tag < kSizeBase)
+        {
+            const std::size_t i = static_cast<std::size_t>(tag - kDriveBase);
+            if (i >= drives_.size())
+                return;
+            split_target_ = drives_[i].mount;
+            open_sizes(feedback);
+            return;
+        }
+        if (tag >= kSizeBase)
+        {
+            const std::size_t i = static_cast<std::size_t>(tag - kSizeBase);
+            if (i >= std::size(kSizes))
+                return;
+            feedback.play(audio::Cue::select);
+            source().split_package(split_id_, split_target_, kSizes[i].mb);
+            return;
+        }
         feedback.play(audio::Cue::select);
         switch (tag)
         {
@@ -448,6 +619,9 @@ class PackagesPage final : public Page
             break;
         case kQueueClear:
             source().package_action("queue_clear", {});
+            break;
+        case kSplitCancel:
+            source().package_action("split_cancel", {});
             break;
         default:
             break;
@@ -577,6 +751,7 @@ class PackagesPage final : public Page
     ui::ListView list_;
     ui::DetailList info_;
     ui::ProgressBar bar_;
+    ui::ProgressBar split_bar_;
     ui::Menu menu_;
     std::string key_;
     std::string info_key_ = "\x01";
@@ -585,6 +760,11 @@ class PackagesPage final : public Page
     PackageScan scan_;
     PackageInstall job_;
     PackageQueue queue_;
+    std::vector<PackageDrive> drives_;
+    PackageSplit split_;
+    std::string split_id_; // the package the drive and size menus are about
+    std::uint64_t split_size_ = 0;
+    std::string split_target_;
 };
 
 } // namespace

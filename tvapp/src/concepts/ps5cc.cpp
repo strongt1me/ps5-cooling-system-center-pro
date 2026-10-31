@@ -99,7 +99,8 @@ enum View
     kBackups,
     kFiles,       // Dateien (29.10.2026)
     kStorage,     // System → Speicher, the first part of the System area (29.10.2026)
-    kPlaceholder, // Dateien, Profil until their pages exist
+    kProfile,     // Profil and Danke (Phase 10, 31.10.2026)
+    kPlaceholder, // an area without a page of its own
 };
 
 // The pages that live in src/ps5cc/*_page.cpp.
@@ -116,7 +117,8 @@ enum PageIndex
     kPageSaves = 8,
     kPageBackups = 9,
     kPageFiles = 10,
-    kPageCount = 11,
+    kPageProfile = 11,
+    kPageCount = 12,
 };
 
 // The sidebar's icons, drawn with the kit's shapes (no artwork files): one per area.
@@ -385,7 +387,7 @@ class Ps5cc final : public app::Concept
             ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
             ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
             ps5cc::make_system_page(),   ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
-            ps5cc::make_backups_page(),  ps5cc::make_files_page()};
+            ps5cc::make_backups_page(),  ps5cc::make_files_page(),    ps5cc::make_profile_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -726,6 +728,18 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::right},
             {0.9f, 0, Direction::none, "einstellung-geaendert"},
+            // Phase 8: warnings, the light bar, the game profiles, then the night mode and the test
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "einstellungen-warnungen"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "einstellungen-lichtleiste"},
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "einstellungen-spielprofile"},
+            {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
@@ -884,6 +898,16 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "paket-warteschlange"},
             {0.3f, action_bit(Action::north)},
             {0.8f, 0, Direction::none, "pakete-menue"},
+            // Aufteilen, once the install has ended: last in the menu (it wraps), then the drive,
+            // then the size of a part
+            {0.3f, action_bit(Action::back)},
+            {3.0f, 0, Direction::none},
+            {0.3f, action_bit(Action::north)},
+            {0.2f, 0, Direction::up},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "paket-aufteilen-ziel"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "paket-aufteilen-groesse"},
             {0.3f, action_bit(Action::back)},
             // Spiele → PS4 von USB: the list, □ on a game, its add-ons, △ and the settings.
             {0.5f, action_bit(Action::jump_next)},
@@ -986,6 +1010,16 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {1.2f, 0, Direction::none, "payload-store"},
+            // Phase 9: the profiles, their menu and the editor
+            {0.4f, action_bit(Action::jump_next)},
+            {0.2f, 0, Direction::down},
+            {0.9f, 0, Direction::none, "payload-profile"},
+            {0.3f, action_bit(Action::north)},
+            {0.7f, 0, Direction::none, "payload-profil-menue"},
+            {0.3f, action_bit(Action::back)},
+            {0.3f, action_bit(Action::west)},
+            {0.9f, 0, Direction::none, "payload-profil-bearbeiten"},
+            {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "system"},
             // System → Speicher (the drives page inside System)
@@ -1050,6 +1084,17 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::north)},
             {0.6f, 0, Direction::none, "kernel-log-aufnahme"},
             {0.3f, action_bit(Action::north)},
+            // what the console keeps of the kernel log: save an excerpt, the files, empty the
+            // folder
+            {0.4f, action_bit(Action::jump_next)},
+            {0.8f, 0, Direction::none, "protokoll-gespeichert"},
+            // Profil (one area up): the built-in pictures and the name, then Danke
+            {0.5f, action_bit(Action::page_prev)},
+            {1.2f, 0, Direction::none, "profil"},
+            {0.4f, action_bit(Action::jump_next)},
+            {1.2f, 0, Direction::none, "profil-danke"},
+            {0.4f, action_bit(Action::jump_prev)},
+            {0.5f, action_bit(Action::page_next)},
             {0.4f, action_bit(Action::touch)},
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
@@ -1161,6 +1206,8 @@ class Ps5cc final : public app::Concept
             return kStorage;
         case kAreaFiles:
             return kFiles;
+        case kAreaProfile:
+            return kProfile;
         default:
             return kPlaceholder;
         }
@@ -1196,6 +1243,8 @@ class Ps5cc final : public app::Concept
             return pages_[kPageStorage].get();
         case kPlaytime:
             return pages_[kPagePlaytime].get();
+        case kProfile:
+            return pages_[kPageProfile].get();
         case kSaves:
             return pages_[kPageSaves].get();
         case kBackups:
@@ -1541,7 +1590,9 @@ class Ps5cc final : public app::Concept
         // Left from a page that has no use for it opens the sidebar (Kühlung and Einstellungen turn
         // values with it).
         const View v = view();
-        if (input.nav == Direction::left && !input.nav_repeat && v != kCooling && v != kSettings)
+        const ps5cc::Page *left_page = current_page();
+        if (input.nav == Direction::left && !input.nav_repeat && v != kCooling && v != kSettings &&
+            (left_page == nullptr || !left_page->wants_left()))
         {
             set_nav_focus(true, feedback);
             return;
@@ -1637,6 +1688,7 @@ class Ps5cc final : public app::Concept
                               : v == kSaves    ? ps5cc::Watch::saves
                               : v == kBackups  ? ps5cc::Watch::backups
                               : v == kFiles    ? ps5cc::Watch::files
+                              : v == kProfile  ? ps5cc::Watch::profile
                                                : ps5cc::Watch::none);
         if (ps5cc::Page *page = current_page())
             page->enter();

@@ -2,6 +2,18 @@
 
 ## Unveröffentlicht
 
+### USB-Laufwerke heißen wie auf der Konsole
+- Statt „USB-Speicher 1“ für `/mnt/usb0` heißen die Laufwerke jetzt `usb0`, `usb1` … – überall (System, Dateimanager, Payloads, Pakete, Auswerfen, Browser und Vollbild). Hinweis eines Nutzers: die Zählung ab 1 passte nicht zu den Pfaden der Konsole.
+- Vollbild, Profil: die Profilbilder im Raster werden in voller Größe geladen (256 px statt der 132-px-Vorschau) und sind scharf; auf der Profil-Seite kommen ihre Bilder zuerst und bis zu vier auf einmal. Links bleibt im Raster (die Seitenleiste öffnet das Touchpad). Behoben: Bilder und Upload scheiterten am kodierten Punkt im Dateinamen („Das Bild ließ sich nicht laden“, „Unbekannter Dateiname“).
+
+### Vollbild-App: Phasen 8–10 und „Aufteilen“
+- **Kühlung → Einstellungen (Phase 8):** neue Abschnitte Warnungen (Warnung ab, Warn-Countdown), Lichtleiste (Ampel an/aus, Gelb ab, Rot ab; Rot bleibt über Gelb) und Spielprofile („„Spiel“ merken“ für das laufende Spiel, Liste der Profile mit „aktiv“, die X-Taste entfernt eines sofort).
+- **Payloads (Phase 9):** neuer Reiter „Profile“: ausführen/anhalten, beim Start der App ausführen, löschen (Dreieck-Taste), bearbeiten und neu anlegen (Quadrat-Taste; Name über die Bildschirmtastatur, Payloads aus dem internen Ordner, Pausen 1/2/5/10 s, Einträge ordnen und entfernen). Unter „Meine Payloads“ löscht die Quadrat-Taste eine interne Datei bzw. kopiert eine vom USB-Stick in den internen Ordner.
+- **Protokoll (Phase 10):** neuer Reiter „Gespeichert“: Auszug des Kernel-Logs auf der Konsole speichern, die gespeicherten Aufnahmen und Auszüge, Ordner leeren; die Dreieck-Taste startet/beendet die Aufnahme auch hier.
+- **Profil (Phase 10):** eigene Seite statt Platzhalter: Bild, Name, Konsole, Benutzer-ID; die 30 mitgelieferten Profilbilder als Raster, die X-Taste macht eines zum Profilbild (die Vollbild-App rechnet es wie die Browser-App in DXT5-DDS und PNG um, `tvapp/src/ps5cc/avatar_build.*`), die Quadrat-Taste holt das vorherige zurück, die Dreieck-Taste ändert den Namen. Reiter „Danke“ mit allen Einträgen der Credits-Seite (`credits.hpp`, aus `web/index.html` erzeugt).
+- **Pakete:** „Aufteilen …“ im Dreieck-Menü: erst das Ziel-Laufwerk (ohne genug Platz gesperrt), dann die Teilgröße (FAT32-Stick 4 GB, Blu-ray 23/46 GB, 1–16 GB, mit der Zahl der Teile); Fortschritt unten in der Karte, „Aufteilen abbrechen“ im Menü.
+- Bleibt in der Browser-App: eigenes Profilbild hochladen, Profile und Spielprofile als Datei sichern/laden, Dateien herunterladen, Links der Danke-Seite.
+
 ### Offene Punkte der Durchsicht vom 31.10. behoben
 - **Lüfter:** Eine feste Schwelle von Hand wird abgelehnt, solange der Lüfterwächter die Kühlung hält (409, vorher überschrieb sie seine volle Kühlung). Während der Wächter hält, laufen die Messwerte im Status weiter, statt stehen zu bleiben.
 - **Verlauf:** `history.csv` schreibt ein eigener Faden; der Lüfter-Faden wartet nie mehr auf ein belegtes Laufwerk.

@@ -62,13 +62,20 @@ CoverWant Covers::next_wanted(const std::vector<Game> &games)
 void Covers::deliver(const std::string &id, std::vector<std::uint8_t> rgba)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (rgba.size() != static_cast<std::size_t>(kCoverSize) * kCoverSize * 4u)
+    // a square of one of the two edges the decoder makes
+    int edge = 0;
+    for (const int e : {kCoverSize, kLargeCoverSize})
+    {
+        if (rgba.size() == static_cast<std::size_t>(e) * e * 4u)
+            edge = e;
+    }
+    if (edge == 0)
     {
         busy_.erase(id);
         failed_.insert(id);
         return;
     }
-    ready_.push_back({id, std::move(rgba)});
+    ready_.push_back({id, std::move(rgba), edge});
 }
 
 void Covers::fail(const std::string &id)
@@ -109,7 +116,7 @@ int Covers::upload_pending(
     int uploaded = 0;
     for (Ready &r : take)
     {
-        const std::uint32_t texture = create(kCoverSize, kCoverSize, r.rgba.data());
+        const std::uint32_t texture = create(r.edge, r.edge, r.rgba.data());
         std::lock_guard<std::mutex> lock(mutex_);
         busy_.erase(r.id);
         if (texture == 0)
@@ -187,7 +194,7 @@ std::vector<std::uint8_t> square_rgba(const std::uint8_t *rgba, int width, int h
     return out;
 }
 
-std::vector<std::uint8_t> decode_cover(const std::uint8_t *png, std::size_t size)
+std::vector<std::uint8_t> decode_cover(const std::uint8_t *png, std::size_t size, int edge)
 {
     if (png == nullptr || size == 0 || size > static_cast<std::size_t>(INT_MAX))
         return {};
@@ -201,7 +208,7 @@ std::vector<std::uint8_t> decode_cover(const std::uint8_t *png, std::size_t size
     // Anything wildly out of shape is not a cover; it would also cost a long decode.
     std::vector<std::uint8_t> out;
     if (w > 0 && h > 0 && w <= 4096 && h <= 4096)
-        out = square_rgba(pixels, w, h, kCoverSize);
+        out = square_rgba(pixels, w, h, edge);
     stbi_image_free(pixels);
     return out;
 }

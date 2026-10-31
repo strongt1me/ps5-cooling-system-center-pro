@@ -1,4 +1,5 @@
-// ps5cc - The Protokoll page: the app's own log and the console's kernel log, live.
+// ps5cc - The Protokoll page: the app's own log, the console's kernel log live, and what of it is
+// kept on the console (recordings and excerpts).
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -23,7 +24,13 @@ enum View
 {
     kApp = 0,
     kKernel = 1,
+    kSaved = 2,
 };
+
+// Rows of the Gespeichert view that are not a file.
+constexpr int kRowSave = -2;
+constexpr int kRowClear = -3;
+constexpr int kRowEmpty = -4;
 
 constexpr float kListTop = kTop + 10.0f;
 constexpr float kListW = 1824.0f - kLeftX;
@@ -52,8 +59,8 @@ class LogsPage final : public Page
     void init(const ui::Theme &theme) override
     {
         theme_ = theme;
-        style_subtabs(views_, theme, 2);
-        views_.set_tabs({{"App-Protokoll"}, {"Kernel-Log live"}});
+        style_subtabs(views_, theme, 3);
+        views_.set_tabs({{"App-Protokoll"}, {"Kernel-Log live"}, {"Gespeichert"}});
         views_.set_active(kApp, true);
 
         list_.style.theme = theme;
@@ -84,9 +91,17 @@ class LogsPage final : public Page
                                  (!data.log.empty() && data.log.back().t_ms != log_.back().t_ms);
         const bool kernel_changed = data.klog.size() != klog_.size() ||
                                     (!data.klog.empty() && data.klog.back().n != klog_.back().n);
+        std::string files_key = data.klog_files_loaded ? "1" : "0";
+        for (const KlogFile &f : data.klog_files)
+            files_key += '\n' + f.name + '\t' + std::to_string(f.size) + (f.active ? "*" : "");
+        const bool files_changed = files_key != files_key_;
+        files_key_ = files_key;
+        files_ = data.klog_files;
+        files_loaded_ = data.klog_files_loaded;
         log_ = data.log;
         klog_ = data.klog;
-        if ((view_ == kApp && app_changed) || (view_ == kKernel && kernel_changed))
+        if ((view_ == kApp && app_changed) || (view_ == kKernel && kernel_changed) ||
+            (view_ == kSaved && (files_changed || kernel_changed)))
             rebuild();
     }
 
@@ -106,15 +121,42 @@ class LogsPage final : public Page
                 view_ = views_.active();
                 follow_ = true;
                 rebuild();
+                if (view_ == kSaved)
+                    list_.set_focus(0); // on "Auszug speichern", never first on "Ordner leeren"
             }
             return;
         }
         // Triangle in the kernel log: record it into a file, as the web app's "Aufnahme" (download
         // it there)
-        if (input.is_pressed(Action::north) && view_ == kKernel)
+        if (input.is_pressed(Action::north) && view_ != kApp)
         {
             feedback.play(audio::Cue::select);
             source().klog_record(!record_.recording);
+            return;
+        }
+        if (view_ == kSaved)
+        {
+            const ui::Event event = list_.handle(input, feedback);
+            if (event != ui::Event::activated)
+                return;
+            const int tag = focused_tag();
+            if (tag == kRowSave)
+            {
+                const std::string text = excerpt();
+                if (text.empty())
+                {
+                    feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                    return;
+                }
+                feedback.play(audio::Cue::select);
+                source().klog_save(text);
+            }
+            else if (tag == kRowClear)
+            {
+                // at once, nothing asked twice; the recording that runs stays
+                feedback.play(audio::Cue::select);
+                source().klog_files_clear();
+            }
             return;
         }
         if (input.is_pressed(Action::west))
@@ -144,8 +186,17 @@ class LogsPage final : public Page
         const ui::Fonts &fonts = canvas.fonts;
         const std::size_t count = view_ == kApp ? log_.size() : klog_.size();
         char text[96];
-        std::snprintf(text, sizeof(text), "%zu Zeilen · %s", count,
-                      follow_ ? "läuft mit" : "angehalten");
+        if (view_ == kSaved)
+        {
+            std::uint64_t bytes = 0;
+            for (const KlogFile &f : files_)
+                bytes += f.size;
+            std::snprintf(text, sizeof(text), "%zu %s · %s", files_.size(),
+                          files_.size() == 1 ? "Datei" : "Dateien", format_bytes(bytes).c_str());
+        }
+        else
+            std::snprintf(text, sizeof(text), "%zu Zeilen · %s", count,
+                          follow_ ? "läuft mit" : "angehalten");
         const float baseline = kTabY + kTabH * 0.5f + 8.0f;
         ui::text(list, fonts.regular, text, 1824.0f, baseline, 21.0f, follow_ ? kMuted : kWarning,
                  gfx::Align::right);
@@ -155,7 +206,7 @@ class LogsPage final : public Page
         const Rect &tabs = views_.bounds();
         const float status_x =
             tabs.x + tabs.w + 14.0f + ui::button_width(ui::Button::r2, 38.0f) + 22.0f;
-        if (view_ == kKernel && record_.recording)
+        if (view_ != kApp && record_.recording)
         {
             std::string file = record_.file;
             if (file.rfind("aufnahme-", 0) == 0)
@@ -174,6 +225,17 @@ class LogsPage final : public Page
     int hints(ui::Hint *out) const override
     {
         out[0] = {ui::Button::l2, "Ansicht", ui::Button::r2};
+        if (view_ == kSaved)
+        {
+            int n = 1;
+            const int tag = focused_tag();
+            if (tag == kRowSave)
+                out[n++] = {ui::Button::cross, "Auszug speichern"};
+            else if (tag == kRowClear)
+                out[n++] = {ui::Button::cross, "Ordner leeren"};
+            out[n++] = {ui::Button::triangle, record_.recording ? "Aufnahme beenden" : "Aufnahme"};
+            return n;
+        }
         out[1] = {ui::Button::dpad, "Blättern"};
         out[2] = {ui::Button::square, "Zum Ende"};
         if (view_ == kKernel) // at most three: the recording takes the place of the scrolling hint
@@ -190,8 +252,53 @@ class LogsPage final : public Page
         return std::max(static_cast<int>(list_.items().size()) - 1, 0);
     }
 
+    int focused_tag() const
+    {
+        const int i = list_.focus();
+        if (i < 0 || i >= static_cast<int>(list_.items().size()))
+            return -1000;
+        return list_.items()[static_cast<std::size_t>(i)].tag;
+    }
+
+    // The kernel log as it is on screen, one line each with the local time, as the web page's
+    // excerpt (there with its filter).
+    std::string excerpt() const
+    {
+        if (klog_.empty())
+            return {};
+        std::string out = "# PS5 Kernel-Log, Auszug aus der Vollbild-App\n";
+        for (const KlogLine &l : klog_)
+            out += format_time_of_day(l.t_ms, tz_) + "  " + l.text + "\n";
+        return out;
+    }
+
+    void rebuild_saved()
+    {
+        std::vector<ui::ListItem> items;
+        const auto row = [&](int tag)
+        {
+            ui::ListItem item;
+            item.tag = tag;
+            items.push_back(item);
+        };
+        row(kRowSave);
+        for (std::size_t i = 0; i < files_.size(); ++i)
+            row(static_cast<int>(i));
+        if (files_.empty())
+            row(kRowEmpty);
+        row(kRowClear);
+        const int keep = list_.focus();
+        list_.set_items(items);
+        list_.set_focus(std::clamp(keep, 0, last()));
+    }
+
     void rebuild()
     {
+        if (view_ == kSaved)
+        {
+            rebuild_saved();
+            return;
+        }
         std::vector<ui::ListItem> items;
         const std::size_t count = view_ == kApp ? log_.size() : klog_.size();
         items.reserve(std::max<std::size_t>(count, 1));
@@ -218,6 +325,40 @@ class LogsPage final : public Page
         const ui::Fonts &fonts = canvas.fonts;
         ui::Painter paint(list, fonts, theme_);
         const float base = row.y + row.h * 0.5f + 7.0f;
+        if (view_ == kSaved)
+        {
+            if (index == kRowSave)
+            {
+                const std::string text =
+                    "Auszug speichern · die " + std::to_string(klog_.size()) +
+                    " Zeilen des Kernel-Logs live, im Ordner klog-live-log der Konsole";
+                ui::text(list, fonts.semibold, ui::fit_label(paint, text, 19.0f, row.w - 40.0f),
+                         row.x + 16.0f, base, 19.0f, kBlue);
+            }
+            else if (index == kRowClear)
+                ui::text(list, fonts.semibold,
+                         "Ordner leeren · alles außer einer laufenden Aufnahme", row.x + 16.0f,
+                         base, 19.0f, kCritical);
+            else if (index == kRowEmpty)
+                ui::text(list, fonts.regular,
+                         files_loaded_ ? "Der Ordner ist leer." : "Wird gelesen …", row.x + 16.0f,
+                         base, 19.0f, kMuted);
+            else if (static_cast<std::size_t>(index) < files_.size())
+            {
+                const KlogFile &f = files_[static_cast<std::size_t>(index)];
+                ui::text(list, fonts.mono, ui::fit_label(paint, f.name, 18.0f, row.w * 0.5f),
+                         row.x + 16.0f, base, 18.0f, kInk);
+                std::string what = std::string(f.kind == "rec" ? "Aufnahme" : "Auszug") + " · " +
+                                   format_date(f.mtime);
+                if (f.active)
+                    what += " · läuft";
+                ui::text(list, fonts.regular, what, row.x + row.w * 0.55f, base, 18.0f,
+                         f.active ? kWarning : kMuted);
+                ui::text(list, fonts.regular, format_bytes(f.size), row.x + row.w - 16.0f, base,
+                         18.0f, kMuted, gfx::Align::right);
+            }
+            return;
+        }
         if (index < 0)
         {
             ui::text(list, fonts.regular,
@@ -269,6 +410,9 @@ class LogsPage final : public Page
     std::vector<LogEntry> log_;
     std::vector<KlogLine> klog_;
     KlogRecord record_;
+    std::vector<KlogFile> files_;
+    bool files_loaded_ = false;
+    std::string files_key_ = "\x01";
 };
 
 } // namespace
