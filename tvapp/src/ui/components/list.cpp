@@ -254,13 +254,16 @@ void ListView::draw(Canvas &canvas) const
 
         if (item.header)
         {
-            const Color muted = style.panel || style.cards ? theme.text_muted : paint.page_text_muted();
+            const Color muted =
+                style.panel || style.cards ? theme.text_muted : paint.page_text_muted();
             const float baseline = row.y + row.h - 14.0f;
             const float left = row.x + style.padding;
-            const float width = paint.label(upper(item.title), left, baseline, style.header_size, muted);
+            const float width =
+                paint.label(upper(item.title), left, baseline, style.header_size, muted);
             if (style.header_rule)
                 list.rounded_rect({left + width + 16.0f, baseline - style.header_size * 0.36f,
-                                   std::max(row.w - 2.0f * style.padding - width - 16.0f, 0.0f), 1.5f},
+                                   std::max(row.w - 2.0f * style.padding - width - 16.0f, 0.0f),
+                                   1.5f},
                                   0.0f, muted.with_alpha(0.25f));
         }
         else
@@ -316,11 +319,13 @@ void ListView::draw(Canvas &canvas) const
                     }
                     if (style.value_width > 0.0f)
                     {
-                        // a fixed column: an empty or a short value leaves the badge where the others are
+                        // a fixed column: an empty or a short value leaves the badge where the
+                        // others are
                         float used = 0.0f;
                         if (!item.value.empty())
-                            used = paint.label(item.value, right, row.cy() + style.value_size * 0.34f,
-                                               style.value_size, quiet, gfx::Align::right);
+                            used =
+                                paint.label(item.value, right, row.cy() + style.value_size * 0.34f,
+                                            style.value_size, quiet, gfx::Align::right);
                         right -= std::max(used, style.value_width) + 18.0f;
                     }
                     else if (!item.value.empty())
@@ -336,7 +341,8 @@ void ListView::draw(Canvas &canvas) const
                         for (const ListItem &other : items_)
                         {
                             if (!other.header && !other.badge.empty())
-                                badge_column_w_ = std::max(badge_column_w_, paint.label_width(other.badge, size) + 24.0f);
+                                badge_column_w_ = std::max(
+                                    badge_column_w_, paint.label_width(other.badge, size) + 24.0f);
                         }
                     }
                     if (style.badge_column && badge_column_w_ > 0.0f)
@@ -344,10 +350,13 @@ void ListView::draw(Canvas &canvas) const
                         if (!item.badge.empty())
                         {
                             const float width = paint.label_width(item.badge, size) + 24.0f;
-                            const Rect pill{right - badge_column_w_ * 0.5f - width * 0.5f, row.cy() - 15.0f, width, 30.0f};
-                            paint.fill(pill, theme.pill_chips ? 15.0f : std::min(theme.radius, 15.0f), theme.accent);
-                            paint.label(item.badge, pill.cx(), pill.cy() + size * 0.34f, size, Painter::on(theme.accent),
-                                        gfx::Align::center);
+                            const Rect pill{right - badge_column_w_ * 0.5f - width * 0.5f,
+                                            row.cy() - 15.0f, width, 30.0f};
+                            paint.fill(pill,
+                                       theme.pill_chips ? 15.0f : std::min(theme.radius, 15.0f),
+                                       theme.accent);
+                            paint.label(item.badge, pill.cx(), pill.cy() + size * 0.34f, size,
+                                        Painter::on(theme.accent), gfx::Align::center);
                         }
                         right -= badge_column_w_ + 18.0f;
                     }

@@ -1,4 +1,5 @@
-// ps5cc - Tests for the game tools' plans: parsing the console app's answers, the rules, the start bodies.
+// ps5cc - Tests for the game tools' plans: parsing the console app's answers, the rules, the start
+// bodies.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -25,7 +26,8 @@ PlanReply reply(Tool tool, const char *json)
     return r;
 }
 
-// gamecopy.c's answer, shortened: the internal SSD too small, the source's own USB disk, a free M.2 and a FAT32 stick.
+// gamecopy.c's answer, shortened: the internal SSD too small, the source's own USB disk, a free M.2
+// and a FAT32 stick.
 constexpr const char *kCopy = R"({"ok":true,"title_id":"PPSA01325","name":"ASTRO BOT",
   "source":"/mnt/usb0/homebrew/PPSA01325","kind":"folder","size_bytes":31200000000,"files":2312,
   "largest_bytes":6000000000,"skipped":2,"running":false,"busy":false,"other_busy":false,"targets":[
@@ -65,8 +67,10 @@ TEST(Ps5ccPlans, CopyRefusesAsTheWebApp)
 {
     const Plan p = hui::ps5cc::parse_plan(Tool::copy, reply(Tool::copy, kCopy));
     PlanChoice c;
-    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[3]), "FAT32 nimmt keine Datei über 4 GB auf");
-    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]), "Zu wenig Platz: Die Kopie braucht 31,2 GB");
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[3]),
+              "FAT32 nimmt keine Datei über 4 GB auf");
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]),
+              "Zu wenig Platz: Die Kopie braucht 31,2 GB");
     // The drive is fine as such; only "playable" would land on the original.
     EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[1]), "");
     c.mode = 0;
@@ -85,17 +89,20 @@ TEST(Ps5ccPlans, CopyStartsOnlyWithModeAndDrive)
     c.mode = 1;
     EXPECT_TRUE(hui::ps5cc::ready(p, c));
     EXPECT_EQ(hui::ps5cc::target_of(p, c), "/mnt/ext0/PS5-Sicherung/Spiele/PPSA01325");
-    EXPECT_EQ(hui::ps5cc::start_body(p, c), R"({"id":"PPSA01325","target":"/mnt/ext0","mode":"backup"})");
+    EXPECT_EQ(hui::ps5cc::start_body(p, c),
+              R"({"id":"PPSA01325","target":"/mnt/ext0","mode":"backup"})");
 }
 
 TEST(Ps5ccPlans, CopyRunRefusals)
 {
     PlanReply r = reply(Tool::copy, R"({"title_id":"X","running":true,"busy":true})");
-    EXPECT_EQ(hui::ps5cc::run_blocked(hui::ps5cc::parse_plan(Tool::copy, r)),
-              "Das Spiel läuft gerade. Bitte erst beenden: Es schreibt womöglich in seinen Ordner.");
+    EXPECT_EQ(
+        hui::ps5cc::run_blocked(hui::ps5cc::parse_plan(Tool::copy, r)),
+        "Das Spiel läuft gerade. Bitte erst beenden: Es schreibt womöglich in seinen Ordner.");
     r.json = R"({"title_id":"X","other_busy":true})";
     EXPECT_EQ(hui::ps5cc::run_blocked(hui::ps5cc::parse_plan(Tool::copy, r)),
-              "Es läuft gerade eine Konvertierung. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig.");
+              "Es läuft gerade eine Konvertierung. Kopieren, Konvertieren und Verschieben laufen "
+              "nicht gleichzeitig.");
 }
 
 constexpr const char *kConvert = R"({"ok":true,"title_id":"CUSA05041","name":"Two Point Hospital",
@@ -153,8 +160,9 @@ TEST(Ps5ccPlans, ConvertBodyHasNoAmprIndexForAPs4Title)
     c.op = 2;
     c.drive = 1;
     c.ampr = true;
-    EXPECT_EQ(hui::ps5cc::start_body(p, c),
-              R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false})");
+    EXPECT_EQ(
+        hui::ps5cc::start_body(p, c),
+        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false})");
 }
 
 TEST(Ps5ccPlans, StreamRiskReasonsInWords)
@@ -191,28 +199,34 @@ TEST(Ps5ccPlans, MoveAndUnpackRules)
               "Zu wenig Platz: Nötig sind mindestens 22,0 GB");
     EXPECT_EQ(hui::ps5cc::target_of(move, c), "/mnt/ext0/homebrew/PPSA01862.ffpfs");
     c.delete_source = true; // only an unpack deletes its source
-    EXPECT_EQ(hui::ps5cc::start_body(move, c),
-              R"({"id":"PPSA01862","op":"move","target":"/mnt/ext0/homebrew","delete_source":false})");
+    EXPECT_EQ(
+        hui::ps5cc::start_body(move, c),
+        R"({"id":"PPSA01862","op":"move","target":"/mnt/ext0/homebrew","delete_source":false})");
 
     const Plan unpack = hui::ps5cc::parse_plan(Tool::unpack, reply(Tool::unpack, kStorage));
-    EXPECT_EQ(hui::ps5cc::drive_blocked(unpack, c, unpack.drives[0]), "Dort gibt es den Ordner PPSA01862 schon");
-    EXPECT_EQ(hui::ps5cc::start_body(unpack, c),
-              R"({"id":"PPSA01862","op":"unpack","target":"/mnt/ext0/homebrew","delete_source":true})");
+    EXPECT_EQ(hui::ps5cc::drive_blocked(unpack, c, unpack.drives[0]),
+              "Dort gibt es den Ordner PPSA01862 schon");
+    EXPECT_EQ(
+        hui::ps5cc::start_body(unpack, c),
+        R"({"id":"PPSA01862","op":"unpack","target":"/mnt/ext0/homebrew","delete_source":true})");
 }
 
 TEST(Ps5ccPlans, ImageUnpackPlanAndInfo)
 {
-    const char *plan = R"({"ok":true,"id":"PPSA03860","name":"Lantern Pass","image":"/mnt/usb0/homebrew/L.ffpfsc",
+    const char *plan =
+        R"({"ok":true,"id":"PPSA03860","name":"Lantern Pass","image":"/mnt/usb0/homebrew/L.ffpfsc",
       "size_bytes":18500000000,"files":900,"largest_bytes":1,"damaged":true,"busy":false,"targets":[
       {"mount":"/mnt/ext0","label":"M.2","fs":"exfatfs","path":"/mnt/ext0/homebrew/PPSA03860","free_bytes":9,
        "exists":false,"enough_space":false,"fat32_too_big":false,"path_too_long":false,"source_here":false}]})";
     const Plan p = hui::ps5cc::parse_plan(Tool::image_unpack, reply(Tool::image_unpack, plan));
     EXPECT_EQ(p.source, "/mnt/usb0/homebrew/L.ffpfsc");
-    EXPECT_EQ(hui::ps5cc::run_blocked(p),
-              "Das Abbild ist beschädigt: ein Ordner darin lässt sich nicht lesen. Zuerst „Abbild prüfen“.");
-    EXPECT_EQ(hui::ps5cc::drive_blocked(p, PlanChoice{}, p.drives[0]), "Nicht genug Platz: nötig sind 18,8 GB.");
+    EXPECT_EQ(hui::ps5cc::run_blocked(p), "Das Abbild ist beschädigt: ein Ordner darin lässt sich "
+                                          "nicht lesen. Zuerst „Abbild prüfen“.");
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, PlanChoice{}, p.drives[0]),
+              "Nicht genug Platz: nötig sind 18,8 GB.");
 
-    const char *info = R"({"ok":true,"id":"PPSA03860","name":"Lantern Pass","format":"ffpfsc","image_bytes":5,
+    const char *info =
+        R"({"ok":true,"id":"PPSA03860","name":"Lantern Pass","format":"ffpfsc","image_bytes":5,
       "can_check":true,"can_unpack":true,"repair":{"state":"fixable","declared":100,"actual":120},
       "last_check":{"when":1792800000,"clean":false,"files":3,"bad_files":1,"container":"Block 7 defekt.",
                     "bad":[{"path":"data/a.bin","offset":4096}]}})";
@@ -220,7 +234,8 @@ TEST(Ps5ccPlans, ImageUnpackPlanAndInfo)
     EXPECT_EQ(repair.repair_state, "fixable");
     EXPECT_EQ(repair.repair_actual, 120u);
     EXPECT_TRUE(hui::ps5cc::ready(repair, PlanChoice{}));
-    EXPECT_EQ(hui::ps5cc::start_body(repair, PlanChoice{}), R"({"kind":"repair","id":"PPSA03860","target":""})");
+    EXPECT_EQ(hui::ps5cc::start_body(repair, PlanChoice{}),
+              R"({"kind":"repair","id":"PPSA03860","target":""})");
     const Plan check = hui::ps5cc::parse_plan(Tool::image_check, reply(Tool::image_check, info));
     EXPECT_TRUE(check.checked);
     EXPECT_FALSE(check.check_clean);
@@ -231,24 +246,30 @@ TEST(Ps5ccPlans, ImageUnpackPlanAndInfo)
 TEST(Ps5ccPlans, RepairRefusesWhatIsFine)
 {
     const Plan p = hui::ps5cc::parse_plan(
-        Tool::image_repair, reply(Tool::image_repair, R"({"id":"X","format":"ffpfsc","repair":{"state":"fine"}})"));
+        Tool::image_repair,
+        reply(Tool::image_repair, R"({"id":"X","format":"ffpfsc","repair":{"state":"fine"}})"));
     EXPECT_EQ(hui::ps5cc::run_blocked(p), "Nichts zu reparieren: Die Größe der Datei stimmt.");
     EXPECT_FALSE(hui::ps5cc::ready(p, PlanChoice{}));
 }
 
 TEST(Ps5ccPlans, DeletePlanCarriesItsToken)
 {
-    const char *json = R"({"ok":true,"kind":"smp","id":"PPSA01325","name":"ASTRO BOT","path":"/mnt/usb0/x.ffpkg",
+    const char *json =
+        R"({"ok":true,"kind":"smp","id":"PPSA01325","name":"ASTRO BOT","path":"/mnt/usb0/x.ffpkg",
       "version":"01.008.000","size_bytes":31200000000,"items":["Die Abbilddatei","Der Eintrag"],"keeps":"",
       "can_delete":true,"confirm":"4f9c2a17"})";
     const Plan p = hui::ps5cc::parse_plan(Tool::erase, reply(Tool::erase, json));
     ASSERT_EQ(p.items.size(), 2u);
     EXPECT_EQ(p.kind, "smp");
     EXPECT_TRUE(hui::ps5cc::ready(p, PlanChoice{}));
-    EXPECT_EQ(hui::ps5cc::start_body(p, PlanChoice{}), R"({"kind":"game","id":"PPSA01325","confirm":"4f9c2a17"})");
+    EXPECT_EQ(hui::ps5cc::start_body(p, PlanChoice{}),
+              R"({"kind":"game","id":"PPSA01325","confirm":"4f9c2a17"})");
 
     const Plan no = hui::ps5cc::parse_plan(
-        Tool::erase, reply(Tool::erase, R"({"id":"X","can_delete":false,"why":"Das Spiel läuft gerade. Bitte erst beenden.","confirm":""})"));
+        Tool::erase,
+        reply(
+            Tool::erase,
+            R"({"id":"X","can_delete":false,"why":"Das Spiel läuft gerade. Bitte erst beenden.","confirm":""})"));
     EXPECT_EQ(hui::ps5cc::run_blocked(no), "Das Spiel läuft gerade. Bitte erst beenden.");
     EXPECT_FALSE(hui::ps5cc::ready(no, PlanChoice{}));
 }
@@ -290,8 +311,8 @@ TEST(Ps5ccPlans, TheMenuShowsWhatTheGameAllows)
     image.path = "/mnt/usb0/homebrew/X.ffpfsc";
     image.can_copy = image.can_unpack = true;
     const std::vector<Tool> i = hui::ps5cc::tools_for(image);
-    const std::vector<Tool> want = {Tool::copy, Tool::unpack, Tool::image_unpack, Tool::image_check, Tool::image_repair,
-                                    Tool::erase};
+    const std::vector<Tool> want = {Tool::copy,        Tool::unpack,       Tool::image_unpack,
+                                    Tool::image_check, Tool::image_repair, Tool::erase};
     EXPECT_EQ(i, want);
     EXPECT_EQ(hui::ps5cc::job_of(Tool::unpack), hui::ps5cc::JobKind::storage);
     EXPECT_EQ(hui::ps5cc::job_of(Tool::erase), hui::ps5cc::JobKind::deletion);

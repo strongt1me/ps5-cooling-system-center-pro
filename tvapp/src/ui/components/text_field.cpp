@@ -57,7 +57,8 @@ std::uint32_t first_codepoint(std::string_view text)
 {
     if (text.empty())
         return 0;
-    const auto byte = [&](std::size_t i) {
+    const auto byte = [&](std::size_t i)
+    {
         return i < text.size() ? static_cast<std::uint32_t>(static_cast<unsigned char>(text[i]))
                                : 0;
     };

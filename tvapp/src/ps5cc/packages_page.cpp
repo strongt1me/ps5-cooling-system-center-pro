@@ -1,11 +1,12 @@
-// ps5cc - The Pakete page (Spiele → Pakete): the packages the console app found, installing them, the queue.
+// ps5cc - The Pakete page (Spiele → Pakete): the packages the console app found, installing them,
+// the queue.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's Pakete tab: ✕ installs the package in focus at once (the console app checks everything again
-// and says no in words when something is in the way), □ puts it into the queue or takes it out, △ opens the rest
-// (search again, start or stop the queue, cancel the install). Splitting a package and sending one from the PC stay
-// in the web app.
+// As the web app's Pakete tab: ✕ installs the package in focus at once (the console app checks
+// everything again and says no in words when something is in the way), □ puts it into the queue or
+// takes it out, △ opens the rest (search again, start or stop the queue, cancel the install).
+// Splitting a package and sending one from the PC stay in the web app.
 
 #include "ps5cc/covers.hpp"
 #include "ps5cc/look.hpp"
@@ -25,7 +26,8 @@ namespace
 using gfx::Color;
 using gfx::Rect;
 
-// Where the card's lower part (queue, install, search) starts: under the details, above the toasts in the corner.
+// Where the card's lower part (queue, install, search) starts: under the details, above the toasts
+// in the corner.
 constexpr float kStatusY = kTop + 470.0f;
 
 enum MenuTag
@@ -110,7 +112,8 @@ class PackagesPage final : public Page
         list_.style.badge_column = true;
         list_.style.value_width = 130.0f; // the badges line up
         list_.style.leading_width = 76.0f;
-        list_.leading = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item, int, float)
+        list_.leading =
+            [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item, int, float)
         {
             const Package *p = package_of(item);
             if (p == nullptr)
@@ -148,7 +151,8 @@ class PackagesPage final : public Page
         queue_ = data.package_queue;
         rebuild();
         const bool known = job_.bytes_total > 0.0 && job_.percent >= 0;
-        bar_.style.mode = job_.active && !known ? ui::ProgressMode::indeterminate : ui::ProgressMode::determinate;
+        bar_.style.mode =
+            job_.active && !known ? ui::ProgressMode::indeterminate : ui::ProgressMode::determinate;
         bar_.style.percent = known;
         bar_.style.status = job_.state == "failed"      ? ui::Status::danger
                             : job_.state == "cancelled" ? ui::Status::warning
@@ -211,7 +215,8 @@ class PackagesPage final : public Page
                 return;
             }
             feedback.play(audio::Cue::select);
-            source().package_action(q != nullptr && q->state == "waiting" ? "queue_remove" : "queue_add", p->id);
+            source().package_action(
+                q != nullptr && q->state == "waiting" ? "queue_remove" : "queue_add", p->id);
             return;
         }
         if (input.is_pressed(Action::north))
@@ -259,10 +264,11 @@ class PackagesPage final : public Page
         if (p == nullptr)
         {
             float ty = card.y + 120.0f;
-            for (const std::string &line : fonts.regular.font->wrap(
-                     "Pakete (.pkg) auf USB-Speichern, M.2 und in /data/pkg. Aufteilen und vom PC senden geht in der "
-                     "Browser-App.",
-                     21.0f, card.w - 60.0f))
+            for (const std::string &line :
+                 fonts.regular.font->wrap("Pakete (.pkg) auf USB-Speichern, M.2 und in /data/pkg. "
+                                          "Aufteilen und vom PC senden geht in der "
+                                          "Browser-App.",
+                                          21.0f, card.w - 60.0f))
             {
                 ui::text(list, fonts.regular, line, card.x + 30.0f, ty, 21.0f, kMuted);
                 ty += 29.0f;
@@ -275,7 +281,8 @@ class PackagesPage final : public Page
 
         // The bottom of the card: the install that runs (or the last one), the queue, a search.
         const float line_y = kStatusY;
-        list.line(card.x + 30.0f, line_y, card.x + card.w - 30.0f, line_y, 1.0f, Color::rgb(0x3880ff, 0.18f));
+        list.line(card.x + 30.0f, line_y, card.x + card.w - 30.0f, line_y, 1.0f,
+                  Color::rgb(0x3880ff, 0.18f));
         ui::text(list, fonts.semibold, queue_line(), card.x + 30.0f, line_y + 38.0f, 21.0f,
                  queue_.halted ? kWarning : kMuted);
         if (job_.state != "idle")
@@ -283,8 +290,10 @@ class PackagesPage final : public Page
             bar_.draw(canvas);
             const std::string why = !job_.error.empty() ? job_.error : job_.note;
             if (!why.empty() && !job_.active)
-                ui::text(list, fonts.regular, fonts.regular.font->wrap(why, 19.0f, card.w - 60.0f).front(),
-                         card.x + 30.0f, kStatusY + 150.0f, 19.0f, job_.state == "failed" ? kCritical : kMuted);
+                ui::text(list, fonts.regular,
+                         fonts.regular.font->wrap(why, 19.0f, card.w - 60.0f).front(),
+                         card.x + 30.0f, kStatusY + 150.0f, 19.0f,
+                         job_.state == "failed" ? kCritical : kMuted);
         }
         else if (scan_.scanning)
         {
@@ -307,8 +316,9 @@ class PackagesPage final : public Page
         if (p != nullptr)
         {
             const PackageQueueItem *q = queued(p->id);
-            out[n++] = {ui::Button::square, q != nullptr && q->state == "waiting" ? "Aus der Warteschlange"
-                                                                                   : "In die Warteschlange"};
+            out[n++] = {ui::Button::square, q != nullptr && q->state == "waiting"
+                                                ? "Aus der Warteschlange"
+                                                : "In die Warteschlange"};
         }
         out[n++] = {ui::Button::triangle, "Mehr"};
         return n;
@@ -330,7 +340,8 @@ class PackagesPage final : public Page
         return package_of(list_.items()[static_cast<std::size_t>(i)]);
     }
 
-    // The newest entry of the queue for a package (an old finished one stays listed until it is cleared).
+    // The newest entry of the queue for a package (an old finished one stays listed until it is
+    // cleared).
     const PackageQueueItem *queued(const std::string &id) const
     {
         const PackageQueueItem *found = nullptr;
@@ -354,14 +365,18 @@ class PackagesPage final : public Page
                                : p.plat == 4      ? Color::rgb(0x2f5fb3)
                                                   : Color::rgb(0x3880ff);
             canvas.list.rounded_rect(box, box.w * 0.22f, tint.with_alpha(0.85f * (1.0f - shown)));
-            const char *mark = p.kind == "update" ? "UP" : p.kind == "dlc" ? "DLC" : p.plat == 4 ? "P4" : "P5";
+            const char *mark = p.kind == "update" ? "UP"
+                               : p.kind == "dlc"  ? "DLC"
+                               : p.plat == 4      ? "P4"
+                                                  : "P5";
             const float size = box.w * 0.34f;
             ui::text(canvas.list, canvas.fonts.semibold, mark, box.x + box.w * 0.5f,
-                     box.y + box.h * 0.5f + size * 0.36f, size, Color::rgb(0xffffff).with_alpha(1.0f - shown),
-                     gfx::Align::center);
+                     box.y + box.h * 0.5f + size * 0.36f, size,
+                     Color::rgb(0xffffff).with_alpha(1.0f - shown), gfx::Align::center);
         }
         if (shown > 0.0f)
-            canvas.list.image(pic.texture, box, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, shown}, box.w * 0.22f);
+            canvas.list.image(pic.texture, box, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, shown},
+                              box.w * 0.22f);
     }
 
     std::string queue_line() const
@@ -394,13 +409,15 @@ class PackagesPage final : public Page
         add(scan_.scanning ? "Suche läuft …" : "Neu suchen", kScan);
         items.back().disabled = scan_.scanning;
         if (queue_.running)
-            add(queue_.pause_requested ? "Hält nach diesem Paket an" : "Warteschlange anhalten", kQueueGo);
+            add(queue_.pause_requested ? "Hält nach diesem Paket an" : "Warteschlange anhalten",
+                kQueueGo);
         else
             add(queue_.halted ? "Warteschlange fortsetzen" : "Warteschlange starten", kQueueGo);
         items.back().disabled = queue_.pause_requested || (!queue_.running && queue_.waiting == 0);
         if (job_.active)
         {
-            add(job_.cancelling ? "Wird abgebrochen …" : "Installation abbrechen", kInstallCancel, true);
+            add(job_.cancelling ? "Wird abgebrochen …" : "Installation abbrechen", kInstallCancel,
+                true);
             items.back().disabled = job_.cancelling || !job_.can_cancel;
         }
         if (queue_.failed > 0)
@@ -455,9 +472,12 @@ class PackagesPage final : public Page
         if (packages_.empty())
         {
             if (scan_.scanning || !scan_.ever)
-                return {note("Die Suche läuft …", "USB-Speicher, M.2 und /data/pkg werden nach .pkg-Dateien durchsucht.")};
-            return {note("Keine Pakete gefunden",
-                         "Leg .pkg-Dateien auf einen USB-Speicher oder nach /data/pkg; Mehr → Neu suchen.")};
+                return {
+                    note("Die Suche läuft …",
+                         "USB-Speicher, M.2 und /data/pkg werden nach .pkg-Dateien durchsucht.")};
+            return {note(
+                "Keine Pakete gefunden",
+                "Leg .pkg-Dateien auf einen USB-Speicher oder nach /data/pkg; Mehr → Neu suchen.")};
         }
         // By drive, in the order the app found them.
         std::vector<std::string> drives;
@@ -480,13 +500,14 @@ class PackagesPage final : public Page
                     continue;
                 ui::ListItem item;
                 item.title = p.name.empty() ? p.file : p.name;
-                item.subtitle = std::string(kind_label(p.kind)) + " · " + p.version + " · " + plat_label(p.plat) +
-                                " · " + p.title_id;
+                item.subtitle = std::string(kind_label(p.kind)) + " · " + p.version + " · " +
+                                plat_label(p.plat) + " · " + p.title_id;
                 item.value = format_bytes(p.total > 0 ? p.total : p.size);
                 if (const PackageQueueItem *q = queued(p.id))
                     item.badge = queue_badge(q->state);
                 if (item.badge.empty() && p.parts_total > 0 && p.parts_found < p.parts_total)
-                    item.badge = "TEILE " + std::to_string(p.parts_found) + "/" + std::to_string(p.parts_total);
+                    item.badge = "TEILE " + std::to_string(p.parts_found) + "/" +
+                                 std::to_string(p.parts_total);
                 item.tag = static_cast<int>(i);
                 out.push_back(item);
             }
@@ -528,8 +549,10 @@ class PackagesPage final : public Page
             rows.push_back({"Titel-ID", p->title_id});
             rows.push_back({"Größe", format_bytes(p->total > 0 ? p->total : p->size)});
             if (p->parts_total > 0)
-                rows.push_back({"Teile", std::to_string(p->parts_found) + " von " + std::to_string(p->parts_total) +
-                                             (p->parts_found < p->parts_total ? " gefunden – es fehlen Teile" : "")});
+                rows.push_back(
+                    {"Teile",
+                     std::to_string(p->parts_found) + " von " + std::to_string(p->parts_total) +
+                         (p->parts_found < p->parts_total ? " gefunden – es fehlen Teile" : "")});
             rows.push_back({"Ort", p->drive_label});
             if (const PackageQueueItem *q = queued(p->id))
             {
@@ -538,7 +561,8 @@ class PackagesPage final : public Page
                         : state == "LÄUFT"  ? "wird installiert"
                         : state == "FERTIG" ? "erledigt"
                                             : "Fehler";
-                rows.push_back({"Warteschlange", q->message.empty() ? state : state + " – " + q->message});
+                rows.push_back(
+                    {"Warteschlange", q->message.empty() ? state : state + " – " + q->message});
             }
         }
         for (const ui::DetailItem &r : rows)

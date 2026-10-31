@@ -80,7 +80,8 @@ int open_local(int port, int timeout_s, Net *why)
 // This title's id from its own param.json ("FAKE86921"), read once; "" when it cannot be read.
 const std::string &own_title_id()
 {
-    static const std::string id = [] {
+    static const std::string id = []
+    {
         std::string out;
         FILE *f = std::fopen("/app0/sce_sys/param.json", "rb");
         if (f == nullptr)
@@ -92,7 +93,8 @@ const std::string &own_title_id()
             text.append(buf, n);
         std::fclose(f);
         cJSON *root = cJSON_Parse(text.c_str());
-        const cJSON *tid = root != nullptr ? cJSON_GetObjectItemCaseSensitive(root, "titleId") : nullptr;
+        const cJSON *tid =
+            root != nullptr ? cJSON_GetObjectItemCaseSensitive(root, "titleId") : nullptr;
         if (cJSON_IsString(tid) && tid->valuestring != nullptr)
             out = tid->valuestring;
         cJSON_Delete(root);
@@ -192,14 +194,16 @@ void *tools_main(void *self)
     return nullptr;
 }
 
-// A title id for a query string: letters, digits, '-' and '_' as they are, everything else percent-encoded.
+// A title id for a query string: letters, digits, '-' and '_' as they are, everything else
+// percent-encoded.
 std::string url_encoded(const std::string &text)
 {
     std::string out;
     for (const char c : text)
     {
         const auto u = static_cast<unsigned char>(c);
-        if ((u >= '0' && u <= '9') || (u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') || u == '-' || u == '_')
+        if ((u >= '0' && u <= '9') || (u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') ||
+            u == '-' || u == '_')
         {
             out += c;
             continue;
@@ -302,8 +306,9 @@ void HttpSource::set_backdrop(const std::string &area, BackdropMode mode)
         }
         if (!have)
         {
-            notice(Notice::Kind::error, "Kein eigenes Bild",
-                   "Lade es zuerst in der Browser-App hoch: System → Hintergründe der Vollbild-App.");
+            notice(
+                Notice::Kind::error, "Kein eigenes Bild",
+                "Lade es zuerst in der Browser-App hoch: System → Hintergründe der Vollbild-App.");
             return;
         }
     }
@@ -506,7 +511,8 @@ void HttpSource::handle_tool(const ToolRequest &request)
             break;
         case Tool::move:
         case Tool::unpack:
-            path = "/api/v1/library/storage/plan?id=" + id + "&op=" + (request.tool == Tool::move ? "move" : "unpack");
+            path = "/api/v1/library/storage/plan?id=" + id +
+                   "&op=" + (request.tool == Tool::move ? "move" : "unpack");
             break;
         case Tool::image_unpack:
             path = "/api/v1/library/image/plan?id=" + id;
@@ -583,9 +589,11 @@ void HttpSource::handle_tool(const ToolRequest &request)
     }
     if (net != Net::ok || status < 200 || status >= 300)
     {
-        // Busy, other_busy, a running game, a target that is gone: the app's own words (409 and the rest).
+        // Busy, other_busy, a running game, a target that is gone: the app's own words (409 and the
+        // rest).
         notice(Notice::Kind::error, label + " nicht gestartet",
-               net == Net::ok ? message_of(body, "Unbekannter Fehler.") : "Die App hat nicht geantwortet.");
+               net == Net::ok ? message_of(body, "Unbekannter Fehler.")
+                              : "Die App hat nicht geantwortet.");
         return;
     }
     if (request.tool == Tool::move || request.tool == Tool::unpack)
@@ -680,7 +688,8 @@ bool HttpSource::connect_phase()
         payload_sent_ = true;
         Net why = Net::failed;
         const int s = open_local(kPortLoader, 5, &why);
-        const std::size_t size = static_cast<std::size_t>(ps5cc_payload_elf_end - ps5cc_payload_elf);
+        const std::size_t size =
+            static_cast<std::size_t>(ps5cc_payload_elf_end - ps5cc_payload_elf);
         const bool sent = s >= 0 && send_all(s, ps5cc_payload_elf, size);
         if (s >= 0)
             close(s);
@@ -700,7 +709,8 @@ bool HttpSource::connect_phase()
 void HttpSource::run()
 {
     std::int64_t last_status = 0, last_library = 0, last_jobs = 0, last_history = 0, last_cover = 0;
-    std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_store = 0, last_log = 0, last_klog = 0;
+    std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_store = 0,
+                 last_log = 0, last_klog = 0;
     std::int64_t last_backdrops = 0, last_packages = 0, last_pkg_install = 0, last_pkg_queue = 0;
     bool packages_open = false;
     std::int64_t last_ps4mount = 0;
@@ -728,7 +738,8 @@ void HttpSource::run()
                 library_wanted = true;
                 config_wanted_ = true;
                 last_status = last_jobs = last_history = 0;
-                last_selftest = last_payloads = last_store = last_log = last_klog = last_backdrops = 0;
+                last_selftest = last_payloads = last_store = last_log = last_klog = last_backdrops =
+                    0;
             }
             else
             {
@@ -795,15 +806,16 @@ void HttpSource::run()
             poll_library();
             covers().forget_failures();
         }
-        // One cover per pass (the loop sleeps 100 ms): about 380 KB of PNG each, decoded and shrunk here so the
-        // frame only uploads 100 KiB.
+        // One cover per pass (the loop sleeps 100 ms): about 380 KB of PNG each, decoded and shrunk
+        // here so the frame only uploads 100 KiB.
         if (now - last_cover >= 250000)
         {
             last_cover = now;
             fetch_cover();
         }
-        // The pictures behind the areas: a small list every 5 s, so one uploaded in the browser shows up soon; a
-        // changed picture is fetched in the same pass (one at a time, about 150 KB of JPEG).
+        // The pictures behind the areas: a small list every 5 s, so one uploaded in the browser
+        // shows up soon; a changed picture is fetched in the same pass (one at a time, about 150 KB
+        // of JPEG).
         if (now - last_backdrops >= 5000000)
         {
             last_backdrops = now;
@@ -833,8 +845,10 @@ void HttpSource::run()
             last_history = now;
             poll_history();
         }
-        // Each page's data only while it is open (the config also once at the start: the settings page opens filled).
-        if (config_wanted_.exchange(false) || (page == Watch::settings && now - last_config >= 15000000))
+        // Each page's data only while it is open (the config also once at the start: the settings
+        // page opens filled).
+        if (config_wanted_.exchange(false) ||
+            (page == Watch::settings && now - last_config >= 15000000))
         {
             last_config = now;
             poll_config();
@@ -862,7 +876,8 @@ void HttpSource::run()
             const bool storing = [&]
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                return data_.store_job.state == "running" || data_.store_fetching || !data_.store_loaded;
+                return data_.store_job.state == "running" || data_.store_fetching ||
+                       !data_.store_loaded;
             }();
             if (now - last_store >= (storing ? 1500000 : 10000000))
             {
@@ -870,8 +885,9 @@ void HttpSource::run()
                 poll_store();
             }
         }
-        // Pakete: the list while a search runs (every second) or now and then, the install and the queue faster while
-        // they run. The first visit with nothing searched yet starts a search, as the web page does.
+        // Pakete: the list while a search runs (every second) or now and then, the install and the
+        // queue faster while they run. The first visit with nothing searched yet starts a search,
+        // as the web page does.
         if (page == Watch::packages)
         {
             const bool entered = !packages_open;
@@ -908,9 +924,10 @@ void HttpSource::run()
         {
             packages_open = false;
         }
-        // Disc: the drive every 2 s while it is switched on (10 s off), the dump every second while one runs (4 s
-        // otherwise), the list of dumps while a search runs. Away from the page only the drive, every 30 s: whether the
-        // console has one at all decides whether the tab is there.
+        // Disc: the drive every 2 s while it is switched on (10 s off), the dump every second while
+        // one runs (4 s otherwise), the list of dumps while a search runs. Away from the page only
+        // the drive, every 30 s: whether the console has one at all decides whether the tab is
+        // there.
         if (page == Watch::disc)
         {
             const bool entered = !disc_open;
@@ -954,8 +971,9 @@ void HttpSource::run()
                 poll_disc();
             }
         }
-        // Spielzeit: every 5 s while it is open, as the web page; Spielstände: the list on entry and after a job, the
-        // job every second while one runs; Sicherungen: on entry, and again when a deletion has ended.
+        // Spielzeit: every 5 s while it is open, as the web page; Spielstände: the list on entry
+        // and after a job, the job every second while one runs; Sicherungen: on entry, and again
+        // when a deletion has ended.
         if (page == Watch::playtime)
         {
             if (!playtime_open || now - last_playtime >= 5000000)
@@ -1012,7 +1030,8 @@ void HttpSource::run()
         {
             backups_open = false;
         }
-        // Extras of a game: every second while a job or a recording step runs there, every 5 s otherwise.
+        // Extras of a game: every second while a job or a recording step runs there, every 5 s
+        // otherwise.
         {
             std::string id;
             bool busy = false;
@@ -1024,7 +1043,8 @@ void HttpSource::run()
                        e.image_job.find("\"active\":true") != std::string::npos ||
                        e.trace.find("\"busy\":true") != std::string::npos;
             }
-            if (!id.empty() && (id != extras_polled_ || now - last_extras >= (busy ? 1000000 : 5000000)))
+            if (!id.empty() &&
+                (id != extras_polled_ || now - last_extras >= (busy ? 1000000 : 5000000)))
             {
                 last_extras = now;
                 extras_polled_ = id;
@@ -1039,7 +1059,8 @@ void HttpSource::run()
             last_record = now;
             poll_klog_record();
         }
-        // Dateien: the job every 0.8 s while one runs (3 s otherwise); the open folder again when it has just ended.
+        // Dateien: the job every 0.8 s while one runs (3 s otherwise); the open folder again when
+        // it has just ended.
         if (page == Watch::files)
         {
             bool active = false;
@@ -1069,7 +1090,8 @@ void HttpSource::run()
         {
             files_open_ = false;
         }
-        // System → Speicher: the drives every 4 s, every second while an eject runs; at once when it opens.
+        // System → Speicher: the drives every 4 s, every second while an eject runs; at once when
+        // it opens.
         if (page == Watch::storage)
         {
             bool ejecting = false;
@@ -1129,7 +1151,8 @@ void HttpSource::handle(const Request &request)
     case Request::Kind::target:
     {
         std::snprintf(payload, sizeof(payload), "{\"threshold_c\":%d}", request.value);
-        if (exchange("POST", "/api/v1/fan/threshold", payload, &status, &body) == Net::ok && status == 200)
+        if (exchange("POST", "/api/v1/fan/threshold", payload, &status, &body) == Net::ok &&
+            status == 200)
         {
             char title[64];
             std::snprintf(title, sizeof(title), "Zieltemperatur %d °C übernommen", request.value);
@@ -1150,8 +1173,8 @@ void HttpSource::handle(const Request &request)
         if (!own_title_id().empty())
             cJSON_AddStringToObject(root, "after_exit", own_title_id().c_str());
         char *text = cJSON_PrintUnformatted(root);
-        const Net net = exchange("POST", "/api/v1/library/launch", text != nullptr ? text : "{}", &status,
-                                 &body, 8);
+        const Net net = exchange("POST", "/api/v1/library/launch", text != nullptr ? text : "{}",
+                                 &status, &body, 8);
         cJSON_free(text);
         cJSON_Delete(root);
         if (net != Net::ok)
@@ -1190,7 +1213,8 @@ void HttpSource::handle(const Request &request)
         }
         else
         {
-            notice(Notice::Kind::error, "Starten nicht möglich", message_of(body, "Unbekannter Fehler."));
+            notice(Notice::Kind::error, "Starten nicht möglich",
+                   message_of(body, "Unbekannter Fehler."));
         }
         cJSON_Delete(reply);
         break;
@@ -1198,33 +1222,40 @@ void HttpSource::handle(const Request &request)
     case Request::Kind::close:
     {
         std::snprintf(payload, sizeof(payload), "{\"id\":\"%.20s\"}", request.id.c_str());
-        // On success the screen has said it already ("… wird beendet, danach startet …"); only a refusal is news.
-        if (exchange("POST", "/api/v1/library/close", payload, &status, &body) != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Beenden nicht möglich", message_of(body, "Unbekannter Fehler."));
+        // On success the screen has said it already ("… wird beendet, danach startet …"); only a
+        // refusal is news.
+        if (exchange("POST", "/api/v1/library/close", payload, &status, &body) != Net::ok ||
+            status >= 300)
+            notice(Notice::Kind::error, "Beenden nicht möglich",
+                   message_of(body, "Unbekannter Fehler."));
         break;
     }
     case Request::Kind::remount:
     {
-        std::snprintf(payload, sizeof(payload), "{\"id\":\"%.20s\",\"action\":\"%.10s\"}", request.id.c_str(),
-                      request.text.c_str());
+        std::snprintf(payload, sizeof(payload), "{\"id\":\"%.20s\",\"action\":\"%.10s\"}",
+                      request.id.c_str(), request.text.c_str());
         // ShadowMountPlus takes some seconds for an image; the answer says what happened
-        if (exchange("POST", "/api/v1/library/remount", payload, &status, &body, 70) == Net::ok && status < 300)
+        if (exchange("POST", "/api/v1/library/remount", payload, &status, &body, 70) == Net::ok &&
+            status < 300)
             notice(Notice::Kind::success, request.id, message_of(body, "Erledigt."));
         else
-            notice(Notice::Kind::error, "Aus- oder Einhängen nicht möglich", message_of(body, "Unbekannter Fehler."));
+            notice(Notice::Kind::error, "Aus- oder Einhängen nicht möglich",
+                   message_of(body, "Unbekannter Fehler."));
         poll_library();
         break;
     }
     case Request::Kind::cancel:
     {
         // A delete has no way back once it started: the screen never asks to cancel one.
-        static const char *const kRoutes[] = {"/api/v1/library/copy/cancel", "/api/v1/library/convert/cancel",
-                                              "/api/v1/library/image/cancel", "/api/v1/library/storage/cancel"};
+        static const char *const kRoutes[] = {
+            "/api/v1/library/copy/cancel", "/api/v1/library/convert/cancel",
+            "/api/v1/library/image/cancel", "/api/v1/library/storage/cancel"};
         const int index = std::clamp(request.value, 0, 3);
         if (exchange("POST", kRoutes[index], "{}", &status, &body) == Net::ok && status < 300)
             notice(Notice::Kind::info, "Auftrag wird abgebrochen");
         else
-            notice(Notice::Kind::error, "Abbrechen nicht möglich", message_of(body, "Unbekannter Fehler."));
+            notice(Notice::Kind::error, "Abbrechen nicht möglich",
+                   message_of(body, "Unbekannter Fehler."));
         poll_jobs();
         break;
     }
@@ -1232,24 +1263,29 @@ void HttpSource::handle(const Request &request)
         if (exchange("POST", "/api/v1/open-ui", "{}", &status, &body) == Net::ok && status < 300)
             notice(Notice::Kind::info, "Weboberfläche", "Wird im Browser der Konsole geöffnet.");
         else
-            notice(Notice::Kind::error, "Browser nicht geöffnet", message_of(body, "Unbekannter Fehler."));
+            notice(Notice::Kind::error, "Browser nicht geöffnet",
+                   message_of(body, "Unbekannter Fehler."));
         break;
     case Request::Kind::reload:
         notice(Notice::Kind::info, "Daten werden neu geladen");
         break;
     case Request::Kind::config:
-        if (exchange("PUT", "/api/v1/config", request.text, &status, &body) == Net::ok && status < 300)
+        if (exchange("PUT", "/api/v1/config", request.text, &status, &body) == Net::ok &&
+            status < 300)
             notice(Notice::Kind::success, "Gespeichert");
         else
-            notice(Notice::Kind::error, "Nicht gespeichert", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Nicht gespeichert",
+                   message_of(body, "Die App hat nicht geantwortet."));
         poll_config();
         poll_status();
         break;
     case Request::Kind::selftest:
-        if (exchange("POST", "/api/v1/fan/selftest", request.value != 0 ? "{\"action\":\"start\"}" : "{\"action\":\"abort\"}",
+        if (exchange("POST", "/api/v1/fan/selftest",
+                     request.value != 0 ? "{\"action\":\"start\"}" : "{\"action\":\"abort\"}",
                      &status, &body) != Net::ok ||
             status >= 300)
-            notice(Notice::Kind::error, request.value != 0 ? "Selbsttest nicht möglich" : "Abbrechen nicht möglich",
+            notice(Notice::Kind::error,
+                   request.value != 0 ? "Selbsttest nicht möglich" : "Abbrechen nicht möglich",
                    message_of(body, "Die App hat nicht geantwortet."));
         poll_selftest();
         break;
@@ -1259,13 +1295,16 @@ void HttpSource::handle(const Request &request)
         if (exchange("POST", "/api/v1/power", payload, &status, &body) == Net::ok && status < 300)
             notice(Notice::Kind::info, "Befehl angenommen", message_of(body, ""));
         else
-            notice(Notice::Kind::error, "Nicht ausgeführt", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Nicht ausgeführt",
+                   message_of(body, "Die App hat nicht geantwortet."));
         break;
     }
     case Request::Kind::payload_start:
-        if (exchange("POST", "/api/v1/payload-files/start", request.text, &status, &body, 10) == Net::ok &&
+        if (exchange("POST", "/api/v1/payload-files/start", request.text, &status, &body, 10) ==
+                Net::ok &&
             status < 300)
-            notice(Notice::Kind::success, "„" + request.id + "“ gestartet", "An den ELF-Loader gesendet.");
+            notice(Notice::Kind::success, "„" + request.id + "“ gestartet",
+                   "An den ELF-Loader gesendet.");
         else
             notice(Notice::Kind::error, "„" + request.id + "“ nicht gestartet",
                    message_of(body, "Die App hat nicht geantwortet."));
@@ -1273,10 +1312,12 @@ void HttpSource::handle(const Request &request)
         break;
     case Request::Kind::payload_kill:
         std::snprintf(payload, sizeof(payload), "{\"pid\":%d}", request.value);
-        if (exchange("POST", "/api/v1/payloads/kill", payload, &status, &body) == Net::ok && status < 300)
+        if (exchange("POST", "/api/v1/payloads/kill", payload, &status, &body) == Net::ok &&
+            status < 300)
             notice(Notice::Kind::info, "Payload beendet");
         else
-            notice(Notice::Kind::error, "Beenden nicht möglich", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Beenden nicht möglich",
+                   message_of(body, "Die App hat nicht geantwortet."));
         poll_payloads();
         break;
     case Request::Kind::package:
@@ -1339,11 +1380,13 @@ void HttpSource::handle(const Request &request)
     }
     case Request::Kind::ps4mount:
     {
-        const std::string route = request.id.empty() ? "/api/v1/ps4mount" : "/api/v1/ps4mount/" + request.id;
+        const std::string route =
+            request.id.empty() ? "/api/v1/ps4mount" : "/api/v1/ps4mount/" + request.id;
         // Adding, removing and moving back can take a while: PS4Mount answers when it is done.
         const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 30);
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "PS4Mount", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "PS4Mount",
+                   message_of(body, "Die App hat nicht geantwortet."));
         else
         {
             const std::string msg = message_of(body, "");
@@ -1384,7 +1427,8 @@ void HttpSource::handle(const Request &request)
     {
         const Net net = exchange("POST", "/api/v1/playtime/reset", "{}", &status, &body, 10);
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Spielzeit", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Spielzeit",
+                   message_of(body, "Die App hat nicht geantwortet."));
         else
             notice(Notice::Kind::success, "Spielzeit", "Der Verlauf ist gelöscht.");
         poll_playtime();
@@ -1395,13 +1439,15 @@ void HttpSource::handle(const Request &request)
         const std::string route = "/api/v1/saves/" + request.id;
         const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 20);
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Spielstände", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Spielstände",
+                   message_of(body, "Die App hat nicht geantwortet."));
         poll_save_job();
         break;
     }
     case Request::Kind::backup_delete:
     {
-        // As the web app's delete dialog: the plan says whether it may go and brings the one-time word; then at once.
+        // As the web app's delete dialog: the plan says whether it may go and brings the one-time
+        // word; then at once.
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root, "kind", "backup");
         cJSON_AddStringToObject(root, "id", request.id.c_str());
@@ -1409,19 +1455,23 @@ void HttpSource::handle(const Request &request)
         const std::string plan_body = text != nullptr ? text : "{}";
         cJSON_free(text);
         cJSON_Delete(root);
-        const Net net = exchange("POST", "/api/v1/library/delete/plan", plan_body, &status, &body, 120);
+        const Net net =
+            exchange("POST", "/api/v1/library/delete/plan", plan_body, &status, &body, 120);
         cJSON *plan = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
         if (plan == nullptr)
         {
-            notice(Notice::Kind::error, "Sicherung", message_of(body, "Die App hat keinen Plan geliefert."));
+            notice(Notice::Kind::error, "Sicherung",
+                   message_of(body, "Die App hat keinen Plan geliefert."));
             break;
         }
         const bool can = flag(plan, "can_delete");
-        const std::string why = str(plan, "why"), confirm = str(plan, "confirm"), name = str(plan, "name");
+        const std::string why = str(plan, "why"), confirm = str(plan, "confirm"),
+                          name = str(plan, "name");
         cJSON_Delete(plan);
         if (!can)
         {
-            notice(Notice::Kind::error, "Sicherung", why.empty() ? "Diese Sicherung lässt sich nicht löschen." : why);
+            notice(Notice::Kind::error, "Sicherung",
+                   why.empty() ? "Diese Sicherung lässt sich nicht löschen." : why);
             break;
         }
         root = cJSON_CreateObject();
@@ -1432,9 +1482,11 @@ void HttpSource::handle(const Request &request)
         const std::string start_body = text != nullptr ? text : "{}";
         cJSON_free(text);
         cJSON_Delete(root);
-        const Net started = exchange("POST", "/api/v1/library/delete", start_body, &status, &body, 20);
+        const Net started =
+            exchange("POST", "/api/v1/library/delete", start_body, &status, &body, 20);
         if (started != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Sicherung", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Sicherung",
+                   message_of(body, "Die App hat nicht geantwortet."));
         else
             notice(Notice::Kind::info, "Sicherung", "„" + name + "“ wird gelöscht.");
         break;
@@ -1444,7 +1496,8 @@ void HttpSource::handle(const Request &request)
         const std::string route = "/api/v1/" + request.id;
         const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 30);
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Extras", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Extras",
+                   message_of(body, "Die App hat nicht geantwortet."));
         else
         {
             const std::string msg = message_of(body, "");
@@ -1474,7 +1527,8 @@ void HttpSource::handle(const Request &request)
     case Request::Kind::extras_plan:
     {
         const std::string route = "/api/v1/library/lz4/plan?id=" + url_encoded(request.id) +
-                                  "&level=" + std::to_string(request.value) + "&profile=" + url_encoded(request.text);
+                                  "&level=" + std::to_string(request.value) +
+                                  "&profile=" + url_encoded(request.text);
         const Net net = exchange("GET", route.c_str(), {}, &status, &body, 30);
         std::lock_guard<std::mutex> lock(mutex_);
         data_.extras_lz4_plan.seq++;
@@ -1490,7 +1544,8 @@ void HttpSource::handle(const Request &request)
         const std::string route = "/api/v1/" + request.id;
         const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 30);
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Bibliothek", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Bibliothek",
+                   message_of(body, "Die App hat nicht geantwortet."));
         else
         {
             const std::string msg = message_of(body, "");
@@ -1515,7 +1570,8 @@ void HttpSource::handle(const Request &request)
         cJSON_Delete(root);
         const Net net = exchange("POST", "/api/v1/klog/record", payload, &status, &body, 10);
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Kernel-Log", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Kernel-Log",
+                   message_of(body, "Die App hat nicht geantwortet."));
         poll_klog_record();
         break;
     }
@@ -1560,12 +1616,15 @@ void HttpSource::handle(const Request &request)
     }
     case Request::Kind::fs_delete:
     {
-        // As the web page: the plan brings the one-time word for exactly these paths; then the delete, at once.
-        const Net net = exchange("POST", "/api/v1/files/delete/plan", request.text, &status, &body, 60);
+        // As the web page: the plan brings the one-time word for exactly these paths; then the
+        // delete, at once.
+        const Net net =
+            exchange("POST", "/api/v1/files/delete/plan", request.text, &status, &body, 60);
         cJSON *plan = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
         if (plan == nullptr)
         {
-            notice(Notice::Kind::error, "Dateien", message_of(body, "Die App hat keinen Plan geliefert."));
+            notice(Notice::Kind::error, "Dateien",
+                   message_of(body, "Die App hat keinen Plan geliefert."));
             break;
         }
         const std::string confirm = str(plan, "confirm");
@@ -1579,7 +1638,8 @@ void HttpSource::handle(const Request &request)
         cJSON_Delete(plan);
         const Net started = exchange("POST", "/api/v1/files/delete", start, &status, &body, 20);
         if (started != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Dateien", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Dateien",
+                   message_of(body, "Die App hat nicht geantwortet."));
         poll_fs_job();
         break;
     }
@@ -1593,7 +1653,8 @@ void HttpSource::handle(const Request &request)
         {
             v.text = std::move(body);
             v.size = v.text.size();
-            // the console sends only the beginning (256 KB); X-Fm-Truncated is not read here, the size tells it
+            // the console sends only the beginning (256 KB); X-Fm-Truncated is not read here, the
+            // size tells it
             v.truncated = v.size >= 256 * 1024;
         }
         else
@@ -1631,11 +1692,14 @@ void HttpSource::handle(const Request &request)
         cJSON_AddStringToObject(root, "mount", request.id.c_str());
         char *text = cJSON_PrintUnformatted(root);
         cJSON_Delete(root);
-        const Net net = exchange("POST", "/api/v1/storage/eject", text != nullptr ? text : "{}", &status, &body, 15);
+        const Net net = exchange("POST", "/api/v1/storage/eject", text != nullptr ? text : "{}",
+                                 &status, &body, 15);
         cJSON_free(text);
-        // A refusal (a job of the app runs, PS4Mount games on the drive) says why; the end comes with the next poll.
+        // A refusal (a job of the app runs, PS4Mount games on the drive) says why; the end comes
+        // with the next poll.
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Nicht ausgeworfen", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Nicht ausgeworfen",
+                   message_of(body, "Die App hat nicht geantwortet."));
         poll_storage();
         break;
     }
@@ -1645,11 +1709,13 @@ void HttpSource::handle(const Request &request)
         cJSON_AddStringToObject(root, "area", request.id.c_str());
         cJSON_AddStringToObject(root, "mode", request.text.c_str());
         char *text = cJSON_PrintUnformatted(root);
-        const Net net = exchange("POST", "/api/v1/backdrops", text != nullptr ? text : "{}", &status, &body);
+        const Net net =
+            exchange("POST", "/api/v1/backdrops", text != nullptr ? text : "{}", &status, &body);
         cJSON_free(text);
         cJSON_Delete(root);
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Hintergrund nicht geändert", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Hintergrund nicht geändert",
+                   message_of(body, "Die App hat nicht geantwortet."));
         poll_backdrops();
         break;
     }
@@ -1660,11 +1726,13 @@ void HttpSource::handle(const Request &request)
         if (!request.id.empty())
             cJSON_AddStringToObject(root, "id", request.id.c_str());
         char *text = cJSON_PrintUnformatted(root);
-        const Net net = exchange("POST", "/api/v1/paystore", text != nullptr ? text : "{}", &status, &body, 10);
+        const Net net =
+            exchange("POST", "/api/v1/paystore", text != nullptr ? text : "{}", &status, &body, 10);
         cJSON_free(text);
         cJSON_Delete(root);
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Payload-Store", message_of(body, "Die App hat nicht geantwortet."));
+            notice(Notice::Kind::error, "Payload-Store",
+                   message_of(body, "Die App hat nicht geantwortet."));
         else if (request.text == "start")
             notice(Notice::Kind::success, "Gestartet", "An den ELF-Loader gesendet.");
         else if (request.text == "refresh")
@@ -1816,7 +1884,8 @@ void HttpSource::poll_store()
 {
     int status = 0;
     std::string body;
-    if (exchange("GET", "/api/v1/paystore?refresh=1", {}, &status, &body, 15) != Net::ok || status != 200)
+    if (exchange("GET", "/api/v1/paystore?refresh=1", {}, &status, &body, 15) != Net::ok ||
+        status != 200)
         return;
     cJSON *root = cJSON_Parse(body.c_str());
     if (root == nullptr)
@@ -1854,11 +1923,23 @@ void HttpSource::poll_store()
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
     if (data_.store_job.state == "running" && job.state == "done")
-        notices_.push_back(
-            {Notice::Kind::success, "„" + job.name + "“ geladen", {}, {}, {}, {}, {}, JobKind::count});
+        notices_.push_back({Notice::Kind::success,
+                            "„" + job.name + "“ geladen",
+                            {},
+                            {},
+                            {},
+                            {},
+                            {},
+                            JobKind::count});
     if (data_.store_job.state == "running" && job.state == "failed")
-        notices_.push_back(
-            {Notice::Kind::error, "„" + job.name + "“ nicht geladen", job.error, {}, {}, {}, {}, JobKind::count});
+        notices_.push_back({Notice::Kind::error,
+                            "„" + job.name + "“ nicht geladen",
+                            job.error,
+                            {},
+                            {},
+                            {},
+                            {},
+                            JobKind::count});
     data_.store = std::move(items);
     data_.store_job = job;
     data_.store_loaded = loaded;
@@ -1871,7 +1952,8 @@ void HttpSource::poll_log()
 {
     int status = 0;
     std::string body;
-    if (exchange("GET", "/api/v1/logs/tail?count=150", {}, &status, &body) != Net::ok || status != 200)
+    if (exchange("GET", "/api/v1/logs/tail?count=150", {}, &status, &body) != Net::ok ||
+        status != 200)
         return;
     cJSON *root = cJSON_Parse(body.c_str());
     if (root == nullptr)
@@ -1902,8 +1984,8 @@ void HttpSource::poll_klog()
             after = data_.klog.back().n;
     }
     char path[96];
-    std::snprintf(path, sizeof(path), "/api/v1/klog?after=%lld&max=%d", static_cast<long long>(after),
-                  after == 0 ? 300 : 500);
+    std::snprintf(path, sizeof(path), "/api/v1/klog?after=%lld&max=%d",
+                  static_cast<long long>(after), after == 0 ? 300 : 500);
     int status = 0;
     std::string body;
     if (exchange("GET", path, {}, &status, &body) != Net::ok || status != 200)
@@ -1957,7 +2039,8 @@ bool HttpSource::poll_status()
     s.safety = flag(control, "safety_active");
     s.guard = static_cast<int>(num(control, "guard_state", 0));
     s.night = flag(control, "night_active");
-    s.target_c = static_cast<int>(num(control, "effective_target_c", num(control, "target_temp_c", 0)));
+    s.target_c =
+        static_cast<int>(num(control, "effective_target_c", num(control, "target_temp_c", 0)));
     s.game_state = str(game, "state");
     s.game_name = str(game, "title_name");
     s.game_id = str(game, "title_id");
@@ -1993,20 +2076,23 @@ void HttpSource::poll_library()
     {
         Game g;
         g.id = str(item, "title_id");
-        // The app's two tiles (and their ids before 1.74.1) are titles of their own, not games to start from here.
-        if (g.id == own_title_id() || g.id == "FAKE86921" || g.id == "FAKE86922" || g.id == "PPSA86921" ||
-            g.id == "PPSA86922")
+        // The app's two tiles (and their ids before 1.74.1) are titles of their own, not games to
+        // start from here.
+        if (g.id == own_title_id() || g.id == "FAKE86921" || g.id == "FAKE86922" ||
+            g.id == "PPSA86921" || g.id == "PPSA86922")
             continue;
         g.name = str(item, "name");
         g.platform = str(item, "platform");
         g.version = str(item, "version");
         g.format = str(item, "format");
-        // A PS4Mount game is an installed package to the system; shown as what it is, not as installed (29.10.2026).
+        // A PS4Mount game is an installed package to the system; shown as what it is, not as
+        // installed (29.10.2026).
         if (g.format == "pkg" && flag(item, "ps4mount"))
             g.format = "ps4mount";
         g.path = str(item, "path");
         g.cover = str(item, "cover");
-        // Only the app's own route: the bytes are fetched from 127.0.0.1 and must not lead anywhere else.
+        // Only the app's own route: the bytes are fetched from 127.0.0.1 and must not lead anywhere
+        // else.
         if (g.cover.rfind("/api/v1/library/cover?", 0) != 0)
             g.cover.clear();
         g.last_played = str(item, "last_played");
@@ -2037,7 +2123,8 @@ void HttpSource::poll_library()
 
 void HttpSource::fetch_cover()
 {
-    // Game covers first, then the developer pictures the console app has cached, under keys of their own.
+    // Game covers first, then the developer pictures the console app has cached, under keys of
+    // their own.
     std::vector<Game> games;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -2066,7 +2153,8 @@ void HttpSource::fetch_cover()
                 games.push_back(std::move(g));
             }
         }
-        // The pictures of the packages, only while the Pakete page is open (ids hold for one search).
+        // The pictures of the packages, only while the Pakete page is open (ids hold for one
+        // search).
         if (watching_.load() == Watch::packages)
         {
             for (const Package &p : data_.packages)
@@ -2104,8 +2192,8 @@ void HttpSource::poll_packages(bool scan)
 {
     int status = 0;
     std::string body;
-    if (exchange(scan ? "POST" : "GET", scan ? "/api/v1/packages/scan" : "/api/v1/packages", scan ? "{}" : "", &status,
-                 &body, 8) != Net::ok ||
+    if (exchange(scan ? "POST" : "GET", scan ? "/api/v1/packages/scan" : "/api/v1/packages",
+                 scan ? "{}" : "", &status, &body, 8) != Net::ok ||
         status != 200)
         return;
     cJSON *root = cJSON_Parse(body.c_str());
@@ -2164,7 +2252,8 @@ void HttpSource::poll_package_install()
 {
     int status = 0;
     std::string body;
-    if (exchange("GET", "/api/v1/packages/install/job", {}, &status, &body) != Net::ok || status != 200)
+    if (exchange("GET", "/api/v1/packages/install/job", {}, &status, &body) != Net::ok ||
+        status != 200)
         return;
     cJSON *root = cJSON_Parse(body.c_str());
     if (root == nullptr)
@@ -2187,8 +2276,9 @@ void HttpSource::poll_package_install()
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
     const PackageInstall &o = data_.package_install;
-    if (o.state == j.state && o.active == j.active && o.cancelling == j.cancelling && o.name == j.name &&
-        o.percent == j.percent && o.bytes_done == j.bytes_done && o.error == j.error && o.remain_s == j.remain_s)
+    if (o.state == j.state && o.active == j.active && o.cancelling == j.cancelling &&
+        o.name == j.name && o.percent == j.percent && o.bytes_done == j.bytes_done &&
+        o.error == j.error && o.remain_s == j.remain_s)
         return;
     // A run that ended: the library may have a new game now.
     if (o.active && !j.active)
@@ -2214,7 +2304,8 @@ void HttpSource::poll_package_queue()
     const cJSON *counts = cJSON_GetObjectItemCaseSensitive(root, "counts");
     q.waiting = static_cast<int>(num(counts, "waiting"));
     q.done = static_cast<int>(num(counts, "done"));
-    q.failed = static_cast<int>(num(counts, "failed") + num(counts, "skipped") + num(counts, "cancelled"));
+    q.failed =
+        static_cast<int>(num(counts, "failed") + num(counts, "skipped") + num(counts, "cancelled"));
     const cJSON *it = nullptr;
     cJSON_ArrayForEach(it, cJSON_GetObjectItemCaseSensitive(root, "items"))
     {
@@ -2231,8 +2322,8 @@ void HttpSource::poll_package_queue()
     cJSON_Delete(root);
     const auto key_of = [](const PackageQueue &x)
     {
-        std::string key = std::to_string(x.running) + std::to_string(x.pause_requested) + std::to_string(x.halted) +
-                          x.halt_reason;
+        std::string key = std::to_string(x.running) + std::to_string(x.pause_requested) +
+                          std::to_string(x.halted) + x.halt_reason;
         for (const PackageQueueItem &i : x.items)
             key += ';' + i.id + i.state + i.message;
         return key;
@@ -2255,7 +2346,8 @@ void HttpSource::poll_playtime()
         return;
     Playtime p;
     p.loaded = true;
-    p.enabled = cJSON_GetObjectItemCaseSensitive(root, "enabled") == nullptr || flag(root, "enabled");
+    p.enabled =
+        cJSON_GetObjectItemCaseSensitive(root, "enabled") == nullptr || flag(root, "enabled");
     p.now = static_cast<std::int64_t>(num(root, "now"));
     p.total = static_cast<int>(num(root, "total"));
     p.kept = static_cast<int>(num(root, "kept"));
@@ -2263,7 +2355,9 @@ void HttpSource::poll_playtime()
     const auto name_of = [&](const std::string &id)
     {
         const cJSON *n = cJSON_GetObjectItemCaseSensitive(titles, id.c_str());
-        return cJSON_IsString(n) && n->valuestring != nullptr && n->valuestring[0] ? std::string(n->valuestring) : id;
+        return cJSON_IsString(n) && n->valuestring != nullptr && n->valuestring[0]
+                   ? std::string(n->valuestring)
+                   : id;
     };
     const auto read = [&](const cJSON *o)
     {
@@ -2516,9 +2610,11 @@ void HttpSource::poll_library_tools()
 {
     int status = 0;
     std::string dup, cache, body;
-    if (exchange("GET", "/api/v1/library/duplicates", {}, &status, &body, 30) == Net::ok && status == 200)
+    if (exchange("GET", "/api/v1/library/duplicates", {}, &status, &body, 30) == Net::ok &&
+        status == 200)
         dup = std::move(body);
-    if (exchange("GET", "/api/v1/library/cache", {}, &status, &body, 10) == Net::ok && status == 200)
+    if (exchange("GET", "/api/v1/library/cache", {}, &status, &body, 10) == Net::ok &&
+        status == 200)
         cache = std::move(body);
     std::lock_guard<std::mutex> lock(mutex_);
     data_.library_tools.duplicates = std::move(dup);
@@ -2766,7 +2862,8 @@ void HttpSource::poll_ps4mount()
     }
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
-    // Busy, PS4Mount answers from its last list or with none: an empty list then is not news, the old one stays.
+    // Busy, PS4Mount answers from its last list or with none: an empty list then is not news, the
+    // old one stays.
     if (m.busy && m.games.empty() && data_.ps4mount.loaded)
     {
         data_.ps4mount.busy = true;
@@ -2898,8 +2995,9 @@ void HttpSource::poll_disc()
     cJSON_Delete(root);
     const auto key_of = [](const DiscState &s)
     {
-        std::string k = std::to_string(s.has_drive) + s.drive + std::to_string(s.enabled) + std::to_string(s.auto_dump) +
-                        std::to_string(s.present) + s.type + s.serial + s.name + s.title_state + s.job_state +
+        std::string k = std::to_string(s.has_drive) + s.drive + std::to_string(s.enabled) +
+                        std::to_string(s.auto_dump) + std::to_string(s.present) + s.type +
+                        s.serial + s.name + s.title_state + s.job_state +
                         std::to_string(static_cast<long long>(s.job_done)) + s.job_error +
                         std::to_string(s.events.size()) + std::to_string(s.images.size());
         for (const DiscImage &i : s.images)
@@ -2937,7 +3035,8 @@ void HttpSource::poll_dump()
         o.decrypt = flag(s, "decrypt");
         o.fself = flag(s, "fself");
         o.backport = flag(s, "backport");
-        o.decrypt_supported = !cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(s, "decrypt_supported"));
+        o.decrypt_supported =
+            !cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(s, "decrypt_supported"));
         o.ps4_split = static_cast<int>(num(s, "ps4_split", 3));
         o.ps4_backport_level = static_cast<int>(num(s, "ps4_backport_level", 4));
         o.ps5_backport_level = static_cast<int>(num(s, "ps5_backport_level", 1));
@@ -2997,7 +3096,8 @@ void HttpSource::poll_dump()
     o.eta_s = static_cast<int>(num(j, "eta_s"));
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
-    // A dump or a queue that just ended: the library knows the game as dumped now, the list of dumps has one more.
+    // A dump or a queue that just ended: the library knows the game as dumped now, the list of
+    // dumps has one more.
     const bool was = data_.dump.job.active || data_.dump.queue.active;
     if (was && !d.job.active && !d.queue.active)
         library_wanted_ = true;
@@ -3009,8 +3109,8 @@ void HttpSource::poll_dumps(bool scan)
 {
     int status = 0;
     std::string body;
-    if (exchange(scan ? "POST" : "GET", scan ? "/api/v1/dumps/scan" : "/api/v1/dumps", scan ? "{}" : "", &status, &body,
-                 8) != Net::ok ||
+    if (exchange(scan ? "POST" : "GET", scan ? "/api/v1/dumps/scan" : "/api/v1/dumps",
+                 scan ? "{}" : "", &status, &body, 8) != Net::ok ||
         status != 200)
         return;
     cJSON *root = cJSON_Parse(body.c_str());
@@ -3048,7 +3148,8 @@ void HttpSource::poll_backdrops()
 {
     int status = 0;
     std::string body;
-    // An app without the route (older than 29.10.2026) answers 404: every area keeps the tile's own picture.
+    // An app without the route (older than 29.10.2026) answers 404: every area keeps the tile's own
+    // picture.
     if (exchange("GET", "/api/v1/backdrops", {}, &status, &body) != Net::ok || status != 200)
         return;
     cJSON *root = cJSON_Parse(body.c_str());
@@ -3063,7 +3164,9 @@ void HttpSource::poll_backdrops()
         b.id = str(a, "id");
         b.label = str(a, "label");
         const std::string mode = str(a, "mode");
-        b.mode = mode == "custom" ? BackdropMode::custom : mode == "off" ? BackdropMode::off : BackdropMode::standard;
+        b.mode = mode == "custom" ? BackdropMode::custom
+                 : mode == "off"  ? BackdropMode::off
+                                  : BackdropMode::standard;
         b.custom = flag(a, "custom");
         b.stamp = str(a, "stamp");
         if (backdrop_area(b.id) >= 0)
@@ -3073,8 +3176,12 @@ void HttpSource::poll_backdrops()
     backdrops().apply(list);
     std::lock_guard<std::mutex> lock(mutex_);
     const auto same = [](const BackdropSetting &x, const BackdropSetting &y)
-    { return x.id == y.id && x.mode == y.mode && x.custom == y.custom && x.stamp == y.stamp && x.label == y.label; };
-    if (data_.backdrops_loaded && std::equal(list.begin(), list.end(), data_.backdrops.begin(), data_.backdrops.end(), same))
+    {
+        return x.id == y.id && x.mode == y.mode && x.custom == y.custom && x.stamp == y.stamp &&
+               x.label == y.label;
+    };
+    if (data_.backdrops_loaded &&
+        std::equal(list.begin(), list.end(), data_.backdrops.begin(), data_.backdrops.end(), same))
         return;
     data_.backdrops = std::move(list);
     data_.backdrops_loaded = true;
@@ -3086,7 +3193,8 @@ void HttpSource::fetch_backdrop()
     const BackdropWant want = backdrops().wanted_custom();
     if (want.area < 0)
         return;
-    const std::string path = std::string("/api/v1/backdrops/image?area=") + backdrop_name(want.area);
+    const std::string path =
+        std::string("/api/v1/backdrops/image?area=") + backdrop_name(want.area);
     int status = 0;
     std::string body;
     if (exchange("GET", path.c_str(), {}, &status, &body, 8) != Net::ok || status != 200)
@@ -3096,7 +3204,8 @@ void HttpSource::fetch_backdrop()
     }
     std::vector<std::uint8_t> rgba =
         decode_backdrop(reinterpret_cast<const std::uint8_t *>(body.data()), body.size());
-    sys::log("[PS5CC] backdrop %s %zu bytes ok=%d", backdrop_name(want.area), body.size(), rgba.empty() ? 0 : 1);
+    sys::log("[PS5CC] backdrop %s %zu bytes ok=%d", backdrop_name(want.area), body.size(),
+             rgba.empty() ? 0 : 1);
     if (rgba.empty())
         backdrops().fail_custom(want.area, want.stamp);
     else
@@ -3135,8 +3244,8 @@ void HttpSource::poll_jobs()
         job.state = str(root, "state");
         job.error = str(root, "error");
         const bool idle = job.state.empty() || job.state == "idle";
-        job.active = !idle && (flag(root, "active") || job.state == "running" || job.state == "scanning" ||
-                               job.state == "verifying");
+        job.active = !idle && (flag(root, "active") || job.state == "running" ||
+                               job.state == "scanning" || job.state == "verifying");
         job.finished = !idle && !job.active;
         job.name = str(root, "name");
         if (job.name.empty())
@@ -3163,7 +3272,10 @@ void HttpSource::poll_jobs()
             job.done = num(root, "work_done");
             const std::string kind = str(root, "kind");
             if (job.name.empty())
-                job.name = kind == "check" ? "Prüfen" : kind == "unpack" ? "Entpacken" : kind == "repair" ? "Reparieren" : kind;
+                job.name = kind == "check"    ? "Prüfen"
+                           : kind == "unpack" ? "Entpacken"
+                           : kind == "repair" ? "Reparieren"
+                                              : kind;
             job.detail = str(root, "current");
             job.active = job.state == "running";
             job.finished = !idle && !job.active;
@@ -3192,25 +3304,29 @@ void HttpSource::read_storage_job(const cJSON *root, Job &job)
     const std::string state = str(root, "state");
     job.active = active;
     job.finished = !active;
-    job.state = active                  ? state
-                : state == "completed"  ? "done"
-                : state == "failed"     ? "failed"
-                                        : "cancelled";
+    job.state = active                 ? state
+                : state == "completed" ? "done"
+                : state == "failed"    ? "failed"
+                                       : "cancelled";
     std::string tid = str(root, "title_id");
     job.name = !tid.empty() ? game_name(tid) : str(root, "title_name");
     if (job.name.empty())
         job.name = str(root, "name");
     const std::string op = str(root, "operation");
-    const std::string verb = op == "move" ? "Verschieben" : op == "unpack" ? "Entpacken" : op == "install" ? "Installieren" : op;
+    const std::string verb = op == "move"      ? "Verschieben"
+                             : op == "unpack"  ? "Entpacken"
+                             : op == "install" ? "Installieren"
+                                               : op;
     const std::string dest = str(root, "destination");
     job.detail = verb + (dest.empty() ? "" : " → " + dest);
     job.total = num(root, "total_bytes");
     job.done = num(root, "processed_bytes");
     job.error = str(root, "result_error");
     job.cancellable = flag(root, "cancellable") && !flag(root, "cancel_requested");
-    // As for a delete: ShadowMountPlus up to 1.7beta5fix1 refused the job while this app runs; the app starts it again
-    // once this app has ended, so it ends itself (once per wait).
-    const bool waits = active && str(root, "waiting_for") == "tile" && str(root, "tile") == own_title_id();
+    // As for a delete: ShadowMountPlus up to 1.7beta5fix1 refused the job while this app runs; the
+    // app starts it again once this app has ended, so it ends itself (once per wait).
+    const bool waits =
+        active && str(root, "waiting_for") == "tile" && str(root, "tile") == own_title_id();
     if (waits)
     {
         job.detail = str(root, "phase");
@@ -3241,9 +3357,11 @@ void HttpSource::read_delete_job(const cJSON *root, Job &job)
     job.done = num(root, "bytes_done");
     job.error = str(root, "error");
     job.cancellable = false;
-    // ShadowMountPlus up to 1.7beta5fix1 refuses every uninstall while any title it mounted runs, this app included: the
-    // delete waits until this app has ended, so it ends itself (once per job; the app reports the result as a notification).
-    if (job.active && str(root, "waiting_for") == "tile" && str(root, "tile") == own_title_id() && !leaving_for_delete_)
+    // ShadowMountPlus up to 1.7beta5fix1 refuses every uninstall while any title it mounted runs,
+    // this app included: the delete waits until this app has ended, so it ends itself (once per
+    // job; the app reports the result as a notification).
+    if (job.active && str(root, "waiting_for") == "tile" && str(root, "tile") == own_title_id() &&
+        !leaving_for_delete_)
     {
         leaving_for_delete_ = true;
         notice(Notice::Kind::leaving, "„" + job.name + "“ wird gelöscht",

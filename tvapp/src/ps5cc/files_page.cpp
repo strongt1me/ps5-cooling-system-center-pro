@@ -1,12 +1,14 @@
-// ps5cc - The Dateien area: the console's folders and drives, copying, moving, deleting, renaming, a new folder.
+// ps5cc - The Dateien area: the console's folders and drives, copying, moving, deleting, renaming,
+// a new folder.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's file manager (src/filemgr.c): looking is allowed everywhere, changing only below the drives and
-// /data, and the console says which with writable. The X button opens a folder or shows a text file; Square opens what
-// an entry allows (pick, copy, cut, rename, delete, measure); Triangle the rest (paste here, new folder, pick all or
-// none, the order, cancel the job). Names are typed on the kit's keyboard. Delete fires at once, as everywhere in the
-// app. Uploading from a computer and downloading to one stay in the web app.
+// As the web app's file manager (src/filemgr.c): looking is allowed everywhere, changing only below
+// the drives and /data, and the console says which with writable. The X button opens a folder or
+// shows a text file; Square opens what an entry allows (pick, copy, cut, rename, delete, measure);
+// Triangle the rest (paste here, new folder, pick all or none, the order, cancel the job). Names
+// are typed on the kit's keyboard. Delete fires at once, as everywhere in the app. Uploading from a
+// computer and downloading to one stay in the web app.
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
@@ -51,7 +53,8 @@ enum class Glyph
     picked,
 };
 
-// The row's sign, drawn with the kit's shapes like the sidebar's icons (29.10.2026: the list looked bare).
+// The row's sign, drawn with the kit's shapes like the sidebar's icons (29.10.2026: the list looked
+// bare).
 void draw_glyph(gfx::DrawList &list, Glyph glyph, float cx, float cy, float s, Color ink)
 {
     const float x = cx - s * 0.5f;
@@ -66,13 +69,15 @@ void draw_glyph(gfx::DrawList &list, Glyph glyph, float cx, float cy, float s, C
         break;
     case Glyph::link:
         list.rounded_rect({x + s * 0.04f, y + s * 0.18f, s * 0.4f, s * 0.2f}, s * 0.06f, ink);
-        list.bordered_rect({x + s * 0.04f, y + s * 0.28f, s * 0.92f, s * 0.56f}, s * 0.1f, clear, t, ink);
+        list.bordered_rect({x + s * 0.04f, y + s * 0.28f, s * 0.92f, s * 0.56f}, s * 0.1f, clear, t,
+                           ink);
         list.line(x + s * 0.36f, y + s * 0.7f, x + s * 0.64f, y + s * 0.46f, t, ink);
         list.line(x + s * 0.48f, y + s * 0.46f, x + s * 0.64f, y + s * 0.46f, t, ink);
         list.line(x + s * 0.64f, y + s * 0.46f, x + s * 0.64f, y + s * 0.6f, t, ink);
         break;
     case Glyph::file:
-        list.bordered_rect({x + s * 0.18f, y + s * 0.06f, s * 0.64f, s * 0.88f}, s * 0.1f, clear, t, ink);
+        list.bordered_rect({x + s * 0.18f, y + s * 0.06f, s * 0.64f, s * 0.88f}, s * 0.1f, clear, t,
+                           ink);
         for (int i = 0; i < 3; ++i)
         {
             const float ly = y + s * (0.36f + 0.17f * static_cast<float>(i));
@@ -85,14 +90,18 @@ void draw_glyph(gfx::DrawList &list, Glyph glyph, float cx, float cy, float s, C
         list.line(cx, y + s * 0.2f, x + s * 0.76f, y + s * 0.48f, t * 1.2f, ink);
         break;
     case Glyph::drive:
-        list.bordered_rect({x + s * 0.04f, y + s * 0.26f, s * 0.92f, s * 0.48f}, s * 0.12f, clear, t, ink);
+        list.bordered_rect({x + s * 0.04f, y + s * 0.26f, s * 0.92f, s * 0.48f}, s * 0.12f, clear,
+                           t, ink);
         list.circle(x + s * 0.76f, cy, s * 0.07f, ink);
         list.line(x + s * 0.2f, cy, x + s * 0.5f, cy, t, ink);
         break;
     case Glyph::picked:
-        list.rounded_rect({x + s * 0.06f, y + s * 0.06f, s * 0.88f, s * 0.88f}, s * 0.22f, Color::rgb(0x3880ff));
-        list.line(x + s * 0.28f, y + s * 0.52f, x + s * 0.44f, y + s * 0.68f, t * 1.3f, Color::rgb(0xffffff));
-        list.line(x + s * 0.44f, y + s * 0.68f, x + s * 0.74f, y + s * 0.34f, t * 1.3f, Color::rgb(0xffffff));
+        list.rounded_rect({x + s * 0.06f, y + s * 0.06f, s * 0.88f, s * 0.88f}, s * 0.22f,
+                          Color::rgb(0x3880ff));
+        list.line(x + s * 0.28f, y + s * 0.52f, x + s * 0.44f, y + s * 0.68f, t * 1.3f,
+                  Color::rgb(0xffffff));
+        list.line(x + s * 0.44f, y + s * 0.68f, x + s * 0.74f, y + s * 0.34f, t * 1.3f,
+                  Color::rgb(0xffffff));
         break;
     }
 }
@@ -174,8 +183,9 @@ std::vector<ui::KeyboardLayout> german_layouts()
         k.span = span;
         return k;
     };
-    de.add_row({wide(ui::KeyKind::shift, 2), wide(ui::KeyKind::layout, 1), wide(ui::KeyKind::space, 3),
-                wide(ui::KeyKind::backspace, 2), wide(ui::KeyKind::done, 2)});
+    de.add_row({wide(ui::KeyKind::shift, 2), wide(ui::KeyKind::layout, 1),
+                wide(ui::KeyKind::space, 3), wide(ui::KeyKind::backspace, 2),
+                wide(ui::KeyKind::done, 2)});
     return {ui::KeyboardLayout::letters(), de, ui::KeyboardLayout::symbols()};
 }
 
@@ -195,9 +205,11 @@ class FilesPage final : public Page
         list_.style.badge_column = true;
         list_.style.value_width = 130.0f; // the badges line up
         list_.style.leading_width = 40.0f;
-        list_.leading = [this](ui::Canvas &canvas, const Rect &box, const ui::ListItem &item, int, float)
+        list_.leading =
+            [this](ui::Canvas &canvas, const Rect &box, const ui::ListItem &item, int, float)
         { draw_glyph(canvas.list, glyph_of(item), box.cx(), box.cy(), 34.0f, ink_of(item)); };
-        list_.set_bounds({kLeftX, kFilesTop + kBarH + 14.0f, kLeftW, kBottom - kFilesTop - kBarH - 14.0f});
+        list_.set_bounds(
+            {kLeftX, kFilesTop + kBarH + 14.0f, kLeftW, kBottom - kFilesTop - kBarH - 14.0f});
 
         info_.style.theme = theme;
         info_.style.panel = false;
@@ -205,7 +217,8 @@ class FilesPage final : public Page
         info_.style.value_size = 21.0f;
         info_.style.row_height = 40.0f;
         info_.style.max_lines = 1;
-        info_.set_bounds({kRightX + 30.0f, kFilesTop + 158.0f, kRightW - 60.0f, 220.0f}); // under the sign and the line
+        info_.set_bounds({kRightX + 30.0f, kFilesTop + 158.0f, kRightW - 60.0f,
+                          220.0f}); // under the sign and the line
 
         menu_.style.theme = solid_theme(theme);
         menu_.style.width = 560.0f;
@@ -305,7 +318,8 @@ class FilesPage final : public Page
                 feedback.play(audio::Cue::back);
             }
             else if (input.nav == Direction::down)
-                view_top_ = std::min(view_top_ + 1, std::max(0, static_cast<int>(view_lines_.size()) - page));
+                view_top_ = std::min(view_top_ + 1,
+                                     std::max(0, static_cast<int>(view_lines_.size()) - page));
             else if (input.nav == Direction::up)
                 view_top_ = std::max(0, view_top_ - 1);
             return;
@@ -360,15 +374,21 @@ class FilesPage final : public Page
         paint.panel(card);
         const FsEntry *e = focused_entry();
         const FsPlace *pl = focused_place();
-        const std::string title = e != nullptr ? e->name : pl != nullptr ? pl->label : base_or_root(where);
+        const std::string title = e != nullptr    ? e->name
+                                  : pl != nullptr ? pl->label
+                                                  : base_or_root(where);
         // a large sign beside the name, then what it is
-        const Glyph sign = e != nullptr ? entry_glyph(*e) : pl != nullptr ? Glyph::drive : Glyph::folder;
+        const Glyph sign = e != nullptr    ? entry_glyph(*e)
+                           : pl != nullptr ? Glyph::drive
+                                           : Glyph::folder;
         const Rect tile{card.x + 30.0f, card.y + 30.0f, 84.0f, 84.0f};
         list.rounded_rect(tile, 20.0f, Color::rgb(0x3880ff, 0.14f));
-        draw_glyph(list, sign, tile.cx(), tile.cy(), 50.0f, sign == Glyph::file ? kFileInk : kFolderInk);
-        ui::text(list, fonts.display, ui::fit_label(paint, title, 30.0f, card.w - 180.0f), tile.x + tile.w + 24.0f,
-                 card.y + 70.0f, 30.0f, kInk);
-        ui::text(list, fonts.regular, ui::fit_label(paint, card_subtitle(e, pl, where), 19.0f, card.w - 180.0f),
+        draw_glyph(list, sign, tile.cx(), tile.cy(), 50.0f,
+                   sign == Glyph::file ? kFileInk : kFolderInk);
+        ui::text(list, fonts.display, ui::fit_label(paint, title, 30.0f, card.w - 180.0f),
+                 tile.x + tile.w + 24.0f, card.y + 70.0f, 30.0f, kInk);
+        ui::text(list, fonts.regular,
+                 ui::fit_label(paint, card_subtitle(e, pl, where), 19.0f, card.w - 180.0f),
                  tile.x + tile.w + 24.0f, card.y + 102.0f, 19.0f, kMuted);
         list.line(card.x + 30.0f, card.y + 140.0f, card.x + card.w - 30.0f, card.y + 140.0f, 1.0f,
                   Color::rgb(0x3880ff, 0.18f));
@@ -376,11 +396,14 @@ class FilesPage final : public Page
 
         float y = card.y + 400.0f;
         if (!folder_.path.empty() && !folder_.writable)
-            y = note_card(canvas, paint, card, y, "Nur ansehen",
-                          "Hier darf nichts geändert werden. Ändern geht auf den Laufwerken und in /data.", kWarning);
+            y = note_card(
+                canvas, paint, card, y, "Nur ansehen",
+                "Hier darf nichts geändert werden. Ändern geht auf den Laufwerken und in /data.",
+                kWarning);
         if (!clip_paths_.empty())
             y = note_card(canvas, paint, card, y,
-                          std::string(clip_move_ ? "Ausgeschnitten: " : "Kopiert: ") + std::to_string(clip_paths_.size()) +
+                          std::string(clip_move_ ? "Ausgeschnitten: " : "Kopiert: ") +
+                              std::to_string(clip_paths_.size()) +
                               (clip_paths_.size() == 1 ? " Eintrag" : " Einträge"),
                           "aus " + clip_from_ + " · Mehr → Hier einfügen", kBlue);
         if (!picked_.empty())
@@ -389,34 +412,44 @@ class FilesPage final : public Page
 
         // the job at the bottom
         const float jy = kBottom - 170.0f;
-        if (job_.active || (job_.finished_ago_s >= 0 && job_.finished_ago_s < 60 && !job_.kind.empty()))
+        if (job_.active ||
+            (job_.finished_ago_s >= 0 && job_.finished_ago_s < 60 && !job_.kind.empty()))
         {
-            list.line(card.x + 30.0f, jy, card.x + card.w - 30.0f, jy, 1.0f, Color::rgb(0x3880ff, 0.18f));
-            const char *what = job_.kind == "move" ? "Verschieben" : job_.kind == "delete" ? "Löschen" : "Kopieren";
+            list.line(card.x + 30.0f, jy, card.x + card.w - 30.0f, jy, 1.0f,
+                      Color::rgb(0x3880ff, 0.18f));
+            const char *what = job_.kind == "move"     ? "Verschieben"
+                               : job_.kind == "delete" ? "Löschen"
+                                                       : "Kopieren";
             if (job_.active)
             {
-                ui::text(list, fonts.semibold, std::string(what) + " · " + std::to_string(job_.percent) + " %",
+                ui::text(list, fonts.semibold,
+                         std::string(what) + " · " + std::to_string(job_.percent) + " %",
                          card.x + 30.0f, jy + 40.0f, 22.0f, kInk);
                 const Rect bar{card.x + 30.0f, jy + 58.0f, card.w - 60.0f, 12.0f};
                 list.rounded_rect(bar, 6.0f, Color::rgb(0x3880ff, 0.18f));
                 list.rounded_rect(
-                    {bar.x, bar.y, bar.w * static_cast<float>(std::clamp(job_.percent, 0, 100)) / 100.0f, bar.h}, 6.0f,
-                    kBlue);
-                const std::string amount = job_.bytes_total > 0 ? format_bytes(job_.bytes_done) + " von " +
-                                                                      format_bytes(job_.bytes_total)
-                                                                : std::to_string(job_.files_done) + " von " +
-                                                                      std::to_string(job_.files_total) + " Dateien";
-                ui::text(list, fonts.regular, ui::fit_label(paint, amount + " · " + job_.current, 18.0f, card.w - 60.0f),
+                    {bar.x, bar.y,
+                     bar.w * static_cast<float>(std::clamp(job_.percent, 0, 100)) / 100.0f, bar.h},
+                    6.0f, kBlue);
+                const std::string amount =
+                    job_.bytes_total > 0
+                        ? format_bytes(job_.bytes_done) + " von " + format_bytes(job_.bytes_total)
+                        : std::to_string(job_.files_done) + " von " +
+                              std::to_string(job_.files_total) + " Dateien";
+                ui::text(list, fonts.regular,
+                         ui::fit_label(paint, amount + " · " + job_.current, 18.0f, card.w - 60.0f),
                          card.x + 30.0f, jy + 100.0f, 18.0f, kMuted);
             }
             else
             {
                 const bool ok = job_.state == "done";
                 ui::text(list, fonts.semibold,
-                         std::string(what) + (ok ? " fertig" : job_.state == "cancelled" ? " abgebrochen" : " fehlgeschlagen"),
+                         std::string(what) + (ok                          ? " fertig"
+                                              : job_.state == "cancelled" ? " abgebrochen"
+                                                                          : " fehlgeschlagen"),
                          card.x + 30.0f, jy + 40.0f, 22.0f, ok ? kGood : kWarning);
-                paragraph(canvas, !job_.error.empty() ? job_.error : job_.note, card.x + 30.0f, jy + 76.0f,
-                          card.w - 60.0f, kMuted, 3);
+                paragraph(canvas, !job_.error.empty() ? job_.error : job_.note, card.x + 30.0f,
+                          jy + 76.0f, card.w - 60.0f, kMuted, 3);
             }
         }
     }
@@ -435,7 +468,7 @@ class FilesPage final : public Page
         ui::Painter paint(list, fonts, theme_);
         solid_floor(list, panel, theme_.radius_card);
         solid_floor(list, panel, theme_.radius_card);
-    paint.panel(panel);
+        paint.panel(panel);
         ui::HintLayout layout;
         layout.size = 34.0f;
         layout.text_size = 21.0f;
@@ -443,10 +476,11 @@ class FilesPage final : public Page
         const ui::GlyphStyle glyphs = ui::GlyphStyle::dark();
         if (dialog_ == kName)
         {
-            ui::text(list, fonts.display, name_mode_ == kRename ? "Umbenennen" : "Neuer Ordner", panel.x + 40.0f,
-                     panel.y + 66.0f, 36.0f, kInk);
-            ui::text(list, fonts.regular, ui::fit_label(paint, "in " + folder_.path, 21.0f, panel.w - 80.0f), panel.x + 40.0f,
-                     panel.y + 104.0f, 21.0f, kMuted);
+            ui::text(list, fonts.display, name_mode_ == kRename ? "Umbenennen" : "Neuer Ordner",
+                     panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
+            ui::text(list, fonts.regular,
+                     ui::fit_label(paint, "in " + folder_.path, 21.0f, panel.w - 80.0f),
+                     panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
             const Rect field{panel.x + 120.0f, panel.y + 160.0f, panel.w - 240.0f, 84.0f};
             list.rounded_rect(field, 14.0f, Color::rgb(0x3880ff, 0.12f));
             const std::string shown = ui::fit_label(paint, name_, 32.0f, field.w - 60.0f);
@@ -457,7 +491,8 @@ class FilesPage final : public Page
                 list.rounded_rect({cx, field.y + 22.0f, 3.0f, 40.0f}, 1.5f, kBlue);
             }
             if (!name_error_.empty())
-                ui::text(list, fonts.regular, name_error_, field.x, field.y + field.h + 36.0f, 21.0f, kCritical);
+                ui::text(list, fonts.regular, name_error_, field.x, field.y + field.h + 36.0f,
+                         21.0f, kCritical);
             keys_.draw(canvas);
             const ui::Hint hints[] = {{ui::Button::square, "Zeichen löschen"},
                                       {ui::Button::triangle, "Leerzeichen"},
@@ -466,25 +501,29 @@ class FilesPage final : public Page
         }
         else
         {
-            ui::text(list, fonts.display, ui::fit_label(paint, base_of(view_.path), 36.0f, panel.w - 80.0f),
+            ui::text(list, fonts.display,
+                     ui::fit_label(paint, base_of(view_.path), 36.0f, panel.w - 80.0f),
                      panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
             std::string about = view_.path;
             if (view_.truncated)
                 about += " · nur der Anfang";
-            ui::text(list, fonts.regular, ui::fit_label(paint, about, 21.0f, panel.w - 80.0f), panel.x + 40.0f,
-                     panel.y + 104.0f, 21.0f, kMuted);
+            ui::text(list, fonts.regular, ui::fit_label(paint, about, 21.0f, panel.w - 80.0f),
+                     panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
             if (view_.seq == 0 || (view_.path.empty() && view_.error.empty()))
-                ui::text(list, fonts.semibold, "Wird geladen …", panel.x + panel.w * 0.5f, panel.y + 420.0f, 30.0f, kInk,
-                         gfx::Align::center);
+                ui::text(list, fonts.semibold, "Wird geladen …", panel.x + panel.w * 0.5f,
+                         panel.y + 420.0f, 30.0f, kInk, gfx::Align::center);
             else if (!view_.error.empty())
-                paragraph(canvas, view_.error, panel.x + 40.0f, panel.y + 200.0f, panel.w - 80.0f, kCritical, 4);
+                paragraph(canvas, view_.error, panel.x + 40.0f, panel.y + 200.0f, panel.w - 80.0f,
+                          kCritical, 4);
             else
             {
                 float y = panel.y + 160.0f;
-                for (int i = view_top_; i < static_cast<int>(view_lines_.size()) && y < panel.y + panel.h - 90.0f; ++i)
+                for (int i = view_top_;
+                     i < static_cast<int>(view_lines_.size()) && y < panel.y + panel.h - 90.0f; ++i)
                 {
                     ui::text(list, fonts.regular,
-                             ui::fit_label(paint, view_lines_[static_cast<std::size_t>(i)], 20.0f, panel.w - 80.0f),
+                             ui::fit_label(paint, view_lines_[static_cast<std::size_t>(i)], 20.0f,
+                                           panel.w - 80.0f),
                              panel.x + 40.0f, y, 20.0f, kInk.with_alpha(0.9f));
                     y += 30.0f;
                 }
@@ -526,14 +565,17 @@ class FilesPage final : public Page
     const FsEntry *focused_entry() const
     {
         const int i = focused_tag() - kEntryTag;
-        return i >= 0 && i < static_cast<int>(entries_.size()) ? &entries_[static_cast<std::size_t>(i)] : nullptr;
+        return i >= 0 && i < static_cast<int>(entries_.size())
+                   ? &entries_[static_cast<std::size_t>(i)]
+                   : nullptr;
     }
 
     const FsPlace *focused_place() const
     {
         const int i = focused_tag() - kPlaceTag;
-        return folder_.path.empty() && i >= 0 && i < static_cast<int>(places_.size()) ? &places_[static_cast<std::size_t>(i)]
-                                                                                       : nullptr;
+        return folder_.path.empty() && i >= 0 && i < static_cast<int>(places_.size())
+                   ? &places_[static_cast<std::size_t>(i)]
+                   : nullptr;
     }
 
     // The picked entries, or the focused one when none is picked: what copy, cut and delete act on.
@@ -569,8 +611,9 @@ class FilesPage final : public Page
         source().files_open(path);
     }
 
-    // O: back where the user was before opening this folder (a place opened from Orte goes back to Orte, not to /mnt),
-    // with the focus on the folder just left (user, 30.10.2026). Without a way back: up one folder.
+    // O: back where the user was before opening this folder (a place opened from Orte goes back to
+    // Orte, not to /mnt), with the focus on the folder just left (user, 30.10.2026). Without a way
+    // back: up one folder.
     void go_back(ui::Feedback &feedback)
     {
         while (!history_.empty() && history_.back() == folder_.path)
@@ -626,7 +669,8 @@ class FilesPage final : public Page
         source().files_view(path);
     }
 
-    static ui::MenuItem item(const std::string &label, int tag, bool disabled = false, bool danger = false)
+    static ui::MenuItem item(const std::string &label, int tag, bool disabled = false,
+                             bool danger = false)
     {
         ui::MenuItem m;
         m.label = label;
@@ -646,8 +690,8 @@ class FilesPage final : public Page
         }
         menu_entry_ = *e;
         const std::vector<const FsEntry *> t = targets();
-        const bool all_writable =
-            std::all_of(t.begin(), t.end(), [](const FsEntry *x) { return x->writable && pickable(*x); });
+        const bool all_writable = std::all_of(t.begin(), t.end(), [](const FsEntry *x)
+                                              { return x->writable && pickable(*x); });
         const std::string count = t.size() > 1 ? " (" + std::to_string(t.size()) + ")" : "";
         std::vector<ui::MenuItem> items;
         if (pickable(*e))
@@ -656,7 +700,9 @@ class FilesPage final : public Page
             items.push_back(item("Ansehen", kView));
         if (e->type == "dir")
             items.push_back(item("Größe messen", kMeasure));
-        items.push_back(item("Kopieren" + count, kCopy, !std::all_of(t.begin(), t.end(), [](const FsEntry *x) { return pickable(*x); })));
+        items.push_back(
+            item("Kopieren" + count, kCopy,
+                 !std::all_of(t.begin(), t.end(), [](const FsEntry *x) { return pickable(*x); })));
         items.push_back(item("Ausschneiden" + count, kCut, !all_writable));
         items.push_back(item("Umbenennen", kRename, !e->writable || !pickable(*e)));
         items.push_back(item("Löschen" + count, kDelete, !all_writable || job_.active, true));
@@ -671,8 +717,9 @@ class FilesPage final : public Page
         std::vector<ui::MenuItem> items;
         if (!clip_paths_.empty())
         {
-            items.push_back(item("Hier einfügen (" + std::to_string(clip_paths_.size()) + ")", kPaste,
-                                 !inside || !folder_.writable || folder_.path == clip_from_ || job_.active));
+            items.push_back(
+                item("Hier einfügen (" + std::to_string(clip_paths_.size()) + ")", kPaste,
+                     !inside || !folder_.writable || folder_.path == clip_from_ || job_.active));
             items.push_back(item("Ablage leeren", kForget));
         }
         items.push_back(item("Neuer Ordner", kNewFolder, !inside || !folder_.writable));
@@ -728,7 +775,8 @@ class FilesPage final : public Page
             break;
         case kPaste:
             source().files_post(clip_move_ ? "move" : "copy",
-                                "{\"paths\":" + paths_json(clip_paths_) + ",\"dest\":" + json_text(folder_.path) + "}");
+                                "{\"paths\":" + paths_json(clip_paths_) +
+                                    ",\"dest\":" + json_text(folder_.path) + "}");
             // a copy can be pasted again; what was cut is gone from its place
             clip_paths_.clear();
             break;
@@ -780,18 +828,20 @@ class FilesPage final : public Page
 
     void submit_name(ui::Feedback &feedback)
     {
-        if (name_.empty() || name_ == "." || name_ == ".." || name_.find('/') != std::string::npos ||
-            name_.find('\\') != std::string::npos)
+        if (name_.empty() || name_ == "." || name_ == ".." ||
+            name_.find('/') != std::string::npos || name_.find('\\') != std::string::npos)
         {
             name_error_ = "Ein Name darf nicht leer sein und kein / oder \\ enthalten.";
             feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
             return;
         }
         if (name_mode_ == kRename)
-            source().files_post("rename", "{\"path\":" + json_text(join(folder_.path, menu_entry_.name)) + ",\"name\":" +
-                                              json_text(name_) + "}");
+            source().files_post("rename",
+                                "{\"path\":" + json_text(join(folder_.path, menu_entry_.name)) +
+                                    ",\"name\":" + json_text(name_) + "}");
         else
-            source().files_post("mkdir", "{\"path\":" + json_text(folder_.path) + ",\"name\":" + json_text(name_) + "}");
+            source().files_post("mkdir", "{\"path\":" + json_text(folder_.path) +
+                                             ",\"name\":" + json_text(name_) + "}");
         dialog_ = kNone;
         feedback.play(audio::Cue::select);
     }
@@ -818,7 +868,8 @@ class FilesPage final : public Page
         return out;
     }
 
-    // Folders first, then by the chosen order (size and date: the biggest and newest first), as the web page.
+    // Folders first, then by the chosen order (size and date: the biggest and newest first), as the
+    // web page.
     void sort_entries()
     {
         entries_ = folder_.entries;
@@ -884,8 +935,8 @@ class FilesPage final : public Page
             ui::ListItem item;
             const bool folder = e.type == "dir" || e.type == "dirlink";
             item.title = e.name;
-            std::string sub = std::string(folder ? "Ordner · " : "") + play_date(e.mtime, tz_) + ", " +
-                              play_clock(e.mtime, tz_) + " Uhr";
+            std::string sub = std::string(folder ? "Ordner · " : "") + play_date(e.mtime, tz_) +
+                              ", " + play_clock(e.mtime, tz_) + " Uhr";
             if (e.type == "dirlink")
                 sub += " · Verknüpfung zu einem Ordner";
             else if (e.type == "link")
@@ -898,9 +949,12 @@ class FilesPage final : public Page
             if (e.type == "file")
                 item.value = format_bytes(e.size);
             else if (s != sizes_.end())
-                item.value = s->second.failed ? "?" : format_bytes(s->second.bytes) + (s->second.partial ? "+" : "");
+                item.value = s->second.failed
+                                 ? "?"
+                                 : format_bytes(s->second.bytes) + (s->second.partial ? "+" : "");
             // picked: the sign turns into a check (glyph_of), no badge
-            if (picked_.count(e.name) == 0 && !clip_paths_.empty() && std::find(clip_paths_.begin(), clip_paths_.end(), full) != clip_paths_.end())
+            if (picked_.count(e.name) == 0 && !clip_paths_.empty() &&
+                std::find(clip_paths_.begin(), clip_paths_.end(), full) != clip_paths_.end())
                 item.badge = clip_move_ ? "AUSGESCHNITTEN" : "KOPIERT";
             item.tag = kEntryTag + static_cast<int>(i);
             out.push_back(item);
@@ -916,7 +970,8 @@ class FilesPage final : public Page
         if (folder_.truncated)
         {
             ui::ListItem n;
-            n.title = "Nur die ersten " + std::to_string(entries_.size()) + " von " + std::to_string(folder_.total);
+            n.title = "Nur die ersten " + std::to_string(entries_.size()) + " von " +
+                      std::to_string(folder_.total);
             n.disabled = true;
             n.tag = -1;
             out.push_back(n);
@@ -955,7 +1010,8 @@ class FilesPage final : public Page
             std::string path;
             if (tag >= kEntryTag && tag - kEntryTag < static_cast<int>(entries_.size()))
                 path = join(folder_.path, entries_[static_cast<std::size_t>(tag - kEntryTag)].name);
-            else if (tag >= kPlaceTag && tag < kEntryTag && tag - kPlaceTag < static_cast<int>(places_.size()))
+            else if (tag >= kPlaceTag && tag < kEntryTag &&
+                     tag - kPlaceTag < static_cast<int>(places_.size()))
                 path = places_[static_cast<std::size_t>(tag - kPlaceTag)].path;
             if (!path.empty() && path == came_from_)
             {
@@ -984,9 +1040,11 @@ class FilesPage final : public Page
             if (e->type == "file")
                 rows.push_back({"Größe", format_bytes(e->size)});
             else if (s != sizes_.end() && !s->second.failed)
-                rows.push_back({"Größe", (s->second.partial ? "mindestens " : "") + format_bytes(s->second.bytes) + " · " +
+                rows.push_back({"Größe", (s->second.partial ? "mindestens " : "") +
+                                             format_bytes(s->second.bytes) + " · " +
                                              std::to_string(s->second.files) + " Dateien"});
-            rows.push_back({"Geändert", play_date(e->mtime, tz_) + ", " + play_clock(e->mtime, tz_) + " Uhr"});
+            rows.push_back(
+                {"Geändert", play_date(e->mtime, tz_) + ", " + play_clock(e->mtime, tz_) + " Uhr"});
             rows.push_back({"Ändern", e->writable ? "erlaubt" : "nur ansehen"});
         }
         else if (const FsPlace *p = focused_place())
@@ -1000,7 +1058,8 @@ class FilesPage final : public Page
         {
             rows.push_back({"Einträge", std::to_string(folder_.entries.size())});
             if (folder_.free_bytes >= 0)
-                rows.push_back({"Frei", format_bytes(static_cast<std::uint64_t>(folder_.free_bytes))});
+                rows.push_back(
+                    {"Frei", format_bytes(static_cast<std::uint64_t>(folder_.free_bytes))});
             rows.push_back({"Ändern", folder_.writable ? "erlaubt" : "nur ansehen"});
         }
         std::string key;
@@ -1063,18 +1122,19 @@ class FilesPage final : public Page
         return where;
     }
 
-    // Where we are: the folders from the root, the last one bright; on the right how many and in which order, and that
-    // L2 and R2 turn the pages.
+    // Where we are: the folders from the root, the last one bright; on the right how many and in
+    // which order, and that L2 and R2 turn the pages.
     void draw_path_bar(ui::Canvas &canvas, ui::Painter &paint) const
     {
         gfx::DrawList &list = canvas.list;
         const ui::Fonts &fonts = canvas.fonts;
         const Rect bar{kLeftX, kFilesTop, kLeftW, kBarH};
         list.rounded_rect(bar, bar.h * 0.5f, Color::rgb(0x0b1430, 0.72f));
-        list.bordered_rect(bar, bar.h * 0.5f, {0.0f, 0.0f, 0.0f, 0.0f}, 1.0f, Color::rgb(0x3880ff, 0.28f));
+        list.bordered_rect(bar, bar.h * 0.5f, {0.0f, 0.0f, 0.0f, 0.0f}, 1.0f,
+                           Color::rgb(0x3880ff, 0.28f));
         const float base = bar.y + bar.h * 0.5f + 7.0f;
-        draw_glyph(list, folder_.path.empty() ? Glyph::drive : Glyph::folder, bar.x + 32.0f, bar.y + bar.h * 0.5f, 24.0f,
-                   kFolderInk);
+        draw_glyph(list, folder_.path.empty() ? Glyph::drive : Glyph::folder, bar.x + 32.0f,
+                   bar.y + bar.h * 0.5f, 24.0f, kFolderInk);
 
         // right: count · order, then the L2 R2 glyphs
         const char *order = sort_ == 1 ? "Größe" : sort_ == 2 ? "Datum" : "Name";
@@ -1086,7 +1146,8 @@ class FilesPage final : public Page
         const float l2w = ui::button_width(ui::Button::l2, 30.0f);
         float rx = bar.x + bar.w - 22.0f;
         const float jump_w = fonts.regular.measure("Blättern", 18.0f);
-        ui::text(list, fonts.regular, "Blättern", rx, base - 1.0f, 18.0f, kMuted, gfx::Align::right);
+        ui::text(list, fonts.regular, "Blättern", rx, base - 1.0f, 18.0f, kMuted,
+                 gfx::Align::right);
         rx -= jump_w + 10.0f + r2w;
         ui::draw_button(list, fonts, glyphs, ui::Button::r2, rx, bar.y + bar.h * 0.5f, 30.0f);
         rx -= 6.0f + l2w;
@@ -1106,7 +1167,8 @@ class FilesPage final : public Page
             while (from < folder_.path.size())
             {
                 const std::size_t to = folder_.path.find('/', from);
-                const std::string part = folder_.path.substr(from, to == std::string::npos ? std::string::npos : to - from);
+                const std::string part = folder_.path.substr(
+                    from, to == std::string::npos ? std::string::npos : to - from);
                 if (!part.empty())
                     parts.push_back(part);
                 if (to == std::string::npos)
@@ -1120,7 +1182,8 @@ class FilesPage final : public Page
         {
             float w = first > 0 ? fonts.regular.measure("…", 20.0f) + 30.0f : 0.0f;
             for (std::size_t i = first; i < parts.size(); ++i)
-                w += fonts.semibold.measure(parts[i], 20.0f) + (i + 1 < parts.size() ? 30.0f : 0.0f);
+                w +=
+                    fonts.semibold.measure(parts[i], 20.0f) + (i + 1 < parts.size() ? 30.0f : 0.0f);
             return w;
         };
         std::size_t first = 0;
@@ -1143,9 +1206,11 @@ class FilesPage final : public Page
         for (std::size_t i = first; i < parts.size(); ++i)
         {
             const bool last = i + 1 == parts.size();
-            const std::string shown = last ? ui::fit_label(paint, parts[i], 20.0f, std::max(room - (x - left), 40.0f))
-                                           : parts[i];
-            ui::text(list, last ? fonts.semibold : fonts.regular, shown, x, base, 20.0f, last ? kInk : kMuted);
+            const std::string shown =
+                last ? ui::fit_label(paint, parts[i], 20.0f, std::max(room - (x - left), 40.0f))
+                     : parts[i];
+            ui::text(list, last ? fonts.semibold : fonts.regular, shown, x, base, 20.0f,
+                     last ? kInk : kMuted);
             x += (last ? fonts.semibold : fonts.regular).measure(shown, 20.0f);
             if (!last)
             {
@@ -1156,17 +1221,17 @@ class FilesPage final : public Page
     }
 
     // A small framed note on the right card: a bold line and a quiet one.
-    float note_card(ui::Canvas &canvas, ui::Painter &paint, const Rect &card, float y, const std::string &title,
-                    const std::string &text, Color accent) const
+    float note_card(ui::Canvas &canvas, ui::Painter &paint, const Rect &card, float y,
+                    const std::string &title, const std::string &text, Color accent) const
     {
         gfx::DrawList &list = canvas.list;
         const Rect box{card.x + 30.0f, y, card.w - 60.0f, 92.0f};
         list.rounded_rect(box, 16.0f, accent.with_alpha(0.12f));
         list.rounded_rect({box.x, box.y + 14.0f, 4.0f, box.h - 28.0f}, 2.0f, accent);
-        ui::text(list, canvas.fonts.semibold, ui::fit_label(paint, title, 22.0f, box.w - 48.0f), box.x + 24.0f,
-                 box.y + 38.0f, 22.0f, kInk);
-        ui::text(list, canvas.fonts.regular, ui::fit_label(paint, text, 18.0f, box.w - 48.0f), box.x + 24.0f,
-                 box.y + 70.0f, 18.0f, kMuted);
+        ui::text(list, canvas.fonts.semibold, ui::fit_label(paint, title, 22.0f, box.w - 48.0f),
+                 box.x + 24.0f, box.y + 38.0f, 22.0f, kInk);
+        ui::text(list, canvas.fonts.regular, ui::fit_label(paint, text, 18.0f, box.w - 48.0f),
+                 box.x + 24.0f, box.y + 70.0f, 18.0f, kMuted);
         return box.y + box.h + 14.0f;
     }
 
@@ -1180,7 +1245,8 @@ class FilesPage final : public Page
             jump_since_ = -1.0f;
             return false;
         }
-        const bool fresh = input.is_pressed(Action::jump_next) || input.is_pressed(Action::jump_prev);
+        const bool fresh =
+            input.is_pressed(Action::jump_next) || input.is_pressed(Action::jump_prev);
         if (fresh)
         {
             jump_since_ = clock_;
@@ -1192,7 +1258,8 @@ class FilesPage final : public Page
             jump_next_ = clock_ + 0.09f;
         const int count = static_cast<int>(list_.items().size());
         const int from = list_.focus();
-        const int to = std::clamp(from + (down ? kJumpRows : -kJumpRows), 0, std::max(count - 1, 0));
+        const int to =
+            std::clamp(from + (down ? kJumpRows : -kJumpRows), 0, std::max(count - 1, 0));
         if (to == from)
         {
             if (fresh)
@@ -1205,8 +1272,8 @@ class FilesPage final : public Page
         return true;
     }
 
-    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width, Color ink,
-                    int max_lines) const
+    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width,
+                    Color ink, int max_lines) const
     {
         int lines = 0;
         for (const std::string &line : canvas.fonts.regular.font->wrap(text, 21.0f, width))
@@ -1240,7 +1307,7 @@ class FilesPage final : public Page
     FsJob job_;
     std::map<std::string, FsSize> sizes_;
     int tz_ = 0;
-    int sort_ = 0; // name, size, date
+    int sort_ = 0;                 // name, size, date
     std::set<std::string> picked_; // names in this folder
 
     bool clip_move_ = false;

@@ -274,13 +274,14 @@ int main(int argc, char **argv)
                                             { return renderer.batch().create_texture(w, h, rgba); },
                                             1000, 1.0f);
         for (int i = 0; i < hui::ps5cc::kBackdropAreas; ++i)
-            hui::ps5cc::backdrops().upload_pending([&](std::uint32_t reuse, int w, int h, const std::uint8_t *rgba)
-                                                   {
-                if (reuse == 0)
-                    return renderer.batch().create_texture(w, h, rgba);
-                renderer.batch().replace_texture(reuse, w, h, rgba);
-                return reuse;
-            });
+            hui::ps5cc::backdrops().upload_pending(
+                [&](std::uint32_t reuse, int w, int h, const std::uint8_t *rgba)
+                {
+                    if (reuse == 0)
+                        return renderer.batch().create_texture(w, h, rgba);
+                    renderer.batch().replace_texture(reuse, w, h, rgba);
+                    return reuse;
+                });
     };
     const auto render = [&](const std::string &name)
     {

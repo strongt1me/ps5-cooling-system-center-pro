@@ -18,7 +18,8 @@ struct PayloadTile
     gfx::Color color;
 };
 
-// "ShadowMountPlus_1.7beta7.elf" -> "shadowmountplus": lower case, no ".elf", no version at the end.
+// "ShadowMountPlus_1.7beta7.elf" -> "shadowmountplus": lower case, no ".elf", no version at the
+// end.
 inline std::string payload_stem(const std::string &name)
 {
     std::string s;
@@ -43,7 +44,8 @@ inline gfx::Color payload_category_color(const std::string &category)
 {
     if (category.find("Network") != std::string::npos)
         return gfx::Color::rgb(0x2f7de1);
-    if (category.find("Jailbreak") != std::string::npos || category.find("System") != std::string::npos)
+    if (category.find("Jailbreak") != std::string::npos ||
+        category.find("System") != std::string::npos)
         return gfx::Color::rgb(0xc2453b);
     if (category.find("Loader") != std::string::npos)
         return gfx::Color::rgb(0x7f56d9);
@@ -54,8 +56,9 @@ inline gfx::Color payload_category_color(const std::string &category)
     return gfx::Color{0.0f, 0.0f, 0.0f, 0.0f};
 }
 
-// The known payloads keep one mark and one colour wherever they turn up (a file, the store, a running process);
-// anything else gets its initials and the colour of its store category, or one derived from its name.
+// The known payloads keep one mark and one colour wherever they turn up (a file, the store, a
+// running process); anything else gets its initials and the colour of its store category, or one
+// derived from its name.
 inline PayloadTile payload_tile(const std::string &name, const std::string &category = {})
 {
     struct Known
@@ -65,14 +68,18 @@ inline PayloadTile payload_tile(const std::string &name, const std::string &cate
         const char *category;
     };
     static const Known kKnown[] = {
-        {"shadowmount", "SM", "Utilities"}, {"ps4mount", "P4", "Utilities"},   {"pkg-manager", "PK", "Utilities"},
-        {"backpork", "BP", "Utilities"},    {"garlic", "GS", "Utilities"},     {"ps5save", "SV", "Utilities"},
-        {"etahen", "eH", "Jailbreak"},      {"kstuff", "KS", "Jailbreak"},     {"onionhen", "oH", "Jailbreak"},
-        {"ps5debug", "DB", "Jailbreak"},    {"elfldr", "EL", "Loader"},        {"pldmgr", "PL", "Loader"},
-        {"ps5-linux", "LX", "Loader"},      {"ftpsrv", "FT", "Network"},       {"zftpd", "FT", "Network"},
-        {"websrv", "WS", "Network"},        {"ps5upload", "UP", "Network"},    {"nanodns", "DN", "Network"},
-        {"shsrv", "SH", "Network"},         {"klogsrv", "KL", "Network"},      {"cheatrunner", "CR", "Cheat"},
-        {"ps5tm", "CC", "Network"},         {"ps5_cooling", "CC", "Network"},  {"ps5 cooling", "CC", "Network"},
+        {"shadowmount", "SM", "Utilities"}, {"ps4mount", "P4", "Utilities"},
+        {"pkg-manager", "PK", "Utilities"}, {"backpork", "BP", "Utilities"},
+        {"garlic", "GS", "Utilities"},      {"ps5save", "SV", "Utilities"},
+        {"etahen", "eH", "Jailbreak"},      {"kstuff", "KS", "Jailbreak"},
+        {"onionhen", "oH", "Jailbreak"},    {"ps5debug", "DB", "Jailbreak"},
+        {"elfldr", "EL", "Loader"},         {"pldmgr", "PL", "Loader"},
+        {"ps5-linux", "LX", "Loader"},      {"ftpsrv", "FT", "Network"},
+        {"zftpd", "FT", "Network"},         {"websrv", "WS", "Network"},
+        {"ps5upload", "UP", "Network"},     {"nanodns", "DN", "Network"},
+        {"shsrv", "SH", "Network"},         {"klogsrv", "KL", "Network"},
+        {"cheatrunner", "CR", "Cheat"},     {"ps5tm", "CC", "Network"},
+        {"ps5_cooling", "CC", "Network"},   {"ps5 cooling", "CC", "Network"},
     };
     const std::string stem = payload_stem(name);
     for (const Known &k : kKnown)
@@ -87,7 +94,8 @@ inline PayloadTile payload_tile(const std::string &name, const std::string &cate
     if (i < stem.size())
         first = static_cast<char>(std::toupper(static_cast<unsigned char>(stem[i])));
     for (std::size_t j = i + 1; j < stem.size(); ++j)
-        if ((stem[j - 1] == '-' || stem[j - 1] == '_' || stem[j - 1] == ' ') && std::isalnum(static_cast<unsigned char>(stem[j])))
+        if ((stem[j - 1] == '-' || stem[j - 1] == '_' || stem[j - 1] == ' ') &&
+            std::isalnum(static_cast<unsigned char>(stem[j])))
         {
             second = static_cast<char>(std::toupper(static_cast<unsigned char>(stem[j])));
             break;
@@ -101,12 +109,14 @@ inline PayloadTile payload_tile(const std::string &name, const std::string &cate
     return tile;
 }
 
-inline void draw_payload_tile(ui::Canvas &canvas, const gfx::Rect &box, const PayloadTile &tile, float alpha = 1.0f)
+inline void draw_payload_tile(ui::Canvas &canvas, const gfx::Rect &box, const PayloadTile &tile,
+                              float alpha = 1.0f)
 {
     canvas.list.rounded_rect(box, box.w * 0.22f, tile.color.with_alpha(tile.color.a * alpha));
     const float size = box.w * 0.4f;
-    ui::text(canvas.list, canvas.fonts.semibold, tile.label, box.x + box.w * 0.5f, box.y + box.h * 0.5f + size * 0.36f,
-             size, gfx::Color::rgb(0xffffff).with_alpha(alpha), gfx::Align::center);
+    ui::text(canvas.list, canvas.fonts.semibold, tile.label, box.x + box.w * 0.5f,
+             box.y + box.h * 0.5f + size * 0.36f, size, gfx::Color::rgb(0xffffff).with_alpha(alpha),
+             gfx::Align::center);
 }
 
 } // namespace hui::ps5cc

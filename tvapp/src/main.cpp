@@ -316,10 +316,11 @@ int main()
 
         // Covers decoded by the HTTP worker become textures here, two a frame at most.
         ps5cc::covers().upload_pending([&](int w, int h, const std::uint8_t *rgba)
-                                       { return renderer.batch().create_texture(w, h, rgba); },
-                                       2, dt);
-        ps5cc::backdrops().upload_pending([&](std::uint32_t reuse, int w, int h, const std::uint8_t *rgba)
-                                          {
+                                       { return renderer.batch().create_texture(w, h, rgba); }, 2,
+                                       dt);
+        ps5cc::backdrops().upload_pending(
+            [&](std::uint32_t reuse, int w, int h, const std::uint8_t *rgba)
+            {
                 if (reuse == 0)
                     return renderer.batch().create_texture(w, h, rgba);
                 renderer.batch().replace_texture(reuse, w, h, rgba);

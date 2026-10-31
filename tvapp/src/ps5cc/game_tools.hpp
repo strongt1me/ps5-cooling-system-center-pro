@@ -1,10 +1,11 @@
-// ps5cc - The game tools of Spiele → Bibliothek: the action menu (□) and the plan dialog of each tool.
+// ps5cc - The game tools of Spiele → Bibliothek: the action menu (□) and the plan dialog of each
+// tool.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Every tool first asks the console app for its plan, shows the choices the web app offers with the same rules
-// (ps5cc/plans.hpp) and starts the job with the same POST body. The job then runs on the console; the screen
-// shows it under Spiele → Aufträge.
+// Every tool first asks the console app for its plan, shows the choices the web app offers with the
+// same rules (ps5cc/plans.hpp) and starts the job with the same POST body. The job then runs on the
+// console; the screen shows it under Spiele → Aufträge.
 
 #pragma once
 
@@ -25,7 +26,8 @@ class GameTools
 {
   public:
     // A short message of the tools' own (a refusal before anything was asked).
-    std::function<void(ui::StatusKind kind, const std::string &title, const std::string &body)> toast;
+    std::function<void(ui::StatusKind kind, const std::string &title, const std::string &body)>
+        toast;
     // The menu's last two entries (Phase 6, 29.10.2026): the game's extras and the library's tools.
     std::function<void(const Game &game, ui::Feedback &feedback)> on_extras;
     std::function<void(ui::Feedback &feedback)> on_library;
@@ -55,8 +57,8 @@ class GameTools
     std::string title() const;
     std::string start_label() const;
     void draw_side(ui::Canvas &canvas, const gfx::Rect &box) const;
-    float draw_paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width, float size,
-                         gfx::Color ink, int max_lines = 6) const;
+    float draw_paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width,
+                         float size, gfx::Color ink, int max_lines = 6) const;
 
     ui::Theme theme_;
     ui::Menu menu_;

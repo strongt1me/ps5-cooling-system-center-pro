@@ -1,4 +1,5 @@
-// ps5cc - The Settings page: how the fan is regulated, the night mode, the fan self-test, the area pictures.
+// ps5cc - The Settings page: how the fan is regulated, the night mode, the fan self-test, the area
+// pictures.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -114,7 +115,8 @@ class SettingsPage final : public Page
         chart_.style.axis.unit = " %";
         chart_.title = "Lüfterdrehzahl";
         chart_.set_active(false);
-        chart_.set_bounds({kRightX + 16.0f, kTop + 440.0f, kRightW - 32.0f, kBottom - kTop - 456.0f});
+        chart_.set_bounds(
+            {kRightX + 16.0f, kTop + 440.0f, kRightW - 32.0f, kBottom - kTop - 456.0f});
         show_test(SelfTest{});
     }
 
@@ -176,13 +178,15 @@ class SettingsPage final : public Page
         const Rect card{kRightX, kTop + 10.0f, kRightW, kBottom - kTop - 10.0f};
         ui::Painter paint(list, fonts, theme_);
         paint.panel(card);
-        ui::text(list, fonts.semibold, "Lüfter-Selbsttest", card.x + 30.0f, card.y + 50.0f, 26.0f, kInk);
+        ui::text(list, fonts.semibold, "Lüfter-Selbsttest", card.x + 30.0f, card.y + 50.0f, 26.0f,
+                 kInk);
         ui::text(list, fonts.semibold, verdict_text(test_), card.x + 30.0f, card.y + 100.0f, 30.0f,
                  verdict_color(test_));
         std::string why = test_.why;
         if (why.empty())
-            why = testing(test_) ? "Die Schwelle steht kurz tief; gemessen wird, ob der Lüfter schneller wird."
-                                 : "Prüft, ob die Lüftersteuerung wirkt – unabhängig von der Temperatur.";
+            why = testing(test_)
+                      ? "Die Schwelle steht kurz tief; gemessen wird, ob der Lüfter schneller wird."
+                      : "Prüft, ob die Lüftersteuerung wirkt – unabhängig von der Temperatur.";
         float y = card.y + 140.0f;
         int lines = 0;
         for (const std::string &line : fonts.regular.font->wrap(why, 21.0f, card.w - 60.0f))
@@ -212,9 +216,10 @@ class SettingsPage final : public Page
     static std::string config_key(const Config &c)
     {
         char text[160];
-        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d", c.mode.c_str(), c.profile.c_str(),
-                      c.safety_temp_c, c.safety_min_c, c.safety_max_c, c.night_enabled ? 1 : 0, c.night_start_min,
-                      c.night_end_min, c.night_target_c, c.target_min_c, c.target_max_c);
+        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d", c.mode.c_str(),
+                      c.profile.c_str(), c.safety_temp_c, c.safety_min_c, c.safety_max_c,
+                      c.night_enabled ? 1 : 0, c.night_start_min, c.night_end_min, c.night_target_c,
+                      c.target_min_c, c.target_max_c);
         return text;
     }
 
@@ -222,25 +227,32 @@ class SettingsPage final : public Page
     {
         form_.clear();
         form_.add_header("LÜFTERREGELUNG");
-        form_.add_choice(kMode, "Modus", {"Automatik", "Beobachten"}, c.mode == "observe" ? 1 : 0).description =
-            "Beobachten: Die App misst nur, die Konsole regelt den Lüfter selbst.";
-        form_.add_choice(kProfile, "Betriebsart", {"Leise", "Ausgewogen", "Kühl"}, profile_index(c.profile))
+        form_.add_choice(kMode, "Modus", {"Automatik", "Beobachten"}, c.mode == "observe" ? 1 : 0)
+            .description = "Beobachten: Die App misst nur, die Konsole regelt den Lüfter selbst.";
+        form_
+            .add_choice(kProfile, "Betriebsart", {"Leise", "Ausgewogen", "Kühl"},
+                        profile_index(c.profile))
             .description = "Wie kräftig der Lüfter auf Wärme antwortet. Das Ziel bleibt.";
-        ui::FormRow &safety = form_.add_slider(kSafety, "Sicherheitsgrenze", static_cast<float>(c.safety_temp_c),
-                                             static_cast<float>(c.safety_min_c),
-                                             static_cast<float>(c.safety_max_c), 1.0f);
+        ui::FormRow &safety = form_.add_slider(
+            kSafety, "Sicherheitsgrenze", static_cast<float>(c.safety_temp_c),
+            static_cast<float>(c.safety_min_c), static_cast<float>(c.safety_max_c), 1.0f);
         safety.unit = " °C";
         safety.description = "Darüber regelt der Lüfter ohne Rücksicht auf die Lautstärke hoch.";
         form_.add_header("NACHTMODUS");
         form_.add_toggle(kNight, "Nachtmodus", c.night_enabled).description =
             "In dieser Zeit gilt das Nachtziel statt der Zieltemperatur.";
         const auto clock = [](float minutes) { return format_clock(static_cast<int>(minutes)); };
-        form_.add_slider(kNightStart, "Beginn", static_cast<float>(c.night_start_min), 0.0f, 1425.0f, 15.0f).format =
-            clock;
-        form_.add_slider(kNightEnd, "Ende", static_cast<float>(c.night_end_min), 0.0f, 1425.0f, 15.0f).format = clock;
-        ui::FormRow &night = form_.add_slider(kNightTarget, "Nachtziel", static_cast<float>(c.night_target_c),
-                                            static_cast<float>(c.target_min_c),
-                                            static_cast<float>(c.target_max_c), 1.0f);
+        form_
+            .add_slider(kNightStart, "Beginn", static_cast<float>(c.night_start_min), 0.0f, 1425.0f,
+                        15.0f)
+            .format = clock;
+        form_
+            .add_slider(kNightEnd, "Ende", static_cast<float>(c.night_end_min), 0.0f, 1425.0f,
+                        15.0f)
+            .format = clock;
+        ui::FormRow &night = form_.add_slider(
+            kNightTarget, "Nachtziel", static_cast<float>(c.night_target_c),
+            static_cast<float>(c.target_min_c), static_cast<float>(c.target_max_c), 1.0f);
         night.unit = " °C";
         form_.add_header("LÜFTER-SELBSTTEST");
         form_.add_action(kSelfTest, "Selbsttest starten").description =
@@ -279,14 +291,16 @@ class SettingsPage final : public Page
 
     void changed(int id)
     {
-        const auto number = [&](int row) { return std::to_string(static_cast<int>(form_.slider_value(row) + 0.5f)); };
+        const auto number = [&](int row)
+        { return std::to_string(static_cast<int>(form_.slider_value(row) + 0.5f)); };
         switch (id)
         {
         case kMode:
             pending_["mode"] = form_.choice_index(kMode) == 1 ? "\"observe\"" : "\"automatic\"";
             break;
         case kProfile:
-            pending_["profile"] = std::string("\"") + kProfiles[std::clamp(form_.choice_index(kProfile), 0, 2)] + "\"";
+            pending_["profile"] = std::string("\"") +
+                                  kProfiles[std::clamp(form_.choice_index(kProfile), 0, 2)] + "\"";
             break;
         case kSafety:
             pending_["safety_temp_c"] = number(kSafety);
@@ -310,7 +324,8 @@ class SettingsPage final : public Page
         save_in_ = kSaveDelay;
     }
 
-    // One PUT with every field changed since the last one (the app takes a partial object, as from the web page).
+    // One PUT with every field changed since the last one (the app takes a partial object, as from
+    // the web page).
     void save()
     {
         if (pending_.empty())
@@ -340,7 +355,8 @@ class SettingsPage final : public Page
         items.push_back({"Höchstwert", t.state == "idle" ? "–" : text});
         std::snprintf(text, sizeof(text), "+%d %%", t.rise_pct);
         items.push_back({"Anstieg", t.state == "idle" ? "–" : text});
-        std::snprintf(text, sizeof(text), "%d von %d s", t.elapsed_s, t.limit_s > 0 ? t.limit_s : 30);
+        std::snprintf(text, sizeof(text), "%d von %d s", t.elapsed_s,
+                      t.limit_s > 0 ? t.limit_s : 30);
         items.push_back({"Dauer", t.state == "idle" ? "–" : text});
         info_.set_items(items);
 

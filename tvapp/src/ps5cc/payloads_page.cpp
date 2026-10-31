@@ -55,7 +55,8 @@ class PayloadsPage final : public Page
         list_.style.badge_column = true;
         list_.style.value_width = 110.0f; // the badges line up
         list_.style.leading_width = 72.0f;
-        list_.leading = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item, int index, float focus)
+        list_.leading = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item,
+                               int index, float focus)
         {
             (void)index;
             (void)focus;
@@ -65,10 +66,12 @@ class PayloadsPage final : public Page
             const float side = std::min(52.0f, row.h - 20.0f);
             const Rect box{row.x + 16.0f, row.y + (row.h - side) * 0.5f, side, side};
             draw_icon(canvas, box, item, tile, item.disabled ? 0.45f : 1.0f);
-            // every payload carries a dot on its picture's corner: softly glowing green when it is loaded, a dark one
-            // that does not glow when it is not (user, 29.10.2026; Meine Payloads, Bereits geladen, Payload-Store)
-            // a store entry not yet downloaded has none: there is nothing on the console that could run
-            const bool none = view_ == kStore && item.tag >= 0 && static_cast<std::size_t>(item.tag) < store_.size() &&
+            // every payload carries a dot on its picture's corner: softly glowing green when it is
+            // loaded, a dark one that does not glow when it is not (user, 29.10.2026; Meine
+            // Payloads, Bereits geladen, Payload-Store) a store entry not yet downloaded has none:
+            // there is nothing on the console that could run
+            const bool none = view_ == kStore && item.tag >= 0 &&
+                              static_cast<std::size_t>(item.tag) < store_.size() &&
                               store_[static_cast<std::size_t>(item.tag)].installed_file.empty();
             if (item.tag >= 0 && !none)
             {
@@ -76,8 +79,10 @@ class PayloadsPage final : public Page
                 canvas.list.circle(cx, cy, 8.5f, kNavy);
                 if (loaded(item))
                 {
-                    const float pulse = 0.5f + 0.5f * std::sin(canvas.time * 2.6f + static_cast<float>(item.tag) * 0.7f);
-                    canvas.list.circle(cx, cy, 13.0f + 3.0f * pulse, kGood.with_alpha(0.18f + 0.22f * pulse));
+                    const float pulse = 0.5f + 0.5f * std::sin(canvas.time * 2.6f +
+                                                               static_cast<float>(item.tag) * 0.7f);
+                    canvas.list.circle(cx, cy, 13.0f + 3.0f * pulse,
+                                       kGood.with_alpha(0.18f + 0.22f * pulse));
                     canvas.list.circle(cx, cy, 8.5f, kNavy);
                     canvas.list.circle(cx, cy, 6.5f, gfx::Color::rgb(0x2fd44a));
                 }
@@ -101,7 +106,8 @@ class PayloadsPage final : public Page
         bar_.set_bounds({kRightX + 30.0f, kBottom - 150.0f, kRightW - 60.0f, 48.0f});
 
         // Under at most two lines of title and four of text.
-        info_.set_bounds({kRightX + 30.0f, kTop + 300.0f, kRightW - 60.0f, kBottom - kTop - 480.0f});
+        info_.set_bounds(
+            {kRightX + 30.0f, kTop + 300.0f, kRightW - 60.0f, kBottom - kTop - 480.0f});
     }
 
     void absorb(const Snapshot &data) override
@@ -119,14 +125,17 @@ class PayloadsPage final : public Page
         bar_.style.mode = job_.state == "running" && !known ? ui::ProgressMode::indeterminate
                                                             : ui::ProgressMode::determinate;
         bar_.style.percent = known;
-        bar_.style.status = job_.state == "failed" ? ui::Status::danger
+        bar_.style.status = job_.state == "failed"    ? ui::Status::danger
                             : job_.state == "running" ? ui::Status::accent
                                                       : ui::Status::success;
-        bar_.label = job_.state == "running" ? "„" + job_.name + "“ wird geladen"
-                     : job_.state == "failed" ? "„" + job_.name + "“: " + (job_.error.empty() ? "gescheitert" : job_.error)
-                     : job_.state == "done"   ? "„" + job_.name + "“ geladen"
-                                              : "";
-        bar_.set_value(known ? static_cast<float>(std::clamp(job_.done / job_.total, 0.0, 1.0)) : 0.0f);
+        bar_.label =
+            job_.state == "running" ? "„" + job_.name + "“ wird geladen"
+            : job_.state == "failed"
+                ? "„" + job_.name + "“: " + (job_.error.empty() ? "gescheitert" : job_.error)
+            : job_.state == "done" ? "„" + job_.name + "“ geladen"
+                                   : "";
+        bar_.set_value(known ? static_cast<float>(std::clamp(job_.done / job_.total, 0.0, 1.0))
+                             : 0.0f);
     }
 
     void enter() override
@@ -139,7 +148,8 @@ class PayloadsPage final : public Page
         if (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next))
         {
             focus_[static_cast<std::size_t>(view_)] = list_.focus();
-            if (views_.step(input.is_pressed(Action::jump_next) ? 1 : -1, input, feedback) == ui::Event::changed)
+            if (views_.step(input.is_pressed(Action::jump_next) ? 1 : -1, input, feedback) ==
+                ui::Event::changed)
             {
                 view_ = views_.active();
                 rebuild(true);
@@ -202,7 +212,8 @@ class PayloadsPage final : public Page
         if (item.file != nullptr)
         {
             title = item.file->name;
-            text = item.file->valid ? "Wird beim Starten an den ELF-Loader (Port 9021) gesendet." : item.file->why;
+            text = item.file->valid ? "Wird beim Starten an den ELF-Loader (Port 9021) gesendet."
+                                    : item.file->why;
         }
         else if (item.running != nullptr)
         {
@@ -217,14 +228,18 @@ class PayloadsPage final : public Page
         }
         else
         {
-            title = view_ == kStore ? "Payload-Store" : view_ == kRunning ? "Bereits geladene Payloads" : "Meine Payloads";
-            text = view_ == kFiles ? "Payloads aus /data/PS5-Cooling-Center/payloads und von USB-Sticks."
-                                   : view_ == kStore ? "Liste: itsPLK ps5-payloads-mirror."
-                                                     : "";
+            title = view_ == kStore     ? "Payload-Store"
+                    : view_ == kRunning ? "Bereits geladene Payloads"
+                                        : "Meine Payloads";
+            text = view_ == kFiles
+                       ? "Payloads aus /data/PS5-Cooling-Center/payloads und von USB-Sticks."
+                   : view_ == kStore ? "Liste: itsPLK ps5-payloads-mirror."
+                                     : "";
         }
         float title_w = card.w - 60.0f;
         PayloadTile tile;
-        const bool has_tile = list_.focus() >= 0 && list_.focus() < static_cast<int>(list_.items().size()) &&
+        const bool has_tile = list_.focus() >= 0 &&
+                              list_.focus() < static_cast<int>(list_.items().size()) &&
                               tile_of(list_.items()[static_cast<std::size_t>(list_.focus())], tile);
         if (has_tile)
         {
@@ -285,8 +300,9 @@ class PayloadsPage final : public Page
         const StoreItem *store = nullptr;
     };
 
-    // The GitHub account whose picture the console app has for this row: a store item's own, or for a file or a running
-    // payload the one of the store item with the same name stem. "" when there is none.
+    // The GitHub account whose picture the console app has for this row: a store item's own, or for
+    // a file or a running payload the one of the store item with the same name stem. "" when there
+    // is none.
     std::string owner_of(const ui::ListItem &item) const
     {
         if (item.header || item.tag < 0)
@@ -302,23 +318,26 @@ class PayloadsPage final : public Page
         if (stem.empty())
             return {};
         for (const StoreItem &s : store_)
-            if (s.avatar && !s.owner.empty() && (payload_stem(s.filename) == stem || payload_stem(s.name) == stem))
+            if (s.avatar && !s.owner.empty() &&
+                (payload_stem(s.filename) == stem || payload_stem(s.name) == stem))
                 return s.owner;
         return {};
     }
 
-    // The developer's picture once it is loaded (faded in over the tile), the coloured tile until then or without one.
-    void draw_icon(ui::Canvas &canvas, const Rect &box, const ui::ListItem &item, const PayloadTile &tile,
-                   float alpha) const
+    // The developer's picture once it is loaded (faded in over the tile), the coloured tile until
+    // then or without one.
+    void draw_icon(ui::Canvas &canvas, const Rect &box, const ui::ListItem &item,
+                   const PayloadTile &tile, float alpha) const
     {
         const std::string owner = owner_of(item);
-        const CoverShown pic = owner.empty() ? CoverShown{} : covers().texture_of(avatar_key(owner));
+        const CoverShown pic =
+            owner.empty() ? CoverShown{} : covers().texture_of(avatar_key(owner));
         const float shown = pic.texture == 0 ? 0.0f : pic.alpha;
         if (shown < 1.0f)
             draw_payload_tile(canvas, box, tile, alpha);
         if (shown > 0.0f)
-            canvas.list.image(pic.texture, box, gfx::kFullUv, gfx::Color{1.0f, 1.0f, 1.0f, shown * alpha},
-                              box.w * 0.22f);
+            canvas.list.image(pic.texture, box, gfx::kFullUv,
+                              gfx::Color{1.0f, 1.0f, 1.0f, shown * alpha}, box.w * 0.22f);
     }
 
     // The row's payload as a tile; false for section titles and notes.
@@ -332,7 +351,8 @@ class PayloadsPage final : public Page
         else if (view_ == kRunning && at < running_.size())
             out = payload_tile(running_[at].name);
         else if (view_ == kStore && at < store_.size())
-            out = payload_tile(store_[at].filename.empty() ? store_[at].name : store_[at].filename, store_[at].category);
+            out = payload_tile(store_[at].filename.empty() ? store_[at].name : store_[at].filename,
+                               store_[at].category);
         else
             return false;
         return true;
@@ -421,27 +441,32 @@ class PayloadsPage final : public Page
                 }
                 ui::ListItem item;
                 item.title = f.name;
-                item.subtitle = f.valid ? format_bytes(f.size) + " · " + format_date(f.mtime) : "ungültig – " + f.why;
+                item.subtitle = f.valid ? format_bytes(f.size) + " · " + format_date(f.mtime)
+                                        : "ungültig – " + f.why;
                 item.disabled = !f.valid;
                 item.tag = static_cast<int>(i);
                 out.push_back(item);
             }
             if (out.empty())
                 out.push_back(note("Keine Payloads gefunden",
-                                   "Leg .elf-Dateien in /data/PS5-Cooling-Center/payloads oder auf einen USB-Stick."));
+                                   "Leg .elf-Dateien in /data/PS5-Cooling-Center/payloads oder auf "
+                                   "einen USB-Stick."));
             return out;
         }
         if (view_ == kRunning)
         {
-            // a title above the list, as the other two views have their folders and categories (user, 29.10.2026)
+            // a title above the list, as the other two views have their folders and categories
+            // (user, 29.10.2026)
             if (!running_.empty())
-                out.push_back(header("BEREITS GELADENE PAYLOADS (" + std::to_string(running_.size()) + ")"));
+                out.push_back(
+                    header("BEREITS GELADENE PAYLOADS (" + std::to_string(running_.size()) + ")"));
             for (std::size_t i = 0; i < running_.size(); ++i)
             {
                 const RunningPayload &p = running_[i];
                 ui::ListItem item;
                 item.title = p.name;
-                item.subtitle = "PID " + std::to_string(p.pid) + " · " + std::to_string(p.memory_mb) + " MB";
+                item.subtitle =
+                    "PID " + std::to_string(p.pid) + " · " + std::to_string(p.memory_mb) + " MB";
                 if (p.self)
                     item.badge = "DIESE APP";
                 item.tag = static_cast<int>(i);
@@ -453,12 +478,13 @@ class PayloadsPage final : public Page
         }
         if (!store_loaded_)
             return {note(store_fetching_ ? "Liste wird geladen …" : "Liste nicht geladen",
-                         store_error_.empty() ? "Die Quadrat-Taste lädt die Liste der Payloads." : store_error_)};
+                         store_error_.empty() ? "Die Quadrat-Taste lädt die Liste der Payloads."
+                                              : store_error_)};
         std::vector<std::size_t> order(store_.size());
         for (std::size_t i = 0; i < order.size(); ++i)
             order[i] = i;
-        std::stable_sort(order.begin(), order.end(),
-                         [&](std::size_t a, std::size_t b) { return store_[a].category < store_[b].category; });
+        std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b)
+                         { return store_[a].category < store_[b].category; });
         std::string category;
         for (std::size_t i : order)
         {
@@ -471,7 +497,8 @@ class PayloadsPage final : public Page
             ui::ListItem item;
             item.title = s.name + "  " + s.version;
             item.subtitle = s.description;
-            // "gespeichert", not "geladen": loaded means running now, which the dot shows (29.10.2026)
+            // "gespeichert", not "geladen": loaded means running now, which the dot shows
+            // (29.10.2026)
             item.value = s.installed_version.empty() ? "" : s.update ? "Update" : "gespeichert";
             if (job_.state == "running" && job_.id == s.id)
                 item.value = "lädt …";
@@ -521,7 +548,9 @@ class PayloadsPage final : public Page
             rows.push_back({"Version", item.store->version});
             rows.push_back({"Kategorie", item.store->category});
             rows.push_back({"Datei", item.store->filename});
-            rows.push_back({"Geladen", item.store->installed_version.empty() ? "nein" : item.store->installed_version});
+            rows.push_back({"Geladen", item.store->installed_version.empty()
+                                           ? "nein"
+                                           : item.store->installed_version});
         }
         info_.set_items(rows);
         info_for_ = list_.focus();
@@ -537,7 +566,8 @@ class PayloadsPage final : public Page
     std::string key_;
     int info_for_ = -2;
 
-    // Whether the row's payload runs: the running list always; a file or a store entry when a running name is it.
+    // Whether the row's payload runs: the running list always; a file or a store entry when a
+    // running name is it.
     bool loaded(const ui::ListItem &item) const
     {
         if (item.tag < 0)
@@ -551,7 +581,8 @@ class PayloadsPage final : public Page
             if (!r.self)
                 running.push_back({r.name, r.file});
         }
-        // the payload folder of the console (the store downloads into it): what two versions are judged against
+        // the payload folder of the console (the store downloads into it): what two versions are
+        // judged against
         std::vector<std::string> folder;
         for (const PayloadFile &f : files_)
             folder.push_back(f.name);

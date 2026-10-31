@@ -1,10 +1,12 @@
-// ps5cc - Spielzeit's numbers: totals, the last fourteen days, the most played games, dates in words.
+// ps5cc - Spielzeit's numbers: totals, the last fourteen days, the most played games, dates in
+// words.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's tab (web/app.js, computed in the client): a session's time is shared out over the days it touches,
-// in proportion to its wall-clock time on each, so a game played across midnight counts on both. Days are local days,
-// tz_min minutes east of UTC. No OpenGL here: the unit tests use it.
+// As the web app's tab (web/app.js, computed in the client): a session's time is shared out over
+// the days it touches, in proportion to its wall-clock time on each, so a game played across
+// midnight counts on both. Days are local days, tz_min minutes east of UTC. No OpenGL here: the
+// unit tests use it.
 
 #pragma once
 

@@ -2,12 +2,13 @@
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the drives on the web app's System page: each with its free space; ✕ on a USB drive ejects it through
-// ShadowMountPlus (1.7beta10). The app itself refuses while one of its jobs runs or PS4Mount plays games from the
-// drive (src/usbeject.c), and says why; nothing is asked twice (user, 27.10.2026).
-// Under the drives: the library's cover and metadata folder (GET /api/v1/library/cache), moved here from the
-// library window (user, 29.10.2026), and the pictures behind the areas, folded in until the X button opens them (moved
-// from Kühlung → Einstellungen, user 29.10.2026). Each part has its own title.
+// As the drives on the web app's System page: each with its free space; ✕ on a USB drive ejects it
+// through ShadowMountPlus (1.7beta10). The app itself refuses while one of its jobs runs or
+// PS4Mount plays games from the drive (src/usbeject.c), and says why; nothing is asked twice
+// (user, 27.10.2026). Under the drives: the library's cover and metadata folder (GET
+// /api/v1/library/cache), moved here from the library window (user, 29.10.2026), and the pictures
+// behind the areas, folded in until the X button opens them (moved from Kühlung → Einstellungen,
+// user 29.10.2026). Each part has its own title.
 
 #include "ps5cc/backdrops.hpp"
 #include "ps5cc/look.hpp"
@@ -33,8 +34,8 @@ constexpr int kCacheToggle = 1000; // list tags past the drives
 constexpr int kCacheClear = 1001;
 constexpr int kBgToggle = 1100; // the row that folds the pictures in and out
 constexpr int kBgArea = 1101;   // + area
-constexpr const char *kAreaLabels[kBackdropAreas] = {"Kühlung", "Spiele", "Dateimanager", "Payloads",
-                                                     "System",  "Profil", "Protokoll"};
+constexpr const char *kAreaLabels[kBackdropAreas] = {
+    "Kühlung", "Spiele", "Dateimanager", "Payloads", "System", "Profil", "Protokoll"};
 constexpr const char *kModeLabels[3] = {"Standard", "Eigenes Bild", "Aus"};
 
 class StoragePage final : public Page
@@ -78,8 +79,11 @@ class StoragePage final : public Page
                     continue;
                 const auto a = static_cast<std::size_t>(area);
                 bg_custom_[a] = b.custom;
-                // a choice made here holds until the app reports it, so the row does not jump back meanwhile
-                const int mode = b.mode == BackdropMode::custom ? 1 : b.mode == BackdropMode::off ? 2 : 0;
+                // a choice made here holds until the app reports it, so the row does not jump back
+                // meanwhile
+                const int mode = b.mode == BackdropMode::custom ? 1
+                                 : b.mode == BackdropMode::off  ? 2
+                                                                : 0;
                 if (bg_wanted_[a] < 0 || bg_wanted_[a] == mode)
                 {
                     bg_wanted_[a] = -1;
@@ -121,16 +125,18 @@ class StoragePage final : public Page
         if (tag >= kBgArea && tag < kBgArea + kBackdropAreas)
         {
             const auto a = static_cast<std::size_t>(tag - kBgArea);
-            // Standard -> Eigenes Bild -> Aus, round; without an uploaded picture "Eigenes Bild" is left out
+            // Standard -> Eigenes Bild -> Aus, round; without an uploaded picture "Eigenes Bild" is
+            // left out
             int next = (bg_mode_[a] + 1) % 3;
             if (next == 1 && !bg_custom_[a])
                 next = 2;
             feedback.play(audio::Cue::select);
             bg_mode_[a] = next;
             bg_wanted_[a] = next;
-            source().set_backdrop(backdrop_name(tag - kBgArea), next == 1   ? BackdropMode::custom
-                                                                : next == 2 ? BackdropMode::off
-                                                                            : BackdropMode::standard);
+            source().set_backdrop(backdrop_name(tag - kBgArea), next == 1 ? BackdropMode::custom
+                                                                : next == 2
+                                                                    ? BackdropMode::off
+                                                                    : BackdropMode::standard);
             rebuild();
             return;
         }
@@ -145,7 +151,8 @@ class StoragePage final : public Page
             if (tag == kCacheToggle)
             {
                 cache_on_ = !cache_on_;
-                source().save_config(std::string("{\"library_cache\":") + (cache_on_ ? "1" : "0") + "}");
+                source().save_config(std::string("{\"library_cache\":") + (cache_on_ ? "1" : "0") +
+                                     "}");
                 source().library_tools_fetch();
                 rebuild();
             }
@@ -181,59 +188,76 @@ class StoragePage final : public Page
         const int tag = focused_tag();
         if (tag == kBgToggle || (tag >= kBgArea && tag < kBgArea + kBackdropAreas))
         {
-            ui::text(list, fonts.display, "Hintergrundbilder", card.x + 30.0f, card.y + 66.0f, 32.0f, kInk);
-            const float y0 = paragraph(canvas,
-                                       "Das Bild hinter jedem Bereich der App. Die X-Taste wechselt zwischen "
-                                       "Standard, Eigenes Bild und Aus (ein schlichter Verlauf).",
-                                       card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kInk, 6);
+            ui::text(list, fonts.display, "Hintergrundbilder", card.x + 30.0f, card.y + 66.0f,
+                     32.0f, kInk);
+            const float y0 =
+                paragraph(canvas,
+                          "Das Bild hinter jedem Bereich der App. Die X-Taste wechselt zwischen "
+                          "Standard, Eigenes Bild und Aus (ein schlichter Verlauf).",
+                          card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kInk, 6);
             paragraph(canvas,
-                      "Eigene Bilder lädst du in der Browser-App hoch: System → Hintergründe. Ohne hochgeladenes "
+                      "Eigene Bilder lädst du in der Browser-App hoch: System → Hintergründe. Ohne "
+                      "hochgeladenes "
                       "Bild wird „Eigenes Bild“ übersprungen.",
                       card.x + 30.0f, y0 + 24.0f, card.w - 60.0f, kMuted, 6);
             return;
         }
         if (tag == kCacheToggle || tag == kCacheClear)
         {
-            ui::text(list, fonts.display, "Covers & Metadaten", card.x + 30.0f, card.y + 66.0f, 32.0f, kInk);
-            const float y0 = paragraph(canvas,
-                                       "Die App speichert Cover, Namen und Größen der Spiele auf der Konsole. So ist "
-                                       "die Bibliothek nach einem Neustart sofort mit Bildern da, ohne alles neu zu "
-                                       "lesen.",
-                                       card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kInk, 6);
-            paragraph(canvas,
-                      "Ordner leeren löscht nur diese gespeicherten Bilder und Angaben; die App liest sie beim "
-                      "nächsten Öffnen der Bibliothek neu. Spiele und Spielstände bleiben unberührt.",
-                      card.x + 30.0f, y0 + 24.0f, card.w - 60.0f, kMuted, 6);
+            ui::text(list, fonts.display, "Covers & Metadaten", card.x + 30.0f, card.y + 66.0f,
+                     32.0f, kInk);
+            const float y0 = paragraph(
+                canvas,
+                "Die App speichert Cover, Namen und Größen der Spiele auf der Konsole. So ist "
+                "die Bibliothek nach einem Neustart sofort mit Bildern da, ohne alles neu zu "
+                "lesen.",
+                card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kInk, 6);
+            paragraph(
+                canvas,
+                "Ordner leeren löscht nur diese gespeicherten Bilder und Angaben; die App liest "
+                "sie beim "
+                "nächsten Öffnen der Bibliothek neu. Spiele und Spielstände bleiben unberührt.",
+                card.x + 30.0f, y0 + 24.0f, card.w - 60.0f, kMuted, 6);
             return;
         }
-        ui::text(list, fonts.display, ui::fit_label(paint, v != nullptr ? v->label : "Speicher", 32.0f, card.w - 60.0f),
+        ui::text(list, fonts.display,
+                 ui::fit_label(paint, v != nullptr ? v->label : "Speicher", 32.0f, card.w - 60.0f),
                  card.x + 30.0f, card.y + 66.0f, 32.0f, kInk);
         float y = card.y + 360.0f;
         if (v != nullptr)
         {
             // how full: a bar under the name, as the web app's
             const float frac =
-                v->total_bytes > 0 ? static_cast<float>(static_cast<double>(v->used_bytes) / v->total_bytes) : 0.0f;
+                v->total_bytes > 0
+                    ? static_cast<float>(static_cast<double>(v->used_bytes) / v->total_bytes)
+                    : 0.0f;
             const Rect bar{card.x + 30.0f, card.y + 92.0f, card.w - 60.0f, 10.0f};
             list.rounded_rect(bar, 5.0f, Color::rgb(0x3880ff, 0.18f));
             list.rounded_rect({bar.x, bar.y, bar.w * std::clamp(frac, 0.0f, 1.0f), bar.h}, 5.0f,
-                              frac >= 0.92f ? kCritical : frac >= 0.8f ? kWarning : kBlue);
+                              frac >= 0.92f  ? kCritical
+                              : frac >= 0.8f ? kWarning
+                                             : kBlue);
             info_.draw(canvas);
             const char *about =
-                v->ejectable
-                    ? (eject_.available
-                           ? "Die X-Taste wirft das Laufwerk sicher aus. Solange ein Auftrag der App läuft (Kopieren, "
-                             "Konvertieren, Sichern, Dateimanager …) oder PS4Mount Spiele davon spielt, lehnt die App "
-                             "ab und sagt, was noch läuft."
-                           : "Auswerfen braucht ShadowMountPlus ab 1.7beta10; es läuft nicht oder ist älter.")
-                    : "Dieses Laufwerk lässt sich nicht auswerfen.";
-            y = paragraph(canvas, about, card.x + 30.0f, y, card.w - 60.0f, v->ejectable ? kInk : kMuted, 6);
+                v->ejectable ? (eject_.available ? "Die X-Taste wirft das Laufwerk sicher aus. "
+                                                   "Solange ein Auftrag der App läuft (Kopieren, "
+                                                   "Konvertieren, Sichern, Dateimanager …) oder "
+                                                   "PS4Mount Spiele davon spielt, lehnt die App "
+                                                   "ab und sagt, was noch läuft."
+                                                 : "Auswerfen braucht ShadowMountPlus ab "
+                                                   "1.7beta10; es läuft nicht oder ist älter.")
+                             : "Dieses Laufwerk lässt sich nicht auswerfen.";
+            y = paragraph(canvas, about, card.x + 30.0f, y, card.w - 60.0f,
+                          v->ejectable ? kInk : kMuted, 6);
         }
         // the last eject, until the next one: what happened
         if (!eject_.state.empty() && !eject_.message.empty())
         {
-            const Color ink = eject_.state == "done" ? kGood : eject_.state == "running" ? kWarning : kCritical;
-            paragraph(canvas, eject_.message, card.x + 30.0f, std::max(y + 30.0f, card.y + 600.0f), card.w - 60.0f, ink, 4);
+            const Color ink = eject_.state == "done"      ? kGood
+                              : eject_.state == "running" ? kWarning
+                                                          : kCritical;
+            paragraph(canvas, eject_.message, card.x + 30.0f, std::max(y + 30.0f, card.y + 600.0f),
+                      card.w - 60.0f, ink, 4);
         }
     }
 
@@ -276,8 +300,8 @@ class StoragePage final : public Page
         return &volumes_[static_cast<std::size_t>(tag)];
     }
 
-    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width, Color ink,
-                    int max_lines) const
+    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width,
+                    Color ink, int max_lines) const
     {
         int lines = 0;
         for (const std::string &line : canvas.fonts.regular.font->wrap(text, 21.0f, width))
@@ -331,7 +355,8 @@ class StoragePage final : public Page
             const auto a = static_cast<std::size_t>(i);
             ui::ListItem item;
             item.title = kAreaLabels[i];
-            item.subtitle = bg_custom_[a] ? "Ein eigenes Bild ist hochgeladen." : "Kein eigenes Bild hochgeladen.";
+            item.subtitle = bg_custom_[a] ? "Ein eigenes Bild ist hochgeladen."
+                                          : "Kein eigenes Bild hochgeladen.";
             item.value = bg_loaded_ ? kModeLabels[std::clamp(bg_mode_[a], 0, 2)] : "…";
             item.tag = kBgArea + i;
             out.push_back(item);
@@ -354,11 +379,13 @@ class StoragePage final : public Page
             const Volume &v = volumes_[i];
             ui::ListItem item;
             item.title = v.label;
-            item.subtitle = format_bytes(v.free_bytes) + " frei von " + format_bytes(v.total_bytes) + " · " + v.path;
-            const int pct = v.total_bytes > 0 ? static_cast<int>(100.0 * static_cast<double>(v.used_bytes) /
-                                                                     static_cast<double>(v.total_bytes) +
-                                                                 0.5)
-                                              : 0;
+            item.subtitle = format_bytes(v.free_bytes) + " frei von " +
+                            format_bytes(v.total_bytes) + " · " + v.path;
+            const int pct = v.total_bytes > 0
+                                ? static_cast<int>(100.0 * static_cast<double>(v.used_bytes) /
+                                                       static_cast<double>(v.total_bytes) +
+                                                   0.5)
+                                : 0;
             item.value = std::to_string(pct) + " %";
             if (eject_.running && eject_.mount == v.path)
                 item.badge = "WIRD AUSGEWORFEN";
@@ -379,7 +406,8 @@ class StoragePage final : public Page
         out.push_back(toggle);
         ui::ListItem clear;
         clear.title = "Covers-Ordner leeren";
-        clear.subtitle = cache_known_ ? std::to_string(cache_titles_) + " Spiele gespeichert · " + format_bytes(cache_bytes_)
+        clear.subtitle = cache_known_ ? std::to_string(cache_titles_) + " Spiele gespeichert · " +
+                                            format_bytes(cache_bytes_)
                                       : std::string("Wird gelesen …");
         clear.disabled = cache_titles_ <= 0;
         clear.tag = kCacheClear;
@@ -414,7 +442,9 @@ class StoragePage final : public Page
             const cJSON *bytes = cJSON_GetObjectItemCaseSensitive(root, "bytes");
             cache_on_ = !cJSON_IsBool(on) || cJSON_IsTrue(on);
             cache_titles_ = cJSON_IsNumber(titles) ? titles->valueint : 0;
-            cache_bytes_ = cJSON_IsNumber(bytes) && bytes->valuedouble > 0.0 ? static_cast<std::uint64_t>(bytes->valuedouble) : 0;
+            cache_bytes_ = cJSON_IsNumber(bytes) && bytes->valuedouble > 0.0
+                               ? static_cast<std::uint64_t>(bytes->valuedouble)
+                               : 0;
             cJSON_Delete(root);
         }
     }

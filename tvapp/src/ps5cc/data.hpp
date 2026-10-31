@@ -51,13 +51,14 @@ struct Game
     std::string version;
     std::string format;
     std::string path;
-    std::string cover;       // where the app serves its cover ("/api/v1/library/cover?id=…"), "" when none
+    std::string
+        cover; // where the app serves its cover ("/api/v1/library/cover?id=…"), "" when none
     std::string last_played; // ISO date as the app sends it, empty when never
     std::uint64_t size_bytes = 0;
     std::uint64_t played_s = 0;
     bool can_launch = true;
-    // What the game tools may do with it (GET /api/v1/library): copy and convert are the console app's own, move
-    // and unpack go through ShadowMountPlus.
+    // What the game tools may do with it (GET /api/v1/library): copy and convert are the console
+    // app's own, move and unpack go through ShadowMountPlus.
     bool can_copy = false;
     bool can_convert = false;
     bool can_move = false;
@@ -65,7 +66,7 @@ struct Game
     bool can_remount = false; // ShadowMountPlus can take it out and put it back (1.7beta10)
     bool smp_mounted = false; // ShadowMountPlus has it mounted now
     bool ampr_emu = false; // mods.ampr_emu: the conversion builds the AMPR index first by default
-    std::string disc;          // installed from disc: "in" (the disc is in the drive) or "out"; "" otherwise
+    std::string disc; // installed from disc: "in" (the disc is in the drive) or "out"; "" otherwise
     bool dump_mounted = false; // the game runs (mounted), so it can be dumped
     std::string dump;          // a dump of it lies on a drive: "done", "unfinished", ""
 };
@@ -132,7 +133,7 @@ struct HistoryEntry
 struct Config
 {
     bool valid = false;
-    std::string mode = "automatic"; // "automatic" or "observe"
+    std::string mode = "automatic";  // "automatic" or "observe"
     std::string profile = "comfort"; // "comfort" (Leise), "balanced", "cool"
     int target_min_c = 50;
     int target_max_c = 91;
@@ -149,7 +150,7 @@ struct Config
 // GET /api/v1/fan/selftest
 struct SelfTest
 {
-    std::string state = "idle";  // idle, requested, running, finished
+    std::string state = "idle";   // idle, requested, running, finished
     std::string verdict = "none"; // none, responds, no_response, aborted, not_possible
     std::string why;
     int baseline_pct = 0;
@@ -257,7 +258,8 @@ struct PackageScan
 // GET /api/v1/packages/install/job
 struct PackageInstall
 {
-    std::string state = "idle"; // idle, preparing, starting, installing, finishing, done, failed, cancelled
+    std::string state =
+        "idle"; // idle, preparing, starting, installing, finishing, done, failed, cancelled
     bool active = false;
     bool can_cancel = false;
     bool cancelling = false;
@@ -319,7 +321,8 @@ inline std::string ps4_key(const std::string &title_id)
 
 struct Ps4MountConfig
 {
-    bool valid = false; // a busy PS4Mount answers without its settings: never save defaults over them
+    bool valid =
+        false; // a busy PS4Mount answers without its settings: never save defaults over them
     bool batch = true;
     bool dlc = true;
     bool dlc_copy = false;
@@ -330,13 +333,14 @@ struct Ps4MountConfig
     std::vector<std::string> paths;
 };
 
-// ---- Phase 4 (29.10.2026): Spielzeit, Spielstände, Sicherungen, as the web app's tabs of the same names ----
+// ---- Phase 4 (29.10.2026): Spielzeit, Spielstände, Sicherungen, as the web app's tabs of the same
+// names ----
 
 // One game session (GET /api/v1/playtime, "sessions"); -1 = not measured.
 struct PlaySession
 {
     std::string id;
-    std::string name; // from "titles", or the id
+    std::string name;       // from "titles", or the id
     std::int64_t start = 0; // s since 1970
     std::int64_t end = 0;
     int play = 0; // seconds in front
@@ -350,12 +354,12 @@ struct Playtime
 {
     bool loaded = false;
     bool enabled = true;
-    std::int64_t now = 0; // the console's clock, s
-    int total = 0;        // sessions ever recorded
-    int kept = 0;         // how many are kept
-    bool live = false;    // a game runs now
-    PlaySession current;  // its session so far
-    std::string live_state; // front, back, gone
+    std::int64_t now = 0;              // the console's clock, s
+    int total = 0;                     // sessions ever recorded
+    int kept = 0;                      // how many are kept
+    bool live = false;                 // a game runs now
+    PlaySession current;               // its session so far
+    std::string live_state;            // front, back, gone
     std::vector<PlaySession> sessions; // oldest first
 };
 
@@ -451,9 +455,10 @@ struct GameBackups
     std::vector<GameBackup> backups;
 };
 
-// ---- Phase 6 (29.10.2026): the game extras of the web app's per-game window (AMPR index, APR-EMU, PlayGo, plugins,
-// LZ4 packs, recording), the library's duplicate images and cover cache, the kernel-log recording. The answers are
-// kept as the console sent them (JSON) and read by the dialog itself: there are many fields, and most are shown once.
+// ---- Phase 6 (29.10.2026): the game extras of the web app's per-game window (AMPR index, APR-EMU,
+// PlayGo, plugins, LZ4 packs, recording), the library's duplicate images and cover cache, the
+// kernel-log recording. The answers are kept as the console sent them (JSON) and read by the dialog
+// itself: there are many fields, and most are shown once.
 
 struct ExtrasState
 {
@@ -465,7 +470,7 @@ struct ExtrasState
 struct ExtrasVersions
 {
     std::uint64_t seq = 0;
-    std::string lib; // ampr, playgo
+    std::string lib;  // ampr, playgo
     std::string json; // GET /api/v1/ampr-emu or /api/v1/playgo
 };
 
@@ -494,8 +499,9 @@ struct KlogRecord
     int elapsed_s = 0;
 };
 
-// ---- Phase 5 (29.10.2026): Dateien, as the web app's file manager (src/filemgr.c, /api/v1/files/*) ----
-// Changes only below the drives and /data (the console says so with writable); looking is allowed everywhere.
+// ---- Phase 5 (29.10.2026): Dateien, as the web app's file manager (src/filemgr.c,
+// /api/v1/files/*) ---- Changes only below the drives and /data (the console says so with
+// writable); looking is allowed everywhere.
 
 struct FsPlace
 {
@@ -556,7 +562,8 @@ struct FsView
     std::uint64_t size = 0;
 };
 
-// A folder measured (GET /api/v1/files/size): at most 8 s of counting, partial = at least this much.
+// A folder measured (GET /api/v1/files/size): at most 8 s of counting, partial = at least this
+// much.
 struct FsSize
 {
     std::uint64_t bytes = 0;
@@ -576,25 +583,28 @@ struct Volume
     bool ejectable = false;
 };
 
-// The last eject through ShadowMountPlus (GET /api/v1/storage/eject): only while no job of the app runs.
+// The last eject through ShadowMountPlus (GET /api/v1/storage/eject): only while no job of the app
+// runs.
 struct UsbEject
 {
     bool loaded = false;
     bool available = false; // ShadowMountPlus 1.7beta10 or newer runs
     bool running = false;
-    std::string state;      // "" never, running, done, failed
+    std::string state; // "" never, running, done, failed
     std::string mount;
     std::string message;
 };
 
-// A pkg on a drive that the search leaves where it is, and why ("skipped" in /api/v1/ps4mount, 29.10.2026).
+// A pkg on a drive that the search leaves where it is, and why ("skipped" in
+// /api/v1/ps4mount, 29.10.2026).
 struct Ps4Skipped
 {
     std::string path;
     std::string mount;    // "/mnt/usb0"
     std::string title_id; // empty when the header could not be read
     std::string name;
-    std::string why; // internal, restored, not_ps4, not_fake, dlc_foreign, dlc_off, duplicate, second_game
+    std::string
+        why; // internal, restored, not_ps4, not_fake, dlc_foreign, dlc_off, duplicate, second_game
 };
 
 struct Ps4Mount
@@ -632,7 +642,8 @@ struct Ps4Dlc
 struct Ps4GameDetail
 {
     std::string id;
-    std::uint64_t seq = 0; // new with every answer, so a dialog never takes an older one for its own
+    std::uint64_t seq =
+        0; // new with every answer, so a dialog never takes an older one for its own
     bool loaded = false;
     std::string error;
     int dlc_limit = 29;
@@ -858,7 +869,7 @@ struct Snapshot
     bool store_fetching = false;
     std::string store_error;
     StoreJob store_job;
-    std::vector<LogEntry> log; // oldest first
+    std::vector<LogEntry> log;  // oldest first
     std::vector<KlogLine> klog; // oldest first, at most kKlogKeep
     bool klog_lost = false;     // lines went by faster than they were fetched
     PlanReply plan;             // the last plan that came back
@@ -891,7 +902,7 @@ struct Snapshot
     UsbEject usb_eject;
     std::vector<BackdropSetting> backdrops; // GET /api/v1/backdrops, in the sidebar's order
     bool backdrops_loaded = false;
-    std::uint64_t serial = 0;   // grows whenever anything above changes
+    std::uint64_t serial = 0; // grows whenever anything above changes
 };
 
 constexpr std::size_t kKlogKeep = 1000;
@@ -915,13 +926,15 @@ class Source
     virtual void set_target(int celsius) = 0;
     virtual void launch(const std::string &id) = 0;
     virtual void close_game(const std::string &id) = 0;
-    // One game "unmount", "mount" or "remount" through ShadowMountPlus; the answer comes as a notice.
+    // One game "unmount", "mount" or "remount" through ShadowMountPlus; the answer comes as a
+    // notice.
     virtual void remount_game(const std::string &id, const std::string &action) = 0;
     virtual void cancel_job(JobKind kind) = 0;
     virtual void open_web_ui() = 0;
     virtual void reload() = 0;
     virtual void retry() = 0;
-    // The page that is open: its data is asked for often (jobs every second, the logs while they are read).
+    // The page that is open: its data is asked for often (jobs every second, the logs while they
+    // are read).
     virtual void watch(Watch page) = 0;
     // PUT /api/v1/config with these fields only ({"profile":"cool"}).
     virtual void save_config(const std::string &patch) = 0;
@@ -932,35 +945,40 @@ class Source
     virtual void kill_payload(int pid) = 0;
     // POST /api/v1/paystore: "refresh", "install", "start", "cancel" (id where it needs one).
     virtual void store_action(const std::string &action, const std::string &id) = 0;
-    // A game tool's plan for one game; it arrives as Snapshot::plan with the ticket returned here. Plans can take a
-    // minute (the console app measures the whole game), so they never wait behind the status.
+    // A game tool's plan for one game; it arrives as Snapshot::plan with the ticket returned here.
+    // Plans can take a minute (the console app measures the whole game), so they never wait behind
+    // the status.
     virtual std::uint64_t request_plan(Tool tool, const std::string &id) = 0;
-    // Starts the tool with this POST body (ps5cc/plans.hpp builds it). Accepted: a job_started notice; refused: an
-    // error notice with the app's message.
+    // Starts the tool with this POST body (ps5cc/plans.hpp builds it). Accepted: a job_started
+    // notice; refused: an error notice with the app's message.
     virtual void start_tool(Tool tool, const std::string &id, const std::string &body) = 0;
-    // The Pakete page: "scan", "install" (id), "install_cancel", "queue_add" / "queue_remove" (id), "queue_start",
-    // "queue_pause", "queue_retry", "queue_clear" (the finished ones).
+    // The Pakete page: "scan", "install" (id), "install_cancel", "queue_add" / "queue_remove" (id),
+    // "queue_start", "queue_pause", "queue_retry", "queue_clear" (the finished ones).
     virtual void package_action(const std::string &action, const std::string &id) = 0;
-    // PS4 von USB: a JSON body for POST /api/v1/ps4mount (route ""), /ps4mount/update ("update") or /ps4mount/dlc
+    // PS4 von USB: a JSON body for POST /api/v1/ps4mount (route ""), /ps4mount/update ("update") or
+    // /ps4mount/dlc
     // ("dlc"); the answer's message comes back as a notice.
     virtual void ps4mount_post(const std::string &route, const std::string &json) = 0;
     // "game" (with the title id): Snapshot::ps4_detail; "log": Snapshot::ps4_log.
     virtual void ps4mount_fetch(const std::string &what, const std::string &id) = 0;
-    // The Disc page: a JSON body for POST /api/v1/<route>, route "disc", "dump", "dumps/scan" or "dumps/delete"; the
-    // answer's message comes back as a notice.
+    // The Disc page: a JSON body for POST /api/v1/<route>, route "disc", "dump", "dumps/scan" or
+    // "dumps/delete"; the answer's message comes back as a notice.
     virtual void disc_post(const std::string &route, const std::string &json) = 0;
-    // A USB drive ejected through ShadowMountPlus ("/mnt/usb0"); the app refuses while one of its jobs runs.
+    // A USB drive ejected through ShadowMountPlus ("/mnt/usb0"); the app refuses while one of its
+    // jobs runs.
     virtual void usb_eject(const std::string &mount) = 0;
     // Spielzeit: the recorded sessions forgotten (the running one keeps counting).
     virtual void playtime_reset() = 0;
-    // Spielstände: POST /api/v1/saves/<route> (backup, delete, verify, restore, cancel) with a JSON body.
+    // Spielstände: POST /api/v1/saves/<route> (backup, delete, verify, restore, cancel) with a JSON
+    // body.
     virtual void saves_post(const std::string &route, const std::string &json) = 0;
     // Sicherungen: a game backup deleted at once (plan, then the delete with its one-time word).
     virtual void backup_delete(const std::string &path) = 0;
-    // Dateien: open a folder ("" = the places), POST /api/v1/files/<route> (mkdir, rename, copy, move, job/cancel),
-    // delete paths at once (plan, then the delete with its one-time word), view a text file, measure a folder.
-    // Extras of a game: open the window ("" closes it; while open the console is asked again and again), POST
-    // /api/v1/<route> with a JSON body, the versions of APR-EMU (ampr) or PlayGo, the plan of an LZ4 pack.
+    // Dateien: open a folder ("" = the places), POST /api/v1/files/<route> (mkdir, rename, copy,
+    // move, job/cancel), delete paths at once (plan, then the delete with its one-time word), view
+    // a text file, measure a folder. Extras of a game: open the window ("" closes it; while open
+    // the console is asked again and again), POST /api/v1/<route> with a JSON body, the versions of
+    // APR-EMU (ampr) or PlayGo, the plan of an LZ4 pack.
     virtual void extras_open(const std::string &id) = 0;
     virtual void extras_post(const std::string &route, const std::string &json) = 0;
     virtual void extras_versions(const std::string &lib) = 0;
@@ -975,7 +993,8 @@ class Source
     virtual void files_delete(const std::vector<std::string> &paths) = 0;
     virtual void files_view(const std::string &path) = 0;
     virtual void files_size(const std::string &path) = 0;
-    // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture (uploaded in the browser).
+    // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture
+    // (uploaded in the browser).
     virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;
     // Ends the app on the console (the preview only says so).
     virtual void quit_app() = 0;
@@ -1003,7 +1022,8 @@ std::string format_clock(int minutes);
 std::string format_time_of_day(std::int64_t ms, int tz_offset_min);
 // "27.10.2026" for seconds since 1970.
 std::string format_date(std::int64_t seconds);
-// Appends the lines newer than the last one in `ring`, keeps at most `keep`; true when anything was added.
+// Appends the lines newer than the last one in `ring`, keeps at most `keep`; true when anything was
+// added.
 bool klog_append(std::vector<KlogLine> &ring, const std::vector<KlogLine> &fresh, std::size_t keep);
 
 } // namespace hui::ps5cc

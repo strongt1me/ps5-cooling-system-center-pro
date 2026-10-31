@@ -1,4 +1,5 @@
-// ps5cc - The console screen of PS5 Cooling & System Center: cooling, games, jobs, settings, payloads, logs.
+// ps5cc - The console screen of PS5 Cooling & System Center: cooling, games, jobs, settings,
+// payloads, logs.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -62,7 +63,8 @@ using ps5cc::kWarning;
 constexpr int kTargetMin = 50;
 constexpr int kTargetMax = 91;
 constexpr float kApplyDelay = 0.6f;
-constexpr float kSwitchWaitSeconds = 30.0f; // a game asked to close is gone in seconds; past this the start is dropped
+constexpr float kSwitchWaitSeconds =
+    30.0f; // a game asked to close is gone in seconds; past this the start is dropped
 constexpr int kChartPoints = 25; // one every 5 s: two minutes
 constexpr float kChartStep = 5.0f;
 constexpr float kPi = 3.14159265f;
@@ -129,35 +131,42 @@ void draw_area_icon(gfx::DrawList &list, int area, const Rect &box, Color ink)
     const Color clear{ink.r, ink.g, ink.b, 0.0f};
     switch (area)
     {
-    case kAreaCooling: // a fan: three blades round a hub (29.10.2026: the old ring and dot read as a record button)
+    case kAreaCooling: // a fan: three blades round a hub (29.10.2026: the old ring and dot read as
+                       // a record button)
         for (int i = 0; i < 3; ++i)
         {
             const float a = static_cast<float>(i) * kPi * 2.0f / 3.0f - kPi * 0.5f;
             // each blade leans off the radius, so the three read as turning
             const float bx = cx + std::cos(a + 0.35f) * s * 0.22f;
             const float by = cy + std::sin(a + 0.35f) * s * 0.22f;
-            list.rotated_rect({bx - s * 0.17f, by - s * 0.12f, s * 0.34f, s * 0.24f}, s * 0.12f, a + 1.1f, ink);
+            list.rotated_rect({bx - s * 0.17f, by - s * 0.12f, s * 0.34f, s * 0.24f}, s * 0.12f,
+                              a + 1.1f, ink);
         }
         list.circle(cx, cy, s * 0.1f, ink);
         list.ring(cx, cy, s * 0.48f, t * 0.8f, ink);
         break;
     case kAreaGames: // a controller: body, d-pad, two buttons
-        list.bordered_rect({x + s * 0.02f, y + s * 0.24f, s * 0.96f, s * 0.54f}, s * 0.27f, clear, t, ink);
+        list.bordered_rect({x + s * 0.02f, y + s * 0.24f, s * 0.96f, s * 0.54f}, s * 0.27f, clear,
+                           t, ink);
         list.line(x + s * 0.2f, cy + s * 0.01f, x + s * 0.4f, cy + s * 0.01f, t, ink);
         list.line(x + s * 0.3f, cy - s * 0.09f, x + s * 0.3f, cy + s * 0.11f, t, ink);
         list.circle(x + s * 0.68f, cy - s * 0.05f, s * 0.06f, ink);
         list.circle(x + s * 0.8f, cy + s * 0.07f, s * 0.06f, ink);
         break;
     case kAreaFiles: // two folders: one outlined behind, one in front
-        list.bordered_rect({x + s * 0.24f, y + s * 0.1f, s * 0.72f, s * 0.54f}, s * 0.09f, clear, t * 0.8f, ink);
+        list.bordered_rect({x + s * 0.24f, y + s * 0.1f, s * 0.72f, s * 0.54f}, s * 0.09f, clear,
+                           t * 0.8f, ink);
         list.rounded_rect({x + s * 0.04f, y + s * 0.3f, s * 0.32f, s * 0.16f}, s * 0.05f, ink);
         list.rounded_rect({x + s * 0.04f, y + s * 0.38f, s * 0.74f, s * 0.52f}, s * 0.09f, ink);
         break;
     case kAreaPayloads: // a rocket: body with a window, two fins, the flame
-        list.bordered_rect({x + s * 0.32f, y + s * 0.02f, s * 0.36f, s * 0.74f}, s * 0.18f, clear, t, ink);
+        list.bordered_rect({x + s * 0.32f, y + s * 0.02f, s * 0.36f, s * 0.74f}, s * 0.18f, clear,
+                           t, ink);
         list.circle(cx, y + s * 0.32f, s * 0.08f, ink);
-        list.rotated_rect({x + s * 0.1f, y + s * 0.56f, s * 0.3f, s * 0.15f}, s * 0.075f, -0.9f, ink);
-        list.rotated_rect({x + s * 0.6f, y + s * 0.56f, s * 0.3f, s * 0.15f}, s * 0.075f, 0.9f, ink);
+        list.rotated_rect({x + s * 0.1f, y + s * 0.56f, s * 0.3f, s * 0.15f}, s * 0.075f, -0.9f,
+                          ink);
+        list.rotated_rect({x + s * 0.6f, y + s * 0.56f, s * 0.3f, s * 0.15f}, s * 0.075f, 0.9f,
+                          ink);
         list.triangle({cx - s * 0.1f, y + s * 0.8f, s * 0.2f, s * 0.18f}, ink, 0.0f, kPi);
         break;
     case kAreaSystem: // a gear: eight teeth, a ring, the hole
@@ -166,7 +175,8 @@ void draw_area_icon(gfx::DrawList &list, int area, const Rect &box, Color ink)
             const float a = static_cast<float>(i) * kPi * 0.25f;
             const float tx = cx + std::cos(a) * s * 0.36f;
             const float ty = cy + std::sin(a) * s * 0.36f;
-            list.rotated_rect({tx - s * 0.08f, ty - s * 0.08f, s * 0.16f, s * 0.16f}, s * 0.03f, a, ink);
+            list.rotated_rect({tx - s * 0.08f, ty - s * 0.08f, s * 0.16f, s * 0.16f}, s * 0.03f, a,
+                              ink);
         }
         list.ring(cx, cy, s * 0.33f, s * 0.14f, ink);
         list.ring(cx, cy, s * 0.13f, t, ink);
@@ -177,7 +187,8 @@ void draw_area_icon(gfx::DrawList &list, int area, const Rect &box, Color ink)
         list.rounded_rect({x + s * 0.25f, y + s * 0.6f, s * 0.5f, s * 0.22f}, s * 0.11f, ink);
         break;
     default: // the log: a clipboard with lines (user's choice, 29.10.2026)
-        list.bordered_rect({x + s * 0.16f, y + s * 0.1f, s * 0.68f, s * 0.86f}, s * 0.1f, clear, t, ink);
+        list.bordered_rect({x + s * 0.16f, y + s * 0.1f, s * 0.68f, s * 0.86f}, s * 0.1f, clear, t,
+                           ink);
         list.rounded_rect({x + s * 0.34f, y + s * 0.02f, s * 0.32f, s * 0.16f}, s * 0.06f, ink);
         for (int i = 0; i < 3; ++i)
         {
@@ -259,7 +270,8 @@ const char *format_label(const std::string &format)
         return "ffpfsc";
     if (format == "fpkg" || format == "pkg")
         return "Installiert";
-    // installed as far as the system knows, but played from the USB drive by PS4Mount (http_source: "ps4mount")
+    // installed as far as the system knows, but played from the USB drive by PS4Mount (http_source:
+    // "ps4mount")
     if (format == "ps4mount")
         return "PS4Mount (USB)";
     return format.c_str();
@@ -295,8 +307,8 @@ ui::Theme make_theme()
     t.page = kNavy;
     t.page_text = kInk;
     t.page_text_muted = kMuted;
-    // The area's picture shows through the panels (29.10.2026; more of it on the user's wish the same evening); the
-    // list rows and the focus stay solid enough to read.
+    // The area's picture shows through the panels (29.10.2026; more of it on the user's wish the
+    // same evening); the list rows and the focus stay solid enough to read.
     t.surface = Color::rgb(0x0f1a38, 0.62f);
     t.surface_high = Color::rgb(0x1a2850, 0.76f);
     t.text = kInk;
@@ -332,8 +344,9 @@ class Ps5cc final : public app::Concept
   public:
     explicit Ps5cc(app::Context &context) : context_(context), theme_(make_theme())
     {
-        // The sidebar of the browser app, as a rail: icons only while the content has the focus, icons and labels
-        // (drawn over the content, which stays where it is) while it is being steered.
+        // The sidebar of the browser app, as a rail: icons only while the content has the focus,
+        // icons and labels (drawn over the content, which stays where it is) while it is being
+        // steered.
         nav_.style.theme = theme_;
         nav_.style.collapsed_width = kRailW;
         nav_.style.expanded_width = 330.0f;
@@ -342,11 +355,11 @@ class Ps5cc final : public app::Concept
         nav_.style.icon_size = 34.0f;
         nav_.style.text_size = 25.0f;
         nav_.style.expanded = false;
-        nav_.icon = [](ui::Canvas &canvas, const Rect &box, const ui::NavEntry &entry, int, float, Color ink)
-        { draw_area_icon(canvas.list, entry.tag, box, ink); };
+        nav_.icon = [](ui::Canvas &canvas, const Rect &box, const ui::NavEntry &entry, int, float,
+                       Color ink) { draw_area_icon(canvas.list, entry.tag, box, ink); };
         {
-            const char *const labels[kAreas] = {"Kühlung", "Spiele", "Dateimanager", "Payloads", "System", "Profil",
-                                                "Protokoll"};
+            const char *const labels[kAreas] = {"Kühlung", "Spiele", "Dateimanager", "Payloads",
+                                                "System",  "Profil", "Protokoll"};
             std::vector<ui::NavEntry> entries;
             for (int i = 0; i < kAreas; ++i)
             {
@@ -368,10 +381,11 @@ class Ps5cc final : public app::Concept
         set_game_tabs(false);
         games_tabs_.set_active(0, true);
 
-        pages_ = {ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
-                  ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
-                  ps5cc::make_storage_page(), ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
-                  ps5cc::make_backups_page(), ps5cc::make_files_page()};
+        pages_ = {
+            ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
+            ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
+            ps5cc::make_storage_page(),  ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
+            ps5cc::make_backups_page(),  ps5cc::make_files_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -396,7 +410,8 @@ class Ps5cc final : public app::Concept
         chart_.style.legend = ui::LegendPlacement::top;
         chart_.style.axis.ticks = 4;
         chart_.style.axis.from_zero = false;
-        // Up to the highest target (91 °C): a scale fitted to the data put 72 °C at the top and looked too hot.
+        // Up to the highest target (91 °C): a scale fitted to the data put 72 °C at the top and
+        // looked too hot.
         chart_.style.axis.include_low = 20.0f;
         chart_.style.axis.include_high = 91.0f;
         chart_.title = "Verlauf der letzten 2 Minuten";
@@ -439,8 +454,9 @@ class Ps5cc final : public app::Concept
 
         details_.style.theme = theme_;
         details_.style.panel = false;
-        // One line per value: wrapped, the path put the content right at the height that needs a scrollbar, the scrollbar
-        // narrowed the rows, the path rewrapped, and the sheet jumped up and down every frame (console, 27.10.2026).
+        // One line per value: wrapped, the path put the content right at the height that needs a
+        // scrollbar, the scrollbar narrowed the rows, the path rewrapped, and the sheet jumped up
+        // and down every frame (console, 27.10.2026).
         details_.style.max_lines = 1;
         sheet_.style.theme = ps5cc::solid_theme(theme_);
         sheet_.style.size = 720.0f;
@@ -463,10 +479,11 @@ class Ps5cc final : public app::Concept
         }
         tools_.init(theme_);
         extras_.init(theme_);
-        tools_.on_extras = [this](const ps5cc::Game &g, ui::Feedback &feedback) { extras_.open_game(g, feedback); };
+        tools_.on_extras = [this](const ps5cc::Game &g, ui::Feedback &feedback)
+        { extras_.open_game(g, feedback); };
         tools_.on_library = [this](ui::Feedback &feedback) { extras_.open_library(feedback); };
-        tools_.toast = [this](ui::StatusKind kind, const std::string &title, const std::string &body)
-        { toasts_.push(kind, title, body); };
+        tools_.toast = [this](ui::StatusKind kind, const std::string &title,
+                              const std::string &body) { toasts_.push(kind, title, body); };
         job_focus_amount_.snap(job_rect(0));
         history_.style.theme = theme_;
         history_.style.row_height = 78.0f;
@@ -505,7 +522,8 @@ class Ps5cc final : public app::Concept
                 return item;
             };
             menu_.set_items({web, reload, quit, line, power("Ruhemodus", kMenuStandby, false),
-                             power("Neu starten", kMenuReboot, false), power("Ausschalten", kMenuOff, true),
+                             power("Neu starten", kMenuReboot, false),
+                             power("Ausschalten", kMenuOff, true),
                              power("Abgesicherter Modus", kMenuSafe, true)});
         }
 
@@ -529,7 +547,8 @@ class Ps5cc final : public app::Concept
         loader_.subtitle = "Die App wird gestartet …";
         loader_.set_tips({"Die Oberfläche holt alle Werte von der App auf der Konsole (Port 8086).",
                           "Die volle Weboberfläche gibt es weiter am Handy oder PC.",
-                          "L1 und R1 wechseln die Seite, L2 und R2 die Ansicht; das Touchpad öffnet die Seitenleiste.",
+                          "L1 und R1 wechseln die Seite, L2 und R2 die Ansicht; das Touchpad "
+                          "öffnet die Seitenleiste.",
                           "Options öffnet das Menü mit der Weboberfläche und den Power-Optionen."});
 
         for (ui::Chip &chip : chips_)
@@ -575,8 +594,8 @@ class Ps5cc final : public app::Concept
         ps5cc::Notice notice;
         while (src.poll_notice(notice))
             show_notice(notice, feedback);
-        // The console app launches the game once this app has gone (it is a title of its own and would count as the
-        // running game); a moment for the toast first.
+        // The console app launches the game once this app has gone (it is a title of its own and
+        // would count as the running game); a moment for the toast first.
         if (switch_wait_ > 0.0f)
         {
             switch_wait_ -= dt;
@@ -652,8 +671,8 @@ class Ps5cc final : public app::Concept
         frame.backdrop = theme_.backdrop;
         frame.backdrop.time = clock_;
         const ps5cc::Page *page = current_page();
-        frame.glass = sheet_.visible() || link_dialog_.visible() || tools_.visible() || extras_.visible() ||
-                      (page != nullptr && page->modal());
+        frame.glass = sheet_.visible() || link_dialog_.visible() || tools_.visible() ||
+                      extras_.visible() || (page != nullptr && page->modal());
 
         ui::Canvas canvas{frame.scene, context_.fonts, 0, clock_};
         draw_area_picture(canvas);
@@ -731,7 +750,8 @@ class Ps5cc final : public app::Concept
             // the menu wraps: two up are "Aushängen" near its end, with "Neu einhängen" above
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
-            {6.0f, 0, Direction::none, "aktionen-einhaengen"}, // after the notices of the start have gone
+            {6.0f, 0, Direction::none,
+             "aktionen-einhaengen"}, // after the notices of the start have gone
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
             {0.2f, action_bit(Action::confirm)},
@@ -805,7 +825,8 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::confirm)},
             {1.0f, 0, Direction::none, "plan-ps4"},
             {0.2f, action_bit(Action::back)},
-            // the extras of the focused game (a folder), its APR-EMU versions, the LZ4 settings; the library tools
+            // the extras of the focused game (a folder), its APR-EMU versions, the LZ4 settings;
+            // the library tools
             {0.4f, action_bit(Action::west)},
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
@@ -822,7 +843,8 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "bibliothek-werkzeuge"},
             {0.3f, action_bit(Action::back)},
-            // Spiele → Spielzeit, then Spielstände (a game picked off with the X button, the triangle menu), then Pakete.
+            // Spiele → Spielzeit, then Spielstände (a game picked off with the X button, the
+            // triangle menu), then Pakete.
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "spielzeit"},
             {0.5f, action_bit(Action::jump_next)},
@@ -843,7 +865,8 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.7f, 0, Direction::none, "spielstaende-zurueck"},
             {0.3f, action_bit(Action::back)},
-            // Spiele → Pakete: the list, an install started with ✕, one more into the queue with □, the △ menu.
+            // Spiele → Pakete: the list, an install started with ✕, one more into the queue with □,
+            // the △ menu.
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "pakete"},
             {0.3f, action_bit(Action::confirm)},
@@ -870,7 +893,8 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "ps4-einstellungen"},
             {0.3f, action_bit(Action::back)},
-            // past the three games: the folded list of pkgs the search left on the drive, opened with ✕, the first one
+            // past the three games: the folded list of pkgs the search left on the drive, opened
+            // with ✕, the first one
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
@@ -878,7 +902,8 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.3f, 0, Direction::down},
             {0.9f, 0, Direction::none, "ps4-uebersprungen"},
-            // Spiele → Disc (the preview has a drive): the list, a running disc game dumped with ✕, △ and the settings.
+            // Spiele → Disc (the preview has a drive): the list, a running disc game dumped with ✕,
+            // △ and the settings.
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "disc"},
             {0.2f, 0, Direction::down},
@@ -970,7 +995,8 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {0.7f, 0, Direction::none, "speicher-covers"},
-            // The area pictures, folded in: opened with X, Kühlung switched off (its picture goes) and back.
+            // The area pictures, folded in: opened with X, Kühlung switched off (its picture goes)
+            // and back.
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
@@ -1012,13 +1038,14 @@ class Ps5cc final : public app::Concept
   private:
     // ---------------------------------------------------------------- data
 
-    // Spiele's sub-tabs: Disc only on a console with a drive (as the web app, 29.10.2026). The view shown stays when
-    // the tab comes or goes; was it Disc itself, the library takes its place.
+    // Spiele's sub-tabs: Disc only on a console with a drive (as the web app, 29.10.2026). The view
+    // shown stays when the tab comes or goes; was it Disc itself, the library takes its place.
     void set_game_tabs(bool disc)
     {
         const View shown = game_views_.empty() ? kGames : view_of_game_tab();
         game_views_ = {kGames, kPlaytime, kSaves, kPackages, kPs4};
-        std::vector<ui::TabItem> tabs = {{"Bibliothek"}, {"Spielzeit"}, {"Spielstände"}, {"Pakete"}, {"PS4 von USB"}};
+        std::vector<ui::TabItem> tabs = {
+            {"Bibliothek"}, {"Spielzeit"}, {"Spielstände"}, {"Pakete"}, {"PS4 von USB"}};
         if (disc)
         {
             game_views_.push_back(kDisc);
@@ -1029,10 +1056,12 @@ class Ps5cc final : public app::Concept
         game_views_.push_back(kJobs);
         tabs.push_back({"Aufträge"});
         disc_tab_ = disc;
-        // eight tabs do not fit at the usual width: each as wide as its word, the row scrolls if it must (29.10.2026)
+        // eight tabs do not fit at the usual width: each as wide as its word, the row scrolls if it
+        // must (29.10.2026)
         ps5cc::style_subtabs(games_tabs_, theme_, static_cast<int>(tabs.size()));
         games_tabs_.style.width = ui::TabWidth::fit;
-        games_tabs_.set_bounds({kLeftX + 56.0f, ps5cc::kTabY, 1824.0f - kLeftX - 112.0f, ps5cc::kTabH});
+        games_tabs_.set_bounds(
+            {kLeftX + 56.0f, ps5cc::kTabY, 1824.0f - kLeftX - 112.0f, ps5cc::kTabH});
         games_tabs_.set_tabs(tabs);
         games_tabs_.set_active(game_tab_of(shown), true);
     }
@@ -1069,7 +1098,8 @@ class Ps5cc final : public app::Concept
         if (pending_target_ == 0 && s.target_c > 0)
             target_ = s.target_c;
 
-        if (data_.games_loaded && (data_.games.size() != shown_games_ || s.game_id != shown_running_))
+        if (data_.games_loaded &&
+            (data_.games.size() != shown_games_ || s.game_id != shown_running_))
             rebuild_games();
         rebuild_jobs();
         rebuild_history();
@@ -1182,8 +1212,8 @@ class Ps5cc final : public app::Concept
         {
             ui::ListItem item;
             item.title = g.name;
-            item.subtitle = g.platform + " · v" + g.version + " · " + format_label(g.format) + " · " +
-                            ps5cc::format_bytes(g.size_bytes);
+            item.subtitle = g.platform + " · v" + g.version + " · " + format_label(g.format) +
+                            " · " + ps5cc::format_bytes(g.size_bytes);
             item.value = ps5cc::format_playtime(g.played_s);
             if (g.id == data_.status.game_id)
                 item.badge = "LÄUFT";
@@ -1246,7 +1276,8 @@ class Ps5cc final : public app::Concept
         items.push_back({"Zuletzt gespielt", german_date(g->last_played)});
         items.push_back({"Speicherort", g->path});
         items.push_back({"Starten", g->can_launch ? "möglich" : "nicht möglich"});
-        // The data changes every second (temperatures); refilling unchanged rows reset the list each time.
+        // The data changes every second (temperatures); refilling unchanged rows reset the list
+        // each time.
         std::string key = g->name;
         for (const ui::DetailItem &item : items)
             key += '\n' + item.label + '\t' + item.value;
@@ -1272,7 +1303,8 @@ class Ps5cc final : public app::Concept
                                : job.active               ? ui::Status::accent
                                                           : ui::Status::success;
             bar.label = job_state_text(job);
-            bar.set_value(known ? static_cast<float>(std::clamp(job.done / job.total, 0.0, 1.0)) : 0.0f);
+            bar.set_value(known ? static_cast<float>(std::clamp(job.done / job.total, 0.0, 1.0))
+                                : 0.0f);
         }
     }
 
@@ -1311,7 +1343,9 @@ class Ps5cc final : public app::Concept
             item.value = e.result == "done"        ? "fertig"
                          : e.result == "cancelled" ? "abgebrochen"
                                                    : "gescheitert";
-            item.swatch = e.result == "done" ? kGood : e.result == "cancelled" ? kWarning : kCritical;
+            item.swatch = e.result == "done"        ? kGood
+                          : e.result == "cancelled" ? kWarning
+                                                    : kCritical;
             items.push_back(item);
         }
         if (items.empty())
@@ -1364,8 +1398,8 @@ class Ps5cc final : public app::Concept
                 ui::DialogContent content;
                 content.icon = ui::StatusKind::danger;
                 content.title = "Die App antwortet nicht";
-                content.body = data_.link_detail +
-                               "\nIst der Jailbreak mit ELF-Loader (Port 9021) geladen?";
+                content.body =
+                    data_.link_detail + "\nIst der Jailbreak mit ELF-Loader (Port 9021) geladen?";
                 content.buttons = {{"Erneut versuchen", ui::ButtonKind::primary}, {"Beenden"}};
                 link_dialog_.open(content, feedback);
             }
@@ -1377,7 +1411,8 @@ class Ps5cc final : public app::Concept
             shown_link_ = data_.link;
         }
         if (data_.link == Link::starting)
-            loader_.subtitle = data_.link_detail.empty() ? "Die App wird gestartet …" : data_.link_detail;
+            loader_.subtitle =
+                data_.link_detail.empty() ? "Die App wird gestartet …" : data_.link_detail;
         if (link_dialog_.is_open() && link_dialog_.handle(input, feedback) == ui::Event::activated)
         {
             if (link_dialog_.choice() == 0)
@@ -1453,12 +1488,14 @@ class Ps5cc final : public app::Concept
             ui::TabBar *tabs = const_cast<ui::TabBar *>(own_subtabs());
             if (tabs != nullptr)
             {
-                if (tabs->step(input.is_pressed(Action::jump_next) ? 1 : -1, input, feedback) == ui::Event::changed)
+                if (tabs->step(input.is_pressed(Action::jump_next) ? 1 : -1, input, feedback) ==
+                    ui::Event::changed)
                     switched();
                 return;
             }
         }
-        // Left from a page that has no use for it opens the sidebar (Kühlung and Einstellungen turn values with it).
+        // Left from a page that has no use for it opens the sidebar (Kühlung and Einstellungen turn
+        // values with it).
         const View v = view();
         if (input.nav == Direction::left && !input.nav_repeat && v != kCooling && v != kSettings)
         {
@@ -1495,8 +1532,8 @@ class Ps5cc final : public app::Concept
         nav_focus_ = focus;
         nav_.set_focused(focus);
         nav_.set_expanded(focus);
-        // Opened over the page it covers it fully (user, 30.10.2026); folded back it is a see-through panel again, once
-        // it has slid in (see update()).
+        // Opened over the page it covers it fully (user, 30.10.2026); folded back it is a
+        // see-through panel again, once it has slid in (see update()).
         if (focus)
             nav_.style.theme = ps5cc::solid_theme(theme_);
         if (focus)
@@ -1582,7 +1619,8 @@ class Ps5cc final : public app::Concept
             pending_target_ = next;
             apply_in_ = kApplyDelay;
             target_bump_.trigger();
-            feedback.play(audio::Cue::slider, 1.0f, 0.0f, 0.8f + 0.01f * static_cast<float>(next - 50));
+            feedback.play(audio::Cue::slider, 1.0f, 0.0f,
+                          0.8f + 0.01f * static_cast<float>(next - 50));
             return;
         }
         if (input.is_pressed(Action::confirm) && pending_target_ > 0)
@@ -1617,7 +1655,8 @@ class Ps5cc final : public app::Concept
             sheet_.open(feedback);
             return;
         }
-        // □: the game tools, as the buttons under each card of the web app (□ is the kit's "more for this item").
+        // □: the game tools, as the buttons under each card of the web app (□ is the kit's "more
+        // for this item").
         if (input.is_pressed(Action::west) && g != nullptr)
             tools_.open_menu(*g, g->id == data_.status.game_id, feedback);
     }
@@ -1664,9 +1703,14 @@ class Ps5cc final : public app::Concept
     // Power-Optionen fire at once – nothing is asked twice (user, 27.10.2026).
     void do_power(int tag, app::Feedback &feedback)
     {
-        const char *action = tag == kMenuStandby ? "standby" : tag == kMenuReboot ? "reboot" : tag == kMenuOff ? "off" : "safemode";
-        const char *what = tag == kMenuStandby ? "Ruhemodus" : tag == kMenuReboot ? "Neustart" : tag == kMenuOff ? "Ausschalten"
-                                                                                                                : "Abgesicherter Modus";
+        const char *action = tag == kMenuStandby  ? "standby"
+                             : tag == kMenuReboot ? "reboot"
+                             : tag == kMenuOff    ? "off"
+                                                  : "safemode";
+        const char *what = tag == kMenuStandby  ? "Ruhemodus"
+                           : tag == kMenuReboot ? "Neustart"
+                           : tag == kMenuOff    ? "Ausschalten"
+                                                : "Abgesicherter Modus";
         feedback.play(audio::Cue::select);
         toasts_.push(ui::StatusKind::info, what, "Die Konsole bekommt den Auftrag.");
         ps5cc::source().power(action);
@@ -1676,21 +1720,24 @@ class Ps5cc final : public app::Concept
     {
         if (n.kind == ps5cc::Notice::Kind::other_running)
         {
-            // A start the user asked for while another game runs: that one is closed and the new one started, without
-            // a question (user, 27.10.2026). The start follows once the status no longer names the closed game.
+            // A start the user asked for while another game runs: that one is closed and the new
+            // one started, without a question (user, 27.10.2026). The start follows once the status
+            // no longer names the closed game.
             running_id_ = n.running_id;
             switch_target_ = n.target_id;
             switch_wait_ = kSwitchWaitSeconds;
             ps5cc::source().close_game(n.running_id);
             toasts_.push(ui::StatusKind::info, "Spiel wird gewechselt",
-                         "„" + n.running_name + "“ wird beendet, danach startet „" + n.target_name + "“.");
+                         "„" + n.running_name + "“ wird beendet, danach startet „" + n.target_name +
+                             "“.");
             feedback.play(audio::Cue::select);
             return;
         }
         if (n.kind == ps5cc::Notice::Kind::job_started)
         {
-            // Straight to the job's card, as the web app's dialog turns into the job's progress: what runs, how far,
-            // and □ to cancel. Only from the library itself; elsewhere the toast says where to look.
+            // Straight to the job's card, as the web app's dialog turns into the job's progress:
+            // what runs, how far, and □ to cancel. Only from the library itself; elsewhere the
+            // toast says where to look.
             const bool here = view() == kGames;
             toasts_.push(ui::StatusKind::success, n.title,
                          n.body + (here ? "" : " · Fortschritt unter Spiele → Aufträge"));
@@ -1718,28 +1765,35 @@ class Ps5cc final : public app::Concept
 
     // ---------------------------------------------------------------- draw
 
-    void draw_initials(ui::Canvas &canvas, const Rect &box, const std::string &name, float size) const
+    void draw_initials(ui::Canvas &canvas, const Rect &box, const std::string &name,
+                       float size) const
     {
         const Color fill = ui::Avatar::color_of(name, 0.55f, 0.55f);
         canvas.list.rounded_rect(box, box.w * 0.22f, fill);
-        ui::text(canvas.list, canvas.fonts.semibold, ui::Avatar::initials_of(name), box.x + box.w * 0.5f,
-                 box.y + box.h * 0.5f + size * 0.36f, size, Color::rgb(0xffffff), gfx::Align::center);
+        ui::text(canvas.list, canvas.fonts.semibold, ui::Avatar::initials_of(name),
+                 box.x + box.w * 0.5f, box.y + box.h * 0.5f + size * 0.36f, size,
+                 Color::rgb(0xffffff), gfx::Align::center);
     }
 
     // The game's cover once the worker has brought it, faded in over the initials it replaces.
-    void draw_cover(ui::Canvas &canvas, const Rect &box, const std::string &id, const std::string &name,
-                    float size) const
+    void draw_cover(ui::Canvas &canvas, const Rect &box, const std::string &id,
+                    const std::string &name, float size) const
     {
-        const ps5cc::CoverShown cover = id.empty() ? ps5cc::CoverShown{} : ps5cc::covers().texture_of(id);
-        const float alpha = cover.texture == 0 ? 0.0f : context_.settings.reduced_motion ? 1.0f : cover.alpha;
+        const ps5cc::CoverShown cover =
+            id.empty() ? ps5cc::CoverShown{} : ps5cc::covers().texture_of(id);
+        const float alpha = cover.texture == 0                 ? 0.0f
+                            : context_.settings.reduced_motion ? 1.0f
+                                                               : cover.alpha;
         if (alpha < 1.0f)
             draw_initials(canvas, box, name, size);
         if (alpha > 0.0f)
-            canvas.list.image(cover.texture, box, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, alpha}, box.w * 0.22f);
+            canvas.list.image(cover.texture, box, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, alpha},
+                              box.w * 0.22f);
     }
 
-    // The area's picture behind everything (user, 29.10.2026), dimmed so text stays readable: darker on the left
-    // (sidebar, titles) and at the top and bottom (title line, hint row), the picture showing most on the right.
+    // The area's picture behind everything (user, 29.10.2026), dimmed so text stays readable:
+    // darker on the left (sidebar, titles) and at the top and bottom (title line, hint row), the
+    // picture showing most on the right.
     void draw_area_picture(ui::Canvas &canvas) const
     {
         const std::uint32_t tex = ps5cc::backdrops().texture(nav_.current());
@@ -1749,8 +1803,10 @@ class Ps5cc final : public app::Concept
         const Rect screen{0.0f, 0.0f, 1920.0f, 1080.0f};
         list.image(tex, screen, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, 1.0f}, 0.0f);
         list.gradient_rect_h(screen, 0.0f, kNavy.with_alpha(0.80f), kNavy.with_alpha(0.12f));
-        list.gradient_rect({0.0f, 0.0f, 1920.0f, 200.0f}, 0.0f, kNavy.with_alpha(0.75f), kNavy.with_alpha(0.0f));
-        list.gradient_rect({0.0f, 860.0f, 1920.0f, 220.0f}, 0.0f, kNavy.with_alpha(0.0f), kNavy.with_alpha(0.85f));
+        list.gradient_rect({0.0f, 0.0f, 1920.0f, 200.0f}, 0.0f, kNavy.with_alpha(0.75f),
+                           kNavy.with_alpha(0.0f));
+        list.gradient_rect({0.0f, 860.0f, 1920.0f, 220.0f}, 0.0f, kNavy.with_alpha(0.0f),
+                           kNavy.with_alpha(0.85f));
     }
 
     void panel(ui::Canvas &canvas, const Rect &r) const
@@ -1764,16 +1820,17 @@ class Ps5cc final : public app::Concept
         gfx::DrawList &list = canvas.list;
         const ui::Fonts &fonts = canvas.fonts;
         // The app's name heads the sidebar column; the page's name follows it on the same line.
-        const float brand = ui::text(list, fonts.semibold, "PS5 COOLING & SYSTEM CENTER", kMargin, 52.0f, 18.0f,
-                                     kBlue, gfx::Align::left, 3.0f);
-        const float pro = ui::text(list, fonts.display, "Pro", kMargin + brand + 14.0f, 53.0f, 22.0f, kInk);
+        const float brand = ui::text(list, fonts.semibold, "PS5 COOLING & SYSTEM CENTER", kMargin,
+                                     52.0f, 18.0f, kBlue, gfx::Align::left, 3.0f);
+        const float pro =
+            ui::text(list, fonts.display, "Pro", kMargin + brand + 14.0f, 53.0f, 22.0f, kInk);
         const int area = nav_.current();
         if (area >= 0 && area < static_cast<int>(nav_.entries().size()))
         {
             const float x = kMargin + brand + 14.0f + pro + 22.0f;
             list.rounded_rect({x, 38.0f, 2.0f, 20.0f}, 1.0f, Color::rgb(0x3880ff, 0.4f));
-            ui::text(list, fonts.semibold, nav_.entries()[static_cast<std::size_t>(area)].label, x + 22.0f, 53.0f,
-                     22.0f, kInk);
+            ui::text(list, fonts.semibold, nav_.entries()[static_cast<std::size_t>(area)].label,
+                     x + 22.0f, 53.0f, 22.0f, kInk);
         }
 
         if (const ui::TabBar *tabs = own_subtabs())
@@ -1785,10 +1842,12 @@ class Ps5cc final : public app::Concept
         // What runs on the console right now, top right on the title line.
         const ps5cc::Status &s = data_.status;
         ui::Painter paint(list, fonts, theme_);
-        const std::string name = ui::fit_label(paint, s.game_name.empty() ? "Kein Spiel" : s.game_name, 22.0f, 640.0f);
-        const float w = ui::text(list, fonts.semibold, name, 1824.0f, 53.0f, 22.0f, kInk, gfx::Align::right);
-        ui::text(list, fonts.regular, s.game_name.empty() ? "Startbildschirm ·" : "Im Spiel ·", 1824.0f - w - 10.0f,
-                 53.0f, 18.0f, kMuted, gfx::Align::right);
+        const std::string name =
+            ui::fit_label(paint, s.game_name.empty() ? "Kein Spiel" : s.game_name, 22.0f, 640.0f);
+        const float w =
+            ui::text(list, fonts.semibold, name, 1824.0f, 53.0f, 22.0f, kInk, gfx::Align::right);
+        ui::text(list, fonts.regular, s.game_name.empty() ? "Startbildschirm ·" : "Im Spiel ·",
+                 1824.0f - w - 10.0f, 53.0f, 18.0f, kMuted, gfx::Align::right);
     }
 
     void draw_cooling(ui::Canvas &canvas) const
@@ -1812,24 +1871,28 @@ class Ps5cc final : public app::Concept
         for (int i = 0; i < 3; ++i)
         {
             const float in = tween::stagger(age_, i);
-            const Rect r{kLeftX + static_cast<float>(i) * (tile_w + 24.0f), kTop + 10.0f + 30.0f * (1.0f - in),
-                         tile_w, 236.0f};
+            const Rect r{kLeftX + static_cast<float>(i) * (tile_w + 24.0f),
+                         kTop + 10.0f + 30.0f * (1.0f - in), tile_w, 236.0f};
             list.push_opacity(in);
             panel(canvas, r);
             ui::text(list, fonts.semibold, tiles[i].label, r.x + 30.0f, r.y + 50.0f, 24.0f, kInk);
-            ui::text(list, fonts.regular, tiles[i].note, r.x + r.w - 30.0f, r.y + 50.0f, 20.0f, kMuted,
-                     gfx::Align::right);
+            ui::text(list, fonts.regular, tiles[i].note, r.x + r.w - 30.0f, r.y + 50.0f, 20.0f,
+                     kMuted, gfx::Align::right);
             char value[16];
             if (tiles[i].value >= 0)
                 std::snprintf(value, sizeof(value), "%d", tiles[i].value);
             else
                 std::snprintf(value, sizeof(value), "–");
             const Color ink = tiles[i].value >= 0 ? temp_color(tiles[i].value) : kMuted;
-            const float w = ui::text(list, fonts.display, value, r.x + 30.0f, r.y + 168.0f, 104.0f, ink);
+            const float w =
+                ui::text(list, fonts.display, value, r.x + 30.0f, r.y + 168.0f, 104.0f, ink);
             if (tiles[i].value >= 0)
                 ui::text(list, fonts.display, "°C", r.x + 40.0f + w, r.y + 168.0f, 40.0f, kMuted);
             // How close to 100 °C, as a thin line along the bottom.
-            const float level = tiles[i].value >= 0 ? std::clamp(static_cast<float>(tiles[i].value) / 100.0f, 0.0f, 1.0f) : 0.0f;
+            const float level =
+                tiles[i].value >= 0
+                    ? std::clamp(static_cast<float>(tiles[i].value) / 100.0f, 0.0f, 1.0f)
+                    : 0.0f;
             const Rect track{r.x + 30.0f, r.y + r.h - 34.0f, r.w - 60.0f, 8.0f};
             list.rounded_rect(track, 4.0f, Color::rgb(0x1a2850));
             list.rounded_rect({track.x, track.y, track.w * level, track.h}, 4.0f, ink);
@@ -1842,29 +1905,34 @@ class Ps5cc final : public app::Concept
         const Rect fan_box{kRightX, kTop + 10.0f, kRightW, 380.0f};
         panel(canvas, fan_box);
         ui::text(list, fonts.semibold, "Lüfter", fan_box.x + 30.0f, fan_box.y + 50.0f, 24.0f, kInk);
-        ui::text(list, fonts.regular, s.automatic ? "Automatik" : "Beobachten", fan_box.x + fan_box.w - 30.0f,
-                 fan_box.y + 50.0f, 20.0f, kMuted, gfx::Align::right);
+        ui::text(list, fonts.regular, s.automatic ? "Automatik" : "Beobachten",
+                 fan_box.x + fan_box.w - 30.0f, fan_box.y + 50.0f, 20.0f, kMuted,
+                 gfx::Align::right);
         gauge_.draw(canvas);
 
         const Rect target_box{kRightX, kTop + 414.0f, kRightW, 214.0f};
         panel(canvas, target_box);
-        ui::text(list, fonts.semibold, "Zieltemperatur", target_box.x + 30.0f, target_box.y + 50.0f, 24.0f,
-                 kInk);
-        const char *state = pending_target_ > 0                                         ? "wird übernommen …"
-                            : data_.status.target_c > 0 && data_.status.target_c != target_ ? "wartet auf die App"
-                                                                                          : "übernommen";
-        ui::text(list, fonts.regular, state, target_box.x + target_box.w - 30.0f, target_box.y + 50.0f, 20.0f,
-                 pending_target_ > 0 ? kWarning : kMuted, gfx::Align::right);
+        ui::text(list, fonts.semibold, "Zieltemperatur", target_box.x + 30.0f, target_box.y + 50.0f,
+                 24.0f, kInk);
+        const char *state = pending_target_ > 0 ? "wird übernommen …"
+                            : data_.status.target_c > 0 && data_.status.target_c != target_
+                                ? "wartet auf die App"
+                                : "übernommen";
+        ui::text(list, fonts.regular, state, target_box.x + target_box.w - 30.0f,
+                 target_box.y + 50.0f, 20.0f, pending_target_ > 0 ? kWarning : kMuted,
+                 gfx::Align::right);
         char target[16];
         std::snprintf(target, sizeof(target), "%d °C", target_);
-        const float cx = target_box.x + target_box.w * 0.5f + ui::shake(target_refusal_.value, clock_);
+        const float cx =
+            target_box.x + target_box.w * 0.5f + ui::shake(target_refusal_.value, clock_);
         const float pop = 1.0f + 0.06f * target_bump_.value;
-        ui::text(list, fonts.display, target, cx, target_box.y + 150.0f, 76.0f * pop, kInk, gfx::Align::center);
+        ui::text(list, fonts.display, target, cx, target_box.y + 150.0f, 76.0f * pop, kInk,
+                 gfx::Align::center);
         const ui::GlyphStyle glyphs = ui::GlyphStyle::dark();
-        ui::draw_button(list, fonts, glyphs, ui::Button::dpad, target_box.x + 40.0f, target_box.y + 124.0f,
-                        46.0f);
-        ui::text(list, fonts.regular, "50 – 91", target_box.x + target_box.w - 30.0f, target_box.y + 134.0f,
-                 20.0f, kMuted, gfx::Align::right);
+        ui::draw_button(list, fonts, glyphs, ui::Button::dpad, target_box.x + 40.0f,
+                        target_box.y + 124.0f, 46.0f);
+        ui::text(list, fonts.regular, "50 – 91", target_box.x + target_box.w - 30.0f,
+                 target_box.y + 134.0f, 20.0f, kMuted, gfx::Align::right);
 
         // States as chips, wrapped into rows under the target.
         const Rect states{kRightX, kTop + 652.0f, kRightW, kBottom - kTop - 652.0f};
@@ -1894,8 +1962,8 @@ class Ps5cc final : public app::Concept
         if (!data_.games_loaded)
         {
             panel(canvas, games_.bounds());
-            ui::text(list, fonts.semibold, "Spiele werden geladen …", kLeftX + 40.0f, kTop + 90.0f, 28.0f,
-                     kMuted);
+            ui::text(list, fonts.semibold, "Spiele werden geladen …", kLeftX + 40.0f, kTop + 90.0f,
+                     28.0f, kMuted);
         }
         else
         {
@@ -1920,8 +1988,8 @@ class Ps5cc final : public app::Concept
             y += 44.0f;
         }
         const bool running = g->id == data_.status.game_id;
-        ui::text(list, fonts.semibold, running ? "Läuft gerade" : g->platform, text_x, y + 8.0f, 22.0f,
-                 running ? kGood : kMuted);
+        ui::text(list, fonts.semibold, running ? "Läuft gerade" : g->platform, text_x, y + 8.0f,
+                 22.0f, running ? kGood : kMuted);
         game_info_.draw(canvas);
 
         const ui::Hint hints[] = {{ui::Button::cross, running ? "Nach vorn holen" : "Starten"},
@@ -1931,7 +1999,8 @@ class Ps5cc final : public app::Concept
         layout.size = 36.0f;
         layout.text_size = 22.0f;
         layout.cy = card.y + card.h - 44.0f;
-        ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 3, card.x + 36.0f, false, layout);
+        ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 3, card.x + 36.0f, false,
+                       layout);
     }
 
     // Five cards, one per kind of job: copy, convert, image, ShadowMountPlus, delete.
@@ -1957,8 +2026,8 @@ class Ps5cc final : public app::Concept
             const ps5cc::Job &job = data_.jobs[static_cast<std::size_t>(i)];
             panel(canvas, r);
             // Title and game on one line, the bar under them: five cards fit the page.
-            const float w = ui::text(list, fonts.semibold, job_title(static_cast<JobKind>(i)), r.x + 32.0f,
-                                     r.y + 46.0f, 24.0f, kInk);
+            const float w = ui::text(list, fonts.semibold, job_title(static_cast<JobKind>(i)),
+                                     r.x + 32.0f, r.y + 46.0f, 24.0f, kInk);
             const float x = r.x + 32.0f + w + 22.0f;
             if (!job.active && !job.finished)
             {
@@ -1966,8 +2035,8 @@ class Ps5cc final : public app::Concept
                 continue;
             }
             ui::text(list, fonts.regular,
-                     ui::fit_label(paint, job.name + (job.detail.empty() ? "" : "  " + job.detail), 22.0f,
-                                   r.x + r.w - 32.0f - x),
+                     ui::fit_label(paint, job.name + (job.detail.empty() ? "" : "  " + job.detail),
+                                   22.0f, r.x + r.w - 32.0f - x),
                      x, r.y + 46.0f, 22.0f, kMuted);
             bars_[static_cast<std::size_t>(i)].draw(canvas);
         }
@@ -1981,20 +2050,30 @@ class Ps5cc final : public app::Concept
     {
         gfx::DrawList &list = canvas.list;
         const ui::Fonts &fonts = canvas.fonts;
-        const float in = context_.settings.reduced_motion ? 1.0f : tween::stagger(placeholder_age_, 0, 0.0f, 0.35f);
-        const Rect card{kLeftX, kTop + 10.0f + 24.0f * (1.0f - in), 1824.0f - kLeftX, kBottom - kTop - 10.0f};
+        const float in = context_.settings.reduced_motion
+                             ? 1.0f
+                             : tween::stagger(placeholder_age_, 0, 0.0f, 0.35f);
+        const Rect card{kLeftX, kTop + 10.0f + 24.0f * (1.0f - in), 1824.0f - kLeftX,
+                        kBottom - kTop - 10.0f};
         list.push_opacity(in);
         panel(canvas, card);
         const int area = nav_.current();
         const float cx = card.x + card.w * 0.5f;
-        draw_area_icon(list, area, {cx - 60.0f, card.y + 150.0f, 120.0f, 120.0f}, Color::rgb(0x3880ff, 0.85f));
-        const char *title = area == kAreaFiles ? "Dateimanager" : area == kAreaSystem ? "System" : "Profil";
-        const char *what = area == kAreaFiles    ? "Ordner der Konsole und der Laufwerke ansehen, kopieren, verschieben und löschen."
-                           : area == kAreaSystem ? "Konsole, Speicherplatz, Netzwerk, Langzeitverlauf und Expertenansichten."
-                                                 : "Anzeigename, Profilbild und die Sicherung der Einstellungen.";
+        draw_area_icon(list, area, {cx - 60.0f, card.y + 150.0f, 120.0f, 120.0f},
+                       Color::rgb(0x3880ff, 0.85f));
+        const char *title = area == kAreaFiles    ? "Dateimanager"
+                            : area == kAreaSystem ? "System"
+                                                  : "Profil";
+        const char *what =
+            area == kAreaFiles
+                ? "Ordner der Konsole und der Laufwerke ansehen, kopieren, verschieben und löschen."
+            : area == kAreaSystem
+                ? "Konsole, Speicherplatz, Netzwerk, Langzeitverlauf und Expertenansichten."
+                : "Anzeigename, Profilbild und die Sicherung der Einstellungen.";
         ui::text(list, fonts.display, title, cx, card.y + 350.0f, 48.0f, kInk, gfx::Align::center);
         ui::text(list, fonts.regular, what, cx, card.y + 400.0f, 24.0f, kMuted, gfx::Align::center);
-        ui::text(list, fonts.semibold, "Kommt in einer der nächsten Fassungen – bis dahin in der Weboberfläche.", cx,
+        ui::text(list, fonts.semibold,
+                 "Kommt in einer der nächsten Fassungen – bis dahin in der Weboberfläche.", cx,
                  card.y + 480.0f, 26.0f, kInk, gfx::Align::center);
         const ui::Hint hints[] = {{ui::Button::cross, "Weboberfläche im Browser öffnen"}};
         ui::HintLayout layout;
@@ -2002,18 +2081,23 @@ class Ps5cc final : public app::Concept
         layout.text_size = 24.0f;
         layout.cy = card.y + 560.0f;
         const float hw = ui::measure_hints(fonts, hints, 1, layout);
-        ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 1, cx - hw * 0.5f, false, layout);
-        ui::text(list, fonts.regular, "Oder jederzeit: Options → „Weboberfläche im Browser öffnen“, am Handy oder PC die "
-                                      "Adresse der Konsole mit Port 8086.",
-                 cx, card.y + 640.0f, 20.0f, kMuted, gfx::Align::center);
+        ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 1, cx - hw * 0.5f, false,
+                       layout);
+        ui::text(
+            list, fonts.regular,
+            "Oder jederzeit: Options → „Weboberfläche im Browser öffnen“, am Handy oder PC die "
+            "Adresse der Konsole mit Port 8086.",
+            cx, card.y + 640.0f, 20.0f, kMuted, gfx::Align::center);
         list.pop_opacity();
     }
 
-    // The rail; expanded over the content while it has the focus, with a veil that sets the content back.
+    // The rail; expanded over the content while it has the focus, with a veil that sets the content
+    // back.
     void draw_nav(ui::Canvas &canvas) const
     {
         if (nav_veil_.value > 0.01f)
-            canvas.list.rounded_rect({kMargin + kRailW, kTabY - 10.0f, 1824.0f - kMargin - kRailW, kBottom - kTabY + 10.0f},
+            canvas.list.rounded_rect({kMargin + kRailW, kTabY - 10.0f, 1824.0f - kMargin - kRailW,
+                                      kBottom - kTabY + 10.0f},
                                      0.0f, kNavy.with_alpha(0.72f * nav_veil_.value));
         nav_.draw(canvas);
     }

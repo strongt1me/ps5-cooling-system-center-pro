@@ -2,10 +2,10 @@
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's per-game window "LZ4-Asset-Packs & APR-EMU": the AMPR index, APR-EMU and PlayGo in the game, the
-// plugins, LZ4 packs and the optimisation by recording, each with the console's own state and refusals. And the
-// library's duplicate images and its cover cache. Every action fires at once; jobs run on the console and the window
-// may be closed while they do.
+// As the web app's per-game window "LZ4-Asset-Packs & APR-EMU": the AMPR index, APR-EMU and PlayGo
+// in the game, the plugins, LZ4 packs and the optimisation by recording, each with the console's
+// own state and refusals. And the library's duplicate images and its cover cache. Every action
+// fires at once; jobs run on the console and the window may be closed while they do.
 
 #pragma once
 

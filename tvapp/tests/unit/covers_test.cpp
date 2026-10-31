@@ -58,7 +58,8 @@ TEST(Covers, ShrinkingKeepsAFlatColour)
         rgba[i + 2] = 230;
         rgba[i + 3] = 255;
     }
-    const std::vector<std::uint8_t> out = hui::ps5cc::square_rgba(rgba.data(), side, side, kCoverSize);
+    const std::vector<std::uint8_t> out =
+        hui::ps5cc::square_rgba(rgba.data(), side, side, kCoverSize);
     ASSERT_EQ(out.size(), static_cast<std::size_t>(kCoverSize) * kCoverSize * 4u);
     EXPECT_EQ(out[0], 10);
     EXPECT_EQ(out[out.size() - 3], 120);

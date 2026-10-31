@@ -371,7 +371,8 @@ std::uint32_t GlBatch::create_texture(int width, int height, const std::uint8_t 
     return texture;
 }
 
-void GlBatch::replace_texture(std::uint32_t texture, int width, int height, const std::uint8_t *rgba)
+void GlBatch::replace_texture(std::uint32_t texture, int width, int height,
+                              const std::uint8_t *rgba)
 {
     glBindTexture(GL_TEXTURE_2D, texture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);

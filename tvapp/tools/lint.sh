@@ -27,8 +27,13 @@ for file in "${repository_files[@]}"; do
     case "$file" in
         *.c|*.cc|*.cpp|*.h|*.hpp|*.ld|*.py|*.ps1|*.sh|*.yml|*.yaml|Makefile|.clang-format|.clang-tidy|.env.example)
             header=$(head -n 20 "$file")
-            grep -Eq 'ps5-homebrew-ui|ps5-native-app-boilerplate' <<<"$header"
-            grep -Fq 'Copyright (C) 2026 BlackBearReloaded' <<<"$header"
+            # Kit files carry the kit's header; ps5cc's own files (the console app's screens) their author's.
+            if grep -Eq '^(//|/\*) ps5cc - ' <<<"$header"; then
+                grep -Fq 'Copyright (C) 2026 strongt1me' <<<"$header"
+            else
+                grep -Eq 'ps5-homebrew-ui|ps5-native-app-boilerplate' <<<"$header"
+                grep -Fq 'Copyright (C) 2026 BlackBearReloaded' <<<"$header"
+            fi
             grep -Fq 'SPDX-License-Identifier: GPL-3.0-or-later' <<<"$header"
             ((checked += 1))
             ;;
@@ -91,5 +96,6 @@ if git grep -n -E 'C:\\Users\\|/home/denis|/mnt/c/Users/denis|\bDenis\b' -- . \
     echo "repository contains a local path or personal-name leak" >&2
     exit 2
 fi
-git diff --check
+# tvapp/ lives inside the console app's repository: check only this tree.
+git diff --check -- .
 printf 'Lint passed: %d attributed code and tooling files.\n' "$checked"

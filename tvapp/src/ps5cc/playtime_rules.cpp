@@ -36,7 +36,8 @@ void civil(std::int64_t z, int &y, int &m, int &d)
 
 const char *weekday(std::int64_t day)
 {
-    static const char *const kNames[] = {"Do.", "Fr.", "Sa.", "So.", "Mo.", "Di.", "Mi."}; // 1970-01-01 was a Thursday
+    static const char *const kNames[] = {"Do.", "Fr.", "Sa.", "So.",
+                                         "Mo.", "Di.", "Mi."}; // 1970-01-01 was a Thursday
     return kNames[static_cast<int>(((day % 7) + 7) % 7)];
 }
 
@@ -49,7 +50,8 @@ int share(const PlaySession &s, std::int64_t from, std::int64_t to)
     const std::int64_t a = std::max(s.start, from), b = std::min(s.end, to);
     if (b <= a)
         return 0;
-    return static_cast<int>(static_cast<double>(s.play) * static_cast<double>(b - a) / static_cast<double>(span) + 0.5);
+    return static_cast<int>(
+        static_cast<double>(s.play) * static_cast<double>(b - a) / static_cast<double>(span) + 0.5);
 }
 
 bool touches(const PlaySession &s, std::int64_t from, std::int64_t to)
@@ -82,7 +84,8 @@ PlayTotals play_totals(const Playtime &p, int tz_min)
     const std::int64_t off = static_cast<std::int64_t>(tz_min) * 60;
     const std::int64_t today = play_day(p.now, tz_min);
     const std::int64_t end = (today + 1) * kDay - off;
-    const std::int64_t from[3] = {today * kDay - off, (today - 6) * kDay - off, (today - 29) * kDay - off};
+    const std::int64_t from[3] = {today * kDay - off, (today - 6) * kDay - off,
+                                  (today - 29) * kDay - off};
     for (const PlaySession &s : play_all(p))
     {
         out.all_s += s.play;
@@ -123,7 +126,8 @@ std::vector<PlayRank> play_ranking(const Playtime &p)
     std::vector<PlayRank> out;
     for (const PlaySession &s : play_all(p))
     {
-        auto it = std::find_if(out.begin(), out.end(), [&](const PlayRank &r) { return r.id == s.id; });
+        auto it =
+            std::find_if(out.begin(), out.end(), [&](const PlayRank &r) { return r.id == s.id; });
         if (it == out.end())
         {
             PlayRank r;
@@ -137,7 +141,8 @@ std::vector<PlayRank> play_ranking(const Playtime &p)
         it->last = std::max(it->last, s.end);
         it->temp_max = std::max({it->temp_max, s.cpu_max, s.soc_max});
     }
-    std::stable_sort(out.begin(), out.end(), [](const PlayRank &a, const PlayRank &b) { return a.seconds > b.seconds; });
+    std::stable_sort(out.begin(), out.end(),
+                     [](const PlayRank &a, const PlayRank &b) { return a.seconds > b.seconds; });
     return out;
 }
 
@@ -185,7 +190,8 @@ std::string play_clock(std::int64_t t, int tz_min)
     const std::int64_t s = t + static_cast<std::int64_t>(tz_min) * 60;
     const std::int64_t in_day = s - floor_div(s, kDay) * kDay;
     char text[8];
-    std::snprintf(text, sizeof(text), "%02d:%02d", static_cast<int>(in_day / 3600), static_cast<int>(in_day / 60 % 60));
+    std::snprintf(text, sizeof(text), "%02d:%02d", static_cast<int>(in_day / 3600),
+                  static_cast<int>(in_day / 60 % 60));
     return text;
 }
 
@@ -196,14 +202,15 @@ std::string play_range(std::int64_t start, std::int64_t end, int tz_min)
     civil(a, y, m, d);
     char text[64];
     if (a == b)
-        std::snprintf(text, sizeof(text), "%s, %02d.%02d., %s–%s Uhr", weekday(a), d, m, play_clock(start, tz_min).c_str(),
-                      play_clock(end, tz_min).c_str());
+        std::snprintf(text, sizeof(text), "%s, %02d.%02d., %s–%s Uhr", weekday(a), d, m,
+                      play_clock(start, tz_min).c_str(), play_clock(end, tz_min).c_str());
     else
     {
         int y2 = 0, m2 = 0, d2 = 0;
         civil(b, y2, m2, d2);
-        std::snprintf(text, sizeof(text), "%s, %02d.%02d., %s – %02d.%02d., %s Uhr", weekday(a), d, m,
-                      play_clock(start, tz_min).c_str(), d2, m2, play_clock(end, tz_min).c_str());
+        std::snprintf(text, sizeof(text), "%s, %02d.%02d., %s – %02d.%02d., %s Uhr", weekday(a), d,
+                      m, play_clock(start, tz_min).c_str(), d2, m2,
+                      play_clock(end, tz_min).c_str());
     }
     return text;
 }

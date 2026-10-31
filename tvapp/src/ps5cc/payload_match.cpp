@@ -99,7 +99,8 @@ bool payload_file_loaded(const std::string &file, const std::vector<std::string>
         if (!r.file.empty() && r.file == file)
             return true;
     }
-    // the versions of this payload in the folder; the same one twice (internal and on USB) counts once
+    // the versions of this payload in the folder; the same one twice (internal and on USB) counts
+    // once
     std::set<std::string> versions;
     for (const std::string &f : folder)
     {

@@ -29,7 +29,10 @@ CoverWant Covers::next_wanted(const std::vector<Game> &games)
     if (textures_.size() + busy_.size() >= kCoverLimit)
         return {};
     const auto open = [&](const Game &g)
-    { return !g.cover.empty() && !textures_.contains(g.id) && !busy_.contains(g.id) && !failed_.contains(g.id); };
+    {
+        return !g.cover.empty() && !textures_.contains(g.id) && !busy_.contains(g.id) &&
+               !failed_.contains(g.id);
+    };
     const Game *pick = nullptr;
     if (!preferred_.empty())
     {
@@ -87,15 +90,17 @@ void Covers::prefer(const std::string &id)
     preferred_ = id;
 }
 
-int Covers::upload_pending(const std::function<std::uint32_t(int, int, const std::uint8_t *)> &create,
-                           int max_per_frame, float dt)
+int Covers::upload_pending(
+    const std::function<std::uint32_t(int, int, const std::uint8_t *)> &create, int max_per_frame,
+    float dt)
 {
     std::vector<Ready> take;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         for (auto &[id, shown] : textures_)
             shown.alpha = std::min(1.0f, shown.alpha + dt / kFadeSeconds);
-        const std::size_t n = std::min(ready_.size(), static_cast<std::size_t>(std::max(0, max_per_frame)));
+        const std::size_t n =
+            std::min(ready_.size(), static_cast<std::size_t>(std::max(0, max_per_frame)));
         take.assign(std::make_move_iterator(ready_.begin()),
                     std::make_move_iterator(ready_.begin() + static_cast<std::ptrdiff_t>(n)));
         ready_.erase(ready_.begin(), ready_.begin() + static_cast<std::ptrdiff_t>(n));
@@ -189,7 +194,8 @@ std::vector<std::uint8_t> decode_cover(const std::uint8_t *png, std::size_t size
     int w = 0;
     int h = 0;
     int channels = 0;
-    unsigned char *pixels = stbi_load_from_memory(png, static_cast<int>(size), &w, &h, &channels, 4);
+    unsigned char *pixels =
+        stbi_load_from_memory(png, static_cast<int>(size), &w, &h, &channels, 4);
     if (pixels == nullptr)
         return {};
     // Anything wildly out of shape is not a cover; it would also cost a long decode.

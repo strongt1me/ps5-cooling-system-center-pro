@@ -21,12 +21,13 @@ namespace hui::ps5cc
 namespace
 {
 
-// A diagonal two-colour gradient with a soft light, different for every seed. No artwork of any real game.
+// A diagonal two-colour gradient with a soft light, different for every seed. No artwork of any
+// real game.
 std::vector<std::uint8_t> invented_cover(std::size_t seed)
 {
-    static constexpr std::uint8_t kPalette[][3] = {{0x2b, 0x3a, 0x8c}, {0xc0, 0x4b, 0xd6}, {0x0c, 0x8f, 0x7a},
-                                                   {0xf0, 0x99, 0x3b}, {0x3a, 0x5b, 0xd9}, {0xd8, 0x5a, 0x30},
-                                                   {0x53, 0x4a, 0xb7}, {0x1d, 0x9e, 0x75}};
+    static constexpr std::uint8_t kPalette[][3] = {
+        {0x2b, 0x3a, 0x8c}, {0xc0, 0x4b, 0xd6}, {0x0c, 0x8f, 0x7a}, {0xf0, 0x99, 0x3b},
+        {0x3a, 0x5b, 0xd9}, {0xd8, 0x5a, 0x30}, {0x53, 0x4a, 0xb7}, {0x1d, 0x9e, 0x75}};
     const std::uint8_t *a = kPalette[seed % 8];
     const std::uint8_t *b = kPalette[(seed * 3 + 5) % 8];
     const float lx = 0.25f + 0.5f * static_cast<float>((seed * 37) % 100) / 100.0f;
@@ -44,7 +45,8 @@ std::vector<std::uint8_t> invented_cover(std::size_t seed)
             std::uint8_t *p = out.data() + (static_cast<std::size_t>(y) * kCoverSize + x) * 4u;
             for (int c = 0; c < 3; ++c)
             {
-                const float base = static_cast<float>(a[c]) * (1.0f - t) + static_cast<float>(b[c]) * t;
+                const float base =
+                    static_cast<float>(a[c]) * (1.0f - t) + static_cast<float>(b[c]) * t;
                 p[c] = static_cast<std::uint8_t>(std::min(255.0f, base + light * 255.0f));
             }
             p[3] = 255;
@@ -108,10 +110,11 @@ class MockSource final : public Source
             const std::string format = m.format;
             const bool folder = format == "folder";
             const bool installed = format == "fpkg" || format == "ps4mount";
-            g.path = installed ? std::string("/user/app/") + m.id
-                               : std::string("/mnt/usb0/homebrew/") + m.id + (folder ? "" : "." + format);
-            // The library's rules (library.c): copy a folder or an image file, convert a folder or an uncompressed
-            // image, move and unpack through ShadowMountPlus.
+            g.path = installed
+                         ? std::string("/user/app/") + m.id
+                         : std::string("/mnt/usb0/homebrew/") + m.id + (folder ? "" : "." + format);
+            // The library's rules (library.c): copy a folder or an image file, convert a folder or
+            // an uncompressed image, move and unpack through ShadowMountPlus.
             g.can_copy = !installed;
             g.can_convert = folder || format == "exfat" || format == "ffpkg" || format == "ffpfs";
             g.can_move = !installed;
@@ -122,7 +125,8 @@ class MockSource final : public Source
             g.size_bytes = static_cast<std::uint64_t>(m.gigabytes * 1e9);
             g.played_s = static_cast<std::uint64_t>(m.hours * 3600.0);
             g.last_played = m.hours > 0.0 ? "2026-10-27T10:29:26Z" : "";
-            // Two games installed from disc: one with its disc in the drive and running, one without its disc.
+            // Two games installed from disc: one with its disc in the drive and running, one
+            // without its disc.
             if (g.id == "PPSA03860")
             {
                 g.disc = "in";
@@ -141,7 +145,8 @@ class MockSource final : public Source
         data_.status.game_state = "im Spiel";
         data_.status.game_foreground = false;
         data_.status.target_c = 75;
-        // A move by ShadowMountPlus that crawls through the whole preview; the app's own kinds stay free for the tools.
+        // A move by ShadowMountPlus that crawls through the whole preview; the app's own kinds stay
+        // free for the tools.
         Job &move = data_.jobs[static_cast<std::size_t>(JobKind::storage)];
         move.active = true;
         move.state = "transferring";
@@ -245,8 +250,10 @@ class MockSource final : public Source
                 Job &job = data_.jobs[i];
                 if (!job.active || job.total <= 0.0)
                     continue;
-                // The move of the opening screen crawls; the jobs started from the tools finish within the preview.
-                const bool crawl = i == static_cast<std::size_t>(JobKind::storage) && job.name == "Maneater";
+                // The move of the opening screen crawls; the jobs started from the tools finish
+                // within the preview.
+                const bool crawl =
+                    i == static_cast<std::size_t>(JobKind::storage) && job.name == "Maneater";
                 job.done = std::fmin(job.total, job.done + job.total * (crawl ? 0.002 : 0.04));
                 if (job.done >= job.total)
                 {
@@ -301,12 +308,14 @@ class MockSource final : public Source
 
     void power(const std::string &action) override
     {
-        notice(Notice::Kind::info, "Befehl angenommen", "Vorschau am PC: „" + action + "“ wird nicht ausgeführt.");
+        notice(Notice::Kind::info, "Befehl angenommen",
+               "Vorschau am PC: „" + action + "“ wird nicht ausgeführt.");
     }
 
     void start_payload(const PayloadFile &file) override
     {
-        notice(Notice::Kind::success, "„" + file.name + "“ gestartet", "An den ELF-Loader gesendet.");
+        notice(Notice::Kind::success, "„" + file.name + "“ gestartet",
+               "An den ELF-Loader gesendet.");
     }
 
     void kill_payload(int pid) override
@@ -358,7 +367,8 @@ class MockSource final : public Source
         plan_ticket_ += 1;
         plan_tool_ = tool;
         plan_id_ = id;
-        // As long as a small game takes to measure on the console, so the "wird vermessen" state shows too.
+        // As long as a small game takes to measure on the console, so the "wird vermessen" state
+        // shows too.
         plan_at_ = clock_ + 0.6f;
         return plan_ticket_;
     }
@@ -368,8 +378,8 @@ class MockSource final : public Source
         (void)body;
         const Game *game = find(id);
         const std::string name = game != nullptr ? game->name : id;
-        const JobKind kind = tool == Tool::copy      ? JobKind::copy
-                             : tool == Tool::convert ? JobKind::convert
+        const JobKind kind = tool == Tool::copy                           ? JobKind::copy
+                             : tool == Tool::convert                      ? JobKind::convert
                              : tool == Tool::move || tool == Tool::unpack ? JobKind::storage
                              : tool == Tool::erase                        ? JobKind::deletion
                                                                           : JobKind::image;
@@ -377,7 +387,8 @@ class MockSource final : public Source
         if (job.active)
         {
             // What the console app answers with 409 while one of its kind runs.
-            notice(Notice::Kind::error, "Nicht gestartet", "Es läuft schon ein Auftrag dieser Art. Bitte danach noch einmal.");
+            notice(Notice::Kind::error, "Nicht gestartet",
+                   "Es läuft schon ein Auftrag dieser Art. Bitte danach noch einmal.");
             return;
         }
         job = Job{};
@@ -459,7 +470,9 @@ class MockSource final : public Source
                 continue;
             g.smp_mounted = action != "unmount";
             notice(Notice::Kind::success, g.name,
-                   action == "unmount" ? "Ausgehängt." : action == "remount" ? "Neu eingehängt." : "Eingehängt.");
+                   action == "unmount"   ? "Ausgehängt."
+                   : action == "remount" ? "Neu eingehängt."
+                                         : "Eingehängt.");
             changed();
             return;
         }
@@ -530,8 +543,8 @@ class MockSource final : public Source
             if (pkg->parts_total > 0 && pkg->parts_found < pkg->parts_total)
             {
                 notice(Notice::Kind::error, "Installation nicht gestartet",
-                       "Es fehlen Teile dieses Pakets: " + std::to_string(pkg->parts_found) + " von " +
-                           std::to_string(pkg->parts_total) + " gefunden.");
+                       "Es fehlen Teile dieses Pakets: " + std::to_string(pkg->parts_found) +
+                           " von " + std::to_string(pkg->parts_total) + " gefunden.");
                 return;
             }
             job = PackageInstall{};
@@ -572,7 +585,8 @@ class MockSource final : public Source
         }
         else if (action == "queue_remove")
         {
-            std::erase_if(q.items, [&](const PackageQueueItem &i) { return i.id == id && i.state != "running"; });
+            std::erase_if(q.items, [&](const PackageQueueItem &i)
+                          { return i.id == id && i.state != "running"; });
         }
         else if (action == "queue_start")
         {
@@ -599,7 +613,8 @@ class MockSource final : public Source
         changed();
     }
 
-    // Enough of PS4Mount for the preview: switching it, adding and removing, the settings, updates and add-ons.
+    // Enough of PS4Mount for the preview: switching it, adding and removing, the settings, updates
+    // and add-ons.
     void ps4mount_post(const std::string &route, const std::string &json) override
     {
         Ps4Mount &m = data_.ps4mount;
@@ -663,11 +678,12 @@ class MockSource final : public Source
     {
         if (what == "log")
         {
-            data_.ps4_log = "2026-10-29 10:12:01.120 [scan] /mnt/usb0: 3 Spiele gefunden\n"
-                            "2026-10-29 10:12:01.480 [reg] CUSA18842: Update 01.020 benutzt\n"
-                            "2026-10-29 10:12:02.010 [reg] CUSA18842: 3 Zusatzinhalte eingehängt\n"
-                            "2026-10-29 10:12:02.700 [panel] Iron Tide ist bereit\n"
-                            "2026-10-29 10:14:40.300 [remove] CUSA09911: aus der Bibliothek entfernt";
+            data_.ps4_log =
+                "2026-10-29 10:12:01.120 [scan] /mnt/usb0: 3 Spiele gefunden\n"
+                "2026-10-29 10:12:01.480 [reg] CUSA18842: Update 01.020 benutzt\n"
+                "2026-10-29 10:12:02.010 [reg] CUSA18842: 3 Zusatzinhalte eingehängt\n"
+                "2026-10-29 10:12:02.700 [panel] Iron Tide ist bereit\n"
+                "2026-10-29 10:14:40.300 [remove] CUSA09911: aus der Bibliothek entfernt";
             ++data_.ps4_log_seq;
             changed();
             return;
@@ -714,19 +730,25 @@ class MockSource final : public Source
         ++e.seq;
         e.ampr_job = R"({"ok":true,"state":"idle","active":false})";
         e.image_job = R"({"ok":true,"state":"idle","active":false})";
-        e.ampr = R"({"ok":true,"has_index":true,"files":18342,"mtime":1793100000,"can_build":true,"why":"","format":"exfat"})";
+        e.ampr =
+            R"({"ok":true,"has_index":true,"files":18342,"mtime":1793100000,"can_build":true,"why":"","format":"exfat"})";
         e.image = R"({"ok":true,"can_check":true,"format":"exfat"})";
-        e.emu_ampr = R"({"ok":true,"place":"game","format":"exfat","can_change":true,"why":"","packed":false,)"
-                     R"("installed":{"present":true,"known":true,"label":"0.4.2.1 test-pack","has_orig":true},"emus":{}})";
-        e.emu_playgo = R"({"ok":true,"place":"game","can_change":true,"why":"","installed":{"present":false},"emus":{}})";
-        e.lz4 = R"({"ok":true,"can":true,"why":"","ampr_import":1,"has_index":true,"free_bytes":240000000000,"packed":false,)"
-                R"("profiles":[{"id":"builtin-lantern","name":"Lantern Pass","where":"builtin","tested":true}],"own_profile":"",)"
-                R"("suggest":{"id":"builtin-lantern","label":"Getestetes Profil für dieses Spiel","tested":true}})";
-        e.trace = R"({"ok":true,"can":true,"why":"","enabled":false,"sessions":0,"journal_new":false,"game_running":false,)"
-                  R"("profile":"PPSA01325-mitschnitt.toml","busy":false,"msg":""})";
-        e.plugins = R"({"ok":true,"can":true,"why":"","state":"update","files":[)"
-                    R"({"name":"cheats.prx","project":"Cheat-Plugin","state":"older","version":"1.2"},)"
-                    R"({"name":"fps.prx","project":"FPS-Anzeige","state":"current","version":"0.3"}]})";
+        e.emu_ampr =
+            R"({"ok":true,"place":"game","format":"exfat","can_change":true,"why":"","packed":false,)"
+            R"("installed":{"present":true,"known":true,"label":"0.4.2.1 test-pack","has_orig":true},"emus":{}})";
+        e.emu_playgo =
+            R"({"ok":true,"place":"game","can_change":true,"why":"","installed":{"present":false},"emus":{}})";
+        e.lz4 =
+            R"({"ok":true,"can":true,"why":"","ampr_import":1,"has_index":true,"free_bytes":240000000000,"packed":false,)"
+            R"("profiles":[{"id":"builtin-lantern","name":"Lantern Pass","where":"builtin","tested":true}],"own_profile":"",)"
+            R"("suggest":{"id":"builtin-lantern","label":"Getestetes Profil für dieses Spiel","tested":true}})";
+        e.trace =
+            R"({"ok":true,"can":true,"why":"","enabled":false,"sessions":0,"journal_new":false,"game_running":false,)"
+            R"("profile":"PPSA01325-mitschnitt.toml","busy":false,"msg":""})";
+        e.plugins =
+            R"({"ok":true,"can":true,"why":"","state":"update","files":[)"
+            R"({"name":"cheats.prx","project":"Cheat-Plugin","state":"older","version":"1.2"},)"
+            R"({"name":"fps.prx","project":"FPS-Anzeige","state":"current","version":"0.3"}]})";
         changed();
     }
 
@@ -734,7 +756,8 @@ class MockSource final : public Source
     {
         (void)json;
         if (route == "library/ampr")
-            data_.extras.ampr_job = R"({"ok":true,"state":"running","active":true,"kind":"index","phase":"Dateien werden gelesen","files":6120})";
+            data_.extras.ampr_job =
+                R"({"ok":true,"state":"running","active":true,"kind":"index","phase":"Dateien werden gelesen","files":6120})";
         notice(Notice::Kind::success, "Extras", "Auftrag angenommen.");
         changed();
     }
@@ -744,12 +767,13 @@ class MockSource final : public Source
         ExtrasVersions &v = data_.extras_versions;
         ++v.seq;
         v.lib = lib;
-        v.json = lib == "playgo"
-                     ? R"({"ok":true,"versions":[{"name":"libScePlayGo.sprx-0.3","label":"0.3","valid":true,"bundled":true,"sha256":"b1"}]})"
-                     : R"({"ok":true,"versions":[{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
-                       R"("valid":true,"bundled":true,"sha256":"a1"},{"name":"libSceAmpr.sprx-0.4.2.1-debug","label":"0.4.2.1 mit Protokoll",)"
-                       R"("debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.1","label":"0.4.1",)"
-                       R"("valid":true,"bundled":false,"sha256":"a3"}]})";
+        v.json =
+            lib == "playgo"
+                ? R"({"ok":true,"versions":[{"name":"libScePlayGo.sprx-0.3","label":"0.3","valid":true,"bundled":true,"sha256":"b1"}]})"
+                : R"({"ok":true,"versions":[{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
+                  R"("valid":true,"bundled":true,"sha256":"a1"},{"name":"libSceAmpr.sprx-0.4.2.1-debug","label":"0.4.2.1 mit Protokoll",)"
+                  R"("debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.1","label":"0.4.1",)"
+                  R"("valid":true,"bundled":false,"sha256":"a3"}]})";
         changed();
     }
 
@@ -759,8 +783,14 @@ class MockSource final : public Source
         (void)profile;
         ExtrasLz4Plan &l = data_.extras_lz4_plan;
         ++l.seq;
-        l.json = std::string(R"({"ok":true,"valid":true,"pack_files":812,"pack_bytes":29000000000,"loose_files":44,)") +
-                 R"("loose_bytes":1200000000,"chunks":118000,"est_s":)" + std::to_string(level == 12 ? 4200 : level == 3 ? 900 : 1860) + "}";
+        l.json =
+            std::string(
+                R"({"ok":true,"valid":true,"pack_files":812,"pack_bytes":29000000000,"loose_files":44,)") +
+            R"("loose_bytes":1200000000,"chunks":118000,"est_s":)" +
+            std::to_string(level == 12  ? 4200
+                           : level == 3 ? 900
+                                        : 1860) +
+            "}";
         changed();
     }
 
@@ -768,11 +798,13 @@ class MockSource final : public Source
     {
         LibraryTools &l = data_.library_tools;
         ++l.seq;
-        l.duplicates = R"({"ok":true,"images":5,"groups":[{"title_id":"PPSA01325","name":"Lantern Pass","sources":[)"
-                       R"({"path":"/mnt/usb0/homebrew/Lantern Pass.ffpfsc","size":31200000000,"folder":false,"set_aside":false,"smp_uses":true,"mounted":true},)"
-                       R"({"path":"/mnt/ext1/homebrew/Lantern Pass.exfat","size":41000000000,"folder":false,"set_aside":false,"smp_uses":false,"mounted":false}]}],)"
-                       R"("aside":[{"path":"/mnt/usb0/homebrew/Iron Tide.exfat.off","title_id":"CUSA18842","size":22000000000}]})";
-        l.cache = R"({"ok":true,"enabled":true,"dir":"/data/PS5-Cooling-Center/covers_and_more","titles":36,"covers":36,"bytes":9400000})";
+        l.duplicates =
+            R"({"ok":true,"images":5,"groups":[{"title_id":"PPSA01325","name":"Lantern Pass","sources":[)"
+            R"({"path":"/mnt/usb0/homebrew/Lantern Pass.ffpfsc","size":31200000000,"folder":false,"set_aside":false,"smp_uses":true,"mounted":true},)"
+            R"({"path":"/mnt/ext1/homebrew/Lantern Pass.exfat","size":41000000000,"folder":false,"set_aside":false,"smp_uses":false,"mounted":false}]}],)"
+            R"("aside":[{"path":"/mnt/usb0/homebrew/Iron Tide.exfat.off","title_id":"CUSA18842","size":22000000000}]})";
+        l.cache =
+            R"({"ok":true,"enabled":true,"dir":"/data/PS5-Cooling-Center/covers_and_more","titles":36,"covers":36,"bytes":9400000})";
         changed();
     }
 
@@ -842,7 +874,8 @@ class MockSource final : public Source
 
     void files_delete(const std::vector<std::string> &paths) override
     {
-        notice(Notice::Kind::info, "Dateien", std::to_string(paths.size()) + " Eintrag/Einträge werden gelöscht.");
+        notice(Notice::Kind::info, "Dateien",
+               std::to_string(paths.size()) + " Eintrag/Einträge werden gelöscht.");
         changed();
     }
 
@@ -852,7 +885,8 @@ class MockSource final : public Source
         v = FsView{};
         v.seq = ++fs_seq_;
         v.path = path;
-        v.text = "[general]\nautomount = 1\nscan_interval = 30\nbackport = auto\n\n[paths]\n/mnt/usb0/homebrew\n"
+        v.text = "[general]\nautomount = 1\nscan_interval = 30\nbackport = "
+                 "auto\n\n[paths]\n/mnt/usb0/homebrew\n"
                  "/mnt/ext1/homebrew\n/data/homebrew\n";
         v.size = v.text.size();
         changed();
@@ -895,7 +929,9 @@ class MockSource final : public Source
     void backup_delete(const std::string &path) override
     {
         auto &b = data_.game_backups.backups;
-        b.erase(std::remove_if(b.begin(), b.end(), [&](const GameBackup &x) { return x.path == path; }), b.end());
+        b.erase(
+            std::remove_if(b.begin(), b.end(), [&](const GameBackup &x) { return x.path == path; }),
+            b.end());
         notice(Notice::Kind::info, "Sicherung", "Die Sicherung wird gelöscht.");
         changed();
     }
@@ -1022,7 +1058,8 @@ class MockSource final : public Source
             if (mode == BackdropMode::custom && !b.custom)
             {
                 notice(Notice::Kind::error, "Kein eigenes Bild",
-                       "Lade es zuerst in der Browser-App hoch: System → Hintergründe der Vollbild-App.");
+                       "Lade es zuerst in der Browser-App hoch: System → Hintergründe der "
+                       "Vollbild-App.");
                 changed();
                 return;
             }
@@ -1063,7 +1100,8 @@ class MockSource final : public Source
         const char *mount, *label, *fs;
         double free_gb;
     };
-    // One of each case the dialogs know: too little room, the source's own drive, a good one, FAT32.
+    // One of each case the dialogs know: too little room, the source's own drive, a good one,
+    // FAT32.
     static constexpr MockDrive kDrives[] = {{"/data", "Interne SSD", "ufs", 24.0},
                                             {"/mnt/usb0", "USB-Laufwerk 1", "exfatfs", 1210.0},
                                             {"/mnt/ext0", "M.2-Laufwerk", "exfatfs", 640.0},
@@ -1088,11 +1126,13 @@ class MockSource final : public Source
         const std::string leaf = folder ? g->id : g->id + "." + g->format;
         cJSON *root = cJSON_CreateObject();
         cJSON_AddBoolToObject(root, "ok", 1);
-        cJSON_AddStringToObject(root, tool == Tool::erase || tool >= Tool::image_unpack ? "id" : "title_id",
-                                g->id.c_str());
+        cJSON_AddStringToObject(
+            root, tool == Tool::erase || tool >= Tool::image_unpack ? "id" : "title_id",
+            g->id.c_str());
         cJSON_AddStringToObject(root, "name", g->name.c_str());
         cJSON_AddBoolToObject(root, "running", running);
-        const auto job_active = [this](JobKind kind) { return data_.jobs[static_cast<std::size_t>(kind)].active; };
+        const auto job_active = [this](JobKind kind)
+        { return data_.jobs[static_cast<std::size_t>(kind)].active; };
         const auto drive_base = [&](cJSON *d, const MockDrive &m)
         {
             cJSON_AddStringToObject(d, "mount", m.mount);
@@ -1100,9 +1140,11 @@ class MockSource final : public Source
             cJSON_AddStringToObject(d, "base", m.mount);
             cJSON_AddStringToObject(d, "fs", m.fs);
             cJSON_AddNumberToObject(d, "free_bytes", m.free_gb * 1e9);
-            cJSON_AddBoolToObject(d, "source_here", g->path.rfind(std::string(m.mount) + "/", 0) == 0);
+            cJSON_AddBoolToObject(d, "source_here",
+                                  g->path.rfind(std::string(m.mount) + "/", 0) == 0);
         };
-        const auto fat32 = [](const MockDrive &m, double file) { return std::string(m.fs) == "msdosfs" && file > 4.29e9; };
+        const auto fat32 = [](const MockDrive &m, double file)
+        { return std::string(m.fs) == "msdosfs" && file > 4.29e9; };
         switch (tool)
         {
         case Tool::copy:
@@ -1114,7 +1156,8 @@ class MockSource final : public Source
             cJSON_AddNumberToObject(root, "largest_bytes", largest);
             cJSON_AddNumberToObject(root, "skipped", 0);
             cJSON_AddBoolToObject(root, "busy", job_active(JobKind::copy));
-            // The preview starts every kind beside the others; the console app keeps copy and convert apart.
+            // The preview starts every kind beside the others; the console app keeps copy and
+            // convert apart.
             cJSON_AddBoolToObject(root, "other_busy", 0);
             cJSON *targets = cJSON_AddArrayToObject(root, "targets");
             for (const MockDrive &m : kDrives)
@@ -1126,7 +1169,9 @@ class MockSource final : public Source
                 for (int mode = 0; mode < kModes; ++mode)
                 {
                     cJSON *o = cJSON_AddObjectToObject(d, kModeKeys[mode]);
-                    const std::string path = std::string(m.mount) + (mode == 0 ? "/homebrew/" : "/PS5-Sicherung/Spiele/") + leaf;
+                    const std::string path = std::string(m.mount) +
+                                             (mode == 0 ? "/homebrew/" : "/PS5-Sicherung/Spiele/") +
+                                             leaf;
                     const bool leftover = mode == 1 && std::string(m.mount) == "/mnt/ext0";
                     cJSON_AddStringToObject(o, "path", path.c_str());
                     cJSON_AddBoolToObject(o, "exists", path == g->path);
@@ -1174,18 +1219,21 @@ class MockSource final : public Source
             cJSON *targets = cJSON_AddArrayToObject(root, "targets");
             for (const MockDrive &m : kDrives)
             {
-                // A PS4 title from the console's own storage brings it down: the app lists only USB and M.2.
+                // A PS4 title from the console's own storage brings it down: the app lists only USB
+                // and M.2.
                 if (ps4 && std::string(m.mount) == "/data")
                     continue;
                 cJSON *d = cJSON_CreateObject();
                 drive_base(d, m);
                 cJSON_AddBoolToObject(d, "fat32_too_big", fat32(m, raw));
-                cJSON_AddBoolToObject(d, "fat32_too_big_ffpkg", fat32(m, ffpkg > 0.0 ? ffpkg : raw));
+                cJSON_AddBoolToObject(d, "fat32_too_big_ffpkg",
+                                      fat32(m, ffpkg > 0.0 ? ffpkg : raw));
                 cJSON_AddBoolToObject(d, "enough_space", m.free_gb * 1e9 >= raw);
                 for (int mode = 0; mode < kModes; ++mode)
                 {
                     cJSON *o = cJSON_AddObjectToObject(d, kModeKeys[mode]);
-                    const std::string dir = std::string(m.mount) + (mode == 0 ? "/homebrew" : "/PS5-Sicherung/Spiele");
+                    const std::string dir =
+                        std::string(m.mount) + (mode == 0 ? "/homebrew" : "/PS5-Sicherung/Spiele");
                     cJSON_AddStringToObject(o, "dir", dir.c_str());
                     for (const char *op : kOpKeys)
                     {
@@ -1212,21 +1260,24 @@ class MockSource final : public Source
             cJSON_AddStringToObject(root, "source", g->path.c_str());
             cJSON_AddStringToObject(root, "source_dir", here.c_str());
             cJSON_AddStringToObject(root, "source_type", folder ? "folder" : "image");
-            cJSON_AddStringToObject(root, "image_type", g->format == "ffpfsc" ? "pfsc" : g->format.c_str());
+            cJSON_AddStringToObject(root, "image_type",
+                                    g->format == "ffpfsc" ? "pfsc" : g->format.c_str());
             cJSON_AddNumberToObject(root, "size_bytes", size);
             cJSON *dests = cJSON_AddArrayToObject(root, "destinations");
             for (const MockDrive &m : kDrives)
             {
                 cJSON *d = cJSON_CreateObject();
                 const std::string path = std::string(m.mount) + "/homebrew";
-                const std::string target = path + "/" + (unpack ? g->id : g->path.substr(slash + 1));
+                const std::string target =
+                    path + "/" + (unpack ? g->id : g->path.substr(slash + 1));
                 cJSON_AddStringToObject(d, "path", path.c_str());
                 cJSON_AddStringToObject(d, "drive", m.label);
                 cJSON_AddStringToObject(d, "fs", m.fs);
                 cJSON_AddNumberToObject(d, "free_bytes", m.free_gb * 1e9);
                 cJSON_AddBoolToObject(d, "exists", 1);
                 cJSON_AddBoolToObject(d, "here", path == here);
-                cJSON_AddBoolToObject(d, "enough_space", path == here && !unpack ? 1 : m.free_gb * 1e9 >= size);
+                cJSON_AddBoolToObject(d, "enough_space",
+                                      path == here && !unpack ? 1 : m.free_gb * 1e9 >= size);
                 cJSON_AddBoolToObject(d, "fat32_too_big", fat32(m, largest));
                 cJSON_AddStringToObject(d, "target", target.c_str());
                 cJSON_AddBoolToObject(d, "target_exists", target == g->path);
@@ -1297,9 +1348,11 @@ class MockSource final : public Source
             cJSON_AddNumberToObject(root, "size_bytes", size);
             cJSON *items = cJSON_AddArrayToObject(root, "items");
             const std::string what = (folder ? "Der Spielordner " : "Die Abbilddatei ") + g->path;
-            cJSON_AddItemToArray(items, cJSON_CreateString(installed ? "Das installierte Spiel (über die Deinstallation "
-                                                                       "der Konsole)"
-                                                                     : what.c_str()));
+            cJSON_AddItemToArray(
+                items,
+                cJSON_CreateString(installed ? "Das installierte Spiel (über die Deinstallation "
+                                               "der Konsole)"
+                                             : what.c_str()));
             cJSON_AddItemToArray(items, cJSON_CreateString("Die Kachel auf dem Startbildschirm"));
             if (!installed)
                 cJSON_AddItemToArray(items, cJSON_CreateString("Der Eintrag bei ShadowMountPlus"));
@@ -1338,15 +1391,18 @@ class MockSource final : public Source
         const bool playing = !s.game_id.empty();
         s.valid = true;
         s.cpu_c = static_cast<int>(std::lround((playing ? 71.0 : 52.0) + 1.6 * std::sin(t * 0.21)));
-        s.soc_c = static_cast<int>(std::lround((playing ? 64.0 : 47.0) + 1.2 * std::sin(t * 0.17 + 1.0)));
-        s.gpu_c = static_cast<int>(std::lround((playing ? 66.0 : 46.0) + 1.4 * std::sin(t * 0.13 + 2.0)));
+        s.soc_c =
+            static_cast<int>(std::lround((playing ? 64.0 : 47.0) + 1.2 * std::sin(t * 0.17 + 1.0)));
+        s.gpu_c =
+            static_cast<int>(std::lround((playing ? 66.0 : 46.0) + 1.4 * std::sin(t * 0.13 + 2.0)));
         s.hottest_c = std::max(s.cpu_c, std::max(s.soc_c, s.gpu_c));
-        s.fan_pct = static_cast<float>(std::round(((playing ? 46.3 : 20.4) + 2.2 * std::sin(t * 0.09)) * 10.0) / 10.0);
+        s.fan_pct = static_cast<float>(
+            std::round(((playing ? 46.3 : 20.4) + 2.2 * std::sin(t * 0.09)) * 10.0) / 10.0);
         s.automatic = true;
     }
 
-    // Two drives with a handful of packages: a PS5 game with its update and add-on, a PS4 game, a split package with a
-    // part missing; one already waits in the queue.
+    // Two drives with a handful of packages: a PS5 game with its update and add-on, a PS4 game, a
+    // split package with a part missing; one already waits in the queue.
     void fill_packages()
     {
         struct Seed
@@ -1357,13 +1413,18 @@ class MockSource final : public Source
             int parts, found;
         };
         static const Seed kSeeds[] = {
-            {"a1f04c2e9b7d3016", "Lantern Pass", "/mnt/usb0", "USB-Speicher 1", "PPSA04211", "01.000", "base", 5, 38.2, 0, 0},
-            {"b2e15d3fac8e4127", "Lantern Pass", "/mnt/usb0", "USB-Speicher 1", "PPSA04211", "01.020", "update", 5, 4.6, 0, 0},
-            {"c3d26e40bd9f5238", "Lantern Pass – Nordwind-Paket", "/mnt/usb0", "USB-Speicher 1", "PPSA04211", "01.000", "dlc", 5,
-             1.1, 0, 0},
-            {"d4c37f51ce0a6349", "Iron Tide", "/mnt/usb0", "USB-Speicher 1", "CUSA18842", "01.000", "base", 4, 22.7, 0, 0},
-            {"e5b48062df1b745a", "Sky Drifters", "/user", "Konsolenspeicher", "PPSA07730", "01.000", "base", 5, 61.0, 3, 2},
-            {"f6a59173e02c856b", "Paper Harbor", "/user", "Konsolenspeicher", "PPSA02954", "01.003", "base", 5, 12.4, 0, 0},
+            {"a1f04c2e9b7d3016", "Lantern Pass", "/mnt/usb0", "USB-Speicher 1", "PPSA04211",
+             "01.000", "base", 5, 38.2, 0, 0},
+            {"b2e15d3fac8e4127", "Lantern Pass", "/mnt/usb0", "USB-Speicher 1", "PPSA04211",
+             "01.020", "update", 5, 4.6, 0, 0},
+            {"c3d26e40bd9f5238", "Lantern Pass – Nordwind-Paket", "/mnt/usb0", "USB-Speicher 1",
+             "PPSA04211", "01.000", "dlc", 5, 1.1, 0, 0},
+            {"d4c37f51ce0a6349", "Iron Tide", "/mnt/usb0", "USB-Speicher 1", "CUSA18842", "01.000",
+             "base", 4, 22.7, 0, 0},
+            {"e5b48062df1b745a", "Sky Drifters", "/user", "Konsolenspeicher", "PPSA07730", "01.000",
+             "base", 5, 61.0, 3, 2},
+            {"f6a59173e02c856b", "Paper Harbor", "/user", "Konsolenspeicher", "PPSA02954", "01.003",
+             "base", 5, 12.4, 0, 0},
         };
         data_.packages.clear();
         for (const Seed &s : kSeeds)
@@ -1381,9 +1442,11 @@ class MockSource final : public Source
             k.total = static_cast<std::uint64_t>(s.gb * 1e9);
             k.parts_total = s.parts;
             k.parts_found = s.found;
-            k.size = s.parts > 0 ? k.total / static_cast<std::uint64_t>(s.parts) * static_cast<std::uint64_t>(s.found)
+            k.size = s.parts > 0 ? k.total / static_cast<std::uint64_t>(s.parts) *
+                                       static_cast<std::uint64_t>(s.found)
                                  : k.total;
-            k.file = std::string(s.title) + "-" + s.version + (s.parts > 0 ? ".pkg (geteilt)" : ".pkg");
+            k.file =
+                std::string(s.title) + "-" + s.version + (s.parts > 0 ? ".pkg (geteilt)" : ".pkg");
             data_.packages.push_back(k);
         }
         data_.package_scan.loaded = true;
@@ -1407,7 +1470,8 @@ class MockSource final : public Source
         {
             q.waiting += i.state == "waiting" ? 1 : 0;
             q.done += i.state == "done" ? 1 : 0;
-            q.failed += i.state == "failed" || i.state == "skipped" || i.state == "cancelled" ? 1 : 0;
+            q.failed +=
+                i.state == "failed" || i.state == "skipped" || i.state == "cancelled" ? 1 : 0;
         }
     }
 
@@ -1417,7 +1481,8 @@ class MockSource final : public Source
         if (scan_left_ > 0.0f)
         {
             scan_left_ -= dt;
-            data_.package_scan.parsed = static_cast<int>(data_.packages.size() * (1.0f - scan_left_ / 2.0f));
+            data_.package_scan.parsed =
+                static_cast<int>(data_.packages.size() * (1.0f - scan_left_ / 2.0f));
             if (scan_left_ <= 0.0f)
             {
                 data_.package_scan.scanning = false;
@@ -1429,8 +1494,11 @@ class MockSource final : public Source
         if (job.active)
         {
             job.bytes_done = std::min(job.bytes_total, job.bytes_done + job.bytes_total * dt / 8.0);
-            job.percent = job.bytes_total > 0.0 ? static_cast<int>(job.bytes_done * 100.0 / job.bytes_total) : -1;
-            job.remain_s = static_cast<int>((job.bytes_total - job.bytes_done) / std::max(job.bytes_total / 8.0, 1.0));
+            job.percent = job.bytes_total > 0.0
+                              ? static_cast<int>(job.bytes_done * 100.0 / job.bytes_total)
+                              : -1;
+            job.remain_s = static_cast<int>((job.bytes_total - job.bytes_done) /
+                                            std::max(job.bytes_total / 8.0, 1.0));
             if (job.bytes_done >= job.bytes_total)
             {
                 job.active = false;
@@ -1449,8 +1517,9 @@ class MockSource final : public Source
         PackageQueue &q = data_.package_queue;
         if (q.running && !job.active)
         {
-            const auto next = std::find_if(q.items.begin(), q.items.end(),
-                                           [](const PackageQueueItem &i) { return i.state == "waiting"; });
+            const auto next =
+                std::find_if(q.items.begin(), q.items.end(),
+                             [](const PackageQueueItem &i) { return i.state == "waiting"; });
             if (next == q.items.end() || q.pause_requested)
             {
                 q.running = false;
@@ -1473,8 +1542,8 @@ class MockSource final : public Source
         }
     }
 
-    // PS4Mount on, three games on the USB drive: one ready with an update and add-ons, one taken out of the library,
-    // one installed on the console as well.
+    // PS4Mount on, three games on the USB drive: one ready with an update and add-ons, one taken
+    // out of the library, one installed on the console as well.
     void fill_ps4mount()
     {
         Ps4Mount &m = data_.ps4mount;
@@ -1509,7 +1578,8 @@ class MockSource final : public Source
             g.updates = s.updates;
             m.games.push_back(g);
         }
-        // What the search left on the drive: a game installed on the console, a PS5 pkg, one taken out earlier.
+        // What the search left on the drive: a game installed on the console, a PS5 pkg, one taken
+        // out earlier.
         struct Skip
         {
             const char *file, *id, *name, *why;
@@ -1546,7 +1616,8 @@ class MockSource final : public Source
         data_.fs_places = {place("USB-Speicher 1", "/mnt/usb0", 247.1, true),
                            place("Daten der Konsole", "/data", 612.4, true),
                            place("Ganzes System (nur ansehen)", "/", -1, false)};
-        const auto entry = [](const char *name, const char *type, double mb, int days, bool writable)
+        const auto entry =
+            [](const char *name, const char *type, double mb, int days, bool writable)
         {
             FsEntry e;
             e.name = name;
@@ -1556,18 +1627,23 @@ class MockSource final : public Source
             e.writable = writable;
             return e;
         };
-        fs_tree_["/mnt/usb0"] = {entry("homebrew", "dir", 0, 2, true),     entry("ps4", "dir", 0, 1, true),
-                                 entry("PS5-Sicherung", "dir", 0, 5, true), entry("payloads", "dir", 0, 9, true),
+        fs_tree_["/mnt/usb0"] = {entry("homebrew", "dir", 0, 2, true),
+                                 entry("ps4", "dir", 0, 1, true),
+                                 entry("PS5-Sicherung", "dir", 0, 5, true),
+                                 entry("payloads", "dir", 0, 9, true),
                                  entry("shadowmount.ini", "file", 0.002, 3, true),
                                  entry("Lantern Pass.ffpfsc", "file", 31200, 6, true),
                                  entry("notes.txt", "file", 0.004, 12, true)};
-        fs_tree_["/mnt/usb0/homebrew"] = {entry("PPSA01325", "dir", 0, 2, true), entry("CUSA05041", "dir", 0, 4, true)};
-        fs_tree_["/data"] = {entry("homebrew", "dir", 0, 1, true), entry("PS5-Cooling-Center", "dir", 0, 0, false)};
+        fs_tree_["/mnt/usb0/homebrew"] = {entry("PPSA01325", "dir", 0, 2, true),
+                                          entry("CUSA05041", "dir", 0, 4, true)};
+        fs_tree_["/data"] = {entry("homebrew", "dir", 0, 1, true),
+                             entry("PS5-Cooling-Center", "dir", 0, 0, false)};
         fs_tree_["/"] = {entry("data", "dir", 0, 0, false), entry("mnt", "dir", 0, 0, false),
                          entry("system", "dir", 0, 30, false), entry("user", "dir", 0, 0, false)};
     }
 
-    // Spielzeit, Spielstände and Sicherungen: a few weeks of play, two users with saves, two backups of games.
+    // Spielzeit, Spielstände and Sicherungen: a few weeks of play, two users with saves, two
+    // backups of games.
     void fill_phase4()
     {
         Playtime &p = data_.playtime;
@@ -1579,11 +1655,16 @@ class MockSource final : public Source
             int days_ago, hour, minutes, cpu;
         };
         static const Seed kSeeds[] = {
-            {"PPSA01325", "Lantern Pass", 0, 9, 95, 71},     {"CUSA18842", "Iron Tide", 1, 20, 140, 68},
-            {"PPSA01325", "Lantern Pass", 2, 18, 60, 70},    {"PPSA04311", "Harbor Lights", 3, 21, 45, 66},
-            {"CUSA18842", "Iron Tide", 4, 19, 210, 69},      {"PPSA01325", "Lantern Pass", 6, 17, 30, 70},
-            {"CUSA12100", "Pixel Garden", 8, 15, 25, 58},    {"CUSA18842", "Iron Tide", 9, 22, 120, 72},
-            {"PPSA04311", "Harbor Lights", 11, 20, 80, 67}, {"PPSA01325", "Lantern Pass", 12, 19, 150, 71},
+            {"PPSA01325", "Lantern Pass", 0, 9, 95, 71},
+            {"CUSA18842", "Iron Tide", 1, 20, 140, 68},
+            {"PPSA01325", "Lantern Pass", 2, 18, 60, 70},
+            {"PPSA04311", "Harbor Lights", 3, 21, 45, 66},
+            {"CUSA18842", "Iron Tide", 4, 19, 210, 69},
+            {"PPSA01325", "Lantern Pass", 6, 17, 30, 70},
+            {"CUSA12100", "Pixel Garden", 8, 15, 25, 58},
+            {"CUSA18842", "Iron Tide", 9, 22, 120, 72},
+            {"PPSA04311", "Harbor Lights", 11, 20, 80, 67},
+            {"PPSA01325", "Lantern Pass", 12, 19, 150, 71},
             {"CUSA12100", "Pixel Garden", 20, 16, 40, 57},
         };
         for (const Seed &s : kSeeds)
@@ -1591,7 +1672,8 @@ class MockSource final : public Source
             PlaySession x;
             x.id = s.id;
             x.name = s.name;
-            x.start = p.now - static_cast<std::int64_t>(s.days_ago) * 86400 - 12 * 3600 + s.hour * 3600;
+            x.start =
+                p.now - static_cast<std::int64_t>(s.days_ago) * 86400 - 12 * 3600 + s.hour * 3600;
             x.end = x.start + s.minutes * 60 + 300;
             x.play = s.minutes * 60;
             x.cpu_max = s.cpu;
@@ -1732,7 +1814,8 @@ class MockSource final : public Source
         data_.usb_eject.loaded = data_.usb_eject.available = true;
     }
 
-    // A console with a drive: a PS2-DVD in it, one image made earlier, one dump of the Disc tab on the USB drive.
+    // A console with a drive: a PS2-DVD in it, one image made earlier, one dump of the Disc tab on
+    // the USB drive.
     void fill_disc()
     {
         DiscState &d = data_.disc;
@@ -1797,8 +1880,8 @@ class MockSource final : public Source
     // Every area on the tile's own picture; Spiele has one of the user's as well (set aside).
     void fill_backdrops()
     {
-        static const char *const kLabels[kBackdropAreas] = {"Kühlung", "Spiele", "Dateimanager", "Payloads",
-                                                            "System",  "Profil", "Protokoll"};
+        static const char *const kLabels[kBackdropAreas] = {
+            "Kühlung", "Spiele", "Dateimanager", "Payloads", "System", "Profil", "Protokoll"};
         data_.backdrops.clear();
         for (int i = 0; i < kBackdropAreas; ++i)
         {
@@ -1865,15 +1948,19 @@ class MockSource final : public Source
         };
         static constexpr Item kItems[] = {
             {"shadowmountplus", "ShadowMountPlus", "1.7beta7", "Utilities & Tools",
-             "Ein automatischer Mounter für Spiele-Abbilder im Hintergrund.", "1.7beta7", false, "mountsmith", true},
-            {"pldmgr", "pldmgr", "v0.6.4", "Utilities & Tools", "Payloads verwalten und automatisch laden.", "v0.6.3",
-             true, "loadkeeper", true},
+             "Ein automatischer Mounter für Spiele-Abbilder im Hintergrund.", "1.7beta7", false,
+             "mountsmith", true},
+            {"pldmgr", "pldmgr", "v0.6.4", "Utilities & Tools",
+             "Payloads verwalten und automatisch laden.", "v0.6.3", true, "loadkeeper", true},
             {"ps5upload", "ps5upload", "v8.4.0", "Networking & Servers",
-             "Schnelle Übertragung vom Rechner auf die PS5 (braucht die PC-App).", "", false, "uplinker", true},
-            {"ftpsrv", "ftpsrv", "v0.15", "Networking & Servers", "FTP-Server auf Port 2121.", "", false, "portwright",
-             false},
-            {"kstuff", "kstuff", "v1.6.7", "System & Jailbreak", "Kernel-Hilfen für den Jailbreak.", "", false, "", false},
-            {"elfldr", "elfldr", "v0.21", "Loaders", "Der ELF-Loader auf Port 9021.", "", false, "portwright", false},
+             "Schnelle Übertragung vom Rechner auf die PS5 (braucht die PC-App).", "", false,
+             "uplinker", true},
+            {"ftpsrv", "ftpsrv", "v0.15", "Networking & Servers", "FTP-Server auf Port 2121.", "",
+             false, "portwright", false},
+            {"kstuff", "kstuff", "v1.6.7", "System & Jailbreak", "Kernel-Hilfen für den Jailbreak.",
+             "", false, "", false},
+            {"elfldr", "elfldr", "v0.21", "Loaders", "Der ELF-Loader auf Port 9021.", "", false,
+             "portwright", false},
         };
         std::size_t seed = 3;
         for (const Item &i : kItems)
@@ -1904,9 +1991,12 @@ class MockSource final : public Source
             {"INFO", "target_temp_changed", "Zieltemperatur auf 75 °C gesetzt."},
             {"INFO", "library_after_exit", "Start von Crash Bandicoot 4 (PPSA02433) vorgemerkt."},
             {"INFO", "playtime_session", "Spielzeit: Titel PPSA02433 – Sitzung beginnt."},
-            {"WARN", "fan_threshold_overridden", "Die Konsole hat die Lüftereinstellung auf 91 °C gesetzt. Zurückgestellt auf 80 °C."},
-            {"INFO", "fan_threshold_applied", "An die Konsole übergeben: 78 °C – Durchschnitt 71,4 °C, gewünschte Drehzahl 46 %."},
-            {"ERROR", "paystore_fetch_failed", "Die Liste der Payloads ließ sich nicht laden (Zeitüberschreitung)."},
+            {"WARN", "fan_threshold_overridden",
+             "Die Konsole hat die Lüftereinstellung auf 91 °C gesetzt. Zurückgestellt auf 80 °C."},
+            {"INFO", "fan_threshold_applied",
+             "An die Konsole übergeben: 78 °C – Durchschnitt 71,4 °C, gewünschte Drehzahl 46 %."},
+            {"ERROR", "paystore_fetch_failed",
+             "Die Liste der Payloads ließ sich nicht laden (Zeitüberschreitung)."},
             {"INFO", "paystore_loaded", "34 Payloads in der Liste."},
         };
         std::int64_t t = 1793114617243;
@@ -1924,10 +2014,12 @@ class MockSource final : public Source
             "icc_fan_get_fan_manual_duty: duty: 0000",
             "[dce-ft:1131 Info]<236>0x0: opened",
             "[dce-ft:1303 Info]<236>0x0: closed",
-            "[SceShellUI] I/PSM.UI : SceneQ : Loaded[0.00msec] : SplashScreen.FAKE86921 : SplashScreen",
+            "[SceShellUI] I/PSM.UI : SceneQ : Loaded[0.00msec] : SplashScreen.FAKE86921 : "
+            "SplashScreen",
             "[SceLncService] launchApp(PPSA02433)",
             "[AvControl] Waiting for the pstate event : done",
-            "[Syscore Umd] Set memory pstate (hasRunningGame=1, hasRunningMiniApp=0, isSplashDisplayed=0)",
+            "[Syscore Umd] Set memory pstate (hasRunningGame=1, hasRunningMiniApp=0, "
+            "isSplashDisplayed=0)",
         };
         std::vector<KlogLine> fresh;
         for (int i = 0; i < count; ++i)
@@ -2084,7 +2176,8 @@ std::string format_time_of_day(std::int64_t ms, int tz_offset_min)
 
 std::string format_date(std::int64_t seconds)
 {
-    // Civil date from days since 1970 (Howard Hinnant's algorithm): no time zone database on the console.
+    // Civil date from days since 1970 (Howard Hinnant's algorithm): no time zone database on the
+    // console.
     std::int64_t z = (seconds >= 0 ? seconds : seconds - 86399) / 86400 + 719468;
     const std::int64_t era = (z >= 0 ? z : z - 146096) / 146097;
     const std::int64_t doe = z - era * 146097;

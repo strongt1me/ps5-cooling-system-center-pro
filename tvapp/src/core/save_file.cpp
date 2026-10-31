@@ -190,9 +190,7 @@ bool ensure_directory(const std::string &path)
 {
     if (::mkdir(path.c_str(), 0755) == 0 || errno == EEXIST)
     {
-        struct stat info
-        {
-        };
+        struct stat info{};
         return ::stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
     }
     return false;

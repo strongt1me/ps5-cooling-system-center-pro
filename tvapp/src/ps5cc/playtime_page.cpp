@@ -2,9 +2,10 @@
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's tab: on the left the game running now, the most played games and the last sessions; on the right
-// today, the last 7 and 30 days and everything, and the last fourteen days as bars. Triangle: delete the history (at
-// once, as everywhere in the app). The table export stays in the web app: a file to save belongs to a computer.
+// As the web app's tab: on the left the game running now, the most played games and the last
+// sessions; on the right today, the last 7 and 30 days and everything, and the last fourteen days
+// as bars. Triangle: delete the history (at once, as everywhere in the app). The table export stays
+// in the web app: a file to save belongs to a computer.
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
@@ -152,11 +153,13 @@ class PlaytimePage final : public Page
             const Rect tile{card.x + 30.0f + static_cast<float>(i % 2) * (tw + 20.0f),
                             card.y + 30.0f + static_cast<float>(i / 2) * (th + 18.0f), tw, th};
             list.rounded_rect(tile, 16.0f, Color::rgb(0x3880ff, 0.10f));
-            ui::text(list, fonts.semibold, labels[i], tile.x + 20.0f, tile.y + 34.0f, 19.0f, kMuted);
-            ui::text(list, fonts.display, play_hours(secs[i]), tile.x + 20.0f, tile.y + 76.0f, 30.0f, kInk);
+            ui::text(list, fonts.semibold, labels[i], tile.x + 20.0f, tile.y + 34.0f, 19.0f,
+                     kMuted);
+            ui::text(list, fonts.display, play_hours(secs[i]), tile.x + 20.0f, tile.y + 76.0f,
+                     30.0f, kInk);
             ui::text(list, fonts.regular,
-                     std::to_string(counts[i]) + (counts[i] == 1 ? " Sitzung" : " Sitzungen"), tile.x + 20.0f,
-                     tile.y + 104.0f, 18.0f, kMuted);
+                     std::to_string(counts[i]) + (counts[i] == 1 ? " Sitzung" : " Sitzungen"),
+                     tile.x + 20.0f, tile.y + 104.0f, 18.0f, kMuted);
         }
 
         // the last fourteen days
@@ -176,7 +179,8 @@ class PlaytimePage final : public Page
             const float base = area.y + area.h - 40.0f;
             list.rounded_rect({x, area.y, bar_w, base - area.y}, 6.0f, Color::rgb(0x3880ff, 0.06f));
             if (h > 0.5f)
-                list.rounded_rect({x, base - h, bar_w, h}, 6.0f, i == 13 ? kBlue : Color::rgb(0x3880ff, 0.55f));
+                list.rounded_rect({x, base - h, bar_w, h}, 6.0f,
+                                  i == 13 ? kBlue : Color::rgb(0x3880ff, 0.55f));
             if (s >= 60)
             {
                 char text[16];
@@ -189,14 +193,15 @@ class PlaytimePage final : public Page
                 }
                 else
                     std::snprintf(text, sizeof(text), "%d'", s / 60);
-                ui::text(list, fonts.regular, text, x + bar_w * 0.5f, base - h - 8.0f, 15.0f, kMuted, gfx::Align::center);
+                ui::text(list, fonts.regular, text, x + bar_w * 0.5f, base - h - 8.0f, 15.0f,
+                         kMuted, gfx::Align::center);
             }
             // every other day named, and today always
             if (i % 2 == 1 || i == 13)
             {
                 const std::string label = play_day_label(today - 13 + i);
-                ui::text(list, fonts.regular, label.substr(0, label.find(' ')), x + bar_w * 0.5f, base + 22.0f, 15.0f,
-                         i == 13 ? kInk : kMuted, gfx::Align::center);
+                ui::text(list, fonts.regular, label.substr(0, label.find(' ')), x + bar_w * 0.5f,
+                         base + 22.0f, 15.0f, i == 13 ? kInk : kMuted, gfx::Align::center);
             }
         }
         std::string foot = std::to_string(play_.total) + " Sitzungen";
@@ -206,8 +211,10 @@ class PlaytimePage final : public Page
             foot += " · es bleiben die letzten " + std::to_string(play_.kept);
         if (!play_.enabled)
             foot = "Die Spielerkennung ist ausgeschaltet: neue Sitzungen werden nicht gezählt.";
-        ui::text(list, fonts.semibold, ui::fit_label(paint, play_.loaded ? foot : "Wird geladen …", 21.0f, card.w - 60.0f),
-                 card.x + 30.0f, kBottom - 56.0f, 21.0f, play_.enabled ? kMuted : kWarning);
+        ui::text(
+            list, fonts.semibold,
+            ui::fit_label(paint, play_.loaded ? foot : "Wird geladen …", 21.0f, card.w - 60.0f),
+            card.x + 30.0f, kBottom - 56.0f, 21.0f, play_.enabled ? kMuted : kWarning);
     }
 
     void draw_overlay(ui::Canvas &canvas) const override
@@ -251,7 +258,8 @@ class PlaytimePage final : public Page
         if (s.cpu_max >= 0)
             t += "CPU bis " + std::to_string(s.cpu_max) + " °C";
         if (s.soc_max >= 0)
-            t += std::string(t.empty() ? "" : " · ") + "SoC bis " + std::to_string(s.soc_max) + " °C";
+            t += std::string(t.empty() ? "" : " · ") + "SoC bis " + std::to_string(s.soc_max) +
+                 " °C";
         return t;
     }
 
@@ -272,10 +280,12 @@ class PlaytimePage final : public Page
             out.push_back(header("LÄUFT GERADE"));
             ui::ListItem live;
             live.title = play_.current.name;
-            const char *where = play_.live_state == "back"   ? "pausiert, der Startbildschirm ist vorn"
+            const char *where = play_.live_state == "back"
+                                    ? "pausiert, der Startbildschirm ist vorn"
                                 : play_.live_state == "gone" ? "wird beendet …"
                                                              : "im Vordergrund";
-            live.subtitle = std::string(where) + " · seit " + play_clock(play_.current.start, tz_) + " Uhr";
+            live.subtitle =
+                std::string(where) + " · seit " + play_clock(play_.current.start, tz_) + " Uhr";
             const std::string t = temps(play_.current);
             if (!t.empty())
                 live.subtitle += " · " + t;
@@ -298,14 +308,16 @@ class PlaytimePage final : public Page
         int total = 0;
         for (const PlayRank &r : rank_)
             total += r.seconds;
-        const std::size_t ranks = all_ranks_ ? rank_.size() : std::min<std::size_t>(rank_.size(), 8);
+        const std::size_t ranks =
+            all_ranks_ ? rank_.size() : std::min<std::size_t>(rank_.size(), 8);
         for (std::size_t i = 0; i < ranks; ++i)
         {
             const PlayRank &r = rank_[i];
             ui::ListItem item;
             item.title = r.name;
-            std::string sub = std::to_string(r.sessions) + (r.sessions == 1 ? " Sitzung" : " Sitzungen") +
-                              " · im Schnitt " + play_duration(r.seconds / std::max(1, r.sessions)) + " · zuletzt " +
+            std::string sub = std::to_string(r.sessions) +
+                              (r.sessions == 1 ? " Sitzung" : " Sitzungen") + " · im Schnitt " +
+                              play_duration(r.seconds / std::max(1, r.sessions)) + " · zuletzt " +
                               play_date(r.last, tz_);
             if (r.temp_max >= 0)
                 sub += " · bis " + std::to_string(r.temp_max) + " °C";
@@ -319,7 +331,8 @@ class PlaytimePage final : public Page
         if (rank_.size() > 8)
         {
             ui::ListItem more;
-            more.title = all_ranks_ ? "Weniger anzeigen" : "Alle " + std::to_string(rank_.size()) + " anzeigen";
+            more.title = all_ranks_ ? "Weniger anzeigen"
+                                    : "Alle " + std::to_string(rank_.size()) + " anzeigen";
             more.tag = kRankTag - 1;
             out.push_back(more);
         }
@@ -336,7 +349,10 @@ class PlaytimePage final : public Page
                 sub += " · " + t;
             item.subtitle = sub;
             item.value = play_duration(s.play);
-            item.badge = (s.flags & 1) != 0 ? "NOTFALL" : (s.flags & 2) != 0 ? "WARNUNG" : (s.flags & 4) != 0 ? "GESCHÄTZT" : "";
+            item.badge = (s.flags & 1) != 0   ? "NOTFALL"
+                         : (s.flags & 2) != 0 ? "WARNUNG"
+                         : (s.flags & 4) != 0 ? "GESCHÄTZT"
+                                              : "";
             item.tag = kSessionTag + i;
             out.push_back(item);
         }

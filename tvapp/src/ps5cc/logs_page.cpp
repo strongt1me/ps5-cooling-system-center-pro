@@ -65,7 +65,8 @@ class LogsPage final : public Page
         list_.style.entrance_step = 0.0f;
         list_.style.focus_shift = 0.0f;
         list_.style.highlight.kind = ui::HighlightKind::bar;
-        list_.content = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item, int index, float focus)
+        list_.content = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item,
+                               int index, float focus)
         {
             (void)index;
             (void)focus;
@@ -99,7 +100,8 @@ class LogsPage final : public Page
     {
         if (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next))
         {
-            if (views_.step(input.is_pressed(Action::jump_next) ? 1 : -1, input, feedback) == ui::Event::changed)
+            if (views_.step(input.is_pressed(Action::jump_next) ? 1 : -1, input, feedback) ==
+                ui::Event::changed)
             {
                 view_ = views_.active();
                 follow_ = true;
@@ -107,7 +109,8 @@ class LogsPage final : public Page
             }
             return;
         }
-        // Triangle in the kernel log: record it into a file, as the web app's "Aufnahme" (download it there)
+        // Triangle in the kernel log: record it into a file, as the web app's "Aufnahme" (download
+        // it there)
         if (input.is_pressed(Action::north) && view_ == kKernel)
         {
             feedback.play(audio::Cue::select);
@@ -122,7 +125,8 @@ class LogsPage final : public Page
             return;
         }
         list_.handle(input, feedback);
-        // Reading further up stops the list from running on; back at the last line it follows again.
+        // Reading further up stops the list from running on; back at the last line it follows
+        // again.
         follow_ = list_.focus() >= last();
     }
 
@@ -140,14 +144,17 @@ class LogsPage final : public Page
         const ui::Fonts &fonts = canvas.fonts;
         const std::size_t count = view_ == kApp ? log_.size() : klog_.size();
         char text[96];
-        std::snprintf(text, sizeof(text), "%zu Zeilen · %s", count, follow_ ? "läuft mit" : "angehalten");
+        std::snprintf(text, sizeof(text), "%zu Zeilen · %s", count,
+                      follow_ ? "läuft mit" : "angehalten");
         const float baseline = kTabY + kTabH * 0.5f + 8.0f;
         ui::text(list, fonts.regular, text, 1824.0f, baseline, 21.0f, follow_ ? kMuted : kWarning,
                  gfx::Align::right);
-        // Starts after the R2 glyph: right-aligned, a long file name ran back over it. The file loses its fixed
-        // "aufnahme-" and ".log" so the line stays clear of the line count on the right.
+        // Starts after the R2 glyph: right-aligned, a long file name ran back over it. The file
+        // loses its fixed "aufnahme-" and ".log" so the line stays clear of the line count on the
+        // right.
         const Rect &tabs = views_.bounds();
-        const float status_x = tabs.x + tabs.w + 14.0f + ui::button_width(ui::Button::r2, 38.0f) + 22.0f;
+        const float status_x =
+            tabs.x + tabs.w + 14.0f + ui::button_width(ui::Button::r2, 38.0f) + 22.0f;
         if (view_ == kKernel && record_.recording)
         {
             std::string file = record_.file;
@@ -155,7 +162,8 @@ class LogsPage final : public Page
                 file.erase(0, 9);
             if (file.size() > 4 && file.compare(file.size() - 4, 4, ".log") == 0)
                 file.resize(file.size() - 4);
-            const std::string rec = "Aufnahme läuft · " + format_bytes(record_.bytes) + " · " + file;
+            const std::string rec =
+                "Aufnahme läuft · " + format_bytes(record_.bytes) + " · " + file;
             ui::text(list, fonts.semibold, rec, status_x, baseline, 21.0f, kCritical);
         }
         else if (view_ == kKernel && lost_)
@@ -213,7 +221,8 @@ class LogsPage final : public Page
         if (index < 0)
         {
             ui::text(list, fonts.regular,
-                     view_ == kApp ? "Noch keine Einträge." : "Noch keine Zeilen – das Kernel-Log wird gelesen.",
+                     view_ == kApp ? "Noch keine Einträge."
+                                   : "Noch keine Zeilen – das Kernel-Log wird gelesen.",
                      row.x + 16.0f, base, 19.0f, kMuted);
             return;
         }
@@ -221,18 +230,23 @@ class LogsPage final : public Page
         if (view_ == kApp && at < log_.size())
         {
             const LogEntry &e = log_[at];
-            ui::text(list, fonts.mono, format_time_of_day(e.t_ms, tz_), row.x + 16.0f, base, 18.0f, kMuted);
-            ui::text(list, fonts.semibold, level_text(e.level), row.x + 136.0f, base, 17.0f, level_color(e.level));
-            ui::text(list, fonts.regular, ui::fit_label(paint, e.message, 19.0f, row.w - 270.0f), row.x + 250.0f,
-                     base, 19.0f, kInk);
+            ui::text(list, fonts.mono, format_time_of_day(e.t_ms, tz_), row.x + 16.0f, base, 18.0f,
+                     kMuted);
+            ui::text(list, fonts.semibold, level_text(e.level), row.x + 136.0f, base, 17.0f,
+                     level_color(e.level));
+            ui::text(list, fonts.regular, ui::fit_label(paint, e.message, 19.0f, row.w - 270.0f),
+                     row.x + 250.0f, base, 19.0f, kInk);
             return;
         }
         if (view_ == kKernel && at < klog_.size())
         {
             const KlogLine &l = klog_[at];
-            ui::text(list, fonts.mono, format_time_of_day(l.t_ms, tz_), row.x + 16.0f, base, 17.0f, kMuted);
-            // The mono face is not the painter's text face: shorten by its own advance (about 0.6 em per char).
-            const std::size_t room = static_cast<std::size_t>(std::max(10.0f, (row.w - 150.0f) / (17.0f * 0.6f)));
+            ui::text(list, fonts.mono, format_time_of_day(l.t_ms, tz_), row.x + 16.0f, base, 17.0f,
+                     kMuted);
+            // The mono face is not the painter's text face: shorten by its own advance (about 0.6
+            // em per char).
+            const std::size_t room =
+                static_cast<std::size_t>(std::max(10.0f, (row.w - 150.0f) / (17.0f * 0.6f)));
             std::string line = l.text;
             if (line.size() > room)
             {

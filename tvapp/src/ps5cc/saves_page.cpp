@@ -1,12 +1,13 @@
-// ps5cc - The Spielstände page (Spiele → Spielstände): the console's saves per user, backups of them, and putting
-// one back.
+// ps5cc - The Spielstände page (Spiele → Spielstände): the console's saves per user, backups of
+// them, and putting one back.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's tab (src/savebackup.c does the work: an encrypted copy, read back and checked): the X button picks
-// a game's saves for the next backup, Square opens what a game or a backup allows (delete with a backup first; check;
-// put one game back), Triangle the rest (back up what is picked, the destination, pick all or none, cancel the job).
-// Everything fires at once; a restore keeps the state before it as its own backup, as in the web app.
+// As the web app's tab (src/savebackup.c does the work: an encrypted copy, read back and checked):
+// the X button picks a game's saves for the next backup, Square opens what a game or a backup
+// allows (delete with a backup first; check; put one game back), Triangle the rest (back up what is
+// picked, the destination, pick all or none, cancel the job). Everything fires at once; a restore
+// keeps the state before it as its own backup, as in the web app.
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
@@ -109,8 +110,8 @@ class SavesPage final : public Page
         }
         for (auto it = picked_.begin(); it != picked_.end();)
         {
-            const bool there = std::any_of(titles_.begin(), titles_.end(),
-                                           [&](const SaveTitle &t) { return t.uid + "/" + t.id == *it; });
+            const bool there = std::any_of(titles_.begin(), titles_.end(), [&](const SaveTitle &t)
+                                           { return t.uid + "/" + t.id == *it; });
             it = there ? std::next(it) : picked_.erase(it);
         }
         if (target_.empty() || std::none_of(saves_.drives.begin(), saves_.drives.end(),
@@ -201,14 +202,16 @@ class SavesPage final : public Page
         const std::string title = t != nullptr   ? (t->name.empty() ? t->id : t->name)
                                   : b != nullptr ? "Sicherung vom " + play_date(b->created, tz_)
                                                  : std::string("Spielstände");
-        ui::text(list, fonts.display, ui::fit_label(paint, title, 32.0f, card.w - 60.0f), card.x + 30.0f, card.y + 66.0f,
-                 32.0f, kInk);
+        ui::text(list, fonts.display, ui::fit_label(paint, title, 32.0f, card.w - 60.0f),
+                 card.x + 30.0f, card.y + 66.0f, 32.0f, kInk);
         if (t != nullptr || b != nullptr)
             info_.draw(canvas);
         else
             paragraph(canvas,
-                      "Sichert die Spielstände der Konsole verschlüsselt und unverändert, liest jede Kopie zurück und "
-                      "prüft sie. Zurückspielen geht nur auf dieser Konsole; der Stand davor wird vorher gesichert.",
+                      "Sichert die Spielstände der Konsole verschlüsselt und unverändert, liest "
+                      "jede Kopie zurück und "
+                      "prüft sie. Zurückspielen geht nur auf dieser Konsole; der Stand davor wird "
+                      "vorher gesichert.",
                       card.x + 30.0f, card.y + 120.0f, card.w - 60.0f, kMuted, 6);
 
         // the job, or what the next backup would be
@@ -217,24 +220,30 @@ class SavesPage final : public Page
         const SaveJob &j = saves_.job;
         if (j.active)
         {
-            ui::text(list, fonts.semibold, job_title(j) + " läuft", card.x + 30.0f, y + 46.0f, 24.0f, kInk);
-            ui::text(list, fonts.regular, j.phase + " · " + std::to_string(j.percent) + " %", card.x + 30.0f, y + 82.0f,
-                     20.0f, kMuted);
+            ui::text(list, fonts.semibold, job_title(j) + " läuft", card.x + 30.0f, y + 46.0f,
+                     24.0f, kInk);
+            ui::text(list, fonts.regular, j.phase + " · " + std::to_string(j.percent) + " %",
+                     card.x + 30.0f, y + 82.0f, 20.0f, kMuted);
             const Rect bar{card.x + 30.0f, y + 102.0f, card.w - 60.0f, 12.0f};
             list.rounded_rect(bar, 6.0f, Color::rgb(0x3880ff, 0.18f));
-            list.rounded_rect({bar.x, bar.y, bar.w * static_cast<float>(std::clamp(j.percent, 0, 100)) / 100.0f, bar.h},
+            list.rounded_rect({bar.x, bar.y,
+                               bar.w * static_cast<float>(std::clamp(j.percent, 0, 100)) / 100.0f,
+                               bar.h},
                               6.0f, kBlue);
             ui::text(list, fonts.regular,
                      ui::fit_label(paint,
-                                   std::to_string(j.files_done) + " von " + std::to_string(j.files_total) +
-                                       " Dateien · " + j.current,
+                                   std::to_string(j.files_done) + " von " +
+                                       std::to_string(j.files_total) + " Dateien · " + j.current,
                                    18.0f, card.w - 60.0f),
                      card.x + 30.0f, y + 146.0f, 18.0f, kMuted);
         }
         else if (j.finished_ago_s >= 0 && j.finished_ago_s < 900 && !j.kind.empty())
         {
             const bool ok = j.state == "done";
-            ui::text(list, fonts.semibold, job_title(j) + (ok ? " fertig" : j.state == "cancelled" ? " abgebrochen" : " fehlgeschlagen"),
+            ui::text(list, fonts.semibold,
+                     job_title(j) + (ok                       ? " fertig"
+                                     : j.state == "cancelled" ? " abgebrochen"
+                                                              : " fehlgeschlagen"),
                      card.x + 30.0f, y + 46.0f, 24.0f, ok ? kGood : kWarning);
             std::string text = !j.error.empty() ? j.error : !j.note.empty() ? j.note : j.path;
             if (!j.undo.empty())
@@ -243,13 +252,15 @@ class SavesPage final : public Page
         }
         else
         {
-            ui::text(list, fonts.semibold, "Nächste Sicherung", card.x + 30.0f, y + 46.0f, 22.0f, kInk);
+            ui::text(list, fonts.semibold, "Nächste Sicherung", card.x + 30.0f, y + 46.0f, 22.0f,
+                     kInk);
             paragraph(canvas, plan_text(), card.x + 30.0f, y + 84.0f, card.w - 60.0f, kMuted, 5);
         }
         if (saves_.unfinished > 0)
             paragraph(canvas,
                       std::to_string(saves_.unfinished) +
-                          " unfertige Sicherung(en) liegen auf den Laufwerken; entfernen am PC oder per FTP.",
+                          " unfertige Sicherung(en) liegen auf den Laufwerken; entfernen am PC "
+                          "oder per FTP.",
                       card.x + 30.0f, kBottom - 80.0f, card.w - 60.0f, kWarning, 2);
     }
 
@@ -263,7 +274,8 @@ class SavesPage final : public Page
         int n = 0;
         if (const SaveTitle *t = focused_title())
         {
-            out[n++] = {ui::Button::cross, picked_.count(t->uid + "/" + t->id) ? "Abwählen" : "Auswählen"};
+            out[n++] = {ui::Button::cross,
+                        picked_.count(t->uid + "/" + t->id) ? "Abwählen" : "Auswählen"};
             out[n++] = {ui::Button::square, "Aktionen"};
         }
         else if (focused_backup() != nullptr)
@@ -275,7 +287,10 @@ class SavesPage final : public Page
   private:
     static std::string job_title(const SaveJob &j)
     {
-        return j.kind == "verify" ? "Prüfung" : j.kind == "restore" ? "Zurückspielen" : j.kind == "delete" ? "Löschen" : "Sicherung";
+        return j.kind == "verify"    ? "Prüfung"
+               : j.kind == "restore" ? "Zurückspielen"
+               : j.kind == "delete"  ? "Löschen"
+                                     : "Sicherung";
     }
 
     const SaveDrive *target() const
@@ -322,13 +337,13 @@ class SavesPage final : public Page
         if (!why.empty())
             return why;
         const SaveDrive *d = target();
-        return std::to_string(picked_.size()) + (picked_.size() == 1 ? " Spiel" : " Spiele") + " ausgewählt, zusammen " +
-               format_bytes(picked_bytes()) + ", nach " + d->label + " (" + format_bytes(d->free_bytes) +
-               " frei). Mehr → Ausgewählte sichern.";
+        return std::to_string(picked_.size()) + (picked_.size() == 1 ? " Spiel" : " Spiele") +
+               " ausgewählt, zusammen " + format_bytes(picked_bytes()) + ", nach " + d->label +
+               " (" + format_bytes(d->free_bytes) + " frei). Mehr → Ausgewählte sichern.";
     }
 
-    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width, Color ink,
-                    int max_lines) const
+    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width,
+                    Color ink, int max_lines) const
     {
         int lines = 0;
         for (const std::string &line : canvas.fonts.regular.font->wrap(text, 21.0f, width))
@@ -353,19 +368,23 @@ class SavesPage final : public Page
     const SaveTitle *focused_title() const
     {
         const int i = focused_tag() - kTitleTag;
-        return i >= 0 && i < static_cast<int>(titles_.size()) ? &titles_[static_cast<std::size_t>(i)] : nullptr;
+        return i >= 0 && i < static_cast<int>(titles_.size())
+                   ? &titles_[static_cast<std::size_t>(i)]
+                   : nullptr;
     }
 
     const SaveBackup *focused_backup() const
     {
         const int i = focused_tag() - kBackupTag;
-        return i >= 0 && i < static_cast<int>(saves_.backups.size()) ? &saves_.backups[static_cast<std::size_t>(i)]
-                                                                       : nullptr;
+        return i >= 0 && i < static_cast<int>(saves_.backups.size())
+                   ? &saves_.backups[static_cast<std::size_t>(i)]
+                   : nullptr;
     }
 
     // ---------------------------------------------------------------- menus
 
-    static ui::MenuItem item(const std::string &label, int tag, bool disabled = false, bool danger = false)
+    static ui::MenuItem item(const std::string &label, int tag, bool disabled = false,
+                             bool danger = false)
     {
         ui::MenuItem m;
         m.label = label;
@@ -381,7 +400,8 @@ class SavesPage final : public Page
         const SaveDrive *d = target();
         const bool busy = saves_.job.active || saves_.game_running;
         std::vector<ui::MenuItem> items;
-        items.push_back(item(d != nullptr ? "Löschen (vorher nach " + d->label + " sichern)" : "Löschen (ohne Sicherung)",
+        items.push_back(item(d != nullptr ? "Löschen (vorher nach " + d->label + " sichern)"
+                                          : "Löschen (ohne Sicherung)",
                              kDelete, busy, true));
         menu_.set_items(items);
         menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
@@ -410,9 +430,11 @@ class SavesPage final : public Page
     {
         const SaveDrive *d = target();
         std::vector<ui::MenuItem> items;
-        items.push_back(item("Ausgewählte sichern (" + std::to_string(picked_.size()) + ")", kBackup, !blocked().empty()));
-        items.push_back(item("Ziel wählen: " + (d != nullptr ? d->label : std::string("keins")) + " …", kTarget,
-                             saves_.drives.empty()));
+        items.push_back(item("Ausgewählte sichern (" + std::to_string(picked_.size()) + ")",
+                             kBackup, !blocked().empty()));
+        items.push_back(
+            item("Ziel wählen: " + (d != nullptr ? d->label : std::string("keins")) + " …", kTarget,
+                 saves_.drives.empty()));
         items.push_back(item("Alle auswählen", kAll, titles_.empty()));
         items.push_back(item("Keine auswählen", kNone, picked_.empty()));
         if (saves_.job.active && saves_.job.can_cancel)
@@ -422,8 +444,8 @@ class SavesPage final : public Page
         menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
     }
 
-    // The drives to back up to, each with its free space; the chosen one is marked. Cycling through them on each
-    // press left it unclear whether the press already saved (user, 29.10.2026).
+    // The drives to back up to, each with its free space; the chosen one is marked. Cycling through
+    // them on each press left it unclear whether the press already saved (user, 29.10.2026).
     void open_drive_menu(ui::Feedback &feedback)
     {
         std::vector<ui::MenuItem> items;
@@ -434,7 +456,8 @@ class SavesPage final : public Page
             const bool on = d.mount == target_;
             if (on)
                 chosen = static_cast<int>(i);
-            items.push_back(item((on ? "Gewählt: " : "") + d.label + " · " + format_bytes(d.free_bytes) + " frei",
+            items.push_back(item((on ? "Gewählt: " : "") + d.label + " · " +
+                                     format_bytes(d.free_bytes) + " frei",
                                  kDrive + static_cast<int>(i)));
         }
         menu_.set_items(items);
@@ -459,9 +482,9 @@ class SavesPage final : public Page
             if (i < menu_backup_.titles.size())
             {
                 const SaveTitle &t = menu_backup_.titles[i];
-                source().saves_post("restore", "{\"path\":" + json_text(menu_backup_.path) + ",\"user\":" +
-                                                   json_text(t.uid) + ",\"title\":" + json_text(t.id) +
-                                                   ",\"confirm\":true}");
+                source().saves_post("restore", "{\"path\":" + json_text(menu_backup_.path) +
+                                                   ",\"user\":" + json_text(t.uid) + ",\"title\":" +
+                                                   json_text(t.id) + ",\"confirm\":true}");
             }
             return;
         }
@@ -469,11 +492,13 @@ class SavesPage final : public Page
         {
         case kDelete:
             if (target() != nullptr)
-                source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) + ",\"id\":" +
-                                                  json_text(menu_title_.id) + ",\"mount\":" + json_text(target_) + "}");
+                source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) +
+                                                  ",\"id\":" + json_text(menu_title_.id) +
+                                                  ",\"mount\":" + json_text(target_) + "}");
             else
-                source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) + ",\"id\":" +
-                                                  json_text(menu_title_.id) + ",\"no_backup\":true}");
+                source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) +
+                                                  ",\"id\":" + json_text(menu_title_.id) +
+                                                  ",\"no_backup\":true}");
             break;
         case kVerify:
             source().saves_post("verify", "{\"path\":" + json_text(menu_backup_.path) + "}");
@@ -490,8 +515,8 @@ class SavesPage final : public Page
             std::string uj;
             for (const std::string &u : users)
                 uj += (uj.empty() ? "" : ",") + json_text(u);
-            source().saves_post("backup",
-                                "{\"target\":" + json_text(target_) + ",\"users\":[" + uj + "],\"titles\":[" + titles + "]}");
+            source().saves_post("backup", "{\"target\":" + json_text(target_) + ",\"users\":[" +
+                                              uj + "],\"titles\":[" + titles + "]}");
             break;
         }
         case kTarget:
@@ -545,12 +570,14 @@ class SavesPage final : public Page
             std::string head = u.name;
             for (char &c : head)
                 c = static_cast<char>(c >= 'a' && c <= 'z' ? c - 32 : c);
-            out.push_back(header(head + " · " + std::to_string(u.titles.size()) + " TITEL · " + format_bytes(u.bytes)));
+            out.push_back(header(head + " · " + std::to_string(u.titles.size()) + " TITEL · " +
+                                 format_bytes(u.bytes)));
             for (const SaveTitle &t : u.titles)
             {
                 ui::ListItem item;
                 item.title = t.name.empty() ? t.id : t.name;
-                item.subtitle = t.id + " · " + t.platform + (t.installed ? "" : " · nicht installiert") + " · geändert " +
+                item.subtitle = t.id + " · " + t.platform +
+                                (t.installed ? "" : " · nicht installiert") + " · geändert " +
                                 play_date(t.mtime, tz_);
                 item.value = format_bytes(t.bytes);
                 item.badge = picked_.count(t.uid + "/" + t.id) ? "AUSGEWÄHLT" : "";
@@ -579,7 +606,9 @@ class SavesPage final : public Page
                 users += (users.empty() ? "" : ", ") + n;
             item.subtitle = b.label + " · " + std::to_string(b.titles.size()) + " Titel · " + users;
             item.value = format_bytes(b.bytes);
-            item.badge = b.kind == "undo" ? "STAND VORHER" : !b.this_console ? "ANDERE KONSOLE" : "";
+            item.badge = b.kind == "undo"  ? "STAND VORHER"
+                         : !b.this_console ? "ANDERE KONSOLE"
+                                           : "";
             item.tag = kBackupTag + static_cast<int>(i);
             out.push_back(item);
         }
@@ -613,7 +642,8 @@ class SavesPage final : public Page
             rows.push_back({"Titel-ID", t->id});
             rows.push_back({"Plattform", t->platform});
             rows.push_back({"Größe", format_bytes(t->bytes)});
-            rows.push_back({"Geändert", play_date(t->mtime, tz_) + ", " + play_clock(t->mtime, tz_) + " Uhr"});
+            rows.push_back(
+                {"Geändert", play_date(t->mtime, tz_) + ", " + play_clock(t->mtime, tz_) + " Uhr"});
             rows.push_back({"Installiert", t->installed ? "ja" : "nein"});
         }
         else if (const SaveBackup *b = focused_backup())
@@ -621,7 +651,8 @@ class SavesPage final : public Page
             rows.push_back({"Laufwerk", b->label});
             rows.push_back({"Titel", std::to_string(b->titles.size())});
             rows.push_back({"Größe", format_bytes(b->bytes)});
-            rows.push_back({"Art", b->kind == "undo" ? "Stand vor dem Zurückspielen" : "Sicherung"});
+            rows.push_back(
+                {"Art", b->kind == "undo" ? "Stand vor dem Zurückspielen" : "Sicherung"});
             rows.push_back({"Konsole", b->this_console ? "diese" : "eine andere (nur ansehen)"});
         }
         std::string key;

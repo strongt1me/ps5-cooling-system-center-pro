@@ -66,8 +66,8 @@ class HttpSource final : public Source
 
     // The workers; public only for the thread entries.
     void run();
-    // Plans and starts of the game tools: a plan measures a whole game and may take a minute, so it has a thread of
-    // its own and the temperatures keep coming meanwhile.
+    // Plans and starts of the game tools: a plan measures a whole game and may take a minute, so it
+    // has a thread of its own and the temperatures keep coming meanwhile.
     void run_tools();
 
   private:
@@ -173,11 +173,12 @@ class HttpSource final : public Source
     std::string extras_id_; // the game whose extras window is open (under mutex_)
     std::deque<ToolRequest> tool_requests_;
     std::uint64_t next_ticket_ = 0;
-    // ShadowMountPlus keeps reporting its last job for ever: one that ended is shown only when it ran in this session.
+    // ShadowMountPlus keeps reporting its last job for ever: one that ended is shown only when it
+    // ran in this session.
     std::atomic<std::int64_t> storage_seen_{0};
-    std::atomic<bool> jobs_wanted_{false};    // a tool started: ask for the jobs at once
-    bool leaving_for_delete_ = false;         // the app ends itself for a delete (worker thread only)
-    bool leaving_for_storage_ = false;        // ... or for a move or an unpack of ShadowMountPlus
+    std::atomic<bool> jobs_wanted_{false}; // a tool started: ask for the jobs at once
+    bool leaving_for_delete_ = false;      // the app ends itself for a delete (worker thread only)
+    bool leaving_for_storage_ = false;     // ... or for a move or an unpack of ShadowMountPlus
     std::atomic<bool> library_wanted_{false}; // a job ended: games may have moved or gone
     std::atomic<Watch> watching_{Watch::none};
     std::atomic<bool> config_wanted_{true};

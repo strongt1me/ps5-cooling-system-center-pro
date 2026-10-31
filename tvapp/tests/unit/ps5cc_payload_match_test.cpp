@@ -37,20 +37,23 @@ TEST(Ps5ccPayloadMatch, RunningNamesFindTheirFiles)
 TEST(Ps5ccPayloadMatch, OnlyTheVersionStartedGlows)
 {
     using hui::ps5cc::payload_file_loaded;
-    const std::vector<std::string> folder = {"ShadowMountPlus_1.7beta7.elf", "ShadowMountPlus_1.7beta10.elf",
-                                             "nanodns_v0.4.elf"};
+    const std::vector<std::string> folder = {"ShadowMountPlus_1.7beta7.elf",
+                                             "ShadowMountPlus_1.7beta10.elf", "nanodns_v0.4.elf"};
     // started by the app: the file is known
-    const std::vector<hui::ps5cc::RunningRef> known = {{"shadowmountplus.elf", "ShadowMountPlus_1.7beta10.elf"}};
+    const std::vector<hui::ps5cc::RunningRef> known = {
+        {"shadowmountplus.elf", "ShadowMountPlus_1.7beta10.elf"}};
     EXPECT_TRUE(payload_file_loaded("ShadowMountPlus_1.7beta10.elf", folder, known));
     EXPECT_FALSE(payload_file_loaded("ShadowMountPlus_1.7beta7.elf", folder, known));
     // started by something else: two versions in the folder, which one is unknown, so none glows
-    const std::vector<hui::ps5cc::RunningRef> unknown = {{"shadowmountplus.elf", ""}, {"nanodns.elf", ""}};
+    const std::vector<hui::ps5cc::RunningRef> unknown = {{"shadowmountplus.elf", ""},
+                                                         {"nanodns.elf", ""}};
     EXPECT_FALSE(payload_file_loaded("ShadowMountPlus_1.7beta10.elf", folder, unknown));
     EXPECT_FALSE(payload_file_loaded("ShadowMountPlus_1.7beta7.elf", folder, unknown));
     // a single file of its kind is the one
     EXPECT_TRUE(payload_file_loaded("nanodns_v0.4.elf", folder, unknown));
     // the same version internal and on USB, written differently, is still one version
-    const std::vector<std::string> twice = {"ShadowMountPlus_1.7beta10.elf", "shadowmountplus_v1.7_Beta10.elf"};
+    const std::vector<std::string> twice = {"ShadowMountPlus_1.7beta10.elf",
+                                            "shadowmountplus_v1.7_Beta10.elf"};
     const std::vector<hui::ps5cc::RunningRef> smp = {{"shadowmountplus.elf", ""}};
     EXPECT_EQ(hui::ps5cc::payload_version(twice[0]), hui::ps5cc::payload_version(twice[1]));
     EXPECT_TRUE(payload_file_loaded(twice[0], twice, smp));

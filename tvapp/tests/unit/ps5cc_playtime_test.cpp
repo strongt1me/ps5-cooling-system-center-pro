@@ -1,4 +1,5 @@
-// ps5cc - Tests for Spielzeit's numbers: days, totals, sessions across midnight, the ranking and the date texts.
+// ps5cc - Tests for Spielzeit's numbers: days, totals, sessions across midnight, the ranking and
+// the date texts.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -9,8 +10,8 @@
 namespace
 {
 
-using hui::ps5cc::Playtime;
 using hui::ps5cc::PlaySession;
+using hui::ps5cc::Playtime;
 
 // 29.10.2026 12:00:00 UTC
 constexpr std::int64_t kNoon = 1793275200;
@@ -34,7 +35,8 @@ TEST(Ps5ccPlaytime, DatesAndClockFollowTheOffset)
     EXPECT_EQ(hui::ps5cc::play_date(kNoon + 11 * 3600 + 1800, 60), "30.10.2026");
     EXPECT_EQ(hui::ps5cc::play_day_label(hui::ps5cc::play_day(kNoon, 0)), "Do. 29.10.");
     EXPECT_EQ(hui::ps5cc::play_range(kNoon, kNoon + 3600, 0), "Do., 29.10., 12:00–13:00 Uhr");
-    EXPECT_EQ(hui::ps5cc::play_range(kNoon + 11 * 3600, kNoon + 13 * 3600, 0), "Do., 29.10., 23:00 – 30.10., 01:00 Uhr");
+    EXPECT_EQ(hui::ps5cc::play_range(kNoon + 11 * 3600, kNoon + 13 * 3600, 0),
+              "Do., 29.10., 23:00 – 30.10., 01:00 Uhr");
 }
 
 TEST(Ps5ccPlaytime, DurationsInWords)

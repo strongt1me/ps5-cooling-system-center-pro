@@ -21,7 +21,8 @@ using hui::ps5cc::kBackdropWidth;
 
 std::vector<std::uint8_t> picture(std::uint8_t value)
 {
-    return std::vector<std::uint8_t>(static_cast<std::size_t>(kBackdropWidth) * kBackdropHeight * 4u, value);
+    return std::vector<std::uint8_t>(
+        static_cast<std::size_t>(kBackdropWidth) * kBackdropHeight * 4u, value);
 }
 
 std::vector<BackdropSetting> games_area(BackdropMode mode, bool custom, const std::string &stamp)
@@ -66,7 +67,8 @@ TEST(Backdrops, NamesAndAreasMatch)
 TEST(Backdrops, CoverKeepsTheCentreOfAWidePicture)
 {
     // 4 x 1 to 2 x 1: the middle two columns (green, blue) survive.
-    const std::vector<std::uint8_t> rgba = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+    const std::vector<std::uint8_t> rgba = {255, 0, 0,   255, 0,   255, 0,   255,
+                                            0,   0, 255, 255, 255, 255, 255, 255};
     const std::vector<std::uint8_t> out = hui::ps5cc::cover_rgba(rgba.data(), 4, 1, 2, 1);
     ASSERT_EQ(out.size(), 8u);
     EXPECT_EQ(out[1], 255); // green

@@ -1,12 +1,14 @@
-// ps5cc - The Disc page (Spiele → Disc): the drive, dumping disc games, the dump queue, the dumps and images.
+// ps5cc - The Disc page (Spiele → Disc): the drive, dumping disc games, the dump queue, the dumps
+// and images.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's Disc tab, in one list with a section each: the drive (✕ makes an image of a PS2-DVD or PS3 disc),
-// the games installed from disc (✕ starts the game or, while it runs, dumps it; □ puts it into the queue), the queue
-// (□ takes a game out), the dumps this tab made and the disc images (□ deletes). △ holds the rest: the drive on and
-// off, automatic images, the queue, stopping a dump, the dump settings, a new search, the drive's events. The tab is
-// only there when the console has a drive. A game's own queue settings stay in the web app. Nothing is asked twice
+// As the web app's Disc tab, in one list with a section each: the drive (✕ makes an image of a
+// PS2-DVD or PS3 disc), the games installed from disc (✕ starts the game or, while it runs, dumps
+// it; □ puts it into the queue), the queue (□ takes a game out), the dumps this tab made and the
+// disc images (□ deletes). △ holds the rest: the drive on and off, automatic images, the queue,
+// stopping a dump, the dump settings, a new search, the drive's events. The tab is only there when
+// the console has a drive. A game's own queue settings stay in the web app. Nothing is asked twice
 // (user, 27.10.2026).
 
 #include "core/tween.hpp"
@@ -144,7 +146,8 @@ class DiscPage final : public Page
         list_.style.badge_column = true;
         list_.style.value_width = 200.0f; // the badges line up
         list_.style.leading_width = 76.0f;
-        list_.leading = [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item, int, float)
+        list_.leading =
+            [this](ui::Canvas &canvas, const Rect &row, const ui::ListItem &item, int, float)
         {
             if (item.header || item.tag < 0)
                 return;
@@ -299,18 +302,22 @@ class DiscPage final : public Page
         if (!note.empty())
             paragraph(canvas, note, card.x + 30.0f, kTop + 470.0f, card.w - 60.0f, kMuted, 2);
 
-        // The bottom of the card: the dump (or the disc image) that runs or ran last, and where dumps go.
+        // The bottom of the card: the dump (or the disc image) that runs or ran last, and where
+        // dumps go.
         const float line_y = kTop + 500.0f;
-        list.line(card.x + 30.0f, line_y, card.x + card.w - 30.0f, line_y, 1.0f, Color::rgb(0x3880ff, 0.18f));
+        list.line(card.x + 30.0f, line_y, card.x + card.w - 30.0f, line_y, 1.0f,
+                  Color::rgb(0x3880ff, 0.18f));
         if (bar_shown_)
             bar_.draw(canvas);
         else
-            ui::text(list, fonts.regular, "Kein Dump läuft.", card.x + 30.0f, kTop + 560.0f, 21.0f, kMuted);
+            ui::text(list, fonts.regular, "Kein Dump läuft.", card.x + 30.0f, kTop + 560.0f, 21.0f,
+                     kMuted);
         if (!bar_note_.empty())
-            paragraph(canvas, bar_note_, card.x + 30.0f, kTop + 620.0f, card.w - 60.0f,
-                      dump_.job.state == "failed" || disc_.job_state == "failed" ? kCritical : kMuted, 3);
-        ui::text(list, fonts.semibold, ui::fit_label(paint, target_line(), 20.0f, card.w - 60.0f), card.x + 30.0f,
-                 kBottom - 40.0f, 20.0f, kMuted);
+            paragraph(
+                canvas, bar_note_, card.x + 30.0f, kTop + 620.0f, card.w - 60.0f,
+                dump_.job.state == "failed" || disc_.job_state == "failed" ? kCritical : kMuted, 3);
+        ui::text(list, fonts.semibold, ui::fit_label(paint, target_line(), 20.0f, card.w - 60.0f),
+                 card.x + 30.0f, kBottom - 40.0f, 20.0f, kMuted);
     }
 
     void draw_overlay(ui::Canvas &canvas) const override
@@ -328,12 +335,13 @@ class DiscPage final : public Page
         ui::Painter paint(list, fonts, theme_);
         solid_floor(list, panel, theme_.radius_card);
         solid_floor(list, panel, theme_.radius_card);
-    paint.panel(panel);
+        paint.panel(panel);
         const bool events = dialog_ == kEventsDialog;
-        ui::text(list, fonts.display, events ? "Ereignisse am Laufwerk" : "Dump-Einstellungen", panel.x + 40.0f,
-                 panel.y + 66.0f, 36.0f, kInk);
+        ui::text(list, fonts.display, events ? "Ereignisse am Laufwerk" : "Dump-Einstellungen",
+                 panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
         ui::text(list, fonts.regular,
-                 events ? "die letzten, das neueste zuerst" : "für PS5- und PS4-Spiele · gelten für den nächsten Dump",
+                 events ? "die letzten, das neueste zuerst"
+                        : "für PS5- und PS4-Spiele · gelten für den nächsten Dump",
                  panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
         ui::HintLayout layout;
         layout.size = 34.0f;
@@ -345,7 +353,8 @@ class DiscPage final : public Page
             float y = panel.y + 170.0f;
             for (std::size_t i = 0; i < disc_.events.size() && i < 20; ++i)
             {
-                ui::text(list, fonts.regular, ui::fit_label(paint, disc_.events[i], 20.0f, panel.w - 80.0f),
+                ui::text(list, fonts.regular,
+                         ui::fit_label(paint, disc_.events[i], 20.0f, panel.w - 80.0f),
                          panel.x + 40.0f, y, 20.0f, kInk.with_alpha(0.85f));
                 y += 30.0f;
             }
@@ -356,15 +365,20 @@ class DiscPage final : public Page
         }
         else
         {
-            list.rounded_rect({panel.x + 1120.0f, panel.y + 140.0f, 1.5f, 630.0f}, 0.0f, Color::rgb(0x3880ff, 0.18f));
+            list.rounded_rect({panel.x + 1120.0f, panel.y + 140.0f, 1.5f, 630.0f}, 0.0f,
+                              Color::rgb(0x3880ff, 0.18f));
             form_.draw(canvas);
             paragraph(canvas,
-                      "Spielbar machen: Entschlüsseln und FSELF müssen beide an sein, sonst zeigt die Konsole den Dump "
-                      "nicht, ShadowMountPlus bindet ihn nicht ein und er lässt sich nicht spielen.\n\nDer Backport ist "
-                      "nur für ältere Firmware nötig und kann den Dump beschädigen.\n\nDen Ordner auf dem Ziel änderst "
+                      "Spielbar machen: Entschlüsseln und FSELF müssen beide an sein, sonst zeigt "
+                      "die Konsole den Dump "
+                      "nicht, ShadowMountPlus bindet ihn nicht ein und er lässt sich nicht "
+                      "spielen.\n\nDer Backport ist "
+                      "nur für ältere Firmware nötig und kann den Dump beschädigen.\n\nDen Ordner "
+                      "auf dem Ziel änderst "
                       "du in der Browser-App.",
                       panel.x + 1150.0f, panel.y + 160.0f, panel.w - 1190.0f, kMuted, 18);
-            const ui::Hint hints[] = {{ui::Button::cross, "Ändern"}, {ui::Button::circle, "Schließen"}};
+            const ui::Hint hints[] = {{ui::Button::cross, "Ändern"},
+                                      {ui::Button::circle, "Schließen"}};
             ui::draw_hints(list, fonts, glyphs, hints, 2, panel.x + 40.0f, false, layout);
         }
         list.pop_opacity();
@@ -412,7 +426,8 @@ class DiscPage final : public Page
     const Game *focused_game() const
     {
         const int tag = focused_tag();
-        return section_of(tag) == kGames && index_of(tag) < games_.size() ? &games_[index_of(tag)] : nullptr;
+        return section_of(tag) == kGames && index_of(tag) < games_.size() ? &games_[index_of(tag)]
+                                                                          : nullptr;
     }
 
     bool queued(const std::string &id) const
@@ -457,7 +472,8 @@ class DiscPage final : public Page
         switch (section_of(tag))
         {
         case kGames:
-            return queued(games_[index_of(tag)].id) || dump_.queue.active ? "" : "In die Warteschlange";
+            return queued(games_[index_of(tag)].id) || dump_.queue.active ? ""
+                                                                          : "In die Warteschlange";
         case kQueue:
             return dump_.queue.active ? "" : "Entfernen";
         case kDumps:
@@ -506,20 +522,24 @@ class DiscPage final : public Page
         switch (section_of(tag))
         {
         case kGames:
-            source().disc_post("dump", "{\"action\":\"queue_add\",\"id\":" + json_text(games_[i].id) + ",\"disc\":true}");
+            source().disc_post("dump", "{\"action\":\"queue_add\",\"id\":" +
+                                           json_text(games_[i].id) + ",\"disc\":true}");
             return true;
         case kQueue:
-            source().disc_post("dump", "{\"action\":\"queue_remove\",\"id\":" + json_text(dump_.queue.items[i].id) + "}");
+            source().disc_post("dump", "{\"action\":\"queue_remove\",\"id\":" +
+                                           json_text(dump_.queue.items[i].id) + "}");
             return true;
         case kDumps:
         {
             const DumpEntry &d = dumps_.dumps[i];
-            source().disc_post("dumps/delete", "{\"mount\":" + json_text(d.mount) + ",\"dir\":" + json_text(d.dir) +
+            source().disc_post("dumps/delete", "{\"mount\":" + json_text(d.mount) +
+                                                   ",\"dir\":" + json_text(d.dir) +
                                                    ",\"folder\":" + json_text(d.folder) + "}");
             return true;
         }
         case kImages:
-            source().disc_post("disc", "{\"action\":\"delete\",\"name\":" + json_text(disc_.images[i].name) + "}");
+            source().disc_post(
+                "disc", "{\"action\":\"delete\",\"name\":" + json_text(disc_.images[i].name) + "}");
             return true;
         default:
             return false;
@@ -530,26 +550,34 @@ class DiscPage final : public Page
 
     void draw_mark(ui::Canvas &canvas, const Rect &box, int tag) const
     {
-        if (const Game *g = section_of(tag) == kGames && index_of(tag) < games_.size() ? &games_[index_of(tag)] : nullptr)
+        if (const Game *g = section_of(tag) == kGames && index_of(tag) < games_.size()
+                                ? &games_[index_of(tag)]
+                                : nullptr)
         {
             const CoverShown pic = covers().texture_of(g->id);
             if (pic.texture != 0)
             {
-                canvas.list.image(pic.texture, box, gfx::kFullUv, Color{1.0f, 1.0f, 1.0f, pic.alpha}, box.w * 0.22f);
+                canvas.list.image(pic.texture, box, gfx::kFullUv,
+                                  Color{1.0f, 1.0f, 1.0f, pic.alpha}, box.w * 0.22f);
                 return;
             }
         }
         const int s = section_of(tag);
-        const Color tint = s == kDrive    ? Color::rgb(0x3880ff)
-                           : s == kGames  ? Color::rgb(0x2f5fb3)
-                           : s == kQueue  ? Color::rgb(0x7f56d9)
-                           : s == kDumps  ? Color::rgb(0x168f68)
-                                          : Color::rgb(0xd9822b);
-        const char *mark = s == kDrive ? "BD" : s == kGames ? "DISC" : s == kQueue ? "WS" : s == kDumps ? "DMP" : "ISO";
+        const Color tint = s == kDrive   ? Color::rgb(0x3880ff)
+                           : s == kGames ? Color::rgb(0x2f5fb3)
+                           : s == kQueue ? Color::rgb(0x7f56d9)
+                           : s == kDumps ? Color::rgb(0x168f68)
+                                         : Color::rgb(0xd9822b);
+        const char *mark = s == kDrive   ? "BD"
+                           : s == kGames ? "DISC"
+                           : s == kQueue ? "WS"
+                           : s == kDumps ? "DMP"
+                                         : "ISO";
         canvas.list.rounded_rect(box, box.w * 0.22f, tint.with_alpha(0.85f));
         const float size = box.w * (std::string(mark).size() > 3 ? 0.24f : 0.3f);
-        ui::text(canvas.list, canvas.fonts.semibold, mark, box.x + box.w * 0.5f, box.y + box.h * 0.5f + size * 0.36f, size,
-                 Color::rgb(0xffffff), gfx::Align::center);
+        ui::text(canvas.list, canvas.fonts.semibold, mark, box.x + box.w * 0.5f,
+                 box.y + box.h * 0.5f + size * 0.36f, size, Color::rgb(0xffffff),
+                 gfx::Align::center);
     }
 
     std::string card_title(int tag) const
@@ -581,15 +609,19 @@ class DiscPage final : public Page
                 return "Ausgeschaltet: Die App fragt das Laufwerk nicht.";
             if (disc_.present && !disc_.dumpable && disc_.has_title)
                 return "PS4- und PS5-Discs werden erkannt, aber nicht kopiert.";
-            return disc_.title_state == "generic" ? "Die Titelkennung ließ sich nicht lesen (GENERIC)." : "";
+            return disc_.title_state == "generic"
+                       ? "Die Titelkennung ließ sich nicht lesen (GENERIC)."
+                       : "";
         case kGames:
         {
             const Game &g = games_[index_of(tag)];
             if (g.dump_mounted)
                 return "Das Spiel läuft: Der Dump kann beginnen, das Spiel läuft dabei weiter.";
             if (g.disc == "out")
-                return "Die Disc liegt nicht im Laufwerk. Zum Starten und Dumpen muss sie drin liegen.";
-            return "Zum Dumpen muss das Spiel laufen: Die X-Taste startet es (die Vollbild-App schließt sich dafür).";
+                return "Die Disc liegt nicht im Laufwerk. Zum Starten und Dumpen muss sie drin "
+                       "liegen.";
+            return "Zum Dumpen muss das Spiel laufen: Die X-Taste startet es (die Vollbild-App "
+                   "schließt sich dafür).";
         }
         case kQueue:
             return dump_.queue.items[index_of(tag)].message;
@@ -617,22 +649,32 @@ class DiscPage final : public Page
             bar_shown_ = true;
             const double work = j.done_bytes + (j.verify ? j.checked_bytes : 0.0);
             const double all = j.total_bytes * (j.verify ? 2.0 : 1.0);
-            const float value = j.state == "done" ? 1.0f : all > 0.0 ? static_cast<float>(std::min(1.0, work / all)) : 0.0f;
+            const float value = j.state == "done" ? 1.0f
+                                : all > 0.0       ? static_cast<float>(std::min(1.0, work / all))
+                                                  : 0.0f;
             std::string label = j.name + " · ";
             if (j.active)
-                label += (j.stage.empty() ? "läuft" : j.stage) + (eta_text(j.eta_s).empty() ? "" : " · " + eta_text(j.eta_s));
+                label += (j.stage.empty() ? "läuft" : j.stage) +
+                         (eta_text(j.eta_s).empty() ? "" : " · " + eta_text(j.eta_s));
             else
-                label += j.state == "done" ? "Dump fertig" : j.state == "cancelled" ? "abgebrochen" : "gescheitert";
+                label += j.state == "done"        ? "Dump fertig"
+                         : j.state == "cancelled" ? "abgebrochen"
+                                                  : "gescheitert";
             bar_.label = label;
             bar_.style.percent = j.active;
-            bar_.style.status = j.state == "failed" ? ui::Status::danger : j.active ? ui::Status::accent : ui::Status::success;
+            bar_.style.status = j.state == "failed" ? ui::Status::danger
+                                : j.active          ? ui::Status::accent
+                                                    : ui::Status::success;
             bar_.set_value(value);
-            bar_note_ = !j.error.empty() ? j.error
-                        : j.active       ? format_bytes(static_cast<std::uint64_t>(j.done_bytes)) + " von " +
-                                         format_bytes(static_cast<std::uint64_t>(j.total_bytes)) +
-                                         (j.rate > 0.0 ? " · " + format_bytes(static_cast<std::uint64_t>(j.rate)) + "/s"
-                                                       : std::string())
-                                         : j.note;
+            bar_note_ =
+                !j.error.empty() ? j.error
+                : j.active
+                    ? format_bytes(static_cast<std::uint64_t>(j.done_bytes)) + " von " +
+                          format_bytes(static_cast<std::uint64_t>(j.total_bytes)) +
+                          (j.rate > 0.0
+                               ? " · " + format_bytes(static_cast<std::uint64_t>(j.rate)) + "/s"
+                               : std::string())
+                    : j.note;
             return;
         }
         if (disc_.job_state != "idle" && !disc_.job_state.empty())
@@ -641,16 +683,16 @@ class DiscPage final : public Page
             const bool running = disc_.job_state == "running" || disc_.job_state == "verifying";
             bar_.label = disc_.job_name + " · " +
                          (disc_.job_state == "verifying" ? std::string("wird geprüft")
-                          : running                      ? "Abbild" + (eta_text(disc_.job_eta_s).empty()
-                                                                            ? std::string()
-                                                                            : " · " + eta_text(disc_.job_eta_s))
-                          : disc_.job_state == "done"    ? std::string("fertig")
+                          : running ? "Abbild" + (eta_text(disc_.job_eta_s).empty()
+                                                      ? std::string()
+                                                      : " · " + eta_text(disc_.job_eta_s))
+                          : disc_.job_state == "done"      ? std::string("fertig")
                           : disc_.job_state == "cancelled" ? std::string("abgebrochen")
                                                            : std::string("gescheitert"));
             bar_.style.percent = running;
             bar_.style.status = disc_.job_state == "failed" ? ui::Status::danger
-                                : running                  ? ui::Status::accent
-                                                           : ui::Status::success;
+                                : running                   ? ui::Status::accent
+                                                            : ui::Status::success;
             bar_.set_value(disc_.job_state == "done" ? 1.0f
                            : disc_.job_total > 0.0
                                ? static_cast<float>(std::min(1.0, disc_.job_done / disc_.job_total))
@@ -661,8 +703,8 @@ class DiscPage final : public Page
         bar_shown_ = false;
     }
 
-    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width, Color ink,
-                    int max_lines) const
+    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width,
+                    Color ink, int max_lines) const
     {
         int lines = 0;
         for (const std::string &line : canvas.fonts.regular.font->wrap(text, 21.0f, width))
@@ -691,8 +733,9 @@ class DiscPage final : public Page
         };
         add(disc_.enabled ? "Laufwerk ausschalten" : "Laufwerk einschalten", kDriveSwitch,
             disc_.job_state == "running" || disc_.job_state == "verifying");
-        add(disc_.auto_dump ? "Neue Disc nicht mehr automatisch sichern" : "Neue Disc automatisch sichern", kAutoDump,
-            !disc_.enabled);
+        add(disc_.auto_dump ? "Neue Disc nicht mehr automatisch sichern"
+                            : "Neue Disc automatisch sichern",
+            kAutoDump, !disc_.enabled);
         ui::MenuItem line;
         line.separator = true;
         items.push_back(line);
@@ -719,15 +762,17 @@ class DiscPage final : public Page
         switch (tag)
         {
         case kDriveSwitch:
-            source().disc_post("disc", disc_.enabled ? "{\"action\":\"disable\"}" : "{\"action\":\"enable\"}");
+            source().disc_post("disc", disc_.enabled ? "{\"action\":\"disable\"}"
+                                                     : "{\"action\":\"enable\"}");
             break;
         case kAutoDump:
             source().disc_post("disc", std::string("{\"action\":\"settings\",\"auto_dump\":") +
                                            (disc_.auto_dump ? "false}" : "true}"));
             break;
         case kQueueGo:
-            source().disc_post("dump", dump_.queue.active ? "{\"action\":\"queue_stop\"}"
-                                                          : "{\"action\":\"queue_start\",\"confirm_close\":true}");
+            source().disc_post("dump", dump_.queue.active
+                                           ? "{\"action\":\"queue_stop\"}"
+                                           : "{\"action\":\"queue_start\",\"confirm_close\":true}");
             break;
         case kQueueSkip:
             source().disc_post("dump", "{\"action\":\"queue_skip\"}");
@@ -790,26 +835,31 @@ class DiscPage final : public Page
             if (kSplitValues[i] == s.ps4_split)
                 split = i;
         }
-        form_.add_choice(kSetSplit, "PS4: Spiel und Update", {"getrennt", "nur Spiel", "nur Update", "in einem Ordner"},
-                         split);
+        form_.add_choice(kSetSplit, "PS4: Spiel und Update",
+                         {"getrennt", "nur Spiel", "nur Update", "in einem Ordner"}, split);
         form_.add_header("SPIELBAR MACHEN");
         form_.add_toggle(kSetDecrypt, "Programmdateien entschlüsseln", s.decrypt).description =
             s.decrypt_supported ? "Nötig zum Spielen." : "Diese Firmware kann nicht entschlüsseln.";
         form_.add_toggle(kSetFself, "Als FSELF signieren", s.fself && s.decrypt).description =
             "Nötig zum Spielen · braucht „Entschlüsseln“.";
         form_.add_header("FÜR FORTGESCHRITTENE");
-        form_.add_toggle(kSetBackport, "SDK herunterpatchen (Backport)", s.backport && s.decrypt).description =
-            "Nur für ältere Firmware · kann den Dump beschädigen.";
-        form_.add_choice(kSetBp4, "PS4-Ziel", {"SDK 5.05", "SDK 6.00", "SDK 7.00", "SDK 9.00 (Standard)", "SDK 10.00", "SDK 11.00"},
-                         std::clamp(s.ps4_backport_level - 1, 0, 5));
+        form_.add_toggle(kSetBackport, "SDK herunterpatchen (Backport)", s.backport && s.decrypt)
+            .description = "Nur für ältere Firmware · kann den Dump beschädigen.";
+        form_.add_choice(
+            kSetBp4, "PS4-Ziel",
+            {"SDK 5.05", "SDK 6.00", "SDK 7.00", "SDK 9.00 (Standard)", "SDK 10.00", "SDK 11.00"},
+            std::clamp(s.ps4_backport_level - 1, 0, 5));
         form_.add_choice(kSetBp5, "PS5-Ziel",
-                         {"SDK 1.00 (Standard)", "SDK 2.00", "SDK 3.00", "SDK 4.00", "SDK 5.00", "SDK 6.00", "SDK 7.00",
-                          "SDK 8.00", "SDK 9.00", "SDK 10.00"},
+                         {"SDK 1.00 (Standard)", "SDK 2.00", "SDK 3.00", "SDK 4.00", "SDK 5.00",
+                          "SDK 6.00", "SDK 7.00", "SDK 8.00", "SDK 9.00", "SDK 10.00"},
                          std::clamp(s.ps5_backport_level - 1, 0, 9));
         form_.add_header("WARTESCHLANGE");
-        form_.add_choice(kSetReplace, "Vorhandene Dumps", {"Überspringen", "Ersetzen"}, dump_.queue.replace ? 1 : 0);
-        form_.add_slider(kSetDelay, "Ladezeit nach dem Start", static_cast<float>(std::clamp(dump_.queue.delay, 5, 600)),
-                         5.0f, 600.0f, 5.0f)
+        form_.add_choice(kSetReplace, "Vorhandene Dumps", {"Überspringen", "Ersetzen"},
+                         dump_.queue.replace ? 1 : 0);
+        form_
+            .add_slider(kSetDelay, "Ladezeit nach dem Start",
+                        static_cast<float>(std::clamp(dump_.queue.delay, 5, 600)), 5.0f, 600.0f,
+                        5.0f)
             .unit = " s";
         dependent_rows();
         form_.set_active(true);
@@ -853,7 +903,8 @@ class DiscPage final : public Page
         }
     }
 
-    // The dump settings as a whole, as the web page sends them; the queue's two in their own request.
+    // The dump settings as a whole, as the web page sends them; the queue's two in their own
+    // request.
     void save_settings()
     {
         save_in_ = 0.0f;
@@ -867,22 +918,27 @@ class DiscPage final : public Page
                                            : dump_.settings.target;
             const bool dec = form_.toggle_value(kSetDecrypt);
             source().disc_post(
-                "dump", "{\"action\":\"settings\",\"target\":" + json_text(target) +
-                            ",\"subdir\":" + json_text(dump_.settings.subdir) + ",\"folder_titles\":" + flag(kSetTitles) +
-                            ",\"dump_dlc\":" + flag(kSetDlc) + ",\"verify\":" + flag(kSetVerify) + ",\"ps4_split\":" +
-                            std::to_string(kSplitValues[std::clamp(form_.choice_index(kSetSplit), 0, 3)]) +
-                            ",\"decrypt\":" + (dec ? "true" : "false") +
-                            ",\"fself\":" + (dec && form_.toggle_value(kSetFself) ? "true" : "false") +
-                            ",\"backport\":" + (dec && form_.toggle_value(kSetBackport) ? "true" : "false") +
-                            ",\"ps4_backport_level\":" + std::to_string(form_.choice_index(kSetBp4) + 1) +
-                            ",\"ps5_backport_level\":" + std::to_string(form_.choice_index(kSetBp5) + 1) + "}");
+                "dump",
+                "{\"action\":\"settings\",\"target\":" + json_text(target) +
+                    ",\"subdir\":" + json_text(dump_.settings.subdir) +
+                    ",\"folder_titles\":" + flag(kSetTitles) + ",\"dump_dlc\":" + flag(kSetDlc) +
+                    ",\"verify\":" + flag(kSetVerify) + ",\"ps4_split\":" +
+                    std::to_string(kSplitValues[std::clamp(form_.choice_index(kSetSplit), 0, 3)]) +
+                    ",\"decrypt\":" + (dec ? "true" : "false") + ",\"fself\":" +
+                    (dec && form_.toggle_value(kSetFself) ? "true" : "false") + ",\"backport\":" +
+                    (dec && form_.toggle_value(kSetBackport) ? "true" : "false") +
+                    ",\"ps4_backport_level\":" + std::to_string(form_.choice_index(kSetBp4) + 1) +
+                    ",\"ps5_backport_level\":" + std::to_string(form_.choice_index(kSetBp5) + 1) +
+                    "}");
         }
         if (queue_dirty_)
         {
             queue_dirty_ = false;
-            source().disc_post("dump", std::string("{\"action\":\"queue_settings\",\"replace\":") +
-                                           (form_.choice_index(kSetReplace) == 1 ? "true" : "false") + ",\"delay\":" +
-                                           std::to_string(static_cast<int>(form_.slider_value(kSetDelay) + 0.5f)) + "}");
+            source().disc_post(
+                "dump",
+                std::string("{\"action\":\"queue_settings\",\"replace\":") +
+                    (form_.choice_index(kSetReplace) == 1 ? "true" : "false") + ",\"delay\":" +
+                    std::to_string(static_cast<int>(form_.slider_value(kSetDelay) + 0.5f)) + "}");
         }
     }
 
@@ -919,7 +975,8 @@ class DiscPage final : public Page
             else if (!disc_.enabled)
             {
                 d.title = "Laufwerk ausgeschaltet";
-                d.subtitle = "Die X-Taste schaltet es ein; dann fragt die App alle anderthalb Sekunden nach der Disc.";
+                d.subtitle = "Die X-Taste schaltet es ein; dann fragt die App alle anderthalb "
+                             "Sekunden nach der Disc.";
             }
             else if (disc_.drive != "ok")
                 d.title = disc_.drive == "none" ? "Kein Laufwerk gefunden" : "Fragt das Laufwerk …";
@@ -942,15 +999,20 @@ class DiscPage final : public Page
             const Game &g = games_[i];
             ui::ListItem item;
             item.title = g.name;
-            item.subtitle = g.id + " · " + g.platform + (g.disc == "out" ? " · Disc nicht im Laufwerk" : "");
+            item.subtitle =
+                g.id + " · " + g.platform + (g.disc == "out" ? " · Disc nicht im Laufwerk" : "");
             item.value = g.size_bytes > 0 ? format_bytes(g.size_bytes) : "";
-            item.badge = g.dump_mounted ? "LÄUFT" : g.dump == "done" ? "GEDUMPT" : queued(g.id) ? "WARTET" : "";
+            item.badge = g.dump_mounted     ? "LÄUFT"
+                         : g.dump == "done" ? "GEDUMPT"
+                         : queued(g.id)     ? "WARTET"
+                                            : "";
             item.tag = kGames * kSectionStep + static_cast<int>(i);
             out.push_back(item);
         }
         if (games_.empty())
-            out.push_back(note("Keine Disc-Spiele installiert",
-                               "Eine Disc muss erst installiert sein; die Konsole kopiert sie beim Einlegen."));
+            out.push_back(note(
+                "Keine Disc-Spiele installiert",
+                "Eine Disc muss erst installiert sein; die Konsole kopiert sie beim Einlegen."));
         const DumpQueue &q = dump_.queue;
         out.push_back(header(q.active ? "WARTESCHLANGE · LÄUFT" : "WARTESCHLANGE"));
         for (std::size_t i = 0; i < q.items.size(); ++i)
@@ -970,9 +1032,11 @@ class DiscPage final : public Page
         }
         if (q.items.empty())
             out.push_back(note(q.interrupted ? "Unterbrochen" : "Leer",
-                               q.interrupted ? "Die App wurde neu gestartet, die Liste ist weg."
-                                             : "Die Quadrat-Taste an einem Disc-Spiel legt es hinein."));
-        out.push_back(header(dumps_.scanning ? "DUMPS · DIE SUCHE LÄUFT …" : "DUMPS AUS DEM DISC-BEREICH"));
+                               q.interrupted
+                                   ? "Die App wurde neu gestartet, die Liste ist weg."
+                                   : "Die Quadrat-Taste an einem Disc-Spiel legt es hinein."));
+        out.push_back(
+            header(dumps_.scanning ? "DUMPS · DIE SUCHE LÄUFT …" : "DUMPS AUS DEM DISC-BEREICH"));
         for (std::size_t i = 0; i < dumps_.dumps.size(); ++i)
         {
             const DumpEntry &d = dumps_.dumps[i];
@@ -987,7 +1051,10 @@ class DiscPage final : public Page
                 sub += " · Backport";
             item.subtitle = sub;
             item.value = d.bytes > 0 ? format_bytes(d.bytes) : "";
-            item.badge = d.state == "done" ? "FERTIG" : d.state == "running" ? "LÄUFT" : d.state.empty() ? "" : "FEHLER";
+            item.badge = d.state == "done"      ? "FERTIG"
+                         : d.state == "running" ? "LÄUFT"
+                         : d.state.empty()      ? ""
+                                                : "FEHLER";
             item.tag = kDumps * kSectionStep + static_cast<int>(i);
             out.push_back(item);
         }
@@ -1002,7 +1069,8 @@ class DiscPage final : public Page
                 const DiscImage &d = disc_.images[i];
                 ui::ListItem item;
                 item.title = d.name;
-                item.subtitle = (d.serial.empty() ? "" : d.serial + " · ") + (d.crc32.empty() ? "" : "CRC-32 " + d.crc32);
+                item.subtitle = (d.serial.empty() ? "" : d.serial + " · ") +
+                                (d.crc32.empty() ? "" : "CRC-32 " + d.crc32);
                 item.value = format_bytes(d.size);
                 item.badge = d.verified ? "REDUMP" : "";
                 item.tag = kImages * kSectionStep + static_cast<int>(i);
@@ -1018,7 +1086,8 @@ class DiscPage final : public Page
         std::vector<ui::ListItem> next = items();
         std::string key;
         for (const ui::ListItem &i : next)
-            key += '\n' + i.title + '\t' + i.subtitle + '\t' + i.value + '\t' + i.badge + std::to_string(i.tag);
+            key += '\n' + i.title + '\t' + i.subtitle + '\t' + i.value + '\t' + i.badge +
+                   std::to_string(i.tag);
         if (key == key_)
         {
             refresh_info();
@@ -1043,12 +1112,15 @@ class DiscPage final : public Page
         switch (section_of(tag))
         {
         case kDrive:
-            rows.push_back({"Laufwerk", !disc_.enabled ? "ausgeschaltet" : disc_.drive == "ok" ? "bereit" : disc_.drive});
+            rows.push_back({"Laufwerk", !disc_.enabled        ? "ausgeschaltet"
+                                        : disc_.drive == "ok" ? "bereit"
+                                                              : disc_.drive});
             if (disc_.present)
             {
                 rows.push_back({"Disc", disc_.type});
                 rows.push_back({"Titelkennung", disc_.serial.empty() ? "–" : disc_.serial});
-                rows.push_back({"Größe", disc_.image_bytes > 0 ? format_bytes(disc_.image_bytes) : "–"});
+                rows.push_back(
+                    {"Größe", disc_.image_bytes > 0 ? format_bytes(disc_.image_bytes) : "–"});
             }
             rows.push_back({"Redump-Liste", disc_.redump ? "wird benutzt" : "keine"});
             rows.push_back({"Abbilder in", disc_.dir});
@@ -1060,7 +1132,9 @@ class DiscPage final : public Page
             rows.push_back({"Plattform", g.platform});
             rows.push_back({"Disc", g.disc == "in" ? "im Laufwerk" : "nicht im Laufwerk"});
             rows.push_back({"Zustand", g.dump_mounted ? "läuft" : "läuft nicht"});
-            rows.push_back({"Dump", g.dump == "done" ? "fertig vorhanden" : g.dump == "unfinished" ? "unfertig" : "keiner"});
+            rows.push_back({"Dump", g.dump == "done"         ? "fertig vorhanden"
+                                    : g.dump == "unfinished" ? "unfertig"
+                                                             : "keiner"});
             break;
         }
         case kQueue:
@@ -1076,9 +1150,12 @@ class DiscPage final : public Page
             const DumpEntry &d = dumps_.dumps[i];
             rows.push_back({"Ordner", d.folder});
             rows.push_back({"Ort", d.mount + (d.dir.empty() ? "" : "/" + d.dir)});
-            rows.push_back({"Art", d.kind == "dlc" ? "DLC" : d.kind == "patch" ? "Patch" : "Spiel"});
+            rows.push_back({"Art", d.kind == "dlc"     ? "DLC"
+                                   : d.kind == "patch" ? "Patch"
+                                                       : "Spiel"});
             rows.push_back({"Größe", d.bytes > 0 ? format_bytes(d.bytes) : "–"});
-            rows.push_back({"Spielbar", d.decrypt && d.fself ? "ja (entschlüsselt, FSELF)" : "nein (nur Sicherung)"});
+            rows.push_back({"Spielbar", d.decrypt && d.fself ? "ja (entschlüsselt, FSELF)"
+                                                             : "nein (nur Sicherung)"});
             break;
         }
         case kImages:

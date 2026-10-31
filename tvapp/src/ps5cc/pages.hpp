@@ -29,7 +29,8 @@ class Page
     virtual void enter()
     {
     }
-    // True while the page shows an overlay of its own: it then gets the input first and the frame its glass.
+    // True while the page shows an overlay of its own: it then gets the input first and the frame
+    // its glass.
     virtual bool modal() const
     {
         return false;
@@ -41,7 +42,8 @@ class Page
     {
         (void)canvas;
     }
-    // The page's own hints for the hint row (at most three); the screen adds L1/R1 before and Options after.
+    // The page's own hints for the hint row (at most three); the screen adds L1/R1 before and
+    // Options after.
     virtual int hints(ui::Hint *out) const = 0;
 };
 
@@ -64,7 +66,8 @@ inline void draw_subtab_glyphs(ui::Canvas &canvas, const ui::TabBar &tabs)
     const float cy = r.y + r.h * 0.5f;
     ui::draw_button(canvas.list, canvas.fonts, glyphs, ui::Button::l2,
                     r.x - 14.0f - ui::button_width(ui::Button::l2, 38.0f), cy, 38.0f);
-    ui::draw_button(canvas.list, canvas.fonts, glyphs, ui::Button::r2, r.x + r.w + 14.0f, cy, 38.0f);
+    ui::draw_button(canvas.list, canvas.fonts, glyphs, ui::Button::r2, r.x + r.w + 14.0f, cy,
+                    38.0f);
 }
 
 std::unique_ptr<Page> make_settings_page();

@@ -59,8 +59,8 @@ struct AxisStyle
     int ticks = 4;      // about this many intervals
     float label_size = 16.0f;
     bool from_zero = true; // the scale includes zero
-    // The scale always reaches these (NaN: only the data decides), so a reading near the top of what it can be does not
-    // look like the top of the plot.
+    // The scale always reaches these (NaN: only the data decides), so a reading near the top of
+    // what it can be does not look like the top of the plot.
     float include_low = std::numeric_limits<float>::quiet_NaN();
     float include_high = std::numeric_limits<float>::quiet_NaN();
     std::string unit; // appended to tick values and readouts ("h", "%")

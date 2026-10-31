@@ -1,4 +1,5 @@
-// ps5cc - The picture behind each area: the tile's own from assets/backdrops, or the user's from the console app.
+// ps5cc - The picture behind each area: the tile's own from assets/backdrops, or the user's from
+// the console app.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -15,8 +16,8 @@ namespace hui::ps5cc
 
 namespace
 {
-// The tile's files are 1280 x 720 (about 70 KiB each); the user's come scaled by the browser app. Anything much
-// larger would cost a long decode for nothing.
+// The tile's files are 1280 x 720 (about 70 KiB each); the user's come scaled by the browser app.
+// Anything much larger would cost a long decode for nothing.
 constexpr int kMaxEdge = 4096;
 constexpr std::size_t kMaxFile = 4u << 20;
 constexpr std::size_t kPixels = static_cast<std::size_t>(kBackdropWidth) * kBackdropHeight * 4u;
@@ -28,7 +29,8 @@ std::vector<std::uint8_t> decode(const std::uint8_t *bytes, std::size_t size)
     int w = 0;
     int h = 0;
     int channels = 0;
-    unsigned char *pixels = stbi_load_from_memory(bytes, static_cast<int>(size), &w, &h, &channels, 4);
+    unsigned char *pixels =
+        stbi_load_from_memory(bytes, static_cast<int>(size), &w, &h, &channels, 4);
     if (pixels == nullptr)
         return {};
     std::vector<std::uint8_t> out;
@@ -41,7 +43,7 @@ std::vector<std::uint8_t> decode(const std::uint8_t *bytes, std::size_t size)
 
 const char *backdrop_name(int area)
 {
-    static const char *const kNames[kBackdropAreas] = {"kuehlung", "spiele",  "dateien",  "payloads",
+    static const char *const kNames[kBackdropAreas] = {"kuehlung", "spiele", "dateien",  "payloads",
                                                        "system",   "profil", "protokoll"};
     return area >= 0 && area < kBackdropAreas ? kNames[area] : "";
 }
@@ -68,9 +70,11 @@ int Backdrops::load(const std::string &assets_dir)
     for (int i = 0; i < kBackdropAreas; ++i)
     {
         std::string data;
-        if (!save::read_file(assets_dir + "/backdrops/" + backdrop_name(i) + ".jpg", &data, kMaxFile))
+        if (!save::read_file(assets_dir + "/backdrops/" + backdrop_name(i) + ".jpg", &data,
+                             kMaxFile))
             continue;
-        std::vector<std::uint8_t> rgba = decode(reinterpret_cast<const std::uint8_t *>(data.data()), data.size());
+        std::vector<std::uint8_t> rgba =
+            decode(reinterpret_cast<const std::uint8_t *>(data.data()), data.size());
         if (rgba.empty())
             continue;
         std::lock_guard<std::mutex> lock(mutex_);
@@ -101,7 +105,8 @@ BackdropWant Backdrops::wanted_custom()
     for (int i = 0; i < kBackdropAreas; ++i)
     {
         Slot &s = slots_[static_cast<std::size_t>(i)];
-        // Only what is to be seen: a picture set aside (standard or off) is fetched when it is chosen.
+        // Only what is to be seen: a picture set aside (standard or off) is fetched when it is
+        // chosen.
         if (s.mode != BackdropMode::custom || !s.custom || s.want_stamp.empty())
             continue;
         const std::string &w = s.want_stamp;
@@ -223,12 +228,14 @@ std::vector<std::uint8_t> decode_backdrop(const std::uint8_t *bytes, std::size_t
     return decode(bytes, size);
 }
 
-std::vector<std::uint8_t> cover_rgba(const std::uint8_t *rgba, int src_w, int src_h, int width, int height)
+std::vector<std::uint8_t> cover_rgba(const std::uint8_t *rgba, int src_w, int src_h, int width,
+                                     int height)
 {
     std::vector<std::uint8_t> out;
     if (rgba == nullptr || src_w <= 0 || src_h <= 0 || width <= 0 || height <= 0)
         return out;
-    // The largest centred part with the target's aspect (64-bit: 4096 x 4096 times 1280 overflows an int).
+    // The largest centred part with the target's aspect (64-bit: 4096 x 4096 times 1280 overflows
+    // an int).
     int crop_w = src_w;
     int crop_h = static_cast<int>(static_cast<std::int64_t>(src_w) * height / width);
     if (crop_h > src_h)
@@ -244,12 +251,14 @@ std::vector<std::uint8_t> cover_rgba(const std::uint8_t *rgba, int src_w, int sr
     for (int dy = 0; dy < height; ++dy)
     {
         const int y0 = top + static_cast<int>(static_cast<std::int64_t>(dy) * crop_h / height);
-        const int y1 = std::max(y0 + 1, top + static_cast<int>(static_cast<std::int64_t>(dy + 1) * crop_h / height));
+        const int y1 = std::max(
+            y0 + 1, top + static_cast<int>(static_cast<std::int64_t>(dy + 1) * crop_h / height));
         for (int dx = 0; dx < width; ++dx)
         {
             const int x0 = left + static_cast<int>(static_cast<std::int64_t>(dx) * crop_w / width);
             const int x1 =
-                std::max(x0 + 1, left + static_cast<int>(static_cast<std::int64_t>(dx + 1) * crop_w / width));
+                std::max(x0 + 1, left + static_cast<int>(static_cast<std::int64_t>(dx + 1) *
+                                                         crop_w / width));
             unsigned sum[4] = {0, 0, 0, 0};
             unsigned count = 0;
             for (int y = y0; y < y1; ++y)

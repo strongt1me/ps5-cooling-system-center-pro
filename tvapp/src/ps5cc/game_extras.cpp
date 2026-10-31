@@ -52,7 +52,8 @@ enum Row
 // The parsed answer, deleted with the holder.
 struct Json
 {
-    explicit Json(const std::string &text) : root(text.empty() ? nullptr : cJSON_Parse(text.c_str()))
+    explicit Json(const std::string &text)
+        : root(text.empty() ? nullptr : cJSON_Parse(text.c_str()))
     {
     }
     ~Json()
@@ -197,8 +198,9 @@ void GameExtras::absorb(const Snapshot &data)
 {
     if (view_ == kClosed)
         return;
-    const bool changed = data.extras.seq != extras_.seq || data.extras_versions.seq != versions_.seq ||
-                         data.extras_lz4_plan.seq != plan_.seq || data.library_tools.seq != library_.seq;
+    const bool changed =
+        data.extras.seq != extras_.seq || data.extras_versions.seq != versions_.seq ||
+        data.extras_lz4_plan.seq != plan_.seq || data.library_tools.seq != library_.seq;
     if (data.extras.id == game_.id)
         extras_ = data.extras;
     versions_ = data.extras_versions;
@@ -208,14 +210,17 @@ void GameExtras::absorb(const Snapshot &data)
         build();
 }
 
-// Rebuilt only when what it shows changed (a refill restarts the form's entrance and loses the focus).
+// Rebuilt only when what it shows changed (a refill restarts the form's entrance and loses the
+// focus).
 void GameExtras::build()
 {
     const int keep = form_.focus_id();
-    // each view only by what it shows: the LZ4 settings keep their choices while the plan comes and goes
+    // each view only by what it shows: the LZ4 settings keep their choices while the plan comes and
+    // goes
     std::string key = std::to_string(view_);
     if (view_ == kMain)
-        key += extras_.ampr + extras_.emu_ampr + extras_.emu_playgo + extras_.lz4 + extras_.trace + extras_.plugins;
+        key += extras_.ampr + extras_.emu_ampr + extras_.emu_playgo + extras_.lz4 + extras_.trace +
+               extras_.plugins;
     else if (view_ == kVersions)
         key += versions_.json + (lib_ == "playgo" ? extras_.emu_playgo : extras_.emu_ampr);
     else if (view_ == kLz4)
@@ -261,12 +266,15 @@ void GameExtras::build_main()
         Json j(extras_.ampr);
         form_.add_header("AMPR-INDEX");
         const bool has = yes(j.root, "has_index");
-        const std::string state = has ? "vorhanden, " + std::to_string(static_cast<int>(num(j.root, "files"))) +
-                                            " Dateien, Stand " + play_date(static_cast<std::int64_t>(num(j.root, "mtime")), 0)
-                                      : "fehlt";
+        const std::string state =
+            has ? "vorhanden, " + std::to_string(static_cast<int>(num(j.root, "files"))) +
+                      " Dateien, Stand " +
+                      play_date(static_cast<std::int64_t>(num(j.root, "mtime")), 0)
+                : "fehlt";
         form_.add_value(kStatus, "Zustand", state);
         ui::FormRow &r = form_.add_action(kAmpr, has ? "Neu bauen" : "Index bauen");
-        r.description = "Der Index sagt APR-EMU, wo jede Datei des Spiels im Abbild liegt; ohne ihn lädt ein gepacktes "
+        r.description = "Der Index sagt APR-EMU, wo jede Datei des Spiels im Abbild liegt; ohne "
+                        "ihn lädt ein gepacktes "
                         "oder per APR-EMU gestartetes Spiel langsam.";
         if (!yes(j.root, "can_build"))
         {
@@ -291,7 +299,8 @@ void GameExtras::build_main()
             state += " · Spiel ist LZ4-gepackt";
         form_.add_value(kStatus + id, "Zustand", state);
         ui::FormRow &r = form_.add_action(id, "Version wählen …");
-        r.description = "Zeigt die Fassungen im Ordner der App; die gewählte wird sofort eingebaut, das Original bleibt "
+        r.description = "Zeigt die Fassungen im Ordner der App; die gewählte wird sofort "
+                        "eingebaut, das Original bleibt "
                         "gesichert.";
         if (!yes(j.root, "can_change"))
         {
@@ -312,12 +321,15 @@ void GameExtras::build_main()
             const cJSON *f = nullptr;
             cJSON_ArrayForEach(f, get(j.root, "files"))
             {
-                about += (about.empty() ? "" : " · ") + str(f, "project") + ": " + plugin_state(str(f, "state"));
+                about += (about.empty() ? "" : " · ") + str(f, "project") + ": " +
+                         plugin_state(str(f, "state"));
             }
             const bool update = str(j.root, "state") == "update";
-            form_.add_value(kStatus + kPlugins, "Zustand", about.empty() ? "keine Plugins im Spiel" : about);
+            form_.add_value(kStatus + kPlugins, "Zustand",
+                            about.empty() ? "keine Plugins im Spiel" : about);
             ui::FormRow &r = form_.add_action(kPlugins, update ? "Aktualisieren" : "Prüfen");
-            r.description = update ? "Legt die neueren Fassungen der Plugins ins Spiel." : "Prüft die Plugins des Spiels.";
+            r.description = update ? "Legt die neueren Fassungen der Plugins ins Spiel."
+                                   : "Prüft die Plugins des Spiels.";
             if (!yes(j.root, "can"))
             {
                 r.disabled = true;
@@ -334,11 +346,13 @@ void GameExtras::build_main()
             const cJSON *p = get(j.root, "pack");
             const double logical = num(p, "logical_bytes"), stored = num(p, "stored_bytes");
             char text[96];
-            std::snprintf(text, sizeof(text), "gepackt: %s → %s (%d %%)", format_bytes(static_cast<std::uint64_t>(logical)).c_str(),
+            std::snprintf(text, sizeof(text), "gepackt: %s → %s (%d %%)",
+                          format_bytes(static_cast<std::uint64_t>(logical)).c_str(),
                           format_bytes(static_cast<std::uint64_t>(stored)).c_str(),
                           logical > 0 ? static_cast<int>(stored * 100.0 / logical + 0.5) : 0);
             form_.add_value(kStatus + kLz4Pack, "Zustand", text);
-            form_.add_action(kLz4Verify, "Pakete prüfen").description = "Liest jedes Paket und vergleicht es mit den Originaldateien.";
+            form_.add_action(kLz4Verify, "Pakete prüfen").description =
+                "Liest jedes Paket und vergleicht es mit den Originaldateien.";
             ui::FormRow &u = form_.add_action(kLz4Unpack, "LZ4 entpacken");
             u.description = "Legt die Dateien wieder ungepackt ab.";
             u.disabled = num(j.root, "free_bytes") < logical + 256.0 * 1024 * 1024;
@@ -349,7 +363,8 @@ void GameExtras::build_main()
         {
             form_.add_value(kStatus + kLz4Pack, "Zustand", "nicht gepackt");
             ui::FormRow &r = form_.add_action(kLz4Pack, "Mit LZ4 packen …");
-            r.description = "Öffnet die Einstellungen: Stufe, Profil und ob im Ordner selbst oder als Kopie.";
+            r.description =
+                "Öffnet die Einstellungen: Stufe, Profil und ob im Ordner selbst oder als Kopie.";
             if (!yes(j.root, "can"))
             {
                 r.disabled = true;
@@ -363,7 +378,9 @@ void GameExtras::build_main()
         form_.add_header("OPTIMIERUNG PER MITSCHNITT");
         const int sessions = static_cast<int>(num(j.root, "sessions"));
         form_.add_value(kStatus + kTraceStart, "Zustand",
-                        !yes(j.root, "enabled") ? "aus" : "läuft · " + std::to_string(sessions) + " Sitzung(en) gesammelt");
+                        !yes(j.root, "enabled")
+                            ? "aus"
+                            : "läuft · " + std::to_string(sessions) + " Sitzung(en) gesammelt");
         if (!yes(j.root, "can"))
         {
             ui::FormRow &r = form_.add_action(kTraceStart, "Mitschnitt starten");
@@ -377,13 +394,15 @@ void GameExtras::build_main()
         {
             ui::FormRow &c = form_.add_action(kTraceCollect, "Sitzung einsammeln");
             c.disabled = !yes(j.root, "journal_new") || yes(j.root, "game_running");
-            c.description = yes(j.root, "game_running") ? "Erst das Spiel beenden." : yes(j.root, "journal_new")
-                                                                                       ? "Eine neue Sitzung liegt bereit."
-                                                                                       : "Noch keine neue Sitzung.";
+            c.description = yes(j.root, "game_running")  ? "Erst das Spiel beenden."
+                            : yes(j.root, "journal_new") ? "Eine neue Sitzung liegt bereit."
+                                                         : "Noch keine neue Sitzung.";
             ui::FormRow &g = form_.add_action(kTraceGenerate, "Profil erzeugen");
             g.disabled = sessions <= 0;
-            g.description = std::to_string(sessions) + " Sitzung(en) gesammelt · " + str(j.root, "profile");
-            form_.add_action(kTraceStop, "Mitschnitt beenden").description = "Nimmt die Aufzeichnung wieder aus dem Spiel.";
+            g.description =
+                std::to_string(sessions) + " Sitzung(en) gesammelt · " + str(j.root, "profile");
+            form_.add_action(kTraceStop, "Mitschnitt beenden").description =
+                "Nimmt die Aufzeichnung wieder aus dem Spiel.";
         }
     }
 }
@@ -412,7 +431,8 @@ void GameExtras::build_versions()
             about += "mit Protokoll · ";
         if (yes(v, "bundled"))
             about += "mitgeliefert · ";
-        about += !sha.empty() && str(v, "sha256") == sha ? "so eingebaut" : "X-Taste baut diese ein";
+        about +=
+            !sha.empty() && str(v, "sha256") == sha ? "so eingebaut" : "X-Taste baut diese ein";
         r.description = about;
         r.disabled = !yes(v, "valid") || (packed && !yes(v, "pack"));
         if (packed && !yes(v, "pack"))
@@ -421,13 +441,16 @@ void GameExtras::build_versions()
         ++i;
     }
     if (i == 0)
-        form_.add_value(kVersion, versions_.json.empty() ? "Wird geladen …" : "Noch keine Versionen im Ordner", "");
+        form_.add_value(
+            kVersion, versions_.json.empty() ? "Wird geladen …" : "Noch keine Versionen im Ordner",
+            "");
     form_.add_header("ORDNER UND ORIGINAL");
     form_.add_action(kInstall, "Mitgelieferte Versionen in den Ordner legen");
     if (yes(inst, "has_orig"))
         form_.add_action(kRestore, "Original wiederherstellen");
     else if (yes(inst, "present"))
-        form_.add_action(kRemove, "Entfernen").description = "Nimmt die eingebaute Fassung wieder heraus.";
+        form_.add_action(kRemove, "Entfernen").description =
+            "Nimmt die eingebaute Fassung wieder heraus.";
 }
 
 void GameExtras::build_lz4()
@@ -480,8 +503,10 @@ void GameExtras::build_library()
         {
             const std::string path = str(s, "path");
             const bool folder = yes(s, "folder");
-            const std::string name = str(g, "name") + " · " + path.substr(path.find_last_of('/') + 1);
-            std::string about = path + " · " + format_bytes(static_cast<std::uint64_t>(num(s, "size")));
+            const std::string name =
+                str(g, "name") + " · " + path.substr(path.find_last_of('/') + 1);
+            std::string about =
+                path + " · " + format_bytes(static_cast<std::uint64_t>(num(s, "size")));
             if (yes(s, "smp_uses"))
                 about += " · nimmt ShadowMountPlus gerade";
             if (yes(s, "mounted"))
@@ -503,14 +528,15 @@ void GameExtras::build_library()
     cJSON_ArrayForEach(a, get(d.root, "aside"))
     {
         const std::string path = str(a, "path");
-        form_.add_action(kDup + rows, "Aktivieren: " + path.substr(path.find_last_of('/') + 1)).description =
-            "beiseitegelegt · " + path;
+        form_.add_action(kDup + rows, "Aktivieren: " + path.substr(path.find_last_of('/') + 1))
+            .description = "beiseitegelegt · " + path;
         paths_.push_back(path);
         aside_.push_back(true);
         ++rows;
     }
     if (rows == 0)
-        form_.add_value(kDup, library_.duplicates.empty() ? "Wird gesucht …" : "Keine doppelten Abbilder", "");
+        form_.add_value(
+            kDup, library_.duplicates.empty() ? "Wird gesucht …" : "Keine doppelten Abbilder", "");
     // Covers & Metadaten live under System → Speicher (user, 29.10.2026).
 }
 
@@ -545,8 +571,9 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
     {
         const std::size_t i = static_cast<std::size_t>(id - kDup);
         if (i < paths_.size())
-            source().library_tools_post("library/duplicates", "{\"path\":" + json_text(paths_[i]) + ",\"undo\":" +
-                                                                  (aside_[i] ? "true" : "false") + "}");
+            source().library_tools_post("library/duplicates",
+                                        "{\"path\":" + json_text(paths_[i]) +
+                                            ",\"undo\":" + (aside_[i] ? "true" : "false") + "}");
         return;
     }
     if (id >= kVersion)
@@ -554,7 +581,8 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         const std::size_t i = static_cast<std::size_t>(id - kVersion);
         if (i < version_names_.size())
             source().extras_post("library/emu", "{\"id\":" + gid + ",\"lib\":\"" + lib_ +
-                                                    "\",\"action\":\"apply\",\"name\":" + json_text(version_names_[i]) + "}");
+                                                    "\",\"action\":\"apply\",\"name\":" +
+                                                    json_text(version_names_[i]) + "}");
         view_ = kMain;
         key_.clear();
         build();
@@ -595,8 +623,8 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
     case kTraceGenerate:
     case kTraceStop:
     {
-        const char *action = id == kTraceStart     ? "start"
-                             : id == kTraceCollect ? "collect"
+        const char *action = id == kTraceStart      ? "start"
+                             : id == kTraceCollect  ? "collect"
                              : id == kTraceGenerate ? "generate"
                                                     : "stop";
         source().extras_post("library/trace", "{\"id\":" + gid + ",\"action\":\"" + action + "\"}");
@@ -608,7 +636,8 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         break;
     case kRestore:
     case kRemove:
-        source().extras_post("library/emu", "{\"id\":" + gid + ",\"lib\":\"" + lib_ + "\",\"action\":\"" +
+        source().extras_post("library/emu", "{\"id\":" + gid + ",\"lib\":\"" + lib_ +
+                                                "\",\"action\":\"" +
                                                 (id == kRestore ? "restore" : "remove") + "\"}");
         view_ = kMain;
         key_.clear();
@@ -621,10 +650,12 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         const std::string profile = mode >= 0 && mode < static_cast<int>(profile_ids_.size())
                                         ? profile_ids_[static_cast<std::size_t>(mode)]
                                         : std::string();
-        source().extras_post("library/lz4", "{\"id\":" + gid + ",\"kind\":\"" +
-                                                (form_.choice_index(kTarget) == 1 ? "copy" : "pack") + "\",\"level\":" +
-                                                std::to_string(kLevels[std::clamp(form_.choice_index(kLevel), 0, 2)]) +
-                                                ",\"profile\":" + json_text(profile) + "}");
+        source().extras_post(
+            "library/lz4",
+            "{\"id\":" + gid + ",\"kind\":\"" +
+                (form_.choice_index(kTarget) == 1 ? "copy" : "pack") + "\",\"level\":" +
+                std::to_string(kLevels[std::clamp(form_.choice_index(kLevel), 0, 2)]) +
+                ",\"profile\":" + json_text(profile) + "}");
         view_ = kMain;
         key_.clear();
         build();
@@ -655,7 +686,8 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
             const bool ok = form_.toggle_value(kTested);
             form_.set_disabled(kPackStart, !ok);
             if (ui::FormRow *r = form_.row(kPackStart))
-                r->description = ok ? "Startet sofort; der Auftrag läuft auf der Konsole." : "Erst die Voraussetzung oben bestätigen.";
+                r->description = ok ? "Startet sofort; der Auftrag läuft auf der Konsole."
+                                    : "Erst die Voraussetzung oben bestätigen.";
         }
         else if (id == kLevel || id == kMode)
             ask_plan();
@@ -670,7 +702,8 @@ void GameExtras::update(float dt)
     shown_.update(dt, 14.0f);
 }
 
-// The job of the window's game: the AMPR job (index, APR-EMU) or the image job (LZ4), whichever runs.
+// The job of the window's game: the AMPR job (index, APR-EMU) or the image job (LZ4), whichever
+// runs.
 std::string GameExtras::job_line(float *fraction) const
 {
     *fraction = -1.0f;
@@ -690,7 +723,8 @@ std::string GameExtras::job_line(float *fraction) const
         *fraction = 0.0f;
         return str(a.root, "phase").empty() ? "läuft …" : str(a.root, "phase");
     }
-    const std::string err = !str(a.root, "error").empty() ? str(a.root, "error") : str(i.root, "error");
+    const std::string err =
+        !str(a.root, "error").empty() ? str(a.root, "error") : str(i.root, "error");
     if (!err.empty())
         return "Fehler: " + err;
     return {};
@@ -701,15 +735,20 @@ std::string GameExtras::side_text() const
     switch (view_)
     {
     case kVersions:
-        return lib_ == "playgo" ? "PlayGo im Spiel: die Fassung von libScePlayGo, die das Spiel lädt. Eine andere gewählt, "
+        return lib_ == "playgo" ? "PlayGo im Spiel: die Fassung von libScePlayGo, die das Spiel "
+                                  "lädt. Eine andere gewählt, "
                                   "wird sie sofort eingebaut; das Original bleibt gesichert."
-                                : "APR-EMU im Spiel: die Fassung von libSceAmpr, die das Spiel lädt. Ein gepacktes Spiel "
-                                  "braucht eine LZ4-Fassung (test-pack). Neue Fassungen vom PC kommen über die Browser-App.";
+                                : "APR-EMU im Spiel: die Fassung von libSceAmpr, die das Spiel "
+                                  "lädt. Ein gepacktes Spiel "
+                                  "braucht eine LZ4-Fassung (test-pack). Neue Fassungen vom PC "
+                                  "kommen über die Browser-App.";
     case kLz4:
-        return "Packt die großen Dateien des Spiels in LZ4-Asset-Packs. Das spart Platz; gelesen wird über APR-EMU "
+        return "Packt die großen Dateien des Spiels in LZ4-Asset-Packs. Das spart Platz; gelesen "
+               "wird über APR-EMU "
                "(test-pack). Eigene Profile (TOML) lädt man über die Browser-App hoch.";
     case kLibrary:
-        return "Doppelte Abbilder: Liegt ein Spiel mehrmals auf den Laufwerken, nimmt ShadowMountPlus eins davon. "
+        return "Doppelte Abbilder: Liegt ein Spiel mehrmals auf den Laufwerken, nimmt "
+               "ShadowMountPlus eins davon. "
                "Deaktivieren legt eine Datei beiseite (.off), Aktivieren holt sie zurück.";
     default:
         break;
@@ -730,19 +769,24 @@ void GameExtras::draw_overlay(ui::Canvas &canvas) const
     ui::Painter paint(list, fonts, theme_);
     solid_floor(list, panel, theme_.radius_card);
     paint.panel(panel);
-    const std::string title = view_ == kLibrary   ? "Bibliothek: Doppelte Abbilder"
-                              : view_ == kVersions ? std::string(lib_ == "playgo" ? "PlayGo" : "APR-EMU") + " · " + game_.name
-                              : view_ == kLz4      ? "Mit LZ4 packen · " + game_.name
-                                                   : "Extras · " + game_.name;
-    ui::text(list, fonts.display, ui::fit_label(paint, title, 36.0f, panel.w - 80.0f), panel.x + 40.0f, panel.y + 66.0f,
-             36.0f, kInk);
+    const std::string title =
+        view_ == kLibrary ? "Bibliothek: Doppelte Abbilder"
+        : view_ == kVersions
+            ? std::string(lib_ == "playgo" ? "PlayGo" : "APR-EMU") + " · " + game_.name
+        : view_ == kLz4 ? "Mit LZ4 packen · " + game_.name
+                        : "Extras · " + game_.name;
+    ui::text(list, fonts.display, ui::fit_label(paint, title, 36.0f, panel.w - 80.0f),
+             panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
     ui::text(list, fonts.regular,
-             view_ == kLibrary ? "für alle Spiele" : "AMPR-Index, APR-EMU, PlayGo, Plugins, LZ4 und Mitschnitt",
+             view_ == kLibrary ? "für alle Spiele"
+                               : "AMPR-Index, APR-EMU, PlayGo, Plugins, LZ4 und Mitschnitt",
              panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
     if (view_ == kMain && extras_.seq == 0)
-        ui::text(list, fonts.semibold, "Wird geladen …", panel.x + 520.0f, panel.y + 420.0f, 30.0f, kInk, gfx::Align::center);
+        ui::text(list, fonts.semibold, "Wird geladen …", panel.x + 520.0f, panel.y + 420.0f, 30.0f,
+                 kInk, gfx::Align::center);
     form_.draw(canvas);
-    list.rounded_rect({panel.x + 1030.0f, panel.y + 140.0f, 1.5f, 630.0f}, 0.0f, Color::rgb(0x3880ff, 0.18f));
+    list.rounded_rect({panel.x + 1030.0f, panel.y + 140.0f, 1.5f, 630.0f}, 0.0f,
+                      Color::rgb(0x3880ff, 0.18f));
     // the focused row's text, then the job
     float y = panel.y + 170.0f;
     int lines = 0;
@@ -759,21 +803,23 @@ void GameExtras::draw_overlay(ui::Canvas &canvas) const
     {
         const float jy = panel.y + 640.0f;
         ui::text(list, fonts.semibold, "Auftrag", panel.x + 1060.0f, jy, 22.0f, kInk);
-        ui::text(list, fonts.regular, ui::fit_label(paint, job, 19.0f, panel.w - 1100.0f), panel.x + 1060.0f, jy + 32.0f,
-                 19.0f, fraction < 0.0f ? kWarning : kMuted);
+        ui::text(list, fonts.regular, ui::fit_label(paint, job, 19.0f, panel.w - 1100.0f),
+                 panel.x + 1060.0f, jy + 32.0f, 19.0f, fraction < 0.0f ? kWarning : kMuted);
         if (fraction >= 0.0f)
         {
             const Rect bar{panel.x + 1060.0f, jy + 50.0f, panel.w - 1100.0f, 12.0f};
             list.rounded_rect(bar, 6.0f, Color::rgb(0x3880ff, 0.18f));
-            list.rounded_rect({bar.x, bar.y, bar.w * std::clamp(fraction, 0.0f, 1.0f), bar.h}, 6.0f, kBlue);
+            list.rounded_rect({bar.x, bar.y, bar.w * std::clamp(fraction, 0.0f, 1.0f), bar.h}, 6.0f,
+                              kBlue);
         }
     }
     ui::HintLayout layout;
     layout.size = 34.0f;
     layout.text_size = 21.0f;
     layout.cy = panel.y + panel.h - 42.0f;
-    const ui::Hint hints[] = {{ui::Button::cross, "Wählen"},
-                              {ui::Button::circle, view_ == kVersions || view_ == kLz4 ? "Zurück" : "Schließen"}};
+    const ui::Hint hints[] = {
+        {ui::Button::cross, "Wählen"},
+        {ui::Button::circle, view_ == kVersions || view_ == kLz4 ? "Zurück" : "Schließen"}};
     ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 2, panel.x + 40.0f, false, layout);
     list.pop_opacity();
 }

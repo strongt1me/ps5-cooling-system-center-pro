@@ -2,12 +2,14 @@
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// load() reads and decodes the tile's own JPEGs (assets/backdrops) once at start-up. The user can upload a picture
-// per area in the browser app; the console app keeps it, and its list says per area which picture to show
-// (GET /api/v1/backdrops): the worker hands that to apply(), asks wanted_custom() which picture to fetch, decodes it
-// with decode_backdrop() and passes the pixels to deliver_custom(). upload_pending() turns one decoded picture a frame
-// into a texture (a changed picture reuses its texture). Nothing here touches GL itself: the texture calls come in as
-// functions, so the tests need no context. A missing file just leaves that area on the plain gradient.
+// load() reads and decodes the tile's own JPEGs (assets/backdrops) once at start-up. The user can
+// upload a picture per area in the browser app; the console app keeps it, and its list says per
+// area which picture to show (GET /api/v1/backdrops): the worker hands that to apply(), asks
+// wanted_custom() which picture to fetch, decodes it with decode_backdrop() and passes the pixels
+// to deliver_custom(). upload_pending() turns one decoded picture a frame into a texture (a changed
+// picture reuses its texture). Nothing here touches GL itself: the texture calls come in as
+// functions, so the tests need no context. A missing file just leaves that area on the plain
+// gradient.
 
 #pragma once
 
@@ -61,9 +63,10 @@ class Backdrops
     void deliver_custom(int area, const std::string &stamp, std::vector<std::uint8_t> rgba);
     void fail_custom(int area, const std::string &stamp);
 
-    // GL side, once a frame: at most one picture becomes a texture. create(reuse, w, h, rgba) fills `reuse` when it
-    // is not 0 and returns it, or makes a new texture.
-    using Create = std::function<std::uint32_t(std::uint32_t reuse, int, int, const std::uint8_t *)>;
+    // GL side, once a frame: at most one picture becomes a texture. create(reuse, w, h, rgba) fills
+    // `reuse` when it is not 0 and returns it, or makes a new texture.
+    using Create =
+        std::function<std::uint32_t(std::uint32_t reuse, int, int, const std::uint8_t *)>;
     void upload_pending(const Create &create);
 
     // Screen side: the texture to draw for an area, 0 for none (yet).
@@ -91,15 +94,18 @@ class Backdrops
 
 Backdrops &backdrops();
 
-// The file name of an area's picture (without .jpg), also its id in the console app; "" out of range.
+// The file name of an area's picture (without .jpg), also its id in the console app; "" out of
+// range.
 const char *backdrop_name(int area);
 // The area of an id, -1 for none.
 int backdrop_area(const std::string &id);
 
-// JPEG or PNG bytes to kBackdropWidth x kBackdropHeight RGBA (scaled to cover, centred); empty when they are no
-// picture.
+// JPEG or PNG bytes to kBackdropWidth x kBackdropHeight RGBA (scaled to cover, centred); empty when
+// they are no picture.
 std::vector<std::uint8_t> decode_backdrop(const std::uint8_t *bytes, std::size_t size);
-// Box-filters the centred part of an RGBA picture with the aspect of width x height down (or up) to that size.
-std::vector<std::uint8_t> cover_rgba(const std::uint8_t *rgba, int src_w, int src_h, int width, int height);
+// Box-filters the centred part of an RGBA picture with the aspect of width x height down (or up) to
+// that size.
+std::vector<std::uint8_t> cover_rgba(const std::uint8_t *rgba, int src_w, int src_h, int width,
+                                     int height);
 
 } // namespace hui::ps5cc

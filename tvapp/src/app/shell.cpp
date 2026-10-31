@@ -123,7 +123,6 @@ void Shell::update(const InputFrame &input, float dt)
         feedback_.play(audio::Cue::welcome);
     }
 
-
     // The active design sees everything the shell does not use; nothing at
     // all while the info panel covers it.
     InputFrame forwarded = input;

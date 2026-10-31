@@ -1,9 +1,11 @@
-// ps5cc - The game tools' plans: what the console app answers before a copy, a conversion, a move, a check or a delete.
+// ps5cc - The game tools' plans: what the console app answers before a copy, a conversion, a move,
+// a check or a delete.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// The rules are the web app's (web/app.js: cpBlocked, cvBlocked, mvBlocked, the unpack and delete dialogs), so both
-// faces refuse the same targets with the same words; the console app checks everything again at the start.
+// The rules are the web app's (web/app.js: cpBlocked, cvBlocked, mvBlocked, the unpack and delete
+// dialogs), so both faces refuse the same targets with the same words; the console app checks
+// everything again at the start.
 
 #pragma once
 
@@ -34,7 +36,8 @@ constexpr int kOps = 3;   // ffpfsc, ffpkg, exfat
 constexpr const char *kModeKeys[kModes] = {"homebrew", "backup"};
 constexpr const char *kOpKeys[kOps] = {"ffpfsc", "ffpkg", "exfat"};
 
-// A place the plan offers: a drive (copy, convert, image unpack) or a folder of ShadowMountPlus (move, unpack).
+// A place the plan offers: a drive (copy, convert, image unpack) or a folder of ShadowMountPlus
+// (move, unpack).
 struct PlanDrive
 {
     std::string mount; // what the start is given: the mount, or for move and unpack the folder

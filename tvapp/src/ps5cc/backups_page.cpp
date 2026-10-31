@@ -1,10 +1,12 @@
-// ps5cc - The Sicherungen page (Spiele → Sicherungen): the app's own backups of games (folder PS5-Sicherung/Spiele).
+// ps5cc - The Sicherungen page (Spiele → Sicherungen): the app's own backups of games (folder
+// PS5-Sicherung/Spiele).
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's tab: every backup with its drive, size, date and whether it is finished and has checksums. Square
-// deletes it at once (the app plans it first and refuses when it must; the deletion then runs as a job under
-// Aufträge). The saves are not part of these backups and are never touched here.
+// As the web app's tab: every backup with its drive, size, date and whether it is finished and has
+// checksums. Square deletes it at once (the app plans it first and refuses when it must; the
+// deletion then runs as a job under Aufträge). The saves are not part of these backups and are
+// never touched here.
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
@@ -142,8 +144,10 @@ class BackupsPage final : public Page
         ui::Painter paint(list, fonts, theme_);
         paint.panel(card);
         const GameBackup *b = focused();
-        ui::text(list, fonts.display, ui::fit_label(paint, b != nullptr ? b->name : "Sicherungen", 32.0f, card.w - 60.0f),
-                 card.x + 30.0f, card.y + 66.0f, 32.0f, kInk);
+        ui::text(
+            list, fonts.display,
+            ui::fit_label(paint, b != nullptr ? b->name : "Sicherungen", 32.0f, card.w - 60.0f),
+            card.x + 30.0f, card.y + 66.0f, 32.0f, kInk);
         float y = card.y + 120.0f;
         if (b != nullptr)
         {
@@ -151,13 +155,15 @@ class BackupsPage final : public Page
             y = card.y + 450.0f;
             if (b->unfinished)
                 y = paragraph(canvas,
-                              "Unfertig: Die Sicherung wurde nicht zu Ende geschrieben. Zum Zurückkopieren taugt sie "
+                              "Unfertig: Die Sicherung wurde nicht zu Ende geschrieben. Zum "
+                              "Zurückkopieren taugt sie "
                               "nicht; löschen und neu sichern.",
                               card.x + 30.0f, y, card.w - 60.0f, kWarning, 4) +
                     12.0f;
         }
         paragraph(canvas,
-                  "Sicherungen der App (Ordner PS5-Sicherung/Spiele). Die Quadrat-Taste löscht eine sofort; die "
+                  "Sicherungen der App (Ordner PS5-Sicherung/Spiele). Die Quadrat-Taste löscht "
+                  "eine sofort; die "
                   "Spielstände bleiben erhalten. Das Löschen läuft unter Aufträge.",
                   card.x + 30.0f, y, card.w - 60.0f, kMuted, 5);
         std::uint64_t total = 0;
@@ -166,9 +172,11 @@ class BackupsPage final : public Page
         const std::string foot = !backups_.loaded ? "Wird eingelesen …"
                                  : !backups_.error.empty()
                                      ? backups_.error
-                                     : std::to_string(backups_.backups.size()) + " Sicherungen, zusammen " + format_bytes(total);
-        ui::text(list, fonts.semibold, ui::fit_label(paint, foot, 21.0f, card.w - 60.0f), card.x + 30.0f, kBottom - 56.0f,
-                 21.0f, backups_.error.empty() ? kMuted : kWarning);
+                                     : std::to_string(backups_.backups.size()) +
+                                           " Sicherungen, zusammen " + format_bytes(total);
+        ui::text(list, fonts.semibold, ui::fit_label(paint, foot, 21.0f, card.w - 60.0f),
+                 card.x + 30.0f, kBottom - 56.0f, 21.0f,
+                 backups_.error.empty() ? kMuted : kWarning);
     }
 
     void draw_overlay(ui::Canvas &canvas) const override
@@ -192,12 +200,13 @@ class BackupsPage final : public Page
         if (i < 0 || i >= static_cast<int>(list_.items().size()))
             return nullptr;
         const int tag = list_.items()[static_cast<std::size_t>(i)].tag;
-        return tag >= 0 && tag < static_cast<int>(backups_.backups.size()) ? &backups_.backups[static_cast<std::size_t>(tag)]
-                                                                            : nullptr;
+        return tag >= 0 && tag < static_cast<int>(backups_.backups.size())
+                   ? &backups_.backups[static_cast<std::size_t>(tag)]
+                   : nullptr;
     }
 
-    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width, Color ink,
-                    int max_lines) const
+    float paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width,
+                    Color ink, int max_lines) const
     {
         int lines = 0;
         for (const std::string &line : canvas.fonts.regular.font->wrap(text, 21.0f, width))
@@ -227,7 +236,7 @@ class BackupsPage final : public Page
         if (out.empty())
         {
             ui::ListItem n;
-            n.title = !backups_.loaded ? "Wird eingelesen …"
+            n.title = !backups_.loaded         ? "Wird eingelesen …"
                       : backups_.error.empty() ? "Keine Sicherungen gefunden"
                                                : backups_.error;
             n.disabled = true;
@@ -261,7 +270,8 @@ class BackupsPage final : public Page
             rows.push_back({"Laufwerk", b->drive});
             rows.push_back({"Art", b->type});
             rows.push_back({"Größe", format_bytes(b->size_bytes)});
-            rows.push_back({"Stand", play_date(b->modified, tz_) + ", " + play_clock(b->modified, tz_) + " Uhr"});
+            rows.push_back({"Stand", play_date(b->modified, tz_) + ", " +
+                                         play_clock(b->modified, tz_) + " Uhr"});
             rows.push_back({"Prüfsumme", b->sums ? "ja (.sha256)" : "nein"});
             rows.push_back({"Ordner", b->path});
         }

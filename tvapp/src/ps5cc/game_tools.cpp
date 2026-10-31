@@ -1,4 +1,5 @@
-// ps5cc - The game tools of Spiele → Bibliothek: the action menu (□) and the plan dialog of each tool.
+// ps5cc - The game tools of Spiele → Bibliothek: the action menu (□) and the plan dialog of each
+// tool.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -20,7 +21,6 @@ namespace
 constexpr int kExtrasTag = 200;
 constexpr int kLibraryTag = 201;
 constexpr int kRemountTag = 202; // + 0 remount, 1 unmount, 2 mount
-
 
 using gfx::Color;
 using gfx::Rect;
@@ -66,15 +66,19 @@ std::string op_text(const Plan &p, int op)
     switch (op)
     {
     case 0:
-        return p.kind == "folder" ? "Der Ordner wird als exFAT-Abbild in einen komprimierten PFS-Container gepackt, in einem "
+        return p.kind == "folder" ? "Der Ordner wird als exFAT-Abbild in einen komprimierten "
+                                    "PFS-Container gepackt, in einem "
                                     "Durchgang ohne Zwischendatei."
                                   : "Das Abbild wird in einen komprimierten PFS-Container gepackt.";
     case 1:
-        return "Ein UFS2-Abbild direkt aus dem Ordner mit 64-KiB-Blöcken, wie ShadowMountPlus es empfiehlt" +
-               (p.ffpkg_bytes > 0 && p.ffpkg_error.empty() ? ", " + format_bytes(p.ffpkg_bytes) + " groß."
-                                                            : std::string("."));
+        return "Ein UFS2-Abbild direkt aus dem Ordner mit 64-KiB-Blöcken, wie ShadowMountPlus es "
+               "empfiehlt" +
+               (p.ffpkg_bytes > 0 && p.ffpkg_error.empty()
+                    ? ", " + format_bytes(p.ffpkg_bytes) + " groß."
+                    : std::string("."));
     default:
-        return "Ein exFAT-Abbild mit 64-KiB-Clustern, wie ShadowMountPlus es für seinen schnellen Weg braucht.";
+        return "Ein exFAT-Abbild mit 64-KiB-Clustern, wie ShadowMountPlus es für seinen schnellen "
+               "Weg braucht.";
     }
 }
 
@@ -143,8 +147,10 @@ void GameTools::init(const ui::Theme &theme)
     form_.style.on_text = "An";
     form_.style.off_text = "Aus";
     form_.set_bounds({kPanel.x + 24.0f, kPanel.y + 130.0f, 880.0f, 650.0f});
-    // Drives as radio buttons: the chosen one is filled, a drive that cannot be chosen says why in its place.
-    form_.trailing = [this](ui::Canvas &canvas, const Rect &control, const ui::FormRow &row, float focus)
+    // Drives as radio buttons: the chosen one is filled, a drive that cannot be chosen says why in
+    // its place.
+    form_.trailing =
+        [this](ui::Canvas &canvas, const Rect &control, const ui::FormRow &row, float focus)
     {
         ui::Painter paint(canvas.list, canvas.fonts, theme_);
         const float cy = control.y + control.h * 0.5f;
@@ -154,17 +160,16 @@ void GameTools::init(const ui::Theme &theme)
             ui::Look look;
             look.focus = focus;
             look.disabled = row.disabled;
-            paint.radio({right - 30.0f, cy - 15.0f, 30.0f, 30.0f}, choice_.drive == row.id - kRowDrive ? 1.0f : 0.0f,
-                        look);
+            paint.radio({right - 30.0f, cy - 15.0f, 30.0f, 30.0f},
+                        choice_.drive == row.id - kRowDrive ? 1.0f : 0.0f, look);
             right -= 46.0f;
         }
         if (row.text.empty())
             return;
         const Color ink = row.disabled && row.id >= kRowDrive ? kWarning : kMuted;
-        paint.label(ui::fit_label(paint, row.text, 20.0f, right - control.x), right, cy + 7.0f, 20.0f, ink,
-                    gfx::Align::right);
+        paint.label(ui::fit_label(paint, row.text, 20.0f, right - control.x), right, cy + 7.0f,
+                    20.0f, ink, gfx::Align::right);
     };
-
 }
 
 void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback)
@@ -198,11 +203,14 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
     ui::MenuItem extras;
     extras.label = "Extras: AMPR, PlayGo, LZ4 …";
     extras.tag = kExtrasTag;
-    // as in the web app: only for games with a folder or image of their own, not for installed packages
-    extras.disabled = game.path.empty() || game.format == "pkg" || game.format == "fpkg" || game.format == "ps4mount";
+    // as in the web app: only for games with a folder or image of their own, not for installed
+    // packages
+    extras.disabled = game.path.empty() || game.format == "pkg" || game.format == "fpkg" ||
+                      game.format == "ps4mount";
     items.push_back(extras);
-    // Taken out of ShadowMountPlus and put back (30.10.2026): for a game that hangs or should be found anew after
-    // copying, moving or deleting. Mounted: "Neu einhängen" and "Aushängen", else "Einhängen". Never while it runs.
+    // Taken out of ShadowMountPlus and put back (30.10.2026): for a game that hangs or should be
+    // found anew after copying, moving or deleting. Mounted: "Neu einhängen" and "Aushängen", else
+    // "Einhängen". Never while it runs.
     if (game.can_remount)
     {
         const bool live = game.id == running_id_;
@@ -234,7 +242,8 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
 
 void GameTools::open_tool(Tool tool, ui::Feedback &feedback)
 {
-    // A running game is never deleted (the console app refuses too): said at once, without asking it.
+    // A running game is never deleted (the console app refuses too): said at once, without asking
+    // it.
     if (tool == Tool::erase && game_.id == running_id_)
     {
         feedback.play(audio::Cue::error);
@@ -276,8 +285,9 @@ void GameTools::absorb(const Snapshot &data)
         plan_.name = game_.name;
     choice_ = first_choice(plan_, &game_);
     build_form();
-    // "Löschen" chosen in the menu deletes at once (wish of the user, 27.10.2026): the plan is only fetched for the
-    // confirmation token the console app wants; the dialog stays for a refusal and its reason.
+    // "Löschen" chosen in the menu deletes at once (wish of the user, 27.10.2026): the plan is only
+    // fetched for the confirmation token the console app wants; the dialog stays for a refusal and
+    // its reason.
     if (tool_ == Tool::erase && plan_.ok && ready(plan_, choice_))
     {
         if (toast)
@@ -308,13 +318,18 @@ void GameTools::build_form()
         for (std::size_t i = 0; i < plan_.drives.size(); ++i)
             form_.add_action(kRowDrive + static_cast<int>(i), plan_.drives[i].label);
         if (plan_.drives.empty())
-            form_.add_value(kRowInfo, plan_.ps4 ? "Kein USB- oder M.2-Laufwerk gefunden" : "Kein Laufwerk gefunden", "");
+            form_.add_value(
+                kRowInfo,
+                plan_.ps4 ? "Kein USB- oder M.2-Laufwerk gefunden" : "Kein Laufwerk gefunden", "");
     };
     const auto add_mode = [this](const char *header)
     {
         form_.add_header(header);
-        form_.add_choice(kRowMode, "Ziel", {"bitte wählen", "A · Spielbar", "B · Sicherung"}, choice_.mode + 1)
-            .description = "A: homebrew, ShadowMountPlus bindet es ein · B: PS5-Sicherung/Spiele, nur aufbewahrt";
+        form_
+            .add_choice(kRowMode, "Ziel", {"bitte wählen", "A · Spielbar", "B · Sicherung"},
+                        choice_.mode + 1)
+            .description =
+            "A: homebrew, ShadowMountPlus bindet es ein · B: PS5-Sicherung/Spiele, nur aufbewahrt";
     };
     int first = kRowStart;
     switch (tool_)
@@ -356,8 +371,8 @@ void GameTools::build_form()
     case Tool::image_unpack:
         add_drives(tool_ == Tool::move ? "Wohin?" : "Wohin entpacken?");
         if (tool_ == Tool::unpack)
-            form_.add_toggle(kRowDeleteSource, "Abbild danach löschen", choice_.delete_source).description =
-                "Erst wenn das Entpacken fertig und fehlerfrei ist.";
+            form_.add_toggle(kRowDeleteSource, "Abbild danach löschen", choice_.delete_source)
+                .description = "Erst wenn das Entpacken fertig und fehlerfrei ist.";
         first = choice_.drive >= 0 ? kRowDrive + choice_.drive : kRowStart;
         break;
     case Tool::image_check:
@@ -365,19 +380,22 @@ void GameTools::build_form()
     {
         form_.add_header("Abbild");
         form_.add_value(kRowInfo, "Format", plan_.format);
-        form_.add_value(kRowInfo + 1, "Größe", plan_.image_bytes > 0 ? format_bytes(plan_.image_bytes) : "–");
+        form_.add_value(kRowInfo + 1, "Größe",
+                        plan_.image_bytes > 0 ? format_bytes(plan_.image_bytes) : "–");
         if (tool_ == Tool::image_check)
         {
             std::string last = "noch nie";
             if (plan_.checked)
-                last = format_date(plan_.check_when) + (plan_.check_clean ? " · in Ordnung" : " · Fehler gefunden");
+                last = format_date(plan_.check_when) +
+                       (plan_.check_clean ? " · in Ordnung" : " · Fehler gefunden");
             form_.add_value(kRowInfo + 2, "Zuletzt geprüft", last);
         }
         else
         {
             const std::string state =
-                plan_.repair_state == "fixable" ? "Größe stimmt nicht: " + format_bytes(plan_.repair_actual) + " statt " +
-                                                      format_bytes(plan_.repair_declared)
+                plan_.repair_state == "fixable"
+                    ? "Größe stimmt nicht: " + format_bytes(plan_.repair_actual) + " statt " +
+                          format_bytes(plan_.repair_declared)
                 : plan_.repair_state == "broken" ? std::string("nicht reparierbar")
                 : plan_.repair_state == "fine"   ? std::string("nichts zu reparieren")
                                                  : std::string("–");
@@ -422,7 +440,8 @@ void GameTools::refresh()
         if (!d.drive.empty())
             info = d.drive + " · " + info;
         if (d.source_here)
-            info += tool_ == Tool::image_unpack ? " · hier liegt das Abbild" : " · hier liegt das Original";
+            info += tool_ == Tool::image_unpack ? " · hier liegt das Abbild"
+                                                : " · hier liegt das Original";
         if (d.here && tool_ == Tool::move)
             info += " · hier liegt das Spiel";
         row->disabled = !why.empty();
@@ -545,7 +564,9 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         else if (id == kRowOp)
         {
             const int index = form_.choice_index(kRowOp);
-            choice_.op = index >= 0 && index < static_cast<int>(op_index_.size()) ? op_index_[static_cast<std::size_t>(index)] : -1;
+            choice_.op = index >= 0 && index < static_cast<int>(op_index_.size())
+                             ? op_index_[static_cast<std::size_t>(index)]
+                             : -1;
         }
         else if (id == kRowAmpr)
             choice_.ampr = form_.toggle_value(kRowAmpr);
@@ -574,7 +595,8 @@ void GameTools::press_start(ui::Feedback &feedback)
         feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
         return;
     }
-    // No ffpfsc question here: the stutter warning stands in the dialog's side text (nothing is asked twice).
+    // No ffpfsc question here: the stutter warning stands in the dialog's side text (nothing is
+    // asked twice).
     feedback.play(audio::Cue::select);
     start();
 }
@@ -595,8 +617,8 @@ void GameTools::update(float dt)
     shown_.update(dt, 18.0f);
 }
 
-float GameTools::draw_paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width, float size,
-                                Color ink, int max_lines) const
+float GameTools::draw_paragraph(ui::Canvas &canvas, const std::string &text, float x, float y,
+                                float width, float size, Color ink, int max_lines) const
 {
     int lines = 0;
     for (const std::string &line : canvas.fonts.regular.font->wrap(text, size, width))
@@ -633,7 +655,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         heading("Quelle", kMuted);
         para(plan_.source, kInk, 2);
         para(format_bytes(plan_.size_bytes) + " in " + files_text(plan_.files) +
-                 (plan_.skipped > 0 ? " · " + std::to_string(plan_.skipped) + " Verknüpfungen oder Sonderdateien bleiben weg"
+                 (plan_.skipped > 0 ? " · " + std::to_string(plan_.skipped) +
+                                          " Verknüpfungen oder Sonderdateien bleiben weg"
                                     : ""),
              kMuted, 2);
         if (!target.empty())
@@ -643,22 +666,25 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             const PlanDest *dest = dest_of(plan_, choice_);
             if (dest != nullptr && dest->unfinished)
                 para("Dort liegt eine abgebrochene Kopie dieser App, sie wird ersetzt" +
-                         (dest->unfinished_bytes > 0 ? " (" + format_bytes(dest->unfinished_bytes) + " werden dabei frei)."
-                                                     : std::string(".")),
+                         (dest->unfinished_bytes > 0
+                              ? " (" + format_bytes(dest->unfinished_bytes) + " werden dabei frei)."
+                              : std::string(".")),
                      kWarning, 3);
         }
         if (choice_.mode == 0)
         {
             heading("ShadowMountPlus findet das Spiel danach zweimal", kWarning);
             para("Das Original und die Kopie haben beide die Titel-ID " + plan_.id +
-                     ". Das kann beim Einbinden Probleme machen. Wolltest du das Spiel verschieben, lösche nach der Kopie "
+                     ". Das kann beim Einbinden Probleme machen. Wolltest du das Spiel "
+                     "verschieben, lösche nach der Kopie "
                      "das Original.",
                  kWarning, 4);
         }
         if (!blocked.empty())
             para(blocked, kCritical, 3);
         if (!target.empty())
-            para("Jede Datei wird nach dem Schreiben zurückgelesen und verglichen; daneben entsteht eine .sha256 mit den "
+            para("Jede Datei wird nach dem Schreiben zurückgelesen und verglichen; daneben "
+                 "entsteht eine .sha256 mit den "
                  "Prüfsummen.",
                  kMuted, 3);
         break;
@@ -667,14 +693,17 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     {
         heading("Quelle", kMuted);
         para(plan_.source, kInk, 2);
-        para(plan_.kind == "folder" ? files_text(plan_.files) + ", als exFAT-Abbild " + format_bytes(plan_.raw_bytes)
-                                    : format_bytes(plan_.raw_bytes),
+        para(plan_.kind == "folder"
+                 ? files_text(plan_.files) + ", als exFAT-Abbild " + format_bytes(plan_.raw_bytes)
+                 : format_bytes(plan_.raw_bytes),
              kMuted, 1);
         if (plan_.ps4)
         {
             heading("PS4-Spiel", kWarning);
-            para("Ziel ist nur ein USB- oder M.2-Laufwerk: Ein PS4-Titel aus dem Speicher der Konsole bringt sie zum "
-                 "Absturz. Kein AMPR-Index. Keine Trophäen aus Abbildern, manche Titel hängen bei „Bitte warten“: "
+            para("Ziel ist nur ein USB- oder M.2-Laufwerk: Ein PS4-Titel aus dem Speicher der "
+                 "Konsole bringt sie zum "
+                 "Absturz. Kein AMPR-Index. Keine Trophäen aus Abbildern, manche Titel hängen bei "
+                 "„Bitte warten“: "
                  "Beides geht nur installiert (Pakete).",
                  kWarning, 5);
         }
@@ -684,12 +713,15 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             if (choice_.op == 1 && !plan_.ffpkg_error.empty())
                 para("Bei diesem Spiel nicht möglich: " + plan_.ffpkg_error, kCritical, 3);
             if (choice_.op == 0 && !stream_reasons(plan_).empty())
-                para("Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder Texture-Streaming). Ein "
-                     "komprimiertes Abbild muss beim Spielen ständig entpackt werden – exFAT oder ffpkg vermeiden das.",
+                para("Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder "
+                     "Texture-Streaming). Ein "
+                     "komprimiertes Abbild muss beim Spielen ständig entpackt werden – exFAT oder "
+                     "ffpkg vermeiden das.",
                      kWarning, 5);
         }
         if (choice_.mode == 0)
-            para("ShadowMountPlus findet das Spiel danach zweimal (Original und neues Abbild). Lösche das Original erst, "
+            para("ShadowMountPlus findet das Spiel danach zweimal (Original und neues Abbild). "
+                 "Lösche das Original erst, "
                  "wenn das neue Abbild startet.",
                  kWarning, 3);
         if (!target.empty())
@@ -708,18 +740,23 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         para(plan_.source, kInk, 2);
         para(format_bytes(plan_.size_bytes), kMuted, 1);
         para(tool_ == Tool::unpack
-                 ? "ShadowMountPlus entpackt das Abbild in einen Dump-Ordner namens " + plan_.id + " im gewählten Ziel." +
-                       (plan_.image_type == "pfsc" ? " Ein komprimiertes Abbild wird dabei deutlich größer als die Datei."
-                                                   : "")
-                 : std::string("ShadowMountPlus verschiebt das Spiel selbst: Es kopiert die Daten, trägt das Spiel am "
-                               "neuen Ort ein und löscht es am alten erst, wenn alles angekommen ist."),
+                 ? "ShadowMountPlus entpackt das Abbild in einen Dump-Ordner namens " + plan_.id +
+                       " im gewählten Ziel." +
+                       (plan_.image_type == "pfsc"
+                            ? " Ein komprimiertes Abbild wird dabei deutlich größer als die Datei."
+                            : "")
+                 : std::string(
+                       "ShadowMountPlus verschiebt das Spiel selbst: Es kopiert die Daten, trägt "
+                       "das Spiel am "
+                       "neuen Ort ein und löscht es am alten erst, wenn alles angekommen ist."),
              kMuted, 5);
         if (!target.empty())
         {
             heading("Ziel", kMuted);
             para(target, kInk, 2);
             if (tool_ == Tool::move)
-                para("Nach dem Verschieben gibt es das Spiel am alten Ort nicht mehr.", kWarning, 2);
+                para("Nach dem Verschieben gibt es das Spiel am alten Ort nicht mehr.", kWarning,
+                     2);
             else if (choice_.delete_source)
                 para("Die Abbild-Datei wird nach dem Entpacken gelöscht.", kWarning, 2);
         }
@@ -730,7 +767,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     case Tool::image_unpack:
         heading("Abbild", kMuted);
         para(plan_.source, kInk, 2);
-        para(files_text(plan_.files) + ", " + format_bytes(plan_.size_bytes) + " entpackt", kMuted, 1);
+        para(files_text(plan_.files) + ", " + format_bytes(plan_.size_bytes) + " entpackt", kMuted,
+             1);
         if (!target.empty())
         {
             heading("Ziel", kMuted);
@@ -738,25 +776,29 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         }
         if (!blocked.empty())
             para(blocked, kCritical, 3);
-        para("Jede Datei wird geschrieben, zurückgelesen und verglichen; erst wenn alles stimmt, bekommt der Ordner seinen "
+        para("Jede Datei wird geschrieben, zurückgelesen und verglichen; erst wenn alles stimmt, "
+             "bekommt der Ordner seinen "
              "Namen. Das Abbild bleibt unberührt.",
              kMuted, 4);
         break;
     case Tool::image_check:
-        para(plan_.format == "ffpfsc" ? "Liest den ganzen Container, jeden Block, und prüft die Dateien darin, ohne das "
-                                        "Abbild einzuhängen."
-                                      : "Liest jede Datei des Abbilds vollständig, ohne es einzuhängen.",
+        para(plan_.format == "ffpfsc"
+                 ? "Liest den ganzen Container, jeden Block, und prüft die Dateien darin, ohne das "
+                   "Abbild einzuhängen."
+                 : "Liest jede Datei des Abbilds vollständig, ohne es einzuhängen.",
              kMuted, 3);
         para("Findet es etwas Defektes, nennt es die betroffenen Dateien beim Namen.", kMuted, 2);
         if (plan_.checked)
         {
-            heading("Letzte Prüfung · " + format_date(plan_.check_when), plan_.check_clean ? kGood : kCritical);
+            heading("Letzte Prüfung · " + format_date(plan_.check_when),
+                    plan_.check_clean ? kGood : kCritical);
             if (plan_.check_clean)
                 para("In Ordnung · " + files_text(plan_.check_files), kInk, 1);
             else
             {
-                para(plan_.check_container.empty() ? "Im Abbild wurden Fehler gefunden." : plan_.check_container, kCritical,
-                     3);
+                para(plan_.check_container.empty() ? "Im Abbild wurden Fehler gefunden."
+                                                   : plan_.check_container,
+                     kCritical, 3);
                 for (std::size_t i = 0; i < plan_.check_bad.size() && i < 4; ++i)
                     para("• " + plan_.check_bad[i], kInk, 1);
             }
@@ -767,8 +809,10 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             para(blocked, kCritical, 3);
         break;
     case Tool::image_repair:
-        para("Nur, wo es sicher geht: Stimmt die Größe der Datei nicht mit dem Kopf des Abbilds überein (Daten "
-             "vollständig, überzählige Bytes leer), setzt die App sie richtig und prüft danach den ganzen Container.",
+        para("Nur, wo es sicher geht: Stimmt die Größe der Datei nicht mit dem Kopf des Abbilds "
+             "überein (Daten "
+             "vollständig, überzählige Bytes leer), setzt die App sie richtig und prüft danach den "
+             "ganzen Container.",
              kMuted, 5);
         para("Defekte Blöcke lassen sich ohne Original nicht wiederherstellen.", kMuted, 2);
         if (!blocked.empty())
@@ -783,7 +827,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                 para("• " + item, kInk, 2);
         }
         if (!plan_.keeps.empty())
-            para("Bleibt liegen: " + plan_.keeps + " (die Spieldaten, auf die das Spiel verweist).", kMuted, 3);
+            para("Bleibt liegen: " + plan_.keeps + " (die Spieldaten, auf die das Spiel verweist).",
+                 kMuted, 3);
         heading("Deine Spielstände bleiben erhalten.", kGood);
         y += 6.0f;
         // The strong warning: a red plate, not only red text.
@@ -792,7 +837,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         list.rounded_rect({plate.x, plate.y, 5.0f, plate.h}, 2.5f, kCritical);
         ui::text(list, fonts.semibold, "Das Löschen ist endgültig.", x + 8.0f, y, 22.0f, kCritical);
         y += 30.0f;
-        ui::text(list, fonts.regular, "Es lässt sich nicht rückgängig machen.", x + 8.0f, y, 20.0f, kInk);
+        ui::text(list, fonts.regular, "Es lässt sich nicht rückgängig machen.", x + 8.0f, y, 20.0f,
+                 kInk);
         y += 54.0f;
         if (!blocked.empty())
             para(blocked, kCritical, 3);
@@ -819,11 +865,11 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
         ui::Painter paint(list, fonts, theme_);
         solid_floor(list, panel, theme_.radius_card);
         solid_floor(list, panel, theme_.radius_card);
-    paint.panel(panel);
+        paint.panel(panel);
         if (tool_ == Tool::erase)
             list.rounded_rect({panel.x, panel.y + 26.0f, 6.0f, 76.0f}, 3.0f, kCritical);
-        ui::text(list, fonts.display, ui::fit_label(paint, title(), 36.0f, panel.w - 80.0f), panel.x + 40.0f,
-                 panel.y + 66.0f, 36.0f, tool_ == Tool::erase ? kCritical : kInk);
+        ui::text(list, fonts.display, ui::fit_label(paint, title(), 36.0f, panel.w - 80.0f),
+                 panel.x + 40.0f, panel.y + 66.0f, 36.0f, tool_ == Tool::erase ? kCritical : kInk);
         std::string about = game_.id;
         if (!game_.platform.empty())
             about += " · " + game_.platform;
@@ -840,30 +886,36 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
         if (awaiting_ != 0)
         {
             const float pulse = 0.6f + 0.4f * std::sin(clock_ * 4.0f);
-            ui::text(list, fonts.semibold, loading_text(tool_), panel.x + panel.w * 0.5f, panel.y + 420.0f, 30.0f,
-                     kInk.with_alpha(pulse), gfx::Align::center);
-            ui::text(list, fonts.regular, "Bei großen Spielen dauert das bis zu einer Minute.", panel.x + panel.w * 0.5f,
-                     panel.y + 466.0f, 21.0f, kMuted, gfx::Align::center);
+            ui::text(list, fonts.semibold, loading_text(tool_), panel.x + panel.w * 0.5f,
+                     panel.y + 420.0f, 30.0f, kInk.with_alpha(pulse), gfx::Align::center);
+            ui::text(list, fonts.regular, "Bei großen Spielen dauert das bis zu einer Minute.",
+                     panel.x + panel.w * 0.5f, panel.y + 466.0f, 21.0f, kMuted, gfx::Align::center);
             const ui::Hint hints[] = {{ui::Button::circle, "Abbrechen"}};
-            ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 1, panel.x + 40.0f, false, layout);
+            ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 1, panel.x + 40.0f, false,
+                           layout);
         }
         else if (!plan_.ok)
         {
-            ui::text(list, fonts.semibold, "Nicht möglich", panel.x + 40.0f, panel.y + 200.0f, 28.0f, kCritical);
-            draw_paragraph(canvas, plan_.error, panel.x + 40.0f, panel.y + 246.0f, panel.w - 80.0f, 22.0f, kInk, 5);
+            ui::text(list, fonts.semibold, "Nicht möglich", panel.x + 40.0f, panel.y + 200.0f,
+                     28.0f, kCritical);
+            draw_paragraph(canvas, plan_.error, panel.x + 40.0f, panel.y + 246.0f, panel.w - 80.0f,
+                           22.0f, kInk, 5);
             const ui::Hint hints[] = {{ui::Button::circle, "Schließen"}};
-            ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 1, panel.x + 40.0f, false, layout);
+            ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 1, panel.x + 40.0f, false,
+                           layout);
         }
         else
         {
-            list.rounded_rect({panel.x + 920.0f, panel.y + 140.0f, 1.5f, 630.0f}, 0.0f, Color::rgb(0x3880ff, 0.18f));
+            list.rounded_rect({panel.x + 920.0f, panel.y + 140.0f, 1.5f, 630.0f}, 0.0f,
+                              Color::rgb(0x3880ff, 0.18f));
             form_.draw(canvas);
             draw_side(canvas, {panel.x + 950.0f, panel.y + 130.0f, panel.w - 990.0f, 650.0f});
             const std::string start = start_label();
             const ui::Hint hints[] = {{ui::Button::cross, "Wählen"},
                                       {ui::Button::triangle, start.c_str()},
                                       {ui::Button::circle, "Abbrechen"}};
-            ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 3, panel.x + 40.0f, false, layout);
+            ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 3, panel.x + 40.0f, false,
+                           layout);
         }
         list.pop_opacity();
     }

@@ -47,8 +47,16 @@ opengl="$root/.deps/ps5-opengl/current/include"
 # Vendored upstream code under src/third_party is excluded from the analyzer profile.
 mapfile -d '' app_c_sources < <(find "$root/src" -path "$root/src/third_party" -prune \
     -o -type f -name '*.c' -print0)
+# payload_blob.c includes build/gen/ps5cc_payload.inc, which `make payload` writes only when the
+# app ELF exists; without a build the analyzer gets a stand-in so lint does not depend on one.
+gen="$root/build/gen"
+if [[ ! -f $gen/ps5cc_payload.inc ]]; then
+    gen=$(mktemp -d)
+    trap 'rm -rf "$gen"' EXIT
+    printf '#define PS5CC_PAYLOAD_PATH "/dev/null"\n' > "$gen/ps5cc_payload.inc"
+fi
 if (( ${#app_c_sources[@]} )); then
-    run_tidy app_c_sources -std=c11 -isystem "$sdk/target/include"
+    run_tidy app_c_sources -std=c11 -I"$gen" -isystem "$sdk/target/include"
 fi
 
 mapfile -d '' app_cpp_sources < <(find "$root/src" -path "$root/src/third_party" -prune \

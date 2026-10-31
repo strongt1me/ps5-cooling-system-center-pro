@@ -1,4 +1,5 @@
-// ps5cc - The game tools' plans: parsing, the rules that refuse a target, the bodies that start a job.
+// ps5cc - The game tools' plans: parsing, the rules that refuse a target, the bodies that start a
+// job.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -91,7 +92,8 @@ bool chosen(const Plan &plan, const PlanChoice &choice)
 bool is_image(const Game &game)
 {
     const std::string &f = game.format;
-    return !f.empty() && f != "folder" && f != "pkg" && f != "fpkg" && !game.path.empty() && game.path[0] == '/';
+    return !f.empty() && f != "folder" && f != "pkg" && f != "fpkg" && !game.path.empty() &&
+           game.path[0] == '/';
 }
 
 std::vector<Tool> tools_for(const Game &game)
@@ -287,7 +289,8 @@ Plan parse_plan(Tool tool, const PlanReply &reply)
         }
     }
 
-    // Copy, convert and the image unpack list drives ("targets"); move and unpack list folders ("destinations").
+    // Copy, convert and the image unpack list drives ("targets"); move and unpack list folders
+    // ("destinations").
     cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "targets"))
     {
         PlanDrive d;
@@ -352,8 +355,8 @@ std::string drive_blocked(const Plan &p, const PlanChoice &c, const PlanDrive &d
             return "FAT32 nimmt keine Datei über 4 GB auf";
         if (!d.enough_space)
             return room;
-        // The drive-wide figure is the best case over both destinations; what counts is the one chosen (its own
-        // unfinished leftover is removed first and gives its room back only to it).
+        // The drive-wide figure is the best case over both destinations; what counts is the one
+        // chosen (its own unfinished leftover is removed first and gives its room back only to it).
         if (c.mode < 0 || c.mode >= kModes)
             return "";
         const PlanDest &dest = d.copy[static_cast<std::size_t>(c.mode)];
@@ -380,7 +383,8 @@ std::string drive_blocked(const Plan &p, const PlanChoice &c, const PlanDrive &d
             return room;
         if (c.mode < 0 || c.mode >= kModes || c.op < 0 || c.op >= kOps)
             return "";
-        const PlanDest &t = d.convert[static_cast<std::size_t>(c.mode)][static_cast<std::size_t>(c.op)];
+        const PlanDest &t =
+            d.convert[static_cast<std::size_t>(c.mode)][static_cast<std::size_t>(c.op)];
         if (!t.present)
             return "";
         if (t.enough_space == 0)
@@ -408,7 +412,8 @@ std::string drive_blocked(const Plan &p, const PlanChoice &c, const PlanDrive &d
         if (d.exists)
             return "Dort gibt es den Ordner schon.";
         if (!d.enough_space)
-            return "Nicht genug Platz: nötig sind " + format_bytes(p.size_bytes + kUnpackReserve) + ".";
+            return "Nicht genug Platz: nötig sind " + format_bytes(p.size_bytes + kUnpackReserve) +
+                   ".";
         if (d.fat32_too_big)
             return "FAT32 nimmt keine Dateien über 4 GB.";
         if (d.path_too_long)
@@ -427,11 +432,13 @@ std::string run_blocked(const Plan &p)
     {
     case Tool::copy:
         if (p.running)
-            return "Das Spiel läuft gerade. Bitte erst beenden: Es schreibt womöglich in seinen Ordner.";
+            return "Das Spiel läuft gerade. Bitte erst beenden: Es schreibt womöglich in seinen "
+                   "Ordner.";
         if (p.busy)
             return "Es läuft schon eine Kopie.";
         if (p.other_busy)
-            return "Es läuft gerade eine Konvertierung. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig.";
+            return "Es läuft gerade eine Konvertierung. Kopieren, Konvertieren und Verschieben "
+                   "laufen nicht gleichzeitig.";
         return "";
     case Tool::convert:
         if (p.running)
@@ -439,7 +446,8 @@ std::string run_blocked(const Plan &p)
         if (p.busy)
             return "Es läuft schon eine Konvertierung.";
         if (p.other_busy)
-            return "Es läuft gerade eine Kopie. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig.";
+            return "Es läuft gerade eine Kopie. Kopieren, Konvertieren und Verschieben laufen "
+                   "nicht gleichzeitig.";
         if (p.ops.empty())
             return "Für dieses Spiel bietet die App kein Format an.";
         return "";
@@ -448,13 +456,16 @@ std::string run_blocked(const Plan &p)
         return p.running ? "Das Spiel läuft gerade. Bitte erst beenden." : "";
     case Tool::image_unpack:
         if (p.damaged)
-            return "Das Abbild ist beschädigt: ein Ordner darin lässt sich nicht lesen. Zuerst „Abbild prüfen“.";
+            return "Das Abbild ist beschädigt: ein Ordner darin lässt sich nicht lesen. Zuerst "
+                   "„Abbild prüfen“.";
         if (p.busy)
             return "Es läuft schon ein Vorgang an einem Abbild.";
         return "";
     case Tool::image_check:
         if (!p.can_check)
-            return !p.why.empty() ? p.why : !p.note.empty() ? p.note : "Dieses Abbild lässt sich nicht prüfen.";
+            return !p.why.empty()    ? p.why
+                   : !p.note.empty() ? p.note
+                                     : "Dieses Abbild lässt sich nicht prüfen.";
         return "";
     case Tool::image_repair:
         if (p.repair_state == "fixable")
@@ -462,7 +473,8 @@ std::string run_blocked(const Plan &p)
         if (p.repair_state == "fine")
             return "Nichts zu reparieren: Die Größe der Datei stimmt.";
         if (p.repair_state == "broken")
-            return "Nicht reparierbar" + (p.repair_why.empty() ? std::string(".") : ": " + p.repair_why);
+            return "Nicht reparierbar" +
+                   (p.repair_why.empty() ? std::string(".") : ": " + p.repair_why);
         return !p.why.empty() ? p.why : "Repariert wird nur ein komprimiertes Abbild (ffpfsc).";
     case Tool::erase:
         return p.can_delete ? "" : (p.why.empty() ? "Das lässt sich gerade nicht löschen." : p.why);
@@ -524,7 +536,8 @@ bool ready(const Plan &p, const PlanChoice &c)
     case Tool::move:
     case Tool::unpack:
     case Tool::image_unpack:
-        if (!chosen(p, c) || !drive_blocked(p, c, p.drives[static_cast<std::size_t>(c.drive)]).empty())
+        if (!chosen(p, c) ||
+            !drive_blocked(p, c, p.drives[static_cast<std::size_t>(c.drive)]).empty())
             return false;
         if (p.tool == Tool::convert && (c.op < 0 || (c.op == 1 && !p.ffpkg_error.empty())))
             return false;
@@ -553,8 +566,8 @@ PlanChoice first_choice(const Plan &p, const Game *game)
         }
         c.ampr = game != nullptr && game->ampr_emu;
     }
-    // Copy and convert as the web app: the first drive that is not the source's and has room; convert then any with
-    // room. The others start on the first drive that can be chosen at all.
+    // Copy and convert as the web app: the first drive that is not the source's and has room;
+    // convert then any with room. The others start on the first drive that can be chosen at all.
     for (std::size_t i = 0; i < p.drives.size() && c.drive < 0; ++i)
     {
         const PlanDrive &d = p.drives[i];
@@ -606,9 +619,10 @@ std::string start_body(const Plan &p, const PlanChoice &c)
     case Tool::image_unpack:
     case Tool::image_check:
     case Tool::image_repair:
-        cJSON_AddStringToObject(root, "kind", p.tool == Tool::image_unpack  ? "unpack"
-                                              : p.tool == Tool::image_check ? "check"
-                                                                            : "repair");
+        cJSON_AddStringToObject(root, "kind",
+                                p.tool == Tool::image_unpack  ? "unpack"
+                                : p.tool == Tool::image_check ? "check"
+                                                              : "repair");
         cJSON_AddStringToObject(root, "id", p.id.c_str());
         cJSON_AddStringToObject(root, "target", p.tool == Tool::image_unpack ? drive.c_str() : "");
         break;
