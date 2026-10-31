@@ -413,6 +413,7 @@ nie ersetzt (dann kommt „ (1)“ an den Namen). PKGs, die ältere Versionen ve
 „Herausgenommene wieder zulassen“ wählt.
 
 - **Vor dem Ruhemodus PS4Mount-Spiele schließen.** Der Ruhemodus schaltet das Laufwerk ab; ein offenes Spiel kann danach nicht
+- **Ausschalten hängt die Spiele aus** (seit PS4Mount 0.7.2): Wer vor dem Ruhemodus PS4Mount ausschaltet, ist sicher. Die App hängt dabei jedes Spiel aus, ohne Zwang; läuft gerade ein Spiel, lehnt sie ab und nennt es. Ist ein Spielordner noch in Benutzung, hängt sie alle wieder ein und bittet, es gleich noch einmal zu versuchen. Eingeschaltet hängt PS4Mount die Spiele wieder ein.
   mehr lesen und hängt.
 - Zwei oder mehr angeschlossene Laufwerke (auch Partitionen) können die Oberfläche der Konsole träge machen, mit oder ohne
   PS4Mount. Dann nur ein Laufwerk mit einer Partition anschließen.

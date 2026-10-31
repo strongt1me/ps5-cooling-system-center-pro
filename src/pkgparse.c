@@ -539,9 +539,15 @@ parse_container(const pkg_src_t *src, const uint8_t *hdr, size_t hr, ps5tm_pkg_t
 
   int delta_type = ((type_magic & 0xFF) == 0x1E || (type_magic & 0xFF000000) == 0x41000000);
   uint32_t content_flags = be32(ch + 0x78);       /* 0x40000000 / 0x00100000: a patch, also when nothing else in the package says so */
+  /* ShadowMountPlus 1.7beta11 (sm_pkg.c): content types 0x1B, 0x1C and 0x21 are add-ons; a PS5 media app (0x26) with both
+     flags 0x40400000 is a full remaster, a base package although it carries the patch flag 0x40000000. */
+  uint32_t content_type = be32(ch + 0x74);
+  int addon_type = content_type == 0x1B || content_type == 0x1C || content_type == 0x21;
+  int media_remaster = content_type == 0x26 && (content_flags & 0x40400000) == 0x40400000;
   const char *c = m.category;
   const char *kind;
-  if(is_lih || (content_flags & 0x40100000) || has_playgo || has_delta || delta_type || !strncmp(c, "gp", 2)) kind = "update";
+  if(addon_type && !is_lih && !has_delta && !delta_type) kind = "dlc";
+  else if(is_lih || (!media_remaster && (content_flags & 0x40100000)) || has_playgo || has_delta || delta_type || !strncmp(c, "gp", 2)) kind = "update";
   else if(!strncmp(c, "ac", 2) || !strncmp(c, "al", 2) || !strcmp(c, "addcont")) kind = "dlc";
   else if(sfo_category && (!strncmp(c, "gd", 2) || !strncmp(c, "bd", 2) || !strncmp(c, "gc", 2) || !strncmp(c, "wt", 2))) kind = "base";
   else if((type_magic & 0xFF) == 1 && !has_base_meta) kind = "dlc";        /* PS5 DLC; a PS4 base package can also have type 1: its category decided above */

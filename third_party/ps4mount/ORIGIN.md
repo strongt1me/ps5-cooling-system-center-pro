@@ -1,4 +1,4 @@
-# PS4Mount 0.7.1 (gasb07)
+# PS4Mount 0.7.2 (gasb07)
 
 Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom User am 15.10.2026 bereitgestellt; davor 0.5.0 vom selben Tag, 0.4.4 vom 14.10. und 0.4.1 vom 13.10.), dazu am 18.10.2026 die Änderungen von 0.5.1 auf 0.6.0 (Quelltext des Tags `v0.6.0`, gelesen und nachgebaut), Lizenz GPL-3.0-or-later
 (`LICENSE` hier). Der Quelltext ist unter `src/ps4m_*.c` übernommen:
@@ -13,6 +13,8 @@ Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom U
 | `src/db.c` | entfällt | Die Abfrage `tbl_contentinfo` liest `ps5tm_library_installed_ids` (ohne SQLite) |
 | `src/web.c`, `web/index.html` | entfallen | Die Weboberfläche ist der Reiter „PS4 von USB“ der App (`web/app.js`); die Originalseite liegt als `panel-index.html` zum Vergleich |
 | `test/unit.c` | `third_party/ps4mount/test/unit.c` | Vorsatz; 150 Prüfungen, laufen ohne Konsole |
+
+Seit 0.7.2 (31.10.2026, Vergleich `v0.7.1...v0.7.2`): Ausschalten hängt vorher jedes Spiel aus (`unmount_games` vor `ps4m_set_enabled` in `src/ps4m_core.c`, nie erzwungen), damit der Ruhemodus kein eingehängtes Spiel vom abgeschalteten Laufwerk findet; läuft ein Spiel, wird abgelehnt und es genannt; bleibt ein Ordner belegt, wird alles wieder eingehängt und abgelehnt. Anders als im Original prüft die App nicht in einer zweiten Abfrage (`/api/stop/check`), sondern die Antwort des Ausschaltens nennt den Grund; ist die Prozessliste nicht lesbar, wird trotzdem (nicht erzwungen) ausgehängt. Nicht übernommen: `web.c`/Panel-Texte und die README-Hinweise (stehen im Handbuch).
 
 Seit 0.7.1 (29.10.2026, Vergleich `v0.7.0...v0.7.1`): `p4m_sfo_check` in `src/ps4m_pkg.c` prüft die Kennungen der param.sfo (TITLE_ID, CONTENT_ID, APP_VER, VERSION und jedes `SERVICE_ID_ADDCONT_ADD_*`, nicht nur die ersten sieben); `src_open` in `src/ps4m_core.c` meldet ein Spiel mit beschädigter param.sfo nie an und lässt ein beschädigtes Update liegen (Meldungen deutsch). Zusätzlich in der App: das beschädigte Spiel steht unter „Auf USB gefunden, nicht eingebunden“ (Grund `damaged`). Die sieben neuen Prüfungen aus `test/unit.c` sind übernommen (157 Prüfungen).
 

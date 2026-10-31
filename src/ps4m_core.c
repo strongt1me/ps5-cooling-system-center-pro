@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 gasb07 (PS4Mount 0.7.1), adapted for PS5 Cooling & System Center - Pro
+ * Copyright (C) 2026 gasb07 (PS4Mount 0.7.2), adapted for PS5 Cooling & System Center - Pro
  *
  * PS4Mount inside the app: scans USB drives for PS4 fake PKGs, registers them without installing them (nullfs mounts of internal
  * folders that hold symlinks to the packages), follows the kernel log and offers its list and actions to the web page.
@@ -85,7 +85,7 @@ int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) { (v
 #include "sqlite_ro.h"
 #include <ps5/kernel.h>
 
-#define VERSION "PS4Mount 0.7.1"
+#define VERSION "PS4Mount 0.7.2"
 #define LOCK_PORT 9032
 #define SCAN_SECONDS 10
 #define STATE_DIR "/data/ps4mount"
@@ -4627,12 +4627,57 @@ void ps4m_boot(void) {
     }
 }
 
+static int still_mounted(const char *target) { return mounted_from(target, NULL, 0) || layers_on(target) > 0; }
+
+/* PS4Mount 0.7.2: switching off unmounts every game first, so that rest mode (which powers the drive off) never finds a game
+ * mounted from it. Never forced: a forced unmount of a folder in use can bring the system down. Refused while a game is open;
+ * when a folder stays busy all games are mounted again. 0 once none is left, else -1 with the reason in msg. Holds g_mu. */
+static int unmount_games(char *msg, size_t cap) {
+    uint32_t ids[1];
+    char tids[1][10], target[64];
+    if (open_games(ids, tids, 1) > 0) {   /* (app) -1 = unknown: the unmounts below are not forced and fail on a folder in use */
+        managed_t *m = managed_by(tids[0], NULL);
+        snprintf(msg, cap, "Bitte zuerst %s beenden, dann lässt sich PS4Mount ausschalten.", m && m->name[0] ? m->name : tids[0]);
+        printf("[main] not switched off: %s is open\n", tids[0]);
+        return -1;
+    }
+    int busy = 0;
+    for (int i = 0; i < MAX_TITLES; i++) {
+        managed_t *m = &g_managed[i];
+        if (!m->used)
+            continue;
+        snprintf(target, sizeof(target), "/user/app/%s", m->tid);
+        unmount_all_layers(target, 0);
+        busy += still_mounted(target);
+        snprintf(target, sizeof(target), "/user/patch/%s", m->tid);
+        unmount_all_layers(target, 0);
+        busy += still_mounted(target);
+        for (int j = 0; j < m->ndlc_tids; j++) {
+            snprintf(target, sizeof(target), "/user/addcont/%s", m->dlc_tids[j]);
+            unmount_all_layers(target, 0);
+            busy += still_mounted(target);
+        }
+    }
+    if (!busy)
+        return 0;
+    for (int i = 0; i < MAX_TITLES; i++)
+        if (g_managed[i].used)
+            mount_paths(g_managed[i].tid, g_managed[i].has_patch, g_managed[i].dlc_tids, g_managed[i].ndlc_tids);
+    snprintf(msg, cap, "%d Spielordner sind noch in Benutzung. Bitte gleich noch einmal versuchen.", busy);
+    printf("[main] not switched off: %d folder(s) still in use, mounted again\n", busy);
+    return -1;
+}
+
 int ps4m_set_enabled(int on, char *msg, size_t n) {
     if (lock_for_page(3000)) {
         snprintf(msg, n, P4M_BUSY);
         return -1;
     }
     config_load();
+    if (!on && g_alive && unmount_games(msg, n)) {
+        pthread_mutex_unlock(&g_mu);
+        return -1;
+    }
     g_enabled = on != 0;
     config_save();
     if (!on) {
@@ -4647,7 +4692,7 @@ int ps4m_set_enabled(int on, char *msg, size_t n) {
         int rc = worker_start(msg, n);
         return rc > 0 ? 0 : rc;   /* waiting for the stand-alone one is no failure: switched on, msg says what happens */
     }
-    snprintf(msg, n, "PS4Mount ist ausgeschaltet. Eingebundene Spiele bleiben, bis die Konsole neu startet oder Sie sie entfernen.");
+    snprintf(msg, n, "PS4Mount ist ausgeschaltet, die Spiele sind ausgehängt. Eingeschaltet hängt PS4Mount sie wieder ein.");
     return 0;
 }
 
