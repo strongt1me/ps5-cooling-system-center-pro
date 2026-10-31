@@ -1350,15 +1350,6 @@
 
   /* ── Statusdarstellung ──────────────────────────────────────────── */
 
-  const setBar = (id, pct, hotAt) => {
-    const el = $(id);
-    if (!el) return;
-    el.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-    if (hotAt) {
-      el.classList.toggle("warn", pct >= hotAt && pct < hotAt + 12);
-      el.classList.toggle("hot", pct >= hotAt + 12);
-    }
-  };
 
   /* ── Übersicht (Reihe D, seit 19.09.2026) ───────────────────────────
    * Ring für den wärmsten Punkt (Skala 30–90 °C), Lüfterring in der Kachel
@@ -1526,26 +1517,6 @@
     if (!F.measured_valid || !fanTileEl || !fanTileEl.setTelemetry)
       lastFanPctStr = fanPctStr(F);
     $("#t-fan").innerHTML = `${lastFanPctStr}<i>%</i>`;
-    /* Not every firmware reports CPU utilisation. Rather than leave a tile
-       showing "--" forever, it falls back to the figure the controller is
-       actually working towards. */
-    const loadEl = $("#t-load");
-    if (loadEl) {
-      if (L.cpu_valid) {
-        txt("#t-load-title", "Auslastung");
-        loadEl.innerHTML = `${Math.round(L.cpu_pct)}<i>%</i>`;
-      } else {
-        txt("#t-load-title", "Zieltemperatur");
-        loadEl.innerHTML = `${C.target_temp_c}<i>°C</i>`;
-      }
-    }
-
-    setBar("#b-cpu", ((T.cpu_c - 30) / 60) * 100, 70);
-    setBar("#b-soc", ((T.soc_c - 30) / 60) * 100, 70);
-    setBar("#b-fan", fanPctNum(F) ?? 0);
-    setBar("#b-load", L.cpu_valid ? L.cpu_pct
-                                  : ((C.target_temp_c - 55) / 20) * 100);
-
     txt("#t-cpu-note", T.cpu_valid ? "Hauptprozessor" : "nicht lesbar");
     /* Zeigt seit 1.17.0 die heißeste chipnahe Messstelle statt Kanal 0 —
        der lag bis zu 17 °C zu niedrig. Siehe platform.c. */
@@ -1562,9 +1533,6 @@
     }
     txt("#t-fan-note", F.available ? "gemessene Drehzahl"
                                    : "Lüfter nicht steuerbar");
-    txt("#t-load-note", L.cpu_valid
-      ? (L.cpu_mhz ? `Prozessor · ${num(L.cpu_mhz)} MHz` : "Prozessor")
-      : `darauf wird geregelt${L.cpu_mhz ? ` · ${num(L.cpu_mhz)} MHz` : ""}`);
 
     /* Laufendes Spiel — nur zeigen, wenn die Konsole eines meldet. */
     const g = s.game || {};
@@ -4534,18 +4502,6 @@
       ...(d.refresh_hz ? [["Bildwiederholrate", `${d.refresh_hz} Hz`]] : []),
       ...(d.hdr !== undefined ? [["HDR", d.hdr ? "aktiv" : "aus"]] : [])
     ]);
-
-    if (state.status) {
-      txt("#tile-msg", state.status.messages.tile);
-
-      /* Hochladen und Installieren nur zeigen, solange es etwas zu tun gibt.
-         Steht die Kachel, sind zwei Knöpfe und eine Anleitung für einen
-         erledigten Vorgang bloß Beiwerk — die Statuszeile genügt. */
-      const setup = $("#tile-setup");
-      if (setup)
-        setup.style.display =
-          state.status.adapters.tile === "installed" ? "none" : "";
-    }
   };
 
   const loadRiskyTelemetry = async (opts = {}) => {
@@ -6878,17 +6834,26 @@
   /* ── USB auswerfen (usbeject.c, 29.10.2026) ──────────────────────────
    * Über ShadowMountPlus (ab 1.7beta10), aber nur, wenn kein Auftrag der App läuft und kein Ordner des Laufwerks
    * woanders eingehängt ist (PS4Mount-Spiele). Die Konsole sagt sonst, was noch läuft; nichts wird doppelt bestätigt. */
-  const usbEject = { running: false, timer: 0 };
+  const usbEject = { running: false, timer: 0, fails: 0 };
+  const usbEjectStop = () => {
+    clearInterval(usbEject.timer);
+    usbEject.timer = 0;
+    usbEject.running = false;
+    usbEject.fails = 0;
+  };
   const usbEjectPoll = async () => {
+    if (document.hidden) return;
     try {
       const r = await api("/api/v1/storage/eject");
+      usbEject.fails = 0;
       if (r.running) return;
-      clearInterval(usbEject.timer);
-      usbEject.timer = 0;
-      usbEject.running = false;
+      usbEjectStop();
       if (r.message) toast(r.message, r.state === "done" ? "" : "error");
       if (typeof loadSystem === "function") loadSystem();
-    } catch (e) { /* die nächste Runde fragt wieder */ }
+    } catch (e) {
+      /* die nächste Runde fragt wieder – aber nicht ewig, sonst bliebe jeder Auswerfen-Knopf stumm */
+      if (++usbEject.fails >= 20) { usbEjectStop(); toast("Die Konsole antwortet nicht. Ob das Laufwerk ausgeworfen ist, zeigt die Liste nach dem Neuladen.", "error"); }
+    }
   };
   $("#storage-list").addEventListener("click", async (e) => {
     const b = e.target.closest("button[data-eject]");
@@ -7130,7 +7095,7 @@
     const on = (j.dlcs || []).filter((d) => d.on).length;
     const rows = (j.dlcs || []).map((d) => `<label class="cp-check p4m-pickrow">
         <input type="checkbox" data-p4mg-dlc="${esc(d.content_id)}" ${d.on ? "checked" : ""}>
-        <span><b>${esc(d.name)}</b> <span class="muted">${esc(d.data ? "mit Daten" : "nur Freischaltung")}${d.copy ? ` · ${P4MG_COPY[d.copy] || d.copy}` : ""}${d.reason ? ` (${esc(d.reason)})` : ""}</span></span></label>`).join("");
+        <span><b>${esc(d.name)}</b> <span class="muted">${esc(d.data ? "mit Daten" : "nur Freischaltung")}${d.copy ? ` · ${esc(P4MG_COPY[d.copy] || d.copy)}` : ""}${d.reason ? ` (${esc(d.reason)})` : ""}</span></span></label>`).join("");
     $("#p4mg-body").innerHTML = `<p class="muted">Höchstens ${limit} Zusatzinhalte können gleichzeitig an sein (${on} von ${(j.dlcs || []).length} jetzt an). Geändert, wird das Spiel damit neu zur Bibliothek hinzugefügt.</p>
       <label class="cp-check p4m-pickrow"><input type="checkbox" data-p4mg="dlc-all"><span><b>Alle an</b> (bis zum Höchstwert)</span></label>
       <div class="p4m-pick">${rows || `<p class="muted">Keine Zusatzinhalte gefunden.</p>`}</div>
@@ -8184,11 +8149,12 @@
     return o;
   };
   const dlClose = () => {
-    dl.seq++;
+    const old = dl.seq++, kind = dl.kind, running = dl.poll;
     const o = $("#dl-overlay");
     if (o) o.hidden = true;
     clearTimeout(dl.poll);
     dl.poll = 0;
+    if (running) setTimeout(() => dlFollow(old, kind), 2000);   /* the list must still learn when it is over */
   };
   const dlOpen = async (kind, id) => {
     const o = dlShell();
@@ -8244,10 +8210,18 @@
         <div class="cp-actions"><button type="button" class="btn" data-dl="close">Schließen</button></div>`;
     }
   };
-  const dlFollow = async () => {
+  /* seq/kind belong to the dialog that started the job: once it is closed or another one opened, the chain only
+     waits for the end quietly and then refreshes the list, without writing into the new dialog. */
+  const dlFollow = async (seq = dl.seq, kind = dl.kind) => {
     let j = null;
     try { j = await api("/api/v1/library/delete"); } catch { /* gleich noch einmal */ }
-    if (j && !j.active && (j.state === "done" || j.state === "failed")) {
+    const ended = j && !j.active && (j.state === "done" || j.state === "failed");
+    if (seq !== dl.seq) {
+      if (ended) { if (kind === "backup") loadBackups(); else loadGames(); }
+      else setTimeout(() => dlFollow(seq, kind), 2000);
+      return;
+    }
+    if (ended) {
       const name = esc(j.name || dl.id);
       $("#dl-body").innerHTML = j.state === "done"
         ? `<p class="dl-done">„${name}“ ist gelöscht.</p>${j.note ? `<p class="muted">${esc(j.note)}</p>` : ""}
@@ -8268,7 +8242,7 @@
       <p class="cp-num"><b>${phase}</b> · ${pc} %</p>
       <div class="cp-bar" role="progressbar" aria-label="Fortschritt beim Löschen" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>
       ${cur ? `<p class="muted cp-cur">${cur}</p>` : ""}<p class="muted">Bitte die Seite offen lassen.</p>`;
-    dl.poll = setTimeout(dlFollow, 1000);
+    dl.poll = setTimeout(() => dlFollow(seq, kind), 1000);
   };
 
   /* ── Dateimanager (06.10.2026) ──────────────────────────────────────
@@ -8461,7 +8435,7 @@
   };
   const fmClose = () => {
     const o = $("#fm-overlay");
-    if (o) { o.hidden = true; o.querySelector(".cp-dialog").classList.remove("fm-view"); }
+    if (o) { o.hidden = true; o.querySelector(".cp-dialog").classList.remove("fm-view"); $("#fm-dlg-title").removeAttribute("data-no-i18n"); }
     fm.viewSeq++;                                     /* eine noch laufende Vorschau darf nichts mehr einsetzen */
   };
 
@@ -8737,6 +8711,7 @@
     const url = `/api/v1/files/view?path=${full}`;
     const o = fmShell();
     o.querySelector(".cp-dialog").classList.add("fm-view");
+    $("#fm-dlg-title").setAttribute("data-no-i18n", "");   /* a file name, not a word to translate */
     txt("#fm-dlg-title", e.name);
     const actions = `<div class="cp-actions"><a class="btn ghost" href="/api/v1/files/download?path=${full}" download>Herunterladen</a>
         <button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
@@ -8744,7 +8719,7 @@
     o.hidden = false;
     const mine = ++fm.viewSeq;
     if (FM_IMG.test(e.name)) {
-      $("#fm-dlg-body").innerHTML = `<img class="fm-view-img" alt="${esc(e.name)}" src="${url}">
+      $("#fm-dlg-body").innerHTML = `<img class="fm-view-img" data-no-i18n alt="${esc(e.name)}" src="${url}">
         <p class="muted fm-view-note">${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))}</p>${actions}`;
       const img = $("#fm-dlg-body .fm-view-img");
       img.addEventListener("error", () => {
@@ -10654,7 +10629,7 @@
       if (pt.tab === "saves") loadSaves();
       if (pt.tab === "pkg") loadPackages();
       if (pt.tab === "p4m") { loadP4m(); loadP4mLog(); }
-      if (pt.tab === "disc") loadDisc();
+      if (pt.tab === "disc") { loadDisc(); dpOpen(); dmOpen(); }   /* their polls stop off the tab and do not restart by themselves */
       if (pt.tab === "bk") loadBackups();         /* these two have no poll: coming back must show what happened meanwhile */
       if (pt.tab === "hist") loadHistory2();
     }
@@ -10928,36 +10903,6 @@
     const inp = $("#s-bind");
     if (inp) inp.value = "127.0.0.1";
     toast("Bind-Adresse auf lokal vorbereitet. Mit Speichern übernehmen.");
-  });
-
-  $("#ensure-tile").addEventListener("click", async () => {
-    try {
-      const r = await api("/api/v1/tile/ensure", { method: "POST" });
-      toast(r.message || "Kachel wird installiert.");
-      txt("#tile-msg", r.message || "");
-      /* Die Installation läuft im Hintergrund; das Protokoll zeigt sie. */
-      setTimeout(loadLog, 2500);
-    } catch (e) { toast(e.message, "error"); txt("#tile-msg", e.message); }
-  });
-
-  /* Das Paket wandert roh in den Rumpf der Anfrage — kein Formular-Wrapper,
-     damit die Konsole es unverändert auf die Platte schreiben kann. */
-  $("#tile-upload").addEventListener("click", async () => {
-    const f = $("#tile-file").files[0];
-    if (!f) { toast("Erst eine .pkg-Datei auswählen.", "error"); return; }
-
-    txt("#tile-msg", `${f.name} wird übertragen …`);
-    try {
-      const res = await fetch("/api/v1/tile/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: f
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || d.ok === false) throw new Error(d.message || `HTTP ${res.status}`);
-      toast(d.message || "Paket empfangen.");
-      txt("#tile-msg", d.message || "");
-    } catch (e) { toast(e.message, "error"); txt("#tile-msg", e.message); }
   });
 
   $("#hist-reset").addEventListener("click", async () => {
@@ -11901,6 +11846,7 @@
       pollStatus();
       pollSystem();
       loadConfigUntilOk();
+      if (state.page === "games" && pt.tab === "disc") { loadDumps().then(dpSync); dmOpen(); }   /* a running dump must not stay frozen */
     }
     syncLogTail();
     syncKlog();

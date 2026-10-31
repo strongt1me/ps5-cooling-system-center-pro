@@ -2,6 +2,16 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: System (Phase 7), Startmenü-Kachel entfernt, Durchsicht 31.10.
+- **System** in fünf Unterreitern (L2/R2): Konsole, Speicher, Kühlleistung, Zusatzabfragen, Experte – wie die Systemseite im Browser (`tvapp/src/ps5cc/system_page.cpp`). Fühler-Schalter speichern sofort, reagieren erst mit geladenen Einstellungen, ein gewünschter Wert verfällt nach 12 s; fehlende Anteile zeigen „–“; Laufwerke ohne Temperatur sagen das, der Grund steht darunter. Die Zeile „CPU-Modus“ entfällt.
+- **Startmenü-Kachel** (Abschnitt und „Kachel installieren“) aus beiden Oberflächen entfernt: seit FAKE86921/FAKE86922 nicht mehr nötig. Handbuch-Tipp in allen Sprachen angepasst; eine gelöschte alte Kachel wird nicht neu angelegt.
+- R2 steht direkt hinter dem letzten Unterreiter statt am rechten Rand.
+- Listen behalten beim Aktualisieren die Auswahl (`refocus`); die Spieleliste wird nur bei echter Änderung neu gefüllt.
+- Datenabfrage: Ein Fehler beendet die Runde statt sie zu blockieren; die Laufwerksliste wird nicht mit leeren Antworten überschrieben.
+- Durchsicht App-Kern: Dump ohne „Überschreiben“ löscht keinen fertigen Dump mehr; Spiel löschen erkennt ein Laufwerk direkt unter dem Startordner; Verschieben bleibt nach wiederholter Ablehnung „beschäftigt“; Kopieren bricht ab, wenn die Unfertig-Marke fehlt; das automatische Ziel wird begrenzt; der Lüfterwächter liest nur noch Temperaturen (`ps5tm_platform_read_temps`).
+- Durchsicht Browser: Disc-Reiter friert nach Reiter- oder Fensterwechsel nicht mehr ein; Löschdialog schreibt nach dem Schließen nicht in einen anderen Dialog und lädt die Liste nach; USB-Auswerfen gibt nach etwa 30 s ohne Antwort auf; Wächter-Meldungen, Kopier-Schalter „PS4 von USB“, „von/bis“ im Nachtmodus übersetzt; Dateinamen in der Ansicht werden nicht übersetzt; toter Code der alten Kacheln entfernt.
+- Vollbild-App mit clang-format formatiert; `make lint` kennt die ps5cc-Dateiköpfe, `build/gen` für clang-tidy und prüft Leerzeichen nur in `tvapp/`.
+
 ### Dateimanager-Name, Seitenleiste deckend
 - Browser: Die Seite des Dateimanagers heißt in der Überschrift „Dateien & Ordner“ (der Reiter bleibt „Dateimanager“).
 - Vollbild: Die aufgeklappte Seitenleiste deckt die Seite dahinter ganz ab; zugeklappt bleibt sie durchsichtig wie die anderen Flächen.

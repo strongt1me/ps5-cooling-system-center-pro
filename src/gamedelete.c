@@ -377,7 +377,9 @@ path_is_plain(const char *path, const char *root) {
   if(l >= sizeof(part)) return 0;
   struct stat st, up;
   int have_up = 0;
-  for(size_t i = strlen(root) + 1; i <= l; i++) {
+  /* From the root itself: its device is what the first folder below it is compared with, so a drive mounted
+     directly below the root is caught too. */
+  for(size_t i = strlen(root); i <= l; i++) {
     if(path[i] != '/' && path[i] != 0) continue;
     memcpy(part, path, i);
     part[i] = 0;

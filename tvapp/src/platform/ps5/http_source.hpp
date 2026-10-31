@@ -54,6 +54,8 @@ class HttpSource final : public Source
     void extras_lz4_plan(const std::string &id, int level, const std::string &profile) override;
     void library_tools_fetch() override;
     void library_tools_post(const std::string &route, const std::string &json) override;
+    void system_post(const std::string &route, const std::string &json) override;
+    void risky_measure() override;
     void klog_record(bool on) override;
     void files_open(const std::string &path) override;
     void files_post(const std::string &route, const std::string &json) override;
@@ -102,6 +104,8 @@ class HttpSource final : public Source
             extras_plan,
             lib_tools,
             lib_tools_post,
+            sys_post,
+            risky,
             klog_record,
             fs_open,
             fs_post,
@@ -148,6 +152,8 @@ class HttpSource final : public Source
     void poll_package_queue();
     void poll_ps4mount();
     void poll_storage();
+    std::string status_raw_; // the last /status answer, for System (worker thread only)
+    void poll_system_extra(bool first);
     void poll_playtime();
     void poll_saves();
     void poll_save_job();

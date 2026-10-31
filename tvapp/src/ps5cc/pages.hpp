@@ -13,7 +13,9 @@
 #include "ui/components.hpp"
 #include "ui/glyphs.hpp"
 
+#include <algorithm>
 #include <memory>
+#include <vector>
 
 namespace hui::ps5cc
 {
@@ -66,8 +68,33 @@ inline void draw_subtab_glyphs(ui::Canvas &canvas, const ui::TabBar &tabs)
     const float cy = r.y + r.h * 0.5f;
     ui::draw_button(canvas.list, canvas.fonts, glyphs, ui::Button::l2,
                     r.x - 14.0f - ui::button_width(ui::Button::l2, 38.0f), cy, 38.0f);
-    ui::draw_button(canvas.list, canvas.fonts, glyphs, ui::Button::r2, r.x + r.w + 14.0f, cy,
-                    38.0f);
+    // R2 follows the last tab, not the bounds: a bar sized by its labels (TabWidth::fit) ends
+    // before them
+    float right = r.x + r.w;
+    if (!tabs.tabs().empty())
+    {
+        const gfx::Rect last =
+            tabs.tab_rect(canvas.fonts, static_cast<int>(tabs.tabs().size()) - 1);
+        right = std::min(right, last.x + last.w);
+    }
+    ui::draw_button(canvas.list, canvas.fonts, glyphs, ui::Button::r2, right + 14.0f, cy, 38.0f);
+}
+
+// Where the focus goes when a list is refilled: on the same row (same tag and title) if it is still
+// there, so rows inserted or removed above it cannot slide another action under X; otherwise the
+// same place, clamped.
+inline int refocus(const ui::ListView &list, const std::vector<ui::ListItem> &next)
+{
+    const int keep = list.focus();
+    const std::vector<ui::ListItem> &old = list.items();
+    if (keep >= 0 && keep < static_cast<int>(old.size()))
+    {
+        const ui::ListItem &was = old[static_cast<std::size_t>(keep)];
+        for (std::size_t i = 0; i < next.size(); ++i)
+            if (next[i].tag == was.tag && next[i].title == was.title)
+                return static_cast<int>(i);
+    }
+    return std::clamp(keep, 0, std::max(static_cast<int>(next.size()) - 1, 0));
 }
 
 std::unique_ptr<Page> make_settings_page();
@@ -76,6 +103,9 @@ std::unique_ptr<Page> make_packages_page();
 std::unique_ptr<Page> make_ps4mount_page();
 std::unique_ptr<Page> make_disc_page();
 std::unique_ptr<Page> make_storage_page();
+// System (Phase 7): Konsole, Speicher (the storage page inside it), Kühlleistung, Zusatzabfragen,
+// Experte.
+std::unique_ptr<Page> make_system_page();
 std::unique_ptr<Page> make_playtime_page();
 std::unique_ptr<Page> make_saves_page();
 std::unique_ptr<Page> make_backups_page();

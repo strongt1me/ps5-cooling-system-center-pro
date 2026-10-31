@@ -3212,6 +3212,9 @@ handle_fan_threshold(int fd, const ps5tm_request_t *req) {
 
     ps5tm_config_lock();
     g_config.target_temp_c = (unsigned)clamped;
+    /* Now, not only when the save gets its turn: the fan reads the pair every pass, and a target above the safety
+       limit would send it into safety mode until then. */
+    ps5tm_config_clamp(&g_config);
     ps5tm_config_unlock();
     int saved = (ps5tm_config_save() == 0);
 

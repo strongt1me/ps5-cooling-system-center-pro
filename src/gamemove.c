@@ -336,7 +336,12 @@ watch_thread(void *arg) {
       g_wait.on = 0;                                       /* from here on ShadowMountPlus's own record tells the progress */
       pthread_mutex_unlock(&g_wlock);
       r = follow_job(id, reason, sizeof(reason), msg, sizeof(msg));
-      if(r == 0 && tile_reason(reason)) continue;
+      if(r == 0 && tile_reason(reason)) {
+        pthread_mutex_lock(&g_wlock);
+        g_wait.on = 1;                                     /* refused again: still waiting, still busy */
+        pthread_mutex_unlock(&g_wlock);
+        continue;
+      }
       started = 1;
       break;
     }

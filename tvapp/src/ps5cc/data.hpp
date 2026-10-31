@@ -480,6 +480,22 @@ struct ExtrasLz4Plan
     std::string json; // GET /api/v1/library/lz4/plan
 };
 
+// The System area (Phase 7, 30.10.2026): the console app's answers as they come, read by the page
+// with cJSON. Only fetched while System is open.
+struct SystemData
+{
+    std::uint64_t seq = 0;
+    std::string system;   // GET /api/v1/system
+    std::string status;   // GET /api/v1/status (the same answer the dashboard reads)
+    std::string health;   // GET /api/v1/cooling-health
+    std::string config;   // GET /api/v1/config (probe_mask, probe_revert_*)
+    std::string channels; // GET /api/v1/channels
+    std::string diag;     // GET /api/v1/controller/diag
+    std::string drives;   // GET /api/v1/drives, "" while the drive probe is off
+    std::string qr;       // GET /api/v1/qr: url and svg
+    std::string risky;    // GET /api/v1/sensors/risky, on "Jetzt messen"
+};
+
 struct LibraryTools
 {
     std::uint64_t seq = 0;
@@ -888,6 +904,7 @@ struct Snapshot
     ExtrasVersions extras_versions;
     ExtrasLz4Plan extras_lz4_plan;
     LibraryTools library_tools;
+    SystemData system_data;
     KlogRecord klog_record;
     std::vector<FsPlace> fs_places;
     FsList fs_list;
@@ -985,6 +1002,9 @@ class Source
     virtual void extras_lz4_plan(const std::string &id, int level, const std::string &profile) = 0;
     // The library's duplicate images and cover cache: fetch both, or POST /api/v1/<route>.
     virtual void library_tools_fetch() = 0;
+    // System: a POST of the console app ("cooling-health") and one reading of the risky sensors.
+    virtual void system_post(const std::string &route, const std::string &json) = 0;
+    virtual void risky_measure() = 0;
     virtual void library_tools_post(const std::string &route, const std::string &json) = 0;
     // The kernel log recorded into a file (on) or not (off).
     virtual void klog_record(bool on) = 0;

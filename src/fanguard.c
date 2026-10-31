@@ -101,7 +101,7 @@ guard_worker(void *arg) {
     if(silent_s >= 3) beat_since = 0;   /* a pass a little over a second long skips a tick now and then */
 
     ps5tm_sensors_t s;
-    ps5tm_platform_read_sensors(&s);
+    ps5tm_platform_read_temps(&s);
     int hottest = -1;
     if(s.cpu_valid && s.cpu_c > hottest) hottest = s.cpu_c;
     if(s.soc_valid && s.soc_c > hottest) hottest = s.soc_c;

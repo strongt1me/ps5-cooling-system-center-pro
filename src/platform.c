@@ -1167,8 +1167,11 @@ fill_risky_telemetry(ps5tm_sensors_t *out, int from_worker) {
 }
 
 
-int
-ps5tm_platform_read_sensors(ps5tm_sensors_t *out) {
+/* full: the fan worker's pass, with load, power and clocks (some of them behind the Sony lock) and the ICC diagnostic.
+   Without it only temperatures and the fan duty are read: what the fan guard needs, and nothing that can wait on a
+   lock or advance the counters the worker's figures are measured between. */
+static int
+read_sensors(ps5tm_sensors_t *out, int full) {
   memset(out, 0, sizeof(*out));
   out->cpu_c = out->soc_c = out->gpu_c = -1;
 
@@ -1274,11 +1277,13 @@ ps5tm_platform_read_sensors(ps5tm_sensors_t *out) {
   if(out->soc_raw_valid[7]) { out->gpu_c = out->soc_raw[7]; out->gpu_valid = 1; }
 
   for(int c = 0; c < PS5TM_MAX_CPUS; c++) out->cpu_pct[c] = -1;
-  int risky = risky_probe_allowed();
-  if(risky) fill_risky_telemetry(out, 1);
-  /* Power and live clocks ride on the risky switch like the load does; the
-     frame rate has a switch of its own and is checked inside. */
-  ps5tm_telemetry_update(out, risky, 1);
+  if(full) {
+    int risky = risky_probe_allowed();
+    if(risky) fill_risky_telemetry(out, 1);
+    /* Power and live clocks ride on the risky switch like the load does; the
+       frame rate has a switch of its own and is checked inside. */
+    ps5tm_telemetry_update(out, risky, 1);
+  }
 
   /* No public syscall exposes GPU utilisation; reported as unavailable
      rather than guessed. The research of 26.09.2026 confirmed it: the "GPU %"
@@ -1305,7 +1310,7 @@ ps5tm_platform_read_sensors(ps5tm_sensors_t *out) {
 
   /* Diagnostic only, and so far all zeros on both consoles: opened every fifth pass, not every second, and the last
      answer carried in between (the fan thread is the only caller). */
-  {
+  if(full) {
     static uint8_t icc_cache[6];
     static int     icc_cache_valid = -1, icc_pass = 0;
     if(icc_pass++ % 5 == 0)
@@ -1315,6 +1320,16 @@ ps5tm_platform_read_sensors(ps5tm_sensors_t *out) {
   }
 
   return (out->cpu_valid || out->soc_valid) ? 0 : -1;
+}
+
+int
+ps5tm_platform_read_sensors(ps5tm_sensors_t *out) {
+  return read_sensors(out, 1);
+}
+
+int
+ps5tm_platform_read_temps(ps5tm_sensors_t *out) {
+  return read_sensors(out, 0);
 }
 
 int

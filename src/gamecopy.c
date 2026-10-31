@@ -941,14 +941,17 @@ copy_run(void *arg) {
   } else {
     char mark[PATH_MAX];
     snprintf(mark, sizeof(mark), "%s/" UNFINISHED_MARK, a.target);
+    /* Without the mark a power cut would leave a half copy that looks finished (and is listed as a backup), so a
+       mark that cannot be made stops the copy before it begins. */
     int mfd = open(mark, O_WRONLY | O_CREAT | O_EXCL, 0666);
     if(mfd >= 0) close(mfd);
+    else         rc = errno ? errno : EIO;
 
     char src[PATH_MAX], dst[PATH_MAX];
     snprintf(src, sizeof(src), "%s", a.source);
     snprintf(dst, sizeof(dst), "%s", a.target);
     size_t root = strlen(src);
-    rc = copy_tree(src, root, dst, strlen(dst), root, 0, buf, &cx);
+    if(!rc) rc = copy_tree(src, root, dst, strlen(dst), root, 0, buf, &cx);
 
     /* On an error src still names what failed (copy_tree leaves it there). */
     snprintf(where, sizeof(where), "%s", strlen(src) > root ? src + root + 1 : "");

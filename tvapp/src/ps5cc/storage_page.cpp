@@ -424,9 +424,9 @@ class StoragePage final : public Page
         if (key != key_)
         {
             key_ = std::move(key);
-            const int keep = list_.focus();
+            const int focus = refocus(list_, next);
             list_.set_items(next);
-            list_.set_focus(std::clamp(keep, 0, std::max(static_cast<int>(next.size()) - 1, 0)));
+            list_.set_focus(focus);
         }
         refresh_info();
     }

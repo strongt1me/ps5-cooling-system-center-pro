@@ -372,6 +372,11 @@ ps5tm_platform_read_sensors(ps5tm_sensors_t *out) {
 }
 
 int
+ps5tm_platform_read_temps(ps5tm_sensors_t *out) {
+  return ps5tm_platform_read_sensors(out);
+}
+
+int
 ps5tm_platform_read_fan_config(unsigned char *o, int *e) {
   memset(o, 0, PS5TM_ICC_FAN_CONFIG_SIZE);
   o[PS5TM_ICC_FAN_TARGET_OFFSET] = (unsigned char)atomic_load(&g_thr);

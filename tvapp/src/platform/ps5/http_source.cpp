@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -95,7 +96,7 @@ const std::string &own_title_id()
         cJSON *root = cJSON_Parse(text.c_str());
         const cJSON *tid =
             root != nullptr ? cJSON_GetObjectItemCaseSensitive(root, "titleId") : nullptr;
-        if (cJSON_IsString(tid) && tid->valuestring != nullptr)
+        if (tid != nullptr && cJSON_IsString(tid) && tid->valuestring != nullptr)
             out = tid->valuestring;
         cJSON_Delete(root);
         return out;
@@ -371,6 +372,14 @@ void HttpSource::library_tools_fetch()
 void HttpSource::library_tools_post(const std::string &route, const std::string &json)
 {
     push({Request::Kind::lib_tools_post, 0, route, json});
+}
+void HttpSource::system_post(const std::string &route, const std::string &json)
+{
+    push({Request::Kind::sys_post, 0, route, json});
+}
+void HttpSource::risky_measure()
+{
+    push({Request::Kind::risky, 0, {}, {}});
 }
 void HttpSource::klog_record(bool on)
 {
@@ -688,8 +697,9 @@ bool HttpSource::connect_phase()
         payload_sent_ = true;
         Net why = Net::failed;
         const int s = open_local(kPortLoader, 5, &why);
-        const std::size_t size =
-            static_cast<std::size_t>(ps5cc_payload_elf_end - ps5cc_payload_elf);
+        // Two linker labels around one blob: compare addresses, not pointers into different arrays.
+        const std::size_t size = reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf_end) -
+                                 reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf);
         const bool sent = s >= 0 && send_all(s, ps5cc_payload_elf, size);
         if (s >= 0)
             close(s);
@@ -1103,6 +1113,7 @@ void HttpSource::run()
             {
                 last_storage = now;
                 poll_storage();
+                poll_system_extra(!storage_open);
             }
             storage_open = true;
         }
@@ -1539,6 +1550,40 @@ void HttpSource::handle(const Request &request)
     case Request::Kind::lib_tools:
         poll_library_tools();
         break;
+    case Request::Kind::sys_post:
+    {
+        const std::string route = "/api/v1/" + request.id;
+        if (exchange("POST", route.c_str(), request.text.empty() ? "{}" : request.text, &status,
+                     &body, 20) == Net::ok &&
+            status < 300)
+        {
+            const std::string msg = message_of(body, "");
+            notice(Notice::Kind::success, "System", msg.empty() ? "Erledigt." : msg);
+        }
+        else
+            notice(Notice::Kind::error, "System",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_status();
+        poll_system_extra(false);
+        break;
+    }
+    case Request::Kind::risky:
+    {
+        std::string risky;
+        const Net net = exchange("GET", "/api/v1/sensors/risky", {}, &status, &body, 10);
+        if (net == Net::ok && status == 200)
+            risky = body;
+        else if (net != Net::ok)
+            notice(Notice::Kind::error, "Risikotelemetrie", "Die App hat nicht geantwortet.");
+        else
+            notice(Notice::Kind::error, "Risikotelemetrie",
+                   message_of(body, "Die Abfrage ist aus (Zusatzabfragen → Risiko)."));
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.system_data.risky = std::move(risky);
+        ++data_.system_data.seq;
+        ++data_.serial;
+        break;
+    }
     case Request::Kind::lib_tools_post:
     {
         const std::string route = "/api/v1/" + request.id;
@@ -2023,6 +2068,7 @@ bool HttpSource::poll_status()
     cJSON *root = cJSON_Parse(body.c_str());
     if (root == nullptr)
         return false;
+    status_raw_ = body;
     Status s;
     const cJSON *t = cJSON_GetObjectItemCaseSensitive(root, "temperatures");
     const cJSON *fan = cJSON_GetObjectItemCaseSensitive(root, "fan");
@@ -2745,14 +2791,81 @@ void HttpSource::poll_fs_job()
     ++data_.serial;
 }
 
+// System's other answers: cooling over the weeks, the probes, the SoC channels, the controller, the
+// drives (only while their probe is on: it reads SMART data), and the QR code once.
+void HttpSource::poll_system_extra(bool first)
+{
+    int status = 0;
+    std::string body;
+    // One request that gets no answer ends the round: the rest would wait out their timeouts one
+    // after another, and the worker would hold back temperatures and queued requests for half a
+    // minute while the app hangs.
+    bool down = false;
+    const auto get = [&](const char *path, int timeout) -> std::string
+    {
+        if (down)
+            return {};
+        const Net net = exchange("GET", path, {}, &status, &body, timeout);
+        if (net != Net::ok)
+        {
+            down = true;
+            return {};
+        }
+        return status == 200 ? body : std::string();
+    };
+    std::string health = get("/api/v1/cooling-health", 4);
+    std::string config = get("/api/v1/config", 4);
+    std::string channels = get("/api/v1/channels", 6);
+    std::string diag = get("/api/v1/controller/diag", 4);
+    int mask = 0;
+    if (cJSON *root = cJSON_Parse(config.c_str()))
+    {
+        mask = static_cast<int>(num(root, "probe_mask"));
+        cJSON_Delete(root);
+    }
+    // the drives: "" while their probe is off; a failed reading keeps the last one instead of
+    // showing none
+    const bool drives_on = (mask & 16) != 0;
+    std::string drives = drives_on ? get("/api/v1/drives", 8) : std::string();
+    const bool keep_drives = drives_on && drives.empty();
+    std::string qr;
+    bool want_qr = first;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        want_qr = want_qr || data_.system_data.qr.empty();
+    }
+    if (want_qr)
+        qr = get("/api/v1/qr", 4);
+    std::lock_guard<std::mutex> lock(mutex_);
+    SystemData &d = data_.system_data;
+    d.status = status_raw_;
+    if (!health.empty())
+        d.health = std::move(health);
+    if (!config.empty())
+        d.config = std::move(config);
+    if (!channels.empty())
+        d.channels = std::move(channels);
+    if (!diag.empty())
+        d.diag = std::move(diag);
+    if (!config.empty() &&
+        !keep_drives) // without this round's config the probe's state is not known
+        d.drives = std::move(drives);
+    if (!qr.empty())
+        d.qr = std::move(qr);
+    ++d.seq;
+    ++data_.serial;
+}
+
 void HttpSource::poll_storage()
 {
     int status = 0;
     std::string body;
     std::vector<Volume> volumes;
     bool got = false;
+    std::string system_raw;
     if (exchange("GET", "/api/v1/system", {}, &status, &body, 8) == Net::ok && status == 200)
     {
+        system_raw = body;
         if (cJSON *root = cJSON_Parse(body.c_str()))
         {
             got = true;
@@ -2790,6 +2903,8 @@ void HttpSource::poll_storage()
     {
         data_.volumes = std::move(volumes);
         data_.volumes_loaded = true;
+        data_.system_data.system = std::move(system_raw);
+        ++data_.system_data.seq;
     }
     if (e.loaded)
         data_.usb_eject = std::move(e);

@@ -79,7 +79,7 @@ std::string str(const cJSON *o, const char *name)
 double num(const cJSON *o, const char *name, double fallback = 0.0)
 {
     const cJSON *v = get(o, name);
-    return cJSON_IsNumber(v) ? v->valuedouble : fallback;
+    return v != nullptr && cJSON_IsNumber(v) ? v->valuedouble : fallback;
 }
 
 bool yes(const cJSON *o, const char *name)

@@ -578,9 +578,10 @@ info_state(const char *dest, const char *folder, char *out, size_t n) {
   cJSON_Delete(j);
 }
 
-/* The folders of this title's game dump below dest. worst: 0 none, 1 finished (or without an info file), 2 unfinished. */
+/* The folders of this title's game dump below dest. worst: 0 none, 1 finished (or without an info file), 2 unfinished.
+   unfinished (may be NULL): the same per folder. */
 static int
-find_existing(const char *dest, const char *tid, char names[4][DJ_NAME_MAX], int *worst) {
+find_existing_each(const char *dest, const char *tid, char names[4][DJ_NAME_MAX], int *worst, int unfinished[4]) {
   int n = 0;
   *worst = 0;
   DIR *d = opendir(dest);
@@ -591,14 +592,21 @@ find_existing(const char *dest, const char *tid, char names[4][DJ_NAME_MAX], int
     char full[PATH_MAX];
     snprintf(full, sizeof(full), "%s/%s", dest, e->d_name);
     if(!is_dir(full)) continue;
-    snprintf(names[n++], DJ_NAME_MAX, "%s", e->d_name);
     char st[16];
     info_state(dest, e->d_name, st, sizeof(st));
-    if(st[0] && strcmp(st, "done")) *worst = 2;
+    int open_one = st[0] && strcmp(st, "done");
+    if(unfinished) unfinished[n] = open_one;
+    snprintf(names[n++], DJ_NAME_MAX, "%s", e->d_name);
+    if(open_one) *worst = 2;
     else if(*worst == 0) *worst = 1;
   }
   closedir(d);
   return n;
+}
+
+static int
+find_existing(const char *dest, const char *tid, char names[4][DJ_NAME_MAX], int *worst) {
+  return find_existing_each(dest, tid, names, worst, NULL);
 }
 
 /* Depth first, never following a link (everything is looked at with lstat; a link is unlinked, not entered). */
@@ -1498,14 +1506,19 @@ dump_run(void *arg) {
   /* an earlier dump of this title in the way */
   if(!a.dlc_only) {
     char old[4][DJ_NAME_MAX];
-    int worst = 0, n = find_existing(a.dest, a.title_id, old, &worst);
-    if(n && worst == 1 && !a.overwrite) {
-      job_fail("Am Ziel liegt schon ein fertiger Dump dieses Spiels (%s).", old[0]);
-      goto out;
-    }
+    int unfinished[4] = {0, 0, 0, 0};
+    int worst = 0, n = find_existing_each(a.dest, a.title_id, old, &worst, unfinished);
+    /* A finished dump goes only when overwriting was asked for, also when an unfinished one lies beside it: that
+       one alone used to decide, and took the finished dump with it. */
+    if(!a.overwrite)
+      for(int i = 0; i < n; i++)
+        if(!unfinished[i]) {
+          job_fail("Am Ziel liegt schon ein fertiger Dump dieses Spiels (%s).", old[i]);
+          goto out;
+        }
     for(int i = 0; i < n; i++) {
       job_state(DJ_MEASURING, "Alten Dump entfernen");
-      dlog("Entferne den vorhandenen Dump %s/%s (%s)", a.dest, old[i], worst == 2 ? "unfertig" : "fertig, ersetzen");
+      dlog("Entferne den vorhandenen Dump %s/%s (%s)", a.dest, old[i], unfinished[i] ? "unfertig" : "fertig, ersetzen");
       remove_dump_folder(a.dest, old[i]);
     }
   }

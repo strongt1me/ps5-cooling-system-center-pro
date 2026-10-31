@@ -794,6 +794,28 @@ class MockSource final : public Source
         changed();
     }
 
+    void system_post(const std::string &route, const std::string &json) override
+    {
+        (void)json;
+        if (route == "cooling-health")
+            notice(Notice::Kind::success, "System", "Der Vergleich beginnt neu.");
+        else
+            notice(Notice::Kind::success, "System", "Erledigt.");
+        changed();
+    }
+
+    void risky_measure() override
+    {
+        SystemData &d = data_.system_data;
+        d.risky =
+            R"({"ok":true,"load":{"cpu_valid":true,"cpu_pct":34,"game_pct":28,"system_pct":6,"cpu_mhz_valid":true,"cpu_mhz":3850,)"
+            R"("cpu_mode_valid":true,"cpu_mode":"Spiel"},"power":{"valid":true,"live_w":196.0,"total_w":204.0,)"
+            R"("rails":[{"name":"GFX","w":121.5,"v":0.86,"a":141.3},{"name":"CPU","w":31.0,"v":0.95,"a":32.6}]},)"
+            R"("top_threads":[{"name":"GameRender","own":"PPSA01325","pct":22},{"name":"ps5tm-http","own":"ps5tm","pct":1}]})";
+        ++d.seq;
+        changed();
+    }
+
     void library_tools_fetch() override
     {
         LibraryTools &l = data_.library_tools;
@@ -1812,6 +1834,79 @@ class MockSource final : public Source
         }
         data_.volumes_loaded = true;
         data_.usb_eject.loaded = data_.usb_eject.available = true;
+        fill_system();
+    }
+
+    // System: what the console app answers, invented but shaped like it (PS5 Pro, WLAN, a 4K
+    // television).
+    void fill_system()
+    {
+        SystemData &d = data_.system_data;
+        d.system =
+            R"({"ok":true,"model":"CFI-7021 B01Y","serial_masked":"••••8023","firmware_raw":"0x12000043","firmware_version":"12.00",)"
+            R"("firmware_group":"12.00-12.70","app_version":"1.74.0","firmware_reported":"12.000.043","uptime_sec":7425,)"
+            R"("network":{"probed":true,"up":true,"kind":"wlan","ip":"192.168.1.94","ssid":"Wohnzimmer-5G","signal_pct":86,"band_ghz":5,"link_mbit":866},)"
+            R"("display":{"name":"Wohnzimmer-TV","width":3840,"height":2160,"refresh_hz":60,"hdr":true},)"
+            R"("controller":{"in_use":true,"press_age_s":4,"battery_pct":80,"charging":false,"from_log":true,"restored":false,"age_s":30},)"
+            R"("console_name":"PS5-054","locale":{"language":4,"time_zone":61,"timezone_offset_min":60,"region_code":"EU"},)"
+            R"("memory":{"rss_mb":297.8,"kernel_mb":314,"wire_mb":411.8,"swap_mb":0,"pt_cpu_used":4996,"pt_cpu_total":9216,"pt_gpu_used":141,"pt_gpu_total":9216,)"
+            R"("processes":[{"name":"PPSA01325 eboot.bin","used_mb":10480,"total_mb":13312},{"name":"NPXS40087 SceShellUI.elf","used_mb":612,"total_mb":1024},)"
+            R"({"name":"ps5tm.elf","used_mb":298,"total_mb":512},{"name":"shadowmountplus.elf","used_mb":42,"total_mb":64}]},)"
+            R"("power_state":{"mode":"BIG_APP","idle_s":12,"age_s":3}})";
+        d.status =
+            R"({"ok":true,"temperatures":{"hottest_c":71,"gpu_valid":true,"gpu_c":66},)"
+            R"("load":{"cores":[38,41,22,57,12,9,30,25],"cpus":[40,36,44,38,20,24,61,53,14,10,8,10,33,27,26,24],"system_cpu_mask":49152,)"
+            R"("cpu_mode":"Spiel",)"
+            R"("live_clocks":{"gfx_mhz":2350,"gfx_limit_mhz":2350,"mem_mhz":2250,"fabric_mhz":1600},"soc_power_valid":true,"soc_power_w":182.4},)"
+            R"("power":{"valid":true,"live_w":196.0,"gpu_w":121.5,"mem_w":18.2,"rails":[{"name":"GFX","w":121.5,"v":0.86,"a":141.3}]},)"
+            R"("fps":{"state":"aus"},"adapters":{"tile":"installed"},"messages":{"tile":"Die Kachel ist auf dem Startbildschirm."}})";
+        d.health =
+            R"({"ok":true,"weeks":6,"verdict_ready":true,"weeks_usable":5,"weeks_needed":4,"since_ms":1790000000000,)"
+            R"("older_weeks":4,"delta_c":1.4,"baseline_c":69.8,"current_c":71.2})";
+        d.config = R"({"probe_mask":13,"probe_revert_in_s":0,"probe_revert_mask":0})";
+        d.channels =
+            R"({"ok":true,"channel_count":8,"channels":[[61,62,63],[58,59,59],[66,66,67],[52,52,53],[70,71,71],[49,49,50],[63,64,64],[55,55,56]]})";
+        d.diag =
+            R"({"ok":true,"host_test":false,"scepad":{"init":true,"open":true,"read_state":true,"get_handle":true,"set_lightbar":true,)"
+            R"("reset_lightbar":true,"set_process_privilege":true},"hid":{"resolved":true,"dev_hid_present":true,)"
+            R"("dev_bluetooth_hid_present":true,"hidcontrol_get_battery_state":true,"hidcontrol_init":true,"bluetoothhid_init":false}})";
+        d.drives = "";
+        // a pattern of the QR code's shape: three finder squares and invented modules
+        const int n = 29;
+        std::string path;
+        unsigned seed = 7;
+        for (int y = 0; y < n; ++y)
+        {
+            for (int x = 0; x < n; ++x)
+            {
+                const auto finder = [&](int fx, int fy)
+                {
+                    const int dx = x - fx, dy = y - fy;
+                    if (dx < 0 || dy < 0 || dx > 6 || dy > 6)
+                        return -1;
+                    return (dx == 0 || dy == 0 || dx == 6 || dy == 6 ||
+                            (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4))
+                               ? 1
+                               : 0;
+                };
+                int on = finder(0, 0);
+                if (on < 0)
+                    on = finder(n - 7, 0);
+                if (on < 0)
+                    on = finder(0, n - 7);
+                if (on < 0)
+                {
+                    seed = seed * 1103515245u + 12345u;
+                    on = ((seed >> 16) & 3) == 0 || ((seed >> 18) & 1) == 0 ? 1 : 0;
+                }
+                if (on == 1)
+                    path += "M" + std::to_string(x + 4) + " " + std::to_string(y + 4) + "h1v1h-1z";
+            }
+        }
+        d.qr =
+            R"({"ok":true,"url":"http://192.168.1.94:8086/","svg":"<svg viewBox=\"0 0 37 37\"><path d=\")" +
+            path + R"(\"/></svg>"})";
+        ++d.seq;
     }
 
     // A console with a drive: a PS2-DVD in it, one image made earlier, one dump of the Disc tab on

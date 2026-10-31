@@ -707,8 +707,8 @@ ps5tm_tile_query(char *msg, size_t msg_len) {
 
   if(ps5tm_tile_file_count > 0) {
     snprintf(msg, msg_len,
-             "Kachel noch nicht installiert. Sie steckt im Programm; „Kachel "
-             "installieren“ legt sie an.");
+             "Kachel nicht installiert (wird seit FAKE86921/FAKE86922 nicht "
+             "mehr gebraucht).");
     return PS5TM_TILE_NOT_INSTALLED;
   }
 
@@ -962,7 +962,8 @@ ps5tm_tile_service(void) {
  * sending this one ELF enough. Once — see tile-auto at the top of the file —
  * because a person who deletes the tile from the home screen did that on
  * purpose, and a tile that comes back at every start would be a nuisance.
- * "Kachel installieren" on the system page puts it back whenever it is asked. */
+ * Since the FAKE86921/FAKE86922 tiles it is not needed any more, so neither
+ * page offers to put it back (POST /api/v1/tile/ensure still can). */
 void
 ps5tm_tile_bootstrap(void) {
   if(tile_installed()) {
@@ -975,8 +976,7 @@ ps5tm_tile_bootstrap(void) {
   if(ps5tm_tile_file_count == 0 && ps5tm_tile_pkg_len == 0) {
     PS5TM_INFO("tile_absent",
                "Keine Kachel installiert und in dieser Fassung weder Dateien "
-               "noch Paket eingebaut – Installation über die Systemseite "
-               "möglich.");
+               "noch Paket eingebaut.");
     return;
   }
 
@@ -984,8 +984,7 @@ ps5tm_tile_bootstrap(void) {
     PS5TM_INFO("tile_auto_skipped",
                "Die Startmenü-Kachel fehlt. Sie wird nicht von allein neu "
                "angelegt, weil sie schon einmal da war oder der Versuch dieser "
-               "Version nicht gelang — „Kachel installieren“ auf der "
-               "Systemseite holt sie zurück.");
+               "Version nicht gelang.");
     return;
   }
 

@@ -1617,6 +1617,8 @@ void     ps5tm_thermal_restart(void);
 
 /* Fills `out`. Returns 0 if at least one temperature sensor responded. */
 int ps5tm_platform_read_sensors(ps5tm_sensors_t *out);
+/* Temperatures and fan duty only, no lock and no telemetry: for the fan guard's own look (fanguard.c). */
+int ps5tm_platform_read_temps(ps5tm_sensors_t *out);
 
 /* Explicit one-shot read of optional risky telemetry (load/clocks/power). */
 int ps5tm_platform_probe_risky_once(ps5tm_sensors_t *out);

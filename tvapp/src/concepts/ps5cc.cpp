@@ -384,7 +384,7 @@ class Ps5cc final : public app::Concept
         pages_ = {
             ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
             ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
-            ps5cc::make_storage_page(),  ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
+            ps5cc::make_system_page(),   ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
             ps5cc::make_backups_page(),  ps5cc::make_files_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
@@ -979,7 +979,10 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {1.2f, 0, Direction::none, "payload-store"},
             {0.5f, action_bit(Action::page_next)},
-            {0.9f, 0, Direction::none, "system"},
+            {1.0f, 0, Direction::none, "system"},
+            // System → Speicher (the drives page inside System)
+            {0.4f, action_bit(Action::jump_next)},
+            {0.9f, 0, Direction::none, "system-speicher"},
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {0.6f, 0, Direction::none, "speicher-auswerfen"},
@@ -1006,6 +1009,28 @@ class Ps5cc final : public app::Concept
             {1.0f, 0, Direction::none, "hintergrund-aus"},
             {0.3f, action_bit(Action::confirm)},
             {0.6f},
+            // System → Kühlleistung, Zusatzabfragen (the first switched with X), Experte (and
+            // further down in it)
+            {0.4f, action_bit(Action::jump_next)},
+            {0.9f, 0, Direction::none, "system-kuehlleistung"},
+            {0.4f, action_bit(Action::jump_next)},
+            {0.9f, 0, Direction::none, "system-abfragen"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "system-abfrage-geschaltet"},
+            {0.4f, action_bit(Action::jump_next)},
+            {0.9f, 0, Direction::none, "system-experte"},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.8f, 0, Direction::none, "system-experte-grafik"},
             {0.5f, action_bit(Action::page_next)},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "protokoll"},
@@ -1098,8 +1123,7 @@ class Ps5cc final : public app::Concept
         if (pending_target_ == 0 && s.target_c > 0)
             target_ = s.target_c;
 
-        if (data_.games_loaded &&
-            (data_.games.size() != shown_games_ || s.game_id != shown_running_))
+        if (data_.games_loaded && games_key() != shown_games_)
             rebuild_games();
         rebuild_jobs();
         rebuild_history();
@@ -1204,9 +1228,21 @@ class Ps5cc final : public app::Concept
         chart_started_ = true;
     }
 
+    // What the game rows show, and which game each row is: a job that ends can change a name, a
+    // format or the order without changing how many games there are, and X acts on data_.games at
+    // the focused row.
+    std::string games_key() const
+    {
+        std::string key = data_.status.game_id;
+        for (const ps5cc::Game &g : data_.games)
+            key += '\n' + g.id + '\t' + g.name + '\t' + g.platform + '\t' + g.version + '\t' +
+                   g.format + '\t' + std::to_string(g.size_bytes) + '\t' +
+                   std::to_string(g.played_s) + (g.can_launch ? "+" : "-");
+        return key;
+    }
+
     void rebuild_games()
     {
-        const int keep = games_.focus();
         std::vector<ui::ListItem> items;
         for (const ps5cc::Game &g : data_.games)
         {
@@ -1228,10 +1264,10 @@ class Ps5cc final : public app::Concept
             none.disabled = true;
             items.push_back(none);
         }
+        const int focus = ps5cc::refocus(games_, items);
         games_.set_items(items);
-        games_.set_focus(std::clamp(keep, 0, static_cast<int>(items.size()) - 1));
-        shown_games_ = data_.games.size();
-        shown_running_ = data_.status.game_id;
+        games_.set_focus(focus);
+        shown_games_ = games_key();
         fill_game_info();
     }
 
@@ -2188,8 +2224,7 @@ class Ps5cc final : public app::Concept
     ui::DetailList details_;
     std::string details_key_; // what details_ shows, to skip refilling it unchanged
     ui::Sheet sheet_;
-    std::size_t shown_games_ = static_cast<std::size_t>(-1);
-    std::string shown_running_ = "\x01";
+    std::string shown_games_ = "\x01"; // games_key() of what the rows show
 
     std::array<ui::ProgressBar, static_cast<std::size_t>(JobKind::count)> bars_;
     ui::ListView history_;
