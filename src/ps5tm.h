@@ -6,9 +6,18 @@
 #ifndef PS5TM_H
 #define PS5TM_H
 
+#include <pthread.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+
+/* Every thread of the app gets a small signal stack of its own (fanguard.c, review 31.10.2026): the crash handler that
+ * hands the fan back to the console must also run after a stack overflow, and an alternate signal stack is set per
+ * thread. pthread_create is routed through ps5tm_thread_create, which installs it and then calls the start routine. */
+int ps5tm_thread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start)(void *), void *arg);
+#ifndef PS5TM_NO_THREAD_WRAP
+#define pthread_create(t, a, f, x) ps5tm_thread_create((t), (a), (f), (x))
+#endif
 
 #define PS5TM_APP_NAME    "PS5 Cooling & System Center - Pro"
 #define PS5TM_APP_TAGLINE "Advanced Cooling & Thermal Management for PlayStation 5"

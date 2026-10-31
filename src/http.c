@@ -116,19 +116,24 @@ write_all(int fd, const void *buf, size_t len) {
    instead of the answer just written. So: end the sending side, read away what the client still sends (1 s, 64 KiB
    at most), then close. */
 static void
-close_after_answer(int fd) {
+close_after_answer_ms(int fd, unsigned ms) {
   shutdown(fd, SHUT_WR);
-  struct timeval tv = { 1, 0 };
+  struct timeval tv = { (time_t)(ms / 1000), (suseconds_t)((ms % 1000) * 1000) };
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
   char sink[4096];
   size_t total = 0;
   uint64_t t0 = ps5tm_mono_ms();
-  while(total < 64 * 1024 && ps5tm_mono_ms() - t0 < 1000) {
+  while(total < 64 * 1024 && ps5tm_mono_ms() - t0 < ms) {
     ssize_t n = read(fd, sink, sizeof(sink));
     if(n <= 0) break;
     total += (size_t)n;
   }
   close(fd);
+}
+
+static void
+close_after_answer(int fd) {
+  close_after_answer_ms(fd, 1000);
 }
 
 
@@ -533,7 +538,7 @@ serve_connection(void *arg) {
                 "Für eine Anfrage konnten %d Bytes nicht belegt werden. "
                 "Läuft der Payload mehrfach, oder ist das eingebettete "
                 "Kachel-Paket zu groß?", MAX_HEADER_BYTES + 1);
-    close(fd);
+    close_after_answer(fd);
     return NULL;
   }
 
@@ -611,7 +616,7 @@ serve_connection(void *arg) {
           "Abgelehnt: Die Weboberfläche ist nur direkt über die IP-Adresse "
           "der Konsole zu bedienen, nicht von einer fremden Webseite aus.");
       free(raw);
-      close(fd);
+      close_after_answer(fd);   /* the request body is unread: a plain close would reset the answer away */
       return NULL;
     }
   }
@@ -988,7 +993,7 @@ ps5tm_http_run(int srv, unsigned port) {
       setsockopt(cl_fd, SOL_SOCKET, SO_SNDTIMEO, &sndtv, sizeof(sndtv));
       ps5tm_http_send_error(cl_fd, 503, "too_many_connections",
                             "Zu viele gleichzeitige Verbindungen.");
-      close(cl_fd);
+      close_after_answer_ms(cl_fd, 100);   /* short: the accept loop waits meanwhile */
       continue;
     }
     if(!peer_acquire(peer.sin_addr.s_addr)) {
@@ -996,7 +1001,7 @@ ps5tm_http_run(int srv, unsigned port) {
       setsockopt(cl_fd, SOL_SOCKET, SO_SNDTIMEO, &sndtv, sizeof(sndtv));
       ps5tm_http_send_error(cl_fd, 503, "too_many_connections_peer",
                             "Zu viele gleichzeitige Verbindungen von dieser Adresse.");
-      close(cl_fd);
+      close_after_answer_ms(cl_fd, 100);   /* short: the accept loop waits meanwhile */
       continue;
     }
     atomic_fetch_add(&g_connections, 1);
@@ -1038,7 +1043,7 @@ ps5tm_http_run(int srv, unsigned port) {
                   "Eine Anfrage konnte nicht bearbeitet werden, die Konsole "
                   "gab keinen Arbeitsplatz mehr her (Fehler %d). Läuft diese "
                   "App womöglich mehrfach?", trc);
-      close(cl_fd);
+      close_after_answer_ms(cl_fd, 100);
     }
     pthread_attr_destroy(&attr);
   }

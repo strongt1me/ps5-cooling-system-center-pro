@@ -1873,6 +1873,44 @@ restore_main(void *arg) {
     }
   }
 
+  /* 7b: files of the title that the backup does not have go (review 31.10.2026): left there, the game saw a mix of the
+         backup and the state before it. Only when that state was saved first (undo), only regular files below the
+         title's own folders of the restored areas, and nothing when a folder cannot be listed completely. */
+  if(undo.dir[0]) {
+    unsigned removed = 0;
+    for(int ar = 0; ar < 2; ar++) {
+      if(!(areas & (1u << ar))) continue;
+      char data[PATH_MAX], meta[PATH_MAX], rd[SV_REL_MAX], rm[SV_REL_MAX];
+      title_dirs(a->uid, ar, a->id, data, sizeof(data), meta, sizeof(meta));
+      snprintf(rd, sizeof(rd), "home/%s/%s/%s", a->uid, k_area[ar].data, a->id);
+      snprintf(rm, sizeof(rm), "home/%s/%s/%s", a->uid, k_area[ar].meta, a->id);
+      flist_t now = { 0 };
+      add_tree(&now, data, rd);
+      add_tree(&now, meta, rm);
+      if(now.err) {
+        PS5TM_WARN("saves_restore_extra_skipped", "Spielstände: Ordner von %s nicht vollständig lesbar, überzählige Dateien bleiben.", a->id);
+        free(now.v);
+        continue;
+      }
+      for(size_t k = 0; k < now.n; k++) {
+        int known = 0;
+        for(size_t i = 0; i < nfiles && !known; i++) known = !strcmp(files[i].rel, now.v[k].rel);
+        if(known) continue;
+        char path[PATH_MAX];
+        console_path(now.v[k].rel, path, sizeof(path));
+        if(unlink(path) == 0) removed++;
+        else PS5TM_WARN("saves_restore_extra_failed", "Spielstände: %s ließ sich nicht entfernen (%s).", now.v[k].rel, strerror(errno));
+      }
+      free(now.v);
+    }
+    if(removed) {
+      PS5TM_INFO("saves_restore_extra", "Spielstände: %u Datei(en) von %s entfernt, die es in der Sicherung nicht gab.", removed, a->id);
+      pthread_mutex_lock(&g_lock);
+      snprintf(g_job.note, sizeof(g_job.note), "%u Datei(en), die es in der Sicherung nicht gab, wurden entfernt; sie liegen in der Sicherung vor dem Zurückspielen.", removed);
+      pthread_mutex_unlock(&g_lock);
+    }
+  }
+
   /* 8: what is on the console now equals the backup */
   PHASE("verifying");
   job_phase(J_VERIFY, "Ergebnis prüfen", total);

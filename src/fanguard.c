@@ -24,10 +24,69 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "ps5tm.h"
+#undef pthread_create   /* this file defines the wrapper and calls the real one (also when the simulation includes it after fan.c) */
+
+/* An alternate signal stack per thread (sigaltstack is per thread on FreeBSD), so that on_crash below also runs after a
+ * stack overflow. It needs very little: open, ioctl, close, sigaction, raise. */
+#define ALT_STACK_BYTES (32 * 1024)
+
+typedef struct {
+  void *(*start)(void *);
+  void *arg;
+} thread_start_t;
+
+static void *
+install_alt_stack(void) {
+  void *mem = malloc(ALT_STACK_BYTES);
+  if(!mem) return NULL;
+  stack_t ss;
+  memset(&ss, 0, sizeof(ss));
+  ss.ss_sp = mem;
+  ss.ss_size = ALT_STACK_BYTES;
+  if(sigaltstack(&ss, NULL) != 0) {
+    free(mem);
+    return NULL;
+  }
+  return mem;
+}
+
+static void
+drop_alt_stack(void *mem) {
+  if(!mem) return;
+  stack_t ss;
+  memset(&ss, 0, sizeof(ss));
+  ss.ss_flags = SS_DISABLE;
+  sigaltstack(&ss, NULL);
+  free(mem);
+}
+
+static void *
+thread_trampoline(void *p) {
+  thread_start_t ts = *(thread_start_t *)p;
+  free(p);
+  void *mem = install_alt_stack();
+  void *ret;
+  pthread_cleanup_push(drop_alt_stack, mem);   /* also when the thread ends with pthread_exit */
+  ret = ts.start(ts.arg);
+  pthread_cleanup_pop(1);
+  return ret;
+}
+
+int
+ps5tm_thread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start)(void *), void *arg) {
+  thread_start_t *ts = malloc(sizeof(*ts));
+  if(!ts) return pthread_create(thread, attr, start, arg);   /* without the extra stack rather than not at all */
+  ts->start = start;
+  ts->arg = arg;
+  int rc = pthread_create(thread, attr, thread_trampoline, ts);
+  if(rc != 0) free(ts);
+  return rc;
+}
 
 #define DEADMAN_S          20      /* a pass normally takes about a second */
 #define RESUME_BEATS_S      3      /* the loop beats again for this long before the guard lets go */
@@ -192,14 +251,16 @@ ps5tm_fanguard_start(void) {
   struct sigaction sa;
   memset(&sa, 0, sizeof(sa));
   sa.sa_handler = on_crash;
+  sa.sa_flags = SA_ONSTACK;                /* on the thread's own signal stack where it has one */
   sigemptyset(&sa.sa_mask);
   for(unsigned i = 0; i < sizeof(sigs) / sizeof(sigs[0]); i++) sigaction(sigs[i], &sa, NULL);
+  (void)install_alt_stack();               /* the thread that starts the guard (main) never ends: kept */
 
   pthread_t t;
   pthread_attr_t attr;
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  int rc = pthread_create(&t, &attr, guard_worker, NULL);
+  int rc = ps5tm_thread_create(&t, &attr, guard_worker, NULL);
   pthread_attr_destroy(&attr);
   if(rc != 0) {
     atomic_store(&g_started, 0);

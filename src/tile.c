@@ -892,7 +892,8 @@ ps5tm_tile_service(void) {
    * process rather than ours — but that has not been tried on the console, and
    * this is a one-time action where "works" matters more than a quiet fan.
    *
-   * The Sony lock covers the calls themselves, so that no other thread's Sony
+   * The Sony lock covers the whole time under the ShellCore identity (since
+   * 31.10.2026 also the wait for the tile), so that no other thread's Sony
    * call — a profile request, say — runs under the wrong identity or into
    * Initialize. That includes up to ten seconds for sceAppInstUtilInitialize()
    * (timed_init; normally it answers at once, and after the first success the
@@ -914,7 +915,9 @@ ps5tm_tile_service(void) {
   auto_note(0);                 /* "fail" until the call has come back */
   char msg[256];
   ps5tm_tile_state_t st = ps5tm_tile_ensure(msg, sizeof(msg));
-  ps5tm_sony_api_unlock();
+  /* The lock stays held through the wait below until the identity is back (review 31.10.2026): released here, another
+     thread's call into the system ran under the ShellCore identity for up to 30 s. Other callers wait instead; this
+     happens once, on the first start without the tile, and the fan worker only try-locks. */
   PS5TM_INFO("tile_result", "%s (%s)", msg, ps5tm_tile_state_name(st));
 
   if(st == PS5TM_TILE_INSTALLING) {
@@ -942,7 +945,6 @@ ps5tm_tile_service(void) {
                  "nachsehen, sonst erneut versuchen.");
   }
 
-  ps5tm_sony_api_lock();
   if(ps5tm_platform_escalate() != 0)
     PS5TM_WARN("tile_authid_restore_failed",
                "Rücksetzen der Rechte fehlgeschlagen — die Lüftersteuerung "
@@ -1004,7 +1006,7 @@ ps5tm_tile_bootstrap(void) {
   auto_note(0);                 /* "fail" until the call has come back */
   char msg[256];
   ps5tm_tile_state_t state = ps5tm_tile_ensure(msg, sizeof(msg));
-  ps5tm_sony_api_unlock();
+  /* The lock stays held until the identity is back (review 31.10.2026), as in ps5tm_tile_service. */
 
   if(state == PS5TM_TILE_INSTALLING) {
     /* Wait for the tile to appear, but not for long: the fan is unregulated
@@ -1026,7 +1028,6 @@ ps5tm_tile_bootstrap(void) {
   }
 
   /* Back to the identity everything after this point depends on. */
-  ps5tm_sony_api_lock();
   if(ps5tm_platform_escalate() != 0)
     PS5TM_WARN("tile_authid_restore_failed",
                "Rücksetzen der Rechte nach der Kachel-Installation "

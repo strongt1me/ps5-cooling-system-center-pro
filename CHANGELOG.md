@@ -2,6 +2,17 @@
 
 ## Unveröffentlicht
 
+### Offene Punkte der Durchsicht vom 31.10. behoben
+- **Lüfter:** Eine feste Schwelle von Hand wird abgelehnt, solange der Lüfterwächter die Kühlung hält (409, vorher überschrieb sie seine volle Kühlung). Während der Wächter hält, laufen die Messwerte im Status weiter, statt stehen zu bleiben.
+- **Verlauf:** `history.csv` schreibt ein eigener Faden; der Lüfter-Faden wartet nie mehr auf ein belegtes Laufwerk.
+- **Absturz:** Jeder Faden der App bekommt einen eigenen kleinen Signal-Stack (`ps5tm_thread_create`, `SA_ONSTACK`), damit die Lüfterrückgabe an die Konsole auch nach einem Stack-Überlauf läuft.
+- **Startmenü-Kachel:** Die Sperre der Systemschnittstelle bleibt gehalten, bis die Rechte zurückgestellt sind; vorher liefen andere Aufrufe bis zu 30 s unter der ShellCore-Identität.
+- **Webserver:** Antworten 403/503 (fremde Herkunft, zu viele Verbindungen, kein Speicher, kein Faden) werden sauber beendet statt mit einem Verbindungsabbruch, der die Antwort verschluckte.
+- **Spielstand zurückspielen:** Dateien des Titels, die es in der Sicherung nicht gibt, werden danach entfernt (sie liegen in der Sicherung vor dem Zurückspielen); vorher sah das Spiel eine Mischung.
+- **Löschen:** Die Bestätigung gilt nur noch für genau die Daten, die beim Planen dort lagen (Gerät und Inode), in Bibliothek und Dateimanager; ausgetauschte Ordner werden abgelehnt.
+- **Dateimanager:** Neuer Ordner und Umbenennen sind gesperrt, solange er kopiert, verschiebt oder löscht (Umbenennen auch während anderer Aufträge der App). Umbenennen einer Datei überschreibt keinen inzwischen entstandenen gleichnamigen mehr. Ein abgebrochenes Kopieren räumt seinen Zielordner auch nach einem „existiert schon“ tief darin wieder ab.
+- **Vollbild-App:** Der QR-Code unter System folgt einer neuen IP-Adresse (etwa jede Minute neu geholt).
+
 ### Vollbild-App: `make lint` im Projektordner
 - `tools/setup-native-dependencies.sh` baut zlib in einem Ordner ohne Leerzeichen (zlibs Makefile verträgt keine im Zielpfad); `tools/fetch-opengl-sdk.sh` lädt ps5-opengl 1.0.2 von der erhaltenen Kopie (JMUtechnologies), weil das Original-Repository fehlt – Prüfsumme unverändert. `make lint` läuft damit im Projektordner vollständig durch.
 

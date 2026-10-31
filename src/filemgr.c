@@ -89,6 +89,7 @@ static int             g_cancel;
 static struct {
   char     token[33];
   char    *list;                          /* the plan's paths, one per line */
+  char    *ids;                           /* their device and inode, one "dev:ino" per line (review 31.10.2026) */
   uint64_t until_ms;
 } g_tok;
 
@@ -510,6 +511,8 @@ parse_body(const ps5tm_request_t *req) {
   return req->body ? cJSON_Parse(req->body) : NULL;
 }
 
+static int other_job_active(char *err, size_t n);
+
 static void
 handle_mkdir(int fd, const ps5tm_request_t *req) {
   cJSON *b = parse_body(req);
@@ -526,6 +529,11 @@ handle_mkdir(int fd, const ps5tm_request_t *req) {
     return;
   }
   cJSON_Delete(b);
+  /* not beside a copy, move or delete: a move deletes its source at the end, with what was made in it meanwhile */
+  if(ps5tm_filemgr_busy()) {
+    ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
+    return;
+  }
   if(real_path(t, real, sizeof(real)) != 0 || mkdir(real, 0777) != 0) {
     int e = errno;
     char msg[500];
@@ -561,6 +569,19 @@ handle_rename(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 403, "read_only", "Das lässt sich hier nicht umbenennen (nur auf den Laufwerken und in /data, keine Verknüpfungen).");
     return;
   }
+  /* not while the file manager or another job of the app works: renaming a folder a job reads or writes pulls it from
+     under it (review 31.10.2026) */
+  {
+    char jerr[300];
+    if(ps5tm_filemgr_busy()) {
+      ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
+      return;
+    }
+    if(other_job_active(jerr, sizeof(jerr))) {
+      ps5tm_http_send_error(fd, 409, "job_busy", jerr);
+      return;
+    }
+  }
   struct stat st;
   if(real_path(src, rs, sizeof(rs)) != 0 || real_path(t, rt, sizeof(rt)) != 0 || lstat(rs, &st) != 0) {
     ps5tm_http_send_error(fd, 404, "not_found", "Das gibt es nicht (mehr).");
@@ -573,7 +594,27 @@ handle_rename(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 409, "exists", "Diesen Namen gibt es hier schon.");
     return;
   }
-  if(rename(rs, rt) != 0) {
+  /* rename() replaces a file that took the name after the look above. A file is therefore linked under the new name
+     first (link refuses a taken name in one step) and the old name removed; where a drive has no links (exFAT) and for
+     folders (rename refuses a folder with content) it stays rename (review 31.10.2026). */
+  int moved = 0;
+  if(S_ISREG(st.st_mode) && !(lstat(rt, &ts) == 0 && ts.st_ino == st.st_ino && ts.st_dev == st.st_dev)) {
+    if(link(rs, rt) == 0) {
+      if(unlink(rs) != 0) {
+        int e = errno;
+        unlink(rt);
+        char msg[500];
+        snprintf(msg, sizeof(msg), "Umbenennen ging nicht: %s", io_words(e));
+        ps5tm_http_send_error(fd, 500, "rename_failed", msg);
+        return;
+      }
+      moved = 1;
+    } else if(errno == EEXIST) {
+      ps5tm_http_send_error(fd, 409, "exists", "Diesen Namen gibt es hier schon.");
+      return;
+    }
+  }
+  if(!moved && rename(rs, rt) != 0) {
     char msg[500];
     snprintf(msg, sizeof(msg), "Umbenennen ging nicht: %s", io_words(errno));
     ps5tm_http_send_error(fd, 500, "rename_failed", msg);
@@ -1028,6 +1069,10 @@ copy_file(const char *rs, const char *rt, const char *vs) {
   return rc;
 }
 
+/* The item's top folder was made by this job (review 31.10.2026): an EEXIST from deeper down then still leaves only
+   what is ours, and it goes again. One job at a time, so one flag. */
+static int g_made_top;
+
 static int
 copy_tree(const char *rs, const char *rt, const char *vs, dev_t dev, int depth) {
   if(cancelled()) return ECANCELED;
@@ -1043,6 +1088,7 @@ copy_tree(const char *rs, const char *rt, const char *vs, dev_t dev, int depth) 
     return 0;
   }
   if(mkdir(rt, 0777) != 0) return errno;
+  if(depth == 0) g_made_top = 1;
   (void)chmod(rt, 0777);
   DIR *d = opendir(rs);
   if(!d) return errno;
@@ -1224,15 +1270,18 @@ run_copy(fm_args_t *a, int move) {
       pthread_mutex_lock(&g_lock);
       unsigned skipped_before = g_job.skipped;
       pthread_mutex_unlock(&g_lock);
+      g_made_top = 0;
       rc = copy_tree(rs, rt, a->src[i], ss.st_dev, 0);
       pthread_mutex_lock(&g_lock);
       int skipped_some = g_job.skipped != skipped_before;
       pthread_mutex_unlock(&g_lock);
       if(rc) {
         /* What this item left behind is its own and goes again – unless the very first step found the name taken
-           (EEXIST): then someone else made it in the meantime, and it is not ours to delete. */
+           (EEXIST at the top): then someone else made it in the meantime, and it is not ours to delete. An EEXIST
+           from inside a folder this job made does not count as that (review 31.10.2026). */
         struct stat ps;
-        if(rc != EEXIST && lstat(rt, &ps) == 0) delete_tree(rt, t, ps.st_dev, 0, 0);
+        int ours = S_ISDIR(ss.st_mode) ? g_made_top : rc != EEXIST;
+        if(ours && lstat(rt, &ps) == 0) delete_tree(rt, t, ps.st_dev, 0, 0);
       } else if(move && skipped_some) {
         snprintf(err, sizeof(err), "%.250s wurde kopiert, aber Verknüpfungen oder Gerätedateien darin ließen sich nicht "
                  "mitnehmen. Das Original bleibt deshalb liegen (es liegt jetzt an beiden Orten).", a->src[i]);
@@ -1513,6 +1562,24 @@ joined(const fm_args_t *a) {
   return s;
 }
 
+/* What each path is, not only what it is called: "dev:ino" per line ("-" for one that is not there). A folder swapped for
+   another under the same name after the plan is then refused, not deleted on the old confirmation. */
+static char *
+identities(const fm_args_t *a) {
+  size_t cap = (size_t)a->n * 48 + 1;
+  char *s = malloc(cap), *p = s;
+  if(!s) return NULL;
+  char rs[FM_PATH + 64];
+  for(unsigned i = 0; i < a->n; i++) {
+    struct stat st;
+    if(real_path(a->src[i], rs, sizeof(rs)) == 0 && lstat(rs, &st) == 0)
+      p += snprintf(p, cap - (size_t)(p - s), "%llu:%llu\n", (unsigned long long)st.st_dev, (unsigned long long)st.st_ino);
+    else
+      p += snprintf(p, cap - (size_t)(p - s), "-\n");
+  }
+  return s;
+}
+
 /* POST delete/plan {paths}: what goes, and the token to start it with */
 static void
 handle_delete_plan(int fd, const ps5tm_request_t *req) {
@@ -1547,6 +1614,7 @@ handle_delete_plan(int fd, const ps5tm_request_t *req) {
     return;
   }
   char *list = joined(&a);
+  char *ids = identities(&a);
   cJSON *o = cJSON_CreateObject();
   cJSON_AddBoolToObject(o, "ok", 1);
   cJSON_AddNumberToObject(o, "items", a.n);
@@ -1557,10 +1625,12 @@ handle_delete_plan(int fd, const ps5tm_request_t *req) {
   for(unsigned i = 0; i < a.n; i++) cJSON_AddItemToArray(arr, cJSON_CreateString(a.src[i]));
   pthread_mutex_lock(&g_lock);
   free(g_tok.list);
+  free(g_tok.ids);
   g_tok.list = list;
+  g_tok.ids = ids;
   make_token(g_tok.token);
   g_tok.until_ms = ps5tm_mono_ms() + FM_TOKEN_MS;
-  if(list) cJSON_AddStringToObject(o, "confirm", g_tok.token);
+  if(list && ids) cJSON_AddStringToObject(o, "confirm", g_tok.token);
   pthread_mutex_unlock(&g_lock);
   free(a.src);
   send_obj(fd, 200, o);
@@ -1580,13 +1650,17 @@ handle_delete(int fd, const ps5tm_request_t *req) {
   if(!http) {
     snprintf(a->kind, sizeof(a->kind), "delete");
     char *list = joined(a);
+    char *ids = identities(a);
     pthread_mutex_lock(&g_lock);
     int ok = list && g_tok.list && g_tok.token[0] && strlen(token) == 32 && !strcmp(token, g_tok.token) &&
              !strcmp(list, g_tok.list) && ps5tm_mono_ms() < g_tok.until_ms;
-    if(ok) { free(g_tok.list); memset(&g_tok, 0, sizeof(g_tok)); }               /* one use */
+    int same = ok && ids && g_tok.ids && !strcmp(ids, g_tok.ids);
+    if(ok) { free(g_tok.list); free(g_tok.ids); memset(&g_tok, 0, sizeof(g_tok)); }   /* one use */
     pthread_mutex_unlock(&g_lock);
     free(list);
+    free(ids);
     if(!ok) { http = 403; snprintf(err, sizeof(err), "Die Bestätigung fehlt oder ist abgelaufen. Bitte das Löschen noch einmal öffnen und bestätigen."); }
+    else if(!same) { http = 409; snprintf(err, sizeof(err), "Seit der Bestätigung wurde an dieser Stelle etwas ausgetauscht. Es wurde nichts gelöscht; bitte das Löschen noch einmal öffnen."); }
   }
   uint64_t bytes = 0, files = 0;
   char rs[FM_PATH + 64];

@@ -3245,6 +3245,12 @@ handle_fan_threshold(int fd, const ps5tm_request_t *req) {
   if(clamped > PS5TM_THRESHOLD_MAX_C) clamped = PS5TM_THRESHOLD_MAX_C;
 
   int eno = 0;
+  if(ps5tm_fanguard_holding()) {
+    ps5tm_http_send_error(fd, 409, "fanguard_holding",
+                          "Der Lüfterwächter hält gerade die volle Kühlung. Eine feste Schwelle lässt sich "
+                          "setzen, sobald er wieder freigibt.");
+    return;
+  }
   if(ps5tm_fan_apply_manual(clamped, &eno) != 0) {
     ps5tm_http_send_error(fd, 500, "icc_fan_ioctl_failed",
                           ps5tm_platform_fan_message());

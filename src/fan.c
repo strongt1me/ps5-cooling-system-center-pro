@@ -18,6 +18,7 @@
  *      inaudible.
  */
 
+#include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -639,6 +640,11 @@ int
 ps5tm_fan_apply_manual(int temp_c, int *errno_out) {
   if(temp_c < PS5TM_THRESHOLD_MIN_C) temp_c = PS5TM_THRESHOLD_MIN_C;
   if(temp_c > PS5TM_THRESHOLD_MAX_C) temp_c = PS5TM_THRESHOLD_MAX_C;
+  /* The guard (fanguard.c) holds the fan: a pin by hand would undo its full cooling. Refused, never queued. */
+  if(ps5tm_fanguard_holding()) {
+    if(errno_out) *errno_out = EBUSY;
+    return -1;
+  }
 
   int rc = ps5tm_platform_set_fan_threshold(temp_c, errno_out);
   if(rc == 0) {
@@ -1116,6 +1122,15 @@ fan_worker(void *arg) {
       observed_c    = -1;
       last_apply_ms = 0;
       last_servo_ms = 0;
+      /* The status must not freeze while the guard holds: the readings go on, the threshold shown is the guard's
+         (full cooling, or the console's own after a dead-man release, both report what the sensors say). */
+      ps5tm_sensors_t hs;
+      if(ps5tm_platform_read_sensors(&hs) == 0) {
+        pthread_mutex_lock(&g_snapshot_lock);
+        g_snapshot.sensors       = hs;
+        g_snapshot.sampled_at_ms = wall;
+        pthread_mutex_unlock(&g_snapshot_lock);
+      }
       sleep(1);
       continue;
     }

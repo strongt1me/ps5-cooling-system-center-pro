@@ -2792,7 +2792,7 @@ void HttpSource::poll_fs_job()
 }
 
 // System's other answers: cooling over the weeks, the probes, the SoC channels, the controller, the
-// drives (only while their probe is on: it reads SMART data), and the QR code once.
+// drives (only while their probe is on: it reads SMART data), and the QR code now and then.
 void HttpSource::poll_system_extra(bool first)
 {
     int status = 0;
@@ -2828,14 +2828,19 @@ void HttpSource::poll_system_extra(bool first)
     const bool drives_on = (mask & 16) != 0;
     std::string drives = drives_on ? get("/api/v1/drives", 8) : std::string();
     const bool keep_drives = drives_on && drives.empty();
+    // The QR code at opening and then about once a minute (15 rounds of 4 s): the console's address
+    // can change while the page stays open (a new DHCP lease), and the code must follow it.
     std::string qr;
-    bool want_qr = first;
+    bool want_qr = first || ++qr_rounds_ >= 15;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         want_qr = want_qr || data_.system_data.qr.empty();
     }
     if (want_qr)
+    {
+        qr_rounds_ = 0;
         qr = get("/api/v1/qr", 4);
+    }
     std::lock_guard<std::mutex> lock(mutex_);
     SystemData &d = data_.system_data;
     d.status = status_raw_;

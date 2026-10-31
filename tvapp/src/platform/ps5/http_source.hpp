@@ -154,6 +154,7 @@ class HttpSource final : public Source
     void poll_storage();
     std::string status_raw_; // the last /status answer, for System (worker thread only)
     void poll_system_extra(bool first);
+    int qr_rounds_ = 0; // System rounds since the QR code was last asked for (worker thread only)
     void poll_playtime();
     void poll_saves();
     void poll_save_job();

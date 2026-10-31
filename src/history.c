@@ -57,17 +57,16 @@ push(const sample_t *s) {
    reported once and not every five minutes. */
 static int g_flush_failed;
 
-/* Rewrites the whole file. The old one is replaced only by a new one that got
- * all the way through — flush, stream error flag and close, every one of which
- * can be where a full drive shows up — and stays as it is otherwise, with the
- * data kept in memory for the next flush.
+/* Writes ring (count samples, oldest at start) and the peaks to the file. The
+ * old one is replaced only by a new one that got all the way through — flush,
+ * stream error flag and close, every one of which can be where a full drive
+ * shows up — and stays as it is otherwise. Returns 1 when written.
  *
- * No fsync, unlike the settings file: the regular flush runs on the fan
- * thread, and an fsync on a drive that a copy job has busy can take seconds. */
-static void
-flush_locked(void) {
-  if(!g_dirty) return;
-
+ * No fsync, unlike the settings file: an fsync on a drive that a copy job has
+ * busy can take seconds. */
+static int
+write_file(const sample_t *ring, unsigned count, unsigned start,
+           int peak_cpu, int peak_soc, int peak_fan, uint64_t peak_cpu_at) {
   mkdir(PS5TM_DATA_DIR, 0755);
 
   char tmp[sizeof(HISTORY_PATH) + 8];
@@ -80,25 +79,20 @@ flush_locked(void) {
     eno = errno;
   } else {
     fprintf(f, "# t_ms,cpu_c,soc_c,fan_pct,target_c\n");
-    fprintf(f, "# peak %d %d %d %llu\n", g_peak_cpu, g_peak_soc, g_peak_fan,
-            (unsigned long long)g_peak_cpu_at);
-
-    unsigned start = (g_count == HISTORY_SLOTS) ? g_head : 0;
-    for(unsigned i = 0; i < g_count; i++) {
-      const sample_t *s = &g_ring[(start + i) % HISTORY_SLOTS];
+    fprintf(f, "# peak %d %d %d %llu\n", peak_cpu, peak_soc, peak_fan,
+            (unsigned long long)peak_cpu_at);
+    for(unsigned i = 0; i < count; i++) {
+      const sample_t *s = &ring[(start + i) % HISTORY_SLOTS];
       fprintf(f, "%llu,%d,%d,%d,%d\n", (unsigned long long)s->t_ms,
               s->cpu_c, s->soc_c, s->fan_pct, s->target_c);
     }
-
     ok  = (fflush(f) == 0 && !ferror(f));
     eno = errno;
     if(fclose(f) != 0 && ok) { ok = 0; eno = errno; }
     if(ok && rename(tmp, HISTORY_PATH) != 0) { ok = 0; eno = errno; }
     if(!ok) unlink(tmp);
   }
-
   if(ok) {
-    g_dirty        = 0;
     g_flush_failed = 0;
   } else if(!g_flush_failed) {
     g_flush_failed = 1;
@@ -107,8 +101,64 @@ flush_locked(void) {
                "die vorhandene Datei bleibt unverändert, im Speicher läuft er "
                "weiter.", eno, strerror(eno));
   }
+  return ok;
 }
 
+/* The regular save runs on a thread of its own (review 31.10.2026): before, the fan thread wrote the file itself, and a
+ * drive that a copy job keeps busy could hold the regulation for seconds. The fan thread only marks it due; the writer
+ * copies the ring under the lock (a memcpy) and writes without it. The copy is static: one writer, and 1440 samples do
+ * not belong on a thread's stack. */
+static pthread_cond_t g_due_cond = PTHREAD_COND_INITIALIZER;
+static int            g_due = 0;
+static sample_t       g_copy[HISTORY_SLOTS];
+
+static void *
+writer_main(void *arg) {
+  (void)arg;
+  for(;;) {
+    pthread_mutex_lock(&g_lock);
+    while(!g_due) pthread_cond_wait(&g_due_cond, &g_lock);
+    g_due = 0;
+    if(!g_dirty) { pthread_mutex_unlock(&g_lock); continue; }
+    memcpy(g_copy, g_ring, sizeof(g_ring));
+    unsigned count = g_count, start = (g_count == HISTORY_SLOTS) ? g_head : 0;
+    int pc = g_peak_cpu, ps = g_peak_soc, pf = g_peak_fan;
+    uint64_t at = g_peak_cpu_at;
+    g_dirty = 0;                       /* a sample arriving while the file is written marks it again */
+    pthread_mutex_unlock(&g_lock);
+
+    if(!write_file(g_copy, count, start, pc, ps, pf, at)) {
+      pthread_mutex_lock(&g_lock);
+      g_dirty = 1;                     /* kept in memory for the next turn */
+      pthread_mutex_unlock(&g_lock);
+    }
+  }
+  return NULL;
+}
+
+static pthread_once_t g_writer_once = PTHREAD_ONCE_INIT;
+static int            g_writer_ok = 0;
+
+static void
+writer_start(void) {
+  pthread_t t;
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  g_writer_ok = (pthread_create(&t, &attr, writer_main, NULL) == 0);
+  pthread_attr_destroy(&attr);
+  if(!g_writer_ok)
+    PS5TM_WARN("history_writer_failed", "Der Verlauf wird ohne eigenen Schreib-Faden gespeichert.");
+}
+
+/* Rewrites the whole file right away, under the lock (reset, and the fallback when the writer thread could not start). */
+static void
+flush_locked(void) {
+  if(!g_dirty) return;
+  if(write_file(g_ring, g_count, (g_count == HISTORY_SLOTS) ? g_head : 0,
+                g_peak_cpu, g_peak_soc, g_peak_fan, g_peak_cpu_at))
+    g_dirty = 0;
+}
 
 void
 ps5tm_history_load(void) {
@@ -184,11 +234,20 @@ ps5tm_history_tick(int cpu_c, int cpu_valid, int soc_c, int soc_valid,
   }
 
   if(g_last_flush_ms == 0) g_last_flush_ms = now;
-  if(now - g_last_flush_ms >= HISTORY_FLUSH_MS) {
-    flush_locked();
-    g_last_flush_ms = now;
-  }
+  int due = (now - g_last_flush_ms >= HISTORY_FLUSH_MS);
+  if(due) g_last_flush_ms = now;
 
+  pthread_mutex_unlock(&g_lock);
+
+  if(!due) return;
+  pthread_once(&g_writer_once, writer_start);
+  pthread_mutex_lock(&g_lock);
+  if(g_writer_ok) {                    /* the fan thread only says it is due, it never waits for the drive */
+    g_due = 1;
+    pthread_cond_signal(&g_due_cond);
+  } else {
+    flush_locked();
+  }
   pthread_mutex_unlock(&g_lock);
 }
 

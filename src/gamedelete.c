@@ -94,6 +94,9 @@ static struct {
   char     kind[12];
   char     id[320];
   char     path[320];                 /* where the plan said the data lies: the deletion must find the same */
+  dev_t    dev;                       /* and what lay there (review 31.10.2026): the same name with other data is refused */
+  ino_t    ino;
+  int      known;                     /* dev/ino were read */
   uint64_t until_ms;
 } g_tok;
 
@@ -662,6 +665,10 @@ ps5tm_gamedelete_plan(const char *kind, const char *id, int *http) {
     snprintf(g_tok.kind, sizeof(g_tok.kind), "%s", kind);
     snprintf(g_tok.id, sizeof(g_tok.id), "%s", id);
     snprintf(g_tok.path, sizeof(g_tok.path), "%s", p.path);
+    struct stat ts;
+    g_tok.known = lstat(p.path, &ts) == 0;
+    g_tok.dev = g_tok.known ? ts.st_dev : 0;
+    g_tok.ino = g_tok.known ? ts.st_ino : 0;
     g_tok.until_ms = ps5tm_mono_ms() + DL_TOKEN_MS;
     cJSON_AddStringToObject(o, "confirm", g_tok.token);
     pthread_mutex_unlock(&g_lock);
@@ -898,8 +905,16 @@ ps5tm_gamedelete_start(const char *kind, const char *id, const char *token, char
   int tok_ok = g_tok.token[0] && strlen(token) == 32 && !strcmp(token, g_tok.token) && !strcmp(kind, g_tok.kind) &&
                !strcmp(id, g_tok.id) && ps5tm_mono_ms() < g_tok.until_ms;
   char planned[sizeof(g_tok.path)] = "";
-  if(tok_ok) snprintf(planned, sizeof(planned), "%s", g_tok.path);
-  if(tok_ok) memset(&g_tok, 0, sizeof(g_tok));                     /* one use */
+  int planned_known = 0;
+  dev_t planned_dev = 0;
+  ino_t planned_ino = 0;
+  if(tok_ok) {
+    snprintf(planned, sizeof(planned), "%s", g_tok.path);
+    planned_known = g_tok.known;
+    planned_dev = g_tok.dev;
+    planned_ino = g_tok.ino;
+    memset(&g_tok, 0, sizeof(g_tok));                              /* one use */
+  }
   pthread_mutex_unlock(&g_lock);
   if(!tok_ok) { snprintf(err, err_len, "Die Bestätigung fehlt oder ist abgelaufen. Bitte das Löschen noch einmal öffnen und bestätigen."); return 403; }
 
@@ -911,6 +926,14 @@ ps5tm_gamedelete_start(const char *kind, const char *id, const char *token, char
   if(strcmp(p.path, planned)) {
     snprintf(err, err_len, "Die Spieldaten liegen inzwischen an einem anderen Ort als bestätigt. Bitte das Löschen noch einmal öffnen.");
     return 409;
+  }
+  {
+    struct stat now;
+    int known = lstat(p.path, &now) == 0;
+    if(known != planned_known || (known && (now.st_dev != planned_dev || now.st_ino != planned_ino))) {
+      snprintf(err, err_len, "Seit der Bestätigung wurde an dieser Stelle etwas ausgetauscht. Es wurde nichts gelöscht; bitte das Löschen noch einmal öffnen.");
+      return 409;
+    }
   }
 
   dl_args_t *a = calloc(1, sizeof(*a));
