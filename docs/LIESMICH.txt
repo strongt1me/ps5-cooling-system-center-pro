@@ -5,7 +5,7 @@ Advanced Cooling & Thermal Management for PlayStation 5
 WAS HIER DRIN LIEGT
 ===================
 
-PS5_Cooling_System_Center_v1.74.0.elf
+PS5_Cooling_System_Center_v1.75.0.elf
     Das Hauptprogramm: Lüftersteuerung und Web-Oberfläche. Das ist die
     Datei, die du nach jedem Neustart der Konsole sendest.
 
@@ -13,39 +13,32 @@ FAKE86921.zip
     Die Vollbild-Kachel: den Ordner FAKE86921 nach /data/homebrew/ kopieren
     (z. B. mit ShadowMountPlus oder einem FTP-Programm). Ein Tipp auf die
     Kachel startet die App und zeigt sie im Vollbild mit Controller-
-    Bedienung (Kühlung, Spiele, Aufträge, Einstellungen, Payloads,
-    Protokoll).
+    Bedienung: Kühlung, Spiele, Dateimanager, Payloads, System, Profil und
+    Protokoll. Die Seitenleiste öffnet die Touchpad-Taste.
 
 FAKE86922.zip
     Die Browser-Kachel: wie oben nach /data/homebrew/ kopieren. Ein Tipp
     startet die App und öffnet die Web-Oberfläche im Browser der Konsole.
     Beide Kacheln können nebeneinander liegen.
 
-Einen eigenen Kachel-Installer (ELF) und ein Kachel-Paket (.pkg) gibt es
-nicht mehr: Das Hauptprogramm legt seine Kachel selbst an.
+Jede Kachel trägt das Hauptprogramm in sich: Ein Tipp darauf startet es,
+falls es noch nicht läuft. Einen Kachel-Installer (ELF) und ein Kachel-Paket
+(.pkg) gibt es nicht mehr.
 
 
 SO WIRD ES BENUTZT
 ==================
 
-1. PS5_Cooling_System_Center_v1.74.0.elf an die Konsole senden (Port 9021).
+1. Eine der Kacheln antippen (FAKE86921 für das Vollbild, FAKE86922 für
+   den Browser) – sie startet das Hauptprogramm selbst.
+   Oder: PS5_Cooling_System_Center_v1.75.0.elf an die Konsole senden
+   (Port 9021).
 2. Auf dem Fernseher erscheint eine Meldung mit der Adresse der
    Web-Oberfläche.
 3. Im Browser aufrufen:  http://<PS5-IP>:8086/
 
-Die Kachel im Startmenü ("Medien") legt das Hauptprogramm beim ersten Start
-selbst an; ein Installer ist dafür nicht nötig. Sie überlebt Neustarts. Hast
-du sie in der Konsole gelöscht, kommt sie nicht von allein zurück: Auf der
-Systemseite legt "Kachel installieren" sie wieder an.
-
-Neues Kachelbild: Die Kachel zuerst in der Konsole löschen (Kachel auswählen,
-Options-Taste, Löschen) und danach auf der Systemseite "Kachel installieren"
-drücken. Eine vorhandene Kachel bleibt sonst unverändert. Die App und
-ihre Einstellungen bleiben dabei unberührt.
-
-Wichtig: Die Kachel startet das Programm NICHT. Sie öffnet nur die
-Web-Oberfläche. Nach jedem Neustart der Konsole muss das Hauptprogramm
-einmal gesendet werden, sonst zeigt die Kachel nichts an.
+Die frühere Startmenü-Kachel (PSCC69690) wird nicht mehr gebraucht und nicht
+mehr angelegt; eine gelöschte kommt nicht zurück.
 
 Wichtig: Immer nur EINE Instanz laufen lassen. Zwei Instanzen regeln den
 Lüfter gleichzeitig und stören sich. Eine alte Instanz lässt sich auf der
@@ -69,8 +62,8 @@ Temperaturverlauf automatisch umbenannt. Es geht nichts verloren.
 HINWEIS ZUM PORT
 ================
 
-Die Oberfläche liegt fest auf Port 8086, weil genau diese Adresse in der
-Startmenü-Kachel hinterlegt ist. Frühere Fassungen nutzten 8080 und 8770;
+Die Oberfläche liegt fest auf Port 8086, weil genau diese Adresse in den
+Kacheln hinterlegt ist. Frühere Fassungen nutzten 8080 und 8770;
 eine alte Konfiguration wird beim ersten Start automatisch umgestellt.
 
 Ist 8086 belegt — meist läuft dann noch eine alte Instanz —, weicht das
@@ -141,10 +134,6 @@ bewusst NICHT mit umbenannt: Dort liegen der Temperaturverlauf und die
 mehrwöchige Kühlleistungs-Aufzeichnung. Ein umbenannter Ordner würde
 beides auf null zurücksetzen.
 
-Die Startmenü-Kachel behält ihre Kennung PSCC69690, es entsteht also nie
-eine zweite. Eine schon installierte Kachel bleibt aber
-stehen, wie sie ist. Den neuen Namen zeigt sie erst, wenn man sie vorher
-löscht (siehe oben, "Neues Kachelbild").
 
 RECHTLICHES
 ===========
@@ -160,8 +149,7 @@ Konto oder Konsole führen. Das Risiko trägt, wer das tut.
 Keine Piraterie. Das Programm enthält keine Spiele, keine Firmware, keine
 Schlüssel und nichts, was einen Kopierschutz umgeht. Es lädt nichts aus dem
 Internet (nur die Seite "Credits" prüft im Browser, ob github.com erreichbar
-ist) außer, wenn man sie einschaltet, den offiziellen Updates der eigenen
-Spiele und, auf Knopfdruck, der Payload-Liste und der Payloads von GitHub
+ist) außer, auf Knopfdruck, der Payload-Liste und der Payloads von GitHub
 ("Payloads herunterladen"). Kopieren, Verschieben und Konvertieren wirken nur auf Spiele, die
 schon auf der eigenen Konsole liegen; Pakete finden, aufteilen und installieren
 nur auf Pakete, die du selbst auf die Konsole oder ein Laufwerk gelegt hast.

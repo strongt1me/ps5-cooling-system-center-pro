@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.75.0
 
 ### Vollbild-App: Seitenleiste nur mit dem Touchpad
 - Links auf dem Steuerkreuz öffnet die Seitenleiste nicht mehr (vorher auf jeder Seite außer Kühlung); sie öffnet nur noch die Touchpad-Taste. Links gehört damit überall der Seite.

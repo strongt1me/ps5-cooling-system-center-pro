@@ -1,44 +1,53 @@
-# PS5 Cooling & System Center – Pro v1.74.0
+# PS5 Cooling & System Center – Pro v1.75.0
 
 ## Highlights
-- **Mehr Kontrolle bei Spiel-Updates** – Standardregel und Schalter je Spiel, „Nur laden“, Download-Ordner (auch USB), Prüfsummen-Schalter und ein Diagnosebericht
-- **Andere Versionen** – Versionsliste von prosperopatches.com und orbispatches.com, dazu der letzte Patch, der auf deiner Firmware läuft
-- **Fake-PKG-Spiele** werden jetzt geprüft und aktualisiert wie alle anderen
+- **Die Vollbild-App ist da** – Kachel FAKE86921: die ganze App auf dem Fernseher mit dem Controller, von Kühlung bis Profil, ohne Browser
+- **Zwei Kacheln, die die App selbst starten** – FAKE86921 (Vollbild) und FAKE86922 (Browser) tragen das Hauptprogramm in sich
+- **Lüfterwächter** – ein unabhängiger zweiter Blick auf den Lüfter: hängt die Regelung oder wird es zu heiß, übernimmt er
+- **Dumpen, Pakete, PS4 von USB, Dateimanager** – viele neue Werkzeuge, in beiden Oberflächen
 
 ## Neu
-### Spiel-Updates
-- Standardregel „Updates erlauben/verweigern“ und ein Schalter „Updates“ in jeder Spielzeile
-- „Nach dem Download installieren“ für alle und je Spiel; ohne Installation bleibt das Paket bereit
-- Download-Ordner: interner Speicher oder ein angeschlossenes USB-Laufwerk
-- Schalter für die Prüfsummen (SHA-256) der geladenen Stücke
-- Diagnose je Spiel mit Bericht zum Kopieren (ohne IP-Adresse und Konsolenname)
-- „Andere Versionen“: Liste mit Größe und nötiger Firmware, Anleitung mit QR-Code und Feld zum Einfügen des Links; geladen wird nur von den offiziellen Update-Servern
-- „Älterer Patch passt“: braucht der neueste Patch eine neuere Firmware, schlägt die App die neueste Version vor, die hier läuft
-- Fake-PKG- und fpkg-Spiele nehmen an Prüfung und direktem Download teil; der Knopf „Link“ kopiert die Download-Adresse
+### Vollbild-App (Kachel FAKE86921)
+- Alle Bereiche mit dem Controller: Kühlung (Übersicht, Einstellungen mit Warnungen, Lichtleiste, Spielprofilen, Nachtmodus, Selbsttest), Spiele (Bibliothek, Spielzeit, Spielstände, Pakete, PS4 von USB, Disc, Sicherungen, Aufträge), Dateimanager, Payloads (eigene, geladene, Store, Profile), System (Konsole, Speicher, Kühlleistung, Zusatzabfragen, Experte), Profil (Name, Profilbild, Danke) und Protokoll (App, Kernel-Log live, Gespeichert)
+- Spiel-Werkzeuge im Aktionen-Menü: Kopieren, Konvertieren, Verschieben, Entpacken, Abbild prüfen, Löschen, Extras (AMPR, PlayGo, LZ4), Aus-/Einhängen über ShadowMountPlus, laufendes Spiel beenden
+- Profilbilder: 30 mitgelieferte und eigene (JPG/PNG aus `/data/PS5-Cooling-Center/Profilbilder` oder vom USB-Stick), umgerechnet auf der Konsole
+- Payload-Profile mit Editor, Pakete aufteilen, Bildschirmtastatur mit ä ö ü ß, eigene Hintergrundbilder je Bereich
+- Die Seitenleiste öffnet die Touchpad-Taste
+
+### Lüfter
+- Unabhängiger Lüfterwächter: Regelung stumm → zurück an die Konsole (oder volle Kühlung, wenn es heiß ist); Übertemperatur → volle Kühlung, bis es wieder kühler ist; bei einem Absturz bekommt die Konsole den Lüfter zurück
+- Kein Pendeln mehr bei Zielen um 72–82 °C, Regelung reagiert in Sekunden, Zieltemperatur ab 50 °C, Anzeige in Zehntelprozent
+
+### Spiele und Laufwerke
+- Dumpen im Reiter Disc: Entschlüsseln, FSELF, Backport (SDK herunterpatchen), Warteschlange für Disc-Spiele
+- Pakete mit einem Klick installieren, PS4 von USB: übersprungene PKGs mit Grund, Updates und Zusatzinhalte wählen, Zusatzinhalte intern kopieren
+- Einzelnes Spiel über ShadowMountPlus aus- und einhängen, USB-Laufwerk sicher auswerfen
+- Dateimanager „Dateien & Ordner“: ganze Ordner hochladen, PS4-Spielordner konvertieren
 
 ## Verbesserungen
-- PS4 von USB: Die Suche schaut ab Werk auch in den Ordner `pkg` jedes Laufwerks
-- Fehlermeldungen der Weboberfläche und zu lange Adressen werden sauber behandelt
+- USB-Laufwerke heißen wie auf der Konsole: `usb0`, `usb1` …
+- Keine doppelten Bestätigungen mehr: Löschen, Power-Optionen, Beenden und Abbrechen wirken beim ersten Druck
+- Apps wie YouTube bleiben unberührt (keine Updates, keine Spielstand-Aktionen)
+- Fremdbausteine: PS4Mount 0.7.2 (Ausschalten hängt die Spiele aus), ShadowMountPlus 1.7beta11, PS5-Payload-SDK v0.45
 
 ## Fehlerbehebungen
-- „Alle aktualisieren“ ließ Fake-PKG-Spiele aus, obwohl die Liste ein Update zeigte
-- Mehrere Überläufe beim Lesen fremder Abbild- und Paketdateien behoben (`lz4pack`, `amprlib`, Abbild-Leser)
-- Die Spielstand-Sicherung arbeitet mit einem größeren Stapel und ist dadurch stabiler
+- Zwei Durchsichten der ganzen App: u. a. Dump löscht keinen fertigen Dump mehr, Spielstand-Zurückspielen entspricht genau der Sicherung, Löschen gilt nur für die bestätigten Daten, Webserver antwortet sauber statt mit Verbindungsabbruch, Disc-Anzeige friert nicht mehr ein
+- Fester Lüfterwert überschreibt den Wächter nicht mehr, der Verlauf bremst die Regelung nicht mehr
 
 ## Hinweise
-- **Nicht an der Konsole bestätigt:** die Versionslisten (die Antwortformate der beiden Seiten konnten nicht live geprüft werden), die Zertifikatsprüfung der Verlaufsseiten und das Installieren eines Updates aus einem USB-Ordner. Ändert eine Seite ihr Format, meldet die App einen Fehler statt einer Liste
-- Die neuen Texte gibt es zunächst nur auf Deutsch
-- Die Starter-Kachel `PPSA86921.zip` enthält diese App; ein Aktualisieren der Kachel ist optional
+- **Spiel-Updates entfernt:** Der Reiter „Updates“ und das Laden von Updates sind nicht mehr in der App
+- Die Startmenü-Kachel PSCC69690 wird nicht mehr gebraucht und nicht mehr angelegt; die Kacheln FAKE86921 und FAKE86922 ersetzen sie
+- **Nicht an der Konsole bestätigt:** PS4Mount 0.7.2 (Ausschalten mit laufendem Spiel), Pakete aufteilen, Payload-Profile ausführen und die Paket-Erkennung für Medien-Apps
 
 ## Downloads
 | Datei | Wofür |
 |---|---|
-| `PS5_Cooling_System_Center_v1.74.0.elf` | die App – nach jedem Neustart der Konsole an Port 9021 senden |
-| `PPSA86921.zip` | Starter-Kachel für `/data/homebrew/` (startet die App per Tipp) |
-| `LIESMICH.txt` | Kurzanleitung |
+| `PS5_Cooling_System_Center_v1.75.0.elf` | Das Hauptprogramm (an Port 9021 senden) |
+| `FAKE86921.zip` | Vollbild-Kachel: Ordner nach `/data/homebrew/` kopieren |
+| `FAKE86922.zip` | Browser-Kachel: Ordner nach `/data/homebrew/` kopieren |
+| `LIESMICH.txt` | Anleitung |
 
 ## Danke
-- **Knutwurst** – PatchDL, Vorbild und Quelle der Update-Funktionen
-- **prosperopatches.com und orbispatches.com** – die Versionsverläufe
+An alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke.
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.73.1...v1.74.0
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.74.0...v1.75.0
