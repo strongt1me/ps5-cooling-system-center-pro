@@ -410,9 +410,12 @@ Download-Liste mit „Löschen“ wieder frei.</div>
 <li><b>Neue Disc automatisch sichern:</b> Der zweite Schalter legt das Abbild sofort an, wenn man eine solche Disc einlegt (aus ab Werk).</li>
 <li><b>Redump:</b> Liegt <code>/data/redump.db</code> auf der Konsole, bekommt das Abbild den Namen aus der Liste (wenn die Titelkennung genau einen hat) und wird mit den Prüfsummen verglichen („Redump geprüft“); sonst heißt es wie die Titelkennung. Die Liste baut man am PC mit <code>tools/build_redump_db.py</code> aus dem Projekt ps-disc-detect (sie lädt die Dateien von redump.info); sie darf bis 64 MB groß sein.</li>
 <li>Ein Abbild löscht man mit „Löschen“ oder im Dateimanager.</li>
-</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>Dateien – der Dateimanager</h2></div>
-<p>Ordner der Konsole ansehen und Dateien herunterladen geht überall. <b>Ändern</b> – hochladen, neuer Ordner, umbenennen,
-kopieren, verschieben, löschen – geht nur auf den <b>Laufwerken</b> und in <code>/data</code>. Überall sonst steht „Nur ansehen“.</p>
+</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>Dateien – der Dateimanager</h2></div><p>Ordner der Konsole ansehen und Dateien herunterladen geht überall. <b>Ändern</b> – hochladen, neuer Ordner, umbenennen,
+kopieren, verschieben, löschen – geht ebenfalls <b>überall</b>, auch in Systemordnern wie <code>/user</code> und im Ordner der App.
+„Nur ansehen“ steht nur noch bei <code>/</code> selbst, <code>/dev</code>, <code>/proc</code> und Verknüpfungen. Bereiche, die die Konsole
+schreibgeschützt eingehängt hat (z. B. <code>/system</code>), lehnen eine Änderung von sich aus ab; die App meldet dann den Fehler.</p>
+<div class='warn'>Unter <code>/system_data</code> und <code>/user</code> liegen Datenbanken und Einstellungen der Konsole. Wer dort das Falsche löscht oder
+verschiebt, riskiert, dass die Konsole nicht mehr startet oder neu eingerichtet werden muss. Löschen wirkt sofort, ohne Rückfrage.</div>
 
 <h3>Ordnen, auswählen, ansehen</h3>
 <ul>
@@ -431,8 +434,9 @@ kopieren, verschieben, löschen – geht nur auf den <b>Laufwerken</b> und in <c
 <h3>Hochladen</h3>
 <p><b>Hochladen</b> wählt eine oder mehrere Dateien; am PC kannst du sie auch auf die Liste ziehen. Ein Balken zeigt den
 Fortschritt je Datei.</p>
-<div class='tip'>Geschützt: Es wird nie etwas überschrieben, Verknüpfungen werden nie verfolgt, und vom Ordner der App
-(<code>/data/PS5-Cooling-Center</code>) ist nur <code>payloads</code> änderbar – ideal, um Payloads hochzuladen.</div>
+<div class='tip'>Geschützt: Es wird nie etwas überschrieben (eine Datei ersetzen: erst die alte löschen, dann die neue hochladen),
+Verknüpfungen werden nie verfolgt, ein eingehängtes Laufwerk lässt sich nicht als Ganzes löschen, und Kopieren und Löschen gehen nie
+auf ein anderes Laufwerk über.</div>
 <p><b>Laufwerke</b> heißen wie auf der Konsole: <code>usb0</code>, <code>usb1</code> … – der Ordner <code>/mnt/usb0</code> ist also „usb0“.</p>
 </section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payloads</h2></div>
 <p>Laufende Payloads sehen und beenden, gespeicherte mit einem Klick starten – aus <code>/data/PS5-Cooling-Center/payloads</code>

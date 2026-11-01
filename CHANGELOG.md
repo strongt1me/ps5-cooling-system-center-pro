@@ -1,5 +1,16 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Dateimanager: überall ändern
+- Hochladen, neuer Ordner, Umbenennen, Kopieren, Verschieben und Löschen gehen jetzt überall – auch in Systemordnern wie `/user/download` und im Ordner der App (Wunsch des Users; vorher nur auf den Laufwerken und in `/data`, im App-Ordner nur `payloads`, `AMPR_EMU`, `PlayGo`, `LZ4_Profile`). „Ganzes System“ ist kein reiner Ansehen-Ort mehr.
+- Gesperrt bleibt nur, was vor Unfällen schützt: `/` selbst, `/dev`, `/proc`, Verknüpfungen (auch auf dem Weg) und eingehängte Laufwerke als Ganzes; Kopieren und Löschen gehen weiter nie auf ein anderes Laufwerk über, überschrieben wird nie. Schreibgeschützt eingehängte Bereiche lehnen selbst ab.
+- Meldungen, Browser, Vollbild-App, Handbuch, FAQ (6 Sprachen) und `docs/HANDBUCH.md` nennen die neue Grenze und warnen vor `/system_data` und `/user`.
+
+### Aufräumen nach der alten Kachel, PS4Mount-Prüfungen als Skript
+- Sprachdateien: 12 Übersetzungen der früheren Kachel-Oberfläche („Kachel installieren“, „Kachel-Paket auswählen“ …) und des entfernten Start-Versuchs gelöscht; sie wurden nirgends mehr angezeigt. Die Antwort auf ein hochgeladenes Kachel-Paket nennt statt des verschwundenen Knopfs `POST /api/v1/tile/ensure`.
+- `test/ps4m/run.sh`: führt die Prüfungen des PS4Mount-Ports (`third_party/ps4mount/test/unit.c`, 157 Prüfungen) unter WSL/Linux aus; bisher nur über einen Befehl von Hand. Beschrieben in `docs/ENTWICKLUNG.md`.
+
 ## v1.75.2
 
 ### Kein Kachel-Versuch mehr beim Start

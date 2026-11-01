@@ -409,9 +409,12 @@ download list, with “Delete”.</div>
 <li><b>Copy new discs automatically:</b> the second switch makes the image right away when such a disc is inserted (off by default).</li>
 <li><b>Redump:</b> if <code>/data/redump.db</code> is on the console, the image gets its name from the list (when the title ID has exactly one) and is compared with the checksums (“checked against Redump”); otherwise it is named like the title ID. Build the list on a PC with <code>tools/build_redump_db.py</code> from the ps-disc-detect project (it downloads the files from redump.info); it may be up to 64 MB.</li>
 <li>Delete an image with “Delete” or in the file manager.</li>
-</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>Files – the file manager</h2></div>
-<p>Viewing the console's folders and downloading files works everywhere. <b>Changing</b> – uploading, new folder, renaming,
-copying, moving, deleting – only works on the <b>drives</b> and in <code>/data</code>. Everywhere else it says “View only”.</p>
+</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>Files – the file manager</h2></div><p>Looking at the console's folders and downloading files works everywhere. <b>Changing</b> – uploading, new folder, renaming,
+copying, moving, deleting – also works <b>everywhere</b>, including system folders such as <code>/user</code> and the app's own folder.
+“View only” is left only for <code>/</code> itself, <code>/dev</code>, <code>/proc</code> and links. Areas the console has mounted read-only
+(e.g. <code>/system</code>) refuse a change by themselves; the app then reports the error.</p>
+<div class='warn'><code>/system_data</code> and <code>/user</code> hold the console's databases and settings. Deleting or moving the wrong thing there
+risks a console that no longer starts or has to be set up again. Deleting acts at once, without asking.</div>
 
 <h3>Sorting, selecting, viewing</h3>
 <ul>
@@ -430,8 +433,8 @@ copying, moving, deleting – only works on the <b>drives</b> and in <code>/data
 <h3>Uploading</h3>
 <p><b>Upload</b> chooses one or more files; on a PC you can also drag them onto the list. A bar shows the
 progress per file.</p>
-<div class='tip'>Protected: nothing is ever overwritten, links are never followed, and in the app's folder
-(<code>/data/PS5-Cooling-Center</code>) only <code>payloads</code> can be changed – ideal for uploading payloads.</div>
+<div class='tip'>Protected: nothing is ever overwritten (to replace a file, delete the old one first, then upload the new one),
+links are never followed, a mounted drive cannot be deleted as a whole, and copying and deleting never cross over to another drive.</div>
 <p><b>Drives</b> are named as on the console: <code>usb0</code>, <code>usb1</code> … – the folder <code>/mnt/usb0</code> is “usb0”.</p>
 </section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payloads</h2></div>
 <p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>

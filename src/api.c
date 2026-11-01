@@ -3833,7 +3833,7 @@ receive_tile_package(int fd, const char *prefix, size_t prefix_len,
   char body[224];
   snprintf(body, sizeof(body),
            "{\"ok\":true,\"bytes\":%zu,\"message\":\"Paket empfangen. "
-           "Jetzt „Kachel installieren“ drücken.\"}", total);
+           "POST /api/v1/tile/ensure meldet es an.\"}", total);
   ps5tm_http_send_json(fd, 200, body);
 }
 

@@ -408,9 +408,12 @@ liste des téléchargements, avec « Supprimer ».</div>
 <li><b>Copier automatiquement les nouveaux disques :</b> le second interrupteur crée l'image aussitôt qu'on insère un tel disque (désactivé par défaut).</li>
 <li><b>Redump :</b> si <code>/data/redump.db</code> se trouve sur la console, l'image prend son nom dans la liste (si l'ID de titre en a exactement un) et est comparée aux sommes de contrôle (« vérifiée avec Redump ») ; sinon elle porte le nom de l'ID de titre. On construit la liste sur un PC avec <code>tools/build_redump_db.py</code> du projet ps-disc-detect (il télécharge les fichiers de redump.info) ; elle peut peser jusqu'à 64 Mo.</li>
 <li>On supprime une image avec « Supprimer » ou dans le gestionnaire de fichiers.</li>
-</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>Fichiers – le gestionnaire de fichiers</h2></div>
-<p>Parcourir les dossiers de la console et télécharger des fichiers est possible partout. <b>Modifier</b> – téléverser, créer un dossier, renommer,
-copier, déplacer, supprimer – n’est possible que sur les <b>lecteurs</b> et dans <code>/data</code>. Partout ailleurs, « Consultation seule » s’affiche.</p>
+</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>Fichiers – le gestionnaire de fichiers</h2></div><p>Parcourir les dossiers de la console et télécharger des fichiers fonctionne partout. <b>Modifier</b> – téléverser, nouveau dossier, renommer,
+copier, déplacer, supprimer – fonctionne aussi <b>partout</b>, y compris dans les dossiers système comme <code>/user</code> et dans le dossier de l’appli.
+« Consultation seule » ne reste que pour <code>/</code> lui-même, <code>/dev</code>, <code>/proc</code> et les liens. Les zones que la console monte
+en lecture seule (p. ex. <code>/system</code>) refusent d’elles-mêmes la modification ; l’appli affiche alors l’erreur.</p>
+<div class='warn'><code>/system_data</code> et <code>/user</code> contiennent les bases de données et les réglages de la console. Supprimer ou déplacer
+le mauvais élément peut empêcher la console de démarrer ou obliger à la reconfigurer. La suppression agit immédiatement, sans question.</div>
 
 <h3>Trier, sélectionner, afficher</h3>
 <ul>
@@ -429,8 +432,8 @@ copier, déplacer, supprimer – n’est possible que sur les <b>lecteurs</b> et
 <h3>Téléverser</h3>
 <p><b>Téléverser</b> permet de choisir un ou plusieurs fichiers ; sur un PC, vous pouvez aussi les faire glisser sur la liste. Une barre indique la
 progression de chaque fichier.</p>
-<div class='tip'>Protégé : rien n’est jamais écrasé, les liens ne sont jamais suivis, et dans le dossier de l’app
-(<code>/data/PS5-Cooling-Center</code>) seul <code>payloads</code> est modifiable – idéal pour téléverser des payloads.</div>
+<div class='tip'>Protections : rien n’est jamais écrasé (pour remplacer un fichier, supprime d’abord l’ancien puis téléverse le nouveau),
+les liens ne sont jamais suivis, un lecteur monté ne peut pas être supprimé en entier, et copier ou supprimer ne passe jamais sur un autre lecteur.</div>
 <p>Les <b>lecteurs</b> portent le même nom que sur la console : <code>usb0</code>, <code>usb1</code> … – le dossier <code>/mnt/usb0</code> est donc « usb0 ».</p>
 </section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payloads</h2></div>
 <p>Voir et arrêter les payloads en cours, lancer d’un clic ceux qui sont enregistrés – depuis <code>/data/PS5-Cooling-Center/payloads</code>

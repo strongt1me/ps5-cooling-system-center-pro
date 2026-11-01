@@ -410,9 +410,12 @@ nell'elenco dei download con «Elimina».</div>
 <li><b>Copia automaticamente i nuovi dischi:</b> il secondo interruttore crea subito l'immagine quando si inserisce un disco del genere (disattivato di serie).</li>
 <li><b>Redump:</b> se sulla console c'è <code>/data/redump.db</code>, l'immagine prende il nome dall'elenco (se l'ID titolo ne ha esattamente uno) e viene confrontata con i checksum («verificata con Redump»); altrimenti si chiama come l'ID titolo. L'elenco si crea su un PC con <code>tools/build_redump_db.py</code> del progetto ps-disc-detect (scarica i file da redump.info); può arrivare a 64 MB.</li>
 <li>Un'immagine si elimina con «Elimina» o nel gestore file.</li>
-</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>File – la gestione file</h2></div>
-<p>Visualizzare le cartelle della console e scaricare file è possibile ovunque. <b>Modificare</b> – caricare, creare una nuova cartella, rinominare,
-copiare, spostare, eliminare – è possibile solo sulle <b>unità</b> e in <code>/data</code>. In tutte le altre posizioni compare «Sola visualizzazione».</p>
+</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>File – la gestione file</h2></div><p>Sfogliare le cartelle della console e scaricare file funziona ovunque. <b>Modificare</b> – caricare, nuova cartella, rinominare,
+copiare, spostare, eliminare – funziona anch’esso <b>ovunque</b>, comprese cartelle di sistema come <code>/user</code> e la cartella dell’app.
+«Sola visualizzazione» resta solo per <code>/</code> stessa, <code>/dev</code>, <code>/proc</code> e i collegamenti. Le aree che la console monta in
+sola lettura (p. es. <code>/system</code>) rifiutano da sole la modifica; l’app mostra allora l’errore.</p>
+<div class='warn'>In <code>/system_data</code> e <code>/user</code> si trovano i database e le impostazioni della console. Eliminare o spostare la cosa
+sbagliata può impedire l’avvio della console o richiederne una nuova configurazione. L’eliminazione agisce subito, senza domande.</div>
 
 <h3>Ordinare, selezionare, visualizzare</h3>
 <ul>
@@ -431,8 +434,8 @@ copiare, spostare, eliminare – è possibile solo sulle <b>unità</b> e in <cod
 <h3>Caricare</h3>
 <p><b>Carica</b> sceglie uno o più file; sul PC puoi anche trascinarli sull'elenco. Una barra mostra
 l'avanzamento per ogni file.</p>
-<div class='tip'>Protetto: non viene mai sovrascritto nulla, i collegamenti non vengono mai seguiti e della cartella dell'app
-(<code>/data/PS5-Cooling-Center</code>) è modificabile solo <code>payloads</code> – ideale per caricare payload.</div>
+<div class='tip'>Protezioni: non viene mai sovrascritto nulla (per sostituire un file, elimina prima quello vecchio e poi carica il nuovo),
+i collegamenti non vengono mai seguiti, un’unità montata non si può eliminare per intero, e copia ed eliminazione non passano mai su un’altra unità.</div>
 <p>Le <b>unità</b> si chiamano come sulla console: <code>usb0</code>, <code>usb1</code> …; la cartella <code>/mnt/usb0</code> è quindi «usb0».</p>
 </section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payload</h2></div>
 <p>Visualizza e termina i payload in esecuzione, avvia quelli salvati con un clic – da <code>/data/PS5-Cooling-Center/payloads</code>

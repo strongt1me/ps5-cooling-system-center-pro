@@ -252,6 +252,18 @@ sh test/sim/run.sh step_t78    # eines; SIMV=1 zeigt das Protokoll, SIMTRACE=dat
 Das Modell ist nicht an einer Konsole vermessen (nur die Firmware-Kennlinie ist es); die Ergebnisse zeigen Tendenzen
 und Wechselwirkungen, keine Grade.
 
+## PS4Mount-Prüfungen
+
+`third_party/ps4mount/test/unit.c` (aus dem Quellprojekt) prüft den Port `src/ps4m_pkg|build|crypto|origin.c`: PKG-Kopf,
+Einträge, Schlüssel, `param.sfo`, Herkunftsliste. Unter WSL/Linux mit gcc und python3:
+
+```bash
+sh test/ps4m/run.sh            # baut die Vorlagen-Kopfdatei, übersetzt und meldet „157 checks, 0 failed“
+```
+
+Der Rückgabewert ist ungleich 0, sobald eine Prüfung scheitert. Bringt ein neues PS4Mount neue Prüfungen in `unit.c`,
+laufen sie hier mit.
+
 ## Host-Test
 
 > [!WARNING]

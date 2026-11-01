@@ -1,12 +1,13 @@
 /* The file manager (06.10.2026). The user chose all of it: looking and downloading, uploading and new folders,
- * copying, moving and renaming, and deleting; and where it may change things: "Laufwerke + /data" — the USB sticks
- * and discs, the M.2 drives and /data. Everything else can only be looked at.
+ * copying, moving and renaming, and deleting. Until 01.11.2026 only on the drives and in /data; since then, as the
+ * user asked, everywhere, the system folders and the app's own folder included. What the console's file systems
+ * refuse (a read-only /system, say) comes back as their error.
  *
- * What may be changed (write_root): a path strictly below /mnt/usbN, /mnt/ext0, /mnt/ext1 or /data, never the mount
- * point itself; in the app's own folder only below its "payloads" folder (that is where the Payloads page looks), so
- * the settings and logs cannot be deleted from here. A path to be changed must be plain (absolute, no "." or ".."
- * parts, no doubled slashes) and no part of it may be a link (no_links): a link in /data pointing at /system must not
- * make /system writable. Copying and deleting never follow a link and never enter another drive.
+ * What stays out of reach is only what protects against accidents (write_root, no_links, mounted_here): "/" itself,
+ * /dev and /proc, a drive's mount point (another file system than the folder it is in: deleting it would empty the
+ * drive), and any path with a link in it (a link pointing elsewhere must not carry a change there). A path to be
+ * changed must be plain (absolute, no "." or ".." parts, no doubled slashes). Copying and deleting never follow a link
+ * and never enter another drive.
  *
  * Looking is allowed everywhere: listing a folder, downloading a regular file (a device file is refused, so /dev
  * cannot be read endlessly).
@@ -59,11 +60,6 @@
 #define FM_COUNT_MAX     1000000         /* entries counted for one job */
 #define FM_BUF           (1u << 20)
 #define FM_SPACE_SPARE   (4ull << 20)    /* left free on the target beyond what is copied */
-#define APP_DIR          "/data/PS5-Cooling-Center"
-#define APP_PAYLOADS     APP_DIR "/payloads"
-#define APP_AMPREMU      APP_DIR "/AMPR_EMU"     /* the APR-EMU versions the person keeps (amprlib.c): added here from the page */
-#define APP_PLAYGO       APP_DIR "/PlayGo"       /* the same for the PlayGo stubs */
-#define APP_LZ4PROF      APP_DIR "/LZ4_Profile"  /* the packing profiles (TOML) of the LZ4 packs */
 #define UPLOAD_EXT       ".ps5cc-hochladen"
 
 enum { FM_IDLE, FM_COUNTING, FM_COPYING, FM_DELETING, FM_DONE, FM_FAILED, FM_CANCELLED };
@@ -159,20 +155,16 @@ dir_name(const char *p, char *out, size_t n) {
   else if(s) *s = 0;
 }
 
-/* The mount point below which p may be changed, or NULL. */
+/* Where the link check for p starts: the drive it is on when that is one of the known mounts (their own mount paths
+   may be links on the console), else "/". NULL when p may not be changed at all. */
 static const char *
 write_root(const char *p) {
   static const char *const fixed[] = { "/mnt/ext0", "/mnt/ext1", "/data" };
+  static const char *const never[] = { "/dev", "/proc" };
   if(!path_plain(p) || !strcmp(p, "/")) return NULL;
-  size_t al = strlen(APP_DIR);
-  if(!strncmp(p, APP_DIR, al) && (p[al] == 0 || p[al] == '/')) {
-    /* the app's own data stays closed, but for what a person puts there on purpose: payloads, APR-EMU and PlayGo versions */
-    size_t pl = strlen(APP_PAYLOADS), el = strlen(APP_AMPREMU), gl = strlen(APP_PLAYGO), ql = strlen(APP_LZ4PROF);
-    int in_payloads = strncmp(p, APP_PAYLOADS, pl) == 0 && p[pl] == '/' && p[pl + 1];
-    int in_ampremu = strncmp(p, APP_AMPREMU, el) == 0 && p[el] == '/' && p[el + 1];
-    int in_playgo = strncmp(p, APP_PLAYGO, gl) == 0 && p[gl] == '/' && p[gl + 1];
-    int in_lz4prof = strncmp(p, APP_LZ4PROF, ql) == 0 && p[ql] == '/' && p[ql + 1];
-    if(!in_payloads && !in_ampremu && !in_playgo && !in_lz4prof) return NULL;
+  for(size_t i = 0; i < sizeof(never) / sizeof(never[0]); i++) {
+    size_t l = strlen(never[i]);
+    if(!strncmp(p, never[i], l) && (p[l] == 0 || p[l] == '/')) return NULL;
   }
   for(size_t i = 0; i < sizeof(fixed) / sizeof(fixed[0]); i++) {
     size_t l = strlen(fixed[i]);
@@ -184,7 +176,7 @@ write_root(const char *p) {
     while(p[l] >= '0' && p[l] <= '9') l++;
     if(p[l] == '/' && p[l + 1]) return "/mnt/usb";
   }
-  return NULL;
+  return "/";
 }
 
 /* No part of p from the mount point on is a link (the last part may be missing: a target yet to be made). The
@@ -341,7 +333,7 @@ places_json(void) {
     add_place(arr, dr[i].label[0] ? dr[i].label : dr[i].mount, dr[i].mount, 1);
   }
   if(!have_data) add_place(arr, "Interne SSD (/data)", "/data", 1);
-  add_place(arr, "Ganzes System (nur ansehen)", "/", 0);
+  add_place(arr, "Ganzes System", "/", dir_writable("/"));
   return o;
 }
 
@@ -525,7 +517,7 @@ handle_mkdir(int fd, const ps5tm_request_t *req) {
   }
   if(!dir_writable(dir) || !writable(t)) {
     cJSON_Delete(b);
-    ps5tm_http_send_error(fd, 403, "read_only", "Hier darf nichts angelegt werden (nur auf den Laufwerken und in /data).");
+    ps5tm_http_send_error(fd, 403, "read_only", "Hier darf nichts angelegt werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).");
     return;
   }
   cJSON_Delete(b);
@@ -566,7 +558,7 @@ handle_rename(int fd, const ps5tm_request_t *req) {
   name = nm;                                        /* the body goes now; what is still needed is copied */
   cJSON_Delete(b);
   if(!ok || !writable(src) || !writable(t)) {
-    ps5tm_http_send_error(fd, 403, "read_only", "Das lässt sich hier nicht umbenennen (nur auf den Laufwerken und in /data, keine Verknüpfungen).");
+    ps5tm_http_send_error(fd, 403, "read_only", "Das lässt sich hier nicht umbenennen (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).");
     return;
   }
   /* not while the file manager or another job of the app works: renaming a folder a job reads or writes pulls it from
@@ -648,7 +640,7 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
     return;
   }
   if(!dir_writable(dir) || !writable(t)) {
-    ps5tm_http_send_error(fd, 403, "read_only", "Hierhin darf nichts geladen werden (nur auf die Laufwerke und nach /data).");
+    ps5tm_http_send_error(fd, 403, "read_only", "Hierhin darf nichts geladen werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).");
     return;
   }
   struct stat st;
@@ -1471,7 +1463,7 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
   struct stat ds;
   if(!http && (!dir_writable(a->dest) || real_path(a->dest, rd, sizeof(rd)) != 0 || stat(rd, &ds) != 0 || !S_ISDIR(ds.st_mode))) {
     http = 403;
-    snprintf(err, sizeof(err), "In diesen Ordner darf nichts %s werden (nur auf die Laufwerke und nach /data).", move ? "verschoben" : "kopiert");
+    snprintf(err, sizeof(err), "In diesen Ordner darf nichts %s werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", move ? "verschoben" : "kopiert");
   }
   uint64_t bytes = 0, files = 0;
   cJSON *conflicts = cJSON_CreateArray();
@@ -1483,7 +1475,7 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
     }
     if(S_ISLNK(ss.st_mode)) { http = 400; snprintf(err, sizeof(err), "%.300s ist eine Verknüpfung; die wird nicht kopiert.", a->src[i]); break; }
     if(move && !writable(a->src[i])) {
-      http = 403; snprintf(err, sizeof(err), "%.300s darf nicht verschoben werden (nur von den Laufwerken und aus /data).", a->src[i]); break;
+      http = 403; snprintf(err, sizeof(err), "%.300s darf nicht verschoben werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", a->src[i]); break;
     }
     if(!strncmp(a->dest, a->src[i], sl) && (a->dest[sl] == 0 || a->dest[sl] == '/')) {
       http = 400; snprintf(err, sizeof(err), "Ein Ordner kann nicht in sich selbst %s werden.", move ? "verschoben" : "kopiert"); break;
@@ -1595,7 +1587,7 @@ handle_delete_plan(int fd, const ps5tm_request_t *req) {
     struct stat st;
     if(!writable(a.src[i])) {
       http = 403;
-      snprintf(err, sizeof(err), "%.300s darf nicht gelöscht werden (nur auf den Laufwerken und in /data, keine Verknüpfungen).", a.src[i]);
+      snprintf(err, sizeof(err), "%.300s darf nicht gelöscht werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", a.src[i]);
       break;
     }
     if(real_path(a.src[i], rs, sizeof(rs)) != 0 || lstat(rs, &st) != 0) {

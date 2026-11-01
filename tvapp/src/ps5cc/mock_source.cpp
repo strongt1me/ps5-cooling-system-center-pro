@@ -1825,7 +1825,7 @@ class MockSource final : public Source
         };
         data_.fs_places = {place("usb0", "/mnt/usb0", 247.1, true),
                            place("Daten der Konsole", "/data", 612.4, true),
-                           place("Ganzes System (nur ansehen)", "/", -1, false)};
+                           place("Ganzes System", "/", -1, true)};
         const auto entry =
             [](const char *name, const char *type, double mb, int days, bool writable)
         {

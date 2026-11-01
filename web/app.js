@@ -8398,7 +8398,7 @@
     const allW = s.length && s.every((e) => e.writable);
     $("#fm-cut").disabled = !allW;
     $("#fm-del").disabled = !allW;
-    $("#fm-cut").title = allW ? "" : "Nur auf den Laufwerken und in /data";
+    $("#fm-cut").title = allW ? "" : "Geschützt: „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen";
     $("#fm-del").title = $("#fm-cut").title;
     const c = fm.clip;
     $("#fm-clipbar").hidden = !c;
@@ -8538,7 +8538,7 @@
 
   /* Hochladen: eine Datei nach der anderen, mit Fortschritt */
   const fmUpload = (files) => {
-    if (!fm.list || !fm.list.writable) { toast("Hierhin darf nichts geladen werden (nur auf die Laufwerke und nach /data).", "error"); return; }
+    if (!fm.list || !fm.list.writable) { toast("Hierhin darf nichts geladen werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", "error"); return; }
     const dir = fm.path;
     [...files].forEach((f) => fm.upQueue.push({ f, dir }));
     if (!fm.xhr) fmUpNext(0, fm.upQueue.length);
@@ -8548,7 +8548,7 @@
      laufen die Dateien durch dieselbe Warteschlange wie einzelne. Was es am Ziel schon gibt, wird übersprungen, nie
      überschrieben. items: [{ f, rel: "Ordner/unter/datei" }], dirs: leere Ordner als relative Pfade. */
   const fmUploadTree = async (items, dirs = []) => {
-    if (!fm.list || !fm.list.writable) { toast("Hierhin darf nichts geladen werden (nur auf die Laufwerke und nach /data).", "error"); return; }
+    if (!fm.list || !fm.list.writable) { toast("Hierhin darf nichts geladen werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", "error"); return; }
     const base = fm.path;
     const need = new Set(dirs.filter(Boolean));
     items.forEach(({ rel }) => {

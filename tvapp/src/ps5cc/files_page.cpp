@@ -398,7 +398,7 @@ class FilesPage final : public Page
         if (!folder_.path.empty() && !folder_.writable)
             y = note_card(
                 canvas, paint, card, y, "Nur ansehen",
-                "Hier darf nichts geändert werden. Ändern geht auf den Laufwerken und in /data.",
+                "Hier darf nichts geändert werden. Geschützt sind nur /dev, /proc, Einhängepunkte und Verknüpfungen.",
                 kWarning);
         if (!clip_paths_.empty())
             y = note_card(canvas, paint, card, y,

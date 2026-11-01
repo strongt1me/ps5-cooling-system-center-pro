@@ -531,21 +531,28 @@ Danach **Mitschnitt beenden**: Das entfernt `fakelib2` wieder. Ein Mitschnitt ze
 ## Dateien: der Dateimanager (seit 06.10.2026)
 
 Die Seite **Dateien** zeigt die Ordner der Konsole. Oben stehen die Orte (Interne SSD `/data`, jedes angeschlossene
-Laufwerk, „Ganzes System (nur ansehen)“), darunter der Pfad zum Anklicken und die Liste: Ordner zuerst, mit Größe und
+Laufwerk, „Ganzes System“), darunter der Pfad zum Anklicken und die Liste: Ordner zuerst, mit Größe und
 Datum. Ein Ordnername öffnet ihn, **↑ Hoch** geht eine Ebene zurück.
 
 **Ansehen und Herunterladen gehen überall.** Jede Datei hat **Ansehen** (Bilder und Textdateien, siehe unten) und
 **Herunterladen** (im Browser am PC; Gerätedateien wie unter `/dev` werden nicht ausgeliefert).
 
-**Ändern geht nur auf den Laufwerken und in `/data`** (USB, M.2, interne SSD): **Neuer Ordner**, **Hochladen** (eine oder
-mehrere Dateien, mit Fortschrittsbalken in Prozent; am PC auch per Ziehen auf die Liste), **Umbenennen**, **Kopieren**,
-**Ausschneiden** (Verschieben) und **Löschen**. Überall sonst steht „Nur ansehen“, und die Knöpfe sind aus. Das prüft die
-Konsole selbst, nicht nur die Seite. Zusätzlich geschützt:
+**Ändern geht überall (seit 1.75.3, vorher nur auf den Laufwerken und in `/data`):** **Neuer Ordner**, **Hochladen** (eine
+oder mehrere Dateien, mit Fortschrittsbalken in Prozent; am PC auch per Ziehen auf die Liste), **Umbenennen**,
+**Kopieren**, **Ausschneiden** (Verschieben) und **Löschen** – auch in Systemordnern wie `/user` (z. B. `/user/download`)
+und im Ordner der App `/data/PS5-Cooling-Center`. Bereiche, die die Konsole schreibgeschützt eingehängt hat (`/system`
+u. a.), lehnen eine Änderung selbst ab (Meldung „schreibgeschützt“). Das prüft die Konsole selbst, nicht nur die Seite.
+Nur zum Schutz vor Unfällen gesperrt („Nur ansehen“, Knöpfe aus):
 
-- der Ordner der App `/data/PS5-Cooling-Center` (Einstellungen, Protokolle) – nur sein Unterordner `payloads` darf
-  verändert werden, damit man Payloads für die Seite „Payloads“ hochladen kann;
-- Verknüpfungen: Sie werden nie verfolgt, wenn etwas geändert wird, und lassen sich weder umbenennen noch löschen;
-- Laufwerke, die in `/data` eingehängt sind, und die Laufwerke selbst (`/mnt/usb0`, `/data`): nur ihr Inhalt.
+- `/` selbst, `/dev` und `/proc`;
+- Verknüpfungen: Sie werden nie verfolgt, wenn etwas geändert wird, und lassen sich weder umbenennen noch löschen; liegt
+  eine Verknüpfung auf dem Weg, ist der ganze Pfad gesperrt;
+- eingehängte Laufwerke selbst (`/mnt/usb0`, `/data`): nur ihr Inhalt. Kopieren und Löschen gehen nie auf ein anderes
+  Laufwerk über.
+
+> **Vorsicht:** Unter `/system_data` und `/user` liegen Datenbanken und Einstellungen der Konsole. Wer dort das Falsche
+> löscht oder verschiebt, riskiert eine Konsole, die nicht mehr startet oder neu eingerichtet werden muss. Überschrieben
+> wird nie etwas: Eine Datei ersetzt man, indem man die alte löscht und die neue hochlädt.
 
 USB-Laufwerke heißen seit 1.75.0 überall wie auf der Konsole: `usb0`, `usb1` … (der Ordner `/mnt/usb0` ist „usb0“; vorher
 zählte die Oberfläche ab 1).
