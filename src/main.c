@@ -320,10 +320,6 @@ main(int argc, char **argv) {
   ps5tm_thermal_load();
   ps5tm_pad_load();
 
-  /* Before the fan controller starts: it needs the process to hold the fan
-     identity, and the tile installer needs a different one. */
-  ps5tm_tile_bootstrap();
-
   ps5tm_api_tile_refresh();
   /* The log already says why when the regulating thread cannot be started
      (the console is short of memory, say); what it does not do is reach a

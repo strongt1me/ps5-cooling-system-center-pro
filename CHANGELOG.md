@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.75.2
+
+### Kein Kachel-Versuch mehr beim Start
+- Die App versucht beim Start nicht mehr, die frühere Medien-Kachel (PSCC69690) anzulegen. Bis 1.75.1 tat sie das noch einmal je Version – entgegen Handbuch und LIESMICH; auf Konsolen, wo es gelang, kam die alte Kachel zurück, und der Versuch hielt die Lüfterregelung bis zu 20 s auf. `POST /api/v1/tile/ensure` legt sie auf Wunsch weiter an.
+- Entfernt: `ps5tm_tile_bootstrap()` und die Notiz `tile-auto` (wird nicht mehr gelesen oder geschrieben).
+
 ## v1.75.1
 
 ### Handbuch und FAQ auf dem Stand von 1.75

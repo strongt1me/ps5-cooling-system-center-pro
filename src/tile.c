@@ -71,22 +71,13 @@
    The real one, whatever a test does to the paths above. */
 #define PS5TM_INSTALL_DIR "/user/app/"
 
-/* Two small notes in our own folder, both about the folder way.
+/* A small note in our own folder about the folder way.
  *
  * tile-staging exists from the moment the files are written until the system
  * has taken them. While it does, the tile does not count as installed even
  * though /user/app/<id> is there — the files of a registration that failed
- * must not pass for a finished tile, or it would never be tried again.
- *
- * tile-auto says what became of the one automatic attempt at start-up:
- * "ok" (the tile was put there; if it is gone, someone removed it, so it is
- * not put back by itself) or "fail <version>" (that version tried and did not
- * get there, or never came back from the system call; a newer version tries
- * once more). It is written BEFORE the call, as "fail", so a call that never
- * returns, or a console that is switched off in the middle of it, cannot
- * repeat itself at every start. */
+ * must not pass for a finished tile, or it would never be tried again. */
 #define PS5TM_STAGING_MARK PS5TM_DATA_DIR "/tile-staging"
-#define PS5TM_AUTO_NOTE    PS5TM_DATA_DIR "/tile-auto"
 
 /* The system's answer for "this title is already registered": fine. */
 #define INST_ALREADY 0x80990002u
@@ -588,34 +579,6 @@ register_tile(const char **how, char *why, size_t why_len) {
   return rc;
 }
 
-/* The state of the one automatic attempt, see the top of the file. */
-static void
-auto_note(int ok) {
-  char text[64];
-  if(ok) snprintf(text, sizeof(text), "ok\n");
-  else   snprintf(text, sizeof(text), "fail %s\n", PS5TM_VERSION);
-  if(note_write(PS5TM_AUTO_NOTE, text) != 0)
-    PS5TM_WARN("tile_note_failed", "%s ließ sich nicht schreiben: %s",
-               PS5TM_AUTO_NOTE, strerror(errno));
-}
-
-static int
-auto_allowed(void) {
-  FILE *f = fopen(PS5TM_AUTO_NOTE, "r");
-  if(!f) return 1;
-  char line[64] = "";
-  if(!fgets(line, sizeof(line), f)) line[0] = '\0';
-  fclose(f);
-
-  if(!strncmp(line, "ok", 2)) return 0;
-  if(!strncmp(line, "fail ", 5)) {
-    char *end = strchr(line, '\n');
-    if(end) *end = '\0';
-    return strcmp(line + 5, PS5TM_VERSION) != 0;
-  }
-  return 1;
-}
-
 /* The folder way, from "nothing there" to "the system has it". Returns
    PS5TM_TILE_INSTALLING when the system took the tile, otherwise a state and a
    message that says why. */
@@ -912,12 +875,11 @@ ps5tm_tile_service(void) {
   }
   PS5TM_INFO("tile_authid", "Identität auf ShellCore umgestellt.");
 
-  auto_note(0);                 /* "fail" until the call has come back */
   char msg[256];
   ps5tm_tile_state_t st = ps5tm_tile_ensure(msg, sizeof(msg));
   /* The lock stays held through the wait below until the identity is back (review 31.10.2026): released here, another
      thread's call into the system ran under the ShellCore identity for up to 30 s. Other callers wait instead; this
-     happens once, on the first start without the tile, and the fan worker only try-locks. */
+     happens only when someone asks for the tile, and the fan worker only try-locks. */
   PS5TM_INFO("tile_result", "%s (%s)", msg, ps5tm_tile_state_name(st));
 
   if(st == PS5TM_TILE_INSTALLING) {
@@ -928,7 +890,6 @@ ps5tm_tile_service(void) {
         PS5TM_INFO("tile_installed",
                    "Kachel installiert — im Startmenü unter Medien.");
         ps5tm_notify("Startmenü-Kachel installiert.\nZu finden unter Medien.");
-        auto_note(1);
         appeared = 1;
         break;
       }
@@ -951,86 +912,5 @@ ps5tm_tile_service(void) {
                "kann gestört sein.");
   else
     PS5TM_INFO("tile_authid_back", "Identität zurückgestellt.");
-  ps5tm_sony_api_unlock();
-}
-
-
-/* Runs once at start-up, before the fan controller claims its own identity.
- *
- * Does nothing at all when the tile is already there, which is the normal
- * case from the second run onwards — no unpacking, no service call, no delay.
- *
- * When it is not, the tile is put there once, by itself: that is what makes
- * sending this one ELF enough. Once — see tile-auto at the top of the file —
- * because a person who deletes the tile from the home screen did that on
- * purpose, and a tile that comes back at every start would be a nuisance.
- * Since the FAKE86921/FAKE86922 tiles it is not needed any more, so neither
- * page offers to put it back (POST /api/v1/tile/ensure still can). */
-void
-ps5tm_tile_bootstrap(void) {
-  if(tile_installed()) {
-    PS5TM_INFO("tile_present",
-               "Startmenü-Kachel ist vorhanden (%s) – nichts zu tun.",
-               PS5TM_TITLE_ID);
-    return;
-  }
-
-  if(ps5tm_tile_file_count == 0 && ps5tm_tile_pkg_len == 0) {
-    PS5TM_INFO("tile_absent",
-               "Keine Kachel installiert und in dieser Fassung weder Dateien "
-               "noch Paket eingebaut.");
-    return;
-  }
-
-  if(!auto_allowed()) {
-    PS5TM_INFO("tile_auto_skipped",
-               "Die Startmenü-Kachel fehlt. Sie wird nicht von allein neu "
-               "angelegt, weil sie schon einmal da war oder der Versuch dieser "
-               "Version nicht gelang.");
-    return;
-  }
-
-  /* Installing needs ShellCore's identity; the fan needs a different one.
-     Take the installer's now and hand it back before anything touches the
-     fan, so a failure here cannot leave the process wrongly identified. */
-  ps5tm_sony_api_lock();
-  if(ps5tm_platform_escalate_as(PS5TM_AUTHID_SHELLCORE) != 0) {
-    ps5tm_sony_api_unlock();
-    PS5TM_WARN("tile_authid_failed",
-               "Konnte die Installations-Identität nicht setzen – Kachel "
-               "wird übersprungen.");
-    ps5tm_platform_escalate();
-    return;
-  }
-
-  auto_note(0);                 /* "fail" until the call has come back */
-  char msg[256];
-  ps5tm_tile_state_t state = ps5tm_tile_ensure(msg, sizeof(msg));
-  /* The lock stays held until the identity is back (review 31.10.2026), as in ps5tm_tile_service. */
-
-  if(state == PS5TM_TILE_INSTALLING) {
-    /* Wait for the tile to appear, but not for long: the fan is unregulated
-       until this returns, and that matters more than a home-screen icon. */
-    for(int i = 0; i < 20; i++) {
-      sleep(1);
-      if(tile_installed()) {
-        PS5TM_INFO("tile_installed", "Kachel wurde installiert.");
-        ps5tm_notify("Startmenü-Kachel installiert.\nZu finden unter Medien.");
-        auto_note(1);
-        break;
-      }
-    }
-    if(!tile_installed())
-      PS5TM_INFO("tile_install_pending",
-                 "Kachel-Installation läuft im Hintergrund weiter.");
-  } else if(state != PS5TM_TILE_INSTALLED) {
-    PS5TM_WARN("tile_install_skipped", "%s", msg);
-  }
-
-  /* Back to the identity everything after this point depends on. */
-  if(ps5tm_platform_escalate() != 0)
-    PS5TM_WARN("tile_authid_restore_failed",
-               "Rücksetzen der Rechte nach der Kachel-Installation "
-               "fehlgeschlagen – die Lüftersteuerung kann gestört sein.");
   ps5tm_sony_api_unlock();
 }

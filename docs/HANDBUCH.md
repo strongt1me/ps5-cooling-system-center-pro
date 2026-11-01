@@ -1446,8 +1446,9 @@ installiert, ohne sie vorher auf ein Laufwerk der Konsole zu kopieren. Datei wä
 
 ## Homescreen-Kachel (veraltet)
 
-> **Nicht mehr in Gebrauch:** Seit 1.74.1 legt die App diese Kachel nicht mehr an, und die Oberfläche bietet „Kachel
-> installieren“ nicht mehr an. Ihre Aufgabe übernehmen `FAKE86921` und `FAKE86922` (nächster Abschnitt), die die App
+> **Nicht mehr in Gebrauch:** Die Oberfläche bietet „Kachel installieren“ seit 1.74.1 nicht mehr an, und seit 1.75.2
+> versucht die App auch beim Start nicht mehr, die Kachel anzulegen (bis 1.75.1 tat sie das noch einmal je Version). Nur
+> `POST /api/v1/tile/ensure` legt sie auf Wunsch noch an; die Notiz `tile-auto` im Datenordner wird nicht mehr gelesen. Ihre Aufgabe übernehmen `FAKE86921` und `FAKE86922` (nächster Abschnitt), die die App
 > selbst starten. Der Abschnitt bleibt als Beschreibung der früheren Technik stehen.
 
 Die Kachel (Title-ID `PSCC69690`, Bereich **Medien**) enthält selbst kein

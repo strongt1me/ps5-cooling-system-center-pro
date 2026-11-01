@@ -32,7 +32,7 @@ int ps5tm_thread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*s
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.75.1"
+#define PS5TM_VERSION        "1.75.2"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -1814,7 +1814,6 @@ ps5tm_tile_state_t ps5tm_tile_ensure(char *msg, size_t msg_len);
 
 /* Start-up hook: installs the built-in tile package if — and only if — no
    tile is present yet. Returns with the fan identity restored. */
-void ps5tm_tile_bootstrap(void);
 /* sceAppInstUtilInitialize on a thread of its own, waited for at most 10 s (it can block for good while the installer service
    is not up): 0 or a Sony code, -0xDEAD when it timed out, -0xBADD when the firmware lacks the calls (tile.c). */
 int  ps5tm_appinst_init(void);
