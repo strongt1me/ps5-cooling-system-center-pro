@@ -7,7 +7,7 @@
  * Welche Sprache: die gemerkte Wahl (localStorage "lang"); beim ersten Besuch die Sprache des Browsers, wenn die App sie
  * hat, sonst Englisch. Deutsch ist die Sprache der Quelltexte und braucht kein Wörterbuch. */
 (function () {
-  var LOCALES = { de: "de-DE", en: "en-GB", it: "it-IT", es: "es-ES", fr: "fr-FR", ru: "ru-RU" };
+  var LOCALES = { de: "de-DE", en: "en-GB", it: "it-IT", es: "es-ES", fr: "fr-FR", ru: "ru-RU", sv: "sv-SE" };
   var lang = "";
   try { lang = localStorage.getItem("lang") || ""; } catch (e) { /* ohne Speicher: Browsersprache */ }
   if (!LOCALES[lang]) {
