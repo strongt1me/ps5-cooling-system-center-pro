@@ -96,7 +96,7 @@ background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0f
 .langs{display:inline-flex;flex-wrap:wrap;gap:6px;margin:0 0 10px 10px;vertical-align:top}
 .langs a{padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#aebbd4;text-decoration:none;font-size:14px}
 .langs a:hover{border-color:rgba(59,130,246,.6);color:#fff}.langs a.on{background:rgba(59,130,246,.22);color:#fff;border-color:rgba(59,130,246,.55)}
-.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.75.0</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#apr'>AMPR index, APR-EMU, PlayGo and history</a></li><li><a href='#assetpacks'>LZ4 asset packs: step by step</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#disc'>Disc in the drive</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
+.cover{min-height:0;padding:28px 0 12px}</style></head><body><div class='wrap'><a class='back' href='/'>← Back to the app</a><span class='langs'><a href='/handbuch.html'>Deutsch</a><a href='/handbuch.en.html' class='on'>English</a><a href='/handbuch.it.html'>Italiano</a><a href='/handbuch.es.html'>Español</a><a href='/handbuch.fr.html'>Français</a><a href='/handbuch.ru.html'>Русский</a></span><header class='cover'><img class='mark' src='/img/app-mark.png' alt=''><div class='kicker'>User manual · PS5 homebrew</div><h1>PS5 Cooling &amp; System Center – Pro</h1><p class='lead'>Quiet fan control, games, packages, saved data, file manager and system – all in the browser, right on the PS5.</p><div class='badges'><span class='badge'>Version 1.75.1</span><span class='badge'>Tested on firmware 12.00</span><span class='badge'>PS5 Pro CFI-7021</span><span class='badge'>English</span></div><div class='psrow'><span class='tri'>△</span><span class='cir'>○</span><span class='crs'>✕</span><span class='sqr'>□</span></div></header><nav class='toc'><h2>Contents</h2><ol><li><a href='#start'>Welcome</a></li><li><a href='#voraussetzungen'>Requirements</a></li><li><a href='#installation'>Installation &amp; first start</a></li><li><a href='#oberflaeche'>The interface at a glance</a></li><li><a href='#vollbild'>The fullscreen app</a></li><li><a href='#kuehlung'>Cooling</a></li><li><a href='#spiele'>Games</a></li><li><a href='#apr'>AMPR index, APR-EMU, PlayGo and history</a></li><li><a href='#assetpacks'>LZ4 asset packs: step by step</a></li><li><a href='#loeschen'>Deleting games &amp; backups</a></li><li><a href='#spielzeit'>Play time</a></li><li><a href='#spielstaende'>Back up saved data</a></li><li><a href='#pakete'>Packages</a></li><li><a href='#disc'>Disc in the drive</a></li><li><a href='#dateien'>Files – the file manager</a></li><li><a href='#payloads'>Payloads</a></li><li><a href='#profil'>Profile</a></li><li><a href='#system'>System &amp; log</a></li><li><a href='#credits'>Credits</a></li><li><a href='#sicherheit'>Security on the home network</a></li><li><a href='#hilfe'>If something does not work</a></li></ol></nav><section class='ch' id='start'><div class='ch-head'><div class='ch-num'>1</div><h2>Welcome</h2></div>
 <p><b>PS5 Cooling &amp; System Center - Pro</b> is a homebrew program (ELF) for a jailbroken PS5. It controls the
 fan according to a calm, freely adjustable target temperature and comes with a web interface that you open from any device on your
 home network: phone, tablet, PC or the console's own browser. On top of that come game management, packages,
@@ -118,24 +118,21 @@ web interface work, but fan control then reports “not available”.</li>
 </ul>
 </section><section class='ch' id='installation'><div class='ch-head'><div class='ch-num'>3</div><h2>Installation &amp; first start</h2></div>
 <ol class='steps'>
-<li>Send <code>PS5_Cooling_System_Center_v1.75.0.elf</code> to the console, port <code>9021</code>, e.g.:<br>
-<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.75.0.elf</code></li>
+<li>Send <code>PS5_Cooling_System_Center_v1.75.1.elf</code> to the console, port <code>9021</code>, e.g.:<br>
+<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v1.75.1.elf</code></li>
 <li>A notification with the address of the web interface appears at the top left of the TV.</li>
 <li>Open it in the browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>
 </ol>
-<h3>The tile on the Home screen</h3>
-<p>On the first start, the app itself creates a tile under “Media”. It <b>only opens the web interface</b> – it
-does not start the program. So after every restart of the console, the ELF has to be sent once again.</p>
-<div class='warn'>Only ever run <b>one</b> instance. Two instances control the fan at the same time and interfere with each other.
-You can stop an old instance on the “Payloads” page; otherwise a restart helps.</div>
-<div class='tip'>Since the tiles FAKE86921 (full screen) and FAKE86922 (browser) this tile is no longer needed. Once deleted, it is not created again.</div>
-<h3>The starter tile: starting without sending</h3>
-<p>With the starter tile the ELF no longer has to be sent. Unpack <code>FAKE86921.zip</code> from the release and copy the folder <code>FAKE86921</code> to <code>/data/homebrew/</code> (over FTP or with the file manager). ShadowMountPlus adds a tile for it.</p>
+<h3>The tiles</h3>
+<p>The release contains two tiles. Copy the folder from the zip to <code>/data/homebrew/</code> (by FTP or with the file manager); ShadowMountPlus then adds the tile.</p>
 <ul>
-<li>One tap on the tile starts the app if it is not running yet and then opens the web interface in the console's browser. If the app is already running, it only opens the interface.</li>
-<li>The app is part of the tile's <code>eboot.bin</code>. After an update, copy the folder from the new release, otherwise the tile starts the old version.</li>
-<li>ShadowMountPlus is needed for it. The old media tile (above) may stay or be deleted.</li>
+<li><b>FAKE86921 – Fullscreen:</b> starts the app if it is not running yet and shows it fullscreen with the controller (see “The fullscreen app”).</li>
+<li><b>FAKE86922 – Browser:</b> starts the app as well and opens the web interface in the console's browser.</li>
+<li>Both carry the app in their <code>eboot.bin</code>. After an update, copy the folders from the new release, otherwise the old version starts. With a tile you no longer need to send the ELF after a restart.</li>
 </ul>
+<div class='warn'>Only ever run <b>one</b> instance. Two instances control the fan at the same time and get in each other's way.
+Stop an old instance on the “Payloads” page, otherwise a restart helps.</div>
+<div class='tip'>The former media tile (PSCC69690) is no longer needed and no longer created; a deleted one does not come back.</div>
 <!--starter--></section><section class='ch' id='oberflaeche'><div class='ch-head'><div class='ch-num'>4</div><h2>The interface at a glance</h2></div>
 <p>On the left is the sidebar with the sections <b>Profile, Games, Files, Payloads, Cooling, System, Log</b> and
 <b>Credits</b>. At the top in the header, on every page: the <b>power options</b>, “Fullscreen”, “Expert mode” and the
@@ -157,7 +154,27 @@ screenshots, so that the app stays small).</p>
 then only scrolls the window itself.</p>
 <h3>Controller keys</h3>
 <p>In the console's browser four buttons help: <b>L1</b> and <b>R1</b> go to the previous and next page of the sidebar, <b>L2</b> and <b>R2</b> scroll the page up and down. The browser reports them to the page as the keys F5 to F8; they do not reload the page.</p>
-<!--keys--></section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>5</div><h2>Cooling</h2></div>
+<!--keys--></section><section class='ch' id='vollbild'><div class='ch-head'><div class='ch-num'>5</div><h2>The fullscreen app</h2></div>
+<p>The tile <b>FAKE86921</b> shows the app fullscreen on the TV, operated with the controller – no browser at all. It can do almost everything the web interface can; both work with the same running app.</p>
+<h3>Buttons</h3>
+<ul>
+<li><b>Touchpad button:</b> opens the sidebar with Cooling, Games, File manager, Payloads, System, Profile and Log.</li>
+<li><b>L1 / R1:</b> previous and next area. <b>L2 / R2:</b> the sub-tabs (e.g. Games → Library, Playtime, Packages …).</li>
+<li><b>D-pad:</b> select and change values. <b>Cross button:</b> start or confirm, <b>Circle button:</b> back.</li>
+<li><b>Square button:</b> actions for the selection (e.g. copy a game, delete a payload, edit a profile), <b>Triangle button:</b> details or “More”.</li>
+<li><b>Options button:</b> menu with “Open web interface in the browser”, “Reload”, “Quit app” and the power options.</li>
+</ul>
+<p>The bar at the bottom always shows what the buttons do right now. Delete, quit and cancel act on the first press – there are no confirmation questions.</p>
+<h3>Areas</h3>
+<ul>
+<li><b>Cooling:</b> overview with the target temperature; settings with operating mode, safety limit, warnings, light bar, game profiles, night mode and fan self-test.</li>
+<li><b>Games:</b> library with an actions menu (copy, convert, move, unpack, check image, delete, extras, unmount and mount, quit the running game), playtime, saves, packages (install, queue, split), PS4 from USB, disc, backups and jobs.</li>
+<li><b>File manager</b>, <b>Payloads</b> (own, already loaded, store, profiles), <b>System</b> (console, storage, cooling health, extra probes, expert), <b>Profile</b> (name, profile picture, thanks) and <b>Log</b> (app log, kernel log live, saved).</li>
+</ul>
+<h3>What stays in the browser</h3>
+<p>Uploading files from a PC, downloading files, saving or loading profiles as a file and opening links only work in the web interface. Under System the fullscreen app shows a QR code with its address.</p>
+<div class='tip'>You enter text with the on-screen keyboard; a page of its own has ä, ö, ü and ß. Every area can have its own background picture (System → Storage → Background pictures).</div>
+</section><section class='ch' id='kuehlung'><div class='ch-head'><div class='ch-num'>6</div><h2>Cooling</h2></div>
 <p>The most important page: the status in plain words, the current temperature, the fan and the running game. Right below, you set
 the <b>Target temperature</b> and the <b>Operating mode</b>.</p>
 
@@ -197,7 +214,10 @@ the test only runs when the console is cool.</p>
 operation and shows it in the fan diagnosis; the target/actual deviation is calculated with it.</p>
 <h3>Display via the mute button</h3>
 <p>Press the controller's mute button <b>twice quickly</b>: the processor temperature and fan speed appear at the top left (without a sound) – even without the web interface. The microphone is toggled twice in the process and ends up as it was before.</p>
-<p>The <b>fan</b> is a drawn <b>speedometer</b>: the needle shows the measured value from left (0 %) to right (100 %) and moves smoothly to every new reading; the rainbow arc lights up only as far as the needle. Needle, number and glowing edge go from blue through green and yellow to red (grey without a reading).</p></section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>6</div><h2>Games</h2></div>
+<p>The <b>fan</b> is a drawn <b>speedometer</b>: the needle shows the measured value from left (0 %) to right (100 %) and moves smoothly to every new reading; the rainbow arc lights up only as far as the needle. Needle, number and glowing edge go from blue through green and yellow to red (grey without a reading).</p>
+<h3>Fan guard</h3>
+<p>A second, independent part of the app looks at the temperatures itself every second. If the regulation stays silent for 20 seconds, it hands the fan back to the console – if it is hot, it sets full cooling. If the temperature stays 10 seconds above the safety limit plus 6 °C while the fan is not at full speed, it holds full cooling until it is 8 °C cooler again. If the app crashes, the console gets the fan back. While it steps in, the Cooling page shows “Guard”, and a fixed threshold set by hand is refused.</p>
+</section><section class='ch' id='spiele'><div class='ch-head'><div class='ch-num'>7</div><h2>Games</h2></div>
 <p>The games on your Home screen with cover, format and actions. You can search by title, title ID or content ID;
 filter by PS5, PS4 or “Backport · AMPR · PlayGo”; and sort by Home screen order, name, play time, size and more.</p>
 
@@ -243,7 +263,7 @@ and verified; nothing is overwritten.</p>
 </ul>
 <!--p4m-->
 <p><b>Before packing to ffpfsc:</b> the console has to unpack a compressed file over and over while playing, so games with a great deal of data or texture streaming can stutter. Before the app converts a game (dump folder, <code>.exfat</code>, <code>.ffpkg</code> or <code>.ffpfs</code>) to <code>.ffpfsc</code> it looks: from about 40 GB of data, with large streaming containers (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB together or more) or with a streaming folder (2 GB or more) the window shows a note next to “ffpfsc”. There is no second question: “Start” converts. This is an estimate from file names and sizes, not from the game engine.</p>
-</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>7</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
+</section><section class='ch' id='apr'><div class='ch-head'><div class='ch-num'>8</div><h2>AMPR index, APR-EMU, PlayGo and history</h2></div>
 <p>Every game card has the button <b>LZ4 asset packs …</b> under <b>Convert</b>. It opens a window with tools around APR-EMU. For now it holds the <b>AMPR index</b>.</p>
 <ul>
 <li>The <b>AMPR index</b> (<code>ampr_emu.index</code>) is the list of all of the game's files that APR-EMU needs to find them. The window shows whether there is one and how many files it knows.</li>
@@ -288,7 +308,7 @@ and verified; nothing is overwritten.</p>
 <li>If a library lacks the execute permission (the app created them like that until 13 Oct 2026), “Update” sets it. Without it the console does not load it (“mount flag / attribute error”).</li>
 <li>If the game has a <code>fakelib2</code> or ShadowMountPlus reads a backport folder, the app changes nothing.</li>
 </ul>
-<!--tp--></section><section class='ch' id='assetpacks'><div class='ch-head'><div class='ch-num'>8</div><h2>LZ4 asset packs: step by step</h2></div><p>An <b>asset pack</b> is a few files (<code>ampr_assets-000.pak</code> and more, plus <code>ampr_assets.index</code>). The app packs a game's data into them and shrinks it with LZ4. APR-EMU reads them while you play and unpacks each block only when the game needs it. According to the developer (drakmor, <i>ampr_emu</i>) this halves the space and often loads 30 to 40 percent faster. Version 0.4.2.1 is expressly a test version: <b>not every game tolerates it.</b></p>
+<!--tp--></section><section class='ch' id='assetpacks'><div class='ch-head'><div class='ch-num'>9</div><h2>LZ4 asset packs: step by step</h2></div><p>An <b>asset pack</b> is a few files (<code>ampr_assets-000.pak</code> and more, plus <code>ampr_assets.index</code>). The app packs a game's data into them and shrinks it with LZ4. APR-EMU reads them while you play and unpacks each block only when the game needs it. According to the developer (drakmor, <i>ampr_emu</i>) this halves the space and often loads 30 to 40 percent faster. Version 0.4.2.1 is expressly a test version: <b>not every game tolerates it.</b></p>
 <h3>What you need</h3>
 <ul>
 <li>The game is a <b>folder</b>. Turn an image into a folder first with <b>Unpack to a folder</b>.</li>
@@ -337,7 +357,7 @@ and verified; nothing is overwritten.</p>
 <li>Models and rules: drakmor/ampr_emu (docs/ASSET_PACK_WORKFLOW_EN.md, GPL-3.0), theghostonline/PS5-LZ4-Compression and danthespal/MkPFS.CSharp. From LZ4 Compression 1.4.3 to 1.5.0 (Husam Osman, GPL-3.0) come the list of files that must stay loose, the permissions 0777, the repair during the check and the choice of tested profiles; rebuilt, not copied.</li>
 <li>Ideas and knowledge: exFAT2AMPR by V-10 (<a href="https://github.com/exFAT2AMPR/exfat2ampr">GitHub</a>, GPL-3.0 with additional terms, “Made by V-10”): the list that “Automatic” leaves loose, the recording for profile creation (its structure and constants follow his port of <code>ampr_pack_profile.py</code>) and the upkeep of the game plugins with their table of checksums.</li>
 </ul>
-<!--tp--></section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>9</div><h2>Deleting games &amp; backups</h2></div>
+<!--tp--></section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Deleting games &amp; backups</h2></div>
 <p>Every game card has <b>Delete</b>, and so does every entry in the <b>Backups</b> tab.</p>
 <ul>
 <li><b>Installed games</b> are uninstalled by the console itself – as with “Delete” in the menu, including updates and add-ons.</li>
@@ -352,11 +372,11 @@ and verified; nothing is overwritten.</p>
 <div class='tip'>Your <b>saved data is always kept</b>. A running game is never deleted.</div>
 <p>Only what really lies inside the game folder or image is deleted: if the path is behind a link or is a mounted drive, the app deletes nothing and says so.</p>
 
-</section><section class='ch' id='spielzeit'><div class='ch-head'><div class='ch-num'>10</div><h2>Play time</h2></div>
+</section><section class='ch' id='spielzeit'><div class='ch-head'><div class='ch-num'>11</div><h2>Play time</h2></div>
 <p>When you played, for how long and how warm the console got: totals for today, 7 and 30 days, the last 14 days
 as bars, the most played games and the recent sessions with peak temperatures. Can be saved as a spreadsheet (CSV).</p>
 
-</section><section class='ch' id='spielstaende'><div class='ch-head'><div class='ch-num'>11</div><h2>Back up saved data</h2></div>
+</section><section class='ch' id='spielstaende'><div class='ch-head'><div class='ch-num'>12</div><h2>Back up saved data</h2></div>
 <p>Copies the saved data as the console stores it – encrypted, without opening or changing anything – to a
 USB stick, a disk or the internal SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datum&gt;</code>). Every file is verified;
 “Verify” reads a backup again later.</p>
@@ -366,7 +386,7 @@ verifies them and only then replaces the old ones.</p>
 console cannot be restored.</div>
 <p>Per user, split into PS5 games and PS4 games. Apps such as YouTube are not listed: the app changes nothing there – it does not back up, restore or delete anything of theirs. “Delete” removes the saved games of one title at once; the app first backs up the current state to the chosen drive (otherwise the first suitable one) and lets you put it back. If there is no drive at all, a note says that it is deleted without a backup.</p>
 
-</section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>12</div><h2>Packages</h2></div>
+</section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>13</div><h2>Packages</h2></div>
 <p>Finds <code>.pkg</code> files on USB drives, disks and in console storage (folder <code>pkg</code>) and shows the picture,
 name, title ID, version, type and size.</p>
 <ul>
@@ -379,7 +399,7 @@ Beforehand, a plan lists what could get in the way.</li>
 <div class='info'>An aborted installation attempt can leave space reserved. You free it again on the console, in the
 download list, with “Delete”.</div>
 
-</section><section class='ch' id='disc'><div class='ch-head'><div class='ch-num'>13</div><h2>Disc in the drive</h2></div>
+</section><section class='ch' id='disc'><div class='ch-head'><div class='ch-num'>14</div><h2>Disc in the drive</h2></div>
 <p>The <b>Disc</b> tab on the Games page shows which disc is in the drive and, on request, makes an image (ISO) of a PS2 DVD or a PS3 disc. It is based on ps-disc-detect (GPL-3.0), whose approach the app has rewritten.</p>
 <p>If the console has no drive (a Digital Edition, a Pro without an attached drive), there is no “Disc” tab. The app checks whether one is there even with the watching off, without sending the drive any command.</p>
 <ul>
@@ -389,7 +409,7 @@ download list, with “Delete”.</div>
 <li><b>Copy new discs automatically:</b> the second switch makes the image right away when such a disc is inserted (off by default).</li>
 <li><b>Redump:</b> if <code>/data/redump.db</code> is on the console, the image gets its name from the list (when the title ID has exactly one) and is compared with the checksums (“checked against Redump”); otherwise it is named like the title ID. Build the list on a PC with <code>tools/build_redump_db.py</code> from the ps-disc-detect project (it downloads the files from redump.info); it may be up to 64 MB.</li>
 <li>Delete an image with “Delete” or in the file manager.</li>
-</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>14</div><h2>Files – the file manager</h2></div>
+</ul></section><section class='ch' id='dateien'><div class='ch-head'><div class='ch-num'>15</div><h2>Files – the file manager</h2></div>
 <p>Viewing the console's folders and downloading files works everywhere. <b>Changing</b> – uploading, new folder, renaming,
 copying, moving, deleting – only works on the <b>drives</b> and in <code>/data</code>. Everywhere else it says “View only”.</p>
 
@@ -412,7 +432,8 @@ copying, moving, deleting – only works on the <b>drives</b> and in <code>/data
 progress per file.</p>
 <div class='tip'>Protected: nothing is ever overwritten, links are never followed, and in the app's folder
 (<code>/data/PS5-Cooling-Center</code>) only <code>payloads</code> can be changed – ideal for uploading payloads.</div>
-</section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>15</div><h2>Payloads</h2></div>
+<p><b>Drives</b> are named as on the console: <code>usb0</code>, <code>usb1</code> … – the folder <code>/mnt/usb0</code> is “usb0”.</p>
+</section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payloads</h2></div>
 <p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>
 or from the USB stick (root or folder <code>payloads</code>). They are started via the console's payload loader
 (port 9021).</p>
@@ -420,10 +441,14 @@ or from the USB stick (root or folder <code>payloads</code>). They are started v
 <p><b>Download payloads:</b> the same list as in itsPLK's Payload Manager (updated every day, currently 28 payloads), with search and categories. “Load list” fetches it once from GitHub; after that it is refreshed at most every three hours when the page is opened. “Download” puts the file into the payload folder, but only after its SHA-256 checksum matches the list. If the list has a newer version, the card shows “old → new” and “Update”. “Delete” only removes what the app downloaded itself; a foreign file of the same name is replaced only after a second click.</p>
 
 <p>Files ending in <code>.elf</code> and <code>.bin</code> (etaHEN) count as payloads; both can be started and used in profiles, with the same check of the content.</p>
-</section><section class='ch' id='profil'><div class='ch-head'><div class='ch-num'>16</div><h2>Profile</h2></div>
-<p>Change the console's display name and choose a profile picture – your own or one of the 30 built-in ones.</p>
+</section><section class='ch' id='profil'><div class='ch-head'><div class='ch-num'>17</div><h2>Profile</h2></div>
+<p>Change the console's display name and choose a profile picture – one of the 30 built-in ones or your own. Name and picture appear on the home screen after switching users; “Restore previous” brings back the picture before.</p>
+<ul>
+<li><b>Web interface:</b> choose your own picture on the phone or PC, “Crop” or “Fit”, then “Apply profile picture”.</li>
+<li><b>Fullscreen app:</b> put your own pictures (JPG or PNG up to 16 MB) into the folder <code>/data/PS5-Cooling-Center/Profilbilder</code> – the app creates it at start – or on a USB stick, in the root or in a folder <code>Profilbilder</code>. They appear first in the grid, marked “EIGENES”. The cross button applies a picture, the square button brings back the previous one, the triangle button changes the name.</li>
+</ul>
 
-</section><section class='ch' id='system'><div class='ch-head'><div class='ch-num'>17</div><h2>System &amp; log</h2></div>
+</section><section class='ch' id='system'><div class='ch-head'><div class='ch-num'>18</div><h2>System &amp; log</h2></div>
 <p><b>System</b> shows the console, firmware, uptime, the storage of all drives, network, display and the
 cooling performance over the weeks; this is also where you reinstall the tile.</p>
 <ul>
@@ -434,11 +459,11 @@ cooling performance over the weeks; this is also where you reinstall the tile.</
 <p><b>Log</b> lists every measurement, control action and message of the app (exportable). The <b>Live kernel log</b> tab shows
 the console's log as it is written – with filter, pause, save, download and recording.</p>
 
-</section><section class='ch' id='credits'><div class='ch-head'><div class='ch-num'>18</div><h2>Credits</h2></div>
+</section><section class='ch' id='credits'><div class='ch-head'><div class='ch-num'>19</div><h2>Credits</h2></div>
 <p>The page thanks the developers whose work is in the app, and other well-known developers of the community – with
 profile picture, name and links. The links can only be clicked if the browser has internet access.</p>
 
-</section><section class='ch' id='sicherheit'><div class='ch-head'><div class='ch-num'>19</div><h2>Security on the home network</h2></div>
+</section><section class='ch' id='sicherheit'><div class='ch-head'><div class='ch-num'>20</div><h2>Security on the home network</h2></div>
 <ul>
 <li>The interface has <b>no login</b>: every device on the home network can read and change things.</li>
 <li>The console does not belong on the open internet – <b>do not set up port forwarding</b> to port 8086.</li>
@@ -446,7 +471,7 @@ profile picture, name and links. The links can only be clicked if the browser ha
 <li>The app refuses requests that recognisably come from outside websites (error 403).</li>
 <li><b>ShadowMountPlus</b> accepts requests from the whole home network by default since 1.7beta8 (port 10101, also without a login). If you don't want that, set <code>api_bind_address=127.0.0.1</code> in its <code>config.ini</code>; the app talks to ShadowMountPlus over <code>127.0.0.1</code> anyway.</li>
 </ul>
-</section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>20</div><h2>If something does not work</h2></div>
+</section><section class='ch' id='hilfe'><div class='ch-head'><div class='ch-num'>21</div><h2>If something does not work</h2></div>
 <table>
 <tr><th>Problem</th><th>Solution</th></tr>
 <tr><td>Web interface not reachable</td><td>Send the ELF again (port 9021); only one instance; check the address <code>http://&lt;PS5-IP&gt;:8086/</code>.</td></tr>
@@ -458,4 +483,4 @@ profile picture, name and links. The links can only be clicked if the browser ha
 </table>
 <p>More answers are in the <b>FAQ</b>.</p>
 <p><b>Page not reachable after a network change?</b> When Wi-Fi is switched off and on or the cable is pulled, the console sometimes ends the web interface's access although the app keeps running (and so does the fan control). The app checks this every ten seconds, reopens the access by itself and says so in the log (“web interface … reopened”). After a few seconds the page loads again; the ELF does not have to be sent again.</p>
-</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.75.0 · As of 7 October 2026 · Not an official product; “PlayStation” and “PS5” are trademarks of their respective owners. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.75.1 · As of 7 October 2026 · Not an official product; “PlayStation” and “PS5” are trademarks of their respective owners. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>

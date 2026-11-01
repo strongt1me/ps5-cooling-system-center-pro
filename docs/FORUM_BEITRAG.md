@@ -72,7 +72,7 @@ Ordner der ganzen Konsole ansehen und Dateien herunterladen. Auf den Laufwerken 
 ### Profil, System, Kopfzeile, Kachel
 
 - **Profil:** Anzeigename ändern, Profilbild aus **30 eingebauten Bildern** oder eigener Datei, mit Sicherung des alten Bildes.
-- **System:** Modell, Firmware, Laufzeit, Speicher, Netzwerk, Diagnose, Kachel installieren, Anzeige auf dem Fernseher.
+- **System:** Modell, Firmware, Laufzeit, Speicher, Netzwerk, Diagnose, Anzeige auf dem Fernseher.
 - **Power-Optionen** in der Kopfzeile jeder Seite: Ruhemodus, Neu starten, Ausschalten, Abgesicherter Modus (jeweils zwei Klicks). Dazu Vollbild und Expertenmodus.
 - **Startmenü-Kachel**, die die App beim ersten Start selbst anlegt (kein Installer nötig).
 - **Credits-Seite** mit allen Entwicklern, deren Arbeit in der App steckt.

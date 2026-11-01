@@ -547,6 +547,9 @@ Konsole selbst, nicht nur die Seite. Zusätzlich geschützt:
 - Verknüpfungen: Sie werden nie verfolgt, wenn etwas geändert wird, und lassen sich weder umbenennen noch löschen;
 - Laufwerke, die in `/data` eingehängt sind, und die Laufwerke selbst (`/mnt/usb0`, `/data`): nur ihr Inhalt.
 
+USB-Laufwerke heißen seit 1.75.0 überall wie auf der Konsole: `usb0`, `usb1` … (der Ordner `/mnt/usb0` ist „usb0“; vorher
+zählte die Oberfläche ab 1).
+
 **Ordnen, auswählen, ansehen (seit 07.10.2026):**
 
 - **Sortieren:** Über der Liste stehen „Name“, „Größe“ und „Datum“; der Pfeil daneben kehrt die Richtung um. Ordner stehen
@@ -1325,6 +1328,19 @@ läuft hier die Automatik, setzt die App ihre Schwelle innerhalb von höchstens 
 vermerkt es als Überschreibung); SMPs Wert hält dann nur kurz. Wer SMPs Wert will, lässt die Automatik aus (Betriebsart
 „Beobachten“, dort gilt eine feste Schwelle bis 91 °C) oder lässt SMP auf `system`.
 
+## Lüfterwächter (seit 1.75.0)
+
+`src/fanguard.c` ist ein eigener Faden, unabhängig von der Regelung; er liest die Temperaturen jede Sekunde selbst.
+
+- **Totmann:** Meldet sich die Regelung 20 Sekunden nicht, gibt er den Lüfter an die Konsole zurück – ist es heiß, stellt
+  er volle Kühlung.
+- **Übertemperatur:** Bleibt die Temperatur 10 Sekunden über der Sicherheitsgrenze + 6 °C, obwohl der Lüfter nicht nahe
+  am Maximum läuft, hält er volle Kühlung, bis es 8 °C kühler ist.
+- **Absturz:** Signal-Behandlung auf eigenem Stapel (jeder Faden bekommt 32 KiB `sigaltstack`); die Konsole bekommt den
+  Lüfter zurück.
+- Solange er hält, zeigt der Status „Wächter“, eine feste Schwelle von Hand wird mit `409 fanguard_holding` abgelehnt; die
+  Sensorwerte im Status laufen weiter. Geprüft mit `test/sim` (Szenarien Totmann, Übertemperatur, Absturz).
+
 ## Voraussetzung kstuff
 
 `/dev/icc_fan` ist nur mit geladenem **kstuff** erreichbar. Fehlt es, laufen
@@ -1422,8 +1438,17 @@ installiert, ohne sie vorher auf ein Laufwerk der Konsole zu kopieren. Datei wä
    Datei noch einen PC: Bild antippen, Vorschau ansehen, „Profilbild
    übernehmen“. Sonst läuft alles wie bei einem eigenen Bild.
 - Bis 1.57.0 ließ sich ein Bild als Paket speichern und später wieder laden; diese Funktion gibt es nicht mehr.
+- **Eigene Bilder in der Vollbild-App (seit 1.75.0):** JPG oder PNG bis 16 MB in `/data/PS5-Cooling-Center/Profilbilder`
+  (legt die App beim Start an) oder auf einem USB-Stick ins Hauptverzeichnis bzw. in einen Ordner `Profilbilder`. Sie
+  stehen vorn im Raster mit der Marke „EIGENES“. Die Vollbild-App rechnet sie auf der Konsole um (Quadrat, DDS und PNG wie
+  die Weboberfläche). X-Taste übernimmt, Quadrat-Taste holt das vorherige Bild zurück, Dreieck-Taste ändert den Namen.
+  Der Ordner `avatar` im Datenordner ist der Arbeitsordner der App und wird nicht nach Bildern durchsucht.
 
-## Homescreen-Kachel
+## Homescreen-Kachel (veraltet)
+
+> **Nicht mehr in Gebrauch:** Seit 1.74.1 legt die App diese Kachel nicht mehr an, und die Oberfläche bietet „Kachel
+> installieren“ nicht mehr an. Ihre Aufgabe übernehmen `FAKE86921` und `FAKE86922` (nächster Abschnitt), die die App
+> selbst starten. Der Abschnitt bleibt als Beschreibung der früheren Technik stehen.
 
 Die Kachel (Title-ID `PSCC69690`, Bereich **Medien**) enthält selbst kein
 Programm: `eboot.bin` ist 0 Byte groß, und `deeplinkUri` in `sce_sys/param.json`
@@ -1488,11 +1513,9 @@ offene PPSA-Kachel für ein laufendes Spiel und lehnte währenddessen Löschen, 
 („game_active“; so bis ShadowMountPlus 1.7beta9, ab 1.7beta10 sperrt ein laufendes Spiel nur noch sich selbst und seine Quellen). Mit `FAKE…` geschieht das nicht. Die alten Ordner `/data/homebrew/PPSA86921` und `/data/homebrew/PPSA86922`
 und ihre Kacheln danach löschen.
 
-- **`FAKE86921`, die Vollbild-App** (neu nach 1.74): startet die App, falls sie noch nicht läuft, und zeigt sie im
-  Vollbild mit Controller-Bedienung – Kühlung, Spiele (mit Cover, Starten), Aufträge, Einstellungen, Payloads (mit
-  Payload-Store und den GitHub-Bildern der Entwickler) und Protokoll; L1/R1 wechselt die Reiter, Options öffnet das
-  Menü mit „Weboberfläche im Browser öffnen“ und den Power-Optionen. Gebaut auf dem Oberflächen-Baukasten
-  ps5-homebrew-ui (`tvapp/`).
+- **`FAKE86921`, die Vollbild-App** (seit 1.75.0): startet die App, falls sie noch nicht läuft, und zeigt sie im
+  Vollbild mit Controller-Bedienung. Gebaut auf dem Oberflächen-Baukasten ps5-homebrew-ui (`tvapp/`); Einzelheiten im
+  Abschnitt „Die Vollbild-App“ unten.
 - **`FAKE86922`, die Browser-Kachel** (bis 1.74 die einzige Kachel, damals unter `PPSA86921`): startet die App, falls sie
   noch nicht läuft (die `eboot.bin` schickt die eingebettete ELF an den Lader auf `127.0.0.1:9021`), wartet, bis die
   Oberfläche antwortet, und öffnet sie über `POST /api/v1/open-ui` im Browser der Konsole. Läuft die App schon, öffnet
@@ -1501,6 +1524,27 @@ und ihre Kacheln danach löschen.
   ps5-native-app-boilerplate); eine einfache ELF startet die Konsole nicht. `sce_module/libc.prx` verlangt der App-Lader.
 - Die App steckt in der `eboot.bin`: Nach einem Update den Ordner aus der neuen Veröffentlichung kopieren, sonst startet
   die Kachel die alte Fassung.
+
+## Die Vollbild-App (seit 1.75.0)
+
+Die Vollbild-App kann fast alles, was die Weboberfläche kann (Vorgabe: beide Oberflächen gleich); beide sprechen mit
+derselben laufenden App über `127.0.0.1:8086`.
+
+- **Tasten:** Touchpad-Taste öffnet die Seitenleiste (nur sie – links auf dem Steuerkreuz gehört der Seite). L1/R1
+  vorheriger/nächster Bereich, L2/R2 Unterreiter, Steuerkreuz auswählen und Werte ändern, X-Taste starten/bestätigen,
+  Kreis-Taste zurück, Quadrat-Taste Aktionen, Dreieck-Taste Details oder „Mehr“, Options-Taste Menü („Weboberfläche im
+  Browser öffnen“, „Neu laden“, „App beenden“, Power-Optionen). Die Leiste unten zeigt die gerade gültigen Tasten.
+- **Bereiche:** Kühlung (Übersicht, Einstellungen mit Warnungen, Lichtleiste, Spielprofilen, Nachtmodus, Selbsttest),
+  Spiele (Bibliothek mit Aktionen-Menü – Kopieren, Konvertieren, Verschieben, Entpacken, Abbild prüfen, Löschen, Extras,
+  Aus-/Einhängen, laufendes Spiel beenden –, Spielzeit, Spielstände, Pakete mit Installieren/Warteschlange/Aufteilen,
+  PS4 von USB, Disc, Sicherungen, Aufträge), Dateimanager, Payloads (eigene, geladene, Store, Profile mit Editor),
+  System (Konsole, Speicher, Kühlleistung, Zusatzabfragen, Experte), Profil (Name, Profilbild, Danke) und Protokoll
+  (App-Protokoll, Kernel-Log live, Gespeichert).
+- **Nur im Browser:** Hochladen vom PC, Herunterladen, Profile als Datei sichern/laden, Links öffnen. Unter System zeigt
+  die Vollbild-App einen QR-Code mit der Adresse der Weboberfläche.
+- **Eingaben** über die Bildschirmtastatur des Baukastens (eigene Seite mit ä ö ü ß). Hintergrundbilder je Bereich unter
+  System → Speicher → Hintergrundbilder (eigene Bilder lädt man über die Weboberfläche hoch).
+- Löschen, Beenden, Abbrechen und die Power-Optionen wirken beim ersten Druck, ohne Rückfrage.
 
 ## Tasten am Controller (seit 1.66.0)
 

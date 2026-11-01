@@ -20,7 +20,7 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET | `/api/v1/config/export` | komplette Konfiguration als JSON herunterladen (inkl. Spielprofile) |
 | POST | `/api/v1/config/import` | komplette Konfiguration aus JSON übernehmen (inkl. Spielprofile) |
 | POST | `/api/v1/fan/threshold` | Direktwert setzen (`{"threshold_c":55}`): in `automatic` als Zieltemperatur, in `observe` als feste Schwelle |
-| POST | `/api/v1/tile/ensure` | Homescreen-Kachel installieren |
+| POST | `/api/v1/tile/ensure` | Frühere Homescreen-Kachel (PSCC69690) anlegen; von der Oberfläche nicht mehr angeboten |
 | POST | `/api/v1/tile/upload` | Kachel-Paket als Rohdaten hochladen (bis 64 MB, abgelegt als `/data/PS5-Cooling-Center/tile.pkg`) |
 | POST | `/api/v1/power` | Konsole ausschalten, neu starten, in den Ruhemodus oder abgesicherten Modus versetzen (`{"action":"off"\|"reboot"\|"standby"\|"safemode"}`); 409 `standby_disabled`, wenn der Ruhemodus in den Energieeinstellungen aus ist |
 | GET | `/api/v1/logs` | Ereignisse als JSON |

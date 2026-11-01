@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.75.1
+
+### Handbuch und FAQ auf dem Stand von 1.75
+- Neues Kapitel „Die Vollbild-App“ (Tasten, Bereiche, was im Browser bleibt) in allen sechs Sprachen.
+- Installation: Abschnitt „Die Kacheln“ – FAKE86921 und FAKE86922 starten die App selbst; die frühere Medien-Kachel (PSCC69690) wird nicht mehr gebraucht.
+- Kühlung: Abschnitt „Lüfterwächter“. Profil: eigene Bilder in der Vollbild-App (Ordner `Profilbilder`, USB). Dateimanager: Laufwerke heißen `usb0`, `usb1` …
+- FAQ: Neustart/Kachel und „leere Seite“ berichtigt, Wächter ergänzt; neu: Seitenleiste mit dem Touchpad, Ablageort eigener Profilbilder, warum „usb0“.
+- `docs/HANDBUCH.md`: Abschnitte Vollbild-App, Lüfterwächter, eigene Profilbilder und USB-Namen; die alte Homescreen-Kachel als veraltet gekennzeichnet. `docs/API.md`: `tile/ensure` beschrieben als frühere Kachel.
+
 ## v1.75.0
 
 ### Vollbild-App: Seitenleiste nur mit dem Touchpad

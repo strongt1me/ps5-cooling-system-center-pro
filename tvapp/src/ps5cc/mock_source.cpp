@@ -2032,7 +2032,7 @@ class MockSource final : public Source
         SystemData &d = data_.system_data;
         d.system =
             R"({"ok":true,"model":"CFI-7021 B01Y","serial_masked":"••••8023","firmware_raw":"0x12000043","firmware_version":"12.00",)"
-            R"("firmware_group":"12.00-12.70","app_version":"1.75.0","firmware_reported":"12.000.043","uptime_sec":7425,)"
+            R"("firmware_group":"12.00-12.70","app_version":"1.75.1","firmware_reported":"12.000.043","uptime_sec":7425,)"
             R"("network":{"probed":true,"up":true,"kind":"wlan","ip":"192.168.1.94","ssid":"Wohnzimmer-5G","signal_pct":86,"band_ghz":5,"link_mbit":866},)"
             R"("display":{"name":"Wohnzimmer-TV","width":3840,"height":2160,"refresh_hz":60,"hdr":true},)"
             R"("controller":{"in_use":true,"press_age_s":4,"battery_pct":80,"charging":false,"from_log":true,"restored":false,"age_s":30},)"
