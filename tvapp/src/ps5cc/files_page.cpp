@@ -396,10 +396,10 @@ class FilesPage final : public Page
 
         float y = card.y + 400.0f;
         if (!folder_.path.empty() && !folder_.writable)
-            y = note_card(
-                canvas, paint, card, y, "Nur ansehen",
-                "Hier darf nichts geändert werden. Geschützt sind nur /dev, /proc, Einhängepunkte und Verknüpfungen.",
-                kWarning);
+            y = note_card(canvas, paint, card, y, "Nur ansehen",
+                          "Hier darf nichts geändert werden. Geschützt sind nur /dev, /proc, "
+                          "Einhängepunkte und Verknüpfungen.",
+                          kWarning);
         if (!clip_paths_.empty())
             y = note_card(canvas, paint, card, y,
                           std::string(clip_move_ ? "Ausgeschnitten: " : "Kopiert: ") +
