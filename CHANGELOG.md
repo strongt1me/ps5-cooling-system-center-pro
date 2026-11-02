@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.75.3
 
 ### Vollbild-App mehrsprachig
 - Die Vollbild-App spricht jetzt Deutsch, Englisch, Spanisch, Französisch, Italienisch, Russisch und Schwedisch. Ab Werk folgt sie der Systemsprache der Konsole (andere Sprachen: Englisch); umstellen lässt sie sich mit der Options-Taste → „Sprache / Language“: eine Liste aller Sprachen, die aktive mit Häkchen, ein Druck wählt; die Wahl bleibt gespeichert (`tv_language` in der Konfiguration, Teil von Export/Import).
