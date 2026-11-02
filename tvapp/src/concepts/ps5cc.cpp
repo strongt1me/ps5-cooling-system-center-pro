@@ -217,7 +217,7 @@ enum MenuTag
     kMenuLanguage = 8,
 };
 
-// The languages the menu steps through: "" follows the console's own setting.
+// The languages the language list offers, in its order: "" follows the console's own setting.
 constexpr const char *kLanguages[] = {"", "de", "en", "es", "fr", "it", "ru", "sv"};
 
 const char *language_name(const std::string &code)
@@ -578,6 +578,23 @@ class Ps5cc final : public app::Concept
         toasts_.set_bounds({kMargin, kTop, 1824.0f - kMargin, 940.0f - kTop});
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
 
+        // Every language at once, the chosen one ticked: one press picks it (user, 02.11.2026).
+        language_menu_.style = menu_.style;
+        language_menu_.style.close_on_check = true;
+        language_menu_.style.wrap = false;
+        {
+            std::vector<ui::MenuItem> items;
+            for (const char *code : kLanguages)
+            {
+                ui::MenuItem item;
+                item.label = *code == '\0' ? "Automatisch" : language_name(code);
+                item.checkable = true;
+                items.push_back(item);
+            }
+            language_menu_.set_items(std::move(items));
+        }
+        language_menu_.set_bounds(menu_.bounds());
+
         loader_.style.theme = theme_;
         loader_.style.layout = ui::LoadingLayout::center;
         loader_.style.indicator = ui::LoadingIndicator::bar;
@@ -721,6 +738,7 @@ class Ps5cc final : public app::Concept
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->update(dt);
         menu_.update(dt);
+        language_menu_.update(dt);
         link_dialog_.update(dt);
         toasts_.update(dt, feedback);
         loader_.update(dt);
@@ -772,6 +790,7 @@ class Ps5cc final : public app::Concept
         tools_.draw_overlay(top);
         extras_.draw_overlay(top);
         menu_.draw(top);
+        language_menu_.draw(top);
         toasts_.draw(top);
         if (loader_.visible())
             loader_.draw(top);
@@ -1024,6 +1043,12 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.2f, action_bit(Action::west)},
             {0.8f, 0, Direction::none, "abgebrochen"},
+            {0.5f, action_bit(Action::menu)},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "sprachen"},
+            {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::menu)},
             {0.8f, 0, Direction::none, "optionen"},
             {0.2f, 0, Direction::down},
@@ -1603,6 +1628,12 @@ class Ps5cc final : public app::Concept
             page->handle(input, feedback);
             return;
         }
+        if (language_menu_.is_open())
+        {
+            if (language_menu_.handle(input, feedback) == ui::Event::changed)
+                choose_language(src, language_menu_.focus());
+            return;
+        }
         if (menu_.is_open())
         {
             if (menu_.handle(input, feedback) == ui::Event::activated)
@@ -1617,7 +1648,7 @@ class Ps5cc final : public app::Concept
                 else if (tag >= kMenuStandby && tag <= kMenuSafe)
                     do_power(tag, feedback);
                 else if (tag == kMenuLanguage)
-                    step_language(src);
+                    open_languages(feedback);
             }
             return;
         }
@@ -1883,23 +1914,33 @@ class Ps5cc final : public app::Concept
             if (menu_.items()[static_cast<std::size_t>(i)].tag == kMenuLanguage)
                 menu_.item(i).shortcut = shown;
         }
+        for (int i = 0; i < static_cast<int>(std::size(kLanguages)); ++i)
+            language_menu_.item(i).checked = setting == kLanguages[i];
+        language_menu_.item(0).shortcut = language_name(data_.language);
     }
 
-    // One press, the next language (nothing asked: user, 27.10.2026); the app keeps it in its
-    // settings.
-    void step_language(ps5cc::Source &src)
+    // The list opens on the language in use, so confirm alone keeps it.
+    void open_languages(app::Feedback &feedback)
     {
-        const std::string &setting = data_.config.tv_language;
-        std::size_t at = 0;
-        for (std::size_t i = 0; i < std::size(kLanguages); ++i)
-        {
-            if (setting == kLanguages[i])
-                at = i;
-        }
-        const std::string next = kLanguages[(at + 1) % std::size(kLanguages)];
-        data_.config.tv_language = next;
-        src.save_config("{\"tv_language\":\"" + next + "\"}");
         show_language();
+        language_menu_.open({1824.0f - 60.0f, 44.0f, 60.0f, 64.0f}, feedback);
+        for (int i = 0; i < static_cast<int>(std::size(kLanguages)); ++i)
+        {
+            if (language_menu_.items()[static_cast<std::size_t>(i)].checked)
+                language_menu_.set_focus(i);
+        }
+    }
+
+    // One press picks it (nothing asked: user, 27.10.2026); the app keeps it in its settings.
+    void choose_language(ps5cc::Source &src, int index)
+    {
+        const std::string chosen = kLanguages[static_cast<std::size_t>(index)];
+        if (chosen != data_.config.tv_language)
+        {
+            data_.config.tv_language = chosen;
+            src.save_config("{\"tv_language\":\"" + chosen + "\"}");
+        }
+        show_language(); // the menu flipped the tick; it belongs on the choice
     }
 
     void show_notice(const ps5cc::Notice &n, app::Feedback &feedback)
@@ -2387,6 +2428,7 @@ class Ps5cc final : public app::Concept
 
     std::array<std::unique_ptr<ps5cc::Page>, kPageCount> pages_;
     ui::Menu menu_;
+    ui::Menu language_menu_;    // Options → Sprache / Language
     std::string switch_target_; // game to start once running_id_ has closed
     float switch_wait_ = 0.0f;  // seconds left to wait for that
     std::string running_id_;
