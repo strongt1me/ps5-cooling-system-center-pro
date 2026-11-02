@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.75.4
 
 ### Uhrzeiten in der Ortszeit der Konsole
 - Die Vollbild-App zeigte Uhrzeiten (Protokoll, Kernel-Log, Dateien, Spielzeit, Sicherungen) in UTC – auf einer Konsole in Mitteleuropa eine Stunde zu früh. Sie kannte nur die Zeitzone, die ein Browser beim Speichern des Nachtmodus mitgeteilt hatte. Jetzt rechnet die App die Ortszeit der Konsole selbst aus (Zeitzone und Sommerzeit aus den Einstellungen der Konsole) und liefert sie als `local_offset_min` in `GET /api/v1/system`; die Vollbild-App nimmt diese.
