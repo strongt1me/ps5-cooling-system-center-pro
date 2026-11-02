@@ -4,7 +4,7 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak,<br>usabile nel browser della console o da qualsiasi dispositivo della rete domestica, in sei lingue.**
+**Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak,<br>usabile nel browser della console o da qualsiasi dispositivo della rete domestica, in sette lingue.**
 
 ![Versione](https://img.shields.io/badge/Versione-1.75.3-1f6feb)
 ![Licenza](https://img.shields.io/badge/Licenza-GPL--3.0--or--later-blue)

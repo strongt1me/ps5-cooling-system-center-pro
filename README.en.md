@@ -4,7 +4,7 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in the console's own browser or from any device on your home network, in six languages.**
+**Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in the console's own browser or from any device on your home network, in seven languages.**
 
 ![Version](https://img.shields.io/badge/Version-1.75.3-1f6feb)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
