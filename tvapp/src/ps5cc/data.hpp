@@ -9,7 +9,9 @@
 #include <array>
 #include <map>
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace hui::ps5cc
@@ -151,6 +153,8 @@ struct Config
     bool lightbar_enabled = false;
     int lightbar_warn_c = 70; // 55..90: yellow from here
     int lightbar_hot_c = 80;  // 56..95: red from here, always above yellow
+    // The fullscreen app's language: "" follows the console, else de, en, es, fr, it, ru.
+    std::string tv_language;
 };
 
 // GET /api/v1/games: a cooling profile kept for one game (Phase 8).
@@ -991,6 +995,13 @@ struct Snapshot
 {
     Link link = Link::starting;
     std::string link_detail; // why it failed, or what it is waiting for
+    // The language the screen is in ("de" until a dictionary arrived) and its dictionary: the
+    // browser's /lang/<xx>.json from the app, then the fullscreen app's own
+    // /app0/assets/lang/<xx>.json. A new pointer means a new language; it stays the same while the
+    // language does.
+    std::string language = "de";
+    std::shared_ptr<const std::vector<std::pair<std::string, std::string>>> dictionary;
+    int console_language = -1; // locale.language of /api/v1/system; -1 until it was read
     Status status;
     std::vector<Game> games;
     bool games_loaded = false;

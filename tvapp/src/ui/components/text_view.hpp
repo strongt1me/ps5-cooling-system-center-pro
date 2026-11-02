@@ -215,6 +215,7 @@ class TextView
     {
         const Fonts *fonts = nullptr;
         const char *theme = nullptr;
+        unsigned text_generation = 0;
         float values[20] = {};
         bool operator==(const Key &other) const;
     };

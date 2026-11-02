@@ -3972,13 +3972,17 @@
     if (onSys) {
       try { diag = await api("/api/v1/controller/diag"); } catch {}
       try { chan = await api("/api/v1/channels"); } catch {}
-      /* Sonde aus (Bit 0x10 in probe_mask): gar nicht erst fragen, sonst meldet der Browser jedes Mal ein rotes 409 in der Konsole. */
+      /* Sonde aus (Bit 0x10 in probe_mask): gar nicht erst fragen. Fragt die Seite doch (Einstellungen noch nicht
+         geladen), antwortet die Konsole seit 1.75.3 mit 200 und enabled:false statt mit 409. */
       const probeKnownOff = state.cfg && Number.isFinite(state.cfg.probe_mask) && !(state.cfg.probe_mask & 0x10);
       if (probeKnownOff) driveOff = true;
-      else try { drive = await api("/api/v1/drives"); }
+      else try {
+        drive = await api("/api/v1/drives");
+        if (drive && drive.enabled === false) { driveOff = true; drive = null; }
+      }
       catch (e) {
         driveErr = e.message || "nicht verfügbar";
-        /* The console answers 409 while the probe is switched off. */
+        /* Ältere Fassungen antworteten mit 409, solange die Sonde aus ist. */
         driveOff = e.code === "drive_probe_disabled";
       }
     }

@@ -9,14 +9,17 @@
 
 #include "platform/ps5/http_source.hpp"
 
+#include "core/save_file.hpp"
 #include "platform/ps5/system.hpp"
 #include "ps5cc/avatar_build.hpp"
 #include "ps5cc/covers.hpp"
 #include "ps5cc/credits.hpp"
+#include "ps5cc/i18n.hpp"
 #include "third_party/cjson/cJSON.h"
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -1037,6 +1040,7 @@ void HttpSource::run()
             if (page == Watch::settings)
                 poll_rules();
         }
+        poll_language();
         if (page == Watch::settings)
         {
             const bool testing = [&]
@@ -2185,9 +2189,73 @@ void HttpSource::poll_config()
     c.lightbar_enabled = num(root, "lightbar_enabled", 0) != 0.0;
     c.lightbar_warn_c = static_cast<int>(num(root, "lightbar_warn_c", 70));
     c.lightbar_hot_c = static_cast<int>(num(root, "lightbar_hot_c", 80));
+    c.tv_language = str(root, "tv_language");
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
     data_.config = c;
+    ++data_.serial;
+}
+
+// The screen's language: the setting, else the console's; on a change the browser's dictionary from
+// the app
+// (/lang/<xx>.json, about 0.5 MB) and the fullscreen app's own from its folder, both parsed here,
+// off the frame.
+void HttpSource::poll_language()
+{
+    if (!console_language_read_)
+    {
+        int status = 0;
+        std::string body;
+        if (exchange("GET", "/api/v1/system", {}, &status, &body, 8) == Net::ok && status == 200)
+        {
+            console_language_read_ = true;
+            if (cJSON *root = cJSON_Parse(body.c_str()))
+            {
+                const cJSON *loc = cJSON_GetObjectItemCaseSensitive(root, "locale");
+                console_language_ = static_cast<int>(num(loc, "language", -1));
+                cJSON_Delete(root);
+            }
+            std::lock_guard<std::mutex> lock(mutex_);
+            data_.console_language = console_language_;
+            ++data_.serial;
+        }
+    }
+    std::string setting;
+    bool config_valid = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        setting = data_.config.tv_language;
+        config_valid = data_.config.valid;
+    }
+    if (!config_valid || !console_language_read_)
+        return;
+    const std::string wanted = i18n::wanted_language(setting, console_language_);
+    if (wanted == language_loaded_ || sys::monotonic_us() < language_retry_us_)
+        return;
+    auto entries = std::make_shared<std::vector<i18n::Entry>>();
+    if (wanted != "de")
+    {
+        int status = 0;
+        std::string body;
+        const std::string path = "/lang/" + wanted + ".json";
+        if (exchange("GET", path.c_str(), {}, &status, &body, 20) != Net::ok || status != 200 ||
+            !i18n::parse_dictionary(body, entries.get()))
+        {
+            sys::log("[PS5CC] dictionary %s not loaded (HTTP %d)", wanted.c_str(), status);
+            language_retry_us_ = sys::monotonic_us() + 10000000; // again in 10 s
+            return;
+        }
+        const std::size_t web = entries->size();
+        std::string own;
+        if (save::read_file("/app0/assets/lang/" + wanted + ".json", &own, 4u * 1024u * 1024u))
+            i18n::parse_dictionary(own, entries.get());
+        sys::log("[PS5CC] language %s: %zu entries from the app, %zu of its own", wanted.c_str(),
+                 web, entries->size() - web);
+    }
+    language_loaded_ = wanted;
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.language = wanted;
+    data_.dictionary = std::move(entries);
     ++data_.serial;
 }
 

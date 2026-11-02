@@ -217,6 +217,13 @@ class HttpSource final : public Source
     std::atomic<bool> library_wanted_{false}; // a job ended: games may have moved or gone
     std::atomic<Watch> watching_{Watch::none};
     std::atomic<bool> config_wanted_{true};
+    // The language: the console's system language (read once per connection) and the one whose
+    // dictionary the screen has; worker thread only.
+    void poll_language();
+    int console_language_ = -1;
+    bool console_language_read_ = false;
+    std::string language_loaded_ = "de";
+    std::int64_t language_retry_us_ = 0; // after a failed download: not before this time
     std::atomic<bool> retry_{false};
     bool online_ = false;
     bool payload_sent_ = false;

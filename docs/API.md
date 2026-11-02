@@ -85,7 +85,7 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET | `/api/v1/sensors/risky` | Risky-Telemetrie auf Abruf (Last/Takt/Leistung) |
 | POST | `/api/v1/storage/eject` | `{"mount":"/mnt/usb0"}`: wirft ein USB-Laufwerk über ShadowMountPlus (ab 1.7beta10, `storage_eject`) aus (`src/usbeject.c`); 409 mit Grund, wenn ein Auftrag der App läuft, PS4Mount Spiele von dem Laufwerk spielt, ShadowMountPlus fehlt oder ablehnt; 202 = angestoßen |
 | GET | `/api/v1/storage/eject` | Stand des letzten Auswerfens: `available` (ShadowMountPlus kann es), `running`, `state` = `""`/`running`/`done`/`failed`, `mount`, `message`; in `/api/v1/system` tragen auswerfbare Laufwerke `ejectable: true` |
-| GET | `/api/v1/drives` | Optionale Laufwerkstelemetrie (`/dev/daN`, wenn freigeschaltet) |
+| GET | `/api/v1/drives` | Optionale Laufwerkstelemetrie (`/dev/daN`, wenn freigeschaltet), mit `enabled: true`. Ist sie unter „Zusatzabfragen“ aus: 200 `{ok: true, enabled: false, code: "drive_probe_disabled", message}` (bis 1.75.2 ein 409) |
 | GET | `/api/v1/logs/export` | Ereignisse als Textdatei |
 | GET | `/api/v1/library` | Spiele des Startbildschirms aus der App-Datenbank der Konsole: Titel, Titel-/Content-ID, Version, Spielzeit, Format/Speicherort, Backport/AMPR/PlayGo (ab 1.46.0); `ps4mount: true`, wenn PS4Mount das Spiel vom USB-Laufwerk spielt (Format dann `pkg`, seit 29.10.2026) |
 | GET | `/api/v1/library/cover?id=PPSA20396` | Cover eines Spiels aus der Liste (PNG, darf zwischengespeichert werden) |
@@ -217,6 +217,10 @@ Neue Konfigurationsfelder:
    statt `target_temp_c` das Nachtziel, außer eine Spielregel ist in Kraft. Wie bei allen Feldern werden Werte außerhalb
    des Bereichs begrenzt (Ziel auf 50–91, Versatz auf −720 bis 840, Minuten auf 0–1439), nicht abgelehnt; die Seite prüft vorher
    und zeigt eine Fehlermeldung.
+- `tv_language` (seit 1.75.3, Teil von Export und Import): die Sprache der Vollbild-App, `""` (ab Werk: wie die
+   Systemsprache der Konsole) oder `de`, `en`, `es`, `fr`, `it`, `ru`, `sv`. Ein anderer Wert wird zu `""`. Die Vollbild-App lädt
+   dazu `/lang/<xx>.json` (das Wörterbuch der Browser-Oberfläche) und ihr eigenes aus `/app0/assets/lang/<xx>.json`. Der
+   Browser merkt sich seine Sprache weiter selbst.
 
 Probe-Maske (`probe_mask`) Bits:
 

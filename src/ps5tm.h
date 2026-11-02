@@ -292,6 +292,10 @@ typedef struct {
   unsigned        night_target_c;      /* PS5TM_TARGET_MIN_C..PS5TM_TARGET_MAX_C */
   int             night_tz_offset_min; /* -720..840 */
 
+  /* The language of the fullscreen app (tile FAKE86921): "" follows the console's system language, else one of
+     "de", "en", "es", "fr", "it", "ru". The browser keeps its own choice per browser. */
+  char            tv_language[4];
+
   /* Processor temperature and fan speed as a system notification when the
      controller's microphone button is pressed twice in quick succession (at
      most every 5 s) — see micbutton.c. The key keeps its name from 1.45.x,
@@ -322,6 +326,8 @@ void ps5tm_config_clamp(ps5tm_config_t *cfg);
 void ps5tm_config_apply_profile(ps5tm_config_t *cfg);
 /* True for a dotted-quad IPv4 address — the only thing bind_address can be. */
 int  ps5tm_config_bind_valid(const char *s);
+/* True for "" (follow the console) and the languages the fullscreen app has: de, en, es, fr, it, ru. */
+int  ps5tm_tv_language_ok(const char *s);
 int  ps5tm_config_load(void);
 /* Writes the settings file. Must NOT be called with the config lock held: it
    takes a snapshot under the lock and does the disk I/O — which can wait for

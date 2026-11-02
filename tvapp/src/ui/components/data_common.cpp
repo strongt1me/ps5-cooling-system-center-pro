@@ -80,9 +80,11 @@ std::string fit_number(const Painter &paint, std::string_view text, float size, 
     std::string cut(text);
     while (!cut.empty())
     {
-        do
+        // continuation bytes first, then the lead byte: a lead byte left alone draws as "?"
+        while (!cut.empty() && (static_cast<unsigned char>(cut.back()) & 0xc0) == 0x80)
             cut.pop_back();
-        while (!cut.empty() && (static_cast<unsigned char>(cut.back()) & 0xc0) == 0x80);
+        if (!cut.empty())
+            cut.pop_back();
         if (number_width(paint, cut + "...", size) <= width)
             break;
     }

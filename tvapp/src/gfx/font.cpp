@@ -12,6 +12,54 @@ namespace hui::gfx
 
 namespace ff = font_format;
 
+namespace
+{
+TextFilter *g_filter = nullptr;
+unsigned g_generation = 0;
+
+std::string_view filtered(std::string_view text)
+{
+    return g_filter != nullptr && !text.empty() ? g_filter->apply(text) : text;
+}
+} // namespace
+
+void set_text_filter(TextFilter *filter)
+{
+    g_filter = filter;
+    ++g_generation;
+}
+
+unsigned text_filter_generation()
+{
+    return g_generation;
+}
+
+std::string_view filter_text(std::string_view text)
+{
+    return filtered(text);
+}
+
+float Font::measure(std::string_view text, float size, float tracking) const
+{
+    return measure_raw(filtered(text), size, tracking);
+}
+
+std::string Font::fit(std::string_view text, float size, float max_width, float tracking) const
+{
+    return fit_raw(filtered(text), size, max_width, tracking);
+}
+
+float Font::layout(std::string_view text, float x, float y, float size, Align align,
+                   std::vector<GlyphQuad> &quads, float tracking) const
+{
+    return layout_raw(filtered(text), x, y, size, align, quads, tracking);
+}
+
+std::vector<std::string> Font::wrap(std::string_view text, float size, float max_width) const
+{
+    return wrap_raw(filtered(text), size, max_width);
+}
+
 std::uint32_t next_codepoint(std::string_view text, std::size_t *index)
 {
     const auto byte = [&](std::size_t at) { return static_cast<unsigned char>(text[at]); };
@@ -123,9 +171,9 @@ float Font::kern(std::uint32_t first, std::uint32_t second) const
     return it != kerns_.end() && it->first == first && it->second == second ? it->amount : 0.0f;
 }
 
-std::string Font::fit(std::string_view text, float size, float max_width, float tracking) const
+std::string Font::fit_raw(std::string_view text, float size, float max_width, float tracking) const
 {
-    if (measure(text, size, tracking) <= max_width)
+    if (measure_raw(text, size, tracking) <= max_width)
         return std::string(text);
     constexpr std::string_view kEllipsis = "\xE2\x80\xA6";
     const std::string_view mark = has_glyph(0x2026) ? kEllipsis : std::string_view("...");
@@ -138,7 +186,7 @@ std::string Font::fit(std::string_view text, float size, float max_width, float 
         while (!candidate.empty() && candidate.back() == ' ')
             candidate.pop_back();
         candidate.append(mark);
-        if (measure(candidate, size, tracking) > max_width)
+        if (measure_raw(candidate, size, tracking) > max_width)
             break;
         best = std::move(candidate);
     }
@@ -170,7 +218,7 @@ Font::Resolved Font::resolve(std::uint32_t *codepoint) const
     return {this, find('?'), 0};
 }
 
-float Font::measure(std::string_view text, float size, float tracking) const
+float Font::measure_raw(std::string_view text, float size, float tracking) const
 {
     float width = 0.0f;
     std::uint32_t previous = 0;
@@ -194,10 +242,10 @@ float Font::measure(std::string_view text, float size, float tracking) const
     return glyphs > 1 ? width + tracking * static_cast<float>(glyphs - 1) : width;
 }
 
-float Font::layout(std::string_view text, float x, float y, float size, Align align,
-                   std::vector<GlyphQuad> &quads, float tracking) const
+float Font::layout_raw(std::string_view text, float x, float y, float size, Align align,
+                       std::vector<GlyphQuad> &quads, float tracking) const
 {
-    const float width = measure(text, size, tracking);
+    const float width = measure_raw(text, size, tracking);
     float pen = x;
     if (align == Align::center)
         pen -= width * 0.5f;
@@ -240,7 +288,7 @@ float Font::layout(std::string_view text, float x, float y, float size, Align al
     return width;
 }
 
-std::vector<std::string> Font::wrap(std::string_view text, float size, float max_width) const
+std::vector<std::string> Font::wrap_raw(std::string_view text, float size, float max_width) const
 {
     std::vector<std::string> lines;
     std::string line;
@@ -260,7 +308,7 @@ std::vector<std::string> Font::wrap(std::string_view text, float size, float max
             const std::string_view word = paragraph.substr(word_start, word_end - word_start);
             std::string candidate =
                 line.empty() ? std::string(word) : line + " " + std::string(word);
-            if (measure(candidate, size) <= max_width)
+            if (measure_raw(candidate, size, 0.0f) <= max_width)
             {
                 line = std::move(candidate);
             }
@@ -271,14 +319,14 @@ std::vector<std::string> Font::wrap(std::string_view text, float size, float max
                 // The word starts a line of its own. One wider than the line
                 // gives up as many code points as fit, line after line.
                 std::size_t start = 0;
-                while (measure(word.substr(start), size) > max_width)
+                while (measure_raw(word.substr(start), size, 0.0f) > max_width)
                 {
                     std::size_t end = start;
                     next_codepoint(word, &end);
                     for (std::size_t next = end; next < word.size(); end = next)
                     {
                         next_codepoint(word, &next);
-                        if (measure(word.substr(start, next - start), size) > max_width)
+                        if (measure_raw(word.substr(start, next - start), size, 0.0f) > max_width)
                             break;
                     }
                     if (end >= word.size())

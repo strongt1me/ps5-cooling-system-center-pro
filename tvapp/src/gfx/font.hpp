@@ -30,6 +30,29 @@ enum class Align : std::uint8_t
     right,
 };
 
+// Rewrites every text a Font measures, fits, lays out or wraps, before it does
+// so: the hook a translation hangs on (one place, so measuring and drawing
+// always see the same words). apply() returns the text to use; a view it
+// returns must stay valid until the filter's owner says otherwise (the frame).
+// Used from the render thread only.
+class TextFilter
+{
+  public:
+    virtual ~TextFilter() = default;
+    virtual std::string_view apply(std::string_view text) = 0;
+};
+
+// The filter every Font uses from now on; nullptr draws text as given. Call it again when the
+// filter starts rewriting differently (a new dictionary): it counts up text_filter_generation().
+void set_text_filter(TextFilter *filter);
+// Changes with every set_text_filter(). Code that keeps wrapped or shortened text compares it, so
+// text laid out before a dictionary arrived is laid out again.
+unsigned text_filter_generation();
+// The text as the filter rewrites it. For code that wraps or shortens a text itself, word by word
+// or character by character, before any of it reaches a Font: it must start from the rewritten
+// text, or it cuts the original.
+std::string_view filter_text(std::string_view text);
+
 class Font
 {
   public:
@@ -116,6 +139,15 @@ class Font
         const font_format::Glyph *glyph = nullptr;
         std::uint32_t texture = 0;
     };
+
+    // The work behind the public calls, on text the filter has already seen
+    // (they call each other, and a second pass through the filter could
+    // rewrite a piece of an already rewritten text).
+    float measure_raw(std::string_view text, float size, float tracking) const;
+    std::string fit_raw(std::string_view text, float size, float max_width, float tracking) const;
+    float layout_raw(std::string_view text, float x, float y, float size, Align align,
+                     std::vector<GlyphQuad> &quads, float tracking) const;
+    std::vector<std::string> wrap_raw(std::string_view text, float size, float max_width) const;
 
     const font_format::Glyph *find(std::uint32_t codepoint) const;
     float kern(std::uint32_t first, std::uint32_t second) const;

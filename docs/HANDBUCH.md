@@ -1541,7 +1541,12 @@ derselben laufenden App über `127.0.0.1:8086`.
 - **Tasten:** Touchpad-Taste öffnet die Seitenleiste (nur sie – links auf dem Steuerkreuz gehört der Seite). L1/R1
   vorheriger/nächster Bereich, L2/R2 Unterreiter, Steuerkreuz auswählen und Werte ändern, X-Taste starten/bestätigen,
   Kreis-Taste zurück, Quadrat-Taste Aktionen, Dreieck-Taste Details oder „Mehr“, Options-Taste Menü („Weboberfläche im
-  Browser öffnen“, „Neu laden“, „App beenden“, Power-Optionen). Die Leiste unten zeigt die gerade gültigen Tasten.
+  Browser öffnen“, „Neu laden“, „Sprache / Language“, „App beenden“, Power-Optionen). Die Leiste unten zeigt die gerade
+  gültigen Tasten.
+- **Sprache (seit 1.75.3):** Deutsch, Englisch, Spanisch, Französisch, Italienisch, Russisch, Schwedisch. Ab Werk wie die
+  Systemsprache der Konsole (andere Sprachen: Englisch); Options-Taste → „Sprache / Language“ schaltet weiter
+  (Automatisch → Deutsch → English → …) und merkt sich die Wahl. Die Texte kommen aus denselben Wörterbüchern wie im
+  Browser; was keines kennt, bleibt deutsch.
 - **Bereiche:** Kühlung (Übersicht, Einstellungen mit Warnungen, Lichtleiste, Spielprofilen, Nachtmodus, Selbsttest),
   Spiele (Bibliothek mit Aktionen-Menü – Kopieren, Konvertieren, Verschieben, Entpacken, Abbild prüfen, Löschen, Extras,
   Aus-/Einhängen, laufendes Spiel beenden –, Spielzeit, Spielstände, Pakete mit Installieren/Warteschlange/Aufteilen,

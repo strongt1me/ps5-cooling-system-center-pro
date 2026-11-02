@@ -2,6 +2,17 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App mehrsprachig
+- Die Vollbild-App spricht jetzt Deutsch, Englisch, Spanisch, Französisch, Italienisch, Russisch und Schwedisch. Ab Werk folgt sie der Systemsprache der Konsole (andere Sprachen: Englisch); umstellen lässt sie sich mit der Options-Taste → „Sprache / Language“ (Automatisch → Deutsch → English → …), die Wahl bleibt gespeichert (`tv_language` in der Konfiguration, Teil von Export/Import).
+- Sie nutzt dieselben Wörterbücher wie die Browser-Oberfläche (`/lang/<xx>.json` von der App) und nach denselben Regeln; ihre eigenen rund 800 Texte liegen in der Kachel (`assets/lang/<xx>.json`). Was in keinem Wörterbuch steht, bleibt deutsch. Russisch braucht keinen neuen Zeichensatz – die Schriften enthalten die kyrillischen Buchstaben schon.
+
+### Übersetzungen vervollständigt
+- Schwedisch (beigetragen von Daniel Nylander, #3): die seither hinzugekommenen Texte der Browser-Oberfläche ergänzt.
+- Englisch, Spanisch, Französisch, Italienisch und Russisch: je rund 200 fehlende Texte ergänzt (zusammen 1.023) – vor allem Meldungen zu Dumpen, PS4 von USB, Aus-/Einhängen über ShadowMountPlus, Spielstart, Lüfterwächter und die Auswahl von Updates und Zusatzinhalten. Dazu „entpackt“, das zur Laufzeit in die Meldungen beim Verschieben/Entpacken eingesetzt wird. Ohne Eintrag bleiben nur Texte, die in jeder Sprache gleich sind (Namen, Einheiten, Code-Bezeichner, englische PS4Mount-Protokollzeilen).
+
+### Kein roter 409 mehr bei ausgeschalteter Laufwerks-Telemetrie
+- `GET /api/v1/drives` antwortet bei ausgeschalteter Laufwerks-Telemetrie (Zusatzabfragen) mit 200 und `enabled: false` statt mit 409. Der Browser zeigte sonst bei jedem Diagnose-Schnappschuss und beim ersten Öffnen der Systemseite einen roten Fehler in seiner Konsole. Die Systemseite versteht beide Antworten.
+
 ### Dateimanager: überall ändern
 - Hochladen, neuer Ordner, Umbenennen, Kopieren, Verschieben und Löschen gehen jetzt überall – auch in Systemordnern wie `/user/download` und im Ordner der App (Wunsch des Users; vorher nur auf den Laufwerken und in `/data`, im App-Ordner nur `payloads`, `AMPR_EMU`, `PlayGo`, `LZ4_Profile`). „Ganzes System“ ist kein reiner Ansehen-Ort mehr.
 - Gesperrt bleibt nur, was vor Unfällen schützt: `/` selbst, `/dev`, `/proc`, Verknüpfungen (auch auf dem Weg) und eingehängte Laufwerke als Ganzes; Kopieren und Löschen gehen weiter nie auf ein anderes Laufwerk über, überschrieben wird nie. Schreibgeschützt eingehängte Bereiche lehnen selbst ab.

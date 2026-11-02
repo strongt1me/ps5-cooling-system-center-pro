@@ -4,6 +4,8 @@
 
 #include "ui/components/component.hpp"
 
+#include "gfx/font.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -51,14 +53,17 @@ namespace
 // Removes whole UTF-8 characters from the end until the text and "..." fit.
 template <typename Measure> std::string fit(std::string_view text, float width, Measure measure)
 {
+    text = gfx::filter_text(text); // cut the translation, not the original
     if (measure(text) <= width)
         return std::string(text);
     std::string cut(text);
     while (!cut.empty())
     {
-        do
+        // continuation bytes first, then the lead byte: a lead byte left alone draws as "?"
+        while (!cut.empty() && (static_cast<unsigned char>(cut.back()) & 0xc0) == 0x80)
             cut.pop_back();
-        while (!cut.empty() && (static_cast<unsigned char>(cut.back()) & 0xc0) == 0x80);
+        if (!cut.empty())
+            cut.pop_back();
         while (!cut.empty() && cut.back() == ' ')
             cut.pop_back();
         if (measure(cut + "...") <= width)

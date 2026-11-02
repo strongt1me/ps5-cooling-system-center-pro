@@ -15,6 +15,7 @@
 #include "ps5cc/data.hpp"
 #include "ps5cc/game_extras.hpp"
 #include "ps5cc/game_tools.hpp"
+#include "ps5cc/i18n.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
 #include "ui/components.hpp"
@@ -26,7 +27,9 @@
 #include <cmath>
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -211,7 +214,31 @@ enum MenuTag
     kMenuReboot = 5,
     kMenuOff = 6,
     kMenuSafe = 7,
+    kMenuLanguage = 8,
 };
+
+// The languages the menu steps through: "" follows the console's own setting.
+constexpr const char *kLanguages[] = {"", "de", "en", "es", "fr", "it", "ru", "sv"};
+
+const char *language_name(const std::string &code)
+{
+    // Each in its own language: whoever cannot read the current one still finds theirs.
+    if (code == "de")
+        return "Deutsch";
+    if (code == "en")
+        return "English";
+    if (code == "es")
+        return "Español";
+    if (code == "fr")
+        return "Français";
+    if (code == "it")
+        return "Italiano";
+    if (code == "ru")
+        return "Русский";
+    if (code == "sv")
+        return "Svenska";
+    return "";
+}
 
 constexpr const char *kTechniques[] = {
     "Live temperatures and fan speed from the app's API",
@@ -346,6 +373,12 @@ class Ps5cc final : public app::Concept
   public:
     explicit Ps5cc(app::Context &context) : context_(context), theme_(make_theme())
     {
+        // Every text the fonts measure and draw passes the translation (German until a dictionary
+        // arrives).
+        gfx::set_text_filter(&translator_);
+        // PC preview: PS5CC_MISSES=<file> lists the texts the dictionary lacked when the design
+        // ends.
+        translator_.record_misses(std::getenv("PS5CC_MISSES") != nullptr);
         // The sidebar of the browser app, as a rail: icons only while the content has the focus,
         // icons and labels (drawn over the content, which stays where it is) while it is being
         // steered.
@@ -508,6 +541,10 @@ class Ps5cc final : public app::Concept
             ui::MenuItem reload;
             reload.label = "Neu laden";
             reload.tag = kMenuReload;
+            // Bilingual on purpose: it must be found in a language one cannot read.
+            ui::MenuItem language;
+            language.label = "Sprache / Language";
+            language.tag = kMenuLanguage;
             ui::MenuItem line;
             line.separator = true;
             ui::MenuItem quit;
@@ -523,10 +560,10 @@ class Ps5cc final : public app::Concept
                 item.shortcut = tag == kMenuStandby ? "Power-Optionen" : "";
                 return item;
             };
-            menu_.set_items({web, reload, quit, line, power("Ruhemodus", kMenuStandby, false),
-                             power("Neu starten", kMenuReboot, false),
-                             power("Ausschalten", kMenuOff, true),
-                             power("Abgesicherter Modus", kMenuSafe, true)});
+            menu_.set_items(
+                {web, reload, language, quit, line, power("Ruhemodus", kMenuStandby, false),
+                 power("Neu starten", kMenuReboot, false), power("Ausschalten", kMenuOff, true),
+                 power("Abgesicherter Modus", kMenuSafe, true)});
         }
 
         link_dialog_.style.theme = ps5cc::solid_theme(theme_);
@@ -582,6 +619,22 @@ class Ps5cc final : public app::Concept
         games_.enter();
     }
 
+    ~Ps5cc() override
+    {
+        gfx::set_text_filter(nullptr);
+        if (const char *path = std::getenv("PS5CC_MISSES"))
+        {
+            if (std::FILE *f = std::fopen(path, "a"))
+            {
+                for (const std::string &miss : translator_.misses())
+                    std::fprintf(f, "%s\n", miss.c_str());
+                std::fclose(f);
+            }
+        }
+    }
+    Ps5cc(const Ps5cc &) = delete;
+    Ps5cc &operator=(const Ps5cc &) = delete;
+
     void update(const InputFrame &input, float dt, app::Feedback &feedback) override
     {
         age_ += dt;
@@ -589,8 +642,19 @@ class Ps5cc final : public app::Concept
         placeholder_age_ += dt;
         ps5cc::Source &src = ps5cc::source();
         src.tick(dt);
+        translator_.frame();
         if (src.fetch(data_, seen_))
+        {
+            if (data_.dictionary != dictionary_)
+            {
+                dictionary_ = data_.dictionary;
+                translator_.load(data_.language,
+                                 dictionary_ ? *dictionary_ : std::vector<ps5cc::i18n::Entry>{});
+                gfx::set_text_filter(&translator_); // lay out kept text again, now translated
+            }
+            show_language();
             absorb();
+        }
         sample_chart(dt);
 
         ps5cc::Notice notice;
@@ -1552,6 +1616,8 @@ class Ps5cc final : public app::Concept
                     src.quit_app();
                 else if (tag >= kMenuStandby && tag <= kMenuSafe)
                     do_power(tag, feedback);
+                else if (tag == kMenuLanguage)
+                    step_language(src);
             }
             return;
         }
@@ -1802,6 +1868,38 @@ class Ps5cc final : public app::Concept
         feedback.play(audio::Cue::select);
         toasts_.push(ui::StatusKind::info, what, "Die Konsole bekommt den Auftrag.");
         ps5cc::source().power(action);
+    }
+
+    // The language entry of the menu names the choice; "automatic" also names what the console
+    // gave.
+    void show_language()
+    {
+        const std::string &setting = data_.config.tv_language;
+        const std::string shown =
+            setting.empty() ? "Automatisch (" + std::string(language_name(data_.language)) + ")"
+                            : std::string(language_name(setting));
+        for (int i = 0; i < static_cast<int>(menu_.items().size()); ++i)
+        {
+            if (menu_.items()[static_cast<std::size_t>(i)].tag == kMenuLanguage)
+                menu_.item(i).shortcut = shown;
+        }
+    }
+
+    // One press, the next language (nothing asked: user, 27.10.2026); the app keeps it in its
+    // settings.
+    void step_language(ps5cc::Source &src)
+    {
+        const std::string &setting = data_.config.tv_language;
+        std::size_t at = 0;
+        for (std::size_t i = 0; i < std::size(kLanguages); ++i)
+        {
+            if (setting == kLanguages[i])
+                at = i;
+        }
+        const std::string next = kLanguages[(at + 1) % std::size(kLanguages)];
+        data_.config.tv_language = next;
+        src.save_config("{\"tv_language\":\"" + next + "\"}");
+        show_language();
     }
 
     void show_notice(const ps5cc::Notice &n, app::Feedback &feedback)
@@ -2122,10 +2220,12 @@ class Ps5cc final : public app::Concept
                 ui::text(list, fonts.regular, "Kein Auftrag", x, r.y + 46.0f, 22.0f, kMuted);
                 continue;
             }
+            // The phase is translated on its own: joined to a game name it would match no entry.
+            const std::string detail =
+                job.detail.empty() ? "" : "  " + std::string(gfx::filter_text(job.detail));
             ui::text(list, fonts.regular,
-                     ui::fit_label(paint, job.name + (job.detail.empty() ? "" : "  " + job.detail),
-                                   22.0f, r.x + r.w - 32.0f - x),
-                     x, r.y + 46.0f, 22.0f, kMuted);
+                     ui::fit_label(paint, job.name + detail, 22.0f, r.x + r.w - 32.0f - x), x,
+                     r.y + 46.0f, 22.0f, kMuted);
             bars_[static_cast<std::size_t>(i)].draw(canvas);
         }
 
@@ -2241,6 +2341,8 @@ class Ps5cc final : public app::Concept
 
     app::Context &context_;
     ui::Theme theme_;
+    ps5cc::i18n::Translator translator_;
+    std::shared_ptr<const std::vector<ps5cc::i18n::Entry>> dictionary_;
     ps5cc::Snapshot data_;
     std::uint64_t seen_ = 0;
     Link shown_link_ = Link::online;

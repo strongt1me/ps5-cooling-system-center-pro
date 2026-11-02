@@ -168,6 +168,7 @@ class LoadingScreen
     {
         const Fonts *fonts = nullptr;
         const char *theme = nullptr;
+        unsigned text_generation = 0;
         int index = -1;
         float width = 0.0f;
         float size = 0.0f;

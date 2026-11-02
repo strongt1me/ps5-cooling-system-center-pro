@@ -2,8 +2,10 @@
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "core/save_file.hpp"
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/i18n.hpp"
 #include "ps5cc/plans.hpp"
 #include "third_party/cjson/cJSON.h"
 
@@ -12,6 +14,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <string>
 #include <deque>
 #include <vector>
 
@@ -191,6 +196,36 @@ class MockSource final : public Source
         fill_store();
         fill_logs();
         refresh_status();
+        data_.console_language = 4; // German, as the owner's console
+        load_language();
+    }
+
+    // For pictures of another language: PS5CC_LANG=en and
+    // PS5CC_LANG_FILES=web/lang/en.json:assets/lang/en.json (the browser's dictionary, then the
+    // fullscreen app's own), as the console app and /app0 would give them.
+    void load_language()
+    {
+        const char *lang = std::getenv("PS5CC_LANG");
+        const char *files = std::getenv("PS5CC_LANG_FILES");
+        if (lang == nullptr || files == nullptr || std::string(lang) == "de")
+            return;
+        auto entries = std::make_shared<std::vector<i18n::Entry>>();
+        std::string list = files;
+        for (std::size_t from = 0; from <= list.size();)
+        {
+            const std::size_t colon = list.find(':', from);
+            const std::string path =
+                list.substr(from, colon == std::string::npos ? std::string::npos : colon - from);
+            std::string text;
+            if (!path.empty() && save::read_file(path, &text, 8u << 20))
+                i18n::parse_dictionary(text, entries.get());
+            if (colon == std::string::npos)
+                break;
+            from = colon + 1;
+        }
+        data_.config.tv_language = lang;
+        data_.language = lang;
+        data_.dictionary = std::move(entries);
     }
 
     bool fetch(Snapshot &out, std::uint64_t &seen) override
@@ -288,7 +323,18 @@ class MockSource final : public Source
 
     void save_config(const std::string &patch) override
     {
-        (void)patch;
+        // the language choice is kept, as the app does (the preview has no other dictionary to
+        // switch to)
+        if (cJSON *root = cJSON_Parse(patch.c_str()))
+        {
+            const cJSON *lang = cJSON_GetObjectItemCaseSensitive(root, "tv_language");
+            if (cJSON_IsString(lang) && lang->valuestring != nullptr)
+            {
+                data_.config.tv_language = lang->valuestring;
+                changed();
+            }
+            cJSON_Delete(root);
+        }
         notice(Notice::Kind::success, "Gespeichert");
     }
 

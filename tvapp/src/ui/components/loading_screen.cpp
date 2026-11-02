@@ -359,11 +359,14 @@ const std::vector<std::string> &LoadingScreen::tip_lines(const Canvas &canvas, c
     TipCache &cache = cache_[slot];
     const float width = layout_of(style, bounds_).tip_width;
     const int lines = std::max(style.tip_lines, 1);
-    if (cache.fonts != &canvas.fonts || cache.theme != style.theme.id || cache.index != index ||
-        cache.width != width || cache.size != style.tip_size || cache.lines_max != lines)
+    const unsigned generation = gfx::text_filter_generation();
+    if (cache.fonts != &canvas.fonts || cache.theme != style.theme.id ||
+        cache.text_generation != generation || cache.index != index || cache.width != width ||
+        cache.size != style.tip_size || cache.lines_max != lines)
     {
         cache.fonts = &canvas.fonts;
         cache.theme = style.theme.id;
+        cache.text_generation = generation;
         cache.index = index;
         cache.width = width;
         cache.size = style.tip_size;

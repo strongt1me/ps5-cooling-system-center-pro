@@ -4,6 +4,8 @@
 
 #include "ui/components/text_view.hpp"
 
+#include "gfx/font.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -42,9 +44,11 @@ template <typename Measure> std::string cut_to(std::string line, float width, Me
         return line;
     while (!line.empty() && measure(line + "...") > width)
     {
-        do
+        // continuation bytes first, then the lead byte: a lead byte left alone draws as "?"
+        while (!line.empty() && (static_cast<unsigned char>(line.back()) & 0xc0) == 0x80)
             line.pop_back();
-        while (!line.empty() && (static_cast<unsigned char>(line.back()) & 0xc0) == 0x80);
+        if (!line.empty())
+            line.pop_back();
         while (!line.empty() && line.back() == ' ')
             line.pop_back();
     }
@@ -57,6 +61,7 @@ template <typename Measure>
 void wrap_into(std::vector<std::string> &out, std::string_view text, float width, bool keep_indent,
                Measure measure)
 {
+    text = gfx::filter_text(text); // wrap the translation, not the original
     std::size_t at = 0;
     while (at <= text.size())
     {
@@ -218,7 +223,7 @@ TextBlock TextBlock::image(std::string caption, float height, int tag)
 
 bool TextView::Key::operator==(const Key &other) const
 {
-    if (fonts != other.fonts || theme != other.theme)
+    if (fonts != other.fonts || theme != other.theme || text_generation != other.text_generation)
         return false;
     return std::equal(std::begin(values), std::end(values), std::begin(other.values));
 }
@@ -229,6 +234,7 @@ TextView::Key TextView::key() const
     Key k;
     k.fonts = fonts_;
     k.theme = theme.id;
+    k.text_generation = gfx::text_filter_generation();
     const float values[] = {
         bounds_.w,
         bounds_.h,

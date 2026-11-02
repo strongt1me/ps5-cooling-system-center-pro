@@ -1157,10 +1157,13 @@ handle_drives(int fd) {
   int enabled = (g_config.probe_mask & PS5TM_PROBE_DRIVE) != 0;
   ps5tm_config_unlock();
 
+  /* Switched off is a state, not a failure: answered with 200 (until 1.75.3 a 409, which every browser printed as
+     a red error in its console whenever the page asked before it knew the setting). */
   if(!enabled) {
-    ps5tm_http_send_error(fd, 409, "drive_probe_disabled",
-                          "Laufwerks-Telemetrie ist deaktiviert "
-                          "(Zusatzabfragen).");
+    static const char off[] =
+      "{\"ok\":true,\"enabled\":false,\"code\":\"drive_probe_disabled\","
+      "\"message\":\"Laufwerks-Telemetrie ist deaktiviert (Zusatzabfragen).\"}";
+    ps5tm_http_send_json(fd, 200, off);
     return;
   }
 
@@ -1169,6 +1172,7 @@ handle_drives(int fd) {
 
   cJSON *root = cJSON_CreateObject();
   cJSON_AddBoolToObject(root, "ok", 1);
+  cJSON_AddBoolToObject(root, "enabled", 1);
   cJSON_AddStringToObject(root, "kind", "drive_telemetry");
   cJSON_AddBoolToObject(root, "m2_present", info.m2_present ? 1 : 0);
 
@@ -2725,6 +2729,7 @@ handle_config_get(int fd) {
       "\"library_cache\":%u,"
       "\"night_enabled\":%u,\"night_start_min\":%u,\"night_end_min\":%u,"
       "\"night_target_c\":%u,\"night_tz_offset_min\":%d,"
+      "\"tv_language\":\"%s\","
       "\"profile\":\"%s\","
       "\"curve\":[",
       g_config.schema_version,
@@ -2749,6 +2754,7 @@ handle_config_get(int fd) {
       g_config.library_cache,
       g_config.night_enabled, g_config.night_start_min, g_config.night_end_min,
       g_config.night_target_c, g_config.night_tz_offset_min,
+      g_config.tv_language,
       g_config.profile == PS5TM_PROFILE_COOL       ? "cool"
       : g_config.profile == PS5TM_PROFILE_BALANCED ? "balanced"
                                                    : "comfort");
@@ -2885,6 +2891,10 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
     next.night_target_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_tz_offset_min")))
     next.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
+  /* an unknown language falls back to "" (follow the console) in ps5tm_config_clamp */
+  if(cJSON_IsString(it = cJSON_GetObjectItem(root, "tv_language")))
+    snprintf(next.tv_language, sizeof(next.tv_language), "%s",
+             ps5tm_tv_language_ok(it->valuestring) ? it->valuestring : "");
 
   /* control_band_c, deadband_c, control_interval_s, average_window_s and
      max_step_pct are deliberately NOT read here.
@@ -2985,6 +2995,7 @@ handle_config_export(int fd) {
   cJSON_AddNumberToObject(cfg, "night_end_min", g_config.night_end_min);
   cJSON_AddNumberToObject(cfg, "night_target_c", g_config.night_target_c);
   cJSON_AddNumberToObject(cfg, "night_tz_offset_min", g_config.night_tz_offset_min);
+  cJSON_AddStringToObject(cfg, "tv_language", g_config.tv_language);
   cJSON_AddStringToObject(cfg, "profile",
       g_config.profile == PS5TM_PROFILE_COOL ? "cool"
       : g_config.profile == PS5TM_PROFILE_BALANCED ? "balanced"
@@ -3100,6 +3111,8 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
     next.night_target_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_tz_offset_min")))
     next.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
+  if(cJSON_IsString(it = cJSON_GetObjectItem(cfg, "tv_language")) && ps5tm_tv_language_ok(it->valuestring))
+    snprintf(next.tv_language, sizeof(next.tv_language), "%s", it->valuestring);
   if(cJSON_IsString(it = cJSON_GetObjectItem(cfg, "profile"))) {
     next.profile = !strcmp(it->valuestring, "cool")     ? PS5TM_PROFILE_COOL
                  : !strcmp(it->valuestring, "balanced") ? PS5TM_PROFILE_BALANCED

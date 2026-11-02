@@ -4,6 +4,8 @@
 
 #include "ui/components/overlay.hpp"
 
+#include "gfx/font.hpp"
+
 #include "ui/pixel_font.hpp"
 
 #include <algorithm>
@@ -39,9 +41,11 @@ template <typename Measure> std::string ellipsize(std::string line, float width,
 {
     while (!line.empty() && measure(line + "...") > width)
     {
-        do
+        // continuation bytes first, then the lead byte: a lead byte left alone draws as "?"
+        while (!line.empty() && (static_cast<unsigned char>(line.back()) & 0xc0) == 0x80)
             line.pop_back();
-        while (!line.empty() && (static_cast<unsigned char>(line.back()) & 0xc0) == 0x80);
+        if (!line.empty())
+            line.pop_back();
         while (!line.empty() && line.back() == ' ')
             line.pop_back();
     }
@@ -53,6 +57,7 @@ template <typename Measure> std::string ellipsize(std::string line, float width,
 template <typename Measure>
 std::vector<std::string> wrap(std::string_view text, float width, int max_lines, Measure measure)
 {
+    text = gfx::filter_text(text); // wrap the translation, not the original
     std::vector<std::string> lines;
     if (max_lines <= 0)
         return lines;
