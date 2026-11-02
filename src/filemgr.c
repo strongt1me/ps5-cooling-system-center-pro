@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/mount.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
@@ -166,14 +167,22 @@ write_root(const char *p) {
     size_t l = strlen(never[i]);
     if(!strncmp(p, never[i], l) && (p[l] == 0 || p[l] == '/')) return NULL;
   }
+  /* The mount points themselves stay even while nothing hangs there: an empty /mnt/usb0 or /mnt/disc deleted or
+     renamed and the next stick or disc finds no place to go. Every folder right below / and right below /mnt is such
+     a place or a root of the system; what is inside them stays changeable. */
+  const char *rest = p + 1;
+  if(!strncmp(p, "/mnt/", 5)) rest = p + 5;
+  if(!strchr(rest, '/')) return NULL;
   for(size_t i = 0; i < sizeof(fixed) / sizeof(fixed[0]); i++) {
     size_t l = strlen(fixed[i]);
+    if(!strncmp(p, fixed[i], l) && p[l] == 0) return NULL;
     if(!strncmp(p, fixed[i], l) && p[l] == '/' && p[l + 1]) return fixed[i];
   }
   const size_t ul = strlen("/mnt/usb");
   if(!strncmp(p, "/mnt/usb", ul) && p[ul] >= '0' && p[ul] <= '9') {
     size_t l = ul + 1;
     while(p[l] >= '0' && p[l] <= '9') l++;
+    if(p[l] == 0) return NULL;
     if(p[l] == '/' && p[l + 1]) return "/mnt/usb";
   }
   return "/";
@@ -214,10 +223,73 @@ mounted_here(const char *p) {
   return a.st_dev != b.st_dev;
 }
 
+#ifndef PS5TM_HOST_TEST
+/* Device and process file systems are not files to change, wherever they hang (each app's sandbox has a /dev of its
+   own). A name yet to be made is judged by the folder it would go into. */
+static int
+special_fs(const char *p) {
+  char real[FM_PATH + 64], parent[FM_PATH];
+  struct statfs sf;
+  if(real_path(p, real, sizeof(real)) != 0) return 1;
+  if(statfs(real, &sf) != 0) {
+    if(errno != ENOENT) return 1;
+    dir_name(p, parent, sizeof(parent));
+    if(real_path(parent, real, sizeof(real)) != 0 || statfs(real, &sf) != 0) return 1;
+  }
+  return !strcmp(sf.f_fstypename, "devfs") || !strcmp(sf.f_fstypename, "procfs") ||
+         !strcmp(sf.f_fstypename, "fdescfs");
+}
+
+/* The mount table, read at most once a second: the folder listing asks for every entry. */
+static pthread_mutex_t g_mnt_lock = PTHREAD_MUTEX_INITIALIZER;
+static char *g_mnt_on;   /* the mount points, one after another, each ended by its NUL */
+static size_t g_mnt_len;
+static time_t g_mnt_at;
+
+/* Does something hang below the folder p (renaming or deleting it would pull the floor from under that drive)? */
+static int
+holds_mount(const char *p) {
+  size_t pl = strlen(p);
+  pthread_mutex_lock(&g_mnt_lock);
+  time_t now = time(NULL);
+  if(!g_mnt_on || now != g_mnt_at) {
+    int count = getfsstat(NULL, 0, MNT_NOWAIT);
+    struct statfs *list = count > 0 ? malloc(sizeof(*list) * (size_t)(count + 16)) : NULL;
+    if(list) {
+      count = getfsstat(list, (long)(sizeof(*list) * (size_t)(count + 16)), MNT_NOWAIT);
+      size_t need = 1;
+      for(int i = 0; i < count; i++) need += strlen(list[i].f_mntonname) + 1;
+      char *on = malloc(need);
+      if(on) {
+        size_t at = 0;
+        for(int i = 0; i < count; i++) {
+          size_t l = strlen(list[i].f_mntonname) + 1;
+          memcpy(on + at, list[i].f_mntonname, l);
+          at += l;
+        }
+        free(g_mnt_on);
+        g_mnt_on = on;
+        g_mnt_len = at;
+        g_mnt_at = now;
+      }
+      free(list);
+    }
+  }
+  int found = !g_mnt_on;   /* no table: be careful */
+  for(size_t at = 0; !found && at < g_mnt_len; at += strlen(g_mnt_on + at) + 1)
+    found = !strncmp(g_mnt_on + at, p, pl) && g_mnt_on[at + pl] == '/';
+  pthread_mutex_unlock(&g_mnt_lock);
+  return found;
+}
+#else
+static int special_fs(const char *p) { (void)p; return 0; }
+static int holds_mount(const char *p) { (void)p; return 0; }
+#endif
+
 /* May p be changed (created, renamed, deleted)? */
 static int
 writable(const char *p) {
-  return write_root(p) && no_links(p) && !mounted_here(p);
+  return write_root(p) && no_links(p) && !mounted_here(p) && !special_fs(p) && !holds_mount(p);
 }
 
 /* May something be made inside the folder dir? A name below it must be writable; the name used to ask is one nobody
@@ -225,7 +297,8 @@ writable(const char *p) {
 static int
 dir_writable(const char *dir) {
   char probe[FM_PATH];
-  return join(dir, ".ps5cc-schreibprobe", probe, sizeof(probe)) == 0 && write_root(probe) && no_links(probe);
+  return join(dir, ".ps5cc-schreibprobe", probe, sizeof(probe)) == 0 && write_root(probe) && no_links(probe) &&
+         !special_fs(probe);
 }
 
 static int

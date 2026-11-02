@@ -307,6 +307,7 @@ void Translator::load(const std::string &lang, const std::vector<Entry> &entries
 {
     lang_ = lang;
     exact_.clear();
+    outputs_.clear();
     patterns_.clear();
     by_lead_.clear();
     floating_.clear();
@@ -330,6 +331,7 @@ void Translator::load(const std::string &lang, const std::vector<Entry> &entries
         if (!has_placeholder(src))
         {
             exact_[src] = tr;
+            outputs_.insert(tr);
             continue;
         }
         Pattern p;
@@ -550,7 +552,9 @@ bool Translator::via_marks(std::string_view core, int depth, std::string *out)
 
 bool Translator::lookup(std::string_view core, int depth, std::string *out)
 {
-    const std::string key(core);
+    // At depth 3 neither segments nor marks are tried: that answer must not stand for a shallower
+    // ask.
+    const std::string key = depth >= 3 ? "\x01" + std::string(core) : std::string(core);
     if (const auto hit = lookups_.find(key); hit != lookups_.end())
     {
         if (hit->second.hit)
@@ -558,7 +562,12 @@ bool Translator::lookup(std::string_view core, int depth, std::string *out)
         return hit->second.hit;
     }
     Cached result;
-    if (const auto e = exact_.find(key); e != exact_.end())
+    if (outputs_.count(std::string(core)) != 0)
+    {
+        lookups_.emplace(key, result); // already a translation: it stays as it is
+        return false;
+    }
+    if (const auto e = exact_.find(std::string(core)); e != exact_.end())
     {
         result.hit = true;
         result.out = e->second;

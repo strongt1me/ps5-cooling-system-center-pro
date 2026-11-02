@@ -54,6 +54,7 @@ namespace
 template <typename Measure> std::string fit(std::string_view text, float width, Measure measure)
 {
     text = gfx::filter_text(text); // cut the translation, not the original
+    const gfx::RawText raw;
     if (measure(text) <= width)
         return std::string(text);
     std::string cut(text);

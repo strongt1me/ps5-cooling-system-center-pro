@@ -16,12 +16,23 @@ namespace
 {
 TextFilter *g_filter = nullptr;
 unsigned g_generation = 0;
+int g_raw = 0; // RawText scopes alive
 
 std::string_view filtered(std::string_view text)
 {
-    return g_filter != nullptr && !text.empty() ? g_filter->apply(text) : text;
+    return g_filter != nullptr && g_raw == 0 && !text.empty() ? g_filter->apply(text) : text;
 }
 } // namespace
+
+RawText::RawText()
+{
+    ++g_raw;
+}
+
+RawText::~RawText()
+{
+    --g_raw;
+}
 
 void set_text_filter(TextFilter *filter)
 {
@@ -213,6 +224,18 @@ Font::Resolved Font::resolve(std::uint32_t *codepoint) const
     {
         if (const ff::Glyph *glyph = fallback.face->find(*codepoint))
             return {fallback.face, glyph, fallback.texture};
+    }
+    // The no-break and thin spaces (French puts one before every colon) draw as a plain space.
+    const std::uint32_t c = *codepoint;
+    if (c == 0x00a0 || (c >= 0x2000 && c <= 0x200a) || c == 0x202f || c == 0x205f)
+    {
+        *codepoint = ' ';
+        return resolve(codepoint);
+    }
+    if (c == 0x2212) // the minus sign some translations write
+    {
+        *codepoint = '-';
+        return resolve(codepoint);
     }
     *codepoint = '?';
     return {this, find('?'), 0};

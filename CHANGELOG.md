@@ -3,7 +3,7 @@
 ## Unveröffentlicht
 
 ### Vollbild-App mehrsprachig
-- Die Vollbild-App spricht jetzt Deutsch, Englisch, Spanisch, Französisch, Italienisch, Russisch und Schwedisch. Ab Werk folgt sie der Systemsprache der Konsole (andere Sprachen: Englisch); umstellen lässt sie sich mit der Options-Taste → „Sprache / Language“ (Automatisch → Deutsch → English → …), die Wahl bleibt gespeichert (`tv_language` in der Konfiguration, Teil von Export/Import).
+- Die Vollbild-App spricht jetzt Deutsch, Englisch, Spanisch, Französisch, Italienisch, Russisch und Schwedisch. Ab Werk folgt sie der Systemsprache der Konsole (andere Sprachen: Englisch); umstellen lässt sie sich mit der Options-Taste → „Sprache / Language“: eine Liste aller Sprachen, die aktive mit Häkchen, ein Druck wählt; die Wahl bleibt gespeichert (`tv_language` in der Konfiguration, Teil von Export/Import).
 - Sie nutzt dieselben Wörterbücher wie die Browser-Oberfläche (`/lang/<xx>.json` von der App) und nach denselben Regeln; ihre eigenen rund 800 Texte liegen in der Kachel (`assets/lang/<xx>.json`). Was in keinem Wörterbuch steht, bleibt deutsch. Russisch braucht keinen neuen Zeichensatz – die Schriften enthalten die kyrillischen Buchstaben schon.
 
 ### Übersetzungen vervollständigt
@@ -17,6 +17,13 @@
 - Hochladen, neuer Ordner, Umbenennen, Kopieren, Verschieben und Löschen gehen jetzt überall – auch in Systemordnern wie `/user/download` und im Ordner der App (Wunsch des Users; vorher nur auf den Laufwerken und in `/data`, im App-Ordner nur `payloads`, `AMPR_EMU`, `PlayGo`, `LZ4_Profile`). „Ganzes System“ ist kein reiner Ansehen-Ort mehr.
 - Gesperrt bleibt nur, was vor Unfällen schützt: `/` selbst, `/dev`, `/proc`, Verknüpfungen (auch auf dem Weg) und eingehängte Laufwerke als Ganzes; Kopieren und Löschen gehen weiter nie auf ein anderes Laufwerk über, überschrieben wird nie. Schreibgeschützt eingehängte Bereiche lehnen selbst ab.
 - Meldungen, Browser, Vollbild-App, Handbuch, FAQ (6 Sprachen) und `docs/HANDBUCH.md` nennen die neue Grenze und warnen vor `/system_data` und `/user`.
+- Nachgeschärft (Prüfung an der Pro): Die Ordner direkt unter `/` und direkt unter `/mnt` selbst bleiben gesperrt, auch wenn gerade nichts darin hängt – ein leeres `/mnt/usb2`, `/mnt/ext0` oder `/mnt/disc` ließ sich sonst löschen oder umbenennen, und der nächste Stick, der erweiterte Speicher oder die nächste Disc fand keinen Platz mehr. Ebenso gesperrt: Ordner, unter denen etwas eingehängt ist (`/mnt/sandbox`, die Titel von ShadowMountPlus), und alles auf Gerätedateisystemen (die `/dev`-Ordner in den Sandboxen der Apps). Ihr Inhalt bleibt änderbar.
+
+### Durchsicht 02.11.
+- Vollbild-App: Eine Übersetzung wird nicht mehr ein zweites Mal übersetzt, wenn sie selbst ein deutsches Wort ist (Englisch zeigte nach dem Kürzen „Profiles“ statt „Profile“, Schwedisch „Starta“ statt „Start“). Beim Kürzen und Umbrechen laufen die Bruchstücke nicht mehr einzeln durch den Übersetzer (weniger Arbeit je Bild, kein Überlaufen des Zwischenspeichers).
+- Vollbild-App: Geschützte und schmale Leerzeichen (Französisch vor jedem Doppelpunkt, rund 830 Stellen) und das Minuszeichen erschienen als „?“; sie werden jetzt als Leerzeichen bzw. „-“ gezeichnet.
+- Vollbild-App: Eine im Menü gewählte Sprache lädt auch dann, wenn die Systemangaben der Konsole (`/api/v1/system`) nicht antworten; die Abfrage wiederholt sich dann alle 10 s statt bei jedem Durchlauf.
+- Browser: Die Systemseite sagt bei ausgeschalteter Laufwerks-Telemetrie wieder „deaktiviert“ statt „Keine Laufwerke gemeldet“; die Textvorschau im Dateimanager bricht nach 30 s mit „Die Konsole antwortet nicht.“ ab, statt ewig zu laden.
 
 ### Aufräumen nach der alten Kachel, PS4Mount-Prüfungen als Skript
 - Sprachdateien: 12 Übersetzungen der früheren Kachel-Oberfläche („Kachel installieren“, „Kachel-Paket auswählen“ …) und des entfernten Start-Versuchs gelöscht; sie wurden nirgends mehr angezeigt. Die Antwort auf ein hochgeladenes Kachel-Paket nennt statt des verschwundenen Knopfs `POST /api/v1/tile/ensure`.

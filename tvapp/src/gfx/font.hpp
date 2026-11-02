@@ -53,6 +53,18 @@ unsigned text_filter_generation();
 // text, or it cuts the original.
 std::string_view filter_text(std::string_view text);
 
+// While one lives, Fonts take text as given. For the loops that cut or wrap a text filter_text()
+// already rewrote: every piece they measure would otherwise go through the filter again, cost a
+// lookup each and could be rewritten a second time (a translation that is itself a German word).
+class RawText
+{
+  public:
+    RawText();
+    ~RawText();
+    RawText(const RawText &) = delete;
+    RawText &operator=(const RawText &) = delete;
+};
+
 class Font
 {
   public:

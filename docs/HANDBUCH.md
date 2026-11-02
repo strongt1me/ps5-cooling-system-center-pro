@@ -548,7 +548,10 @@ Nur zum Schutz vor Unfällen gesperrt („Nur ansehen“, Knöpfe aus):
 - Verknüpfungen: Sie werden nie verfolgt, wenn etwas geändert wird, und lassen sich weder umbenennen noch löschen; liegt
   eine Verknüpfung auf dem Weg, ist der ganze Pfad gesperrt;
 - eingehängte Laufwerke selbst (`/mnt/usb0`, `/data`): nur ihr Inhalt. Kopieren und Löschen gehen nie auf ein anderes
-  Laufwerk über.
+  Laufwerk über. Seit 1.75.3 gilt das für jeden Ordner direkt unter `/` und direkt unter `/mnt`, auch wenn gerade nichts
+  darin hängt (ein leeres `/mnt/usb2` oder `/mnt/disc` gelöscht, und der nächste Stick oder die nächste Disc findet keinen
+  Platz), und für Ordner, unter denen etwas eingehängt ist (`/mnt/sandbox`);
+- alles auf Gerätedateisystemen, auch die `/dev`-Ordner in den Sandboxen der Apps.
 
 > **Vorsicht:** Unter `/system_data` und `/user` liegen Datenbanken und Einstellungen der Konsole. Wer dort das Falsche
 > löscht oder verschiebt, riskiert eine Konsole, die nicht mehr startet oder neu eingerichtet werden muss. Überschrieben
@@ -1544,8 +1547,8 @@ derselben laufenden App über `127.0.0.1:8086`.
   Browser öffnen“, „Neu laden“, „Sprache / Language“, „App beenden“, Power-Optionen). Die Leiste unten zeigt die gerade
   gültigen Tasten.
 - **Sprache (seit 1.75.3):** Deutsch, Englisch, Spanisch, Französisch, Italienisch, Russisch, Schwedisch. Ab Werk wie die
-  Systemsprache der Konsole (andere Sprachen: Englisch); Options-Taste → „Sprache / Language“ schaltet weiter
-  (Automatisch → Deutsch → English → …) und merkt sich die Wahl. Die Texte kommen aus denselben Wörterbüchern wie im
+  Systemsprache der Konsole (andere Sprachen: Englisch); Options-Taste → „Sprache / Language“ öffnet eine Liste
+  aller Sprachen (Häkchen = aktiv); ein Druck wählt, die Wahl bleibt gespeichert. Die Texte kommen aus denselben Wörterbüchern wie im
   Browser; was keines kennt, bleibt deutsch.
 - **Bereiche:** Kühlung (Übersicht, Einstellungen mit Warnungen, Lichtleiste, Spielprofilen, Nachtmodus, Selbsttest),
   Spiele (Bibliothek mit Aktionen-Menü – Kopieren, Konvertieren, Verschieben, Entpacken, Abbild prüfen, Löschen, Extras,

@@ -129,6 +129,14 @@ TEST(Font, UnknownCharactersFallBackToQuestionMark)
     EXPECT_FLOAT_EQ(font.measure("\xFF", 30), font.measure("?", 30));         // invalid byte
 }
 
+TEST(Font, NoBreakSpacesDrawAsSpaces)
+{
+    const Font &font = inter();
+    // "Espace :" as French writes it: a space, never "?"
+    EXPECT_FLOAT_EQ(font.measure("a\xC2\xA0:", 30), font.measure("a :", 30));
+    EXPECT_FLOAT_EQ(font.measure("a\xE2\x80\xAF:", 30), font.measure("a :", 30)); // U+202F
+}
+
 TEST(Font, AsksItsFallbacksForWhatItLacks)
 {
     Font font = inter(); // a copy: fallbacks belong to one font

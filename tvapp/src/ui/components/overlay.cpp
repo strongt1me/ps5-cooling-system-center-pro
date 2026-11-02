@@ -58,6 +58,7 @@ template <typename Measure>
 std::vector<std::string> wrap(std::string_view text, float width, int max_lines, Measure measure)
 {
     text = gfx::filter_text(text); // wrap the translation, not the original
+    const gfx::RawText raw;
     std::vector<std::string> lines;
     if (max_lines <= 0)
         return lines;

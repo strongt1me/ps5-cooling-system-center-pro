@@ -62,6 +62,7 @@ void wrap_into(std::vector<std::string> &out, std::string_view text, float width
                Measure measure)
 {
     text = gfx::filter_text(text); // wrap the translation, not the original
+    const gfx::RawText raw;
     std::size_t at = 0;
     while (at <= text.size())
     {

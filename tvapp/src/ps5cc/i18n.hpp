@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -88,6 +89,9 @@ class Translator final : public gfx::TextFilter
 
     std::string lang_ = "de";
     std::unordered_map<std::string, std::string> exact_;
+    // Every translation exact_ gives: such a text is done, even when it is also a German key
+    // ("Profil" gives "Profile", which itself would give "Profiles").
+    std::unordered_set<std::string> outputs_;
     std::vector<Pattern> patterns_;
     std::unordered_map<std::string, std::vector<std::size_t>>
         by_lead_;                                     // first two bytes, ASCII lower case

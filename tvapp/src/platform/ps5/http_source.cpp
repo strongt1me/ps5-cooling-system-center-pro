@@ -2202,11 +2202,15 @@ void HttpSource::poll_config()
 // off the frame.
 void HttpSource::poll_language()
 {
-    if (!console_language_read_)
+    if (!console_language_read_ && sys::monotonic_us() >= system_retry_us_)
     {
         int status = 0;
         std::string body;
-        if (exchange("GET", "/api/v1/system", {}, &status, &body, 8) == Net::ok && status == 200)
+        if (exchange("GET", "/api/v1/system", {}, &status, &body, 8) != Net::ok || status != 200)
+        {
+            system_retry_us_ = sys::monotonic_us() + 10000000; // not on every pass
+        }
+        else
         {
             console_language_read_ = true;
             if (cJSON *root = cJSON_Parse(body.c_str()))
@@ -2227,7 +2231,8 @@ void HttpSource::poll_language()
         setting = data_.config.tv_language;
         config_valid = data_.config.valid;
     }
-    if (!config_valid || !console_language_read_)
+    // A language chosen in the menu needs nothing from the console.
+    if (!config_valid || (setting.empty() && !console_language_read_))
         return;
     const std::string wanted = i18n::wanted_language(setting, console_language_);
     if (wanted == language_loaded_ || sys::monotonic_us() < language_retry_us_)

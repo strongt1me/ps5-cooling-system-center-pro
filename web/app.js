@@ -4177,6 +4177,8 @@
         dHost.innerHTML = `<div class="kv-grid">${head}</div>${dHost.innerHTML}`;
       } else if (driveErr) {
         dHost.innerHTML = `<p class="muted">${esc(driveErr)}</p>`;
+      } else if (driveOff) {
+        dHost.innerHTML = `<p class="muted">Laufwerks-Telemetrie ist deaktiviert (Zusatzabfragen).</p>`;
       } else {
         dHost.innerHTML = `<p class="muted">Keine /dev/daN-Laufwerke gemeldet.</p>`;
       }
@@ -8732,14 +8734,18 @@
       });
       return;
     }
+    /* Nicht ewig „wird geladen …“, wenn die Konsole nicht mehr antwortet; die Uhr läuft bis zum Ende des Texts. */
+    const ctl = new AbortController();
+    const stop = setTimeout(() => ctl.abort(), 30000);
     try {
-      const r = await fetch(url, { cache: "no-store" });
+      const r = await fetch(url, { cache: "no-store", signal: ctl.signal });
       if (!r.ok) {
         let m = "";
         try { m = (await r.json()).message; } catch { /* keine Meldung */ }
         throw new Error(m || `HTTP ${r.status}`);
       }
       const text = await r.text();
+      clearTimeout(stop);
       if (mine !== fm.viewSeq) return;
       const truncated = r.headers.get("X-Fm-Truncated") === "1";
       const total = Number(r.headers.get("X-Fm-Size"));
@@ -8748,8 +8754,10 @@
         <p class="muted fm-view-note">${truncated ? `Nur der Anfang: ${esc(bytes(shown))} von ${esc(bytes(total))}. ` : ""}${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))}</p>${actions}`;
       $("#fm-dlg-body .fm-view-text").textContent = text || "(leer)";
     } catch (er) {
+      clearTimeout(stop);
       if (mine !== fm.viewSeq) return;
-      $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(er.message)}</p>${actions}`;
+      const msg = er && er.name === "AbortError" ? "Die Konsole antwortet nicht." : er.message;
+      $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(msg)}</p>${actions}`;
     }
   };
 

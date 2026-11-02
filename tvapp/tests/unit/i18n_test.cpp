@@ -101,6 +101,23 @@ TEST(I18n, FilterReachesFontsAndCountsChanges)
     EXPECT_EQ(gfx::filter_text("Spiele"), "Spiele");
 }
 
+TEST(I18n, ATranslationIsNotTranslatedAgain)
+{
+    Translator t;
+    t.load("en", std::vector<Entry>{{"Profil", "Profile"}, {"Profile", "Profiles"}});
+    EXPECT_EQ(t.translate("Profil"), "Profile");
+    EXPECT_EQ(t.translate("Profile"), "Profile"); // drawn again after fitting: stays
+    EXPECT_EQ(t.translate("Profile..."), "Profile...");
+
+    gfx::set_text_filter(&t);
+    {
+        const gfx::RawText raw; // pieces of a text already rewritten go through as given
+        EXPECT_EQ(gfx::filter_text("Profil"), "Profil");
+    }
+    EXPECT_EQ(gfx::filter_text("Profil"), "Profile");
+    gfx::set_text_filter(nullptr);
+}
+
 TEST(I18n, ConsoleLanguage)
 {
     EXPECT_EQ(console_language(4), "de");
