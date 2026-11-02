@@ -225,6 +225,8 @@ class HttpSource final : public Source
     std::string language_loaded_ = "de";
     std::int64_t language_retry_us_ = 0; // after a failed download: not before this time
     std::int64_t system_retry_us_ = 0;   // after a failed /api/v1/system: not before this time
+    bool console_tz_known_ = false;      // the console named its own time zone
+    int console_tz_min_ = 0;             // its clock minus UTC (locale.local_offset_min)
     std::atomic<bool> retry_{false};
     bool online_ = false;
     bool payload_sent_ = false;

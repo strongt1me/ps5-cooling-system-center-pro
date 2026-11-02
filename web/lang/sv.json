@@ -5101,7 +5101,8 @@
     "„{0}“ wurde nicht gelöscht: {1}": "”{0}” togs inte bort: {1}",
     "„{0}“ wurde nicht gestartet: die Vollbild-App hat sich nicht beendet.": "”{0}” startades inte: helskärmsappen avslutades inte.",
     "„{0}“ wurde nicht {1}: {2}": "”{0}” blev inte {1}: {2}",
-    "entpackt": "uppackad"
+    "entpackt": "uppackad",
+    "Die Kernlast wird nur mit der Zusatzabfrage „Risikotelemetrie“ gemessen; sie ist aus.": "Kärnbelastningen mäts bara med extra avsökningen ”Risktelemetri”; den är avstängd."
   },
   "v": 1
 }

@@ -2489,7 +2489,13 @@ handle_system(int fd) {
         cJSON_AddNumberToObject(loc, "time_zone", rs.time_zone_code);
       if(rs.timezone_offset_valid)
         cJSON_AddNumberToObject(loc, "timezone_offset_min",
-                                rs.timezone_offset_min);
+                                rs.timezone_offset_min);   /* raw, despite the name (seconds on the Pro) */
+      if(rs.utc_offset_valid)
+        cJSON_AddNumberToObject(loc, "utc_offset_raw", rs.utc_offset_sec);
+      if(rs.summer_time_valid)
+        cJSON_AddBoolToObject(loc, "summer_time", rs.summer_time_now);
+      if(rs.local_offset_valid)
+        cJSON_AddNumberToObject(loc, "local_offset_min", rs.local_offset_min);
       if(rs.region_valid)
         cJSON_AddStringToObject(loc, "region_code", rs.region_code);
     }

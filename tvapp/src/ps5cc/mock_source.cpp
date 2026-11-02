@@ -2082,7 +2082,7 @@ class MockSource final : public Source
             R"("network":{"probed":true,"up":true,"kind":"wlan","ip":"192.168.1.94","ssid":"Wohnzimmer-5G","signal_pct":86,"band_ghz":5,"link_mbit":866},)"
             R"("display":{"name":"Wohnzimmer-TV","width":3840,"height":2160,"refresh_hz":60,"hdr":true},)"
             R"("controller":{"in_use":true,"press_age_s":4,"battery_pct":80,"charging":false,"from_log":true,"restored":false,"age_s":30},)"
-            R"("console_name":"PS5-054","locale":{"language":4,"time_zone":61,"timezone_offset_min":60,"region_code":"EU"},)"
+            R"("console_name":"PS5-054","locale":{"language":4,"time_zone":61,"timezone_offset_min":3600,"utc_offset_raw":3600,"summer_time":false,"local_offset_min":60,"region_code":"EU"},)"
             R"("memory":{"rss_mb":297.8,"kernel_mb":314,"wire_mb":411.8,"swap_mb":0,"pt_cpu_used":4996,"pt_cpu_total":9216,"pt_gpu_used":141,"pt_gpu_total":9216,)"
             R"("processes":[{"name":"PPSA01325 eboot.bin","used_mb":10480,"total_mb":13312},{"name":"NPXS40087 SceShellUI.elf","used_mb":612,"total_mb":1024},)"
             R"({"name":"ps5tm.elf","used_mb":298,"total_mb":512},{"name":"shadowmountplus.elf","used_mb":42,"total_mb":64}]},)"

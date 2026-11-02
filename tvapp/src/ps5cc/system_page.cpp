@@ -727,8 +727,10 @@ class SystemPage final : public Page
             add(kCores, n, "Kern " + std::to_string(i++),
                 v < 0 ? "–" : std::to_string(static_cast<int>(v)) + " %");
         }
+        // the load is measured only with "Risikotelemetrie" on: say so, not just "nothing"
         if (n == 0)
-            add(kCores, n, "Auslastung", "keine Angabe");
+            add(kCores, n, "Auslastung",
+                (mask_ & 8) == 0 ? "Abfrage aus (Zusatzabfragen)" : "keine Angabe");
 
         // graphics
         n = 0;
@@ -908,7 +910,11 @@ class SystemPage final : public Page
         {
             add(kFirmware, n, "Sprache (Code)",
                 std::to_string(static_cast<int>(num(loc, "language"))));
-            const int off = static_cast<int>(num(loc, "timezone_offset_min"));
+            // local_offset_min since 1.75.4; timezone_offset_min is raw and counted seconds on the
+            // Pro (3600 at UTC+1), so it is only the fallback for an older app
+            const int off = has(loc, "local_offset_min")
+                                ? static_cast<int>(num(loc, "local_offset_min"))
+                                : static_cast<int>(num(loc, "timezone_offset_min")) / 60;
             char tz[32];
             std::snprintf(tz, sizeof(tz), "UTC%c%d:%02d", off < 0 ? '-' : '+', std::abs(off) / 60,
                           std::abs(off) % 60);

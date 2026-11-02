@@ -60,6 +60,8 @@ extern int sceRegMgrGetStr(int key, char *out, size_t size) __attribute__((weak)
 #define REG_LANGUAGE      33685504    /* SYSTEM_language, type 0, size 4 */
 #define REG_TIME_ZONE     83951616    /* DATE_time_zone, type 0, size 4 */
 #define REG_TZ_OFFSET     84410368    /* DATE_timezone_offset, type 0, size 4 */
+#define REG_IS_SUMMER     84279296    /* DATE_is_summer_time (0x05060000), read-only, 1 while it is in force */
+#define REG_UTC_OFFSET    84344832    /* DATE_utc_offset (0x05070000) */
 #define REG_REGION_CODE   58723328    /* SECURITY_PARENTAL_game_age_limit_region */
 #define REG_REGION_SIZE   3
 
@@ -95,6 +97,14 @@ ps5tm_regstats_refresh(void) {
         s.timezone_offset_valid = 1;
         s.timezone_offset_min = v;
       }
+      if(sceRegMgrGetInt(REG_IS_SUMMER, &v) == 0) {
+        s.summer_time_valid = 1;
+        s.summer_time_now = v != 0;
+      }
+      if(sceRegMgrGetInt(REG_UTC_OFFSET, &v) == 0) {
+        s.utc_offset_valid = 1;
+        s.utc_offset_sec = v;
+      }
     }
 
     if(sceRegMgrGetStr) {
@@ -111,6 +121,31 @@ ps5tm_regstats_refresh(void) {
   if(rc != 0) s.nickname[0] = '\0';
   s.nickname[sizeof(s.nickname) - 1] = '\0';
   s.valid = (s.nickname[0] != '\0');
+
+  /* The console's local time, for the screens that show clock times (the fullscreen app knew only what a browser
+     once told it, and showed UTC until then). DATE_timezone_offset said 3600 at UTC+1 on the Pro, so it counts
+     seconds although other code calls it minutes; a value of 14 hours or less in minutes is taken as minutes.
+     It is the zone's own offset; daylight saving comes on top while DATE_is_summer_time says so. That last part
+     could not be checked in November: the raw values are logged once so a summer reading can confirm it. */
+  if(s.timezone_offset_valid) {
+    int v = s.timezone_offset_min;
+    int base = (v > 840 || v < -720) ? v / 60 : v;
+    if(base >= -720 && base <= 840) {
+      s.local_offset_min = base + (s.summer_time_valid && s.summer_time_now ? 60 : 0);
+      s.local_offset_valid = 1;
+    }
+  }
+  {
+    static int tz_logged = 0;
+    if(!tz_logged && (s.timezone_offset_valid || s.utc_offset_valid)) {
+      tz_logged = 1;
+      PS5TM_INFO("regstats_time_zone",
+                 "Zeitzone der Konsole: Code %d, Versatz roh %d, UTC-Versatz roh %d, Sommerzeit %d -> Ortszeit "
+                 "UTC%+d min.", s.time_zone_valid ? s.time_zone_code : -1,
+                 s.timezone_offset_valid ? s.timezone_offset_min : 0, s.utc_offset_valid ? s.utc_offset_sec : 0,
+                 s.summer_time_valid ? s.summer_time_now : -1, s.local_offset_valid ? s.local_offset_min : 0);
+    }
+  }
 
   pthread_mutex_lock(&g_lock);
   g_stats = s;

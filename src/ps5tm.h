@@ -1250,7 +1250,13 @@ typedef struct {
    int  time_zone_valid;
    int  time_zone_code;
    int  timezone_offset_valid;
-   int  timezone_offset_min;
+   int  timezone_offset_min;      /* raw DATE_timezone_offset: the Pro gave 3600 at UTC+1, i.e. seconds */
+   int  utc_offset_valid;
+   int  utc_offset_sec;           /* raw DATE_utc_offset */
+   int  summer_time_valid;
+   int  summer_time_now;          /* DATE_is_summer_time: daylight saving in force right now */
+   int  local_offset_valid;
+   int  local_offset_min;         /* the console's clock minus UTC, daylight saving included */
    int  region_valid;
    char region_code[8];
 } ps5tm_regstats_t;

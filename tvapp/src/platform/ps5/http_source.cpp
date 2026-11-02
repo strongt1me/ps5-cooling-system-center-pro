@@ -2182,7 +2182,10 @@ void HttpSource::poll_config()
     c.night_start_min = static_cast<int>(num(root, "night_start_min", 1380));
     c.night_end_min = static_cast<int>(num(root, "night_end_min", 420));
     c.night_target_c = static_cast<int>(num(root, "night_target_c", 75));
-    c.tz_offset_min = static_cast<int>(num(root, "night_tz_offset_min", 0));
+    // Clock times: the console's own zone when it named one (daylight saving included); else what a
+    // browser last told the app, which stays UTC until someone saves the night mode there.
+    c.tz_offset_min =
+        console_tz_known_ ? console_tz_min_ : static_cast<int>(num(root, "night_tz_offset_min", 0));
     c.target_temp_c = static_cast<int>(num(root, "target_temp_c", 68));
     c.warning_cpu_c = static_cast<int>(num(root, "warning_cpu_c", 85));
     c.warning_countdown_s = static_cast<int>(num(root, "warning_countdown_s", 120));
@@ -2217,10 +2220,17 @@ void HttpSource::poll_language()
             {
                 const cJSON *loc = cJSON_GetObjectItemCaseSensitive(root, "locale");
                 console_language_ = static_cast<int>(num(loc, "language", -1));
+                if (cJSON_IsNumber(cJSON_GetObjectItemCaseSensitive(loc, "local_offset_min")))
+                {
+                    console_tz_known_ = true;
+                    console_tz_min_ = static_cast<int>(num(loc, "local_offset_min", 0));
+                }
                 cJSON_Delete(root);
             }
             std::lock_guard<std::mutex> lock(mutex_);
             data_.console_language = console_language_;
+            if (console_tz_known_)
+                data_.config.tz_offset_min = console_tz_min_;
             ++data_.serial;
         }
     }

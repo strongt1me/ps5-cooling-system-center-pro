@@ -146,7 +146,7 @@ struct Config
     int night_start_min = 23 * 60;
     int night_end_min = 7 * 60;
     int night_target_c = 75;
-    int tz_offset_min = 0;         // minutes east of UTC, as the web page last told the app
+    int tz_offset_min = 0;         // minutes east of UTC: the console's zone, else the web page's
     int target_temp_c = 68;        // what a game profile remembers
     int warning_cpu_c = 85;        // 40..110; the chip's own limit is 5 °C more (config.c)
     int warning_countdown_s = 120; // 30..900

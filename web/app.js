@@ -1661,7 +1661,7 @@
               <u>${esc(v)} %</u>
             </div>`;
           }).join("")
-        : `<p class="muted">Die Konsole meldet keine Werte je Kern.</p>`);
+        : `<p class="muted">${!(state.cfg && Number.isFinite(state.cfg.probe_mask) && !(state.cfg.probe_mask & 8)) ? "Die Konsole meldet keine Werte je Kern." : "Die Kernlast wird nur mit der Zusatzabfrage „Risikotelemetrie“ gemessen; sie ist aus."}</p>`);
     }
 
     /* Was übrig bleibt: alles, was keine Prozessorauslastung ist. */
@@ -4091,10 +4091,13 @@
         }
         if (sys.locale.time_zone !== undefined)
           locRows.push(["Zeitzone (Code)", String(sys.locale.time_zone)]);
-        if (sys.locale.time_zone !== undefined && sys.locale.timezone_offset_min !== undefined)
-          locRows.push(["Zeitzone (Best-Effort)", `${offsetToHm(sys.locale.timezone_offset_min)} (aus Offset)`]);
-        if (sys.locale.timezone_offset_min !== undefined)
-          locRows.push(["Zeitzonen-Offset", `${offsetToHm(sys.locale.timezone_offset_min)} (${sys.locale.timezone_offset_min} min)`]);
+        /* Seit 1.75.4 rechnet die App die Ortszeit selbst aus (local_offset_min, Sommerzeit eingerechnet);
+           timezone_offset_min ist trotz des Namens der Rohwert und zählte auf der Pro Sekunden (3600 bei UTC+1). */
+        const tzMin = sys.locale.local_offset_min !== undefined ? sys.locale.local_offset_min : sys.locale.timezone_offset_min;
+        if (sys.locale.time_zone !== undefined && tzMin !== undefined)
+          locRows.push(["Zeitzone (Best-Effort)", `${offsetToHm(tzMin)} (aus Offset)`]);
+        if (tzMin !== undefined)
+          locRows.push(["Zeitzonen-Offset", `${offsetToHm(tzMin)} (${tzMin} min)`]);
         if (sys.locale.region_code !== undefined)
           locRows.push(["Region (Code)", String(sys.locale.region_code)]);
         locRows.push(["Hinweis", "Rohcodes sind maßgeblich; Zuordnung kann je Firmware/Region abweichen."]);
@@ -4589,7 +4592,7 @@
     if (!box) return;
     const cores = (s && s.load && s.load.cores) || [];
     if (!cores.length) {
-      box.innerHTML = `<p class="muted">Die Konsole meldet keine Einzelwerte.</p>`;
+      box.innerHTML = `<p class="muted">${!(state.cfg && Number.isFinite(state.cfg.probe_mask) && !(state.cfg.probe_mask & 8)) ? "Die Konsole meldet keine Einzelwerte." : "Die Kernlast wird nur mit der Zusatzabfrage „Risikotelemetrie“ gemessen; sie ist aus."}</p>`;
       return;
     }
     /* Ab 1 gezählt, wie in der Prozessor-Karte der Übersicht — dieselben acht
