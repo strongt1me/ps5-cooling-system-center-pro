@@ -1583,8 +1583,12 @@ Lüfterdrehzahl — auch ohne geöffnete Web-Oberfläche (Schalter unter
 Mikrofon wird dabei zweimal umgeschaltet und ist danach wieder wie vorher;
 ein einzelner Druck löst nichts aus. Ein Payload darf den Controller nicht
 lesen, deshalb wertet die App die Zeile aus, die das System für jeden Druck
-selbst ins Kernelprotokoll schreibt (`MicMuteKeyPressed`). Bis 1.45.x lag
-diese Anzeige auf der PS-Taste.
+selbst ins Kernelprotokoll schreibt (`MicMuteKeyPressed`). Diese Zeile gibt
+es erst ab Firmware 10.01; auf älteren Firmwares (z. B. 9.60) zählt die App
+stattdessen die Zeile, mit der das System den neuen Stummschalt-Zustand meldet
+(`onPostUmmStatusChanged`). Die meldet sich auch, wenn sich der Zustand aus
+anderem Grund ändert (Headset, Party), dann kann selten eine Meldung ohne
+Tastendruck kommen. Bis 1.45.x lag diese Anzeige auf der PS-Taste.
 
 Ein **dauerhaft eingeblendetes Overlay** wie bei etaHEN ist damit nicht
 gemeint und von außen auch nicht möglich: dafür müsste sich die App in den

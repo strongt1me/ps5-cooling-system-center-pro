@@ -31,6 +31,18 @@
  * reads that are at most MIC_PAIR_MS apart. That lets presses up to about two
  * seconds apart count as a pair — generous on purpose: a pair that was not
  * meant costs one notification, a pair that was missed costs another try.
+ *
+ * Firmware before 10.01 has no MicMuteKeyPressed line at all: the string is
+ * missing from SceShellCore of every version from 3.20 to 9.60 and present
+ * from 10.01 on (checked 02.11.2026 against the decrypted modules). A user on a
+ * 9.60 Slim got no notification for that reason. The third line above,
+ * onPostUmmStatusChanged(), is in 9.60 with the same format, so there each of
+ * those lines counts as a press instead. It is weaker — the status also
+ * changes when a headset is plugged in or a party starts — and whether 9.60
+ * really logs it on a press is not confirmed on a console yet. Should a
+ * MicMuteKeyPressed line show up after all (10.00, which was not checked),
+ * that one wins for good, since on newer firmware a press writes both and
+ * counting both would turn every single press into a pair.
  */
 
 #include <stdint.h>
@@ -41,6 +53,11 @@
 #include "ps5tm.h"
 
 #define MIC_MARK     "MicMuteKeyPressed"
+/* The fallback before 10.01, see the top. */
+#define UMM_MARK     "onPostUmmStatusChanged"
+/* First firmware whose ShellCore has MIC_MARK, as kernel_get_fw_version()
+   packs it (BCD major/minor in the top two bytes). */
+#define MIC_MARK_FW  0x10010000u
 /* At most one notification this often — about as long as one stays on screen,
    so a run of presses does not stack them up. It was 20 s at first (with the
    PS button), which swallowed eight deliberate presses in a row on the console
@@ -59,6 +76,8 @@ static unsigned g_last_count    = 0;
 static int      g_lone          = 0;
 static uint64_t g_lone_ms       = 0;
 static uint64_t g_last_shown_ms = 0;
+/* Set once a MicMuteKeyPressed line was seen; from then on only those count. */
+static int      g_seen_mic      = 0;
 
 /* Our own lines go into the very buffer this reads: ps5tm_log() mirrors every
    entry to klog, and a few of them carry text a stranger chose — the path of
@@ -90,12 +109,22 @@ own_line(const char *buf, const char *hit) {
 }
 
 static unsigned
-count_presses(const char *buf) {
+count_mark(const char *buf, const char *mark) {
   unsigned n = 0;
-  for(const char *p = buf; (p = strstr(p, MIC_MARK)) != NULL;
-      p += sizeof(MIC_MARK) - 1)
+  size_t   step = strlen(mark);
+  for(const char *p = buf; (p = strstr(p, mark)) != NULL; p += step)
     if(!own_line(buf, p)) n++;
   return n;
+}
+
+/* Presses in the buffer, by whichever line this firmware writes for them. An
+   unknown version (0) is treated as new: that is what the trigger was built on. */
+static unsigned
+count_presses(const char *buf, uint32_t fw) {
+  unsigned mic = count_mark(buf, MIC_MARK);
+  if(mic) g_seen_mic = 1;
+  if(g_seen_mic || !fw || fw >= MIC_MARK_FW) return mic;
+  return count_mark(buf, UMM_MARK);
 }
 
 /* fresh: presses this read found beyond the last one's; now: when it took
@@ -131,7 +160,10 @@ ps5tm_micbutton_poll(void) {
   size_t len = 0;
   char  *buf = ps5tm_msgbuf_read(&len);
   if(!buf) return;
-  unsigned n = count_presses(buf);
+  /* Switching from the fallback to the real line needs no new baseline: every
+     press also writes a status line, so the old count is never below the new
+     one and the switch itself cannot look like presses. */
+  unsigned n = count_presses(buf, ps5tm_platform_firmware());
   free(buf);
 
   if(!g_have_baseline) {
