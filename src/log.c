@@ -1,12 +1,15 @@
-/* In-memory event ring buffer backing /api/v1/logs. */
+/* In-memory event ring buffer backing /api/v1/logs, mirrored to app.log on /data. */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -132,13 +135,20 @@ out_mirror(const char *line, size_t len, int *err) {
 }
 
 
+static uint64_t        g_seq;     /* entries ever written (g_lock); the file writer counts against it */
+static pthread_cond_t  g_file_wake = PTHREAD_COND_INITIALIZER;
+
 static void
 ring_add(const ps5tm_log_entry_t *e) {
   pthread_mutex_lock(&g_lock);
   g_entries[g_head] = *e;
   g_head = (g_head + 1) % PS5TM_LOG_CAPACITY;
   if(g_count < PS5TM_LOG_CAPACITY) g_count++;
+  g_seq++;
   pthread_mutex_unlock(&g_lock);
+  /* A warning or an error goes to the file at once, not with the next batch: it is the line most likely to be
+     followed by a crash. No mutex around the signal; a wake-up lost that way costs at most one batch interval. */
+  if(e->level[0] == 'W' || e->level[0] == 'E') pthread_cond_signal(&g_file_wake);
 }
 
 
@@ -268,4 +278,133 @@ ps5tm_log_snapshot(ps5tm_log_entry_t *out, unsigned max) {
 
   pthread_mutex_unlock(&g_lock);
   return n;
+}
+
+
+/* ------------------------------------------------------------ file mirror
+ *
+ * The ring above is all the pages show, and it dies with the process: after
+ * the console restarted on 03.11.2026 nothing told what the app had done
+ * before. So the same entries also go to PS5TM_APPLOG_PATH, appended by a
+ * thread of their own. ps5tm_log() itself never touches the disk: it is
+ * called from the fan worker, which must not wait for a write or an fsync.
+ *
+ * The thread takes what is new in the ring every APPLOG_BATCH_MS (at once
+ * for a warning or an error), writes it as text, and syncs it, so that a
+ * hard reset loses at most that interval. Lines that rolled out of the ring
+ * before they were written are counted in a line of their own. Past
+ * APPLOG_MAX_BYTES the file becomes app.old.log and a new one starts. */
+#define APPLOG_BATCH_MS  2000
+#define APPLOG_MAX_BYTES (1024 * 1024)
+
+/* Entries from number `from` on, oldest first; *lost is how many of them the ring no longer holds. Returns the count. */
+static unsigned
+snapshot_since(uint64_t from, ps5tm_log_entry_t *out, uint64_t *next, uint64_t *lost) {
+  pthread_mutex_lock(&g_lock);
+  uint64_t oldest = g_seq - g_count;          /* number of the oldest entry still in the ring */
+  *lost = from < oldest ? oldest - from : 0;
+  if(from < oldest) from = oldest;
+  unsigned n = (unsigned)(g_seq - from);
+  unsigned start = (g_head + PS5TM_LOG_CAPACITY - n) % PS5TM_LOG_CAPACITY;
+  for(unsigned i = 0; i < n; i++) out[i] = g_entries[(start + i) % PS5TM_LOG_CAPACITY];
+  *next = g_seq;
+  pthread_mutex_unlock(&g_lock);
+  return n;
+}
+
+static int
+applog_open(void) {
+  struct stat st;
+  if(!stat(PS5TM_APPLOG_PATH, &st) && st.st_size > APPLOG_MAX_BYTES)
+    rename(PS5TM_APPLOG_PATH, PS5TM_APPLOG_OLD_PATH);
+  return open(PS5TM_APPLOG_PATH, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0666);
+}
+
+/* The console's clock as the pages show it: local time once the registry has told the offset, UTC (with a Z) until then. */
+static void
+applog_stamp(uint64_t ms, char *out, size_t n) {
+  ps5tm_regstats_t rs;
+  ps5tm_regstats_get(&rs);
+  time_t secs = (time_t)(ms / 1000) + (rs.local_offset_valid ? (time_t)rs.local_offset_min * 60 : 0);
+  struct tm tmv;
+  snprintf(out, n, "0000-00-00 00:00:00");
+  if(gmtime_r(&secs, &tmv)) strftime(out, n, rs.local_offset_valid ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d %H:%M:%SZ", &tmv);
+}
+
+static void
+applog_write(int fd, const char *s, size_t len) {
+  while(len) {
+    ssize_t w = write(fd, s, len);
+    if(w < 0 && errno == EINTR) continue;
+    if(w <= 0) return;                        /* disk full or gone: drop it, the ring still has it */
+    s += w;
+    len -= (size_t)w;
+  }
+}
+
+static void *
+applog_worker(void *arg) {
+  (void)arg;
+  ps5tm_log_entry_t *batch = malloc(sizeof(*batch) * PS5TM_LOG_CAPACITY);   /* ~115 KB: never on the thread stack */
+  char              *buf   = malloc(PS5TM_LOG_CAPACITY * 512 + 256);
+  if(!batch || !buf) { free(batch); free(buf); return NULL; }
+
+  uint64_t next = 0;
+  int      fd   = applog_open();
+  if(fd >= 0) {
+    char head[160], stamp[32];
+    applog_stamp(ps5tm_now_ms(), stamp, sizeof(stamp));
+    int k = snprintf(head, sizeof(head), "\n===== %s  " PS5TM_APP_NAME " " PS5TM_VERSION " gestartet =====\n", stamp);
+    applog_write(fd, head, (size_t)k);
+  }
+
+  for(;;) {
+    pthread_mutex_lock(&g_lock);
+    if(g_seq == next) {
+      struct timespec until;
+      clock_gettime(CLOCK_REALTIME, &until);
+      until.tv_sec  += APPLOG_BATCH_MS / 1000;
+      until.tv_nsec += (APPLOG_BATCH_MS % 1000) * 1000000L;
+      if(until.tv_nsec >= 1000000000L) { until.tv_sec++; until.tv_nsec -= 1000000000L; }
+      pthread_cond_timedwait(&g_file_wake, &g_lock, &until);
+    }
+    pthread_mutex_unlock(&g_lock);
+
+    uint64_t lost = 0;
+    unsigned n = snapshot_since(next, batch, &next, &lost);
+    if(!n && !lost) continue;
+
+    if(fd < 0) fd = applog_open();            /* /data was not ready yet, or the file was removed */
+    if(fd < 0) continue;
+
+    size_t o = 0;
+    char   stamp[32];
+    if(lost)
+      o += (size_t)snprintf(buf + o, 256, "… %llu Einträge kamen zu schnell und fehlen hier (im Kernel-Log stehen sie).\n",
+                            (unsigned long long)lost);
+    for(unsigned i = 0; i < n; i++) {
+      applog_stamp(batch[i].timestamp_ms, stamp, sizeof(stamp));
+      o += (size_t)snprintf(buf + o, 512, "%s  %-5s  %-28s  %s\n", stamp, batch[i].level, batch[i].code, batch[i].message);
+    }
+    applog_write(fd, buf, o);
+    fsync(fd);
+
+    struct stat st;
+    if(!fstat(fd, &st) && st.st_size > APPLOG_MAX_BYTES) {
+      close(fd);
+      fd = applog_open();
+    }
+  }
+  return NULL;
+}
+
+void
+ps5tm_log_file_start(void) {
+  pthread_attr_t attr;
+  pthread_t      t;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  if(pthread_create(&t, &attr, applog_worker, NULL) != 0)
+    PS5TM_WARN("applog_thread", "Die Protokolldatei %s wird nicht geschrieben (Faden startet nicht).", PS5TM_APPLOG_PATH);
+  pthread_attr_destroy(&attr);
 }

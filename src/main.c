@@ -300,6 +300,7 @@ main(int argc, char **argv) {
   migrate_data_dir();
   mkdir(PS5TM_DATA_DIR, 0755);
   mkdir(PS5TM_DATA_DIR "/Profilbilder", 0777);   /* own pictures for the Profil page (31.10.2026); 0777 as an FTP copy */
+  ps5tm_log_file_start();                        /* app.log: the log survives a restart of the console (03.11.2026) */
   ps5tm_config_load();
   ps5tm_payloads_init();                 /* the folder for own payloads, only if missing */
 

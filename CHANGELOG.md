@@ -1,5 +1,13 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Protokoll übersteht einen Neustart
+- Das App-Protokoll lag bisher nur im Speicher und war nach einem Neustart oder Absturz der Konsole weg (so am 03.11.2026: Was die App vor dem Neustart getan hatte, ließ sich nicht mehr feststellen). Jetzt schreibt die App jedes Ereignis zusätzlich in **`/data/PS5-Cooling-Center/app.log`**, im selben Aufbau wie der Export (Ortszeit der Konsole, Stufe, Kennung, Text).
+- Ein eigener Faden schreibt alle 2 Sekunden, was neu ist, Warnungen und Fehler sofort, und sichert die Datei jedes Mal auf die Platte (`fsync`). Der Lüfter-Faden wartet dadurch nie auf die Platte. Was schneller kam, als der Speicher des Protokolls (256 Einträge) hält, steht als „… N Einträge kamen zu schnell und fehlen hier“ in der Datei.
+- Jeder Start der App beginnt mit einer Zeile `===== <Zeit>  … <Version> gestartet =====`. Ab 1 MB wird die Datei zu `app.old.log` und eine neue beginnt (höchstens etwa 2 MB zusammen).
+- Handbuch (alle sieben Sprachen) und `docs/HANDBUCH.md` nennen die Datei.
+
 ## v1.75.5
 
 ### AMPR EMU NG in der Versionsauswahl

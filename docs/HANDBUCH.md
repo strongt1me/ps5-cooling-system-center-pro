@@ -30,7 +30,11 @@ Konfigurationen ziehen beim ersten Start automatisch um.
 - **System** — Konsole, Firmware, Laufzeit, Speicherplatz, Netzwerk, Kachel,
    Bildschirmanzeige, Zusatzabfragen, Experte-Modus mit Rohdiagnose
 - **Protokoll** — Ereignisse der App, als `.log` exportierbar, und das
-   Kernel-Log live (siehe unten)
+   Kernel-Log live (siehe unten). Seit 1.75.6 schreibt die App jedes Ereignis
+   auch in `/data/PS5-Cooling-Center/app.log` (höchstens 2 s später, Warnungen
+   sofort; ab 1 MB wird die alte Datei zu `app.old.log`), damit es einen
+   Neustart oder Absturz der Konsole übersteht. Jeder Start der App beginnt dort
+   mit einer Zeile `===== … gestartet =====`.
 
 Darunter öffnen **Handbuch** und **FAQ** (seit 1.49.1) das eingebaute Benutzerhandbuch und die häufigen Fragen,
 am PC in einem neuen Tab; oben steht „← Zurück zur App“. Sie erscheinen in der gewählten Sprache (seit 1.50.0 sechs, siehe

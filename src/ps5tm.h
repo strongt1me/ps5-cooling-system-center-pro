@@ -367,6 +367,11 @@ void ps5tm_log(const char *level, const char *code, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));
 /* Copies at most `max` entries (oldest first) into `out`; returns the count. */
 unsigned ps5tm_log_snapshot(ps5tm_log_entry_t *out, unsigned max);
+/* Starts the thread that appends every entry to PS5TM_APPLOG_PATH, so the log outlives a restart (log.c). Once, after
+   the data folder exists; the entries logged before are written too. */
+#define PS5TM_APPLOG_PATH     PS5TM_DATA_DIR "/app.log"
+#define PS5TM_APPLOG_OLD_PATH PS5TM_DATA_DIR "/app.old.log"
+void ps5tm_log_file_start(void);
 
 /* Serializes fragile Sony API calls across multiple worker/request threads. */
 void ps5tm_sony_api_lock(void);
