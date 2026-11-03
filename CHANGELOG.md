@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.75.7
 
 ### Endzeile in `app.log`
 - Endet die App, schreibt sie jetzt eine Zeile `===== <Zeit>  … <Version> beendet: <Grund> =====` in `app.log` – vorher alles, was noch nicht in der Datei stand, ohne die 2 Sekunden abzuwarten. Gründe: „Konsole wird ausgeschaltet“, „Konsole startet neu“, „Konsole startet in den abgesicherten Modus neu“ (jeweils über die Power-Optionen der App), „vom System beendet (SIGTERM/SIGINT)“ und „abgestürzt (Signal N)“. Lehnt die Konsole das Ausschalten oder den Neustart ab, folgt `===== … läuft weiter =====` und die Datei nimmt wieder Zeilen an.

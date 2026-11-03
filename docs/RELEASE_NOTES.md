@@ -1,25 +1,24 @@
-# PS5 Cooling & System Center – Pro v1.75.6
+# PS5 Cooling & System Center – Pro v1.75.7
 
 ## Highlights
-- **Das Protokoll übersteht jetzt einen Neustart** – die App schreibt jedes Ereignis zusätzlich in `/data/PS5-Cooling-Center/app.log`, damit nach einem Neustart oder Absturz der Konsole nachzulesen ist, was vorher geschah
+- **`app.log` zeigt jetzt, wie die App geendet hat** – jede Ausführung schließt mit einer Zeile `===== … beendet: <Grund> =====`, und fehlt sie, sagt der nächste Start das
 
 ## Neu
-- Die Datei `app.log` hat denselben Aufbau wie der Export im Reiter „Protokoll“: Zeit der Konsole, Stufe, Kennung, Text.
-- Die App schreibt alle 2 Sekunden, was neu ist, Warnungen und Fehler sofort, und sichert die Datei jedes Mal auf die Platte. Der Lüfter wartet dabei nie auf die Platte.
-- Jeder Start der App beginnt in der Datei mit einer Zeile `===== … gestartet =====`.
-- Ab 1 MB wird die alte Datei zu `app.old.log` und eine neue beginnt (zusammen höchstens etwa 2 MB).
-- Kamen Einträge schneller, als die App sie wegschreiben konnte, steht in der Datei, wie viele fehlen; im Kernel-Log stehen sie trotzdem.
-- Lesen kannst du die Datei im Dateimanager der App oder per FTP.
-- Das Handbuch nennt die Datei in allen sieben Sprachen.
+- Vor dem Ende schreibt die App alles, was noch nicht in der Datei steht, sofort hinein und setzt dann die Endzeile.
+- Gründe: „Konsole wird ausgeschaltet“, „Konsole startet neu“, „Konsole startet in den abgesicherten Modus neu“ (über die Power-Optionen der App), „vom System beendet“ und „abgestürzt (Signal N)“.
+- Lehnt die Konsole das Ausschalten oder den Neustart ab, folgt `===== … läuft weiter =====` und das Protokoll geht weiter.
+- Vor dem Ruhemodus schreibt die App alles Offene sofort in die Datei.
+- Endete die vorige Ausführung ohne Endzeile (Neustart über das Menü der Konsole, Strom weg, neu gesendete ELF), steht vor der neuen Startzeile ein Hinweis darauf.
+- Das Handbuch beschreibt die Endzeile in allen sieben Sprachen.
 
 ## Hinweise
-- Die ersten Zeilen nach dem Start stehen in Weltzeit (mit `Z` hinter der Uhrzeit), bis die App die Zeitzone der Konsole kennt; danach in Ortszeit.
+- An der Konsole geprüft: Neustart über die App hinterlässt „beendet: Konsole startet neu“, eine neu gesendete ELF den Hinweis auf die fehlende Endzeile.
 - Die Kacheln FAKE86921 (Vollbild) und FAKE86922 (Browser) aus diesem Release neu kopieren.
 
 ## Downloads
 | Datei | Wofür |
 |---|---|
-| `PS5_Cooling_System_Center_v1.75.6.elf` | Das Hauptprogramm (an Port 9021 senden) |
+| `PS5_Cooling_System_Center_v1.75.7.elf` | Das Hauptprogramm (an Port 9021 senden) |
 | `FAKE86921.zip` | Vollbild-Kachel: Ordner nach `/data/homebrew/` kopieren |
 | `FAKE86922.zip` | Browser-Kachel: Ordner nach `/data/homebrew/` kopieren |
 | `LIESMICH.txt` | Anleitung |
@@ -27,4 +26,4 @@
 ## Danke
 An alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke.
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.75.5...v1.75.6
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.75.6...v1.75.7
