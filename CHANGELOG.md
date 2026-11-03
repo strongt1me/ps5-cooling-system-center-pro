@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.75.6
 
 ### Protokoll übersteht einen Neustart
 - Das App-Protokoll lag bisher nur im Speicher und war nach einem Neustart oder Absturz der Konsole weg (so am 03.11.2026: Was die App vor dem Neustart getan hatte, ließ sich nicht mehr feststellen). Jetzt schreibt die App jedes Ereignis zusätzlich in **`/data/PS5-Cooling-Center/app.log`**, im selben Aufbau wie der Export (Ortszeit der Konsole, Stufe, Kennung, Text).

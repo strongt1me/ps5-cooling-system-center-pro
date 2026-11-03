@@ -1,34 +1,30 @@
-# PS5 Cooling & System Center – Pro v1.75.5
+# PS5 Cooling & System Center – Pro v1.75.6
 
 ## Highlights
-- **AMPR EMU NG in der Versionsauswahl** – die Weiterentwicklung von quer3q (liest LZ4- und zstd-Pakete) steht als „NG 0.2.0“ mit eigener Marke ganz oben und lässt sich auf Knopfdruck von GitHub laden
-- **Handbuch und FAQ auf Schwedisch** – jetzt in allen sieben Sprachen
+- **Das Protokoll übersteht jetzt einen Neustart** – die App schreibt jedes Ereignis zusätzlich in `/data/PS5-Cooling-Center/app.log`, damit nach einem Neustart oder Absturz der Konsole nachzulesen ist, was vorher geschah
 
 ## Neu
-- APR-EMU-Version wählen: Die App erkennt die Dateien von **ampr-emu-ng** (<https://github.com/quer3q/ampr-emu-ng>, GPL-3.0) an ihrer Kennung und zeigt sie als „NG 0.2.0“ bzw. „NG 0.2.0 debug“ mit grüner Marke „NG“. Eine eingebaute NG-Datei wird auch dann beim Namen genannt, wenn sie nicht im Ordner `AMPR_EMU` liegt.
-- **„AMPR EMU NG 0.2.0 von GitHub laden“** holt die beiden Dateien der Veröffentlichung v0.2.0 in den Ordner `AMPR_EMU` – nur auf Knopfdruck, nur von GitHub, und erst nach passender Prüfsumme (SHA-256). Mitgeliefert wird NG nicht, damit die App klein bleibt.
-- „Datei hinzufügen“ benennt Dateien einer neueren NG-Veröffentlichung (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) selbst passend um.
-- Nach dem Einbauen von NG erinnert eine Meldung daran, in ShadowMountPlus das Aktualisieren der fakelib abzuschalten (`update_emulators=0`) – sonst ersetzt ShadowMountPlus die Datei beim Spielstart. Im Browser als Warnkasten, in der Vollbild-App als Meldung und als Meldung der Konsole.
-- Browser und Vollbild-App können das gleichermaßen (Vollbild: Extras → APR-EMU).
-- Handbuch und FAQ gibt es jetzt auch auf Schwedisch; alle Fassungen nennen Svenska in der Sprachleiste.
-
-## Fehlerbehebungen
-- Bei schwedischer Oberfläche führte der Handbuch-Knopf ins Leere (die schwedische Fassung fehlte).
-- Schwedisch: Vier Knöpfe lasen sich wie Zustandsmeldungen („Packar upp LZ4 …“); jetzt in Befehlsform („Packa upp LZ4 …“, „Packa med LZ4 …“, „Packa upp …“, „Dela upp …“).
+- Die Datei `app.log` hat denselben Aufbau wie der Export im Reiter „Protokoll“: Zeit der Konsole, Stufe, Kennung, Text.
+- Die App schreibt alle 2 Sekunden, was neu ist, Warnungen und Fehler sofort, und sichert die Datei jedes Mal auf die Platte. Der Lüfter wartet dabei nie auf die Platte.
+- Jeder Start der App beginnt in der Datei mit einer Zeile `===== … gestartet =====`.
+- Ab 1 MB wird die alte Datei zu `app.old.log` und eine neue beginnt (zusammen höchstens etwa 2 MB).
+- Kamen Einträge schneller, als die App sie wegschreiben konnte, steht in der Datei, wie viele fehlen; im Kernel-Log stehen sie trotzdem.
+- Lesen kannst du die Datei im Dateimanager der App oder per FTP.
+- Das Handbuch nennt die Datei in allen sieben Sprachen.
 
 ## Hinweise
-- Ob ein Spiel mit AMPR EMU NG läuft, hängt vom Spiel ab – vorher ungepackt testen, das Original bleibt als `libSceAmpr.sprx.orig` gesichert.
+- Die ersten Zeilen nach dem Start stehen in Weltzeit (mit `Z` hinter der Uhrzeit), bis die App die Zeitzone der Konsole kennt; danach in Ortszeit.
 - Die Kacheln FAKE86921 (Vollbild) und FAKE86922 (Browser) aus diesem Release neu kopieren.
 
 ## Downloads
 | Datei | Wofür |
 |---|---|
-| `PS5_Cooling_System_Center_v1.75.5.elf` | Das Hauptprogramm (an Port 9021 senden) |
+| `PS5_Cooling_System_Center_v1.75.6.elf` | Das Hauptprogramm (an Port 9021 senden) |
 | `FAKE86921.zip` | Vollbild-Kachel: Ordner nach `/data/homebrew/` kopieren |
 | `FAKE86922.zip` | Browser-Kachel: Ordner nach `/data/homebrew/` kopieren |
 | `LIESMICH.txt` | Anleitung |
 
 ## Danke
-An quer3q für ampr-emu-ng, an drakmor für ampr_emu und an alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke.
+An alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke.
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.75.4...v1.75.5
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.75.5...v1.75.6
