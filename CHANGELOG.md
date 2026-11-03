@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.75.5
 
 ### AMPR EMU NG in der Versionsauswahl
 - Die Auswahl „APR-EMU-Version“ kennt jetzt **ampr-emu-ng** von quer3q (<https://github.com/quer3q/ampr-emu-ng>, GPL-3.0), eine Weiterentwicklung von drakmors ampr_emu, die LZ4- und zstd-Pakete liest. Ihre Dateien tragen statt `[AMPR_EMU]` die Kennung `ampr-emu-ng <Version>`; die App erkennt sie daran, zeigt sie als **„NG 0.2.0“** (bzw. „NG 0.2.0 debug“) mit grüner Marke „NG“ ganz oben in der Liste und nennt eine eingebaute NG-Datei auch dann beim Namen, wenn sie nicht im Ordner liegt.
