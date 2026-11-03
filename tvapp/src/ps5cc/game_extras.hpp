@@ -14,6 +14,7 @@
 #include "ps5cc/data.hpp"
 #include "ui/components.hpp"
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,9 @@ class GameExtras
     void handle(const InputFrame &input, ui::Feedback &feedback);
     void update(float dt);
     void draw_overlay(ui::Canvas &canvas) const;
+
+    // A notice for the screen's toasts (the advice after AMPR EMU NG went into a game).
+    std::function<void(ui::StatusKind, const std::string &, const std::string &)> toast;
 
   private:
     enum View
@@ -70,6 +74,7 @@ class GameExtras
     std::vector<std::string> paths_;       // the duplicate images, by row
     std::vector<bool> aside_;              // and whether each is set aside
     std::string key_;
+    std::string warned_; // the job whose advice was shown already
     float clock_ = 0.0f;
 };
 

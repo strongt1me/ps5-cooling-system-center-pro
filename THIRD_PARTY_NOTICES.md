@@ -28,6 +28,10 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   kommen nur auf Wunsch in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` oder in ein Spiel
   (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Fassungen und Bauarten (`test-pack`,
   `test-nopack`, `test-debug-pack`, `test`, `test-debug`) nach <https://github.com/drakmor/ampr_emu>.
+- **ampr-emu-ng** (quer3q, GPL-3.0): nicht eingebettet. Die App erkennt die Bauten dieser Weiterentwicklung von
+  ampr_emu an ihrer Kennung und lädt auf Wunsch die Dateien der Veröffentlichung 0.2.0 von
+  <https://github.com/quer3q/ampr-emu-ng> in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` (`src/amprng.c`,
+  Prüfsummen aus der `SHA256SUMS` der Veröffentlichung). Quelltext: das Projekt.
 - **pgo_stub** (drakmor, GPL-3.0): Zwei Bauten des PlayGo-Stubs (`libScePlayGo.sprx`, Fassung 0.6, mit und ohne
   Protokoll, siehe `third_party/playgo/ORIGIN.md`) sind gepackt in die App eingebettet; sie kommen nur auf Wunsch in den
   Ordner `/data/PS5-Cooling-Center/PlayGo` oder in ein Spiel (`src/amprlib.c`). Quelltext der Programme:

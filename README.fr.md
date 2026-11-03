@@ -191,7 +191,7 @@ L'ELF est compilé avec le PS5 payload SDK **v0.45**, dont le code de démarrage
 | **Système** | Console, stockage, réseau, diagnostic |
 | **Profil** | Nom affiché et image de profil |
 | **Journal** | Événements de l'appli et journal du noyau en direct |
-| **Crédits** | Remerciements ; plus le **manuel** et la **FAQ** en six langues |
+| **Crédits** | Remerciements ; plus le **manuel** et la **FAQ** en sept langues |
 
 **À la manette (navigateur de la console) :** L1 / R1 page précédente / suivante · L2 / R2 défiler vers le haut / bas · Muet deux fois : température et ventilateur sur la TV.
 
@@ -202,7 +202,7 @@ L'ELF est compilé avec le PS5 payload SDK **v0.45**, dont le code de démarrage
 
 | Document | Contenu |
 | --- | --- |
-| [Manuel](docs/HANDBUCH.md) | Utilisation en détail (en allemand ; aussi dans l'appli, en six langues) |
+| [Manuel](docs/HANDBUCH.md) | Utilisation en détail (en allemand ; aussi dans l'appli, en sept langues) |
 | [API](docs/API.md) | Tous les points d'accès et champs de configuration |
 | [Développement](docs/ENTWICKLUNG.md) | Compiler, envoyer, dépanner, structure du code |
 | [Modifications](CHANGELOG.md) | Ce qui a changé dans chaque version |

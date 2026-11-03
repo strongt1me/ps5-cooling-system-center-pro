@@ -7714,7 +7714,8 @@
     const emuJob = j && j.id === apr.id && j.kind === "emu" && (j.lib || "ampr") === lib;
     let chip;
     if (!ins.present) chip = `<span class="apr-state no">nicht eingebaut</span>`;
-    else if (ins.known) chip = `<span class="apr-state ok">eingebaut: ${esc(ins.label)}</span>`;
+    else if (ins.known) chip = `<span class="apr-state ok">eingebaut: ${esc(ins.label)}</span>${ins.ng ? ` <span class="gm-tag ng">NG</span>` : ""}`;
+    else if (ins.ng) chip = `<span class="apr-state ok"><span>eingebaut: AMPR EMU NG</span> ${esc(ins.ng_version || "")} <span>(nicht im Ordner AMPR_EMU)</span></span> <span class="gm-tag ng">NG</span>`;
     else if (ins.emu) chip = pg ? `<span class="apr-state ok">PlayGo-Stub, unbekannte Fassung (${bytes(ins.size)})</span>` : `<span class="apr-state ok">APR-EMU, unbekannte Fassung (${bytes(ins.size)})</span>`;
     else chip = pg ? `<span class="apr-state no">Datei des Spiels, kein PlayGo-Stub</span>` : `<span class="apr-state no">Datei des Spiels, kein APR-EMU</span>`;
     const notes = [];
@@ -7725,7 +7726,8 @@
     if (em.packed) notes.push("Das Spiel liegt in LZ4-Paketen: nur eine Version mit „pack“ kann sie lesen.");
     let result = "";
     if (emuJob && !j.active && j.state === "done")
-      result = `<p class="cp-ok">${j.op === "apply" ? "✓ Eingebaut." : j.op === "restore" ? "✓ Das Original ist zurück." : "✓ Entfernt."}</p>${j.note ? `<small>${esc(j.note)}</small>` : ""}`;
+      result = `<p class="cp-ok">${j.op === "apply" ? "✓ Eingebaut." : j.op === "restore" ? "✓ Das Original ist zurück." : "✓ Entfernt."}</p>${j.note ? `<small>${esc(j.note)}</small>` : ""}${j.warn
+        ? (j.warn_level === 2 ? `<div class="cp-warn"><b>⚠</b> ${esc(j.warn)}</div>` : `<small>${esc(j.warn)}</small>`) : ""}`;
     else if (emuJob && !j.active && j.state === "failed") result = `<p class="cp-err">✗ ${esc(j.error || "Das ging nicht.")}</p>`;
     const working = emuJob && j.active ? `<small>${esc(j.phase || "")}</small>` : "";
     const why = !em.can_change ? (em.why || "Für dieses Spiel geht das nicht.") : anyRunning ? "Es läuft schon ein Vorgang." : "";
@@ -7868,11 +7870,11 @@
       const folder = x.stored ? (pg ? "im Ordner PlayGo" : "im Ordner AMPR_EMU") : "in der App, noch nicht im Ordner";
       return `<button type="button" class="cp-choice apr-drive${apr.emuSel === x.name ? " on" : ""}${off || packBlock ? " off" : ""}" data-apr-emu-pick="${esc(x.name)}" ${off || packBlock ? "disabled" : ""}>
           <span class="cp-choice-text"><b>${esc(x.label)}</b>
-            ${x.pack || x.debug || x.bundled ? `<span class="apr-tags">${x.pack ? `<span class="gm-tag ampr">LZ4</span>` : ""}${x.debug ? `<span class="gm-tag bp">mit Protokoll</span>` : ""}${x.bundled ? `<span class="gm-tag fmt">mitgeliefert</span>` : ""}</span>` : ""}
-            <span class="muted"><span>${bytes(x.size)}</span> · ${pg ? "" : `<span>${x.pack ? "kann LZ4-Pakete lesen" : "ohne Paketunterstützung"}</span> · `}<span>${folder}</span>${ins.sha256 && ins.sha256 === x.sha256 ? ` · <b>so eingebaut</b>` : ""}</span>
+            ${x.ng || x.pack || x.debug || x.bundled ? `<span class="apr-tags">${x.ng ? `<span class="gm-tag ng">NG</span>` : ""}${x.pack ? `<span class="gm-tag ampr">LZ4</span>` : ""}${x.debug ? `<span class="gm-tag bp">mit Protokoll</span>` : ""}${x.bundled ? `<span class="gm-tag fmt">mitgeliefert</span>` : ""}</span>` : ""}
+            <span class="muted"><span>${bytes(x.size)}</span> · ${x.ng ? `<span>AMPR EMU NG (quer3q)</span> · ` : ""}${pg ? "" : `<span>${x.pack ? (x.ng ? "kann LZ4- und zstd-Pakete lesen" : "kann LZ4-Pakete lesen") : "ohne Paketunterstützung"}</span> · `}<span>${folder}</span>${ins.sha256 && ins.sha256 === x.sha256 ? ` · <b>so eingebaut</b>` : ""}</span>
             ${off ? `<span class="cp-why">${pg ? "kein gültiger PlayGo-Stub" : "keine gültige APR-EMU-Datei"}</span>` : packBlock ? `<span class="cp-why">Das Spiel liegt in LZ4-Paketen: diese Version kann sie nicht lesen.</span>` : ""}</span></button>`;
     }).join("");
-    const cur = ins.present ? (ins.known ? esc(ins.label) : ins.emu ? (pg ? `<span>PlayGo-Stub, unbekannte Fassung (${bytes(ins.size)})</span>` : `<span>APR-EMU, unbekannte Fassung (${bytes(ins.size)})</span>`)
+    const cur = ins.present ? (ins.known ? esc(ins.label) : ins.ng ? `<span>AMPR EMU NG</span> ${esc(ins.ng_version || "")}` : ins.emu ? (pg ? `<span>PlayGo-Stub, unbekannte Fassung (${bytes(ins.size)})</span>` : `<span>APR-EMU, unbekannte Fassung (${bytes(ins.size)})</span>`)
       : (pg ? `<span>die Datei des Spiels (kein PlayGo-Stub)</span>` : `<span>die Datei des Spiels (kein APR-EMU)</span>`)) : `<span>nichts</span>`;
     const warn = [];
     if (em.fakelib2 && em.place === "game") warn.push(pg
@@ -7880,6 +7882,7 @@
       : `<b>⚠ Im Spielordner liegt auch ein <code>fakelib2</code>.</b> ShadowMountPlus ab 1.7beta1 liest dann nur dieses; der AMPR EMU in <code>fakelib</code> bliebe ungenutzt.`);
     if (em.emus && em.emus.overrides) warn.push(`<b>⚠ ShadowMountPlus ersetzt die Datei beim Spielstart</b> aus <code>${esc(em.emus.path)}</code> (update_emulators=1). Dort liegt eine <code>${L.file}</code>; sie gewinnt gegen die Datei, die du hier einbaust.`);
     const missing = v.versions.filter((x) => x.bundled && !x.stored).length;
+    const ngr = !pg && v.ng_release ? v.ng_release : null;
     const noStore = !v.versions.length ? (pg
       ? `<p class="muted">Noch keine Versionen im Speicher. Lege Dateien namens <code>libScePlayGo.sprx-0.5-nolog</code> mit „Datei hinzufügen“ ab.</p>`
       : `<p class="muted">Noch keine Versionen im Speicher. Lege Dateien namens <code>libSceAmpr.sprx-0.4.2.1-test-pack</code> (so heißen sie bei drakmors Veröffentlichungen) mit „Datei hinzufügen“ ab.</p>`) : "";
@@ -7894,9 +7897,13 @@
       ${noStore}
       <p class="apr-add">
         ${missing ? `<button type="button" class="btn" data-apr-emu-install>Mitgelieferte Versionen in den Ordner legen</button>` : ""}
+        ${ngr && ngr.missing ? `<button type="button" class="btn" data-apr-emu-ng ${ngr.busy ? "disabled" : ""}><span>AMPR EMU NG</span> ${esc(ngr.version)} <span>von GitHub laden</span></button>` : ""}
         <button type="button" class="btn ghost" data-apr-emu-add>Datei hinzufügen …</button>
         <input type="file" id="apr-emu-file" multiple hidden>
         <span class="muted" id="apr-emu-up">${esc(apr.emuNote || "")}</span></p>
+      ${ngr ? `<p class="muted"><span>AMPR EMU NG ist eine Weiterentwicklung von quer3q und liest LZ4- und zstd-Pakete.</span> <span>Die App lädt die bekannte Veröffentlichung nur auf Knopfdruck und prüft ihre Prüfsumme.</span>
+        <span>Dateien einer neueren Veröffentlichung (libSceAmpr.sprx, libSceAmpr-debug.sprx) benennt „Datei hinzufügen“ passend um.</span>
+        <span>Der Entwickler rät, in ShadowMountPlus update_emulators=0 zu setzen.</span></p>` : ""}
       ${warn.map((w) => `<div class="cp-warn">${w}</div>`).join("")}
       ${em.place === "backport" ? `<p class="muted">Dieses Spiel bekommt die Datei im Backport-Ordner (ein komprimiertes Abbild lässt sich nicht beschreiben); das Spiel selbst bleibt unberührt. Ein neuer Backport-Ordner verdeckt die <code>fakelib</code> des Spiels, deshalb werden deren Dateien hineinkopiert.</p>` : ""}
       <p class="muted">${pg
@@ -7998,12 +8005,21 @@
     const say = (m) => { const s = $("#apr-emu-up"); if (s) s.textContent = m; };
     let ok = 0;
     for (const f of files) {
-      if (!L.re.test(f.name)) { say(`„${f.name}“: Der Name muss so aussehen wie ${L.example}.`); continue; }
+      let name = f.name;
+      /* AMPR EMU NG names its files libSceAmpr.sprx / libSceAmpr-debug.sprx: the version comes from the mark in the file */
+      if (apr.lib !== "playgo" && !L.re.test(name) && /^libSceAmpr(-debug)?\.sprx$/i.test(name) && f.size <= 4 * 1048576) {
+        try {
+          const bin = new TextDecoder("latin1").decode(await f.arrayBuffer());
+          const m = /ampr-emu-ng (\d+(?:\.\d+)*)/.exec(bin);
+          if (m) name = `libSceAmpr.sprx-${m[1]}-ng${/-debug/i.test(f.name) ? "-debug" : ""}`;
+        } catch (_) { /* stays as it is */ }
+      }
+      if (!L.re.test(name)) { say(`„${f.name}“: Der Name muss so aussehen wie ${L.example}.`); continue; }
       if (f.size > 4 * 1048576) { say(`„${f.name}“ ist zu groß.`); continue; }
       say(`„${f.name}“ wird hochgeladen …`);
       try {
         const d = (apr.vers && apr.vers.dir) || "/data/PS5-Cooling-Center/" + L.dir;
-        const r = await fetch(`/api/v1/files/upload?path=${encodeURIComponent(d)}&name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+        const r = await fetch(`/api/v1/files/upload?path=${encodeURIComponent(d)}&name=${encodeURIComponent(name)}`, { method: "POST", body: f });
         const j = await r.json().catch(() => ({}));
         if (!r.ok || !j.ok) { say(`„${f.name}“: ${j.message || "HTTP " + r.status}`); continue; }
         ok++;
@@ -8051,6 +8067,18 @@
         apr.emuNote = r.installed ? `${r.installed} ${r.installed === 1 ? "Version" : "Versionen"} im Ordner abgelegt.` : "Es war schon alles im Ordner.";
         apr.emuErr = "";
       } catch (err) { apr.emuErr = err.message; }
+      if (apr.view === "emu") aprRender();
+    } else if (b.hasAttribute("data-apr-emu-ng")) {
+      b.disabled = true;
+      apr.emuNote = "AMPR EMU NG wird von GitHub geladen …";
+      const s = $("#apr-emu-up");
+      if (s) s.textContent = apr.emuNote;
+      try {
+        const r = await api("/api/v1/ampr-emu/fetch-ng", { method: "POST", body: "{}" });
+        apr.vers = r;
+        apr.emuNote = r.installed ? `${r.installed} ${r.installed === 1 ? "Datei" : "Dateien"} von AMPR EMU NG im Ordner abgelegt.` : "Es war schon alles im Ordner.";
+        apr.emuErr = "";
+      } catch (err) { apr.emuErr = err.message; apr.emuNote = ""; }
       if (apr.view === "emu") aprRender();
     } else if (b.hasAttribute("data-apr-emu-add")) {
       const fi = $("#apr-emu-file");

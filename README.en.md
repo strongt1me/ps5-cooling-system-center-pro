@@ -191,7 +191,7 @@ The ELF is built with PS5 payload SDK **v0.45**, whose start-up code knows firmw
 | **System** | Console, storage, network, diagnostics |
 | **Profile** | Display name and profile picture |
 | **Log** | App events and the live kernel log |
-| **Credits** | Thanks to the developers; plus the **manual** and **FAQ** in six languages |
+| **Credits** | Thanks to the developers; plus the **manual** and **FAQ** in seven languages |
 
 **On the controller (console browser):** L1 / R1 previous / next page · L2 / R2 scroll up / down · Mute twice: temperature and fan on the TV.
 
@@ -202,7 +202,7 @@ The ELF is built with PS5 payload SDK **v0.45**, whose start-up code knows firmw
 
 | Document | Contents |
 | --- | --- |
-| [Manual](docs/HANDBUCH.md) | Usage in detail (German; also in the app, in six languages) |
+| [Manual](docs/HANDBUCH.md) | Usage in detail (German; also in the app, in seven languages) |
 | [API](docs/API.md) | All endpoints and configuration fields |
 | [Development](docs/ENTWICKLUNG.md) | Building, sending, troubleshooting, source layout |
 | [Changes](CHANGELOG.md) | What changed in which version |

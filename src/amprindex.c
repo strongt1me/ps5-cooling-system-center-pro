@@ -391,6 +391,8 @@ static struct {
   char     phase[160];
   char     error[400];
   char     note[400];
+  char     warn[300];                  /* emu apply of ampr-emu-ng: what ShadowMountPlus needs (update_emulators=0) */
+  int      warn_level;                 /* 2 something to do, 1 only to know, 0 none */
   unsigned files, collisions;
   uint64_t started_ms, finished_ms;
 } g_job;
@@ -535,7 +537,12 @@ ai_thread(void *arg) {
   g_job.files = ctx.files;
   g_job.collisions = ctx.coll;
   snprintf(g_job.note, sizeof(g_job.note), "%s", ctx.note);
+  if(a->emu && !strcmp(a->op, "apply") && !strcmp(a->lib, "ampr"))
+    g_job.warn_level = ps5tm_amprlib_ng_warning(a->store, g_job.warn, sizeof(g_job.warn));
+  int ng_warn = g_job.warn_level == 2;
   pthread_mutex_unlock(&g_lock);
+  /* the full-screen app and the console itself see it too, not only the browser window */
+  if(ng_warn) ps5tm_notify("AMPR EMU NG eingebaut: In ShadowMountPlus update_emulators=0 setzen, sonst wird die Datei beim Spielstart ersetzt.");
   ps5tm_library_forget();
   if(a->emu) PS5TM_INFO("ampr_emu_changed", "%s-Datei von %s geändert (%s %s).", !strcmp(a->lib, "playgo") ? "PlayGo" : "APR-EMU", a->id, a->op, a->store);
   else PS5TM_INFO("ampr_index_built", "AMPR-Index für %s gebaut: %u Dateien%s.", a->id, ctx.files, ctx.coll ? " (Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, einmal genommen)" : "");
@@ -738,6 +745,10 @@ ps5tm_ampr_status(void) {
   cJSON_AddStringToObject(o, "lib", g_job.lib);
   cJSON_AddStringToObject(o, "op", g_job.op);
   if(g_job.note[0]) cJSON_AddStringToObject(o, "note", g_job.note);
+  if(g_job.warn[0]) {
+    cJSON_AddStringToObject(o, "warn", g_job.warn);
+    cJSON_AddNumberToObject(o, "warn_level", g_job.warn_level);
+  }
   cJSON_AddBoolToObject(o, "active", g_job.state == AI_RUNNING);
   cJSON_AddStringToObject(o, "id", g_job.id);
   cJSON_AddStringToObject(o, "name", g_job.name);

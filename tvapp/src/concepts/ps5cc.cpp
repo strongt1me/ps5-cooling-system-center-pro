@@ -517,6 +517,8 @@ class Ps5cc final : public app::Concept
         tools_.on_extras = [this](const ps5cc::Game &g, ui::Feedback &feedback)
         { extras_.open_game(g, feedback); };
         tools_.on_library = [this](ui::Feedback &feedback) { extras_.open_library(feedback); };
+        extras_.toast = [this](ui::StatusKind kind, const std::string &title,
+                               const std::string &body) { toasts_.push(kind, title, body); };
         tools_.toast = [this](ui::StatusKind kind, const std::string &title,
                               const std::string &body) { toasts_.push(kind, title, body); };
         job_focus_amount_.snap(job_rect(0));
@@ -932,16 +934,25 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::back)},
             // the extras of the focused game (a folder), its APR-EMU versions, the LZ4 settings;
             // the library tools
-            {0.4f, action_bit(Action::west)},
-            {0.2f, 0, Direction::up},
-            {0.2f, 0, Direction::up},
+            {0.6f, action_bit(Action::back)},
+            {0.6f, action_bit(Action::back)},
+            {0.6f, action_bit(Action::west)},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "extras"},
             {0.2f, 0, Direction::down},
-            {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "extras-versionen"},
-            {0.3f, action_bit(Action::back)},
+            // AMPR EMU NG built in: the advice about update_emulators comes as a toast
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.3f, action_bit(Action::confirm)},
+            {1.0f, 0, Direction::none, "extras-ng-hinweis"},
             {0.3f, action_bit(Action::back)},
             {0.4f, action_bit(Action::west)},
             {0.2f, 0, Direction::up},

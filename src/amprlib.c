@@ -20,14 +20,18 @@
  *             there is used for every format, since it is what ShadowMountPlus reads first.
  *
  * The file the game brought itself is kept once as libSceAmpr.sprx.orig and never overwritten by a later change. A file
- * that is itself an APR-EMU (it carries "[AMPR_EMU]", true for every build of drakmor's ampr_emu) or a PlayGo stub is no
- * original and is not kept. Changing, restoring and removing never touch another file of the game.
+ * that is itself an APR-EMU (it carries "[AMPR_EMU]", true for every build of drakmor's ampr_emu, or "ampr-emu-ng <version>",
+ * the mark of quer3q's fork ampr-emu-ng) or a PlayGo stub is no original and is not kept. Changing, restoring and removing never touch another file of the game.
  *
  * The versions are files in /data/PS5-Cooling-Center/AMPR_EMU, named like drakmor's release files:
  * libSceAmpr.sprx-<version>-<variant> (0.4.2.1-test-pack, 0.3.6.6-test-debug ...). They are put there by the person (the
  * file manager of this app does it); each is checked for the SELF header and the APR-EMU mark before it is offered.
  * The variants with "pack" in their name (not "nopack") can read LZ4 asset packs. ShadowMountPlus can also replace the
- * file at the start of a game from /data/shadowmount/emus (update_emulators, on by default): the page says so. */
+ * file at the start of a game from /data/shadowmount/emus (update_emulators, on by default): the page says so.
+ *
+ * ampr-emu-ng (quer3q, GPL-3.0, wish of the user 03.11.2026) is a fork of drakmor's ampr_emu that reads the same packs (and zstd
+ * ones). Its builds are kept as libSceAmpr.sprx-<version>-ng and -ng-debug, shown as "NG <version>" and listed first; the app
+ * does not carry them (the payload is near its size limit) but fetches the known release on request (amprng.c). */
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -67,14 +71,15 @@ typedef struct {
   const char             *dir;          /* the store folder */
   const char             *old_dir;      /* the name of the first version of that folder, renamed when found, or NULL */
   const char             *mark;         /* in every build of the project */
+  const char             *mark2;        /* or this one (the fork ampr-emu-ng), or NULL */
   const ps5tm_emu_blob_t *blobs;
   const unsigned         *nblobs;
 } al_kind_t;
 
 static const al_kind_t K_AMPR = { "ampr", "libSceAmpr.sprx", "libSceAmpr.sprx-", PS5TM_DATA_DIR "/AMPR_EMU", PS5TM_DATA_DIR "/ampr-emu",
-                                  "[AMPR_EMU]", ps5tm_emu_blobs, &ps5tm_emu_blob_count };
+                                  "[AMPR_EMU]", "ampr-emu-ng ", ps5tm_emu_blobs, &ps5tm_emu_blob_count };
 static const al_kind_t K_PLAYGO = { "playgo", "libScePlayGo.sprx", "libScePlayGo.sprx-", PS5TM_DATA_DIR "/PlayGo", NULL,
-                                    "playgo_stub.dat", ps5tm_playgo_blobs, &ps5tm_playgo_blob_count };
+                                    "playgo_stub.dat", NULL, ps5tm_playgo_blobs, &ps5tm_playgo_blob_count };
 
 static const al_kind_t *
 kind_of(const char *lib) {
@@ -90,6 +95,7 @@ typedef struct {
   char     version[24];
   char     variant[40];
   int      pack, debug, valid;
+  int      ng;                     /* a build of ampr-emu-ng (name ...-ng or ...-ng-<variant>) */
   int      stored;                 /* the file is in the folder AMPR_EMU */
   int      bundled;                /* the app carries this very file (same name and hash) */
   uint64_t size;
@@ -105,18 +111,42 @@ has_mark(const uint8_t *d, size_t n, const char *mark) {
   return 0;
 }
 
-/* A build of the APR-EMU or a PlayGo stub: not what a game brings itself. */
+/* "ampr-emu-ng 0.2.0" stands in every build of the fork (checked on 0.2.0, both builds, 03.11.2026) */
+#define AL_NG_MARK "ampr-emu-ng "
+
+static int
+is_ng(const uint8_t *d, size_t n) {
+  return has_mark(d, n, AL_NG_MARK);
+}
+
+/* A build of the APR-EMU (drakmor's or the fork) or a PlayGo stub: not what a game brings itself. */
 static int
 is_replacement(const uint8_t *d, size_t n) {
-  return has_mark(d, n, "[AMPR_EMU]") || has_mark(d, n, "playgo_stub.dat");
+  return has_mark(d, n, "[AMPR_EMU]") || is_ng(d, n) || has_mark(d, n, "playgo_stub.dat");
+}
+
+/* The version an ampr-emu-ng build names after its mark ("ampr-emu-ng 0.2.0"), "" when there is none. */
+static void
+ng_version_of(const uint8_t *d, size_t n, char *out, size_t out_len) {
+  out[0] = 0;
+  size_t m = strlen(AL_NG_MARK);
+  for(size_t i = 0; i + m < n; i++) {
+    if(d[i] != 'a' || memcmp(d + i, AL_NG_MARK, m)) continue;
+    size_t k = 0, j = i + m;
+    while(j < n && k + 1 < out_len && (isdigit(d[j]) || d[j] == '.')) out[k++] = (char)d[j++];
+    out[k] = 0;
+    if(k && isdigit((unsigned char)out[0])) return;
+    out[0] = 0;
+  }
 }
 
 /* An APR-EMU with the reader of LZ4 packs: the PackedStdio builds ("pack", "debug-pack") carry the names of the two formats
    (AMPRPAK4 manifest, AMPRDAT3 volumes), the LooseStdio builds ("nopack", the 0.3 ones) do not (checked on the five built-in
-   files, 15.10.2026). By content, so that a pack build of another name or version counts too. */
+   files, 15.10.2026; ampr-emu-ng 0.2.0 carries both in its two builds). By content, so that a pack build of another name or
+   version counts too. */
 static int
 reads_packs(const uint8_t *d, size_t n) {
-  return has_mark(d, n, "[AMPR_EMU]") && has_mark(d, n, "AMPRPAK4");
+  return (has_mark(d, n, "[AMPR_EMU]") || is_ng(d, n)) && has_mark(d, n, "AMPRPAK4");
 }
 
 static void
@@ -229,7 +259,8 @@ parse_name(const al_kind_t *k, const char *name, al_ver_t *v) {
   snprintf(v->variant, sizeof(v->variant), "%s", var);
   snprintf(v->name, sizeof(v->name), "%s", name);
   v->debug = strstr(var, "debug") != NULL || (k == &K_PLAYGO && !strcmp(var, "log"));          /* writes a log */
-  v->pack = k == &K_AMPR && strstr(var, "pack") != NULL && strstr(var, "nopack") == NULL;
+  v->ng = k == &K_AMPR && (!strcmp(var, "ng") || !strncmp(var, "ng-", 3));
+  v->pack = k == &K_AMPR && (v->ng || (strstr(var, "pack") != NULL && strstr(var, "nopack") == NULL));
   return 1;
 }
 
@@ -317,7 +348,9 @@ read_version(const al_kind_t *k, const char *name, al_ver_t *v) {
   v->size = n;
   sha_of(d, n, v->sha);
   /* SELF magic 4F 15 3D 1D, and the mark of every APR-EMU build */
-  v->valid = n > 0x100 && d[0] == 0x4F && d[1] == 0x15 && d[2] == 0x3D && d[3] == 0x1D && has_mark(d, n, k->mark);
+  v->valid = n > 0x100 && d[0] == 0x4F && d[1] == 0x15 && d[2] == 0x3D && d[3] == 0x1D &&
+             (has_mark(d, n, k->mark) || (k->mark2 && has_mark(d, n, k->mark2)));
+  if(v->ng) v->pack = reads_packs(d, n);                 /* a fork build: what it reads, by content */
   v->stored = 1;
   const ps5tm_emu_blob_t *b = find_blob(k, name);
   v->bundled = b && !strcmp(b->sha256, v->sha);
@@ -339,6 +372,7 @@ ver_cmp_num(const char *a, const char *b) {
 static int
 cmp_ver(const void *pa, const void *pb) {
   const al_ver_t *a = pa, *b = pb;
+  if(a->ng != b->ng) return a->ng ? -1 : 1;             /* the fork first, it is the newer line */
   int c = ver_cmp_num(b->version, a->version);          /* newest first */
   if(c) return c;
   return strcmp(a->variant, b->variant);
@@ -394,8 +428,15 @@ find_by_sha(const al_ver_t *v, size_t n, const char *sha) {
   return NULL;
 }
 
+/* "0.4.2.1 test-pack"; a fork build "NG 0.2.0" or "NG 0.2.0 debug" */
 static void
 label_of(const al_ver_t *v, char *out, size_t n) {
+  if(v->ng) {
+    const char *rest = v->variant + 2;
+    if(*rest == '-') rest++;
+    snprintf(out, n, "NG %s%s%s", v->version, rest[0] ? " " : "", rest);
+    return;
+  }
   snprintf(out, n, "%s%s%s", v->version, v->variant[0] ? " " : "", v->variant);
 }
 
@@ -468,10 +509,12 @@ typedef struct {
   int      lib_present, lib_emu, lib_packs, has_orig, fakelib_dir, fakelib2, packed;
   uint64_t lib_size;
   char     lib_sha[65];
+  char     lib_ng[16];             /* the version of an ampr-emu-ng build, "" when it is none */
   char     scanpath[256];
   char     bp_dir[300];            /* <scanpath>/backports/<id>[ suffix] that exists, or the one that would be made */
   int      bp_exists, bp_fakelib, bp_fakelib2, bp_lib_present, bp_lib_emu, bp_lib_packs, bp_has_orig;
   char     bp_sha[65];
+  char     bp_ng[16];
   uint64_t bp_lib_size;
   char     place[10];              /* "game", "backport" or "" */
   char     why[240];
@@ -510,6 +553,7 @@ probe_backport(al_probe_t *p, const char *id) {
     p->bp_lib_packs = reads_packs(d, n);
     p->bp_lib_size = n;
     sha_of(d, n, p->bp_sha);
+    ng_version_of(d, n, p->bp_ng, sizeof(p->bp_ng));
     free(d);
   }
   snprintf(f, sizeof(f), "%s/fakelib/%s" AL_ORIG, p->bp_dir, p->k->lib);
@@ -533,6 +577,7 @@ probe_thread(void *arg) {
     snprintf(f, sizeof(f), "%s/fakelib/%s", p->li.path, p->k->lib);
     if(slurp(f, &d, &n, AL_MAX_BYTES) == 0) {
       p->lib_present = 1; p->lib_emu = is_replacement(d, n); p->lib_packs = reads_packs(d, n); p->lib_size = n; sha_of(d, n, p->lib_sha);
+      ng_version_of(d, n, p->lib_ng, sizeof(p->lib_ng));
       free(d);
     }
     snprintf(f, sizeof(f), "%s/fakelib/%s" AL_ORIG, p->li.path, p->k->lib);
@@ -557,6 +602,7 @@ probe_thread(void *arg) {
     if(got >= 0) {
       p->lib_present = 1; p->lib_emu = is_replacement(d, (size_t)got); p->lib_packs = reads_packs(d, (size_t)got); p->lib_size = (uint64_t)got;
       sha_of(d, (size_t)got, p->lib_sha);
+      ng_version_of(d, (size_t)got, p->lib_ng, sizeof(p->lib_ng));
     }
     free(d);
   }
@@ -622,11 +668,14 @@ ps5tm_amprlib_versions(const char *lib) {
     cJSON_AddBoolToObject(e, "pack", v[i].pack);
     cJSON_AddBoolToObject(e, "debug", v[i].debug);
     cJSON_AddBoolToObject(e, "valid", v[i].valid);
+    cJSON_AddBoolToObject(e, "ng", v[i].ng);
+    cJSON_AddStringToObject(e, "family", v[i].ng ? "ampr-emu-ng" : k == &K_AMPR ? "ampr_emu" : "pgo_stub");
     cJSON_AddBoolToObject(e, "stored", v[i].stored);
     cJSON_AddBoolToObject(e, "bundled", v[i].bundled);
     cJSON_AddItemToArray(arr, e);
   }
   free(v);
+  if(k == &K_AMPR) ps5tm_amprng_json(o);                       /* the release of ampr-emu-ng the app can fetch */
   al_emus_t em;
   read_emus(k, &em);
   cJSON *e = cJSON_AddObjectToObject(o, "emus");
@@ -693,6 +742,9 @@ ps5tm_amprlib_state(const char *lib, const char *id, int *http) {
     cJSON_AddBoolToObject(inst, "emu", use_bp ? p->bp_lib_emu : p->lib_emu);
     cJSON_AddBoolToObject(inst, "reads_packs", use_bp ? p->bp_lib_packs : p->lib_packs);
     cJSON_AddBoolToObject(inst, "known", m != NULL);
+    const char *ngv = use_bp ? p->bp_ng : p->lib_ng;
+    cJSON_AddBoolToObject(inst, "ng", ngv[0] != 0);
+    if(ngv[0]) cJSON_AddStringToObject(inst, "ng_version", ngv);
     if(m) { char lab[80]; label_of(m, lab, sizeof(lab)); cJSON_AddStringToObject(inst, "label", lab); cJSON_AddStringToObject(inst, "name", m->name); cJSON_AddBoolToObject(inst, "pack", m->pack); }
   }
   cJSON_AddBoolToObject(inst, "has_orig", use_bp ? p->bp_has_orig : p->has_orig);
@@ -1059,6 +1111,25 @@ out:
   free(own);
   free(p);
   return rc;
+}
+
+/* After an ampr-emu-ng build went into a game (wish of the user 03.11.2026): its developer says ShadowMountPlus must not
+   refresh the fakelib (update_emulators=0), else the file is replaced at the start of the game. 2 with the warning when
+   update_emulators is on (the default), 1 with a short confirmation when it is off, 0 for any other version. */
+int
+ps5tm_amprlib_ng_warning(const char *store_name, char *out, size_t n) {
+  al_ver_t v;
+  if(n) out[0] = 0;
+  if(!store_name || !parse_name(&K_AMPR, store_name, &v) || !v.ng) return 0;
+  al_emus_t em;
+  read_emus(&K_AMPR, &em);
+  if(em.update_emulators) {
+    say(out, n, "AMPR EMU NG: Schalte in ShadowMountPlus das Aktualisieren der fakelib ab (update_emulators=0), sonst ersetzt "
+                "ShadowMountPlus die Datei beim Spielstart.");
+    return 2;
+  }
+  say(out, n, "AMPR EMU NG: Das Aktualisieren der fakelib ist in ShadowMountPlus schon abgeschaltet (update_emulators=0).");
+  return 1;
 }
 
 /* For the check of LZ4 packs (imgjob_lz4.inc, after LZ4 Compression 1.4.3, read on 15.10.2026): does the APR-EMU that

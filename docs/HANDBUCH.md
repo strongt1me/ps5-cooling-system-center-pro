@@ -308,7 +308,13 @@ Dateien im Ordner `/data/PS5-Cooling-Center/AMPR_EMU`, benannt wie bei drakmors 
 (`libSceAmpr.sprx-0.4.2.1-test-pack`). Fünf Fassungen (0.4.2.1 test-pack, test-debug-pack, test-nopack, 0.3.6.6 test,
 test-debug) sind in der App mitgeliefert: Sie stehen in der Auswahl, auch wenn sie noch nicht im Ordner liegen, und kommen
 beim Einbauen oder mit „Mitgelieferte Versionen in den Ordner legen“ dorthin (Ordner `AMPR_EMU`, wird bei Bedarf angelegt).
-Weitere Fassungen legt „Datei hinzufügen“ im Fenster in denselben Ordner. Wohin die
+Weitere Fassungen legt „Datei hinzufügen“ im Fenster in denselben Ordner.
+**AMPR EMU NG** (quer3q, eine Weiterentwicklung, die LZ4- und zstd-Pakete liest) steht mit der Marke „NG“ ganz oben
+(„NG 0.2.0“, „NG 0.2.0 debug“). Die App bringt es nicht mit; „AMPR EMU NG 0.2.0 von GitHub laden“ holt die beiden
+Dateien auf Knopfdruck in den Ordner und prüft ihre Prüfsumme. Dateien einer neueren NG-Veröffentlichung
+(`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) benennt „Datei hinzufügen“ selbst passend um. Der Entwickler rät, in
+ShadowMountPlus `update_emulators=0` zu setzen, damit der Emulator-Ordner die Datei beim Spielstart nicht ersetzt; nach dem
+Einbauen von NG erinnert eine Meldung daran (im Browser, in der Vollbild-App und als Meldung der Konsole), solange es noch an ist. Wohin die
 Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backport-Ordner
 `<Suchpfad>/backports/<Titel-ID>/` (seit 1.7beta6 auch ein Ordner, dessen Name nur mit der Titel-ID beginnt, etwa „PPSA12345 Spielname“: der genau so benannte gewinnt, sonst der erste in Byte-Reihenfolge) mit `fakelib2` vor `fakelib`, dann das Spiel mit `fakelib2` vor
 `fakelib`; der erste vorhandene Ordner gilt allein, auch ein leerer):
@@ -598,7 +604,7 @@ Uhrzeit folgen der Sprache (`de-DE`, `en-GB`, `it-IT`, `es-ES`, `fr-FR`, `ru-RU`
   deutsch. Auch Meldungen aus der Konsole in der Oberfläche (z. B. Fehlertexte eines Auftrags) werden übersetzt, soweit das
   Wörterbuch sie kennt; seltene Texte können deutsch bleiben. Wer eine Lücke findet, kann sie als Issue melden
   („Translation“) – Näheres zum Ergänzen steht in [ENTWICKLUNG.md](ENTWICKLUNG.md#übersetzungen).
-- **Handbuch und FAQ** gibt es in allen sechs Sprachen: in der App (Seitenleiste, unter „Credits“; ohne Bildschirmfotos).
+- **Handbuch und FAQ** gibt es in allen sieben Sprachen: in der App (Seitenleiste, unter „Credits“; ohne Bildschirmfotos).
 
 ## Credits (seit 06.10.2026)
 

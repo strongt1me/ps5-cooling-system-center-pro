@@ -38,6 +38,7 @@ enum Row
     kInstall = 40,
     kRestore,
     kRemove,
+    kFetchNg,
     kTested = 60,
     kLevel,
     kMode,
@@ -203,6 +204,20 @@ void GameExtras::absorb(const Snapshot &data)
         data.extras_lz4_plan.seq != plan_.seq || data.library_tools.seq != library_.seq;
     if (data.extras.id == game_.id)
         extras_ = data.extras;
+    // AMPR EMU NG built in: ShadowMountPlus must not refresh the fakelib, said once per job
+    {
+        Json a(extras_.ampr_job);
+        const std::string warn = str(a.root, "warn");
+        const std::string job = str(a.root, "id") + str(a.root, "state") + warn;
+        if (str(a.root, "state") == "done" && num(a.root, "warn_level") >= 2 && job != warned_ &&
+            toast)
+        {
+            warned_ = job;
+            // the toast shows two lines: the advice short, the full sentence stays in the window
+            toast(ui::StatusKind::warning, "AMPR EMU NG eingebaut",
+                  "In ShadowMountPlus update_emulators=0 setzen, sonst wird die Datei ersetzt.");
+        }
+    }
     versions_ = data.extras_versions;
     plan_ = data.extras_lz4_plan;
     library_ = data.library_tools;
@@ -290,7 +305,8 @@ void GameExtras::build_main()
         const cJSON *inst = get(j.root, "installed");
         std::string state = !yes(inst, "present") ? "nicht eingebaut"
                             : yes(inst, "known")  ? "eingebaut: " + str(inst, "label")
-                                                  : "eine unbekannte Fassung ist eingebaut";
+                            : yes(inst, "ng") ? "AMPR EMU NG eingebaut · " + str(inst, "ng_version")
+                                              : "eine unbekannte Fassung ist eingebaut";
         if (str(j.root, "place") == "backport")
             state += " · im Backport-Ordner";
         if (yes(inst, "has_orig"))
@@ -425,6 +441,8 @@ void GameExtras::build_versions()
             label += " (eingebaut)";
         ui::FormRow &r = form_.add_action(kVersion + i, label.empty() ? str(v, "name") : label);
         std::string about;
+        if (yes(v, "ng"))
+            about += "AMPR EMU NG · ";
         if (yes(v, "pack"))
             about += "LZ4 · ";
         if (yes(v, "debug"))
@@ -446,6 +464,17 @@ void GameExtras::build_versions()
             "");
     form_.add_header("ORDNER UND ORIGINAL");
     form_.add_action(kInstall, "Mitgelieferte Versionen in den Ordner legen");
+    const cJSON *ng = get(j.root, "ng_release");
+    if (lib_ == "ampr" && cJSON_IsObject(ng))
+    {
+        const cJSON *missing = get(ng, "missing");
+        const bool want = cJSON_IsNumber(missing) && missing->valueint > 0;
+        ui::FormRow &f = form_.add_action(kFetchNg, "AMPR EMU NG von GitHub laden");
+        f.disabled = !want || yes(ng, "busy");
+        f.description = want ? "Weiterentwicklung von quer3q, liest LZ4- und zstd-Pakete; "
+                               "Prüfsumme wird geprüft."
+                             : "Schon im Ordner.";
+    }
     if (yes(inst, "has_orig"))
         form_.add_action(kRestore, "Original wiederherstellen");
     else if (yes(inst, "present"))
@@ -634,6 +663,10 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         source().extras_post(lib_ == "playgo" ? "playgo/install" : "ampr-emu/install", "{}");
         source().extras_versions(lib_);
         break;
+    case kFetchNg:
+        source().extras_post("ampr-emu/fetch-ng", "{}");
+        source().extras_versions(lib_);
+        break;
     case kRestore:
     case kRemove:
         source().extras_post("library/emu", "{\"id\":" + gid + ",\"lib\":\"" + lib_ +
@@ -727,6 +760,8 @@ std::string GameExtras::job_line(float *fraction) const
         !str(a.root, "error").empty() ? str(a.root, "error") : str(i.root, "error");
     if (!err.empty())
         return "Fehler: " + err;
+    if (str(a.root, "state") == "done" && !str(a.root, "warn").empty())
+        return str(a.root, "warn");
     return {};
 }
 

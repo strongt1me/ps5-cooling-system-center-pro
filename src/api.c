@@ -4559,6 +4559,16 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
+  /* ampr-emu-ng (amprng.c): the known release from GitHub into AMPR_EMU, only when the person asks */
+  if(!strcmp(req->path, "/api/v1/ampr-emu/fetch-ng")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    char why[300] = "";
+    int http = 200;
+    cJSON *o = ps5tm_amprng_fetch(why, sizeof(why), &http);
+    if(!o) { ps5tm_http_send_error(fd, http, http == 409 ? "busy" : "ampr_ng_fetch_failed", why[0] ? why : "ampr-emu-ng ließ sich nicht laden."); return; }
+    send_cjson(fd, 200, o);
+    return;
+  }
   if(!strcmp(req->path, "/api/v1/library/emu")) {
     if(is_get) {
       char id[16] = "", lib[8] = "";

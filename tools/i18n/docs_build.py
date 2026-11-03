@@ -32,8 +32,8 @@ background:rgba(20,27,41,.92);border:1px solid rgba(59,130,246,.55);color:#cfe0f
 .langs a{padding:9px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#aebbd4;text-decoration:none;font-size:14px}
 .langs a:hover{border-color:rgba(59,130,246,.6);color:#fff}.langs a.on{background:rgba(59,130,246,.22);color:#fff;border-color:rgba(59,130,246,.55)}
 """
-LANGS = ["de", "en", "it", "es", "fr", "ru"]
-LANG_NAMES = {"de": "Deutsch", "en": "English", "it": "Italiano", "es": "Español", "fr": "Français", "ru": "Русский"}
+LANGS = ["de", "en", "it", "es", "fr", "ru", "sv"]
+LANG_NAMES = {"de": "Deutsch", "en": "English", "it": "Italiano", "es": "Español", "fr": "Français", "ru": "Русский", "sv": "Svenska"}
 APP_LOGO = "/img/app-mark.png"      # inside the app the logo is a file of the app, not a copy in every page
 
 

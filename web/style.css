@@ -843,6 +843,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
   letter-spacing: .04em; cursor: help; }
 .gm-tag.bp   { background: rgba(250,178,25,.16); color: #ffd57b; border: 1px solid rgba(250,178,25,.38); }
 .gm-tag.ampr { background: rgba(57,135,229,.16); color: #9cc4ff; border: 1px solid rgba(57,135,229,.4); }
+.gm-tag.ng   { background: rgba(46,204,113,.16); color: #8ff0b5; border: 1px solid rgba(46,204,113,.42); }
 .gm-tag.pg   { background: rgba(25,158,112,.16); color: #7fe0bc; border: 1px solid rgba(25,158,112,.4); }
 .gm-tag.fmt  { background: rgba(255,255,255,.07); color: var(--ink-2); border: 1px solid rgba(255,255,255,.2); }
 .gm-tag.unk  { background: none; color: var(--ink-muted); border: 1px dashed rgba(255,255,255,.18);
@@ -1998,6 +1999,7 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-theme="hell"] .rule button { color: #8e0b0b; }
 :root[data-theme="hell"] .gm-tag.bp { color: #8e640b; }
 :root[data-theme="hell"] .gm-tag.ampr { color: #0b408e; }
+:root[data-theme="hell"] .gm-tag.ng { color: #136c39; }
 :root[data-theme="hell"] .gm-tag.pg { color: #1e7b59; }
 :root[data-theme="hell"] .gm-meta dd.warn { color: #8e640b; }
 :root[data-theme="hell"] .cp-why { color: #8e640b; }

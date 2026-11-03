@@ -807,6 +807,14 @@ int           ps5tm_amprlib_run(const char *lib, const char *op, const char *tit
    it at the start from its emulator folder by one that reads no packs. root: the game folder. */
 int           ps5tm_amprlib_pack_check(const char *title_id, const char *root, int repair, char *warn, size_t warn_len,
                                        char *why, size_t why_len);
+/* ampr-emu-ng (amprng.c): the release the app can fetch into AMPR_EMU, added to the versions JSON as "ng_release"; the
+   fetch puts its missing files there (checked by SHA-256) and gives the versions JSON with "installed", or NULL with why
+   and an HTTP status (409 already running, 502 download or check failed). */
+void          ps5tm_amprng_json(struct cJSON *o);
+/* After an ampr-emu-ng version went into a game: 2 and the warning to set update_emulators=0 in ShadowMountPlus (it is on),
+   1 and a confirmation (it is off), 0 for any other version (amprlib.c). */
+int           ps5tm_amprlib_ng_warning(const char *store_name, char *out, size_t n);
+struct cJSON *ps5tm_amprng_fetch(char *why, size_t why_len, int *http);
 
 /* Checking, unpacking and repairing the image of a game (imgjob.c). */
 struct cJSON *ps5tm_imgjob_info(const char *title_id, int *http);

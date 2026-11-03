@@ -191,7 +191,7 @@ El ELF se compila con el PS5 payload SDK **v0.45**, cuyo código de arranque con
 | **Sistema** | Consola, almacenamiento, red, diagnóstico |
 | **Perfil** | Nombre visible e imagen de perfil |
 | **Registro** | Eventos de la app y registro del kernel en directo |
-| **Créditos** | Agradecimientos; además **manual** y **FAQ** en seis idiomas |
+| **Créditos** | Agradecimientos; además **manual** y **FAQ** en siete idiomas |
 
 **Con el mando (navegador de la consola):** L1 / R1 página anterior / siguiente · L2 / R2 desplazar arriba / abajo · Silencio dos veces: temperatura y ventilador en la TV.
 
@@ -202,7 +202,7 @@ El ELF se compila con el PS5 payload SDK **v0.45**, cuyo código de arranque con
 
 | Documento | Contenido |
 | --- | --- |
-| [Manual](docs/HANDBUCH.md) | Uso en detalle (en alemán; también en la app, en seis idiomas) |
+| [Manual](docs/HANDBUCH.md) | Uso en detalle (en alemán; también en la app, en siete idiomas) |
 | [API](docs/API.md) | Todos los endpoints y campos de configuración |
 | [Desarrollo](docs/ENTWICKLUNG.md) | Compilar, enviar, resolver problemas, estructura del código |
 | [Cambios](CHANGELOG.md) | Qué cambió en cada versión |

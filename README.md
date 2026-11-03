@@ -191,7 +191,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmw
 | **System** | Konsole, Speicher, Netzwerk, Diagnose |
 | **Profil** | Anzeigename und Profilbild |
 | **Protokoll** | Ereignisse der App und Kernel-Log live |
-| **Credits** | Dank an die Entwickler; dazu **Handbuch** und **FAQ** in sechs Sprachen |
+| **Credits** | Dank an die Entwickler; dazu **Handbuch** und **FAQ** in sieben Sprachen |
 
 **Am Controller (Browser der Konsole):** L1 / R1 vorherige / nächste Seite · L2 / R2 nach oben / unten scrollen · Mute-Taste zweimal: Temperatur und Lüfter auf dem Fernseher.
 
@@ -202,7 +202,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmw
 
 | Dokument | Inhalt |
 | --- | --- |
-| [Handbuch](docs/HANDBUCH.md) | Bedienung im Detail (auch in der App, in sechs Sprachen) |
+| [Handbuch](docs/HANDBUCH.md) | Bedienung im Detail (auch in der App, in sieben Sprachen) |
 | [API](docs/API.md) | Alle Endpunkte und Konfigurationsfelder |
 | [Entwicklung](docs/ENTWICKLUNG.md) | Bauen, Senden, Fehlersuche, Quellcode-Aufbau |
 | [Änderungen](CHANGELOG.md) | Was sich in welcher Version geändert hat |

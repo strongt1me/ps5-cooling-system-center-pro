@@ -1,5 +1,20 @@
 # Changelog
 
+## Unveröffentlicht
+
+### AMPR EMU NG in der Versionsauswahl
+- Die Auswahl „APR-EMU-Version“ kennt jetzt **ampr-emu-ng** von quer3q (<https://github.com/quer3q/ampr-emu-ng>, GPL-3.0), eine Weiterentwicklung von drakmors ampr_emu, die LZ4- und zstd-Pakete liest. Ihre Dateien tragen statt `[AMPR_EMU]` die Kennung `ampr-emu-ng <Version>`; die App erkennt sie daran, zeigt sie als **„NG 0.2.0“** (bzw. „NG 0.2.0 debug“) mit grüner Marke „NG“ ganz oben in der Liste und nennt eine eingebaute NG-Datei auch dann beim Namen, wenn sie nicht im Ordner liegt.
+- Mitgeliefert wird NG nicht (die Nutzlast liegt bei 9,9 MB, nahe der Grenze, an der die Konsole sie nicht mehr lud). Stattdessen lädt **„AMPR EMU NG 0.2.0 von GitHub laden“** die beiden Dateien der Veröffentlichung v0.2.0 in den Ordner `AMPR_EMU` (`libSceAmpr.sprx-0.2.0-ng`, `-ng-debug`), nur auf Knopfdruck, über den eigenen HTTPS-Client der App, nur von GitHub; eine Datei bekommt ihren Namen erst, wenn ihre SHA-256 zur Veröffentlichung passt. Neu: `POST /api/v1/ampr-emu/fetch-ng`, in `GET /api/v1/ampr-emu` die Felder `ng`, `family` und `ng_release`.
+- „Datei hinzufügen“ benennt Dateien einer neueren NG-Veröffentlichung (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) selbst passend um – die Version steht in der Datei.
+- Nach dem Einbauen von NG erscheint eine Meldung, dass in ShadowMountPlus das Aktualisieren der fakelib abgeschaltet sein muss (`update_emulators=0`), sonst ersetzt ShadowMountPlus die Datei beim Spielstart: im Browser als Warnkasten unter „✓ Eingebaut.“, in der Vollbild-App als Meldung, dazu als Meldung der Konsole. Ist `update_emulators=0` schon gesetzt, steht nur ein kurzer Hinweis da. Neu im Stand des Auftrags (`GET /api/v1/library/ampr/job`): `warn` und `warn_level` (2 = etwas zu tun, 1 = nur zur Info).
+- Eine NG-Datei gilt wie jede APR-EMU nie als Original des Spiels und zählt bei LZ4-gepackten Spielen als Paketleser.
+- Browser und Vollbild-App (Extras → APR-EMU) gleich; Übersetzungen in allen Sprachen.
+- Vollbild-App: Die Vorschau-Tour öffnete die Extras eines Spiels nicht mehr (das Aktionen-Menü hatte sich geändert); korrigiert.
+
+### Handbuch und FAQ auf Schwedisch
+- Handbuch und FAQ gibt es jetzt auch auf Schwedisch (`web/handbuch.sv.html`, `web/faq.sv.html`, Quelle `tools/i18n/docs/docs_src.sv.json`). Bisher führte der Handbuch-Knopf bei schwedischer Oberfläche ins Leere (`/handbuch.sv.html` fehlte). Alle Fassungen nennen Svenska jetzt in der Sprachleiste und in der Sprachliste des Kapitels „Oberfläche“.
+- Schwedische Oberfläche: Vier Knöpfe lasen sich wie Zustandsmeldungen („Packar upp LZ4 …“); jetzt in Befehlsform („Packa upp LZ4 …“, „Packa med LZ4 …“, „Packa upp …“, „Dela upp …“).
+
 ## v1.75.4
 
 ### Uhrzeiten in der Ortszeit der Konsole
