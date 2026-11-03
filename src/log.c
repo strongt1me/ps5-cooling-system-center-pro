@@ -293,9 +293,25 @@ ps5tm_log_snapshot(ps5tm_log_entry_t *out, unsigned max) {
  * for a warning or an error), writes it as text, and syncs it, so that a
  * hard reset loses at most that interval. Lines that rolled out of the ring
  * before they were written are counted in a line of their own. Past
- * APPLOG_MAX_BYTES the file becomes app.old.log and a new one starts. */
+ * APPLOG_MAX_BYTES the file becomes app.old.log and a new one starts.
+ *
+ * Every run is framed: a "gestartet" line when it begins and a "beendet" line
+ * when it ends the regular way (SIGTERM/SIGINT, or the app switching the
+ * console off or restarting it, ps5tm_log_file_end) or crashes
+ * (ps5tm_log_file_crash_signal_safe). SIGKILL and a hard power cut leave no
+ * trace of their own, so a start that finds the last run without its end line
+ * says so first. */
 #define APPLOG_BATCH_MS  2000
 #define APPLOG_MAX_BYTES (1024 * 1024)
+#define APPLOG_END_MARK  " beendet: "
+
+/* The writer's state. g_file_lock serialises a batch of the thread with a flush from another one (an ending run). */
+static pthread_mutex_t    g_file_lock = PTHREAD_MUTEX_INITIALIZER;
+static ps5tm_log_entry_t *g_file_batch;
+static char              *g_file_buf;
+static uint64_t           g_file_next;
+static volatile int       g_file_fd = -1;    /* also read by the crash handler */
+static int                g_file_ended;      /* the end line is written: nothing more goes to the file */
 
 /* Entries from number `from` on, oldest first; *lost is how many of them the ring no longer holds. Returns the count. */
 static unsigned
@@ -342,6 +358,57 @@ applog_write(int fd, const char *s, size_t len) {
   }
 }
 
+/* Whether the last line of the file is the end line of a run. A missing or empty file counts as ended: nothing ran. */
+static int
+applog_last_run_ended(void) {
+  int fd = open(PS5TM_APPLOG_PATH, O_RDONLY | O_NOFOLLOW);
+  if(fd < 0) return 1;
+  char  tail[512];
+  off_t size = lseek(fd, 0, SEEK_END);
+  off_t from = size > (off_t)sizeof(tail) - 1 ? size - (off_t)sizeof(tail) + 1 : 0;
+  ssize_t n = size > 0 && lseek(fd, from, SEEK_SET) == from ? read(fd, tail, sizeof(tail) - 1) : 0;
+  close(fd);
+  if(n <= 0) return 1;
+  tail[n] = 0;
+  while(n > 0 && (tail[n - 1] == '\n' || tail[n - 1] == '\r')) tail[--n] = 0;
+  const char *last = strrchr(tail, '\n');
+  last = last ? last + 1 : tail;
+  return !strncmp(last, "=====", 5) && strstr(last, APPLOG_END_MARK) != NULL;
+}
+
+/* Writes what is new in the ring and syncs it. Caller holds g_file_lock. */
+static void
+applog_drain(void) {
+  if(g_file_ended) return;
+  uint64_t lost = 0;
+  unsigned n = snapshot_since(g_file_next, g_file_batch, &g_file_next, &lost);
+  if(!n && !lost) return;
+
+  if(g_file_fd < 0) g_file_fd = applog_open();   /* /data was not ready yet, or the file was removed */
+  if(g_file_fd < 0) return;
+
+  char  *buf = g_file_buf;
+  size_t o   = 0;
+  char   stamp[32];
+  if(lost)
+    o += (size_t)snprintf(buf + o, 256, "… %llu Einträge kamen zu schnell und fehlen hier (im Kernel-Log stehen sie).\n",
+                          (unsigned long long)lost);
+  for(unsigned i = 0; i < n; i++) {
+    applog_stamp(g_file_batch[i].timestamp_ms, stamp, sizeof(stamp));
+    o += (size_t)snprintf(buf + o, 512, "%s  %-5s  %-28s  %s\n", stamp, g_file_batch[i].level, g_file_batch[i].code,
+                          g_file_batch[i].message);
+  }
+  applog_write(g_file_fd, buf, o);
+  fsync(g_file_fd);
+
+  struct stat st;
+  if(!fstat(g_file_fd, &st) && st.st_size > APPLOG_MAX_BYTES) {
+    int old = g_file_fd;
+    g_file_fd = applog_open();
+    close(old);
+  }
+}
+
 static void *
 applog_worker(void *arg) {
   (void)arg;
@@ -349,18 +416,28 @@ applog_worker(void *arg) {
   char              *buf   = malloc(PS5TM_LOG_CAPACITY * 512 + 256);
   if(!batch || !buf) { free(batch); free(buf); return NULL; }
 
-  uint64_t next = 0;
-  int      fd   = applog_open();
-  if(fd >= 0) {
-    char head[160], stamp[32];
+  pthread_mutex_lock(&g_file_lock);
+  g_file_batch = batch;
+  g_file_buf   = buf;
+  int ended    = applog_last_run_ended();
+  g_file_fd    = applog_open();
+  if(g_file_fd >= 0) {
+    char head[400], stamp[32];
+    int  k = 0;
     applog_stamp(ps5tm_now_ms(), stamp, sizeof(stamp));
-    int k = snprintf(head, sizeof(head), "\n===== %s  " PS5TM_APP_NAME " " PS5TM_VERSION " gestartet =====\n", stamp);
-    applog_write(fd, head, (size_t)k);
+    if(!ended)
+      k += snprintf(head + k, sizeof(head) - (size_t)k,
+                    "\n(Die vorige Ausführung hat keine Endzeile hinterlassen: Konsole ausgeschaltet oder neu gestartet, "
+                    "abgestürzt oder von einer neuen Ausführung abgelöst.)");
+    k += snprintf(head + k, sizeof(head) - (size_t)k,
+                  "\n===== %s  " PS5TM_APP_NAME " " PS5TM_VERSION " gestartet =====\n", stamp);
+    applog_write(g_file_fd, head, (size_t)k);
   }
+  pthread_mutex_unlock(&g_file_lock);
 
   for(;;) {
     pthread_mutex_lock(&g_lock);
-    if(g_seq == next) {
+    if(g_seq == g_file_next) {
       struct timespec until;
       clock_gettime(CLOCK_REALTIME, &until);
       until.tv_sec  += APPLOG_BATCH_MS / 1000;
@@ -370,32 +447,76 @@ applog_worker(void *arg) {
     }
     pthread_mutex_unlock(&g_lock);
 
-    uint64_t lost = 0;
-    unsigned n = snapshot_since(next, batch, &next, &lost);
-    if(!n && !lost) continue;
-
-    if(fd < 0) fd = applog_open();            /* /data was not ready yet, or the file was removed */
-    if(fd < 0) continue;
-
-    size_t o = 0;
-    char   stamp[32];
-    if(lost)
-      o += (size_t)snprintf(buf + o, 256, "… %llu Einträge kamen zu schnell und fehlen hier (im Kernel-Log stehen sie).\n",
-                            (unsigned long long)lost);
-    for(unsigned i = 0; i < n; i++) {
-      applog_stamp(batch[i].timestamp_ms, stamp, sizeof(stamp));
-      o += (size_t)snprintf(buf + o, 512, "%s  %-5s  %-28s  %s\n", stamp, batch[i].level, batch[i].code, batch[i].message);
-    }
-    applog_write(fd, buf, o);
-    fsync(fd);
-
-    struct stat st;
-    if(!fstat(fd, &st) && st.st_size > APPLOG_MAX_BYTES) {
-      close(fd);
-      fd = applog_open();
-    }
+    pthread_mutex_lock(&g_file_lock);
+    applog_drain();
+    pthread_mutex_unlock(&g_file_lock);
   }
   return NULL;
+}
+
+void
+ps5tm_log_file_flush(void) {
+  pthread_mutex_lock(&g_file_lock);
+  if(g_file_batch) applog_drain();
+  pthread_mutex_unlock(&g_file_lock);
+}
+
+void
+ps5tm_log_file_end(const char *why) {
+  pthread_mutex_lock(&g_file_lock);
+  if(g_file_batch && !g_file_ended) {
+    applog_drain();
+    if(g_file_fd >= 0) {
+      char line[256], stamp[32];
+      applog_stamp(ps5tm_now_ms(), stamp, sizeof(stamp));
+      int k = snprintf(line, sizeof(line), "===== %s  " PS5TM_APP_NAME " " PS5TM_VERSION APPLOG_END_MARK "%s =====\n",
+                       stamp, why ? why : "ohne Angabe");
+      if(k > (int)sizeof(line) - 1) k = (int)sizeof(line) - 1;
+      applog_write(g_file_fd, line, (size_t)k);
+      fsync(g_file_fd);
+    }
+    g_file_ended = 1;
+  }
+  pthread_mutex_unlock(&g_file_lock);
+}
+
+/* The end line was written but the run goes on (the console refused to switch off): the file takes lines again. */
+void
+ps5tm_log_file_resume(void) {
+  pthread_mutex_lock(&g_file_lock);
+  if(g_file_ended && g_file_fd >= 0) {
+    char line[200], stamp[32];
+    applog_stamp(ps5tm_now_ms(), stamp, sizeof(stamp));
+    int k = snprintf(line, sizeof(line), "===== %s  " PS5TM_APP_NAME " " PS5TM_VERSION " läuft weiter =====\n", stamp);
+    if(k > (int)sizeof(line) - 1) k = (int)sizeof(line) - 1;
+    applog_write(g_file_fd, line, (size_t)k);
+  }
+  g_file_ended = 0;
+  pthread_mutex_unlock(&g_file_lock);
+}
+
+/* From the crash handler: only write() and fsync(), no lock, no stdio, no clock formatting. What the last batch had not
+   written yet is lost here; the kernel log still has it. */
+void
+ps5tm_log_file_crash_signal_safe(int sig) {
+  int fd = g_file_fd;
+  if(fd < 0 || g_file_ended) return;
+  char line[224];
+  static const char head[] = "===== " PS5TM_APP_NAME " " PS5TM_VERSION APPLOG_END_MARK "abgestürzt (Signal ";
+  size_t k = sizeof(head) - 1;
+  memcpy(line, head, k);
+  char digits[8];
+  int  d = 0;
+  unsigned v = sig > 0 ? (unsigned)sig : 0;
+  do { digits[d++] = (char)('0' + v % 10); v /= 10; } while(v && d < (int)sizeof(digits));
+  while(d) line[k++] = digits[--d];
+  static const char tail[] = "), die letzten Sekunden davor fehlen hier =====\n";
+  memcpy(line + k, tail, sizeof(tail) - 1);
+  k += sizeof(tail) - 1;
+  ssize_t w = write(fd, line, k);
+  (void)w;
+  fsync(fd);
+  g_file_ended = 1;
 }
 
 void

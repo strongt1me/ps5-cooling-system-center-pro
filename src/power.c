@@ -76,12 +76,15 @@ ps5tm_power_off(void) {
   }
 
   PS5TM_WARN("power_off_requested", "Ausschalten der Konsole angefordert.");
+  ps5tm_log_file_end("Konsole wird ausgeschaltet");   /* before the call: the process may not see it return */
   /* Called with an int argument 0: if the symbol takes none the register is ignored, otherwise 0 is a normal shutdown. */
   int rc = p_turn_off ? p_turn_off(0) : p_power_off();
   ps5tm_sony_api_unlock();
-  if(rc != 0)
+  if(rc != 0) {
+    ps5tm_log_file_resume();
     PS5TM_ERROR("power_off_failed",
                 "Ausschalten abgelehnt (0x%08X).", (unsigned)rc);
+  }
   return rc;
 }
 
@@ -98,11 +101,14 @@ ps5tm_power_reboot(void) {
   }
 
   PS5TM_WARN("reboot_requested", "Neustart der Konsole angefordert.");
+  ps5tm_log_file_end("Konsole startet neu");
   int rc = p_reboot();
   ps5tm_sony_api_unlock();
-  if(rc != 0)
+  if(rc != 0) {
+    ps5tm_log_file_resume();
     PS5TM_ERROR("reboot_failed",
                 "Neustart abgelehnt (0x%08X).", (unsigned)rc);
+  }
   return rc;
 }
 
@@ -129,6 +135,7 @@ ps5tm_power_standby(void) {
   }
 
   PS5TM_WARN("standby_requested", "Ruhemodus angefordert.");
+  ps5tm_log_file_flush();                             /* the run goes on after waking, so no end line */
   int rc = p_standby();
   ps5tm_sony_api_unlock();
   if(rc != 0)
@@ -169,11 +176,13 @@ ps5tm_power_safemode(void) {
     return rc;
   }
 
+  ps5tm_log_file_end("Konsole startet in den abgesicherten Modus neu");
   rc = p_reboot();
   ps5tm_sony_api_unlock();
   if(rc != 0) {
     /* The flag is armed but the console is staying up: undo it, otherwise the
        next ordinary restart would land in safe mode without anyone asking. */
+    ps5tm_log_file_resume();
     PS5TM_ERROR("safemode_reboot_failed",
                 "Neustart abgelehnt (0x%08X) — Kennzeichen wird "
                 "zurückgenommen.", (unsigned)rc);

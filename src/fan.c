@@ -1082,6 +1082,7 @@ fan_worker(void *arg) {
       if(last_applied > 0 || atomic_load(&g_manual_threshold_c) > 0)
         ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno);
       PS5TM_INFO("fan_stop", "Beenden angefordert – die Lüftereinstellung geht an die Konsole zurück.");
+      ps5tm_log_file_end("vom System beendet (SIGTERM/SIGINT)");
       _exit(0);
     }
 

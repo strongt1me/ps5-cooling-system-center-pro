@@ -372,6 +372,10 @@ unsigned ps5tm_log_snapshot(ps5tm_log_entry_t *out, unsigned max);
 #define PS5TM_APPLOG_PATH     PS5TM_DATA_DIR "/app.log"
 #define PS5TM_APPLOG_OLD_PATH PS5TM_DATA_DIR "/app.old.log"
 void ps5tm_log_file_start(void);
+void ps5tm_log_file_flush(void);                    /* write what is pending now (before something that may end the run) */
+void ps5tm_log_file_end(const char *why);           /* pending lines, then the run's end line; nothing more after it */
+void ps5tm_log_file_resume(void);                   /* after an end line whose ending did not happen */
+void ps5tm_log_file_crash_signal_safe(int sig);     /* the end line from a crash handler */
 
 /* Serializes fragile Sony API calls across multiple worker/request threads. */
 void ps5tm_sony_api_lock(void);

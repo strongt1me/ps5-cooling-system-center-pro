@@ -332,6 +332,8 @@ ps5tm_log(const char *level, const char *code, const char *fmt, ...) {
   }
 }
 void ps5tm_notify(const char *fmt, ...) { (void)fmt; }
+void ps5tm_log_file_end(const char *why) { (void)why; }
+void ps5tm_log_file_crash_signal_safe(int sig) { (void)sig; }
 void ps5tm_show_dialog(const char *text) { (void)text; }
 void ps5tm_chanlog_sample(const ps5tm_sensors_t *s) { (void)s; }
 void ps5tm_thermal_sample(int a, int b, double c, int d, int e, int f, int g) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g; }

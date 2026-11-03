@@ -1,5 +1,13 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Endzeile in `app.log`
+- Endet die App, schreibt sie jetzt eine Zeile `===== <Zeit>  … <Version> beendet: <Grund> =====` in `app.log` – vorher alles, was noch nicht in der Datei stand, ohne die 2 Sekunden abzuwarten. Gründe: „Konsole wird ausgeschaltet“, „Konsole startet neu“, „Konsole startet in den abgesicherten Modus neu“ (jeweils über die Power-Optionen der App), „vom System beendet (SIGTERM/SIGINT)“ und „abgestürzt (Signal N)“. Lehnt die Konsole das Ausschalten oder den Neustart ab, folgt `===== … läuft weiter =====` und die Datei nimmt wieder Zeilen an.
+- Vor dem Ruhemodus schreibt die App alles Offene sofort in die Datei (ohne Endzeile, denn sie läuft nach dem Aufwachen weiter).
+- Einen Neustart über das Menü der Konsole, ein Abschalten per Stromstecker oder die Ablösung durch eine neu gesendete ELF bemerkt die App nicht (SIGKILL lässt sich nicht abfangen). Deshalb prüft jeder Start, ob die letzte Zeile der Datei eine Endzeile ist, und schreibt sonst „(Die vorige Ausführung hat keine Endzeile hinterlassen …)“ vor die neue Startzeile. Anlass: Nach dem Neustart am 03.11.2026 endete die Datei mitten in einer Messung.
+- Handbuch (alle sieben Sprachen) und `docs/HANDBUCH.md` beschreiben die Endzeile.
+
 ## v1.75.6
 
 ### Protokoll übersteht einen Neustart

@@ -32,7 +32,7 @@
 #undef pthread_create   /* this file defines the wrapper and calls the real one (also when the simulation includes it after fan.c) */
 
 /* An alternate signal stack per thread (sigaltstack is per thread on FreeBSD), so that on_crash below also runs after a
- * stack overflow. It needs very little: open, ioctl, close, sigaction, raise. */
+ * stack overflow. It needs very little: open, ioctl, close, write, fsync, sigaction, raise. */
 #define ALT_STACK_BYTES (32 * 1024)
 
 typedef struct {
@@ -236,6 +236,7 @@ guard_worker(void *arg) {
 static void
 on_crash(int sig) {
   ps5tm_platform_set_fan_threshold_signal_safe(PS5TM_NEUTRAL_THRESHOLD_C);
+  ps5tm_log_file_crash_signal_safe(sig);
   struct sigaction d;
   memset(&d, 0, sizeof(d));
   d.sa_handler = SIG_DFL;

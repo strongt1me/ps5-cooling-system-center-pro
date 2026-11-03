@@ -34,7 +34,10 @@ Konfigurationen ziehen beim ersten Start automatisch um.
    auch in `/data/PS5-Cooling-Center/app.log` (höchstens 2 s später, Warnungen
    sofort; ab 1 MB wird die alte Datei zu `app.old.log`), damit es einen
    Neustart oder Absturz der Konsole übersteht. Jeder Start der App beginnt dort
-   mit einer Zeile `===== … gestartet =====`.
+   mit einer Zeile `===== … gestartet =====`. Endet die App regulär (Ausschalten
+   oder Neustart über die App, Beenden durch das System, Absturz), schreibt sie
+   `===== … beendet: <Grund> =====`; fehlt diese Zeile, sagt der nächste Start
+   das in einer eigenen Zeile.
 
 Darunter öffnen **Handbuch** und **FAQ** (seit 1.49.1) das eingebaute Benutzerhandbuch und die häufigen Fragen,
 am PC in einem neuen Tab; oben steht „← Zurück zur App“. Sie erscheinen in der gewählten Sprache (seit 1.50.0 sechs, siehe
