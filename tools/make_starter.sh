@@ -32,4 +32,14 @@ cp "$B/eboot.bin" "$OUT/eboot.bin"
 cp "$B/sce_module/libc.prx" "$OUT/sce_module/"
 cp "$B/sce_sys/param.json" "$B/sce_sys/icon0.png" "$ROOT/starter/sce_sys/pic0.png" "$ROOT/starter/sce_sys/pic1.png" "$OUT/sce_sys/"
 
+# The background the home screen shows while a tile is selected (pic0) or starting (pic1) is read as BC7 DDS, 3840x2160 (a pic0.png
+# beside it is not used). Made from starter/sce_sys/pic0.png here instead of being kept in the repository: 8 MB each, the same picture.
+DDS="$(mktemp)"
+python "$ROOT/tools/png_to_bc7_dds.py" "$ROOT/starter/sce_sys/pic0.png" "$DDS"
+for t in FAKE86921 FAKE86922; do
+  cp "$DDS" "$ROOT/starter/out/$t/sce_sys/pic0.dds"
+  cp "$DDS" "$ROOT/starter/out/$t/sce_sys/pic1.dds"
+done
+rm -f "$DDS"
+
 for t in FAKE86921 FAKE86922; do echo "ok: starter/out/$t"; ls -l "$ROOT/starter/out/$t/eboot.bin"; done
