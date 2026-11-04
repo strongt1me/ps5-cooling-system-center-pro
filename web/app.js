@@ -9046,16 +9046,24 @@
         <div class="cp-actions"><button type="button" class="btn ghost" id="fm-uphide">Ausblenden</button></div>`;
       fmLoad(fm.path);
     };
-    x.onload = () => {
+    x.onload = async () => {
       let d = null;
       try { d = JSON.parse(x.responseText); } catch { /* keine Antwort */ }
-      if (x.status === 200 && d && d.ok) fmUpNext(done + 1, total);
+      if (x.status === 200 && d && d.ok && d.skipped) { fm.upSkipped = (fm.upSkipped || 0) + 1; fmUpNext(done + 1, total); }
+      else if (x.status === 200 && d && d.ok) fmUpNext(done + 1, total);
       else if (it.skipExisting && x.status === 409 && d && d.code === "exists") { fm.upSkipped = (fm.upSkipped || 0) + 1; fmUpNext(done + 1, total); }
+      else if (!it.conflict && x.status === 409 && d && d.code === "exists") {
+        const choice = await fmAskConflict([it.f.name]);
+        if (!choice) { fail("Abgebrochen."); return; }
+        fm.upQueue.unshift({ ...it, conflict: choice });
+        fmUpNext(done, total);
+      }
       else fail((d && d.message) || `HTTP ${x.status}`);
     };
     x.onerror = () => fail("Die Verbindung brach ab.");
     x.onabort = () => fail("Abgebrochen; nichts von dieser Datei wurde gespeichert.");
-    x.open("POST", `/api/v1/files/upload?path=${encodeURIComponent(it.dir)}&name=${encodeURIComponent(it.f.name)}`);
+    const conflictQ = it.conflict ? `&conflict=${it.conflict}` : "";
+    x.open("POST", `/api/v1/files/upload?path=${encodeURIComponent(it.dir)}&name=${encodeURIComponent(it.f.name)}${conflictQ}`);
     x.send(it.f);
   };
 

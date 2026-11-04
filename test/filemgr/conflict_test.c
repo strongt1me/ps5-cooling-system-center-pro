@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -137,6 +138,23 @@ fresh(void) {
   put("/data/dst/d/z.txt", "OLDZ");
 }
 
+/* A raw upload (src/filemgr.c:receive_upload, called directly by http.c, not through ps5tm_filemgr_api): `prefix_len`
+   of `body` is handed over as already read (as it would arrive together with the headers in one recv()), the rest
+   is written to a socketpair for receive_upload's own reads to pick up — the same split real uploads have. */
+static int
+upload_once(const char *query, const char *body, size_t body_len, size_t prefix_len) {
+  int sv[2];
+  if(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) exit(2);
+  size_t rest = body_len - prefix_len;
+  if(rest && write(sv[1], body + prefix_len, rest) != (ssize_t)rest) exit(2);
+  close(sv[1]);
+  g_status = 0;
+  g_body[0] = 0;
+  ps5tm_filemgr_receive_upload(sv[0], query, body, prefix_len, body_len);
+  close(sv[0]);
+  return g_status;
+}
+
 int
 main(void) {
   /* 1. nothing chosen: refused, with the list, nothing touched */
@@ -213,6 +231,31 @@ main(void) {
   fresh();
   CHECK(transfer("/api/v1/files/copy", "/data/src/f.txt", "/data/src/d", "replace") == 200, "no clash with a choice");
   CHECK(is("/data/src/d/f.txt", "NEW"), "plain copy");
+
+  /* 13. upload: free name, no conflict choice needed; body split between "already read" and "read from the fd" */
+  fresh();
+  CHECK(upload_once("path=%2Fdata%2Fsrc&name=u.txt&conflict=", "HELLOBODY", 9, 3) == 200, "plain upload: %d %s", g_status, g_body);
+  CHECK(is("/data/src/u.txt", "HELLOBODY"), "plain upload content");
+
+  /* 14. upload to a taken name, no choice: refused, old content kept, nothing left behind */
+  CHECK(upload_once("path=%2Fdata%2Fsrc&name=f.txt&conflict=", "REPLACED", 8, 0) == 409, "upload no choice: %d", g_status);
+  CHECK(strstr(g_body, "\"code\":\"exists\"") != NULL, "upload no choice code: %s", g_body);
+  CHECK(is("/data/src/f.txt", "NEW"), "upload no choice: target unchanged");
+
+  /* 15. upload with conflict=replace: overwrites */
+  CHECK(upload_once("path=%2Fdata%2Fsrc&name=f.txt&conflict=replace", "REPLACED", 8, 0) == 200, "upload replace: %d %s", g_status, g_body);
+  CHECK(is("/data/src/f.txt", "REPLACED"), "upload replace: content swapped");
+
+  /* 16. upload with conflict=keep: saved beside it under a free name, extension kept */
+  CHECK(upload_once("path=%2Fdata%2Fsrc&name=f.txt&conflict=keep", "AGAIN", 5, 5) == 200, "upload keep: %d %s", g_status, g_body);
+  CHECK(strstr(g_body, "\"path\":\"/data/src/f (2).txt\"") != NULL, "upload keep reports the new name: %s", g_body);
+  CHECK(is("/data/src/f.txt", "REPLACED") && is("/data/src/f (2).txt", "AGAIN"), "upload keep: both present");
+
+  /* 17. upload with conflict=skip: nothing written, nothing left behind, the original stays */
+  CHECK(upload_once("path=%2Fdata%2Fsrc&name=f.txt&conflict=skip", "IGNORED", 7, 0) == 200, "upload skip: %d %s", g_status, g_body);
+  CHECK(strstr(g_body, "\"skipped\":true") != NULL, "upload skip reports skipped: %s", g_body);
+  CHECK(is("/data/src/f.txt", "REPLACED"), "upload skip: target unchanged");
+  CHECK(!has("/data/src/f.txt.ps5cc-hochladen"), "upload skip: no leftover temp file");
 
   printf("%d checks passed, %d failed\n", g_ok, g_fail);
   return g_fail ? 1 : 0;

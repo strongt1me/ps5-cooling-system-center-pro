@@ -710,22 +710,63 @@ read_some(int fd, char *buf, size_t n) {
   }
 }
 
+/* Reads and throws away whatever of the body a rejected upload has not been read yet. Without this, closing the
+   connection on an early refusal (name taken, no room, read-only) while the browser is still streaming a large file
+   resets the TCP connection instead of delivering the response: the browser's XHR then reports a bare "connection
+   broke" instead of the JSON error, and "exists" looked like a crash rather than a name already taken (review
+   04.11.2026, console report). Best-effort: a read error here is not reported, the real error already is. */
+static void
+drain_body(int fd, size_t already, size_t total) {
+  if(already >= total) return;
+  char buf[4096];
+  size_t left = total - already;
+  while(left) {
+    int r = read_some(fd, buf, left < sizeof(buf) ? left : sizeof(buf));
+    if(r <= 0) return;
+    left -= (size_t)r;
+  }
+}
+
+static int keep_both_name(const char *dest, const char *base, int is_dir, char *t, size_t tn, char *rt, size_t rn);
+
 static void
 receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len, size_t total) {
   char dir[FM_PATH], name[FM_NAME * 3], t[FM_PATH], real[FM_PATH + 64], tmp[FM_PATH + 96];
   if(query_value(query, "path", dir, sizeof(dir)) != 0 || query_value(query, "name", name, sizeof(name)) != 0 ||
      !path_plain(dir) || !name_ok(name) || join(dir, name, t, sizeof(t)) != 0 || real_path(t, real, sizeof(real)) != 0) {
+    drain_body(fd, prefix_len, total);
     ps5tm_http_send_error(fd, 400, "bad_name", "Ungültiger Ordner oder Dateiname.");
     return;
   }
   if(!dir_writable(dir) || !writable(t)) {
+    drain_body(fd, prefix_len, total);
     ps5tm_http_send_error(fd, 403, "read_only", "Hierhin darf nichts geladen werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).");
     return;
   }
+  /* What to do about a name already taken, as copy/move answer it: "" asks (409, refused for now), "replace" writes
+     over the existing file once the whole upload is in, "keep" saves it under a free "name (2)", "skip" leaves the
+     target untouched and reports success without writing anything. */
+  char conflict[8];
+  query_value(query, "conflict", conflict, sizeof(conflict));
   struct stat st;
-  if(lstat(real, &st) == 0) { ps5tm_http_send_error(fd, 409, "exists", "Eine Datei dieses Namens gibt es hier schon."); return; }
+  int exists = lstat(real, &st) == 0;
+  if(exists && !strcmp(conflict, "skip")) {
+    drain_body(fd, prefix_len, total);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddBoolToObject(o, "skipped", 1);
+    cJSON_AddStringToObject(o, "path", t);
+    send_obj(fd, 200, o);
+    return;
+  }
+  if(exists && conflict[0] == 0) {
+    drain_body(fd, prefix_len, total);
+    ps5tm_http_send_error(fd, 409, "exists", "Eine Datei dieses Namens gibt es hier schon.");
+    return;
+  }
   uint64_t fr = 0;
   if(space_free(dir, &fr) == 0 && fr < (uint64_t)total + FM_SPACE_SPARE) {
+    drain_body(fd, prefix_len, total);
     ps5tm_http_send_error(fd, 409, "no_space", "Auf dem Laufwerk ist dafür nicht genug Platz.");
     return;
   }
@@ -780,10 +821,47 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
     ps5tm_http_send_error(fd, werr ? 500 : 400, "upload_incomplete", msg);
     return;
   }
-  /* the name may have been taken while the bytes came: then the upload stays beside it under its own name */
-  if(lstat(real, &st) == 0 || rename(tmp, real) != 0) {
+  /* The name may have been taken (or taken again) while the bytes came. "replace" and "keep" were asked for
+     up front, so they apply to whatever is there now, not only to what was there at the start. */
+  struct stat lst;
+  int late_exists = lstat(real, &lst) == 0;
+  if(late_exists && !strcmp(conflict, "replace")) {
+    if(S_ISDIR(lst.st_mode)) {
+      unlink(tmp);
+      ps5tm_http_send_error(fd, 409, "refused", "Im Ziel ist das ein Ordner und lässt sich nicht durch eine Datei ersetzen.");
+      return;
+    }
+    if(rename(tmp, real) != 0) {
+      unlink(tmp);
+      char msg[300];
+      snprintf(msg, sizeof(msg), "Ersetzen ging nicht: %s", io_words(errno));
+      ps5tm_http_send_error(fd, 500, "rename_failed", msg);
+      return;
+    }
+  } else if(late_exists && !strcmp(conflict, "keep")) {
+    char t2[FM_PATH], rt2[FM_PATH + 64];
+    if(keep_both_name(dir, name, 0, t2, sizeof(t2), rt2, sizeof(rt2)) != 0) {
+      unlink(tmp);
+      ps5tm_http_send_error(fd, 500, "name_failed", "Für diese Datei ließ sich im Ziel kein freier Name finden.");
+      return;
+    }
+    if(rename(tmp, rt2) != 0) {
+      unlink(tmp);
+      char msg[300];
+      snprintf(msg, sizeof(msg), "Speichern ging nicht: %s", io_words(errno));
+      ps5tm_http_send_error(fd, 500, "rename_failed", msg);
+      return;
+    }
+    snprintf(t, sizeof(t), "%s", t2);
+  } else if(late_exists) {
     unlink(tmp);
     ps5tm_http_send_error(fd, 409, "exists", "Eine Datei dieses Namens ist inzwischen entstanden; nichts wurde überschrieben.");
+    return;
+  } else if(rename(tmp, real) != 0) {
+    unlink(tmp);
+    char msg[300];
+    snprintf(msg, sizeof(msg), "Speichern ging nicht: %s", io_words(errno));
+    ps5tm_http_send_error(fd, 500, "rename_failed", msg);
     return;
   }
   PS5TM_INFO("files_upload", "Dateien: hochgeladen: %.140s (%zu KB).", t, total / 1024);
