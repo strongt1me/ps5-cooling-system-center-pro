@@ -1,14 +1,6 @@
 # Changelog
 
-## v1.76.0
-
-### Profil: Offline-Konto und Fake-Anmeldung
-- Neuer Reiter-Bereich im Profil: **Offline-Konto aktivieren** setzt Name, Account-ID und Flags über die Registry (OffAct-Verfahren, GPL-3.0, John Törnblom).
-- **Fake-Anmeldung schreiben** injiziert die np-fake-signin v1.3 ELF (earthonion) an den lokalen ELF-Lader (127.0.0.1:9021). Die ELF liest den aktiven Benutzer selbst aus und schreibt auth.dat, config.dat sowie alle Registrierungseinträge — keine Eingaben nötig.
-- **Alles zurücksetzen** löscht auth.dat/config.dat und leert alle Registry-Schlüssel beider Funktionen.
-- Statusanzeige zeigt an, ob das Offline-Konto aktiv ist und ob auth.dat vorhanden ist.
-
-## Unveröffentlicht
+## v1.76.1
 
 ### Vollbild-App: Reiter „Konto“ im Profil
 - Neue Ansicht „Konto“ zwischen „Profil“ und „Danke“ (L2/R2): **Offline-Konto aktivieren** (der Name wird auf der Bildschirmtastatur abgefragt, vorbelegt mit dem Benutzernamen), **Fake-Anmeldung schreiben** und **Alles zurücksetzen**. Jede Zeile zeigt ihren Zustand („aktiv: Name“, „vorhanden“); ✕ führt sofort aus, ohne Rückfrage.
@@ -27,6 +19,14 @@
 
 ### Fehlerbehebung: Fake-Anmeldung zurücksetzen
 - Die Statusanzeige („Fake-Anmeldung vorhanden“) und „Alles zurücksetzen“ suchten `auth.dat` und `config.dat` unter `/system_data/priv/home/0x1EA2F4D9/`. np-fake-signin schreibt aber nach `/system_data/priv/home/1ea2f4d9/` (klein, ohne `0x`): Die Anzeige blieb bei „keine“, und das Zurücksetzen löschte die Dateien nicht.
+
+## v1.76.0
+
+### Profil: Offline-Konto und Fake-Anmeldung
+- Neuer Reiter-Bereich im Profil: **Offline-Konto aktivieren** setzt Name, Account-ID und Flags über die Registry (OffAct-Verfahren, GPL-3.0, John Törnblom).
+- **Fake-Anmeldung schreiben** injiziert die np-fake-signin v1.3 ELF (earthonion) an den lokalen ELF-Lader (127.0.0.1:9021). Die ELF liest den aktiven Benutzer selbst aus und schreibt auth.dat, config.dat sowie alle Registrierungseinträge — keine Eingaben nötig.
+- **Alles zurücksetzen** löscht auth.dat/config.dat und leert alle Registry-Schlüssel beider Funktionen.
+- Statusanzeige zeigt an, ob das Offline-Konto aktiv ist und ob auth.dat vorhanden ist.
 
 ### Durchsicht 03.11.2026
 - **Kühlung:** Bei Fensterbreiten von 981 bis 1259 px war die Lüfter-Kachel zu schmal, die Drehzahl („19,0 %“) wurde abgeschnitten. Dort stehen die Kacheln jetzt untereinander wie unter 980 px.
