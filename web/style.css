@@ -385,6 +385,14 @@ body.offline .offline-note { display: flex; }
   .shell { padding: 18px 16px 32px; }
   .ov-top, .ov-mid { grid-template-columns: minmax(0, 1fr); }
 }
+/* Seitenleiste links, aber noch schmal (03.11.2026): die Lüfter-Kachel braucht ~345 px (Tacho 190 + Text), die rechte Spalte hätte
+   hier nur 245–340 px, und der Wert („19,0 %“) wurde abgeschnitten. Darum hier wie unter 980 px untereinander. */
+@media (min-width: 981px) and (max-width: 1259px) { .ov-top { grid-template-columns: minmax(0, 1fr); } }
+/* Knapp darüber (1260–1379 px) passt „19,0 %“, aber „100,0 %“ wurde rechts abgeschnitten (04.11.2026): Tacho etwas kleiner, Abstand enger. */
+@media (min-width: 1260px) and (max-width: 1379px) {
+  .ov-tile.fan-banner .ov-fan { width: 168px; }
+  .ov-tile.fan-banner:not(.ov-game) { gap: 16px; }
+}
 @media (max-width: 720px) {
   /* Banner hochkant: Bild füllt die Karte, gleichmäßig abgedunkelt */
   .co-stat { padding: 2px 12px; }
@@ -765,6 +773,7 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .adv-grid small { display: block; margin-top: 4px; color: var(--ink-muted); font-size: 11px; }
 
 /* ── Benutzerprofil ────────────────────────────────────────────────── */
+.field-label { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
 .name-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .name-row .uid { padding: 9px 11px; border: 1px solid var(--hairline);
   border-radius: 9px; background: var(--inset); color: var(--ink-muted);
@@ -1453,15 +1462,45 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 .fm-open:hover { color: var(--accent); text-decoration: underline; }
 .fm-open:focus-visible { color: var(--accent); text-decoration: underline; }
 .fm-main small { font-size: 12px; }
-.fm-acts { display: flex; flex-wrap: wrap; gap: 6px; }
-.fm-act { padding: 5px 10px; font-size: 12px; text-decoration: none; }
+.fm-more { position: relative; }
+.fm-dots { width: 34px; height: 30px; border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--ink-2); font-size: 17px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0; line-height: 1; }
+.fm-dots:hover { border-color: var(--accent); color: var(--accent); }
+.fm-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 200;
+  min-width: 170px; padding: 4px 0; border-radius: var(--r-md);
+  border: 1px solid var(--hairline); background: var(--surface-1);
+  box-shadow: 0 4px 18px rgba(0,0,0,.22); }
+.fm-menu button, .fm-menu a { display: block; width: 100%; padding: 8px 14px; text-align: left;
+  font-size: 13px; font: inherit; font-size: 13px; color: var(--ink); background: none;
+  border: 0; cursor: pointer; white-space: nowrap; text-decoration: none; box-sizing: border-box; }
+.fm-menu button:hover, .fm-menu a:hover { background: var(--inset); }
+.fm-menu button:disabled { color: var(--ink-muted); cursor: default; }
+.fm-menu button:disabled:hover { background: none; }
+.fm-menu .fm-menu-danger { color: #e55; }
+.fm-menu .fm-menu-danger:hover { background: rgba(229,85,85,.08); color: #e55; }
+.fm-menu-sep { height: 1px; background: var(--hairline); margin: 4px 0; }
+.fm-edit-area { width: 100%; min-height: 220px; max-height: 58vh; resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;
+  line-height: 1.5; color: var(--ink); background: var(--inset);
+  border: 1px solid var(--hairline); border-radius: 10px; padding: 12px;
+  overflow: auto; box-sizing: border-box; }
+.fm-pick-crumb { font-size: 12px; color: var(--ink-2); margin: 0 0 6px; }
+.fm-pick-crumb button { background: none; border: 0; padding: 0 2px; color: var(--accent);
+  font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; }
+.fm-pick-list { max-height: 44vh; overflow-y: auto; border: 1px solid var(--hairline);
+  border-radius: var(--r-md); margin: 4px 0 10px; }
+.fm-pick-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--hairline); }
+.fm-pick-row:last-child { border-bottom: 0; }
+.fm-pick-row:hover { background: var(--inset); }
+.fm-pick-empty { padding: 12px 14px; font-size: 13px; color: var(--ink-2); }
 .fm-empty { padding: 18px 6px; }
 .fm-field { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; font-size: 13px; color: var(--ink-2); }
 .fm-field input { padding: 9px 11px; border-radius: var(--r-sm); border: 1px solid var(--hairline);
   background: var(--inset); color: var(--ink); font: inherit; font-size: 14px; }
 @media (max-width: 720px) {
-  .fm-row { grid-template-columns: auto 24px 1fr; }
-  .fm-acts { grid-column: 3; }
+  .fm-row { grid-template-columns: auto 24px 1fr auto; }
 }
 /* display:flex oben würde das hidden-Attribut überstimmen (wie beim Lösch-Fenster) */
 #page-files [hidden] { display: none !important; }
@@ -2011,6 +2050,8 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-theme="hell"] .cp-ok { color: #1e7b59; }
 :root[data-theme="hell"] .pl-ver { color: #0b3a8e; }
 :root[data-theme="hell"] .pl-trash { color: #8e0b0b; }
+:root[data-theme="hell"] .ps-card.ps-mine .ps-ico { color: #217821; }   /* --good/--warning auf hellem Grund: 2,8:1 bzw. 1,5:1 (03.11.2026) */
+:root[data-theme="hell"] .ps-card.ps-upd .ps-ico { color: #8a610b; }
 :root[data-theme="hell"] .p4m-state.ok { color: #1e7b1e; }
 :root[data-theme="hell"] .upd-diag-row .ok { color: #1e7b1e; }
 :root[data-theme="hell"] .upd-diag-row .bad { color: #9a6200; }

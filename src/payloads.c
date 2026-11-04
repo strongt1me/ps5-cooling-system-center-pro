@@ -763,6 +763,28 @@ send_all(int fd, const char *buf, size_t len, uint64_t deadline) {
   return 0;
 }
 
+/* Injects an in-memory ELF blob directly to the local loader (127.0.0.1:9021).
+   Returns 0 on success, -1 if the loader is unreachable, -2 on a send error. */
+int
+ps5tm_loader_inject_mem(const unsigned char *data, unsigned long len, const char **why)
+{
+  if(why) *why = NULL;
+  uint64_t now = ps5tm_mono_ms();
+  int sock = loader_connect(now + 3000);
+  if(sock < 0) {
+    if(why) *why = "Der Payload-Lader (Port 9021) antwortet nicht. Läuft elfldr?";
+    return -1;
+  }
+  int rc = send_all(sock, (const char *)data, (size_t)len, now + 10000);
+  shutdown(sock, SHUT_WR);
+  close(sock);
+  if(rc != 0) {
+    if(why) *why = "Das Senden an den Payload-Lader ist abgebrochen.";
+    return -2;
+  }
+  return 0;
+}
+
 /* A step of a payload profile waits for a start, copy or delete under way (up to 30 s) instead of failing with
    "busy", and may start the same file twice in a row (a profile like "a.elf, !1000, a.elf" means it). */
 static int start_impl(const char *source, const char *mount, const char *dir, const char *name,

@@ -75,7 +75,7 @@ struct MockGame
 // to reach a realistic length.
 constexpr MockGame kGames[] = {
     {"PPSA02433", "Crash Bandicoot 4: It's About Time", "PS5", "01.000.002", "exfat", 47.8, 2.9},
-    {"FAKE86922", "PS5CC Vollbild-Test", "PS5", "01.000.010", "folder", 0.06, 0.03},
+    {"PPSA06240", "Neon Courier", "PS5", "01.000.010", "folder", 0.06, 0.03},
     {"PPSA01325", "ASTRO BOT", "PS5", "01.008.000", "ffpkg", 31.2, 14.5},
     {"PPSA01862", "Maneater", "PS5", "01.000.004", "ffpfs", 22.0, 6.1},
     {"CUSA44880", "Moorhuhn Remake", "PS4", "01.02", "fpkg", 1.4, 0.8},
@@ -96,6 +96,10 @@ constexpr MockGame kGames[] = {
     {"CUSA20220", "Brick Breakers HD", "PS4", "01.04", "ps4mount", 0.7, 1.9},
     {"PPSA10777", "Echo Valley", "PS5", "01.001.000", "ffpkg", 15.0, 2.2},
     {"PPSA12345", "Starlight Express Tour", "PS5", "01.000.000", "exfat", 11.1, 0.7},
+    // The console app lists the app's own tiles too (they lie in /data/homebrew); the source drops
+    // them, as http_source.cpp does.
+    {"FAKE86921", "PS5 Cooling & System Center", "PS5", "01.000.010", "folder", 0.06, 0.0},
+    {"FAKE86922", "PS5 Cooling & System Center (Browser)", "PS5", "01.00", "folder", 0.01, 0.0},
 };
 
 class MockSource final : public Source
@@ -106,6 +110,8 @@ class MockSource final : public Source
         data_.link = Link::online;
         for (const MockGame &m : kGames)
         {
+            if (is_own_tile(m.id))
+                continue;
             Game g;
             g.id = m.id;
             g.name = m.name;
@@ -1361,10 +1367,11 @@ class MockSource final : public Source
     };
     // One of each case the dialogs know: too little room, the source's own drive, a good one,
     // FAT32.
+    // Labels as the console app names its drives (sysinfo.c): usb0, usb1 like the console itself.
     static constexpr MockDrive kDrives[] = {{"/data", "Interne SSD", "ufs", 24.0},
-                                            {"/mnt/usb0", "USB-Laufwerk 1", "exfatfs", 1210.0},
-                                            {"/mnt/ext0", "M.2-Laufwerk", "exfatfs", 640.0},
-                                            {"/mnt/usb1", "USB-Stick", "msdosfs", 59.0}};
+                                            {"/mnt/usb0", "usb0", "exfatfs", 1210.0},
+                                            {"/mnt/ext0", "M.2-Erweiterung", "exfatfs", 640.0},
+                                            {"/mnt/usb1", "usb1", "msdosfs", 59.0}};
 
     // Every plan goes through JSON and ps5cc/plans.cpp, as the console app's answers do.
     PlanReply make_plan(Tool tool, const std::string &id) const

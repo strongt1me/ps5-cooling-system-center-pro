@@ -60,7 +60,7 @@ class LogsPage final : public Page
     {
         theme_ = theme;
         style_subtabs(views_, theme, 3);
-        views_.set_tabs({{"App-Protokoll"}, {"Kernel-Log live"}, {"Gespeichert"}});
+        views_.set_tabs({{"App-Protokoll"}, {"Kernel-Log live"}, {"Gespeicherte"}});
         views_.set_active(kApp, true);
 
         list_.style.theme = theme;

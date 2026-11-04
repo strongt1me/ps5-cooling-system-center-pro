@@ -306,7 +306,7 @@ write_lines(int fd, const ps5tm_klog_line_t *ln, unsigned n, int tz_min, char *o
     char ts[32];
     fmt_time(ts, sizeof(ts), ln[i].t_ms, tz_min, 0);
     size_t need = strlen(ts) + 2 + strlen(ln[i].text) + 1;
-    if(o + need > cap) {
+    if(o + need >= cap) {                                      /* >=: snprintf needs room for its NUL too */
       rc = write_all(fd, out, o);
       *bytes += o;
       o = 0;

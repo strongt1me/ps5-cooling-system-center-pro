@@ -1078,6 +1078,35 @@ int ps5tm_avatar_apply(uint32_t uid, int *out_copied, const char **why);
 int ps5tm_avatar_restore(uint32_t uid, int *out_copied, const char **why);
 
 
+/* ----------------------------------------------------------------- account */
+
+/* Max length of an OffAct account-type string (including NUL). */
+#define PS5TM_ACCOUNT_TYPE_MAX 17
+
+typedef struct {
+  uint32_t uid;
+  int      valid;        /* user was found */
+  int      activated;   /* offline slot 1 account is set */
+  int      fakesignin;  /* auth.dat/config.dat exist */
+  uint64_t account_id;
+} ps5tm_account_status_t;
+
+/* Deterministic account-id from a name (OffAct FNV hash). */
+uint64_t ps5tm_account_gen_id(const char *name);
+
+/* Read the current state without changing anything. */
+ps5tm_account_status_t ps5tm_account_status(void);
+
+/* Set offline-account registry keys for slot 1. */
+int ps5tm_account_activate(const char *username, const char **why);
+
+/* Inject np-fake-signin v1.3 ELF to 127.0.0.1:9021; ELF is fully self-contained. */
+int ps5tm_account_fakesignin(const char **why);
+
+/* Delete the files and clear the registry keys. */
+int ps5tm_account_restore(const char **why);
+
+
 /* ------------------------------------------------------------------ power */
 
 /* Ask the system to power off, restart or go to rest. Returns 0 when the
@@ -1227,6 +1256,7 @@ int   ps5tm_payload_start(const char *source, const char *mount, const char *dir
 int   ps5tm_payload_copy(const char *mount, const char *dir, const char *name,
                          ps5tm_payload_result_t *r);
 int   ps5tm_payload_delete(const char *name, ps5tm_payload_result_t *r);
+int   ps5tm_loader_inject_mem(const unsigned char *data, unsigned long len, const char **why);
 
 /* Payload profiles (payprofiles.c): named sequences of payload files with pauses; one can run at app start. */
 char *ps5tm_payprof_get_json(void);

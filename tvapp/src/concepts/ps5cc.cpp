@@ -485,6 +485,7 @@ class Ps5cc final : public app::Concept
         game_info_.style.label_size = 20.0f;
         game_info_.style.value_size = 22.0f;
         game_info_.style.row_height = 44.0f;
+        game_info_.style.max_lines = 1; // as details_: a wrapped value can make the rows pendulum
         game_info_.set_bounds({kRightX + 36.0f, kTop + 250.0f, kRightW - 72.0f, 300.0f});
 
         details_.style.theme = theme_;

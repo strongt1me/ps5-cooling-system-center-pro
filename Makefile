@@ -66,6 +66,7 @@ SRCS += src/dualsense.c
 SRCS += src/probe.c
 SRCS += src/dynsym.c
 SRCS += src/profile.c
+SRCS += src/account.c
 SRCS += src/sony_api_lock.c
 SRCS += src/micbutton.c
 SRCS += src/telemetry.c
@@ -148,6 +149,7 @@ GEN_SRCS += gen/ampr_emu_blob.c
 GEN_SRCS += gen/playgo_blob.c
 GEN_SRCS += gen/dlc_blob.c
 GEN_SRCS += gen/lz4prof_blob.c
+GEN_SRCS += gen/npfakesignin_blob.c
 
 # The home-screen tile as a folder: param.json, icon and pictures from
 # tile/sce_sys, about 1.7 MB. The app writes them to /user/app/<id>/sce_sys and
@@ -297,6 +299,11 @@ $(PKGI_HELPER_ELF): src/helper/pkginst_helper.c src/pkginst_ipc.h Makefile gen/s
 # The mark stands in the image once, followed by the dots the app writes its token over: the build checks it.
 gen/pkginst_blob.c: $(PKGI_HELPER_ELF) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(PKGI_HELPER_ELF) ps5tm_pkginst_helper PS5CC-PKGI-TOKEN:
+
+# np-fake-signin (earthonion) — the ELF injected to 127.0.0.1:9021 on "Fake-Anmeldung schreiben".
+NPFSI_ELF := third_party/np_fake_signin/np-fake-signin_v1.3.elf
+gen/npfakesignin_blob.c: $(NPFSI_ELF) tools/gen_blob.py | gen
+	$(PYTHON) tools/gen_blob.py $@ $(NPFSI_ELF) ps5tm_npfakesignin
 
 # The APR-EMU versions (third_party/ampr_emu), packed into the app (tools/gen_emu_blob.py, src/amprlib.c).
 EMU_FILES := $(wildcard third_party/ampr_emu/libSceAmpr.sprx-*)

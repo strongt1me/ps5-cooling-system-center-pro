@@ -201,6 +201,33 @@
             </div>
           </article>
 
+          <!-- ── Offline-Konto aktivieren ───────────────────────────────────── -->
+          <article class="card" id="acc-activate-card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-user"/></svg></span><div class="ck-text"><h2>Offline-Konto aktivieren</h2>
+              <p class="sub">setzt Benutzernamen und Konto-ID über die Systemregistrierung</p></div></div></div>
+            <p class="note">Erstellt einen lokalen PS5-Benutzer ohne Netzwerkverbindung. Der Name erscheint im Startmenü. Benötigt aktiven Jailbreak.</p>
+            <div class="name-row" style="align-items:flex-end;gap:8px;">
+              <input type="text" id="acc-name" maxlength="16" placeholder="Player1"
+                     autocomplete="off" spellcheck="false" style="flex:1;">
+              <button class="btn primary" id="acc-activate-btn">Konto aktivieren</button>
+            </div>
+            <p class="note" id="acc-activate-note" style="margin-top:8px;">
+              Slot 1 · Konto-ID wird aus dem Namen berechnet</p>
+          </article>
+
+          <!-- ── Fake-Signin ────────────────────────────────────────────────── -->
+          <article class="card" id="acc-fakesignin-card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-transfer"/></svg></span><div class="ck-text"><h2>Fake-Anmeldung schreiben</h2>
+              <p class="sub">schreibt auth.dat/config.dat und setzt Registrierungseinträge</p></div></div></div>
+            <p class="note">Injiziert die np-fake-signin ELF (earthonion v1.3) zum ELF-Lader — liest den aktiven Benutzer selbst aus und schreibt auth.dat, config.dat sowie Registrierungseinträge. <strong>Nur mit aktivem Jailbreak + elfldr auf Port 9021.</strong></p>
+            <div class="row-gap">
+              <button class="btn primary" id="fs-write-btn">Fake-Anmeldung schreiben</button>
+              <button class="btn danger" id="fs-restore-btn">Alles zurücksetzen</button>
+            </div>
+            <p class="note" id="fs-status-note" style="margin-top:8px;">
+              Schreibt in <code>/system_data/priv/home/&lt;uid&gt;/</code></p>
+          </article>
+
           <article class="card">
             <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-transfer"/></svg></span><div class="ck-text"><h2>Profile sichern und übertragen</h2>
               <p class="sub">als Datei speichern und auf einem anderen Gerät wieder einlesen</p></div></div></div>
@@ -1547,7 +1574,7 @@
                 <span class="switch"><input type="checkbox" id="s-lightbar-enabled"><i></i></span>
               </label>
               <label class="switch-row">
-                <span><b>Experte-Modus</b><small>zeigt zusätzliche Roh- und Diagnosewerte</small></span>
+                <span><b>Expertenmodus</b><small>zeigt zusätzliche Roh- und Diagnosewerte</small></span>
                 <span class="switch"><input type="checkbox" id="expert-mode"><i></i></span>
               </label>
               <label class="switch-row">

@@ -28,7 +28,7 @@ Konfigurationen ziehen beim ersten Start automatisch um.
    Zahl zweimal erscheint. Im Expertenmodus kommen Verläufe, Rohwerte,
    Regelzustand, Diagnose und erweiterte Parameter dazu.
 - **System** — Konsole, Firmware, Laufzeit, Speicherplatz, Netzwerk, Kachel,
-   Bildschirmanzeige, Zusatzabfragen, Experte-Modus mit Rohdiagnose
+   Bildschirmanzeige, Zusatzabfragen, Expertenmodus mit Rohdiagnose
 - **Protokoll** — Ereignisse der App, als `.log` exportierbar, und das
    Kernel-Log live (siehe unten). Seit 1.75.6 schreibt die App jedes Ereignis
    auch in `/data/PS5-Cooling-Center/app.log` (höchstens 2 s später, Warnungen
@@ -1222,7 +1222,7 @@ Wie es arbeitet:
 - Netzbindung ist als Option verfügbar: `bind_address` kann in der UI direkt
    auf `0.0.0.0` (LAN) oder `127.0.0.1` (nur lokal auf der Konsole) gesetzt
    und gespeichert werden.
-- Experte-Modus zeigt zusätzlich Rohfelder aus der Quelle, u. a.
+- Der Expertenmodus zeigt zusätzlich Rohfelder aus der Quelle, u. a.
    `firmware_raw`, `firmware_group`, `cpu_mode` (roh) und erweiterte
    Controller-Rohdaten.
 - **Komfortgrenze** (65 % im Komfortprofil): verhindert, dass ein Thermostat,

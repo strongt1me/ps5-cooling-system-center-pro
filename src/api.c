@@ -2628,6 +2628,79 @@ handle_profile_username(int fd, const ps5tm_request_t *req) {
 }
 
 
+/* ------------------------------------------------------------ account (offline + fake-signin) */
+
+static void
+handle_account_status(int fd)
+{
+  ps5tm_account_status_t s = ps5tm_account_status();
+  char buf[256];
+  snprintf(buf, sizeof(buf),
+           "{\"valid\":%s,\"uid\":\"0x%08X\",\"activated\":%s,"
+           "\"fakesignin\":%s,\"account_id\":\"0x%016llX\"}",
+           JB(s.valid), s.uid,
+           JB(s.activated), JB(s.fakesignin),
+           (unsigned long long)s.account_id);
+  ps5tm_http_send_json(fd, 200, buf);
+}
+
+static void
+handle_account_activate(int fd, const ps5tm_request_t *req)
+{
+  cJSON *root = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *jn = root ? cJSON_GetObjectItem(root, "username") : NULL;
+
+  if(!cJSON_IsString(jn) || !jn->valuestring || !jn->valuestring[0]) {
+    cJSON_Delete(root);
+    ps5tm_http_send_error(fd, 400, "missing_username",
+                          "Kein Benutzername angegeben.");
+    return;
+  }
+
+  char nm[PS5TM_USERNAME_MAX + 1];
+  snprintf(nm, sizeof(nm), "%s", jn->valuestring);
+  cJSON_Delete(root);
+
+  const char *why = NULL;
+  if(ps5tm_account_activate(nm, &why) != 0) {
+    ps5tm_http_send_error(fd, 400, "activate_failed",
+                          why ? why : "Aktivierung fehlgeschlagen.");
+    return;
+  }
+
+  char buf[128];
+  snprintf(buf, sizeof(buf),
+           "{\"ok\":true,\"account_id\":\"0x%016llX\"}",
+           (unsigned long long)ps5tm_account_gen_id(nm));
+  ps5tm_http_send_json(fd, 200, buf);
+}
+
+static void
+handle_account_fakesignin(int fd, const ps5tm_request_t *req)
+{
+  (void)req;
+  const char *why = NULL;
+  if(ps5tm_account_fakesignin(&why) != 0) {
+    ps5tm_http_send_error(fd, 400, "fakesignin_failed",
+                          why ? why : "Fake-Signin fehlgeschlagen.");
+    return;
+  }
+  ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+}
+
+static void
+handle_account_restore(int fd)
+{
+  const char *why = NULL;
+  if(ps5tm_account_restore(&why) != 0) {
+    ps5tm_http_send_error(fd, 400, "restore_failed",
+                          why ? why : "Zuruecksetzen fehlgeschlagen.");
+    return;
+  }
+  ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+}
+
+
 /* -------------------------------------------------------------- fan self-test */
 
 static const char *
@@ -5296,6 +5369,34 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                          "Nur POST erlaubt."); return; }
     handle_avatar_commit(fd, 1);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/profile/account/status")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                        "Nur GET erlaubt."); return; }
+    handle_account_status(fd);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/profile/account/activate")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                         "Nur POST erlaubt."); return; }
+    handle_account_activate(fd, req);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/profile/account/fakesignin")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                         "Nur POST erlaubt."); return; }
+    handle_account_fakesignin(fd, req);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/profile/account/restore")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                         "Nur POST erlaubt."); return; }
+    handle_account_restore(fd);
     return;
   }
 

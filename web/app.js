@@ -3401,6 +3401,7 @@
     renderUser(sys);
     renderProfileHero(sys);
     refreshProfilePicture();
+    accLoadStatus();
   };
 
   const wireUsername = () => {
@@ -3431,6 +3432,88 @@
 
     btn.addEventListener("click", save);
     inp.addEventListener("keydown", (e) => { if (e.key === "Enter") save(); });
+  };
+
+  /* ── Offline-Konto / Fake-Anmeldung ────────────────────────────── */
+
+  const accLoadStatus = async () => {
+    const noteA = $("#acc-activate-note"), noteF = $("#fs-status-note");
+    if (!noteA && !noteF) return;
+    let st;
+    try { st = await api("/api/v1/profile/account/status"); } catch { return; }
+
+    if (noteA) {
+      if (st.activated)
+        noteA.textContent = `Aktiv: Konto „${st.username || "?"}" (Slot 1)`;
+      else
+        noteA.textContent = "Kein Offline-Konto aktiv.";
+    }
+    if (noteF) {
+      if (st.fakesignin)
+        noteF.textContent = "Fake-Anmeldung vorhanden (auth.dat + config.dat).";
+      else
+        noteF.textContent = "Keine Fake-Anmeldung vorhanden.";
+    }
+
+    const nameInp = $("#acc-name");
+    if (nameInp && !nameInp.value && st.username)
+      nameInp.value = st.username;
+  };
+
+  const wireAccountActivate = () => {
+    const btn = $("#acc-activate-btn");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const name = ($("#acc-name")?.value || "").trim();
+      if (!name) { toast("Bitte einen Benutzernamen eingeben.", "error"); return; }
+      btn.disabled = true;
+      try {
+        const r = await api("/api/v1/profile/account/activate",
+          { method: "POST", body: JSON.stringify({ username: name }) });
+        toast(r.message || "Offline-Konto aktiviert.");
+        accLoadStatus();
+      } catch (e) {
+        toast(e.message, "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  };
+
+  const wireAccountFakesignin = () => {
+    const writeBtn = $("#fs-write-btn"), restoreBtn = $("#fs-restore-btn");
+
+    if (writeBtn) {
+      writeBtn.addEventListener("click", async () => {
+        writeBtn.disabled = true;
+        try {
+          const r = await api("/api/v1/profile/account/fakesignin",
+            { method: "POST" });
+          toast(r.message || "np-fake-signin injiziert.");
+          accLoadStatus();
+        } catch (e) {
+          toast(e.message, "error");
+        } finally {
+          writeBtn.disabled = false;
+        }
+      });
+    }
+
+    if (restoreBtn) {
+      restoreBtn.addEventListener("click", async () => {
+        restoreBtn.disabled = true;
+        try {
+          const r = await api("/api/v1/profile/account/restore",
+            { method: "POST" });
+          toast(r.message || "Alles zurückgesetzt.");
+          accLoadStatus();
+        } catch (e) {
+          toast(e.message, "error");
+        } finally {
+          restoreBtn.disabled = false;
+        }
+      });
+    }
   };
 
   /* ── Profilbild ─────────────────────────────────────────────────── */
@@ -8289,7 +8372,7 @@
      mit Kennwort, still geholt). Hochladen läuft je Datei über XMLHttpRequest, weil nur das den Fortschritt
      des Sendens meldet. Namen kommen von der Konsole und gehen durch esc(); Knöpfe tragen nur Nummern. */
   const fm = { path: "", places: [], list: null, sel: new Set(), clip: null, poll: 0, xhr: null, upQueue: [],
-               loaded: false,
+               loaded: false, pick: null,
                sort: "name", desc: false, sorted: [], sizes: new Map(), sizing: false, viewSeq: 0 };
   /* Die Sortierung merkt sich der Browser (nur eine Annehmlichkeit, nichts davon hängt daran). */
   try {
@@ -8403,18 +8486,11 @@
       const sz = e.type === "dir" ? fm.sizes.get(fmJoin(d.path, e.name)) : null;
       const sizeText = e.type === "file" ? bytes(e.size)
         : sz ? `${bytes(sz.bytes) === "--" ? "0 B" : bytes(sz.bytes)}${sz.partial ? "+" : ""} · ${num(sz.files)} ${sz.files === 1 ? "Datei" : "Dateien"}${sz.partial ? " (mindestens)" : ""}` : "";
-      const full = encodeURIComponent(fmJoin(d.path, e.name));
-      const acts = [
-        e.type === "file" ? `<button type="button" class="btn ghost fm-act" data-fm-view="${i}">Ansehen</button>` : "",
-        e.type === "dir" && !sz ? `<button type="button" class="btn ghost fm-act" data-fm-size="${i}">Größe</button>` : "",
-        e.type === "file" ? `<a class="btn ghost fm-act" href="/api/v1/files/download?path=${full}" download>Herunterladen</a>` : "",
-        e.writable ? `<button type="button" class="btn ghost fm-act" data-fm-ren="${i}">Umbenennen</button>` : "",
-      ].join("");
       return `<div class="fm-row${fm.sel.has(e.name) ? " sel" : ""}" role="listitem">
           <input type="checkbox" class="fm-check" data-fm-sel="${i}" aria-label="${esc(e.name)} auswählen"${fm.sel.has(e.name) ? " checked" : ""}${canSel ? "" : " disabled"}>
           <span class="fm-ico">${ico}</span>
           <div class="fm-main">${name}<small class="muted">${[sizeText, fmWhen(e.mtime), kind].filter(Boolean).map(esc).join(" · ")}</small></div>
-          <div class="fm-acts">${acts}</div>
+          <div class="fm-more"><button type="button" class="fm-dots" data-fm-menu="${i}" aria-label="${esc(e.name)} Menü" title="Aktionen">···</button></div>
         </div>`;
     }).join("") : `<p class="muted fm-empty">Dieser Ordner ist leer.</p>`;
     fmRenderBars();
@@ -8474,6 +8550,223 @@
     const o = $("#fm-overlay");
     if (o) { o.hidden = true; o.querySelector(".cp-dialog").classList.remove("fm-view"); $("#fm-dlg-title").removeAttribute("data-no-i18n"); }
     fm.viewSeq++;                                     /* eine noch laufende Vorschau darf nichts mehr einsetzen */
+    fm.pick = null;
+  };
+
+  /* ⋯ Menü je Zeile */
+  let fmMenuEl = null, fmMenuIdx = -1;
+  const fmMenuClose = () => {
+    if (fmMenuEl) { fmMenuEl.remove(); fmMenuEl = null; fmMenuIdx = -1; }
+  };
+  const FM_TEXT_EXT = /\.(txt|cfg|ini|conf|config|json|yaml|yml|toml|sh|py|js|ts|log|csv|md|xml|html?|css|bat|cmd|properties|env|lst|m3u|pls|nfo|diz|reg|inf|htaccess|gitignore)$/i;
+  const fmMenuOpen = (i, btn) => {
+    fmMenuClose();
+    const e = fmEntries()[i];
+    if (!e) return;
+    fmMenuIdx = i;
+    const isFile = e.type === "file";
+    const isDir = fmIsDir(e);
+    const full = fmJoin(fm.path, e.name);
+    const fullEnc = encodeURIComponent(full);
+    const items = [];
+    if (isFile) items.push(`<button type="button" data-fmma="view" data-fmmi="${i}">Ansehen</button>`);
+    if (isFile && FM_TEXT_EXT.test(e.name)) items.push(`<button type="button" data-fmma="edit" data-fmmi="${i}">Bearbeiten</button>`);
+    if (isFile) items.push(`<a href="/api/v1/files/download?path=${fullEnc}" download>Herunterladen</a>`);
+    if (isDir && !fm.sizes.has(full)) items.push(`<button type="button" data-fmma="size" data-fmmi="${i}">Größe berechnen</button>`);
+    if (e.writable) {
+      items.push(`<div class="fm-menu-sep"></div>`);
+      items.push(`<button type="button" data-fmma="ren" data-fmmi="${i}">Umbenennen</button>`);
+    }
+    items.push(`<div class="fm-menu-sep"></div>`);
+    items.push(`<button type="button" data-fmma="copy" data-fmmi="${i}">Kopieren nach …</button>`);
+    if (e.writable) items.push(`<button type="button" data-fmma="move" data-fmmi="${i}">Verschieben nach …</button>`);
+    if (e.writable) {
+      items.push(`<div class="fm-menu-sep"></div>`);
+      items.push(`<button type="button" class="fm-menu-danger" data-fmma="del1" data-fmmi="${i}">Löschen</button>`);
+    }
+    const menu = document.createElement("div");
+    menu.className = "fm-menu";
+    menu.innerHTML = items.join("");
+    btn.closest(".fm-more").appendChild(menu);
+    fmMenuEl = menu;
+    const br = menu.getBoundingClientRect();
+    if (br.bottom > window.innerHeight - 8) { menu.style.top = "auto"; menu.style.bottom = "calc(100% + 4px)"; }
+  };
+
+  /* Zielordner-Auswahl Dialog */
+  const fmPickDest = async (title, srcPath, move) => {
+    fm.pick = { path: fm.path };
+    const o = fmShell();
+    o.querySelector(".cp-dialog").classList.add("fm-view");
+    txt("#fm-dlg-title", title);
+    const render = async () => {
+      const pp = fm.pick ? fm.pick.path : fm.path;
+      $("#fm-dlg-body").innerHTML = `<p class="muted" style="padding:4px 0 8px">wird geladen …</p>`;
+      o.hidden = false;
+      let d;
+      try { d = await api(`/api/v1/files/list?path=${encodeURIComponent(pp)}`); }
+      catch (er) {
+        $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(er.message)}</p>
+          <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Abbrechen</button></div>`;
+        return;
+      }
+      if (!fm.pick) return;
+      fm.pick.path = d.path;
+      const parts = d.path === "/" ? ["/"] : ["", ...d.path.slice(1).split("/")];
+      const crumbs = parts.map((p, i) => {
+        const full = i === 0 ? "/" : parts.slice(0, i + 1).join("/");
+        return i === parts.length - 1
+          ? `<b>${esc(p || "/")}</b>`
+          : `<button type="button" class="fm-pick-nav" data-fmpicknav="${esc(full)}">${esc(p || "/")}</button>`;
+      }).join(" / ");
+      const dirs = d.entries.filter((e) => e.type === "dir" || e.type === "dirlink");
+      const rows = (d.parent ? [`<div class="fm-pick-row" data-fmpicknav="${esc(d.parent)}">${FM_ICO.dir}<span>.. (Übergeordnet)</span></div>`] : [])
+        .concat(dirs.map((e) => `<div class="fm-pick-row" data-fmpicknav="${esc(fmJoin(d.path, e.name))}">${FM_ICO.dir}<span>${esc(e.name)}</span></div>`))
+        .join("");
+      const canDrop = !!d.writable;
+      const srcParent = srcPath.includes("/") ? srcPath.slice(0, srcPath.lastIndexOf("/")) || "/" : "/";
+      const sameDir = d.path === srcParent;
+      const okLbl = move ? "Hierhin verschieben" : "Hierhin kopieren";
+      const okTip = !canDrop ? "Hierher nicht möglich" : (move && sameDir) ? "Schon im Zielordner" : "";
+      const okDis = !canDrop || (move && sameDir);
+      $("#fm-dlg-body").innerHTML = `
+        <p class="fm-pick-crumb">${crumbs}</p>
+        <div class="fm-pick-list" id="fm-pick-list">${rows || `<p class="fm-pick-empty">Keine Unterordner</p>`}</div>
+        <p class="muted" style="font-size:12px;margin:0 0 10px">Aktuell: <b>${esc(d.path)}</b></p>
+        <div class="cp-actions">
+          <button type="button" class="btn" data-fmd="close">Abbrechen</button>
+          <button type="button" class="btn primary" id="fm-pick-ok"${okDis ? " disabled" : ""} title="${esc(okTip)}">${esc(okLbl)}</button>
+        </div>`;
+      const lst = $("#fm-pick-list");
+      if (lst) {
+        lst.addEventListener("click", (ev) => {
+          const row = ev.target.closest("[data-fmpicknav]");
+          if (!row || !fm.pick) return;
+          fm.pick.path = row.dataset.fmpicknav;
+          render();
+        });
+      }
+      const okBtn = $("#fm-pick-ok");
+      if (okBtn && !okBtn.disabled) {
+        okBtn.addEventListener("click", async () => {
+          okBtn.disabled = true; okBtn.textContent = "…";
+          const dest = fm.pick ? fm.pick.path : d.path;
+          try {
+            await api(`/api/v1/files/${move ? "move" : "copy"}`, { method: "POST", body: JSON.stringify({ paths: [srcPath], dest }), timeoutMs: 120000 });
+            fm.pick = null;
+            fmClose();
+            fmFollow();
+          } catch (er) { toast(er.message, "error"); fmClose(); fm.pick = null; }
+        });
+      }
+    };
+    await render();
+  };
+
+  /* Einzelnen Eintrag löschen (ohne Mehrfachauswahl) */
+  const fmDeleteOne = async (i) => {
+    const e = fmEntries()[i];
+    if (!e || !e.writable) return;
+    const paths = [fmJoin(fm.path, e.name)];
+    const o = fmShell();
+    txt("#fm-dlg-title", "Löschen");
+    $("#fm-dlg-body").innerHTML = `<p class="muted">Wird gelöscht …</p>`;
+    o.hidden = false;
+    try {
+      const plan = await api("/api/v1/files/delete/plan", { method: "POST", body: JSON.stringify({ paths }), timeoutMs: 60000 });
+      await api("/api/v1/files/delete", { method: "POST", body: JSON.stringify({ paths: plan.paths, confirm: plan.confirm }) });
+      fmClose();
+      fmFollow();
+    } catch (er) {
+      $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(er.message)}</p>
+        <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
+    }
+  };
+
+  /* Texteditor */
+  const FM_EDIT_MAX = 65536;
+  const fmSaveEdit = async (path, content) => {
+    const r = await fetch(`/api/v1/files/write?path=${encodeURIComponent(path)}`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+      body: content,
+    });
+    if (!r.ok) {
+      let m = "";
+      try { m = (await r.json()).message; } catch { }
+      throw new Error(m || `HTTP ${r.status}`);
+    }
+  };
+  const fmEdit = async (i) => {
+    const e = fmEntries()[i];
+    if (!e) return;
+    const full = fmJoin(fm.path, e.name);
+    const url = `/api/v1/files/view?path=${encodeURIComponent(full)}&max=${FM_EDIT_MAX}`;
+    const o = fmShell();
+    o.querySelector(".cp-dialog").classList.add("fm-view");
+    $("#fm-dlg-title").setAttribute("data-no-i18n", "");
+    txt("#fm-dlg-title", e.name);
+    $("#fm-dlg-body").innerHTML = `<p class="muted">wird geladen …</p>`;
+    o.hidden = false;
+    const mine = ++fm.viewSeq;
+    const ctl = new AbortController();
+    const stop = setTimeout(() => ctl.abort(), 30000);
+    try {
+      const r = await fetch(url, { cache: "no-store", signal: ctl.signal });
+      clearTimeout(stop);
+      if (!r.ok) {
+        let m = "";
+        try { m = (await r.json()).message; } catch { }
+        throw new Error(m || `HTTP ${r.status}`);
+      }
+      const text = await r.text();
+      if (mine !== fm.viewSeq) return;
+      const truncated = r.headers.get("X-Fm-Truncated") === "1";
+      const total = Number(r.headers.get("X-Fm-Size"));
+      if (truncated) {
+        $("#fm-dlg-body").innerHTML = `<p class="cp-err">Diese Datei ist zu groß für den Editor (${bytes(total)}, Limit 64 KiB). Bitte herunterladen, bearbeiten und wieder hochladen.</p>
+          <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
+        return;
+      }
+      if (!e.writable) {
+        $("#fm-dlg-body").innerHTML = `<pre class="fm-view-text"></pre>
+          <p class="muted fm-view-note">${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))} · <em>schreibgeschützt</em></p>
+          <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
+        $("#fm-dlg-body .fm-view-text").textContent = text || "(leer)";
+        return;
+      }
+      $("#fm-dlg-body").innerHTML = `<textarea class="fm-edit-area" id="fm-edit-ta" spellcheck="false" data-no-i18n autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+        <p class="muted fm-view-note" id="fm-edit-note">${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))}</p>
+        <p class="cp-err" id="fm-edit-err" hidden></p>
+        <div class="cp-actions">
+          <button type="button" class="btn" data-fmd="close">Schließen</button>
+          <button type="button" class="btn primary" id="fm-edit-save">Speichern</button>
+        </div>`;
+      $("#fm-edit-ta").value = text;
+      $("#fm-edit-ta").focus();
+      $("#fm-edit-save").addEventListener("click", async () => {
+        const btn = $("#fm-edit-save");
+        btn.disabled = true; btn.textContent = "…";
+        const err = $("#fm-edit-err");
+        err.hidden = true;
+        try {
+          await fmSaveEdit(full, $("#fm-edit-ta").value);
+          txt("#fm-edit-note", "Gespeichert ✓");
+          btn.textContent = "Gespeichert";
+          setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = "Speichern"; } }, 2000);
+          fmLoad(fm.path);
+        } catch (ex) {
+          err.textContent = ex.message; err.hidden = false;
+          btn.disabled = false; btn.textContent = "Speichern";
+        }
+      });
+    } catch (er) {
+      clearTimeout(stop);
+      if (mine !== fm.viewSeq) return;
+      const msg = er && er.name === "AbortError" ? "Die Konsole antwortet nicht." : er.message;
+      $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(msg)}</p>
+        <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
+    }
   };
 
   let fmNameAct = null;
@@ -8803,9 +9096,33 @@
   };
 
   $("#page-files").addEventListener("click", (e) => {
+    /* Schließt das ⋯ Menü bei Klick außerhalb */
+    if (fmMenuEl && !e.target.closest(".fm-menu") && !e.target.closest("[data-fm-menu]")) {
+      fmMenuClose();
+    }
     const t = e.target.closest("button, a");
     if (!t || t.disabled) return;
     const d = t.dataset;
+    if (d.fmMenu !== undefined) {
+      const idx = +d.fmMenu;
+      if (fmMenuIdx === idx && fmMenuEl) { fmMenuClose(); return; }
+      fmMenuOpen(idx, t);
+      return;
+    }
+    if (d.fmma !== undefined) {
+      const idx = +d.fmmi;
+      const en = fmEntries()[idx];
+      fmMenuClose();
+      if (!en) return;
+      const act = d.fmma;
+      if (act === "view") fmView(idx);
+      else if (act === "edit") fmEdit(idx);
+      else if (act === "size") fmSizeOne(idx);
+      else if (act === "ren") fmAskName("Umbenennen", "Neuer Name", en.name, (v) => api("/api/v1/files/rename", { method: "POST", body: JSON.stringify({ path: fmJoin(fm.path, en.name), name: v }) }));
+      else if (act === "copy" || act === "move") fmPickDest(act === "move" ? "Verschieben nach" : "Kopieren nach", fmJoin(fm.path, en.name), act === "move");
+      else if (act === "del1") fmDeleteOne(idx);
+      return;
+    }
     if (d.fmPlace !== undefined) { const p = fm.places[+d.fmPlace]; if (p) fmLoad(p.path); }
     else if (d.fmCrumb !== undefined) fmLoad(d.fmCrumb);
     else if (d.fmOpen !== undefined) { const en = fmEntries()[+d.fmOpen]; if (en) fmLoad(fmJoin(fm.path, en.name)); }
@@ -10986,6 +11303,8 @@
   wirePower();
   wireProbes();
   wireUsername();
+  wireAccountActivate();
+  wireAccountFakesignin();
   wireAvatar();
   const diagWindow = $("#diag-window");
   if (diagWindow) {

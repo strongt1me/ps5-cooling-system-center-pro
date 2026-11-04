@@ -2685,8 +2685,7 @@ void HttpSource::poll_library()
         g.id = str(item, "title_id");
         // The app's two tiles (and their ids before 1.74.1) are titles of their own, not games to
         // start from here.
-        if (g.id == own_title_id() || g.id == "FAKE86921" || g.id == "FAKE86922" ||
-            g.id == "PPSA86921" || g.id == "PPSA86922")
+        if (g.id == own_title_id() || is_own_tile(g.id))
             continue;
         g.name = str(item, "name");
         g.platform = str(item, "platform");

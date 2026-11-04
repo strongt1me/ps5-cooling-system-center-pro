@@ -229,7 +229,7 @@ Invoke-RestMethod -Uri "http://<PS5-IP>:8086/api/v1/config" -Method Get -Timeout
 
 1. Presets testen (`Kühl`, `Ausgewogen`, `Leise`):
    Erwartung: Direktwert wird gesetzt und in der Live-Anzeige aktualisiert.
-2. Experte-Modus schalten:
+2. Expertenmodus schalten:
    Erwartung: Zusätzliche Karten für Locale- und Firmware-Rohwerte erscheinen.
 3. Konfiguration exportieren:
    Erwartung: `ps5tm-config.json` wird heruntergeladen.

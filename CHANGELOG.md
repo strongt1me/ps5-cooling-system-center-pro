@@ -1,5 +1,19 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Durchsicht 03.11.2026
+- **Kühlung:** Bei Fensterbreiten von 981 bis 1259 px war die Lüfter-Kachel zu schmal, die Drehzahl („19,0 %“) wurde abgeschnitten. Dort stehen die Kacheln jetzt untereinander wie unter 980 px.
+- **Kühlung:** Bei 1260 bis 1379 px wurde „100,0 %“ rechts abgeschnitten. Dort ist der Tacho jetzt etwas kleiner (168 statt 190 px) und der Abstand enger.
+- **Design „Hell“:** Die Buchstaben-Symbole im Payload-Store (eigene Payloads grün, Update verfügbar gelb) waren auf dem hellen Grund kaum lesbar (2,8:1 bzw. 1,5:1); jetzt dunklere Farben (über 4,5:1).
+- **Übersetzungen der Browser-App:** 44 Protokollmeldungen und 38 sichtbare Texte, die in allen anderen Sprachen deutsch blieben (z. B. „Benutzer-ID“, „zuletzt gespielt“, „Dump-Warteschlange“, „Titel-ID“, „Eigene CPU-Menge …“, „Zeitzone der Konsole …“).
+- **Vollbild-App:** fehlende Übersetzungen ergänzt („Selbsttest abbrechen“, „Keine auswählen“, „ja“/„nein“, „sofort“, „gespeichert“, „Auszug speichern“, Aufträge „Verschieben/Entpacken/Installieren → …“); der Reiter „Kernel-Log live“ war in es/fr/it/ru abgeschnitten, „Suma de control“ (es) ebenso – jetzt kürzere Fassungen. Die Angaben zu einem Spiel stehen einzeilig wie in den übrigen Detaillisten (sonst konnten die Zeilen pendeln).
+- **PS4 von USB:** Öffneten zwei Seiten gleichzeitig „Updates/Add-ons“ zweier Spiele, konnte eines die Liste des anderen zeigen (gemeinsamer Puffer). Eine Content-ID mit `"` oder `\` aus einem Paketkopf machte die Antwort ungültig; sie wird jetzt maskiert.
+- **Kernel-Log speichern:** Füllte eine Zeile den Schreibpuffer genau, stand in der Datei ein NUL-Byte statt des Zeilenumbruchs.
+- **PS4 von USB:** Pakete, deren Content-ID nicht aus genau 36 Zeichen A–Z, a–z, 0–9, `-` und `_` besteht, werden nicht mehr geöffnet. Eine zu kurze ID hätte beim Abschalten eines Add-ons den Ordner aller Add-ons des Spiels gelöscht, `/` oder `..` darin hätte aus dem Ordner herausgeführt.
+- **System:** Der Schalter heißt auch in den Einstellungen „Expertenmodus“ (vorher „Experte-Modus“), wie oben neben „Vollbild“.
+- **Vollbild-App:** Die Reiter heißen „Payload-Profile“ (vorher „Profile“, blieb auf Englisch „Profile“) und „Gespeicherte“ im Protokoll (vorher „Gespeichert“; dadurch hieß auch die Meldung „Gespeichert“ auf Russisch und Französisch „die Gespeicherten“).
+
 ## v1.75.7
 
 ### Endzeile in `app.log`

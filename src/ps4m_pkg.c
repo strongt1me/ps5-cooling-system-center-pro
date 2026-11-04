@@ -72,6 +72,14 @@ int p4m_pkg_open(pkg_t *pkg, const char *path) {
         goto fail;
     pkg->file_size = (uint64_t)st.st_size;
     memcpy(pkg->content_id, pkg->header + 0x40, 36);
+    /* (app) the content id names folders too (/user/playgo/addcont/<id>, and its label from byte 20 on below addcont/<title>,
+       which drop_dlc removes): a real one is always 36 characters of A-Z, a-z, 0-9, '-' and '_'. A shorter one would leave
+       an empty label and with it the folder of all add-ons of the game; '/' or ".." would leave the folder altogether. */
+    for (int k = 0; k < 36; k++) {
+        char c = pkg->content_id[k];
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_'))
+            goto fail;
+    }
     memcpy(pkg->title_id, pkg->content_id + 7, 9);
     /* (app) the title id from the header names folders on the console (/user/appmeta/<id>, ...): only AAAA00000 */
     for (int k = 0; k < 9; k++)

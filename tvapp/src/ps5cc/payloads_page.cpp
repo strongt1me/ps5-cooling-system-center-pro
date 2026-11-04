@@ -138,7 +138,7 @@ class PayloadsPage final : public Page
     {
         theme_ = theme;
         style_subtabs(views_, theme, 4);
-        views_.set_tabs({{"Meine Payloads"}, {"Bereits geladen"}, {"Payload-Store"}, {"Profile"}});
+        views_.set_tabs({{"Meine Payloads"}, {"Bereits geladen"}, {"Payload-Store"}, {"Payload-Profile"}});
         views_.set_active(kFiles, true);
 
         list_.style.theme = theme;

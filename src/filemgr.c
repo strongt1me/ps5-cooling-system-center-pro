@@ -918,6 +918,71 @@ looks_like_text(const unsigned char *b, size_t n) {
   return n == 0 || ctl * 10 < n;
 }
 
+/* ------------------------------------------------------------------ write (text editor) */
+
+static void
+handle_write(int fd, const ps5tm_request_t *req) {
+  char p[FM_PATH], real[FM_PATH + 64];
+  if(query_value(req->query, "path", p, sizeof(p)) != 0 || !path_plain(p) || !strcmp(p, "/") ||
+     real_path(p, real, sizeof(real)) != 0) {
+    ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
+    return;
+  }
+  if(!writable(p)) {
+    ps5tm_http_send_error(fd, 403, "read_only", "Diese Datei ist schreibgeschuetzt (geschuetzt sind \"/\", /dev, /proc, eingehaengte Laufwerke und Verknuepfungen).");
+    return;
+  }
+  struct stat st;
+  if(stat(real, &st) != 0 || !S_ISREG(st.st_mode)) {
+    ps5tm_http_send_error(fd, 404, "not_a_file", "Diese Datei gibt es nicht (mehr).");
+    return;
+  }
+  if(ps5tm_filemgr_busy()) {
+    ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade. Bitte danach noch einmal.");
+    return;
+  }
+  const char *content = req->body ? req->body : "";
+  size_t len = req->body_len;
+  char tmp[FM_PATH + 80];
+  if(snprintf(tmp, sizeof(tmp), "%s.ps5cc-tmp-%d", real, (int)getpid()) >= (int)sizeof(tmp)) {
+    ps5tm_http_send_error(fd, 500, "path_too_long", "Pfad zu lang.");
+    return;
+  }
+  int out = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, st.st_mode & 0777u);
+  if(out < 0) {
+    char msg[300];
+    snprintf(msg, sizeof(msg), "Datei ließ sich nicht schreiben: %s", io_words(errno));
+    ps5tm_http_send_error(fd, 500, "write_failed", msg);
+    return;
+  }
+  size_t off = 0;
+  int werr = 0;
+  while(off < len) {
+    ssize_t w = write(out, content + off, len - off);
+    if(w < 0 && errno == EINTR) continue;
+    if(w <= 0) { werr = errno ? errno : EIO; break; }
+    off += (size_t)w;
+  }
+  close(out);
+  if(werr) {
+    unlink(tmp);
+    char msg[300];
+    snprintf(msg, sizeof(msg), "Schreiben fehlgeschlagen: %s", io_words(werr));
+    ps5tm_http_send_error(fd, 500, "write_failed", msg);
+    return;
+  }
+  if(rename(tmp, real) != 0) {
+    int e = errno;
+    unlink(tmp);
+    char msg[300];
+    snprintf(msg, sizeof(msg), "Speichern fehlgeschlagen: %s", io_words(e));
+    ps5tm_http_send_error(fd, 500, "rename_failed", msg);
+    return;
+  }
+  PS5TM_INFO("files_write", "Dateien: bearbeitet: %.150s (%zu Bytes).", p, len);
+  ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+}
+
 static void
 handle_view(int fd, const ps5tm_request_t *req) {
   char p[FM_PATH], real[FM_PATH + 64], num[24];
@@ -1802,6 +1867,7 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
     { "/api/v1/files/copy", 1 }, { "/api/v1/files/move", 1 }, { "/api/v1/files/delete/plan", 1 },
     { "/api/v1/files/delete", 1 }, { "/api/v1/files/job/cancel", 1 },
     { "/api/v1/files/view", 0 }, { "/api/v1/files/size", 0 },
+    { "/api/v1/files/write", 1 },
   };
   for(size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
     if(strcmp(p, routes[i].path)) continue;
@@ -1827,6 +1893,7 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
         break;
       case 11: handle_view(fd, req); break;
       case 12: handle_size(fd, req); break;
+      case 13: handle_write(fd, req); break;
     }
     return 1;
   }

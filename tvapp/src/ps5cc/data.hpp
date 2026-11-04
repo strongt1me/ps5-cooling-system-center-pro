@@ -73,6 +73,13 @@ struct Game
     std::string dump;          // a dump of it lies on a drive: "done", "unfinished", ""
 };
 
+// The app's two tiles (and their ids before 1.74.1, src/titleid.h): titles of their own, never
+// games to list or start. Both sources skip them, so the PC preview shows what the console shows.
+inline bool is_own_tile(const std::string &id)
+{
+    return id == "FAKE86921" || id == "FAKE86922" || id == "PPSA86921" || id == "PPSA86922";
+}
+
 enum class JobKind : std::uint8_t
 {
     copy,

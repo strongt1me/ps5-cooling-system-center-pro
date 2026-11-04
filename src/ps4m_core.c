@@ -3165,7 +3165,7 @@ static char *game_json_impl(const char *tid) {
     if (find_root(tid, root, sizeof(root)) || src_open(&t, root, tid))
         return NULL;
     buf_t out = {0};
-    static update_t ups[32];
+    update_t ups[32]; /* (app) not static: two pages asking at once run this on two threads (11 KB, the stack is 4 MB) */
     int nu = list_updates(t.dir, tid, ups, 32);
     p4m_buf_printf(&out, "{\"title_id\":\"%s\",\"name\":", tid);
     json_str(&out, t.name);
@@ -3182,7 +3182,10 @@ static char *game_json_impl(const char *tid) {
     p4m_buf_printf(&out, "],\"dlcs\":[");
     for (int i = 0; i < t.ndlc_all; i++) {
         const sfo_item_t *n = p4m_sfo_get(&t.dlc[i].sfo, "TITLE");
-        p4m_buf_printf(&out, "%s{\"content_id\":\"%s\",\"name\":", i ? "," : "", t.dlc[i].pkg.content_id);
+        /* (app) escaped: past the title ID the content ID is whatever the package header says */
+        p4m_buf_printf(&out, "%s{\"content_id\":", i ? "," : "");
+        json_str(&out, t.dlc[i].pkg.content_id);
+        p4m_buf_printf(&out, ",\"name\":");
         json_str(&out, n && !n->is_int ? n->sval : t.dlc[i].pkg.content_id + 20);
         p4m_buf_printf(&out, ",\"on\":%s,\"data\":%s", i < t.ndlc ? "true" : "false", t.dlc[i].data ? "true" : "false");
         char why[128] = "";

@@ -49,4 +49,14 @@ TEST(Ps5ccKlog, AppendsOnlyNewerLinesAndKeepsTheNewest)
     EXPECT_FALSE(hui::ps5cc::klog_append(ring, {}, 3));
 }
 
+TEST(Ps5ccLibrary, OwnTilesAreNoGames)
+{
+    EXPECT_TRUE(hui::ps5cc::is_own_tile("FAKE86921"));
+    EXPECT_TRUE(hui::ps5cc::is_own_tile("FAKE86922"));
+    EXPECT_TRUE(hui::ps5cc::is_own_tile("PPSA86921"));
+    EXPECT_TRUE(hui::ps5cc::is_own_tile("PPSA86922"));
+    EXPECT_FALSE(hui::ps5cc::is_own_tile("PPSA01325"));
+    EXPECT_FALSE(hui::ps5cc::is_own_tile(""));
+}
+
 } // namespace
