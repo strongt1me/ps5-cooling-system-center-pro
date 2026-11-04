@@ -1113,6 +1113,8 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::north)},
             {0.3f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "dateien-vorhanden"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "dateien-auftrag"},
             {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::back)},

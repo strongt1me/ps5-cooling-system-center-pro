@@ -56,6 +56,10 @@ static int g_fail, g_ok;
 
 static const char *ROOT = FM_ROOT;
 
+/* filemgr.c calls this in every 1-MB step of a transfer (-DFM_TEST_HOOK, see run.sh): a test that needs a slow copy sets g_slow_ms. */
+static int g_slow_ms;
+void fm_slow(void) { if(g_slow_ms > 0) usleep((useconds_t)g_slow_ms * 1000); }
+
 static void
 put(const char *rel, const char *text) {
   char p[512];
@@ -256,6 +260,31 @@ main(void) {
   CHECK(strstr(g_body, "\"skipped\":true") != NULL, "upload skip reports skipped: %s", g_body);
   CHECK(is("/data/src/f.txt", "REPLACED"), "upload skip: target unchanged");
   CHECK(!has("/data/src/f.txt.ps5cc-hochladen"), "upload skip: no leftover temp file");
+
+  /* 18. speed and time left: a copy of 80 MB at about 25 MB/s reports a speed in the right range, and a time left that
+        does not grow; nothing of it once the job is over */
+  fresh();
+  if(system("dd if=/dev/zero of='" FM_ROOT "/data/src/big.bin' bs=1M count=80 2>/dev/null") != 0) exit(2);
+  g_slow_ms = 40;
+  call("POST", "/api/v1/files/copy", "{\"paths\":[\"/data/src/big.bin\"],\"dest\":\"/data/dst\"}");
+  CHECK(g_status == 200, "slow copy started: %d %s", g_status, g_body);
+  long long rate = 0, eta = 0, eta_first = 0;
+  for(int i = 0; i < 80 && ps5tm_filemgr_busy(); i++) {
+    usleep(100000);
+    call("GET", "/api/v1/files/job", NULL);
+    char *r = strstr(g_body, "\"rate_bps\":"), *e = strstr(g_body, "\"eta_s\":");
+    if(r && e && atoll(r + 11) > 0) {
+      rate = atoll(r + 11);
+      eta = atoll(e + 8);
+      if(!eta_first) eta_first = eta;
+    }
+  }
+  g_slow_ms = 0;
+  CHECK(rate > 8 * 1048576LL && rate < 80 * 1048576LL, "speed in a sane range: %lld B/s", rate);
+  CHECK(eta_first > 0 && eta_first <= 4, "time left at the first sample: %lld s", eta_first);
+  CHECK(eta <= eta_first, "time left does not grow: %lld after %lld", eta, eta_first);
+  call("GET", "/api/v1/files/job", NULL);
+  CHECK(strstr(g_body, "\"rate_bps\":0,") != NULL && strstr(g_body, "\"eta_s\":0,") != NULL, "no speed once done: %s", g_body);
 
   printf("%d checks passed, %d failed\n", g_ok, g_fail);
   return g_fail ? 1 : 0;

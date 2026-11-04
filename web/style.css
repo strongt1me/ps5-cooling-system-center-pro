@@ -109,6 +109,10 @@ body {
 .tab.active { color: var(--ink); font-weight: 600;
   background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.3); }
 .tab.active svg { stroke: #8ab4ff; }
+/* Die Versionsnummer direkt unter den Reitern (04.11.2026). Sie liegt über dem Lüfter-Bild, also mit eigener Unterlage wie .side-foot. */
+.side-ver { margin: 10px 0 0; padding: 7px 12px; border: 1px solid var(--hairline); border-radius: 10px;
+  background: rgba(9,15,30,.8); color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+.side-ver:empty { display: none; }
 /* Liegt über dem Lüfter-Bild: eigene dunkle Unterlage, sonst unlesbar */
 .side-foot { margin: auto 0 0; padding: 11px 13px; border: 1px solid var(--hairline);
   border-radius: 12px; background: rgba(9,15,30,.8);
@@ -384,6 +388,7 @@ body.offline .offline-note { display: flex; }
   .tabs { flex-direction: row; flex-wrap: wrap; }   /* umbrechen statt seitlich scrollen */
   .tab { width: auto; flex: none; }
   .side-foot { display: none; }
+  .side-ver { margin: 6px 0 0; padding: 0 2px; border: 0; background: none; }   /* in der Leiste oben: nur Text, kein Kasten */
   .shell { padding: 18px 16px 32px; }
   .ov-top, .ov-mid { grid-template-columns: minmax(0, 1fr); }
 }
@@ -1988,6 +1993,7 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-theme="hell"] .side .tab.active { color: var(--ink); background: rgba(47,111,224,.14); border-color: rgba(47,111,224,.32); }
 :root[data-theme="hell"] .side .tab.active svg { stroke: #2a6fcf; }
 :root[data-theme="hell"] .side-foot { background: rgba(255,255,255,.6); }
+:root[data-theme="hell"] .side-ver { background: rgba(255,255,255,.6); }
 :root[data-theme="hell"] .tip { background: rgba(255,255,255,.97); }
 /* Kacheln mit Bild (Status, Lüfter, Spiel, Banner): das Bild ist dunkel, also behalten sie die dunklen Farben */
 :root[data-theme="hell"] .ov-hero, :root[data-theme="hell"] .ov-tile, :root[data-theme="hell"] .page-banner,

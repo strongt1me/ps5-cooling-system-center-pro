@@ -452,14 +452,22 @@ class FilesPage final : public Page
                     {bar.x, bar.y,
                      bar.w * static_cast<float>(std::clamp(job_.percent, 0, 100)) / 100.0f, bar.h},
                     6.0f, kBlue);
-                const std::string amount =
+                std::string amount =
                     job_.bytes_total > 0
                         ? format_bytes(job_.bytes_done) + " von " + format_bytes(job_.bytes_total)
                         : std::to_string(job_.files_done) + " von " +
                               std::to_string(job_.files_total) + " Dateien";
+                // how fast, and how long it still takes (the app measures it)
+                if (job_.rate_bps > 0)
+                    amount += " · " + format_rate(job_.rate_bps);
+                if (job_.eta_s > 0)
+                    amount += " · noch ca. " + format_eta(job_.eta_s);
                 ui::text(list, fonts.regular,
-                         ui::fit_label(paint, amount + " · " + job_.current, 18.0f, card.w - 60.0f),
-                         card.x + 30.0f, jy + 100.0f, 18.0f, kMuted);
+                         ui::fit_label(paint, amount, 18.0f, card.w - 60.0f), card.x + 30.0f,
+                         jy + 100.0f, 18.0f, kMuted);
+                ui::text(list, fonts.regular,
+                         ui::fit_label(paint, job_.current, 18.0f, card.w - 60.0f), card.x + 30.0f,
+                         jy + 128.0f, 18.0f, kMuted);
             }
             else
             {

@@ -4083,7 +4083,7 @@
     txt("#console-model", sys.model || "PlayStation 5");
     /* txt() setzt textContent, kein innerHTML — hier gehört also das echte
        Zeichen hin und nicht &amp;, sonst stünde die Entity wörtlich da. */
-    txt("#foot-version", `PS5 Cooling & System Center - Pro ${sys.app_version || ""}`.trim());
+    txt("#side-version", sys.app_version ? `Version ${sys.app_version}` : "");
 
     /* Banner der Systemseite */
     txt("#sy-model", sys.model || "--");
@@ -8895,9 +8895,12 @@
     if (j.active) {
       const pc = Math.max(0, Math.min(100, Math.floor(Number(j.percent) || 0)));
       const amount = j.bytes_total > 0 ? `${j.bytes_done > 0 ? esc(bytes(j.bytes_done)) : "0 B"} von ${esc(bytes(j.bytes_total))}` : `${num(j.files_done)} von ${num(j.files_total)} Dateien`;
+      /* Geschwindigkeit und Restzeit, solange etwas kopiert oder verschoben wird (der Server misst sie) */
+      const mbs = (bps) => (bps >= 1048576 ? `${num(bps / 1048576, bps >= 10485760 ? 0 : 1)} MB/s` : `${Math.max(1, Math.round(bps / 1024))} KB/s`);
+      const pace = (j.rate_bps > 0 ? ` · ${esc(mbs(j.rate_bps))}` : "") + (j.eta_s > 0 ? ` · noch ca. ${esc(ptDur(j.eta_s))}` : "");
       paintJob(box, `<p class="cp-num"><b>${esc(what)}${j.dest ? ` nach ${esc(j.dest)}` : ""}</b> · ${pc} %</p>
         <div class="cp-bar" role="progressbar" aria-label="Fortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>
-        <p class="muted cp-cur">${amount}${j.elapsed_s > 0 ? ` · seit ${esc(ptDur(j.elapsed_s))}` : ""}${j.current ? `<br><code>${esc(j.current)}</code>` : ""}</p>`,
+        <p class="muted cp-cur">${amount}${pace}${j.elapsed_s > 0 ? ` · seit ${esc(ptDur(j.elapsed_s))}` : ""}${j.current ? `<br><code>${esc(j.current)}</code>` : ""}</p>`,
         `<button type="button" class="btn" id="fm-cancel">Abbrechen</button>`);
       fm.poll = setTimeout(fmFollow, 800);
       return;

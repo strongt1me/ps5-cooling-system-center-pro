@@ -647,6 +647,8 @@ struct FsJob
     int files_total = 0;
     int files_done = 0;
     int finished_ago_s = -1;
+    std::uint64_t rate_bps = 0; // bytes per second of a copy or move, 0 when not known yet
+    int eta_s = 0;              // seconds left at that speed, 0 when not known
 };
 
 // Names the target of a copy or move already has (the app refused with them, 409 "exists"): the
@@ -1251,6 +1253,10 @@ void set_source(Source *source);
 
 // "47,8 GB", "512 MB" (German decimal comma).
 std::string format_bytes(std::uint64_t bytes);
+// "82 MB/s", "6,4 MB/s", "340 KB/s": the speed of a copy.
+std::string format_rate(std::uint64_t bytes_per_second);
+// "40 Sek.", "12 Min.", "1 Std. 05 Min.": what is left.
+std::string format_eta(int seconds);
 // "2,9 h", "35 min", "–" for nothing.
 std::string format_playtime(std::uint64_t seconds);
 // "46,3" for 46.3.

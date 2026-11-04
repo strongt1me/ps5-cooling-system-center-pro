@@ -1179,6 +1179,8 @@ class MockSource final : public Source
             j.percent = 37;
             j.bytes_total = static_cast<std::uint64_t>(3.2e9);
             j.bytes_done = static_cast<std::uint64_t>(1.18e9);
+            j.rate_bps = static_cast<std::uint64_t>(82.4e6);
+            j.eta_s = 24;
         }
         else if (route == "mkdir")
             notice(Notice::Kind::success, "Dateien", "Der Ordner ist angelegt.");
@@ -2568,6 +2570,27 @@ std::string format_bytes(std::uint64_t bytes)
     if (b >= 1e3)
         return format_decimal(static_cast<float>(b / 1e3), 0) + " KB";
     return std::to_string(bytes) + " B";
+}
+
+std::string format_rate(std::uint64_t bytes_per_second)
+{
+    const double b = static_cast<double>(bytes_per_second);
+    if (b >= 1e6)
+        return format_decimal(static_cast<float>(b / 1e6), b >= 1e7 ? 0 : 1) + " MB/s";
+    return std::to_string(std::max<std::uint64_t>(1, bytes_per_second / 1000)) + " KB/s";
+}
+
+std::string format_eta(int seconds)
+{
+    if (seconds <= 0)
+        return "";
+    if (seconds < 60)
+        return std::to_string(seconds) + " Sek.";
+    const int h = seconds / 3600;
+    const int m = (seconds % 3600) / 60;
+    if (h == 0)
+        return std::to_string(m) + " Min.";
+    return std::to_string(h) + " Std. " + (m < 10 ? "0" : "") + std::to_string(m) + " Min.";
 }
 
 std::string format_playtime(std::uint64_t seconds)

@@ -3697,6 +3697,8 @@ void HttpSource::poll_fs_job()
     j.files_total = static_cast<int>(num(root, "files_total"));
     j.files_done = static_cast<int>(num(root, "files_done"));
     j.finished_ago_s = static_cast<int>(num(root, "finished_ago_s", -1));
+    j.rate_bps = static_cast<std::uint64_t>(num(root, "rate_bps"));
+    j.eta_s = static_cast<int>(num(root, "eta_s"));
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
     data_.fs_job = std::move(j);

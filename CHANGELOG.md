@@ -1,5 +1,15 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Browser-Oberfläche: Versionsnummer links
+- Die Versionsnummer („Version 1.76.5“) steht jetzt in der Seitenleiste direkt unter „FAQ“ statt in einer Fußzeile ganz unten, für die man scrollen musste. Sie liegt auf einer dunklen Unterlage, weil sie über dem Lüfterbild steht; in der schmalen Leiste oben (Handy) steht sie als schlichter Text unter den Reitern. Die Fußzeile entfällt.
+
+### Dateimanager: Geschwindigkeit und Restzeit
+- Beim Kopieren und Verschieben zeigt die Auftragsanzeige jetzt die **Übertragungsrate** („82 MB/s“) und die **geschätzte Restzeit** („noch ca. 12 Min.“), im Browser und in der Vollbild-App. Die App misst beides selbst: einmal pro Sekunde aus den schon übertragenen Bytes, leicht geglättet (70 % alter Wert, 30 % neue Messung); stockt die Übertragung länger als vier Sekunden (langsamer Stick, große Datei wird geschrieben), sinkt die Anzeige auf das, was seit der letzten Messung wirklich ankam. In den ersten Sekunden und beim Zählen und Löschen steht nichts da.
+- `GET /api/v1/files/job` nennt dazu `rate_bps` (Bytes pro Sekunde) und `eta_s` (Sekunden, 0 = unbekannt); beide sind nur beim Kopieren/Verschieben belegt.
+- Neue Prüfung in `test/filemgr/run.sh` (jetzt 55): eine auf 25 MB/s gebremste Kopie liefert eine Rate im richtigen Bereich und eine nicht wachsende Restzeit; nach dem Ende steht beides wieder auf 0. Neue Unit-Tests für `format_rate` und `format_eta` der Vollbild-App (320 Tests).
+
 ## v1.76.5
 
 ### Offline-Konto: wie OffAct (v0.4.2)

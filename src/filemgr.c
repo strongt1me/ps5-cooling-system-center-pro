@@ -76,6 +76,9 @@ typedef struct {
   uint64_t bytes_total, bytes_done, files_total, files_done;
   unsigned items, items_done, skipped;
   uint64_t started_ms, finished_ms;
+  /* speed (04.11.2026): a sample of the bytes done every second or more, smoothed; rate_ms/rate_bytes are the last sample */
+  double   rate_bps;
+  uint64_t rate_ms, rate_bytes;
 } fm_job_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -915,6 +918,16 @@ job_add(uint64_t bytes, uint64_t files) {
   pthread_mutex_lock(&g_lock);
   g_job.bytes_done += bytes;
   g_job.files_done += files;
+  uint64_t now = ps5tm_mono_ms();
+  if(!g_job.rate_ms) {
+    g_job.rate_ms = now;
+    g_job.rate_bytes = g_job.bytes_done;
+  } else if(now - g_job.rate_ms >= 1000) {
+    double inst = (double)(g_job.bytes_done - g_job.rate_bytes) * 1000.0 / (double)(now - g_job.rate_ms);
+    g_job.rate_bps = g_job.rate_bps > 0 ? 0.7 * g_job.rate_bps + 0.3 * inst : inst;     /* a little smoothing: the bar is read, not measured */
+    g_job.rate_ms = now;
+    g_job.rate_bytes = g_job.bytes_done;
+  }
   pthread_mutex_unlock(&g_lock);
 }
 
@@ -2012,6 +2025,20 @@ job_json(void) {
   cJSON_AddNumberToObject(o, "items", j.items);
   cJSON_AddNumberToObject(o, "items_done", j.items_done);
   cJSON_AddNumberToObject(o, "skipped", j.skipped);
+  /* Speed and the time left, while data is going from one place to another. A copy that has delivered nothing for a few
+     seconds (a slow stick, a big file being flushed) is no longer as fast as its last sample: what came since is all there is. */
+  double rate = 0, eta = 0;
+  if(j.state == FM_COPYING && j.rate_ms && j.rate_bps > 0) {
+    rate = j.rate_bps;
+    uint64_t idle = now > j.rate_ms ? now - j.rate_ms : 0;
+    if(idle > 4000) {
+      double cur = (double)(j.bytes_done - j.rate_bytes) * 1000.0 / (double)idle;
+      if(cur < rate) rate = cur;
+    }
+    if(rate > 0 && j.bytes_total > j.bytes_done) eta = (double)(j.bytes_total - j.bytes_done) / rate;
+  }
+  cJSON_AddNumberToObject(o, "rate_bps", (double)(long long)rate);
+  cJSON_AddNumberToObject(o, "eta_s", eta > 0 ? (double)(long long)(eta + 0.5) : 0);
   cJSON_AddNumberToObject(o, "elapsed_s", j.started_ms ? (double)(((j.finished_ms ? j.finished_ms : now) - j.started_ms) / 1000) : 0);
   cJSON_AddNumberToObject(o, "finished_ago_s", j.finished_ms ? (double)((now - j.finished_ms) / 1000) : -1);
   return o;

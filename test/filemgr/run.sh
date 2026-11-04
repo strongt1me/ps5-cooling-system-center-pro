@@ -7,6 +7,6 @@ work=${TMPDIR:-/tmp}/fmtest
 rm -rf "$work"
 mkdir -p "$work"
 clang -g -fsanitize=address,undefined -Wall -Wextra -DPS5TM_HOST_TEST -DPS5TM_NO_THREAD_WRAP \
-  -DFM_ROOT="\"$work/root\"" -I"$repo/src" -I"$repo/src/third_party" -I"$repo/test/include" \
+  -DFM_TEST_HOOK=fm_slow -DFM_ROOT="\"$work/root\"" -I"$repo/src" -I"$repo/src/third_party" -I"$repo/test/include" \
   "$here/conflict_test.c" "$repo/src/filemgr.c" "$repo/src/third_party/cJSON.c" -lpthread -o "$work/conflict_test"
 "$work/conflict_test"

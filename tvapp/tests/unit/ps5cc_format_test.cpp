@@ -36,6 +36,25 @@ TEST(Ps5ccFormat, DateIsCivil)
     EXPECT_EQ(hui::ps5cc::format_date(951782400), "29.02.2000");
 }
 
+TEST(Ps5ccFormat, RateIsInMegabytesPerSecond)
+{
+    EXPECT_EQ(hui::ps5cc::format_rate(82400000), "82 MB/s");
+    EXPECT_EQ(hui::ps5cc::format_rate(6400000), "6,4 MB/s");
+    EXPECT_EQ(hui::ps5cc::format_rate(340000), "340 KB/s");
+    EXPECT_EQ(hui::ps5cc::format_rate(10), "1 KB/s");
+}
+
+TEST(Ps5ccFormat, EtaIsSecondsMinutesHours)
+{
+    EXPECT_EQ(hui::ps5cc::format_eta(0), "");
+    EXPECT_EQ(hui::ps5cc::format_eta(-5), "");
+    EXPECT_EQ(hui::ps5cc::format_eta(40), "40 Sek.");
+    EXPECT_EQ(hui::ps5cc::format_eta(60), "1 Min.");
+    EXPECT_EQ(hui::ps5cc::format_eta(12 * 60 + 30), "12 Min.");
+    EXPECT_EQ(hui::ps5cc::format_eta(3600 + 5 * 60), "1 Std. 05 Min.");
+    EXPECT_EQ(hui::ps5cc::format_eta(3 * 3600 + 42 * 60), "3 Std. 42 Min.");
+}
+
 TEST(Ps5ccKlog, AppendsOnlyNewerLinesAndKeepsTheNewest)
 {
     std::vector<KlogLine> ring;
