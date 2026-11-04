@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.76.4
 
 ### Kacheln: Hintergrundbild im Startmenü
 - Die Konsole zeigt das große Bild, das beim Anwählen (`pic0`) und beim Starten (`pic1`) einer Kachel im Startmenü erscheint, nur als **BC7-DDS in 3840×2160** (`pic0.dds`/`pic1.dds`); ein `pic0.png` daneben wird nicht gelesen. Die Kacheln `FAKE86921` und `FAKE86922` hatten bisher nur PNG, deshalb blieb das Bild aus. `tools/make_starter.sh` erzeugt die beiden Dateien jetzt beim Bau aus `starter/sce_sys/pic0.png` (neues Werkzeug `tools/png_to_bc7_dds.py`, ohne Zusatzprogramme: Pillow und numpy genügen; Kopf und Größe gleich wie die Beispiele des Vollbild-Kits) und legt sie in beide Kacheln. Bestehende Kacheln: die Dateien nach `/data/homebrew/<ID>/sce_sys/` kopieren und zusätzlich nach `/user/app/<ID>/sce_sys/` und `/user/appmeta/<ID>/`, denn die Konsole kopiert diese Bilder nur bei der ersten Anmeldung.
