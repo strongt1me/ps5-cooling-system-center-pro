@@ -90,9 +90,15 @@ static struct {
   uint64_t until_ms;
 } g_tok;
 
+/* What to do with a name the target already has (04.11.2026): nothing asked yet (the request is refused with the list),
+   replace (a file is written beside and renamed over; a folder is merged, its files replaced), keep both (the new one gets
+   "name (2)"), skip (the entry is left out). */
+enum { FM_C_NONE = 0, FM_C_REPLACE, FM_C_KEEP, FM_C_SKIP };
+
 typedef struct {
   char     kind[8];
   char     dest[FM_PATH];
+  int      conflict;
   unsigned n;
   char   (*src)[FM_PATH];
   char    *buf;                       /* this job's copy buffer; the job frees it (not g_buf: a next job may own that by then) */
@@ -1163,14 +1169,28 @@ delete_tree(const char *real, const char *vpath, dev_t dev, int depth, int live)
 /* ------------------------------------------------------------------ copying */
 
 static char *g_buf;                               /* the job's buffer, FM_BUF */
+static int   g_replace;                           /* this item's name is taken in the target: files there are replaced */
 
 static int
 copy_file(const char *rs, const char *rt, const char *vs) {
   job_current(vs);
   int in = open(rs, O_RDONLY | O_NONBLOCK);
   if(in < 0) return errno;
+  /* A file that is there is written beside it and renamed over it at the end: a copy that fails half way leaves the old
+     file as it was. */
+  char tmp[FM_PATH + 96];
+  const char *dst = rt;
+  int replace = 0;
+  struct stat ex;
+  if(g_replace && lstat(rt, &ex) == 0) {
+    if(!S_ISREG(ex.st_mode)) { close(in); return S_ISDIR(ex.st_mode) ? EISDIR : EEXIST; }
+    if(snprintf(tmp, sizeof(tmp), "%s.fm-tmp", rt) >= (int)sizeof(tmp)) { close(in); return ENAMETOOLONG; }
+    unlink(tmp);
+    dst = tmp;
+    replace = 1;
+  }
   /* 0777 whatever the umask says: a copied game whose eboot.bin lacks the execute bit crashes (lz4pack.h) */
-  int out = open(rt, O_WRONLY | O_CREAT | O_EXCL, 0777);
+  int out = open(dst, O_WRONLY | O_CREAT | O_EXCL, 0777);
   if(out < 0) { int e = errno; close(in); return e; }
   (void)fchmod(out, 0777);
   int rc = 0;
@@ -1195,6 +1215,10 @@ copy_file(const char *rs, const char *rt, const char *vs) {
   if(!rc && fsync(out) != 0) rc = errno ? errno : EIO;
   if(close(out) != 0 && !rc) rc = errno ? errno : EIO;
   close(in);
+  if(replace) {
+    if(!rc && rename(tmp, rt) != 0) rc = errno ? errno : EIO;
+    if(rc) unlink(tmp);
+  }
   if(!rc) job_add(0, 1);
   return rc;
 }
@@ -1217,9 +1241,14 @@ copy_tree(const char *rs, const char *rt, const char *vs, dev_t dev, int depth) 
     pthread_mutex_unlock(&g_lock);
     return 0;
   }
-  if(mkdir(rt, 0777) != 0) return errno;
-  if(depth == 0) g_made_top = 1;
-  (void)chmod(rt, 0777);
+  if(mkdir(rt, 0777) != 0) {
+    struct stat ex;
+    if(errno != EEXIST || !g_replace || lstat(rt, &ex) != 0 || !S_ISDIR(ex.st_mode)) return errno ? errno : EEXIST;
+    /* merged into the folder that is there: not ours, so a failure does not delete it */
+  } else {
+    if(depth == 0) g_made_top = 1;
+    (void)chmod(rt, 0777);
+  }
   DIR *d = opendir(rs);
   if(!d) return errno;
   struct dirent *e;
@@ -1357,9 +1386,26 @@ move_cleanup(const char *rs, const char *rt, unsigned *kept) {
   return rc;
 }
 
+/* "name (2)", "name (3)" … beside the name that is taken ("a.txt" becomes "a (2).txt"; a folder has no extension). */
+static int
+keep_both_name(const char *dest, const char *base, int is_dir, char *t, size_t tn, char *rt, size_t rn) {
+  const char *dot = is_dir ? NULL : strrchr(base, '.');
+  if(dot == base) dot = NULL;
+  int stem = dot ? (int)(dot - base) : (int)strlen(base);
+  for(int k = 2; k < 1000; k++) {
+    char name[FM_NAME + 16];
+    if(snprintf(name, sizeof(name), "%.*s (%d)%s", stem, base, k, dot ? dot : "") >= (int)sizeof(name)) return -1;
+    struct stat st;
+    if(join(dest, name, t, tn) != 0 || real_path(t, rt, rn) != 0) return -1;
+    if(lstat(rt, &st) != 0 && errno == ENOENT) return 0;
+  }
+  return -1;
+}
+
 static void
 run_copy(fm_args_t *a, int move) {
   job_state(FM_COPYING);
+  unsigned conflict_skipped = 0;                  /* names that were taken, and the person chose to leave them */
   unsigned move_kept = 0;                         /* entries the source got or changed meanwhile: left where they are */
   char rd[FM_PATH + 64], rs[FM_PATH + 64], rt[FM_PATH + 64], t[FM_PATH], err[800] = "";
   struct stat ds;
@@ -1382,13 +1428,34 @@ run_copy(fm_args_t *a, int move) {
       return;
     }
     struct stat ts;
+    int replacing = 0;
     if(lstat(rt, &ts) == 0) {
-      snprintf(err, sizeof(err), "Im Ziel gibt es inzwischen schon „%.200s“. Nichts wurde überschrieben.", base_name(t));
-      job_finish(FM_FAILED, err, NULL);
-      return;
+      if(a->conflict == FM_C_SKIP || (a->conflict == FM_C_REPLACE && ts.st_dev == ss.st_dev && ts.st_ino == ss.st_ino)) {
+        conflict_skipped++;                     /* left out, or already the very same entry */
+        pthread_mutex_lock(&g_lock);
+        g_job.items_done++;
+        pthread_mutex_unlock(&g_lock);
+        continue;
+      }
+      if(a->conflict == FM_C_KEEP) {
+        if(keep_both_name(a->dest, base_name(a->src[i]), S_ISDIR(ss.st_mode), t, sizeof(t), rt, sizeof(rt)) != 0) {
+          snprintf(err, sizeof(err), "Für „%.200s“ ließ sich im Ziel kein freier Name finden.", base_name(a->src[i]));
+          job_finish(FM_FAILED, err, NULL);
+          return;
+        }
+      } else if(a->conflict == FM_C_REPLACE && S_ISDIR(ss.st_mode) == S_ISDIR(ts.st_mode) && !S_ISLNK(ts.st_mode)) {
+        replacing = 1;
+      } else {
+        snprintf(err, sizeof(err), "Im Ziel gibt es inzwischen schon „%.200s“. Nichts wurde überschrieben.", base_name(t));
+        job_finish(FM_FAILED, err, NULL);
+        return;
+      }
     }
     int rc;
-    if(move && ss.st_dev == ds.st_dev) {
+    g_replace = replacing;
+    /* a rename puts a file over a file; a folder over a folder has to be merged, so it is copied (and the original
+       cleaned up afterwards, as for a move between drives) */
+    if(move && ss.st_dev == ds.st_dev && !(replacing && S_ISDIR(ss.st_mode))) {
       job_current(a->src[i]);
       rc = rename(rs, rt) == 0 ? 0 : errno;
       if(!rc) {
@@ -1454,8 +1521,13 @@ run_copy(fm_args_t *a, int move) {
   unsigned skipped = g_job.skipped;
   uint64_t done = g_job.bytes_done;
   pthread_mutex_unlock(&g_lock);
+  g_replace = 0;
   if(skipped)
     snprintf(note, sizeof(note), "%u Einträge wurden ausgelassen (Verknüpfungen, Gerätedateien oder ein anderes Laufwerk darin).", skipped);
+  if(conflict_skipped) {
+    size_t nl = strlen(note);
+    snprintf(note + nl, sizeof(note) - nl, "%s%u Einträge gab es im Ziel schon; sie blieben unverändert.", nl ? " " : "", conflict_skipped);
+  }
   if(move_kept) {
     size_t nl = strlen(note);
     snprintf(note + nl, sizeof(note) - nl, "%s%u Einträge sind während des Verschiebens im Original neu entstanden oder haben sich "
@@ -1591,6 +1663,11 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
   int http = a ? 0 : 500;
   if(!a) snprintf(err, sizeof(err), "Kein Speicher.");
   const char *dest = b ? jstr(b, "dest") : NULL;
+  const char *choice = b ? jstr(b, "conflict") : NULL;
+  if(!http && choice && *choice) {
+    a->conflict = !strcmp(choice, "replace") ? FM_C_REPLACE : !strcmp(choice, "keep") ? FM_C_KEEP : !strcmp(choice, "skip") ? FM_C_SKIP : -1;
+    if(a->conflict < 0) { http = 400; snprintf(err, sizeof(err), "Unbekannte Wahl für vorhandene Namen."); }
+  }
   if(!http) {
     snprintf(a->kind, sizeof(a->kind), "%s", move ? "move" : "copy");
     if(!dest || !path_plain(dest)) { http = 400; snprintf(err, sizeof(err), "Ungültiger Zielordner."); }
@@ -1604,6 +1681,7 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
     snprintf(err, sizeof(err), "In diesen Ordner darf nichts %s werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", move ? "verschoben" : "kopiert");
   }
   uint64_t bytes = 0, files = 0;
+  int merge_room = 0;                              /* a folder is merged by copying: it needs room even on the same drive */
   cJSON *conflicts = cJSON_CreateArray();
   for(unsigned i = 0; !http && i < a->n; i++) {
     struct stat ss;
@@ -1622,8 +1700,24 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
       http = 403; snprintf(err, sizeof(err), "Dorthin darf „%.200s“ nicht.", base_name(a->src[i])); break;
     }
     struct stat ts;
-    if(lstat(rt, &ts) == 0) { cJSON_AddItemToArray(conflicts, cJSON_CreateString(base_name(a->src[i]))); continue; }
-    if(!move || ss.st_dev != ds.st_dev) {
+    int merging = 0;                               /* a folder copied over a folder: no rename possible */
+    if(lstat(rt, &ts) == 0) {
+      if(a->conflict == FM_C_NONE) { cJSON_AddItemToArray(conflicts, cJSON_CreateString(base_name(a->src[i]))); continue; }
+      if(a->conflict == FM_C_SKIP) continue;
+      if(a->conflict == FM_C_REPLACE) {
+        if(ts.st_dev == ss.st_dev && ts.st_ino == ss.st_ino) continue;       /* the very same entry */
+        if(S_ISDIR(ss.st_mode) != S_ISDIR(ts.st_mode) || S_ISLNK(ts.st_mode)) {
+          http = 409;
+          snprintf(err, sizeof(err), "„%.200s“ ist im Ziel %s und lässt sich nicht durch %s ersetzen. Wähle „Beide behalten“ oder „Überspringen“.",
+                   base_name(a->src[i]), S_ISDIR(ts.st_mode) ? "ein Ordner" : "eine Datei oder Verknüpfung",
+                   S_ISDIR(ss.st_mode) ? "einen Ordner" : "eine Datei");
+          break;
+        }
+        merging = S_ISDIR(ss.st_mode);
+        if(merging) merge_room = 1;
+      }
+    }
+    if(!move || ss.st_dev != ds.st_dev || merging) {
       count_t c = { 0 };
       count_tree(rs, ss.st_dev, 0, &c);
       if(c.err) { http = 500; snprintf(err, sizeof(err), "%.300s ließ sich nicht durchzählen: %s", a->src[i], io_words(c.err)); break; }
@@ -1641,7 +1735,7 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
     snprintf(err, sizeof(err), "Im Ziel gibt es schon Einträge mit diesen Namen; nichts wurde überschrieben.");
   }
   uint64_t fr = 0;
-  int needs_room = 0;
+  int needs_room = merge_room;
   for(unsigned i = 0; !http && i < a->n; i++) {
     struct stat ss;
     if(real_path(a->src[i], rs, sizeof(rs)) == 0 && lstat(rs, &ss) == 0 && (!move || ss.st_dev != ds.st_dev)) needs_room = 1;

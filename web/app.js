@@ -8551,6 +8551,47 @@
     if (o) { o.hidden = true; o.querySelector(".cp-dialog").classList.remove("fm-view"); $("#fm-dlg-title").removeAttribute("data-no-i18n"); }
     fm.viewSeq++;                                     /* eine noch laufende Vorschau darf nichts mehr einsetzen */
     fm.pick = null;
+    if (fm.ask) { const r = fm.ask; fm.ask = null; r(null); }   /* das Fenster „Namen schon vorhanden“ wurde geschlossen */
+  };
+
+  /* Kopieren und Verschieben starten. Gibt es im Ziel schon Namen, fragt ein Fenster (wie im Prospero Manager):
+     Ersetzen, Beide behalten oder Überspringen. Ersetzen legt eine Datei neben die alte und tauscht sie erst am Ende
+     aus; ein Ordner wird zusammengeführt. true, wenn der Auftrag läuft. */
+  const fmAskConflict = (names) => new Promise((resolve) => {
+    const o = fmShell();
+    o.querySelector(".cp-dialog").classList.remove("fm-view");
+    txt("#fm-dlg-title", "Namen schon vorhanden");
+    const shown = names.slice(0, 6).map((n) => `<li><code>${esc(n)}</code></li>`).join("");
+    const more = names.length > 6 ? `<li class="muted">${esc(`und ${names.length - 6} weitere`)}</li>` : "";
+    $("#fm-dlg-body").innerHTML = `
+      <p>Im Ziel gibt es schon:</p>
+      <ul class="fm-conflict-list">${shown}${more}</ul>
+      <p class="muted" style="font-size:12px">Ordner werden zusammengeführt; gleichnamige Dateien darin werden ersetzt.</p>
+      <div class="cp-actions">
+        <button type="button" class="btn" data-fmc="">Abbrechen</button>
+        <button type="button" class="btn" data-fmc="skip">Überspringen</button>
+        <button type="button" class="btn" data-fmc="keep">Beide behalten</button>
+        <button type="button" class="btn primary" data-fmc="replace">Ersetzen</button>
+      </div>`;
+    fm.ask = resolve;
+    o.hidden = false;
+    $("#fm-dlg-body").querySelectorAll("[data-fmc]").forEach((b) => b.addEventListener("click", () => {
+      const r = fm.ask;
+      fm.ask = null;
+      if (r) r(b.dataset.fmc || null);
+    }));
+  });
+  const fmTransfer = async (move, paths, dest) => {
+    const send = (conflict) => api(`/api/v1/files/${move ? "move" : "copy"}`, {
+      method: "POST", body: JSON.stringify(conflict ? { paths, dest, conflict } : { paths, dest }), timeoutMs: 120000,
+    });
+    try { await send(); return true; } catch (e) {
+      const names = e.data && Array.isArray(e.data.conflicts) ? e.data.conflicts : [];
+      if (!(e.status === 409 && e.code === "exists" && names.length)) { toast(e.message, "error"); return false; }
+      const choice = await fmAskConflict(names);
+      if (!choice) return false;
+      try { await send(choice); return true; } catch (e2) { toast(e2.message, "error"); return false; }
+    }
   };
 
   /* ⋯ Menü je Zeile */
@@ -8596,6 +8637,7 @@
   /* Zielordner-Auswahl Dialog */
   const fmPickDest = async (title, srcPath, move) => {
     fm.pick = { path: fm.path };
+    if (!fm.places || !fm.places.length) await fmLoadPlaces();
     const o = fmShell();
     o.querySelector(".cp-dialog").classList.add("fm-view");
     txt("#fm-dlg-title", title);
@@ -8623,6 +8665,11 @@
       const rows = (d.parent ? [`<div class="fm-pick-row" data-fmpicknav="${esc(d.parent)}">${FM_ICO.dir}<span>.. (Übergeordnet)</span></div>`] : [])
         .concat(dirs.map((e) => `<div class="fm-pick-row" data-fmpicknav="${esc(fmJoin(d.path, e.name))}">${FM_ICO.dir}<span>${esc(e.name)}</span></div>`))
         .join("");
+      /* die Laufwerke und Orte der Konsole: von jedem Ordner aus ein Sprung dorthin */
+      const places = (fm.places || []).map((pl) => {
+        const here = d.path === pl.path || d.path.startsWith(pl.path === "/" ? "/" : `${pl.path}/`);
+        return `<button type="button" class="fm-pick-place" data-fmpicknav="${esc(pl.path)}" title="${esc(pl.path)}"${here ? ' aria-current="true"' : ""}>${esc(pl.label)}</button>`;
+      }).join("");
       const canDrop = !!d.writable;
       const srcParent = srcPath.includes("/") ? srcPath.slice(0, srcPath.lastIndexOf("/")) || "/" : "/";
       const sameDir = d.path === srcParent;
@@ -8630,6 +8677,7 @@
       const okTip = !canDrop ? "Hierher nicht möglich" : (move && sameDir) ? "Schon im Zielordner" : "";
       const okDis = !canDrop || (move && sameDir);
       $("#fm-dlg-body").innerHTML = `
+        ${places ? `<div class="fm-pick-places" id="fm-pick-places">${places}</div>` : ""}
         <p class="fm-pick-crumb">${crumbs}</p>
         <div class="fm-pick-list" id="fm-pick-list">${rows || `<p class="fm-pick-empty">Keine Unterordner</p>`}</div>
         <p class="muted" style="font-size:12px;margin:0 0 10px">Aktuell: <b>${esc(d.path)}</b></p>
@@ -8637,9 +8685,9 @@
           <button type="button" class="btn" data-fmd="close">Abbrechen</button>
           <button type="button" class="btn primary" id="fm-pick-ok"${okDis ? " disabled" : ""} title="${esc(okTip)}">${esc(okLbl)}</button>
         </div>`;
-      const lst = $("#fm-pick-list");
-      if (lst) {
-        lst.addEventListener("click", (ev) => {
+      for (const box of [$("#fm-pick-list"), $("#fm-pick-places")]) {
+        if (!box) continue;
+        box.addEventListener("click", (ev) => {
           const row = ev.target.closest("[data-fmpicknav]");
           if (!row || !fm.pick) return;
           fm.pick.path = row.dataset.fmpicknav;
@@ -8651,12 +8699,10 @@
         okBtn.addEventListener("click", async () => {
           okBtn.disabled = true; okBtn.textContent = "…";
           const dest = fm.pick ? fm.pick.path : d.path;
-          try {
-            await api(`/api/v1/files/${move ? "move" : "copy"}`, { method: "POST", body: JSON.stringify({ paths: [srcPath], dest }), timeoutMs: 120000 });
-            fm.pick = null;
-            fmClose();
-            fmFollow();
-          } catch (er) { toast(er.message, "error"); fmClose(); fm.pick = null; }
+          const started = await fmTransfer(move, [srcPath], dest);
+          fm.pick = null;
+          fmClose();
+          if (started) fmFollow();
         });
       }
     };
@@ -8855,15 +8901,12 @@
   const fmPaste = async () => {
     const c = fm.clip;
     if (!c) return;
-    try {
-      await api(`/api/v1/files/${c.move ? "move" : "copy"}`, { method: "POST", body: JSON.stringify({ paths: c.paths, dest: fm.path }), timeoutMs: 120000 });
-      if (!c.move) fm.clip = null;
-      fmRenderBars();
-      fmFollow();
-    } catch (e) {
-      const names = e.data && Array.isArray(e.data.conflicts) && e.data.conflicts.length ? ` (${e.data.conflicts.slice(0, 5).join(", ")})` : "";
-      toast(`${e.message}${names}`, "error");
-    }
+    const started = await fmTransfer(c.move, c.paths, fm.path);
+    fmClose();
+    if (!started) return;
+    if (!c.move) fm.clip = null;
+    fmRenderBars();
+    fmFollow();
   };
 
   /* Hochladen: eine Datei nach der anderen, mit Fortschritt */

@@ -5,7 +5,9 @@
 // As the web app's Profil and Credits pages. ✕ on a built-in picture makes it the profile picture
 // at once (the files are built here, avatar_build.cpp, and sent as the web page sends them), □ gets
 // the one before back, △ changes the name on the on-screen keyboard. Pictures of one's own come
-// from a USB drive or /data/PS5-Cooling-Center/Profilbilder (31.10.2026). The export and import of
+// from a USB drive or /data/PS5-Cooling-Center/Profilbilder (31.10.2026). The Konto view does what
+// the web page's two account cards do: an offline account (the name asked on the keyboard), the
+// fake sign-in and everything back, each at ✕ at once (04.11.2026). The export and import of
 // profiles and the links of the Danke page stay in the web app.
 
 #include "ps5cc/covers.hpp"
@@ -31,11 +33,20 @@ using gfx::Rect;
 enum View
 {
     kProfile = 0,
-    kThanks = 1,
+    kAccount = 1,
+    kThanks = 2,
+};
+
+enum AccountRow
+{
+    kRowActivate = 0,
+    kRowFakeSignin = 1,
+    kRowRestore = 2,
 };
 
 constexpr float kInfoW = 560.0f;
 constexpr float kGridX = kLeftX + kInfoW + 30.0f;
+constexpr float kAccountH = 3.0f * 104.0f + 2.0f * 8.0f + 28.0f;
 const Rect kDialog{360.0f, 150.0f, 1200.0f, 760.0f};
 
 // The first letter (a whole UTF-8 character), as the web page's initial.
@@ -55,8 +66,8 @@ class ProfilePage final : public Page
     void init(const ui::Theme &theme) override
     {
         theme_ = theme;
-        style_subtabs(views_, theme, 2);
-        views_.set_tabs({{"Profil"}, {"Danke"}});
+        style_subtabs(views_, theme, 3);
+        views_.set_tabs({{"Profil"}, {"Konto"}, {"Danke"}});
         views_.set_active(kProfile, true);
 
         grid_.style.theme = theme;
@@ -79,6 +90,17 @@ class ProfilePage final : public Page
                                   Color{1.0f, 1.0f, 1.0f, pic.alpha}, radius);
         };
         grid_.set_bounds({kGridX, kTop + 10.0f, 1824.0f - kGridX, kBottom - kTop - 10.0f});
+
+        account_.style.theme = theme;
+        account_.style.panel = true;
+        account_.style.row_height = 104.0f;
+        account_.style.gap = 8.0f;
+        account_.style.title_size = 28.0f;
+        account_.style.subtitle_size = 20.0f;
+        account_.style.value_size = 24.0f;
+        account_.style.entrance_step = 0.0f;
+        account_.style.highlight.kind = ui::HighlightKind::bar;
+        account_.set_bounds({kLeftX, kTop + 10.0f, 1824.0f - kLeftX, kAccountH});
 
         thanks_.style.theme = theme;
         thanks_.style.panel = true;
@@ -139,6 +161,8 @@ class ProfilePage final : public Page
     void absorb(const Snapshot &data) override
     {
         profile_ = data.profile;
+        account_info_ = data.account;
+        fill_account();
         revision_ = data.avatar_revision;
         busy_ = data.avatar_busy;
         std::string key;
@@ -177,6 +201,7 @@ class ProfilePage final : public Page
     void enter() override
     {
         grid_.enter();
+        account_.enter();
         thanks_.enter();
     }
 
@@ -208,7 +233,10 @@ class ProfilePage final : public Page
                 }
                 naming_ = false;
                 feedback.play(audio::Cue::select);
-                source().set_username(trimmed);
+                if (naming_account_)
+                    source().account_action("activate", trimmed);
+                else
+                    source().set_username(trimmed);
             }
             return;
         }
@@ -220,6 +248,8 @@ class ProfilePage final : public Page
                 view_ = views_.active();
                 if (view_ == kProfile)
                     grid_.enter();
+                else if (view_ == kAccount)
+                    account_.enter();
                 else
                     thanks_.enter();
             }
@@ -230,6 +260,11 @@ class ProfilePage final : public Page
             thanks_.handle(input, feedback);
             return;
         }
+        if (view_ == kAccount)
+        {
+            handle_account(input, feedback);
+            return;
+        }
         if (input.is_pressed(Action::north))
         {
             if (!profile_.valid || !profile_.can_rename)
@@ -238,6 +273,7 @@ class ProfilePage final : public Page
                 return;
             }
             naming_ = true;
+            naming_account_ = false;
             name_ = profile_.username;
             keys_.style.max_length = std::max(profile_.name_max, 1);
             keys_.set_layout(0);
@@ -278,6 +314,7 @@ class ProfilePage final : public Page
     {
         views_.update(dt);
         grid_.update(dt);
+        account_.update(dt);
         thanks_.update(dt);
         clock_ += dt;
         if (naming_)
@@ -293,6 +330,11 @@ class ProfilePage final : public Page
         if (view_ == kThanks)
         {
             thanks_.draw(canvas);
+            return;
+        }
+        if (view_ == kAccount)
+        {
+            draw_account(canvas);
             return;
         }
         gfx::DrawList &list = canvas.list;
@@ -359,7 +401,8 @@ class ProfilePage final : public Page
         ui::Painter paint(list, fonts, theme_);
         solid_floor(list, panel, theme_.radius_card);
         paint.panel(panel);
-        ui::text(list, fonts.display, "Anzeigename", panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
+        ui::text(list, fonts.display, naming_account_ ? "Name des Offline-Kontos" : "Anzeigename",
+                 panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
         ui::text(list, fonts.regular,
                  "höchstens " + std::to_string(std::max(profile_.name_max, 1)) + " Zeichen",
                  panel.x + panel.w - 40.0f, panel.y + 66.0f, 21.0f, kMuted, gfx::Align::right);
@@ -385,12 +428,110 @@ class ProfilePage final : public Page
             out[n++] = {ui::Button::dpad, "Blättern"};
             return n;
         }
+        if (view_ == kAccount)
+        {
+            out[n++] = {ui::Button::cross, "Ausführen"};
+            return n;
+        }
         out[n++] = {ui::Button::cross, "Als Profilbild"};
         out[n++] = {ui::Button::triangle, "Name ändern"};
         return n;
     }
 
   private:
+    // The three rows of the Konto view, rebuilt only when what they say changes (a rebuild starts
+    // the list's entrance again).
+    void fill_account()
+    {
+        const std::string key = std::to_string(account_info_.loaded) +
+                                std::to_string(account_info_.activated) +
+                                std::to_string(account_info_.fakesignin) + account_info_.username;
+        if (key == account_key_)
+            return;
+        account_key_ = key;
+        std::vector<ui::ListItem> rows(3);
+        rows[kRowActivate].title = "Offline-Konto aktivieren";
+        rows[kRowActivate].subtitle =
+            "Setzt Name und Konto-Kennung in der Registrierung der Konsole.";
+        rows[kRowActivate].value = !account_info_.loaded     ? "…"
+                                   : account_info_.activated ? "aktiv: " + account_info_.username
+                                                             : "nicht aktiv";
+        rows[kRowActivate].tag = kRowActivate;
+        rows[kRowFakeSignin].title = "Fake-Anmeldung schreiben";
+        rows[kRowFakeSignin].subtitle = "Schickt np-fake-signin an den Payload-Lader: Die Konsole "
+                                        "sieht das Konto als angemeldet.";
+        rows[kRowFakeSignin].value = !account_info_.loaded      ? "…"
+                                     : account_info_.fakesignin ? "vorhanden"
+                                                                : "keine";
+        rows[kRowFakeSignin].tag = kRowFakeSignin;
+        rows[kRowRestore].title = "Alles zurücksetzen";
+        rows[kRowRestore].subtitle =
+            "Löscht auth.dat und config.dat und leert die Einträge beider Funktionen.";
+        rows[kRowRestore].tag = kRowRestore;
+        const int keep = account_.focus();
+        account_.set_items(rows);
+        account_.set_focus(std::clamp(keep, 0, 2));
+    }
+
+    void handle_account(const InputFrame &input, ui::Feedback &feedback)
+    {
+        if (account_.handle(input, feedback) != ui::Event::activated)
+            return;
+        if (!profile_.valid)
+        {
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        switch (account_.focus())
+        {
+        case kRowActivate:
+            naming_ = true;
+            naming_account_ = true;
+            name_ = account_info_.activated && !account_info_.username.empty()
+                        ? account_info_.username
+                        : profile_.username;
+            keys_.style.max_length = std::max(profile_.name_max, 1);
+            keys_.set_layout(0);
+            keys_.set_length(static_cast<int>(name_.size()));
+            keys_.set_active(true);
+            keys_.enter();
+            break;
+        case kRowFakeSignin:
+            feedback.play(audio::Cue::select);
+            source().account_action("fakesignin", {});
+            break;
+        default:
+            feedback.play(audio::Cue::select);
+            source().account_action("restore", {});
+            break;
+        }
+    }
+
+    void draw_account(ui::Canvas &canvas) const
+    {
+        account_.draw(canvas);
+        gfx::DrawList &list = canvas.list;
+        const ui::Fonts &fonts = canvas.fonts;
+        const float top = kTop + 10.0f + kAccountH + 24.0f;
+        const char *note =
+            profile_.valid
+                ? "Zuerst das Offline-Konto aktivieren, danach die Fake-Anmeldung schreiben. Die "
+                  "Fake-Anmeldung braucht den Payload-Lader (Port 9021). Die Konsole zeigt eine "
+                  "Meldung, sobald sie fertig ist."
+                : "Kein Benutzer angemeldet: Ohne Benutzer lässt sich kein Konto anlegen.";
+        const std::vector<std::string> lines =
+            fonts.regular.font->wrap(note, 20.0f, 1824.0f - kLeftX - 60.0f);
+        ui::Painter paint(list, fonts, theme_);
+        paint.panel(
+            {kLeftX, top, 1824.0f - kLeftX, 28.0f * static_cast<float>(lines.size()) + 36.0f});
+        float y = top + 42.0f;
+        for (const std::string &line : lines)
+        {
+            ui::text(list, fonts.regular, line, kLeftX + 30.0f, y, 20.0f, kMuted);
+            y += 28.0f;
+        }
+    }
+
     static ui::GridWrap GridWrapFlow()
     {
         return ui::GridWrap::flow;
@@ -446,10 +587,14 @@ class ProfilePage final : public Page
     ui::Theme theme_;
     ui::TabBar views_;
     ui::GridView grid_;
+    ui::ListView account_;
     ui::ListView thanks_;
     ui::Keyboard keys_;
     int view_ = kProfile;
     ProfileInfo profile_;
+    AccountInfo account_info_;
+    std::string account_key_ = "\x01";
+    bool naming_account_ = false;
     int revision_ = 0;
     bool busy_ = false;
     std::string avatars_key_ = "\x01";

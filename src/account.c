@@ -171,7 +171,7 @@ offact_deactivate(int slot)
 static int
 np_path(uint32_t uid, const char *rel, char *out, size_t out_size)
 {
-  int n = snprintf(out, out_size, "%s/0x%08X/%s", NP_HOME_ROOT, uid, rel);
+  int n = snprintf(out, out_size, "%s/%x/%s", NP_HOME_ROOT, uid, rel);
   return (n > 0 && (size_t)n < out_size) ? 0 : -1;
 }
 
@@ -205,8 +205,10 @@ ps5tm_account_status(void)
   /* offline activation: slot 1 key */
   char name[PS5TM_USERNAME_MAX + 1];
   memset(name, 0, sizeof(name));
-  if(sceRegMgrGetStr(KEY_ACCOUNT_NAME(1), name, sizeof(name)) == 0 && name[0])
+  if(sceRegMgrGetStr(KEY_ACCOUNT_NAME(1), name, sizeof(name)) == 0 && name[0]) {
     s.activated = 1;
+    memcpy(s.username, name, sizeof(s.username));
+  }
 
   uint64_t aid = 0;
   sceRegMgrGetBin(KEY_ACCOUNT_ID(1), &aid, sizeof(aid));

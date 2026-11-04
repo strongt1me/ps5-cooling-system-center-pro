@@ -37,8 +37,12 @@ SO WIRD ES BENUTZT
    Web-Oberfläche.
 3. Im Browser aufrufen:  http://<PS5-IP>:8086/
 
-Die frühere Startmenü-Kachel (PSCC69690) wird nicht mehr gebraucht und nicht
-mehr angelegt; eine gelöschte kommt nicht zurück.
+Wer nur die ELF sendet und keine der beiden Kacheln hat: Etwa eine Minute nach
+dem Start legt die App einmal selbst eine Kachel unter "Medien" an, die die
+Weboberfläche der laufenden App öffnet (sie startet die App nicht; nach jedem
+Neustart der Konsole muss die ELF weiter gesendet werden). Das passiert nur,
+wenn gerade kein Spiel läuft, und nur einmal: Eine später gelöschte Kachel kommt
+nicht von allein zurück.
 
 Wichtig: Immer nur EINE Instanz laufen lassen. Zwei Instanzen regeln den
 Lüfter gleichzeitig und stören sich. Eine alte Instanz lässt sich auf der

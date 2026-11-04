@@ -160,7 +160,7 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | POST | `/api/v1/files/upload?path=&name=` | Rohdaten als neue Datei im Ordner `path` (nie überschreiben; 409 wenn der Name vergeben ist, 403 außerhalb der Laufwerke und `/data`) |
 | POST | `/api/v1/files/mkdir` | `{path, name}`: neuer Ordner |
 | POST | `/api/v1/files/rename` | `{path, name}`: neuer Name im selben Ordner |
-| POST | `/api/v1/files/copy`, `/api/v1/files/move` | `{paths[≤100], dest}`: startet den Auftrag; 409 mit `conflicts[]`, wenn Namen im Ziel vergeben sind, oder bei zu wenig Platz |
+| POST | `/api/v1/files/copy`, `/api/v1/files/move` | `{paths[≤100], dest, conflict?}`: startet den Auftrag; 409 (`code: exists`) mit `conflicts[]`, wenn Namen im Ziel vergeben sind und `conflict` fehlt, oder bei zu wenig Platz. `conflict` wählt für alle vergebenen Namen: `replace` (eine Datei wird neben die alte geschrieben und am Ende darübergelegt; ein Ordner wird zusammengeführt, gleichnamige Dateien darin ersetzt; 409 `refused`, wenn Datei und Ordner nicht zueinander passen; derselbe Eintrag wird ausgelassen), `keep` (der neue Eintrag heißt `name (2)`, `name (3)` …, bei Dateien vor der Endung) oder `skip` (der Eintrag wird ausgelassen) |
 | POST | `/api/v1/files/delete/plan` | `{paths}`: `{items, folders, files, bytes, paths, confirm}`; `confirm` ist das Kennwort (einmal, 10 min, genau diese Liste) |
 | POST | `/api/v1/files/delete` | `{paths, confirm}`: startet das Löschen (403 ohne gültiges Kennwort) |
 | GET | `/api/v1/files/job` | der Auftrag: `{state (idle\|counting\|copying\|deleting\|done\|failed\|cancelled), active, kind (copy\|move\|delete), dest, current, error, note, percent, bytes_total, bytes_done, files_total, files_done, items, items_done, skipped, elapsed_s, finished_ago_s}` |
@@ -169,6 +169,10 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET/PUT | `/api/v1/games` | Spielprofile (Regeln je Spiel) lesen / schreiben |
 | GET | `/api/v1/games/export` | Spielprofile als JSON exportieren |
 | POST | `/api/v1/games/import` | Spielprofile aus JSON importieren |
+| GET | `/api/v1/profile/account/status` | Offline-Konto und Fake-Anmeldung des Benutzers: `valid`, `uid`, `activated`, `fakesignin`, `account_id`, `username` |
+| POST | `/api/v1/profile/account/activate` | Offline-Konto für Platz 1 setzen (`{"username":"…"}`, höchstens 16 Zeichen) |
+| POST | `/api/v1/profile/account/fakesignin` | die eingebettete np-fake-signin ELF (earthonion v1.3) an den Payload-Lader 127.0.0.1:9021 schicken; ohne Körper |
+| POST | `/api/v1/profile/account/restore` | auth.dat und config.dat löschen, die Registrierungseinträge beider Funktionen leeren |
 | POST | `/api/v1/profile/username` | Anzeigenamen des Benutzers ändern (`{"name":"…"}`) |
 | GET | `/api/v1/profile/avatar/current` | aktuelles Profilbild (PNG) |
 | POST | `/api/v1/profile/avatar/file?name=avatar.png` | eine Datei des Profilbild-Satzes als Rohdaten in den Zwischenbereich laden (`avatar64.dds` … `avatar440.dds`, `picture64.dds` … `picture440.dds`, `avatar.png`, `picture.png`, `online.json`) |

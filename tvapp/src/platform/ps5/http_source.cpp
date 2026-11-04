@@ -453,6 +453,22 @@ void HttpSource::restore_avatar()
 {
     push({Request::Kind::avatar_restore, 0, {}, "{}"});
 }
+void HttpSource::account_action(const std::string &action, const std::string &name)
+{
+    std::string json = "{}";
+    if (action == "activate")
+    {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "username", name.c_str());
+        char *text = cJSON_PrintUnformatted(o);
+        cJSON_Delete(o);
+        if (text == nullptr)
+            return;
+        json = text;
+        cJSON_free(text);
+    }
+    push({Request::Kind::account_post, 0, action, json});
+}
 void HttpSource::klog_save(const std::string &text)
 {
     int tz = 0; // the file is named after the local time, as the web page's tz
@@ -472,6 +488,27 @@ void HttpSource::files_open(const std::string &path)
 }
 void HttpSource::files_post(const std::string &route, const std::string &json)
 {
+    push({Request::Kind::fs_post, 0, route, json});
+}
+void HttpSource::files_conflict(const std::string &choice)
+{
+    std::string route;
+    std::string json;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        route = std::move(pending_conflict_route_);
+        json = std::move(pending_conflict_json_);
+        pending_conflict_route_.clear();
+        pending_conflict_json_.clear();
+        data_.fs_conflict.names.clear();
+        ++data_.fs_conflict.seq;
+        ++data_.serial;
+    }
+    // the same request again, with the choice added before its closing brace
+    const std::size_t close = json.find_last_of('}');
+    if (choice.empty() || route.empty() || close == std::string::npos)
+        return;
+    json.insert(close, ",\"conflict\":\"" + choice + "\"");
     push({Request::Kind::fs_post, 0, route, json});
 }
 void HttpSource::files_delete(const std::vector<std::string> &paths)
@@ -1971,6 +2008,31 @@ void HttpSource::handle(const Request &request)
             notice(Notice::Kind::error, "Nicht zurückgeholt",
                    message_of(body, "Die App hat nicht geantwortet."));
         break;
+    case Request::Kind::account_post:
+    {
+        const std::string &action = request.id;
+        const bool ok = exchange("POST", ("/api/v1/profile/account/" + action).c_str(),
+                                 request.text, &status, &body, 20) == Net::ok &&
+                        status < 300;
+        const bool activate = action == "activate";
+        const bool fake = action == "fakesignin";
+        if (ok)
+            notice(Notice::Kind::success,
+                   activate ? "Offline-Konto aktiviert"
+                   : fake   ? "Fake-Anmeldung gesendet"
+                            : "Konto zurückgesetzt",
+                   activate ? "Die Konsole zeigt jetzt diesen Namen."
+                   : fake   ? "Die Meldung der Konsole erscheint gleich."
+                            : "");
+        else
+            notice(Notice::Kind::error,
+                   activate ? "Offline-Konto nicht aktiviert"
+                   : fake   ? "Fake-Anmeldung nicht gesendet"
+                            : "Nicht zurückgesetzt",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_profile();
+        break;
+    }
     case Request::Kind::klog_record:
     {
         cJSON *root = cJSON_CreateObject();
@@ -2005,7 +2067,35 @@ void HttpSource::handle(const Request &request)
         if (net != Net::ok || status >= 300)
         {
             std::string msg = message_of(body, "Die App hat nicht geantwortet.");
-            // the names that are in the way, as the web page lists them
+            // the names that are in the way: the screen asks what to do with them
+            std::vector<std::string> taken;
+            if (status == 409 && (request.id == "copy" || request.id == "move"))
+            {
+                if (cJSON *root = cJSON_Parse(body.c_str()))
+                {
+                    if (str(root, "code") == "exists")
+                    {
+                        const cJSON *c = nullptr;
+                        cJSON_ArrayForEach(c, cJSON_GetObjectItemCaseSensitive(root, "conflicts"))
+                        {
+                            if (cJSON_IsString(c) && c->valuestring != nullptr)
+                                taken.emplace_back(c->valuestring);
+                        }
+                    }
+                    cJSON_Delete(root);
+                }
+            }
+            if (!taken.empty())
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                pending_conflict_route_ = request.id;
+                pending_conflict_json_ = request.text;
+                data_.fs_conflict.names = std::move(taken);
+                data_.fs_conflict.move = request.id == "move";
+                ++data_.fs_conflict.seq;
+                ++data_.serial;
+                break;
+            }
             if (cJSON *root = cJSON_Parse(body.c_str()))
             {
                 const cJSON *c = nullptr;
@@ -3458,9 +3548,24 @@ void HttpSource::poll_profile()
             cJSON_Delete(root);
         }
     }
+    AccountInfo account;
+    if (exchange("GET", "/api/v1/profile/account/status", {}, &status, &body, 6) == Net::ok &&
+        status == 200)
+    {
+        if (cJSON *root = cJSON_Parse(body.c_str()))
+        {
+            account.loaded = true;
+            account.activated = flag(root, "activated");
+            account.fakesignin = flag(root, "fakesignin");
+            account.username = str(root, "username");
+            cJSON_Delete(root);
+        }
+    }
     std::lock_guard<std::mutex> lock(mutex_);
     if (info.loaded)
         data_.profile = info;
+    if (account.loaded)
+        data_.account = std::move(account);
     if (!avatars.empty())
         data_.avatars = std::move(avatars);
     ++data_.serial;

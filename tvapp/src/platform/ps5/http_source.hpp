@@ -70,10 +70,12 @@ class HttpSource final : public Source
     void apply_avatar(const std::string &file) override;
     void apply_own_avatar(const std::string &path) override;
     void restore_avatar() override;
+    void account_action(const std::string &action, const std::string &name) override;
     void klog_save(const std::string &text) override;
     void klog_files_clear() override;
     void files_open(const std::string &path) override;
     void files_post(const std::string &route, const std::string &json) override;
+    void files_conflict(const std::string &choice) override;
     void files_delete(const std::vector<std::string> &paths) override;
     void files_view(const std::string &path) override;
     void files_size(const std::string &path) override;
@@ -127,6 +129,7 @@ class HttpSource final : public Source
             profile_name,
             avatar_apply,
             avatar_restore,
+            account_post,
             klog_save,
             klog_clear,
             fs_open,
@@ -203,6 +206,9 @@ class HttpSource final : public Source
 
     std::mutex mutex_;
     Snapshot data_;
+    std::string pending_conflict_route_; // the copy or move the app refused for names in the way
+                                         // (under mutex_)
+    std::string pending_conflict_json_;
     std::deque<Notice> notices_;
     std::deque<Request> requests_;
     std::string extras_id_; // the game whose extras window is open (under mutex_)

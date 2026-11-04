@@ -1469,10 +1469,12 @@ installiert, ohne sie vorher auf ein Laufwerk der Konsole zu kopieren. Datei wä
 
 ## Homescreen-Kachel (veraltet)
 
-> **Nicht mehr in Gebrauch:** Die Oberfläche bietet „Kachel installieren“ seit 1.74.1 nicht mehr an, und seit 1.75.2
-> versucht die App auch beim Start nicht mehr, die Kachel anzulegen (bis 1.75.1 tat sie das noch einmal je Version). Nur
-> `POST /api/v1/tile/ensure` legt sie auf Wunsch noch an; die Notiz `tile-auto` im Datenordner wird nicht mehr gelesen. Ihre Aufgabe übernehmen `FAKE86921` und `FAKE86922` (nächster Abschnitt), die die App
-> selbst starten. Der Abschnitt bleibt als Beschreibung der früheren Technik stehen.
+> **Nur für ELF ohne Kachel:** Die Oberfläche bietet „Kachel installieren“ seit 1.74.1 nicht mehr an. Seit 1.76.1 legt die
+> App die Kachel wieder selbst an, aber nur dort, wo sie sonst nichts zum Starten hätte: etwa eine Minute nach dem Start,
+> wenn weder `PSCC69690` noch ein Ordner `FAKE86921`/`FAKE86922` in `/data/homebrew` da ist und gerade kein Spiel läuft.
+> Das geschieht **einmal**: Die Notiz `tile-auto` im Datenordner hält `ok` (nie wieder) oder `fail <Version>` (erst mit der
+> nächsten Version wieder) fest. `POST /api/v1/tile/ensure` legt sie weiter auf Wunsch an. Wer `FAKE86921` oder
+> `FAKE86922` nutzt, bekommt sie nicht, denn diese Kacheln starten die App selbst (nächster Abschnitt).
 
 Die Kachel (Title-ID `PSCC69690`, Bereich **Medien**) enthält selbst kein
 Programm: `eboot.bin` ist 0 Byte groß, und `deeplinkUri` in `sce_sys/param.json`

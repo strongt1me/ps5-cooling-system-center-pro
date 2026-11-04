@@ -1494,6 +1494,12 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
   cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--hairline); }
 .fm-pick-row:last-child { border-bottom: 0; }
 .fm-pick-row:hover { background: var(--inset); }
+.fm-pick-places { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.fm-pick-place { border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); border-radius: 999px;
+  padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.fm-pick-place:hover { border-color: var(--accent); }
+.fm-pick-place[aria-current="true"] { background: var(--accent); border-color: transparent; color: #fff; }
+.fm-conflict-list { margin: 0 0 10px; padding-left: 20px; font-size: 13px; }
 .fm-pick-empty { padding: 12px 14px; font-size: 13px; color: var(--ink-2); }
 .fm-empty { padding: 18px 6px; }
 .fm-field { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; font-size: 13px; color: var(--ink-2); }

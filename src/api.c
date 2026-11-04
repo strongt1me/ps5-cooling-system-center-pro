@@ -2634,13 +2634,15 @@ static void
 handle_account_status(int fd)
 {
   ps5tm_account_status_t s = ps5tm_account_status();
-  char buf[256];
+  char esc[6 * PS5TM_USERNAME_MAX + 8];
+  json_escape(s.username, esc, sizeof(esc));
+  char buf[384];
   snprintf(buf, sizeof(buf),
            "{\"valid\":%s,\"uid\":\"0x%08X\",\"activated\":%s,"
-           "\"fakesignin\":%s,\"account_id\":\"0x%016llX\"}",
+           "\"fakesignin\":%s,\"account_id\":\"0x%016llX\",\"username\":\"%s\"}",
            JB(s.valid), s.uid,
            JB(s.activated), JB(s.fakesignin),
-           (unsigned long long)s.account_id);
+           (unsigned long long)s.account_id, esc);
   ps5tm_http_send_json(fd, 200, buf);
 }
 

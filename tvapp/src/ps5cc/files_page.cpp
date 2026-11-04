@@ -156,6 +156,10 @@ enum MenuTag
     kSort,
     kCancel,
     kReload,
+    kConflictReplace = 40,
+    kConflictKeep,
+    kConflictSkip,
+    kConflictCancel,
 };
 
 enum Dialog
@@ -247,6 +251,12 @@ class FilesPage final : public Page
     {
         places_ = data.fs_places;
         job_ = data.fs_job;
+        if (data.fs_conflict.seq != conflict_seq_)
+        {
+            conflict_seq_ = data.fs_conflict.seq;
+            conflict_names_ = data.fs_conflict.names;
+            conflict_ask_ = !conflict_names_.empty();
+        }
         sizes_ = data.fs_sizes;
         tz_ = data.config.tz_offset_min;
         if (data.fs_list.seq != list_seq_)
@@ -290,10 +300,21 @@ class FilesPage final : public Page
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (conflict_ask_ && !menu_.is_open() && dialog_ == kNone)
+        {
+            conflict_ask_ = false;
+            open_conflict_menu(feedback);
+        }
         if (menu_.is_open())
         {
             if (menu_.handle(input, feedback) == ui::Event::activated)
                 run(menu_.items()[static_cast<std::size_t>(menu_.focus())].tag, feedback);
+            // closed without an answer (back): the copy or move is given up
+            if (conflict_menu_ && !menu_.is_open())
+            {
+                conflict_menu_ = false;
+                source().files_conflict({});
+            }
             return;
         }
         if (dialog_ == kName)
@@ -710,6 +731,31 @@ class FilesPage final : public Page
         menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
     }
 
+    // Names the target already has: as the Prospero Manager asks, replace or keep both (or leave
+    // them out).
+    void open_conflict_menu(ui::Feedback &feedback)
+    {
+        const std::string what =
+            conflict_names_.size() == 1
+                ? "\xE2\x80\x9E" + conflict_names_[0] + "\xE2\x80\x9C gibt es im Ziel schon"
+                : std::to_string(conflict_names_.size()) + " Namen gibt es im Ziel schon";
+        ui::MenuItem sep;
+        sep.separator = true;
+        std::vector<ui::MenuItem> items;
+        items.push_back(item(what, 0, true));
+        items.push_back(sep);
+        items.push_back(item("Ersetzen", kConflictReplace));
+        items.push_back(item("Beide behalten", kConflictKeep));
+        items.push_back(item("\xC3\x9C"
+                             "berspringen",
+                             kConflictSkip));
+        items.push_back(item("Abbrechen", kConflictCancel));
+        menu_.set_items(items);
+        menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
+        menu_.set_focus(3);
+        conflict_menu_ = true;
+    }
+
     void open_page_menu(ui::Feedback &feedback)
     {
         const bool inside = !folder_.path.empty();
@@ -802,6 +848,16 @@ class FilesPage final : public Page
             break;
         case kCancel:
             source().files_post("job/cancel", "{}");
+            break;
+        case kConflictReplace:
+        case kConflictKeep:
+        case kConflictSkip:
+        case kConflictCancel:
+            conflict_menu_ = false;
+            source().files_conflict(tag == kConflictReplace ? "replace"
+                                    : tag == kConflictKeep  ? "keep"
+                                    : tag == kConflictSkip  ? "skip"
+                                                            : "");
             break;
         case kReload:
             source().files_open(folder_.path);
@@ -1290,6 +1346,10 @@ class FilesPage final : public Page
     ui::ListView list_;
     ui::DetailList info_;
     ui::Menu menu_;
+    std::uint64_t conflict_seq_ = 0;
+    std::vector<std::string> conflict_names_;
+    bool conflict_ask_ = false;  // a question is waiting to be asked
+    bool conflict_menu_ = false; // the menu on screen is that question
     ui::Keyboard keys_;
     tween::Spring shown_;
     float clock_ = 0.0f;

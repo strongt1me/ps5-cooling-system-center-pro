@@ -32,7 +32,7 @@ int ps5tm_thread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*s
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.76.0"
+#define PS5TM_VERSION        "1.76.1"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -1089,6 +1089,7 @@ typedef struct {
   int      activated;   /* offline slot 1 account is set */
   int      fakesignin;  /* auth.dat/config.dat exist */
   uint64_t account_id;
+  char     username[PS5TM_USERNAME_MAX + 1]; /* name of the offline account, empty when none */
 } ps5tm_account_status_t;
 
 /* Deterministic account-id from a name (OffAct FNV hash). */

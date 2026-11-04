@@ -1061,6 +1061,32 @@ class MockSource final : public Source
         changed();
     }
 
+    void account_action(const std::string &action, const std::string &name) override
+    {
+        AccountInfo &a = data_.account;
+        a.loaded = true;
+        if (action == "activate")
+        {
+            a.activated = true;
+            a.username = name;
+            notice(Notice::Kind::success, "Offline-Konto aktiviert",
+                   "Die Konsole zeigt jetzt diesen Namen.");
+        }
+        else if (action == "fakesignin")
+        {
+            a.fakesignin = true;
+            notice(Notice::Kind::success, "Fake-Anmeldung gesendet",
+                   "Die Meldung der Konsole erscheint gleich.");
+        }
+        else
+        {
+            a = AccountInfo{};
+            a.loaded = true;
+            notice(Notice::Kind::success, "Konto zurückgesetzt");
+        }
+        changed();
+    }
+
     void apply_avatar(const std::string &file) override
     {
         (void)file;
@@ -1116,8 +1142,27 @@ class MockSource final : public Source
         changed();
     }
 
+    void files_conflict(const std::string &choice) override
+    {
+        data_.fs_conflict.names.clear();
+        ++data_.fs_conflict.seq;
+        if (!choice.empty())
+            files_post(data_.fs_conflict.move ? "move" : "copy",
+                       "{\"conflict\":\"" + choice + "\"}");
+        changed();
+    }
+
     void files_post(const std::string &route, const std::string &json) override
     {
+        if ((route == "copy" || route == "move") && json.find("\"conflict\"") == std::string::npos)
+        {
+            // the app refuses with the names in the way, the screen asks
+            data_.fs_conflict.names = {"eboot.bin", "sce_sys"};
+            data_.fs_conflict.move = route == "move";
+            ++data_.fs_conflict.seq;
+            changed();
+            return;
+        }
         if (route == "copy" || route == "move")
         {
             FsJob &j = data_.fs_job;
@@ -2293,6 +2338,9 @@ class MockSource final : public Source
         data_.profile.model = "PS5 Pro (CFI-7021)";
         data_.profile.name_max = 16;
         data_.profile.can_rename = true;
+        data_.account.loaded = true;
+        data_.account.activated = true;
+        data_.account.username = "Spieler1";
         data_.avatars = {
             {"01-neon-portraet.jpg", "Neon-Porträt"}, {"02-neon-fuchs.jpg", "Neon-Fuchs"},
             {"03-neon-roboter.jpg", "Neon-Roboter"},  {"04-neon-pilz.jpg", "Neon-Pilz"},

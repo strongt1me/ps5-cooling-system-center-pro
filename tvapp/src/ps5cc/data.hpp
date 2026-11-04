@@ -649,6 +649,16 @@ struct FsJob
     int finished_ago_s = -1;
 };
 
+// Names the target of a copy or move already has (the app refused with them, 409 "exists"): the
+// screen asks what to do (replace, keep both, skip) and the answer goes back through
+// Source::files_conflict.
+struct FsConflict
+{
+    std::uint64_t seq = 0; // goes up with every new question and every answer
+    std::vector<std::string> names;
+    bool move = false;
+};
+
 // A text file's beginning (GET /api/v1/files/view).
 struct FsView
 {
@@ -942,6 +952,16 @@ struct ProfileInfo
     bool can_rename = false;
 };
 
+// GET /api/v1/profile/account/status: the offline account and the fake sign-in of the signed-in
+// user.
+struct AccountInfo
+{
+    bool loaded = false;
+    bool activated = false;  // an offline account is set (slot 1)
+    bool fakesignin = false; // auth.dat exists
+    std::string username;    // the offline account's name
+};
+
 // /avatars/index.json: a built-in profile picture (web/avatars, thumbnails in /avatars/t).
 struct AvatarChoice
 {
@@ -1055,6 +1075,7 @@ struct Snapshot
     SystemData system_data;
     KlogRecord klog_record;
     ProfileInfo profile;
+    AccountInfo account;
     std::vector<AvatarChoice> avatars;
     std::vector<OwnPicture> own_pictures;
     bool own_pictures_loaded = false;
@@ -1065,6 +1086,7 @@ struct Snapshot
     std::vector<FsPlace> fs_places;
     FsList fs_list;
     FsJob fs_job;
+    FsConflict fs_conflict;
     FsView fs_view;
     std::map<std::string, FsSize> fs_sizes; // by path
     Playtime playtime;
@@ -1186,12 +1208,17 @@ class Source
     // The same with a picture of one's own, by its path on the console.
     virtual void apply_own_avatar(const std::string &path) = 0;
     virtual void restore_avatar() = 0;
+    // POST /api/v1/profile/account/<action>: "activate" (needs the name), "fakesignin" (the app
+    // sends np-fake-signin to the loader) and "restore" (everything back).
+    virtual void account_action(const std::string &action, const std::string &name) = 0;
     // POST /api/v1/klog/save (the text as it is, a few MB at most) and /klog/files/clear (all but
     // the recording that runs).
     virtual void klog_save(const std::string &text) = 0;
     virtual void klog_files_clear() = 0;
     virtual void files_open(const std::string &path) = 0;
     virtual void files_post(const std::string &route, const std::string &json) = 0;
+    // The answer to a FsConflict: "replace", "keep", "skip", or "" to give the copy or move up.
+    virtual void files_conflict(const std::string &choice) = 0;
     virtual void files_delete(const std::vector<std::string> &paths) = 0;
     virtual void files_view(const std::string &path) = 0;
     virtual void files_size(const std::string &path) = 0;

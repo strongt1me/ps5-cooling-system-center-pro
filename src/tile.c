@@ -55,6 +55,7 @@
 #include "ps5tm.h"
 #include "tile_files.h"
 #include "tile_pkg.h"
+#include "titleid.h"
 
 /* Host tests point every path at a scratch folder. */
 #ifndef PS5TM_TILE_ROOT
@@ -299,6 +300,10 @@ find_pkg(char *why, size_t why_len) {
  * A tile registered from a folder has no metadata directory at all (the other
  * launchers on the test console have none), so there /user/app/<ID> is the
  * witness again — which is why the staging note below must be able to veto it. */
+/* Set when the check before the batch call refused (another title waits under /user/app): nothing was registered, and
+   the cause can be removed, so the automatic try is not used up (tile_auto_consider). */
+static int g_guard_refused;
+
 static const char *k_tile_marks[] = {
   PS5TM_TILE_ROOT "/system_data/priv/appmeta/" PS5TM_TITLE_ID,
   PS5TM_APP_DIR,
@@ -567,6 +572,7 @@ register_tile(const char **how, char *why, size_t why_len) {
       return TILE_BATCH_REFUSED;
     }
     if(!batch_reach_ok(why, why_len)) {
+      g_guard_refused = 1;
       PS5TM_WARN("tile_batch_refused",
                  "Sammelinstallation nicht aufgerufen: %s.", why);
       return TILE_BATCH_REFUSED;
@@ -618,6 +624,7 @@ ensure_folder(char *msg, size_t msg_len) {
   /* Only the batch call (FW 12.00): find out before writing anything whether
      it would take nothing but the tile. */
   if(!p_inst_dir && !batch_reach_ok(why, sizeof(why))) {
+    g_guard_refused = 1;
     snprintf(msg, msg_len,
              "Die Kachel wurde nicht angelegt: Auf dieser Firmware ginge das "
              "nur über die Sammelanmeldung, und die hätte mehr erfasst — %s.",
@@ -812,14 +819,70 @@ ps5tm_tile_request_install(void) {
 }
 
 
+/* An ELF sent on its own leaves nothing to start the app from afterwards (04.11.2026). So a minute after start-up
+   the home-screen tile is put in the Medien row once, when
+   - none of the app's tiles is there (the old one, or a FAKE folder in /data/homebrew: that one starts the app itself),
+   - no game is running (registering takes the ShellCore identity, and the fan answers badly while it is held),
+   - this console has not been served before: "ok" in the note stays for good, a "fail <version>" blocks the same
+     version only. Written BEFORE the call, so a crash in it cannot lead to a second try. A tile the person deletes
+     later does not come back by itself.
+   The same request as the web call, so the same safeguards (no batch call that would take other titles with it). */
+#define PS5TM_TILE_AUTO_MARK  PS5TM_DATA_DIR "/tile-auto"
+#define TILE_AUTO_DELAY_SEC   60
+
+static int g_auto_pending = 0;   /* the request in flight came from here */
+
+static int
+tile_auto_blocked_for_good(void) {
+  struct stat st;
+  if(stat("/data/homebrew/" PS5TM_TV_TITLE_ID, &st) == 0) return 1;
+  if(stat("/data/homebrew/" PS5TM_BROWSER_TITLE_ID, &st) == 0) return 1;
+
+  char line[96] = "";
+  FILE *f = fopen(PS5TM_TILE_AUTO_MARK, "r");
+  if(f) {
+    if(!fgets(line, sizeof(line), f)) line[0] = 0;
+    fclose(f);
+  }
+  size_t n = strlen(line);
+  while(n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+  if(!strcmp(line, "ok")) return 1;
+  return !strcmp(line, "fail " PS5TM_VERSION);
+}
+
+static void
+tile_auto_consider(void) {
+  static int ticks = 0, finished = 0;
+  if(finished) return;
+  if(ticks < TILE_AUTO_DELAY_SEC) { ticks++; return; }
+
+  if(ps5tm_tile_file_count == 0 || tile_installed() || tile_auto_blocked_for_good()) {
+    finished = 1;
+    return;
+  }
+
+  ps5tm_gamestate_t gs;
+  ps5tm_gamestate_get(&gs);
+  if(gs.title_id[0] || gs.foreground) return;   /* try again next second */
+
+  finished = 1;
+  if(note_write(PS5TM_TILE_AUTO_MARK, "fail " PS5TM_VERSION "\n") != 0) return;
+  g_auto_pending = 1;
+  PS5TM_INFO("tile_auto", "Keine Kachel gefunden: Die App legt sie einmal selbst an (Medien).");
+  ps5tm_tile_request_install();
+}
+
+
 /* Called once a second from the probe thread — the only place allowed to take
    the ShellCore identity and wait on the installer service. */
 void
 ps5tm_tile_service(void) {
+  tile_auto_consider();
   if(!g_install_requested) return;
   g_install_requested = 0;
 
   if(tile_installed()) {
+    g_auto_pending = 0;
     PS5TM_INFO("tile_present", "Kachel ist bereits vorhanden.");
     return;
   }
@@ -881,6 +944,16 @@ ps5tm_tile_service(void) {
      thread's call into the system ran under the ShellCore identity for up to 30 s. Other callers wait instead; this
      happens only when someone asks for the tile, and the fan worker only try-locks. */
   PS5TM_INFO("tile_result", "%s (%s)", msg, ps5tm_tile_state_name(st));
+  if(g_auto_pending) {
+    g_auto_pending = 0;
+    if(st == PS5TM_TILE_INSTALLING || st == PS5TM_TILE_INSTALLED)
+      note_write(PS5TM_TILE_AUTO_MARK, "ok\n");
+    else if(g_guard_refused) {
+      /* nothing was touched: the next start tries again, once the title that waits is gone */
+      unlink(PS5TM_TILE_AUTO_MARK);
+      ps5tm_notify("Die Medien-Kachel wurde nicht angelegt:\nein anderer Titel wartet unter /user/app (siehe Protokoll).");
+    }
+  }
 
   if(st == PS5TM_TILE_INSTALLING) {
     int appeared = 0;

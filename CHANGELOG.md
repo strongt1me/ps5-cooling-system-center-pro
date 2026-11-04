@@ -10,6 +10,24 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: Reiter „Konto“ im Profil
+- Neue Ansicht „Konto“ zwischen „Profil“ und „Danke“ (L2/R2): **Offline-Konto aktivieren** (der Name wird auf der Bildschirmtastatur abgefragt, vorbelegt mit dem Benutzernamen), **Fake-Anmeldung schreiben** und **Alles zurücksetzen**. Jede Zeile zeigt ihren Zustand („aktiv: Name“, „vorhanden“); ✕ führt sofort aus, ohne Rückfrage.
+- `GET /api/v1/profile/account/status` nennt jetzt auch `username` (der Name des Offline-Kontos); die Browser-Karte zeigte vorher „Konto „?“ (Slot 1)“.
+- Übersetzungen der neuen Texte in sechs Sprachen.
+
+### Dateimanager: Laufwerke in der Zielwahl, Ersetzen und Beide behalten
+- **Kopieren/Verschieben nach …** zeigt oben die Orte der Konsole (Laufwerke, `/data`, USB …) als Schaltflächen; vorher konnte man nur durch die Unterordner des aktuellen Ordners gehen.
+- **Namen, die es im Ziel schon gibt:** Statt einer Fehlermeldung fragt ein Fenster wie im Prospero Manager: **Ersetzen**, **Beide behalten** (der neue Eintrag heißt `Name (2)`, bei Dateien `Name (2).txt`), **Überspringen** oder Abbrechen. Gilt für Kopieren, Verschieben und Einfügen aus der Ablage, in der Browser-App und in der Vollbild-App.
+- Eine Datei wird beim Ersetzen erst neben die alte geschrieben und am Ende darübergelegt (bricht das Kopieren ab, bleibt die alte unverändert); ein Ordner wird zusammengeführt. Eine Datei lässt sich nicht durch einen Ordner ersetzen (und umgekehrt), und ein Eintrag nicht durch sich selbst. `POST /api/v1/files/copy|move` nimmt dafür `conflict` (`replace`, `keep`, `skip`).
+- Neuer Host-Test `test/filemgr/run.sh` (36 Prüfungen mit echten Dateien, unter Adress- und Undefined-Behavior-Prüfung).
+
+### Kachel für „nur ELF“
+- Hält die Schutzprüfung die Anmeldung auf (ein anderer Titel wartet unter `/user/app`, die Sammelanmeldung hätte ihn mit erfasst), meldet die App das auf dem Fernseher und versucht es beim nächsten Start erneut, statt den einen Versuch zu verbrauchen.
+- Wer nur die ELF sendet und keine Kachel hat, bekommt wieder eine: Etwa eine Minute nach dem Start legt die App die Medien-Kachel (`PSCC69690`, öffnet die Weboberfläche) einmal selbst an – im Hintergrund, nur wenn gerade kein Spiel läuft und weder sie noch ein Ordner `FAKE86921`/`FAKE86922` in `/data/homebrew` da ist. Dieselbe Anmeldung wie bei `POST /api/v1/tile/ensure`, also ohne die Sammelanmeldung, die fremde Titel mit erfasst hätte. Die Notiz `tile-auto` hält `ok` (nie wieder) oder `fail <Version>` (nächste Version wieder) fest und wird vor dem Aufruf geschrieben; eine später gelöschte Kachel kommt nicht von allein zurück. Die FAKE-Kacheln selbst kann die ELF nicht erzeugen (35 MB bzw. eine Kopie ihrer selbst).
+
+### Fehlerbehebung: Fake-Anmeldung zurücksetzen
+- Die Statusanzeige („Fake-Anmeldung vorhanden“) und „Alles zurücksetzen“ suchten `auth.dat` und `config.dat` unter `/system_data/priv/home/0x1EA2F4D9/`. np-fake-signin schreibt aber nach `/system_data/priv/home/1ea2f4d9/` (klein, ohne `0x`): Die Anzeige blieb bei „keine“, und das Zurücksetzen löschte die Dateien nicht.
+
 ### Durchsicht 03.11.2026
 - **Kühlung:** Bei Fensterbreiten von 981 bis 1259 px war die Lüfter-Kachel zu schmal, die Drehzahl („19,0 %“) wurde abgeschnitten. Dort stehen die Kacheln jetzt untereinander wie unter 980 px.
 - **Kühlung:** Bei 1260 bis 1379 px wurde „100,0 %“ rechts abgeschnitten. Dort ist der Tacho jetzt etwas kleiner (168 statt 190 px) und der Abstand enger.
