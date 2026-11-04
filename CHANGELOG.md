@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.76.0
+
+### Profil: Offline-Konto und Fake-Anmeldung
+- Neuer Reiter-Bereich im Profil: **Offline-Konto aktivieren** setzt Name, Account-ID und Flags über die Registry (OffAct-Verfahren, GPL-3.0, John Törnblom).
+- **Fake-Anmeldung schreiben** injiziert die np-fake-signin v1.3 ELF (earthonion) an den lokalen ELF-Lader (127.0.0.1:9021). Die ELF liest den aktiven Benutzer selbst aus und schreibt auth.dat, config.dat sowie alle Registrierungseinträge — keine Eingaben nötig.
+- **Alles zurücksetzen** löscht auth.dat/config.dat und leert alle Registry-Schlüssel beider Funktionen.
+- Statusanzeige zeigt an, ob das Offline-Konto aktiv ist und ob auth.dat vorhanden ist.
+
 ## Unveröffentlicht
 
 ### Durchsicht 03.11.2026
