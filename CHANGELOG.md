@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.76.6
 
 ### Browser-Oberfläche: Versionsnummer links
 - Die Versionsnummer („Version 1.76.5“) steht jetzt in der Seitenleiste direkt unter „FAQ“ statt in einer Fußzeile ganz unten, für die man scrollen musste. Sie liegt auf einer dunklen Unterlage, weil sie über dem Lüfterbild steht; in der schmalen Leiste oben (Handy) steht sie als schlichter Text unter den Reitern. Die Fußzeile entfällt.
