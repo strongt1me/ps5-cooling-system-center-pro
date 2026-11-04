@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.76.3
+
+### Offline-Konto: Zustand gut sichtbar, Name auswählen statt eintippen
+- Die Statuszeile von „Offline-Konto aktivieren“ und „Fake-Anmeldung schreiben“ bekommt einen leuchtenden grünen Rand, solange die Funktion aktiv ist (Browser); in der Vollbild-App zeigt die Zeile dafür einen grünen Punkt.
+- Über dem Namensfeld erscheinen anklickbare Vorschläge: der echte lokale Benutzername der Konsole und, falls abweichend, der zuletzt aktivierte Name. Ein Klick übernimmt den Namen; ist das Feld leer, wird es automatisch damit vorbelegt.
+
 ## v1.76.2
 
 ### Fehlerbehebung (schwerwiegend): „Alles zurücksetzen“ löschte den Namen des Offline-Kontos
