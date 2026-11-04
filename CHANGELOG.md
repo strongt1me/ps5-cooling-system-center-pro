@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.76.2
+
+### Fehlerbehebung (schwerwiegend): „Alles zurücksetzen“ löschte den Namen des Offline-Kontos
+- Vier der Registrierungsschlüssel, die die Fake-Anmeldung zurücksetzte, sind dieselben wie Name, Konto-ID, Kennzeichen und Art des **Offline-Kontos** (beide Funktionen teilen sich auf der Konsole denselben Platz 1). „Alles zurücksetzen“ leerte sie deshalb mit, auch wenn das Offline-Konto weiter gebraucht wurde. Nach einem Neustart hatte die Konsole dann keinen Namen mehr für das Konto, und Programme, die eine vollständige Kontokennung erwarten (z. B. der Y2JB), liefen nicht mehr richtig.
+- Der Knopf heißt jetzt **„Fake-Anmeldung zurücksetzen“** (Browser und Vollbild-App) und lässt Name, Konto-ID, Kennzeichen und Art des Offline-Kontos unangetastet; gelöscht werden nur auth.dat, config.dat und die Registrierungsschlüssel, die ausschließlich die Fake-Anmeldung betreffen.
+- **Wer schon „Alles zurücksetzen“ gedrückt hat:** Unter „Profil“ → „Offline-Konto aktivieren“ den Namen erneut eingeben, das setzt die Kontokennung wieder.
+
 ## v1.76.1
 
 ### Vollbild-App: Reiter „Konto“ im Profil
