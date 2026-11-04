@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.76.5
 
 ### Offline-Konto: wie OffAct (v0.4.2)
 - Ein Vergleich mit dem Quelltext von OffAct (`master` ist noch v0.4.2; die neu geladene `OffAct-1.zip` ist ein Build davon, ohne Quelltext) ergab zwei Abweichungen unseres Einbaus, die jetzt behoben sind: OffAct **schreibt nie einen Namen**, sondern macht einen **vorhandenen Benutzer** zum Offline-Konto (Konto-ID, Typ `np`, Kennzeichen), und es setzt die Kennzeichen auf **4098**, wir hatten **1**. Außerdem hasht es den Namen mit vorzeichenbehaftetem `char`: Ein Name mit Umlaut bekommt jetzt dieselbe Konto-ID wie dort.
