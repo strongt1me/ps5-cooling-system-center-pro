@@ -4,20 +4,20 @@
 Usage: build_avatars.py <source-dir> [<web-dir>]
 
   source-dir  the original pictures, one file each, named NN-name.png
-              (square, at least 440 px; the originals are 1024 px, ~2.5 MB each)
+              (square, at least 384 px; the originals are 1024 px, ~2.5 MB each)
   web-dir     the web/ folder to write into (default: ../web next to this script)
 
-Writes web/avatars/NN-name.jpg (440 x 440, progressive JPEG) and
+Writes web/avatars/NN-name.jpg (384 x 384, progressive JPEG) and
 web/avatars/index.json (what the Profil page lists). tools/gen_assets.py then
 embeds both like every other file under web/.
 
 Why so small: everything under web/ becomes part of the ELF and stays in memory
 while the app runs. The app is about 3 MB; one build grew to 10.5 MB and the
 console then had too little memory left to serve a single request (see the
-note above TILE_PKG in the Makefile). Thirty pictures at 440 px cost about
-1.3 MB. 440 px is also the largest size the page ever makes of a profile
-picture (four textures of 64/128/260/440 px and a 440 px PNG), so nothing is
-lost by not embedding the 1024 px originals.
+note above TILE_PKG in the Makefile). Thirty pictures at 384 px, quality 75,
+cost about 1 MB. The page still makes a 440 px texture and PNG of the chosen
+picture; that one is scaled up slightly from 384 px, which is hardly visible on a
+profile picture and not worth 0.4 MB of ELF.
 
 Needs Pillow (pip install pillow). Run it whenever the pictures change. The
 result is committed, the originals are not (75 MB).
@@ -30,8 +30,8 @@ import sys
 
 from PIL import Image
 
-SIZE = 440
-QUALITY = 82
+SIZE = 384
+QUALITY = 75
 # The generator behind the originals leaves a one-pixel border that is slightly
 # transparent. Scaled down it would show as a dark hairline, so it is cut off.
 EDGE = 2
