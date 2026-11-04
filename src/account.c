@@ -15,7 +15,16 @@
  *
  * Both features require an active jailbreak (elevated ucred).
  *
- * "Restore" deletes auth.dat/config.dat and clears registry keys.
+ * "Restore" deletes auth.dat/config.dat and clears the registry keys that are
+ * fake-signin's own. It leaves the account-identity keys (name, account id,
+ * type, flags) untouched: those are the same registry fields OffAct's offline
+ * activation uses for slot 1 (see the KEY_ACCOUNT_* / RKEY_* numbers below —
+ * four of them are numerically identical), so clearing them on every restore
+ * silently deactivated an offline account the person had set up separately,
+ * leaving the console with no name for that account and breaking anything
+ * that expects the slot to have an identity (review 04.11.2026, console
+ * report: "Alles zurücksetzen" + reboot left the account nameless and broke
+ * Y2JB). Restoring is meant to undo only what fake-signin itself wrote.
  */
 
 #include <stdint.h>
@@ -116,23 +125,6 @@ offact_activate(int slot, const char *name, int *rc_out)
   if(rc_out) *rc_out = rc;
   return (rc == 0) ? 0 : -1;
 }
-
-static int
-offact_deactivate(int slot)
-{
-  if(!sceRegMgrSetStr || !sceRegMgrSetBin || !sceRegMgrSetInt) return -1;
-
-  char empty[PS5TM_USERNAME_MAX + 1];
-  memset(empty, 0, sizeof(empty));
-
-  uint64_t zero = 0;
-  sceRegMgrSetStr(KEY_ACCOUNT_NAME(slot), empty, sizeof(empty));
-  sceRegMgrSetBin(KEY_ACCOUNT_ID(slot), &zero, sizeof(zero));
-  sceRegMgrSetStr(KEY_ACCOUNT_TYPE(slot), empty, PS5TM_ACCOUNT_TYPE_MAX);
-  sceRegMgrSetInt(KEY_ACCOUNT_FLAGS(slot), 0);
-  return 0;
-}
-
 
 /* --------------------------------------------------- fake-signin registry keys
  * Key numbers determined by analysing np-fake-signin.c (earthonion).
@@ -300,17 +292,17 @@ ps5tm_account_restore(const char **why)
   if(np_path(u.uid, "np/auth.dat",  p, sizeof(p)) == 0) unlink(p);
   if(np_path(u.uid, "config.dat",   p, sizeof(p)) == 0) unlink(p);
 
-  /* clear registry */
+  /* Clear fake-signin's own registry keys. Not RKEY_USERNAME, RKEY_ACCOUNT_ID,
+     RKEY_FLAG_2 or RKEY_NP_ENV: those are the same fields as the OffAct slot-1
+     account name, id, flags and type (KEY_ACCOUNT_NAME/ID/FLAGS/TYPE(1) above),
+     so clearing them here would deactivate an offline account that may still
+     be in use — this function undoes fake-signin only. */
   if(sceRegMgrSetStr && sceRegMgrSetBin && sceRegMgrSetInt) {
     char empty[128];
     memset(empty, 0, sizeof(empty));
-    uint64_t zero64 = 0;
     int zeroi = 0;
 
-    sceRegMgrSetStr(RKEY_USERNAME,    empty, PS5TM_USERNAME_MAX + 1);
-    sceRegMgrSetBin(RKEY_ACCOUNT_ID, &zero64, 8);
     sceRegMgrSetStr(RKEY_EMAIL,       empty, sizeof(empty));
-    sceRegMgrSetStr(RKEY_NP_ENV,      empty, 17);
     sceRegMgrSetStr(RKEY_ONLINE_ID,   empty, PS5TM_USERNAME_MAX + 1);
     sceRegMgrSetStr(RKEY_EXT_1100,    empty, sizeof(empty));
     sceRegMgrSetStr(RKEY_COUNTRY,     empty, 4);
@@ -318,7 +310,6 @@ ps5tm_account_restore(const char **why)
     sceRegMgrSetStr(RKEY_LOCALE,      empty, 40);
     sceRegMgrSetInt(RKEY_SIGNIN_FLAG, 0);
     sceRegMgrSetBin(RKEY_FLAG_1,     &zeroi, 4);
-    sceRegMgrSetBin(RKEY_FLAG_2,     &zeroi, 4);
     sceRegMgrSetBin(RKEY_FLAG_3,     &zeroi, 4);
     sceRegMgrSetBin(RKEY_FLAG_5C,    &zeroi, 4);
     sceRegMgrSetBin(RKEY_NP_A4,     &zeroi, 4);
@@ -329,10 +320,8 @@ ps5tm_account_restore(const char **why)
     sceRegMgrSetBin(RKEY_NP_F4,     &zeroi, 4);
     sceRegMgrSetStr(RKEY_EXT_1141,   empty, 4);
     sceRegMgrSetStr(RKEY_EXT_114C,   empty, 4);
-
-    offact_deactivate(1);
   }
 
-  PS5TM_INFO("account_restored", "Offline-Konto und Fake-Signin fuer UID 0x%08X zurueckgesetzt.", u.uid);
+  PS5TM_INFO("account_restored", "Fake-Signin fuer UID 0x%08X zurueckgesetzt (Offline-Konto blieb unangetastet).", u.uid);
   return 0;
 }

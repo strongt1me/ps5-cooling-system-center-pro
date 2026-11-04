@@ -3505,7 +3505,7 @@
         try {
           const r = await api("/api/v1/profile/account/restore",
             { method: "POST" });
-          toast(r.message || "Alles zurückgesetzt.");
+          toast(r.message || "Fake-Anmeldung zurückgesetzt.");
           accLoadStatus();
         } catch (e) {
           toast(e.message, "error");

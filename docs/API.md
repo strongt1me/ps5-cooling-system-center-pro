@@ -172,7 +172,7 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET | `/api/v1/profile/account/status` | Offline-Konto und Fake-Anmeldung des Benutzers: `valid`, `uid`, `activated`, `fakesignin`, `account_id`, `username` |
 | POST | `/api/v1/profile/account/activate` | Offline-Konto für Platz 1 setzen (`{"username":"…"}`, höchstens 16 Zeichen) |
 | POST | `/api/v1/profile/account/fakesignin` | die eingebettete np-fake-signin ELF (earthonion v1.3) an den Payload-Lader 127.0.0.1:9021 schicken; ohne Körper |
-| POST | `/api/v1/profile/account/restore` | auth.dat und config.dat löschen, die Registrierungseinträge beider Funktionen leeren |
+| POST | `/api/v1/profile/account/restore` | auth.dat und config.dat löschen und die Registrierungseinträge der Fake-Anmeldung leeren; lässt Name, Konto-ID, Flags und Typ des Offline-Kontos unangetastet |
 | POST | `/api/v1/profile/username` | Anzeigenamen des Benutzers ändern (`{"name":"…"}`) |
 | GET | `/api/v1/profile/avatar/current` | aktuelles Profilbild (PNG) |
 | POST | `/api/v1/profile/avatar/file?name=avatar.png` | eine Datei des Profilbild-Satzes als Rohdaten in den Zwischenbereich laden (`avatar64.dds` … `avatar440.dds`, `picture64.dds` … `picture440.dds`, `avatar.png`, `picture.png`, `online.json`) |

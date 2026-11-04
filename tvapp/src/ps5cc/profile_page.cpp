@@ -464,9 +464,10 @@ class ProfilePage final : public Page
                                      : account_info_.fakesignin ? "vorhanden"
                                                                 : "keine";
         rows[kRowFakeSignin].tag = kRowFakeSignin;
-        rows[kRowRestore].title = "Alles zurücksetzen";
+        rows[kRowRestore].title = "Fake-Anmeldung zurücksetzen";
         rows[kRowRestore].subtitle =
-            "Löscht auth.dat und config.dat und leert die Einträge beider Funktionen.";
+            "Löscht auth.dat und config.dat und leert die Einträge der Fake-Anmeldung. Lässt das "
+            "Offline-Konto unangetastet.";
         rows[kRowRestore].tag = kRowRestore;
         const int keep = account_.focus();
         account_.set_items(rows);
