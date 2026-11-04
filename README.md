@@ -4,7 +4,7 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser der Konsole oder von jedem Gerät im Heimnetz, in sieben Sprachen.**
+**Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser (Konsole, Handy, PC) oder als Vollbild-App auf dem Fernseher mit dem Controller, in sieben Sprachen.**
 
 ![Version](https://img.shields.io/badge/Version-1.76.7-1f6feb)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
@@ -19,7 +19,28 @@
 
 </div>
 
-Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfter nach einer ruhigen, einstellbaren Komfortkurve regelt und eine Weboberfläche mitbringt. Dazu kommen Spiele-, Datei-, Payload- und Profilverwaltung. Alles läuft auf der Konsole selbst, ohne PC und ohne Internet.
+Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfter nach einer ruhigen, einstellbaren Komfortkurve regelt und eine Browser-App sowie eine Vollbild-App mitbringt. Dazu kommen Spiele-, Datei-, Payload- und Profilverwaltung. Alles läuft auf der Konsole selbst, ohne PC und ohne Internet.
+
+## Zwei Oberflächen
+
+Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was die Browser-App kann; nur Dateien hoch- und herunterladen geht allein im Browser.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Browser-App: Kühlung"></td>
+    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Vollbild-App: Kühlung"></td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>🌐 Browser-App</h3>
+      Im Browser der Konsole oder von Handy und PC im Heimnetz: <code>http://&lt;PS5-IP&gt;:8086</code>. Als Kachel <b>FAKE86922</b> öffnet ein Tipp den Browser der Konsole mit der App. Vier Designs, sieben Sprachen, Handbuch und FAQ eingebaut.
+    </td>
+    <td valign="top">
+      <h3>📺 Vollbild-App</h3>
+      Die Kachel <b>FAKE86921</b> im Medien-Bereich der Konsole füllt den Fernseher und wird nur mit dem Controller bedient, ganz ohne Browser. L1/R1 wechseln die Seite, L2/R2 die Ansicht, <b>X</b> öffnet oder startet, <b>Dreieck</b> zeigt mehr, <b>Quadrat</b> öffnet die Aktionen.
+    </td>
+  </tr>
+</table>
 
 ## Funktionen
 
@@ -62,13 +83,13 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
       L1/R1 wechseln die Seite, L2/R2 scrollen; Mute-Taste zweimal zeigt Temperatur und Lüfter auf dem Fernseher.
     </td>
     <td valign="top">
-      <h3>🚀 Starter-Kachel</h3>
-      Ein Ordner für <code>/data/homebrew</code>: Ein Tipp auf die Kachel startet die App und öffnet die Oberfläche.
+      <h3>🚀 Starter-Kacheln</h3>
+      Zwei Ordner für <code>/data/homebrew</code>: <code>FAKE86921</code> startet die Vollbild-App, <code>FAKE86922</code> öffnet die Browser-App.
     </td>
   </tr>
 </table>
 
-### Ansichten
+### Ansichten der Browser-App
 
 <table>
   <tr>
@@ -116,6 +137,28 @@ Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfte
 </table>
 <sub>Alle Bilder mit Beispieldaten und erfundenen Spielen.</sub>
 </details>
+
+### Ansichten der Vollbild-App
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Vollbild-App: Spiele"></td>
+    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Vollbild-App: Dateimanager"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Spiele: Bibliothek mit Starten, Details und Aktionen</sub></td>
+    <td align="center"><sub>Dateimanager: Kopieren mit Rate und Restzeit</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Vollbild-App: Payloads"></td>
+    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Vollbild-App: Spielzeit"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Payloads: laufende ansehen und beenden</sub></td>
+    <td align="center"><sub>Spielzeit mit Tagesübersicht</sub></td>
+  </tr>
+</table>
+<sub>Alle Bilder mit Beispieldaten und erfundenen Spielen.</sub>
 
 <details>
 <summary><b>Alle Funktionen im Detail</b></summary>

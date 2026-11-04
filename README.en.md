@@ -4,7 +4,7 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in the console's own browser or from any device on your home network, in seven languages.**
+**Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in a browser (console, phone, PC) or as a fullscreen app on the TV with the controller, in seven languages.**
 
 ![Version](https://img.shields.io/badge/Version-1.76.7-1f6feb)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
@@ -19,7 +19,28 @@
 
 </div>
 
-A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fan along a quiet, adjustable comfort curve and comes with a web interface. On top of that: game, file, payload and profile management. Everything runs on the console itself, without a PC and without the internet.
+A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fan along a quiet, adjustable comfort curve and comes with a browser app and a fullscreen app. On top of that: game, file, payload and profile management. Everything runs on the console itself, without a PC and without the internet.
+
+## Two interfaces
+
+One app, two ways to use it. The fullscreen app can do almost everything the browser app can; only uploading and downloading files works in the browser alone.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Browser app: cooling"></td>
+    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Fullscreen app: cooling"></td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>🌐 Browser app</h3>
+      In the console's browser or from a phone or PC on the home network: <code>http://&lt;PS5-IP&gt;:8086</code>. As the tile <b>FAKE86922</b>, a tap opens the console's browser with the app. Four designs, seven languages, manual and FAQ built in.
+    </td>
+    <td valign="top">
+      <h3>📺 Fullscreen app</h3>
+      The tile <b>FAKE86921</b> in the console's media area fills the TV and is operated with the controller only, no browser at all. L1/R1 switch the page, L2/R2 the view, <b>X</b> opens or starts, <b>Triangle</b> shows more, <b>Square</b> opens the actions.
+    </td>
+  </tr>
+</table>
 
 ## Features
 
@@ -62,13 +83,13 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
       L1/R1 switch pages, L2/R2 scroll; pressing Mute twice shows temperature and fan on the TV.
     </td>
     <td valign="top">
-      <h3>🚀 Starter tile</h3>
-      A folder for <code>/data/homebrew</code>: one tap on its tile starts the app and opens the interface.
+      <h3>🚀 Starter tiles</h3>
+      Two folders for <code>/data/homebrew</code>: <code>FAKE86921</code> starts the fullscreen app, <code>FAKE86922</code> opens the browser app.
     </td>
   </tr>
 </table>
 
-### Screens
+### Screens of the browser app
 
 <table>
   <tr>
@@ -116,6 +137,28 @@ A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fa
 </table>
 <sub>All pictures use sample data and made-up games; the interface is shown in German.</sub>
 </details>
+
+### Screens of the fullscreen app
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Fullscreen app: games"></td>
+    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Fullscreen app: file manager"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Games: library with start, details and actions</sub></td>
+    <td align="center"><sub>File manager: copying with speed and time left</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Fullscreen app: payloads"></td>
+    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Fullscreen app: play time"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Payloads: see and end running ones</sub></td>
+    <td align="center"><sub>Play time with a daily overview</sub></td>
+  </tr>
+</table>
+<sub>All pictures use sample data and made-up games; the interface is shown in German.</sub>
 
 <details>
 <summary><b>All features in detail</b></summary>

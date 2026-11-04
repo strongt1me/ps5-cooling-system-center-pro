@@ -4,7 +4,7 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak,<br>usabile nel browser della console o da qualsiasi dispositivo della rete domestica, in sette lingue.**
+**Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak,<br>usabile nel browser (console, telefono, PC) o come app a schermo intero sulla TV con il controller, in sette lingue.**
 
 ![Versione](https://img.shields.io/badge/Versione-1.76.7-1f6feb)
 ![Licenza](https://img.shields.io/badge/Licenza-GPL--3.0--or--later-blue)
@@ -19,7 +19,28 @@
 
 </div>
 
-Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola la ventola secondo una curva di comfort silenziosa e regolabile e include un'interfaccia web. In più: gestione di giochi, file, payload e profilo. Tutto gira sulla console stessa, senza PC e senza Internet.
+Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola la ventola secondo una curva di comfort silenziosa e regolabile e include un'app per browser e un'app a schermo intero. In più: gestione di giochi, file, payload e profilo. Tutto gira sulla console stessa, senza PC e senza Internet.
+
+## Due interfacce
+
+Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che fa l'app per browser; solo caricare e scaricare file funziona unicamente nel browser.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="App per browser: raffreddamento"></td>
+    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="App a schermo intero: raffreddamento"></td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>🌐 App per browser</h3>
+      Nel browser della console o da telefono e PC nella rete domestica: <code>http://&lt;PS5-IP&gt;:8086</code>. Con il riquadro <b>FAKE86922</b> un tocco apre il browser della console con l'app. Quattro temi, sette lingue, manuale e FAQ integrati.
+    </td>
+    <td valign="top">
+      <h3>📺 App a schermo intero</h3>
+      Il riquadro <b>FAKE86921</b> nell'area multimediale della console riempie la TV e si usa solo con il controller, senza browser. L1/R1 cambiano pagina, L2/R2 la vista, <b>X</b> apre o avvia, <b>Triangolo</b> mostra di più, <b>Quadrato</b> apre le azioni.
+    </td>
+  </tr>
+</table>
 
 ## Funzioni
 
@@ -62,13 +83,13 @@ Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola l
       L1/R1 cambiano pagina, L2/R2 scorrono; premere due volte Mute mostra temperatura e ventola sulla TV.
     </td>
     <td valign="top">
-      <h3>🚀 Riquadro di avvio</h3>
-      Una cartella per <code>/data/homebrew</code>: un tocco sul riquadro avvia l'app e apre l'interfaccia.
+      <h3>🚀 Riquadri di avvio</h3>
+      Due cartelle per <code>/data/homebrew</code>: <code>FAKE86921</code> avvia l'app a schermo intero, <code>FAKE86922</code> apre l'app per browser.
     </td>
   </tr>
 </table>
 
-### Schermate
+### Schermate dell'app per browser
 
 <table>
   <tr>
@@ -116,6 +137,28 @@ Un payload homebrew (ELF) che legge i sensori di temperatura della PS5, regola l
 </table>
 <sub>Tutte le immagini con dati di esempio e giochi inventati; l'interfaccia è mostrata in tedesco.</sub>
 </details>
+
+### Schermate dell'app a schermo intero
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="App a schermo intero: giochi"></td>
+    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="App a schermo intero: gestione file"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Giochi: libreria con avvio, dettagli e azioni</sub></td>
+    <td align="center"><sub>Gestione file: copia con velocità e tempo rimanente</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="App a schermo intero: payload"></td>
+    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="App a schermo intero: tempo di gioco"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Payload: vedere e terminare quelli in esecuzione</sub></td>
+    <td align="center"><sub>Tempo di gioco con panoramica giornaliera</sub></td>
+  </tr>
+</table>
+<sub>Tutte le immagini con dati di esempio e giochi inventati; l'interfaccia è mostrata in tedesco.</sub>
 
 <details>
 <summary><b>Tutte le funzioni in dettaglio</b></summary>

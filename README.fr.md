@@ -4,7 +4,7 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Contrôle du ventilateur, surveillance de la température et centre système pour la PlayStation 5 jailbreakée,<br>utilisable dans le navigateur de la console ou depuis tout appareil du réseau domestique, en sept langues.**
+**Contrôle du ventilateur, surveillance de la température et centre système pour la PlayStation 5 jailbreakée,<br>utilisable dans un navigateur (console, téléphone, PC) ou comme application plein écran sur le téléviseur avec la manette, en sept langues.**
 
 ![Version](https://img.shields.io/badge/Version-1.76.7-1f6feb)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0--or--later-blue)
@@ -19,7 +19,28 @@
 
 </div>
 
-Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote le ventilateur selon une courbe de confort silencieuse et réglable et fournit une interface web. En plus : gestion des jeux, des fichiers, des payloads et du profil. Tout tourne sur la console elle-même, sans PC et sans Internet.
+Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote le ventilateur selon une courbe de confort silencieuse et réglable et fournit une application de navigateur et une application plein écran. En plus : gestion des jeux, des fichiers, des payloads et du profil. Tout tourne sur la console elle-même, sans PC et sans Internet.
+
+## Deux interfaces
+
+Une seule application, deux façons de l'utiliser. L'application plein écran fait presque tout ce que fait l'application de navigateur ; seul l'envoi et le téléchargement de fichiers ne fonctionnent que dans le navigateur.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Application de navigateur : refroidissement"></td>
+    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Application plein écran : refroidissement"></td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>🌐 Application de navigateur</h3>
+      Dans le navigateur de la console ou depuis un téléphone ou un PC du réseau domestique : <code>http://&lt;PS5-IP&gt;:8086</code>. Avec la vignette <b>FAKE86922</b>, un appui ouvre le navigateur de la console avec l'application. Quatre thèmes, sept langues, manuel et FAQ intégrés.
+    </td>
+    <td valign="top">
+      <h3>📺 Application plein écran</h3>
+      La vignette <b>FAKE86921</b> de la zone média de la console remplit le téléviseur et se commande uniquement à la manette, sans navigateur. L1/R1 changent de page, L2/R2 de vue, <b>X</b> ouvre ou lance, <b>Triangle</b> en montre plus, <b>Carré</b> ouvre les actions.
+    </td>
+  </tr>
+</table>
 
 ## Fonctions
 
@@ -62,13 +83,13 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
       L1/R1 changent de page, L2/R2 font défiler ; deux appuis sur Muet affichent température et ventilateur sur la TV.
     </td>
     <td valign="top">
-      <h3>🚀 Vignette de lancement</h3>
-      Un dossier pour <code>/data/homebrew</code> : un appui sur sa vignette lance l'appli et ouvre l'interface.
+      <h3>🚀 Vignettes de lancement</h3>
+      Deux dossiers pour <code>/data/homebrew</code> : <code>FAKE86921</code> lance l'appli plein écran, <code>FAKE86922</code> ouvre l'appli de navigateur.
     </td>
   </tr>
 </table>
 
-### Écrans
+### Écrans de l'application de navigateur
 
 <table>
   <tr>
@@ -116,6 +137,28 @@ Un payload homebrew (ELF) qui lit les capteurs de température de la PS5, pilote
 </table>
 <sub>Toutes les images avec des données d'exemple et des jeux inventés ; l'interface est montrée en allemand.</sub>
 </details>
+
+### Écrans de l'application plein écran
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Application plein écran : jeux"></td>
+    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Application plein écran : gestionnaire de fichiers"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Jeux : bibliothèque avec lancement, détails et actions</sub></td>
+    <td align="center"><sub>Gestionnaire de fichiers : copie avec débit et temps restant</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Application plein écran : payloads"></td>
+    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Application plein écran : temps de jeu"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Payloads : voir et arrêter ceux en cours</sub></td>
+    <td align="center"><sub>Temps de jeu avec aperçu quotidien</sub></td>
+  </tr>
+</table>
+<sub>Toutes les images avec des données d'exemple et des jeux inventés ; l'interface est montrée en allemand.</sub>
 
 <details>
 <summary><b>Toutes les fonctions en détail</b></summary>
