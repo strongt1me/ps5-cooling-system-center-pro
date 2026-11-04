@@ -3447,22 +3447,45 @@
         noteA.textContent = `Aktiv: Konto „${st.username || "?"}" (Slot 1)`;
       else
         noteA.textContent = "Kein Offline-Konto aktiv.";
+      noteA.classList.toggle("acc-active", !!st.activated);
     }
     if (noteF) {
       if (st.fakesignin)
         noteF.textContent = "Fake-Anmeldung vorhanden (auth.dat + config.dat).";
       else
         noteF.textContent = "Keine Fake-Anmeldung vorhanden.";
+      noteF.classList.toggle("acc-active", !!st.fakesignin);
+    }
+
+    /* Bereits bekannte Namen zum Auswählen, statt sie eintippen zu müssen: der echte
+       lokale Benutzername der Konsole und, falls abweichend, der zuletzt aktivierte. */
+    const picks = [];
+    if (state.userName) picks.push(state.userName);
+    if (st.username && !picks.includes(st.username)) picks.push(st.username);
+    const pickWrap = $("#acc-name-picks");
+    if (pickWrap) {
+      pickWrap.innerHTML = picks.map((n) =>
+        `<button type="button" class="acc-pick" data-acc-pick="${esc(n)}">${esc(n)}</button>`).join("");
+      pickWrap.hidden = !picks.length;
     }
 
     const nameInp = $("#acc-name");
-    if (nameInp && !nameInp.value && st.username)
-      nameInp.value = st.username;
+    if (nameInp && !nameInp.value && picks.length)
+      nameInp.value = picks[0];
   };
 
   const wireAccountActivate = () => {
     const btn = $("#acc-activate-btn");
     if (!btn) return;
+    const pickWrap = $("#acc-name-picks");
+    if (pickWrap) {
+      pickWrap.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-acc-pick]");
+        if (!b) return;
+        const inp = $("#acc-name");
+        if (inp) inp.value = b.dataset.accPick;
+      });
+    }
     btn.addEventListener("click", async () => {
       const name = ($("#acc-name")?.value || "").trim();
       if (!name) { toast("Bitte einen Benutzernamen eingeben.", "error"); return; }

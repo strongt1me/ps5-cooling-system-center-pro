@@ -457,6 +457,9 @@ class ProfilePage final : public Page
                                    : account_info_.activated ? "aktiv: " + account_info_.username
                                                              : "nicht aktiv";
         rows[kRowActivate].tag = kRowActivate;
+        // ein leuchtender Punkt, solange die Funktion aktiv ist — wie der grüne Rand im Browser
+        if (account_info_.activated)
+            rows[kRowActivate].swatch = kGood.with_alpha(1.0f);
         rows[kRowFakeSignin].title = "Fake-Anmeldung schreiben";
         rows[kRowFakeSignin].subtitle = "Schickt np-fake-signin an den Payload-Lader: Die Konsole "
                                         "sieht das Konto als angemeldet.";
@@ -464,6 +467,8 @@ class ProfilePage final : public Page
                                      : account_info_.fakesignin ? "vorhanden"
                                                                 : "keine";
         rows[kRowFakeSignin].tag = kRowFakeSignin;
+        if (account_info_.fakesignin)
+            rows[kRowFakeSignin].swatch = kGood.with_alpha(1.0f);
         rows[kRowRestore].title = "Fake-Anmeldung zurücksetzen";
         rows[kRowRestore].subtitle =
             "Löscht auth.dat und config.dat und leert die Einträge der Fake-Anmeldung. Lässt das "

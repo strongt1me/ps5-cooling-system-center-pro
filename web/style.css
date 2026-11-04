@@ -1500,6 +1500,15 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 .fm-pick-place:hover { border-color: var(--accent); }
 .fm-pick-place[aria-current="true"] { background: var(--accent); border-color: transparent; color: #fff; }
 .fm-conflict-list { margin: 0 0 10px; padding-left: 20px; font-size: 13px; }
+
+.acc-picks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
+.acc-picks::before { content: "Vorhanden:"; font-size: 12px; color: var(--ink-2); }
+.acc-pick { border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); border-radius: 999px;
+  padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.acc-pick:hover { border-color: var(--accent); }
+/* Leuchtender Rand, solange die Funktion aktiv ist (konsistent mit .conn.on / .run-dot.live). */
+.note.acc-active { border-color: rgba(12,163,12,.45); background: rgba(12,163,12,.08);
+  color: var(--good); box-shadow: 0 0 0 1px rgba(12,163,12,.22), 0 0 14px rgba(12,163,12,.3); }
 .fm-pick-empty { padding: 12px 14px; font-size: 13px; color: var(--ink-2); }
 .fm-empty { padding: 18px 6px; }
 .fm-field { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; font-size: 13px; color: var(--ink-2); }
