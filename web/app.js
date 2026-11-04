@@ -3442,12 +3442,14 @@
     let st;
     try { st = await api("/api/v1/profile/account/status"); } catch { return; }
 
+    const accounts = Array.isArray(st.accounts) ? st.accounts : [];
+    const firstActive = accounts.find((a) => a.active);
     if (noteA) {
-      if (st.activated)
-        noteA.textContent = `Aktiv: Konto „${st.username || "?"}" (Slot 1)`;
+      if (firstActive)
+        noteA.textContent = `Aktiv: Konto „${firstActive.name}" (Platz ${firstActive.slot})`;
       else
         noteA.textContent = "Kein Offline-Konto aktiv.";
-      noteA.classList.toggle("acc-active", !!st.activated);
+      noteA.classList.toggle("acc-active", !!firstActive);
     }
     if (noteF) {
       if (st.fakesignin)
@@ -3457,48 +3459,33 @@
       noteF.classList.toggle("acc-active", !!st.fakesignin);
     }
 
-    /* Bereits bekannte Namen zum Auswählen, statt sie eintippen zu müssen: der echte
-       lokale Benutzername der Konsole und, falls abweichend, der zuletzt aktivierte. */
-    const picks = [];
-    if (state.userName) picks.push(state.userName);
-    if (st.username && !picks.includes(st.username)) picks.push(st.username);
-    const pickWrap = $("#acc-name-picks");
-    if (pickWrap) {
-      pickWrap.innerHTML = picks.map((n) =>
-        `<button type="button" class="acc-pick" data-acc-pick="${esc(n)}">${esc(n)}</button>`).join("");
-      pickWrap.hidden = !picks.length;
+    /* Die vorhandenen Benutzer der Konsole (OffAct listet dieselben): einer wird ausgewählt, nicht getippt. */
+    const list = $("#acc-list");
+    if (list) {
+      list.innerHTML = accounts.length ? accounts.map((a) => `
+        <div class="acc-row${a.active ? " acc-active" : ""}" role="listitem">
+          <div class="acc-main"><b>${esc(a.name)}</b>
+            <small class="muted">${esc(`Platz ${a.slot} · Typ ${a.type || "–"} · Konto-ID ${a.id}`)}</small></div>
+          <button type="button" class="btn${a.active ? "" : " primary"}" data-acc-slot="${a.slot}">${a.active ? "Erneut aktivieren" : "Aktivieren"}</button>
+        </div>`).join("") : `<p class="muted">Keine Benutzer gefunden (läuft der Jailbreak?).</p>`;
     }
-
-    const nameInp = $("#acc-name");
-    if (nameInp && !nameInp.value && picks.length)
-      nameInp.value = picks[0];
   };
 
   const wireAccountActivate = () => {
-    const btn = $("#acc-activate-btn");
-    if (!btn) return;
-    const pickWrap = $("#acc-name-picks");
-    if (pickWrap) {
-      pickWrap.addEventListener("click", (e) => {
-        const b = e.target.closest("[data-acc-pick]");
-        if (!b) return;
-        const inp = $("#acc-name");
-        if (inp) inp.value = b.dataset.accPick;
-      });
-    }
-    btn.addEventListener("click", async () => {
-      const name = ($("#acc-name")?.value || "").trim();
-      if (!name) { toast("Bitte einen Benutzernamen eingeben.", "error"); return; }
+    const list = $("#acc-list");
+    if (!list) return;
+    list.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-acc-slot]");
+      if (!btn || btn.disabled) return;
       btn.disabled = true;
       try {
-        const r = await api("/api/v1/profile/account/activate",
-          { method: "POST", body: JSON.stringify({ username: name }) });
-        toast(r.message || "Offline-Konto aktiviert.");
-        accLoadStatus();
-      } catch (e) {
-        toast(e.message, "error");
+        await api("/api/v1/profile/account/activate",
+          { method: "POST", body: JSON.stringify({ slot: Number(btn.dataset.accSlot) }) });
+        toast("Offline-Konto aktiviert.");
+      } catch (er) {
+        toast(er.message, "error");
       } finally {
-        btn.disabled = false;
+        accLoadStatus();                              /* zeichnet die Liste neu, auch den Knopf */
       }
     });
   };
@@ -8511,7 +8498,7 @@
         : sz ? `${bytes(sz.bytes) === "--" ? "0 B" : bytes(sz.bytes)}${sz.partial ? "+" : ""} · ${num(sz.files)} ${sz.files === 1 ? "Datei" : "Dateien"}${sz.partial ? " (mindestens)" : ""}` : "";
       return `<div class="fm-row${fm.sel.has(e.name) ? " sel" : ""}" role="listitem">
           <input type="checkbox" class="fm-check" data-fm-sel="${i}" aria-label="${esc(e.name)} auswählen"${fm.sel.has(e.name) ? " checked" : ""}${canSel ? "" : " disabled"}>
-          <span class="fm-ico">${ico}</span>
+          <span class="fm-ico${isDir ? " dir" : ""}">${ico}</span>
           <div class="fm-main">${name}<small class="muted">${[sizeText, fmWhen(e.mtime), kind].filter(Boolean).map(esc).join(" · ")}</small></div>
           <div class="fm-more"><button type="button" class="fm-dots" data-fm-menu="${i}" aria-label="${esc(e.name)} Menü" title="Aktionen">···</button></div>
         </div>`;
@@ -8685,12 +8672,15 @@
           : `<button type="button" class="fm-pick-nav" data-fmpicknav="${esc(full)}">${esc(p || "/")}</button>`;
       }).join(" / ");
       const dirs = d.entries.filter((e) => e.type === "dir" || e.type === "dirlink");
-      const rows = (d.parent ? [`<div class="fm-pick-row" data-fmpicknav="${esc(d.parent)}">${FM_ICO.dir}<span>.. (Übergeordnet)</span></div>`] : [])
-        .concat(dirs.map((e) => `<div class="fm-pick-row" data-fmpicknav="${esc(fmJoin(d.path, e.name))}">${FM_ICO.dir}<span>${esc(e.name)}</span></div>`))
+      const rows = (d.parent ? [`<div class="fm-pick-row" data-fmpicknav="${esc(d.parent)}"><span class="fm-ico dir">${FM_ICO.dir}</span><span class="fm-name">.. (Übergeordnet)</span></div>`] : [])
+        .concat(dirs.map((e) => `<div class="fm-pick-row" data-fmpicknav="${esc(fmJoin(d.path, e.name))}"><span class="fm-ico dir">${FM_ICO.dir}</span><span class="fm-name">${esc(e.name)}</span></div>`))
         .join("");
       /* die Laufwerke und Orte der Konsole: von jedem Ordner aus ein Sprung dorthin */
+      const inPlace = (pl) => d.path === pl.path || d.path.startsWith(pl.path === "/" ? "/" : `${pl.path}/`);
+      /* nur der genaueste Ort leuchtet: „Ganzes System“ (/) umfasst jeden Pfad, soll aber nicht neben der SSD blau sein */
+      const best = (fm.places || []).filter(inPlace).reduce((a, b) => (!a || b.path.length > a.path.length ? b : a), null);
       const places = (fm.places || []).map((pl) => {
-        const here = d.path === pl.path || d.path.startsWith(pl.path === "/" ? "/" : `${pl.path}/`);
+        const here = pl === best;
         return `<button type="button" class="fm-pick-place" data-fmpicknav="${esc(pl.path)}" title="${esc(pl.path)}"${here ? ' aria-current="true"' : ""}>${esc(pl.label)}</button>`;
       }).join("");
       const canDrop = !!d.writable;
@@ -9054,6 +9044,7 @@
       else if (it.skipExisting && x.status === 409 && d && d.code === "exists") { fm.upSkipped = (fm.upSkipped || 0) + 1; fmUpNext(done + 1, total); }
       else if (!it.conflict && x.status === 409 && d && d.code === "exists") {
         const choice = await fmAskConflict([it.f.name]);
+        fmClose();                                      /* das Fenster hat seine Aufgabe getan, mit oder ohne Wahl */
         if (!choice) { fail("Abgebrochen."); return; }
         fm.upQueue.unshift({ ...it, conflict: choice });
         fmUpNext(done, total);

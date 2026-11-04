@@ -2634,46 +2634,89 @@ static void
 handle_account_status(int fd)
 {
   ps5tm_account_status_t s = ps5tm_account_status();
-  char esc[6 * PS5TM_USERNAME_MAX + 8];
-  json_escape(s.username, esc, sizeof(esc));
-  char buf[384];
-  snprintf(buf, sizeof(buf),
-           "{\"valid\":%s,\"uid\":\"0x%08X\",\"activated\":%s,"
-           "\"fakesignin\":%s,\"account_id\":\"0x%016llX\",\"username\":\"%s\"}",
-           JB(s.valid), s.uid,
-           JB(s.activated), JB(s.fakesignin),
-           (unsigned long long)s.account_id, esc);
-  ps5tm_http_send_json(fd, 200, buf);
+  ps5tm_account_entry_t list[PS5TM_ACCOUNT_SLOTS];
+  int n = s.valid ? ps5tm_account_list(list, PS5TM_ACCOUNT_SLOTS) : 0;
+
+  char hex[24];
+  cJSON *o = cJSON_CreateObject();
+  cJSON_AddBoolToObject(o, "valid", s.valid);
+  snprintf(hex, sizeof(hex), "0x%08X", s.uid);
+  cJSON_AddStringToObject(o, "uid", hex);
+  cJSON_AddBoolToObject(o, "activated", s.activated);
+  cJSON_AddBoolToObject(o, "fakesignin", s.fakesignin);
+  snprintf(hex, sizeof(hex), "0x%016llX", (unsigned long long)s.account_id);
+  cJSON_AddStringToObject(o, "account_id", hex);
+  cJSON_AddStringToObject(o, "username", s.username);
+  /* the accounts that can be activated: the console's users (OffAct lists the same) */
+  cJSON *arr = cJSON_AddArrayToObject(o, "accounts");
+  for(int i = 0; i < n; i++) {
+    cJSON *a = cJSON_CreateObject();
+    cJSON_AddNumberToObject(a, "slot", list[i].slot);
+    cJSON_AddStringToObject(a, "name", list[i].name);
+    snprintf(hex, sizeof(hex), "0x%016llX", (unsigned long long)list[i].id);
+    cJSON_AddStringToObject(a, "id", hex);
+    cJSON_AddStringToObject(a, "type", list[i].type);
+    cJSON_AddNumberToObject(a, "flags", list[i].flags);
+    cJSON_AddBoolToObject(a, "active", list[i].active);
+    cJSON_AddItemToArray(arr, a);
+  }
+  char *txt = cJSON_PrintUnformatted(o);
+  cJSON_Delete(o);
+  if(!txt) { ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
+  ps5tm_http_send_json(fd, 200, txt);
+  free(txt);
 }
 
+/* {"slot":N} or, from older callers, {"username":"…"}; "id":"0x…" optionally sets the account id (OffAct lets one edit it). */
 static void
 handle_account_activate(int fd, const ps5tm_request_t *req)
 {
   cJSON *root = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *js = root ? cJSON_GetObjectItem(root, "slot") : NULL;
   const cJSON *jn = root ? cJSON_GetObjectItem(root, "username") : NULL;
+  const cJSON *ji = root ? cJSON_GetObjectItem(root, "id") : NULL;
 
-  if(!cJSON_IsString(jn) || !jn->valuestring || !jn->valuestring[0]) {
-    cJSON_Delete(root);
-    ps5tm_http_send_error(fd, 400, "missing_username",
-                          "Kein Benutzername angegeben.");
-    return;
+  uint64_t id = 0;
+  if(cJSON_IsString(ji) && ji->valuestring && ji->valuestring[0]) {
+    char *end = NULL;
+    id = strtoull(ji->valuestring, &end, 16);
+    if(end == ji->valuestring || *end) {
+      cJSON_Delete(root);
+      ps5tm_http_send_error(fd, 400, "bad_id", "Ungültige Konto-ID (hexadezimal, z. B. 0x1234).");
+      return;
+    }
   }
-
-  char nm[PS5TM_USERNAME_MAX + 1];
-  snprintf(nm, sizeof(nm), "%s", jn->valuestring);
-  cJSON_Delete(root);
 
   const char *why = NULL;
-  if(ps5tm_account_activate(nm, &why) != 0) {
-    ps5tm_http_send_error(fd, 400, "activate_failed",
-                          why ? why : "Aktivierung fehlgeschlagen.");
+  int rc, slot = 0;
+  char name[PS5TM_ACCOUNT_NAME_BUF] = "";
+  if(cJSON_IsNumber(js)) {
+    slot = (int)js->valuedouble;
+    rc = ps5tm_account_activate_slot(slot, id, &why);
+  } else if(cJSON_IsString(jn) && jn->valuestring && jn->valuestring[0]) {
+    snprintf(name, sizeof(name), "%s", jn->valuestring);
+    rc = ps5tm_account_activate(name, &why);
+  } else {
+    cJSON_Delete(root);
+    ps5tm_http_send_error(fd, 400, "missing_account", "Kein Benutzer ausgewählt.");
+    return;
+  }
+  cJSON_Delete(root);
+  if(rc != 0) {
+    ps5tm_http_send_error(fd, 400, "activate_failed", why ? why : "Aktivierung fehlgeschlagen.");
     return;
   }
 
-  char buf[128];
-  snprintf(buf, sizeof(buf),
-           "{\"ok\":true,\"account_id\":\"0x%016llX\"}",
-           (unsigned long long)ps5tm_account_gen_id(nm));
+  /* what the account looks like now */
+  ps5tm_account_entry_t list[PS5TM_ACCOUNT_SLOTS];
+  int n = ps5tm_account_list(list, PS5TM_ACCOUNT_SLOTS);
+  char buf[160];
+  snprintf(buf, sizeof(buf), "{\"ok\":true}");
+  for(int i = 0; i < n; i++) {
+    if(slot ? list[i].slot == slot : !strcmp(list[i].name, name))
+      snprintf(buf, sizeof(buf), "{\"ok\":true,\"slot\":%d,\"account_id\":\"0x%016llX\"}",
+               list[i].slot, (unsigned long long)list[i].id);
+  }
   ps5tm_http_send_json(fd, 200, buf);
 }
 

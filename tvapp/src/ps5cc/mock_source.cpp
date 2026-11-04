@@ -1067,6 +1067,11 @@ class MockSource final : public Source
         a.loaded = true;
         if (action == "activate")
         {
+            for (AccountSlot &s : a.slots)
+            {
+                if (s.name == name)
+                    s.active = true;
+            }
             a.activated = true;
             a.username = name;
             notice(Notice::Kind::success, "Offline-Konto aktiviert",
@@ -1080,8 +1085,7 @@ class MockSource final : public Source
         }
         else
         {
-            a = AccountInfo{};
-            a.loaded = true;
+            a.fakesignin = false;
             notice(Notice::Kind::success, "Konto zurückgesetzt");
         }
         changed();
@@ -2341,6 +2345,7 @@ class MockSource final : public Source
         data_.account.loaded = true;
         data_.account.activated = true;
         data_.account.username = "Spieler1";
+        data_.account.slots = {{1, "Spieler1", true}, {3, "Gast", false}};
         data_.avatars = {
             {"01-neon-portraet.jpg", "Neon-Porträt"}, {"02-neon-fuchs.jpg", "Neon-Fuchs"},
             {"03-neon-roboter.jpg", "Neon-Roboter"},  {"04-neon-pilz.jpg", "Neon-Pilz"},

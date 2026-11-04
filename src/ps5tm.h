@@ -1083,10 +1083,22 @@ int ps5tm_avatar_restore(uint32_t uid, int *out_copied, const char **why);
 /* Max length of an OffAct account-type string (including NUL). */
 #define PS5TM_ACCOUNT_TYPE_MAX 17
 
+/* One account of the console, as OffAct lists them: slots 1..16 whose name is set (OffAct main.c, v0.4.2). */
+#define PS5TM_ACCOUNT_SLOTS   16
+#define PS5TM_ACCOUNT_NAME_BUF 32            /* ACCOUNT_NAME_MAX of OffAct: the size the registry call wants */
+typedef struct {
+  int      slot;                              /* 1..16 */
+  char     name[PS5TM_ACCOUNT_NAME_BUF];
+  uint64_t id;                                /* account id; 0 = none */
+  char     type[PS5TM_ACCOUNT_TYPE_MAX];      /* "np" once activated */
+  int      flags;                             /* 4098 once activated */
+  int      active;                            /* id set and type "np": OffAct has been through this account */
+} ps5tm_account_entry_t;
+
 typedef struct {
   uint32_t uid;
   int      valid;        /* user was found */
-  int      activated;   /* offline slot 1 account is set */
+  int      activated;   /* at least one account is set up as an offline account (see ps5tm_account_entry_t.active) */
   int      fakesignin;  /* auth.dat/config.dat exist */
   uint64_t account_id;
   char     username[PS5TM_USERNAME_MAX + 1]; /* name of the offline account, empty when none */
@@ -1098,7 +1110,14 @@ uint64_t ps5tm_account_gen_id(const char *name);
 /* Read the current state without changing anything. */
 ps5tm_account_status_t ps5tm_account_status(void);
 
-/* Set offline-account registry keys for slot 1. */
+/* The accounts that exist (name set), at most `max`; returns how many. Reads the registry only. */
+int ps5tm_account_list(ps5tm_account_entry_t *out, int max);
+
+/* OffAct's activation of one existing account: account id (0: keep the one that is set, else made from the name), type
+   "np", flags 4098. The name is never written. */
+int ps5tm_account_activate_slot(int slot, uint64_t id, const char **why);
+
+/* The same for the account that has this name (exactly). */
 int ps5tm_account_activate(const char *username, const char **why);
 
 /* Inject np-fake-signin v1.3 ELF to 127.0.0.1:9021; ELF is fully self-contained. */

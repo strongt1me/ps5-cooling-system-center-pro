@@ -1,5 +1,17 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Offline-Konto: wie OffAct (v0.4.2)
+- Ein Vergleich mit dem Quelltext von OffAct (`master` ist noch v0.4.2; die neu geladene `OffAct-1.zip` ist ein Build davon, ohne Quelltext) ergab zwei Abweichungen unseres Einbaus, die jetzt behoben sind: OffAct **schreibt nie einen Namen**, sondern macht einen **vorhandenen Benutzer** zum Offline-Konto (Konto-ID, Typ `np`, Kennzeichen), und es setzt die Kennzeichen auf **4098**, wir hatten **1**. Außerdem hasht es den Namen mit vorzeichenbehaftetem `char`: Ein Name mit Umlaut bekommt jetzt dieselbe Konto-ID wie dort.
+- **Oberfläche:** Im Browser steht statt des Namensfelds eine Liste der vorhandenen Benutzer (Platz, Typ, Konto-ID) mit „Aktivieren“; die aktive Zeile leuchtet grün. In der Vollbild-App öffnet „Offline-Konto aktivieren“ eine Auswahl der Benutzer (bei nur einem wird er sofort aktiviert); die Tastatur dafür entfällt. `GET /api/v1/profile/account/status` nennt dazu `accounts[]`, `POST …/account/activate` nimmt `slot` (und optional `id`); `username` geht weiter, sofern es den Benutzer gibt.
+- Der Zustand „aktiv“ hieß bisher nur „Platz 1 hat einen Namen“ (das trifft auf jeden Benutzer zu); jetzt heißt er „Konto-ID gesetzt und Typ `np`“.
+- Neuer Host-Test `test/account/run.sh` (29 Prüfungen gegen eine Registrierung im Speicher, auch dass das Zurücksetzen der Fake-Anmeldung das Konto stehen lässt).
+
+### Dateimanager: Zielwahl und Ordnerfarbe
+- In „Kopieren nach“ haben die Ordnerzeilen die Größe und Schrift wie im Dateimanager (vorher riesige Symbole mit kleinem Namen); Ordner sind überall **gelb**, Dateien bleiben grau. Bei `/data` leuchtet nur noch „Interne SSD“, nicht zugleich „Ganzes System“.
+- Das Fenster „Namen schon vorhanden“ schließt sich nach dem Hochladen von selbst.
+
 ## v1.76.4
 
 ### Kacheln: Hintergrundbild im Startmenü

@@ -169,8 +169,8 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET/PUT | `/api/v1/games` | Spielprofile (Regeln je Spiel) lesen / schreiben |
 | GET | `/api/v1/games/export` | Spielprofile als JSON exportieren |
 | POST | `/api/v1/games/import` | Spielprofile aus JSON importieren |
-| GET | `/api/v1/profile/account/status` | Offline-Konto und Fake-Anmeldung des Benutzers: `valid`, `uid`, `activated`, `fakesignin`, `account_id`, `username` |
-| POST | `/api/v1/profile/account/activate` | Offline-Konto für Platz 1 setzen (`{"username":"…"}`, höchstens 16 Zeichen) |
+| GET | `/api/v1/profile/account/status` | Offline-Konto und Fake-Anmeldung: `valid`, `uid`, `activated` (ein Konto ist eingerichtet), `fakesignin`, `account_id`/`username` (des ersten eingerichteten Kontos) und `accounts[{slot, name, id, type, flags, active}]`, die vorhandenen Benutzer der Konsole (Plätze 1 bis 16 mit Namen, wie OffAct sie listet) |
+| POST | `/api/v1/profile/account/activate` | einen vorhandenen Benutzer als Offline-Konto aktivieren, wie OffAct: `{"slot":N}` (oder von älteren Aufrufern `{"username":"…"}`, der Name muss es schon geben); setzt Konto-ID (die vorhandene, sonst aus dem Namen gebildet; mit `"id":"0x…"` frei wählbar), Typ `np` und Kennzeichen 4098. Der Name wird nie geschrieben |
 | POST | `/api/v1/profile/account/fakesignin` | die eingebettete np-fake-signin ELF (earthonion v1.3) an den Payload-Lader 127.0.0.1:9021 schicken; ohne Körper |
 | POST | `/api/v1/profile/account/restore` | auth.dat und config.dat löschen und die Registrierungseinträge der Fake-Anmeldung leeren; lässt Name, Konto-ID, Flags und Typ des Offline-Kontos unangetastet |
 | POST | `/api/v1/profile/username` | Anzeigenamen des Benutzers ändern (`{"name":"…"}`) |

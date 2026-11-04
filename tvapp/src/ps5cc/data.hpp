@@ -954,12 +954,22 @@ struct ProfileInfo
 
 // GET /api/v1/profile/account/status: the offline account and the fake sign-in of the signed-in
 // user.
+// One user of the console, as OffAct lists them (slots 1..16 with a name): the offline account is
+// activated for one of them.
+struct AccountSlot
+{
+    int slot = 0;
+    std::string name;
+    bool active = false; // account id and type "np" are set
+};
+
 struct AccountInfo
 {
     bool loaded = false;
-    bool activated = false;  // an offline account is set (slot 1)
+    bool activated = false;  // one of the users is activated as the offline account
     bool fakesignin = false; // auth.dat exists
-    std::string username;    // the offline account's name
+    std::string username;    // the name of the first activated one
+    std::vector<AccountSlot> slots;
 };
 
 // /avatars/index.json: a built-in profile picture (web/avatars, thumbnails in /avatars/t).

@@ -50,6 +50,8 @@
      jeder Karte war neben den Textschatten das, was das Scrollen am PS5-Browser bremste (Test an der Konsole: ohne ihn
      flüssig); Ringe ohne Unschärfe sind nur Rechtecke und kosten fast nichts. */
   --card-glow: 0 0 0 1px rgba(56,128,255,.07), 0 0 0 3px rgba(56,128,255,.05), 0 0 0 6px rgba(56,128,255,.025), inset 0 1px 0 rgba(150,190,255,.09);
+  /* Ordnersymbole im Dateimanager (04.11.2026): gelb, damit man sie auf einen Blick von Dateien unterscheidet */
+  --folder: #f2b83a;
 }
 
 * { box-sizing: border-box; }
@@ -1456,6 +1458,7 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 .fm-check { width: 18px; height: 18px; }
 .fm-ico svg { width: 24px; height: 24px; fill: none; stroke: var(--ink-2); stroke-width: 1.6;
   stroke-linejoin: round; stroke-linecap: round; display: block; }
+.fm-ico.dir svg { stroke: var(--folder); fill: rgba(242,184,58,.2); }
 .fm-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .fm-name { font-size: 14px; color: var(--ink); overflow-wrap: anywhere; text-align: left; }
 .fm-open { background: none; border: 0; padding: 0; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
@@ -1490,8 +1493,9 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
   font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; }
 .fm-pick-list { max-height: 44vh; overflow-y: auto; border: 1px solid var(--hairline);
   border-radius: var(--r-md); margin: 4px 0 10px; }
-.fm-pick-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
-  cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--hairline); }
+.fm-pick-row { display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 12px; padding: 9px 12px;
+  cursor: pointer; border-bottom: 1px solid var(--hairline); }
+.fm-pick-row .fm-name { font-weight: 600; }
 .fm-pick-row:last-child { border-bottom: 0; }
 .fm-pick-row:hover { background: var(--inset); }
 .fm-pick-places { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
@@ -1501,11 +1505,14 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 .fm-pick-place[aria-current="true"] { background: var(--accent); border-color: transparent; color: #fff; }
 .fm-conflict-list { margin: 0 0 10px; padding-left: 20px; font-size: 13px; }
 
-.acc-picks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
-.acc-picks::before { content: "Vorhanden:"; font-size: 12px; color: var(--ink-2); }
-.acc-pick { border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); border-radius: 999px;
-  padding: 4px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
-.acc-pick:hover { border-color: var(--accent); }
+.acc-list { display: grid; gap: 8px; margin: 10px 0 0; }
+.acc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;
+  border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--inset); }
+.acc-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.acc-main b { font-size: 15px; overflow-wrap: anywhere; }
+.acc-main small { font-size: 12px; }
+.acc-row.acc-active { border-color: rgba(12,163,12,.45); background: rgba(12,163,12,.08);
+  box-shadow: 0 0 0 1px rgba(12,163,12,.22), 0 0 14px rgba(12,163,12,.3); }
 /* Leuchtender Rand, solange die Funktion aktiv ist (konsistent mit .conn.on / .run-dot.live). */
 .note.acc-active { border-color: rgba(12,163,12,.45); background: rgba(12,163,12,.08);
   color: var(--good); box-shadow: 0 0 0 1px rgba(12,163,12,.22), 0 0 14px rgba(12,163,12,.3); }
@@ -1941,6 +1948,7 @@ button.apr-drive:disabled { cursor: default; }
 /* ── Hell: helles Grau-Blau statt Weiß, gedämpft, damit es am Fernseher nicht blendet ── */
 :root[data-theme="hell"] {
   color-scheme: light;
+  --folder: #c98a0a;
   --plane: #dfe5ee; --side: #e9eef5; --accent: #2f6fe0;
   --surface-1: #f3f6fa; --surface-2: #e9eef6; --inset: #e6ebf3;
   --ink: #18212f; --ink-2: #303d55; --ink-muted: #5a6780;

@@ -2,11 +2,11 @@
  *
  * Two independent features:
  *
- *  1. Offline activation (OffAct approach, GPL-3.0):
- *     Sets three sceRegMgr keys — account name, account ID and account flags —
- *     so the console shows the chosen name without touching any file.
- *     Algorithm derived from offact.c by John Törnblom (GPL-3.0-or-later,
- *     https://github.com/ps5-payload-dev/offact, tag v0.4.2).
+ *  1. Offline activation (OffAct, GPL-3.0):
+ *     Works on accounts that exist: lists slots 1..16 whose name is set and, for the chosen one, sets the account id,
+ *     the type "np" and the flags 4098 — as OffAct's main.c does (OnDialogOutcome). The name is not written; it is the
+ *     console user's own. Derived from offact.c / main.c by John Törnblom (GPL-3.0-or-later,
+ *     https://github.com/ps5-payload-dev/offact, v0.4.2; master has no commit beyond it as of 04.11.2026).
  *
  *  2. Fake-signin:
  *     Injects the np-fake-signin v1.3 ELF (earthonion) to 127.0.0.1:9021.
@@ -46,18 +46,27 @@ extern int sceRegMgrSetStr(int, const char *, size_t) __attribute__((weak));
 extern int sceRegMgrSetBin(int, const void *, size_t) __attribute__((weak));
 extern int sceRegMgrSetInt(int, int)                  __attribute__((weak));
 #else
+/* A small registry in memory for the host test (test/account): a key holds what was last written to it, a key never
+   written reads as an error, as an unknown key does on the console. */
+static struct { int key, used; char s[64]; uint64_t b; int i; } g_reg[128];
+static int reg_slot(int k, int make) {
+  for(int i = 0; i < 128; i++) if(g_reg[i].used && g_reg[i].key == k) return i;
+  if(!make) return -1;
+  for(int i = 0; i < 128; i++) if(!g_reg[i].used) { g_reg[i].used = 1; g_reg[i].key = k; return i; }
+  return -1;
+}
 static int sceRegMgrGetStr(int k, char *v, size_t n)
-  { (void)k; snprintf(v, n, "TestAcc"); return 0; }
+  { int i = reg_slot(k, 0); if(i < 0) return -1; snprintf(v, n, "%s", g_reg[i].s); return 0; }
 static int sceRegMgrGetBin(int k, void *v, size_t n)
-  { (void)k; memset(v, 0, n); return 0; }
+  { int i = reg_slot(k, 0); if(i < 0) return -1; memcpy(v, &g_reg[i].b, n < 8 ? n : 8); return 0; }
 static int sceRegMgrGetInt(int k, int *v)
-  { (void)k; *v = 0; return 0; }
+  { int i = reg_slot(k, 0); if(i < 0) return -1; *v = g_reg[i].i; return 0; }
 static int sceRegMgrSetStr(int k, const char *v, size_t n)
-  { (void)k; (void)v; (void)n; return 0; }
+  { int i = reg_slot(k, 1); if(i < 0) return -1; snprintf(g_reg[i].s, sizeof(g_reg[i].s), "%.*s", (int)n, v); return 0; }
 static int sceRegMgrSetBin(int k, const void *v, size_t n)
-  { (void)k; (void)v; (void)n; return 0; }
+  { int i = reg_slot(k, 1); if(i < 0) return -1; g_reg[i].b = 0; memcpy(&g_reg[i].b, v, n < 8 ? n : 8); return 0; }
 static int sceRegMgrSetInt(int k, int v)
-  { (void)k; (void)v; return 0; }
+  { int i = reg_slot(k, 1); if(i < 0) return -1; g_reg[i].i = v; return 0; }
 #endif /* PS5TM_HOST_TEST */
 
 
@@ -72,13 +81,15 @@ entity_number(int slot, int max, int step, int base, int fallback)
   return (slot - 1) * step + base;
 }
 
-/* FNV-based hash used as a deterministic account-id. */
+/* FNV-based hash used as a deterministic account-id. OffAct hashes `char`, which is signed on this platform: a byte of
+   0x80 or more (an umlaut in UTF-8) enters as a negative number extended to 64 bits. The same here, so a name gets the
+   same id as in OffAct. */
 static uint64_t
 gen_account_id(const char *name)
 {
   uint64_t h = (uint64_t)(0x5EAF00D) / (uint64_t)(0xCA7F00D);
   if(*name) {
-    do { h = 0x100000001B3ULL * (h ^ (unsigned char)*name++); } while(*name);
+    do { h = 0x100000001B3ULL * (h ^ (uint64_t)(int64_t)(signed char)*name++); } while(*name);
   }
   return h;
 }
@@ -89,41 +100,36 @@ gen_account_id(const char *name)
 #define KEY_ACCOUNT_FLAGS(s) entity_number((s),16,65536,125831168,127141888)
 #define KEY_ACCOUNT_TYPE(s)  entity_number((s),16,65536,125874183,127184903)
 
-/* OffAct activation: set name, id, type and flags for one slot. */
+#define ACCOUNT_FLAGS_ACTIVE 4098   /* what OffAct's main.c sets (account_flags = 4098) */
+
+/* One slot as OffAct's GetItemLabel reads it. -1 when the slot has no name (no such user) or the registry is not there. */
 static int
-offact_activate(int slot, const char *name, int *rc_out)
+read_slot(int slot, ps5tm_account_entry_t *e)
 {
-  if(!sceRegMgrSetStr || !sceRegMgrSetBin || !sceRegMgrSetInt) {
-    if(rc_out) *rc_out = -1;
-    return -1;
-  }
+  memset(e, 0, sizeof(*e));
+  e->slot = slot;
+  if(!sceRegMgrGetStr || !sceRegMgrGetBin || !sceRegMgrGetInt) return -1;
 
-  char   nm[PS5TM_USERNAME_MAX + 1];
-  memset(nm, 0, sizeof(nm));
-  snprintf(nm, sizeof(nm), "%s", name);
+  char name[PS5TM_ACCOUNT_NAME_BUF];
+  memset(name, 0, sizeof(name));
+  if(sceRegMgrGetStr(KEY_ACCOUNT_NAME(slot), name, sizeof(name)) != 0 || !name[0]) return -1;
+  memcpy(e->name, name, sizeof(e->name));
+  e->name[sizeof(e->name) - 1] = 0;
 
-  uint64_t aid = gen_account_id(nm);
+  uint64_t id = 0;
+  if(sceRegMgrGetBin(KEY_ACCOUNT_ID(slot), &id, sizeof(id)) == 0) e->id = id;
 
-  int rc;
-  rc = sceRegMgrSetStr(KEY_ACCOUNT_NAME(slot), nm, sizeof(nm));
-  if(rc_out) *rc_out = rc;
-  if(rc != 0) return -1;
+  char type[PS5TM_ACCOUNT_TYPE_MAX];
+  memset(type, 0, sizeof(type));
+  if(sceRegMgrGetStr(KEY_ACCOUNT_TYPE(slot), type, sizeof(type)) == 0)
+    memcpy(e->type, type, sizeof(e->type));
+  e->type[sizeof(e->type) - 1] = 0;
 
-  rc = sceRegMgrSetBin(KEY_ACCOUNT_ID(slot), &aid, sizeof(aid));
-  if(rc_out) *rc_out = rc;
-  if(rc != 0) return -1;
+  int flags = 0;
+  if(sceRegMgrGetInt(KEY_ACCOUNT_FLAGS(slot), &flags) == 0) e->flags = flags;
 
-  /* "np" marks the account as a full PSN account in the slot type field. */
-  char typ[PS5TM_ACCOUNT_TYPE_MAX];
-  memset(typ, 0, sizeof(typ));
-  snprintf(typ, sizeof(typ), "np");
-  rc = sceRegMgrSetStr(KEY_ACCOUNT_TYPE(slot), typ, sizeof(typ));
-  if(rc_out) *rc_out = rc;
-  if(rc != 0) return -1;
-
-  rc = sceRegMgrSetInt(KEY_ACCOUNT_FLAGS(slot), 1);
-  if(rc_out) *rc_out = rc;
-  return (rc == 0) ? 0 : -1;
+  e->active = e->id != 0 && !strcmp(e->type, "np");
+  return 0;
 }
 
 /* --------------------------------------------------- fake-signin registry keys
@@ -194,17 +200,17 @@ ps5tm_account_status(void)
 
   if(!sceRegMgrGetStr || !sceRegMgrGetBin || !sceRegMgrGetInt) return s;
 
-  /* offline activation: slot 1 key */
-  char name[PS5TM_USERNAME_MAX + 1];
-  memset(name, 0, sizeof(name));
-  if(sceRegMgrGetStr(KEY_ACCOUNT_NAME(1), name, sizeof(name)) == 0 && name[0]) {
+  /* offline activation: the first account that is set up (id and type "np"); the earlier check, "slot 1 has a name",
+     held for every console user, activated or not */
+  ps5tm_account_entry_t list[PS5TM_ACCOUNT_SLOTS];
+  int n = ps5tm_account_list(list, PS5TM_ACCOUNT_SLOTS);
+  for(int i = 0; i < n; i++) {
+    if(!list[i].active) continue;
     s.activated = 1;
-    memcpy(s.username, name, sizeof(s.username));
+    snprintf(s.username, sizeof(s.username), "%s", list[i].name);
+    s.account_id = list[i].id;
+    break;
   }
-
-  uint64_t aid = 0;
-  sceRegMgrGetBin(KEY_ACCOUNT_ID(1), &aid, sizeof(aid));
-  s.account_id = aid;
 
   /* fake-signin: check presence of auth.dat */
   char ap[NP_PATH_MAX];
@@ -218,43 +224,74 @@ ps5tm_account_status(void)
 }
 
 
-/* Offline activation — slot 1 by default. */
+/* The accounts that exist: slots with a name, in slot order. */
+int
+ps5tm_account_list(ps5tm_account_entry_t *out, int max)
+{
+  int n = 0;
+  for(int slot = 1; slot <= PS5TM_ACCOUNT_SLOTS && n < max; slot++) {
+    if(read_slot(slot, &out[n]) == 0) n++;
+  }
+  return n;
+}
+
+
+/* OffAct's activation of one account (main.c, OnDialogOutcome): id, type "np", flags 4098, in that order. The id is the
+   one given, else the one already set, else made from the name (OnActivateItem proposes the same). */
+int
+ps5tm_account_activate_slot(int slot, uint64_t id, const char **why)
+{
+  if(why) *why = NULL;
+
+  ps5tm_account_entry_t e;
+  if(slot < 1 || slot > PS5TM_ACCOUNT_SLOTS || read_slot(slot, &e) != 0) {
+    if(why) *why = "Auf diesem Platz gibt es keinen Benutzer.";
+    return -1;
+  }
+  if(!sceRegMgrSetStr || !sceRegMgrSetBin || !sceRegMgrSetInt) {
+    if(why) *why = "sceRegMgr nicht verfuegbar — ist der Jailbreak geladen?";
+    return -1;
+  }
+  if(!id) id = e.id ? e.id : gen_account_id(e.name);
+
+  char type[PS5TM_ACCOUNT_TYPE_MAX];
+  memset(type, 0, sizeof(type));
+  snprintf(type, sizeof(type), "np");
+
+  int rc = sceRegMgrSetBin(KEY_ACCOUNT_ID(slot), &id, sizeof(id));
+  if(rc == 0) rc = sceRegMgrSetStr(KEY_ACCOUNT_TYPE(slot), type, sizeof(type));
+  if(rc == 0) rc = sceRegMgrSetInt(KEY_ACCOUNT_FLAGS(slot), ACCOUNT_FLAGS_ACTIVE);
+  if(rc != 0) {
+    static char msg[128];
+    snprintf(msg, sizeof(msg), "Registrierungszugriff fehlgeschlagen (0x%08X). Jailbreak aktiv?", (unsigned)rc);
+    if(why) *why = msg;
+    PS5TM_WARN("account_activate_failed", "Offline-Konto Platz %d (\"%s\") konnte nicht aktiviert werden (0x%08X).",
+               slot, e.name, (unsigned)rc);
+    return -1;
+  }
+
+  PS5TM_INFO("account_activated", "Offline-Konto Platz %d (\"%s\") aktiviert: ID 0x%016llX, Typ np, Kennzeichen %d.",
+             slot, e.name, (unsigned long long)id, ACCOUNT_FLAGS_ACTIVE);
+  return 0;
+}
+
+
+/* The account with this name. The older callers (the full-screen app of 1.76.4, a page still in a browser's cache)
+   send a name instead of a slot. */
 int
 ps5tm_account_activate(const char *username, const char **why)
 {
   if(why) *why = NULL;
-
   if(!username || !*username) {
-    if(why) *why = "Kein Benutzername angegeben.";
+    if(why) *why = "Kein Benutzer angegeben.";
     return -1;
   }
-  if(strlen(username) > (size_t)PS5TM_USERNAME_MAX) {
-    if(why) *why = "Name zu lang (max. 16 Zeichen).";
-    return -1;
-  }
-
-  if(!sceRegMgrSetStr) {
-    if(why) *why = "sceRegMgr nicht verfuegbar — ist der Jailbreak geladen?";
-    return -1;
-  }
-
-  int rc = 0;
-  if(offact_activate(1, username, &rc) != 0) {
-    static char msg[128];
-    snprintf(msg, sizeof(msg),
-             "Registrierungszugriff fehlgeschlagen (0x%08X). Jailbreak aktiv?",
-             (unsigned)rc);
-    if(why) *why = msg;
-    PS5TM_WARN("account_activate_failed",
-               "Offline-Konto fuer \"%s\" konnte nicht aktiviert werden (0x%08X).",
-               username, (unsigned)rc);
-    return -1;
-  }
-
-  PS5TM_INFO("account_activated",
-             "Offline-Konto Slot 1 auf \"%s\" gesetzt (ID 0x%016llX).",
-             username, (unsigned long long)gen_account_id(username));
-  return 0;
+  ps5tm_account_entry_t list[PS5TM_ACCOUNT_SLOTS];
+  int n = ps5tm_account_list(list, PS5TM_ACCOUNT_SLOTS);
+  for(int i = 0; i < n; i++)
+    if(!strcmp(list[i].name, username)) return ps5tm_account_activate_slot(list[i].slot, 0, why);
+  if(why) *why = "Es gibt keinen Benutzer mit diesem Namen. Das Offline-Konto kann nur für vorhandene Benutzer aktiviert werden.";
+  return -1;
 }
 
 

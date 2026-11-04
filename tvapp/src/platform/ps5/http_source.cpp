@@ -3558,6 +3558,16 @@ void HttpSource::poll_profile()
             account.activated = flag(root, "activated");
             account.fakesignin = flag(root, "fakesignin");
             account.username = str(root, "username");
+            const cJSON *a = nullptr;
+            cJSON_ArrayForEach(a, cJSON_GetObjectItemCaseSensitive(root, "accounts"))
+            {
+                AccountSlot s;
+                s.slot = static_cast<int>(num(a, "slot"));
+                s.name = str(a, "name");
+                s.active = flag(a, "active");
+                if (!s.name.empty())
+                    account.slots.push_back(std::move(s));
+            }
             cJSON_Delete(root);
         }
     }

@@ -1211,7 +1211,7 @@ class Ps5cc final : public app::Concept
             {0.4f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "profil-konto"},
             {0.4f, action_bit(Action::confirm)},
-            {0.8f, 0, Direction::none, "profil-konto-name"},
+            {0.8f, 0, Direction::none, "profil-konto-auswahl"},
             {0.4f, action_bit(Action::back)},
             {0.4f, action_bit(Action::jump_next)},
             {1.2f, 0, Direction::none, "profil-danke"},

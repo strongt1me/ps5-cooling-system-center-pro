@@ -204,16 +204,10 @@
           <!-- ── Offline-Konto aktivieren ───────────────────────────────────── -->
           <article class="card" id="acc-activate-card">
             <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-user"/></svg></span><div class="ck-text"><h2>Offline-Konto aktivieren</h2>
-              <p class="sub">setzt Benutzernamen und Konto-ID über die Systemregistrierung</p></div></div></div>
-            <p class="note">Erstellt einen lokalen PS5-Benutzer ohne Netzwerkverbindung. Der Name erscheint im Startmenü. Benötigt aktiven Jailbreak.</p>
-            <div class="acc-picks" id="acc-name-picks" hidden></div>
-            <div class="name-row" style="align-items:flex-end;gap:8px;">
-              <input type="text" id="acc-name" maxlength="16" placeholder="Player1"
-                     autocomplete="off" spellcheck="false" style="flex:1;">
-              <button class="btn primary" id="acc-activate-btn">Konto aktivieren</button>
-            </div>
-            <p class="note" id="acc-activate-note" style="margin-top:8px;">
-              Slot 1 · Konto-ID wird aus dem Namen berechnet</p>
+              <p class="sub">aktiviert einen vorhandenen Benutzer über die Systemregistrierung</p></div></div></div>
+            <p class="note">Wähle einen vorhandenen Benutzer der Konsole: Konto-ID, Typ „np“ und Kennzeichen werden gesetzt, der Name bleibt, wie er ist (wie in OffAct). Benötigt aktiven Jailbreak.</p>
+            <div class="acc-list" id="acc-list" role="list"><p class="muted">wird geladen …</p></div>
+            <p class="note" id="acc-activate-note" style="margin-top:8px;">Kein Offline-Konto aktiv.</p>
           </article>
 
           <!-- ── Fake-Signin ────────────────────────────────────────────────── -->

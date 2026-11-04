@@ -91,6 +91,11 @@ class ProfilePage final : public Page
         };
         grid_.set_bounds({kGridX, kTop + 10.0f, 1824.0f - kGridX, kBottom - kTop - 10.0f});
 
+        pick_.style.theme = solid_theme(theme);
+        pick_.style.width = 560.0f;
+        pick_.style.scrim = 0.35f;
+        pick_.set_bounds({kLeftX, 40.0f, 1824.0f - kLeftX, 920.0f});
+
         account_.style.theme = theme;
         account_.style.panel = true;
         account_.style.row_height = 104.0f;
@@ -207,11 +212,24 @@ class ProfilePage final : public Page
 
     bool modal() const override
     {
-        return naming_;
+        return naming_ || pick_.is_open();
     }
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (pick_.is_open())
+        {
+            if (pick_.handle(input, feedback) == ui::Event::activated)
+            {
+                const int tag = pick_.items()[static_cast<std::size_t>(pick_.focus())].tag;
+                if (tag >= 0 && static_cast<std::size_t>(tag) < pick_names_.size())
+                {
+                    feedback.play(audio::Cue::select);
+                    source().account_action("activate", pick_names_[static_cast<std::size_t>(tag)]);
+                }
+            }
+            return;
+        }
         if (naming_)
         {
             keys_.set_length(static_cast<int>(name_.size()));
@@ -233,10 +251,7 @@ class ProfilePage final : public Page
                 }
                 naming_ = false;
                 feedback.play(audio::Cue::select);
-                if (naming_account_)
-                    source().account_action("activate", trimmed);
-                else
-                    source().set_username(trimmed);
+                source().set_username(trimmed);
             }
             return;
         }
@@ -273,7 +288,6 @@ class ProfilePage final : public Page
                 return;
             }
             naming_ = true;
-            naming_account_ = false;
             name_ = profile_.username;
             keys_.style.max_length = std::max(profile_.name_max, 1);
             keys_.set_layout(0);
@@ -316,6 +330,7 @@ class ProfilePage final : public Page
         grid_.update(dt);
         account_.update(dt);
         thanks_.update(dt);
+        pick_.update(dt);
         clock_ += dt;
         if (naming_)
             keys_.update(dt);
@@ -390,6 +405,7 @@ class ProfilePage final : public Page
 
     void draw_overlay(ui::Canvas &canvas) const override
     {
+        pick_.draw(canvas);
         const float amount = shown_.value;
         if (amount <= 0.01f)
             return;
@@ -401,8 +417,7 @@ class ProfilePage final : public Page
         ui::Painter paint(list, fonts, theme_);
         solid_floor(list, panel, theme_.radius_card);
         paint.panel(panel);
-        ui::text(list, fonts.display, naming_account_ ? "Name des Offline-Kontos" : "Anzeigename",
-                 panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
+        ui::text(list, fonts.display, "Anzeigename", panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
         ui::text(list, fonts.regular,
                  "höchstens " + std::to_string(std::max(profile_.name_max, 1)) + " Zeichen",
                  panel.x + panel.w - 40.0f, panel.y + 66.0f, 21.0f, kMuted, gfx::Align::right);
@@ -452,7 +467,8 @@ class ProfilePage final : public Page
         std::vector<ui::ListItem> rows(3);
         rows[kRowActivate].title = "Offline-Konto aktivieren";
         rows[kRowActivate].subtitle =
-            "Setzt Name und Konto-Kennung in der Registrierung der Konsole.";
+            "Macht einen vorhandenen Benutzer zum Offline-Konto: Konto-ID, "
+            "Typ „np“ und Kennzeichen.";
         rows[kRowActivate].value = !account_info_.loaded     ? "…"
                                    : account_info_.activated ? "aktiv: " + account_info_.username
                                                              : "nicht aktiv";
@@ -479,6 +495,36 @@ class ProfilePage final : public Page
         account_.set_focus(std::clamp(keep, 0, 2));
     }
 
+    // The console's users, as OffAct lists them: one is chosen, none is typed. A single user is
+    // activated at once.
+    void open_account_pick(ui::Feedback &feedback)
+    {
+        pick_names_.clear();
+        std::vector<ui::MenuItem> items;
+        for (const AccountSlot &s : account_info_.slots)
+        {
+            ui::MenuItem m;
+            m.label = s.name;
+            m.shortcut = s.active ? "aktiv" : "";
+            m.tag = static_cast<int>(pick_names_.size());
+            pick_names_.push_back(s.name);
+            items.push_back(m);
+        }
+        if (items.empty())
+        {
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        if (items.size() == 1)
+        {
+            feedback.play(audio::Cue::select);
+            source().account_action("activate", pick_names_[0]);
+            return;
+        }
+        pick_.set_items(items);
+        pick_.open({kLeftX + 40.0f, kTop + 60.0f, 700.0f, 60.0f}, feedback);
+    }
+
     void handle_account(const InputFrame &input, ui::Feedback &feedback)
     {
         if (account_.handle(input, feedback) != ui::Event::activated)
@@ -491,16 +537,7 @@ class ProfilePage final : public Page
         switch (account_.focus())
         {
         case kRowActivate:
-            naming_ = true;
-            naming_account_ = true;
-            name_ = account_info_.activated && !account_info_.username.empty()
-                        ? account_info_.username
-                        : profile_.username;
-            keys_.style.max_length = std::max(profile_.name_max, 1);
-            keys_.set_layout(0);
-            keys_.set_length(static_cast<int>(name_.size()));
-            keys_.set_active(true);
-            keys_.enter();
+            open_account_pick(feedback);
             break;
         case kRowFakeSignin:
             feedback.play(audio::Cue::select);
@@ -600,7 +637,8 @@ class ProfilePage final : public Page
     ProfileInfo profile_;
     AccountInfo account_info_;
     std::string account_key_ = "\x01";
-    bool naming_account_ = false;
+    ui::Menu pick_;                       // which user becomes the offline account
+    std::vector<std::string> pick_names_; // by the menu items' tags
     int revision_ = 0;
     bool busy_ = false;
     std::string avatars_key_ = "\x01";
