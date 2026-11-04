@@ -1,5 +1,10 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Vollbild-App: Version im Titel
+- Die Titelzeile zeigt nach „PS5 COOLING & SYSTEM CENTER Pro“ jetzt die Version der laufenden App („v1.76.7“), klein und gedämpft; der Trennstrich und der Name der Seite rücken ein Stück nach rechts. Die Zahl liest die Vollbild-App beim Start aus `GET /api/v1/system` (`app_version`), sie ist also die Version, die auf der Konsole wirklich läuft, nicht die der Kachel.
+
 ## v1.76.6
 
 ### Browser-Oberfläche: Versionsnummer links

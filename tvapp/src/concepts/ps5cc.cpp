@@ -2087,10 +2087,17 @@ class Ps5cc final : public app::Concept
                                      52.0f, 18.0f, kBlue, gfx::Align::left, 3.0f);
         const float pro =
             ui::text(list, fonts.display, "Pro", kMargin + brand + 14.0f, 53.0f, 22.0f, kInk);
+        // The app's version follows the title, small and muted (it was only on the System page).
+        float ver = 0.0f;
+        if (!data_.app_version.empty())
+        {
+            ver = 12.0f + ui::text(list, fonts.regular, "v" + data_.app_version,
+                                   kMargin + brand + 14.0f + pro + 12.0f, 53.0f, 18.0f, kMuted);
+        }
         const int area = nav_.current();
         if (area >= 0 && area < static_cast<int>(nav_.entries().size()))
         {
-            const float x = kMargin + brand + 14.0f + pro + 22.0f;
+            const float x = kMargin + brand + 14.0f + pro + ver + 22.0f;
             list.rounded_rect({x, 38.0f, 2.0f, 20.0f}, 1.0f, Color::rgb(0x3880ff, 0.4f));
             ui::text(list, fonts.semibold, nav_.entries()[static_cast<std::size_t>(area)].label,
                      x + 22.0f, 53.0f, 22.0f, kInk);

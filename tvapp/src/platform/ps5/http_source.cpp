@@ -2306,8 +2306,10 @@ void HttpSource::poll_language()
         else
         {
             console_language_read_ = true;
+            std::string app_version;
             if (cJSON *root = cJSON_Parse(body.c_str()))
             {
+                app_version = str(root, "app_version");
                 const cJSON *loc = cJSON_GetObjectItemCaseSensitive(root, "locale");
                 console_language_ = static_cast<int>(num(loc, "language", -1));
                 if (cJSON_IsNumber(cJSON_GetObjectItemCaseSensitive(loc, "local_offset_min")))
@@ -2319,6 +2321,7 @@ void HttpSource::poll_language()
             }
             std::lock_guard<std::mutex> lock(mutex_);
             data_.console_language = console_language_;
+            data_.app_version = app_version;
             if (console_tz_known_)
                 data_.config.tz_offset_min = console_tz_min_;
             ++data_.serial;
