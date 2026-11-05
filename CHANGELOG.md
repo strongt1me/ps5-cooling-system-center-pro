@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.76.9
 
 ### Dateimanager: wie viele Einträge, von wo nach wo
 - Die Auftragsanzeige beim Kopieren, Verschieben und Löschen sagt jetzt, **wie viele Dateien/Ordner** es sind und **welcher gerade** dran ist, und darunter, **woher und wohin**: „Kopiere 1 von 2 Dateien/Ordnern · 37 %“ und „von /mnt/usb0/neu nach /mnt/ext1“ (bei einem Eintrag „Kopiere 1 Datei/Ordner“; kommen die Einträge aus mehreren Ordnern, steht nur „Ziel: …“; beim Löschen „Ordner: …“). Im Browser steht in der Mengenzeile außerdem, wie viele der enthaltenen Dateien schon fertig sind („1 von 3 Dateien“). Browser und Vollbild-App zeigen dasselbe; der Text ist in allen Sprachen übersetzt.
