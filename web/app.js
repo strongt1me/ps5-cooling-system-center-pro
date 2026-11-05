@@ -12,7 +12,7 @@
   const W = 720, H = 210;
   const DIAG_WINDOW_KEY = "ps5tm.diagWindowMin";
   const EXPERT_MODE_KEY = "ps5tm.expertMode";
-  const FULLSCREEN_KEY = "ps5tm.fullscreen";      /* "0" = nicht automatisch */
+  const FULLSCREEN_KEY = "ps5tm.fullscreen";      /* "1" = beim ersten Druck Vollbild, "0" = nicht; ohne Eintrag: nur im Browser der PS5 */
   const CHANRAW_CONFIRMED_ONLY_KEY = "ps5tm.chanrawConfirmedOnly";
   const RISKY_AUTO_KEY = "ps5tm.riskyAuto";
   const RISKY_AUTO_INTERVAL_KEY = "ps5tm.riskyAutoIntervalSec";
@@ -8520,8 +8520,10 @@
     txt("#fm-selcount", `${s.length} ausgewählt`);
     const allW = s.length && s.every((e) => e.writable);
     $("#fm-cut").disabled = !allW;
+    $("#fm-moveto").disabled = !allW;
     $("#fm-del").disabled = !allW;
     $("#fm-cut").title = allW ? "" : "Geschützt: „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen";
+    $("#fm-moveto").title = $("#fm-cut").title;
     $("#fm-del").title = $("#fm-cut").title;
     const c = fm.clip;
     $("#fm-clipbar").hidden = !c;
@@ -8645,7 +8647,8 @@
   };
 
   /* Zielordner-Auswahl Dialog */
-  const fmPickDest = async (title, srcPath, move) => {
+  const fmPickDest = async (title, srcPath, move, onStarted) => {
+    const srcs = Array.isArray(srcPath) ? srcPath : [srcPath];       /* ein Eintrag oder die ganze Auswahl */
     fm.pick = { path: fm.path };
     if (!fm.places || !fm.places.length) await fmLoadPlaces();
     const o = fmShell();
@@ -8684,8 +8687,8 @@
         return `<button type="button" class="fm-pick-place" data-fmpicknav="${esc(pl.path)}" title="${esc(pl.path)}"${here ? ' aria-current="true"' : ""}>${esc(pl.label)}</button>`;
       }).join("");
       const canDrop = !!d.writable;
-      const srcParent = srcPath.includes("/") ? srcPath.slice(0, srcPath.lastIndexOf("/")) || "/" : "/";
-      const sameDir = d.path === srcParent;
+      const parentOf = (p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) || "/" : "/");
+      const sameDir = srcs.every((p) => parentOf(p) === d.path);
       const okLbl = move ? "Hierhin verschieben" : "Hierhin kopieren";
       const okTip = !canDrop ? "Hierher nicht möglich" : (move && sameDir) ? "Schon im Zielordner" : "";
       const okDis = !canDrop || (move && sameDir);
@@ -8712,10 +8715,10 @@
         okBtn.addEventListener("click", async () => {
           okBtn.disabled = true; okBtn.textContent = "…";
           const dest = fm.pick ? fm.pick.path : d.path;
-          const started = await fmTransfer(move, [srcPath], dest);
+          const started = await fmTransfer(move, srcs, dest);
           fm.pick = null;
           fmClose();
-          if (started) fmFollow();
+          if (started) { if (onStarted) onStarted(); fmFollow(); }
         });
       }
     };
@@ -9211,6 +9214,13 @@
       fm.sel.clear();
       fmRender();
       toast(fm.clip.move ? "Gemerkt. Jetzt den Zielordner öffnen und „Hier einfügen“." : "Gemerkt. Jetzt den Zielordner öffnen und „Hier einfügen“.");
+    }
+    else if (t.id === "fm-copyto" || t.id === "fm-moveto") {
+      const sel = fmSelected();
+      if (!sel.length) return;
+      const move = t.id === "fm-moveto";
+      fmPickDest(move ? "Verschieben nach" : "Kopieren nach", sel.map((en) => fmJoin(fm.path, en.name)), move,
+        () => { fm.sel.clear(); fmRender(); });
     }
     else if (t.id === "fm-paste") fmPaste();
     else if (t.id === "fm-clipclear") { fm.clip = null; fmRenderBars(); }
@@ -11725,8 +11735,15 @@
      irgendwo auf der Seite um; die gedrückte Schaltfläche tut trotzdem ihre
      Arbeit (nur lauschen, nichts abfangen). Wer „Vollbild beenden" drückt,
      schaltet das Automatische für die nächsten Starts ab. */
+  /* Seit 05.11.2026 schaltet der erste Druck nur noch im Browser der PS5 selbst auf Vollbild (dort gibt es keine Taskleiste,
+     die man brauchen könnte). Am PC und am Handy bleibt die Seite im normalen Fenster, bis jemand „Vollbild“ drückt; das
+     merkt sich der Knopf für die nächsten Starts ("1"), „Vollbild beenden“ schaltet es wieder ab ("0"). */
+  const fsIsConsole = /PlayStation/i.test(navigator.userAgent || "");
   const fsAutoWanted = () => {
-    try { return localStorage.getItem(FULLSCREEN_KEY) !== "0"; } catch { return true; }
+    try {
+      const v = localStorage.getItem(FULLSCREEN_KEY);
+      return v === null ? fsIsConsole : v !== "0";
+    } catch { return fsIsConsole; }
   };
   const fsAutoSave = (on) => {
     try { localStorage.setItem(FULLSCREEN_KEY, on ? "1" : "0"); } catch {}

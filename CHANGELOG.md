@@ -1,5 +1,13 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Browser-Oberfläche: Vollbild nur noch im Browser der PS5
+- Der erste Druck irgendwo auf der Seite schaltete bisher in jedem Browser auf Vollbild; am PC musste man F11 drücken, um die Taskleiste wiederzusehen. Jetzt geschieht das nur noch im Browser der PS5 selbst (dort gibt es keine Taskleiste; erkannt am `PlayStation` im Browsernamen). Am PC und am Handy bleibt die Seite im normalen Fenster, bis jemand **Vollbild** drückt; der Knopf merkt sich das für die nächsten Starts, **Vollbild beenden** schaltet es wieder ab. Wer es schon einmal bewusst ein- oder ausgeschaltet hatte, behält seine Wahl.
+
+### Dateimanager: Kopieren nach / Verschieben nach für die ganze Auswahl
+- In der Leiste über der Auswahl stehen neben „Kopieren“, „Ausschneiden“, „Löschen“ und „Auswahl aufheben“ jetzt auch **Kopieren nach** und **Verschieben nach**. Sie öffnen dieselbe Zielwahl wie „⋯“ bei einem einzelnen Eintrag (Laufwerke oben, Ordner zum Hineinwechseln, „Hierhin kopieren/verschieben“), aber für alle ausgewählten Einträge auf einmal. Die Auswahl ist danach aufgehoben. „Verschieben nach“ ist wie „Ausschneiden“ nur möglich, wenn alle Einträge änderbar sind, und im selben Ordner gesperrt. Die Vollbild-App hat dafür weiter die Ablage („Kopieren/Ausschneiden“ und „Hier einfügen“), die mehrere Einträge auf einmal nimmt.
+
 ## v1.76.7
 
 ### Vollbild-App: Version im Titel
