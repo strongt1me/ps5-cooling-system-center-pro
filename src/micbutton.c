@@ -38,8 +38,9 @@
  * 9.60 Slim got no notification for that reason. The third line above,
  * onPostUmmStatusChanged(), is in 9.60 with the same format, so there each of
  * those lines counts as a press instead. It is weaker — the status also
- * changes when a headset is plugged in or a party starts — and whether 9.60
- * really logs it on a press is not confirmed on a console yet. Should a
+ * changes when a headset is plugged in or a party starts — but it works: the
+ * same 9.60 Slim showed the notification three times on 04.11.2026 (1.76.4,
+ * mic_button_shown before and during a game). Should a
  * MicMuteKeyPressed line show up after all (10.00, which was not checked),
  * that one wins for good, since on newer firmware a press writes both and
  * counting both would turn every single press into a pair.
