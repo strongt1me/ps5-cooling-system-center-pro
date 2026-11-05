@@ -1175,7 +1175,10 @@ class MockSource final : public Source
             j.active = true;
             j.state = "copying";
             j.kind = route;
-            j.dest = "/mnt/usb0/homebrew";
+            j.from = "/mnt/usb0/neu";
+            j.dest = "/mnt/ext1";
+            j.items = 2;
+            j.items_done = 0;
             j.current = "eboot.bin";
             j.percent = 37;
             j.bytes_total = static_cast<std::uint64_t>(3.2e9);
@@ -2592,6 +2595,26 @@ std::string format_eta(int seconds)
     if (h == 0)
         return std::to_string(m) + " Min.";
     return std::to_string(h) + " Std. " + (m < 10 ? "0" : "") + std::to_string(m) + " Min.";
+}
+
+std::string format_job_title(const std::string &kind, int items_done, int items)
+{
+    const char *verb = kind == "move" ? "Verschiebe" : kind == "delete" ? "Lösche" : "Kopiere";
+    if (items <= 0)
+        return kind == "move" ? "Verschieben" : kind == "delete" ? "Löschen" : "Kopieren";
+    if (items == 1)
+        return std::string(verb) + " 1 Datei/Ordner";
+    return std::string(verb) + " " + std::to_string(std::min(items_done + 1, items)) + " von " +
+           std::to_string(items) + " Dateien/Ordnern";
+}
+
+std::string format_job_route(const std::string &kind, const std::string &from, const std::string &dest)
+{
+    if (kind == "delete")
+        return from.empty() ? "" : "Ordner: " + from;
+    if (dest.empty())
+        return "";
+    return from.empty() ? "Ziel: " + dest : "von " + from + " nach " + dest;
 }
 
 std::string format_playtime(std::uint64_t seconds)

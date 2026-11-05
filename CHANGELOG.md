@@ -1,5 +1,11 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Dateimanager: wie viele Einträge, von wo nach wo
+- Die Auftragsanzeige beim Kopieren, Verschieben und Löschen sagt jetzt, **wie viele Dateien/Ordner** es sind und **welcher gerade** dran ist, und darunter, **woher und wohin**: „Kopiere 1 von 2 Dateien/Ordnern · 37 %“ und „von /mnt/usb0/neu nach /mnt/ext1“ (bei einem Eintrag „Kopiere 1 Datei/Ordner“; kommen die Einträge aus mehreren Ordnern, steht nur „Ziel: …“; beim Löschen „Ordner: …“). Im Browser steht in der Mengenzeile außerdem, wie viele der enthaltenen Dateien schon fertig sind („1 von 3 Dateien“). Browser und Vollbild-App zeigen dasselbe; der Text ist in allen Sprachen übersetzt.
+- `GET /api/v1/files/job` nennt dazu `from` (der Ordner, aus dem alle Einträge kommen; leer bei gemischten Quellen); `items` und `items_done` gab es schon. Host-Test `test/filemgr/run.sh` jetzt 56 Prüfungen; neue Unit-Tests `format_job_title` und `format_job_route` (322 Tests).
+
 ## v1.76.8
 
 ### Browser-Oberfläche: Vollbild nur noch im Browser der PS5

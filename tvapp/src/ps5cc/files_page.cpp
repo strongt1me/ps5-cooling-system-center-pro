@@ -432,7 +432,7 @@ class FilesPage final : public Page
                           "Quadrat-Taste: Kopieren, Ausschneiden, Löschen …", kBlue);
 
         // the job at the bottom
-        const float jy = kBottom - 170.0f;
+        const float jy = kBottom - 200.0f;
         if (job_.active ||
             (job_.finished_ago_s >= 0 && job_.finished_ago_s < 60 && !job_.kind.empty()))
         {
@@ -444,9 +444,17 @@ class FilesPage final : public Page
             if (job_.active)
             {
                 ui::text(list, fonts.semibold,
-                         std::string(what) + " · " + std::to_string(job_.percent) + " %",
+                         ui::fit_label(paint,
+                                       format_job_title(job_.kind, job_.items_done, job_.items) +
+                                           " · " + std::to_string(job_.percent) + " %",
+                                       22.0f, card.w - 60.0f),
                          card.x + 30.0f, jy + 40.0f, 22.0f, kInk);
-                const Rect bar{card.x + 30.0f, jy + 58.0f, card.w - 60.0f, 12.0f};
+                // from where to where
+                ui::text(list, fonts.regular,
+                         ui::fit_label(paint, format_job_route(job_.kind, job_.from, job_.dest),
+                                       16.0f, card.w - 60.0f),
+                         card.x + 30.0f, jy + 64.0f, 16.0f, kMuted);
+                const Rect bar{card.x + 30.0f, jy + 80.0f, card.w - 60.0f, 12.0f};
                 list.rounded_rect(bar, 6.0f, Color::rgb(0x3880ff, 0.18f));
                 list.rounded_rect(
                     {bar.x, bar.y,
@@ -464,10 +472,10 @@ class FilesPage final : public Page
                     amount += " · noch ca. " + format_eta(job_.eta_s);
                 ui::text(list, fonts.regular,
                          ui::fit_label(paint, amount, 18.0f, card.w - 60.0f), card.x + 30.0f,
-                         jy + 100.0f, 18.0f, kMuted);
+                         jy + 122.0f, 18.0f, kMuted);
                 ui::text(list, fonts.regular,
                          ui::fit_label(paint, job_.current, 18.0f, card.w - 60.0f), card.x + 30.0f,
-                         jy + 128.0f, 18.0f, kMuted);
+                         jy + 150.0f, 18.0f, kMuted);
             }
             else
             {

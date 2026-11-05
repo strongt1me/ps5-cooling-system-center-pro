@@ -8901,9 +8901,17 @@
       /* Geschwindigkeit und Restzeit, solange etwas kopiert oder verschoben wird (der Server misst sie) */
       const mbs = (bps) => (bps >= 1048576 ? `${num(bps / 1048576, bps >= 10485760 ? 0 : 1)} MB/s` : `${Math.max(1, Math.round(bps / 1024))} KB/s`);
       const pace = (j.rate_bps > 0 ? ` · ${esc(mbs(j.rate_bps))}` : "") + (j.eta_s > 0 ? ` · noch ca. ${esc(ptDur(j.eta_s))}` : "");
-      paintJob(box, `<p class="cp-num"><b>${esc(what)}${j.dest ? ` nach ${esc(j.dest)}` : ""}</b> · ${pc} %</p>
+      /* „Kopiere 1 von 2 Dateien/Ordnern“ und darunter „von … nach …“ (von = der Ordner, aus dem alles kommt; fehlt bei gemischten Quellen) */
+      const verb = { copy: "Kopiere", move: "Verschiebe", delete: "Lösche" }[j.kind];
+      const nth = Math.min((j.items_done || 0) + 1, j.items || 1);
+      const head = verb && j.items > 1 ? `${verb} ${nth} von ${j.items} Dateien/Ordnern` : verb && j.items === 1 ? `${verb} 1 Datei/Ordner` : what;
+      const route = j.kind === "delete" ? (j.from ? `Ordner: ${j.from}` : "")
+        : j.dest ? (j.from ? `von ${j.from} nach ${j.dest}` : `Ziel: ${j.dest}`) : "";
+      const files = j.bytes_total > 0 && j.files_total > 1 ? ` · ${num(j.files_done)} von ${num(j.files_total)} Dateien` : "";
+      paintJob(box, `<p class="cp-num"><b>${esc(head)}</b> · ${pc} %</p>
+        ${route ? `<p class="muted cp-cur">${esc(route)}</p>` : ""}
         <div class="cp-bar" role="progressbar" aria-label="Fortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>
-        <p class="muted cp-cur">${amount}${pace}${j.elapsed_s > 0 ? ` · seit ${esc(ptDur(j.elapsed_s))}` : ""}${j.current ? `<br><code>${esc(j.current)}</code>` : ""}</p>`,
+        <p class="muted cp-cur">${amount}${files}${pace}${j.elapsed_s > 0 ? ` · seit ${esc(ptDur(j.elapsed_s))}` : ""}${j.current ? `<br><code>${esc(j.current)}</code>` : ""}</p>`,
         `<button type="button" class="btn" id="fm-cancel">Abbrechen</button>`);
       fm.poll = setTimeout(fmFollow, 800);
       return;

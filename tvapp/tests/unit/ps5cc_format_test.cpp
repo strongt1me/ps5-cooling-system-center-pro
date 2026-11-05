@@ -55,6 +55,24 @@ TEST(Ps5ccFormat, EtaIsSecondsMinutesHours)
     EXPECT_EQ(hui::ps5cc::format_eta(3 * 3600 + 42 * 60), "3 Std. 42 Min.");
 }
 
+TEST(Ps5ccFormat, JobTitleCountsTheEntries)
+{
+    EXPECT_EQ(hui::ps5cc::format_job_title("copy", 0, 2), "Kopiere 1 von 2 Dateien/Ordnern");
+    EXPECT_EQ(hui::ps5cc::format_job_title("move", 1, 3), "Verschiebe 2 von 3 Dateien/Ordnern");
+    EXPECT_EQ(hui::ps5cc::format_job_title("delete", 5, 5), "Lösche 5 von 5 Dateien/Ordnern"); // never past the last
+    EXPECT_EQ(hui::ps5cc::format_job_title("copy", 0, 1), "Kopiere 1 Datei/Ordner");
+    EXPECT_EQ(hui::ps5cc::format_job_title("copy", 0, 0), "Kopieren");
+}
+
+TEST(Ps5ccFormat, JobRouteNamesSourceAndTarget)
+{
+    EXPECT_EQ(hui::ps5cc::format_job_route("copy", "/mnt/usb0/neu", "/mnt/ext1"),
+              "von /mnt/usb0/neu nach /mnt/ext1");
+    EXPECT_EQ(hui::ps5cc::format_job_route("move", "", "/mnt/ext1"), "Ziel: /mnt/ext1");
+    EXPECT_EQ(hui::ps5cc::format_job_route("delete", "/data/neu", ""), "Ordner: /data/neu");
+    EXPECT_EQ(hui::ps5cc::format_job_route("copy", "/a", ""), "");
+}
+
 TEST(Ps5ccKlog, AppendsOnlyNewerLinesAndKeepsTheNewest)
 {
     std::vector<KlogLine> ring;

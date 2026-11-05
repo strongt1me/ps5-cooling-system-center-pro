@@ -269,17 +269,21 @@ main(void) {
   call("POST", "/api/v1/files/copy", "{\"paths\":[\"/data/src/big.bin\"],\"dest\":\"/data/dst\"}");
   CHECK(g_status == 200, "slow copy started: %d %s", g_status, g_body);
   long long rate = 0, eta = 0, eta_first = 0;
+  int seen = 0, from_bad = 0;
   for(int i = 0; i < 80 && ps5tm_filemgr_busy(); i++) {
     usleep(100000);
     call("GET", "/api/v1/files/job", NULL);
     char *r = strstr(g_body, "\"rate_bps\":"), *e = strstr(g_body, "\"eta_s\":");
     if(r && e && atoll(r + 11) > 0) {
+      seen++;
+      if(!strstr(g_body, "\"from\":\"/data/src\"") || !strstr(g_body, "\"items\":1,")) from_bad = 1;
       rate = atoll(r + 11);
       eta = atoll(e + 8);
       if(!eta_first) eta_first = eta;
     }
   }
   g_slow_ms = 0;
+  CHECK(seen > 0 && !from_bad, "the job names its source folder and its entries (%d answers)", seen);
   CHECK(rate > 8 * 1048576LL && rate < 80 * 1048576LL, "speed in a sane range: %lld B/s", rate);
   CHECK(eta_first > 0 && eta_first <= 4, "time left at the first sample: %lld s", eta_first);
   CHECK(eta <= eta_first, "time left does not grow: %lld after %lld", eta, eta_first);

@@ -3691,6 +3691,9 @@ void HttpSource::poll_fs_job()
     j.state = str(root, "state");
     j.kind = str(root, "kind");
     j.dest = str(root, "dest");
+    j.from = str(root, "from");
+    j.items = static_cast<int>(num(root, "items"));
+    j.items_done = static_cast<int>(num(root, "items_done"));
     j.current = str(root, "current");
     j.error = str(root, "error");
     j.note = str(root, "note");

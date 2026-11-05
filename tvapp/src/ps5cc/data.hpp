@@ -638,10 +638,13 @@ struct FsJob
     std::string state; // idle counting copying deleting done failed cancelled
     std::string kind;  // copy move delete
     std::string dest;
+    std::string from; // the folder all entries come from; "" when from several
     std::string current;
     std::string error;
     std::string note;
     int percent = 0;
+    int items = 0;      // entries chosen (files or folders)
+    int items_done = 0; // of those, finished
     std::uint64_t bytes_total = 0;
     std::uint64_t bytes_done = 0;
     int files_total = 0;
@@ -1258,6 +1261,11 @@ std::string format_bytes(std::uint64_t bytes);
 std::string format_rate(std::uint64_t bytes_per_second);
 // "40 Sek.", "12 Min.", "1 Std. 05 Min.": what is left.
 std::string format_eta(int seconds);
+// "Kopiere 1 von 2 Dateien/Ordnern" (the one being worked on is items_done + 1), "Kopiere 1 Datei/Ordner";
+// kind is copy, move or delete; without a count the plain "Kopieren".
+std::string format_job_title(const std::string &kind, int items_done, int items);
+// "von /mnt/usb0/neu nach /mnt/ext1"; "Ziel: …" when the entries come from several folders; for a delete "Ordner: …".
+std::string format_job_route(const std::string &kind, const std::string &from, const std::string &dest);
 // "2,9 h", "35 min", "–" for nothing.
 std::string format_playtime(std::uint64_t seconds);
 // "46,3" for 46.3.

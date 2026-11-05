@@ -70,6 +70,7 @@ typedef struct {
   int      state;
   char     kind[8];                       /* "copy", "move", "delete" */
   char     dest[FM_PATH];
+  char     from[FM_PATH];                 /* the folder all entries come from; "" when they come from several */
   char     current[FM_PATH];
   char     error[800];
   char     note[400];
@@ -910,6 +911,23 @@ job_current(const char *v) {
 void FM_TEST_HOOK(void);                          /* host test only: may slow the job down to cancel it midway */
 #endif
 
+/* The folder the entries of a job lie in, for "von … nach …" in the display: their common parent, or "" when they differ. */
+static void
+common_parent(const fm_args_t *a, char *out, size_t n) {
+  out[0] = 0;
+  for(unsigned i = 0; i < a->n; i++) {
+    char p[FM_PATH];
+    snprintf(p, sizeof(p), "%s", a->src[i]);
+    size_t len = strlen(p);
+    while(len > 1 && p[len - 1] == '/') p[--len] = 0;
+    char *slash = strrchr(p, '/');
+    if(!slash) { out[0] = 0; return; }
+    if(slash == p) p[1] = 0; else *slash = 0;
+    if(i == 0) snprintf(out, n, "%s", p);
+    else if(strcmp(out, p)) { out[0] = 0; return; }
+  }
+}
+
 static void
 job_add(uint64_t bytes, uint64_t files) {
 #ifdef FM_TEST_HOOK
@@ -1716,6 +1734,7 @@ start_job(fm_args_t *a, uint64_t bytes_total, uint64_t files_total, char *err, s
   g_job.state = FM_COUNTING;
   snprintf(g_job.kind, sizeof(g_job.kind), "%s", a->kind);
   snprintf(g_job.dest, sizeof(g_job.dest), "%s", a->dest);
+  common_parent(a, g_job.from, sizeof(g_job.from));
   g_job.bytes_total = bytes_total;
   g_job.files_total = files_total;
   g_job.items = a->n;
@@ -2010,6 +2029,7 @@ job_json(void) {
   cJSON_AddBoolToObject(o, "active", active);
   cJSON_AddStringToObject(o, "kind", j.kind);
   cJSON_AddStringToObject(o, "dest", j.dest);
+  cJSON_AddStringToObject(o, "from", j.from);
   cJSON_AddStringToObject(o, "current", j.current);
   cJSON_AddStringToObject(o, "error", j.error);
   cJSON_AddStringToObject(o, "note", j.note);
