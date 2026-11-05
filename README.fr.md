@@ -6,7 +6,7 @@
 
 **Contrôle du ventilateur, surveillance de la température et centre système pour la PlayStation 5 jailbreakée,<br>utilisable dans un navigateur (console, téléphone, PC) ou comme application plein écran sur le téléviseur avec la manette, en sept langues.**
 
-![Version](https://img.shields.io/badge/Version-1.76.7-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.76.8-1f6feb)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0--or--later-blue)
 ![Plateforme](https://img.shields.io/badge/Plateforme-PS5%20Payload-003791)
 ![Langues](https://img.shields.io/badge/Langues-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
@@ -197,7 +197,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 1. Télécharger `PS5_Cooling_System_Center_v<version>.elf` depuis les [Releases](../../releases).
 2. L'envoyer à la console (chargeur ELF, port **9021**), par exemple :
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.76.7.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.76.8.elf
    ```
 3. Ouvrir **`http://<IP-PS5>:8086`** dans un navigateur (la notification en haut à gauche de la TV affiche aussi l'adresse).
 

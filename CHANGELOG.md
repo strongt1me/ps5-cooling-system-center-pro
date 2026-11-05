@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.76.8
 
 ### Browser-Oberfläche: Vollbild nur noch im Browser der PS5
 - Der erste Druck irgendwo auf der Seite schaltete bisher in jedem Browser auf Vollbild; am PC musste man F11 drücken, um die Taskleiste wiederzusehen. Jetzt geschieht das nur noch im Browser der PS5 selbst (dort gibt es keine Taskleiste; erkannt am `PlayStation` im Browsernamen). Am PC und am Handy bleibt die Seite im normalen Fenster, bis jemand **Vollbild** drückt; der Knopf merkt sich das für die nächsten Starts, **Vollbild beenden** schaltet es wieder ab. Wer es schon einmal bewusst ein- oder ausgeschaltet hatte, behält seine Wahl.
