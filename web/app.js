@@ -1168,6 +1168,74 @@
     });
   };
 
+  /* ── Rückfrage vor jedem Löschen (06.11.2026) ───────────────────────
+     Vorher löschte jeder „Löschen“-Knopf sofort. Jetzt nennt ein kleines Fenster, was weggeht (Namen mit Art oder Größe,
+     dazu Hinweise), und löscht erst nach „Löschen“. „Abbrechen“ hat den Fokus; ×, ein Klick daneben und Escape löschen
+     nichts. askDelete() liefert true, wenn gelöscht werden soll. Der Dateimanager (fmAskDelete) und das Löschen von
+     Spielen und Sicherungen (dlOpen) haben eigene Fenster, weil sie den Plan der Konsole zeigen.
+       title  die Frage („Datei löschen?“)           lead   der Satz darunter (Standard: „Das wird endgültig gelöscht:“)
+       items  [{name, info}] – was weggeht            notes  Zeilen darunter (Ordner, Hinweise)
+       warn   Warnzeile oder mehrere als Liste (Standard: „Das lässt sich nicht rückgängig machen.“, "" = keine) */
+  const PL_OWN_DIR = "/data/PS5-Cooling-Center/payloads";      /* der eigene Payload-Ordner der App */
+  let adDone = null;
+  const adShell = () => {
+    let o = $("#ad-overlay");
+    if (o) return o;
+    o = document.createElement("div");
+    o.id = "ad-overlay";
+    o.className = "gm-overlay";
+    o.hidden = true;
+    o.innerHTML = `<div class="cp-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-title">
+        <div class="cp-head"><h3 id="ad-title"></h3>
+          <button type="button" class="cp-x" data-ad="no" aria-label="Schließen">×</button></div>
+        <div id="ad-body"></div>
+      </div>`;
+    document.body.appendChild(o);
+    o.addEventListener("click", (e) => {
+      if (e.target === o) { if (adDone) adDone(false); return; }
+      const b = e.target.closest("[data-ad]");
+      if (b && !b.disabled && adDone) adDone(b.dataset.ad === "yes");
+    });
+    return o;
+  };
+  const askDelete = ({ title, lead = "Das wird endgültig gelöscht:", items = [], notes = [],
+                       warn = "Das lässt sich nicht rückgängig machen." }) => new Promise((resolve) => {
+    const o = adShell();
+    if (adDone) adDone(false);                          /* eine noch offene Frage gilt als abgelehnt */
+    txt("#ad-title", title);
+    const rows = items.map((it) => `<li><code>${esc(it.name)}</code>${it.info ? ` <span class="muted">${esc(it.info)}</span>` : ""}</li>`).join("");
+    $("#ad-body").innerHTML = `${lead ? `<p>${esc(lead)}</p>` : ""}
+      ${rows ? `<ul class="fm-conflict-list fm-del-list">${rows}</ul>` : ""}
+      ${notes.map((n) => `<p class="muted fm-del-in">${esc(n)}</p>`).join("")}
+      ${(Array.isArray(warn) ? warn : [warn]).filter(Boolean).map((w) => `<p class="fm-del-warn">${esc(w)}</p>`).join("")}
+      <div class="cp-actions">
+        <button type="button" class="btn" data-ad="no">Abbrechen</button>
+        <button type="button" class="btn danger" data-ad="yes">Löschen</button>
+      </div>`;
+    adDone = (yes) => { adDone = null; o.hidden = true; resolve(!!yes); };
+    o.hidden = false;
+    const no = o.querySelector('.btn[data-ad="no"]');
+    if (no) no.focus();
+  });
+
+  /* Eine Frage mit „Ja“ und „Abbrechen“ (06.11.2026, AMPR EMU NG fragt, ob ShadowMountPlus umgestellt werden soll).
+     Liefert true bei „Ja“, sonst false („Abbrechen“, ×, Klick daneben, Escape): dann geht nichts weiter.
+       paras  Absätze (der Reihe nach)        yes / no  Beschriftung der beiden Knöpfe */
+  const askYesNo = ({ title, paras = [], yes = "Ja", no = "Abbrechen" }) => new Promise((resolve) => {
+    const o = adShell();
+    if (adDone) adDone(false);
+    txt("#ad-title", title);
+    $("#ad-body").innerHTML = `${paras.map((p) => `<p>${esc(p)}</p>`).join("")}
+      <div class="cp-actions">
+        <button type="button" class="btn" data-ad="no">${esc(no)}</button>
+        <button type="button" class="btn primary" data-ad="yes">${esc(yes)}</button>
+      </div>`;
+    adDone = (v) => { adDone = null; o.hidden = true; resolve(!!v); };
+    o.hidden = false;
+    const y = o.querySelector('.btn[data-ad="yes"]');
+    if (y) y.focus();
+  });
+
   const saveConfig = async (patch, note) => {
     await api("/api/v1/config", { method: "PUT", body: JSON.stringify(patch) });
     if (note) toast(note);
@@ -2400,6 +2468,8 @@
 
     $$("#pl-stored [data-pl-del]").forEach((b) =>
       oneClick(b, async () => {
+        if (!(await askDelete({ title: "Datei löschen?", items: [{ name: b.dataset.name }],
+                                notes: [`Ordner: ${PL_OWN_DIR}`] }))) return;
         try {
           await plPost("delete", { name: b.dataset.name });
           toast(`„${b.dataset.name}" gelöscht.`);
@@ -2532,7 +2602,7 @@
         + (!ins || i.update
           ? `<button class="btn ${ins ? "primary " : ""}pl-act" data-ps-install="${esc(i.id)}"${any ? " disabled" : ""}>${busy ? "lädt …" : ins ? "Aktualisieren" : "Herunterladen"}</button>`
           : "")
-        + (ins ? `<button class="pl-trash" data-ps-del="${esc(i.id)}" title="Aus dem Ordner löschen" aria-label="${esc(i.name)} löschen"${busy ? " disabled" : ""}>${PL_SVG.trash}</button>` : "");
+        + (ins ? `<button class="pl-trash" data-ps-del="${esc(i.id)}" title="Aus dem Ordner löschen" aria-label="${esc(i.name)} löschen" data-name="${esc(i.name)}"${busy ? " disabled" : ""}>${PL_SVG.trash}</button>` : "");
       return `<div class="pl-card ps-card${i.update ? " ps-upd" : ""}${ins ? " ps-mine" : ""}">
         <div class="pl-ico ps-ico">${esc((i.name.match(/[A-Za-z0-9]/g) || ["?"]).slice(0, 2).join("").toUpperCase())}${ins ? plDot(plFileLoaded(ins.filename)) : ""}</div>
         <div class="pl-info">
@@ -2568,6 +2638,8 @@
     } else if (st) {
       await psPost({ action: "start", id: st.dataset.psStart });
     } else if (del && !del.disabled) {
+      if (!(await askDelete({ title: "Datei löschen?", items: [{ name: del.dataset.name || del.dataset.psDel }],
+                              notes: [`Ordner: ${PL_OWN_DIR}`] }))) return;
       del.disabled = true;
       await psPost({ action: "delete", id: del.dataset.psDel });
     }
@@ -2848,6 +2920,9 @@
             plEdit = null;
             plRenderEdit();
           } else if (b.hasAttribute("data-pp-remove")) {
+            plEditSync();
+            if (!(await askDelete({ title: "Profil löschen?", items: [{ name: plEdit.name.trim() || plEdit.id,
+                                                                         info: `${plEdit.items.length} ${plEdit.items.length === 1 ? "Eintrag" : "Einträge"}` }] }))) return;
             const id = plEdit.id;
             const startup = plProf.startup === id ? "" : plProf.startup;
             await plProfSave({ startup, profiles: plProf.profiles.filter((x) => x.id !== id) });
@@ -4024,7 +4099,12 @@
       const up = ev.target.closest("[data-bd-up]");
       const del = ev.target.closest("[data-bd-del]");
       if (up) { bd.area = up.dataset.bdUp; $("#bd-file").value = ""; $("#bd-file").click(); }
-      else if (del) bdPost({ area: del.dataset.bdDel, delete: true });
+      else if (del) {
+        const label = del.closest(".bd-item") && del.closest(".bd-item").querySelector(".bd-name");
+        askDelete({ title: "Hintergrundbild löschen?", items: [{ name: label ? label.textContent.trim() : del.dataset.bdDel, info: "eigenes Bild" }],
+                    warn: ["Das lässt sich nicht rückgängig machen.", "Der Bereich zeigt danach wieder das Standardbild."] })
+          .then((yes) => { if (yes) bdPost({ area: del.dataset.bdDel, delete: true }); });
+      }
     });
   }
   const bdFile = $("#bd-file");
@@ -5016,7 +5096,7 @@
   };
 
   const gmHasMods = (x) => !!(x.mods && x.mods.state === "checked"
-    && (x.mods.backport || x.mods.ampr_emu || x.mods.playgo || x.mods.lz4));
+    && (x.mods.backport || x.mods.ampr_emu || x.mods.playgo || x.mods.lz4 || x.mods.zstd));
 
   /* Form der Spieldaten (library.c, detect_storage): wie ShadowMountPlus sie
      meldet, sonst aus mount.lnk und /user/app geschlossen. */
@@ -5119,6 +5199,8 @@
         + (m.ampr_index ? " · ampr_emu.index vorhanden: die Emulation lief schon" : ""))}">AMPR EMU</span>`);
     if (m.lz4)
       t.push(`<span class="gm-tag ampr" title="ampr_assets.index · Das Spiel liegt in LZ4-Paketen">LZ4 gepackt</span>`);
+    if (m.zstd)
+      t.push(`<span class="gm-tag ng" title="ampr_zstd.index · Das Spiel liegt in zstd-Paketen (AMPR EMU NG)">zstd gepackt</span>`);
     if (m.playgo)
       t.push(`<span class="gm-tag pg" title="${esc((m.fakelib2 ? "fakelib2" : "fakelib") + "/libScePlayGo.sprx"
         + (m.playgo_log ? " · playlgo.log vorhanden" : ""))}">PlayGo</span>`);
@@ -7194,11 +7276,13 @@
     const j = p4mg.data;
     if (!j) return;
     const limit = j.dlc_limit || 29;
-    const on = (j.dlcs || []).filter((d) => d.on).length;
+    /* PS4Mount 0.7.3: only add-ons with data count against the limit; unlock-only ones are always welcome */
+    const withData = (j.dlcs || []).filter((d) => d.data);
+    const on = withData.filter((d) => d.on).length;
     const rows = (j.dlcs || []).map((d) => `<label class="cp-check p4m-pickrow">
-        <input type="checkbox" data-p4mg-dlc="${esc(d.content_id)}" ${d.on ? "checked" : ""}>
+        <input type="checkbox" data-p4mg-dlc="${esc(d.content_id)}" data-data="${d.data ? 1 : 0}" ${d.on ? "checked" : ""}>
         <span><b>${esc(d.name)}</b> <span class="muted">${esc(d.data ? "mit Daten" : "nur Freischaltung")}${d.copy ? ` · ${esc(P4MG_COPY[d.copy] || d.copy)}` : ""}${d.reason ? ` (${esc(d.reason)})` : ""}</span></span></label>`).join("");
-    $("#p4mg-body").innerHTML = `<p class="muted">Höchstens ${limit} Zusatzinhalte können gleichzeitig an sein (${on} von ${(j.dlcs || []).length} jetzt an). Geändert, wird das Spiel damit neu zur Bibliothek hinzugefügt.</p>
+    $("#p4mg-body").innerHTML = `<p class="muted">Höchstens ${limit} Zusatzinhalte mit Daten können gleichzeitig an sein; reine Freischaltungen zählen nicht (${on} von ${withData.length} mit Daten jetzt an). Geändert, wird das Spiel damit neu zur Bibliothek hinzugefügt.</p>
       <label class="cp-check p4m-pickrow"><input type="checkbox" data-p4mg="dlc-all"><span><b>Alle an</b> (bis zum Höchstwert)</span></label>
       <div class="p4m-pick">${rows || `<p class="muted">Keine Zusatzinhalte gefunden.</p>`}</div>
       <div class="cp-actions"><button type="button" class="btn" data-p4mg="close">Schließen</button>
@@ -7228,7 +7312,11 @@
   const p4mgDlcAll = (b) => {
     const limit = (p4mg.data && p4mg.data.dlc_limit) || 29;
     const boxes = $$("#p4mg-body input[data-p4mg-dlc]");
-    boxes.forEach((box, i) => { box.checked = b.checked && i < limit; });
+    let nd = 0;                                      /* the add-ons with data up to the limit, every unlock-only one */
+    boxes.forEach((box) => {
+      if (!b.checked) { box.checked = false; return; }
+      if (box.dataset.data === "1") { box.checked = nd < limit; nd += 1; } else box.checked = true;
+    });
   };
 
   const p4mgSubmitUpd = async (b) => {
@@ -7373,7 +7461,9 @@
   $("#gm-pane-disc").addEventListener("click", (e) => {
     const del = e.target.closest("[data-disc-del]");
     if (del) {
-      discPost({ action: "delete", name: del.dataset.discDel });
+      const meta = del.closest(".p4m-row") && del.closest(".p4m-row").querySelector(".p4m-meta");
+      askDelete({ title: "Abbild löschen?", items: [{ name: del.dataset.discDel, info: meta ? meta.textContent.trim().split(" · ")[0] : "" }] })
+        .then((yes) => { if (yes) discPost({ action: "delete", name: del.dataset.discDel }); });
       return;
     }
     const b = e.target.closest("[data-disc-act]");
@@ -7474,6 +7564,7 @@
     hvRender();
   });
   oneClick($("#hv-clear"), async () => {
+    if (!(await askDelete({ title: "Verlauf löschen?", lead: "Alle Einträge des Verlaufs der App werden gelöscht.", warn: ["Das lässt sich nicht rückgängig machen.", "Die Spiele und Dateien selbst bleiben."] }))) return;
     try { await api("/api/v1/jobs/history/clear", { method: "POST" }); hv.list = []; hvRender(); toast("Verlauf geleert."); }
     catch (e) { toast(e.message, "error"); }
   });
@@ -7508,6 +7599,14 @@
     [12, "Stufe 12 · am kleinsten", "LZ4 HC, am langsamsten. Spart am meisten."],
   ];
 
+  /* zstd (06.11.2026, zstdpack.c): Stufe 1 bis 22; vier Anker genügen, die Vorgabe ist die von ps5-dump-forge */
+  const ZST_LEVELS = [
+    [5, "Stufe 5 · ausgewogen (empfohlen)", "zstd. Gute Packung, packt zügig. Beim Spielen kostet das Entpacken wenig."],
+    [1, "Stufe 1 · am schnellsten", "zstd. Packt am schnellsten, spart aber am wenigsten Platz."],
+    [9, "Stufe 9 · kleiner", "zstd. Spart mehr Platz, das Packen dauert deutlich länger."],
+    [19, "Stufe 19 · am kleinsten", "zstd, am langsamsten. Spart am meisten; bei großen Spielen dauert das Packen sehr lange."],
+  ];
+
   /* Was „Pakete prüfen“ außer den Paketen gerichtet hat (imgjob_lz4.inc, nach LZ4 Compression 1.4.3): jede Angabe ein eigener
      Satz, damit jeder übersetzt wird. */
   const aprLz4Repairs = (j) => {
@@ -7537,18 +7636,20 @@
     const prog = run ? aprProgress(ij) : "";
     if (!z.can) {
       return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
-          <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>).</small>
+          <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>) oder zstd-Pakete (<code>ampr_zstd-*.pak</code>, nur für AMPR EMU NG).</small>
           <small class="cp-why">${esc(z.why || "Für dieses Spiel geht das nicht.")}</small></div>
-          <button type="button" class="btn" disabled>Mit LZ4 packen …</button></div>`;
+          <div class="apr-btnstack"><button type="button" class="btn" disabled>Mit LZ4 packen …</button>
+          <button type="button" class="btn" disabled>Mit zstd packen …</button></div></div>`;
     }
     /* Kann dieses Spiel Asset-Packs überhaupt nutzen? Die gängigen Werkzeuge prüfen, ob eboot.bin oder sce_module libSceAmpr
        einbinden; ohne das gibt es nur die ffpfsc-Komprimierung. Dasselbe tut die App (ampr_import: 1 ja, 0 nein, -1 nicht lesbar). */
     if (z.ampr_import === 0 && !z.packed) {
       return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
-          <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>).</small>
+          <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>) oder zstd-Pakete (<code>ampr_zstd-*.pak</code>, nur für AMPR EMU NG).</small>
           <span class="apr-state no">✗ lädt libSceAmpr nicht selbst</span>
           <small class="cp-why">Dieses Spiel bindet libSceAmpr weder in eboot.bin noch in sce_module ein. Es würde seine Dateien in den Paketen nicht wiederfinden. Für solche Spiele gibt es nur die Komprimierung zu einem .ffpfsc-Abbild (Knopf „Konvertieren“).</small></div>
-          <button type="button" class="btn" disabled>Mit LZ4 packen …</button></div>`;
+          <div class="apr-btnstack"><button type="button" class="btn" disabled>Mit LZ4 packen …</button>
+          <button type="button" class="btn" disabled>Mit zstd packen …</button></div></div>`;
     }
     const fit = (z.ampr_import === 1 ? `<span class="apr-state ok">✓ lädt libSceAmpr selbst</span>`
       : z.ampr_import === -1 ? `<span class="apr-state no">? nicht zu erkennen, ob es libSceAmpr lädt</span>` : "")
@@ -7565,27 +7666,31 @@
     const runWhy = anyRunning ? "Es läuft schon ein Vorgang." : "";
     if (z.packed) {
       const pk = z.pack || {};
+      const zst = pk.kind === "zstd";
       const pct = pk.logical_bytes ? Math.round(pk.stored_bytes * 100 / pk.logical_bytes) : 0;
       const lc = z.last_check;
       const lastLine = lc ? `<small>Letzte Prüfung: ${esc(hvWhen(lc.when))} · ${num(lc.files)} Dateien, ${lc.bytewise ? "jede Datei Byte für Byte gleich" : "alle Blöcke gelesen und geprüft"}.</small>` : "";
       const need = (pk.logical_bytes || 0) + 268435456;
       const room = z.free_bytes >= need;
       const unWhy = anyRunning ? "Es läuft schon ein Vorgang." : !room ? `Zum Entpacken fehlt Platz: nötig sind ${bytes(need)}, frei sind ${bytes(z.free_bytes)}.` : "";
-      return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
-          <small>Das Spiel liegt in LZ4-Paketen. Es läuft nur mit einer APR-EMU-Version, die Pakete liest („pack“). Starte es jetzt: läuft es nicht, bringt „LZ4 entpacken“ alles zurück.</small>
-          <span class="apr-state ok">✓ gepackt · ${bytes(pk.logical_bytes)} → ${bytes(pk.stored_bytes)} (${pct} %)</span>
+      return `<div class="apr-row"><div><b>${zst ? "zstd-Asset-Packs" : "LZ4-Asset-Packs"}</b>
+          ${zst ? `<small>Das Spiel liegt in zstd-Paketen. Es läuft nur mit AMPR EMU NG, das sie liest. Starte es jetzt: läuft es nicht, bringt „zstd entpacken“ alles zurück.</small>`
+                : `<small>Das Spiel liegt in LZ4-Paketen. Es läuft nur mit einer APR-EMU-Version, die Pakete liest („pack“). Starte es jetzt: läuft es nicht, bringt „LZ4 entpacken“ alles zurück.</small>`}
+          <span class="apr-state ok">✓ gepackt · ${bytes(pk.logical_bytes)} → ${bytes(pk.stored_bytes)} (${pct} %)</span>${zst && pk.level ? ` <span class="apr-state ok">${esc(`zstd Stufe ${pk.level}`)}</span>` : ""}
           ${(z.start_problems || []).map((t) => `<p class="cp-warn">${esc(t)}</p>`).join("")}
           ${lastLine}${prog}${result}</div>
           ${run ? cancel : `<button type="button" class="btn primary" data-apr-lz4="verify" ${anyRunning ? "disabled" : ""}>Pakete prüfen</button>`}</div>
         <div class="apr-row"><div><b>Zurück zu losen Dateien</b>
           <small>Entpackt die Pakete wieder in den Spielordner und prüft jede Datei. Danach lassen sich Index und APR-EMU-Version wieder ändern.</small>
           ${unWhy && !anyRunning ? `<small class="cp-why">${esc(unWhy)}</small>` : ""}</div>
-          <button type="button" class="btn" data-apr-lz4="unpack" ${unWhy ? "disabled" : ""} ${unWhy ? `title="${esc(unWhy)}"` : ""}>LZ4 entpacken …</button></div>`;
+          <button type="button" class="btn" data-apr-lz4="unpack" ${unWhy ? "disabled" : ""} ${unWhy ? `title="${esc(unWhy)}"` : ""}>${zst ? "zstd entpacken …" : "LZ4 entpacken …"}</button></div>`;
     }
     return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
         <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>). APR-EMU liest sie beim Spielen und entpackt jeden Block erst, wenn das Spiel ihn braucht. Das Spiel belegt danach weniger Platz.</small>
+        <small>Oder in zstd-Pakete (<code>ampr_zstd-*.pak</code>): Die liest nur AMPR EMU NG; gepackt wird das ganze Spiel außer den Systemdateien, das spart meist mehr Platz.</small>
         ${run ? "" : `<span class="apr-state no">nicht gepackt</span> ${fit}${guide}`}${prog}${result}</div>
-        ${run ? cancel : `<button type="button" class="btn primary" data-apr-lz4="open" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit LZ4 packen …</button>`}</div>`;
+        ${run ? cancel : `<div class="apr-btnstack"><button type="button" class="btn primary" data-apr-lz4="open" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit LZ4 packen …</button>
+          <button type="button" class="btn" data-apr-lz4="openz" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit zstd packen …</button></div>`}</div>`;
   };
 
   /* Welches Profil der Auftrag bekommt: "" = automatisch, das getestete Profil, das zum Spiel passt (imgjob_lz4.inc, nach LZ4
@@ -7603,7 +7708,7 @@
     s.busy = true;
     aprRender();
     try {
-      const r = await api(`/api/v1/library/lz4/plan?id=${encodeURIComponent(apr.id)}&level=${s.level}&profile=${encodeURIComponent(key)}`);
+      const r = await api(`/api/v1/library/lz4/plan?id=${encodeURIComponent(apr.id)}&level=${s.level}&profile=${encodeURIComponent(key)}&format=${s.fmt === "zstd" ? "zstd" : "lz4"}`);
       if (apr.lz4s !== s || s.planKey !== key) return;
       if (r.valid) s.plan = r; else s.planErr = r.error || "Die Auswahl ließ sich nicht berechnen.";
     } catch (err) { if (apr.lz4s === s && s.planKey === key) s.planErr = err.message; }
@@ -7684,9 +7789,10 @@
   const aprRenderLz4Set = (body) => {
     const z = apr.lz4, s = apr.lz4s;
     cp.view = "aplz4set";
-    txt("#cp-title", `LZ4-Asset-Packs – ${apr.info ? apr.info.name : ""}`);
+    const zs = !!(s && s.fmt === "zstd");
+    txt("#cp-title", `${zs ? "zstd" : "LZ4"}-Asset-Packs – ${apr.info ? apr.info.name : ""}`);
     if (!z || !s) { body.innerHTML = `<p class="muted">wird gelesen …</p>`; return; }
-    const levels = AL_LEVELS.map(([v, t, d]) => `<label class="cp-choice">
+    const levels = (zs ? ZST_LEVELS : AL_LEVELS).map(([v, t, d]) => `<label class="cp-choice">
         <input type="radio" name="lz4-level" value="${v}" ${s.level === v ? "checked" : ""}>
         <span class="cp-choice-text"><b>${esc(t)}</b><span class="muted">${esc(d)}</span></span></label>`).join("");
     const profs = z.profiles || [];
@@ -7711,38 +7817,43 @@
         + (z.free_bytes < need ? `<p class="cp-why">${`Das könnte knapp werden: frei sind ${bytes(z.free_bytes)}, die App rechnet für diese Auswahl mit etwa ${bytes(need)}.`}</p>` : "");
     }
     const base = (z.path || "").split("/").pop();
-    const noGo = (s.mode !== "auto" && !lz4Key(s)) || s.busy || !!s.planErr || !s.tested;
+    const noGo = (!zs && s.mode !== "auto" && !lz4Key(s)) || s.busy || !!s.planErr || !s.tested;
     const sg = z.suggest;
     const sgHow = !sg ? "" : sg.how === "engine" ? (sg.engine === "unity" ? "Passt über den Aufbau der Dateien: Das Spiel nutzt die Unity-Engine." : "Passt über den Aufbau der Dateien: Das Spiel nutzt die Engine von Insomniac.")
       : sg.how === "title" ? "Passt über die Titel-ID: für genau dieses Spiel gemacht." : "Passt über den Namen des Spiels.";
     const tested = sg ? `<label class="cp-choice"><input type="radio" name="lz4-mode" value="tested" ${s.mode === "tested" ? "checked" : ""}>
           <span class="cp-choice-text"><b>${z.own_profile ? esc(`Getestetes Profil: ${sg.label}`) : esc(`Getestetes Profil: ${sg.label} (empfohlen)`)}</b><span class="muted">${esc(sgHow)}</span>
           <span class="muted">${esc(`Von danthespal geschrieben und an der Konsole getestet mit ${sg.tested}. Dateien, die es nicht nennt, bleiben lose.`)}</span></span></label>` : "";
+    const zstWhat = `<p class="muted">Alles außer den Systemdateien: Programme (<code>eboot.bin</code>, <code>.sprx</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code> und leere Dateien bleiben lose, dazu ein paar Dateien, die die PS5 selbst auf der Platte sucht. AMPR EMU NG liest das ganze Spiel aus den Paketen.</p>`;
     body.innerHTML = `
       <p class="cp-src"><span class="muted">Spiel</span> <code>${esc(z.path || "")}</code></p>
-      <div class="cp-warn"><b>Vorher erledigen:</b> <span>Baue unter „APR-EMU im Spiel“ die Version 0.4.2.1 test-pack ein und starte das Spiel ungepackt. Läuft es so nicht, läuft es gepackt nie. Behalte das Original, bis du das gepackte Spiel gestartet hast.</span>
+      ${zs ? `<div class="cp-warn"><b>Vorher erledigen:</b> <span>Baue unter „APR-EMU im Spiel“ AMPR EMU NG ein und starte das Spiel ungepackt. Läuft es so nicht, läuft es gepackt nie. Behalte das Original, bis du das gepackte Spiel gestartet hast.</span>
         <label class="cp-check"><input type="checkbox" id="lz4-tested" ${s.tested ? "checked" : ""}>
-          <span>Ich habe das Spiel mit APR-EMU (test-pack) ungepackt gestartet, und es lief.</span></label></div>
+          <span>Ich habe das Spiel mit AMPR EMU NG ungepackt gestartet, und es lief.</span></label></div>`
+      : `<div class="cp-warn"><b>Vorher erledigen:</b> <span>Baue unter „APR-EMU im Spiel“ die Version 0.4.2.1 test-pack ein und starte das Spiel ungepackt. Läuft es so nicht, läuft es gepackt nie. Behalte das Original, bis du das gepackte Spiel gestartet hast.</span>
+        <label class="cp-check"><input type="checkbox" id="lz4-tested" ${s.tested ? "checked" : ""}>
+          <span>Ich habe das Spiel mit APR-EMU (test-pack) ungepackt gestartet, und es lief.</span></label></div>`}
       <h4 class="cp-step">1. Wie stark packen?</h4>
       <div class="cp-list">${levels}</div>
       <h4 class="cp-step">2. Was kommt hinein?</h4>
-      <div class="cp-list">
+      ${zs ? `${zstWhat}${est}` : `<div class="cp-list">
         ${tested}
         <label class="cp-choice"><input type="radio" name="lz4-mode" value="auto" ${s.mode === "auto" ? "checked" : ""}>
           <span class="cp-choice-text"><b>${sg || z.own_profile ? "Automatisch" : "Automatisch (empfohlen)"}</b><span class="muted">Spieldaten werden gepackt. Programme (<code>eboot.bin</code>, <code>.sprx</code>), <code>sce_sys</code>, Spielstände und schon komprimierte Medien bleiben lose.</span></span></label>
         <label class="cp-choice"><input type="radio" name="lz4-mode" value="toml" ${s.mode === "toml" ? "checked" : ""}>
           <span class="cp-choice-text"><b>Eigenes Profil (TOML)</b><span class="muted">Eine Packliste, z. B. aus einem Mitschnitt des Spiels oder aus der Community. Liegt sie auf der Konsole oder einem USB-Stick, wird sie dir angeboten.</span></span></label>
       </div>
-      ${profSel}${est}
+      ${profSel}${est}`}
       <h4 class="cp-step">3. Was geschieht mit den Originalen?</h4>
       <div class="cp-list">
         <label class="cp-choice"><input type="radio" name="lz4-where" value="inplace" ${s.copy ? "" : "checked"}>
           <span class="cp-choice-text"><b>Im Spielordner packen (spart am meisten Platz)</b><span class="muted">Die Pakete entstehen im Spielordner; erst wenn jede Datei Byte für Byte geprüft ist, werden die Originale entfernt. Bei einem Fehler bleibt alles wie vorher.</span></span></label>
         <label class="cp-choice"><input type="radio" name="lz4-where" value="copy" ${s.copy ? "checked" : ""}>
-          <span class="cp-choice-text"><b>${esc(`Als neuen Ordner ${base}-lz4 daneben`)}</b><span class="muted">Das Original bleibt unberührt. Braucht Platz für das gepackte Spiel zusätzlich.</span></span></label>
+          <span class="cp-choice-text"><b>${esc(`Als neuen Ordner ${base}-${zs ? "zstd" : "lz4"} daneben`)}</b><span class="muted">Das Original bleibt unberührt. Braucht Platz für das gepackte Spiel zusätzlich.</span></span></label>
       </div>
       ${s.copy ? `<p class="cp-why">Achtung: Dann liegen zwei Ordner mit derselben Titel-ID nebeneinander. ShadowMountPlus kann sich daran verschlucken und das Spiel im Sekundentakt umhängen. Verschiebe das Original vorher aus dem Suchpfad (zum Beispiel auf einen USB-Stick).</p>` : ""}
-      <div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (die Version „0.4.2.1 test-pack“) in den Spielordner; ein gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>
+      ${zs ? `<div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (AMPR EMU NG) in den Spielordner; ein in zstd gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>`
+      : `<div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (die Version „0.4.2.1 test-pack“) in den Spielordner; ein gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>`}
       ${s.err ? `<p class="cp-err">${esc(s.err)}</p>` : ""}
       <p class="muted">Läuft auf der PS5 mit niedriger Priorität weiter, auch wenn du dieses Fenster schließt. Ein laufendes Spiel muss vorher beendet sein.</p>
       <div class="cp-actions">
@@ -7817,6 +7928,7 @@
     if (em.fakelib2 && em.place === "game") notes.push("Im Spielordner liegt auch ein <code>fakelib2</code>: ShadowMountPlus ab 1.7beta1 liest dann nur dieses, die Datei in <code>fakelib</code> bliebe ungenutzt.");
     if (em.emus && em.emus.overrides) notes.push(`ShadowMountPlus ersetzt <code>${APR_LIBS[lib].file}</code> beim Spielstart aus <code>` + esc(em.emus.path) + "</code> (update_emulators=1): diese Datei gewinnt dann.");
     if (em.packed) notes.push("Das Spiel liegt in LZ4-Paketen: nur eine Version mit „pack“ kann sie lesen.");
+    if (em.packed_zstd) notes.push("Das Spiel liegt in zstd-Paketen: nur AMPR EMU NG kann sie lesen.");
     let result = "";
     if (emuJob && !j.active && j.state === "done")
       result = `<p class="cp-ok">${j.op === "apply" ? "✓ Eingebaut." : j.op === "restore" ? "✓ Das Original ist zurück." : "✓ Entfernt."}</p>${j.note ? `<small>${esc(j.note)}</small>` : ""}${j.warn
@@ -7959,13 +8071,13 @@
     const sel = v.versions.find((x) => x.name === apr.emuSel);
     const list = v.versions.map((x) => {
       const off = !x.valid;
-      const packBlock = em.packed && !x.pack;
+      const packBlock = (em.packed && !x.pack) || (em.packed_zstd && !x.ng);
       const folder = x.stored ? (pg ? "im Ordner PlayGo" : "im Ordner AMPR_EMU") : "in der App, noch nicht im Ordner";
       return `<button type="button" class="cp-choice apr-drive${apr.emuSel === x.name ? " on" : ""}${off || packBlock ? " off" : ""}" data-apr-emu-pick="${esc(x.name)}" ${off || packBlock ? "disabled" : ""}>
           <span class="cp-choice-text"><b>${esc(x.label)}</b>
             ${x.ng || x.pack || x.debug || x.bundled ? `<span class="apr-tags">${x.ng ? `<span class="gm-tag ng">NG</span>` : ""}${x.pack ? `<span class="gm-tag ampr">LZ4</span>` : ""}${x.debug ? `<span class="gm-tag bp">mit Protokoll</span>` : ""}${x.bundled ? `<span class="gm-tag fmt">mitgeliefert</span>` : ""}</span>` : ""}
             <span class="muted"><span>${bytes(x.size)}</span> · ${x.ng ? `<span>AMPR EMU NG (quer3q)</span> · ` : ""}${pg ? "" : `<span>${x.pack ? (x.ng ? "kann LZ4- und zstd-Pakete lesen" : "kann LZ4-Pakete lesen") : "ohne Paketunterstützung"}</span> · `}<span>${folder}</span>${ins.sha256 && ins.sha256 === x.sha256 ? ` · <b>so eingebaut</b>` : ""}</span>
-            ${off ? `<span class="cp-why">${pg ? "kein gültiger PlayGo-Stub" : "keine gültige APR-EMU-Datei"}</span>` : packBlock ? `<span class="cp-why">Das Spiel liegt in LZ4-Paketen: diese Version kann sie nicht lesen.</span>` : ""}</span></button>`;
+            ${off ? `<span class="cp-why">${pg ? "kein gültiger PlayGo-Stub" : "keine gültige APR-EMU-Datei"}</span>` : packBlock ? `<span class="cp-why">${em.packed_zstd ? "Das Spiel liegt in zstd-Paketen: diese Version kann sie nicht lesen." : "Das Spiel liegt in LZ4-Paketen: diese Version kann sie nicht lesen."}</span>` : ""}</span></button>`;
     }).join("");
     const cur = ins.present ? (ins.known ? esc(ins.label) : ins.ng ? `<span>AMPR EMU NG</span> ${esc(ins.ng_version || "")}` : ins.emu ? (pg ? `<span>PlayGo-Stub, unbekannte Fassung (${bytes(ins.size)})</span>` : `<span>APR-EMU, unbekannte Fassung (${bytes(ins.size)})</span>`)
       : (pg ? `<span>die Datei des Spiels (kein PlayGo-Stub)</span>` : `<span>die Datei des Spiels (kein APR-EMU)</span>`)) : `<span>nichts</span>`;
@@ -7980,7 +8092,7 @@
       ? `<p class="muted">Noch keine Versionen im Speicher. Lege Dateien namens <code>libScePlayGo.sprx-0.5-nolog</code> mit „Datei hinzufügen“ ab.</p>`
       : `<p class="muted">Noch keine Versionen im Speicher. Lege Dateien namens <code>libSceAmpr.sprx-0.4.2.1-test-pack</code> (so heißen sie bei drakmors Veröffentlichungen) mit „Datei hinzufügen“ ab.</p>`) : "";
     const busy = !!((apr.job && apr.job.active) || (apr.ij && apr.ij.active));
-    const canApply = !!(sel && sel.valid && em.can_change && !busy && !(em.packed && !sel.pack));
+    const canApply = !!(sel && sel.valid && em.can_change && !busy && !(em.packed && !sel.pack) && !(em.packed_zstd && !sel.ng));
     body.innerHTML = `
       <p class="cp-src"><span class="muted">Spiel</span> <code>${esc(em.place === "backport" ? em.backport.dir + "/fakelib" : (em.game_path + (em.format === "folder" ? "/fakelib" : " › fakelib")))}</code>
         <span><span>eingebaut:</span> <b>${cur}</b>${ins.has_orig ? ` · <span>Original des Spiels gesichert</span>` : ""}</span></p>
@@ -7994,9 +8106,9 @@
         <button type="button" class="btn ghost" data-apr-emu-add>Datei hinzufügen …</button>
         <input type="file" id="apr-emu-file" multiple hidden>
         <span class="muted" id="apr-emu-up">${esc(apr.emuNote || "")}</span></p>
-      ${ngr ? `<p class="muted"><span>AMPR EMU NG ist eine Weiterentwicklung von quer3q und liest LZ4- und zstd-Pakete.</span> <span>Die App lädt die bekannte Veröffentlichung nur auf Knopfdruck und prüft ihre Prüfsumme.</span>
+      ${ngr ? `<p class="muted"><span>AMPR EMU NG ist eine Weiterentwicklung von quer3q und liest LZ4- und zstd-Pakete.</span> <span>Eine Fassung ist in der App mitgeliefert (siehe die Liste oben); eine neuere Veröffentlichung lädt die App nur auf Knopfdruck und prüft ihre Prüfsumme.</span>
         <span>Dateien einer neueren Veröffentlichung (libSceAmpr.sprx, libSceAmpr-debug.sprx) benennt „Datei hinzufügen“ passend um.</span>
-        <span>Der Entwickler rät, in ShadowMountPlus update_emulators=0 zu setzen.</span></p>` : ""}
+        <span>Beim Einbauen fragt die App, ob die automatische Fakelib-Aktualisierung in ShadowMountPlus abgeschaltet werden soll, weil ShadowMountPlus die NG-Datei sonst beim Spielstart wieder ersetzt.</span></p>` : ""}
       ${warn.map((w) => `<div class="cp-warn">${w}</div>`).join("")}
       ${em.place === "backport" ? `<p class="muted">Dieses Spiel bekommt die Datei im Backport-Ordner (ein komprimiertes Abbild lässt sich nicht beschreiben); das Spiel selbst bleibt unberührt. Ein neuer Backport-Ordner verdeckt die <code>fakelib</code> des Spiels, deshalb werden deren Dateien hineinkopiert.</p>` : ""}
       <p class="muted">${pg
@@ -8178,6 +8290,28 @@
       if (fi) fi.click();
     } else if (b.hasAttribute("data-apr-emu-act")) {
       const action = b.dataset.aprEmuAct;
+      /* AMPR EMU NG, solange ShadowMountPlus die fakelib selbst aktualisiert: Es würde die Datei beim Spielstart wieder
+         ersetzen. Erst fragen, ob das abgeschaltet werden soll; „Ja“ ändert nur die Zeile update_emulators in dessen
+         config.ini und baut NG dann ein, „Abbrechen“ (oder Schließen) lässt alles, wie es ist. */
+      if (action === "apply" && apr.lib === "ampr" && apr.vers && apr.vers.emus && apr.vers.emus.update_emulators) {
+        const pick = apr.vers.versions.find((x) => x.name === apr.emuSel);
+        if (pick && pick.ng) {
+          const ans = await askYesNo({
+            title: "ShadowMountPlus umstellen?",
+            paras: [
+              "Die automatische Fakelib-Aktualisierung von ShadowMountPlus ist eingeschaltet. Dann ersetzt ShadowMountPlus die NG-Datei beim Spielstart wieder durch die Fassung aus seinem Emulator-Ordner.",
+              "Soll die automatische Fakelib-Aktualisierung in ShadowMountPlus deaktiviert werden?",
+              "Die App ändert dafür nur die Zeile update_emulators in /data/shadowmount/config.ini. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.",
+            ],
+          });
+          if (!ans) return;
+          try {
+            const r = await api("/api/v1/ampr-emu/smp-update", { method: "POST", body: JSON.stringify({ enabled: false }) });
+            apr.vers.emus.update_emulators = !!r.update_emulators;
+            toast(r.message || "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet.");
+          } catch (err) { toast(err.message, "error"); return; }      /* ließ sich nicht ändern: dann auch nichts einbauen */
+        }
+      }
       b.disabled = true;
       try {
         apr.job = await api("/api/v1/library/emu", { method: "POST", body: JSON.stringify({ id: apr.id, lib: apr.lib, action, name: action === "apply" ? apr.emuSel : "" }) });
@@ -8186,9 +8320,15 @@
       } catch (err) { apr.emuErr = err.message; aprRender(); }
     } else if (b.hasAttribute("data-apr-lz4")) {
       const what = b.dataset.aprLz4;
-      if (what === "open") {
+      if (what === "openz") {                          /* zstd: kein Profil, alles außer den Systemdateien (06.11.2026) */
+        apr.lz4s = { fmt: "zstd", level: 5, mode: "auto", profile: "", copy: false, plan: null, planErr: "",
+                     planKey: "", busy: false, err: "", upNote: "", tested: false };
+        apr.view = "lz4set";
+        aprRender();
+        aprLz4Plan();
+      } else if (what === "open") {
         const z0 = apr.lz4 || {};                      /* ein eigenes Profil für das Spiel geht vor, dann das getestete, sonst automatisch */
-        apr.lz4s = { level: 9, mode: z0.own_profile ? "toml" : z0.suggest ? "tested" : "auto", profile: z0.own_profile || "", copy: false, plan: null, planErr: "",
+        apr.lz4s = { fmt: "lz4", level: 9, mode: z0.own_profile ? "toml" : z0.suggest ? "tested" : "auto", profile: z0.own_profile || "", copy: false, plan: null, planErr: "",
                      planKey: "", busy: false, err: "", upNote: "", tested: false };
         apr.view = "lz4set";
         aprRender();
@@ -8205,7 +8345,7 @@
       const s = apr.lz4s;
       b.disabled = true;
       try {
-        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy ? "copy" : "pack", level: s.level, profile: lz4Key(s) }) });
+        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy ? "copy" : "pack", level: s.level, profile: s.fmt === "zstd" ? "" : lz4Key(s), format: s.fmt === "zstd" ? "zstd" : "lz4" }) });
         apr.view = "main";
         aprLoad();
       } catch (err) { s.err = err.message; aprRender(); }
@@ -8252,8 +8392,8 @@
   /* ── Löschen (gamedelete.c) ─────────────────────────────────────────
      Ein Spiel (installiert: über die Deinstallation der Konsole; ShadowMountPlus: abmelden, dann die Datei löschen)
      oder eine Sicherung der App. Der Plan der Konsole sagt genau, was weggeht, und gibt ein Kennwort aus, ohne das
-     nichts gelöscht wird. Die Seite holt den Plan still und löscht sofort (nichts muss doppelt bestätigt werden);
-     der Dialog zeigt, was weggeht, und bleibt nur bei einer Ablehnung mit dem Grund stehen. Die Spielstände bleiben immer. */
+     nichts gelöscht wird. Die Seite holt den Plan und zeigt im Fenster, was weggeht; erst „Löschen“ startet (seit
+     06.11.2026, vorher ging es sofort). Lehnt die Konsole ab, steht der Grund da. Die Spielstände bleiben immer. */
   /* seq: jedes Öffnen und Schließen zählt hoch; eine Antwort, die zu einem früheren Öffnen gehört, wird verworfen
      (Durchsicht 19.10.2026: der Plan von Spiel A konnte im Dialog für Spiel B landen) */
   const dl = { kind: "", id: "", plan: null, poll: 0, seq: 0 };
@@ -8275,6 +8415,7 @@
       const b = e.target.closest("[data-dl]");
       if (!b || b.disabled) return;
       if (b.dataset.dl === "close") dlClose();
+      else if (b.dataset.dl === "go") dlGo();
     });
     return o;
   };
@@ -8300,8 +8441,7 @@
       const plan = await api("/api/v1/library/delete/plan", { method: "POST", body: JSON.stringify({ kind, id }), timeoutMs: 120000 });
       if (seq !== dl.seq) return;
       dl.plan = plan;
-      dlRenderPlan();
-      if (plan.can_delete) dlGo();
+      dlRenderPlan();       /* fragt: erst „Löschen“ im Fenster startet (dlGo) */
     } catch (e) {
       if (seq !== dl.seq) return;
       $("#dl-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
@@ -8323,13 +8463,20 @@
       ${items ? `<p>Gelöscht wird:</p><ul class="dl-items">${items}</ul>` : ""}
       ${p.keeps ? `<p class="muted">Bleibt liegen: <code>${esc(p.keeps)}</code> – die Spieldaten, auf die das Spiel verweist. Welche Dateien dazugehören, weiß die App nicht sicher; sie lassen sich danach von Hand löschen.</p>` : ""}
       <p class="dl-keep">Deine Spielstände bleiben erhalten.</p>
-      ${ok ? `<p class="muted">Wird gelöscht …</p>`
+      ${ok ? `<p class="fm-del-warn">Das lässt sich nicht rückgängig machen.</p>
+      <div class="cp-actions">
+        <button type="button" class="btn" data-dl="close">Abbrechen</button>
+        <button type="button" class="btn danger" data-dl="go">Löschen</button>
+      </div>`
            : `<p class="cp-err">${esc(p.why || "Das lässt sich gerade nicht löschen.")}</p>
       <div class="cp-actions"><button type="button" class="btn" data-dl="close">Schließen</button></div>`}`;
+    const no = $("#dl-body .btn[data-dl=close]");
+    if (ok && no) no.focus();                 /* der Fokus liegt auf „Abbrechen“: ein Enter löscht nichts */
   };
   const dlGo = async () => {
-    if (!dl.plan) return;
+    if (!dl.plan || !dl.plan.can_delete) return;
     const seq = dl.seq;
+    $("#dl-body").innerHTML = `<p class="muted">Wird gelöscht …</p>`;
     try {
       await api("/api/v1/library/delete", { method: "POST",
         body: JSON.stringify({ kind: dl.kind, id: dl.id, confirm: dl.plan.confirm }) });
@@ -8378,8 +8525,8 @@
   /* ── Dateimanager (06.10.2026) ──────────────────────────────────────
      Was geändert werden darf, entscheidet die Konsole (filemgr.c); die Seite zeigt es nur an (writable je Ordner
      und Eintrag). Kopieren und Verschieben gehen über eine Zwischenablage: auswählen, „Kopieren“ oder
-     „Ausschneiden“, in den Zielordner gehen, „Hier einfügen“. Löschen wirkt wie bei den Spielen sofort (Plan
-     mit Kennwort, still geholt). Hochladen läuft je Datei über XMLHttpRequest, weil nur das den Fortschritt
+     „Ausschneiden“, in den Zielordner gehen, „Hier einfügen“. Löschen fragt zuerst und nennt, was weggeht
+     (Plan mit Kennwort). Hochladen läuft je Datei über XMLHttpRequest, weil nur das den Fortschritt
      des Sendens meldet. Namen kommen von der Konsole und gehen durch esc(); Knöpfe tragen nur Nummern. */
   const fm = { path: "", places: [], list: null, sel: new Set(), clip: null, poll: 0, xhr: null, upQueue: [],
                loaded: false, pick: null,
@@ -8725,25 +8872,70 @@
     await render();
   };
 
-  /* Einzelnen Eintrag löschen (ohne Mehrfachauswahl) */
-  const fmDeleteOne = async (i) => {
-    const e = fmEntries()[i];
-    if (!e || !e.writable) return;
-    const paths = [fmJoin(fm.path, e.name)];
+  /* Löschen: erst fragen, dann löschen (06.11.2026; vorher ging es sofort). Das Fenster nennt, was weggeht: die Namen, ob
+     Ordner oder Datei (mit Größe), den Ordner, in dem sie liegen – und sobald die Konsole gezählt hat, wie viele Dateien
+     und wie viel Platz. Erst „Löschen“ startet, mit dem Kennwort des Plans (einmal, genau diese Liste); „Abbrechen“ hat den
+     Fokus, ein Enter löscht also nichts. Schließen, × und ein Klick daneben löschen nichts. */
+  const FM_DEL_SHOWN = 6;
+  const fmAskDelete = async (list, fromSelection) => {
+    const rows = list.filter((e) => e && e.writable);
+    if (!rows.length) return;
+    const paths = rows.map((e) => fmJoin(fm.path, e.name));
     const o = fmShell();
-    txt("#fm-dlg-title", "Löschen");
-    $("#fm-dlg-body").innerHTML = `<p class="muted">Wird gelöscht …</p>`;
+    o.querySelector(".cp-dialog").classList.remove("fm-view");
+    txt("#fm-dlg-title", rows.length > 1 ? `${rows.length} Einträge löschen?` : fmIsDir(rows[0]) ? "Ordner löschen?" : "Datei löschen?");
+    const names = rows.slice(0, FM_DEL_SHOWN).map((e) => `<li><code>${esc(e.name)}</code> <span class="muted">${esc(fmIsDir(e) ? "Ordner" : bytes(e.size))}</span></li>`).join("");
+    const more = rows.length > FM_DEL_SHOWN ? `<li class="muted">${esc(`und ${rows.length - FM_DEL_SHOWN} weitere`)}</li>` : "";
+    const hasDir = rows.some(fmIsDir);
+    $("#fm-dlg-body").innerHTML = `
+      <p>Das wird endgültig gelöscht:</p>
+      <ul class="fm-conflict-list fm-del-list">${names}${more}</ul>
+      <p class="muted fm-del-in">${esc(`Ordner: ${fm.path}`)}</p>
+      <p class="muted fm-del-sum" id="fm-del-sum">${hasDir ? "Die Konsole zählt nach …" : ""}</p>
+      <p class="fm-del-warn">Das lässt sich nicht rückgängig machen.</p>
+      ${hasDir ? `<p class="fm-del-warn">Ordner werden mit allem gelöscht, was darin liegt.</p>` : ""}
+      <p class="cp-err" id="fm-del-err" hidden></p>
+      <div class="cp-actions">
+        <button type="button" class="btn" id="fm-del-no" data-fmd="close">Abbrechen</button>
+        <button type="button" class="btn danger" id="fm-del-go" disabled>Löschen</button>
+      </div>`;
     o.hidden = false;
+    $("#fm-del-no").focus();
+    const mine = ++fm.viewSeq;                         /* fmClose zählt hoch: eine späte Antwort darf nichts mehr einsetzen */
+    const fail = (er) => {
+      if (mine !== fm.viewSeq) return;
+      $("#fm-del-sum").textContent = "";
+      const box = $("#fm-del-err");
+      box.textContent = er.message;
+      box.hidden = false;
+      $("#fm-del-go").disabled = true;
+    };
+    let plan = null;
     try {
-      const plan = await api("/api/v1/files/delete/plan", { method: "POST", body: JSON.stringify({ paths }), timeoutMs: 60000 });
-      await api("/api/v1/files/delete", { method: "POST", body: JSON.stringify({ paths: plan.paths, confirm: plan.confirm }) });
-      fmClose();
-      fmFollow();
-    } catch (er) {
-      $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(er.message)}</p>
-        <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
+      plan = await api("/api/v1/files/delete/plan", { method: "POST", body: JSON.stringify({ paths }), timeoutMs: 60000 });
+    } catch (er) { fail(er); return; }
+    if (mine !== fm.viewSeq) return;
+    if (hasDir) {
+      const n = Number(plan.files) || 0;
+      /* zwei Textstücke: „… · {1}“ als Ganzes träfe ein anderes Muster („{0} Dateien · {1}“) und ließe „Insgesamt“ stehen */
+      $("#fm-del-sum").innerHTML = `<span>${n === 0 ? "Insgesamt keine Dateien" : n === 1 ? "Insgesamt 1 Datei" : `Insgesamt ${num(n)} Dateien`}</span> · <span>${esc(bytes(plan.bytes || 0))}</span>`;
     }
+    const go = $("#fm-del-go");
+    go.disabled = false;
+    go.addEventListener("click", async () => {
+      go.disabled = true;
+      try {
+        await api("/api/v1/files/delete", { method: "POST", body: JSON.stringify({ paths: plan.paths, confirm: plan.confirm }) });
+        if (mine !== fm.viewSeq) return;
+        fmClose();
+        if (fromSelection) fm.sel.clear();
+        fmFollow();
+      } catch (er) { fail(er); }
+    });
   };
+
+  /* Einzelnen Eintrag löschen (ohne Mehrfachauswahl) */
+  const fmDeleteOne = (i) => fmAskDelete([fmEntries()[i]], false);
 
   /* Texteditor */
   const FM_EDIT_MAX = 65536;
@@ -8858,26 +9050,8 @@
     } catch (e) { err.textContent = e.message; err.hidden = false; }
   };
 
-  /* Löschen: die Seite holt den Plan der Konsole (mit seinem Kennwort) still und löscht sofort – nichts muss doppelt
-     bestätigt werden. Der Dialog bleibt nur stehen, wenn die Konsole ablehnt, und nennt den Grund. */
-  const fmDelete = async () => {
-    const paths = fmSelected().map((e) => fmJoin(fm.path, e.name));
-    if (!paths.length) return;
-    const o = fmShell();
-    txt("#fm-dlg-title", "Löschen");
-    $("#fm-dlg-body").innerHTML = `<p class="muted">Wird gelöscht …</p>`;
-    o.hidden = false;
-    try {
-      const plan = await api("/api/v1/files/delete/plan", { method: "POST", body: JSON.stringify({ paths }), timeoutMs: 60000 });
-      await api("/api/v1/files/delete", { method: "POST", body: JSON.stringify({ paths: plan.paths, confirm: plan.confirm }) });
-      fmClose();
-      fm.sel.clear();
-      fmFollow();
-    } catch (e) {
-      $("#fm-dlg-body").innerHTML = `<p class="cp-err">${esc(e.message)}</p>
-        <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
-    }
-  };
+  /* Löschen der Auswahl: fragt zuerst (fmAskDelete), der Plan der Konsole liefert das Kennwort. */
+  const fmDelete = () => fmAskDelete(fmSelected(), true);
 
   /* der laufende Auftrag (Kopieren, Verschieben, Löschen) */
   const FM_KIND = { copy: "Kopieren", move: "Verschieben", delete: "Löschen" };
@@ -9346,6 +9520,7 @@
   });
 
   oneClick($("#pt-reset"), async () => {
+    if (!(await askDelete({ title: "Spielzeit-Verlauf löschen?", lead: "Alle aufgezeichneten Sitzungen der Spielzeit werden gelöscht.", warn: ["Das lässt sich nicht rückgängig machen.", "Die Spiele und ihre Spielstände bleiben."] }))) return;
     try {
       await api("/api/v1/playtime/reset", { method: "POST" });
       toast("Spielzeit-Verlauf gelöscht.");
@@ -9705,11 +9880,15 @@
     if (b.dataset.svDelete) {
       const key = b.dataset.svDelete, name = b.dataset.name;
       const [uid, id] = key.split("/");
-      /* One click: the state before is backed up first to the chosen drive (the first suitable one by default);
-         with no drive at all the console allows no_backup, and the toast says so. */
+      /* Asks first (06.11.2026). Then the state before is backed up to the chosen drive (the first suitable one by
+         default); with no drive at all the console allows no_backup, and the question says so. */
+      const yes = await askDelete(sv.drive
+        ? { title: "Spielstände löschen?", lead: "Das wird gelöscht:", items: [{ name, info: "Spielstände" }], notes: [`Sie werden vorher auf ${sv.drive} gesichert.`], warn: "" }
+        : { title: "Spielstände löschen?", items: [{ name, info: "Spielstände" }],
+            notes: [`Kein Laufwerk für eine Sicherung da: Die Spielstände von „${name}“ werden ohne Sicherung gelöscht.`] });
+      if (!yes) return;
       b.disabled = true;
       try {
-        if (!sv.drive) toast(`Kein Laufwerk für eine Sicherung da: Die Spielstände von „${name}“ werden ohne Sicherung gelöscht.`);
         svStarted(await api("/api/v1/saves/delete", { method: "POST",
           body: JSON.stringify(sv.drive ? { uid, id, mount: sv.drive } : { uid, id, no_backup: true }) }));
       } catch (err) { toast(err.message, "error"); } finally { b.disabled = false; }
@@ -9788,7 +9967,12 @@
   $("#dp-list").addEventListener("click", async (e) => {
     const del = e.target.closest("button[data-dpdel]");
     if (!del) return;
-    del.disabled = true;                                     /* löscht beim ersten Klick */
+    const row = del.closest(".p4m-row");
+    const nm = row && row.querySelector(".p4m-name");
+    const dumpWhere = `${del.dataset.mount}${del.dataset.dir ? "/" + del.dataset.dir : ""}`;
+    if (!(await askDelete({ title: "Dump löschen?", items: [{ name: del.dataset.folder, info: nm && nm.textContent.trim() !== del.dataset.folder ? nm.textContent.trim() : "" }],
+                            notes: [`Ordner: ${dumpWhere}`] }))) return;
+    del.disabled = true;
     try {
       const r = await api("/api/v1/dumps/delete", { method: "POST", body: JSON.stringify({ mount: del.dataset.mount, dir: del.dataset.dir, folder: del.dataset.folder }) });
       if (r.message) toast(r.message);
@@ -11558,6 +11742,7 @@
   };
   $("#kl-files-reload").addEventListener("click", () => klFilesLoad());
   oneClick($("#kl-files-clear"), async () => {
+    if (!(await askDelete({ title: "Dateien löschen?", lead: "Alle gespeicherten Kernel-Log-Dateien werden gelöscht.", warn: ["Das lässt sich nicht rückgängig machen.", "Die laufende Aufnahme bleibt."] }))) return;
     try {
       const r = await api("/api/v1/klog/files/clear", { method: "POST" });
       toast(r.deleted ? `${r.deleted} ${r.deleted === 1 ? "Datei" : "Dateien"} gelöscht (${bytes(r.bytes)}).` +

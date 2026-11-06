@@ -25,15 +25,17 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 ## Eingebettete Fassungen, einzelne übernommene Dateien, Vorbilder und Schnittstellen (bei jedem Eintrag steht, was genau übernommen ist)
 
 - **np-fake-signin** 1.3 (earthonion): Die fertige ELF (117 KiB, Port 9021) ist unverändert eingebettet und wird nur auf Wunsch an den lokalen ELF-Lader geschickt; kein Quelltext ist übernommen, eine Lizenz nennt das Projekt nicht (siehe `third_party/np_fake_signin/ORIGIN.md`). Die Datei liegt nicht im Repository (`.gitignore` schließt `*.elf` aus); wer die App baut, legt sie selbst nach `third_party/np_fake_signin/np-fake-signin_v1.3.elf`.
-- **ampr_emu** (drakmor, GPL-3.0): Fünf Bauten der APR-EMU-Dateien (`libSceAmpr.sprx`, Fassungen 0.3.6.6 und
-  0.4.2.1, GPL-3.0, siehe `third_party/ampr_emu/ORIGIN.md`) sind gepackt in die App eingebettet; sie
+- **ampr_emu** (drakmor, GPL-3.0): Drei Bauten der APR-EMU-Dateien (`libSceAmpr.sprx`, Fassung 0.4.2.1,
+  GPL-3.0, siehe `third_party/ampr_emu/ORIGIN.md`) sind gepackt in die App eingebettet; sie
   kommen nur auf Wunsch in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` oder in ein Spiel
-  (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Fassungen und Bauarten (`test-pack`,
-  `test-nopack`, `test-debug-pack`, `test`, `test-debug`) nach <https://github.com/drakmor/ampr_emu>.
-- **ampr-emu-ng** (quer3q, GPL-3.0): nicht eingebettet. Die App erkennt die Bauten dieser Weiterentwicklung von
-  ampr_emu an ihrer Kennung und lädt auf Wunsch die Dateien der Veröffentlichung 0.2.0 von
-  <https://github.com/quer3q/ampr-emu-ng> in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` (`src/amprng.c`,
-  Prüfsummen aus der `SHA256SUMS` der Veröffentlichung). Quelltext: das Projekt.
+  (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Bauarten (`test-pack`,
+  `test-nopack`, `test-debug-pack`) nach <https://github.com/drakmor/ampr_emu>.
+- **ampr-emu-ng** (quer3q, GPL-3.0): Zwei Bauten der Veröffentlichung 0.3.2 (`libSceAmpr.sprx`,
+  `libSceAmpr-debug.sprx`, vom 05.11.2026, SHA-256 aus der `SHA256SUMS` der Veröffentlichung, siehe
+  `third_party/ampr_emu/ORIGIN.md`) sind wie die anderen gepackt eingebettet, als `libSceAmpr.sprx-0.3.2-ng`
+  und `-ng-debug`. Die App erkennt die Bauten dieser Weiterentwicklung von ampr_emu an ihrer Kennung und lädt auf Wunsch
+  die Dateien einer neueren Veröffentlichung von <https://github.com/quer3q/ampr-emu-ng> in den Ordner
+  `/data/PS5-Cooling-Center/AMPR_EMU` (`src/amprng.c`). Quelltext: das Projekt.
 - **pgo_stub** (drakmor, GPL-3.0): Zwei Bauten des PlayGo-Stubs (`libScePlayGo.sprx`, Fassung 0.6, mit und ohne
   Protokoll, siehe `third_party/playgo/ORIGIN.md`) sind gepackt in die App eingebettet; sie kommen nur auf Wunsch in den
   Ordner `/data/PS5-Cooling-Center/PlayGo` oder in ein Spiel (`src/amprlib.c`). Quelltext der Programme:
@@ -53,7 +55,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   Startcode, kein fremder Systemcode, siehe `sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt.
 - **ps-disc-detect** (GPL-3.0-or-later; „disc detect“, Archiv `ps-disc-detect-main.zip`, vom User am 21.10.2026 bereitgestellt): Vorbild und Wissen für den Reiter „Disc“ (`src/disc.c`): der Weg zum Laufwerk (`/dev/xpt0`, CAMIOCOMMAND mit GET CONFIGURATION, READ DISC STRUCTURE, SET STREAMING), die Profilnummern, wo die Titelkennung liegt (`SYSTEM.CNF`, `PARAM.SFO`, `param.json`), das Lesen von `/dev/cd0` in 128-KiB-Stücken, das Benennen nach Redump und das Schema der Redump-Datenbank. Der Code ist neu geschrieben (kein CD-Abbild, kein IRD, keine eingebettete Liste); die MD5- und SHA-1-Rechnungen sind eigene Fassungen der veröffentlichten Verfahren.
-- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.7.2): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
+- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.7.3): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
   (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
@@ -83,6 +85,13 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   `src/imgjob_lz4.inc`); nachgebaut, kein Quelltext übernommen. <https://github.com/theghostonline/PS5-LZ4-Compression> (seit Oktober 2026 nicht mehr erreichbar; Konto und Projekt wurden gelöscht oder umbenannt)
 - **LZ4** 1.10.0 (Yann Collet, BSD-2-Clause): `src/third_party/lz4/` (`lz4.c`, `lz4hc.c`), unverändert; die Fassung, die auch die APR-EMU
   zum Entpacken benutzt. Lizenztext: `src/third_party/lz4/LICENSE`.
+- **zstd** 1.5.7 (Meta Platforms / Yann Collet, BSD-3-Clause, auch GPLv2 möglich; hier unter der BSD-Lizenz): `src/third_party/zstd/`
+  (Kompressor und Dekompressor der Bibliothek ohne Mehrfädigkeit und ohne Assembler-Entpacker, unverändert), für die zstd-Pakete
+  (`src/zstdpack.c`). Lizenztext: `src/third_party/zstd/LICENSE`. Herkunft: <https://github.com/facebook/zstd>, Archiv-Prüfsumme in
+  `src/third_party/zstd/README.PS5TM`.
+- **zstd-Pakete von AMPR EMU NG** (quer3q, GPL-3.0): Aufbau von `ampr_zstd.index` (AMPRZPK1) und `ampr_zstd-NNN.pak` (AMPRZDT1) nach
+  `docs/zstd-format.md` von ampr-emu-ng und `docs/zstd.md` von ps5-dump-forge (Fassung 0.5.3, gelesen am 06.11.2026); nachgebaut
+  in C (`src/zstdpack.c`), kein Quelltext übernommen. <https://github.com/quer3q/ampr-emu-ng>, <https://github.com/quer3q/ps5-dump-forge>
 - **PS5 Dump & Image Converter** (eigenes Projekt des Autors, Modul `shadowmount_generation.py` und der
   fakelib-Manager): Vorbild für die Ablage der APR-EMU-Datei (`fakelib` statt `fakelib2`, Sicherung der
   Spieldatei als `.orig`, Erkennung eines früheren Emulators an `[AMPR_EMU]`) und für die Suchreihenfolge von

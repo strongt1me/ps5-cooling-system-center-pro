@@ -2,10 +2,13 @@
  * (https://github.com/quer3q/ampr-emu-ng, GPL-3.0). It reads the same LZ4 packs and zstd ones, and its builds carry the mark
  * "ampr-emu-ng <version>" instead of "[AMPR_EMU]"; amprlib.c recognises them by that and shows them as "NG <version>".
  *
- * The app does not carry them: the payload is near the size where the console stopped loading it (10.5 MB, 02.10.2026). On
- * request (POST /api/v1/ampr-emu/fetch-ng) it fetches the two files of the release named below from GitHub into the folder
+ * Release 0.3.2 is carried by the app (06.11.2026, wish of the user): third_party/ampr_emu/libSceAmpr.sprx-0.3.2-ng and -ng-debug,
+ * packed into the payload by tools/gen_emu_blob.py; room was made by dropping the old 0.3.6.6 builds and 0.4.2.1 nopack (the
+ * payload must stay clear of the size where the console stopped loading it, 10.5 MB, 02.10.2026). Between the two a file
+ * the table below names counts as there when the app carries it. A newer release is fetched on request
+ * (POST /api/v1/ampr-emu/fetch-ng): the two files of the release named below come from GitHub into the folder
  * AMPR_EMU, under the names amprlib.c reads (libSceAmpr.sprx-<version>-ng, -ng-debug). A file only gets its name after its
- * SHA-256 matched the one written here (from the release's SHA256SUMS, checked on 03.11.2026) and it carries the SELF header
+ * SHA-256 matched the one written here (from the release's SHA256SUMS, checked on 06.11.2026) and it carries the SELF header
  * and the mark. A newer release goes into the table below by hand (tools/upstream.json watches the project); until then the
  * person can add its files with "Datei hinzufügen" (the page names them).
  *
@@ -24,7 +27,7 @@
 #include "third_party/cJSON.h"
 #include "upd_http.h"
 
-#define NG_VERSION  "0.2.0"
+#define NG_VERSION  "0.3.2"
 #define NG_BASE     "https://github.com/quer3q/ampr-emu-ng/releases/download/v" NG_VERSION "/"
 #define NG_DIR      PS5TM_DATA_DIR "/AMPR_EMU"
 #define NG_MAX      (4u * 1024 * 1024)
@@ -37,10 +40,15 @@ typedef struct {
 } ng_file_t;
 
 static const ng_file_t NG_FILES[] = {
-  { "libSceAmpr.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng", "7acb2173d9691b5dfb94ea4007660920b7250111c5fd7a86c6eb91b763ad3d76", 678416 },
-  { "libSceAmpr-debug.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng-debug", "15fd9e82561f1dcd181126672164aabc8a8954db0d5d79d13641706bfdb31881", 747184 },
+  { "libSceAmpr.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng", "9a8f553a68d4e6e6be11bd9f8d5519b5faa68560761881966abff1dd65bf19f7", 697072 },
+  { "libSceAmpr-debug.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng-debug", "5e4f1fcbfb83c9beb06d892dcd807a7f077bd54aa57cefa1d712b6f067ddae5d", 779360 },
 };
 #define NG_COUNT (sizeof(NG_FILES) / sizeof(NG_FILES[0]))
+
+const char *
+ps5tm_amprng_name(void) {
+  return "libSceAmpr.sprx-" NG_VERSION "-ng";
+}
 
 static pthread_mutex_t g_ng_lock = PTHREAD_MUTEX_INITIALIZER;
 static int             g_ng_busy;
@@ -73,9 +81,18 @@ has_text(const unsigned char *d, size_t n, const char *t) {
   return 0;
 }
 
-/* 1 when the folder already holds this very file */
+/* 1 when the app carries this very file (name and SHA-256): it goes into the folder with the other built-in versions */
+static int
+carried(const ng_file_t *f) {
+  for(unsigned i = 0; i < ps5tm_emu_blob_count; i++)
+    if(!strcmp(ps5tm_emu_blobs[i].name, f->name) && !strcmp(ps5tm_emu_blobs[i].sha256, f->sha256)) return 1;
+  return 0;
+}
+
+/* 1 when the file is there: the app carries it, or the folder already holds this very file */
 static int
 have_file(const ng_file_t *f) {
+  if(carried(f)) return 1;
   char path[300];
   snprintf(path, sizeof(path), NG_DIR "/%s", f->name);
   FILE *fp = fopen(path, "rb");

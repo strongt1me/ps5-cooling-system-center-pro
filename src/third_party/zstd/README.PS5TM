@@ -1,0 +1,7 @@
+zstd 1.5.7 (https://github.com/facebook/zstd, release v1.5.7; archive sha256 eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3),
+unchanged: lib/zstd.h, zstd_errors.h and the files of lib/common (debug, entropy_common, error_private, fse_decompress, xxhash, zstd_common),
+lib/compress (all but the multi-threaded zstdmt_compress.c) and lib/decompress (all but the assembly huf_decompress_amd64.S) that the single-threaded
+build needs. Licence: BSD 3-Clause (see LICENSE; zstd is also available under GPLv2, this copy is used under the BSD one).
+Used by src/zstdpack.c: the compressor makes the zstd frames of the asset packs for AMPR EMU NG (AMPRZPK1 / AMPRZDT1, 256 KiB chunks), the
+decompressor reads them back for the check and for unpacking. Built single-threaded and without assembly (see the Makefile), strings of errors
+stripped. Added 06.11.2026.

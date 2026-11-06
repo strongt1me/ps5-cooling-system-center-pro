@@ -312,16 +312,19 @@ braucht. Das Fenster zeigt, ob es einen gibt und wie viele Dateien er kennt.
 **APR-EMU im Spiel.** Die Zeile zeigt, welche `libSceAmpr.sprx` ein Spiel lädt, und lässt dich
 eine Version einbauen, das Original zurückholen oder die Datei entfernen. Die Versionen liegen als
 Dateien im Ordner `/data/PS5-Cooling-Center/AMPR_EMU`, benannt wie bei drakmors Veröffentlichungen
-(`libSceAmpr.sprx-0.4.2.1-test-pack`). Fünf Fassungen (0.4.2.1 test-pack, test-debug-pack, test-nopack, 0.3.6.6 test,
-test-debug) sind in der App mitgeliefert: Sie stehen in der Auswahl, auch wenn sie noch nicht im Ordner liegen, und kommen
+(`libSceAmpr.sprx-0.4.2.1-test-pack`). Fünf Fassungen (NG 0.3.2 und NG 0.3.2 debug, 0.4.2.1 test-pack, test-debug-pack,
+test-nopack) sind in der App mitgeliefert: Sie stehen in der Auswahl, auch wenn sie noch nicht im Ordner liegen, und kommen
 beim Einbauen oder mit „Mitgelieferte Versionen in den Ordner legen“ dorthin (Ordner `AMPR_EMU`, wird bei Bedarf angelegt).
 Weitere Fassungen legt „Datei hinzufügen“ im Fenster in denselben Ordner.
 **AMPR EMU NG** (quer3q, eine Weiterentwicklung, die LZ4- und zstd-Pakete liest) steht mit der Marke „NG“ ganz oben
-(„NG 0.2.0“, „NG 0.2.0 debug“). Die App bringt es nicht mit; „AMPR EMU NG 0.2.0 von GitHub laden“ holt die beiden
-Dateien auf Knopfdruck in den Ordner und prüft ihre Prüfsumme. Dateien einer neueren NG-Veröffentlichung
-(`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) benennt „Datei hinzufügen“ selbst passend um. Der Entwickler rät, in
-ShadowMountPlus `update_emulators=0` zu setzen, damit der Emulator-Ordner die Datei beim Spielstart nicht ersetzt; nach dem
-Einbauen von NG erinnert eine Meldung daran (im Browser, in der Vollbild-App und als Meldung der Konsole), solange es noch an ist. Wohin die
+(„NG 0.3.2“, „NG 0.3.2 debug“). Beide Dateien sind in der App mitgeliefert; eine neuere Veröffentlichung holt
+„AMPR EMU NG von GitHub laden“ auf Knopfdruck in den Ordner und prüft ihre Prüfsumme, sobald die App sie kennt. Dateien einer neueren NG-Veröffentlichung
+(`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) benennt „Datei hinzufügen“ selbst passend um. ShadowMountPlus ersetzt die
+Datei beim Spielstart aus seinem Emulator-Ordner, solange seine automatische Fakelib-Aktualisierung an ist
+(`update_emulators=1`). Deshalb **fragt die App beim Einbauen von NG**, ob sie abgeschaltet werden soll: **Ja** setzt nur die
+Zeile `update_emulators` in `/data/shadowmount/config.ini` auf 0 (die Datei wird einmal als `config.ini.ps5cc-bak` gesichert;
+je nach Fassung übernimmt ShadowMountPlus die Änderung sofort oder erst beim nächsten Start) und baut NG ein, **Abbrechen** lässt
+alles, wie es ist. Ist die Aktualisierung schon aus, kommt die Frage nicht. Wohin die
 Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backport-Ordner
 `<Suchpfad>/backports/<Titel-ID>/` (seit 1.7beta6 auch ein Ordner, dessen Name nur mit der Titel-ID beginnt, etwa „PPSA12345 Spielname“: der genau so benannte gewinnt, sonst der erste in Byte-Reihenfolge) mit `fakelib2` vor `fakelib`, dann das Spiel mit `fakelib2` vor
 `fakelib`; der erste vorhandene Ordner gilt allein, auch ein leerer):
@@ -430,7 +433,10 @@ nie ersetzt (dann kommt „ (1)“ an den Namen). PKGs, die ältere Versionen ve
   mehr lesen und hängt.
 - Zwei oder mehr angeschlossene Laufwerke (auch Partitionen) können die Oberfläche der Konsole träge machen, mit oder ohne
   PS4Mount. Dann nur ein Laufwerk mit einer Partition anschließen.
-- Ein laufendes Spiel kann höchstens etwa 30 Pakete nutzen (Spiel, Update und rund 29 Zusatzinhalte). Das ist eine Grenze der
+- PS4Mount verwaltet seit 0.7.3 bis zu 768 Spiele je Laufwerk (vorher 256) und durchsucht bis zu 64 Ordner (vorher 8). Was
+  darüber liegt, meldet die App, statt es still zu übergehen.
+- Ein laufendes Spiel kann höchstens etwa 30 Pakete nutzen (Spiel, Update und rund 29 Zusatzinhalte mit Daten; reine
+  Freischaltungen zählen seit PS4Mount 0.7.3 nicht mit). Das ist eine Grenze der
   Konsole, auch für installierte Spiele.
 
 ## LZ4-Asset-Packs: Schritt für Schritt (seit 12.10.2026)
@@ -458,7 +464,8 @@ schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes
 1. **APR-EMU einbauen.** Im Fenster „LZ4-Asset-Packs & APR-EMU“ bei **APR-EMU im Spiel** die Version `0.4.2.1 test-pack`
    wählen. Nur die Versionen mit „pack“ im Namen lesen Pakete.
 2. **Ungepackt testen.** Das Spiel starten und ein Stück spielen: Menü, ein Level, einen Spielstand laden. Läuft es so nicht, läuft
-   es gepackt nie. Dann hilft nur eine ältere APR-EMU (zum Beispiel 0.3.6.6) oder keine.
+   es gepackt nie. Dann hilft nur eine ältere APR-EMU (zum Beispiel 0.3.6.6; sie liegt der App seit November 2026 nicht mehr bei,
+„Datei hinzufügen“ nimmt sie von drakmors Veröffentlichungsseite) oder keine.
 3. **Packen.** **Mit LZ4 packen …**, zum Anfang Stufe 9 und **Automatisch**. Das Kästchen „ungepackt gestartet, und es lief“
    gehört dazu. **Im Spielordner packen** spart den meisten Platz; die Originale werden erst entfernt, wenn jede Datei Byte für
    Byte mit den Paketen verglichen ist, und bei jedem Fehler bleibt alles wie vorher. Die Wahl **Als neuen Ordner … daneben** lässt
@@ -473,6 +480,18 @@ schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes
 5. **Starten und spielen.** Erst jetzt zeigt sich, ob es läuft. Spiele länger als ein paar Sekunden: Menü, ein Level, Laden und
    Speichern.
 6. **Läuft es nicht:** **LZ4 entpacken …** schreibt alle Dateien zurück, vergleicht sie und entfernt die Pakete.
+
+### zstd statt LZ4 (seit 06.11.2026)
+
+Neben den LZ4-Paketen macht die App **zstd-Pakete** (`ampr_zstd.index`, `ampr_zstd-NNN.pak`; **Mit zstd packen …**). Das Format
+stammt von quer3q (ampr-emu-ng, `docs/zstd-format.md`); gelesen wird es nur von **AMPR EMU NG**. Die App legt NG beim Packen selbst
+in `fakelib` (ist in ShadowMountPlus die automatische Fakelib-Aktualisierung noch an, steht eine Warnung im Ergebnis). Gepackt wird das
+ganze Spiel außer den Systemdateien (Programme, `sce_sys`, `sce_module`, `fakelib*`, leere Dateien, die Pakete selbst und die Dateien
+der APR-EMU, dazu die wenigen Dateien, die die PS5 auf der Platte sucht): kein Profil, kein „Automatisch“. Stufe 1 bis 22 (angeboten
+1, 5, 9, 19; Vorgabe 5), jedes Stück von 256 KiB ein eigener zstd-Frame mit Prüfsumme, roh, wenn zstd es nicht verkleinert. Packen,
+Prüfen (Byte für Byte gegen die Originale), Entpacken, „Als neuen Ordner …-zstd daneben“ wie bei LZ4. Ein Spiel liegt in LZ4- oder in
+zstd-Paketen, nie in beiden; in einem zstd-Spiel sind alle APR-EMU-Versionen außer NG gesperrt. Gegen den unabhängigen Leser des
+PS5 Dump & Image Converter geprüft; an der Konsole mit einem Spiel noch nicht erprobt.
 
 ### Getestete Profile
 
@@ -568,7 +587,7 @@ Nur zum Schutz vor Unfällen gesperrt („Nur ansehen“, Knöpfe aus):
 
 > **Vorsicht:** Unter `/system_data` und `/user` liegen Datenbanken und Einstellungen der Konsole. Wer dort das Falsche
 > löscht oder verschiebt, riskiert eine Konsole, die nicht mehr startet oder neu eingerichtet werden muss. Überschrieben
-> wird nie etwas: Eine Datei ersetzt man, indem man die alte löscht und die neue hochlädt.
+> wird nie ungefragt: Gibt es einen Namen im Ziel schon, fragt ein Fenster (Ersetzen, Beide behalten, Überspringen).
 
 USB-Laufwerke heißen seit 1.75.0 überall wie auf der Konsole: `usb0`, `usb1` … (der Ordner `/mnt/usb0` ist „usb0“; vorher
 zählte die Oberfläche ab 1).
@@ -585,25 +604,38 @@ zählte die Oberfläche ab 1).
 - **Ansehen:** „Ansehen“ zeigt Bilder (PNG, JPG, GIF, WebP, BMP, ICO) und den Anfang von Textdateien (bis 256 KB) in einem
   Fenster. Die Datei kommt mit strenger Sicherheitskopfzeile (kein Skript, nur das Bild oder der Text); andere Dateien lassen
   sich nur herunterladen.
+- **Bearbeiten:** Bei Textdateien bis 64 KB öffnet „Bearbeiten“ einen Editor; „Speichern“ schreibt die Datei zurück
+  (`POST /api/v1/files/write`). Größere Dateien herunterladen, bearbeiten und wieder hochladen.
 
-**Kopieren und Verschieben:** Einträge ankreuzen, **Kopieren** oder **Ausschneiden**, in den Zielordner wechseln, **Hier
-einfügen**. Ein Balken zeigt Prozent, Bytes und die aktuelle Datei; **Abbrechen** hält an und entfernt im Ziel, was vom
-angefangenen Eintrag schon geschrieben war. Nichts wird überschrieben: Gibt es einen Namen im Ziel schon, beginnt nichts,
-und die Meldung nennt ihn. Verschieben innerhalb eines Laufwerks ist ein Umbenennen; zwischen zwei Laufwerken wird
-kopiert, und das Original erst gelöscht, wenn die Kopie vollständig ist. Vorher prüft die Konsole den freien Platz.
+**Kopieren und Verschieben:** Einträge ankreuzen (oder am einzelnen Eintrag das Menü „⋯“ öffnen) und **Kopieren nach** oder
+**Verschieben nach** wählen: Die Zielwahl zeigt oben die Orte der Konsole (Laufwerke, `/data` …) und lässt in Unterordner
+wechseln; **Hierhin kopieren** bzw. **Hierhin verschieben** startet. Alternativ über die Ablage: **Kopieren** oder
+**Ausschneiden**, in den Zielordner wechseln, **Hier einfügen** (so arbeitet die Vollbild-App). Gibt es einen Namen im Ziel
+schon, fragt ein Fenster: **Ersetzen** (eine Datei wird erst neben die alte geschrieben und am Ende darübergelegt, ein
+Ordner zusammengeführt), **Beide behalten** (`Name (2)`), **Überspringen** oder Abbrechen; `conflict` in der Anfrage
+(`replace`, `keep`, `skip`). Die Anzeige nennt, wie viele Dateien/Ordner es sind und welcher dran ist („Kopiere 1 von 2
+Dateien/Ordnern“), woher und wohin („von /mnt/usb0/neu nach /mnt/ext1“), Prozent, Bytes und die aktuelle Datei, dazu die
+Übertragungsrate („82 MB/s“) und die geschätzte Restzeit („noch ca. 12 Min.“; die App misst beides einmal pro Sekunde und
+glättet leicht, `rate_bps` und `eta_s` in `GET /api/v1/files/job`). **Abbrechen** hält an und entfernt im Ziel, was vom
+angefangenen Eintrag schon geschrieben war. Verschieben innerhalb eines Laufwerks ist ein Umbenennen; zwischen zwei Laufwerken
+wird kopiert, und das Original erst gelöscht, wenn die Kopie vollständig ist. Vorher prüft die Konsole den freien Platz.
 
-**Löschen** wirkt wie bei den Spielen sofort: Die Seite holt den Plan der Konsole (mit seinem Kennwort) still und
-löscht direkt. Nur wenn die Konsole ablehnt, bleibt ein Fenster mit dem Grund stehen. Ein Balken zeigt den Fortschritt.
+**Löschen fragt zuerst:** Das Fenster nennt, was weggeht – die Namen mit Art und Größe, den Ordner und bei Ordnern, wie viele
+Dateien mit wie viel Platz darin liegen (die Konsole zählt über den Plan nach, `POST /api/v1/files/delete/plan`; sein Kennwort
+gilt einmal, zehn Minuten und genau für diese Liste). Erst **Löschen** im Fenster startet; **Abbrechen** hat den Fokus. Ein
+Balken zeigt den Fortschritt. Dasselbe fragen Spiele und Sicherungen, Spielstände, Payload-Dateien und -Profile,
+Disc-Abbilder, Dumps, Hintergrundbilder, Verlauf, Spielzeit-Verlauf und Kernel-Log-Dateien, im Browser wie in der
+Vollbild-App (seit 06.11.2026; vorher löschte alles sofort).
 
 Während Kopieren, Verschieben oder Löschen läuft, startet kein zweiter solcher Auftrag; der Dateimanager startet nicht,
 solange ein anderer Vorgang der App läuft (Spiel kopieren, konvertieren, installieren …). Jede Änderung steht im Protokoll.
 
 ## Sprache der Oberfläche (seit 07.10.2026)
 
-Oben rechts in der Kopfzeile steht die Sprachwahl: **Deutsch, English, Italiano, Español, Français, Русский**. Beim ersten
+Oben rechts in der Kopfzeile steht die Sprachwahl: **Deutsch, English, Italiano, Español, Français, Русский, Svenska**. Beim ersten
 Besuch nimmt die Seite die Sprache des Browsers; hat die App sie nicht, Englisch. Die Wahl merkt sich der Browser
 (`localStorage`, Schlüssel `lang`), die Seite lädt dann neu und bleibt auf der Seite, auf der man war. Zahlen, Datum und
-Uhrzeit folgen der Sprache (`de-DE`, `en-GB`, `it-IT`, `es-ES`, `fr-FR`, `ru-RU`).
+Uhrzeit folgen der Sprache (`de-DE`, `en-GB`, `it-IT`, `es-ES`, `fr-FR`, `ru-RU`, `sv-SE`).
 
 - Die Quelltexte der App sind deutsch. Für jede andere Sprache lädt die Seite ein Wörterbuch (`/lang/<xx>.json`), das jeden
   deutschen Text auf den übersetzten abbildet. Deutsch braucht keins.

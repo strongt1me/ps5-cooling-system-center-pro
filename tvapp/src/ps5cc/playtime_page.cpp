@@ -4,7 +4,7 @@
 //
 // As the web app's tab: on the left the game running now, the most played games and the last
 // sessions; on the right today, the last 7 and 30 days and everything, and the last fourteen days
-// as bars. Triangle: delete the history (at once, as everywhere in the app). The table export stays
+// as bars. Triangle: delete the history (after a question, 06.11.2026). The table export stays
 // in the web app: a file to save belongs to a computer.
 
 #include "ps5cc/look.hpp"
@@ -54,6 +54,7 @@ class PlaytimePage final : public Page
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
+        ask_.init(theme);
     }
 
     void absorb(const Snapshot &data) override
@@ -73,11 +74,18 @@ class PlaytimePage final : public Page
 
     bool modal() const override
     {
-        return menu_.is_open();
+        return menu_.is_open() || ask_.is_open();
     }
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (ask_.is_open())
+        {
+            // only "Löschen" in the question deletes the history (06.11.2026)
+            if (ask_.handle(input, feedback))
+                source().playtime_reset();
+            return;
+        }
         if (menu_.is_open())
         {
             if (menu_.handle(input, feedback) == ui::Event::activated)
@@ -85,7 +93,10 @@ class PlaytimePage final : public Page
                 const int tag = menu_.items()[static_cast<std::size_t>(menu_.focus())].tag;
                 feedback.play(audio::Cue::select);
                 if (tag == kReset)
-                    source().playtime_reset();
+                    ask_.open("Spielzeit-Verlauf löschen?", {}, {}, feedback,
+                              "Alle aufgezeichneten Sitzungen der Spielzeit werden gelöscht.",
+                              "Das lässt sich nicht rückgängig machen.\n"
+                              "Die Spiele und ihre Spielstände bleiben.");
                 else if (tag == kReload)
                     source().reload();
             }
@@ -132,6 +143,7 @@ class PlaytimePage final : public Page
     {
         list_.update(dt);
         menu_.update(dt);
+        ask_.update(dt);
     }
 
     void draw(ui::Canvas &canvas) const override
@@ -220,6 +232,7 @@ class PlaytimePage final : public Page
     void draw_overlay(ui::Canvas &canvas) const override
     {
         menu_.draw(canvas);
+        ask_.draw(canvas);
     }
 
     int hints(ui::Hint *out) const override
@@ -387,6 +400,7 @@ class PlaytimePage final : public Page
     ui::Theme theme_;
     ui::ListView list_;
     ui::Menu menu_;
+    DeleteAsk ask_; // asked before the history is deleted
     std::string key_;
     Playtime play_;
     int tz_ = 0;

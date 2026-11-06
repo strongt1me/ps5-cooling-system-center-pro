@@ -31,6 +31,7 @@ enum Row
     kLz4Pack,
     kLz4Verify,
     kLz4Unpack,
+    kZstPack,
     kTraceStart,
     kTraceCollect,
     kTraceGenerate,
@@ -147,6 +148,11 @@ void GameExtras::init(const ui::Theme &theme)
     form_.style.on_text = "An";
     form_.style.off_text = "Aus";
     form_.set_bounds({kPanel.x + 24.0f, kPanel.y + 130.0f, 980.0f, 640.0f});
+    ask_.style.theme = solid_theme(theme);
+    ask_.style.frosted = false;
+    ask_.style.scrim = 0.72f;
+    ask_.style.width = 900.0f;
+    ask_.style.body_lines = 10;
 }
 
 void GameExtras::open_game(const Game &game, ui::Feedback &feedback)
@@ -313,6 +319,8 @@ void GameExtras::build_main()
             state += " · Original gesichert";
         if (yes(j.root, "packed"))
             state += " · Spiel ist LZ4-gepackt";
+        if (yes(j.root, "packed_zstd"))
+            state += " · Spiel ist zstd-gepackt";
         form_.add_value(kStatus + id, "Zustand", state);
         ui::FormRow &r = form_.add_action(id, "Version wählen …");
         r.description = "Zeigt die Fassungen im Ordner der App; die gewählte wird sofort "
@@ -356,7 +364,8 @@ void GameExtras::build_main()
     // LZ4 packs
     {
         Json j(extras_.lz4);
-        form_.add_header("LZ4-ASSET-PACKS");
+        const bool zst = str(get(j.root, "pack"), "kind") == "zstd"; // the packs are zstd ones (AMPR EMU NG)
+        form_.add_header(zst ? "ZSTD-ASSET-PACKS" : "LZ4-ASSET-PACKS");
         if (yes(j.root, "packed"))
         {
             const cJSON *p = get(j.root, "pack");
@@ -369,7 +378,7 @@ void GameExtras::build_main()
             form_.add_value(kStatus + kLz4Pack, "Zustand", text);
             form_.add_action(kLz4Verify, "Pakete prüfen").description =
                 "Liest jedes Paket und vergleicht es mit den Originaldateien.";
-            ui::FormRow &u = form_.add_action(kLz4Unpack, "LZ4 entpacken");
+            ui::FormRow &u = form_.add_action(kLz4Unpack, zst ? "zstd entpacken" : "LZ4 entpacken");
             u.description = "Legt die Dateien wieder ungepackt ab.";
             u.disabled = num(j.root, "free_bytes") < logical + 256.0 * 1024 * 1024;
             if (u.disabled)
@@ -381,10 +390,15 @@ void GameExtras::build_main()
             ui::FormRow &r = form_.add_action(kLz4Pack, "Mit LZ4 packen …");
             r.description =
                 "Öffnet die Einstellungen: Stufe, Profil und ob im Ordner selbst oder als Kopie.";
+            ui::FormRow &z = form_.add_action(kZstPack, "Mit zstd packen …");
+            z.description = "Nur für AMPR EMU NG: packt alles außer den Systemdateien. Öffnet die "
+                            "Einstellungen: Stufe und ob im Ordner selbst oder als Kopie.";
             if (!yes(j.root, "can"))
             {
                 r.disabled = true;
                 r.description = str(j.root, "why");
+                z.disabled = true;
+                z.description = str(j.root, "why");
             }
         }
     }
@@ -430,7 +444,11 @@ void GameExtras::build_versions()
     const cJSON *inst = get(emu.root, "installed");
     const std::string sha = str(inst, "sha256");
     const bool packed = yes(emu.root, "packed");
+    const bool packed_zstd = yes(emu.root, "packed_zstd"); // only AMPR EMU NG reads zstd packs
     version_names_.clear();
+    version_ng_.clear();
+    // the answer of the app says whether ShadowMountPlus refreshes the fakelib (update_emulators, on by default)
+    smp_update_on_ = yes(get(j.root, "emus"), "update_emulators");
     form_.add_header("VERSIONEN");
     int i = 0;
     const cJSON *v = nullptr;
@@ -452,10 +470,13 @@ void GameExtras::build_versions()
         about +=
             !sha.empty() && str(v, "sha256") == sha ? "so eingebaut" : "X-Taste baut diese ein";
         r.description = about;
-        r.disabled = !yes(v, "valid") || (packed && !yes(v, "pack"));
+        r.disabled = !yes(v, "valid") || (packed && !yes(v, "pack")) || (packed_zstd && !yes(v, "ng"));
         if (packed && !yes(v, "pack"))
             r.description = "Das Spiel ist gepackt: nur eine LZ4-Fassung passt.";
+        if (packed_zstd && !yes(v, "ng"))
+            r.description = "Das Spiel liegt in zstd-Paketen: nur AMPR EMU NG passt.";
         version_names_.push_back(str(v, "name"));
+        version_ng_.push_back(yes(v, "ng"));
         ++i;
     }
     if (i == 0)
@@ -473,7 +494,7 @@ void GameExtras::build_versions()
         f.disabled = !want || yes(ng, "busy");
         f.description = want ? "Weiterentwicklung von quer3q, liest LZ4- und zstd-Pakete; "
                                "Prüfsumme wird geprüft."
-                             : "Schon im Ordner.";
+                             : "Schon im Ordner oder mitgeliefert.";
     }
     if (yes(inst, "has_orig"))
         form_.add_action(kRestore, "Original wiederherstellen");
@@ -486,9 +507,26 @@ void GameExtras::build_lz4()
 {
     Json j(extras_.lz4);
     form_.add_header("VORAUSSETZUNG");
-    form_.add_toggle(kTested, "Ungepackt mit APR-EMU (test-pack) getestet", false).description =
-        "Das Spiel muss so schon gelaufen sein; erst dann lohnt das Packen.";
+    form_.add_toggle(kTested,
+                     zstd_ ? "Ungepackt mit AMPR EMU NG getestet"
+                           : "Ungepackt mit APR-EMU (test-pack) getestet",
+                     false)
+        .description = "Das Spiel muss so schon gelaufen sein; erst dann lohnt das Packen.";
     form_.add_header("EINSTELLUNGEN");
+    if (zstd_)
+    {
+        // zstd: level 1 to 22 (four anchors), everything but the system files goes in, no profile
+        form_.add_choice(kLevel, "Stufe",
+                         {"5 (empfohlen)", "1 (am schnellsten)", "9 (kleiner)", "19 (am kleinsten)"}, 0);
+        profile_ids_.clear();
+        form_.add_choice(kTarget, "Wohin", {"Im Ordner selbst", "Als Kopie (-zstd)"}, 0).description =
+            "Eine Kopie legt einen zweiten Ordner mit derselben Titel-ID an.";
+        form_.add_value(kPlanText, "Plan", plan_text());
+        ui::FormRow &go = form_.add_action(kPackStart, "Packen starten");
+        go.disabled = true;
+        go.description = "Erst die Voraussetzung oben bestätigen.";
+        return;
+    }
     form_.add_choice(kLevel, "Stufe", {"9 (empfohlen)", "3 (schneller)", "12 (kleiner)"}, 0);
     profile_ids_.clear();
     std::vector<std::string> modes;
@@ -583,13 +621,20 @@ std::string GameExtras::plan_text() const
 
 void GameExtras::ask_plan()
 {
+    if (zstd_)
+    {
+        static const int kZstLevels[4] = {5, 1, 9, 19};
+        source().extras_lz4_plan(game_.id, kZstLevels[std::clamp(form_.choice_index(kLevel), 0, 3)],
+                                 std::string(), "zstd");
+        return;
+    }
     static const int kLevels[3] = {9, 3, 12};
     const int level = kLevels[std::clamp(form_.choice_index(kLevel), 0, 2)];
     const int mode = form_.choice_index(kMode);
     const std::string profile = mode >= 0 && mode < static_cast<int>(profile_ids_.size())
                                     ? profile_ids_[static_cast<std::size_t>(mode)]
                                     : std::string();
-    source().extras_lz4_plan(game_.id, level, profile);
+    source().extras_lz4_plan(game_.id, level, profile, "lz4");
 }
 
 void GameExtras::activate(int id, ui::Feedback &feedback)
@@ -608,13 +653,30 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
     if (id >= kVersion)
     {
         const std::size_t i = static_cast<std::size_t>(id - kVersion);
-        if (i < version_names_.size())
-            source().extras_post("library/emu", "{\"id\":" + gid + ",\"lib\":\"" + lib_ +
-                                                    "\",\"action\":\"apply\",\"name\":" +
-                                                    json_text(version_names_[i]) + "}");
-        view_ = kMain;
-        key_.clear();
-        build();
+        if (i >= version_names_.size())
+            return;
+        // AMPR EMU NG while ShadowMountPlus still refreshes the fakelib (06.11.2026): it would put its own file back
+        // at the start of a game. The question comes first: "Ja" switches the setting off and puts the version in,
+        // "Abbrechen" (or back) leaves everything as it was.
+        if (lib_ == "ampr" && i < version_ng_.size() && version_ng_[i] && smp_update_on_)
+        {
+            pending_version_ = version_names_[i];
+            ui::DialogContent content;
+            content.icon = ui::StatusKind::warning;
+            content.title = "ShadowMountPlus umstellen?";
+            content.body =
+                "Die automatische Fakelib-Aktualisierung von ShadowMountPlus ist eingeschaltet. "
+                "Dann ersetzt ShadowMountPlus die NG-Datei beim Spielstart wieder durch die Fassung "
+                "aus seinem Emulator-Ordner.\n\n"
+                "Soll die automatische Fakelib-Aktualisierung in ShadowMountPlus deaktiviert "
+                "werden?\n\n"
+                "Die App ändert dafür nur die Zeile update_emulators in "
+                "/data/shadowmount/config.ini. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.";
+            content.buttons = {{"Ja", ui::ButtonKind::primary}, {"Abbrechen"}};
+            ask_.open(content, feedback);
+            return;
+        }
+        apply_version(version_names_[i]);
         return;
     }
     switch (id)
@@ -635,6 +697,8 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         source().extras_post("library/plugins", "{\"id\":" + gid + ",\"action\":\"apply\"}");
         break;
     case kLz4Pack:
+    case kZstPack:
+        zstd_ = id == kZstPack;
         view_ = kLz4;
         plan_ = ExtrasLz4Plan{};
         key_.clear();
@@ -679,16 +743,19 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
     case kPackStart:
     {
         static const int kLevels[3] = {9, 3, 12};
+        static const int kZstLevels[4] = {5, 1, 9, 19};
         const int mode = form_.choice_index(kMode);
-        const std::string profile = mode >= 0 && mode < static_cast<int>(profile_ids_.size())
+        const std::string profile = !zstd_ && mode >= 0 && mode < static_cast<int>(profile_ids_.size())
                                         ? profile_ids_[static_cast<std::size_t>(mode)]
                                         : std::string();
+        const int level = zstd_ ? kZstLevels[std::clamp(form_.choice_index(kLevel), 0, 3)]
+                                : kLevels[std::clamp(form_.choice_index(kLevel), 0, 2)];
         source().extras_post(
             "library/lz4",
             "{\"id\":" + gid + ",\"kind\":\"" +
                 (form_.choice_index(kTarget) == 1 ? "copy" : "pack") + "\",\"level\":" +
-                std::to_string(kLevels[std::clamp(form_.choice_index(kLevel), 0, 2)]) +
-                ",\"profile\":" + json_text(profile) + "}");
+                std::to_string(level) + ",\"profile\":" + json_text(profile) + ",\"format\":\"" +
+                (zstd_ ? "zstd" : "lz4") + "\"}");
         view_ = kMain;
         key_.clear();
         build();
@@ -699,10 +766,37 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
     }
 }
 
+// The version goes into the game; the window returns to the game's page.
+void GameExtras::apply_version(const std::string &name)
+{
+    source().extras_post("library/emu", "{\"id\":" + json_text(game_.id) + ",\"lib\":\"" + lib_ +
+                                            "\",\"action\":\"apply\",\"name\":" +
+                                            json_text(name) + "}");
+    view_ = kMain;
+    key_.clear();
+    build();
+}
+
 void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
 {
     if (view_ == kClosed)
         return;
+    if (ask_.is_open())
+    {
+        // "Ja" switches the automatic fakelib update off in ShadowMountPlus, then the version goes in; "Abbrechen" and
+        // back change nothing (the requests queue in this order, so the setting is written before the file goes in)
+        const ui::Event event = ask_.handle(input, feedback);
+        if (event == ui::Event::activated && ask_.choice() == 0)
+        {
+            source().extras_post("ampr-emu/smp-update", "{\"enabled\":false}");
+            smp_update_on_ = false;
+            apply_version(pending_version_);
+            pending_version_.clear();
+        }
+        else if (!ask_.is_open())
+            pending_version_.clear();
+        return;
+    }
     if (input.is_pressed(Action::back))
     {
         close(feedback);
@@ -731,6 +825,7 @@ void GameExtras::update(float dt)
 {
     clock_ += dt;
     form_.update(dt);
+    ask_.update(dt);
     shown_.target = view_ != kClosed ? 1.0f : 0.0f;
     shown_.update(dt, 14.0f);
 }
@@ -778,6 +873,9 @@ std::string GameExtras::side_text() const
                                   "braucht eine LZ4-Fassung (test-pack). Neue Fassungen vom PC "
                                   "kommen über die Browser-App.";
     case kLz4:
+        if (zstd_)
+            return "Packt das ganze Spiel außer den Systemdateien in zstd-Asset-Packs. Das spart "
+                   "Platz; gelesen wird sie nur von AMPR EMU NG, das die App dafür einbaut.";
         return "Packt die großen Dateien des Spiels in LZ4-Asset-Packs. Das spart Platz; gelesen "
                "wird über APR-EMU "
                "(test-pack). Eigene Profile (TOML) lädt man über die Browser-App hoch.";
@@ -808,7 +906,7 @@ void GameExtras::draw_overlay(ui::Canvas &canvas) const
         view_ == kLibrary ? "Bibliothek: Doppelte Abbilder"
         : view_ == kVersions
             ? std::string(lib_ == "playgo" ? "PlayGo" : "APR-EMU") + " · " + game_.name
-        : view_ == kLz4 ? "Mit LZ4 packen · " + game_.name
+        : view_ == kLz4 ? std::string(zstd_ ? "Mit zstd packen · " : "Mit LZ4 packen · ") + game_.name
                         : "Extras · " + game_.name;
     ui::text(list, fonts.display, ui::fit_label(paint, title, 36.0f, panel.w - 80.0f),
              panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
@@ -857,6 +955,7 @@ void GameExtras::draw_overlay(ui::Canvas &canvas) const
         {ui::Button::circle, view_ == kVersions || view_ == kLz4 ? "Zurück" : "Schließen"}};
     ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 2, panel.x + 40.0f, false, layout);
     list.pop_opacity();
+    ask_.draw(canvas); // "ShadowMountPlus umstellen?" on top of everything
 }
 
 } // namespace hui::ps5cc

@@ -6,8 +6,9 @@
 // As the web app's tab (src/savebackup.c does the work: an encrypted copy, read back and checked):
 // the X button picks a game's saves for the next backup, Square opens what a game or a backup
 // allows (delete with a backup first; check; put one game back), Triangle the rest (back up what is
-// picked, the destination, pick all or none, cancel the job). Everything fires at once; a restore
-// keeps the state before it as its own backup, as in the web app.
+// picked, the destination, pick all or none, cancel the job). Deleting asks first and names the
+// game (06.11.2026); the rest fires at once, and a restore keeps the state before it as its own
+// backup, as in the web app.
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
@@ -87,6 +88,7 @@ class SavesPage final : public Page
         menu_.style.width = 620.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
+        ask_.init(theme);
     }
 
     void absorb(const Snapshot &data) override
@@ -134,11 +136,18 @@ class SavesPage final : public Page
 
     bool modal() const override
     {
-        return menu_.is_open();
+        return menu_.is_open() || ask_.is_open();
     }
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (ask_.is_open())
+        {
+            // only "Löschen" in the question deletes the saves (06.11.2026)
+            if (ask_.handle(input, feedback))
+                delete_saves();
+            return;
+        }
         if (menu_.is_open())
         {
             if (menu_.handle(input, feedback) == ui::Event::activated)
@@ -187,6 +196,7 @@ class SavesPage final : public Page
         list_.update(dt);
         info_.update(dt);
         menu_.update(dt);
+        ask_.update(dt);
     }
 
     void draw(ui::Canvas &canvas) const override
@@ -267,6 +277,7 @@ class SavesPage final : public Page
     void draw_overlay(ui::Canvas &canvas) const override
     {
         menu_.draw(canvas);
+        ask_.draw(canvas);
     }
 
     int hints(ui::Hint *out) const override
@@ -465,6 +476,35 @@ class SavesPage final : public Page
         menu_.set_focus(chosen);
     }
 
+    // Asks first (user, 06.11.2026): which game's saves go, and whether they are backed up before.
+    void ask_delete(ui::Feedback &feedback)
+    {
+        const SaveDrive *d = target();
+        const std::string name = menu_title_.name.empty() ? menu_title_.id : menu_title_.name;
+        std::vector<std::string> notes;
+        if (d != nullptr)
+            notes.push_back("Sie werden vorher auf " + d->label + " gesichert.");
+        else
+            notes.push_back("Kein Laufwerk für eine Sicherung da:");
+        if (d == nullptr)
+            notes.push_back("Es wird ohne Sicherung gelöscht.");
+        ask_.open("Spielstände löschen?", {DeleteAsk::line(name, "Spielstände")}, notes, feedback,
+                  d != nullptr ? "Das wird gelöscht:" : "Das wird endgültig gelöscht:",
+                  d != nullptr ? std::string() : std::string("Das lässt sich nicht rückgängig machen."));
+    }
+
+    void delete_saves()
+    {
+        if (target() != nullptr)
+            source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) +
+                                              ",\"id\":" + json_text(menu_title_.id) +
+                                              ",\"mount\":" + json_text(target_) + "}");
+        else
+            source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) +
+                                              ",\"id\":" + json_text(menu_title_.id) +
+                                              ",\"no_backup\":true}");
+    }
+
     void run(int tag, ui::Feedback &feedback)
     {
         feedback.play(audio::Cue::select);
@@ -491,14 +531,7 @@ class SavesPage final : public Page
         switch (tag)
         {
         case kDelete:
-            if (target() != nullptr)
-                source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) +
-                                                  ",\"id\":" + json_text(menu_title_.id) +
-                                                  ",\"mount\":" + json_text(target_) + "}");
-            else
-                source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) +
-                                                  ",\"id\":" + json_text(menu_title_.id) +
-                                                  ",\"no_backup\":true}");
+            ask_delete(feedback);
             break;
         case kVerify:
             source().saves_post("verify", "{\"path\":" + json_text(menu_backup_.path) + "}");
@@ -668,6 +701,7 @@ class SavesPage final : public Page
     ui::ListView list_;
     ui::DetailList info_;
     ui::Menu menu_;
+    DeleteAsk ask_;
     std::string key_;
     std::string info_key_ = "\x01";
     Saves saves_;

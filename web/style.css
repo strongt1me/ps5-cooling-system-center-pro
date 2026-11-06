@@ -89,8 +89,9 @@ body {
 .shell > .topbar, .shell > main, .shell > .foot { max-width: 1320px; margin-left: auto; margin-right: auto; }
 
 .brand { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 0 6px 22px; }
-/* Logo: Bild des Users (Lüfter + Thermometer), Ecken schon rund freigestellt */
-.brand-mark { width: 40px; height: 40px; flex: none; display: block; }
+/* Logo: Bild des Users (Lüfter + Thermometer). Die Bilddatei ist quadratisch (kein Alphakanal); die runden Ecken
+   macht der Stil (06.11.2026), ein Viertel der Kantenlänge wie beim Kachel-Symbol der Konsole. */
+.brand-mark { width: 40px; height: 40px; flex: none; display: block; border-radius: 10px; }
 /* Der Name ist lang: In der Seitenleiste bricht er nach „PS5 Cooling &" um und
    lässt „System Center - Pro" auf der zweiten Zeile stehen. Das „Pro" hängt per
    geschütztem Leerzeichen am Strich, damit es nie allein in der Zeile steht. */
@@ -1509,6 +1510,14 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 .fm-pick-place:hover { border-color: var(--accent); }
 .fm-pick-place[aria-current="true"] { background: var(--accent); border-color: transparent; color: #fff; }
 .fm-conflict-list { margin: 0 0 10px; padding-left: 20px; font-size: 13px; }
+/* Löschen: erst fragen (06.11.2026) – die Namen stehen fett und umbrechen, auch lange */
+.fm-del-list { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.fm-del-list code { font-weight: 600; font-size: 13.5px; }
+.fm-del-in, .fm-del-sum { margin: 0 0 6px; font-size: 12.5px; overflow-wrap: anywhere; }
+.fm-del-sum:empty { display: none; }
+.fm-del-warn { margin: 8px 0 0; font-size: 13px; color: #ffb0b0; }
+.fm-del-warn + .fm-del-warn { margin-top: 2px; }
+:root[data-theme="hell"] .fm-del-warn { color: #8e0b0b; }
 
 .acc-list { display: grid; gap: 8px; margin: 10px 0 0; }
 .acc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;

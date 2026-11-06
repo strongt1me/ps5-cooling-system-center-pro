@@ -9,11 +9,11 @@
 ![Version](https://img.shields.io/badge/Version-1.76.9-1f6feb)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
-![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
+![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
 
 [Funktionen](#funktionen) · [Schnellstart](#schnellstart) · [Voraussetzungen](#voraussetzungen) · [Bedienung](#bedienung) · [Dokumentation](#dokumentation) · [Rechtliches](#rechtliches-und-haftungsausschluss) · [Credits](#credits-und-danksagung)
 
-**Deutsch** · [English](README.en.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md)
+**Deutsch** · [English](README.en.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
 <img src="docs/images/kuehlung.jpg" alt="Kühlung: Temperatur, Lüfter, laufendes Spiel, Zieltemperatur und Betriebsart" width="860">
 
@@ -173,13 +173,13 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 **Spiele**
 - Starten (aus dem Konsolen-Browser schließt sich die Seite sofort), beenden, auf andere Laufwerke kopieren, mit ShadowMountPlus verschieben oder entpacken.
 - Ohne PC in exFAT-, ffpkg- und ffpfsc-Abbilder umwandeln; alles wird nach dem Schreiben zurückgelesen und geprüft, mit `.sha256`-Datei.
-- LZ4-Asset-Packs, AMPR-Index, APR-EMU, PlayGo-Stub und DLC-Module pro Spiel, Abbilder prüfen, entpacken und reparieren.
+- LZ4-Asset-Packs, AMPR-Index, APR-EMU (ampr_emu und AMPR EMU NG), PlayGo-Stub und DLC-Module pro Spiel, Abbilder prüfen, entpacken und reparieren.
 - PS4 von USB: PS4-Fake-PKGs vom USB-Laufwerk in die Bibliothek, ohne Installation (PS4Mount von gasb07).
 - Disc: zeigt, welche Disc im Laufwerk liegt (PS2/PS3/PS4/PS5, Titelkennung), und legt von PS2-DVDs und PS3-Discs ein Abbild mit CRC-32, MD5 und SHA-1 an, auf Wunsch geprüft gegen Redump (nach ps-disc-detect).
 - Spielzeit mit Temperaturen, Spielstände sichern und zurückspielen, Pakete finden, aufteilen und installieren, Verlauf aller Vorgänge.
 
 **Verwaltung**
-- Dateimanager: ansehen, herunter- und hochladen, Ordner anlegen, umbenennen, kopieren, verschieben, löschen (Ändern nur auf Laufwerken und in `/data`).
+- Dateimanager: ansehen, bearbeiten, herunter- und hochladen (auch ganze Ordner), Ordner anlegen, umbenennen, kopieren, verschieben, löschen – überall, mit Geschwindigkeit und Restzeit beim Kopieren; Löschen fragt zuerst und nennt, was weggeht.
 - Payloads: laufende ansehen und beenden, eigene `.elf` aus einem Ordner oder vom USB-Stick starten, Profile als Startfolge; die Payloads aus der Liste des Payload Managers von itsPLK herunterladen und aktualisieren (mit SHA-256-Prüfung).
 - Profil: Anzeigename und Profilbild (30 eingebaute Bilder oder eigene Datei).
 - Design: Standard, Hell, Dunkel und Optimal (am schnellsten gezeichnet, gedacht für den Fernseher); jedes Gerät merkt sich seine Wahl.
@@ -188,7 +188,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 
 **Technik**
 - Eigener HTTP-Server ohne Fremdbibliothek, dokumentierte [JSON-Schnittstelle](docs/API.md), Einstellungen unter `/data/PS5-Cooling-Center/config.json`.
-- Kein Zugriff aufs Internet, außer „Payloads herunterladen“: Erst auf Knopfdruck lädt die App die Payload-Liste und die Dateien von GitHub. Sonst spricht sie nur mit Programmen auf der Konsole und mit den Browsern im Heimnetz.
+- Kein Zugriff aufs Internet, außer auf Knopfdruck: „Payloads herunterladen“ lädt die Payload-Liste und die Dateien von GitHub, „AMPR EMU NG laden“ eine neuere Fassung von dort. Sonst spricht die App nur mit Programmen auf der Konsole und mit den Browsern im Heimnetz.
 
 </details>
 
@@ -275,7 +275,7 @@ Ergebnis ist `PS5_Cooling_Center.elf`; die Starter-Kachel baut `tools/make_start
 ## Rechtliches und Haftungsausschluss
 
 > [!CAUTION]
-> **Kein offizielles Produkt, keine Piraterie, keine Haftung.** Dieses Projekt steht in keiner Verbindung zu den Rechteinhabern der Konsole. Es enthält keine Spiele, keine Firmware, keine fremden Schlüssel (nur einen öffentlich bekannten Schlüssel für selbst gebaute Test-Pakete, siehe THIRD_PARTY_NOTICES.md) und keinen Code zum Umgehen von Kopierschutz, und es lädt nichts aus dem Internet außer, wenn man sie einschaltet, den offiziellen Updates der eigenen Spiele von den offiziellen Servern. Das Modifizieren einer Konsole kann Garantie und Konto kosten; das Risiko trägt, wer es tut. Das Programm wird **ohne jede Gewährleistung** bereitgestellt.
+> **Kein offizielles Produkt, keine Piraterie, keine Haftung.** Dieses Projekt steht in keiner Verbindung zu den Rechteinhabern der Konsole. Es enthält keine Spiele, keine Firmware, keine fremden Schlüssel (nur einen öffentlich bekannten Schlüssel für selbst gebaute Test-Pakete, siehe THIRD_PARTY_NOTICES.md) und keinen Code zum Umgehen von Kopierschutz, und es lädt nichts aus dem Internet außer, auf Knopfdruck, der Payload-Liste samt Dateien und einer neueren Fassung von AMPR EMU NG von GitHub. Das Modifizieren einer Konsole kann Garantie und Konto kosten; das Risiko trägt, wer es tut. Das Programm wird **ohne jede Gewährleistung** bereitgestellt.
 
 <details>
 <summary>Vollständiger Text</summary>
@@ -313,6 +313,7 @@ Dieses Projekt steht auf den Schultern der PS5-Homebrew-Gemeinschaft. **Vielen D
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) und die Mitwirkenden von [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT-, PFS- und PFSC-Abbilder.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): Vorlage für den UFS2-/ffpkg-Schreiber.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-Asset-Packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) und [dlc_emu](https://github.com/drakmor/dlc_emu) (eingebettete Fassungen, GPL-3.0).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest (Fassung 0.3.2 eingebettet, neuere lädt die App auf Knopfdruck).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): Bauweise der Starter-Kachel als nativer Titel.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): Aufbau der Pakete und Ablauf des Installierens (eigener Code nach diesem Vorbild).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): Profilfunktion und Format des Profilbilds.
@@ -351,4 +352,4 @@ Wer sich hier vermisst oder falsch beschrieben findet: bitte melden, die Liste w
 
 Copyright © 2026 strongt1me · **GNU General Public License v3.0 oder später**, siehe [LICENSE](LICENSE). Bis 1.45.1 galt MIT; ab 1.46.0 GPL-3.0-or-later, weil Teile aus GPL-Projekten übernommen sind (Einzelheiten in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-<sub>Diese README gibt es auch auf [English](README.en.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md) und [Русский](README.ru.md). Handbuch und FAQ liegen jeder Veröffentlichung in allen sechs Sprachen bei.</sub>
+<sub>Diese README gibt es auch auf [English](README.en.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md), [Русский](README.ru.md) und [Svenska](README.sv.md). Handbuch und FAQ liegen jeder Veröffentlichung in allen sieben Sprachen bei.</sub>

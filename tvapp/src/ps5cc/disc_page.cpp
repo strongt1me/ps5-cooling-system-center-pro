@@ -174,6 +174,7 @@ class DiscPage final : public Page
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
+        ask_.init(theme);
 
         form_.style.theme = theme;
         form_.style.panel = false;
@@ -214,11 +215,18 @@ class DiscPage final : public Page
 
     bool modal() const override
     {
-        return menu_.is_open() || dialog_ != kNone;
+        return menu_.is_open() || dialog_ != kNone || ask_.is_open();
     }
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (ask_.is_open())
+        {
+            // only "Löschen" in the question deletes (06.11.2026)
+            if (ask_.handle(input, feedback) && !delete_route_.empty())
+                source().disc_post(delete_route_, delete_json_);
+            return;
+        }
         if (menu_.is_open())
         {
             if (menu_.handle(input, feedback) == ui::Event::activated)
@@ -244,7 +252,7 @@ class DiscPage final : public Page
         }
         if (input.is_pressed(Action::west))
         {
-            if (!square(focused_tag()))
+            if (!square(focused_tag(), feedback))
                 feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
             else
                 feedback.play(audio::Cue::select);
@@ -260,6 +268,7 @@ class DiscPage final : public Page
         info_.update(dt);
         bar_.update(dt);
         menu_.update(dt);
+        ask_.update(dt);
         form_.update(dt);
         shown_.target = dialog_ != kNone ? 1.0f : 0.0f;
         shown_.update(dt, 14.0f);
@@ -323,6 +332,7 @@ class DiscPage final : public Page
     void draw_overlay(ui::Canvas &canvas) const override
     {
         menu_.draw(canvas);
+        ask_.draw(canvas);
         const float amount = shown_.value;
         if (amount <= 0.01f)
             return;
@@ -514,7 +524,7 @@ class DiscPage final : public Page
         }
     }
 
-    bool square(int tag)
+    bool square(int tag, ui::Feedback &feedback)
     {
         if (square_label(tag).empty())
             return false;
@@ -531,16 +541,28 @@ class DiscPage final : public Page
             return true;
         case kDumps:
         {
+            // asks first (06.11.2026): the dump's folder and where it lies
             const DumpEntry &d = dumps_.dumps[i];
-            source().disc_post("dumps/delete", "{\"mount\":" + json_text(d.mount) +
-                                                   ",\"dir\":" + json_text(d.dir) +
-                                                   ",\"folder\":" + json_text(d.folder) + "}");
+            delete_route_ = "dumps/delete";
+            delete_json_ = "{\"mount\":" + json_text(d.mount) + ",\"dir\":" + json_text(d.dir) +
+                           ",\"folder\":" + json_text(d.folder) + "}";
+            const std::string what = !d.title.empty() && d.title != d.folder ? d.title
+                                     : d.bytes > 0 ? format_bytes(d.bytes)
+                                                   : std::string();
+            const std::vector<std::string> names{DeleteAsk::line(d.folder, what)};
+            ask_.open("Dump löschen?", names,
+                      {"Ordner: " + d.mount + (d.dir.empty() ? "" : "/" + d.dir)}, feedback);
             return true;
         }
         case kImages:
-            source().disc_post(
-                "disc", "{\"action\":\"delete\",\"name\":" + json_text(disc_.images[i].name) + "}");
+        {
+            const DiscImage &img = disc_.images[i];
+            delete_route_ = "disc";
+            delete_json_ = "{\"action\":\"delete\",\"name\":" + json_text(img.name) + "}";
+            ask_.open("Abbild löschen?",
+                      {DeleteAsk::line(img.name, format_bytes(img.size))}, {}, feedback);
             return true;
+        }
         default:
             return false;
         }
@@ -1184,6 +1206,9 @@ class DiscPage final : public Page
     ui::DetailList info_;
     ui::ProgressBar bar_;
     ui::Menu menu_;
+    DeleteAsk ask_;                // asked before a dump or a disc image is deleted
+    std::string delete_route_;     // what the question is about: the route ...
+    std::string delete_json_;      // ... and its body
     ui::Form form_;
     tween::Spring shown_;
     std::string key_;

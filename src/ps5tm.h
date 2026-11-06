@@ -814,8 +814,15 @@ int           ps5tm_amprlib_run(const char *lib, const char *op, const char *tit
 /* For the check of LZ4 packs: does the APR-EMU the game gets read packs? 0 yes; 1 no (with repair the built-in test-pack is
    in now); 2 a fakelib2 without the reader wins (left alone, why says so); -1 with why. warn: ShadowMountPlus would replace
    it at the start from its emulator folder by one that reads no packs. root: the game folder. */
-int           ps5tm_amprlib_pack_check(const char *title_id, const char *root, int repair, char *warn, size_t warn_len,
+int           ps5tm_amprlib_pack_check(const char *title_id, const char *root, int repair, int zstd, char *warn, size_t warn_len,
                                        char *why, size_t why_len);
+/* zstd = 1: the check is for zstd packs (06.11.2026), which only ampr-emu-ng reads: the file must be an NG build, and repair puts the
+   embedded NG release in (ps5tm_amprng_name()). */
+/* The name of the NG release the app carries, as it stands in the folder AMPR_EMU: "libSceAmpr.sprx-0.3.2-ng". */
+const char   *ps5tm_amprng_name(void);
+/* A program the app carries as a zlib stream (tools/gen_blob.py): the bytes unpacked into a new buffer (free it), or NULL when the
+   stream does not give exactly raw_len bytes (src/blobz.c). */
+unsigned char *ps5tm_blob_inflate(const unsigned char *z, unsigned long z_len, unsigned long raw_len, size_t *out_len);
 /* ampr-emu-ng (amprng.c): the release the app can fetch into AMPR_EMU, added to the versions JSON as "ng_release"; the
    fetch puts its missing files there (checked by SHA-256) and gives the versions JSON with "installed", or NULL with why
    and an HTTP status (409 already running, 502 download or check failed). */
@@ -823,6 +830,10 @@ void          ps5tm_amprng_json(struct cJSON *o);
 /* After an ampr-emu-ng version went into a game: 2 and the warning to set update_emulators=0 in ShadowMountPlus (it is on),
    1 and a confirmation (it is off), 0 for any other version (amprlib.c). */
 int           ps5tm_amprlib_ng_warning(const char *store_name, char *out, size_t n);
+/* The person's "yes" to switching off the automatic fakelib update of ShadowMountPlus (update_emulators in its config.ini):
+   0 or an errno with the reason in why; ..._on() tells whether it is on (the default). */
+int           ps5tm_amprlib_smp_update(int enabled, char *why, size_t why_len);
+int           ps5tm_amprlib_smp_update_on(void);
 struct cJSON *ps5tm_amprng_fetch(char *why, size_t why_len, int *http);
 
 /* Checking, unpacking and repairing the image of a game (imgjob.c). */
@@ -847,8 +858,8 @@ int           ps5tm_trace_build_profile(const char *const *journals, const char 
 struct cJSON *ps5tm_plugins_info(const char *title_id, int *http);
 int           ps5tm_plugins_apply(const char *title_id, char *msg, size_t msg_len, struct cJSON **detail);
 struct cJSON *ps5tm_lz4_info(const char *title_id, int *http);
-struct cJSON *ps5tm_lz4_plan(const char *title_id, int level, const char *profile, int *http);
-int           ps5tm_lz4_start(const char *kind, const char *title_id, int level, const char *profile, char *err, size_t err_len);
+struct cJSON *ps5tm_lz4_plan(const char *title_id, int level, const char *profile, const char *format, int *http);
+int           ps5tm_lz4_start(const char *kind, const char *title_id, int level, const char *profile, const char *format, char *err, size_t err_len);
 /* 1 when the game folder holds a pack set (ampr_assets.index) */
 int           ps5tm_lz4_packed_dir(const char *dir);
 

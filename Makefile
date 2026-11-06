@@ -104,8 +104,8 @@ SRCS += src/pkgqueue.c
 SRCS += src/jobhist.c
 SRCS += src/amprindex.c
 SRCS += src/imgjob.c
-SRCS += src/amprlib.c src/amprng.c
-SRCS += src/lz4cfg.c src/lz4pack.c
+SRCS += src/amprlib.c src/amprng.c src/smpcfg.c
+SRCS += src/lz4cfg.c src/lz4pack.c src/zstdpack.c src/blobz.c
 SRCS += src/trace.c src/plugins.c
 SRCS += src/ps4m_core.c src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_fw.c src/ps4m_origin.c src/ps4m_accopy.c
 SRCS += src/qr.c
@@ -202,6 +202,14 @@ DEFLATE_OBJS := $(patsubst src/third_party/libdeflate/lib/%.c,gen/libdeflate/%.o
 # LZ4 1.10.0 (BSD-2-Clause) for the asset packs (lz4pack.c): the compressor and the decoder, built at -O2 like libdeflate.
 LZ4_OBJS := gen/lz4/lz4.o gen/lz4/lz4hc.o
 LZ4_HDRS := $(wildcard src/third_party/lz4/*.h)
+
+# zstd 1.5.7 (BSD-3-Clause) for the zstd asset packs (zstdpack.c, 06.11.2026): the compressor makes the frames, the decoder reads them
+# back for the check and the unpacking. Single-threaded (the app runs its own pool), without the assembly decoder, without legacy
+# formats and error strings; built at -O2 like libdeflate and lz4, because packing speed is the person's waiting time.
+ZSTD_DIR  := src/third_party/zstd/lib
+ZSTD_SRCS := $(addprefix $(ZSTD_DIR)/common/,debug.c entropy_common.c error_private.c fse_decompress.c xxhash.c zstd_common.c)              $(addprefix $(ZSTD_DIR)/compress/,fse_compress.c hist.c huf_compress.c zstd_compress.c zstd_compress_literals.c                 zstd_compress_sequences.c zstd_compress_superblock.c zstd_double_fast.c zstd_fast.c zstd_lazy.c zstd_ldm.c zstd_opt.c                 zstd_preSplit.c)              $(addprefix $(ZSTD_DIR)/decompress/,huf_decompress.c zstd_ddict.c zstd_decompress.c zstd_decompress_block.c)
+ZSTD_OBJS := $(patsubst $(ZSTD_DIR)/%.c,gen/zstd/%.o,$(ZSTD_SRCS))
+ZSTD_HDRS := $(wildcard $(ZSTD_DIR)/*.h $(ZSTD_DIR)/*/*.h)
 
 # BearSSL 0.6 (MIT) for the game updates (upd_http.c): TLS to Sony's download servers, the DNS-over-HTTPS resolvers and the patch
 # history sites. Built at -O2 into an archive, so the link takes only the parts the app uses.
@@ -347,6 +355,10 @@ gen/libdeflate/%.o: src/third_party/libdeflate/lib/%.c $(DEFLATE_HDRS) Makefile 
 	mkdir -p $(dir $@)
 	$(CC) -O2 -ffunction-sections -fdata-sections -c -o $@ $<
 
+gen/zstd/%.o: $(ZSTD_DIR)/%.c $(ZSTD_HDRS) Makefile gen/sdk.stamp | gen
+	mkdir -p $(dir $@)
+	$(CC) -Os -w -DZSTD_DISABLE_ASM=1 -DHUF_FORCE_DECOMPRESS_X1=1 -DZSTD_FORCE_DECOMPRESS_SEQUENCES_SHORT=1 -DZSTD_LEGACY_SUPPORT=0 -DDEBUGLEVEL=0 -DZSTD_STRIP_ERROR_STRINGS=1 	    -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-ident -c -o $@ $<
+
 gen/lz4/%.o: src/third_party/lz4/%.c $(LZ4_HDRS) Makefile gen/sdk.stamp | gen
 	mkdir -p $(dir $@)
 	$(CC) -O2 -ffunction-sections -fdata-sections -c -o $@ $<
@@ -381,9 +393,9 @@ gen/sdk.stamp: FORCE | gen
 check-sdk-firmware:
 	@$(PYTHON) tools/check_sdk_firmware.py sdk "$(PS5_PAYLOAD_SDK)" $(FW_NEED)
 
-$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
+$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
         $(SHELLUI_STUB) gen/sdk.stamp | check-sdk-firmware
-	$(CC) $(CFLAGS) -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
+	$(CC) $(CFLAGS) -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
 	"$(PS5_PAYLOAD_SDK)/bin/prospero-strip" --strip-all $@
 	@$(PYTHON) tools/check_sdk_firmware.py elf $@ $(FW_NEED) >/dev/null || { rm -f $@; exit 1; }
 

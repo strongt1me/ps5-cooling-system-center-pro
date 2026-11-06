@@ -1,7 +1,7 @@
 {
   "_comment": "Stand der Fremdbausteine, die diese App nutzt. 'current' ist die Fassung, die im Projekt steckt (nicht die neueste). tools/upstream_check.py vergleicht mit GitHub; der Skill 'upstream-update' (.claude/skills) arbeitet die Unterschiede ab und trägt die neue Fassung hier ein.",
   "components": [
-    {"id": "ps4mount", "repo": "gasb07/ps4mount", "current": "v0.7.2", "prereleases": false,
+    {"id": "ps4mount", "repo": "gasb07/ps4mount", "current": "v0.7.3", "prereleases": false,
      "where": "src/ps4m_*.c (Port von src/main.c -> ps4m_core.c), third_party/ps4mount/ORIGIN.md, Handbuch-Kapitel PS4 von USB",
      "how": "Vergleich v<alt>...v<neu> mit gh api repos/gasb07/ps4mount/compare; Änderungen von Hand in src/ps4m_core.c (und ps4m_pkg/build/crypto) übernehmen; logts.c und web.c entfallen"},
     {"id": "shadowmountplus", "repo": "drakmor/ShadowMountPlus", "current": "1.7beta11", "prereleases": true,
@@ -10,9 +10,9 @@
     {"id": "ampr_emu", "repo": "drakmor/ampr_emu", "current": "0.4.2.1", "prereleases": false,
      "where": "third_party/ampr_emu/*, tools/gen_emu_blob.py, src/amprlib.c, Handbuch AMPR-Kapitel",
      "how": "Neue Anhänge laden, SELF-Kopf 4F153D1D und Kennung [AMPR_EMU] prüfen, als libSceAmpr.sprx-<ver>-<variante> ablegen, ORIGIN.md und THIRD_PARTY_NOTICES.md ergänzen; wenige Fassungen einbetten (Nutzlast unter ~10 MB)"},
-    {"id": "ampr-emu-ng", "repo": "quer3q/ampr-emu-ng", "current": "v0.2.0", "prereleases": false,
-     "where": "src/amprng.c (NG_VERSION, NG_FILES: Namen, Größen, SHA-256), Handbuch AMPR-Kapitel, CHANGELOG",
-     "how": "Nicht einbetten. SHA256SUMS der Veröffentlichung lesen, Anhänge laden, SELF-Kopf 4F153D1D und Kennung 'ampr-emu-ng <ver>' prüfen; NG_VERSION und die Tabelle in src/amprng.c nachziehen; Release-Notizen auf Formatänderungen (Pakete, Index) prüfen"},
+    {"id": "ampr-emu-ng", "repo": "quer3q/ampr-emu-ng", "current": "v0.3.2", "prereleases": false,
+     "where": "third_party/ampr_emu/*-ng*, tools/gen_emu_blob.py, src/amprng.c (NG_VERSION, NG_FILES: Namen, Größen, SHA-256), Handbuch AMPR-Kapitel, CHANGELOG",
+     "how": "Seit 06.11.2026 eingebettet (v0.3.2, beide Dateien; v0.3.1 wurde am selben Tag abgelöst und entfernt; dafür entfielen 0.3.6.6 test und test-debug). Eine neue Fassung ersetzt die eingebetteten -ng-Dateien (Platz beachten: Nutzlast unter ~10 MB) oder wird nur in NG_VERSION und NG_FILES nachgezogen und lädt dann per Knopf. SHA256SUMS der Veröffentlichung lesen, Anhänge laden, SELF-Kopf 4F153D1D und Kennung 'ampr-emu-ng <ver>' prüfen; NG_VERSION und die Tabelle in src/amprng.c nachziehen; Release-Notizen auf Formatänderungen (Pakete, Index) prüfen"},
     {"id": "pgo_stub", "repo": "drakmor/pgo_stub", "current": "0.6", "prereleases": false,
      "where": "third_party/playgo/*, tools/gen_emu_blob.py playgo",
      "how": "wie ampr_emu; Kennung playgo_stub.dat"},
@@ -31,13 +31,19 @@
     {"id": "exfat2ampr", "repo": "exFAT2AMPR/exfat2ampr", "current": "v1.104", "prereleases": false,
      "where": "src/trace.c, src/dupimg.c, src/lz4*.c (nur Wissen; Zusatzbedingungen der Lizenz: Credit 'Made by V-10')",
      "how": "Release-Notizen lesen; Ideen eigenständig nachbauen, nie Code übernehmen"},
+    {"id": "zstd", "repo": "facebook/zstd", "current": "v1.5.7", "prereleases": false,
+     "where": "src/third_party/zstd/ (README.PS5TM), Makefile (ZSTD_SRCS), src/zstdpack.c",
+     "how": "Neues Quellarchiv laden, SHA-256 prüfen, die Dateien aus lib/common, lib/compress, lib/decompress ersetzen (Liste in der README.PS5TM), mit test/zstdpack/run.sh und dem Bau prüfen; Ausgabe der Frames bleibt formatgleich"},
+    {"id": "ps5-dump-forge", "repo": "quer3q/ps5-dump-forge", "current": "v0.5.4", "prereleases": false,
+     "where": "src/zstdpack.c (Format der zstd-Pakete), docs/zstd-format.md von ampr-emu-ng, Handbuch-Kapitel LZ4-Asset-Packs",
+     "how": "Release-Notizen und docs/zstd.md lesen: Änderungen am Aufbau (Chunk-Größe, Indexfelder, Regeln, was lose bleibt) in src/zstdpack.c, Handbuch und docs/API.md nachziehen; Gegenprobe mit dem Leser des PS5 Dump & Image Converter"},
     {"id": "libdeflate", "repo": "ebiggers/libdeflate", "current": "v1.26", "prereleases": false,
      "where": "src/third_party/libdeflate/ (MIT, unverändert)", "how": "Quelldateien tauschen, Version in libdeflate.h prüfen, Makefile-Liste beibehalten"},
     {"id": "lz4", "repo": "lz4/lz4", "current": "v1.10.0", "prereleases": false,
      "where": "src/third_party/lz4/ (muss die Fassung sein, die auch die APR-EMU nutzt)", "how": "Nur mit Absprache: die APR-EMU liest LZ4-Daten dieser Fassung"},
     {"id": "cjson", "repo": "DaveGamble/cJSON", "current": "v1.7.19", "prereleases": false,
      "where": "src/third_party/cJSON.c/.h", "how": "Dateien tauschen"},
-    {"id": "ps5upload", "repo": "phantomptr/ps5upload", "current": "v10.0.3", "prereleases": false, "watch": true,
+    {"id": "ps5upload", "repo": "phantomptr/ps5upload", "current": "v11.2.5", "prereleases": false, "watch": true,
      "where": "nur Wissen (Starten über eine Meldung, caller-pid-Prüfung); wird nicht ausgeliefert", "how": "Nur lesen, bei sicherheits- oder startrelevanten Änderungen melden"}
   ]
 }

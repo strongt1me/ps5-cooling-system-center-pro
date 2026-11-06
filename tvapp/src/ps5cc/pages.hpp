@@ -9,6 +9,7 @@
 
 #include "core/input.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/delete_ask.hpp"
 #include "ps5cc/look.hpp"
 #include "ui/components.hpp"
 #include "ui/glyphs.hpp"

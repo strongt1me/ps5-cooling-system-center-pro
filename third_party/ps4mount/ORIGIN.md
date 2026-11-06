@@ -1,4 +1,4 @@
-# PS4Mount 0.7.2 (gasb07)
+# PS4Mount 0.7.3 (gasb07)
 
 Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom User am 15.10.2026 bereitgestellt; davor 0.5.0 vom selben Tag, 0.4.4 vom 14.10. und 0.4.1 vom 13.10.), dazu am 18.10.2026 die Änderungen von 0.5.1 auf 0.6.0 (Quelltext des Tags `v0.6.0`, gelesen und nachgebaut), Lizenz GPL-3.0-or-later
 (`LICENSE` hier). Der Quelltext ist unter `src/ps4m_*.c` übernommen:
@@ -13,6 +13,8 @@ Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom U
 | `src/db.c` | entfällt | Die Abfrage `tbl_contentinfo` liest `ps5tm_library_installed_ids` (ohne SQLite) |
 | `src/web.c`, `web/index.html` | entfallen | Die Weboberfläche ist der Reiter „PS4 von USB“ der App (`web/app.js`); die Originalseite liegt als `panel-index.html` zum Vergleich |
 | `test/unit.c` | `third_party/ps4mount/test/unit.c` | Vorsatz; 150 Prüfungen, laufen ohne Konsole |
+
+Seit 0.7.3 (06.11.2026, Vergleich `v0.7.2...v0.7.3`): bis zu 768 Spiele je Laufwerk (`MAX_TITLES`, vorher 256; darüber meldet `scan_root` die Zahl der nicht hinzugefügten Spiele) und bis zu 64 Suchordner (`MAX_SCAN_PATHS`, vorher 8; `config_load` meldet ignorierte Ordner); die Zusatzinhalte eines Spiels sind nicht mehr auf 64 begrenzt: `dlc_open` hält je Zusatzinhalt nur noch einen kleinen Eintrag (`dlc_pkg_t`: Kennungen, Größe, Prüfsumme, Titel, Version) statt des geparsten Pakets und öffnet das Paket erst beim Einbauen (`place_dlc`); `<TID>.dlcoff` wird so lang gelesen, wie die Datei ist; reine Freischaltungen (ohne Daten) zählen nicht gegen die Grenze von 29 (`dlc_open`, `ps4m_choose_dlc`); ein Kopierstapel fasst höchstens 64 Zusatzinhalte (`AC_MAX_JOBS`, der Rest kommt im nächsten). `src/api.c` reicht die Liste der Zusatzinhalte ohne Zwischenpuffer weiter, damit lange Listen nicht abgeschnitten werden; die Oberflächen (Browser, Vollbild-App) zählen nur Zusatzinhalte mit Daten gegen die Grenze, und „Alle an“ schaltet alle Freischaltungen und die ersten 29 mit Daten ein. Nicht übernommen: `web.c` (größere Anfrage- und Pufferlängen für das Panel; die App bekommt die Liste über ihre eigene Schnittstelle) und die Änderungen am Panel (`web/*.html`) und den Tests des Originals.
 
 Seit 0.7.2 (31.10.2026, Vergleich `v0.7.1...v0.7.2`): Ausschalten hängt vorher jedes Spiel aus (`unmount_games` vor `ps4m_set_enabled` in `src/ps4m_core.c`, nie erzwungen), damit der Ruhemodus kein eingehängtes Spiel vom abgeschalteten Laufwerk findet; läuft ein Spiel, wird abgelehnt und es genannt; bleibt ein Ordner belegt, wird alles wieder eingehängt und abgelehnt. Anders als im Original prüft die App nicht in einer zweiten Abfrage (`/api/stop/check`), sondern die Antwort des Ausschaltens nennt den Grund; ist die Prozessliste nicht lesbar, wird trotzdem (nicht erzwungen) ausgehängt. Nicht übernommen: `web.c`/Panel-Texte und die README-Hinweise (stehen im Handbuch).
 

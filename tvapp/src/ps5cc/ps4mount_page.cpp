@@ -832,9 +832,8 @@ class Ps4MountPage final : public Page
                    "zur Bibliothek "
                    "hinzugefügt.";
         return "Höchstens " + std::to_string(detail_.dlc_limit) +
-               " Zusatzinhalte können gleichzeitig an sein. Gespeichert, wird das Spiel damit neu "
-               "zur Bibliothek "
-               "hinzugefügt.";
+               " Zusatzinhalte mit Daten können gleichzeitig an sein; reine Freischaltungen "
+               "zählen nicht. Gespeichert, wird das Spiel damit neu zur Bibliothek hinzugefügt.";
     }
 
     void build_settings()
@@ -961,9 +960,14 @@ class Ps4MountPage final : public Page
         {
             if (id == kDlcAll)
             {
+                // PS4Mount 0.7.3: the add-ons with data up to the limit, every unlock-only one
+                int with_data = 0;
                 for (std::size_t i = 0; i < detail_.dlcs.size(); ++i)
-                    form_.set_toggle(kDlc + static_cast<int>(i),
-                                     static_cast<int>(i) < detail_.dlc_limit);
+                {
+                    const bool on = !detail_.dlcs[i].data || with_data < detail_.dlc_limit;
+                    with_data += detail_.dlcs[i].data ? 1 : 0;
+                    form_.set_toggle(kDlc + static_cast<int>(i), on);
+                }
                 return;
             }
             if (id == kDlcSave)

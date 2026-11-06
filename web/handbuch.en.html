@@ -137,6 +137,7 @@ Stop an old instance on the “Payloads” page, otherwise a restart helps.</div
 <p>On the left is the sidebar with the sections <b>Profile, Games, Files, Payloads, Cooling, System, Log</b> and
 <b>Credits</b>. At the top in the header, on every page: the <b>power options</b>, “Fullscreen”, “Expert mode” and the
 connection indicator.</p>
+<p>“Fullscreen” hides the browser's taskbar and window frame. In the PS5's own browser the first press on the page switches to fullscreen by itself; on a PC or phone the page stays in a normal window until you press “Fullscreen” (the button remembers it, “Exit fullscreen” turns it off again). Under the “FAQ” entry in the sidebar you find the version of the running app.</p>
 <p><b>Design.</b> Next to the language you choose one of four designs: <b>Standard</b> (dark blue with glowing edges), <b>Light</b> (muted grey-blue, does not dazzle), <b>Dark</b> (almost black, without glow) and <b>Optimal</b> (for the TV and the PS5: strong contrast, larger text, no translucency or shadows, the fastest to draw). Every device remembers its own choice, for example “Optimal” on the TV and “Light” on the phone.</p>
 <h3>Power options</h3>
 <p><b>Rest Mode</b>, <b>Restart</b>, <b>Turn off</b> and <b>Safe Mode</b>. Every command works on the first click; while it runs the button is locked, so a double click does not trigger it twice.</p>
@@ -164,7 +165,7 @@ then only scrolls the window itself.</p>
 <li><b>Square button:</b> actions for the selection (e.g. copy a game, delete a payload, edit a profile), <b>Triangle button:</b> details or “More”.</li>
 <li><b>Options button:</b> menu with “Open web interface in the browser”, “Reload”, “Sprache / Language”, “Quit app” and the power options.</li><li><b>Language:</b> German, English, Spanish, French, Italian, Russian or Swedish. By default it follows the console’s system language (other languages: English); Options button → “Sprache / Language” opens a list of all languages (tick = active); one press picks one and the choice is kept. Texts no dictionary knows stay German.</li>
 </ul>
-<p>The bar at the bottom always shows what the buttons do right now. Delete, quit and cancel act on the first press – there are no confirmation questions.</p>
+<p>The bar at the bottom always shows what the buttons do right now. Quit and cancel act on the first press – there are no confirmation questions. Deleting is the exception: it asks first and names what will go.</p>
 <h3>Areas</h3>
 <ul>
 <li><b>Cooling:</b> overview with the target temperature; settings with operating mode, safety limit, warnings, light bar, game profiles, night mode and fan self-test.</li>
@@ -259,7 +260,8 @@ and verified; nothing is overwritten.</p>
 <li><b>Close PS4Mount games before rest mode.</b> Rest mode switches the drive off; a game left open cannot read afterwards and locks up.</li>
 <li><b>Switching off unmounts the games</b> (since PS4Mount 0.7.2): switching PS4Mount off before rest mode is safe. The app unmounts every game, without forcing; while a game is open it refuses and names it. If a game folder is still in use, it mounts all of them again and asks you to try again in a moment. Switched on, PS4Mount mounts the games again.</li>
 <li>Two or more connected drives (partitions count too) can make the console interface slow, with or without PS4Mount. Then connect a single drive with one partition.</li>
-<li>A running game can use at most about 30 packages (game, update and roughly 29 add-ons). This is a console limit that applies to installed games too.</li>
+<li>A running game can use at most about 30 packages (game, update and roughly 29 add-ons with data; unlock-only add-ons no longer count since PS4Mount 0.7.3). This is a console limit that applies to installed games too.</li>
+<li>Since 0.7.3 PS4Mount handles up to 768 games per drive (before: 256) and searches up to 64 folders (before: 8). Anything beyond that is reported instead of being skipped silently.</li>
 </ul>
 <!--p4m-->
 <p><b>Before packing to ffpfsc:</b> the console has to unpack a compressed file over and over while playing, so games with a great deal of data or texture streaming can stutter. Before the app converts a game (dump folder, <code>.exfat</code>, <code>.ffpkg</code> or <code>.ffpfs</code>) to <code>.ffpfsc</code> it looks: from about 40 GB of data, with large streaming containers (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB together or more) or with a streaming folder (2 GB or more) the window shows a note next to “ffpfsc”. There is no second question: “Start” converts. This is an estimate from file names and sizes, not from the game engine.</p>
@@ -273,7 +275,7 @@ and verified; nothing is overwritten.</p>
 <div class='tip'>A running game and any other job of the app block building. The layout follows drakmor's script <code>build_ampr_index.py</code> (GPL-3.0) and was compared byte for byte with its result.</div>
 <h3>APR-EMU in the game</h3>
 <p>The row <b>APR-EMU in the game</b> shows which <code>libSceAmpr.sprx</code> a game loads and lets you choose a version and put it in, bring the game's original back or remove the file. The versions are files in <code>/data/PS5-Cooling-Center/AMPR_EMU</code>, named like drakmor's releases (<code>libSceAmpr.sprx-0.4.2.1-test-pack</code>). Five versions are bundled with the app: they show in the list even when they are not in the folder yet, and get there when you build one in or with <b>Put the bundled versions into the folder</b> (the folder is made when needed). Add more with <b>Add file</b>. Every file is checked (SELF header, the mark “[AMPR_EMU]”). Variants with “pack” in the name can read LZ4 packs, “debug” writes a log.</p>
-<p><b>AMPR EMU NG</b> (quer3q, <a href="https://github.com/quer3q/ampr-emu-ng">ampr-emu-ng</a>, GPL-3.0) is a further development of ampr_emu and reads LZ4 and zstd packs. Its files carry the mark “ampr-emu-ng &lt;version&gt;”; in the list they appear at the top with the tag <b>NG</b> (<b>NG 0.2.0</b>, <b>NG 0.2.0 debug</b>). The app does not ship them: <b>download AMPR EMU NG 0.2.0 from GitHub</b> fetches both files into the <code>AMPR_EMU</code> folder (<code>libSceAmpr.sprx-0.2.0-ng</code>, <code>-ng-debug</code>) when you press it and checks their checksum. <b>Add file</b> renames files of a newer release (<code>libSceAmpr.sprx</code>, <code>libSceAmpr-debug.sprx</code>) to fit. The developer advises setting <code>update_emulators=0</code> in ShadowMountPlus.</p>
+<p><b>AMPR EMU NG</b> (quer3q, <a href="https://github.com/quer3q/ampr-emu-ng">ampr-emu-ng</a>, GPL-3.0) is a further development of ampr_emu and reads LZ4 and zstd packs. Its files carry the mark “ampr-emu-ng &lt;version&gt;”; in the list they appear at the top with the tag <b>NG</b> (<b>NG 0.3.2</b>, <b>NG 0.3.2 debug</b>). Both files are bundled with the app (<code>libSceAmpr.sprx-0.3.2-ng</code>, <code>-ng-debug</code>). A newer release is fetched by <b>download AMPR EMU NG from GitHub</b> into the <code>AMPR_EMU</code> folder when you press it, and its checksum is checked, once the app knows it. <b>Add file</b> renames files of a newer release (<code>libSceAmpr.sprx</code>, <code>libSceAmpr-debug.sprx</code>) to fit. When installing NG, the app asks whether to turn off the automatic fakelib update in ShadowMountPlus, because otherwise ShadowMountPlus replaces the NG file again at the start of a game with the version from its emulator folder: <b>Yes</b> sets only the line <code>update_emulators</code> in <code>/data/shadowmount/config.ini</code> to 0 (the app saves the file once as <code>config.ini.ps5cc-bak</code>) and installs NG, <b>Cancel</b> leaves everything as it is. Depending on its version, ShadowMountPlus takes the change over at once or at its next start. The question does not appear when the update is already off.</p>
 <ul>
 <li>Where the file goes follows ShadowMountPlus (1.7beta1 and newer): it looks first in the backport folder <code>&lt;scan path&gt;/backports/&lt;title id&gt;/</code> (since 1.7beta6 also a folder whose name only begins with the title id, such as “PPSA12345 Game Name”: the one named exactly like it wins, otherwise the first in byte order), then in the game, and the first folder that exists counts alone. For a <b>game folder, .exfat or .ffpkg</b> it goes to <code>fakelib/libSceAmpr.sprx</code> in the game (an image is briefly mounted for writing by ShadowMountPlus). A <b>compressed .ffpfsc</b> cannot be written: a backport folder is made there and the game stays untouched; because it hides the game's <code>fakelib</code>, its files are copied in. If a backport folder already exists, it is used for every format.</li>
 <li>The file the game brought itself is kept once as <code>libSceAmpr.sprx.orig</code> and never overwritten; an earlier APR-EMU does not count as an original. <b>Restore original</b> puts it back. <b>Remove</b> deletes only the APR-EMU file.</li>
@@ -300,7 +302,7 @@ and verified; nothing is overwritten.</p>
 <li><b>Repair</b>: only where it is safe. If the size of an <code>.ffpfsc</code> file does not match the image's header, but the data is complete and the extra bytes are empty, the app sets the size right and reads the container in full once more. Damaged blocks cannot be made again from the image alone. Repair is locked while ShadowMountPlus has the image mounted.</li>
 </ul>
 <h3>History</h3>
-<p>On the games page the <b>History</b> tab lists all of the app's jobs – copy, move, convert, split package, install, delete, file manager, saved data and AMPR index – with result (done, failed, cancelled), size, duration and time. The last 500 are kept on the console in <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Clear history</b> deletes them at once.</p>
+<p>On the games page the <b>History</b> tab lists all of the app's jobs – copy, move, convert, split package, install, delete, file manager, saved data and AMPR index – with result (done, failed, cancelled), size, duration and time. The last 500 are kept on the console in <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Clear history</b> deletes them after a question.</p>
 <h3>Game plugins</h3>
 <p>The row <b>Game plugins</b> keeps drakmor's replacement modules in the game's <code>fakelib</code> folder up to date: the PlayGo stub (<code>libScePlayGo.sprx</code>, pgo_stub 0.6) and the DLC modules (<code>libSceAppContent.sprx</code>, <code>libSceGameUpdate.sprx</code>, <code>libSceNpEntitlementAccess.sprx</code>, dlc_emu 0.3, “log” build: it writes <code>/app0/dlc_emu.log</code> into the game; the build without logging crashed at game start and is replaced as a “faulty build”) that show the DLC listed in the game's <code>dlc_emu.ini</code> as owned.</p>
 <ul>
@@ -320,7 +322,7 @@ and verified; nothing is overwritten.</p>
 <h3>Step by step</h3>
 <ol>
 <li><b>Install APR-EMU.</b> In the window <b>LZ4 asset packs &amp; APR-EMU</b>, under <b>APR-EMU in the game</b>, choose version <code>0.4.2.1 test-pack</code>. Only versions with “pack” in the name read packs.</li>
-<li><b>Test unpacked.</b> Start the game and play for a while: menu, a level, load a save. If it does not run like this, it will never run packed. Then only an older APR-EMU (for example 0.3.6.6) or none helps.</li>
+<li><b>Test unpacked.</b> Start the game and play for a while: menu, a level, load a save. If it does not run like this, it will never run packed. Then only an older APR-EMU (for example 0.3.6.6; it has not come with the app since November 2026, <b>Add file</b> takes it from drakmor's releases page) or none helps.</li>
 <li><b>Pack.</b> <b>Pack with LZ4 …</b>, to begin with level 9 and <b>Automatic</b>. The box “started unpacked, and it ran” belongs to it. <b>Pack in the game folder</b> saves the most space; the originals are removed only once every file has been compared byte for byte with the packs, and on any error everything stays as before. The choice <b>As a new folder … next to it</b> leaves the original untouched but puts two folders with the same title ID side by side. ShadowMountPlus can choke on that and keep re-mounting the game every few seconds; take the original out of the search path first. If there is a <b>tested profile</b> for the game (see below), it is already selected.</li>
 <li><b>Check packs.</b> Reads every block, decompresses it and compares it with the CRC file. Then it fixes what good packs also need: if the APR-EMU that reads packs is missing or something replaced it, <code>0.4.2.1 test-pack</code> goes back in. Files the PS5 looks for on the drive but that only exist inside the packs (packed by older tools) are brought back. And it sets the permissions in the game folder to 0777. What it fixed is listed under <b>Repaired</b>. No repacking is needed. This shows that the packs are intact, not that the game uses them correctly.</li>
 <li><b>Start and play.</b> Only now you see whether it runs. Play for longer than a few seconds: menu, a level, loading and saving.</li>
@@ -358,7 +360,17 @@ and verified; nothing is overwritten.</p>
 <li>Models and rules: drakmor/ampr_emu (docs/ASSET_PACK_WORKFLOW_EN.md, GPL-3.0), theghostonline/PS5-LZ4-Compression and danthespal/MkPFS.CSharp. From LZ4 Compression 1.4.3 to 1.5.0 (Husam Osman, GPL-3.0) come the list of files that must stay loose, the permissions 0777, the repair during the check and the choice of tested profiles; rebuilt, not copied.</li>
 <li>Ideas and knowledge: exFAT2AMPR by V-10 (<a href="https://github.com/exFAT2AMPR/exfat2ampr">GitHub</a>, GPL-3.0 with additional terms, “Made by V-10”): the list that “Automatic” leaves loose, the recording for profile creation (its structure and constants follow his port of <code>ampr_pack_profile.py</code>) and the upkeep of the game plugins with their table of checksums.</li>
 </ul>
-<!--tp--></section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Deleting games &amp; backups</h2></div>
+<!--tp-->
+<h3>zstd instead of LZ4 (for AMPR EMU NG)</h3>
+<p>Besides the LZ4 packs the app also makes <b>zstd packs</b>: <b>Pack with zstd …</b> (files <code>ampr_zstd.index</code> and <code>ampr_zstd-000.pak</code> and more). The format comes from quer3q (<i>ampr-emu-ng</i>); only <b>AMPR EMU NG</b> reads it, no other APR-EMU does. The app puts NG into <code>fakelib</code> itself while packing. If the automatic fakelib update of ShadowMountPlus is still on, the result shows a warning: turn it off (or install NG beforehand under <b>APR-EMU in the game</b>, which makes the app ask about it).</p>
+<ul>
+<li>The whole game is packed except the system files: programs (<code>eboot.bin</code>, <code>.sprx</code>, <code>.prx</code>, <code>.elf</code>, <code>.self</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code>, empty files, the files of the packs and of the APR-EMU, and the few files the PS5 itself looks for on the drive. There is neither a profile nor “Automatic”: AMPR EMU NG serves a fully packed game.</li>
+<li><b>Level</b> 1 to 22 (the app offers 1, 5, 9 and 19; default 5). Higher levels save more space but pack much more slowly. While playing hardly anything changes: unpacking costs about the same little at every level. Every piece of 256 KiB is a zstd frame of its own with a checksum; what zstd cannot shrink stays raw.</li>
+<li>Everything else is as with LZ4: <b>test unpacked with NG</b> first, then pack; the original is removed only after the byte-for-byte comparison; <b>Check packs</b>, <b>Unpack zstd …</b>, and the choice <b>As a new folder …-zstd next to it</b>.</li>
+<li>A game lies in LZ4 packs or in zstd packs, never in both. To switch, unpack first. In a zstd game all versions except NG are locked in the window <b>APR-EMU in the game</b>.</li>
+</ul>
+<p><b>Status:</b> packing and checking are verified against the originals and against an independent reader of the format (the one in PS5 Dump &amp; Image Converter); whether a packed game runs on the console depends on AMPR EMU NG and has not yet been tried with this app. Try it first on a game whose original you keep.</p>
+</section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Deleting games &amp; backups</h2></div>
 <p>Every game card has <b>Delete</b>, and so does every entry in the <b>Backups</b> tab.</p>
 <ul>
 <li><b>Installed games</b> are uninstalled by the console itself – as with “Delete” in the menu, including updates and add-ons.</li>
@@ -366,7 +378,7 @@ and verified; nothing is overwritten.</p>
 <li><b>The app's backups</b> (copies and conversions) are deleted together with their checksum file.</li>
 </ul>
 <ol class='steps'>
-<li>Tap <b>Delete</b>: the app quietly asks the console what will go and deletes at once. The window shows what is being deleted.</li>
+<li>Tap <b>Delete</b>: the app asks the console what will go and shows it in a window. Only <b>Delete</b> in the window deletes; <b>Cancel</b> leaves everything as it was.</li>
 <li>A progress bar with a percentage shows how far it has got.</li>
 <li>If the console refuses (for example because the game is running), the window stays open with the reason and nothing is deleted.</li>
 </ol>
@@ -385,7 +397,7 @@ USB stick, a disk or the internal SSD (<code>PS5-Sicherung/Spielstaende/&lt;Datu
 verifies them and only then replaces the old ones.</p>
 <div class='warn'>Backing up and restoring only happen when <b>no game is running</b> – not even a paused one. Backups from another
 console cannot be restored.</div>
-<p>Per user, split into PS5 games and PS4 games. Apps such as YouTube are not listed: the app changes nothing there – it does not back up, restore or delete anything of theirs. “Delete” removes the saved games of one title at once; the app first backs up the current state to the chosen drive (otherwise the first suitable one) and lets you put it back. If there is no drive at all, a note says that it is deleted without a backup.</p>
+<p>Per user, split into PS5 games and PS4 games. Apps such as YouTube are not listed: the app changes nothing there – it does not back up, restore or delete anything of theirs. “Delete” removes the saved games of one title after a question that names it; the app first backs up the current state to the chosen drive (otherwise the first suitable one) and lets you put it back. If there is no drive at all, a note says that it is deleted without a backup.</p>
 
 </section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>13</div><h2>Packages</h2></div>
 <p>Finds <code>.pkg</code> files on USB drives, disks and in console storage (folder <code>pkg</code>) and shows the picture,
@@ -415,7 +427,7 @@ copying, moving, deleting – also works <b>everywhere</b>, including system fol
 “View only” is left only for <code>/</code> itself, <code>/dev</code>, <code>/proc</code> and links. Areas the console has mounted read-only
 (e.g. <code>/system</code>) refuse a change by themselves; the app then reports the error.</p>
 <div class='warn'><code>/system_data</code> and <code>/user</code> hold the console's databases and settings. Deleting or moving the wrong thing there
-risks a console that no longer starts or has to be set up again. Deleting acts at once, without asking.</div>
+risks a console that no longer starts or has to be set up again. Deleting asks first: a window names what will go (the names, file or folder, for folders the number of files and the size); only “Delete” in the window deletes for good, “Cancel” leaves everything as it was.</div>
 
 <h3>Sorting, selecting, viewing</h3>
 <ul>
@@ -423,19 +435,22 @@ risks a console that no longer starts or has to be set up again. Deleting acts a
 <li><b>Select all:</b> The box above the list selects all entries of the folder (except links and special files). Half filled means: only some of them are selected.</li>
 <li><b>Folder sizes:</b> “Size” on a folder counts how much is inside; “Folder sizes” does this for all folders in the view, one after another. A very large folder is reported with “at least” after about 8 seconds.</li>
 <li><b>Viewing:</b> “View” shows pictures (PNG, JPG, GIF, WebP, BMP, ICO) and the beginning of text files (up to 256 KB). Other files can only be downloaded.</li>
+<li><b>Editing:</b> For text files up to 64 KB “Edit” opens an editor; “Save” writes the file back. Download larger files, edit them and upload them again.</li>
 </ul>
 <h3>Copying &amp; moving</h3>
 <ol class='steps'>
-<li>Tick the entries.</li>
-<li>Press <b>Copy</b> or <b>Cut</b>.</li>
-<li>Go to the destination folder and press <b>Paste here</b>.</li>
-<li>A bar shows the percentage, the amount of data and the current file; <b>Cancel</b> removes the started entry from the destination again.</li>
+<li>Tick entries (or open the <b>⋯</b> menu of a single entry).</li>
+<li>Press <b>Copy to</b> or <b>Move to</b>.</li>
+<li>In the destination picker choose a drive or a place of the console at the top, go into the subfolders and press <b>Copy here</b> or <b>Move here</b>.</li>
+<li>If a name already exists in the destination, a window asks: <b>Replace</b>, <b>Keep both</b> (the new entry is called “Name (2)”), <b>Skip</b> or <b>Cancel</b>. Replace writes a file next to the old one first and swaps it in at the end; a folder is merged.</li>
+<li>The display says how many files/folders there are and which one is being worked on (“Copying 1 of 2 files/folders”), from where to where (“from /mnt/usb0/new to /mnt/ext1”), percent, amount of data and the current file, plus the transfer rate (“82 MB/s”) and the estimated time left (“approx. 12 min left”). <b>Cancel</b> removes the entry that was started in the destination again.</li>
 </ol>
+<p>Instead of “… to” you can use the clipboard: <b>Copy</b> or <b>Cut</b>, go to the destination folder and press <b>Paste here</b>. The fullscreen app works this way too.</p>
+<h3>Deleting</h3>
+<p><b>Delete</b> asks first: the window says what will go – the names with kind and size, the folder, and for folders how many files with how much space are inside. Only <b>Delete</b> in the window deletes for good; <b>Cancel</b> (it has the focus) leaves everything as it was.</p>
 <h3>Uploading</h3>
-<p><b>Upload</b> chooses one or more files; on a PC you can also drag them onto the list. A bar shows the
-progress per file.</p>
-<div class='tip'>Protected: nothing is ever overwritten (to replace a file, delete the old one first, then upload the new one),
-links are never followed, a mounted drive cannot be deleted as a whole, and copying and deleting never cross over to another drive.</div>
+<p><b>Upload</b> picks one or more files, <b>Upload folder</b> a whole folder (the folder structure is created, then the files go one by one); on a PC you can also drag either onto the list. A bar shows the progress per file. If the name already exists in the destination, the same window as for copying asks.</p>
+<div class='tip'>Protected: links are never followed, a mounted drive cannot be deleted as a whole, and copying and deleting never cross over to another drive. An entry cannot replace itself, and a file cannot replace a folder (or the other way round).</div>
 <p><b>Drives</b> are named as on the console: <code>usb0</code>, <code>usb1</code> … – the folder <code>/mnt/usb0</code> is “usb0”.</p>
 </section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payloads</h2></div>
 <p>See and quit running payloads, and start saved ones with one click – from <code>/data/PS5-Cooling-Center/payloads</code>

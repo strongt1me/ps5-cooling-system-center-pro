@@ -55,6 +55,7 @@ class GameExtras
     void activate(int id, ui::Feedback &feedback);
     void close(ui::Feedback &feedback);
     void ask_plan();
+    void apply_version(const std::string &name);
     std::string plan_text() const;
     std::string side_text() const;
     std::string job_line(float *fraction) const;
@@ -70,6 +71,11 @@ class GameExtras
     LibraryTools library_;
     std::string lib_; // ampr or playgo, for the versions view
     std::vector<std::string> version_names_;
+    std::vector<bool> version_ng_; // and whether each is a build of AMPR EMU NG
+    bool smp_update_on_ = false;   // ShadowMountPlus replaces the fakelib files at the start of a game
+    ui::Dialog ask_;               // "ShadowMountPlus umstellen?" before an NG version goes in
+    std::string pending_version_;  // the version that waits for the answer
+    bool zstd_ = false;                    // the pack settings are for zstd packs (AMPR EMU NG), not LZ4
     std::vector<std::string> profile_ids_; // the choices of the LZ4 mode, "" = automatic
     std::vector<std::string> paths_;       // the duplicate images, by row
     std::vector<bool> aside_;              // and whether each is set aside

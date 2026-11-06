@@ -60,6 +60,9 @@ inline constexpr Credit kCredits[] = {
     {"Zusammenspiel, Wissen und Vorbilder", "", "gasb07", "@gasb07",
      "PS4Mount: Vorlage und Code für den Reiter „PS4 von USB“, PS4-Spiele (Fake-PKG) vom "
      "USB-Laufwerk ohne Installation. Danke!"},
+    {"Zusammenspiel, Wissen und Vorbilder", "", "quer3q", "@quer3q",
+     "AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die Fassung "
+     "0.3.2 steckt als eingebettete Fassung in der App, neuere lädt sie auf Knopfdruck. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "Knutwurst", "@knutwurst",
      "PatchDL: Die eigene Namensauflösung und der HTTPS-Abruf der App (für den Payload-Store) "
      "stammen daraus. Danke!"},

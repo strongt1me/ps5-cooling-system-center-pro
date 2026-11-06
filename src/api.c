@@ -4687,6 +4687,39 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
+  /* The question that comes with AMPR EMU NG (06.11.2026): ShadowMountPlus replaces the file at the start of a game unless its
+     automatic fakelib update is off. {"enabled": false} switches it off in its config.ini (only that line, smpcfg.c); only on
+     the person's "yes". GET tells how it stands. */
+  if(!strcmp(req->path, "/api/v1/ampr-emu/smp-update")) {
+    if(is_get) {
+      cJSON *o = cJSON_CreateObject();
+      cJSON_AddBoolToObject(o, "ok", 1);
+      cJSON_AddBoolToObject(o, "update_emulators", ps5tm_amprlib_smp_update_on());
+      send_cjson(fd, 200, o);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *je = b ? cJSON_GetObjectItem(b, "enabled") : NULL;
+    if(!cJSON_IsBool(je)) { cJSON_Delete(b); ps5tm_http_send_error(fd, 400, "bad_request", "{\"enabled\": true|false} fehlt."); return; }
+    int want = cJSON_IsTrue(je);
+    cJSON_Delete(b);
+    char why[300] = "";
+    int rc = ps5tm_amprlib_smp_update(want, why, sizeof(why));
+    if(rc) {
+      PS5TM_WARN("smp_update_emulators", "update_emulators in ShadowMountPlus ließ sich nicht ändern: %s", why);
+      ps5tm_http_send_error(fd, rc == ENOENT ? 404 : 500, "smp_config_failed", why[0] ? why : "Die Einstellung ließ sich nicht ändern.");
+      return;
+    }
+    PS5TM_INFO("smp_update_emulators", "ShadowMountPlus: automatische Fakelib-Aktualisierung %s (update_emulators=%d).", want ? "eingeschaltet" : "abgeschaltet", want);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddBoolToObject(o, "update_emulators", ps5tm_amprlib_smp_update_on());
+    cJSON_AddStringToObject(o, "message", want ? "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist wieder eingeschaltet."
+                                              : "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet.");
+    send_cjson(fd, 200, o);
+    return;
+  }
   if(!strcmp(req->path, "/api/v1/library/emu")) {
     if(is_get) {
       char id[16] = "", lib[8] = "";
@@ -4764,14 +4797,16 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL;
     const cJSON *jl = b ? cJSON_GetObjectItem(b, "level") : NULL;
     const cJSON *jp = b ? cJSON_GetObjectItem(b, "profile") : NULL;
-    char kind[12] = "", id[16] = "", profile[128] = "";
+    const cJSON *jf = b ? cJSON_GetObjectItem(b, "format") : NULL;                    /* "lz4" (default) or "zstd" (06.11.2026) */
+    char kind[12] = "", id[16] = "", profile[128] = "", format[8] = "";
     int level = cJSON_IsNumber(jl) ? ps5tm_num_i32(jl->valuedouble) : 9;
     if(cJSON_IsString(jk)) snprintf(kind, sizeof(kind), "%s", jk->valuestring);
     if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
     if(cJSON_IsString(jp)) snprintf(profile, sizeof(profile), "%s", jp->valuestring);
+    if(cJSON_IsString(jf)) snprintf(format, sizeof(format), "%s", jf->valuestring);
     cJSON_Delete(b);
     char err[400] = "";
-    int http = ps5tm_lz4_start(kind, id, level, profile, err, sizeof(err));
+    int http = ps5tm_lz4_start(kind, id, level, profile, format, err, sizeof(err));
     if(http != 200) { ps5tm_http_send_error(fd, http, "lz4_refused", err); return; }
     send_cjson(fd, 200, ps5tm_imgjob_status());
     return;
@@ -4931,9 +4966,9 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
     const cJSON *jid = b ? cJSON_GetObjectItem(b, "id") : NULL, *jo = b ? cJSON_GetObjectItem(b, "on") : NULL;
     char id[16] = "", msg[200] = "";
-    static char on[64 * 37 + 1];
+    /* the list is as long as the request (a game can have hundreds of add-ons, PS4Mount 0.7.3): no copy into a small buffer */
+    const char *on = cJSON_IsString(jo) ? jo->valuestring : "";
     if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
-    snprintf(on, sizeof(on), "%s", cJSON_IsString(jo) ? jo->valuestring : "");
     int rc = ps4m_choose_dlc(id, on, msg, sizeof(msg));
     cJSON_Delete(b);
     cJSON *o = cJSON_CreateObject();
@@ -5109,12 +5144,13 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   }
   if(!strcmp(req->path, "/api/v1/library/lz4/plan")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
-    char id[16] = "", lv[8] = "", profile[128] = "";
+    char id[16] = "", lv[8] = "", profile[128] = "", format[8] = "";
     query_param(req->query, "id", id, sizeof(id));
     query_param(req->query, "level", lv, sizeof(lv));
     query_param(req->query, "profile", profile, sizeof(profile));
+    query_param(req->query, "format", format, sizeof(format));
     int http = 200;
-    cJSON *o = ps5tm_lz4_plan(id, atoi(lv), profile, &http);
+    cJSON *o = ps5tm_lz4_plan(id, atoi(lv), profile, format, &http);
     if(!o) { ps5tm_http_send_error(fd, http, http == 400 ? "bad_request" : "not_found", http == 400 ? "Das Profil gibt es nicht." : "Das Spiel ist nicht in der Liste oder liegt nicht als Ordner vor."); return; }
     send_cjson(fd, 200, o);
     return;

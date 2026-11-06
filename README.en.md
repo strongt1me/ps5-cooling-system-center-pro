@@ -9,11 +9,11 @@
 ![Version](https://img.shields.io/badge/Version-1.76.9-1f6feb)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
 ![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
-![Languages](https://img.shields.io/badge/Languages-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU-lightgrey)
+![Languages](https://img.shields.io/badge/Languages-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
 
 [Features](#features) · [Quick start](#quick-start) · [Requirements](#requirements) · [Usage](#usage) · [Documentation](#documentation) · [Legal](#legal-notice-and-disclaimer) · [Credits](#credits-and-acknowledgements)
 
-[Deutsch](README.md) · **English** · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md)
+[Deutsch](README.md) · **English** · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
 <img src="docs/images/kuehlung.jpg" alt="Cooling: temperature, fan, running game, target temperature and mode" width="860">
 
@@ -173,13 +173,13 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 **Games**
 - Start (from the console's browser the page closes at once), close, copy to other drives, move or unpack with ShadowMountPlus.
 - Convert to exFAT, ffpkg and ffpfsc images without a PC; everything is read back and checked after writing, with a `.sha256` file.
-- LZ4 asset packs, AMPR index, APR-EMU, PlayGo stub and DLC modules per game; check, unpack and repair images.
+- LZ4 asset packs, AMPR index, APR-EMU (ampr_emu and AMPR EMU NG), PlayGo stub and DLC modules per game; check, unpack and repair images.
 - PS4 from USB: PS4 fake PKGs from a USB drive into the library without installing them (PS4Mount by gasb07).
 - Disc: shows which disc is in the drive (PS2/PS3/PS4/PS5, title ID) and makes an image of PS2 DVDs and PS3 discs with CRC-32, MD5 and SHA-1, checked against Redump if wanted (after ps-disc-detect).
 - Play time with temperatures, back up and restore saves, find, split and install packages, history of all jobs.
 
 **Management**
-- File manager: view, download and upload, create folders, rename, copy, move, delete (changes only on drives and in `/data`).
+- File manager: view, edit, download and upload (whole folders too), create folders, rename, copy, move, delete – everywhere, with speed and time left while copying; deleting asks first and names what will go.
 - Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence; download and update the payloads from itsPLK's Payload Manager list (SHA-256 checked).
 - Profile: display name and profile picture (30 built-in pictures or your own file).
 - Design: Standard, Light, Dark and Optimal (fastest to draw, meant for the TV); every device remembers its choice.
@@ -188,7 +188,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 
 **Technology**
 - Its own HTTP server without a third-party library, a documented [JSON interface](docs/API.md), settings in `/data/PS5-Cooling-Center/config.json`.
-- No internet access unless you switch on **game updates** (off by default): then the app asks the official download servers for the updates of your own games. Likewise “Download payloads” fetches the payload list and the files from GitHub only when you press the button. Otherwise it only talks to programs on the console and to the browsers on your home network.
+- No internet access unless you press a button: “Download payloads” fetches the payload list and the files from GitHub, “Download AMPR EMU NG” a newer release from there. Otherwise the app only talks to programs on the console and to the browsers on your home network.
 
 </details>
 
@@ -202,7 +202,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 3. Open **`http://<PS5-IP>:8086`** in a browser (the notification at the top left of the TV shows the address too).
 
 > [!TIP]
-> **Start without sending:** unpack `FAKE86921.zip` from the release and copy the folder to `/data/homebrew/`. ShadowMountPlus adds a tile; one tap on it starts the app and opens the interface.
+> **Start without sending:** unpack `FAKE86921.zip` (fullscreen app with the controller) and/or `FAKE86922.zip` (web interface in the browser) from the release and copy the folders to `/data/homebrew/`. ShadowMountPlus adds the tiles; one tap on one starts the app.
 
 > [!IMPORTANT]
 > Only **one** instance may run at a time, otherwise two programs fight over the fan. An old instance can be stopped on the "Payloads" page. More in the [LIESMICH](docs/LIESMICH.txt) (German).
@@ -275,7 +275,7 @@ The result is `PS5_Cooling_Center.elf`; `tools/make_starter.sh` builds the start
 ## Legal notice and disclaimer
 
 > [!CAUTION]
-> **Not an official product, no piracy, no liability.** This project has no connection to the console's rights holders. It contains no games, no firmware, no third-party keys (only a publicly known key for self-built test packages, see THIRD_PARTY_NOTICES.md) and no code to circumvent copy protection, and it downloads nothing from the internet except, when you switch them on, the official updates of your own games from the official servers. Modifying a console can cost you your warranty and account; the risk lies with whoever does it. The program is provided **without any warranty**.
+> **Not an official product, no piracy, no liability.** This project has no connection to the console's rights holders. It contains no games, no firmware, no third-party keys (only a publicly known key for self-built test packages, see THIRD_PARTY_NOTICES.md) and no code to circumvent copy protection, and it downloads nothing from the internet except, when you press a button, the payload list with its files and a newer release of AMPR EMU NG from GitHub. Modifying a console can cost you your warranty and account; the risk lies with whoever does it. The program is provided **without any warranty**.
 
 <details>
 <summary>Full text</summary>
@@ -287,7 +287,7 @@ The result is `PS5_Cooling_Center.elf`; `tools/make_starter.sh` builds the start
 - **No piracy.** This project is **not** meant to obtain, distribute or use pirated copies, and it does not support that. Copying, moving and converting only work on games already on your own console and are meant for backups of legitimately acquired games. Finding, splitting, installing and mounting packages from USB only work on packages you put on the console or a drive yourself; the app does not obtain any. Distributing copyrighted content is a criminal offence in most countries. There is no help with that here, not in issues either.
 - **No third-party system files in the repository.** System libraries, firmware and proprietary SDK files are neither shipped nor accepted (see [CONTRIBUTING](CONTRIBUTING.md)). The 30 profile pictures were created by the author.
 - **No warranty, no liability.** The program interferes with the console's fan control and system functions. It is provided as is, **without any warranty** (GNU GPL, sections 15 and 16). The author is not liable for damage to consoles, data or accounts. A dusty console cools worse, however the fan is driven.
-- **Privacy.** History, log and settings stay on the console in `/data/PS5-Cooling-Center/`. The app sends no data to the internet; only with game updates switched on does it ask the official update servers and DNS providers about the title IDs of your own games. The only exception is in the browser: the "Credits" page loads the small icon from github.com once to see whether the browser has internet access; only then are the links clickable.
+- **Privacy.** History, log and settings stay on the console in `/data/PS5-Cooling-Center/`. The app sends no data to the internet. The only exception is in the browser: the "Credits" page loads the small icon from github.com once to see whether the browser has internet; only then are the links clickable.
 - **Third-party projects** are under their own licences, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 </details>
 
@@ -313,11 +313,14 @@ This project stands on the shoulders of the PS5 homebrew community. **Thank you!
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) and the contributors to [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT, PFS and PFSC images.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): the model for the UFS2/ffpkg writer.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4 asset packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) and [dlc_emu](https://github.com/drakmor/dlc_emu) (embedded builds, GPL-3.0).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, a further development of ampr_emu that also reads zstd packs (release 0.3.2 embedded, newer ones fetched by the app on request).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): how the starter tile is built as a native title.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): package layout and the install flow (own code after this model).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profile function and profile picture format.
 - **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR encoder.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): the four tested LZ4 profiles (ASTRO BOT, EA Sports UFC 6, Insomniac engine, Unity engine), embedded unchanged.
+- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): the app's own name resolution and HTTPS fetch (for the payload store).
+- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS for the payload store.
 - **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
 </details>
 
@@ -328,7 +331,7 @@ This project stands on the shoulders of the PS5 homebrew community. **Thank you!
 - **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: the list for "Automatic", recording for profile creation, upkeep of the game plugins.
 - **theghostonline (Husam Osman), [PS5 LZ4 Compression](https://github.com/theghostonline/PS5-LZ4-Compression)**: files that must stay loose when packing, permissions 0777, repair while checking the packs, choice of the tested profiles.
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: parameters for `.ffpkg` images.
-- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) and [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager).
+- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) and [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (model and list for “Download payloads”, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): detecting the running game.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** and **[onionHEN](https://github.com/aydencharles/onionHEN)**: system calls, readings, frame rate.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: the model for many features (code rewritten each time).
@@ -349,4 +352,4 @@ If you are missing here or described wrongly, please let me know and the list wi
 
 Copyright © 2026 strongt1me · **GNU General Public License v3.0 or later**, see [LICENSE](LICENSE). Up to 1.45.1 the project was MIT; from 1.46.0 it is GPL-3.0-or-later because parts are taken from GPL projects (details in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-<sub>This README is also available in [Deutsch](README.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md) and [Русский](README.ru.md). The manual and FAQ come with every release in all six languages.</sub>
+<sub>This README is also available in [Deutsch](README.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md), [Русский](README.ru.md) and [Svenska](README.sv.md). The manual and FAQ come with every release in all seven languages.</sub>

@@ -7,8 +7,8 @@
 // the drives and /data, and the console says which with writable. The X button opens a folder or
 // shows a text file; Square opens what an entry allows (pick, copy, cut, rename, delete, measure);
 // Triangle the rest (paste here, new folder, pick all or none, the order, cancel the job). Names
-// are typed on the kit's keyboard. Delete fires at once, as everywhere in the app. Uploading from a
-// computer and downloading to one stay in the web app.
+// are typed on the kit's keyboard. Delete asks first and names what goes (user, 06.11.2026).
+// Uploading from a computer and downloading to one stay in the web app.
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
@@ -69,6 +69,7 @@ constexpr int kPlaceTag = 100;  // + index into the places
 constexpr int kUpTag = 99;      // ".." up one folder
 constexpr int kEntryTag = 1000; // + index into entries_ (sorted)
 constexpr int kJumpRows = 8;    // L2 / R2: a page of rows at a time
+constexpr std::size_t kDeleteShown = 5; // names the delete question lists; the rest is counted
 constexpr float kBarH = 50.0f;  // the path bar above the list
 // The page has no sub-tabs: it starts level with the sidebar's top (user, 30.10.2026).
 constexpr float kFilesTop = kTabY;
@@ -229,6 +230,8 @@ class FilesPage final : public Page
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
 
+        ask_.init(theme);
+
         keys_.style.theme = theme;
         keys_.style.bindings = ui::KeyboardBindings::standard();
         keys_.style.space_label = "Leer";
@@ -295,11 +298,26 @@ class FilesPage final : public Page
 
     bool modal() const override
     {
-        return menu_.is_open() || dialog_ != kNone;
+        return menu_.is_open() || dialog_ != kNone || ask_.is_open();
     }
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (ask_.is_open())
+        {
+            // "Löschen" (the second button) is the only way to delete; back, "Abbrechen" and anything
+            // else leave everything as it was
+            if (ask_.handle(input, feedback))
+            {
+                source().files_delete(delete_paths_);
+                picked_.clear();
+                key_.clear();
+                rebuild();
+            }
+            if (!ask_.is_open())
+                delete_paths_.clear();
+            return;
+        }
         if (conflict_ask_ && !menu_.is_open() && dialog_ == kNone)
         {
             conflict_ask_ = false;
@@ -376,6 +394,7 @@ class FilesPage final : public Page
         list_.update(dt);
         info_.update(dt);
         menu_.update(dt);
+        ask_.update(dt);
         if (dialog_ == kName)
             keys_.update(dt);
         shown_.target = dialog_ != kNone ? 1.0f : 0.0f;
@@ -494,6 +513,7 @@ class FilesPage final : public Page
     void draw_overlay(ui::Canvas &canvas) const override
     {
         menu_.draw(canvas);
+        ask_.draw(canvas);
         const float amount = shown_.value;
         if (amount <= 0.01f)
             return;
@@ -832,8 +852,8 @@ class FilesPage final : public Page
             open_name(kRename, feedback);
             break;
         case kDelete:
-            source().files_delete(paths);
-            picked_.clear();
+            // asks first (user, 06.11.2026); what is picked stays picked until it is confirmed
+            open_delete_dialog(feedback);
             break;
         case kPaste:
             source().files_post(clip_move_ ? "move" : "copy",
@@ -883,6 +903,42 @@ class FilesPage final : public Page
         }
         key_.clear();
         rebuild();
+    }
+
+    // Delete asks first (user, 06.11.2026; it used to fire at once): the question names what goes -
+    // the names, folder or file, where they lie - and the focus opens on "Abbrechen".
+    void open_delete_dialog(ui::Feedback &feedback)
+    {
+        const std::vector<const FsEntry *> t = targets();
+        if (t.empty())
+            return;
+        delete_paths_.clear();
+        std::vector<std::string> names;
+        bool any_folder = false;
+        for (const FsEntry *e : t)
+        {
+            const std::string full = join(folder_.path, e->name);
+            delete_paths_.push_back(full);
+            const bool folder = e->type == "dir";
+            any_folder = any_folder || folder;
+            if (names.size() >= kDeleteShown)
+                continue;
+            std::string what = folder ? "Ordner" : format_bytes(e->size);
+            const auto s = sizes_.find(full);
+            if (folder && s != sizes_.end() && !s->second.failed)
+                what += " \xC2\xB7 " + format_bytes(s->second.bytes);
+            names.push_back(DeleteAsk::line(e->name, what));
+        }
+        if (t.size() > names.size())
+            names.push_back("und " + std::to_string(t.size() - names.size()) + " weitere");
+        std::vector<std::string> notes{"Ordner: " + folder_.path};
+        const std::string warn = std::string("Das lässt sich nicht rückgängig machen.") +
+                                 (any_folder ? "\nOrdner werden mit allem gelöscht, was darin liegt."
+                                             : "");
+        ask_.open(t.size() > 1 ? std::to_string(t.size()) + " Einträge löschen?"
+                  : t[0]->type == "dir" ? "Ordner löschen?"
+                                        : "Datei löschen?",
+                  names, notes, feedback, "Das wird endgültig gelöscht:", warn);
     }
 
     void open_name(int mode, ui::Feedback &feedback)
@@ -1362,6 +1418,8 @@ class FilesPage final : public Page
     ui::ListView list_;
     ui::DetailList info_;
     ui::Menu menu_;
+    DeleteAsk ask_;                         // asked before every delete
+    std::vector<std::string> delete_paths_; // what that question is about
     std::uint64_t conflict_seq_ = 0;
     std::vector<std::string> conflict_names_;
     bool conflict_ask_ = false;  // a question is waiting to be asked

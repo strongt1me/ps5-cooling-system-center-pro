@@ -60,7 +60,8 @@ class HttpSource final : public Source
     void extras_open(const std::string &id) override;
     void extras_post(const std::string &route, const std::string &json) override;
     void extras_versions(const std::string &lib) override;
-    void extras_lz4_plan(const std::string &id, int level, const std::string &profile) override;
+    void extras_lz4_plan(const std::string &id, int level, const std::string &profile,
+                         const std::string &format) override;
     void library_tools_fetch() override;
     void library_tools_post(const std::string &route, const std::string &json) override;
     void system_post(const std::string &route, const std::string &json) override;
@@ -141,6 +142,7 @@ class HttpSource final : public Source
         int value = 0;
         std::string id;
         std::string text; // a JSON body, or the store's action
+        std::string extra; // a second text: the pack format of the plan
     };
 
     struct ToolRequest

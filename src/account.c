@@ -299,15 +299,24 @@ ps5tm_account_activate(const char *username, const char **why)
    loader (127.0.0.1:9021). The ELF reads the current user itself and writes
    auth.dat, config.dat and all registry keys — no arguments needed. */
 extern const unsigned char ps5tm_npfakesignin[];
-extern const unsigned long ps5tm_npfakesignin_len;
+extern const unsigned long ps5tm_npfakesignin_len;       /* the zlib stream of the ELF (tools/gen_blob.py) */
+extern const unsigned long ps5tm_npfakesignin_raw_len;
 
 int
 ps5tm_account_fakesignin(const char **why)
 {
   if(why) *why = NULL;
   PS5TM_INFO("account_fakesignin", "Injiziere np-fake-signin v1.3 (%lu Bytes).",
-             ps5tm_npfakesignin_len);
-  return ps5tm_loader_inject_mem(ps5tm_npfakesignin, ps5tm_npfakesignin_len, why);
+             ps5tm_npfakesignin_raw_len);
+  size_t n = 0;
+  unsigned char *elf = ps5tm_blob_inflate(ps5tm_npfakesignin, ps5tm_npfakesignin_len, ps5tm_npfakesignin_raw_len, &n);
+  if(!elf) {
+    if(why) *why = "np-fake-signin ließ sich nicht entpacken.";
+    return -1;
+  }
+  int rc = ps5tm_loader_inject_mem(elf, n, why);
+  free(elf);
+  return rc;
 }
 
 

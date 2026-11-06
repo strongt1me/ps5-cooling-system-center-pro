@@ -53,7 +53,8 @@
 
 /* The helper's image, put into this program at build time (tools/gen_blob.py over the helper's ELF). */
 extern const unsigned char ps5tm_pkginst_helper[];
-extern const unsigned long ps5tm_pkginst_helper_len;
+extern const unsigned long ps5tm_pkginst_helper_len;     /* the zlib stream of the ELF (tools/gen_blob.py) */
+extern const unsigned long ps5tm_pkginst_helper_raw_len;
 
 #define PI_MAX_SLICES   512
 #define PI_SPACE_SLACK  (1ull << 30)         /* what the console wants free besides the package */
@@ -862,11 +863,10 @@ make_token(char out[PKGI_TOKEN_LEN + 1]) {
    such place exactly once. */
 static unsigned char *
 image_with_token(const char *token, size_t *len, char *why, size_t why_len) {
-  size_t n = (size_t)ps5tm_pkginst_helper_len;
-  if(n < 64) { snprintf(why, why_len, "Der Installationshelfer ist in dieser Fassung der App nicht enthalten."); return NULL; }
-  unsigned char *img = malloc(n);
-  if(!img) { snprintf(why, why_len, "Zu wenig Speicher."); return NULL; }
-  memcpy(img, ps5tm_pkginst_helper, n);
+  if(ps5tm_pkginst_helper_raw_len < 64) { snprintf(why, why_len, "Der Installationshelfer ist in dieser Fassung der App nicht enthalten."); return NULL; }
+  size_t n = 0;
+  unsigned char *img = ps5tm_blob_inflate(ps5tm_pkginst_helper, ps5tm_pkginst_helper_len, ps5tm_pkginst_helper_raw_len, &n);
+  if(!img) { snprintf(why, why_len, "Der Installationshelfer ließ sich nicht entpacken."); return NULL; }
   const char *mark = PKGI_TOKEN_MARK;
   size_t ml = strlen(mark), at = (size_t)-1;
   unsigned count = 0;

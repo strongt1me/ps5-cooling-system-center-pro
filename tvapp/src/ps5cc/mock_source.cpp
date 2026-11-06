@@ -943,12 +943,26 @@ class MockSource final : public Source
         if (route == "library/ampr")
             data_.extras.ampr_job =
                 R"({"ok":true,"state":"running","active":true,"kind":"index","phase":"Dateien werden gelesen","files":6120})";
-        // AMPR EMU NG built in: the app answers with the advice about update_emulators
+        // AMPR EMU NG built in: the app answers with the advice about update_emulators (unless it was switched off
+        // before, with "yes" to the question)
+        if (route == "ampr-emu/smp-update")
+        {
+            smp_update_off_ = json.find("false") != std::string::npos;
+            notice(Notice::Kind::success, "Extras",
+                   smp_update_off_ ? "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet."
+                                   : "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist wieder eingeschaltet.");
+            changed();
+            return;
+        }
         if (route == "library/emu" && json.find("-ng") != std::string::npos)
             data_.extras.ampr_job =
-                R"({"ok":true,"state":"done","active":false,"kind":"emu","lib":"ampr","op":"apply","id":"PPSA01325",)"
-                R"("warn":"AMPR EMU NG: Schalte in ShadowMountPlus das Aktualisieren der fakelib ab (update_emulators=0), )"
-                R"(sonst ersetzt ShadowMountPlus die Datei beim Spielstart.","warn_level":2})";
+                smp_update_off_
+                    ? R"({"ok":true,"state":"done","active":false,"kind":"emu","lib":"ampr","op":"apply","id":"PPSA01325",)"
+                      R"("warn":"AMPR EMU NG: Das Aktualisieren der fakelib ist in ShadowMountPlus schon abgeschaltet )"
+                      R"((update_emulators=0).","warn_level":1})"
+                    : R"({"ok":true,"state":"done","active":false,"kind":"emu","lib":"ampr","op":"apply","id":"PPSA01325",)"
+                      R"("warn":"AMPR EMU NG: Schalte in ShadowMountPlus das Aktualisieren der fakelib ab (update_emulators=0), )"
+                      R"(sonst ersetzt ShadowMountPlus die Datei beim Spielstart.","warn_level":2})";
         notice(Notice::Kind::success, "Extras", "Auftrag angenommen.");
         changed();
     }
@@ -961,28 +975,29 @@ class MockSource final : public Source
         v.json =
             lib == "playgo"
                 ? R"({"ok":true,"versions":[{"name":"libScePlayGo.sprx-0.3","label":"0.3","valid":true,"bundled":true,"sha256":"b1"}]})"
-                : R"({"ok":true,"ng_release":{"version":"0.2.0","missing":1,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.2.0-ng","label":"NG 0.2.0","ng":true,"pack":true,)"
-                  R"("valid":true,"bundled":false,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
+                : std::string(R"({"ok":true,"emus":{"update_emulators":)") + (smp_update_off_ ? "false" : "true") +
+                  R"(},"ng_release":{"version":"0.3.2","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.3.2-ng","label":"NG 0.3.2","ng":true,"pack":true,)"
+                  R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
                   R"("valid":true,"bundled":true,"sha256":"a1"},{"name":"libSceAmpr.sprx-0.4.2.1-debug","label":"0.4.2.1 mit Protokoll",)"
                   R"("debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.1","label":"0.4.1",)"
                   R"("valid":true,"bundled":false,"sha256":"a3"}]})";
         changed();
     }
 
-    void extras_lz4_plan(const std::string &id, int level, const std::string &profile) override
+    void extras_lz4_plan(const std::string &id, int level, const std::string &profile,
+                         const std::string &format) override
     {
         (void)id;
         (void)profile;
         ExtrasLz4Plan &l = data_.extras_lz4_plan;
         ++l.seq;
-        l.json =
-            std::string(
-                R"({"ok":true,"valid":true,"pack_files":812,"pack_bytes":29000000000,"loose_files":44,)") +
-            R"("loose_bytes":1200000000,"chunks":118000,"est_s":)" +
-            std::to_string(level == 12  ? 4200
-                           : level == 3 ? 900
-                                        : 1860) +
-            "}";
+        const bool zstd = format == "zstd";
+        l.json = std::string(zstd ? R"({"ok":true,"valid":true,"pack_files":905,"pack_bytes":29700000000,"loose_files":6,)"
+                                  : R"({"ok":true,"valid":true,"pack_files":812,"pack_bytes":29000000000,"loose_files":44,)") +
+                 R"("loose_bytes":1200000000,"chunks":118000,"est_s":)" +
+                 std::to_string(zstd ? (level >= 19 ? 21000 : level >= 9 ? 2600 : level == 1 ? 480 : 900)
+                                     : (level == 12 ? 4200 : level == 3 ? 900 : 1860)) +
+                 "}";
         changed();
     }
 
@@ -2529,6 +2544,7 @@ class MockSource final : public Source
     Tool plan_tool_ = Tool::copy;
     std::string plan_id_;
     float plan_at_ = 0.0f;
+    bool smp_update_off_ = false; // "Ja" to the ShadowMountPlus question was given
 };
 
 Source *g_source = nullptr;

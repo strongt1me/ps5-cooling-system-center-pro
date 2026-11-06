@@ -45,6 +45,7 @@
 #include "imgread.h"
 #include "ioerr.h"
 #include "lz4pack.h"
+#include "zstdpack.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 #include "third_party/libdeflate/libdeflate.h"
@@ -95,6 +96,7 @@ typedef struct {
   unsigned lz4_loose, lz4_packed;       /* files left loose / packed */
   int      lz4_apr_fixed;               /* lz4verify: the APR-EMU that reads packs was put back */
   unsigned lz4_restored, lz4_modes;     /* lz4verify: files written back to the disk from the packs, modes set to 0777 */
+  int      lz4_zstd;                    /* the LZ4 jobs: 1 when the packs are zstd ones (06.11.2026), 0 for LZ4 */
 } job_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1212,6 +1214,7 @@ ps5tm_imgjob_status(void) {
     cJSON_AddNumberToObject(o, "lz4_stored", (double)g_job.lz4_stored);
     cJSON_AddNumberToObject(o, "lz4_loose", g_job.lz4_loose);
     cJSON_AddNumberToObject(o, "lz4_packed", g_job.lz4_packed);
+    cJSON_AddStringToObject(o, "lz4_format", g_job.lz4_zstd ? "zstd" : "lz4");
     if(!strcmp(g_job.kind, "lz4verify")) {
       cJSON_AddBoolToObject(o, "lz4_apr_fixed", g_job.lz4_apr_fixed);
       cJSON_AddNumberToObject(o, "lz4_restored", g_job.lz4_restored);

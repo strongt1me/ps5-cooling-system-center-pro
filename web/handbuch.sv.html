@@ -137,6 +137,7 @@ Stoppa en gammal instans på sidan ”Payloads”, annars hjälper en omstart.</
 <p>Till vänster finns sidofältet med avsnitten <b>Profil, Spel, Filer, Payloads, Kylning, System, Logg</b> och
 <b>Credits</b>. Högst upp i sidhuvudet, på varje sida: <b>energialternativen</b>, ”Helskärm”, ”Expertläge” och
 anslutningsindikatorn.</p>
+<p>”Helskärm” döljer webbläsarens aktivitetsfält och fönsterram. I PS5:ans egen webbläsare växlar det första trycket på sidan till helskärm av sig självt; på en dator eller mobil stannar sidan i ett vanligt fönster tills du trycker på ”Helskärm” (knappen minns det, ”Avsluta helskärm” stänger av det igen). Under posten ”FAQ” i sidofältet finns versionen av den app som körs.</p>
 <p><b>Utseende.</b> Bredvid språket väljer du ett av fyra utseenden: <b>Standard</b> (mörkblått med glödande kanter), <b>Ljust</b> (dämpat gråblått, bländar inte), <b>Mörkt</b> (nästan svart, utan glöd) och <b>Optimal</b> (för tv:n och PS5: stark kontrast, större text, ingen genomskinlighet eller skuggor, snabbast att rita). Varje enhet kommer ihåg sitt eget val, till exempel ”Optimal” på tv:n och ”Ljust” på mobilen.</p>
 <h3>Energialternativ</h3>
 <p><b>Viloläge</b>, <b>Starta om</b>, <b>Stäng av</b> och <b>Felsäkert läge</b>. Varje kommando fungerar vid första klicket; medan det körs är knappen låst, så ett dubbelklick utlöser det inte två gånger.</p>
@@ -164,7 +165,7 @@ sedan bara själva fönstret.</p>
 <li><b>Fyrkantsknappen:</b> åtgärder för urvalet (t.ex. kopiera ett spel, ta bort en payload, redigera en profil), <b>Triangelknappen:</b> detaljer eller ”Mer”.</li>
 <li><b>Options-knappen:</b> meny med ”Öppna webbgränssnittet i webbläsaren”, ”Läs in igen”, ”Sprache / Language”, ”Avsluta appen” och energialternativen.</li><li><b>Språk:</b> tyska, engelska, spanska, franska, italienska, ryska eller svenska. Som standard följer den konsolens systemspråk (andra språk: engelska); Options-knappen → ”Sprache / Language” öppnar en lista med alla språk (bock = aktivt); ett tryck väljer ett och valet sparas. Texter som ingen ordlista känner till förblir på tyska.</li>
 </ul>
-<p>Raden längst ner visar alltid vad knapparna gör just nu. Ta bort, avsluta och avbryt verkar vid första trycket – det finns inga kontrollfrågor.</p>
+<p>Raden längst ner visar alltid vad knapparna gör just nu. Avsluta och avbryt verkar vid första trycket – det finns inga kontrollfrågor. Borttagning är undantaget: den frågar först och nämner vad som tas bort.</p>
 <h3>Områden</h3>
 <ul>
 <li><b>Kylning:</b> översikt med måltemperaturen; inställningar med driftläge, säkerhetsgräns, varningar, ljusfält, spelprofiler, nattläge och fläktens självtest.</li>
@@ -259,7 +260,8 @@ och kontrolleras. Ingenting skrivs över.</p>
 <li><b>Avsluta PS4Mount-spel före viloläge.</b> Viloläget stänger av enheten. Ett spel som lämnas öppet kan inte läsa efteråt och låser sig.</li>
 <li><b>När du stänger av avmonteras spelen</b> (sedan PS4Mount 0.7.2): det är säkert att stänga av PS4Mount före viloläge. Appen avmonterar varje spel utan att tvinga. Medan ett spel är öppet vägrar den och anger vilket spel det är. Om en spelmapp fortfarande används monterar den alla igen och ber dig försöka igen om en stund. När du slår på PS4Mount monteras spelen igen.</li>
 <li>Två eller fler anslutna enheter (partitioner räknas också) kan göra konsolens gränssnitt långsamt, med eller utan PS4Mount. Anslut då en enda enhet med en partition.</li>
-<li>Ett spel som körs kan använda högst cirka 30 paket (spel, uppdatering och ungefär 29 tillägg). Det är en gräns i konsolen som också gäller för installerade spel.</li>
+<li>Ett spel som körs kan använda högst cirka 30 paket (spel, uppdatering och ungefär 29 tillägg med data; tillägg som bara låser upp räknas inte längre sedan PS4Mount 0.7.3). Det är en gräns i konsolen som också gäller för installerade spel.</li>
+<li>Sedan 0.7.3 hanterar PS4Mount upp till 768 spel per enhet (förut 256) och söker i upp till 64 mappar (förut 8). Det som överskrider det rapporteras i stället för att tyst hoppas över.</li>
 </ul>
 <!--p4m-->
 <p><b>Innan du packar till ffpfsc:</b> konsolen måste packa upp en komprimerad fil om och om igen medan du spelar, så spel med väldigt mycket data eller strömning av texturer kan hacka. Innan appen konverterar ett spel (dumpmapp, <code>.exfat</code>, <code>.ffpkg</code> eller <code>.ffpfs</code>) till <code>.ffpfsc</code> tittar den efter: från cirka 40 GB data, med stora strömningsbehållare (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB tillsammans eller mer) eller med en strömningsmapp (2 GB eller mer) visar fönstret en notering bredvid ”ffpfsc”. Det kommer ingen extra fråga: ”Starta” konverterar. Det är en uppskattning utifrån filnamn och storlekar, inte utifrån spelmotorn.</p>
@@ -273,7 +275,7 @@ och kontrolleras. Ingenting skrivs över.</p>
 <div class='tip'>Ett spel som körs och alla andra jobb i appen blockerar byggandet. Uppbyggnaden följer drakmors skript <code>build_ampr_index.py</code> (GPL-3.0) och har jämförts byte för byte med dess resultat.</div>
 <h3>APR-EMU i spelet</h3>
 <p>Raden <b>APR-EMU i spelet</b> visar vilken <code>libSceAmpr.sprx</code> ett spel läser in och låter dig välja en version och lägga in den, ta tillbaka spelets original eller ta bort filen. Versionerna är filer i <code>/data/PS5-Cooling-Center/AMPR_EMU</code>, namngivna som drakmors utgåvor (<code>libSceAmpr.sprx-0.4.2.1-test-pack</code>). Fem versioner följer med appen: de visas i listan även när de ännu inte ligger i mappen, och hamnar där när du bygger in en eller med <b>Lägg medföljande versioner i mappen</b> (mappen skapas vid behov). Lägg till fler med <b>Lägg till fil</b>. Varje fil kontrolleras (SELF-huvud, märket ”[AMPR_EMU]”). Varianter med ”pack” i namnet kan läsa LZ4-paket, ”debug” skriver en logg.</p>
-<p><b>AMPR EMU NG</b> (quer3q, <a href="https://github.com/quer3q/ampr-emu-ng">ampr-emu-ng</a>, GPL-3.0) är en vidareutveckling av ampr_emu och läser LZ4- och zstd-paket. Dess filer bär märket ”ampr-emu-ng &lt;version&gt;”. I listan visas de överst med märkningen <b>NG</b> (<b>NG 0.2.0</b>, <b>NG 0.2.0 debug</b>). Appen levererar dem inte: <b>hämta AMPR EMU NG 0.2.0 från GitHub</b> hämtar båda filerna till mappen <code>AMPR_EMU</code> (<code>libSceAmpr.sprx-0.2.0-ng</code>, <code>-ng-debug</code>) när du trycker på den och kontrollerar deras kontrollsumma. <b>Lägg till fil</b> byter namn på filer från en nyare utgåva (<code>libSceAmpr.sprx</code>, <code>libSceAmpr-debug.sprx</code>) så att de passar. Utvecklaren rekommenderar att du ställer in <code>update_emulators=0</code> i ShadowMountPlus.</p>
+<p><b>AMPR EMU NG</b> (quer3q, <a href="https://github.com/quer3q/ampr-emu-ng">ampr-emu-ng</a>, GPL-3.0) är en vidareutveckling av ampr_emu och läser LZ4- och zstd-paket. Dess filer bär märket ”ampr-emu-ng &lt;version&gt;”. I listan visas de överst med märkningen <b>NG</b> (<b>NG 0.3.2</b>, <b>NG 0.3.2 debug</b>). Båda filerna följer med appen (<code>libSceAmpr.sprx-0.3.2-ng</code>, <code>-ng-debug</code>). En nyare utgåva hämtar <b>hämta AMPR EMU NG från GitHub</b> till mappen <code>AMPR_EMU</code> när du trycker på den och kontrollerar kontrollsumman, så snart appen känner till den. <b>Lägg till fil</b> byter namn på filer från en nyare utgåva (<code>libSceAmpr.sprx</code>, <code>libSceAmpr-debug.sprx</code>) så att de passar. När NG installeras frågar appen om den automatiska fakelib-uppdateringen i ShadowMountPlus ska stängas av, eftersom ShadowMountPlus annars ersätter NG-filen igen vid spelstart med versionen från sin emulatormapp: <b>Ja</b> ändrar bara raden <code>update_emulators</code> i <code>/data/shadowmount/config.ini</code> till 0 (appen sparar filen en gång som <code>config.ini.ps5cc-bak</code>) och installerar NG, <b>Avbryt</b> lämnar allt som det är. Beroende på version tar ShadowMountPlus emot ändringen direkt eller vid nästa start. Frågan visas inte när uppdateringen redan är avstängd.</p>
 <ul>
 <li>Var filen hamnar följer ShadowMountPlus (1.7beta1 och nyare): den letar först i backportmappen <code>&lt;scan path&gt;/backports/&lt;title id&gt;/</code> (sedan 1.7beta6 även en mapp vars namn bara börjar med titel-ID:t, till exempel ”PPSA12345 Game Name”: den som heter exakt som titel-ID:t vinner, annars den första i byteordning), sedan i spelet, och den första mappen som finns gäller ensam. För en <b>spelmapp, .exfat eller .ffpkg</b> hamnar den i <code>fakelib/libSceAmpr.sprx</code> i spelet (en avbild monteras kort för skrivning av ShadowMountPlus). En <b>komprimerad .ffpfsc</b> kan inte skrivas: där skapas en backportmapp och spelet lämnas orört. Eftersom den döljer spelets <code>fakelib</code> kopieras dess filer in. Om det redan finns en backportmapp används den för alla format.</li>
 <li>Filen som spelet hade med sig sparas en gång som <code>libSceAmpr.sprx.orig</code> och skrivs aldrig över. En tidigare APR-EMU räknas inte som original. <b>Återställ original</b> lägger tillbaka den. <b>Ta bort</b> tar bara bort APR-EMU-filen.</li>
@@ -300,7 +302,7 @@ och kontrolleras. Ingenting skrivs över.</p>
 <li><b>Reparera</b>: bara där det är säkert. Om storleken på en <code>.ffpfsc</code>-fil inte stämmer med avbildens huvud, men data är fullständig och de extra byten är tomma, rättar appen storleken och läser hela behållaren en gång till. Skadade block kan inte återskapas enbart från avbilden. Reparera är låst medan ShadowMountPlus har avbilden monterad.</li>
 </ul>
 <h3>Historik</h3>
-<p>På spelsidan listar fliken <b>Historik</b> alla appens jobb – kopiera, flytta, konvertera, dela paket, installera, ta bort, filhanteraren, sparad data och AMPR-index – med resultat (klart, misslyckades, avbrutet), storlek, tidsåtgång och tidpunkt. De senaste 500 sparas på konsolen i <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Töm historik</b> tar bort dem direkt.</p>
+<p>På spelsidan listar fliken <b>Historik</b> alla appens jobb – kopiera, flytta, konvertera, dela paket, installera, ta bort, filhanteraren, sparad data och AMPR-index – med resultat (klart, misslyckades, avbrutet), storlek, tidsåtgång och tidpunkt. De senaste 500 sparas på konsolen i <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Töm historik</b> tar bort dem efter en fråga.</p>
 <h3>Spelinsticksmoduler</h3>
 <p>Raden <b>Spelinsticksmoduler</b> håller drakmors ersättningsmoduler i spelets mapp <code>fakelib</code> uppdaterade: PlayGo-stubben (<code>libScePlayGo.sprx</code>, pgo_stub 0.6) och DLC-modulerna (<code>libSceAppContent.sprx</code>, <code>libSceGameUpdate.sprx</code>, <code>libSceNpEntitlementAccess.sprx</code>, dlc_emu 0.3, ”log”-versionen: den skriver <code>/app0/dlc_emu.log</code> i spelet; versionen utan loggning kraschade vid spelstart och ersätts som ”felaktig version”) som visar de DLC som listas i spelets <code>dlc_emu.ini</code> som ägda.</p>
 <ul>
@@ -320,7 +322,7 @@ och kontrolleras. Ingenting skrivs över.</p>
 <h3>Steg för steg</h3>
 <ol>
 <li><b>Installera APR-EMU.</b> I fönstret <b>LZ4-tillgångspaket och APR-EMU</b>, under <b>APR-EMU i spelet</b>, väljer du versionen <code>0.4.2.1 test-pack</code>. Bara versioner med ”pack” i namnet läser paket.</li>
-<li><b>Testa uppackat.</b> Starta spelet och spela en stund: meny, en bana, ladda en sparning. Om det inte fungerar så här kommer det aldrig att fungera packat. Då hjälper bara en äldre APR-EMU (till exempel 0.3.6.6) eller ingen alls.</li>
+<li><b>Testa uppackat.</b> Starta spelet och spela en stund: meny, en bana, ladda en sparning. Om det inte fungerar så här kommer det aldrig att fungera packat. Då hjälper bara en äldre APR-EMU (till exempel 0.3.6.6; den följer inte längre med appen sedan november 2026, <b>Lägg till fil</b> tar den från drakmors utgivningssida) eller ingen alls.</li>
 <li><b>Packa.</b> <b>Packa med LZ4 …</b>, till att börja med nivå 9 och <b>Automatiskt</b>. Rutan ”startat uppackat, och det fungerade” hör till detta. <b>Paketering i spelmappen</b> sparar mest utrymme. Originalen tas bort först när varje fil har jämförts byte för byte med paketen. Vid minsta fel blir allt som förut. Valet <b>Som ny mapp … bredvid</b> lämnar originalet orört, men lägger två mappar med samma titel-ID bredvid varandra. ShadowMountPlus kan få problem med det och montera om spelet med några sekunders mellanrum. Ta därför först bort originalet från sökvägen. Om det finns en <b>testad profil</b> för spelet (se nedan) är den redan vald.</li>
 <li><b>Kontrollera paket.</b> Läser varje block, packar upp det och jämför det med CRC-filen. Sedan rättar den det som även bra paket behöver: om den APR-EMU som läser paket saknas eller har ersatts av något annat, läggs <code>0.4.2.1 test-pack</code> tillbaka. Filer som PS5 letar efter på enheten men som bara finns i paketen (packade av äldre verktyg) tas tillbaka. Och den sätter behörigheterna i spelmappen till 0777. Det som rättades listas under <b>Reparerat:</b>. Ingen ompackning behövs. Detta visar att paketen är hela, inte att spelet använder dem rätt.</li>
 <li><b>Starta och spela.</b> Först nu ser du om det fungerar. Spela längre än några sekunder: meny, en bana, ladda och spara.</li>
@@ -358,7 +360,17 @@ och kontrolleras. Ingenting skrivs över.</p>
 <li>Förebilder och regler: drakmor/ampr_emu (docs/ASSET_PACK_WORKFLOW_EN.md, GPL-3.0), theghostonline/PS5-LZ4-Compression och danthespal/MkPFS.CSharp. Från LZ4 Compression 1.4.3 till 1.5.0 (Husam Osman, GPL-3.0) kommer listan över filer som måste förbli lösa, behörigheterna 0777, reparationen under kontrollen och valet av testade profiler. Nybyggt, inte kopierat.</li>
 <li>Idéer och kunskap: exFAT2AMPR av V-10 (<a href="https://github.com/exFAT2AMPR/exfat2ampr">GitHub</a>, GPL-3.0 med tilläggsvillkor, ”Made by V-10”): listan som ”Automatiskt” lämnar lös, inspelningen för att skapa profiler (dess uppbyggnad och konstanter följer hans port av <code>ampr_pack_profile.py</code>) och skötseln av spelinsticksmodulerna med deras tabell över kontrollsummor.</li>
 </ul>
-<!--tp--></section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Ta bort spel och säkerhetskopior</h2></div>
+<!--tp-->
+<h3>zstd i stället för LZ4 (för AMPR EMU NG)</h3>
+<p>Förutom LZ4-paket gör appen också <b>zstd-paket</b>: <b>Packa med zstd …</b> (filerna <code>ampr_zstd.index</code> och <code>ampr_zstd-000.pak</code> med flera). Formatet kommer från quer3q (<i>ampr-emu-ng</i>); bara <b>AMPR EMU NG</b> läser det, ingen annan APR-EMU. Appen lägger själv in NG i <code>fakelib</code> när den packar. Om ShadowMountPlus automatiska fakelib-uppdatering fortfarande är på visas en varning i resultatet: stäng av den (eller bygg in NG i förväg under <b>APR-EMU i spelet</b>, då frågar appen om det).</p>
+<ul>
+<li>Hela spelet packas utom systemfilerna: program (<code>eboot.bin</code>, <code>.sprx</code>, <code>.prx</code>, <code>.elf</code>, <code>.self</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code>, tomma filer, paketens och APR-EMU:s egna filer och de få filer som PS5 själv letar efter på disken. Det finns varken profil eller ”Automatiskt”: AMPR EMU NG betjänar ett helt packat spel.</li>
+<li><b>Nivå</b> 1 till 22 (appen erbjuder 1, 5, 9 och 19; standard 5). Högre nivåer sparar mer utrymme men packar mycket långsammare. Vid spel ändras knappt något: uppackningen kostar lika lite på alla nivåer. Varje bit på 256 KiB är en egen zstd-ram med kontrollsumma; det zstd inte kan krympa blir kvar rått.</li>
+<li>Allt annat är som med LZ4: <b>testa först opaketerat med NG</b>, packa sedan; originalet tas bort först efter jämförelsen byte för byte; <b>Kontrollera paket</b>, <b>Packa upp zstd …</b> och valet <b>Som ny mapp …-zstd bredvid</b>.</li>
+<li>Ett spel ligger antingen i LZ4-paket eller i zstd-paket, aldrig i båda. För att byta, packa först upp. I ett zstd-spel är alla versioner utom NG låsta i fönstret <b>APR-EMU i spelet</b>.</li>
+</ul>
+<p><b>Status:</b> packningen och kontrollen är verifierade mot originalen och mot en oberoende läsare av formatet (den i PS5 Dump &amp; Image Converter); om ett packat spel går på konsolen beror på AMPR EMU NG och har ännu inte provats med den här appen. Prova först på ett spel vars original du behåller.</p>
+</section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Ta bort spel och säkerhetskopior</h2></div>
 <p>Varje spelkort har <b>Ta bort</b>, och det har även varje post på fliken <b>Säkerhetskopior</b>.</p>
 <ul>
 <li><b>Installerade spel</b> avinstalleras av konsolen själv – som med ”Ta bort” i menyn, inklusive uppdateringar och tillägg.</li>
@@ -366,7 +378,7 @@ och kontrolleras. Ingenting skrivs över.</p>
 <li><b>Appens säkerhetskopior</b> (kopior och konverteringar) tas bort tillsammans med sin fil med kontrollsummor.</li>
 </ul>
 <ol class='steps'>
-<li>Tryck på <b>Ta bort</b>: appen frågar tyst konsolen vad som försvinner och tar bort direkt. Fönstret visar vad som tas bort.</li>
+<li>Tryck på <b>Ta bort</b>: appen frågar konsolen vad som försvinner och visar det i ett fönster. Bara <b>Ta bort</b> i fönstret tar bort något; <b>Avbryt</b> lämnar allt som det var.</li>
 <li>En förloppsindikator med procent visar hur långt det har kommit.</li>
 <li>Om konsolen vägrar (till exempel för att spelet körs) förblir fönstret öppet med orsaken, och inget tas bort.</li>
 </ol>
@@ -385,7 +397,7 @@ USB-minne, en disk eller den interna SSD:n (<code>PS5-Sicherung/Spielstaende/&lt
 kontrollerar dem och ersätter först därefter de gamla.</p>
 <div class='warn'>Säkerhetskopiering och återställning sker bara när <b>inget spel körs</b> – inte ens ett pausat. Säkerhetskopior från en annan
 konsol kan inte återställas.</div>
-<p>Per användare, uppdelat i PS5-spel och PS4-spel. Appar som YouTube visas inte: appen ändrar inget där – den säkerhetskopierar, återställer eller tar inte bort något av deras. ”Ta bort” tar bort alla sparningar för en titel på en gång. Appen säkerhetskopierar först det aktuella läget till den valda enheten (annars till den första lämpliga) och låter dig lägga tillbaka det. Om det inte finns någon enhet alls säger ett meddelande att det tas bort utan säkerhetskopia.</p>
+<p>Per användare, uppdelat i PS5-spel och PS4-spel. Appar som YouTube visas inte: appen ändrar inget där – den säkerhetskopierar, återställer eller tar inte bort något av deras. ”Ta bort” tar bort alla sparningar för en titel efter en fråga som nämner titeln. Appen säkerhetskopierar först det aktuella läget till den valda enheten (annars till den första lämpliga) och låter dig lägga tillbaka det. Om det inte finns någon enhet alls säger ett meddelande att det tas bort utan säkerhetskopia.</p>
 
 </section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>13</div><h2>Paket</h2></div>
 <p>Hittar <code>.pkg</code>-filer på USB-enheter, diskar och i konsolens lagring (mappen <code>pkg</code>) och visar bild,
@@ -415,7 +427,7 @@ kopiera, flytta, ta bort – fungerar också <b>överallt</b>, även i systemmap
 ”Endast visning” gäller bara för <code>/</code> självt, <code>/dev</code>, <code>/proc</code> och länkar. Områden som konsolen har monterat som skrivskyddade
 (t.ex. <code>/system</code>) avvisar en ändring av sig själva. Appen visar då felet.</p>
 <div class='warn'><code>/system_data</code> och <code>/user</code> innehåller konsolens databaser och inställningar. Om du tar bort eller flyttar fel sak där
-riskerar du en konsol som inte längre startar eller måste ställas in på nytt. Borttagning sker direkt, utan fråga.</div>
+riskerar du en konsol som inte längre startar eller måste ställas in på nytt. Borttagning frågar först: ett fönster nämner vad som tas bort (namnen, fil eller mapp, för mappar antalet filer och storleken); först ”Ta bort” i fönstret tar bort det för gott, ”Avbryt” lämnar allt som det var.</div>
 
 <h3>Sortera, markera, visa</h3>
 <ul>
@@ -423,19 +435,22 @@ riskerar du en konsol som inte längre startar eller måste ställas in på nytt
 <li><b>Välj alla:</b> Rutan ovanför listan markerar alla poster i mappen (utom länkar och specialfiler). Halvfylld betyder: bara några av dem är markerade.</li>
 <li><b>Mappstorlekar:</b> ”Storlek” på en mapp räknar hur mycket den innehåller. ”Mappstorlekar” gör det för alla mappar i vyn, en efter en. En mycket stor mapp visas med ”minst” efter ungefär 8 sekunder.</li>
 <li><b>Visa:</b> ”Visa” visar bilder (PNG, JPG, GIF, WebP, BMP, ICO) och början av textfiler (upp till 256 KB). Andra filer kan bara hämtas.</li>
+<li><b>Redigera:</b> För textfiler upp till 64 KB öppnar ”Redigera” en editor; ”Spara” skriver tillbaka filen. Större filer hämtar du, redigerar och laddar upp igen.</li>
 </ul>
 <h3>Kopiera &amp; flytta</h3>
 <ol class='steps'>
-<li>Markera posterna.</li>
-<li>Tryck på <b>Kopiera</b> eller <b>Klipp ut</b>.</li>
-<li>Gå till målmappen och tryck på <b>Klistra in här</b>.</li>
-<li>En stapel visar procent, datamängd och aktuell fil. <b>Avbryt</b> tar bort den påbörjade posten från målet igen.</li>
+<li>Markera poster (eller öppna menyn <b>⋯</b> för en enskild post).</li>
+<li>Tryck på <b>Kopiera till</b> eller <b>Flytta till</b>.</li>
+<li>I målvalet väljer du överst en enhet eller en plats i konsolen, går in i undermapparna och trycker på <b>Kopiera hit</b> eller <b>Flytta hit</b>.</li>
+<li>Finns namnet redan i målet frågar ett fönster: <b>Ersätt</b>, <b>Behåll båda</b> (den nya posten heter ”Namn (2)”), <b>Hoppa över</b> eller <b>Avbryt</b>. Ersätt skriver först filen bredvid den gamla och byter ut den på slutet; en mapp slås ihop.</li>
+<li>Visningen anger hur många filer/mappar det är och vilken som pågår (”Kopierar 1 av 2 filer/mappar”), varifrån och vart (”från /mnt/usb0/ny till /mnt/ext1”), procent, datamängd och aktuell fil, dessutom överföringshastigheten (”82 MB/s”) och beräknad återstående tid (”ca 12 min kvar”). <b>Avbryt</b> tar bort den påbörjade posten i målet igen.</li>
 </ol>
+<p>I stället för ”… till” går det också via urklipp: <b>Kopiera</b> eller <b>Klipp ut</b>, gå till målmappen och tryck på <b>Klistra in här</b>. Helskärmsappen fungerar så.</p>
+<h3>Ta bort</h3>
+<p><b>Ta bort</b> frågar först: Fönstret anger vad som försvinner – namnen med typ och storlek, mappen och för mappar hur många filer med hur mycket utrymme som finns i dem. Bara <b>Ta bort</b> i fönstret tar bort för gott; <b>Avbryt</b> (den har fokus) lämnar allt som det var.</p>
 <h3>Ladda upp</h3>
-<p><b>Ladda upp</b> väljer en eller flera filer. På en dator kan du också dra dem till listan. En stapel visar
-förloppet för varje fil.</p>
-<div class='tip'>Skyddat: inget skrivs någonsin över (för att ersätta en fil tar du först bort den gamla och laddar sedan upp den nya),
-länkar följs aldrig, en monterad enhet kan inte tas bort i sin helhet, och kopiering och borttagning går aldrig över till en annan enhet.</div>
+<p><b>Ladda upp</b> väljer en eller flera filer, <b>Ladda upp mapp</b> en hel mapp (mappstrukturen skapas, sedan går filerna en och en); på en PC kan du också dra båda till listan. Ett fält visar förloppet per fil. Finns namnet redan i målet frågar samma fönster som vid kopiering.</p>
+<div class='tip'>Skydd: länkar följs aldrig, en monterad enhet kan inte tas bort i sin helhet, och kopiering och borttagning går aldrig över till en annan enhet. En post kan inte ersätta sig själv, och en fil kan inte ersätta en mapp (eller tvärtom).</div>
 <p><b>Enheter</b> heter som på konsolen: <code>usb0</code>, <code>usb1</code> … – mappen <code>/mnt/usb0</code> är ”usb0”.</p>
 </section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payloads</h2></div>
 <p>Se och avsluta payloads som körs, och starta sparade payloads med ett klick – från <code>/data/PS5-Cooling-Center/payloads</code>

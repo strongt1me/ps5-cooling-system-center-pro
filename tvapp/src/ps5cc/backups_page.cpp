@@ -4,8 +4,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // As the web app's tab: every backup with its drive, size, date and whether it is finished and has
-// checksums. Square deletes it at once (the app plans it first and refuses when it must; the
-// deletion then runs as a job under Aufträge). The saves are not part of these backups and are
+// checksums. Square deletes it after a question that names it (the app plans it first and refuses
+// when it must; the deletion then runs as a job under Aufträge). The saves are not part of these backups and are
 // never touched here.
 
 #include "ps5cc/look.hpp"
@@ -57,6 +57,7 @@ class BackupsPage final : public Page
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
+        ask_.init(theme);
     }
 
     void absorb(const Snapshot &data) override
@@ -74,11 +75,18 @@ class BackupsPage final : public Page
 
     bool modal() const override
     {
-        return menu_.is_open();
+        return menu_.is_open() || ask_.is_open();
     }
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (ask_.is_open())
+        {
+            // only "Löschen" in the question deletes (06.11.2026)
+            if (ask_.handle(input, feedback))
+                source().backup_delete(menu_path_);
+            return;
+        }
         if (menu_.is_open())
         {
             if (menu_.handle(input, feedback) == ui::Event::activated)
@@ -86,7 +94,7 @@ class BackupsPage final : public Page
                 const int tag = menu_.items()[static_cast<std::size_t>(menu_.focus())].tag;
                 feedback.play(audio::Cue::select);
                 if (tag == kDelete)
-                    source().backup_delete(menu_path_);
+                    ask_delete(feedback);
                 else if (tag == kReload)
                     source().reload();
             }
@@ -133,6 +141,7 @@ class BackupsPage final : public Page
         list_.update(dt);
         info_.update(dt);
         menu_.update(dt);
+        ask_.update(dt);
     }
 
     void draw(ui::Canvas &canvas) const override
@@ -163,7 +172,7 @@ class BackupsPage final : public Page
         }
         paragraph(canvas,
                   "Sicherungen der App (Ordner PS5-Sicherung/Spiele). Die Quadrat-Taste löscht "
-                  "eine sofort; die "
+                  "eine nach einer Rückfrage; die "
                   "Spielstände bleiben erhalten. Das Löschen läuft unter Aufträge.",
                   card.x + 30.0f, y, card.w - 60.0f, kMuted, 5);
         std::uint64_t total = 0;
@@ -182,6 +191,7 @@ class BackupsPage final : public Page
     void draw_overlay(ui::Canvas &canvas) const override
     {
         menu_.draw(canvas);
+        ask_.draw(canvas);
     }
 
     int hints(ui::Hint *out) const override
@@ -194,6 +204,26 @@ class BackupsPage final : public Page
     }
 
   private:
+    // Asks first (user, 06.11.2026): the backup's name, where it lies and how big it is.
+    void ask_delete(ui::Feedback &feedback)
+    {
+        const GameBackup *found = nullptr;
+        for (const GameBackup &b : backups_.backups)
+        {
+            if (b.path == menu_path_)
+                found = &b;
+        }
+        std::vector<std::string> names;
+        std::vector<std::string> notes;
+        if (found != nullptr)
+        {
+            names.push_back(DeleteAsk::line(found->name, format_bytes(found->size_bytes)));
+            notes.push_back("Ordner: " + found->path);
+        }
+        notes.push_back("Deine Spielstände bleiben erhalten.");
+        ask_.open("Sicherung löschen?", names, notes, feedback);
+    }
+
     const GameBackup *focused() const
     {
         const int i = list_.focus();
@@ -288,6 +318,7 @@ class BackupsPage final : public Page
     ui::ListView list_;
     ui::DetailList info_;
     ui::Menu menu_;
+    DeleteAsk ask_;
     std::string key_;
     std::string info_key_ = "\x01";
     GameBackups backups_;

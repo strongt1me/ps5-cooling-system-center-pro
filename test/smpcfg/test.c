@@ -1,0 +1,207 @@
+/* Host test of src/smpcfg.c: reading and changing update_emulators in ShadowMountPlus's config.ini. */
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "smpcfg.h"
+
+static int g_fail, g_n;
+
+#define CHECK(c) do { g_n++; if(!(c)) { g_fail++; printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); } } while(0)
+
+static char *
+edit(const char *t, int on) {
+  size_t n = 0;
+  char *r = ps5tm_smpcfg_with_update(t, strlen(t), on, &n);
+  CHECK(r && n == strlen(r));
+  return r;
+}
+
+static int
+state(const char *t) {
+  ps5tm_smpcfg_t c;
+  ps5tm_smpcfg_parse(t, strlen(t), &c);
+  return c.update_emulators;
+}
+
+static char *
+slurp(const char *p, size_t *n) {
+  FILE *f = fopen(p, "rb");
+  if(!f) return NULL;
+  char *b = malloc(1 << 16);
+  *n = fread(b, 1, (1 << 16) - 1, f);
+  b[*n] = 0;
+  fclose(f);
+  return b;
+}
+
+/* a flat file as the console has it: the template as comments, the person's lines at the end */
+static const char FLAT_LIVE[] =
+  "# ShadowMountPlus runtime config\n"
+  "# update_emulators=1\n"
+  "# emulators_path=/data/shadowmount/emus\n"
+  "scanpath=/mnt/usb0\n"
+  "\n"
+  "update_emulators=0\n"
+  "auto_update_ampr=0\n";
+
+int
+main(int argc, char **argv) {
+  const char *work = argc > 1 ? argv[1] : "/tmp/smpcfg-work";
+  char *r;
+
+  /* ---- reading */
+  CHECK(state("") == 1);                                   /* the default of ShadowMountPlus is on */
+  CHECK(state("# update_emulators=0\n") == 1);             /* a comment says nothing */
+  CHECK(state(FLAT_LIVE) == 0);
+  CHECK(state("update_emulators = off\n") == 0);
+  CHECK(state("update_emulators=No\n") == 0);
+  CHECK(state("update_emulators=false\n") == 0);
+  CHECK(state("update_emulators=yes\n") == 1);
+  CHECK(state("  update_emulators=on  \n") == 1);
+  CHECK(state("[emulators]\nupdate_enabled = off\n") == 0);
+  CHECK(state("[Emulators]\nupdate_enabled=1\n") == 1);
+  CHECK(state("[other]\nupdate_enabled=0\n") == 1);        /* only inside [emulators] */
+  {
+    ps5tm_smpcfg_t c;
+    const char *t = "[config]\nversion=2\n[emulators]\nupdate_enabled=1\npath = /data/x/emus\n";
+    ps5tm_smpcfg_parse(t, strlen(t), &c);
+    CHECK(c.v2 && !strcmp(c.emulators_path, "/data/x/emus"));
+    t = "emulators_path=/data/y\n";
+    ps5tm_smpcfg_parse(t, strlen(t), &c);
+    CHECK(!c.v2 && !strcmp(c.emulators_path, "/data/y"));
+    t = "emulators_path=relative\n";
+    ps5tm_smpcfg_parse(t, strlen(t), &c);
+    CHECK(c.emulators_path[0] == 0);                       /* only an absolute path counts */
+  }
+
+  /* ---- a flat file: the active line changes, the rest stays byte for byte */
+  r = edit(FLAT_LIVE, 0);
+  CHECK(!strcmp(r, FLAT_LIVE));                            /* already off: the same text */
+  free(r);
+  r = edit(FLAT_LIVE, 1);
+  CHECK(state(r) == 1);
+  CHECK(strstr(r, "update_emulators=1\nauto_update_ampr=0\n") != NULL);
+  CHECK(strstr(r, "# update_emulators=1\n# emulators_path=/data/shadowmount/emus\nscanpath=/mnt/usb0\n\n") != NULL);
+  {
+    char *back = edit(r, 0);
+    CHECK(!strcmp(back, FLAT_LIVE));                       /* there and back again */
+    free(back);
+  }
+  free(r);
+
+  /* ---- on by an active line */
+  {
+    const char *t = "scanpath=/mnt/usb0\nupdate_emulators=1\nsmb_password=geheim\n";
+    r = edit(t, 0);
+    CHECK(!strcmp(r, "scanpath=/mnt/usb0\nupdate_emulators=0\nsmb_password=geheim\n"));
+    free(r);
+    t = "  Update_Emulators = true\n";
+    r = edit(t, 0);
+    CHECK(!strcmp(r, "  Update_Emulators =0\n"));         /* indentation and spelling of the key stay */
+    CHECK(state(r) == 0);
+    free(r);
+    t = "update_emulators=1\nupdate_emulators=1\n";        /* two lines: both */
+    r = edit(t, 0);
+    CHECK(!strcmp(r, "update_emulators=0\nupdate_emulators=0\n"));
+    free(r);
+  }
+
+  /* ---- no line at all: added at the end, the line ending of the file kept */
+  r = edit("# only comments\nscanpath=/mnt/usb0", 0);
+  CHECK(!strcmp(r, "# only comments\nscanpath=/mnt/usb0\nupdate_emulators=0\n"));
+  free(r);
+  r = edit("scanpath=/mnt/usb0\r\n# x\r\n", 0);
+  CHECK(!strcmp(r, "scanpath=/mnt/usb0\r\n# x\r\nupdate_emulators=0\r\n"));
+  free(r);
+  r = edit("", 0);
+  CHECK(!strcmp(r, "update_emulators=0\n"));
+  free(r);
+  r = edit("scanpath=/mnt/usb0\n", 1);                     /* on is the default: nothing to add */
+  CHECK(!strcmp(r, "scanpath=/mnt/usb0\n"));
+  free(r);
+  r = edit("update_emulators=0\r\nx=1\r\n", 1);
+  CHECK(!strcmp(r, "update_emulators=1\r\nx=1\r\n"));      /* CRLF stays */
+  free(r);
+
+  /* ---- the sectioned format (v2) */
+  {
+    const char *t =
+      "[config]\nversion=2\n\n[general]\ndebug=on\n\n[emulators]\n# update_enabled = on\n# path = /data/shadowmount/emus\n"
+      "auto_update_ampr=0\n\n[smb:NAS]\nhost=10.0.0.2\npassword=geheim\n";
+    r = edit(t, 0);
+    CHECK(state(r) == 0);
+    CHECK(strstr(r, "[emulators]\nupdate_enabled=0\n# update_enabled = on\n") != NULL);
+    CHECK(strstr(r, "[smb:NAS]\nhost=10.0.0.2\npassword=geheim\n") != NULL);
+    CHECK(strstr(r, "update_emulators") == NULL);          /* a v2 file does not get the flat key */
+    CHECK(strlen(r) == strlen(t) + strlen("update_enabled=0\n"));
+    free(r);
+    t = "[config]\nversion=2\n[emulators]\nupdate_enabled = on\npath=/p\n";
+    r = edit(t, 0);
+    CHECK(!strcmp(r, "[config]\nversion=2\n[emulators]\nupdate_enabled =0\npath=/p\n"));
+    free(r);
+    t = "[config]\nversion=2\n[general]\ndebug=on";
+    r = edit(t, 0);
+    CHECK(!strcmp(r, "[config]\nversion=2\n[general]\ndebug=on\n\n[emulators]\nupdate_enabled=0\n"));
+    CHECK(state(r) == 0);
+    free(r);
+  }
+
+  /* ---- the file */
+  {
+    char cmd[512], p[400], bak[420], tmp[420], why[300];
+    snprintf(cmd, sizeof(cmd), "rm -rf '%s' && mkdir -p '%s'", work, work);
+    CHECK(system(cmd) == 0);
+    snprintf(p, sizeof(p), "%s/config.ini", work);
+    snprintf(bak, sizeof(bak), "%s.ps5cc-bak", p);
+    snprintf(tmp, sizeof(tmp), "%s.ps5cc-tmp", p);
+
+    /* no file, folder there: made */
+    CHECK(ps5tm_smpcfg_set_update(p, 0, why, sizeof(why)) == 0);
+    size_t n = 0;
+    char *b = slurp(p, &n);
+    CHECK(b && !strcmp(b, "update_emulators=0\n"));
+    free(b);
+    CHECK(access(bak, F_OK) != 0);                          /* nothing to keep */
+
+    /* an existing file: changed, the old one kept once, the mode kept */
+    FILE *f = fopen(p, "wb");
+    fputs("scanpath=/mnt/usb0\nupdate_emulators=1\nsmb_password=geheim\n", f);
+    fclose(f);
+    chmod(p, 0600);
+    CHECK(ps5tm_smpcfg_set_update(p, 0, why, sizeof(why)) == 0);
+    b = slurp(p, &n);
+    CHECK(b && !strcmp(b, "scanpath=/mnt/usb0\nupdate_emulators=0\nsmb_password=geheim\n"));
+    free(b);
+    b = slurp(bak, &n);
+    CHECK(b && !strcmp(b, "scanpath=/mnt/usb0\nupdate_emulators=1\nsmb_password=geheim\n"));
+    free(b);
+    struct stat st;
+    CHECK(stat(p, &st) == 0 && (st.st_mode & 0777) == 0600);
+    CHECK(stat(bak, &st) == 0 && (st.st_mode & 0777) == 0600);
+    CHECK(access(tmp, F_OK) != 0);                          /* no temporary file left */
+
+    /* already as wanted: the file is not touched, the copy stays the first one */
+    CHECK(ps5tm_smpcfg_set_update(p, 0, why, sizeof(why)) == 0);
+    b = slurp(bak, &n);
+    CHECK(b && strstr(b, "update_emulators=1") != NULL);
+    free(b);
+
+    /* and back on */
+    CHECK(ps5tm_smpcfg_set_update(p, 1, why, sizeof(why)) == 0);
+    b = slurp(p, &n);
+    CHECK(b && strstr(b, "update_emulators=1") != NULL);
+    free(b);
+
+    /* no folder: a reason, nothing made */
+    snprintf(p, sizeof(p), "%s/nicht-da/config.ini", work);
+    CHECK(ps5tm_smpcfg_set_update(p, 0, why, sizeof(why)) == ENOENT);
+    CHECK(strstr(why, "nicht eingerichtet") != NULL);
+  }
+
+  printf("%d checks, %d failed\n", g_n, g_fail);
+  return g_fail ? 1 : 0;
+}

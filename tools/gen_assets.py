@@ -7,6 +7,11 @@ import gzip
 import os
 import sys
 
+try:                                   # zopfli: the same gzip format, about 5 % smaller than level 9 (06.11.2026)
+    import zopfli.gzip as _zopfli_gzip
+except ImportError:                    # not installed: level 9, as before (the app works the same, only a little bigger)
+    _zopfli_gzip = None
+
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".css":  "text/css; charset=utf-8",
@@ -62,7 +67,8 @@ def main():
             ext = os.path.splitext(full)[1].lower()
             raw_len, gz = len(blob), 0
             if ext in GZIP_TYPES and raw_len > 512:
-                packed = gzip.compress(blob, 9, mtime=0)
+                packed = (_zopfli_gzip.compress(blob, numiterations=15) if _zopfli_gzip
+                          else gzip.compress(blob, 9, mtime=0))
                 if len(packed) < raw_len * 0.9:
                     blob, gz = packed, 1
             sym = "asset_%d" % index

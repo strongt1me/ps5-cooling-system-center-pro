@@ -91,6 +91,7 @@ typedef struct {
   int      ampr_index;           /* ampr_emu.index: the emulation has run   */
   int      playgo_log;           /* playlgo.log: likewise                   */
   int      lz4;                  /* ampr_assets.index: the game lies in LZ4 packs */
+  int      zstd;                 /* ampr_zstd.index: the game lies in zstd packs (06.11.2026) */
   int      extra_libs;           /* other libraries in fakelib              */
   int      fakelib2;             /* the libraries come from fakelib2 (it replaces fakelib, as ShadowMountPlus uses it) */
   int      bp_from;              /* 0 none, 1 in the game, 2 from <scanpath>/backports/<TITLE_ID>                      */
@@ -502,6 +503,7 @@ detect_mods(lib_game_t *g) {
         m->ampr_index = 0;
         m->playgo_log = 0;
         m->lz4 = 0;
+        m->zstd = 0;
         overlay_backports(g, m);
         uint32_t eb0 = (m->eboot_sdk >> 16) & 0xFFFF;
         uint32_t pj0 = (uint32_t)(g->param_sdk >> 48) & 0xFFFF;
@@ -553,6 +555,8 @@ detect_mods(lib_game_t *g) {
   m->playgo_log = stat(path, &st) == 0;
   snprintf(path, sizeof(path), "%s/ampr_assets.index", g->source);
   m->lz4 = stat(path, &st) == 0;
+  snprintf(path, sizeof(path), "%s/ampr_zstd.index", g->source);
+  m->zstd = stat(path, &st) == 0;
   overlay_backports(g, m);
 
   uint32_t eb = (m->eboot_sdk >> 16) & 0xFFFF;              /* 0x0400 = 4.00 */
@@ -1607,6 +1611,7 @@ ps5tm_library_json(void) {
       cJSON_AddBoolToObject  (m, "ampr_index", md->ampr_index);
       cJSON_AddBoolToObject  (m, "playgo_log", md->playgo_log);
       cJSON_AddBoolToObject  (m, "lz4", md->lz4);
+      cJSON_AddBoolToObject  (m, "zstd", md->zstd);
       cJSON_AddNumberToObject(m, "backport_libs", md->extra_libs);
       cJSON_AddBoolToObject  (m, "fakelib2", md->fakelib2);
       cJSON_AddStringToObject(m, "libs_from", md->bp_from == 2 ? "folder" : md->bp_from == 1 ? "game" : "");

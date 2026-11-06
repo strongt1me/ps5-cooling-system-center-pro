@@ -212,6 +212,7 @@ class PayloadsPage final : public Page
         menu_.style.width = 560.0f;
         menu_.style.scrim = 0.35f;
         menu_.set_bounds({kMargin, 40.0f, 1824.0f - kMargin, 920.0f});
+        ask_.init(theme);
 
         keys_.style.theme = theme;
         keys_.style.bindings = ui::KeyboardBindings::standard();
@@ -236,7 +237,7 @@ class PayloadsPage final : public Page
 
     bool modal() const override
     {
-        return menu_.is_open() || naming_ || editing_;
+        return menu_.is_open() || naming_ || editing_ || ask_.is_open();
     }
 
     void absorb(const Snapshot &data) override
@@ -278,6 +279,13 @@ class PayloadsPage final : public Page
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (ask_.is_open())
+        {
+            // only "Löschen" in the question deletes (06.11.2026)
+            if (ask_.handle(input, feedback))
+                delete_confirmed();
+            return;
+        }
         if (menu_.is_open())
         {
             if (menu_.handle(input, feedback) == ui::Event::activated)
@@ -369,12 +377,15 @@ class PayloadsPage final : public Page
             }
             if (view_ == kFiles && item.file != nullptr)
             {
-                // at once, nothing asked twice: an internal file goes, a USB file is copied in
-                // (never over one of the same name)
+                // an internal file goes after a question (06.11.2026) that names it, a USB file is
+                // copied in at once (never over one of the same name)
                 if (item.file->source == "internal")
                 {
                     feedback.play(audio::Cue::select);
-                    source().delete_payload_file(*item.file);
+                    delete_file_ = *item.file;
+                    delete_profile_.clear();
+                    ask_.open("Datei löschen?", {DeleteAsk::line(item.file->name)},
+                              {"Ordner: /data/PS5-Cooling-Center/payloads"}, feedback);
                 }
                 else if (internal_has(item.file->name))
                     feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
@@ -413,6 +424,7 @@ class PayloadsPage final : public Page
         views_.update(dt);
         list_.update(dt);
         menu_.update(dt);
+        ask_.update(dt);
         clock_ += dt;
         if (naming_)
             keys_.update(dt);
@@ -470,7 +482,7 @@ class PayloadsPage final : public Page
             text = item.file->valid ? "Wird beim Starten an den ELF-Loader (Port 9021) gesendet."
                                     : item.file->why;
             if (item.file->source == "internal")
-                text += " Die Quadrat-Taste löscht die Datei sofort.";
+                text += " Die Quadrat-Taste löscht die Datei nach einer Rückfrage.";
             else if (internal_has(item.file->name))
                 text += " Im internen Ordner gibt es sie schon.";
             else
@@ -537,6 +549,7 @@ class PayloadsPage final : public Page
     void draw_overlay(ui::Canvas &canvas) const override
     {
         menu_.draw(canvas);
+        ask_.draw(canvas);
         const float amount = shown_.value;
         if (amount <= 0.01f)
             return;
@@ -1251,14 +1264,35 @@ class PayloadsPage final : public Page
         }
         else if (tag == kMenuDelete)
         {
+            // asks first (06.11.2026): the profile's name and how many entries it has
+            delete_profile_ = it->id;
+            delete_file_ = PayloadFile{};
+            const std::size_t n = it->items.size();
+            ask_.open("Profil löschen?",
+                      {DeleteAsk::line(it->name, std::to_string(n) + (n == 1 ? " Eintrag" : " Einträge"))},
+                      {}, feedback);
+        }
+    }
+
+    // "Löschen" was chosen in the question: the file or the profile it was opened for goes.
+    void delete_confirmed()
+    {
+        if (!delete_profile_.empty())
+        {
             std::vector<PayloadProfile> all = profiles_;
-            const std::string gone = it->id;
+            const std::string gone = delete_profile_;
             std::erase_if(all, [&](const PayloadProfile &p) { return p.id == gone; });
             const std::string startup = startup_ == gone ? std::string() : startup_;
             source().save_payload_profiles(all, startup);
             profiles_ = all;
             startup_ = startup;
+            delete_profile_.clear();
             rebuild(false);
+        }
+        else if (!delete_file_.name.empty())
+        {
+            source().delete_payload_file(delete_file_);
+            delete_file_ = PayloadFile{};
         }
     }
 
@@ -1271,6 +1305,9 @@ class PayloadsPage final : public Page
     int edit_index_ = -1;  // the entry the △ menu is about
     std::string menu_profile_;
     ui::Menu menu_;
+    DeleteAsk ask_;                // asked before a file or a profile is deleted
+    PayloadFile delete_file_;      // what the question is about (a file) ...
+    std::string delete_profile_;   // ... or a profile's id
     ui::Keyboard keys_;
     bool naming_ = false;
     std::string name_;

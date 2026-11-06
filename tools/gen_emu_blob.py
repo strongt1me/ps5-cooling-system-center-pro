@@ -13,7 +13,8 @@ name, its size and its SHA-256, in the table that src/amprlib.c reads. The app u
 into the store folder (AMPR_EMU, PlayGo) or builds it into a game; the SHA-256 is checked then, and again here: a file that is
 not a build of the project (SELF header 4F 15 3D 1D and the mark "[AMPR_EMU]" / "playgo_stub.dat") stops the build.
 
-The files are GPL-3.0 binaries of https://github.com/drakmor/ampr_emu and https://github.com/drakmor/pgo_stub (the ORIGIN.md
+The files are GPL-3.0 binaries of https://github.com/drakmor/ampr_emu, https://github.com/quer3q/ampr-emu-ng (its builds carry
+"ampr-emu-ng <version>" instead of "[AMPR_EMU]") and https://github.com/drakmor/pgo_stub (the ORIGIN.md
 in each folder says which, and how they were checked). Only a few versions are embedded on purpose: a payload of about 10 MB
 is where a console stopped loading the app on 02.10.2026 (docs/ENTWICKLUNG.md), and the embedded files add their compressed
 size to it.
@@ -52,8 +53,9 @@ def main():
         if not name_re.match(n):
             sys.exit("gen_emu_blob: der Name %s passt nicht zu %s<Version>-<Variante>" % (n, prefixes[0]))
         data = open(os.path.join(folder, n), "rb").read()
-        if len(data) < 0x100 or data[:4] != b"\x4f\x15\x3d\x1d" or mark not in data:
-            sys.exit("gen_emu_blob: %s ist keine %s-Datei (SELF-Kopf und %s fehlen)" % (n, what, mark.decode()))
+        marks = (mark,) + ((b"ampr-emu-ng ",) if sym == "emu" else ())     # the fork ampr-emu-ng carries its own mark (06.11.2026)
+        if len(data) < 0x100 or data[:4] != b"\x4f\x15\x3d\x1d" or not any(m in data for m in marks):
+            sys.exit("gen_emu_blob: %s ist keine %s-Datei (SELF-Kopf und %s fehlen)" % (n, what, " / ".join(m.decode() for m in marks)))
         z = zlib.compress(data, 9)
         if zlib.decompress(z) != data:
             sys.exit("gen_emu_blob: %s lässt sich nicht verlustfrei packen" % n)

@@ -33,6 +33,7 @@ enum Row
     kRowAmpr,
     kRowDeleteSource,
     kRowStart,
+    kRowCancel, // the delete question's "Abbrechen", where its focus opens
     kRowInfo = 20,
     kRowDrive = 100,
 };
@@ -298,15 +299,9 @@ void GameTools::absorb(const Snapshot &data)
         plan_.name = game_.name;
     choice_ = first_choice(plan_, &game_);
     build_form();
-    // "Löschen" chosen in the menu deletes at once (wish of the user, 27.10.2026): the plan is only
-    // fetched for the confirmation token the console app wants; the dialog stays for a refusal and
-    // its reason.
-    if (tool_ == Tool::erase && plan_.ok && ready(plan_, choice_))
-    {
-        if (toast)
-            toast(ui::StatusKind::info, quoted(plan_.name) + " wird gelöscht", "");
-        start();
-    }
+    // "Löschen" chosen in the menu used to delete at once (wish of the user, 27.10.2026). Since
+    // 06.11.2026 the dialog stays: it names what goes, and only its red "Löschen" row starts it
+    // (the focus opens on "Abbrechen"; △ is no shortcut here).
 }
 
 bool GameTools::modal() const
@@ -427,6 +422,11 @@ void GameTools::build_form()
         break;
     case Tool::count:
         break;
+    }
+    if (tool_ == Tool::erase)
+    {
+        form_.add_action(kRowCancel, "Abbrechen");
+        first = kRowCancel;
     }
     ui::FormRow &start_row = form_.add_action(kRowStart, start_label());
     start_row.danger = tool_ == Tool::erase;
@@ -569,7 +569,7 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
     }
     if (!plan_.ok)
         return; // loading, or the error with only "Schließen"
-    if (input.is_pressed(Action::north))
+    if (input.is_pressed(Action::north) && tool_ != Tool::erase)
     {
         press_start(feedback);
         return;
@@ -599,6 +599,10 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         {
             choice_.drive = id - kRowDrive;
             refresh();
+        }
+        else if (id == kRowCancel)
+        {
+            close_dialog(feedback);
         }
         else if (id == kRowStart)
         {
@@ -930,11 +934,20 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
             form_.draw(canvas);
             draw_side(canvas, {panel.x + 950.0f, panel.y + 130.0f, panel.w - 990.0f, 650.0f});
             const std::string start = start_label();
+            // a delete has no triangle shortcut: only its red row starts it
+            const bool shortcut = tool_ != Tool::erase;
             const ui::Hint hints[] = {{ui::Button::cross, "Wählen"},
                                       {ui::Button::triangle, start.c_str()},
                                       {ui::Button::circle, "Abbrechen"}};
-            ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 3, panel.x + 40.0f, false,
-                           layout);
+            if (shortcut)
+                ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 3, panel.x + 40.0f,
+                               false, layout);
+            else
+            {
+                const ui::Hint two[] = {hints[0], hints[2]};
+                ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), two, 2, panel.x + 40.0f, false,
+                               layout);
+            }
         }
         list.pop_opacity();
     }

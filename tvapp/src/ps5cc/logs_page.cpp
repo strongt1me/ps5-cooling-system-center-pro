@@ -80,6 +80,12 @@ class LogsPage final : public Page
             draw_line(canvas, row, item.tag);
         };
         list_.set_bounds({kLeftX, kListTop, kListW, kBottom - kListTop});
+        ask_.init(theme);
+    }
+
+    bool modal() const override
+    {
+        return ask_.is_open();
     }
 
     void absorb(const Snapshot &data) override
@@ -113,6 +119,13 @@ class LogsPage final : public Page
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (ask_.is_open())
+        {
+            // only "Löschen" in the question deletes the saved files (06.11.2026)
+            if (ask_.handle(input, feedback))
+                source().klog_files_clear();
+            return;
+        }
         if (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next))
         {
             if (views_.step(input.is_pressed(Action::jump_next) ? 1 : -1, input, feedback) ==
@@ -153,9 +166,12 @@ class LogsPage final : public Page
             }
             else if (tag == kRowClear)
             {
-                // at once, nothing asked twice; the recording that runs stays
+                // asks first (06.11.2026); the recording that runs stays
                 feedback.play(audio::Cue::select);
-                source().klog_files_clear();
+                ask_.open("Dateien löschen?", {}, {}, feedback,
+                          "Alle gespeicherten Kernel-Log-Dateien werden gelöscht.",
+                          "Das lässt sich nicht rückgängig machen.\n"
+                          "Die laufende Aufnahme bleibt.");
             }
             return;
         }
@@ -176,6 +192,12 @@ class LogsPage final : public Page
     {
         views_.update(dt);
         list_.update(dt);
+        ask_.update(dt);
+    }
+
+    void draw_overlay(ui::Canvas &canvas) const override
+    {
+        ask_.draw(canvas);
     }
 
     void draw(ui::Canvas &canvas) const override
@@ -403,6 +425,7 @@ class LogsPage final : public Page
     ui::Theme theme_;
     ui::TabBar views_;
     ui::ListView list_;
+    DeleteAsk ask_; // asked before the saved kernel-log files are deleted
     int view_ = kApp;
     bool follow_ = true;
     bool lost_ = false;

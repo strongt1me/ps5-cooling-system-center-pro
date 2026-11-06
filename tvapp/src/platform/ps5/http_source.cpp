@@ -396,9 +396,10 @@ void HttpSource::extras_versions(const std::string &lib)
 {
     push({Request::Kind::extras_versions, 0, lib, {}});
 }
-void HttpSource::extras_lz4_plan(const std::string &id, int level, const std::string &profile)
+void HttpSource::extras_lz4_plan(const std::string &id, int level, const std::string &profile,
+                                 const std::string &format)
 {
-    push({Request::Kind::extras_plan, level, id, profile});
+    push({Request::Kind::extras_plan, level, id, profile, format});
 }
 void HttpSource::library_tools_fetch()
 {
@@ -1838,7 +1839,8 @@ void HttpSource::handle(const Request &request)
     {
         const std::string route = "/api/v1/library/lz4/plan?id=" + url_encoded(request.id) +
                                   "&level=" + std::to_string(request.value) +
-                                  "&profile=" + url_encoded(request.text);
+                                  "&profile=" + url_encoded(request.text) +
+                                  "&format=" + url_encoded(request.extra.empty() ? "lz4" : request.extra);
         const Net net = exchange("GET", route.c_str(), {}, &status, &body, 30);
         std::lock_guard<std::mutex> lock(mutex_);
         data_.extras_lz4_plan.seq++;

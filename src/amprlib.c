@@ -24,14 +24,15 @@
  * the mark of quer3q's fork ampr-emu-ng) or a PlayGo stub is no original and is not kept. Changing, restoring and removing never touch another file of the game.
  *
  * The versions are files in /data/PS5-Cooling-Center/AMPR_EMU, named like drakmor's release files:
- * libSceAmpr.sprx-<version>-<variant> (0.4.2.1-test-pack, 0.3.6.6-test-debug ...). They are put there by the person (the
+ * libSceAmpr.sprx-<version>-<variant> (0.4.2.1-test-pack, 0.3.1-ng-debug ...). They are put there by the person (the
  * file manager of this app does it); each is checked for the SELF header and the APR-EMU mark before it is offered.
  * The variants with "pack" in their name (not "nopack") can read LZ4 asset packs. ShadowMountPlus can also replace the
  * file at the start of a game from /data/shadowmount/emus (update_emulators, on by default): the page says so.
  *
  * ampr-emu-ng (quer3q, GPL-3.0, wish of the user 03.11.2026) is a fork of drakmor's ampr_emu that reads the same packs (and zstd
- * ones). Its builds are kept as libSceAmpr.sprx-<version>-ng and -ng-debug, shown as "NG <version>" and listed first; the app
- * does not carry them (the payload is near its size limit) but fetches the known release on request (amprng.c). */
+ * ones). Its builds are kept as libSceAmpr.sprx-<version>-ng and -ng-debug, shown as "NG <version>" and listed first. The app
+ * carries release 0.3.1 (06.11.2026, in place of the old 0.3.6.6 builds) and fetches a newer known release on request
+ * (amprng.c). */
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -46,6 +47,7 @@
 
 #include "imgread.h"
 #include "ps5tm.h"
+#include "smpcfg.h"
 #include "sha256.h"
 #include "third_party/cJSON.h"
 #include "third_party/libdeflate/libdeflate.h"
@@ -111,7 +113,7 @@ has_mark(const uint8_t *d, size_t n, const char *mark) {
   return 0;
 }
 
-/* "ampr-emu-ng 0.2.0" stands in every build of the fork (checked on 0.2.0, both builds, 03.11.2026) */
+/* "ampr-emu-ng 0.3.1" stands in every build of the fork (checked on 0.2.0 and 0.3.1, both builds each, 03.11. and 06.11.2026) */
 #define AL_NG_MARK "ampr-emu-ng "
 
 static int
@@ -147,6 +149,13 @@ ng_version_of(const uint8_t *d, size_t n, char *out, size_t out_len) {
 static int
 reads_packs(const uint8_t *d, size_t n) {
   return (has_mark(d, n, "[AMPR_EMU]") || is_ng(d, n)) && has_mark(d, n, "AMPRPAK4");
+}
+
+/* Does the file read zstd packs (ampr_zstd.index, AMPRZPK1)? Only the builds of ampr-emu-ng do, and they carry the magic (checked
+   on 0.3.2 and 0.3.1, 06.11.2026); drakmor's runtime does not know them. */
+static int
+reads_zstd(const uint8_t *d, size_t n) {
+  return is_ng(d, n) && has_mark(d, n, "AMPRZPK1");
 }
 
 static void
@@ -428,7 +437,7 @@ find_by_sha(const al_ver_t *v, size_t n, const char *sha) {
   return NULL;
 }
 
-/* "0.4.2.1 test-pack"; a fork build "NG 0.2.0" or "NG 0.2.0 debug" */
+/* "0.4.2.1 test-pack"; a fork build "NG 0.3.1" or "NG 0.3.1 debug" */
 static void
 label_of(const al_ver_t *v, char *out, size_t n) {
   if(v->ng) {
@@ -453,25 +462,34 @@ read_emus(const al_kind_t *k, al_emus_t *e) {
   size_t n = 0;
   if(slurp(AL_SM_CONFIG, &d, &n, 256 * 1024) == 0) {
     d[n] = 0;
-    char *save = NULL;
-    for(char *line = strtok_r((char *)d, "\r\n", &save); line; line = strtok_r(NULL, "\r\n", &save)) {
-      while(*line == ' ' || *line == '\t') line++;
-      if(*line == '#' || *line == ';' || !*line) continue;
-      char *eq = strchr(line, '=');
-      if(!eq) continue;
-      *eq = 0;
-      char *key = line, *val = eq + 1;
-      for(char *q = key + strlen(key); q > key && (q[-1] == ' ' || q[-1] == '\t'); ) *--q = 0;
-      while(*val == ' ' || *val == '\t') val++;
-      for(char *q = val + strlen(val); q > val && (q[-1] == ' ' || q[-1] == '\t'); ) *--q = 0;
-      if(!strcasecmp(key, "update_emulators"))
-        e->update_emulators = !(!strcasecmp(val, "0") || !strcasecmp(val, "false") || !strcasecmp(val, "no") || !strcasecmp(val, "off"));
-      else if(!strcasecmp(key, "emulators_path") && val[0] == '/' && strlen(val) < 200)
-        snprintf(e->path, sizeof(e->path), "%s/%s", val[strlen(val) - 1] == '/' ? (val[strlen(val) - 1] = 0, val) : val, k->lib);
+    ps5tm_smpcfg_t c;                                        /* the flat file of ShadowMountPlus up to 1.7beta11 and the sectioned one (smpcfg.c) */
+    ps5tm_smpcfg_parse((const char *)d, n, &c);
+    e->update_emulators = c.update_emulators;
+    if(c.emulators_path[0]) {
+      size_t m = strlen(c.emulators_path);
+      if(c.emulators_path[m - 1] == '/') c.emulators_path[m - 1] = 0;
+      snprintf(e->path, sizeof(e->path), "%s/%s", c.emulators_path, k->lib);
     }
     free(d);
   }
   e->present = is_file(e->path);
+}
+
+/* The person said yes to "switch off the automatic fakelib update of ShadowMountPlus" (06.11.2026): update_emulators=0 goes
+   into its config.ini (smpcfg.c: only that line, the rest of the file as it was, the old file kept once as .ps5cc-bak).
+   ShadowMountPlus takes it up from its file (newer ones at once, older ones at the latest with their next start).
+   0 on success, else an errno with the reason in why. */
+int
+ps5tm_amprlib_smp_update(int enabled, char *why, size_t why_len) {
+  return ps5tm_smpcfg_set_update(AL_SM_CONFIG, enabled, why, why_len);
+}
+
+/* Is the automatic fakelib update of ShadowMountPlus on (its default)? */
+int
+ps5tm_amprlib_smp_update_on(void) {
+  al_emus_t em;
+  read_emus(&K_AMPR, &em);
+  return em.update_emulators;
 }
 
 /* ---------------------------------------------------------------- a big stack for the image reader */
@@ -506,7 +524,7 @@ typedef struct {
   ps5tm_libdel_t li;
   int      folder;                 /* the game is a folder */
   int      readable;               /* the content could be looked at */
-  int      lib_present, lib_emu, lib_packs, has_orig, fakelib_dir, fakelib2, packed;
+  int      lib_present, lib_emu, lib_packs, has_orig, fakelib_dir, fakelib2, packed, packed_zstd;
   uint64_t lib_size;
   char     lib_sha[65];
   char     lib_ng[16];             /* the version of an ampr-emu-ng build, "" when it is none */
@@ -574,6 +592,8 @@ probe_thread(void *arg) {
     p->fakelib2 = is_dir(f);
     snprintf(f, sizeof(f), "%s/ampr_assets.index", p->li.path);
     p->packed = p->k == &K_AMPR && is_file(f);
+    snprintf(f, sizeof(f), "%s/ampr_zstd.index", p->li.path);
+    p->packed_zstd = p->k == &K_AMPR && is_file(f);
     snprintf(f, sizeof(f), "%s/fakelib/%s", p->li.path, p->k->lib);
     if(slurp(f, &d, &n, AL_MAX_BYTES) == 0) {
       p->lib_present = 1; p->lib_emu = is_replacement(d, n); p->lib_packs = reads_packs(d, n); p->lib_size = n; sha_of(d, n, p->lib_sha);
@@ -592,6 +612,7 @@ probe_thread(void *arg) {
   p->fakelib_dir = imgr_list(r, "/fakelib", NULL, NULL) == 0;
   p->fakelib2 = imgr_list(r, "/fakelib2", NULL, NULL) == 0;
   p->packed = p->k == &K_AMPR && imgr_pread(r, "/ampr_assets.index", 0, probe, 1) >= 0;
+  p->packed_zstd = p->k == &K_AMPR && imgr_pread(r, "/ampr_zstd.index", 0, probe, 1) >= 0;
   char ip[160];
   snprintf(ip, sizeof(ip), "/fakelib/%s" AL_ORIG, p->k->lib);
   p->has_orig = imgr_pread(r, ip, 0, probe, 1) >= 0;
@@ -728,6 +749,7 @@ ps5tm_amprlib_state(const char *lib, const char *id, int *http) {
   cJSON_AddBoolToObject(o, "can_change", p->place[0] && !p->why[0] && p->readable);
   if(p->why[0]) cJSON_AddStringToObject(o, "why", p->why);
   cJSON_AddBoolToObject(o, "packed", p->packed);
+  cJSON_AddBoolToObject(o, "packed_zstd", p->packed_zstd);
   cJSON_AddBoolToObject(o, "fakelib2", p->fakelib2);
   /* the file that counts: the backport one when ShadowMountPlus reads that folder, else the game's own */
   int use_bp = !strcmp(p->place, "backport");
@@ -1027,7 +1049,7 @@ ps5tm_amprlib_run(const char *lib, const char *op, const char *id, const char *r
   }
   int rc = 0;
   char fakelib[PATH_MAX];
-  int packed = 0;
+  int packed = 0, packed_zstd = 0;
   uint8_t *own = NULL;
   size_t own_len = 0;
   al_probe_t *p = NULL;
@@ -1038,6 +1060,8 @@ ps5tm_amprlib_run(const char *lib, const char *op, const char *id, const char *r
     char f[PATH_MAX];
     snprintf(f, sizeof(f), "%s/ampr_assets.index", root);
     packed = k == &K_AMPR && is_file(f);
+    snprintf(f, sizeof(f), "%s/ampr_zstd.index", root);
+    packed_zstd = k == &K_AMPR && is_file(f);
     snprintf(f, sizeof(f), "%s/fakelib2", root);
     if(is_dir(f)) add_note(note, note_len, "Im Spielordner liegt auch ein fakelib2: ShadowMountPlus ab 1.7beta1 liest dann nur dieses, die Datei in fakelib bliebe ungenutzt.");
   } else {                                                /* a backport folder */
@@ -1047,7 +1071,8 @@ ps5tm_amprlib_run(const char *lib, const char *op, const char *id, const char *r
     snprintf(fakelib, sizeof(fakelib), "%s/fakelib", p->bp_dir);
     snprintf(bp_dir, sizeof(bp_dir), "%s", p->bp_dir);
     packed = p->packed;
-    if(apply && !(packed && !ver.pack) && !p->bp_exists) {
+    packed_zstd = p->packed_zstd;
+    if(apply && !((packed && !ver.pack) || (packed_zstd && !ver.ng)) && !p->bp_exists) {
       /* a new backport hides the game's own fakelib: it gets a copy of what is there first */
       rc = mkdir_p(fakelib);
       if(rc) { say(why, why_len, "Der Backport-Ordner ließ sich nicht anlegen: %s", strerror(rc)); goto out; }
@@ -1081,6 +1106,12 @@ ps5tm_amprlib_run(const char *lib, const char *op, const char *id, const char *r
     rc = EPERM;
     say(why, why_len, apply ? "Das Spiel liegt in LZ4-Paketen: nur eine Version mit Paketunterstützung (pack) kann sie lesen."
                             : "Das Spiel liegt in LZ4-Paketen: die APR-EMU-Datei lässt sich erst ändern, wenn es wieder entpackt ist.");
+    goto out;
+  }
+  if(packed_zstd && !(apply && ver.ng)) {
+    rc = EPERM;
+    say(why, why_len, apply ? "Das Spiel liegt in zstd-Paketen: nur AMPR EMU NG kann sie lesen."
+                            : "Das Spiel liegt in zstd-Paketen: die APR-EMU-Datei lässt sich erst ändern, wenn es wieder entpackt ist.");
     goto out;
   }
 
@@ -1139,7 +1170,7 @@ ps5tm_amprlib_ng_warning(const char *store_name, char *out, size_t n) {
    app leaves alone (why says so); -1 with why. warn: ShadowMountPlus would replace the file at the start of the game from
    its emulator folder by one that reads no packs. root: the game folder. */
 int
-ps5tm_amprlib_pack_check(const char *id, const char *root, int repair, char *warn, size_t warn_len, char *why, size_t why_len) {
+ps5tm_amprlib_pack_check(const char *id, const char *root, int repair, int zstd, char *warn, size_t warn_len, char *why, size_t why_len) {
   if(warn && warn_len) warn[0] = 0;
   if(why && why_len) why[0] = 0;
   al_probe_t *p = calloc(1, sizeof(*p));
@@ -1155,7 +1186,7 @@ ps5tm_amprlib_pack_check(const char *id, const char *root, int repair, char *war
   snprintf(f, sizeof(f), "%s/%s", dir, K_AMPR.lib);
   uint8_t *d = NULL;
   size_t n = 0;
-  int ok = slurp(f, &d, &n, AL_MAX_BYTES) == 0 && reads_packs(d, n);
+  int ok = slurp(f, &d, &n, AL_MAX_BYTES) == 0 && (zstd ? reads_zstd(d, n) : reads_packs(d, n));
   free(d);
   int rc = 0;
   if(!ok && two) {
@@ -1166,14 +1197,16 @@ ps5tm_amprlib_pack_check(const char *id, const char *root, int repair, char *war
     rc = 1;
     if(repair) {
       char note[300] = "";
-      int r = ps5tm_amprlib_run("ampr", "apply", id, bp ? NULL : root, "libSceAmpr.sprx-0.4.2.1-test-pack", note, sizeof(note), why, why_len);
+      const char *want = zstd ? ps5tm_amprng_name() : "libSceAmpr.sprx-0.4.2.1-test-pack";
+      int r = ps5tm_amprlib_run("ampr", "apply", id, bp ? NULL : root, want, note, sizeof(note), why, why_len);
       if(r) rc = -1;
       else {                                                    /* a file of the person under that name is used instead of the app's */
         d = NULL;
         n = 0;
-        if(!(slurp(f, &d, &n, AL_MAX_BYTES) == 0 && reads_packs(d, n))) {
+        if(!(slurp(f, &d, &n, AL_MAX_BYTES) == 0 && (zstd ? reads_zstd(d, n) : reads_packs(d, n)))) {
           rc = -1;
-          say(why, why_len, "Die Datei libSceAmpr.sprx-0.4.2.1-test-pack im Ordner AMPR_EMU liest keine LZ4-Pakete. Lösche sie dort, dann nimmt die App die mitgelieferte.");
+          say(why, why_len, zstd ? "Die Datei %s im Ordner AMPR_EMU liest keine zstd-Pakete. Lösche sie dort, dann nimmt die App die mitgelieferte."
+                                 : "Die Datei %s im Ordner AMPR_EMU liest keine LZ4-Pakete. Lösche sie dort, dann nimmt die App die mitgelieferte.", want);
         }
         free(d);
       }
@@ -1184,8 +1217,10 @@ ps5tm_amprlib_pack_check(const char *id, const char *root, int repair, char *war
   if(em.present && em.update_emulators) {
     d = NULL;
     n = 0;
-    if(slurp(em.path, &d, &n, AL_MAX_BYTES) == 0 && !reads_packs(d, n))
-      say(warn, warn_len, "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus %s (update_emulators=1), und diese Datei liest keine LZ4-Pakete: "
+    if(slurp(em.path, &d, &n, AL_MAX_BYTES) == 0 && !(zstd ? reads_zstd(d, n) : reads_packs(d, n)))
+      say(warn, warn_len, zstd ? "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus %s (update_emulators=1), und diese Datei liest keine zstd-Pakete: "
+          "Das gepackte Spiel bliebe schwarz. Lege dort AMPR EMU NG ab oder setze update_emulators=0."
+          : "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus %s (update_emulators=1), und diese Datei liest keine LZ4-Pakete: "
           "Das gepackte Spiel bliebe schwarz. Lege dort eine Version mit „pack“ ab oder setze update_emulators=0.", em.path);
     free(d);
   }

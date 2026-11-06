@@ -1208,7 +1208,9 @@ class Source
     virtual void extras_open(const std::string &id) = 0;
     virtual void extras_post(const std::string &route, const std::string &json) = 0;
     virtual void extras_versions(const std::string &lib) = 0;
-    virtual void extras_lz4_plan(const std::string &id, int level, const std::string &profile) = 0;
+    // format: "lz4" or "zstd" (the zstd packs of AMPR EMU NG take a level 1 to 22 and no profile)
+    virtual void extras_lz4_plan(const std::string &id, int level, const std::string &profile,
+                                 const std::string &format) = 0;
     // The library's duplicate images and cover cache: fetch both, or POST /api/v1/<route>.
     virtual void library_tools_fetch() = 0;
     // System: a POST of the console app ("cooling-health") and one reading of the risky sensors.

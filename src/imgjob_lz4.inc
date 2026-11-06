@@ -10,10 +10,14 @@
  *   lz4verify  Reads every block of the packs, decodes it and checks its CRC.
  *   lz4unpack  Writes the packed files back into the game folder, compares them with the packs, then takes the packs away. */
 
+/* Since 06.11.2026 the same jobs also make and read zstd packs (zstdpack.c, for AMPR EMU NG): lz4arg_t.zstd says which format the
+   job works with. A pack job gets it from the person's choice; verify and unpack find it in the folder (ampr_zstd.index or
+   ampr_assets.index). zstd packs everything except the system files, so a profile does not apply to them, and the level is 1 to 22. */
 typedef struct {
   char kind[10];
   int  level;
   char profile[PATH_MAX];        /* "" = automatic, else the path of a TOML profile */
+  int  zstd;                     /* 1: zstd packs (NG), 0: LZ4 packs */
 } lz4arg_t;
 
 /* ---------------------------------------------------------------- what the engine shows */
@@ -423,6 +427,80 @@ lz4_speed_note(int level, uint64_t bytes, uint64_t pack_ms, uint64_t verify_ms) 
   pthread_mutex_unlock(&g_lz4_speed_lock);
 }
 
+
+/* The same for zstd packs (06.11.2026): PS5TM_DATA_DIR/zstd-speed.txt with "pack <level> <bytes/s>" (levels 1 to 22) and "verify <bytes/s>".
+   The guesses are for three threads at idle priority on the console (zstd on one fast core: about 500 MB/s at level 1, 130 at 5, 8 at 19);
+   the reading of the files caps the low levels. A level not measured yet is scaled from the nearest one that was. */
+#define ZST_SPEED_FILE  PS5TM_DATA_DIR "/zstd-speed.txt"
+static const double ZST_PACK_GUESS[23] = { 0, 350e6, 330e6, 300e6, 260e6, 230e6, 190e6, 150e6, 120e6, 100e6, 85e6, 70e6, 55e6, 35e6, 26e6,
+                                           19e6, 14e6, 11e6, 8e6, 6.5e6, 5e6, 4e6, 3.2e6 };
+static pthread_mutex_t g_zst_speed_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void
+zst_speed_load(double pack[23], double *verify) {
+  memset(pack, 0, 23 * sizeof(*pack));
+  *verify = 0;
+  FILE *f = fopen(ZST_SPEED_FILE, "r");
+  if(!f) return;
+  char line[96];
+  while(fgets(line, sizeof(line), f)) {
+    int lv = 0;
+    double v = 0;
+    if(sscanf(line, "pack %d %lf", &lv, &v) == 2 && lv >= 1 && lv <= 22 && v > 1e5 && v < 1e11) pack[lv] = v;
+    else if(sscanf(line, "verify %lf", &v) == 1 && v > 1e5 && v < 1e11) *verify = v;
+  }
+  fclose(f);
+}
+
+/* seconds for packing and checking bytes at level; *learned 1 when this console measured this or another level */
+static double
+zst_estimate_s(uint64_t bytes, int level, int *learned) {
+  if(level < 1 || level > 22) level = 5;
+  double pack[23], ver, rate = 0;
+  pthread_mutex_lock(&g_zst_speed_lock);
+  zst_speed_load(pack, &ver);
+  pthread_mutex_unlock(&g_zst_speed_lock);
+  *learned = 1;
+  if(pack[level] > 0) rate = pack[level];
+  for(int d = 1; !rate && d <= 21; d++)
+    for(int s = -1; s <= 1; s += 2) {
+      int o = level + s * d;
+      if(o >= 1 && o <= 22 && pack[o] > 0) { rate = pack[o] * ZST_PACK_GUESS[level] / ZST_PACK_GUESS[o]; break; }
+    }
+  if(!rate) { *learned = 0; rate = ZST_PACK_GUESS[level]; }
+  return (double)bytes / rate + (double)bytes / (ver > 0 ? ver : LZ4_VERIFY_GUESS);
+}
+
+static void
+zst_speed_note(int level, uint64_t bytes, uint64_t pack_ms, uint64_t verify_ms) {
+  if(level < 1 || level > 22 || bytes < LZ4_SPEED_MIN_BYTES) return;
+  double pack[23], ver;
+  pthread_mutex_lock(&g_zst_speed_lock);
+  zst_speed_load(pack, &ver);
+  if(pack_ms >= LZ4_SPEED_MIN_MS) {
+    double v = (double)bytes * 1000.0 / (double)pack_ms;
+    pack[level] = pack[level] > 0 ? (pack[level] + v) / 2 : v;
+  }
+  if(verify_ms >= LZ4_SPEED_MIN_MS) {
+    double v = (double)bytes * 1000.0 / (double)verify_ms;
+    ver = ver > 0 ? (ver + v) / 2 : v;
+  }
+  char b[900];
+  size_t at = 0;
+  for(int i = 1; i <= 22; i++)
+    if(pack[i] > 0 && at < sizeof(b)) at += (size_t)snprintf(b + at, sizeof(b) - at, "pack %d %.0f\n", i, pack[i]);
+  if(ver > 0 && at < sizeof(b)) at += (size_t)snprintf(b + at, sizeof(b) - at, "verify %.0f\n", ver);
+  if(at > sizeof(b)) at = sizeof(b);
+  char tmp[sizeof(ZST_SPEED_FILE) + 8];
+  snprintf(tmp, sizeof(tmp), "%s.tmp", ZST_SPEED_FILE);
+  FILE *f = fopen(tmp, "w");
+  int ok = f && fwrite(b, 1, at, f) == at;
+  if(f && fclose(f) != 0) ok = 0;
+  if(ok && rename(tmp, ZST_SPEED_FILE) != 0) ok = 0;
+  if(!ok) unlink(tmp);
+  pthread_mutex_unlock(&g_zst_speed_lock);
+}
+
 /* ---------------------------------------------------------------- what the game folder holds (after exFAT2AMPR 1.95)
 
    Before anything is packed: every entry of the game folder is a file or a folder that can be read. A link would not be
@@ -491,26 +569,36 @@ lz4_make_cfg(const lz4arg_t *a, lzc_cfg_t *cfg, char *err, size_t en) {
 }
 
 /* lzp_info on a thread with a big stack (the callers are connection threads) */
-typedef struct { char dir[256]; lzp_info_t info; int packed; } lz4infoarg_t;
+typedef struct { char dir[256]; lzp_info_t info; int packed; int zstd, level; } lz4infoarg_t;
 
 static void *
 lz4_info_thread(void *arg) {
   lz4infoarg_t *x = arg;
   x->packed = lzp_info(x->dir, &x->info);
+  if(!x->packed && !x->info.why[0]) {                     /* no LZ4 set there: a zstd one? (06.11.2026) */
+    lzp_info_t zi;
+    int lv = 0;
+    int zp = zsp_info(x->dir, &zi, &lv);
+    if(zp || zi.why[0]) { x->info = zi; x->packed = zp; x->zstd = 1; x->level = lv; }
+  }
   return NULL;
 }
 
+/* *zstd is 1 when the set is a zstd one, *level then its level */
 static int
-lz4_info_big(const char *dir, lzp_info_t *out) {
+lz4_info_big(const char *dir, lzp_info_t *out, int *zstd, int *level) {
   lz4infoarg_t *x = calloc(1, sizeof(*x));
-  if(!x) { memset(out, 0, sizeof(*out)); return 0; }
+  if(!x) { memset(out, 0, sizeof(*out)); if(zstd) *zstd = 0; return 0; }
   snprintf(x->dir, sizeof(x->dir), "%s", dir);
-  if(run_big(lz4_info_thread, x) != 0) { free(x); memset(out, 0, sizeof(*out)); return 0; }
+  if(run_big(lz4_info_thread, x) != 0) { free(x); memset(out, 0, sizeof(*out)); if(zstd) *zstd = 0; return 0; }
   *out = x->info;
   int p = x->packed;
+  if(zstd) *zstd = x->zstd;
+  if(level) *level = x->level;
   free(x);
   return p;
 }
+
 
 static uint64_t
 lz4_free(const char *path) {
@@ -521,13 +609,15 @@ lz4_free(const char *path) {
 
 /* Takes the packs of a failed pack away again and says truthfully whether that worked (review 15.10.2026). */
 static const char *
-lz4_rollback(int copy, const char *tmp, const char *root) {
+lz4_rollback(int copy, const char *tmp, const char *root, int zstd) {
   if(copy) { rm_tree(tmp, 0); return "die Pakete wurden wieder entfernt"; }
   char e2[300] = "";
-  if(lzp_remove_set(root, e2, sizeof(e2)) == 0) return "die Pakete wurden wieder entfernt";
-  PS5TM_WARN("lz4_rollback_failed", "LZ4: Die Pakete in %.120s ließen sich nicht wieder entfernen: %.120s", root, e2);
-  return "ACHTUNG: Die Pakete ließen sich nicht ganz wieder entfernen (siehe Protokoll). Bitte „LZ4 entpacken“ wählen oder die "
-         "Dateien ampr_assets* im Spielordner löschen";
+  if((zstd ? zsp_remove_set(root, e2, sizeof(e2)) : lzp_remove_set(root, e2, sizeof(e2))) == 0) return "die Pakete wurden wieder entfernt";
+  PS5TM_WARN("lz4_rollback_failed", "%s: Die Pakete in %.120s ließen sich nicht wieder entfernen: %.120s", zstd ? "zstd" : "LZ4", root, e2);
+  return zstd ? "ACHTUNG: Die Pakete ließen sich nicht ganz wieder entfernen (siehe Protokoll). Bitte „zstd entpacken“ wählen oder die "
+                "Dateien ampr_zstd* im Spielordner löschen"
+              : "ACHTUNG: Die Pakete ließen sich nicht ganz wieder entfernen (siehe Protokoll). Bitte „LZ4 entpacken“ wählen oder die "
+                "Dateien ampr_assets* im Spielordner löschen";
 }
 
 static void
@@ -539,6 +629,8 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   lzp_stats_t st;
   memset(&st, 0, sizeof(st));
   int have_cfg = 0, backport = 0, made_tmp = 0;
+  const int zs = a->zstd;                                      /* zstd packs (AMPR EMU NG) instead of LZ4 */
+  const char *fmt_name = zs ? "zstd" : "LZ4";
   uint64_t loose_bytes = 0;
 
   char place[16] = "", pwhy[200] = "";
@@ -552,14 +644,19 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   set_phase("Der AMPR-Index wird gebaut");
   unsigned nf = 0, coll = 0;
   if(ps5tm_ampr_build_dir(root, &nf, &coll, &g_cancel, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
-  if(lz4_make_cfg(a, &cfg, err, sizeof(err)) != 0) { lz4_fail(err, -1); return; }
-  have_cfg = 1;
   lzp_plan_t pl;
-  if(lzp_plan(root, &cfg, &pl, &ui, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); goto out; }
-  if(pl.pack_files == 0) { lz4_fail("Nach diesem Profil gäbe es nichts zu packen.", -1); goto out; }
-  if(cfg.automatic) {
-    cfg.groups[0].pack_count = pl.pack_bytes >= (8ull << 30) ? 4 : pl.pack_bytes >= (1ull << 30) ? 2 : 1;
-    cfg.workers = 3;
+  if(zs) {
+    if(zsp_plan(root, &pl, &ui, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
+    if(pl.pack_files == 0) { lz4_fail("Es gäbe nichts zu packen.", -1); return; }
+  } else {
+    if(lz4_make_cfg(a, &cfg, err, sizeof(err)) != 0) { lz4_fail(err, -1); return; }
+    have_cfg = 1;
+    if(lzp_plan(root, &cfg, &pl, &ui, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); goto out; }
+    if(pl.pack_files == 0) { lz4_fail("Nach diesem Profil gäbe es nichts zu packen.", -1); goto out; }
+    if(cfg.automatic) {
+      cfg.groups[0].pack_count = pl.pack_bytes >= (8ull << 30) ? 4 : pl.pack_bytes >= (1ull << 30) ? 2 : 1;
+      cfg.workers = 3;
+    }
   }
   loose_bytes = pl.loose_bytes;
   pthread_mutex_lock(&g_lock);
@@ -576,18 +673,23 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     if(sl && sl != parent) *sl = 0;
     const char *base = strrchr(root, '/');
     base = base ? base + 1 : root;
-    snprintf(fin, sizeof(fin), "%s/%s-lz4", parent, base);
+    snprintf(fin, sizeof(fin), zs ? "%s/%s-zstd" : "%s/%s-lz4", parent, base);
     snprintf(tmp, sizeof(tmp), "%s" IJ_PART_SUFFIX, fin);
     space_at = parent;
     struct stat st0;
-    if(lstat(fin, &st0) == 0) { char m[PATH_MAX + 120]; snprintf(m, sizeof(m), "Den Ordner %s-lz4 gibt es schon. Bitte ihn zuerst umbenennen oder löschen.", base); lz4_fail(m, -1); goto out; }
+    if(lstat(fin, &st0) == 0) {
+      char m[PATH_MAX + 120];
+      snprintf(m, sizeof(m), zs ? "Den Ordner %s-zstd gibt es schon. Bitte ihn zuerst umbenennen oder löschen." : "Den Ordner %s-lz4 gibt es schon. Bitte ihn zuerst umbenennen oder löschen.", base);
+      lz4_fail(m, -1);
+      goto out;
+    }
     if(lstat(tmp, &st0) == 0 && S_ISDIR(st0.st_mode)) rm_tree(tmp, 0);
     pthread_mutex_lock(&g_lock);
     snprintf(g_job.dest, sizeof(g_job.dest), "%s", fin);
     pthread_mutex_unlock(&g_lock);
   }
   uint64_t avail = lz4_free(space_at);
-  {                                                            /* a FAT32 drive takes no file of 4 GiB or more: smaller pack files */
+  if(!zs) {                                                    /* a FAT32 drive takes no file of 4 GiB or more: smaller pack files (a zstd volume is at most 4 GiB less 64 KiB anyway) */
     char fst[16] = "";
     uint64_t av2 = 0;
     if(drive_free(space_at, &av2, fst, sizeof(fst)) == 0 && !strcmp(fst, "msdosfs")) {
@@ -610,7 +712,7 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   }
 
   uint64_t t_pack = ps5tm_mono_ms();
-  if(lzp_pack(root, outdir, &cfg, &st, &ui, err, sizeof(err)) != 0) {
+  if((zs ? zsp_pack(root, outdir, a->level, 3, &st, &ui, err, sizeof(err)) : lzp_pack(root, outdir, &cfg, &st, &ui, err, sizeof(err))) != 0) {
     int c = cancelled();
     if(copy) rm_tree(tmp, 0);
     lz4_fail(err, c ? ECANCELED : -1);
@@ -620,9 +722,9 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   lz4_job_stats(&st, st.files_loose);
   lzp_stats_t vs;
   uint64_t t_verify = ps5tm_mono_ms();
-  if(lzp_verify(outdir, root, &vs, &ui, err, sizeof(err)) != 0) {                   /* byte for byte against the originals */
+  if((zs ? zsp_verify(outdir, root, &vs, &ui, err, sizeof(err)) : lzp_verify(outdir, root, &vs, &ui, err, sizeof(err))) != 0) {   /* byte for byte against the originals */
     int c = cancelled();
-    const char *rb = lz4_rollback(copy, tmp, root);
+    const char *rb = lz4_rollback(copy, tmp, root, zs);
     char m[900];
     if(c) snprintf(m, sizeof(m), "Abgebrochen, %s.", rb);
     else snprintf(m, sizeof(m), "Die Prüfung gegen die Originale ist fehlgeschlagen, %s: %s", rb, err);
@@ -630,14 +732,15 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     goto out;
   }
   lz4_last_set(id, 1, vs.files_packed, vs.logical_bytes);
-  lz4_speed_note(cfg.fast ? 1 : cfg.level, pl.pack_bytes, pack_ms, ps5tm_mono_ms() - t_verify);
+  if(!zs) lz4_speed_note(cfg.fast ? 1 : cfg.level, pl.pack_bytes, pack_ms, ps5tm_mono_ms() - t_verify);
+  else zst_speed_note(a->level, pl.pack_bytes, pack_ms, ps5tm_mono_ms() - t_verify);
 
   if(copy) {
     /* the files that stay loose, copied and read back */
     lzp_list_t pk;
     cp_t *c = calloc(1, sizeof(*c));
     uint8_t *buf = malloc(IJ_BUF_BYTES);
-    if(!c || !buf || lzp_list(outdir, &pk, err, sizeof(err)) != 0) { free(c); free(buf); rm_tree(tmp, 0); lz4_fail(err[0] ? err : "Kein Speicher.", -1); goto out; }
+    if(!c || !buf || (zs ? zsp_list(outdir, &pk, err, sizeof(err)) : lzp_list(outdir, &pk, err, sizeof(err))) != 0) { free(c); free(buf); rm_tree(tmp, 0); lz4_fail(err[0] ? err : "Kein Speicher.", -1); goto out; }
     c->packed = &pk;
     c->buf = buf;
     c->srclen = strlen(root);
@@ -657,11 +760,26 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     if(crc_rc) { rm_tree(tmp, 0); lz4_fail(why[0] ? why : "Abgebrochen.", crc_rc); goto out; }
   }
 
-  /* the APR-EMU that reads the packs */
+  /* the APR-EMU that reads the packs: for zstd packs AMPR EMU NG (nothing else reads them) */
   set_phase("Die APR-EMU-Datei wird eingebaut");
   char awhy[300] = "";
-  if(lz4_install_apr(id, copy ? tmp : root, backport, awhy, sizeof(awhy)) != 0) {
-    const char *rb = lz4_rollback(copy, tmp, root);
+  if(zs) {
+    char warn[640] = "";
+    int ar = ps5tm_amprlib_pack_check(id, copy ? tmp : root, 1, 1, warn, sizeof(warn), awhy, sizeof(awhy));
+    if(ar < 0 || ar == 2) {
+      const char *rb = lz4_rollback(copy, tmp, root, zs);
+      char m[800];
+      snprintf(m, sizeof(m), "AMPR EMU NG, die zstd-Pakete liest, ließ sich nicht einbauen (%s), %s.", awhy[0] ? awhy : "ohne Angabe", rb);
+      lz4_fail(m, -1);
+      goto out;
+    }
+    if(warn[0]) {
+      pthread_mutex_lock(&g_lock);
+      snprintf(g_job.note, sizeof(g_job.note), "%s", warn);
+      pthread_mutex_unlock(&g_lock);
+    }
+  } else if(lz4_install_apr(id, copy ? tmp : root, backport, awhy, sizeof(awhy)) != 0) {
+    const char *rb = lz4_rollback(copy, tmp, root, zs);
     char m[800];
     snprintf(m, sizeof(m), "Die APR-EMU-Datei, die Pakete liest, ließ sich nicht einbauen (%s), %s.", awhy[0] ? awhy : "ohne Angabe", rb);
     lz4_fail(m, -1);
@@ -672,7 +790,7 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     made_tmp = 0;
   } else {
     lzp_stats_t rs;
-    if(lzp_remove_sources(root, root, 1, &rs, &ui, err, sizeof(err)) != 0) {
+    if((zs ? zsp_remove_sources(root, root, 1, &rs, &ui, err, sizeof(err)) : lzp_remove_sources(root, root, 1, &rs, &ui, err, sizeof(err))) != 0) {
       /* the packs and the APR-EMU are in, the game works with the originals it still has: say so */
       char m[600];
       snprintf(m, sizeof(m), "Die Pakete sind fertig und geprüft, aber das Entfernen der Originale ist unterbrochen worden (%s). Das Spiel läuft mit den Dateien, die noch da sind.", err);
@@ -684,9 +802,9 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   {                                                            /* originals that came as 0666 (an .exfat copy) crash the packed game */
     unsigned mf = 0, mfail = 0;
     lzp_fix_modes(copy ? fin : root, &mf, &mfail);
-    if(mf) PS5TM_INFO("lz4_pack_modes", "LZ4-Pakete für %s: Rechte an %u Einträgen auf 0777 gesetzt.", id, mf);
+    if(mf) PS5TM_INFO("lz4_pack_modes", "%s-Pakete für %s: Rechte an %u Einträgen auf 0777 gesetzt.", fmt_name, id, mf);
     if(mfail) {                                                /* said, not swallowed: such a file can crash the game */
-      PS5TM_WARN("lz4_pack_modes_failed", "LZ4-Pakete für %s: Rechte an %u Einträgen ließen sich nicht auf 0777 setzen.", id, mfail);
+      PS5TM_WARN("lz4_pack_modes_failed", "%s-Pakete für %s: Rechte an %u Einträgen ließen sich nicht auf 0777 setzen.", fmt_name, id, mfail);
       pthread_mutex_lock(&g_lock);
       snprintf(g_job.note, sizeof(g_job.note), "Rechte an %u Dateien oder Ordnern ließen sich nicht auf 0777 setzen. Startet das Spiel nicht, "
                "„Pakete prüfen“ wählen.", mfail);
@@ -694,7 +812,7 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     }
   }
   ps5tm_library_forget();
-  PS5TM_INFO("lz4_pack_done", "LZ4-Pakete für %s: %llu Dateien, %.1f → %.1f GB%s.", id, (unsigned long long)st.files_packed,
+  PS5TM_INFO("lz4_pack_done", "%s-Pakete für %s: %llu Dateien, %.1f → %.1f GB%s.", fmt_name, id, (unsigned long long)st.files_packed,
              (double)st.logical_bytes / 1e9, (double)st.stored_bytes / 1e9, copy ? " (in einem neuen Ordner)" : "");
   finish(IJ_DONE, NULL);
 out:
@@ -709,17 +827,17 @@ out:
    modes of the game folder (0777). The game is not running (checked at the start). */
 static void
 lz4_run_verify(const char *id, const char *root, const lz4arg_t *a) {
-  (void)a;
+  const int zs = a->zstd;
   lzp_ui_t ui = lz4_ui();
   char err[500] = "";
   lzp_stats_t st;
-  if(lzp_verify(root, NULL, &st, &ui, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
+  if((zs ? zsp_verify(root, NULL, &st, &ui, err, sizeof(err)) : lzp_verify(root, NULL, &st, &ui, err, sizeof(err))) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
   lz4_job_stats(&st, 0);
   lz4_last_set(id, 0, st.files_packed, st.logical_bytes);
 
   set_phase("Die APR-EMU-Datei wird geprüft");
   char warn[640] = "", why[300] = "";
-  int apr = ps5tm_amprlib_pack_check(id, root, 1, warn, sizeof(warn), why, sizeof(why));
+  int apr = ps5tm_amprlib_pack_check(id, root, 1, zs, warn, sizeof(warn), why, sizeof(why));
   if(apr < 0 || apr == 2) {
     char m[600];
     snprintf(m, sizeof(m), apr < 0 ? "Die Pakete sind in Ordnung, aber die APR-EMU-Datei, die sie liest, ließ sich nicht einbauen: %s"
@@ -727,13 +845,15 @@ lz4_run_verify(const char *id, const char *root, const lz4arg_t *a) {
     lz4_fail(m, -1);
     return;
   }
-  set_phase("Die Dateien, die die PS5 auf der Platte sucht, werden geprüft");
   unsigned missing = 0, restored = 0;
-  if(lzp_restore_disk_files(root, 1, &missing, &restored, err, sizeof(err)) != 0) {
-    char m[600];
-    snprintf(m, sizeof(m), "Die Pakete sind in Ordnung, aber Dateien, die die PS5 auf der Platte sucht, ließen sich nicht aus ihnen zurückholen: %s", err);
-    lz4_fail(m, -1);
-    return;
+  if(!zs) {                                                    /* zstd sets are not made with a list of files the PS5 wants on disk: nothing to bring back */
+    set_phase("Die Dateien, die die PS5 auf der Platte sucht, werden geprüft");
+    if(lzp_restore_disk_files(root, 1, &missing, &restored, err, sizeof(err)) != 0) {
+      char m[600];
+      snprintf(m, sizeof(m), "Die Pakete sind in Ordnung, aber Dateien, die die PS5 auf der Platte sucht, ließen sich nicht aus ihnen zurückholen: %s", err);
+      lz4_fail(m, -1);
+      return;
+    }
   }
   set_phase("Die Rechte im Spielordner werden geprüft");
   unsigned fixed = 0, failed = 0;
@@ -749,23 +869,23 @@ lz4_run_verify(const char *id, const char *root, const lz4arg_t *a) {
   }
   pthread_mutex_unlock(&g_lock);
   if(failed)
-    PS5TM_WARN("lz4_verify_modes_failed", "LZ4-Pakete von %s: Rechte an %u Einträgen ließen sich nicht auf 0777 setzen.", id, failed);
+    PS5TM_WARN("lz4_verify_modes_failed", "%s-Pakete von %s: Rechte an %u Einträgen ließen sich nicht auf 0777 setzen.", zs ? "zstd" : "LZ4", id, failed);
   if(apr == 1)
-    PS5TM_INFO("lz4_verify_repaired", "LZ4-Pakete von %s geprüft und repariert: APR-EMU neu eingebaut, %u Dateien zurück auf die Platte, Rechte an %u Einträgen gesetzt (%u ließen sich nicht ändern).",
-               id, restored, fixed, failed);
+    PS5TM_INFO("lz4_verify_repaired", "%s-Pakete von %s geprüft und repariert: APR-EMU neu eingebaut, %u Dateien zurück auf die Platte, Rechte an %u Einträgen gesetzt (%u ließen sich nicht ändern).",
+               zs ? "zstd" : "LZ4", id, restored, fixed, failed);
   else if(restored || fixed)
-    PS5TM_INFO("lz4_verify_repaired", "LZ4-Pakete von %s geprüft und repariert: %u Dateien zurück auf die Platte, Rechte an %u Einträgen gesetzt (%u ließen sich nicht ändern).",
-               id, restored, fixed, failed);
+    PS5TM_INFO("lz4_verify_repaired", "%s-Pakete von %s geprüft und repariert: %u Dateien zurück auf die Platte, Rechte an %u Einträgen gesetzt (%u ließen sich nicht ändern).",
+               zs ? "zstd" : "LZ4", id, restored, fixed, failed);
   finish(IJ_DONE, NULL);
 }
 
 static void
 lz4_run_unpack(const char *id, const char *root, const lz4arg_t *a) {
-  (void)a;
+  const int zs = a->zstd;
   lzp_ui_t ui = lz4_ui();
   char err[500] = "";
   lzp_info_t inf;
-  if(!lzp_info(root, &inf)) { lz4_fail(inf.why[0] ? inf.why : "Das Spiel liegt nicht in LZ4-Paketen.", -1); return; }
+  if(!(zs ? zsp_info(root, &inf, NULL) : lzp_info(root, &inf))) { lz4_fail(inf.why[0] ? inf.why : zs ? "Das Spiel liegt nicht in zstd-Paketen." : "Das Spiel liegt nicht in LZ4-Paketen.", -1); return; }
   uint64_t need = inf.logical_bytes + IJ_RESERVE;
   uint64_t avail = lz4_free(root);
   if(avail < need) {
@@ -775,22 +895,22 @@ lz4_run_unpack(const char *id, const char *root, const lz4arg_t *a) {
     return;
   }
   lzp_stats_t st;
-  if(lzp_unpack(root, root, &st, &ui, err, sizeof(err)) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
+  if((zs ? zsp_unpack(root, root, &st, &ui, err, sizeof(err)) : lzp_unpack(root, root, &st, &ui, err, sizeof(err))) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
   lzp_stats_t vs;
-  if(lzp_verify(root, root, &vs, &ui, err, sizeof(err)) != 0) {
+  if((zs ? zsp_verify(root, root, &vs, &ui, err, sizeof(err)) : lzp_verify(root, root, &vs, &ui, err, sizeof(err))) != 0) {
     char m[600];
     snprintf(m, sizeof(m), "Die entpackten Dateien weichen von den Paketen ab (%s). Die Pakete bleiben.", err);
     lz4_fail(m, cancelled() ? ECANCELED : -1);
     return;
   }
   set_phase("Die Pakete werden entfernt");
-  if(lzp_remove_set(root, err, sizeof(err)) != 0) { lz4_fail(err, -1); return; }
+  if((zs ? zsp_remove_set(root, err, sizeof(err)) : lzp_remove_set(root, err, sizeof(err))) != 0) { lz4_fail(err, -1); return; }
   lz4_job_stats(&st, 0);
   pthread_mutex_lock(&g_lock);
   g_job.bytes_files = st.logical_bytes;
   pthread_mutex_unlock(&g_lock);
   ps5tm_library_forget();
-  PS5TM_INFO("lz4_unpack_done", "LZ4-Pakete von %s entpackt: %llu Dateien.", id, (unsigned long long)st.files_packed);
+  PS5TM_INFO("lz4_unpack_done", "%s-Pakete von %s entpackt: %llu Dateien.", zs ? "zstd" : "LZ4", id, (unsigned long long)st.files_packed);
   finish(IJ_DONE, NULL);
 }
 
@@ -823,11 +943,19 @@ typedef struct {
   char         profile[PATH_MAX];
   int          level;
   int          eff_level;              /* the level of the configuration (a profile names its own); LZ4 fast counts as 1 */
+  int          zstd;                   /* the plan of a zstd pack: no profile, level 1 to 22 */
 } lz4planarg_t;
 
 static void *
 lz4_plan_thread(void *arg) {
   lz4planarg_t *p = arg;
+  if(p->zstd) {
+    lzp_ui_t zu;
+    memset(&zu, 0, sizeof(zu));
+    p->rc = zsp_plan(p->root, &p->plan, &zu, p->err, sizeof(p->err));
+    p->eff_level = p->level;
+    return NULL;
+  }
   lz4arg_t a;
   memset(&a, 0, sizeof(a));
   snprintf(a.profile, sizeof(a.profile), "%s", p->profile);
@@ -856,7 +984,8 @@ ps5tm_lz4_packed_dir(const char *dir) {
   char p[PATH_MAX];
   struct stat st;
   snprintf(p, sizeof(p), "%s/" LZP_INDEX_NAME, dir);
-  return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+  if(stat(p, &st) == 0 && S_ISREG(st.st_mode)) return 1;
+  return zsp_packed_dir(dir);                             /* zstd packs count as well: the index is tied to them just the same */
 }
 
 /* Does the game load libSceAmpr itself? The tools for LZ4 asset packs ask exactly this (12.10.2026, the LZ4 tool of theghostonline,
@@ -1033,10 +1162,13 @@ ps5tm_lz4_info(const char *id, int *http) {
   cJSON_AddBoolToObject(o, "has_index", stat(ip, &st) == 0);
   cJSON_AddNumberToObject(o, "free_bytes", (double)lz4_free(li.path));
   lzp_info_t inf;
-  int packed = lz4_info_big(li.path, &inf);
+  int is_zstd = 0, zlevel = 0;
+  int packed = lz4_info_big(li.path, &inf, &is_zstd, &zlevel);
   cJSON_AddBoolToObject(o, "packed", packed);
   if(packed) {
     cJSON *p = cJSON_AddObjectToObject(o, "pack");
+    cJSON_AddStringToObject(p, "kind", is_zstd ? "zstd" : "lz4");
+    if(is_zstd) cJSON_AddNumberToObject(p, "level", zlevel);
     cJSON_AddNumberToObject(p, "files_packed", (double)inf.files_packed);
     cJSON_AddNumberToObject(p, "files_loose", (double)inf.files_loose);
     cJSON_AddNumberToObject(p, "logical_bytes", (double)inf.logical_bytes);
@@ -1114,7 +1246,7 @@ ps5tm_lz4_info(const char *id, int *http) {
 
 /* what a profile would do with the game: files, bytes, blocks, without packing anything */
 struct cJSON *
-ps5tm_lz4_plan(const char *id, int level, const char *profile, int *http) {
+ps5tm_lz4_plan(const char *id, int level, const char *profile, const char *format, int *http) {
   *http = 200;
   ps5tm_libdel_t li;
   char why[300] = "";
@@ -1123,8 +1255,10 @@ ps5tm_lz4_plan(const char *id, int level, const char *profile, int *http) {
   lz4planarg_t *p = calloc(1, sizeof(*p));
   if(!p) { *http = 500; return NULL; }
   snprintf(p->root, sizeof(p->root), "%s", li.path);
-  p->level = level < 1 ? 9 : level > 12 ? 12 : level;
-  if(lz4_profile_path(profile, p->profile, sizeof(p->profile)) != 0) { free(p); *http = 400; return NULL; }
+  p->zstd = format && !strcmp(format, "zstd");
+  if(p->zstd) p->level = level < 1 || level > 22 ? ZSP_LEVEL_DEFAULT : level;
+  else p->level = level < 1 ? 9 : level > 12 ? 12 : level;
+  if(!p->zstd && lz4_profile_path(profile, p->profile, sizeof(p->profile)) != 0) { free(p); *http = 400; return NULL; }
   cJSON *o = cJSON_CreateObject();
   cJSON_AddBoolToObject(o, "ok", 1);
   if(run_big(lz4_plan_thread, p) != 0) { cJSON_AddBoolToObject(o, "ok", 0); cJSON_AddStringToObject(o, "error", "Die Auswahl lässt sich gerade nicht berechnen."); free(p); return o; }
@@ -1141,18 +1275,19 @@ ps5tm_lz4_plan(const char *id, int level, const char *profile, int *http) {
     cJSON_AddNumberToObject(o, "chunks", (double)p->plan.chunks);
     cJSON_AddNumberToObject(o, "block_shift", p->plan.block_shift);
     int learned = 0, l9 = 0;
-    double est = lz4_estimate_s(p->plan.pack_bytes, p->eff_level, &learned);
+    double est = p->zstd ? zst_estimate_s(p->plan.pack_bytes, p->eff_level, &learned) : lz4_estimate_s(p->plan.pack_bytes, p->eff_level, &learned);
     cJSON_AddNumberToObject(o, "est_s", (double)(uint64_t)(est + 0.5));
     cJSON_AddBoolToObject(o, "est_learned", learned);
     cJSON_AddNumberToObject(o, "est_level", p->eff_level);
-    if(p->eff_level >= 10) cJSON_AddNumberToObject(o, "est9_s", (double)(uint64_t)(lz4_estimate_s(p->plan.pack_bytes, 9, &l9) + 0.5));
+    cJSON_AddStringToObject(o, "format", p->zstd ? "zstd" : "lz4");
+    if(!p->zstd && p->eff_level >= 10) cJSON_AddNumberToObject(o, "est9_s", (double)(uint64_t)(lz4_estimate_s(p->plan.pack_bytes, 9, &l9) + 0.5));
   }
   free(p);
   return o;
 }
 
 int
-ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *profile, char *err, size_t n) {
+ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *profile, const char *format, char *err, size_t n) {
   char kind[10] = "";
   if(kind_in && !strcmp(kind_in, "pack")) strcpy(kind, "lz4pack");
   else if(kind_in && !strcmp(kind_in, "copy")) strcpy(kind, "lz4copy");
@@ -1164,30 +1299,34 @@ ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *prof
   int rc = lz4_folder_game(id, &li, err, n);
   if(rc != 200) return rc;
   char prof[PATH_MAX] = "";
-  if(is_pack && lz4_profile_path(profile, prof, sizeof(prof)) != 0) { snprintf(err, n, "Das Profil gibt es nicht (mehr)."); return 400; }
-  if(is_pack && (level < 1 || level > 12)) level = 9;
+  int want_zstd = format && !strcmp(format, "zstd");        /* the format of a new pack set; verify and unpack follow the folder */
+  if(is_pack && !want_zstd && lz4_profile_path(profile, prof, sizeof(prof)) != 0) { snprintf(err, n, "Das Profil gibt es nicht (mehr)."); return 400; }
+  if(is_pack && want_zstd && (level < 1 || level > 22)) level = ZSP_LEVEL_DEFAULT;
+  if(is_pack && !want_zstd && (level < 1 || level > 12)) level = 9;
   if(ps5tm_procmgr_title_running(id) == 1) { snprintf(err, n, "Das Spiel läuft gerade. Bitte zuerst beenden."); return 409; }
   /* what is there: reading the manifest takes a big stack */
   lzp_info_t inf0;
-  int packed = lz4_info_big(li.path, &inf0);
-  if(is_pack && packed) { snprintf(err, n, "Das Spiel liegt schon in LZ4-Paketen."); return 409; }
+  int set_zstd = 0;
+  int packed = lz4_info_big(li.path, &inf0, &set_zstd, NULL);
+  if(is_pack && packed) { snprintf(err, n, set_zstd ? "Das Spiel liegt schon in zstd-Paketen." : "Das Spiel liegt schon in LZ4-Paketen."); return 409; }
   if(is_pack && lz4_ampr_import(li.path) == 0) {
     snprintf(err, n, "Dieses Spiel bindet libSceAmpr weder in eboot.bin noch in sce_module ein. Es würde seine Dateien in den Paketen nicht wiederfinden. Für solche Spiele gibt es nur die Komprimierung zu einem .ffpfsc-Abbild (Knopf „Konvertieren“).");
     return 409;
   }
-  if(!is_pack && !packed) { snprintf(err, n, "Das Spiel liegt nicht in LZ4-Paketen."); return 409; }
+  if(!is_pack && !packed) { snprintf(err, n, "Das Spiel liegt nicht in Paketen."); return 409; }
   if(!strcmp(kind, "lz4copy")) {                              /* the folder of the copy must not be there yet: asked before anything is touched */
     char fin[PATH_MAX];
     const char *base = strrchr(li.path, '/');
     base = base ? base + 1 : li.path;
-    snprintf(fin, sizeof(fin), "%s-lz4", li.path);
+    snprintf(fin, sizeof(fin), want_zstd ? "%s-zstd" : "%s-lz4", li.path);
     struct stat st0;
-    if(lstat(fin, &st0) == 0) { snprintf(err, n, "Den Ordner %s-lz4 gibt es schon. Bitte ihn zuerst umbenennen oder löschen.", base); return 409; }
+    if(lstat(fin, &st0) == 0) { snprintf(err, n, want_zstd ? "Den Ordner %s-zstd gibt es schon. Bitte ihn zuerst umbenennen oder löschen." : "Den Ordner %s-lz4 gibt es schon. Bitte ihn zuerst umbenennen oder löschen.", base); return 409; }
   }
   lz4arg_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, n, "Kein Speicher."); return 500; }
   snprintf(a->kind, sizeof(a->kind), "%s", kind);
   a->level = level;
+  a->zstd = is_pack ? want_zstd : set_zstd;
   snprintf(a->profile, sizeof(a->profile), "%s", prof);
   pthread_mutex_lock(&g_lock);
   if(active_locked()) { pthread_mutex_unlock(&g_lock); free(a); snprintf(err, n, "Es läuft schon ein Vorgang an einem Abbild oder an LZ4-Paketen."); return 409; }
@@ -1198,6 +1337,7 @@ ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *prof
   snprintf(g_job.name, sizeof(g_job.name), "%s", li.name);
   snprintf(g_job.image, sizeof(g_job.image), "%s", li.path);
   snprintf(g_job.format, sizeof(g_job.format), "folder");
+  g_job.lz4_zstd = a->zstd;
   snprintf(g_job.phase, sizeof(g_job.phase), "Wird vorbereitet");
   g_job.started_ms = ps5tm_mono_ms();
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
@@ -1210,6 +1350,7 @@ ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *prof
     free(a);
     return 409;
   }
+  const int zflag = a->zstd;                                  /* a belongs to the thread once it runs */
   pthread_t th;
   pthread_attr_t at;
   pthread_attr_init(&at);
@@ -1223,6 +1364,6 @@ ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *prof
     snprintf(err, n, "Der Vorgang ließ sich nicht starten.");
     return 500;
   }
-  PS5TM_INFO("lz4_job_start", "LZ4-Vorgang gestartet: %s von %s (%s).", kind, li.name, id);
+  PS5TM_INFO("lz4_job_start", "%s-Vorgang gestartet: %s von %s (%s).", zflag ? "zstd" : "LZ4", kind, li.name, id);
   return 200;
 }

@@ -137,6 +137,7 @@ Chiudi un’istanza vecchia nella pagina «Payloads», altrimenti aiuta un riavv
 <p>A sinistra c'è la barra laterale con le sezioni <b>Profilo, Giochi, File, Payload, Raffreddamento, Sistema, Registro</b> e
 <b>Riconoscimenti</b>. In alto nell'intestazione, su ogni pagina: le <b>opzioni di alimentazione</b>, «Schermo intero», «Modalità esperto» e
 l'indicatore di connessione.</p>
+<p>«Schermo intero» nasconde la barra delle applicazioni e la cornice della finestra del browser. Nel browser della PS5 stessa, il primo tocco sulla pagina passa da solo a schermo intero; su PC o telefono la pagina resta in una finestra normale finché non premi «Schermo intero» (il pulsante lo ricorda, «Esci da schermo intero» lo disattiva). Sotto la voce «FAQ» della barra laterale trovi la versione dell’app in esecuzione.</p>
 <p><b>Tema.</b> Accanto alla lingua scegli uno dei quattro temi: <b>Standard</b> (blu scuro con bordi luminosi), <b>Chiaro</b> (grigio-azzurro tenue, non abbaglia), <b>Scuro</b> (quasi nero, senza bagliore) e <b>Ottimale</b> (per il televisore e la PS5: contrasto deciso, testo più grande, senza trasparenze né ombre, il più rapido da disegnare). Ogni dispositivo ricorda la propria scelta, per esempio «Ottimale» sul televisore e «Chiaro» sul telefono.</p>
 <h3>Opzioni di alimentazione</h3>
 <p><b>Modalità riposo</b>, <b>Riavvia</b>, <b>Spegni</b> e <b>Modalità provvisoria</b>. Ogni comando avviene al primo clic; mentre è in corso il pulsante è bloccato, così un doppio clic non lo esegue due volte.</p>
@@ -164,7 +165,7 @@ scorre allora solo la finestra stessa.</p>
 <li><b>Tasto quadrato:</b> azioni per la selezione (p. es. copiare un gioco, eliminare un payload, modificare un profilo), <b>tasto triangolo:</b> dettagli o «Altro».</li>
 <li><b>Tasto Options:</b> menu con «Apri l’interfaccia web nel browser», «Ricarica», «Sprache / Language», «Chiudi l’app» e le opzioni di alimentazione.</li><li><b>Lingua:</b> tedesco, inglese, spagnolo, francese, italiano, russo o svedese. Di fabbrica segue la lingua di sistema della console (altre lingue: inglese); tasto Options → «Sprache / Language» apre un elenco di tutte le lingue (spunta = attiva); una pressione sceglie e la scelta resta salvata. I testi che nessun dizionario conosce restano in tedesco.</li>
 </ul>
-<p>La barra in basso mostra sempre cosa fanno i tasti in quel momento. Eliminare, chiudere e annullare agiscono alla prima pressione, senza domande di conferma.</p>
+<p>La barra in basso mostra sempre cosa fanno i tasti in quel momento. Chiudere e annullare agiscono alla prima pressione, senza domande di conferma. L’eliminazione fa eccezione: chiede prima conferma e indica che cosa verrà eliminato.</p>
 <h3>Aree</h3>
 <ul>
 <li><b>Raffreddamento:</b> panoramica con la temperatura obiettivo; impostazioni con modalità di funzionamento, limite di sicurezza, avvisi, barra luminosa, profili di gioco, modalità notte e autotest della ventola.</li>
@@ -260,7 +261,8 @@ non viene sovrascritto nulla.</p>
 <li><b>Chiudi i giochi PS4Mount prima della modalità di riposo.</b> La modalità di riposo spegne l'unità; un gioco rimasto aperto poi non riesce più a leggere e si blocca.</li>
 <li><b>Spegnendo si smontano i giochi</b> (dalla PS4Mount 0.7.2): spegnere PS4Mount prima della modalità di riposo è sicuro. L’app smonta ogni gioco senza forzare; se un gioco è aperto rifiuta e lo nomina. Se una cartella di gioco è ancora in uso, li rimonta tutti e chiede di riprovare tra poco. Riacceso, PS4Mount rimonta i giochi.</li>
 <li>Due o più unità collegate (contano anche le partizioni) possono rallentare l'interfaccia della console, con o senza PS4Mount. Collega allora una sola unità con una sola partizione.</li>
-<li>Un gioco in esecuzione può usare al massimo circa 30 pacchetti (gioco, aggiornamento e circa 29 contenuti aggiuntivi). È un limite della console, anche per i giochi installati.</li>
+<li>Un gioco in esecuzione può usare al massimo circa 30 pacchetti (gioco, aggiornamento e circa 29 contenuti aggiuntivi con dati; quelli che servono solo a sbloccare non contano più da PS4Mount 0.7.3). È un limite della console, anche per i giochi installati.</li>
+<li>Dalla 0.7.3 PS4Mount gestisce fino a 768 giochi per unità (prima 256) e cerca in fino a 64 cartelle (prima 8). Ciò che supera i limiti viene segnalato invece di essere ignorato in silenzio.</li>
 </ul>
 <!--p4m-->
 <p><b>Prima di impacchettare in ffpfsc:</b> la console deve decomprimere continuamente un file compresso mentre si gioca, quindi i giochi con moltissimi dati o streaming di texture possono scattare. Prima che l'app converta un gioco (cartella di dump, <code>.exfat</code>, <code>.ffpkg</code> o <code>.ffpfs</code>) in <code>.ffpfsc</code>, controlla: da circa 40 GB di dati, con grandi contenitori di streaming (<code>.ucas</code>, <code>.utoc</code>, <code>.pak</code>, <code>.forge</code>, <code>.streamdb</code>, <code>.resources</code>, <code>.cas</code>, <code>.rpf</code>; 4 GB o più in totale) o con una cartella di streaming (2 GB o più) la finestra mostra un avviso accanto a «ffpfsc». Non c'è una seconda domanda: «Avvia» converte. È una stima basata su nomi e dimensioni dei file, non sul motore del gioco.</p>
@@ -274,7 +276,7 @@ non viene sovrascritto nulla.</p>
 <div class='tip'>Un gioco in esecuzione e qualsiasi altra operazione dell'app bloccano la creazione. La struttura segue lo script <code>build_ampr_index.py</code> di drakmor (GPL-3.0) ed è stata confrontata byte per byte con il suo risultato.</div>
 <h3>APR-EMU nel gioco</h3>
 <p>La riga <b>APR-EMU nel gioco</b> mostra quale <code>libSceAmpr.sprx</code> carica un gioco e ti lascia scegliere una versione e inserirla, ripristinare l'originale del gioco o rimuovere il file. Le versioni sono file nella cartella <code>/data/PS5-Cooling-Center/AMPR_EMU</code>, con il nome delle uscite di drakmor (<code>libSceAmpr.sprx-0.4.2.1-test-pack</code>). Cinque versioni sono incluse nell'app: compaiono nell'elenco anche se non sono ancora nella cartella, e ci arrivano quando ne inserisci una o con <b>Metti le versioni incluse nella cartella</b> (la cartella viene creata se serve). Altre le aggiungi con <b>Aggiungi file</b>. Ogni file viene verificato (intestazione SELF, marca «[AMPR_EMU]»). Le varianti con «pack» nel nome possono leggere pacchetti LZ4, «debug» scrive un registro.</p>
-<p><b>AMPR EMU NG</b> (quer3q, <a href="https://github.com/quer3q/ampr-emu-ng">ampr-emu-ng</a>, GPL-3.0) è uno sviluppo di ampr_emu e legge pacchetti LZ4 e zstd. I suoi file portano il marchio «ampr-emu-ng &lt;versione&gt;»; nell’elenco compaiono in cima con l’etichetta <b>NG</b> (<b>NG 0.2.0</b>, <b>NG 0.2.0 debug</b>). L’app non li include: <b>Scarica AMPR EMU NG 0.2.0 da GitHub</b> mette i due file nella cartella <code>AMPR_EMU</code> (<code>libSceAmpr.sprx-0.2.0-ng</code>, <code>-ng-debug</code>) premendo il pulsante e ne controlla il checksum. <b>Aggiungi file</b> rinomina i file di una versione più recente (<code>libSceAmpr.sprx</code>, <code>libSceAmpr-debug.sprx</code>). Lo sviluppatore consiglia di impostare <code>update_emulators=0</code> in ShadowMountPlus.</p>
+<p><b>AMPR EMU NG</b> (quer3q, <a href="https://github.com/quer3q/ampr-emu-ng">ampr-emu-ng</a>, GPL-3.0) è uno sviluppo di ampr_emu e legge pacchetti LZ4 e zstd. I suoi file portano il marchio «ampr-emu-ng &lt;versione&gt;»; nell’elenco compaiono in cima con l’etichetta <b>NG</b> (<b>NG 0.3.2</b>, <b>NG 0.3.2 debug</b>). Entrambi i file sono inclusi nell’app (<code>libSceAmpr.sprx-0.3.2-ng</code>, <code>-ng-debug</code>). Una versione più recente la mette <b>Scarica AMPR EMU NG da GitHub</b> nella cartella <code>AMPR_EMU</code> premendo il pulsante, con controllo del checksum, appena l’app la conosce. <b>Aggiungi file</b> rinomina i file di una versione più recente (<code>libSceAmpr.sprx</code>, <code>libSceAmpr-debug.sprx</code>). Quando inserisce NG, l'app chiede se disattivare l'aggiornamento automatico della fakelib in ShadowMountPlus, perché altrimenti ShadowMountPlus sostituisce di nuovo il file NG all'avvio del gioco con la versione della sua cartella degli emulatori: <b>Sì</b> porta a 0 solo la riga <code>update_emulators</code> in <code>/data/shadowmount/config.ini</code> (l'app salva il file una volta come <code>config.ini.ps5cc-bak</code>) e inserisce NG, <b>Annulla</b> lascia tutto com'è. A seconda della versione, ShadowMountPlus recepisce la modifica subito o al prossimo avvio. La domanda non compare se l'aggiornamento è già disattivato.</p>
 <ul>
 <li>Dove va il file lo decide ShadowMountPlus (1.7beta1 e successive): cerca prima nella cartella backport <code>&lt;percorso di ricerca&gt;/backports/&lt;ID del titolo&gt;/</code> (dalla 1.7beta6 anche una cartella il cui nome inizia solo con l’ID del titolo, ad es. «PPSA12345 Nome del gioco»: vince quella con il nome esatto, altrimenti la prima in ordine di byte), poi nel gioco, e conta da sola la prima cartella esistente. Per una <b>cartella di gioco, .exfat o .ffpkg</b> va in <code>fakelib/libSceAmpr.sprx</code> nel gioco (ShadowMountPlus monta brevemente l'immagine in scrittura). Un <b>.ffpfsc compresso</b> non è scrivibile: lì si crea una cartella backport e il gioco resta intatto; poiché nasconde la <code>fakelib</code> del gioco, i suoi file vengono copiati dentro. Se esiste già una cartella backport, vale per ogni formato.</li>
 <li>Il file che il gioco portava con sé viene salvato una volta come <code>libSceAmpr.sprx.orig</code> e mai sovrascritto; un APR-EMU precedente non conta come originale. <b>Ripristina originale</b> lo rimette. <b>Rimuovi</b> elimina solo il file APR-EMU.</li>
@@ -301,7 +303,7 @@ non viene sovrascritto nulla.</p>
 <li><b>Ripara</b>: solo dove è sicuro. Se la dimensione di un file <code>.ffpfsc</code> non corrisponde all'intestazione dell'immagine, ma i dati sono completi e i byte in più vuoti, l'app corregge la dimensione e rilegge l'intero contenitore. I blocchi danneggiati non si possono rifare con la sola immagine. La riparazione è bloccata finché ShadowMountPlus ha l'immagine montata.</li>
 </ul>
 <h3>Cronologia</h3>
-<p>Nella pagina dei giochi la scheda <b>Cronologia</b> elenca tutte le operazioni dell'app – copia, spostamento, conversione, divisione pacchetto, installazione, eliminazione, file manager, salvataggi e indice AMPR – con esito (fatto, errore, annullato), dimensione, durata e ora. Le ultime 500 sono sulla console in <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Svuota cronologia</b> le elimina subito.</p>
+<p>Nella pagina dei giochi la scheda <b>Cronologia</b> elenca tutte le operazioni dell'app – copia, spostamento, conversione, divisione pacchetto, installazione, eliminazione, file manager, salvataggi e indice AMPR – con esito (fatto, errore, annullato), dimensione, durata e ora. Le ultime 500 sono sulla console in <code>/data/PS5-Cooling-Center/history.jsonl</code>. <b>Svuota cronologia</b> le elimina dopo una domanda di conferma.</p>
 <h3>Plugin dei giochi</h3>
 <p>La riga <b>Plugin dei giochi</b> tiene aggiornati nella cartella <code>fakelib</code> del gioco i moduli sostitutivi di drakmor: lo stub PlayGo (<code>libScePlayGo.sprx</code>, pgo_stub 0.6) e i moduli DLC (<code>libSceAppContent.sprx</code>, <code>libSceGameUpdate.sprx</code>, <code>libSceNpEntitlementAccess.sprx</code>, dlc_emu 0.3, versione «log»: scrive <code>/app0/dlc_emu.log</code> nel gioco; la versione senza registro si bloccava all'avvio del gioco e viene sostituita come «versione difettosa»), che mostrano come acquistati i DLC elencati nel <code>dlc_emu.ini</code> del gioco.</p>
 <ul>
@@ -321,7 +323,7 @@ non viene sovrascritto nulla.</p>
 <h3>Passo dopo passo</h3>
 <ol>
 <li><b>Installa APR-EMU.</b> Nella finestra <b>Asset pack LZ4 e APR-EMU</b>, sotto <b>APR-EMU nel gioco</b>, scegli la versione <code>0.4.2.1 test-pack</code>. Solo le versioni con «pack» nel nome leggono i pacchetti.</li>
-<li><b>Prova non impacchettato.</b> Avvia il gioco e gioca un po': menu, un livello, carica un salvataggio. Se così non funziona, non funzionerà mai impacchettato. Allora aiuta solo una APR-EMU più vecchia (per esempio 0.3.6.6) o nessuna.</li>
+<li><b>Prova non impacchettato.</b> Avvia il gioco e gioca un po': menu, un livello, carica un salvataggio. Se così non funziona, non funzionerà mai impacchettato. Allora aiuta solo una APR-EMU più vecchia (per esempio 0.3.6.6; da novembre 2026 non è più inclusa nell’app, <b>Aggiungi file</b> la prende dalla pagina delle versioni di drakmor) o nessuna.</li>
 <li><b>Impacchetta.</b> <b>Impacchetta con LZ4 …</b>, all'inizio livello 9 e <b>Automatico</b>. La casella «avviato non impacchettato, e funzionava» ne fa parte. <b>Impacchetta nella cartella del gioco</b> risparmia più spazio; gli originali vengono rimossi solo quando ogni file è stato confrontato byte per byte con i pacchetti, e a ogni errore tutto resta com'era. La scelta <b>Come nuova cartella … accanto</b> lascia intatto l'originale, ma affianca due cartelle con lo stesso ID del titolo. ShadowMountPlus può impuntarsi e rimontare il gioco ogni pochi secondi; porta prima l'originale fuori dal percorso di ricerca. Se c'è un <b>profilo testato</b> per il gioco (vedi sotto), è già selezionato.</li>
 <li><b>Controlla i pacchetti.</b> Legge ogni blocco, lo decomprime e lo confronta con il file CRC. Poi sistema ciò che serve anche a pacchetti integri: se manca l'APR-EMU che legge i pacchetti o qualcosa l'ha sostituito, rimette <code>0.4.2.1 test-pack</code>. Recupera i file che la PS5 cerca sul disco ma che stanno solo nei pacchetti (compressi con strumenti più vecchi). E imposta i permessi della cartella del gioco a 0777. Ciò che ha sistemato compare sotto <b>Riparato</b>. Non serve ricomprimere. Questo dimostra che i pacchetti sono integri, non che il gioco li usi bene.</li>
 <li><b>Avvia e gioca.</b> Solo ora si vede se funziona. Gioca più di qualche secondo: menu, un livello, caricamento e salvataggio.</li>
@@ -359,7 +361,17 @@ non viene sovrascritto nulla.</p>
 <li>Modelli e regole: drakmor/ampr_emu (docs/ASSET_PACK_WORKFLOW_EN.md, GPL-3.0), theghostonline/PS5-LZ4-Compression e danthespal/MkPFS.CSharp. Da LZ4 Compression 1.4.3 a 1.5.0 (Husam Osman, GPL-3.0) vengono l'elenco dei file che devono restare sciolti, i permessi 0777, la riparazione durante il controllo e la scelta dei profili testati; rifatto, non copiato.</li>
 <li>Idee e conoscenza: exFAT2AMPR di V-10 (<a href="https://github.com/exFAT2AMPR/exfat2ampr">GitHub</a>, GPL-3.0 con condizioni aggiuntive, «Made by V-10»): l'elenco che «Automatico» lascia sciolto, la registrazione per creare i profili (struttura e costanti seguono il suo port di <code>ampr_pack_profile.py</code>) e la manutenzione dei plugin dei giochi con la loro tabella di somme di controllo.</li>
 </ul>
-<!--tp--></section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Eliminare giochi &amp; backup</h2></div>
+<!--tp-->
+<h3>zstd al posto di LZ4 (per AMPR EMU NG)</h3>
+<p>Oltre ai pacchetti LZ4, l'app crea anche <b>pacchetti zstd</b>: <b>Impacchetta con zstd …</b> (file <code>ampr_zstd.index</code> e <code>ampr_zstd-000.pak</code> e successivi). Il formato è di quer3q (<i>ampr-emu-ng</i>); lo legge solo <b>AMPR EMU NG</b>, nessun'altra APR-EMU. L'app mette NG in <code>fakelib</code> da sola durante l'impacchettamento. Se l'aggiornamento automatico di fakelib di ShadowMountPlus è ancora attivo, il risultato mostra un avviso: disattivalo (o installa prima NG in <b>APR-EMU nel gioco</b>, e l'app te lo chiederà).</p>
+<ul>
+<li>Viene impacchettato tutto il gioco tranne i file di sistema: programmi (<code>eboot.bin</code>, <code>.sprx</code>, <code>.prx</code>, <code>.elf</code>, <code>.self</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code>, file vuoti, i file dei pacchetti e dell'APR-EMU e i pochi file che la PS5 stessa cerca sul disco. Non esistono profili né «Automatico»: AMPR EMU NG serve un gioco impacchettato per intero.</li>
+<li><b>Livello</b> da 1 a 22 (l'app offre 1, 5, 9 e 19; predefinito 5). I livelli alti risparmiano più spazio ma impacchettano molto più lentamente. Durante il gioco cambia poco: la decompressione costa altrettanto poco a ogni livello. Ogni blocco da 256 KiB è un frame zstd a sé con checksum; ciò che zstd non riduce resta grezzo.</li>
+<li>Il resto è come con LZ4: prima <b>provare non impacchettato con NG</b>, poi impacchettare; l'originale viene rimosso solo dopo il confronto byte per byte; <b>Controlla i pacchetti</b>, <b>Estrai zstd …</b> e la scelta <b>Come nuova cartella …-zstd accanto</b>.</li>
+<li>Un gioco si trova in pacchetti LZ4 o in pacchetti zstd, mai in entrambi. Per cambiare, estrai prima. In un gioco zstd tutte le versioni tranne NG sono bloccate nella finestra <b>APR-EMU nel gioco</b>.</li>
+</ul>
+<p><b>Stato:</b> impacchettamento e controllo sono verificati rispetto agli originali e a un lettore indipendente del formato (quello di PS5 Dump &amp; Image Converter); se un gioco impacchettato funziona sulla console dipende da AMPR EMU NG e non è ancora stato provato con questa app. Provalo prima su un gioco di cui conservi l'originale.</p>
+</section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Eliminare giochi &amp; backup</h2></div>
 <p>Ogni scheda di gioco ha <b>Elimina</b>, così come ogni voce nella scheda <b>Backup</b>.</p>
 <ul>
 <li>I <b>giochi installati</b> li disinstalla la console stessa – come nel menu «Elimina», insieme ad aggiornamenti e contenuti aggiuntivi.</li>
@@ -367,7 +379,7 @@ non viene sovrascritto nulla.</p>
 <li>I <b>backup dell'app</b> (copie e conversioni) vengono eliminati insieme al file di checksum.</li>
 </ul>
 <ol class='steps'>
-<li>Tocca <b>Elimina</b>: l'app chiede in silenzio alla console cosa verrà rimosso ed elimina subito. La finestra mostra cosa viene eliminato.</li>
+<li>Tocca <b>Elimina</b>: l'app chiede alla console cosa verrà rimosso e lo mostra in una finestra. Solo <b>Elimina</b> nella finestra elimina; <b>Annulla</b> lascia tutto com’era.</li>
 <li>Una barra di avanzamento con la percentuale mostra a che punto è l'operazione.</li>
 <li>Se la console rifiuta (per esempio perché il gioco è in esecuzione), la finestra resta aperta con il motivo e non viene eliminato nulla.</li>
 </ol>
@@ -386,7 +398,7 @@ chiavetta USB, un disco o la SSD interna (<code>PS5-Sicherung/Spielstaende/&lt;D
 accanto a quelli esistenti, li verifica e solo allora li sostituisce.</p>
 <div class='warn'>Backup e ripristino avvengono solo quando <b>nessun gioco è in esecuzione</b> – nemmeno in pausa. I backup di
 un'altra console non si possono ripristinare.</div>
-<p>Per ogni utente, divisi in giochi PS5 e giochi PS4. Le app come YouTube non compaiono: l'app non cambia nulla lì, non salva, non ripristina e non elimina nulla di loro. «Elimina» rimuove subito i salvataggi di un titolo; l’app salva prima lo stato attuale sull’unità scelta (altrimenti sulla prima adatta) e permette di ripristinarlo. Se non c’è nessuna unità, un avviso dice che si elimina senza backup.</p>
+<p>Per ogni utente, divisi in giochi PS5 e giochi PS4. Le app come YouTube non compaiono: l'app non cambia nulla lì, non salva, non ripristina e non elimina nulla di loro. «Elimina» rimuove i salvataggi di un titolo dopo una domanda che lo nomina; l’app salva prima lo stato attuale sull’unità scelta (altrimenti sulla prima adatta) e permette di ripristinarlo. Se non c’è nessuna unità, un avviso dice che si elimina senza backup.</p>
 
 </section><section class='ch' id='pakete'><div class='ch-head'><div class='ch-num'>13</div><h2>Pacchetti</h2></div>
 <p>Trova i file <code>.pkg</code> su unità USB, dischi e nella memoria della console (cartella <code>pkg</code>) e ne mostra immagine,
@@ -416,7 +428,7 @@ copiare, spostare, eliminare – funziona anch’esso <b>ovunque</b>, comprese c
 «Sola visualizzazione» resta solo per <code>/</code> stessa, <code>/dev</code>, <code>/proc</code> e i collegamenti. Le aree che la console monta in
 sola lettura (p. es. <code>/system</code>) rifiutano da sole la modifica; l’app mostra allora l’errore.</p>
 <div class='warn'>In <code>/system_data</code> e <code>/user</code> si trovano i database e le impostazioni della console. Eliminare o spostare la cosa
-sbagliata può impedire l’avvio della console o richiederne una nuova configurazione. L’eliminazione agisce subito, senza domande.</div>
+sbagliata può impedire l’avvio della console o richiederne una nuova configurazione. L’eliminazione chiede prima conferma: una finestra indica che cosa verrà eliminato (i nomi, file o cartella, per le cartelle il numero di file e la dimensione); solo «Elimina» nella finestra elimina in modo definitivo, «Annulla» lascia tutto com’era.</div>
 
 <h3>Ordinare, selezionare, visualizzare</h3>
 <ul>
@@ -424,19 +436,22 @@ sbagliata può impedire l’avvio della console o richiederne una nuova configur
 <li><b>Seleziona tutto:</b> la casella sopra l'elenco seleziona tutte le voci della cartella (esclusi collegamenti e file speciali). Riempita a metà significa che è selezionata solo una parte.</li>
 <li><b>Dimensioni cartelle:</b> «Dimensione» su una cartella calcola quanto contiene; «Dimensioni cartelle» lo fa, una dopo l'altra, per tutte le cartelle della vista. Una cartella molto grande viene indicata dopo circa 8 secondi con «almeno».</li>
 <li><b>Visualizzare:</b> «Visualizza» mostra le immagini (PNG, JPG, GIF, WebP, BMP, ICO) e l'inizio dei file di testo (fino a 256 KB). Gli altri file si possono solo scaricare.</li>
+<li><b>Modificare:</b> Per i file di testo fino a 64 KB «Modifica» apre un editor; «Salva» riscrive il file. I file più grandi si scaricano, si modificano e si ricaricano.</li>
 </ul>
 <h3>Copiare &amp; spostare</h3>
 <ol class='steps'>
-<li>Spunta le voci.</li>
-<li>Premi <b>Copia</b> o <b>Taglia</b>.</li>
-<li>Passa alla cartella di destinazione e premi <b>Incolla qui</b>.</li>
-<li>Una barra mostra percentuale, quantità di dati e file attuale; <b>Annulla</b> rimuove dalla destinazione la voce iniziata.</li>
+<li>Seleziona le voci (oppure apri il menu <b>⋯</b> di una singola voce).</li>
+<li>Premi <b>Copia in</b> o <b>Sposta in</b>.</li>
+<li>Nella scelta della destinazione seleziona in alto un’unità o un luogo della console, entra nelle sottocartelle e premi <b>Copia qui</b> oppure <b>Sposta qui</b>.</li>
+<li>Se il nome esiste già nella destinazione, una finestra chiede: <b>Sostituisci</b>, <b>Mantieni entrambi</b> (la nuova voce si chiama «Nome (2)»), <b>Salta</b> o <b>Annulla</b>. Sostituisci scrive prima il file accanto a quello vecchio e lo scambia alla fine; una cartella viene unita.</li>
+<li>L’indicazione dice quanti file/cartelle ci sono e quale è in corso («Copia di 1 su 2 file/cartelle»), da dove a dove («da /mnt/usb0/nuovo a /mnt/ext1»), percentuale, quantità di dati e file attuale, più la velocità di trasferimento («82 MB/s») e il tempo residuo stimato («ancora circa 12 min»). <b>Annulla</b> rimuove di nuovo dalla destinazione la voce iniziata.</li>
 </ol>
+<p>Al posto di «… in» si può usare anche gli appunti: <b>Copia</b> o <b>Taglia</b>, andare nella cartella di destinazione e premere <b>Incolla qui</b>. L’app a schermo intero funziona così.</p>
+<h3>Eliminare</h3>
+<p><b>Elimina</b> chiede prima conferma: la finestra dice cosa verrà eliminato – i nomi con tipo e dimensione, la cartella e, per le cartelle, quanti file e quanto spazio contengono. Solo <b>Elimina</b> nella finestra elimina in modo definitivo; <b>Annulla</b> (ha il focus) lascia tutto com’era.</p>
 <h3>Caricare</h3>
-<p><b>Carica</b> sceglie uno o più file; sul PC puoi anche trascinarli sull'elenco. Una barra mostra
-l'avanzamento per ogni file.</p>
-<div class='tip'>Protezioni: non viene mai sovrascritto nulla (per sostituire un file, elimina prima quello vecchio e poi carica il nuovo),
-i collegamenti non vengono mai seguiti, un’unità montata non si può eliminare per intero, e copia ed eliminazione non passano mai su un’altra unità.</div>
+<p><b>Carica</b> sceglie uno o più file, <b>Carica cartella</b> un’intera cartella (la struttura delle cartelle viene creata, poi i file vanno uno per uno); sul PC puoi anche trascinare entrambi sull’elenco. Una barra mostra l’avanzamento per ogni file. Se il nome esiste già nella destinazione, chiede la stessa finestra della copia.</p>
+<div class='tip'>Protezioni: i collegamenti non vengono mai seguiti, un’unità montata non si può eliminare per intero, e copia ed eliminazione non passano mai su un’altra unità. Una voce non può sostituire sé stessa, e un file non può sostituire una cartella (né il contrario).</div>
 <p>Le <b>unità</b> si chiamano come sulla console: <code>usb0</code>, <code>usb1</code> …; la cartella <code>/mnt/usb0</code> è quindi «usb0».</p>
 </section><section class='ch' id='payloads'><div class='ch-head'><div class='ch-num'>16</div><h2>Payload</h2></div>
 <p>Visualizza e termina i payload in esecuzione, avvia quelli salvati con un clic – da <code>/data/PS5-Cooling-Center/payloads</code>
