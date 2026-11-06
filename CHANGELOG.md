@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.77.0 – 06.11.2026
 
 ### Löschen fragt zuerst, und nennt, was weggeht
 - Jeder „Löschen“-Knopf löschte bisher sofort. Jetzt öffnet sich erst ein Fenster, das **nennt, was weggeht**; erst **Löschen** im Fenster löscht. **Abbrechen** hat den Fokus, ein Enter oder die ✕-Taste löscht also nichts; ×, O, Escape und ein Klick daneben schließen das Fenster, ohne etwas zu tun.
