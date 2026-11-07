@@ -208,6 +208,8 @@ AMPR-Index gibt es für PS4-Spiele nicht. Der Plan meldet solche Ordner mit `"ps
 
 **Warnung vor dem Packen zu ffpfsc** (seit 21.10.2026). Ein komprimiertes Abbild muss die Konsole beim Spielen ständig entpacken; bei Spielen mit sehr vielen Daten oder Texture-Streaming sind Ruckler möglich. Der Plan des Konvertierens (`GET /api/v1/library/convert/plan`) sieht deshalb vorab nach (Dump-Ordner, `.exfat`, `.ffpkg`, `.ffpfs`; Abbilder ohne Entpacken über den Abbild-Leser) und liefert `stream_risk`: ab 40 GB Daten (`big_data`), große Streaming-Container (`.ucas`, `.utoc`, `.pak`, `.forge`, `.streamdb`, `.resources`, `.cas`, `.rpf`, zusammen ab 4 GB) oder ein Ordner, dessen Name mit „stream“ beginnt (ab 2 GB). Trifft etwas zu, steht beim Eintrag „ffpfsc“ ein Hinweis; eine zweite Frage beim Start gibt es nicht mehr (seit 27.10.2026: nichts muss doppelt bestätigt werden). Es ist eine Schätzung an Namen und Größen, nicht an der Spiel-Engine; die Schwellen stehen als `STREAM_*` in `src/gameconvert.c`.
 
+**Unsignierte Programmdateien** (seit 07.11.2026, nach ps5-dump-forge 0.5.4). Sind die Programmdateien eines Spiels (`eboot.bin`, `.prx`, `.sprx`, `.elf`, `.self`) einfache ELF-Dateien (`e_type` `0xFE10` oder `0xFE18`), startet die Konsole es nicht: Ihr Lader lehnt sie ab. Der Plan des Konvertierens meldet sie vorab (`unsigned_exec`), das Fenster nennt sie („Unsignierte Programmdateien“, in Browser und Vollbild-App). Beim Konvertieren eines **PS5-Dump-Ordners** schreibt die App sie als **fake-signierte SELF-Dateien** (FSELF) in einen kleinen Ordner neben dem Ziel (`<Ziel>.ps5cc-sign-teil`), der als zweite Quelle über den Spielordner gelegt wird – so, wie ein PS4-Ordner seine `param.json` bekommt –; jede Datei wird nach dem Schreiben gegen das Original zurückgelesen, der Ordner danach entfernt, der Spielordner nur gelesen. Ein `ampr_emu.index` im Ordner wird dabei auf die neuen Größen gebracht. Der Aufbau der Dateien ist der, den `make_fself.py --ptype fake` aus ampr-emu-ng (und ps5-dump-forge) schreibt; er ist byteweise gleich geprüft (`test/fsign`), **an der Konsole aber noch nicht erprobt**. Ausgenommen sind PS4-Ordner, Abbilder als Quelle (ein Abbild wird Byte für Byte gepackt) und Dateien, die schon signiert sind; Dateien mit ungewöhnlichem Aufbau bleiben, wie sie sind, und der Auftrag sagt es in seiner Notiz. Beim Packen gilt dasselbe für **„Als neuen Ordner … daneben“** (nur LZ4); **im Spielordner** packen lässt die Programmdateien, wie sie sind (das Fenster sagt es) – bei zstd, das immer im Spielordner packt, also immer. Unabhängig davon bleibt die Fake-Signatur beim Sichern von Disc-Spielen („Als FSELF neu signieren“, Reiter Disc) eine eigene Funktion mit eigenem Aufbau (`src/dump_fself.c`).
+
 Der Programmcode für exFAT und ffpfsc ist aus [MkPFS](https://github.com/PSBrew/MkPFS)
 (GPL-3.0) übertragen, der für ffpkg aus [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)
 (BSD-2-Clause, nur als Vorlage für den eigenen C-Code, nichts davon wird
@@ -352,7 +354,7 @@ Das Einstellungsfenster fragt: Stufe 3 (LZ4 Fast), 9 oder 12 (LZ4 HC); „Automa
 komprimierte Medien und kaum packbare Riesendateien bleiben lose) oder ein eigenes Profil (TOML wie drakmors `ampr_pack.py`, im Ordner
 `/data/PS5-Cooling-Center/LZ4_Profile` oder `LZ4_Profile` auf einem USB-Laufwerk); „im Spielordner packen“ (AMPR-Index neu bauen, packen,
 jede Datei Byte für Byte mit dem Original vergleichen, erst dann die Originale entfernen; bei jedem Fehler werden die Pakete wieder
-entfernt) oder „als neuer Ordner `<Name>-lz4`“ (Original unberührt). Danach: **Pakete prüfen** (jeder Block gelesen, entpackt, gegen die
+entfernt) oder „als neuer Ordner `<Name>-lz4`“ (Original unberührt; unsignierte Programmdateien stehen dort als FSELF, siehe „Spiele kopieren und konvertieren“). Danach: **Pakete prüfen** (jeder Block gelesen, entpackt, gegen die
 CRC-Datei geprüft) und **LZ4 entpacken** (zurückschreiben, vergleichen, Pakete entfernen). Solange ein Spiel gepackt ist, ist der
 AMPR-Index gesperrt. Format und Regeln nach [drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (GPL-3.0), LZ4 1.10.0 (BSD-2).
 
@@ -489,9 +491,13 @@ in `fakelib` (ist in ShadowMountPlus die automatische Fakelib-Aktualisierung noc
 ganze Spiel außer den Systemdateien (Programme, `sce_sys`, `sce_module`, `fakelib*`, leere Dateien, die Pakete selbst und die Dateien
 der APR-EMU, dazu die wenigen Dateien, die die PS5 auf der Platte sucht): kein Profil, kein „Automatisch“. Stufe 1 bis 22 (angeboten
 1, 5, 9, 19; Vorgabe 5), jedes Stück von 256 KiB ein eigener zstd-Frame mit Prüfsumme, roh, wenn zstd es nicht verkleinert. Packen,
-Prüfen (Byte für Byte gegen die Originale), Entpacken, „Als neuen Ordner …-zstd daneben“ wie bei LZ4. Ein Spiel liegt in LZ4- oder in
-zstd-Paketen, nie in beiden; in einem zstd-Spiel sind alle APR-EMU-Versionen außer NG gesperrt. Gegen den unabhängigen Leser des
-PS5 Dump & Image Converter geprüft; an der Konsole mit einem Spiel noch nicht erprobt.
+Prüfen (Byte für Byte gegen die Originale) und Entpacken wie bei LZ4. **Bei zstd gibt es keine Wahl mehr, ob die Originale bleiben** (seit
+07.11.2026): Gepackt wird immer im Spielordner, und die Originale gehen erst, wenn jede Datei Byte für Byte mit ihrem Paket verglichen ist
+(bei einem Fehler bleibt alles wie vorher; **zstd entpacken …** bringt alle Dateien zurück). Das Kästchen „ungepackt mit NG getestet“ bleibt
+(NG baut die App beim Packen selbst ein). Das Packen in einen neuen Ordner `…-zstd` gibt es in den Oberflächen nicht mehr (die
+Schnittstelle nimmt `kind: copy` weiter an). Ein Spiel liegt in LZ4- oder in zstd-Paketen, nie in beiden; in einem zstd-Spiel sind alle
+APR-EMU-Versionen außer NG gesperrt. Gegen den unabhängigen Leser des PS5 Dump & Image Converter geprüft; an der Konsole mit einem Spiel
+noch nicht erprobt.
 
 ### Getestete Profile
 

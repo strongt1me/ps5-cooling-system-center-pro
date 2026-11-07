@@ -70,6 +70,15 @@ struct StreamRisk
     std::uint64_t stream_dir_bytes = 0;
 };
 
+// Plain ELF executables of a folder game (fsign.c): the console does not start them. A conversion, and packing into a new
+// folder, write them as FSELF; the plan names them beforehand.
+struct UnsignedExec
+{
+    std::uint64_t count = 0;        // the ones that can be signed
+    std::uint64_t refused = 0;      // the ones with an odd header: left as they are
+    std::vector<std::string> files; // the first few
+};
+
 struct Plan
 {
     Tool tool = Tool::copy;
@@ -88,6 +97,7 @@ struct Plan
     std::string ffpkg_error;
     std::vector<std::string> ops; // the formats the console app knows by name, in its order
     StreamRisk stream;
+    UnsignedExec unsigned_exec;
     // ---- move and unpack (ShadowMountPlus) ----
     std::string op, image_type;
     // ---- image unpack, check, repair ----
@@ -147,6 +157,8 @@ PlanChoice first_choice(const Plan &plan, const Game *game);
 std::string start_body(const Plan &plan, const PlanChoice &choice);
 // Why a compressed image may stutter, one sentence each; empty when nothing speaks against it.
 std::vector<std::string> stream_reasons(const Plan &plan);
+// The names of the unsigned executables, comma-separated, with "…" when there are more than shown; "" when none.
+std::string unsigned_names(const UnsignedExec &u);
 // "exFAT", "FAT32", "UFS" for the console's file system names.
 std::string fs_label(const std::string &fs);
 

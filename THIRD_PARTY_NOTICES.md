@@ -92,6 +92,10 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
 - **zstd-Pakete von AMPR EMU NG** (quer3q, GPL-3.0): Aufbau von `ampr_zstd.index` (AMPRZPK1) und `ampr_zstd-NNN.pak` (AMPRZDT1) nach
   `docs/zstd-format.md` von ampr-emu-ng und `docs/zstd.md` von ps5-dump-forge (Fassung 0.5.3, gelesen am 06.11.2026); nachgebaut
   in C (`src/zstdpack.c`), kein Quelltext übernommen. <https://github.com/quer3q/ampr-emu-ng>, <https://github.com/quer3q/ps5-dump-forge>
+- **Fake-Signieren unsignierter Programmdateien** (quer3q, ps5-dump-forge 0.5.4, GPL-3.0, `crates/ps5-dump-forge-core/src/fself.rs`, gelesen am
+  07.11.2026; und `tools/make_fself.py` von ampr-emu-ng, GPL-3.0, nur zum Vergleich in den Tests, nicht im Projekt): Aufbau der FSELF-Datei und
+  Erkennung der Programmdateien; nachgebaut in C (`src/fsign.c`), kein Quelltext übernommen.
+  <https://github.com/quer3q/ps5-dump-forge>, <https://github.com/quer3q/ampr-emu-ng>
 - **PS5 Dump & Image Converter** (eigenes Projekt des Autors, Modul `shadowmount_generation.py` und der
   fakelib-Manager): Vorbild für die Ablage der APR-EMU-Datei (`fakelib` statt `fakelib2`, Sicherung der
   Spieldatei als `.orig`, Erkennung eines früheren Emulators an `[AMPR_EMU]`) und für die Suchreihenfolge von

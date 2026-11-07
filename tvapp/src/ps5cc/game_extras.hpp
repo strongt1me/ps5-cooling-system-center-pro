@@ -57,6 +57,8 @@ class GameExtras
     void ask_plan();
     void apply_version(const std::string &name);
     std::string plan_text() const;
+    // The unsigned executables of the game and what packing does with them (into a copy: FSELF).
+    std::string sign_text() const;
     std::string side_text() const;
     std::string job_line(float *fraction) const;
 

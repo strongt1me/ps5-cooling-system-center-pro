@@ -44,7 +44,9 @@ enum Row
     kLevel,
     kMode,
     kTarget,
+    kOriginals,
     kPlanText,
+    kSignText,
     kPackStart,
     kStatus = 90,   // + section: the state, always in sight
     kVersion = 100, // + index
@@ -251,7 +253,10 @@ void GameExtras::build()
     if (key == key_)
     {
         if (view_ == kLz4)
+        {
             form_.set_value_text(kPlanText, plan_text());
+            form_.set_value_text(kSignText, sign_text());
+        }
         return;
     }
     key_ = key;
@@ -506,27 +511,30 @@ void GameExtras::build_versions()
 void GameExtras::build_lz4()
 {
     Json j(extras_.lz4);
-    form_.add_header("VORAUSSETZUNG");
-    form_.add_toggle(kTested,
-                     zstd_ ? "Ungepackt mit AMPR EMU NG getestet"
-                           : "Ungepackt mit APR-EMU (test-pack) getestet",
-                     false)
-        .description = "Das Spiel muss so schon gelaufen sein; erst dann lohnt das Packen.";
-    form_.add_header("EINSTELLUNGEN");
     if (zstd_)
     {
-        // zstd: level 1 to 22 (four anchors), everything but the system files goes in, no profile
+        // zstd: level 1 to 22 (four anchors), everything but the system files goes in, no profile. The game is always packed in its
+        // own folder and the originals go once every file has been compared with its pack (a failure leaves everything as it was),
+        // so there is nothing to choose about them; that the game ran unpacked is still confirmed first.
+        form_.add_header("VORAUSSETZUNG");
+        form_.add_toggle(kTested, "Ungepackt mit AMPR EMU NG getestet", false).description =
+            "Das Spiel muss so schon gelaufen sein; erst dann lohnt das Packen.";
+        form_.add_header("EINSTELLUNGEN");
         form_.add_choice(kLevel, "Stufe",
                          {"5 (empfohlen)", "1 (am schnellsten)", "9 (kleiner)", "19 (am kleinsten)"}, 0);
         profile_ids_.clear();
-        form_.add_choice(kTarget, "Wohin", {"Im Ordner selbst", "Als Kopie (-zstd)"}, 0).description =
-            "Eine Kopie legt einen zweiten Ordner mit derselben Titel-ID an.";
+        form_.add_value(kOriginals, "Originale", "entfernt nach der Prüfung");
         form_.add_value(kPlanText, "Plan", plan_text());
-        ui::FormRow &go = form_.add_action(kPackStart, "Packen starten");
-        go.disabled = true;
-        go.description = "Erst die Voraussetzung oben bestätigen.";
+        form_.add_value(kSignText, "Programmdateien", sign_text());
+        ui::FormRow &zgo = form_.add_action(kPackStart, "Packen starten");
+        zgo.disabled = true;
+        zgo.description = "Erst die Voraussetzung oben bestätigen.";
         return;
     }
+    form_.add_header("VORAUSSETZUNG");
+    form_.add_toggle(kTested, "Ungepackt mit APR-EMU (test-pack) getestet", false).description =
+        "Das Spiel muss so schon gelaufen sein; erst dann lohnt das Packen.";
+    form_.add_header("EINSTELLUNGEN");
     form_.add_choice(kLevel, "Stufe", {"9 (empfohlen)", "3 (schneller)", "12 (kleiner)"}, 0);
     profile_ids_.clear();
     std::vector<std::string> modes;
@@ -550,6 +558,7 @@ void GameExtras::build_lz4()
     form_.add_choice(kTarget, "Wohin", {"Im Ordner selbst", "Als Kopie (-lz4)"}, 0).description =
         "Eine Kopie legt einen zweiten Ordner mit derselben Titel-ID an.";
     form_.add_value(kPlanText, "Plan", plan_text());
+    form_.add_value(kSignText, "Programmdateien", sign_text());
     ui::FormRow &go = form_.add_action(kPackStart, "Packen starten");
     go.disabled = true;
     go.description = "Erst die Voraussetzung oben bestätigen.";
@@ -617,6 +626,30 @@ std::string GameExtras::plan_text() const
     return std::to_string(static_cast<int>(num(plan.root, "pack_files"))) + " Dateien (" +
            format_bytes(static_cast<std::uint64_t>(num(plan.root, "pack_bytes"))) + ") · etwa " +
            duration(num(plan.root, "est_s"));
+}
+
+std::string GameExtras::sign_text() const
+{
+    Json plan(plan_.json);
+    if (plan.root == nullptr)
+        return "Wird geprüft …";
+    if (!yes(plan.root, "valid"))
+        return "–";
+    const cJSON *u = get(plan.root, "unsigned_exec");
+    const int count = static_cast<int>(num(u, "count"));
+    const int refused = static_cast<int>(num(u, "refused"));
+    if (count == 0 && refused == 0)
+        return "Alle signiert";
+    // into a copy the new folder gets them as FSELF; in the game's own folder they stay as they are (short: the value column is narrow)
+    const bool copy = !zstd_ && form_.choice_index(kTarget) == 1;
+    std::string text;
+    if (count > 0)
+        text = std::to_string(count) + " unsigniert";
+    if (refused > 0)
+        text += (text.empty() ? "" : " · ") + std::to_string(refused) + " nicht signierbar";
+    else
+        text += copy ? " · FSELF in der Kopie" : " · bleiben unverändert";
+    return text;
 }
 
 void GameExtras::ask_plan()
@@ -753,7 +786,7 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         source().extras_post(
             "library/lz4",
             "{\"id\":" + gid + ",\"kind\":\"" +
-                (form_.choice_index(kTarget) == 1 ? "copy" : "pack") + "\",\"level\":" +
+                (!zstd_ && form_.choice_index(kTarget) == 1 ? "copy" : "pack") + "\",\"level\":" +
                 std::to_string(level) + ",\"profile\":" + json_text(profile) + ",\"format\":\"" +
                 (zstd_ ? "zstd" : "lz4") + "\"}");
         view_ = kMain;
@@ -818,6 +851,8 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         else if (id == kLevel || id == kMode)
             ask_plan();
+        else if (id == kTarget)
+            form_.set_value_text(kSignText, sign_text());
     }
 }
 
@@ -875,7 +910,8 @@ std::string GameExtras::side_text() const
     case kLz4:
         if (zstd_)
             return "Packt das ganze Spiel außer den Systemdateien in zstd-Asset-Packs. Das spart "
-                   "Platz; gelesen wird sie nur von AMPR EMU NG, das die App dafür einbaut.";
+                   "Platz; gelesen wird sie nur von AMPR EMU NG, das die App dafür einbaut. Die "
+                   "Originale werden entfernt, sobald jede Datei Byte für Byte geprüft ist.";
         return "Packt die großen Dateien des Spiels in LZ4-Asset-Packs. Das spart Platz; gelesen "
                "wird über APR-EMU "
                "(test-pack). Eigene Profile (TOML) lädt man über die Browser-App hoch.";

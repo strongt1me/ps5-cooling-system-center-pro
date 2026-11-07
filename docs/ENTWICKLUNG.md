@@ -327,6 +327,15 @@ Versionen:
   (`USE_CCACHE=0 make test-unit` im WSL-Baum `~/ps5cc-tvapp`).
 - Neue Auftragsarten, die eine Ersetzung abbrechen würde, gehören in die Liste der Auftrags-Routen beider Kacheln.
 
+## Unsignierte Programmdateien: fsign (seit 07.11.2026)
+
+`src/fsign.c` schreibt einfache ELF-Programmdateien (`e_type` `0xFE10` / `0xFE18`; Namen `eboot*.bin`, `.elf`, `.self`, `.prx`, `.sprx`) als fake-signierte SELF-Dateien, weil die Konsole einfache ELF-Dateien nicht startet. Der Aufbau ist byteweise der von `make_fself.py --ptype fake` (ampr-emu-ng) und `fself.rs` von ps5-dump-forge 0.5.4 (Kopf `4F 15 3D 1D`, je kopiertem Abschnitt ein Paar Einträge, Kopf mit SHA-256 der ELF, Nullblöcke, dann die Abschnitte, dann `PT_SCE_VERSION`); **nicht** der von `src/dump_fself.c` (anderer Magic, längerer Metabereich, an der Konsole ebenfalls nicht erprobt).
+
+- **Konvertieren** (`gameconvert.c`, `cv_run`): `ps5tm_fsign_scan` listet die Programmdateien, `ps5tm_fsign_stage` schreibt sie (und einen angepassten `ampr_emu.index`) nach `<Ziel>.ps5cc-sign-teil`, die zweite Quelle der Abbild-Schreiber (`exfat_image_plan_roots`, `ufs2_write_tree_roots`: eine Datei in mehreren Quellen wird aus der letzten gelesen); `ps5tm_fsign_rmtree` räumt am Ende und bei jedem Abbruch auf. Nur PS5-Ordner (`nroots == 0`).
+- **Packen in einen neuen Ordner** (`imgjob_lz4.inc`, `cp_sign` in `cp_walk`): die losen Programmdateien werden beim Kopieren als FSELF geschrieben und zurückgelesen, danach wird der kopierte `ampr_emu.index` angepasst. Die losen Einträge in `ampr_assets.index` behalten die ELF-Größen (ps5-dump-forge tut es ebenso; der Leser vergleicht lose Dateien nicht).
+- **Pläne:** `ps5tm_fsign_info` (in `gameconvert.c`) liefert `unsigned_exec` für den Konvertierungsplan und den Packplan; Browser (`cvUnsigned`, `aprUnsigned` in `web/app.js`) und Vollbild-App (`Plan::unsigned_exec`, `GameExtras::sign_text`) zeigen es.
+- **Tests** (Linux/WSL, gcc, ASan/UBSan): `sh test/fsign/run.sh` – `test.c` prüft Erkennung, Index, Stage, Links, Abbruch und 3000 beschädigte ELF-Dateien; `e2e.c` baut exFAT- und UFS2-Abbilder aus Spielordner plus Stage und sucht die Bytes; mit `MAKE_FSELF=<make_fself.py>` (ampr-emu-ng, `tools/make_fself.py`, nicht im Projekt) wird das Ergebnis Byte für Byte mit dem des Skripts verglichen, mit dem Modul `blake3` auch mit dem Prüfwert aus dem Test von ps5-dump-forge.
+
 ## Übersetzungen
 
 Die Oberfläche gibt es auf Deutsch, Englisch, Italienisch, Spanisch, Französisch und Russisch. Die Quelltexte sind deutsch und
@@ -395,6 +404,7 @@ src/sqlite_ro.c     Nur-lesender SQLite-Leser für die App-Datenbank der Konsole
 src/smp.c           Schnittstelle zu ShadowMountPlus (Port 10101)
 src/gamecopy.c      Spiele kopieren (jede Datei zurücklesen, Prüfsummen-Datei)
 src/gameconvert.c   Spiele konvertieren (exFAT, ffpfsc, ffpkg), Ergebnis zurücklesen und prüfen
+src/fsign.c          Unsignierte PS5-Programmdateien als fake-signierte SELF-Dateien (FSELF) schreiben: beim Konvertieren und beim Packen in einen neuen Ordner
 src/gamemove.c      Verschieben und Entpacken über ShadowMountPlus
 src/filemgr.c      Dateimanager: ansehen, laden, hochladen, kopieren, verschieben, umbenennen, löschen; ändern nur unter den Laufwerken und /data, nie über Verknüpfungen
 src/jobhist.c      Verlauf der Aufträge (history.jsonl): eine Zeile je beendetem Kopieren, Konvertieren, Installieren, Löschen, Dateimanager-Auftrag usw.

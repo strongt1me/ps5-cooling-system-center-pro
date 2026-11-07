@@ -6116,6 +6116,18 @@
     return out;
   };
 
+  /* Unsigned PS5 executables (fsign.c, 07.11.2026): the console's loader refuses a plain ELF, so such a game does not start. The
+     image gets them as FSELF; the game folder is only read. The scan of the plan names them (unsigned_exec). */
+  const cvUnsigned = (p) => {
+    const u = p && p.unsigned_exec;
+    if (!u || (!u.count && !u.refused)) return "";
+    const names = (u.files || []).slice(0, 4).join(", ") + (u.count > 4 ? ", …" : "");
+    return (u.count ? `<div class="cp-warn"><b>Unsignierte Programmdateien</b>
+        <span>${num(u.count)} Programmdateien dieses Spiels sind einfache ELF-Dateien, die die Konsole nicht startet. Das Abbild bekommt sie fake-signiert als FSELF; der Spielordner bleibt, wie er ist.</span>
+        <small><code>${esc(names)}</code></small></div>` : "")
+      + (u.refused ? `<p class="cp-why">${num(u.refused)} Programmdateien sind nicht signiert und ließen sich nicht signieren (ungewöhnlicher Aufbau). Sie bleiben, wie sie sind; das Spiel startet damit womöglich nicht.</p>` : "");
+  };
+
   const cvBlocked = (d) => {
     const p = cv.plan;
     /* A .ffpkg is as big as its own image, which is not the exFAT one's size. */
@@ -6186,6 +6198,7 @@
           in allen drei Formaten. Die App legt eine <code>param.json</code> aus der <code>param.sfo</code> mit ins Abbild,
           damit auch ältere Versionen es finden. Ziel ist nur ein USB- oder M.2-Laufwerk: Ein PS4-Titel aus dem Speicher
           der Konsole bringt sie zum Absturz. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“).</div>` : ""}
+      ${cvUnsigned(p)}
       <h4 class="cp-step">1. Was soll entstehen?</h4>
       <div class="cp-list">${ops}</div>
       ${p.kind === "folder" && !p.ps4 ? `<label class="cp-choice cv-ampr">
@@ -7627,7 +7640,7 @@
         result = lk.kind === "lz4verify" ? `<p class="cp-ok">✓ Alle Pakete gelesen: ${num(lk.lz4_packed)} Dateien in Ordnung.</p>${aprLz4Repairs(lk)}`
           : lk.kind === "lz4unpack" ? `<p class="cp-ok">✓ Entpackt: ${num(lk.lz4_packed)} Dateien, jede mit den Paketen verglichen.</p>`
           : lk.kind === "lz4copy" ? `<p class="cp-ok">✓ Fertig: ${num(lk.lz4_packed)} Dateien gepackt, ${bytes(lk.lz4_logical)} → ${bytes(lk.lz4_stored)}.</p>
-              <small>Das gepackte Spiel liegt in:</small><small><code>${esc(lk.dest || "")}</code></small><small>Das Original blieb unberührt.</small>`
+              <small>Das gepackte Spiel liegt in:</small><small><code>${esc(lk.dest || "")}</code></small><small>Das Original blieb unberührt.</small>${lk.note ? `<p class="cp-warn">${esc(lk.note)}</p>` : ""}`
           : `<p class="cp-ok">✓ Gepackt: ${num(lk.lz4_packed)} Dateien, ${bytes(lk.lz4_logical)} → ${bytes(lk.lz4_stored)}.</p>
               <small>Jede Datei wurde Byte für Byte mit dem Original verglichen, bevor das Original entfernt wurde.</small>`;
       } else if (lk.state === "cancelled") result = `<small>${lk.kind === "lz4unpack" ? "Abgebrochen. Die Pakete sind noch da." : "Abgebrochen. Das Spiel ist wie vorher."}</small>`;
@@ -7786,6 +7799,18 @@
         <button type="button" class="btn${todo ? " primary" : ""}" data-apr-plug="apply" ${anyRunning || !items ? "disabled" : ""}>${todo ? "Aktualisieren" : "Prüfen"}</button></div>`;
   };
 
+  /* The same for packing: into a new folder the executables are written as FSELF, in the game folder they stay as they are. */
+  const aprUnsigned = (pl, copy, zs) => {
+    const u = pl && pl.unsigned_exec;
+    if (!u || (!u.count && !u.refused)) return "";
+    return (u.count ? (zs
+        ? `<p class="cp-why">${num(u.count)} Programmdateien dieses Spiels sind nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet). Beim Packen mit zstd bleiben sie, wie sie sind.</p>`
+        : copy
+        ? `<p class="muted">${num(u.count)} Programmdateien dieses Spiels sind nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet). Im neuen Ordner stehen sie als FSELF; das Original bleibt, wie es ist.</p>`
+        : `<p class="cp-why">${num(u.count)} Programmdateien dieses Spiels sind nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet). Beim Packen im Spielordner bleiben sie, wie sie sind. Wähle den neuen Ordner daneben, dann stehen sie dort als FSELF.</p>`) : "")
+      + (u.refused ? `<p class="cp-why">${num(u.refused)} Programmdateien sind nicht signiert und ließen sich nicht signieren (ungewöhnlicher Aufbau). Sie bleiben, wie sie sind; das Spiel startet damit womöglich nicht.</p>` : "");
+  };
+
   const aprRenderLz4Set = (body) => {
     const z = apr.lz4, s = apr.lz4s;
     cp.view = "aplz4set";
@@ -7827,7 +7852,7 @@
     const zstWhat = `<p class="muted">Alles außer den Systemdateien: Programme (<code>eboot.bin</code>, <code>.sprx</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code> und leere Dateien bleiben lose, dazu ein paar Dateien, die die PS5 selbst auf der Platte sucht. AMPR EMU NG liest das ganze Spiel aus den Paketen.</p>`;
     body.innerHTML = `
       <p class="cp-src"><span class="muted">Spiel</span> <code>${esc(z.path || "")}</code></p>
-      ${zs ? `<div class="cp-warn"><b>Vorher erledigen:</b> <span>Baue unter „APR-EMU im Spiel“ AMPR EMU NG ein und starte das Spiel ungepackt. Läuft es so nicht, läuft es gepackt nie. Behalte das Original, bis du das gepackte Spiel gestartet hast.</span>
+      ${zs ? `<div class="cp-warn"><b>Vorher erledigen:</b> <span>Baue unter „APR-EMU im Spiel“ AMPR EMU NG ein und starte das Spiel ungepackt. Läuft es so nicht, läuft es gepackt nie.</span>
         <label class="cp-check"><input type="checkbox" id="lz4-tested" ${s.tested ? "checked" : ""}>
           <span>Ich habe das Spiel mit AMPR EMU NG ungepackt gestartet, und es lief.</span></label></div>`
       : `<div class="cp-warn"><b>Vorher erledigen:</b> <span>Baue unter „APR-EMU im Spiel“ die Version 0.4.2.1 test-pack ein und starte das Spiel ungepackt. Läuft es so nicht, läuft es gepackt nie. Behalte das Original, bis du das gepackte Spiel gestartet hast.</span>
@@ -7844,15 +7869,17 @@
           <span class="cp-choice-text"><b>Eigenes Profil (TOML)</b><span class="muted">Eine Packliste, z. B. aus einem Mitschnitt des Spiels oder aus der Community. Liegt sie auf der Konsole oder einem USB-Stick, wird sie dir angeboten.</span></span></label>
       </div>
       ${profSel}${est}`}
-      <h4 class="cp-step">3. Was geschieht mit den Originalen?</h4>
+      ${zs ? "" : `<h4 class="cp-step">3. Was geschieht mit den Originalen?</h4>
       <div class="cp-list">
         <label class="cp-choice"><input type="radio" name="lz4-where" value="inplace" ${s.copy ? "" : "checked"}>
           <span class="cp-choice-text"><b>Im Spielordner packen (spart am meisten Platz)</b><span class="muted">Die Pakete entstehen im Spielordner; erst wenn jede Datei Byte für Byte geprüft ist, werden die Originale entfernt. Bei einem Fehler bleibt alles wie vorher.</span></span></label>
         <label class="cp-choice"><input type="radio" name="lz4-where" value="copy" ${s.copy ? "checked" : ""}>
           <span class="cp-choice-text"><b>${esc(`Als neuen Ordner ${base}-${zs ? "zstd" : "lz4"} daneben`)}</b><span class="muted">Das Original bleibt unberührt. Braucht Platz für das gepackte Spiel zusätzlich.</span></span></label>
-      </div>
-      ${s.copy ? `<p class="cp-why">Achtung: Dann liegen zwei Ordner mit derselben Titel-ID nebeneinander. ShadowMountPlus kann sich daran verschlucken und das Spiel im Sekundentakt umhängen. Verschiebe das Original vorher aus dem Suchpfad (zum Beispiel auf einen USB-Stick).</p>` : ""}
-      ${zs ? `<div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (AMPR EMU NG) in den Spielordner; ein in zstd gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>`
+      </div>`}
+      ${aprUnsigned(s.plan, s.copy, zs)}
+      ${s.copy && !zs ? `<p class="cp-why">Achtung: Dann liegen zwei Ordner mit derselben Titel-ID nebeneinander. ShadowMountPlus kann sich daran verschlucken und das Spiel im Sekundentakt umhängen. Verschiebe das Original vorher aus dem Suchpfad (zum Beispiel auf einen USB-Stick).</p>` : ""}
+      ${zs ? `<div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (AMPR EMU NG) in den Spielordner; ein in zstd gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>
+        <p class="muted">Die Originale werden entfernt, sobald jede gepackte Datei Byte für Byte mit ihrem Original verglichen ist; bei einem Fehler bleibt alles wie vorher. „zstd entpacken“ bringt alle Dateien zurück.</p>`
       : `<div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (die Version „0.4.2.1 test-pack“) in den Spielordner; ein gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>`}
       ${s.err ? `<p class="cp-err">${esc(s.err)}</p>` : ""}
       <p class="muted">Läuft auf der PS5 mit niedriger Priorität weiter, auch wenn du dieses Fenster schließt. Ein laufendes Spiel muss vorher beendet sein.</p>
@@ -8345,7 +8372,7 @@
       const s = apr.lz4s;
       b.disabled = true;
       try {
-        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy ? "copy" : "pack", level: s.level, profile: s.fmt === "zstd" ? "" : lz4Key(s), format: s.fmt === "zstd" ? "zstd" : "lz4" }) });
+        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy && s.fmt !== "zstd" ? "copy" : "pack", level: s.level, profile: s.fmt === "zstd" ? "" : lz4Key(s), format: s.fmt === "zstd" ? "zstd" : "lz4" }) });
         apr.view = "main";
         aprLoad();
       } catch (err) { s.err = err.message; aprRender(); }

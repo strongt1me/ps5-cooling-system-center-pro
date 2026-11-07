@@ -207,12 +207,13 @@ lz4_install_apr(const char *id, const char *root, int backport, char *why, size_
 
 /* a copy of the folder without the files that are packed; every file is read back and compared (CRC-32) */
 typedef struct {
-  const lzp_list_t *packed;
-  uint8_t          *buf;
-  size_t            srclen, dstlen;
-  unsigned          files, links;
-  char              why[400];
-  int               rc;
+  const lzp_list_t   *packed;
+  const fsign_list_t *sign;            /* unsigned PS5 executables: written as FSELF instead of copied (fsign.c) */
+  uint8_t            *buf;
+  size_t              srclen, dstlen;
+  unsigned            files, links, signed_files;
+  char                why[400];
+  int                 rc;
 } cp_t;
 
 static int
@@ -283,6 +284,25 @@ bad2:
   return -1;
 }
 
+static void sign_prog(void *c, uint64_t b) { (void)c; work(b); }
+
+/* An unsigned PS5 executable: the console refuses a plain ELF, so the copy gets it as a fake-signed SELF (written, then read back
+   against the original, by fsign.c). */
+static int
+cp_sign(cp_t *c, const char *src, const char *dst, const struct stat *st, const fsign_item_t *it) {
+  char why[300] = "";
+  int r = ps5tm_fsign_write(src, dst, &g_cancel, sign_prog, NULL, NULL, why, sizeof(why));
+  if(r == 1) { c->rc = ECANCELED; return -1; }
+  if(r != 0) { snprintf(c->why, sizeof(c->why), "Eine Programmdatei ließ sich nicht signieren (%s): %s", why[0] ? why : "ohne Angabe", it->rel); c->rc = -1; return -1; }
+  struct timeval tv[2];
+  tv[0].tv_sec = tv[1].tv_sec = st->st_mtime;
+  tv[0].tv_usec = tv[1].tv_usec = 0;
+  utimes(dst, tv);
+  c->files++;
+  c->signed_files++;
+  return 0;
+}
+
 static int
 cp_walk(cp_t *c, char *src, size_t sl, char *dst, size_t dl, int depth) {
   if(depth > 60) { snprintf(c->why, sizeof(c->why), "Die Ordner sind zu tief verschachtelt."); c->rc = -1; return -1; }
@@ -317,7 +337,10 @@ cp_walk(cp_t *c, char *src, size_t sl, char *dst, size_t dl, int depth) {
       else { (void)chmod(dst, LZP_FILE_MODE); rc = cp_walk(c, src, sl + 1 + n, dst, dl + 1 + n, depth + 1); }
     } else if(S_ISREG(st.st_mode)) {
       const char *rel = src + c->srclen + 1;
-      if(!lzp_list_has(c->packed, rel)) rc = cp_file(c, src, dst, &st);
+      if(!lzp_list_has(c->packed, rel)) {
+        const fsign_item_t *si = c->sign ? ps5tm_fsign_find(c->sign, rel) : NULL;
+        rc = si ? cp_sign(c, src, dst, &st, si) : cp_file(c, src, dst, &st);
+      }
     } else c->links++;
     src[sl] = 0;
     dst[dl] = 0;
@@ -632,6 +655,7 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   const int zs = a->zstd;                                      /* zstd packs (AMPR EMU NG) instead of LZ4 */
   const char *fmt_name = zs ? "zstd" : "LZ4";
   uint64_t loose_bytes = 0;
+  char sign_note[300] = "";                                    /* said at the end, beside whatever else the job has to say */
 
   char place[16] = "", pwhy[200] = "";
   if(ps5tm_amprlib_place("ampr", id, place, sizeof(place), pwhy, sizeof(pwhy)) != 0) { lz4_fail("Das Spiel ist nicht mehr in der Liste.", -1); return; }
@@ -745,8 +769,14 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     c->buf = buf;
     c->srclen = strlen(root);
     c->dstlen = strlen(tmp);
+    /* unsigned PS5 executables: the console's loader refuses a plain ELF, so the new folder gets them as FSELF (fsign.c) */
+    fsign_list_t sl;
+    set_phase("Die Programmdateien werden geprüft");
+    if(ps5tm_fsign_scan(root, &g_cancel, &sl) == 1) { free(c); free(buf); lzp_list_free(&pk); rm_tree(tmp, 0); lz4_fail("Abgebrochen.", ECANCELED); goto out; }
+    c->sign = sl.n ? &sl : NULL;
+    unsigned signed_n = 0, refused_n = sl.refused;
     char *s2 = malloc(PATH_MAX), *d2 = malloc(PATH_MAX);
-    if(!s2 || !d2) { free(s2); free(d2); free(c); free(buf); lzp_list_free(&pk); rm_tree(tmp, 0); lz4_fail("Kein Speicher.", -1); goto out; }
+    if(!s2 || !d2) { free(s2); free(d2); free(c); free(buf); lzp_list_free(&pk); ps5tm_fsign_free(&sl); rm_tree(tmp, 0); lz4_fail("Kein Speicher.", -1); goto out; }
     snprintf(s2, PATH_MAX, "%s", root);
     snprintf(d2, PATH_MAX, "%s", tmp);
     lz4_ui_total(NULL, loose_bytes * 2 + 1);
@@ -755,9 +785,27 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     int crc_rc = c->rc;
     char why[400];
     snprintf(why, sizeof(why), "%s", c->why);
+    signed_n = c->signed_files;
     free(s2); free(d2); free(c); free(buf);
     lzp_list_free(&pk);
+    if(!crc_rc && signed_n) {                                  /* the index the copy carries lists the executables at their ELF sizes */
+      char ip[PATH_MAX + 32];
+      unsigned fx = 0;
+      snprintf(ip, sizeof(ip), "%s/ampr_emu.index", tmp);
+      if(ps5tm_fsign_fix_index(ip, ip, &sl, &fx, why, sizeof(why)) != 0) crc_rc = -1;
+      else if(fx) PS5TM_INFO("lz4_pack_signed_index", "%s-Pakete für %s: %u Einträge im AMPR-Index auf die Größe der signierten Dateien gesetzt.", fmt_name, id, fx);
+    }
+    ps5tm_fsign_free(&sl);
     if(crc_rc) { rm_tree(tmp, 0); lz4_fail(why[0] ? why : "Abgebrochen.", crc_rc); goto out; }
+    if(signed_n || refused_n) {
+      PS5TM_INFO("lz4_pack_signed", "%s-Pakete für %s: %u unsignierte Programmdateien als FSELF in den neuen Ordner geschrieben, %u ließen sich nicht signieren.", fmt_name, id, signed_n, refused_n);
+      if(signed_n && refused_n)
+        snprintf(sign_note, sizeof(sign_note), "%u Programmdateien waren nicht signiert und stehen im neuen Ordner als FSELF; %u ließen sich nicht signieren und blieben, wie sie sind.", signed_n, refused_n);
+      else if(signed_n)
+        snprintf(sign_note, sizeof(sign_note), "%u Programmdateien waren nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet) und stehen im neuen Ordner als FSELF.", signed_n);
+      else
+        snprintf(sign_note, sizeof(sign_note), "%u Programmdateien sind nicht signiert und ließen sich nicht signieren; sie blieben, wie sie sind.", refused_n);
+    }
   }
 
   /* the APR-EMU that reads the packs: for zstd packs AMPR EMU NG (nothing else reads them) */
@@ -810,6 +858,12 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
                "„Pakete prüfen“ wählen.", mfail);
       pthread_mutex_unlock(&g_lock);
     }
+  }
+  if(sign_note[0]) {
+    pthread_mutex_lock(&g_lock);
+    size_t nl = strlen(g_job.note);
+    snprintf(g_job.note + nl, sizeof(g_job.note) - nl, "%s%s", nl ? " · " : "", sign_note);
+    pthread_mutex_unlock(&g_lock);
   }
   ps5tm_library_forget();
   PS5TM_INFO("lz4_pack_done", "%s-Pakete für %s: %llu Dateien, %.1f → %.1f GB%s.", fmt_name, id, (unsigned long long)st.files_packed,
@@ -1274,6 +1328,7 @@ ps5tm_lz4_plan(const char *id, int level, const char *profile, const char *forma
     cJSON_AddNumberToObject(o, "loose_bytes", (double)p->plan.loose_bytes);
     cJSON_AddNumberToObject(o, "chunks", (double)p->plan.chunks);
     cJSON_AddNumberToObject(o, "block_shift", p->plan.block_shift);
+    cJSON_AddItemToObject(o, "unsigned_exec", ps5tm_fsign_info(li.path));
     int learned = 0, l9 = 0;
     double est = p->zstd ? zst_estimate_s(p->plan.pack_bytes, p->eff_level, &learned) : lz4_estimate_s(p->plan.pack_bytes, p->eff_level, &learned);
     cJSON_AddNumberToObject(o, "est_s", (double)(uint64_t)(est + 0.5));

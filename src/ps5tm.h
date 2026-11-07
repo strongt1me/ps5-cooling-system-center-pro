@@ -927,6 +927,9 @@ int           ps5tm_gamemove_cancel(char *err, size_t err_len);
    to .ffpfsc); mode "homebrew" or "backup" as for copying. start returns an
    HTTP status like copying. */
 struct cJSON *ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len);
+/* What a game folder holds of unsigned PS5 executables (fsign.c), for the windows of converting and packing: { count, refused, capped,
+   bytes, files: [first names] }. count 0 when there is none. Always an object (the caller owns it). */
+struct cJSON *ps5tm_fsign_info(const char *folder);
 int           ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index,
                                       const char *mount, const char *mode,
                                       char *err, size_t err_len);

@@ -238,6 +238,7 @@ filtrera på PS5, PS4 eller ”Backport · AMPR · PlayGo” och sortera efter o
 det) eller som säkerhetskopia i <code>PS5-Sicherung/Spiele</code>. Varje kopia läses tillbaka efter skrivningen
 och kontrolleras. Ingenting skrivs över.</p>
 <p><b>PS4-spelmappar</b> (bara <code>sce_sys/param.sfo</code>, ingen <code>param.json</code>) kan nu också konverteras: ShadowMountPlus monterar PS4-avbilder från 1.7beta8, i alla tre formaten. Appen lägger en <code>param.json</code> som byggs från <code>param.sfo</code> i avbilden, så att även äldre versioner hittar den. Målet kan bara vara en USB- eller M.2-enhet – en PS4-titel från konsolens lagring får konsolen att krascha. Troféer fungerar inte för PS4-spel från avbilder (0x80551618), och vissa titlar fastnar på ”Vänta”: båda kräver en riktig installation (fliken ”Paket”).</p>
+<p><b>Osignerade körbara filer:</b> Om ett spels körbara filer (<code>eboot.bin</code>, <code>.prx</code>, <code>.sprx</code>, <code>.elf</code>, <code>.self</code>) är vanliga ELF-filer startar konsolen det inte: dess laddare avvisar sådana filer. Konverteringsfönstret nämner dem i förväg (”Osignerade körbara filer”). Avbilden får dem <b>fake-signerade som FSELF</b>, i den uppbyggnad som <code>make_fself.py</code> från ampr-emu-ng och ps5-dump-forge skriver; spelmappen läses bara. Ett <code>ampr_emu.index</code> i mappen justeras då till de nya storlekarna. Körbara filer som redan är signerade förblir som de är; de med ovanlig uppbyggnad lämnar appen oförändrade och säger det.</p>
 
 <div class='warn'>Skapa om <code>.ffpkg</code>-avbilder som gjorts med versioner före 1.48.0 (gammal struktur).</div>
 <h3>PS4-spel från USB (PS4Mount)</h3>
@@ -354,6 +355,7 @@ och kontrolleras. Ingenting skrivs över.</p>
 <p>Därefter <b>Avsluta inspelning</b>: det tar bort <code>fakelib2</code> igen. En inspelning visar bara det som lästes i de scener du spelade. Lägg till egna regler för resten.</p>
 <h3>Gränser och anmärkningar</h3>
 <ul>
+<li>Osignerade körbara filer: När appen paketerar i en <b>ny mapp</b> bredvid spelet skriver den vanliga ELF-filer som FSELF (se kapitlet ”Spel”), annars startar konsolen dem inte. Vid paketering <b>i spelmappen</b> förblir de som de är – med zstd, som alltid packar där, alltid; fönstret visar i förväg hur många det är.</li>
 <li>APR-EMU avvisar uppsättningar med fler än 2 000 000 filer, 16 000 000 block eller 1 024 paketfiler. För stora spel använder appen större block.</li>
 <li>Index, <code>.runtime</code> och paket för ett spel hör ihop (samma bygg-ID). Byt aldrig ut enskilda delar och ändra inget medan spelet körs.</li>
 <li>Enligt upphovspersonen har APR-EMU 0.4.2.1 fortfarande en krasch med sparningar. Behåll originalet tills du har spelat tillräckligt länge.</li>
@@ -367,10 +369,10 @@ och kontrolleras. Ingenting skrivs över.</p>
 <ul>
 <li>Hela spelet packas utom systemfilerna: program (<code>eboot.bin</code>, <code>.sprx</code>, <code>.prx</code>, <code>.elf</code>, <code>.self</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code>, tomma filer, paketens och APR-EMU:s egna filer och de få filer som PS5 själv letar efter på disken. Det finns varken profil eller ”Automatiskt”: AMPR EMU NG betjänar ett helt packat spel.</li>
 <li><b>Nivå</b> 1 till 22 (appen erbjuder 1, 5, 9 och 19; standard 5). Högre nivåer sparar mer utrymme men packar mycket långsammare. Vid spel ändras knappt något: uppackningen kostar lika lite på alla nivåer. Varje bit på 256 KiB är en egen zstd-ram med kontrollsumma; det zstd inte kan krympa blir kvar rått.</li>
-<li>Allt annat är som med LZ4: <b>testa först opaketerat med NG</b>, packa sedan; originalet tas bort först efter jämförelsen byte för byte; <b>Kontrollera paket</b>, <b>Packa upp zstd …</b> och valet <b>Som ny mapp …-zstd bredvid</b>.</li>
+<li>Till skillnad från LZ4 finns inget val om originalen ska finnas kvar för zstd: appen packar alltid i spelmappen och tar bort originalen först efter jämförelsen byte för byte (vid fel förblir allt som förut). Innan bekräftar du, som med LZ4, att spelet gick <b>opaketerat med NG</b>; själva NG bygger appen in när den packar. <b>Kontrollera paket</b> och <b>Packa upp zstd …</b> finns som med LZ4; uppackning ger tillbaka alla filer.</li>
 <li>Ett spel ligger antingen i LZ4-paket eller i zstd-paket, aldrig i båda. För att byta, packa först upp. I ett zstd-spel är alla versioner utom NG låsta i fönstret <b>APR-EMU i spelet</b>.</li>
 </ul>
-<p><b>Status:</b> packningen och kontrollen är verifierade mot originalen och mot en oberoende läsare av formatet (den i PS5 Dump &amp; Image Converter); om ett packat spel går på konsolen beror på AMPR EMU NG och har ännu inte provats med den här appen. Prova först på ett spel vars original du behåller.</p>
+<p><b>Status:</b> packningen och kontrollen är verifierade mot originalen och mot en oberoende läsare av formatet (den i PS5 Dump &amp; Image Converter); om ett packat spel går på konsolen beror på AMPR EMU NG och har ännu inte provats med den här appen. Prova först på ett litet spel; om det inte går, ger ”Packa upp zstd …” tillbaka alla filer.</p>
 </section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Ta bort spel och säkerhetskopior</h2></div>
 <p>Varje spelkort har <b>Ta bort</b>, och det har även varje post på fliken <b>Säkerhetskopior</b>.</p>
 <ul>

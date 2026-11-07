@@ -239,6 +239,7 @@ filtern nach PS5, PS4 oder „Backport · AMPR · PlayGo“; sortieren nach Star
 findet es dort) oder als Sicherung nach <code>PS5-Sicherung/Spiele</code>. Jede Kopie wird nach dem Schreiben zurückgelesen
 und geprüft; nichts wird überschrieben.</p>
 <p><b>PS4-Spielordner</b> (nur <code>sce_sys/param.sfo</code>, keine <code>param.json</code>) lassen sich seit dieser Version ebenso konvertieren: ShadowMountPlus bindet PS4-Abbilder ab 1.7beta8 ein, in allen drei Formaten. Die App legt eine <code>param.json</code> aus der <code>param.sfo</code> mit ins Abbild, damit auch ältere Versionen es finden. Ziel ist nur ein USB- oder M.2-Laufwerk – ein PS4-Titel aus dem Speicher der Konsole bringt sie zum Absturz. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“).</p>
+<p><b>Unsignierte Programmdateien:</b> Sind die Programmdateien eines Spiels (<code>eboot.bin</code>, <code>.prx</code>, <code>.sprx</code>, <code>.elf</code>, <code>.self</code>) einfache ELF-Dateien, startet die Konsole es nicht: Ihr Lader lehnt solche Dateien ab. Das Fenster zum Konvertieren nennt sie vorher („Unsignierte Programmdateien“). Das Abbild bekommt sie <b>fake-signiert als FSELF</b>, in dem Aufbau, den <code>make_fself.py</code> von ampr-emu-ng und ps5-dump-forge schreiben; der Spielordner wird nur gelesen. Ein <code>ampr_emu.index</code> im Ordner wird dabei auf die neuen Größen gebracht. Programmdateien, die schon signiert sind, bleiben, wie sie sind; solche mit ungewöhnlichem Aufbau lässt die App unverändert und sagt es.</p>
 
 <div class='warn'><code>.ffpkg</code>-Abbilder aus Versionen vor 1.48.0 bitte neu erzeugen (alter Aufbau).</div>
 <h3>PS4-Spiele von USB (PS4Mount)</h3>
@@ -355,6 +356,7 @@ und geprüft; nichts wird überschrieben.</p>
 <p>Danach <b>Mitschnitt beenden</b>: Das entfernt <code>fakelib2</code> wieder. Ein Mitschnitt zeigt nur, was in den gespielten Szenen gelesen wurde; für anderes ergänzt du eigene Regeln.</p>
 <h3>Grenzen und Hinweise</h3>
 <ul>
+<li>Unsignierte Programmdateien: Packt die App in einen <b>neuen Ordner</b> daneben, schreibt sie einfache ELF-Dateien als FSELF (siehe Kapitel „Spiele“), weil die Konsole sie sonst nicht startet. Beim Packen <b>im Spielordner</b> bleiben sie, wie sie sind – bei zstd, das immer dort packt, also immer; das Fenster zeigt vorher, wie viele es sind.</li>
 <li>Die APR-EMU lehnt Sätze mit mehr als 2&nbsp;000&nbsp;000 Dateien, 16&nbsp;000&nbsp;000 Blöcken oder 1&nbsp;024 Paketdateien ab. Bei großen Spielen nimmt die App größere Blöcke.</li>
 <li>Index, <code>.runtime</code> und Pakete eines Spiels gehören zusammen (gleiche Build-ID). Tausche nie einzelne Teile aus und ändere nichts, während das Spiel läuft.</li>
 <li>Die APR-EMU 0.4.2.1 hat laut ihrem Autor noch einen Absturz bei Spielständen. Behalte das Original, bis du lange genug gespielt hast.</li>
@@ -368,10 +370,10 @@ und geprüft; nichts wird überschrieben.</p>
 <ul>
 <li>Gepackt wird das ganze Spiel außer den Systemdateien: Programme (<code>eboot.bin</code>, <code>.sprx</code>, <code>.prx</code>, <code>.elf</code>, <code>.self</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code>, leere Dateien, die Dateien der Pakete und der APR-EMU und die wenigen Dateien, die die PS5 selbst auf der Platte sucht. Es gibt weder ein Profil noch „Automatisch“: AMPR EMU NG bedient ein vollständig gepacktes Spiel.</li>
 <li><b>Stufe</b> 1 bis 22 (die App bietet 1, 5, 9 und 19; Vorgabe 5). Höhere Stufen sparen mehr Platz, packen aber viel langsamer. Beim Spielen ändert sich kaum etwas: Das Entpacken kostet bei jeder Stufe ähnlich wenig. Jedes Stück von 256 KiB ist ein eigener zstd-Frame mit Prüfsumme; was zstd nicht verkleinert, bleibt roh.</li>
-<li>Alles andere ist wie bei LZ4: erst <b>ungepackt mit NG testen</b>, dann packen; das Original wird erst nach dem Byte-für-Byte-Vergleich entfernt; <b>Pakete prüfen</b>, <b>zstd entpacken …</b>, und die Wahl <b>Als neuen Ordner …-zstd daneben</b>.</li>
+<li>Anders als bei LZ4 gibt es bei zstd keine Wahl, ob die Originale bleiben: Die App packt immer im Spielordner und entfernt die Originale erst nach dem Byte-für-Byte-Vergleich (bei einem Fehler bleibt alles wie vorher). Vorher bestätigst du wie bei LZ4, dass das Spiel <b>ungepackt mit NG</b> lief; NG baut die App beim Packen selbst ein. <b>Pakete prüfen</b> und <b>zstd entpacken …</b> gibt es wie bei LZ4; Entpacken bringt alle Dateien zurück.</li>
 <li>Ein Spiel liegt entweder in LZ4- oder in zstd-Paketen, nie in beiden. Zum Wechseln erst entpacken. In einem zstd-Spiel sind im Fenster <b>APR-EMU im Spiel</b> alle Versionen außer NG gesperrt.</li>
 </ul>
-<p><b>Stand:</b> Das Packen und Prüfen ist gegen die Originale und gegen einen unabhängigen Leser des Formats (den des PS5 Dump &amp; Image Converter) geprüft; ob ein Spiel gepackt auf der Konsole läuft, hängt von AMPR EMU NG ab und ist mit dieser App noch nicht erprobt. Probiere es zuerst an einem Spiel, dessen Original du behältst.</p>
+<p><b>Stand:</b> Das Packen und Prüfen ist gegen die Originale und gegen einen unabhängigen Leser des Formats (den des PS5 Dump &amp; Image Converter) geprüft; ob ein Spiel gepackt auf der Konsole läuft, hängt von AMPR EMU NG ab und ist mit dieser App noch nicht erprobt. Probiere es zuerst an einem kleinen Spiel; läuft es nicht, bringt „zstd entpacken …“ alle Dateien zurück.</p>
 </section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Spiele &amp; Sicherungen löschen</h2></div>
 <p>Jede Spielkarte hat <b>Löschen</b>, ebenso jeder Eintrag im Reiter <b>Sicherungen</b>.</p>
 <ul>

@@ -42,6 +42,7 @@
 
 #include "checkfile.h"
 #include "conv_pfs.h"
+#include "fsign.h"
 #include "imgread.h"
 #include "ioerr.h"
 #include "lz4pack.h"

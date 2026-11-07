@@ -1,5 +1,23 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Unsignierte Programmdateien: Konvertieren und Packen schreiben sie als FSELF (nach ps5-dump-forge 0.5.4)
+- Sind die Programmdateien eines Spiels einfache ELF-Dateien, startet die Konsole es nicht – ihr Lader lehnt sie ab. Beim **Konvertieren** eines PS5-Dump-Ordners (exFAT, ffpkg, ffpfsc) und beim **Packen in einen neuen Ordner** (nur LZ4, „Als neuen Ordner … daneben“) schreibt die App sie jetzt als **fake-signierte SELF-Dateien (FSELF)**; der Spielordner wird nur gelesen. Ein `ampr_emu.index` wird dabei auf die neuen Größen gebracht. Beim Packen im Spielordner selbst bleiben sie, wie sie sind (das Fenster sagt es); zstd packt seit dieser Fassung immer im Spielordner (siehe unten).
+- Der Aufbau ist byteweise der von `make_fself.py --ptype fake` (ampr-emu-ng) und von ps5-dump-forge 0.5.4 (`fself.rs`); gelesen wurde dessen Quelltext, nachgebaut in C (`src/fsign.c`). Es ist **nicht** der Aufbau der „Als FSELF neu signieren“-Funktion des Dumps (`src/dump_fself.c`).
+- **Anzeige vorab:** Der Konvertierungsplan und der Packplan melden `unsigned_exec` (Anzahl, Namen, nicht signierbare); Browser und Vollbild-App warnen im Fenster („Unsignierte Programmdateien“, in der Vollbild-App die Zeile „Programmdateien“ im Packformular). Die Notiz des Auftrags nennt am Ende, wie viele signiert wurden.
+- Prüfung: `test/fsign` (Host-Tests unter AddressSanitizer und UBSan): Ergebnis **Byte für Byte gleich** dem von `make_fself.py` und gleich dem Prüfwert (BLAKE3) aus dem Test von ps5-dump-forge, Erkennung, Index, 3000 beschädigte ELF-Dateien ohne Absturz, Abbruch ohne halbe Datei, und Abbilder (exFAT und UFS2) aus Spielordner plus signierten Dateien enthalten die SELF-Datei, nicht die ELF. **An der Konsole noch nicht erprobt.**
+- Nicht übernommen aus 0.5.4: `include_from`/`exclude_from` der Packregeln (die App kennt keine Regelprofile), das schnellere Entpacken fester 7z/RAR und die Laufwerke A: und B: (nur das PC-Programm).
+- Neue Texte in allen sechs Sprachen (Browser und Vollbild-App), Handbuch und FAQ (sieben Sprachen), `docs/HANDBUCH.md`, `docs/API.md`, `docs/ENTWICKLUNG.md`, `THIRD_PARTY_NOTICES.md`; ELF 9,89 MB.
+
+### zstd: keine Wahl mehr, ob die Originale bleiben
+- Beim Packen mit **zstd** gibt es in Browser und Vollbild-App **keine Wahl** mehr, ob die Originale bleiben oder ein neuer Ordner `…-zstd` entsteht: gepackt wird immer im Spielordner, die Originale werden erst entfernt, wenn jede gepackte Datei Byte für Byte mit ihrem Original verglichen ist (bei einem Fehler bleibt alles wie vorher; **zstd entpacken …** bringt alle Dateien zurück). Das Fenster nennt das stattdessen (Browser: Hinweis unter der Warnung, Vollbild: Zeile „Originale“ – „entfernt nach der Prüfung“).
+- Das Kästchen **„ungepackt mit AMPR EMU NG getestet“** bleibt (Wunsch des Users); aus der Warnung „Vorher erledigen“ ist nur der Satz „Behalte das Original, bis du das gepackte Spiel gestartet hast“ entfallen, weil er nicht mehr stimmt. **LZ4 bleibt, wie es war.**
+- Die Schnittstelle (`POST /api/v1/library/lz4`) nimmt `kind: copy` mit `format: zstd` weiter an; die Oberflächen schicken es nicht mehr. Handbuch (alle sieben Sprachen, zstd-Abschnitt, „Stand“, Unsignierte Programmdateien) und FAQ angepasst, neue Texte in allen sechs Sprachen.
+
+### Fremdbausteine
+- **ps5-dump-forge 0.5.4** (quer3q, GPL-3.0; vorher 0.5.3 gelesen): zstd-Format unverändert (`docs/zstd.md` ohne Änderung), die mitgelieferte ampr-emu-ng 0.3.2 steckt schon in der App; neu eingebaut ist das Signieren (siehe oben).
+
 ## v1.77.1 – 07.11.2026
 
 ### Die Kacheln ersetzen eine ältere laufende App

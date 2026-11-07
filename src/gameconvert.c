@@ -60,6 +60,7 @@
 #include "conv_pfs.h"
 #include "conv_ufs2.h"
 #include "dump_image.h"
+#include "fsign.h"
 #include "ioerr.h"
 #include "imgread.h"
 #include "iopolicy.h"
@@ -108,7 +109,7 @@ typedef struct {
   unsigned files;
   char     error[640];        /* room for PS5TM_IO_TEXT_MAX (ioerr.h) after a label and a path */
   char     sums[320];         /* the checksum file, once written          */
-  char     note[200];         /* something that did not stop the job      */
+  char     note[300];         /* something that did not stop the job      */
   uint64_t started_ms, finished_ms;
   uint64_t window_ms, window_bytes;
   double   rate;
@@ -126,7 +127,7 @@ typedef struct {
   int  folder;
   int  ampr;                  /* build ampr_emu.index in the folder first (amprindex.c) */
   int  nroots;                /* a PS4 dump: the folders laid over each other (base, update, overlay), else 0 */
-  char roots[3][256];
+  char roots[3][336];                 /* a target path (320) and the ending of the folder of signed files */
   char overlay[256];          /* the folder of our own files among them, removed when the job is over */
 } cv_args_t;
 
@@ -455,6 +456,8 @@ cv_run(void *arg) {
   unsigned          files = 1;
   int               out = -1;
   ps5tm_prefetch_t *pf = NULL;
+  char              sign_dir[PATH_MAX] = "";      /* the folder of signed executables laid over the game (fsign.c), removed in the end */
+  unsigned          signed_n = 0, refused_n = 0;
 
   /* The AMPR index first, if asked for: it goes into the folder and with it into the image, at the place APR-EMU
      looks for it (/app0/ampr_emu.index). */
@@ -466,6 +469,59 @@ cv_run(void *arg) {
     PS5TM_INFO("ampr_index_built", "AMPR-Index für %s vor dem Konvertieren gebaut: %u Dateien.", a.title_id, ai_files);
     err[0] = 0;
   }
+  /* Unsigned PS5 executables (fsign.c): the console's loader refuses a plain ELF, so the image would not start the game. They are
+     written as fake-signed SELFs into a small folder next to the result, which goes over the game as a second source (the way a
+     PS4 dump gets its param.json); the game folder itself is only read. A PS4 folder has none of these. */
+  if(a.folder && a.nroots == 0) {
+    fsign_list_t sl;
+    if(ps5tm_fsign_scan(a.source, &g_cancel, &sl) == 1) {
+      cv_state(CV_CANCELLED);
+      PS5TM_INFO("game_convert_cancelled", "Konvertieren von %s abgebrochen, bevor etwas geschrieben wurde.", a.title_id);
+      goto cleanup;
+    }
+    refused_n = sl.refused;
+    if(sl.refused)
+      PS5TM_WARN("game_convert_sign_refused", "Konvertieren von %s: %u Programmdateien lassen sich nicht signieren und bleiben, wie sie sind (z. B. %.120s: %.100s).",
+                 a.title_id, sl.refused, sl.refused_rel, sl.refused_why);
+    if(sl.n) {
+      char sdir[PATH_MAX], sw[400] = "";
+      uint64_t avail0 = 0;
+      char fs0[16];
+      snprintf(sdir, sizeof(sdir), "%s", a.target);
+      char *ssl = strrchr(sdir, '/');
+      if(ssl) *ssl = 0;
+      snprintf(sign_dir, sizeof(sign_dir), "%s" FSIGN_STAGE_SUFFIX, a.target);
+      ps5tm_fsign_rmtree(sign_dir);                                /* this app's own leftover of an earlier try */
+      if(mkdir_p(sdir) != 0) { cv_fail("Der Zielordner ließ sich nicht anlegen."); ps5tm_fsign_free(&sl); sign_dir[0] = 0; goto cleanup; }
+      if(drive_space(a.base, &avail0, fs0, sizeof(fs0)) != 0 || avail0 < sl.self_bytes + SPACE_RESERVE) {
+        cv_fail("Auf dem Ziel ist nicht genug Platz, um die Programmdateien zu signieren.");
+        ps5tm_fsign_free(&sl);
+        sign_dir[0] = 0;
+        goto cleanup;
+      }
+      unsigned idx = 0;
+      int sr = ps5tm_fsign_stage(a.source, sign_dir, &sl, &g_cancel, NULL, NULL, &idx, sw, sizeof(sw));
+      if(sr == 1) {
+        cv_state(CV_CANCELLED);
+        PS5TM_INFO("game_convert_cancelled", "Konvertieren von %s abgebrochen, bevor etwas geschrieben wurde.", a.title_id);
+        ps5tm_fsign_free(&sl);
+        goto cleanup;
+      }
+      if(sr != 0) {
+        cv_fail("Die Programmdateien ließen sich nicht signieren: %s", sw[0] ? sw : "ohne Angabe");
+        PS5TM_WARN("game_convert_sign_failed", "Konvertieren von %s: Signieren gescheitert: %s", a.title_id, sw);
+        ps5tm_fsign_free(&sl);
+        goto cleanup;
+      }
+      signed_n = sl.n;
+      PS5TM_INFO("game_convert_signed", "Konvertieren von %s: %u unsignierte Programmdateien als FSELF in das Abbild geschrieben%s.",
+                 a.title_id, sl.n, idx ? " (AMPR-Index angepasst)" : "");
+      ps5tm_fsign_free(&sl);
+      snprintf(a.roots[0], sizeof(a.roots[0]), "%s", a.source);
+      snprintf(a.roots[1], sizeof(a.roots[1]), "%s", sign_dir);
+      a.nroots = 2;
+    }
+  }
   if(a.folder) {
     if(a.nroots > 0) {
       const char *rt[3] = { a.roots[0], a.roots[1], a.roots[2] };
@@ -473,7 +529,7 @@ cv_run(void *arg) {
     } else {
       img = exfat_image_plan(a.source, serial_for(a.title_id), err, sizeof(err));
     }
-    if(!img) { cv_fail("%s", err); return NULL; }
+    if(!img) { cv_fail("%s", err); goto cleanup; }
     raw   = exfat_image_size(img);
     files = exfat_image_files(img);
   } else {
@@ -548,6 +604,12 @@ cv_run(void *arg) {
   g_job.total_bytes = raw;
   g_job.files       = files;
   g_job.state       = CV_WRITING;
+  if(signed_n && refused_n)
+    snprintf(g_job.note, sizeof(g_job.note), "%u Programmdateien waren nicht signiert und stehen im Abbild als FSELF; %u ließen sich nicht signieren und blieben, wie sie sind.", signed_n, refused_n);
+  else if(signed_n)
+    snprintf(g_job.note, sizeof(g_job.note), "%u Programmdateien waren nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet) und stehen im Abbild als FSELF.", signed_n);
+  else if(refused_n)
+    snprintf(g_job.note, sizeof(g_job.note), "%u Programmdateien sind nicht signiert und ließen sich nicht signieren; sie blieben, wie sie sind.", refused_n);
   pthread_mutex_unlock(&g_lock);
 
   uint64_t size = 0;
@@ -725,9 +787,11 @@ cv_run(void *arg) {
   pthread_mutex_lock(&g_lock);
   g_job.output_bytes = size;
   if(sums_ok) snprintf(g_job.sums, sizeof(g_job.sums), "%s", sums_path);
-  else if(have_sha)
-    snprintf(g_job.note, sizeof(g_job.note), "Die Prüfsummen-Datei ließ sich nicht "
-             "schreiben. Das Ergebnis selbst ist geprüft und in Ordnung.");
+  else if(have_sha) {
+    size_t nl = strlen(g_job.note);
+    snprintf(g_job.note + nl, sizeof(g_job.note) - nl, "%sDie Prüfsummen-Datei ließ sich nicht "
+             "schreiben. Das Ergebnis selbst ist geprüft und in Ordnung.", nl ? " · " : "");
+  }
   uint64_t secs = (ps5tm_mono_ms() - g_job.started_ms) / 1000;
   pthread_mutex_unlock(&g_lock);
   cv_state(CV_DONE);
@@ -748,6 +812,7 @@ cleanup:
   if(out >= 0) { close(out); unlink(part); }
   if(fsrc.fd >= 0) close(fsrc.fd);
   exfat_image_free(img);
+  if(sign_dir[0]) ps5tm_fsign_rmtree(sign_dir);
   return NULL;
 }
 
@@ -946,6 +1011,8 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   cJSON_AddStringToObject(root, "stem", stem);
   cJSON_AddNumberToObject(root, "raw_bytes", (double)raw);
   cJSON_AddItemToObject  (root, "stream_risk", stream_risk_json(source, folder, raw));
+  /* A PS5 folder with plain ELF executables: the image gets them as FSELF (fsign.c), the page says so before the start. */
+  cJSON_AddItemToObject  (root, "unsigned_exec", ps5tm_fsign_info(folder && !ps4 ? source : NULL));
   cJSON_AddNumberToObject(root, "ffpkg_bytes", (double)ffpkg_bytes);
   if(ffpkg_why[0]) cJSON_AddStringToObject(root, "ffpkg_error", ffpkg_why);
   cJSON_AddNumberToObject(root, "files", files);
@@ -1016,6 +1083,23 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     cJSON_AddItemToArray(arr, d);
   }
   return root;
+}
+
+/* The unsigned PS5 executables of a game folder, for the windows of converting and of packing into a new folder. */
+cJSON *
+ps5tm_fsign_info(const char *folder) {
+  fsign_list_t l;
+  memset(&l, 0, sizeof(l));
+  if(folder && folder[0] == '/') ps5tm_fsign_scan(folder, NULL, &l);
+  cJSON *o = cJSON_CreateObject();
+  cJSON_AddNumberToObject(o, "count", l.n);
+  cJSON_AddNumberToObject(o, "refused", l.refused);
+  cJSON_AddBoolToObject  (o, "capped", l.capped);
+  cJSON_AddNumberToObject(o, "bytes", (double)l.elf_bytes);
+  cJSON *a = cJSON_AddArrayToObject(o, "files");
+  for(unsigned i = 0; i < l.n && i < 8; i++) cJSON_AddItemToArray(a, cJSON_CreateString(l.it[i].rel));
+  ps5tm_fsign_free(&l);
+  return o;
 }
 
 /* 1 while a conversion is under way. For the other file jobs' starts: only one

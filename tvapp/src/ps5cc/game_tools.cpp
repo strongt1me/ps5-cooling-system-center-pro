@@ -730,6 +730,22 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  "Beides geht nur installiert (Pakete).",
                  kWarning, 5);
         }
+        if (plan_.unsigned_exec.count > 0)
+        {
+            heading("Unsignierte Programmdateien", kWarning);
+            para(std::to_string(plan_.unsigned_exec.count) +
+                     " Programmdateien dieses Spiels sind einfache ELF-Dateien, die die Konsole "
+                     "nicht startet. Das Abbild bekommt sie fake-signiert als FSELF; der "
+                     "Spielordner bleibt, wie er ist.",
+                 kWarning, 4);
+            para(unsigned_names(plan_.unsigned_exec), kMuted, 2);
+        }
+        if (plan_.unsigned_exec.refused > 0)
+            para(std::to_string(plan_.unsigned_exec.refused) +
+                     " Programmdateien sind nicht signiert und ließen sich nicht signieren "
+                     "(ungewöhnlicher Aufbau). Sie bleiben, wie sie sind; das Spiel startet damit "
+                     "womöglich nicht.",
+                 kCritical, 4);
         if (choice_.op >= 0)
         {
             para(op_text(plan_, choice_.op), kMuted, 3);

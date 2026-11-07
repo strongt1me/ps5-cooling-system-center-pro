@@ -239,6 +239,7 @@ filtrare per PS5, PS4 o «Backport · AMPR · PlayGo» e ordinare come nella sch
 li trova lì) o come backup in <code>PS5-Sicherung/Spiele</code>. Ogni copia viene riletta e verificata dopo la scrittura;
 non viene sovrascritto nulla.</p>
 <p>Anche le <b>cartelle di giochi PS4</b> (solo <code>sce_sys/param.sfo</code>, nessun <code>param.json</code>) ora si possono convertire: ShadowMountPlus monta le immagini PS4 dalla 1.7beta8, in tutti e tre i formati. L'app aggiunge all'immagine un <code>param.json</code> ricavato dal <code>param.sfo</code>, così anche le versioni precedenti la trovano. La destinazione può essere solo un'unità USB o M.2: un titolo PS4 dalla memoria della console la manda in crash. I giochi PS4 da immagini non hanno trofei (0x80551618) e alcuni titoli restano su «Attendere»: entrambe le cose richiedono una vera installazione (scheda «Pacchetti»).</p>
+<p><b>Eseguibili non firmati:</b> se gli eseguibili di un gioco (<code>eboot.bin</code>, <code>.prx</code>, <code>.sprx</code>, <code>.elf</code>, <code>.self</code>) sono semplici file ELF, la console non lo avvia: il suo loader rifiuta tali file. La finestra di conversione li nomina in anticipo («Eseguibili non firmati»). L’immagine li riceve <b>con firma fittizia (fake-signed) come FSELF</b>, nella struttura che scrivono <code>make_fself.py</code> di ampr-emu-ng e ps5-dump-forge; la cartella del gioco viene solo letta. Un <code>ampr_emu.index</code> nella cartella viene portato alle nuove dimensioni. Gli eseguibili già firmati restano come sono; quelli con struttura insolita l’app li lascia invariati e lo dice.</p>
 
 <div class='warn'>Le immagini <code>.ffpkg</code> create con versioni precedenti alla 1.48.0 vanno ricreate (vecchia struttura).</div>
 <h3>Giochi PS4 da USB (PS4Mount)</h3>
@@ -355,6 +356,7 @@ non viene sovrascritto nulla.</p>
 <p>Poi <b>Ferma la registrazione</b>: questo rimuove di nuovo <code>fakelib2</code>. Una registrazione mostra solo ciò che è stato letto nelle scene giocate; per il resto aggiungi regole tue.</p>
 <h3>Limiti e note</h3>
 <ul>
+<li>Eseguibili non firmati: quando l’app impacchetta in una <b>nuova cartella</b> accanto al gioco, scrive i semplici file ELF come FSELF (vedi il capitolo «Giochi»), perché altrimenti la console non li avvierebbe. Impacchettando <b>nella cartella del gioco</b> restano come sono – con zstd, che impacchetta sempre lì, sempre; la finestra mostra in anticipo quanti sono.</li>
 <li>APR-EMU rifiuta insiemi con più di 2.000.000 di file, 16.000.000 di blocchi o 1.024 file di pacchetto. Per i giochi grandi l'app usa blocchi più grandi.</li>
 <li>L'indice, il <code>.runtime</code> e i pacchetti di un gioco vanno insieme (stesso ID di build). Non scambiare mai singole parti e non cambiare nulla mentre il gioco è in esecuzione.</li>
 <li>Secondo il suo autore APR-EMU 0.4.2.1 ha ancora un blocco con i salvataggi. Tieni l'originale finché non hai giocato abbastanza.</li>
@@ -368,10 +370,10 @@ non viene sovrascritto nulla.</p>
 <ul>
 <li>Viene impacchettato tutto il gioco tranne i file di sistema: programmi (<code>eboot.bin</code>, <code>.sprx</code>, <code>.prx</code>, <code>.elf</code>, <code>.self</code>), <code>sce_sys</code>, <code>sce_module</code>, <code>fakelib</code>, file vuoti, i file dei pacchetti e dell'APR-EMU e i pochi file che la PS5 stessa cerca sul disco. Non esistono profili né «Automatico»: AMPR EMU NG serve un gioco impacchettato per intero.</li>
 <li><b>Livello</b> da 1 a 22 (l'app offre 1, 5, 9 e 19; predefinito 5). I livelli alti risparmiano più spazio ma impacchettano molto più lentamente. Durante il gioco cambia poco: la decompressione costa altrettanto poco a ogni livello. Ogni blocco da 256 KiB è un frame zstd a sé con checksum; ciò che zstd non riduce resta grezzo.</li>
-<li>Il resto è come con LZ4: prima <b>provare non impacchettato con NG</b>, poi impacchettare; l'originale viene rimosso solo dopo il confronto byte per byte; <b>Controlla i pacchetti</b>, <b>Estrai zstd …</b> e la scelta <b>Come nuova cartella …-zstd accanto</b>.</li>
+<li>A differenza di LZ4, con zstd non c’è scelta sul mantenere gli originali: l’app impacchetta sempre nella cartella del gioco e rimuove gli originali solo dopo il confronto byte per byte (in caso di errore resta tutto com’era). Prima confermi, come con LZ4, che il gioco ha funzionato <b>non impacchettato con NG</b>; NG lo integra l’app stessa quando impacchetta. <b>Controlla i pacchetti</b> e <b>Estrai zstd …</b> ci sono come con LZ4; estrarre restituisce tutti i file.</li>
 <li>Un gioco si trova in pacchetti LZ4 o in pacchetti zstd, mai in entrambi. Per cambiare, estrai prima. In un gioco zstd tutte le versioni tranne NG sono bloccate nella finestra <b>APR-EMU nel gioco</b>.</li>
 </ul>
-<p><b>Stato:</b> impacchettamento e controllo sono verificati rispetto agli originali e a un lettore indipendente del formato (quello di PS5 Dump &amp; Image Converter); se un gioco impacchettato funziona sulla console dipende da AMPR EMU NG e non è ancora stato provato con questa app. Provalo prima su un gioco di cui conservi l'originale.</p>
+<p><b>Stato:</b> impacchettamento e controllo sono verificati rispetto agli originali e a un lettore indipendente del formato (quello di PS5 Dump &amp; Image Converter); se un gioco impacchettato funziona sulla console dipende da AMPR EMU NG e non è ancora stato provato con questa app. Provalo prima su un gioco piccolo; se non funziona, «Estrai zstd …» restituisce tutti i file.</p>
 </section><section class='ch' id='loeschen'><div class='ch-head'><div class='ch-num'>10</div><h2>Eliminare giochi &amp; backup</h2></div>
 <p>Ogni scheda di gioco ha <b>Elimina</b>, così come ogni voce nella scheda <b>Backup</b>.</p>
 <ul>

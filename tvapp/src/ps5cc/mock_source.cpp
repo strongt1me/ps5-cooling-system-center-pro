@@ -994,7 +994,8 @@ class MockSource final : public Source
         const bool zstd = format == "zstd";
         l.json = std::string(zstd ? R"({"ok":true,"valid":true,"pack_files":905,"pack_bytes":29700000000,"loose_files":6,)"
                                   : R"({"ok":true,"valid":true,"pack_files":812,"pack_bytes":29000000000,"loose_files":44,)") +
-                 R"("loose_bytes":1200000000,"chunks":118000,"est_s":)" +
+                 R"("loose_bytes":1200000000,"chunks":118000,)" +
+                 R"("unsigned_exec":{"count":4,"refused":0,"capped":false,"bytes":148000000,"files":["eboot.bin","sce_module/libgame.prx"]},"est_s":)" +
                  std::to_string(zstd ? (level >= 19 ? 21000 : level >= 9 ? 2600 : level == 1 ? 480 : 900)
                                      : (level == 12 ? 4200 : level == 3 ? 900 : 1860)) +
                  "}";
@@ -1542,6 +1543,21 @@ class MockSource final : public Source
             cJSON_AddStringToObject(risk, "stream_dir", "");
             cJSON_AddNumberToObject(risk, "stream_dir_bytes", 0);
             cJSON_AddNumberToObject(root, "ffpkg_bytes", ffpkg);
+            // plain ELF executables (fsign.c): a big PS5 folder game has a few, a very big one has one that cannot be signed too
+            cJSON *unsig = cJSON_AddObjectToObject(root, "unsigned_exec");
+            const bool plain = folder && !ps4 && size > 20e9;
+            cJSON_AddNumberToObject(unsig, "count", plain ? 4 : 0);
+            cJSON_AddNumberToObject(unsig, "refused", plain && size > 60e9 ? 1 : 0);
+            cJSON_AddBoolToObject(unsig, "capped", 0);
+            cJSON_AddNumberToObject(unsig, "bytes", plain ? 148000000.0 : 0.0);
+            cJSON *unames = cJSON_AddArrayToObject(unsig, "files");
+            if (plain)
+            {
+                cJSON_AddItemToArray(unames, cJSON_CreateString("eboot.bin"));
+                cJSON_AddItemToArray(unames, cJSON_CreateString("sce_module/libgame.prx"));
+                cJSON_AddItemToArray(unames, cJSON_CreateString("fakelib/libSceAgc.sprx"));
+                cJSON_AddItemToArray(unames, cJSON_CreateString("sce_module/libhelper.prx"));
+            }
             cJSON_AddNumberToObject(root, "files", folder ? 2312 : 1);
             cJSON *ops = cJSON_AddArrayToObject(root, "ops");
             cJSON_AddItemToArray(ops, cJSON_CreateString("ffpfsc"));

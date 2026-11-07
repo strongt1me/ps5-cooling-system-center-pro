@@ -175,6 +175,37 @@ TEST(Ps5ccPlans, StreamRiskReasonsInWords)
     EXPECT_EQ(why[2], "Es hat einen Streaming-Ordner („streaming“, 3,0 GB).");
 }
 
+TEST(Ps5ccPlans, UnsignedExecutablesAreReadAndNamed)
+{
+    // an answer without the field (an older console app): nothing to say
+    const Plan none = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvert));
+    EXPECT_EQ(none.unsigned_exec.count, 0u);
+    EXPECT_EQ(none.unsigned_exec.refused, 0u);
+    EXPECT_EQ(hui::ps5cc::unsigned_names(none.unsigned_exec), "");
+
+    const Plan p = hui::ps5cc::parse_plan(
+        Tool::convert,
+        reply(Tool::convert,
+              R"({"ok":true,"title_id":"PPSA01325","name":"X","kind":"folder","ops":["ffpfsc"],"targets":[],
+                  "unsigned_exec":{"count":6,"refused":1,"capped":false,"bytes":148000000,
+                  "files":["eboot.bin","sce_module/a.prx","sce_module/b.prx","fakelib/c.sprx","d.sprx","e.sprx","f.sprx","g.sprx"]}})"));
+    ASSERT_TRUE(p.ok);
+    EXPECT_EQ(p.unsigned_exec.count, 6u);
+    EXPECT_EQ(p.unsigned_exec.refused, 1u);
+    EXPECT_EQ(p.unsigned_exec.files.size(), 8u);
+    // four names, then "…" when there are more executables than named
+    EXPECT_EQ(hui::ps5cc::unsigned_names(p.unsigned_exec),
+              "eboot.bin, sce_module/a.prx, sce_module/b.prx, fakelib/c.sprx, …");
+    Plan few = p;
+    few.unsigned_exec.count = 4;
+    EXPECT_EQ(hui::ps5cc::unsigned_names(few.unsigned_exec),
+              "eboot.bin, sce_module/a.prx, sce_module/b.prx, fakelib/c.sprx");
+    // only executables that cannot be signed: no names, no "…"
+    Plan odd;
+    odd.unsigned_exec.refused = 2;
+    EXPECT_EQ(hui::ps5cc::unsigned_names(odd.unsigned_exec), "");
+}
+
 constexpr const char *kStorage = R"({"ok":true,"op":"move","title_id":"PPSA01862",
   "source":"/mnt/usb0/homebrew/PPSA01862.ffpfs","source_dir":"/mnt/usb0/homebrew","source_type":"image",
   "image_type":"pfs","size_bytes":22000000000,"running":false,"destinations":[

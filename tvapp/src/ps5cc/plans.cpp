@@ -236,6 +236,15 @@ Plan parse_plan(Tool tool, const PlanReply &reply)
             p.stream.containers.push_back(item->valuestring);
     }
 
+    const cJSON *unsig = cJSON_GetObjectItemCaseSensitive(root, "unsigned_exec");
+    p.unsigned_exec.count = bytes(unsig, "count");
+    p.unsigned_exec.refused = bytes(unsig, "refused");
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(unsig, "files"))
+    {
+        if (cJSON_IsString(item) && item->valuestring != nullptr)
+            p.unsigned_exec.files.push_back(item->valuestring);
+    }
+
     p.op = str(root, "op");
     p.image_type = str(root, "image_type");
 
@@ -635,6 +644,21 @@ std::string start_body(const Plan &p, const PlanChoice &c)
         break;
     }
     return json_text(root);
+}
+
+std::string unsigned_names(const UnsignedExec &u)
+{
+    std::string out;
+    std::size_t shown = 0;
+    for (const std::string &n : u.files)
+    {
+        if (shown++ == 4)
+            break;
+        out += (out.empty() ? "" : ", ") + n;
+    }
+    if (!out.empty() && u.count > 4)
+        out += ", …";
+    return out;
 }
 
 std::vector<std::string> stream_reasons(const Plan &p)
