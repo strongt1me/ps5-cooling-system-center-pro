@@ -17,6 +17,11 @@
 
 void ps5tm_api_tile_refresh(void);
 
+/* The version of this very ELF as a mark the two tiles read from the copy they carry (starter/browser/title/starter.c, tvapp
+ * http_source.cpp): a tile that finds an OLDER app running replaces it with its own (07.11.2026). The text after the colon is
+ * PS5TM_VERSION; main() refers to the array so that the linker keeps it. */
+__attribute__((used)) static const char ps5tm_version_mark[] = "PS5CC-VERSION:" PS5TM_VERSION ":";
+
 
 /* The data directory lost its spaces in 1.3. Move the whole thing rather than
    migrating file by file, so the temperature history and any staged package
@@ -214,6 +219,7 @@ on_stop_signal(int sig) {
 int
 main(int argc, char **argv) {
   (void)argc; (void)argv;
+  __asm__ volatile("" : : "r"(ps5tm_version_mark));
 
   /* Before the first character of output, and that ordering is the whole
    * point.

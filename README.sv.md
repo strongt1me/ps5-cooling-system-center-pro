@@ -6,7 +6,7 @@
 
 **Fläktstyrning, temperaturövervakning och systemcentral för den jailbreakade PlayStation 5,<br>som används i en webbläsare (konsol, mobil, dator) eller som helskärmsapp på TV:n med handkontrollen, på sju språk.**
 
-![Version](https://img.shields.io/badge/Version-1.77.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.77.1-1f6feb)
 ![Licens](https://img.shields.io/badge/Licens-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
 ![Språk](https://img.shields.io/badge/Spr%C3%A5k-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
@@ -197,7 +197,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 1. Hämta `PS5_Cooling_System_Center_v<version>.elf` från [Releases](../../releases).
 2. Skicka den till konsolen (ELF-laddare, port **9021**), till exempel:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.77.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.77.1.elf
    ```
 3. Öppna **`http://<PS5-IP>:8086`** i en webbläsare (aviseringen uppe till vänster på TV:n visar också adressen).
 

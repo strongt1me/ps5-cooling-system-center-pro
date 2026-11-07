@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.77.1 – 07.11.2026
+
+### Die Kacheln ersetzen eine ältere laufende App
+- Beide Kacheln (Vollbild FAKE86921 und Browser FAKE86922) schickten ihre eingebaute App bisher nur, wenn auf Port 8086 nichts antwortete. Wer neue Kachel-Ordner über alte kopierte, ohne die Konsole neu zu starten, behielt die **alte App** und sah zum Beispiel noch „1.76.9“ (gemeldet von einem Nutzer des Releases 1.77.0).
+- Jetzt **vergleichen die Kacheln die Versionen**: Die App nennt ihre in `GET /api/v1/system` (`app_version`), die ELF in der Kachel trägt die Marke `PS5CC-VERSION:<Version>:` (neu in `src/main.c`). Ist die laufende App **älter**, geht die eingebaute über sie (die neue beendet die alte beim Start), und die Kachel wartet, bis die neue Version antwortet (höchstens 30 s). Eine **gleiche oder neuere** App bleibt, ebenso eine ohne Versionsangabe.
+- **Läuft ein Auftrag** (Abbild/LZ4/zstd-Pakete, Dateimanager, Kopieren/Konvertieren/Löschen, Paket-Installation, Spielstände, AMPR-Index), wird nichts ersetzt: Das Ende der App würde den Auftrag abbrechen. Die Kachel meldet „Eine neuere App liegt bereit“; nach dem Auftrag noch einmal öffnen.
+- Geprüft am PC: Einheitstests der Vergleichslogik und der Versionsmarke (`ps5cc_app_update_test`, 327 Tests insgesamt) und ein Ende-zu-Ende-Test der Browser-Kachel gegen eine nachgebaute App und einen nachgebauten Loader (älter und frei: ersetzt; gleich, neuer, mit Auftrag: bleibt; keine App: wie bisher gesendet). An der Konsole noch nicht erprobt.
+
 ## v1.77.0 – 06.11.2026
 
 ### Löschen fragt zuerst, und nennt, was weggeht

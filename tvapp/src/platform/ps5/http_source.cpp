@@ -27,6 +27,8 @@
 #include <cctype>
 #include <cstring>
 #include <netinet/in.h>
+#include "ps5cc/app_update.hpp"
+
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -884,11 +886,69 @@ std::string HttpSource::game_name(const std::string &id)
 
 // Until the app answers: ask it, and when nothing listens send it once to the
 // ELF loader, exactly as the old starter tile did. True once it answers.
+// The ELF of the app this tile carries to the payload loader (127.0.0.1:9021).
+bool HttpSource::send_payload()
+{
+    Net why = Net::failed;
+    const int s = open_local(kPortLoader, 5, &why);
+    // Two linker labels around one blob: compare addresses, not pointers into different arrays.
+    const std::size_t size = reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf_end) -
+                             reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf);
+    const bool sent = s >= 0 && send_all(s, ps5cc_payload_elf, size);
+    if (s >= 0)
+        close(s);
+    sys::log("[PS5CC] payload %zu bytes sent=%d", size, sent ? 1 : 0);
+    return sent;
+}
+
+// An app answers. When it is OLDER than the one this tile carries and no job runs, the tile's own goes over it (the new app
+// retires the old one when it starts); a job in progress would end with it, so then the old app stays and the person is told.
+bool HttpSource::replace_older_app()
+{
+    const std::size_t size = reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf_end) -
+                             reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf);
+    const std::string mine = embedded_version(ps5cc_payload_elf, size);
+    if (mine.empty())
+        return false;
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/system", {}, &status, &body, 5) != Net::ok || status != 200)
+        return false;
+    std::string running;
+    if (cJSON *root = cJSON_Parse(body.c_str()))
+    {
+        running = str(root, "app_version");
+        cJSON_Delete(root);
+    }
+    if (!should_replace(running, mine))
+        return false;
+    static const char *const kJobs[] = {"/api/v1/library/image/job", "/api/v1/files/job",
+                                        "/api/v1/library/ampr/job", "/api/v1/library/copy",
+                                        "/api/v1/library/convert", "/api/v1/library/delete",
+                                        "/api/v1/packages/install/job", "/api/v1/saves/job"};
+    for (const char *route : kJobs)
+    {
+        if (exchange("GET", route, {}, &status, &body, 3) == Net::ok && status == 200 &&
+            job_active(body))
+        {
+            notice(Notice::Kind::info, "Eine neuere App liegt bereit",
+                   "Ein Auftrag läuft noch. Danach die Kachel noch einmal öffnen.");
+            return false;
+        }
+    }
+    set_link(Link::starting, "Die App wird aktualisiert …");
+    if (!send_payload())
+        return false;
+    return true;
+}
+
 bool HttpSource::connect_phase()
 {
     if (retry_.exchange(false))
     {
         payload_sent_ = false;
+        update_checked_ = false;
+        awaiting_update_ = false;
         starting_since_us_ = 0;
         set_link(Link::starting, "Verbindung zur App …");
     }
@@ -898,23 +958,47 @@ bool HttpSource::connect_phase()
     std::string body;
     const Net net = exchange("GET", "/api/v1/status", {}, &status, &body, 2);
     if (net == Net::ok && status == 200)
+    {
+        const std::int64_t at = sys::monotonic_us();
+        if (!update_checked_)
+        {
+            update_checked_ = true;
+            if (replace_older_app())
+            {
+                payload_sent_ = true;
+                awaiting_update_ = true;
+                starting_since_us_ = at;
+                return false;
+            }
+        }
+        if (awaiting_update_)
+        {
+            // The old app may still answer for a moment; wait for the new one (by its version), but not for ever.
+            std::string running;
+            if (exchange("GET", "/api/v1/system", {}, &status, &body, 3) == Net::ok && status == 200)
+            {
+                if (cJSON *root = cJSON_Parse(body.c_str()))
+                {
+                    running = str(root, "app_version");
+                    cJSON_Delete(root);
+                }
+            }
+            const std::size_t size = reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf_end) -
+                                     reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf);
+            if (running != embedded_version(ps5cc_payload_elf, size) &&
+                at - starting_since_us_ <= kStartLimitUs)
+                return false;
+            awaiting_update_ = false;
+        }
         return true;
+    }
     const std::int64_t now = sys::monotonic_us();
     if (starting_since_us_ == 0)
         starting_since_us_ = now;
     if (net == Net::refused && !payload_sent_)
     {
         payload_sent_ = true;
-        Net why = Net::failed;
-        const int s = open_local(kPortLoader, 5, &why);
-        // Two linker labels around one blob: compare addresses, not pointers into different arrays.
-        const std::size_t size = reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf_end) -
-                                 reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf);
-        const bool sent = s >= 0 && send_all(s, ps5cc_payload_elf, size);
-        if (s >= 0)
-            close(s);
-        sys::log("[PS5CC] payload %zu bytes sent=%d", size, sent ? 1 : 0);
-        if (!sent)
+        if (!send_payload())
         {
             set_link(Link::failed, "Der ELF-Loader (Port 9021) ist nicht erreichbar.");
             return false;

@@ -5,7 +5,7 @@ Advanced Cooling & Thermal Management for PlayStation 5
 WAS HIER DRIN LIEGT
 ===================
 
-PS5_Cooling_System_Center_v1.77.0.elf
+PS5_Cooling_System_Center_v1.77.1.elf
     Das Hauptprogramm: Lüftersteuerung und Web-Oberfläche. Das ist die
     Datei, die du nach jedem Neustart der Konsole sendest.
 
@@ -31,11 +31,19 @@ SO WIRD ES BENUTZT
 
 1. Eine der Kacheln antippen (FAKE86921 für das Vollbild, FAKE86922 für
    den Browser) – sie startet das Hauptprogramm selbst.
-   Oder: PS5_Cooling_System_Center_v1.77.0.elf an die Konsole senden
+   Oder: PS5_Cooling_System_Center_v1.77.1.elf an die Konsole senden
    (Port 9021).
 2. Auf dem Fernseher erscheint eine Meldung mit der Adresse der
    Web-Oberfläche.
 3. Im Browser aufrufen:  http://<PS5-IP>:8086/
+
+Aktualisieren: Die neuen Kachel-Ordner über die alten kopieren (die Vollbild-App
+muss dabei geschlossen sein). Eine Kachel ersetzt eine ÄLTERE, noch laufende App
+beim Antippen selbst durch ihre eigene; eine gleiche oder neuere App bleibt, und
+solange die laufende App einen Auftrag hat (Kopieren, Packen, Installieren ...),
+wird sie nicht ersetzt, die Kachel sagt es und lässt sich danach noch einmal
+öffnen. Wer nur die ELF sendet, schickt die neue ELF an Port 9021: Sie beendet
+die ältere Instanz selbst.
 
 Wer nur die ELF sendet und keine der beiden Kacheln hat: Etwa eine Minute nach
 dem Start legt die App einmal selbst eine Kachel unter "Medien" an, die die

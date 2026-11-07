@@ -238,7 +238,11 @@ class HttpSource final : public Source
     std::atomic<bool> retry_{false};
     bool online_ = false;
     bool payload_sent_ = false;
+    bool update_checked_ = false;  // the running app's version was compared with the one this tile carries
+    bool awaiting_update_ = false; // the tile sent its own app over an older one and waits for it
     std::int64_t starting_since_us_ = 0;
+    bool send_payload();           // the embedded ELF to the loader; false when the loader is not there
+    bool replace_older_app();      // an older app runs and is idle: send ours; true when it was sent
     int status_failures_ = 0;
     bool reported_silence_ = false;
 };
