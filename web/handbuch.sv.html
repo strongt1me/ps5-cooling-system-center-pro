@@ -128,7 +128,8 @@ webbgränssnittet, men fläktstyrningen visar då ”inte tillgänglig”.</li>
 <ul>
 <li><b>FAKE86921 – Helskärm:</b> startar appen om den inte redan körs och visar den i helskärm med handkontrollen (se ”Helskärmsappen”).</li>
 <li><b>FAKE86922 – Webbläsare:</b> startar också appen och öppnar webbgränssnittet i konsolens webbläsare.</li>
-<li>Båda har appen i sin <code>eboot.bin</code>. Kopiera mapparna från den nya releasen efter en uppdatering, annars startar den gamla versionen. Med en bricka behöver du inte längre skicka ELF-filen efter en omstart.</li>
+<li>Båda har appen i sin <code>eboot.bin</code>. Kopiera mapparna från den nya releasen efter en uppdatering (helskärmsappen måste vara stängd). Med en bricka behöver du inte längre skicka ELF-filen efter en omstart.</li>
+<li><b>En äldre app som körs ersätts (sedan 1.77.1):</b> När du trycker på brickan jämförs versionerna. Om en <b>äldre</b> app fortfarande körs – till exempel för att konsolen inte startats om – tar den inbyggda över (den avslutar den gamla vid start; brickan väntar upp till 30 sekunder). En lika ny eller nyare app får vara kvar. Pågår ett jobb (paketering, kopiering, installation, sparfiler …) ersätts inget, eftersom jobbet då skulle avbrytas: brickan meddelar att en nyare app finns redo (meddelandet är på tyska); öppna den igen när jobbet är klart. Brickor från 1.77.0 eller äldre kan inte detta än – skicka den nya ELF-filen en gång eller starta om konsolen.</li>
 </ul>
 <div class='warn'>Kör alltid bara <b>en</b> instans. Två instanser styr fläkten samtidigt och stör varandra.
 Stoppa en gammal instans på sidan ”Payloads”, annars hjälper en omstart.</div>
@@ -502,4 +503,4 @@ profilbild, namn och länkar. Länkarna går bara att klicka på om webbläsaren
 </table>
 <p>Fler svar finns i <b>FAQ</b>.</p>
 <p><b>Sidan går inte att nå efter en nätverksändring?</b> När WLAN slås av och på eller kabeln dras ur avslutar konsolen ibland webbgränssnittets åtkomst, fast appen fortsätter att köras (och fläktstyrningen också). Appen kontrollerar detta var tionde sekund, öppnar åtkomsten igen av sig själv och skriver det i loggen (”webbgränssnitt … öppnat igen”). Efter några sekunder laddas sidan igen. ELF-filen behöver inte skickas igen.</p>
-</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.77.1 · Per den 7 oktober 2026 · Ingen officiell produkt; ”PlayStation” och ”PS5” är varumärken som tillhör sina respektive ägare. Endast för din egen konsol, utan garanti (GPL-3.0-or-later).</div></div></body></html>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.77.1 · Per den 7 november 2026 · Ingen officiell produkt; ”PlayStation” och ”PS5” är varumärken som tillhör sina respektive ägare. Endast för din egen konsol, utan garanti (GPL-3.0-or-later).</div></div></body></html>

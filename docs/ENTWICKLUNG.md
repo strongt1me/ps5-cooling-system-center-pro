@@ -311,6 +311,22 @@ einmal ab und schreibt `gen/tile_files.c`; `src/tile.c` macht daraus beim Start 
 Gebaut wird sie mit `pkg/build.ps1` (Bilder skalieren → `LibProsperoPkg.dll`
 bereitstellen → `dotnet run`). Voraussetzung ist das **.NET-10-SDK**.
 
+## Kacheln FAKE86921/FAKE86922: ältere laufende App ersetzen (seit 1.77.1)
+
+Beide Kacheln (`tools/make_starter.sh <elf>`) tragen eine Kopie der App-ELF und vergleichen beim Antippen die
+Versionen:
+
+- Die ELF enthält die Marke `PS5CC-VERSION:<Version>:` (`ps5tm_version_mark` in `src/main.c`), die laufende App meldet
+  `app_version` in `GET /api/v1/system`.
+- **Browser-Kachel** (`starter/browser/title/starter.c`): `maybe_update()` vergleicht (`compare_versions`), prüft über
+  die Auftrags-Routen (`"active":true`), ob ein Auftrag läuft, schickt bei „älter und frei“ die ELF an Port 9021 und wartet
+  höchstens 120 × 250 ms auf dieselbe Version. Gleiche, neuere oder unbekannte Versionen und Aufträge lassen die App stehen.
+- **Vollbild-Kachel**: dieselbe Logik in `HttpSource::replace_older_app()` und der Verbindungsphase
+  (`tvapp/src/platform/ps5/http_source.cpp`, Wartezeit höchstens 30 s); die reine Vergleichs- und Auftragslogik steht in
+  `tvapp/src/ps5cc/app_update.cpp/.hpp`, ihr Einheitstest in `tvapp/tests/unit/ps5cc_app_update_test.cpp`
+  (`USE_CCACHE=0 make test-unit` im WSL-Baum `~/ps5cc-tvapp`).
+- Neue Auftragsarten, die eine Ersetzung abbrechen würde, gehören in die Liste der Auftrags-Routen beider Kacheln.
+
 ## Übersetzungen
 
 Die Oberfläche gibt es auf Deutsch, Englisch, Italienisch, Spanisch, Französisch und Russisch. Die Quelltexte sind deutsch und

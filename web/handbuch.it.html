@@ -128,7 +128,8 @@ l'interfaccia web, ma il controllo della ventola segnala «non disponibile».</l
 <ul>
 <li><b>FAKE86921 – Schermo intero:</b> avvia l’app se non è ancora in esecuzione e la mostra a schermo intero con il controller (vedi «L’app a schermo intero»).</li>
 <li><b>FAKE86922 – Browser:</b> avvia anch’esso l’app e apre l’interfaccia web nel browser della console.</li>
-<li>Entrambi contengono l’app nel loro <code>eboot.bin</code>. Dopo un aggiornamento copia le cartelle della nuova pubblicazione, altrimenti parte la versione vecchia. Con un riquadro non serve più inviare l’ELF dopo un riavvio.</li>
+<li>Entrambi contengono l’app nel loro <code>eboot.bin</code>. Dopo un aggiornamento copia le cartelle della nuova pubblicazione (l’app a schermo intero deve essere chiusa). Con un riquadro non serve più inviare l’ELF dopo un riavvio.</li>
+<li><b>Un’app più vecchia in esecuzione viene sostituita (dalla 1.77.1):</b> toccando il riquadro vengono confrontate le versioni. Se è ancora in esecuzione un’app <b>più vecchia</b> – ad esempio perché la console non è stata riavviata –, subentra quella integrata (chiude la vecchia all’avvio; il riquadro attende fino a 30 secondi). Un’app uguale o più recente resta. Se è in corso un’operazione (impacchettamento, copia, installazione, salvataggi …), non viene sostituito nulla, perché l’operazione verrebbe annullata: il riquadro segnala che è pronta un’app più recente (il messaggio è in tedesco); riaprilo al termine. I riquadri della 1.77.0 o precedenti non lo sanno ancora fare: invia una volta il nuovo ELF o riavvia la console.</li>
 </ul>
 <div class='warn'>Esegui sempre <b>una sola</b> istanza. Due istanze regolano la ventola contemporaneamente e si ostacolano.
 Chiudi un’istanza vecchia nella pagina «Payloads», altrimenti aiuta un riavvio.</div>
@@ -503,4 +504,4 @@ immagine del profilo, nome e link. I link sono cliccabili solo se il browser ha 
 </table>
 <p>Altre risposte si trovano nelle <b>FAQ</b>.</p>
 <p><b>Pagina non raggiungibile dopo un cambio di rete?</b> Quando il Wi-Fi viene spento e riacceso o il cavo viene staccato, la console a volte chiude l'accesso dell'interfaccia web anche se l'app continua a funzionare (e anche il controllo della ventola). L'app lo verifica ogni dieci secondi, riapre da sola l'accesso e lo segnala nel registro («interfaccia web … riaperta»). Dopo qualche secondo la pagina si carica di nuovo; non serve inviare di nuovo l'ELF.</p>
-</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Versione 1.77.1 · Aggiornato al 7 ottobre 2026 · Non è un prodotto ufficiale; «PlayStation» e «PS5» sono marchi dei rispettivi proprietari. Solo per la propria console, senza alcuna garanzia (GPL-3.0-or-later).</div></div></body></html>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Versione 1.77.1 · Aggiornato al 7 novembre 2026 · Non è un prodotto ufficiale; «PlayStation» e «PS5» sono marchi dei rispettivi proprietari. Solo per la propria console, senza alcuna garanzia (GPL-3.0-or-later).</div></div></body></html>

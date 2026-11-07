@@ -22,7 +22,7 @@
    "Svenska"
   ],
   "back": "← Tillbaka till appen",
-  "footer": "PS5 Cooling &amp; System Center - Pro · Version {version} · Per den 7 oktober 2026 · Ingen officiell produkt; ”PlayStation” och ”PS5” är varumärken som tillhör sina respektive ägare. Endast för din egen konsol, utan garanti (GPL-3.0-or-later)."
+  "footer": "PS5 Cooling &amp; System Center - Pro · Version {version} · Per den 7 november 2026 · Ingen officiell produkt; ”PlayStation” och ”PS5” är varumärken som tillhör sina respektive ägare. Endast för din egen konsol, utan garanti (GPL-3.0-or-later)."
  },
  "captions": {
   "01-kuehlung.png": "Sidan ”Kylning”",
@@ -54,7 +54,7 @@
   {
    "id": "installation",
    "title": "Installation &amp; första start",
-   "html": "\n<ol class='steps'>\n<li>Skicka <code>PS5_Cooling_System_Center_v{version}.elf</code> till konsolen, port <code>9021</code>, t.ex.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>Uppe till vänster på tv:n visas ett meddelande med webbgränssnittets adress.</li>\n<li>Öppna den i webbläsaren: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>Brickorna</h3>\n<p>Releasen innehåller två brickor. Kopiera mappen från zip-filen till <code>/data/homebrew/</code> (via FTP eller med filhanteraren); sedan lägger ShadowMountPlus till brickan.</p>\n<ul>\n<li><b>FAKE86921 – Helskärm:</b> startar appen om den inte redan körs och visar den i helskärm med handkontrollen (se ”Helskärmsappen”).</li>\n<li><b>FAKE86922 – Webbläsare:</b> startar också appen och öppnar webbgränssnittet i konsolens webbläsare.</li>\n<li>Båda har appen i sin <code>eboot.bin</code>. Kopiera mapparna från den nya releasen efter en uppdatering, annars startar den gamla versionen. Med en bricka behöver du inte längre skicka ELF-filen efter en omstart.</li>\n</ul>\n<div class='warn'>Kör alltid bara <b>en</b> instans. Två instanser styr fläkten samtidigt och stör varandra.\nStoppa en gammal instans på sidan ”Payloads”, annars hjälper en omstart.</div>\n<div class='tip'>Den tidigare mediebrickan (PSCC69690) behövs inte längre och skapas inte längre; en borttagen kommer inte tillbaka.</div>\n<!--starter-->"
+   "html": "\n<ol class='steps'>\n<li>Skicka <code>PS5_Cooling_System_Center_v{version}.elf</code> till konsolen, port <code>9021</code>, t.ex.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>Uppe till vänster på tv:n visas ett meddelande med webbgränssnittets adress.</li>\n<li>Öppna den i webbläsaren: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>Brickorna</h3>\n<p>Releasen innehåller två brickor. Kopiera mappen från zip-filen till <code>/data/homebrew/</code> (via FTP eller med filhanteraren); sedan lägger ShadowMountPlus till brickan.</p>\n<ul>\n<li><b>FAKE86921 – Helskärm:</b> startar appen om den inte redan körs och visar den i helskärm med handkontrollen (se ”Helskärmsappen”).</li>\n<li><b>FAKE86922 – Webbläsare:</b> startar också appen och öppnar webbgränssnittet i konsolens webbläsare.</li>\n<li>Båda har appen i sin <code>eboot.bin</code>. Kopiera mapparna från den nya releasen efter en uppdatering (helskärmsappen måste vara stängd). Med en bricka behöver du inte längre skicka ELF-filen efter en omstart.</li>\n<li><b>En äldre app som körs ersätts (sedan 1.77.1):</b> När du trycker på brickan jämförs versionerna. Om en <b>äldre</b> app fortfarande körs – till exempel för att konsolen inte startats om – tar den inbyggda över (den avslutar den gamla vid start; brickan väntar upp till 30 sekunder). En lika ny eller nyare app får vara kvar. Pågår ett jobb (paketering, kopiering, installation, sparfiler …) ersätts inget, eftersom jobbet då skulle avbrytas: brickan meddelar att en nyare app finns redo (meddelandet är på tyska); öppna den igen när jobbet är klart. Brickor från 1.77.0 eller äldre kan inte detta än – skicka den nya ELF-filen en gång eller starta om konsolen.</li>\n</ul>\n<div class='warn'>Kör alltid bara <b>en</b> instans. Två instanser styr fläkten samtidigt och stör varandra.\nStoppa en gammal instans på sidan ”Payloads”, annars hjälper en omstart.</div>\n<div class='tip'>Den tidigare mediebrickan (PSCC69690) behövs inte längre och skapas inte längre; en borttagen kommer inte tillbaka.</div>\n<!--starter-->"
   },
   {
    "id": "oberflaeche",
@@ -179,6 +179,10 @@
     {
      "q": "Rutan öppnar bara en tom sida – varför?",
      "a": "Det gäller den tidigare medierutan (PSCC69690): den startade inte appen. Använd rutan FAKE86922 (webbläsare) eller FAKE86921 (helskärm). Båda startar appen själva."
+    },
+    {
+     "q": "Jag har kopierat nya brickmappar, men appen visar fortfarande den gamla versionen – varför?",
+     "a": "Till och med 1.77.0 skickade brickorna bara sin app om ingen körde, så en äldre app som fortfarande körde blev helt enkelt kvar. Sedan 1.77.1 ersätter brickan en <b>äldre</b> app som körs när du trycker på den. En lika ny eller nyare app får vara kvar, och pågår ett jobb (paketering, kopiering, installation …) rör brickan inte appen – öppna den igen när jobbet är klart. Är brickorna på konsolen från 1.77.0 eller äldre, skicka den nya ELF-filen en gång till port 9021 (den avslutar själv den gamla instansen) eller starta om konsolen."
     },
     {
      "q": "Hur öppnar jag gränssnittet på en mobil eller dator?",

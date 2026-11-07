@@ -128,7 +128,8 @@ Weboberfläche, die Lüfterregelung meldet dann „nicht verfügbar“.</li>
 <ul>
 <li><b>FAKE86921 – Vollbild:</b> startet die App, falls sie noch nicht läuft, und zeigt sie im Vollbild mit dem Controller (siehe „Die Vollbild-App“).</li>
 <li><b>FAKE86922 – Browser:</b> startet die App ebenso und öffnet die Weboberfläche im Browser der Konsole.</li>
-<li>Beide tragen die App in ihrer <code>eboot.bin</code>. Nach einem Update die Ordner aus der neuen Veröffentlichung kopieren, sonst startet die alte Fassung. Mit einer Kachel muss die ELF nach einem Neustart nicht mehr gesendet werden.</li>
+<li>Beide tragen die App in ihrer <code>eboot.bin</code>. Nach einem Update die Ordner aus der neuen Veröffentlichung kopieren (die Vollbild-App muss dafür geschlossen sein). Mit einer Kachel muss die ELF nach einem Neustart nicht mehr gesendet werden.</li>
+<li><b>Eine ältere laufende App wird ersetzt (seit 1.77.1):</b> Beim Antippen vergleicht die Kachel die Versionen. Läuft noch eine <b>ältere</b> App – etwa weil die Konsole nicht neu gestartet wurde –, tritt die eingebaute an ihre Stelle (sie beendet die alte beim Start; die Kachel wartet dafür bis zu 30 Sekunden). Eine gleiche oder neuere App bleibt. Läuft gerade ein Auftrag (Packen, Kopieren, Installieren, Spielstände …), wird nichts ersetzt, weil das den Auftrag abbräche: Die Kachel meldet, dass eine neuere App bereitliegt (Meldung auf Deutsch); nach dem Auftrag noch einmal öffnen. Kacheln aus 1.77.0 oder älter können das noch nicht – dann einmal die neue ELF senden oder die Konsole neu starten.</li>
 </ul>
 <div class='warn'>Immer nur <b>eine</b> Instanz laufen lassen. Zwei Instanzen regeln den Lüfter gleichzeitig und stören sich.
 Eine alte Instanz beendest du auf der Seite „Payloads“, sonst hilft ein Neustart.</div>
@@ -503,4 +504,4 @@ Profilbild, Name und Links. Die Links sind nur anklickbar, wenn der Browser Inte
 </table>
 <p>Mehr Antworten stehen in der <b>FAQ</b>.</p>
 <p><b>Seite nach einem Netzwerkwechsel nicht erreichbar?</b> Wird das WLAN aus- und wieder eingeschaltet oder das Kabel gezogen, beendet die Konsole manchmal den Zugang der Web-Oberfläche, obwohl die App weiterläuft (und die Lüftersteuerung auch). Die App prüft das alle zehn Sekunden, öffnet den Zugang dann von selbst neu und meldet es im Protokoll („Weboberfläche … neu geöffnet“). Nach ein paar Sekunden lädt die Seite wieder; die ELF muss nicht noch einmal gesendet werden.</p>
-</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.77.1 · Stand 07.10.2026 · Kein offizielles Produkt; „PlayStation“ und „PS5“ sind Marken ihrer jeweiligen Inhaber. Nur für die eigene Konsole, ohne Gewähr (GPL-3.0-or-later).</div></div></body></html>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.77.1 · Stand 07.11.2026 · Kein offizielles Produkt; „PlayStation“ und „PS5“ sind Marken ihrer jeweiligen Inhaber. Nur für die eigene Konsole, ohne Gewähr (GPL-3.0-or-later).</div></div></body></html>

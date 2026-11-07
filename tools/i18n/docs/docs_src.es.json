@@ -22,7 +22,7 @@
    "Español"
   ],
   "back": "← Volver a la app",
-  "footer": "PS5 Cooling &amp; System Center - Pro · Versión {version} · Actualizado el 7 de octubre de 2026 · No es un producto oficial; «PlayStation» y «PS5» son marcas comerciales de sus respectivos propietarios. Solo para tu propia consola, sin garantía (GPL-3.0-or-later)."
+  "footer": "PS5 Cooling &amp; System Center - Pro · Versión {version} · Actualizado el 7 de noviembre de 2026 · No es un producto oficial; «PlayStation» y «PS5» son marcas comerciales de sus respectivos propietarios. Solo para tu propia consola, sin garantía (GPL-3.0-or-later)."
  },
  "captions": {
   "01-kuehlung.png": "La página «Refrigeración»",
@@ -54,7 +54,7 @@
   {
    "id": "installation",
    "title": "Instalación &amp; primer inicio",
-   "html": "\n<ol class='steps'>\n<li>Envía <code>PS5_Cooling_System_Center_v{version}.elf</code> a la consola, puerto <code>9021</code>, p. ej.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>En el televisor aparece, arriba a la izquierda, una notificación con la dirección de la interfaz web.</li>\n<li>Ábrela en el navegador: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>Los mosaicos</h3>\n<p>La publicación contiene dos mosaicos. Copia la carpeta del zip a <code>/data/homebrew/</code> (por FTP o con el gestor de archivos); ShadowMountPlus crea entonces el mosaico.</p>\n<ul>\n<li><b>FAKE86921 – Pantalla completa:</b> inicia la app si aún no se está ejecutando y la muestra a pantalla completa con el mando (ver «La app a pantalla completa»).</li>\n<li><b>FAKE86922 – Navegador:</b> también inicia la app y abre la interfaz web en el navegador de la consola.</li>\n<li>Ambos llevan la app en su <code>eboot.bin</code>. Tras una actualización, copia las carpetas de la nueva publicación; si no, se inicia la versión antigua. Con un mosaico ya no hace falta enviar el ELF tras un reinicio.</li>\n</ul>\n<div class='warn'>Ejecuta siempre solo <b>una</b> instancia. Dos instancias regulan el ventilador a la vez y se estorban.\nDetén una instancia antigua en la página «Payloads»; si no, ayuda reiniciar.</div>\n<div class='tip'>El antiguo mosaico de Multimedia (PSCC69690) ya no hace falta y ya no se crea; si lo borras, no vuelve.</div>\n<!--starter-->"
+   "html": "\n<ol class='steps'>\n<li>Envía <code>PS5_Cooling_System_Center_v{version}.elf</code> a la consola, puerto <code>9021</code>, p. ej.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>En el televisor aparece, arriba a la izquierda, una notificación con la dirección de la interfaz web.</li>\n<li>Ábrela en el navegador: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>Los mosaicos</h3>\n<p>La publicación contiene dos mosaicos. Copia la carpeta del zip a <code>/data/homebrew/</code> (por FTP o con el gestor de archivos); ShadowMountPlus crea entonces el mosaico.</p>\n<ul>\n<li><b>FAKE86921 – Pantalla completa:</b> inicia la app si aún no se está ejecutando y la muestra a pantalla completa con el mando (ver «La app a pantalla completa»).</li>\n<li><b>FAKE86922 – Navegador:</b> también inicia la app y abre la interfaz web en el navegador de la consola.</li>\n<li>Ambos llevan la app en su <code>eboot.bin</code>. Tras una actualización, copia las carpetas de la nueva publicación (la app a pantalla completa debe estar cerrada). Con un mosaico ya no hace falta enviar el ELF tras un reinicio.</li>\n<li><b>Una app más antigua en ejecución se sustituye (desde 1.77.1):</b> al tocar el mosaico se comparan las versiones. Si aún se ejecuta una app <b>más antigua</b> –por ejemplo, porque no se reinició la consola–, la integrada ocupa su lugar (cierra la antigua al iniciarse; el mosaico espera hasta 30 segundos). Una app igual o más nueva se mantiene. Si hay un trabajo en curso (empaquetar, copiar, instalar, partidas guardadas …), no se sustituye nada, porque cancelaría el trabajo: el mosaico avisa de que hay una app más nueva lista (el aviso está en alemán); ábrelo de nuevo al terminar. Los mosaicos de 1.77.0 o anteriores aún no pueden hacerlo: envía el nuevo ELF una vez o reinicia la consola.</li>\n</ul>\n<div class='warn'>Ejecuta siempre solo <b>una</b> instancia. Dos instancias regulan el ventilador a la vez y se estorban.\nDetén una instancia antigua en la página «Payloads»; si no, ayuda reiniciar.</div>\n<div class='tip'>El antiguo mosaico de Multimedia (PSCC69690) ya no hace falta y ya no se crea; si lo borras, no vuelve.</div>\n<!--starter-->"
   },
   {
    "id": "oberflaeche",
@@ -179,6 +179,10 @@
     {
      "q": "El icono solo abre una página vacía, ¿por qué?",
      "a": "Esto afecta al antiguo mosaico de Multimedia (PSCC69690): no iniciaba la app. Usa el mosaico FAKE86922 (navegador) o FAKE86921 (pantalla completa); ambos inician la app por sí mismos."
+    },
+    {
+     "q": "He copiado carpetas de mosaico nuevas, pero la app sigue mostrando la versión antigua, ¿por qué?",
+     "a": "Hasta 1.77.0 los mosaicos solo enviaban su app si no había ninguna en ejecución, así que una app antigua que seguía activa se quedaba tal cual. Desde 1.77.1 el mosaico sustituye al tocarlo una app <b>más antigua</b> en ejecución. Una igual o más nueva se mantiene, y si hay un trabajo en curso (empaquetar, copiar, instalar …) el mosaico no toca la app: ábrelo de nuevo al terminar. Si los mosaicos de tu consola son de 1.77.0 o anteriores, envía una vez el nuevo ELF al puerto 9021 (cierra él mismo la instancia antigua) o reinicia la consola."
     },
     {
      "q": "¿Cómo abro la interfaz en el móvil o en el PC?",

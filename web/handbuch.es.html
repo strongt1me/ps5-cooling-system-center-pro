@@ -128,7 +128,8 @@ interfaz web, pero la regulación del ventilador indica «no disponible».</li>
 <ul>
 <li><b>FAKE86921 – Pantalla completa:</b> inicia la app si aún no se está ejecutando y la muestra a pantalla completa con el mando (ver «La app a pantalla completa»).</li>
 <li><b>FAKE86922 – Navegador:</b> también inicia la app y abre la interfaz web en el navegador de la consola.</li>
-<li>Ambos llevan la app en su <code>eboot.bin</code>. Tras una actualización, copia las carpetas de la nueva publicación; si no, se inicia la versión antigua. Con un mosaico ya no hace falta enviar el ELF tras un reinicio.</li>
+<li>Ambos llevan la app en su <code>eboot.bin</code>. Tras una actualización, copia las carpetas de la nueva publicación (la app a pantalla completa debe estar cerrada). Con un mosaico ya no hace falta enviar el ELF tras un reinicio.</li>
+<li><b>Una app más antigua en ejecución se sustituye (desde 1.77.1):</b> al tocar el mosaico se comparan las versiones. Si aún se ejecuta una app <b>más antigua</b> –por ejemplo, porque no se reinició la consola–, la integrada ocupa su lugar (cierra la antigua al iniciarse; el mosaico espera hasta 30 segundos). Una app igual o más nueva se mantiene. Si hay un trabajo en curso (empaquetar, copiar, instalar, partidas guardadas …), no se sustituye nada, porque cancelaría el trabajo: el mosaico avisa de que hay una app más nueva lista (el aviso está en alemán); ábrelo de nuevo al terminar. Los mosaicos de 1.77.0 o anteriores aún no pueden hacerlo: envía el nuevo ELF una vez o reinicia la consola.</li>
 </ul>
 <div class='warn'>Ejecuta siempre solo <b>una</b> instancia. Dos instancias regulan el ventilador a la vez y se estorban.
 Detén una instancia antigua en la página «Payloads»; si no, ayuda reiniciar.</div>
@@ -503,4 +504,4 @@ imagen de perfil, nombre y enlaces. Los enlaces solo se pueden pulsar si el nave
 </table>
 <p>Encontrarás más respuestas en las <b>FAQ</b>.</p>
 <p><b>¿La página no se alcanza tras un cambio de red?</b> Si se apaga y enciende el Wi-Fi o se desconecta el cable, la consola a veces cierra el acceso de la interfaz web aunque la app siga funcionando (y el control del ventilador también). La app lo comprueba cada diez segundos, vuelve a abrir el acceso por sí sola y lo indica en el registro («interfaz web … reabierta»). Tras unos segundos la página carga de nuevo; no hace falta volver a enviar la ELF.</p>
-</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Versión 1.77.1 · Actualizado el 7 de octubre de 2026 · No es un producto oficial; «PlayStation» y «PS5» son marcas comerciales de sus respectivos propietarios. Solo para tu propia consola, sin garantía (GPL-3.0-or-later).</div></div></body></html>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Versión 1.77.1 · Actualizado el 7 de noviembre de 2026 · No es un producto oficial; «PlayStation» y «PS5» son marcas comerciales de sus respectivos propietarios. Solo para tu propia consola, sin garantía (GPL-3.0-or-later).</div></div></body></html>

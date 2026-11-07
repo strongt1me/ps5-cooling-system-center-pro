@@ -22,7 +22,7 @@
    "Italiano"
   ],
   "back": "← Torna all'app",
-  "footer": "PS5 Cooling &amp; System Center - Pro · Versione {version} · Aggiornato al 7 ottobre 2026 · Non è un prodotto ufficiale; «PlayStation» e «PS5» sono marchi dei rispettivi proprietari. Solo per la propria console, senza alcuna garanzia (GPL-3.0-or-later)."
+  "footer": "PS5 Cooling &amp; System Center - Pro · Versione {version} · Aggiornato al 7 novembre 2026 · Non è un prodotto ufficiale; «PlayStation» e «PS5» sono marchi dei rispettivi proprietari. Solo per la propria console, senza alcuna garanzia (GPL-3.0-or-later)."
  },
  "captions": {
   "01-kuehlung.png": "La pagina «Raffreddamento»",
@@ -54,7 +54,7 @@
   {
    "id": "installation",
    "title": "Installazione &amp; primo avvio",
-   "html": "\n<ol class='steps'>\n<li>Invia <code>PS5_Cooling_System_Center_v{version}.elf</code> alla console, porta <code>9021</code>, ad es.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>Sul televisore compare in alto a sinistra una notifica con l'indirizzo dell'interfaccia web.</li>\n<li>Apri nel browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>I riquadri</h3>\n<p>La pubblicazione contiene due riquadri. Copia la cartella dello zip in <code>/data/homebrew/</code> (via FTP o con il gestore file); ShadowMountPlus crea poi il riquadro.</p>\n<ul>\n<li><b>FAKE86921 – Schermo intero:</b> avvia l’app se non è ancora in esecuzione e la mostra a schermo intero con il controller (vedi «L’app a schermo intero»).</li>\n<li><b>FAKE86922 – Browser:</b> avvia anch’esso l’app e apre l’interfaccia web nel browser della console.</li>\n<li>Entrambi contengono l’app nel loro <code>eboot.bin</code>. Dopo un aggiornamento copia le cartelle della nuova pubblicazione, altrimenti parte la versione vecchia. Con un riquadro non serve più inviare l’ELF dopo un riavvio.</li>\n</ul>\n<div class='warn'>Esegui sempre <b>una sola</b> istanza. Due istanze regolano la ventola contemporaneamente e si ostacolano.\nChiudi un’istanza vecchia nella pagina «Payloads», altrimenti aiuta un riavvio.</div>\n<div class='tip'>Il vecchio riquadro Multimedia (PSCC69690) non serve più e non viene più creato; se lo elimini non torna.</div>\n<!--starter-->"
+   "html": "\n<ol class='steps'>\n<li>Invia <code>PS5_Cooling_System_Center_v{version}.elf</code> alla console, porta <code>9021</code>, ad es.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>Sul televisore compare in alto a sinistra una notifica con l'indirizzo dell'interfaccia web.</li>\n<li>Apri nel browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>I riquadri</h3>\n<p>La pubblicazione contiene due riquadri. Copia la cartella dello zip in <code>/data/homebrew/</code> (via FTP o con il gestore file); ShadowMountPlus crea poi il riquadro.</p>\n<ul>\n<li><b>FAKE86921 – Schermo intero:</b> avvia l’app se non è ancora in esecuzione e la mostra a schermo intero con il controller (vedi «L’app a schermo intero»).</li>\n<li><b>FAKE86922 – Browser:</b> avvia anch’esso l’app e apre l’interfaccia web nel browser della console.</li>\n<li>Entrambi contengono l’app nel loro <code>eboot.bin</code>. Dopo un aggiornamento copia le cartelle della nuova pubblicazione (l’app a schermo intero deve essere chiusa). Con un riquadro non serve più inviare l’ELF dopo un riavvio.</li>\n<li><b>Un’app più vecchia in esecuzione viene sostituita (dalla 1.77.1):</b> toccando il riquadro vengono confrontate le versioni. Se è ancora in esecuzione un’app <b>più vecchia</b> – ad esempio perché la console non è stata riavviata –, subentra quella integrata (chiude la vecchia all’avvio; il riquadro attende fino a 30 secondi). Un’app uguale o più recente resta. Se è in corso un’operazione (impacchettamento, copia, installazione, salvataggi …), non viene sostituito nulla, perché l’operazione verrebbe annullata: il riquadro segnala che è pronta un’app più recente (il messaggio è in tedesco); riaprilo al termine. I riquadri della 1.77.0 o precedenti non lo sanno ancora fare: invia una volta il nuovo ELF o riavvia la console.</li>\n</ul>\n<div class='warn'>Esegui sempre <b>una sola</b> istanza. Due istanze regolano la ventola contemporaneamente e si ostacolano.\nChiudi un’istanza vecchia nella pagina «Payloads», altrimenti aiuta un riavvio.</div>\n<div class='tip'>Il vecchio riquadro Multimedia (PSCC69690) non serve più e non viene più creato; se lo elimini non torna.</div>\n<!--starter-->"
   },
   {
    "id": "oberflaeche",
@@ -179,6 +179,10 @@
     {
      "q": "Il riquadro apre solo una pagina vuota – perché?",
      "a": "Riguarda il vecchio riquadro Multimedia (PSCC69690): non avviava l’app. Usa il riquadro FAKE86922 (browser) o FAKE86921 (schermo intero); entrambi avviano l’app da soli."
+    },
+    {
+     "q": "Ho copiato le nuove cartelle dei riquadri, ma l’app mostra ancora la versione vecchia – perché?",
+     "a": "Fino alla 1.77.0 i riquadri inviavano la loro app solo se non ne era in esecuzione nessuna, quindi un’app vecchia ancora attiva restava semplicemente lì. Dalla 1.77.1 il riquadro, quando lo tocchi, sostituisce un’app <b>più vecchia</b> in esecuzione. Una uguale o più recente resta, e se è in corso un’operazione (impacchettamento, copia, installazione …) il riquadro non tocca l’app: riaprilo al termine. Se i riquadri sulla console sono della 1.77.0 o precedenti, invia una volta il nuovo ELF alla porta 9021 (chiude da solo la vecchia istanza) o riavvia la console."
     },
     {
      "q": "Come apro l'interfaccia dallo smartphone o dal PC?",

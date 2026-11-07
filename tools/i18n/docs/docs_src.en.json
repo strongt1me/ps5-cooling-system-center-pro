@@ -22,7 +22,7 @@
    "English"
   ],
   "back": "← Back to the app",
-  "footer": "PS5 Cooling &amp; System Center - Pro · Version {version} · As of 7 October 2026 · Not an official product; “PlayStation” and “PS5” are trademarks of their respective owners. Only for your own console, without warranty (GPL-3.0-or-later)."
+  "footer": "PS5 Cooling &amp; System Center - Pro · Version {version} · As of 7 November 2026 · Not an official product; “PlayStation” and “PS5” are trademarks of their respective owners. Only for your own console, without warranty (GPL-3.0-or-later)."
  },
  "captions": {
   "01-kuehlung.png": "The “Cooling” page",
@@ -54,7 +54,7 @@
   {
    "id": "installation",
    "title": "Installation &amp; first start",
-   "html": "\n<ol class='steps'>\n<li>Send <code>PS5_Cooling_System_Center_v{version}.elf</code> to the console, port <code>9021</code>, e.g.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>A notification with the address of the web interface appears at the top left of the TV.</li>\n<li>Open it in the browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>The tiles</h3>\n<p>The release contains two tiles. Copy the folder from the zip to <code>/data/homebrew/</code> (by FTP or with the file manager); ShadowMountPlus then adds the tile.</p>\n<ul>\n<li><b>FAKE86921 – Fullscreen:</b> starts the app if it is not running yet and shows it fullscreen with the controller (see “The fullscreen app”).</li>\n<li><b>FAKE86922 – Browser:</b> starts the app as well and opens the web interface in the console's browser.</li>\n<li>Both carry the app in their <code>eboot.bin</code>. After an update, copy the folders from the new release, otherwise the old version starts. With a tile you no longer need to send the ELF after a restart.</li>\n</ul>\n<div class='warn'>Only ever run <b>one</b> instance. Two instances control the fan at the same time and get in each other's way.\nStop an old instance on the “Payloads” page, otherwise a restart helps.</div>\n<div class='tip'>The former media tile (PSCC69690) is no longer needed and no longer created; a deleted one does not come back.</div>\n<!--starter-->"
+   "html": "\n<ol class='steps'>\n<li>Send <code>PS5_Cooling_System_Center_v{version}.elf</code> to the console, port <code>9021</code>, e.g.:<br>\n<code>nc -q0 &lt;PS5-IP&gt; 9021 &lt; PS5_Cooling_System_Center_v{version}.elf</code></li>\n<li>A notification with the address of the web interface appears at the top left of the TV.</li>\n<li>Open it in the browser: <code>http://&lt;PS5-IP&gt;:8086/</code></li>\n</ol>\n<h3>The tiles</h3>\n<p>The release contains two tiles. Copy the folder from the zip to <code>/data/homebrew/</code> (by FTP or with the file manager); ShadowMountPlus then adds the tile.</p>\n<ul>\n<li><b>FAKE86921 – Fullscreen:</b> starts the app if it is not running yet and shows it fullscreen with the controller (see “The fullscreen app”).</li>\n<li><b>FAKE86922 – Browser:</b> starts the app as well and opens the web interface in the console's browser.</li>\n<li>Both carry the app in their <code>eboot.bin</code>. After an update, copy the folders from the new release (the fullscreen app must be closed for that). With a tile you no longer need to send the ELF after a restart.</li>\n<li><b>An older running app is replaced (since 1.77.1):</b> When you tap a tile, it compares the versions. If an <b>older</b> app is still running – for example because the console was not restarted – the built-in one takes its place (it ends the old one on start; the tile waits up to 30 seconds for that). An equal or newer app stays. If a job is running (packing, copying, installing, save games …), nothing is replaced, because that would cancel the job: the tile reports that a newer app is ready (the message is in German); open it again after the job. Tiles from 1.77.0 or older cannot do this yet – send the new ELF once or restart the console.</li>\n</ul>\n<div class='warn'>Only ever run <b>one</b> instance. Two instances control the fan at the same time and get in each other's way.\nStop an old instance on the “Payloads” page, otherwise a restart helps.</div>\n<div class='tip'>The former media tile (PSCC69690) is no longer needed and no longer created; a deleted one does not come back.</div>\n<!--starter-->"
   },
   {
    "id": "oberflaeche",
@@ -179,6 +179,10 @@
     {
      "q": "The tile only opens an empty page – why?",
      "a": "This concerns the former media tile (PSCC69690): it did not start the app. Use the tile FAKE86922 (browser) or FAKE86921 (fullscreen); both start the app themselves."
+    },
+    {
+     "q": "I copied new tile folders, but the app still shows the old version – why?",
+     "a": "Up to 1.77.0 the tiles only sent their app when none was running, so an older app that was still running simply stayed. Since 1.77.1 a tile replaces an <b>older</b> running app when you tap it. An equal or newer one stays, and if a job is running (packing, copying, installing …) the tile leaves the app alone – open it again after the job. If the tiles on your console are still from 1.77.0 or older, send the new ELF once to port 9021 (it ends the old instance itself) or restart the console."
     },
     {
      "q": "How do I open the interface on a phone or PC?",

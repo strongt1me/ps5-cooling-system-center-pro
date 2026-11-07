@@ -1580,8 +1580,21 @@ und ihre Kacheln danach löschen.
   sie nur die Oberfläche.
 - Die `eboot.bin` ist ein nativer, signierter PS5-Titel (gebaut mit `tools/make_starter.sh` nach dem Vorbild von
   ps5-native-app-boilerplate); eine einfache ELF startet die Konsole nicht. `sce_module/libc.prx` verlangt der App-Lader.
-- Die App steckt in der `eboot.bin`: Nach einem Update den Ordner aus der neuen Veröffentlichung kopieren, sonst startet
-  die Kachel die alte Fassung.
+- Die App steckt in der `eboot.bin`: Nach einem Update den Ordner aus der neuen Veröffentlichung kopieren (die
+  Vollbild-App muss dafür geschlossen sein, sonst lehnt FTP ihre `eboot.bin` ab).
+- **Eine ältere laufende App wird ersetzt (seit 1.77.1).** Bis 1.77.0 schickten die Kacheln ihre App nur, wenn auf
+  Port 8086 nichts antwortete; eine noch laufende ältere blieb stehen und zeigte zum Beispiel weiter „1.76.9“. Jetzt
+  vergleichen die Kacheln beim Antippen die Versionen: Die laufende App nennt ihre in `GET /api/v1/system`
+  (`app_version`), die ELF in der Kachel trägt die Marke `PS5CC-VERSION:<Version>:` (`src/main.c`).
+  - Ist die laufende App **älter**, tritt die eingebaute an ihre Stelle (die neue beendet die alte beim Start); die
+    Kachel wartet, bis die neue Version antwortet, höchstens 30 Sekunden.
+  - Eine **gleiche oder neuere** App bleibt, ebenso eine ohne Versionsangabe.
+  - Läuft ein **Auftrag** (Abbild/LZ4/zstd-Pakete, Dateimanager, Kopieren/Konvertieren/Löschen, Paket-Installation,
+    Spielstände, AMPR-Index), wird nichts ersetzt, denn das Ende der App würde ihn abbrechen. Die Kachel meldet
+    „Eine neuere App liegt bereit“; nach dem Auftrag noch einmal öffnen.
+  - Kacheln aus 1.77.0 oder älter können das noch nicht: einmal die neue ELF an Port 9021 senden (sie beendet die
+    ältere Instanz selbst) oder die Konsole neu starten und dann die Kachel öffnen. Geprüft wurde die Vergleichslogik
+    am PC, das Ersetzen an der Konsole noch nicht.
 
 ## Die Vollbild-App (seit 1.75.0)
 

@@ -128,7 +128,8 @@ web interface work, but fan control then reports “not available”.</li>
 <ul>
 <li><b>FAKE86921 – Fullscreen:</b> starts the app if it is not running yet and shows it fullscreen with the controller (see “The fullscreen app”).</li>
 <li><b>FAKE86922 – Browser:</b> starts the app as well and opens the web interface in the console's browser.</li>
-<li>Both carry the app in their <code>eboot.bin</code>. After an update, copy the folders from the new release, otherwise the old version starts. With a tile you no longer need to send the ELF after a restart.</li>
+<li>Both carry the app in their <code>eboot.bin</code>. After an update, copy the folders from the new release (the fullscreen app must be closed for that). With a tile you no longer need to send the ELF after a restart.</li>
+<li><b>An older running app is replaced (since 1.77.1):</b> When you tap a tile, it compares the versions. If an <b>older</b> app is still running – for example because the console was not restarted – the built-in one takes its place (it ends the old one on start; the tile waits up to 30 seconds for that). An equal or newer app stays. If a job is running (packing, copying, installing, save games …), nothing is replaced, because that would cancel the job: the tile reports that a newer app is ready (the message is in German); open it again after the job. Tiles from 1.77.0 or older cannot do this yet – send the new ELF once or restart the console.</li>
 </ul>
 <div class='warn'>Only ever run <b>one</b> instance. Two instances control the fan at the same time and get in each other's way.
 Stop an old instance on the “Payloads” page, otherwise a restart helps.</div>
@@ -502,4 +503,4 @@ profile picture, name and links. The links can only be clicked if the browser ha
 </table>
 <p>More answers are in the <b>FAQ</b>.</p>
 <p><b>Page not reachable after a network change?</b> When Wi-Fi is switched off and on or the cable is pulled, the console sometimes ends the web interface's access although the app keeps running (and so does the fan control). The app checks this every ten seconds, reopens the access by itself and says so in the log (“web interface … reopened”). After a few seconds the page loads again; the ELF does not have to be sent again.</p>
-</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.77.1 · As of 7 October 2026 · Not an official product; “PlayStation” and “PS5” are trademarks of their respective owners. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>
+</section><div class='foot'>PS5 Cooling &amp; System Center - Pro · Version 1.77.1 · As of 7 November 2026 · Not an official product; “PlayStation” and “PS5” are trademarks of their respective owners. Only for your own console, without warranty (GPL-3.0-or-later).</div></div></body></html>
