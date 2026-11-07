@@ -62,6 +62,15 @@ int ps5tm_fsign_fix_index(const char *index_path, const char *out_path, const fs
 int ps5tm_fsign_stage(const char *root, const char *stage, const fsign_list_t *l, const int *cancel, fsign_prog_fn prog, void *ctx,
                       unsigned *index_resized, char *err, size_t en);
 
+/* Replaces the listed executables of root by their fake-signed SELFs, in place (zstd packs, which always work in the game's folder):
+   each one is written beside the original under a temporary name (original + FSIGN_TMP_SUFFIX), read back against it, and only then
+   renamed over it; the mode and the times of the original are kept. Done in the order of l, and stopped at the first that fails: the
+   ones done stay signed, the others stay as they were. Then the AMPR index is corrected for the files done. *done: how many. 0, 1 when
+   cancelled, -1 failed (err). */
+#define FSIGN_TMP_SUFFIX ".ps5cc-sign-tmp"
+int ps5tm_fsign_replace(const char *root, const fsign_list_t *l, const int *cancel, fsign_prog_fn prog, void *ctx, unsigned *done,
+                        unsigned *index_resized, char *err, size_t en);
+
 /* Removes a folder whose name ends in FSIGN_STAGE_SUFFIX and everything in it (links are removed, never followed). */
 void ps5tm_fsign_rmtree(const char *stage);
 

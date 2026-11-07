@@ -47,6 +47,7 @@ enum Row
     kOriginals,
     kPlanText,
     kSignText,
+    kSign,
     kPackStart,
     kStatus = 90,   // + section: the state, always in sight
     kVersion = 100, // + index
@@ -255,7 +256,7 @@ void GameExtras::build()
         if (view_ == kLz4)
         {
             form_.set_value_text(kPlanText, plan_text());
-            form_.set_value_text(kSignText, sign_text());
+            refresh_sign();
         }
         return;
     }
@@ -526,6 +527,9 @@ void GameExtras::build_lz4()
         form_.add_value(kOriginals, "Originale", "entfernt nach der Prüfung");
         form_.add_value(kPlanText, "Plan", plan_text());
         form_.add_value(kSignText, "Programmdateien", sign_text());
+        form_.add_toggle(kSign, "Programmdateien signieren", true).description =
+            "Ersetzt unsignierte Programmdateien im Spielordner durch FSELF-Fassungen.";
+        form_.set_disabled(kSign, !has_unsigned());
         ui::FormRow &zgo = form_.add_action(kPackStart, "Packen starten");
         zgo.disabled = true;
         zgo.description = "Erst die Voraussetzung oben bestätigen.";
@@ -628,6 +632,21 @@ std::string GameExtras::plan_text() const
            duration(num(plan.root, "est_s"));
 }
 
+bool GameExtras::has_unsigned() const
+{
+    Json plan(plan_.json);
+    const cJSON *u = get(plan.root, "unsigned_exec");
+    return yes(plan.root, "valid") && num(u, "count") > 0;
+}
+
+// The "Programmdateien" row and the switch beside it follow the plan and the choices.
+void GameExtras::refresh_sign()
+{
+    form_.set_value_text(kSignText, sign_text());
+    if (zstd_)
+        form_.set_disabled(kSign, !has_unsigned());
+}
+
 std::string GameExtras::sign_text() const
 {
     Json plan(plan_.json);
@@ -645,10 +664,12 @@ std::string GameExtras::sign_text() const
     std::string text;
     if (count > 0)
         text = std::to_string(count) + " unsigniert";
+    // zstd signs in the game's own folder when the switch is on; into a copy (LZ4) the new folder gets FSELF
+    const bool signs = copy || (zstd_ && form_.toggle_value(kSign));
     if (refused > 0)
         text += (text.empty() ? "" : " · ") + std::to_string(refused) + " nicht signierbar";
     else
-        text += copy ? " · FSELF in der Kopie" : " · bleiben unverändert";
+        text += copy ? " · FSELF in der Kopie" : signs ? " · werden zu FSELF" : " · bleiben unverändert";
     return text;
 }
 
@@ -788,7 +809,8 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
             "{\"id\":" + gid + ",\"kind\":\"" +
                 (!zstd_ && form_.choice_index(kTarget) == 1 ? "copy" : "pack") + "\",\"level\":" +
                 std::to_string(level) + ",\"profile\":" + json_text(profile) + ",\"format\":\"" +
-                (zstd_ ? "zstd" : "lz4") + "\"}");
+                (zstd_ ? "zstd" : "lz4") + "\",\"sign\":" +
+                (zstd_ && form_.toggle_value(kSign) && has_unsigned() ? "true" : "false") + "}");
         view_ = kMain;
         key_.clear();
         build();
@@ -851,8 +873,8 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         else if (id == kLevel || id == kMode)
             ask_plan();
-        else if (id == kTarget)
-            form_.set_value_text(kSignText, sign_text());
+        else if (id == kTarget || id == kSign)
+            refresh_sign();
     }
 }
 

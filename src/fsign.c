@@ -32,6 +32,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "sha256.h"
@@ -696,6 +697,72 @@ ps5tm_fsign_stage(const char *root, const char *stage, const fsign_list_t *l, co
   }
   free(src);
   free(dst);
+  return rc;
+}
+
+/* ------------------------------------------------------------------ in place */
+
+int
+ps5tm_fsign_replace(const char *root, const fsign_list_t *l, const int *cancel, fsign_prog_fn prog, void *ctx, unsigned *done,
+                    unsigned *index_resized, char *err, size_t en) {
+  unsigned n = 0;
+  if(done) *done = 0;
+  if(index_resized) *index_resized = 0;
+  char *src = malloc(PATH_MAX), *tmp = malloc(PATH_MAX + 32);
+  if(!src || !tmp) { free(src); free(tmp); say(err, en, "Kein Speicher."); return -1; }
+  int rc = 0;
+  for(unsigned i = 0; i < l->n && !rc; i++) {
+    if(snprintf(src, PATH_MAX, "%s/%s", root, l->it[i].rel) >= PATH_MAX || snprintf(tmp, PATH_MAX + 32, "%s" FSIGN_TMP_SUFFIX, src) >= PATH_MAX + 32) {
+      say(err, en, "Ein Pfad ist zu lang: %s", l->it[i].rel);
+      rc = -1;
+      break;
+    }
+    struct stat st;
+    if(lstat(src, &st) != 0 || !S_ISREG(st.st_mode) || (uint64_t)st.st_size != l->it[i].elf_size) {
+      say(err, en, "%s: Die Datei hat sich verändert.", l->it[i].rel);
+      rc = -1;
+      break;
+    }
+    unlink(tmp);                                                   /* a leftover of an earlier try */
+    char why[300] = "";
+    int w = ps5tm_fsign_write(src, tmp, cancel, prog, ctx, NULL, why, sizeof(why));
+    if(w == 1) { rc = 1; break; }
+    if(w != 0) { say(err, en, "%s: %s", l->it[i].rel, why[0] ? why : "nicht signiert."); rc = -1; break; }
+    struct stat st2;
+    if(lstat(src, &st2) != 0 || st2.st_size != st.st_size || st2.st_mtime != st.st_mtime) {      /* changed while it was signed */
+      unlink(tmp);
+      say(err, en, "%s: Die Datei hat sich verändert.", l->it[i].rel);
+      rc = -1;
+      break;
+    }
+    if(rename(tmp, src) != 0) {
+      int e = errno;
+      unlink(tmp);
+      say(err, en, "%s: Umbenennen gescheitert: %s", l->it[i].rel, strerror(e));
+      rc = -1;
+      break;
+    }
+    struct timeval tv[2];
+    tv[0].tv_sec = tv[1].tv_sec = st.st_mtime;
+    tv[0].tv_usec = tv[1].tv_usec = 0;
+    utimes(src, tv);
+    n++;
+  }
+  if(done) *done = n;
+  if(n) {                                                          /* the index lists the files done at their SELF sizes */
+    fsign_list_t sub;
+    memset(&sub, 0, sizeof(sub));
+    sub.it = l->it;                                                /* the files done are the first n; sub is never freed */
+    sub.n = n;
+    char ip[PATH_MAX + 32], why[300] = "";
+    if(snprintf(ip, sizeof(ip), "%s/" FS_INDEX_NAME, root) < (int)sizeof(ip) &&
+       ps5tm_fsign_fix_index(ip, ip, &sub, index_resized, why, sizeof(why)) != 0 && !rc) {
+      say(err, en, "%s", why);
+      rc = -1;
+    }
+  }
+  free(src);
+  free(tmp);
   return rc;
 }
 

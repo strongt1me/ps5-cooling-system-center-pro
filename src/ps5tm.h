@@ -859,7 +859,7 @@ struct cJSON *ps5tm_plugins_info(const char *title_id, int *http);
 int           ps5tm_plugins_apply(const char *title_id, char *msg, size_t msg_len, struct cJSON **detail);
 struct cJSON *ps5tm_lz4_info(const char *title_id, int *http);
 struct cJSON *ps5tm_lz4_plan(const char *title_id, int level, const char *profile, const char *format, int *http);
-int           ps5tm_lz4_start(const char *kind, const char *title_id, int level, const char *profile, const char *format, char *err, size_t err_len);
+int           ps5tm_lz4_start(const char *kind, const char *title_id, int level, const char *profile, const char *format, int sign, char *err, size_t err_len);
 /* 1 when the game folder holds a pack set (ampr_assets.index) */
 int           ps5tm_lz4_packed_dir(const char *dir);
 

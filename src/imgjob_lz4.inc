@@ -18,6 +18,7 @@ typedef struct {
   int  level;
   char profile[PATH_MAX];        /* "" = automatic, else the path of a TOML profile */
   int  zstd;                     /* 1: zstd packs (NG), 0: LZ4 packs */
+  int  sign;                     /* zstd (always in the game's folder): replace its unsigned executables there by FSELF (fsign.c, 07.11.2026) */
 } lz4arg_t;
 
 /* ---------------------------------------------------------------- what the engine shows */
@@ -847,6 +848,35 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
       goto out;
     }
   }
+  if(!copy && zs && a->sign) {                                 /* zstd always packs in the game's folder: its unsigned executables are replaced there (fsign.c) */
+    fsign_list_t sl;
+    set_phase("Die Programmdateien werden signiert");
+    int scr = ps5tm_fsign_scan(root, &g_cancel, &sl);
+    unsigned total = sl.n, refused = sl.refused, done = 0, fx = 0;
+    char swhy[300] = "";
+    int sr = scr == 1 ? 1 : 0;
+    if(scr == 0 && sl.n) {
+      uint64_t big = 0;
+      for(unsigned i = 0; i < sl.n; i++) if(sl.it[i].self_size > big) big = sl.it[i].self_size;
+      if(lz4_free(root) < big + (64ull << 20)) { sr = -1; snprintf(swhy, sizeof(swhy), "zu wenig Platz auf dem Laufwerk"); }
+      else { lz4_ui_total(NULL, sl.elf_bytes * 2 + 1); sr = ps5tm_fsign_replace(root, &sl, &g_cancel, sign_prog, NULL, &done, &fx, swhy, sizeof(swhy)); }
+    }
+    if(scr == 1) snprintf(sign_note, sizeof(sign_note), "Das Signieren der Programmdateien wurde abgebrochen; sie blieben, wie sie waren.");
+    else if(sr != 0) {
+      if(sr == 1) snprintf(swhy, sizeof(swhy), "abgebrochen");
+      PS5TM_WARN("zstd_pack_sign_failed", "zstd-Pakete für %s: Signieren im Spielordner gescheitert: %.200s", id, swhy);
+      snprintf(sign_note, sizeof(sign_note), "Das Signieren der Programmdateien ist nicht fertig geworden (%s); %u von %u sind schon FSELF, die übrigen blieben, wie sie waren.", swhy, done, total);
+    } else if(done) {
+      PS5TM_INFO("zstd_pack_signed", "zstd-Pakete für %s: %u unsignierte Programmdateien im Spielordner als FSELF geschrieben%s.", id, done, fx ? " (AMPR-Index angepasst)" : "");
+      if(refused)
+        snprintf(sign_note, sizeof(sign_note), "%u Programmdateien waren nicht signiert und sind im Spielordner jetzt FSELF; %u ließen sich nicht signieren und blieben, wie sie sind.", done, refused);
+      else
+        snprintf(sign_note, sizeof(sign_note), "%u Programmdateien waren nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet) und sind im Spielordner jetzt FSELF.", done);
+    } else if(refused) {
+      snprintf(sign_note, sizeof(sign_note), "%u Programmdateien sind nicht signiert und ließen sich nicht signieren; sie blieben, wie sie sind.", refused);
+    }
+    ps5tm_fsign_free(&sl);
+  }
   {                                                            /* originals that came as 0666 (an .exfat copy) crash the packed game */
     unsigned mf = 0, mfail = 0;
     lzp_fix_modes(copy ? fin : root, &mf, &mfail);
@@ -1342,7 +1372,7 @@ ps5tm_lz4_plan(const char *id, int level, const char *profile, const char *forma
 }
 
 int
-ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *profile, const char *format, char *err, size_t n) {
+ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *profile, const char *format, int sign, char *err, size_t n) {
   char kind[10] = "";
   if(kind_in && !strcmp(kind_in, "pack")) strcpy(kind, "lz4pack");
   else if(kind_in && !strcmp(kind_in, "copy")) strcpy(kind, "lz4copy");
@@ -1382,6 +1412,7 @@ ps5tm_lz4_start(const char *kind_in, const char *id, int level, const char *prof
   snprintf(a->kind, sizeof(a->kind), "%s", kind);
   a->level = level;
   a->zstd = is_pack ? want_zstd : set_zstd;
+  a->sign = is_pack && want_zstd && !strcmp(kind, "lz4pack") && sign;      /* only zstd in place: a copy signs by itself, LZ4 in place leaves them */
   snprintf(a->profile, sizeof(a->profile), "%s", prof);
   pthread_mutex_lock(&g_lock);
   if(active_locked()) { pthread_mutex_unlock(&g_lock); free(a); snprintf(err, n, "Es läuft schon ein Vorgang an einem Abbild oder an LZ4-Paketen."); return 409; }

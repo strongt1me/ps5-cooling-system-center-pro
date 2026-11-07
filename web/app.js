@@ -7800,11 +7800,13 @@
   };
 
   /* The same for packing: into a new folder the executables are written as FSELF, in the game folder they stay as they are. */
-  const aprUnsigned = (pl, copy, zs) => {
+  const aprUnsigned = (pl, copy, zs, sign) => {
     const u = pl && pl.unsigned_exec;
     if (!u || (!u.count && !u.refused)) return "";
     return (u.count ? (zs
-        ? `<p class="cp-why">${num(u.count)} Programmdateien dieses Spiels sind nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet). Beim Packen mit zstd bleiben sie, wie sie sind.</p>`
+        ? `<p class="cp-why">${num(u.count)} Programmdateien dieses Spiels sind nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet). Beim Packen mit zstd lassen sie sich im Spielordner durch FSELF-Fassungen ersetzen.</p>
+           <label class="cp-check"><input type="checkbox" id="lz4-sign" ${sign ? "checked" : ""}>
+             <span>Programmdateien als FSELF signieren (ersetzt die Dateien im Spielordner)</span></label>`
         : copy
         ? `<p class="muted">${num(u.count)} Programmdateien dieses Spiels sind nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet). Im neuen Ordner stehen sie als FSELF; das Original bleibt, wie es ist.</p>`
         : `<p class="cp-why">${num(u.count)} Programmdateien dieses Spiels sind nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet). Beim Packen im Spielordner bleiben sie, wie sie sind. Wähle den neuen Ordner daneben, dann stehen sie dort als FSELF.</p>`) : "")
@@ -7876,7 +7878,7 @@
         <label class="cp-choice"><input type="radio" name="lz4-where" value="copy" ${s.copy ? "checked" : ""}>
           <span class="cp-choice-text"><b>${esc(`Als neuen Ordner ${base}-${zs ? "zstd" : "lz4"} daneben`)}</b><span class="muted">Das Original bleibt unberührt. Braucht Platz für das gepackte Spiel zusätzlich.</span></span></label>
       </div>`}
-      ${aprUnsigned(s.plan, s.copy, zs)}
+      ${aprUnsigned(s.plan, s.copy, zs, s.sign)}
       ${s.copy && !zs ? `<p class="cp-why">Achtung: Dann liegen zwei Ordner mit derselben Titel-ID nebeneinander. ShadowMountPlus kann sich daran verschlucken und das Spiel im Sekundentakt umhängen. Verschiebe das Original vorher aus dem Suchpfad (zum Beispiel auf einen USB-Stick).</p>` : ""}
       ${zs ? `<div class="cp-warn"><b>⚠ Nur für Spiele, die APR-EMU nutzen.</b> Dazu legt die App <code>fakelib/libSceAmpr.sprx</code> (AMPR EMU NG) in den Spielordner; ein in zstd gepacktes Spiel läuft nur damit. Der AMPR-Index und die APR-EMU-Version lassen sich danach nicht mehr ändern, bis du es wieder entpackst.</div>
         <p class="muted">Die Originale werden entfernt, sobald jede gepackte Datei Byte für Byte mit ihrem Original verglichen ist; bei einem Fehler bleibt alles wie vorher. „zstd entpacken“ bringt alle Dateien zurück.</p>`
@@ -7914,6 +7916,7 @@
     }
     if (el.id === "lz4-prof") { s.profile = el.value; aprLz4Plan(); return; }
     if (el.id === "lz4-tested") s.tested = !!el.checked;
+    else if (el.id === "lz4-sign") s.sign = !!el.checked;
     else if (el.name === "lz4-level") {
       s.level = +el.value;
       if (s.mode === "auto") { aprLz4Plan(); return; }                 /* die Dauer hängt an der Stufe (ein Profil nennt seine eigene) */
@@ -8349,7 +8352,7 @@
       const what = b.dataset.aprLz4;
       if (what === "openz") {                          /* zstd: kein Profil, alles außer den Systemdateien (06.11.2026) */
         apr.lz4s = { fmt: "zstd", level: 5, mode: "auto", profile: "", copy: false, plan: null, planErr: "",
-                     planKey: "", busy: false, err: "", upNote: "", tested: false };
+                     planKey: "", busy: false, err: "", upNote: "", tested: false, sign: true };
         apr.view = "lz4set";
         aprRender();
         aprLz4Plan();
@@ -8372,7 +8375,8 @@
       const s = apr.lz4s;
       b.disabled = true;
       try {
-        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy && s.fmt !== "zstd" ? "copy" : "pack", level: s.level, profile: s.fmt === "zstd" ? "" : lz4Key(s), format: s.fmt === "zstd" ? "zstd" : "lz4" }) });
+        apr.ij = await api("/api/v1/library/lz4", { method: "POST", body: JSON.stringify({ id: apr.id, kind: s.copy && s.fmt !== "zstd" ? "copy" : "pack", level: s.level, profile: s.fmt === "zstd" ? "" : lz4Key(s), format: s.fmt === "zstd" ? "zstd" : "lz4",
+          sign: s.fmt === "zstd" && !!s.sign && !!(s.plan && s.plan.unsigned_exec && s.plan.unsigned_exec.count > 0) }) });
         apr.view = "main";
         aprLoad();
       } catch (err) { s.err = err.message; aprRender(); }

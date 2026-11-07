@@ -59,6 +59,8 @@ class GameExtras
     std::string plan_text() const;
     // The unsigned executables of the game and what packing does with them (into a copy: FSELF).
     std::string sign_text() const;
+    bool has_unsigned() const; // the plan names unsigned executables
+    void refresh_sign();       // the row and the switch follow the plan and the choices
     std::string side_text() const;
     std::string job_line(float *fraction) const;
 

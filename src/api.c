@@ -4798,15 +4798,17 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     const cJSON *jl = b ? cJSON_GetObjectItem(b, "level") : NULL;
     const cJSON *jp = b ? cJSON_GetObjectItem(b, "profile") : NULL;
     const cJSON *jf = b ? cJSON_GetObjectItem(b, "format") : NULL;                    /* "lz4" (default) or "zstd" (06.11.2026) */
+    const cJSON *jsg = b ? cJSON_GetObjectItem(b, "sign") : NULL;                      /* zstd: sign the executables in the game's folder (07.11.2026) */
     char kind[12] = "", id[16] = "", profile[128] = "", format[8] = "";
     int level = cJSON_IsNumber(jl) ? ps5tm_num_i32(jl->valuedouble) : 9;
     if(cJSON_IsString(jk)) snprintf(kind, sizeof(kind), "%s", jk->valuestring);
     if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
     if(cJSON_IsString(jp)) snprintf(profile, sizeof(profile), "%s", jp->valuestring);
     if(cJSON_IsString(jf)) snprintf(format, sizeof(format), "%s", jf->valuestring);
+    const int sign = cJSON_IsTrue(jsg);
     cJSON_Delete(b);
     char err[400] = "";
-    int http = ps5tm_lz4_start(kind, id, level, profile, format, err, sizeof(err));
+    int http = ps5tm_lz4_start(kind, id, level, profile, format, sign, err, sizeof(err));
     if(http != 200) { ps5tm_http_send_error(fd, http, "lz4_refused", err); return; }
     send_cjson(fd, 200, ps5tm_imgjob_status());
     return;

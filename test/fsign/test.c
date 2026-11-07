@@ -6,6 +6,8 @@
  * It writes the ELF files and the SELF files the script make_fself.py (ampr-emu-ng) is then run on and compared with (run.sh), and
  * checks the rest itself: which files are found, the AMPR index, the folder laid over a game, links, mistakes and cancelling. */
 
+#include <sys/time.h>
+
 #include "fsign.h"
 #include "testlib.h"
 
@@ -153,6 +155,88 @@ main(int argc, char **argv) {
     snprintf(p, sizeof(p), "%s/eboot.bin", G); CHECK(fsize(p) == ELF_LEN);
   }
   ps5tm_fsign_free(&l);
+
+  /* --- in place (zstd packs): each executable replaced by its SELF through a temporary name */
+  {
+    char R[1024];
+    snprintf(R, sizeof(R), "%s/inplace", W);
+    snprintf(p, sizeof(p), "%s/fakelib", R); mk(p);
+    snprintf(p, sizeof(p), "%s/data/deep/er", R); mk(p);
+    snprintf(p, sizeof(p), "%s/eboot.bin", R); put_file(p, exec, ELF_LEN);
+    struct timeval old[2] = { { 1600000000, 0 }, { 1600000000, 0 } };
+    CHECK(utimes(p, old) == 0);
+    snprintf(p, sizeof(p), "%s/fakelib/libSceFoo.sprx", R); put_file(p, dyn, ELF_LEN);
+    snprintf(p, sizeof(p), "%s/data/deep/er/Mod.PRX", R); put_file(p, dyn, ELF_LEN);
+    snprintf(p, sizeof(p), "%s/eboot.bin" FSIGN_TMP_SUFFIX, R); put_file(p, "stale", 5);        /* a leftover of an earlier try */
+    const char *paths[] = { "/app0/eboot.bin", "/app0/fakelib/libSceFoo.sprx", "/app0/data/a.bin" };
+    const uint64_t sizes[] = { ELF_LEN, ELF_LEN, 5 };
+    snprintf(p, sizeof(p), "%s/ampr_emu.index", R);
+    make_index(p, paths, sizes, 3);
+    fsign_list_t rl;
+    CHECK(ps5tm_fsign_scan(R, NULL, &rl) == 0 && rl.n == 3);
+    unsigned dn = 99, fx = 99;
+    uint64_t prg = 0;
+    CHECK(ps5tm_fsign_replace(R, &rl, NULL, prog, &prg, &dn, &fx, err, sizeof(err)) == 0 && dn == 3 && fx == 2);
+    CHECK(prg == 2 * 3 * (0x4321ull + 0x123 + 0x25));
+    snprintf(p, sizeof(p), "%s/eboot.bin", R);
+    size_t an, bn;
+    uint8_t *a = get_file(p, &an);
+    snprintf(q, sizeof(q), "%s/self_exec.bin", W);
+    uint8_t *b = get_file(q, &bn);
+    CHECK(a && b && an == 18917 && bn == an && !memcmp(a, b, an));                              /* the very SELF the other test wrote */
+    free(a); free(b);
+    struct stat st;
+    CHECK(stat(p, &st) == 0 && st.st_mtime == 1600000000 && (st.st_mode & 0111));                /* the time is kept, it stays executable */
+    snprintf(q, sizeof(q), "%s/eboot.bin" FSIGN_TMP_SUFFIX, R);
+    CHECK(!exists(q));
+    snprintf(p, sizeof(p), "%s/ampr_emu.index", R);
+    uint8_t *ix = get_file(p, &an);
+    CHECK(ix && g64(ix, 48 + 8) == 18917 && g64(ix, 48 + 24 + 8) == 18917 && g64(ix, 48 + 48 + 8) == 5);
+    free(ix);
+    fsign_list_t again;
+    CHECK(ps5tm_fsign_scan(R, NULL, &again) == 0 && again.n == 0);                              /* nothing is left to sign */
+    ps5tm_fsign_free(&again);
+
+    /* the file changes after the list was made: nothing is replaced */
+    snprintf(p, sizeof(p), "%s/g2", W); mk(p);
+    snprintf(q, sizeof(q), "%s/g2/eboot.bin", W); put_file(q, exec, ELF_LEN);
+    fsign_list_t gl;
+    CHECK(ps5tm_fsign_scan(p, NULL, &gl) == 0 && gl.n == 1);
+    { uint8_t *longer = malloc(ELF_LEN + 1); memcpy(longer, exec, ELF_LEN); longer[ELF_LEN] = 0; put_file(q, longer, ELF_LEN + 1); free(longer); }
+    CHECK(ps5tm_fsign_replace(p, &gl, NULL, NULL, NULL, &dn, &fx, err, sizeof(err)) == -1 && dn == 0 && strstr(err, "verändert"));
+    CHECK(fsize(q) == ELF_LEN + 1);
+    /* cancelled before the first file */
+    int stop = 1;
+    put_file(q, exec, ELF_LEN);
+    CHECK(ps5tm_fsign_replace(p, &gl, &stop, NULL, NULL, &dn, &fx, err, sizeof(err)) == 1 && dn == 0 && fsize(q) == ELF_LEN);
+    ps5tm_fsign_free(&gl);
+
+    /* the second file cannot be read: the first stays signed, the second stays as it was, the index only knows the first */
+    if(getuid() != 0) {
+      snprintf(p, sizeof(p), "%s/g3/b", W); mk(p);
+      snprintf(p, sizeof(p), "%s/g3/a", W); mk(p);
+      snprintf(p, sizeof(p), "%s/g3/a/eboot.bin", W); put_file(p, exec, ELF_LEN);
+      snprintf(q, sizeof(q), "%s/g3/b/libx.prx", W); put_file(q, dyn, ELF_LEN);
+      const char *p3[] = { "/app0/a/eboot.bin", "/app0/b/libx.prx" };
+      const uint64_t s3[] = { ELF_LEN, ELF_LEN };
+      snprintf(p, sizeof(p), "%s/g3/ampr_emu.index", W);
+      make_index(p, p3, s3, 2);
+      snprintf(p, sizeof(p), "%s/g3", W);
+      fsign_list_t tl;
+      CHECK(ps5tm_fsign_scan(p, NULL, &tl) == 0 && tl.n == 2);
+      CHECK(chmod(q, 0) == 0);
+      CHECK(ps5tm_fsign_replace(p, &tl, NULL, NULL, NULL, &dn, &fx, err, sizeof(err)) == -1 && dn == 1 && fx == 1 && strstr(err, "libx.prx"));
+      snprintf(p, sizeof(p), "%s/g3/a/eboot.bin", W); CHECK(fsize(p) == 18917);
+      CHECK(chmod(q, 0644) == 0 && fsize(q) == ELF_LEN);
+      snprintf(q, sizeof(q), "%s/g3/b/libx.prx" FSIGN_TMP_SUFFIX, W); CHECK(!exists(q));
+      snprintf(p, sizeof(p), "%s/g3/ampr_emu.index", W);
+      ix = get_file(p, &an);
+      CHECK(ix && g64(ix, 48 + 8) == 18917 && g64(ix, 48 + 24 + 8) == ELF_LEN);
+      free(ix);
+      ps5tm_fsign_free(&tl);
+    }
+    ps5tm_fsign_free(&rl);
+  }
 
   /* --- mistakes in the ELF: no crash, either signed and read back, or refused, never half a file */
   {
