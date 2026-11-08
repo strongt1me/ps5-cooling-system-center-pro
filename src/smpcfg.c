@@ -40,19 +40,54 @@ trim(const char **s, size_t *len) {
 
 typedef enum { L_OTHER, L_SECTION, L_KEY } kind_t;
 
-/* What a line is: a section header (name in key), a key = value line (key and value, trimmed), or something else
- * (blank, comment). */
+/* The value at v (the blanks before it already gone) the way ShadowMountPlus reads it: in quotes, with \\ and \" as
+ * escapes, up to the closing quote; otherwise up to a # or ; (what follows is a comment) without the blanks before that.
+ * Returns how many bytes of v belong to the value (quotes included); the decoded text is in out. */
+static size_t
+decode_value(const char *v, size_t vn, char *out, size_t olen) {
+  size_t i = 0, o = 0;
+  if(vn && v[0] == '"') {
+    for(i = 1; i < vn && v[i] != '"'; i++) {
+      if(v[i] == '\\' && i + 1 < vn && (v[i + 1] == '\\' || v[i + 1] == '"')) i++;
+      if(o + 1 < olen) out[o++] = v[i];
+    }
+    if(i < vn) i++;                                           /* the closing quote */
+    out[o] = 0;
+    return i;
+  }
+  while(i < vn && v[i] != '#' && v[i] != ';') i++;
+  size_t e = i;
+  while(e && (v[e - 1] == ' ' || v[e - 1] == '\t')) e--;
+  o = e < olen - 1 ? e : olen - 1;
+  memcpy(out, v, o);
+  out[o] = 0;
+  return e;
+}
+
+/* What a line is: a section header (name in key, lower case; a comment behind the ] is allowed), a key = value line (key
+ * and decoded value; vs and ve, when given, are where the value starts and ends in the line), or something else (blank,
+ * comment). */
 static kind_t
-classify(const line_t *l, char *key, size_t klen, char *val, size_t vlen) {
+classify(const line_t *l, char *key, size_t klen, char *val, size_t vlen, size_t *vs, size_t *ve) {
   const char *s = l->s;
   size_t n = l->len;
   trim(&s, &n);
   key[0] = val[0] = 0;
   if(!n || s[0] == '#' || s[0] == ';') return L_OTHER;
   if(s[0] == '[') {
-    if(s[n - 1] != ']') return L_OTHER;
-    size_t m = n - 2 < klen - 1 ? n - 2 : klen - 1;
-    memcpy(key, s + 1, m);
+    const char *end = NULL;
+    for(size_t i = 1; i < n && !end; i++) {
+      if(s[i] != ']') continue;
+      size_t j = i + 1;
+      while(j < n && (s[j] == ' ' || s[j] == '\t')) j++;
+      if(j == n || s[j] == '#' || s[j] == ';') end = s + i;
+    }
+    if(!end) return L_OTHER;
+    const char *nm = s + 1;
+    size_t nn = (size_t)(end - nm);
+    trim(&nm, &nn);
+    size_t m = nn < klen - 1 ? nn : klen - 1;
+    memcpy(key, nm, m);
     key[m] = 0;
     for(char *q = key; *q; q++) if(*q >= 'A' && *q <= 'Z') *q += 32;
     return L_SECTION;
@@ -64,15 +99,26 @@ classify(const line_t *l, char *key, size_t klen, char *val, size_t vlen) {
   trim(&k, &kn);
   const char *v = eq + 1;
   size_t vn = n - (size_t)(eq - s) - 1;
-  trim(&v, &vn);
+  while(vn && (*v == ' ' || *v == '\t')) { v++; vn--; }
   if(!kn) return L_OTHER;
   size_t a = kn < klen - 1 ? kn : klen - 1;
-  size_t b = vn < vlen - 1 ? vn : vlen - 1;
   memcpy(key, k, a);
   key[a] = 0;
-  memcpy(val, v, b);
-  val[b] = 0;
+  size_t used = decode_value(v, vn, val, vlen);
+  if(vs) *vs = (size_t)(v - l->s);
+  if(ve) *ve = (size_t)(v - l->s) + used;
   return L_KEY;
+}
+
+/* Does the text have a [config] section? Then it is a v2 file and only the keys of its sections count (ShadowMountPlus
+ * ignores the old flat names there); without it the flat names count. */
+static int
+has_config(const char *text, size_t len) {
+  char key[96], val[8];
+  line_t l;
+  for(size_t off = 0; next_line(text, len, off, &l); off = l.next)
+    if(classify(&l, key, sizeof(key), val, sizeof(val), NULL, NULL) == L_SECTION && !strcmp(key, "config")) return 1;
+  return 0;
 }
 
 static int
@@ -84,18 +130,19 @@ void
 ps5tm_smpcfg_parse(const char *text, size_t len, ps5tm_smpcfg_t *c) {
   memset(c, 0, sizeof(*c));
   c->update_emulators = 1;
+  const int v2cfg = has_config(text, len);
   char sec[96] = "", key[96], val[256];
   line_t l;
   for(size_t off = 0; next_line(text, len, off, &l); off = l.next) {
-    kind_t k = classify(&l, key, sizeof(key), val, sizeof(val));
+    kind_t k = classify(&l, key, sizeof(key), val, sizeof(val), NULL, NULL);
     if(k == L_SECTION) {
       snprintf(sec, sizeof(sec), "%s", key);
       if(!strcmp(sec, "config") || !strcmp(sec, "emulators")) c->v2 = 1;
     } else if(k == L_KEY) {
       int emu_sec = !strcmp(sec, "emulators");
-      if(!strcasecmp(key, "update_emulators") || (emu_sec && !strcasecmp(key, "update_enabled")))
+      if((!v2cfg && !strcasecmp(key, "update_emulators")) || (emu_sec && !strcasecmp(key, "update_enabled")))
         c->update_emulators = !is_off(val);
-      else if((!strcasecmp(key, "emulators_path") || (emu_sec && !strcasecmp(key, "path"))) && val[0] == '/' &&
+      else if(((!v2cfg && !strcasecmp(key, "emulators_path")) || (emu_sec && !strcasecmp(key, "path"))) && val[0] == '/' &&
               strlen(val) < sizeof(c->emulators_path))
         memcpy(c->emulators_path, val, strlen(val) + 1);      /* the length was checked above */
     }
@@ -129,28 +176,31 @@ ps5tm_smpcfg_with_update(const char *text, size_t len, int on, size_t *out_len) 
   ps5tm_smpcfg_t c;
   ps5tm_smpcfg_parse(text, len, &c);
   const char *eol = memchr(text, '\r', len) ? "\r\n" : "\n";
-  const char *val = on ? "1" : "0";
+  const char *nv = on ? "1" : "0";
   out_t o = { 0 };
   put(&o, "", 0);
+  const int v2cfg = has_config(text, len);
   char sec[96] = "", key[96], v[256];
   int found = 0, header_end = -1;                 /* header_end: offset after the [emulators] header line */
   line_t l;
   for(size_t off = 0; next_line(text, len, off, &l); off = l.next) {
-    kind_t k = classify(&l, key, sizeof(key), v, sizeof(v));
+    size_t vs = 0, ve = 0;
+    kind_t k = classify(&l, key, sizeof(key), v, sizeof(v), &vs, &ve);
     int hit = 0;
     if(k == L_SECTION) {
       snprintf(sec, sizeof(sec), "%s", key);
       if(!strcmp(sec, "emulators")) header_end = (int)l.next;
     } else if(k == L_KEY) {
-      hit = !strcasecmp(key, "update_emulators") || (!strcmp(sec, "emulators") && !strcasecmp(key, "update_enabled"));
+      hit = (!v2cfg && !strcasecmp(key, "update_emulators")) || (!strcmp(sec, "emulators") && !strcasecmp(key, "update_enabled"));
     }
     if(hit) {
-      /* the same line with only the value changed: indentation, key spelling and the line ending stay */
-      const char *eq = memchr(l.s, '=', l.len);
-      size_t head = (size_t)(eq - l.s) + 1;
-      put(&o, l.s, head);
-      puts_(&o, val);
-      put(&o, text + off + l.len, l.next - off - l.len);          /* the line ending (and nothing else: blanks after the value go) */
+      /* the same line with only the value changed: indentation, key spelling, the blanks around the value, a comment
+         behind it and the line ending stay */
+      put(&o, l.s, vs);
+      puts_(&o, nv);
+      if(ve == vs && ve < l.len) puts_(&o, " ");                  /* "key = # note": keep the comment apart from the value */
+      put(&o, l.s + ve, l.len - ve);
+      put(&o, text + off + l.len, l.next - off - l.len);          /* the line ending */
       found = 1;
     } else {
       put(&o, text + off, l.next - off);

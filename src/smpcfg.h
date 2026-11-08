@@ -3,9 +3,13 @@
  * "yes", does it).
  *
  * Two formats exist. ShadowMountPlus up to 1.7beta11 has a flat file with the key  update_emulators=1|0  and
- * emulators_path=<folder>. The format "v2" on its main branch has sections: [emulators] update_enabled and path. Both are
- * read; a write follows the format the file has (a flat file stays flat). Everything else in the file (comments, SMB
- * connections with their passwords, the line endings) is left byte for byte as it was.
+ * emulators_path=<folder>. From 1.7beta12 (08.11.2026) the file is "v2": it starts with [config] version = 2 and has
+ * sections, here [emulators] update_enabled and path; ShadowMountPlus converts the old files at its first start (the old
+ * ones go to config-v1-backup) and ignores the old flat names in a v2 file, so does this reader. Values are read as its
+ * v2 reader does: "quoted" (with \\ and \" as escapes) or up to a # or ; that starts a comment; a section header may have a
+ * comment behind the ]. Both formats are read; a write follows the format the file has (a flat file stays flat) and
+ * changes only the value: the blanks around it, a comment behind it, everything else in the file (comments, SMB connections
+ * with their passwords, the line endings) stays byte for byte as it was. Checked against the reader of 1.7beta12 itself.
  *
  * Plain C without the rest of the app, so that the host test (test/smpcfg/run.sh) compiles it alone. */
 #ifndef PS5TM_SMPCFG_H

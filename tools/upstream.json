@@ -4,7 +4,7 @@
     {"id": "ps4mount", "repo": "gasb07/ps4mount", "current": "v0.7.3", "prereleases": false,
      "where": "src/ps4m_*.c (Port von src/main.c -> ps4m_core.c), third_party/ps4mount/ORIGIN.md, Handbuch-Kapitel PS4 von USB",
      "how": "Vergleich v<alt>...v<neu> mit gh api repos/gasb07/ps4mount/compare; Änderungen von Hand in src/ps4m_core.c (und ps4m_pkg/build/crypto) übernehmen; logts.c und web.c entfallen"},
-    {"id": "shadowmountplus", "repo": "drakmor/ShadowMountPlus", "current": "1.7beta11", "prereleases": true,
+    {"id": "shadowmountplus", "repo": "drakmor/ShadowMountPlus", "current": "1.7beta12", "prereleases": true,
      "where": "src/smp.c (Schnittstelle), src/library.c + src/amprlib.c (Backport-Ordner), Handbuch/FAQ, THIRD_PARTY_NOTICES.md",
      "how": "Quell-Diff der beiden Fassungen lesen (README Backport-Abschnitt, docs/api.md, sm_api_protocol.h, sm_path_utils.c); Config-Schlüssel mit amprlib.c abgleichen"},
     {"id": "ampr_emu", "repo": "drakmor/ampr_emu", "current": "0.4.2.1", "prereleases": false,

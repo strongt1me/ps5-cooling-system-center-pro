@@ -462,7 +462,7 @@ read_emus(const al_kind_t *k, al_emus_t *e) {
   size_t n = 0;
   if(slurp(AL_SM_CONFIG, &d, &n, 256 * 1024) == 0) {
     d[n] = 0;
-    ps5tm_smpcfg_t c;                                        /* the flat file of ShadowMountPlus up to 1.7beta11 and the sectioned one (smpcfg.c) */
+    ps5tm_smpcfg_t c;                                        /* the flat file of ShadowMountPlus up to 1.7beta11 and the sectioned one (v2) from 1.7beta12 (smpcfg.c) */
     ps5tm_smpcfg_parse((const char *)d, n, &c);
     e->update_emulators = c.update_emulators;
     if(c.emulators_path[0]) {

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Fremdbausteine
+- **ShadowMountPlus 1.7beta12** (drakmor, Vorabfassung vom 08.11.2026) geprüft. **Schnittstelle (Port 10101) unverändert:** gleiche Routen und JSON-Felder, die OpenAPI-Beschreibung ist nicht angefasst; neu ist nur, dass ein Ziel unter `/mnt/ext1` (M.2) nur angenommen wird, wenn dort wirklich etwas eingehängt ist, und dass M.2 nicht mehr als USB gilt. `smp.c`, Auswerfen, Aus-/Einhängen, Verschieben und die Bibliothek brauchen nichts.
+- **Neues Dateiformat „v2“:** `config.ini` (globale Einstellungen, Suchpfade, SMB-Verbindungen als `[smb:NAME]`) und die neue `profiles.ini` (Einstellungen je Spiel und Abbild) beginnen mit `[config]` und `version = 2` und sind in Abschnitte gegliedert; beim ersten Start werden die alten Dateien (`config.ini`, `autotune.ini`, `smb.json`) umgewandelt und nach `config-v1-backup/` gesichert. Die App benutzt davon nur `update_emulators` (jetzt `update_enabled` unter `[emulators]`) und den Emulator-Ordner (`path`); Suchpfade, Profile und SMB verwaltet sie nicht.
+- **`src/smpcfg.c` liest und schreibt die Datei jetzt wie der strenge v2-Leser von ShadowMountPlus:** (1) ein Kommentar hinter dem Wert (`update_enabled = off  # Test`) zählt nicht mehr als Teil des Werts – vorher las die App das als „an“; (2) Werte in Anführungszeichen (`path = "/data/mein ordner"`, mit `\\` und `\"`) werden verstanden – vorher wurde so ein Pfad ignoriert; (3) ein Abschnittskopf darf einen Kommentar tragen (`[emulators] # …`); (4) in einer v2-Datei zählen nur die Schlüssel der Abschnitte, die alten flachen Namen (`update_emulators`, `emulators_path`) werden dort wie bei ShadowMountPlus überhört, in einer flachen Datei weiter nur diese. Beim Ändern bleiben jetzt auch die Leerzeichen um den Wert und ein Kommentar dahinter (`update_enabled = on  # Standard` → `update_enabled = 0  # Standard`); der Rest der Datei, Zeilenenden und Dateirechte wie bisher.
+- Geprüft: `test/smpcfg` (96 statt 66 Prüfungen, AddressSanitizer/UBSan) und ein Gegentest mit dem **unveränderten INI-Leser aus ShadowMountPlus 1.7beta12** (15 Dateien, 135 Prüfungen): gleicher Wert für `update_enabled` und `path`, und jede von der App geschriebene Datei nimmt dieser Leser an.
+- Dokumentation: Handbuch (sieben Sprachen), `docs/HANDBUCH.md` und `docs/API.md` nennen jetzt beide Schlüsselnamen und die Umstellung. Die Oberflächen sind unverändert; ihre Fragetexte beim Einbauen von NG sprechen weiter von der „Zeile `update_emulators`“ – in einer v2-Datei heißt sie `update_enabled`.
+- Nur beobachtet: **ps5upload v11.6.0** (phantomptr, 08.11.2026; „nur Wissen“): Spielen zu zweit übers Internet, Konvertieren direkt auf die PS5, PS4-Updates einbinden – nichts davon betrifft den Start oder die Sicherheit dieser App.
+
 ## v1.78.0 – 08.11.2026
 
 ### Unsignierte Programmdateien: Konvertieren und Packen schreiben sie als FSELF (nach ps5-dump-forge 0.5.4)

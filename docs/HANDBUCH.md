@@ -323,10 +323,13 @@ Weitere Fassungen legt „Datei hinzufügen“ im Fenster in denselben Ordner.
 „AMPR EMU NG von GitHub laden“ auf Knopfdruck in den Ordner und prüft ihre Prüfsumme, sobald die App sie kennt. Dateien einer neueren NG-Veröffentlichung
 (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) benennt „Datei hinzufügen“ selbst passend um. ShadowMountPlus ersetzt die
 Datei beim Spielstart aus seinem Emulator-Ordner, solange seine automatische Fakelib-Aktualisierung an ist
-(`update_emulators=1`). Deshalb **fragt die App beim Einbauen von NG**, ob sie abgeschaltet werden soll: **Ja** setzt nur die
-Zeile `update_emulators` in `/data/shadowmount/config.ini` auf 0 (die Datei wird einmal als `config.ini.ps5cc-bak` gesichert;
-je nach Fassung übernimmt ShadowMountPlus die Änderung sofort oder erst beim nächsten Start) und baut NG ein, **Abbrechen** lässt
-alles, wie es ist. Ist die Aktualisierung schon aus, kommt die Frage nicht. Wohin die
+(`update_emulators=1`, ab 1.7beta12 `update_enabled=1` unter `[emulators]`). Deshalb **fragt die App beim Einbauen von NG**, ob sie
+abgeschaltet werden soll: **Ja** setzt nur die Zeile `update_emulators` (ab 1.7beta12 `update_enabled` unter `[emulators]`) in
+`/data/shadowmount/config.ini` auf 0 (die Datei wird einmal als `config.ini.ps5cc-bak` gesichert; je nach Fassung übernimmt
+ShadowMountPlus die Änderung sofort oder erst beim nächsten Start) und baut NG ein, **Abbrechen** lässt alles, wie es ist.
+Ab 1.7beta12 benutzt ShadowMountPlus ein neues Format der `config.ini` (Abschnitte, `[config] version = 2`) und wandelt die alten
+Dateien beim ersten Start um (die alten bleiben in `config-v1-backup`); die App versteht beide Formate und lässt Kommentare,
+Leerzeichen und alles andere in der Datei, wie es ist. Ist die Aktualisierung schon aus, kommt die Frage nicht. Wohin die
 Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backport-Ordner
 `<Suchpfad>/backports/<Titel-ID>/` (seit 1.7beta6 auch ein Ordner, dessen Name nur mit der Titel-ID beginnt, etwa „PPSA12345 Spielname“: der genau so benannte gewinnt, sonst der erste in Byte-Reihenfolge) mit `fakelib2` vor `fakelib`, dann das Spiel mit `fakelib2` vor
 `fakelib`; der erste vorhandene Ordner gilt allein, auch ein leerer):
@@ -341,7 +344,7 @@ Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backpo
 - Die Datei des Spiels wird einmal als `libSceAmpr.sprx.orig` gesichert und nie überschrieben; ein früherer
   APR-EMU (Kennung `[AMPR_EMU]`) oder PlayGo-Stub gilt nicht als Original. Ein leer werdender Backport-Ordner
   wird wieder entfernt, denn ein leerer Ordner würde die `fakelib` des Spiels verdecken.
-- Hinweise: `update_emulators=1` in der `config.ini` von ShadowMountPlus ersetzt die Datei beim Spielstart aus
+- Hinweise: `update_emulators=1` (ab 1.7beta12 `update_enabled` unter `[emulators]`) in der `config.ini` von ShadowMountPlus ersetzt die Datei beim Spielstart aus
   `/data/shadowmount/emus` (gewinnt dann); ein Spiel in LZ4-Paketen nimmt nur Versionen mit „pack“.
 - Vorbild und Regeln: der „PS5 Dump & Image Converter“ (fakelib-Manager) und die Suchreihenfolge von
   ShadowMountPlus 1.7; Versionen und Bauarten (`test-pack`, `test-nopack`, `test-debug-pack`, `test`,

@@ -101,7 +101,7 @@ main(int argc, char **argv) {
     free(r);
     t = "  Update_Emulators = true\n";
     r = edit(t, 0);
-    CHECK(!strcmp(r, "  Update_Emulators =0\n"));         /* indentation and spelling of the key stay */
+    CHECK(!strcmp(r, "  Update_Emulators = 0\n"));        /* indentation, spelling of the key and the blank after = stay */
     CHECK(state(r) == 0);
     free(r);
     t = "update_emulators=1\nupdate_emulators=1\n";        /* two lines: both */
@@ -141,11 +141,64 @@ main(int argc, char **argv) {
     free(r);
     t = "[config]\nversion=2\n[emulators]\nupdate_enabled = on\npath=/p\n";
     r = edit(t, 0);
-    CHECK(!strcmp(r, "[config]\nversion=2\n[emulators]\nupdate_enabled =0\npath=/p\n"));
+    CHECK(!strcmp(r, "[config]\nversion=2\n[emulators]\nupdate_enabled = 0\npath=/p\n"));
     free(r);
     t = "[config]\nversion=2\n[general]\ndebug=on";
     r = edit(t, 0);
     CHECK(!strcmp(r, "[config]\nversion=2\n[general]\ndebug=on\n\n[emulators]\nupdate_enabled=0\n"));
+    CHECK(state(r) == 0);
+    free(r);
+  }
+
+  /* ---- v2 as ShadowMountPlus 1.7beta12 reads it: comments behind a value, quotes, a header with a comment, only the section keys */
+  {
+    ps5tm_smpcfg_t c;
+    const char *t;
+    CHECK(state("[config]\nversion=2\n[emulators]\nupdate_enabled = off  # Test\n") == 0);
+    CHECK(state("[config]\nversion=2\n[emulators]\nupdate_enabled = off ; Test\n") == 0);
+    CHECK(state("[config]\nversion=2\n[emulators]\nupdate_enabled = on # off\n") == 1);
+    CHECK(state("[config]\nversion=2\n[emulators]\nupdate_enabled = \"off\"\n") == 0);
+    CHECK(state("[config]\nversion=2\n[emulators]\nupdate_enabled = \"on\" # off\n") == 1);
+    CHECK(state("[config]\nversion=2\n[emulators] # the emulators\nupdate_enabled=0\n") == 0);   /* a comment behind the header */
+    CHECK(state("[config] ; v2\nversion=2\n[Emulators]  \nupdate_enabled=0\n") == 0);
+    CHECK(state("[ emulators ]\nupdate_enabled=0\n") == 0);                                    /* blanks inside the brackets */
+    t = "[config]\nversion=2\n[emulators]\nupdate_enabled=1\npath = /data/x/emus   # my folder\n";
+    ps5tm_smpcfg_parse(t, strlen(t), &c);
+    CHECK(!strcmp(c.emulators_path, "/data/x/emus"));
+    t = "[config]\nversion=2\n[emulators]\npath = \"/data/my emus # 1\" ; note\n";
+    ps5tm_smpcfg_parse(t, strlen(t), &c);
+    CHECK(!strcmp(c.emulators_path, "/data/my emus # 1"));
+    t = "[config]\nversion=2\n[emulators]\npath = \"/data/a\\\\b\\\"c\"\n";
+    ps5tm_smpcfg_parse(t, strlen(t), &c);
+    CHECK(!strcmp(c.emulators_path, "/data/a\\b\"c"));                                         /* \\ and \" */
+    /* in a v2 file the old flat names mean nothing, in a flat file the section keys still do */
+    CHECK(state("[config]\nversion=2\nupdate_emulators=0\n") == 1);
+    CHECK(state("[config]\nversion=2\n[emulators]\nupdate_emulators=0\n") == 1);
+    t = "[config]\nversion=2\nemulators_path=/data/old\n";
+    ps5tm_smpcfg_parse(t, strlen(t), &c);
+    CHECK(c.emulators_path[0] == 0);
+    CHECK(state("update_emulators=0\n") == 0);
+    /* a comment behind the value, blanks and quotes stay when the value changes */
+    r = edit("[config]\nversion=2\n[emulators]\nupdate_enabled = on  # Standard\n", 0);
+    CHECK(!strcmp(r, "[config]\nversion=2\n[emulators]\nupdate_enabled = 0  # Standard\n"));
+    CHECK(state(r) == 0);
+    free(r);
+    r = edit("[config]\nversion=2\r\n[emulators]\r\nupdate_enabled = \"on\" ; x\r\n", 0);
+    CHECK(!strcmp(r, "[config]\nversion=2\r\n[emulators]\r\nupdate_enabled = 0 ; x\r\n"));
+    free(r);
+    r = edit("[config]\nversion=2\n[emulators]\nupdate_enabled = # note\n", 0);
+    CHECK(!strcmp(r, "[config]\nversion=2\n[emulators]\nupdate_enabled = 0 # note\n"));
+    CHECK(state(r) == 0);
+    free(r);
+    r = edit("update_emulators=1  \n", 0);
+    CHECK(!strcmp(r, "update_emulators=0  \n"));                                               /* blanks behind the value stay */
+    free(r);
+    r = edit("update_emulators=1 # Standard\n", 0);
+    CHECK(!strcmp(r, "update_emulators=0 # Standard\n"));
+    free(r);
+    /* a stray old name in a v2 file is left alone, the right line is added under the header (which has a comment) */
+    r = edit("[config]\nversion=2\n[general]\nupdate_emulators=0\n[emulators] # emus\nauto_update_ampr=0\n", 0);
+    CHECK(!strcmp(r, "[config]\nversion=2\n[general]\nupdate_emulators=0\n[emulators] # emus\nupdate_enabled=0\nauto_update_ampr=0\n"));
     CHECK(state(r) == 0);
     free(r);
   }
