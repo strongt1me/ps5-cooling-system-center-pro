@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.78.0 – 08.11.2026
 
 ### Unsignierte Programmdateien: Konvertieren und Packen schreiben sie als FSELF (nach ps5-dump-forge 0.5.4)
 - Sind die Programmdateien eines Spiels einfache ELF-Dateien, startet die Konsole es nicht – ihr Lader lehnt sie ab. Beim **Konvertieren** eines PS5-Dump-Ordners (exFAT, ffpkg, ffpfsc) und beim **Packen in einen neuen Ordner** (nur LZ4, „Als neuen Ordner … daneben“) schreibt die App sie jetzt als **fake-signierte SELF-Dateien (FSELF)**; der Spielordner wird nur gelesen. Ein `ampr_emu.index` wird dabei auf die neuen Größen gebracht. Beim Packen im Spielordner selbst bleiben sie, wie sie sind (das Fenster sagt es); nur bei zstd, das immer im Spielordner packt, gibt es den **Schalter „Programmdateien als FSELF signieren“** (voreingestellt an): dann ersetzt die App sie dort durch FSELF-Fassungen (siehe unten).
