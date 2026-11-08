@@ -3,7 +3,7 @@
  * unnecessary. The format is drakmor's AMPRPAK4 (manifest "ampr_assets.index") with AMPRDAT3 data volumes
  * ("ampr_assets-NNN.pak") and the offline CRC sidecar AMPRCRC1 ("ampr_assets.index.crc"); this is a C port of the packer
  * of ampr_emu (https://github.com/drakmor/ampr_emu, docs/ASSET_PACKS.md, tools/ampr_pack.py + ampr_pack_format.py,
- * GPL-3.0, read on 12.10.2026) on LZ4 1.10.0 (BSD-2-Clause), the version the runtime pins.
+ * GPL-3.0, read on 12.10.2026) on LZ4 1.11.0 (BSD-2-Clause); the runtime pins its own decoder (1.10.0), the block format is the same (test/lz4cross).
  *
  * Every function returns 0, or -1 with the reason in err (German, for the page), or ECANCELED when the cancel flag was
  * raised (err then says "Abgebrochen."). Nothing here starts threads of the caller's kind: pack() runs its own pool of

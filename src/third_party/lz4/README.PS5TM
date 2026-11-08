@@ -1,4 +1,5 @@
-LZ4 1.10.0 (https://github.com/lz4/lz4, release v1.10.0; archive sha256 537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b),
-unchanged: lib/lz4.c, lz4.h, lz4hc.c, lz4hc.h. Licence of the library: BSD 2-Clause (see LICENSE).
-Used by src/lz4pack.c for the independent raw LZ4 blocks of the asset packs (AMPRPAK4) -- the same decoder version
-that drakmor's ampr_emu pins (v1.10.0). Added 12.10.2026.
+LZ4 1.11.0 (https://github.com/lz4/lz4, release v1.11.0; archive lz4-1.11.0.tar.gz sha256 247e5fa64da5f7b75ee3dd3bed484076396c9ebe8254d9ccf693eb62800c5e26,
+the one in the release's .sha256), unchanged: lib/lz4.c, lz4.h, lz4hc.c, lz4hc.h. Licence of the library: BSD 2-Clause (see LICENSE).
+Used by src/lz4pack.c for the independent raw LZ4 blocks of the asset packs (AMPRPAK4). The runtime of drakmor's ampr_emu pins its
+own decoder (v1.10.0): the block format has not changed since 2012, and test/lz4cross shows that blocks written by 1.11.0 are read by
+1.10.0 and the other way round (884 blocks of fast and HC levels 1 to 12, 457 MB, no difference). Added 12.10.2026 (1.10.0), 1.11.0 on 08.11.2026.

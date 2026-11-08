@@ -83,8 +83,9 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   geschriebenen Spieldateien (SIGBUS/CE-108255-1, gemeldet von OmgWhatIsThisss), für die Reparatur beim Prüfen der Pakete und für
   die Auswahl eines getesteten Profils nach Titel-ID, Name oder Engine (`src/lz4cfg.c`, `src/lz4pack_read.inc`, `src/amprlib.c`,
   `src/imgjob_lz4.inc`); nachgebaut, kein Quelltext übernommen. <https://github.com/theghostonline/PS5-LZ4-Compression> (seit Oktober 2026 nicht mehr erreichbar; Konto und Projekt wurden gelöscht oder umbenannt)
-- **LZ4** 1.10.0 (Yann Collet, BSD-2-Clause): `src/third_party/lz4/` (`lz4.c`, `lz4hc.c`), unverändert; die Fassung, die auch die APR-EMU
-  zum Entpacken benutzt. Lizenztext: `src/third_party/lz4/LICENSE`.
+- **LZ4** 1.11.0 (Yann Collet, BSD-2-Clause): `src/third_party/lz4/` (`lz4.c`, `lz4hc.c`), unverändert (seit 08.11.2026; vorher 1.10.0). Die
+  APR-EMU entpackt mit ihrer eigenen Fassung (1.10.0); das Blockformat ist gleich, `test/lz4cross` prüft beide Richtungen. Lizenztext:
+  `src/third_party/lz4/LICENSE`.
 - **zstd** 1.5.7 (Meta Platforms / Yann Collet, BSD-3-Clause, auch GPLv2 möglich; hier unter der BSD-Lizenz): `src/third_party/zstd/`
   (Kompressor und Dekompressor der Bibliothek ohne Mehrfädigkeit und ohne Assembler-Entpacker, unverändert), für die zstd-Pakete
   (`src/zstdpack.c`). Lizenztext: `src/third_party/zstd/LICENSE`. Herkunft: <https://github.com/facebook/zstd>, Archiv-Prüfsumme in

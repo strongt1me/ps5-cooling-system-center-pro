@@ -356,7 +356,7 @@ komprimierte Medien und kaum packbare Riesendateien bleiben lose) oder ein eigen
 jede Datei Byte für Byte mit dem Original vergleichen, erst dann die Originale entfernen; bei jedem Fehler werden die Pakete wieder
 entfernt) oder „als neuer Ordner `<Name>-lz4`“ (Original unberührt; unsignierte Programmdateien stehen dort als FSELF, siehe „Spiele kopieren und konvertieren“). Danach: **Pakete prüfen** (jeder Block gelesen, entpackt, gegen die
 CRC-Datei geprüft) und **LZ4 entpacken** (zurückschreiben, vergleichen, Pakete entfernen). Solange ein Spiel gepackt ist, ist der
-AMPR-Index gesperrt. Format und Regeln nach [drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (GPL-3.0), LZ4 1.10.0 (BSD-2).
+AMPR-Index gesperrt. Format und Regeln nach [drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (GPL-3.0), LZ4 1.11.0 (BSD-2).
 
 **PlayGo im Spiel.** Die zweite Zeile darunter arbeitet genauso für `libScePlayGo.sprx`, den PlayGo-Stub von
 drakmor ([pgo_stub](https://github.com/drakmor/pgo_stub), GPL-3.0): Er meldet einem Spiel, dessen PlayGo-Inhalte nicht
