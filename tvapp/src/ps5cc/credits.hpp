@@ -62,7 +62,7 @@ inline constexpr Credit kCredits[] = {
      "USB-Laufwerk ohne Installation. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "quer3q", "@quer3q",
      "AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die Fassung "
-     "0.3.2 steckt als eingebettete Fassung in der App, neuere lädt sie auf Knopfdruck. Danke!"},
+     "0.3.3 steckt als eingebettete Fassung in der App, neuere lädt sie auf Knopfdruck. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "Knutwurst", "@knutwurst",
      "PatchDL: Die eigene Namensauflösung und der HTTPS-Abruf der App (für den Payload-Store) "
      "stammen daraus. Danke!"},

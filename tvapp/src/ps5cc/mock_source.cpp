@@ -976,7 +976,7 @@ class MockSource final : public Source
             lib == "playgo"
                 ? R"({"ok":true,"versions":[{"name":"libScePlayGo.sprx-0.3","label":"0.3","valid":true,"bundled":true,"sha256":"b1"}]})"
                 : std::string(R"({"ok":true,"emus":{"update_emulators":)") + (smp_update_off_ ? "false" : "true") +
-                  R"(},"ng_release":{"version":"0.3.2","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.3.2-ng","label":"NG 0.3.2","ng":true,"pack":true,)"
+                  R"(},"ng_release":{"version":"0.3.3","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.3.3-ng","label":"NG 0.3.3","ng":true,"pack":true,)"
                   R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
                   R"("valid":true,"bundled":true,"sha256":"a1"},{"name":"libSceAmpr.sprx-0.4.2.1-debug","label":"0.4.2.1 mit Protokoll",)"
                   R"("debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.1","label":"0.4.1",)"

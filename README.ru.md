@@ -313,7 +313,7 @@ make
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) и участники [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): образы exFAT, PFS и PFSC.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): образец для записи UFS2/ffpkg.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-ассет-паки, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) и [dlc_emu](https://github.com/drakmor/dlc_emu) (встроенные сборки, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроена версия 0.3.2, более новые приложение загружает по запросу).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроена версия 0.3.3, более новые приложение загружает по запросу).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): как собрана плитка запуска в виде нативного приложения.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): структура пакетов и процесс установки (собственный код по этому образцу).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): функция профиля и формат изображения профиля.
