@@ -1,41 +1,47 @@
-# PS5 Cooling & System Center – Pro v1.78.0
+# PS5 Cooling & System Center – Pro v1.79.0
 
 ## Highlights
-- **Spiele mit unsignierten Programmdateien starten:** Beim Konvertieren und beim Packen in einen neuen Ordner schreibt die App einfache ELF-Dateien als **FSELF** – an der Konsole bestätigt
-- **zstd packt immer im Spielordner und kann die Programmdateien dabei signieren** – ohne Frage nach den Originalen
-- **AMPR EMU NG 0.3.3** (quer3q) fest eingebaut, **LZ4 1.11.0** in den LZ4-Paketen
+- **ShadowMountPlus 1.7beta12:** Die App liest und schreibt die neue `config.ini` (Abschnitte, `update_enabled`) genauso wie die alte und ändert immer die richtige Zeile – Standard ist „Automatisch erkennen“
+- **ShadowMountPlus hat einen eigenen Platz:** im Browser als Karte ganz oben auf der Seite **System**, in der Vollbild-App als eigener Reiter unter **System**, wo man die Version in einem Auswahlfenster wählt
+- **Neuer Schalter „Fakelib automatisch aktualisieren“:** Die Aktualisierung von ShadowMountPlus (sein Standard „an“) lässt sich wieder einschalten, nachdem man sie für AMPR EMU NG abgeschaltet hat
+- **Firmware 4.03 bis 14.10** steht jetzt im README („FW 4.03 bis 14.10 Support“)
 
 ## Neu
 
-### Unsignierte Programmdateien als FSELF
-- Ein Spiel, dessen Programmdateien (`eboot.bin`, `.prx`, `.sprx`) einfache ELF-Dateien sind, startet an der Konsole nicht: Sie lehnt es mit `0x80020008` ab. Beim **Konvertieren** eines PS5-Ordners (exFAT, ffpkg, ffpfsc) und beim **LZ4-Packen in einen neuen Ordner** schreibt die App diese Dateien jetzt als **fake-signierte SELF-Dateien (FSELF)**. Der Spielordner wird dabei nur gelesen, ein `ampr_emu.index` wird auf die neuen Größen gebracht.
-- Der Plan nennt vorab, wie viele Programmdateien betroffen sind – in der Browser-Oberfläche und in der Vollbild-App („Unsignierte Programmdateien“; im Packformular die Zeile „Programmdateien“). Dateien mit ungewöhnlichem Aufbau bleiben, wie sie sind, und die Notiz des Auftrags sagt es.
-- Der Aufbau ist der von `make_fself.py` (ampr-emu-ng) und ps5-dump-forge 0.5.4 und stimmt Byte für Byte mit einer auf der Konsole laufenden `eboot.bin` überein.
-- **An der Konsole bestätigt:** Ein Ordner mit einfacher ELF als `eboot.bin` startet nicht, dasselbe Spiel mit der App konvertiert startet und lief im Vordergrund.
+### ShadowMountPlus 1.7beta12
+- Ab 1.7beta12 benutzt ShadowMountPlus ein neues Format der `config.ini` (`[config]`, `version = 2`, Abschnitte; die Einstellung heißt `update_enabled` unter `[emulators]`) und wandelt die alte Datei beim ersten Start um. Die App versteht beide Formate und liest und schreibt sie so wie ShadowMountPlus selbst: Kommentare, Anführungszeichen, Leerzeichen, SMB-Zugänge und Zeilenenden bleiben, wie sie sind, geändert wird nur der eine Wert.
+- Neue Einstellung **„Version“:** Automatisch erkennen (Standard), Vor 1.7beta12 oder Ab 1.7beta12. Die Datei bestimmt, welche Zeile geschrieben wird; die Angabe gilt für eine fehlende oder leere Datei und löst einen Hinweis aus, wenn sie nicht zur Datei passt (etwa wenn ShadowMountPlus nach dem Update noch nicht gestartet wurde).
+- Alle Hinweise, Warnungen und Fragen nennen die Zeile, die die App wirklich ändert (`update_emulators` oder `update_enabled`).
+- Wo man es findet: Browser auf der Seite **System** ganz oben in der Karte **ShadowMountPlus**; Vollbild-App unter **System** im Reiter **ShadowMountPlus** (die Version wählt man dort in einem Fenster mit den drei Antworten).
 
-### zstd: Spielordner und Signieren
-- Mit zstd wird **immer im Spielordner** gepackt. Die Wahl „Im Ordner selbst oder als Kopie“ und der Rat, die Originale zu behalten, entfallen; die Originale gehen erst, wenn jede gepackte Datei Byte für Byte mit ihrem Original verglichen ist, und „zstd entpacken“ bringt alles zurück. Das Kästchen „ungepackt getestet“ bleibt.
-- Neuer Schalter **„Programmdateien signieren“** (voreingestellt an, nur wählbar, wenn unsignierte Programmdateien da sind): Nach dem Packen ersetzt die App sie im Spielordner durch FSELF-Fassungen, jede gegen das Original zurückgelesen. Scheitert eine, bleiben die fertigen signiert und die übrigen, wie sie waren.
+### Fakelib automatisch aktualisieren
+- Die Frage „ShadowMountPlus umstellen?“ beim Einbauen von AMPR EMU NG schaltet die automatische Fakelib-Aktualisierung von ShadowMountPlus ab. Dafür gibt es jetzt auch den Weg zurück: ein Schalter in der Karte (Browser) und im Reiter ShadowMountPlus (Vollbild-App), der sie wieder einschaltet. Er ändert nur die eine Zeile in `/data/shadowmount/config.ini`.
+- `GET /api/v1/config` meldet den Stand als `smp_update_emulators` (nur lesend).
+
+### Fenster eines Spiels
+- Das Fenster und sein Knopf heißen jetzt „LZ4-/zstd-Asset-Packs & APR-EMU“, damit man sieht, dass man dort auch zstd einstellt; in der Vollbild-App nennt die Zeile unter dem Titel der Extras zstd ebenfalls.
+
+### Firmware
+- Der Startcode der ELF (SDK v0.45) kennt die Firmware **4.03 bis 14.10**. Nutzer melden, dass die App auch auf 4.xx bis 10.xx und auf 13.60 läuft; selbst getestet ist die Firmware 12.00. README, FAQ und Handbuch sagen das in allen sieben Sprachen.
 
 ### Fremdbausteine
-- **AMPR EMU NG v0.3.3** (quer3q, 07.11.2026) ersetzt die eingebettete 0.3.2: Korrekturen in der Laufzeit (vollständig installierte Spiele fragen nicht mehr nach Weiterladen oder Platz, Marvel's Wolverine startet wieder, weniger Hänger bei vielen gepackten Dateien, Ghost of Yōtei und Hollow Knight Silksong). Das Paketformat ist unverändert.
-- **LZ4 1.11.0** (Yann Collet) statt 1.10.0 in den LZ4-Paketen. Das Blockformat ist gleich: Ein Test mit 884 Blöcken in beide Richtungen zeigte keinen Unterschied, die APR-EMU liest die Pakete weiter.
-- **ps5-dump-forge 0.5.4** (quer3q): das zstd-Format ist unverändert; sein Signieren war die Vorlage für das oben.
+- **ShadowMountPlus 1.7beta12** (drakmor, Vorabfassung) geprüft: Die Schnittstelle (Port 10101) ist unverändert, neu ist das Dateiformat „v2“ der `config.ini` und die `profiles.ini`.
+- **ps5upload bis v12.3.0** (phantomptr) nur gelesen; nichts davon betrifft Start oder Sicherheit der App.
 
 ## Hinweise
-- Die neue ELF an Port 9021 senden (sie beendet die ältere Instanz selbst) und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein). Ab 1.77.1 ersetzen die Kacheln eine ältere laufende App beim Antippen selbst.
-- Mit zstd gepackte Spiele laufen nur mit AMPR EMU NG. **An der Konsole geprüft:** Matchbox Driving Adventures (6 GB) lief nach dem Packen mit zstd und NG 0.3.3 mindestens zwei Minuten im Vordergrund und ließ sich vollständig entpacken. Längeres Spielen und andere Spiele sind nicht geprüft.
-- Ältere NG-Dateien im Ordner `AMPR_EMU` der Konsole bleiben dort, bis du sie im Fenster „APR & LZ4“ entfernst.
+- Die neue ELF an Port 9021 senden (sie beendet die ältere Instanz selbst) und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein).
+- **Geprüft:** der Schreibweg gegen den echten Leser aus dem Quelltext von ShadowMountPlus 1.7beta12 am PC (11 Fälle); an der PS5 Pro (Firmware 12.00, `config.ini` im neuen Format) die Einstellung, der Hinweis, die Karte und der ganze Ablauf im Browser (Rückfrage, Speichern, „umstellen?“, NG-Einbau) an einer entpackten Testkopie von Double Dragon Revive – die echte `config.ini` blieb dabei byte-gleich.
+- **Nicht geprüft:** die Vollbild-App auf dem Fernseher (Reiter und Auswahlfenster; am PC nur als Bild gesehen) und das Umschalten auf „an“ in der echten `config.ini`.
 
 ## Downloads
 | Datei | Wofür |
 |---|---|
-| `PS5_Cooling_System_Center_v1.78.0.elf` | Das Hauptprogramm (an Port 9021 senden) |
+| `PS5_Cooling_System_Center_v1.79.0.elf` | Das Hauptprogramm (an Port 9021 senden) |
 | `FAKE86921.zip` | Vollbild-Kachel: Ordner nach `/data/homebrew/` kopieren |
 | `FAKE86922.zip` | Browser-Kachel: Ordner nach `/data/homebrew/` kopieren |
 | `LIESMICH.txt` | Anleitung |
 
 ## Danke
-An alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke. Besonders **quer3q** für AMPR EMU NG und ps5-dump-forge, deren Signieren hier die Vorlage war, und alle, die NG mit ihren Spielen testen.
+An alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke. Besonders **drakmor** für ShadowMountPlus und die Hinweise zur neuen `config.ini`.
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.77.1...v1.78.0
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.78.0...v1.79.0

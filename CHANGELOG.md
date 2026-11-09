@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.79.0 – 10.11.2026
 
 ### ShadowMountPlus: die App fragt, welche Version läuft (09.11.2026)
 - ShadowMountPlus hat ab 1.7beta12 eine neue `config.ini` (Abschnitte statt einer flachen Liste). Neue Einstellung **`smp_version`** (Standard **`auto`** = an der `config.ini` erkennen, `old` = vor 1.7beta12, `v2` = ab 1.7beta12; `""` = noch nicht gefragt, nur wenn ausdrücklich leer gespeichert; Teil von Export und Import): im Browser auf der Seite **System** ganz oben in der Karte **ShadowMountPlus** (Auswahl „Automatisch erkennen“, „Vor 1.7beta12“, „Ab 1.7beta12“), in der Vollbild-App unter **System → ShadowMountPlus** (eigener Reiter).
