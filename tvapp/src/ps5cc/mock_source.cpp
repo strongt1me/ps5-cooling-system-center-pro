@@ -340,6 +340,12 @@ class MockSource final : public Source
                 data_.config.tv_language = lang->valuestring;
                 changed();
             }
+            const cJSON *smp = cJSON_GetObjectItemCaseSensitive(root, "smp_version");
+            if (cJSON_IsString(smp) && smp->valuestring != nullptr)
+            {
+                data_.config.smp_version = smp->valuestring;
+                changed();
+            }
             cJSON_Delete(root);
         }
         notice(Notice::Kind::success, "Gespeichert");
@@ -959,10 +965,10 @@ class MockSource final : public Source
                 smp_update_off_
                     ? R"({"ok":true,"state":"done","active":false,"kind":"emu","lib":"ampr","op":"apply","id":"PPSA01325",)"
                       R"("warn":"AMPR EMU NG: Das Aktualisieren der fakelib ist in ShadowMountPlus schon abgeschaltet )"
-                      R"((update_emulators=0).","warn_level":1})"
+                      R"((update_emulators=0).","warn_key":"update_emulators","warn_level":1})"
                     : R"({"ok":true,"state":"done","active":false,"kind":"emu","lib":"ampr","op":"apply","id":"PPSA01325",)"
                       R"("warn":"AMPR EMU NG: Schalte in ShadowMountPlus das Aktualisieren der fakelib ab (update_emulators=0), )"
-                      R"(sonst ersetzt ShadowMountPlus die Datei beim Spielstart.","warn_level":2})";
+                      R"(sonst ersetzt ShadowMountPlus die Datei beim Spielstart.","warn_key":"update_emulators","warn_level":2})";
         notice(Notice::Kind::success, "Extras", "Auftrag angenommen.");
         changed();
     }
@@ -976,7 +982,8 @@ class MockSource final : public Source
             lib == "playgo"
                 ? R"({"ok":true,"versions":[{"name":"libScePlayGo.sprx-0.3","label":"0.3","valid":true,"bundled":true,"sha256":"b1"}]})"
                 : std::string(R"({"ok":true,"emus":{"update_emulators":)") + (smp_update_off_ ? "false" : "true") +
-                  R"(},"ng_release":{"version":"0.3.3","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.3.3-ng","label":"NG 0.3.3","ng":true,"pack":true,)"
+                  R"(,"key":"update_emulators","format":"flat","warning":"","smp_version":")" + data_.config.smp_version +
+                  R"("},"ng_release":{"version":"0.3.3","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.3.3-ng","label":"NG 0.3.3","ng":true,"pack":true,)"
                   R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
                   R"("valid":true,"bundled":true,"sha256":"a1"},{"name":"libSceAmpr.sprx-0.4.2.1-debug","label":"0.4.2.1 mit Protokoll",)"
                   R"("debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.1","label":"0.4.1",)"

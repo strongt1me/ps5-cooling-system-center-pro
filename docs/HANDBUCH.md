@@ -329,7 +329,12 @@ abgeschaltet werden soll: **Ja** setzt nur die Zeile `update_emulators` (ab 1.7b
 ShadowMountPlus die Änderung sofort oder erst beim nächsten Start) und baut NG ein, **Abbrechen** lässt alles, wie es ist.
 Ab 1.7beta12 benutzt ShadowMountPlus ein neues Format der `config.ini` (Abschnitte, `[config] version = 2`) und wandelt die alten
 Dateien beim ersten Start um (die alten bleiben in `config-v1-backup`); die App versteht beide Formate und lässt Kommentare,
-Leerzeichen und alles andere in der Datei, wie es ist. Ist die Aktualisierung schon aus, kommt die Frage nicht. Wohin die
+Leerzeichen und alles andere in der Datei, wie es ist. Welche Version bei dir läuft, sagst du der App: Sie fragt beim Einbauen von
+NG einmal nach (**Ab 1.7beta12**, **Vor 1.7beta12** oder **Automatisch erkennen**) und merkt sich die Antwort; ändern lässt sie sich im Browser auf der Seite **Kühlung** in der Karte
+**ShadowMountPlus** und in der Vollbild-App unter **Einstellungen → ShadowMountPlus**. Welche Zeile geschrieben wird, bestimmt die Datei selbst, sobald
+sie ihr Format verrät; deine Angabe gilt für eine fehlende oder leere `config.ini` und löst einen Hinweis aus, wenn sie nicht zur
+Datei passt (etwa wenn ShadowMountPlus nach dem Update noch nicht gestartet wurde und die Datei noch die alte ist: es wandelt sie
+beim ersten Start um und übernimmt die Zeile). Ist die Aktualisierung schon aus, kommt die Frage nicht. Wohin die
 Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backport-Ordner
 `<Suchpfad>/backports/<Titel-ID>/` (seit 1.7beta6 auch ein Ordner, dessen Name nur mit der Titel-ID beginnt, etwa „PPSA12345 Spielname“: der genau so benannte gewinnt, sonst der erste in Byte-Reihenfolge) mit `fakelib2` vor `fakelib`, dann das Spiel mit `fakelib2` vor
 `fakelib`; der erste vorhandene Ordner gilt allein, auch ein leerer):

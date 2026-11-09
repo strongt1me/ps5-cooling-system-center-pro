@@ -15,7 +15,7 @@ static int g_fail, g_n;
 static char *
 edit(const char *t, int on) {
   size_t n = 0;
-  char *r = ps5tm_smpcfg_with_update(t, strlen(t), on, &n);
+  char *r = ps5tm_smpcfg_with_update(t, strlen(t), on, PS5TM_SMP_AUTO, &n);
   CHECK(r && n == strlen(r));
   return r;
 }
@@ -213,7 +213,7 @@ main(int argc, char **argv) {
     snprintf(tmp, sizeof(tmp), "%s.ps5cc-tmp", p);
 
     /* no file, folder there: made */
-    CHECK(ps5tm_smpcfg_set_update(p, 0, why, sizeof(why)) == 0);
+    CHECK(ps5tm_smpcfg_set_update(p, 0, PS5TM_SMP_AUTO, why, sizeof(why)) == 0);
     size_t n = 0;
     char *b = slurp(p, &n);
     CHECK(b && !strcmp(b, "update_emulators=0\n"));
@@ -225,7 +225,7 @@ main(int argc, char **argv) {
     fputs("scanpath=/mnt/usb0\nupdate_emulators=1\nsmb_password=geheim\n", f);
     fclose(f);
     chmod(p, 0600);
-    CHECK(ps5tm_smpcfg_set_update(p, 0, why, sizeof(why)) == 0);
+    CHECK(ps5tm_smpcfg_set_update(p, 0, PS5TM_SMP_AUTO, why, sizeof(why)) == 0);
     b = slurp(p, &n);
     CHECK(b && !strcmp(b, "scanpath=/mnt/usb0\nupdate_emulators=0\nsmb_password=geheim\n"));
     free(b);
@@ -238,21 +238,97 @@ main(int argc, char **argv) {
     CHECK(access(tmp, F_OK) != 0);                          /* no temporary file left */
 
     /* already as wanted: the file is not touched, the copy stays the first one */
-    CHECK(ps5tm_smpcfg_set_update(p, 0, why, sizeof(why)) == 0);
+    CHECK(ps5tm_smpcfg_set_update(p, 0, PS5TM_SMP_AUTO, why, sizeof(why)) == 0);
     b = slurp(bak, &n);
     CHECK(b && strstr(b, "update_emulators=1") != NULL);
     free(b);
 
     /* and back on */
-    CHECK(ps5tm_smpcfg_set_update(p, 1, why, sizeof(why)) == 0);
+    CHECK(ps5tm_smpcfg_set_update(p, 1, PS5TM_SMP_AUTO, why, sizeof(why)) == 0);
     b = slurp(p, &n);
     CHECK(b && strstr(b, "update_emulators=1") != NULL);
     free(b);
 
     /* no folder: a reason, nothing made */
     snprintf(p, sizeof(p), "%s/nicht-da/config.ini", work);
-    CHECK(ps5tm_smpcfg_set_update(p, 0, why, sizeof(why)) == ENOENT);
+    CHECK(ps5tm_smpcfg_set_update(p, 0, PS5TM_SMP_AUTO, why, sizeof(why)) == ENOENT);
     CHECK(strstr(why, "nicht eingerichtet") != NULL);
+  }
+
+  /* ---- the version the person named (smp_version, 09.11.2026) */
+  {
+    CHECK(ps5tm_smpcfg_format("", 0) == PS5TM_SMPFMT_NONE);
+    CHECK(ps5tm_smpcfg_format("# only a comment\n\n", 17) == PS5TM_SMPFMT_NONE);
+    CHECK(ps5tm_smpcfg_format("scanpath=/mnt/usb0\n", 19) == PS5TM_SMPFMT_FLAT);
+    CHECK(ps5tm_smpcfg_format("[config]\nversion=2\n", 19) == PS5TM_SMPFMT_V2);
+    CHECK(ps5tm_smpcfg_format("a=1\n[Emulators] # x\n", 20) == PS5TM_SMPFMT_V2);
+    CHECK(ps5tm_smpcfg_mode_of("old") == PS5TM_SMP_OLD);
+    CHECK(ps5tm_smpcfg_mode_of("v2") == PS5TM_SMP_V2);
+    CHECK(ps5tm_smpcfg_mode_of("auto") == PS5TM_SMP_AUTO);
+    CHECK(ps5tm_smpcfg_mode_of("") == PS5TM_SMP_AUTO);
+    CHECK(ps5tm_smpcfg_mode_of("irgendwas") == PS5TM_SMP_AUTO);
+    CHECK(ps5tm_smpcfg_mode_of(NULL) == PS5TM_SMP_AUTO);
+
+    /* the name of the line: the file says, a file that says nothing follows the named version */
+    CHECK(!strcmp(ps5tm_smpcfg_key(PS5TM_SMPFMT_FLAT, PS5TM_SMP_V2), "update_emulators"));
+    CHECK(!strcmp(ps5tm_smpcfg_key(PS5TM_SMPFMT_V2, PS5TM_SMP_OLD), "update_enabled"));
+    CHECK(!strcmp(ps5tm_smpcfg_key(PS5TM_SMPFMT_V2, PS5TM_SMP_AUTO), "update_enabled"));
+    CHECK(!strcmp(ps5tm_smpcfg_key(PS5TM_SMPFMT_NONE, PS5TM_SMP_V2), "update_enabled"));
+    CHECK(!strcmp(ps5tm_smpcfg_key(PS5TM_SMPFMT_NONE, PS5TM_SMP_OLD), "update_emulators"));
+    CHECK(!strcmp(ps5tm_smpcfg_key(PS5TM_SMPFMT_NONE, PS5TM_SMP_AUTO), "update_emulators"));
+
+    /* a hint only when the named version and the file do not fit */
+    CHECK(strstr(ps5tm_smpcfg_mismatch(PS5TM_SMPFMT_FLAT, PS5TM_SMP_V2), "update_emulators") != NULL);
+    CHECK(strstr(ps5tm_smpcfg_mismatch(PS5TM_SMPFMT_V2, PS5TM_SMP_OLD), "update_enabled") != NULL);
+    CHECK(ps5tm_smpcfg_mismatch(PS5TM_SMPFMT_FLAT, PS5TM_SMP_OLD)[0] == 0);
+    CHECK(ps5tm_smpcfg_mismatch(PS5TM_SMPFMT_V2, PS5TM_SMP_V2)[0] == 0);
+    CHECK(ps5tm_smpcfg_mismatch(PS5TM_SMPFMT_FLAT, PS5TM_SMP_AUTO)[0] == 0);
+    CHECK(ps5tm_smpcfg_mismatch(PS5TM_SMPFMT_V2, PS5TM_SMP_AUTO)[0] == 0);
+    CHECK(ps5tm_smpcfg_mismatch(PS5TM_SMPFMT_NONE, PS5TM_SMP_V2)[0] == 0);
+    CHECK(ps5tm_smpcfg_mismatch(PS5TM_SMPFMT_NONE, PS5TM_SMP_OLD)[0] == 0);
+
+    /* a file that says nothing gets the line of the named version */
+    size_t n = 0;
+    char *r = ps5tm_smpcfg_with_update("", 0, 0, PS5TM_SMP_V2, &n);
+    CHECK(r && !strcmp(r, "[config]\nversion=2\n\n[emulators]\nupdate_enabled=0\n"));
+    CHECK(r && state(r) == 0 && ps5tm_smpcfg_format(r, strlen(r)) == PS5TM_SMPFMT_V2);
+    free(r);
+    r = ps5tm_smpcfg_with_update("# nur ein Kommentar\n", 20, 0, PS5TM_SMP_V2, &n);
+    CHECK(r && !strcmp(r, "# nur ein Kommentar\n[config]\nversion=2\n\n[emulators]\nupdate_enabled=0\n"));
+    free(r);
+    r = ps5tm_smpcfg_with_update("# nur ein Kommentar", 19, 0, PS5TM_SMP_V2, &n);          /* no line ending at the end */
+    CHECK(r && !strcmp(r, "# nur ein Kommentar\n[config]\nversion=2\n\n[emulators]\nupdate_enabled=0\n"));
+    free(r);
+    r = ps5tm_smpcfg_with_update("", 0, 0, PS5TM_SMP_OLD, &n);
+    CHECK(r && !strcmp(r, "update_emulators=0\n"));
+    free(r);
+    r = ps5tm_smpcfg_with_update("", 0, 0, PS5TM_SMP_AUTO, &n);
+    CHECK(r && !strcmp(r, "update_emulators=0\n"));
+    free(r);
+    r = ps5tm_smpcfg_with_update("", 0, 1, PS5TM_SMP_V2, &n);                              /* on is the default: nothing to write */
+    CHECK(r && r[0] == 0 && n == 0);
+    free(r);
+
+    /* a file that says which format it is in is written in that format, whatever was named */
+    r = ps5tm_smpcfg_with_update("scanpath=/mnt/usb0\n", 19, 0, PS5TM_SMP_V2, &n);
+    CHECK(r && !strcmp(r, "scanpath=/mnt/usb0\nupdate_emulators=0\n"));
+    free(r);
+    r = ps5tm_smpcfg_with_update("[config]\nversion=2\n[emulators]\nupdate_enabled=1\n", 48, 0, PS5TM_SMP_OLD, &n);
+    CHECK(r && !strcmp(r, "[config]\nversion=2\n[emulators]\nupdate_enabled=0\n"));
+    free(r);
+  }
+
+  {
+    /* the file: a missing one is made in the format of the named version */
+    char cmd[512], p[400], why[300];
+    size_t n = 0;
+    snprintf(cmd, sizeof(cmd), "rm -rf '%s' && mkdir -p '%s'", work, work);
+    CHECK(system(cmd) == 0);
+    snprintf(p, sizeof(p), "%s/config.ini", work);
+    CHECK(ps5tm_smpcfg_set_update(p, 0, PS5TM_SMP_V2, why, sizeof(why)) == 0);
+    char *b = slurp(p, &n);
+    CHECK(b && !strcmp(b, "[config]\nversion=2\n\n[emulators]\nupdate_enabled=0\n"));
+    free(b);
   }
 
   printf("%d checks, %d failed\n", g_n, g_fail);

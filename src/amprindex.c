@@ -393,6 +393,7 @@ static struct {
   char     note[400];
   char     warn[300];                  /* emu apply of ampr-emu-ng: what ShadowMountPlus needs (update_emulators=0) */
   int      warn_level;                 /* 2 something to do, 1 only to know, 0 none */
+  char     warn_key[24];               /* the line of ShadowMountPlus's config.ini the warning names (update_emulators / update_enabled) */
   unsigned files, collisions;
   uint64_t started_ms, finished_ms;
 } g_job;
@@ -540,9 +541,12 @@ ai_thread(void *arg) {
   if(a->emu && !strcmp(a->op, "apply") && !strcmp(a->lib, "ampr"))
     g_job.warn_level = ps5tm_amprlib_ng_warning(a->store, g_job.warn, sizeof(g_job.warn));
   int ng_warn = g_job.warn_level == 2;
+  char warn_key[24];
+  snprintf(warn_key, sizeof(warn_key), "%s", ps5tm_amprlib_smp_key());       /* like the warning above, it reads the config.ini */
+  if(g_job.warn[0]) snprintf(g_job.warn_key, sizeof(g_job.warn_key), "%s", warn_key);
   pthread_mutex_unlock(&g_lock);
   /* the full-screen app and the console itself see it too, not only the browser window */
-  if(ng_warn) ps5tm_notify("AMPR EMU NG eingebaut: In ShadowMountPlus update_emulators=0 setzen, sonst wird die Datei beim Spielstart ersetzt.");
+  if(ng_warn) ps5tm_notify("AMPR EMU NG eingebaut: In ShadowMountPlus %s=0 setzen, sonst wird die Datei beim Spielstart ersetzt.", warn_key);
   ps5tm_library_forget();
   if(a->emu) PS5TM_INFO("ampr_emu_changed", "%s-Datei von %s geändert (%s %s).", !strcmp(a->lib, "playgo") ? "PlayGo" : "APR-EMU", a->id, a->op, a->store);
   else PS5TM_INFO("ampr_index_built", "AMPR-Index für %s gebaut: %u Dateien%s.", a->id, ctx.files, ctx.coll ? " (Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, einmal genommen)" : "");
@@ -748,6 +752,7 @@ ps5tm_ampr_status(void) {
   if(g_job.warn[0]) {
     cJSON_AddStringToObject(o, "warn", g_job.warn);
     cJSON_AddNumberToObject(o, "warn_level", g_job.warn_level);
+    cJSON_AddStringToObject(o, "warn_key", g_job.warn_key);
   }
   cJSON_AddBoolToObject(o, "active", g_job.state == AI_RUNNING);
   cJSON_AddStringToObject(o, "id", g_job.id);

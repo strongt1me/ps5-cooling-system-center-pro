@@ -296,6 +296,11 @@ typedef struct {
      "de", "en", "es", "fr", "it", "ru". The browser keeps its own choice per browser. */
   char            tv_language[4];
 
+  /* The version of ShadowMountPlus the person named (09.11.2026): "" = not asked yet, "auto" = find out from its
+     config.ini, "old" = up to 1.7beta11 (flat file), "v2" = from 1.7beta12 (sections). Decides which line of its
+     config.ini the app changes when the file itself does not say (smpcfg.c) and what the texts call that line. */
+  char            smp_version[8];
+
   /* Processor temperature and fan speed as a system notification when the
      controller's microphone button is pressed twice in quick succession (at
      most every 5 s) — see micbutton.c. The key keeps its name from 1.45.x,
@@ -328,6 +333,10 @@ void ps5tm_config_apply_profile(ps5tm_config_t *cfg);
 int  ps5tm_config_bind_valid(const char *s);
 /* True for "" (follow the console) and the languages the fullscreen app has: de, en, es, fr, it, ru. */
 int  ps5tm_tv_language_ok(const char *s);
+/* True for "" (not asked yet), "auto", "old" and "v2". */
+int  ps5tm_smp_version_ok(const char *s);
+/* The saved word (smp_version) in out; takes the config lock. */
+void ps5tm_config_smp_version(char *out, size_t n);
 int  ps5tm_config_load(void);
 /* Writes the settings file. Must NOT be called with the config lock held: it
    takes a snapshot under the lock and does the disk I/O — which can wait for
@@ -834,6 +843,12 @@ int           ps5tm_amprlib_ng_warning(const char *store_name, char *out, size_t
    0 or an errno with the reason in why; ..._on() tells whether it is on (the default). */
 int           ps5tm_amprlib_smp_update(int enabled, char *why, size_t why_len);
 int           ps5tm_amprlib_smp_update_on(void);
+/* What the surfaces need to name the line of ShadowMountPlus's config.ini right: key (update_emulators or update_enabled),
+   format ("none", "flat", "v2"), smp_version (the saved word), warning (when the named version and the file do not fit).
+   Added to the object o. */
+void          ps5tm_amprlib_smp_info(struct cJSON *o);
+/* The name of that line alone, for texts made in C. Never NULL. */
+const char   *ps5tm_amprlib_smp_key(void);
 struct cJSON *ps5tm_amprng_fetch(char *why, size_t why_len, int *http);
 
 /* Checking, unpacking and repairing the image of a game (imgjob.c). */

@@ -1193,8 +1193,8 @@
     document.body.appendChild(o);
     o.addEventListener("click", (e) => {
       if (e.target === o) { if (adDone) adDone(false); return; }
-      const b = e.target.closest("[data-ad]");
-      if (b && !b.disabled && adDone) adDone(b.dataset.ad === "yes");
+      const b = e.target.closest("[data-ad], [data-ad-pick]");
+      if (b && !b.disabled && adDone) adDone(b.dataset.adPick !== undefined ? b.dataset.adPick : b.dataset.ad === "yes");
     });
     return o;
   };
@@ -1234,6 +1234,24 @@
     o.hidden = false;
     const y = o.querySelector('.btn[data-ad="yes"]');
     if (y) y.focus();
+  });
+
+  /* Eine Frage mit mehreren Antworten (09.11.2026, die Version von ShadowMountPlus). Liefert den Wert des gewählten Knopfes,
+     bei „Abbrechen“, ×, Klick daneben oder Escape "": dann geht nichts weiter.
+       options  [{value, label}] in der Reihenfolge der Knöpfe; der erste hat den Fokus */
+  const askChoice = ({ title, paras = [], options = [], no = "Abbrechen" }) => new Promise((resolve) => {
+    const o = adShell();
+    if (adDone) adDone(false);
+    txt("#ad-title", title);
+    $("#ad-body").innerHTML = `${paras.map((p) => `<p>${esc(p)}</p>`).join("")}
+      <div class="cp-actions">
+        <button type="button" class="btn" data-ad="no">${esc(no)}</button>
+        ${options.map((x, i) => `<button type="button" class="btn${i === 0 ? " primary" : ""}" data-ad-pick="${esc(x.value)}">${esc(x.label)}</button>`).join("")}
+      </div>`;
+    adDone = (v) => { adDone = null; o.hidden = true; resolve(typeof v === "string" ? v : ""); };
+    o.hidden = false;
+    const f = o.querySelector(".btn[data-ad-pick]");
+    if (f) f.focus();
   });
 
   const saveConfig = async (patch, note) => {
@@ -2100,6 +2118,7 @@
     /* Fehlt das Feld (ältere App), gilt die Vorgabe „an". */
     if ($("#mic-button-status")) $("#mic-button-status").checked = c.ps_button_status !== 0;
     if ($("#gm-cache-on")) $("#gm-cache-on").checked = !!c.library_cache;
+    if ($("#s-smp-version")) { $("#s-smp-version").value = c.smp_version || "auto"; loadSmpNote(); }
 
     /* Regelbereich, Ruhezone, Intervall, Glättung und Schrittweite haben
        keine Felder mehr — sie ergeben sich aus der Betriebsart. Die Werte
@@ -7956,7 +7975,7 @@
     if (em.place === "backport") notes.push(`Ablage: Backport-Ordner <code>${esc(em.backport.dir)}/fakelib</code> – das Spiel bleibt unberührt.`);
     if (ins.has_orig) notes.push(`Die Datei, die das Spiel selbst mitbrachte, ist gesichert als <code>${APR_LIBS[lib].file}.orig</code>.`);
     if (em.fakelib2 && em.place === "game") notes.push("Im Spielordner liegt auch ein <code>fakelib2</code>: ShadowMountPlus ab 1.7beta1 liest dann nur dieses, die Datei in <code>fakelib</code> bliebe ungenutzt.");
-    if (em.emus && em.emus.overrides) notes.push(`ShadowMountPlus ersetzt <code>${APR_LIBS[lib].file}</code> beim Spielstart aus <code>` + esc(em.emus.path) + "</code> (update_emulators=1): diese Datei gewinnt dann.");
+    if (em.emus && em.emus.overrides) notes.push(`ShadowMountPlus ersetzt <code>${APR_LIBS[lib].file}</code> beim Spielstart aus <code>` + esc(em.emus.path) + "</code> (" + esc(em.emus.key || "update_emulators") + "=1): diese Datei gewinnt dann.");
     if (em.packed) notes.push("Das Spiel liegt in LZ4-Paketen: nur eine Version mit „pack“ kann sie lesen.");
     if (em.packed_zstd) notes.push("Das Spiel liegt in zstd-Paketen: nur AMPR EMU NG kann sie lesen.");
     let result = "";
@@ -8115,7 +8134,7 @@
     if (em.fakelib2 && em.place === "game") warn.push(pg
       ? `<b>⚠ Im Spielordner liegt auch ein <code>fakelib2</code>.</b> ShadowMountPlus ab 1.7beta1 liest dann nur dieses; der PlayGo-Stub in <code>fakelib</code> bliebe ungenutzt.`
       : `<b>⚠ Im Spielordner liegt auch ein <code>fakelib2</code>.</b> ShadowMountPlus ab 1.7beta1 liest dann nur dieses; der AMPR EMU in <code>fakelib</code> bliebe ungenutzt.`);
-    if (em.emus && em.emus.overrides) warn.push(`<b>⚠ ShadowMountPlus ersetzt die Datei beim Spielstart</b> aus <code>${esc(em.emus.path)}</code> (update_emulators=1). Dort liegt eine <code>${L.file}</code>; sie gewinnt gegen die Datei, die du hier einbaust.`);
+    if (em.emus && em.emus.overrides) warn.push(`<b>⚠ ShadowMountPlus ersetzt die Datei beim Spielstart</b> aus <code>${esc(em.emus.path)}</code> (${esc(em.emus.key || "update_emulators")}=1). Dort liegt eine <code>${L.file}</code>; sie gewinnt gegen die Datei, die du hier einbaust.`);
     const missing = v.versions.filter((x) => x.bundled && !x.stored).length;
     const ngr = !pg && v.ng_release ? v.ng_release : null;
     const noStore = !v.versions.length ? (pg
@@ -8321,24 +8340,50 @@
     } else if (b.hasAttribute("data-apr-emu-act")) {
       const action = b.dataset.aprEmuAct;
       /* AMPR EMU NG, solange ShadowMountPlus die fakelib selbst aktualisiert: Es würde die Datei beim Spielstart wieder
-         ersetzen. Erst fragen, ob das abgeschaltet werden soll; „Ja“ ändert nur die Zeile update_emulators in dessen
-         config.ini und baut NG dann ein, „Abbrechen“ (oder Schließen) lässt alles, wie es ist. */
+         ersetzen. Erst fragen, ob das abgeschaltet werden soll; „Ja“ ändert nur die Zeile update_emulators (ab 1.7beta12
+         update_enabled) in dessen config.ini und baut NG dann ein, „Abbrechen“ (oder Schließen) lässt alles, wie es ist.
+         Hat die Person noch nie gesagt, welche Version von ShadowMountPlus läuft (smp_version leer), fragt die App das
+         zuerst, einmal (09.11.2026); die Antwort steht danach in den Einstellungen. */
       if (action === "apply" && apr.lib === "ampr" && apr.vers && apr.vers.emus && apr.vers.emus.update_emulators) {
         const pick = apr.vers.versions.find((x) => x.name === apr.emuSel);
         if (pick && pick.ng) {
+          let smpKey = apr.vers.emus.key || "update_emulators";
+          if (state.cfg && state.cfg.smp_version === "") {
+            const ver = await askChoice({
+              title: "Welche Version von ShadowMountPlus nutzt du?",
+              paras: [
+                "Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit Abschnitten statt einer flachen Liste). Die App ändert darin gleich eine Zeile und muss wissen, welche Version bei dir läuft.",
+                "Du kannst das später jederzeit auf der Seite Kühlung in der Karte ShadowMountPlus ändern. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.",
+              ],
+              options: [
+                { value: "v2", label: "Ab 1.7beta12" },
+                { value: "old", label: "Vor 1.7beta12" },
+                { value: "auto", label: "Automatisch erkennen" },
+              ],
+            });
+            if (!ver) return;
+            try {
+              await saveConfig({ smp_version: ver });
+              const now = await api("/api/v1/ampr-emu/smp-update");
+              smpKey = now.key || smpKey;
+              if (now.warning) toast(now.warning);
+            } catch (err) { toast(err.message, "error"); return; }
+          }
           const ans = await askYesNo({
             title: "ShadowMountPlus umstellen?",
             paras: [
               "Die automatische Fakelib-Aktualisierung von ShadowMountPlus ist eingeschaltet. Dann ersetzt ShadowMountPlus die NG-Datei beim Spielstart wieder durch die Fassung aus seinem Emulator-Ordner.",
               "Soll die automatische Fakelib-Aktualisierung in ShadowMountPlus deaktiviert werden?",
-              "Die App ändert dafür nur die Zeile update_emulators in /data/shadowmount/config.ini. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.",
+              `Die App ändert dafür nur die Zeile ${smpKey} in /data/shadowmount/config.ini. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.`,
             ],
           });
           if (!ans) return;
           try {
             const r = await api("/api/v1/ampr-emu/smp-update", { method: "POST", body: JSON.stringify({ enabled: false }) });
             apr.vers.emus.update_emulators = !!r.update_emulators;
+            apr.vers.emus.key = r.key || apr.vers.emus.key;
             toast(r.message || "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet.");
+            if (r.warning) toast(r.warning);
           } catch (err) { toast(err.message, "error"); return; }      /* ließ sich nicht ändern: dann auch nichts einbauen */
         }
       }
@@ -11436,6 +11481,32 @@
     saveConfig({ mode: e.target.checked ? "automatic" : "observe" },
                e.target.checked ? "Automatik eingeschaltet."
                                 : "Automatik aus — nur Beobachtung.")
+      .catch((err) => toast(err.message, "error"));
+  });
+
+  /* ShadowMountPlus (09.11.2026): welche Version läuft, und wie die config.ini aussieht (Zeile, Format, Hinweis bei Widerspruch). */
+  async function loadSmpNote() {
+    const n = $("#s-smp-note");
+    if (!n) return;
+    try {
+      const r = await api("/api/v1/ampr-emu/smp-update");
+      const base = r.format === "flat" ? "Die config.ini ist im alten Format (Zeile update_emulators)."
+                 : r.format === "v2" ? "Die config.ini ist im neuen Format (Zeile update_enabled)."
+                 : `Es gibt noch keine config.ini mit Inhalt. Die App legt beim Ändern die Zeile ${r.key} an.`;
+      n.textContent = "";                              /* zwei Elemente: jeder Satz wird für sich übersetzt */
+      const a = document.createElement("span");
+      a.textContent = base;
+      n.appendChild(a);
+      if (r.warning) {
+        n.appendChild(document.createTextNode(" "));
+        const w = document.createElement("span");
+        w.textContent = r.warning;
+        n.appendChild(w);
+      }
+    } catch (err) { n.textContent = err.message; }
+  }
+  if ($("#s-smp-version")) $("#s-smp-version").addEventListener("change", (e) => {
+    saveConfig({ smp_version: e.target.value }, "Version von ShadowMountPlus gespeichert.")
       .catch((err) => toast(err.message, "error"));
   });
 

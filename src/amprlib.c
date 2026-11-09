@@ -451,12 +451,24 @@ label_of(const al_ver_t *v, char *out, size_t n) {
 
 /* ---------------------------------------------------------------- ShadowMountPlus settings that matter here */
 
-typedef struct { int present; int update_emulators; char path[300]; } al_emus_t;
+typedef struct {
+  int         present;
+  int         update_emulators;
+  char        path[300];
+  int         format;          /* PS5TM_SMPFMT_*: what the config.ini is in */
+  int         mode;            /* PS5TM_SMP_*: the version of ShadowMountPlus the person named */
+  char        version[8];      /* the setting smp_version as saved ("" = not asked yet) */
+  const char *key;             /* update_emulators or update_enabled: the line this app reads and changes (never NULL) */
+  const char *warning;         /* "" or a sentence when the named version and the file do not fit (never NULL) */
+} al_emus_t;
 
 static void
 read_emus(const al_kind_t *k, al_emus_t *e) {
   memset(e, 0, sizeof(*e));
   e->update_emulators = 1;                                   /* the default of ShadowMountPlus */
+  ps5tm_config_smp_version(e->version, sizeof(e->version));
+  e->mode = ps5tm_smpcfg_mode_of(e->version);
+  e->format = PS5TM_SMPFMT_NONE;
   snprintf(e->path, sizeof(e->path), "%s/emus/%s", AL_SM_DIR, k->lib);
   uint8_t *d = NULL;
   size_t n = 0;
@@ -464,6 +476,7 @@ read_emus(const al_kind_t *k, al_emus_t *e) {
     d[n] = 0;
     ps5tm_smpcfg_t c;                                        /* the flat file of ShadowMountPlus up to 1.7beta11 and the sectioned one (v2) from 1.7beta12 (smpcfg.c) */
     ps5tm_smpcfg_parse((const char *)d, n, &c);
+    e->format = ps5tm_smpcfg_format((const char *)d, n);
     e->update_emulators = c.update_emulators;
     if(c.emulators_path[0]) {
       size_t m = strlen(c.emulators_path);
@@ -473,6 +486,16 @@ read_emus(const al_kind_t *k, al_emus_t *e) {
     free(d);
   }
   e->present = is_file(e->path);
+  e->key = ps5tm_smpcfg_key(e->format, e->mode);
+  e->warning = ps5tm_smpcfg_mismatch(e->format, e->mode);
+}
+
+static void
+add_emus_info(cJSON *e, const al_emus_t *em) {
+  cJSON_AddStringToObject(e, "key", em->key);
+  cJSON_AddStringToObject(e, "format", em->format == PS5TM_SMPFMT_V2 ? "v2" : em->format == PS5TM_SMPFMT_FLAT ? "flat" : "none");
+  cJSON_AddStringToObject(e, "smp_version", em->version);
+  cJSON_AddStringToObject(e, "warning", em->warning);
 }
 
 /* The person said yes to "switch off the automatic fakelib update of ShadowMountPlus" (06.11.2026): update_emulators=0 goes
@@ -481,7 +504,23 @@ read_emus(const al_kind_t *k, al_emus_t *e) {
    0 on success, else an errno with the reason in why. */
 int
 ps5tm_amprlib_smp_update(int enabled, char *why, size_t why_len) {
-  return ps5tm_smpcfg_set_update(AL_SM_CONFIG, enabled, why, why_len);
+  al_emus_t em;
+  read_emus(&K_AMPR, &em);                                   /* the named version decides for a file that says nothing */
+  return ps5tm_smpcfg_set_update(AL_SM_CONFIG, enabled, em.mode, why, why_len);
+}
+
+void
+ps5tm_amprlib_smp_info(cJSON *o) {
+  al_emus_t em;
+  read_emus(&K_AMPR, &em);
+  add_emus_info(o, &em);
+}
+
+const char *
+ps5tm_amprlib_smp_key(void) {
+  al_emus_t em;
+  read_emus(&K_AMPR, &em);
+  return em.key;
 }
 
 /* Is the automatic fakelib update of ShadowMountPlus on (its default)? */
@@ -703,6 +742,7 @@ ps5tm_amprlib_versions(const char *lib) {
   cJSON_AddStringToObject(e, "path", em.path);
   cJSON_AddBoolToObject(e, "present", em.present);
   cJSON_AddBoolToObject(e, "update_emulators", em.update_emulators);
+  add_emus_info(e, &em);
   return o;
 }
 
@@ -786,6 +826,7 @@ ps5tm_amprlib_state(const char *lib, const char *id, int *http) {
   cJSON_AddBoolToObject(e, "present", em.present);
   cJSON_AddBoolToObject(e, "update_emulators", em.update_emulators);
   cJSON_AddBoolToObject(e, "overrides", em.present && em.update_emulators);
+  add_emus_info(e, &em);
   cJSON_AddNumberToObject(o, "versions", (double)nv);
   free(vers);
   free(p);
@@ -991,9 +1032,12 @@ static void
 note_emus(const al_kind_t *k, char *note, size_t n) {
   al_emus_t em;
   read_emus(k, &em);
-  if(em.present && em.update_emulators)
-    add_note(note, n, k == &K_AMPR ? "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus dem Emulator-Ordner (update_emulators=1): diese Datei gewinnt dann."
-                                   : "ShadowMountPlus ersetzt libScePlayGo.sprx beim Spielstart aus dem Emulator-Ordner (update_emulators=1): diese Datei gewinnt dann.");
+  if(em.present && em.update_emulators) {
+    char t[320];
+    snprintf(t, sizeof(t), k == &K_AMPR ? "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus dem Emulator-Ordner (%s=1): diese Datei gewinnt dann."
+                                        : "ShadowMountPlus ersetzt libScePlayGo.sprx beim Spielstart aus dem Emulator-Ordner (%s=1): diese Datei gewinnt dann.", em.key);
+    add_note(note, n, t);
+  }
 }
 
 int
@@ -1145,8 +1189,9 @@ out:
 }
 
 /* After an ampr-emu-ng build went into a game (wish of the user 03.11.2026): its developer says ShadowMountPlus must not
-   refresh the fakelib (update_emulators=0), else the file is replaced at the start of the game. 2 with the warning when
-   update_emulators is on (the default), 1 with a short confirmation when it is off, 0 for any other version. */
+   refresh the fakelib (update_emulators=0, update_enabled=0 in the v2 file), else the file is replaced at the start of the
+   game. 2 with the warning when the setting is on (the default), 1 with a short confirmation when it is off, 0 for any
+   other version. */
 int
 ps5tm_amprlib_ng_warning(const char *store_name, char *out, size_t n) {
   al_ver_t v;
@@ -1155,11 +1200,11 @@ ps5tm_amprlib_ng_warning(const char *store_name, char *out, size_t n) {
   al_emus_t em;
   read_emus(&K_AMPR, &em);
   if(em.update_emulators) {
-    say(out, n, "AMPR EMU NG: Schalte in ShadowMountPlus das Aktualisieren der fakelib ab (update_emulators=0), sonst ersetzt "
-                "ShadowMountPlus die Datei beim Spielstart.");
+    say(out, n, "AMPR EMU NG: Schalte in ShadowMountPlus das Aktualisieren der fakelib ab (%s=0), sonst ersetzt "
+                "ShadowMountPlus die Datei beim Spielstart.", em.key);
     return 2;
   }
-  say(out, n, "AMPR EMU NG: Das Aktualisieren der fakelib ist in ShadowMountPlus schon abgeschaltet (update_emulators=0).");
+  say(out, n, "AMPR EMU NG: Das Aktualisieren der fakelib ist in ShadowMountPlus schon abgeschaltet (%s=0).", em.key);
   return 1;
 }
 
@@ -1218,10 +1263,10 @@ ps5tm_amprlib_pack_check(const char *id, const char *root, int repair, int zstd,
     d = NULL;
     n = 0;
     if(slurp(em.path, &d, &n, AL_MAX_BYTES) == 0 && !(zstd ? reads_zstd(d, n) : reads_packs(d, n)))
-      say(warn, warn_len, zstd ? "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus %s (update_emulators=1), und diese Datei liest keine zstd-Pakete: "
-          "Das gepackte Spiel bliebe schwarz. Lege dort AMPR EMU NG ab oder setze update_emulators=0."
-          : "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus %s (update_emulators=1), und diese Datei liest keine LZ4-Pakete: "
-          "Das gepackte Spiel bliebe schwarz. Lege dort eine Version mit „pack“ ab oder setze update_emulators=0.", em.path);
+      say(warn, warn_len, zstd ? "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus %s (%s=1), und diese Datei liest keine zstd-Pakete: "
+          "Das gepackte Spiel bliebe schwarz. Lege dort AMPR EMU NG ab oder setze %s=0."
+          : "ShadowMountPlus ersetzt libSceAmpr.sprx beim Spielstart aus %s (%s=1), und diese Datei liest keine LZ4-Pakete: "
+          "Das gepackte Spiel bliebe schwarz. Lege dort eine Version mit „pack“ ab oder setze %s=0.", em.path, em.key, em.key);
     free(d);
   }
   free(p);

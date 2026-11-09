@@ -59,6 +59,23 @@ ps5tm_tv_language_ok(const char *s) {
   return 0;
 }
 
+int
+ps5tm_smp_version_ok(const char *s) {
+  static const char *const ok[] = { "", "auto", "old", "v2" };
+  if(!s) return 0;
+  for(size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++)
+    if(!strcmp(s, ok[i])) return 1;
+  return 0;
+}
+
+void
+ps5tm_config_smp_version(char *out, size_t n) {
+  if(!out || !n) return;
+  ps5tm_config_lock();
+  snprintf(out, n, "%s", g_config.smp_version);
+  ps5tm_config_unlock();
+}
+
 #define PROBE_BITS (PS5TM_PROBE_GAME | PS5TM_PROBE_PAD | PS5TM_PROBE_NETDISP | \
                     PS5TM_PROBE_RISKY | PS5TM_PROBE_DRIVE | PS5TM_PROBE_FPS)
 
@@ -175,6 +192,7 @@ ps5tm_config_defaults(ps5tm_config_t *cfg) {
   cfg->night_target_c = 75;
   cfg->night_tz_offset_min = 0;
   cfg->tv_language[0] = '\0';
+  cfg->smp_version[0] = '\0';
 
   /* "Quiet when idle, cool under load."
    *
@@ -323,6 +341,7 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
   if(cfg->night_tz_offset_min < -720) cfg->night_tz_offset_min = -720;
   if(cfg->night_tz_offset_min > 840)  cfg->night_tz_offset_min = 840;
   if(!ps5tm_tv_language_ok(cfg->tv_language)) cfg->tv_language[0] = '\0';
+  if(!ps5tm_smp_version_ok(cfg->smp_version)) cfg->smp_version[0] = '\0';
   cfg->lightbar_warn_c = clampu(cfg->lightbar_warn_c, 55, 90);
   cfg->lightbar_hot_c = clampu(cfg->lightbar_hot_c, 56, 95);
   if(cfg->lightbar_hot_c <= cfg->lightbar_warn_c)
@@ -504,6 +523,8 @@ ps5tm_config_load(void) {
     g_config.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
   if(cJSON_IsString(it = cJSON_GetObjectItem(root, "tv_language")) && ps5tm_tv_language_ok(it->valuestring))
     snprintf(g_config.tv_language, sizeof(g_config.tv_language), "%s", it->valuestring);
+  if(cJSON_IsString(it = cJSON_GetObjectItem(root, "smp_version")) && ps5tm_smp_version_ok(it->valuestring))
+    snprintf(g_config.smp_version, sizeof(g_config.smp_version), "%s", it->valuestring);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "lightbar_warn_c")))
     g_config.lightbar_warn_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "lightbar_hot_c")))
@@ -708,6 +729,7 @@ ps5tm_config_save(void) {
           "  \"night_target_c\": %u,\n"
           "  \"night_tz_offset_min\": %d,\n"
           "  \"tv_language\": \"%s\",\n"
+          "  \"smp_version\": \"%s\",\n"
           "  \"profile\": \"%s\",\n"
           "  \"curve\": [\n",
           c.probe_mask,
@@ -723,6 +745,7 @@ ps5tm_config_save(void) {
           c.library_cache,
           c.night_enabled, c.night_start_min, c.night_end_min, c.night_target_c, c.night_tz_offset_min,
           c.tv_language,
+          c.smp_version,
           c.profile == PS5TM_PROFILE_COOL       ? "cool"
           : c.profile == PS5TM_PROFILE_BALANCED ? "balanced"
                                                 : "comfort");

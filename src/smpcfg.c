@@ -149,6 +149,44 @@ ps5tm_smpcfg_parse(const char *text, size_t len, ps5tm_smpcfg_t *c) {
   }
 }
 
+int
+ps5tm_smpcfg_format(const char *text, size_t len) {
+  char key[96], val[8];
+  int flat = 0;
+  line_t l;
+  for(size_t off = 0; next_line(text, len, off, &l); off = l.next) {
+    kind_t k = classify(&l, key, sizeof(key), val, sizeof(val), NULL, NULL);
+    if(k == L_SECTION && (!strcmp(key, "config") || !strcmp(key, "emulators"))) return PS5TM_SMPFMT_V2;
+    if(k == L_KEY) flat = 1;
+  }
+  return flat ? PS5TM_SMPFMT_FLAT : PS5TM_SMPFMT_NONE;
+}
+
+int
+ps5tm_smpcfg_mode_of(const char *setting) {
+  if(setting && !strcmp(setting, "old")) return PS5TM_SMP_OLD;
+  if(setting && !strcmp(setting, "v2")) return PS5TM_SMP_V2;
+  return PS5TM_SMP_AUTO;
+}
+
+const char *
+ps5tm_smpcfg_key(int format, int mode) {
+  if(format == PS5TM_SMPFMT_NONE) format = mode == PS5TM_SMP_V2 ? PS5TM_SMPFMT_V2 : PS5TM_SMPFMT_FLAT;
+  return format == PS5TM_SMPFMT_V2 ? "update_enabled" : "update_emulators";
+}
+
+const char *
+ps5tm_smpcfg_mismatch(int format, int mode) {
+  if(mode == PS5TM_SMP_V2 && format == PS5TM_SMPFMT_FLAT)
+    return "Du hast „ab 1.7beta12“ gewählt, aber die config.ini von ShadowMountPlus ist noch im alten Format (ShadowMountPlus "
+           "wandelt sie erst bei seinem ersten Start um). Die App ändert deshalb die Zeile update_emulators; ShadowMountPlus "
+           "übernimmt sie bei der Umwandlung.";
+  if(mode == PS5TM_SMP_OLD && format == PS5TM_SMPFMT_V2)
+    return "Du hast „vor 1.7beta12“ gewählt, aber die config.ini von ShadowMountPlus ist schon im neuen Format. Die App ändert "
+           "deshalb die Zeile update_enabled; eine ShadowMountPlus-Version vor 1.7beta12 liest diese Zeile nicht.";
+  return "";
+}
+
 /* Appends to a growing buffer. */
 typedef struct { char *p; size_t n, cap; int bad; } out_t;
 
@@ -172,9 +210,10 @@ static void
 puts_(out_t *o, const char *s) { put(o, s, strlen(s)); }
 
 char *
-ps5tm_smpcfg_with_update(const char *text, size_t len, int on, size_t *out_len) {
-  ps5tm_smpcfg_t c;
-  ps5tm_smpcfg_parse(text, len, &c);
+ps5tm_smpcfg_with_update(const char *text, size_t len, int on, int mode, size_t *out_len) {
+  /* the file decides how the line is written; a file that says nothing gets the line of the version the person named */
+  int fmt = ps5tm_smpcfg_format(text, len);
+  if(fmt == PS5TM_SMPFMT_NONE) fmt = mode == PS5TM_SMP_V2 ? PS5TM_SMPFMT_V2 : PS5TM_SMPFMT_FLAT;
   const char *eol = memchr(text, '\r', len) ? "\r\n" : "\n";
   const char *nv = on ? "1" : "0";
   out_t o = { 0 };
@@ -208,7 +247,7 @@ ps5tm_smpcfg_with_update(const char *text, size_t len, int on, size_t *out_len) 
   }
   if(!found && !on) {
     /* not there: add it where the format keeps it (a flat file at its end, a v2 file inside [emulators]) */
-    if(c.v2) {
+    if(fmt == PS5TM_SMPFMT_V2) {
       if(header_end >= 0) {
         char ins[64];
         snprintf(ins, sizeof(ins), "update_enabled=0%s", eol);
@@ -221,6 +260,12 @@ ps5tm_smpcfg_with_update(const char *text, size_t len, int on, size_t *out_len) 
         o = o2;
       } else {
         if(o.n && o.p[o.n - 1] != '\n') puts_(&o, eol);
+        if(!v2cfg) {                                              /* a v2 file starts with [config] version = 2: without it ShadowMountPlus reads it as an old one */
+          puts_(&o, "[config]");
+          puts_(&o, eol);
+          puts_(&o, "version=2");
+          puts_(&o, eol);
+        }
         puts_(&o, eol);
         puts_(&o, "[emulators]");
         puts_(&o, eol);
@@ -244,7 +289,7 @@ say(char *why, size_t n, const char *fmt, const char *a) {
 }
 
 int
-ps5tm_smpcfg_set_update(const char *path, int on, char *why, size_t why_len) {
+ps5tm_smpcfg_set_update(const char *path, int on, int mode, char *why, size_t why_len) {
   if(why && why_len) why[0] = 0;
   char *old = NULL;
   size_t olen = 0;
@@ -275,7 +320,7 @@ ps5tm_smpcfg_set_update(const char *path, int on, char *why, size_t why_len) {
     old[0] = 0;
   }
   size_t nlen = 0;
-  char *neu = ps5tm_smpcfg_with_update(old, olen, on, &nlen);
+  char *neu = ps5tm_smpcfg_with_update(old, olen, on, mode, &nlen);
   if(!neu) { free(old); say(why, why_len, "Kein Speicher.", NULL); return ENOMEM; }
   int rc = 0;
   if(have && nlen == olen && !memcmp(neu, old, olen)) goto done;        /* already as wanted: nothing to write */

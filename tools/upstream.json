@@ -43,7 +43,7 @@
      "where": "src/third_party/lz4/ (lz4.c, lz4.h, lz4hc.c, lz4hc.h; seit 08.11.2026 1.11.0, die APR-EMU hat ihren eigenen Entpacker 1.10.0)", "how": "Nur mit Absprache: die APR-EMU liest LZ4-Daten (Blockformat gleich). Archiv der Veröffentlichung laden, SHA-256 mit der .sha256 vergleichen, die vier Dateien tauschen, README.PS5TM nachziehen und sh test/lz4cross/run.sh <Ordner der anderen Fassung> laufen lassen (beide Richtungen)"},
     {"id": "cjson", "repo": "DaveGamble/cJSON", "current": "v1.7.19", "prereleases": false,
      "where": "src/third_party/cJSON.c/.h", "how": "Dateien tauschen"},
-    {"id": "ps5upload", "repo": "phantomptr/ps5upload", "current": "v11.2.5", "prereleases": false, "watch": true,
+    {"id": "ps5upload", "repo": "phantomptr/ps5upload", "current": "v12.3.0", "prereleases": false, "watch": true,
      "where": "nur Wissen (Starten über eine Meldung, caller-pid-Prüfung); wird nicht ausgeliefert", "how": "Nur lesen, bei sicherheits- oder startrelevanten Änderungen melden"}
   ]
 }

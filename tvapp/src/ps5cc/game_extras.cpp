@@ -156,6 +156,12 @@ void GameExtras::init(const ui::Theme &theme)
     ask_.style.scrim = 0.72f;
     ask_.style.width = 900.0f;
     ask_.style.body_lines = 10;
+    ask_version_.style.theme = solid_theme(theme);
+    ask_version_.style.frosted = false;
+    ask_version_.style.scrim = 0.72f;
+    ask_version_.style.width = 900.0f;
+    ask_version_.style.body_lines = 10;
+    ask_version_.style.buttons = ui::DialogButtons::stacked; // three answers with long words: one under the other
 }
 
 void GameExtras::open_game(const Game &game, ui::Feedback &feedback)
@@ -223,8 +229,9 @@ void GameExtras::absorb(const Snapshot &data)
         {
             warned_ = job;
             // the toast shows two lines: the advice short, the full sentence stays in the window
+            const std::string key = str(a.root, "warn_key").empty() ? "update_emulators" : str(a.root, "warn_key");
             toast(ui::StatusKind::warning, "AMPR EMU NG eingebaut",
-                  "In ShadowMountPlus update_emulators=0 setzen, sonst wird die Datei ersetzt.");
+                  "In ShadowMountPlus " + key + "=0 setzen, sonst wird die Datei ersetzt.");
         }
     }
     versions_ = data.extras_versions;
@@ -453,8 +460,14 @@ void GameExtras::build_versions()
     const bool packed_zstd = yes(emu.root, "packed_zstd"); // only AMPR EMU NG reads zstd packs
     version_names_.clear();
     version_ng_.clear();
-    // the answer of the app says whether ShadowMountPlus refreshes the fakelib (update_emulators, on by default)
-    smp_update_on_ = yes(get(j.root, "emus"), "update_emulators");
+    // the answer of the app says whether ShadowMountPlus refreshes the fakelib (update_emulators, on by default), which
+    // line of its config.ini the app changes (update_emulators; update_enabled from 1.7beta12) and whether the person said
+    // which version runs (an older app has no such field: then there is nothing to ask)
+    const cJSON *emus = get(j.root, "emus");
+    smp_update_on_ = yes(emus, "update_emulators");
+    smp_key_ = str(emus, "key").empty() ? "update_emulators" : str(emus, "key");
+    smp_format_ = str(emus, "format");
+    smp_asked_ = get(emus, "smp_version") == nullptr || !str(emus, "smp_version").empty();
     form_.add_header("VERSIONEN");
     int i = 0;
     const cJSON *v = nullptr;
@@ -715,19 +728,25 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         if (lib_ == "ampr" && i < version_ng_.size() && version_ng_[i] && smp_update_on_)
         {
             pending_version_ = version_names_[i];
-            ui::DialogContent content;
-            content.icon = ui::StatusKind::warning;
-            content.title = "ShadowMountPlus umstellen?";
-            content.body =
-                "Die automatische Fakelib-Aktualisierung von ShadowMountPlus ist eingeschaltet. "
-                "Dann ersetzt ShadowMountPlus die NG-Datei beim Spielstart wieder durch die Fassung "
-                "aus seinem Emulator-Ordner.\n\n"
-                "Soll die automatische Fakelib-Aktualisierung in ShadowMountPlus deaktiviert "
-                "werden?\n\n"
-                "Die App ändert dafür nur die Zeile update_emulators in "
-                "/data/shadowmount/config.ini. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.";
-            content.buttons = {{"Ja", ui::ButtonKind::primary}, {"Abbrechen"}};
-            ask_.open(content, feedback);
+            if (!smp_asked_)
+            {
+                // the person never said which version of ShadowMountPlus runs: asked once (09.11.2026), the answer is
+                // kept in the settings; "back" leaves everything as it was
+                ui::DialogContent content;
+                content.icon = ui::StatusKind::question;
+                content.title = "Welche Version von ShadowMountPlus nutzt du?";
+                content.body =
+                    "Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit Abschnitten statt einer "
+                    "flachen Liste). Die App ändert darin gleich eine Zeile und muss wissen, welche Version bei dir "
+                    "läuft.\n\n"
+                    "Du kannst das später jederzeit in den Einstellungen unter ShadowMountPlus ändern. Mit „Zurück“ "
+                    "bleibt alles, wie es ist, und NG wird nicht eingebaut.";
+                content.buttons = {
+                    {"Ab 1.7beta12", ui::ButtonKind::primary}, {"Vor 1.7beta12"}, {"Automatisch erkennen"}};
+                ask_version_.open(content, feedback);
+                return;
+            }
+            ask_switch(feedback);
             return;
         }
         apply_version(version_names_[i]);
@@ -821,6 +840,24 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
     }
 }
 
+// "ShadowMountPlus umstellen?": yes switches its automatic fakelib update off and puts the waiting version in.
+void GameExtras::ask_switch(ui::Feedback &feedback)
+{
+    ui::DialogContent content;
+    content.icon = ui::StatusKind::warning;
+    content.title = "ShadowMountPlus umstellen?";
+    content.body =
+        "Die automatische Fakelib-Aktualisierung von ShadowMountPlus ist eingeschaltet. "
+        "Dann ersetzt ShadowMountPlus die NG-Datei beim Spielstart wieder durch die Fassung "
+        "aus seinem Emulator-Ordner.\n\n"
+        "Soll die automatische Fakelib-Aktualisierung in ShadowMountPlus deaktiviert "
+        "werden?\n\n"
+        "Die App ändert dafür nur die Zeile " +
+        smp_key_ + " in /data/shadowmount/config.ini. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.";
+    content.buttons = {{"Ja", ui::ButtonKind::primary}, {"Abbrechen"}};
+    ask_.open(content, feedback);
+}
+
 // The version goes into the game; the window returns to the game's page.
 void GameExtras::apply_version(const std::string &name)
 {
@@ -836,6 +873,26 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
 {
     if (view_ == kClosed)
         return;
+    if (ask_version_.is_open())
+    {
+        // the version of ShadowMountPlus, asked once: kept in the settings (the request queues before the one that changes
+        // its config.ini, so the named version is in force when that is written), then the question about switching off
+        const ui::Event event = ask_version_.handle(input, feedback);
+        if (event == ui::Event::activated)
+        {
+            static const char *const kWords[3] = {"v2", "old", "auto"};
+            const int choice = std::clamp(ask_version_.choice(), 0, 2);
+            source().save_config(std::string("{\"smp_version\":\"") + kWords[choice] + "\"}");
+            smp_asked_ = true;
+            // a file with content decides which line it has; for one without, the named version does
+            if (smp_format_ == "none" || smp_format_.empty())
+                smp_key_ = choice == 0 ? "update_enabled" : "update_emulators";
+            ask_switch(feedback);
+        }
+        else if (!ask_version_.is_open())
+            pending_version_.clear();
+        return;
+    }
     if (ask_.is_open())
     {
         // "Ja" switches the automatic fakelib update off in ShadowMountPlus, then the version goes in; "Abbrechen" and
@@ -883,6 +940,7 @@ void GameExtras::update(float dt)
     clock_ += dt;
     form_.update(dt);
     ask_.update(dt);
+    ask_version_.update(dt);
     shown_.target = view_ != kClosed ? 1.0f : 0.0f;
     shown_.update(dt, 14.0f);
 }
@@ -1013,7 +1071,8 @@ void GameExtras::draw_overlay(ui::Canvas &canvas) const
         {ui::Button::circle, view_ == kVersions || view_ == kLz4 ? "Zurück" : "Schließen"}};
     ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 2, panel.x + 40.0f, false, layout);
     list.pop_opacity();
-    ask_.draw(canvas); // "ShadowMountPlus umstellen?" on top of everything
+    ask_version_.draw(canvas); // the version of ShadowMountPlus, once
+    ask_.draw(canvas);         // "ShadowMountPlus umstellen?" on top of everything
 }
 
 } // namespace hui::ps5cc

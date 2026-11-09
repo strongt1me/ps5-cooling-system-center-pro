@@ -2369,6 +2369,7 @@ void HttpSource::poll_config()
     c.lightbar_warn_c = static_cast<int>(num(root, "lightbar_warn_c", 70));
     c.lightbar_hot_c = static_cast<int>(num(root, "lightbar_hot_c", 80));
     c.tv_language = str(root, "tv_language");
+    c.smp_version = str(root, "smp_version");
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
     data_.config = c;

@@ -2854,6 +2854,7 @@ handle_config_get(int fd) {
       "\"night_enabled\":%u,\"night_start_min\":%u,\"night_end_min\":%u,"
       "\"night_target_c\":%u,\"night_tz_offset_min\":%d,"
       "\"tv_language\":\"%s\","
+      "\"smp_version\":\"%s\","
       "\"profile\":\"%s\","
       "\"curve\":[",
       g_config.schema_version,
@@ -2879,6 +2880,7 @@ handle_config_get(int fd) {
       g_config.night_enabled, g_config.night_start_min, g_config.night_end_min,
       g_config.night_target_c, g_config.night_tz_offset_min,
       g_config.tv_language,
+      g_config.smp_version,
       g_config.profile == PS5TM_PROFILE_COOL       ? "cool"
       : g_config.profile == PS5TM_PROFILE_BALANCED ? "balanced"
                                                    : "comfort");
@@ -3019,6 +3021,10 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
   if(cJSON_IsString(it = cJSON_GetObjectItem(root, "tv_language")))
     snprintf(next.tv_language, sizeof(next.tv_language), "%s",
              ps5tm_tv_language_ok(it->valuestring) ? it->valuestring : "");
+  /* the version of ShadowMountPlus the person named; an unknown word is "not asked yet" */
+  if(cJSON_IsString(it = cJSON_GetObjectItem(root, "smp_version")))
+    snprintf(next.smp_version, sizeof(next.smp_version), "%s",
+             ps5tm_smp_version_ok(it->valuestring) ? it->valuestring : "");
 
   /* control_band_c, deadband_c, control_interval_s, average_window_s and
      max_step_pct are deliberately NOT read here.
@@ -3120,6 +3126,7 @@ handle_config_export(int fd) {
   cJSON_AddNumberToObject(cfg, "night_target_c", g_config.night_target_c);
   cJSON_AddNumberToObject(cfg, "night_tz_offset_min", g_config.night_tz_offset_min);
   cJSON_AddStringToObject(cfg, "tv_language", g_config.tv_language);
+  cJSON_AddStringToObject(cfg, "smp_version", g_config.smp_version);
   cJSON_AddStringToObject(cfg, "profile",
       g_config.profile == PS5TM_PROFILE_COOL ? "cool"
       : g_config.profile == PS5TM_PROFILE_BALANCED ? "balanced"
@@ -3237,6 +3244,8 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
     next.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
   if(cJSON_IsString(it = cJSON_GetObjectItem(cfg, "tv_language")) && ps5tm_tv_language_ok(it->valuestring))
     snprintf(next.tv_language, sizeof(next.tv_language), "%s", it->valuestring);
+  if(cJSON_IsString(it = cJSON_GetObjectItem(cfg, "smp_version")) && ps5tm_smp_version_ok(it->valuestring))
+    snprintf(next.smp_version, sizeof(next.smp_version), "%s", it->valuestring);
   if(cJSON_IsString(it = cJSON_GetObjectItem(cfg, "profile"))) {
     next.profile = !strcmp(it->valuestring, "cool")     ? PS5TM_PROFILE_COOL
                  : !strcmp(it->valuestring, "balanced") ? PS5TM_PROFILE_BALANCED
@@ -4695,6 +4704,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
       cJSON *o = cJSON_CreateObject();
       cJSON_AddBoolToObject(o, "ok", 1);
       cJSON_AddBoolToObject(o, "update_emulators", ps5tm_amprlib_smp_update_on());
+      ps5tm_amprlib_smp_info(o);                        /* key, format, smp_version, warning */
       send_cjson(fd, 200, o);
       return;
     }
@@ -4705,16 +4715,18 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     int want = cJSON_IsTrue(je);
     cJSON_Delete(b);
     char why[300] = "";
+    const char *smp_key = ps5tm_amprlib_smp_key();      /* the line this write changes: by the file, by the named version for an empty one */
     int rc = ps5tm_amprlib_smp_update(want, why, sizeof(why));
     if(rc) {
-      PS5TM_WARN("smp_update_emulators", "update_emulators in ShadowMountPlus ließ sich nicht ändern: %s", why);
+      PS5TM_WARN("smp_update_emulators", "%s in ShadowMountPlus ließ sich nicht ändern: %s", smp_key, why);
       ps5tm_http_send_error(fd, rc == ENOENT ? 404 : 500, "smp_config_failed", why[0] ? why : "Die Einstellung ließ sich nicht ändern.");
       return;
     }
-    PS5TM_INFO("smp_update_emulators", "ShadowMountPlus: automatische Fakelib-Aktualisierung %s (update_emulators=%d).", want ? "eingeschaltet" : "abgeschaltet", want);
+    PS5TM_INFO("smp_update_emulators", "ShadowMountPlus: automatische Fakelib-Aktualisierung %s (%s=%d).", want ? "eingeschaltet" : "abgeschaltet", smp_key, want);
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", 1);
     cJSON_AddBoolToObject(o, "update_emulators", ps5tm_amprlib_smp_update_on());
+    ps5tm_amprlib_smp_info(o);                          /* key, format, smp_version, warning (the named version and the file do not fit) */
     cJSON_AddStringToObject(o, "message", want ? "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist wieder eingeschaltet."
                                               : "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet.");
     send_cjson(fd, 200, o);

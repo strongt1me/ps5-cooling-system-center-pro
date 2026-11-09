@@ -162,6 +162,8 @@ struct Config
     int lightbar_hot_c = 80;  // 56..95: red from here, always above yellow
     // The fullscreen app's language: "" follows the console, else de, en, es, fr, it, ru.
     std::string tv_language;
+    // The version of ShadowMountPlus the person named: "" not asked yet, "auto", "old" (up to 1.7beta11), "v2" (from 1.7beta12).
+    std::string smp_version;
 };
 
 // GET /api/v1/games: a cooling profile kept for one game (Phase 8).
