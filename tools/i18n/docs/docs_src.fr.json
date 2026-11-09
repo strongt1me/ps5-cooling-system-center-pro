@@ -161,7 +161,7 @@
     },
     {
      "q": "Quel firmware est pris en charge ?",
-     "a": "Le firmware 12.00 a été testé sur une PS5 Pro (CFI-7021) ; des utilisateurs signalent que l’app fonctionne aussi sur 4.xx à 10.xx et sur 13.60. La compilation utilise un SDK dont le code de démarrage connaît le firmware de 4.00 à 14.10 ; l’app n’a pas été testée sur les autres versions."
+     "a": "Le firmware 12.00 a été testé sur une PS5 Pro (CFI-7021) ; des utilisateurs signalent que l’app fonctionne aussi sur 4.xx à 10.xx et sur 13.60. La compilation utilise un SDK dont le code de démarrage connaît le firmware de 4.03 à 14.10 ; l’app n’a pas été testée sur les autres versions."
     },
     {
      "q": "L’app est-elle payante ?",

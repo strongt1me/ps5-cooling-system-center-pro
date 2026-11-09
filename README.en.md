@@ -7,6 +7,7 @@
 **Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in a browser (console, phone, PC) or as a fullscreen app on the TV with the controller, in seven languages.**
 
 ![Version](https://img.shields.io/badge/Version-1.78.0-1f6feb)
+![Firmware](https://img.shields.io/badge/FW-4.03%20to%2014.10%20supported-2ea44f)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
 ![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
 ![Languages](https://img.shields.io/badge/Languages-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
@@ -212,6 +213,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 | | |
 | --- | --- |
 | **Console** | Jailbroken PS5 with an ELF loader on port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) or similar) |
+| **Firmware** | **FW 4.03 to 14.10 supported** |
 | **Tested** | PS5 Pro (CFI-7021), firmware 12.00; several users report 4.xx to 10.xx and 13.60 working too |
 | **Fan** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (without it, sensors and interface work, fan control does not) |
 | **Network** | A browser on the same network, or the console's own browser |
@@ -220,7 +222,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 <details>
 <summary>Firmware and SDK in detail</summary>
 
-The ELF is built with PS5 payload SDK **v0.45**, whose start-up code knows firmware **4.00 up to 14.10**. A firmware the start-up code does not know never reaches `main()`: the program then does not start at all and writes nothing to the log. There are no reports yet for 13.00 to 13.40 (the start-up code knows them). The GPU temperature exists on the Pro only.
+The ELF is built with PS5 payload SDK **v0.45**, whose start-up code knows firmware **4.03 up to 14.10**. A firmware the start-up code does not know never reaches `main()`: the program then does not start at all and writes nothing to the log. There are no reports yet for 13.00 to 13.40 (the start-up code knows them). The GPU temperature exists on the Pro only.
 </details>
 
 ## Usage

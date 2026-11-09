@@ -7,6 +7,7 @@
 **Control del ventilador, supervisión de temperatura y centro de sistema para la PlayStation 5 con jailbreak,<br>desde un navegador (consola, móvil, PC) o como aplicación a pantalla completa en el televisor con el mando, en siete idiomas.**
 
 ![Versión](https://img.shields.io/badge/Versi%C3%B3n-1.78.0-1f6feb)
+![Firmware](https://img.shields.io/badge/FW-4.03%20a%2014.10%20compatible-2ea44f)
 ![Licencia](https://img.shields.io/badge/Licencia-GPL--3.0--or--later-blue)
 ![Plataforma](https://img.shields.io/badge/Plataforma-PS5%20Payload-003791)
 ![Idiomas](https://img.shields.io/badge/Idiomas-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
@@ -212,6 +213,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 | | |
 | --- | --- |
 | **Consola** | PS5 con jailbreak y cargador ELF en el puerto 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) o similar) |
+| **Firmware** | **Compatible con FW 4.03 a 14.10** |
 | **Probado** | PS5 Pro (CFI-7021), firmware 12.00; varios usuarios informan que también funciona en 4.xx a 10.xx y en 13.60 |
 | **Ventilador** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (sin él funcionan sensores e interfaz, la regulación no) |
 | **Red** | Un navegador en la misma red, o el navegador de la consola |
@@ -220,7 +222,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 <details>
 <summary>Firmware y SDK en detalle</summary>
 
-El ELF se compila con el PS5 payload SDK **v0.45**, cuyo código de arranque conoce el firmware **de 4.00 hasta 14.10**. Un firmware que el código de arranque no conoce nunca llega a `main()`: el programa no arranca y no escribe nada en el registro. Para 13.00–13.40 aún no hay informes (el código de arranque los conoce). La temperatura de la GPU solo existe en la Pro.
+El ELF se compila con el PS5 payload SDK **v0.45**, cuyo código de arranque conoce el firmware **de 4.03 hasta 14.10**. Un firmware que el código de arranque no conoce nunca llega a `main()`: el programa no arranca y no escribe nada en el registro. Para 13.00–13.40 aún no hay informes (el código de arranque los conoce). La temperatura de la GPU solo existe en la Pro.
 </details>
 
 ## Uso

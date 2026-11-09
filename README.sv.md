@@ -7,6 +7,7 @@
 **Fläktstyrning, temperaturövervakning och systemcentral för den jailbreakade PlayStation 5,<br>som används i en webbläsare (konsol, mobil, dator) eller som helskärmsapp på TV:n med handkontrollen, på sju språk.**
 
 ![Version](https://img.shields.io/badge/Version-1.78.0-1f6feb)
+![Firmware](https://img.shields.io/badge/FW-4.03%20till%2014.10%20st%C3%B6d-2ea44f)
 ![Licens](https://img.shields.io/badge/Licens-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
 ![Språk](https://img.shields.io/badge/Spr%C3%A5k-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
@@ -212,6 +213,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 | | |
 | --- | --- |
 | **Konsol** | Jailbreakad PS5 med en ELF-laddare på port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) eller liknande) |
+| **Firmware** | **Stöd för FW 4.03 till 14.10** |
 | **Testad** | PS5 Pro (CFI-7021), firmware 12.00; flera användare rapporterar att även 4.xx till 10.xx och 13.60 fungerar |
 | **Fläkt** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (utan den fungerar sensorer och gränssnitt, men inte fläktstyrningen) |
 | **Nätverk** | En webbläsare i samma nätverk, eller konsolens egen webbläsare |
@@ -220,7 +222,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 <details>
 <summary>Firmware och SDK i detalj</summary>
 
-ELF-filen är byggd med PS5-payload-SDK **v0.45**, vars startkod känner till firmware **från 4.00 upp till 14.10**. En firmware som startkoden inte känner till når aldrig `main()`: programmet startar då inte alls och skriver ingenting i loggen. För 13.00 till 13.40 finns ännu inga rapporter (startkoden känner till dem). Grafiktemperaturen finns bara på Pro.
+ELF-filen är byggd med PS5-payload-SDK **v0.45**, vars startkod känner till firmware **från 4.03 upp till 14.10**. En firmware som startkoden inte känner till når aldrig `main()`: programmet startar då inte alls och skriver ingenting i loggen. För 13.00 till 13.40 finns ännu inga rapporter (startkoden känner till dem). Grafiktemperaturen finns bara på Pro.
 </details>
 
 ## Användning

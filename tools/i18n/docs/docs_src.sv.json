@@ -161,7 +161,7 @@
     },
     {
      "q": "Vilken firmware stöds?",
-     "a": "Firmware 12.00 på en PS5 Pro (CFI-7021) är testad; användare rapporterar att appen även fungerar på 4.xx till 10.xx och på 13.60. Appen är byggd med ett SDK vars startkod känner till firmware 4.00 till 14.10. På övriga versioner har appen inte testats."
+     "a": "Firmware 12.00 på en PS5 Pro (CFI-7021) är testad; användare rapporterar att appen även fungerar på 4.xx till 10.xx och på 13.60. Appen är byggd med ett SDK vars startkod känner till firmware 4.03 till 14.10. På övriga versioner har appen inte testats."
     },
     {
      "q": "Kostar appen något?",

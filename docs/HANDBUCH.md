@@ -1115,7 +1115,7 @@ Programm.
 ## Firmware
 
 Die App ist mit dem PS5-Payload-SDK **v0.45** gebaut. Dessen Startcode kennt die
-Firmware **von 4.00 bis einschließlich 14.10** (14.00 und 14.10 seit v0.45); v0.41, mit dem die Versionen bis 1.46.0
+Firmware **von 4.03 bis einschließlich 14.10** (14.00 und 14.10 seit v0.45); v0.41, mit dem die Versionen bis 1.46.0
 gebaut waren, endete bei 13.40. Eine Firmware, die der Startcode nicht kennt,
 kommt nicht bis `main()`: Das Programm startet dann nicht und schreibt nichts ins
 Protokoll. Getestet ist nur die **Firmware 12.00** auf einer PS5 Pro; mehrere Nutzer melden, dass die App auch auf **4.xx bis 10.xx** und auf **13.60** läuft. Ob

@@ -277,6 +277,14 @@ class SystemPage final : public Page
 
         storage_ = make_storage_page();
         storage_->init(theme);
+
+        // the choice of the ShadowMountPlus version: three answers, one under the other
+        pick_version_.style.theme = solid_theme(theme);
+        pick_version_.style.frosted = false;
+        pick_version_.style.scrim = 0.72f;
+        pick_version_.style.width = 800.0f;
+        pick_version_.style.body_lines = 4;
+        pick_version_.style.buttons = ui::DialogButtons::stacked;
     }
 
     void absorb(const Snapshot &data) override
@@ -323,11 +331,25 @@ class SystemPage final : public Page
 
     bool modal() const override
     {
-        return view_ == kStorage && storage_->modal();
+        return pick_version_.is_open() || (view_ == kStorage && storage_->modal());
     }
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (pick_version_.is_open())
+        {
+            // the version of ShadowMountPlus: kept in the settings; "back" leaves everything as it was
+            const ui::Event event = pick_version_.handle(input, feedback);
+            if (event == ui::Event::activated)
+            {
+                static const char *const kWords[3] = {"auto", "old", "v2"};
+                smp_version_ = kWords[std::clamp(pick_version_.choice(), 0, 2)];
+                smp_hold_ = 8.0f;
+                source().save_config("{\"smp_version\":\"" + smp_version_ + "\"}");
+                rebuild();
+            }
+            return;
+        }
         if (!modal() &&
             (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next)))
         {
@@ -359,6 +381,7 @@ class SystemPage final : public Page
         views_.update(dt);
         list_.update(dt);
         storage_->update(dt);
+        pick_version_.update(dt);
         if (smp_hold_ > 0.0f)
             smp_hold_ = std::max(smp_hold_ - dt, 0.0f);
         // a switch the console never confirmed (save timed out or was refused) gives way to what it
@@ -476,6 +499,7 @@ class SystemPage final : public Page
     {
         if (view_ == kStorage)
             storage_->draw_overlay(canvas);
+        pick_version_.draw(canvas);
     }
 
     int hints(ui::Hint *out) const override
@@ -492,7 +516,7 @@ class SystemPage final : public Page
         const int tag = focused_tag();
         if (tag == kSmpVersionRow || tag == kSmpUpdateRow)
         {
-            out[1] = {ui::Button::cross, tag == kSmpVersionRow ? "Ändern" : "Umschalten"};
+            out[1] = {ui::Button::cross, tag == kSmpVersionRow ? "Wählen" : "Umschalten"};
             return 2;
         }
         if (tag >= kProbe && tag < kProbe + 6)
@@ -579,20 +603,27 @@ class SystemPage final : public Page
                 feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
                 return;
             }
-            feedback.play(audio::Cue::select);
-            smp_hold_ = 8.0f;
             if (tag == kSmpVersionRow)
             {
-                // Automatisch -> Vor 1.7beta12 -> Ab 1.7beta12 -> Automatisch (as the web page lists them)
-                smp_version_ = smp_version_ == "old" ? "v2" : smp_version_ == "v2" ? "auto" : "old";
-                source().save_config("{\"smp_version\":\"" + smp_version_ + "\"}");
+                // Automatisch erkennen / Vor 1.7beta12 / Ab 1.7beta12, as the web page lists them; the focus opens on the one in force
+                const int current = smp_version_ == "old" ? 1 : smp_version_ == "v2" ? 2 : 0;
+                ui::DialogContent content;
+                content.icon = ui::StatusKind::question;
+                content.title = "Welche Version von ShadowMountPlus nutzt du?";
+                content.body =
+                    "„Automatisch erkennen“ liest die Version aus der config.ini von ShadowMountPlus, die beiden anderen "
+                    "legen sie fest. Mit „Zurück“ bleibt alles, wie es ist.";
+                content.buttons = {{"Automatisch erkennen"}, {"Vor 1.7beta12"}, {"Ab 1.7beta12"}};
+                content.buttons[static_cast<std::size_t>(current)].kind = ui::ButtonKind::primary;
+                content.default_button = current;
+                pick_version_.open(content, feedback);
+                return;
             }
-            else
-            {
-                // not a field of the config: ShadowMountPlus's own setting, changed in its config.ini by the app
-                smp_update_ = !smp_update_;
-                source().extras_post("ampr-emu/smp-update", smp_update_ ? "{\"enabled\":true}" : "{\"enabled\":false}");
-            }
+            feedback.play(audio::Cue::select);
+            smp_hold_ = 8.0f;
+            // not a field of the config: ShadowMountPlus's own setting, changed in its config.ini by the app
+            smp_update_ = !smp_update_;
+            source().extras_post("ampr-emu/smp-update", smp_update_ ? "{\"enabled\":true}" : "{\"enabled\":false}");
             rebuild();
             return;
         }
@@ -737,6 +768,7 @@ class SystemPage final : public Page
         out.push_back(header("SHADOWMOUNTPLUS"));
         const char *version = smp_version_ == "old" ? "Vor 1.7beta12" : smp_version_ == "v2" ? "Ab 1.7beta12" : "Automatisch";
         ui::ListItem v = row("Version", config_loaded_ ? version : "…", kSmpVersionRow);
+        v.chevron = config_loaded_; // it opens a choice
         v.subtitle = "Ab 1.7beta12 hat ShadowMountPlus eine neue config.ini.";
         out.push_back(v);
         ui::ListItem u = row("Fakelib automatisch aktualisieren", config_loaded_ ? (smp_update_ ? "An" : "Aus") : "…", kSmpUpdateRow);
@@ -1096,6 +1128,7 @@ class SystemPage final : public Page
     bool config_loaded_ = false;
     std::string smp_version_;      // ShadowMountPlus: the version the person named ("", "auto", "old", "v2")
     bool smp_update_ = true;       // its automatic fakelib update (its own setting, read from its config.ini)
+    ui::Dialog pick_version_;      // the choice of the ShadowMountPlus version
     float smp_hold_ = 0.0f;        // a change made here holds for a few seconds, until the console reports it
     int mask_ = 0;
     int wanted_mask_ = -1; // a switch made here holds until the console reports it, at most 12 s

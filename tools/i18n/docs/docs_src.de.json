@@ -161,7 +161,7 @@
     },
     {
      "q": "Welche Firmware wird unterstützt?",
-     "a": "Getestet ist Firmware 12.00 auf einer PS5 Pro (CFI-7021); Nutzer melden, dass die App auch auf 4.xx bis 10.xx und 13.60 läuft. Gebaut wird mit einem SDK, dessen Startcode die Firmware 4.00 bis 14.10 kennt; auf den übrigen Ständen ist die App nicht getestet."
+     "a": "Getestet ist Firmware 12.00 auf einer PS5 Pro (CFI-7021); Nutzer melden, dass die App auch auf 4.xx bis 10.xx und 13.60 läuft. Gebaut wird mit einem SDK, dessen Startcode die Firmware 4.03 bis 14.10 kennt; auf den übrigen Ständen ist die App nicht getestet."
     },
     {
      "q": "Kostet die App etwas?",

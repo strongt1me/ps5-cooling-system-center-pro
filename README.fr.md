@@ -7,6 +7,7 @@
 **Contrôle du ventilateur, surveillance de la température et centre système pour la PlayStation 5 jailbreakée,<br>utilisable dans un navigateur (console, téléphone, PC) ou comme application plein écran sur le téléviseur avec la manette, en sept langues.**
 
 ![Version](https://img.shields.io/badge/Version-1.78.0-1f6feb)
+![Firmware](https://img.shields.io/badge/FW-4.03%20%C3%A0%2014.10%20pris%20en%20charge-2ea44f)
 ![Licence](https://img.shields.io/badge/Licence-GPL--3.0--or--later-blue)
 ![Plateforme](https://img.shields.io/badge/Plateforme-PS5%20Payload-003791)
 ![Langues](https://img.shields.io/badge/Langues-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
@@ -212,6 +213,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 | | |
 | --- | --- |
 | **Console** | PS5 jailbreakée avec un chargeur ELF sur le port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) ou équivalent) |
+| **Firmware** | **Prise en charge de FW 4.03 à 14.10** |
 | **Testé** | PS5 Pro (CFI-7021), firmware 12.00 ; plusieurs utilisateurs signalent que 4.xx à 10.xx et 13.60 fonctionnent aussi |
 | **Ventilateur** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (sans lui, capteurs et interface fonctionnent, pas la régulation) |
 | **Réseau** | Un navigateur sur le même réseau, ou le navigateur de la console |
@@ -220,7 +222,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 <details>
 <summary>Firmware et SDK en détail</summary>
 
-L'ELF est compilé avec le PS5 payload SDK **v0.45**, dont le code de démarrage connaît le firmware **de 4.00 à 14.10**. Un firmware que le code de démarrage ne connaît pas n'atteint jamais `main()` : le programme ne démarre pas du tout et n'écrit rien dans le journal. Pour 13.00 à 13.40 il n'y a pas encore de retour (le code de démarrage les connaît). La température du GPU n'existe que sur la Pro.
+L'ELF est compilé avec le PS5 payload SDK **v0.45**, dont le code de démarrage connaît le firmware **de 4.03 à 14.10**. Un firmware que le code de démarrage ne connaît pas n'atteint jamais `main()` : le programme ne démarre pas du tout et n'écrit rien dans le journal. Pour 13.00 à 13.40 il n'y a pas encore de retour (le code de démarrage les connaît). La température du GPU n'existe que sur la Pro.
 </details>
 
 ## Utilisation

@@ -1179,6 +1179,10 @@ class Ps5cc final : public app::Concept
             // System → ShadowMountPlus (version and the automatic fakelib update)
             {0.4f, action_bit(Action::jump_next)},
             {0.9f, 0, Direction::none, "system-shadowmountplus"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "system-shadowmountplus-auswahl"},
+            {0.3f, action_bit(Action::back)},
+            {0.5f},
             {0.2f, 0, Direction::down},
             {0.6f, 0, Direction::none, "system-shadowmountplus-fakelib"},
             {0.2f, 0, Direction::up},
