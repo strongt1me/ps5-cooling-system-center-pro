@@ -212,7 +212,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 | | |
 | --- | --- |
 | **Konsole** | PS5 mit Jailbreak und ELF-Lader auf Port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) o. ä.) |
-| **Getestet** | PS5 Pro (CFI-7021), Firmware 12.00; laut mehreren Nutzern auch 13.60 |
+| **Getestet** | PS5 Pro (CFI-7021), Firmware 12.00; laut mehreren Nutzern auch 4.xx bis 10.xx und 13.60 |
 | **Lüfter** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (ohne laufen Sensoren und Oberfläche, die Regelung nicht) |
 | **Netzwerk** | Browser im selben Netz, oder der Browser der Konsole selbst |
 | **Optional** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) für Verschieben, Entpacken und die Starter-Kachel |
@@ -220,7 +220,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 <details>
 <summary>Firmware und SDK im Detail</summary>
 
-Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmware **bis 14.10** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
+Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmware **von 4.00 bis 14.10** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
 </details>
 
 ## Bedienung

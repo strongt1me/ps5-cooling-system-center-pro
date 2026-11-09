@@ -296,8 +296,9 @@ typedef struct {
      "de", "en", "es", "fr", "it", "ru". The browser keeps its own choice per browser. */
   char            tv_language[4];
 
-  /* The version of ShadowMountPlus the person named (09.11.2026): "" = not asked yet, "auto" = find out from its
-     config.ini, "old" = up to 1.7beta11 (flat file), "v2" = from 1.7beta12 (sections). Decides which line of its
+  /* The version of ShadowMountPlus the person named (09.11.2026): "auto" (the default) = find out from its
+     config.ini, "old" = up to 1.7beta11 (flat file), "v2" = from 1.7beta12 (sections), "" = not asked yet (only an
+     explicitly saved empty word: the browser and the full-screen app then ask once). Decides which line of its
      config.ini the app changes when the file itself does not say (smpcfg.c) and what the texts call that line. */
   char            smp_version[8];
 

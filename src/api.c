@@ -2826,6 +2826,10 @@ handle_config_get(int fd) {
              ",\"probe_revert_in_s\":%u,\"probe_revert_mask\":%u",
              left_s, back_mask);
 
+  /* ShadowMountPlus's automatic fakelib update, read from its config.ini (read-only here; changed with
+     POST /api/v1/ampr-emu/smp-update). Read before the lock: it takes the config lock itself. */
+  const int smp_update = ps5tm_amprlib_smp_update_on() ? 1 : 0;
+
   ps5tm_config_lock();
   json_escape(g_config.bind_address, bind_esc, sizeof(bind_esc));
   o += (size_t)snprintf(body + o, sizeof(body) - o,
@@ -2855,6 +2859,7 @@ handle_config_get(int fd) {
       "\"night_target_c\":%u,\"night_tz_offset_min\":%d,"
       "\"tv_language\":\"%s\","
       "\"smp_version\":\"%s\","
+      "\"smp_update_emulators\":%s,"
       "\"profile\":\"%s\","
       "\"curve\":[",
       g_config.schema_version,
@@ -2881,6 +2886,7 @@ handle_config_get(int fd) {
       g_config.night_target_c, g_config.night_tz_offset_min,
       g_config.tv_language,
       g_config.smp_version,
+      smp_update ? "true" : "false",
       g_config.profile == PS5TM_PROFILE_COOL       ? "cool"
       : g_config.profile == PS5TM_PROFILE_BALANCED ? "balanced"
                                                    : "comfort");
@@ -3021,10 +3027,10 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
   if(cJSON_IsString(it = cJSON_GetObjectItem(root, "tv_language")))
     snprintf(next.tv_language, sizeof(next.tv_language), "%s",
              ps5tm_tv_language_ok(it->valuestring) ? it->valuestring : "");
-  /* the version of ShadowMountPlus the person named; an unknown word is "not asked yet" */
+  /* the version of ShadowMountPlus the person named; an unknown word is the default "auto" */
   if(cJSON_IsString(it = cJSON_GetObjectItem(root, "smp_version")))
     snprintf(next.smp_version, sizeof(next.smp_version), "%s",
-             ps5tm_smp_version_ok(it->valuestring) ? it->valuestring : "");
+             ps5tm_smp_version_ok(it->valuestring) ? it->valuestring : "auto");
 
   /* control_band_c, deadband_c, control_interval_s, average_window_s and
      max_step_pct are deliberately NOT read here.

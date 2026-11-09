@@ -212,7 +212,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 | | |
 | --- | --- |
 | **Konsol** | Jailbreakad PS5 med en ELF-laddare på port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) eller liknande) |
-| **Testad** | PS5 Pro (CFI-7021), firmware 12.00; flera användare rapporterar att även 13.60 fungerar |
+| **Testad** | PS5 Pro (CFI-7021), firmware 12.00; flera användare rapporterar att även 4.xx till 10.xx och 13.60 fungerar |
 | **Fläkt** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (utan den fungerar sensorer och gränssnitt, men inte fläktstyrningen) |
 | **Nätverk** | En webbläsare i samma nätverk, eller konsolens egen webbläsare |
 | **Valfritt** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) för att flytta, packa upp och för startrutan |
@@ -220,7 +220,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 <details>
 <summary>Firmware och SDK i detalj</summary>
 
-ELF-filen är byggd med PS5-payload-SDK **v0.45**, vars startkod känner till firmware **upp till 14.10**. En firmware som startkoden inte känner till når aldrig `main()`: programmet startar då inte alls och skriver ingenting i loggen. För 13.00 till 13.40 finns ännu inga rapporter (startkoden känner till dem). Grafiktemperaturen finns bara på Pro.
+ELF-filen är byggd med PS5-payload-SDK **v0.45**, vars startkod känner till firmware **från 4.00 upp till 14.10**. En firmware som startkoden inte känner till når aldrig `main()`: programmet startar då inte alls och skriver ingenting i loggen. För 13.00 till 13.40 finns ännu inga rapporter (startkoden känner till dem). Grafiktemperaturen finns bara på Pro.
 </details>
 
 ## Användning

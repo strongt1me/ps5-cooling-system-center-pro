@@ -192,7 +192,7 @@ ps5tm_config_defaults(ps5tm_config_t *cfg) {
   cfg->night_target_c = 75;
   cfg->night_tz_offset_min = 0;
   cfg->tv_language[0] = '\0';
-  cfg->smp_version[0] = '\0';
+  snprintf(cfg->smp_version, sizeof(cfg->smp_version), "auto");   /* default (09.11.2026): the config.ini tells which version runs */
 
   /* "Quiet when idle, cool under load."
    *
@@ -341,7 +341,7 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
   if(cfg->night_tz_offset_min < -720) cfg->night_tz_offset_min = -720;
   if(cfg->night_tz_offset_min > 840)  cfg->night_tz_offset_min = 840;
   if(!ps5tm_tv_language_ok(cfg->tv_language)) cfg->tv_language[0] = '\0';
-  if(!ps5tm_smp_version_ok(cfg->smp_version)) cfg->smp_version[0] = '\0';
+  if(!ps5tm_smp_version_ok(cfg->smp_version)) snprintf(cfg->smp_version, sizeof(cfg->smp_version), "auto");
   cfg->lightbar_warn_c = clampu(cfg->lightbar_warn_c, 55, 90);
   cfg->lightbar_hot_c = clampu(cfg->lightbar_hot_c, 56, 95);
   if(cfg->lightbar_hot_c <= cfg->lightbar_warn_c)

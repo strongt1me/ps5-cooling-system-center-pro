@@ -37,7 +37,6 @@ enum Row
     kLightbar,
     kLightWarn,
     kLightHot,
-    kSmpVersion,
     kRuleSave,
     kRuleNone,
     kRuleBase = 100, // + index of the kept game profile
@@ -54,16 +53,6 @@ const char *profile_word(const std::string &profile)
 
 constexpr float kSaveDelay = 0.6f;
 constexpr const char *kProfiles[] = {"comfort", "balanced", "cool"};
-// The version of ShadowMountPlus the person named (smp_version): auto, before 1.7beta12, from 1.7beta12.
-constexpr const char *kSmpVersions[] = {"auto", "old", "v2"};
-
-int smp_version_index(const std::string &word)
-{
-    for (int i = 1; i < 3; ++i)
-        if (word == kSmpVersions[i])
-            return i;
-    return 0; // "" (not asked yet) and "auto"
-}
 
 int profile_index(const std::string &profile)
 {
@@ -301,13 +290,13 @@ class SettingsPage final : public Page
   private:
     static std::string config_key(const Config &c)
     {
-        char text[220];
-        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
+        char text[200];
+        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
                       c.mode.c_str(), c.profile.c_str(), c.safety_temp_c, c.safety_min_c,
                       c.safety_max_c, c.night_enabled ? 1 : 0, c.night_start_min, c.night_end_min,
                       c.night_target_c, c.target_min_c, c.target_max_c, c.warning_cpu_c,
                       c.warning_countdown_s, c.lightbar_enabled ? 1 : 0, c.lightbar_warn_c,
-                      c.lightbar_hot_c, c.target_temp_c, smp_version_index(c.smp_version));
+                      c.lightbar_hot_c, c.target_temp_c);
         return text;
     }
 
@@ -393,11 +382,6 @@ class SettingsPage final : public Page
             kNightTarget, "Nachtziel", static_cast<float>(c.night_target_c),
             static_cast<float>(c.target_min_c), static_cast<float>(c.target_max_c), 1.0f);
         night.unit = " °C";
-        form_.add_header("SHADOWMOUNTPLUS");
-        form_
-            .add_choice(kSmpVersion, "Version", {"Automatisch", "Vor 1.7beta12", "Ab 1.7beta12"},
-                        smp_version_index(c.smp_version))
-            .description = "Ab 1.7beta12 hat ShadowMountPlus eine neue config.ini.";
         form_.add_header("LÜFTER-SELBSTTEST");
         form_.add_action(kSelfTest, "Selbsttest starten").description =
             "Senkt die Schwelle für höchstens 30 s und misst, ob der Lüfter schneller wird.";
@@ -428,7 +412,6 @@ class SettingsPage final : public Page
         form_.set_toggle(kLightbar, c.lightbar_enabled);
         form_.set_slider(kLightWarn, static_cast<float>(c.lightbar_warn_c));
         form_.set_slider(kLightHot, static_cast<float>(c.lightbar_hot_c));
-        form_.set_choice(kSmpVersion, smp_version_index(c.smp_version));
         if (ui::FormRow *row = form_.row(kRuleSave); row != nullptr && !game_id_.empty())
             row->text = std::to_string(c.target_temp_c) + " °C · " + profile_word(c.profile);
         night_rows(c.night_enabled);
@@ -482,10 +465,6 @@ class SettingsPage final : public Page
             break;
         case kWarnCountdown:
             pending_["warning_countdown_s"] = number(kWarnCountdown);
-            break;
-        case kSmpVersion:
-            pending_["smp_version"] =
-                std::string("\"") + kSmpVersions[std::clamp(form_.choice_index(kSmpVersion), 0, 2)] + "\"";
             break;
         case kLightbar:
             pending_["lightbar_enabled"] = form_.toggle_value(kLightbar) ? "1" : "0";

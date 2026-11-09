@@ -979,19 +979,6 @@
             <button class="btn" id="night-save" type="button">Nachtmodus speichern</button>
           </article>
 
-          <!-- ShadowMountPlus (09.11.2026): ab 1.7beta12 hat es eine neue config.ini; die App fragt, welche Version läuft -->
-          <article class="card" id="smp-card">
-            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-link"/></svg></span><div class="ck-text"><h2>ShadowMountPlus</h2>
-              <p class="sub">welche Version bei dir läuft</p></div></div></div>
-            <p class="note">Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit Abschnitten statt einer flachen Liste). Damit die App darin die richtige Zeile ändert, sag ihr, welche Version du nutzt.</p>
-            <div class="apr-prof"><select id="s-smp-version" aria-label="Version von ShadowMountPlus">
-              <option value="auto">Automatisch erkennen (an der Datei)</option>
-              <option value="old">Vor 1.7beta12 (alte config.ini)</option>
-              <option value="v2">Ab 1.7beta12 (neue config.ini)</option>
-            </select></div>
-            <p class="note" id="s-smp-note">wird gelesen …</p>
-          </article>
-
           <!-- Reihe 3: Verlauf und Sensoren -->
           <div class="ov-row ov-mid">
             <article class="card">
@@ -1295,6 +1282,23 @@
               <div class="co-stat"><span class="ov-label">Firmware</span><strong class="pb-val" id="sy-fw">--</strong></div>
               <div class="co-stat"><span class="ov-label">Läuft seit</span><strong class="pb-val" id="sy-uptime">--</strong></div>
             </div>
+          </article>
+
+          <!-- ShadowMountPlus (09.11.2026, ganz oben auf der Seite System): ab 1.7beta12 hat es eine neue config.ini; die App fragt, welche Version läuft -->
+          <article class="card" id="smp-card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-link"/></svg></span><div class="ck-text"><h2>ShadowMountPlus</h2>
+              <p class="sub">Version und automatische Aktualisierung</p></div></div></div>
+            <p class="note">Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit Abschnitten statt einer flachen Liste). Damit die App darin die richtige Zeile ändert, sag ihr, welche Version du nutzt.</p>
+            <div class="apr-prof"><select id="s-smp-version" aria-label="Version von ShadowMountPlus">
+              <option value="auto">Automatisch erkennen (an der Datei)</option>
+              <option value="old">Vor 1.7beta12 (alte config.ini)</option>
+              <option value="v2">Ab 1.7beta12 (neue config.ini)</option>
+            </select></div>
+            <p class="note" id="s-smp-note">wird gelesen …</p>
+            <label class="switch-row mt-12">
+              <span><b>Fakelib automatisch aktualisieren</b><small>Das ist die Einstellung von ShadowMountPlus selbst und dort normalerweise an: Beim Spielstart ersetzt es die fakelib der Spiele durch die Dateien aus seinem Emulator-Ordner. Für AMPR EMU NG muss das aus sein, sonst ersetzt ShadowMountPlus die NG-Datei wieder.</small></span>
+              <span class="switch"><input type="checkbox" id="s-smp-update"><i></i></span>
+            </label>
           </article>
 
           <article class="card has-ico">

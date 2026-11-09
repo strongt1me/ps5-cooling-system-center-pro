@@ -1,8 +1,8 @@
-// ps5cc - The System area (Phase 7): Konsole, Speicher, Kühlleistung, Zusatzabfragen, Experte.
+// ps5cc - The System area (Phase 7): Konsole, ShadowMountPlus, Speicher, Kühlleistung, Zusatzabfragen, Experte.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// As the web app's System page, in five sub-tabs (L2/R2). Speicher is the drives page of its own
+// As the web app's System page, in six sub-tabs (L2/R2). Speicher is the drives page of its own
 // (storage_page.cpp), held here; the others read the console app's answers as they come
 // (SystemData) with cJSON. What only a browser can do stays there: uploading a picture, exporting
 // and importing, and the views the browser keeps for itself (monitoring alarms,
@@ -33,10 +33,11 @@ using gfx::Rect;
 enum View
 {
     kConsole = 0,
-    kStorage = 1,
-    kHealth = 2,
-    kProbes = 3,
-    kExpert = 4,
+    kShadow = 1, // ShadowMountPlus: the version it runs and its automatic fakelib update (09.11.2026)
+    kStorage = 2,
+    kHealth = 3,
+    kProbes = 4,
+    kExpert = 5,
 };
 
 // List tags: what a row does, and in Experte which part it belongs to (the right card explains that
@@ -48,6 +49,8 @@ constexpr int kPreset = 40; // + 0 Sicher, 1 Monitoring, 2 Voll
 constexpr int kTimed = 50;  // + 0 2 min, 1 5 min, 2 10 min
 constexpr int kTimedStop = 59;
 constexpr int kRiskyMeasure = 60;
+constexpr int kSmpVersionRow = 70;
+constexpr int kSmpUpdateRow = 71;
 constexpr int kPart = 100; // + part index * 100 + row, Experte
 
 struct Probe
@@ -251,8 +254,14 @@ class SystemPage final : public Page
     {
         theme_ = theme;
         style_subtabs(views_, theme, 5);
-        views_.set_tabs(
-            {{"Konsole"}, {"Speicher"}, {"Kühlleistung"}, {"Zusatzabfragen"}, {"Experte"}});
+        // six tabs: sized by their labels, so the longest one (ShadowMountPlus) is shown in full
+        views_.style.width = ui::TabWidth::fit;
+        views_.set_tabs({{"Konsole"},
+                         {"ShadowMountPlus"},
+                         {"Speicher"},
+                         {"Kühlleistung"},
+                         {"Zusatzabfragen"},
+                         {"Experte"}});
         views_.set_active(kConsole, true);
 
         list_.style.theme = theme;
@@ -290,6 +299,12 @@ class SystemPage final : public Page
                 revert_in_s_ = static_cast<int>(num(c.root, "probe_revert_in_s"));
                 revert_left_ = static_cast<float>(revert_in_s_);
                 revert_mask_ = static_cast<int>(num(c.root, "probe_revert_mask"));
+                // ShadowMountPlus: not while a change of the person is on its way to the console
+                if (smp_hold_ <= 0.0f)
+                {
+                    smp_version_ = str(c.root, "smp_version");
+                    smp_update_ = !cJSON_IsFalse(get(c.root, "smp_update_emulators"));
+                }
                 config_loaded_ = true;
             }
             Json q(d_.qr);
@@ -344,6 +359,8 @@ class SystemPage final : public Page
         views_.update(dt);
         list_.update(dt);
         storage_->update(dt);
+        if (smp_hold_ > 0.0f)
+            smp_hold_ = std::max(smp_hold_ - dt, 0.0f);
         // a switch the console never confirmed (save timed out or was refused) gives way to what it
         // reports
         if (wanted_mask_ >= 0 && (wanted_age_ += dt) > 12.0f)
@@ -387,6 +404,21 @@ class SystemPage final : public Page
         case kConsole:
             draw_qr(canvas, paint, card);
             break;
+        case kShadow:
+        {
+            heading(canvas, "ShadowMountPlus", card);
+            const float y = paragraph(
+                canvas,
+                "Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit Abschnitten statt einer flachen "
+                "Liste). Damit die App darin die richtige Zeile ändert, sag ihr, welche Version du nutzt.",
+                x, card.y + 130.0f, w, kInk, 6);
+            paragraph(canvas,
+                      "Das ist die Einstellung von ShadowMountPlus selbst und dort normalerweise an: Beim Spielstart "
+                      "ersetzt es die fakelib der Spiele durch die Dateien aus seinem Emulator-Ordner. Für AMPR EMU NG "
+                      "muss das aus sein, sonst ersetzt ShadowMountPlus die NG-Datei wieder.",
+                      x, y + 20.0f, w, kMuted, 8);
+            break;
+        }
         case kHealth:
         {
             heading(canvas, "Kühlleistung über die Zeit", card);
@@ -458,6 +490,11 @@ class SystemPage final : public Page
             return 1 + std::min(n, 2);
         }
         const int tag = focused_tag();
+        if (tag == kSmpVersionRow || tag == kSmpUpdateRow)
+        {
+            out[1] = {ui::Button::cross, tag == kSmpVersionRow ? "Ändern" : "Umschalten"};
+            return 2;
+        }
         if (tag >= kProbe && tag < kProbe + 6)
         {
             out[1] = {ui::Button::cross,
@@ -532,6 +569,31 @@ class SystemPage final : public Page
         {
             feedback.play(audio::Cue::select);
             source().system_post("cooling-health", "{}");
+            return;
+        }
+        if (tag == kSmpVersionRow || tag == kSmpUpdateRow)
+        {
+            // before the console's answer is known the rows only show "…"
+            if (!config_loaded_)
+            {
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                return;
+            }
+            feedback.play(audio::Cue::select);
+            smp_hold_ = 8.0f;
+            if (tag == kSmpVersionRow)
+            {
+                // Automatisch -> Vor 1.7beta12 -> Ab 1.7beta12 -> Automatisch (as the web page lists them)
+                smp_version_ = smp_version_ == "old" ? "v2" : smp_version_ == "v2" ? "auto" : "old";
+                source().save_config("{\"smp_version\":\"" + smp_version_ + "\"}");
+            }
+            else
+            {
+                // not a field of the config: ShadowMountPlus's own setting, changed in its config.ini by the app
+                smp_update_ = !smp_update_;
+                source().extras_post("ampr-emu/smp-update", smp_update_ ? "{\"enabled\":true}" : "{\"enabled\":false}");
+            }
+            rebuild();
             return;
         }
         if (tag == kRiskyMeasure)
@@ -666,6 +728,20 @@ class SystemPage final : public Page
         }
         out.push_back(action("Vergleich neu beginnen", "Nach dem Reinigen: zählt ab jetzt neu.",
                              kHealthReset));
+        return out;
+    }
+
+    std::vector<ui::ListItem> shadow_items() const
+    {
+        std::vector<ui::ListItem> out;
+        out.push_back(header("SHADOWMOUNTPLUS"));
+        const char *version = smp_version_ == "old" ? "Vor 1.7beta12" : smp_version_ == "v2" ? "Ab 1.7beta12" : "Automatisch";
+        ui::ListItem v = row("Version", config_loaded_ ? version : "…", kSmpVersionRow);
+        v.subtitle = "Ab 1.7beta12 hat ShadowMountPlus eine neue config.ini.";
+        out.push_back(v);
+        ui::ListItem u = row("Fakelib automatisch aktualisieren", config_loaded_ ? (smp_update_ ? "An" : "Aus") : "…", kSmpUpdateRow);
+        u.subtitle = "Normalerweise an. Für AMPR EMU NG ausschalten.";
+        out.push_back(u);
         return out;
     }
 
@@ -937,6 +1013,7 @@ class SystemPage final : public Page
         if (view_ == kStorage)
             return;
         std::vector<ui::ListItem> next = view_ == kConsole  ? console_items()
+                                         : view_ == kShadow ? shadow_items()
                                          : view_ == kHealth ? health_items()
                                          : view_ == kProbes ? probe_items()
                                                             : expert_items();
@@ -1017,6 +1094,9 @@ class SystemPage final : public Page
     QrCode qr_;
     std::string qr_url_;
     bool config_loaded_ = false;
+    std::string smp_version_;      // ShadowMountPlus: the version the person named ("", "auto", "old", "v2")
+    bool smp_update_ = true;       // its automatic fakelib update (its own setting, read from its config.ini)
+    float smp_hold_ = 0.0f;        // a change made here holds for a few seconds, until the console reports it
     int mask_ = 0;
     int wanted_mask_ = -1; // a switch made here holds until the console reports it, at most 12 s
     float wanted_age_ = 0.0f;

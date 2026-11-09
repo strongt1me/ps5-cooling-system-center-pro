@@ -5272,7 +5272,7 @@
             ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy)}
             ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move)}
             ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert)}
-            ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-Asset-Packs …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
+            ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-/zstd-Asset-Packs …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
             ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
             ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy)}
             ${remount}
@@ -8010,7 +8010,7 @@
     if (apr.view === "emu") { aprRenderEmu(body); return; }
     if (apr.view === "lz4set") { aprRenderLz4Set(body); return; }
     cp.view = "apr";
-    txt("#cp-title", `LZ4-Asset-Packs & APR-EMU – ${i.name}`);
+    txt("#cp-title", `LZ4-/zstd-Asset-Packs & APR-EMU – ${i.name}`);
 
     /* AMPR-Index */
     const state = i.has_index
@@ -8245,7 +8245,7 @@
     apr.id = id; apr.info = null; apr.job = null; apr.img = null; apr.ij = null; apr.plan = null; apr.view = "main"; apr.drive = ""; apr.planErr = "";
     apr.emu = null; apr.pgo = null; apr.lib = "ampr"; apr.vers = null; apr.emuSel = ""; apr.emuErr = ""; apr.emuNote = ""; apr.lz4 = null; apr.lz4s = null; apr.trace = null; apr.plug = null;
     cp.view = "aprloading";
-    txt("#cp-title", "LZ4-Asset-Packs & APR-EMU");
+    txt("#cp-title", "LZ4-/zstd-Asset-Packs & APR-EMU");
     $("#cp-body").innerHTML = `<p class="muted">wird gelesen …</p>`;
     $("#cp-overlay").hidden = false;
     aprLoad();
@@ -8353,7 +8353,7 @@
               title: "Welche Version von ShadowMountPlus nutzt du?",
               paras: [
                 "Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit Abschnitten statt einer flachen Liste). Die App ändert darin gleich eine Zeile und muss wissen, welche Version bei dir läuft.",
-                "Du kannst das später jederzeit auf der Seite Kühlung in der Karte ShadowMountPlus ändern. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.",
+                "Du kannst das später jederzeit auf der Seite System ganz oben in der Karte ShadowMountPlus ändern. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.",
               ],
               options: [
                 { value: "v2", label: "Ab 1.7beta12" },
@@ -8382,6 +8382,8 @@
             const r = await api("/api/v1/ampr-emu/smp-update", { method: "POST", body: JSON.stringify({ enabled: false }) });
             apr.vers.emus.update_emulators = !!r.update_emulators;
             apr.vers.emus.key = r.key || apr.vers.emus.key;
+            const swUpd = $("#s-smp-update");
+            if (swUpd) swUpd.checked = !!r.update_emulators;
             toast(r.message || "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet.");
             if (r.warning) toast(r.warning);
           } catch (err) { toast(err.message, "error"); return; }      /* ließ sich nicht ändern: dann auch nichts einbauen */
@@ -11490,6 +11492,8 @@
     if (!n) return;
     try {
       const r = await api("/api/v1/ampr-emu/smp-update");
+      const sw = $("#s-smp-update");
+      if (sw) sw.checked = !!r.update_emulators;
       const base = r.format === "flat" ? "Die config.ini ist im alten Format (Zeile update_emulators)."
                  : r.format === "v2" ? "Die config.ini ist im neuen Format (Zeile update_enabled)."
                  : `Es gibt noch keine config.ini mit Inhalt. Die App legt beim Ändern die Zeile ${r.key} an.`;
@@ -11505,6 +11509,21 @@
       }
     } catch (err) { n.textContent = err.message; }
   }
+  /* Die automatische Fakelib-Aktualisierung von ShadowMountPlus wieder an- oder abschalten (nur diese eine Zeile seiner config.ini) */
+  if ($("#s-smp-update")) $("#s-smp-update").addEventListener("change", async (e) => {
+    const sw = e.target;
+    const want = sw.checked;
+    sw.disabled = true;
+    try {
+      const r = await api("/api/v1/ampr-emu/smp-update", { method: "POST", body: JSON.stringify({ enabled: want }) });
+      sw.checked = !!r.update_emulators;
+      toast(r.message || (want ? "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist wieder eingeschaltet."
+                               : "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet."));
+      if (r.warning) toast(r.warning);
+    } catch (err) { sw.checked = !want; toast(err.message, "error"); }
+    sw.disabled = false;
+    loadSmpNote();
+  });
   if ($("#s-smp-version")) $("#s-smp-version").addEventListener("change", (e) => {
     saveConfig({ smp_version: e.target.value }, "Version von ShadowMountPlus gespeichert.")
       .catch((err) => toast(err.message, "error"));

@@ -739,7 +739,7 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
                     "Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit Abschnitten statt einer "
                     "flachen Liste). Die App ändert darin gleich eine Zeile und muss wissen, welche Version bei dir "
                     "läuft.\n\n"
-                    "Du kannst das später jederzeit in den Einstellungen unter ShadowMountPlus ändern. Mit „Zurück“ "
+                    "Du kannst das später jederzeit unter System im Reiter ShadowMountPlus ändern. Mit „Zurück“ "
                     "bleibt alles, wie es ist, und NG wird nicht eingebaut.";
                 content.buttons = {
                     {"Ab 1.7beta12", ui::ButtonKind::primary}, {"Vor 1.7beta12"}, {"Automatisch erkennen"}};
@@ -1028,7 +1028,7 @@ void GameExtras::draw_overlay(ui::Canvas &canvas) const
              panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
     ui::text(list, fonts.regular,
              view_ == kLibrary ? "für alle Spiele"
-                               : "AMPR-Index, APR-EMU, PlayGo, Plugins, LZ4 und Mitschnitt",
+                               : "AMPR-Index, APR-EMU, PlayGo, Plugins, LZ4, zstd und Mitschnitt",
              panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
     if (view_ == kMain && extras_.seq == 0)
         ui::text(list, fonts.semibold, "Wird geladen …", panel.x + 520.0f, panel.y + 420.0f, 30.0f,

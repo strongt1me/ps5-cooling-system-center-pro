@@ -344,6 +344,7 @@ class MockSource final : public Source
             if (cJSON_IsString(smp) && smp->valuestring != nullptr)
             {
                 data_.config.smp_version = smp->valuestring;
+                sync_system_config();
                 changed();
             }
             cJSON_Delete(root);
@@ -954,6 +955,7 @@ class MockSource final : public Source
         if (route == "ampr-emu/smp-update")
         {
             smp_update_off_ = json.find("false") != std::string::npos;
+            sync_system_config();
             notice(Notice::Kind::success, "Extras",
                    smp_update_off_ ? "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet."
                                    : "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist wieder eingeschaltet.");
@@ -1007,6 +1009,19 @@ class MockSource final : public Source
                                      : (level == 12 ? 4200 : level == 3 ? 900 : 1860)) +
                  "}";
         changed();
+    }
+
+    // The raw config the System page reads (probe mask, ShadowMountPlus version and its automatic fakelib update)
+    std::string system_config_json() const
+    {
+        return std::string(R"({"probe_mask":13,"probe_revert_in_s":0,"probe_revert_mask":0,"smp_version":")") +
+               data_.config.smp_version + R"(","smp_update_emulators":)" + (smp_update_off_ ? "false" : "true") + "}";
+    }
+
+    void sync_system_config()
+    {
+        data_.system_data.config = system_config_json();
+        ++data_.system_data.seq;
     }
 
     void system_post(const std::string &route, const std::string &json) override
@@ -2203,7 +2218,7 @@ class MockSource final : public Source
         d.health =
             R"({"ok":true,"weeks":6,"verdict_ready":true,"weeks_usable":5,"weeks_needed":4,"since_ms":1790000000000,)"
             R"("older_weeks":4,"delta_c":1.4,"baseline_c":69.8,"current_c":71.2})";
-        d.config = R"({"probe_mask":13,"probe_revert_in_s":0,"probe_revert_mask":0})";
+        d.config = system_config_json();
         d.channels =
             R"({"ok":true,"channel_count":8,"channels":[[61,62,63],[58,59,59],[66,66,67],[52,52,53],[70,71,71],[49,49,50],[63,64,64],[55,55,56]]})";
         d.diag =

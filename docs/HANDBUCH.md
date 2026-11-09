@@ -329,9 +329,9 @@ abgeschaltet werden soll: **Ja** setzt nur die Zeile `update_emulators` (ab 1.7b
 ShadowMountPlus die Änderung sofort oder erst beim nächsten Start) und baut NG ein, **Abbrechen** lässt alles, wie es ist.
 Ab 1.7beta12 benutzt ShadowMountPlus ein neues Format der `config.ini` (Abschnitte, `[config] version = 2`) und wandelt die alten
 Dateien beim ersten Start um (die alten bleiben in `config-v1-backup`); die App versteht beide Formate und lässt Kommentare,
-Leerzeichen und alles andere in der Datei, wie es ist. Welche Version bei dir läuft, sagst du der App: Sie fragt beim Einbauen von
-NG einmal nach (**Ab 1.7beta12**, **Vor 1.7beta12** oder **Automatisch erkennen**) und merkt sich die Antwort; ändern lässt sie sich im Browser auf der Seite **Kühlung** in der Karte
-**ShadowMountPlus** und in der Vollbild-App unter **Einstellungen → ShadowMountPlus**. Welche Zeile geschrieben wird, bestimmt die Datei selbst, sobald
+Leerzeichen und alles andere in der Datei, wie es ist. Welche Version bei dir läuft, erkennt die App an der Datei (Standard: **Automatisch erkennen**);
+festlegen lässt es sich mit **Ab 1.7beta12** oder **Vor 1.7beta12** im Browser auf der Seite **System** ganz oben in der Karte
+**ShadowMountPlus** und in der Vollbild-App unter **System → ShadowMountPlus**. Welche Zeile geschrieben wird, bestimmt die Datei selbst, sobald
 sie ihr Format verrät; deine Angabe gilt für eine fehlende oder leere `config.ini` und löst einen Hinweis aus, wenn sie nicht zur
 Datei passt (etwa wenn ShadowMountPlus nach dem Update noch nicht gestartet wurde und die Datei noch die alte ist: es wandelt sie
 beim ersten Start um und übernimmt die Zeile). Ist die Aktualisierung schon aus, kommt die Frage nicht. Wohin die
@@ -1115,11 +1115,11 @@ Programm.
 ## Firmware
 
 Die App ist mit dem PS5-Payload-SDK **v0.45** gebaut. Dessen Startcode kennt die
-Firmware **bis einschließlich 14.10** (14.00 und 14.10 seit v0.45); v0.41, mit dem die Versionen bis 1.46.0
+Firmware **von 4.00 bis einschließlich 14.10** (14.00 und 14.10 seit v0.45); v0.41, mit dem die Versionen bis 1.46.0
 gebaut waren, endete bei 13.40. Eine Firmware, die der Startcode nicht kennt,
 kommt nicht bis `main()`: Das Programm startet dann nicht und schreibt nichts ins
-Protokoll. Getestet ist nur die **Firmware 12.00** auf einer PS5 Pro; mehrere Nutzer melden, dass die App auch auf **13.60** läuft. Ob
-Lüftersteuerung und Sensoren auf 13.xx so arbeiten wie dort, ist nicht geprüft.
+Protokoll. Getestet ist nur die **Firmware 12.00** auf einer PS5 Pro; mehrere Nutzer melden, dass die App auch auf **4.xx bis 10.xx** und auf **13.60** läuft. Ob
+Lüftersteuerung und Sensoren auf anderen Ständen so arbeiten wie dort, ist nicht geprüft.
 Was die Konsole meldet, steht auf der Systemseite („Firmware“) und im Protokoll
 (`firmware`).
 

@@ -212,7 +212,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 | | |
 | --- | --- |
 | **Console** | PS5 jailbreakée avec un chargeur ELF sur le port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) ou équivalent) |
-| **Testé** | PS5 Pro (CFI-7021), firmware 12.00 ; plusieurs utilisateurs signalent que 13.60 fonctionne aussi |
+| **Testé** | PS5 Pro (CFI-7021), firmware 12.00 ; plusieurs utilisateurs signalent que 4.xx à 10.xx et 13.60 fonctionnent aussi |
 | **Ventilateur** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (sans lui, capteurs et interface fonctionnent, pas la régulation) |
 | **Réseau** | Un navigateur sur le même réseau, ou le navigateur de la console |
 | **Optionnel** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) pour déplacer, décompresser et la vignette de lancement |
@@ -220,7 +220,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 <details>
 <summary>Firmware et SDK en détail</summary>
 
-L'ELF est compilé avec le PS5 payload SDK **v0.45**, dont le code de démarrage connaît le firmware **jusqu'à 14.10**. Un firmware que le code de démarrage ne connaît pas n'atteint jamais `main()` : le programme ne démarre pas du tout et n'écrit rien dans le journal. Pour 13.00 à 13.40 il n'y a pas encore de retour (le code de démarrage les connaît). La température du GPU n'existe que sur la Pro.
+L'ELF est compilé avec le PS5 payload SDK **v0.45**, dont le code de démarrage connaît le firmware **de 4.00 à 14.10**. Un firmware que le code de démarrage ne connaît pas n'atteint jamais `main()` : le programme ne démarre pas du tout et n'écrit rien dans le journal. Pour 13.00 à 13.40 il n'y a pas encore de retour (le code de démarrage les connaît). La température du GPU n'existe que sur la Pro.
 </details>
 
 ## Utilisation

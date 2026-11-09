@@ -229,11 +229,14 @@ Neue Konfigurationsfelder:
    Systemsprache der Konsole) oder `de`, `en`, `es`, `fr`, `it`, `ru`, `sv`. Ein anderer Wert wird zu `""`. Die Vollbild-App lädt
    dazu `/lang/<xx>.json` (das Wörterbuch der Browser-Oberfläche) und ihr eigenes aus `/app0/assets/lang/<xx>.json`. Der
    Browser merkt sich seine Sprache weiter selbst.
-- `smp_version` (neu, Teil von Export und Import): die Version von ShadowMountPlus, die die Person angegeben hat: `""` (noch nicht
-   gefragt), `auto` (am Format der `config.ini` erkennen), `old` (bis 1.7beta11, flache Datei) oder `v2` (ab 1.7beta12, Abschnitte).
-   Ein anderer Wert wird zu `""`. Zeigt die `config.ini` ihr Format, gilt die Datei; die Angabe entscheidet nur für eine fehlende oder
+- `smp_version` (neu, Teil von Export und Import): die Version von ShadowMountPlus, die die Person angegeben hat: `auto` (Standard: am Format der `config.ini`
+   erkennen), `""` (noch nicht gefragt; nur wenn leer gespeichert, dann fragen Browser und Vollbild-App beim Einbauen von NG einmal), `old` (bis 1.7beta11, flache Datei) oder `v2` (ab 1.7beta12, Abschnitte).
+   Ein anderer Wert wird zu `auto`. Zeigt die `config.ini` ihr Format, gilt die Datei; die Angabe entscheidet nur für eine fehlende oder
    leere Datei und löst einen Hinweis (`warning`) aus, wenn sie nicht zur Datei passt. Die Oberflächen fragen einmal danach, wenn
    `""` gilt und sie die `config.ini` ändern wollen (beim Einbauen von AMPR EMU NG).
+- `smp_update_emulators` (nur in der Antwort von `GET`, nicht änderbar, nicht in Export und Import): ob ShadowMountPlus beim Spielstart die fakelib der
+   Spiele selbst aktualisiert (sein Standard „an“), gelesen aus dessen `config.ini`; geändert wird es mit `POST /api/v1/ampr-emu/smp-update`
+   (`{"enabled": true|false}`). Die Vollbild-App liest es hier für ihren Reiter System → ShadowMountPlus.
 
 Probe-Maske (`probe_mask`) Bits:
 
