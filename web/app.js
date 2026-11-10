@@ -6448,6 +6448,54 @@
     return cmp ? list.slice().sort(cmp) : list.slice();   /* "recent": Konsole */
   };
 
+  /* Titelbilder in der Ansicht „kompakt“ (10.11.2026): Die Bilder der Konsole sind 512 × 512 Pixel, in der kompakten Karte stehen sie in 78 Pixel
+     (156 Bildpunkte auf dem Fernseher). Der Browser der PS5 verkleinert so stark nur grob (er greift einzelne Punkte heraus): Das Bild wird
+     körnig und verschwommen. Hier wird deshalb in Halbierungen verkleinert (jede Stufe mittelt je vier Punkte) und das Ergebnis in genau der
+     Größe angezeigt, in der es steht. Das Original bleibt in data-full; die große Ansicht und jedes andere Fenster zeigen weiter das Original. */
+  const gmThumbCache = new Map();        // Adresse des Bildes + "@" + Bildpunkte -> Adresse des verkleinerten Bildes
+  const gmHalve = (img, target) => {
+    try {
+      let src = img, sw = img.naturalWidth, sh = img.naturalHeight;
+      const smooth = (g) => { g.imageSmoothingEnabled = true; if ("imageSmoothingQuality" in g) g.imageSmoothingQuality = "high"; };
+      while (sw / 2 >= target) {                            // nie unter die Zielgröße halbieren (sonst müsste man wieder vergrößern)
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(sw / 2)); c.height = Math.max(1, Math.round(sh / 2));
+        const g = c.getContext("2d"); smooth(g);
+        g.drawImage(src, 0, 0, c.width, c.height);
+        src = c; sw = c.width; sh = c.height;
+      }
+      const out = document.createElement("canvas");
+      out.width = target; out.height = Math.max(1, Math.round(target * sh / sw));
+      const g = out.getContext("2d"); smooth(g);
+      g.drawImage(src, 0, 0, out.width, out.height);
+      return out;
+    } catch (e) { return null; }
+  };
+  const gmSharpen = () => {
+    const compact = document.documentElement.getAttribute("data-gmview") === "compact";
+    document.querySelectorAll("#gm-grid .gm-cover img").forEach((img) => {
+      if (!compact) {                                       // zurück zum Original
+        if (img.dataset.full) { img.src = img.dataset.full; delete img.dataset.full; }
+        return;
+      }
+      if (img.dataset.full) return;                         // schon verkleinert
+      const full = img.getAttribute("src");
+      const go = () => {
+        if (!img.isConnected || img.dataset.full) return;
+        const w = img.getBoundingClientRect().width;
+        const target = Math.min(256, Math.round(w * Math.max(1, window.devicePixelRatio || 1)));
+        if (!w || !img.naturalWidth || img.naturalWidth <= target * 1.3) return;   // da ist nichts zu gewinnen
+        const key = full + "@" + target;
+        const apply = (url) => { if (img.isConnected && !img.dataset.full) { img.dataset.full = full; img.src = url; } };
+        if (gmThumbCache.has(key)) { apply(gmThumbCache.get(key)); return; }
+        const out = gmHalve(img, target);
+        if (!out || !out.toBlob) return;
+        out.toBlob((b) => { if (!b) return; const url = URL.createObjectURL(b); gmThumbCache.set(key, url); if (document.documentElement.getAttribute("data-gmview") === "compact") apply(url); }, "image/png");
+      };
+      if (img.complete && img.naturalWidth) go(); else img.addEventListener("load", go, { once: true });
+    });
+  };
+
   const renderGames = () => {
     const grid = $("#gm-grid");
     if (!grid) return;
@@ -6489,7 +6537,10 @@
     /* Kein Cover: das Bild verschwindet, die Initialen dahinter bleiben. */
     $$("#gm-grid img").forEach((img) =>
       img.addEventListener("error", () => img.classList.add("broken"), { once: true }));
+    gmSharpen();
   };
+  /* die Auswahl „Darstellung“ wechselt die Bilder mit (theme-boot.js setzt das Attribut erst danach, deshalb der Aufschub) */
+  { const sel = $("#gm-view"); if (sel) sel.addEventListener("change", () => setTimeout(gmSharpen, 0)); }
 
   /* ── Covers & Metadaten speichern (04.10.2026) ───────────────────────
    * Der Zwischenspeicher der Spieleliste (libcache.c): Titelbilder und die Angaben,

@@ -2,6 +2,16 @@
 
 ## Unveröffentlicht
 
+### Kompakte Ansicht: Titelbilder nicht mehr körnig (10.11.2026)
+- **Sensoren (Kühlung):** Die Zeile unter dem Namen („Hauptprozessor“, „heißeste Messstelle am Chip“ …) beginnt jetzt unter dem Namen, nicht unter dem farbigen Punkt davor; sie saß 17 Pixel weiter links als der Name (Screenshot der PS5).
+- **Symbol von „Infos & Metadaten“ mittig:** Der Knopf erbte aus der großen Ansicht `justify-content: space-between`; der Browser der PS5 setzte die eine Spalte des Rasters dadurch an den linken Rand, das Symbol saß etwa 4 Pixel links von der Mitte (Screenshot der PS5). Die Symbolknöpfe der kompakten Ansicht sind jetzt ausdrücklich mittig ausgerichtet.
+- **Ursache:** Die Titelbilder der Konsole sind 512 × 512 Pixel, in der kompakten Karte stehen sie in 78 Pixel (156 Bildpunkte am Fernseher). Der Browser der PS5 verkleinert so stark nur grob, das Bild wurde körnig und verschwommen (Screenshot der PS5 vom 10.11.2026). In der großen Ansicht (240 Pixel) fällt das nicht auf.
+- **Behebung nur für die kompakte Ansicht:** Die Seite verkleinert die Bilder selbst, in Halbierungen (jede Stufe mittelt je vier Bildpunkte), und zeigt sie in genau der Größe, in der sie stehen (Zwischenspeicher je Bild, kein neues Bild bei jedem Neuzeichnen). Das Original bleibt in `data-full`; die große Ansicht und alle anderen Stellen zeigen weiter das Original. Neue Abfragen an die Konsole gibt es nicht.
+
+### Browser der PS5: größere Schrift (10.11.2026)
+- **Nur im Browser der PS5** (Kennung „PlayStation“; `theme-boot.js` setzt die Klasse `ps5` an `<html>`) ist die kleine Schrift größer: 10,5 bis 12,5 px werden um 2 px größer (12 px → 14 px, die häufigste Größe der Beschreibungen), 13 und 13,5 px um 1,5 px, 14 px um 1 px; ab 15 px bleibt alles. Jede Schriftregel steht in einer Kopie mit `html.ps5` davor (Block `PS5-TEXT` in `style.css`, erzeugt von `tools/gen_ps5_text.py`), in ihrem alten `@media`-Block und in ihrer alten Reihenfolge. In jedem anderen Browser ändert sich nichts.
+- **Umbrüche geprüft:** Alle Seiten (Kühlung, Spiele groß und kompakt, Dateimanager, Payloads, System, Profil, Protokoll, Credits) bei 1540 und 1920 Pixel Breite mit und ohne die Klasse verglichen: Knöpfe, Reiter, Marken, Überschriften und Beschriftungen brechen nirgends neu um; es gewinnen nur Fließtexte (Beschreibungen) eine Zeile. Die Zeile „Pfad · Größe · Datum“ der gespeicherten Payloads wurde mit „…“ gekürzt und darf auf der PS5 deshalb in eine zweite Zeile umbrechen.
+
 ### Firmware, die ein Spiel verlangt, auf den Karten (10.11.2026)
 - **Browser-Oberfläche:** Unter dem Titel steht eine Marke „FW 13.60“ (PS4-Titel: „PS4-FW 9.00“) mit der Firmware aus der `param.json` bzw. `param.sfo`; verlangt das Spiel eine neuere Firmware als die Konsole hat, ist die Marke gelb. **Mit angewendetem Backport** steht stattdessen die Firmware, die der Backport trägt: die SDK-Fassung seiner `eboot.bin` (Marke neben „Backport“, im Hinweis steht, was die `param.json` verlangt). In „Infos & Metadaten“ kommt bei Backports die Zeile „Backport-Firmware“ dazu. Gilt in der großen wie in der kompakten Darstellung und in allen Designs.
 - **Vollbild-App:** In der Zeile eines Spiels steht „· FW 13.60“ (Backport: dessen Firmware), in den Angaben „Benötigte Firmware“ und bei Backports „Backport-Firmware“.

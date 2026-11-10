@@ -261,7 +261,8 @@ body {
 .ov-kv { display: grid; gap: 11px; }
 .ov-kv > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; font-size: 13.5px; }
 .ov-kv span { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; color: var(--ink-2); min-width: 0; }
-.ov-kv span small { flex-basis: 100%; color: var(--ink-muted); font-size: 11.5px; }
+.ov-kv span small { flex-basis: 100%; color: var(--ink-muted); font-size: 11.5px;
+  padding-left: 17px; }                  /* unter dem Namen, nicht unter dem Punkt davor (9 px Punkt + 8 px Abstand) */
 .ov-kv b { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ov-kv b i { font-style: normal; font-size: 12px; color: var(--ink-muted); margin-left: 2px; }
 
@@ -2255,7 +2256,10 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-gmview="compact"] .gm-actions { grid-area: a; margin-top: 0; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; }
 :root[data-gmview="compact"] .gm-more { display: contents; }
 :root[data-gmview="compact"] .gm-actions .btn { width: 28px; height: 28px; min-width: 0; padding: 0; border-radius: 9px;
-  display: inline-grid; place-items: center; }
+  display: inline-grid; place-items: center;
+  /* ausdrücklich mittig: „Infos & Metadaten“ erbt aus der großen Ansicht justify-content: space-between, und der Browser der PS5 setzte
+     die eine Spalte des Rasters deshalb an den linken Rand (das Symbol saß 4 Pixel links von der Mitte) */
+  justify-content: center; align-content: center; }
 :root[data-gmview="compact"] .gm-actions .btn .gm-ico { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor;
   stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 :root[data-gmview="compact"] .gm-actions .btn .gm-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
@@ -2277,3 +2281,374 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-gmview="compact"] .gm-actions .gm-info { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; }
 :root[data-gmview="compact"] .gm-actions [data-delete] { order: 9; }
 :root[data-gmview="compact"] .gm-actions .gm-close { order: 10; flex: 1 0 100%; width: 100%; height: auto; padding: 7px 12px; margin: 0; display: block; }
+
+/* ── PS5-TEXT:BEGIN (erzeugt von tools/gen_ps5_text.py, nicht von Hand ändern) ─────────────────────────────────────────── */
+/* Browser der PS5: kleine Schrift größer (Klasse ps5 an <html>, siehe theme-boot.js). 354 Regeln, davon 290 größer. */
+html.ps5 body { font-size: 15px; }
+html.ps5 .brand-text strong { font-size: 15px; }
+html.ps5 .tab { font-size: 15px; }
+html.ps5 .side-ver { font-size: 14px; }
+html.ps5 .side-foot { font-size: 13.5px; }
+html.ps5 .page-head h1 { font-size: 23px; }
+html.ps5 .page-head small { font-size: 14.5px; }
+html.ps5 .xswitch { font-size: 14.5px; }
+html.ps5 .conn { font-size: 14px; }
+html.ps5 .hero-num { font-size: 42px; }
+html.ps5 .hero-unit { font-size: 17px; }
+html.ps5 .ov-title h2 { font-size: 20px; }
+html.ps5 .hero-icon { font-size: 15px; }
+html.ps5 .hero-copy p { font-size: 15px; }
+html.ps5 .ov-caption { font-size: 14px; }
+html.ps5 .ov-label { font-size: 13.5px; }
+html.ps5 .ov-big { font-size: 26px; }
+html.ps5 .ov-big i { font-size: 15px; }
+html.ps5 .ov-tile small { font-size: 14px; }
+html.ps5 .ov-game b { font-size: 16px; }
+html.ps5 .ov-fan + .ov-tile-text .ov-label { font-size: 15px; }
+html.ps5 .ov-fan + .ov-tile-text .ov-big { font-size: 46px; }
+html.ps5 .ov-fan + .ov-tile-text .ov-big i { font-size: 22px; }
+html.ps5 .ov-fan + .ov-tile-text small { font-size: 15px; }
+html.ps5 .ov-note { font-size: 14px; }
+html.ps5 .ov-kv > div { font-size: 15px; }
+html.ps5 .ov-kv span small { font-size: 13.5px; }
+html.ps5 .ov-kv b i { font-size: 14px; }
+html.ps5 .ov-expert-head h2 { font-size: 17px; }
+html.ps5 .co-stat small { font-size: 14px; }
+html.ps5 .page-banner h2 { font-size: 20px; }
+html.ps5 .pb-sub { font-size: 15px; }
+html.ps5 .pb-val { font-size: 19px; }
+html.ps5 .pf-avatar > span { font-size: 46px; }
+html.ps5 .pf-id h2 { font-size: 32px; }
+html.ps5 .offline-note b { font-size: 15px; }
+html.ps5 .offline-note small { font-size: 14.5px; }
+html.ps5 .co-quick-head { font-size: 15px; }
+html.ps5 .co-quick-head small { font-size: 14px; }
+html.ps5 .co-preset { font-size: 15px; }
+html.ps5 .co-preset span { font-size: 14px; }
+html.ps5 .co-explain summary { font-size: 15px; }
+html.ps5 .co-explain-body p { font-size: 15px; }
+html.ps5 .fs-btn { font-size: 14.5px; }
+html.ps5 .pw-btn { font-size: 14.5px; }
+@media (max-width: 480px) {
+html.ps5 .pf-id h2 { font-size: 26px; }
+}
+html.ps5 .fan-mini-meta { font-size: 13.5px; }
+html.ps5 .badge { font-size: 13.5px; }
+html.ps5 .card-head h2 { font-size: 19px; }
+html.ps5 .sub { font-size: 14.5px; }
+html.ps5 .legend { font-size: 14.5px; }
+html.ps5 .axis-y { font-size: 14.5px; }
+html.ps5 .tip { font-size: 14px; }
+html.ps5 .tip b { font-size: 13px; }
+html.ps5 .sensor span { font-size: 13.5px; }
+html.ps5 .sensor b { font-size: 19px; }
+html.ps5 .sensor b em { font-size: 14px; }
+html.ps5 .ring-mid b { font-size: 30px; }
+html.ps5 .ring-mid span { font-size: 12.5px; }
+html.ps5 .core i { font-size: 13px; }
+html.ps5 .core u { font-size: 13.5px; }
+html.ps5 .explain h2 { font-size: 15px; }
+html.ps5 .explain p { font-size: 15px; }
+html.ps5 #target-out { font-size: 40px; }
+html.ps5 .target-hint { font-size: 14px; }
+html.ps5 .scale { font-size: 14px; }
+html.ps5 .scale small { font-size: 12.5px; }
+html.ps5 .choice b { font-size: 15px; }
+html.ps5 .choice small { font-size: 13.5px; }
+html.ps5 .switch-row b { font-size: 15px; }
+html.ps5 .switch-row small { font-size: 13.5px; }
+html.ps5 .note { font-size: 13.5px; }
+html.ps5 .btn { font-size: 15px; }
+html.ps5 .linkish { font-size: 14px; }
+html.ps5 .kv-grid span { font-size: 13.5px; }
+html.ps5 .kv-grid b { font-size: 17px; }
+html.ps5 .kv-list > div { font-size: 15px; }
+html.ps5 .reason-tag { font-size: 12.5px; }
+html.ps5 .fan-legend { font-size: 13.5px; }
+html.ps5 .diag-events-head { font-size: 13.5px; }
+html.ps5 .diag-window button { font-size: 13px; }
+html.ps5 .diag-events-top #diag-events-clear { font-size: 13.5px; }
+html.ps5 .diag-summary span { font-size: 13.5px; }
+html.ps5 .diag-summary b { font-size: 14px; }
+html.ps5 .diag-events time { font-size: 13px; }
+html.ps5 .diag-src { font-size: 13px; }
+html.ps5 .diag-diff { font-size: 12.5px; }
+html.ps5 .diag-events b { font-size: 14px; }
+html.ps5 .vol-head b { font-size: 15px; }
+html.ps5 .vol-head span { font-size: 14px; }
+html.ps5 .vol-head .vol-eject { font-size: 14px; }
+html.ps5 .rule-current b { font-size: 15px; }
+html.ps5 .rule-current small { font-size: 14px; }
+html.ps5 .rule b { font-size: 15px; }
+html.ps5 .rule small { font-size: 13.5px; }
+html.ps5 .rule.live b::before { font-size: 13px; }
+html.ps5 .rule button { font-size: 13.5px; }
+html.ps5 .advanced summary { font-size: 15px; }
+html.ps5 .adv-grid label { font-size: 14.5px; }
+html.ps5 .adv-grid small { font-size: 13px; }
+html.ps5 .field-label { font-size: 14px; }
+html.ps5 .name-row .uid { font-size: 14px; }
+html.ps5 .gm-tools input[type=search] { font-size: 15px; }
+html.ps5 .gm-chip { font-size: 14.5px; }
+html.ps5 .gm-sort { font-size: 14.5px; }
+html.ps5 .gm-sort select { font-size: 14.5px; }
+html.ps5 .gm-fallback { font-size: 34px; }
+html.ps5 .gm-plat, html.ps5 .gm-live { font-size: 13px; }
+html.ps5 .gm-body h3 { font-size: 15px; }
+html.ps5 .gm-tag { font-size: 12.5px; }
+html.ps5 .gm-meta { font-size: 14px; }
+html.ps5 .gm-meta dd.mono { font-size: 13px; }
+html.ps5 .gm-overlay-box b { font-size: 19px; }
+html.ps5 .gm-overlay-box p { font-size: 15px; }
+html.ps5 .run-close { font-size: 14.5px; }
+html.ps5 .gm-more .btn { font-size: 14px; }
+html.ps5 .cp-head h3 { font-size: 17px; }
+html.ps5 .cp-x { font-size: 24px; }
+html.ps5 .cp-dialog code { font-size: 14px; }
+html.ps5 .cp-src, html.ps5 .cp-dest { font-size: 14.5px; }
+html.ps5 .cp-step { font-size: 15px; }
+html.ps5 .cp-choice-text { font-size: 14.5px; }
+html.ps5 .cp-choice-text .muted { font-size: 14px; }
+html.ps5 .cp-why { font-size: 14px; }
+html.ps5 .cp-warn { font-size: 14.5px; }
+html.ps5 .cp-err { font-size: 14.5px; }
+html.ps5 .dl-items { font-size: 15px; }
+html.ps5 .dl-keep { font-size: 14.5px; }
+html.ps5 .dl-done { font-size: 15px; }
+html.ps5 .cp-ok { font-size: 15px; }
+html.ps5 .cp-num { font-size: 15px; }
+html.ps5 .cp-banner { font-size: 14.5px; }
+html.ps5 .cp-banner[data-outcome] { font-size: 17px; }
+html.ps5 .sub-head { font-size: 15px; }
+html.ps5 .avatar-preview p { font-size: 14px; }
+html.ps5 .avatar-ctl input[type=file] { font-size: 14.5px; }
+html.ps5 .av-pick-label { font-size: 14.5px; }
+html.ps5 .av-gallery-title { font-size: 14.5px; }
+html.ps5 .av-gallery-title small { font-size: 14px; }
+html.ps5 .pl-title { font-size: 26px; }
+html.ps5 .pl-sec-head h3 { font-size: 14px; }
+html.ps5 .pl-count { font-size: 13px; }
+html.ps5 .pl-where { font-size: 14px; }
+html.ps5 .pl-where code { font-size: 14px; }
+html.ps5 .pl-note { font-size: 14px; }
+html.ps5 .pl-name { font-size: 15px; }
+html.ps5 .pl-ver { font-size: 13.5px; }
+html.ps5 .pl-badtxt { font-size: 13.5px; }
+html.ps5 .pl-path { font-size: 12.5px; }
+html.ps5 .pl-act { font-size: 14.5px; }
+html.ps5 .pl-trash { font-size: 14px; }
+html.ps5 .pl-live { font-size: 14px; }
+html.ps5 .pl-drive { font-size: 14.5px; }
+html.ps5 .pl-drive code { font-size: 13.5px; }
+html.ps5 .av-status { font-size: 14.5px; }
+html.ps5 .entry { font-size: 14.5px; }
+html.ps5 .entry .lvl { font-size: 12.5px; }
+html.ps5 .entry code { font-size: 12.5px; }
+html.ps5 .gm-cache-info { font-size: 14px; }
+html.ps5 .gm-cache .btn { font-size: 14.5px; }
+html.ps5 .kl-follow { font-size: 14.5px; }
+html.ps5 .kl-view { font-size: 14px; }
+html.ps5 .p4m-meta { font-size: 14px; }
+html.ps5 .p4m-state { font-size: 14px; }
+html.ps5 .p4m-skiphead { font-size: 15px; }
+html.ps5 .p4m-field { font-size: 14.5px; }
+html.ps5 .p4m-fasthint { font-size: 14.5px; }
+html.ps5 .dup-intro { font-size: 14.5px; }
+html.ps5 .upd-intro { font-size: 14.5px; }
+html.ps5 .upd-hint { font-size: 14.5px; }
+html.ps5 .upd-sw { font-size: 14px; }
+html.ps5 .upd-diag { font-size: 14.5px; }
+html.ps5 .upd-diag textarea { font-size: 14px; }
+html.ps5 .upd-linkrow input { font-size: 14px; }
+html.ps5 .dup-src code { font-size: 14px; }
+html.ps5 .p4m-log { font-size: 14px; }
+html.ps5 .pt-note { font-size: 14.5px; }
+html.ps5 .pt-live b { font-size: 15px; }
+html.ps5 .pt-live small { font-size: 14.5px; }
+html.ps5 .pt-stat strong { font-size: 19px; }
+html.ps5 .pt-stat small { font-size: 14px; }
+html.ps5 .pt-foot { font-size: 14px; }
+html.ps5 .pt-bar-val { font-size: 12.5px; }
+html.ps5 .pt-bar-lbl { font-size: 12.5px; }
+html.ps5 .pt-cover span { font-size: 15px; }
+html.ps5 .pt-main b { font-size: 15px; }
+html.ps5 .pt-main small { font-size: 14px; }
+html.ps5 .pt-side b { font-size: 15px; }
+html.ps5 .pt-side small { font-size: 14px; }
+html.ps5 .pt-empty { font-size: 14.5px; }
+@media (max-width: 720px) {
+html.ps5 .pt-bar-lbl { font-size: 11.5px; }
+}
+html.ps5 .sv-intro { font-size: 14.5px; }
+html.ps5 .sv-hint { font-size: 14.5px; }
+html.ps5 .sv-user-head b { font-size: 17px; }
+html.ps5 .sv-user-name .muted { font-size: 13.5px; }
+html.ps5 .sv-user-sum { font-size: 14.5px; }
+html.ps5 .sv-avatar { font-size: 24px; }
+html.ps5 .sv-t-name b { font-size: 15px; }
+html.ps5 .sv-t-name small { font-size: 13.5px; }
+html.ps5 .sv-t-size { font-size: 14.5px; }
+html.ps5 .sv-t-size small { font-size: 13px; }
+html.ps5 .sv-bk-main b { font-size: 15px; }
+html.ps5 .sv-bk-main small { font-size: 14px; }
+html.ps5 .sv-bk-row .btn { font-size: 14.5px; }
+html.ps5 .sv-job-path { font-size: 14px; }
+html.ps5 .sv-job-path code { font-size: 13.5px; }
+html.ps5 .kl-files-note { font-size: 14.5px; }
+html.ps5 .kl-files-note code { font-size: 13.5px; }
+html.ps5 .kl-file-name { font-size: 14.5px; }
+html.ps5 .kl-file-name small { font-size: 13.5px; }
+html.ps5 .kl-file-size { font-size: 14.5px; }
+html.ps5 .kl-file a.btn { font-size: 14.5px; }
+html.ps5 .muted { font-size: 14.5px; }
+html.ps5 .file-inline { font-size: 14px; }
+html.ps5 .file-inline input[type=file] { font-size: 14.5px; }
+html.ps5 .foot { font-size: 14px; }
+html.ps5 .toast { font-size: 14.5px; }
+@media (max-width: 620px) {
+html.ps5 .brand-text strong { font-size: 15px; }
+html.ps5 .conn { font-size: 13px; }
+html.ps5 .hero-num { font-size: 38px; }
+html.ps5 .hero-copy h1 { font-size: 18px; }
+html.ps5 .tab { font-size: 12.5px; }
+html.ps5 #target-out { font-size: 32px; }
+}
+html.ps5 .pk-drive { font-size: 15px; }
+html.ps5 .pk-drive .muted { font-size: 14px; }
+html.ps5 .pk-ico { font-size: 18px; }
+html.ps5 .pk-main b { font-size: 15px; }
+html.ps5 .pk-main small { font-size: 13.5px; }
+html.ps5 .pk-size { font-size: 14.5px; }
+html.ps5 .pk-note { font-size: 14px; }
+html.ps5 .pk-facts { font-size: 14.5px; }
+html.ps5 .cr-by { font-size: 14.5px; }
+html.ps5 .cr-group { font-size: 15px; }
+html.ps5 .cr-initials { font-size: 17px; }
+html.ps5 .cr-text b { font-size: 15px; }
+html.ps5 .cr-login { font-size: 14.5px; }
+html.ps5 .cr-text p { font-size: 14.5px; }
+html.ps5 .cr-links a { font-size: 14px; }
+html.ps5 .cr-foot { font-size: 14px; }
+html.ps5 .cr-net { font-size: 14.5px; }
+html.ps5 .cr-intro { font-size: 14.5px; }
+html.ps5 .fm-crumb { font-size: 15px; }
+html.ps5 .fm-ro { font-size: 14.5px; }
+html.ps5 .fm-free { font-size: 14.5px; }
+html.ps5 .fm-bar b, html.ps5 .fm-bar span { font-size: 15px; }
+html.ps5 .fm-job code { font-size: 14px; }
+html.ps5 .fm-name { font-size: 15px; }
+html.ps5 .fm-open { font-size: 15px; }
+html.ps5 .fm-main small { font-size: 14px; }
+html.ps5 .fm-dots { font-size: 17px; }
+html.ps5 .fm-menu button, html.ps5 .fm-menu a { font-size: 14.5px; }
+html.ps5 .fm-edit-area { font-size: 14px; }
+html.ps5 .fm-pick-crumb { font-size: 14px; }
+html.ps5 .fm-pick-crumb button { font-size: 14px; }
+html.ps5 .fm-pick-place { font-size: 14px; }
+html.ps5 .fm-conflict-list { font-size: 14.5px; }
+html.ps5 .fm-del-list { font-size: 15px; }
+html.ps5 .fm-del-list code { font-size: 15px; }
+html.ps5 .fm-del-in, html.ps5 .fm-del-sum { font-size: 14.5px; }
+html.ps5 .fm-del-warn { font-size: 14.5px; }
+html.ps5 .acc-main b { font-size: 15px; }
+html.ps5 .acc-main small { font-size: 14px; }
+html.ps5 .fm-pick-empty { font-size: 14.5px; }
+html.ps5 .fm-field { font-size: 14.5px; }
+html.ps5 .fm-field input { font-size: 15px; }
+html.ps5 .cr-featured .cr-text b { font-size: 17px; }
+html.ps5 .cr-featured .cr-text p { font-size: 15px; }
+html.ps5 .cr-outro { font-size: 14.5px; }
+html.ps5 .night-grid label { font-size: 14.5px; }
+html.ps5 .fan-test-head small { font-size: 14px; }
+html.ps5 .fan-test-state { font-size: 15px; }
+html.ps5 .fan-test-meta { font-size: 14px; }
+html.ps5 .fm-sortbar { font-size: 14.5px; }
+html.ps5 .fm-sortgrp select { font-size: 14.5px; }
+html.ps5 .fm-sortgrp .btn, html.ps5 #fm-sizes { font-size: 14.5px; }
+html.ps5 .fm-view-text { font-size: 14px; }
+html.ps5 .fm-view-note { font-size: 14px; }
+html.ps5 .lang-switch select { font-size: 14.5px; }
+html.ps5 .pl-startup-tag { font-size: 13px; }
+html.ps5 .pl-prof-run ul { font-size: 14.5px; }
+html.ps5 .sv-group { font-size: 14.5px; }
+html.ps5 .pk-drop { font-size: 14.5px; }
+html.ps5 .qr-url code { font-size: 15px; }
+html.ps5 .pl-prof-run { font-size: 14.5px; }
+html.ps5 .pl-prof-run ul { font-size: 14px; }
+html.ps5 .fm-hero .sub { font-size: 16px; }
+html.ps5 .fm-hero .pl-title { font-size: 36px; }
+html.ps5 .pq-note { font-size: 14.5px; }
+html.ps5 .pq-ico { font-size: 14.5px; }
+html.ps5 .pq-main b { font-size: 15px; }
+html.ps5 .pq-main small { font-size: 13.5px; }
+html.ps5 .pq-state { font-size: 14.5px; }
+html.ps5 .pq-why { font-size: 14px; }
+html.ps5 .pq-act .btn { font-size: 14px; }
+html.ps5 .pq-foot { font-size: 14px; }
+html.ps5 .pk-qtitle .btn { font-size: 14px; }
+html.ps5 #gm-pane-lib > .card:first-child .card-head h2 { font-size: 26px; }
+html.ps5 #gm-pane-lib > .card:first-child .card-head .sub { font-size: 15px; }
+html.ps5 .gm-pop-head b { font-size: 15px; }
+html.ps5 .gm-pop-head small { font-size: 13.5px; }
+html.ps5 .gm-pop-x { font-size: 16px; }
+html.ps5 .gm-pop .gm-meta { font-size: 14.5px; }
+html.ps5 .file-pick .file-btn { font-size: 14.5px; }
+html.ps5 .file-pick .file-name { font-size: 14.5px; }
+html.ps5 .name-card .card-head h2 { font-size: 24px; }
+html.ps5 .name-card .card-head .sub { font-size: 16px; }
+html.ps5 .name-card .name-row .uid { font-size: 16px; }
+html.ps5 .name-card .name-row input { font-size: 22px; }
+html.ps5 .name-card .name-row .btn { font-size: 17px; }
+html.ps5 .name-card .note { font-size: 15px; }
+html.ps5 .pl-sec-head h3 { font-size: 18px; }
+html.ps5 .pl-count { font-size: 15px; }
+html.ps5 .pl-where { font-size: 15px; }
+html.ps5 .pl-where code { font-size: 15px; }
+html.ps5 .pl-note, html.ps5 .note.pl-help { font-size: 15px; }
+html.ps5 .apr-row b { font-size: 15px; }
+html.ps5 .apr-row small { font-size: 14.5px; }
+html.ps5 .apr-state { font-size: 13.5px; }
+html.ps5 .apr-note { font-size: 14.5px; }
+html.ps5 .hv-ico { font-size: 17px; }
+html.ps5 .hv-main b { font-size: 15px; }
+html.ps5 .hv-main small { font-size: 14.5px; }
+html.ps5 .hv-res { font-size: 14px; }
+html.ps5 .hv-foot { font-size: 14.5px; }
+html.ps5 .apr-folder { font-size: 14.5px; }
+html.ps5 .apr-guide { font-size: 14.5px; }
+html.ps5 .apr-guide li { font-size: 14.5px; }
+@media (max-width: 560px) {
+html.ps5 .card-head h2 { font-size: 17px; }
+html.ps5 .axis-y { font-size: 13.5px; }
+}
+html.ps5[data-theme="optimal"] body { font-size: 16px; }
+html.ps5[data-theme="optimal"] .card-head h2 { font-size: 21px; }
+html.ps5[data-theme="optimal"] .sub { font-size: 15px; }
+html.ps5[data-theme="optimal"] .legend { font-size: 15px; }
+html.ps5[data-theme="optimal"] .axis-y { font-size: 15px; }
+html.ps5[data-theme="optimal"] .tab { font-size: 15.5px; }
+html.ps5 .ps-ico { font-size: 14.5px; }
+html.ps5 .ps-desc { font-size: 14px; }
+html.ps5 .ps-job-row span { font-size: 14.5px; }
+html.ps5 .dm-group > h3 { font-size: 13.5px; }
+html.ps5 .dm-row b { font-size: 15px; }
+html.ps5 .dm-row small { font-size: 14.5px; }
+html.ps5 .dm-field > span { font-size: 14.5px; }
+html.ps5 .dm-field > small { font-size: 14.5px; }
+html.ps5 .dm-field select, html.ps5 .dm-field input { font-size: 15px; }
+html.ps5 .dm-adv > summary { font-size: 15px; }
+html.ps5 .dm-adv > summary small { font-size: 14.5px; }
+html.ps5 .dm-note { font-size: 14.5px; }
+html.ps5 .gm-help b { font-size: 14.5px; }
+html.ps5 .gm-help span { font-size: 14.5px; }
+html.ps5 .gm-help small { font-size: 14px; }
+html.ps5[data-gmview="compact"] .gm-fallback { font-size: 22px; }
+html.ps5[data-gmview="compact"] .gm-plat, html.ps5[data-gmview="compact"] .gm-live { font-size: 11.5px; }
+html.ps5[data-gmview="compact"] .gm-body h3 { font-size: 15px; }
+html.ps5[data-gmview="compact"] .gm-actions .gm-start { font-size: 14.5px; }
+/* ── PS5-TEXT:END ── */
+
+/* ── PS5-Feinheiten (von Hand, nach dem Block PS5-TEXT) ───────────────────────────────────────────────────────────────
+   Mit der größeren Schrift wurde die Zeile „Pfad · Größe · Datum“ der gespeicherten Payloads öfter mit „…“ gekürzt und verlor Größe und Datum:
+   Sie darf auf der PS5 in eine zweite Zeile umbrechen. */
+html.ps5 .pl-path { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
