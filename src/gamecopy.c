@@ -1407,10 +1407,10 @@ ps5tm_gamecopy_status(void) {
 
 int
 ps5tm_gamecopy_cancel(void) {
+  /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
   pthread_mutex_lock(&g_lock);
   int active = job_active_locked();
+  if(active) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
-  if(!active) return -1;
-  __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
-  return 0;
+  return active ? 0 : -1;
 }

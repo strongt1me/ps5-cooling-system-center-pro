@@ -1297,28 +1297,36 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   if(!ps4) return cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
 
   /* A PS4 folder: the folder with our param.json (and a repaired npbind.dat, if needed) laid over it, as for a dump.
-     The overlay is written only once this job may start, and the worker removes it when it is over. */
-  if(other_job_active(1, err, err_len)) { free(a); return 409; }
+     The overlay is written only once this job may start, and the worker removes it when it is over.
+     One start at a time: the overlay folder is named after the title, so two starts of the same title at once (a double
+     click, the page and the fullscreen app) would both write it, and the one that is then refused would delete it under
+     the one that runs. The first start has claimed the place when cv_launch returns; the second then sees it busy. */
+  static pthread_mutex_t ps4_start_lock = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_lock(&ps4_start_lock);
+  int rc, busy, repaired = 0;
+  char overlay[256];
+  if(other_job_active(1, err, err_len)) { free(a); rc = 409; goto ps4_done; }
   pthread_mutex_lock(&g_lock);
-  int busy = active_locked();
+  busy = active_locked();
   pthread_mutex_unlock(&g_lock);
-  if(busy) { snprintf(err, err_len, "Es läuft schon eine Konvertierung."); free(a); return 409; }
+  if(busy) { snprintf(err, err_len, "Es läuft schon eine Konvertierung."); free(a); rc = 409; goto ps4_done; }
   snprintf(a->overlay, sizeof(a->overlay), "%s/dump-image/%s", PS5TM_DATA_DIR, title_id);
-  int repaired = 0;
   if(dimg_write_overlay(source, NULL, a->overlay, &pi, &repaired, err, err_len) != 0) {
     dimg_remove_overlay(a->overlay);
     free(a);
-    return 500;
+    rc = 500;
+    goto ps4_done;
   }
   snprintf(a->roots[0], sizeof(a->roots[0]), "%s", source);
   snprintf(a->roots[1], sizeof(a->roots[1]), "%s", a->overlay);
   a->nroots = 2;
   PS5TM_INFO("ps4_image", "PS4-Ordner %s: param.json aus der param.sfo gebaut%s.", title_id,
              repaired ? ", npbind.dat-Prüfsumme korrigiert" : "");
-  char overlay[256];
   snprintf(overlay, sizeof(overlay), "%s", a->overlay);
-  int rc = cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
+  rc = cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
   if(rc != 200) dimg_remove_overlay(overlay);        /* cv_launch freed a; the worker would have removed it otherwise */
+ps4_done:
+  pthread_mutex_unlock(&ps4_start_lock);
   return rc;
 }
 

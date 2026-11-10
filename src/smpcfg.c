@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -254,6 +255,7 @@ ps5tm_smpcfg_with_update(const char *text, size_t len, int on, int mode, size_t 
         out_t o2 = { 0 };
         put(&o2, "", 0);
         put(&o2, o.p, (size_t)header_end);
+        if(header_end > 0 && o.p[header_end - 1] != '\n') puts_(&o2, eol);      /* [emulators] was the last line and had no line ending */
         puts_(&o2, ins);
         put(&o2, o.p + header_end, o.n - (size_t)header_end);
         free(o.p);
@@ -288,13 +290,22 @@ say(char *why, size_t n, const char *fmt, const char *a) {
   if(why && n) snprintf(why, n, fmt, a ? a : "");
 }
 
-int
-ps5tm_smpcfg_set_update(const char *path, int on, int mode, char *why, size_t why_len) {
+static int
+set_update_locked(const char *path, int on, int mode, char *why, size_t why_len) {
   if(why && why_len) why[0] = 0;
   char *old = NULL;
   size_t olen = 0;
   struct stat st;
-  int have = stat(path, &st) == 0 && S_ISREG(st.st_mode);
+  int have = 0;
+  if(stat(path, &st) == 0) {
+    if(!S_ISREG(st.st_mode)) { say(why, why_len, "%s ist keine gewöhnliche Datei.", path); return EINVAL; }
+    have = 1;
+  } else if(errno != ENOENT) {
+    /* only a file that is missing is made new: any other failure must not end in a fresh file over the real one */
+    int e = errno;
+    say(why, why_len, "%s ließ sich nicht ansehen.", path);
+    return e;
+  }
   if(have) {
     if(st.st_size < 0 || (size_t)st.st_size > CFG_MAX) { say(why, why_len, "%s ist zu groß, um sie zu ändern.", path); return EFBIG; }
     FILE *f = fopen(path, "rb");
@@ -302,7 +313,13 @@ ps5tm_smpcfg_set_update(const char *path, int on, int mode, char *why, size_t wh
     old = malloc((size_t)st.st_size + 1);
     if(!old) { fclose(f); say(why, why_len, "Kein Speicher.", NULL); return ENOMEM; }
     olen = fread(old, 1, (size_t)st.st_size, f);
+    int rerr = ferror(f);
     fclose(f);
+    if(rerr || olen != (size_t)st.st_size) {              /* half of it read: never written back as if it were all */
+      free(old);
+      say(why, why_len, "%s ließ sich nicht vollständig lesen.", path);
+      return EIO;
+    }
     old[olen] = 0;
   } else {
     /* a missing file is made only where ShadowMountPlus lives (its folder is there) */
@@ -324,24 +341,44 @@ ps5tm_smpcfg_set_update(const char *path, int on, int mode, char *why, size_t wh
   if(!neu) { free(old); say(why, why_len, "Kein Speicher.", NULL); return ENOMEM; }
   int rc = 0;
   if(have && nlen == olen && !memcmp(neu, old, olen)) goto done;        /* already as wanted: nothing to write */
-  /* the old file stays once as a copy (it holds the person's whole setup, SMB connections included) */
+  /* what is about to be written must say what was asked: looked at BEFORE the file is touched, so a wrong result never
+     replaces the person's config (it holds their whole setup, SMB connections included) */
+  {
+    ps5tm_smpcfg_t c;
+    ps5tm_smpcfg_parse(neu, nlen, &c);
+    if(c.update_emulators != (on ? 1 : 0)) { rc = EIO; say(why, why_len, "Die Einstellung in %s hat sich nicht ändern lassen.", path); goto done; }
+  }
+  /* the old file stays once as a copy; a link in its place is never written through, and half a copy is not left behind
+     (it would pass for the real one next time) */
   if(have) {
     char bak[320];
     snprintf(bak, sizeof(bak), "%s.ps5cc-bak", path);
     struct stat bs;
-    if(stat(bak, &bs) != 0) {
-      FILE *b = fopen(bak, "wb");
+    if(lstat(bak, &bs) != 0) {
+      int bfd = open(bak, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, st.st_mode & 0777);
+      FILE *b = bfd >= 0 ? fdopen(bfd, "wb") : NULL;
       if(b) {
-        fchmod(fileno(b), st.st_mode & 0777);
-        fwrite(old, 1, olen, b);
-        fclose(b);
+        (void)fchmod(fileno(b), st.st_mode & 0777);
+        int ok = fwrite(old, 1, olen, b) == olen;
+        if(fclose(b) != 0) ok = 0;
+        if(!ok) unlink(bak);
+      } else if(bfd >= 0) {
+        close(bfd);
+        unlink(bak);
       }
     }
   }
   char tmp[320];
   snprintf(tmp, sizeof(tmp), "%s.ps5cc-tmp", path);
-  FILE *f = fopen(tmp, "wb");
-  if(!f) { rc = errno ? errno : EIO; say(why, why_len, "%s ließ sich nicht schreiben.", tmp); goto done; }
+  (void)unlink(tmp);                       /* a leftover of an earlier run, or a link put there: never written through */
+  int tfd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0666);
+  FILE *f = tfd >= 0 ? fdopen(tfd, "wb") : NULL;
+  if(!f) {
+    rc = errno ? errno : EIO;
+    if(tfd >= 0) { close(tfd); unlink(tmp); }
+    say(why, why_len, "%s ließ sich nicht schreiben.", tmp);
+    goto done;
+  }
   if(have) fchmod(fileno(f), st.st_mode & 0777);
   if(fwrite(neu, 1, nlen, f) != nlen || fflush(f) != 0) {
     rc = errno ? errno : EIO;
@@ -351,21 +388,46 @@ ps5tm_smpcfg_set_update(const char *path, int on, int mode, char *why, size_t wh
     goto done;
   }
   fsync(fileno(f));
-  fclose(f);
+  if(fclose(f) != 0) {
+    rc = errno ? errno : EIO;
+    unlink(tmp);
+    say(why, why_len, "%s ließ sich nicht schreiben.", tmp);
+    goto done;
+  }
   if(rename(tmp, path) != 0) {
     rc = errno ? errno : EIO;
     unlink(tmp);
     say(why, why_len, "%s ließ sich nicht ersetzen.", path);
     goto done;
   }
-  /* look again: what is in the file now says what was asked */
+  /* look at the file itself, not at the buffer: what stands on the drive now must be what was meant to be written */
   {
-    ps5tm_smpcfg_t c;
-    ps5tm_smpcfg_parse(neu, nlen, &c);
-    if(c.update_emulators != (on ? 1 : 0)) { rc = EIO; say(why, why_len, "Die Einstellung in %s hat sich nicht ändern lassen.", path); }
+    int same = 0;
+    FILE *r = fopen(path, "rb");
+    if(r) {
+      char *back = malloc(nlen + 1);
+      if(back) {
+        size_t blen = fread(back, 1, nlen + 1, r);
+        same = blen == nlen && !memcmp(back, neu, nlen);
+        free(back);
+      }
+      fclose(r);
+    }
+    if(!same) { rc = EIO; say(why, why_len, "Die Einstellung in %s hat sich nicht ändern lassen.", path); }
   }
 done:
   free(old);
   free(neu);
+  return rc;
+}
+
+/* One writer at a time: two calls would share the one temporary file name, and the second one's truncate would empty the
+   file the first one is about to move over the config. */
+int
+ps5tm_smpcfg_set_update(const char *path, int on, int mode, char *why, size_t why_len) {
+  static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_lock(&lock);
+  int rc = set_update_locked(path, on, mode, why, why_len);
+  pthread_mutex_unlock(&lock);
   return rc;
 }

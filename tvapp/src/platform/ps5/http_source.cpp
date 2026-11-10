@@ -3455,25 +3455,34 @@ void HttpSource::poll_extras(const std::string &id)
                                    "/api/v1/library/trace?id=" + q,
                                    "/api/v1/library/plugins?id=" + q};
     std::string answers[9];
+    bool lost[9] = {};
     for (int i = 0; i < 9; ++i)
     {
         int status = 0;
         std::string body;
-        if (exchange("GET", routes[i].c_str(), {}, &status, &body, 20) == Net::ok && status == 200)
+        const Net net = exchange("GET", routes[i].c_str(), {}, &status, &body, 20);
+        if (net == Net::ok && status == 200)
             answers[i] = std::move(body);
+        else
+            lost[i] = net != Net::ok; // a timeout is not an answer: for the same game the earlier one stays
     }
     std::lock_guard<std::mutex> lock(mutex_);
     ExtrasState &e = data_.extras;
+    const bool same = e.id == id;
+    auto put = [&](std::string &dst, int i) {
+        if (!(lost[i] && same))
+            dst = std::move(answers[i]);
+    };
     e.id = id;
-    e.ampr_job = std::move(answers[0]);
-    e.image_job = std::move(answers[1]);
-    e.ampr = std::move(answers[2]);
-    e.image = std::move(answers[3]);
-    e.emu_ampr = std::move(answers[4]);
-    e.emu_playgo = std::move(answers[5]);
-    e.lz4 = std::move(answers[6]);
-    e.trace = std::move(answers[7]);
-    e.plugins = std::move(answers[8]);
+    put(e.ampr_job, 0);
+    put(e.image_job, 1);
+    put(e.ampr, 2);
+    put(e.image, 3);
+    put(e.emu_ampr, 4);
+    put(e.emu_playgo, 5);
+    put(e.lz4, 6);
+    put(e.trace, 7);
+    put(e.plugins, 8);
     ++e.seq;
     ++data_.serial;
 }
@@ -4352,16 +4361,32 @@ void HttpSource::poll_jobs()
                                           "/api/v1/library/image/job", "/api/v1/library/storage",
                                           "/api/v1/library/delete"};
     std::array<Job, static_cast<std::size_t>(JobKind::count)> jobs{};
+    std::array<Job, static_cast<std::size_t>(JobKind::count)> before;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        before = data_.jobs;
+    }
     for (std::size_t i = 0; i < jobs.size(); ++i)
     {
         int status = 0;
         std::string body;
+        const Net net = exchange("GET", kRoutes[i], {}, &status, &body);
+        // A timeout is not an answer: the card keeps what it showed (otherwise one slow reply under load would show "no job"
+        // while a copy runs, and would start a library reload because the job seems to have ended).
+        if (net != Net::ok)
+        {
+            jobs[i] = before[i];
+            continue;
+        }
         // Without ShadowMountPlus its route answers 503: the card simply stays empty.
-        if (exchange("GET", kRoutes[i], {}, &status, &body) != Net::ok || status != 200)
+        if (status != 200)
             continue;
         cJSON *root = cJSON_Parse(body.c_str());
         if (root == nullptr)
+        {
+            jobs[i] = before[i];
             continue;
+        }
         Job &job = jobs[i];
         if (i == static_cast<std::size_t>(JobKind::storage))
         {

@@ -151,13 +151,28 @@ writer_start(void) {
     PS5TM_WARN("history_writer_failed", "Der Verlauf wird ohne eigenen Schreib-Faden gespeichert.");
 }
 
-/* Rewrites the whole file right away, under the lock (reset, and the fallback when the writer thread could not start). */
+/* Rewrites the whole file right away, under the lock (only the fallback when the writer thread could not start). */
 static void
 flush_locked(void) {
   if(!g_dirty) return;
   if(write_file(g_ring, g_count, (g_count == HISTORY_SLOTS) ? g_head : 0,
                 g_peak_cpu, g_peak_soc, g_peak_fan, g_peak_cpu_at))
     g_dirty = 0;
+}
+
+/* Says the file is due. The writer thread writes it; the caller (the fan thread, or a request) never waits for the drive, and
+ * only one thread at a time touches history.csv.tmp. */
+static void
+request_flush(void) {
+  pthread_once(&g_writer_once, writer_start);
+  pthread_mutex_lock(&g_lock);
+  if(g_writer_ok) {
+    g_due = 1;
+    pthread_cond_signal(&g_due_cond);
+  } else {
+    flush_locked();
+  }
+  pthread_mutex_unlock(&g_lock);
 }
 
 void
@@ -239,16 +254,7 @@ ps5tm_history_tick(int cpu_c, int cpu_valid, int soc_c, int soc_valid,
 
   pthread_mutex_unlock(&g_lock);
 
-  if(!due) return;
-  pthread_once(&g_writer_once, writer_start);
-  pthread_mutex_lock(&g_lock);
-  if(g_writer_ok) {                    /* the fan thread only says it is due, it never waits for the drive */
-    g_due = 1;
-    pthread_cond_signal(&g_due_cond);
-  } else {
-    flush_locked();
-  }
-  pthread_mutex_unlock(&g_lock);
+  if(due) request_flush();             /* the fan thread only says it is due, it never waits for the drive */
 }
 
 
@@ -290,7 +296,7 @@ ps5tm_history_reset(void) {
   g_peak_cpu = g_peak_soc = g_peak_fan = -1;
   g_peak_cpu_at = 0;
   g_dirty = 1;
-  flush_locked();
   pthread_mutex_unlock(&g_lock);
+  request_flush();                     /* the empty file is written by the writer thread: no drive access under the lock the fan thread takes */
   PS5TM_INFO("history_reset", "Verlauf zurückgesetzt.");
 }

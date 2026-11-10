@@ -1243,12 +1243,12 @@ ps5tm_imgjob_status(void) {
 
 int
 ps5tm_imgjob_cancel(void) {
+  /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
   pthread_mutex_lock(&g_lock);
   int act = active_locked();
+  if(act) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
-  if(!act) return 0;
-  __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
-  return 1;
+  return act ? 1 : 0;
 }
 
 #include "imgjob_lz4.inc"

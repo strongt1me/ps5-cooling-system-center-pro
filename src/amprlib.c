@@ -872,13 +872,18 @@ put_lib(const al_kind_t *k, const char *fakelib, const al_ver_t *ver, const uint
   if(!is_file(orig)) {
     uint8_t *cur = NULL;
     size_t cl = 0;
-    if(slurp(target, &cur, &cl, AL_MAX_BYTES) == 0) {
+    int sr = slurp(target, &cur, &cl, AL_MAX_BYTES);
+    if(sr == 0) {
       if(!is_replacement(cur, cl)) {
         rc = put_file(orig, cur, cl);
         if(rc) { free(cur); say(why, why_len, "Das Original ließ sich nicht sichern: %s", strerror(rc)); return rc; }
         add_note(note, note_len, "Die Datei des Spiels ist als libSceAmpr.sprx.orig gesichert.");
       }
       free(cur);
+    } else if(sr != ENOENT && is_file(target)) {
+      /* the file is there but cannot be read: it would be replaced without a copy of it */
+      say(why, why_len, "Die vorhandene Datei des Spiels ließ sich nicht lesen (%s). Sie wird nicht ersetzt, solange es keine Sicherung gibt.", strerror(sr));
+      return sr;
     } else if(game_own && game_own_len && !is_replacement(game_own, game_own_len)) {
       rc = put_file(orig, game_own, game_own_len);
       if(rc) { say(why, why_len, "Das Original ließ sich nicht sichern: %s", strerror(rc)); return rc; }

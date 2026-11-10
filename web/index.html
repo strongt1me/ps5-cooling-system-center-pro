@@ -1446,6 +1446,35 @@
               <h2>Expertenansicht</h2>
               <p class="sub">Rohwerte, Diagnose und Telemetrie — über den Schalter oben ein- und ausblendbar.</p>
             </div>
+            <article class="card" id="perf-card">
+              <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gauge"/></svg></span><div class="ck-text"><h2>Scroll-Test (PS5)</h2>
+                <p class="sub">findet heraus, was das Scrollen bremst</p></div></div></div>
+              <p class="note">Schaltet je eine Zeichenart ab. Danach auf der Seite „Spiele“ oder „Profil“ eine Weile scrollen: Jede Messung steht im Protokoll als Zeile „scroll …“ mit den eingeschalteten Schaltern. Nur zum Suchen der Ursache; es ändert nichts an der Konsole.</p>
+            <label class="switch-row mt-12">
+              <span><b>Rundungen aus</b><small>Ecken der Karten und Bilder eckig</small></span>
+              <span class="switch"><input type="checkbox" data-perf="round"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Schatten aus</b><small>keine Schlagschatten und keine Leuchtränder</small></span>
+              <span class="switch"><input type="checkbox" data-perf="shadow"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Verläufe aus</b><small>Flächen einfarbig statt mit Farbverlauf</small></span>
+              <span class="switch"><input type="checkbox" data-perf="grad"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Bilder aus</b><small>Titelbilder und Profilbilder nicht anzeigen</small></span>
+              <span class="switch"><input type="checkbox" data-perf="img"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Übergänge aus</b><small>keine Animationen und Übergänge</small></span>
+              <span class="switch"><input type="checkbox" data-perf="anim"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Karten nicht einzeln zeichnen aus</b><small>schaltet den Zeichenbereich je Spielkarte ab (zum Vergleich)</small></span>
+              <span class="switch"><input type="checkbox" data-perf="contain"><i></i></span>
+            </label>
+            </article>
             <article class="card is-hidden" id="locale-expert-card">
               <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-globe"/></svg></span><div class="ck-text"><h2>Region, Sprache, Zeitzone (Experte)</h2>
                 <p class="sub">Rohwerte aus der Registry</p></div></div></div>

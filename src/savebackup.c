@@ -1325,9 +1325,9 @@ job_launch(void *(*fn)(void *), job_args_t *a, const char *kind, char *err, size
   snprintf(g_job.kind, sizeof(g_job.kind), "%s", kind);
   snprintf(g_job.phase, sizeof(g_job.phase), "Vorbereiten");
   g_job.started_ms = ps5tm_mono_ms();
-  pthread_mutex_unlock(&g_lock);
-  __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
+  __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);          /* under the lock, like the cancel below */
   __atomic_store_n(&g_nocancel, 0, __ATOMIC_RELEASE);
+  pthread_mutex_unlock(&g_lock);
 
   /* The question before the call and this claim are not one step: a job of another kind (a split, an installation, a
      copy) may have started on the way. The others ask for this one before they claim their own, so of two that meet at
@@ -2298,11 +2298,12 @@ ps5tm_saves_busy(void) {
 
 void
 ps5tm_saves_cancel(void) {
+  /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
   pthread_mutex_lock(&g_lock);
   int active = job_active_locked();
-  pthread_mutex_unlock(&g_lock);
   if(active && !__atomic_load_n(&g_nocancel, __ATOMIC_ACQUIRE))
     __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+  pthread_mutex_unlock(&g_lock);
 }
 
 

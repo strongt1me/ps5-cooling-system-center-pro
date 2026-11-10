@@ -1063,7 +1063,8 @@ handle_write(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 500, "path_too_long", "Pfad zu lang.");
     return;
   }
-  int out = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, st.st_mode & 0777u);
+  (void)unlink(tmp);                     /* a leftover of an earlier run, or a link put there: never written through */
+  int out = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, st.st_mode & 0777u);
   if(out < 0) {
     char msg[300];
     snprintf(msg, sizeof(msg), "Datei ließ sich nicht schreiben: %s", io_words(errno));
@@ -2105,11 +2106,16 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
       case 7: handle_copy(fd, req, 1); break;
       case 8: handle_delete_plan(fd, req); break;
       case 9: handle_delete(fd, req); break;
-      case 10:
-        if(!ps5tm_filemgr_busy()) { ps5tm_http_send_error(fd, 409, "not_running", "Es läuft gerade nichts."); break; }
-        __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+      case 10: {
+        /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
+        pthread_mutex_lock(&g_lock);
+        int busy = g_job.state == FM_COUNTING || g_job.state == FM_COPYING || g_job.state == FM_DELETING;
+        if(busy) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+        pthread_mutex_unlock(&g_lock);
+        if(!busy) { ps5tm_http_send_error(fd, 409, "not_running", "Es läuft gerade nichts."); break; }
         ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
         break;
+      }
       case 11: handle_view(fd, req); break;
       case 12: handle_size(fd, req); break;
       case 13: handle_write(fd, req); break;

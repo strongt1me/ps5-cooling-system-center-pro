@@ -2652,3 +2652,15 @@ html.ps5[data-gmview="compact"] .gm-actions .gm-start { font-size: 14.5px; }
    Mit der größeren Schrift wurde die Zeile „Pfad · Größe · Datum“ der gespeicherten Payloads öfter mit „…“ gekürzt und verlor Größe und Datum:
    Sie darf auf der PS5 in eine zweite Zeile umbrechen. */
 html.ps5 .pl-path { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+
+/* Scrollen auf der PS5 (10.11.2026): Jede Spielkarte ist ein eigener Zeichenbereich (contain). content-visibility wurde bewusst nicht benutzt: Die Höhe, mit
+   der der Browser bis zur ersten Zeichnung rechnen müsste, lässt sich nicht treffen, und die Scrollleiste spränge. */
+html.ps5 .gm-card { contain: layout paint style; }
+
+/* ── Scroll-Test (Expertenmodus, System): schaltet je eine Zeichenart ab, um zu finden, was das Scrollen bremst. Die Klassen setzt app.js an <html>. ── */
+html.perf-round *, html.perf-round *::before, html.perf-round *::after { border-radius: 0 !important; }
+html.perf-shadow *, html.perf-shadow *::before, html.perf-shadow *::after { box-shadow: none !important; text-shadow: none !important; }
+html.perf-grad *, html.perf-grad *::before, html.perf-grad *::after { background-image: none !important; }
+html.perf-img img { display: none !important; }
+html.perf-anim *, html.perf-anim *::before, html.perf-anim *::after { animation: none !important; transition: none !important; }
+html.perf-contain .gm-card { contain: none !important; }

@@ -441,7 +441,13 @@ vol_open_next(zvols_t *v, char *err, size_t en) {
   if(!v->f) { close(fd); say(err, en, "Kein Speicher."); return -1; }
   setvbuf(v->f, NULL, _IOFBF, IO_BUF);
   uint8_t zero[VOLUME_HEADER] = { 0 };
-  if(fwrite(zero, 1, sizeof(zero), v->f) != sizeof(zero)) { say(err, en, "Schreiben in eine Paketdatei schlug fehl (%s).", strerror(errno)); return -1; }
+  if(fwrite(zero, 1, sizeof(zero), v->f) != sizeof(zero)) {
+    say(err, en, "Schreiben in eine Paketdatei schlug fehl (%s).", strerror(errno));
+    fclose(v->f);                                      /* not counted in v->n yet, so remove_tmp_set would never see it */
+    v->f = NULL;
+    unlink(p);
+    return -1;
+  }
   v->pos = VOLUME_HEADER;
   v->n++;
   return 0;
@@ -1233,6 +1239,8 @@ zsp_remove_sources(const char *dir, const char *root, int empty_dirs, lzp_stats_
   memset(st, 0, sizeof(*st));
   zidx_t x;
   if(zidx_load(dir, &x, err, en) != 0) return -1;
+  /* the paths are checked like everywhere else the index is read (no "..", no leading "/"): this one deletes files */
+  if(records_check(&x, err, en) != 0) { zidx_free(&x); return -1; }
   int rc = -1;
   ui_phase(ui, "Die Originale werden entfernt");
   ui_files(ui, 0, (unsigned)x.nf);

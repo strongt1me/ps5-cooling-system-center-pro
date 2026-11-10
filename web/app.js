@@ -380,7 +380,9 @@
 
   const loadMonitorNum = (key, def, min, max) => {
     try {
-      const v = Number(localStorage.getItem(key));
+      const raw = localStorage.getItem(key);
+      /* nothing stored: Number(null) is 0, and that would pass for a value and give the minimum instead of the default */
+      const v = raw === null || raw.trim() === "" ? NaN : Number(raw);
       if (Number.isFinite(v)) return Math.max(min, Math.min(max, Math.round(v)));
     } catch {}
     return def;
@@ -6452,6 +6454,7 @@
      (156 Bildpunkte auf dem Fernseher). Der Browser der PS5 verkleinert so stark nur grob (er greift einzelne Punkte heraus): Das Bild wird
      körnig und verschwommen. Hier wird deshalb in Halbierungen verkleinert (jede Stufe mittelt je vier Punkte) und das Ergebnis in genau der
      Größe angezeigt, in der es steht. Das Original bleibt in data-full; die große Ansicht und jedes andere Fenster zeigen weiter das Original. */
+  const gmCompact = () => document.documentElement.getAttribute("data-gmview") === "compact";   // die Ansicht „kompakt“ ist an
   const gmThumbCache = new Map();        // Adresse des Bildes + "@" + Bildpunkte -> Adresse des verkleinerten Bildes
   const gmHalve = (img, target) => {
     try {
@@ -6472,7 +6475,7 @@
     } catch (e) { return null; }
   };
   const gmSharpen = () => {
-    const compact = document.documentElement.getAttribute("data-gmview") === "compact";
+    const compact = gmCompact();
     document.querySelectorAll("#gm-grid .gm-cover img").forEach((img) => {
       if (!compact) {                                       // zurück zum Original
         if (img.dataset.full) { img.src = img.dataset.full; delete img.dataset.full; }
@@ -6490,10 +6493,41 @@
         if (gmThumbCache.has(key)) { apply(gmThumbCache.get(key)); return; }
         const out = gmHalve(img, target);
         if (!out || !out.toBlob) return;
-        out.toBlob((b) => { if (!b) return; const url = URL.createObjectURL(b); gmThumbCache.set(key, url); if (document.documentElement.getAttribute("data-gmview") === "compact") apply(url); }, "image/png");
+        out.toBlob((b) => { if (!b) return; const url = URL.createObjectURL(b); gmThumbCache.set(key, url);
+          if (gmThumbCache.size > 80) {                       // die ältesten freigeben, aber nie ein Bild, das noch angezeigt wird
+            const shown = new Set([...document.querySelectorAll("#gm-grid .gm-cover img")].map((i) => i.src));
+            for (const [k, u] of gmThumbCache) {
+              if (gmThumbCache.size <= 80) break;
+              if (shown.has(u)) continue;
+              try { URL.revokeObjectURL(u); } catch (e) { /* egal */ }
+              gmThumbCache.delete(k);
+            }
+          } if (gmCompact()) apply(url); }, "image/png");
       };
       if (img.complete && img.naturalWidth) go(); else img.addEventListener("load", go, { once: true });
     });
+  };
+
+  /* Puffer für die Titelbilder (nur PS5, 10.11.2026): Die Bilder sind „lazy“ und werden erst entpackt, wenn man sie ins Bild scrollt;
+     das Entpacken (512 × 512 Pixel) läuft im Browser der PS5 auf der Hauptlinie und bremst das Scrollen. Hier werden sie stattdessen im
+     Leerlauf nacheinander geladen und entpackt (oben zuerst, nie während des Scrollens), sodass sie beim Scrollen schon bereit sind. */
+  let gmLastScroll = 0, gmBufferToken = 0;
+  addEventListener("scroll", () => { gmLastScroll = Date.now(); }, { passive: true, capture: true });
+  const gmBuffer = async () => {
+    if (!document.documentElement.classList.contains("ps5")) return;
+    const token = ++gmBufferToken;
+    const imgs = [...document.querySelectorAll("#gm-grid .gm-cover img")];
+    await new Promise((r) => setTimeout(r, 1200));         // erst zeichnet die Seite fertig
+    for (const img of imgs) {
+      if (token !== gmBufferToken) return;                 // die Liste wurde neu gezeichnet
+      if (!img.isConnected || img.complete || img.classList.contains("broken")) continue;   // fertig oder kaputt: nichts zu laden
+      while (Date.now() - gmLastScroll < 400) {            // nicht beim Scrollen
+        await new Promise((r) => setTimeout(r, 200));
+        if (token !== gmBufferToken) return;
+      }
+      try { img.loading = "eager"; if (img.decode) await img.decode(); } catch (e) { /* kaputtes Bild: das Fehlerbild kommt anderswo */ }
+      await new Promise((r) => setTimeout(r, 80));
+    }
   };
 
   const renderGames = () => {
@@ -6538,9 +6572,10 @@
     $$("#gm-grid img").forEach((img) =>
       img.addEventListener("error", () => img.classList.add("broken"), { once: true }));
     gmSharpen();
+    gmBuffer();
   };
   /* die Auswahl „Darstellung“ wechselt die Bilder mit (theme-boot.js setzt das Attribut erst danach, deshalb der Aufschub) */
-  { const sel = $("#gm-view"); if (sel) sel.addEventListener("change", () => setTimeout(gmSharpen, 0)); }
+  { const sel = $("#gm-view"); if (sel) sel.addEventListener("change", () => setTimeout(() => { gmSharpen(); gmPadSync(); }, 0)); }
 
   /* ── Covers & Metadaten speichern (04.10.2026) ───────────────────────
    * Der Zwischenspeicher der Spieleliste (libcache.c): Titelbilder und die Angaben,
@@ -6658,7 +6693,6 @@
      Symbole. Fährt man mit der Maus darüber oder mit dem Steuerkreuz darauf (Fokus), steht unten, was der Knopf macht; die Taste
      „i“ oder Dreieck zeigt es für den Knopf mit Fokus noch einmal. Die Knöpfe sind dieselben wie in der großen Ansicht (gleiche
      Attribute, Sperren und Hinweise); nur ihre Darstellung ist eine andere. In der großen Ansicht geschieht hier nichts. */
-  const gmCompact = () => document.documentElement.getAttribute("data-gmview") === "compact";
   let gmHelp = null, gmHelpTimer = 0;
   const gmHelpShow = (b) => {
     if (!b || !gmCompact()) return;
@@ -6687,18 +6721,20 @@
     if ((e.key === "i" || e.key === "I") && !e.ctrlKey && !e.altKey && !e.metaKey) gmHelpShow(gmFocusBtn());
   });
   /* Dreieck am Controller (Standardbelegung: Taste 3), falls der Browser die Gamepad-Schnittstelle hat */
-  let gmPadOn = false, gmPadPrev = false;
-  const gmPadStart = () => {
-    if (gmPadOn) return;
-    gmPadOn = true;
-    setInterval(() => {
-      if (!gmCompact()) return;
-      let down = false;
-      try { for (const p of navigator.getGamepads()) if (p && p.buttons[3] && p.buttons[3].pressed) down = true; } catch (e) { /* egal */ }
-      if (down && !gmPadPrev) gmHelpShow(gmFocusBtn());
-      gmPadPrev = down;
-    }, 120);
+  let gmPadOn = false, gmPadPrev = false, gmPadTimer = 0;
+  const gmPadTick = () => {
+    let down = false;
+    try { for (const p of navigator.getGamepads()) if (p && p.buttons[3] && p.buttons[3].pressed) down = true; } catch (e) { /* egal */ }
+    if (down && !gmPadPrev) gmHelpShow(gmFocusBtn());
+    gmPadPrev = down;
   };
+  /* die Abfrage läuft nur, solange ein Controller da ist und die Ansicht „kompakt“ an ist */
+  const gmPadSync = () => {
+    const want = gmPadOn && gmCompact() && state.page === "games";
+    if (want && !gmPadTimer) gmPadTimer = setInterval(gmPadTick, 120);
+    else if (!want && gmPadTimer) { clearInterval(gmPadTimer); gmPadTimer = 0; }
+  };
+  const gmPadStart = () => { gmPadOn = true; gmPadSync(); };
   window.addEventListener("gamepadconnected", gmPadStart);
   try { if (navigator.getGamepads && Array.prototype.some.call(navigator.getGamepads(), Boolean)) gmPadStart(); } catch (e) { /* egal */ }
   document.addEventListener("mousedown", (e) => {
@@ -7161,6 +7197,7 @@
     $("#gm-pane-disc").hidden  = which !== "disc";
     $("#gm-pane-bk").hidden    = which !== "bk";
     $("#gm-pane-hist").hidden  = which !== "hist";
+    if (which === "lib") gmSharpen();                    /* war die Liste im Verborgenen neu gezeichnet worden, kommen hier die Vorschaubilder */
     [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["p4m", "#gm-tab-p4m"], ["disc", "#gm-tab-disc"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
       const b = $(sel);
       b.classList.toggle("active", which === k);
@@ -8719,18 +8756,26 @@
   };
   /* seq/kind belong to the dialog that started the job: once it is closed or another one opened, the chain only
      waits for the end quietly and then refreshes the list, without writing into the new dialog. */
-  const dlFollow = async (seq = dl.seq, kind = dl.kind) => {
+  const dlFollow = async (seq = dl.seq, kind = dl.kind, idle = 0) => {
     let j = null;
     try { j = await api("/api/v1/library/delete"); } catch { /* gleich noch einmal */ }
-    const ended = j && !j.active && (j.state === "done" || j.state === "failed");
+    /* "idle" although a job was started: the app was restarted and no longer knows it. Three answers in a row, so that
+       a start which is not yet counted is not taken for it; without this the dialog would wait for ever. */
+    const idleNow = !!(j && !j.active && j.state === "idle");
+    idle = idleNow ? idle + 1 : 0;
+    const lost = idleNow && idle >= 3;
+    const ended = lost || !!(j && !j.active && (j.state === "done" || j.state === "failed"));
     if (seq !== dl.seq) {
       if (ended) { if (kind === "backup") loadBackups(); else loadGames(); }
-      else setTimeout(() => dlFollow(seq, kind), 2000);
+      else setTimeout(() => dlFollow(seq, kind, idle), 2000);
       return;
     }
     if (ended) {
-      const name = esc(j.name || dl.id);
-      $("#dl-body").innerHTML = j.state === "done"
+      const name = esc(j.name || (dl.plan && dl.plan.name) || dl.id);
+      $("#dl-body").innerHTML = lost
+        ? `<p class="cp-err">Die Rückmeldung der App ging verloren (vermutlich wurde sie neu gestartet). Bitte in der Liste prüfen, ob „${name}“ noch da ist.</p>
+           <div class="cp-actions"><button type="button" class="btn" data-dl="close">Schließen</button></div>`
+        : j.state === "done"
         ? `<p class="dl-done">„${name}“ ist gelöscht.</p>${j.note ? `<p class="muted">${esc(j.note)}</p>` : ""}
            <p class="dl-keep">Die Spielstände sind erhalten.</p>
            <div class="cp-actions"><button type="button" class="btn" data-dl="close">Schließen</button></div>`
@@ -8749,7 +8794,7 @@
       <p class="cp-num"><b>${phase}</b> · ${pc} %</p>
       <div class="cp-bar" role="progressbar" aria-label="Fortschritt beim Löschen" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pc}"><div style="width:${pc}%"></div></div>
       ${cur ? `<p class="muted cp-cur">${cur}</p>` : ""}<p class="muted">Bitte die Seite offen lassen.</p>`;
-    dl.poll = setTimeout(() => dlFollow(seq, kind), 1000);
+    dl.poll = setTimeout(() => dlFollow(seq, kind, idle), 1000);
   };
 
   /* ── Dateimanager (06.10.2026) ──────────────────────────────────────
@@ -11469,6 +11514,8 @@
     txt("#page-title", b.textContent.trim());
     $$(".page").forEach((p) =>
       p.classList.toggle("active", p.id === `page-${state.page}`));
+    gmPadSync();                                       /* die Controller-Abfrage läuft nur auf der Seite „Spiele“ */
+    if (state.page === "games") gmSharpen();           /* eine Liste, die im Verborgenen neu gezeichnet wurde, bekommt hier ihre Vorschaubilder */
     if (state.page === "credits") crProbe();
     if (state.page === "files") fmOpen();
     if (state.page === "log" && kl.tab === "app") loadLog();
@@ -12181,6 +12228,10 @@
     state.expertMode = !!on;
     document.body.classList.toggle("expert", state.expertMode);
     expertSwitches.forEach((el) => { el.checked = state.expertMode; });
+    if (!state.expertMode) {                            /* ohne Expertenansicht ist der Scroll-Test nicht mehr zu sehen: alles wieder an */
+      [...document.documentElement.classList].filter((c) => c.startsWith("perf-")).forEach((c) => document.documentElement.classList.remove(c));
+      document.querySelectorAll("input[data-perf]").forEach((b) => { b.checked = false; });
+    }
   };
   applyExpertMode(loadExpertMode());
   expertSwitches.forEach((el) => el.addEventListener("change", async () => {
@@ -12723,6 +12774,45 @@
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => { scrolling = false; if (scrollSkipped) { scrollSkipped = false; pollStatus(); } }, 250);
   }, { passive: true, capture: true });
+
+  /* Scroll-Test (Expertenmodus, Seite System, 10.11.2026): Die Schalter setzen je eine Klasse perf-… an <html> (style.css); sie werden nicht gemerkt.
+     Die Messung des Scrollens (unten) schreibt die eingeschalteten Schalter in ihre Zeile. */
+  const PERF_KEYS = ["round", "shadow", "grad", "img", "anim", "contain"];
+  const perfFlags = () => PERF_KEYS.filter((k) => document.documentElement.classList.contains("perf-" + k)).map((k) => k[0]).join("") || "none";
+  (() => {
+    /* nicht gemerkt: nach einem Neuladen ist alles wieder an, ein vergessener Schalter kann nichts dauerhaft verstecken */
+    try { localStorage.removeItem("perfLab"); } catch (e) { /* egal */ }
+    document.querySelectorAll("input[data-perf]").forEach((box) => {
+      box.addEventListener("change", () => document.documentElement.classList.toggle("perf-" + box.dataset.perf, box.checked));
+    });
+  })();
+
+  /* Messung des Scrollens (nur PS5, 10.11.2026): Wie flüssig läuft es wirklich? Beim Scrollen zählt die Seite die Bildabstände (requestAnimationFrame)
+     und meldet 400 ms nach dem letzten Schritt eine Zeile ins Protokoll („scroll games frames 52 avg 41 max 190 slow 12 nodes 2867“: Seite, Anzahl,
+     mittlerer und größter Abstand in ms, Anzahl über 50 ms, Knoten der Seite). Höchstens eine Meldung je 30 Sekunden (die Route teilt sich 10 Zeilen je Minute mit echten Skriptfehlern). */
+  (() => {
+    if (!document.documentElement.classList.contains("ps5") || !window.requestAnimationFrame) return;
+    let active = false, last = 0, frames = [], endTimer = 0, sentAt = 0, sent = 0;
+    const tick = (t) => { if (!active) return; if (last) frames.push(t - last); last = t; requestAnimationFrame(tick); };
+    const finish = () => {
+      active = false; last = 0;
+      const f = frames; frames = [];
+      if (f.length < 8) return;
+      const avg = f.reduce((a, b) => a + b, 0) / f.length;
+      const max = f.reduce((a, b) => (b > a ? b : a), 0);
+      const slow = f.filter((x) => x > 50).length;
+      const now = Date.now();
+      if (now - sentAt < 30000 || sent >= 20) return;
+      sentAt = now; sent++;
+      const msg = `scroll ${state.page || "x"} frames ${f.length} avg ${Math.round(avg)} max ${Math.round(max)} slow ${slow} nodes ${document.querySelectorAll("*").length} off ${perfFlags()}`;
+      try { fetch("/api/v1/log/client", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ msg, where: "perf" }) }).catch(() => {}); } catch (e) { /* egal */ }
+    };
+    addEventListener("scroll", () => {
+      if (!active) { active = true; last = 0; frames = []; requestAnimationFrame(tick); }
+      clearTimeout(endTimer);
+      endTimer = setTimeout(finish, 400);
+    }, { passive: true, capture: true });
+  })();
 
   /* A page that is not in front needs no live data. The beat keeps running
      but idles while document.hidden and takes up again by itself, so a browser

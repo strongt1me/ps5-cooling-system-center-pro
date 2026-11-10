@@ -201,6 +201,14 @@ main(int argc, char **argv) {
     CHECK(!strcmp(r, "[config]\nversion=2\n[general]\nupdate_emulators=0\n[emulators] # emus\nupdate_enabled=0\nauto_update_ampr=0\n"));
     CHECK(state(r) == 0);
     free(r);
+    /* [emulators] is the last line and has no line ending: the new line starts on a line of its own (11.2026: it was glued to the header) */
+    r = edit("[config]\nversion=2\n[emulators]", 0);
+    CHECK(!strcmp(r, "[config]\nversion=2\n[emulators]\nupdate_enabled=0\n"));
+    CHECK(state(r) == 0);
+    free(r);
+    r = edit("[config]\r\nversion=2\r\n[emulators]", 0);
+    CHECK(!strcmp(r, "[config]\r\nversion=2\r\n[emulators]\r\nupdate_enabled=0\r\n"));
+    free(r);
   }
 
   /* ---- the file */
@@ -248,6 +256,46 @@ main(int argc, char **argv) {
     b = slurp(p, &n);
     CHECK(b && strstr(b, "update_emulators=1") != NULL);
     free(b);
+
+    /* links put where the copy and the temporary file go are never written through; a stale temporary file is replaced */
+    {
+      char p2[400], l1[420], l2[420], away1[400], away2[400];
+      snprintf(p2, sizeof(p2), "%s/c2.ini", work);
+      snprintf(l1, sizeof(l1), "%s.ps5cc-bak", p2);
+      snprintf(l2, sizeof(l2), "%s.ps5cc-tmp", p2);
+      snprintf(away1, sizeof(away1), "%s/away1", work);
+      snprintf(away2, sizeof(away2), "%s/away2", work);
+      f = fopen(p2, "wb");
+      fputs("update_emulators=1\n", f);
+      fclose(f);
+      CHECK(symlink(away1, l1) == 0 && symlink(away2, l2) == 0);          /* both point at nothing */
+      CHECK(ps5tm_smpcfg_set_update(p2, 0, PS5TM_SMP_AUTO, why, sizeof(why)) == 0);
+      b = slurp(p2, &n);
+      CHECK(b && !strcmp(b, "update_emulators=0\n"));
+      free(b);
+      CHECK(access(away1, F_OK) != 0 && access(away2, F_OK) != 0);        /* nothing written through the links */
+      CHECK(access(l2, F_OK) != 0);                                       /* the temporary name is free again */
+      unlink(l1);
+      f = fopen(l2, "wb");                                                /* a leftover of an earlier run */
+      fputs("garbage", f);
+      fclose(f);
+      CHECK(ps5tm_smpcfg_set_update(p2, 1, PS5TM_SMP_AUTO, why, sizeof(why)) == 0);
+      b = slurp(p2, &n);
+      CHECK(b && !strcmp(b, "update_emulators=1\n"));
+      free(b);
+      CHECK(access(l2, F_OK) != 0);
+    }
+
+    /* not a plain file (a folder stands there): refused with a reason, nothing replaced */
+    {
+      char pd[400];
+      snprintf(pd, sizeof(pd), "%s/ordner.ini", work);
+      CHECK(mkdir(pd, 0755) == 0);
+      CHECK(ps5tm_smpcfg_set_update(pd, 0, PS5TM_SMP_AUTO, why, sizeof(why)) == EINVAL);
+      CHECK(strstr(why, "keine gewöhnliche Datei") != NULL);
+      struct stat sd;
+      CHECK(stat(pd, &sd) == 0 && S_ISDIR(sd.st_mode));
+    }
 
     /* no folder: a reason, nothing made */
     snprintf(p, sizeof(p), "%s/nicht-da/config.ini", work);
