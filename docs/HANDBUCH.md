@@ -327,12 +327,15 @@ Dump-Ordnern.
 **APR-EMU im Spiel.** Die Zeile zeigt, welche `libSceAmpr.sprx` ein Spiel lädt, und lässt dich
 eine Version einbauen, das Original zurückholen oder die Datei entfernen. Die Versionen liegen als
 Dateien im Ordner `/data/PS5-Cooling-Center/AMPR_EMU`, benannt wie bei drakmors Veröffentlichungen
-(`libSceAmpr.sprx-0.4.2.1-test-pack`). Fünf Fassungen (NG 0.3.3 und NG 0.3.3 debug, 0.4.2.1 test-pack, test-debug-pack,
+(`libSceAmpr.sprx-0.4.2.1-test-pack`). Fünf Fassungen (NG 0.3.4 und NG 0.3.4 debug, 0.4.2.1 test-pack, test-debug-pack,
 test-nopack) sind in der App mitgeliefert: Sie stehen in der Auswahl, auch wenn sie noch nicht im Ordner liegen, und kommen
 beim Einbauen oder mit „Mitgelieferte Versionen in den Ordner legen“ dorthin (Ordner `AMPR_EMU`, wird bei Bedarf angelegt).
 Weitere Fassungen legt „Datei hinzufügen“ im Fenster in denselben Ordner.
+Die Liste der Versionen hat drei Gruppen mit eigenem Titel: **AMPR EMU NG @quer3q** (alle NG-Fassungen, auch die später dazukommenden),
+**AMPR EMU @Drakmor** (die Fassung ohne Paketunterstützung, sie heißt dort nur „0.4.2.1“) und **LZ4 Asset Pack Version** (die beiden
+Fassungen nur für LZ4-Pakete, `test-pack` und `test-debug-pack`).
 **AMPR EMU NG** (quer3q, eine Weiterentwicklung, die LZ4- und zstd-Pakete liest) steht mit der Marke „NG“ ganz oben
-(„NG 0.3.3“, „NG 0.3.3 debug“). Beide Dateien sind in der App mitgeliefert; eine neuere Veröffentlichung holt
+(„NG 0.3.4“, „NG 0.3.4 debug“). Beide Dateien sind in der App mitgeliefert; eine neuere Veröffentlichung holt
 „AMPR EMU NG von GitHub laden“ auf Knopfdruck in den Ordner und prüft ihre Prüfsumme, sobald die App sie kennt. Dateien einer neueren NG-Veröffentlichung
 (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) benennt „Datei hinzufügen“ selbst passend um. ShadowMountPlus ersetzt die
 Datei beim Spielstart aus seinem Emulator-Ordner, solange seine automatische Fakelib-Aktualisierung an ist
@@ -509,7 +512,7 @@ schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes
 Neben den LZ4-Paketen macht die App **zstd-Pakete** (`ampr_zstd.index`, `ampr_zstd-NNN.pak`; **Mit zstd packen …**). Das Format
 stammt von quer3q (ampr-emu-ng, `docs/zstd-format.md`); gelesen wird es nur von **AMPR EMU NG**. Die App legt NG beim Packen selbst
 in `fakelib` (ist in ShadowMountPlus die automatische Fakelib-Aktualisierung noch an, steht eine Warnung im Ergebnis). Gepackt wird das
-ganze Spiel außer den Systemdateien (Programme, `sce_sys`, `sce_module`, `fakelib*`, leere Dateien, die Pakete selbst und die Dateien
+ganze Spiel außer den Systemdateien (Programme, `.ini`-Dateien wie `dlc_emu.ini`, `sce_sys`, `sce_module`, `fakelib*`, leere Dateien, die Pakete selbst und die Dateien
 der APR-EMU, dazu die wenigen Dateien, die die PS5 auf der Platte sucht): kein Profil, kein „Automatisch“. Stufe 1 bis 22 (angeboten
 1, 5, 9, 19; Vorgabe 5), jedes Stück von 256 KiB ein eigener zstd-Frame mit Prüfsumme, roh, wenn zstd es nicht verkleinert. Packen,
 Prüfen (Byte für Byte gegen die Originale) und Entpacken wie bei LZ4. **Bei zstd gibt es keine Wahl mehr, ob die Originale bleiben** (seit
@@ -541,7 +544,7 @@ bekommt die Rechte 0777, auch beim Kopieren, beim Entpacken eines Abbilds und im
 
 ### Was „Automatisch“ lose lässt
 
-Beim Profil **Automatisch** bleiben lose: Programme und Bibliotheken (`eboot.bin`, `.prx`, `.sprx`), `sce_sys`, `sce_module`, `fakelib`, Spielstände, schon komprimierte Medien (mp4, webm, ogg, wem …), Konfigurations- und Datendateien (`.json`, `.xml`, `.dat`, `.bin`, `.utoc`), Archive (`.zip`, `.7z`, `.rar`) und die eigenen `.pak`-Dateien des Spiels, die Ordner `trophy2`, `uds`, `_DUPLEX_`, `decrypted` und Film-Ordner, Wwise-Soundbanks (`soundbank…`, `wem…`), Dateien direkt im Spielordner und sehr große, kaum packbare Dateien. Das ist die Liste, die sich bei Werkzeugen bewährt hat, die auf der Konsole laufen (exFAT2AMPR von V-10, Lazy_AMPR). Ein eigenes Profil (TOML) packt, was seine Regeln sagen.
+Beim Profil **Automatisch** bleiben lose: Programme und Bibliotheken (`eboot.bin`, `.prx`, `.sprx`), `sce_sys`, `sce_module`, `fakelib`, Spielstände, schon komprimierte Medien (mp4, webm, ogg, wem …), Konfigurations- und Datendateien (`.json`, `.xml`, `.ini`, `.dat`, `.bin`, `.utoc`), Archive (`.zip`, `.7z`, `.rar`) und die eigenen `.pak`-Dateien des Spiels, die Ordner `trophy2`, `uds`, `_DUPLEX_`, `decrypted` und Film-Ordner, Wwise-Soundbanks (`soundbank…`, `wem…`), Dateien direkt im Spielordner und sehr große, kaum packbare Dateien. Das ist die Liste, die sich bei Werkzeugen bewährt hat, die auf der Konsole laufen (exFAT2AMPR von V-10, Lazy_AMPR). Ein eigenes Profil (TOML) packt, was seine Regeln sagen.
 
 ### Besser als „Automatisch“: der Mitschnitt
 

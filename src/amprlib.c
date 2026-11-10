@@ -446,6 +446,12 @@ label_of(const al_ver_t *v, char *out, size_t n) {
     snprintf(out, n, "NG %s%s%s", v->version, rest[0] ? " " : "", rest);
     return;
   }
+  /* the build without pack support goes by its version alone ("0.4.2.1" for libSceAmpr.sprx-0.4.2.1-test-nopack; the list says
+     "ohne Paketunterstützung" beside it, 10.11.2026, wish of the user) */
+  if(strstr(v->variant, "nopack")) {
+    snprintf(out, n, "%s", v->version);
+    return;
+  }
   snprintf(out, n, "%s%s%s", v->version, v->variant[0] ? " " : "", v->variant);
 }
 

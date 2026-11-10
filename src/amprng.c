@@ -2,13 +2,13 @@
  * (https://github.com/quer3q/ampr-emu-ng, GPL-3.0). It reads the same LZ4 packs and zstd ones, and its builds carry the mark
  * "ampr-emu-ng <version>" instead of "[AMPR_EMU]"; amprlib.c recognises them by that and shows them as "NG <version>".
  *
- * Release 0.3.3 is carried by the app (07.11.2026, wish of the user): third_party/ampr_emu/libSceAmpr.sprx-0.3.3-ng and -ng-debug,
+ * Release 0.3.4 is carried by the app (10.11.2026, wish of the user): third_party/ampr_emu/libSceAmpr.sprx-0.3.4-ng and -ng-debug,
  * packed into the payload by tools/gen_emu_blob.py; room was made by dropping the old 0.3.6.6 builds and 0.4.2.1 nopack (the
  * payload must stay clear of the size where the console stopped loading it, 10.5 MB, 02.10.2026). Between the two a file
  * the table below names counts as there when the app carries it. A newer release is fetched on request
  * (POST /api/v1/ampr-emu/fetch-ng): the two files of the release named below come from GitHub into the folder
  * AMPR_EMU, under the names amprlib.c reads (libSceAmpr.sprx-<version>-ng, -ng-debug). A file only gets its name after its
- * SHA-256 matched the one written here (from the release's SHA256SUMS, checked on 07.11.2026) and it carries the SELF header
+ * SHA-256 matched the one written here (from the release's SHA256SUMS, checked on 10.11.2026) and it carries the SELF header
  * and the mark. A newer release goes into the table below by hand (tools/upstream.json watches the project); until then the
  * person can add its files with "Datei hinzufügen" (the page names them).
  *
@@ -27,7 +27,7 @@
 #include "third_party/cJSON.h"
 #include "upd_http.h"
 
-#define NG_VERSION  "0.3.3"
+#define NG_VERSION  "0.3.4"
 #define NG_BASE     "https://github.com/quer3q/ampr-emu-ng/releases/download/v" NG_VERSION "/"
 #define NG_DIR      PS5TM_DATA_DIR "/AMPR_EMU"
 #define NG_MAX      (4u * 1024 * 1024)
@@ -40,8 +40,8 @@ typedef struct {
 } ng_file_t;
 
 static const ng_file_t NG_FILES[] = {
-  { "libSceAmpr.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng", "1c1051f91bc7cba19b15362b2b832114b53a4c3d6193f50c90fdf1ae5d78d268", 701376 },
-  { "libSceAmpr-debug.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng-debug", "1ae61d604fd2da60728175a37f700a1283a8ceb0c36e6f28770ab663215ab364", 785120 },
+  { "libSceAmpr.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng", "7d1bb260f954b755ed687733e52ccfa38c31440a9b88a6fbba5b3b75e08bfa26", 712144 },
+  { "libSceAmpr-debug.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng-debug", "717299ddd8122716ba11c89e03cc56d05207d0cae2ef898da8a9a65536640997", 819776 },
 };
 #define NG_COUNT (sizeof(NG_FILES) / sizeof(NG_FILES[0]))
 

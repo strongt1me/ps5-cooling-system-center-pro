@@ -30,9 +30,9 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   kommen nur auf Wunsch in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` oder in ein Spiel
   (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Bauarten (`test-pack`,
   `test-nopack`, `test-debug-pack`) nach <https://github.com/drakmor/ampr_emu>.
-- **ampr-emu-ng** (quer3q, GPL-3.0): Zwei Bauten der Veröffentlichung 0.3.3 (`libSceAmpr.sprx`,
-  `libSceAmpr-debug.sprx`, vom 07.11.2026, SHA-256 aus der `SHA256SUMS` der Veröffentlichung, siehe
-  `third_party/ampr_emu/ORIGIN.md`) sind wie die anderen gepackt eingebettet, als `libSceAmpr.sprx-0.3.3-ng`
+- **ampr-emu-ng** (quer3q, GPL-3.0): Zwei Bauten der Veröffentlichung 0.3.4 (`libSceAmpr.sprx`,
+  `libSceAmpr-debug.sprx`, vom 09.11.2026, SHA-256 aus der `SHA256SUMS` der Veröffentlichung, siehe
+  `third_party/ampr_emu/ORIGIN.md`) sind wie die anderen gepackt eingebettet, als `libSceAmpr.sprx-0.3.4-ng`
   und `-ng-debug`. Die App erkennt die Bauten dieser Weiterentwicklung von ampr_emu an ihrer Kennung und lädt auf Wunsch
   die Dateien einer neueren Veröffentlichung von <https://github.com/quer3q/ampr-emu-ng> in den Ordner
   `/data/PS5-Cooling-Center/AMPR_EMU` (`src/amprng.c`). Quelltext: das Projekt.

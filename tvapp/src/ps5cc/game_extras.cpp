@@ -471,35 +471,79 @@ void GameExtras::build_versions()
     smp_key_ = str(emus, "key").empty() ? "update_emulators" : str(emus, "key");
     smp_format_ = str(emus, "format");
     smp_asked_ = get(emus, "smp_version") == nullptr || !str(emus, "smp_version").empty();
-    form_.add_header("VERSIONEN");
-    int i = 0;
-    const cJSON *v = nullptr;
-    cJSON_ArrayForEach(v, get(j.root, "versions"))
+    // three groups with a title of their own (AMPR EMU only; PlayGo has one list): AMPR EMU NG by quer3q (every NG build, later
+    // ones too), AMPR EMU by drakmor (the rest) and the builds that only serve LZ4 packs (test-pack, test-debug-pack)
+    const bool playgo = lib_ == "playgo";
+    auto group_of = [&](const cJSON *x)
     {
-        std::string label = str(v, "label");
-        if (!sha.empty() && str(v, "sha256") == sha)
-            label += " (eingebaut)";
-        ui::FormRow &r = form_.add_action(kVersion + i, label.empty() ? str(v, "name") : label);
-        std::string about;
-        if (yes(v, "ng"))
-            about += "AMPR EMU NG · ";
-        if (yes(v, "pack"))
-            about += "LZ4 · ";
-        if (yes(v, "debug"))
-            about += "mit Protokoll · ";
-        if (yes(v, "bundled"))
-            about += "mitgeliefert · ";
-        about +=
-            !sha.empty() && str(v, "sha256") == sha ? "so eingebaut" : "X-Taste baut diese ein";
-        r.description = about;
-        r.disabled = !yes(v, "valid") || (packed && !yes(v, "pack")) || (packed_zstd && !yes(v, "ng"));
-        if (packed && !yes(v, "pack"))
-            r.description = "Das Spiel ist gepackt: nur eine LZ4-Fassung passt.";
-        if (packed_zstd && !yes(v, "ng"))
-            r.description = "Das Spiel liegt in zstd-Paketen: nur AMPR EMU NG passt.";
-        version_names_.push_back(str(v, "name"));
-        version_ng_.push_back(yes(v, "ng"));
-        ++i;
+        if (playgo)
+            return 1;
+        if (yes(x, "ng"))
+            return 0;
+        return yes(x, "pack") ? 2 : 1;
+    };
+    int counts[3] = {0, 0, 0};
+    const cJSON *v = nullptr;
+    cJSON_ArrayForEach(v, get(j.root, "versions")) { ++counts[group_of(v)]; }
+    int i = 0;
+    // the rows go in the order of the groups; version_names_ and version_ng_ follow the same order, so row i is entry i
+    auto add_versions = [&](int group, int want_debug)
+    {
+        const cJSON *e = nullptr;
+        cJSON_ArrayForEach(e, get(j.root, "versions"))
+        {
+            if (group_of(e) != group)
+                continue;
+            if (want_debug >= 0 && yes(e, "debug") != (want_debug == 1))
+                continue;
+            std::string label = str(e, "label");
+            if (!sha.empty() && str(e, "sha256") == sha)
+                label += " (eingebaut)";
+            ui::FormRow &r = form_.add_action(kVersion + i, label.empty() ? str(e, "name") : label);
+            std::string about;
+            if (yes(e, "ng"))
+                about += "AMPR EMU NG · ";
+            if (yes(e, "pack"))
+                about += "LZ4 · ";
+            if (yes(e, "ng")) // AMPR EMU NG reads zstd packs as well
+                about += "ZSTD · ";
+            if (yes(e, "debug"))
+                about += "mit Protokoll · ";
+            if (yes(e, "bundled"))
+                about += "mitgeliefert · ";
+            about +=
+                !sha.empty() && str(e, "sha256") == sha ? "so eingebaut" : "X-Taste baut diese ein";
+            r.description = about;
+            r.disabled =
+                !yes(e, "valid") || (packed && !yes(e, "pack")) || (packed_zstd && !yes(e, "ng"));
+            if (packed && !yes(e, "pack"))
+                r.description = "Das Spiel ist gepackt: nur eine LZ4-Fassung passt.";
+            if (packed_zstd && !yes(e, "ng"))
+                r.description = "Das Spiel liegt in zstd-Paketen: nur AMPR EMU NG passt.";
+            version_names_.push_back(str(e, "name"));
+            version_ng_.push_back(yes(e, "ng"));
+            ++i;
+        }
+    };
+    static const char *const kGroupTitles[3] = {"AMPR EMU NG @quer3q", "AMPR EMU @Drakmor",
+                                                "LZ4-ASSET-PACK-VERSION"};
+    if (playgo || counts[0] + counts[1] + counts[2] == 0)
+        form_.add_header("VERSIONEN");
+    for (int g = 0; g < 3; ++g)
+    {
+        if (counts[g] == 0)
+            continue;
+        if (!playgo)
+            form_.add_header(kGroupTitles[g]);
+        if (g == 2)
+        {
+            add_versions(g, 0); // without the log first
+            add_versions(g, 1);
+        }
+        else
+        {
+            add_versions(g, -1);
+        }
     }
     if (i == 0)
         form_.add_value(

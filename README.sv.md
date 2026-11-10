@@ -315,7 +315,7 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) och de som bidrar till [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT-, PFS- och PFSC-avbilder.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): förebilden för UFS2-/ffpkg-skrivaren.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-asset-paket, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) och [dlc_emu](https://github.com/drakmor/dlc_emu) (inbyggda versioner, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, en vidareutveckling av ampr_emu som också läser zstd-paket (utgåva 0.3.3 inbyggd, nyare hämtar appen på begäran).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, en vidareutveckling av ampr_emu som också läser zstd-paket (utgåva 0.3.4 inbyggd, nyare hämtar appen på begäran).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): hur startrutan byggs som en inbyggd titel.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): paketens uppbyggnad och installationsförloppet (egen kod efter denna förebild).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profilfunktionen och profilbildens format.

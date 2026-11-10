@@ -8306,16 +8306,23 @@
     if (!v || !em) { body.innerHTML = `<p class="muted">wird gelesen …</p>`; return; }
     const ins = em.installed || {};
     const sel = v.versions.find((x) => x.name === apr.emuSel);
-    const list = v.versions.map((x) => {
+    /* Drei Gruppen mit eigenem Titel (nur bei der APR-EMU; PlayGo hat eine Liste ohne Titel): AMPR EMU NG von quer3q (alle NG-Fassungen, auch spätere),
+       AMPR EMU von drakmor (die übrigen) und die Fassungen nur für LZ4-Pakete (test-pack, test-debug-pack) als „LZ4 Asset Pack Version“. */
+    const lz4Only = (x) => !pg && x.pack && !x.ng;
+    const ngOnly = (x) => !pg && !!x.ng;
+    const row = (x) => {
       const off = !x.valid;
       const packBlock = (em.packed && !x.pack) || (em.packed_zstd && !x.ng);
       const folder = x.stored ? (pg ? "im Ordner PlayGo" : "im Ordner AMPR_EMU") : "in der App, noch nicht im Ordner";
       return `<button type="button" class="cp-choice apr-drive${apr.emuSel === x.name ? " on" : ""}${off || packBlock ? " off" : ""}" data-apr-emu-pick="${esc(x.name)}" ${off || packBlock ? "disabled" : ""}>
           <span class="cp-choice-text"><b>${esc(x.label)}</b>
-            ${x.ng || x.pack || x.debug || x.bundled ? `<span class="apr-tags">${x.ng ? `<span class="gm-tag ng">NG</span>` : ""}${x.pack ? `<span class="gm-tag ampr">LZ4</span>` : ""}${x.debug ? `<span class="gm-tag bp">mit Protokoll</span>` : ""}${x.bundled ? `<span class="gm-tag fmt">mitgeliefert</span>` : ""}</span>` : ""}
+            ${x.ng || x.pack || x.debug || x.bundled ? `<span class="apr-tags">${x.ng ? `<span class="gm-tag ng">NG</span>` : ""}${x.pack ? `<span class="gm-tag ampr">LZ4</span>` : ""}${x.ng ? `<span class="gm-tag ampr">ZSTD</span>` : ""}${x.debug ? `<span class="gm-tag bp">mit Protokoll</span>` : ""}${x.bundled ? `<span class="gm-tag fmt">mitgeliefert</span>` : ""}</span>` : ""}
             <span class="muted"><span>${bytes(x.size)}</span> · ${x.ng ? `<span>AMPR EMU NG (quer3q)</span> · ` : ""}${pg ? "" : `<span>${x.pack ? (x.ng ? "kann LZ4- und zstd-Pakete lesen" : "kann LZ4-Pakete lesen") : "ohne Paketunterstützung"}</span> · `}<span>${folder}</span>${ins.sha256 && ins.sha256 === x.sha256 ? ` · <b>so eingebaut</b>` : ""}</span>
             ${off ? `<span class="cp-why">${pg ? "kein gültiger PlayGo-Stub" : "keine gültige APR-EMU-Datei"}</span>` : packBlock ? `<span class="cp-why">${em.packed_zstd ? "Das Spiel liegt in zstd-Paketen: diese Version kann sie nicht lesen." : "Das Spiel liegt in LZ4-Paketen: diese Version kann sie nicht lesen."}</span>` : ""}</span></button>`;
-    }).join("");
+    };
+    const ngList = v.versions.filter(ngOnly).map(row).join("");
+    const list = v.versions.filter((x) => !lz4Only(x) && !ngOnly(x)).map(row).join("");
+    const lz4List = v.versions.filter(lz4Only).sort((a, b) => (a.debug ? 1 : 0) - (b.debug ? 1 : 0)).map(row).join("");   /* ohne Protokoll zuerst */
     const cur = ins.present ? (ins.known ? esc(ins.label) : ins.ng ? `<span>AMPR EMU NG</span> ${esc(ins.ng_version || "")}` : ins.emu ? (pg ? `<span>PlayGo-Stub, unbekannte Fassung (${bytes(ins.size)})</span>` : `<span>APR-EMU, unbekannte Fassung (${bytes(ins.size)})</span>`)
       : (pg ? `<span>die Datei des Spiels (kein PlayGo-Stub)</span>` : `<span>die Datei des Spiels (kein APR-EMU)</span>`)) : `<span>nichts</span>`;
     const warn = [];
@@ -8335,7 +8342,9 @@
         <span><span>eingebaut:</span> <b>${cur}</b>${ins.has_orig ? ` · <span>Original des Spiels gesichert</span>` : ""}</span></p>
       <h4 class="cp-step">Welche Version?</h4>
       <p class="muted apr-folder">Die Dateien liegen im Ordner <code>${esc(v.dir)}</code>; ein Teil ist in der App mitgeliefert und kommt beim Einbauen (oder mit dem Knopf unten) dorthin.</p>
-      <div class="cp-list">${list}</div>
+      ${ngList ? `<h4 class="cp-step">AMPR EMU NG @quer3q</h4><div class="cp-list">${ngList}</div>` : ""}
+      ${list ? `${pg ? "" : `<h4 class="cp-step">AMPR EMU @Drakmor</h4>`}<div class="cp-list">${list}</div>` : ""}
+      ${lz4List ? `<h4 class="cp-step">LZ4 Asset Pack Version</h4><div class="cp-list">${lz4List}</div>` : ""}
       ${noStore}
       <p class="apr-add">
         ${missing ? `<button type="button" class="btn" data-apr-emu-install>Mitgelieferte Versionen in den Ordner legen</button>` : ""}

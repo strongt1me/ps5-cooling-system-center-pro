@@ -315,7 +315,7 @@ This project stands on the shoulders of the PS5 homebrew community. **Thank you!
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) and the contributors to [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT, PFS and PFSC images.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): the model for the UFS2/ffpkg writer.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4 asset packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) and [dlc_emu](https://github.com/drakmor/dlc_emu) (embedded builds, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, a further development of ampr_emu that also reads zstd packs (release 0.3.3 embedded, newer ones fetched by the app on request).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, a further development of ampr_emu that also reads zstd packs (release 0.3.4 embedded, newer ones fetched by the app on request).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): how the starter tile is built as a native title.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): package layout and the install flow (own code after this model).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profile function and profile picture format.

@@ -238,7 +238,7 @@ auto_loose(const char *rel) {
     if(!strncmp(name, prefix[i], strlen(prefix[i]))) return 1;
   const char *dot = strrchr(name, '.');
   if(dot) {
-    static const char *const ext[] = { ".bin", ".dat", ".json", ".xml", ".utoc", ".zip", ".7z", ".rar", ".crc", ".runtime", ".index", ".pak", NULL };
+    static const char *const ext[] = { ".bin", ".dat", ".json", ".xml", ".ini", ".utoc", ".zip", ".7z", ".rar", ".crc", ".runtime", ".index", ".pak", NULL };
     for(int i = 0; ext[i]; i++)
       if(!strcmp(dot, ext[i])) return 1;
   }

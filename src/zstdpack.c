@@ -183,6 +183,8 @@ zsp_stays_loose(const char *rel, uint64_t size) {
   const char *slash = strrchr(rel, '/');
   const char *name = slash ? slash + 1 : rel;
   if(!strcasecmp(name, "eboot.bin") || ends_ci(rel, ".elf") || ends_ci(rel, ".self") || ends_ci(rel, ".prx") || ends_ci(rel, ".sprx")) return 1;
+  /* every .ini stays editable (dlc_emu.ini and other settings a person changes by hand), as in Dump Forge 0.5.5 (10.11.2026) */
+  if(ends_ci(rel, ".ini")) return 1;
   const char *first_end = strchr(rel, '/');
   if(first_end) {                                        /* a folder at the root of the game */
     size_t fl = (size_t)(first_end - rel);

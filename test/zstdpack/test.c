@@ -110,6 +110,9 @@ main(int argc, char **argv) {
   CHECK(zsp_stays_loose("a/b/EBOOT.BIN", 10));
   CHECK(zsp_stays_loose("lib/x.sprx", 10));
   CHECK(zsp_stays_loose("sce_sys/a/b.png", 10));
+  CHECK(zsp_stays_loose("data/dlc_emu.ini", 10));                 /* settings stay editable (Dump Forge 0.5.5) */
+  CHECK(zsp_stays_loose("Config/GAME.INI", 10));
+  CHECK(!zsp_stays_loose("data/x.ini.bin", 10));                  /* only the extension counts */
   CHECK(zsp_stays_loose("fakelib2/x", 10));
   CHECK(zsp_stays_loose("ampr_zstd.index", 10));
   CHECK(zsp_stays_loose("ampr_zstd-000.pak", 10));

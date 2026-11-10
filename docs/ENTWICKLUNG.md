@@ -367,12 +367,9 @@ bleiben es; die Übersetzung geschieht zur Laufzeit im Browser.
 - **Handbuch und FAQ** (`web/handbuch*.html`, `web/faq*.html` und die PDFs) entstehen aus `tools/i18n/docs/docs_src.<xx>.json` (Texte) und
   `docs_style.css`; `python tools/i18n/docs_build.py app` schreibt die Fassungen für die App, `... full --shots <Ordner>` die mit Bildschirmfotos
   für PDF und HTML (der Ordner hat je Sprache einen Unterordner mit den Bildern; PDF daraus mit dem Druckdialog des Browsers).
-- **Schrift im Browser der PS5:** `web/theme-boot.js` setzt die Klasse `ps5` an `<html>`, wenn der Browser „PlayStation“ meldet. Der Block
-  `PS5-TEXT` am Ende von `web/style.css` enthält zu jeder `font-size`-Regel eine Kopie mit `html.ps5` davor und größerer Schrift (kleine Größen
-  wachsen um 2 px, 13 bis 13,5 px um 1,5 px, 14 px um 1 px, ab 15 px nichts); jede Regel steht in ihrem alten `@media`-Block und in ihrer alten
-  Reihenfolge, damit sich die Rangfolge nicht ändert. Der Block ist **erzeugt**: nach jeder Änderung einer Schriftgröße `python tools/gen_ps5_text.py`
-  laufen lassen. Ausnahmen von Hand gehören hinter die Marke `PS5-TEXT:END` in den Block „PS5-Feinheiten“. Prüfen auf neue Umbrüche: die Seiten bei
-  1540 und 1920 Pixel Breite mit und ohne die Klasse vergleichen (Zeilen je Text, neue Kürzungen mit „…“).
+- **Klasse `ps5`:** `web/theme-boot.js` setzt sie an `<html>`, wenn der Browser „PlayStation“ meldet. Sie gilt nur für PS5-eigene Dinge
+  (Titelbilder der kompakten Ansicht, Zeichenbereich je Spielkarte, Scroll-Messung). Eine größere Schrift nur für die PS5 gab es kurz am
+  10.11.2026 (erzeugter Block `PS5-TEXT`); sie wurde auf Wunsch des Users zurückgenommen, die Schrift ist dort wie überall.
 - Die Meldungen, die die Konsole selbst auf dem Fernseher einblendet, sind deutsch (sie entstehen in `src/notify.c`, nicht im Browser).
 
 ## Aufbau des Quellcodes

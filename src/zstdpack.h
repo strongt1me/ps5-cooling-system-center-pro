@@ -8,7 +8,7 @@
  *     frame, no dictionary, window at most 256 KiB), or raw when zstd does not make it smaller. The chunks lie one after another
  *     in the volumes, in the order of the file records, which are sorted by (FNV-1a 64 of the path, path bytes).
  *   - a volume is at most 4 GiB less 64 KiB; a file may continue in the next volume.
- *   - what stays loose: programs and modules (eboot.bin, .elf .self .prx .sprx), sce_sys, sce_module, fakelib*, the files of the
+ *   - what stays loose: programs and modules (eboot.bin, .elf .self .prx .sprx), every .ini, sce_sys, sce_module, fakelib*, the files of the
  *     packs and of the APR-EMU, empty files, and the few files the PS5 itself looks for on disk (lzc_keep_on_disk).
  *
  * The functions return 0, or -1 with the reason in err (German, for the page), or ECANCELED when the cancel flag was raised

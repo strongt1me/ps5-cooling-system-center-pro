@@ -12,8 +12,9 @@
 (function () {
   var THEMES = { standard: 1, hell: 1, dunkel: 1, optimal: 1 };
   var root = document.documentElement;
-  /* Browser der PS5 (Kennung „PlayStation“): Klasse ps5 an <html>. style.css (Block PS5-TEXT, erzeugt von tools/gen_ps5_text.py) macht die
-     kleine Schrift dort größer; in jedem anderen Browser bleibt alles, wie es ist. */
+  /* Browser der PS5 (Kennung „PlayStation“): Klasse ps5 an <html>. Sie schaltet nur PS5-eigene Dinge (Titelbilder der kompakten Ansicht,
+     Zeichenbereich je Spielkarte, Scroll-Messung); die Schrift ist dort wie in jedem anderen Browser (die größere Schrift wurde am
+     10.11.2026 wieder zurückgenommen). */
   try { if (/PlayStation/i.test(navigator.userAgent)) root.classList.add("ps5"); } catch (e) { /* ohne Kennung: nichts */ }
   function apply(t) {
     if (!THEMES[t]) t = "standard";
