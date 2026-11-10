@@ -1886,6 +1886,9 @@ input[type=checkbox]:focus-visible { outline: 2px solid rgba(138,180,255,.7); ou
 .apr-row b { display: block; font-size: 14.5px; }
 .apr-row small { display: block; color: var(--ink-muted); font-size: 12.5px; margin-top: 3px; line-height: 1.5; }
 .apr-row .btn { flex: none; }
+/* a button that cannot be used here (LZ4 and zstd for an image, a running job, ...) looks greyed out as well as being locked */
+.apr-row .btn:disabled { opacity: .42; cursor: not-allowed; }
+.apr-row .btn:disabled:not(.primary):hover { border-color: var(--hairline); background-color: var(--surface-2); }
 .apr-state { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
 .apr-state.ok { background: rgba(12,163,12,.16); color: #7fe07f; border: 1px solid rgba(12,163,12,.4); }
 .apr-state.no { background: rgba(250,178,25,.14); color: #ffd57b; border: 1px solid rgba(250,178,25,.4); }
@@ -2004,11 +2007,70 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-theme="hell"] .side-foot { background: rgba(255,255,255,.6); }
 :root[data-theme="hell"] .side-ver { background: rgba(255,255,255,.6); }
 :root[data-theme="hell"] .tip { background: rgba(255,255,255,.97); }
-/* Kacheln mit Bild (Status, Lüfter, Spiel, Banner): das Bild ist dunkel, also behalten sie die dunklen Farben */
-:root[data-theme="hell"] .ov-hero, :root[data-theme="hell"] .ov-tile, :root[data-theme="hell"] .page-banner,
-:root[data-theme="hell"] .pf-hero, :root[data-theme="hell"] .gm-banner, :root[data-theme="hell"] .lib-head {
-  --ink: #f3f6fd; --ink-2: #d3dbee; --ink-muted: #a9b5d0; --hairline: rgba(255,255,255,.12);
-  --surface-1: rgba(20,27,41,.86); --surface-2: rgba(26,35,52,.91); --inset: #0c1320; color: var(--ink); }
+/* Kacheln und Banner mit Bild im hellen Design (10.11.2026, Wunsch des Users): wie der Kopf der Spiele-Seite eine helle Karte mit dunkler
+   Schrift, das Bild nur rechts und nach links ausgeblendet. Bis 10.11.2026 behielten sie die dunklen Farben (helle Schrift auf dem Bild). */
+/* Kühlung: Status, Lüfter, „Läuft gerade“. Der leuchtende Luftstrom (.fan-flow) und der Rand in der Farbe der Drehzahl bleiben; die Überblendung
+   (.hero-shade, .fan-shade, ::after) liegt über dem Luftstrom und deckt seine linke Hälfte zu. */
+:root[data-theme="hell"] .card.ov-hero { background: url(/img/hero-overview.jpg) right center / cover no-repeat, #f6f8fb; }
+:root[data-theme="hell"] .hero-shade {
+  background: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 62%, rgba(246,248,251,.88) 70%, rgba(246,248,251,.35) 82%, rgba(246,248,251,0) 96%); }
+:root[data-theme="hell"] .card.ov-hero .hero-copy { margin-right: 28%; }     /* der Satz endet vor dem Bild */
+:root[data-theme="hell"] .ov-tile.fan-banner:not(.ov-game) { background: url(/img/banner-fan.jpg) right center / cover no-repeat, #f6f8fb;
+  flex-direction: row-reverse; justify-content: space-between; }       /* Zahl links auf dem hellen Grund, der Tacho rechts vor dem Bild */
+:root[data-theme="hell"] .fan-shade {
+  background: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 34%, rgba(246,248,251,.85) 46%, rgba(246,248,251,.3) 62%, rgba(246,248,251,0) 78%); }
+:root[data-theme="hell"] .ov-tile.ov-game.fan-banner { background: url(/img/banner-game.jpg) right center / cover no-repeat, #f6f8fb; }
+:root[data-theme="hell"] .ov-tile.ov-game .ov-tile-text { padding-right: 150px; }     /* ein langer Spielname endet vor dem Bild */
+:root[data-theme="hell"] .ov-tile.ov-game.fan-banner::after { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;
+  background: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 42%, rgba(246,248,251,.88) 56%, rgba(246,248,251,.4) 76%, rgba(246,248,251,0) 94%); }
+:root[data-theme="hell"] .ov-fan + .ov-tile-text .ov-label, :root[data-theme="hell"] .ov-fan + .ov-tile-text small,
+:root[data-theme="hell"] .ov-fan + .ov-tile-text .ov-big i, :root[data-theme="hell"] .ov-tile.ov-game .ov-label,
+:root[data-theme="hell"] .ov-tile.ov-game .ov-tile-text small { color: var(--ink-muted); text-shadow: none; }
+:root[data-theme="hell"] .ov-fan + .ov-tile-text .ov-big, :root[data-theme="hell"] .ov-tile.ov-game .ov-tile-text b { text-shadow: none; }
+@media (max-width: 720px) {
+  /* schmal liegt die Schrift über der ganzen Kachel: das Bild nur als blasser Hauch */
+  :root[data-theme="hell"] .card.ov-hero .hero-copy { margin-right: 0; }
+  :root[data-theme="hell"] .hero-shade { background: linear-gradient(rgba(246,248,251,.9), rgba(246,248,251,.9)); }
+  :root[data-theme="hell"] .fan-shade { background: linear-gradient(rgba(246,248,251,.88), rgba(246,248,251,.88)); }
+  :root[data-theme="hell"] .ov-tile.ov-game.fan-banner::after { background: linear-gradient(rgba(246,248,251,.88), rgba(246,248,251,.88)); }
+}
+/* Seitenbanner im hellen Design wie der Kopf der Spiele-Seite (Wunsch des Users, 10.11.2026): helle Karte, dunkle Schrift, das Bild nur
+   rechts und nach links in die Karte übergeblendet, nicht über die ganze Fläche sichtbar. */
+:root[data-theme="hell"] .card.pf-hero, :root[data-theme="hell"] .pl-top.pl-hero {
+  background: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 38%, rgba(246,248,251,.92) 52%, rgba(246,248,251,.45) 70%, rgba(246,248,251,0) 90%),
+    url(/img/banner-system.jpg) right center / cover no-repeat, #f6f8fb; }
+:root[data-theme="hell"] .card.page-banner {       /* System und Protokoll: drei Kennzahlen nebeneinander, die Überblendung beginnt später */
+  background: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 46%, rgba(246,248,251,.92) 60%, rgba(246,248,251,.45) 76%, rgba(246,248,251,0) 94%),
+    url(/img/banner-system.jpg) right center / cover no-repeat, #f6f8fb; }
+:root[data-theme="hell"] .card.page-banner.pb-log {
+  background-image: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 46%, rgba(246,248,251,.92) 60%, rgba(246,248,251,.45) 76%, rgba(246,248,251,0) 94%),
+    url(/img/banner-log.jpg); }
+:root[data-theme="hell"] .card.pf-hero {
+  background-image: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 38%, rgba(246,248,251,.92) 52%, rgba(246,248,251,.45) 70%, rgba(246,248,251,0) 90%),
+    url(/img/banner-profile.jpg); }
+:root[data-theme="hell"] .pl-top.pl-hero:not(.fm-hero) {
+  background-image: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 38%, rgba(246,248,251,.92) 52%, rgba(246,248,251,.45) 70%, rgba(246,248,251,0) 90%),
+    url(/img/banner-payloads.jpg); }
+:root[data-theme="hell"] .pl-top.pl-hero.fm-hero {
+  background-image: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 38%, rgba(246,248,251,.92) 52%, rgba(246,248,251,.45) 70%, rgba(246,248,251,0) 90%),
+    url(/img/banner-files.jpg); }
+:root[data-theme="hell"] .pf-avatar > span { color: #2a6fcf; }       /* der Anfangsbuchstabe stand hellblau auf dunklem Grund */
+@media (max-width: 720px) {
+  /* schmal läuft die Schrift über die ganze Breite: das Bild nur noch als blasser Hauch */
+  :root[data-theme="hell"] .card.page-banner, :root[data-theme="hell"] .card.pf-hero, :root[data-theme="hell"] .pl-top.pl-hero {
+    background-image: linear-gradient(rgba(246,248,251,.9), rgba(246,248,251,.9)), url(/img/banner-system.jpg); }
+  :root[data-theme="hell"] .card.page-banner.pb-log { background-image: linear-gradient(rgba(246,248,251,.9), rgba(246,248,251,.9)), url(/img/banner-log.jpg); }
+  :root[data-theme="hell"] .card.pf-hero { background-image: linear-gradient(rgba(246,248,251,.9), rgba(246,248,251,.9)), url(/img/banner-profile.jpg); }
+  :root[data-theme="hell"] .pl-top.pl-hero:not(.fm-hero) { background-image: linear-gradient(rgba(246,248,251,.9), rgba(246,248,251,.9)), url(/img/banner-payloads.jpg); }
+  :root[data-theme="hell"] .pl-top.pl-hero.fm-hero { background-image: linear-gradient(rgba(246,248,251,.9), rgba(246,248,251,.9)), url(/img/banner-files.jpg); }
+}
+/* Kopf der Spiele-Seite: die Karte ist hell und ihre Schrift dunkel, das Bild rechts aber dunkel. Die Überblendung nach links ist deshalb
+   hell statt marineblau und reicht weiter; so bleibt auch eine Zeile lesbar, die bei schmalem Fenster bis ins Bild läuft (10.11.2026). */
+:root[data-theme="hell"] #gm-pane-lib > .card:first-child::before {
+  background: linear-gradient(180deg, rgba(246,248,251,0) 72%, var(--surface-1) 100%),
+    linear-gradient(90deg, var(--surface-1) 0%, rgba(246,248,251,.94) 36%, rgba(246,248,251,0) 82%),
+    url(img/banner-library.jpg) right center / cover no-repeat; }
+@media (max-width: 720px) { :root[data-theme="hell"] #gm-pane-lib > .card:first-child::before { opacity: .4; } }
 
 /* ── Dunkel: fast schwarz, ohne Leuchten und ohne Durchscheinen, ruhig für dunkle Räume ── */
 :root[data-theme="dunkel"] {
@@ -2166,3 +2228,52 @@ button.apr-drive:disabled { cursor: default; }
 @keyframes pl-dot { 0%, 100% { box-shadow: 0 0 2px 1px rgba(47,212,74,.35); } 50% { box-shadow: 0 0 9px 4px rgba(47,212,74,.6); } }
 @media (prefers-reduced-motion: reduce) { .pl-dot { animation: none; box-shadow: 0 0 6px 2px rgba(47,212,74,.5); } }
 .pl-dot.off { background: #4a5677; animation: none; box-shadow: none; }
+
+/* ── Spielkarten: Darstellung „kompakt“ (10.11.2026, Wunsch des Users) ─────────────────────────────────────────────────
+   Auswahl „Darstellung“ auf der Spiele-Seite, gemerkt je Gerät (theme-boot.js setzt data-gmview="compact" an <html>). Nur die Darstellung
+   ändert sich: Bild klein neben dem Titel, die Knöpfe als Reihe von Symbolen. Die Knöpfe sind dieselben (Attribute, Sperren, Hinweise). Der Text
+   der Knöpfe bleibt im Dokument (für Vorleser), ist aber nicht zu sehen. Die große Ansicht blendet die Symbole aus und sieht aus wie bisher. */
+.gm-ico { display: none; }
+.gm-help { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 58; width: max-content;
+  max-width: min(720px, calc(100vw - 24px)); display: grid; gap: 2px; padding: 10px 16px; border: 1px solid #3b82f6; border-radius: 12px;
+  background: var(--surface-1); color: var(--ink); box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+.gm-help[hidden] { display: none; }
+.gm-help b { font-size: 13px; }
+.gm-help span { color: var(--ink-2); font-size: 12.5px; line-height: 1.45; }
+.gm-help small { color: var(--ink-muted); font-size: 12px; line-height: 1.4; }
+:root[data-gmview="compact"] .gm-grid { grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; }
+:root[data-gmview="compact"] .gm-card { display: grid; grid-template-columns: 78px minmax(0, 1fr); grid-template-rows: auto 1fr auto;
+  grid-template-areas: "c t" "c g" "a a"; column-gap: 12px; row-gap: 8px; padding: 12px; align-content: start; position: relative; }
+:root[data-gmview="compact"] .gm-cover { grid-area: c; border-radius: 10px; overflow: hidden; align-self: start; }
+:root[data-gmview="compact"] .gm-fallback { font-size: 22px; }
+:root[data-gmview="compact"] .gm-plat, :root[data-gmview="compact"] .gm-live { padding: 1px 6px; font-size: 9.5px; }
+:root[data-gmview="compact"] .gm-plat { top: 5px; left: 5px; }
+:root[data-gmview="compact"] .gm-live { top: auto; bottom: 5px; right: 5px; }
+:root[data-gmview="compact"] .gm-body { display: contents; }
+:root[data-gmview="compact"] .gm-body h3 { grid-area: t; min-height: 0; font-size: 14px; padding-right: 26px; }
+:root[data-gmview="compact"] .gm-tags { grid-area: g; align-content: flex-start; }
+:root[data-gmview="compact"] .gm-actions { grid-area: a; margin-top: 0; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; }
+:root[data-gmview="compact"] .gm-more { display: contents; }
+:root[data-gmview="compact"] .gm-actions .btn { width: 28px; height: 28px; min-width: 0; padding: 0; border-radius: 9px;
+  display: inline-grid; place-items: center; }
+:root[data-gmview="compact"] .gm-actions .btn .gm-ico { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:root[data-gmview="compact"] .gm-actions .btn .gm-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; }
+:root[data-gmview="compact"] .gm-info::after { content: none; }
+:root[data-gmview="compact"] .gm-actions .gm-start { order: 1; width: auto; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px;
+  position: relative; margin-right: 6px; font-size: 12.5px; }
+:root[data-gmview="compact"] .gm-actions .gm-start::after { content: ""; position: absolute; right: -5px; top: 3px; bottom: 3px; width: 1px;
+  background: var(--hairline); }
+:root[data-gmview="compact"] .gm-actions .gm-start .gm-ico { fill: currentColor; stroke: none; width: 14px; height: 14px; }
+:root[data-gmview="compact"] .gm-actions .gm-start .gm-lbl { position: static; width: auto; height: auto; clip: auto; overflow: visible; }
+:root[data-gmview="compact"] .gm-actions [data-copy] { order: 2; }
+:root[data-gmview="compact"] .gm-actions [data-store] { order: 3; }
+:root[data-gmview="compact"] .gm-actions [data-convert] { order: 4; }
+:root[data-gmview="compact"] .gm-actions [data-apr] { order: 5; }
+:root[data-gmview="compact"] .gm-actions [data-gopath] { order: 6; }
+:root[data-gmview="compact"] .gm-actions [data-remount] { order: 7; }
+/* „Infos & Metadaten“ als kleines Symbol oben rechts in der Karte, damit die Reihe der Knöpfe in eine Zeile passt */
+:root[data-gmview="compact"] .gm-actions .gm-info { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; }
+:root[data-gmview="compact"] .gm-actions [data-delete] { order: 9; }
+:root[data-gmview="compact"] .gm-actions .gm-close { order: 10; flex: 1 0 100%; width: 100%; height: auto; padding: 7px 12px; margin: 0; display: block; }

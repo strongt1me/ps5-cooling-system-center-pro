@@ -215,7 +215,8 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
     line.separator = true;
     items.push_back(line);
     ui::MenuItem extras;
-    extras.label = "Extras: AMPR, PlayGo, LZ4, zstd …";
+    // LZ4 and zstd only work for dump folders; for an image the entry names what is left there (10.11.2026)
+    extras.label = game.format == "folder" ? "Extras: AMPR, PlayGo, LZ4, zstd …" : "Extras: AMPR, PlayGo …";
     extras.tag = kExtrasTag;
     // as in the web app: only for games with a folder or image of their own, not for installed
     // packages

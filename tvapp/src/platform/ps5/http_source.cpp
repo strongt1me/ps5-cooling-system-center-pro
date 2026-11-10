@@ -2871,6 +2871,13 @@ void HttpSource::poll_library()
         g.platform = str(item, "platform");
         g.version = str(item, "version");
         g.format = str(item, "format");
+        g.system_ver = str(item, "system_ver");
+        {
+            // With a backport applied the firmware that matters is the one it carries (11.2026)
+            const cJSON *mods = cJSON_GetObjectItemCaseSensitive(item, "mods");
+            if (mods != nullptr && str(mods, "state") == "checked" && flag(mods, "backport") && g.platform != "PS4")
+                g.backport_fw = str(mods, "eboot_sdk");
+        }
         // A PS4Mount game is an installed package to the system; shown as what it is, not as
         // installed (29.10.2026).
         if (g.format == "pkg" && flag(item, "ps4mount"))

@@ -68,6 +68,17 @@ Alle, PS5, PS4 und „Backport · AMPR · PlayGo“; sortiert wie auf dem
 Startbildschirm, nach Name, zuletzt gespielt, Spielzeit, Größe oder
 installiert.
 
+**Darstellung.** Neben der Sortierung wählst du die „Darstellung“: **groß (wie bisher)** oder
+**kompakt**. Bei „kompakt“ steht das Bild klein neben dem Titel und die Knöpfe sind eine Reihe von
+Symbolen; fährst du mit der Maus oder dem Steuerkreuz auf ein Symbol (oder drückst „i“ bzw.
+Dreieck), steht unten, was es macht. Die Knöpfe sind in beiden Ansichten dieselben (gleiche
+Funktion, gleiche Sperren und Hinweise); der Browser merkt sich die Wahl je Gerät.
+
+**Firmware.** Unter dem Titel steht auch die Firmware, die das Spiel verlangt („FW 13.60“, bei PS4-Titeln
+„PS4-FW“); verlangt es eine neuere als die der Konsole, ist die Marke gelb. Ist ein Backport angewendet, steht
+stattdessen die Firmware, die der Backport trägt (die SDK-Fassung seiner `eboot.bin`); was die `param.json`
+verlangt, steht im Hinweis. In der Vollbild-App steht sie in der Zeile des Spiels und in den Angaben.
+
 **Format und Speicherort.** Unter „Infos & Metadaten“ meldet ShadowMountPlus 1.7,
 wo das Spiel läuft: der Dump-Ordner oder die Abbild-Datei (`.exfat`, `.ffpkg`,
 `.ffpfs`, `.ffpfsc`), nicht der Ordner unter `/mnt/shadowmnt`, in den es sie
@@ -295,7 +306,9 @@ Aufräumen gerade fehlte; der nächste Versuch entfernt sie.
 Jede Spielkarte hat unter **Konvertieren** den Knopf **LZ4-/zstd-Asset-Packs …**. Er öffnet das Fenster „LZ4-/zstd-Asset-Packs & APR-EMU“, ein
 Fenster mit Werkzeugen rund um APR-EMU; bisher ist das der **AMPR-Index**
 (`ampr_emu.index`): die Liste aller Dateien des Spiels, die APR-EMU zum Finden
-braucht. Das Fenster zeigt, ob es einen gibt und wie viele Dateien er kennt.
+braucht. Das Fenster zeigt, ob es einen gibt und wie viele Dateien er kennt. Bei einem Abbild heißt der Knopf
+**AMPR & APR-EMU …** und das Fenster „AMPR & APR-EMU“: LZ4 und zstd gehen nur bei
+Dump-Ordnern.
 
 - **Bauen / Neu bauen** legt ihn an. Bei einem Dump-Ordner geschieht das direkt, bei
   einem Abbild hängt ShadowMountPlus es kurz zum Schreiben ein und danach wieder aus.

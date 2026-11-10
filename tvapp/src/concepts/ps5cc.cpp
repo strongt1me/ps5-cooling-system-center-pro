@@ -973,6 +973,18 @@ class Ps5cc final : public app::Concept
             {0.9f, 0, Direction::none, "extras-zstd-einstellungen"},
             {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::back)},
+            // an image: the extras entry names only what works there
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.4f, action_bit(Action::west)},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "spiel-menue-abbild"},
+            {0.3f, action_bit(Action::back)},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
             {0.4f, action_bit(Action::west)},
             {0.2f, 0, Direction::up},
             {0.3f, action_bit(Action::confirm)},
@@ -1465,9 +1477,26 @@ class Ps5cc final : public app::Concept
         std::string key = data_.status.game_id;
         for (const ps5cc::Game &g : data_.games)
             key += '\n' + g.id + '\t' + g.name + '\t' + g.platform + '\t' + g.version + '\t' +
-                   g.format + '\t' + std::to_string(g.size_bytes) + '\t' +
+                   g.format + '\t' + g.system_ver + '\t' + g.backport_fw + '\t' + std::to_string(g.size_bytes) + '\t' +
                    std::to_string(g.played_s) + (g.can_launch ? "+" : "-");
         return key;
+    }
+
+    // " · FW 13.60": what the game asks for; with a backport the firmware the backport carries (11.2026)
+    static std::string fw_label(const ps5cc::Game &g)
+    {
+        const std::string &fw = !g.backport_fw.empty() ? g.backport_fw : g.system_ver;
+        if (fw.empty())
+            return {};
+        return std::string(" · ") + (g.platform == "PS4" ? "PS4-FW " : "FW ") + fw;
+    }
+
+    static void add_fw_rows(std::vector<ui::DetailItem> &items, const ps5cc::Game &g)
+    {
+        if (!g.system_ver.empty())
+            items.push_back({g.platform == "PS4" ? "Benötigte PS4-Firmware" : "Benötigte Firmware", g.system_ver});
+        if (!g.backport_fw.empty())
+            items.push_back({"Backport-Firmware", g.backport_fw});
     }
 
     void rebuild_games()
@@ -1478,7 +1507,7 @@ class Ps5cc final : public app::Concept
             ui::ListItem item;
             item.title = g.name;
             item.subtitle = g.platform + " · v" + g.version + " · " + format_label(g.format) +
-                            " · " + ps5cc::format_bytes(g.size_bytes);
+                            fw_label(g) + " · " + ps5cc::format_bytes(g.size_bytes);
             item.value = ps5cc::format_playtime(g.played_s);
             if (g.id == data_.status.game_id)
                 item.badge = "LÄUFT";
@@ -1520,6 +1549,7 @@ class Ps5cc final : public app::Concept
         items.push_back({"Titel-ID", g->id});
         items.push_back({"Version", g->version});
         items.push_back({"Format", format_label(g->format)});
+        add_fw_rows(items, *g);
         items.push_back({"Größe", ps5cc::format_bytes(g->size_bytes)});
         items.push_back({"Spielzeit", ps5cc::format_playtime(g->played_s)});
         game_info_.set_items(items);
@@ -1536,6 +1566,7 @@ class Ps5cc final : public app::Concept
         items.push_back({"Plattform", g->platform});
         items.push_back({"Version", g->version});
         items.push_back({"Format", format_label(g->format)});
+        add_fw_rows(items, *g);
         items.push_back({"Größe", ps5cc::format_bytes(g->size_bytes)});
         items.push_back({"Spielzeit", ps5cc::format_playtime(g->played_s)});
         items.push_back({"Zuletzt gespielt", german_date(g->last_played)});

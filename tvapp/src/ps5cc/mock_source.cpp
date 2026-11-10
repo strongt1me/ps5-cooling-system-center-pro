@@ -133,6 +133,19 @@ class MockSource final : public Source
             g.can_remount = !installed;
             g.smp_mounted = !installed;
             g.ampr_emu = std::string(m.id) == "PPSA01325";
+            // the firmware a game asks for; one with a backport (the firmware it carries), a PS4 title
+            const std::string mid = m.id;
+            if (mid == "PPSA02433" || mid == "PPSA10777")
+                g.system_ver = "12.00";
+            else if (mid == "PPSA01325" || mid == "PPSA12345")
+            {
+                g.system_ver = "10.60";
+                g.backport_fw = "4.00";
+            }
+            else if (mid == "PPSA01862")
+                g.system_ver = "5.00";
+            else if (mid == "CUSA44880" || mid == "CUSA05041" || mid == "CUSA20220")
+                g.system_ver = "9.00";
             g.size_bytes = static_cast<std::uint64_t>(m.gigabytes * 1e9);
             g.played_s = static_cast<std::uint64_t>(m.hours * 3600.0);
             g.last_played = m.hours > 0.0 ? "2026-10-27T10:29:26Z" : "";

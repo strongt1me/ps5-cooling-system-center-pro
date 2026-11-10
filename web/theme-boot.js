@@ -4,7 +4,11 @@
  * in „Standard“ aufblitzt. Die Wahl gilt je Gerät (localStorage "theme"): am Fernseher etwa „Optimal“, am Handy „Hell“.
  * Das Design steht als data-theme an <html>; „Standard“ ist die Vorgabe und braucht keines (gemerktes „aktuell“, der
  * frühere Name, gilt als „standard“). Die Farben stehen in
- * style.css (Abschnitt „Vier Designs“). Der Wähler oben (#theme) wechselt ohne Neuladen. */
+ * style.css (Abschnitt „Vier Designs“). Der Wähler oben (#theme) wechselt ohne Neuladen.
+ *
+ * Ebenso die Darstellung der Spielkarten (10.11.2026): „groß (wie bisher)“ oder „kompakt“, gemerkt je Gerät (localStorage "gmview"),
+ * als data-gmview="compact" an <html>; „groß“ ist die Vorgabe und braucht kein Attribut. Der Wähler #gm-view steht auf der
+ * Spiele-Seite. */
 (function () {
   var THEMES = { standard: 1, hell: 1, dunkel: 1, optimal: 1 };
   var root = document.documentElement;
@@ -16,7 +20,22 @@
   var cur = "standard";
   try { cur = localStorage.getItem("theme") || "standard"; } catch (e) { /* ohne Speicher: die Vorgabe */ }
   cur = apply(cur);
+  var view = "classic";
+  try { view = localStorage.getItem("gmview") === "compact" ? "compact" : "classic"; } catch (e) { /* ohne Speicher: die Vorgabe */ }
+  function applyView(v) {
+    if (v === "compact") root.setAttribute("data-gmview", "compact"); else root.removeAttribute("data-gmview");
+    return v;
+  }
+  view = applyView(view);
   document.addEventListener("DOMContentLoaded", function () {
+    var vsel = document.getElementById("gm-view");
+    if (vsel) {
+      vsel.value = view;
+      vsel.addEventListener("change", function () {
+        view = applyView(vsel.value);
+        try { localStorage.setItem("gmview", view); } catch (e) { /* ohne Speicher gilt die Wahl bis zum Neuladen */ }
+      });
+    }
     var sel = document.getElementById("theme");
     if (!sel) return;
     sel.value = cur;

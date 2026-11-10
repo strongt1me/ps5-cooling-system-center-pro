@@ -52,6 +52,8 @@ struct Game
     std::string platform;
     std::string version;
     std::string format;
+    std::string system_ver; // the firmware the game asks for (param.json; PS4 titles: param.sfo), "" when unknown
+    std::string backport_fw; // PS5 with a backport applied: the firmware it carries (SDK of the eboot.bin), else ""
     std::string path;
     std::string
         cover; // where the app serves its cover ("/api/v1/library/cover?id=…"), "" when none

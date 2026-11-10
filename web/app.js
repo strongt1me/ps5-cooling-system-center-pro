@@ -5189,12 +5189,36 @@
     return t;
   };
 
+  /* Firmware, die das Spiel verlangt (10.11.2026): „FW 13.60“ aus der param.json (PS4-Titel: „PS4-FW“ aus der param.sfo). Ist ein Backport
+     angewendet, steht die Firmware, die der Backport trägt: die SDK-Fassung der eboot.bin; was die param.json verlangt, steht im Hinweis.
+     Nur Anzeige. */
+  const gmFw = (x) => {
+    const m = x.mods && x.mods.state === "checked" ? x.mods : null;
+    const ps4 = x.platform === "PS4";
+    const need = x.system_ver || "";
+    const name = (v) => `${ps4 ? "PS4-FW" : "FW"} ${v}`;
+    if (m && m.backport && m.eboot_sdk && !ps4) {
+      const why = `Backport: die Firmware, die der Backport trägt (SDK der eboot.bin ${m.eboot_sdk}).`
+        + (need ? ` Laut param.json verlangt das Spiel ${need}.` : "");
+      return { text: name(m.eboot_sdk), cls: "bp", title: why, backport: true };
+    }
+    if (!need) return null;
+    const cfw = gm.meta && gm.meta.console_fw;
+    const newer = !ps4 && cfw && parseFloat(need) > parseFloat(cfw);
+    const why = (ps4 ? `Benötigte PS4-Firmware (param.sfo): ${need}` : `Benötigte Firmware (param.json): ${need}`)
+      + (newer ? ` · Neuer als die Firmware der Konsole (${cfw}).` : "");
+    return { text: name(need), cls: newer ? "bp" : "fmt", title: why, backport: false };
+  };
+  const gmFwTag = (fw) => `<span class="gm-tag ${fw.cls}" title="${esc(fw.title)}">${esc(fw.text)}</span>`;
+
   const gmTags = (x) => {
     const m = x.mods;
     const fmt = gmFormatLabel(x);
+    const fw = gmFw(x);
     const t = fmt
       ? [`<span class="gm-tag fmt" title="${esc(x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : GM_FORMATS[x.format] || x.format)}">${esc(fmt)}</span>`]
       : [];
+    if (fw && !fw.backport) t.push(gmFwTag(fw));
     gmMarks(x).forEach((s) => t.push(s));
     if (!m) return t.join("");
     if (m.state !== "checked") {
@@ -5212,6 +5236,7 @@
         why.push(`${m.backport_libs} Systembibliothek(en) im Ordner ${m.fakelib2 ? "fakelib2" : "fakelib"}`
           + (m.libs_from === "folder" ? " (Backport-Ordner neben dem Spiel)" : ""));
       t.push(`<span class="gm-tag bp" title="${esc(why.join(" · "))}">Backport</span>`);
+      if (fw && fw.backport) t.push(gmFwTag(fw));
     }
     if (m.ampr_emu)
       t.push(`<span class="gm-tag ampr" title="${esc((m.fakelib2 ? "fakelib2" : "fakelib") + "/libSceAmpr.sprx"
@@ -5225,6 +5250,22 @@
         + (m.playgo_log ? " · playlgo.log vorhanden" : ""))}">PlayGo</span>`);
     return t.join("");
   };
+
+  /* Symbole der Spielkarten (Ansicht „kompakt“); in der großen Ansicht sind sie ausgeblendet */
+  const GM_ICONS = {
+    play: '<path d="M8 5v14l11-7z"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+    move: '<path d="M4 12h12"/><path d="M12 7l5 5-5 5"/><path d="M20 5v14"/>',
+    conv: '<path d="M5 8h13"/><path d="M14 4l4 4-4 4"/><path d="M19 16H6"/><path d="M10 12l-4 4 4 4"/>',
+    pack: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>',
+    path: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    mount: '<path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M5 19h14"/>',
+    remount: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
+    unmount: '<path d="M12 5l7 8H5z"/><path d="M5 18h14"/>',
+    del: '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>'
+  };
+  const gmIco = (k) => `<svg class="gm-ico" viewBox="0 0 24 24" aria-hidden="true">${GM_ICONS[k] || ""}</svg>`;
 
   /* Die Knöpfe einer Karte: auf jeder Karte dieselben vier an derselben Stelle
      (Starten; Kopieren und Verschieben nebeneinander; Konvertieren darunter).
@@ -5246,8 +5287,9 @@
         : !x.path ? "Wo die Spieldaten dieses Titels liegen, ist nicht bekannt."
         : "Konvertieren geht nur bei Dump-Ordnern und bei Abbildern (exFAT, ffpkg, ffpfs, ffpfsc)."
     };
-    const btn = (cls, attrs, label, ok, reason) =>
-      `<button type="button" class="btn${cls}" ${attrs}${ok ? "" : ` disabled title="${esc(reason)}"`}>${label}</button>`;
+    /* Symbol und Hinweis sind nur für die Ansicht „kompakt“; in der großen Ansicht sieht man wie bisher nur den Text. */
+    const btn = (cls, attrs, label, ok, reason, ico, hint) =>
+      `<button type="button" class="btn${cls}" ${attrs}${hint ? ` data-hint="${esc(hint)}"` : ""}${ok ? "" : ` disabled title="${esc(reason)}"`}>${ico ? gmIco(ico) : ""}<span class="gm-lbl">${label}</span></button>`;
     /* Das laufende Spiel bekommt zusätzlich „Spiel beenden" (wie „Close App"
        in Elf Arsenal); die Seite fragt vorher nach. */
     const close = live
@@ -5262,19 +5304,19 @@
       : "Aus- und Einhängen braucht ShadowMountPlus ab 1.7beta10.";
     const rmOk = !!x.can_remount && !live;
     const remount = x.mounted
-      ? `${btn("", `data-remount="remount" data-id="${id}"`, "Neu einhängen", rmOk, rmWhy)}
-            ${btn("", `data-remount="unmount" data-id="${id}"`, "Aushängen", rmOk, rmWhy)}`
-      : btn("", `data-remount="mount" data-id="${id}"`, "Einhängen", rmOk, rmWhy);
+      ? `${btn("", `data-remount="remount" data-id="${id}"`, "Neu einhängen", rmOk, rmWhy, "remount", 'Hängt das Spiel aus und wieder ein; hilft, wenn es hängt.')}
+            ${btn("", `data-remount="unmount" data-id="${id}"`, "Aushängen", rmOk, rmWhy, "unmount", 'Hängt das Spiel über ShadowMountPlus aus.')}`
+      : btn("", `data-remount="mount" data-id="${id}"`, "Einhängen", rmOk, rmWhy, "mount", 'Hängt das Spiel über ShadowMountPlus ein.');
     /* läuft das Spiel schon, ist „Starten“ aus: ein zweiter Start desselben Titels kann die Konsole abstürzen lassen */
-    return `${btn(" primary gm-start", `data-launch="${id}"`, "Starten", !!x.can_launch && !live, live ? "Das Spiel läuft schon." : why.launch)}
+    return `${btn(" primary gm-start", `data-launch="${id}"`, "Starten", !!x.can_launch && !live, live ? "Das Spiel läuft schon." : why.launch, "play", 'Startet das Spiel. Läuft schon ein anderes, fragt die App zuerst nach.')}
           ${close}
           <div class="gm-more">
-            ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy)}
-            ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move)}
-            ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert)}
-            ${btn(" gm-apr", `data-apr="${id}"`, "LZ4-/zstd-Asset-Packs …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy)}
-            ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "")}
-            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy)}
+            ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy, "copy", 'Kopiert das Spiel (Ordner oder Abbild) auf ein anderes Laufwerk.')}
+            ${btn("", `data-store="move" data-id="${id}"`, "Verschieben", !!x.can_move, why.move, "move", 'Verschiebt das Spiel über ShadowMountPlus auf ein anderes Laufwerk.')}
+            ${btn(" gm-conv", `data-convert="${id}"`, "Konvertieren", !!(x.can_convert || x.can_unpack), why.convert, "conv", 'Wandelt einen Dump-Ordner in ein Abbild um oder ein Abbild in ein anderes Format.')}
+            ${btn(" gm-apr", `data-apr="${id}"`, x.format === "folder" ? "LZ4-/zstd-Asset-Packs …" : "AMPR & APR-EMU …", !pkg && !!x.path, pkg ? "Installierte Spiele (PKG) haben keinen Spielordner." : why.copy, "pack", x.format === "folder" ? 'Packt die Spieldaten in LZ4- oder zstd-Pakete und stellt AMPR-Index, APR-EMU und PlayGo ein.' : 'Stellt AMPR-Index, APR-EMU und PlayGo ein. LZ4 und zstd gehen nur bei Dump-Ordnern.')}
+            ${btn(" gm-del", `data-delete="${id}"`, "Löschen", true, "", "del", 'Löscht das Spiel von der Konsole. Die App fragt vorher nach.')}
+            ${btn("", `data-gopath="${id}"`, "Pfad öffnen", !!x.path && !pkg, pkg ? "Ein installiertes Spiel (PKG) liegt nicht als Ordner oder Abbild vor." : why.copy, "path", 'Öffnet den Ordner des Spiels im Dateimanager.')}
             ${remount}
           </div>`;
   };
@@ -5302,6 +5344,7 @@
                  newer ? `${x.system_ver} (Konsole ${cfw})` : x.system_ver,
                  newer ? "warn" : "", why]);
     }
+    if (m && m.backport && m.eboot_sdk && x.platform !== "PS4") rows.push(["Backport-Firmware", m.eboot_sdk]);
     if (x.sdk) rows.push(["SDK", x.sdk]);
     rows.push(["Spielzeit", x.played_s > 0 ? duration(x.played_s) : "—"]);
     rows.push(["Zuletzt gespielt", gmDate(x.last_played, true)]);
@@ -5355,8 +5398,8 @@
         <h3 title="${esc(x.name)}">${esc(x.name)}</h3>
         ${tags ? `<div class="gm-tags">${tags}</div>` : ""}
         <div class="gm-actions">
-          <button type="button" class="btn gm-info" data-info="${esc(x.title_id)}"
-            aria-expanded="${open ? "true" : "false"}">Infos &amp; Metadaten</button>
+          <button type="button" class="btn gm-info" data-info="${esc(x.title_id)}" data-hint="Zeigt Titel-ID, Version, Format, Speicherort und weitere Angaben des Spiels."
+            aria-expanded="${open ? "true" : "false"}">${gmIco("info")}<span class="gm-lbl">Infos &amp; Metadaten</span></button>
           <dl class="gm-meta" hidden>${rows.map(([k, v, cls, tip]) =>
             `<dt>${esc(k)}</dt><dd${cls ? ` class="${cls}"` : ""}${tip ? ` title="${esc(tip)}"` : ""}>${esc(v)}</dd>`).join("")}</dl>
           ${gmButtons(x, live)}
@@ -6558,6 +6601,55 @@
     gmPopPlace(true);
   };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && gmPop) gmPopClose(); });
+
+  /* ── Infoleiste der kompakten Spielkarten (10.11.2026) ───────────────────────────────────────────────────────────────
+     In der Ansicht „kompakt“ (Auswahl „Darstellung“ auf der Spiele-Seite, gemerkt je Gerät) stehen die Knöpfe einer Karte als
+     Symbole. Fährt man mit der Maus darüber oder mit dem Steuerkreuz darauf (Fokus), steht unten, was der Knopf macht; die Taste
+     „i“ oder Dreieck zeigt es für den Knopf mit Fokus noch einmal. Die Knöpfe sind dieselben wie in der großen Ansicht (gleiche
+     Attribute, Sperren und Hinweise); nur ihre Darstellung ist eine andere. In der großen Ansicht geschieht hier nichts. */
+  const gmCompact = () => document.documentElement.getAttribute("data-gmview") === "compact";
+  let gmHelp = null, gmHelpTimer = 0;
+  const gmHelpShow = (b) => {
+    if (!b || !gmCompact()) return;
+    if (!gmHelp) {
+      gmHelp = document.createElement("div");
+      gmHelp.className = "gm-help"; gmHelp.setAttribute("role", "status"); gmHelp.hidden = true;
+      document.body.appendChild(gmHelp);
+    }
+    clearTimeout(gmHelpTimer);
+    const lbl = b.querySelector(".gm-lbl");
+    const t = document.createElement("b"); t.textContent = lbl ? lbl.textContent.trim() : "";
+    const d = document.createElement("span"); d.textContent = b.dataset.hint || "";
+    gmHelp.textContent = "";
+    gmHelp.append(t, d);
+    if (b.disabled && b.title) { const w = document.createElement("small"); w.textContent = b.title; gmHelp.append(w); }
+    gmHelp.hidden = false;
+  };
+  const gmHelpHide = (ms) => { clearTimeout(gmHelpTimer); gmHelpTimer = setTimeout(() => { if (gmHelp) gmHelp.hidden = true; }, ms); };
+  const gmHelpBtn = (e) => (e.target && e.target.closest ? e.target.closest(".gm-card .btn[data-hint]") : null);
+  const gmFocusBtn = () => { const a = document.activeElement; return a && a.closest ? a.closest(".gm-card .btn[data-hint]") : null; };
+  document.addEventListener("mouseover", (e) => { const b = gmHelpBtn(e); if (b) gmHelpShow(b); });
+  document.addEventListener("focusin", (e) => { const b = gmHelpBtn(e); if (b) gmHelpShow(b); });
+  document.addEventListener("mouseout", (e) => { if (gmHelpBtn(e)) gmHelpHide(900); });
+  document.addEventListener("focusout", (e) => { if (gmHelpBtn(e)) gmHelpHide(900); });
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === "i" || e.key === "I") && !e.ctrlKey && !e.altKey && !e.metaKey) gmHelpShow(gmFocusBtn());
+  });
+  /* Dreieck am Controller (Standardbelegung: Taste 3), falls der Browser die Gamepad-Schnittstelle hat */
+  let gmPadOn = false, gmPadPrev = false;
+  const gmPadStart = () => {
+    if (gmPadOn) return;
+    gmPadOn = true;
+    setInterval(() => {
+      if (!gmCompact()) return;
+      let down = false;
+      try { for (const p of navigator.getGamepads()) if (p && p.buttons[3] && p.buttons[3].pressed) down = true; } catch (e) { /* egal */ }
+      if (down && !gmPadPrev) gmHelpShow(gmFocusBtn());
+      gmPadPrev = down;
+    }, 120);
+  };
+  window.addEventListener("gamepadconnected", gmPadStart);
+  try { if (navigator.getGamepads && Array.prototype.some.call(navigator.getGamepads(), Boolean)) gmPadStart(); } catch (e) { /* egal */ }
   document.addEventListener("mousedown", (e) => {
     if (gmPop && !gmPop.contains(e.target) && !e.target.closest("button[data-info]")) gmPopClose();
   });
@@ -8017,7 +8109,8 @@
     if (apr.view === "emu") { aprRenderEmu(body); return; }
     if (apr.view === "lz4set") { aprRenderLz4Set(body); return; }
     cp.view = "apr";
-    txt("#cp-title", `LZ4-/zstd-Asset-Packs & APR-EMU – ${i.name}`);
+    /* LZ4 und zstd gibt es nur bei Dump-Ordnern; bei einem Abbild bleiben AMPR-Index, APR-EMU und PlayGo (10.11.2026) */
+    txt("#cp-title", `${i.format === "folder" ? "LZ4-/zstd-Asset-Packs & APR-EMU" : "AMPR & APR-EMU"} – ${i.name}`);
 
     /* AMPR-Index */
     const state = i.has_index
@@ -8252,7 +8345,8 @@
     apr.id = id; apr.info = null; apr.job = null; apr.img = null; apr.ij = null; apr.plan = null; apr.view = "main"; apr.drive = ""; apr.planErr = "";
     apr.emu = null; apr.pgo = null; apr.lib = "ampr"; apr.vers = null; apr.emuSel = ""; apr.emuErr = ""; apr.emuNote = ""; apr.lz4 = null; apr.lz4s = null; apr.trace = null; apr.plug = null;
     cp.view = "aprloading";
-    txt("#cp-title", "LZ4-/zstd-Asset-Packs & APR-EMU");
+    const opened = gm.list.find((x) => x.title_id === id);
+    txt("#cp-title", opened && opened.format !== "folder" ? "AMPR & APR-EMU" : "LZ4-/zstd-Asset-Packs & APR-EMU");
     $("#cp-body").innerHTML = `<p class="muted">wird gelesen …</p>`;
     $("#cp-overlay").hidden = false;
     aprLoad();
