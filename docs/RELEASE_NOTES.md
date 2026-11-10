@@ -31,7 +31,7 @@
 ## Hinweise
 - Die neue ELF an Port 9021 senden (sie beendet die ältere Instanz selbst) und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein).
 - **Geprüft:** der Schreibweg gegen den echten Leser aus dem Quelltext von ShadowMountPlus 1.7beta12 am PC (11 Fälle); an der PS5 Pro (Firmware 12.00, `config.ini` im neuen Format) die Einstellung, der Hinweis, die Karte und der ganze Ablauf im Browser (Rückfrage, Speichern, „umstellen?“, NG-Einbau) an einer entpackten Testkopie von Double Dragon Revive – die echte `config.ini` blieb dabei byte-gleich.
-- **Nicht geprüft:** die Vollbild-App auf dem Fernseher (Reiter und Auswahlfenster; am PC nur als Bild gesehen) und das Umschalten auf „an“ in der echten `config.ini`.
+- **Danach an der Konsole bestätigt (10.11.2026):** die Vollbild-App auf dem Fernseher (Reiter „ShadowMountPlus“ unter System mit dem Auswahlfenster für die Version) und das Umschalten von „Fakelib automatisch aktualisieren“ auf „an“ in der echten `config.ini`; beides funktioniert in der Browser-Oberfläche und in der Vollbild-App.
 
 ## Downloads
 | Datei | Wofür |
