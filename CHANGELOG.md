@@ -1,5 +1,12 @@
 # Changelog
 
+## Unveröffentlicht
+
+### zstd neben LZ4 benannt (10.11.2026)
+- **Browser-Oberfläche:** Im Fenster „LZ4-/zstd-Asset-Packs & APR-EMU“ sind LZ4 und zstd jetzt zwei getrennte Zeilen mit eigener Überschrift, eigenem Text und eigenem Knopf (vorher eine Zeile „LZ4-Asset-Packs“ mit beiden Knöpfen, die nach Zusammenhang aussah). Der Fortschritt und das Ergebnis eines Auftrags erscheinen in der Zeile seines Formats; „zstd-Asset-Packs“ ist jetzt auch übersetzt. Der Knopf auf der Spielkarte hieß schon seit v1.79.0 „LZ4-/zstd-Asset-Packs …“.
+- **Vollbild-App:** Der Eintrag im Menü eines Spiels heißt jetzt „Extras: AMPR, PlayGo, LZ4, zstd …“ (vorher nur LZ4); die Übersetzungen in den sechs Sprachen folgen. Im Fenster Extras hat zstd eine eigene Überschrift „ZSTD-ASSET-PACKS“ mit eigenem Knopf (vorher standen beide Knöpfe unter „LZ4-ASSET-PACKS“); neues Bild „extras-lz4-zstd“ in der Tour.
+- **Handbuch (7 Sprachen):** Der Knopf auf der Spielkarte und das Fenster heißen dort „LZ4-/zstd-Asset-Packs …“ wie in der Oberfläche; vorher stand noch der alte Name nur mit LZ4.
+
 ## v1.79.0 – 10.11.2026
 
 ### ShadowMountPlus: die App fragt, welche Version läuft (09.11.2026)

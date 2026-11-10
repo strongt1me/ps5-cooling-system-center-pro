@@ -403,6 +403,9 @@ void GameExtras::build_main()
             ui::FormRow &r = form_.add_action(kLz4Pack, "Mit LZ4 packen …");
             r.description =
                 "Öffnet die Einstellungen: Stufe, Profil und ob im Ordner selbst oder als Kopie.";
+            // zstd is a group of its own, as in the web app: one list under one heading looked as if
+            // the two formats belonged together (10.11.2026)
+            form_.add_header("ZSTD-ASSET-PACKS");
             ui::FormRow &z = form_.add_action(kZstPack, "Mit zstd packen …");
             z.description = "Nur für AMPR EMU NG: packt alles außer den Systemdateien. Öffnet die "
                             "Einstellungen: Stufe und ob im Ordner selbst oder als Kopie.";

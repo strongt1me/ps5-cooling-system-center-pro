@@ -215,7 +215,7 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
     line.separator = true;
     items.push_back(line);
     ui::MenuItem extras;
-    extras.label = "Extras: AMPR, PlayGo, LZ4 …";
+    extras.label = "Extras: AMPR, PlayGo, LZ4, zstd …";
     extras.tag = kExtrasTag;
     // as in the web app: only for games with a folder or image of their own, not for installed
     // packages

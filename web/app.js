@@ -7666,23 +7666,24 @@
       else result = `<p class="cp-err">✗ ${esc(lk.error || "Das ging nicht.")}</p>`;
     }
     const prog = run ? aprProgress(ij) : "";
-    if (!z.can) {
-      return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
-          <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>) oder zstd-Pakete (<code>ampr_zstd-*.pak</code>, nur für AMPR EMU NG).</small>
-          <small class="cp-why">${esc(z.why || "Für dieses Spiel geht das nicht.")}</small></div>
-          <div class="apr-btnstack"><button type="button" class="btn" disabled>Mit LZ4 packen …</button>
-          <button type="button" class="btn" disabled>Mit zstd packen …</button></div></div>`;
-    }
+    /* LZ4 und zstd sind zwei getrennte Zeilen mit eigener Überschrift, eigenem Text und eigenem Knopf (10.11.2026): in einer Zeile
+       sah es aus, als gehöre das eine zum anderen. */
+    const lz4Text = `<small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>). APR-EMU liest sie beim Spielen und entpackt jeden Block erst, wenn das Spiel ihn braucht. Das Spiel belegt danach weniger Platz.</small>`;
+    const zstText = `<small>Packt die Spieldaten in zstd-Pakete (<code>ampr_zstd-*.pak</code>): Die liest nur AMPR EMU NG; gepackt wird das ganze Spiel außer den Systemdateien, das spart meist mehr Platz.</small>`;
+    /* geht es nicht: der Grund steht bei LZ4, beim zstd-Knopf als Hinweis */
+    const offRows = (why, state) => `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
+          ${lz4Text}${state}
+          <small class="cp-why">${esc(why)}</small></div>
+          <button type="button" class="btn" disabled>Mit LZ4 packen …</button></div>
+        <div class="apr-row"><div><b>zstd-Asset-Packs</b>
+          ${zstText}</div>
+          <button type="button" class="btn" disabled title="${esc(why)}">Mit zstd packen …</button></div>`;
+    if (!z.can) return offRows(z.why || "Für dieses Spiel geht das nicht.", "");
     /* Kann dieses Spiel Asset-Packs überhaupt nutzen? Die gängigen Werkzeuge prüfen, ob eboot.bin oder sce_module libSceAmpr
        einbinden; ohne das gibt es nur die ffpfsc-Komprimierung. Dasselbe tut die App (ampr_import: 1 ja, 0 nein, -1 nicht lesbar). */
-    if (z.ampr_import === 0 && !z.packed) {
-      return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
-          <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>) oder zstd-Pakete (<code>ampr_zstd-*.pak</code>, nur für AMPR EMU NG).</small>
-          <span class="apr-state no">✗ lädt libSceAmpr nicht selbst</span>
-          <small class="cp-why">Dieses Spiel bindet libSceAmpr weder in eboot.bin noch in sce_module ein. Es würde seine Dateien in den Paketen nicht wiederfinden. Für solche Spiele gibt es nur die Komprimierung zu einem .ffpfsc-Abbild (Knopf „Konvertieren“).</small></div>
-          <div class="apr-btnstack"><button type="button" class="btn" disabled>Mit LZ4 packen …</button>
-          <button type="button" class="btn" disabled>Mit zstd packen …</button></div></div>`;
-    }
+    if (z.ampr_import === 0 && !z.packed)
+      return offRows("Dieses Spiel bindet libSceAmpr weder in eboot.bin noch in sce_module ein. Es würde seine Dateien in den Paketen nicht wiederfinden. Für solche Spiele gibt es nur die Komprimierung zu einem .ffpfsc-Abbild (Knopf „Konvertieren“).",
+        `<span class="apr-state no">✗ lädt libSceAmpr nicht selbst</span>`);
     const fit = (z.ampr_import === 1 ? `<span class="apr-state ok">✓ lädt libSceAmpr selbst</span>`
       : z.ampr_import === -1 ? `<span class="apr-state no">? nicht zu erkennen, ob es libSceAmpr lädt</span>` : "")
       + (z.suggest ? ` <span class="apr-state ok">${esc(`✓ getestetes Profil: ${z.suggest.label}`)}</span>` : "");
@@ -7717,12 +7718,18 @@
           ${unWhy && !anyRunning ? `<small class="cp-why">${esc(unWhy)}</small>` : ""}</div>
           <button type="button" class="btn" data-apr-lz4="unpack" ${unWhy ? "disabled" : ""} ${unWhy ? `title="${esc(unWhy)}"` : ""}>${zst ? "zstd entpacken …" : "LZ4 entpacken …"}</button></div>`;
     }
+    /* ein laufender oder eben beendeter Auftrag erscheint in der Zeile seines Formats */
+    const jb = (run ? ij : lk) || {};
+    const zj = jb.lz4_format === "zstd";
+    const lzRun = run && !zj, zsRun = run && zj;
     return `<div class="apr-row"><div><b>LZ4-Asset-Packs</b>
-        <small>Packt die Spieldaten in LZ4-Pakete (<code>ampr_assets-*.pak</code>). APR-EMU liest sie beim Spielen und entpackt jeden Block erst, wenn das Spiel ihn braucht. Das Spiel belegt danach weniger Platz.</small>
-        <small>Oder in zstd-Pakete (<code>ampr_zstd-*.pak</code>): Die liest nur AMPR EMU NG; gepackt wird das ganze Spiel außer den Systemdateien, das spart meist mehr Platz.</small>
-        ${run ? "" : `<span class="apr-state no">nicht gepackt</span> ${fit}${guide}`}${prog}${result}</div>
-        ${run ? cancel : `<div class="apr-btnstack"><button type="button" class="btn primary" data-apr-lz4="open" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit LZ4 packen …</button>
-          <button type="button" class="btn" data-apr-lz4="openz" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit zstd packen …</button></div>`}</div>`;
+        ${lz4Text}
+        ${run ? "" : `<span class="apr-state no">nicht gepackt</span> ${fit}${guide}`}${zj ? "" : prog + result}</div>
+        ${lzRun ? cancel : `<button type="button" class="btn primary" data-apr-lz4="open" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit LZ4 packen …</button>`}</div>
+      <div class="apr-row"><div><b>zstd-Asset-Packs</b>
+        ${zstText}
+        ${zj ? prog + result : ""}</div>
+        ${zsRun ? cancel : `<button type="button" class="btn" data-apr-lz4="openz" ${anyRunning ? "disabled" : ""} ${runWhy ? `title="${esc(runWhy)}"` : ""}>Mit zstd packen …</button>`}</div>`;
   };
 
   /* Welches Profil der Auftrag bekommt: "" = automatisch, das getestete Profil, das zum Spiel passt (imgjob_lz4.inc, nach LZ4

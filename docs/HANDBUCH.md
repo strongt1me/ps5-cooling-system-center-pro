@@ -292,7 +292,7 @@ Aufräumen gerade fehlte; der nächste Versuch entfernt sie.
 
 ## AMPR-Index, APR-EMU, PlayGo und der Verlauf (seit 11.10.2026)
 
-Jede Spielkarte hat unter **Konvertieren** den Knopf **LZ4-Asset-Packs …**. Er öffnet das Fenster „LZ4-Asset-Packs & APR-EMU“, ein
+Jede Spielkarte hat unter **Konvertieren** den Knopf **LZ4-/zstd-Asset-Packs …**. Er öffnet das Fenster „LZ4-/zstd-Asset-Packs & APR-EMU“, ein
 Fenster mit Werkzeugen rund um APR-EMU; bisher ist das der **AMPR-Index**
 (`ampr_emu.index`): die Liste aller Dateien des Spiels, die APR-EMU zum Finden
 braucht. Das Fenster zeigt, ob es einen gibt und wie viele Dateien er kennt.
@@ -471,7 +471,7 @@ schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes
 
 ### Schritt für Schritt
 
-1. **APR-EMU einbauen.** Im Fenster „LZ4-Asset-Packs & APR-EMU“ bei **APR-EMU im Spiel** die Version `0.4.2.1 test-pack`
+1. **APR-EMU einbauen.** Im Fenster „LZ4-/zstd-Asset-Packs & APR-EMU“ bei **APR-EMU im Spiel** die Version `0.4.2.1 test-pack`
    wählen. Nur die Versionen mit „pack“ im Namen lesen Pakete.
 2. **Ungepackt testen.** Das Spiel starten und ein Stück spielen: Menü, ein Level, einen Spielstand laden. Läuft es so nicht, läuft
    es gepackt nie. Dann hilft nur eine ältere APR-EMU (zum Beispiel 0.3.6.6; sie liegt der App seit November 2026 nicht mehr bei,
