@@ -424,7 +424,7 @@ src/conv_exfat.c    exFAT-Abbild schreiben (aus MkPFS portiert)
 src/conv_pfs.c      PFS-Container mit PFSC-Kompression (aus MkPFS portiert), vollständige Prüfung
 src/conv_ufs2.c     UFS2-Abbild (ffpkg) nach dem Vorbild von UFS2Tool, Prüfsumme je Datei
 src/checkfile.c     Zurücklesen mit CRC-32/SHA-256, Prüfsummen-Datei im sha256sum-Format
-src/sha256.c        SHA-256 (eigen, mit -O2 gebaut)
+src/sha256.c        SHA-256 (eigen): reines C, dazu die SHA-Befehle der CPU (CPUID + Selbsttest, Test: test/sha256/run.sh)
 src/iopolicy.c      Lesen und Schreiben gleichzeitig nur zwischen zwei Laufwerken, Vorauslesen
 src/gamedelete.c    Spiele und Sicherungen löschen: Plan mit Einmal-Kennwort, Deinstallation über die Konsole (Helfer), ShadowMountPlus abmelden + Abbild löschen, Sicherungen; löscht nie über Verknüpfungen, Laufwerksgrenzen oder außerhalb von /mnt/usb*, /mnt/ext*, /data
 src/ioerr.h         die Worte für einen gescheiterten Zugriff: abgemeldetes Laufwerk (ENXIO/ENODEV), EIO, sonst strerror()

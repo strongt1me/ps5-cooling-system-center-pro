@@ -14,6 +14,7 @@
 
 #include "ps4m.h"
 #include "ps5tm.h"
+#include "sha256.h"
 
 void ps5tm_api_tile_refresh(void);
 
@@ -302,6 +303,12 @@ main(int argc, char **argv) {
   uint32_t fw = ps5tm_platform_firmware();
   PS5TM_INFO("firmware", "Firmware 0x%08X erkannt (Gruppe %s).",
              (unsigned)fw, ps5tm_platform_firmware_group(fw));
+
+  /* The checksums of a conversion hash every byte of the result: whether the CPU's SHA extensions do it (sha256.c) is worth a line */
+  if(ps5tm_sha256_hw())
+    PS5TM_INFO("sha256_path", "SHA-256 der Prüfsummen: SHA-Befehle der CPU (Selbsttest bestanden).");
+  else
+    PS5TM_INFO("sha256_path", "SHA-256 der Prüfsummen: reines C (keine SHA-Befehle oder Selbsttest nicht bestanden).");
 
   migrate_data_dir();
   mkdir(PS5TM_DATA_DIR, 0755);

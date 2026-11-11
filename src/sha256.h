@@ -18,4 +18,9 @@ void ps5tm_sha256_final(ps5tm_sha256_t *s, uint8_t out[32]);
 /* 64 lower-case hex digits and a terminating zero. */
 void ps5tm_sha256_hex(const uint8_t digest[32], char out[65]);
 
+/* 1 when the SHA extensions of the CPU do the work (x86-64, CPUID, and a known-answer test passed), else 0: the plain C. */
+int  ps5tm_sha256_hw(void);
+/* For tests: 0 plain C, 1 the hardware where the CPU has it (else plain C), -1 decide again by the CPU. */
+void ps5tm_sha256_force(int mode);
+
 #endif
