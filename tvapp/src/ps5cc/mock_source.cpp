@@ -998,8 +998,8 @@ class MockSource final : public Source
                 ? R"({"ok":true,"versions":[{"name":"libScePlayGo.sprx-0.3","label":"0.3","valid":true,"bundled":true,"sha256":"b1"}]})"
                 : std::string(R"({"ok":true,"emus":{"update_emulators":)") + (smp_update_off_ ? "false" : "true") +
                   R"(,"key":"update_emulators","format":"flat","warning":"","smp_version":")" + data_.config.smp_version +
-                  R"("},"ng_release":{"version":"0.3.4","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.3.4-ng","label":"NG 0.3.4","ng":true,"pack":true,)"
-                  R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.3.4-ng-debug","label":"NG 0.3.4 debug","ng":true,"pack":true,)"
+                  R"("},"ng_release":{"version":"0.3.5","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.3.5-ng","label":"NG 0.3.5","ng":true,"pack":true,)"
+                  R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.3.5-ng-debug","label":"NG 0.3.5 debug","ng":true,"pack":true,)"
                   R"("debug":true,"valid":true,"bundled":true,"sha256":"n2"},{"name":"libSceAmpr.sprx-0.4.2.1-test-debug-pack","label":"0.4.2.1 test-debug-pack",)"
                   R"("pack":true,"debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.2.1-test-nopack","label":"0.4.2.1",)"
                   R"("valid":true,"bundled":true,"sha256":"a3"},{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"

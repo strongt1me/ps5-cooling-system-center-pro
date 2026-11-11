@@ -344,7 +344,7 @@ Dump-Ordnern.
 **APR-EMU im Spiel.** Die Zeile zeigt, welche `libSceAmpr.sprx` ein Spiel lädt, und lässt dich
 eine Version einbauen, das Original zurückholen oder die Datei entfernen. Die Versionen liegen als
 Dateien im Ordner `/data/PS5-Cooling-Center/AMPR_EMU`, benannt wie bei drakmors Veröffentlichungen
-(`libSceAmpr.sprx-0.4.2.1-test-pack`). Fünf Fassungen (NG 0.3.4 und NG 0.3.4 debug, 0.4.2.1 test-pack, test-debug-pack,
+(`libSceAmpr.sprx-0.4.2.1-test-pack`). Fünf Fassungen (NG 0.3.5 und NG 0.3.5 debug, 0.4.2.1 test-pack, test-debug-pack,
 test-nopack) sind in der App mitgeliefert: Sie stehen in der Auswahl, auch wenn sie noch nicht im Ordner liegen, und kommen
 beim Einbauen oder mit „Mitgelieferte Versionen in den Ordner legen“ dorthin (Ordner `AMPR_EMU`, wird bei Bedarf angelegt).
 Weitere Fassungen legt „Datei hinzufügen“ im Fenster in denselben Ordner.
@@ -352,7 +352,7 @@ Die Liste der Versionen hat drei Gruppen mit eigenem Titel: **AMPR EMU NG @quer3
 **AMPR EMU @Drakmor** (die Fassung ohne Paketunterstützung, sie heißt dort nur „0.4.2.1“) und **LZ4 Asset Pack Version** (die beiden
 Fassungen nur für LZ4-Pakete, `test-pack` und `test-debug-pack`).
 **AMPR EMU NG** (quer3q, eine Weiterentwicklung, die LZ4- und zstd-Pakete liest) steht mit der Marke „NG“ ganz oben
-(„NG 0.3.4“, „NG 0.3.4 debug“). Beide Dateien sind in der App mitgeliefert; eine neuere Veröffentlichung holt
+(„NG 0.3.5“, „NG 0.3.5 debug“). Beide Dateien sind in der App mitgeliefert; eine neuere Veröffentlichung holt
 „AMPR EMU NG von GitHub laden“ auf Knopfdruck in den Ordner und prüft ihre Prüfsumme, sobald die App sie kennt. Dateien einer neueren NG-Veröffentlichung
 (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) benennt „Datei hinzufügen“ selbst passend um. ShadowMountPlus ersetzt die
 Datei beim Spielstart aus seinem Emulator-Ordner, solange seine automatische Fakelib-Aktualisierung an ist

@@ -828,7 +828,7 @@ int           ps5tm_amprlib_pack_check(const char *title_id, const char *root, i
                                        char *why, size_t why_len);
 /* zstd = 1: the check is for zstd packs (06.11.2026), which only ampr-emu-ng reads: the file must be an NG build, and repair puts the
    embedded NG release in (ps5tm_amprng_name()). */
-/* The name of the NG release the app carries, as it stands in the folder AMPR_EMU: "libSceAmpr.sprx-0.3.4-ng". */
+/* The name of the NG release the app carries, as it stands in the folder AMPR_EMU: "libSceAmpr.sprx-0.3.5-ng". */
 const char   *ps5tm_amprng_name(void);
 /* A program the app carries as a zlib stream (tools/gen_blob.py): the bytes unpacked into a new buffer (free it), or NULL when the
    stream does not give exactly raw_len bytes (src/blobz.c). */
