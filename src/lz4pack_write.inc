@@ -206,15 +206,6 @@ cmp_lane_item(const void *a, const void *b) {
   return x->id < y->id ? -1 : x->id > y->id;
 }
 
-/* Every .ini stays loose in a new pack, whatever a profile says (dlc_emu.ini and other settings a person edits by hand; Dump
-   Forge 0.5.5, 10.11.2026). Only the packer decides this: lzc_protected() is also what reading a set checks against, and a set
-   made earlier may hold a packed .ini. */
-static int
-ini_file(const char *rel) {
-  size_t n = strlen(rel);
-  return n >= 4 && !strcasecmp(rel + n - 4, ".ini");
-}
-
 static int
 plan_build(plan_t *p, const char *root, lzc_cfg_t *cfg, const lzp_ui_t *ui, char *err, size_t en) {
   memset(p, 0, sizeof(*p));
@@ -244,7 +235,7 @@ plan_build(plan_t *p, const char *root, lzc_cfg_t *cfg, const lzp_ui_t *ui, char
     lzc_rule_t tmp;
     const lzc_rule_t *rule = lzc_select(cfg, rel, &tmp);
     /* programs, system folders, the packs, settings files (.ini) and the files the PS5 looks for on disk stay loose whatever a profile says */
-    if(lzc_protected(rel) || ini_file(rel) || lzc_keep_on_disk(rel, e->size) || rule->action == LZC_LOOSE) {
+    if(lzc_protected(rel) || lzc_is_ini(rel) || lzc_keep_on_disk(rel, e->size) || rule->action == LZC_LOOSE) {
       p->loose_files++;
       p->loose_bytes += e->size;
       continue;

@@ -1058,8 +1058,12 @@ handle_write(int fd, const ps5tm_request_t *req) {
   }
   const char *content = req->body ? req->body : "";
   size_t len = req->body_len;
-  char tmp[FM_PATH + 80];
-  if(snprintf(tmp, sizeof(tmp), "%s.ps5cc-tmp-%d", real, (int)getpid()) >= (int)sizeof(tmp)) {
+  char tmp[FM_PATH + 96];
+  /* one name per request: the server runs a thread per connection, and two saves of the same file at once (the page and the full-screen
+     app, a double click) would otherwise share one temporary file, the second one's unlink deleting the first one's under it */
+  static unsigned g_write_seq;
+  const unsigned seq = __atomic_add_fetch(&g_write_seq, 1, __ATOMIC_RELAXED);
+  if(snprintf(tmp, sizeof(tmp), "%s.ps5cc-tmp-%d-%u", real, (int)getpid(), seq) >= (int)sizeof(tmp)) {
     ps5tm_http_send_error(fd, 500, "path_too_long", "Pfad zu lang.");
     return;
   }

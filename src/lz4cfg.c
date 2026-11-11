@@ -155,6 +155,12 @@ lower_copy(const char *s, char *out, size_t n) {
 }
 
 int
+lzc_is_ini(const char *rel) {
+  size_t n = rel ? strlen(rel) : 0;
+  return n >= 4 && !strcasecmp(rel + n - 4, ".ini");
+}
+
+int
 lzc_protected(const char *rel) {
   char l[1100];
   norm_path(rel, l, sizeof(l));
@@ -236,9 +242,10 @@ auto_loose(const char *rel) {
   static const char *const prefix[] = { "movie", "soundbank", "wem", NULL };
   for(int i = 0; prefix[i]; i++)
     if(!strncmp(name, prefix[i], strlen(prefix[i]))) return 1;
+  if(lzc_is_ini(name)) return 1;
   const char *dot = strrchr(name, '.');
   if(dot) {
-    static const char *const ext[] = { ".bin", ".dat", ".json", ".xml", ".ini", ".utoc", ".zip", ".7z", ".rar", ".crc", ".runtime", ".index", ".pak", NULL };
+    static const char *const ext[] = { ".bin", ".dat", ".json", ".xml", ".utoc", ".zip", ".7z", ".rar", ".crc", ".runtime", ".index", ".pak", NULL };
     for(int i = 0; ext[i]; i++)
       if(!strcmp(dot, ext[i])) return 1;
   }

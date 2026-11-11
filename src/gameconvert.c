@@ -59,6 +59,7 @@
 #include "conv_exfat.h"
 #include "conv_pfs.h"
 #include "conv_ufs2.h"
+#include "cvsample.h"
 #include "dump_image.h"
 #include "fsign.h"
 #include "ioerr.h"
@@ -86,12 +87,8 @@
 #define IO_CHUNK         (4u << 20)
 /* Read-ahead between two drives: three pieces, twelve megabytes in flight. */
 #define PREFETCH_BUFS    3
-/* The quick check of an exFAT image (10.11.2026): the pieces it keeps a CRC-32 of while writing and reads back afterwards:
-   the first and the last few, and one about every SAMPLE_STRIDE bytes in between (at least one per piece of the image
-   divided by SAMPLE_PIECES, so a big image gets a few hundred of them). */
-#define SAMPLE_PIECES    400u
-#define SAMPLE_EDGE      3u
-#define SAMPLE_MAX       (SAMPLE_PIECES + 2 * SAMPLE_EDGE + 8)
+/* The quick check of an exFAT image (10.11.2026): the pieces it keeps a CRC-32 of while writing and reads back afterwards, the first
+   and the last few and a few hundred in between: cvsample.h. */
 
 enum { CV_IDLE, CV_SCANNING, CV_WRITING, CV_VERIFYING, CV_DONE, CV_FAILED,
        CV_CANCELLED };
@@ -428,9 +425,6 @@ cv_ufs2_write(const cv_args_t *a, int fd, const int *cancel, void (*progress)(vo
 
 /* ------------------------------------------------ the quick check of an exFAT image (10.11.2026) */
 
-/* A piece of the image: where it lies, how long it is and the CRC-32 taken of it while it was written. */
-typedef struct { uint64_t pos; uint32_t len, crc; } cv_sample_t;
-
 /* Reads the pieces kept while writing back from the drive and compares each with its CRC-32. 0, or -1 with the reason in
    err (errno ECANCELED on a cancel). The work shown is the pieces read. */
 static int
@@ -703,10 +697,8 @@ cv_run(void *arg) {
     uint64_t pos = 0;
     /* The quick check keeps a CRC-32 of some pieces while they go down: the first and the last few, and one about every
        "stride" bytes between (a few hundred altogether); afterwards only those are read back. */
-    cv_sample_t smp[SAMPLE_MAX], tail[SAMPLE_EDGE];
-    unsigned    nsmp = 0, iter = 0;
-    uint64_t    next_smp = 0, stride = raw / SAMPLE_PIECES;
-    if(stride < IO_CHUNK) stride = IO_CHUNK;
+    cv_sampler_t sm;
+    cv_sampler_init(&sm, raw, IO_CHUNK);
     while(!rc) {
       if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) {
         rc = -1;
@@ -723,14 +715,7 @@ cv_run(void *arg) {
       }
       if(n == 0) break;
       wcrc = libdeflate_crc32(wcrc, buf, (size_t)n);
-      if(a.quick) {
-        cv_sample_t rec = { pos, (uint32_t)n, libdeflate_crc32(0, buf, (size_t)n) };
-        tail[iter % SAMPLE_EDGE] = rec;
-        int take = iter < SAMPLE_EDGE || pos >= next_smp;
-        if(pos >= next_smp) next_smp = pos + stride;
-        if(take && nsmp < SAMPLE_MAX - SAMPLE_EDGE) smp[nsmp++] = rec;
-        iter++;
-      }
+      if(a.quick) cv_sampler_add(&sm, pos, (uint32_t)n, libdeflate_crc32(0, buf, (size_t)n));
       const uint8_t *p = buf;
       size_t left = (size_t)n;
       while(left) {
@@ -754,19 +739,14 @@ cv_run(void *arg) {
     if(!rc && a.quick) {
       /* The quick level: the size of the file, then the pieces kept while writing, read back and compared. The image is not
          read through, so there is no SHA-256 and no checksum file. The last few pieces join the ones taken on the way. */
-      unsigned last = iter < SAMPLE_EDGE ? iter : SAMPLE_EDGE;
-      for(unsigned t = last; t > 0; t--) {
-        const cv_sample_t *r = &tail[(iter - t) % SAMPLE_EDGE];
-        if(nsmp && r->pos <= smp[nsmp - 1].pos) continue;            /* already in */
-        smp[nsmp++] = *r;
-      }
+      cv_sampler_finish(&sm);
       struct stat fst;
       if(fstat(out, &fst) != 0 || (uint64_t)fst.st_size != size) {
         snprintf(err, sizeof(err), "Das Abbild ist unvollständig.");
         rc = -1;
       } else {
         ps5tm_drop_cache(out);
-        rc = cv_check_samples(out, smp, nsmp, &g_cancel, err, sizeof(err));
+        rc = cv_check_samples(out, sm.smp, sm.nsmp, &g_cancel, err, sizeof(err));
       }
     } else if(!rc) {
       /* Read back from the drive: every byte, against the CRC-32 taken while

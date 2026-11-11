@@ -83,6 +83,10 @@ void lzc_free(lzc_cfg_t *c);
 int  lzc_glob(const char *pattern, const char *s);
 /* Is this path one that must never be packed (programs, system folders, the pack files themselves)? */
 int  lzc_protected(const char *rel);
+/* Is this a settings file a person edits by hand (a .ini: dlc_emu.ini and the like; Dump Forge 0.5.5, 10.11.2026)? It stays loose in every
+   new pack, LZ4 and zstd alike, whatever a profile says. The one place of that rule; lzc_protected() is not used for it because reading a
+   set checks against that, and a set made earlier may hold a packed .ini. */
+int  lzc_is_ini(const char *rel);
 /* Is this a file the PS5 itself must find on disk (PlayGo markers, empty files, Ghost of Yotei's boot files)? Such files stay
    loose whatever a profile says, and a set that holds one packed gets it written back by the check (lzp_restore_disk_files). */
 int  lzc_keep_on_disk(const char *rel, uint64_t size);

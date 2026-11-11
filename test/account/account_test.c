@@ -16,8 +16,20 @@ static int g_user_valid = 1;
 void ps5tm_user_get(ps5tm_user_t *out) { memset(out, 0, sizeof(*out)); out->valid = g_user_valid; out->uid = 0x1EA2F4D9; }
 int ps5tm_loader_inject_mem(const unsigned char *d, unsigned long n, const char **why) { (void)d; (void)n; if(why) *why = NULL; return 0; }
 void ps5tm_log(const char *level, const char *code, const char *fmt, ...) { (void)level; (void)code; (void)fmt; }
+/* the app carries the program as a zlib stream and unpacks it with ps5tm_blob_inflate (src/blobz.c); here the "stream" is the four
+   bytes themselves and the stand-in hands back a copy */
 const unsigned char ps5tm_npfakesignin[4] = { 0x7f, 'E', 'L', 'F' };
 const unsigned long ps5tm_npfakesignin_len = 4;
+const unsigned long ps5tm_npfakesignin_raw_len = 4;
+unsigned char *
+ps5tm_blob_inflate(const unsigned char *z, unsigned long z_len, unsigned long raw_len, size_t *out_len) {
+  if(!z || !z_len || !raw_len || raw_len > z_len) return NULL;
+  unsigned char *b = malloc(raw_len);
+  if(!b) return NULL;
+  memcpy(b, z, raw_len);
+  if(out_len) *out_len = raw_len;
+  return b;
+}
 
 static int g_ok, g_fail;
 #define CHECK(c, ...) do { if(c) g_ok++; else { g_fail++; printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while(0)

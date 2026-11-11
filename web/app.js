@@ -6504,6 +6504,7 @@
       const full = img.getAttribute("src");
       const go = () => {
         if (!img.isConnected || img.dataset.full) return;
+        if (Date.now() - gmLastScroll < 400) { setTimeout(go, 250); return; }   // nicht beim Scrollen (wie gmBuffer): erst nach der Pause verkleinern
         const w = img.getBoundingClientRect().width;
         const target = Math.min(256, Math.round(w * Math.max(1, window.devicePixelRatio || 1)));
         if (!w || !img.naturalWidth || img.naturalWidth <= target * 1.3) return;   // da ist nichts zu gewinnen
@@ -12807,12 +12808,120 @@
      Die Messung des Scrollens (unten) schreibt die eingeschalteten Schalter in ihre Zeile. */
   const PERF_KEYS = ["round", "shadow", "grad", "img", "anim", "contain"];
   const perfFlags = () => PERF_KEYS.filter((k) => document.documentElement.classList.contains("perf-" + k)).map((k) => k[0]).join("") || "none";
+  let perfAutoOn = false;                               /* der automatische Durchlauf scrollt selbst: die Messung beim Scrollen (unten) schweigt dann */
   (() => {
     /* nicht gemerkt: nach einem Neuladen ist alles wieder an, ein vergessener Schalter kann nichts dauerhaft verstecken */
     try { localStorage.removeItem("perfLab"); } catch (e) { /* egal */ }
     document.querySelectorAll("input[data-perf]").forEach((box) => {
       box.addEventListener("change", () => document.documentElement.classList.toggle("perf-" + box.dataset.perf, box.checked));
     });
+  })();
+
+  /* Automatischer Durchlauf (11.11.2026, Knopf auf der Karte): Die Seite „Spiele“ scrollt selbst (hin und her, mit gleichbleibender Geschwindigkeit,
+     je Einstellung 7 Sekunden), und je Bild wird der Abstand zum vorigen gemessen (requestAnimationFrame). Reihenfolge: ein Vorlauf (nicht gewertet:
+     Bilder laden und entpacken sich dabei), alles an, je ein Schalter aus, am Ende noch einmal alles an als Kontrolllauf. Danach stehen die Schalter
+     wie vorher, die Seite ist wieder die, auf der der Knopf war, und die Werte stehen auf der Karte und (neun Zeilen, unter der Grenze von 10 je
+     Minute) im Protokoll als „scrollauto …“. Skripte scrollen nicht ganz wie der Controller; verglichen werden aber nur die Einstellungen untereinander. */
+  (() => {
+    const btn = $("#perf-auto-btn"), stateEl = $("#perf-auto-state"), out = $("#perf-auto-out"), note = $("#perf-auto-note");
+    if (!btn || !stateEl || !out || !note) return;
+    const html = document.documentElement;
+    const ORDER = ["none", "round", "shadow", "grad", "img", "anim", "contain", "none"];
+    const NAME = { none: "Alles an", round: "Rundungen aus", shadow: "Schatten aus", grad: "Verläufe aus", img: "Bilder aus", anim: "Übergänge aus", contain: "Karten nicht einzeln zeichnen aus" };
+    const PASS_MS = 7000, SPEED = 1800, SKIP = 5;       /* ms je Durchgang, Pixel je Sekunde, die ersten Bilder eines Durchgangs zählen nicht */
+    let running = false, stop = false;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const setOnly = (k) => PERF_KEYS.forEach((x) => html.classList.toggle("perf-" + x, x === k));
+    const num = (x, d) => (+x.toFixed(d)).toLocaleString(LOCALE);
+    const pass = () => new Promise((resolve) => {
+      const frames = [];
+      let t0 = 0, last = 0;
+      const L = Math.max(1, Math.min(html.scrollHeight - innerHeight, 9000));
+      const step = (ts) => {
+        if (stop) return resolve(frames);
+        if (!t0) t0 = ts;
+        const el = ts - t0;
+        if (last) frames.push(ts - last);
+        last = ts;
+        if (el >= PASS_MS) return resolve(frames);
+        const p = ((el / 1000) * SPEED) % (2 * L);
+        window.scrollTo(0, p < L ? p : 2 * L - p);
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    const stats = (f) => {
+      const a = f.slice(SKIP).sort((x, y) => x - y);
+      if (a.length < 20) return null;
+      return { n: a.length, avg: a.reduce((s, x) => s + x, 0) / a.length, p95: a[Math.floor(a.length * 0.95)], max: a[a.length - 1], slow: a.filter((x) => x > 50).length };
+    };
+    /* gibt das Versprechen der Anfrage zurück: die Zeilen werden nacheinander gesendet und kommen so in der richtigen Reihenfolge an */
+    const report = (line) => {
+      try { return fetch("/api/v1/log/client", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ msg: line, where: "perf" }) }).catch(() => {}); } catch (e) { return Promise.resolve(); }
+    };
+    const run = async () => {
+      running = true; stop = false; perfAutoOn = true;
+      const before = PERF_KEYS.filter((k) => html.classList.contains("perf-" + k));
+      const page0 = state.page;
+      const res = [];
+      btn.textContent = "Abbrechen";
+      out.classList.add("is-hidden"); note.classList.add("is-hidden"); out.innerHTML = "";
+      stateEl.textContent = "Vorlauf …";
+      try {
+        const games = $('.tab[data-page="games"]');
+        if (!games) throw new Error("no games tab");
+        games.click();
+        let cards = 0;
+        for (let i = 0; i < 40 && !stop; i++) {            /* bis zu 10 s warten, bis die Liste da ist */
+          cards = document.querySelectorAll("#page-games .gm-card").length;
+          if (cards >= 4 && html.scrollHeight > innerHeight * 3) break;
+          await sleep(250);
+        }
+        if (stop) { stateEl.textContent = "Abgebrochen."; }
+        else if (cards < 4 || html.scrollHeight <= innerHeight * 3) { stateEl.textContent = "Die Spieleliste ist noch leer. Bitte erst die Seite „Spiele“ laden lassen und noch einmal messen."; }
+        else {
+          setOnly(null); await sleep(300); await pass();   /* Vorlauf */
+          for (let i = 0; i < ORDER.length && !stop; i++) {
+            const k = ORDER[i];
+            stateEl.textContent = `Messung ${i + 1} von ${ORDER.length}: ${NAME[k]}`;
+            setOnly(k === "none" ? null : k); await sleep(400);
+            const s = stats(await pass());
+            if (s && !stop) res.push({ k: i === ORDER.length - 1 ? "none2" : k, name: i === ORDER.length - 1 ? "Alles an (Kontrolllauf)" : NAME[k], s });
+          }
+          stateEl.textContent = stop ? "Abgebrochen." : "Fertig.";
+          if (res.length) {
+            await report(`scrollauto info ps5 ${html.classList.contains("ps5") ? 1 : 0} nodes ${document.querySelectorAll("*").length} cards ${cards} height ${html.scrollHeight} speed ${SPEED} pass ${PASS_MS}`);
+            for (const r of res) await report(`scrollauto ${r.k} n ${r.s.n} avg ${num(r.s.avg, 1).replace(",", ".")} p95 ${num(r.s.p95, 0)} max ${num(r.s.max, 0)} slow ${r.s.slow}`);
+          }
+        }
+      } catch (e) {
+        stateEl.textContent = "Abgebrochen.";
+      }
+      try {                                               /* was auch geschieht: Knopf und Messung beim Handscrollen kommen wieder */
+        setOnly(null);
+        before.forEach((k) => html.classList.add("perf-" + k));
+        $$("input[data-perf]").forEach((b) => { b.checked = before.includes(b.dataset.perf); });
+        const back = $('.tab[data-page="' + page0 + '"]');
+        if (back && state.page !== page0) back.click();
+        else window.scrollTo(0, 0);
+        if (res.length) {
+          const baseRow = res.find((r) => r.k === "none");   /* die Änderung gilt gegenüber „Alles an“; fehlt diese Messung, steht keine */
+          out.innerHTML = res.map((r) => {
+            const parts = [`Ø ${num(r.s.avg, 1)} ms`, `${Math.round(1000 / r.s.avg)} Bilder/s`, `langsam ${r.s.slow}`];
+            if (baseRow && r !== baseRow) {
+              const d = Math.round((r.s.avg / baseRow.s.avg - 1) * 100);
+              parts.push(`${d > 0 ? "+" : ""}${d} %`);
+            }
+            return `<div><span>${r.name}</span><b>${parts.join(" · ")}</b></div>`;
+          }).join("");
+          out.classList.remove("is-hidden"); note.classList.remove("is-hidden");
+        }
+      } finally {
+        btn.textContent = "Automatisch messen";
+        perfAutoOn = false; running = false;
+      }
+    };
+    btn.addEventListener("click", () => { if (running) stop = true; else run(); });
   })();
 
   /* Messung des Scrollens (nur PS5, 10.11.2026): Wie flüssig läuft es wirklich? Beim Scrollen zählt die Seite die Bildabstände (requestAnimationFrame)
@@ -12825,7 +12934,7 @@
     const finish = () => {
       active = false; last = 0;
       const f = frames; frames = [];
-      if (f.length < 8) return;
+      if (perfAutoOn || f.length < 8) return;
       const avg = f.reduce((a, b) => a + b, 0) / f.length;
       const max = f.reduce((a, b) => (b > a ? b : a), 0);
       const slow = f.filter((x) => x > 50).length;
@@ -12836,6 +12945,7 @@
       try { fetch("/api/v1/log/client", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ msg, where: "perf" }) }).catch(() => {}); } catch (e) { /* egal */ }
     };
     addEventListener("scroll", () => {
+      if (perfAutoOn) return;                             /* der automatische Durchlauf (oben) misst selbst */
       if (!active) { active = true; last = 0; frames = []; requestAnimationFrame(tick); }
       clearTimeout(endTimer);
       endTimer = setTimeout(finish, 400);

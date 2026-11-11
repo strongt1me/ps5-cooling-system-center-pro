@@ -2181,9 +2181,20 @@ ps5tm_dump_start_item(const char *tid, int overwrite, const ps5tm_dumpopt_t *opt
   return dump_start(tid, "", overwrite, 0, opt, msg, n);
 }
 
+/* Sets the cancel flag under the lock that saw the dump running (a start resets it under the same lock), so that a cancel meant for
+   the dump that has just ended can never land on the one the queue starts next. 1 when a dump was running, else 0 and nothing set. */
+static int
+cancel_if_busy(void) {
+  pthread_mutex_lock(&g_lock);
+  int busy = g_job.state >= DJ_MEASURING && g_job.state <= DJ_FINISHING;
+  if(busy) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+  pthread_mutex_unlock(&g_lock);
+  return busy;
+}
+
 void
 ps5tm_dump_abort(void) {
-  __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+  (void)cancel_if_busy();
 }
 
 /* How the last dump ended: its state name and a sentence (the error, else the note). 1 when there is one that has ended. */
@@ -2241,8 +2252,7 @@ ps5tm_dump_action(const cJSON *b, char *msg, size_t n) {
     return !strcmp(act, "start") ? dump_start(id, target, cJSON_IsTrue(jo), 0, NULL, msg, n) : dump_start(id, target, 0, 1, NULL, msg, n);
   }
   if(!strcmp(act, "cancel")) {
-    if(!ps5tm_dump_busy()) { snprintf(msg, n, "Es läuft kein Dump."); return 409; }
-    __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+    if(!cancel_if_busy()) { snprintf(msg, n, "Es läuft kein Dump."); return 409; }
     snprintf(msg, n, "Der Dump wird gestoppt. Was bis dahin geschrieben wurde, bleibt unfertig im Ziel.");
     return 200;
   }
