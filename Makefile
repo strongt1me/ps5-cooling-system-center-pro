@@ -199,7 +199,7 @@ DEFLATE_SRCS := $(addprefix src/third_party/libdeflate/lib/,adler32.c crc32.c \
                 zlib_decompress.c utils.c x86/cpu_features.c)
 DEFLATE_OBJS := $(patsubst src/third_party/libdeflate/lib/%.c,gen/libdeflate/%.o,$(DEFLATE_SRCS))
 
-# LZ4 1.11.0 (BSD-2-Clause) for the asset packs (lz4pack.c): the compressor and the decoder, built at -O2 like libdeflate.
+# LZ4 1.11.1 (BSD-2-Clause) for the asset packs (lz4pack.c): the compressor and the decoder, built at -O2 like libdeflate.
 LZ4_OBJS := gen/lz4/lz4.o gen/lz4/lz4hc.o
 LZ4_HDRS := $(wildcard src/third_party/lz4/*.h)
 

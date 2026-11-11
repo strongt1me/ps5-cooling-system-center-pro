@@ -31,6 +31,7 @@ enum Row
     kRowMode = 1,
     kRowOp,
     kRowAmpr,
+    kRowVerify,
     kRowDeleteSource,
     kRowStart,
     kRowCancel, // the delete question's "Abbrechen", where its focus opens
@@ -372,6 +373,12 @@ void GameTools::build_form()
                 "Für Spiele mit APR-EMU: ampr_emu.index kommt mit ins Abbild.";
         add_mode("2. Als was?");
         add_drives("3. Wohin?");
+        // 4. How the result is checked afterwards; the .ffpkg (PS4) quick check is one read instead of two, the others a sample
+        form_.add_header("4. Prüfung danach");
+        form_.add_choice(kRowVerify, "Prüfung", {"Gründlich (empfohlen)", "Schnell"}, choice_.quick ? 1 : 0)
+            .description = choice_.quick
+                               ? "Aufbau und Stichprobe, ohne Prüfsummen-Datei. Spart bei großen Spielen viel Zeit."
+                               : "Liest das ganze Ergebnis noch einmal und legt die Prüfsummen-Datei an.";
         first = options.empty() ? kRowMode : kRowOp;
         break;
     }
@@ -590,6 +597,15 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         else if (id == kRowAmpr)
             choice_.ampr = form_.toggle_value(kRowAmpr);
+        else if (id == kRowVerify)
+        {
+            choice_.quick = form_.choice_index(kRowVerify) == 1;
+            if (ui::FormRow *row = form_.row(kRowVerify))
+                row->description =
+                    choice_.quick
+                        ? "Aufbau und Stichprobe, ohne Prüfsummen-Datei. Spart bei großen Spielen viel Zeit."
+                        : "Liest das ganze Ergebnis noch einmal und legt die Prüfsummen-Datei an.";
+        }
         else if (id == kRowDeleteSource)
             choice_.delete_source = form_.toggle_value(kRowDeleteSource);
         refresh();

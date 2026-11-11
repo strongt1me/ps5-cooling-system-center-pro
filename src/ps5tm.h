@@ -946,8 +946,9 @@ struct cJSON *ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err
 /* What a game folder holds of unsigned PS5 executables (fsign.c), for the windows of converting and packing: { count, refused, capped,
    bytes, files: [first names] }. count 0 when there is none. Always an object (the caller owns it). */
 struct cJSON *ps5tm_fsign_info(const char *folder);
+/* quick: check the result the quick way (structure and a sample, no checksum file) instead of reading it all back (10.11.2026) */
 int           ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index,
-                                      const char *mount, const char *mode,
+                                      const char *mount, const char *mode, int quick,
                                       char *err, size_t err_len);
 struct cJSON *ps5tm_gameconvert_status(void);
 int           ps5tm_gameconvert_cancel(void);

@@ -2254,6 +2254,10 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   const cJSON *jdst = body ? cJSON_GetObjectItem(body, "target") : NULL;
   const cJSON *jm   = body ? cJSON_GetObjectItem(body, "mode")   : NULL;
   int ampr = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "ampr_index"));
+  /* "verify": "full" (the default) reads the whole result back and writes the checksum file; "quick" checks the structure and a
+     sample and writes no checksum file (10.11.2026) */
+  const cJSON *jv = body ? cJSON_GetObjectItem(body, "verify") : NULL;
+  int quick = cJSON_IsString(jv) && !strcmp(jv->valuestring, "quick");
   char id[16] = "", op[12] = "", target[40] = "", mode[12] = "";
   if(cJSON_IsString(jid))  snprintf(id, sizeof(id), "%s", jid->valuestring);
   if(cJSON_IsString(jop))  snprintf(op, sizeof(op), "%s", jop->valuestring);
@@ -2262,7 +2266,7 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   cJSON_Delete(body);
 
   char err[640] = "";
-  int status = ps5tm_gameconvert_start(id, op, ampr, target, mode, err, sizeof(err));
+  int status = ps5tm_gameconvert_start(id, op, ampr, target, mode, quick, err, sizeof(err));
   if(status != 200) {
     ps5tm_http_send_error(fd, status, "convert_refused", err);
     return;

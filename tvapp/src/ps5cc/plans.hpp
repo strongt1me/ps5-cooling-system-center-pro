@@ -127,6 +127,7 @@ struct PlanChoice
     int op = -1;    // convert: index into kOpKeys
     int drive = -1; // index into Plan::drives
     bool ampr = false;
+    bool quick = false; // convert: check the result the quick way (structure and a sample), no checksum file
     bool delete_source = false;
 };
 

@@ -17,6 +17,9 @@ typedef struct {
   void    (*progress)(void *ctx, uint64_t raw_done);
   void     *progress_ctx;
   uint32_t *raw_crc;          /* out, may be NULL: CRC-32 of the payload   */
+  int       no_prefilter;     /* 0 (the default): a block that looks incompressible is stored raw without a try
+                                 (a quick level-1 test of three pieces of it, see conv_pfs.c); 1: every block is tried */
+  uint64_t *prefiltered;      /* out, may be NULL: how many blocks the pre-filter stored raw           */
 } pfsc_opts_t;
 
 /* Writes an unsigned PS5 PFS image holding one file, inner_name (ASCII),
@@ -34,9 +37,14 @@ typedef struct {
   void      *progress_ctx;
   int        skip_crc;        /* an image that was not written here: no payload CRC to compare with (last, so that
                                  the positional initializers of the converter stay as they were) */
+  int        quick;           /* the quick level (10.11.2026): the structure (header, inodes, the whole block table, the
+                                 places that must be empty) and a sample of at most 2048 blocks spread over the image,
+                                 each unpacked (a compressed block carries its own Adler-32); the image is not read through,
+                                 so there is no payload CRC compare and no SHA-256 (sha stays untouched) */
 } pfsc_check_t;
 
-/* Reads a finished image back from the drive, all of it and in order: header,
+/* Reads a finished image back from the drive, all of it and in order (with c->quick: structure and a sample, see
+   pfsc_check_t): header,
    inodes, PFSC header, the whole block table (offsets rise, no block longer
    than a logical block, none outside the stream), the areas that must be
    zero — and every block, unpacked, with the CRC-32 of the whole payload

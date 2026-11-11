@@ -5627,6 +5627,7 @@
         if (n === "cv-drive") cv.drive = e.target.value;
         if (n === "cv-mode") cv.mode = e.target.value;
         if (n === "cv-ampr") cv.ampr = e.target.checked;
+        if (n === "cv-verify") cv.verify = e.target.value;
         if (n === "cv-op") {
           if (e.target.value === "unpack") { mvOpen(cv.id, "unpack"); return; }
           cv.op = e.target.value;
@@ -6298,15 +6299,33 @@
         ? `<p class="muted">Kein USB- oder M.2-Laufwerk gefunden. Ein PS4-Abbild darf nicht in den Speicher der Konsole.</p>`
         : `<p class="muted">Kein Laufwerk gefunden.</p>`)}</div>
 
+      <h4 class="cp-step">4. Prüfung danach</h4>
+      <div class="cp-list">
+        <label class="cp-choice">
+          <input type="radio" name="cv-verify" value="full" ${cv.verify !== "quick" ? "checked" : ""}>
+          <span class="cp-choice-text"><b>Gründlich (empfohlen)</b>
+            <span class="muted">Liest das ganze Ergebnis noch einmal vom Laufwerk, prüft jeden Block und legt die Prüfsummen-Datei (SHA-256) an.</span></span>
+        </label>
+        <label class="cp-choice">
+          <input type="radio" name="cv-verify" value="quick" ${cv.verify === "quick" ? "checked" : ""}>
+          <span class="cp-choice-text"><b>Schnell</b>
+            <span class="muted">${cv.op === "ffpkg"
+              ? "Prüft den Aufbau und alle Dateien in einem Durchgang (statt in zwei) und legt keine Prüfsummen-Datei an."
+              : "Prüft den Aufbau und eine Stichprobe über das ganze Abbild; das Ergebnis wird nicht noch einmal ganz gelesen und es gibt keine Prüfsummen-Datei. Spart bei großen Spielen viel Zeit."}</span></span>
+        </label>
+      </div>
+
       ${target ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[cv.op] || cv.op)}</b></p>
         <p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(target)}</code>
         ${tgt && tgt.unfinished ? `<span class="cp-why">Dort liegt eine unfertige Datei dieser App, sie wird ersetzt${
           tgt.unfinished_bytes > 0 ? ` (${bytes(tgt.unfinished_bytes)} werden dabei frei)` : ""}.</span>` : ""}</p>` : ""}
       ${blockedRun ? `<p class="cp-err">${esc(blockedRun)}</p>` : ""}
-      <p class="muted">Die PS5 rechnet dabei mit niedriger Priorität, damit Lüftersteuerung und
+      ${cv.verify === "quick"
+        ? `<p class="muted">Die PS5 rechnet dabei mit niedriger Priorität, damit Lüftersteuerung und Oberfläche Vorrang behalten. Bei großen Spielen dauert das. Danach prüft sie das Ergebnis schnell (Aufbau und Stichprobe); eine Prüfsummen-Datei entsteht dabei nicht.</p>`
+        : `<p class="muted">Die PS5 rechnet dabei mit niedriger Priorität, damit Lüftersteuerung und
         Oberfläche Vorrang behalten. Bei großen Spielen dauert das. Danach liest sie das ganze
         Ergebnis zur Prüfung noch einmal vom Laufwerk${target ? `; daneben entsteht
-        <code>${esc(target)}.sha256</code> mit der Prüfsumme (SHA-256)` : ""}.</p>
+        <code>${esc(target)}.sha256</code> mit der Prüfsumme (SHA-256)` : ""}.</p>`}
       <div class="cp-actions">
         <button type="button" class="btn" data-cp="close">Abbrechen</button>
         <button type="button" class="btn primary" data-cp="start" ${target && !blockedRun ? "" : "disabled"}>Konvertieren starten</button>
@@ -6390,7 +6409,7 @@
     const g = gm.list.find((x) => x.title_id === id);
     /* Ein komprimiertes Abbild lässt sich nur entpacken: gleich dorthin. */
     if (g && !g.can_convert && g.can_unpack) { mvOpen(id, "unpack"); return; }
-    cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cp.view = "cvloading";
+    cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cv.verify = "full"; cp.view = "cvloading";
     { const g0 = gm.list.find((x) => x.title_id === id); cv.ampr = !!(g0 && g0.mods && g0.mods.ampr_emu); }
     txt("#cp-title", `„${g ? g.name : id}“ konvertieren`);
     $("#cp-body").innerHTML = `<p class="muted">Das Spiel wird vermessen …</p>`;
@@ -6416,7 +6435,7 @@
     btn.disabled = true;
     try {
       cv.job = await api("/api/v1/library/convert", { method: "POST",
-        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode,
+        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full",
                                ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr) }) });
       cvRenderJob();
       jobBanner();

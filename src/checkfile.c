@@ -38,7 +38,7 @@
 #include "sha256.h"
 #include "third_party/libdeflate/libdeflate.h"
 
-#define READ_CHUNK (1u << 20)
+#define READ_CHUNK (4u << 20)        /* the read-back reads in 4 MiB pieces (1 MiB until 10.11.2026) */
 
 void
 ps5tm_drop_cache(int fd) {

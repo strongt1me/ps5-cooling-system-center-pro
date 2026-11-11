@@ -82,9 +82,16 @@
    they only get what nobody else wants. Three zlib threads managed 80 MB/s
    on 29.09.2026, with the SSD as the source. */
 #define WORKERS          4
-#define IO_CHUNK         (1u << 20)
-/* Read-ahead between two drives: four megabytes in flight. */
-#define PREFETCH_BUFS    4
+/* The source is read in 4 MiB pieces (1 MiB until 10.11.2026: a drive, USB above all, gives more with bigger reads). */
+#define IO_CHUNK         (4u << 20)
+/* Read-ahead between two drives: three pieces, twelve megabytes in flight. */
+#define PREFETCH_BUFS    3
+/* The quick check of an exFAT image (10.11.2026): the pieces it keeps a CRC-32 of while writing and reads back afterwards:
+   the first and the last few, and one about every SAMPLE_STRIDE bytes in between (at least one per piece of the image
+   divided by SAMPLE_PIECES, so a big image gets a few hundred of them). */
+#define SAMPLE_PIECES    400u
+#define SAMPLE_EDGE      3u
+#define SAMPLE_MAX       (SAMPLE_PIECES + 2 * SAMPLE_EDGE + 8)
 
 enum { CV_IDLE, CV_SCANNING, CV_WRITING, CV_VERIFYING, CV_DONE, CV_FAILED,
        CV_CANCELLED };
@@ -109,6 +116,8 @@ typedef struct {
   unsigned files;
   char     error[640];        /* room for PS5TM_IO_TEXT_MAX (ioerr.h) after a label and a path */
   char     sums[320];         /* the checksum file, once written          */
+  int      quick;             /* the check afterwards is the quick one (structure and a sample; no checksum file) */
+  uint64_t prefiltered;       /* blocks of an ffpfsc the pre-filter stored raw without a try */
   char     note[300];         /* something that did not stop the job      */
   uint64_t started_ms, finished_ms;
   uint64_t window_ms, window_bytes;
@@ -126,6 +135,7 @@ typedef struct {
   char inner[40];
   int  folder;
   int  ampr;                  /* build ampr_emu.index in the folder first (amprindex.c) */
+  int  quick;                 /* check the result the quick way (structure and a sample), no checksum file */
   int  nroots;                /* a PS4 dump: the folders laid over each other (base, update, overlay), else 0 */
   char roots[3][336];                 /* a target path (320) and the ending of the folder of signed files */
   char overlay[256];          /* the folder of our own files among them, removed when the job is over */
@@ -417,6 +427,59 @@ cv_ufs2_write(const cv_args_t *a, int fd, const int *cancel, void (*progress)(vo
   return ufs2_write_tree(fd, a->source, cancel, progress, NULL, size, sums, err, err_len);
 }
 
+/* ------------------------------------------------ the quick check of an exFAT image (10.11.2026) */
+
+/* A piece of the image: where it lies, how long it is and the CRC-32 taken of it while it was written. */
+typedef struct { uint64_t pos; uint32_t len, crc; } cv_sample_t;
+
+/* Reads the pieces kept while writing back from the drive and compares each with its CRC-32. 0, or -1 with the reason in
+   err (errno ECANCELED on a cancel). The work shown is the pieces read. */
+static int
+cv_check_samples(int fd, const cv_sample_t *s, unsigned n, const int *cancel, char *err, size_t err_len) {
+  uint64_t total = 0, done = 0;
+  uint32_t maxlen = 1;
+  for(unsigned i = 0; i < n; i++) {
+    total += s[i].len;
+    if(s[i].len > maxlen) maxlen = s[i].len;
+  }
+  uint8_t *buf = malloc(maxlen);
+  if(!buf) { snprintf(err, err_len, "Kein Speicher."); return -1; }
+  cv_check_begin(total);
+  int rc = 0;
+  for(unsigned i = 0; i < n && !rc; i++) {
+    if(__atomic_load_n(cancel, __ATOMIC_ACQUIRE)) {
+      snprintf(err, err_len, "Abgebrochen.");
+      errno = ECANCELED;
+      rc = -1;
+      break;
+    }
+    size_t got = 0;
+    while(got < s[i].len) {
+      ssize_t r = pread(fd, buf + got, s[i].len - got, (off_t)(s[i].pos + got));
+      if(r < 0 && errno == EINTR) continue;
+      if(r <= 0) {
+        snprintf(err, err_len, "Lesefehler beim Prüfen: %s", ps5tm_io_strerror(r < 0 ? errno : EIO));
+        rc = -1;
+        break;
+      }
+      got += (size_t)r;
+    }
+    if(rc) break;
+    uint32_t crc = libdeflate_crc32(0, buf, s[i].len);
+    if(crc != s[i].crc) {
+      snprintf(err, err_len, "Die Datei auf dem Laufwerk weicht von dem ab, was geschrieben wurde (Stelle %llu MB, "
+               "Prüfsumme %08X statt %08X). Ist das Ziel defekt?",
+               (unsigned long long)(s[i].pos >> 20), (unsigned)crc, (unsigned)s[i].crc);
+      rc = -1;
+      break;
+    }
+    done += s[i].len;
+    cv_check_progress(NULL, done);
+  }
+  free(buf);
+  return rc;
+}
+
 /* The console stays awake for as long as the job runs, whichever way it ends
    (powerguard.c). */
 static void *
@@ -639,6 +702,12 @@ cv_run(void *arg) {
     rc = buf ? 0 : -1;
     if(!buf) snprintf(err, sizeof(err), "Kein Speicher.");
     uint64_t pos = 0;
+    /* The quick check keeps a CRC-32 of some pieces while they go down: the first and the last few, and one about every
+       "stride" bytes between (a few hundred altogether); afterwards only those are read back. */
+    cv_sample_t smp[SAMPLE_MAX], tail[SAMPLE_EDGE];
+    unsigned    nsmp = 0, iter = 0;
+    uint64_t    next_smp = 0, stride = raw / SAMPLE_PIECES;
+    if(stride < IO_CHUNK) stride = IO_CHUNK;
     while(!rc) {
       if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) {
         rc = -1;
@@ -655,6 +724,14 @@ cv_run(void *arg) {
       }
       if(n == 0) break;
       wcrc = libdeflate_crc32(wcrc, buf, (size_t)n);
+      if(a.quick) {
+        cv_sample_t rec = { pos, (uint32_t)n, libdeflate_crc32(0, buf, (size_t)n) };
+        tail[iter % SAMPLE_EDGE] = rec;
+        int take = iter < SAMPLE_EDGE || pos >= next_smp;
+        if(pos >= next_smp) next_smp = pos + stride;
+        if(take && nsmp < SAMPLE_MAX - SAMPLE_EDGE) smp[nsmp++] = rec;
+        iter++;
+      }
       const uint8_t *p = buf;
       size_t left = (size_t)n;
       while(left) {
@@ -675,7 +752,24 @@ cv_run(void *arg) {
       rc = -1;
     }
     size = pos;
-    if(!rc) {
+    if(!rc && a.quick) {
+      /* The quick level: the size of the file, then the pieces kept while writing, read back and compared. The image is not
+         read through, so there is no SHA-256 and no checksum file. The last few pieces join the ones taken on the way. */
+      unsigned last = iter < SAMPLE_EDGE ? iter : SAMPLE_EDGE;
+      for(unsigned t = last; t > 0; t--) {
+        const cv_sample_t *r = &tail[(iter - t) % SAMPLE_EDGE];
+        if(nsmp && r->pos <= smp[nsmp - 1].pos) continue;            /* already in */
+        smp[nsmp++] = *r;
+      }
+      struct stat fst;
+      if(fstat(out, &fst) != 0 || (uint64_t)fst.st_size != size) {
+        snprintf(err, sizeof(err), "Das Abbild ist unvollständig.");
+        rc = -1;
+      } else {
+        ps5tm_drop_cache(out);
+        rc = cv_check_samples(out, smp, nsmp, &g_cancel, err, sizeof(err));
+      }
+    } else if(!rc) {
       /* Read back from the drive: every byte, against the CRC-32 taken while
          it was written. */
       cv_check_begin(size);
@@ -701,27 +795,36 @@ cv_run(void *arg) {
          against those, then the whole file is read through once more for the
          checksum file's SHA-256. The work shown is the two reads together. */
       uint64_t data = ufs2_sums_bytes(usums);
-      cv_check_begin(data + size);
+      cv_check_begin(a.quick ? data : data + size);
       ps5tm_drop_cache(out);
       rc = ufs2_verify_tree(out, usums, &g_cancel, cv_check_progress, NULL, err, sizeof(err));
-      if(!rc) {
+      if(!rc && !a.quick) {
         ps5tm_drop_cache(out);
         rc = ps5tm_digest_fd(out, size, NULL, sha, &g_cancel, cv_check_progress_after, &data,
                              err, sizeof(err));
       }
-      have_sha = !rc;
+      /* The quick level stops after the first read (structure and every file's blocks): no second read for the SHA-256,
+         so no checksum file. */
+      have_sha = !rc && !a.quick;
     }
     ufs2_sums_free(usums);
   } else {
-    pfsc_opts_t o = { DEFLATE_LEVEL, WORKERS, &g_cancel, cv_progress, NULL, &wcrc };
+    uint64_t prefiltered = 0;
+    pfsc_opts_t o = { DEFLATE_LEVEL, WORKERS, &g_cancel, cv_progress, NULL, &wcrc, 0, &prefiltered };
     char inner[48];
     snprintf(inner, sizeof(inner), "%s", a.inner);
     rc = pfs_write_single(out, inner, raw, rd, rctx, &o, &size, err, sizeof(err));
     if(!rc) {
+      pthread_mutex_lock(&g_lock);
+      g_job.prefiltered = prefiltered;
+      pthread_mutex_unlock(&g_lock);
+      PS5TM_INFO("game_convert_prefilter", "Konvertieren von %s: %llu von %llu Blöcken ohne Versuch roh gespeichert (Vorfilter).",
+                 a.title_id, (unsigned long long)prefiltered, (unsigned long long)((raw + 0xFFFFu) >> 16));
       cv_check_begin(size);
-      pfsc_check_t c = { wcrc, &g_cancel, cv_check_progress, NULL, 0 };
-      rc = pfs_verify_full(out, &c, sha, err, sizeof(err));
-      have_sha = !rc;
+      /* quick: structure and a sample of the blocks, the image is not read through (no payload CRC, no SHA-256) */
+      pfsc_check_t c = { wcrc, &g_cancel, cv_check_progress, NULL, 0, a.quick };
+      rc = pfs_verify_full(out, &c, a.quick ? NULL : sha, err, sizeof(err));
+      have_sha = !rc && !a.quick;
     }
   }
   /* The reading-ahead thread stops before what it reads from is freed. */
@@ -787,7 +890,12 @@ cv_run(void *arg) {
   pthread_mutex_lock(&g_lock);
   g_job.output_bytes = size;
   if(sums_ok) snprintf(g_job.sums, sizeof(g_job.sums), "%s", sums_path);
-  else if(have_sha) {
+  else if(a.quick) {                  /* the quick level reads no SHA-256, so there is no checksum file; said once */
+    size_t nl = strlen(g_job.note);
+    snprintf(g_job.note + nl, sizeof(g_job.note) - nl, "%s%s", nl ? " · " : "",
+             strcmp(a.op, "ffpkg") ? "Schnell geprüft: Aufbau und Stichprobe, daher keine Prüfsummen-Datei."
+                                   : "Schnell geprüft: Aufbau und alle Dateien in einem Durchgang, daher keine Prüfsummen-Datei.");
+  } else if(have_sha) {
     size_t nl = strlen(g_job.note);
     snprintf(g_job.note + nl, sizeof(g_job.note) - nl, "%sDie Prüfsummen-Datei ließ sich nicht "
              "schreiben. Das Ergebnis selbst ist geprüft und in Ordnung.", nl ? " · " : "");
@@ -1187,6 +1295,7 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
   snprintf(g_job.source, sizeof(g_job.source), "%s", source);
   snprintf(g_job.target, sizeof(g_job.target), "%s", a->target);
   snprintf(g_job.drive, sizeof(g_job.drive), "%s", label);
+  g_job.quick = a->quick;
   g_job.started_ms = ps5tm_mono_ms();
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
@@ -1224,7 +1333,7 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
 
 int
 ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, const char *mount,
-                        const char *mode, char *err, size_t err_len) {
+                        const char *mode, int quick, char *err, size_t err_len) {
   char name[128], source[256];
   if(!title_id || !op || !mount || !mode ||
      ps5tm_library_copy_info(title_id, name, sizeof(name), source, sizeof(source)) != 0) {
@@ -1260,6 +1369,7 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   char label[40], dir[128], stem[200];
   a->folder = is_dir(source);
   a->ampr = a->folder && ampr_index && !ps4;
+  a->quick = quick ? 1 : 0;
   stem_of(source, a->folder, stem, sizeof(stem));
   if(drive_base(mount, a->base, sizeof(a->base), label, sizeof(label)) != 0 ||
      dest_dir(a->base, mode, dir, sizeof(dir)) != 0 ||
@@ -1345,6 +1455,7 @@ ps5tm_gameconvert_status(void) {
   cJSON_AddStringToObject(root, "title_id", j.title_id);
   cJSON_AddStringToObject(root, "name", j.name);
   cJSON_AddStringToObject(root, "op", j.op);
+  cJSON_AddStringToObject(root, "verify", j.quick ? "quick" : "full");
   cJSON_AddStringToObject(root, "mode", j.mode);
   cJSON_AddStringToObject(root, "source", j.source);
   cJSON_AddStringToObject(root, "target", j.target);

@@ -1,5 +1,9 @@
-LZ4 1.11.0 (https://github.com/lz4/lz4, release v1.11.0; archive lz4-1.11.0.tar.gz sha256 247e5fa64da5f7b75ee3dd3bed484076396c9ebe8254d9ccf693eb62800c5e26,
-the one in the release's .sha256), unchanged: lib/lz4.c, lz4.h, lz4hc.c, lz4hc.h. Licence of the library: BSD 2-Clause (see LICENSE).
+LZ4 1.11.1 (https://github.com/lz4/lz4, release v1.11.1 of 10.11.2026, tag commit aa4647fad575d01a874aaaadcdbe8e6a40e072f5), unchanged: lib/lz4.c, lz4.h, lz4hc.c, lz4hc.h.
+The release has no archive and no .sha256: the four files were read from the tag through GitHub's contents API and each one matches the git blob
+hash the API names (lz4.c 2ab4a114f14143f901899c4bcd8aa18ee9ee866a, lz4.h e69ae5627dcee63f71c0a4e42c4c8c58f337426c, lz4hc.c
+b394c3961d35d80a8e89a4b0838ff8eea42adfe6, lz4hc.h 1743673532aee7229a9a1b925f422be69a78bcc1). Licence of the library: BSD 2-Clause (see LICENSE, unchanged).
 Used by src/lz4pack.c for the independent raw LZ4 blocks of the asset packs (AMPRPAK4). The runtime of drakmor's ampr_emu pins its
-own decoder (v1.10.0): the block format has not changed since 2012, and test/lz4cross shows that blocks written by 1.11.0 are read by
-1.10.0 and the other way round (884 blocks of fast and HC levels 1 to 12, 457 MB, no difference). Added 12.10.2026 (1.10.0), 1.11.0 on 08.11.2026.
+own decoder (v1.10.0): the block format has not changed since 2012, and test/lz4cross shows that blocks written by 1.11.1 are read by
+1.11.0 and the other way round (see CHANGELOG; the same test showed it for 1.11.0 against 1.10.0). Added 12.10.2026 (1.10.0), 1.11.0 on 08.11.2026,
+1.11.1 on 10.11.2026 (fixes LZ4_resetStreamHC() on dirty memory, an out-of-bounds write at levels >= 10 that 1.11.0 had; this app uses
+LZ4_compress_HC_extStateHC, which initializes the state itself).

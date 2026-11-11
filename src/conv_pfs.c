@@ -32,7 +32,7 @@
  *     payloads share. A test payload with fewer rights was refused it
  *     (29.09.2026); refused threads run one fewer, keeping a CPU free, and
  *     yield after every block
- *   - input is read and output written in 1 MiB pieces, not per block
+ *   - input is read in 4 MiB pieces (1 MiB until 10.11.2026) and output written in 1 MiB pieces, not per block
  *   - the block table is written in batches while the blocks stream, not
  *     held in memory (it is 12 MB for a 100 GB image)
  *
@@ -48,7 +48,19 @@
  *     a hole that the drive's file system has to fill with zeros — the Game
  *     Compressor traced failures on USB drives to exactly that (its 1.0.3)
  *   - a CRC-32 of the payload is kept while writing, and pfs_verify_full()
- *     unpacks every block afterwards and compares, instead of a sample */
+ *     unpacks every block afterwards and compares, instead of a sample
+ *     (a quick level that does take a sample exists since 10.11.2026)
+ *
+ * And since 10.11.2026 a pre-filter for blocks that do not compress (a game's
+ * video, audio and packed archives): libdeflate only gives up on a block when
+ * its output passes the limit, and for data that does not shrink that is near
+ * the end of the block, so the early exit saves next to nothing. Before the
+ * real compression three pieces of 4 KiB of the block (at 0, 28 KiB, 56 KiB)
+ * go through a level-1 compressor; when none of them shrinks by 3 %, the block
+ * is stored raw without a try. That costs about a twentieth of a real
+ * compression on a block that does shrink, and saves nearly all of it on one
+ * that does not. A block that is mixed (a part that shrinks well, a part that
+ * does not) is tried as before whenever one of the pieces shrinks. */
 
 #include <errno.h>
 #include <pthread.h>
@@ -94,7 +106,13 @@
 #define FIRST_FILE_BLOCK   6u
 #define TABLE_BATCH        8192          /* offsets per table write       */
 #define MAX_SLOTS          24
-#define IO_BYTES           (1u << 20)    /* read and write in 1 MiB       */
+#define IO_BYTES           (1u << 20)    /* write in 1 MiB                */
+#define READ_BYTES         (4u << 20)    /* the source and the check read in 4 MiB (was 1) */
+#ifndef QUICK_BLOCKS
+#define QUICK_BLOCKS       2048u         /* the quick check unpacks at most this many blocks, spread over the image */
+#endif
+#define PRE_PIECE         4096u         /* the pre-filter: pieces of this size ...       */
+#define PRE_MIN_SAVING     3             /* ... must shrink by at least this many percent */
 /* The longest a compressed block may be: it must save at least 5 % of the
    logical block (3277 of 65536 bytes), else it is stored raw. */
 #define MAX_COMPRESSED     (LBS - (LBS * 5 + 99) / 100)
@@ -265,15 +283,36 @@ typedef struct {
      own interface (26.09.2026). */
   int             normal_quota;
   int             normal_used;
+  int             prefilter;       /* 1: the pre-filter is on (see the top of the file) */
+  uint64_t        skipped;         /* blocks it stored raw; added to atomically        */
 } pool_t;
 
+/* The pre-filter: 1 when three pieces of the block, each through a level-1
+   compressor, all stay above PRE_MIN_SAVING percent of their size, which is
+   taken for data that does not shrink. libdeflate returns 0 when the output
+   does not fit the room it is given: the room is the piece less the saving. */
+static int
+looks_incompressible(struct libdeflate_compressor *cf, const uint8_t *raw) {
+  static const unsigned at[3] = { 0, 0x7000, 0xE000 };          /* 0, 28 KiB, 56 KiB: all inside 64 KiB */
+  uint8_t out[PRE_PIECE];
+  const size_t room = PRE_PIECE - PRE_PIECE * PRE_MIN_SAVING / 100;
+  for(int i = 0; i < 3; i++)
+    if(libdeflate_deflate_compress(cf, raw + at[i], PRE_PIECE, out, room)) return 0;   /* it fits: it shrinks */
+  return 1;
+}
+
 static void
-compress_slot(struct libdeflate_compressor *c, slot_t *s) {
+compress_slot(struct libdeflate_compressor *c, struct libdeflate_compressor *cf, pool_t *p, slot_t *s) {
+  if(cf && looks_incompressible(cf, s->raw)) {            /* stored raw (out_len 0), without a try */
+    s->out_len = 0;
+    if(p) __atomic_fetch_add(&p->skipped, 1, __ATOMIC_RELAXED);
+    return;
+  }
   /* Room for MAX_COMPRESSED bytes only: whatever does not fit is stored raw.
      MkPFS's own limit is LBS - 1 (a compressed block must be strictly
      smaller than the logical block, or the reader takes it for raw bytes);
      this one is 5 % lower, see the top of the file. libdeflate gives up as
-     soon as the output passes it, so an incompressible block costs less. */
+     soon as the output passes it. */
   s->out_len = libdeflate_zlib_compress(c, s->raw, LBS, s->out, MAX_COMPRESSED);
 }
 
@@ -291,6 +330,7 @@ worker(void *arg) {
   pthread_mutex_unlock(&p->mu);
 
   struct libdeflate_compressor *c = libdeflate_alloc_compressor(p->level);
+  struct libdeflate_compressor *cf = p->prefilter ? libdeflate_alloc_compressor(1) : NULL;   /* NULL: every block is tried */
   pthread_mutex_lock(&p->mu);
   for(;;) {
     slot_t *s = NULL;
@@ -305,7 +345,7 @@ worker(void *arg) {
     if(!s) break;
     s->state = SLOT_BUSY;
     pthread_mutex_unlock(&p->mu);
-    if(c) compress_slot(c, s);
+    if(c) compress_slot(c, cf, p, s);
     if(!idle) sched_yield();
     pthread_mutex_lock(&p->mu);
     s->state = c ? SLOT_DONE : SLOT_FAILED;
@@ -313,10 +353,11 @@ worker(void *arg) {
   }
   pthread_mutex_unlock(&p->mu);
   if(c) libdeflate_free_compressor(c);
+  if(cf) libdeflate_free_compressor(cf);
   return NULL;
 }
 
-/* The source, read ahead in 1 MiB pieces and handed out in blocks. */
+/* The source, read in READ_BYTES pieces and handed out in blocks. */
 typedef struct {
   conv_read_fn rd;
   void        *ctx;
@@ -329,7 +370,7 @@ static int
 stage_read(stage_t *st, uint8_t *dst, size_t want) {
   while(want) {
     if(st->pos == st->len) {
-      ssize_t r = st->rd(st->ctx, st->buf, IO_BYTES);
+      ssize_t r = st->rd(st->ctx, st->buf, READ_BYTES);
       if(r < 0) return -1;
       if(r == 0) { errno = EIO; return -1; }
       st->pos = 0;
@@ -425,12 +466,12 @@ pfs_write_single(int fd, const char *inner_name, uint64_t raw_size,
   pthread_t th[MAX_SLOTS];
   int       nthreads = 0, pool_live = 0;
   uint64_t *table = NULL;
-  struct libdeflate_compressor *inline_c = NULL;
+  struct libdeflate_compressor *inline_c = NULL, *inline_cf = NULL;
   stage_t   st   = { rd, rd_ctx, NULL, 0, 0, 0 };
   sink_t    sink = { fd, NULL, 0, 0 };
   memset(&pool, 0, sizeof(pool));
   uint8_t *blk = calloc(1, BS);
-  st.buf   = malloc(IO_BYTES);
+  st.buf   = malloc(READ_BYTES);
   sink.buf = malloc(IO_BYTES);
   if(!blk || !st.buf || !sink.buf) goto nomem;
 
@@ -473,6 +514,7 @@ pfs_write_single(int fd, const char *inner_name, uint64_t raw_size,
   table[tbl_n++] = header_size;
 
   pool.level        = o->level;
+  pool.prefilter    = !o->no_prefilter;
   pool.normal_quota = o->workers > 1 ? o->workers - 1 : 1;
   pool.nslots = (unsigned)(o->workers > 0 ? o->workers * 4 : 1);
   if(pool.nslots > MAX_SLOTS) pool.nslots = MAX_SLOTS;
@@ -486,7 +528,10 @@ pfs_write_single(int fd, const char *inner_name, uint64_t raw_size,
     if(pthread_create(&th[nthreads], NULL, worker, &pool) != 0) break;
     nthreads++;
   }
-  if(!nthreads && !(inline_c = libdeflate_alloc_compressor(o->level))) goto nomem;
+  if(!nthreads) {
+    if(!(inline_c = libdeflate_alloc_compressor(o->level))) goto nomem;
+    if(pool.prefilter) inline_cf = libdeflate_alloc_compressor(1);      /* NULL: every block is tried */
+  }
 
   uint64_t next_fill = 0, next_write = 0, raw_done = 0;
   while(next_write < block_count) {
@@ -509,7 +554,7 @@ pfs_write_single(int fd, const char *inner_name, uint64_t raw_size,
         pthread_cond_signal(&pool.work);
         pthread_mutex_unlock(&pool.mu);
       } else {
-        compress_slot(inline_c, s);
+        compress_slot(inline_c, inline_cf, &pool, s);
         s->state = SLOT_DONE;
       }
       next_fill++;
@@ -608,7 +653,9 @@ out:
     pthread_mutex_destroy(&pool.mu);
     errno = saved;
   }
+  if(o->prefiltered) *o->prefiltered = __atomic_load_n(&pool.skipped, __ATOMIC_RELAXED);
   if(inline_c) libdeflate_free_compressor(inline_c);
+  if(inline_cf) libdeflate_free_compressor(inline_cf);
   free(pool.slots);
   free(table);
   free(sink.buf);
@@ -747,9 +794,69 @@ out:
   return rc;
 }
 
+/* The quick level (10.11.2026): the four places that must be empty, each read on its own, then a sample of at most QUICK_BLOCKS
+   blocks, evenly spread so that the first and the last one are in it, each read and — when it is compressed — unpacked: a
+   zlib stream carries the Adler-32 of its data, which libdeflate checks, so a block that decodes is whole. A block stored raw
+   has nothing to check it against here (its place in the table and its length were checked before). The image is not read
+   through: no CRC of the payload, no SHA-256. buf has IO_BYTES at least; v is set up as in pfs_verify_full(). */
+static int
+verify_quick(vblocks_t *v, const pfsc_check_t *c, uint64_t fsize, uint64_t entries, uint64_t header_size,
+             uint64_t stored, uint8_t *buf, char *err, size_t err_len) {
+  const uint64_t zr[4][2] = {
+    { 4ull * BS, 5ull * BS },                                                      /* block 4, reserved */
+    { v->base + 0x30, v->base + PFSC_TABLE_OFF },                                  /* behind the header */
+    { v->base + PFSC_TABLE_OFF + entries * 8, v->base + header_size },             /* behind the table */
+    { v->base + stored, fsize },                                                   /* the end */
+  };
+  for(int i = 0; i < 4; i++) {
+    for(uint64_t pos = zr[i][0]; pos < zr[i][1];) {
+      size_t n = zr[i][1] - pos < IO_BYTES ? (size_t)(zr[i][1] - pos) : IO_BYTES;
+      if(pread_all(v->fd, buf, n, pos) != 0) {
+        snprintf(err, err_len, "Lesefehler beim Prüfen: %s", ps5tm_io_strerror(errno));
+        return -1;
+      }
+      if(!zero_within(buf, pos, n, zr[i][0], zr[i][1])) {
+        snprintf(err, err_len, "Ein Bereich des Abbilds, der leer sein muss, enthält Daten.");
+        return -1;
+      }
+      pos += n;
+    }
+  }
+  const uint64_t bc = v->block_count;
+  const uint64_t ns = bc < QUICK_BLOCKS ? bc : QUICK_BLOCKS;
+  for(uint64_t k = 0; k < ns; k++) {
+    if(c && c->cancel && __atomic_load_n(c->cancel, __ATOMIC_ACQUIRE)) {
+      snprintf(err, err_len, "Abgebrochen.");
+      errno = ECANCELED;
+      return -1;
+    }
+    const uint64_t i = ns == 1 ? 0 : k * (bc - 1) / (ns - 1);
+    uint8_t ent[16];
+    if(pread_all(v->fd, ent, sizeof(ent), v->base + PFSC_TABLE_OFF + i * 8) != 0) {
+      snprintf(err, err_len, "Die Blocktabelle ist nicht lesbar.");
+      return -1;
+    }
+    const size_t len = (size_t)(get64(ent + 8) - get64(ent));            /* the table was checked: 1 to LBS */
+    if(pread_all(v->fd, v->bbuf, len, v->base + get64(ent)) != 0) {
+      snprintf(err, err_len, "Lesefehler beim Prüfen: %s", ps5tm_io_strerror(errno));
+      return -1;
+    }
+    if(len != LBS) {
+      size_t got = 0;
+      if(libdeflate_zlib_decompress(v->d, v->bbuf, len, v->raw, LBS, &got) != LIBDEFLATE_SUCCESS || got != LBS) {
+        snprintf(err, err_len, "Block %llu lässt sich nicht entpacken.", (unsigned long long)i);
+        return -1;
+      }
+    }
+    if(c && c->progress) c->progress(c->progress_ctx, fsize / ns * (k + 1));
+    sched_yield();                    /* the fan and the web server come first */
+  }
+  return 0;
+}
+
 int
 pfs_verify_full(int fd, const pfsc_check_t *c, uint8_t sha[32], char *err, size_t err_len) {
-  uint8_t *h = malloc(BS), *buf = malloc(IO_BYTES);
+  uint8_t *h = malloc(BS), *buf = malloc(c && c->quick ? IO_BYTES : READ_BYTES);
   vblocks_t v;
   memset(&v, 0, sizeof(v));
   v.fd   = fd;
@@ -821,6 +928,11 @@ pfs_verify_full(int fd, const pfsc_check_t *c, uint8_t sha[32], char *err, size_
     snprintf(err, err_len, "Die Blocktabelle endet nicht dort, wo der Datenstrom endet.");
     goto out;
   }
+  if(c && c->quick) {                 /* structure and a sample: the image is not read through (sha stays untouched) */
+    if(verify_quick(&v, c, (uint64_t)st.st_size, entries, header_size, stored, buf, err, err_len) != 0) goto out;
+    rc = 0;
+    goto out;
+  }
 
   /* Then the file once, in order, from the drive: every byte goes into the
      SHA-256, the places that must be empty are looked at, and every block is
@@ -835,7 +947,7 @@ pfs_verify_full(int fd, const pfsc_check_t *c, uint8_t sha[32], char *err, size_
       errno = ECANCELED;
       goto out;
     }
-    size_t n = fsize - pos < IO_BYTES ? (size_t)(fsize - pos) : IO_BYTES;
+    size_t n = fsize - pos < READ_BYTES ? (size_t)(fsize - pos) : READ_BYTES;
     if(pread_all(fd, buf, n, pos) != 0) {
       snprintf(err, err_len, "Lesefehler beim Prüfen: %s", ps5tm_io_strerror(errno));
       goto out;

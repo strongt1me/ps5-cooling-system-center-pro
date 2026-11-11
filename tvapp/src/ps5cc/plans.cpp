@@ -617,6 +617,7 @@ std::string start_body(const Plan &p, const PlanChoice &c)
         cJSON_AddStringToObject(root, "mode", mode);
         // The AMPR index is a PS5 thing and only goes into an image built from a folder.
         cJSON_AddBoolToObject(root, "ampr_index", p.kind == "folder" && !p.ps4 && c.ampr);
+        cJSON_AddStringToObject(root, "verify", c.quick ? "quick" : "full");
         break;
     case Tool::move:
     case Tool::unpack:

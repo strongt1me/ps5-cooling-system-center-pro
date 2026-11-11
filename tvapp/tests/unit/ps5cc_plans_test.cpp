@@ -162,7 +162,20 @@ TEST(Ps5ccPlans, ConvertBodyHasNoAmprIndexForAPs4Title)
     c.ampr = true;
     EXPECT_EQ(
         hui::ps5cc::start_body(p, c),
-        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false})");
+        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"full"})");
+}
+
+TEST(Ps5ccPlans, ConvertBodyAsksForTheQuickCheck)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvert));
+    PlanChoice c;
+    c.mode = 0;
+    c.op = 2;
+    c.drive = 1;
+    c.quick = true;
+    EXPECT_EQ(
+        hui::ps5cc::start_body(p, c),
+        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"quick"})");
 }
 
 TEST(Ps5ccPlans, StreamRiskReasonsInWords)
