@@ -922,19 +922,35 @@ bool HttpSource::replace_older_app()
     }
     if (!should_replace(running, mine))
         return false;
-    static const char *const kJobs[] = {"/api/v1/library/image/job", "/api/v1/files/job",
-                                        "/api/v1/library/ampr/job", "/api/v1/library/copy",
-                                        "/api/v1/library/convert", "/api/v1/library/delete",
-                                        "/api/v1/packages/install/job", "/api/v1/saves/job"};
-    for (const char *route : kJobs)
+    // One route for all jobs of the app (since 1.79.x). An answer that does not come, or is not understood, counts as "a job may
+    // run": the old app is then left alone (audit 11.11.2026, F-02). Only an app too old for the route (404) is asked job by job,
+    // and there too a missing answer counts as busy.
+    const Net busy_net = exchange("GET", "/api/v1/jobs/active", {}, &status, &body, 4);
+    bool busy = true;
+    if (busy_net == Net::ok && status == 200)
+        busy = job_active(body);
+    else if (busy_net == Net::ok && status == 404)
     {
-        if (exchange("GET", route, {}, &status, &body, 3) == Net::ok && status == 200 &&
-            job_active(body))
+        static const char *const kJobs[] = {"/api/v1/library/image/job", "/api/v1/files/job",
+                                            "/api/v1/library/ampr/job", "/api/v1/library/copy",
+                                            "/api/v1/library/convert", "/api/v1/library/delete",
+                                            "/api/v1/packages/install/job", "/api/v1/saves/job"};
+        busy = false;
+        for (const char *route : kJobs)
         {
-            notice(Notice::Kind::info, "Eine neuere App liegt bereit",
-                   "Ein Auftrag läuft noch. Danach die Kachel noch einmal öffnen.");
-            return false;
+            const Net n = exchange("GET", route, {}, &status, &body, 3);
+            if (n != Net::ok || (status == 200 && job_active(body)))
+            {
+                busy = true;
+                break;
+            }
         }
+    }
+    if (busy)
+    {
+        notice(Notice::Kind::info, "Eine neuere App liegt bereit",
+               "Die App ist gerade beschäftigt. Danach die Kachel noch einmal öffnen.");
+        return false;
     }
     set_link(Link::starting, "Die App wird aktualisiert …");
     if (!send_payload())

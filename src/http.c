@@ -867,6 +867,36 @@ ps5tm_http_port_free(unsigned port) {
 }
 
 
+/* A descriptor kept in reserve for accept() under pressure (F-01); -1 until opened or when /dev/null cannot be opened. */
+static int g_spare_fd = -1;
+
+/* accept() failed for lack of resources: free the reserve, take one waiting connection and drop it (the client gets
+   a clean close instead of a reset), take the reserve back, pause. Logged at most once a minute. */
+static void
+accept_shed(int srv, int eno) {
+  static uint64_t last_log_ms;
+  static unsigned suppressed;
+  uint64_t now = ps5tm_mono_ms();
+  if(last_log_ms == 0 || now - last_log_ms >= 60000) {
+    PS5TM_WARN("http_accept_resource",
+               "Die Weboberfläche kann gerade keine neue Verbindung annehmen (Fehler %d: %s, %u weitere seit der "
+               "letzten Meldung). Der Zugang bleibt offen; die Konsole hat Dateien, Puffer oder Speicher knapp.",
+               eno, strerror(eno), suppressed);
+    last_log_ms = now;
+    suppressed = 0;
+  } else {
+    suppressed++;
+  }
+  if(g_spare_fd >= 0) {
+    close(g_spare_fd);
+    g_spare_fd = -1;
+    int shed = accept(srv, NULL, NULL);
+    if(shed >= 0) close(shed);
+  }
+  g_spare_fd = open("/dev/null", O_RDONLY);
+  usleep(250 * 1000);
+}
+
 /* Can a client still connect to the listener? The console drops listening sockets when the network changes (Wi-Fi off and on, a
    cable pulled): the process runs on, select() sees nothing wrong, and nobody gets in any more (the same trap PatchDL 0.3.4 fixed
    for its web server). A connect to the socket's own address that is refused says the listener is gone; a timeout or any other
@@ -901,6 +931,7 @@ ps5tm_http_run(int srv, unsigned port) {
              "Weboberfläche gestartet "
              "(Port %u).", port);
 
+  if(g_spare_fd < 0) g_spare_fd = open("/dev/null", O_RDONLY);   /* reserve for accept() under pressure (F-01) */
   unsigned idle = 0;
   for(;;) {
     /* A one-second accept timeout keeps the loop responsive to a port
@@ -976,6 +1007,14 @@ ps5tm_http_run(int srv, unsigned port) {
       if(errno == EINTR || errno == ECONNABORTED ||
          errno == EAGAIN || errno == EWOULDBLOCK) continue;
       int eno = errno;
+      /* Running out of descriptors, buffers or memory (audit 11.11.2026, F-01) is a shortage of the whole system,
+         not a sign that the listener is gone. Closing it here made things worse: every waiting client got a reset
+         and the new socket() often failed on the same shortage. The listener stays; one waiting connection is shed
+         with the reserve descriptor, and the loop pauses briefly. */
+      if(eno == EMFILE || eno == ENFILE || eno == ENOBUFS || eno == ENOMEM) {
+        accept_shed(srv, eno);
+        continue;
+      }
       close(srv);
       PS5TM_WARN("http_accept_failed",
                  "Die Weboberfläche kann keine Verbindungen mehr annehmen "

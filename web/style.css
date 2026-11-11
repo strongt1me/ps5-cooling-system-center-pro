@@ -2318,3 +2318,18 @@ html.perf-cardglow .gm-card:not(.running) { box-shadow: none !important; }
 html.perf-btnround .gm-card .btn, html.perf-btnround .gm-card .gm-tag, html.perf-btnround .gm-card .gm-plat, html.perf-btnround .gm-card .gm-live { border-radius: 0 !important; }
 /* auf der PS5 beschneidet schon contain: paint an der runden Kante: ohne beides schneidet die Karte ihr Titelbild nicht mehr ab */
 html.perf-coverclip .gm-card { overflow: visible !important; contain: none !important; }
+
+/* Kein Rahmen des Browsers um Knöpfe (11.11.2026): Wird ein Knopf mit dem Controller gewählt (Steuerkreuz, L1/R1 wechseln den Bereich und
+   setzen den Fokus auf den Reiter), zeichnet der Browser der PS5 einen eigenen hellbraunen Fokusrahmen darum. Die Seite hat für ihre Knöpfe
+   eigene Fokus-Darstellungen (Reiter, .btn, .gm-chip …: etwas heller); der Rahmen des Browsers entfällt. Wer keine eigene hat, wird
+   nur leicht aufgehellt (:where hat keine Gewichtung, jede eigene Regel gewinnt). Felder, Auswahllisten, Haken und die Bildwahl
+   (.av-thumb, #dup-head) behalten ihre Markierung. */
+button:focus-visible, summary:focus-visible, [role="button"]:focus-visible { outline: none; }
+:where(button):focus-visible { background-color: rgba(255,255,255,.07); }
+:root[data-theme="hell"] :where(button):focus-visible { background-color: rgba(24,44,84,.07); }
+/* Dasselbe für Auswahllisten, Textfelder und Mehrzeilenfelder (Screenshot 11.11.2026: „Darstellung“, „Sortierung“, „Design“ hatten ihn noch): statt des
+   Rahmens des Browsers wird ihr eigener dünner Rand heller. Haken, Schalter, Optionsknöpfe und Schieberegler behalten ihre Markierung. */
+select:focus-visible, textarea:focus-visible,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus-visible { outline: none; }
+:where(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])):focus-visible { border-color: rgba(138,180,255,.6); }
+:root[data-theme="hell"] :where(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])):focus-visible { border-color: rgba(24,44,84,.5); }

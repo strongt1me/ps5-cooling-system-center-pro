@@ -126,6 +126,20 @@ wait_for_release(unsigned port) {
   }
 }
 
+/* Ends the older instance `pid` that holds `port`: SIGTERM first, so that it can hand the fan back to the console (fan.c),
+   and only when the port is still held after about three seconds SIGKILL, which cannot be caught (audit 11.11.2026, F-02).
+   Returns 0 when the signal could not be sent. */
+static int
+stop_sibling(int pid, unsigned port) {
+  if(kill(pid, SIGTERM) != 0) return kill(pid, SIGKILL) == 0 ? 0 : -1;
+  for(int i = 0; i < 30; i++) {
+    int probe = 0;
+    if(!sibling_on_port(port, &probe)) return 0;
+    usleep(100 * 1000);
+  }
+  return kill(pid, SIGKILL);
+}
+
 
 /* Stops an older instance of this app that is holding `port`, so a freshly
    sent payload can take over. Returns 1 when something was actually stopped.
@@ -150,7 +164,7 @@ takeover_port(unsigned port) {
   if(!sibling_on_port(port, &pid)) return 0;   /* not ours — hands off */
   if(pid <= 1 || pid == (int)getpid())  return 0;
 
-  if(kill(pid, SIGKILL) != 0) {
+  if(stop_sibling(pid, port) != 0) {
     PS5TM_WARN("takeover_failed",
                "Die ältere Ausführung dieser App auf Port %u (Prozess %d) "
                "ließ sich nicht beenden.", port, pid);
@@ -187,7 +201,7 @@ retire_siblings(unsigned own_port) {
     int pid = 0;
     if(!sibling_on_port(p, &pid)) continue;
 
-    if(pid > 1 && pid != (int)getpid() && kill(pid, SIGKILL) == 0) {
+    if(pid > 1 && pid != (int)getpid() && stop_sibling(pid, p) == 0) {
       PS5TM_INFO("sibling_retired",
                  "Ältere Ausführung dieser App auf Port %u beendet "
                  "(Prozess %d). Sonst hätten zwei gleichzeitig am Lüfter "

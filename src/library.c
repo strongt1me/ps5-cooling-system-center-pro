@@ -574,9 +574,14 @@ detect_mods(lib_game_t *g) {
    -1 whenever the answer would be a guess: a read error half way (a drive
    pulled during the walk), a tree deeper than any game, a folder that is gone.
    A partial sum is worse than none — a 280 GB game would show as 12. */
+/* Time budget for the folder walks of one refresh (audit 11.11.2026, F-03): 0 = none. A walk that runs past it gives -1
+   ("not known"), real_size() then keeps the last size it had, and what was finished stays cached for the next round. */
+static uint64_t g_walk_deadline_ms;
+
 static int64_t
 dir_size(const char *path, int depth) {
   if(depth > 32) return -1;
+  if(g_walk_deadline_ms && ps5tm_mono_ms() > g_walk_deadline_ms) return -1;
   DIR *d = opendir(path);
   if(!d) return -1;
   int64_t total = 0;
@@ -591,6 +596,7 @@ dir_size(const char *path, int depth) {
     }
     if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
     if(snprintf(child, sizeof(child), "%s/%s", path, e->d_name) >= (int)sizeof(child)) continue;
+    if(g_walk_deadline_ms && ps5tm_mono_ms() > g_walk_deadline_ms) { total = -1; break; }
     struct stat st;
     if(lstat(child, &st) != 0) {
       if(errno == ENOENT) continue;            /* gone since readdir: fine */
@@ -1089,6 +1095,7 @@ static void
 refresh(void) {
   char err[160] = "";
   size_t size = 0;
+  g_walk_deadline_ms = ps5tm_mono_ms() + 20000;    /* folder walks of this round: at most 20 s (F-03) */
   unsigned char *file = read_appdb(&size, err, sizeof(err));
   lib_game_t    *list = calloc(LIBRARY_MAX, sizeof(lib_game_t));
   sqlro_table_t *tab  = malloc(sizeof(sqlro_table_t));
@@ -1220,6 +1227,19 @@ done:
    (review 19.10.2026: single-title lookups skipped the TTL and kept the old list until the games page asked). */
 static int g_dirty;
 
+/* Waits for a mutex for at most `ms` (polling: no timed lock is needed anywhere else). 0 = got it. */
+static int
+lock_bounded(pthread_mutex_t *m, unsigned ms) {
+  uint64_t end = ps5tm_mono_ms() + ms;
+  for(;;) {
+    if(pthread_mutex_trylock(m) == 0) return 0;
+    if(ps5tm_mono_ms() >= end) return -1;
+    usleep(20 * 1000);
+  }
+}
+
+#define LIBRARY_WAIT_MS 20000u   /* the longest a caller queues behind a read (audit F-03): then it goes on with the list it has */
+
 static void
 ensure_fresh(int ttl_applies) {
   pthread_mutex_lock(&g_lock);
@@ -1228,8 +1248,21 @@ ensure_fresh(int ttl_applies) {
   pthread_mutex_unlock(&g_lock);
   if(!stale) return;
 
-  if(first || dirty) pthread_mutex_lock(&g_refresh_lock);
-  else if(pthread_mutex_trylock(&g_refresh_lock) != 0) return;
+  /* Who waits for a read under way: the very first read (nothing to fall back on) and a job that is planned against
+     the list (ttl_applies = 0, must not see the list from before a change) - both for a bounded time, never for good.
+     Pages asking with a TTL take the list as it is, also after a change: the next caller reads afresh. */
+  if(first || (dirty && !ttl_applies)) {
+    if(lock_bounded(&g_refresh_lock, LIBRARY_WAIT_MS) != 0) {
+      static int warned;
+      if(!warned) {
+        warned = 1;
+        PS5TM_WARN("library_wait_timeout",
+                   "Die Spieleliste wird seit über %u s neu gelesen (Laufwerk oder ShadowMountPlus langsam); "
+                   "diese Anfrage arbeitet mit der bisherigen Liste weiter.", LIBRARY_WAIT_MS / 1000);
+      }
+      return;
+    }
+  } else if(pthread_mutex_trylock(&g_refresh_lock) != 0) return;
 
   /* The thread ahead of us may just have finished the very read we came for. */
   pthread_mutex_lock(&g_lock);

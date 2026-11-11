@@ -5435,6 +5435,21 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
+  /* One answer to "is any job of the app under way?": the Fullscreen tile asks it before it replaces the app with a newer one
+     (audit 11.11.2026, F-02). Same list as for ejecting a drive. */
+  if(!strcmp(req->path, "/api/v1/jobs/active")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                        "Nur GET erlaubt."); return; }
+    char why[200] = "";
+    int active = ps5tm_app_job_running(why, sizeof(why));
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddBoolToObject(o, "active", active);
+    cJSON_AddStringToObject(o, "what", active ? why : "");
+    send_cjson(fd, 200, o);
+    return;
+  }
+
   if(!strcmp(req->path, "/api/v1/controller/diag")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }

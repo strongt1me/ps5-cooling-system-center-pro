@@ -84,6 +84,9 @@ typedef struct {
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_upload_lock = PTHREAD_MUTEX_INITIALIZER;
+/* Uploads under way (under g_lock). Counted as a file-manager job towards everyone else, so that a move, copy,
+   conversion or delete does not start beside a file that is still arriving (audit 11.11.2026, F-04). */
+static int g_uploads;
 static fm_job_t        g_job;
 static int             g_cancel;
 
@@ -876,20 +879,40 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
   send_obj(fd, 200, o);
 }
 
+static int other_job_active(char *err, size_t n);
+
 void
 ps5tm_filemgr_receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len, size_t total) {
   /* not beside a copy, move or delete of the file manager: a move deletes its source at the end, and a file
      uploaded into that folder meanwhile would go with it, never copied */
-  if(ps5tm_filemgr_busy()) {
+  /* the claim and the check are one step, as in start_job() */
+  pthread_mutex_lock(&g_lock);
+  int job = g_job.state == FM_COUNTING || g_job.state == FM_COPYING || g_job.state == FM_DELETING;
+  int up  = g_uploads > 0;
+  if(!job && !up) g_uploads++;
+  pthread_mutex_unlock(&g_lock);
+  if(job) {
     ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
     return;
   }
-  if(pthread_mutex_trylock(&g_upload_lock) != 0) {
+  if(up) {
     ps5tm_http_send_error(fd, 409, "upload_busy", "Es wird gerade schon eine Datei hochgeladen.");
     return;
   }
-  receive_upload(fd, query, prefix, prefix_len, total);
-  pthread_mutex_unlock(&g_upload_lock);
+  /* the other jobs of the app write into the same folders, and a move or delete takes its source away at the end */
+  char why[200];
+  int other = other_job_active(why, sizeof(why));
+  if(!other && pthread_mutex_trylock(&g_upload_lock) != 0) {
+    snprintf(why, sizeof(why), "Es wird gerade schon eine Datei hochgeladen.");
+    other = 1;
+  } else if(!other) {
+    receive_upload(fd, query, prefix, prefix_len, total);
+    pthread_mutex_unlock(&g_upload_lock);
+  }
+  pthread_mutex_lock(&g_lock);
+  g_uploads--;
+  pthread_mutex_unlock(&g_lock);
+  if(other) ps5tm_http_send_error(fd, 409, "files_busy", why);
 }
 
 
@@ -959,9 +982,10 @@ job_state(int s) {
 static int
 other_job_active(char *err, size_t n) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
+     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_ampr_busy() || ps5tm_imgjob_busy() ||
+     ps5tm_disc_busy()) {
     snprintf(err, n, "Es läuft gerade ein anderer Vorgang der App (Kopieren, Konvertieren, Verschieben, Spielstände, "
-             "Paket teilen oder installieren, Löschen). Bitte danach noch einmal.");
+             "Paket teilen oder installieren, Löschen, Disc-Abbild). Bitte danach noch einmal.");
     return 1;
   }
   return 0;
@@ -1719,9 +1743,11 @@ start_job(fm_args_t *a, uint64_t bytes_total, uint64_t files_total, char *err, s
   /* the claim and the check are one step: two requests in the same moment cannot both start */
   pthread_mutex_lock(&g_lock);
   int busy = g_job.state == FM_COUNTING || g_job.state == FM_COPYING || g_job.state == FM_DELETING;
+  int uploading = g_uploads > 0;
   fm_job_t before = g_job;
-  if(!busy) g_job.state = FM_COUNTING;
+  if(!busy && !uploading) g_job.state = FM_COUNTING;
   pthread_mutex_unlock(&g_lock);
+  if(uploading && !busy) { snprintf(err, n, "Es wird gerade eine Datei hochgeladen. Bitte danach noch einmal."); return 409; }
   if(busy) { snprintf(err, n, "Der Dateimanager ist gerade schon beschäftigt."); return 409; }
   int other = other_job_active(err, n);
   char *buf = !other && strcmp(a->kind, "delete") ? malloc(FM_BUF) : NULL;
@@ -2072,7 +2098,7 @@ job_json(void) {
 int
 ps5tm_filemgr_busy(void) {
   pthread_mutex_lock(&g_lock);
-  int b = g_job.state == FM_COUNTING || g_job.state == FM_COPYING || g_job.state == FM_DELETING;
+  int b = g_job.state == FM_COUNTING || g_job.state == FM_COPYING || g_job.state == FM_DELETING || g_uploads > 0;
   pthread_mutex_unlock(&g_lock);
   return b;
 }
