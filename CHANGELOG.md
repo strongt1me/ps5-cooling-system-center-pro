@@ -2,6 +2,17 @@
 
 ## Unveröffentlicht
 
+### Audit 11.11.2026: die übrigen Befunde F-11, F-17 bis F-21, F-24, F-27
+- **F-11:** Beim Packen im Spielordner (zstd/LZ4) wird vor dem Entfernen der Originale und vor dem Signieren noch einmal gefragt, ob das Spiel inzwischen läuft; wenn ja, bleiben die Originale liegen bzw. wird das Signieren übersprungen, mit Hinweis.
+- **F-17:** Der Bau nutzt `-fstack-protector-strong` (ELF +82 KB auf 10,10 MB). Neu: `.github/workflows/host-tests.yml` führt die Host-Tests (account, cvsample, filemgr, fsign, instlock, smpcfg, sha256, convpfs, zstdpack, ps4m) bei jedem Push und Pull-Request auf `src/` und `test/` aus; auf GitHub noch nicht gelaufen.
+- **F-18:** Das Paketverzeichnis eines LZ4-Pakets (`lz4pack.c`) wird zuerst nur im Kopf gelesen: Anzahlen innerhalb der Grenzen und Größe passt zum Kopf, erst dann wird bis zu 2000 MiB reserviert. Die zstd-Dateiliste (`zstdpack.c`) bricht beim Durchlaufen bei der Grenze ab statt erst nach dem Aufbau der ganzen Liste.
+- **F-19:** Die Leerlaufprüfung der Abbild-Prüfung der Bibliothek kennt jetzt alle Aufträge (Spielstände, Paket teilen und installieren, AMPR, Abbild-Aufträge, Auswerfen, Disc), vorher fünf.
+- **F-20:** Der Payload-Store ändert seinen Index nur noch unter einer Sperre (Löschen und fertiger Download verlieren sich nicht mehr gegenseitig), jede Schreibung hat eine eigene Temp-Datei, neu angelegt. Die AMPR-Bibliothek (`amprlib.c`) schreibt ihre Dateien einzeln nacheinander.
+- **F-21:** Vor dem direkten Lesen eines Abbilds steht dessen Titel-ID in `probe-read.txt`; findet der nächste Start die Datei, ist die App dort beendet worden: Der Titel kommt in `probe-skip.txt` und wird nicht mehr direkt gelesen (Datei löschen erlaubt ihn wieder), mit Protokollzeile `image_probe_crash`.
+- **F-24:** Der Payload-Katalog wird nach einem Fehlschlag nicht bei jedem Besuch der Seite neu geholt: erster neuer Versuch nach 10 Minuten, dann bis 3 Stunden; der Knopf fragt immer.
+- **F-27:** Das Überspringen in der Dump-Warteschlange wird in einem Schritt mit der Prüfung des aktuellen Titels (unter der Sperre) gesetzt und beim Wechsel des Titels unter der Sperre gelöscht.
+- Bau ohne Warnungen; alle Host-Tests grün. **Nicht an der Konsole erprobt**, vor allem der Stack-Schutz.
+
 ### Audit 11.11.2026: die offenen Befunde F-06, F-07, F-08, F-09, F-10, F-15
 - **F-06, USB auswerfen:** `ps5tm_usbeject_busy()` meldet ein laufendes Auswerfen; Kopieren, Konvertieren, Verschieben, Dateimanager (samt Upload), Abbild-Aufträge, Paket-Installation, Spielstände und AMPR-Index starten in dem Fenster nicht (Meldung „Ein Laufwerk wird gerade ausgeworfen …“).
 - **F-07, Verschieben:** Ein Start des Verschiebens oder Entpackens hält von der ersten Prüfung bis zur Antwort von ShadowMountPlus einen lokalen Merker (`g_starting`); andere Aufträge sehen ihn über `ps5tm_gamemove_busy()`, und ein zweiter Start läuft nicht in die Lücke. Das bewusste „SMP-Fehler gilt als frei“ bleibt.

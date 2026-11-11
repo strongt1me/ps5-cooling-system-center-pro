@@ -196,7 +196,7 @@ slurp(const char *path, uint8_t **data, size_t *len, size_t max) {
  * (0644) is refused by the loader ("mount flag / attribute error", the game ends at once), while eboot.bin and the
  * files of PC tools are 0777 / 0755. So it is made 0755 whatever the umask says. */
 static int
-put_file(const char *path, const uint8_t *d, size_t n) {
+put_file_unlocked(const char *path, const uint8_t *d, size_t n) {
   char tmp[PATH_MAX];
   if(snprintf(tmp, sizeof(tmp), "%s.ps5cc-teil", path) >= (int)sizeof(tmp)) return ENAMETOOLONG;
   int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0755);
@@ -214,6 +214,17 @@ put_file(const char *path, const uint8_t *d, size_t n) {
   if(close(fd) != 0 && !rc) rc = errno ? errno : EIO;
   if(!rc && rename(tmp, path) != 0) rc = errno ? errno : EIO;
   if(rc) unlink(tmp);
+  return rc;
+}
+
+/* One writer at a time (audit 11.11.2026, F-20): all of them use the same temporary name "<file>.ps5cc-teil", and two at once cut each other's file. */
+static pthread_mutex_t g_put_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int
+put_file(const char *path, const uint8_t *d, size_t n) {
+  pthread_mutex_lock(&g_put_lock);
+  int rc = put_file_unlocked(path, d, n);
+  pthread_mutex_unlock(&g_put_lock);
   return rc;
 }
 

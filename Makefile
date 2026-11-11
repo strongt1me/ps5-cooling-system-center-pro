@@ -235,6 +235,8 @@ WEB_FILES := $(wildcard web/*) $(wildcard web/img/*) $(wildcard web/avatars/*) $
 CFLAGS := -Os -Wall -Wextra -Werror -Isrc -Isrc/third_party -Igen
 CFLAGS += -ffunction-sections -fdata-sections
 CFLAGS += -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-ident
+# stack canaries in functions with arrays or taken addresses (audit 11.11.2026, F-17); __stack_chk_fail comes from the SDK's libkernel
+CFLAGS += -fstack-protector-strong
 CFLAGS += -DPS5TM_BUILD=$(BUILD_DATE)
 CFLAGS += $(EXTRA_CFLAGS)
 

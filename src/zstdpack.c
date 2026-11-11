@@ -295,7 +295,8 @@ walk_dir(walk_t *w, char *path, size_t len, int depth) {
         w->plan->pack_files++;
         w->plan->pack_bytes += size;
         w->plan->chunks += (size + CHUNK_SIZE - 1) >> CHUNK_SHIFT;
-        if(w->pack && zlist_push(w->pack, rel, size) != 0) { say(w->err, w->en, "Kein Speicher."); rc = -1; }
+        if(w->pack && w->pack->n >= MAX_FILES) { say(w->err, w->en, "Das Spiel hat zu viele Dateien für die Pakete (mehr als %u).", MAX_FILES); rc = -1; }   /* stops while walking, not after building the whole list (audit F-18) */
+        else if(w->pack && zlist_push(w->pack, rel, size) != 0) { say(w->err, w->en, "Kein Speicher."); rc = -1; }
       }
     } else {                                             /* a link or a device: not packed, and the job's own check said so before */
       w->plan->loose_files++;

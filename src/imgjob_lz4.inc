@@ -837,6 +837,11 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   if(copy) {
     if(rename(tmp, fin) != 0) { int e = errno; rm_tree(tmp, 0); char m[300]; snprintf(m, sizeof(m), "Der fertige Ordner ließ sich nicht umbenennen: %s", ps5tm_io_strerror(e)); lz4_fail(m, -1); goto out; }
     made_tmp = 0;
+  } else if(ps5tm_procmgr_title_running(id) == 1) {
+    /* asked again right before the originals go (audit 11.11.2026, F-11): the game may have been started while the packs were made */
+    lz4_fail("Das Spiel wurde während des Packens gestartet. Die Pakete sind fertig, die Originale bleiben liegen. Spiel beenden und noch einmal packen.", -1);
+    ps5tm_library_forget();
+    goto out;
   } else {
     lzp_stats_t rs;
     if((zs ? zsp_remove_sources(root, root, 1, &rs, &ui, err, sizeof(err)) : lzp_remove_sources(root, root, 1, &rs, &ui, err, sizeof(err))) != 0) {
@@ -848,7 +853,9 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
       goto out;
     }
   }
-  if(!copy && zs && a->sign) {                                 /* zstd always packs in the game's folder: its unsigned executables are replaced there (fsign.c) */
+  if(!copy && zs && a->sign && ps5tm_procmgr_title_running(id) == 1) {   /* and before the executables are replaced (F-11) */
+    snprintf(sign_note, sizeof(sign_note), "Das Signieren der Programmdateien wurde übersprungen: Das Spiel wurde währenddessen gestartet.");
+  } else if(!copy && zs && a->sign) {                          /* zstd always packs in the game's folder: its unsigned executables are replaced there (fsign.c) */
     fsign_list_t sl;
     set_phase("Die Programmdateien werden signiert");
     int scr = ps5tm_fsign_scan(root, &g_cancel, &sl);

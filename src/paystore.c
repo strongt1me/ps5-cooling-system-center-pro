@@ -95,8 +95,11 @@ read_file(const char *path, size_t max, size_t *len) {
 static int
 write_atomic(const char *path, const char *data, size_t n) {
   char tmp[512];
-  snprintf(tmp, sizeof tmp, "%s.tmp", path);
-  int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0666);
+  /* one temporary name per call, created new: two writers no longer share one ".tmp" and cut each other's JSON (audit 11.11.2026, F-20) */
+  static unsigned seq;
+  snprintf(tmp, sizeof tmp, "%s.%d-%u.tmp", path, (int)getpid(), __atomic_add_fetch(&seq, 1, __ATOMIC_RELAXED));
+  (void)unlink(tmp);
+  int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0666);
   if(fd < 0) return -1;
   size_t off = 0;
   while(off < n) {
@@ -348,6 +351,23 @@ index_load(void) {
   return j;
 }
 
+/* Everyone who changes the index reads it, changes it and writes it back under this lock (audit 11.11.2026, F-20): a delete and a download
+   finishing at the same time lost one of the two changes. Order of locks: g_lock, then this one; nothing holds this one while it asks for g_lock. */
+static pthread_mutex_t g_index_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int index_save(cJSON *j);
+
+static int
+index_forget(const char *id) {
+  pthread_mutex_lock(&g_index_lock);
+  cJSON *j = index_load();
+  cJSON_DeleteItemFromObject(j, id);
+  int rc = index_save(j);
+  cJSON_Delete(j);
+  pthread_mutex_unlock(&g_index_lock);
+  return rc;
+}
+
 static int
 index_save(cJSON *j) {
   char *s = cJSON_PrintUnformatted(j);
@@ -515,12 +535,14 @@ install_thread(void *arg) {
 
   /* the file gets its name; an older file of this payload under another name goes (only one the store put there) */
   pthread_mutex_lock(&g_lock);
+  pthread_mutex_lock(&g_index_lock);
   cJSON *idx = index_load();
   const cJSON *old = cJSON_GetObjectItem(idx, it->id);
   char oldname[96];
   snprintf(oldname, sizeof oldname, "%s", idx_str(old, "filename"));
   if(rename(tmp, dst) != 0) {
     int e = errno;
+    pthread_mutex_unlock(&g_index_lock);
     pthread_mutex_unlock(&g_lock);
     unlink(tmp);
     cJSON_Delete(idx);
@@ -544,6 +566,7 @@ install_thread(void *arg) {
   cJSON_AddNumberToObject(e, "installed_at", (double)(ps5tm_now_ms() / 1000));
   int saved = index_save(idx) == 0;
   cJSON_Delete(idx);
+  pthread_mutex_unlock(&g_index_lock);
   g_job.state = PJ_DONE;
   g_job.done = g_job.total = d.got;
   snprintf(g_job.error, sizeof g_job.error, "%s", saved ? "" : "Geladen, aber die Liste der geladenen Payloads ließ sich nicht speichern.");
@@ -716,6 +739,10 @@ find_locked(const char *id) {
   return NULL;
 }
 
+/* After a failed fetch the page does not ask again with every visit (audit 11.11.2026, F-24; a visit used to cost a request thread up to 45 s):
+   the next try by itself comes after 10 minutes, doubling up to 3 hours with every further miss. The button always asks. */
+static int64_t g_next_try_s, g_backoff_s;
+
 cJSON *
 ps5tm_paystore_json(int refresh) {
   pthread_mutex_lock(&g_lock);
@@ -723,9 +750,20 @@ ps5tm_paystore_json(int refresh) {
   int64_t now = ps5tm_now_ms() / 1000;
   int stale = g_n <= 0 || now - g_cat_at >= PS_TTL_S || now < g_cat_at;
   /* refresh 1: only when a list was loaded once before and is old by now; 2: always (the button) */
-  int want = refresh == 2 || (refresh == 1 && g_n > 0 && stale);
+  int want = refresh == 2 || (refresh == 1 && g_n > 0 && stale && now >= g_next_try_s);
+  int64_t before = g_cat_at;
   pthread_mutex_unlock(&g_lock);
-  if(want) fetch_catalog();
+  if(want) {
+    fetch_catalog();
+    pthread_mutex_lock(&g_lock);
+    int64_t t = ps5tm_now_ms() / 1000;
+    if(g_cat_at != before) { g_backoff_s = 0; g_next_try_s = 0; }
+    else {
+      g_backoff_s = g_backoff_s ? (g_backoff_s * 2 > 10800 ? 10800 : g_backoff_s * 2) : 600;
+      g_next_try_s = t + g_backoff_s;
+    }
+    pthread_mutex_unlock(&g_lock);
+  }
 
   cJSON *o = cJSON_CreateObject();
   cJSON *idx = index_load();
@@ -858,9 +896,8 @@ ps5tm_paystore_action(const cJSON *b, char *msg, size_t mn) {
     const char *want = idx_str(e, "checksum");
     if(want[0] && (file_sha256(p, hex) != 0 || strcasecmp(hex, want))) {
       /* the file is no longer what the store put there (replaced by hand): forget the entry, keep the file */
-      cJSON_DeleteItemFromObject(idx, id);
-      index_save(idx);
       cJSON_Delete(idx);
+      index_forget(id);
       snprintf(msg, mn, "Die Datei wurde seit dem Laden geändert und bleibt liegen; der Eintrag wurde entfernt.");
       return 200;
     }
@@ -869,9 +906,8 @@ ps5tm_paystore_action(const cJSON *b, char *msg, size_t mn) {
       snprintf(msg, mn, "Die Datei ließ sich nicht löschen: %s", strerror(errno));
       return 500;
     }
-    cJSON_DeleteItemFromObject(idx, id);
-    index_save(idx);
     cJSON_Delete(idx);
+    index_forget(id);
     PS5TM_INFO("paystore_deleted", "Payload gelöscht: %s.", fn);
     snprintf(msg, mn, "Gelöscht.");
     return 200;

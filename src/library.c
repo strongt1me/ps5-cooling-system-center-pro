@@ -2356,8 +2356,10 @@ probe_idle(void) {
   ps5tm_gamestate_t gs;
   ps5tm_gamestate_get(&gs);
   if(gs.title_id[0]) return 0;                                   /* a game is up, even a paused one */
+  /* every job of the app that writes images or folders (audit 11.11.2026, F-19; it knew five of about thirteen) */
   return !ps5tm_gamecopy_busy() && !ps5tm_gameconvert_busy() && !ps5tm_gamemove_busy() &&
-         !ps5tm_gamedelete_busy() && !ps5tm_filemgr_busy();
+         !ps5tm_gamedelete_busy() && !ps5tm_filemgr_busy() && !ps5tm_saves_busy() && !ps5tm_pkgsplit_busy() &&
+         !ps5tm_pkginst_busy() && !ps5tm_ampr_busy() && !ps5tm_imgjob_busy() && !ps5tm_usbeject_busy() && !ps5tm_disc_busy();
 }
 
 /* Titles whose image the reader could not open: for them (and only them) the mount is the way. */
@@ -2379,10 +2381,58 @@ probe_note_failed(const char *tid) {
 
 /* Part one: read every image game's own file, nothing mounted, no call to ShadowMountPlus. A title is read again only when
    its image file has another size or time than the one the saved result was read from. Returns how many were read. */
+/* A title whose image the direct reader took the app down with is not read again after the restart: before every read its id goes into a
+   small file, removed afterwards; one that is still there at the next start means the app ended inside the read (audit 11.11.2026, F-21;
+   until then every start read the same image again 20 s later, and the app ended again). Such titles are listed in PROBE_SKIP and left
+   alone; deleting that file (Dateimanager) allows them again. */
+#define PROBE_READMARK PS5TM_DATA_DIR "/probe-read.txt"
+#define PROBE_SKIP     PS5TM_DATA_DIR "/probe-skip.txt"
+
+static void
+probe_mark_reading(const char *tid) {
+  if(!tid) { (void)unlink(PROBE_READMARK); return; }
+  FILE *f = fopen(PROBE_READMARK, "w");
+  if(!f) return;
+  fprintf(f, "%s\n", tid);
+  fflush(f);
+  (void)fsync(fileno(f));
+  fclose(f);
+}
+
+static int
+probe_skipped(const char *tid) {
+  FILE *f = fopen(PROBE_SKIP, "r");
+  if(!f) return 0;
+  char line[32];
+  int hit = 0;
+  while(!hit && fgets(line, sizeof(line), f)) {
+    line[strcspn(line, "\r\n")] = 0;
+    hit = !strcmp(line, tid);
+  }
+  fclose(f);
+  return hit;
+}
+
+static void
+probe_after_crash(void) {
+  FILE *f = fopen(PROBE_READMARK, "r");
+  if(!f) return;
+  char tid[32] = "";
+  if(fgets(tid, sizeof(tid), f)) tid[strcspn(tid, "\r\n")] = 0;
+  fclose(f);
+  (void)unlink(PROBE_READMARK);
+  if(strlen(tid) != 9 || probe_skipped(tid)) return;
+  FILE *s = fopen(PROBE_SKIP, "a");
+  if(s) { fprintf(s, "%s\n", tid); fclose(s); }
+  PS5TM_WARN("image_probe_crash", "Beim Lesen des Abbilds von %s ist die App zuletzt beendet worden. Es wird nicht mehr direkt gelesen (Liste: %s; Datei löschen erlaubt es wieder).",
+             tid, PROBE_SKIP);
+}
+
 static int
 probe_read_images(void) {
   struct { char tid[12]; char path[256]; } img[PROBE_MAX_TITLES];
   int n = 0;
+  probe_after_crash();
   pthread_mutex_lock(&g_lock);
   for(int i = 0; i < g_count && n < PROBE_MAX_TITLES; i++) {
     const lib_game_t *g = &g_games[i];
@@ -2406,7 +2456,11 @@ probe_read_images(void) {
     }
     pthread_mutex_unlock(&g_refresh_lock);
     if(have) continue;
-    if(probe_read_image_file(img[i].tid, img[i].path, (int64_t)st.st_size, (int64_t)st.st_mtime) == 0) {
+    if(probe_skipped(img[i].tid)) continue;                    /* the reader crashed on it before: left alone until the list is deleted */
+    probe_mark_reading(img[i].tid);                            /* a crash inside the reader leaves this mark behind (audit F-21) */
+    int rd = probe_read_image_file(img[i].tid, img[i].path, (int64_t)st.st_size, (int64_t)st.st_mtime);
+    probe_mark_reading(NULL);
+    if(rd == 0) {
       done++;
     } else {
       probe_note_failed(img[i].tid);

@@ -335,8 +335,8 @@ worker(void *arg) {
   for(int i = 0; i < count && !stopped; i++) {
     pthread_mutex_lock(&g_lock);
     g_current = i;
+    g_skip = 0;                                  /* a skip is meant for one title only; cleared with the change of title, under the lock (audit F-27) */
     pthread_mutex_unlock(&g_lock);
-    g_skip = 0;                                  /* a skip is meant for one title only */
     if(g_stop || process_item(i) < 0) stopped = 1;
   }
 
@@ -506,9 +506,9 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
       waiting = st == Q_WAITING_DISC || st == Q_LAUNCHING || st == Q_SETTLING;
       dumping = st == Q_DUMPING;
     }
+    if(waiting || dumping) g_skip = 1;           /* in the same step as the look at the current title: it cannot hit the next one (audit F-27) */
     pthread_mutex_unlock(&g_lock);
     if(!waiting && !dumping) { snprintf(msg, n, "Die Warteschlange arbeitet gerade an keinem Titel."); return 409; }
-    g_skip = 1;
     if(dumping) ps5tm_dump_abort();              /* a dump does not look at g_skip: it ends like any other, and g_skip tells the worker to go on */
     snprintf(msg, n, dumping ? "Der Dump wird gestoppt, dann geht es mit dem nächsten Titel weiter." : "Der Titel wird übersprungen.");
     return 200;

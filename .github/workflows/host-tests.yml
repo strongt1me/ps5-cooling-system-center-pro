@@ -1,0 +1,50 @@
+# The host tests of the pieces of the app that run on a PC (audit 11.11.2026, F-17: "Tests nicht in CI").
+# Each test script builds its part of src/ with the sanitizers (address, undefined) and runs it; they need gcc/clang and python3,
+# nothing of the console. The tests that need files of a PS5 or another reader (lz4cross) are not part of this.
+name: Host tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'tools/gen_p4m_templates.py'
+      - '.github/workflows/host-tests.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'tools/gen_p4m_templates.py'
+      - '.github/workflows/host-tests.yml'
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc clang python3
+      - name: account
+        run: bash test/account/run.sh
+      - name: cvsample
+        run: sh test/cvsample/run.sh
+      - name: filemgr
+        run: bash test/filemgr/run.sh
+      - name: fsign
+        run: sh test/fsign/run.sh
+      - name: instlock
+        run: bash test/instlock/run.sh
+      - name: smpcfg
+        run: sh test/smpcfg/run.sh
+      - name: sha256
+        run: sh test/sha256/run.sh
+      - name: convpfs
+        run: sh test/convpfs/run.sh
+      - name: zstdpack
+        run: sh test/zstdpack/run.sh
+      - name: ps4m
+        run: sh test/ps4m/run.sh

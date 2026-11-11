@@ -351,6 +351,20 @@ man_load(const char *path, man_t *m, int heavy, char *err, size_t en) {
   struct stat st;
   if(fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < (off_t)INDEX_HEADER_SIZE || st.st_size > (off_t)(2000ll << 20)) { close(fd); say(err, en, "Das Paketverzeichnis ist ungültig."); return -1; }
   size_t len = (size_t)st.st_size;
+  {
+    /* The header first (audit 11.11.2026, F-18): what it says must add up to the size of the file, and the counts must be within the limits,
+       before up to 2000 MiB are allocated for a directory that cannot be valid. */
+    uint8_t hd[INDEX_HEADER_SIZE];
+    if(read_all(fd, hd, INDEX_HEADER_SIZE, 0) != 0 || memcmp(hd, k_index_magic, 8) || g32(hd, 8) != 4) { close(fd); say(err, en, "Das Paketverzeichnis ist ungültig: kein AMPRPAK4."); return -1; }
+    uint64_t hnf = g64(hd, 40), hnc = g64(hd, 48), hns = g64(hd, 104);
+    uint32_t hnp = g32(hd, 56);
+    if(hnf > MAX_FILES || hnc > MAX_CHUNKS || hnp > MAX_PACKS || hns > (uint64_t)len ||
+       INDEX_HEADER_SIZE + hnf * FILE_REC + hnc * CHUNK_REC + (uint64_t)hnp * PACK_REC + hns != (uint64_t)len) {
+      close(fd);
+      say(err, en, "Das Paketverzeichnis ist ungültig: Größe und Kopf passen nicht zusammen.");
+      return -1;
+    }
+  }
   uint8_t *b = malloc(len);
   if(!b) { close(fd); say(err, en, "Kein Speicher."); return -1; }
   if(read_all(fd, b, len, 0) != 0) { close(fd); free(b); say(err, en, "Das Paketverzeichnis ließ sich nicht lesen."); return -1; }
