@@ -28,6 +28,16 @@ static struct {
   uint64_t at_ms;
 } g_job;
 
+/* 1 while a drive is being ejected, from the first claim to the end (audit 11.11.2026, F-06): the jobs of the app do not start in that
+   window (they list this next to the other busy functions), as the eject does not start beside them. */
+int
+ps5tm_usbeject_busy(void) {
+  pthread_mutex_lock(&g_lock);
+  int b = g_job.running;
+  pthread_mutex_unlock(&g_lock);
+  return b;
+}
+
 /* /mnt/usb0../mnt/usb7 and /mnt/ext0: what ShadowMountPlus calls ejectable (the M.2 drive /mnt/ext1 is not). */
 int
 ps5tm_usbeject_path_ok(const char *mount) {

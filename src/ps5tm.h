@@ -1453,6 +1453,7 @@ struct cJSON *ps5tm_backdrops_json(void);
    this app's jobs runs and no folder of the drive is mounted elsewhere. start: 202 started, else the HTTP status of the
    refusal, msg says why. */
 int           ps5tm_usbeject_path_ok(const char *mount);
+int           ps5tm_usbeject_busy(void);                   /* 1 while a drive is being ejected: no job of the app starts beside it (audit F-06) */
 /* 1 and what runs ("Es läuft eine Kopie oder ein Dump") while any of the app's own jobs runs. */
 int           ps5tm_app_job_running(char *why, size_t n);
 /* smpremount.c (30.10.2026): one game "mount", "unmount" or "remount" through ShadowMountPlus; the HTTP status and a

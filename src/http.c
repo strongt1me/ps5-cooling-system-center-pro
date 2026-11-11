@@ -49,9 +49,18 @@ static atomic_int g_connections;
 static pthread_mutex_t g_peer_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct { uint32_t ip; int n; } g_peer[PEER_SLOTS];
 
+/* The app's own helpers on the loopback (the full-screen tile, the console's browser, the app itself) have a limit of their own instead of none
+   (audit 11.11.2026, F-08): a tile that retried every few seconds against a slow server could take all 24 places. 12 is more than a
+   page load (about six) and the tile's two threads need. */
+#define MAX_LOOPBACK 12
+static atomic_int g_loopback;
+
 static int
 peer_acquire(uint32_t ip) {
-  if((ntohl(ip) >> 24) == 127) return 1;
+  if((ntohl(ip) >> 24) == 127) {
+    if(atomic_fetch_add(&g_loopback, 1) >= MAX_LOOPBACK) { atomic_fetch_sub(&g_loopback, 1); return 0; }
+    return 1;
+  }
   int ok = 1, free_slot = -1;
   pthread_mutex_lock(&g_peer_lock);
   for(int i = 0; i < PEER_SLOTS; i++) {
@@ -69,7 +78,7 @@ peer_acquire(uint32_t ip) {
 
 static void
 peer_release(uint32_t ip) {
-  if((ntohl(ip) >> 24) == 127) return;
+  if((ntohl(ip) >> 24) == 127) { atomic_fetch_sub(&g_loopback, 1); return; }
   pthread_mutex_lock(&g_peer_lock);
   for(int i = 0; i < PEER_SLOTS; i++)
     if(g_peer[i].n > 0 && g_peer[i].ip == ip) { g_peer[i].n--; break; }
@@ -836,7 +845,7 @@ ps5tm_http_bind(unsigned port) {
     return -1;
   }
 
-  if(listen(srv, 16) != 0) {
+  if(listen(srv, 128) != 0) {
     int eno = errno;
     close(srv);
     PS5TM_ERROR("http_listen_failed",

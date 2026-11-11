@@ -727,10 +727,19 @@ drain_body(int fd, size_t already, size_t total) {
   if(already >= total) return;
   char buf[4096];
   size_t left = total - already;
-  while(left) {
-    int r = read_some(fd, buf, left < sizeof(buf) ? left : sizeof(buf));
+  /* A refused upload reads off (and drops) the rest of its body before the answer goes out. Without a budget a sender that claims 10^12 bytes and
+     sends one every few seconds held this thread, and with it the upload lock, for good (audit 11.11.2026, F-15): at most 64 MiB and 15 s;
+     then the answer goes out and the connection closes. */
+  uint64_t t0 = ps5tm_mono_ms();
+  size_t budget = (size_t)64 << 20;
+  while(left && budget) {
+    if(ps5tm_mono_ms() - t0 > 15000) return;
+    size_t want = left < sizeof(buf) ? left : sizeof(buf);
+    if(want > budget) want = budget;
+    int r = read_some(fd, buf, want);
     if(r <= 0) return;
     left -= (size_t)r;
+    budget -= (size_t)r;
   }
 }
 
@@ -991,7 +1000,7 @@ job_state(int s) {
 static int
 other_job_active(char *err, size_t n) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_ampr_busy() || ps5tm_imgjob_busy() ||
+     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_usbeject_busy() || ps5tm_ampr_busy() || ps5tm_imgjob_busy() ||
      ps5tm_disc_busy()) {
     snprintf(err, n, "Es läuft gerade ein anderer Vorgang der App (Kopieren, Konvertieren, Verschieben, Spielstände, "
              "Paket teilen oder installieren, Löschen, Disc-Abbild). Bitte danach noch einmal.");

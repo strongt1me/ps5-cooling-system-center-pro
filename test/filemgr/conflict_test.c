@@ -18,6 +18,7 @@
 /* ---- what filemgr.c asks of the rest of the app */
 int ps5tm_ampr_busy(void) { return 0; }
 int ps5tm_disc_busy(void) { return 0; }
+int ps5tm_usbeject_busy(void) { return 0; }
 int ps5tm_gameconvert_busy(void) { return 0; }
 int ps5tm_gamecopy_busy(void) { return 0; }
 int ps5tm_gamedelete_busy(void) { return 0; }

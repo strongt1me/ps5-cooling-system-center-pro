@@ -1101,7 +1101,7 @@ ps5tm_imgjob_plan(const char *id, char *err, size_t err_len) {
 static int
 other_job(char *err, size_t n) {
   if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy()) {
+     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_gamedelete_busy() || ps5tm_usbeject_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy()) {
     snprintf(err, n, "Es läuft gerade ein anderer Vorgang der App. Bitte danach noch einmal.");
     return 1;
   }

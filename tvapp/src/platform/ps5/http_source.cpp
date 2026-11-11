@@ -1119,6 +1119,14 @@ void HttpSource::run()
                 }
             }
         }
+        if (status_failures_ > 0)
+        {
+            // The app is slow or does not answer: no further questions in this pass, and a pause that grows with every miss (up to
+            // 2 s), so that this tile does not add to the load that made the app slow (audit 11.11.2026, F-08). Requests of the
+            // person are taken at the top of the loop as before.
+            sys::sleep_us(std::min(status_failures_, 4) * 500000);
+            continue;
+        }
         if (library_wanted || now - last_library >= 30000000)
         {
             library_wanted = false;

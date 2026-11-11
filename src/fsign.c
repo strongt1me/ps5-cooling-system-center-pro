@@ -705,7 +705,11 @@ ps5tm_fsign_stage(const char *root, const char *stage, const fsign_list_t *l, co
 int
 ps5tm_fsign_replace(const char *root, const fsign_list_t *l, const int *cancel, fsign_prog_fn prog, void *ctx, unsigned *done,
                     unsigned *index_resized, char *err, size_t en) {
-  unsigned n = 0;
+  unsigned n = 0, flushed = 0;
+  /* The index is corrected after every FS_INDEX_BATCH files and at the end, not only at the end (audit 11.11.2026, F-10): a power cut or a
+     SIGKILL halfway no longer leaves a long list of signed files that the index still lists at their old sizes, which a second run would
+     not repair (it only picks up unsigned files). */
+  enum { FS_INDEX_BATCH = 20 };
   if(done) *done = 0;
   if(index_resized) *index_resized = 0;
   char *src = malloc(PATH_MAX), *tmp = malloc(PATH_MAX + 32);
@@ -747,19 +751,37 @@ ps5tm_fsign_replace(const char *root, const fsign_list_t *l, const int *cancel, 
     tv[0].tv_usec = tv[1].tv_usec = 0;
     utimes(src, tv);
     n++;
+    if(n - flushed >= FS_INDEX_BATCH) {
+      fsign_list_t part;
+      memset(&part, 0, sizeof(part));
+      part.it = l->it + flushed;                                   /* the files done since the last correction; part is never freed */
+      part.n = n - flushed;
+      char ip[PATH_MAX + 32], why[300] = "";
+      unsigned rs = 0;
+      if(snprintf(ip, sizeof(ip), "%s/" FS_INDEX_NAME, root) < (int)sizeof(ip) &&
+         ps5tm_fsign_fix_index(ip, ip, &part, &rs, why, sizeof(why)) != 0) {
+        say(err, en, "%s", why);
+        rc = -1;
+        break;
+      }
+      if(index_resized) *index_resized += rs;
+      flushed = n;
+    }
   }
   if(done) *done = n;
-  if(n) {                                                          /* the index lists the files done at their SELF sizes */
+  if(n > flushed) {                                                /* the index lists the files done at their SELF sizes */
     fsign_list_t sub;
     memset(&sub, 0, sizeof(sub));
-    sub.it = l->it;                                                /* the files done are the first n; sub is never freed */
-    sub.n = n;
+    sub.it = l->it + flushed;                                      /* the rest of the files done; sub is never freed */
+    sub.n = n - flushed;
     char ip[PATH_MAX + 32], why[300] = "";
+    unsigned rs = 0;
     if(snprintf(ip, sizeof(ip), "%s/" FS_INDEX_NAME, root) < (int)sizeof(ip) &&
-       ps5tm_fsign_fix_index(ip, ip, &sub, index_resized, why, sizeof(why)) != 0 && !rc) {
+       ps5tm_fsign_fix_index(ip, ip, &sub, &rs, why, sizeof(why)) != 0 && !rc) {
       say(err, en, "%s", why);
       rc = -1;
     }
+    if(index_resized) *index_resized += rs;
   }
   free(src);
   free(tmp);

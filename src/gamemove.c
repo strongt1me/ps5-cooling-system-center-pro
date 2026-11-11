@@ -397,9 +397,14 @@ waiting_for_tile(void) {
   return on;
 }
 
-int
-ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
-                     int delete_source, char *err, size_t err_len) {
+/* 1 from the first check of a start until ShadowMountPlus has taken the job (audit 11.11.2026, F-07): the other jobs of the app see a move
+   that is only being started (ps5tm_gamemove_busy) and do not start beside it, and a second move does not start in the gap between asking
+   and ShadowMountPlus' reply. */
+static int g_starting;
+
+static int
+gamemove_start_checked(const char *title_id, const char *op, const char *dest_dir,
+                       int delete_source, char *err, size_t err_len) {
   ps5tm_smp_game_t s;
   int st = check_title(title_id, op, &s, err, err_len);
   if(st != 200) return st;
@@ -489,6 +494,10 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
              "und Verschieben laufen nicht gleichzeitig damit.");
     return 409;
   }
+  if(ps5tm_usbeject_busy()) {
+    snprintf(err, err_len, "Ein Laufwerk wird gerade ausgeworfen. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig damit.");
+    return 409;
+  }
   if(ps5tm_gamedelete_busy()) {
     snprintf(err, err_len, "Es wird gerade ein Spiel oder eine Sicherung gelöscht. Kopieren, Konvertieren "
              "und Verschieben laufen nicht gleichzeitig damit.");
@@ -574,6 +583,18 @@ ps5tm_gamemove_status(char *err, size_t err_len) {
   return ans;
 }
 
+int
+ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
+                     int delete_source, char *err, size_t err_len) {
+  if(__atomic_exchange_n(&g_starting, 1, __ATOMIC_ACQ_REL)) {
+    snprintf(err, err_len, "Es wird gerade schon ein Verschieben oder Entpacken gestartet. Bitte einen Moment warten.");
+    return 409;
+  }
+  int rc = gamemove_start_checked(title_id, op, dest_dir, delete_source, err, err_len);
+  __atomic_store_n(&g_starting, 0, __ATOMIC_RELEASE);
+  return rc;
+}
+
 /* 1 while ShadowMountPlus runs a storage job (a move, an unpack). For the
    app's own copy and conversion, which do not start beside one. A short
    timeout: this sits in the way of a start, and a ShadowMountPlus that does
@@ -581,6 +602,7 @@ ps5tm_gamemove_status(char *err, size_t err_len) {
    the person from copying. */
 int
 ps5tm_gamemove_busy(void) {
+  if(__atomic_load_n(&g_starting, __ATOMIC_ACQUIRE)) return 1;
   if(waiting_for_tile()) return 1;
   char err[128];
   cJSON *job = ps5tm_smp_call("/games/storage/status", NULL, 1500, err, sizeof(err));

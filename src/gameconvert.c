@@ -1209,6 +1209,10 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
              "und Verschieben laufen nicht gleichzeitig damit.");
     return 1;
   }
+  if(ps5tm_usbeject_busy()) {
+    snprintf(err, err_len, "Ein Laufwerk wird gerade ausgeworfen. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig damit.");
+    return 1;
+  }
   if(ps5tm_gamedelete_busy()) {
     snprintf(err, err_len, "Es wird gerade ein Spiel oder eine Sicherung gelöscht. Kopieren, Konvertieren "
              "und Verschieben laufen nicht gleichzeitig damit.");
