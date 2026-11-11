@@ -5006,8 +5006,17 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   if(!strcmp(req->path, "/api/v1/open-ui")) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
     if(strcmp(req->peer, "127.0.0.1")) { ps5tm_http_send_error(fd, 403, "forbidden", "Nur von der Konsole selbst."); return; }
-    char url[48];
-    snprintf(url, sizeof(url), "http://127.0.0.1:%d", PS5TM_TILE_DEEPLINK_PORT);
+    /* The full-screen app says so ({"from":"fullscreen"}): the page then carries ?vollbild=1 and shows the card for the full-screen app's
+       background pictures (System page), which is of no use to anyone who only opens the browser app (11.11.2026). */
+    int from_fullscreen = 0;
+    if(req->body && req->body_len) {
+      cJSON *b = cJSON_Parse(req->body);
+      const cJSON *jf = b ? cJSON_GetObjectItem(b, "from") : NULL;
+      from_fullscreen = cJSON_IsString(jf) && !strcmp(jf->valuestring, "fullscreen");
+      if(b) cJSON_Delete(b);
+    }
+    char url[64];
+    snprintf(url, sizeof(url), "http://127.0.0.1:%d%s", PS5TM_TILE_DEEPLINK_PORT, from_fullscreen ? "/?vollbild=1" : "");
     int rc = ps5tm_open_ui(url);
     ps5tm_http_send_json(fd, rc == 0 ? 200 : 503, rc == 0 ? "{\"ok\":true}" : "{\"ok\":false}");
     return;

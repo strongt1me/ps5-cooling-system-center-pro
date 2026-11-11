@@ -71,7 +71,8 @@ installiert.
 **Darstellung.** Neben der Sortierung wählst du die „Darstellung“: **groß (wie bisher)** oder
 **kompakt**. Bei „kompakt“ steht das Bild klein neben dem Titel und die Knöpfe sind eine Reihe von
 Symbolen; fährst du mit der Maus oder dem Steuerkreuz auf ein Symbol (oder drückst „i“), steht unten, was es macht. Die Knöpfe sind in beiden Ansichten dieselben (gleiche
-Funktion, gleiche Sperren und Hinweise); der Browser merkt sich die Wahl je Gerät.
+Funktion, gleiche Sperren und Hinweise); der Browser merkt sich die Wahl je Gerät. Seit dem 11.11.2026 ist „kompakt“ die Vorgabe;
+wer „groß“ gewählt hat, behält es.
 
 **Firmware.** Unter dem Titel steht auch die Firmware, die das Spiel verlangt („FW 13.60“, bei PS4-Titeln
 „PS4-FW“); verlangt es eine neuere als die der Konsole, ist die Marke gelb. Ist ein Backport angewendet, steht
@@ -113,8 +114,8 @@ Jedes Spiel bringt diese Dateien selbst mit, im eigenen `fakelib`-Ordner. Die Ap
   den Spielordner (FTP oder vergleichbar), ohnehin nur möglich bei Spielen aus
   einem Ordner, nicht bei einem Abbild oder einem installierten Paket.
 
-**Covers & Metadaten speichern.** Rechts neben den Reitern der Seite steht ein Schalter dieses
-Namens, ab Werk aus. Eingeschaltet legt die App auf der Konsole ab, was sie beim Lesen der Liste
+**Covers & Metadaten.** Seit dem 11.11.2026 gibt es dafür keinen Schalter und keine Anzeige mehr: Die App
+speichert sie immer. Sie legt auf der Konsole ab, was sie beim Lesen der Liste
 sonst jedes Mal neu holen muss, im Ordner `/data/PS5-Cooling-Center/covers_and_more` (so heißt er seit dem 05.10.2026; ein
 älterer Ordner `covers_and_moore` wird beim ersten Zugriff umbenannt): je Spiel
 ein Ordner mit der Titel-ID, darin `icon0.png` (eine Kopie des Titelbilds) und `meta.json` (die
@@ -125,10 +126,8 @@ nutzt sie diese Dateien: Bilder kommen aus der Kopie, und ein Spielordner, desse
 weniger als sechs Stunden gemessen wurde, wird nicht noch einmal durchgezählt. Was sich seither
 geändert hat (eine andere `eboot.bin`, eine neue Ersatzbibliothek, ein anderes Bild), erkennt die
 App und liest es neu. Kommt ein Spiel dazu, wird es mit dem nächsten Lesen mitgespeichert.
-Neben dem Schalter steht, wie viel im Ordner liegt, und „Ordner leeren“ räumt
-ihn auf: Gelöscht wird nur, was die App selbst angelegt hat (Ordner mit einer Titel-ID als Namen
-und darin `meta.json`, `icon0.png` und deren Zwischendateien), nie etwas anderes, und nie ein Spiel.
-Ausschalten löscht nichts; die Dateien bleiben liegen, werden dann aber nicht benutzt. Ein Bild über
+Von Hand aufräumen lässt sich der Ordner mit dem Dateimanager (nur Ordner mit einer Titel-ID als Namen und darin `meta.json`,
+`icon0.png` und deren Zwischendateien gehören der App); die App legt ihn beim nächsten Lesen der Liste neu an. Ein Bild über
 6 MB wird nicht kopiert, und alle Bilder zusammen bleiben unter 160 MB.
 
 ## Spiele starten und beenden

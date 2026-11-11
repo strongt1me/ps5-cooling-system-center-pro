@@ -260,17 +260,6 @@
               <button type="button" class="gm-chip" id="gm-tab-bk" role="tab" aria-selected="false">Sicherungen</button>
               <button type="button" class="gm-chip" id="gm-tab-hist" role="tab" aria-selected="false">Verlauf</button>
             </div>
-            <!-- Zwischenspeicher der Spieleliste (libcache.c, 04.10.2026): Titelbilder und die Angaben, die
-                 ein Scan sonst bei jedem Lesen neu holt, auf der Konsole in covers_and_more. -->
-            <div class="gm-cache" id="gm-cache">
-              <span class="gm-cache-info" id="gm-cache-info" hidden></span>
-              <button type="button" class="btn ghost" id="gm-cache-clear" hidden>Ordner leeren</button>
-              <label class="xswitch" for="gm-cache-on"
-                     title="Speichert die Titelbilder und Angaben Ihrer Spiele auf der Konsole (Ordner /data/PS5-Cooling-Center/covers_and_more), damit die Liste schneller lädt.">
-                <span>Covers &amp; Metadaten speichern</span>
-                <span class="switch"><input type="checkbox" id="gm-cache-on" aria-describedby="gm-cache-info"><i></i></span>
-              </label>
-            </div>
           </div>
 
           <div id="gm-pane-lib">
@@ -1432,7 +1421,7 @@
           </article>
 
           <!-- Hintergrundbilder der Vollbild-App (backdrops.c, GET/POST /api/v1/backdrops); app.js (bdLoad) füllt es. -->
-          <article class="card" id="bd-card">
+          <article class="card" id="bd-card" hidden>
             <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-display"/></svg></span><div class="ck-text"><h2>Hintergründe der Vollbild-App</h2>
               <p class="sub">Ein eigenes Bild für jeden Bereich</p></div></div></div>
             <div class="bd-grid" id="bd-grid"><p class="muted">wird gelesen …</p></div>

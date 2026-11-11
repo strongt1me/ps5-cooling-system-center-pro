@@ -576,7 +576,6 @@ struct LibraryTools
 {
     std::uint64_t seq = 0;
     std::string duplicates; // GET /api/v1/library/duplicates
-    std::string cache;      // GET /api/v1/library/cache
 };
 
 // GET /api/v1/klog/files: what lies in the console's kernel-log folder.

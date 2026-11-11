@@ -333,7 +333,7 @@ void HttpSource::set_backdrop(const std::string &area, BackdropMode mode)
         {
             notice(
                 Notice::Kind::error, "Kein eigenes Bild",
-                "Lade es zuerst in der Browser-App hoch: System → Hintergründe der Vollbild-App.");
+                "Öffne zuerst die Browser-App aus dieser App (Options → Weboberfläche im Browser öffnen) und lade es dort hoch: System → Hintergründe der Vollbild-App.");
             return;
         }
     }
@@ -1615,7 +1615,7 @@ void HttpSource::handle(const Request &request)
         break;
     }
     case Request::Kind::web:
-        if (exchange("POST", "/api/v1/open-ui", "{}", &status, &body) == Net::ok && status < 300)
+        if (exchange("POST", "/api/v1/open-ui", "{\"from\":\"fullscreen\"}", &status, &body) == Net::ok && status < 300)
             notice(Notice::Kind::info, "Weboberfläche", "Wird im Browser der Konsole geöffnet.");
         else
             notice(Notice::Kind::error, "Browser nicht geöffnet",
@@ -3506,16 +3506,12 @@ void HttpSource::poll_extras(const std::string &id)
 void HttpSource::poll_library_tools()
 {
     int status = 0;
-    std::string dup, cache, body;
+    std::string dup, body;
     if (exchange("GET", "/api/v1/library/duplicates", {}, &status, &body, 30) == Net::ok &&
         status == 200)
         dup = std::move(body);
-    if (exchange("GET", "/api/v1/library/cache", {}, &status, &body, 10) == Net::ok &&
-        status == 200)
-        cache = std::move(body);
     std::lock_guard<std::mutex> lock(mutex_);
     data_.library_tools.duplicates = std::move(dup);
-    data_.library_tools.cache = std::move(cache);
     ++data_.library_tools.seq;
     ++data_.serial;
 }

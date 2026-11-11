@@ -68,12 +68,11 @@ static uint64_t        g_tick;                               /* counts the looku
 
 /* ------------------------------------------------------------------ small things */
 
+/* Always on (user, 11.11.2026): the switch and the folder's display are gone from the pages; the setting library_cache stays in the
+   config for compatibility but no longer decides anything. */
 int
 ps5tm_libcache_enabled(void) {
-  ps5tm_config_lock();
-  int on = g_config.library_cache != 0;
-  ps5tm_config_unlock();
-  return on;
+  return 1;
 }
 
 static int

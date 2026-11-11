@@ -1069,8 +1069,6 @@ class MockSource final : public Source
             R"({"path":"/mnt/usb0/homebrew/Lantern Pass.ffpfsc","size":31200000000,"folder":false,"set_aside":false,"smp_uses":true,"mounted":true},)"
             R"({"path":"/mnt/ext1/homebrew/Lantern Pass.exfat","size":41000000000,"folder":false,"set_aside":false,"smp_uses":false,"mounted":false}]}],)"
             R"("aside":[{"path":"/mnt/usb0/homebrew/Iron Tide.exfat.off","title_id":"CUSA18842","size":22000000000}]})";
-        l.cache =
-            R"({"ok":true,"enabled":true,"dir":"/data/PS5-Cooling-Center/covers_and_more","titles":36,"covers":36,"bytes":9400000})";
         changed();
     }
 
@@ -1430,7 +1428,7 @@ class MockSource final : public Source
             if (mode == BackdropMode::custom && !b.custom)
             {
                 notice(Notice::Kind::error, "Kein eigenes Bild",
-                       "Lade es zuerst in der Browser-App hoch: System → Hintergründe der "
+                       "Öffne zuerst die Browser-App aus dieser App (Options → Weboberfläche im Browser öffnen) und lade es dort hoch: System → Hintergründe der "
                        "Vollbild-App.");
                 changed();
                 return;

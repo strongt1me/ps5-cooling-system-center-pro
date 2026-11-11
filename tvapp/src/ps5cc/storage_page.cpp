@@ -5,9 +5,8 @@
 // As the drives on the web app's System page: each with its free space; ✕ on a USB drive ejects it
 // through ShadowMountPlus (1.7beta10). The app itself refuses while one of its jobs runs or
 // PS4Mount plays games from the drive (src/usbeject.c), and says why; nothing is asked twice
-// (user, 27.10.2026). Under the drives: the library's cover and metadata folder (GET
-// /api/v1/library/cache), moved here from the library window (user, 29.10.2026), and the pictures
-// behind the areas, folded in until the X button opens them (moved from Kühlung → Einstellungen,
+// (user, 27.10.2026). Under the drives: the pictures
+// behind the areas (the cover and metadata folder is always on and no longer shown, user 11.11.2026), folded in until the X button opens them (moved from Kühlung → Einstellungen,
 // user 29.10.2026). Each part has its own title.
 
 #include "ps5cc/backdrops.hpp"
@@ -30,8 +29,6 @@ namespace
 using gfx::Color;
 using gfx::Rect;
 
-constexpr int kCacheToggle = 1000; // list tags past the drives
-constexpr int kCacheClear = 1001;
 constexpr int kBgToggle = 1100; // the row that folds the pictures in and out
 constexpr int kBgArea = 1101;   // + area
 constexpr const char *kAreaLabels[kBackdropAreas] = {
@@ -92,11 +89,6 @@ class StoragePage final : public Page
             }
             bg_loaded_ = true;
         }
-        if (data.library_tools.seq != cache_seq_)
-        {
-            cache_seq_ = data.library_tools.seq;
-            read_cache(data.library_tools.cache);
-        }
         rebuild();
     }
 
@@ -140,26 +132,6 @@ class StoragePage final : public Page
             rebuild();
             return;
         }
-        if (tag == kCacheToggle || tag == kCacheClear)
-        {
-            if (tag == kCacheClear && cache_titles_ <= 0)
-            {
-                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
-                return;
-            }
-            feedback.play(audio::Cue::select);
-            if (tag == kCacheToggle)
-            {
-                cache_on_ = !cache_on_;
-                source().save_config(std::string("{\"library_cache\":") + (cache_on_ ? "1" : "0") +
-                                     "}");
-                source().library_tools_fetch();
-                rebuild();
-            }
-            else
-                source().library_tools_post("library/cache/clear", "{}");
-            return;
-        }
         const Volume *v = focused();
         if (v == nullptr || !can_eject(*v))
         {
@@ -196,28 +168,11 @@ class StoragePage final : public Page
                           "Standard, Eigenes Bild und Aus (ein schlichter Verlauf).",
                           card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kInk, 6);
             paragraph(canvas,
-                      "Eigene Bilder lädst du in der Browser-App hoch: System → Hintergründe. Ohne "
-                      "hochgeladenes "
+                      "Eigene Bilder lädst du in der Browser-App hoch, die du von hier öffnest "
+                      "(Options → Weboberfläche im Browser öffnen): System → Hintergründe der "
+                      "Vollbild-App. Nur so erscheint dieser Bereich dort. Ohne hochgeladenes "
                       "Bild wird „Eigenes Bild“ übersprungen.",
                       card.x + 30.0f, y0 + 24.0f, card.w - 60.0f, kMuted, 6);
-            return;
-        }
-        if (tag == kCacheToggle || tag == kCacheClear)
-        {
-            ui::text(list, fonts.display, "Covers & Metadaten", card.x + 30.0f, card.y + 66.0f,
-                     32.0f, kInk);
-            const float y0 = paragraph(
-                canvas,
-                "Die App speichert Cover, Namen und Größen der Spiele auf der Konsole. So ist "
-                "die Bibliothek nach einem Neustart sofort mit Bildern da, ohne alles neu zu "
-                "lesen.",
-                card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kInk, 6);
-            paragraph(
-                canvas,
-                "Ordner leeren löscht nur diese gespeicherten Bilder und Angaben; die App liest "
-                "sie beim "
-                "nächsten Öffnen der Bibliothek neu. Spiele und Spielstände bleiben unberührt.",
-                card.x + 30.0f, y0 + 24.0f, card.w - 60.0f, kMuted, 6);
             return;
         }
         ui::text(list, fonts.display,
@@ -269,10 +224,6 @@ class StoragePage final : public Page
             out[n++] = {ui::Button::cross, bg_open_ ? "Zuklappen" : "Aufklappen"};
         else if (tag >= kBgArea && tag < kBgArea + kBackdropAreas)
             out[n++] = {ui::Button::cross, "Wechseln"};
-        else if (tag == kCacheToggle)
-            out[n++] = {ui::Button::cross, cache_on_ ? "Ausschalten" : "Einschalten"};
-        else if (tag == kCacheClear && cache_titles_ > 0)
-            out[n++] = {ui::Button::cross, "Leeren"};
         else if (const Volume *v = focused(); v != nullptr && can_eject(*v))
             out[n++] = {ui::Button::cross, "Auswerfen"};
         return n;
@@ -336,8 +287,6 @@ class StoragePage final : public Page
             n.tag = -1;
             out.push_back(n);
         }
-        out.push_back(header("COVERS & METADATEN"));
-        append_cache(out);
         out.push_back(header("HINTERGRUNDBILDER"));
         ui::ListItem fold;
         fold.title = "Hintergrundbilder der Bereiche";
@@ -396,24 +345,6 @@ class StoragePage final : public Page
         }
     }
 
-    void append_cache(std::vector<ui::ListItem> &out) const
-    {
-        ui::ListItem toggle;
-        toggle.title = "Covers & Metadaten speichern";
-        toggle.subtitle = "Damit die Bibliothek nach einem Neustart sofort mit Bildern da ist.";
-        toggle.value = cache_on_ ? "An" : "Aus";
-        toggle.tag = kCacheToggle;
-        out.push_back(toggle);
-        ui::ListItem clear;
-        clear.title = "Covers-Ordner leeren";
-        clear.subtitle = cache_known_ ? std::to_string(cache_titles_) + " Spiele gespeichert · " +
-                                            format_bytes(cache_bytes_)
-                                      : std::string("Wird gelesen …");
-        clear.disabled = cache_titles_ <= 0;
-        clear.tag = kCacheClear;
-        out.push_back(clear);
-    }
-
     // Rebuilt only when what the list shows changed: a refill restarts its animation.
     void rebuild()
     {
@@ -429,24 +360,6 @@ class StoragePage final : public Page
             list_.set_focus(focus);
         }
         refresh_info();
-    }
-
-    void read_cache(const std::string &text)
-    {
-        cJSON *root = text.empty() ? nullptr : cJSON_Parse(text.c_str());
-        cache_known_ = root != nullptr;
-        if (root != nullptr)
-        {
-            const cJSON *on = cJSON_GetObjectItemCaseSensitive(root, "enabled");
-            const cJSON *titles = cJSON_GetObjectItemCaseSensitive(root, "titles");
-            const cJSON *bytes = cJSON_GetObjectItemCaseSensitive(root, "bytes");
-            cache_on_ = !cJSON_IsBool(on) || cJSON_IsTrue(on);
-            cache_titles_ = cJSON_IsNumber(titles) ? titles->valueint : 0;
-            cache_bytes_ = cJSON_IsNumber(bytes) && bytes->valuedouble > 0.0
-                               ? static_cast<std::uint64_t>(bytes->valuedouble)
-                               : 0;
-            cJSON_Delete(root);
-        }
     }
 
     void refresh_info()
@@ -476,11 +389,6 @@ class StoragePage final : public Page
     std::vector<Volume> volumes_;
     bool loaded_ = false;
     UsbEject eject_;
-    std::uint64_t cache_seq_ = 0;
-    bool cache_known_ = false;
-    bool cache_on_ = true;
-    int cache_titles_ = 0;
-    std::uint64_t cache_bytes_ = 0;
     bool bg_open_ = false;
     bool bg_loaded_ = false;
     std::array<bool, kBackdropAreas> bg_custom_{};

@@ -1098,9 +1098,6 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 /* Spiele: die Reiter links, der Schalter für den Zwischenspeicher am rechten Ende der Zeile */
 .pg-tabbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
 .pg-tabbar .pg-tabs { margin: 0; }
-.gm-cache { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; margin-left: auto; }
-.gm-cache-info { color: var(--ink-muted); font-size: 12px; }
-.gm-cache .btn { padding: 6px 13px; border-radius: 999px; font-size: 12.5px; }
 .kl-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 4px 0 12px; }
 .kl-tools input[type=search] { flex: 1 1 260px; min-width: 0; padding: 9px 12px; border-radius: 9px;
   border: 1px solid var(--hairline); background: var(--inset); color: var(--ink); font: inherit; }
@@ -2243,9 +2240,13 @@ button.apr-drive:disabled { cursor: default; }
 .gm-help span { color: var(--ink-2); font-size: 12.5px; line-height: 1.45; }
 .gm-help small { color: var(--ink-muted); font-size: 12px; line-height: 1.4; }
 :root[data-gmview="compact"] .gm-grid { grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; }
-:root[data-gmview="compact"] .gm-card { display: grid; grid-template-columns: 78px minmax(0, 1fr); grid-template-rows: auto 1fr auto;
+:root[data-gmview="compact"] .gm-card { display: grid; grid-template-columns: 78px minmax(0, 1fr); grid-template-rows: auto minmax(52px, 1fr) auto;
   grid-template-areas: "c t" "c g" "a a"; column-gap: 12px; row-gap: 8px; padding: 12px; align-content: start; position: relative; }
-:root[data-gmview="compact"] .gm-cover { grid-area: c; border-radius: 10px; overflow: hidden; align-self: start; }
+:root[data-gmview="compact"] .gm-cover { border-radius: 10px; overflow: hidden;
+  /* Das Titelbild steht frei links oben, nicht mehr als Rasterelement über zwei Zeilen (11.11.2026): Ein Element, das eine flexible Zeile (1fr) überspannt,
+     gibt seine ganze Höhe an diese Zeile weiter (Regel des Rasters), und der Browser der PS5 rechnete das mal so, mal anders: Die Karten waren erst
+     etwa 18 px höher (158 statt 140) und schrumpften dann von selbst (Screenshots 16:50:11 und 16:50:12). So ist die Höhe immer dieselbe: 12 + Titel + 8 + mindestens 52 + 8 + 28 + 12. */
+  position: absolute; left: 12px; top: 12px; width: 78px; height: 78px; padding-top: 0; grid-area: auto; }
 :root[data-gmview="compact"] .gm-fallback { font-size: 22px; }
 :root[data-gmview="compact"] .gm-plat, :root[data-gmview="compact"] .gm-live { padding: 1px 6px; font-size: 9.5px; }
 :root[data-gmview="compact"] .gm-plat { top: 5px; left: 5px; }
@@ -2333,3 +2334,5 @@ select:focus-visible, textarea:focus-visible,
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus-visible { outline: none; }
 :where(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])):focus-visible { border-color: rgba(138,180,255,.6); }
 :root[data-theme="hell"] :where(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])):focus-visible { border-color: rgba(24,44,84,.5); }
+/* Karte der Hintergründe der Vollbild-App: nur sichtbar, wenn app.js sie freigibt (Adresse mit ?vollbild=1) */
+#bd-card[hidden] { display: none; }

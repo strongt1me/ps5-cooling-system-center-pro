@@ -2119,7 +2119,6 @@
     $("#auto-mode").checked = c.mode === "automatic";
     /* Fehlt das Feld (ältere App), gilt die Vorgabe „an". */
     if ($("#mic-button-status")) $("#mic-button-status").checked = c.ps_button_status !== 0;
-    if ($("#gm-cache-on")) $("#gm-cache-on").checked = !!c.library_cache;
     if ($("#s-smp-version")) { $("#s-smp-version").value = c.smp_version || "auto"; loadSmpNote(); }
 
     /* Regelbereich, Ruhezone, Intervall, Glättung und Schrittweite haben
@@ -4067,6 +4066,10 @@
   /* Hintergründe der Vollbild-App (backdrops.c). Das Bild wird hier zugeschnitten (1280 × 720, Mitte, wie
      „cover“) und als JPEG geschickt: Die Konsole speichert es nur, die Kachel lädt es nach ein paar Sekunden. */
   const bd = { once: false, area: "" };
+  /* Die Karte gibt es nur, wenn die Browser-App aus der Vollbild-App geöffnet wurde (die Adresse trägt dann ?vollbild=1, POST /api/v1/open-ui mit
+     {"from":"fullscreen"}); wer nur die Browser-App öffnet, sieht sie nicht (11.11.2026). Nichts wird gemerkt: Eine andere Adresse zeigt sie nicht. */
+  const bdOn = /[?&]vollbild=1(&|$)/.test(location.search);
+  { const bc = $("#bd-card"); if (bc && bdOn) bc.hidden = false; }
   const BD_MODES = [["standard", "Standardbild"], ["custom", "Eigenes Bild"], ["off", "Kein Bild"]];
   const bdShow = (d) => {
     const grid = $("#bd-grid");
@@ -4143,7 +4146,7 @@
   });
 
   const loadSystem = async () => {
-    if (state.page === "system" && !bd.once) bdLoad();
+    if (bdOn && state.page === "system" && !bd.once) bdLoad();
     let sys;
     try { sys = await api("/api/v1/system"); } catch { return; }
     const qrNow = sys && sys.network ? String(sys.network.ip || "") : "";
@@ -6657,25 +6660,8 @@
   /* die Auswahl „Darstellung“ wechselt die Bilder mit (theme-boot.js setzt das Attribut erst danach, deshalb der Aufschub) */
   { const sel = $("#gm-view"); if (sel) sel.addEventListener("change", () => setTimeout(() => { gmSharpen(); }, 0)); }
 
-  /* ── Covers & Metadaten speichern (04.10.2026) ───────────────────────
-   * Der Zwischenspeicher der Spieleliste (libcache.c): Titelbilder und die Angaben,
-   * die ein Scan sonst bei jedem Lesen neu holt, liegen auf der Konsole in
-   * /data/PS5-Cooling-Center/covers_and_more. Aus (die Vorgabe): nichts wird
-   * geschrieben und nichts benutzt; was schon dort liegt, bleibt, bis jemand den
-   * Ordner leert. Der Schalter ist eine Einstellung (library_cache); loadConfig()
-   * zeigt ihn deshalb auch dann richtig, wenn diese Seite noch nie offen war. */
-  const gcLoad = async () => {
-    try {
-      const d = await api("/api/v1/library/cache");
-      const n = Number(d.titles) || 0;
-      const info = $("#gm-cache-info");
-      info.textContent = n
-        ? `${num(n)} ${n === 1 ? "Spiel" : "Spiele"} gespeichert · ${bytes(d.bytes)}`
-        : "noch nichts gespeichert";
-      info.hidden = !(n || d.enabled);
-      $("#gm-cache-clear").hidden = !n;
-    } catch { /* die Anzeige bleibt, wie sie war */ }
-  };
+  /* (Covers & Metadaten werden immer gespeichert, 11.11.2026: der Schalter und die Anzeige des Ordners sind von der Seite entfernt;
+     der Zwischenspeicher selbst arbeitet in der App, libcache.c.) */
 
   /* `quiet` ist der Minutentakt. Die Liste ändert sich selten; ohne Änderung wird das Raster nicht neu gebaut. Das kostete jede
      Minute alle Karten samt Bildern (am PS5-Browser ein Ruckeln beim Scrollen) und nahm einem halb bestätigten Knopf auf einer
@@ -6693,36 +6679,12 @@
     }
     /* Im Minutentakt ändert ein Fehlschlag bei vorhandener Liste nichts: die alte bleibt stehen, ohne Neubau, und die
        Signatur bleibt erhalten (sonst folgte nach der Erholung noch ein Neubau; Durchsicht 19.10.2026). */
-    if (quiet && !sig && gm.loaded && gm.list.length) { gcLoad(); return; }
+    if (quiet && !sig && gm.loaded && gm.list.length) return;
     const same = !!quiet && gm.loaded && sig !== "" && sig === gm.sig;
     gm.sig = sig;
     gm.loaded = true;
     if (!same) renderGames();
-    gcLoad();
   };
-
-  $("#gm-cache-on").addEventListener("change", async (e) => {
-    const box = e.target, on = box.checked;
-    box.disabled = true;
-    try {
-      await saveConfig({ library_cache: on ? 1 : 0 },
-        on ? "Covers & Metadaten werden gespeichert."
-           : "Covers & Metadaten werden nicht mehr gespeichert. Was schon im Ordner liegt, bleibt, bis er geleert wird.");
-      loadGames();                       /* die nächste Liste füllt den Ordner (oder lässt ihn in Ruhe) */
-    } catch (err) {
-      box.checked = !on;
-      toast(err.message, "error");
-    }
-    box.disabled = false;
-  });
-  oneClick($("#gm-cache-clear"), async () => {
-    try {
-      const r = await api("/api/v1/library/cache/clear", { method: "POST" });
-      toast(r.titles ? `${num(r.titles)} ${r.titles === 1 ? "Spiel" : "Spiele"} aus dem Ordner entfernt (${bytes(r.bytes)}).`
-                     : "Es gab nichts zu löschen.");
-      loadGames();                       /* ist der Schalter an, füllt sich der Ordner mit dieser Liste neu */
-    } catch (e) { toast(e.message, "error"); }
-  });
 
   /* Infos-Fenster: eines für alle Karten, fest über der Seite. Es sitzt über dem
      Knopf (oder darunter, wenn oben kein Platz ist) und folgt ihm beim Scrollen;

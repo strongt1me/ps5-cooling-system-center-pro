@@ -779,6 +779,15 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
   }
   snprintf(tmp, sizeof(tmp), "%s" UPLOAD_EXT, real);
   int out = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0777);          /* 0777 like a game file (lz4pack.h), as FTP does */
+  if(out < 0 && errno == EEXIST) {
+    /* A leftover of a crashed or killed upload (audit 11.11.2026, F-14). Only one upload runs at a time (g_upload_lock is
+       held here), so a plain file of this name is not under way any more; a link or folder of that name is left alone. */
+    struct stat ls;
+    if(lstat(tmp, &ls) == 0 && S_ISREG(ls.st_mode) && unlink(tmp) == 0) {
+      PS5TM_INFO("files_upload_leftover", "Dateien: eine übrig gebliebene Teil-Datei vom Hochladen entfernt: %.150s", tmp);
+      out = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0777);
+    }
+  }
   if(out < 0) {
     char msg[500];
     snprintf(msg, sizeof(msg), "Die Datei ließ sich nicht anlegen: %s", io_words(errno));
@@ -1107,7 +1116,10 @@ handle_write(int fd, const ps5tm_request_t *req) {
     if(w <= 0) { werr = errno ? errno : EIO; break; }
     off += (size_t)w;
   }
-  close(out);
+  /* on the drive before the rename replaces the old file: after a power cut the file is the old one or the new one, never an
+     empty one (audit 11.11.2026, F-14); a failing close counts as a failed write */
+  if(!werr && fsync(out) != 0) werr = errno ? errno : EIO;
+  if(close(out) != 0 && !werr) werr = errno ? errno : EIO;
   if(werr) {
     unlink(tmp);
     char msg[300];

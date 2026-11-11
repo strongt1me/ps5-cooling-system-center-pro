@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "instlock.h"
 #include "ps4m.h"
 #include "ps5tm.h"
 #include "sha256.h"
@@ -334,6 +335,24 @@ main(int argc, char **argv) {
   ps5tm_config_lock();
   unsigned own_port = g_config.http_port;
   ps5tm_config_unlock();
+
+  /* One copy of the app, found without HTTP (audit 11.11.2026, F-12): an older copy that holds the lock is asked to end (SIGTERM, so
+     that it hands the fan back), and only then does this one go on to the fan and the port. The check through the web server below
+     stays for copies from before the lock existed and for a lock that cannot be taken. */
+  int stopped_pid = 0;
+  int lock = ps5tm_instlock_acquire(PS5TM_DATA_DIR "/app.lock", 3000, 2000, &stopped_pid);
+  if(lock == 1 && stopped_pid > 0) {
+    PS5TM_INFO("instance_stopped",
+               "Eine ältere Ausführung dieser App (Prozess %d) wurde über die Sperrdatei beendet; sie war nicht mehr ansprechbar "
+               "oder lief noch.", stopped_pid);
+    wait_for_release(own_port);
+  } else if(lock == 0) {
+    PS5TM_WARN("instance_lock_busy",
+               "Eine ältere Ausführung dieser App hält die Sperrdatei und ließ sich nicht beenden. Zwei gleichzeitig laufende "
+               "drehen beide am Lüfter: PS5 neu starten und die App nur einmal schicken.");
+  } else if(lock < 0) {
+    PS5TM_INFO("instance_lock_unavailable", "Die Sperrdatei der App ließ sich nicht anlegen; ältere Ausführungen werden über den Port gesucht.");
+  }
   retire_siblings(own_port);
 
   if(own_port != PS5TM_TILE_DEEPLINK_PORT)

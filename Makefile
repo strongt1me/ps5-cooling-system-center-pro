@@ -92,6 +92,7 @@ SRCS += src/savebackup.c
 SRCS += src/klogfiles.c
 SRCS += src/backdrops.c
 SRCS += src/usbeject.c
+SRCS += src/instlock.c
 SRCS += src/smpremount.c
 SRCS += src/libcache.c
 SRCS += src/pkgparse.c

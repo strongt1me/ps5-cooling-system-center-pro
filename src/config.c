@@ -185,7 +185,7 @@ ps5tm_config_defaults(ps5tm_config_t *cfg) {
   cfg->lightbar_warn_c = 70;
   cfg->lightbar_hot_c = 76;
   cfg->ps_button_status = 1;
-  cfg->library_cache = 0;
+  cfg->library_cache = 1;
   cfg->night_enabled = 0;
   cfg->night_start_min = 23 * 60;
   cfg->night_end_min = 7 * 60;
@@ -333,7 +333,7 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
   cfg->telemetry_retention_days = clampu(cfg->telemetry_retention_days, 7, 365);
   cfg->lightbar_enabled = cfg->lightbar_enabled ? 1u : 0u;
   cfg->ps_button_status = cfg->ps_button_status ? 1u : 0u;
-  cfg->library_cache = cfg->library_cache ? 1u : 0u;
+  cfg->library_cache = 1u;                 /* always on (11.11.2026): see ps5tm_libcache_enabled() */
   cfg->night_enabled = cfg->night_enabled ? 1u : 0u;
   cfg->night_start_min = clampu(cfg->night_start_min, 0, 1439);
   cfg->night_end_min = clampu(cfg->night_end_min, 0, 1439);
