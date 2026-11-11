@@ -57,7 +57,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Juegos</h3>
-      Iniciar, cerrar, copiar, mover, convertir a exFAT/ffpkg/ffpfsc, asset packs LZ4, APR-EMU, PlayGo.
+      Iniciar, cerrar, copiar, mover, convertir a exFAT/ffpkg/ffpfsc, asset packs LZ4, APR-EMU, PlayGo. Vista compacta (predeterminada) o grande.
     </td>
   </tr>
   <tr>
@@ -98,7 +98,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
     <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Juegos de PS4 desde USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Juegos: biblioteca con iniciar, copiar, convertir</sub></td>
+    <td align="center"><sub>Juegos: biblioteca en vista compacta (predeterminada) con iniciar, copiar, convertir</sub></td>
     <td align="center"><sub>PS4 desde USB: PKG falsos sin instalar</sub></td>
   </tr>
   <tr>
@@ -134,6 +134,10 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
   <tr>
     <td><img src="docs/images/protokoll.jpg" alt="Registro"></td>
     <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Refrigeración en el móvil" width="240"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/spiele-gross.jpg" alt="Juegos en vista grande"></td>
+    <td align="center" valign="middle"><sub>Juegos en vista grande: carátulas grandes, botones con texto (se cambia en la página Juegos)</sub></td>
   </tr>
 </table>
 <sub>Todas las imágenes con datos de ejemplo y juegos inventados; la interfaz se muestra en alemán.</sub>

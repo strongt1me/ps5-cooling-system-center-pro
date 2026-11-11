@@ -57,7 +57,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Jeux</h3>
-      Lancer, fermer, copier, déplacer, convertir en exFAT/ffpkg/ffpfsc, asset packs LZ4, APR-EMU, PlayGo.
+      Lancer, fermer, copier, déplacer, convertir en exFAT/ffpkg/ffpfsc, asset packs LZ4, APR-EMU, PlayGo. Vue compacte (par défaut) ou grande.
     </td>
   </tr>
   <tr>
@@ -98,7 +98,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
     <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Jeux PS4 depuis USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Jeux : bibliothèque avec lancer, copier, convertir</sub></td>
+    <td align="center"><sub>Jeux : bibliothèque en vue compacte (par défaut) avec lancer, copier, convertir</sub></td>
     <td align="center"><sub>PS4 depuis USB : faux PKG sans installation</sub></td>
   </tr>
   <tr>
@@ -134,6 +134,10 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
   <tr>
     <td><img src="docs/images/protokoll.jpg" alt="Journal"></td>
     <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Refroidissement sur un téléphone" width="240"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/spiele-gross.jpg" alt="Jeux en grande vue"></td>
+    <td align="center" valign="middle"><sub>Jeux en grande vue : grandes jaquettes, boutons avec libellé (réglable sur la page Jeux)</sub></td>
   </tr>
 </table>
 <sub>Toutes les images avec des données d'exemple et des jeux inventés ; l'interface est montrée en allemand.</sub>

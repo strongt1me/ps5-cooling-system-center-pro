@@ -57,7 +57,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Giochi</h3>
-      Avviare, chiudere, copiare, spostare, convertire in exFAT/ffpkg/ffpfsc, asset pack LZ4, APR-EMU, PlayGo.
+      Avviare, chiudere, copiare, spostare, convertire in exFAT/ffpkg/ffpfsc, asset pack LZ4, APR-EMU, PlayGo. Vista compatta (predefinita) o grande.
     </td>
   </tr>
   <tr>
@@ -98,7 +98,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Giochi PS4 da USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Giochi: libreria con avvio, copia, conversione</sub></td>
+    <td align="center"><sub>Giochi: libreria in vista compatta (predefinita) con avvio, copia, conversione</sub></td>
     <td align="center"><sub>PS4 da USB: PKG falsi senza installazione</sub></td>
   </tr>
   <tr>
@@ -134,6 +134,10 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
   <tr>
     <td><img src="docs/images/protokoll.jpg" alt="Registro"></td>
     <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Raffreddamento sullo smartphone" width="240"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/spiele-gross.jpg" alt="Giochi in vista grande"></td>
+    <td align="center" valign="middle"><sub>Giochi in vista grande: copertine grandi, pulsanti con testo (si cambia nella pagina Giochi)</sub></td>
   </tr>
 </table>
 <sub>Tutte le immagini con dati di esempio e giochi inventati; l'interfaccia è mostrata in tedesco.</sub>

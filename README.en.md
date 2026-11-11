@@ -57,7 +57,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Games</h3>
-      Start, close, copy, move, convert to exFAT/ffpkg/ffpfsc, LZ4 asset packs, APR-EMU, PlayGo.
+      Start, close, copy, move, convert to exFAT/ffpkg/ffpfsc, LZ4 asset packs, APR-EMU, PlayGo. Compact (default) or large view.
     </td>
   </tr>
   <tr>
@@ -98,7 +98,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
     <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="PS4 games from USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Games: library with start, copy, convert</sub></td>
+    <td align="center"><sub>Games: library in compact view (default) with start, copy, convert</sub></td>
     <td align="center"><sub>PS4 from USB: fake PKGs without installing</sub></td>
   </tr>
   <tr>
@@ -134,6 +134,10 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
   <tr>
     <td><img src="docs/images/protokoll.jpg" alt="Log"></td>
     <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Cooling on a phone" width="240"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/spiele-gross.jpg" alt="Games in the large view"></td>
+    <td align="center" valign="middle"><sub>Games in the large view: big covers, labelled buttons (switch on the Games page)</sub></td>
   </tr>
 </table>
 <sub>All pictures use sample data and made-up games; the interface is shown in German.</sub>

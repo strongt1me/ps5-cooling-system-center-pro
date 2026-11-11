@@ -57,7 +57,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Игры</h3>
-      Запуск, закрытие, копирование, перенос, конвертация в exFAT/ffpkg/ffpfsc, LZ4-ассет-паки, APR-EMU, PlayGo.
+      Запуск, закрытие, копирование, перенос, конвертация в exFAT/ffpkg/ffpfsc, LZ4-ассет-паки, APR-EMU, PlayGo. Вид: компактный (по умолчанию) или крупный.
     </td>
   </tr>
   <tr>
@@ -98,7 +98,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Игры PS4 с USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Игры: библиотека с запуском, копированием, конвертацией</sub></td>
+    <td align="center"><sub>Игры: библиотека в компактном виде (по умолчанию) с запуском, копированием, конвертацией</sub></td>
     <td align="center"><sub>PS4 с USB: fake PKG без установки</sub></td>
   </tr>
   <tr>
@@ -134,6 +134,10 @@ Homebrew-пейлоад (ELF), который читает датчики тем
   <tr>
     <td><img src="docs/images/protokoll.jpg" alt="Журнал"></td>
     <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Охлаждение на телефоне" width="240"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/spiele-gross.jpg" alt="Игры в крупном виде"></td>
+    <td align="center" valign="middle"><sub>Игры в крупном виде: большие обложки, кнопки с подписями (переключается на странице «Игры»)</sub></td>
   </tr>
 </table>
 <sub>Все изображения с примерными данными и вымышленными играми; интерфейс показан на немецком.</sub>

@@ -57,7 +57,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Spel</h3>
-      Starta, stäng, kopiera, flytta, konvertera till exFAT/ffpkg/ffpfsc, LZ4-asset-paket, APR-EMU, PlayGo.
+      Starta, stäng, kopiera, flytta, konvertera till exFAT/ffpkg/ffpfsc, LZ4-asset-paket, APR-EMU, PlayGo. Kompakt vy (standard) eller stor.
     </td>
   </tr>
   <tr>
@@ -98,7 +98,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="PS4-spel från USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Spel: bibliotek med start, kopiering, konvertering</sub></td>
+    <td align="center"><sub>Spel: bibliotek i kompakt vy (standard) med start, kopiering, konvertering</sub></td>
     <td align="center"><sub>PS4 från USB: fake-PKG utan installation</sub></td>
   </tr>
   <tr>
@@ -134,6 +134,10 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
   <tr>
     <td><img src="docs/images/protokoll.jpg" alt="Logg"></td>
     <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Kylning på en mobil" width="240"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/spiele-gross.jpg" alt="Spel i stor vy"></td>
+    <td align="center" valign="middle"><sub>Spel i stor vy: stora omslag, knappar med text (växlas på sidan Spel)</sub></td>
   </tr>
 </table>
 <sub>Alla bilder använder exempeldata och påhittade spel; gränssnittet visas på tyska.</sub>

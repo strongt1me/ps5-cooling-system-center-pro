@@ -109,10 +109,6 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
             <span id="fs-text">Vollbild</span>
           </button>
-          <label class="xswitch" for="expert-mode-top">
-            <span>Expertenmodus</span>
-            <span class="switch"><input type="checkbox" id="expert-mode-top"><i></i></span>
-          </label>
           <div class="conn" id="conn"><i></i><span id="conn-text">Verbinde …</span></div>
         </div>
       </header>
@@ -1272,10 +1268,17 @@
           <article class="card page-banner pb-system">
             <h2>Deine Konsole</h2>
             <p class="pb-sub">Hardware, Speicher und Netzwerk auf einen Blick.</p>
-            <div class="pb-stats">
+            <div class="pb-stats pb-stats-x">
               <div class="co-stat"><span class="ov-label">Modell</span><strong class="pb-val" id="sy-model">--</strong></div>
               <div class="co-stat"><span class="ov-label">Firmware</span><strong class="pb-val" id="sy-fw">--</strong></div>
               <div class="co-stat"><span class="ov-label">Läuft seit</span><strong class="pb-val" id="sy-uptime">--</strong></div>
+              <!-- Der Expertenmodus (11.11.2026): nur hier, rechts neben „Läuft seit“ -->
+              <div class="co-stat pb-expert">
+                <label class="xswitch" for="expert-mode" title="zeigt zusätzliche Roh- und Diagnosewerte">
+                  <span>Expertenmodus</span>
+                  <span class="switch"><input type="checkbox" id="expert-mode"><i></i></span>
+                </label>
+              </div>
             </div>
           </article>
 
@@ -1630,10 +1633,6 @@
               <label class="switch-row">
                 <span><b>Prospero Lights aktivieren</b><small>DualSense-Licht als Temperaturampel (best effort)</small></span>
                 <span class="switch"><input type="checkbox" id="s-lightbar-enabled"><i></i></span>
-              </label>
-              <label class="switch-row">
-                <span><b>Expertenmodus</b><small>zeigt zusätzliche Roh- und Diagnosewerte</small></span>
-                <span class="switch"><input type="checkbox" id="expert-mode"><i></i></span>
               </label>
               <label class="switch-row">
                 <span><b>Nur bestätigte Rohsensorwerte</b><small>blendet unbestätigte Kanal-Heuristiken aus</small></span>

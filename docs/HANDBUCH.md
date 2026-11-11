@@ -45,8 +45,8 @@ am PC in einem neuen Tab; oben steht „← Zurück zur App“. Sie erscheinen i
 
 In der **Kopfzeile**, auf jeder Seite, stehen die **Power-Optionen**: vier Knöpfe, mit denen
 sich die Konsole steuern lässt. Ein gemeinsamer Rahmen zeigt, dass sie zusammengehören; sie sitzen
-zwischen dem Seitentitel und den Schaltern „Vollbild“, „Expertenmodus“ und der
-Verbindungsanzeige: **Ruhemodus**, **Neu starten**, **Ausschalten** und
+zwischen dem Seitentitel und dem Schalter „Vollbild“ und der
+Verbindungsanzeige (der „Expertenmodus“ steht seit dem 11.11.2026 nur noch auf der Seite System und ist ab Werk aus): **Ruhemodus**, **Neu starten**, **Ausschalten** und
 **Abgesicherter Modus** (bis 1.47.0 eine Karte auf der Systemseite). Jeder Befehl
 wirkt beim ersten Klick, ohne Rückfrage (Wunsch vom 27.10.2026: nichts muss doppelt bestätigt
 werden). Nicht gespeicherte Spielstände gehen beim Ausschalten und beim Neustart verloren; der

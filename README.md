@@ -57,7 +57,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Spiele</h3>
-      Starten, beenden, kopieren, verschieben, in exFAT/ffpkg/ffpfsc umwandeln, LZ4-Asset-Packs, APR-EMU, PlayGo.
+      Starten, beenden, kopieren, verschieben, in exFAT/ffpkg/ffpfsc umwandeln, LZ4-Asset-Packs, APR-EMU, PlayGo. Ansicht kompakt (Standard) oder groß.
     </td>
   </tr>
   <tr>
@@ -98,7 +98,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
     <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="PS4-Spiele von USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Spiele: Bibliothek mit Starten, Kopieren, Konvertieren</sub></td>
+    <td align="center"><sub>Spiele: Bibliothek in kompakter Ansicht (Standard) mit Starten, Kopieren, Konvertieren</sub></td>
     <td align="center"><sub>PS4 von USB: Fake-PKGs ohne Installation</sub></td>
   </tr>
   <tr>
@@ -134,6 +134,10 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
   <tr>
     <td><img src="docs/images/protokoll.jpg" alt="Protokoll"></td>
     <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Kühlung auf dem Handy" width="240"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/spiele-gross.jpg" alt="Spiele in großer Ansicht"></td>
+    <td align="center" valign="middle"><sub>Spiele in großer Ansicht: große Titelbilder, Knöpfe mit Beschriftung (auf der Seite Spiele umschaltbar)</sub></td>
   </tr>
 </table>
 <sub>Alle Bilder mit Beispieldaten und erfundenen Spielen.</sub>

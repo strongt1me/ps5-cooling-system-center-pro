@@ -316,7 +316,18 @@
     try { localStorage.setItem(DIAG_WINDOW_KEY, String(v)); } catch {}
   };
 
+  /* Ab Werk aus (11.11.2026): Wer den Modus vorher eingeschaltet hatte, bekommt ihn einmal ausgeschaltet; danach gilt wieder seine Wahl. */
+  const EXPERT_RESET_KEY = "ps5tm.expertReset";
+  const expertResetOnce = () => {
+    try {
+      if (localStorage.getItem(EXPERT_RESET_KEY) !== "20261111") {
+        localStorage.setItem(EXPERT_MODE_KEY, "0");
+        localStorage.setItem(EXPERT_RESET_KEY, "20261111");
+      }
+    } catch {}
+  };
   const loadExpertMode = () => {
+    expertResetOnce();
     try {
       return localStorage.getItem(EXPERT_MODE_KEY) === "1";
     } catch {
@@ -747,7 +758,7 @@
       saveExpertMode(state.expertMode);
       /* Beide Schalter und die Seitenklasse, wie applyExpertMode() weiter
          unten — hier von Hand, weil die Funktion erst später definiert ist. */
-      ["#expert-mode", "#expert-mode-top"].forEach((sel) => {
+      ["#expert-mode"].forEach((sel) => {
         const el = $(sel);
         if (el) el.checked = state.expertMode;
       });
@@ -12255,10 +12266,9 @@
     });
   }
 
-  /* Zwei Schalter, ein Zustand: oben in der Kopfzeile (neu, 19.09.2026) und
-     der bisherige auf der System-Seite. Die Klasse am <body> blendet den
+  /* Der Schalter steht nur noch auf der System-Seite (11.11.2026; vorher auch oben in der Kopfzeile). Die Klasse am <body> blendet den
      Expertenbereich ein (siehe .expert-only in style.css). */
-  const expertSwitches = ["#expert-mode", "#expert-mode-top"].map((sel) => $(sel)).filter(Boolean);
+  const expertSwitches = ["#expert-mode"].map((sel) => $(sel)).filter(Boolean);
   const applyExpertMode = (on) => {
     state.expertMode = !!on;
     document.body.classList.toggle("expert", state.expertMode);

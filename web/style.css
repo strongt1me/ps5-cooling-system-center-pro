@@ -290,6 +290,9 @@ body.expert .expert-only { display: block; }
 .page-banner h2 { margin: 0; font-size: 20px; letter-spacing: -.015em; }
 .pb-sub { margin: 4px 0 0; max-width: 460px; color: var(--ink-2); font-size: 13.5px; }
 .pb-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 170px)); margin-top: 16px; }
+/* Seite System: der Expertenmodus als vierte Zelle der Zeile, rechts neben „Läuft seit“, mittig zur Zeile (11.11.2026) */
+.pb-stats-x { grid-template-columns: repeat(3, minmax(0, 170px)) auto; }
+.pb-stats-x .pb-expert { align-self: center; display: flex; align-items: center; padding-right: 0; }
 .pb-val { display: block; font-size: 19px; font-weight: 800; letter-spacing: -.02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
