@@ -1,4 +1,4 @@
-/* Host test of src/conv_pfs.c (.ffpfsc images): writing with and without the pre-filter, the full and the quick check, damage.
+/* Host test of src/conv_pfs.c (.ffpfsc images): writing, the full and the quick check, damage.
  * Usage: test <workdir>   (built with -DQUICK_BLOCKS=64 so that a few hundred blocks are more than the quick check samples) */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -21,8 +21,9 @@
 static int g_fail, g_checks;
 #define CHECK(c) do { g_checks++; if(!(c)) { g_fail++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while(0)
 
-/* The payload: block i is, by i % 8: 0-3 text-like (compresses), 4-5 random (does not), 6 random in front and zeros behind
-   (a mixed one: the piece at 56 KiB shrinks), 7 zeros. 520 blocks, the last one 1000 bytes short. */
+/* The payload: block i is, by i % 8: 0-2 text-like (compresses), 3 random 4 KiB pieces at 0, 28 and 56 KiB and zeros everywhere else
+   (compresses well; a pre-filter that judged by those three pieces took it for incompressible, which is why there is none),
+   4-5 random (does not), 6 random in front and zeros behind, 7 zeros. 520 blocks, the last one 1000 bytes short. */
 #define NBLOCKS 520u
 #define RAW_SIZE ((uint64_t)NBLOCKS * BS - 1000)
 
@@ -33,7 +34,11 @@ fill_block(uint8_t *p, unsigned idx) {
   unsigned kind = idx % 8;
   for(unsigned i = 0; i < BS; i++) {
     uint8_t v;
-    if(kind <= 3) v = (uint8_t)("the quick brown fox jumps over the lazy dog "[(i + idx) % 44]);
+    if(kind <= 2) v = (uint8_t)("the quick brown fox jumps over the lazy dog "[(i + idx) % 44]);
+    else if(kind == 3) {
+      int in_piece = (i < 4096) || (i >= 0x7000 && i < 0x7000 + 4096) || (i >= 0xE000 && i < 0xE000 + 4096);
+      if(in_piece) { seed = seed * 6364136223846793005ull + 1442695040888963407ull; v = (uint8_t)(seed >> 33); } else v = 0;
+    }
     else if(kind <= 5) { seed = seed * 6364136223846793005ull + 1442695040888963407ull; v = (uint8_t)(seed >> 33); }
     else if(kind == 6) { if(i < BS / 2) { seed = seed * 6364136223846793005ull + 1442695040888963407ull; v = (uint8_t)(seed >> 33); } else v = 0; }
     else v = 0;
@@ -66,11 +71,11 @@ static uint64_t g_progress;
 static void progress(void *ctx, uint64_t done) { (void)ctx; g_progress = done; }
 
 static int
-write_image(const char *path, int no_prefilter, uint64_t *prefiltered, uint64_t *size, uint32_t *crc) {
+write_image(const char *path, uint64_t *size, uint32_t *crc) {
   int fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0666);
   if(fd < 0) return -1;
   src_t *s = calloc(1, sizeof(*s));
-  pfsc_opts_t o = { 6, 3, NULL, progress, NULL, crc, no_prefilter, prefiltered };
+  pfsc_opts_t o = { 6, 3, NULL, progress, NULL, crc };
   char err[300] = "";
   int rc = pfs_write_single(fd, "image.exfat", RAW_SIZE, src_read, s, &o, size, err, sizeof(err));
   if(rc) printf("write failed: %s\n", err);
@@ -112,37 +117,32 @@ flip(int fd, uint64_t at) {
 int
 main(int argc, char **argv) {
   if(argc < 2) { fprintf(stderr, "usage: test <workdir>\n"); return 2; }
-  char a[512], b[512];
+  char a[512];
   mkdir(argv[1], 0777);
-  snprintf(a, sizeof(a), "%s/with.ffpfsc", argv[1]);
-  snprintf(b, sizeof(b), "%s/without.ffpfsc", argv[1]);
+  snprintf(a, sizeof(a), "%s/image.ffpfsc", argv[1]);
 
-  uint64_t skipped = 0, skipped0 = 0, size = 0, size0 = 0;
-  uint32_t crc = 0, crc0 = 0;
-  CHECK(write_image(a, 0, &skipped, &size, &crc) == 0);
-  CHECK(write_image(b, 1, &skipped0, &size0, &crc0) == 0);
+  uint64_t size = 0;
+  uint32_t crc = 0;
+  CHECK(write_image(a, &size, &crc) == 0);
 
-  /* the pre-filter: the random blocks (4, 5 of every 8: 130 of 520) and the half-random ones' pieces at 0 and 28 KiB are random,
-     but the one at 56 KiB is zeros, so a mixed block is tried; the zero and text blocks are tried */
-  printf("pre-filter: %llu of %u blocks stored without a try\n", (unsigned long long)skipped, NBLOCKS);
-  CHECK(skipped0 == 0);
-  CHECK(skipped >= 130 - 2 && skipped <= 130 + 2);
-  /* same result as without: a block the filter skips would have been stored raw anyway */
-  CHECK(size == size0);
-  CHECK(crc == crc0);
+  /* which blocks were stored raw and which packed: the random ones (4, 5 of every 8) raw, every other kind packed, in particular the
+     one with random pieces at 0, 28 and 56 KiB and zeros in between (3 of every 8) */
   {
-    FILE *fa = fopen(a, "rb"), *fb = fopen(b, "rb");
-    CHECK(fa && fb);
-    long cmp = 0;
-    if(fa && fb) {
-      fseek(fa, (long)BASE, SEEK_SET);
-      fseek(fb, (long)BASE, SEEK_SET);
-      int ca, cb;
-      while((ca = fgetc(fa)) != EOF && (cb = fgetc(fb)) != EOF) if(ca != cb) { cmp = 1; break; }
+    int fd0 = open(a, O_RDONLY);
+    CHECK(fd0 >= 0);
+    unsigned raw_ok = 0, packed_ok = 0, bad = 0;
+    for(unsigned i = 0; i < NBLOCKS; i++) {
+      uint64_t o2, l2;
+      block_at(fd0, i, &o2, &l2);
+      unsigned k = i % 8;
+      if(i == NBLOCKS - 1) continue;                                /* the last one is short: no rule */
+      if(k == 4 || k == 5) { if(l2 == BS) raw_ok++; else bad++; }
+      else { if(l2 < BS) packed_ok++; else bad++; }
     }
-    CHECK(cmp == 0);                  /* the PFSC stream is byte for byte the same */
-    if(fa) fclose(fa);
-    if(fb) fclose(fb);
+    printf("blocks: %u raw as expected, %u packed as expected, %u not\n", raw_ok, packed_ok, bad);
+    CHECK(bad == 0);
+    CHECK(raw_ok == 2 * (NBLOCKS / 8));
+    if(fd0 >= 0) close(fd0);
   }
 
   char err[300] = "";

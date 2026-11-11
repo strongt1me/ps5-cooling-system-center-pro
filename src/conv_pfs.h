@@ -17,9 +17,6 @@ typedef struct {
   void    (*progress)(void *ctx, uint64_t raw_done);
   void     *progress_ctx;
   uint32_t *raw_crc;          /* out, may be NULL: CRC-32 of the payload   */
-  int       no_prefilter;     /* 0 (the default): a block that looks incompressible is stored raw without a try
-                                 (a quick level-1 test of three pieces of it, see conv_pfs.c); 1: every block is tried */
-  uint64_t *prefiltered;      /* out, may be NULL: how many blocks the pre-filter stored raw           */
 } pfsc_opts_t;
 
 /* Writes an unsigned PS5 PFS image holding one file, inner_name (ASCII),

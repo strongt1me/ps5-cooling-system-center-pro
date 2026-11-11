@@ -1,5 +1,5 @@
 #!/bin/sh
-# Host test of src/conv_pfs.c (.ffpfsc images: pre-filter, full and quick check, damage) – Linux/WSL, gcc:
+# Host test of src/conv_pfs.c (.ffpfsc images: raw and packed blocks, full and quick check, damage) – Linux/WSL, gcc:
 #   sh test/convpfs/run.sh
 set -e
 cd "$(dirname "$0")/../.."

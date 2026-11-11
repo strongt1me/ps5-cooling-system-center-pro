@@ -117,7 +117,6 @@ typedef struct {
   char     error[640];        /* room for PS5TM_IO_TEXT_MAX (ioerr.h) after a label and a path */
   char     sums[320];         /* the checksum file, once written          */
   int      quick;             /* the check afterwards is the quick one (structure and a sample; no checksum file) */
-  uint64_t prefiltered;       /* blocks of an ffpfsc the pre-filter stored raw without a try */
   char     note[300];         /* something that did not stop the job      */
   uint64_t started_ms, finished_ms;
   uint64_t window_ms, window_bytes;
@@ -809,17 +808,11 @@ cv_run(void *arg) {
     }
     ufs2_sums_free(usums);
   } else {
-    uint64_t prefiltered = 0;
-    pfsc_opts_t o = { DEFLATE_LEVEL, WORKERS, &g_cancel, cv_progress, NULL, &wcrc, 0, &prefiltered };
+    pfsc_opts_t o = { DEFLATE_LEVEL, WORKERS, &g_cancel, cv_progress, NULL, &wcrc };
     char inner[48];
     snprintf(inner, sizeof(inner), "%s", a.inner);
     rc = pfs_write_single(out, inner, raw, rd, rctx, &o, &size, err, sizeof(err));
     if(!rc) {
-      pthread_mutex_lock(&g_lock);
-      g_job.prefiltered = prefiltered;
-      pthread_mutex_unlock(&g_lock);
-      PS5TM_INFO("game_convert_prefilter", "Konvertieren von %s: %llu von %llu Blöcken ohne Versuch roh gespeichert (Vorfilter).",
-                 a.title_id, (unsigned long long)prefiltered, (unsigned long long)((raw + 0xFFFFu) >> 16));
       cv_check_begin(size);
       /* quick: structure and a sample of the blocks, the image is not read through (no payload CRC, no SHA-256) */
       pfsc_check_t c = { wcrc, &g_cancel, cv_check_progress, NULL, 0, a.quick };

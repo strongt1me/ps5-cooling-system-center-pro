@@ -51,16 +51,14 @@
  *     unpacks every block afterwards and compares, instead of a sample
  *     (a quick level that does take a sample exists since 10.11.2026)
  *
- * And since 10.11.2026 a pre-filter for blocks that do not compress (a game's
- * video, audio and packed archives): libdeflate only gives up on a block when
- * its output passes the limit, and for data that does not shrink that is near
- * the end of the block, so the early exit saves next to nothing. Before the
- * real compression three pieces of 4 KiB of the block (at 0, 28 KiB, 56 KiB)
- * go through a level-1 compressor; when none of them shrinks by 3 %, the block
- * is stored raw without a try. That costs about a twentieth of a real
- * compression on a block that does shrink, and saves nearly all of it on one
- * that does not. A block that is mixed (a part that shrinks well, a part that
- * does not) is tried as before whenever one of the pieces shrinks. */
+ * No pre-filter for blocks that do not compress: one was tried on 11.11.2026
+ * (three pieces of 4 KiB through a level-1 compressor, the block stored raw
+ * when none shrank by 3 %) and taken out again the same day. On the console,
+ * converting two big games (17.5 and 30.6 GB, both mostly compressible) with
+ * and without it, it skipped only 5-7 % of the blocks, saved no time (the run
+ * without it was 6 % and 1.6 % faster) and made the image 0.05-0.25 % larger,
+ * because a block whose three pieces do not shrink can still shrink as a
+ * whole. The image is therefore not the same as without it. */
 
 #include <errno.h>
 #include <pthread.h>
@@ -111,8 +109,6 @@
 #ifndef QUICK_BLOCKS
 #define QUICK_BLOCKS       2048u         /* the quick check unpacks at most this many blocks, spread over the image */
 #endif
-#define PRE_PIECE         4096u         /* the pre-filter: pieces of this size ...       */
-#define PRE_MIN_SAVING     3             /* ... must shrink by at least this many percent */
 /* The longest a compressed block may be: it must save at least 5 % of the
    logical block (3277 of 65536 bytes), else it is stored raw. */
 #define MAX_COMPRESSED     (LBS - (LBS * 5 + 99) / 100)
@@ -283,31 +279,10 @@ typedef struct {
      own interface (26.09.2026). */
   int             normal_quota;
   int             normal_used;
-  int             prefilter;       /* 1: the pre-filter is on (see the top of the file) */
-  uint64_t        skipped;         /* blocks it stored raw; added to atomically        */
 } pool_t;
 
-/* The pre-filter: 1 when three pieces of the block, each through a level-1
-   compressor, all stay above PRE_MIN_SAVING percent of their size, which is
-   taken for data that does not shrink. libdeflate returns 0 when the output
-   does not fit the room it is given: the room is the piece less the saving. */
-static int
-looks_incompressible(struct libdeflate_compressor *cf, const uint8_t *raw) {
-  static const unsigned at[3] = { 0, 0x7000, 0xE000 };          /* 0, 28 KiB, 56 KiB: all inside 64 KiB */
-  uint8_t out[PRE_PIECE];
-  const size_t room = PRE_PIECE - PRE_PIECE * PRE_MIN_SAVING / 100;
-  for(int i = 0; i < 3; i++)
-    if(libdeflate_deflate_compress(cf, raw + at[i], PRE_PIECE, out, room)) return 0;   /* it fits: it shrinks */
-  return 1;
-}
-
 static void
-compress_slot(struct libdeflate_compressor *c, struct libdeflate_compressor *cf, pool_t *p, slot_t *s) {
-  if(cf && looks_incompressible(cf, s->raw)) {            /* stored raw (out_len 0), without a try */
-    s->out_len = 0;
-    if(p) __atomic_fetch_add(&p->skipped, 1, __ATOMIC_RELAXED);
-    return;
-  }
+compress_slot(struct libdeflate_compressor *c, slot_t *s) {
   /* Room for MAX_COMPRESSED bytes only: whatever does not fit is stored raw.
      MkPFS's own limit is LBS - 1 (a compressed block must be strictly
      smaller than the logical block, or the reader takes it for raw bytes);
@@ -330,7 +305,6 @@ worker(void *arg) {
   pthread_mutex_unlock(&p->mu);
 
   struct libdeflate_compressor *c = libdeflate_alloc_compressor(p->level);
-  struct libdeflate_compressor *cf = p->prefilter ? libdeflate_alloc_compressor(1) : NULL;   /* NULL: every block is tried */
   pthread_mutex_lock(&p->mu);
   for(;;) {
     slot_t *s = NULL;
@@ -345,7 +319,7 @@ worker(void *arg) {
     if(!s) break;
     s->state = SLOT_BUSY;
     pthread_mutex_unlock(&p->mu);
-    if(c) compress_slot(c, cf, p, s);
+    if(c) compress_slot(c, s);
     if(!idle) sched_yield();
     pthread_mutex_lock(&p->mu);
     s->state = c ? SLOT_DONE : SLOT_FAILED;
@@ -353,7 +327,6 @@ worker(void *arg) {
   }
   pthread_mutex_unlock(&p->mu);
   if(c) libdeflate_free_compressor(c);
-  if(cf) libdeflate_free_compressor(cf);
   return NULL;
 }
 
@@ -466,7 +439,7 @@ pfs_write_single(int fd, const char *inner_name, uint64_t raw_size,
   pthread_t th[MAX_SLOTS];
   int       nthreads = 0, pool_live = 0;
   uint64_t *table = NULL;
-  struct libdeflate_compressor *inline_c = NULL, *inline_cf = NULL;
+  struct libdeflate_compressor *inline_c = NULL;
   stage_t   st   = { rd, rd_ctx, NULL, 0, 0, 0 };
   sink_t    sink = { fd, NULL, 0, 0 };
   memset(&pool, 0, sizeof(pool));
@@ -514,7 +487,6 @@ pfs_write_single(int fd, const char *inner_name, uint64_t raw_size,
   table[tbl_n++] = header_size;
 
   pool.level        = o->level;
-  pool.prefilter    = !o->no_prefilter;
   pool.normal_quota = o->workers > 1 ? o->workers - 1 : 1;
   pool.nslots = (unsigned)(o->workers > 0 ? o->workers * 4 : 1);
   if(pool.nslots > MAX_SLOTS) pool.nslots = MAX_SLOTS;
@@ -528,10 +500,7 @@ pfs_write_single(int fd, const char *inner_name, uint64_t raw_size,
     if(pthread_create(&th[nthreads], NULL, worker, &pool) != 0) break;
     nthreads++;
   }
-  if(!nthreads) {
-    if(!(inline_c = libdeflate_alloc_compressor(o->level))) goto nomem;
-    if(pool.prefilter) inline_cf = libdeflate_alloc_compressor(1);      /* NULL: every block is tried */
-  }
+  if(!nthreads && !(inline_c = libdeflate_alloc_compressor(o->level))) goto nomem;
 
   uint64_t next_fill = 0, next_write = 0, raw_done = 0;
   while(next_write < block_count) {
@@ -554,7 +523,7 @@ pfs_write_single(int fd, const char *inner_name, uint64_t raw_size,
         pthread_cond_signal(&pool.work);
         pthread_mutex_unlock(&pool.mu);
       } else {
-        compress_slot(inline_c, inline_cf, &pool, s);
+        compress_slot(inline_c, s);
         s->state = SLOT_DONE;
       }
       next_fill++;
@@ -653,9 +622,7 @@ out:
     pthread_mutex_destroy(&pool.mu);
     errno = saved;
   }
-  if(o->prefiltered) *o->prefiltered = __atomic_load_n(&pool.skipped, __ATOMIC_RELAXED);
   if(inline_c) libdeflate_free_compressor(inline_c);
-  if(inline_cf) libdeflate_free_compressor(inline_cf);
   free(pool.slots);
   free(table);
   free(sink.buf);

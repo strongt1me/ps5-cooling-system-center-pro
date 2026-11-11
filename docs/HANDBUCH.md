@@ -258,12 +258,10 @@ Laufwerk zurück und prüft es ganz, nicht nur stichprobenweise:
 - Bei Schnell entsteht **keine** Prüfsummen-Datei (`.sha256`); die Meldung am Ende sagt es. Ein beschädigter Block außerhalb der
   Stichprobe wird nicht gefunden; wer sich nicht sicher ist, nimmt Gründlich oder prüft das Abbild später mit „Prüfen“.
 
-**Vorfilter und Lesestücke (seit 11.11.2026).** Blöcke, die sich nicht komprimieren lassen (Videos, Audio, gepackte Archive),
-erkennt ffpfsc vor der eigentlichen Kompression: Drei Stücke zu je 4 KiB eines Blocks laufen durch einen schnellen Kompressor
-(Stufe 1); schrumpft keines um mindestens 3 %, wird der Block roh gespeichert, ohne ihn zu versuchen. Das Abbild ist dasselbe wie
-ohne Vorfilter (ein Test vergleicht es Byte für Byte); bei nicht komprimierbaren Daten rechnet ein Faden auf dem PC gut dreimal
-so schnell (86 statt 285 MB/s), bei komprimierbaren kostet er nichts Messbares. Die Quelle und das Zurücklesen werden in 4-MiB-
-Stücken gelesen (vorher 1 MiB); der Lesevorlauf zwischen zwei Laufwerken hält drei solche Stücke bereit.
+**Lesestücke (seit 11.11.2026).** Die Quelle und das Zurücklesen werden in 4-MiB-Stücken gelesen (vorher 1 MiB); der Lesevorlauf
+zwischen zwei Laufwerken hält drei solche Stücke bereit. Blöcke, die sich nicht komprimieren lassen, speichert ffpfsc roh, wie
+bisher: Ein Block wird nur gepackt, wenn er dabei mindestens 5 % spart. Einen Vorfilter, der solche Blöcke ohne Versuch überspringt,
+gibt es nicht: Ein Test an der Konsole mit zwei großen Spielen brachte damit keinen Zeitgewinn.
 
 **Prüfsummen-Datei.** Neben dem Ergebnis entsteht `<Name>.sha256` mit dem SHA-256
 im Format von `sha256sum` (je Zeile: Prüfsumme, zwei Leerzeichen, Name). Bei einem
