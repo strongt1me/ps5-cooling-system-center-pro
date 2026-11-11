@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+---
+
+## v1.80.0 – 11.11.2026
+
 ### Audit 11.11.2026: die übrigen Befunde F-11, F-17 bis F-21, F-24, F-27
 - **F-11:** Beim Packen im Spielordner (zstd/LZ4) wird vor dem Entfernen der Originale und vor dem Signieren noch einmal gefragt, ob das Spiel inzwischen läuft; wenn ja, bleiben die Originale liegen bzw. wird das Signieren übersprungen, mit Hinweis.
 - **F-17:** Der Bau nutzt `-fstack-protector-strong` (ELF +82 KB auf 10,10 MB). Neu: `.github/workflows/host-tests.yml` führt die Host-Tests (account, cvsample, filemgr, fsign, instlock, smpcfg, sha256, convpfs, zstdpack, ps4m) bei jedem Push und Pull-Request auf `src/` und `test/` aus; auf GitHub noch nicht gelaufen.
