@@ -2286,6 +2286,25 @@ button.apr-drive:disabled { cursor: default; }
    der der Browser bis zur ersten Zeichnung rechnen müsste, lässt sich nicht treffen, und die Scrollleiste spränge. */
 html.ps5 .gm-card { contain: layout paint style; }
 
+/* Große Ansicht auf der PS5 (11.11.2026), nach dem Vorbild der Spielkarten von ShadowMountPlus: Der Scroll-Test an der Pro zeigte, dass die vielen
+   gerundeten, beschnittenen Flächen mit Schatten das Scrollen bremsen (Kartenecken, Schein, Knopfrundung, Beschneiden: zusammen von 19,4 auf 16,7 ms).
+   Hier: kein Schein-Ring, die Karte beschneidet ihren Inhalt nicht mehr (auch contain: paint, das an der runden Kante beschneidet, entfällt), das
+   Titelbild trägt die runden oberen Ecken selbst (app.js, gmRoundTop; .pre = schon vorgerundet), Knöpfe und Marken etwas eckiger. Solange ein Bild noch nicht
+   vorgerundet ist (und bei einem ohne Bild), beschneidet das Kästchen des Titelbilds wie bisher. Die kompakte Ansicht und andere Browser bleiben wie sie sind. */
+html.ps5:not([data-gmview="compact"]) .gm-card { overflow: visible; border-radius: 14px; contain: layout style; }
+html.ps5:not([data-gmview="compact"]) .gm-card:not(.running) { box-shadow: none; }
+html.ps5:not([data-gmview="compact"]) .gm-cover { border-radius: 13px 13px 0 0; overflow: hidden; }
+html.ps5:not([data-gmview="compact"]) .gm-cover.pre { border-radius: 0; overflow: visible; background: none; }
+html.ps5:not([data-gmview="compact"]) .gm-card .btn { border-radius: 7px; }
+html.ps5:not([data-gmview="compact"]) .gm-card .gm-tag { border-radius: 6px; }
+/* Dasselbe für die kompakte Ansicht: Karte 12 px, ohne Beschneiden und Schein, Symbolknöpfe 7 px, Marken 6 px; das kleine Titelbild wird rundum vorgerundet
+   (app.js, gmRoundTop mit „all“) und braucht dann kein Beschneiden durch sein Kästchen (.pre). */
+html.ps5[data-gmview="compact"] .gm-card { overflow: visible; border-radius: 12px; contain: layout style; }
+html.ps5[data-gmview="compact"] .gm-card:not(.running) { box-shadow: none; }
+html.ps5[data-gmview="compact"] .gm-cover.pre { border-radius: 0; overflow: visible; background: none; }
+html.ps5[data-gmview="compact"] .gm-actions .btn { border-radius: 7px; }
+html.ps5[data-gmview="compact"] .gm-card .gm-tag { border-radius: 6px; }
+
 /* ── Scroll-Test (Expertenmodus, System): schaltet je eine Zeichenart ab, um zu finden, was das Scrollen bremst. Die Klassen setzt app.js an <html>. ── */
 html.perf-round *, html.perf-round *::before, html.perf-round *::after { border-radius: 0 !important; }
 html.perf-shadow *, html.perf-shadow *::before, html.perf-shadow *::after { box-shadow: none !important; text-shadow: none !important; }
@@ -2293,3 +2312,9 @@ html.perf-grad *, html.perf-grad *::before, html.perf-grad *::after { background
 html.perf-img img { display: none !important; }
 html.perf-anim *, html.perf-anim *::before, html.perf-anim *::after { animation: none !important; transition: none !important; }
 html.perf-contain .gm-card { contain: none !important; }
+/* feinere Schalter (11.11.2026), nur für die Spielkarten: welcher Teil von „Rundungen“ und „Schatten“ bremst das Scrollen? */
+html.perf-cardround .gm-card { border-radius: 0 !important; }
+html.perf-cardglow .gm-card:not(.running) { box-shadow: none !important; }
+html.perf-btnround .gm-card .btn, html.perf-btnround .gm-card .gm-tag, html.perf-btnround .gm-card .gm-plat, html.perf-btnround .gm-card .gm-live { border-radius: 0 !important; }
+/* auf der PS5 beschneidet schon contain: paint an der runden Kante: ohne beides schneidet die Karte ihr Titelbild nicht mehr ab */
+html.perf-coverclip .gm-card { overflow: visible !important; contain: none !important; }

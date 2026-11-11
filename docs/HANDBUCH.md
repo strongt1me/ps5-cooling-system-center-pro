@@ -70,8 +70,7 @@ installiert.
 
 **Darstellung.** Neben der Sortierung wählst du die „Darstellung“: **groß (wie bisher)** oder
 **kompakt**. Bei „kompakt“ steht das Bild klein neben dem Titel und die Knöpfe sind eine Reihe von
-Symbolen; fährst du mit der Maus oder dem Steuerkreuz auf ein Symbol (oder drückst „i“ bzw.
-Dreieck), steht unten, was es macht. Die Knöpfe sind in beiden Ansichten dieselben (gleiche
+Symbolen; fährst du mit der Maus oder dem Steuerkreuz auf ein Symbol (oder drückst „i“), steht unten, was es macht. Die Knöpfe sind in beiden Ansichten dieselben (gleiche
 Funktion, gleiche Sperren und Hinweise); der Browser merkt sich die Wahl je Gerät.
 
 **Firmware.** Unter dem Titel steht auch die Firmware, die das Spiel verlangt („FW 13.60“, bei PS4-Titeln

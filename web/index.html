@@ -1449,7 +1449,7 @@
             <article class="card" id="perf-card">
               <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-gauge"/></svg></span><div class="ck-text"><h2>Scroll-Test (PS5)</h2>
                 <p class="sub">findet heraus, was das Scrollen bremst</p></div></div></div>
-              <p class="note">Der Knopf scrollt die Seite „Spiele“ selbst durch, mit jeder Einstellung einmal (etwa eine Minute), und zeigt die Messwerte hier. Dabei bitte nichts bedienen.</p>
+              <p class="note">Der Knopf scrollt die Seite „Spiele“ selbst durch, mit jeder Einstellung einmal (etwa zwei Minuten), und zeigt die Messwerte hier. Dabei bitte nichts bedienen.</p>
               <div class="mt-12"><button type="button" class="btn primary" id="perf-auto-btn">Automatisch messen</button> <span class="muted" id="perf-auto-state"></span></div>
               <div class="kv-list mt-12 is-hidden" id="perf-auto-out"></div>
               <p class="note is-hidden" id="perf-auto-note">Je kleiner der Abstand zwischen zwei Bildern, desto flüssiger (16 bis 17 ms sind 60 Bilder pro Sekunde). „langsam“ zählt Bilder über 50 ms. Die letzte Zeile ist ein Kontrolllauf mit allem an: So weit weichen zwei gleiche Durchläufe voneinander ab.</p>
@@ -1477,6 +1477,22 @@
             <label class="switch-row mt-12">
               <span><b>Karten nicht einzeln zeichnen aus</b><small>schaltet den Zeichenbereich je Spielkarte ab (zum Vergleich)</small></span>
               <span class="switch"><input type="checkbox" data-perf="contain"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Kartenrundung aus</b><small>Ecken der Spielkarten eckig (Titelbilder und Knöpfe bleiben rund)</small></span>
+              <span class="switch"><input type="checkbox" data-perf="cardround"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Kartenschein aus</b><small>kein feiner Schein-Ring um die Spielkarten</small></span>
+              <span class="switch"><input type="checkbox" data-perf="cardglow"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Knopfrundung aus</b><small>Ecken der Knöpfe und Marken auf den Karten eckig</small></span>
+              <span class="switch"><input type="checkbox" data-perf="btnround"><i></i></span>
+            </label>
+            <label class="switch-row mt-12">
+              <span><b>Beschneiden der Karte aus</b><small>die Karte schneidet ihr Titelbild nicht mehr an den runden Ecken ab</small></span>
+              <span class="switch"><input type="checkbox" data-perf="coverclip"><i></i></span>
             </label>
             </article>
             <article class="card is-hidden" id="locale-expert-card">

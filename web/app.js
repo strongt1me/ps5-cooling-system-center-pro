@@ -6493,25 +6493,85 @@
       return out;
     } catch (e) { return null; }
   };
+  /* Große Ansicht auf der PS5 (11.11.2026): Das Titelbild bekommt die runden oberen Ecken selbst (einmal je Bild, in der Größe, in der es steht, und
+     mit durchsichtigen Ecken), damit die Karte es nicht an ihrer runden Kante beschneiden muss (style.css, „Vorbild ShadowMountPlus“). Nur quadratische
+     Bilder; alle anderen und Bilder, die es noch nicht gibt, behalten das Beschneiden per CSS. r = die Rundung in CSS-Pixeln, w = die Breite des Bildes. */
+  const GM_COVER_RADIUS = 13;
+  const gmRoundTop = (img, target, r, all) => {                                 // all: auch die unteren Ecken (kompakte Karte)
+    try {
+      const base = target < img.naturalWidth ? gmHalve(img, target) : img;      // erst in Halbierungen verkleinern (wie in der kompakten Ansicht)
+      if (!base) return null;
+      const c = document.createElement("canvas");
+      c.width = target; c.height = target;
+      const g = c.getContext("2d");
+      g.imageSmoothingEnabled = true; if ("imageSmoothingQuality" in g) g.imageSmoothingQuality = "high";
+      g.beginPath(); g.moveTo(0, r); g.arcTo(0, 0, r, 0, r); g.lineTo(target - r, 0); g.arcTo(target, 0, target, r, r);
+      if (all) { g.lineTo(target, target - r); g.arcTo(target, target, target - r, target, r); g.lineTo(r, target); g.arcTo(0, target, 0, target - r, r); }
+      else { g.lineTo(target, target); g.lineTo(0, target); }
+      g.closePath(); g.clip();
+      g.drawImage(base, 0, 0, target, target);
+      return c;
+    } catch (e) { return null; }
+  };
+  /* Die Umwandlung der Titelbilder (Canvas, PNG) kostet je Bild einige Millisekunden Hauptlinie: Alle 25 auf einmal gaben einen Ruck. Darum eine Schlange:
+     ein Bild je 50 ms, und nur, wenn seit 400 ms nicht gescrollt wurde (sonst nach 250 ms noch einmal nachsehen). */
+  const gmConvQueue = [];
+  let gmConvTimer = 0;
+  const gmConvPump = () => {
+    if (gmConvTimer || !gmConvQueue.length) return;
+    const scrolling = Date.now() - gmLastScroll < 400;
+    gmConvTimer = setTimeout(() => {
+      gmConvTimer = 0;
+      if (Date.now() - gmLastScroll >= 400) { const job = gmConvQueue.shift(); try { job(); } catch (e) { /* egal */ } }
+      gmConvPump();
+    }, scrolling ? 250 : 50);
+  };
+  /* "compact": verkleinert (kompakte Ansicht); "round": große Ansicht auf der PS5, oben gerundet; "": nichts (andere Browser, Original) */
+  const gmMode = () => (gmCompact() ? "compact" : document.documentElement.classList.contains("ps5") ? "round" : "");
   const gmSharpen = () => {
-    const compact = gmCompact();
+    const mode = gmMode();
     document.querySelectorAll("#gm-grid .gm-cover img").forEach((img) => {
-      if (!compact) {                                       // zurück zum Original
-        if (img.dataset.full) { img.src = img.dataset.full; delete img.dataset.full; }
-        return;
+      if (img.dataset.full && img.dataset.mode !== mode) {      // zurück zum Original (andere Ansicht oder nichts mehr zu tun)
+        img.src = img.dataset.full; delete img.dataset.full; delete img.dataset.mode;
+        if (img.parentNode) img.parentNode.classList.remove("pre");
       }
-      if (img.dataset.full) return;                         // schon verkleinert
+      if (!mode || img.dataset.full) return;                    // nichts zu tun oder schon verarbeitet
       const full = img.getAttribute("src");
-      const go = () => {
-        if (!img.isConnected || img.dataset.full) return;
-        if (Date.now() - gmLastScroll < 400) { setTimeout(go, 250); return; }   // nicht beim Scrollen (wie gmBuffer): erst nach der Pause verkleinern
+      const go = () => { gmConvQueue.push(work); gmConvPump(); };      // nicht sofort: nacheinander und nur in einer Scroll-Pause (gmConvPump)
+      const work = () => {
+        if (!img.isConnected || img.dataset.full || gmMode() !== mode) return;
         const w = img.getBoundingClientRect().width;
-        const target = Math.min(256, Math.round(w * Math.max(1, window.devicePixelRatio || 1)));
-        if (!w || !img.naturalWidth || img.naturalWidth <= target * 1.3) return;   // da ist nichts zu gewinnen
-        const key = full + "@" + target;
-        const apply = (url) => { if (img.isConnected && !img.dataset.full) { img.dataset.full = full; img.src = url; } };
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        if (!w || !img.naturalWidth) return;
+        const ps5 = document.documentElement.classList.contains("ps5");
+        const square = Math.abs(img.naturalHeight / img.naturalWidth - 1) <= 0.02;
+        let target, key, make, rounded = false;
+        if (mode === "compact" && !ps5) {                       // andere Browser: nur verkleinern
+          target = Math.min(256, Math.round(w * dpr));
+          if (img.naturalWidth <= target * 1.3) return;         // da ist nichts zu gewinnen
+          key = full + "@" + target;
+          make = () => gmHalve(img, target);
+        } else if (mode === "compact") {                        // PS5, kompakt: verkleinert und rundum vorgerundet (Rundung 10 px wie das Kästchen)
+          if (!square) return;
+          target = Math.min(256, img.naturalWidth, Math.round(w * dpr));
+          key = full + "@c" + target;
+          make = () => gmRoundTop(img, target, 10 * target / w, true);
+          rounded = true;
+        } else {                                                // PS5, groß: in der angezeigten Größe, oben gerundet
+          if (!square) return;                                  // nicht quadratisch: bleibt beim Beschneiden per CSS
+          target = Math.min(img.naturalWidth, Math.round(w * dpr));
+          key = full + "@r" + target;
+          make = () => gmRoundTop(img, target, GM_COVER_RADIUS * target / w);
+          rounded = true;
+        }
+        const apply = (url) => {
+          if (img.isConnected && !img.dataset.full && gmMode() === mode) {
+            img.dataset.full = full; img.dataset.mode = mode; img.src = url;
+            if (rounded && img.parentNode) img.parentNode.classList.add("pre");
+          }
+        };
         if (gmThumbCache.has(key)) { apply(gmThumbCache.get(key)); return; }
-        const out = gmHalve(img, target);
+        const out = make();
         if (!out || !out.toBlob) return;
         out.toBlob((b) => { if (!b) return; const url = URL.createObjectURL(b); gmThumbCache.set(key, url);
           if (gmThumbCache.size > 80) {                       // die ältesten freigeben, aber nie ein Bild, das noch angezeigt wird
@@ -6522,7 +6582,7 @@
               try { URL.revokeObjectURL(u); } catch (e) { /* egal */ }
               gmThumbCache.delete(k);
             }
-          } if (gmCompact()) apply(url); }, "image/png");
+          } apply(url); }, "image/png");
       };
       if (img.complete && img.naturalWidth) go(); else img.addEventListener("load", go, { once: true });
     });
@@ -6595,7 +6655,7 @@
     gmBuffer();
   };
   /* die Auswahl „Darstellung“ wechselt die Bilder mit (theme-boot.js setzt das Attribut erst danach, deshalb der Aufschub) */
-  { const sel = $("#gm-view"); if (sel) sel.addEventListener("change", () => setTimeout(() => { gmSharpen(); gmPadSync(); }, 0)); }
+  { const sel = $("#gm-view"); if (sel) sel.addEventListener("change", () => setTimeout(() => { gmSharpen(); }, 0)); }
 
   /* ── Covers & Metadaten speichern (04.10.2026) ───────────────────────
    * Der Zwischenspeicher der Spieleliste (libcache.c): Titelbilder und die Angaben,
@@ -6711,7 +6771,7 @@
   /* ── Infoleiste der kompakten Spielkarten (10.11.2026) ───────────────────────────────────────────────────────────────
      In der Ansicht „kompakt“ (Auswahl „Darstellung“ auf der Spiele-Seite, gemerkt je Gerät) stehen die Knöpfe einer Karte als
      Symbole. Fährt man mit der Maus darüber oder mit dem Steuerkreuz darauf (Fokus), steht unten, was der Knopf macht; die Taste
-     „i“ oder Dreieck zeigt es für den Knopf mit Fokus noch einmal. Die Knöpfe sind dieselben wie in der großen Ansicht (gleiche
+     „i“ zeigt es für den Knopf mit Fokus noch einmal. Die Knöpfe sind dieselben wie in der großen Ansicht (gleiche
      Attribute, Sperren und Hinweise); nur ihre Darstellung ist eine andere. In der großen Ansicht geschieht hier nichts. */
   let gmHelp = null, gmHelpTimer = 0;
   const gmHelpShow = (b) => {
@@ -6740,23 +6800,8 @@
   document.addEventListener("keydown", (e) => {
     if ((e.key === "i" || e.key === "I") && !e.ctrlKey && !e.altKey && !e.metaKey) gmHelpShow(gmFocusBtn());
   });
-  /* Dreieck am Controller (Standardbelegung: Taste 3), falls der Browser die Gamepad-Schnittstelle hat */
-  let gmPadOn = false, gmPadPrev = false, gmPadTimer = 0;
-  const gmPadTick = () => {
-    let down = false;
-    try { for (const p of navigator.getGamepads()) if (p && p.buttons[3] && p.buttons[3].pressed) down = true; } catch (e) { /* egal */ }
-    if (down && !gmPadPrev) gmHelpShow(gmFocusBtn());
-    gmPadPrev = down;
-  };
-  /* die Abfrage läuft nur, solange ein Controller da ist und die Ansicht „kompakt“ an ist */
-  const gmPadSync = () => {
-    const want = gmPadOn && gmCompact() && state.page === "games";
-    if (want && !gmPadTimer) gmPadTimer = setInterval(gmPadTick, 120);
-    else if (!want && gmPadTimer) { clearInterval(gmPadTimer); gmPadTimer = 0; }
-  };
-  const gmPadStart = () => { gmPadOn = true; gmPadSync(); };
-  window.addEventListener("gamepadconnected", gmPadStart);
-  try { if (navigator.getGamepads && Array.prototype.some.call(navigator.getGamepads(), Boolean)) gmPadStart(); } catch (e) { /* egal */ }
+  /* Die Dreieck-Taste des Controllers (Abfrage der Gamepad-Schnittstelle alle 120 ms) gibt es seit dem 11.11.2026 nicht mehr: Der Browser der PS5 belegt
+     sie selbst (Seite neu laden), und die Erklärung steht auch ohne sie, sobald ein Symbol den Fokus hat. */
   document.addEventListener("mousedown", (e) => {
     if (gmPop && !gmPop.contains(e.target) && !e.target.closest("button[data-info]")) gmPopClose();
   });
@@ -11543,7 +11588,6 @@
     txt("#page-title", b.textContent.trim());
     $$(".page").forEach((p) =>
       p.classList.toggle("active", p.id === `page-${state.page}`));
-    gmPadSync();                                       /* die Controller-Abfrage läuft nur auf der Seite „Spiele“ */
     if (state.page === "games") gmSharpen();           /* eine Liste, die im Verborgenen neu gezeichnet wurde, bekommt hier ihre Vorschaubilder */
     if (state.page === "credits") crProbe();
     if (state.page === "files") fmOpen();
@@ -12806,8 +12850,9 @@
 
   /* Scroll-Test (Expertenmodus, Seite System, 10.11.2026): Die Schalter setzen je eine Klasse perf-… an <html> (style.css); sie werden nicht gemerkt.
      Die Messung des Scrollens (unten) schreibt die eingeschalteten Schalter in ihre Zeile. */
-  const PERF_KEYS = ["round", "shadow", "grad", "img", "anim", "contain"];
-  const perfFlags = () => PERF_KEYS.filter((k) => document.documentElement.classList.contains("perf-" + k)).map((k) => k[0]).join("") || "none";
+  const PERF_KEYS = ["round", "shadow", "grad", "img", "anim", "contain", "cardround", "cardglow", "btnround", "coverclip"];
+  const PERF_CODE = { round: "r", shadow: "s", grad: "g", img: "i", anim: "a", contain: "c", cardround: "R", cardglow: "S", btnround: "B", coverclip: "C" };   /* ein Buchstabe je Schalter in der Zeile „scroll …“ */
+  const perfFlags = () => PERF_KEYS.filter((k) => document.documentElement.classList.contains("perf-" + k)).map((k) => PERF_CODE[k]).join("") || "none";
   let perfAutoOn = false;                               /* der automatische Durchlauf scrollt selbst: die Messung beim Scrollen (unten) schweigt dann */
   (() => {
     /* nicht gemerkt: nach einem Neuladen ist alles wieder an, ein vergessener Schalter kann nichts dauerhaft verstecken */
@@ -12819,19 +12864,23 @@
 
   /* Automatischer Durchlauf (11.11.2026, Knopf auf der Karte): Die Seite „Spiele“ scrollt selbst (hin und her, mit gleichbleibender Geschwindigkeit,
      je Einstellung 7 Sekunden), und je Bild wird der Abstand zum vorigen gemessen (requestAnimationFrame). Reihenfolge: ein Vorlauf (nicht gewertet:
-     Bilder laden und entpacken sich dabei), alles an, je ein Schalter aus, am Ende noch einmal alles an als Kontrolllauf. Danach stehen die Schalter
-     wie vorher, die Seite ist wieder die, auf der der Knopf war, und die Werte stehen auf der Karte und (neun Zeilen, unter der Grenze von 10 je
-     Minute) im Protokoll als „scrollauto …“. Skripte scrollen nicht ganz wie der Controller; verglichen werden aber nur die Einstellungen untereinander. */
+     Bilder laden und entpacken sich dabei), alles an, je ein Schalter aus (seit dem 11.11. nachmittags auch die vier feineren für die Spielkarten und
+     alle vier zusammen), am Ende noch einmal alles an als Kontrolllauf. Danach stehen die Schalter wie vorher, die Seite ist wieder die, auf der der
+     Knopf war, und die Werte stehen auf der Karte und (eine Kopfzeile und vier mit je bis zu vier Messungen, unter der Grenze von 10 Zeilen je Minute) im
+     Protokoll als „scrollauto v2 …“: je Messung „Schlüssel Mittel p95 größter langsam“. Skripte scrollen nicht ganz wie der Controller; verglichen
+     werden aber nur die Einstellungen untereinander. */
   (() => {
     const btn = $("#perf-auto-btn"), stateEl = $("#perf-auto-state"), out = $("#perf-auto-out"), note = $("#perf-auto-note");
     if (!btn || !stateEl || !out || !note) return;
     const html = document.documentElement;
-    const ORDER = ["none", "round", "shadow", "grad", "img", "anim", "contain", "none"];
-    const NAME = { none: "Alles an", round: "Rundungen aus", shadow: "Schatten aus", grad: "Verläufe aus", img: "Bilder aus", anim: "Übergänge aus", contain: "Karten nicht einzeln zeichnen aus" };
+    const ORDER = ["none", "round", "shadow", "grad", "img", "anim", "contain", "cardround", "cardglow", "btnround", "coverclip", "cards", "none"];
+    const NAME = { none: "Alles an", round: "Rundungen aus", shadow: "Schatten aus", grad: "Verläufe aus", img: "Bilder aus", anim: "Übergänge aus", contain: "Karten nicht einzeln zeichnen aus",
+                   cardround: "Kartenrundung aus", cardglow: "Kartenschein aus", btnround: "Knopfrundung aus", coverclip: "Beschneiden der Karte aus", cards: "Karten: alles aus" };
+    const SETS = { cards: ["cardround", "cardglow", "btnround", "coverclip"] };     /* ein Schritt, der mehrere Schalter zusammen abschaltet; sonst genau der eine */
     const PASS_MS = 7000, SPEED = 1800, SKIP = 5;       /* ms je Durchgang, Pixel je Sekunde, die ersten Bilder eines Durchgangs zählen nicht */
     let running = false, stop = false;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    const setOnly = (k) => PERF_KEYS.forEach((x) => html.classList.toggle("perf-" + x, x === k));
+    const setOnly = (k) => { const on = SETS[k] || [k]; PERF_KEYS.forEach((x) => html.classList.toggle("perf-" + x, on.includes(x))); };   /* null und „none“: alles an */
     const num = (x, d) => (+x.toFixed(d)).toLocaleString(LOCALE);
     const pass = () => new Promise((resolve) => {
       const frames = [];
@@ -12874,24 +12923,39 @@
         let cards = 0;
         for (let i = 0; i < 40 && !stop; i++) {            /* bis zu 10 s warten, bis die Liste da ist */
           cards = document.querySelectorAll("#page-games .gm-card").length;
-          if (cards >= 4 && html.scrollHeight > innerHeight * 3) break;
+          if (cards >= 4 && html.scrollHeight > innerHeight * 1.5) break;     /* die kompakte Ansicht ist nur etwa dreimal so hoch wie das Fenster */
           await sleep(250);
         }
         if (stop) { stateEl.textContent = "Abgebrochen."; }
-        else if (cards < 4 || html.scrollHeight <= innerHeight * 3) { stateEl.textContent = "Die Spieleliste ist noch leer. Bitte erst die Seite „Spiele“ laden lassen und noch einmal messen."; }
+        else if (cards < 4 || html.scrollHeight <= innerHeight * 1.5) {
+          stateEl.textContent = "Die Spieleliste ist noch leer. Bitte erst die Seite „Spiele“ laden lassen und noch einmal messen.";
+          await report(`scrollauto skip cards ${cards} height ${html.scrollHeight} win ${innerWidth}x${innerHeight} view ${html.getAttribute("data-gmview") === "compact" ? "compact" : "classic"}`);   /* damit sich aus dem Protokoll ablesen lässt, warum */
+        }
         else {
+          /* Erst warten, bis alle Titelbilder geladen und umgewandelt sind (Schlange leer, eine Sekunde Ruhe, höchstens 40 s): sonst fällt diese Arbeit
+             in die ersten Messungen und verfälscht sie (Messung 5: 47 ms im ersten Schritt). */
+          gmSharpen();
+          for (let i = 0, quiet = 0; i < 160 && !stop && quiet < 4; i++) {
+            const imgs = [...document.querySelectorAll("#page-games .gm-cover img")];
+            imgs.forEach((x) => { if (x.loading === "lazy") x.loading = "eager"; });
+            if (imgs.every((x) => x.complete) && !gmConvQueue.length && !gmConvTimer) quiet++; else quiet = 0;
+            await sleep(250);
+          }
           setOnly(null); await sleep(300); await pass();   /* Vorlauf */
           for (let i = 0; i < ORDER.length && !stop; i++) {
             const k = ORDER[i];
             stateEl.textContent = `Messung ${i + 1} von ${ORDER.length}: ${NAME[k]}`;
-            setOnly(k === "none" ? null : k); await sleep(400);
+            setOnly(k); await sleep(400);
             const s = stats(await pass());
             if (s && !stop) res.push({ k: i === ORDER.length - 1 ? "none2" : k, name: i === ORDER.length - 1 ? "Alles an (Kontrolllauf)" : NAME[k], s });
           }
           stateEl.textContent = stop ? "Abgebrochen." : "Fertig.";
           if (res.length) {
-            await report(`scrollauto info ps5 ${html.classList.contains("ps5") ? 1 : 0} nodes ${document.querySelectorAll("*").length} cards ${cards} height ${html.scrollHeight} speed ${SPEED} pass ${PASS_MS}`);
-            for (const r of res) await report(`scrollauto ${r.k} n ${r.s.n} avg ${num(r.s.avg, 1).replace(",", ".")} p95 ${num(r.s.p95, 0)} max ${num(r.s.max, 0)} slow ${r.s.slow}`);
+            const card0 = document.querySelector("#page-games .gm-card");   /* Ansicht, Fenster und Kartenhöhe: damit eindeutig ist, was gemessen wurde (große oder kompakte Ansicht) */
+            await report(`scrollauto info ps5 ${html.classList.contains("ps5") ? 1 : 0} view ${html.getAttribute("data-gmview") === "compact" ? "compact" : "classic"} win ${innerWidth}x${innerHeight} dpr ${window.devicePixelRatio || 1} card ${card0 ? Math.round(card0.getBoundingClientRect().height) : 0} nodes ${document.querySelectorAll("*").length} cards ${cards} height ${html.scrollHeight} speed ${SPEED} pass ${PASS_MS}`);
+            /* je Messung „Schlüssel Mittel p95 größter langsam“, vier je Zeile (die Route nimmt nur 150 Zeichen und 10 Zeilen je Minute) */
+            const one = (r) => `${r.k} ${num(r.s.avg, 1).replace(",", ".")} ${num(r.s.p95, 0)} ${num(r.s.max, 0)} ${r.s.slow}`;
+            for (let i = 0; i < res.length; i += 4) await report(`scrollauto v2 ${res.slice(i, i + 4).map(one).join(", ")}`);
           }
         }
       } catch (e) {
