@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+### Systemsprache in der Browser-App (12.11.2026)
+- **Ab Werk „Auto (System)“:** Ohne eigene Wahl übernimmt die Browser-App die Systemsprache und zeigt Englisch, wenn sie die Sprache nicht hat. Im Browser der PS5 gilt die Sprache der **Konsole** (die Seite erfährt sie von der App, merkt sie als `lang_sys` und lädt einmal neu, wenn sie von der gezeigten abweicht); am PC und Handy gilt die Sprache des Browsers, alle seine Sprachen in ihrer Reihenfolge (vorher nur die erste). Die Sprachwahl oben hat dafür den neuen Eintrag **Auto (System)**; eine eigene Wahl bleibt gemerkt, „Auto“ nimmt sie zurück.
+- **Vollbild-App:** unverändert (folgt schon der Systemsprache der Konsole, sonst Englisch; `tv_language` leer = Systemsprache).
+- Geprüft mit neun Fällen am PC (deutsch, französisch, portugiesisch und japanisch → Englisch, Liste „pt, it, en“ → Italienisch, gespeicherte Wahl, PS5-Kennung mit Konsole schwedisch / japanisch / englisch). Handbuch (`docs/HANDBUCH.md`) angepasst. **An der Konsole noch nicht erprobt.**
+
+
 ---
 
 ## v1.80.0 – 11.11.2026

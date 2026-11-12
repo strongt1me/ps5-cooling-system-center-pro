@@ -12279,6 +12279,29 @@
     }
   };
   applyExpertMode(loadExpertMode());
+
+  /* Die Sprache der Konsole im Browser der PS5 (12.11.2026): Ohne eigene Wahl (Auto) gilt die Systemsprache der Konsole, wenn die App sie
+     hat, sonst Englisch. i18n-boot.js nimmt beim ersten Mal die Sprache des Browsers; hier erfährt die Seite die der Konsole (Code wie
+     sceSystemServiceParamGetInt), merkt sie als "lang_sys" und lädt einmal neu, wenn sie von der gezeigten abweicht. Andere Browser
+     (PC, Handy) folgen ihrer eigenen Sprache. */
+  (async () => {
+    if (!window.PS5_LANG_AUTO || !/PlayStation/i.test(navigator.userAgent)) return;
+    let sys;
+    try { sys = await api("/api/v1/system"); } catch { return; }
+    const code = sys && sys.locale ? sys.locale.language : undefined;
+    if (typeof code !== "number") return;
+    const MAP = { 2: "fr", 22: "fr", 3: "es", 20: "es", 4: "de", 5: "it", 8: "ru", 13: "sv" };
+    const sysLang = MAP[code] || "en";
+    try {
+      localStorage.setItem("lang_sys", sysLang);
+      if (sysLang !== window.PS5_LANG && sessionStorage.getItem("lang_sys_reload") !== sysLang) {
+        sessionStorage.setItem("lang_sys_reload", sysLang);
+        const page = sessionStorage.getItem("ps5page");
+        if (page) sessionStorage.setItem("ps5restore", page);
+        location.reload();
+      }
+    } catch { /* ohne Speicher bleibt es bei der Browsersprache */ }
+  })();
   expertSwitches.forEach((el) => el.addEventListener("change", async () => {
     applyExpertMode(el.checked);
     saveExpertMode(state.expertMode);

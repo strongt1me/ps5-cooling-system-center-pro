@@ -678,8 +678,10 @@ solange ein anderer Vorgang der App läuft (Spiel kopieren, konvertieren, instal
 
 ## Sprache der Oberfläche (seit 07.10.2026)
 
-Oben rechts in der Kopfzeile steht die Sprachwahl: **Deutsch, English, Italiano, Español, Français, Русский, Svenska**. Beim ersten
-Besuch nimmt die Seite die Sprache des Browsers; hat die App sie nicht, Englisch. Die Wahl merkt sich der Browser
+Oben rechts in der Kopfzeile steht die Sprachwahl: **Auto (System), Deutsch, English, Italiano, Español, Français, Русский, Svenska**. Ab Werk steht
+sie auf **Auto**: Die App übernimmt die Systemsprache, im Browser der PS5 die der Konsole, am PC oder Handy die des Browsers (in der
+Reihenfolge seiner Sprachen); hat die App die Sprache nicht, gilt Englisch (seit 12.11.2026). Die Vollbild-App folgt ebenso der Sprache der
+Konsole (Einstellung „Sprache“: Systemsprache), Englisch, wenn sie diese nicht hat. Eine eigene Wahl merkt sich der Browser
 (`localStorage`, Schlüssel `lang`), die Seite lädt dann neu und bleibt auf der Seite, auf der man war. Zahlen, Datum und
 Uhrzeit folgen der Sprache (`de-DE`, `en-GB`, `it-IT`, `es-ES`, `fr-FR`, `ru-RU`, `sv-SE`).
 

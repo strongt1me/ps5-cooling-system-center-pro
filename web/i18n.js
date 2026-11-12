@@ -53,9 +53,12 @@
   /* die Sprachauswahl und die Links zu Handbuch und FAQ in der gewählten Sprache */
   var sel = document.getElementById("lang");
   if (sel) {
-    sel.value = lang;
+    sel.value = window.PS5_LANG_AUTO ? "auto" : lang;
     sel.addEventListener("change", function () {
-      try { localStorage.setItem("lang", sel.value); } catch (e) { /* ohne Speicher gilt die Wahl nur bis zum Neuladen nicht */ }
+      try {
+        if (sel.value === "auto") localStorage.removeItem("lang");         /* Auto: wieder die Systemsprache (12.11.2026) */
+        else localStorage.setItem("lang", sel.value);
+      } catch (e) { /* ohne Speicher gilt die Wahl nur bis zum Neuladen nicht */ }
       try {
         var page = sessionStorage.getItem("ps5page");
         if (page) sessionStorage.setItem("ps5restore", page);
