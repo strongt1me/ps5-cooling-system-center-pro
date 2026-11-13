@@ -19,6 +19,7 @@
 int ps5tm_ampr_busy(void) { return 0; }
 int ps5tm_disc_busy(void) { return 0; }
 int ps5tm_usbeject_busy(void) { return 0; }
+int ps5tm_jobs_busy_except(int self, int flags, char *why, size_t n) { (void)self; (void)flags; (void)why; (void)n; return 0; }
 int ps5tm_gameconvert_busy(void) { return 0; }
 int ps5tm_gamecopy_busy(void) { return 0; }
 int ps5tm_gamedelete_busy(void) { return 0; }

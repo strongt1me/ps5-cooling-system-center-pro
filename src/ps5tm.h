@@ -1453,7 +1453,18 @@ struct cJSON *ps5tm_backdrops_json(void);
    this app's jobs runs and no folder of the drive is mounted elsewhere. start: 202 started, else the HTTP status of the
    refusal, msg says why. */
 int           ps5tm_usbeject_path_ok(const char *mount);
-int           ps5tm_usbeject_busy(void);                   /* 1 while a drive is being ejected: no job of the app starts beside it (audit F-06) */
+int           ps5tm_usbeject_busy(void);
+
+/* The one list of jobs that do not run beside each other (src/jobreg.c). A job module asks with its own id (or -1) before it starts. */
+typedef enum {
+  PS5TM_JOB_SAVES, PS5TM_JOB_PKGSPLIT, PS5TM_JOB_PKGINST, PS5TM_JOB_PKGSCAN, PS5TM_JOB_GAMEDELETE, PS5TM_JOB_FILEMGR, PS5TM_JOB_AMPR,
+  PS5TM_JOB_IMGJOB, PS5TM_JOB_DISC, PS5TM_JOB_USBEJECT, PS5TM_JOB_GAMECONVERT, PS5TM_JOB_GAMECOPY, PS5TM_JOB_GAMEMOVE,
+  PS5TM_JOB_COUNT
+} ps5tm_job_t;
+#define PS5TM_JOBS_READERS 1     /* also count the jobs that only read a drive (the package search): for ejecting a drive */
+#define PS5TM_JOBS_NO_SMP  2     /* do not ask ShadowMountPlus whether it moves a game (no HTTP call) */
+/* 1 when a job other than `self` is under way; why names it. */
+int           ps5tm_jobs_busy_except(int self, int flags, char *why, size_t n);                   /* 1 while a drive is being ejected: no job of the app starts beside it (audit F-06) */
 /* 1 and what runs ("Es läuft eine Kopie oder ein Dump") while any of the app's own jobs runs. */
 int           ps5tm_app_job_running(char *why, size_t n);
 /* smpremount.c (30.10.2026): one game "mount", "unmount" or "remount" through ShadowMountPlus; the HTTP status and a
@@ -1974,6 +1985,10 @@ typedef struct {
   int    gzip_ok;
   /* If-None-Match: the ETag of the copy the browser has (the pages answer 304 when it is still the one) */
   char   if_none_match[48];
+  /* Origin and User-Agent, cut short and reduced to plain characters (letters, digits, space and . , - _ / :) so that they can go into the
+     log: only for the trace of power commands (audit 11.11.2026: an unexplained safe-mode request could not be attributed). */
+  char   origin[64];
+  char   agent[64];
 } ps5tm_request_t;
 
 /* The file manager's requests (/api/v1/files/...): 1 when it answered, 0 when the path is not its own. */

@@ -484,20 +484,9 @@ split_thread(void *arg) {
 
 static int
 other_job_active(char *err, size_t n) {
-  if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() || ps5tm_gamedelete_busy()) {
-    snprintf(err, n, "Es läuft gerade eine Kopie, Konvertierung, ein Verschieben, eine Sicherung oder ein Löschen. Das läuft nicht gleichzeitig mit dem Teilen eines Pakets.");
-    return 1;
-  }
-  if(ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
-    snprintf(err, n, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
-    return 1;
-  }
-  if(ps5tm_filemgr_busy()) {
-    snprintf(err, n, "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
-    return 1;
-  }
-  if(ps5tm_pkginst_busy()) {
-    snprintf(err, n, "Es wird gerade ein Paket installiert. Das läuft nicht gleichzeitig mit dem Teilen eines Pakets.");
+  char w[160];
+  if(ps5tm_jobs_busy_except(PS5TM_JOB_PKGSPLIT, 0, w, sizeof(w))) {
+    snprintf(err, n, "%s. Das läuft nicht gleichzeitig mit dem Teilen eines Pakets.", w);
     return 1;
   }
   return 0;

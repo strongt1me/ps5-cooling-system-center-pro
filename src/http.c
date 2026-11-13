@@ -55,6 +55,20 @@ static struct { uint32_t ip; int n; } g_peer[PEER_SLOTS];
 #define MAX_LOOPBACK 12
 static atomic_int g_loopback;
 
+/* Copies src into dst, at most n-1 characters, anything but letters, digits, space and . , - _ / : replaced by "?": log text must not carry
+   brackets or other characters the kernel-log readers could take for a marker. */
+static void
+plain_copy(char *dst, size_t n, const char *src) {
+  size_t o = 0;
+  for(; *src && o + 1 < n; src++) {
+    unsigned char c = (unsigned char)*src;
+    int plain = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == ' ' || c == '.' || c == ',' ||
+                c == '-' || c == '_' || c == '/' || c == ':';
+    dst[o++] = plain ? (char)c : '?';
+  }
+  dst[o] = 0;
+}
+
 static int
 peer_acquire(uint32_t ip) {
   if((ntohl(ip) >> 24) == 127) {
@@ -638,6 +652,11 @@ serve_connection(void *arg) {
         if(!strncasecmp(c, "gzip", 4)) { req.gzip_ok = 1; break; }
     req.if_none_match[0] = 0;
     if(header_value(headers, "If-None-Match", req.if_none_match, sizeof(req.if_none_match)) <= 0) req.if_none_match[0] = 0;
+    char ua[160], og[160];
+    if(header_value(headers, "User-Agent", ua, sizeof(ua)) <= 0) ua[0] = 0;
+    if(header_value(headers, "Origin", og, sizeof(og)) <= 0) og[0] = 0;
+    plain_copy(req.agent, sizeof(req.agent), ua);
+    plain_copy(req.origin, sizeof(req.origin), og);
   }
 
   const char *cl = find_header(headers, "Content-Length");

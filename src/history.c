@@ -110,6 +110,7 @@ write_file(const sample_t *ring, unsigned count, unsigned start,
  * not belong on a thread's stack. */
 static pthread_cond_t g_due_cond = PTHREAD_COND_INITIALIZER;
 static int            g_due = 0;
+static unsigned       g_writes = 0;          /* turns of the writer that are over (written or failed); the reset waits for one */
 static sample_t       g_copy[HISTORY_SLOTS];
 
 static void *
@@ -127,11 +128,11 @@ writer_main(void *arg) {
     g_dirty = 0;                       /* a sample arriving while the file is written marks it again */
     pthread_mutex_unlock(&g_lock);
 
-    if(!write_file(g_copy, count, start, pc, ps, pf, at)) {
-      pthread_mutex_lock(&g_lock);
-      g_dirty = 1;                     /* kept in memory for the next turn */
-      pthread_mutex_unlock(&g_lock);
-    }
+    int wrote = write_file(g_copy, count, start, pc, ps, pf, at);
+    pthread_mutex_lock(&g_lock);
+    if(!wrote) g_dirty = 1;            /* kept in memory for the next turn */
+    g_writes++;
+    pthread_mutex_unlock(&g_lock);
   }
   return NULL;
 }
@@ -296,7 +297,17 @@ ps5tm_history_reset(void) {
   g_peak_cpu = g_peak_soc = g_peak_fan = -1;
   g_peak_cpu_at = 0;
   g_dirty = 1;
+  unsigned before = g_writes;
   pthread_mutex_unlock(&g_lock);
   request_flush();                     /* the empty file is written by the writer thread: no drive access under the lock the fan thread takes */
+  /* the answer goes out when the empty file is on the drive (at most 3 s; a drive held busy by a copy does not hold this up for good): a restart right
+     after the click must not bring the old history back (audit 11.11.2026) */
+  for(int i = 0; i < 150; i++) {
+    pthread_mutex_lock(&g_lock);
+    int over = g_writes != before || !g_writer_ok;   /* without a writer thread the file was written synchronously */
+    pthread_mutex_unlock(&g_lock);
+    if(over) break;
+    usleep(20 * 1000);
+  }
   PS5TM_INFO("history_reset", "Verlauf zurückgesetzt.");
 }

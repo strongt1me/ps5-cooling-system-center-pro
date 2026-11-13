@@ -46,5 +46,7 @@ jobs:
         run: sh test/convpfs/run.sh
       - name: zstdpack
         run: sh test/zstdpack/run.sh
+      - name: jobreg
+        run: sh test/jobreg/run.sh
       - name: ps4m
         run: sh test/ps4m/run.sh

@@ -1181,47 +1181,9 @@ ps5tm_gamecopy_busy(void) {
    other with their own lock held would wait on each other forever). */
 static int
 other_job_active(int ask_smp, char *err, size_t err_len) {
-  if(ps5tm_saves_busy()) {
-    snprintf(err, err_len, "Es läuft gerade ein Vorgang mit den Spielständen. Kopieren, Konvertieren "
-             "und Verschieben laufen nicht gleichzeitig damit.");
-    return 1;
-  }
-  if(ps5tm_pkgsplit_busy()) {
-    snprintf(err, err_len, "Es wird gerade ein Paket geteilt. Kopieren, Konvertieren "
-             "und Verschieben laufen nicht gleichzeitig damit.");
-    return 1;
-  }
-  if(ps5tm_usbeject_busy()) {
-    snprintf(err, err_len, "Ein Laufwerk wird gerade ausgeworfen. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig damit.");
-    return 1;
-  }
-  if(ps5tm_gamedelete_busy()) {
-    snprintf(err, err_len, "Es wird gerade ein Spiel oder eine Sicherung gelöscht. Kopieren, Konvertieren "
-             "und Verschieben laufen nicht gleichzeitig damit.");
-    return 1;
-  }
-  if(ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
-    snprintf(err, err_len, "Es wird gerade ein AMPR-Index gebaut. Bitte danach noch einmal.");
-    return 1;
-  }
-  if(ps5tm_filemgr_busy()) {
-    snprintf(err, err_len, "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
-    return 1;
-  }
-  if(ps5tm_pkginst_busy()) {
-    snprintf(err, err_len, "Es wird gerade ein Paket installiert. Kopieren, Konvertieren "
-             "und Verschieben laufen nicht gleichzeitig damit.");
-    return 1;
-  }
-  if(ps5tm_gameconvert_busy()) {
-    snprintf(err, err_len, "Es läuft gerade eine Konvertierung. Kopieren, "
-             "Konvertieren und Verschieben laufen nicht gleichzeitig.");
-    return 1;
-  }
-  if(ask_smp && ps5tm_gamemove_busy()) {
-    snprintf(err, err_len, "ShadowMountPlus verschiebt oder entpackt gerade "
-             "ein Spiel. Kopieren, Konvertieren und Verschieben laufen nicht "
-             "gleichzeitig.");
+  char w[160];
+  if(ps5tm_jobs_busy_except(PS5TM_JOB_GAMECOPY, ask_smp ? 0 : PS5TM_JOBS_NO_SMP, w, sizeof(w))) {
+    snprintf(err, err_len, "%s. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig.", w);
     return 1;
   }
   return 0;

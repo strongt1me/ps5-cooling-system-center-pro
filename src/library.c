@@ -2356,10 +2356,8 @@ probe_idle(void) {
   ps5tm_gamestate_t gs;
   ps5tm_gamestate_get(&gs);
   if(gs.title_id[0]) return 0;                                   /* a game is up, even a paused one */
-  /* every job of the app that writes images or folders (audit 11.11.2026, F-19; it knew five of about thirteen) */
-  return !ps5tm_gamecopy_busy() && !ps5tm_gameconvert_busy() && !ps5tm_gamemove_busy() &&
-         !ps5tm_gamedelete_busy() && !ps5tm_filemgr_busy() && !ps5tm_saves_busy() && !ps5tm_pkgsplit_busy() &&
-         !ps5tm_pkginst_busy() && !ps5tm_ampr_busy() && !ps5tm_imgjob_busy() && !ps5tm_usbeject_busy() && !ps5tm_disc_busy();
+  /* every job of the app: the one list of usbeject.c (ps5tm_app_job_running) instead of a copy of it here, so that a new job is added in one place */
+  return !ps5tm_jobs_busy_except(-1, PS5TM_JOBS_READERS, NULL, 0);
 }
 
 /* Titles whose image the reader could not open: for them (and only them) the mount is the way. */
@@ -2383,25 +2381,25 @@ probe_note_failed(const char *tid) {
    its image file has another size or time than the one the saved result was read from. Returns how many were read. */
 /* A title whose image the direct reader took the app down with is not read again after the restart: before every read its id goes into a
    small file, removed afterwards; one that is still there at the next start means the app ended inside the read (audit 11.11.2026, F-21;
-   until then every start read the same image again 20 s later, and the app ended again). Such titles are listed in PROBE_SKIP and left
-   alone; deleting that file (Dateimanager) allows them again. */
+   until then every start read the same image again 20 s later, and the app ended again). One leftover can also be an ordinary end (a new
+   ELF was sent, the console was switched off), so the first one only makes the title a suspect (PROBE_SUSPECT); a second one for the same
+   title, with no good read in between, puts it on PROBE_SKIP and it is left alone. Deleting that file (Dateimanager) allows it again. */
 #define PROBE_READMARK PS5TM_DATA_DIR "/probe-read.txt"
+#define PROBE_SUSPECT  PS5TM_DATA_DIR "/probe-suspect.txt"
 #define PROBE_SKIP     PS5TM_DATA_DIR "/probe-skip.txt"
 
 static void
 probe_mark_reading(const char *tid) {
   if(!tid) { (void)unlink(PROBE_READMARK); return; }
-  FILE *f = fopen(PROBE_READMARK, "w");
+  FILE *f = fopen(PROBE_READMARK, "w");              /* no fsync: the mark has to survive the end of the process, not a power cut */
   if(!f) return;
   fprintf(f, "%s\n", tid);
-  fflush(f);
-  (void)fsync(fileno(f));
   fclose(f);
 }
 
 static int
-probe_skipped(const char *tid) {
-  FILE *f = fopen(PROBE_SKIP, "r");
+list_has(const char *path, const char *tid) {
+  FILE *f = fopen(path, "r");
   if(!f) return 0;
   char line[32];
   int hit = 0;
@@ -2414,6 +2412,38 @@ probe_skipped(const char *tid) {
 }
 
 static void
+list_add(const char *path, const char *tid) {
+  FILE *f = fopen(path, "a");
+  if(!f) return;
+  fprintf(f, "%s\n", tid);
+  fclose(f);
+}
+
+static void
+list_remove(const char *path, const char *tid) {
+  FILE *f = fopen(path, "r");
+  if(!f) return;
+  char tmp[160], line[32], keep[16][12];
+  int n = 0;
+  while(n < 16 && fgets(line, sizeof(line), f)) {
+    line[strcspn(line, "\r\n")] = 0;
+    if(line[0] && strcmp(line, tid) && strlen(line) < sizeof(keep[0])) snprintf(keep[n++], sizeof(keep[0]), "%s", line);
+  }
+  fclose(f);
+  snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+  FILE *o = fopen(tmp, "w");
+  if(!o) return;
+  for(int i = 0; i < n; i++) fprintf(o, "%s\n", keep[i]);
+  fclose(o);
+  if(rename(tmp, path) != 0) unlink(tmp);
+}
+
+static int
+probe_skipped(const char *tid) {
+  return list_has(PROBE_SKIP, tid);
+}
+
+static void
 probe_after_crash(void) {
   FILE *f = fopen(PROBE_READMARK, "r");
   if(!f) return;
@@ -2422,9 +2452,14 @@ probe_after_crash(void) {
   fclose(f);
   (void)unlink(PROBE_READMARK);
   if(strlen(tid) != 9 || probe_skipped(tid)) return;
-  FILE *s = fopen(PROBE_SKIP, "a");
-  if(s) { fprintf(s, "%s\n", tid); fclose(s); }
-  PS5TM_WARN("image_probe_crash", "Beim Lesen des Abbilds von %s ist die App zuletzt beendet worden. Es wird nicht mehr direkt gelesen (Liste: %s; Datei löschen erlaubt es wieder).",
+  if(!list_has(PROBE_SUSPECT, tid)) {
+    list_add(PROBE_SUSPECT, tid);
+    PS5TM_INFO("image_probe_interrupted", "Das Lesen des Abbilds von %s wurde unterbrochen (die App wurde beendet). Passiert das noch einmal, wird es nicht mehr direkt gelesen.", tid);
+    return;
+  }
+  list_add(PROBE_SKIP, tid);
+  list_remove(PROBE_SUSPECT, tid);
+  PS5TM_WARN("image_probe_crash", "Beim Lesen des Abbilds von %s ist die App zweimal beendet worden. Es wird nicht mehr direkt gelesen (Liste: %s; Datei löschen erlaubt es wieder).",
              tid, PROBE_SKIP);
 }
 
@@ -2461,6 +2496,7 @@ probe_read_images(void) {
     int rd = probe_read_image_file(img[i].tid, img[i].path, (int64_t)st.st_size, (int64_t)st.st_mtime);
     probe_mark_reading(NULL);
     if(rd == 0) {
+      list_remove(PROBE_SUSPECT, img[i].tid);                  /* read well: no longer a suspect */
       done++;
     } else {
       probe_note_failed(img[i].tid);

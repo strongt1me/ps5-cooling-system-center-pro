@@ -51,26 +51,7 @@ ps5tm_usbeject_path_ok(const char *mount) {
    mounted or unmounted (smpremount.c). */
 int
 ps5tm_app_job_running(char *why, size_t n) {
-  static const struct { int (*busy)(void); const char *what; } jobs[] = {
-    { ps5tm_gamecopy_busy,    "Es läuft eine Kopie oder ein Dump" },
-    { ps5tm_gameconvert_busy, "Es läuft eine Konvertierung" },
-    { ps5tm_gamemove_busy,    "ShadowMountPlus verschiebt oder entpackt gerade ein Spiel für die App" },
-    { ps5tm_gamedelete_busy,  "Es wird ein Spiel oder eine Sicherung gelöscht" },
-    { ps5tm_filemgr_busy,     "Der Dateimanager arbeitet (Kopieren, Verschieben oder Löschen)" },
-    { ps5tm_saves_busy,       "Es läuft ein Vorgang mit den Spielständen" },
-    { ps5tm_pkginst_busy,     "Es wird ein Paket installiert" },
-    { ps5tm_pkgsplit_busy,    "Es wird ein Paket geteilt" },
-    { ps5tm_pkgscan_busy,     "Die Pakete werden gerade gesucht" },
-    { ps5tm_ampr_busy,        "Es wird ein AMPR-Index gebaut" },
-    { ps5tm_imgjob_busy,      "Es wird ein Abbild bearbeitet" },
-    { ps5tm_disc_busy,        "Es wird ein Abbild der Disc angelegt" },
-  };
-  for(size_t i = 0; i < sizeof(jobs) / sizeof(jobs[0]); i++)
-    if(jobs[i].busy()) {
-      snprintf(why, n, "%s", jobs[i].what);
-      return 1;
-    }
-  return 0;
+  return ps5tm_jobs_busy_except(PS5TM_JOB_USBEJECT, PS5TM_JOBS_READERS, why, n);
 }
 
 /* A folder of the drive mounted somewhere else (PS4Mount's games, a ShadowMountPlus title): 1 with the reason. */

@@ -211,10 +211,9 @@ game_running(char *id, size_t n) {
 
 static int
 other_job_active(char *err, size_t err_len) {
-  if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_gamemove_busy() || ps5tm_saves_busy() ||
-     ps5tm_pkgsplit_busy() || ps5tm_pkginst_busy() || ps5tm_filemgr_busy() || ps5tm_ampr_busy() || ps5tm_imgjob_busy()) {
-    snprintf(err, err_len, "Es läuft gerade ein anderer Vorgang (Kopieren, Konvertieren, Verschieben, Spielstände, Dateimanager, "
-             "ein Paket teilen oder installieren). Gelöscht wird erst danach.");
+  char w[160];
+  if(ps5tm_jobs_busy_except(PS5TM_JOB_GAMEDELETE, 0, w, sizeof(w))) {
+    snprintf(err, err_len, "%s. Gelöscht wird erst danach.", w);
     return 1;
   }
   return 0;

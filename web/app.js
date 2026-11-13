@@ -4079,7 +4079,16 @@
   const bd = { once: false, area: "" };
   /* Die Karte gibt es nur, wenn die Browser-App aus der Vollbild-App geöffnet wurde (die Adresse trägt dann ?vollbild=1, POST /api/v1/open-ui mit
      {"from":"fullscreen"}); wer nur die Browser-App öffnet, sieht sie nicht (11.11.2026). Nichts wird gemerkt: Eine andere Adresse zeigt sie nicht. */
-  const bdOn = /[?&]vollbild=1(&|$)/.test(location.search);
+  /* Die Marke bleibt für diesen Besuch erhalten (sessionStorage), wenn man über Handbuch oder FAQ zurückkommt (die Adresse hat dann kein ?vollbild=1 mehr):
+     gilt nur, solange die Seite von einer Seite derselben App aus geöffnet wurde; ein frischer Start (Kachel, Lesezeichen: kein Verweis) löscht sie. */
+  const bdOn = (() => {
+    const q = /[?&]vollbild=1(&|$)/.test(location.search);
+    try {
+      if (q) sessionStorage.setItem("ps5vb", "1");
+      else if (!document.referrer || new URL(document.referrer).origin !== location.origin) sessionStorage.removeItem("ps5vb");
+      return q || sessionStorage.getItem("ps5vb") === "1";
+    } catch { return q; }
+  })();
   { const bc = $("#bd-card"); if (bc && bdOn) bc.hidden = false; }
   const BD_MODES = [["standard", "Standardbild"], ["custom", "Eigenes Bild"], ["off", "Kein Bild"]];
   const bdShow = (d) => {

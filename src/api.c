@@ -4501,6 +4501,12 @@ handle_power(int fd, ps5tm_request_t *req) {
   snprintf(action, sizeof(action), "%s", act->valuestring);
   cJSON_Delete(root);
 
+  /* Who asked (audit 11.11.2026): a safe-mode request 5 s after the app started could not be attributed to anyone. Only the known words are
+     logged, with the peer, the Origin and the User-Agent of the request. */
+  if(!strcmp(action, "off") || !strcmp(action, "reboot") || !strcmp(action, "standby") || !strcmp(action, "safemode"))
+    PS5TM_WARN("power_request", "Energie-Befehl %s von %s (Origin %s, Gerät %s).", action, req->peer,
+               req->origin[0] ? req->origin : "-", req->agent[0] ? req->agent : "-");
+
   int         rc  = -1;
   const char *msg = NULL;
 
