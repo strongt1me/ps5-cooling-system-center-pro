@@ -2256,7 +2256,14 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   /* "name": a template for the result's name ({titel}, {id}, {version}, {quelle}; empty = the name of the source), cvname.h */
   const cJSON *jn   = body ? cJSON_GetObjectItem(body, "name")   : NULL;
   char tpl[200] = "";
-  if(cJSON_IsString(jn)) snprintf(tpl, sizeof(tpl), "%s", jn->valuestring);
+  if(cJSON_IsString(jn)) {
+    if(strlen(jn->valuestring) >= sizeof(tpl)) {            /* refused, not cut: what was checked is what starts */
+      cJSON_Delete(body);
+      ps5tm_http_send_error(fd, 400, "name_too_long", "Die Vorlage für den Namen ist zu lang (höchstens 199 Bytes).");
+      return;
+    }
+    snprintf(tpl, sizeof(tpl), "%s", jn->valuestring);
+  }
   int ampr = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "ampr_index"));
   /* "verify": "full" (the default) reads the whole result back and writes the checksum file; "quick" checks the structure and a
      sample and writes no checksum file (10.11.2026) */
@@ -2289,7 +2296,14 @@ handle_convert_check(int fd, const ps5tm_request_t *req) {
   const size_t cap[5] = { sizeof(id), sizeof(op), sizeof(target), sizeof(mode), sizeof(tpl) };
   for(int i = 0; i < 5; i++) {
     const cJSON *j = body ? cJSON_GetObjectItem(body, keys[i]) : NULL;
-    if(cJSON_IsString(j)) snprintf(dst[i], cap[i], "%s", j->valuestring);
+    if(cJSON_IsString(j)) {
+      if(strlen(j->valuestring) >= cap[i]) {                 /* refused, not cut */
+        cJSON_Delete(body);
+        ps5tm_http_send_error(fd, 400, "value_too_long", i == 4 ? "Die Vorlage für den Namen ist zu lang (höchstens 199 Bytes)." : "Eine Angabe ist zu lang.");
+        return;
+      }
+      snprintf(dst[i], cap[i], "%s", j->valuestring);
+    }
   }
   cJSON_Delete(body);
   cJSON *root = ps5tm_gameconvert_check(id, op, target, mode, tpl, err, sizeof(err));
@@ -5365,7 +5379,20 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   if(!strcmp(req->path, "/api/v1/library/convert/cancel")) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                          "Nur POST erlaubt."); return; }
-    if(ps5tm_gameconvert_cancel() != 0) {
+    /* {"queue_id": n}: only the job the person saw (0 = one that is not from the queue); no body = the job that runs (older clients) */
+    int expect = -1;
+    {
+      cJSON *cb = req->body ? cJSON_Parse(req->body) : NULL;
+      const cJSON *jq = cb ? cJSON_GetObjectItem(cb, "queue_id") : NULL;
+      if(cJSON_IsNumber(jq) && jq->valuedouble >= 0 && jq->valuedouble <= 2147483647.0) expect = (int)jq->valuedouble;
+      cJSON_Delete(cb);
+    }
+    int cr = ps5tm_gameconvert_cancel(expect);
+    if(cr == -2) {
+      ps5tm_http_send_error(fd, 409, "other_convert", "Dieser Auftrag ist schon zu Ende, der nächste läuft. Der nächste wurde nicht abgebrochen.");
+      return;
+    }
+    if(cr != 0) {
       ps5tm_http_send_error(fd, 409, "no_convert", "Es läuft keine Konvertierung.");
       return;
     }

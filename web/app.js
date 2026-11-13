@@ -6260,6 +6260,7 @@
   const cvRefreshCheck = async () => {
     const box = $("#cv-check");
     if (!box || cp.view !== "cvplan") return;
+    if (cv.cbusy) { cv.cpend = true; return; }          /* one question at a time; the newest state is asked once the answer is in */
     const seq = ++cv.cseq;
     const st = $('#cp-body [data-cp="start"]'), qu = $('#cp-body [data-cp="queue"]');
     if (!cv.op || !cv.drive || !cv.mode) {
@@ -6269,6 +6270,7 @@
       if (qu) qu.disabled = true;
       return;
     }
+    cv.cbusy = true;
     try {
       const c = await api("/api/v1/library/convert/check", { method: "POST", timeoutMs: 120000,
         body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, name: cv.name || "" }) });
@@ -6281,6 +6283,9 @@
       box.innerHTML = `<p class="cp-err">${esc(e.message)}</p>`;
       if (st) st.disabled = true;
       if (qu) qu.disabled = true;
+    } finally {
+      cv.cbusy = false;
+      if (cv.cpend) { cv.cpend = false; cvRefreshCheck(); }
     }
   };
   const cvCheckSoon = () => {
@@ -6663,7 +6668,8 @@
   const cvCancel = async (btn) => {
     btn.disabled = true;
     try {
-      await api("/api/v1/library/convert/cancel", { method: "POST" });
+      /* only the job that is shown: if it has ended and the next one of the queue has begun, that one is not cancelled (the server says so) */
+      await api("/api/v1/library/convert/cancel", { method: "POST", body: JSON.stringify({ queue_id: (cv.job && cv.job.queue_id) || 0 }) });
       toast("Das Konvertieren wird abgebrochen.");
     } catch (e) {
       toast(e.message, "error");

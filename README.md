@@ -6,7 +6,7 @@
 
 **Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser (Konsole, Handy, PC) oder als Vollbild-App auf dem Fernseher mit dem Controller, in sieben Sprachen.**
 
-![Version](https://img.shields.io/badge/Version-1.81.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.82.0-1f6feb)
 ![Firmware](https://img.shields.io/badge/FW-4.03%20bis%2014.10%20Support-2ea44f)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
@@ -202,7 +202,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 1. Aus den [Releases](../../releases) die Datei `PS5_Cooling_System_Center_v<Version>.elf` laden.
 2. An die Konsole senden (ELF-Lader, Port **9021**), zum Beispiel:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.81.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.82.0.elf
    ```
 3. Im Browser öffnen: **`http://<PS5-IP>:8086`** (die Adresse zeigt auch die Meldung oben links auf dem Fernseher).
 

@@ -28,6 +28,37 @@ put(char *out, size_t out_len, size_t *at, const char *s, size_t n) {
   return 0;
 }
 
+/* Makes the bytes of s valid UTF-8 and takes out what only fakes or hides a name: a byte that is not part of a valid sequence, the C1
+   controls, zero-width and direction marks (U+200B-200F, U+202A-202E, U+2060-2069), the line and paragraph separators and U+FEFF each
+   become one "_". Works in place (the result is never longer); returns the new length. */
+static size_t
+clean_utf8(char *s, size_t n) {
+  size_t r = 0, w = 0;
+  while(r < n) {
+    unsigned char c = (unsigned char)s[r];
+    size_t len = 0;
+    unsigned cp = 0;
+    if(c < 0x80) { s[w++] = (char)c; r++; continue; }
+    if(c >= 0xC2 && c <= 0xDF) { len = 2; cp = c & 0x1f; }
+    else if(c >= 0xE0 && c <= 0xEF) { len = 3; cp = c & 0x0f; }
+    else if(c >= 0xF0 && c <= 0xF4) { len = 4; cp = c & 0x07; }
+    int good = len && r + len <= n;
+    for(size_t k = 1; good && k < len; k++) {
+      unsigned char d = (unsigned char)s[r + k];
+      if((d & 0xC0) != 0x80) good = 0; else cp = (cp << 6) | (d & 0x3f);
+    }
+    if(good && ((len == 3 && cp < 0x800) || (len == 4 && (cp < 0x10000 || cp > 0x10FFFF)) || (cp >= 0xD800 && cp <= 0xDFFF))) good = 0;
+    int bad = !good || (cp >= 0x80 && cp <= 0x9F) || (cp >= 0x200B && cp <= 0x200F) || (cp >= 0x2028 && cp <= 0x202E) ||
+              (cp >= 0x2060 && cp <= 0x2069) || cp == 0xFEFF;
+    if(bad) { s[w++] = '_'; r += good ? len : 1; continue; }
+    memmove(s + w, s + r, len);
+    w += len;
+    r += len;
+  }
+  s[w] = 0;
+  return w;
+}
+
 int
 ps5tm_cvname_expand(const char *tpl, const ps5tm_cvname_fields_t *f, size_t ext_len, char *out, size_t out_len, size_t *bytes,
                     char *err, size_t err_len) {
@@ -51,6 +82,7 @@ ps5tm_cvname_expand(const char *tpl, const ps5tm_cvname_fields_t *f, size_t ext_
     }
   }
   out[at] = 0;
+  at = clean_utf8(out, at);
   /* spaces at both ends and dots at the end do not survive on every drive */
   while(at > 0 && (out[at - 1] == ' ' || out[at - 1] == '.')) out[--at] = 0;
   size_t lead = 0;

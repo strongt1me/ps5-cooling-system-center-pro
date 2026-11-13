@@ -323,8 +323,10 @@ Konsole auf eine Antwort der Platte). Im Kernel-Log (Seite „Protokoll“, Reit
 steht dann `umass0: USB_ERR_TIMEOUT`, das Laufwerk meldet sich ab (`detached`) und gleich darauf
 wieder an. Am 05.10.2026 war genau das der Grund für vier abgebrochene Konvertierungen; mit einem
 anderen Kabel liefen sie durch. Was der Auftrag geschrieben hat, räumt er weg. Nach einer
-Konvertierung kann eine leere `….ps5cc-konv-teil`-Datei liegen bleiben, weil die Platte beim
-Aufräumen gerade fehlte; der nächste Versuch entfernt sie.
+Konvertierung kann eine `….ps5cc-konv-teil`-Datei liegen bleiben (nach einem Absturz, einem Stromausfall oder wenn die
+Platte beim Aufräumen fehlte, bis zur Größe des Abbilds). Ein neuer Auftrag mit **demselben Ziel** (gleicher Name, gleiches
+Format, gleiches Laufwerk) ersetzt sie; bei einem anderen Namen oder Format bleibt sie liegen, bis du sie im Dateimanager löschst.
+Die App räumt Reste nicht von selbst beim Start auf.
 
 ## AMPR-Index, APR-EMU, PlayGo und der Verlauf (seit 11.10.2026)
 

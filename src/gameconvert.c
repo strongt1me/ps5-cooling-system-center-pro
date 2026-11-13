@@ -445,6 +445,7 @@ typedef struct {
   uint64_t  total, bytes, sum;
   int       kept_all;                    /* every hash is in h (not more than STAMP_KEEP files) */
   int       usable;                      /* the walk was complete: not more than STAMP_MAX_ENTRIES files, no depth over 32 */
+  int       aborted;                     /* the walk was stopped because the job was cancelled */
   unsigned  changed;                     /* the second look: files whose hash is not among the first ones */
   char      first[256];                  /* the first of them */
 } cv_stamp_t;
@@ -496,6 +497,7 @@ stamp_walk(cv_stamp_t *st, const cv_stamp_t *ref, char *path, size_t len, size_t
   while((e = readdir(d))) {
     if(e->d_name[0] == '.' && (!e->d_name[1] || (e->d_name[1] == '.' && !e->d_name[2]))) continue;
     if(st->total >= STAMP_MAX_ENTRIES) { st->usable = 0; break; }
+    if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) { st->aborted = 1; st->usable = 0; break; }   /* a long walk over a big game on USB */
     size_t nl = strlen(e->d_name);
     if(len + 1 + nl >= PATH_MAX) { st->usable = 0; continue; }
     path[len] = '/';
@@ -538,12 +540,14 @@ stamp_free(cv_stamp_t *st) {
   memset(st, 0, sizeof(*st));
 }
 
-/* 0 when source is as it was; else -1 with the sentence in err. A source that could not be fingerprinted (too many files) is not checked. */
+/* 0 when source is as it was; -1 with the sentence in err when it changed; -2 when the job was cancelled during the look. A source that could
+   not be fingerprinted (too many files) is not checked. */
 static int
 stamp_verify(const cv_stamp_t *first, const char *source, int folder, char *err, size_t err_len) {
   if(!first->usable) return 0;
   cv_stamp_t now;
   stamp_take(&now, first, source, folder);
+  if(now.aborted) { stamp_free(&now); return -2; }
   int same = !now.usable || (now.total == first->total && now.bytes == first->bytes && now.sum == first->sum);
   if(!same) {
     if(now.changed > 1 && now.first[0])
@@ -983,9 +987,18 @@ cv_run(void *arg) {
     pthread_mutex_lock(&g_lock);
     g_job.t_rename_ms = ps5tm_mono_ms();
     pthread_mutex_unlock(&g_lock);
-    if(stamp_verify(&stamp, a.source, a.folder, err, sizeof(err)) != 0) {
+    int sv = stamp_verify(&stamp, a.source, a.folder, err, sizeof(err));
+    if(sv == -2) {
+      rc = -1;
+      cancelled = 1;
+      snprintf(err, sizeof(err), "Abgebrochen.");
+    } else if(sv != 0) {
       PS5TM_WARN("game_convert_source_changed", "Konvertieren von %s: %s", a.title_id, err);
       rc = -1;
+    } else if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) {   /* a cancel in the last moment: honoured before the result gets its name */
+      rc = -1;
+      cancelled = 1;
+      snprintf(err, sizeof(err), "Abgebrochen.");
     }
   }
   if(!rc) {
@@ -1215,6 +1228,7 @@ typedef struct {
 } plan_cache_t;
 static pthread_mutex_t g_pc_lock = PTHREAD_MUTEX_INITIALIZER;
 #define PLAN_SLOTS 4
+static pthread_mutex_t g_plan_run_lock = PTHREAD_MUTEX_INITIALIZER;   /* one walk over a game for the check at a time */
 static plan_cache_t    g_pc[PLAN_SLOTS];             /* the last few titles: two windows or the queue asking about two games do not push each other out */
 
 static void
@@ -1452,11 +1466,20 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
     pthread_mutex_lock(&g_pc_lock);
     pc.valid = 0;
     for(int i = 0; i < PLAN_SLOTS; i++) if(g_pc[i].valid && !strcmp(g_pc[i].title_id, title_id)) { pc = g_pc[i]; break; }
+    if(pc.valid && ps5tm_mono_ms() - pc.at_ms < PLAN_KEEP_MS) {
+      for(int i = 0; i < PLAN_SLOTS; i++) if(g_pc[i].valid && !strcmp(g_pc[i].title_id, title_id)) g_pc[i].at_ms = ps5tm_mono_ms();   /* in use: stays fresh */
+      pthread_mutex_unlock(&g_pc_lock);
+      break;
+    }
     pthread_mutex_unlock(&g_pc_lock);
-    if(pc.valid && !strcmp(pc.title_id, title_id) && ps5tm_mono_ms() - pc.at_ms < PLAN_KEEP_MS) break;
     pc.valid = 0;
-    if(tries == 0) {                                    /* no plan of this game at hand: work it out (the same walk the plan does) */
+    if(tries == 0) {                                    /* no plan of this game at hand: work it out (the same walk the plan does), but only one at a time */
+      if(pthread_mutex_trylock(&g_plan_run_lock) != 0) {
+        snprintf(err, err_len, "Das Spiel wird gerade vermessen. Einen Moment, die Prüfung folgt gleich.");
+        return NULL;
+      }
       cJSON *pj = ps5tm_gameconvert_plan(title_id, err, err_len);
+      pthread_mutex_unlock(&g_plan_run_lock);
       if(!pj) return NULL;
       cJSON_Delete(pj);
     }
@@ -1505,7 +1528,7 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
 
   /* the target: drive, name, room, file system */
   char base[64], label[40], dir[128];
-  char stem[256] = "", eerr[200] = "";
+  char stem[PS5TM_CVNAME_MAX + 1] = "", eerr[200] = "";
   size_t name_bytes = 0;
   int have_target = 0;
   cJSON_AddStringToObject(root, "target", "");
@@ -1713,7 +1736,7 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
 
   cv_args_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 500; }
-  char label[40], dir[128], stem[200];
+  char label[40], dir[128], stem[PS5TM_CVNAME_MAX + 1];
   a->folder = is_dir(source);
   a->ampr = a->folder && ampr_index && !ps4;
   a->quick = quick ? 1 : 0;
@@ -1861,11 +1884,13 @@ ps5tm_gameconvert_status(void) {
 }
 
 int
-ps5tm_gameconvert_cancel(void) {
+ps5tm_gameconvert_cancel(int expect_qid) {
   /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
   pthread_mutex_lock(&g_lock);
   int active = active_locked();
-  if(active) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+  /* expect_qid >= 0: the entry of the queue the person saw (0 = a job that is not from the queue); another job is not cancelled */
+  int other = active && expect_qid >= 0 && g_job.qid != expect_qid;
+  if(active && !other) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
-  return active ? 0 : -1;
+  return other ? -2 : active ? 0 : -1;
 }

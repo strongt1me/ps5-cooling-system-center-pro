@@ -1687,7 +1687,15 @@ void HttpSource::handle(const Request &request)
             "/api/v1/library/copy/cancel", "/api/v1/library/convert/cancel",
             "/api/v1/library/image/cancel", "/api/v1/library/storage/cancel"};
         const int index = std::clamp(request.value, 0, 3);
-        if (exchange("POST", kRoutes[index], "{}", &status, &body) == Net::ok && status < 300)
+        // A conversion is cancelled only if it is still the one the screen showed (the queue may have started the next one meanwhile).
+        std::string cancel_body = "{}";
+        if (index == static_cast<int>(JobKind::convert))
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            cancel_body = "{\"queue_id\":" +
+                          std::to_string(data_.jobs[static_cast<std::size_t>(JobKind::convert)].queue_id) + "}";
+        }
+        if (exchange("POST", kRoutes[index], cancel_body, &status, &body) == Net::ok && status < 300)
             notice(Notice::Kind::info, "Auftrag wird abgebrochen");
         else
             notice(Notice::Kind::error, "Abbrechen nicht möglich",

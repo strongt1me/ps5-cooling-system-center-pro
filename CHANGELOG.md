@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+---
+
+## v1.82.0 – 13.11.2026
+
 ### Konvertieren: Prüfung vor dem Start, Name, Schritte, Warteschlange (13.11.2026)
 Anlass: ein Vergleich mit dem Werkzeug „Dump Forge“. Was dort schon der Hauptweg ist (ein Strom ohne Zwischenordner, Prüfsumme beim Schreiben, Stichprobenprüfung, Datei erst unter unbekanntem Namen), kann diese App seit 1.46.0 bis 1.79.0 schon; hier kommt, was fehlte. Browser-App und Vollbild-App bekommen dasselbe.
 - **Prüfung vor dem Start (`ps5tm_gameconvert_check`, `POST /api/v1/library/convert/check`):** Das Fenster zeigt alle Befunde auf einmal als Liste (Quelle lesbar, Platz, FAT32-Grenze, Name am Ziel schon vergeben, Spiel läuft, PS4-Ziel, Namen/Pfade nah an der Grenze, anderer Auftrag läuft). Rot sperrt „Konvertieren starten“ und „Zur Warteschlange“, Gelb warnt nur; ein laufender anderer Auftrag sperrt nur den Start. Die Abfrage nutzt den Plan, den das Fenster gerade geholt hat (kein zweiter Gang durch das Spiel) und fragt ShadowMountPlus nicht.
@@ -10,6 +14,22 @@ Anlass: ein Vergleich mit dem Werkzeug „Dump Forge“. Was dort schon der Haup
 - **Warteschlange (`src/convqueue.c`, `/api/v1/library/convert/queue`):** Bis zu 24 Aufträge nacheinander; läuft schon ein anderer Auftrag, wartet der Eintrag und beginnt danach von selbst (ohne ShadowMountPlus dabei zu fragen). Ein Fehler hält sie nicht an („Erneut versuchen“), „Abbrechen“ des laufenden Auftrags lässt sie weiterlaufen, „Warteschlange stoppen“ hält nur weitere Starts an. Nichts wird gelöscht; sie liegt im Speicher und ist nach einem Neustart der App leer. Eine Meldung der Konsole am Ende.
 - **Quelle während des Laufs geändert (`gameconvert.c`, `stamp_*`):** Vor dem Schreiben nimmt die App einen Fingerabdruck der Quelle (Zahl und Größe der Dateien und ein Hash aus Pfad, Größe und Zeit je Datei, bis 400 000 Dateien mit Namen); vor dem Umbenennen vergleicht sie ihn. Weicht er ab, wird das Ergebnis nicht übernommen und die Meldung nennt die erste abweichende Datei.
 - Neue Texte in den sechs Wörterbüchern der Browser-App, Handbuch in sieben Sprachen, `docs/API.md`.
+
+### Durchsicht und Konsolentest der Warteschlange (13.11.2026)
+- **Durchsicht seit v1.81.0** (acht Blickwinkel, acht Funde, alle behoben):
+  - Ein Eintrag, der auf einen anderen Auftrag wartet, steht auf „wartet“ (nicht „läuft“) und lässt sich entfernen; Stoppen beim Warten lässt ihn „wartet“ und löst keine Meldung „0 von 1 fertig“ aus.
+  - `gameconvert.c` merkt sich, wie der letzte Auftrag eines Eintrags endete (`ps5tm_gameconvert_queue_result`): ein Auftrag, auf den innerhalb der Abfragesekunde ein anderer Start folgt, gilt nicht mehr als gescheitert.
+  - Blockiert einer der eigenen Aufträge der App, startet die Warteschlange nichts und fragt ShadowMountPlus nicht; blockiert ShadowMountPlus selbst (Verschieben, Entpacken), wird der Start nur alle 30 Sekunden versucht.
+  - Der Plan-Cache der Prüfung hält die letzten vier Titel statt einen; der zweite Blick des Quellstempels speichert keine Hashes mehr; die Zeile „Quelle lesbar“ nennt „als exFAT-Abbild“ nur beim Format exFAT (neuer Wörterbuch-Eintrag in zwölf Dateien); toter Code entfernt.
+- **An der PS5 Pro geprüft** (nur lesend, Ergebnisse danach gelöscht): zwei echte Spiele nacheinander in der Warteschlange (Matchbox 5,6 GB als ffpfsc in 176 s, BUBBLE BOBBLE 0,9 GB in 29 s, beide „fertig und geprüft“, kein Fehlalarm des Quellstempels); Prüfliste mit Vorlage und Standardname; Warten bei laufendem eigenem Auftrag und bei einem Entpacken durch ShadowMountPlus (Eintrag „wartet“, startet danach von selbst); Entfernen und Stoppen beim Warten; Abbrechen eines Auftrags aus der Warteschlange; Ergebnis eines Auftrags, auf den sofort ein fremder Start folgt; Plan-Cache mit zwei Titeln (zweite Runde 0,01 s statt 1,08 s).
+- **Von Hand angesehen:** Nach dem Senden an die Konsole sah die App für den Nutzer „soweit gut“ aus. Nicht einzeln durchgespielt sind die Bedienung der Vollbild-App am Fernseher (Namenszeile mit Tastatur, Prüfliste, Stufenleiste, Warteschlangen-Fenster; geprüft sind die Daten, 337 Unit-Tests und die Vorschaubilder) und der Fall „die Quelle ändert sich während des Laufs“ (nur beim Bau durchdacht, kein Eingriff in ein Spiel des Nutzers).
+- **Verbesserungen nach der Gegenprüfung** (Audit mit vier Fachprüfern und adversarialer Prüfung, 14 von 22 Befunden bestätigt, alle klein):
+  - **Prüfliste (F-31):** Ein Treffer im Plan-Cache hält ihn frisch (vorher verfiel er nach 30 Minuten trotz Gebrauch); die Prüfung vermisst höchstens ein Spiel zugleich (sonst „Das Spiel wird gerade vermessen“); die Browser-App fragt nie zwei Prüfungen gleichzeitig.
+  - **Abbrechen (F-37):** `POST /api/v1/library/convert/cancel` nimmt `{"queue_id":n}` und bricht nur den Auftrag ab, den die Oberfläche sah (409 `other_convert`, wenn inzwischen der nächste der Warteschlange läuft); Browser-App und Vollbild-App senden es. Ein Eintrag, dessen Start gerade angefragt wird, lässt sich nicht entfernen (409).
+  - **Namensvorlage (F-46):** Zu lange Vorlagen (ab 200 Bytes) werden überall abgelehnt statt gekürzt, Prüfung und Start nutzen denselben Puffer; ungültiges UTF-8, C1-Steuerzeichen, Null-Breite- und Richtungszeichen (U+200B-200F, U+2028-202E, U+2060-2069, U+FEFF) werden zu `_` (Test `test/cvname`, 28 Prüfungen).
+  - **Abbruch in der letzten Quellprüfung (F-43):** Der Lauf des Quellstempels beachtet den Abbruch und vor dem Umbenennen wird er noch einmal geprüft.
+  - **Handbuch (F-36):** Der Satz zu `….ps5cc-konv-teil` sagt jetzt, dass Reste nach einem Absturz nur bei gleichem Ziel ersetzt werden.
+- **Bekannt:** Ein Auftrag von ShadowMountPlus sperrt „Konvertieren starten“ in der Prüfliste nicht (die Prüfliste fragt ShadowMountPlus bewusst nicht bei jedem Tastendruck); der Start meldet dann, dass Aufträge nicht gleichzeitig laufen, und das Einreihen funktioniert.
 
 ---
 

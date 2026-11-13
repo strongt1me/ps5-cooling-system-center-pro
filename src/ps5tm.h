@@ -32,7 +32,7 @@ int ps5tm_thread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*s
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.81.0"
+#define PS5TM_VERSION        "1.82.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -959,7 +959,9 @@ struct cJSON *ps5tm_gameconvert_check(const char *title_id, const char *op, cons
 struct cJSON *ps5tm_gameconvert_status(void);
 /* How the last job that ran for queue entry qid ended ('done', 'failed' or 'cancelled'): 1 when known, else 0 (convqueue.c) */
 int ps5tm_gameconvert_queue_result(int qid, char *state, size_t state_len, char *error, size_t error_len, uint64_t *bytes);
-int           ps5tm_gameconvert_cancel(void);
+/* expect_qid < 0: the job that runs; >= 0: only the job of that queue entry (0 = one that is not from the queue). 0 cancelled, -1 none runs,
+   -2 another job than the expected one runs (the one the person saw has ended and the next has begun) */
+int           ps5tm_gameconvert_cancel(int expect_qid);
 /* The queue of conversions (convqueue.c, 13.11.2026): the list as JSON, and one action of it (add, remove, retry, start, stop, clear);
    the action returns an HTTP status with the reason in err when it is not 200. */
 struct cJSON *ps5tm_convqueue_status(void);

@@ -34,6 +34,16 @@ main(void) {
   CHECK(ex("a\tb\nc", 7, o, &b, e) == 0 && !strcmp(o, "a_b_c"));
   /* UTF-8 stays whole */
   { ps5tm_cvname_fields_t g = { "Größe ✓ 日本語", "PPSA00001", "1", "x" }; CHECK(ps5tm_cvname_expand("{titel}", &g, 7, o, sizeof(o), &b, e, sizeof(e)) == 0 && !strcmp(o, "Größe ✓ 日本語")); }
+  /* bytes that are no UTF-8, and characters that fake a name */
+  CHECK(ex("a\xff" "b", 7, o, &b, e) == 0 && !strcmp(o, "a_b"));                       /* a stray byte */
+  CHECK(ex("a\xc0\x80" "b", 7, o, &b, e) == 0 && !strcmp(o, "a__b"));                 /* an overlong sequence */
+  CHECK(ex("a\xed\xa0\x80" "b", 7, o, &b, e) == 0 && !strcmp(o, "a___b"));           /* a surrogate: each byte of it */
+  CHECK(ex("a\xe2\x80\xae" "b", 7, o, &b, e) == 0 && !strcmp(o, "a_b"));             /* U+202E (right-to-left override) */
+  CHECK(ex("a\xe2\x80\x8f" "b", 7, o, &b, e) == 0 && !strcmp(o, "a_b"));             /* U+200F */
+  CHECK(ex("a\xc2\x85" "b", 7, o, &b, e) == 0 && !strcmp(o, "a_b"));                  /* U+0085 (a C1 control) */
+  CHECK(ex("a\xef\xbb\xbf" "b", 7, o, &b, e) == 0 && !strcmp(o, "a_b"));             /* U+FEFF */
+  CHECK(ex("a\xe2\x80" , 7, o, &b, e) == 0 && !strcmp(o, "a__"));                     /* a sequence cut short */
+  CHECK(ex("\xc3\xa4\xc3\xb6", 7, o, &b, e) == 0 && !strcmp(o, "\xc3\xa4\xc3\xb6"));   /* ä ö stay */
   /* unknown field, missing brace, empty */
   CHECK(ex("{foo}", 7, o, &b, e) != 0 && strstr(e, "{foo}"));
   CHECK(ex("{titel", 7, o, &b, e) != 0 && strstr(e, "}"));

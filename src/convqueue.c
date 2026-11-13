@@ -30,6 +30,7 @@ typedef struct {
   int      state;
   char     id[12], name[128], op[8], mount[40], mode[12], name_tpl[200], target[400];
   int      ampr, quick;
+  int      starting;          /* ps5tm_gameconvert_start is being called for it: it cannot be removed in that moment */
   char     msg[300];
   uint64_t out_bytes, started_ms, finished_ms;
 } cq_item_t;
@@ -83,6 +84,23 @@ wait_for_job(int qid) {
   }
 }
 
+/* The start of an entry, marked while it is being asked for (a removal in that moment would leave a job that is on no list). */
+static int
+start_marked(const cq_item_t *it, char *err, size_t err_len) {
+  pthread_mutex_lock(&g_lock);
+  cq_item_t *me = find_locked(it->qid);
+  if(me) me->starting = 1;
+  pthread_mutex_unlock(&g_lock);
+  int rc = ps5tm_gameconvert_start(it->id, it->op, it->ampr, it->mount, it->mode, it->quick, it->name_tpl, it->qid, err, err_len);
+  if(rc != 200) {
+    pthread_mutex_lock(&g_lock);
+    me = find_locked(it->qid);
+    if(me) me->starting = 0;
+    pthread_mutex_unlock(&g_lock);
+  }
+  return rc;
+}
+
 static void *
 runner(void *arg) {
   (void)arg;
@@ -105,7 +123,7 @@ runner(void *arg) {
     char err[640] = "";
     int rc, stopped = 0;
     for(;;) {
-      rc = ps5tm_gameconvert_start(it.id, it.op, it.ampr, it.mount, it.mode, it.quick, it.name_tpl, it.qid, err, sizeof(err));
+      rc = start_marked(&it, err, sizeof(err));
       if(rc == 200) break;
       /* Refused because another job runs (the sentences of gameconvert.c: other_job_active and the claim of the one place): wait. The words
          are read from the refusal itself. */
@@ -141,7 +159,7 @@ runner(void *arg) {
     pthread_mutex_lock(&g_lock);
     {
       cq_item_t *run = find_locked(it.qid);
-      if(run) { run->state = CQ_RUN; run->started_ms = ps5tm_mono_ms(); }
+      if(run) { run->state = CQ_RUN; run->started_ms = ps5tm_mono_ms(); run->starting = 0; }
       g_running_qid = it.qid;
     }
     pthread_mutex_unlock(&g_lock);
@@ -230,6 +248,10 @@ ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
   if(!strcmp(act, "add")) {
     const char *id = str_of(body, "id"), *op = str_of(body, "op"), *mount = str_of(body, "target"), *mode = str_of(body, "mode");
     const char *tpl = str_of(body, "name");
+    if(strlen(tpl) >= sizeof(((cq_item_t *)0)->name_tpl)) {
+      snprintf(err, err_len, "Die Vorlage für den Namen ist zu lang (höchstens 199 Bytes).");
+      return 400;
+    }
     int quick = !strcmp(str_of(body, "verify"), "quick");
     int ampr = cJSON_IsTrue(cJSON_GetObjectItem(body, "ampr_index"));
     cJSON *chk = ps5tm_gameconvert_check(id, op, mount, mode, tpl, err, err_len);
@@ -300,6 +322,7 @@ ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
     cq_item_t *it = find_locked(qid);
     if(!it) { snprintf(err, err_len, "Diesen Eintrag gibt es nicht mehr."); rc = 404; }
     else if(it->state == CQ_RUN) { snprintf(err, err_len, "Dieser Auftrag läuft gerade. Brich ihn ab, dann geht es weiter."); rc = 409; }
+    else if(it->starting && !strcmp(act, "remove")) { snprintf(err, err_len, "Dieser Eintrag wird gerade gestartet. Versuche es gleich noch einmal."); rc = 409; }
     else if(!strcmp(act, "remove")) remove_at_locked((int)(it - g_it));
     else if(it->state == CQ_WAIT) { /* already waiting */ }
     else {

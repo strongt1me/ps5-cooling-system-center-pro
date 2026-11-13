@@ -6,7 +6,7 @@
 
 **Управление вентилятором, контроль температуры и системный центр для PlayStation 5 с джейлбрейком,<br>в браузере (консоль, телефон, ПК) или как полноэкранное приложение на телевизоре с геймпадом, на семи языках.**
 
-![Версия](https://img.shields.io/badge/%D0%92%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.81.0-1f6feb)
+![Версия](https://img.shields.io/badge/%D0%92%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.82.0-1f6feb)
 ![Прошивка](https://img.shields.io/badge/FW-4.03%E2%80%9314.10%20%D0%BF%D0%BE%D0%B4%D0%B4%D0%B5%D1%80%D0%B6%D0%BA%D0%B0-2ea44f)
 ![Лицензия](https://img.shields.io/badge/%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-GPL--3.0--or--later-blue)
 ![Платформа](https://img.shields.io/badge/%D0%9F%D0%BB%D0%B0%D1%82%D1%84%D0%BE%D1%80%D0%BC%D0%B0-PS5%20Payload-003791)
@@ -202,7 +202,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 1. Скачайте `PS5_Cooling_System_Center_v<версия>.elf` из [Releases](../../releases).
 2. Отправьте его на консоль (загрузчик ELF, порт **9021**), например:
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.81.0.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.82.0.elf
    ```
 3. Откройте **`http://<IP-PS5>:8086`** в браузере (адрес также показывает уведомление вверху слева на ТВ).
 
