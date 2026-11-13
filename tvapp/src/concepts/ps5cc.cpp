@@ -1251,12 +1251,6 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::back)},
-            // "Ganzes System": locked at the top, the note says that the folders below can be changed
-            {0.3f, action_bit(Action::jump_next)},
-            {0.8f, 0, Direction::none, "dateien-system"},
-            {0.3f, action_bit(Action::confirm)},
-            {0.9f, 0, Direction::none, "dateien-wurzel"},
-            {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "payloads"},
             {0.4f, action_bit(Action::jump_next)},
