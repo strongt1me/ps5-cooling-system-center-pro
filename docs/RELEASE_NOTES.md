@@ -21,8 +21,8 @@
 
 ## Hinweise
 - Die neue ELF an Port 9021 senden (sie beendet die ältere Instanz selbst) und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein).
-- **An der PS5 Pro geprüft** (die Spiele nur gelesen, die Ergebnisse danach gelöscht): zwei echte Spiele nacheinander in der Warteschlange (5,6 GB als ffpfsc in 176 s und 0,9 GB in 29 s, beide geprüft, kein Fehlalarm der Quellprüfung), Warten bei laufendem eigenem Auftrag und bei einem Entpacken durch ShadowMountPlus, Entfernen, Stoppen und Abbrechen, Prüfliste mit Vorlage und Standardname. Die App sah nach dem Senden gut aus.
-- **Nicht einzeln bestätigt:** die Bedienung der Vollbild-App am Fernseher im Einzelnen (Namenszeile mit Tastatur, Warteschlangen-Fenster) und der Fall, dass sich die Quelle während des Konvertierens ändert.
+- **An der PS5 Pro geprüft** (die Spiele nur gelesen, die Ergebnisse danach gelöscht): zwei echte Spiele nacheinander in der Warteschlange (5,6 GB als ffpfsc in 176 s und 0,9 GB in 29 s, beide geprüft, kein Fehlalarm der Quellprüfung), Warten bei laufendem eigenem Auftrag und bei einem Entpacken durch ShadowMountPlus, Entfernen, Stoppen und Abbrechen, Prüfliste mit Vorlage und Standardname. Die App sah nach dem Senden gut aus. An einer Testkopie eines echten Spiels (12 800 Dateien) wurde außerdem bestätigt: eine unveränderte Quelle gibt keinen Fehlalarm, eine während des Konvertierens geänderte Quelle bricht den Auftrag mit dem Namen der Datei ab, und ein Abbruch im letzten Schritt wirkt.
+- **Nicht einzeln bestätigt:** die Bedienung der Vollbild-App am Fernseher im Einzelnen (Namenszeile mit Tastatur, Warteschlangen-Fenster).
 - **Bekannt:** Ein Auftrag von ShadowMountPlus sperrt „Konvertieren starten“ in der Prüfliste nicht. Der Start meldet dann, dass Aufträge nicht gleichzeitig laufen; das Einreihen in die Warteschlange funktioniert.
 
 ## Downloads
