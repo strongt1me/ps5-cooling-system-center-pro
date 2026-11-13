@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+---
+
+## v1.81.0 – 13.11.2026
+
 ### Durchsicht seit v1.79.0 und Fehlersuche (13.11.2026)
 - **Geprüft:** Durchsicht aller Änderungen seit v1.79.0 (acht Blickwinkel, sechs Funde), alle zehn Host-Tests, ein Fehlerlauf über alle Seiten und Reiter der Browser-App in drei Sprachen (keine Skriptfehler), das Protokoll der Pro (`app.log`) seit dem Release.
 - **Abbild-Lesen (`library.c`):** Eine übrig gebliebene Marke `probe-read.txt` setzt einen Titel erst beim zweiten Mal auf die Liste `probe-skip.txt` (das erste Mal nur auf `probe-suspect.txt`); ein gutes Lesen streicht ihn wieder. Vorher genügte ein gewöhnliches Beenden der App mitten im Lesen (neue ELF gesendet, Konsole ausgeschaltet), um ein Spiel dauerhaft vom direkten Lesen auszunehmen. Die Marke wird nicht mehr mit `fsync` geschrieben.

@@ -6,7 +6,7 @@
 
 **Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in a browser (console, phone, PC) or as a fullscreen app on the TV with the controller, in seven languages.**
 
-![Version](https://img.shields.io/badge/Version-1.80.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.81.0-1f6feb)
 ![Firmware](https://img.shields.io/badge/FW-4.03%20to%2014.10%20supported-2ea44f)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
 ![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
@@ -202,7 +202,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 1. Download `PS5_Cooling_System_Center_v<version>.elf` from the [Releases](../../releases).
 2. Send it to the console (ELF loader, port **9021**), for example:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.80.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.81.0.elf
    ```
 3. Open **`http://<PS5-IP>:8086`** in a browser (the notification at the top left of the TV shows the address too).
 
