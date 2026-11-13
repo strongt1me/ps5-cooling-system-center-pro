@@ -10076,7 +10076,7 @@
    * Zurückspielen schreibt in die Ordner der Konsole selbst. Es verlangt deshalb zwei
    * Klicks auf denselben Knopf (wie das Löschen anderswo hier), und die Anfrage trägt
    * "confirm": true — die Konsole nimmt sie sonst nicht an. */
-  const sv = { data: null, error: "", loaded: false, sel: new Set(), known: new Set(), drive: "",
+  const sv = { data: null, error: "", loaded: false, sel: new Set(), drive: "",
                open: new Set(), timer: 0, polling: false, job: null, dismissed: "" };
 
   const svWhen = (sec) => (sec > 0
@@ -10096,14 +10096,9 @@
 
   const svSyncSelection = () => {
     const keys = new Set();
-    sv.data.users.forEach((u) => u.titles.forEach((t) => {
-      const k = `${u.uid}/${t.id}`;
-      keys.add(k);
-      if (!sv.known.has(k)) { sv.known.add(k); sv.sel.add(k); }     /* was not there before: chosen */
-    }));
-    /* what is gone from the console is gone from the choice too, and chosen again if it returns */
+    sv.data.users.forEach((u) => u.titles.forEach((t) => keys.add(`${u.uid}/${t.id}`)));
+    /* nothing is chosen on its own (user, 13.11.2026): the person ticks what to back up; what is gone from the console is gone from the choice too */
     [...sv.sel].forEach((k) => { if (!keys.has(k)) sv.sel.delete(k); });
-    [...sv.known].forEach((k) => { if (!keys.has(k)) sv.known.delete(k); });
   };
 
   const svSelBytes = () => {
