@@ -35,6 +35,7 @@
 #define KR_EMBEDDED_VERSION  "0.0.1-beta"
 #define KR_PROJECT           "https://github.com/quer3q/kraken-mount"
 #define KR_DIR               PS5TM_DATA_DIR "/kraken"
+#define PS5TM_KRAKEN_DATA    "/data/krakenmount"
 #define KR_ELF               KR_DIR "/kraken-mount.elf"
 #define KR_VER               KR_DIR "/version.txt"
 #define KR_ELF_MAX           (16u * 1024 * 1024)
@@ -270,6 +271,36 @@ keep_tile_away(void) {
   }
 }
 
+/* ------------------------------------------------------------------ search folders */
+
+/* Kraken Mount searches /data/homebrew, /data/etaHEN/games and the roots of the drives by itself, where ShadowMountPlus searches too:
+   every game folder there would be registered twice. The app therefore gives it folders of its own, FPKG-Games on the internal storage
+   and on each drive (user, 13.11.2026: "getrennte Ordner, beide laufen"), and writes them into its config when there is none yet.
+   An existing config is never touched (the page of Kraken Mount on port 8097 changes it). A drive that is not there costs nothing. */
+#define KR_CONFIG      PS5TM_KRAKEN_DATA "/config.toml"
+#define KR_FPKG_FOLDER "FPKG-Games"
+
+static int make_dir(const char *p);
+
+static void
+seed_config(void) {
+  struct stat st;
+  if(stat(KR_CONFIG, &st) == 0) return;
+  make_dir(PS5TM_KRAKEN_DATA);
+  make_dir("/data/" KR_FPKG_FOLDER);
+  char buf[900];
+  size_t o = (size_t)snprintf(buf, sizeof buf, "# search folders set by the app (page FPKGMount); ShadowMountPlus does not search them\nscanpath = [\"/data/" KR_FPKG_FOLDER "\"");
+  for(int i = 0; i < 8 && o < sizeof buf; i++) o += (size_t)snprintf(buf + o, sizeof buf - o, ", \"/mnt/usb%d/" KR_FPKG_FOLDER "\"", i);
+  for(int i = 0; i < 2 && o < sizeof buf; i++) o += (size_t)snprintf(buf + o, sizeof buf - o, ", \"/mnt/ext%d/" KR_FPKG_FOLDER "\"", i);
+  if(o < sizeof buf) o += (size_t)snprintf(buf + o, sizeof buf - o, "]\n");
+  if(o >= sizeof buf) return;
+  FILE *f = fopen(KR_CONFIG, "w");
+  if(!f) { PS5TM_WARN("kraken_config", "%s ließ sich nicht anlegen: %s", KR_CONFIG, strerror(errno)); return; }
+  fputs(buf, f);
+  fclose(f);
+  PS5TM_INFO("kraken_config", "Suchordner für Kraken Mount angelegt: /data/%s und %s auf den Laufwerken.", KR_FPKG_FOLDER, KR_FPKG_FOLDER);
+}
+
 /* ------------------------------------------------------------------ actions */
 
 static int
@@ -282,6 +313,7 @@ start_kraken(char *msg, size_t n) {
   pthread_mutex_unlock(&g_lock);
   if(again) { snprintf(msg, n, "Kraken Mount wird gerade gestartet. Das dauert einige Sekunden."); return 409; }
   keep_tile_away();
+  seed_config();
   unsigned char *elf = NULL;
   size_t elf_len = 0;
   char fv[48];

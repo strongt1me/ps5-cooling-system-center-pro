@@ -7702,7 +7702,11 @@
     txt("#fp-prog", prog.join(" · "));
     $("#fp-open").href = `http://${location.hostname}:8097/`;
     const roots = d.settings && Array.isArray(d.settings.scanpath) && d.settings.scanpath.length ? d.settings.scanpath : null;
-    txt("#fp-roots", roots ? `Suchordner: ${roots.join(", ")}`
+    /* the folders the app writes into the config of Kraken Mount (kraken.c seed_config): /data/FPKG-Games and FPKG-Games on every drive */
+    const own = ["/data/FPKG-Games", ...Array.from({ length: 8 }, (_, i) => `/mnt/usb${i}/FPKG-Games`), "/mnt/ext0/FPKG-Games", "/mnt/ext1/FPKG-Games"];
+    const isOwn = roots && roots.length === own.length && roots.every((r, i) => r === own[i]);
+    txt("#fp-roots", isOwn ? "Suchordner: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk. ShadowMountPlus sucht dort nicht, deshalb kommen sich beide nicht in die Quere."
+      : roots ? `Suchordner: ${roots.join(", ")}`
       : "Suchordner (Grundeinstellung): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks.");
     const note = $("#fp-note");
     note.hidden = !!k && !(k.cache && k.cache.low_space) && !k.paused;

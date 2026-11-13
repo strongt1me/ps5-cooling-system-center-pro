@@ -254,19 +254,19 @@ class KrakenPage final : public Page
         else
         {
             paragraph(canvas,
-                      "Spielt (F)PKG-Spiele und Spielordner ohne Installation, mit dem Programm "
-                      "Kraken Mount von quer3q. Lege ein unverschlüsseltes Debug-FPKG (.pkg) oder "
-                      "einen Spielordner in einen der Suchordner; Kraken Mount meldet das Spiel "
-                      "von selbst an.",
+                      "Spielt (F)PKG-Spiele ohne Installation, mit dem Programm Kraken Mount von "
+                      "quer3q. Lege ein unverschlüsseltes Debug-FPKG (.pkg) in den Ordner "
+                      "FPKG-Games; Kraken Mount meldet das Spiel von selbst an.",
                       card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kMuted, 5);
             paragraph(canvas, roots_text(), card.x + 30.0f, card.y + 300.0f, card.w - 60.0f, kInk,
                       5);
-            paragraph(canvas,
-                      "Kraken Mount ist noch eine Beta. ShadowMountPlus sucht in denselben "
-                      "Ordnern: Für Ordner-Spiele läuft am besten nur eines von beiden. Nach einem "
-                      "Neustart der Konsole muss Kraken Mount laufen, damit die Spiele sichtbar "
-                      "bleiben.",
-                      card.x + 30.0f, card.y + 470.0f, card.w - 60.0f, kWarning, 6);
+            paragraph(
+                canvas,
+                "Kraken Mount ist noch eine Beta. Nach einem Neustart der Konsole muss "
+                "Kraken Mount laufen, damit die Spiele sichtbar bleiben. Sucht es in Ordnern, "
+                "die auch ShadowMountPlus durchsucht, würden deren Ordner-Spiele doppelt "
+                "angemeldet.",
+                card.x + 30.0f, card.y + 470.0f, card.w - 60.0f, kWarning, 6);
         }
         const float line_y = kBottom - 96.0f;
         list.line(card.x + 30.0f, line_y, card.x + card.w - 30.0f, line_y, 1.0f,
@@ -402,6 +402,17 @@ class KrakenPage final : public Page
             return "Suchordner (Grundeinstellung): /data/homebrew, /data/etaHEN/games, homebrew "
                    "und "
                    "etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks.";
+        // the folders the app writes into its config (kraken.c seed_config)
+        std::vector<std::string> own = {"/data/FPKG-Games"};
+        for (int i = 0; i < 8; ++i)
+            own.push_back("/mnt/usb" + std::to_string(i) + "/FPKG-Games");
+        own.push_back("/mnt/ext0/FPKG-Games");
+        own.push_back("/mnt/ext1/FPKG-Games");
+        if (state_.scanpaths == own)
+            return "Suchordner: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und "
+                   "M.2-Laufwerk. ShadowMountPlus sucht dort nicht, deshalb kommen sich beide "
+                   "nicht "
+                   "in die Quere.";
         std::string out = "Suchordner: ";
         for (std::size_t i = 0; i < state_.scanpaths.size(); ++i)
             out += (i == 0 ? "" : ", ") + state_.scanpaths[i];
