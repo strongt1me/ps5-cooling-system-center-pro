@@ -2394,8 +2394,12 @@ class MockSource final : public Source
             return p;
         };
         data_.fs_places = {place("usb0", "/mnt/usb0", 247.1, true),
-                           place("Daten der Konsole", "/data", 612.4, true),
-                           place("Ganzes System", "/", -1, true)};
+                           place("Interne SSD (/data)", "/data", 612.4, true),
+                           place("Benutzerdaten (/user)", "/user", -1, true),
+                           place("Systemdaten (/system_data)", "/system_data", -1, true),
+                           place("System (/system)", "/system", -1, true),
+                           place("Systemerweiterung (/system_ex)", "/system_ex", -1, true),
+                           place("Ganzes System", "/", -1, false)};
         const auto entry =
             [](const char *name, const char *type, double mb, int days, bool writable)
         {

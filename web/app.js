@@ -9144,6 +9144,9 @@
     const n = d.entries.length;
     txt("#fm-sub", `${d.path} · ${n} ${n === 1 ? "Eintrag" : "Einträge"}${d.truncated ? ` (die ersten ${n} von ${d.total})` : ""}`);
     txt("#fm-free", d.free_bytes > 0 ? `${bytes(d.free_bytes)} frei` : "");
+    /* "/" and "/mnt" are locked, the folders below them are not: the note says where it goes on (user, 13.11.2026) */
+    txt("#fm-ro", d.path === "/" || d.path === "/mnt" ? "Hier gesperrt – öffne einen Ordner darunter, dort lässt sich ändern"
+      : "Nur ansehen – hier darf nichts geändert werden");
     $("#fm-ro").hidden = !!d.writable;
     $("#fm-mkdir").disabled = !d.writable;
     $("#fm-upload-lbl").classList.toggle("disabled", !d.writable);

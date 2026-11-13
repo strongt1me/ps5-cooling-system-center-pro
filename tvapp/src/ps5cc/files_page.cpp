@@ -512,10 +512,19 @@ class FilesPage final : public Page
 
         float y = card.y + 400.0f;
         if (!folder_.path.empty() && !folder_.writable)
-            y = note_card(canvas, paint, card, y, "Nur ansehen",
-                          "Hier darf nichts geändert werden. Geschützt sind nur /dev, /proc, "
-                          "Einhängepunkte und Verknüpfungen.",
-                          kWarning);
+        {
+            // "/" and "/mnt" are locked, what lies below them is not: say where it goes on
+            // (user, 13.11.2026)
+            const bool top = folder_.path == "/" || folder_.path == "/mnt";
+            y = note_card(
+                canvas, paint, card, y, top ? "Hier gesperrt" : "Nur ansehen",
+                top ? "Die Wurzel und die Ordner direkt darunter schützt die App. Öffne einen "
+                      "Ordner darunter, zum Beispiel user, system oder data: dort lässt sich "
+                      "ändern."
+                    : "Hier darf nichts geändert werden. Geschützt sind /, /dev, /proc, "
+                      "Einhängepunkte, Verknüpfungen und die Ordner direkt unter / und /mnt.",
+                kWarning);
+        }
         if (!clip_paths_.empty())
             y = note_card(canvas, paint, card, y,
                           std::string(clip_move_ ? "Ausgeschnitten: " : "Kopiert: ") +
@@ -1535,7 +1544,7 @@ class FilesPage final : public Page
                 const FsPlace &p = places_[i];
                 ui::ListItem item;
                 item.title = p.label;
-                item.subtitle = p.path + (p.writable ? "" : " · nur ansehen");
+                item.subtitle = p.path + (p.writable ? "" : " · gesperrt, ändern geht darunter");
                 if (p.free_bytes >= 0 && p.writable)
                     item.value = format_bytes(static_cast<std::uint64_t>(p.free_bytes)) + " frei";
                 item.tag = kPlaceTag + static_cast<int>(i);
@@ -1681,14 +1690,16 @@ class FilesPage final : public Page
                                              std::to_string(s->second.files) + " Dateien"});
             rows.push_back(
                 {"Geändert", play_date(e->mtime, tz_) + ", " + play_clock(e->mtime, tz_) + " Uhr"});
-            rows.push_back({"Ändern", e->writable ? "erlaubt" : "nur ansehen"});
+            rows.push_back({"Ändern", e->writable        ? "erlaubt"
+                                      : e->type == "dir" ? "Ordner selbst gesperrt"
+                                                         : "nur ansehen"});
         }
         else if (const FsPlace *p = focused_place())
         {
             rows.push_back({"Ordner", p->path});
             if (p->free_bytes >= 0)
                 rows.push_back({"Frei", format_bytes(static_cast<std::uint64_t>(p->free_bytes))});
-            rows.push_back({"Ändern", p->writable ? "erlaubt" : "nur ansehen"});
+            rows.push_back({"Ändern", p->writable ? "erlaubt" : "in den Ordnern darunter"});
         }
         else if (!folder_.path.empty())
         {
@@ -1696,7 +1707,7 @@ class FilesPage final : public Page
             if (folder_.free_bytes >= 0)
                 rows.push_back(
                     {"Frei", format_bytes(static_cast<std::uint64_t>(folder_.free_bytes))});
-            rows.push_back({"Ändern", folder_.writable ? "erlaubt" : "nur ansehen"});
+            rows.push_back({"Ändern", folder_.writable ? "erlaubt" : "hier gesperrt"});
         }
         std::string key;
         for (const ui::DetailItem &r : rows)
@@ -1863,13 +1874,19 @@ class FilesPage final : public Page
                     const std::string &title, const std::string &text, Color accent) const
     {
         gfx::DrawList &list = canvas.list;
-        const Rect box{card.x + 30.0f, y, card.w - 60.0f, 92.0f};
+        // a long note goes over up to three lines (the box grows with them)
+        const std::vector<std::string> lines =
+            canvas.fonts.regular.font->wrap(text, 18.0f, card.w - 60.0f - 48.0f);
+        const int count = std::clamp(static_cast<int>(lines.size()), 1, 3);
+        const Rect box{card.x + 30.0f, y, card.w - 60.0f,
+                       std::max(92.0f, 64.0f + 24.0f * static_cast<float>(count))};
         list.rounded_rect(box, 16.0f, accent.with_alpha(0.12f));
         list.rounded_rect({box.x, box.y + 14.0f, 4.0f, box.h - 28.0f}, 2.0f, accent);
         ui::text(list, canvas.fonts.semibold, ui::fit_label(paint, title, 22.0f, box.w - 48.0f),
                  box.x + 24.0f, box.y + 38.0f, 22.0f, kInk);
-        ui::text(list, canvas.fonts.regular, ui::fit_label(paint, text, 18.0f, box.w - 48.0f),
-                 box.x + 24.0f, box.y + 70.0f, 18.0f, kMuted);
+        for (int i = 0; i < count; ++i)
+            ui::text(list, canvas.fonts.regular, lines[static_cast<std::size_t>(i)], box.x + 24.0f,
+                     box.y + 70.0f + 24.0f * static_cast<float>(i), 18.0f, kMuted);
         return box.y + box.h + 14.0f;
     }
 

@@ -419,6 +419,16 @@ places_json(void) {
     add_place(arr, dr[i].label[0] ? dr[i].label : dr[i].mount, dr[i].mount, 1);
   }
   if(!have_data) add_place(arr, "Interne SSD (/data)", "/data", 1);
+  /* The folders of the console one works in most, one click away (user, 13.11.2026: the app is to work in the system as it does in the
+     browser): only those that exist; what may be changed in each is decided per folder, as everywhere. */
+  static const struct { const char *label, *path; } sysdirs[] = {
+    { "Benutzerdaten (/user)", "/user" }, { "Systemdaten (/system_data)", "/system_data" },
+    { "System (/system)", "/system" }, { "Systemerweiterung (/system_ex)", "/system_ex" },
+  };
+  for(size_t i = 0; i < sizeof(sysdirs) / sizeof(sysdirs[0]); i++) {
+    struct stat sd;
+    if(stat(sysdirs[i].path, &sd) == 0 && S_ISDIR(sd.st_mode)) add_place(arr, sysdirs[i].label, sysdirs[i].path, dir_writable(sysdirs[i].path));
+  }
   add_place(arr, "Ganzes System", "/", dir_writable("/"));
   return o;
 }
