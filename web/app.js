@@ -5630,6 +5630,8 @@
          Entpacken durch ShadowMountPlus (mv…); cp.view sagt, was drin ist. */
       o.addEventListener("click", (e) => {
         if (e.target === o) { cpClose(); return; }
+        const q = e.target.closest("[data-cq]");
+        if (q && !q.disabled) { cvQueueAct(q); return; }
         const b = e.target.closest("[data-cp]");
         if (!b || b.disabled) return;
         const act = b.dataset.cp;
@@ -5639,10 +5641,19 @@
         if (act === "close") cpClose();
         else if (act === "start") start(b);
         else if (act === "cancel") cancel(b);
+        else if (act === "queue") cvQueueAdd(b);
+        else if (act === "tpl") cvTemplate();
+        else if (act === "queueview") cvOpenQueue();
+        else if (act === "jobview") { cvRenderJob(); cvPoll(); }
+      });
+      /* The name of a converted image: typing only refreshes the check (a new drawing of the dialog would take the focus away). */
+      o.addEventListener("input", (e) => {
+        if (e.target && e.target.name === "cv-name") { cv.name = e.target.value; cvCheckSoon(); }
       });
       o.addEventListener("change", (e) => {
         if (cp.view.startsWith("ap")) return;                      /* APR & LZ4 hat eigene Felder (apr…) und keinen Plan */
         const n = e.target.name || "";
+        if (n === "cv-name") return;
         if (n === "cp-drive") cp.drive = e.target.value;
         if (n === "cp-mode") cp.mode = e.target.value;
         if (n === "mv-dest") mv.dest = e.target.value;
@@ -6169,7 +6180,8 @@
    * (gameconvert.c). Ein Abbild zu einem Ordner entpacken macht
    * ShadowMountPlus (mv…). Die Ziele sind die des Kopierens: der Ordner
    * homebrew eines Laufwerks oder PS5-Sicherung/Spiele. */
-  const cv = { id: "", plan: null, op: "", drive: "", mode: "", job: null, timer: 0, ampr: false };
+  const cv = { id: "", plan: null, op: "", drive: "", mode: "", job: null, timer: 0, ampr: false,
+               name: "", check: null, cseq: 0, ctimer: 0, queue: null, qtimer: 0 };
 
   const CV_OPS = {
     ffpfsc: {
@@ -6231,6 +6243,58 @@
     return "";
   };
 
+  /* The check before the start (gameconvert.c, ps5tm_gameconvert_check): everything that speaks for or against it, in one list. Red stops the
+     start, yellow only warns. It is asked again at every choice and, a moment after the last key, at every letter of the name. */
+  const cvQueueOpen = () => (cv.queue && cv.queue.open > 0 ? cv.queue.open : 0);
+  const cvCheckPaint = (c) => {
+    const box = $("#cv-check");
+    if (!box) return;
+    const ic = { ok: "✓", warn: "⚠", error: "✕" };
+    box.innerHTML = c.checks.map((k) => `<div class="cv-row ${esc(k.level)}"><i aria-hidden="true">${ic[k.level] || "•"}</i>
+        <div><span>${esc(k.text)}</span>${k.hint ? `<small>${esc(k.hint)}</small>` : ""}</div></div>`).join("")
+      + (c.target ? `<p class="cp-dest cv-target"><span class="muted">Ziel</span> <code>${esc(c.target)}</code></p>` : "");
+    const st = $('#cp-body [data-cp="start"]'), qu = $('#cp-body [data-cp="queue"]');
+    if (st) st.disabled = !c.can_start;
+    if (qu) qu.disabled = !c.can_queue;
+  };
+  const cvRefreshCheck = async () => {
+    const box = $("#cv-check");
+    if (!box || cp.view !== "cvplan") return;
+    const seq = ++cv.cseq;
+    const st = $('#cp-body [data-cp="start"]'), qu = $('#cp-body [data-cp="queue"]');
+    if (!cv.op || !cv.drive || !cv.mode) {
+      cv.check = null;
+      box.innerHTML = `<p class="muted">Wähle Format, Art und Ziel, dann erscheint die Prüfung.</p>`;
+      if (st) st.disabled = true;
+      if (qu) qu.disabled = true;
+      return;
+    }
+    try {
+      const c = await api("/api/v1/library/convert/check", { method: "POST", timeoutMs: 120000,
+        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, name: cv.name || "" }) });
+      if (seq !== cv.cseq || cp.view !== "cvplan") return;
+      cv.check = c;
+      cvCheckPaint(c);
+    } catch (e) {
+      if (seq !== cv.cseq || cp.view !== "cvplan") return;
+      cv.check = null;
+      box.innerHTML = `<p class="cp-err">${esc(e.message)}</p>`;
+      if (st) st.disabled = true;
+      if (qu) qu.disabled = true;
+    }
+  };
+  const cvCheckSoon = () => {
+    clearTimeout(cv.ctimer);
+    cv.ctimer = setTimeout(cvRefreshCheck, 250);
+  };
+  /* The template that names a result as the game is named on the console. */
+  const cvTemplate = () => {
+    cv.name = "{titel} [{id}] v{version}";
+    const i = $('#cp-body input[name="cv-name"]');
+    if (i) i.value = cv.name;
+    cvCheckSoon();
+  };
+
   const cvRenderPlan = () => {
     const p = cv.plan;
     const body = $("#cp-body");
@@ -6272,9 +6336,6 @@
     const sel = p.targets.find((d) => d.mount === cv.drive);
     const tgt = sel && cv.mode && cv.op && sel[cv.mode] ? sel[cv.mode][cv.op] : null;
     const target = tgt ? tgt.path : "";
-    const blockedRun = p.running ? "Das Spiel läuft gerade. Bitte erst beenden."
-                     : p.busy ? "Es läuft schon eine Konvertierung."
-                     : p.other_busy ? "Es läuft gerade eine Kopie. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig." : "";
 
     body.innerHTML = `
       <p class="cp-src"><span class="muted">Quelle</span> <code>${esc(p.source)}</code>
@@ -6322,7 +6383,15 @@
         ? `<p class="muted">Kein USB- oder M.2-Laufwerk gefunden. Ein PS4-Abbild darf nicht in den Speicher der Konsole.</p>`
         : `<p class="muted">Kein Laufwerk gefunden.</p>`)}</div>
 
-      <h4 class="cp-step">4. Prüfung danach</h4>
+      <h4 class="cp-step">4. Name der Ausgabe</h4>
+      <div class="cv-name">
+        <input type="text" name="cv-name" value="${esc(cv.name)}" maxlength="190" spellcheck="false" autocomplete="off"
+          placeholder="Leer: der Name des Ordners ({quelle})" aria-label="Name der Ausgabe">
+        <button type="button" class="btn" data-cp="tpl">Vorlage einsetzen</button>
+      </div>
+      <p class="muted cv-name-hint">Felder: <code>{titel}</code> <code>{id}</code> <code>{version}</code> <code>{quelle}</code>. Der Rest bleibt, wie du ihn schreibst.</p>
+
+      <h4 class="cp-step">5. Prüfung danach</h4>
       <div class="cp-list">
         <label class="cp-choice">
           <input type="radio" name="cv-verify" value="full" ${cv.verify !== "quick" ? "checked" : ""}>
@@ -6338,21 +6407,22 @@
         </label>
       </div>
 
-      ${target ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[cv.op] || cv.op)}</b></p>
-        <p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(target)}</code>
-        ${tgt && tgt.unfinished ? `<span class="cp-why">Dort liegt eine unfertige Datei dieser App, sie wird ersetzt${
-          tgt.unfinished_bytes > 0 ? ` (${bytes(tgt.unfinished_bytes)} werden dabei frei)` : ""}.</span>` : ""}</p>` : ""}
-      ${blockedRun ? `<p class="cp-err">${esc(blockedRun)}</p>` : ""}
+      ${cv.op ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[cv.op] || cv.op)}</b></p>` : ""}
+      <h4 class="cp-step">Prüfung vor dem Start</h4>
+      <div id="cv-check" class="cv-check" aria-live="polite"><p class="muted">Die Prüfung läuft …</p></div>
       ${cv.verify === "quick"
         ? `<p class="muted">Die PS5 rechnet dabei mit niedriger Priorität, damit Lüftersteuerung und Oberfläche Vorrang behalten. Bei großen Spielen dauert das. Danach prüft sie das Ergebnis schnell (Aufbau und Stichprobe); eine Prüfsummen-Datei entsteht dabei nicht.</p>`
         : `<p class="muted">Die PS5 rechnet dabei mit niedriger Priorität, damit Lüftersteuerung und
         Oberfläche Vorrang behalten. Bei großen Spielen dauert das. Danach liest sie das ganze
-        Ergebnis zur Prüfung noch einmal vom Laufwerk${target ? `; daneben entsteht
-        <code>${esc(target)}.sha256</code> mit der Prüfsumme (SHA-256)` : ""}.</p>`}
+        Ergebnis zur Prüfung noch einmal vom Laufwerk; daneben entsteht eine Datei mit der
+        Endung <code>.sha256</code> und der Prüfsumme (SHA-256).</p>`}
       <div class="cp-actions">
+        ${cvQueueOpen() ? `<button type="button" class="btn" data-cp="queueview">Warteschlange ansehen (${cvQueueOpen()})</button>` : ""}
         <button type="button" class="btn" data-cp="close">Abbrechen</button>
-        <button type="button" class="btn primary" data-cp="start" ${target && !blockedRun ? "" : "disabled"}>Konvertieren starten</button>
+        <button type="button" class="btn" data-cp="queue" disabled>Zur Warteschlange</button>
+        <button type="button" class="btn primary" data-cp="start" disabled>Konvertieren starten</button>
       </div>`;
+    cvRefreshCheck();
   };
 
   const cvRenderJob = () => {
@@ -6403,9 +6473,128 @@
       html = `<p class="muted">Keine Konvertierung.</p>`;
     }
     const active = !!j.active;
+    html = cvStages(j) + html;
+    const qn = cvQueueOpen();
     paintJob(body, html, `
         ${active ? `<button type="button" class="btn" data-cp="cancel">Konvertieren abbrechen</button>` : ""}
+        ${qn || (cv.queue && cv.queue.items && cv.queue.items.length) ? `<button type="button" class="btn" data-cp="queueview">Warteschlange${qn ? ` (${qn})` : ""}</button>` : ""}
         <button type="button" class="btn${active ? "" : " primary"}" data-cp="close">${active ? "Im Hintergrund weiter" : "Schließen"}</button>`);
+  };
+
+  /* The steps of a conversion with the time each took (gameconvert.c: stages): done, running (with its share), stopped there, still to come. */
+  const cvDur = (ms) => {
+    const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
+  };
+  const cvStages = (j) => {
+    if (!j || !j.stages || !j.stages.length) return "";
+    const names = { scan: "Vermessen", write: j.op === "ffpfsc" ? "Komprimieren" : "Schreiben", verify: "Prüfen", rename: "Umbenennen" };
+    const pct = j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0;
+    const cpct = j.check_total_bytes > 0 ? Math.min(100, Math.floor(j.check_done_bytes * 100 / j.check_total_bytes)) : 0;
+    return `<div class="cv-steps" role="list">${j.stages.map((x) => {
+      const what = x.state === "done" ? cvDur(x.ms)
+        : x.state === "now" ? `${cvDur(x.ms)}${x.id === "write" ? ` · ${pct} %` : x.id === "verify" ? ` · ${cpct} %` : ""}`
+        : x.state === "stopped" ? `${cvDur(x.ms)} · hier beendet` : "noch offen";
+      return `<div class="cv-step ${esc(x.state)}" role="listitem"><b>${x.state === "done" ? "✓ " : ""}${esc(names[x.id] || x.id)}</b><span>${esc(what)}</span></div>`;
+    }).join("")}</div>`;
+  };
+
+  /* The queue of conversions (convqueue.c). Added from the plan; it runs one game after the other. */
+  const cvQueueLoad = async () => {
+    try { cv.queue = await api("/api/v1/library/convert/queue"); } catch (e) { /* ohne Liste geht der Rest weiter */ }
+  };
+  const cvQueueAdd = async (btn) => {
+    btn.disabled = true;
+    try {
+      cv.queue = await api("/api/v1/library/convert/queue", { method: "POST", timeoutMs: 120000,
+        body: JSON.stringify({ action: "add", id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full", name: cv.name || "",
+                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr) }) });
+      toast("In die Warteschlange gestellt.");
+      cvOpenQueue();
+      cvPoll();
+    } catch (e) {
+      toast(e.message, "error");
+      btn.disabled = false;
+    }
+  };
+  const cvQueueAct = async (b) => {
+    b.disabled = true;
+    try {
+      cv.queue = await api("/api/v1/library/convert/queue", { method: "POST",
+        body: JSON.stringify({ action: b.dataset.cq, qid: Number(b.dataset.qid) || 0 }) });
+      if (b.dataset.cq === "jobview") return;
+      cvQueueRender(true);
+    } catch (e) {
+      toast(e.message, "error");
+      b.disabled = false;
+    }
+  };
+  const CV_QSTATE = { waiting: "wartet", running: "läuft", done: "fertig", failed: "gescheitert", cancelled: "abgebrochen" };
+  const CV_QICON = { waiting: "…", running: "▶", done: "✓", failed: "✕", cancelled: "–" };
+  /* force: draw the list anew; otherwise only when it changed (a click must not fall into a redraw), the running entry's line always. */
+  const cvQueueRender = (force) => {
+    const body = $("#cp-body");
+    const q = cv.queue;
+    if (!body || !q || cp.view !== "cvqueue") return;
+    const sig = JSON.stringify([q.running, (q.items || []).map((i) => [i.qid, i.state, i.message || "", i.output_bytes || 0])]);
+    const live = (i) => {
+      const j = cv.job;
+      if (i.state !== "running" || !j || j.queue_id !== i.qid) return i.state === "running" ? "wird gestartet …" : "";
+      const names = { scanning: "Vermessen", writing: j.op === "ffpfsc" ? "Komprimieren" : "Schreiben", verifying: "Prüfen" };
+      const pct = j.state === "verifying"
+        ? (j.check_total_bytes > 0 ? Math.min(100, Math.floor(j.check_done_bytes * 100 / j.check_total_bytes)) : 0)
+        : (j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0);
+      return j.state === "scanning" ? "Vermessen …" : `${names[j.state] || j.state} ${pct} %`;
+    };
+    if (force || body.__qsig !== sig) {
+      body.__qsig = sig;
+      const items = q.items || [];
+      const finished = items.some((i) => i.state === "done" || i.state === "failed" || i.state === "cancelled");
+      txt("#cp-title", `Warteschlange · ${items.length === 1 ? "1 Auftrag" : `${items.length} Aufträge`}`);
+      body.innerHTML = `<div class="cv-queue">${items.length ? items.map((i) => `<div class="cv-qrow ${esc(i.state)}">
+          <i aria-hidden="true">${CV_QICON[i.state] || "•"}</i>
+          <div class="cv-qname"><b>${esc(i.name)}</b>
+            <small>${esc(i.op)} · ${esc(i.target)}</small>
+            ${i.state === "running" ? `<small class="cv-qlive" data-qid="${i.qid}">${esc(live(i))}</small>` : ""}
+            ${i.state === "done" ? `<small>${i.output_bytes && i.elapsed_s ? `Fertig und geprüft: ${esc(bytes(i.output_bytes))} in ${esc(cvDur(i.elapsed_s * 1000))}.`
+              : i.output_bytes ? `Fertig und geprüft: ${esc(bytes(i.output_bytes))}.` : "Fertig und geprüft."}</small>` : ""}
+            ${i.message ? `<small class="cv-qmsg">${esc(i.message)}</small>` : ""}</div>
+          <span class="cv-qtag ${esc(i.state)}">${esc(CV_QSTATE[i.state] || i.state)}</span>
+          ${i.state === "running" ? `<button type="button" class="btn" data-cp="jobview">Ansehen</button>` : ""}
+          ${i.state === "failed" || i.state === "cancelled" ? `<button type="button" class="btn" data-cq="retry" data-qid="${i.qid}">Erneut versuchen</button>` : ""}
+          ${i.state !== "running" ? `<button type="button" class="btn" data-cq="remove" data-qid="${i.qid}">Entfernen</button>` : ""}
+        </div>`).join("") : `<p class="muted">Die Warteschlange ist leer. Im Fenster „Konvertieren“ eines Spiels stellst du es mit „Zur Warteschlange“ hinein.</p>`}</div>
+        <p class="muted cv-qhint">${q.running ? "Die Warteschlange läuft: Sobald ein Auftrag fertig ist, beginnt der nächste. Ein Fehler hält sie nicht an."
+          : q.open > 0 ? "Die Warteschlange ist angehalten. Der laufende Auftrag endet wie gewohnt, danach beginnt keiner mehr." : ""}</p>
+        <div class="cp-actions">
+          ${finished ? `<button type="button" class="btn" data-cq="clear">Fertige entfernen</button>` : ""}
+          ${q.running ? `<button type="button" class="btn" data-cq="stop">Warteschlange stoppen</button>`
+            : q.open > 0 ? `<button type="button" class="btn primary" data-cq="start">Warteschlange starten</button>` : ""}
+          <button type="button" class="btn${q.running || q.open > 0 ? "" : " primary"}" data-cp="close">Schließen</button>
+        </div>`;
+    } else {
+      $$(".cv-qlive").forEach((el) => {
+        const it = (q.items || []).find((x) => String(x.qid) === el.dataset.qid);
+        if (it) el.textContent = live(it);
+      });
+    }
+  };
+  const cvQueuePoll = async () => {
+    clearTimeout(cv.qtimer);
+    if (cp.view !== "cvqueue") return;
+    await cvQueueLoad();
+    try { cv.job = await api("/api/v1/library/convert"); jobBanner(); } catch (e) { /* weiter */ }
+    cvQueueRender(false);
+    if (cp.view === "cvqueue") cv.qtimer = setTimeout(cvQueuePoll, 2000);
+  };
+  const cvOpenQueue = () => {
+    cpShell();
+    cp.view = "cvqueue";
+    dlg.seq++;
+    const body = $("#cp-body");
+    body.__qsig = null;
+    body.innerHTML = `<p class="muted">Die Warteschlange wird geladen …</p>`;
+    cvQueuePoll();
   };
 
   const cvPoll = async () => {
@@ -6428,17 +6617,20 @@
   const cvOpen = async (id) => {
     cpShell();
     const seq = ++dlg.seq;
-    if (cv.job && cv.job.active) { cvRenderJob(); return; }
+    /* The running conversion of this very game shows its job; for another game the plan opens (it can wait in the queue). */
+    if (cv.job && cv.job.active && cv.job.title_id === id) { cvRenderJob(); return; }
     const g = gm.list.find((x) => x.title_id === id);
     /* Ein komprimiertes Abbild lässt sich nur entpacken: gleich dorthin. */
     if (g && !g.can_convert && g.can_unpack) { mvOpen(id, "unpack"); return; }
-    cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cv.verify = "full"; cp.view = "cvloading";
+    cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cv.verify = "full"; cv.name = ""; cv.check = null; cp.view = "cvloading";
     { const g0 = gm.list.find((x) => x.title_id === id); cv.ampr = !!(g0 && g0.mods && g0.mods.ampr_emu); }
     txt("#cp-title", `„${g ? g.name : id}“ konvertieren`);
     $("#cp-body").innerHTML = `<p class="muted">Das Spiel wird vermessen …</p>`;
     try {
       const plan = await api(`/api/v1/library/convert/plan?id=${encodeURIComponent(id)}`,
                              { timeoutMs: 120000 });
+      if (seq !== dlg.seq || !$("#cp-overlay")) return;
+      await cvQueueLoad();
       if (seq !== dlg.seq || !$("#cp-overlay")) return;
       cv.plan = plan;
       cv.op = plan.ops.find((op) => CV_OPS[op] && !(op === "ffpkg" && plan.ffpkg_error)) || "";
@@ -6458,7 +6650,7 @@
     btn.disabled = true;
     try {
       cv.job = await api("/api/v1/library/convert", { method: "POST",
-        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full",
+        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full", name: cv.name || "",
                                ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr) }) });
       cvRenderJob();
       jobBanner();

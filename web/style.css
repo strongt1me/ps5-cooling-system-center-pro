@@ -2339,3 +2339,51 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 :root[data-theme="hell"] :where(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])):focus-visible { border-color: rgba(24,44,84,.5); }
 /* Karte der Hintergründe der Vollbild-App: nur sichtbar, wenn app.js sie freigibt (Adresse mit ?vollbild=1) */
 #bd-card[hidden] { display: none; }
+
+/* Konvertieren (13.11.2026): Prüfliste vor dem Start, Namensfeld, Stufenzeile, Warteschlange */
+.cv-name { display: flex; gap: 8px; align-items: center; }
+.cv-name input { flex: 1; min-width: 0; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--hairline);
+  background: var(--surface-2); color: var(--ink); font: inherit; font-size: 13px; }
+.cv-name input:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
+.cv-name-hint { margin: 6px 0 0; font-size: 12px; }
+.cv-check { display: flex; flex-direction: column; gap: 0; margin: 0 0 12px; border: 1px solid var(--hairline); border-radius: 11px;
+  background: var(--surface-2); padding: 4px 12px; }
+.cv-check > .muted, .cv-check > .cp-err { margin: 8px 0; }
+.cv-row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 1.45; }
+.cv-row:first-child { border-top: 0; }
+.cv-row i { flex: none; width: 16px; font-style: normal; text-align: center; font-weight: 700; }
+.cv-row small { display: block; color: var(--ink-2); font-size: 12px; }
+.cv-row.ok i { color: #7fe0bc; }
+.cv-row.warn i { color: #ffd57b; }
+.cv-row.error i { color: #ff9b9b; }
+.cv-row.error > div > span { color: #ffb4b4; }
+.cv-target { margin: 6px 0 4px; }
+.cv-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0 0 12px; }
+.cv-step { display: flex; flex-direction: column; gap: 2px; padding: 7px 9px; border: 1px solid var(--hairline); border-radius: 10px;
+  font-size: 12px; background: var(--surface-2); color: var(--ink-2); min-width: 0; }
+.cv-step b { font-weight: 600; color: var(--ink); font-size: 12.5px; }
+.cv-step.done { border-color: rgba(127,224,188,.45); background: rgba(127,224,188,.1); }
+.cv-step.now { border-color: var(--s1); background: rgba(123,92,240,.16); }
+.cv-step.stopped { border-color: rgba(255,155,155,.5); background: rgba(255,155,155,.1); }
+.cv-queue { display: flex; flex-direction: column; }
+.cv-qrow { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--hairline); flex-wrap: wrap; }
+.cv-qrow:first-child { border-top: 0; }
+.cv-qrow > i { flex: none; width: 18px; text-align: center; font-style: normal; font-weight: 700; }
+.cv-qrow.done > i { color: #7fe0bc; }
+.cv-qrow.failed > i { color: #ff9b9b; }
+.cv-qrow.running > i { color: var(--s1); }
+.cv-qname { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+.cv-qname small { color: var(--ink-2); font-size: 12px; word-break: break-all; }
+.cv-qname .cv-qmsg { color: #ffd57b; word-break: normal; overflow-wrap: anywhere; }
+.cv-qtag { font-size: 11.5px; padding: 2px 9px; border-radius: 999px; background: var(--inset); color: var(--ink-2); white-space: nowrap; }
+.cv-qtag.running { background: rgba(123,92,240,.22); color: var(--ink); }
+.cv-qtag.done { background: rgba(127,224,188,.16); color: #7fe0bc; }
+.cv-qtag.failed { background: rgba(255,155,155,.16); color: #ff9b9b; }
+.cv-qhint { margin: 10px 0 0; font-size: 12px; }
+@media (max-width: 560px) { .cv-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+:root[data-theme="hell"] .cv-row.ok i, :root[data-theme="hell"] .cv-qrow.done > i, :root[data-theme="hell"] .cv-qtag.done { color: #1e7b59; }
+:root[data-theme="hell"] .cv-row.warn i, :root[data-theme="hell"] .cv-qname .cv-qmsg { color: #8e640b; }
+:root[data-theme="hell"] .cv-row.error i, :root[data-theme="hell"] .cv-qrow.failed > i, :root[data-theme="hell"] .cv-qtag.failed { color: #8e0b0b; }
+:root[data-theme="hell"] .cv-row.error > div > span { color: #8e0b0b; }
+:root[data-theme="hell"] .cv-step.done { border-color: rgba(30,123,89,.5); background: rgba(30,123,89,.08); }
+:root[data-theme="hell"] .cv-step.stopped { border-color: rgba(142,11,11,.45); background: rgba(142,11,11,.07); }

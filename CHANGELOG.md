@@ -2,6 +2,15 @@
 
 ## Unveröffentlicht
 
+### Konvertieren: Prüfung vor dem Start, Name, Schritte, Warteschlange (13.11.2026)
+Anlass: ein Vergleich mit dem Werkzeug „Dump Forge“. Was dort schon der Hauptweg ist (ein Strom ohne Zwischenordner, Prüfsumme beim Schreiben, Stichprobenprüfung, Datei erst unter unbekanntem Namen), kann diese App seit 1.46.0 bis 1.79.0 schon; hier kommt, was fehlte. Browser-App und Vollbild-App bekommen dasselbe.
+- **Prüfung vor dem Start (`ps5tm_gameconvert_check`, `POST /api/v1/library/convert/check`):** Das Fenster zeigt alle Befunde auf einmal als Liste (Quelle lesbar, Platz, FAT32-Grenze, Name am Ziel schon vergeben, Spiel läuft, PS4-Ziel, Namen/Pfade nah an der Grenze, anderer Auftrag läuft). Rot sperrt „Konvertieren starten“ und „Zur Warteschlange“, Gelb warnt nur; ein laufender anderer Auftrag sperrt nur den Start. Die Abfrage nutzt den Plan, den das Fenster gerade geholt hat (kein zweiter Gang durch das Spiel) und fragt ShadowMountPlus nicht.
+- **Name der Ausgabe nach Vorlage (`src/cvname.c`, Host-Test `test/cvname`):** `{titel}`, `{id}`, `{version}`, `{quelle}`; leer = Name des Ordners wie bisher. Zeichen, die ein Laufwerk nicht nimmt, werden zu `_`, Endungen aus Leerzeichen und Punkten entfallen; mit Endung und der Prüfsummen-Datei höchstens 255 Bytes. Das Fenster zeigt den fertigen Namen und seine Länge; der Start nimmt das Feld `name`.
+- **Stufenzeile (`stages` im Status):** Vermessen, Schreiben (bei ffpfsc Komprimieren), Prüfen, Umbenennen mit der Zeit je Schritt, in Browser-App und Vollbild-App.
+- **Warteschlange (`src/convqueue.c`, `/api/v1/library/convert/queue`):** Bis zu 24 Aufträge nacheinander; läuft schon ein anderer Auftrag, wartet der Eintrag und beginnt danach von selbst (ohne ShadowMountPlus dabei zu fragen). Ein Fehler hält sie nicht an („Erneut versuchen“), „Abbrechen“ des laufenden Auftrags lässt sie weiterlaufen, „Warteschlange stoppen“ hält nur weitere Starts an. Nichts wird gelöscht; sie liegt im Speicher und ist nach einem Neustart der App leer. Eine Meldung der Konsole am Ende.
+- **Quelle während des Laufs geändert (`gameconvert.c`, `stamp_*`):** Vor dem Schreiben nimmt die App einen Fingerabdruck der Quelle (Zahl und Größe der Dateien und ein Hash aus Pfad, Größe und Zeit je Datei, bis 400 000 Dateien mit Namen); vor dem Umbenennen vergleicht sie ihn. Weicht er ab, wird das Ergebnis nicht übernommen und die Meldung nennt die erste abweichende Datei.
+- Neue Texte in den sechs Wörterbüchern der Browser-App, Handbuch in sieben Sprachen, `docs/API.md`.
+
 ---
 
 ## v1.81.0 – 13.11.2026

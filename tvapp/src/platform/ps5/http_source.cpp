@@ -674,7 +674,7 @@ std::uint64_t HttpSource::request_plan(Tool tool, const std::string &id)
     r.ticket = ++next_ticket_;
     // Only the newest plan matters: one asked for earlier and still waiting is dropped.
     tool_requests_.erase(std::remove_if(tool_requests_.begin(), tool_requests_.end(),
-                                        [](const ToolRequest &q) { return !q.start; }),
+                                        [](const ToolRequest &q) { return !q.start && q.kind == 0; }),
                          tool_requests_.end());
     tool_requests_.push_back(std::move(r));
     return next_ticket_;
@@ -686,6 +686,40 @@ void HttpSource::start_tool(Tool tool, const std::string &id, const std::string 
     r.start = true;
     r.tool = tool;
     r.id = id;
+    r.body = body;
+    tool_requests_.push_back(std::move(r));
+}
+
+std::uint64_t HttpSource::convert_check(const std::string &body)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    ToolRequest r;
+    r.kind = 1;
+    r.tool = Tool::convert;
+    r.body = body;
+    r.ticket = ++next_ticket_;
+    // Only the newest check matters: one asked for earlier and still waiting is dropped.
+    tool_requests_.erase(std::remove_if(tool_requests_.begin(), tool_requests_.end(),
+                                        [](const ToolRequest &q) { return q.kind == 1; }),
+                         tool_requests_.end());
+    tool_requests_.push_back(std::move(r));
+    return next_ticket_;
+}
+void HttpSource::convert_queue(const std::string &body)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    // A list asked for while another list is waiting is the same question: it is asked once.
+    if (body.empty())
+    {
+        for (const ToolRequest &q : tool_requests_)
+        {
+            if (q.kind == 2 && q.body.empty())
+                return;
+        }
+    }
+    ToolRequest r;
+    r.kind = 2;
+    r.tool = Tool::convert;
     r.body = body;
     tool_requests_.push_back(std::move(r));
 }
@@ -716,6 +750,45 @@ void HttpSource::handle_tool(const ToolRequest &request)
 {
     int status = 0;
     std::string body;
+    if (request.kind == 1)
+    {
+        // The check before a conversion: it may have to measure the game once more (two minutes, as the plan).
+        const Net net = exchange("POST", "/api/v1/library/convert/check", request.body, &status, &body, 120);
+        CheckReply reply;
+        reply.ticket = request.ticket;
+        reply.ok = net == Net::ok && status == 200;
+        if (reply.ok)
+            reply.json = std::move(body);
+        else
+            reply.error = net == Net::ok ? message_of(body, "Die App hat nichts zur Prüfung gesagt.")
+                                         : "Die App hat nicht rechtzeitig geantwortet.";
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.convert_check = std::move(reply);
+        ++data_.serial;
+        return;
+    }
+    if (request.kind == 2)
+    {
+        // The queue: the list, or one action whose answer is the list again.
+        const bool post = !request.body.empty();
+        const Net net = exchange(post ? "POST" : "GET", "/api/v1/library/convert/queue", request.body, &status, &body, 130);
+        if (net == Net::ok && status == 200)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (data_.convert_queue_json != body)
+            {
+                data_.convert_queue_json = std::move(body);
+                ++data_.serial;
+            }
+        }
+        else if (post)
+        {
+            notice(Notice::Kind::error, "Warteschlange",
+                   net == Net::ok ? message_of(body, "Das hat nicht geklappt.")
+                                  : "Die App hat nicht geantwortet.");
+        }
+        return;
+    }
     const std::string id = url_encoded(request.id);
     if (!request.start)
     {
@@ -4444,6 +4517,18 @@ void HttpSource::poll_jobs()
             job.done = num(root, checking ? "check_done_bytes" : "done_bytes");
             const std::string target = str(root, "target");
             job.detail = target.empty() ? str(root, "op") : "→ " + target;
+            job.op = str(root, "op");
+            job.queue_id = static_cast<int>(num(root, "queue_id"));
+            const cJSON *stage = nullptr;
+            cJSON_ArrayForEach(stage, cJSON_GetObjectItemCaseSensitive(root, "stages"))
+            {
+                JobStage st;
+                st.id = str(stage, "id");
+                st.state = str(stage, "state");
+                st.ms = num(stage, "ms");
+                if (!st.id.empty())
+                    job.stages.push_back(std::move(st));
+            }
         }
         else
         {
@@ -4460,6 +4545,20 @@ void HttpSource::poll_jobs()
             job.finished = !idle && !job.active;
         }
         cJSON_Delete(root);
+    }
+    {
+        // The queue of conversions rides along (one short GET): the job card says how many wait. An older console app has no such route.
+        int qstatus = 0;
+        std::string qbody;
+        if (exchange("GET", "/api/v1/library/convert/queue", {}, &qstatus, &qbody) == Net::ok && qstatus == 200)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (data_.convert_queue_json != qbody)
+            {
+                data_.convert_queue_json = std::move(qbody);
+                ++data_.serial;
+            }
+        }
     }
     std::lock_guard<std::mutex> lock(mutex_);
     // A job that just ended may have moved, unpacked or deleted a game: the list is read again.

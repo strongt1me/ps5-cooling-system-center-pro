@@ -7,6 +7,7 @@
 
 #include "third_party/cjson/cJSON.h"
 
+#include <algorithm>
 #include <cstdio>
 
 namespace hui::ps5cc
@@ -450,13 +451,8 @@ std::string run_blocked(const Plan &p)
                    "laufen nicht gleichzeitig.";
         return "";
     case Tool::convert:
-        if (p.running)
-            return "Das Spiel läuft gerade. Bitte erst beenden.";
-        if (p.busy)
-            return "Es läuft schon eine Konvertierung.";
-        if (p.other_busy)
-            return "Es läuft gerade eine Kopie. Kopieren, Konvertieren und Verschieben laufen "
-                   "nicht gleichzeitig.";
+        // A running game or another job is not said here: the check before the start names it (and a
+        // busy job still lets the conversion wait in the queue).
         if (p.ops.empty())
             return "Für dieses Spiel bietet die App kein Format an.";
         return "";
@@ -618,6 +614,7 @@ std::string start_body(const Plan &p, const PlanChoice &c)
         // The AMPR index is a PS5 thing and only goes into an image built from a folder.
         cJSON_AddBoolToObject(root, "ampr_index", p.kind == "folder" && !p.ps4 && c.ampr);
         cJSON_AddStringToObject(root, "verify", c.quick ? "quick" : "full");
+        cJSON_AddStringToObject(root, "name", c.name.c_str());
         break;
     case Tool::move:
     case Tool::unpack:
@@ -681,6 +678,181 @@ std::vector<std::string> stream_reasons(const Plan &p)
         out.push_back("Es hat einen Streaming-Ordner (" + quoted(p.stream.stream_dir) + ", " +
                       format_bytes(p.stream.stream_dir_bytes) + ").");
     return out;
+}
+
+ConvertCheck parse_check(const CheckReply &reply)
+{
+    ConvertCheck c;
+    if (!reply.ok)
+    {
+        c.error = reply.error.empty() ? "Die App hat nicht geantwortet." : reply.error;
+        return c;
+    }
+    cJSON *root = cJSON_Parse(reply.json.c_str());
+    if (!cJSON_IsObject(root))
+    {
+        cJSON_Delete(root);
+        c.error = "Die Antwort der App ist nicht lesbar.";
+        return c;
+    }
+    c.ok = true;
+    c.can_start = flag(root, "can_start");
+    c.can_queue = flag(root, "can_queue");
+    c.target = str(root, "target");
+    c.stem = str(root, "stem");
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "checks"))
+    {
+        CheckRow row;
+        row.id = str(item, "id");
+        row.level = str(item, "level");
+        row.text = str(item, "text");
+        row.hint = str(item, "hint");
+        // Only the three levels this screen knows by name: anything else is read as a note.
+        if (row.level != "ok" && row.level != "warn" && row.level != "error")
+            row.level = "ok";
+        if (!row.text.empty())
+            c.rows.push_back(std::move(row));
+    }
+    cJSON_Delete(root);
+    return c;
+}
+
+std::string check_body(const Plan &p, const PlanChoice &c)
+{
+    if (!chosen(p, c) || c.op < 0 || c.op >= kOps || c.mode < 0 || c.mode >= kModes)
+        return {};
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "id", p.id.c_str());
+    cJSON_AddStringToObject(root, "op", kOpKeys[c.op]);
+    cJSON_AddStringToObject(root, "target",
+                            p.drives[static_cast<std::size_t>(c.drive)].mount.c_str());
+    cJSON_AddStringToObject(root, "mode", kModeKeys[c.mode]);
+    cJSON_AddStringToObject(root, "name", c.name.c_str());
+    return json_text(root);
+}
+
+std::string queue_add_body(const Plan &p, const PlanChoice &c)
+{
+    cJSON *root = cJSON_Parse(start_body(p, c).c_str());
+    if (!cJSON_IsObject(root))
+    {
+        cJSON_Delete(root);
+        root = cJSON_CreateObject();
+    }
+    cJSON_AddStringToObject(root, "action", "add");
+    return json_text(root);
+}
+
+std::string queue_action_body(const std::string &action, int qid)
+{
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "action", action.c_str());
+    if (qid != 0)
+        cJSON_AddNumberToObject(root, "qid", qid);
+    return json_text(root);
+}
+
+ConvertQueue parse_queue(const std::string &json)
+{
+    ConvertQueue q;
+    cJSON *root = cJSON_Parse(json.c_str());
+    if (!cJSON_IsObject(root))
+    {
+        cJSON_Delete(root);
+        return q;
+    }
+    q.ok = true;
+    q.running = flag(root, "running");
+    q.running_id = static_cast<int>(num(root, "running_id"));
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "items"))
+    {
+        QueueItem it;
+        it.qid = static_cast<int>(num(item, "qid"));
+        it.id = str(item, "id");
+        it.name = str(item, "name");
+        it.op = str(item, "op");
+        it.mode = str(item, "mode");
+        it.mount = str(item, "mount");
+        it.target = str(item, "target");
+        it.state = str(item, "state");
+        it.message = str(item, "message");
+        it.output_bytes = bytes(item, "output_bytes");
+        it.elapsed_s = num(item, "elapsed_s");
+        if (it.qid == 0 || it.name.empty())
+            continue;
+        if (it.state == "waiting" || it.state == "running")
+            ++q.open;
+        else if (it.state == "done")
+            ++q.done;
+        else
+            ++q.failed;
+        q.items.push_back(std::move(it));
+    }
+    cJSON_Delete(root);
+    return q;
+}
+
+std::string duration_text(double ms)
+{
+    const long total = ms > 0.0 ? static_cast<long>(ms / 1000.0 + 0.5) : 0;
+    const long h = total / 3600;
+    const long m = (total % 3600) / 60;
+    const long s = total % 60;
+    char buf[32];
+    if (h > 0)
+        std::snprintf(buf, sizeof(buf), "%ld:%02ld:%02ld", h, m, s);
+    else
+        std::snprintf(buf, sizeof(buf), "%ld:%02ld", m, s);
+    return buf;
+}
+
+std::vector<StageText> stage_texts(const Job &job)
+{
+    std::vector<StageText> out;
+    const int pct = job.total > 0.0
+                        ? static_cast<int>(std::clamp(job.done * 100.0 / job.total, 0.0, 100.0))
+                        : 0;
+    for (const JobStage &s : job.stages)
+    {
+        StageText t;
+        t.state = s.state;
+        if (s.id == "scan")
+            t.label = "Vermessen";
+        else if (s.id == "write")
+            t.label = job.op == "ffpfsc" ? "Komprimieren" : "Schreiben";
+        else if (s.id == "verify")
+            t.label = "Prüfen";
+        else if (s.id == "rename")
+            t.label = "Umbenennen";
+        else
+            t.label = s.id;
+        if (s.state == "done")
+            t.detail = duration_text(s.ms);
+        else if (s.state == "now")
+        {
+            t.detail = duration_text(s.ms);
+            if (s.id == "write" || s.id == "verify")
+                t.detail += " · " + std::to_string(pct) + " %";
+        }
+        else if (s.state == "stopped")
+            t.detail = duration_text(s.ms) + " · hier beendet";
+        else
+            t.detail = "noch offen";
+        out.push_back(std::move(t));
+    }
+    return out;
+}
+
+std::string queue_summary(const ConvertQueue &q)
+{
+    std::string text = std::to_string(q.open) + " offen";
+    if (q.done > 0)
+        text += " · " + std::to_string(q.done) + " fertig";
+    if (q.failed > 0)
+        text += " · " + std::to_string(q.failed) + " mit Fehler";
+    return text;
 }
 
 } // namespace hui::ps5cc

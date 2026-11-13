@@ -185,6 +185,41 @@ class MockSource final : public Source
             {1793070000, "convert", "Iron Tide", "exFAT → ffpkg", "cancelled", 0},
             {1793060000, "copy", "Sky Drifters", "→ Interne SSD", "failed", 0},
         };
+        // A queue of conversions with something in it: one finished, one that stopped because the source changed, one waiting (the
+        // queue is stopped; the tour starts it).
+        {
+            QueueItem done;
+            done.qid = 1;
+            done.id = "PPSA03860";
+            done.name = "Lantern Pass";
+            done.op = "ffpfsc";
+            done.mode = "homebrew";
+            done.mount = "/mnt/usb0";
+            done.target = "/mnt/usb0/homebrew/Lantern Pass [PPSA03860] v01.002.000.ffpfsc";
+            done.state = "done";
+            done.output_bytes = 12900000000ull;
+            done.elapsed_s = 2460.0;
+            QueueItem failed = done;
+            failed.qid = 2;
+            failed.id = "PPSA11420";
+            failed.name = "Styx: Blades of Greed";
+            failed.target = "/mnt/usb0/homebrew/Styx_ Blades of Greed.ffpfsc";
+            failed.state = "failed";
+            failed.output_bytes = 0;
+            failed.elapsed_s = 0.0;
+            failed.message = "Die Quelle hat sich während des Konvertierens geändert: Data/pack01.bin. Das Ergebnis wurde nicht übernommen.";
+            QueueItem waiting = done;
+            waiting.qid = 3;
+            waiting.id = "PPSA08455";
+            waiting.name = "Iron Tide";
+            waiting.target = "/mnt/usb0/homebrew/Iron Tide.ffpfsc";
+            waiting.state = "waiting";
+            waiting.output_bytes = 0;
+            waiting.elapsed_s = 0.0;
+            queue_ = {done, failed, waiting};
+            queue_next_ = 4;
+            sync_queue();
+        }
         data_.config.valid = true;
         data_.config.mode = "automatic";
         data_.config.profile = "comfort";
@@ -300,6 +335,15 @@ class MockSource final : public Source
             closing_.clear();
             changed();
         }
+        if (check_at_ > 0.0f && clock_ >= check_at_)
+        {
+            check_at_ = 0.0f;
+            data_.convert_check.ticket = check_ticket_;
+            data_.convert_check.ok = true;
+            data_.convert_check.error.clear();
+            data_.convert_check.json = make_check(check_body_);
+            changed();
+        }
         if (plan_at_ > 0.0f && clock_ >= plan_at_)
         {
             plan_at_ = 0.0f;
@@ -326,6 +370,42 @@ class MockSource final : public Source
                     job.finished = true;
                     job.state = "done";
                     notice(Notice::Kind::success, "„" + job.name + "“ fertig");
+                    for (QueueItem &q : queue_)
+                    {
+                        if (q.state == "running" && q.qid == job.queue_id)
+                        {
+                            q.state = "done";
+                            q.elapsed_s = 2460.0;
+                            q.output_bytes = 21700000000ull;
+                        }
+                    }
+                    sync_queue();
+                }
+                if (i == static_cast<std::size_t>(JobKind::convert))
+                    fill_stages(job);
+            }
+            // The queue starts its next entry when no conversion runs.
+            Job &conv = data_.jobs[static_cast<std::size_t>(JobKind::convert)];
+            if (queue_run_ && !conv.active)
+            {
+                for (QueueItem &q : queue_)
+                {
+                    if (q.state != "waiting")
+                        continue;
+                    q.state = "running";
+                    const Game *g = find(q.id);
+                    conv = Job{};
+                    conv.active = true;
+                    conv.state = "writing";
+                    conv.name = q.name;
+                    conv.op = q.op;
+                    conv.queue_id = q.qid;
+                    conv.detail = "→ " + q.target;
+                    conv.total = g != nullptr ? static_cast<double>(g->size_bytes) : 1e9;
+                    conv.done = conv.total * 0.07;
+                    fill_stages(conv);
+                    sync_queue();
+                    break;
                 }
             }
             refresh_status();
@@ -547,6 +627,297 @@ class MockSource final : public Source
         return plan_ticket_;
     }
 
+
+    // ---- the check before a conversion and the queue (13.11.2026) ----
+    std::uint64_t convert_check(const std::string &body) override
+    {
+        check_ticket_ += 1;
+        check_body_ = body;
+        check_at_ = clock_ + 0.15f;
+        return check_ticket_;
+    }
+
+    void convert_queue(const std::string &body) override
+    {
+        if (body.empty())
+        {
+            sync_queue();
+            return;
+        }
+        cJSON *root = cJSON_Parse(body.c_str());
+        const auto text = [&](const char *key) -> std::string
+        {
+            const cJSON *i = cJSON_GetObjectItemCaseSensitive(root, key);
+            return cJSON_IsString(i) && i->valuestring != nullptr ? i->valuestring : "";
+        };
+        const std::string action = text("action");
+        const cJSON *q = cJSON_GetObjectItemCaseSensitive(root, "qid");
+        const int qid = cJSON_IsNumber(q) ? static_cast<int>(q->valuedouble) : 0;
+        if (action == "add")
+        {
+            const Game *g = find(text("id"));
+            QueueItem item;
+            item.qid = queue_next_++;
+            item.id = text("id");
+            item.name = g != nullptr ? g->name : item.id;
+            item.op = text("op");
+            item.mode = text("mode");
+            item.mount = text("target");
+            item.state = "waiting";
+            std::string stem, err;
+            expand_name(text("name"), g, stem, err);
+            item.target = item.mount + (item.mode == "backup" ? "/PS5-Sicherung/Spiele/" : "/homebrew/") + stem + "." + item.op;
+            queue_.push_back(item);
+            queue_run_ = true;
+        }
+        else if (action == "start")
+            queue_run_ = true;
+        else if (action == "stop")
+            queue_run_ = false;
+        else if (action == "clear")
+        {
+            queue_.erase(std::remove_if(queue_.begin(), queue_.end(),
+                                        [](const QueueItem &i) { return i.state != "waiting" && i.state != "running"; }),
+                         queue_.end());
+        }
+        else if (action == "remove" || action == "retry")
+        {
+            for (std::size_t i = 0; i < queue_.size(); ++i)
+            {
+                if (queue_[i].qid != qid || queue_[i].state == "running")
+                    continue;
+                if (action == "remove")
+                    queue_.erase(queue_.begin() + static_cast<std::ptrdiff_t>(i));
+                else
+                {
+                    queue_[i].state = "waiting";
+                    queue_[i].message.clear();
+                    queue_run_ = true;
+                }
+                break;
+            }
+        }
+        cJSON_Delete(root);
+        sync_queue();
+    }
+
+    // The name of a result from the template, as the console app's cvname.c does it.
+    static bool expand_name(const std::string &tpl, const Game *g, std::string &out, std::string &err)
+    {
+        const std::string title = g != nullptr ? g->name : "Spiel";
+        const std::string id = g != nullptr ? g->id : "";
+        const std::string version = g != nullptr ? g->version : "";
+        const std::string source = g != nullptr ? g->id : "";
+        std::string t = tpl.empty() ? "{quelle}" : tpl;
+        out.clear();
+        for (std::size_t i = 0; i < t.size(); ++i)
+        {
+            if (t[i] == '{')
+            {
+                const std::size_t end = t.find('}', i);
+                if (end == std::string::npos)
+                {
+                    err = "In der Vorlage fehlt ein „}“.";
+                    return false;
+                }
+                const std::string key = t.substr(i + 1, end - i - 1);
+                if (key == "titel")
+                    out += title;
+                else if (key == "id")
+                    out += id;
+                else if (key == "version")
+                    out += version;
+                else if (key == "quelle")
+                    out += source;
+                else
+                {
+                    err = "Die Vorlage kennt „{" + key + "}“ nicht. Es gibt {titel}, {id}, {version} und {quelle}.";
+                    return false;
+                }
+                i = end;
+            }
+            else
+            {
+                const char c = t[i];
+                out += (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') ? '_' : c;
+            }
+        }
+        while (!out.empty() && (out.back() == ' ' || out.back() == '.'))
+            out.pop_back();
+        if (out.empty())
+        {
+            err = "Der Name ist leer.";
+            return false;
+        }
+        return true;
+    }
+
+    // The console app's check (gameconvert.c: ps5tm_gameconvert_check), reduced to what the preview can say.
+    std::string make_check(const std::string &body) const
+    {
+        cJSON *req = cJSON_Parse(body.c_str());
+        const auto text = [&](const char *key) -> std::string
+        {
+            const cJSON *i = cJSON_GetObjectItemCaseSensitive(req, key);
+            return cJSON_IsString(i) && i->valuestring != nullptr ? i->valuestring : "";
+        };
+        const Game *g = find(text("id"));
+        const std::string op = text("op"), mount = text("target"), mode = text("mode");
+        const double size = g != nullptr ? static_cast<double>(g->size_bytes) : 0.0;
+        const double raw = size * 1.02;
+        const bool folder = g != nullptr && g->format == "folder";
+        cJSON *root = cJSON_CreateObject();
+        cJSON *rows = cJSON_AddArrayToObject(root, "checks");
+        bool errors = false;
+        const auto add = [&](const char *id, const char *level, const std::string &t, const std::string &hint = {})
+        {
+            cJSON *o = cJSON_CreateObject();
+            cJSON_AddStringToObject(o, "id", id);
+            cJSON_AddStringToObject(o, "level", level);
+            cJSON_AddStringToObject(o, "text", t.c_str());
+            if (!hint.empty())
+                cJSON_AddStringToObject(o, "hint", hint.c_str());
+            cJSON_AddItemToArray(rows, o);
+            if (std::string(level) == "error")
+                errors = true;
+        };
+        const auto gb = [](double bytes)
+        {
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), "%.1f GB", bytes / 1e9);
+            return std::string(buf);
+        };
+        add("source", "ok",
+            folder ? "Quelle lesbar: 2312 Dateien, als exFAT-Abbild " + gb(raw) : "Abbild-Datei lesbar: " + gb(raw));
+        if (g != nullptr && g->id == data_.status.game_id)
+            add("running", "error", "Das Spiel läuft gerade.", "Beende das Spiel, dann geht es weiter.");
+        std::string stem, err;
+        std::string target;
+        const MockDrive *drive = nullptr;
+        for (const MockDrive &m : kDrives)
+        {
+            if (mount == m.mount)
+                drive = &m;
+        }
+        const char *ext = op == "exfat" ? ".exfat" : op == "ffpkg" ? ".ffpkg" : ".ffpfsc";
+        if (drive == nullptr)
+            add("drive", "error", "Dieses Ziel gibt es nicht.");
+        else if (!expand_name(text("name"), g, stem, err))
+            add("name", "error", err);
+        else
+        {
+            target = mount + (mode == "backup" ? "/PS5-Sicherung/Spiele/" : "/homebrew/") + stem + ext;
+            add("name", "ok", "Name der Ausgabe: " + stem + ext + " (" + std::to_string(stem.size() + std::string(ext).size()) + " von 239 Bytes)");
+            if (stem == "Taken")
+                add("exists", "error", "Am Ziel gibt es " + stem + ext + " schon.", "Ändere den Namen oder wähle einen anderen Ordner.");
+            if (drive->free_gb * 1e9 < raw + 256e6)
+                add("space", "error", std::string("Auf ") + drive->label + " ist nicht genug Platz: " + gb(drive->free_gb * 1e9) + " frei, gebraucht werden bis zu " + gb(raw + 256e6) + ".",
+                    "Wähle ein anderes Laufwerk oder schaffe Platz.");
+            else
+                add("space", "ok", std::string("Platz auf ") + drive->label + ": " + gb(drive->free_gb * 1e9) + " frei, gebraucht höchstens " + gb(raw));
+            if (std::string(drive->fs) == "msdosfs" && raw > 4.29e9)
+                add("fat32", "error", "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Das Abbild wird " + gb(raw) + " groß.",
+                    "Wähle ein Laufwerk mit exFAT.");
+        }
+        // The move by ShadowMountPlus that crawls through the whole preview does not count here (the console app would name it).
+        bool busy = false;
+        for (std::size_t i = 0; i < data_.jobs.size(); ++i)
+        {
+            if (data_.jobs[i].active && i != static_cast<std::size_t>(JobKind::deletion) &&
+                i != static_cast<std::size_t>(JobKind::storage))
+                busy = true;
+        }
+        if (data_.jobs[static_cast<std::size_t>(JobKind::convert)].active)
+            add("busy", "warn", "Es läuft gerade eine Konvertierung. Der Start geht erst danach.",
+                "In die Warteschlange gestellt, beginnt der Auftrag danach von selbst.");
+        else if (busy)
+            add("busy", "warn", "Es läuft gerade ein anderer Auftrag. Der Start geht erst danach.",
+                "In die Warteschlange gestellt, beginnt der Auftrag danach von selbst.");
+        const bool have_target = !target.empty();
+        cJSON_AddBoolToObject(root, "ok", 1);
+        cJSON_AddBoolToObject(root, "can_queue", !errors && have_target);
+        cJSON_AddBoolToObject(root, "can_start", !errors && have_target && !busy);
+        cJSON_AddStringToObject(root, "target", target.c_str());
+        cJSON_AddStringToObject(root, "stem", stem.c_str());
+        cJSON_AddNumberToObject(root, "name_bytes", static_cast<double>(stem.size()));
+        cJSON_AddNumberToObject(root, "name_limit", 239);
+        cJSON_Delete(req);
+        char *out = cJSON_PrintUnformatted(root);
+        std::string json = out != nullptr ? out : "{}";
+        cJSON_free(out);
+        cJSON_Delete(root);
+        return json;
+    }
+
+    void sync_queue()
+    {
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddBoolToObject(root, "ok", 1);
+        cJSON_AddBoolToObject(root, "running", queue_run_);
+        int running_id = 0, open = 0, done = 0, failed = 0;
+        cJSON *items = cJSON_AddArrayToObject(root, "items");
+        for (const QueueItem &q : queue_)
+        {
+            cJSON *o = cJSON_CreateObject();
+            cJSON_AddNumberToObject(o, "qid", q.qid);
+            cJSON_AddStringToObject(o, "id", q.id.c_str());
+            cJSON_AddStringToObject(o, "name", q.name.c_str());
+            cJSON_AddStringToObject(o, "op", q.op.c_str());
+            cJSON_AddStringToObject(o, "mode", q.mode.c_str());
+            cJSON_AddStringToObject(o, "mount", q.mount.c_str());
+            cJSON_AddStringToObject(o, "target", q.target.c_str());
+            cJSON_AddStringToObject(o, "state", q.state.c_str());
+            if (!q.message.empty())
+                cJSON_AddStringToObject(o, "message", q.message.c_str());
+            if (q.output_bytes > 0)
+                cJSON_AddNumberToObject(o, "output_bytes", static_cast<double>(q.output_bytes));
+            if (q.elapsed_s > 0.0)
+                cJSON_AddNumberToObject(o, "elapsed_s", q.elapsed_s);
+            cJSON_AddItemToArray(items, o);
+            if (q.state == "running")
+                running_id = q.qid;
+            if (q.state == "waiting" || q.state == "running")
+                ++open;
+            else if (q.state == "done")
+                ++done;
+            else
+                ++failed;
+        }
+        cJSON_AddNumberToObject(root, "running_id", running_id);
+        cJSON_AddNumberToObject(root, "open", open);
+        cJSON_AddNumberToObject(root, "done", done);
+        cJSON_AddNumberToObject(root, "failed", failed);
+        char *out = cJSON_PrintUnformatted(root);
+        data_.convert_queue_json = out != nullptr ? out : "";
+        cJSON_free(out);
+        cJSON_Delete(root);
+        changed();
+    }
+
+    // The steps of the running conversion, from how far the invented job has come (the preview runs a thousand times faster than
+    // the console).
+    static void fill_stages(Job &job)
+    {
+        job.stages.clear();
+        const double frac = job.total > 0.0 ? job.done / job.total : 0.0;
+        const double write = std::clamp((frac - 0.04) / 0.72, 0.0, 1.0);
+        const double verify = std::clamp((frac - 0.76) / 0.21, 0.0, 1.0);
+        const double rename = std::clamp((frac - 0.97) / 0.03, 0.0, 1.0);
+        const bool over = !job.active && job.state == "done";
+        const auto stage = [&](const char *id, double ms, bool began, bool next_began)
+        {
+            JobStage s;
+            s.id = id;
+            s.ms = ms;
+            s.state = !began ? "todo" : (next_began || over) ? "done" : "now";
+            job.stages.push_back(s);
+        };
+        stage("scan", 42000.0, true, frac > 0.04);
+        stage("write", 1870000.0 * write, frac > 0.04, frac > 0.76);
+        stage("verify", 483000.0 * verify, frac > 0.76, frac > 0.97);
+        stage("rename", 3000.0 * rename, frac > 0.97, false);
+    }
+
     void start_tool(Tool tool, const std::string &id, const std::string &body) override
     {
         (void)body;
@@ -578,8 +949,12 @@ class MockSource final : public Source
             job.total *= 2.0; // written and read back
             break;
         case Tool::convert:
+        {
             job.detail = "→ /mnt/ext0/homebrew/" + id + ".ffpfsc";
+            job.op = "ffpfsc";
+            job.state = "writing";
             break;
+        }
         case Tool::move:
             job.detail = "Verschieben → /mnt/ext0/homebrew";
             break;
@@ -602,6 +977,8 @@ class MockSource final : public Source
             break;
         }
         job.done = job.total * 0.07;
+        if (kind == JobKind::convert)
+            fill_stages(job);
         Notice n;
         n.kind = Notice::Kind::job_started;
         n.title = std::string(tool_label(tool)) + " gestartet";
@@ -1564,6 +1941,7 @@ class MockSource final : public Source
             cJSON_AddStringToObject(root, "kind", folder ? "folder" : "file");
             cJSON_AddBoolToObject(root, "ps4", ps4);
             cJSON_AddStringToObject(root, "stem", g->id.c_str());
+            cJSON_AddStringToObject(root, "version", g->version.c_str());
             cJSON_AddNumberToObject(root, "raw_bytes", raw);
             cJSON *risk = cJSON_AddObjectToObject(root, "stream_risk");
             const bool big = size > 30e9;
@@ -2594,6 +2972,12 @@ class MockSource final : public Source
     Tool plan_tool_ = Tool::copy;
     std::string plan_id_;
     float plan_at_ = 0.0f;
+    std::uint64_t check_ticket_ = 0;
+    std::string check_body_;
+    float check_at_ = 0.0f;
+    std::vector<QueueItem> queue_; // the queue of conversions (invented; a few entries stand in it from the start)
+    bool queue_run_ = false;
+    int queue_next_ = 1;
     bool smp_update_off_ = false; // "Ja" to the ShadowMountPlus question was given
 };
 

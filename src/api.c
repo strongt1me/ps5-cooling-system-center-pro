@@ -2253,6 +2253,10 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   const cJSON *jop  = body ? cJSON_GetObjectItem(body, "op")     : NULL;
   const cJSON *jdst = body ? cJSON_GetObjectItem(body, "target") : NULL;
   const cJSON *jm   = body ? cJSON_GetObjectItem(body, "mode")   : NULL;
+  /* "name": a template for the result's name ({titel}, {id}, {version}, {quelle}; empty = the name of the source), cvname.h */
+  const cJSON *jn   = body ? cJSON_GetObjectItem(body, "name")   : NULL;
+  char tpl[200] = "";
+  if(cJSON_IsString(jn)) snprintf(tpl, sizeof(tpl), "%s", jn->valuestring);
   int ampr = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "ampr_index"));
   /* "verify": "full" (the default) reads the whole result back and writes the checksum file; "quick" checks the structure and a
      sample and writes no checksum file (10.11.2026) */
@@ -2266,12 +2270,50 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   cJSON_Delete(body);
 
   char err[640] = "";
-  int status = ps5tm_gameconvert_start(id, op, ampr, target, mode, quick, err, sizeof(err));
+  int status = ps5tm_gameconvert_start(id, op, ampr, target, mode, quick, tpl, 0, err, sizeof(err));
   if(status != 200) {
     ps5tm_http_send_error(fd, status, "convert_refused", err);
     return;
   }
   send_cjson(fd, 200, ps5tm_gameconvert_status());
+}
+
+/* The check before the start: POST {id, op, target, mode, name}; the answer lists everything that speaks for or against it (gameconvert.c).
+   POST, not GET: the name is free text (a template), and the query of a GET is not decoded here. */
+static void
+handle_convert_check(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  char id[16] = "", op[12] = "", target[40] = "", mode[12] = "", tpl[200] = "", err[400] = "";
+  const char *keys[5] = { "id", "op", "target", "mode", "name" };
+  char *dst[5] = { id, op, target, mode, tpl };
+  const size_t cap[5] = { sizeof(id), sizeof(op), sizeof(target), sizeof(mode), sizeof(tpl) };
+  for(int i = 0; i < 5; i++) {
+    const cJSON *j = body ? cJSON_GetObjectItem(body, keys[i]) : NULL;
+    if(cJSON_IsString(j)) snprintf(dst[i], cap[i], "%s", j->valuestring);
+  }
+  cJSON_Delete(body);
+  cJSON *root = ps5tm_gameconvert_check(id, op, target, mode, tpl, err, sizeof(err));
+  if(!root) {
+    ps5tm_http_send_error(fd, 409, "convert_check_failed", err);
+    return;
+  }
+  send_cjson(fd, 200, root);
+}
+
+/* The queue of conversions (convqueue.c): GET the list, POST {action: add | remove | retry | start | stop | clear, ...}. */
+static void
+handle_convert_queue(int fd, const ps5tm_request_t *req, int is_post) {
+  if(is_post) {
+    cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+    char err[400] = "";
+    int status = ps5tm_convqueue_action(body, err, sizeof(err));
+    cJSON_Delete(body);
+    if(status != 200) {
+      ps5tm_http_send_error(fd, status, "convert_queue_refused", err);
+      return;
+    }
+  }
+  send_cjson(fd, 200, ps5tm_convqueue_status());
 }
 
 /* Moving and unpacking, done by ShadowMountPlus (gamemove.c). The request
@@ -5304,6 +5346,19 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(is_get)  { send_cjson(fd, 200, ps5tm_gameconvert_status()); return; }
     if(is_post) { handle_convert_start(fd, req); return; }
     ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST.");
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/library/convert/check")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
+                                         "Nur POST erlaubt."); return; }
+    handle_convert_check(fd, req);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/library/convert/queue")) {
+    if(!is_get && !is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST."); return; }
+    handle_convert_queue(fd, req, is_post);
     return;
   }
 

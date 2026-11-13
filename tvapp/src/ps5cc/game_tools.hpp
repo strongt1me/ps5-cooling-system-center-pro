@@ -37,6 +37,8 @@ class GameTools
     void open_menu(const Game &game, bool running, ui::Feedback &feedback);
     // Opens a tool's dialog directly (the menu's choice; the tour).
     void open_tool(Tool tool, ui::Feedback &feedback);
+    // The queue of conversions: from the job card, or from the convert dialog (13.11.2026).
+    void open_queue(ui::Feedback &feedback);
     // The plan the dialog waits for, the running game.
     void absorb(const Snapshot &data);
     // Menu, dialog or question open: they get the input first, and the frame its glass.
@@ -52,7 +54,18 @@ class GameTools
     void build_form();
     void refresh();
     void press_start(ui::Feedback &feedback);
+    void press_queue(ui::Feedback &feedback);
     void start();
+    // The check before a conversion starts: asked again whenever the choice changes.
+    void request_check();
+    bool start_ready() const;
+    bool queue_ready() const;
+    void handle_queue(const InputFrame &input, ui::Feedback &feedback);
+    void close_queue(ui::Feedback &feedback);
+    void rebuild_queue();
+    std::string queue_line(const QueueItem &item) const;
+    void draw_queue(ui::Canvas &canvas) const;
+    float draw_checks(ui::Canvas &canvas, float x, float y, float width) const;
     void answer_question();
     std::string title() const;
     std::string start_label() const;
@@ -72,6 +85,21 @@ class GameTools
     std::uint64_t awaiting_ = 0; // the ticket of the plan the dialog waits for; 0 when it has it
     Plan plan_;
     PlanChoice choice_;
+    // convert: the check before the start, the name chosen, the queue and the running job
+    ConvertCheck check_;
+    std::uint64_t check_ticket_ = 0;
+    std::string check_key_; // the body last asked for
+    bool check_pending_ = false;
+    int name_mode_ = 0; // 0: the source's name, 1: the template, 2: an own name
+    ui::InputPrompt prompt_;
+    ConvertQueue queue_;
+    std::string queue_json_;
+    Job convert_job_;
+    bool queue_open_ = false;
+    float queue_poll_ = 0.0f;
+    ui::ListView queue_list_;
+    std::string queue_key_; // what the list's rows are made of, so it is rebuilt only when that changes
+    tween::Spring queue_shown_;
     std::vector<int> op_index_; // the op choice's options, as indexes into kOpKeys
     float clock_ = 0.0f;
     tween::Spring shown_;

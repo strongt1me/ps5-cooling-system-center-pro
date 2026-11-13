@@ -843,6 +843,25 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::up},
             {0.4f, action_bit(Action::west)},
             {0.7f, 0, Direction::none, "aktionen-laufend"},
+            // Konvertieren of the running game: the check names it in red (and the name row with the template, then the keyboard)
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.8f, 0, Direction::none, "plan-konvertieren-laeuft"},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.7f, 0, Direction::none, "plan-konvertieren-name"},
+            {0.2f, 0, Direction::right},
+            {0.8f, 0, Direction::none, "name-tastatur"},
+            {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::back)},
             {0.2f, 0, Direction::down},
             {0.35f, 0, Direction::down},
@@ -883,6 +902,13 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "plan-konvertieren-pruefung"},
             {0.2f, action_bit(Action::north)},
             {1.2f, 0, Direction::none, "auftrag-laeuft"},
+            // the steps of the conversion with their times, then its queue (one finished, one that stopped, one waiting) and its start
+            {0.8f, 0, Direction::none, "auftrag-stufen"},
+            {0.3f, action_bit(Action::north)},
+            {0.9f, 0, Direction::none, "warteschlange"},
+            {0.3f, action_bit(Action::north)},
+            {28.0f, 0, Direction::none, "warteschlange-laeuft"},
+            {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
@@ -1371,6 +1397,11 @@ class Ps5cc final : public app::Concept
         if (data_.games_loaded && games_key() != shown_games_)
             rebuild_games();
         rebuild_jobs();
+        if (data_.convert_queue_json != queue_json_)
+        {
+            queue_json_ = data_.convert_queue_json;
+            queue_ = ps5cc::parse_queue(queue_json_);
+        }
         rebuild_history();
         rebuild_chips();
         if (sheet_.is_open())
@@ -1984,6 +2015,12 @@ class Ps5cc final : public app::Concept
             }
             return;
         }
+        // △ on the conversion's card: its queue (several games one after the other)
+        if (input.is_pressed(Action::north) && job_focus_ == static_cast<int>(JobKind::convert))
+        {
+            tools_.open_queue(feedback);
+            return;
+        }
         if (input.is_pressed(Action::west))
         {
             const ps5cc::Job &job = data_.jobs[static_cast<std::size_t>(job_focus_)];
@@ -2388,6 +2425,9 @@ class Ps5cc final : public app::Concept
             if (!job.active && !job.finished)
             {
                 ui::text(list, fonts.regular, "Kein Auftrag", x, r.y + 46.0f, 22.0f, kMuted);
+                if (i == static_cast<int>(JobKind::convert) && queue_.open > 0)
+                    ui::text(list, fonts.regular, "Warteschlange: " + ps5cc::queue_summary(queue_),
+                             r.x + r.w - 32.0f, r.y + 46.0f, 22.0f, kWarning, gfx::Align::right);
                 continue;
             }
             // The phase is translated on its own: joined to a game name it would match no entry.
@@ -2397,10 +2437,57 @@ class Ps5cc final : public app::Concept
                      ui::fit_label(paint, job.name + detail, 22.0f, r.x + r.w - 32.0f - x), x,
                      r.y + 46.0f, 22.0f, kMuted);
             bars_[static_cast<std::size_t>(i)].draw(canvas);
+            if (i == static_cast<int>(JobKind::convert) && !job.stages.empty())
+                draw_stages(canvas, r, job);
         }
 
         ui::text(list, fonts.semibold, "Verlauf", kRightX, kTop + 36.0f, 26.0f, kInk);
         history_.draw(canvas);
+    }
+
+    // The steps of a conversion under its bar, each with the time it took: a dot (the check marks are not in the font), the name
+    // and the time, "noch offen" for what has not begun, "hier beendet" where it stopped.
+    void draw_stages(ui::Canvas &canvas, const Rect &r, const ps5cc::Job &job) const
+    {
+        gfx::DrawList &list = canvas.list;
+        const ui::Fonts &fonts = canvas.fonts;
+        ui::Painter paint(list, fonts, theme_);
+        const std::vector<ps5cc::StageText> steps = ps5cc::stage_texts(job);
+        if (steps.empty())
+            return;
+        // Each cell is as wide as its text needs ("Komprimieren 31:10 · 51 %" more than "Vermessen 0:42"); what is left over is shared
+        // out evenly, and when the texts are wider than the card (a longer language) every cell shrinks alike and the times get "…".
+        const float span = r.w - 64.0f;
+        std::vector<float> need;
+        float total = 0.0f;
+        for (const ps5cc::StageText &s : steps)
+        {
+            const float n = 18.0f + fonts.semibold.font->measure(s.label, 18.0f) + 6.0f +
+                            fonts.regular.font->measure(s.detail, 18.0f) + 14.0f;
+            need.push_back(n);
+            total += n;
+        }
+        const float spare = (span - total) / static_cast<float>(steps.size());
+        const float scale = total > span ? span / total : 1.0f;
+        float cursor = r.x + 32.0f;
+        for (std::size_t k = 0; k < steps.size(); ++k)
+        {
+            const ps5cc::StageText &s = steps[k];
+            const float cell = total > span ? need[k] * scale : need[k] + spare;
+            const float x0 = cursor;
+            cursor += cell;
+            const Color tone = s.state == "done"      ? kGood
+                               : s.state == "stopped" ? kCritical
+                               : s.state == "now"     ? Color::rgb(0x6aa2ff)
+                                                      : kMuted;
+            list.rounded_rect({x0, r.y + 122.0f, 12.0f, 12.0f}, 6.0f, tone);
+            const float w = ui::text(list, fonts.semibold, s.label, x0 + 18.0f, r.y + 134.0f, 18.0f,
+                                     s.state == "todo" ? kMuted : kInk);
+            const float room = cell - 18.0f - w - 6.0f - 4.0f;
+            if (room > 30.0f)
+                ui::text(list, fonts.regular, ui::fit_label(paint, s.detail, 18.0f, room),
+                         x0 + 18.0f + w + 6.0f, r.y + 134.0f, 18.0f, kMuted);
+        }
     }
 
     // Dateien, System, Profil: their pages come later; until then the web interface has them.
@@ -2491,6 +2578,8 @@ class Ps5cc final : public app::Concept
             case kJobs:
                 hints[count++] = {ui::Button::dpad, "Auswählen"};
                 hints[count++] = {ui::Button::square, "Abbrechen"};
+                if (job_focus_ == static_cast<int>(JobKind::convert))
+                    hints[count++] = {ui::Button::triangle, "Warteschlange"};
                 break;
             case kPlaceholder:
                 hints[count++] = {ui::Button::cross, "Weboberfläche"};
@@ -2514,6 +2603,8 @@ class Ps5cc final : public app::Concept
     ps5cc::i18n::Translator translator_;
     std::shared_ptr<const std::vector<ps5cc::i18n::Entry>> dictionary_;
     ps5cc::Snapshot data_;
+    std::string queue_json_;      // the queue of conversions as last parsed
+    ps5cc::ConvertQueue queue_;
     std::uint64_t seen_ = 0;
     Link shown_link_ = Link::online;
     float age_ = 0.0f;

@@ -57,6 +57,7 @@
 
 #include "checkfile.h"
 #include "conv_exfat.h"
+#include "cvname.h"
 #include "conv_pfs.h"
 #include "conv_ufs2.h"
 #include "cvsample.h"
@@ -120,6 +121,9 @@ typedef struct {
   double   rate;
   uint64_t cwindow_ms, cwindow_bytes;
   double   crate;             /* the same, for reading back               */
+  int      qid;               /* the entry of the queue (convqueue.c) this job runs for, else 0 */
+  /* when each step began (monotonic ms; 0 = not yet): the step line of the page shows how long each took (13.11.2026) */
+  uint64_t t_write_ms, t_verify_ms, t_rename_ms;
 } cv_job_t;
 
 typedef struct {
@@ -229,6 +233,7 @@ static void
 cv_check_begin(uint64_t size) {
   pthread_mutex_lock(&g_lock);
   g_job.state         = CV_VERIFYING;
+  g_job.t_verify_ms   = ps5tm_mono_ms();
   g_job.check_total   = size;
   g_job.check_done    = 0;
   g_job.cwindow_ms    = 0;
@@ -399,6 +404,135 @@ exfat_read(void *ctx, void *buf, size_t len) {
 }
 
 
+
+/* ------------------------------------------- did the source change while the job ran? (13.11.2026) */
+
+/* A fingerprint of the files of the source, taken before anything is written and again before the result is put in place: the
+   count, the bytes, and one 64-bit hash of (path, size, time) per file. A game that was changed meanwhile (a file replaced, added or
+   deleted) would give an image of neither state, and the check afterwards reads back what was written, not what should have been.
+   The hashes are kept (sorted) for up to STAMP_KEEP files, so that the second look can name the first file that differs. */
+#define STAMP_KEEP        400000u
+#define STAMP_MAX_ENTRIES 4000000u
+
+typedef struct {
+  uint64_t *h;
+  size_t    n, cap;
+  uint64_t  total, bytes, sum;
+  int       kept_all;                    /* every hash is in h (not more than STAMP_KEEP files) */
+  int       usable;                      /* the walk was complete: not more than STAMP_MAX_ENTRIES files, no depth over 32 */
+  unsigned  changed;                     /* the second look: files whose hash is not among the first ones */
+  char      first[256];                  /* the first of them */
+} cv_stamp_t;
+
+static uint64_t
+stamp_hash(const char *rel, uint64_t size, int64_t mtime) {
+  uint64_t h = 1469598103934665603ull;     /* FNV-1a */
+  for(const char *p = rel; *p; p++) h = (h ^ (uint8_t)*p) * 1099511628211ull;
+  for(int i = 0; i < 8; i++) h = (h ^ ((size >> (8 * i)) & 0xff)) * 1099511628211ull;
+  for(int i = 0; i < 8; i++) h = (h ^ (((uint64_t)mtime >> (8 * i)) & 0xff)) * 1099511628211ull;
+  return h;
+}
+
+static int
+stamp_cmp(const void *a, const void *b) {
+  uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
+  return x < y ? -1 : x > y;
+}
+
+static void
+stamp_add(cv_stamp_t *st, const cv_stamp_t *ref, const char *rel, uint64_t size, int64_t mtime) {
+  uint64_t h = stamp_hash(rel, size, mtime);
+  st->total++;
+  st->bytes += size;
+  st->sum += h;
+  if(st->kept_all) {
+    if(st->n >= STAMP_KEEP) st->kept_all = 0;
+    else {
+      if(st->n == st->cap) {
+        size_t nc = st->cap ? st->cap * 2 : 4096;
+        uint64_t *nh = realloc(st->h, nc * sizeof(*nh));
+        if(!nh) st->kept_all = 0;
+        else { st->h = nh; st->cap = nc; }
+      }
+      if(st->kept_all) st->h[st->n++] = h;
+    }
+  }
+  if(ref && ref->kept_all && !bsearch(&h, ref->h, ref->n, sizeof(*ref->h), stamp_cmp)) {
+    if(!st->changed++) snprintf(st->first, sizeof(st->first), "%s", rel);
+  }
+}
+
+static void
+stamp_walk(cv_stamp_t *st, const cv_stamp_t *ref, char *path, size_t len, size_t root_len, int depth) {
+  if(depth > 32) { st->usable = 0; return; }
+  DIR *d = opendir(path);
+  if(!d) return;
+  struct dirent *e;
+  while((e = readdir(d))) {
+    if(e->d_name[0] == '.' && (!e->d_name[1] || (e->d_name[1] == '.' && !e->d_name[2]))) continue;
+    if(st->total >= STAMP_MAX_ENTRIES) { st->usable = 0; break; }
+    size_t nl = strlen(e->d_name);
+    if(len + 1 + nl >= PATH_MAX) { st->usable = 0; continue; }
+    path[len] = '/';
+    memcpy(path + len + 1, e->d_name, nl + 1);
+    struct stat sb;
+    if(lstat(path, &sb) == 0) {
+      if(S_ISDIR(sb.st_mode)) stamp_walk(st, ref, path, len + 1 + nl, root_len, depth + 1);
+      else if(S_ISREG(sb.st_mode)) stamp_add(st, ref, path + root_len + 1, (uint64_t)sb.st_size, (int64_t)sb.st_mtime);
+    }
+    path[len] = 0;
+  }
+  closedir(d);
+}
+
+/* Takes the fingerprint of source (a folder or one image file). ref: the first one, when this is the second look. */
+static void
+stamp_take(cv_stamp_t *st, const cv_stamp_t *ref, const char *source, int folder) {
+  memset(st, 0, sizeof(*st));
+  st->kept_all = 1;
+  st->usable = 1;
+  if(folder) {
+    char path[PATH_MAX];
+    size_t len = strlen(source);
+    if(len >= sizeof(path)) { st->usable = 0; return; }
+    memcpy(path, source, len + 1);
+    while(len > 1 && path[len - 1] == '/') path[--len] = 0;
+    stamp_walk(st, ref, path, len, len, 0);
+  } else {
+    struct stat sb;
+    const char *b = strrchr(source, '/');
+    if(stat(source, &sb) == 0 && S_ISREG(sb.st_mode)) stamp_add(st, ref, b ? b + 1 : source, (uint64_t)sb.st_size, (int64_t)sb.st_mtime);
+    else st->usable = 0;
+  }
+  if(!ref && st->kept_all && st->n > 1) qsort(st->h, st->n, sizeof(*st->h), stamp_cmp);
+}
+
+static void
+stamp_free(cv_stamp_t *st) {
+  free(st->h);
+  memset(st, 0, sizeof(*st));
+}
+
+/* 0 when source is as it was; else -1 with the sentence in err. A source that could not be fingerprinted (too many files) is not checked. */
+static int
+stamp_verify(const cv_stamp_t *first, const char *source, int folder, char *err, size_t err_len) {
+  if(!first->usable) return 0;
+  cv_stamp_t now;
+  stamp_take(&now, first, source, folder);
+  int same = !now.usable || (now.total == first->total && now.bytes == first->bytes && now.sum == first->sum);
+  if(!same) {
+    if(now.changed > 1 && now.first[0])
+      snprintf(err, err_len, "Die Quelle hat sich während des Konvertierens geändert: %s und andere Dateien. Das Ergebnis wurde nicht übernommen.", now.first);
+    else if(now.changed && now.first[0])
+      snprintf(err, err_len, "Die Quelle hat sich während des Konvertierens geändert: %s. Das Ergebnis wurde nicht übernommen.", now.first);
+    else
+      snprintf(err, err_len, "Die Quelle hat sich während des Konvertierens geändert (Dateien sind gelöscht worden, oder Größe und Zeit stimmen "
+                             "nicht mehr). Das Ergebnis wurde nicht übernommen.");
+  }
+  stamp_free(&now);
+  return same ? 0 : -1;
+}
+
 /* --------------------------------------------------------------- the worker */
 
 static void *cv_run(void *arg);
@@ -514,6 +648,8 @@ cv_run(void *arg) {
   ps5tm_prefetch_t *pf = NULL;
   char              sign_dir[PATH_MAX] = "";      /* the folder of signed executables laid over the game (fsign.c), removed in the end */
   unsigned          signed_n = 0, refused_n = 0;
+  cv_stamp_t        stamp;                        /* the fingerprint of the source before anything is written */
+  memset(&stamp, 0, sizeof(stamp));
 
   /* The AMPR index first, if asked for: it goes into the folder and with it into the image, at the place APR-EMU
      looks for it (/app0/ampr_emu.index). */
@@ -525,6 +661,8 @@ cv_run(void *arg) {
     PS5TM_INFO("ampr_index_built", "AMPR-Index für %s vor dem Konvertieren gebaut: %u Dateien.", a.title_id, ai_files);
     err[0] = 0;
   }
+  /* The source as it is now (after the AMPR index, which is part of it): compared once more before the result is put in place. */
+  stamp_take(&stamp, NULL, a.source, a.folder);
   /* Unsigned PS5 executables (fsign.c): the console's loader refuses a plain ELF, so the image would not start the game. They are
      written as fake-signed SELFs into a small folder next to the result, which goes over the game as a second source (the way a
      PS4 dump gets its param.json); the game folder itself is only read. A PS4 folder has none of these. */
@@ -660,6 +798,7 @@ cv_run(void *arg) {
   g_job.total_bytes = raw;
   g_job.files       = files;
   g_job.state       = CV_WRITING;
+  g_job.t_write_ms  = ps5tm_mono_ms();
   if(signed_n && refused_n)
     snprintf(g_job.note, sizeof(g_job.note), "%u Programmdateien waren nicht signiert und stehen im Abbild als FSELF; %u ließen sich nicht signieren und blieben, wie sie sind.", signed_n, refused_n);
   else if(signed_n)
@@ -815,6 +954,15 @@ cv_run(void *arg) {
   close(out);
   out = -1;
 
+  if(!rc) {                                     /* the last step: the source is looked at once more, then the result gets its name */
+    pthread_mutex_lock(&g_lock);
+    g_job.t_rename_ms = ps5tm_mono_ms();
+    pthread_mutex_unlock(&g_lock);
+    if(stamp_verify(&stamp, a.source, a.folder, err, sizeof(err)) != 0) {
+      PS5TM_WARN("game_convert_source_changed", "Konvertieren von %s: %s", a.title_id, err);
+      rc = -1;
+    }
+  }
   if(!rc) {
     struct stat st;
     if(lstat(a.target, &st) == 0) {             /* appeared meanwhile */
@@ -889,6 +1037,7 @@ cv_run(void *arg) {
              sums_ok ? ", Prüfsummen-Datei angelegt" : "");
 
 cleanup:
+  stamp_free(&stamp);
   ps5tm_prefetch_stop(pf);
   if(out >= 0) { close(out); unlink(part); }
   if(fsrc.fd >= 0) close(fsrc.fd);
@@ -915,6 +1064,7 @@ typedef struct {
   int      n_exts;
   char     dir_name[64];
   unsigned entries;
+  unsigned max_name, max_path;          /* the longest file name and the longest path inside the source, in bytes */
 } stream_scan_t;
 
 static void
@@ -922,6 +1072,8 @@ stream_note(stream_scan_t *x, const char *path, uint64_t size) {
   x->data += size;
   const char *sl = strrchr(path, '/');
   const char *name = sl ? sl + 1 : path;
+  if(strlen(name) > x->max_name) x->max_name = (unsigned)strlen(name);
+  if(strlen(path) > x->max_path) x->max_path = (unsigned)strlen(path);
   const char *dot = strrchr(name, '.');
   static const char *const cont[] = { ".ucas", ".utoc", ".pak", ".forge", ".streamdb", ".resources", ".cas", ".rpf", NULL };
   if(dot) {
@@ -1016,11 +1168,35 @@ stream_risk_json(const char *source, int folder, uint64_t raw_bytes) {
   if(cont) for(int k = 0; k < x->n_exts; k++) cJSON_AddItemToArray(ex, cJSON_CreateString(x->exts[k]));
   cJSON_AddStringToObject(o, "stream_dir", sdir ? x->dir_name : "");
   cJSON_AddNumberToObject(o, "stream_dir_bytes", sdir ? (double)x->sdir : 0);
+  cJSON_AddNumberToObject(o, "max_name", x->max_name);
+  cJSON_AddNumberToObject(o, "max_path", x->max_path);
   free(j);
   return o;
 }
 
 /* --------------------------------------------------------------- interface */
+
+/* What the last plan worked out (the walk over the source is the costly part): the check before the start (ps5tm_gameconvert_check) and
+   the queue use it instead of walking again. It is for one title at a time and goes stale after PLAN_KEEP_MS. */
+#define PLAN_KEEP_MS (30ull * 60 * 1000)
+typedef struct {
+  int      valid;
+  char     title_id[12], name[128], source[256], version[40];
+  int      folder, ps4;
+  uint64_t raw, ffpkg_bytes, files;
+  char     ffpkg_why[700];
+  unsigned max_name, max_path;
+  uint64_t at_ms;
+} plan_cache_t;
+static pthread_mutex_t g_pc_lock = PTHREAD_MUTEX_INITIALIZER;
+static plan_cache_t    g_pc;
+
+static void
+game_version(const char *title_id, char *out, size_t n) {
+  ps5tm_libdel_t d;
+  out[0] = 0;
+  if(ps5tm_library_delete_info(title_id, &d) == 0) snprintf(out, n, "%s", d.version);
+}
 
 cJSON *
 ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
@@ -1090,8 +1266,32 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
      index (a PS5 thing), and a param.json from the param.sfo goes into the image. */
   cJSON_AddBoolToObject  (root, "ps4", ps4);
   cJSON_AddStringToObject(root, "stem", stem);
+  char version[40];
+  game_version(title_id, version, sizeof(version));
+  cJSON_AddStringToObject(root, "version", version);
   cJSON_AddNumberToObject(root, "raw_bytes", (double)raw);
-  cJSON_AddItemToObject  (root, "stream_risk", stream_risk_json(source, folder, raw));
+  cJSON *srisk = stream_risk_json(source, folder, raw);
+  cJSON_AddItemToObject  (root, "stream_risk", srisk);
+  {
+    const cJSON *mn = cJSON_GetObjectItem(srisk, "max_name"), *mp = cJSON_GetObjectItem(srisk, "max_path");
+    pthread_mutex_lock(&g_pc_lock);
+    memset(&g_pc, 0, sizeof(g_pc));
+    g_pc.valid = 1;
+    snprintf(g_pc.title_id, sizeof(g_pc.title_id), "%s", title_id);
+    snprintf(g_pc.name, sizeof(g_pc.name), "%s", name);
+    snprintf(g_pc.source, sizeof(g_pc.source), "%s", source);
+    snprintf(g_pc.version, sizeof(g_pc.version), "%s", version);
+    g_pc.folder = folder;
+    g_pc.ps4 = ps4;
+    g_pc.raw = raw;
+    g_pc.ffpkg_bytes = ffpkg_bytes;
+    g_pc.files = files;
+    snprintf(g_pc.ffpkg_why, sizeof(g_pc.ffpkg_why), "%s", ffpkg_why);
+    g_pc.max_name = cJSON_IsNumber(mn) ? (unsigned)mn->valuedouble : 0;
+    g_pc.max_path = cJSON_IsNumber(mp) ? (unsigned)mp->valuedouble : 0;
+    g_pc.at_ms = ps5tm_mono_ms();
+    pthread_mutex_unlock(&g_pc_lock);
+  }
   /* A PS5 folder with plain ELF executables: the image gets them as FSELF (fsign.c), the page says so before the start. */
   cJSON_AddItemToObject  (root, "unsigned_exec", ps5tm_fsign_info(folder && !ps4 ? source : NULL));
   cJSON_AddNumberToObject(root, "ffpkg_bytes", (double)ffpkg_bytes);
@@ -1166,6 +1366,177 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   return root;
 }
 
+
+/* ------------------------------------------------------ the check before the start (13.11.2026) */
+
+static void
+chk_add(cJSON *arr, const char *id, const char *level, const char *hint, const char *fmt, ...) __attribute__((format(printf, 5, 6)));
+
+static void
+chk_add(cJSON *arr, const char *id, const char *level, const char *hint, const char *fmt, ...) {
+  char text[400];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(text, sizeof(text), fmt, ap);
+  va_end(ap);
+  cJSON *o = cJSON_CreateObject();
+  cJSON_AddStringToObject(o, "id", id);
+  cJSON_AddStringToObject(o, "level", level);
+  cJSON_AddStringToObject(o, "text", text);
+  if(hint && hint[0]) cJSON_AddStringToObject(o, "hint", hint);
+  cJSON_AddItemToArray(arr, o);
+}
+
+static const char *
+size_text(uint64_t b, char *buf, size_t n) {
+  if(b >= (1ull << 30)) snprintf(buf, n, "%.1f GB", (double)b / (double)(1ull << 30));
+  else snprintf(buf, n, "%llu MB", (unsigned long long)(b >> 20));
+  return buf;
+}
+
+/* The ending of the result for op. */
+static const char *
+op_ext(const char *op) {
+  return !strcmp(op, "exfat") ? ".exfat" : !strcmp(op, "ffpkg") ? ".ffpkg" : ".ffpfsc";
+}
+
+/* The stem of the result name from the template tpl for this game: 0, or -1 with the reason in err. bytes: its length with the ending. */
+static int
+result_stem(const char *tpl, const char *op, const char *title_id, const char *name, const char *version, const char *source, int folder,
+            char *stem, size_t stem_len, size_t *bytes, char *err, size_t err_len) {
+  char quelle[200];
+  stem_of(source, folder, quelle, sizeof(quelle));
+  ps5tm_cvname_fields_t f = { name, title_id, version, quelle };
+  return ps5tm_cvname_expand(tpl, &f, strlen(op_ext(op)), stem, stem_len, bytes, err, err_len);
+}
+
+cJSON *
+ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount, const char *mode, const char *name_tpl, char *err,
+                        size_t err_len) {
+  if(!title_id || !op || !mount || !mode) { snprintf(err, err_len, "Angaben fehlen."); return NULL; }
+  plan_cache_t pc;
+  for(int tries = 0; tries < 2; tries++) {
+    pthread_mutex_lock(&g_pc_lock);
+    pc = g_pc;
+    pthread_mutex_unlock(&g_pc_lock);
+    if(pc.valid && !strcmp(pc.title_id, title_id) && ps5tm_mono_ms() - pc.at_ms < PLAN_KEEP_MS) break;
+    pc.valid = 0;
+    if(tries == 0) {                                    /* no plan of this game at hand: work it out (the same walk the plan does) */
+      cJSON *pj = ps5tm_gameconvert_plan(title_id, err, err_len);
+      if(!pj) return NULL;
+      cJSON_Delete(pj);
+    }
+  }
+  if(!pc.valid) { snprintf(err, err_len, "Das Spiel ließ sich nicht vermessen."); return NULL; }
+
+  int can_exfat, can_ffpfsc, can_ffpkg;
+  ops_for(pc.source, &can_exfat, &can_ffpfsc, &can_ffpkg);
+  if(!(!strcmp(op, "exfat") && can_exfat) && !(!strcmp(op, "ffpfsc") && can_ffpfsc) && !(!strcmp(op, "ffpkg") && can_ffpkg)) {
+    snprintf(err, err_len, "Diese Umwandlung gibt es für dieses Spiel nicht.");
+    return NULL;
+  }
+
+  cJSON *root = cJSON_CreateObject();
+  cJSON *arr = cJSON_AddArrayToObject(root, "checks");
+  char b1[32], b2[32];
+  int errors = 0;
+
+  /* the source */
+  if(pc.folder) chk_add(arr, "source", "ok", NULL, "Quelle lesbar: %llu Dateien, als exFAT-Abbild %s",
+                        (unsigned long long)pc.files, size_text(pc.raw, b1, sizeof(b1)));
+  else chk_add(arr, "source", "ok", NULL, "Abbild-Datei lesbar: %s", size_text(pc.raw, b1, sizeof(b1)));
+  if(!strcmp(op, "ffpkg") && pc.ffpkg_why[0]) {
+    chk_add(arr, "ffpkg", "error", pc.ffpkg_why, "Ein ffpkg-Abbild ist bei diesem Spiel nicht möglich.");
+    errors++;
+  }
+  if(pc.max_name > 240 || pc.max_path > 800)
+    chk_add(arr, "names", "warn", "exFAT erlaubt 255 Zeichen je Name und diese App 1024 Bytes je Pfad.",
+            "Ein Dateiname (%u Bytes) oder ein Pfad (%u Bytes) im Spiel kommt nah an die Grenze.", pc.max_name, pc.max_path);
+
+  /* the game must not run */
+  ps5tm_gamestate_t gs;
+  ps5tm_gamestate_get(&gs);
+  if(gs.title_id[0] && !strcmp(gs.title_id, title_id)) {
+    chk_add(arr, "running", "error", "Beende das Spiel, dann geht es weiter.", "Das Spiel läuft gerade.");
+    errors++;
+  }
+
+  /* a PS4 title only goes to a plugged-in drive */
+  if(pc.ps4 && !image_drive_ok(mount)) {
+    chk_add(arr, "ps4", "error", "Ein PS4-Titel aus dem Speicher der Konsole bringt sie zum Absturz.",
+            "Das Abbild eines PS4-Spiels darf nur auf ein USB- oder M.2-Laufwerk.");
+    errors++;
+  }
+
+  /* the target: drive, name, room, file system */
+  char base[64], label[40], dir[128];
+  char stem[256] = "", eerr[200] = "";
+  size_t name_bytes = 0;
+  int have_target = 0;
+  cJSON_AddStringToObject(root, "target", "");
+  if(drive_base(mount, base, sizeof(base), label, sizeof(label)) != 0 || dest_dir(base, mode, dir, sizeof(dir)) != 0) {
+    chk_add(arr, "drive", "error", NULL, "Dieses Ziel gibt es nicht.");
+    errors++;
+  } else if(result_stem(name_tpl, op, title_id, pc.name, pc.version, pc.source, pc.folder, stem, sizeof(stem), &name_bytes, eerr, sizeof(eerr)) != 0) {
+    chk_add(arr, "name", "error", NULL, "%s", eerr);
+    errors++;
+  } else {
+    char target[400];
+    snprintf(target, sizeof(target), "%s/%s%s", dir, stem, op_ext(op));
+    cJSON_ReplaceItemInObject(root, "target", cJSON_CreateString(target));
+    have_target = 1;
+    char fname[300];
+    snprintf(fname, sizeof(fname), "%s%s", stem, op_ext(op));
+    chk_add(arr, "name", "ok", NULL, "Name der Ausgabe: %s (%zu von %d Bytes)", fname, name_bytes, PS5TM_CVNAME_MAX - PS5TM_CVNAME_SUFFIX);
+
+    uint64_t avail = 0;
+    char fs[16];
+    int ts = target_state(target);
+    uint64_t back = ts == 2 ? leftover_bytes(target) : 0;
+    uint64_t need = !strcmp(op, "ffpkg") && pc.ffpkg_bytes ? pc.ffpkg_bytes : pc.raw;
+    if(ts == 1) {
+      chk_add(arr, "exists", "error", "Ändere den Namen oder wähle einen anderen Ordner.", "Am Ziel gibt es %s schon.", fname);
+      errors++;
+    } else if(ts == 2) {
+      chk_add(arr, "leftover", "ok", NULL, "Dort liegt eine unfertige Datei dieser App. Sie wird ersetzt (%s werden frei).", size_text(back, b1, sizeof(b1)));
+    }
+    if(drive_space(base, &avail, fs, sizeof(fs)) != 0) {
+      chk_add(arr, "drive", "error", NULL, "Das Ziel %s ist nicht erreichbar.", label);
+      errors++;
+    } else {
+      if(avail + back < need + SPACE_RESERVE) {
+        chk_add(arr, "space", "error", "Wähle ein anderes Laufwerk oder schaffe Platz.",
+                "Auf %s ist nicht genug Platz: %s frei, gebraucht werden bis zu %s.", label, size_text(avail + back, b1, sizeof(b1)),
+                size_text(need + SPACE_RESERVE, b2, sizeof(b2)));
+        errors++;
+      } else {
+        chk_add(arr, "space", "ok", NULL, "Platz auf %s: %s frei, gebraucht höchstens %s", label, size_text(avail + back, b1, sizeof(b1)),
+                size_text(need, b2, sizeof(b2)));
+      }
+      if(!strcmp(fs, "msdosfs") && need > FAT32_MAX_FILE) {
+        chk_add(arr, "fat32", "error", "Wähle ein Laufwerk mit exFAT.", "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Das Abbild wird %s groß.",
+                size_text(need, b1, sizeof(b1)));
+        errors++;
+      }
+    }
+  }
+
+  /* another job: the start has to wait, the queue can take it */
+  int busy = 0;
+  char why[160] = "";
+  if(ps5tm_gameconvert_busy()) { busy = 1; snprintf(why, sizeof(why), "Es läuft gerade eine Konvertierung"); }
+  else if(ps5tm_jobs_busy_except(PS5TM_JOB_GAMECONVERT, PS5TM_JOBS_NO_SMP, why, sizeof(why))) busy = 1;   /* no question to ShadowMountPlus at every key typed */
+  if(busy) chk_add(arr, "busy", "warn", "In die Warteschlange gestellt, beginnt der Auftrag danach von selbst.", "%s. Der Start geht erst danach.", why);
+
+  cJSON_AddBoolToObject  (root, "ok", 1);
+  cJSON_AddBoolToObject  (root, "can_queue", errors == 0 && have_target);
+  cJSON_AddBoolToObject  (root, "can_start", errors == 0 && have_target && !busy);
+  cJSON_AddStringToObject(root, "stem", have_target ? stem : "");
+  cJSON_AddNumberToObject(root, "name_bytes", (double)name_bytes);
+  cJSON_AddNumberToObject(root, "name_limit", PS5TM_CVNAME_MAX - PS5TM_CVNAME_SUFFIX);
+  return root;
+}
+
 /* The unsigned PS5 executables of a game folder, for the windows of converting and of packing into a new folder. */
 cJSON *
 ps5tm_fsign_info(const char *folder) {
@@ -1207,10 +1578,10 @@ other_job_active(int ask_smp, char *err, size_t err_len) {
   return 0;
 }
 
-/* Claims the one place for a file job and starts the worker. Takes over a; frees it on every refusal. */
+/* Claims the one place for a file job and starts the worker. Takes over a; frees it on every refusal. qid: the queue entry it runs for, or 0. */
 static int
 cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *source, const char *op, const char *mode,
-          const char *label, char *err, size_t err_len) {
+          const char *label, int qid, char *err, size_t err_len) {
   /* One file job at a time. Asked before this one is claimed, so a refusal
      leaves the last job's result on the page untouched. */
   if(other_job_active(1, err, err_len)) {
@@ -1235,6 +1606,7 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
   snprintf(g_job.target, sizeof(g_job.target), "%s", a->target);
   snprintf(g_job.drive, sizeof(g_job.drive), "%s", label);
   g_job.quick = a->quick;
+  g_job.qid = qid;
   g_job.started_ms = ps5tm_mono_ms();
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
@@ -1272,7 +1644,7 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
 
 int
 ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, const char *mount,
-                        const char *mode, int quick, char *err, size_t err_len) {
+                        const char *mode, int quick, const char *name_tpl, int qid, char *err, size_t err_len) {
   char name[128], source[256];
   if(!title_id || !op || !mount || !mode ||
      ps5tm_library_copy_info(title_id, name, sizeof(name), source, sizeof(source)) != 0) {
@@ -1309,7 +1681,15 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   a->folder = is_dir(source);
   a->ampr = a->folder && ampr_index && !ps4;
   a->quick = quick ? 1 : 0;
-  stem_of(source, a->folder, stem, sizeof(stem));
+  {
+    char version[40], eerr[200] = "";
+    game_version(title_id, version, sizeof(version));
+    if(result_stem(name_tpl, op, title_id, name, version, source, a->folder, stem, sizeof(stem), NULL, eerr, sizeof(eerr)) != 0) {
+      free(a);
+      snprintf(err, err_len, "%s", eerr);
+      return 400;
+    }
+  }
   if(drive_base(mount, a->base, sizeof(a->base), label, sizeof(label)) != 0 ||
      dest_dir(a->base, mode, dir, sizeof(dir)) != 0 ||
      snprintf(a->target, sizeof(a->target), "%s/%s%s", dir, stem,
@@ -1343,7 +1723,7 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
     for(char *p = e; *p; p++) if(*p >= 'A' && *p <= 'Z') *p = (char)(*p + 32);
     snprintf(a->inner, sizeof(a->inner), "%s%s", title_id, e);
   }
-  if(!ps4) return cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
+  if(!ps4) return cv_launch(a, title_id, name, source, op, mode, label, qid, err, err_len);
 
   /* A PS4 folder: the folder with our param.json (and a repaired npbind.dat, if needed) laid over it, as for a dump.
      The overlay is written only once this job may start, and the worker removes it when it is over.
@@ -1372,7 +1752,7 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   PS5TM_INFO("ps4_image", "PS4-Ordner %s: param.json aus der param.sfo gebaut%s.", title_id,
              repaired ? ", npbind.dat-Prüfsumme korrigiert" : "");
   snprintf(overlay, sizeof(overlay), "%s", a->overlay);
-  rc = cv_launch(a, title_id, name, source, op, mode, label, err, err_len);
+  rc = cv_launch(a, title_id, name, source, op, mode, label, qid, err, err_len);
   if(rc != 200) dimg_remove_overlay(overlay);        /* cv_launch freed a; the worker would have removed it otherwise */
 ps4_done:
   pthread_mutex_unlock(&ps4_start_lock);
@@ -1413,6 +1793,25 @@ ps5tm_gameconvert_status(void) {
   if(j.note[0]) cJSON_AddStringToObject(root, "note", j.note);
   uint64_t end = j.finished_ms ? j.finished_ms : ps5tm_mono_ms();
   cJSON_AddNumberToObject(root, "elapsed_s", (double)((end - j.started_ms) / 1000));
+  if(j.qid) cJSON_AddNumberToObject(root, "queue_id", j.qid);
+  /* The steps with the time each took (13.11.2026): "done", "now" (running), "stopped" (the job ended in it) or "todo". */
+  {
+    static const char *const k_stage[4] = { "scan", "write", "verify", "rename" };
+    uint64_t at[4] = { j.started_ms, j.t_write_ms, j.t_verify_ms, j.t_rename_ms };
+    cJSON *sa = cJSON_AddArrayToObject(root, "stages");
+    for(int i = 0; i < 4; i++) {
+      uint64_t to = 0;                                    /* when the step ended: the start of the next one that began, else the job's end */
+      for(int k = i + 1; k < 4 && !to; k++) if(at[k]) to = at[k];
+      int begun = at[i] != 0, later = to != 0;
+      const char *st = !begun ? "todo" : later ? "done" : j.finished_ms ? (j.state == CV_DONE ? "done" : "stopped") : "now";
+      if(!to) to = end;
+      cJSON *o = cJSON_CreateObject();
+      cJSON_AddStringToObject(o, "id", k_stage[i]);
+      cJSON_AddStringToObject(o, "state", st);
+      cJSON_AddNumberToObject(o, "ms", begun && to > at[i] ? (double)(to - at[i]) : 0);
+      cJSON_AddItemToArray(sa, o);
+    }
+  }
   if(j.state == CV_WRITING && j.rate > 0) {
     cJSON_AddNumberToObject(root, "bytes_per_s", j.rate);
     if(j.total_bytes > j.done_bytes)

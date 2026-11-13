@@ -129,6 +129,56 @@ struct PlanChoice
     bool ampr = false;
     bool quick = false; // convert: check the result the quick way (structure and a sample), no checksum file
     bool delete_source = false;
+    // convert: the template of the result's name ({titel} {id} {version} {quelle}); empty: the name of the source
+    std::string name;
+};
+
+// The template the name row offers (what the console names a game: title, id, version).
+constexpr const char *kNameTemplate = "{titel} [{id}] v{version}";
+
+// One line of the check before a conversion starts (POST /api/v1/library/convert/check): level is "ok", "warn" or "error".
+struct CheckRow
+{
+    std::string id, level, text, hint;
+};
+
+// The whole answer: red rows stop the start and the queue, a yellow "busy" row only the start.
+struct ConvertCheck
+{
+    bool ok = false;
+    std::string error; // why there is no answer
+    std::vector<CheckRow> rows;
+    bool can_start = false;
+    bool can_queue = false;
+    std::string target; // the full path of the result
+    std::string stem;   // its name without the ending
+};
+
+// One entry of the queue of conversions (GET /api/v1/library/convert/queue): state is "waiting", "running", "done", "failed" or
+// "cancelled".
+struct QueueItem
+{
+    int qid = 0;
+    std::string id, name, op, mode, mount, target, state, message;
+    std::uint64_t output_bytes = 0;
+    double elapsed_s = 0.0;
+};
+
+struct ConvertQueue
+{
+    bool ok = false;
+    bool running = false; // the queue starts entries
+    int running_id = 0;
+    std::vector<QueueItem> items;
+    int open = 0; // waiting or running
+    int done = 0;
+    int failed = 0; // failed or cancelled
+};
+
+// A step of a conversion as the job card shows it: the name and what stands under it ("16:06 · 51 %", "noch offen").
+struct StageText
+{
+    std::string label, detail, state;
 };
 
 // The tools a game offers, in menu order, from the library's flags.
@@ -162,5 +212,22 @@ std::vector<std::string> stream_reasons(const Plan &plan);
 std::string unsigned_names(const UnsignedExec &u);
 // "exFAT", "FAT32", "UFS" for the console's file system names.
 std::string fs_label(const std::string &fs);
+
+// ---- the check before a conversion, the queue and the steps (13.11.2026) ----
+// The answer of the check; a reply that failed becomes ok = false with its message.
+ConvertCheck parse_check(const CheckReply &reply);
+// The body of the check's POST for this choice; "" while format, kind or drive is not chosen yet.
+std::string check_body(const Plan &plan, const PlanChoice &choice);
+// The body that puts the conversion into the queue (as the start's, plus the action).
+std::string queue_add_body(const Plan &plan, const PlanChoice &choice);
+// {"action": ..., "qid": ...} for remove, retry, start, stop and clear (qid only where it is not 0).
+std::string queue_action_body(const std::string &action, int qid = 0);
+ConvertQueue parse_queue(const std::string &json);
+// "0:42", "16:06", "1:02:11" (the time of a step).
+std::string duration_text(double ms);
+// The steps of a conversion's job with their times; empty when the app sent none.
+std::vector<StageText> stage_texts(const Job &job);
+// The words under the "Warteschlange" line: "2 offen · 1 fertig · 1 mit Fehler".
+std::string queue_summary(const ConvertQueue &queue);
 
 } // namespace hui::ps5cc

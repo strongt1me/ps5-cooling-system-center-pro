@@ -50,3 +50,5 @@ jobs:
         run: sh test/jobreg/run.sh
       - name: ps4m
         run: sh test/ps4m/run.sh
+      - name: cvname
+        run: sh test/cvname/run.sh

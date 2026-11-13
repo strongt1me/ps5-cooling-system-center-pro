@@ -947,11 +947,21 @@ struct cJSON *ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err
    bytes, files: [first names] }. count 0 when there is none. Always an object (the caller owns it). */
 struct cJSON *ps5tm_fsign_info(const char *folder);
 /* quick: check the result the quick way (structure and a sample, no checksum file) instead of reading it all back (10.11.2026) */
+/* name_tpl: the template of the result's name (cvname.h), NULL or "" for the name of the source; qid: the entry of the queue (convqueue.c) the
+   job runs for, else 0 */
 int           ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index,
                                       const char *mount, const char *mode, int quick,
+                                      const char *name_tpl, int qid, char *err, size_t err_len);
+/* Everything that speaks for or against the start with these choices, as a list (id, level ok/warn/error, text, hint) plus can_start and
+   can_queue, the target and the name (14.11.2026); NULL with the reason in err. */
+struct cJSON *ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount, const char *mode, const char *name_tpl,
                                       char *err, size_t err_len);
 struct cJSON *ps5tm_gameconvert_status(void);
 int           ps5tm_gameconvert_cancel(void);
+/* The queue of conversions (convqueue.c, 14.11.2026): the list as JSON, and one action of it (add, remove, retry, start, stop, clear);
+   the action returns an HTTP status with the reason in err when it is not 200. */
+struct cJSON *ps5tm_convqueue_status(void);
+int           ps5tm_convqueue_action(const struct cJSON *body, char *err, size_t err_len);
 
 /* Copying a game folder or image file to another drive — see gamecopy.c. The
    plan measures the source (cached for a minute) and lists the drives it

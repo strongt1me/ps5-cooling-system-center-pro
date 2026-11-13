@@ -10,6 +10,7 @@
 namespace
 {
 
+using hui::ps5cc::CheckReply;
 using hui::ps5cc::Game;
 using hui::ps5cc::Plan;
 using hui::ps5cc::PlanChoice;
@@ -162,7 +163,7 @@ TEST(Ps5ccPlans, ConvertBodyHasNoAmprIndexForAPs4Title)
     c.ampr = true;
     EXPECT_EQ(
         hui::ps5cc::start_body(p, c),
-        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"full"})");
+        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"full","name":""})");
 }
 
 TEST(Ps5ccPlans, ConvertBodyAsksForTheQuickCheck)
@@ -175,7 +176,164 @@ TEST(Ps5ccPlans, ConvertBodyAsksForTheQuickCheck)
     c.quick = true;
     EXPECT_EQ(
         hui::ps5cc::start_body(p, c),
-        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"quick"})");
+        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"quick","name":""})");
+}
+
+TEST(Ps5ccPlans, ConvertBodyCarriesTheNameTemplate)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvert));
+    PlanChoice c;
+    c.mode = 0;
+    c.op = 2;
+    c.drive = 1;
+    c.name = hui::ps5cc::kNameTemplate;
+    EXPECT_EQ(
+        hui::ps5cc::start_body(p, c),
+        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"full","name":"{titel} [{id}] v{version}"})");
+    // the check asks with the same choice
+    EXPECT_EQ(
+        hui::ps5cc::check_body(p, c),
+        R"({"id":"CUSA05041","op":"exfat","target":"/mnt/ext0","mode":"homebrew","name":"{titel} [{id}] v{version}"})");
+    // and the queue takes the start's body plus its action
+    const std::string add = hui::ps5cc::queue_add_body(p, c);
+    EXPECT_NE(add.find(R"("action":"add")"), std::string::npos);
+    EXPECT_NE(add.find(R"("op":"exfat")"), std::string::npos);
+    EXPECT_NE(add.find(R"("name":"{titel} [{id}] v{version}")"), std::string::npos);
+}
+
+TEST(Ps5ccPlans, NoCheckUntilFormatKindAndDriveAreChosen)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvert));
+    PlanChoice c;
+    EXPECT_EQ(hui::ps5cc::check_body(p, c), "");
+    c.op = 2;
+    c.drive = 1;
+    EXPECT_EQ(hui::ps5cc::check_body(p, c), "") << "the kind (mode) is missing";
+    c.mode = 1;
+    EXPECT_NE(hui::ps5cc::check_body(p, c), "");
+    c.drive = 9;
+    EXPECT_EQ(hui::ps5cc::check_body(p, c), "") << "a drive that is not in the plan";
+}
+
+TEST(Ps5ccPlans, ConvertIsNotBlockedByARunningGameOrJobHere)
+{
+    // These are the check's rows now (a busy job still lets the conversion wait in the queue).
+    Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvert));
+    p.running = true;
+    p.busy = true;
+    p.other_busy = true;
+    EXPECT_EQ(hui::ps5cc::run_blocked(p), "");
+    p.ops.clear();
+    EXPECT_EQ(hui::ps5cc::run_blocked(p), "Für dieses Spiel bietet die App kein Format an.");
+}
+
+TEST(Ps5ccPlans, TheCheckIsParsedWithItsLevels)
+{
+    CheckReply r;
+    r.ok = true;
+    r.json = R"({"ok":true,"can_start":false,"can_queue":true,"target":"/mnt/usb0/homebrew/X.ffpfsc","stem":"X",
+      "checks":[{"id":"source","level":"ok","text":"Quelle lesbar: 12481 Dateien"},
+                {"id":"exists","level":"warn","text":"Gelb","hint":"Ein Hinweis"},
+                {"id":"fat32","level":"error","text":"Rot"},
+                {"id":"x","level":"weird","text":"Unbekannte Stufe"},
+                {"id":"empty","level":"ok","text":""}]})";
+    const hui::ps5cc::ConvertCheck c = hui::ps5cc::parse_check(r);
+    ASSERT_TRUE(c.ok);
+    EXPECT_FALSE(c.can_start);
+    EXPECT_TRUE(c.can_queue);
+    EXPECT_EQ(c.target, "/mnt/usb0/homebrew/X.ffpfsc");
+    ASSERT_EQ(c.rows.size(), 4u) << "a row without text is dropped";
+    EXPECT_EQ(c.rows[1].level, "warn");
+    EXPECT_EQ(c.rows[1].hint, "Ein Hinweis");
+    EXPECT_EQ(c.rows[2].level, "error");
+    EXPECT_EQ(c.rows[3].level, "ok") << "a level the screen does not know is read as a note";
+
+    CheckReply bad;
+    bad.error = "Die App hat nicht rechtzeitig geantwortet.";
+    const hui::ps5cc::ConvertCheck f = hui::ps5cc::parse_check(bad);
+    EXPECT_FALSE(f.ok);
+    EXPECT_EQ(f.error, "Die App hat nicht rechtzeitig geantwortet.");
+    EXPECT_TRUE(f.rows.empty());
+    EXPECT_FALSE(f.can_start);
+
+    CheckReply garbage;
+    garbage.ok = true;
+    garbage.json = "nicht json";
+    EXPECT_FALSE(hui::ps5cc::parse_check(garbage).ok);
+}
+
+TEST(Ps5ccPlans, TheQueueIsParsedAndCounted)
+{
+    const hui::ps5cc::ConvertQueue q = hui::ps5cc::parse_queue(
+        R"({"ok":true,"running":true,"running_id":2,"items":[
+      {"qid":1,"id":"PPSA01","name":"A","op":"ffpfsc","mode":"homebrew","mount":"/mnt/usb0","target":"/mnt/usb0/homebrew/A.ffpfsc","state":"done","output_bytes":21700000000,"elapsed_s":2460},
+      {"qid":2,"id":"PPSA02","name":"B","op":"ffpfsc","state":"running"},
+      {"qid":3,"id":"PPSA03","name":"C","op":"exfat","state":"waiting"},
+      {"qid":4,"id":"PPSA04","name":"D","op":"ffpkg","state":"failed","message":"Die Quelle hat sich geändert."},
+      {"qid":5,"id":"PPSA05","name":"E","op":"ffpkg","state":"cancelled"},
+      {"qid":0,"id":"X","name":"ohne qid","state":"waiting"}]})");
+    ASSERT_TRUE(q.ok);
+    EXPECT_TRUE(q.running);
+    EXPECT_EQ(q.running_id, 2);
+    ASSERT_EQ(q.items.size(), 5u) << "an entry without a number is dropped";
+    EXPECT_EQ(q.open, 2);
+    EXPECT_EQ(q.done, 1);
+    EXPECT_EQ(q.failed, 2) << "failed and cancelled count together";
+    EXPECT_EQ(q.items[0].output_bytes, 21700000000ull);
+    EXPECT_EQ(q.items[3].message, "Die Quelle hat sich geändert.");
+    EXPECT_EQ(hui::ps5cc::queue_summary(q), "2 offen · 1 fertig · 2 mit Fehler");
+    EXPECT_FALSE(hui::ps5cc::parse_queue("kaputt").ok);
+    EXPECT_EQ(hui::ps5cc::queue_summary(hui::ps5cc::ConvertQueue{}), "0 offen");
+}
+
+TEST(Ps5ccPlans, QueueActionsAreBuiltAsTheAppExpectsThem)
+{
+    EXPECT_EQ(hui::ps5cc::queue_action_body("start"), R"({"action":"start"})");
+    EXPECT_EQ(hui::ps5cc::queue_action_body("remove", 7), R"({"action":"remove","qid":7})");
+    EXPECT_EQ(hui::ps5cc::queue_action_body("clear"), R"({"action":"clear"})");
+}
+
+TEST(Ps5ccPlans, StepTimesAreWrittenAsMinutesAndHours)
+{
+    EXPECT_EQ(hui::ps5cc::duration_text(0), "0:00");
+    EXPECT_EQ(hui::ps5cc::duration_text(-5), "0:00");
+    EXPECT_EQ(hui::ps5cc::duration_text(42000), "0:42");
+    EXPECT_EQ(hui::ps5cc::duration_text(41500), "0:42") << "rounded to the second";
+    EXPECT_EQ(hui::ps5cc::duration_text(966000), "16:06");
+    EXPECT_EQ(hui::ps5cc::duration_text(3599000), "59:59");
+    EXPECT_EQ(hui::ps5cc::duration_text(3731000), "1:02:11");
+}
+
+TEST(Ps5ccPlans, TheStepsOfAJobHaveNamesTimesAndShare)
+{
+    hui::ps5cc::Job job;
+    job.op = "ffpfsc";
+    job.total = 200.0;
+    job.done = 102.0;
+    job.stages = {{"scan", "done", 42000.0},
+                  {"write", "now", 966000.0},
+                  {"verify", "todo", 0.0},
+                  {"rename", "todo", 0.0}};
+    std::vector<hui::ps5cc::StageText> t = hui::ps5cc::stage_texts(job);
+    ASSERT_EQ(t.size(), 4u);
+    EXPECT_EQ(t[0].label, "Vermessen");
+    EXPECT_EQ(t[0].detail, "0:42");
+    EXPECT_EQ(t[1].label, "Komprimieren");
+    EXPECT_EQ(t[1].detail, "16:06 · 51 %");
+    EXPECT_EQ(t[2].label, "Prüfen");
+    EXPECT_EQ(t[2].detail, "noch offen");
+    EXPECT_EQ(t[3].label, "Umbenennen");
+    // an uncompressed format writes, it does not compress
+    job.op = "exfat";
+    EXPECT_EQ(hui::ps5cc::stage_texts(job)[1].label, "Schreiben");
+    // where the job ended
+    job.stages = {{"scan", "done", 42000.0}, {"write", "done", 1870000.0}, {"verify", "stopped", 91000.0}, {"rename", "todo", 0.0}};
+    t = hui::ps5cc::stage_texts(job);
+    EXPECT_EQ(t[1].detail, "31:10");
+    EXPECT_EQ(t[2].detail, "1:31 · hier beendet");
+    // the app sent none (an older console app): no steps
+    job.stages.clear();
+    EXPECT_TRUE(hui::ps5cc::stage_texts(job).empty());
 }
 
 TEST(Ps5ccPlans, StreamRiskReasonsInWords)

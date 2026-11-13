@@ -47,6 +47,8 @@ class HttpSource final : public Source
     void stop_payload_profile() override;
     void kill_payload(int pid) override;
     void store_action(const std::string &action, const std::string &id) override;
+    std::uint64_t convert_check(const std::string &body) override;
+    void convert_queue(const std::string &body) override;
     void set_backdrop(const std::string &area, BackdropMode mode) override;
     void package_action(const std::string &action, const std::string &id) override;
     void split_package(const std::string &id, const std::string &target, int part_mb) override;
@@ -148,6 +150,7 @@ class HttpSource final : public Source
     struct ToolRequest
     {
         bool start = false; // false: the plan
+        int kind = 0;       // 0: a plan or a start; 1: the check before a conversion; 2: the queue of conversions
         Tool tool = Tool::copy;
         std::string id;
         std::string body;

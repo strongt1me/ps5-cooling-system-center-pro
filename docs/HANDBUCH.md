@@ -261,6 +261,15 @@ zwischen zwei Laufwerken hält drei solche Stücke bereit. Blöcke, die sich nic
 bisher: Ein Block wird nur gepackt, wenn er dabei mindestens 5 % spart. Einen Vorfilter, der solche Blöcke ohne Versuch überspringt,
 gibt es nicht: Ein Test an der Konsole mit zwei großen Spielen brachte damit keinen Zeitgewinn.
 
+**Prüfung vor dem Start, Name, Schritte, Warteschlange (seit 13.11.2026).** Das Fenster fragt bei jeder Wahl `POST /api/v1/library/convert/check`
+und zeigt die Befunde als Liste (Rot sperrt Start und Warteschlange, Gelb warnt, ein anderer laufender Auftrag sperrt nur den Start; die
+Grenzen für Namen und Pfade sind die von exFAT und der App). Der Name der Ausgabe kommt aus einer Vorlage mit `{titel}`, `{id}`, `{version}` und
+`{quelle}` (`src/cvname.c`); leer heißt wie bisher der Name des Ordners. Der Status hat `stages` (Vermessen, Schreiben, Prüfen, Umbenennen mit der
+Zeit je Schritt). Die Warteschlange (`src/convqueue.c`) hält bis zu 24 Einträge im Speicher und startet sie nacheinander über
+`ps5tm_gameconvert_start`; ein Eintrag, dessen Start an einem anderen Auftrag scheitert, wartet (alle zehn Sekunden ein neuer Versuch, ohne dabei
+ShadowMountPlus zu fragen). Vor dem Schreiben nimmt der Auftrag einen Fingerabdruck der Quelle und vergleicht ihn vor dem Umbenennen: Hat sich eine
+Datei der Quelle geändert, wird das Ergebnis nicht übernommen.
+
 **Prüfsummen-Datei.** Neben dem Ergebnis entsteht `<Name>.sha256` mit dem SHA-256
 im Format von `sha256sum` (je Zeile: Prüfsumme, zwei Leerzeichen, Name). Bei einem
 Abbild steht ein Eintrag darin, bei einer Ordner-Kopie einer je Datei, mit

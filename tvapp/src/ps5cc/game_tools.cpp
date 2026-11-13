@@ -6,6 +6,7 @@
 #include "ps5cc/game_tools.hpp"
 
 #include "ps5cc/look.hpp"
+#include "ps5cc/pages.hpp"
 #include "ui/glyphs.hpp"
 #include "ui/widgets.hpp"
 
@@ -32,6 +33,9 @@ enum Row
     kRowOp,
     kRowAmpr,
     kRowVerify,
+    kRowName,
+    kRowQueue,
+    kRowQueueView,
     kRowDeleteSource,
     kRowStart,
     kRowCancel, // the delete question's "Abbrechen", where its focus opens
@@ -82,19 +86,6 @@ std::string op_text(const Plan &p, int op)
     default:
         return "Ein exFAT-Abbild mit 64-KiB-Clustern, wie ShadowMountPlus es für seinen schnellen "
                "Weg braucht.";
-    }
-}
-
-const char *op_format(int op)
-{
-    switch (op)
-    {
-    case 0:
-        return "ffpfsc (komprimiertes PFS)";
-    case 1:
-        return "ffpkg (UFS2-Abbild)";
-    default:
-        return "exFAT-Abbild (.exfat)";
     }
 }
 
@@ -173,6 +164,32 @@ void GameTools::init(const ui::Theme &theme)
         paint.label(ui::fit_label(paint, row.text, 20.0f, right - control.x), right, cy + 7.0f,
                     20.0f, ink, gfx::Align::right);
     };
+
+    // The name of a converted image is typed on the kit's keyboard (the template's braces are on its symbol page).
+    prompt_.style.theme = solid_theme(theme);
+    prompt_.style.max_length = 190;
+    prompt_.style.allow_empty = true;
+    prompt_.style.auto_capital = false;
+    prompt_.style.frosted = false;
+    prompt_.style.done_label = "Fertig";
+    prompt_.style.cancel_label = "Abbrechen";
+    prompt_.set_title("Name der Ausgabe");
+    prompt_.field.set_placeholder("Name des Ordners");
+    prompt_.keyboard.style.bindings = ui::KeyboardBindings::standard();
+    prompt_.keyboard.style.space_label = "Leer";
+    prompt_.keyboard.style.done_label = "Fertig";
+    prompt_.keyboard.set_layouts(german_layouts());
+
+    // The queue of conversions: rows like the Pakete page's queue.
+    queue_list_.style.theme = theme;
+    queue_list_.style.panel = true;
+    queue_list_.style.row_height = 84.0f;
+    queue_list_.style.title_size = 24.0f;
+    queue_list_.style.subtitle_size = 18.0f;
+    queue_list_.style.value_size = 20.0f;
+    queue_list_.style.highlight.kind = ui::HighlightKind::bar;
+    queue_list_.style.badge_column = true;
+    queue_list_.set_bounds({kPanel.x + 40.0f, kPanel.y + 140.0f, kPanel.w - 80.0f, 620.0f});
 }
 
 void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback)
@@ -278,8 +295,15 @@ void GameTools::open_dialog(Tool tool, ui::Feedback &feedback)
     plan_ = Plan{};
     plan_.tool = tool;
     choice_ = PlanChoice{};
+    check_ = ConvertCheck{};
+    check_key_.clear();
+    check_pending_ = false;
+    check_ticket_ = 0;
+    name_mode_ = 0;
     form_.clear();
     awaiting_ = source().request_plan(tool, game_.id);
+    if (tool == Tool::convert)
+        source().convert_queue(""); // how many wait, for the row that opens the queue
     feedback.play(audio::Cue::open);
 }
 
@@ -293,6 +317,23 @@ void GameTools::close_dialog(ui::Feedback &feedback)
 void GameTools::absorb(const Snapshot &data)
 {
     running_id_ = data.status.game_id;
+    convert_job_ = data.jobs[static_cast<std::size_t>(JobKind::convert)];
+    if (data.convert_queue_json != queue_json_)
+    {
+        queue_json_ = data.convert_queue_json;
+        queue_ = parse_queue(queue_json_);
+        if (open_ && tool_ == Tool::convert && plan_.ok)
+            refresh();
+    }
+    if (queue_open_)
+        rebuild_queue();
+    if (open_ && tool_ == Tool::convert && check_pending_ && check_ticket_ != 0 &&
+        data.convert_check.ticket == check_ticket_)
+    {
+        check_ = parse_check(data.convert_check);
+        check_pending_ = false;
+        refresh();
+    }
     if (!open_ || awaiting_ == 0 || data.plan.ticket != awaiting_)
         return;
     awaiting_ = 0;
@@ -308,12 +349,13 @@ void GameTools::absorb(const Snapshot &data)
 
 bool GameTools::modal() const
 {
-    return menu_.is_open() || open_;
+    return menu_.is_open() || open_ || queue_open_;
 }
 
 bool GameTools::visible() const
 {
-    return menu_.visible() || open_ || shown_.value > 0.01f;
+    return menu_.visible() || open_ || shown_.value > 0.01f || queue_open_ ||
+           queue_shown_.value > 0.01f;
 }
 
 void GameTools::build_form()
@@ -367,7 +409,8 @@ void GameTools::build_form()
             }
         }
         if (!options.empty())
-            form_.add_choice(kRowOp, "Format", options, index);
+            form_.add_choice(kRowOp, "Format", options, index).description =
+                choice_.op >= 0 ? op_text(plan_, choice_.op) : std::string();
         if (plan_.kind == "folder" && !plan_.ps4)
             form_.add_toggle(kRowAmpr, "AMPR-Index vorher bauen", choice_.ampr).description =
                 "Für Spiele mit APR-EMU: ampr_emu.index kommt mit ins Abbild.";
@@ -379,6 +422,13 @@ void GameTools::build_form()
             .description = choice_.quick
                                ? "Aufbau und Stichprobe, ohne Prüfsummen-Datei. Spart bei großen Spielen viel Zeit."
                                : "Liest das ganze Ergebnis noch einmal und legt die Prüfsummen-Datei an.";
+        // 5. The name of the result: the source's own, the template of the console's names, or typed on the keyboard
+        form_.add_header("5. Name der Ausgabe");
+        form_.add_choice(kRowName, "Name",
+                         {"Name des Ordners", "Titel [ID] vVersion", "Eigener Name …"}, name_mode_)
+            .description = "Felder: {titel} {id} {version} {quelle}. Leer: der Name des Ordners.";
+        form_.add_action(kRowQueueView, "Warteschlange ansehen").chevron = true;
+        form_.add_action(kRowQueue, "Zur Warteschlange");
         first = options.empty() ? kRowMode : kRowOp;
         break;
     }
@@ -470,11 +520,43 @@ void GameTools::refresh()
         // Focused, a refused drive says all of it: the reason may not fit beside the name.
         row->description = why.empty() ? std::string() : why + " · " + info;
     }
+    if (tool_ == Tool::convert)
+    {
+        request_check();
+        if (ui::FormRow *row = form_.row(kRowQueue))
+            row->disabled = !queue_ready();
+        if (ui::FormRow *row = form_.row(kRowQueueView))
+            row->text = queue_.open > 0 ? queue_summary(queue_) : std::string();
+    }
     if (ui::FormRow *row = form_.row(kRowStart))
     {
         row->label = start_label();
-        row->disabled = !ready(plan_, choice_);
+        row->disabled = !start_ready();
     }
+}
+
+void GameTools::request_check()
+{
+    const std::string body = check_body(plan_, choice_);
+    if (body == check_key_)
+        return;
+    check_key_ = body;
+    check_ = ConvertCheck{};
+    check_pending_ = !body.empty();
+    check_ticket_ = body.empty() ? 0 : source().convert_check(body);
+}
+
+bool GameTools::start_ready() const
+{
+    if (tool_ != Tool::convert)
+        return ready(plan_, choice_);
+    return ready(plan_, choice_) && check_.ok && !check_pending_ && check_.can_start;
+}
+
+bool GameTools::queue_ready() const
+{
+    return tool_ == Tool::convert && ready(plan_, choice_) && check_.ok && !check_pending_ &&
+           check_.can_queue;
 }
 
 std::string GameTools::start_label() const
@@ -568,8 +650,27 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         return;
     }
+    if (queue_open_)
+    {
+        handle_queue(input, feedback);
+        return;
+    }
     if (!open_)
         return;
+    if (prompt_.is_open())
+    {
+        const ui::Event typed = prompt_.handle(input, feedback);
+        if (typed == ui::Event::activated)
+        {
+            choice_.name = prompt_.text();
+            name_mode_ = choice_.name.empty() ? 0 : choice_.name == kNameTemplate ? 1 : 2;
+            form_.set_choice(kRowName, name_mode_);
+            refresh();
+        }
+        else if (typed == ui::Event::cancelled)
+            form_.set_choice(kRowName, name_mode_);
+        return;
+    }
     if (input.is_pressed(Action::back))
     {
         close_dialog(feedback);
@@ -580,6 +681,11 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
     if (input.is_pressed(Action::north) && tool_ != Tool::erase)
     {
         press_start(feedback);
+        return;
+    }
+    if (input.is_pressed(Action::west) && tool_ == Tool::convert)
+    {
+        press_queue(feedback);
         return;
     }
     const ui::Event event = form_.handle(input, feedback);
@@ -594,6 +700,20 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             choice_.op = index >= 0 && index < static_cast<int>(op_index_.size())
                              ? op_index_[static_cast<std::size_t>(index)]
                              : -1;
+            if (ui::FormRow *row = form_.row(kRowOp))
+                row->description = choice_.op >= 0 ? op_text(plan_, choice_.op) : std::string();
+        }
+        else if (id == kRowName)
+        {
+            const int mode = form_.choice_index(kRowName);
+            if (mode == 2)
+            {
+                // The keyboard opens with what stands there; Done keeps it, back leaves the row as it was.
+                prompt_.open(feedback, choice_.name.empty() ? std::string(kNameTemplate) : choice_.name);
+                return;
+            }
+            name_mode_ = mode;
+            choice_.name = mode == 1 ? kNameTemplate : "";
         }
         else if (id == kRowAmpr)
             choice_.ampr = form_.toggle_value(kRowAmpr);
@@ -625,12 +745,169 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         {
             press_start(feedback);
         }
+        else if (id == kRowQueue)
+        {
+            press_queue(feedback);
+        }
+        else if (id == kRowQueueView)
+        {
+            open_queue(feedback);
+        }
+    }
+}
+
+void GameTools::press_queue(ui::Feedback &feedback)
+{
+    if (!queue_ready())
+    {
+        feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+        return;
+    }
+    // At once, nothing asked: the queue deletes nothing, and the conversion starts by itself when it is its turn.
+    feedback.play(audio::Cue::select);
+    source().convert_queue(queue_add_body(plan_, choice_));
+    open_ = false;
+    awaiting_ = 0;
+    open_queue(feedback);
+}
+
+void GameTools::open_queue(ui::Feedback &feedback)
+{
+    open_ = false;
+    awaiting_ = 0;
+    prompt_.dismiss();
+    queue_open_ = true;
+    queue_poll_ = 0.0f;
+    queue_key_.clear();
+    rebuild_queue();
+    queue_list_.set_active(true);
+    queue_list_.enter();
+    source().convert_queue("");
+    feedback.play(audio::Cue::open);
+}
+
+void GameTools::close_queue(ui::Feedback &feedback)
+{
+    queue_open_ = false;
+    feedback.play(audio::Cue::back);
+}
+
+std::string GameTools::queue_line(const QueueItem &item) const
+{
+    const std::string what = item.op + " · " + item.target;
+    if (item.state == "running")
+    {
+        if (convert_job_.queue_id != item.qid)
+            return "wird gestartet …";
+        for (const StageText &s : stage_texts(convert_job_))
+        {
+            if (s.state == "now")
+                return s.label + " " + s.detail;
+        }
+        return what;
+    }
+    if (item.state == "done")
+        return "Fertig und geprüft" +
+               (item.output_bytes > 0 ? ": " + format_bytes(item.output_bytes) : std::string()) +
+               (item.elapsed_s > 0.0 ? " in " + duration_text(item.elapsed_s * 1000.0) : std::string());
+    if (!item.message.empty())
+        return item.message;
+    return what;
+}
+
+void GameTools::rebuild_queue()
+{
+    std::string key;
+    for (const QueueItem &q : queue_.items)
+        key += std::to_string(q.qid) + q.state + ";";
+    if (key != queue_key_)
+    {
+        queue_key_ = key;
+        std::vector<ui::ListItem> items;
+        for (const QueueItem &q : queue_.items)
+        {
+            ui::ListItem item;
+            item.title = q.name;
+            item.tag = q.qid;
+            item.swatch = q.state == "done"      ? kGood
+                          : q.state == "failed"  ? kCritical
+                          : q.state == "cancelled" ? kWarning
+                          : q.state == "running" ? Color::rgb(0x6aa2ff)
+                                                 : kMuted;
+            item.badge = q.state == "waiting"     ? "WARTET"
+                         : q.state == "running"   ? "LÄUFT"
+                         : q.state == "done"      ? "FERTIG"
+                         : q.state == "cancelled" ? "ABGEBROCHEN"
+                                                  : "FEHLER";
+            items.push_back(item);
+        }
+        const int focus = queue_list_.focus();
+        queue_list_.set_items(items);
+        queue_list_.set_focus(std::clamp(focus, 0, std::max(static_cast<int>(items.size()) - 1, 0)), true);
+    }
+    // The words under the names change every second while a conversion runs: written in place, so the list does not start over.
+    for (std::size_t i = 0; i < queue_.items.size() && i < queue_list_.items().size(); ++i)
+        queue_list_.item(static_cast<int>(i)).subtitle = queue_line(queue_.items[i]);
+}
+
+void GameTools::handle_queue(const InputFrame &input, ui::Feedback &feedback)
+{
+    if (input.is_pressed(Action::back))
+    {
+        close_queue(feedback);
+        return;
+    }
+    const std::size_t at = static_cast<std::size_t>(std::max(queue_list_.focus(), 0));
+    const QueueItem *item = at < queue_.items.size() ? &queue_.items[at] : nullptr;
+    // Nothing here asks twice: removing takes an entry off the list (the queue deletes no file), the others are plain switches.
+    if (input.is_pressed(Action::north))
+    {
+        if (!queue_.running && queue_.open == 0)
+        {
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        feedback.play(audio::Cue::select);
+        source().convert_queue(queue_action_body(queue_.running ? "stop" : "start"));
+        return;
+    }
+    if (input.is_pressed(Action::west))
+    {
+        if (item == nullptr || item->state == "running")
+        {
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        feedback.play(audio::Cue::select);
+        source().convert_queue(queue_action_body("remove", item->qid));
+        return;
+    }
+    if (input.is_pressed(Action::page_next))
+    {
+        if (queue_.done + queue_.failed == 0)
+        {
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        feedback.play(audio::Cue::select);
+        source().convert_queue(queue_action_body("clear"));
+        return;
+    }
+    if (queue_list_.handle(input, feedback) == ui::Event::activated)
+    {
+        if (item != nullptr && (item->state == "failed" || item->state == "cancelled"))
+        {
+            feedback.play(audio::Cue::select);
+            source().convert_queue(queue_action_body("retry", item->qid));
+        }
+        else
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
     }
 }
 
 void GameTools::press_start(ui::Feedback &feedback)
 {
-    if (!ready(plan_, choice_))
+    if (!start_ready())
     {
         feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
         return;
@@ -653,8 +930,22 @@ void GameTools::update(float dt)
     clock_ += dt;
     menu_.update(dt);
     form_.update(dt);
+    prompt_.update(dt);
+    queue_list_.update(dt);
     shown_.target = open_ ? 1.0f : 0.0f;
     shown_.update(dt, 18.0f);
+    queue_shown_.target = queue_open_ ? 1.0f : 0.0f;
+    queue_shown_.update(dt, 18.0f);
+    if (queue_open_)
+    {
+        // The list is asked for again every two seconds while it is on screen.
+        queue_poll_ += dt;
+        if (queue_poll_ >= 2.0f)
+        {
+            queue_poll_ = 0.0f;
+            source().convert_queue("");
+        }
+    }
 }
 
 float GameTools::draw_paragraph(ui::Canvas &canvas, const std::string &text, float x, float y,
@@ -732,7 +1023,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     case Tool::convert:
     {
         heading("Quelle", kMuted);
-        para(plan_.source, kInk, 2);
+        para(plan_.source, kInk, 1);
         para(plan_.kind == "folder"
                  ? files_text(plan_.files) + ", als exFAT-Abbild " + format_bytes(plan_.raw_bytes)
                  : format_bytes(plan_.raw_bytes),
@@ -754,37 +1045,32 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                      " Programmdateien dieses Spiels sind einfache ELF-Dateien, die die Konsole "
                      "nicht startet. Das Abbild bekommt sie fake-signiert als FSELF; der "
                      "Spielordner bleibt, wie er ist.",
-                 kWarning, 4);
-            para(unsigned_names(plan_.unsigned_exec), kMuted, 2);
+                 kWarning, 3);
+            para(unsigned_names(plan_.unsigned_exec), kMuted, 1);
         }
         if (plan_.unsigned_exec.refused > 0)
             para(std::to_string(plan_.unsigned_exec.refused) +
                      " Programmdateien sind nicht signiert und ließen sich nicht signieren "
                      "(ungewöhnlicher Aufbau). Sie bleiben, wie sie sind; das Spiel startet damit "
                      "womöglich nicht.",
-                 kCritical, 4);
-        if (choice_.op >= 0)
-        {
-            para(op_text(plan_, choice_.op), kMuted, 3);
-            if (choice_.op == 1 && !plan_.ffpkg_error.empty())
-                para("Bei diesem Spiel nicht möglich: " + plan_.ffpkg_error, kCritical, 3);
-            if (choice_.op == 0 && !stream_reasons(plan_).empty())
-                para("Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder "
-                     "Texture-Streaming). Ein "
-                     "komprimiertes Abbild muss beim Spielen ständig entpackt werden – exFAT oder "
-                     "ffpkg vermeiden das.",
-                     kWarning, 5);
-        }
+                 kCritical, 3);
+        // The check before the start: everything that speaks for or against it in one list.
+        heading("Prüfung vor dem Start", kMuted);
+        y = draw_checks(canvas, x, y, w);
+        if (!check_.target.empty())
+            para(check_.target, kInk, 2);
+        if (choice_.op == 1 && !plan_.ffpkg_error.empty())
+            para("Bei diesem Spiel nicht möglich: " + plan_.ffpkg_error, kCritical, 3);
+        if (choice_.op == 0 && !stream_reasons(plan_).empty())
+            para("Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder "
+                 "Texture-Streaming). Ein "
+                 "komprimiertes Abbild muss beim Spielen ständig entpackt werden – exFAT oder "
+                 "ffpkg vermeiden das.",
+                 kWarning, 5);
         if (choice_.mode == 0)
             para("ShadowMountPlus findet das Spiel danach zweimal (Original und neues Abbild). "
-                 "Lösche das Original erst, "
-                 "wenn das neue Abbild startet.",
+                 "Lösche das Original erst, wenn das neue Abbild startet.",
                  kWarning, 3);
-        if (!target.empty())
-        {
-            heading(std::string("Ziel · ") + op_format(choice_.op), kMuted);
-            para(target, kInk, 2);
-        }
         if (!blocked.empty())
             para(blocked, kCritical, 3);
         break;
@@ -905,6 +1191,95 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     }
 }
 
+float GameTools::draw_checks(ui::Canvas &canvas, float x, float y, float width) const
+{
+    gfx::DrawList &list = canvas.list;
+    const ui::Fonts &fonts = canvas.fonts;
+    constexpr float kSize = 19.0f;
+    constexpr float kHintSize = 17.0f;
+    if (check_key_.empty() || check_pending_ || (!check_.ok && check_.error.empty()))
+    {
+        ui::text(list, fonts.regular,
+                 check_key_.empty() ? "Wähle Format, Art und Ziel, dann erscheint die Prüfung."
+                                    : "Die Prüfung läuft …",
+                 x, y, 20.0f, kMuted);
+        return y + 40.0f;
+    }
+    if (!check_.ok)
+        return draw_paragraph(canvas, check_.error, x, y, width, 20.0f, kCritical, 3);
+    for (const CheckRow &row : check_.rows)
+    {
+        // A coloured dot, not a glyph: the check marks are not in the font.
+        const Color tone = row.level == "error" ? kCritical : row.level == "warn" ? kWarning : kGood;
+        list.rounded_rect({x, y - 14.0f, 12.0f, 12.0f}, 6.0f, tone);
+        const int max_lines = row.level == "ok" ? 2 : 3;
+        int lines = 0;
+        for (const std::string &line : fonts.regular.font->wrap(row.text, kSize, width - 28.0f))
+        {
+            if (++lines > max_lines)
+                break;
+            ui::text(list, fonts.regular, line, x + 28.0f, y, kSize,
+                     row.level == "error" ? kCritical : row.level == "warn" ? kWarning : kInk);
+            y += kSize * 1.3f;
+        }
+        lines = 0;
+        for (const std::string &line : fonts.regular.font->wrap(row.hint, kHintSize, width - 28.0f))
+        {
+            if (row.hint.empty() || ++lines > 2)
+                break;
+            ui::text(list, fonts.regular, line, x + 28.0f, y, kHintSize, kMuted);
+            y += kHintSize * 1.3f;
+        }
+        y += 5.0f;
+    }
+    return y + 4.0f;
+}
+
+void GameTools::draw_queue(ui::Canvas &canvas) const
+{
+    const float amount = queue_shown_.value;
+    if (amount <= 0.01f)
+        return;
+    gfx::DrawList &list = canvas.list;
+    const ui::Fonts &fonts = canvas.fonts;
+    list.rounded_rect({0.0f, 0.0f, 1920.0f, 1080.0f}, 0.0f, kNavy.with_alpha(0.78f * amount));
+    list.push_opacity(amount);
+    const float rise = 24.0f * (1.0f - amount);
+    const Rect panel{kPanel.x, kPanel.y + rise, kPanel.w, kPanel.h};
+    ui::Painter paint(list, fonts, theme_);
+    solid_floor(list, panel, theme_.radius_card);
+    solid_floor(list, panel, theme_.radius_card);
+    paint.panel(panel);
+    ui::text(list, fonts.display, "Warteschlange", panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
+    ui::text(list, fonts.regular,
+             queue_.items.empty()
+                 ? std::string("Konvertierungen, die nacheinander laufen")
+                 : queue_summary(queue_) + (queue_.running ? " · läuft" : " · angehalten"),
+             panel.x + 40.0f, panel.y + 104.0f, 21.0f, queue_.running ? kMuted : kWarning);
+    if (queue_.items.empty())
+    {
+        ui::text(list, fonts.semibold, "Die Warteschlange ist leer.", panel.x + panel.w * 0.5f,
+                 panel.y + 380.0f, 30.0f, kInk, gfx::Align::center);
+        ui::text(list, fonts.regular,
+                 "Im Fenster „Konvertieren“ eines Spiels stellst du es mit „Zur Warteschlange“ hinein.",
+                 panel.x + panel.w * 0.5f, panel.y + 428.0f, 22.0f, kMuted, gfx::Align::center);
+    }
+    else
+        queue_list_.draw(canvas);
+    ui::HintLayout layout;
+    layout.size = 34.0f;
+    layout.text_size = 21.0f;
+    layout.cy = panel.y + panel.h - 42.0f;
+    const ui::Hint hints[] = {{ui::Button::cross, "Erneut versuchen"},
+                              {ui::Button::square, "Entfernen"},
+                              {ui::Button::triangle,
+                               queue_.running ? "Warteschlange stoppen" : "Warteschlange starten"},
+                              {ui::Button::r1, "Fertige entfernen"},
+                              {ui::Button::circle, "Schließen"}};
+    ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 5, panel.x + 40.0f, false, layout);
+    list.pop_opacity();
+}
+
 void GameTools::draw_overlay(ui::Canvas &canvas) const
 {
     // The menu under the dialog: it is still leaving while the dialog arrives.
@@ -972,7 +1347,14 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
             const ui::Hint hints[] = {{ui::Button::cross, "Wählen"},
                                       {ui::Button::triangle, start.c_str()},
                                       {ui::Button::circle, "Abbrechen"}};
-            if (shortcut)
+            if (tool_ == Tool::convert)
+            {
+                const ui::Hint four[] = {hints[0], hints[1],
+                                         {ui::Button::square, "Zur Warteschlange"}, hints[2]};
+                ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), four, 4, panel.x + 40.0f, false,
+                               layout);
+            }
+            else if (shortcut)
                 ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 3, panel.x + 40.0f,
                                false, layout);
             else
@@ -984,6 +1366,8 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
         }
         list.pop_opacity();
     }
+    draw_queue(canvas);
+    prompt_.draw(canvas);
 }
 
 } // namespace hui::ps5cc
