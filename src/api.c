@@ -4924,6 +4924,33 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
+  /* FPKGMount (kraken.c): Kraken Mount started, asked and stopped; GET the state with its game list, POST {action: start|stop|rescan|rebuild|
+     rebuild_all|delete|fetch, id?, path?}. */
+  if(!strcmp(req->path, "/api/v1/kraken")) {
+    if(is_get) { send_cjson(fd, 200, ps5tm_kraken_state()); return; }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    if(!cJSON_IsObject(b)) { cJSON_Delete(b); ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Anfrage."); return; }
+    char msg[400] = "";
+    int http = ps5tm_kraken_action(b, msg, sizeof(msg));
+    cJSON_Delete(b);
+    if(http != 200) { ps5tm_http_send_error(fd, http, http == 409 ? "busy" : "kraken_failed", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
+  if(!strcmp(req->path, "/api/v1/kraken/icon")) {
+    char id[16];
+    query_param(req->query, "id", id, sizeof(id));
+    unsigned char *png = NULL;
+    size_t len = 0;
+    if(ps5tm_kraken_icon(id, &png, &len) != 0) { ps5tm_http_send_error(fd, 404, "no_icon", "Kein Symbol vorhanden."); return; }
+    ps5tm_http_send_cached(fd, "image/png", png, len, 3600);
+    free(png);
+    return;
+  }
   /* PS4Mount inside the app (ps4m_core.c): GET the list and state,
      POST {action: enable|disable|scan|add|remove|restore|restore_all|restored_forget|config, ...}. */
   if(!strcmp(req->path, "/api/v1/ps4mount")) {

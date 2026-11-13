@@ -6,7 +6,7 @@
 
 **Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser (Konsole, Handy, PC) oder als Vollbild-App auf dem Fernseher mit dem Controller, in sieben Sprachen.**
 
-![Version](https://img.shields.io/badge/Version-1.82.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.83.0-1f6feb)
 ![Firmware](https://img.shields.io/badge/FW-4.03%20bis%2014.10%20Support-2ea44f)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
@@ -62,7 +62,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
   </tr>
   <tr>
     <td valign="top">
-      <h3>💾 PS4 von USB</h3>
+      <h3>💾 PS4 PKG von USB</h3>
       PS4-Fake-PKGs direkt vom USB-Laufwerk spielen, ohne Installation (PS4Mount eingebaut), mit Updates und DLC.
     </td>
     <td valign="top">
@@ -99,7 +99,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
   </tr>
   <tr>
     <td align="center"><sub>Spiele: Bibliothek in kompakter Ansicht (Standard) mit Starten, Kopieren, Konvertieren</sub></td>
-    <td align="center"><sub>PS4 von USB: Fake-PKGs ohne Installation</sub></td>
+    <td align="center"><sub>PS4 PKG von USB: Fake-PKGs ohne Installation</sub></td>
   </tr>
   <tr>
     <td><img src="docs/images/spielzeit.jpg" alt="Spielzeit"></td>
@@ -179,7 +179,8 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 - Starten (aus dem Konsolen-Browser schließt sich die Seite sofort), beenden, auf andere Laufwerke kopieren, mit ShadowMountPlus verschieben oder entpacken.
 - Ohne PC in exFAT-, ffpkg- und ffpfsc-Abbilder umwandeln; alles wird nach dem Schreiben zurückgelesen und geprüft, mit `.sha256`-Datei.
 - LZ4-Asset-Packs, AMPR-Index, APR-EMU (ampr_emu und AMPR EMU NG), PlayGo-Stub und DLC-Module pro Spiel, Abbilder prüfen, entpacken und reparieren.
-- PS4 von USB: PS4-Fake-PKGs vom USB-Laufwerk in die Bibliothek, ohne Installation (PS4Mount von gasb07).
+- PS4 PKG von USB: PS4-Fake-PKGs vom USB-Laufwerk in die Bibliothek, ohne Installation (PS4Mount von gasb07).
+- FPKGMount: (F)PKG-Spiele und Spielordner ohne Installation spielen, mit Kraken Mount von quer3q (die App bringt es mit und startet es).
 - Disc: zeigt, welche Disc im Laufwerk liegt (PS2/PS3/PS4/PS5, Titelkennung), und legt von PS2-DVDs und PS3-Discs ein Abbild mit CRC-32, MD5 und SHA-1 an, auf Wunsch geprüft gegen Redump (nach ps-disc-detect).
 - Spielzeit mit Temperaturen, Spielstände sichern und zurückspielen, Pakete finden, aufteilen und installieren, Verlauf aller Vorgänge.
 
@@ -202,7 +203,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 1. Aus den [Releases](../../releases) die Datei `PS5_Cooling_System_Center_v<Version>.elf` laden.
 2. An die Konsole senden (ELF-Lader, Port **9021**), zum Beispiel:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.82.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.83.0.elf
    ```
 3. Im Browser öffnen: **`http://<PS5-IP>:8086`** (die Adresse zeigt auch die Meldung oben links auf dem Fernseher).
 
@@ -234,7 +235,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmw
 | Seite | Inhalt |
 | --- | --- |
 | **Kühlung** | Status, Verlauf, Sensoren, Zieltemperatur, Betriebsart, Profile pro Spiel |
-| **Spiele** | Bibliothek, Spielzeit, Spielstände, Pakete, PS4 von USB, Sicherungen, Verlauf |
+| **Spiele** | Bibliothek, Spielzeit, Spielstände, Pakete, PS4 PKG von USB, FPKGMount, Sicherungen, Verlauf |
 | **Dateimanager** | Ordner der Konsole und der Laufwerke |
 | **Payloads** | laufende, gespeicherte und auf USB liegende Payloads, Profile, Payloads herunterladen |
 | **System** | Konsole, Speicher, Netzwerk, Diagnose |
@@ -315,11 +316,11 @@ Dieses Projekt steht auf den Schultern der PS5-Homebrew-Gemeinschaft. **Vielen D
 <details>
 <summary><b>Code aus anderen Projekten (portiert oder eingebunden)</b></summary>
 
-- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PS4-Fake-PKGs vom USB-Laufwerk ohne Installation; der Quelltext ist als Reiter „PS4 von USB“ eingebaut.
+- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PS4-Fake-PKGs vom USB-Laufwerk ohne Installation; der Quelltext ist als Reiter „PS4 PKG von USB“ eingebaut.
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) und die Mitwirkenden von [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT-, PFS- und PFSC-Abbilder.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): Vorlage für den UFS2-/ffpkg-Schreiber.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-Asset-Packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) und [dlc_emu](https://github.com/drakmor/dlc_emu) (eingebettete Fassungen, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest (die zwei neuesten Fassungen 0.4.0 und 0.3.5 eingebettet, neuere lädt die App auf Knopfdruck).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest (die zwei neuesten Fassungen 0.4.0 und 0.3.5 eingebettet, neuere lädt die App auf Knopfdruck). Dazu [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): das Programm hinter dem Reiter „FPKGMount“ (unverändert als ELF eingebettet).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): Bauweise der Starter-Kachel als nativer Titel.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): Aufbau der Pakete und Ablauf des Installierens (eigener Code nach diesem Vorbild).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): Profilfunktion und Format des Profilbilds.

@@ -109,7 +109,7 @@ SRCS += src/jobhist.c
 SRCS += src/amprindex.c
 SRCS += src/imgjob.c
 SRCS += src/amprlib.c src/amprng.c src/smpcfg.c
-SRCS += src/lz4cfg.c src/lz4pack.c src/zstdpack.c src/blobz.c src/fsign.c
+SRCS += src/lz4cfg.c src/lz4pack.c src/zstdpack.c src/blobz.c src/fsign.c src/kraken.c
 SRCS += src/trace.c src/plugins.c
 SRCS += src/ps4m_core.c src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_fw.c src/ps4m_origin.c src/ps4m_accopy.c
 SRCS += src/qr.c
@@ -154,6 +154,7 @@ GEN_SRCS += gen/playgo_blob.c
 GEN_SRCS += gen/dlc_blob.c
 GEN_SRCS += gen/lz4prof_blob.c
 GEN_SRCS += gen/npfakesignin_blob.c
+GEN_SRCS += gen/kraken_blob.c
 
 # The home-screen tile as a folder: param.json, icon and pictures from
 # tile/sce_sys, about 1.7 MB. The app writes them to /user/app/<id>/sce_sys and
@@ -318,6 +319,11 @@ gen/pkginst_blob.c: $(PKGI_HELPER_ELF) tools/gen_blob.py | gen
 NPFSI_ELF := third_party/np_fake_signin/np-fake-signin_v1.3.elf
 gen/npfakesignin_blob.c: $(NPFSI_ELF) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(NPFSI_ELF) ps5tm_npfakesignin
+
+# Kraken Mount (quer3q, GPL-3.0): the released ELF, started from the page FPKGMount (src/kraken.c) over the loader on 127.0.0.1:9021.
+KRAKEN_ELF := third_party/kraken_mount/kraken-mount_v0.0.1-beta.elf
+gen/kraken_blob.c: $(KRAKEN_ELF) tools/gen_blob.py | gen
+	$(PYTHON) tools/gen_blob.py $@ $(KRAKEN_ELF) ps5tm_kraken
 
 # The APR-EMU versions (third_party/ampr_emu), packed into the app (tools/gen_emu_blob.py, src/amprlib.c).
 EMU_FILES := $(wildcard third_party/ampr_emu/libSceAmpr.sprx-*)

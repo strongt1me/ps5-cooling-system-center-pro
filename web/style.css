@@ -1121,7 +1121,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 /* ── Spielzeit (03.10.2026) ────────────────────────────────────────────
    Ohne inset, aspect-ratio und filter, wie die Spiele-Seite: Die Balkenhöhe
    kommt in Pixeln aus dem Skript, nicht aus Prozenten einer Flex-Fläche. */
-/* PS4Mount in der App (Reiter „PS4 von USB“) */
+/* PS4Mount in der App (Reiter „PS4 PKG von USB“) */
 .p4m-intro { margin: 0 0 14px; }
 .p4m-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--hairline); }
 .p4m-row:first-child { border-top: 0; }
@@ -1132,6 +1132,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .p4m-state { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hairline); font-size: 12px; white-space: nowrap; }
 .p4m-state.ok { border-color: rgba(12,163,12,.5); color: #7ee07e; }
 .p4m-state.warn { border-color: rgba(250,178,25,.5); color: #fab219; }
+.p4m-state.bad { border-color: rgba(230,70,70,.55); color: #ff8a8a; }
 .p4m-skipbox { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hairline); }
 .p4m-skiphead { font-size: 14px; font-weight: 700; color: var(--ink-2); cursor: pointer; padding: 4px 0; }
 .p4m-skipbox[open] .p4m-skiphead { margin-bottom: 4px; }

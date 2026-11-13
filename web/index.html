@@ -252,7 +252,8 @@
               <button type="button" class="gm-chip" id="gm-tab-time" role="tab" aria-selected="false">Spielzeit</button>
               <button type="button" class="gm-chip" id="gm-tab-saves" role="tab" aria-selected="false">Spielstände</button>
               <button type="button" class="gm-chip" id="gm-tab-pkg" role="tab" aria-selected="false">Pakete</button>
-              <button type="button" class="gm-chip" id="gm-tab-p4m" role="tab" aria-selected="false">PS4 von USB</button>
+              <button type="button" class="gm-chip" id="gm-tab-p4m" role="tab" aria-selected="false">PS4 PKG von USB</button>
+              <button type="button" class="gm-chip" id="gm-tab-fpkg" role="tab" aria-selected="false">FPKGMount</button>
               <button type="button" class="gm-chip" id="gm-tab-disc" role="tab" aria-selected="false">Disc</button>
               <button type="button" class="gm-chip" id="gm-tab-bk" role="tab" aria-selected="false">Sicherungen</button>
               <button type="button" class="gm-chip" id="gm-tab-hist" role="tab" aria-selected="false">Verlauf</button>
@@ -600,6 +601,45 @@
             </article>
           </div>
 
+          <div id="gm-pane-fpkg" hidden>
+            <article class="card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-usb"/></svg></span><div class="ck-text"><h2>FPKG-Spiele mit Kraken Mount</h2><p class="sub" id="fp-sub">wird gelesen …</p></div></div>
+                <div class="row-gap">
+                  <label class="xswitch" for="fp-on" title="Startet Kraken Mount oder beendet es.">
+                    <span>Einschalten</span>
+                    <span class="switch"><input type="checkbox" id="fp-on"><i></i></span>
+                  </label>
+                  <button class="btn ghost" id="fp-scan" type="button">Jetzt suchen</button>
+                  <button class="btn ghost" id="fp-reload" type="button">Aktualisieren</button>
+                </div>
+              </div>
+              <p class="muted p4m-intro">Spielt (F)PKG-Spiele und Spielordner ohne Installation, mit dem Programm Kraken Mount von quer3q (GPL-3.0), das die App mitbringt und startet. Lege ein unverschlüsseltes Debug-FPKG (.pkg, zum Beispiel aus Dump Forge) oder einen Spielordner mit eboot.bin und sce_sys/param.json in einen der Suchordner; Kraken Mount meldet das Spiel von selbst mit Symbol auf dem Startbildschirm an. Die Datei bleibt, wo sie liegt.</p>
+              <p class="muted" id="fp-roots"></p>
+              <div class="pt-note">Kraken Mount ist noch eine Beta. ShadowMountPlus sucht in denselben Ordnern: Für Ordner-Spiele läuft am besten nur eines von beiden. Nach einem Neustart der Konsole muss Kraken Mount laufen, damit die Spiele sichtbar bleiben.</div>
+              <div class="pt-note" id="fp-note" hidden></div>
+              <div id="fp-list"></div>
+            </article>
+            <article class="card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-log"/></svg></span><div class="ck-text"><h2>Programm</h2><p class="sub" id="fp-prog">wird gelesen …</p></div></div>
+                <div class="row-gap">
+                  <button class="btn primary" id="fp-start" type="button">Kraken Mount starten</button>
+                  <button class="btn ghost" id="fp-stop" type="button">Beenden</button>
+                  <button class="btn ghost" id="fp-fetch" type="button" title="Holt die neueste Veröffentlichung von GitHub (github.com/quer3q/kraken-mount), prüft ihre Prüfsumme und nimmt sie beim nächsten Start.">Neue Fassung von GitHub laden</button>
+                  <a class="btn ghost" id="fp-open" href="#" target="_blank" rel="noopener noreferrer" title="Die eigene Seite von Kraken Mount (Einstellungen, Suchordner).">Seite von Kraken Mount</a>
+                </div>
+              </div>
+            </article>
+            <article class="card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-log"/></svg></span><div class="ck-text"><h2>Protokoll von Kraken Mount</h2></div></div>
+                <div class="row-gap"><button class="btn ghost" id="fp-log-reload" type="button">Neu laden</button></div>
+              </div>
+              <pre class="p4m-log" id="fp-log"></pre>
+            </article>
+          </div>
+
           <div id="gm-pane-p4m" hidden>
             <article class="card">
               <div class="card-head">
@@ -647,7 +687,7 @@
             <!-- PS4Mount 0.5.0: die PKGs eines Spiels dorthin zurück, woher sie kamen (origin.txt im Spielordner auf dem Laufwerk) -->
             <article class="card">
               <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-undo"/></svg></span><div class="ck-text"><h2>Nicht mehr von USB spielen</h2><p class="sub">Kachel weg, PKG-Dateien zurück an ihren alten Platz</p></div></div></div>
-              <p class="muted p4m-intro">Nimmt Spiele aus „PS4 von USB“ heraus: Die Kachel verschwindet, und die PKGs (Spiel, Update
+              <p class="muted p4m-intro">Nimmt Spiele aus „PS4 PKG von USB“ heraus: Die Kachel verschwindet, und die PKGs (Spiel, Update
                 und alle Zusatzinhalte) kommen mit ihren ursprünglichen Namen an den Platz zurück, an dem sie vor dem Einsortieren in
                 <code>ps4/CUSAxxxxx</code> lagen. Keine PKG wird gelöscht. Ein laufendes Spiel wird vorher geschlossen, auch ein
                 PS5-Spiel. Herausgenommene Spiele nimmt die Suche nicht wieder auf, bis Sie „Herausgenommene wieder zulassen“ wählen.</p>
@@ -2083,7 +2123,7 @@
               <span class="cr-pic cr-initials" aria-hidden="true">gb</span>
               <div class="cr-text">
                 <b>gasb07</b> <a class="cr-login" href="https://github.com/gasb07" target="_blank" rel="noopener noreferrer">@gasb07</a>
-                <p>PS4Mount: Vorlage und Code für den Reiter „PS4 von USB“, PS4-Spiele (Fake-PKG) vom USB-Laufwerk ohne Installation. Danke!</p>
+                <p>PS4Mount: Vorlage und Code für den Reiter „PS4 PKG von USB“, PS4-Spiele (Fake-PKG) vom USB-Laufwerk ohne Installation. Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/gasb07/ps4mount" target="_blank" rel="noopener noreferrer">ps4mount</a>
                 </div>
@@ -2093,7 +2133,7 @@
               <span class="cr-pic cr-initials" aria-hidden="true">q3</span>
               <div class="cr-text">
                 <b>quer3q</b> <a class="cr-login" href="https://github.com/quer3q" target="_blank" rel="noopener noreferrer">@quer3q</a>
-                <p>AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die zwei neuesten Fassungen (0.4.0 und 0.3.5) stecken eingebettet in der App, neuere lädt sie auf Knopfdruck. Danke!</p>
+                <p>AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die zwei neuesten Fassungen (0.4.0 und 0.3.5) stecken eingebettet in der App, neuere lädt sie auf Knopfdruck. Kraken Mount: das Programm hinter dem Reiter „FPKGMount“, es spielt (F)PKG-Spiele ohne Installation. Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/quer3q/ampr-emu-ng" target="_blank" rel="noopener noreferrer">ampr-emu-ng</a>
                 </div>

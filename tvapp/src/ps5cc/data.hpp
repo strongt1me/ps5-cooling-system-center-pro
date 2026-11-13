@@ -52,8 +52,10 @@ struct Game
     std::string platform;
     std::string version;
     std::string format;
-    std::string system_ver; // the firmware the game asks for (param.json; PS4 titles: param.sfo), "" when unknown
-    std::string backport_fw; // PS5 with a backport applied: the firmware it carries (SDK of the eboot.bin), else ""
+    std::string system_ver;  // the firmware the game asks for (param.json; PS4 titles: param.sfo),
+                             // "" when unknown
+    std::string backport_fw; // PS5 with a backport applied: the firmware it carries (SDK of the
+                             // eboot.bin), else ""
     std::string path;
     std::string
         cover; // where the app serves its cover ("/api/v1/library/cover?id=…"), "" when none
@@ -92,7 +94,8 @@ enum class JobKind : std::uint8_t
     count,
 };
 
-// One step of a conversion (GET /api/v1/library/convert "stages"): state is "todo", "now", "done" or "stopped".
+// One step of a conversion (GET /api/v1/library/convert "stages"): state is "todo", "now", "done"
+// or "stopped".
 struct JobStage
 {
     std::string id; // "scan", "write", "verify", "rename"
@@ -113,7 +116,7 @@ struct Job
     bool cancellable = true; // a delete cannot be stopped; ShadowMountPlus says whether its job can
     std::string op;          // convert: "ffpfsc", "ffpkg" or "exfat"
     std::vector<JobStage> stages; // convert: the steps with the time each took
-    int queue_id = 0;        // convert: the entry of the queue it runs for, else 0
+    int queue_id = 0;             // convert: the entry of the queue it runs for, else 0
 };
 
 // The game tools of Spiele → Bibliothek, in the order of their menu.
@@ -141,7 +144,8 @@ struct PlanReply
     std::string json;
 };
 
-// The answer to the check before a conversion starts (POST /api/v1/library/convert/check): parsed by ps5cc/plans.hpp.
+// The answer to the check before a conversion starts (POST /api/v1/library/convert/check): parsed
+// by ps5cc/plans.hpp.
 struct CheckReply
 {
     std::uint64_t ticket = 0; // the number convert_check() returned
@@ -184,7 +188,8 @@ struct Config
     int lightbar_hot_c = 80;  // 56..95: red from here, always above yellow
     // The fullscreen app's language: "" follows the console, else de, en, es, fr, it, ru.
     std::string tv_language;
-    // The version of ShadowMountPlus the person named: "" not asked yet, "auto", "old" (up to 1.7beta11), "v2" (from 1.7beta12).
+    // The version of ShadowMountPlus the person named: "" not asked yet, "auto", "old" (up
+    // to 1.7beta11), "v2" (from 1.7beta12).
     std::string smp_version;
 };
 
@@ -698,7 +703,8 @@ struct FsView
     std::uint64_t size = 0;
 };
 
-// The answer to a saved text file (POST /api/v1/files/write): the editor stays open until it is here.
+// The answer to a saved text file (POST /api/v1/files/write): the editor stays open until it is
+// here.
 struct FsWrite
 {
     std::uint64_t seq = 0;
@@ -711,7 +717,8 @@ struct FsWrite
 // much.
 struct FsSize
 {
-    std::uint64_t seq = 0; // goes up with every measuring of this path ("Alle Größen messen" waits for it)
+    std::uint64_t seq =
+        0; // goes up with every measuring of this path ("Alle Größen messen" waits for it)
     std::uint64_t bytes = 0;
     int files = 0;
     bool partial = false;
@@ -764,6 +771,48 @@ struct Ps4Mount
     Ps4MountConfig config;
     std::vector<Ps4Game> games;
     std::vector<Ps4Skipped> skipped;
+};
+
+// One game of Kraken Mount (FPKGMount, GET /api/v1/kraken: "kraken":{"games":[...]}).
+struct KrakenGame
+{
+    std::string title_id;
+    std::string name;
+    std::string version;
+    std::string path;    // the .pkg or the game folder
+    std::string kind;    // "pkg" or "folder"
+    std::string packing; // folder: "plain", "zstd", "lz4"
+    std::string drive;   // the label of its drive
+    std::string status;  // pending, checking, building, ready, error, duplicate
+    std::string error;
+    std::uint64_t size = 0;
+    std::uint64_t cache_size = 0;
+    bool running = false; // a session of this game is live
+};
+
+// The texture key of a Kraken Mount game's picture in covers().
+inline std::string kraken_key(const std::string &title_id)
+{
+    return "krm:" + title_id;
+}
+
+// FPKGMount: Kraken Mount (quer3q) as the app started it, and what it reports.
+struct KrakenState
+{
+    bool loaded = false;
+    bool running = false;  // it answers on its port
+    bool starting = false; // sent to the loader a moment ago
+    bool fetching = false; // a newer release is being downloaded
+    bool busy = false;     // it scans or builds
+    bool paused = false;   // a game runs: it waits
+    bool low_space = false;
+    std::string version; // the running one
+    std::string embedded_version;
+    std::string fetched_version;
+    std::string error;
+    std::vector<KrakenGame> games;
+    std::vector<std::string> log;       // the last lines of its log
+    std::vector<std::string> scanpaths; // the folders it searches (empty: its own defaults)
 };
 
 struct Ps4Update
@@ -968,6 +1017,7 @@ enum class Watch : std::uint8_t
     logs,
     packages,
     ps4mount,
+    kraken,
     disc,
     storage,
     playtime,
@@ -1077,7 +1127,8 @@ struct Snapshot
     std::string language = "de";
     std::shared_ptr<const std::vector<std::pair<std::string, std::string>>> dictionary;
     int console_language = -1; // locale.language of /api/v1/system; -1 until it was read
-    std::string app_version;   // app_version of /api/v1/system, shown after the title; "" until it was read
+    std::string
+        app_version; // app_version of /api/v1/system, shown after the title; "" until it was read
     Status status;
     std::vector<Game> games;
     bool games_loaded = false;
@@ -1100,12 +1151,13 @@ struct Snapshot
     bool store_fetching = false;
     std::string store_error;
     StoreJob store_job;
-    std::vector<LogEntry> log;  // oldest first
-    std::vector<KlogLine> klog; // oldest first, at most kKlogKeep
-    bool klog_lost = false;     // lines went by faster than they were fetched
-    PlanReply plan;             // the last plan that came back
-    CheckReply convert_check;   // the last check of a conversion that came back
-    std::string convert_queue_json; // the last answer of GET/POST /api/v1/library/convert/queue ("" until one came)
+    std::vector<LogEntry> log;      // oldest first
+    std::vector<KlogLine> klog;     // oldest first, at most kKlogKeep
+    bool klog_lost = false;         // lines went by faster than they were fetched
+    PlanReply plan;                 // the last plan that came back
+    CheckReply convert_check;       // the last check of a conversion that came back
+    std::string convert_queue_json; // the last answer of GET/POST /api/v1/library/convert/queue (""
+                                    // until one came)
     std::vector<Package> packages;
     PackageScan package_scan;
     PackageInstall package_install;
@@ -1113,6 +1165,7 @@ struct Snapshot
     PackageSplit package_split;
     PackageQueue package_queue;
     Ps4Mount ps4mount;
+    KrakenState kraken;
     Ps4GameDetail ps4_detail; // the game last asked for with ps4mount_fetch("game", id)
     std::string ps4_log;      // the end of PS4Mount's log, after ps4mount_fetch("log")
     std::uint64_t ps4_log_seq = 0;
@@ -1211,12 +1264,14 @@ class Source
     // Starts the tool with this POST body (ps5cc/plans.hpp builds it). Accepted: a job_started
     // notice; refused: an error notice with the app's message.
     virtual void start_tool(Tool tool, const std::string &id, const std::string &body) = 0;
-    // The check before a conversion starts (everything that speaks for or against it, in one list): POST
-    // /api/v1/library/convert/check with this body (ps5cc/plans.hpp builds it); the answer arrives as
-    // Snapshot::convert_check with the ticket returned here. Only the newest one matters.
+    // The check before a conversion starts (everything that speaks for or against it, in one list):
+    // POST /api/v1/library/convert/check with this body (ps5cc/plans.hpp builds it); the answer
+    // arrives as Snapshot::convert_check with the ticket returned here. Only the newest one
+    // matters.
     virtual std::uint64_t convert_check(const std::string &body) = 0;
-    // The queue of conversions: "" asks for the list, else a POST body (add, remove, retry, start, stop, clear); the
-    // answer is always the list, as Snapshot::convert_queue_json. A refusal comes as an error notice.
+    // The queue of conversions: "" asks for the list, else a POST body (add, remove, retry, start,
+    // stop, clear); the answer is always the list, as Snapshot::convert_queue_json. A refusal comes
+    // as an error notice.
     virtual void convert_queue(const std::string &body) = 0;
     // The Pakete page: "scan", "install" (id), "install_cancel", "queue_add" / "queue_remove" (id),
     // "queue_start", "queue_pause", "queue_retry", "queue_clear" (the finished ones).
@@ -1224,12 +1279,15 @@ class Source
     // POST /api/v1/packages/split: into parts of part_mb on the drive target ("split_cancel" as a
     // package_action stops it).
     virtual void split_package(const std::string &id, const std::string &target, int part_mb) = 0;
-    // PS4 von USB: a JSON body for POST /api/v1/ps4mount (route ""), /ps4mount/update ("update") or
-    // /ps4mount/dlc
+    // PS4 PKG von USB: a JSON body for POST /api/v1/ps4mount (route ""), /ps4mount/update
+    // ("update") or /ps4mount/dlc
     // ("dlc"); the answer's message comes back as a notice.
     virtual void ps4mount_post(const std::string &route, const std::string &json) = 0;
     // "game" (with the title id): Snapshot::ps4_detail; "log": Snapshot::ps4_log.
     virtual void ps4mount_fetch(const std::string &what, const std::string &id) = 0;
+    // FPKGMount: a JSON body for POST /api/v1/kraken (start, stop, rescan, rebuild, rebuild_all,
+    // delete, fetch); the answer's message comes back as a notice.
+    virtual void kraken_post(const std::string &json) = 0;
     // The Disc page: a JSON body for POST /api/v1/<route>, route "disc", "dump", "dumps/scan" or
     // "dumps/delete"; the answer's message comes back as a notice.
     virtual void disc_post(const std::string &route, const std::string &json) = 0;
@@ -1283,7 +1341,8 @@ class Source
     virtual void files_delete(const std::vector<std::string> &paths) = 0;
     virtual void files_view(const std::string &path) = 0;
     virtual void files_size(const std::string &path) = 0;
-    // POST /api/v1/files/write: the text replaces a text file (up to 64 KiB); the answer is Snapshot::fs_write.
+    // POST /api/v1/files/write: the text replaces a text file (up to 64 KiB); the answer is
+    // Snapshot::fs_write.
     virtual void files_write(const std::string &path, const std::string &text) = 0;
     // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture
     // (uploaded in the browser).
@@ -1308,11 +1367,13 @@ std::string format_bytes(std::uint64_t bytes);
 std::string format_rate(std::uint64_t bytes_per_second);
 // "40 Sek.", "12 Min.", "1 Std. 05 Min.": what is left.
 std::string format_eta(int seconds);
-// "Kopiere 1 von 2 Dateien/Ordnern" (the one being worked on is items_done + 1), "Kopiere 1 Datei/Ordner";
-// kind is copy, move or delete; without a count the plain "Kopieren".
+// "Kopiere 1 von 2 Dateien/Ordnern" (the one being worked on is items_done + 1), "Kopiere 1
+// Datei/Ordner"; kind is copy, move or delete; without a count the plain "Kopieren".
 std::string format_job_title(const std::string &kind, int items_done, int items);
-// "von /mnt/usb0/neu nach /mnt/ext1"; "Ziel: …" when the entries come from several folders; for a delete "Ordner: …".
-std::string format_job_route(const std::string &kind, const std::string &from, const std::string &dest);
+// "von /mnt/usb0/neu nach /mnt/ext1"; "Ziel: …" when the entries come from several folders; for a
+// delete "Ordner: …".
+std::string format_job_route(const std::string &kind, const std::string &from,
+                             const std::string &dest);
 // "2,9 h", "35 min", "–" for nothing.
 std::string format_playtime(std::uint64_t seconds);
 // "46,3" for 46.3.

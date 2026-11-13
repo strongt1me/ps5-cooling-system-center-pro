@@ -7438,11 +7438,12 @@
     $("#gm-pane-saves").hidden = which !== "saves";
     $("#gm-pane-pkg").hidden   = which !== "pkg";
     $("#gm-pane-p4m").hidden   = which !== "p4m";
+    $("#gm-pane-fpkg").hidden  = which !== "fpkg";
     $("#gm-pane-disc").hidden  = which !== "disc";
     $("#gm-pane-bk").hidden    = which !== "bk";
     $("#gm-pane-hist").hidden  = which !== "hist";
     if (which === "lib") gmSharpen();                    /* war die Liste im Verborgenen neu gezeichnet worden, kommen hier die Vorschaubilder */
-    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["p4m", "#gm-tab-p4m"], ["disc", "#gm-tab-disc"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
+    [["lib", "#gm-tab-lib"], ["time", "#gm-tab-time"], ["saves", "#gm-tab-saves"], ["pkg", "#gm-tab-pkg"], ["p4m", "#gm-tab-p4m"], ["fpkg", "#gm-tab-fpkg"], ["disc", "#gm-tab-disc"], ["bk", "#gm-tab-bk"], ["hist", "#gm-tab-hist"]].forEach(([k, sel]) => {
       const b = $(sel);
       b.classList.toggle("active", which === k);
       b.setAttribute("aria-selected", which === k ? "true" : "false");
@@ -7451,6 +7452,7 @@
     if (which === "saves") loadSaves();
     if (which === "pkg") loadPackages();
     if (which === "p4m") { loadP4m(); loadP4mLog(); }
+    if (which === "fpkg") loadFp();
     if (which === "disc") loadDisc();
     if (which === "disc" && typeof dpOpen === "function") dpOpen();
     if (which === "disc" && typeof dmOpen === "function") dmOpen();
@@ -7460,6 +7462,7 @@
     svSync();
     pkSync();
     if (typeof p4mSync === "function") p4mSync();
+    if (typeof fpSync === "function") fpSync();
     if (typeof discSync === "function") discSync();
     if (typeof dpSync === "function") dpSync();
   };
@@ -7510,7 +7513,7 @@
     }
   });
 
-  /* ── PS4 von USB (ps4m_core.c, 14.10.2026) ──────────────────────────
+  /* ── PS4 PKG von USB (ps4m_core.c, 14.10.2026) ──────────────────────────
    * PS4Mount von gasb07 (GPL-3.0) in der App: PS4-Fake-PKGs vom USB-Laufwerk ohne Installation. Die Seite zeigt die Liste, schaltet
    * den Dienst ein und aus, löst eine Suche aus, nimmt Spiele aus der Bibliothek und wieder hinein und speichert die Einstellungen. */
   const p4m = { data: null, timer: 0, busy: false, sel: new Set(), skipOpen: false, skipKey: "" };
@@ -7660,17 +7663,101 @@
     catch (e) { $("#p4m-log").textContent = e.message; }
   };
 
+
+  /* ── FPKGMount (kraken.c, 13.11.2026) ───────────────────────────────
+   * Kraken Mount von quer3q (GPL-3.0) meldet (F)PKG-Spiele und Spielordner an, ohne sie zu installieren. Die App bringt das Programm mit,
+   * startet und beendet es und zeigt seine Liste (GET /api/v1/kraken; „kraken“ darin ist die Antwort seiner eigenen Schnittstelle). */
+  const fp = { data: null, timer: 0 };
+  const FP_STATE = {
+    pending: ["warn", "Wartet"], checking: ["warn", "Wird geprüft"], building: ["warn", "Wird aufgebaut"], ready: ["ok", "Bereit"],
+    error: ["bad", "Fehlgeschlagen"], duplicate: ["", "Liegt schon an anderer Stelle"]
+  };
+  const FP_PACK = { plain: "Ordner", zstd: "Ordner (zstd)", lz4: "Ordner (LZ4)" };
+
+  const fpPost = async (body, quiet) => {
+    try {
+      const r = await api("/api/v1/kraken", { method: "POST", body: JSON.stringify(body) });
+      if (r.message && !quiet) toast(r.message);
+    } catch (e) { toast(e.message, "error"); }
+    await loadFp();
+    if (body.action !== "fetch") setTimeout(loadFp, 4000);
+  };
+
+  const fpRender = () => {
+    const d = fp.data;
+    if (!d) return;
+    const k = d.kraken || null;
+    const games = k && k.games ? k.games : [];
+    const running = new Set(k && k.running ? k.running : []);
+    const drive = (m) => { const x = ((k && k.drives) || []).find((v) => v.mount === m); return x ? x.label : m; };
+    txt("#fp-sub", k ? (k.busy ? "arbeitet gerade (sucht oder baut auf) …" : `läuft · Version ${k.version} · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken`)
+      : d.starting ? "startet gleich …" : "ausgeschaltet");
+    $("#fp-on").checked = !!k || !!d.starting;
+    $("#fp-scan").disabled = !k;
+    $("#fp-start").disabled = !!k || !!d.starting;
+    $("#fp-stop").disabled = !k;
+    $("#fp-fetch").disabled = !!d.fetching;
+    const prog = [`In der App: Kraken Mount ${d.embedded_version}`];
+    if (d.fetched_version) prog.push(`geladen: ${d.fetched_version} (wird beim Start genommen)`);
+    txt("#fp-prog", prog.join(" · "));
+    $("#fp-open").href = `http://${location.hostname}:8097/`;
+    const roots = d.settings && Array.isArray(d.settings.scanpath) && d.settings.scanpath.length ? d.settings.scanpath : null;
+    txt("#fp-roots", roots ? `Suchordner: ${roots.join(", ")}`
+      : "Suchordner (Grundeinstellung): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks.");
+    const note = $("#fp-note");
+    note.hidden = !!k && !(k.cache && k.cache.low_space) && !k.paused;
+    if (!k) note.textContent = d.starting ? "Kraken Mount startet. Das dauert einige Sekunden." : "Kraken Mount ist ausgeschaltet. Einschalten, damit die Spiele gesucht und angemeldet werden.";
+    else if (k.cache && k.cache.low_space) note.textContent = "Auf der internen SSD ist nur noch wenig Platz frei. Kraken Mount legt dort den Zwischenspeicher der Spiele an.";
+    else if (k.paused) note.textContent = "Ein Spiel läuft. Kraken Mount sucht und baut erst nach dem Spiel weiter.";
+    $("#fp-list").innerHTML = games.length ? games.map((g) => {
+      const st = running.has(g.title_id) ? ["ok", "Läuft"] : (FP_STATE[g.status] || ["", g.status]);
+      const kind = g.kind === "pkg" ? "FPKG" : (FP_PACK[g.packing] || "Ordner");
+      const meta = [g.title_id, g.version ? `Version ${g.version}` : "", g.size > 0 ? bytes(g.size) : "", drive(g.drive), kind].filter(Boolean);   /* a folder has no size of its own here */
+      const busy = g.status === "building" || g.status === "checking" || running.has(g.title_id);
+      return `<div class="p4m-row">
+        <img class="p4m-icon" src="/api/v1/kraken/icon?id=${esc(g.title_id)}" alt="" loading="lazy">
+        <div class="p4m-main"><div class="p4m-name">${esc(g.title_name || g.title_id)}</div>
+          <div class="p4m-meta">${esc(meta.join(" · "))}</div>
+          ${g.error ? `<div class="p4m-meta">${esc(g.error)}</div>` : ""}</div>
+        <span class="p4m-state ${st[0]}">${esc(st[1])}</span>
+        <div class="p4m-btns">
+          <button type="button" class="btn ghost" data-fp="rebuild" data-id="${esc(g.title_id)}" ${busy ? "disabled" : ""}
+            title="Baut den Zwischenspeicher dieses Spiels neu auf und meldet es neu an.">Neu aufbauen</button>
+          <button type="button" class="btn ghost" data-fp="delete" data-id="${esc(g.title_id)}" data-path="${esc(g.path)}" data-name="${esc(g.title_name || g.title_id)}" ${busy ? "disabled" : ""}
+            title="Löscht die PKG-Datei bzw. den Spielordner vom Laufwerk, dazu Kachel und Zwischenspeicher.">Spiel löschen</button>
+        </div></div>`;
+    }).join("") : `<p class="muted">${k ? "Kraken Mount hat auf den Laufwerken keine Spiele gefunden." : "Sobald Kraken Mount läuft, stehen hier seine Spiele."}</p>`;
+    $$("#fp-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
+    if (k && k.log) {
+      const el = $("#fp-log");
+      const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+      el.textContent = Array.isArray(k.log) ? k.log.join("\n") : String(k.log);
+      if (atEnd) el.scrollTop = el.scrollHeight;
+    } else if (!k) $("#fp-log").textContent = "";
+  };
+
+  const loadFp = async () => {
+    try { fp.data = await api("/api/v1/kraken"); fpRender(); }
+    catch (e) { txt("#fp-sub", e.message); }
+  };
+
+  const fpSync = () => {
+    const run = state.page === "games" && pt.tab === "fpkg" && !document.hidden;
+    if (run && !fp.timer) fp.timer = setInterval(loadFp, 5000);
+    else if (!run && fp.timer) { clearInterval(fp.timer); fp.timer = 0; }
+  };
+
   const p4mSync = () => {
     const run = state.page === "games" && pt.tab === "p4m" && !document.hidden;
     if (run && !p4m.timer) p4m.timer = setInterval(loadP4m, 5000);
     else if (!run && p4m.timer) { clearInterval(p4m.timer); p4m.timer = 0; }
   };
 
-  /* ── PS4Mount-Spiele: Updates wählen, Zusatzinhalte an/aus (26.10.2026, in der Liste „PS4 von USB") ──
+  /* ── PS4Mount-Spiele: Updates wählen, Zusatzinhalte an/aus (26.10.2026, in der Liste „PS4 PKG von USB") ──
    * Ein eigenes, schlankes Fenster (wie Kopieren/Konvertieren, aber ohne deren Zustand zu teilen) zeigt wahlweise
    * die Updates oder die Zusatzinhalte eines Spiels (/api/v1/ps4mount/game); „view" sagt, welche Ansicht gerade
    * drin ist. Keine eigene Seite und kein „Starten“: Das deckt schon die Bibliothek ab, und die Liste hier ist
-   * sonst dieselbe wie „PS4 von USB“ selbst (Wunsch des Users, 26.10.2026). */
+   * sonst dieselbe wie „PS4 PKG von USB“ selbst (Wunsch des Users, 26.10.2026). */
   const p4mg = { id: "", name: "", view: "", data: null, sel: "", seq: 0 };
 
 
@@ -7927,6 +8014,32 @@
   });
 
   $("#gm-tab-p4m").addEventListener("click", () => ptSelectTab("p4m"));
+
+  $("#gm-tab-fpkg").addEventListener("click", () => ptSelectTab("fpkg"));
+  $("#fp-reload").addEventListener("click", loadFp);
+  $("#fp-log-reload").addEventListener("click", loadFp);
+  $("#fp-on").addEventListener("change", (e) => fpPost({ action: e.target.checked ? "start" : "stop" }));
+  $("#fp-start").addEventListener("click", () => fpPost({ action: "start" }));
+  $("#fp-stop").addEventListener("click", () => fpPost({ action: "stop" }));
+  $("#fp-scan").addEventListener("click", () => fpPost({ action: "rescan" }));
+  $("#fp-fetch").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    toast("Kraken Mount wird von GitHub geladen …");
+    await fpPost({ action: "fetch" });
+    b.disabled = false;
+  });
+  $("#fp-list").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-fp]");
+    if (!b || b.disabled) return;
+    if (b.dataset.fp === "rebuild") { fpPost({ action: "rebuild", id: b.dataset.id }); return; }
+    if (b.dataset.fp === "delete") {
+      if (!(await askDelete({ title: "Spiel löschen?", items: [{ name: b.dataset.name, info: b.dataset.path }],
+        notes: ["Gelöscht werden die PKG-Datei bzw. der Spielordner auf dem Laufwerk, die Kachel auf dem Startbildschirm und der Zwischenspeicher des Spiels. Spielstände bleiben."] }))) return;
+      b.disabled = true;
+      fpPost({ action: "delete", id: b.dataset.id, path: b.dataset.path });
+    }
+  });
 
   $("#p4m-reload").addEventListener("click", () => { loadP4m(); loadP4mLog(); });
   $("#p4m-log-reload").addEventListener("click", loadP4mLog);
@@ -10577,7 +10690,7 @@
     `<button type="button" class="btn ${cls}" data-dm="${esc(act)}"${dis ? ` disabled title="${esc(why || "")}"` : ""}>${esc(label)}</button>`;
 
   const DM_RUN_PS5 = "So startest du den Dump: ShadowMountPlus findet einen Ordner nur, wenn er direkt in einem seiner Suchordner liegt (zum Beispiel „homebrew“ auf dem Laufwerk) und darin „sce_sys/param.json“ hat. Im Standardordner „homebrew/ps5-app-dumper/dumps“ sucht es nicht. Trage dafür oben bei „Ordner auf dem Ziel“ „homebrew“ ein.";
-  const DM_RUN_PS4 = "Dieser PS4-Dump ist eine Sicherung. ShadowMountPlus startet nur PS5-Spiele (es liest „sce_sys/param.json“), und „PS4 von USB“ liest nur PKG-Dateien. Ein PS4-Dump-Ordner lässt sich deshalb nicht direkt starten.";
+  const DM_RUN_PS4 = "Dieser PS4-Dump ist eine Sicherung. ShadowMountPlus startet nur PS5-Spiele (es liest „sce_sys/param.json“), und „PS4 PKG von USB“ liest nur PKG-Dateien. Ein PS4-Dump-Ordner lässt sich deshalb nicht direkt starten.";
   const dmJobHtml = (j) => {
     const act = !!j.active;
     const withVer = !!j.verify;
@@ -11793,6 +11906,7 @@
       if (pt.tab === "saves") loadSaves();
       if (pt.tab === "pkg") loadPackages();
       if (pt.tab === "p4m") { loadP4m(); loadP4mLog(); }
+      if (pt.tab === "fpkg") loadFp();
       if (pt.tab === "disc") { loadDisc(); dpOpen(); dmOpen(); }   /* their polls stop off the tab and do not restart by themselves */
       if (pt.tab === "bk") loadBackups();         /* these two have no poll: coming back must show what happened meanwhile */
       if (pt.tab === "hist") loadHistory2();
@@ -11801,6 +11915,7 @@
     svSync();
     pkSync();
     p4mSync();
+    fpSync();
     discSync();
     syncLogTail();
   }));
@@ -13266,6 +13381,7 @@
     svSync();
     pkSync();
     p4mSync();                                  /* its 5 s poll stopped for a hidden tab like the others, and starts again */
+    fpSync();
     psSync();
   });
 

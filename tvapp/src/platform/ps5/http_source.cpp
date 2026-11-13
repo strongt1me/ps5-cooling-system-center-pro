@@ -333,7 +333,8 @@ void HttpSource::set_backdrop(const std::string &area, BackdropMode mode)
         {
             notice(
                 Notice::Kind::error, "Kein eigenes Bild",
-                "Öffne zuerst die Browser-App aus dieser App (Options → Weboberfläche im Browser öffnen) und lade es dort hoch: System → Hintergründe der Vollbild-App.");
+                "Öffne zuerst die Browser-App aus dieser App (Options → Weboberfläche im Browser "
+                "öffnen) und lade es dort hoch: System → Hintergründe der Vollbild-App.");
             return;
         }
     }
@@ -360,6 +361,10 @@ void HttpSource::split_package(const std::string &id, const std::string &target,
 void HttpSource::ps4mount_post(const std::string &route, const std::string &json)
 {
     push({Request::Kind::ps4mount, 0, route, json});
+}
+void HttpSource::kraken_post(const std::string &json)
+{
+    push({Request::Kind::kraken, 0, {}, json});
 }
 void HttpSource::ps4mount_fetch(const std::string &what, const std::string &id)
 {
@@ -678,7 +683,8 @@ std::uint64_t HttpSource::request_plan(Tool tool, const std::string &id)
     r.ticket = ++next_ticket_;
     // Only the newest plan matters: one asked for earlier and still waiting is dropped.
     tool_requests_.erase(std::remove_if(tool_requests_.begin(), tool_requests_.end(),
-                                        [](const ToolRequest &q) { return !q.start && q.kind == 0; }),
+                                        [](const ToolRequest &q)
+                                        { return !q.start && q.kind == 0; }),
                          tool_requests_.end());
     tool_requests_.push_back(std::move(r));
     return next_ticket_;
@@ -756,16 +762,19 @@ void HttpSource::handle_tool(const ToolRequest &request)
     std::string body;
     if (request.kind == 1)
     {
-        // The check before a conversion: it may have to measure the game once more (two minutes, as the plan).
-        const Net net = exchange("POST", "/api/v1/library/convert/check", request.body, &status, &body, 120);
+        // The check before a conversion: it may have to measure the game once more (two minutes, as
+        // the plan).
+        const Net net =
+            exchange("POST", "/api/v1/library/convert/check", request.body, &status, &body, 120);
         CheckReply reply;
         reply.ticket = request.ticket;
         reply.ok = net == Net::ok && status == 200;
         if (reply.ok)
             reply.json = std::move(body);
         else
-            reply.error = net == Net::ok ? message_of(body, "Die App hat nichts zur Prüfung gesagt.")
-                                         : "Die App hat nicht rechtzeitig geantwortet.";
+            reply.error = net == Net::ok
+                              ? message_of(body, "Die App hat nichts zur Prüfung gesagt.")
+                              : "Die App hat nicht rechtzeitig geantwortet.";
         std::lock_guard<std::mutex> lock(mutex_);
         data_.convert_check = std::move(reply);
         ++data_.serial;
@@ -775,7 +784,8 @@ void HttpSource::handle_tool(const ToolRequest &request)
     {
         // The queue: the list, or one action whose answer is the list again.
         const bool post = !request.body.empty();
-        const Net net = exchange(post ? "POST" : "GET", "/api/v1/library/convert/queue", request.body, &status, &body, 130);
+        const Net net = exchange(post ? "POST" : "GET", "/api/v1/library/convert/queue",
+                                 request.body, &status, &body, 130);
         if (net == Net::ok && status == 200)
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -978,8 +988,9 @@ bool HttpSource::send_payload()
     return sent;
 }
 
-// An app answers. When it is OLDER than the one this tile carries and no job runs, the tile's own goes over it (the new app
-// retires the old one when it starts); a job in progress would end with it, so then the old app stays and the person is told.
+// An app answers. When it is OLDER than the one this tile carries and no job runs, the tile's own
+// goes over it (the new app retires the old one when it starts); a job in progress would end with
+// it, so then the old app stays and the person is told.
 bool HttpSource::replace_older_app()
 {
     const std::size_t size = reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf_end) -
@@ -999,19 +1010,20 @@ bool HttpSource::replace_older_app()
     }
     if (!should_replace(running, mine))
         return false;
-    // One route for all jobs of the app (since 1.79.x). An answer that does not come, or is not understood, counts as "a job may
-    // run": the old app is then left alone (audit 11.11.2026, F-02). Only an app too old for the route (404) is asked job by job,
-    // and there too a missing answer counts as busy.
+    // One route for all jobs of the app (since 1.79.x). An answer that does not come, or is not
+    // understood, counts as "a job may run": the old app is then left alone (audit 11.11.2026,
+    // F-02). Only an app too old for the route (404) is asked job by job, and there too a missing
+    // answer counts as busy.
     const Net busy_net = exchange("GET", "/api/v1/jobs/active", {}, &status, &body, 4);
     bool busy = true;
     if (busy_net == Net::ok && status == 200)
         busy = job_active(body);
     else if (busy_net == Net::ok && status == 404)
     {
-        static const char *const kJobs[] = {"/api/v1/library/image/job", "/api/v1/files/job",
-                                            "/api/v1/library/ampr/job", "/api/v1/library/copy",
-                                            "/api/v1/library/convert", "/api/v1/library/delete",
-                                            "/api/v1/packages/install/job", "/api/v1/saves/job"};
+        static const char *const kJobs[] = {
+            "/api/v1/library/image/job",    "/api/v1/files/job",       "/api/v1/library/ampr/job",
+            "/api/v1/library/copy",         "/api/v1/library/convert", "/api/v1/library/delete",
+            "/api/v1/packages/install/job", "/api/v1/saves/job"};
         busy = false;
         for (const char *route : kJobs)
         {
@@ -1066,9 +1078,11 @@ bool HttpSource::connect_phase()
         }
         if (awaiting_update_)
         {
-            // The old app may still answer for a moment; wait for the new one (by its version), but not for ever.
+            // The old app may still answer for a moment; wait for the new one (by its version), but
+            // not for ever.
             std::string running;
-            if (exchange("GET", "/api/v1/system", {}, &status, &body, 3) == Net::ok && status == 200)
+            if (exchange("GET", "/api/v1/system", {}, &status, &body, 3) == Net::ok &&
+                status == 200)
             {
                 if (cJSON *root = cJSON_Parse(body.c_str()))
                 {
@@ -1111,6 +1125,8 @@ void HttpSource::run()
     std::int64_t last_backdrops = 0, last_packages = 0, last_pkg_install = 0, last_pkg_queue = 0;
     bool packages_open = false;
     std::int64_t last_ps4mount = 0;
+    std::int64_t last_kraken = 0;
+    bool kraken_open = false;
     bool ps4_open = false;
     std::int64_t last_storage = 0;
     bool storage_open = false;
@@ -1198,9 +1214,10 @@ void HttpSource::run()
         }
         if (status_failures_ > 0)
         {
-            // The app is slow or does not answer: no further questions in this pass, and a pause that grows with every miss (up to
-            // 2 s), so that this tile does not add to the load that made the app slow (audit 11.11.2026, F-08). Requests of the
-            // person are taken at the top of the loop as before.
+            // The app is slow or does not answer: no further questions in this pass, and a pause
+            // that grows with every miss (up to 2 s), so that this tile does not add to the load
+            // that made the app slow (audit 11.11.2026, F-08). Requests of the person are taken at
+            // the top of the loop as before.
             sys::sleep_us(std::min(status_failures_, 4) * 500000);
             continue;
         }
@@ -1550,7 +1567,21 @@ void HttpSource::run()
         {
             storage_open = false;
         }
-        // PS4 von USB: every 5 s while it is open, as the web page; at once when it opens.
+        // FPKGMount: every 5 s while it is open, as the web page; at once when it opens.
+        if (page == Watch::kraken)
+        {
+            if (!kraken_open || now - last_kraken >= 5000000)
+            {
+                last_kraken = now;
+                poll_kraken();
+            }
+            kraken_open = true;
+        }
+        else
+        {
+            kraken_open = false;
+        }
+        // PS4 PKG von USB: every 5 s while it is open, as the web page; at once when it opens.
         if (page == Watch::ps4mount)
         {
             if (!ps4_open || now - last_ps4mount >= 5000000)
@@ -1691,15 +1722,19 @@ void HttpSource::handle(const Request &request)
             "/api/v1/library/copy/cancel", "/api/v1/library/convert/cancel",
             "/api/v1/library/image/cancel", "/api/v1/library/storage/cancel"};
         const int index = std::clamp(request.value, 0, 3);
-        // A conversion is cancelled only if it is still the one the screen showed (the queue may have started the next one meanwhile).
+        // A conversion is cancelled only if it is still the one the screen showed (the queue may
+        // have started the next one meanwhile).
         std::string cancel_body = "{}";
         if (index == static_cast<int>(JobKind::convert))
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            cancel_body = "{\"queue_id\":" +
-                          std::to_string(data_.jobs[static_cast<std::size_t>(JobKind::convert)].queue_id) + "}";
+            cancel_body =
+                "{\"queue_id\":" +
+                std::to_string(data_.jobs[static_cast<std::size_t>(JobKind::convert)].queue_id) +
+                "}";
         }
-        if (exchange("POST", kRoutes[index], cancel_body, &status, &body) == Net::ok && status < 300)
+        if (exchange("POST", kRoutes[index], cancel_body, &status, &body) == Net::ok &&
+            status < 300)
             notice(Notice::Kind::info, "Auftrag wird abgebrochen");
         else
             notice(Notice::Kind::error, "Abbrechen nicht möglich",
@@ -1708,7 +1743,9 @@ void HttpSource::handle(const Request &request)
         break;
     }
     case Request::Kind::web:
-        if (exchange("POST", "/api/v1/open-ui", "{\"from\":\"fullscreen\"}", &status, &body) == Net::ok && status < 300)
+        if (exchange("POST", "/api/v1/open-ui", "{\"from\":\"fullscreen\"}", &status, &body) ==
+                Net::ok &&
+            status < 300)
             notice(Notice::Kind::info, "Weboberfläche", "Wird im Browser der Konsole geöffnet.");
         else
             notice(Notice::Kind::error, "Browser nicht geöffnet",
@@ -1900,6 +1937,24 @@ void HttpSource::handle(const Request &request)
         poll_ps4mount();
         break;
     }
+    case Request::Kind::kraken:
+    {
+        // A download of a newer release can take minutes; everything else answers within seconds.
+        const bool fetch = request.text.find("\"fetch\"") != std::string::npos;
+        const Net net =
+            exchange("POST", "/api/v1/kraken", request.text, &status, &body, fetch ? 220 : 30);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "FPKGMount",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        else
+        {
+            const std::string msg = message_of(body, "");
+            if (!msg.empty())
+                notice(Notice::Kind::success, "FPKGMount", msg);
+        }
+        poll_kraken();
+        break;
+    }
     case Request::Kind::ps4mount_fetch:
         if (request.text == "game")
             fetch_ps4_detail(request.id);
@@ -2030,10 +2085,10 @@ void HttpSource::handle(const Request &request)
     }
     case Request::Kind::extras_plan:
     {
-        const std::string route = "/api/v1/library/lz4/plan?id=" + url_encoded(request.id) +
-                                  "&level=" + std::to_string(request.value) +
-                                  "&profile=" + url_encoded(request.text) +
-                                  "&format=" + url_encoded(request.extra.empty() ? "lz4" : request.extra);
+        const std::string route =
+            "/api/v1/library/lz4/plan?id=" + url_encoded(request.id) +
+            "&level=" + std::to_string(request.value) + "&profile=" + url_encoded(request.text) +
+            "&format=" + url_encoded(request.extra.empty() ? "lz4" : request.extra);
         const Net net = exchange("GET", route.c_str(), {}, &status, &body, 30);
         std::lock_guard<std::mutex> lock(mutex_);
         data_.extras_lz4_plan.seq++;
@@ -2391,7 +2446,8 @@ void HttpSource::handle(const Request &request)
     }
     case Request::Kind::fs_write:
     {
-        // the text goes as it is (the app reads the body raw); a save counts the folder and the file again
+        // the text goes as it is (the app reads the body raw); a save counts the folder and the
+        // file again
         const std::string path = "/api/v1/files/write?path=" + url_encoded(request.id);
         const Net net = exchange("POST", path.c_str(), request.text, &status, &body, 30);
         FsWrite w;
@@ -3002,7 +3058,8 @@ void HttpSource::poll_library()
         {
             // With a backport applied the firmware that matters is the one it carries (11.2026)
             const cJSON *mods = cJSON_GetObjectItemCaseSensitive(item, "mods");
-            if (mods != nullptr && str(mods, "state") == "checked" && flag(mods, "backport") && g.platform != "PS4")
+            if (mods != nullptr && str(mods, "state") == "checked" && flag(mods, "backport") &&
+                g.platform != "PS4")
                 g.backport_fw = str(mods, "eboot_sdk");
         }
         // A PS4Mount game is an installed package to the system; shown as what it is, not as
@@ -3061,6 +3118,17 @@ void HttpSource::fetch_cover()
             g.id = key;
             g.cover = "/api/v1/paystore/avatar?owner=" + s.owner;
             games.push_back(std::move(g));
+        }
+        // The Kraken Mount games' pictures, only while that page is open.
+        if (watching_.load() == Watch::kraken)
+        {
+            for (const KrakenGame &k : data_.kraken.games)
+            {
+                Game g;
+                g.id = kraken_key(k.title_id);
+                g.cover = "/api/v1/kraken/icon?id=" + url_encoded(k.title_id);
+                games.push_back(std::move(g));
+            }
         }
         // The PS4Mount games' pictures, only while that page is open.
         if (watching_.load() == Watch::ps4mount)
@@ -3591,12 +3659,15 @@ void HttpSource::poll_extras(const std::string &id)
         if (net == Net::ok && status == 200)
             answers[i] = std::move(body);
         else
-            lost[i] = net != Net::ok; // a timeout is not an answer: for the same game the earlier one stays
+            lost[i] =
+                net !=
+                Net::ok; // a timeout is not an answer: for the same game the earlier one stays
     }
     std::lock_guard<std::mutex> lock(mutex_);
     ExtrasState &e = data_.extras;
     const bool same = e.id == id;
-    auto put = [&](std::string &dst, int i) {
+    auto put = [&](std::string &dst, int i)
+    {
         if (!(lost[i] && same))
             dst = std::move(answers[i]);
     };
@@ -4142,6 +4213,86 @@ void HttpSource::poll_ps4mount()
     ++data_.serial;
 }
 
+void HttpSource::poll_kraken()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/kraken", {}, &status, &body, 8) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    KrakenState k;
+    k.loaded = true;
+    k.running = flag(root, "running");
+    k.starting = flag(root, "starting");
+    k.fetching = flag(root, "fetching");
+    k.embedded_version = str(root, "embedded_version");
+    k.fetched_version = str(root, "fetched_version");
+    const cJSON *kr = cJSON_GetObjectItemCaseSensitive(root, "kraken");
+    if (cJSON_IsObject(kr))
+    {
+        k.version = str(kr, "version");
+        k.busy = flag(kr, "busy");
+        k.paused = flag(kr, "paused");
+        const cJSON *cache = cJSON_GetObjectItemCaseSensitive(kr, "cache");
+        k.low_space = cJSON_IsObject(cache) && flag(cache, "low_space");
+        std::vector<std::string> live;
+        const cJSON *r = nullptr;
+        cJSON_ArrayForEach(r, cJSON_GetObjectItemCaseSensitive(kr, "running"))
+        {
+            if (cJSON_IsString(r) && r->valuestring != nullptr)
+                live.emplace_back(r->valuestring);
+        }
+        const auto drive_label = [&](const std::string &mount)
+        {
+            const cJSON *d = nullptr;
+            cJSON_ArrayForEach(d, cJSON_GetObjectItemCaseSensitive(kr, "drives"))
+            {
+                if (str(d, "mount") == mount && !str(d, "label").empty())
+                    return str(d, "label");
+            }
+            return mount;
+        };
+        const cJSON *g = nullptr;
+        cJSON_ArrayForEach(g, cJSON_GetObjectItemCaseSensitive(kr, "games"))
+        {
+            KrakenGame x;
+            x.title_id = str(g, "title_id");
+            x.name = str(g, "title_name");
+            x.version = str(g, "version");
+            x.path = str(g, "path");
+            x.kind = str(g, "kind");
+            x.packing = str(g, "packing");
+            x.drive = drive_label(str(g, "drive"));
+            x.status = str(g, "status");
+            x.error = str(g, "error");
+            x.size = static_cast<std::uint64_t>(num(g, "size"));
+            x.cache_size = static_cast<std::uint64_t>(num(g, "cache_size"));
+            x.running = std::find(live.begin(), live.end(), x.title_id) != live.end();
+            if (!x.title_id.empty())
+                k.games.push_back(std::move(x));
+        }
+        const cJSON *l = nullptr;
+        cJSON_ArrayForEach(l, cJSON_GetObjectItemCaseSensitive(kr, "log"))
+        {
+            if (cJSON_IsString(l) && l->valuestring != nullptr)
+                k.log.emplace_back(l->valuestring);
+        }
+        const cJSON *set = cJSON_GetObjectItemCaseSensitive(root, "settings");
+        const cJSON *p = nullptr;
+        cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(set, "scanpath"))
+        {
+            if (cJSON_IsString(p) && p->valuestring != nullptr)
+                k.scanpaths.emplace_back(p->valuestring);
+        }
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.kraken = std::move(k);
+    ++data_.serial;
+}
+
 void HttpSource::fetch_ps4_detail(const std::string &id)
 {
     Ps4GameDetail d;
@@ -4494,8 +4645,9 @@ void HttpSource::poll_jobs()
         int status = 0;
         std::string body;
         const Net net = exchange("GET", kRoutes[i], {}, &status, &body);
-        // A timeout is not an answer: the card keeps what it showed (otherwise one slow reply under load would show "no job"
-        // while a copy runs, and would start a library reload because the job seems to have ended).
+        // A timeout is not an answer: the card keeps what it showed (otherwise one slow reply under
+        // load would show "no job" while a copy runs, and would start a library reload because the
+        // job seems to have ended).
         if (net != Net::ok)
         {
             jobs[i] = before[i];
@@ -4577,10 +4729,12 @@ void HttpSource::poll_jobs()
         cJSON_Delete(root);
     }
     {
-        // The queue of conversions rides along (one short GET): the job card says how many wait. An older console app has no such route.
+        // The queue of conversions rides along (one short GET): the job card says how many wait. An
+        // older console app has no such route.
         int qstatus = 0;
         std::string qbody;
-        if (exchange("GET", "/api/v1/library/convert/queue", {}, &qstatus, &qbody) == Net::ok && qstatus == 200)
+        if (exchange("GET", "/api/v1/library/convert/queue", {}, &qstatus, &qbody) == Net::ok &&
+            qstatus == 200)
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (data_.convert_queue_json != qbody)

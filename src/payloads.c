@@ -833,7 +833,7 @@ start_impl(const char *source, const char *mount, const char *dir, const char *n
       PS5TM_WARN("payload_ps4mount_refused", "„%s“ ist PS4Mount, und PS4Mount läuft schon (%s): nicht gestartet.",
                  log_name(name, shown, sizeof(shown)), mine ? "in der App" : "eigenständig");
       return fail(r, 409, "ps4mount_running", mine
-                  ? "Die App hat PS4Mount eingebaut, und es läuft gerade (Reiter „PS4 von USB“). Ein zweites PS4Mount würde "
+                  ? "Die App hat PS4Mount eingebaut, und es läuft gerade (Reiter „PS4 PKG von USB“). Ein zweites PS4Mount würde "
                     "dieselben Spiele noch einmal anmelden und einhängen; diese Datei wird deshalb nicht gestartet. Wer lieber "
                     "das eigenständige nutzt: dort zuerst ausschalten."
                   : "Das eigenständige PS4Mount läuft schon. Es wird nicht ein zweites Mal gestartet.");

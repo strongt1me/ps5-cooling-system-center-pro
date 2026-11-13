@@ -6,7 +6,7 @@
 
 **Fläktstyrning, temperaturövervakning och systemcentral för den jailbreakade PlayStation 5,<br>som används i en webbläsare (konsol, mobil, dator) eller som helskärmsapp på TV:n med handkontrollen, på sju språk.**
 
-![Version](https://img.shields.io/badge/Version-1.82.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.83.0-1f6feb)
 ![Firmware](https://img.shields.io/badge/FW-4.03%20till%2014.10%20st%C3%B6d-2ea44f)
 ![Licens](https://img.shields.io/badge/Licens-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
@@ -62,7 +62,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
   </tr>
   <tr>
     <td valign="top">
-      <h3>💾 PS4 från USB</h3>
+      <h3>💾 PS4 PKG från USB</h3>
       Spela PS4-fake-PKG direkt från en USB-enhet utan installation (PS4Mount inbyggt), med uppdateringar och DLC.
     </td>
     <td valign="top">
@@ -99,7 +99,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
   </tr>
   <tr>
     <td align="center"><sub>Spel: bibliotek i kompakt vy (standard) med start, kopiering, konvertering</sub></td>
-    <td align="center"><sub>PS4 från USB: fake-PKG utan installation</sub></td>
+    <td align="center"><sub>PS4 PKG från USB: fake-PKG utan installation</sub></td>
   </tr>
   <tr>
     <td><img src="docs/images/spielzeit.jpg" alt="Speltid"></td>
@@ -179,7 +179,8 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 - Starta (från konsolens webbläsare stängs sidan direkt), stäng, kopiera till andra enheter, flytta eller packa upp med ShadowMountPlus.
 - Konvertera till exFAT-, ffpkg- och ffpfsc-avbilder utan dator; allt läses tillbaka och kontrolleras efter skrivningen, med en `.sha256`-fil.
 - LZ4-asset-paket, AMPR-index, APR-EMU (ampr_emu och AMPR EMU NG), PlayGo-stub och DLC-moduler per spel; kontrollera, packa upp och reparera avbilder.
-- PS4 från USB: PS4-fake-PKG från en USB-enhet in i biblioteket utan installation (PS4Mount av gasb07).
+- PS4 PKG från USB: PS4-fake-PKG från en USB-enhet in i biblioteket utan installation (PS4Mount av gasb07).
+- FPKGMount: spela (F)PKG-spel och spelmappar utan installation, med Kraken Mount från quer3q (appen har med sig och startar det).
 - Skiva: visar vilken skiva som ligger i enheten (PS2/PS3/PS4/PS5, titel-ID) och gör en avbild av PS2-DVD och PS3-skivor med CRC-32, MD5 och SHA-1, på begäran kontrollerad mot Redump (efter ps-disc-detect).
 - Speltid med temperaturer, säkerhetskopiera och återställ spelsparningar, hitta, dela och installera paket, historik över alla jobb.
 
@@ -202,7 +203,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 1. Hämta `PS5_Cooling_System_Center_v<version>.elf` från [Releases](../../releases).
 2. Skicka den till konsolen (ELF-laddare, port **9021**), till exempel:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.82.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.83.0.elf
    ```
 3. Öppna **`http://<PS5-IP>:8086`** i en webbläsare (aviseringen uppe till vänster på TV:n visar också adressen).
 
@@ -234,7 +235,7 @@ ELF-filen är byggd med PS5-payload-SDK **v0.45**, vars startkod känner till fi
 | Sida | Innehåll |
 | --- | --- |
 | **Kylning** | Status, historik, sensorer, måltemperatur, driftläge, profiler per spel |
-| **Spel** | Bibliotek, speltid, spelsparningar, paket, PS4 från USB, säkerhetskopior, historik |
+| **Spel** | Bibliotek, speltid, spelsparningar, paket, PS4 PKG från USB, FPKGMount, säkerhetskopior, historik |
 | **Filhanterare** | Mappar på konsolen och enheterna |
 | **Payloads** | Pågående, sparade och USB-payloads, profiler, hämta payloads |
 | **System** | Konsol, lagring, nätverk, diagnos |
@@ -315,11 +316,11 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 <details>
 <summary><b>Kod från andra projekt (porterad eller inbyggd)</b></summary>
 
-- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PS4-fake-PKG från en USB-enhet utan installation; källkoden är inbyggd som fliken ”PS4 från USB”.
+- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PS4-fake-PKG från en USB-enhet utan installation; källkoden är inbyggd som fliken ”PS4 PKG från USB”.
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) och de som bidrar till [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT-, PFS- och PFSC-avbilder.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): förebilden för UFS2-/ffpkg-skrivaren.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-asset-paket, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) och [dlc_emu](https://github.com/drakmor/dlc_emu) (inbyggda versioner, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, en vidareutveckling av ampr_emu som också läser zstd-paket (de två senaste utgåvorna, 0.4.0 och 0.3.5, inbyggda, nyare hämtar appen på begäran).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, en vidareutveckling av ampr_emu som också läser zstd-paket (de två senaste utgåvorna, 0.4.0 och 0.3.5, inbyggda, nyare hämtar appen på begäran). Dessutom [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): programmet bakom fliken ”FPKGMount” (inbyggt oförändrat som ELF).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): hur startrutan byggs som en inbyggd titel.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): paketens uppbyggnad och installationsförloppet (egen kod efter denna förebild).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profilfunktionen och profilbildens format.

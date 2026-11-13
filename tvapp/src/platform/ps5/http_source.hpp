@@ -54,6 +54,7 @@ class HttpSource final : public Source
     void split_package(const std::string &id, const std::string &target, int part_mb) override;
     void ps4mount_post(const std::string &route, const std::string &json) override;
     void ps4mount_fetch(const std::string &what, const std::string &id) override;
+    void kraken_post(const std::string &json) override;
     void disc_post(const std::string &route, const std::string &json) override;
     void usb_eject(const std::string &mount) override;
     void playtime_reset() override;
@@ -117,6 +118,7 @@ class HttpSource final : public Source
             package,
             ps4mount,
             ps4mount_fetch,
+            kraken,
             disc,
             eject,
             playtime_reset,
@@ -145,14 +147,15 @@ class HttpSource final : public Source
         } kind;
         int value = 0;
         std::string id;
-        std::string text; // a JSON body, or the store's action
+        std::string text;  // a JSON body, or the store's action
         std::string extra; // a second text: the pack format of the plan
     };
 
     struct ToolRequest
     {
         bool start = false; // false: the plan
-        int kind = 0;       // 0: a plan or a start; 1: the check before a conversion; 2: the queue of conversions
+        int kind = 0; // 0: a plan or a start; 1: the check before a conversion; 2: the queue of
+                      // conversions
         Tool tool = Tool::copy;
         std::string id;
         std::string body;
@@ -186,6 +189,7 @@ class HttpSource final : public Source
     void poll_package_split();
     void poll_package_queue();
     void poll_ps4mount();
+    void poll_kraken();
     void poll_storage();
     std::string status_raw_; // the last /status answer, for System (worker thread only)
     void poll_system_extra(bool first);
@@ -243,11 +247,12 @@ class HttpSource final : public Source
     std::atomic<bool> retry_{false};
     bool online_ = false;
     bool payload_sent_ = false;
-    bool update_checked_ = false;  // the running app's version was compared with the one this tile carries
+    bool update_checked_ =
+        false; // the running app's version was compared with the one this tile carries
     bool awaiting_update_ = false; // the tile sent its own app over an older one and waits for it
     std::int64_t starting_since_us_ = 0;
-    bool send_payload();           // the embedded ELF to the loader; false when the loader is not there
-    bool replace_older_app();      // an older app runs and is idle: send ours; true when it was sent
+    bool send_payload();      // the embedded ELF to the loader; false when the loader is not there
+    bool replace_older_app(); // an older app runs and is idle: send ours; true when it was sent
     int status_failures_ = 0;
     bool reported_silence_ = false;
 };

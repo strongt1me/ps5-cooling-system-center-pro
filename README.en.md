@@ -6,7 +6,7 @@
 
 **Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in a browser (console, phone, PC) or as a fullscreen app on the TV with the controller, in seven languages.**
 
-![Version](https://img.shields.io/badge/Version-1.82.0-1f6feb)
+![Version](https://img.shields.io/badge/Version-1.83.0-1f6feb)
 ![Firmware](https://img.shields.io/badge/FW-4.03%20to%2014.10%20supported-2ea44f)
 ![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
 ![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
@@ -62,7 +62,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
   </tr>
   <tr>
     <td valign="top">
-      <h3>💾 PS4 from USB</h3>
+      <h3>💾 PS4 PKG from USB</h3>
       Play PS4 fake PKGs straight from a USB drive without installing them (PS4Mount built in), with updates and DLC.
     </td>
     <td valign="top">
@@ -99,7 +99,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
   </tr>
   <tr>
     <td align="center"><sub>Games: library in compact view (default) with start, copy, convert</sub></td>
-    <td align="center"><sub>PS4 from USB: fake PKGs without installing</sub></td>
+    <td align="center"><sub>PS4 PKG from USB: fake PKGs without installing</sub></td>
   </tr>
   <tr>
     <td><img src="docs/images/spielzeit.jpg" alt="Play time"></td>
@@ -179,7 +179,8 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 - Start (from the console's browser the page closes at once), close, copy to other drives, move or unpack with ShadowMountPlus.
 - Convert to exFAT, ffpkg and ffpfsc images without a PC; everything is read back and checked after writing, with a `.sha256` file.
 - LZ4 asset packs, AMPR index, APR-EMU (ampr_emu and AMPR EMU NG), PlayGo stub and DLC modules per game; check, unpack and repair images.
-- PS4 from USB: PS4 fake PKGs from a USB drive into the library without installing them (PS4Mount by gasb07).
+- PS4 PKG from USB: PS4 fake PKGs from a USB drive into the library without installing them (PS4Mount by gasb07).
+- FPKGMount: play (F)PKG games and game folders without installing them, with Kraken Mount by quer3q (the app carries and starts it).
 - Disc: shows which disc is in the drive (PS2/PS3/PS4/PS5, title ID) and makes an image of PS2 DVDs and PS3 discs with CRC-32, MD5 and SHA-1, checked against Redump if wanted (after ps-disc-detect).
 - Play time with temperatures, back up and restore saves, find, split and install packages, history of all jobs.
 
@@ -202,7 +203,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 1. Download `PS5_Cooling_System_Center_v<version>.elf` from the [Releases](../../releases).
 2. Send it to the console (ELF loader, port **9021**), for example:
    ```bash
-   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.82.0.elf
+   nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.83.0.elf
    ```
 3. Open **`http://<PS5-IP>:8086`** in a browser (the notification at the top left of the TV shows the address too).
 
@@ -234,7 +235,7 @@ The ELF is built with PS5 payload SDK **v0.45**, whose start-up code knows firmw
 | Page | Contents |
 | --- | --- |
 | **Cooling** | Status, history, sensors, target temperature, mode, per-game profiles |
-| **Games** | Library, play time, saves, packages, PS4 from USB, backups, history |
+| **Games** | Library, play time, saves, packages, PS4 PKG from USB, FPKGMount, backups, history |
 | **File manager** | Folders of the console and the drives |
 | **Payloads** | Running, saved and USB payloads, profiles, download payloads |
 | **System** | Console, storage, network, diagnostics |
@@ -315,11 +316,11 @@ This project stands on the shoulders of the PS5 homebrew community. **Thank you!
 <details>
 <summary><b>Code from other projects (ported or included)</b></summary>
 
-- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PS4 fake PKGs from a USB drive without installing; the source is built in as the "PS4 from USB" tab.
+- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PS4 fake PKGs from a USB drive without installing; the source is built in as the "PS4 PKG from USB" tab.
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) and the contributors to [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT, PFS and PFSC images.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): the model for the UFS2/ffpkg writer.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4 asset packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) and [dlc_emu](https://github.com/drakmor/dlc_emu) (embedded builds, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, a further development of ampr_emu that also reads zstd packs (the two newest releases, 0.4.0 and 0.3.5, embedded, newer ones fetched by the app on request).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, a further development of ampr_emu that also reads zstd packs (the two newest releases, 0.4.0 and 0.3.5, embedded, newer ones fetched by the app on request). Also [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): the program behind the “FPKGMount” tab (embedded unchanged as an ELF).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): how the starter tile is built as a native title.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): package layout and the install flow (own code after this model).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profile function and profile picture format.

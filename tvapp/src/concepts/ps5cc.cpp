@@ -93,6 +93,7 @@ enum View
     kGames,
     kPackages,
     kPs4,
+    kKraken,
     kDisc,
     kJobs,
     kPayloads,
@@ -121,7 +122,8 @@ enum PageIndex
     kPageBackups = 9,
     kPageFiles = 10,
     kPageProfile = 11,
-    kPageCount = 12,
+    kPageKraken = 12,
+    kPageCount = 13,
 };
 
 // The sidebar's icons, drawn with the kit's shapes (no artwork files): one per area.
@@ -420,7 +422,8 @@ class Ps5cc final : public app::Concept
             ps5cc::make_settings_page(), ps5cc::make_payloads_page(), ps5cc::make_logs_page(),
             ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
             ps5cc::make_system_page(),   ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
-            ps5cc::make_backups_page(),  ps5cc::make_files_page(),    ps5cc::make_profile_page()};
+            ps5cc::make_backups_page(),  ps5cc::make_files_page(),    ps5cc::make_profile_page(),
+            ps5cc::make_kraken_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -843,7 +846,8 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::up},
             {0.4f, action_bit(Action::west)},
             {0.7f, 0, Direction::none, "aktionen-laufend"},
-            // Konvertieren of the running game: the check names it in red (and the name row with the template, then the keyboard)
+            // Konvertieren of the running game: the check names it in red (and the name row with
+            // the template, then the keyboard)
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
@@ -902,7 +906,8 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "plan-konvertieren-pruefung"},
             {0.2f, action_bit(Action::north)},
             {1.2f, 0, Direction::none, "auftrag-laeuft"},
-            // the steps of the conversion with their times, then its queue (one finished, one that stopped, one waiting) and its start
+            // the steps of the conversion with their times, then its queue (one finished, one that
+            // stopped, one waiting) and its start
             {0.8f, 0, Direction::none, "auftrag-stufen"},
             {0.3f, action_bit(Action::north)},
             {0.9f, 0, Direction::none, "warteschlange"},
@@ -984,8 +989,9 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "extras-versionen"},
-            // AMPR EMU NG built in: with the automatic fakelib update of ShadowMountPlus on, the app asks first
-            // whether to switch it off; "Ja" changes the setting and the NG file goes in
+            // AMPR EMU NG built in: with the automatic fakelib update of ShadowMountPlus on, the
+            // app asks first whether to switch it off; "Ja" changes the setting and the NG file
+            // goes in
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
@@ -1073,7 +1079,7 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "paket-aufteilen-groesse"},
             {0.3f, action_bit(Action::back)},
-            // Spiele → PS4 von USB: the list, □ on a game, its add-ons, △ and the settings.
+            // Spiele → PS4 PKG von USB: the list, □ on a game, its add-ons, △ and the settings.
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "ps4-usb"},
             {0.3f, action_bit(Action::west)},
@@ -1098,6 +1104,15 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.3f, 0, Direction::down},
             {0.9f, 0, Direction::none, "ps4-uebersprungen"},
+            // Spiele → FPKGMount: the list of Kraken Mount, □ on a game, △.
+            {0.5f, action_bit(Action::jump_next)},
+            {1.0f, 0, Direction::none, "fpkg"},
+            {0.3f, action_bit(Action::west)},
+            {0.7f, 0, Direction::none, "fpkg-aktionen"},
+            {0.3f, action_bit(Action::back)},
+            {0.4f, action_bit(Action::north)},
+            {0.7f, 0, Direction::none, "fpkg-mehr"},
+            {0.3f, action_bit(Action::back)},
             // Spiele → Disc (the preview has a drive): the list, a running disc game dumped with ✕,
             // △ and the settings.
             {0.5f, action_bit(Action::jump_next)},
@@ -1153,7 +1168,8 @@ class Ps5cc final : public app::Concept
             {0.7f, 0, Direction::none, "dateien-aktionen"},
             {0.3f, action_bit(Action::confirm)},
             {0.7f, 0, Direction::none, "dateien-ausgewaehlt"},
-            // the selection mode: X sets a check and goes on to the next row; then back to where it was
+            // the selection mode: X sets a check and goes on to the next row; then back to where it
+            // was
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {0.3f, action_bit(Action::confirm)},
@@ -1181,7 +1197,8 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "dateien-ansehen"},
             {0.3f, action_bit(Action::back)},
-            // the line editor: "Bearbeiten" in the menu of a text file, one line at a time on the keyboard
+            // the line editor: "Bearbeiten" in the menu of a text file, one line at a time on the
+            // keyboard
             {0.3f, action_bit(Action::west)},
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
@@ -1389,9 +1406,9 @@ class Ps5cc final : public app::Concept
     void set_game_tabs(bool disc)
     {
         const View shown = game_views_.empty() ? kGames : view_of_game_tab();
-        game_views_ = {kGames, kPlaytime, kSaves, kPackages, kPs4};
-        std::vector<ui::TabItem> tabs = {
-            {"Bibliothek"}, {"Spielzeit"}, {"Spielstände"}, {"Pakete"}, {"PS4 von USB"}};
+        game_views_ = {kGames, kPlaytime, kSaves, kPackages, kPs4, kKraken};
+        std::vector<ui::TabItem> tabs = {{"Bibliothek"}, {"Spielzeit"},       {"Spielstände"},
+                                         {"Pakete"},     {"PS4 PKG von USB"}, {"FPKGMount"}};
         if (disc)
         {
             game_views_.push_back(kDisc);
@@ -1510,6 +1527,8 @@ class Ps5cc final : public app::Concept
             return pages_[kPagePackages].get();
         case kPs4:
             return pages_[kPagePs4].get();
+        case kKraken:
+            return pages_[kPageKraken].get();
         case kDisc:
             return pages_[kPageDisc].get();
         case kStorage:
@@ -1566,12 +1585,14 @@ class Ps5cc final : public app::Concept
         std::string key = data_.status.game_id;
         for (const ps5cc::Game &g : data_.games)
             key += '\n' + g.id + '\t' + g.name + '\t' + g.platform + '\t' + g.version + '\t' +
-                   g.format + '\t' + g.system_ver + '\t' + g.backport_fw + '\t' + std::to_string(g.size_bytes) + '\t' +
-                   std::to_string(g.played_s) + (g.can_launch ? "+" : "-");
+                   g.format + '\t' + g.system_ver + '\t' + g.backport_fw + '\t' +
+                   std::to_string(g.size_bytes) + '\t' + std::to_string(g.played_s) +
+                   (g.can_launch ? "+" : "-");
         return key;
     }
 
-    // " · FW 13.60": what the game asks for; with a backport the firmware the backport carries (11.2026)
+    // " · FW 13.60": what the game asks for; with a backport the firmware the backport carries
+    // (11.2026)
     static std::string fw_label(const ps5cc::Game &g)
     {
         const std::string &fw = !g.backport_fw.empty() ? g.backport_fw : g.system_ver;
@@ -1583,7 +1604,8 @@ class Ps5cc final : public app::Concept
     static void add_fw_rows(std::vector<ui::DetailItem> &items, const ps5cc::Game &g)
     {
         if (!g.system_ver.empty())
-            items.push_back({g.platform == "PS4" ? "Benötigte PS4-Firmware" : "Benötigte Firmware", g.system_ver});
+            items.push_back({g.platform == "PS4" ? "Benötigte PS4-Firmware" : "Benötigte Firmware",
+                             g.system_ver});
         if (!g.backport_fw.empty())
             items.push_back({"Backport-Firmware", g.backport_fw});
     }
@@ -1974,6 +1996,7 @@ class Ps5cc final : public app::Concept
                               : v == kLogs     ? ps5cc::Watch::logs
                               : v == kPackages ? ps5cc::Watch::packages
                               : v == kPs4      ? ps5cc::Watch::ps4mount
+                              : v == kKraken   ? ps5cc::Watch::kraken
                               : v == kDisc     ? ps5cc::Watch::disc
                               : v == kStorage  ? ps5cc::Watch::storage
                               : v == kPlaytime ? ps5cc::Watch::playtime
@@ -2495,8 +2518,9 @@ class Ps5cc final : public app::Concept
         history_.draw(canvas);
     }
 
-    // The steps of a conversion under its bar, each with the time it took: a dot (the check marks are not in the font), the name
-    // and the time, "noch offen" for what has not begun, "hier beendet" where it stopped.
+    // The steps of a conversion under its bar, each with the time it took: a dot (the check marks
+    // are not in the font), the name and the time, "noch offen" for what has not begun, "hier
+    // beendet" where it stopped.
     void draw_stages(ui::Canvas &canvas, const Rect &r, const ps5cc::Job &job) const
     {
         gfx::DrawList &list = canvas.list;
@@ -2505,8 +2529,9 @@ class Ps5cc final : public app::Concept
         const std::vector<ps5cc::StageText> steps = ps5cc::stage_texts(job);
         if (steps.empty())
             return;
-        // Each cell is as wide as its text needs ("Komprimieren 31:10 · 51 %" more than "Vermessen 0:42"); what is left over is shared
-        // out evenly, and when the texts are wider than the card (a longer language) every cell shrinks alike and the times get "…".
+        // Each cell is as wide as its text needs ("Komprimieren 31:10 · 51 %" more than "Vermessen
+        // 0:42"); what is left over is shared out evenly, and when the texts are wider than the
+        // card (a longer language) every cell shrinks alike and the times get "…".
         const float span = r.w - 64.0f;
         std::vector<float> need;
         float total = 0.0f;
@@ -2653,7 +2678,7 @@ class Ps5cc final : public app::Concept
     ps5cc::i18n::Translator translator_;
     std::shared_ptr<const std::vector<ps5cc::i18n::Entry>> dictionary_;
     ps5cc::Snapshot data_;
-    std::string queue_json_;      // the queue of conversions as last parsed
+    std::string queue_json_; // the queue of conversions as last parsed
     ps5cc::ConvertQueue queue_;
     std::uint64_t seen_ = 0;
     Link shown_link_ = Link::online;

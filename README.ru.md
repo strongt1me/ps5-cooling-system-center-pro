@@ -6,7 +6,7 @@
 
 **Управление вентилятором, контроль температуры и системный центр для PlayStation 5 с джейлбрейком,<br>в браузере (консоль, телефон, ПК) или как полноэкранное приложение на телевизоре с геймпадом, на семи языках.**
 
-![Версия](https://img.shields.io/badge/%D0%92%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.82.0-1f6feb)
+![Версия](https://img.shields.io/badge/%D0%92%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.83.0-1f6feb)
 ![Прошивка](https://img.shields.io/badge/FW-4.03%E2%80%9314.10%20%D0%BF%D0%BE%D0%B4%D0%B4%D0%B5%D1%80%D0%B6%D0%BA%D0%B0-2ea44f)
 ![Лицензия](https://img.shields.io/badge/%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-GPL--3.0--or--later-blue)
 ![Платформа](https://img.shields.io/badge/%D0%9F%D0%BB%D0%B0%D1%82%D1%84%D0%BE%D1%80%D0%BC%D0%B0-PS5%20Payload-003791)
@@ -62,7 +62,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
   </tr>
   <tr>
     <td valign="top">
-      <h3>💾 PS4 с USB</h3>
+      <h3>💾 PS4 PKG с USB</h3>
       Игры PS4 (fake PKG) прямо с USB-накопителя без установки (встроенный PS4Mount), с обновлениями и DLC.
     </td>
     <td valign="top">
@@ -95,11 +95,11 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 <table>
   <tr>
     <td width="50%"><img src="docs/images/spiele.jpg" alt="Библиотека игр"></td>
-    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Игры PS4 с USB"></td>
+    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Игры PS4 PKG с USB"></td>
   </tr>
   <tr>
     <td align="center"><sub>Игры: библиотека в компактном виде (по умолчанию) с запуском, копированием, конвертацией</sub></td>
-    <td align="center"><sub>PS4 с USB: fake PKG без установки</sub></td>
+    <td align="center"><sub>PS4 PKG с USB: fake PKG без установки</sub></td>
   </tr>
   <tr>
     <td><img src="docs/images/spielzeit.jpg" alt="Время игры"></td>
@@ -179,7 +179,8 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 - Запуск (из браузера консоли страница закрывается сразу), закрытие, копирование на другие накопители, перенос или распаковка с ShadowMountPlus.
 - Конвертация в образы exFAT, ffpkg и ffpfsc без ПК; всё перечитывается и проверяется после записи, с файлом `.sha256`.
 - LZ4-ассет-паки, индекс AMPR, APR-EMU (ampr_emu и AMPR EMU NG), заглушка PlayGo и модули DLC для каждой игры; проверка, распаковка и исправление образов.
-- PS4 с USB: fake PKG PS4 с USB-накопителя в библиотеку без установки (PS4Mount от gasb07).
+- PS4 PKG с USB: fake PKG PS4 PKG с USB-накопителя в библиотеку без установки (PS4Mount от gasb07).
+- FPKGMount: запуск игр (F)PKG и папок игр без установки через Kraken Mount от quer3q (приложение содержит его и запускает).
 - Disc: показывает, какой диск лежит в дисководе (PS2/PS3/PS4/PS5, ID заголовка), и создаёт образ DVD PS2 и дисков PS3 с CRC-32, MD5 и SHA-1, при желании с проверкой по Redump (по мотивам ps-disc-detect).
 - Время игры с температурами, резервное копирование и восстановление сохранений, поиск, разделение и установка пакетов, история всех операций.
 
@@ -202,7 +203,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 1. Скачайте `PS5_Cooling_System_Center_v<версия>.elf` из [Releases](../../releases).
 2. Отправьте его на консоль (загрузчик ELF, порт **9021**), например:
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.82.0.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.83.0.elf
    ```
 3. Откройте **`http://<IP-PS5>:8086`** в браузере (адрес также показывает уведомление вверху слева на ТВ).
 
@@ -234,7 +235,7 @@ ELF собран с PS5 payload SDK **v0.45**, стартовый код кот�
 | Страница | Содержание |
 | --- | --- |
 | **Охлаждение** | Состояние, история, датчики, целевая температура, режим, профили для игр |
-| **Игры** | Библиотека, время игры, сохранения, пакеты, PS4 с USB, резервные копии, история |
+| **Игры** | Библиотека, время игры, сохранения, пакеты, PS4 PKG с USB, FPKGMount, резервные копии, история |
 | **Файловый менеджер** | Папки консоли и накопителей |
 | **Пейлоады** | Запущенные, сохранённые и лежащие на USB пейлоады, профили, загрузка пейлоадов |
 | **Система** | Консоль, хранилище, сеть, диагностика |
@@ -315,11 +316,11 @@ make
 <details>
 <summary><b>Код из других проектов (перенесённый или встроенный)</b></summary>
 
-- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): fake PKG PS4 с USB без установки; код встроен как вкладка «PS4 с USB».
+- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): fake PKG PS4 PKG с USB без установки; код встроен как вкладка «PS4 PKG с USB».
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) и участники [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): образы exFAT, PFS и PFSC.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): образец для записи UFS2/ffpkg.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-ассет-паки, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) и [dlc_emu](https://github.com/drakmor/dlc_emu) (встроенные сборки, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроены две самые новые версии, 0.4.0 и 0.3.5, более новые приложение загружает по запросу).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроены две самые новые версии, 0.4.0 и 0.3.5, более новые приложение загружает по запросу). А также [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): программа за вкладкой «FPKGMount» (встроена без изменений как ELF).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): как собрана плитка запуска в виде нативного приложения.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): структура пакетов и процесс установки (собственный код по этому образцу).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): функция профиля и формат изображения профиля.

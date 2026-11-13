@@ -55,7 +55,14 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   Startcode, kein fremder Systemcode, siehe `sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt.
 - **ps-disc-detect** (GPL-3.0-or-later; „disc detect“, Archiv `ps-disc-detect-main.zip`, vom User am 21.10.2026 bereitgestellt): Vorbild und Wissen für den Reiter „Disc“ (`src/disc.c`): der Weg zum Laufwerk (`/dev/xpt0`, CAMIOCOMMAND mit GET CONFIGURATION, READ DISC STRUCTURE, SET STREAMING), die Profilnummern, wo die Titelkennung liegt (`SYSTEM.CNF`, `PARAM.SFO`, `param.json`), das Lesen von `/dev/cd0` in 128-KiB-Stücken, das Benennen nach Redump und das Schema der Redump-Datenbank. Der Code ist neu geschrieben (kein CD-Abbild, kein IRD, keine eingebettete Liste); die MD5- und SHA-1-Rechnungen sind eigene Fassungen der veröffentlichten Verfahren.
-- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.7.3): Für den Reiter „PS4 von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
+- **Kraken Mount** (quer3q, GPL-3.0-or-later, Version 0.0.1-beta vom 13.11.2026, <https://github.com/quer3q/kraken-mount>, Tag `v0.0.1-beta`):
+  Für den Reiter „FPKGMount“ ist die veröffentlichte `kraken-mount.elf` (4 327 528 Bytes, SHA-256
+  `32cdf8e9aee9a8e91a7acd8884ac4701a75a38d96d483ea00bb7cbf4fe11a522`, gleich der `SHA256SUMS` der Veröffentlichung) unverändert als
+  zlib-Blob eingebettet (`third_party/kraken_mount/`, `tools/gen_blob.py`) und wird bei „Kraken Mount starten“ an den ELF-Lader
+  gesendet; die App bedient es über seine Schnittstelle auf Port 8097 (`src/kraken.c`). Aus seinem Quelltext ist nichts übernommen
+  (er ist in Rust geschrieben); der Quelltext dieser Fassung steht unter der genannten Adresse. Eine neuere Veröffentlichung lädt die
+  App nur auf Knopfdruck von dort (HTTPS, Prüfsumme aus `SHA256SUMS`).
+- **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.7.3): Für den Reiter „PS4 PKG von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
   (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
   (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und

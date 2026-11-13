@@ -105,6 +105,7 @@ std::unique_ptr<Page> make_settings_page();
 std::unique_ptr<Page> make_payloads_page();
 std::unique_ptr<Page> make_packages_page();
 std::unique_ptr<Page> make_ps4mount_page();
+std::unique_ptr<Page> make_kraken_page();
 std::unique_ptr<Page> make_disc_page();
 std::unique_ptr<Page> make_storage_page();
 // System (Phase 7): Konsole, Speicher (the storage page inside it), Kühlleistung, Zusatzabfragen,

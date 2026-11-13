@@ -32,7 +32,7 @@ int ps5tm_thread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*s
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.82.0"
+#define PS5TM_VERSION        "1.83.0"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -851,6 +851,14 @@ void          ps5tm_amprlib_smp_info(struct cJSON *o);
 /* The name of that line alone, for texts made in C. Never NULL. */
 const char   *ps5tm_amprlib_smp_key(void);
 struct cJSON *ps5tm_amprng_fetch(char *why, size_t why_len, int *http);
+
+/* FPKGMount (src/kraken.c): Kraken Mount (quer3q) started, asked and stopped by the app. The state is {embedded_version, fetched_version?,
+   start_version, project, fetching, running, starting?, kraken:{…Kraken Mount's own /api/state…}}. The action is a JSON object with "action":
+   start, stop, rescan, rebuild (id), rebuild_all, delete (id, path), fetch; the result is an HTTP status (200 = done) with a sentence in msg. */
+struct cJSON *ps5tm_kraken_state(void);
+int           ps5tm_kraken_action(const struct cJSON *body, char *msg, size_t n);
+/* icon0.png of one of its games (malloc'd); 0 = found. */
+int           ps5tm_kraken_icon(const char *title_id, unsigned char **png, size_t *len);
 
 /* Checking, unpacking and repairing the image of a game (imgjob.c). */
 struct cJSON *ps5tm_imgjob_info(const char *title_id, int *http);

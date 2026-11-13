@@ -133,7 +133,8 @@ class MockSource final : public Source
             g.can_remount = !installed;
             g.smp_mounted = !installed;
             g.ampr_emu = std::string(m.id) == "PPSA01325";
-            // the firmware a game asks for; one with a backport (the firmware it carries), a PS4 title
+            // the firmware a game asks for; one with a backport (the firmware it carries), a PS4
+            // title
             const std::string mid = m.id;
             if (mid == "PPSA02433" || mid == "PPSA10777")
                 g.system_ver = "12.00";
@@ -185,8 +186,8 @@ class MockSource final : public Source
             {1793070000, "convert", "Iron Tide", "exFAT → ffpkg", "cancelled", 0},
             {1793060000, "copy", "Sky Drifters", "→ Interne SSD", "failed", 0},
         };
-        // A queue of conversions with something in it: one finished, one that stopped because the source changed, one waiting (the
-        // queue is stopped; the tour starts it).
+        // A queue of conversions with something in it: one finished, one that stopped because the
+        // source changed, one waiting (the queue is stopped; the tour starts it).
         {
             QueueItem done;
             done.qid = 1;
@@ -207,7 +208,8 @@ class MockSource final : public Source
             failed.state = "failed";
             failed.output_bytes = 0;
             failed.elapsed_s = 0.0;
-            failed.message = "Die Quelle hat sich während des Konvertierens geändert: Data/pack01.bin. Das Ergebnis wurde nicht übernommen.";
+            failed.message = "Die Quelle hat sich während des Konvertierens geändert: "
+                             "Data/pack01.bin. Das Ergebnis wurde nicht übernommen.";
             QueueItem waiting = done;
             waiting.qid = 3;
             waiting.id = "PPSA08455";
@@ -242,6 +244,7 @@ class MockSource final : public Source
         fill_backdrops();
         fill_packages();
         fill_ps4mount();
+        fill_kraken();
         fill_disc();
         fill_volumes();
         fill_phase4();
@@ -627,7 +630,6 @@ class MockSource final : public Source
         return plan_ticket_;
     }
 
-
     // ---- the check before a conversion and the queue (13.11.2026) ----
     std::uint64_t convert_check(const std::string &body) override
     {
@@ -666,7 +668,9 @@ class MockSource final : public Source
             item.state = "waiting";
             std::string stem, err;
             expand_name(text("name"), g, stem, err);
-            item.target = item.mount + (item.mode == "backup" ? "/PS5-Sicherung/Spiele/" : "/homebrew/") + stem + "." + item.op;
+            item.target = item.mount +
+                          (item.mode == "backup" ? "/PS5-Sicherung/Spiele/" : "/homebrew/") + stem +
+                          "." + item.op;
             queue_.push_back(item);
             queue_run_ = true;
         }
@@ -676,8 +680,8 @@ class MockSource final : public Source
             queue_run_ = false;
         else if (action == "clear")
         {
-            queue_.erase(std::remove_if(queue_.begin(), queue_.end(),
-                                        [](const QueueItem &i) { return i.state != "waiting" && i.state != "running"; }),
+            queue_.erase(std::remove_if(queue_.begin(), queue_.end(), [](const QueueItem &i)
+                                        { return i.state != "waiting" && i.state != "running"; }),
                          queue_.end());
         }
         else if (action == "remove" || action == "retry")
@@ -702,7 +706,8 @@ class MockSource final : public Source
     }
 
     // The name of a result from the template, as the console app's cvname.c does it.
-    static bool expand_name(const std::string &tpl, const Game *g, std::string &out, std::string &err)
+    static bool expand_name(const std::string &tpl, const Game *g, std::string &out,
+                            std::string &err)
     {
         const std::string title = g != nullptr ? g->name : "Spiel";
         const std::string id = g != nullptr ? g->id : "";
@@ -731,7 +736,8 @@ class MockSource final : public Source
                     out += source;
                 else
                 {
-                    err = "Die Vorlage kennt „{" + key + "}“ nicht. Es gibt {titel}, {id}, {version} und {quelle}.";
+                    err = "Die Vorlage kennt „{" + key +
+                          "}“ nicht. Es gibt {titel}, {id}, {version} und {quelle}.";
                     return false;
                 }
                 i = end;
@@ -739,7 +745,10 @@ class MockSource final : public Source
             else
             {
                 const char c = t[i];
-                out += (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') ? '_' : c;
+                out += (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' ||
+                        c == '<' || c == '>' || c == '|')
+                           ? '_'
+                           : c;
             }
         }
         while (!out.empty() && (out.back() == ' ' || out.back() == '.'))
@@ -752,7 +761,8 @@ class MockSource final : public Source
         return true;
     }
 
-    // The console app's check (gameconvert.c: ps5tm_gameconvert_check), reduced to what the preview can say.
+    // The console app's check (gameconvert.c: ps5tm_gameconvert_check), reduced to what the preview
+    // can say.
     std::string make_check(const std::string &body) const
     {
         cJSON *req = cJSON_Parse(body.c_str());
@@ -769,7 +779,8 @@ class MockSource final : public Source
         cJSON *root = cJSON_CreateObject();
         cJSON *rows = cJSON_AddArrayToObject(root, "checks");
         bool errors = false;
-        const auto add = [&](const char *id, const char *level, const std::string &t, const std::string &hint = {})
+        const auto add = [&](const char *id, const char *level, const std::string &t,
+                             const std::string &hint = {})
         {
             cJSON *o = cJSON_CreateObject();
             cJSON_AddStringToObject(o, "id", id);
@@ -788,9 +799,11 @@ class MockSource final : public Source
             return std::string(buf);
         };
         add("source", "ok",
-            folder ? "Quelle lesbar: 2312 Dateien, als exFAT-Abbild " + gb(raw) : "Abbild-Datei lesbar: " + gb(raw));
+            folder ? "Quelle lesbar: 2312 Dateien, als exFAT-Abbild " + gb(raw)
+                   : "Abbild-Datei lesbar: " + gb(raw));
         if (g != nullptr && g->id == data_.status.game_id)
-            add("running", "error", "Das Spiel läuft gerade.", "Beende das Spiel, dann geht es weiter.");
+            add("running", "error", "Das Spiel läuft gerade.",
+                "Beende das Spiel, dann geht es weiter.");
         std::string stem, err;
         std::string target;
         const MockDrive *drive = nullptr;
@@ -806,20 +819,33 @@ class MockSource final : public Source
             add("name", "error", err);
         else
         {
-            target = mount + (mode == "backup" ? "/PS5-Sicherung/Spiele/" : "/homebrew/") + stem + ext;
-            add("name", "ok", "Name der Ausgabe: " + stem + ext + " (" + std::to_string(stem.size() + std::string(ext).size()) + " von 239 Bytes)");
+            target =
+                mount + (mode == "backup" ? "/PS5-Sicherung/Spiele/" : "/homebrew/") + stem + ext;
+            add("name", "ok",
+                "Name der Ausgabe: " + stem + ext + " (" +
+                    std::to_string(stem.size() + std::string(ext).size()) + " von 239 Bytes)");
             if (stem == "Taken")
-                add("exists", "error", "Am Ziel gibt es " + stem + ext + " schon.", "Ändere den Namen oder wähle einen anderen Ordner.");
+                add("exists", "error", "Am Ziel gibt es " + stem + ext + " schon.",
+                    "Ändere den Namen oder wähle einen anderen Ordner.");
             if (drive->free_gb * 1e9 < raw + 256e6)
-                add("space", "error", std::string("Auf ") + drive->label + " ist nicht genug Platz: " + gb(drive->free_gb * 1e9) + " frei, gebraucht werden bis zu " + gb(raw + 256e6) + ".",
+                add("space", "error",
+                    std::string("Auf ") + drive->label +
+                        " ist nicht genug Platz: " + gb(drive->free_gb * 1e9) +
+                        " frei, gebraucht werden bis zu " + gb(raw + 256e6) + ".",
                     "Wähle ein anderes Laufwerk oder schaffe Platz.");
             else
-                add("space", "ok", std::string("Platz auf ") + drive->label + ": " + gb(drive->free_gb * 1e9) + " frei, gebraucht höchstens " + gb(raw));
+                add("space", "ok",
+                    std::string("Platz auf ") + drive->label + ": " + gb(drive->free_gb * 1e9) +
+                        " frei, gebraucht höchstens " + gb(raw));
             if (std::string(drive->fs) == "msdosfs" && raw > 4.29e9)
-                add("fat32", "error", "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Das Abbild wird " + gb(raw) + " groß.",
+                add("fat32", "error",
+                    "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Das "
+                    "Abbild wird " +
+                        gb(raw) + " groß.",
                     "Wähle ein Laufwerk mit exFAT.");
         }
-        // The move by ShadowMountPlus that crawls through the whole preview does not count here (the console app would name it).
+        // The move by ShadowMountPlus that crawls through the whole preview does not count here
+        // (the console app would name it).
         bool busy = false;
         for (std::size_t i = 0; i < data_.jobs.size(); ++i)
         {
@@ -894,8 +920,8 @@ class MockSource final : public Source
         changed();
     }
 
-    // The steps of the running conversion, from how far the invented job has come (the preview runs a thousand times faster than
-    // the console).
+    // The steps of the running conversion, from how far the invented job has come (the preview runs
+    // a thousand times faster than the console).
     static void fill_stages(Job &job)
     {
         job.stages.clear();
@@ -1257,6 +1283,50 @@ class MockSource final : public Source
         changed();
     }
 
+    // Enough of Kraken Mount for the preview: starting and stopping it, building and deleting
+    // games.
+    void kraken_post(const std::string &json) override
+    {
+        KrakenState &k = data_.kraken;
+        const auto has = [&](const char *text) { return json.find(text) != std::string::npos; };
+        std::string msg;
+        if (has("\"start\""))
+        {
+            k.running = true;
+            k.starting = false;
+            k.version = "0.0.1";
+            msg = "Kraken Mount 0.0.1-beta wird gestartet. Das dauert einige Sekunden.";
+        }
+        else if (has("\"stop\""))
+        {
+            k.running = false;
+            msg = "Kraken Mount wird beendet.";
+        }
+        else if (has("\"rescan\""))
+            msg = "Kraken Mount sucht neu.";
+        else if (has("\"rebuild_all\""))
+            msg = "Kraken Mount baut alle Spiele neu auf.";
+        else if (has("\"rebuild\""))
+            msg = "Das Spiel wird neu aufgebaut.";
+        else if (has("\"fetch\""))
+            msg = "Die neueste Fassung (0.0.1-beta) ist schon da.";
+        else if (has("\"delete\""))
+        {
+            for (std::size_t i = 0; i < k.games.size(); ++i)
+            {
+                if (has(("\"" + k.games[i].title_id + "\"").c_str()))
+                {
+                    k.games.erase(k.games.begin() + static_cast<std::ptrdiff_t>(i));
+                    break;
+                }
+            }
+            msg = "Das Spiel ist gelöscht.";
+        }
+        if (!msg.empty())
+            notice(Notice::Kind::success, "FPKGMount", msg);
+        changed();
+    }
+
     void ps4mount_fetch(const std::string &what, const std::string &id) override
     {
         if (what == "log")
@@ -1340,15 +1410,18 @@ class MockSource final : public Source
         if (route == "library/ampr")
             data_.extras.ampr_job =
                 R"({"ok":true,"state":"running","active":true,"kind":"index","phase":"Dateien werden gelesen","files":6120})";
-        // AMPR EMU NG built in: the app answers with the advice about update_emulators (unless it was switched off
-        // before, with "yes" to the question)
+        // AMPR EMU NG built in: the app answers with the advice about update_emulators (unless it
+        // was switched off before, with "yes" to the question)
         if (route == "ampr-emu/smp-update")
         {
             smp_update_off_ = json.find("false") != std::string::npos;
             sync_system_config();
-            notice(Notice::Kind::success, "Extras",
-                   smp_update_off_ ? "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet."
-                                   : "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist wieder eingeschaltet.");
+            notice(
+                Notice::Kind::success, "Extras",
+                smp_update_off_
+                    ? "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist abgeschaltet."
+                    : "Die automatische Fakelib-Aktualisierung in ShadowMountPlus ist wieder "
+                      "eingeschaltet.");
             changed();
             return;
         }
@@ -1373,16 +1446,18 @@ class MockSource final : public Source
         v.json =
             lib == "playgo"
                 ? R"({"ok":true,"versions":[{"name":"libScePlayGo.sprx-0.3","label":"0.3","valid":true,"bundled":true,"sha256":"b1"}]})"
-                : std::string(R"({"ok":true,"emus":{"update_emulators":)") + (smp_update_off_ ? "false" : "true") +
-                  R"(,"key":"update_emulators","format":"flat","warning":"","smp_version":")" + data_.config.smp_version +
-                  R"("},"ng_release":{"version":"0.4.0","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.4.0-ng","label":"NG 0.4.0","ng":true,"pack":true,)"
-                  R"("valid":true,"bundled":true,"sha256":"n3"},{"name":"libSceAmpr.sprx-0.4.0-ng-debug","label":"NG 0.4.0 debug","ng":true,"pack":true,)"
-                  R"("debug":true,"valid":true,"bundled":true,"sha256":"n4"},{"name":"libSceAmpr.sprx-0.3.5-ng","label":"NG 0.3.5","ng":true,"pack":true,)"
-                  R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.3.5-ng-debug","label":"NG 0.3.5 debug","ng":true,"pack":true,)"
-                  R"("debug":true,"valid":true,"bundled":true,"sha256":"n2"},{"name":"libSceAmpr.sprx-0.4.2.1-test-debug-pack","label":"0.4.2.1 test-debug-pack",)"
-                  R"("pack":true,"debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.2.1-test-nopack","label":"0.4.2.1",)"
-                  R"("valid":true,"bundled":true,"sha256":"a3"},{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
-                  R"("valid":true,"bundled":true,"sha256":"a1"}]})";
+                : std::string(R"({"ok":true,"emus":{"update_emulators":)") +
+                      (smp_update_off_ ? "false" : "true") +
+                      R"(,"key":"update_emulators","format":"flat","warning":"","smp_version":")" +
+                      data_.config.smp_version +
+                      R"("},"ng_release":{"version":"0.4.0","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.4.0-ng","label":"NG 0.4.0","ng":true,"pack":true,)"
+                      R"("valid":true,"bundled":true,"sha256":"n3"},{"name":"libSceAmpr.sprx-0.4.0-ng-debug","label":"NG 0.4.0 debug","ng":true,"pack":true,)"
+                      R"("debug":true,"valid":true,"bundled":true,"sha256":"n4"},{"name":"libSceAmpr.sprx-0.3.5-ng","label":"NG 0.3.5","ng":true,"pack":true,)"
+                      R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.3.5-ng-debug","label":"NG 0.3.5 debug","ng":true,"pack":true,)"
+                      R"("debug":true,"valid":true,"bundled":true,"sha256":"n2"},{"name":"libSceAmpr.sprx-0.4.2.1-test-debug-pack","label":"0.4.2.1 test-debug-pack",)"
+                      R"("pack":true,"debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.2.1-test-nopack","label":"0.4.2.1",)"
+                      R"("valid":true,"bundled":true,"sha256":"a3"},{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
+                      R"("valid":true,"bundled":true,"sha256":"a1"}]})";
         changed();
     }
 
@@ -1394,21 +1469,32 @@ class MockSource final : public Source
         ExtrasLz4Plan &l = data_.extras_lz4_plan;
         ++l.seq;
         const bool zstd = format == "zstd";
-        l.json = std::string(zstd ? R"({"ok":true,"valid":true,"pack_files":905,"pack_bytes":29700000000,"loose_files":6,)"
-                                  : R"({"ok":true,"valid":true,"pack_files":812,"pack_bytes":29000000000,"loose_files":44,)") +
-                 R"("loose_bytes":1200000000,"chunks":118000,)" +
-                 R"("unsigned_exec":{"count":4,"refused":0,"capped":false,"bytes":148000000,"files":["eboot.bin","sce_module/libgame.prx"]},"est_s":)" +
-                 std::to_string(zstd ? (level >= 19 ? 21000 : level >= 9 ? 2600 : level == 1 ? 480 : 900)
-                                     : (level == 12 ? 4200 : level == 3 ? 900 : 1860)) +
-                 "}";
+        l.json =
+            std::string(
+                zstd
+                    ? R"({"ok":true,"valid":true,"pack_files":905,"pack_bytes":29700000000,"loose_files":6,)"
+                    : R"({"ok":true,"valid":true,"pack_files":812,"pack_bytes":29000000000,"loose_files":44,)") +
+            R"("loose_bytes":1200000000,"chunks":118000,)" +
+            R"("unsigned_exec":{"count":4,"refused":0,"capped":false,"bytes":148000000,"files":["eboot.bin","sce_module/libgame.prx"]},"est_s":)" +
+            std::to_string(zstd ? (level >= 19  ? 21000
+                                   : level >= 9 ? 2600
+                                   : level == 1 ? 480
+                                                : 900)
+                                : (level == 12  ? 4200
+                                   : level == 3 ? 900
+                                                : 1860)) +
+            "}";
         changed();
     }
 
-    // The raw config the System page reads (probe mask, ShadowMountPlus version and its automatic fakelib update)
+    // The raw config the System page reads (probe mask, ShadowMountPlus version and its automatic
+    // fakelib update)
     std::string system_config_json() const
     {
-        return std::string(R"({"probe_mask":13,"probe_revert_in_s":0,"probe_revert_mask":0,"smp_version":")") +
-               data_.config.smp_version + R"(","smp_update_emulators":)" + (smp_update_off_ ? "false" : "true") + "}";
+        return std::string(
+                   R"({"probe_mask":13,"probe_revert_in_s":0,"probe_revert_mask":0,"smp_version":")") +
+               data_.config.smp_version + R"(","smp_update_emulators":)" +
+               (smp_update_off_ ? "false" : "true") + "}";
     }
 
     void sync_system_config()
@@ -1820,7 +1906,8 @@ class MockSource final : public Source
             if (mode == BackdropMode::custom && !b.custom)
             {
                 notice(Notice::Kind::error, "Kein eigenes Bild",
-                       "Öffne zuerst die Browser-App aus dieser App (Options → Weboberfläche im Browser öffnen) und lade es dort hoch: System → Hintergründe der "
+                       "Öffne zuerst die Browser-App aus dieser App (Options → Weboberfläche im "
+                       "Browser öffnen) und lade es dort hoch: System → Hintergründe der "
                        "Vollbild-App.");
                 changed();
                 return;
@@ -1970,7 +2057,8 @@ class MockSource final : public Source
             cJSON_AddStringToObject(risk, "stream_dir", "");
             cJSON_AddNumberToObject(risk, "stream_dir_bytes", 0);
             cJSON_AddNumberToObject(root, "ffpkg_bytes", ffpkg);
-            // plain ELF executables (fsign.c): a big PS5 folder game has a few, a very big one has one that cannot be signed too
+            // plain ELF executables (fsign.c): a big PS5 folder game has a few, a very big one has
+            // one that cannot be signed too
             cJSON *unsig = cJSON_AddObjectToObject(root, "unsigned_exec");
             const bool plain = folder && !ps4 && size > 20e9;
             cJSON_AddNumberToObject(unsig, "count", plain ? 4 : 0);
@@ -2326,6 +2414,46 @@ class MockSource final : public Source
 
     // PS4Mount on, three games on the USB drive: one ready with an update and add-ons, one taken
     // out of the library, one installed on the console as well.
+    void fill_kraken()
+    {
+        KrakenState &k = data_.kraken;
+        k.loaded = k.running = true;
+        k.version = "0.0.1";
+        k.embedded_version = "0.0.1-beta";
+        struct Seed
+        {
+            const char *id, *name, *version, *kind, *packing, *drive, *status;
+            double gb;
+            bool live;
+        };
+        static const Seed kSeeds[] = {
+            {"PPSA01325", "Lantern Pass", "01.002", "pkg", "", "USB 1", "ready", 24.8, false},
+            {"PPSA04311", "Harbor Lights", "01.000", "folder", "zstd", "Interne SSD", "ready", 11.2,
+             true},
+            {"PPSA07720", "Pixel Garden", "01.001", "pkg", "", "USB 2", "building", 8.1, false},
+        };
+        for (const Seed &s : kSeeds)
+        {
+            KrakenGame g;
+            g.title_id = s.id;
+            g.name = s.name;
+            g.version = s.version;
+            g.kind = s.kind;
+            g.packing = s.packing;
+            g.drive = s.drive;
+            g.status = s.status;
+            g.size = static_cast<std::uint64_t>(s.gb * 1e9);
+            g.cache_size = static_cast<std::uint64_t>(s.gb * 4e6);
+            g.path = std::string(g.kind == "pkg" ? "/mnt/usb0/homebrew/" : "/data/homebrew/") +
+                     s.name + (g.kind == "pkg" ? ".pkg" : "");
+            g.running = s.live;
+            k.games.push_back(g);
+        }
+        k.log = {"[10:12:01] scan: 3 games, 0 errors",
+                 "[10:12:02] build PPSA07720: pkg 8.1 GB, extracting sce_sys ...",
+                 "[10:12:08] PPSA01325 registered", "[10:12:09] ready"};
+    }
+
     void fill_ps4mount()
     {
         Ps4Mount &m = data_.ps4mount;
@@ -2991,7 +3119,8 @@ class MockSource final : public Source
     std::uint64_t check_ticket_ = 0;
     std::string check_body_;
     float check_at_ = 0.0f;
-    std::vector<QueueItem> queue_; // the queue of conversions (invented; a few entries stand in it from the start)
+    std::vector<QueueItem>
+        queue_; // the queue of conversions (invented; a few entries stand in it from the start)
     bool queue_run_ = false;
     int queue_next_ = 1;
     bool smp_update_off_ = false; // "Ja" to the ShadowMountPlus question was given
@@ -3074,7 +3203,8 @@ std::string format_job_title(const std::string &kind, int items_done, int items)
            std::to_string(items) + " Dateien/Ordnern";
 }
 
-std::string format_job_route(const std::string &kind, const std::string &from, const std::string &dest)
+std::string format_job_route(const std::string &kind, const std::string &from,
+                             const std::string &dest)
 {
     if (kind == "delete")
         return from.empty() ? "" : "Ordner: " + from;

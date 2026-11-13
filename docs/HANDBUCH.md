@@ -459,7 +459,7 @@ filterbar. Die letzten 500 liegen auf der Konsole in
 
 ### PS4-Spiele von USB (PS4Mount)
 
-Der Reiter **PS4 von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) direkt vom USB-Laufwerk, ohne sie zu installieren. Er beruht auf PS4Mount von gasb07 (GPL-3.0), dessen Quelltext in die App übernommen ist.
+Der Reiter **PS4 PKG von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) direkt vom USB-Laufwerk, ohne sie zu installieren. Er beruht auf PS4Mount von gasb07 (GPL-3.0), dessen Quelltext in die App übernommen ist.
 
 1. **Vorbereiten.** Auf einem exFAT-Laufwerk liegen Spiel, Update und Zusatzinhalte als `.pkg` in der obersten Ebene oder im Ordner `pkg` (oder in Ordnern, die in den Einstellungen stehen). Die Dateinamen sind egal.
 2. **Einschalten.** Der Schalter „Einschalten“ startet die Suche; er bleibt über einen Neustart der App hinweg an. „Jetzt suchen“ löst eine Suche sofort aus.
@@ -498,6 +498,16 @@ Ein **Asset-Pack** besteht aus wenigen Dateien (`ampr_assets-000.pak` und weiter
 Spieldaten eines Spiels hinein und verkleinert sie mit LZ4. Die APR-EMU liest sie beim Spielen und entpackt jeden Block erst, wenn
 das Spiel ihn braucht. Laut dem Entwickler (drakmor, *ampr_emu*) halbiert das den Platzbedarf und lädt oft 30 bis 40 Prozent
 schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes Spiel verträgt das.**
+
+### (F)PKG-Spiele mit Kraken Mount (FPKGMount)
+
+Der Reiter **FPKGMount** neben „PS4 PKG von USB“ spielt (F)PKG-Spiele und Spielordner (roh, zstd, LZ4) direkt von der Platte oder vom USB-Laufwerk, ohne sie zu installieren. Dafür bringt die App das Programm **Kraken Mount** von quer3q mit (GPL-3.0, Version 0.0.1-beta; ein eigenes Programm, nicht in die App umgeschrieben), startet es und zeigt seine Spiele.
+
+- **Vorbereiten:** Ein unverschlüsseltes Debug-FPKG (zum Beispiel aus Dump Forge) als `.pkg` oder ein Spielordner mit `eboot.bin` und `sce_sys/param.json` liegt in `/data/homebrew`, `/data/etaHEN/games`, im Ordner `homebrew` oder `etaHEN/games` eines USB- oder M.2-Laufwerks oder in dessen Hauptordner. Die Seite nennt die Suchordner, die Kraken Mount gerade benutzt. Backports kommen nach `<Suchordner>/backports/<TITEL-ID>*`.
+- **Einschalten:** „Einschalten“ (oder „Kraken Mount starten“) sendet das Programm an den ELF-Lader. Jedes Spiel bekommt eine Meldung und eine eigene Kachel. Eine Kachel für Kraken Mount selbst legt die App nicht an (es gibt nur die Seite in der App, wie bei „PS4 PKG von USB“); eine früher von Kraken Mount angelegte Kachel entfernt sie beim nächsten Start. Beenden geht über denselben Schalter und wird abgelehnt, solange ein Spiel läuft.
+- **Liste:** Name, Titel-ID, Version, Größe, Laufwerk, Art (FPKG oder Ordner) und Zustand. **Neu aufbauen** baut den Zwischenspeicher eines Spiels neu (er liegt immer auf der internen SSD unter `/data/krakenmount/caches`). **Spiel löschen** fragt vorher und löscht die PKG-Datei bzw. den Spielordner, die Kachel und den Zwischenspeicher; Spielstände bleiben.
+- **Neue Fassung:** „Neue Fassung von GitHub laden“ holt die neueste Veröffentlichung (nur auf Knopfdruck, per HTTPS, mit der Prüfsumme aus `SHA256SUMS`); der nächste Start nimmt sie. Die Einstellungen von Kraken Mount (Suchordner, Fakelib) bleiben in seiner eigenen Seite (Port 8097, Link im Reiter).
+- **Hinweise:** Kraken Mount ist eine Beta; als `.pkg` läuft ein Spiel womöglich schlechter als als zstd-Ordner. ShadowMountPlus sucht in denselben Ordnern: Für Ordner-Spiele läuft am besten nur eines von beiden. Nach einem Neustart der Konsole muss Kraken Mount laufen, damit die Spiele sichtbar bleiben. Die Vollbild-App hat dieselbe Seite unter Spiele → FPKGMount (Quadrat: Neu aufbauen, Löschen; Dreieck: Start/Beenden, Suchen, neue Fassung, Protokoll). Ein Spiel, dessen `param.json` „upgradable“ als `applicationDrmType` trägt (das haben viele Abbilder), zeigt die Konsole mit einem Vorhängeschloss an der Kachel, weil Kraken Mount die Datei unverändert anmeldet; ShadowMountPlus schreibt sie dabei auf „standard“ um. Starten lässt sich das Spiel trotzdem.
 
 ### Was nötig ist
 
@@ -1678,7 +1688,7 @@ derselben laufenden App über `127.0.0.1:8086`.
 - **Bereiche:** Kühlung (Übersicht, Einstellungen mit Warnungen, Lichtleiste, Spielprofilen, Nachtmodus, Selbsttest),
   Spiele (Bibliothek mit Aktionen-Menü – Kopieren, Konvertieren, Verschieben, Entpacken, Abbild prüfen, Löschen, Extras,
   Aus-/Einhängen, laufendes Spiel beenden –, Spielzeit, Spielstände, Pakete mit Installieren/Warteschlange/Aufteilen,
-  PS4 von USB, Disc, Sicherungen, Aufträge), Dateimanager, Payloads (eigene, geladene, Store, Profile mit Editor),
+  PS4 PKG von USB, FPKGMount, Disc, Sicherungen, Aufträge), Dateimanager, Payloads (eigene, geladene, Store, Profile mit Editor),
   System (Konsole, Speicher, Kühlleistung, Zusatzabfragen, Experte), Profil (Name, Profilbild, Danke) und Protokoll
   (App-Protokoll, Kernel-Log live, Gespeichert).
 - **Nur im Browser:** Hochladen vom PC, Herunterladen, Profile als Datei sichern/laden, Links öffnen. Unter System zeigt
