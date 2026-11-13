@@ -21,7 +21,8 @@
 
 ## Hinweise
 - Die neue ELF an Port 9021 senden (sie beendet die ältere Instanz selbst) und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein).
-- **An der PS5 Pro (Firmware 12.00) geprüft:** die Sprachwahl in der Vollbild-App (folgt der Systemsprache der Konsole, im Menü „Automatisch (Deutsch)“), das Register mit Lasttests (Hochladen gegen Auswerfen eines nicht vorhandenen Laufwerks, dreimal je 80 Anfragen: kein abgerissener Aufruf, Ablehnungen mit dem richtigen Grund; 40 gleichzeitige Verschiebe-Starts) und die Ablösung der älteren Ausführung über die Sperrdatei. Die Auswahl der Sprache in der Browser-App ist am PC mit neun Fällen geprüft, am Fernseher noch nicht.
+- **An der PS5 Pro (Firmware 12.00) geprüft:** die Sprachwahl in der Vollbild-App (folgt der Systemsprache der Konsole, im Menü „Automatisch (Deutsch)“), das Register mit Lasttests (Hochladen gegen Auswerfen eines nicht vorhandenen Laufwerks, dreimal je 80 Anfragen: kein abgerissener Aufruf, Ablehnungen mit dem richtigen Grund; 40 gleichzeitige Verschiebe-Starts) und die Ablösung der älteren Ausführung über die Sperrdatei. Die Auswahl der Sprache in der Browser-App ist am PC mit neun Fällen geprüft.
+- **Danach an der Konsole bestätigt (13.11.2026):** Die Browser-App startet auf dem PS5-Browser auf Deutsch mit „Auto (System)“, und die Vollbild-App startet und läuft sauber.
 - Wer die Sprache der Vollbild-App im Menü fest gewählt hat, behält sie; „Automatisch“ im Menü folgt wieder der Konsole.
 
 ## Downloads
