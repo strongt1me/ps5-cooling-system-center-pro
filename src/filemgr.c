@@ -909,11 +909,15 @@ ps5tm_filemgr_receive_upload(int fd, const char *query, const char *prefix, size
   int up  = g_uploads > 0;
   if(!job && !up) g_uploads++;
   pthread_mutex_unlock(&g_lock);
+  /* A refusal reads off the body first (budgeted, see drain_body): an answer sent while the sender is still writing is lost in a connection
+     reset, and the page shows a network error instead of the reason. */
   if(job) {
+    drain_body(fd, prefix_len, total);
     ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
     return;
   }
   if(up) {
+    drain_body(fd, prefix_len, total);
     ps5tm_http_send_error(fd, 409, "upload_busy", "Es wird gerade schon eine Datei hochgeladen.");
     return;
   }
@@ -930,7 +934,10 @@ ps5tm_filemgr_receive_upload(int fd, const char *query, const char *prefix, size
   pthread_mutex_lock(&g_lock);
   g_uploads--;
   pthread_mutex_unlock(&g_lock);
-  if(other) ps5tm_http_send_error(fd, 409, "files_busy", why);
+  if(other) {
+    drain_body(fd, prefix_len, total);
+    ps5tm_http_send_error(fd, 409, "files_busy", why);
+  }
 }
 
 
