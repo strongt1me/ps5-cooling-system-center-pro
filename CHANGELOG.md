@@ -2,6 +2,13 @@
 
 ## Unveröffentlicht
 
+### Vollbild-App: Dateimanager mit Haken-Auswahl, „Alle Größen messen“ und Zeileneditor (13.11.2026)
+Anlass: Wunsch des Nutzers, dass die Vollbild-App im Dateimanager dasselbe kann wie die Browser-App.
+- **Auswahlmodus mit Haken:** „Auswählen“ im Quadrat-Menü eines Eintrags (oder △ → „Mehrere auswählen“) zeigt vor jedem Eintrag ein Kästchen. X setzt oder nimmt den Haken und springt eine Zeile weiter, so lassen sich viele Einträge schnell nacheinander abhaken; O beendet den Modus (die Haken bleiben), die untere Leiste und ein Hinweis auf der rechten Karte sagen es. Kopieren, Ausschneiden und Löschen wirken auf die Haken. Ein Ordnerwechsel beendet den Modus.
+- **„Alle Größen messen“** (△ → Mehr): misst die Ordner der Ansicht nacheinander (die App zählt je Ordner höchstens 8 Sekunden), mit Fortschritt auf der rechten Karte und „Messen beenden“; bereits gemessene Ordner werden übersprungen. „Sortieren nach: Größe“ zählt gemessene Ordner jetzt mit ihrer Größe.
+- **Textdateien bearbeiten** (Quadrat-Menü → „Bearbeiten“, bis 64 KiB und nur, wo Ändern erlaubt ist, wie in der Browser-App): Die Datei wird zeilenweise bearbeitet. X öffnet die Bildschirmtastatur für die Zeile, Quadrat das Zeilenmenü (davor einfügen, danach einfügen, löschen), △ speichert, O schließt (mit Rückfrage bei ungespeicherten Änderungen). Geänderte Zeilen sind markiert; Zeilenenden (LF oder CRLF) und ein fehlender letzter Zeilenumbruch bleiben, wie die Datei sie hatte. Gespeichert wird über `POST /api/v1/files/write` (Temp-Datei, `fsync`, Umbenennen); der Editor bleibt offen, bis die App antwortet. Neu: `src/ps5cc/files_edit.*` (Test `ps5cc_files_edit_test`, 8 Tests).
+- Neue Texte in den sechs Wörterbüchern der Vollbild-App; der Hinweis auf die Tasten steht in der unteren Leiste.
+
 ---
 
 ## v1.82.0 – 13.11.2026

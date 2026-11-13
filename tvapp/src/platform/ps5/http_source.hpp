@@ -82,6 +82,7 @@ class HttpSource final : public Source
     void files_delete(const std::vector<std::string> &paths) override;
     void files_view(const std::string &path) override;
     void files_size(const std::string &path) override;
+    void files_write(const std::string &path, const std::string &text) override;
     void quit_app() override;
     std::uint64_t request_plan(Tool tool, const std::string &id) override;
     void start_tool(Tool tool, const std::string &id, const std::string &body) override;
@@ -140,6 +141,7 @@ class HttpSource final : public Source
             fs_delete,
             fs_view,
             fs_size,
+            fs_write,
         } kind;
         int value = 0;
         std::string id;

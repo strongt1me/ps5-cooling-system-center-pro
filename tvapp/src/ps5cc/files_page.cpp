@@ -10,6 +10,7 @@
 // are typed on the kit's keyboard. Delete asks first and names what goes (user, 06.11.2026).
 // Uploading from a computer and downloading to one stay in the web app.
 
+#include "ps5cc/files_edit.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
 #include "ps5cc/playtime_rules.hpp"
@@ -65,12 +66,12 @@ using gfx::Rect;
 
 const Rect kPanel{200.0f, 92.0f, 1520.0f, 864.0f};
 
-constexpr int kPlaceTag = 100;  // + index into the places
-constexpr int kUpTag = 99;      // ".." up one folder
-constexpr int kEntryTag = 1000; // + index into entries_ (sorted)
-constexpr int kJumpRows = 8;    // L2 / R2: a page of rows at a time
+constexpr int kPlaceTag = 100;          // + index into the places
+constexpr int kUpTag = 99;              // ".." up one folder
+constexpr int kEntryTag = 1000;         // + index into entries_ (sorted)
+constexpr int kJumpRows = 8;            // L2 / R2: a page of rows at a time
 constexpr std::size_t kDeleteShown = 5; // names the delete question lists; the rest is counted
-constexpr float kBarH = 50.0f;  // the path bar above the list
+constexpr float kBarH = 50.0f;          // the path bar above the list
 // The page has no sub-tabs: it starts level with the sidebar's top (user, 30.10.2026).
 constexpr float kFilesTop = kTabY;
 
@@ -85,6 +86,7 @@ enum class Glyph
     up,
     drive,
     picked,
+    unpicked, // a box without a check: the selection mode shows one before every entry
 };
 
 // The row's sign, drawn with the kit's shapes like the sidebar's icons (29.10.2026: the list looked
@@ -129,6 +131,10 @@ void draw_glyph(gfx::DrawList &list, Glyph glyph, float cx, float cy, float s, C
         list.circle(x + s * 0.76f, cy, s * 0.07f, ink);
         list.line(x + s * 0.2f, cy, x + s * 0.5f, cy, t, ink);
         break;
+    case Glyph::unpicked:
+        list.bordered_rect({x + s * 0.1f, y + s * 0.1f, s * 0.8f, s * 0.8f}, s * 0.2f, clear,
+                           t * 1.3f, ink);
+        break;
     case Glyph::picked:
         list.rounded_rect({x + s * 0.06f, y + s * 0.06f, s * 0.88f, s * 0.88f}, s * 0.22f,
                           Color::rgb(0x3880ff));
@@ -149,6 +155,7 @@ enum MenuTag
     kDelete,
     kMeasure,
     kView,
+    kEdit,
     kPaste = 20,
     kForget,
     kNewFolder,
@@ -157,10 +164,18 @@ enum MenuTag
     kSort,
     kCancel,
     kReload,
+    kPickMode,
+    kMeasureAll,
+    kMeasureStop,
     kConflictReplace = 40,
     kConflictKeep,
     kConflictSkip,
     kConflictCancel,
+    kLineBefore = 60,
+    kLineAfter,
+    kLineDelete,
+    kKeepEditing = 70,
+    kDiscard,
 };
 
 enum Dialog
@@ -168,7 +183,11 @@ enum Dialog
     kNone,
     kName,
     kViewer,
+    kEditor,
 };
+
+constexpr int kEditLineMode = 90; // name_mode_ of the keyboard when it edits one line of the editor
+constexpr int kEditRows = 18;     // lines on the editor's page
 
 std::string json_text(const std::string &s)
 {
@@ -270,9 +289,51 @@ class FilesPage final : public Page
             {
                 shown_path_ = folder_.path;
                 picked_.clear();
+                pick_mode_ = false;
+                measure_queue_.clear();
+                measure_current_.clear();
                 list_.set_focus(0);
             }
             sort_entries();
+        }
+        if (dialog_ == kEditor && edit_loading_ && data.fs_view.seq != view_seq_)
+        {
+            view_seq_ = data.fs_view.seq;
+            edit_loading_ = false;
+            const FsView &v = data.fs_view;
+            if (!v.error.empty())
+                edit_error_ = v.error;
+            else if (v.truncated || v.text.size() > kEditMaxBytes)
+                edit_error_ = "Diese Datei ist zu groß für den Editor (über 64 KiB).";
+            else
+            {
+                edit_text_ = split_edit_text(v.text);
+                if (!edit_text_.error.empty())
+                    edit_error_ = edit_text_.error;
+                else
+                {
+                    edit_before_ = edit_text_.lines;
+                    edit_ready_ = true;
+                    update_marks();
+                }
+            }
+        }
+        if (data.fs_write.seq != write_seq_)
+        {
+            write_seq_ = data.fs_write.seq;
+            if (edit_saving_ && dialog_ == kEditor)
+            {
+                edit_saving_ = false;
+                if (data.fs_write.ok)
+                {
+                    saved_name_ = base_of(edit_path_);
+                    saved_t_ = clock_;
+                    dialog_ = kNone;
+                    source().files_open(folder_.path); // the size and the time are new
+                }
+                else
+                    edit_error_ = data.fs_write.error;
+            }
         }
         if (dialog_ == kViewer && data.fs_view.seq != view_seq_)
         {
@@ -305,8 +366,8 @@ class FilesPage final : public Page
     {
         if (ask_.is_open())
         {
-            // "Löschen" (the second button) is the only way to delete; back, "Abbrechen" and anything
-            // else leave everything as it was
+            // "Löschen" (the second button) is the only way to delete; back, "Abbrechen" and
+            // anything else leave everything as it was
             if (ask_.handle(input, feedback))
             {
                 source().files_delete(delete_paths_);
@@ -341,7 +402,9 @@ class FilesPage final : public Page
             const ui::Event event = keys_.handle(input, feedback);
             if (event == ui::Event::cancelled)
             {
-                dialog_ = kNone;
+                if (name_mode_ == kEditLineMode)
+                    cancel_line_edit();
+                dialog_ = name_mode_ == kEditLineMode ? kEditor : kNone;
                 feedback.play(audio::Cue::back);
             }
             else if (event == ui::Event::activated)
@@ -361,6 +424,18 @@ class FilesPage final : public Page
                                      std::max(0, static_cast<int>(view_lines_.size()) - page));
             else if (input.nav == Direction::up)
                 view_top_ = std::max(0, view_top_ - 1);
+            return;
+        }
+        if (dialog_ == kEditor)
+        {
+            handle_editor(input, feedback);
+            return;
+        }
+        if (input.is_pressed(Action::back) && pick_mode_)
+        {
+            // O ends the selection first (what is checked stays checked), the next O goes back
+            pick_mode_ = false;
+            feedback.play(audio::Cue::back);
             return;
         }
         if (input.is_pressed(Action::back) && !folder_.path.empty())
@@ -395,6 +470,7 @@ class FilesPage final : public Page
         info_.update(dt);
         menu_.update(dt);
         ask_.update(dt);
+        step_measure();
         if (dialog_ == kName)
             keys_.update(dt);
         shown_.target = dialog_ != kNone ? 1.0f : 0.0f;
@@ -446,9 +522,21 @@ class FilesPage final : public Page
                               std::to_string(clip_paths_.size()) +
                               (clip_paths_.size() == 1 ? " Eintrag" : " Einträge"),
                           "aus " + clip_from_ + " · Mehr → Hier einfügen", kBlue);
-        if (!picked_.empty())
-            y = note_card(canvas, paint, card, y, std::to_string(picked_.size()) + " ausgewählt",
-                          "Quadrat-Taste: Kopieren, Ausschneiden, Löschen …", kBlue);
+        if (pick_mode_ || !picked_.empty())
+            y = note_card(canvas, paint, card, y,
+                          picked_.empty() ? std::string("Nichts ausgewählt")
+                                          : std::to_string(picked_.size()) + " ausgewählt",
+                          pick_mode_
+                              ? std::string("X-Taste setzt den Haken · O-Taste beendet die Auswahl")
+                              : std::string("Quadrat-Taste: Kopieren, Ausschneiden, Löschen …"),
+                          kBlue);
+        if (measuring())
+            y = note_card(canvas, paint, card, y, "Größen werden gemessen",
+                          std::to_string(measure_done_) + " von " + std::to_string(measure_total_) +
+                              " · Mehr: Messen beenden",
+                          kBlue);
+        if (!saved_name_.empty() && clock_ - saved_t_ < 6.0f)
+            y = note_card(canvas, paint, card, y, "Gespeichert", saved_name_, kGood);
 
         // the job at the bottom
         const float jy = kBottom - 200.0f;
@@ -489,9 +577,8 @@ class FilesPage final : public Page
                     amount += " · " + format_rate(job_.rate_bps);
                 if (job_.eta_s > 0)
                     amount += " · noch ca. " + format_eta(job_.eta_s);
-                ui::text(list, fonts.regular,
-                         ui::fit_label(paint, amount, 18.0f, card.w - 60.0f), card.x + 30.0f,
-                         jy + 122.0f, 18.0f, kMuted);
+                ui::text(list, fonts.regular, ui::fit_label(paint, amount, 18.0f, card.w - 60.0f),
+                         card.x + 30.0f, jy + 122.0f, 18.0f, kMuted);
                 ui::text(list, fonts.regular,
                          ui::fit_label(paint, job_.current, 18.0f, card.w - 60.0f), card.x + 30.0f,
                          jy + 150.0f, 18.0f, kMuted);
@@ -512,11 +599,13 @@ class FilesPage final : public Page
 
     void draw_overlay(ui::Canvas &canvas) const override
     {
-        menu_.draw(canvas);
-        ask_.draw(canvas);
         const float amount = shown_.value;
         if (amount <= 0.01f)
+        {
+            menu_.draw(canvas);
+            ask_.draw(canvas);
             return;
+        }
         gfx::DrawList &list = canvas.list;
         const ui::Fonts &fonts = canvas.fonts;
         list.rounded_rect({0.0f, 0.0f, 1920.0f, 1080.0f}, 0.0f, kNavy.with_alpha(0.78f * amount));
@@ -533,14 +622,19 @@ class FilesPage final : public Page
         const ui::GlyphStyle glyphs = ui::GlyphStyle::dark();
         if (dialog_ == kName)
         {
-            ui::text(list, fonts.display, name_mode_ == kRename ? "Umbenennen" : "Neuer Ordner",
+            const bool line_mode = name_mode_ == kEditLineMode;
+            ui::text(list, fonts.display,
+                     line_mode ? "Zeile " + std::to_string(edit_line_ + 1) + " ändern"
+                               : std::string(name_mode_ == kRename ? "Umbenennen" : "Neuer Ordner"),
                      panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
             ui::text(list, fonts.regular,
-                     ui::fit_label(paint, "in " + folder_.path, 21.0f, panel.w - 80.0f),
+                     ui::fit_label(paint, line_mode ? edit_path_ : "in " + folder_.path, 21.0f,
+                                   panel.w - 80.0f),
                      panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
             const Rect field{panel.x + 120.0f, panel.y + 160.0f, panel.w - 240.0f, 84.0f};
             list.rounded_rect(field, 14.0f, Color::rgb(0x3880ff, 0.12f));
-            const std::string shown = ui::fit_label(paint, name_, 32.0f, field.w - 60.0f);
+            const std::string shown = ui::fit_label(paint, line_mode ? edit_display(name_) : name_,
+                                                    32.0f, field.w - 60.0f);
             ui::text(list, fonts.semibold, shown, field.x + 28.0f, field.y + 54.0f, 32.0f, kInk);
             if (std::fmod(clock_, 1.0f) < 0.6f)
             {
@@ -555,6 +649,10 @@ class FilesPage final : public Page
                                       {ui::Button::triangle, "Leerzeichen"},
                                       {ui::Button::circle, "Abbrechen"}};
             ui::draw_hints(list, fonts, glyphs, hints, 3, panel.x + 40.0f, false, layout);
+        }
+        else if (dialog_ == kEditor)
+        {
+            draw_editor(canvas, paint, panel, layout, glyphs);
         }
         else
         {
@@ -589,6 +687,75 @@ class FilesPage final : public Page
             ui::draw_hints(list, fonts, glyphs, hints, 1, panel.x + 40.0f, false, layout);
         }
         list.pop_opacity();
+        menu_.draw(canvas);
+        ask_.draw(canvas);
+    }
+
+    // The line editor: the lines with their numbers, the focused one lit, a mark before every line
+    // that was changed or put in (user, 13.11.2026: a controller types one line at a time).
+    void draw_editor(ui::Canvas &canvas, ui::Painter &paint, const Rect &panel,
+                     const ui::HintLayout &layout, const ui::GlyphStyle &glyphs) const
+    {
+        gfx::DrawList &list = canvas.list;
+        const ui::Fonts &fonts = canvas.fonts;
+        ui::text(list, fonts.display,
+                 ui::fit_label(paint, "Bearbeiten: " + base_of(edit_path_), 36.0f, panel.w - 80.0f),
+                 panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
+        std::string about = edit_path_;
+        if (edit_ready_)
+        {
+            about += " · Zeilen: " + std::to_string(edit_text_.lines.size());
+            if (edit_changed_ > 0)
+                about += " · geändert: " + std::to_string(edit_changed_);
+        }
+        ui::text(list, fonts.regular, ui::fit_label(paint, about, 21.0f, panel.w - 80.0f),
+                 panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
+        if (edit_loading_)
+            ui::text(list, fonts.semibold, "Wird geladen …", panel.x + panel.w * 0.5f,
+                     panel.y + 420.0f, 30.0f, kInk, gfx::Align::center);
+        else if (!edit_ready_)
+            paragraph(canvas, edit_error_, panel.x + 40.0f, panel.y + 200.0f, panel.w - 80.0f,
+                      kCritical, 4);
+        else
+        {
+            const float row_h = 34.0f;
+            const float top = panel.y + 140.0f;
+            const int count = static_cast<int>(edit_text_.lines.size());
+            for (int r = 0; r < kEditRows; ++r)
+            {
+                const int i = edit_top_ + r;
+                if (i >= count)
+                    break;
+                const float y0 = top + static_cast<float>(r) * row_h;
+                const Rect row{panel.x + 28.0f, y0, panel.w - 56.0f, row_h - 3.0f};
+                if (i == edit_focus_)
+                {
+                    list.rounded_rect(row, 8.0f, Color::rgb(0x3880ff, 0.22f));
+                    list.bordered_rect(row, 8.0f, {0.0f, 0.0f, 0.0f, 0.0f}, 1.5f, kBlue);
+                }
+                if (edit_marks_[static_cast<std::size_t>(i)])
+                    list.rounded_rect({row.x + 8.0f, row.y + 7.0f, 6.0f, row.h - 14.0f}, 3.0f,
+                                      kWarning);
+                ui::text(list, fonts.regular, std::to_string(i + 1), row.x + 92.0f, y0 + 23.0f,
+                         17.0f, kMuted, gfx::Align::right);
+                ui::text(list, fonts.regular,
+                         ui::fit_label(paint,
+                                       edit_display(edit_text_.lines[static_cast<std::size_t>(i)]),
+                                       20.0f, row.w - 130.0f),
+                         row.x + 108.0f, y0 + 23.0f, 20.0f, kInk.with_alpha(0.92f));
+            }
+        }
+        if (edit_ready_ && !edit_error_.empty())
+            ui::text(list, fonts.regular, ui::fit_label(paint, edit_error_, 20.0f, panel.w - 80.0f),
+                     panel.x + 40.0f, panel.y + panel.h - 84.0f, 20.0f, kCritical);
+        if (edit_saving_)
+            ui::text(list, fonts.semibold, "Wird gespeichert …", panel.x + panel.w * 0.5f,
+                     panel.y + panel.h - 84.0f, 26.0f, kInk, gfx::Align::center);
+        const ui::Hint hints[] = {{ui::Button::cross, "Zeile ändern"},
+                                  {ui::Button::square, "Zeilen"},
+                                  {ui::Button::triangle, "Speichern"},
+                                  {ui::Button::circle, "Schließen"}};
+        ui::draw_hints(list, fonts, glyphs, hints, 4, panel.x + 40.0f, false, layout);
     }
 
     int hints(ui::Hint *out) const override
@@ -596,7 +763,9 @@ class FilesPage final : public Page
         int n = 0;
         if (const FsEntry *e = focused_entry())
         {
-            if (e->type == "dir" || e->type == "dirlink")
+            if (pick_mode_ && pickable(*e))
+                out[n++] = {ui::Button::cross, "Haken setzen"};
+            else if (e->type == "dir" || e->type == "dirlink")
                 out[n++] = {ui::Button::cross, "Öffnen"};
             else if (e->type == "file")
                 out[n++] = {ui::Button::cross, "Ansehen"};
@@ -605,6 +774,8 @@ class FilesPage final : public Page
         else if (focused_place() != nullptr || focused_tag() == kUpTag)
             out[n++] = {ui::Button::cross, "Öffnen"};
         out[n++] = {ui::Button::triangle, "Mehr"};
+        if (pick_mode_)
+            out[n++] = {ui::Button::circle, "Auswahl beenden"};
         return n;
     }
 
@@ -709,6 +880,22 @@ class FilesPage final : public Page
             return;
         }
         const FsEntry *e = focused_entry();
+        if (pick_mode_ && e != nullptr && pickable(*e))
+        {
+            // the selection mode (user, 13.11.2026): X sets or takes away the check and goes to the
+            // next row, so that many entries are checked one after the other
+            if (!picked_.erase(e->name))
+                picked_.insert(e->name);
+            feedback.play(audio::Cue::select);
+            key_.clear();
+            rebuild();
+            const int next = list_.focus() + 1;
+            if (next < static_cast<int>(list_.items().size()) &&
+                list_.items()[static_cast<std::size_t>(next)].tag >= kEntryTag)
+                list_.set_focus(next, false);
+            refresh_info();
+            return;
+        }
         if (e != nullptr && (e->type == "dir" || e->type == "dirlink"))
             open(join(folder_.path, e->name), feedback);
         else if (e != nullptr && e->type == "file")
@@ -753,8 +940,12 @@ class FilesPage final : public Page
         std::vector<ui::MenuItem> items;
         if (pickable(*e))
             items.push_back(item(picked_.count(e->name) ? "Abwählen" : "Auswählen", kPick));
+        if (pick_mode_)
+            items.push_back(item("Auswahl beenden", kPickMode));
         if (e->type == "file")
             items.push_back(item("Ansehen", kView));
+        if (e->type == "file" && is_text_name(e->name))
+            items.push_back(item("Bearbeiten", kEdit, !edit_refusal(*e).empty()));
         if (e->type == "dir")
             items.push_back(item("Größe messen", kMeasure));
         items.push_back(
@@ -807,6 +998,12 @@ class FilesPage final : public Page
         items.push_back(item("Neuer Ordner", kNewFolder, !inside || !folder_.writable));
         items.push_back(item("Alle auswählen", kPickAll, !inside || entries_.empty()));
         items.push_back(item("Keine auswählen", kPickNone, picked_.empty()));
+        items.push_back(item(pick_mode_ ? "Auswahl beenden" : "Mehrere auswählen", kPickMode,
+                             !inside || entries_.empty()));
+        items.push_back(
+            item("Alle Größen messen", kMeasureAll, !inside || !has_dirs() || measuring()));
+        if (measuring())
+            items.push_back(item("Messen beenden", kMeasureStop));
         items.push_back(item(std::string("Sortieren nach: ") + orders[sort_], kSort, !inside));
         if (job_.active)
             items.push_back(item("Auftrag abbrechen", kCancel, false, true));
@@ -833,7 +1030,44 @@ class FilesPage final : public Page
         {
         case kPick:
             if (!picked_.erase(menu_entry_.name))
+            {
                 picked_.insert(menu_entry_.name);
+                pick_mode_ = true; // "Auswählen" starts the selection: the boxes appear
+            }
+            break;
+        case kPickMode:
+            pick_mode_ = !pick_mode_;
+            break;
+        case kEdit:
+            open_editor(join(folder_.path, menu_entry_.name));
+            break;
+        case kMeasureAll:
+            start_measure();
+            break;
+        case kMeasureStop:
+            measure_queue_.clear();
+            measure_current_.clear();
+            break;
+        case kLineBefore:
+            insert_line(edit_focus_, feedback);
+            break;
+        case kLineAfter:
+            insert_line(edit_focus_ + 1, feedback);
+            break;
+        case kLineDelete:
+            if (edit_text_.lines.size() > 1 && edit_focus_ >= 0 &&
+                edit_focus_ < static_cast<int>(edit_text_.lines.size()))
+            {
+                edit_text_.lines.erase(edit_text_.lines.begin() + edit_focus_);
+                edit_focus_ = std::min(edit_focus_, static_cast<int>(edit_text_.lines.size()) - 1);
+                scroll_to_focus();
+                update_marks();
+            }
+            break;
+        case kKeepEditing:
+            break;
+        case kDiscard:
+            dialog_ = kNone;
             break;
         case kView:
             show(join(folder_.path, menu_entry_.name), feedback);
@@ -932,10 +1166,10 @@ class FilesPage final : public Page
         if (t.size() > names.size())
             names.push_back("und " + std::to_string(t.size() - names.size()) + " weitere");
         std::vector<std::string> notes{"Ordner: " + folder_.path};
-        const std::string warn = std::string("Das lässt sich nicht rückgängig machen.") +
-                                 (any_folder ? "\nOrdner werden mit allem gelöscht, was darin liegt."
-                                             : "");
-        ask_.open(t.size() > 1 ? std::to_string(t.size()) + " Einträge löschen?"
+        const std::string warn =
+            std::string("Das lässt sich nicht rückgängig machen.") +
+            (any_folder ? "\nOrdner werden mit allem gelöscht, was darin liegt." : "");
+        ask_.open(t.size() > 1          ? std::to_string(t.size()) + " Einträge löschen?"
                   : t[0]->type == "dir" ? "Ordner löschen?"
                                         : "Datei löschen?",
                   names, notes, feedback, "Das wird endgültig gelöscht:", warn);
@@ -947,6 +1181,7 @@ class FilesPage final : public Page
         name_mode_ = mode;
         name_error_.clear();
         name_ = mode == kRename ? menu_entry_.name : "Neuer Ordner";
+        keys_.style.max_length = 120;
         keys_.set_layout(0);
         keys_.set_length(static_cast<int>(name_.size()));
         keys_.set_active(true);
@@ -956,6 +1191,17 @@ class FilesPage final : public Page
 
     void submit_name(ui::Feedback &feedback)
     {
+        if (name_mode_ == kEditLineMode)
+        {
+            if (edit_line_ >= 0 && edit_line_ < static_cast<int>(edit_text_.lines.size()))
+                edit_text_.lines[static_cast<std::size_t>(edit_line_)] =
+                    name_ + (edit_cr_ ? std::string(1, static_cast<char>(13)) : std::string());
+            edit_new_line_ = false;
+            update_marks();
+            dialog_ = kEditor;
+            feedback.play(audio::Cue::select);
+            return;
+        }
         if (name_.empty() || name_ == "." || name_ == ".." ||
             name_.find('/') != std::string::npos || name_.find('\\') != std::string::npos)
         {
@@ -972,6 +1218,260 @@ class FilesPage final : public Page
                                              ",\"name\":" + json_text(name_) + "}");
         dialog_ = kNone;
         feedback.play(audio::Cue::select);
+    }
+
+    // ---------------------------------------------------------------- the line editor
+
+    void open_editor(const std::string &path)
+    {
+        edit_path_ = path;
+        edit_text_ = EditText{};
+        edit_text_.lines = {std::string()};
+        edit_before_.clear();
+        edit_marks_ = {false};
+        edit_changed_ = 0;
+        edit_error_.clear();
+        edit_loading_ = true;
+        edit_ready_ = false;
+        edit_saving_ = false;
+        edit_new_line_ = false;
+        edit_focus_ = 0;
+        edit_top_ = 0;
+        dialog_ = kEditor;
+        source().files_view(path);
+    }
+
+    bool dirty() const
+    {
+        return edit_ready_ && edit_text_.lines != edit_before_;
+    }
+
+    void update_marks()
+    {
+        edit_marks_ = edit_marks(edit_text_.lines, edit_before_);
+        edit_changed_ = static_cast<int>(std::count(edit_marks_.begin(), edit_marks_.end(), true));
+        if (edit_changed_ == 0 && edit_text_.lines.size() != edit_before_.size())
+            edit_changed_ = 1; // lines taken out leave no mark, but the text is changed
+    }
+
+    void scroll_to_focus()
+    {
+        if (edit_focus_ < edit_top_)
+            edit_top_ = edit_focus_;
+        else if (edit_focus_ >= edit_top_ + kEditRows)
+            edit_top_ = edit_focus_ - kEditRows + 1;
+    }
+
+    void handle_editor(const InputFrame &input, ui::Feedback &feedback)
+    {
+        if (edit_saving_)
+            return; // the answer of the app is on its way
+        if (!edit_ready_)
+        {
+            // loading, or the file cannot be edited: O (or X) leaves
+            if (input.is_pressed(Action::back) ||
+                (!edit_loading_ && input.is_pressed(Action::confirm)))
+            {
+                dialog_ = kNone;
+                feedback.play(audio::Cue::back);
+            }
+            return;
+        }
+        const int count = static_cast<int>(edit_text_.lines.size());
+        if (input.is_pressed(Action::back))
+        {
+            if (dirty())
+                open_discard_menu(feedback);
+            else
+            {
+                dialog_ = kNone;
+                feedback.play(audio::Cue::back);
+            }
+            return;
+        }
+        int to = edit_focus_;
+        if (input.nav == Direction::down)
+            to = std::min(count - 1, edit_focus_ + 1);
+        else if (input.nav == Direction::up)
+            to = std::max(0, edit_focus_ - 1);
+        else if (input.is_pressed(Action::jump_next))
+            to = std::min(count - 1, edit_focus_ + kEditRows - 1);
+        else if (input.is_pressed(Action::jump_prev))
+            to = std::max(0, edit_focus_ - (kEditRows - 1));
+        if (to != edit_focus_)
+        {
+            edit_focus_ = to;
+            scroll_to_focus();
+            feedback.play(audio::Cue::focus);
+            return;
+        }
+        if (input.is_pressed(Action::confirm))
+            open_line_edit(edit_focus_, feedback);
+        else if (input.is_pressed(Action::west))
+            open_line_menu(feedback);
+        else if (input.is_pressed(Action::north))
+            save_editor(feedback);
+    }
+
+    void open_line_edit(int index, ui::Feedback &feedback)
+    {
+        std::string line = edit_text_.lines[static_cast<std::size_t>(index)];
+        edit_cr_ = !line.empty() &&
+                   line.back() == static_cast<char>(13); // a CR of mixed line endings is kept
+        if (edit_cr_)
+            line.pop_back();
+        if (line.size() > kEditMaxLineBytes)
+        {
+            edit_error_ = "Diese Zeile ist zu lang für die Tastatur (über 400 Zeichen).";
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        edit_error_.clear();
+        edit_line_ = index;
+        name_mode_ = kEditLineMode;
+        name_error_.clear();
+        name_ = line;
+        keys_.style.max_length = static_cast<int>(kEditMaxLineBytes);
+        keys_.set_layout(0);
+        keys_.set_length(static_cast<int>(name_.size()));
+        keys_.set_active(true);
+        keys_.enter();
+        dialog_ = kName;
+    }
+
+    // The keyboard was left with O: a line put in and never typed into goes again.
+    void cancel_line_edit()
+    {
+        if (edit_new_line_ && edit_line_ >= 0 &&
+            edit_line_ < static_cast<int>(edit_text_.lines.size()) && edit_text_.lines.size() > 1)
+        {
+            edit_text_.lines.erase(edit_text_.lines.begin() + edit_line_);
+            edit_focus_ = std::min(edit_focus_, static_cast<int>(edit_text_.lines.size()) - 1);
+            scroll_to_focus();
+            update_marks();
+        }
+        edit_new_line_ = false;
+    }
+
+    void insert_line(int at, ui::Feedback &feedback)
+    {
+        if (edit_text_.lines.size() >= kEditMaxLines)
+        {
+            edit_error_ = "Zu viele Zeilen für den Editor (über 4000).";
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        at = std::clamp(at, 0, static_cast<int>(edit_text_.lines.size()));
+        edit_text_.lines.insert(edit_text_.lines.begin() + at, std::string());
+        edit_focus_ = at;
+        scroll_to_focus();
+        update_marks();
+        edit_new_line_ = true;
+        open_line_edit(at, feedback);
+    }
+
+    void open_line_menu(ui::Feedback &feedback)
+    {
+        std::vector<ui::MenuItem> items;
+        items.push_back(item("Zeile davor einfügen", kLineBefore));
+        items.push_back(item("Zeile danach einfügen", kLineAfter));
+        items.push_back(item("Zeile löschen", kLineDelete, edit_text_.lines.size() <= 1));
+        menu_.set_items(items);
+        menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
+    }
+
+    // O with unsaved changes: the focus is on "Weiter bearbeiten".
+    void open_discard_menu(ui::Feedback &feedback)
+    {
+        ui::MenuItem sep;
+        sep.separator = true;
+        std::vector<ui::MenuItem> items;
+        items.push_back(item("Änderungen verwerfen?", 0, true));
+        items.push_back(sep);
+        items.push_back(item("Weiter bearbeiten", kKeepEditing));
+        items.push_back(item("Verwerfen", kDiscard, false, true));
+        menu_.set_items(items);
+        menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
+        menu_.set_focus(2);
+    }
+
+    void save_editor(ui::Feedback &feedback)
+    {
+        if (!dirty())
+        {
+            edit_error_ = "Es gibt nichts zu speichern.";
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        const std::string text = join_edit_text(edit_text_);
+        if (text.size() > kEditMaxBytes)
+        {
+            edit_error_ = "Die Datei wäre größer als 64 KiB.";
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        edit_error_.clear();
+        edit_saving_ = true;
+        feedback.play(audio::Cue::select);
+        source().files_write(edit_path_, text);
+    }
+
+    // ---------------------------------------------------------------- "Alle Größen messen"
+
+    bool has_dirs() const
+    {
+        return std::any_of(entries_.begin(), entries_.end(),
+                           [](const FsEntry &e) { return e.type == "dir"; });
+    }
+
+    bool measuring() const
+    {
+        return !measure_current_.empty() || !measure_queue_.empty();
+    }
+
+    // The folders that have no size yet, one after the other (the app counts each for at most 8
+    // seconds); when all have one, all again.
+    void start_measure()
+    {
+        std::vector<std::string> all;
+        std::vector<std::string> todo;
+        for (const FsEntry &e : entries_)
+        {
+            if (e.type != "dir")
+                continue;
+            const std::string full = join(folder_.path, e.name);
+            all.push_back(full);
+            const auto it = sizes_.find(full);
+            if (it == sizes_.end() || it->second.failed)
+                todo.push_back(full);
+        }
+        measure_queue_ = todo.empty() ? all : todo;
+        measure_current_.clear();
+        measure_total_ = static_cast<int>(measure_queue_.size());
+        measure_done_ = 0;
+    }
+
+    void step_measure()
+    {
+        if (!measure_current_.empty())
+        {
+            const auto it = sizes_.find(measure_current_);
+            if (it != sizes_.end() && it->second.seq > measure_seq_before_)
+            {
+                ++measure_done_;
+                measure_current_.clear();
+                if (measure_queue_.empty() && sort_ == 1)
+                    sort_entries(); // by size: the folders now have one
+            }
+        }
+        if (measure_current_.empty() && !measure_queue_.empty())
+        {
+            measure_current_ = measure_queue_.front();
+            measure_queue_.erase(measure_queue_.begin());
+            const auto it = sizes_.find(measure_current_);
+            measure_seq_before_ = it != sizes_.end() ? it->second.seq : 0;
+            source().files_size(measure_current_);
+        }
     }
 
     // ---------------------------------------------------------------- list
@@ -1002,15 +1502,23 @@ class FilesPage final : public Page
     {
         entries_ = folder_.entries;
         const int order = sort_;
+        // a folder counts with the size it was measured at, when it was ("Alle Größen messen")
+        const auto size_of = [this](const FsEntry &e) -> std::uint64_t
+        {
+            if (e.type != "dir")
+                return e.size;
+            const auto it = sizes_.find(join(folder_.path, e.name));
+            return it != sizes_.end() && !it->second.failed ? it->second.bytes : 0;
+        };
         std::stable_sort(entries_.begin(), entries_.end(),
-                         [order](const FsEntry &a, const FsEntry &b)
+                         [order, &size_of](const FsEntry &a, const FsEntry &b)
                          {
                              const bool da = a.type == "dir" || a.type == "dirlink";
                              const bool db = b.type == "dir" || b.type == "dirlink";
                              if (da != db)
                                  return da;
-                             if (order == 1 && a.size != b.size)
-                                 return a.size > b.size;
+                             if (order == 1 && size_of(a) != size_of(b))
+                                 return size_of(a) > size_of(b);
                              if (order == 2 && a.mtime != b.mtime)
                                  return a.mtime > b.mtime;
                              return false; // the console's own order: by name, case-insensitive
@@ -1218,7 +1726,9 @@ class FilesPage final : public Page
         if (i >= 0 && i < static_cast<int>(entries_.size()))
         {
             const FsEntry &e = entries_[static_cast<std::size_t>(i)];
-            return picked_.count(e.name) != 0 ? Glyph::picked : entry_glyph(e);
+            if (picked_.count(e.name) != 0)
+                return Glyph::picked;
+            return pick_mode_ && pickable(e) ? Glyph::unpicked : entry_glyph(e);
         }
         return Glyph::file;
     }
@@ -1443,6 +1953,33 @@ class FilesPage final : public Page
     int tz_ = 0;
     int sort_ = 0;                 // name, size, date
     std::set<std::string> picked_; // names in this folder
+    bool pick_mode_ = false;       // the boxes are shown and X sets a check (user, 13.11.2026)
+
+    // "Alle Größen messen": the folders still to do, the one the app counts now
+    std::vector<std::string> measure_queue_;
+    std::string measure_current_;
+    std::uint64_t measure_seq_before_ = 0;
+    int measure_total_ = 0;
+    int measure_done_ = 0;
+
+    // The line editor
+    std::string edit_path_;
+    EditText edit_text_;
+    std::vector<std::string> edit_before_; // the lines as the file had them
+    std::vector<bool> edit_marks_;         // changed or put in, by line
+    int edit_changed_ = 0;
+    int edit_focus_ = 0;
+    int edit_top_ = 0;
+    int edit_line_ = 0; // the line the keyboard works on
+    bool edit_loading_ = false;
+    bool edit_ready_ = false;
+    bool edit_saving_ = false;
+    bool edit_new_line_ = false; // the keyboard works on a line that was just put in
+    bool edit_cr_ = false;       // that line had a CR at its end (mixed line endings)
+    std::string edit_error_;
+    std::uint64_t write_seq_ = 0;
+    std::string saved_name_;
+    float saved_t_ = -100.0f;
 
     bool clip_move_ = false;
     std::string clip_from_;

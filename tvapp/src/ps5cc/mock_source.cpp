@@ -1632,9 +1632,10 @@ class MockSource final : public Source
         v = FsView{};
         v.seq = ++fs_seq_;
         v.path = path;
-        v.text = "[general]\nautomount = 1\nscan_interval = 30\nbackport = "
-                 "auto\n\n[paths]\n/mnt/usb0/homebrew\n"
-                 "/mnt/ext1/homebrew\n/data/homebrew\n";
+        v.text = !mock_text_.empty() ? mock_text_
+                                     : "[general]\nautomount = 1\nscan_interval = 30\nbackport = "
+                                       "auto\n\n[paths]\n/mnt/usb0/homebrew\n"
+                                       "/mnt/ext1/homebrew\n/data/homebrew\n";
         v.size = v.text.size();
         changed();
     }
@@ -1642,9 +1643,21 @@ class MockSource final : public Source
     void files_size(const std::string &path) override
     {
         FsSize s;
+        s.seq = data_.fs_sizes[path].seq + 1;
         s.bytes = static_cast<std::uint64_t>(41.7e9);
         s.files = 1284;
         data_.fs_sizes[path] = s;
+        changed();
+    }
+
+    void files_write(const std::string &path, const std::string &text) override
+    {
+        FsWrite w;
+        w.seq = data_.fs_write.seq + 1;
+        w.path = path;
+        w.ok = true;
+        data_.fs_write = std::move(w);
+        mock_text_ = text; // what the next view shows
         changed();
     }
 
@@ -2967,6 +2980,7 @@ class MockSource final : public Source
     float eject_at_ = 0.0f;
     std::map<std::string, std::vector<FsEntry>> fs_tree_;
     std::uint64_t fs_seq_ = 0;
+    std::string mock_text_; // the text a save put in (the next view shows it)
     std::int64_t klog_n_ = 51400;
     std::uint64_t plan_ticket_ = 0;
     Tool plan_tool_ = Tool::copy;

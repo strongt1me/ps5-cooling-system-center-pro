@@ -658,6 +658,12 @@ zählte die Oberfläche ab 1).
 - **Ordnergrößen:** „Größe“ an einem Ordner zählt nach, wie viel darin liegt; „Ordnergrößen“ macht das nacheinander für alle
   Ordner der Ansicht. Die Konsole zählt höchstens etwa 8 Sekunden je Ordner; dauert es länger, steht die Größe als
   „mindestens“ da (`partial`).
+
+**Vollbild-App (seit 13.11.2026):** Die Seite **Dateimanager** nutzt dieselben Routen und dieselben Regeln wie die Browser-Seite.
+Dazu kommen: der **Auswahlmodus** (Kästchen vor jedem Eintrag, X setzt den Haken und geht eine Zeile weiter, O beendet ihn), 
+**Alle Größen messen** (△ → Mehr) und das **Bearbeiten von Textdateien** zeilenweise mit der Bildschirmtastatur (Quadrat-Menü →
+Bearbeiten; wie im Browser bis 64 KiB und nur, wo Ändern erlaubt ist; △ speichert über `POST /api/v1/files/write`). Hochladen und
+Herunterladen bleiben im Browser.
 - **Ansehen:** „Ansehen“ zeigt Bilder (PNG, JPG, GIF, WebP, BMP, ICO) und den Anfang von Textdateien (bis 256 KB) in einem
   Fenster. Die Datei kommt mit strenger Sicherheitskopfzeile (kein Skript, nur das Bild oder der Text); andere Dateien lassen
   sich nur herunterladen.

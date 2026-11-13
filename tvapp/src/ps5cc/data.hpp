@@ -698,10 +698,20 @@ struct FsView
     std::uint64_t size = 0;
 };
 
+// The answer to a saved text file (POST /api/v1/files/write): the editor stays open until it is here.
+struct FsWrite
+{
+    std::uint64_t seq = 0;
+    std::string path;
+    bool ok = false;
+    std::string error;
+};
+
 // A folder measured (GET /api/v1/files/size): at most 8 s of counting, partial = at least this
 // much.
 struct FsSize
 {
+    std::uint64_t seq = 0; // goes up with every measuring of this path ("Alle Größen messen" waits for it)
     std::uint64_t bytes = 0;
     int files = 0;
     bool partial = false;
@@ -1129,6 +1139,7 @@ struct Snapshot
     FsJob fs_job;
     FsConflict fs_conflict;
     FsView fs_view;
+    FsWrite fs_write;
     std::map<std::string, FsSize> fs_sizes; // by path
     Playtime playtime;
     Saves saves;
@@ -1272,6 +1283,8 @@ class Source
     virtual void files_delete(const std::vector<std::string> &paths) = 0;
     virtual void files_view(const std::string &path) = 0;
     virtual void files_size(const std::string &path) = 0;
+    // POST /api/v1/files/write: the text replaces a text file (up to 64 KiB); the answer is Snapshot::fs_write.
+    virtual void files_write(const std::string &path, const std::string &text) = 0;
     // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture
     // (uploaded in the browser).
     virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;

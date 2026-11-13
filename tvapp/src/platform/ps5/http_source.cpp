@@ -533,6 +533,10 @@ void HttpSource::files_size(const std::string &path)
 {
     push({Request::Kind::fs_size, 0, path, {}});
 }
+void HttpSource::files_write(const std::string &path, const std::string &text)
+{
+    push({Request::Kind::fs_write, 0, path, text});
+}
 void HttpSource::watch(Watch page)
 {
     watching_ = page;
@@ -2380,7 +2384,25 @@ void HttpSource::handle(const Request &request)
             cJSON_Delete(root);
         }
         std::lock_guard<std::mutex> lock(mutex_);
+        s.seq = data_.fs_sizes[request.id].seq + 1;
         data_.fs_sizes[request.id] = s;
+        ++data_.serial;
+        break;
+    }
+    case Request::Kind::fs_write:
+    {
+        // the text goes as it is (the app reads the body raw); a save counts the folder and the file again
+        const std::string path = "/api/v1/files/write?path=" + url_encoded(request.id);
+        const Net net = exchange("POST", path.c_str(), request.text, &status, &body, 30);
+        FsWrite w;
+        w.path = request.id;
+        w.ok = net == Net::ok && status >= 200 && status < 300;
+        if (!w.ok)
+            w.error = net == Net::ok ? message_of(body, "Das Speichern hat nicht geklappt.")
+                                     : "Die App hat nicht rechtzeitig geantwortet.";
+        std::lock_guard<std::mutex> lock(mutex_);
+        w.seq = data_.fs_write.seq + 1;
+        data_.fs_write = std::move(w);
         ++data_.serial;
         break;
     }
