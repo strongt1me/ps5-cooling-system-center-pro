@@ -8596,7 +8596,7 @@
         <button type="button" class="btn ghost" data-apr-emu-add>Datei hinzufügen …</button>
         <input type="file" id="apr-emu-file" multiple hidden>
         <span class="muted" id="apr-emu-up">${esc(apr.emuNote || "")}</span></p>
-      ${ngr ? `<p class="muted"><span>AMPR EMU NG ist eine Weiterentwicklung von quer3q und liest LZ4- und zstd-Pakete.</span> <span>Eine Fassung ist in der App mitgeliefert (siehe die Liste oben); eine neuere Veröffentlichung lädt die App nur auf Knopfdruck und prüft ihre Prüfsumme.</span>
+      ${ngr ? `<p class="muted"><span>AMPR EMU NG ist eine Weiterentwicklung von quer3q und liest LZ4- und zstd-Pakete.</span> <span>Die zwei neuesten Fassungen sind in der App mitgeliefert (siehe die Liste oben); eine neuere Veröffentlichung lädt die App nur auf Knopfdruck und prüft ihre Prüfsumme.</span>
         <span>Dateien einer neueren Veröffentlichung (libSceAmpr.sprx, libSceAmpr-debug.sprx) benennt „Datei hinzufügen“ passend um.</span>
         <span>Beim Einbauen fragt die App, ob die automatische Fakelib-Aktualisierung in ShadowMountPlus abgeschaltet werden soll, weil ShadowMountPlus die NG-Datei sonst beim Spielstart wieder ersetzt.</span></p>` : ""}
       ${warn.map((w) => `<div class="cp-warn">${w}</div>`).join("")}

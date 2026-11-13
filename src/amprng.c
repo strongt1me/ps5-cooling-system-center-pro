@@ -2,10 +2,10 @@
  * (https://github.com/quer3q/ampr-emu-ng, GPL-3.0). It reads the same LZ4 packs and zstd ones, and its builds carry the mark
  * "ampr-emu-ng <version>" instead of "[AMPR_EMU]"; amprlib.c recognises them by that and shows them as "NG <version>".
  *
- * Release 0.3.5 is carried by the app (11.11.2026, wish of the user): third_party/ampr_emu/libSceAmpr.sprx-0.3.5-ng and -ng-debug,
- * packed into the payload by tools/gen_emu_blob.py; room was made by dropping the old 0.3.6.6 builds and 0.4.2.1 nopack (the
- * payload must stay clear of the size where the console stopped loading it, 10.5 MB, 02.10.2026). Between the two a file
- * the table below names counts as there when the app carries it. A newer release is fetched on request
+ * The two newest releases are carried by the app (wish of the user, 13.11.2026: always the two newest to choose from): 0.4.0 and 0.3.5,
+ * third_party/ampr_emu/libSceAmpr.sprx-<version>-ng and -ng-debug of each, packed into the payload by tools/gen_emu_blob.py. A newer
+ * release replaces the oldest of the two (the old files are taken out of third_party/ampr_emu). Between the two a file the table
+ * below names counts as there when the app carries it. A newer release is fetched on request
  * (POST /api/v1/ampr-emu/fetch-ng): the two files of the release named below come from GitHub into the folder
  * AMPR_EMU, under the names amprlib.c reads (libSceAmpr.sprx-<version>-ng, -ng-debug). A file only gets its name after its
  * SHA-256 matched the one written here (from the release's SHA256SUMS, checked on 10.11.2026) and it carries the SELF header
@@ -27,7 +27,7 @@
 #include "third_party/cJSON.h"
 #include "upd_http.h"
 
-#define NG_VERSION  "0.3.5"
+#define NG_VERSION  "0.4.0"      /* the newest release: the table below and the default of the zstd repair (ps5tm_amprng_name) */
 #define NG_BASE     "https://github.com/quer3q/ampr-emu-ng/releases/download/v" NG_VERSION "/"
 #define NG_DIR      PS5TM_DATA_DIR "/AMPR_EMU"
 #define NG_MAX      (4u * 1024 * 1024)
@@ -40,8 +40,8 @@ typedef struct {
 } ng_file_t;
 
 static const ng_file_t NG_FILES[] = {
-  { "libSceAmpr.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng", "998f2029b250d954725f864b57f2eee72aefbfb88054a3f1c3df550d4d6c8261", 751504 },
-  { "libSceAmpr-debug.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng-debug", "a76c0336d667b486ba1a30b43a23281563dc323a20589cb28bc2454a70af581b", 869168 },
+  { "libSceAmpr.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng", "8320eb65c16565f42031b9d88b15a447039f0fd7e5694faf5f1cb84cafdba218", 775696 },
+  { "libSceAmpr-debug.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng-debug", "d27f7c58a92da9807366db5d15423ef19257ad06df3b78ea0d0fbaea3ce664f6", 899072 },
 };
 #define NG_COUNT (sizeof(NG_FILES) / sizeof(NG_FILES[0]))
 
