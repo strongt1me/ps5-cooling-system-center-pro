@@ -831,7 +831,11 @@ run_smp(const dl_args_t *a) {
     /* only when the delete below will go ahead as well (the same checks on the folder): a game folder that is a mount point or lies behind a
        link is refused there, and its markers must not be gone then */
     const char *root = deletable_root(s.path);
-    for(size_t i = 0; root && path_is_plain(s.path, root) && i < sizeof(marks) / sizeof(marks[0]); i++) {
+    /* sce_sys itself must be a plain folder on the game's own drive: a link there would carry the unlink into another game (audit N-1) */
+    struct stat gs, ss;
+    int plain = root && path_is_plain(s.path, root) && snprintf(mp, sizeof(mp), "%s/sce_sys", s.path) < (int)sizeof(mp) &&
+                lstat(s.path, &gs) == 0 && lstat(mp, &ss) == 0 && S_ISDIR(ss.st_mode) && ss.st_dev == gs.st_dev;
+    for(size_t i = 0; plain && i < sizeof(marks) / sizeof(marks[0]); i++) {
       if(snprintf(mp, sizeof(mp), "%s%s", s.path, marks[i]) >= (int)sizeof(mp)) continue;
       struct stat ms;
       if(lstat(mp, &ms) == 0 && S_ISREG(ms.st_mode)) (void)unlink(mp);

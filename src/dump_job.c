@@ -2317,6 +2317,7 @@ ps5tm_dump_action(const cJSON *b, char *msg, size_t n) {
    fields of its list entry; what is not in the list is never touched. */
 int
 ps5tm_dump_delete(const char *mount, const char *dir, const char *folder, char *msg, size_t n) {
+  if(ps5tm_dumpq_active()) { snprintf(msg, n, "Die Dump-Warteschlange läuft. Ein Dump lässt sich erst nach ihrem Ende oder ihrem Stopp löschen."); return 409; }
   if(__atomic_exchange_n(&g_deleting, 1, __ATOMIC_ACQ_REL)) { snprintf(msg, n, "Ein Dump wird gerade gelöscht."); return 409; }
   /* claimed first, then looked at: a dump that starts now sees the claim and stands down */
   if(ps5tm_dump_busy()) { __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE); snprintf(msg, n, "Es läuft gerade ein Dump."); return 409; }

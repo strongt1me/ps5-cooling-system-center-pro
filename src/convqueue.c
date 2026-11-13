@@ -141,7 +141,13 @@ runner(void *arg) {
         if(!keep) { stopped = 1; break; }
         char w[160];
         if(ps5tm_gameconvert_busy() || ps5tm_jobs_busy_except(PS5TM_JOB_GAMECONVERT, PS5TM_JOBS_NO_SMP, w, sizeof(w))) { local_wait = 1; sleep(10); continue; }
-        if(!local_wait && !slept) { slept = 1; sleep(30); continue; }
+        if(!local_wait && !slept) {
+          slept = 1;
+          ps5tm_powerguard_release();                 /* waiting for ShadowMountPlus is not the app's own work: the console may rest meanwhile */
+          sleep(30);
+          ps5tm_powerguard_hold();
+          continue;
+        }
         break;
       }
       if(stopped) break;

@@ -9504,8 +9504,17 @@
         try { m = (await r.json()).message; } catch { }
         throw new Error(m || `HTTP ${r.status}`);
       }
-      const text = await r.text();
+      /* decoded by hand: a file that is not clean UTF-8, or whose line ends a textarea would change (it gives LF only), is not
+         saved back from here (it would come back changed); CRLF alone is kept (audit 13.11.2026, N-2) */
+      const buf = await r.arrayBuffer();
       if (mine !== fm.viewSeq) return;
+      let text, exact = true;
+      try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buf); } catch {
+        text = new TextDecoder("utf-8", { ignoreBOM: true }).decode(buf); exact = false;
+      }
+      const nlAll = (text.match(/\n/g) || []).length, nlCr = (text.match(/\r\n/g) || []).length;
+      const eolCrlf = nlCr > 0 && nlCr === nlAll;
+      if (/\r(?!\n)/.test(text) || (nlCr > 0 && !eolCrlf)) exact = false;
       const truncated = r.headers.get("X-Fm-Truncated") === "1";
       const total = Number(r.headers.get("X-Fm-Size"));
       if (truncated) {
@@ -9513,9 +9522,9 @@
           <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
         return;
       }
-      if (!e.writable) {
+      if (!e.writable || !exact) {
         $("#fm-dlg-body").innerHTML = `<pre class="fm-view-text"></pre>
-          <p class="muted fm-view-note">${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))} · <em>schreibgeschützt</em></p>
+          <p class="muted fm-view-note">${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))} · <em>${e.writable ? "Nur ansehen: andere Zeichenkodierung oder gemischte Zeilenenden, hier würde das Speichern die Datei verändern. Bitte herunterladen, bearbeiten und wieder hochladen." : "schreibgeschützt"}</em></p>
           <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
         $("#fm-dlg-body .fm-view-text").textContent = text || "(leer)";
         return;
@@ -9535,7 +9544,8 @@
         const err = $("#fm-edit-err");
         err.hidden = true;
         try {
-          await fmSaveEdit(full, $("#fm-edit-ta").value);
+          const val = $("#fm-edit-ta").value;                  /* the textarea gives LF; a file with CRLF gets its CRLF back */
+          await fmSaveEdit(full, eolCrlf ? val.replace(/\n/g, "\r\n") : val);
           txt("#fm-edit-note", "Gespeichert ✓");
           btn.textContent = "Gespeichert";
           setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = "Speichern"; } }, 2000);

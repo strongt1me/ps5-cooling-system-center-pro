@@ -567,7 +567,11 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
    the person from copying. */
 int
 ps5tm_gamemove_busy_local(void) {
-  return __atomic_load_n(&g_starting, __ATOMIC_ACQUIRE) || waiting_for_tile();
+  if(__atomic_load_n(&g_starting, __ATOMIC_ACQUIRE)) return 1;
+  pthread_mutex_lock(&g_wlock);
+  int on = g_wait.on || g_wait.watching;               /* waiting for the tile, or following the job ShadowMountPlus has taken */
+  pthread_mutex_unlock(&g_wlock);
+  return on;
 }
 
 int

@@ -340,9 +340,13 @@ class FilesPage final : public Page
         if (dialog_ == kViewer && data.fs_view.seq != view_seq_)
         {
             view_seq_ = data.fs_view.seq;
-            view_ = data.fs_view;
-            view_lines_ = split_lines(view_.text);
-            view_top_ = 0;
+            if (view_matches(data.fs_view,
+                             view_path_)) // an answer for another file, arriving late, is let go
+            {
+                view_ = data.fs_view;
+                view_lines_ = split_lines(view_.text);
+                view_top_ = 0;
+            }
         }
         if (dialog_ != kViewer)
             view_seq_ = data.fs_view.seq;
@@ -922,6 +926,7 @@ class FilesPage final : public Page
         dialog_ = kViewer;
         view_ = FsView{};
         view_lines_.clear();
+        view_path_ = path;
         source().files_view(path);
     }
 
@@ -1480,9 +1485,12 @@ class FilesPage final : public Page
                 measure_current_.clear();
                 if (measure_queue_.empty() && sort_ == 1)
                 {
+                    const FsEntry *was = focused_entry();
+                    const std::string name = was != nullptr ? was->name : std::string();
                     sort_entries(); // by size: the folders now have one
                     key_.clear();   // and the rows (their tags are indexes) are built again at once
                     rebuild();
+                    focus_entry_named(name); // the cursor stays on the entry it was on
                 }
             }
         }
@@ -1654,6 +1662,24 @@ class FilesPage final : public Page
             focus_came_from();
         }
         refresh_info();
+    }
+
+    // The row of the entry with this name (after the order of the rows changed).
+    void focus_entry_named(const std::string &name)
+    {
+        if (name.empty())
+            return;
+        const std::vector<ui::ListItem> &rows = list_.items();
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int tag = rows[i].tag;
+            if (tag >= kEntryTag && tag - kEntryTag < static_cast<int>(entries_.size()) &&
+                entries_[static_cast<std::size_t>(tag - kEntryTag)].name == name)
+            {
+                list_.set_focus(static_cast<int>(i));
+                return;
+            }
+        }
     }
 
     // After going up: the row of the folder we came out of, once the parent's list is here.
@@ -1994,6 +2020,8 @@ class FilesPage final : public Page
 
     // The line editor
     std::string edit_path_;
+    std::string
+        view_path_; // the file the viewer asked for: a late answer for another one is let go
     EditText edit_text_;
     std::vector<std::string> edit_before_; // the lines as the file had them
     std::vector<bool> edit_marks_;         // changed or put in, by line
