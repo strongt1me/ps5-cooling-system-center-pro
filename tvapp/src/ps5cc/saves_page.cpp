@@ -99,17 +99,10 @@ class SavesPage final : public Page
         for (const SaveUser &u : saves_.users)
         {
             for (const SaveTitle &t : u.titles)
-            {
                 titles_.push_back(t);
-                // new titles are picked, as in the web app; ones that went are forgotten
-                const std::string key = t.uid + "/" + t.id;
-                if (!known_.count(key))
-                {
-                    known_.insert(key);
-                    picked_.insert(key);
-                }
-            }
         }
+        // nothing is picked on its own (user, 13.11.2026): the person picks what to back up; titles
+        // that went are forgotten
         for (auto it = picked_.begin(); it != picked_.end();)
         {
             const bool there = std::any_of(titles_.begin(), titles_.end(), [&](const SaveTitle &t)
@@ -490,7 +483,8 @@ class SavesPage final : public Page
             notes.push_back("Es wird ohne Sicherung gelöscht.");
         ask_.open("Spielstände löschen?", {DeleteAsk::line(name, "Spielstände")}, notes, feedback,
                   d != nullptr ? "Das wird gelöscht:" : "Das wird endgültig gelöscht:",
-                  d != nullptr ? std::string() : std::string("Das lässt sich nicht rückgängig machen."));
+                  d != nullptr ? std::string()
+                               : std::string("Das lässt sich nicht rückgängig machen."));
     }
 
     void delete_saves()
@@ -500,9 +494,8 @@ class SavesPage final : public Page
                                               ",\"id\":" + json_text(menu_title_.id) +
                                               ",\"mount\":" + json_text(target_) + "}");
         else
-            source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) +
-                                              ",\"id\":" + json_text(menu_title_.id) +
-                                              ",\"no_backup\":true}");
+            source().saves_post("delete", "{\"uid\":" + json_text(menu_title_.uid) + ",\"id\":" +
+                                              json_text(menu_title_.id) + ",\"no_backup\":true}");
     }
 
     void run(int tag, ui::Feedback &feedback)
@@ -708,7 +701,6 @@ class SavesPage final : public Page
     int tz_ = 0;
     std::vector<SaveTitle> titles_;
     std::set<std::string> picked_; // "uid/id"
-    std::set<std::string> known_;
     std::string target_;
     SaveTitle menu_title_;
     SaveBackup menu_backup_;
