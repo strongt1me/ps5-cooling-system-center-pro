@@ -159,12 +159,37 @@ static void cv_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 /* The job's timing (the speed window, the time it has run) is all differences,
    so it runs on the monotonic clock: the wall clock steps when the console
    syncs its time, and a difference across a step is garbage. */
+static struct { int qid, state; char error[300]; uint64_t bytes; } g_qres;   /* how the last job of a queue entry ended; the next start overwrites g_job */
+
 static void
 cv_state(int s) {
   pthread_mutex_lock(&g_lock);
   g_job.state = s;
-  if(s >= CV_DONE) g_job.finished_ms = ps5tm_mono_ms();
+  if(s >= CV_DONE) {
+    g_job.finished_ms = ps5tm_mono_ms();
+    if(g_job.qid) {
+      g_qres.qid = g_job.qid;
+      g_qres.state = s;
+      snprintf(g_qres.error, sizeof(g_qres.error), "%s", g_job.error);
+      g_qres.bytes = g_job.output_bytes;
+    }
+  }
   pthread_mutex_unlock(&g_lock);
+}
+
+/* 1 and the way it ended ("done", "failed" or "cancelled"), when the last job that ran for queue entry qid has ended; else 0. */
+int
+ps5tm_gameconvert_queue_result(int qid, char *state, size_t state_len, char *error, size_t error_len, uint64_t *bytes) {
+  int have = 0;
+  pthread_mutex_lock(&g_lock);
+  if(qid && g_qres.qid == qid) {
+    have = 1;
+    snprintf(state, state_len, "%s", k_state[g_qres.state]);
+    snprintf(error, error_len, "%s", g_qres.error);
+    if(bytes) *bytes = g_qres.bytes;
+  }
+  pthread_mutex_unlock(&g_lock);
+  return have;
 }
 
 static void
@@ -445,7 +470,7 @@ stamp_add(cv_stamp_t *st, const cv_stamp_t *ref, const char *rel, uint64_t size,
   st->total++;
   st->bytes += size;
   st->sum += h;
-  if(st->kept_all) {
+  if(!ref && st->kept_all) {                 /* the second look (ref) only compares: it keeps no hashes */
     if(st->n >= STAMP_KEEP) st->kept_all = 0;
     else {
       if(st->n == st->cap) {
@@ -1189,7 +1214,8 @@ typedef struct {
   uint64_t at_ms;
 } plan_cache_t;
 static pthread_mutex_t g_pc_lock = PTHREAD_MUTEX_INITIALIZER;
-static plan_cache_t    g_pc;
+#define PLAN_SLOTS 4
+static plan_cache_t    g_pc[PLAN_SLOTS];             /* the last few titles: two windows or the queue asking about two games do not push each other out */
 
 static void
 game_version(const char *title_id, char *out, size_t n) {
@@ -1275,21 +1301,28 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   {
     const cJSON *mn = cJSON_GetObjectItem(srisk, "max_name"), *mp = cJSON_GetObjectItem(srisk, "max_path");
     pthread_mutex_lock(&g_pc_lock);
-    memset(&g_pc, 0, sizeof(g_pc));
-    g_pc.valid = 1;
-    snprintf(g_pc.title_id, sizeof(g_pc.title_id), "%s", title_id);
-    snprintf(g_pc.name, sizeof(g_pc.name), "%s", name);
-    snprintf(g_pc.source, sizeof(g_pc.source), "%s", source);
-    snprintf(g_pc.version, sizeof(g_pc.version), "%s", version);
-    g_pc.folder = folder;
-    g_pc.ps4 = ps4;
-    g_pc.raw = raw;
-    g_pc.ffpkg_bytes = ffpkg_bytes;
-    g_pc.files = files;
-    snprintf(g_pc.ffpkg_why, sizeof(g_pc.ffpkg_why), "%s", ffpkg_why);
-    g_pc.max_name = cJSON_IsNumber(mn) ? (unsigned)mn->valuedouble : 0;
-    g_pc.max_path = cJSON_IsNumber(mp) ? (unsigned)mp->valuedouble : 0;
-    g_pc.at_ms = ps5tm_mono_ms();
+    int slot = 0;                                    /* this title's slot, else a free one, else the oldest */
+    for(int i = 0; i < PLAN_SLOTS; i++) {
+      if(g_pc[i].valid && !strcmp(g_pc[i].title_id, title_id)) { slot = i; break; }
+      if(!g_pc[i].valid) { slot = i; break; }
+      if(g_pc[i].at_ms < g_pc[slot].at_ms) slot = i;
+    }
+    plan_cache_t *pcs = &g_pc[slot];
+    memset(pcs, 0, sizeof(*pcs));
+    pcs->valid = 1;
+    snprintf(pcs->title_id, sizeof(pcs->title_id), "%s", title_id);
+    snprintf(pcs->name, sizeof(pcs->name), "%s", name);
+    snprintf(pcs->source, sizeof(pcs->source), "%s", source);
+    snprintf(pcs->version, sizeof(pcs->version), "%s", version);
+    pcs->folder = folder;
+    pcs->ps4 = ps4;
+    pcs->raw = raw;
+    pcs->ffpkg_bytes = ffpkg_bytes;
+    pcs->files = files;
+    snprintf(pcs->ffpkg_why, sizeof(pcs->ffpkg_why), "%s", ffpkg_why);
+    pcs->max_name = cJSON_IsNumber(mn) ? (unsigned)mn->valuedouble : 0;
+    pcs->max_path = cJSON_IsNumber(mp) ? (unsigned)mp->valuedouble : 0;
+    pcs->at_ms = ps5tm_mono_ms();
     pthread_mutex_unlock(&g_pc_lock);
   }
   /* A PS5 folder with plain ELF executables: the image gets them as FSELF (fsign.c), the page says so before the start. */
@@ -1417,7 +1450,8 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
   plan_cache_t pc;
   for(int tries = 0; tries < 2; tries++) {
     pthread_mutex_lock(&g_pc_lock);
-    pc = g_pc;
+    pc.valid = 0;
+    for(int i = 0; i < PLAN_SLOTS; i++) if(g_pc[i].valid && !strcmp(g_pc[i].title_id, title_id)) { pc = g_pc[i]; break; }
     pthread_mutex_unlock(&g_pc_lock);
     if(pc.valid && !strcmp(pc.title_id, title_id) && ps5tm_mono_ms() - pc.at_ms < PLAN_KEEP_MS) break;
     pc.valid = 0;
@@ -1442,8 +1476,9 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
   int errors = 0;
 
   /* the source */
-  if(pc.folder) chk_add(arr, "source", "ok", NULL, "Quelle lesbar: %llu Dateien, als exFAT-Abbild %s",
-                        (unsigned long long)pc.files, size_text(pc.raw, b1, sizeof(b1)));
+  if(pc.folder && !strcmp(op, "exfat")) chk_add(arr, "source", "ok", NULL, "Quelle lesbar: %llu Dateien, als exFAT-Abbild %s",
+                                                (unsigned long long)pc.files, size_text(pc.raw, b1, sizeof(b1)));
+  else if(pc.folder) chk_add(arr, "source", "ok", NULL, "Quelle lesbar: %llu Dateien", (unsigned long long)pc.files);
   else chk_add(arr, "source", "ok", NULL, "Abbild-Datei lesbar: %s", size_text(pc.raw, b1, sizeof(b1)));
   if(!strcmp(op, "ffpkg") && pc.ffpkg_why[0]) {
     chk_add(arr, "ffpkg", "error", pc.ffpkg_why, "Ein ffpkg-Abbild ist bei diesem Spiel nicht möglich.");
@@ -1607,6 +1642,7 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
   snprintf(g_job.drive, sizeof(g_job.drive), "%s", label);
   g_job.quick = a->quick;
   g_job.qid = qid;
+  if(qid && g_qres.qid == qid) g_qres.qid = 0;       /* an entry tried again: its earlier result is not this job's */
   g_job.started_ms = ps5tm_mono_ms();
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);

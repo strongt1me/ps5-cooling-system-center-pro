@@ -957,6 +957,8 @@ int           ps5tm_gameconvert_start(const char *title_id, const char *op, int 
 struct cJSON *ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount, const char *mode, const char *name_tpl,
                                       char *err, size_t err_len);
 struct cJSON *ps5tm_gameconvert_status(void);
+/* How the last job that ran for queue entry qid ended ('done', 'failed' or 'cancelled'): 1 when known, else 0 (convqueue.c) */
+int ps5tm_gameconvert_queue_result(int qid, char *state, size_t state_len, char *error, size_t error_len, uint64_t *bytes);
 int           ps5tm_gameconvert_cancel(void);
 /* The queue of conversions (convqueue.c, 14.11.2026): the list as JSON, and one action of it (add, remove, retry, start, stop, clear);
    the action returns an HTTP status with the reason in err when it is not 200. */

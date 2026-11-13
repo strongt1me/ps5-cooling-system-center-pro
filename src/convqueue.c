@@ -59,36 +59,27 @@ remove_at_locked(int i) {
   g_n--;
 }
 
-/* Waits until the job this entry started has ended and notes how. Returns 0. */
+/* Waits until the job this entry started has ended and notes how. The result is the one gameconvert.c keeps for this entry, so that a job
+   which another start followed within the second between two looks is still found. */
 static void
 wait_for_job(int qid) {
   for(;;) {
     sleep(1);
-    cJSON *st = ps5tm_gameconvert_status();
-    if(!st) continue;
-    const cJSON *act = cJSON_GetObjectItem(st, "active");
-    const cJSON *state = cJSON_GetObjectItem(st, "state");
-    const cJSON *q = cJSON_GetObjectItem(st, "queue_id");
-    int active = cJSON_IsTrue(act);
-    int mine = cJSON_IsNumber(q) && (int)q->valuedouble == qid;
-    if(!active) {
-      pthread_mutex_lock(&g_lock);
-      cq_item_t *it = find_locked(qid);
-      if(it) {
-        const char *s = cJSON_IsString(state) ? state->valuestring : "";
-        const cJSON *err = cJSON_GetObjectItem(st, "error");
-        const cJSON *ob = cJSON_GetObjectItem(st, "output_bytes");
-        if(mine && !strcmp(s, "done")) { it->state = CQ_DONE; if(cJSON_IsNumber(ob)) it->out_bytes = (uint64_t)ob->valuedouble; }
-        else if(mine && !strcmp(s, "cancelled")) { it->state = CQ_CANCEL; set_msg(it, "Abgebrochen."); }
-        else if(mine) { it->state = CQ_FAIL; set_msg(it, cJSON_IsString(err) ? err->valuestring : "Das Konvertieren ist gescheitert."); }
-        else { it->state = CQ_FAIL; set_msg(it, "Der Auftrag ist nicht mehr zu sehen."); }
-        it->finished_ms = ps5tm_mono_ms();
-      }
-      pthread_mutex_unlock(&g_lock);
-      cJSON_Delete(st);
-      return;
+    char s[16] = "", err[300] = "";
+    uint64_t ob = 0;
+    int have = ps5tm_gameconvert_queue_result(qid, s, sizeof(s), err, sizeof(err), &ob);
+    if(!have && ps5tm_gameconvert_busy()) continue;
+    pthread_mutex_lock(&g_lock);
+    cq_item_t *it = find_locked(qid);
+    if(it) {
+      if(have && !strcmp(s, "done")) { it->state = CQ_DONE; it->out_bytes = ob; }
+      else if(have && !strcmp(s, "cancelled")) { it->state = CQ_CANCEL; set_msg(it, "Abgebrochen."); }
+      else if(have) { it->state = CQ_FAIL; set_msg(it, err[0] ? err : "Das Konvertieren ist gescheitert."); }
+      else { it->state = CQ_FAIL; set_msg(it, "Der Auftrag ist nicht mehr zu sehen."); }
+      it->finished_ms = ps5tm_mono_ms();
     }
-    cJSON_Delete(st);
+    pthread_mutex_unlock(&g_lock);
+    return;
   }
 }
 
@@ -107,34 +98,36 @@ runner(void *arg) {
       pthread_mutex_unlock(&g_lock);
       break;
     }
-    g_it[idx].state = CQ_RUN;
-    g_it[idx].started_ms = ps5tm_mono_ms();
-    g_it[idx].msg[0] = 0;
-    g_running_qid = g_it[idx].qid;
+    g_it[idx].msg[0] = 0;                             /* the entry stays "waiting" until its job has really started */
     it = g_it[idx];
     pthread_mutex_unlock(&g_lock);
 
-    tried++;
     char err[640] = "";
-    int rc, requeued = 0;
+    int rc, stopped = 0;
     for(;;) {
       rc = ps5tm_gameconvert_start(it.id, it.op, it.ampr, it.mount, it.mode, it.quick, it.name_tpl, it.qid, err, sizeof(err));
       if(rc == 200) break;
       /* Refused because another job runs (the sentences of gameconvert.c: other_job_active and the claim of the one place): wait. The words
-         are read from the refusal itself, so that nothing here asks ShadowMountPlus over its port while the entry waits. */
+         are read from the refusal itself. */
       int busy = rc == 409 && (strstr(err, "laufen nicht gleichzeitig") || strstr(err, "Es läuft schon eine Konvertierung"));
       if(!busy) break;
-      /* another job runs: wait, unless the queue was stopped or the entry removed meanwhile */
-      pthread_mutex_lock(&g_lock);
-      cq_item_t *me = find_locked(it.qid);
-      int keep = g_run && me;
-      if(me && !keep) me->state = CQ_WAIT;            /* stopped while waiting: back to waiting */
-      if(me && !keep) requeued = 1;
-      pthread_mutex_unlock(&g_lock);
-      if(!keep) break;
-      sleep(10);
+      /* Another job runs. While one of the app's own jobs is the reason, that is looked at here (no start, so nobody is asked over the port of
+         ShadowMountPlus); when none is, ShadowMountPlus is the reason and the start is tried again only after 30 seconds. The wait ends
+         when the queue is stopped or the entry removed. */
+      int local_wait = 0, slept = 0;
+      for(;;) {
+        pthread_mutex_lock(&g_lock);
+        int keep = g_run && find_locked(it.qid);
+        pthread_mutex_unlock(&g_lock);
+        if(!keep) { stopped = 1; break; }
+        char w[160];
+        if(ps5tm_gameconvert_busy() || ps5tm_jobs_busy_except(PS5TM_JOB_GAMECONVERT, PS5TM_JOBS_NO_SMP, w, sizeof(w))) { local_wait = 1; sleep(10); continue; }
+        if(!local_wait && !slept) { slept = 1; sleep(30); continue; }
+        break;
+      }
+      if(stopped) break;
     }
-    if(requeued) continue;
+    if(stopped) continue;                             /* stopped or removed while waiting: the entry (if still there) stays "waiting" */
     if(rc != 200) {
       pthread_mutex_lock(&g_lock);
       cq_item_t *me = find_locked(it.qid);
@@ -144,6 +137,14 @@ runner(void *arg) {
       continue;
     }
     PS5TM_INFO("convq_item_started", "Konvertier-Warteschlange: %s (%s) gestartet.", it.name, it.id);
+    tried++;
+    pthread_mutex_lock(&g_lock);
+    {
+      cq_item_t *run = find_locked(it.qid);
+      if(run) { run->state = CQ_RUN; run->started_ms = ps5tm_mono_ms(); }
+      g_running_qid = it.qid;
+    }
+    pthread_mutex_unlock(&g_lock);
     wait_for_job(it.qid);
     pthread_mutex_lock(&g_lock);
     cq_item_t *me = find_locked(it.qid);
@@ -254,19 +255,15 @@ ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
     }
     int rc = 200;
     pthread_mutex_lock(&g_lock);
-    int open = 0, dup = 0;
+    int dup = 0;
     for(int i = 0; i < g_n; i++) {
-      if(g_it[i].state == CQ_WAIT || g_it[i].state == CQ_RUN) {
-        open++;
-        if(!strcmp(g_it[i].target, tg->valuestring)) dup = 1;
-      }
+      if((g_it[i].state == CQ_WAIT || g_it[i].state == CQ_RUN) && !strcmp(g_it[i].target, tg->valuestring)) dup = 1;
     }
     if(dup) { snprintf(err, err_len, "Dieses Abbild steht schon in der Warteschlange."); rc = 409; }
     else if(g_n >= CQ_MAX) {                                    /* make room: the finished ones go first */
       for(int i = 0; i < g_n;) { if(g_it[i].state >= CQ_DONE) remove_at_locked(i); else i++; }
       if(g_n >= CQ_MAX) { snprintf(err, err_len, "Die Warteschlange ist voll (%d Einträge).", CQ_MAX); rc = 409; }
     }
-    (void)open;
     if(rc == 200) {
       cq_item_t *it = &g_it[g_n++];
       memset(it, 0, sizeof(*it));

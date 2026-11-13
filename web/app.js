@@ -6522,7 +6522,6 @@
     try {
       cv.queue = await api("/api/v1/library/convert/queue", { method: "POST",
         body: JSON.stringify({ action: b.dataset.cq, qid: Number(b.dataset.qid) || 0 }) });
-      if (b.dataset.cq === "jobview") return;
       cvQueueRender(true);
     } catch (e) {
       toast(e.message, "error");
