@@ -990,6 +990,8 @@ int           ps5tm_gamecopy_cancel(void);
 int           ps5tm_gamecopy_busy(void);
 int           ps5tm_gameconvert_busy(void);
 int           ps5tm_gamemove_busy(void);
+/* Only what the app itself holds of a move (it is being started, or it waits for the tile to close): no call to ShadowMountPlus. */
+int           ps5tm_gamemove_busy_local(void);
 
 /* While at least one long job holds it, the console's timer for automatic
    rest mode is reset every ten seconds — see powerguard.c. Every hold needs

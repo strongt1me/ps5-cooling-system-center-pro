@@ -45,8 +45,8 @@ class Page
     {
         (void)canvas;
     }
-    // The page's own hints for the hint row (at most three); the screen adds L1/R1 before and
-    // Options after.
+    // The page's own hints for the hint row (at most four: the screen has room for six in all); the
+    // screen adds L1/R1 before and Options after.
     virtual int hints(ui::Hint *out) const = 0;
 };
 

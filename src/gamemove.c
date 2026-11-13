@@ -566,9 +566,13 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
    not answer, or has no job to report, is read as idle — it must never keep
    the person from copying. */
 int
+ps5tm_gamemove_busy_local(void) {
+  return __atomic_load_n(&g_starting, __ATOMIC_ACQUIRE) || waiting_for_tile();
+}
+
+int
 ps5tm_gamemove_busy(void) {
-  if(__atomic_load_n(&g_starting, __ATOMIC_ACQUIRE)) return 1;
-  if(waiting_for_tile()) return 1;
+  if(ps5tm_gamemove_busy_local()) return 1;
   char err[128];
   cJSON *job = ps5tm_smp_call("/games/storage/status", NULL, 1500, err, sizeof(err));
   if(!job) return 0;

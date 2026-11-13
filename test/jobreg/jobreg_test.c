@@ -19,7 +19,9 @@ STUB(ps5tm_disc_busy, PS5TM_JOB_DISC)
 STUB(ps5tm_usbeject_busy, PS5TM_JOB_USBEJECT)
 STUB(ps5tm_gameconvert_busy, PS5TM_JOB_GAMECONVERT)
 STUB(ps5tm_gamecopy_busy, PS5TM_JOB_GAMECOPY)
-int ps5tm_gamemove_busy(void) { g_asked_move++; return g_busy[PS5TM_JOB_GAMEMOVE]; }
+static int g_move_local;
+int ps5tm_gamemove_busy_local(void) { return g_move_local; }
+int ps5tm_gamemove_busy(void) { g_asked_move++; return g_move_local || g_busy[PS5TM_JOB_GAMEMOVE]; }
 
 static int g_fail, g_n;
 #define CHECK(c) do { g_n++; if(!(c)) { g_fail++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while(0)
@@ -49,6 +51,12 @@ main(void) {
   g_asked_move = 0;
   CHECK(!ps5tm_jobs_busy_except(-1, PS5TM_JOBS_NO_SMP, NULL, 0) && g_asked_move == 0);
   CHECK(!ps5tm_jobs_busy_except(-1, 0, NULL, 0) && g_asked_move == 1);
+  /* a move the app itself holds (being started, waiting for the tile) counts even when ShadowMountPlus is not asked */
+  g_asked_move = 0;
+  g_move_local = 1;
+  CHECK(ps5tm_jobs_busy_except(-1, PS5TM_JOBS_NO_SMP, why, sizeof(why)) == 1 && g_asked_move == 0 && why[0]);
+  CHECK(ps5tm_jobs_busy_except(PS5TM_JOB_GAMEMOVE, PS5TM_JOBS_NO_SMP, NULL, 0) == 0); /* but not for the move itself */
+  g_move_local = 0;
   /* the move is asked last: a job found earlier ends the asking */
   g_asked_move = 0;
   g_busy[PS5TM_JOB_FILEMGR] = 1;

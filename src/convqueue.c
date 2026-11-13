@@ -105,6 +105,7 @@ static void *
 runner(void *arg) {
   (void)arg;
   int done_n = 0, tried = 0;
+  ps5tm_powerguard_hold();                            /* the console stays awake from entry to entry too, not only inside a job (audit F-45) */
   for(;;) {
     cq_item_t it;
     int idx = -1;
@@ -169,6 +170,7 @@ runner(void *arg) {
     if(me && me->state == CQ_DONE) done_n++;
     pthread_mutex_unlock(&g_lock);
   }
+  ps5tm_powerguard_release();
   if(tried) {
     ps5tm_notify("Konvertier-Warteschlange zu Ende: %d von %d fertig.", done_n, tried);
     PS5TM_INFO("convq_end", "Konvertier-Warteschlange zu Ende: %d von %d fertig.", done_n, tried);

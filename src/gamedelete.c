@@ -823,6 +823,20 @@ run_smp(const dl_args_t *a) {
   job_phase("Die Spieldaten werden gelöscht");
   uint64_t files = 0, bytes = 0;
   char why[640] = "";
+  /* ShadowMountPlus has let the game go; its markers go first, so that a scan that comes while the folder is being emptied does not take the
+     half-deleted rest for a game and register it again (audit F-35). The paths are fixed, below the game's own folder. */
+  {
+    static const char *const marks[] = { "/sce_sys/param.json", "/sce_sys/param.sfo" };
+    char mp[1100];
+    /* only when the delete below will go ahead as well (the same checks on the folder): a game folder that is a mount point or lies behind a
+       link is refused there, and its markers must not be gone then */
+    const char *root = deletable_root(s.path);
+    for(size_t i = 0; root && path_is_plain(s.path, root) && i < sizeof(marks) / sizeof(marks[0]); i++) {
+      if(snprintf(mp, sizeof(mp), "%s%s", s.path, marks[i]) >= (int)sizeof(mp)) continue;
+      struct stat ms;
+      if(lstat(mp, &ms) == 0 && S_ISREG(ms.st_mode)) (void)unlink(mp);
+    }
+  }
   int rc = delete_path(s.path, 10, 99, &files, &bytes, why, sizeof(why));
   pthread_mutex_lock(&g_lock);
   g_job.files = files;
@@ -884,8 +898,8 @@ delete_thread(void *arg) {
   snprintf(name, sizeof(name), "%s", g_job.name);
   snprintf(error, sizeof(error), "%s", g_job.error);
   uint64_t bytes = g_job.bytes, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
-  pthread_mutex_unlock(&g_lock);
   int waited = g_job.waited_tile;
+  pthread_mutex_unlock(&g_lock);
   if(waited && st == DL_DONE) ps5tm_notify("„%s“ ist gelöscht.", name);
   else if(waited && st == DL_FAILED) ps5tm_notify("„%s“ wurde nicht gelöscht: %.120s", name, error);
   if(st == DL_DONE || st == DL_FAILED)

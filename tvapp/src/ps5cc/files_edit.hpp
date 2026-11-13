@@ -44,6 +44,11 @@ EditText split_edit_text(const std::string &text);
 // Puts it together again: split_edit_text then join_edit_text gives back the same bytes.
 std::string join_edit_text(const EditText &text);
 
+// The answer of Source::files_view is the one asked for: the same path. An answer for another file
+// (asked before, arriving late) must not fill the editor, or a save would put its text into the
+// wrong file.
+bool view_matches(const FsView &view, const std::string &path);
+
 // A line as the list shows it: tabs as spaces, a stray CR gone.
 std::string edit_display(const std::string &line);
 

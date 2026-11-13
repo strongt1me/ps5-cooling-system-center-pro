@@ -102,6 +102,16 @@ TEST(FilesEdit, DisplayShowsTabsAsSpacesAndNoCr)
     EXPECT_EQ(edit_display(""), "");
 }
 
+TEST(FilesEdit, OnlyTheAnswerForTheOpenFileIsTaken)
+{
+    FsView v;
+    v.path = "/mnt/usb0/a.ini";
+    EXPECT_TRUE(view_matches(v, "/mnt/usb0/a.ini"));
+    EXPECT_FALSE(view_matches(v, "/mnt/usb0/b.ini"));
+    EXPECT_FALSE(view_matches(v, ""));
+    EXPECT_FALSE(view_matches(FsView{}, "")); // nothing asked, nothing taken
+}
+
 TEST(FilesEdit, MarksOnlyWhatChanged)
 {
     const std::vector<std::string> before{"a", "b", "c", "d"};

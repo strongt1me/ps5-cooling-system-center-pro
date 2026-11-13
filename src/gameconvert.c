@@ -472,8 +472,12 @@ stamp_add(cv_stamp_t *st, const cv_stamp_t *ref, const char *rel, uint64_t size,
   st->bytes += size;
   st->sum += h;
   if(!ref && st->kept_all) {                 /* the second look (ref) only compares: it keeps no hashes */
-    if(st->n >= STAMP_KEEP) st->kept_all = 0;
-    else {
+    if(st->n >= STAMP_KEEP) {
+      st->kept_all = 0;                      /* too many files to compare one by one: the sums decide, the list is of no use */
+      free(st->h);
+      st->h = NULL;
+      st->n = st->cap = 0;
+    } else {
       if(st->n == st->cap) {
         size_t nc = st->cap ? st->cap * 2 : 4096;
         uint64_t *nh = realloc(st->h, nc * sizeof(*nh));
@@ -1688,6 +1692,8 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
   /* the AMPR index walk (amprindex.c) recurses with ~4 KB per folder level: never the small default stack */
   pthread_attr_setstacksize(&attr, 1024 * 1024);
   pthread_t th;
+  char target_log[sizeof(g_job.target)];             /* for the log line: the thread owns a and g_job from here on */
+  snprintf(target_log, sizeof(target_log), "%s", a->target);
   int rc = pthread_create(&th, &attr, cv_thread, a);
   pthread_attr_destroy(&attr);
   if(rc != 0) {
@@ -1697,7 +1703,7 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
     return 500;
   }
   PS5TM_INFO("game_convert_started", "Konvertieren von %s (%s) nach %s gestartet.",
-             title_id, source, g_job.target);
+             title_id, source, target_log);
   return 200;
 }
 

@@ -2041,6 +2041,9 @@ out:
 
 /* ---------------------------------------------------------------- interface */
 
+/* 1 while ps5tm_dump_delete removes a dump: a dump that starts in that time could write into the folder being emptied (audit F-38). */
+static int g_deleting;
+
 int
 ps5tm_dump_busy(void) {
   pthread_mutex_lock(&g_lock);
@@ -2132,6 +2135,12 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
     pthread_mutex_unlock(&g_lock);
     free(a);
     snprintf(err, en, "Es läuft schon ein Dump.");
+    return 409;
+  }
+  if(__atomic_load_n(&g_deleting, __ATOMIC_ACQUIRE)) {
+    pthread_mutex_unlock(&g_lock);
+    free(a);
+    snprintf(err, en, "Ein Dump wird gerade gelöscht. Bitte einen Moment warten.");
     return 409;
   }
   memset(&g_job, 0, sizeof(g_job));
@@ -2308,14 +2317,17 @@ ps5tm_dump_action(const cJSON *b, char *msg, size_t n) {
    fields of its list entry; what is not in the list is never touched. */
 int
 ps5tm_dump_delete(const char *mount, const char *dir, const char *folder, char *msg, size_t n) {
-  if(ps5tm_dump_busy()) { snprintf(msg, n, "Es läuft gerade ein Dump."); return 409; }
-  if(ps5tm_filejobs_busy_for_dump(msg, n)) return 409;
+  if(__atomic_exchange_n(&g_deleting, 1, __ATOMIC_ACQ_REL)) { snprintf(msg, n, "Ein Dump wird gerade gelöscht."); return 409; }
+  /* claimed first, then looked at: a dump that starts now sees the claim and stands down */
+  if(ps5tm_dump_busy()) { __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE); snprintf(msg, n, "Es läuft gerade ein Dump."); return 409; }
+  if(ps5tm_filejobs_busy_for_dump(msg, n)) { __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE); return 409; }
   char dest[PATH_MAX], state[16];
   int http = ps5tm_dumplib_locate(mount, dir, folder, dest, sizeof(dest), state, sizeof(state), msg, n);
-  if(http != 200) return http;
-  if(!strcmp(state, "running")) { snprintf(msg, n, "Dieser Dump wird gerade geschrieben."); return 409; }
+  if(http != 200) { __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE); return http; }
+  if(!strcmp(state, "running")) { __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE); snprintf(msg, n, "Dieser Dump wird gerade geschrieben."); return 409; }
   uint64_t t0 = ps5tm_mono_ms();
   remove_dump_folder(dest, folder);
+  __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE);
   PS5TM_INFO("dump_deleted", "Dump gelöscht: %s.", folder);
   ps5tm_hist_add("delete", folder, "Dump", "done", "", 0, ps5tm_mono_ms() - t0);
   (void)ps5tm_dumplib_start(0);

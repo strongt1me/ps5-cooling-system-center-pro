@@ -1317,6 +1317,8 @@ ps5tm_gamecopy_start(const char *title_id, const char *mount, const char *mode,
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
   pthread_attr_setstacksize(&attr, 1024 * 1024);    /* copy_tree recurses with a path buffer per level; the default is not ours to rely on */
   pthread_t th;
+  char target_log[sizeof(g_job.target)];             /* for the log line: the thread owns a and g_job from here on */
+  snprintf(target_log, sizeof(target_log), "%s", a->target);
   int rc = pthread_create(&th, &attr, copy_thread, a);
   pthread_attr_destroy(&attr);
   if(rc != 0) {
@@ -1326,7 +1328,7 @@ ps5tm_gamecopy_start(const char *title_id, const char *mount, const char *mode,
     return 500;
   }
   PS5TM_INFO("game_copy_started", "Kopie von %s (%s) nach %s gestartet.",
-             title_id, source, g_job.target);
+             title_id, source, target_log);
   return 200;
 }
 

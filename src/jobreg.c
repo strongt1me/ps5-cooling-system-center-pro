@@ -37,7 +37,13 @@ ps5tm_jobs_busy_except(int self, int flags, char *why, size_t n) {
   for(int i = 0; i < PS5TM_JOB_COUNT; i++) {
     if(i == self || !k_jobs[i].busy) continue;
     if(k_jobs[i].reads_only && !(flags & PS5TM_JOBS_READERS)) continue;
-    if(i == PS5TM_JOB_GAMEMOVE && (flags & PS5TM_JOBS_NO_SMP)) continue;
+    if(i == PS5TM_JOB_GAMEMOVE && (flags & PS5TM_JOBS_NO_SMP)) {
+      if(ps5tm_gamemove_busy_local()) {            /* ShadowMountPlus is not asked, but what the app itself holds still counts */
+        if(why && n) snprintf(why, n, "%s", k_jobs[i].what);
+        return 1;
+      }
+      continue;
+    }
     if(k_jobs[i].busy()) {
       if(why && n) snprintf(why, n, "%s", k_jobs[i].what);
       return 1;

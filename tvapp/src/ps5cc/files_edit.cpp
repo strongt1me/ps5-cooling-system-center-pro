@@ -103,6 +103,11 @@ std::string join_edit_text(const EditText &text)
     return out;
 }
 
+bool view_matches(const FsView &view, const std::string &path)
+{
+    return !path.empty() && view.path == path;
+}
+
 std::string edit_display(const std::string &line)
 {
     std::string out;

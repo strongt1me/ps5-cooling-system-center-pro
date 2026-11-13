@@ -290,22 +290,24 @@ class FilesPage final : public Page
                 shown_path_ = folder_.path;
                 picked_.clear();
                 pick_mode_ = false;
-                measure_queue_.clear();
-                measure_current_.clear();
+                stop_measure();
                 list_.set_focus(0);
             }
             sort_entries();
         }
         if (dialog_ == kEditor && edit_loading_ && data.fs_view.seq != view_seq_)
         {
+            // only the answer for this file counts: one for another (asked before, arriving late)
+            // is let go
+            const bool mine = view_matches(data.fs_view, edit_path_);
             view_seq_ = data.fs_view.seq;
-            edit_loading_ = false;
+            edit_loading_ = !mine;
             const FsView &v = data.fs_view;
-            if (!v.error.empty())
+            if (mine && !v.error.empty())
                 edit_error_ = v.error;
-            else if (v.truncated || v.text.size() > kEditMaxBytes)
+            else if (mine && (v.truncated || v.text.size() > kEditMaxBytes))
                 edit_error_ = "Diese Datei ist zu groß für den Editor (über 64 KiB).";
-            else
+            else if (mine)
             {
                 edit_text_ = split_edit_text(v.text);
                 if (!edit_text_.error.empty())
@@ -372,6 +374,7 @@ class FilesPage final : public Page
             {
                 source().files_delete(delete_paths_);
                 picked_.clear();
+                pick_mode_ = false;
                 key_.clear();
                 rebuild();
             }
@@ -1054,8 +1057,7 @@ class FilesPage final : public Page
             start_measure();
             break;
         case kMeasureStop:
-            measure_queue_.clear();
-            measure_current_.clear();
+            stop_measure();
             break;
         case kLineBefore:
             insert_line(edit_focus_, feedback);
@@ -1090,6 +1092,7 @@ class FilesPage final : public Page
             clip_from_ = folder_.path;
             clip_paths_ = paths;
             picked_.clear();
+            pick_mode_ = false;
             break;
         case kRename:
             open_name(kRename, feedback);
@@ -1438,6 +1441,12 @@ class FilesPage final : public Page
         return !measure_current_.empty() || !measure_queue_.empty();
     }
 
+    void stop_measure()
+    {
+        measure_queue_.clear();
+        measure_current_.clear();
+    }
+
     // The folders that have no size yet, one after the other (the app counts each for at most 8
     // seconds); when all have one, all again.
     void start_measure()
@@ -1454,8 +1463,8 @@ class FilesPage final : public Page
             if (it == sizes_.end() || it->second.failed)
                 todo.push_back(full);
         }
+        stop_measure();
         measure_queue_ = todo.empty() ? all : todo;
-        measure_current_.clear();
         measure_total_ = static_cast<int>(measure_queue_.size());
         measure_done_ = 0;
     }
@@ -1470,7 +1479,11 @@ class FilesPage final : public Page
                 ++measure_done_;
                 measure_current_.clear();
                 if (measure_queue_.empty() && sort_ == 1)
+                {
                     sort_entries(); // by size: the folders now have one
+                    key_.clear();   // and the rows (their tags are indexes) are built again at once
+                    rebuild();
+                }
             }
         }
         if (measure_current_.empty() && !measure_queue_.empty())

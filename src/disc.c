@@ -1365,7 +1365,11 @@ dump_start_locked(char *err, size_t en, int automatic) {
   if(g_job.state == JOB_RUNNING || g_job.state == JOB_VERIFY) { snprintf(err, en, "Es läuft schon ein Abbild."); return 409; }
   if(!type_is_dumpable(g_type)) { snprintf(err, en, "Diese Disc lässt sich nicht sichern (nur PS2-DVD und PS3-Discs)."); return 409; }
   if(g_tstate != TS_OK && g_tstate != TS_GENERIC) { snprintf(err, en, "Die Disc ist noch nicht erkannt (Titelkennung fehlt)."); return 409; }
-  if(ps5tm_gamecopy_busy() || ps5tm_gameconvert_busy() || ps5tm_filemgr_busy()) { snprintf(err, en, "Ein anderer Dateiauftrag läuft gerade."); return 409; }
+  {
+    /* every job of the app that works on drives (jobreg.c), not only three of them; ShadowMountPlus is not asked here (the lock is held) */
+    char w[200];
+    if(ps5tm_jobs_busy_except(PS5TM_JOB_DISC, PS5TM_JOBS_NO_SMP, w, sizeof(w))) { snprintf(err, en, "%s. Bitte warten, bis er fertig ist.", w); return 409; }
+  }
   dump_arg_t *a = calloc(1, sizeof *a);
   if(!a) { snprintf(err, en, "Kein Speicher."); return 500; }
   a->type = g_type;
