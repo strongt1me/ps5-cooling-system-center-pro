@@ -77,7 +77,7 @@ drive_in_use(const char *mount, char *why, size_t n) {
   free(list);
   if(ps4) {
     snprintf(why, n, "PS4Mount spielt %d PS4-Spiel(e) von diesem Laufwerk, zum Beispiel %s. Auswerfen würde ihnen die Daten "
-             "nehmen; erst mit „Nicht mehr von USB spielen“ herausnehmen oder die Konsole neu starten.", ps4, first);
+             "nehmen; erst mit „Kachel entfernen“ herausnehmen oder die Konsole neu starten.", ps4, first);
     return 1;
   }
   if(other) {

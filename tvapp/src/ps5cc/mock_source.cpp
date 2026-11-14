@@ -1292,10 +1292,8 @@ class MockSource final : public Source
                 g->state = "removed";
             msg = "Die Kachel ist entfernt, die PKG bleibt auf dem USB-Laufwerk.";
         }
-        else if (has("\"restored_forget\""))
-            msg = "Die herausgenommenen Spiele sind wieder zugelassen.";
         else if (has("\"restore"))
-            msg = "Die Spiele werden herausgenommen, die PKGs kommen an ihren alten Platz.";
+            msg = "Die PKGs kommen an ihren alten Platz zurück, das Spiel bleibt in der Bibliothek.";
         if (!msg.empty())
             notice(Notice::Kind::success, "PS4Mount", msg);
         changed();
@@ -2498,7 +2496,7 @@ class MockSource final : public Source
     {
         Ps4Mount &m = data_.ps4mount;
         m.loaded = m.enabled = m.running = true;
-        m.version = "PS4Mount 0.7.0";
+        m.version = "PS4Mount 0.8.0";
         m.config.valid = true;
         m.config.paths = {"/", "/pkg"};
         struct Seed
@@ -2521,6 +2519,9 @@ class MockSource final : public Source
             g.version = s.version;
             g.state = s.state;
             g.mount = "/mnt/usb0";
+            // two games lie where they were put, one was sorted into ps4/ by an earlier version
+            const bool sorted = std::string(s.id) == "CUSA18842";
+            g.source = sorted ? std::string("/mnt/usb0/ps4/") + s.id : std::string("/mnt/usb0/PS4 Spiele/") + s.name;
             g.size = static_cast<std::uint64_t>(s.gb * 1e9);
             g.has_patch = s.patch;
             g.dlc = s.dlc;
@@ -2528,8 +2529,8 @@ class MockSource final : public Source
             g.updates = s.updates;
             m.games.push_back(g);
         }
-        // What the search left on the drive: a game installed on the console, a PS5 pkg, one taken
-        // out earlier.
+        // What the search left on the drive: a game installed on the console, a PS5 pkg, one that is
+        // still being copied.
         struct Skip
         {
             const char *file, *id, *name, *why;
@@ -2537,7 +2538,7 @@ class MockSource final : public Source
         static const Skip kSkips[] = {
             {"CUSA20417 - Lantern Bay - game.pkg", "CUSA20417", "Lantern Bay", "internal"},
             {"UP4402-PPSA07710_00-GLASSHARBOR00000.pkg", "", "", "not_ps4"},
-            {"CUSA11208 - Copper Meadow - game.pkg", "", "", "restored"},
+            {"CUSA11208 - Copper Meadow - game.pkg", "CUSA11208", "Copper Meadow", "incomplete"},
         };
         for (const Skip &s : kSkips)
         {

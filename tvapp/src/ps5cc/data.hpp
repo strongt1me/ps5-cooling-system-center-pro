@@ -407,6 +407,7 @@ struct Ps4Game
     std::string state; // ready, running, pending, removed, internal, duplicate, addons
     std::string mount;
     std::string update_issue;
+    std::string source; // the folder the game pkg is read from (PS4Mount 0.8.0: where it lies)
     bool has_patch = false;
     std::uint64_t size = 0;
     int dlc = 0;       // add-ons in use
@@ -757,7 +758,7 @@ struct Ps4Skipped
     std::string title_id; // empty when the header could not be read
     std::string name;
     std::string
-        why; // internal, restored, not_ps4, not_fake, dlc_foreign, dlc_off, duplicate, second_game
+        why; // internal, incomplete, not_ps4, not_fake, dlc_foreign, dlc_off, duplicate, second_game, damaged
 };
 
 struct Ps4Mount

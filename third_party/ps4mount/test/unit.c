@@ -297,8 +297,8 @@ static void test_sfo_check(void) {
 }
 
 static void test_origin(void) {
-    printf("origin records and restored list\n");
-    char root[] = "/tmp/ps4mount-test-XXXXXX", game[128], list[128], out[256], p[256];
+    printf("origin records\n");
+    char root[] = "/tmp/ps4mount-test-XXXXXX", game[128], out[256], p[256];
     if (!mkdtemp(root)) {
         CHECK(0);
         return;
@@ -334,17 +334,6 @@ static void test_origin(void) {
     CHECK(p4m_origin_free_path(root, "Game.pkg", out, sizeof(out)) == 0 && !strcmp(out, p));
     snprintf(p, sizeof(p), "%s/v1.0/noext", root);
     CHECK(p4m_origin_free_path(root, "v1.0/noext", out, sizeof(out)) == 0 && !strcmp(out, p));
-
-    /* restored pkgs are matched by path and size */
-    snprintf(list, sizeof(list), "%s/restored.txt", root);
-    CHECK(!p4m_restored_has(list, "Game.pkg", 100));
-    CHECK(p4m_restored_add(list, "Game.pkg", 100) == 0);
-    CHECK(p4m_restored_add(list, "games/Other.pkg", 5000000000ull) == 0);
-    CHECK(p4m_restored_has(list, "Game.pkg", 100));
-    CHECK(p4m_restored_has(list, "games/Other.pkg", 5000000000ull));
-    CHECK(!p4m_restored_has(list, "Game.pkg", 101));    /* changed */
-    CHECK(!p4m_restored_has(list, "Game2.pkg", 100));   /* renamed */
-    CHECK(!p4m_restored_has(list, "x/Game.pkg", 100));  /* moved */
 
     char cmd[300];
     snprintf(cmd, sizeof(cmd), "rm -rf '%s'", root);

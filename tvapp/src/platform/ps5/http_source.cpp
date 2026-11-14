@@ -4203,6 +4203,7 @@ void HttpSource::poll_ps4mount()
         x.state = str(g, "state");
         x.mount = str(g, "mount");
         x.update_issue = str(g, "update_issue");
+        x.source = str(g, "source");
         x.has_patch = flag(g, "has_patch");
         x.size = static_cast<std::uint64_t>(num(g, "size"));
         x.dlc = static_cast<int>(num(g, "dlc"));

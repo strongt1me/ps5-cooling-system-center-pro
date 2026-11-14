@@ -4975,7 +4975,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
   /* PS4Mount inside the app (ps4m_core.c): GET the list and state,
-     POST {action: enable|disable|scan|add|remove|restore|restore_all|restored_forget|config, ...}. */
+     POST {action: enable|disable|scan|add|remove|restore|restore_all|config, ...}. */
   if(!strcmp(req->path, "/api/v1/ps4mount")) {
     if(is_get) {
       char *s = ps4m_state_json();

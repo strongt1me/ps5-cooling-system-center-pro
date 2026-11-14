@@ -7605,8 +7605,11 @@
   const p4mPickButtons = () => {
     const b = $("#p4m-restore-sel");
     b.disabled = !(p4m.data && p4m.data.running) || !p4m.sel.size;
-    b.textContent = p4m.sel.size > 1 ? `${p4m.sel.size} Spiele nicht mehr von USB spielen` : "Ausgewählte nicht mehr von USB spielen";
+    b.textContent = p4m.sel.size > 1 ? `${p4m.sel.size} Spiele zurückverschieben` : "Ausgewählte zurückverschieben";
   };
+
+  /* PS4Mount 0.8.0: ein Spiel, dessen PKG im Ordner <Laufwerk>/ps4/<Titel-ID> liegt, wurde von einer früheren Version dorthin verschoben */
+  const p4mOrganized = (g) => /\/ps4\/CUSA\d{5}$/.test(g.source || "");
 
   const p4mRender = () => {
     const d = p4m.data;
@@ -7635,10 +7638,11 @@
         : (g.state === "ready" || g.state === "pending")
           ? `<button type="button" class="btn ghost" data-p4m="remove" data-id="${esc(g.title_id)}"
               title="Die Kachel verschwindet vom Startbildschirm, die PKG bleibt auf dem USB-Laufwerk. „Kachel wieder anlegen“ holt sie zurück.">Kachel entfernen</button>` : "";
-      /* PS4Mount 0.5.0: die PKGs dorthin zurück, woher sie kamen; nicht bei Spielen, die fest auf der Konsole installiert sind */
-      const back = g.state !== "internal"
+      /* PS4Mount 0.5.0: die PKGs dorthin zurück, woher sie kamen; seit 0.8.0 nur bei Spielen, die eine frühere Version in
+         ps4/<Titel-ID> einsortiert hat (die anderen liegen noch an ihrem Platz), und das Spiel bleibt in der Bibliothek */
+      const back = g.state !== "internal" && p4mOrganized(g)
         ? `<button type="button" class="btn ghost" data-p4m-back="${esc(g.title_id)}"
-            title="Die Kachel verschwindet, Spiel, Update und Zusatzinhalte kommen an ihren alten Platz auf dem Laufwerk zurück, und die Suche nimmt das Spiel nicht wieder auf. Ein laufendes Spiel wird vorher geschlossen.">Nicht mehr von USB spielen</button>` : "";
+            title="Spiel, Update und Zusatzinhalte kommen an ihren alten Platz auf dem Laufwerk zurück, das Spiel bleibt in der Bibliothek. Ein laufendes Spiel wird vorher geschlossen.">PKGs zurückverschieben</button>` : "";
       /* PS4Mount 0.7.0: welches Update benutzt wird bzw. welche Zusatzinhalte an sind, nur wenn es etwas zu wählen gibt */
       const upd = g.updates > 1
         ? `<button type="button" class="btn ghost" data-p4mg="upd" data-id="${esc(g.title_id)}" data-name="${esc(g.name)}">Updates</button>` : "";
@@ -7653,15 +7657,15 @@
     }).join("") : `<p class="muted">${(d.skipped || []).length ? "Kein PS4-Spiel ist eingebunden. Was auf den Laufwerken gefunden wurde, steht unten mit dem Grund."
       : "Keine PS4-Spiele auf den angeschlossenen Laufwerken gefunden."}</p>`;
     p4mSkipRender(d.skipped || []);
-    /* die Auswahl zum Zurückverschieben: jedes Spiel, das nicht fest installiert ist; was mitgeht, steht dabei */
-    const movable = games.filter((g) => g.state !== "internal");
+    /* die Auswahl zum Zurückverschieben: jedes Spiel mit PKGs im Ordner ps4, das nicht fest installiert ist; was mitgeht, steht dabei */
+    const movable = games.filter((g) => g.state !== "internal" && p4mOrganized(g));
     for (const id of Array.from(p4m.sel)) if (!movable.some((g) => g.title_id === id)) p4m.sel.delete(id);
     $("#p4m-pick").innerHTML = movable.length ? movable.map((g) => {
       const what = g.has_patch && g.dlc ? `Spiel, Update und ${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}`
         : g.has_patch ? "Spiel und Update" : g.dlc ? `Spiel und ${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}` : "Spiel";
       return `<label class="cp-check p4m-pickrow"><input type="checkbox" data-p4m-sel="${esc(g.title_id)}" ${p4m.sel.has(g.title_id) ? "checked" : ""}>
         <span><b>${esc(g.name)}</b> <span class="muted">${esc(`${g.title_id} · ${what}`)}</span></span></label>`;
-    }).join("") : `<p class="muted">Kein Spiel wird gerade von USB gespielt.</p>`;
+    }).join("") : `<p class="muted">Kein Spiel hat PKGs im Ordner ps4.</p>`;
     p4mPickButtons();
     $("#p4m-restore-all").disabled = !d.running || !movable.length;
     $$("#p4m-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
@@ -7684,7 +7688,7 @@
      „Keine PS4-Spiele gefunden“ da, obwohl die PKGs auf dem Laufwerk lagen, etwa weil das Spiel schon installiert ist. */
   const P4M_WHY = {
     internal: "Schon auf der Konsole installiert. Um es von USB zu spielen, erst das installierte Spiel löschen.",
-    restored: "Mit „Nicht mehr von USB spielen“ herausgenommen. „Herausgenommene wieder zulassen“ (weiter unten) holt es zurück.",
+    incomplete: "Die Datei ist kleiner, als ihr Kopf sagt: Sie wird noch kopiert oder ist abgeschnitten.",
     not_ps4: "Kein PS4-Paket, zum Beispiel ein PS5-PKG. Solche Pakete installiert der Reiter „Pakete“.",
     not_fake: "Kein Fake-PKG. Von USB spielen lassen sich nur Fake-PKGs.",
     dlc_foreign: "Zusatzinhalt, der zu keinem PS4-Spiel gehört.",
@@ -8159,7 +8163,6 @@
   $("#p4m-save").addEventListener("click", () => p4mPost(p4mConfig()));
   oneClick($("#p4m-restore-sel"), () => p4mRestore({ action: "restore", ids: Array.from(p4m.sel) }));
   oneClick($("#p4m-restore-all"), () => p4mRestore({ action: "restore_all" }));
-  oneClick($("#p4m-forget"), () => p4mPost({ action: "restored_forget" }));
 
   /* ── Verlauf (jobhist.c, 11.10.2026) ────────────────────────────────
      Alle Vorgänge der App mit Ergebnis, aus /api/v1/jobs/history, das neueste zuerst. */

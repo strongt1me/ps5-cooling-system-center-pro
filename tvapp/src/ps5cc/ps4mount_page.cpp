@@ -45,7 +45,6 @@ enum MenuTag
     kPageSettings,
     kPageLog,
     kPageRestoreAll,
-    kPageForget,
 };
 
 enum Dialog
@@ -119,9 +118,9 @@ const char *why_text(const std::string &why)
         return "Schon auf der Konsole installiert. Um es von USB zu spielen, erst das installierte "
                "Spiel löschen "
                "(Bibliothek → Aktionen → Löschen).";
-    if (why == "restored")
-        return "Mit „Nicht mehr von USB spielen“ herausgenommen. Mehr → Herausgenommene wieder "
-               "zulassen holt es zurück.";
+    if (why == "incomplete")
+        return "Die Datei ist kleiner, als ihr Kopf sagt: Sie wird noch kopiert oder ist "
+               "abgeschnitten.";
     if (why == "not_ps4")
         return "Kein PS4-Paket, zum Beispiel ein PS5-PKG. Solche Pakete installiert der Reiter "
                "„Pakete“.";
@@ -146,8 +145,8 @@ const char *why_short(const std::string &why)
 {
     if (why == "internal")
         return "schon installiert";
-    if (why == "restored")
-        return "herausgenommen";
+    if (why == "incomplete")
+        return "unvollständig";
     if (why == "not_ps4")
         return "kein PS4-Paket";
     if (why == "not_fake")
@@ -672,8 +671,8 @@ class Ps4MountPage final : public Page
             add("Zusatzinhalte (" + std::to_string(g.dlc) + " von " + std::to_string(g.dlc_total) +
                     " an)",
                 kGameDlc);
-        if (g.state != "internal")
-            add("Nicht mehr von USB spielen", kGameRestore, !mount_.running, true);
+        if (g.state != "internal" && organized(g))
+            add("PKGs zurückverschieben", kGameRestore, !mount_.running);
         if (items.empty())
         {
             feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
@@ -682,6 +681,25 @@ class Ps4MountPage final : public Page
         menu_game_ = g.title_id;
         menu_.set_items(items);
         menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
+    }
+
+    // PS4Mount 0.8.0 leaves the pkgs where they lie; only a game an earlier version sorted into
+    // <drive>/ps4/<title ID> has pkgs to move back (the game stays in the library).
+    static bool organized(const Ps4Game &g)
+    {
+        const std::string tail = "/ps4/" + g.title_id;
+        return g.source.size() >= tail.size() &&
+               g.source.compare(g.source.size() - tail.size(), tail.size(), tail) == 0;
+    }
+
+    bool any_organized() const
+    {
+        for (const Ps4Game &g : mount_.games)
+        {
+            if (g.state != "internal" && organized(g))
+                return true;
+        }
+        return false;
     }
 
     void open_page_menu(ui::Feedback &feedback)
@@ -704,9 +722,7 @@ class Ps4MountPage final : public Page
         ui::MenuItem line;
         line.separator = true;
         items.push_back(line);
-        add("Herausgenommene wieder zulassen", kPageForget, !mount_.running);
-        add("Alle nicht mehr von USB spielen", kPageRestoreAll,
-            !mount_.running || mount_.games.empty(), true);
+        add("Alle zurückverschieben", kPageRestoreAll, !mount_.running || !any_organized());
         menu_.set_items(items);
         menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
     }
@@ -752,9 +768,6 @@ class Ps4MountPage final : public Page
             open_dialog(kLog, feedback);
             log_ = "wird geladen …";
             source().ps4mount_fetch("log", {});
-            break;
-        case kPageForget:
-            source().ps4mount_post({}, "{\"action\":\"restored_forget\"}");
             break;
         case kPageRestoreAll:
             source().ps4mount_post({}, "{\"action\":\"restore_all\"}");

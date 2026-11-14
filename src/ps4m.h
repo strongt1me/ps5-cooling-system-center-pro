@@ -18,8 +18,7 @@ int   ps4m_running(void);
    or a process is named like it (since 15.10.2026; may take up to 0.6 s). */
 int   ps4m_standalone_active(char *why, size_t n);
 /* "scan"; "add" / "remove" with a CUSA title id; "restore" with one or more title ids (comma-separated): their pkgs go back to
-   where they came from (since 0.5.0, done by the worker, which closes the open game first); "restore_all"; "restored_forget":
-   pkgs moved back are picked up again. 0 = done or started. */
+   where they came from (since 0.5.0, done by the worker, which closes the open game first); "restore_all". 0 = done or started. */
 int   ps4m_do_action(const char *action, const char *tid, char *msg, size_t n);
 /* Settings as the form string of the original panel (batch=0|1&batch_size=N&dlc=0|1&restore_batch=N&paths=...). */
 int   ps4m_do_config(const char *form, char *msg, size_t n);

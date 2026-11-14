@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
- * Copyright (C) 2026 gasb07 (PS4Mount 0.7.0 accopy.c), adapted for PS5 Cooling & System Center - Pro: functions
+ * Copyright (C) 2026 gasb07 (PS4Mount 0.8.0 accopy.c), adapted for PS5 Cooling & System Center - Pro: functions
  * carry the p4m_ prefix (see src/ps4m_accopy.h); otherwise unchanged. */
 #include "ps4m_accopy.h"
 
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static void
@@ -93,7 +95,8 @@ p4m_acwait_start(p4m_acwait_t *w, time_t now) {
 int
 p4m_acwait_step(p4m_acwait_t *w, uint64_t cur, uint64_t want, time_t now) {
   if(cur >= want) return P4M_ACW_DONE;
-  if(cur > w->last) {
+  if(cur > w->last || !cur) {
+    /* nothing written here yet: the system copies elsewhere and moves ac.pkg in at the end (PS4Mount 0.8.0) */
     w->last = cur;
     w->grew = now;
   }
@@ -110,4 +113,16 @@ p4m_accopy_decide(const p4m_acin_t *in) {
   if(!in->marked) return in->fails >= P4M_ACFAIL_MAX ? P4M_AC_PROBLEM : P4M_AC_INSTALL;
   if(!in->files) return in->rereg ? P4M_AC_REINSTALL : P4M_AC_TURN_OFF;
   return in->playgo ? P4M_AC_NONE : P4M_AC_REINSTALL;
+}
+
+int
+p4m_accopy_files_done(const char *dir, uint64_t size) {
+  char p[PATH_MAX];
+  struct stat st;
+  snprintf(p, sizeof(p), "%s/ac.pkg", dir);
+  if(stat(p, &st) || (uint64_t)st.st_size < size) return 0;
+  snprintf(p, sizeof(p), "%s/ac.json", dir);
+  if(stat(p, &st)) return 0;
+  snprintf(p, sizeof(p), "%s/ac.pbm", dir);
+  return !stat(p, &st);
 }
