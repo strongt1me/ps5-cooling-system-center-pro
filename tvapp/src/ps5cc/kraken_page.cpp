@@ -540,7 +540,9 @@ class KrakenPage final : public Page
             item.subtitle = g.title_id + (g.version.empty() ? "" : " · Version " + g.version) +
                             " · " + kind_of(g) + " · " + g.drive;
             item.value = g.size != 0 ? format_bytes(g.size) : std::string();
-            item.badge = st.badge;
+            // A title ShadowMountPlus or PS4Mount manages too: both write its tile and mount it
+            // (src/mounters.c); more important than where the build stands
+            item.badge = g.conflict_with.empty() ? st.badge : "KONFLIKT";
             item.tag = static_cast<int>(i);
             out.push_back(item);
         }
@@ -581,6 +583,11 @@ class KrakenPage final : public Page
             rows.push_back({"Titel-ID", g->title_id});
             rows.push_back({"Version", g->version.empty() ? "-" : g->version});
             rows.push_back({"Art", kind_of(*g)});
+            if (!g->conflict_with.empty())
+                rows.push_back({"Konflikt", "auch bei " + g->conflict_with});
+            // Game folders are ShadowMountPlus's business; only .pkg files belong in these folders
+            if (g->kind != "pkg")
+                rows.push_back({"Hinweis", "nur .pkg gehört hierher"});
             rows.push_back({"Laufwerk", g->drive});
             rows.push_back({"Größe", g->size != 0 ? format_bytes(g->size) : "-"});
             rows.push_back(

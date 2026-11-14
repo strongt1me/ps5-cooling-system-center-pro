@@ -40,6 +40,7 @@
 #include <unistd.h>
 
 #include "ps5tm.h"
+#include "smphold.h"
 #include "third_party/cJSON.h"
 
 #define SMP_PORT        10101
@@ -327,6 +328,16 @@ ps5tm_smp_call(const char *route, const cJSON *body, int timeout_ms,
   char *txt = body ? cJSON_PrintUnformatted(body) : NULL;
   cJSON *ans = post(route, txt ? txt : "{}", timeout_ms);
   free(txt);
+
+  /* Everything the app mounts goes through here: smphold.c writes it down, so that a game mounted and never started (which keeps
+     every other launch from starting, "Device busy") is unmounted again. A mount without an answer may have gone through, so it is
+     written down too; the watcher drops it when ShadowMountPlus says it is not mounted. */
+  const cJSON *tid = body ? cJSON_GetObjectItem(body, "title_id") : NULL;
+  if(cJSON_IsString(tid)) {
+    if(!strcmp(route, "/games/mount") && (!ans || status_ok(ans))) ps5tm_smphold_note(tid->valuestring, 1);
+    else if(!strcmp(route, "/games/unmount") && ans && status_ok(ans)) ps5tm_smphold_note(tid->valuestring, 0);
+  }
+
   if(!ans) {
     snprintf(err, err_len, "ShadowMountPlus antwortet nicht.");
     return NULL;

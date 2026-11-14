@@ -71,6 +71,9 @@ struct Game
     bool can_unpack = false;
     bool can_remount = false; // ShadowMountPlus can take it out and put it back (1.7beta10)
     bool smp_mounted = false; // ShadowMountPlus has it mounted now
+    // Another mounter wants this title too ("Kraken Mount"): both write /user/app/<ID> and mount
+    // /system_ex/app/<ID> (GET /api/v1/library: "conflicts", 14.11.2026); "" when none does
+    std::string conflict_with;
     bool ampr_emu = false; // mods.ampr_emu: the conversion builds the AMPR index first by default
     std::string disc; // installed from disc: "in" (the disc is in the drive) or "out"; "" otherwise
     bool dump_mounted = false; // the game runs (mounted), so it can be dumped
@@ -786,6 +789,9 @@ struct KrakenGame
     std::string drive;   // the label of its drive
     std::string status;  // pending, checking, building, ready, error, duplicate
     std::string error;
+    // ShadowMountPlus or PS4Mount manages this title too (GET /api/v1/kraken: "conflicts"); "" when
+    // none does
+    std::string conflict_with;
     std::uint64_t size = 0;
     std::uint64_t cache_size = 0;
     bool running = false; // a session of this game is live

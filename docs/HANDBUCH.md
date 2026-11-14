@@ -186,6 +186,15 @@ die Vollbild-App die Marke „EINGEHÄNGT“ in der Zeile (dazu im Infobereich �
 Menüpunkt „Aushängen“ „gibt andere Starts frei“), und auch die Meldung nach dem Einhängen sagt es. Wer ein Spiel nur
 neu erkennen lassen wollte, hängt es danach wieder aus.
 
+**Die App räumt selbst auf** (`src/smphold.c`): Jedes Spiel, das sie über ShadowMountPlus einhängt (die Knöpfe der Spielkarte, die
+Prüfung der Fakelibs, der AMPR-Auftrag), schreibt sie auf (im Speicher und in `/data/PS5-Cooling-Center/smp-mounted.txt`, damit
+ein Neustart der App es nicht vergisst). Ist es 2 Minuten nach dem Einhängen noch eingehängt und nicht gestartet, hängt sie es
+selbst wieder aus, mit einer Meldung auf der Konsole und einer Zeile im Protokoll (`smp_hold_released`; scheitert das Aushängen,
+`smp_hold_failed` und ein neuer Versuch nach 30 Sekunden). Die zwei Minuten laufen nur, solange kein Spiel läuft und kein Auftrag
+der App arbeitet; hat ShadowMountPlus das Spiel inzwischen selbst freigegeben (es lief und wurde beendet, oder ShadowMountPlus
+wurde neu gestartet), streicht die App es nur aus ihrer Liste. Was nicht die App eingehängt hat (etwa über die eigene Seite von
+ShadowMountPlus oder dessen dauerhafte Abbild-Einhängungen), rührt sie nicht an.
+
 ## Spiele kopieren und konvertieren (ab 1.46.0)
 
 Auf der Karte eines Spiels, das als Dump-Ordner oder Abbild-Datei vorliegt:
@@ -527,6 +536,7 @@ Der Reiter **FPKGMount** neben „PS4 PKG von USB“ spielt (F)PKG-Spiele und Sp
 - **Liste:** Name, Titel-ID, Version, Größe, Laufwerk, Art (FPKG oder Ordner) und Zustand. **Neu aufbauen** baut den Zwischenspeicher eines Spiels neu (er liegt immer auf der internen SSD unter `/data/krakenmount/caches`). **Spiel löschen** fragt vorher und löscht die PKG-Datei bzw. den Spielordner, die Kachel und den Zwischenspeicher; Spielstände bleiben.
 - **Neue Fassung:** „Neue Fassung von GitHub laden“ holt die neueste Veröffentlichung (nur auf Knopfdruck, per HTTPS, mit der Prüfsumme aus `SHA256SUMS`); der nächste Start nimmt sie. Die Einstellungen von Kraken Mount (Suchordner, Fakelib) bleiben in seiner eigenen Seite (Port 8097, Link im Reiter).
 - **Hinweise:** Kraken Mount ist eine Beta; als `.pkg` läuft ein Spiel womöglich schlechter als als zstd-Ordner. Stellst du Kraken Mount auf Ordner um, die auch ShadowMountPlus durchsucht (etwa /data/homebrew), würde jedes Ordner-Spiel dort doppelt angemeldet. Nach einem Neustart der Konsole muss Kraken Mount laufen, damit die Spiele sichtbar bleiben. Die Vollbild-App hat dieselbe Seite unter Spiele → FPKGMount (Quadrat: Neu aufbauen, Löschen; Dreieck: Start/Beenden, Suchen, neue Fassung, Protokoll). Ein Spiel, dessen `param.json` „upgradable“ als `applicationDrmType` trägt (das haben viele Abbilder), zeigt die Konsole mit einem Vorhängeschloss an der Kachel, weil Kraken Mount die Datei unverändert anmeldet; ShadowMountPlus schreibt sie dabei auf „standard“ um. Starten lässt sich das Spiel trotzdem.
+- **Derselbe Titel bei zwei Einhängern (seit 14.11.2026, `src/mounters.c`).** Kraken Mount, ShadowMountPlus und PS4Mount melden jedes Spiel bei der Konsole an und hängen es ein (`/user/app/<ID>`, `/system_ex/app/<ID>`). Liegt dieselbe Titel-ID bei zwei von ihnen (so am 14.11.2026 mit Alex Kidd: eine `.pkg` bei Kraken Mount, ein Abbild bei ShadowMountPlus), kommen sie sich in die Quere: Kraken Mount hängt die Einhängung von ShadowMountPlus aus (Protokoll „not ours, or stale; unmounting it“), es gibt `Device busy`, und die Kachel unterscheidet sich (Kraken Mount meldet die `param.json` unverändert an, ShadowMountPlus schreibt sie um). Die App meldet es: gelber Streifen über der Spieleliste und im Reiter FPKGMount, in der Vollbild-App die Marke „KONFLIKT“ und die Zeile „Konflikt“. Sie verschiebt nichts selbst; das Spiel soll nur bei einem von beiden liegen. Auch **Spielordner im Suchordner von Kraken Mount** (`FPKG-Games`) meldet der Reiter („nur .pkg gehört hierher“): Ordner-Spiele gehören zu ShadowMountPlus. Ein Schalter, der Kraken Mount auf `.pkg` beschränkt, fehlt in Kraken Mount selbst (Einstellungen: nur Suchordner, Fakelib, Backports, Intervall, Speichergrenze, Meldungen, Protokoll); die App liefert dessen ELF unverändert aus.
 
 ### Was nötig ist
 

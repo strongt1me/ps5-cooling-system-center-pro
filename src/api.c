@@ -1252,6 +1252,8 @@ static void
 handle_library(int fd) {
   cJSON *root = ps5tm_library_json();
   int    ok   = cJSON_IsTrue(cJSON_GetObjectItem(root, "ok"));
+  /* Titles Kraken Mount lists that ShadowMountPlus or PS4Mount manages too (mounters.c); added here, outside the library's lock. */
+  if(ok) cJSON_AddItemToObject(root, "conflicts", ps5tm_mounters_conflicts());
   char  *txt  = cJSON_PrintUnformatted(root);
   cJSON_Delete(root);
   if(!txt) {

@@ -983,6 +983,13 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   font-size: 14px; line-height: 1.5; }
 .gm-hold .gm-hold-text { flex: 1 1 320px; min-width: 0; }
 .gm-hold[hidden] { display: none; }
+/* Titel, die zwei Einhänger zugleich wollen (14.11.2026): wie der Hinweis darüber, aber Zeile für Zeile */
+.gm-dup { margin: 0 0 14px; padding: 12px 16px; border: 2px solid rgba(250,178,25,.85); border-radius: 13px;
+  background: rgba(250,178,25,.24); color: var(--ink); font-size: 14px; line-height: 1.5; }
+.gm-dup p { margin: 0; }
+.gm-dup p + p { margin-top: 6px; }
+.gm-dup[hidden] { display: none; }
+.p4m-meta.fp-folder { color: var(--ink); }
 
 .sub-head { margin: 22px 0 12px; padding-top: 18px; font-size: 14px;
   border-top: 1px solid var(--hairline); color: var(--ink-2); }

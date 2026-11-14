@@ -860,6 +860,22 @@ int           ps5tm_kraken_action(const struct cJSON *body, char *msg, size_t n)
 /* icon0.png of one of its games (malloc'd); 0 = found. */
 int           ps5tm_kraken_icon(const char *title_id, unsigned char **png, size_t *len);
 
+/* The games Kraken Mount lists (for the check of titles two mounters want, src/mounters.c): a copy kept for 10 s, nothing while it does
+   not run. kind is "pkg" (a .pkg file) or "folder" (a game folder: Kraken Mount takes those too). Returns how many were filled in. */
+#define PS5TM_KRAKEN_MAX 64
+typedef struct {
+  char title_id[12];
+  char name[96];
+  char path[192];
+  char kind[8];
+} ps5tm_kraken_game_t;
+int ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max);
+
+/* Titles two mounters want at once (src/mounters.c, 14.11.2026): a game Kraken Mount lists that ShadowMountPlus (a folder or an image) or
+   PS4Mount manages too. Both write /user/app/<ID> and mount /system_ex/app/<ID>; ShadowMountPlus also rewrites the param.json. An array of
+   {title_id, name, kraken:{path, kind}, other:{by:"smp"|"ps4mount", path}}; empty when Kraken Mount does not run. The caller frees it. */
+struct cJSON *ps5tm_mounters_conflicts(void);
+
 /* Dump Forge as the engine of the format "FPKG (Debug-.pkg)" (src/dumpforge.c): its PS5 program in the folder PS5TM_DATA_DIR/dumpforge, started
    through the loader, asked on 127.0.0.1:8095. The state is {installed, version?, folder, running, running_version?, project, fetching}. */
 typedef struct {

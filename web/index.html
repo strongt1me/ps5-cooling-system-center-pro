@@ -316,6 +316,9 @@
             <!-- Ein eingehängtes, nicht gestartetes Spiel sperrt jeden anderen Start (app.js, gmHoldRender) -->
             <div class="gm-hold" id="gm-hold" role="status" hidden></div>
 
+            <!-- Titel, die Kraken Mount und ShadowMountPlus oder PS4Mount zugleich wollen (app.js, dupFill) -->
+            <div class="gm-dup" id="gm-dup" role="status" hidden></div>
+
             <div class="gm-grid" id="gm-grid"></div>
           </div>
 
@@ -621,6 +624,8 @@
               <p class="muted" id="fp-roots"></p>
               <div class="pt-note">Kraken Mount ist noch eine Beta. Nach einem Neustart der Konsole muss Kraken Mount laufen, damit die Spiele sichtbar bleiben. Sucht es in Ordnern, die auch ShadowMountPlus durchsucht, würden deren Ordner-Spiele doppelt angemeldet.</div>
               <div class="pt-note" id="fp-note" hidden></div>
+              <!-- Titel, die Kraken Mount und ShadowMountPlus oder PS4Mount zugleich wollen (app.js, dupFill) -->
+              <div class="gm-dup" id="fp-dup" role="status" hidden></div>
               <div id="fp-list"></div>
             </article>
             <article class="card">

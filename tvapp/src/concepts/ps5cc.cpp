@@ -1129,6 +1129,11 @@ class Ps5cc final : public app::Concept
             // Spiele → FPKGMount: the list of Kraken Mount, □ on a game, △.
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "fpkg"},
+            // the first game (Lantern Pass) is also at ShadowMountPlus: "KONFLIKT"; the second is a
+            // game folder: the info says that folders are ShadowMountPlus's business
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "fpkg-ordner"},
+            {0.2f, 0, Direction::up},
             {0.3f, action_bit(Action::west)},
             {0.7f, 0, Direction::none, "fpkg-aktionen"},
             {0.3f, action_bit(Action::back)},
@@ -1609,7 +1614,7 @@ class Ps5cc final : public app::Concept
             key += '\n' + g.id + '\t' + g.name + '\t' + g.platform + '\t' + g.version + '\t' +
                    g.format + '\t' + g.system_ver + '\t' + g.backport_fw + '\t' +
                    std::to_string(g.size_bytes) + '\t' + std::to_string(g.played_s) +
-                   (g.can_launch ? "+" : "-") + (holds_launch(g) ? "H" : "h");
+                   (g.can_launch ? "+" : "-") + (holds_launch(g) ? "H" : "h") + g.conflict_with;
         return key;
     }
 
@@ -1654,6 +1659,8 @@ class Ps5cc final : public app::Concept
                 item.badge = "LÄUFT";
             else if (holds_launch(g))
                 item.badge = "EINGEHÄNGT";
+            else if (!g.conflict_with.empty())
+                item.badge = "KONFLIKT";
             item.disabled = !g.can_launch;
             items.push_back(item);
         }
@@ -1690,13 +1697,18 @@ class Ps5cc final : public app::Concept
         }
         std::vector<ui::DetailItem> items;
         items.push_back({"Titel-ID", g->id});
+        // What needs a look comes first, the list shows six rows: a mounted game that does not run
+        // keeps other launches from starting; two mounters want the title and both write its tile
+        // and mount it (src/mounters.c)
+        if (holds_launch(*g))
+            items.push_back({"Eingehängt", "hält andere Starts auf"});
+        if (!g->conflict_with.empty())
+            items.push_back({"Konflikt", "auch bei " + g->conflict_with});
         items.push_back({"Version", g->version});
         items.push_back({"Format", format_label(g->format)});
         add_fw_rows(items, *g);
         items.push_back({"Größe", ps5cc::format_bytes(g->size_bytes)});
         items.push_back({"Spielzeit", ps5cc::format_playtime(g->played_s)});
-        if (holds_launch(*g))
-            items.push_back({"Eingehängt", "hält andere Starts auf"});
         game_info_.set_items(items);
     }
 

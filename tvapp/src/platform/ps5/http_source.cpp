@@ -3067,11 +3067,20 @@ void HttpSource::poll_library()
     if (root == nullptr)
         return;
     std::vector<Game> games;
+    // Titles Kraken Mount lists that ShadowMountPlus or PS4Mount manages too: the row says so
+    std::vector<std::string> conflicts;
     const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "conflicts"))
+    {
+        if (!str(item, "title_id").empty())
+            conflicts.push_back(str(item, "title_id"));
+    }
     cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "games"))
     {
         Game g;
         g.id = str(item, "title_id");
+        if (std::find(conflicts.begin(), conflicts.end(), g.id) != conflicts.end())
+            g.conflict_with = "Kraken Mount";
         // The app's two tiles (and their ids before 1.74.1) are titles of their own, not games to
         // start from here.
         if (g.id == own_title_id() || is_own_tile(g.id))
@@ -4303,11 +4312,25 @@ void HttpSource::poll_kraken()
             }
             return mount;
         };
+        // Titles ShadowMountPlus or PS4Mount manages too (src/mounters.c)
+        std::vector<std::pair<std::string, std::string>> conflicts;
+        const cJSON *c = nullptr;
+        cJSON_ArrayForEach(c, cJSON_GetObjectItemCaseSensitive(root, "conflicts"))
+        {
+            const cJSON *other = cJSON_GetObjectItemCaseSensitive(c, "other");
+            conflicts.emplace_back(str(c, "title_id"),
+                                   str(other, "by") == "ps4mount" ? "PS4Mount" : "ShadowMountPlus");
+        }
         const cJSON *g = nullptr;
         cJSON_ArrayForEach(g, cJSON_GetObjectItemCaseSensitive(kr, "games"))
         {
             KrakenGame x;
             x.title_id = str(g, "title_id");
+            for (const auto &cf : conflicts)
+            {
+                if (cf.first == x.title_id)
+                    x.conflict_with = cf.second;
+            }
             x.name = str(g, "title_name");
             x.version = str(g, "version");
             x.path = str(g, "path");

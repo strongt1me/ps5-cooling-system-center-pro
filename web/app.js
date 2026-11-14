@@ -6927,12 +6927,38 @@
       if (rm && !rm.disabled) gmRemount(rm.dataset.id, rm.dataset.remount, rm);
     }); }
 
+  /* Titel, die Kraken Mount und ShadowMountPlus (oder PS4Mount) zugleich wollen (src/mounters.c, 14.11.2026): Beide schreiben
+     /user/app/<ID> und hängen /system_ex/app/<ID> ein, ShadowMountPlus schreibt zudem die param.json um. Die App verschiebt
+     nichts selbst; sie nennt den Titel, die Person nimmt ihn aus einem der beiden heraus. Eine Zeile je Titel, höchstens fünf. */
+  const dupFill = (box, list) => {
+    if (!box) return;
+    const items = Array.isArray(list) ? list : [];
+    if (!items.length) { box.hidden = true; box.textContent = ""; box.dataset.key = ""; return; }
+    const by = (x) => (x.other && x.other.by === "ps4mount" ? "PS4Mount" : "ShadowMountPlus");
+    const key = items.map((x) => `${x.title_id}/${by(x)}`).join();
+    if (!box.hidden && box.dataset.key === key) return;
+    box.dataset.key = key;
+    box.textContent = "";
+    items.slice(0, 5).forEach((x) => {
+      const p = document.createElement("p");
+      p.textContent = `„${x.name || x.title_id}“ (${x.title_id}) liegt bei Kraken Mount und bei ${by(x)}. Beide wollen dieselbe Kachel und dasselbe Einhängen. Lass das Spiel nur bei einem von beiden.`;
+      box.append(p);
+    });
+    if (items.length > 5) {
+      const p = document.createElement("p");
+      p.textContent = `… und ${items.length - 5} weitere`;
+      box.append(p);
+    }
+    box.hidden = false;
+  };
+
   const renderGames = () => {
     const grid = $("#gm-grid");
     if (!grid) return;
     gm.running = gmRunningId();
     gm.live = gmLiveId();
     gmHoldRender();
+    dupFill($("#gm-dup"), gm.meta && gm.meta.conflicts);
 
     if (!gm.loaded) {
       txt("#gm-sub", "wird gelesen …");
@@ -7807,7 +7833,7 @@
     /* the folders the app writes into the config of Kraken Mount (kraken.c seed_config): /data/FPKG-Games and FPKG-Games on every drive */
     const own = ["/data/FPKG-Games", ...Array.from({ length: 8 }, (_, i) => `/mnt/usb${i}/FPKG-Games`), "/mnt/ext0/FPKG-Games", "/mnt/ext1/FPKG-Games"];
     const isOwn = roots && roots.length === own.length && roots.every((r, i) => r === own[i]);
-    txt("#fp-roots", isOwn ? "Suchordner: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk. ShadowMountPlus sucht dort nicht, deshalb kommen sich beide nicht in die Quere."
+    txt("#fp-roots", isOwn ? "Suchordner: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk. ShadowMountPlus sucht dort nicht. Liegt dasselbe Spiel (dieselbe Titel-ID) auch bei ShadowMountPlus, kommen sich beide doch in die Quere; die App meldet es dann."
       : roots ? `Suchordner: ${roots.join(", ")}`
       : "Suchordner (Grundeinstellung): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks.");
     const note = $("#fp-note");
@@ -7815,6 +7841,7 @@
     if (!k) note.textContent = d.starting ? "Kraken Mount startet. Das dauert einige Sekunden." : "Kraken Mount ist ausgeschaltet. Einschalten, damit die Spiele gesucht und angemeldet werden.";
     else if (k.cache && k.cache.low_space) note.textContent = "Auf der internen SSD ist nur noch wenig Platz frei. Kraken Mount legt dort den Zwischenspeicher der Spiele an.";
     else if (k.paused) note.textContent = "Ein Spiel läuft. Kraken Mount sucht und baut erst nach dem Spiel weiter.";
+    dupFill($("#fp-dup"), d.conflicts);
     $("#fp-list").innerHTML = games.length ? games.map((g) => {
       const st = running.has(g.title_id) ? ["ok", "Läuft"] : (FP_STATE[g.status] || ["", g.status]);
       const kind = g.kind === "pkg" ? "FPKG" : (FP_PACK[g.packing] || "Ordner");
@@ -7824,7 +7851,8 @@
         <img class="p4m-icon" src="/api/v1/kraken/icon?id=${esc(g.title_id)}" alt="" loading="lazy">
         <div class="p4m-main"><div class="p4m-name">${esc(g.title_name || g.title_id)}</div>
           <div class="p4m-meta">${esc(meta.join(" · "))}</div>
-          ${g.error ? `<div class="p4m-meta">${esc(g.error)}</div>` : ""}</div>
+          ${g.error ? `<div class="p4m-meta">${esc(g.error)}</div>` : ""}
+          ${g.kind === "pkg" ? "" : `<div class="p4m-meta fp-folder">Ein Spielordner im Suchordner von Kraken Mount. Ordner-Spiele gehören zu ShadowMountPlus; hier sollten nur .pkg-Dateien liegen.</div>`}</div>
         <span class="p4m-state ${st[0]}">${esc(st[1])}</span>
         <div class="p4m-btns">
           <button type="button" class="btn ghost" data-fp="rebuild" data-id="${esc(g.title_id)}" ${busy ? "disabled" : ""}

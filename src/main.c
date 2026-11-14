@@ -16,6 +16,7 @@
 #include "ps4m.h"
 #include "ps5tm.h"
 #include "sha256.h"
+#include "smphold.h"
 
 void ps5tm_api_tile_refresh(void);
 
@@ -502,6 +503,7 @@ main(int argc, char **argv) {
        here only because there is no reason for it to run earlier. */
     ps5tm_playtime_start();
     ps5tm_library_probe_start();
+    ps5tm_smphold_start();             /* a game the app mounted and nobody started is unmounted again (smphold.c) */
     ps5tm_payprof_start();
     ps4m_boot();                       /* PS4Mount, when it was switched on in the page */
     ps5tm_disc_boot();                 /* the optical drive: only when the person turned it on */

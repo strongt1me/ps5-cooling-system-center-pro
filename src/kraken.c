@@ -151,6 +151,8 @@ ps5tm_kraken_state(void) {
     free(body);
     if(cJSON_IsObject(set)) cJSON_AddItemToObject(o, "settings", set);
     else cJSON_Delete(set);
+    /* titles ShadowMountPlus or PS4Mount manages too (mounters.c): the page warns about them */
+    cJSON_AddItemToObject(o, "conflicts", ps5tm_mounters_conflicts());
   } else {
     cJSON_Delete(k);
     cJSON_AddBoolToObject(o, "running", 0);
@@ -160,6 +162,62 @@ ps5tm_kraken_state(void) {
     cJSON_AddBoolToObject(o, "starting", starting);
   }
   return o;
+}
+
+/* Kraken Mount's games as a small copy, for mounters.c. One ask of its /api/state every 10 s at most, however often the library or the
+   page asks; while it does not answer (switched off), nothing is listed and the next ask waits 5 s. */
+static ps5tm_kraken_game_t g_games[PS5TM_KRAKEN_MAX];
+static int                 g_games_n;
+static uint64_t            g_games_ms;
+
+int
+ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max) {
+  pthread_mutex_lock(&g_lock);
+  uint64_t now = ps5tm_mono_ms();
+  int fresh = g_games_ms && now - g_games_ms < (g_games_n > 0 ? 10000u : 5000u);
+  pthread_mutex_unlock(&g_lock);
+  if(!fresh) {
+    unsigned char *body = NULL;
+    size_t bn = 0;
+    int st = kr_http("GET", "/api/state", NULL, 0, 1500, &body, &bn);
+    cJSON *k = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
+    free(body);
+    const cJSON *games = k ? cJSON_GetObjectItem(k, "games") : NULL, *g;
+    ps5tm_kraken_game_t *tmp = calloc(PS5TM_KRAKEN_MAX, sizeof(*tmp));     /* 20 KB: not on a thread's stack */
+    int n = 0;
+    if(!tmp) {
+      cJSON_Delete(k);
+      pthread_mutex_lock(&g_lock);
+      int m = g_games_n < max ? g_games_n : max;
+      memcpy(out, g_games, sizeof(out[0]) * (size_t)m);
+      pthread_mutex_unlock(&g_lock);
+      return m;
+    }
+    cJSON_ArrayForEach(g, games) {
+      if(n >= PS5TM_KRAKEN_MAX) break;
+      const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *nm = cJSON_GetObjectItem(g, "title_name"),
+                  *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind");
+      if(!cJSON_IsString(t) || !valid_tid(t->valuestring)) continue;
+      ps5tm_kraken_game_t *e = &tmp[n++];
+      memset(e, 0, sizeof(*e));
+      snprintf(e->title_id, sizeof(e->title_id), "%s", t->valuestring);
+      snprintf(e->name, sizeof(e->name), "%s", cJSON_IsString(nm) ? nm->valuestring : "");
+      snprintf(e->path, sizeof(e->path), "%s", cJSON_IsString(p) ? p->valuestring : "");
+      snprintf(e->kind, sizeof(e->kind), "%s", cJSON_IsString(kd) && !strcmp(kd->valuestring, "pkg") ? "pkg" : "folder");
+    }
+    cJSON_Delete(k);
+    pthread_mutex_lock(&g_lock);
+    memcpy(g_games, tmp, sizeof(g_games[0]) * (size_t)n);
+    g_games_n = n;
+    g_games_ms = now;
+    pthread_mutex_unlock(&g_lock);
+    free(tmp);
+  }
+  pthread_mutex_lock(&g_lock);
+  int n = g_games_n < max ? g_games_n : max;
+  memcpy(out, g_games, sizeof(out[0]) * (size_t)n);
+  pthread_mutex_unlock(&g_lock);
+  return n;
 }
 
 int

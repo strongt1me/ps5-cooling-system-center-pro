@@ -134,6 +134,10 @@ class MockSource final : public Source
             // One game is mounted and does not run: the case that keeps every other launch from
             // starting ("Device busy"), so the preview shows its mark
             g.smp_mounted = !installed && std::string(m.id) == "PPSA06240";
+            // ASTRO BOT lies at ShadowMountPlus as an image and at Kraken Mount as a .pkg (the
+            // case of 14.11.2026): both want its tile
+            if (std::string(m.id) == "PPSA01325")
+                g.conflict_with = "Kraken Mount";
             g.ampr_emu = std::string(m.id) == "PPSA01325";
             // the firmware a game asks for; one with a backport (the firmware it carries), a PS4
             // title
@@ -1070,9 +1074,11 @@ class MockSource final : public Source
                    action == "unmount"   ? "Ausgehängt."
                    : action == "remount"
                        ? "Neu eingehängt. Es startet kein anderes Spiel und keine Kachel, solange es "
-                         "nicht gestartet oder wieder ausgehängt ist."
+                         "nicht gestartet ist. Ohne Start hängt die App es nach 2 Minuten selbst "
+                         "wieder aus."
                        : "Eingehängt. Es startet kein anderes Spiel und keine Kachel, solange es "
-                         "nicht gestartet oder wieder ausgehängt ist.");
+                         "nicht gestartet ist. Ohne Start hängt die App es nach 2 Minuten selbst "
+                         "wieder aus.");
             changed();
             return;
         }
@@ -2490,6 +2496,8 @@ class MockSource final : public Source
             g.path = std::string(g.kind == "pkg" ? "/mnt/usb0/homebrew/" : "/data/homebrew/") +
                      s.name + (g.kind == "pkg" ? ".pkg" : "");
             g.running = s.live;
+            if (std::string(s.id) == "PPSA01325")
+                g.conflict_with = "ShadowMountPlus";
             k.games.push_back(g);
         }
         k.log = {"[10:12:01] scan: 3 games, 0 errors",
