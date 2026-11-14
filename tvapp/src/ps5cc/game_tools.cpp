@@ -318,7 +318,11 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
             ui::MenuItem m;
             m.label = label;
             m.tag = kRemountTag + offset;
-            m.shortcut = live ? "läuft gerade" : "ShadowMountPlus";
+            // A mounted game that does not run keeps every other launch from starting ("Device
+            // busy"): "Aushängen" frees them (14.11.2026)
+            m.shortcut = live                              ? "läuft gerade"
+                         : offset == 1 && game.smp_mounted ? "gibt andere Starts frei"
+                                                           : "ShadowMountPlus";
             m.disabled = live;
             items.push_back(m);
         };

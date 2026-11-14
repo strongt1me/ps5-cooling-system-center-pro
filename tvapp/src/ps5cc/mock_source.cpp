@@ -131,7 +131,9 @@ class MockSource final : public Source
             g.can_move = !installed;
             g.can_unpack = !installed && !folder;
             g.can_remount = !installed;
-            g.smp_mounted = !installed;
+            // One game is mounted and does not run: the case that keeps every other launch from
+            // starting ("Device busy"), so the preview shows its mark
+            g.smp_mounted = !installed && std::string(m.id) == "PPSA06240";
             g.ampr_emu = std::string(m.id) == "PPSA01325";
             // the firmware a game asks for; one with a backport (the firmware it carries), a PS4
             // title
@@ -1066,8 +1068,11 @@ class MockSource final : public Source
             g.smp_mounted = action != "unmount";
             notice(Notice::Kind::success, g.name,
                    action == "unmount"   ? "Ausgehängt."
-                   : action == "remount" ? "Neu eingehängt."
-                                         : "Eingehängt.");
+                   : action == "remount"
+                       ? "Neu eingehängt. Es startet kein anderes Spiel und keine Kachel, solange es "
+                         "nicht gestartet oder wieder ausgehängt ist."
+                       : "Eingehängt. Es startet kein anderes Spiel und keine Kachel, solange es "
+                         "nicht gestartet oder wieder ausgehängt ist.");
             changed();
             return;
         }

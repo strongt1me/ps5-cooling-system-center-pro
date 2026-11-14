@@ -977,6 +977,12 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .cp-banner[data-outcome="failed"]  { background: rgba(208,59,59,.28);  border-color: rgba(208,59,59,.9); }
 .cp-banner[data-outcome="aborted"] { background: rgba(250,178,25,.24); border-color: rgba(250,178,25,.85); }
 .cp-banner[hidden] { display: none; }
+/* Hinweis auf der Spieleliste: ein eingehängtes, nicht gestartetes Spiel hält ShadowMountPlus besetzt (14.11.2026) */
+.gm-hold { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0 0 14px; padding: 12px 16px;
+  border: 2px solid rgba(250,178,25,.85); border-radius: 13px; background: rgba(250,178,25,.24); color: var(--ink);
+  font-size: 14px; line-height: 1.5; }
+.gm-hold .gm-hold-text { flex: 1 1 320px; min-width: 0; }
+.gm-hold[hidden] { display: none; }
 
 .sub-head { margin: 22px 0 12px; padding-top: 18px; font-size: 14px;
   border-top: 1px solid var(--hairline); color: var(--ink-2); }

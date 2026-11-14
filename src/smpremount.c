@@ -80,8 +80,11 @@ ps5tm_smpremount(const char *title_id, const char *action, char *msg, size_t n) 
   }
   ps5tm_smp_forget();
   ps5tm_library_forget(); /* the next list shows the new state */
+  /* A game mounted this way and not started keeps ShadowMountPlus's one place for a prepared runtime: every other launch (a
+     game, a tile) is then refused with EBUSY ("Device busy") until it is started or taken out again. Reproduced on the console
+     on 14.11.2026 (a tile would not start while a game was mounted; started again right after "unmount"). So the answer says it. */
   snprintf(msg, n, "%s", unmount ? (g.mounted ? "Ausgehängt." : "War schon ausgehängt.")
-                     : remount ? "Neu eingehängt."
-                               : "Eingehängt.");
+                     : remount ? "Neu eingehängt. Es startet kein anderes Spiel und keine Kachel, solange es nicht gestartet oder wieder ausgehängt ist."
+                               : "Eingehängt. Es startet kein anderes Spiel und keine Kachel, solange es nicht gestartet oder wieder ausgehängt ist.");
   return 200;
 }

@@ -6900,11 +6900,39 @@
     }
   };
 
+  /* Ein von ShadowMountPlus eingehängtes Spiel, das nicht läuft, hält dort den einen Platz für die Laufzeit-Einhängung besetzt:
+     Jeder andere Start (Spiel oder Kachel) scheitert mit „Device busy“, bis es gestartet oder ausgehängt ist. An der Konsole
+     nachgestellt am 14.11.2026. Darum steht es hier ganz oben, mit dem Knopf, der es aushängt. */
+  const gmHoldRender = () => {
+    const box = $("#gm-hold");
+    if (!box) return;
+    const g = gm.loaded ? gm.list.find((x) => x.smp && x.mounted && x.can_remount && x.title_id !== gm.live) : null;
+    if (!g) { box.hidden = true; box.textContent = ""; return; }
+    const key = g.title_id;
+    if (!box.hidden && box.dataset.id === key) return;
+    box.dataset.id = key;
+    box.textContent = "";
+    const text = document.createElement("span");
+    text.className = "gm-hold-text";
+    text.textContent = `„${g.name}“ ist eingehängt, aber nicht gestartet. Solange das so bleibt, startet kein anderes Spiel und keine Kachel (ShadowMountPlus meldet „Device busy“). Starte das Spiel oder hänge es aus.`;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn"; b.dataset.remount = "unmount"; b.dataset.id = key;
+    b.textContent = "Aushängen";
+    box.append(text, b);
+    box.hidden = false;
+  };
+  { const box = $("#gm-hold");
+    if (box) box.addEventListener("click", (e) => {
+      const rm = e.target.closest("button[data-remount]");
+      if (rm && !rm.disabled) gmRemount(rm.dataset.id, rm.dataset.remount, rm);
+    }); }
+
   const renderGames = () => {
     const grid = $("#gm-grid");
     if (!grid) return;
     gm.running = gmRunningId();
     gm.live = gmLiveId();
+    gmHoldRender();
 
     if (!gm.loaded) {
       txt("#gm-sub", "wird gelesen …");

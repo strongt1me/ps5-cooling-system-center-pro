@@ -169,6 +169,23 @@ etwas dazu (eine Absage, ein Angebot „Starten“), zeigt sie es als Meldung ob
   innerhalb von 30 Sekunden startet deshalb nichts und bietet auch keine zweite
   Meldung an.
 
+## Ein- und Aushängen über ShadowMountPlus (seit 30.10.2026; Hinweis seit 14.11.2026)
+
+In der Spielkarte (Vollbild-App: Aktionen) hängen „Einhängen“, „Neu einhängen“ und „Aushängen“ ein Spiel über
+ShadowMountPlus (ab 1.7beta10) ein oder aus. Das hilft, wenn ein Spiel hängt oder nach dem Kopieren, Verschieben
+oder Löschen neu erkannt werden soll. Nie, solange das Spiel läuft.
+
+**Wichtig:** Ein eingehängtes Spiel, das nicht läuft, hält bei ShadowMountPlus den einen Platz für die Einhängung
+besetzt (`claim_prepared_title` in `sm_shellcore_service.c`, ShadowMountPlus 1.7beta12). Solange es nicht gestartet oder
+wieder ausgehängt ist, startet kein anderes Spiel und keine Kachel: ShadowMountPlus meldet im Protokoll
+`launch mount unavailable: <Titel-ID> status=16 (Device busy)`, die Konsole zeigt einen Startfehler
+(`LaunchFlowError`). An der Konsole nachgestellt am 14.11.2026: Mit eingehängtem Spiel scheiterten beide Kacheln
+(FAKE86921 und FAKE86922); nach „Aushängen“ startete die Kachel sofort wieder. Ein Neustart von ShadowMountPlus gibt den
+Platz ebenfalls frei. Darum zeigt die Spieleseite im Browser oben einen gelben Hinweis mit dem Knopf „Aushängen“,
+die Vollbild-App die Marke „EINGEHÄNGT“ in der Zeile (dazu im Infobereich „Eingehängt: hält andere Starts auf“ und am
+Menüpunkt „Aushängen“ „gibt andere Starts frei“), und auch die Meldung nach dem Einhängen sagt es. Wer ein Spiel nur
+neu erkennen lassen wollte, hängt es danach wieder aus.
+
 ## Spiele kopieren und konvertieren (ab 1.46.0)
 
 Auf der Karte eines Spiels, das als Dump-Ordner oder Abbild-Datei vorliegt:

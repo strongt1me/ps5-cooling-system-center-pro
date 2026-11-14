@@ -841,6 +841,14 @@ class Ps5cc final : public app::Concept
             {0.9f, 0, Direction::down},
             {0.35f, 0, Direction::down},
             {0.8f, 0, Direction::none, "spiele"},
+            // Neon Courier (second row) is mounted and does not run: its row is marked, the info
+            // names why it matters, and its menu says "Aushängen" frees the other launches
+            {0.2f, 0, Direction::up},
+            {0.6f, 0, Direction::none, "spiele-eingehaengt"},
+            {0.4f, action_bit(Action::west)},
+            {0.7f, 0, Direction::none, "aktionen-eingehaengt"},
+            {0.3f, action_bit(Action::back)},
+            {0.3f, 0, Direction::down},
             // the running game (Crash, first row) has "Spiel beenden" on top of its menu
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
@@ -1601,8 +1609,16 @@ class Ps5cc final : public app::Concept
             key += '\n' + g.id + '\t' + g.name + '\t' + g.platform + '\t' + g.version + '\t' +
                    g.format + '\t' + g.system_ver + '\t' + g.backport_fw + '\t' +
                    std::to_string(g.size_bytes) + '\t' + std::to_string(g.played_s) +
-                   (g.can_launch ? "+" : "-");
+                   (g.can_launch ? "+" : "-") + (holds_launch(g) ? "H" : "h");
         return key;
+    }
+
+    // A game ShadowMountPlus has mounted that does not run keeps its one place for a prepared
+    // runtime: every other launch (a game, a tile) is refused with "Device busy" until it is
+    // started or taken out again (reproduced on the console, 14.11.2026). Shown on its row.
+    bool holds_launch(const ps5cc::Game &g) const
+    {
+        return g.can_remount && g.smp_mounted && g.id != data_.status.game_id;
     }
 
     // " · FW 13.60": what the game asks for; with a backport the firmware the backport carries
@@ -1636,6 +1652,8 @@ class Ps5cc final : public app::Concept
             item.value = ps5cc::format_playtime(g.played_s);
             if (g.id == data_.status.game_id)
                 item.badge = "LÄUFT";
+            else if (holds_launch(g))
+                item.badge = "EINGEHÄNGT";
             item.disabled = !g.can_launch;
             items.push_back(item);
         }
@@ -1677,6 +1695,8 @@ class Ps5cc final : public app::Concept
         add_fw_rows(items, *g);
         items.push_back({"Größe", ps5cc::format_bytes(g->size_bytes)});
         items.push_back({"Spielzeit", ps5cc::format_playtime(g->played_s)});
+        if (holds_launch(*g))
+            items.push_back({"Eingehängt", "hält andere Starts auf"});
         game_info_.set_items(items);
     }
 
