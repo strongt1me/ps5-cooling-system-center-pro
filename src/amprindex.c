@@ -34,6 +34,7 @@
 #include <unistd.h>
 
 #include "imgread.h"
+#include "indexlimit.h"
 #include "ioerr.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
@@ -594,6 +595,65 @@ ai_img_header(const char *path, uint64_t *count) {
   return rc;
 }
 
+/* The packs of a game folder against the lookup tables of AMPR EMU NG (indexlimit.c, 14.11.2026): ampr-emu-ng v0.4.0 serves no packed file when the
+   tables of the pack index do not fit the memory it sets aside for them (Final Fantasy XVI 49 MiB, Demon's Souls 62 MiB; ampr-emu-ng issues #67, #61,
+   #53: the game then does not start). The numbers come from the 128-byte header of ampr_zstd.index (or ampr_assets.index, the LZ4 pack; NG takes the
+   zstd one when both exist) and from ampr_emu.index, all read anyway. `ids` is the AMPRIDX3 count when the game has one, else 0; `ampr_bytes` the size of
+   ampr_emu.index. Adds "index_check" to o; nothing when the game has no pack. The formulas are checked with the maintainers of ampr-emu-ng; the result
+   is for v0.4.0 and an estimate in the margins ("state": ok, tight, over). */
+static void
+pack_check(const char *dir, uint64_t ids, long long ampr_bytes, cJSON *o) {
+  uint8_t h[128];
+  struct stat st;
+  char p[AI_PATH];
+  uint64_t abytes = ampr_bytes > 0 ? (uint64_t)ampr_bytes : 0;
+  ps5tm_need_t nd;
+  uint64_t files = 0, chunks = 0, volumes = 0;
+  const char *kind = NULL;
+
+  snprintf(p, sizeof(p), "%s/ampr_zstd.index", dir);
+  int fd = open(p, O_RDONLY | O_NONBLOCK);
+  if(fd >= 0) {
+    ps5tm_zstd_index_t ix;
+    if(fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && pread(fd, h, sizeof(h), 0) == (ssize_t)sizeof(h) && ps5tm_zstd_header(h, sizeof(h), &ix) == 0) {
+      ix.ids = ids;
+      ix.index_bytes = (uint64_t)st.st_size;
+      ix.ampr_bytes = abytes;
+      ps5tm_zstd_need(&ix, &nd);
+      files = ix.files; chunks = ix.chunks; volumes = ix.volumes;
+      kind = "zstd";
+    }
+    close(fd);
+  }
+  if(!kind) {
+    snprintf(p, sizeof(p), "%s/ampr_assets.index", dir);
+    fd = open(p, O_RDONLY | O_NONBLOCK);
+    if(fd >= 0) {
+      if(fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && pread(fd, h, sizeof(h), 0) == (ssize_t)sizeof(h) &&
+         ps5tm_lz4_header(h, sizeof(h), &files, &chunks, &volumes) == 0) {
+        ps5tm_lz4_need(files, chunks, volumes, (uint64_t)st.st_size, abytes, &nd);
+        kind = "lz4";
+      }
+      close(fd);
+    }
+  }
+  if(!kind) return;
+  cJSON *c = cJSON_AddObjectToObject(o, "index_check");
+  cJSON_AddStringToObject(c, "kind", kind);
+  cJSON_AddStringToObject(c, "ng_version", "0.4.0");
+  cJSON_AddNumberToObject(c, "files", (double)files);
+  cJSON_AddNumberToObject(c, "chunks", (double)chunks);
+  cJSON_AddNumberToObject(c, "volumes", (double)volumes);          /* LZ4: the packs */
+  cJSON_AddNumberToObject(c, "ids", (double)(ids ? ids : files));
+  cJSON_AddNumberToObject(c, "need_bytes", (double)nd.need);
+  cJSON_AddNumberToObject(c, "room_bytes", (double)nd.room);        /* index memory left after ampr_emu.index */
+  cJSON_AddNumberToObject(c, "headroom_bytes", (double)nd.headroom);
+  cJSON_AddNumberToObject(c, "limit_bytes", (double)PS5TM_NG_LOOKUP_MAX);
+  cJSON_AddBoolToObject(c, "paged", nd.paged);
+  cJSON_AddBoolToObject(c, "over", nd.over);
+  cJSON_AddStringToObject(c, "state", ps5tm_need_state(&nd));
+}
+
 /* What the page shows for a game: where its data lies, whether it has an index, and whether one can be built. */
 cJSON *
 ps5tm_ampr_info(const char *id, int *http) {
@@ -609,6 +669,7 @@ ps5tm_ampr_info(const char *id, int *http) {
   uint64_t count = 0;
   int have = 0;
   long mtime = 0;
+  long long ampr_bytes = 0;
   const char *why = NULL;
   int can = 0;
   if(!strcmp(li.format, "folder")) {
@@ -617,10 +678,11 @@ ps5tm_ampr_info(const char *id, int *http) {
     int fd = open(p, O_RDONLY | O_NONBLOCK);
     if(fd >= 0) {
       struct stat st;
-      if(fstat(fd, &st) == 0) mtime = (long)st.st_mtime;
+      if(fstat(fd, &st) == 0) { mtime = (long)st.st_mtime; ampr_bytes = (long long)st.st_size; }
       if(pread(fd, h, sizeof(h), 0) == (ssize_t)sizeof(h) && header_count(h, sizeof(h), &count) == 0) have = 1;
       close(fd);
     }
+    pack_check(li.path, have ? count : 0, ampr_bytes, o);
     can = 1;
     if(ps5tm_lz4_packed_dir(li.path)) {
       can = 0;

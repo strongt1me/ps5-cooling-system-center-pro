@@ -316,6 +316,37 @@ void GameExtras::build_main()
             r.description = str(j.root, "why");
         }
     }
+    // Do the tables of the pack fit into AMPR EMU NG v0.4.0? It serves no packed file when they do
+    // not, and the game does not start (ampr-emu-ng #67, #61, #53). Estimated by src/indexlimit.c
+    // from the pack index and ampr_emu.index (14.11.2026); "tight" is within 2 MiB of the limit.
+    {
+        Json j(extras_.ampr);
+        const cJSON *c = get(j.root, "index_check");
+        if (c != nullptr)
+        {
+            const std::string st = str(c, "state");
+            const double headroom = num(c, "headroom_bytes");
+            form_.add_header("INDEX-TABELLEN (AMPR EMU NG)");
+            // short rows: a long value is cut off at the right edge
+            ui::FormRow &r = form_.add_value(kStatus + 70, "Zustand",
+                                             st == "over" ? "zu groß" : st == "tight" ? "knapp" : "passt");
+            form_.add_value(kStatus + 71, "Tabellen (geschätzt)",
+                            format_bytes(static_cast<std::uint64_t>(num(c, "need_bytes"))));
+            form_.add_value(kStatus + 72, headroom < 0 ? "Es fehlen" : "Spielraum",
+                            format_bytes(static_cast<std::uint64_t>(headroom < 0 ? -headroom : headroom)));
+            form_.add_value(kStatus + 73, "Pack-Index",
+                            std::to_string(static_cast<long long>(num(c, "files"))) + " Dateien, " +
+                                std::to_string(static_cast<long long>(num(c, "chunks"))) +
+                                " Chunks");
+            if (st == "over")
+                r.description = "AMPR EMU NG 0.4.0 liefert die gepackten Dateien dieses Spiels "
+                                "nicht aus, das Spiel startet nicht. Nach den Berichten startet "
+                                "es mit NG 0.3.4.";
+            else if (st == "tight")
+                r.description = "Das liegt nahe an der Grenze (Schätzung, 2 MiB Spielraum). "
+                                "Startet das Spiel nicht, ist wahrscheinlich dies der Grund.";
+        }
+    }
     // APR-EMU and PlayGo in the game
     const auto emu_row = [&](int id, const char *title, const std::string &text)
     {

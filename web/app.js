@@ -8670,6 +8670,31 @@
         <button type="button" class="btn" data-apr-emu data-lib="${lib}" ${why ? "disabled" : ""} ${why ? `title="${esc(why)}"` : ""}>${emuJob && j.active ? "Läuft …" : "Version wählen …"}</button></div>`;
   };
 
+  /* Passen die Tabellen des Packs in AMPR EMU NG? (src/indexlimit.c, 14.11.2026) AMPR EMU NG 0.4.0 liefert keine gepackte Datei aus, wenn die Tabellen,
+     die es aus dem Pack-Index aufbaut, nicht in seinen Speicher passen: Das Spiel startet dann nicht (Final Fantasy XVI 49 MiB, Demon's Souls 62 MiB;
+     ampr-emu-ng #67, #61, #53). Die App schätzt es aus den Köpfen von ampr_zstd.index bzw. ampr_assets.index und ampr_emu.index; „knapp“ heißt:
+     innerhalb von 2 MiB um die Grenze. Die Rechnung gilt für Version 0.4.0. */
+  const aprCheckRow = (c) => {
+    if (!c) return "";
+    const mib = (b) => (Math.abs(b) / 1048576).toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const chip = c.state === "over"
+      ? `<span class="apr-state bad">${esc(`zu groß · Tabellen ≈ ${mib(c.need_bytes)} MiB, es fehlen ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`
+      : c.state === "tight"
+        ? `<span class="apr-state no">${esc(`knapp · Tabellen ≈ ${mib(c.need_bytes)} MiB, Spielraum ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`
+        : `<span class="apr-state ok">${esc(`passt · Tabellen ≈ ${mib(c.need_bytes)} MiB, Spielraum ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`;
+    const counts = c.kind === "lz4"
+      ? `${num(c.files)} Dateien · ${num(c.chunks)} Chunks · ${num(c.volumes)} Pakete · Schätzung für NG 0.4.0`
+      : `${num(c.files)} Dateien · ${num(c.chunks)} Chunks · ${num(c.volumes)} Volumes · Schätzung für NG 0.4.0`;
+    const note = c.state === "over"
+      ? "NG 0.4.0 liefert die gepackten Dateien dieses Spiels nicht aus, das Spiel startet nicht. Nach den Berichten startet es mit NG 0.3.4; sonst das Spiel mit weniger Dateien packen."
+      : c.state === "tight"
+        ? "Das liegt nahe an der Grenze (Schätzung, 2 MiB Spielraum). Startet das Spiel nicht, ist wahrscheinlich dies der Grund."
+        : "";
+    return `<div class="apr-row"><div><b>Passt der Index in AMPR EMU NG?</b>
+        <small>Die Tabellen, die AMPR EMU NG 0.4.0 aus dem Pack-Index aufbaut, müssen in seinen Speicher passen (Grenze 48 MiB, abzüglich des Platzes für ampr_emu.index und 16 MiB Seitencache). Passt es nicht, liefert NG keine gepackte Datei aus und das Spiel startet nicht (ampr-emu-ng #67, #61, #53).</small>${chip}
+        <small>${esc(counts)}</small>${note ? `<small>${esc(note)}</small>` : ""}</div></div>`;
+  };
+
   const aprRender = () => {
     const body = $("#cp-body");
     const i = apr.info;
@@ -8777,7 +8802,7 @@
 
     paintJob(body, `
       <p class="muted" style="margin:0 0 14px">${esc(fmtName)}${img.image_bytes ? ` · ${bytes(img.image_bytes)}` : ""}</p>
-      ${ampr}${aprLz4Rows(apr.lz4, ij, mine, anyRunning)}${aprTraceRow(apr.trace, ij, anyRunning)}${emuRow}${aprPlugRow(apr.plug, anyRunning)}${imgRows}`,
+      ${ampr}${aprCheckRow(i.index_check)}${aprLz4Rows(apr.lz4, ij, mine, anyRunning)}${aprTraceRow(apr.trace, ij, anyRunning)}${emuRow}${aprPlugRow(apr.plug, anyRunning)}${imgRows}`,
       `<button type="button" class="btn" data-cp="close">${anyRunning ? "Im Hintergrund weiter" : "Schließen"}</button>`);
   };
 

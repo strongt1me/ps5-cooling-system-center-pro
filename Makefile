@@ -99,6 +99,7 @@ SRCS += src/convqueue.c
 SRCS += src/smpremount.c
 SRCS += src/smphold.c
 SRCS += src/mounters.c
+SRCS += src/indexlimit.c
 SRCS += src/libcache.c
 SRCS += src/pkgparse.c
 SRCS += src/pkgscan.c

@@ -1421,8 +1421,12 @@ class MockSource final : public Source
         ++e.seq;
         e.ampr_job = R"({"ok":true,"state":"idle","active":false})";
         e.image_job = R"({"ok":true,"state":"idle","active":false})";
+        // a zstd pack whose tables do not fit AMPR EMU NG 0.4.0 (indexlimit.c): the preview shows the warning
         e.ampr =
-            R"({"ok":true,"has_index":true,"files":18342,"mtime":1793100000,"can_build":true,"why":"","format":"exfat"})";
+            R"({"ok":true,"has_index":true,"files":18342,"mtime":1793100000,"can_build":true,"why":"","format":"exfat",)"
+            R"("index_check":{"kind":"zstd","ng_version":"0.4.0","files":1300000,"chunks":600000,"volumes":20,)"
+            R"("ids":1300000,"need_bytes":52000000,"room_bytes":62914560,"headroom_bytes":-3000000,)"
+            R"("limit_bytes":50331648,"paged":true,"over":true,"state":"over"}})";
         e.image = R"({"ok":true,"can_check":true,"format":"exfat"})";
         e.emu_ampr =
             R"({"ok":true,"place":"game","format":"exfat","can_change":true,"why":"","packed":false,)"
