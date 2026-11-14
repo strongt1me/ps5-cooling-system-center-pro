@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht (nach v1.83.0, geplant als v1.84.0)
+## v1.84.0 – 14.11.2026
 
 ### Neues Konvertierformat „FPKG (Debug-.pkg)“ mit Dump Forge als Motor (14.11.2026, auf Wunsch)
 - **Neues Format im Fenster „Konvertieren“** (Browser-App und Vollbild-App): neben ffpfsc, ffpkg und exFAT baut die App ein **Debug-FPKG** (`.pkg`) aus einem PS5-Spielordner oder einem Abbild (exFAT, ffpkg, ffpfs, ffpfsc); Kraken Mount (Reiter „FPKGMount“) hängt es ein. Es läuft wie die anderen Formate: Prüfung vor dem Start (Quelle, Platz, Name, Dump Forge da?), Name mit Vorlage, Schritte mit Zeiten (Vermessen, Komprimieren, Prüfen, Umbenennen), Warteschlange, Abbrechen, Eintrag im Verlauf. Nicht über die Kommandozeile.
@@ -13,7 +13,7 @@
 - **Vollbild-App:** Das Format steht mit den vier Stufen in der Zeile „Format“, eine Zeile „Dump Forge laden“ (sagt „fehlt noch“, „wird geladen …“, „Version 0.5.5 ist da“), die Seitenkarte erklärt das Paket, den Ordner der ELF und die doppelte Titel-ID. 4 neue Tests in `ps5cc_plans_test` (350 grün); Vorschaubilder `plan-konvertieren-engine` und `plan-konvertieren-fpkg`.
 - **Texte:** Wörterbücher der Browser-App (58 neue Einträge je Sprache) und der Vollbild-App (17), Handbuch (7 Sprachen), `docs/HANDBUCH.md`, README (7 Sprachen), `docs/API.md`, `THIRD_PARTY_NOTICES.md`, `third_party/dump_forge/ORIGIN.md`, `tools/upstream.json` (Baustein `dump-forge`).
 
-## v1.83.0 – 13.11.2026
+## v1.83.0 – 13.11.2026 (nicht einzeln veröffentlicht, in v1.84.0 enthalten)
 
 ### FPKGMount: (F)PKG-Spiele mit Kraken Mount, und „PS4 von USB“ heißt jetzt „PS4 PKG von USB“ (13.11.2026, auf Wunsch)
 - **Neuer Reiter „FPKGMount“ (Spiele)** in der Browser-App und der Vollbild-App, neben „PS4 PKG von USB“. **Kraken Mount** von quer3q (GPL-3.0, v0.0.1-beta) meldet (F)PKG-Spiele (Debug-FPKG, `.pkg`) und Spielordner (roh, zstd, LZ4) ohne Installation auf dem Startbildschirm an und startet sie mit ampr-emu-ng; dafür war in AMPR EMU NG 0.4.0 die FPKG-Unterstützung angelegt. Kraken Mount ist ein eigenes Programm in Rust mit eigenem PKG-Leser und lässt sich nicht in C umschreiben wie PS4Mount: Die App trägt die veröffentlichte `kraken-mount.elf` (4,3 MB, unverändert, SHA-256 geprüft, gepackt 2,6 MB) und bedient sie.
