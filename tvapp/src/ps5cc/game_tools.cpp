@@ -308,8 +308,8 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
                       game.format == "ps4mount";
     items.push_back(extras);
     // Taken out of ShadowMountPlus and put back (30.10.2026): for a game that hangs or should be
-    // found anew after copying, moving or deleting. Mounted: "Neu einhängen" and "Aushängen", else
-    // "Einhängen". Never while it runs.
+    // found anew after copying, moving or deleting. Mounted: "Neu einhängen", else "Einhängen";
+    // "Aushängen" after either. Never while it runs.
     if (game.can_remount)
     {
         const bool live = game.id == running_id_;
@@ -326,13 +326,14 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
             m.disabled = live;
             items.push_back(m);
         };
+        // "Aushängen" always follows "Einhängen" (14.11.2026), as the button next to it in the web
+        // app: a game that is not mounted answers "War schon ausgehängt." and nothing happens, so
+        // the entry also works while the list has not read the state anew.
         if (game.smp_mounted)
-        {
             add("Neu einhängen", 0);
-            add("Aushängen", 1);
-        }
         else
             add("Einhängen", 2);
+        add("Aushängen", 1);
     }
     ui::MenuItem library;
     library.label = "Bibliothek: Doppelte Abbilder …";

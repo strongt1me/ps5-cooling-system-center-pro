@@ -887,7 +887,8 @@ class Ps5cc final : public app::Concept
             // The game tools on ASTRO BOT (an ffpkg image): the menu, then each plan.
             {0.4f, action_bit(Action::west)},
             {0.7f, 0, Direction::none, "aktionen-menue"},
-            // the menu wraps: two up are "Aushängen" near its end, with "Neu einhängen" above
+            // the menu wraps: two up are "Aushängen" near its end, with "Einhängen" (or "Neu
+            // einhängen" for a mounted game) above
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {6.0f, 0, Direction::none,
