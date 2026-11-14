@@ -860,6 +860,32 @@ int           ps5tm_kraken_action(const struct cJSON *body, char *msg, size_t n)
 /* icon0.png of one of its games (malloc'd); 0 = found. */
 int           ps5tm_kraken_icon(const char *title_id, unsigned char **png, size_t *len);
 
+/* Dump Forge as the engine of the format "FPKG (Debug-.pkg)" (src/dumpforge.c): its PS5 program in the folder PS5TM_DATA_DIR/dumpforge, started
+   through the loader, asked on 127.0.0.1:8095. The state is {installed, version?, folder, running, running_version?, project, fetching}. */
+typedef struct {
+  int      state;             /* 0 running, 1 done, 2 failed; -1 not found */
+  char     stage[24];         /* scan, preflight, check, plan, compress, write, verify, finalize */
+  int      stage_index, stage_count;
+  uint64_t done, total;       /* of the stage */
+  uint64_t bytes;             /* the package, when done */
+  unsigned files;
+  char     output[320];
+  char     error[400];
+  char     log[200];          /* its last line */
+} ps5tm_dumpforge_job_t;
+struct cJSON *ps5tm_dumpforge_state(void);
+int           ps5tm_dumpforge_installed(char *version, size_t n);
+/* Keeps the home-screen tile /user/app/<tile_id> of a helper program (Kraken Mount, Dump Forge) away: a tile it made earlier (one of the
+   markers exists) is uninstalled, then an empty file takes the place of the folder, which the program leaves alone (tilekeep.c). */
+void          ps5tm_tile_keep_away(const char *tile_id, const char *name, const char *const *markers, int n_markers);
+int           ps5tm_dumpforge_running(void);
+int           ps5tm_dumpforge_start(char *msg, size_t n);              /* 0 = running, -1 with a sentence */
+void          ps5tm_dumpforge_stop(void);
+int           ps5tm_dumpforge_fetch(char *msg, size_t n);              /* 200 = there, else an HTTP-like status with a sentence */
+int           ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int *job, char *err, size_t n);
+int           ps5tm_dumpforge_job_poll(int job, ps5tm_dumpforge_job_t *out);
+void          ps5tm_dumpforge_job_cancel(int job);
+
 /* Checking, unpacking and repairing the image of a game (imgjob.c). */
 struct cJSON *ps5tm_imgjob_info(const char *title_id, int *http);
 struct cJSON *ps5tm_imgjob_plan(const char *title_id, char *err, size_t err_len);

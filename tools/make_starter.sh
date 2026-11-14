@@ -42,4 +42,13 @@ for t in FAKE86921 FAKE86922; do
 done
 rm -f "$DDS"
 
+# Dump Forge (the engine of the format "FPKG (Debug-.pkg)") comes with both tiles in their folder dumpforge/: the app looks there as well
+# (src/dumpforge.c), so nobody has to fetch it. Pinned and checked by tools/fetch-dumpforge.sh; the app ELF alone does not carry it.
+DF_ELF="$(bash "$ROOT/tools/fetch-dumpforge.sh")"
+for t in FAKE86921 FAKE86922; do
+  mkdir -p "$ROOT/starter/out/$t/dumpforge"
+  cp "$DF_ELF" "$ROOT/starter/out/$t/dumpforge/"
+  cp "$ROOT/third_party/dump_forge/ORIGIN.md" "$ROOT/starter/out/$t/dumpforge/ORIGIN.md"
+done
+
 for t in FAKE86921 FAKE86922; do echo "ok: starter/out/$t"; ls -l "$ROOT/starter/out/$t/eboot.bin"; done

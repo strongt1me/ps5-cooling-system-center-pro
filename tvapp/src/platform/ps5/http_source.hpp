@@ -55,6 +55,7 @@ class HttpSource final : public Source
     void ps4mount_post(const std::string &route, const std::string &json) override;
     void ps4mount_fetch(const std::string &what, const std::string &id) override;
     void kraken_post(const std::string &json) override;
+    void dumpforge_fetch() override;
     void disc_post(const std::string &route, const std::string &json) override;
     void usb_eject(const std::string &mount) override;
     void playtime_reset() override;
@@ -119,6 +120,7 @@ class HttpSource final : public Source
             ps4mount,
             ps4mount_fetch,
             kraken,
+            dumpforge,
             disc,
             eject,
             playtime_reset,
@@ -190,6 +192,7 @@ class HttpSource final : public Source
     void poll_package_queue();
     void poll_ps4mount();
     void poll_kraken();
+    void poll_dumpforge();
     void poll_storage();
     std::string status_raw_; // the last /status answer, for System (worker thread only)
     void poll_system_extra(bool first);

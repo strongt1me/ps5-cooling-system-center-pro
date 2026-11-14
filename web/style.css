@@ -1896,6 +1896,11 @@ input[type=checkbox]:focus-visible { outline: 2px solid rgba(138,180,255,.7); ou
 .apr-state.no { background: rgba(250,178,25,.14); color: #ffd57b; border: 1px solid rgba(250,178,25,.4); }
 .apr-note { font-size: 12.5px; margin: 4px 0 14px; }
 .cp-choice.cv-ampr { margin-top: 8px; }
+.cp-sub { margin: -2px 0 2px 26px; padding: 8px 0 2px 12px; border-left: 2px solid var(--hairline); }
+.cp-sub h5 { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.cp-sub .cp-choice { padding: 7px 10px; }
+.cv-engine { margin: 8px 0 0; }
+.cv-engine.cp-warn { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 
 /* Verlauf (11.10.2026) */
 .hv-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }

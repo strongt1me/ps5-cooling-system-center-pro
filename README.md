@@ -57,7 +57,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Spiele</h3>
-      Starten, beenden, kopieren, verschieben, in exFAT/ffpkg/ffpfsc umwandeln, LZ4-Asset-Packs, APR-EMU, PlayGo. Ansicht kompakt (Standard) oder groß.
+      Starten, beenden, kopieren, verschieben, in exFAT/ffpkg/ffpfsc/FPKG umwandeln, LZ4-Asset-Packs, APR-EMU, PlayGo. Ansicht kompakt (Standard) oder groß.
     </td>
   </tr>
   <tr>
@@ -177,7 +177,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 
 **Spiele**
 - Starten (aus dem Konsolen-Browser schließt sich die Seite sofort), beenden, auf andere Laufwerke kopieren, mit ShadowMountPlus verschieben oder entpacken.
-- Ohne PC in exFAT-, ffpkg- und ffpfsc-Abbilder umwandeln; alles wird nach dem Schreiben zurückgelesen und geprüft, mit `.sha256`-Datei.
+- Ohne PC in exFAT-, ffpkg- und ffpfsc-Abbilder umwandeln; alles wird nach dem Schreiben zurückgelesen und geprüft, mit `.sha256`-Datei. Dazu ein Debug-FPKG (`.pkg`) für Kraken Mount, geschrieben von Dump Forge (quer3q; die App lädt es auf Knopfdruck).
 - LZ4-Asset-Packs, AMPR-Index, APR-EMU (ampr_emu und AMPR EMU NG), PlayGo-Stub und DLC-Module pro Spiel, Abbilder prüfen, entpacken und reparieren.
 - PS4 PKG von USB: PS4-Fake-PKGs vom USB-Laufwerk in die Bibliothek, ohne Installation (PS4Mount von gasb07).
 - FPKGMount: (F)PKG-Spiele und Spielordner ohne Installation spielen, mit Kraken Mount von quer3q (die App bringt es mit und startet es).

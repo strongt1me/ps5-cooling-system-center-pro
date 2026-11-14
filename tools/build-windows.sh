@@ -80,6 +80,13 @@ export PS5_PAYLOAD_SDK="${SDK_SHORT}"
 # tools/win carries the rev(1) the SDK's strip wrapper needs.
 export PATH="${ROOT}/tools/win:${PATH}"
 
+# clang compiles every source to a temporary object and then starts the linker with all of them on one command line, which Windows stops at
+# 32 767 characters ("Die Befehlszeile ist zu lang"). The default temporary folder (%LOCALAPPDATA%\Temp\...) is long; a short one keeps the line
+# well below the limit as the list of sources grows (src/tilekeep.c, added on 14.11.2026, was the file that broke it).
+SHORT_TMP="/c/tmp"
+mkdir -p "${SHORT_TMP}"
+export TMP="C:/tmp" TEMP="C:/tmp"
+
 cd "${ROOT}"
 exec "${MAKE_BIN}" PS5_PAYLOAD_SDK="${SDK_SHORT}" \
      CC="${ROOT_SHORT}/tools/win/prospero-clang" PYTHON=python "$@"

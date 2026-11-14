@@ -668,9 +668,11 @@ class MockSource final : public Source
             item.state = "waiting";
             std::string stem, err;
             expand_name(text("name"), g, stem, err);
+            const bool fpkg_item = item.op.rfind("fpkg", 0) == 0;
             item.target = item.mount +
-                          (item.mode == "backup" ? "/PS5-Sicherung/Spiele/" : "/homebrew/") + stem +
-                          "." + item.op;
+                          (item.mode == "backup" ? "/PS5-Sicherung/Spiele/"
+                                                 : (fpkg_item ? "/FPKG-Games/" : "/homebrew/")) +
+                          stem + "." + (fpkg_item ? std::string("pkg") : item.op);
             queue_.push_back(item);
             queue_run_ = true;
         }
@@ -812,15 +814,31 @@ class MockSource final : public Source
             if (mount == m.mount)
                 drive = &m;
         }
-        const char *ext = op == "exfat" ? ".exfat" : op == "ffpkg" ? ".ffpkg" : ".ffpfsc";
+        const bool fpkg = op.rfind("fpkg", 0) == 0;
+        const char *ext = fpkg            ? ".pkg"
+                          : op == "exfat" ? ".exfat"
+                          : op == "ffpkg" ? ".ffpkg"
+                                          : ".ffpfsc";
+        if (fpkg)
+        {
+            if (data_.dumpforge.installed)
+                add("engine", "ok", "Dump Forge 0.5.5 schreibt das Paket");
+            else
+                add("engine", "error", "Dump Forge, das die Pakete schreibt, ist noch nicht da.",
+                    "Dump Forge laden (Knopf im Fenster) oder die Datei "
+                    "ps5-dump-forge-VERSION-ps5.elf in den Ordner "
+                    "/data/PS5-Cooling-Center/dumpforge legen.");
+        }
         if (drive == nullptr)
             add("drive", "error", "Dieses Ziel gibt es nicht.");
         else if (!expand_name(text("name"), g, stem, err))
             add("name", "error", err);
         else
         {
-            target =
-                mount + (mode == "backup" ? "/PS5-Sicherung/Spiele/" : "/homebrew/") + stem + ext;
+            target = mount +
+                     (mode == "backup" ? "/PS5-Sicherung/Spiele/"
+                                       : (fpkg ? "/FPKG-Games/" : "/homebrew/")) +
+                     stem + ext;
             add("name", "ok",
                 "Name der Ausgabe: " + stem + ext + " (" +
                     std::to_string(stem.size() + std::string(ext).size()) + " von 239 Bytes)");
@@ -1280,6 +1298,17 @@ class MockSource final : public Source
             msg = "Die Spiele werden herausgenommen, die PKGs kommen an ihren alten Platz.";
         if (!msg.empty())
             notice(Notice::Kind::success, "PS4Mount", msg);
+        changed();
+    }
+
+    // Dump Forge "fetched" at once (the real one downloads 18 MB).
+    void dumpforge_fetch() override
+    {
+        data_.dumpforge.installed = true;
+        data_.dumpforge.fetching = false;
+        data_.dumpforge.version = "0.5.5";
+        ++data_.dumpforge.epoch;
+        notice(Notice::Kind::success, "Dump Forge", "Dump Forge 0.5.5 ist geladen.");
         changed();
     }
 
@@ -2081,6 +2110,14 @@ class MockSource final : public Source
                 cJSON_AddItemToArray(ops, cJSON_CreateString("ffpkg"));
                 cJSON_AddItemToArray(ops, cJSON_CreateString("exfat"));
             }
+            if (!ps4)
+                cJSON_AddItemToArray(ops, cJSON_CreateString("fpkg"));
+            cJSON *engine = cJSON_AddObjectToObject(root, "dumpforge");
+            cJSON_AddBoolToObject(engine, "installed", data_.dumpforge.installed);
+            if (data_.dumpforge.installed)
+                cJSON_AddStringToObject(engine, "version", "0.5.5");
+            cJSON_AddStringToObject(engine, "folder", "/data/PS5-Cooling-Center/dumpforge");
+            cJSON_AddBoolToObject(engine, "running", 0);
             cJSON_AddBoolToObject(root, "busy", job_active(JobKind::convert));
             cJSON_AddBoolToObject(root, "other_busy", 0);
             cJSON *targets = cJSON_AddArrayToObject(root, "targets");
@@ -2105,7 +2142,10 @@ class MockSource final : public Source
                     for (const char *op : kOpKeys)
                     {
                         cJSON *t = cJSON_AddObjectToObject(o, op);
-                        const std::string path = dir + "/" + g->id + "." + op;
+                        const bool fp = std::string(op) == "fpkg";
+                        const std::string path =
+                            (fp && mode == 0 ? std::string(m.mount) + "/FPKG-Games" : dir) + "/" +
+                            g->id + (fp ? ".pkg" : std::string(".") + op);
                         cJSON_AddStringToObject(t, "path", path.c_str());
                         cJSON_AddBoolToObject(t, "exists", path == g->path);
                         cJSON_AddBoolToObject(t, "unfinished", 0);

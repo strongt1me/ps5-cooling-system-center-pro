@@ -73,6 +73,8 @@
 #define SPACE_RESERVE    (256ull * 1024 * 1024)
 #define FAT32_MAX_FILE   0xFFFFFFFFull
 #define BACKUP_DIR       "PS5-Sicherung/Spiele"
+#define FPKG_NAME_MAX    63             /* Dump Forge refuses an output name longer than this (bytes, without ".pkg") */
+#define FPKG_DIR         "FPKG-Games"   /* where Kraken Mount searches (kraken.c): a playable debug FPKG goes there instead of "homebrew" */
 /* Not the copy's ".ps5cc-teil": a copy of an image and a conversion can end up
    with the same target name, and must never be able to share — or delete — a
    temporary file. */
@@ -101,7 +103,7 @@ typedef struct {
   int      state;
   char     title_id[12];
   char     name[128];
-  char     op[8];
+  char     op[12];
   char     mode[12];
   char     source[256];
   char     target[320];
@@ -128,7 +130,7 @@ typedef struct {
 
 typedef struct {
   char title_id[12];
-  char op[8];
+  char op[12];
   char source[256];
   char base[64];
   char target[320];
@@ -301,6 +303,18 @@ ps4_folder(const char *source) {
   return stat(p, &st) == 0 && S_ISREG(st.st_mode);
 }
 
+/* The format "FPKG (Debug-.pkg)" (14.11.2026, dumpforge.c): op "fpkg" (Kraken level fast), "fpkg-bal" (balanced), "fpkg-min" (smallest), "fpkg-raw"
+   (stored). Dump Forge's PS5 program writes the package; this file only gives it the job and shows its progress. */
+static int
+is_fpkg_op(const char *op) {
+  return !strcmp(op, "fpkg") || !strcmp(op, "fpkg-bal") || !strcmp(op, "fpkg-min") || !strcmp(op, "fpkg-raw");
+}
+
+static const char *
+fpkg_level(const char *op) {
+  return !strcmp(op, "fpkg-bal") ? "balanced" : !strcmp(op, "fpkg-min") ? "smallest" : !strcmp(op, "fpkg-raw") ? "stored" : "fast";
+}
+
 /* What a source can become; "" when nothing. ffpkg (UFS2) is direct-from-
    folder only, like MkPFS's own "folder into exFAT" step — repacking an
    existing image into ffpkg isn't a thing ShadowMountPlus expects.
@@ -308,19 +322,21 @@ ps4_folder(const char *source) {
    for (see gamecopy.c), or a PS4 game's sce_sys/param.sfo (ps4_folder); a folder without either has nothing to
    convert into. */
 static void
-ops_for(const char *source, int *can_exfat, int *can_ffpfsc, int *can_ffpkg) {
-  *can_exfat = *can_ffpfsc = *can_ffpkg = 0;
+ops_for(const char *source, int *can_exfat, int *can_ffpfsc, int *can_ffpkg, int *can_fpkg) {
+  *can_exfat = *can_ffpfsc = *can_ffpkg = *can_fpkg = 0;
   if(is_dir(source)) {
     char param[PATH_MAX];
     struct stat st;
-    if((snprintf(param, sizeof(param), "%s/sce_sys/param.json", source) < (int)sizeof(param) &&
-        stat(param, &st) == 0 && S_ISREG(st.st_mode)) || ps4_folder(source))
-      *can_exfat = *can_ffpfsc = *can_ffpkg = 1;
+    int ps5 = snprintf(param, sizeof(param), "%s/sce_sys/param.json", source) < (int)sizeof(param) && stat(param, &st) == 0 && S_ISREG(st.st_mode);
+    if(ps5 || ps4_folder(source)) *can_exfat = *can_ffpfsc = *can_ffpkg = 1;
+    if(ps5) *can_fpkg = 1;                                /* a debug FPKG is a PS5 package */
     return;
   }
   const char *e = ext_of(source);
   if(!strcasecmp(e, ".exfat") || !strcasecmp(e, ".ffpkg") || !strcasecmp(e, ".ffpfs"))
     *can_ffpfsc = 1;
+  if(!strcasecmp(e, ".exfat") || !strcasecmp(e, ".ffpkg") || !strcasecmp(e, ".ffpfs") || !strcasecmp(e, ".ffpfsc"))
+    *can_fpkg = 1;
 }
 
 /* The name without its folder and, for a file, without its extension. */
@@ -355,6 +371,17 @@ dest_dir(const char *base, const char *mode, char *out, size_t out_len) {
   if(!sub) return -1;
   int n = snprintf(out, out_len, "%s/%s", base, sub);
   return (n > 0 && (size_t)n < out_len) ? 0 : -1;
+}
+
+/* The folder for result op: like dest_dir, but a playable (mode "homebrew") debug FPKG goes to FPKG-Games, which Kraken Mount searches
+   (ShadowMountPlus does not mount a .pkg). */
+static int
+dest_dir_op(const char *base, const char *mode, const char *op, char *out, size_t out_len) {
+  if(is_fpkg_op(op) && !strcmp(mode, "homebrew")) {
+    int n = snprintf(out, out_len, "%s/%s", base, FPKG_DIR);
+    return (n > 0 && (size_t)n < out_len) ? 0 : -1;
+  }
+  return dest_dir(base, mode, out, out_len);
 }
 
 static int
@@ -665,10 +692,87 @@ cv_thread(void *arg) {
   return r;
 }
 
+/* The format "fpkg": Dump Forge's program writes the debug FPKG straight to the target (under a name of its own, renamed when verified);
+   this worker gives it the job, shows its stages as the steps of this page and stops it again when the person cancels. */
+static void *
+cv_run_fpkg(const cv_args_t *a) {
+  char msg[400] = "", err[400] = "";
+  int started_here = !ps5tm_dumpforge_running();
+  char dir[PATH_MAX];
+  snprintf(dir, sizeof(dir), "%s", a->target);
+  char *sl = strrchr(dir, '/');
+  if(sl) *sl = 0;
+  if(mkdir_p(dir) != 0) { cv_fail("Der Zielordner ließ sich nicht anlegen."); return NULL; }
+  if(ps5tm_dumpforge_start(msg, sizeof(msg)) != 0) { cv_fail("%s", msg); return NULL; }
+  int job = 0;
+  if(ps5tm_dumpforge_job_start(a->source, a->target, fpkg_level(a->op), !a->quick, &job, err, sizeof(err)) != 0) {
+    cv_fail("%s", err);
+    if(started_here) ps5tm_dumpforge_stop();
+    return NULL;
+  }
+  PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s.", a->title_id, job, fpkg_level(a->op));
+  int cancel_sent = 0, lost = 0, final = -1;
+  uint64_t last_ms = ps5tm_mono_ms(), last_done = 0;
+  ps5tm_dumpforge_job_t jb;
+  for(;;) {
+    if(!cancel_sent && __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) { ps5tm_dumpforge_job_cancel(job); cancel_sent = 1; }
+    usleep(1000 * 1000);
+    int st = ps5tm_dumpforge_job_poll(job, &jb);
+    if(st < 0) {
+      if(++lost >= 40) { cv_fail("Dump Forge antwortet nicht mehr."); final = CV_FAILED; break; }
+      continue;
+    }
+    lost = 0;
+    uint64_t now = ps5tm_mono_ms();
+    pthread_mutex_lock(&g_lock);
+    int writing = !strcmp(jb.stage, "compress") || !strcmp(jb.stage, "write");
+    int verifying = !strcmp(jb.stage, "verify") || !strcmp(jb.stage, "finalize");
+    if(g_job.state == CV_SCANNING && writing) { g_job.state = CV_WRITING; g_job.t_write_ms = now; }
+    if((g_job.state == CV_SCANNING || g_job.state == CV_WRITING) && verifying) { g_job.state = CV_VERIFYING; g_job.t_verify_ms = now; }
+    if(g_job.state == CV_VERIFYING && !strcmp(jb.stage, "finalize") && !g_job.t_rename_ms) g_job.t_rename_ms = now;
+    if(g_job.state == CV_WRITING && jb.total) {
+      g_job.total_bytes = jb.total;
+      g_job.done_bytes = jb.done > jb.total ? jb.total : jb.done;
+      if(now > last_ms + 1500 && jb.done >= last_done) {
+        double r = (double)(jb.done - last_done) * 1000.0 / (double)(now - last_ms);
+        g_job.rate = g_job.rate > 0 ? g_job.rate * 0.6 + r * 0.4 : r;
+        last_ms = now;
+        last_done = jb.done;
+      }
+    }
+    if(g_job.state == CV_VERIFYING && jb.total) { g_job.check_total = jb.total; g_job.check_done = jb.done > jb.total ? jb.total : jb.done; }
+    if(jb.log[0]) snprintf(g_job.note, sizeof(g_job.note), "%s", jb.log);
+    pthread_mutex_unlock(&g_lock);
+    if(st == 1) { final = CV_DONE; break; }
+    if(st == 2) { final = CV_FAILED; break; }
+  }
+  if(final == CV_DONE) {
+    pthread_mutex_lock(&g_lock);
+    g_job.output_bytes = jb.bytes;
+    g_job.files = jb.files;
+    g_job.done_bytes = g_job.total_bytes;
+    g_job.check_done = g_job.check_total;
+    g_job.note[0] = 0;
+    if(!g_job.t_rename_ms) g_job.t_rename_ms = ps5tm_mono_ms();
+    pthread_mutex_unlock(&g_lock);
+    cv_state(CV_DONE);
+    PS5TM_INFO("game_convert_done", "Debug-FPKG von %s fertig: %s (%llu Bytes).", a->title_id, a->target, (unsigned long long)jb.bytes);
+  } else if(final == CV_FAILED && (cancel_sent || __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE))) {
+    cv_state(CV_CANCELLED);
+    PS5TM_INFO("game_convert_cancelled", "Debug-FPKG von %s abgebrochen.", a->title_id);
+  } else if(final == CV_FAILED) {
+    if(jb.error[0]) cv_fail("Dump Forge: %s", jb.error);
+    PS5TM_WARN("game_convert_failed", "Debug-FPKG von %s gescheitert: %s", a->title_id, jb.error);
+  }
+  if(started_here) ps5tm_dumpforge_stop();
+  return NULL;
+}
+
 static void *
 cv_run(void *arg) {
   cv_args_t a = *(cv_args_t *)arg;
   free(arg);
+  if(is_fpkg_op(a.op)) return cv_run_fpkg(&a);
 
   char part[PATH_MAX], err[640] = "";
   snprintf(part, sizeof(part), "%s" PART_SUFFIX, a.target);
@@ -1249,8 +1353,8 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     snprintf(err, err_len, "Dieses Spiel lässt sich nicht konvertieren.");
     return NULL;
   }
-  int can_exfat, can_ffpfsc, can_ffpkg;
-  ops_for(source, &can_exfat, &can_ffpfsc, &can_ffpkg);
+  int can_exfat, can_ffpfsc, can_ffpkg, can_fpkg;
+  ops_for(source, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
   int folder = is_dir(source);
   int ps4 = folder && ps4_folder(source);
   if(ps4) {
@@ -1352,6 +1456,8 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   if(can_ffpfsc) cJSON_AddItemToArray(ops, cJSON_CreateString("ffpfsc"));
   if(can_ffpkg)  cJSON_AddItemToArray(ops, cJSON_CreateString("ffpkg"));
   if(can_exfat)  cJSON_AddItemToArray(ops, cJSON_CreateString("exfat"));
+  if(can_fpkg)   cJSON_AddItemToArray(ops, cJSON_CreateString("fpkg"));
+  cJSON_AddItemToObject  (root, "dumpforge", ps5tm_dumpforge_state());      /* the engine of the format "fpkg": there, running? */
   cJSON_AddBoolToObject  (root, "running", gs.title_id[0] && !strcmp(gs.title_id, title_id));
   cJSON_AddBoolToObject  (root, "busy", busy);
   /* A copy runs: no conversion starts beside it (the start says so too). */
@@ -1383,9 +1489,9 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     cJSON_AddBoolToObject  (d, "fat32_too_big_ffpkg",
                             !strcmp(fs, "msdosfs") && (ffpkg_bytes ? ffpkg_bytes : raw) > FAT32_MAX_FILE);
     static const char *const modes[] = { "homebrew", "backup" };
-    static const char *const exts[]  = { ".ffpfsc", ".ffpkg", ".exfat" };
-    static const char *const keys[]  = { "ffpfsc", "ffpkg", "exfat" };
-    const int offered[3] = { can_ffpfsc, can_ffpkg, can_exfat };
+    static const char *const exts[]  = { ".ffpfsc", ".ffpkg", ".exfat", ".pkg" };
+    static const char *const keys[]  = { "ffpfsc", "ffpkg", "exfat", "fpkg" };
+    const int offered[4] = { can_ffpfsc, can_ffpkg, can_exfat, can_fpkg };
     /* What is promised here is what the job will find: it deletes this app's
        own leftover first, so the room that leftover holds counts as free for
        THAT target (enough_space inside the target). The drive-wide
@@ -1396,9 +1502,10 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
       if(dest_dir(base, modes[m], dir, sizeof(dir)) != 0) continue;
       cJSON *o = cJSON_AddObjectToObject(d, modes[m]);
       cJSON_AddStringToObject(o, "dir", dir);
-      for(int e = 0; e < 3; e++) {
-        char path[400];
-        snprintf(path, sizeof(path), "%s/%s%s", dir, stem, exts[e]);
+      for(int e = 0; e < 4; e++) {
+        char path[400], fdir[128];
+        if(e == 3 && dest_dir_op(base, modes[m], "fpkg", fdir, sizeof(fdir)) != 0) continue;
+        snprintf(path, sizeof(path), "%s/%s%s", e == 3 ? fdir : dir, stem, exts[e]);
         int      ts   = target_state(path);
         uint64_t back = ts == 2 ? leftover_bytes(path) : 0;
         int      fits = avail + back >= (e == 1 ? need_ffpkg : need);
@@ -1448,7 +1555,7 @@ size_text(uint64_t b, char *buf, size_t n) {
 /* The ending of the result for op. */
 static const char *
 op_ext(const char *op) {
-  return !strcmp(op, "exfat") ? ".exfat" : !strcmp(op, "ffpkg") ? ".ffpkg" : ".ffpfsc";
+  return is_fpkg_op(op) ? ".pkg" : !strcmp(op, "exfat") ? ".exfat" : !strcmp(op, "ffpkg") ? ".ffpkg" : ".ffpfsc";
 }
 
 /* The stem of the result name from the template tpl for this game: 0, or -1 with the reason in err. bytes: its length with the ending. */
@@ -1490,9 +1597,10 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
   }
   if(!pc.valid) { snprintf(err, err_len, "Das Spiel ließ sich nicht vermessen."); return NULL; }
 
-  int can_exfat, can_ffpfsc, can_ffpkg;
-  ops_for(pc.source, &can_exfat, &can_ffpfsc, &can_ffpkg);
-  if(!(!strcmp(op, "exfat") && can_exfat) && !(!strcmp(op, "ffpfsc") && can_ffpfsc) && !(!strcmp(op, "ffpkg") && can_ffpkg)) {
+  int can_exfat, can_ffpfsc, can_ffpkg, can_fpkg;
+  ops_for(pc.source, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
+  if(!(!strcmp(op, "exfat") && can_exfat) && !(!strcmp(op, "ffpfsc") && can_ffpfsc) && !(!strcmp(op, "ffpkg") && can_ffpkg) &&
+     !(is_fpkg_op(op) && can_fpkg)) {
     snprintf(err, err_len, "Diese Umwandlung gibt es für dieses Spiel nicht.");
     return NULL;
   }
@@ -1515,6 +1623,19 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
     chk_add(arr, "names", "warn", "exFAT erlaubt 255 Zeichen je Name und diese App 1024 Bytes je Pfad.",
             "Ein Dateiname (%u Bytes) oder ein Pfad (%u Bytes) im Spiel kommt nah an die Grenze.", pc.max_name, pc.max_path);
 
+  /* the engine of a debug FPKG: Dump Forge's program must be in its folder */
+  if(is_fpkg_op(op)) {
+    char dv[40] = "";
+    if(!ps5tm_dumpforge_installed(dv, sizeof(dv))) {
+      char hint[260];
+      snprintf(hint, sizeof(hint), "Dump Forge laden (Knopf im Fenster) oder die Datei ps5-dump-forge-VERSION-ps5.elf in den Ordner %s legen.", PS5TM_DATA_DIR "/dumpforge");
+      chk_add(arr, "engine", "error", hint, "Dump Forge, das die Pakete schreibt, ist noch nicht da.");
+      errors++;
+    } else {
+      chk_add(arr, "engine", "ok", NULL, "Dump Forge %s schreibt das Paket", dv[0] ? dv : "?");
+    }
+  }
+
   /* the game must not run */
   ps5tm_gamestate_t gs;
   ps5tm_gamestate_get(&gs);
@@ -1536,7 +1657,7 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
   size_t name_bytes = 0;
   int have_target = 0;
   cJSON_AddStringToObject(root, "target", "");
-  if(drive_base(mount, base, sizeof(base), label, sizeof(label)) != 0 || dest_dir(base, mode, dir, sizeof(dir)) != 0) {
+  if(drive_base(mount, base, sizeof(base), label, sizeof(label)) != 0 || dest_dir_op(base, mode, op, dir, sizeof(dir)) != 0) {
     chk_add(arr, "drive", "error", NULL, "Dieses Ziel gibt es nicht.");
     errors++;
   } else if(result_stem(name_tpl, op, title_id, pc.name, pc.version, pc.source, pc.folder, stem, sizeof(stem), &name_bytes, eerr, sizeof(eerr)) != 0) {
@@ -1550,6 +1671,11 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
     char fname[300];
     snprintf(fname, sizeof(fname), "%s%s", stem, op_ext(op));
     chk_add(arr, "name", "ok", NULL, "Name der Ausgabe: %s (%zu von %d Bytes)", fname, name_bytes, PS5TM_CVNAME_MAX - PS5TM_CVNAME_SUFFIX);
+    if(is_fpkg_op(op) && strlen(stem) > FPKG_NAME_MAX) {
+      chk_add(arr, "name_len", "error", "Kürze den Namen, zum Beispiel mit einer Vorlage wie {id} v{version}.",
+              "Dump Forge nimmt nur Namen bis %d Bytes ohne „.pkg“; dieser hat %zu.", FPKG_NAME_MAX, strlen(stem));
+      errors++;
+    }
 
     uint64_t avail = 0;
     char fs[16];
@@ -1575,7 +1701,11 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
         chk_add(arr, "space", "ok", NULL, "Platz auf %s: %s frei, gebraucht höchstens %s", label, size_text(avail + back, b1, sizeof(b1)),
                 size_text(need, b2, sizeof(b2)));
       }
-      if(!strcmp(fs, "msdosfs") && need > FAT32_MAX_FILE) {
+      if(!strcmp(fs, "msdosfs") && need > FAT32_MAX_FILE && is_fpkg_op(op) && strcmp(op, "fpkg-raw")) {
+        chk_add(arr, "fat32", "warn", "Wähle ein Laufwerk mit exFAT, wenn das Paket über 4 GB wird.",
+                "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Das Paket wird kleiner als das Spiel (%s), aber wie viel, weiß erst Dump Forge.",
+                size_text(need, b1, sizeof(b1)));
+      } else if(!strcmp(fs, "msdosfs") && need > FAT32_MAX_FILE) {
         chk_add(arr, "fat32", "error", "Wähle ein Laufwerk mit exFAT.", "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Das Abbild wird %s groß.",
                 size_text(need, b1, sizeof(b1)));
         errors++;
@@ -1716,13 +1846,17 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
     snprintf(err, err_len, "Dieses Spiel lässt sich nicht konvertieren.");
     return 404;
   }
-  int can_exfat, can_ffpfsc, can_ffpkg;
-  ops_for(source, &can_exfat, &can_ffpfsc, &can_ffpkg);
+  int can_exfat, can_ffpfsc, can_ffpkg, can_fpkg;
+  ops_for(source, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
   int want_exfat = !strcmp(op, "exfat"), want_ffpfsc = !strcmp(op, "ffpfsc"),
-      want_ffpkg = !strcmp(op, "ffpkg");
-  if(!(want_exfat && can_exfat) && !(want_ffpfsc && can_ffpfsc) && !(want_ffpkg && can_ffpkg)) {
+      want_ffpkg = !strcmp(op, "ffpkg"), want_fpkg = is_fpkg_op(op);
+  if(!(want_exfat && can_exfat) && !(want_ffpfsc && can_ffpfsc) && !(want_ffpkg && can_ffpkg) && !(want_fpkg && can_fpkg)) {
     snprintf(err, err_len, "Diese Umwandlung gibt es für dieses Spiel nicht.");
     return 400;
+  }
+  if(want_fpkg && !ps5tm_dumpforge_installed(NULL, 0)) {
+    snprintf(err, err_len, "Dump Forge, das die Pakete schreibt, ist noch nicht da. Bitte laden oder die Datei in den Ordner %s legen.", PS5TM_DATA_DIR "/dumpforge");
+    return 409;
   }
 
   int ps4 = ps4_folder(source);
@@ -1744,7 +1878,7 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 500; }
   char label[40], dir[128], stem[PS5TM_CVNAME_MAX + 1];
   a->folder = is_dir(source);
-  a->ampr = a->folder && ampr_index && !ps4;
+  a->ampr = a->folder && ampr_index && !ps4 && !want_fpkg;       /* Dump Forge writes the AMPR index into its package itself */
   a->quick = quick ? 1 : 0;
   {
     char version[40], eerr[200] = "";
@@ -1754,11 +1888,16 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
       snprintf(err, err_len, "%s", eerr);
       return 400;
     }
+    if(want_fpkg && strlen(stem) > FPKG_NAME_MAX) {
+      free(a);
+      snprintf(err, err_len, "Dump Forge nimmt nur Namen bis %d Bytes ohne „.pkg“; dieser hat %zu. Bitte den Namen kürzen.", FPKG_NAME_MAX, strlen(stem));
+      return 400;
+    }
   }
   if(drive_base(mount, a->base, sizeof(a->base), label, sizeof(label)) != 0 ||
-     dest_dir(a->base, mode, dir, sizeof(dir)) != 0 ||
+     dest_dir_op(a->base, mode, op, dir, sizeof(dir)) != 0 ||
      snprintf(a->target, sizeof(a->target), "%s/%s%s", dir, stem,
-              want_exfat ? ".exfat" : want_ffpkg ? ".ffpkg" : ".ffpfsc") >= (int)sizeof(a->target)) {
+              want_fpkg ? ".pkg" : want_exfat ? ".exfat" : want_ffpkg ? ".ffpkg" : ".ffpfsc") >= (int)sizeof(a->target)) {
     free(a);
     snprintf(err, err_len, "Dieses Ziel gibt es nicht.");
     return 400;

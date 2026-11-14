@@ -231,7 +231,8 @@ TEST(Ps5ccPlans, TheCheckIsParsedWithItsLevels)
 {
     CheckReply r;
     r.ok = true;
-    r.json = R"({"ok":true,"can_start":false,"can_queue":true,"target":"/mnt/usb0/homebrew/X.ffpfsc","stem":"X",
+    r.json =
+        R"({"ok":true,"can_start":false,"can_queue":true,"target":"/mnt/usb0/homebrew/X.ffpfsc","stem":"X",
       "checks":[{"id":"source","level":"ok","text":"Quelle lesbar: 12481 Dateien"},
                 {"id":"exists","level":"warn","text":"Gelb","hint":"Ein Hinweis"},
                 {"id":"fat32","level":"error","text":"Rot"},
@@ -327,13 +328,127 @@ TEST(Ps5ccPlans, TheStepsOfAJobHaveNamesTimesAndShare)
     job.op = "exfat";
     EXPECT_EQ(hui::ps5cc::stage_texts(job)[1].label, "Schreiben");
     // where the job ended
-    job.stages = {{"scan", "done", 42000.0}, {"write", "done", 1870000.0}, {"verify", "stopped", 91000.0}, {"rename", "todo", 0.0}};
+    job.stages = {{"scan", "done", 42000.0},
+                  {"write", "done", 1870000.0},
+                  {"verify", "stopped", 91000.0},
+                  {"rename", "todo", 0.0}};
     t = hui::ps5cc::stage_texts(job);
     EXPECT_EQ(t[1].detail, "31:10");
     EXPECT_EQ(t[2].detail, "1:31 · hier beendet");
     // the app sent none (an older console app): no steps
     job.stages.clear();
     EXPECT_TRUE(hui::ps5cc::stage_texts(job).empty());
+}
+
+// The debug FPKG (Dump Forge): one format, four levels; the engine may be missing.
+constexpr const char *kConvertFpkg =
+    R"({"ok":true,"title_id":"PPSA02664","name":"Alex Kidd in Miracle World DX",
+  "source":"/mnt/ext1/etaHEN/games/Alex Kidd.exfat","kind":"image","ps4":false,"raw_bytes":4871608285,
+  "files":1,"ops":["ffpfsc","fpkg"],"dumpforge":{"ok":true,"installed":false,"folder":"/data/PS5-Cooling-Center/dumpforge","running":false},
+  "running":false,"busy":false,"other_busy":false,"targets":[
+  {"mount":"/mnt/usb1","label":"USB-Stick","fs":"msdosfs","free_bytes":59000000000,"source_here":false,
+   "fat32_too_big":true,"fat32_too_big_ffpkg":true,"enough_space":true,
+   "homebrew":{"dir":"/mnt/usb1/homebrew","fpkg":{"path":"/mnt/usb1/FPKG-Games/Alex.pkg","exists":false,"enough_space":true}}},
+  {"mount":"/mnt/ext0","label":"M.2-Laufwerk","fs":"exfatfs","free_bytes":640000000000,"source_here":false,
+   "fat32_too_big":false,"fat32_too_big_ffpkg":false,"enough_space":true,
+   "homebrew":{"dir":"/mnt/ext0/homebrew","fpkg":{"path":"/mnt/ext0/FPKG-Games/Alex.pkg","exists":false,"enough_space":true}},
+   "backup":{"dir":"/mnt/ext0/PS5-Sicherung/Spiele","fpkg":{"path":"/mnt/ext0/PS5-Sicherung/Spiele/Alex.pkg","exists":true,"enough_space":true}}}]})";
+
+TEST(Ps5ccPlans, TheDebugFpkgIsAFormatWithFourLevelsAndAnEngine)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertFpkg));
+    ASSERT_TRUE(p.ok);
+    ASSERT_EQ(p.ops.size(), 2u);
+    EXPECT_EQ(p.ops[1], "fpkg");
+    EXPECT_TRUE(p.dumpforge.known);
+    EXPECT_FALSE(p.dumpforge.installed);
+    EXPECT_EQ(p.dumpforge.folder, "/data/PS5-Cooling-Center/dumpforge");
+
+    // each level is an op of its own for the console app
+    PlanChoice c;
+    c.mode = 0;
+    c.op = hui::ps5cc::kOpFpkg;
+    c.drive = 1;
+    EXPECT_EQ(hui::ps5cc::op_key(c), "fpkg");
+    c.level = 1;
+    EXPECT_EQ(hui::ps5cc::op_key(c), "fpkg-bal");
+    c.level = 2;
+    EXPECT_EQ(hui::ps5cc::op_key(c), "fpkg-min");
+    c.level = 3;
+    EXPECT_EQ(hui::ps5cc::op_key(c), "fpkg-raw");
+    c.op = 0;
+    EXPECT_EQ(hui::ps5cc::op_key(c), "ffpfsc");
+    c.op = -1;
+    EXPECT_EQ(hui::ps5cc::op_key(c), "");
+
+    EXPECT_TRUE(hui::ps5cc::is_fpkg_op("fpkg-min"));
+    EXPECT_FALSE(hui::ps5cc::is_fpkg_op("ffpkg"));
+    EXPECT_TRUE(hui::ps5cc::squeezes("ffpfsc"));
+    EXPECT_TRUE(hui::ps5cc::squeezes("fpkg"));
+    EXPECT_TRUE(hui::ps5cc::squeezes("fpkg-bal"));
+    EXPECT_FALSE(hui::ps5cc::squeezes("fpkg-raw"));
+    EXPECT_FALSE(hui::ps5cc::squeezes("exfat"));
+    EXPECT_EQ(hui::ps5cc::op_label("fpkg-bal"), "FPKG · ausgewogen");
+    EXPECT_EQ(hui::ps5cc::op_label("fpkg-raw"), "FPKG · unkomprimiert");
+    EXPECT_EQ(hui::ps5cc::op_label("exfat"), "exfat") << "the other ops stay as the app names them";
+}
+
+TEST(Ps5ccPlans, TheDebugFpkgBodyCarriesTheLevelAndNoAmprIndex)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertFpkg));
+    PlanChoice c;
+    c.mode = 0;
+    c.op = hui::ps5cc::kOpFpkg;
+    c.level = 2;
+    c.drive = 1;
+    c.ampr = true;
+    c.quick = true;
+    EXPECT_EQ(
+        hui::ps5cc::start_body(p, c),
+        R"({"id":"PPSA02664","op":"fpkg-min","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"quick","name":""})");
+    EXPECT_EQ(
+        hui::ps5cc::check_body(p, c),
+        R"({"id":"PPSA02664","op":"fpkg-min","target":"/mnt/ext0","mode":"homebrew","name":""})");
+    EXPECT_EQ(hui::ps5cc::target_of(p, c), "/mnt/ext0/FPKG-Games/Alex.pkg");
+    EXPECT_NE(hui::ps5cc::queue_add_body(p, c).find(R"("op":"fpkg-min")"), std::string::npos);
+}
+
+TEST(Ps5ccPlans, ACompressedFpkgMayGoToAFat32DriveButAnUncompressedOneMayNot)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertFpkg));
+    PlanChoice c;
+    c.mode = 0;
+    c.op = hui::ps5cc::kOpFpkg;
+    c.drive = 0;
+    // it gets smaller than the game: the check names the drive, the list does not turn it away
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]), "");
+    c.level = hui::ps5cc::kLevelRaw;
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]),
+              "FAT32 nimmt keine Datei über 4 GB auf");
+    // ffpfsc stays as it was
+    c.op = 0;
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]),
+              "FAT32 nimmt keine Datei über 4 GB auf");
+    // a target that exists is refused for the FPKG as for the others
+    c.op = hui::ps5cc::kOpFpkg;
+    c.level = 0;
+    c.mode = 1;
+    c.drive = 1;
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[1]), "Dort gibt es diese Datei schon");
+}
+
+TEST(Ps5ccPlans, TheStepOfACompressedFpkgIsCalledCompressing)
+{
+    hui::ps5cc::Job job;
+    job.total = 100.0;
+    job.stages = {{"scan", "done", 1000.0},
+                  {"write", "now", 5000.0},
+                  {"verify", "todo", 0.0},
+                  {"rename", "todo", 0.0}};
+    job.op = "fpkg";
+    EXPECT_EQ(hui::ps5cc::stage_texts(job)[1].label, "Komprimieren");
+    job.op = "fpkg-raw";
+    EXPECT_EQ(hui::ps5cc::stage_texts(job)[1].label, "Schreiben");
 }
 
 TEST(Ps5ccPlans, StreamRiskReasonsInWords)
@@ -356,8 +471,9 @@ TEST(Ps5ccPlans, UnsignedExecutablesAreReadAndNamed)
 
     const Plan p = hui::ps5cc::parse_plan(
         Tool::convert,
-        reply(Tool::convert,
-              R"({"ok":true,"title_id":"PPSA01325","name":"X","kind":"folder","ops":["ffpfsc"],"targets":[],
+        reply(
+            Tool::convert,
+            R"({"ok":true,"title_id":"PPSA01325","name":"X","kind":"folder","ops":["ffpfsc"],"targets":[],
                   "unsigned_exec":{"count":6,"refused":1,"capped":false,"bytes":148000000,
                   "files":["eboot.bin","sce_module/a.prx","sce_module/b.prx","fakelib/c.sprx","d.sprx","e.sprx","f.sprx","g.sprx"]}})"));
     ASSERT_TRUE(p.ok);

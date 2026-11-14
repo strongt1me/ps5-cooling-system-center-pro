@@ -366,6 +366,10 @@ void HttpSource::kraken_post(const std::string &json)
 {
     push({Request::Kind::kraken, 0, {}, json});
 }
+void HttpSource::dumpforge_fetch()
+{
+    push({Request::Kind::dumpforge, 0, {}, "{\"action\":\"fetch\"}"});
+}
 void HttpSource::ps4mount_fetch(const std::string &what, const std::string &id)
 {
     push({Request::Kind::ps4mount_fetch, 0, id, what});
@@ -1953,6 +1957,28 @@ void HttpSource::handle(const Request &request)
                 notice(Notice::Kind::success, "FPKGMount", msg);
         }
         poll_kraken();
+        break;
+    }
+    case Request::Kind::dumpforge:
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            data_.dumpforge.fetching = true;
+            ++data_.dumpforge.epoch;
+            ++data_.serial;
+        }
+        // The download of the program (18 MB over the console's own connection) takes a while.
+        const Net net = exchange("POST", "/api/v1/dumpforge", request.text, &status, &body, 300);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "Dump Forge",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        else
+        {
+            const std::string msg = message_of(body, "");
+            if (!msg.empty())
+                notice(Notice::Kind::success, "Dump Forge", msg);
+        }
+        poll_dumpforge();
         break;
     }
     case Request::Kind::ps4mount_fetch:
@@ -4210,6 +4236,28 @@ void HttpSource::poll_ps4mount()
     if (!m.config.valid && data_.ps4mount.config.valid)
         m.config = data_.ps4mount.config;
     data_.ps4mount = std::move(m);
+    ++data_.serial;
+}
+
+void HttpSource::poll_dumpforge()
+{
+    int status = 0;
+    std::string body;
+    DumpForgeState d;
+    if (exchange("GET", "/api/v1/dumpforge", {}, &status, &body, 8) == Net::ok && status == 200)
+    {
+        cJSON *root = cJSON_Parse(body.c_str());
+        if (root != nullptr)
+        {
+            d.installed = flag(root, "installed");
+            d.fetching = flag(root, "fetching");
+            d.version = str(root, "version");
+            cJSON_Delete(root);
+        }
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    d.epoch = data_.dumpforge.epoch + 1; // also when the question failed: the dialog stops waiting
+    data_.dumpforge = std::move(d);
     ++data_.serial;
 }
 

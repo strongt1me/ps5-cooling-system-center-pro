@@ -28,7 +28,7 @@ static const char *const k_state[] = { "waiting", "running", "done", "failed", "
 typedef struct {
   int      qid;
   int      state;
-  char     id[12], name[128], op[8], mount[40], mode[12], name_tpl[200], target[400];
+  char     id[12], name[128], op[12], mount[40], mode[12], name_tpl[200], target[400];
   int      ampr, quick;
   int      starting;          /* ps5tm_gameconvert_start is being called for it: it cannot be removed in that moment */
   char     msg[300];

@@ -790,6 +790,17 @@ struct KrakenGame
     bool running = false; // a session of this game is live
 };
 
+// Dump Forge (quer3q), the engine of the debug FPKG format, as the console app reported it last
+// (GET /api/v1/dumpforge). epoch counts the answers: a dialog that waits for the download sees a
+// new one.
+struct DumpForgeState
+{
+    std::uint64_t epoch = 0;
+    bool installed = false;
+    bool fetching = false;
+    std::string version;
+};
+
 // The texture key of a Kraken Mount game's picture in covers().
 inline std::string kraken_key(const std::string &title_id)
 {
@@ -1166,6 +1177,7 @@ struct Snapshot
     PackageQueue package_queue;
     Ps4Mount ps4mount;
     KrakenState kraken;
+    DumpForgeState dumpforge;
     Ps4GameDetail ps4_detail; // the game last asked for with ps4mount_fetch("game", id)
     std::string ps4_log;      // the end of PS4Mount's log, after ps4mount_fetch("log")
     std::uint64_t ps4_log_seq = 0;
@@ -1288,6 +1300,10 @@ class Source
     // FPKGMount: a JSON body for POST /api/v1/kraken (start, stop, rescan, rebuild, rebuild_all,
     // delete, fetch); the answer's message comes back as a notice.
     virtual void kraken_post(const std::string &json) = 0;
+    // Dump Forge fetched from GitHub for the format "FPKG" (POST /api/v1/dumpforge
+    // {"action":"fetch"}); it takes a while. The answer arrives as a notice and as
+    // Snapshot::dumpforge.
+    virtual void dumpforge_fetch() = 0;
     // The Disc page: a JSON body for POST /api/v1/<route>, route "disc", "dump", "dumps/scan" or
     // "dumps/delete"; the answer's message comes back as a notice.
     virtual void disc_post(const std::string &route, const std::string &json) = 0;

@@ -4941,6 +4941,29 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
+  /* Dump Forge, the engine of the format "FPKG (Debug-.pkg)" (dumpforge.c): GET the state, POST {action: fetch|start|stop}. */
+  if(!strcmp(req->path, "/api/v1/dumpforge")) {
+    if(is_get) { send_cjson(fd, 200, ps5tm_dumpforge_state()); return; }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *ja = b ? cJSON_GetObjectItem(b, "action") : NULL;
+    char action[16] = "", msg[400] = "";
+    if(cJSON_IsString(ja)) snprintf(action, sizeof(action), "%s", ja->valuestring);
+    cJSON_Delete(b);
+    int http = 200;
+    if(!strcmp(action, "fetch")) http = ps5tm_dumpforge_fetch(msg, sizeof(msg));
+    else if(!strcmp(action, "start")) { if(ps5tm_dumpforge_start(msg, sizeof(msg)) != 0) http = 502; }
+    else if(!strcmp(action, "stop")) {
+      if(ps5tm_gameconvert_busy()) { http = 409; snprintf(msg, sizeof(msg), "Es läuft gerade eine Konvertierung."); }
+      else { ps5tm_dumpforge_stop(); snprintf(msg, sizeof(msg), "Dump Forge ist beendet."); }
+    } else { http = 400; snprintf(msg, sizeof(msg), "Diese Aktion kennt die App nicht."); }
+    if(http != 200) { ps5tm_http_send_error(fd, http, http == 409 ? "busy" : "dumpforge_failed", msg); return; }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "message", msg);
+    send_cjson(fd, 200, o);
+    return;
+  }
   if(!strcmp(req->path, "/api/v1/kraken/icon")) {
     char id[16];
     query_param(req->query, "id", id, sizeof(id));

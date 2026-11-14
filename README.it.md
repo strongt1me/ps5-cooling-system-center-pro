@@ -57,7 +57,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Giochi</h3>
-      Avviare, chiudere, copiare, spostare, convertire in exFAT/ffpkg/ffpfsc, asset pack LZ4, APR-EMU, PlayGo. Vista compatta (predefinita) o grande.
+      Avviare, chiudere, copiare, spostare, convertire in exFAT/ffpkg/ffpfsc/FPKG, asset pack LZ4, APR-EMU, PlayGo. Vista compatta (predefinita) o grande.
     </td>
   </tr>
   <tr>
@@ -177,7 +177,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 
 **Giochi**
 - Avviare (dal browser della console la pagina si chiude subito), chiudere, copiare su altre unità, spostare o estrarre con ShadowMountPlus.
-- Convertire in immagini exFAT, ffpkg e ffpfsc senza PC; tutto viene riletto e verificato dopo la scrittura, con un file `.sha256`.
+- Convertire in immagini exFAT, ffpkg e ffpfsc senza PC; tutto viene riletto e verificato dopo la scrittura, con un file `.sha256`. Inoltre un FPKG di debug (`.pkg`) per Kraken Mount, scritto da Dump Forge (quer3q; l’app lo scarica premendo un pulsante).
 - Asset pack LZ4, indice AMPR, APR-EMU (ampr_emu e AMPR EMU NG), stub PlayGo e moduli DLC per gioco; verificare, estrarre e riparare immagini.
 - PS4 PKG da USB: PKG falsi PS4 da un'unità USB nella libreria senza installarli (PS4Mount di gasb07).
 - FPKGMount: avvia giochi (F)PKG e cartelle di gioco senza installarli, con Kraken Mount di quer3q (l'app lo include e lo avvia).

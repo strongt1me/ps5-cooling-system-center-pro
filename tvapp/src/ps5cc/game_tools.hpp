@@ -17,6 +17,7 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace hui::ps5cc
@@ -98,9 +99,13 @@ class GameTools
     bool queue_open_ = false;
     float queue_poll_ = 0.0f;
     ui::ListView queue_list_;
-    std::string queue_key_; // what the list's rows are made of, so it is rebuilt only when that changes
+    std::string
+        queue_key_; // what the list's rows are made of, so it is rebuilt only when that changes
     tween::Spring queue_shown_;
-    std::vector<int> op_index_; // the op choice's options, as indexes into kOpKeys
+    std::vector<std::pair<int, int>>
+        op_index_; // the format choice's options: {index into kOpKeys, level of the FPKG}
+    std::uint64_t engine_epoch_ = 0; // the last answer about Dump Forge this dialog has taken in
+    bool engine_fetching_ = false;   // "Dump Forge laden" was pressed and the answer is not in yet
     float clock_ = 0.0f;
     tween::Spring shown_;
 };

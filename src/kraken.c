@@ -26,6 +26,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "lhttp.h"
 #include "ps5tm.h"
 #include "sha256.h"
 #include "third_party/cJSON.h"
@@ -39,7 +40,6 @@
 #define KR_ELF               KR_DIR "/kraken-mount.elf"
 #define KR_VER               KR_DIR "/version.txt"
 #define KR_ELF_MAX           (16u * 1024 * 1024)
-#define KR_REPLY_MAX         (2u * 1024 * 1024)
 
 extern const unsigned char ps5tm_kraken[];
 extern const unsigned long ps5tm_kraken_len;          /* the zlib stream of the ELF (tools/gen_blob.py) */
@@ -51,65 +51,10 @@ static uint64_t        g_started_ms;                  /* the last start: a secon
 
 /* ------------------------------------------------------------------ loopback client */
 
-/* One request to Kraken Mount on 127.0.0.1:8097. Returns the HTTP status, or -1 when nothing answers. The body (not NUL-terminated
-   for images, but always followed by a 0 byte) goes to *out, malloc'd, when out is not NULL. */
+/* One request to Kraken Mount on 127.0.0.1:8097 (lhttp.c): the HTTP status, or -1 when nothing answers. */
 static int
 kr_http(const char *method, const char *path, const char *body, size_t body_len, int timeout_ms, unsigned char **out, size_t *out_len) {
-  if(out) *out = NULL;
-  if(out_len) *out_len = 0;
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  if(fd < 0) return -1;
-  struct timeval tv = { timeout_ms / 1000, (timeout_ms % 1000) * 1000 };
-  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
-  struct sockaddr_in sa;
-  memset(&sa, 0, sizeof sa);
-  sa.sin_family = AF_INET;
-  sa.sin_port = htons(KR_PORT);
-  sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  if(connect(fd, (struct sockaddr *)&sa, sizeof sa) != 0) { close(fd); return -1; }
-  char head[512];
-  int hn = snprintf(head, sizeof head, "%s %s HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Length: %zu\r\n\r\n", method, path, body_len);
-  if(hn <= 0 || (size_t)hn >= sizeof head || send(fd, head, (size_t)hn, 0) != hn || (body_len && send(fd, body, body_len, 0) != (ssize_t)body_len)) {
-    close(fd);
-    return -1;
-  }
-  size_t cap = 8192, len = 0;
-  unsigned char *buf = malloc(cap);
-  if(!buf) { close(fd); return -1; }
-  for(;;) {
-    if(len + 4096 + 1 > cap) {
-      if(cap >= KR_REPLY_MAX) break;
-      size_t nc = cap * 2;
-      unsigned char *nb = realloc(buf, nc);
-      if(!nb) break;
-      buf = nb;
-      cap = nc;
-    }
-    ssize_t r = recv(fd, buf + len, cap - len - 1, 0);
-    if(r <= 0) break;
-    len += (size_t)r;
-  }
-  close(fd);
-  buf[len] = 0;
-  int status = -1;
-  if(len > 12 && !strncmp((char *)buf, "HTTP/1.", 7)) status = atoi((char *)buf + 9);
-  if(status <= 0) { free(buf); return -1; }
-  if(out) {
-    unsigned char *p = NULL;
-    for(size_t i = 0; i + 3 < len; i++)
-      if(buf[i] == '\r' && buf[i + 1] == '\n' && buf[i + 2] == '\r' && buf[i + 3] == '\n') { p = buf + i + 4; break; }
-    size_t blen = p ? len - (size_t)(p - buf) : 0;
-    unsigned char *copy = malloc(blen + 1);
-    if(copy) {
-      if(blen) memcpy(copy, p, blen);
-      copy[blen] = 0;
-      *out = copy;
-      if(out_len) *out_len = blen;
-    }
-  }
-  free(buf);
-  return status;
+  return ps5tm_lhttp(KR_PORT, method, path, NULL, body, body_len, timeout_ms, out, out_len);
 }
 
 /* ------------------------------------------------------------------ files */
@@ -241,34 +186,12 @@ ps5tm_kraken_icon(const char *id, unsigned char **png, size_t *len) {
    so before every start: a tile it made earlier goes (the console's own uninstall, then the marker), and a plain empty file takes the
    place of the folder. */
 #define KR_TILE_ID      "KRKN00001"
-#define KR_TILE_PATH    "/user/app/" KR_TILE_ID
 #define KR_TILE_MARKER  "/data/krakenmount/tile.ok"
 
 static void
 keep_tile_away(void) {
-  struct stat st;
-  int marker = stat(KR_TILE_MARKER, &st) == 0;
-  int present = lstat(KR_TILE_PATH, &st) == 0;
-  if(marker) {
-    if(present && S_ISDIR(st.st_mode) && stat(KR_TILE_PATH "/sce_sys/param.json", &st) == 0) {
-      int pat = 0, add = 0;
-      char why[300] = "";
-      int rc = ps5tm_pkginst_uninstall(KR_TILE_ID, &pat, &add, why, sizeof why);
-      if(rc != 0) {
-        PS5TM_WARN("kraken_tile", "Die Kachel von Kraken Mount (%s) ließ sich nicht entfernen: %s", KR_TILE_ID, why[0] ? why : "ohne Angabe");
-        return;                                         /* marker and tile stay together: nothing is made worse */
-      }
-      PS5TM_INFO("kraken_tile", "Die Kachel von Kraken Mount (%s) ist entfernt.", KR_TILE_ID);
-      for(int i = 0; i < 50 && lstat(KR_TILE_PATH, &st) == 0; i++) usleep(100 * 1000);
-    }
-    unlink(KR_TILE_MARKER);
-    present = lstat(KR_TILE_PATH, &st) == 0;
-  }
-  if(!present) {
-    int fd = open(KR_TILE_PATH, O_WRONLY | O_CREAT | O_EXCL, 0644);
-    if(fd >= 0) close(fd);
-    else PS5TM_WARN("kraken_tile", "%s ließ sich nicht anlegen: %s", KR_TILE_PATH, strerror(errno));
-  }
+  static const char *const markers[] = { KR_TILE_MARKER };
+  ps5tm_tile_keep_away(KR_TILE_ID, "Kraken Mount", markers, 1);
 }
 
 /* ------------------------------------------------------------------ search folders */

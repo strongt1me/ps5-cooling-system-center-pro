@@ -8,6 +8,7 @@
 #include "third_party/cjson/cJSON.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 
 namespace hui::ps5cc
@@ -224,6 +225,15 @@ Plan parse_plan(Tool tool, const PlanReply &reply)
                 p.ops.push_back(key);
         }
     }
+    const cJSON *engine = cJSON_GetObjectItemCaseSensitive(root, "dumpforge");
+    if (cJSON_IsObject(engine))
+    {
+        p.dumpforge.known = true;
+        p.dumpforge.installed = flag(engine, "installed");
+        p.dumpforge.running = flag(engine, "running");
+        p.dumpforge.version = str(engine, "version");
+        p.dumpforge.folder = str(engine, "folder");
+    }
     const cJSON *risk = cJSON_GetObjectItemCaseSensitive(root, "stream_risk");
     p.stream.risky = flag(risk, "risky");
     p.stream.big_data = flag(risk, "big_data");
@@ -385,9 +395,12 @@ std::string drive_blocked(const Plan &p, const PlanChoice &c, const PlanDrive &d
     case Tool::convert:
     {
         const bool ffpkg = c.op == 1;
+        // A compressed FPKG gets smaller than the game: the check names a FAT32 drive, it is not
+        // turned away here.
+        const bool squeezed_fpkg = c.op == kOpFpkg && c.level != kLevelRaw;
         const std::uint64_t need = ffpkg && p.ffpkg_bytes > 0 ? p.ffpkg_bytes : p.raw_bytes;
         const std::string room = "Zu wenig Platz: Nötig sind bis zu " + format_bytes(need);
-        if (ffpkg ? d.fat32_too_big_ffpkg : d.fat32_too_big)
+        if (!squeezed_fpkg && (ffpkg ? d.fat32_too_big_ffpkg : d.fat32_too_big))
             return "FAT32 nimmt keine Datei über 4 GB auf";
         if (!d.enough_space)
             return room;
@@ -451,8 +464,8 @@ std::string run_blocked(const Plan &p)
                    "laufen nicht gleichzeitig.";
         return "";
     case Tool::convert:
-        // A running game or another job is not said here: the check before the start names it (and a
-        // busy job still lets the conversion wait in the queue).
+        // A running game or another job is not said here: the check before the start names it (and
+        // a busy job still lets the conversion wait in the queue).
         if (p.ops.empty())
             return "Für dieses Spiel bietet die App kein Format an.";
         return "";
@@ -608,11 +621,13 @@ std::string start_body(const Plan &p, const PlanChoice &c)
         break;
     case Tool::convert:
         cJSON_AddStringToObject(root, "id", p.id.c_str());
-        cJSON_AddStringToObject(root, "op", c.op >= 0 && c.op < kOps ? kOpKeys[c.op] : "");
+        cJSON_AddStringToObject(root, "op", op_key(c).c_str());
         cJSON_AddStringToObject(root, "target", drive.c_str());
         cJSON_AddStringToObject(root, "mode", mode);
-        // The AMPR index is a PS5 thing and only goes into an image built from a folder.
-        cJSON_AddBoolToObject(root, "ampr_index", p.kind == "folder" && !p.ps4 && c.ampr);
+        // The AMPR index is a PS5 thing and only goes into an image built from a folder (Dump Forge
+        // writes its own).
+        cJSON_AddBoolToObject(root, "ampr_index",
+                              p.kind == "folder" && !p.ps4 && c.ampr && c.op != kOpFpkg);
         cJSON_AddStringToObject(root, "verify", c.quick ? "quick" : "full");
         cJSON_AddStringToObject(root, "name", c.name.c_str());
         break;
@@ -718,13 +733,47 @@ ConvertCheck parse_check(const CheckReply &reply)
     return c;
 }
 
+std::string op_key(const PlanChoice &c)
+{
+    if (c.op < 0 || c.op >= kOps)
+        return {};
+    if (c.op == kOpFpkg)
+        return kLevelOps[c.level >= 0 && c.level < kLevels ? c.level : 0];
+    return kOpKeys[c.op];
+}
+
+bool is_fpkg_op(const std::string &op)
+{
+    return op.rfind("fpkg", 0) == 0;
+}
+
+bool squeezes(const std::string &op)
+{
+    return op == "ffpfsc" || (is_fpkg_op(op) && op != "fpkg-raw");
+}
+
+std::string op_label(const std::string &op)
+{
+    for (int l = 0; l < kLevels; ++l)
+    {
+        if (op == kLevelOps[l])
+        {
+            std::string name = kLevelNames[l];
+            for (char &ch : name)
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            return "FPKG · " + name;
+        }
+    }
+    return op;
+}
+
 std::string check_body(const Plan &p, const PlanChoice &c)
 {
     if (!chosen(p, c) || c.op < 0 || c.op >= kOps || c.mode < 0 || c.mode >= kModes)
         return {};
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "id", p.id.c_str());
-    cJSON_AddStringToObject(root, "op", kOpKeys[c.op]);
+    cJSON_AddStringToObject(root, "op", op_key(c).c_str());
     cJSON_AddStringToObject(root, "target",
                             p.drives[static_cast<std::size_t>(c.drive)].mount.c_str());
     cJSON_AddStringToObject(root, "mode", kModeKeys[c.mode]);
@@ -821,7 +870,7 @@ std::vector<StageText> stage_texts(const Job &job)
         if (s.id == "scan")
             t.label = "Vermessen";
         else if (s.id == "write")
-            t.label = job.op == "ffpfsc" ? "Komprimieren" : "Schreiben";
+            t.label = squeezes(job.op) ? "Komprimieren" : "Schreiben";
         else if (s.id == "verify")
             t.label = "Prüfen";
         else if (s.id == "rename")

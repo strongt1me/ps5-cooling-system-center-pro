@@ -37,6 +37,7 @@ enum Row
     kRowQueue,
     kRowQueueView,
     kRowDeleteSource,
+    kRowEngine,
     kRowStart,
     kRowCancel, // the delete question's "Abbrechen", where its focus opens
     kRowInfo = 20,
@@ -55,7 +56,7 @@ std::string files_text(std::uint64_t n)
     return std::to_string(n) + (n == 1 ? " Datei" : " Dateien");
 }
 
-const char *op_title(int op, bool folder)
+std::string op_title(int op, bool folder, int level)
 {
     switch (op)
     {
@@ -63,15 +64,77 @@ const char *op_title(int op, bool folder)
         return folder ? "ffpfsc · komprimiert (empfohlen)" : "ffpfsc · komprimiert";
     case 1:
         return "ffpkg (UFS2) · unkomprimiert";
+    case kOpFpkg:
+        return std::string("FPKG (Debug-.pkg) · ") +
+               kLevelNames[level >= 0 && level < kLevels ? level : 0] +
+               (level == 0 ? " (empfohlen)" : "");
     default:
         return "exFAT-Abbild · unkomprimiert";
     }
 }
 
-std::string op_text(const Plan &p, int op)
+// What each compression level of the debug FPKG means (Dump Forge: balanced and smallest give a
+// ~2.6 % smaller package and take about 6 and 9 times as long; stored is for a console that refuses
+// a compressed one).
+const char *level_text(int level)
+{
+    switch (level)
+    {
+    case 1:
+        return "Das Paket wird rund 2,6 % kleiner; es dauert etwa 6-mal so lange, alle Kerne "
+               "rechnen durchgehend.";
+    case 2:
+        return "Das kleinste Paket; es dauert etwa 9-mal so lange, alle Kerne rechnen durchgehend.";
+    case kLevelRaw:
+        return "Nichts wird komprimiert: das Paket ist viel größer. Für den Fall, dass die Konsole "
+               "ein komprimiertes nicht startet.";
+    default:
+        return "Kraken-Kompression mit kurzer Rechenzeit.";
+    }
+}
+
+// The same in a few words, for the format row (one line).
+const char *level_short(int level)
+{
+    switch (level)
+    {
+    case 1:
+        return "Rund 2,6 % kleiner, etwa 6-mal so lange.";
+    case 2:
+        return "Das kleinste Paket, etwa 9-mal so lange.";
+    case kLevelRaw:
+        return "Nicht komprimiert: viel größer. Falls die Konsole ein komprimiertes nicht startet.";
+    default:
+        return "Kraken-Kompression mit kurzer Rechenzeit.";
+    }
+}
+
+std::string mode_text(bool fpkg)
+{
+    return fpkg ? "A: FPKG-Games, Kraken Mount meldet es an · B: PS5-Sicherung/Spiele, nur "
+                  "aufbewahrt"
+                : "A: homebrew, ShadowMountPlus bindet es ein · B: PS5-Sicherung/Spiele, nur "
+                  "aufbewahrt";
+}
+
+std::string verify_text(bool quick, bool fpkg)
+{
+    if (fpkg)
+        return quick ? "Dump Forge prüft den ganzen Aufbau, kleine Dateien ganz und vom Rest eine "
+                       "zufällige Stichprobe."
+                     : "Dump Forge liest jedes Byte des fertigen Pakets noch einmal und prüft es. "
+                       "Das dauert länger.";
+    return quick
+               ? "Aufbau und Stichprobe, ohne Prüfsummen-Datei. Spart bei großen Spielen viel Zeit."
+               : "Liest das ganze Ergebnis noch einmal und legt die Prüfsummen-Datei an.";
+}
+
+std::string op_text(const Plan &p, int op, int level)
 {
     switch (op)
     {
+    case kOpFpkg:
+        return level_short(level);
     case 0:
         return p.kind == "folder" ? "Der Ordner wird als exFAT-Abbild in einen komprimierten "
                                     "PFS-Container gepackt, in einem "
@@ -165,7 +228,8 @@ void GameTools::init(const ui::Theme &theme)
                     20.0f, ink, gfx::Align::right);
     };
 
-    // The name of a converted image is typed on the kit's keyboard (the template's braces are on its symbol page).
+    // The name of a converted image is typed on the kit's keyboard (the template's braces are on
+    // its symbol page).
     prompt_.style.theme = solid_theme(theme);
     prompt_.style.max_length = 190;
     prompt_.style.allow_empty = true;
@@ -233,8 +297,10 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
     line.separator = true;
     items.push_back(line);
     ui::MenuItem extras;
-    // LZ4 and zstd only work for dump folders; for an image the entry names what is left there (10.11.2026)
-    extras.label = game.format == "folder" ? "Extras: AMPR, PlayGo, LZ4, zstd …" : "Extras: AMPR, PlayGo …";
+    // LZ4 and zstd only work for dump folders; for an image the entry names what is left there
+    // (10.11.2026)
+    extras.label =
+        game.format == "folder" ? "Extras: AMPR, PlayGo, LZ4, zstd …" : "Extras: AMPR, PlayGo …";
     extras.tag = kExtrasTag;
     // as in the web app: only for games with a folder or image of their own, not for installed
     // packages
@@ -300,6 +366,7 @@ void GameTools::open_dialog(Tool tool, ui::Feedback &feedback)
     check_pending_ = false;
     check_ticket_ = 0;
     name_mode_ = 0;
+    engine_fetching_ = false;
     form_.clear();
     awaiting_ = source().request_plan(tool, game_.id);
     if (tool == Tool::convert)
@@ -327,6 +394,19 @@ void GameTools::absorb(const Snapshot &data)
     }
     if (queue_open_)
         rebuild_queue();
+    // Dump Forge came (or the download failed): the dialog takes it in and asks the check again.
+    if (data.dumpforge.epoch != engine_epoch_)
+    {
+        engine_epoch_ = data.dumpforge.epoch;
+        if (open_ && tool_ == Tool::convert && plan_.ok && !data.dumpforge.fetching)
+        {
+            engine_fetching_ = false;
+            plan_.dumpforge.installed = data.dumpforge.installed;
+            plan_.dumpforge.version = data.dumpforge.version;
+            check_key_.clear();
+            refresh();
+        }
+    }
     if (open_ && tool_ == Tool::convert && check_pending_ && check_ticket_ != 0 &&
         data.convert_check.ticket == check_ticket_)
     {
@@ -380,8 +460,7 @@ void GameTools::build_form()
         form_
             .add_choice(kRowMode, "Ziel", {"bitte wählen", "A · Spielbar", "B · Sicherung"},
                         choice_.mode + 1)
-            .description =
-            "A: homebrew, ShadowMountPlus bindet es ein · B: PS5-Sicherung/Spiele, nur aufbewahrt";
+            .description = mode_text(choice_.op == kOpFpkg);
     };
     int first = kRowStart;
     switch (tool_)
@@ -396,36 +475,50 @@ void GameTools::build_form()
         form_.add_header("1. Was soll entstehen?");
         std::vector<std::string> options;
         int index = 0;
+        bool fpkg_offered = false;
         for (const std::string &op : plan_.ops)
         {
             for (int o = 0; o < kOps; ++o)
             {
                 if (op != kOpKeys[o])
                     continue;
-                if (o == choice_.op)
-                    index = static_cast<int>(op_index_.size());
-                op_index_.push_back(o);
-                options.emplace_back(op_title(o, plan_.kind == "folder"));
+                // The debug FPKG is one format with four levels: each is an option of its own.
+                const int levels = o == kOpFpkg ? kLevels : 1;
+                fpkg_offered = fpkg_offered || o == kOpFpkg;
+                for (int l = 0; l < levels; ++l)
+                {
+                    if (o == choice_.op && l == choice_.level)
+                        index = static_cast<int>(op_index_.size());
+                    op_index_.emplace_back(o, l);
+                    options.emplace_back(op_title(o, plan_.kind == "folder", l));
+                }
             }
         }
         if (!options.empty())
             form_.add_choice(kRowOp, "Format", options, index).description =
-                choice_.op >= 0 ? op_text(plan_, choice_.op) : std::string();
+                choice_.op >= 0 ? op_text(plan_, choice_.op, choice_.level) : std::string();
+        // Dump Forge writes the debug FPKG: when it is not there yet, a row fetches it (or says
+        // where its file goes).
+        if (fpkg_offered && plan_.dumpforge.known)
+            form_.add_action(kRowEngine, "Dump Forge laden");
         if (plan_.kind == "folder" && !plan_.ps4)
             form_.add_toggle(kRowAmpr, "AMPR-Index vorher bauen", choice_.ampr).description =
                 "Für Spiele mit APR-EMU: ampr_emu.index kommt mit ins Abbild.";
         add_mode("2. Als was?");
         add_drives("3. Wohin?");
-        // 4. How the result is checked afterwards; the .ffpkg (PS4) quick check is one read instead of two, the others a sample
+        // 4. How the result is checked afterwards; the .ffpkg (PS4) quick check is one read instead
+        // of two, the others a sample
         form_.add_header("4. Prüfung danach");
-        form_.add_choice(kRowVerify, "Prüfung", {"Gründlich (empfohlen)", "Schnell"}, choice_.quick ? 1 : 0)
-            .description = choice_.quick
-                               ? "Aufbau und Stichprobe, ohne Prüfsummen-Datei. Spart bei großen Spielen viel Zeit."
-                               : "Liest das ganze Ergebnis noch einmal und legt die Prüfsummen-Datei an.";
-        // 5. The name of the result: the source's own, the template of the console's names, or typed on the keyboard
+        form_
+            .add_choice(kRowVerify, "Prüfung", {"Gründlich (empfohlen)", "Schnell"},
+                        choice_.quick ? 1 : 0)
+            .description = verify_text(choice_.quick, choice_.op == kOpFpkg);
+        // 5. The name of the result: the source's own, the template of the console's names, or
+        // typed on the keyboard
         form_.add_header("5. Name der Ausgabe");
-        form_.add_choice(kRowName, "Name",
-                         {"Name des Ordners", "Titel [ID] vVersion", "Eigener Name …"}, name_mode_)
+        form_
+            .add_choice(kRowName, "Name",
+                        {"Name des Ordners", "Titel [ID] vVersion", "Eigener Name …"}, name_mode_)
             .description = "Felder: {titel} {id} {version} {quelle}. Leer: der Name des Ordners.";
         form_.add_action(kRowQueueView, "Warteschlange ansehen").chevron = true;
         form_.add_action(kRowQueue, "Zur Warteschlange");
@@ -523,6 +616,33 @@ void GameTools::refresh()
     if (tool_ == Tool::convert)
     {
         request_check();
+        const bool fpkg = choice_.op == kOpFpkg;
+        // The words of the rows that depend on the format: the targets, the check afterwards, the
+        // AMPR index.
+        if (ui::FormRow *row = form_.row(kRowMode))
+            row->description = mode_text(fpkg);
+        if (ui::FormRow *row = form_.row(kRowVerify))
+            row->description = verify_text(choice_.quick, fpkg);
+        if (ui::FormRow *row = form_.row(kRowAmpr))
+        {
+            row->disabled = fpkg;
+            row->description = fpkg
+                                   ? "Dump Forge schreibt den Index selbst ins Paket."
+                                   : "Für Spiele mit APR-EMU: ampr_emu.index kommt mit ins Abbild.";
+        }
+        if (ui::FormRow *row = form_.row(kRowEngine))
+        {
+            row->disabled = plan_.dumpforge.installed || engine_fetching_;
+            row->text = plan_.dumpforge.installed
+                            ? "Version " + plan_.dumpforge.version + " ist da"
+                            : (engine_fetching_ ? std::string("wird geladen …")
+                                                : std::string("fehlt noch"));
+            row->description = plan_.dumpforge.installed
+                                   ? "Dump Forge ist da. Die App startet es für den Auftrag und "
+                                     "beendet es danach wieder."
+                                   : "Holt das Programm von GitHub (SHA-256 geprüft), das die "
+                                     "Debug-Pakete schreibt.";
+        }
         if (ui::FormRow *row = form_.row(kRowQueue))
             row->disabled = !queue_ready();
         if (ui::FormRow *row = form_.row(kRowQueueView))
@@ -697,19 +817,22 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         else if (id == kRowOp)
         {
             const int index = form_.choice_index(kRowOp);
-            choice_.op = index >= 0 && index < static_cast<int>(op_index_.size())
-                             ? op_index_[static_cast<std::size_t>(index)]
-                             : -1;
+            const bool known = index >= 0 && index < static_cast<int>(op_index_.size());
+            choice_.op = known ? op_index_[static_cast<std::size_t>(index)].first : -1;
+            choice_.level = known ? op_index_[static_cast<std::size_t>(index)].second : 0;
             if (ui::FormRow *row = form_.row(kRowOp))
-                row->description = choice_.op >= 0 ? op_text(plan_, choice_.op) : std::string();
+                row->description =
+                    choice_.op >= 0 ? op_text(plan_, choice_.op, choice_.level) : std::string();
         }
         else if (id == kRowName)
         {
             const int mode = form_.choice_index(kRowName);
             if (mode == 2)
             {
-                // The keyboard opens with what stands there; Done keeps it, back leaves the row as it was.
-                prompt_.open(feedback, choice_.name.empty() ? std::string(kNameTemplate) : choice_.name);
+                // The keyboard opens with what stands there; Done keeps it, back leaves the row as
+                // it was.
+                prompt_.open(feedback,
+                             choice_.name.empty() ? std::string(kNameTemplate) : choice_.name);
                 return;
             }
             name_mode_ = mode;
@@ -719,12 +842,8 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             choice_.ampr = form_.toggle_value(kRowAmpr);
         else if (id == kRowVerify)
         {
-            choice_.quick = form_.choice_index(kRowVerify) == 1;
-            if (ui::FormRow *row = form_.row(kRowVerify))
-                row->description =
-                    choice_.quick
-                        ? "Aufbau und Stichprobe, ohne Prüfsummen-Datei. Spart bei großen Spielen viel Zeit."
-                        : "Liest das ganze Ergebnis noch einmal und legt die Prüfsummen-Datei an.";
+            choice_.quick =
+                form_.choice_index(kRowVerify) == 1; // the row's words follow in refresh()
         }
         else if (id == kRowDeleteSource)
             choice_.delete_source = form_.toggle_value(kRowDeleteSource);
@@ -740,6 +859,16 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         else if (id == kRowCancel)
         {
             close_dialog(feedback);
+        }
+        else if (id == kRowEngine)
+        {
+            if (!plan_.dumpforge.installed && !engine_fetching_)
+            {
+                engine_fetching_ = true;
+                source().dumpforge_fetch();
+                feedback.play(audio::Cue::select);
+                refresh();
+            }
         }
         else if (id == kRowStart)
         {
@@ -763,7 +892,8 @@ void GameTools::press_queue(ui::Feedback &feedback)
         feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
         return;
     }
-    // At once, nothing asked: the queue deletes nothing, and the conversion starts by itself when it is its turn.
+    // At once, nothing asked: the queue deletes nothing, and the conversion starts by itself when
+    // it is its turn.
     feedback.play(audio::Cue::select);
     source().convert_queue(queue_add_body(plan_, choice_));
     open_ = false;
@@ -794,7 +924,7 @@ void GameTools::close_queue(ui::Feedback &feedback)
 
 std::string GameTools::queue_line(const QueueItem &item) const
 {
-    const std::string what = item.op + " · " + item.target;
+    const std::string what = op_label(item.op) + " · " + item.target;
     if (item.state == "running")
     {
         if (convert_job_.queue_id != item.qid)
@@ -809,7 +939,8 @@ std::string GameTools::queue_line(const QueueItem &item) const
     if (item.state == "done")
         return "Fertig und geprüft" +
                (item.output_bytes > 0 ? ": " + format_bytes(item.output_bytes) : std::string()) +
-               (item.elapsed_s > 0.0 ? " in " + duration_text(item.elapsed_s * 1000.0) : std::string());
+               (item.elapsed_s > 0.0 ? " in " + duration_text(item.elapsed_s * 1000.0)
+                                     : std::string());
     if (!item.message.empty())
         return item.message;
     return what;
@@ -829,11 +960,11 @@ void GameTools::rebuild_queue()
             ui::ListItem item;
             item.title = q.name;
             item.tag = q.qid;
-            item.swatch = q.state == "done"      ? kGood
-                          : q.state == "failed"  ? kCritical
+            item.swatch = q.state == "done"        ? kGood
+                          : q.state == "failed"    ? kCritical
                           : q.state == "cancelled" ? kWarning
-                          : q.state == "running" ? Color::rgb(0x6aa2ff)
-                                                 : kMuted;
+                          : q.state == "running"   ? Color::rgb(0x6aa2ff)
+                                                   : kMuted;
             item.badge = q.state == "waiting"     ? "WARTET"
                          : q.state == "running"   ? "LÄUFT"
                          : q.state == "done"      ? "FERTIG"
@@ -843,9 +974,11 @@ void GameTools::rebuild_queue()
         }
         const int focus = queue_list_.focus();
         queue_list_.set_items(items);
-        queue_list_.set_focus(std::clamp(focus, 0, std::max(static_cast<int>(items.size()) - 1, 0)), true);
+        queue_list_.set_focus(std::clamp(focus, 0, std::max(static_cast<int>(items.size()) - 1, 0)),
+                              true);
     }
-    // The words under the names change every second while a conversion runs: written in place, so the list does not start over.
+    // The words under the names change every second while a conversion runs: written in place, so
+    // the list does not start over.
     for (std::size_t i = 0; i < queue_.items.size() && i < queue_list_.items().size(); ++i)
         queue_list_.item(static_cast<int>(i)).subtitle = queue_line(queue_.items[i]);
 }
@@ -859,7 +992,8 @@ void GameTools::handle_queue(const InputFrame &input, ui::Feedback &feedback)
     }
     const std::size_t at = static_cast<std::size_t>(std::max(queue_list_.focus(), 0));
     const QueueItem *item = at < queue_.items.size() ? &queue_.items[at] : nullptr;
-    // Nothing here asks twice: removing takes an entry off the list (the queue deletes no file), the others are plain switches.
+    // Nothing here asks twice: removing takes an entry off the list (the queue deletes no file),
+    // the others are plain switches.
     if (input.is_pressed(Action::north))
     {
         if (!queue_.running && queue_.open == 0)
@@ -1067,10 +1201,37 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  "komprimiertes Abbild muss beim Spielen ständig entpackt werden – exFAT oder "
                  "ffpkg vermeiden das.",
                  kWarning, 5);
-        if (choice_.mode == 0)
+        if (choice_.mode == 0 && choice_.op == kOpFpkg)
+            para("Das Original und das Paket haben beide die Titel-ID " + plan_.id +
+                     ". Ist das Original bei ShadowMountPlus eingehängt, stören sich beide, sobald "
+                     "Kraken Mount das Paket anmeldet. Hänge das Original erst aus oder lösche "
+                     "es, bevor du das Paket startest.",
+                 kWarning, 5);
+        else if (choice_.mode == 0)
             para("ShadowMountPlus findet das Spiel danach zweimal (Original und neues Abbild). "
                  "Lösche das Original erst, wenn das neue Abbild startet.",
                  kWarning, 3);
+        if (choice_.op == kOpFpkg && plan_.dumpforge.known && !plan_.dumpforge.installed)
+        {
+            heading("Dump Forge fehlt noch", kWarning);
+            para("Die Zeile „Dump Forge laden“ holt es von GitHub. Selbst laden: Die ELF-Datei "
+                 "(Name: ps5-dump-forge-VERSION-ps5.elf) gehört in diesen Ordner der PS5:",
+                 kWarning, 3);
+            para(plan_.dumpforge.folder.empty() ? std::string("/data/PS5-Cooling-Center/dumpforge")
+                                                : plan_.dumpforge.folder,
+                 kInk, 2);
+        }
+        if (choice_.op == kOpFpkg)
+        {
+            para("Ein Debug-Paket (.pkg), das Kraken Mount einhängt (Seite FPKGMount), geschrieben "
+                 "vom PS5-Programm Dump Forge von quer3q.",
+                 kMuted, 3);
+            para(level_text(choice_.level), kMuted, 3);
+        }
+        if (choice_.op == kOpFpkg)
+            para("Dump Forge läuft dabei als eigenes Programm auf der PS5 und schreibt das Paket; "
+                 "die App zeigt seine Schritte. Eine Prüfsummen-Datei entsteht nicht.",
+                 kMuted, 3);
         if (!blocked.empty())
             para(blocked, kCritical, 3);
         break;
@@ -1210,7 +1371,9 @@ float GameTools::draw_checks(ui::Canvas &canvas, float x, float y, float width) 
     for (const CheckRow &row : check_.rows)
     {
         // A coloured dot, not a glyph: the check marks are not in the font.
-        const Color tone = row.level == "error" ? kCritical : row.level == "warn" ? kWarning : kGood;
+        const Color tone = row.level == "error"  ? kCritical
+                           : row.level == "warn" ? kWarning
+                                                 : kGood;
         list.rounded_rect({x, y - 14.0f, 12.0f, 12.0f}, 6.0f, tone);
         const int max_lines = row.level == "ok" ? 2 : 3;
         int lines = 0;
@@ -1219,7 +1382,9 @@ float GameTools::draw_checks(ui::Canvas &canvas, float x, float y, float width) 
             if (++lines > max_lines)
                 break;
             ui::text(list, fonts.regular, line, x + 28.0f, y, kSize,
-                     row.level == "error" ? kCritical : row.level == "warn" ? kWarning : kInk);
+                     row.level == "error"  ? kCritical
+                     : row.level == "warn" ? kWarning
+                                           : kInk);
             y += kSize * 1.3f;
         }
         lines = 0;
@@ -1260,9 +1425,10 @@ void GameTools::draw_queue(ui::Canvas &canvas) const
     {
         ui::text(list, fonts.semibold, "Die Warteschlange ist leer.", panel.x + panel.w * 0.5f,
                  panel.y + 380.0f, 30.0f, kInk, gfx::Align::center);
-        ui::text(list, fonts.regular,
-                 "Im Fenster „Konvertieren“ eines Spiels stellst du es mit „Zur Warteschlange“ hinein.",
-                 panel.x + panel.w * 0.5f, panel.y + 428.0f, 22.0f, kMuted, gfx::Align::center);
+        ui::text(
+            list, fonts.regular,
+            "Im Fenster „Konvertieren“ eines Spiels stellst du es mit „Zur Warteschlange“ hinein.",
+            panel.x + panel.w * 0.5f, panel.y + 428.0f, 22.0f, kMuted, gfx::Align::center);
     }
     else
         queue_list_.draw(canvas);
@@ -1270,12 +1436,12 @@ void GameTools::draw_queue(ui::Canvas &canvas) const
     layout.size = 34.0f;
     layout.text_size = 21.0f;
     layout.cy = panel.y + panel.h - 42.0f;
-    const ui::Hint hints[] = {{ui::Button::cross, "Erneut versuchen"},
-                              {ui::Button::square, "Entfernen"},
-                              {ui::Button::triangle,
-                               queue_.running ? "Warteschlange stoppen" : "Warteschlange starten"},
-                              {ui::Button::r1, "Fertige entfernen"},
-                              {ui::Button::circle, "Schließen"}};
+    const ui::Hint hints[] = {
+        {ui::Button::cross, "Erneut versuchen"},
+        {ui::Button::square, "Entfernen"},
+        {ui::Button::triangle, queue_.running ? "Warteschlange stoppen" : "Warteschlange starten"},
+        {ui::Button::r1, "Fertige entfernen"},
+        {ui::Button::circle, "Schließen"}};
     ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 5, panel.x + 40.0f, false, layout);
     list.pop_opacity();
 }
@@ -1349,8 +1515,8 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
                                       {ui::Button::circle, "Abbrechen"}};
             if (tool_ == Tool::convert)
             {
-                const ui::Hint four[] = {hints[0], hints[1],
-                                         {ui::Button::square, "Zur Warteschlange"}, hints[2]};
+                const ui::Hint four[] = {
+                    hints[0], hints[1], {ui::Button::square, "Zur Warteschlange"}, hints[2]};
                 ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), four, 4, panel.x + 40.0f, false,
                                layout);
             }
