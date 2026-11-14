@@ -182,18 +182,34 @@ wieder ausgehängt ist, startet kein anderes Spiel und keine Kachel: ShadowMount
 (`LaunchFlowError`). An der Konsole nachgestellt am 14.11.2026: Mit eingehängtem Spiel scheiterten beide Kacheln
 (FAKE86921 und FAKE86922); nach „Aushängen“ startete die Kachel sofort wieder. Ein Neustart von ShadowMountPlus gibt den
 Platz ebenfalls frei. Darum zeigt die Spieleseite im Browser oben einen gelben Hinweis mit dem Knopf „Aushängen“,
-die Vollbild-App die Marke „EINGEHÄNGT“ in der Zeile (dazu im Infobereich „Eingehängt: hält andere Starts auf“ und am
+die Vollbild-App die Marke „EINGEHÄNGT“ in der Zeile (dazu im Infobereich „Eingehängt: wird gleich ausgehängt“ und am
 Menüpunkt „Aushängen“ „gibt andere Starts frei“), und auch die Meldung nach dem Einhängen sagt es. Wer ein Spiel nur
 neu erkennen lassen wollte, hängt es danach wieder aus.
 
-**Die App räumt selbst auf** (`src/smphold.c`): Jedes Spiel, das sie über ShadowMountPlus einhängt (die Knöpfe der Spielkarte, die
-Prüfung der Fakelibs, der AMPR-Auftrag), schreibt sie auf (im Speicher und in `/data/PS5-Cooling-Center/smp-mounted.txt`, damit
-ein Neustart der App es nicht vergisst). Ist es 2 Minuten nach dem Einhängen noch eingehängt und nicht gestartet, hängt sie es
-selbst wieder aus, mit einer Meldung auf der Konsole und einer Zeile im Protokoll (`smp_hold_released`; scheitert das Aushängen,
-`smp_hold_failed` und ein neuer Versuch nach 30 Sekunden). Die zwei Minuten laufen nur, solange kein Spiel läuft und kein Auftrag
-der App arbeitet; hat ShadowMountPlus das Spiel inzwischen selbst freigegeben (es lief und wurde beendet, oder ShadowMountPlus
-wurde neu gestartet), streicht die App es nur aus ihrer Liste. Was nicht die App eingehängt hat (etwa über die eigene Seite von
-ShadowMountPlus oder dessen dauerhafte Abbild-Einhängungen), rührt sie nicht an.
+**Die App räumt selbst auf, ohne dass jemand etwas aushängen oder warten muss** (`src/smphold.c`, seit 14.11.2026 abends): Jedes
+Spiel, das sie über ShadowMountPlus einhängt (die Knöpfe der Spielkarte, die Prüfung der Fakelibs, der AMPR-Auftrag), schreibt sie
+auf (im Speicher und in `/data/PS5-Cooling-Center/smp-mounted.txt`, damit ein Neustart der App es nicht vergisst). Dann gibt sie es
+von allein frei, auf drei Wegen:
+
+1. **Sofort, wenn sie selbst ein anderes Spiel startet** (Browser „Starten“, Vollbild-App, Dump-Warteschlange): `ps5tm_library_start`
+   hängt vorher aus, was sie hält und nicht dieses Spiel ist.
+2. **Sofort, wenn die Konsole einen anderen Start ablehnt** (etwa vom Startbildschirm oder an einer Kachel): Das Kernel-Log nennt den
+   gescheiterten Start (`launchApp(<Titel-ID>)`, `LaunchFlowError.<Titel-ID>`; so auf der Test-Konsole gesehen). Die App liest es, solange
+   sie ein Spiel hält (jede Sekunde), hängt aus, schreibt `smp_hold_released` ins Protokoll und meldet auf der Konsole: „Der Start von
+   … ist gescheitert. Das eingehängte … kann der Grund sein: Die App hat es ausgehängt. Bitte den Start noch einmal versuchen.“ Der
+   erste Versuch kann also einen Fehlerdialog zeigen, der zweite geht. Scheitert der Start des gehaltenen Spiels selbst, bleibt es.
+3. **Sonst nach 30 Sekunden** ohne Start, mit einer Meldung auf der Konsole und einer Zeile im Protokoll (zuerst waren es 2 Minuten;
+   scheitert das Aushängen, `smp_hold_failed` und ein neuer Versuch nach 10 Sekunden). Die 30 Sekunden laufen nur, solange kein Spiel
+   läuft und kein Auftrag der App arbeitet; hat ShadowMountPlus das Spiel inzwischen selbst freigegeben (es lief und wurde beendet, oder
+   ShadowMountPlus wurde neu gestartet), streicht die App es nur aus ihrer Liste.
+
+Was nicht die App eingehängt hat (etwa über die eigene Seite von ShadowMountPlus oder dessen dauerhafte Abbild-Einhängungen), rührt sie
+nicht an. Darum erscheinen der gelbe Hinweis und die Marke nur für Spiele, die die App selbst eingehängt hat (`app_mounted` in der
+Spieleliste): Das Feld `mounted` von ShadowMountPlus heißt nur, dass unter `/system_ex/app/<ID>` ein Spiel liegt – auch nach dessen
+eigener Einrichtung eines neuen Ordner-Spiels oder nach der Registrierung durch Kraken Mount, und beides blockiert keinen anderen
+Start (Konsolentest 14.11.2026: ein Titel mit `mounted: true` aus ShadowMountPlus' Einrichtung ließ den Start eines zweiten zu; erst
+das Einhängen über den Knopf lieferte `launch mount unavailable … status=16 (Device busy)`). Die Meldung des Hinweises und die Marke in der
+Vollbild-App lauten entsprechend „wird gleich ausgehängt“.
 
 ## Spiele kopieren und konvertieren (ab 1.46.0)
 

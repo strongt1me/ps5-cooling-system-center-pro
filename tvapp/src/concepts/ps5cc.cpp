@@ -1619,12 +1619,15 @@ class Ps5cc final : public app::Concept
         return key;
     }
 
-    // A game ShadowMountPlus has mounted that does not run keeps its one place for a prepared
-    // runtime: every other launch (a game, a tile) is refused with "Device busy" until it is
-    // started or taken out again (reproduced on the console, 14.11.2026). Shown on its row.
+    // A game the app mounted through ShadowMountPlus that does not run keeps its one place for a
+    // prepared runtime: every other launch (a game, a tile) is refused with "Device busy"
+    // (reproduced on the console, 14.11.2026). The app lets go by itself: at once when a start
+    // fails, before a start from the app, else after 30 s. Shown on its row, so that nobody
+    // thinks something is broken. Only for what the app mounted (app_mounted): smp_mounted also
+    // says that ShadowMountPlus's own set-up or Kraken Mount put a game there, and neither blocks.
     bool holds_launch(const ps5cc::Game &g) const
     {
-        return g.can_remount && g.smp_mounted && g.id != data_.status.game_id;
+        return g.can_remount && g.smp_mounted && g.app_mounted && g.id != data_.status.game_id;
     }
 
     // " · FW 13.60": what the game asks for; with a backport the firmware the backport carries
@@ -1702,7 +1705,7 @@ class Ps5cc final : public app::Concept
         // keeps other launches from starting; two mounters want the title and both write its tile
         // and mount it (src/mounters.c)
         if (holds_launch(*g))
-            items.push_back({"Eingehängt", "hält andere Starts auf"});
+            items.push_back({"Eingehängt", "wird gleich ausgehängt"});
         if (!g->conflict_with.empty())
             items.push_back({"Konflikt", "auch bei " + g->conflict_with});
         items.push_back({"Version", g->version});

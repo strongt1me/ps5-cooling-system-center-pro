@@ -70,6 +70,7 @@
 #include "ps5tm.h"
 #include "sqlite_ro.h"
 #include "third_party/cJSON.h"
+#include "smphold.h"
 
 #define APPDB_PATH       "/system_data/priv/mms/app.db"
 #define APPDB_JOURNAL    APPDB_PATH "-journal"
@@ -1671,6 +1672,10 @@ ps5tm_library_json(void) {
                   strcmp(g->format, "image") && g->format[0];
     cJSON_AddBoolToObject(e, "smp", g->smp);
     if(g->smp) cJSON_AddBoolToObject(e, "mounted", g->smp_mounted);
+    /* "mounted" only says that /system_ex/app/<id> holds a game: ShadowMountPlus's own set-up and Kraken Mount's registration do
+       that too, and neither blocks another start. The place that does is taken by what the app mounted itself and nobody started
+       (smphold.c); only that is worth a warning (console test 14.11.2026). */
+    if(g->smp) cJSON_AddBoolToObject(e, "app_mounted", g->smp_mounted && ps5tm_smphold_is_held(g->title_id));
     /* Taken out and put back through ShadowMountPlus (smpremount.c): its folders and images, not installed packages. */
     cJSON_AddBoolToObject(e, "can_remount", g->smp && strcmp(g->format, "pkg") && ps5tm_smp_can("mount_game") &&
                           ps5tm_smp_can("unmount_game"));
@@ -1741,6 +1746,10 @@ ps5tm_library_start(const char *title_id) {
   if(!sceSystemServiceLaunchApp) return -1;
   int uid = -1;
   if(ps5tm_user_service_active_user(&uid) != 0 || uid <= 0) return -1;
+
+  /* A game the app mounted through ShadowMountPlus and nobody started would make the console refuse this start ("Device busy");
+     it goes first (smphold.c), so no start from the app fails for that. Nothing happens when the app holds nothing. */
+  ps5tm_smphold_release_for_start(title_id);
 
   launch_ctx_t ctx;
   memset(&ctx, 0, sizeof(ctx));

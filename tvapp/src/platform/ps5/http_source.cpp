@@ -3118,6 +3118,7 @@ void HttpSource::poll_library()
         g.can_unpack = flag(item, "can_unpack");
         g.can_remount = flag(item, "can_remount");
         g.smp_mounted = flag(item, "mounted");
+        g.app_mounted = flag(item, "app_mounted");
         g.ampr_emu = flag(cJSON_GetObjectItemCaseSensitive(item, "mods"), "ampr_emu");
         g.disc = str(item, "disc");
         g.dump_mounted = flag(item, "dump_mounted");

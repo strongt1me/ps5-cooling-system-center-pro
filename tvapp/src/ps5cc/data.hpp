@@ -70,7 +70,11 @@ struct Game
     bool can_move = false;
     bool can_unpack = false;
     bool can_remount = false; // ShadowMountPlus can take it out and put it back (1.7beta10)
-    bool smp_mounted = false; // ShadowMountPlus has it mounted now
+    bool smp_mounted = false; // ShadowMountPlus has it mounted now (anyone's mount: its own set-up, Kraken Mount, the app)
+    // The app mounted it itself (the button) and nobody started it: the one place for a prepared runtime is taken, every other
+    // launch is refused until the app lets go (smphold.c: at once when a start fails, else after 30 s); GET /api/v1/library
+    // "app_mounted", 14.11.2026
+    bool app_mounted = false;
     // Another mounter wants this title too ("Kraken Mount"): both write /user/app/<ID> and mount
     // /system_ex/app/<ID> (GET /api/v1/library: "conflicts", 14.11.2026); "" when none does
     std::string conflict_with;

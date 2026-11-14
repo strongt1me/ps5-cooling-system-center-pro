@@ -6903,26 +6903,37 @@
     }
   };
 
-  /* Ein von ShadowMountPlus eingehängtes Spiel, das nicht läuft, hält dort den einen Platz für die Laufzeit-Einhängung besetzt:
-     Jeder andere Start (Spiel oder Kachel) scheitert mit „Device busy“, bis es gestartet oder ausgehängt ist. An der Konsole
-     nachgestellt am 14.11.2026. Darum steht es hier ganz oben, mit dem Knopf, der es aushängt. */
+  /* Ein Spiel, das die App selbst über ShadowMountPlus eingehängt hat (Knopf „Einhängen“) und das nicht läuft, hält dort den
+     einen Platz für die Laufzeit-Einhängung besetzt: Jeder andere Start (Spiel oder Kachel) scheitert mit „Device busy“. An der
+     Konsole nachgestellt am 14.11.2026. Die App gibt es von selbst frei (smphold.c: bei einem gescheiterten Start sofort, vor einem
+     Start aus der App, sonst nach 30 Sekunden); der Streifen sagt es, damit niemand denkt, etwas sei kaputt. Er erscheint nur für
+     `app_mounted`: Das Feld `mounted` allein zeigt auch ShadowMountPlus' eigene Einrichtung und Krakens Registrierung, die nichts
+     blockieren (Konsolentest 14.11.2026). */
+  /* Solange der Streifen steht, lädt die Seite die Liste alle 5 Sekunden still nach (sonst erst im Minutentakt): Die App gibt das
+     Spiel nach 30 Sekunden oder früher frei, und der Streifen soll nicht noch eine halbe Minute danach behaupten, es sei blockiert. */
+  let gmHoldTimer = 0;
+  const gmHoldWatch = (on) => {
+    if (on && !gmHoldTimer) gmHoldTimer = setInterval(() => { if (!document.hidden && state.page === "games") loadGames(true); }, 5000);
+    else if (!on && gmHoldTimer) { clearInterval(gmHoldTimer); gmHoldTimer = 0; }
+  };
   const gmHoldRender = () => {
     const box = $("#gm-hold");
     if (!box) return;
-    const g = gm.loaded ? gm.list.find((x) => x.smp && x.mounted && x.can_remount && x.title_id !== gm.live) : null;
-    if (!g) { box.hidden = true; box.textContent = ""; return; }
+    const g = gm.loaded ? gm.list.find((x) => x.smp && x.app_mounted && x.can_remount && x.title_id !== gm.live) : null;
+    if (!g) { box.hidden = true; box.textContent = ""; gmHoldWatch(false); return; }
     const key = g.title_id;
     if (!box.hidden && box.dataset.id === key) return;
     box.dataset.id = key;
     box.textContent = "";
     const text = document.createElement("span");
     text.className = "gm-hold-text";
-    text.textContent = `„${g.name}“ ist eingehängt, aber nicht gestartet. Solange das so bleibt, startet kein anderes Spiel und keine Kachel (ShadowMountPlus meldet „Device busy“). Starte das Spiel oder hänge es aus.`;
+    text.textContent = `„${g.name}“ ist eingehängt, aber nicht gestartet. Die App hängt es nach 30 Sekunden selbst wieder aus. Scheitert ein anderer Start (ShadowMountPlus meldet „Device busy“), gibt sie es sofort frei: dann einfach noch einmal starten.`;
     const b = document.createElement("button");
     b.type = "button"; b.className = "btn"; b.dataset.remount = "unmount"; b.dataset.id = key;
     b.textContent = "Aushängen";
     box.append(text, b);
     box.hidden = false;
+    gmHoldWatch(true);
   };
   { const box = $("#gm-hold");
     if (box) box.addEventListener("click", (e) => {

@@ -134,6 +134,7 @@ class MockSource final : public Source
             // One game is mounted and does not run: the case that keeps every other launch from
             // starting ("Device busy"), so the preview shows its mark
             g.smp_mounted = !installed && std::string(m.id) == "PPSA06240";
+            g.app_mounted = g.smp_mounted;
             // ASTRO BOT lies at ShadowMountPlus as an image and at Kraken Mount as a .pkg (the
             // case of 14.11.2026): both want its tile
             if (std::string(m.id) == "PPSA01325")
@@ -1070,15 +1071,16 @@ class MockSource final : public Source
             if (g.id != id)
                 continue;
             g.smp_mounted = action != "unmount";
+            g.app_mounted = g.smp_mounted;
             notice(Notice::Kind::success, g.name,
                    action == "unmount"   ? "Ausgehängt."
                    : action == "remount"
-                       ? "Neu eingehängt. Es startet kein anderes Spiel und keine Kachel, solange es "
-                         "nicht gestartet ist. Ohne Start hängt die App es nach 2 Minuten selbst "
-                         "wieder aus."
-                       : "Eingehängt. Es startet kein anderes Spiel und keine Kachel, solange es "
-                         "nicht gestartet ist. Ohne Start hängt die App es nach 2 Minuten selbst "
-                         "wieder aus.");
+                       ? "Neu eingehängt. Die App hängt es nach 30 Sekunden selbst wieder aus, "
+                         "damit andere Spiele und Kacheln starten. Scheitert ein anderer Start, "
+                         "gibt sie es sofort frei: dann einfach noch einmal starten."
+                       : "Eingehängt. Die App hängt es nach 30 Sekunden selbst wieder aus, damit "
+                         "andere Spiele und Kacheln starten. Scheitert ein anderer Start, gibt sie "
+                         "es sofort frei: dann einfach noch einmal starten.");
             changed();
             return;
         }
