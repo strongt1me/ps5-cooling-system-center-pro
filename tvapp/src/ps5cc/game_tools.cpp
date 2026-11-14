@@ -320,15 +320,18 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
             m.tag = kRemountTag + offset;
             // A mounted game that does not run keeps every other launch from starting ("Device
             // busy"): "Aushängen" frees them (14.11.2026)
-            m.shortcut = live                              ? "läuft gerade"
-                         : offset == 1 && game.smp_mounted ? "gibt andere Starts frei"
-                                                           : "ShadowMountPlus";
-            m.disabled = live;
+            // "Aushängen" of a game that is not mounted has nothing to take out: greyed, like the
+            // button in the web app
+            const bool nothing_to_unmount = offset == 1 && !game.smp_mounted;
+            m.shortcut = live                       ? "läuft gerade"
+                         : nothing_to_unmount       ? "nicht eingehängt"
+                         : offset == 1              ? "gibt andere Starts frei"
+                                                    : "ShadowMountPlus";
+            m.disabled = live || nothing_to_unmount;
             items.push_back(m);
         };
         // "Aushängen" always follows "Einhängen" (14.11.2026), as the button next to it in the web
-        // app: a game that is not mounted answers "War schon ausgehängt." and nothing happens, so
-        // the entry also works while the list has not read the state anew.
+        // app, greyed while the game is not mounted
         if (game.smp_mounted)
             add("Neu einhängen", 0);
         else

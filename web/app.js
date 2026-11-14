@@ -5328,13 +5328,13 @@
       : live ? "Das Spiel läuft gerade. Erst beenden, dann aus- oder einhängen."
       : "Aus- und Einhängen braucht ShadowMountPlus ab 1.7beta10.";
     const rmOk = !!x.can_remount && !live;
-    /* „Aushängen“ steht immer rechts neben „Einhängen“ / „Neu einhängen“ (14.11.2026). Ist das Spiel nicht eingehängt, tut es
-       nichts und antwortet „War schon ausgehängt.“; so bleibt der Knopf auch dann benutzbar, wenn die Liste den Zustand noch
-       nicht neu gelesen hat. */
+    /* „Aushängen“ steht immer rechts neben „Einhängen“ / „Neu einhängen“ (14.11.2026), ist aber ausgegraut, solange das Spiel
+       nicht eingehängt ist (es gäbe nichts auszuhängen). */
+    const unmountWhy = rmOk ? "Das Spiel ist nicht eingehängt." : rmWhy;
     const remount = `${x.mounted
       ? btn("", `data-remount="remount" data-id="${id}"`, "Neu einhängen", rmOk, rmWhy, "remount", 'Hängt das Spiel aus und wieder ein; hilft, wenn es hängt.')
       : btn("", `data-remount="mount" data-id="${id}"`, "Einhängen", rmOk, rmWhy, "mount", 'Hängt das Spiel über ShadowMountPlus ein.')}
-            ${btn("", `data-remount="unmount" data-id="${id}"`, "Aushängen", rmOk, rmWhy, "unmount", 'Hängt das Spiel über ShadowMountPlus aus. Ist es nicht eingehängt, passiert nichts.')}`;
+            ${btn("", `data-remount="unmount" data-id="${id}"`, "Aushängen", rmOk && !!x.mounted, unmountWhy, "unmount", 'Hängt das Spiel über ShadowMountPlus aus.')}`;
     /* läuft das Spiel schon, ist „Starten“ aus: ein zweiter Start desselben Titels kann die Konsole abstürzen lassen */
     return `${btn(" primary gm-start", `data-launch="${id}"`, "Starten", !!x.can_launch && !live, live ? "Das Spiel läuft schon." : why.launch, "play", 'Startet das Spiel. Läuft schon ein anderes, fragt die App zuerst nach.')}
           ${close}
