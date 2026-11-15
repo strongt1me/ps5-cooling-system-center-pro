@@ -7851,8 +7851,6 @@
       : d.starting ? "startet gleich …" : "ausgeschaltet");
     $("#fp-on").checked = !!k || !!d.starting;
     $("#fp-scan").disabled = !k;
-    $("#fp-start").disabled = !!k || !!d.starting;
-    $("#fp-stop").disabled = !k;
     $("#fp-fetch").disabled = !!d.fetching;
     const prog = [`In der App: Kraken Mount ${d.embedded_version}`];
     if (d.fetched_version) prog.push(`geladen: ${d.fetched_version} (wird beim Start genommen)`);
@@ -8186,8 +8184,6 @@
   $("#fp-reload").addEventListener("click", loadFp);
   $("#fp-log-reload").addEventListener("click", loadFp);
   $("#fp-on").addEventListener("change", (e) => fpPost({ action: e.target.checked ? "start" : "stop" }));
-  $("#fp-start").addEventListener("click", () => fpPost({ action: "start" }));
-  $("#fp-stop").addEventListener("click", () => fpPost({ action: "stop" }));
   $("#fp-scan").addEventListener("click", () => fpPost({ action: "rescan" }));
   $("#fp-fetch").addEventListener("click", async (e) => {
     const b = e.currentTarget;

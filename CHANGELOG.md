@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht (nach v1.84.0)
 
+### Browser: FPKGMount ohne doppelte Knöpfe (15.11.2026)
+- Die Knöpfe „Kraken Mount starten“ und „Beenden“ in der Karte „Programm“ sind entfernt: Sie schickten dasselbe wie der Schalter „Einschalten“ oben. Es bleiben der Schalter, „Neue Fassung von GitHub laden“ und „Seite von Kraken Mount“. Handbuch (7 Sprachen) und Wörterbücher angepasst; die Vollbild-App bleibt unverändert (am Controller gibt es keinen Schalter).
+
 ### Prüfung der ganzen App (15.11.2026): 45 Befunde, 8 Prüfer, Gegenprüfung am Code
 - **Vorgehen:** War-Room-Audit (Skalierung, Nebenläufigkeit, Ausfall, Sicherheit) und vier Code-Reviews über `78bb196..HEAD`; die Befunde stehen in `.warroom/audit/09-audit-2026-11-15-roh.md`, fünf Gegenprüfer haben jeden am Code zu widerlegen versucht (alle 45 blieben bestehen, meist mit geringerer Schwere), danach zwei Prüfer über die Korrekturen.
 - **Wächter (`smphold.c`):** Ein Spiel, das die Person selbst startet, wird abgeschrieben und nie ausgehängt (frischer Spielzustand nötig; sonst wartet die Uhr); die Uhr des Titels beginnt neu, wenn die App ihn startet; Funkstille von ShadowMountPlus streicht keine Haltung mehr (erst nach 10 Minuten); Wiederholung nach Absage 10 s, 20 s … 5 min, nur die erste Absage im Protokoll; Freigaben laufen nacheinander und prüfen den Eintrag vor dem Aushängen noch einmal; die Datei `smp-mounted.txt` trägt den Start der Konsole und wird nach einem Neustart nicht mehr gelesen; ein AMPR-Auftrag schreibt kein Spiel ab, das schon vorher eingehängt war (Fehler: es wurde 30 s später ausgehängt); fehlgeschlagene Markierung im Kernel-Log wird wiederholt; `probe_recover` hängt nichts mehr blind aus.
