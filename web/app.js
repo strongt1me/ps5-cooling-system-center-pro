@@ -8189,7 +8189,23 @@
     const b = e.currentTarget;
     b.disabled = true;
     toast("Kraken Mount wird von GitHub geladen …");
-    await fpPost({ action: "fetch" });
+    const res = $("#fp-fetch-res");
+    res.hidden = false;
+    res.classList.remove("err");
+    txt("#fp-fetch-when", "Prüfe bei GitHub …");
+    txt("#fp-fetch-msg", "");
+    let msg = "", bad = false;
+    try {
+      const r = await api("/api/v1/kraken", { method: "POST", body: JSON.stringify({ action: "fetch" }), timeoutMs: FP_TIMEOUT.fetch });
+      msg = r.message || "";
+      toast(msg);
+    } catch (er) { msg = er.message; bad = true; toast(msg, "error"); }
+    /* the result stays on the card: "schon aktuell" or "neu geladen" (new version) or the error */
+    res.classList.toggle("err", bad);
+    txt("#fp-fetch-when", `Letzte Prüfung ${new Date().toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" })}`);
+    txt("#fp-fetch-msg", msg);
+    $("#fp-list").__h = "";
+    await loadFp();
     b.disabled = false;
   });
   $("#fp-list").addEventListener("click", async (e) => {

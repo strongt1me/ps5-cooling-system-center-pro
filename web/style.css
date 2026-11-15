@@ -2413,3 +2413,5 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 :root[data-theme="hell"] .p4m-state.bad,
 :root[data-theme="hell"] .apr-state.bad { color: #8e0b0b; }
 :root[data-theme="hell"] .p4m-state.warn { color: #7a5200; }
+.fp-fetch-res { margin: 14px 0 0; }
+.fp-fetch-res.err { border-color: rgba(255,107,107,.5); }
