@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.86.1 – 15.11.2026
+
+### AMPR EMU NG: früher mitgelieferte Fassungen verdrängen keine neuere mehr
+- Beim Laden einer neuen NG-Fassung räumt die App jetzt auch Dateien auf, die eine **frühere App-Fassung** mitgeliefert und in den Ordner AMPR_EMU gelegt hat (NG 0.3.2 bis 0.4.0; erkannt an der Prüfsumme, nicht am Namen). Vorher blieb zum Beispiel eine alte `libSceAmpr.sprx-0.4.0-ng` liegen, weil sie weder eingebaut war noch im Verzeichnis der selbst geladenen Dateien stand: Sie belegte den zweiten Platz der Liste und verdrängte die 0.3.5. Selbst abgelegte Dateien mit anderem Inhalt bleiben wie bisher liegen.
+
 ## v1.86.0 – 15.11.2026
 
 ### Fremdbausteine: AMPR EMU NG v0.4.1 und Kraken Mount v0.2.0 (15.11.2026)
