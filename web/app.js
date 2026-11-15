@@ -8181,7 +8181,6 @@
   $("#gm-tab-p4m").addEventListener("click", () => ptSelectTab("p4m"));
 
   $("#gm-tab-fpkg").addEventListener("click", () => ptSelectTab("fpkg"));
-  $("#fp-reload").addEventListener("click", loadFp);
   $("#fp-log-reload").addEventListener("click", loadFp);
   $("#fp-on").addEventListener("change", (e) => fpPost({ action: e.target.checked ? "start" : "stop" }));
   $("#fp-scan").addEventListener("click", () => fpPost({ action: "rescan" }));
