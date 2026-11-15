@@ -79,6 +79,8 @@ struct exfat_image {
   uint32_t  serial;
   unsigned  files;
   uint64_t  payload;        /* bytes of file data */
+  unsigned  skipped_special, skipped_system;   /* entries left out on purpose while planning: links and devices; OS metadata names */
+  char      skipped_example[96];               /* the first of them */
 
   uint32_t *runs;           /* cluster runs in cluster order, for the FAT */
   uint32_t  nruns, cap_runs;
@@ -331,6 +333,13 @@ check_name_clashes(const exfat_image_t *im, uint32_t first, const scan_ent_t *en
   return rc;
 }
 
+/* An entry the scan leaves out on purpose is counted, so that the caller can say how many (exfat_image_skipped). */
+static void
+note_skipped(exfat_image_t *im, int system, const char *name) {
+  if(system) im->skipped_system++; else im->skipped_special++;
+  if(!im->skipped_example[0]) snprintf(im->skipped_example, sizeof(im->skipped_example), "%s", name);
+}
+
 /* The absolute path of rel inside source root r; -1 when it does not fit. */
 static int
 root_path(const exfat_image_t *im, unsigned r, const char *rel, char *out, size_t out_len) {
@@ -373,8 +382,8 @@ scan_dir(exfat_image_t *im, uint32_t dir, char *rel, size_t rlen, int depth, uin
       errno = 0;
       e = readdir(d);
       if(!e) { rd_errno = errno; break; }
-      if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..") || ignored_name(e->d_name))
-        continue;
+      if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+      if(ignored_name(e->d_name)) { note_skipped(im, 1, e->d_name); continue; }
       if(snprintf(full, sizeof(full), "%s/%s", path, e->d_name) >= (int)sizeof(full)) {
         snprintf(err, err_len, "Ein Pfad ist zu lang.");
         rc = -1;
@@ -382,7 +391,7 @@ scan_dir(exfat_image_t *im, uint32_t dir, char *rel, size_t rlen, int depth, uin
       }
       struct stat st;
       if(lstat(full, &st) != 0) { snprintf(err, err_len, "%s: %s", e->d_name, ps5tm_io_strerror(errno)); rc = -1; break; }
-      if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) continue;   /* links, devices */
+      if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) { note_skipped(im, 0, e->d_name); continue; }   /* links, devices: counted and said */
       if(grow((void **)&ents, &cap, n + 1, sizeof(*ents)) != 0 ||
          !(ents[n].name = strdup(e->d_name))) { rc = -1; break; }
       ents[n].is_dir = S_ISDIR(st.st_mode);
@@ -651,6 +660,12 @@ fail:
 uint64_t exfat_image_size(const exfat_image_t *im)    { return im->volume_sectors * SECTOR; }
 unsigned exfat_image_files(const exfat_image_t *im)   { return im->files; }
 uint64_t exfat_image_payload(const exfat_image_t *im) { return im->payload; }
+unsigned exfat_image_skipped(const exfat_image_t *im, unsigned *special, unsigned *system, char *example, size_t example_len) {
+  if(special) *special = im->skipped_special;
+  if(system)  *system  = im->skipped_system;
+  if(example && example_len) snprintf(example, example_len, "%s", im->skipped_example);
+  return im->skipped_special + im->skipped_system;
+}
 const char *exfat_image_where(const exfat_image_t *im) { return im->where; }
 
 void

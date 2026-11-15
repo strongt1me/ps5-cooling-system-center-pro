@@ -16,6 +16,18 @@
 - Downloads in den Speicher verdoppeln den Puffer, statt bei jedem Stück zu kopieren.
 - Vollbild-App: „Laden“ von FPKGMount/Dump Forge blockiert den Werkzeugfaden nicht mehr (eigener Faden), und die Abfragen von FPKGMount laufen nacheinander, damit eine ältere Antwort keine neuere überschreibt.
 
+### Offene Punkte der Prüfungen abgearbeitet (15.11.2026)
+- Konvertieren nach .ffpkg: Ein eigener UFS2-Plan ersetzt den exFAT-Plan (Namen wie `Readme.txt`/`README.TXT` gehen jetzt), Fortschritt und Restzeit stimmen, die Abbilddatei hat keine Löcher mehr (der Rest wird in großen Blöcken mit Abbruchprüfung nachgeschrieben), und still weggelassene Einträge (Verknüpfungen, Sonderdateien, `desktop.ini` …) stehen in der Meldung. Das Format des Abbilds ist unverändert (Byte-Vergleich im Test `test/ufs2plan`).
+- Dump: Der PS4-Dump senkt jetzt auch die `param.sfo`; `param.json`/`param.sfo` kommen erst nach Entschlüsseln und Backport an ihren Platz; ein altes Ziel bei „Ersetzen“ wird erst nach den Prüfungen gelöscht; entschlüsselte Dateien bekommen 0777; die `.sha256`-Liste hat jede Datei nur einmal; die Info-Datei wird atomar geschrieben; die Warteschlange joint nicht mehr doppelt. „Dump löschen“ zählt als Auftrag.
+- Aufräumen: Beim ersten Konvertieren werden unfertige Teildateien und Signier-Ordner früherer Sitzungen (älter als eine Stunde) entfernt.
+- Beenden (neue ELF, SIGTERM): laufende Aufträge werden zuerst abgebrochen (höchstens 2,5 s): Konvertieren und seine Warteschlange, Kopieren, Spielstände, Paket teilen, Abbild, Dump samt Warteschlange (die Warteschlange behält ihre Marke: der nächste Start sagt, dass ein Lauf unterbrochen wurde), Dateimanager (Kopieren, Verschieben, Löschen), Disc-Abbild und Paketinstallation samt Warteschlange. Spiel löschen und das Verschieben über ShadowMountPlus lassen sich nicht abbrechen und enden mit dem Prozess.
+- Kraken Mount: Eine geladene Fassung, die nach dem Start nicht lauscht, wird markiert (`bad.txt`); der nächste Start nimmt die eingebettete, und dieselbe Fassung wird nicht erneut geladen.
+- Dateimanager und Pakete: `.fm-tmp` nur als reguläre Datei überschrieben; Paketteile werden mit `link()` benannt (nie über eine neu entstandene Datei).
+- Browser: PS4Mount-Einstellungen lassen sich erst nach dem Laden speichern; „Liste laden“ im Payload-Store bleibt nicht gesperrt; der Datei-Editor hat eine Frist; der Streifen für das gehaltene Spiel nennt die stehende Uhr; neuer Knopf „Alle neu aufbauen“ bei FPKGMount; weitere Servermeldungen in 6 Sprachen.
+- Vollbild-App: Cover-Bilder verdrängen das am längsten nicht gezeichnete, wenn der Speicher voll ist (Profil- und Danksagungsbilder bleiben); das Ergebnis von „Neue Fassung laden“ bleibt auf der Seite stehen.
+- Vollbild-App, Snapshot (F-85): Eine Kopie des ganzen Datenstands (700 Spiele) kostet 0,7 ms unter den Prüfwerkzeugen (AddressSanitizer) und geschieht höchstens einmal je Sekunde; ein Test (`snapshot_copy_test`) hält das fest. Daher keine Umbauten. Der tote Codeweg im Browser (`data-pk-iopen`, `data-fm-size`) ist entfernt.
+- Bewusst nicht behoben: F-67 (fremde Programme lauschen auf 0.0.0.0, nicht in diesem Projekt änderbar).
+
 ### Dritte Prüfung (15.11.2026): bisher ungelesene Bereiche, 8 von 10 Funden behoben
 - PS4Mount: „Zusatzinhalte wählen“ legt die große Titel-Struktur nicht mehr auf dem Stack des Anfragefadens an (Absturzgefahr des ganzen Programms bei knappem Stack).
 - Dateimanager: Die Platzprüfung läuft bei riesiger Content-Length nicht mehr über; Das reine Zählen für den Fortschrittsbalken beim Verschieben hat eine 60-s-Frist (die Zählung für die Platzprüfung bleibt vollständig); Editor-Speichern und „Neuer Ordner“ warten wie die Uploads auf laufende Aufträge der App.

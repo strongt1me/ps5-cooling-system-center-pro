@@ -27,7 +27,13 @@ typedef struct ufs2_sums ufs2_sums_t;
    but empty files, whose inode tables would be bigger than its data. 0 on
    success with the image size in *image_size; -1 with a reason in err, errno
    ECANCELED when *cancel stopped it. With sums not NULL, a successful write
-   hands over the CRC-32s of the files' data (ufs2_sums_free() them). */
+   hands over the CRC-32s of the files' data (ufs2_sums_free() them).
+   The image file is written through, every byte of it, never left with holes
+   (a hole is what a drive's file system has to fill itself): after the tree the
+   stretches nothing was written to (unused inode tables, free blocks, the spare
+   room at the end) are written as zeros, in big pieces and with *cancel looked
+   at. progress gets the bytes of the image laid down so far, from 0 up to the
+   image size: the blocks of the files' data first, then the zero-fill. */
 int ufs2_write_tree(int fd, const char *source_root, const int *cancel,
                     void (*progress)(void *ctx, uint64_t done_bytes), void *progress_ctx,
                     uint64_t *image_size, ufs2_sums_t **sums, char *err, size_t err_len);
@@ -40,6 +46,23 @@ int ufs2_write_tree(int fd, const char *source_root, const int *cancel,
 int ufs2_plan_size(const char *source_root, uint64_t *image_size, char *err, size_t err_len);
 
 #define UFS2_MAX_ROOTS 4
+
+/* What the sizing pass of a tree finds, for a caller that wants more than the image size: the size of the image (as
+   ufs2_plan_size() gives it), the bytes of file data in it, the number of files, and what the scan left out on purpose
+   (the entries that are neither a folder nor a regular file, such as links and devices, and the OS metadata names such as
+   desktop.ini, thumbs.db and ._*), with the name of the first of them. The progress ufs2_write_tree() reports runs from 0
+   to image_size, so image_size is the total to show it against. cancel (may be NULL) stops the scan, errno ECANCELED. */
+typedef struct {
+  uint64_t image_size;
+  uint64_t data_bytes;
+  uint64_t files;
+  unsigned skipped_special;
+  unsigned skipped_system;
+  char     skipped_example[96];
+} ufs2_plan_info_t;
+int ufs2_plan_info(const char *source_root, const int *cancel, ufs2_plan_info_t *info, char *err, size_t err_len);
+int ufs2_plan_info_roots(const char *const *roots, unsigned nroots, const int *cancel, ufs2_plan_info_t *info,
+                         char *err, size_t err_len);
 
 /* The same two over several source folders laid over each other (a game, then its update, then a few files of our own): a
    folder in more than one is merged, a file in more than one is read from the last. Nothing is copied. */

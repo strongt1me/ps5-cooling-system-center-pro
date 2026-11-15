@@ -832,6 +832,7 @@ struct KrakenState
     std::string version; // the running one
     std::string embedded_version;
     std::string fetched_version;
+    std::string fetch_result; // what the last "neue Fassung laden" said (stays on the page, as in the browser)
     std::vector<KrakenGame> games;
     std::vector<std::string> log;       // the last lines of its log
     std::vector<std::string> scanpaths; // the folders it searches (empty: its own defaults)

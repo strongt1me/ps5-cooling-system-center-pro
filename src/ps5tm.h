@@ -750,6 +750,7 @@ struct cJSON *ps5tm_gamedelete_backups_json(void);
 
 /* The file manager (filemgr.c): 1 while it copies, moves or deletes. */
 int           ps5tm_filemgr_busy(void);
+void          ps5tm_filemgr_shutdown(void);                               /* the app ends: a running copy/move/delete is asked to stop */
 
 /* The history of the app's jobs (jobhist.c): one line per finished job in /data/PS5-Cooling-Center/history.jsonl.
    result is "done", "failed" or "cancelled"; detail, error may be NULL. */
@@ -1664,6 +1665,7 @@ int  ps5tm_filejobs_busy_for_dump(char *err, size_t err_len);   /* gamecopy.c: a
 typedef struct { int set, decrypt, fself, backport, bp_ps4, bp_ps5, ps4_split; } ps5tm_dumpopt_t;
 int  ps5tm_dump_start_item(const char *tid, int overwrite, const ps5tm_dumpopt_t *opt, char *msg, size_t msg_len);
 void ps5tm_dump_abort(void);
+void ps5tm_dumpq_shutdown(void);                                  /* the app ends: stops the dump queue without its usual end, cancels a running dump */
 int  ps5tm_dump_last(char *state, size_t state_len, char *msg, size_t msg_len);
 int  ps5tm_dump_present(const char *tid);
 void ps5tm_dump_settings(ps5tm_dumpopt_t *o, char *target, size_t target_len);

@@ -140,7 +140,7 @@ typedef struct {
 
 /* blocks: exactly what the writer will ask alloc_block() for (file data and
    indirect blocks, directory blocks) — the size of the image is planned from it. */
-typedef struct { uint64_t raw_size, total_entries, blocks; } dirsize_acc_t;
+typedef struct { uint64_t raw_size, total_entries, blocks, files; } dirsize_acc_t;
 
 typedef struct { char *name; int is_dir; } scan_ent_t;
 
@@ -171,7 +171,7 @@ typedef struct {
   const int *cancel;
   void    (*progress)(void *ctx, uint64_t done_bytes);
   void     *progress_ctx;
-  uint64_t  done_bytes;
+  uint64_t  done_bytes;             /* bytes of the image laid down by the files' blocks (the progress reported) */
   ufs2_sums_t *sums;                /* NULL: no CRCs are kept */
   uint32_t  next_inode;
   int32_t  *dirs_per_cg;             /* num_cg entries */
@@ -224,6 +224,45 @@ indirect_blocks_for(uint64_t nb) {
   return 2 + ceil_div(rest - (uint64_t)PTRS_PER_BLOCK, (uint64_t)PTRS_PER_BLOCK);
 }
 
+/* Which parts of the image file were written to (by pwrite_all, which is every write of the writer): one bit for each
+   unit of 4 KiB (64 KiB for a very big image, to keep the map small). What nothing wrote to is a hole in the file; the
+   writer fills those with zeros at the end (fill_holes), so the file is complete from the first to the last byte, as
+   conv_pfs.c's images are. One writer at a time per thread, like the source roots. */
+typedef struct {
+  int       fd;
+  uint8_t  *bits;
+  uint64_t  unit, nunits, total;
+} wtrack_t;
+static _Thread_local wtrack_t g_wt = { -1, NULL, 0, 0, 0 };
+
+static void
+wt_release(void) {
+  free(g_wt.bits);
+  g_wt.bits = NULL;
+  g_wt.fd = -1;
+  g_wt.unit = g_wt.nunits = g_wt.total = 0;
+}
+
+static int
+wt_begin(int fd, uint64_t total) {
+  wt_release();
+  uint64_t unit = total <= (256ull << 30) ? 4096 : 65536;
+  uint64_t nunits = ceil_div(total, unit);
+  g_wt.bits = calloc((size_t)(nunits / 8 + 1), 1);
+  if(!g_wt.bits) return -1;
+  g_wt.fd = fd; g_wt.unit = unit; g_wt.nunits = nunits; g_wt.total = total;
+  return 0;
+}
+
+static void
+wt_mark(uint64_t off, size_t len) {
+  if(!len || off >= g_wt.total) return;
+  uint64_t end = off + len;
+  if(end > g_wt.total) end = g_wt.total;
+  for(uint64_t u = off / g_wt.unit, last = (end - 1) / g_wt.unit; u <= last; u++)
+    g_wt.bits[u >> 3] |= (uint8_t)(1u << (u & 7));
+}
+
 static int
 pwrite_all(int fd, const void *buf, size_t len, uint64_t off) {
   const uint8_t *p = buf;
@@ -231,6 +270,7 @@ pwrite_all(int fd, const void *buf, size_t len, uint64_t off) {
     ssize_t w = pwrite(fd, p, len, (off_t)off);
     if(w < 0) { if(errno == EINTR) continue; return -1; }
     if(w == 0) { errno = EIO; return -1; }
+    if(g_wt.bits && fd == g_wt.fd) wt_mark(off, (size_t)w);
     p += w; len -= (size_t)w; off += (uint64_t)w;
   }
   return 0;
@@ -281,6 +321,19 @@ ignored_name(const char *n) {
   for(size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++)
     if(!strcasecmp(n, names[i])) return 1;
   return 0;
+}
+
+/* What the sizing pass of one call leaves out on purpose, counted by scan_collect (set only while ufs2_plan_info scans; the
+   write pass scans the same entries again and does not count them a second time), and the cancel flag that pass looks at. */
+typedef struct { unsigned special, system; char example[96]; } skip_acc_t;
+static _Thread_local skip_acc_t  *g_skip;
+static _Thread_local const int   *g_plan_cancel;
+
+static void
+note_skipped(int system, const char *name) {
+  if(!g_skip) return;
+  if(system) g_skip->system++; else g_skip->special++;
+  if(!g_skip->example[0]) snprintf(g_skip->example, sizeof(g_skip->example), "%s", name);
 }
 
 /* By name; the same name twice (in two source roots) next to each other. */
@@ -363,7 +416,8 @@ scan_collect(const char *path, scan_ent_t **out_ents, unsigned *out_n, unsigned 
     errno = 0;
     e = readdir(d);
     if(!e) { rd_errno = errno; break; }
-    if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..") || ignored_name(e->d_name)) continue;
+    if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+    if(ignored_name(e->d_name)) { note_skipped(1, e->d_name); continue; }
     if(strlen(e->d_name) > 255) {
       snprintf(err, err_len, "Der Name \"%s\" ist zu lang.", e->d_name); rc = -1; break;
     }
@@ -372,7 +426,7 @@ scan_collect(const char *path, scan_ent_t **out_ents, unsigned *out_n, unsigned 
     }
     struct stat st;
     if(lstat(child, &st) != 0) { snprintf(err, err_len, "%s: %s", child, ps5tm_io_strerror(errno)); rc = -1; break; }
-    if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) continue;    /* links, devices */
+    if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) { note_skipped(0, e->d_name); continue; }    /* links, devices: counted and said */
     if(n >= cap) {
       unsigned ncap = cap ? cap * 2 : 64;
       scan_ent_t *p = realloc(ents, ncap * sizeof(scan_ent_t));
@@ -461,6 +515,7 @@ static int
 calc_dir_sizes_recurse(const char *path, dirsize_acc_t *acc, int depth,
                        char *err, size_t err_len) {
   if(depth > MAX_DEPTH) { snprintf(err, err_len, "Der Ordner ist zu tief verschachtelt."); return -1; }
+  if(is_cancelled(g_plan_cancel)) { errno = ECANCELED; snprintf(err, err_len, "Abgebrochen."); return -1; }
   scan_ent_t *ents = NULL; unsigned n = 0;
   if(scan_and_sort_dir(path, &ents, &n, err, err_len) != 0) return -1;
 
@@ -513,6 +568,7 @@ calc_dir_sizes_recurse(const char *path, dirsize_acc_t *acc, int depth,
         rc = -1; break;
       }
       acc->raw_size += len;
+      acc->files++;
       if(len > 0) {
         uint64_t bl = ceil_div(len, BLOCK_SIZE);
         acc->blocks += bl + indirect_blocks_for(bl);      /* + its indirect blocks */
@@ -1211,10 +1267,10 @@ write_data_block(file_wr_t *fw) {
   }
   fw->last_frag = frag;
   fw->next++;
-  if(pc->progress && fw->next % PROGRESS_EVERY_BLOCKS == 0) {
-    uint64_t done = fw->next * BLOCK_SIZE;
-    pc->progress(pc->progress_ctx, pc->done_bytes + (done < fw->size ? done : fw->size));
-  }
+  /* The progress counts what goes into the image: whole blocks (a small file takes a block of 64 KiB, and that is
+     what the drive is made to write), not the bytes of the files. */
+  pc->done_bytes += BLOCK_SIZE;
+  if(pc->progress && fw->next % PROGRESS_EVERY_BLOCKS == 0) pc->progress(pc->progress_ctx, pc->done_bytes);
   return frag;
 }
 
@@ -1237,6 +1293,7 @@ write_indirect_block(file_wr_t *fw, uint64_t count) {
   if(pwrite_all(pc->fd, fw->ind, BLOCK_SIZE, (uint64_t)self * FRAG_SIZE) != 0) {
     snprintf(pc->err, pc->err_len, "Schreibfehler: %s", ps5tm_io_strerror(errno)); return -1;
   }
+  pc->done_bytes += BLOCK_SIZE;
   return self;
 }
 
@@ -1265,6 +1322,7 @@ write_double_indirect_block(file_wr_t *fw, uint64_t count) {
   if(pwrite_all(pc->fd, fw->dbl, BLOCK_SIZE, (uint64_t)self * FRAG_SIZE) != 0) {
     snprintf(pc->err, pc->err_len, "Schreibfehler: %s", ps5tm_io_strerror(errno)); return -1;
   }
+  pc->done_bytes += BLOCK_SIZE;
   return self;
 }
 
@@ -1371,7 +1429,6 @@ write_file_entry(populate_ctx_t *pc, const char *path, uint32_t this_inode) {
     pc->sums->crc[this_inode] = crc;
     pc->sums->data_bytes += size;
   }
-  pc->done_bytes += size;
   if(pc->progress) pc->progress(pc->progress_ctx, pc->done_bytes);
   return 0;
 }
@@ -1720,10 +1777,40 @@ plan_image(const char *source_root, ufs2_plan_t *pl, char *err, size_t err_len) 
 }
 
 int
-ufs2_plan_size(const char *source_root, uint64_t *image_size, char *err, size_t err_len) {
+ufs2_plan_info(const char *source_root, const int *cancel, ufs2_plan_info_t *info, char *err, size_t err_len) {
   ufs2_plan_t plan;
-  if(plan_image(source_root, &plan, err, err_len) != 0) return -1;
-  *image_size = plan.total_size;
+  skip_acc_t  skip;
+  memset(&skip, 0, sizeof(skip));
+  g_skip = &skip;
+  g_plan_cancel = cancel;
+  int rc = plan_image(source_root, &plan, err, err_len);
+  g_skip = NULL;
+  g_plan_cancel = NULL;
+  if(rc != 0) return -1;
+  memset(info, 0, sizeof(*info));
+  info->image_size = plan.total_size;
+  info->data_bytes = plan.acc.raw_size;
+  info->files = plan.acc.files;
+  info->skipped_special = skip.special;
+  info->skipped_system = skip.system;
+  snprintf(info->skipped_example, sizeof(info->skipped_example), "%s", skip.example);
+  return 0;
+}
+
+int
+ufs2_plan_info_roots(const char *const *roots, unsigned nroots, const int *cancel, ufs2_plan_info_t *info,
+                     char *err, size_t err_len) {
+  if(set_roots(roots, nroots, err, err_len) != 0) return -1;
+  int rc = ufs2_plan_info(g_roots[0], cancel, info, err, err_len);
+  g_nroots = 0;
+  return rc;
+}
+
+int
+ufs2_plan_size(const char *source_root, uint64_t *image_size, char *err, size_t err_len) {
+  ufs2_plan_info_t pi;
+  if(ufs2_plan_info(source_root, NULL, &pi, err, err_len) != 0) return -1;
+  *image_size = pi.image_size;
   return 0;
 }
 
@@ -1733,6 +1820,45 @@ ufs2_plan_size_roots(const char *const *roots, unsigned nroots, uint64_t *image_
   int rc = ufs2_plan_size(g_roots[0], image_size, err, err_len);
   g_nroots = 0;
   return rc;
+}
+
+/* Writes zeros over every unit of the image nothing was written to (see wtrack_t), in pieces of ZERO_CHUNK with the cancel
+   flag looked at between them. base is the progress already reported (the blocks of the files); the zero-fill moves it on
+   from there to the image size. 0, or -1 with the reason in err (errno ECANCELED when *cancel stopped it). */
+#define ZERO_CHUNK (4u << 20)
+
+static int
+fill_holes(int fd, const int *cancel, void (*progress)(void *, uint64_t), void *progress_ctx, uint64_t base,
+           char *err, size_t err_len) {
+  const uint64_t unit = g_wt.unit, nunits = g_wt.nunits;
+  uint64_t holes = 0;
+  for(uint64_t u = 0; u < nunits; u++)
+    if(!(g_wt.bits[u >> 3] & (1u << (u & 7)))) holes++;
+  const uint64_t fill_total = holes * unit;
+  const uint64_t slice = g_wt.total > base ? g_wt.total - base : 0;
+  if(fill_total) {
+    uint8_t *zeros = calloc(1, ZERO_CHUNK);
+    if(!zeros) { snprintf(err, err_len, "Kein Speicher."); return -1; }
+    uint64_t done = 0;
+    for(uint64_t u = 0; u < nunits;) {
+      if(g_wt.bits[u >> 3] & (1u << (u & 7))) { u++; continue; }
+      uint64_t run = 1;
+      while(u + run < nunits && run * unit < ZERO_CHUNK && !(g_wt.bits[(u + run) >> 3] & (1u << ((u + run) & 7)))) run++;
+      if(is_cancelled(cancel)) { free(zeros); errno = ECANCELED; snprintf(err, err_len, "Abgebrochen."); return -1; }
+      /* the bytes of a unit that were written are never touched: the run holds untouched units only, and a unit is whole */
+      if(pwrite_all(fd, zeros, (size_t)(run * unit), u * unit) != 0) {
+        snprintf(err, err_len, "Schreibfehler: %s", ps5tm_io_strerror(errno));
+        free(zeros);
+        return -1;
+      }
+      u += run;
+      done += run * unit;
+      if(progress) progress(progress_ctx, base + (uint64_t)((double)done / (double)fill_total * (double)slice));
+    }
+    free(zeros);
+  }
+  if(progress) progress(progress_ctx, g_wt.total);
+  return 0;
 }
 
 int
@@ -1745,14 +1871,17 @@ ufs2_write_tree_roots(int fd, const char *const *roots, unsigned nroots, const i
   return rc;
 }
 
-int
-ufs2_write_tree(int fd, const char *source_root, const int *cancel,
+static int
+write_tree_impl(int fd, const char *source_root, const int *cancel,
                 void (*progress)(void *ctx, uint64_t done_bytes), void *progress_ctx,
                 uint64_t *image_size, ufs2_sums_t **sums_out, char *err, size_t err_len) {
   if(sums_out) *sums_out = NULL;
 
   ufs2_plan_t plan;
-  if(plan_image(source_root, &plan, err, err_len) != 0) return -1;
+  g_plan_cancel = cancel;
+  int prc = plan_image(source_root, &plan, err, err_len);
+  g_plan_cancel = NULL;
+  if(prc != 0) return -1;
   dirsize_acc_t acc = plan.acc;
   uint64_t total_size = plan.total_size;
   int32_t ipg = plan.ipg, num_cg = plan.num_cg;
@@ -1770,10 +1899,18 @@ ufs2_write_tree(int fd, const char *source_root, const int *cancel,
     return -1;
   }
 
-  if(ftruncate(fd, (off_t)total_size) != 0) {
-    snprintf(err, err_len, "Die Zieldatei ließ sich nicht auf die Abbildgröße bringen: %s", ps5tm_io_strerror(errno));
-    return -1;
+  /* The file is brought to its size in steps, so that a drive whose file system fills the extension with zeros on the spot
+     (the FAT kinds do) can be stopped between two of them; the stretches that nothing is written to afterwards are written
+     as zeros at the end (fill_holes), so the file has no hole. */
+  for(uint64_t sz = 0; sz < total_size;) {
+    sz = total_size - sz > (1ull << 30) ? sz + (1ull << 30) : total_size;
+    if(is_cancelled(cancel)) { errno = ECANCELED; snprintf(err, err_len, "Abgebrochen."); return -1; }
+    if(ftruncate(fd, (off_t)sz) != 0) {
+      snprintf(err, err_len, "Die Zieldatei ließ sich nicht auf die Abbildgröße bringen: %s", ps5tm_io_strerror(errno));
+      return -1;
+    }
   }
+  if(wt_begin(fd, total_size) != 0) { snprintf(err, err_len, "Kein Speicher."); return -1; }
 
   int64_t total_frags = (int64_t)(total_size / FRAG_SIZE);
   size_t cg_cap = (size_t)align_up((uint64_t)sb.cgsize, SECTOR_SIZE) + FRAG_SIZE;
@@ -1905,6 +2042,13 @@ ufs2_write_tree(int fd, const char *source_root, const int *cancel,
                                  alloc.high_water, pc.tail_free, pc.tail_free_n, num_cg,
                                  pc.next_inode, err, err_len);
 
+  /* Everything that is to hold something is written; what is left (the unused inodes, the free blocks, the room kept at the
+     end) goes down as zeros now, not as a hole. */
+  if(!rc && fill_holes(fd, cancel, progress, progress_ctx, pc.done_bytes, err, err_len) != 0) {
+    rc = -1;
+    if(is_cancelled(cancel)) pc.cancelled = 1;
+  }
+
   int cancelled = pc.cancelled;
   free(alloc.high_water);
   free(dirs_per_cg);
@@ -1919,6 +2063,17 @@ ufs2_write_tree(int fd, const char *source_root, const int *cancel,
   if(image_size) *image_size = total_size;
   if(sums_out) *sums_out = sums;
   return 0;
+}
+
+int
+ufs2_write_tree(int fd, const char *source_root, const int *cancel,
+                void (*progress)(void *ctx, uint64_t done_bytes), void *progress_ctx,
+                uint64_t *image_size, ufs2_sums_t **sums_out, char *err, size_t err_len) {
+  int rc = write_tree_impl(fd, source_root, cancel, progress, progress_ctx, image_size, sums_out, err, err_len);
+  int saved = errno;
+  wt_release();                          /* the map of written parts, on every way out */
+  errno = saved;
+  return rc;
 }
 
 

@@ -144,4 +144,39 @@ TEST(Covers, ALoadedCoverIsNotFetchedAgain)
     EXPECT_EQ(covers.pending(), 0u);
 }
 
+TEST(Covers, AFullStoreGivesBackTheLeastRecentlyDrawnForTheFocusedGame)
+{
+    Covers covers;
+    std::vector<std::uint32_t> destroyed;
+    std::uint32_t next = 1;
+    const auto create = [&](int, int, const std::uint8_t *) { return next++; };
+    const auto destroy = [&](std::uint32_t t) { destroyed.push_back(t); };
+    std::vector<Game> games(hui::ps5cc::kCoverLimit + 1);
+    for (std::size_t i = 0; i < games.size(); ++i)
+    {
+        games[i].id = "G" + std::to_string(i);
+        games[i].cover = "/c?" + std::to_string(i);
+    }
+    for (std::size_t i = 0; i < hui::ps5cc::kCoverLimit; ++i)
+    {
+        covers.deliver(games[i].id, blank_cover());
+        covers.upload_pending(create, 1, 0.0f, destroy);
+    }
+    ASSERT_EQ(covers.loaded(), hui::ps5cc::kCoverLimit);
+    // Full: the library is not fetched on, only the focused game is.
+    EXPECT_TRUE(covers.next_wanted(games).path.empty());
+    covers.prefer(games.back().id);
+    covers.texture_of(games[0].id); // drawn lately: not the one to go
+    const hui::ps5cc::CoverWant want = covers.next_wanted(games);
+    EXPECT_EQ(want.id, games.back().id);
+    covers.deliver(want.id, blank_cover());
+    covers.upload_pending(create, 1, 0.0f, destroy);
+    EXPECT_EQ(covers.loaded(), hui::ps5cc::kCoverLimit);
+    ASSERT_EQ(destroyed.size(), 1u);
+    EXPECT_EQ(destroyed[0], 2u); // the second made (G1): G0 was drawn after it
+    EXPECT_NE(covers.texture_of(games.back().id).texture, 0u);
+    EXPECT_NE(covers.texture_of(games[0].id).texture, 0u);
+    EXPECT_EQ(covers.texture_of(games[1].id).texture, 0u);
+}
+
 } // namespace

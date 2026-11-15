@@ -39,6 +39,7 @@
 #define PS5TM_KRAKEN_DATA    "/data/krakenmount"
 #define KR_ELF               KR_DIR "/kraken-mount.elf"
 #define KR_VER               KR_DIR "/version.txt"
+#define KR_BAD               KR_DIR "/bad.txt"        /* a downloaded version that did not answer after its start: not used again */
 #define KR_ELF_MAX           (16u * 1024 * 1024)
 
 extern const unsigned char ps5tm_kraken[];
@@ -117,6 +118,38 @@ fetched_version(char *v, size_t n) {
   fclose(f);
   for(const char *c = v; *c; c++)
     if(!((*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '.' || *c == '-' || *c == '_')) { v[0] = 0; return; }
+  /* A version that was marked as not working is as good as not there: the embedded copy starts instead (audit F-68: no way back before). */
+  char bad[48] = "";
+  FILE *bf = fopen(KR_BAD, "r");
+  if(bf) {
+    if(fgets(bad, sizeof bad, bf)) {
+      size_t l = strlen(bad);
+      while(l && (bad[l - 1] == '\n' || bad[l - 1] == '\r' || bad[l - 1] == ' ')) bad[--l] = 0;
+    }
+    fclose(bf);
+    if(bad[0] && !strcmp(bad, v)) v[0] = 0;
+  }
+}
+
+/* After the start of a downloaded version: it has a minute to answer. If it does not, the version is written to KR_BAD and the next start
+   takes the embedded copy (a release that does not run must not leave the page without a working Kraken Mount for good). */
+static void *
+watch_fetched_start(void *arg) {
+  char *ver = arg;
+  for(int i = 0; i < 60; i++) {
+    sleep(1);
+    int st = kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL);
+    /* "listens but answers late" (a scan, a drive that hangs) is alive: only a program that never listens is bad */
+    if(st == 200 || st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) { free(ver); return NULL; }
+  }
+  FILE *bf = fopen(KR_BAD ".tmp", "w");
+  int ok = bf && fprintf(bf, "%s\n", ver) >= 0;
+  if(bf && fclose(bf) != 0) ok = 0;
+  if(ok && rename(KR_BAD ".tmp", KR_BAD) == 0)
+    PS5TM_WARN("kraken_bad_version", "Kraken Mount %s hat nach dem Start nicht geantwortet: die nächsten Starts nehmen die eingebettete Fassung.", ver);
+  else unlink(KR_BAD ".tmp");
+  free(ver);
+  return NULL;
 }
 
 /* ------------------------------------------------------------------ state */
@@ -374,6 +407,16 @@ start_kraken(char *msg, size_t n) {
     return 502;
   }
   PS5TM_INFO("kraken_start", "Kraken Mount %s an den Payload-Lader gesendet.", which);
+  if(which == fv) {
+    char *ver = strdup(fv);
+    pthread_t th;
+    pthread_attr_t at;
+    pthread_attr_init(&at);
+    pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(&at, 128 * 1024);
+    if(!ver || pthread_create(&th, &at, watch_fetched_start, ver) != 0) free(ver);
+    pthread_attr_destroy(&at);
+  }
   snprintf(msg, n, "Kraken Mount %s wird gestartet. Das dauert einige Sekunden.", which);
   return 200;
 }
@@ -497,6 +540,23 @@ fetch_release(char *msg, size_t n) {
     rc = 200;
     goto done;
   }
+  {
+    /* the version that was marked as not working is not loaded again and again (the marker stays until a different one comes) */
+    char badv[48] = "";
+    FILE *bf = fopen(KR_BAD, "r");
+    if(bf) {
+      if(fgets(badv, sizeof badv, bf)) {
+        size_t l = strlen(badv);
+        while(l && (badv[l - 1] == '\n' || badv[l - 1] == '\r' || badv[l - 1] == ' ')) badv[--l] = 0;
+      }
+      fclose(bf);
+    }
+    if(badv[0] && !strcmp(badv, ver)) {
+      snprintf(msg, n, "Die neueste Fassung (%s) hat nach dem Start nicht geantwortet und wird nicht noch einmal geladen. Die eingebettete Fassung wird genommen.", ver);
+      rc = 200;
+      goto done;
+    }
+  }
   char elf_url[400] = "", sums_url[400] = "";
   cJSON_ArrayForEach(a, assets) {
     const cJSON *nm = cJSON_GetObjectItem(a, "name"), *u = cJSON_GetObjectItem(a, "browser_download_url");
@@ -527,6 +587,7 @@ fetch_release(char *msg, size_t n) {
   if(make_dir(KR_DIR) != 0) { snprintf(why, sizeof why, "Der Ordner %s ließ sich nicht anlegen: %s", KR_DIR, strerror(errno)); goto done; }
   int e = ps5tm_put_lib_file(KR_ELF, (const unsigned char *)elf, elf_n);
   if(e) { snprintf(why, sizeof why, "Die Datei ließ sich nicht ablegen: %s", strerror(e)); goto done; }
+  unlink(KR_BAD);                                  /* a newer release gets its chance */
   /* the version file is written to a file of its own and renamed (a start at the same moment never reads half of it) */
   FILE *vf = fopen(KR_VER ".tmp", "w");
   int vok = vf && fprintf(vf, "%s\n", ver) >= 0;

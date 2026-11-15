@@ -29,7 +29,8 @@ namespace hui::ps5cc
 constexpr int kCoverSize = 160;
 // The edge of a picture drawn at about 200 px (the profile pictures): sharp there, 256 KiB each.
 constexpr int kLargeCoverSize = 256;
-// At most this many textures (about 40 MiB): later games keep their initials.
+// At most this many textures (about 40 MiB). At the limit only the focused game still gets one: the least recently drawn texture is given
+// back for it (the others keep their initials until they are focused).
 constexpr std::size_t kCoverLimit = 400;
 
 struct CoverWant
@@ -60,8 +61,10 @@ class Covers
     void listen(bool on);
 
     // GL side, once a frame. create(w, h, rgba) returns a texture name.
+    // destroy(texture) gives a texture back; with it, a full store makes room for a new picture (the least recently drawn one goes).
     int upload_pending(const std::function<std::uint32_t(int, int, const std::uint8_t *)> &create,
-                       int max_per_frame, float dt);
+                       int max_per_frame, float dt,
+                       const std::function<void(std::uint32_t)> &destroy = {});
 
     // Screen side.
     CoverShown texture_of(const std::string &id) const;
@@ -80,6 +83,8 @@ class Covers
     mutable std::mutex mutex_;
     bool listening_ = true; // see listen()
     std::map<std::string, CoverShown> textures_;
+    mutable std::map<std::string, std::uint64_t> used_; // when a texture was last asked for (texture_of)
+    mutable std::uint64_t tick_ = 0;
     std::vector<Ready> ready_;
     std::set<std::string> busy_;   // fetched or decoded, not uploaded yet
     std::set<std::string> failed_; // not tried again until forget_failures()

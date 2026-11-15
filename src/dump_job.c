@@ -536,9 +536,10 @@ write_info(const char *dest, const char *folder, const char *tid, const char *ti
   info_path(dest, folder, path, sizeof(path));
   json_escape(title, t, sizeof(t));
   snprintf(o, sizeof(o), "%s", origin && origin[0] ? origin : "disc-tab");
-  FILE *f = fopen(path, "w");
-  if(!f) return;
-  fprintf(f,
+  /* Built in memory and written through a temporary name (write_atomic): an interrupted write leaves the earlier info file as
+     it was ("running"), never an empty or cut one, which info_state() would take for "no info = finished". */
+  char body[2048];
+  int bn = snprintf(body, sizeof(body),
           "{\n"
           "  \"tool\": \"ps5-cooling-center\",\n"
           "  \"origin\": \"%s\",\n"
@@ -558,9 +559,8 @@ write_info(const char *dest, const char *folder, const char *tid, const char *ti
           !strcmp(kind, "game") ? g_info_dec : 0, !strcmp(kind, "game") ? g_info_fself : 0,
           !strcmp(kind, "game") ? g_info_bp : 0, !strcmp(kind, "game") && g_info_bp ? g_info_bp4 : 0,
           !strcmp(kind, "game") && g_info_bp ? g_info_bp5 : 0);
-  fflush(f);
-  fsync(fileno(f));
-  fclose(f);
+  if(bn <= 0 || (size_t)bn >= sizeof(body) || write_atomic(path, body, (size_t)bn) != 0)
+    dlog("Hinweis: Die Info-Datei %s ließ sich nicht schreiben.", path);
 }
 
 /* the "state" of a folder's info file; "" when there is none (an older dump, or something else) */
@@ -825,6 +825,81 @@ fd_read(void *ctx, void *buf, size_t len) {
   }
 }
 
+/* A PS4 title dumped into one folder (split 0): the files of the patch replace those of the app of the same name. Their checksum
+   lines are therefore kept back until the end and only the last line of a name goes into the checksum file (audit D-05), so that
+   it never lists the app's old version of a file the patch replaced. */
+typedef struct {
+  uint8_t sha[32];
+  char   *name;
+  size_t  seq;
+  int     drop;
+} held_sum_t;
+
+static held_sum_t *g_hs;
+static size_t      g_hs_n, g_hs_cap;
+static int         g_hs_on;
+
+static void
+hs_free(void) {
+  for(size_t i = 0; i < g_hs_n; i++) free(g_hs[i].name);
+  free(g_hs);
+  g_hs = NULL;
+  g_hs_n = g_hs_cap = 0;
+  g_hs_on = 0;
+}
+
+static int
+hs_cmp_name(const void *x, const void *y) {
+  const held_sum_t *a = x, *b = y;
+  int c = strcmp(a->name, b->name);
+  if(c) return c;
+  return a->seq < b->seq ? -1 : a->seq > b->seq;
+}
+
+static int
+hs_cmp_seq(const void *x, const void *y) {
+  const held_sum_t *a = x, *b = y;
+  return a->seq < b->seq ? -1 : a->seq > b->seq;
+}
+
+/* One checksum line: straight into the file, or (g_hs_on) kept back. */
+static void
+sums_note(ps5tm_sums_t *sums, const uint8_t sha[32], const char *name) {
+  if(!sums || !name) return;
+  if(g_hs_on) {
+    if(g_hs_n == g_hs_cap) {
+      size_t nc = g_hs_cap ? g_hs_cap * 2 : 1024;
+      held_sum_t *nv = realloc(g_hs, nc * sizeof(*nv));
+      if(nv) { g_hs = nv; g_hs_cap = nc; }
+    }
+    char *nm = g_hs_n < g_hs_cap ? strdup(name) : NULL;
+    if(nm) {
+      held_sum_t *h = &g_hs[g_hs_n];
+      memcpy(h->sha, sha, 32);
+      h->name = nm;
+      h->seq = g_hs_n++;
+      h->drop = 0;
+      return;
+    }
+    /* no memory: the line goes in at once (a double entry is the lesser harm) */
+  }
+  (void)ps5tm_sums_add(sums, sha, name);
+}
+
+/* Writes the kept-back lines, the last one of each name, in the order they came. */
+static void
+hs_flush(ps5tm_sums_t *sums) {
+  if(g_hs_n > 1) {
+    qsort(g_hs, g_hs_n, sizeof(*g_hs), hs_cmp_name);
+    for(size_t i = 0; i + 1 < g_hs_n; i++)
+      if(!strcmp(g_hs[i].name, g_hs[i + 1].name)) g_hs[i].drop = 1;
+    qsort(g_hs, g_hs_n, sizeof(*g_hs), hs_cmp_seq);
+  }
+  for(size_t i = 0; i < g_hs_n; i++)
+    if(!g_hs[i].drop && sums) (void)ps5tm_sums_add(sums, g_hs[i].sha, g_hs[i].name);
+  hs_free();
+}
+
 static int
 verify_written(const char *dst, uint64_t size, uint32_t want_crc, const cp_ctx_t *cx, const char *name) {
   int fd = open(dst, O_RDONLY);
@@ -839,7 +914,7 @@ verify_written(const char *dst, uint64_t size, uint32_t want_crc, const cp_ctx_t
   close(fd);
   if(rc) return e == ECANCELED ? ECANCELED : (e ? e : EIO);
   if(got != want_crc) return E_VERIFY_FAILED;
-  if(cx->sums && name) (void)ps5tm_sums_add(cx->sums, sha, name);
+  if(cx->sums && name) sums_note(cx->sums, sha, name);
   return 0;
 }
 
@@ -1503,24 +1578,22 @@ dump_run(void *arg) {
   if(a.cfg.folder_titles) title_suffix(a.name, suffix, sizeof(suffix));
   snprintf(gfolder, sizeof(gfolder), "%s-app0%s", a.title_id, suffix);
 
-  /* an earlier dump of this title in the way */
+  /* An earlier dump of this title in the way: looked at here, removed only once the new one is measured and has room (below), so
+     that a measuring error, a cancel or too little room never costs the finished dump that was to be replaced. */
+  char old_dump[4][DJ_NAME_MAX];
+  int old_unfinished[4] = {0, 0, 0, 0};
+  int n_old = 0;
   if(!a.dlc_only) {
-    char old[4][DJ_NAME_MAX];
-    int unfinished[4] = {0, 0, 0, 0};
-    int worst = 0, n = find_existing_each(a.dest, a.title_id, old, &worst, unfinished);
+    int worst = 0;
+    n_old = find_existing_each(a.dest, a.title_id, old_dump, &worst, old_unfinished);
     /* A finished dump goes only when overwriting was asked for, also when an unfinished one lies beside it: that
        one alone used to decide, and took the finished dump with it. */
     if(!a.overwrite)
-      for(int i = 0; i < n; i++)
-        if(!unfinished[i]) {
-          job_fail("Am Ziel liegt schon ein fertiger Dump dieses Spiels (%s).", old[i]);
+      for(int i = 0; i < n_old; i++)
+        if(!old_unfinished[i]) {
+          job_fail("Am Ziel liegt schon ein fertiger Dump dieses Spiels (%s).", old_dump[i]);
           goto out;
         }
-    for(int i = 0; i < n; i++) {
-      job_state(DJ_MEASURING, "Alten Dump entfernen");
-      dlog("Entferne den vorhandenen Dump %s/%s (%s)", a.dest, old[i], unfinished[i] ? "unfertig" : "fertig, ersetzen");
-      remove_dump_folder(a.dest, old[i]);
-    }
   }
 
   /* what there is to copy */
@@ -1643,6 +1716,18 @@ dump_run(void *arg) {
     job_fail("Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Dieses Spiel hat größere.");
     goto out;
   }
+  /* what the dumps to be replaced give back */
+  uint64_t freed = 0;
+  for(int i = 0; i < n_old && !cancelled(); i++) {
+    char op[PATH_MAX];
+    if(snprintf(op, sizeof(op), "%s/%s", a.dest, old_dump[i]) >= (int)sizeof(op)) continue;
+    freed += measure(op, NULL).bytes;
+  }
+  if(cancelled()) {
+    job_state(DJ_CANCELLED, "cancelled");
+    goto out;
+  }
+  avail += freed;
   uint64_t reserve = a.console ? DJ_RESERVE : 0;
   if(all.bytes + reserve > avail) {
     if(a.console)
@@ -1655,6 +1740,13 @@ dump_run(void *arg) {
   }
   dlog("Gemessen: %u Dateien, %.2f GB; frei: %.2f GB%s", all.files, (double)all.bytes / 1073741824.0, (double)avail / 1073741824.0,
        a.console ? " (10 GB bleiben frei)" : "");
+
+  /* everything is measured and fits: now the dumps that this one replaces go */
+  for(int i = 0; i < n_old; i++) {
+    job_state(DJ_MEASURING, "Alten Dump entfernen");
+    dlog("Entferne den vorhandenen Dump %s/%s (%s)", a.dest, old_dump[i], old_unfinished[i] ? "unfertig" : "fertig, ersetzen");
+    remove_dump_folder(a.dest, old_dump[i]);
+  }
 
   pthread_mutex_lock(&g_lock);
   g_job.total_bytes = all.bytes;
@@ -1696,6 +1788,7 @@ dump_run(void *arg) {
     char ps4why[220] = "";
     for(int i = 0; i < nfold; i++) write_info(a.dest, pl4->part[i].folder, a.title_id, a.name, "game", "running", 0, t_start, 0, a.origin);
     rc = 0;
+    g_hs_on = sums && pl4->single && pl4->n > 1;      /* both parts into one folder: see sums_note */
     for(int i = 0; i < pl4->n && !rc && !cancelled(); i++) {
       ps4_part_t *pt = &pl4->part[i];
       job_state(DJ_COPYING, pt->use_img ? "Abbild entpacken" : "Kopieren");
@@ -1878,6 +1971,11 @@ dump_run(void *arg) {
     uint64_t bd2 = 0;
     if(!rc && cancelled()) rc = ECANCELED;
     if(!rc && !phase_complete(&ph, &fd2, &bd2)) rc = E_SOURCE_CHANGED;
+    /* Decrypting and the backport come first, with param.json / param.sfo still under their temporary names (the backport
+       lowers the held file): only a dump that is whole in every respect gets them in place, so that a dump stopped half-way
+       through the decrypting is never taken for a game. */
+    if(!rc && !cancelled() && a.cfg.decrypt && run_decrypt(&a, app0, dgame, "Spiel") == 0) run_backport(&a, dgame, 0);
+    if(!rc && cancelled()) rc = ECANCELED;
     if(!rc) {
       for(int i = 0; i < 2 && !rc; i++) {
         if(!have[i]) continue;
@@ -1889,8 +1987,6 @@ dump_run(void *arg) {
     }
     for(int i = 0; i < 2; i++)
       if(have[i] && rc) unlink(held[i]);
-    if(!rc && !cancelled() && a.cfg.decrypt && run_decrypt(&a, app0, dgame, "Spiel") == 0) run_backport(&a, dgame, 0);
-    if(!rc && cancelled()) rc = ECANCELED;
     pthread_mutex_lock(&g_lock);
     game_bytes = g_job.done_bytes;
     pthread_mutex_unlock(&g_lock);
@@ -1999,6 +2095,7 @@ dump_run(void *arg) {
 
   /* the checksum file gets its name only for a dump that is whole */
   if(sums) {
+    hs_flush(sums);
     if(ps5tm_sums_close(sums, serr, sizeof(serr)) != 0)
       job_note("Die Prüfsummen-Datei ließ sich nicht schreiben. Der Dump selbst ist zurückgelesen und in Ordnung.");
     sums = NULL;
@@ -2017,6 +2114,7 @@ dump_run(void *arg) {
 out_sums:
   if(sums) ps5tm_sums_abort(sums);
 out:
+  hs_free();
   free(buf);
   free(src);
   free(dst);
@@ -2044,12 +2142,20 @@ out:
 /* 1 while ps5tm_dump_delete removes a dump: a dump that starts in that time could write into the folder being emptied (audit F-38). */
 static int g_deleting;
 
-int
-ps5tm_dump_busy(void) {
+/* 1 while a dump is being written (not while one is deleted). */
+static int
+dump_running(void) {
   pthread_mutex_lock(&g_lock);
   int busy = g_job.state >= DJ_MEASURING && g_job.state <= DJ_FINISHING;
   pthread_mutex_unlock(&g_lock);
   return busy;
+}
+
+/* 1 while a dump is written or deleted: the deletion counts as a file job too, so no copy, conversion or file-manager job starts into the
+   folder that is being emptied (audit F-38). Seen by the others through ps5tm_gamecopy_busy(). */
+int
+ps5tm_dump_busy(void) {
+  return dump_running() || __atomic_load_n(&g_deleting, __ATOMIC_ACQUIRE);
 }
 
 static int
@@ -2320,7 +2426,7 @@ ps5tm_dump_delete(const char *mount, const char *dir, const char *folder, char *
   if(ps5tm_dumpq_active()) { snprintf(msg, n, "Die Dump-Warteschlange läuft. Ein Dump lässt sich erst nach ihrem Ende oder ihrem Stopp löschen."); return 409; }
   if(__atomic_exchange_n(&g_deleting, 1, __ATOMIC_ACQ_REL)) { snprintf(msg, n, "Ein Dump wird gerade gelöscht."); return 409; }
   /* claimed first, then looked at: a dump that starts now sees the claim and stands down */
-  if(ps5tm_dump_busy()) { __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE); snprintf(msg, n, "Es läuft gerade ein Dump."); return 409; }
+  if(dump_running()) { __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE); snprintf(msg, n, "Es läuft gerade ein Dump."); return 409; }
   if(ps5tm_filejobs_busy_for_dump(msg, n)) { __atomic_store_n(&g_deleting, 0, __ATOMIC_RELEASE); return 409; }
   char dest[PATH_MAX], state[16];
   int http = ps5tm_dumplib_locate(mount, dir, folder, dest, sizeof(dest), state, sizeof(state), msg, n);

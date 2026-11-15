@@ -423,14 +423,20 @@ split_run(void *arg) {
   for(unsigned k = 1; k <= parts; k++) {
     char tmp[PS5TM_PKG_PATH + 32], fin[PS5TM_PKG_PATH + 32];
     part_names(a, k, tmp, sizeof(tmp), fin, sizeof(fin));
-    if(access(fin, F_OK) == 0 || rename(tmp, fin) != 0) {
-      int e = errno;
+    /* a link fails when the name is taken: nothing that appeared since the check is replaced (rename would). A drive without links
+       (exFAT) falls back to the check and rename (audit F-128, as in gameconvert.c). */
+    int taken = 0, e = 0;
+    if(access(fin, F_OK) == 0) taken = 1;
+    else if(link(tmp, fin) == 0) (void)unlink(tmp);
+    else if(errno == EEXIST) taken = 1;
+    else if(rename(tmp, fin) != 0) e = errno ? errno : EIO;
+    if(taken || e) {
       for(unsigned j = 1; j < k; j++) {                       /* the ones already named go again */
         char t2[PS5TM_PKG_PATH + 32], f2[PS5TM_PKG_PATH + 32];
         part_names(a, j, t2, sizeof(t2), f2, sizeof(f2));
         unlink(f2);
       }
-      job_fail("Teil %u ließ sich nicht an seinen Platz setzen (%s).", k, access(fin, F_OK) == 0 ? "den Namen gibt es schon" : ps5tm_io_strerror(e));
+      job_fail("Teil %u ließ sich nicht an seinen Platz setzen (%s).", k, taken ? "den Namen gibt es schon" : ps5tm_io_strerror(e));
       goto cleanup;
     }
   }

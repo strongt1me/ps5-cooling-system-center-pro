@@ -69,8 +69,10 @@ static int             g_interrupted;     /* told once: a run was cut by a resta
 static int             g_boot_checked;
 static uint64_t        g_started_ms, g_finished_ms;
 static volatile int    g_stop, g_skip;
+static volatile int    g_shutdown;            /* the app ends (ps5tm_dumpq_shutdown): the stop is not the person's, the mark stays */
 static pthread_t       g_worker;
 static int             g_worker_valid;
+static int             g_starting;       /* a start is under way (the old worker is being joined): no second start meanwhile */
 
 #ifndef DQ_SLEEP_MS
 #define DQ_SLEEP_MS(ms) usleep((useconds_t)(ms) * 1000u)
@@ -340,6 +342,13 @@ worker(void *arg) {
     if(g_stop || process_item(i) < 0) stopped = 1;
   }
 
+  if(g_shutdown) {
+    /* The app is ending: nothing is marked "stopped by you" and the mark of the run stays, so that the next start says that a run was
+       interrupted (audit F-30). */
+    PS5TM_INFO("dumpq_end", "Dump-Warteschlange beim Beenden der App abgebrochen.");
+    ps5tm_powerguard_release();
+    return NULL;
+  }
   int done = 0;
   pthread_mutex_lock(&g_lock);
   for(int i = 0; i < g_n; i++) {
@@ -367,6 +376,15 @@ worker(void *arg) {
   }
   ps5tm_powerguard_release();
   return NULL;
+}
+
+/* The app ends: a running queue stops without the usual end (no "stopped by you", the mark stays), and a running dump is cancelled. */
+void
+ps5tm_dumpq_shutdown(void) {
+  pthread_mutex_lock(&g_lock);
+  if(g_active) { g_shutdown = 1; g_stop = 1; }
+  pthread_mutex_unlock(&g_lock);
+  ps5tm_dump_abort();
 }
 
 /* ---------------------------------------------------------------- interface */
@@ -429,17 +447,20 @@ queue_start(const cJSON *b, char *msg, size_t n) {
   }
 
   pthread_mutex_lock(&g_lock);
-  if(g_active) { pthread_mutex_unlock(&g_lock); snprintf(msg, n, "Die Warteschlange läuft schon."); return 409; }
+  if(g_active || g_starting) { pthread_mutex_unlock(&g_lock); snprintf(msg, n, "Die Warteschlange läuft schon."); return 409; }
+  g_starting = 1;                                /* a second start that comes in while the old worker is joined is refused (audit D-06) */
   if(g_worker_valid) {                           /* a finished worker is joined before the next one starts */
+    pthread_t old = g_worker;
+    g_worker_valid = 0;                          /* the handle is taken over here: nobody else joins it */
     pthread_mutex_unlock(&g_lock);
-    pthread_join(g_worker, NULL);
+    pthread_join(old, NULL);
     pthread_mutex_lock(&g_lock);
-    g_worker_valid = 0;
   }
   for(int i = 0; i < g_n; i++) { g_item[i].state = Q_PENDING; g_item[i].msg[0] = 0; }   /* a list that was run is run again from the top */
   g_interrupted = 0;
   g_current = -1;
   g_active = 1;
+  g_starting = 0;
   g_stop = 0;
   g_skip = 0;
   g_started_ms = ps5tm_mono_ms();

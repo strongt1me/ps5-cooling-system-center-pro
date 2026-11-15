@@ -989,7 +989,6 @@ static int g_ac_nleft;
 static int g_acn, g_ac_ok, g_ac_bad;
 static volatile int g_ac_gen; /* a new batch changes it: late returns of older calls are ignored */
 static time_t g_ac_next, g_ac_since;
-static ac_playgo_t g_ac_playgo;
 
 static int g_ac_submitted; /* the batch was handed to the system; before that it is still being built */
 
@@ -1019,12 +1018,13 @@ static void *ac_install_thread(void *arg) {
         char name[32];
         memset(&meta, 0, sizeof(meta));
         memset(&info, 0, sizeof(info));
-        memset(&g_ac_playgo, 0, sizeof(g_ac_playgo));
+        ac_playgo_t playgo; /* one per call: a call given up on may still write while a new batch makes its own */
+        memset(&playgo, 0, sizeof(playgo));
         snprintf(name, sizeof(name), "%s (Zusatzinhalt)", j->game);
         meta.uri = j->pkg_path;
         meta.ex_uri = meta.playgo_scenario_id = meta.content_id = meta.icon_url = "";
         meta.content_name = name;
-        int rc = sceAppInstUtilInstallByPackage ? sceAppInstUtilInstallByPackage(&meta, &info, &g_ac_playgo) : -1; /* (app) weak */
+        int rc = sceAppInstUtilInstallByPackage ? sceAppInstUtilInstallByPackage(&meta, &info, &playgo) : -1; /* (app) weak */
         printf("[accopy] %s: InstallByPackage=0x%08x\n", meta.uri, rc);
         if (g_ac_gen != gen)
             break; /* given up on: a newer batch owns the jobs */
@@ -2630,7 +2630,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     index_skips(root);
     static title_t titles[MAX_TITLES];
     static char tids[MAX_TITLES][10];
-    static int over_told; /* games past the limit in the last notification (PS4Mount 0.7.3) */
+    static int over_told[10]; /* games past the limit in the last notification, per drive (PS4Mount 0.7.3) */
     int count = 0, pending = 0, over = 0, found = title_list(root, tids, MAX_TITLES, &over);
     for (int i = 0; i < found; i++) {
         title_src_t src;
@@ -2667,12 +2667,12 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             notify("%s: %d Zusatzinhalt(e) warten auf ihr Spiel, das nicht auf diesem Laufwerk liegt (siehe Protokoll)", label,
                    waiting);
     }
-    if (over && (fresh || over > over_told)) {
+    if (over && (fresh || over > over_told[slot])) {
         printf("[scan] %s: %d game(s) past the limit of %d not added\n", root, over, MAX_TITLES);
         notify("%s: %d Spiel(e) nicht hinzugefügt: PS4Mount verwaltet höchstens %d Spiele je Laufwerk", label, over,
                MAX_TITLES);
     }
-    over_told = over;
+    over_told[slot] = over;
     if (fresh && !count)
         notify("%s: Keine PS4-Spiele gefunden", label);
     else if (fresh)
@@ -2696,11 +2696,24 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         }
         if (mount_title(&src)) {
             /* every scan (10 s) would tell again: the message at most every 5 minutes, the log line every time */
-            static time_t told_at;
+            static char told_tid[16][10];
+            static time_t told_at[16];
             time_t now_t = time(NULL);
+            int ti = -1, free_i = -1, oldest = 0;
+            for (int q = 0; q < 16; q++) {
+                if (!strcmp(told_tid[q], t->tid))
+                    ti = q;
+                if (!told_tid[q][0] && free_i < 0)
+                    free_i = q;
+                if (told_at[q] < told_at[oldest])
+                    oldest = q;
+            }
+            if (ti < 0)
+                ti = free_i >= 0 ? free_i : oldest;
             printf("[scan] %s (%s) could not be mounted\n", src.name, t->tid);
-            if (!told_at || now_t - told_at >= 300 || now_t < told_at) {
-                told_at = now_t;
+            if (strcmp(told_tid[ti], t->tid) || now_t - told_at[ti] >= 300 || now_t < told_at[ti]) {
+                snprintf(told_tid[ti], sizeof(told_tid[ti]), "%s", t->tid);
+                told_at[ti] = now_t;
                 notify("%s (%s) ließ sich nicht einbinden", src.name, t->tid);
             }
         }

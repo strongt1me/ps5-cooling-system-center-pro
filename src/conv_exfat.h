@@ -24,6 +24,11 @@ exfat_image_t *exfat_image_plan(const char *source_root, uint32_t serial,
 uint64_t       exfat_image_size(const exfat_image_t *img);
 unsigned       exfat_image_files(const exfat_image_t *img);
 uint64_t       exfat_image_payload(const exfat_image_t *img);
+/* What the scan left out on purpose, counted while the image was planned: *special entries that are neither a folder nor
+   a regular file (links, devices), *system OS metadata names (desktop.ini, thumbs.db, ._* ...). example gets the name of
+   the first. Returns the two added up. */
+unsigned       exfat_image_skipped(const exfat_image_t *img, unsigned *special, unsigned *system, char *example,
+                                   size_t example_len);
 /* The next up to len bytes of the image, strictly in order. Returns the
    number of bytes produced, 0 at the end, -1 on a read error — errno holds
    the cause and exfat_image_where() the file concerned. */

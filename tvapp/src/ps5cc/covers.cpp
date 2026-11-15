@@ -15,6 +15,17 @@ namespace hui::ps5cc
 namespace
 {
 constexpr float kFadeSeconds = 0.25f;
+
+// Pictures of the Profil and Danksagungen pages are never given back to make room: their pages do not ask for them again by focus.
+bool keep_loaded(const std::string &key)
+{
+    for (const char *prefix : {"profilepic:", "ownpic:", "avatarpick:", "credit:", "avatar:"})
+    {
+        if (key.rfind(prefix, 0) == 0)
+            return true;
+    }
+    return false;
+}
 } // namespace
 
 Covers &covers()
@@ -26,7 +37,9 @@ Covers &covers()
 CoverWant Covers::next_wanted(const std::vector<Game> &games)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (textures_.size() + busy_.size() >= kCoverLimit)
+    // At the limit only the focused game is still fetched (the store gives a texture back for it); the rest of the library keeps waiting.
+    const bool full = textures_.size() + busy_.size() >= kCoverLimit;
+    if (full && (preferred_.empty() || !busy_.empty()))
         return {};
     const auto open = [&](const Game &g)
     {
@@ -42,7 +55,7 @@ CoverWant Covers::next_wanted(const std::vector<Game> &games)
                 pick = &g;
         }
     }
-    if (pick == nullptr)
+    if (pick == nullptr && !full)
     {
         for (const Game &g : games)
         {
@@ -106,7 +119,7 @@ void Covers::listen(bool on)
 
 int Covers::upload_pending(
     const std::function<std::uint32_t(int, int, const std::uint8_t *)> &create, int max_per_frame,
-    float dt)
+    float dt, const std::function<void(std::uint32_t)> &destroy)
 {
     std::vector<Ready> take;
     {
@@ -132,7 +145,28 @@ int Covers::upload_pending(
             continue;
         }
         textures_[r.id] = {texture, 0.0f};
+        used_[r.id] = ++tick_;
         ++uploaded;
+        // Over the limit: the picture drawn least recently goes (never the one just made).
+        while (destroy && textures_.size() > kCoverLimit)
+        {
+            auto victim = textures_.end();
+            std::uint64_t oldest = UINT64_MAX;
+            for (auto it = textures_.begin(); it != textures_.end(); ++it)
+            {
+                const std::uint64_t t = used_.contains(it->first) ? used_[it->first] : 0;
+                if (it->first != r.id && !keep_loaded(it->first) && t < oldest)
+                {
+                    oldest = t;
+                    victim = it;
+                }
+            }
+            if (victim == textures_.end())
+                break;
+            destroy(victim->second.texture);
+            used_.erase(victim->first);
+            textures_.erase(victim);
+        }
     }
     return uploaded;
 }
@@ -141,7 +175,10 @@ CoverShown Covers::texture_of(const std::string &id) const
 {
     std::lock_guard<std::mutex> lock(mutex_);
     const auto it = textures_.find(id);
-    return it == textures_.end() ? CoverShown{} : it->second;
+    if (it == textures_.end())
+        return CoverShown{};
+    used_[id] = ++tick_;
+    return it->second;
 }
 
 std::size_t Covers::loaded() const

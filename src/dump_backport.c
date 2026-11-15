@@ -36,6 +36,7 @@
 #define BP_ENTRIES_MAX  400000u
 #define BP_SMALL_MAX    (1u << 20)
 #define BP_PHDR         0x38u
+#define BP_HELD_SUFFIX  ".ps5cc-teil"   /* the same as DJ_PART in dump_job.c */
 
 #define ELF_MAGIC       "\x7F" "ELF"
 #define PS4_FSELF_MAGIC "\x4F\x15\x3D\x1D"
@@ -381,10 +382,8 @@ patch_param_json(const char *path, uint32_t t5, el_say_t *say, char *why, size_t
     while((pos = strstr(pos, search)) != NULL) {
       pos += strlen(search);
       while(pos < end && (*pos == ' ' || *pos == '\t' || *pos == '\n' || *pos == '\r' || *pos == ':')) pos++;
-      if(pos >= end || *pos != '"') {
-        pos++;
-        continue;
-      }
+      if(pos >= end) break;                 /* the file ends after the key: nothing to read, and never a step past the buffer */
+      if(*pos != '"') continue;             /* not a string value; pos is already behind the key, so the search goes on */
       char *qs = pos;
       pos++;
       char *vs = pos;
@@ -572,23 +571,33 @@ ps5tm_dump_backport_run(const char *dst_root, int is_ps4, int level, volatile in
   else if(c.stop == -1) rc = -1;
 
   if(rc == 0) {
-    char path[PATH_MAX];
+    /* The parameter file may still carry its temporary name (the dump job holds param.sfo / param.json back until the very end,
+       see DJ_PART in dump_job.c): then the held file is the one that ends up in place, so it is the one to lower. A file under
+       its final name is lowered as well. */
+    const char *const pname = c.ps4 ? "param.sfo" : "param.json";
+    char path[2][PATH_MAX];
+    int have_path[2] = { 0, 0 };
+    have_path[0] = snprintf(path[0], PATH_MAX, "%s/sce_sys/%s" BP_HELD_SUFFIX, c.p, pname) < PATH_MAX;
+    have_path[1] = snprintf(path[1], PATH_MAX, "%s/sce_sys/%s", c.p, pname) < PATH_MAX;
     el_say_t say = { .rel = "param" };
-    int pr = 0;
-    if(c.ps4) {
-      if(snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", c.p) < (int)sizeof(path)) pr = patch_param_sfo(path, c.t4, &say);
-    } else {
-      if(snprintf(path, sizeof(path), "%s/sce_sys/param.json", c.p) < (int)sizeof(path))
-        pr = patch_param_json(path, c.t5, &say, res->why, sizeof(res->why));
+    int found = 0, patched = 0, bad = 0;
+    for(int i = 0; i < 2; i++) {
+      struct stat pst;
+      if(!have_path[i] || lstat(path[i], &pst) != 0) continue;
+      found = 1;
+      int pr = c.ps4 ? patch_param_sfo(path[i], c.t4, &say) : patch_param_json(path[i], c.t5, &say, res->why, sizeof(res->why));
+      if(pr == 1) patched = 1;
+      else if(pr < 0) bad = 1;
     }
-    if(pr == 1) {
+    if(patched) {
       res->param_patched = 1;
       for(int i = 0; i < say.nlines; i++) say_line(&c, NULL, "Backport: %s", say.line[i]);
-    } else if(pr < 0 && access(path, F_OK) == 0) {
+    }
+    if(bad) {
       res->failed++;
-      snprintf(res->why, sizeof(res->why), "%s ließ sich nicht umschreiben", c.ps4 ? "param.sfo" : "param.json");
-      say_line(&c, NULL, "Backport: %s ließ sich nicht umschreiben", c.ps4 ? "param.sfo" : "param.json");
-    } else if(pr < 0) {
+      snprintf(res->why, sizeof(res->why), "%s ließ sich nicht umschreiben", pname);
+      say_line(&c, NULL, "Backport: %s ließ sich nicht umschreiben", pname);
+    } else if(!found) {
       say_line(&c, NULL, "Backport: %s fehlt, übersprungen", c.ps4 ? "sce_sys/param.sfo" : "sce_sys/param.json");
     }
   }

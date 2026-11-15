@@ -2536,7 +2536,7 @@
   const psRunning = () => !!(ps.data && ps.data.job && ps.data.job.state === "running");
   const psLoad = async (mode) => {
     try { ps.data = await api(`/api/v1/paystore?refresh=${mode || 0}`, { timeoutMs: 60000 }); }
-    catch (e) { ps.data = ps.data || null; txt("#pl-count-store", "nicht verfügbar"); $("#ps-list").innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+    catch (e) { ps.data = ps.data || null; txt("#pl-count-store", "nicht verfügbar"); $("#ps-list").innerHTML = `<p class="muted">${esc(e.message)}</p>`; $("#ps-refresh").disabled = false; return; }
     psRender();
     psSync();
   };
@@ -2651,6 +2651,7 @@
     $("#ps-refresh").disabled = true;
     txt("#pl-count-store", "wird geladen …");
     await psPost({ action: "refresh" });
+    if (!psRunning()) $("#ps-refresh").disabled = false;      /* also when the answer never came: the button must not stay locked */
   });
   $("#ps-q").addEventListener("input", (e) => { ps.q = e.target.value; psRender(); });
   $("#ps-cats").addEventListener("click", (e) => {
@@ -6926,13 +6927,14 @@
     if (!box) return;
     const g = gm.loaded ? gm.list.find((x) => x.smp && x.app_mounted && x.can_remount && x.title_id !== gm.live) : null;
     if (!g) { box.hidden = true; box.textContent = ""; gmHoldWatch(false); return; }
-    const key = g.title_id;
-    if (!box.hidden && box.dataset.id === key) return;
+    const key = g.title_id, paused = g.hold_paused ? "1" : "";
+    if (!box.hidden && box.dataset.id === key && (box.dataset.paused || "") === paused) return;
     box.dataset.id = key;
+    box.dataset.paused = paused;
     box.textContent = "";
     const text = document.createElement("span");
     text.className = "gm-hold-text";
-    text.textContent = `„${g.name}“ ist eingehängt, aber nicht gestartet. Die App hängt es nach 30 Sekunden selbst wieder aus. Scheitert ein anderer Start (ShadowMountPlus meldet „Device busy“), gibt sie es sofort frei: dann einfach noch einmal starten.`;
+    text.textContent = paused ? `„${g.name}“ ist eingehängt, aber nicht gestartet. Die Wartezeit von 30 Sekunden steht, solange ein Spiel läuft oder ein Auftrag der App arbeitet.` : `„${g.name}“ ist eingehängt, aber nicht gestartet. Die App hängt es nach 30 Sekunden selbst wieder aus. Scheitert ein anderer Start (ShadowMountPlus meldet „Device busy“), gibt sie es sofort frei: dann einfach noch einmal starten.`;
     const b = document.createElement("button");
     b.type = "button"; b.className = "btn"; b.dataset.remount = "unmount"; b.dataset.id = key;
     b.textContent = "Aushängen";
@@ -7834,7 +7836,7 @@
 
   /* Der Server arbeitet bei „fetch“ (GitHub, bis zu drei Dateien zu je 3 Minuten) und „delete“ (großer Spielordner, bis 20 s) in einem
      Zug; mit den 8 Sekunden der übrigen Aufrufe meldete die Seite „keine Antwort“, während die Konsole weiterarbeitete. */
-  const FP_TIMEOUT = { fetch: 600000, delete: 40000, rebuild: 40000, rescan: 40000, start: 20000, stop: 20000 };
+  const FP_TIMEOUT = { fetch: 600000, delete: 40000, rebuild: 40000, rebuild_all: 40000, rescan: 40000, start: 20000, stop: 20000 };
   const fpPost = async (body) => {
     try {
       const r = await api("/api/v1/kraken", { method: "POST", body: JSON.stringify(body), timeoutMs: FP_TIMEOUT[body.action] || 20000 });
@@ -7856,6 +7858,7 @@
       : d.starting ? "startet gleich …" : "ausgeschaltet");
     $("#fp-on").checked = !!k || !!d.starting;
     $("#fp-scan").disabled = !k;
+    $("#fp-rebuild-all").disabled = !k;
     $("#fp-fetch").disabled = !!d.fetching;
     const prog = [`In der App: Kraken Mount ${d.embedded_version}`];
     if (d.fetched_version) prog.push(`geladen: ${d.fetched_version} (wird beim Start genommen)`);
@@ -8043,7 +8046,7 @@
     b.disabled = true;
     try {
       const r = await api("/api/v1/ps4mount/update", { method: "POST", body: JSON.stringify({ id: p4mg.id, file: p4mg.sel }) });
-      toast(r.message);
+      if (r.message) toast(r.message);
       p4mgClose();
       loadP4m();
     } catch (e) { toast(e.message, "error"); b.disabled = false; }
@@ -8054,7 +8057,7 @@
     const on = $$("#p4mg-body input[data-p4mg-dlc]").filter((box) => box.checked).map((box) => box.dataset.p4mgDlc).join(",");
     try {
       const r = await api("/api/v1/ps4mount/dlc", { method: "POST", body: JSON.stringify({ id: p4mg.id, on }) });
-      toast(r.message);
+      if (r.message) toast(r.message);
       p4mgClose();
       loadP4m();
     } catch (e) { toast(e.message, "error"); b.disabled = false; }
@@ -8195,6 +8198,7 @@
   $("#fp-log-reload").addEventListener("click", loadFp);
   $("#fp-on").addEventListener("change", (e) => fpPost({ action: e.target.checked ? "start" : "stop" }));
   $("#fp-scan").addEventListener("click", () => fpPost({ action: "rescan" }));
+  $("#fp-rebuild-all").addEventListener("click", () => fpPost({ action: "rebuild_all" }));
   $("#fp-fetch").addEventListener("click", async (e) => {
     const b = e.currentTarget;
     b.disabled = true;
@@ -8208,7 +8212,7 @@
     try {
       const r = await api("/api/v1/kraken", { method: "POST", body: JSON.stringify({ action: "fetch" }), timeoutMs: FP_TIMEOUT.fetch });
       msg = r.message || "";
-      toast(msg);
+      if (msg) toast(msg);
     } catch (er) { msg = er.message; bad = true; toast(msg, "error"); }
     /* the result stays on the card: "schon aktuell" or "neu geladen" (new version) or the error */
     res.classList.toggle("err", bad);
@@ -8271,7 +8275,12 @@
     if (c.checked) p4m.sel.add(c.dataset.p4mSel); else p4m.sel.delete(c.dataset.p4mSel);
     p4mPickButtons();
   });
-  $("#p4m-save").addEventListener("click", () => p4mPost(p4mConfig()));
+  $("#p4m-save").addEventListener("click", () => {
+    /* The form is empty until the console has given the real settings (it answers "config":{} while PS4Mount works): saving then would
+       write defaults over them. */
+    if (!p4m.cfgShown) { toast("Die Einstellungen sind noch nicht geladen. Bitte einen Moment warten.", "error"); return; }
+    p4mPost(p4mConfig());
+  });
   oneClick($("#p4m-restore-sel"), () => p4mRestore({ action: "restore", ids: Array.from(p4m.sel) }));
   oneClick($("#p4m-restore-all"), () => p4mRestore({ action: "restore_all" }));
 
@@ -9796,11 +9805,19 @@
   /* Texteditor */
   const FM_EDIT_MAX = 65536;
   const fmSaveEdit = async (path, content) => {
-    const r = await fetch(`/api/v1/files/write?path=${encodeURIComponent(path)}`, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-      body: content,
-    });
+    const ctl = new AbortController();
+    const stop = setTimeout(() => ctl.abort(), 30000);       /* not "…" for ever when the console does not answer */
+    let r;
+    try {
+      r = await fetch(`/api/v1/files/write?path=${encodeURIComponent(path)}`, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+        body: content,
+        signal: ctl.signal,
+      });
+    } catch (er) {
+      throw new Error(er && er.name === "AbortError" ? "Die Konsole antwortet nicht." : er.message);
+    } finally { clearTimeout(stop); }
     if (!r.ok) {
       let m = "";
       try { m = (await r.json()).message; } catch { }
@@ -9823,7 +9840,6 @@
     const stop = setTimeout(() => ctl.abort(), 30000);
     try {
       const r = await fetch(url, { cache: "no-store", signal: ctl.signal });
-      clearTimeout(stop);
       if (!r.ok) {
         let m = "";
         try { m = (await r.json()).message; } catch { }
@@ -9832,6 +9848,7 @@
       /* decoded by hand: a file that is not clean UTF-8, or whose line ends a textarea would change (it gives LF only), is not
          saved back from here (it would come back changed); CRLF alone is kept (audit 13.11.2026, N-2) */
       const buf = await r.arrayBuffer();
+      clearTimeout(stop);                                    /* the wait runs to the end of the body */
       if (mine !== fm.viewSeq) return;
       let text, exact = true;
       try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buf); } catch {
@@ -10124,8 +10141,6 @@
     if (!e || fm.sizing) return;
     const seq = fmSeq;
     fm.sizing = true;
-    const b = $(`[data-fm-size="${i}"]`);
-    if (b) { b.disabled = true; b.textContent = "…"; }
     try { await fmSizeFetch(e); } catch (er) { toast(`${e.name}: ${er.message}`, "error"); }
     fm.sizing = false;
     if (seq === fmSeq) { fm.sorted = fmSortList(fm.list.entries); fmRender(); }
@@ -10250,7 +10265,6 @@
       if (en) fmAskName("Umbenennen", "Neuer Name", en.name, (v) => api("/api/v1/files/rename", { method: "POST", body: JSON.stringify({ path: fmJoin(fm.path, en.name), name: v }) }));
     }
     else if (d.fmView !== undefined) fmView(+d.fmView);
-    else if (d.fmSize !== undefined) fmSizeOne(+d.fmSize);
     else if (t.id === "fm-sizes") fmSizeAll();
     else if (t.id === "fm-dir") { fm.desc = !fm.desc; fmSaveSort(); fmRender(); }
     else if (t.id === "fm-up") { if (fm.list && fm.list.parent) fmLoad(fm.list.parent); }
@@ -12025,11 +12039,6 @@
     if (qadd && !qadd.disabled) { await pqAdd([qadd.dataset.pkQadd]); return; }
     const qtitle = e.target.closest("[data-pk-qtitle]");
     if (qtitle && !qtitle.disabled) { await pqAdd(qtitle.dataset.pkQtitle.split(",")); return; }
-    const iopen = e.target.closest("[data-pk-iopen]");
-    if (iopen) {
-      if (pk.ipanel === iopen.dataset.pkIopen) { pk.ipanel = ""; pkRenderList(); } else pkiOpen(iopen.dataset.pkIopen);
-      return;
-    }
     if (e.target.closest("[data-pk-iclose]")) { pk.ipanel = ""; pkRenderList(); return; }
     const inst = e.target.closest("[data-pk-install]");
     if (inst && !inst.disabled) {

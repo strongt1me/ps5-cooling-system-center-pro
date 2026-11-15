@@ -560,11 +560,9 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
   return rc;
 }
 
-/* 1 while ShadowMountPlus runs a storage job (a move, an unpack). For the
-   app's own copy and conversion, which do not start beside one. A short
-   timeout: this sits in the way of a start, and a ShadowMountPlus that does
-   not answer, or has no job to report, is read as idle — it must never keep
-   the person from copying. */
+/* The part that needs no question to ShadowMountPlus: a start under way, a wait for the app's own tile, a job being followed. The jobs
+   list (jobreg.c) asks this alone when it is told not to ask ShadowMountPlus (PS5TM_JOBS_NO_SMP), so that skipping the HTTP call never
+   skips the app's own marks (audit F-34). */
 int
 ps5tm_gamemove_busy_local(void) {
   if(__atomic_load_n(&g_starting, __ATOMIC_ACQUIRE)) return 1;
@@ -574,6 +572,11 @@ ps5tm_gamemove_busy_local(void) {
   return on;
 }
 
+/* 1 while ShadowMountPlus runs a storage job (a move, an unpack). For the
+   app's own copy and conversion, which do not start beside one. A short
+   timeout: this sits in the way of a start, and a ShadowMountPlus that does
+   not answer, or has no job to report, is read as idle — it must never keep
+   the person from copying. */
 int
 ps5tm_gamemove_busy(void) {
   if(ps5tm_gamemove_busy_local()) return 1;

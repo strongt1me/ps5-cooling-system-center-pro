@@ -1100,7 +1100,7 @@ handle_write(int fd, const ps5tm_request_t *req) {
     return;
   }
   if(!writable(p)) {
-    ps5tm_http_send_error(fd, 403, "read_only", "Diese Datei ist schreibgeschuetzt (geschuetzt sind \"/\", /dev, /proc, eingehaengte Laufwerke und Verknuepfungen).");
+    ps5tm_http_send_error(fd, 403, "read_only", "Diese Datei ist schreibgeschützt (geschützt sind „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).");
     return;
   }
   struct stat st;
@@ -1365,7 +1365,10 @@ copy_file(const char *rs, const char *rt, const char *vs) {
   if(g_replace && lstat(rt, &ex) == 0) {
     if(!S_ISREG(ex.st_mode)) { close(in); return S_ISDIR(ex.st_mode) ? EISDIR : EEXIST; }
     if(snprintf(tmp, sizeof(tmp), "%s.fm-tmp", rt) >= (int)sizeof(tmp)) { close(in); return ENAMETOOLONG; }
-    unlink(tmp);
+    /* a leftover of an earlier run of this copy (same name, same suffix) is cleared; anything else under that name (a folder, a link) is not ours
+       and is not touched: the O_EXCL open below then refuses (audit F-127) */
+    struct stat lt;
+    if(lstat(tmp, &lt) == 0 && S_ISREG(lt.st_mode)) unlink(tmp);
     dst = tmp;
     replace = 1;
   }
@@ -2136,6 +2139,14 @@ job_json(void) {
   cJSON_AddNumberToObject(o, "elapsed_s", j.started_ms ? (double)(((j.finished_ms ? j.finished_ms : now) - j.started_ms) / 1000) : 0);
   cJSON_AddNumberToObject(o, "finished_ago_s", j.finished_ms ? (double)((now - j.finished_ms) / 1000) : -1);
   return o;
+}
+
+/* The app ends: a copy, move or delete of the file manager is asked to stop (as with the button "Abbrechen"). */
+void
+ps5tm_filemgr_shutdown(void) {
+  pthread_mutex_lock(&g_lock);
+  if(g_job.state == FM_COUNTING || g_job.state == FM_COPYING || g_job.state == FM_DELETING) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+  pthread_mutex_unlock(&g_lock);
 }
 
 int

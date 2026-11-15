@@ -4314,14 +4314,24 @@ void HttpSource::handle_engine_now(const ToolRequest &request)
         const bool fetch = request.body.find("\"fetch\"") != std::string::npos;
         const Net net =
             exchange("POST", "/api/v1/kraken", request.body, &status, &body, fetch ? 620 : 40);
+        std::string result;
         if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "FPKGMount",
-                   message_of(body, "Die App hat nicht geantwortet."));
+        {
+            result = message_of(body, "Die App hat nicht geantwortet.");
+            notice(Notice::Kind::error, "FPKGMount", result);
+        }
         else
         {
-            const std::string msg = message_of(body, "");
-            if (!msg.empty())
-                notice(Notice::Kind::success, "FPKGMount", msg);
+            result = message_of(body, "");
+            if (!result.empty())
+                notice(Notice::Kind::success, "FPKGMount", result);
+        }
+        if (fetch)
+        {
+            // the result of the download stays on the page, as the browser keeps it on its card
+            std::lock_guard<std::mutex> lock(mutex_);
+            data_.kraken.fetch_result = result;
+            ++data_.serial;
         }
         poll_kraken();
         return;
@@ -4487,6 +4497,7 @@ void HttpSource::poll_kraken()
     }
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
+    k.fetch_result = data_.kraken.fetch_result;
     data_.kraken = std::move(k);
     ++data_.serial;
 }

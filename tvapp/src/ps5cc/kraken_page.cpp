@@ -434,7 +434,8 @@ class KrakenPage final : public Page
         std::string s = "Kraken Mount";
         if (!state_.running)
             return s + (state_.starting ? " · startet gleich …" : " · ausgeschaltet") +
-                   " · In der App: Kraken Mount " + state_.embedded_version;
+                   " · In der App: Kraken Mount " + state_.embedded_version +
+                   (state_.fetch_result.empty() ? "" : " · " + state_.fetch_result);
         if (!state_.version.empty())
             s += " " + state_.version;
         if (state_.busy)
@@ -451,6 +452,8 @@ class KrakenPage final : public Page
         // a newer release was loaded: the next start takes it (the web page says the same)
         if (!state_.fetched_version.empty())
             s += " · geladen: " + state_.fetched_version + " (wird beim Start genommen)";
+        if (!state_.fetch_result.empty())
+            s += " · " + state_.fetch_result;
         return s;
     }
 

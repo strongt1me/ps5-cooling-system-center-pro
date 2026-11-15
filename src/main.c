@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +18,7 @@
 #include "ps5tm.h"
 #include "sha256.h"
 #include "smphold.h"
+#include "third_party/cJSON.h"
 
 void ps5tm_api_tile_refresh(void);
 
@@ -129,12 +131,12 @@ wait_for_release(unsigned port) {
 }
 
 /* Ends the older instance `pid` that holds `port`: SIGTERM first, so that it can hand the fan back to the console (fan.c),
-   and only when the port is still held after about three seconds SIGKILL, which cannot be caught (audit 11.11.2026, F-02).
+   and only when the port is still held after about six seconds SIGKILL, which cannot be caught (audit 11.11.2026, F-02).
    Returns 0 when the signal could not be sent. */
 static int
 stop_sibling(int pid, unsigned port) {
   if(kill(pid, SIGTERM) != 0) return kill(pid, SIGKILL) == 0 ? 0 : -1;
-  for(int i = 0; i < 30; i++) {
+  for(int i = 0; i < 60; i++) {                  /* a copy with a job under way first cancels it (stopper_thread), up to ~2.5 s */
     int probe = 0;
     if(!sibling_on_port(port, &probe)) return 0;
     usleep(100 * 1000);
@@ -221,15 +223,81 @@ retire_siblings(unsigned own_port) {
 }
 
 
-/* SIGTERM and SIGINT: ask the fan thread to hand the fan back to the console and end the process (fan.c). Only a flag is set
- * here. If the thread cannot get to it (it waits in a system call, or never started), SIGALRM ends the process: its default
- * action is to terminate. SIGKILL, which the app's own take-over and the process manager use, cannot be caught, so for those
- * the old behaviour stays: the last threshold remains until the console's next change of state resets it. */
+/* SIGTERM and SIGINT: ask the fan thread to hand the fan back to the console and end the process (fan.c). Only flags are set
+ * here (nothing in a signal handler may take a lock). If the thread cannot get to it (it waits in a system call, or never started),
+ * SIGALRM ends the process. SIGKILL, which the app's own take-over and the process manager use, cannot be caught, so for those
+ * the old behaviour stays: the last threshold remains until the console's next change of state resets it.
+ *
+ * Jobs under way (audit F-30): once stopper_thread runs, the signal does not stop the fan thread at once but first lets that thread
+ * ask the running jobs to cancel (each removes what it wrote) and wait up to ~2.5 s for them. Not covered: jobs without a cancel of
+ * their own (game delete, ShadowMountPlus move): they end with the process as before.
+ * The newcomer's SIGKILL comes after 6 s (instlock_acquire below), so the whole delay fits in. */
+static volatile sig_atomic_t g_stop_pending;       /* SIGTERM/SIGINT seen, stopper_thread does the rest */
+static volatile sig_atomic_t g_stopper_ready;      /* stopper_thread runs: the handler leaves the fan to it */
+
+/* Backstop when stopper_thread is stuck (a lock held by a stuck job): hand the fan back anyway, and end the process 3 s later. */
+static void
+on_stop_alarm(int sig) {
+  (void)sig;
+  ps5tm_fan_request_stop();
+  signal(SIGALRM, SIG_DFL);                         /* the next SIGALRM ends the process */
+  alarm(3);
+}
+
 static void
 on_stop_signal(int sig) {
   (void)sig;
+  if(g_stopper_ready) {
+    g_stop_pending = 1;
+    alarm(5);
+  } else {
+    ps5tm_fan_request_stop();
+    alarm(5);
+  }
+}
+
+/* 1 while a job other than the packages scan and the ShadowMountPlus move runs (the latter is not asked: no HTTP call at shutdown). */
+static int
+jobs_running(char *why, size_t n) {
+  return ps5tm_jobs_busy_except(-1, PS5TM_JOBS_NO_SMP, why, n);
+}
+
+/* Waits for the stop signal; then cancels the running jobs that can be cancelled, waits briefly for them to end and only then hands over
+   to the fan thread (which hands the fan back and ends the process). Without a job nothing is waited for. */
+static void *
+stopper_thread(void *arg) {
+  (void)arg;
+  while(!g_stop_pending) usleep(100 * 1000);
+  char why[200] = "", err[200];
+  if(jobs_running(why, sizeof(why))) {
+    PS5TM_INFO("stop_jobs", "Beenden angefordert, aber es läuft noch etwas (%.120s): die Aufträge werden abgebrochen.", why);
+    cJSON *b = cJSON_CreateObject();                /* the queues first, so that the next entry does not start */
+    if(b) {
+      cJSON_AddStringToObject(b, "action", "stop");
+      (void)ps5tm_convqueue_action(b, err, sizeof(err));
+      cJSON_Delete(b);
+    }
+    (void)ps5tm_gameconvert_cancel(-1);
+    (void)ps5tm_gamecopy_cancel();
+    ps5tm_saves_cancel();
+    ps5tm_pkgsplit_cancel();
+    (void)ps5tm_imgjob_cancel();
+    ps5tm_dumpq_shutdown();                          /* the queue keeps its mark (the next start tells that the run was interrupted) */
+    ps5tm_filemgr_shutdown();
+    {
+      cJSON *c = cJSON_CreateObject();               /* the disc image: the same as the button "Abbrechen" */
+      if(c) {
+        cJSON_AddStringToObject(c, "action", "cancel");
+        char dmsg[200];
+        (void)ps5tm_disc_action(c, dmsg, sizeof(dmsg));
+        cJSON_Delete(c);
+      }
+    }
+    (void)ps5tm_pkgqueue_cancel();                   /* the package that runs and the queue behind it */
+    for(int i = 0; i < 25 && jobs_running(why, sizeof(why)); i++) usleep(100 * 1000);
+  }
   ps5tm_fan_request_stop();
-  alarm(5);
+  return NULL;
 }
 
 
@@ -341,7 +409,7 @@ main(int argc, char **argv) {
      that it hands the fan back), and only then does this one go on to the fan and the port. The check through the web server below
      stays for copies from before the lock existed and for a lock that cannot be taken. */
   int stopped_pid = 0;
-  int lock = ps5tm_instlock_acquire(PS5TM_DATA_DIR "/app.lock", 3000, 2000, &stopped_pid);
+  int lock = ps5tm_instlock_acquire(PS5TM_DATA_DIR "/app.lock", 6000, 2000, &stopped_pid);
   if(lock == 1 && stopped_pid > 0) {
     PS5TM_INFO("instance_stopped",
                "Eine ältere Ausführung dieser App (Prozess %d) wurde über die Sperrdatei beendet; sie war nicht mehr ansprechbar "
@@ -382,6 +450,21 @@ main(int argc, char **argv) {
                    "Schwelle.");
   }
   ps5tm_fanguard_start();
+
+  /* Jobs under way are cancelled before the fan is handed back on SIGTERM (audit F-30, see on_stop_signal). Without the thread the
+     handler works as before. */
+  {
+    pthread_attr_t sattr;
+    pthread_attr_init(&sattr);
+    pthread_attr_setdetachstate(&sattr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setstacksize(&sattr, 256 * 1024);
+    pthread_t sth;
+    if(pthread_create(&sth, &sattr, stopper_thread, NULL) == 0) {
+      signal(SIGALRM, on_stop_alarm);
+      g_stopper_ready = 1;
+    }
+    pthread_attr_destroy(&sattr);
+  }
 
   /* The probe thread deliberately does NOT start here — see below. */
 

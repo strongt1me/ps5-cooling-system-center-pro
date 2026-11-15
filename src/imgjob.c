@@ -854,6 +854,14 @@ unpack_run(void *arg) {
     goto out;
   }
   set_phase("Der Ordner wird fertiggestellt");
+  /* The target was free at the start, hours ago: a rename onto an empty folder that has appeared since would replace it
+     without a word (rename succeeds on an empty directory), so it is looked at once more (audit D-09). */
+  if(lstat(dest, &st) == 0 || errno != ENOENT) {
+    rm_tree(tmp, 0);
+    finish(IJ_FAILED, "Den Zielordner gibt es inzwischen schon (er wurde während des Entpackens angelegt). Nichts wurde überschrieben und der entpackte Ordner nicht behalten. "
+                      "Bitte ihn umbenennen oder löschen und neu entpacken.");
+    goto out;
+  }
   if(rename(tmp, dest) != 0) {
     int e = errno ? errno : EIO;
     rm_tree(tmp, 0);

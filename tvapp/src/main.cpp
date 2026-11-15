@@ -317,7 +317,12 @@ int main()
         // Covers decoded by the HTTP worker become textures here, two a frame at most.
         ps5cc::covers().upload_pending([&](int w, int h, const std::uint8_t *rgba)
                                        { return renderer.batch().create_texture(w, h, rgba); }, 2,
-                                       dt);
+                                       dt,
+                                       [](std::uint32_t texture)
+                                       {
+                                           const GLuint name = texture;
+                                           glDeleteTextures(1, &name);
+                                       });
         ps5cc::backdrops().upload_pending(
             [&](std::uint32_t reuse, int w, int h, const std::uint8_t *rgba)
             {

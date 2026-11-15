@@ -602,6 +602,9 @@ one_file(ds_ctx_t *c, const char *src, const char *dst, const char *rel) {
     close(fd);
     return;
   }
+  /* The plain file takes the place of the executable copy: it needs the execute bit, as the copy has it (a game whose eboot.bin
+     or modules lack it crashes at the start, see the copy in dump_job.c); fchmod is not cut by the umask. */
+  (void)fchmod(out, 0777);
   int critical = 0;
   rc = elf_extract(fd, &pl, out, c->buf, c->cancel, &critical);
   if(critical) res->critical = 1;

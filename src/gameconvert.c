@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #ifndef PS5TM_HOST_TEST
 #include <sys/mount.h>
@@ -117,7 +118,7 @@ typedef struct {
   char     error[640];        /* room for PS5TM_IO_TEXT_MAX (ioerr.h) after a label and a path */
   char     sums[320];         /* the checksum file, once written          */
   int      quick;             /* the check afterwards is the quick one (structure and a sample; no checksum file) */
-  char     note[300];         /* something that did not stop the job      */
+  char     note[520];         /* something that did not stop the job      */
   uint64_t started_ms, finished_ms;
   uint64_t window_ms, window_bytes;
   double   rate;
@@ -563,6 +564,12 @@ stamp_take(cv_stamp_t *st, const cv_stamp_t *ref, const char *source, int folder
     else st->usable = 0;
   }
   if(!ref && st->kept_all && st->n > 1) qsort(st->h, st->n, sizeof(*st->h), stamp_cmp);
+  if((!st->kept_all || !st->usable) && st->h) {   /* a list that is of no use (too many files, a failed realloc, an incomplete walk) is not kept until stamp_free (audit F-48) */
+    free(st->h);
+    st->h = NULL;
+    st->n = st->cap = 0;
+    st->kept_all = 0;
+  }
 }
 
 static void
@@ -593,18 +600,48 @@ stamp_verify(const cv_stamp_t *first, const char *source, int folder, char *err,
   return same ? 0 : -1;
 }
 
+/* The look at the source right after the writing and BEFORE the long read-back (audit F-40): a source that changed meanwhile ends the job
+   here, not only after hours of checking. 0 when all is well; -1 with the sentence in err (a cancel says "Abgebrochen."). The look before
+   the result gets its name (the last step of cv_run) stays: the read-back takes long too. */
+static int
+stamp_check_after_write(const cv_stamp_t *first, const char *title_id, const char *source, int folder, char *err, size_t err_len) {
+  int sv = stamp_verify(first, source, folder, err, err_len);
+  if(sv == 0) return 0;
+  if(sv == -2) {
+    snprintf(err, err_len, "Abgebrochen.");
+    errno = ECANCELED;
+  } else {
+    PS5TM_WARN("game_convert_source_changed", "Konvertieren von %s: %s", title_id, err);
+  }
+  return -1;
+}
+
 /* --------------------------------------------------------------- the worker */
 
 static void *cv_run(void *arg);
 
-/* The UFS2 writer over the one folder of a game, or over a PS4 dump's folders laid over each other (dump_image.c). */
+/* The UFS2 writer over the one folder of a game, or over a PS4 dump's folders laid over each other (dump_image.c). Its own plan:
+   the size of its image, the data in it, the files, what it leaves out. The scan stops when g_cancel is set (errno ECANCELED). */
 static int
-cv_ufs2_plan(const cv_args_t *a, uint64_t *size, char *err, size_t err_len) {
+cv_ufs2_plan(const cv_args_t *a, ufs2_plan_info_t *pi, char *err, size_t err_len) {
   if(a->nroots > 0) {
     const char *rt[3] = { a->roots[0], a->roots[1], a->roots[2] };
-    return ufs2_plan_size_roots(rt, (unsigned)a->nroots, size, err, err_len);
+    return ufs2_plan_info_roots(rt, (unsigned)a->nroots, &g_cancel, pi, err, err_len);
   }
-  return ufs2_plan_size(a->source, size, err, err_len);
+  return ufs2_plan_info(a->source, &g_cancel, pi, err, err_len);
+}
+
+/* What the image leaves out on purpose, as a sentence for the job's note: links and devices (the image has no place for them) and
+   the names the OS litters a folder with (desktop.ini, thumbs.db, ._* ...), which the writers skip in every folder. "" when none. */
+static void
+skip_note(char *out, size_t n, unsigned special, unsigned system, const char *example) {
+  out[0] = 0;
+  if(!special && !system) return;
+  char what[160] = "";
+  if(special && system) snprintf(what, sizeof(what), "%u Verknüpfungen oder Sonderdateien und %u Systemdateien (desktop.ini, thumbs.db, ._*)", special, system);
+  else if(special)      snprintf(what, sizeof(what), "%u Verknüpfungen oder Sonderdateien", special);
+  else                  snprintf(what, sizeof(what), "%u Systemdateien (desktop.ini, thumbs.db, ._*)", system);
+  snprintf(out, n, "Nicht ins Abbild übernommen: %s, zum Beispiel „%.60s“.", what, example && example[0] ? example : "?");
 }
 
 static int
@@ -667,6 +704,66 @@ cv_check_samples(int fd, const cv_sample_t *s, unsigned n, const int *cancel, ch
   return rc;
 }
 
+/* ------------------------------------------------ leftovers of an earlier run (audit F-36) */
+
+#define SWEEP_MIN_AGE_S 3600     /* only what has lain untouched for an hour: a job of this run, or another start in the same moment, is never hit */
+
+static int
+sweep_old(const struct stat *st, time_t now) {
+  return (int64_t)st->st_mtime < (int64_t)now && (int64_t)now - (int64_t)st->st_mtime >= SWEEP_MIN_AGE_S;
+}
+
+/* In one result folder: this app's unfinished files (PART_SUFFIX) and its folders of signed executables (FSIGN_STAGE_SUFFIX) that are old.
+   Only a name with exactly one of these endings is touched; a link or anything else with such a name stays. Returns how many were removed. */
+static unsigned
+sweep_dir(const char *dir, time_t now) {
+  DIR *d = opendir(dir);
+  if(!d) return 0;
+  unsigned n = 0;
+  size_t pl = strlen(PART_SUFFIX), xl = strlen(FSIGN_STAGE_SUFFIX);
+  struct dirent *e;
+  while((e = readdir(d))) {
+    size_t nl = strlen(e->d_name);
+    int is_part = nl > pl && !strcmp(e->d_name + nl - pl, PART_SUFFIX);
+    int is_stage = nl > xl && !strcmp(e->d_name + nl - xl, FSIGN_STAGE_SUFFIX);
+    if(!is_part && !is_stage) continue;
+    char path[PATH_MAX];
+    if(snprintf(path, sizeof(path), "%s/%s", dir, e->d_name) >= (int)sizeof(path)) continue;
+    struct stat st;
+    if(lstat(path, &st) != 0 || !sweep_old(&st, now)) continue;
+    if(is_part && S_ISREG(st.st_mode)) { if(unlink(path) == 0) n++; }
+    else if(is_stage && S_ISDIR(st.st_mode)) { ps5tm_fsign_rmtree(path); n++; }
+  }
+  closedir(d);
+  return n;
+}
+
+/* Once per run of the app, before the first conversion starts (no other conversion is there, so none of its files can be hit): the
+   unfinished files that a crash or a power cut left in the folders where the jobs put them — on every drive the folders of the two
+   modes and the one of the debug FPKGs — and the folders of the overlay of a PS4 game (PS5TM_DATA_DIR/dump-image/TITLE) a job did not
+   get to remove. Before this, a leftover was only removed when the next try had the very same name. The folders of the result are
+   fixed (dest_dir), nothing is searched further down. */
+static void
+sweep_leftovers(void) {
+  static int done;
+  if(__atomic_exchange_n(&done, 1, __ATOMIC_ACQ_REL)) return;
+  time_t now = time(NULL);
+  unsigned n = 0, ov = 0;   /* ov: kept for the log line below, always 0 now */
+  ps5tm_sysinfo_t info;
+  ps5tm_sysinfo_get(&info);
+  for(unsigned i = 0; i < info.volume_count; i++) {
+    char base[64], dir[128];
+    snprintf(base, sizeof(base), "%s", !strcmp(info.volumes[i].path, "/user") ? "/data" : info.volumes[i].path);
+    static const char *const modes[] = { "homebrew", "backup" };
+    for(int m = 0; m < 2; m++) if(dest_dir(base, modes[m], dir, sizeof(dir)) == 0) n += sweep_dir(dir, now);
+    if(snprintf(dir, sizeof(dir), "%s/%s", base, FPKG_DIR) < (int)sizeof(dir)) n += sweep_dir(dir, now);
+  }
+  /* The overlay folders under dump-image are NOT swept here: the overlay of the job that starts now is written before this runs, and an old
+     leftover of the same title would be taken for it (audit 15.11.2026). The next job of that title writes its own over the old one. */
+  if(n || ov)
+    PS5TM_INFO("game_convert_sweep", "Aufräumen beim ersten Konvertieren: %u unfertige Datei(en)/Ordner und %u Überlagerungsordner einer früheren Sitzung entfernt.", n, ov);
+}
+
 /* The console stays awake for as long as the job runs, whichever way it ends
    (powerguard.c). */
 static void *
@@ -674,6 +771,7 @@ cv_thread(void *arg) {
   char overlay[256];
   snprintf(overlay, sizeof(overlay), "%s", ((cv_args_t *)arg)->overlay);
   ps5tm_powerguard_hold();
+  sweep_leftovers();                                 /* first job of this run only; this job's own files do not exist yet */
   void *r = cv_run(arg);
   ps5tm_powerguard_release();
   if(overlay[0]) dimg_remove_overlay(overlay);
@@ -825,6 +923,8 @@ cv_run(void *arg) {
   ps5tm_prefetch_t *pf = NULL;
   char              sign_dir[PATH_MAX] = "";      /* the folder of signed executables laid over the game (fsign.c), removed in the end */
   unsigned          signed_n = 0, refused_n = 0;
+  unsigned          skip_special = 0, skip_system = 0;   /* entries the plan left out on purpose (links, OS metadata names) */
+  char              skip_eg[96] = "";
   cv_stamp_t        stamp;                        /* the fingerprint of the source before anything is written */
   memset(&stamp, 0, sizeof(stamp));
 
@@ -893,7 +993,27 @@ cv_run(void *arg) {
       a.nroots = 2;
     }
   }
-  if(a.folder) {
+  uint64_t need_bytes = 0;            /* what the target has to have room for */
+  if(a.folder && !strcmp(a.op, "ffpkg")) {
+    /* An .ffpkg is planned by its own writer, not through an exFAT image: exFAT refuses what UFS2 can hold (names that differ in
+       case only, characters exFAT forbids), and its size is not the .ffpkg's. The image size is also what the progress runs
+       against (the writer reports the bytes of the image it has laid down), so raw is that size here. */
+    ufs2_plan_info_t pi;
+    if(cv_ufs2_plan(&a, &pi, err, sizeof(err)) != 0) {
+      if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) {
+        cv_state(CV_CANCELLED);
+        PS5TM_INFO("game_convert_cancelled", "Konvertieren von %s abgebrochen, bevor etwas geschrieben wurde.", a.title_id);
+      } else {
+        cv_fail("%s", err);
+      }
+      goto cleanup;
+    }
+    raw         = pi.image_size;
+    files       = pi.files > 0xFFFFFFFFu ? 0xFFFFFFFFu : (unsigned)pi.files;
+    skip_special = pi.skipped_special;
+    skip_system  = pi.skipped_system;
+    snprintf(skip_eg, sizeof(skip_eg), "%s", pi.skipped_example);
+  } else if(a.folder) {
     if(a.nroots > 0) {
       const char *rt[3] = { a.roots[0], a.roots[1], a.roots[2] };
       img = exfat_image_plan_roots(rt, (unsigned)a.nroots, serial_for(a.title_id), err, sizeof(err));
@@ -903,6 +1023,7 @@ cv_run(void *arg) {
     if(!img) { cv_fail("%s", err); goto cleanup; }
     raw   = exfat_image_size(img);
     files = exfat_image_files(img);
+    exfat_image_skipped(img, &skip_special, &skip_system, skip_eg, sizeof(skip_eg));
   } else {
     struct stat st;
     fsrc.fd = open(a.source, O_RDONLY);
@@ -913,15 +1034,9 @@ cv_run(void *arg) {
     raw = (uint64_t)st.st_size;
   }
 
-  /* An .ffpkg is as big as its own image, which is not the exFAT image's size:
-     a big file's pointer blocks are counted generously, and every file is
-     rounded up to whole blocks. The room is asked for that size. */
-  uint64_t need_bytes = raw;
-  if(!strcmp(a.op, "ffpkg") && a.folder) {
-    uint64_t ffpkg_size = 0;
-    if(cv_ufs2_plan(&a, &ffpkg_size, err, sizeof(err)) != 0) { cv_fail("%s", err); goto cleanup; }
-    need_bytes = ffpkg_size;
-  }
+  /* An .ffpkg is as big as its own image (raw above), which is not the exFAT image's size: a big file's pointer blocks are
+     counted generously, and every file is rounded up to whole blocks. The room is asked for that size. */
+  need_bytes = raw;
 
   /* Planning cannot be interrupted (it is another file's code). A cancel that
      came meanwhile is honoured here, before anything is touched — not only
@@ -982,7 +1097,16 @@ cv_run(void *arg) {
     snprintf(g_job.note, sizeof(g_job.note), "%u Programmdateien waren nicht signiert (einfache ELF-Dateien, die die Konsole nicht startet) und stehen im Abbild als FSELF.", signed_n);
   else if(refused_n)
     snprintf(g_job.note, sizeof(g_job.note), "%u Programmdateien sind nicht signiert und ließen sich nicht signieren; sie blieben, wie sie sind.", refused_n);
+  if(skip_special || skip_system) {          /* what is not in the image says so, next to the other notes */
+    char sn[300];
+    skip_note(sn, sizeof(sn), skip_special, skip_system, skip_eg);
+    size_t nl = strlen(g_job.note);
+    snprintf(g_job.note + nl, sizeof(g_job.note) - nl, "%s%s", nl ? " · " : "", sn);
+  }
   pthread_mutex_unlock(&g_lock);
+  if(skip_special || skip_system)
+    PS5TM_WARN("game_convert_skipped", "Konvertieren von %s: %u Verknüpfungen/Sonderdateien und %u Systemdateien kommen nicht ins Abbild (z. B. %.60s).",
+               a.title_id, skip_special, skip_system, skip_eg);
 
   uint64_t size = 0;
   int rc;
@@ -1052,6 +1176,7 @@ cv_run(void *arg) {
       rc = -1;
     }
     size = pos;
+    if(!rc) rc = stamp_check_after_write(&stamp, a.title_id, a.source, a.folder, err, sizeof(err));   /* before the read-back (audit F-40) */
     if(!rc && a.quick) {
       /* The quick level: the size of the file, then the pieces kept while writing, read back and compared. The image is not
          read through, so there is no SHA-256 and no checksum file. The last few pieces join the ones taken on the way. */
@@ -1083,6 +1208,7 @@ cv_run(void *arg) {
   } else if(!strcmp(a.op, "ffpkg")) {
     ufs2_sums_t *usums = NULL;
     rc = cv_ufs2_write(&a, out, &g_cancel, cv_progress, &size, &usums, err, sizeof(err));
+    if(!rc) rc = stamp_check_after_write(&stamp, a.title_id, a.source, a.folder, err, sizeof(err));   /* before the read-back (audit F-40) */
     if(!rc) {
       /* The blocks of this writer go down in no order, so the image as a whole
          has no CRC to compare. What it has is one per file, taken while the
@@ -1108,6 +1234,7 @@ cv_run(void *arg) {
     char inner[48];
     snprintf(inner, sizeof(inner), "%s", a.inner);
     rc = pfs_write_single(out, inner, raw, rd, rctx, &o, &size, err, sizeof(err));
+    if(!rc) rc = stamp_check_after_write(&stamp, a.title_id, a.source, a.folder, err, sizeof(err));   /* before the read-back (audit F-40) */
     if(!rc) {
       cv_check_begin(size);
       /* quick: structure and a sample of the blocks, the image is not read through (no payload CRC, no SHA-256) */
@@ -1376,6 +1503,9 @@ typedef struct {
   int      folder, ps4;
   uint64_t raw, ffpkg_bytes, files;
   char     ffpkg_why[700];
+  char     exfat_why[400];                      /* why no exFAT image (and so no .exfat / .ffpfsc) of this folder, "" when there is one */
+  unsigned skip_special, skip_system;           /* entries the images leave out on purpose; skip_eg: the first of them */
+  char     skip_eg[96];
   unsigned max_name, max_path;
   uint64_t at_ms;
 } plan_cache_t;
@@ -1413,13 +1543,23 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
 
   uint64_t raw = 0;
   unsigned files = 1;
+  char     exfat_why[400] = "", skip_eg[96] = "";
+  unsigned skip_special = 0, skip_system = 0;
   if(folder) {
     exfat_image_t *img = exfat_image_plan(source, serial_for(title_id), err, err_len);
-    if(!img) return NULL;
-    raw   = exfat_image_size(img);
-    files = exfat_image_files(img);
-    exfat_image_free(img);
-    if(ps4) raw += 1ull << 20;                         /* room for the param.json laid over it (dump_image.c) */
+    if(img) {
+      raw   = exfat_image_size(img);
+      files = exfat_image_files(img);
+      exfat_image_skipped(img, &skip_special, &skip_system, skip_eg, sizeof(skip_eg));
+      exfat_image_free(img);
+      if(ps4) raw += 1ull << 20;                       /* room for the param.json laid over it (dump_image.c) */
+    } else if(can_ffpkg) {
+      /* exFAT refuses what UFS2 can hold (names that differ in case only, characters exFAT forbids): the .ffpkg is planned
+         on its own below and decides; only the two exFAT-based results are left out then. */
+      snprintf(exfat_why, sizeof(exfat_why), "%s", err);
+    } else {
+      return NULL;
+    }
   } else {
     struct stat st;
     if(stat(source, &st) != 0) {
@@ -1437,8 +1577,28 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   uint64_t ffpkg_bytes = 0;
   char ffpkg_why[700] = "";
   if(folder && can_ffpkg) {
-    if(ufs2_plan_size(source, &ffpkg_bytes, ffpkg_why, sizeof(ffpkg_why)) != 0) ffpkg_bytes = 0;
-    else { ffpkg_why[0] = 0; if(ps4) ffpkg_bytes += 1ull << 20; }
+    ufs2_plan_info_t pi;
+    if(ufs2_plan_info(source, NULL, &pi, ffpkg_why, sizeof(ffpkg_why)) != 0) {
+      ffpkg_bytes = 0;
+    } else {
+      ffpkg_why[0] = 0;
+      ffpkg_bytes = pi.image_size;
+      if(ps4) ffpkg_bytes += 1ull << 20;
+      if(exfat_why[0]) {                               /* no exFAT plan: the sizes and counts are this one's */
+        raw   = ffpkg_bytes;
+        files = pi.files > 0xFFFFFFFFu ? 0xFFFFFFFFu : (unsigned)pi.files;
+        skip_special = pi.skipped_special;
+        skip_system  = pi.skipped_system;
+        snprintf(skip_eg, sizeof(skip_eg), "%s", pi.skipped_example);
+      }
+    }
+  }
+  if(exfat_why[0]) {
+    if(!ffpkg_bytes) {                                 /* neither image can be made of this folder */
+      snprintf(err, err_len, "%s (als ffpkg: %s)", exfat_why, ffpkg_why);
+      return NULL;
+    }
+    can_exfat = can_ffpfsc = 0;                        /* the page offers .ffpkg only */
   }
 
   char stem[200];
@@ -1487,6 +1647,10 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     pcs->ffpkg_bytes = ffpkg_bytes;
     pcs->files = files;
     snprintf(pcs->ffpkg_why, sizeof(pcs->ffpkg_why), "%s", ffpkg_why);
+    snprintf(pcs->exfat_why, sizeof(pcs->exfat_why), "%s", exfat_why);
+    pcs->skip_special = skip_special;
+    pcs->skip_system = skip_system;
+    snprintf(pcs->skip_eg, sizeof(pcs->skip_eg), "%s", skip_eg);
     pcs->max_name = cJSON_IsNumber(mn) ? (unsigned)mn->valuedouble : 0;
     pcs->max_path = cJSON_IsNumber(mp) ? (unsigned)mp->valuedouble : 0;
     pcs->at_ms = ps5tm_mono_ms();
@@ -1496,6 +1660,12 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   cJSON_AddItemToObject  (root, "unsigned_exec", ps5tm_fsign_info(folder && !ps4 ? source : NULL));
   cJSON_AddNumberToObject(root, "ffpkg_bytes", (double)ffpkg_bytes);
   if(ffpkg_why[0]) cJSON_AddStringToObject(root, "ffpkg_error", ffpkg_why);
+  if(exfat_why[0]) cJSON_AddStringToObject(root, "exfat_error", exfat_why);      /* no .exfat / .ffpfsc for this folder; "ops" has no more than .ffpkg */
+  if(skip_special || skip_system) {
+    char sn[300];
+    skip_note(sn, sizeof(sn), skip_special, skip_system, skip_eg);
+    cJSON_AddStringToObject(root, "skipped_note", sn);
+  }
   cJSON_AddNumberToObject(root, "files", files);
   cJSON *ops = cJSON_AddArrayToObject(root, "ops");
   if(can_ffpfsc) cJSON_AddItemToArray(ops, cJSON_CreateString("ffpfsc"));
@@ -1663,6 +1833,15 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
   if(!strcmp(op, "ffpkg") && pc.ffpkg_why[0]) {
     chk_add(arr, "ffpkg", "error", pc.ffpkg_why, "Ein ffpkg-Abbild ist bei diesem Spiel nicht möglich.");
     errors++;
+  }
+  if(pc.exfat_why[0] && (!strcmp(op, "exfat") || !strcmp(op, "ffpfsc"))) {
+    chk_add(arr, "exfat", "error", pc.exfat_why, "Ein exFAT-Abbild ist bei diesem Spiel nicht möglich.");
+    errors++;
+  }
+  if(pc.skip_special || pc.skip_system) {
+    char sn[300];
+    skip_note(sn, sizeof(sn), pc.skip_special, pc.skip_system, pc.skip_eg);
+    chk_add(arr, "skipped", "warn", "Die Abbilder nehmen nur Ordner und gewöhnliche Dateien auf.", "%s", sn);
   }
   if(pc.max_name > 240 || pc.max_path > 800)
     chk_add(arr, "names", "warn", "exFAT erlaubt 255 Zeichen je Name und diese App 1024 Bytes je Pfad.",
