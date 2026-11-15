@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht (nach v1.85.1)
+## v1.86.0 – 15.11.2026
 
 ### Fremdbausteine: AMPR EMU NG v0.4.1 und Kraken Mount v0.2.0 (15.11.2026)
 - **AMPR EMU NG v0.4.1** (quer3q, 15.11.2026) ist eingebettet; die zwei Fassungen zur Auswahl sind jetzt **0.4.1 und 0.3.5**: Auf Wunsch bleibt die letzte fehlerfreie stabile (0.3.5) statt der fehlerhaften 0.4.0 (feste 48-MiB-Grenze für Indexe, Abstürze und Ladehänger, die 0.4.1 behebt). SHA-256 gegen `SHA256SUMS` geprüft, SELF-Kopf und Kennung `ampr-emu-ng 0.4.1` in beiden Dateien. Neu laut Veröffentlichung: neue Dateiindex-Ansicht ohne die feste 48-MiB-Grenze (Indexspeicher 80 MiB), Korrekturen für große Spiele (Final Fantasy XVI, Demon's Souls, Returnal), Spider-Man: Miles Morales, Spielstand-Einhängen, Horizon Forbidden West und Ordner-Handles. Die Paketformate sind unverändert.
