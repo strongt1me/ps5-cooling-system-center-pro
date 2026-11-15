@@ -5,7 +5,7 @@
 ### Browser: FPKGMount ohne doppelte Knöpfe (15.11.2026)
 - Die Knöpfe „Kraken Mount starten“ und „Beenden“ in der Karte „Programm“ sind entfernt: Sie schickten dasselbe wie der Schalter „Einschalten“ oben. Es bleiben der Schalter, „Neue Fassung von GitHub laden“ und „Seite von Kraken Mount“. Handbuch (7 Sprachen) und Wörterbücher angepasst; die Vollbild-App bleibt unverändert (am Controller gibt es keinen Schalter).
 - „Neue Fassung von GitHub laden“: Das Ergebnis („schon die neueste Fassung“, „neu geladen“ oder der Fehler) bleibt jetzt mit der Uhrzeit der Prüfung auf der Karte „Programm“ stehen; die kurze Einblendung allein wurde übersehen.
-- Der Knopf „Aktualisieren“ oben auf der FPKGMount-Seite ist entfernt: Die Seite frischt sich selbst auf; „Jetzt suchen“ bleibt.
+- Der Knopf „Aktualisieren“ oben auf der FPKGMount-Seite ist entfernt: Die Seite frischt sich selbst auf; „Jetzt suchen“ bleibt. Dasselbe gilt für die Seite „PS4 von USB“ (PS4Mount); das Protokoll behält „Neu laden“.
 
 ### Prüfung der ganzen App (15.11.2026): 45 Befunde, 8 Prüfer, Gegenprüfung am Code
 - **Vorgehen:** War-Room-Audit (Skalierung, Nebenläufigkeit, Ausfall, Sicherheit) und vier Code-Reviews über `78bb196..HEAD`; die Befunde stehen in `.warroom/audit/09-audit-2026-11-15-roh.md`, fünf Gegenprüfer haben jeden am Code zu widerlegen versucht (alle 45 blieben bestehen, meist mit geringerer Schwere), danach zwei Prüfer über die Korrekturen.

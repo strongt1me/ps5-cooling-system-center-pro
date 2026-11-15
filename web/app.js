@@ -8219,7 +8219,6 @@
     }
   });
 
-  $("#p4m-reload").addEventListener("click", () => { loadP4m(); loadP4mLog(); });
   $("#p4m-log-reload").addEventListener("click", loadP4mLog);
   $("#p4m-on").addEventListener("change", (e) => p4mPost({ action: e.target.checked ? "enable" : "disable" }));
   $("#p4m-scan").addEventListener("click", () => p4mPost({ action: "scan" }));
