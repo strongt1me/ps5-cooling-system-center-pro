@@ -16,6 +16,9 @@
 - Downloads in den Speicher verdoppeln den Puffer, statt bei jedem Stück zu kopieren.
 - Vollbild-App: „Laden“ von FPKGMount/Dump Forge blockiert den Werkzeugfaden nicht mehr (eigener Faden), und die Abfragen von FPKGMount laufen nacheinander, damit eine ältere Antwort keine neuere überschreibt.
 
+### Ordner für Dump Forge (15.11.2026)
+- Die App legt `/data/PS5-Cooling-Center/dumpforge` bei jedem Start an (bisher erst beim Laden von Dump Forge). Wer die Datei `ps5-dump-forge-VERSION-ps5.elf` von Hand dorthin legen will, findet den Ordner schon vor.
+
 ### Offene Punkte der Prüfungen abgearbeitet (15.11.2026)
 - Konvertieren nach .ffpkg: Ein eigener UFS2-Plan ersetzt den exFAT-Plan (Namen wie `Readme.txt`/`README.TXT` gehen jetzt), Fortschritt und Restzeit stimmen, die Abbilddatei hat keine Löcher mehr (der Rest wird in großen Blöcken mit Abbruchprüfung nachgeschrieben), und still weggelassene Einträge (Verknüpfungen, Sonderdateien, `desktop.ini` …) stehen in der Meldung. Das Format des Abbilds ist unverändert (Byte-Vergleich im Test `test/ufs2plan`).
 - Dump: Der PS4-Dump senkt jetzt auch die `param.sfo`; `param.json`/`param.sfo` kommen erst nach Entschlüsseln und Backport an ihren Platz; ein altes Ziel bei „Ersetzen“ wird erst nach den Prüfungen gelöscht; entschlüsselte Dateien bekommen 0777; die `.sha256`-Liste hat jede Datei nur einmal; die Info-Datei wird atomar geschrieben; die Warteschlange joint nicht mehr doppelt. „Dump löschen“ zählt als Auftrag.

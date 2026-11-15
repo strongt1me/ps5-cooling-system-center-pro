@@ -894,6 +894,7 @@ typedef struct {
 } ps5tm_dumpforge_job_t;
 struct cJSON *ps5tm_dumpforge_state(void);
 int           ps5tm_dumpforge_installed(char *version, size_t n);
+void          ps5tm_dumpforge_prepare(void);                              /* makes the app's folder for Dump Forge (at the start of the app) */
 /* Keeps the home-screen tile /user/app/<tile_id> of a helper program (Kraken Mount, Dump Forge) away: a tile it made earlier (one of the
    markers exists) is uninstalled, then an empty file takes the place of the folder, which the program leaves alone (tilekeep.c). */
 void          ps5tm_tile_keep_away(const char *tile_id, const char *name, const char *const *markers, int n_markers);

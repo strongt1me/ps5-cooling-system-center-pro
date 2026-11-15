@@ -128,6 +128,13 @@ find_elf(char *path, size_t pn, char *ver, size_t vn) {
   return found;
 }
 
+/* The folder of the app for the program Dump Forge, made at every start of the app (0777 as an FTP copy): whoever puts ps5-dump-forge-VERSION-ps5.elf
+   there by hand finds the folder, and the page names it. */
+void
+ps5tm_dumpforge_prepare(void) {
+  if(mkdir(DF_DIR, 0777) != 0 && errno != EEXIST) PS5TM_WARN("dumpforge_dir", "Der Ordner %s ließ sich nicht anlegen: %s", DF_DIR, strerror(errno));
+}
+
 /* ------------------------------------------------------------------ state */
 
 /* Dump Forge answers on its port: GET /api/session names it. Its version goes to ver when asked for. 1 = it runs, 0 = nothing of it, -1 = it
