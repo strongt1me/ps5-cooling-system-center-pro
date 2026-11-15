@@ -612,6 +612,13 @@ handle_mkdir(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade (Kopieren, Verschieben oder Löschen). Bitte danach noch einmal.");
     return;
   }
+  {
+    char jerr[300];                                    /* nor beside a conversion, move or dump of the app (as with the uploads) */
+    if(other_job_active(jerr, sizeof(jerr))) {
+      ps5tm_http_send_error(fd, 409, "job_busy", jerr);
+      return;
+    }
+  }
   if(real_path(t, real, sizeof(real)) != 0 || mkdir(real, 0777) != 0) {
     int e = errno;
     char msg[500];
@@ -781,7 +788,7 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
     return;
   }
   uint64_t fr = 0;
-  if(space_free(dir, &fr) == 0 && fr < (uint64_t)total + FM_SPACE_SPARE) {
+  if(space_free(dir, &fr) == 0 && (fr < FM_SPACE_SPARE || fr - FM_SPACE_SPARE < (uint64_t)total)) {
     drain_body(fd, prefix_len, total);
     ps5tm_http_send_error(fd, 409, "no_space", "Auf dem Laufwerk ist dafür nicht genug Platz.");
     return;
@@ -1014,6 +1021,8 @@ other_job_active(char *err, size_t n) {
   return 0;
 }
 
+#define FM_PLAN_BUDGET_MS 60000u        /* the most that counting for a plan may take */
+
 typedef struct {
   uint64_t files, bytes, seen;
   int      err;
@@ -1102,6 +1111,13 @@ handle_write(int fd, const ps5tm_request_t *req) {
   if(ps5tm_filemgr_busy()) {
     ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade. Bitte danach noch einmal.");
     return;
+  }
+  {
+    char jerr[300];
+    if(other_job_active(jerr, sizeof(jerr))) {
+      ps5tm_http_send_error(fd, 409, "job_busy", jerr);
+      return;
+    }
   }
   const char *content = req->body ? req->body : "";
   size_t len = req->body_len;
@@ -1892,6 +1908,7 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
       files += c.files;
     } else {
       count_t c = { 0 };
+      c.deadline_ms = ps5tm_mono_ms() + FM_PLAN_BUDGET_MS;   /* only the bar: a lower bound is enough (the counts that decide about room keep the entry limit, no time limit) */
       count_tree(rs, ss.st_dev, 0, &c);           /* only for the bar; a rename takes no room */
       files += c.files;
       bytes += c.err ? 0 : c.bytes;
@@ -1907,7 +1924,7 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
     struct stat ss;
     if(real_path(a->src[i], rs, sizeof(rs)) == 0 && lstat(rs, &ss) == 0 && (!move || ss.st_dev != ds.st_dev)) needs_room = 1;
   }
-  if(!http && needs_room && space_free(a->dest, &fr) == 0 && fr < bytes + FM_SPACE_SPARE) {
+  if(!http && needs_room && space_free(a->dest, &fr) == 0 && (fr < FM_SPACE_SPARE || fr - FM_SPACE_SPARE < bytes)) {
     http = 409;
     snprintf(err, sizeof(err), "Im Ziel ist nicht genug Platz: gebraucht %llu MB, frei %llu MB.",
              (unsigned long long)(bytes >> 20), (unsigned long long)(fr >> 20));

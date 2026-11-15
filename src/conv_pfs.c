@@ -132,7 +132,7 @@ static void put64(uint8_t *p, uint64_t v) { put32(p, (uint32_t)v); put32(p + 4, 
 static uint32_t get32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 static uint64_t get64(const uint8_t *p) { return (uint64_t)get32(p) | (uint64_t)get32(p + 4) << 32; }
 
-static uint64_t ceil_div(uint64_t a, uint64_t b) { return (a + b - 1) / b; }
+static uint64_t ceil_div(uint64_t a, uint64_t b) { return a / b + (a % b != 0); }   /* no overflow for a near 2^64 (a damaged or foreign header) */
 
 static int
 pwrite_all(int fd, const void *buf, size_t len, uint64_t off) {
@@ -848,7 +848,7 @@ pfs_verify_full(int fd, const pfsc_check_t *c, uint8_t sha[32], char *err, size_
   if(pread_all(fd, h, BS, BS) != 0) { snprintf(err, err_len, "Inodes nicht lesbar."); goto out; }
   const uint8_t *fi = h + 3 * INODE_SIZE;
   uint64_t stored = get64(fi + 0x08), raw_size = get64(fi + 0x10);
-  if(!(get32(fi + 0x04) & FLAG_COMPRESSED) || get32(fi + 0x64) != FIRST_FILE_BLOCK || !raw_size ||
+  if(!(get32(fi + 0x04) & FLAG_COMPRESSED) || get32(fi + 0x64) != FIRST_FILE_BLOCK || !raw_size || raw_size > (1ull << 50) ||
      (FIRST_FILE_BLOCK + ceil_div(stored, BS)) * BS != (uint64_t)st.st_size) {
     snprintf(err, err_len, "Die Datei-Inode stimmt nicht.");
     goto out;

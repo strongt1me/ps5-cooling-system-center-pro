@@ -100,7 +100,7 @@ cmp_key(const void *a, const void *b) {
 static int
 cmp_name(const void *a, const void *b) {
   char *ka = make_key(*(char *const *)a), *kb = make_key(*(char *const *)b);
-  int r = (ka && kb) ? strcmp(ka, kb) : 0;
+  int r = (ka && kb) ? strcmp(ka, kb) : strcmp(*(char *const *)a, *(char *const *)b);   /* no memory for the keys: by the names as they are, still an order */
   free(ka);
   free(kb);
   return r;
@@ -326,7 +326,8 @@ ps5tm_ampr_build_dir(const char *root, unsigned *files, unsigned *collisions, co
   snprintf(tmp, sizeof(tmp), "%s/%s.tmp", root, AI_NAME);
   snprintf(dst, sizeof(dst), "%s/%s", root, AI_NAME);
   snprintf(bak, sizeof(bak), "%s/%s.bak", root, AI_NAME);
-  int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0777);         /* game files are 0777 (see LZP_FILE_MODE in lz4pack.h) */
+  unlink(tmp);                                                     /* a leftover (or a link put there) is removed, never followed */
+  int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0777);   /* game files are 0777 (see LZP_FILE_MODE in lz4pack.h) */
   if(fd < 0) {
     int e = errno;
     free(img);
@@ -433,8 +434,9 @@ finish(int state, const char *error) {
     else snprintf(detail, sizeof(detail), "entfernt");
   } else snprintf(detail, sizeof(detail), "%u Dateien", g_job.files);
   uint64_t dur = g_job.finished_ms - g_job.started_ms;
+  const char *hist_kind = emu ? (strcmp(g_job.lib, "playgo") ? "ampr_emu" : "playgo") : "ampr_index";   /* read under the lock: a new start may overwrite g_job */
   pthread_mutex_unlock(&g_lock);
-  ps5tm_hist_add(emu ? (strcmp(g_job.lib, "playgo") ? "ampr_emu" : "playgo") : "ampr_index", name, state == AI_DONE ? detail : NULL, state == AI_DONE ? "done" : "failed", error, 0, dur);
+  ps5tm_hist_add(hist_kind, name, state == AI_DONE ? detail : NULL, state == AI_DONE ? "done" : "failed", error, 0, dur);
 }
 
 static int

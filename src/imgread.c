@@ -821,6 +821,7 @@ ufs_chain_ok(fsx_t *f, const imgr_entry_t *e, uint64_t *bad_off) {
   ufs_ino_t in;
   *bad_off = 0;
   if(ufs_inode(u, (uint32_t)e->h1, &in) != 0) return -1;
+  if(in.size > u->f.b->size) return -1;               /* a file larger than the image: a damaged inode, and no walk of billions of blocks */
   uint64_t blocks = (in.size + u->bsize - 1) / u->bsize;
   for(uint64_t l = 0; l < blocks; l++) {
     int64_t fr = ufs_bmap(u, &in, l);

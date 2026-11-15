@@ -1522,6 +1522,7 @@ static managed_t g_managed[MAX_TITLES];
 static int g_manual_scan; /* "Scan for games" in the panel */
 static int g_scan_again; /* games were just added: scan again without waiting (PS4Mount 0.7.0) */
 static int g_deleting; /* a delete screen is open: game folders are unmounted */
+static int g_stop;     /* declared here for scan_root; set and read further down */
 static time_t g_deleting_since;
 static time_t g_deleting_close_at; /* set when the uninstall finished */
 
@@ -2119,8 +2120,10 @@ static int install_all_start(char (*tids)[10], int n) {
     g_install_busy = 1;
     pthread_t th;
     if (pthread_create(&th, NULL, install_thread, NULL)) {
-        install_thread(NULL); /* no thread: call it here */
-        return 0;
+        /* no thread: the call can hang for good after rest mode, and here it would hold the lock of the page; it is not made (audit 15.11.2026) */
+        g_install_busy = 0;
+        printf("[reg] no thread for the registration\n");
+        return -1;
     }
     pthread_detach(th);
     return 0;
@@ -2691,8 +2694,16 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         } else if (m && !running && m->running && time(NULL) - m->running_since > 60) {
             m->running = 0; /* closed without a klog end event */
         }
-        if (mount_title(&src))
-            notify("%s (%s) ließ sich nicht einbinden", src.name, t->tid);
+        if (mount_title(&src)) {
+            /* every scan (10 s) would tell again: the message at most every 5 minutes, the log line every time */
+            static time_t told_at;
+            time_t now_t = time(NULL);
+            printf("[scan] %s (%s) could not be mounted\n", src.name, t->tid);
+            if (!told_at || now_t - told_at >= 300 || now_t < told_at) {
+                told_at = now_t;
+                notify("%s (%s) ließ sich nicht einbinden", src.name, t->tid);
+            }
+        }
         ac_reconcile(&src);
         src_close(&src);
     }
@@ -2723,6 +2734,10 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             break;
         if (group++)
             wait_db_quiet(BATCH_QUIET, 120);
+        /* The lock is let go while waiting: the page may have switched PS4Mount off or opened the delete screen meanwhile. The groups still
+           to come are not registered then (audit 15.11.2026). */
+        if (g_stop || !g_enabled || g_deleting)
+            break;
         if (grouped) {
             buf_t names = {0};
             for (int k = 0; k < n; k++)
@@ -2759,7 +2774,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         for (int k = 0; k < n; k++) {
             title_t *t = &titles[members[k]];
             title_src_t src;
-            if (!prepared[k] || src_open(&src, root, t->tid))
+            if (!prepared[k] || removed(t->tid) || src_open(&src, root, t->tid))   /* removed meanwhile: not put back */
                 continue;
             if (register_finish(&src)) {
                 if (retry_failed(t->tid))
@@ -2999,7 +3014,9 @@ static void handle_klog_line(const char *line) {
             ac_drop_game(m->tid);
             notify("%s ist aus der Bibliothek entfernt. Die PKG bleibt auf dem USB-Laufwerk.", m->name);
             m->used = 0;
-        } else if (strlen(id) == 36 && g_deleting && !g_cfg.dlc_copy) {
+        } else if (strlen(id) == 36 && strspn(id, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_") == 36 && g_deleting && !g_cfg.dlc_copy) {
+            /* only a content id of the usual letters: it comes from the kernel log, which other programs write to as well, and goes into a path
+             * that is deleted below (audit 15.11.2026) */
             /* an add-on of one of our games deleted on a delete screen: keep it out until the
              * drive is reconnected. Outside those screens the uninstall is the system's own:
              * registering a game again uninstalls its add-ons' PlayGo data, and taking that
@@ -3276,13 +3293,20 @@ int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) {
     }
     /* only add-ons with data use the devices a running game mounts its packages with; the unlock-only ones do not
      * count (PS4Mount 0.7.3) */
-    title_src_t t;
+    /* on the heap: title_src_t is some 200 KB and this runs on a request thread (512 KiB) - audit 15.11.2026 */
+    title_src_t *tp = malloc(sizeof(*tp));
+    if (!tp) {
+        snprintf(msg, cap, "kein Speicher mehr frei");
+        return -1;
+    }
     if (lock_for_page(3000)) { /* the index is rebuilt by the worker under this lock (audit 15.11.2026) */
+        free(tp);
         snprintf(msg, cap, P4M_BUSY);
         return -1;
     }
-    if (find_root(tid, root, sizeof(root)) || src_open(&t, root, tid)) {
+    if (find_root(tid, root, sizeof(root)) || src_open(tp, root, tid)) {
         pthread_mutex_unlock(&g_mu);
+        free(tp);
         snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
         return -1;
     }
@@ -3293,11 +3317,12 @@ int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) {
         for (char *c = list; *c; c++)
             if (*c == ',')
                 *c = '\n';
-        for (int i = 0; i < t.ndlc_all; i++)
-            data += t.dlc[i].data && dlc_listed(list, t.dlc[i].pkg.content_id);
+        for (int i = 0; i < tp->ndlc_all; i++)
+            data += tp->dlc[i].data && dlc_listed(list, tp->dlc[i].pkg.content_id);
     }
     free(list);
-    src_close(&t);
+    src_close(tp);
+    free(tp);
     pthread_mutex_unlock(&g_mu);
     if (data > DLC_LIMIT) {
         snprintf(msg, cap, "Höchstens %d Zusatzinhalte mit Daten können an sein (reine Freischaltungen zählen nicht)",

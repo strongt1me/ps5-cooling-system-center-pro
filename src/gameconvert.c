@@ -1154,7 +1154,12 @@ cv_run(void *arg) {
     if(lstat(a.target, &st) == 0) {             /* appeared meanwhile */
       snprintf(err, sizeof(err), "Am Ziel gibt es %s schon.", a.target);
       rc = -1;
-    } else if(rename(part, a.target) != 0) {
+    } else if(link(part, a.target) == 0) {      /* a link fails when the target exists: nothing that appeared in the gap is replaced */
+      unlink(part);
+    } else if(errno == EEXIST) {
+      snprintf(err, sizeof(err), "Am Ziel gibt es %s schon.", a.target);
+      rc = -1;
+    } else if(rename(part, a.target) != 0) {    /* a file system without links (exFAT): the check above has to do */
       snprintf(err, sizeof(err), "Umbenennen gescheitert: %s", ps5tm_io_strerror(errno));
       rc = -1;
     }

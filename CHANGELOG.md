@@ -16,6 +16,16 @@
 - Downloads in den Speicher verdoppeln den Puffer, statt bei jedem Stück zu kopieren.
 - Vollbild-App: „Laden“ von FPKGMount/Dump Forge blockiert den Werkzeugfaden nicht mehr (eigener Faden), und die Abfragen von FPKGMount laufen nacheinander, damit eine ältere Antwort keine neuere überschreibt.
 
+### Dritte Prüfung (15.11.2026): bisher ungelesene Bereiche, 8 von 10 Funden behoben
+- PS4Mount: „Zusatzinhalte wählen“ legt die große Titel-Struktur nicht mehr auf dem Stack des Anfragefadens an (Absturzgefahr des ganzen Programms bei knappem Stack).
+- Dateimanager: Die Platzprüfung läuft bei riesiger Content-Length nicht mehr über; Das reine Zählen für den Fortschrittsbalken beim Verschieben hat eine 60-s-Frist (die Zählung für die Platzprüfung bleibt vollständig); Editor-Speichern und „Neuer Ordner“ warten wie die Uploads auf laufende Aufträge der App.
+- Abbilder: Ein UFS-Inode, der größer ist als das Abbild, gilt als beschädigt (kein Lauf über Milliarden Blöcke).
+- AMPR-Index: Sortieren ohne Speicher bleibt eine Ordnung, das Verlaufskennzeichen wird unter der Sperre gelesen, die Zwischendatei folgt keinen Verknüpfungen.
+- PS4Mount (Registrierung): Ein Content-Name aus dem Kernel-Log darf nur noch die üblichen Zeichen enthalten (er gelangte ungeprüft in einen Pfad, der gelöscht wird); Ausschalten oder das Lösch-Fenster beendet eine laufende Gruppen-Registrierung; ein währenddessen entferntes Spiel wird nicht wieder eingetragen; ohne Faden unterbleibt der Registrierungsaufruf, statt die Seite zu sperren; „ließ sich nicht einbinden“ meldet höchstens alle 5 Minuten.
+- Konvertieren: Fremde .ffpfsc-Dateien mit Größenangaben nahe 2^64 bestehen die Prüfung nicht mehr; beim Umbenennen am Ende wird ein inzwischen angelegtes Ziel nie überschrieben.
+- Offen bleiben (Konverter, `.warroom/findings.json`): .ffpkg über einen exFAT-Plan (Namensregeln, Fortschritt) und Löcher in der .ffpkg-Datei; beides braucht einen Test an der Konsole.
+- Nicht geändert: U-09 (`.fm-tmp` beim Ersetzen) und U-10 (Teildatei beim Aufteilen), siehe `.warroom/findings.json`.
+
 ### Browser: FPKGMount ohne doppelte Knöpfe (15.11.2026)
 - Die Knöpfe „Kraken Mount starten“ und „Beenden“ in der Karte „Programm“ sind entfernt: Sie schickten dasselbe wie der Schalter „Einschalten“ oben. Es bleiben der Schalter, „Neue Fassung von GitHub laden“ und „Seite von Kraken Mount“. Handbuch (7 Sprachen) und Wörterbücher angepasst; die Vollbild-App bleibt unverändert (am Controller gibt es keinen Schalter).
 - „Neue Fassung von GitHub laden“: Das Ergebnis („schon die neueste Fassung“, „neu geladen“ oder der Fehler) bleibt jetzt mit der Uhrzeit der Prüfung auf der Karte „Programm“ stehen; die kurze Einblendung allein wurde übersehen.
