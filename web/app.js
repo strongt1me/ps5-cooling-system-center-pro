@@ -7883,7 +7883,7 @@
     const games = k && k.games ? k.games : [];
     const running = new Set(k && k.running ? k.running : []);
     const drive = (m) => { const x = ((k && k.drives) || []).find((v) => v.mount === m); return x ? x.label : m; };
-    txt("#fp-sub", k ? (k.busy ? "arbeitet gerade (sucht oder baut auf) …" : `läuft · Version ${k.version} · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken`)
+    txt("#fp-sub", k ? (k.waiting === "shadowmount" ? "wartet auf ShadowMountPlus" : k.waiting === "kstuff" ? "wartet auf kstuff" : k.busy ? "arbeitet gerade (sucht oder baut auf) …" : `läuft · Version ${k.version} · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken`)
       : d.starting ? "startet gleich …" : "ausgeschaltet");
     $("#fp-on").checked = !!k || !!d.starting;
     $("#fp-scan").disabled = !k;
@@ -7902,8 +7902,9 @@
       : d.settings ? "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege FPKG-Spiele besser in den Ordner FPKG-Games (/data/FPKG-Games oder FPKG-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner ein."
       : "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner FPKG-Games ein: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk.");
     const note = $("#fp-note");
-    note.hidden = !!k && !(k.cache && k.cache.low_space) && !k.paused;
+    note.hidden = !!k && !k.waiting && !(k.cache && k.cache.low_space) && !k.paused;
     if (!k) note.textContent = d.starting ? "Kraken Mount startet. Das dauert einige Sekunden." : "Kraken Mount ist ausgeschaltet. Einschalten, damit die Spiele gesucht und angemeldet werden.";
+    else if (k.waiting) note.textContent = k.waiting === "kstuff" ? "Kraken Mount wartet, bis kstuff geladen ist. Vorher meldet es kein Spiel an." : "Kraken Mount wartet, bis ShadowMountPlus beendet ist. Solange es läuft, meldet Kraken Mount kein Spiel an (so arbeitet es seit Version 0.2.0).";
     else if (k.cache && k.cache.low_space) note.textContent = "Auf der internen SSD ist nur noch wenig Platz frei. Kraken Mount legt dort den Zwischenspeicher der Spiele an.";
     else if (k.paused) note.textContent = "Ein Spiel läuft. Kraken Mount sucht und baut erst nach dem Spiel weiter.";
     dupFill($("#fp-dup"), d.conflicts);
@@ -8764,12 +8765,15 @@
         <button type="button" class="btn" data-apr-emu data-lib="${lib}" ${why ? "disabled" : ""} ${why ? `title="${esc(why)}"` : ""}>${emuJob && j.active ? "Läuft …" : "Version wählen …"}</button></div>`;
   };
 
-  /* Passen die Tabellen des Packs in AMPR EMU NG? (src/indexlimit.c, 14.11.2026) AMPR EMU NG 0.4.0 liefert keine gepackte Datei aus, wenn die Tabellen,
-     die es aus dem Pack-Index aufbaut, nicht in seinen Speicher passen: Das Spiel startet dann nicht (Final Fantasy XVI 49 MiB, Demon's Souls 62 MiB;
-     ampr-emu-ng #67, #61, #53). Die App schätzt es aus den Köpfen von ampr_zstd.index bzw. ampr_assets.index und ampr_emu.index; „knapp“ heißt:
-     innerhalb von 2 MiB um die Grenze. Die Rechnung gilt für Version 0.4.0. */
-  const aprCheckRow = (c) => {
+  /* Passen die Tabellen des Packs in AMPR EMU NG? (src/indexlimit.c, 14.11.2026) AMPR EMU NG liefert keine gepackte Datei aus, wenn die Tabellen,
+     die es aus dem Pack-Index aufbaut, nicht in seinen Speicher passen: Das Spiel startet dann nicht (0.4.0: Final Fantasy XVI 49 MiB, Demon's Souls
+     62 MiB; ampr-emu-ng #67, #61, #53). Die App schätzt es aus den Köpfen von ampr_zstd.index bzw. ampr_assets.index und ampr_emu.index; „knapp“ heißt:
+     innerhalb von 2 MiB um die Grenze. `c` ist das Ergebnis für die neueste mitgelieferte Fassung (c.ng_version, seit 15.11.2026 0.4.1: Ansicht aller
+     Dateien + Paket-Tabellen in 80 MiB Indexspeicher), `old` das für die ältere (index_check_old, 0.4.0: 48 MiB Tabellengrenze, Seitencache). Die
+     Zusatzzeile nennt, wenn die ältere Fassung das Spiel nicht ausliefert, die neuere es aber schafft. */
+  const aprCheckRow = (c, old) => {
     if (!c) return "";
+    const ver = c.ng_version || "0.4.0";
     const mib = (b) => (Math.abs(b) / 1048576).toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     const chip = c.state === "over"
       ? `<span class="apr-state bad">${esc(`zu groß · Tabellen ≈ ${mib(c.need_bytes)} MiB, es fehlen ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`
@@ -8779,16 +8783,25 @@
           : `knapp · Tabellen ≈ ${mib(c.need_bytes)} MiB, Spielraum ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`
         : `<span class="apr-state ok">${esc(`passt · Tabellen ≈ ${mib(c.need_bytes)} MiB, Spielraum ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`;
     const counts = c.kind === "lz4"
-      ? `${num(c.files)} Dateien · ${num(c.chunks)} Chunks · ${num(c.volumes)} Pakete · Schätzung für NG 0.4.0`
-      : `${num(c.files)} Dateien · ${num(c.chunks)} Chunks · ${num(c.volumes)} Volumes · Schätzung für NG 0.4.0`;
+      ? `${num(c.files)} Dateien · ${num(c.chunks)} Chunks · ${num(c.volumes)} Pakete · Schätzung für NG ${ver}`
+      : `${num(c.files)} Dateien · ${num(c.chunks)} Chunks · ${num(c.volumes)} Volumes · Schätzung für NG ${ver}`;
     const note = c.state === "over"
-      ? "NG 0.4.0 liefert die gepackten Dateien dieses Spiels nicht aus, das Spiel startet nicht. Nach den Berichten startet es mit NG 0.3.4; sonst das Spiel mit weniger Dateien packen."
+      ? `NG ${ver} liefert die gepackten Dateien dieses Spiels nicht aus, das Spiel startet nicht. Nach den Berichten startet es mit NG 0.3.4; sonst das Spiel mit weniger Dateien packen.`
       : c.state === "tight"
         ? "Das liegt nahe an der Grenze (Schätzung, 2 MiB Spielraum). Startet das Spiel nicht, ist wahrscheinlich dies der Grund."
         : "";
+    /* die ältere Fassung scheitert (oder liegt knapp), die neuere schafft es */
+    const olderNote = old && c.state === "ok" && (old.state === "over" || old.state === "tight")
+      ? (old.state === "over"
+        ? `NG ${old.ng_version || "0.4.0"} liefert die gepackten Dateien dieses Spiels nicht aus; mit NG ${ver} passt es.`
+        : `NG ${old.ng_version || "0.4.0"} liegt bei diesem Spiel nahe an der Grenze und liefert die gepackten Dateien womöglich nicht aus; mit NG ${ver} passt es.`)
+      : "";
+    const what = ver === "0.4.0"
+      ? `Die Tabellen, die AMPR EMU NG ${ver} aus dem Pack-Index aufbaut, müssen in seinen Speicher passen (Grenze 48 MiB, abzüglich des Platzes für ampr_emu.index und 16 MiB Seitencache). Passt es nicht, liefert NG keine gepackte Datei aus und das Spiel startet nicht (ampr-emu-ng #67, #61, #53).`
+      : `Die Ansicht aller Dateien und die Paket-Tabellen müssen in den Indexspeicher von 80 MiB passen (AMPR EMU NG ${ver}). Passt es nicht, liefert NG keine gepackte Datei aus und das Spiel startet nicht.`;
     return `<div class="apr-row"><div><b>Passt der Index in AMPR EMU NG?</b>
-        <small>Die Tabellen, die AMPR EMU NG 0.4.0 aus dem Pack-Index aufbaut, müssen in seinen Speicher passen (Grenze 48 MiB, abzüglich des Platzes für ampr_emu.index und 16 MiB Seitencache). Passt es nicht, liefert NG keine gepackte Datei aus und das Spiel startet nicht (ampr-emu-ng #67, #61, #53).</small>${chip}
-        <small>${esc(counts)}</small>${note ? `<small>${esc(note)}</small>` : ""}</div></div>`;
+        <small>${esc(what)}</small>${chip}
+        <small>${esc(counts)}</small>${note ? `<small>${esc(note)}</small>` : ""}${olderNote ? `<small>${esc(olderNote)}</small>` : ""}</div></div>`;
   };
 
   const aprRender = () => {
@@ -8898,7 +8911,7 @@
 
     paintJob(body, `
       <p class="muted" style="margin:0 0 14px">${esc(fmtName)}${img.image_bytes ? ` · ${bytes(img.image_bytes)}` : ""}</p>
-      ${ampr}${aprCheckRow(i.index_check)}${aprLz4Rows(apr.lz4, ij, mine, anyRunning)}${aprTraceRow(apr.trace, ij, anyRunning)}${emuRow}${aprPlugRow(apr.plug, anyRunning)}${imgRows}`,
+      ${ampr}${aprCheckRow(i.index_check, i.index_check_old)}${aprLz4Rows(apr.lz4, ij, mine, anyRunning)}${aprTraceRow(apr.trace, ij, anyRunning)}${emuRow}${aprPlugRow(apr.plug, anyRunning)}${imgRows}`,
       `<button type="button" class="btn" data-cp="close">${anyRunning ? "Im Hintergrund weiter" : "Schließen"}</button>`);
   };
 

@@ -33,7 +33,7 @@
 #include "upd_http.h"
 
 #define KR_PORT              8097
-#define KR_EMBEDDED_VERSION  "0.0.1-beta"
+#define KR_EMBEDDED_VERSION  "0.2.0"
 #define KR_PROJECT           "https://github.com/quer3q/kraken-mount"
 #define KR_DIR               PS5TM_DATA_DIR "/kraken"
 #define PS5TM_KRAKEN_DATA    "/data/krakenmount"

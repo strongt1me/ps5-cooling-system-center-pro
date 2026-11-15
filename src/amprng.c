@@ -2,7 +2,7 @@
  * (https://github.com/quer3q/ampr-emu-ng, GPL-3.0). It reads the same LZ4 packs and zstd ones, and its builds carry the mark
  * "ampr-emu-ng <version>" instead of "[AMPR_EMU]"; amprlib.c recognises them by that and shows them as "NG <version>".
  *
- * The two newest releases are carried by the app (wish of the user, 13.11.2026: always the two newest to choose from): 0.4.0 and 0.3.5,
+ * The two newest releases are carried by the app (wish of the user, 13.11.2026: always the two newest to choose from): 0.4.1 and 0.4.0,
  * third_party/ampr_emu/libSceAmpr.sprx-<version>-ng and -ng-debug of each, packed into the payload by tools/gen_emu_blob.py. A newer
  * release replaces the oldest of the two (the old files are taken out of third_party/ampr_emu). Between the two a file the table
  * below names counts as there when the app carries it. A newer release is fetched on request
@@ -27,7 +27,7 @@
 #include "third_party/cJSON.h"
 #include "upd_http.h"
 
-#define NG_VERSION  "0.4.0"      /* the newest release: the table below and the default of the zstd repair (ps5tm_amprng_name) */
+#define NG_VERSION  "0.4.1"      /* the newest release: the table below and the default of the zstd repair (ps5tm_amprng_name) */
 #define NG_BASE     "https://github.com/quer3q/ampr-emu-ng/releases/download/v" NG_VERSION "/"
 #define NG_DIR      PS5TM_DATA_DIR "/AMPR_EMU"
 #define NG_MAX      (4u * 1024 * 1024)
@@ -40,8 +40,8 @@ typedef struct {
 } ng_file_t;
 
 static const ng_file_t NG_FILES[] = {
-  { "libSceAmpr.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng", "8320eb65c16565f42031b9d88b15a447039f0fd7e5694faf5f1cb84cafdba218", 775696 },
-  { "libSceAmpr-debug.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng-debug", "d27f7c58a92da9807366db5d15423ef19257ad06df3b78ea0d0fbaea3ce664f6", 899072 },
+  { "libSceAmpr.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng", "9c7c41b3216bc4f877d67e3c2e5c9c8f9ffabdd5065f4f3fe0dd98fa7228386f", 733104 },
+  { "libSceAmpr-debug.sprx", "libSceAmpr.sprx-" NG_VERSION "-ng-debug", "f82e26aa9306f142a4120eb1ab70c52403a840b8441f136ec88ce19f2c7f97a2", 855408 },
 };
 #define NG_COUNT (sizeof(NG_FILES) / sizeof(NG_FILES[0]))
 

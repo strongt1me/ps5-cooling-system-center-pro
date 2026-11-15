@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht (nach v1.85.1)
 
+### Fremdbausteine: AMPR EMU NG v0.4.1 und Kraken Mount v0.2.0 (15.11.2026)
+- **AMPR EMU NG v0.4.1** (quer3q, 15.11.2026) ist eingebettet; die zwei neuesten Fassungen sind jetzt **0.4.1 und 0.4.0** (0.3.5 ist entfernt). SHA-256 gegen `SHA256SUMS` geprüft, SELF-Kopf und Kennung `ampr-emu-ng 0.4.1` in beiden Dateien. Neu laut Veröffentlichung: neue Dateiindex-Ansicht ohne die feste 48-MiB-Grenze (Indexspeicher 80 MiB), Korrekturen für große Spiele (Final Fantasy XVI, Demon's Souls, Returnal), Spider-Man: Miles Morales, Spielstand-Einhängen, Horizon Forbidden West und Ordner-Handles. Die Paketformate sind unverändert.
+- **Passt der Index in AMPR EMU NG?** rechnet jetzt für beide Fassungen: Die Zeile gilt für die neueste (0.4.1: Ansicht aller Dateien plus Paket-Tabellen gegen 80 MiB, geschätzt aus dem Quelltext), mit einem Zusatz, wenn die ältere (0.4.0) „zu groß“ oder „knapp“ wäre; in der Vollbild-App zeigt die Zeile „Ältere Fassung“ dasselbe. Test `test/indexlimit` (111 Prüfungen).
+- **Kraken Mount v0.2.0** (quer3q, 15.11.2026) ist eingebettet (statt v0.0.1-beta; 3,8 statt 4,3 MB). Neu: alle FPKG-Dateien auch mit Lücken, Oberfläche und Meldungen in 11 Sprachen, ampr-emu-ng v0.4.1 darin (mit eigener Aktualisierung), verschobene Spiele werden neu verknüpft statt neu gebaut, neue Spiele melden sich auch dort an, wo nur elfldr läuft (Dank für #22).
+- **Wichtig:** Kraken Mount v0.2.0 meldet erst Spiele an, wenn kstuff geladen ist und **ShadowMountPlus nicht mehr läuft**; bis dahin wartet es. Die Seite FPKGMount zeigt das jetzt (Feld `waiting`: „wartet auf ShadowMountPlus“ bzw. „wartet auf kstuff“, mit Hinweis), in der Browser-App und in der Vollbild-App; Handbuch (7 Sprachen) und `docs/HANDBUCH.md` sagen es ebenfalls. Wer ShadowMountPlus dauerhaft laufen lässt, bekommt mit FPKGMount kein Spiel angemeldet.
+
 ### Knopf „Anleitung“ beim Format FPKG
 - Im Konvertieren-Fenster gibt es beim Format „FPKG (Debug-.pkg)“ einen Knopf „Anleitung“ (Browser-App: unter den Kompressionsstufen, Vollbild-App: Zeile unter „Dump Forge laden“). Er zeigt „Dump Forge bei der reinen ELF-Version“: Weg 1 (die App lädt Dump Forge selbst), Weg 2 (von Hand nach `/data/PS5-Cooling-Center/dumpforge/` ablegen, erlaubte Namen, Größe) und Hinweise. Mit Übersetzungen in 6 Sprachen.
 

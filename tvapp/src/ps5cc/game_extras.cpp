@@ -316,15 +316,19 @@ void GameExtras::build_main()
             r.description = str(j.root, "why");
         }
     }
-    // Do the tables of the pack fit into AMPR EMU NG v0.4.0? It serves no packed file when they do
-    // not, and the game does not start (ampr-emu-ng #67, #61, #53). Estimated by src/indexlimit.c
-    // from the pack index and ampr_emu.index (14.11.2026); "tight" is within 2 MiB of the limit.
+    // Do the tables of the pack fit into AMPR EMU NG? It serves no packed file when they do not,
+    // and the game does not start (ampr-emu-ng #67, #61, #53). Estimated by src/indexlimit.c from
+    // the pack index and ampr_emu.index (14.11.2026); "tight" is within 2 MiB of the limit.
+    // "index_check" is the result for the newest version the app ships (ng_version, 0.4.1 since
+    // 15.11.2026: the view of all files and the pack tables in 80 MiB of index memory),
+    // "index_check_old" the one for the older version (0.4.0: 48 MiB table limit, page cache).
     {
         Json j(extras_.ampr);
         const cJSON *c = get(j.root, "index_check");
         if (c != nullptr)
         {
             const std::string st = str(c, "state");
+            const std::string ver = str(c, "ng_version").empty() ? "0.4.0" : str(c, "ng_version");
             const double headroom = num(c, "headroom_bytes");
             form_.add_header("INDEX-TABELLEN (AMPR EMU NG)");
             // short rows: a long value is cut off at the right edge
@@ -339,12 +343,31 @@ void GameExtras::build_main()
                                 std::to_string(static_cast<long long>(num(c, "chunks"))) +
                                 " Chunks");
             if (st == "over")
-                r.description = "AMPR EMU NG 0.4.0 liefert die gepackten Dateien dieses Spiels "
+                r.description = "AMPR EMU NG " + ver +
+                                " liefert die gepackten Dateien dieses Spiels "
                                 "nicht aus, das Spiel startet nicht. Nach den Berichten startet "
                                 "es mit NG 0.3.4.";
             else if (st == "tight")
                 r.description = "Das liegt nahe an der Grenze (Schätzung, 2 MiB Spielraum). "
                                 "Startet das Spiel nicht, ist wahrscheinlich dies der Grund.";
+            else if (ver != "0.4.0")
+                r.description = "Die Ansicht aller Dateien und die Paket-Tabellen müssen in den "
+                                "Indexspeicher von 80 MiB passen (AMPR EMU NG " + ver + ").";
+            // the older version fails or is close, the newer one manages
+            const cJSON *old = get(j.root, "index_check_old");
+            const std::string ost = old != nullptr ? str(old, "state") : std::string();
+            if (st == "ok" && (ost == "over" || ost == "tight"))
+            {
+                const std::string over = str(old, "ng_version").empty() ? "0.4.0" : str(old, "ng_version");
+                form_.add_value(kStatus + 74, "Ältere Fassung", over + (ost == "over" ? ": zu groß" : ": knapp"));
+                r.description = ost == "over"
+                                    ? "NG " + over +
+                                          " liefert die gepackten Dateien dieses Spiels nicht aus; mit NG " +
+                                          ver + " passt es."
+                                    : "NG " + over +
+                                          " liegt bei diesem Spiel nahe an der Grenze und liefert die gepackten Dateien womöglich nicht aus; mit NG " +
+                                          ver + " passt es.";
+            }
         }
     }
     // APR-EMU and PlayGo in the game

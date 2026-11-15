@@ -603,19 +603,42 @@ ai_img_header(const char *path, uint64_t *count) {
   return rc;
 }
 
-/* The packs of a game folder against the lookup tables of AMPR EMU NG (indexlimit.c, 14.11.2026): ampr-emu-ng v0.4.0 serves no packed file when the
-   tables of the pack index do not fit the memory it sets aside for them (Final Fantasy XVI 49 MiB, Demon's Souls 62 MiB; ampr-emu-ng issues #67, #61,
-   #53: the game then does not start). The numbers come from the 128-byte header of ampr_zstd.index (or ampr_assets.index, the LZ4 pack; NG takes the
-   zstd one when both exist) and from ampr_emu.index, all read anyway. `ids` is the AMPRIDX3 count when the game has one, else 0; `ampr_bytes` the size of
-   ampr_emu.index. Adds "index_check" to o; nothing when the game has no pack. The formulas are checked with the maintainers of ampr-emu-ng; the result
-   is for v0.4.0 and an estimate in the margins ("state": ok, tight, over). */
+/* One result of the index check as a JSON object: the numbers of the pack index and what AMPR EMU NG of version `ng` needs of its index memory. */
+static void
+index_check_json(cJSON *o, const char *key, const char *kind, const char *ng, uint64_t files, uint64_t chunks, uint64_t volumes, uint64_t ids,
+                 const ps5tm_need_t *nd, uint64_t limit) {
+  cJSON *c = cJSON_AddObjectToObject(o, key);
+  if(!c) return;
+  cJSON_AddStringToObject(c, "kind", kind);
+  cJSON_AddStringToObject(c, "ng_version", ng);
+  cJSON_AddNumberToObject(c, "files", (double)files);
+  cJSON_AddNumberToObject(c, "chunks", (double)chunks);
+  cJSON_AddNumberToObject(c, "volumes", (double)volumes);          /* LZ4: the packs */
+  cJSON_AddNumberToObject(c, "ids", (double)(ids ? ids : files));
+  cJSON_AddNumberToObject(c, "need_bytes", (double)nd->need);
+  cJSON_AddNumberToObject(c, "room_bytes", (double)nd->room);        /* 0.4.0: index memory left after ampr_emu.index; 0.4.1: the 80 MiB */
+  cJSON_AddNumberToObject(c, "headroom_bytes", (double)nd->headroom);
+  cJSON_AddNumberToObject(c, "limit_bytes", (double)limit);
+  cJSON_AddBoolToObject(c, "paged", nd->paged);
+  cJSON_AddBoolToObject(c, "over", nd->over);
+  cJSON_AddStringToObject(c, "state", ps5tm_need_state(nd));
+}
+
+/* The packs of a game folder against the index memory of AMPR EMU NG (indexlimit.c, 14.11.2026, 0.4.1 on 15.11.2026): NG serves no packed file when
+   the tables of the pack index do not fit the memory it sets aside for them (v0.4.0: Final Fantasy XVI 49 MiB, Demon's Souls 62 MiB; ampr-emu-ng
+   issues #67, #61, #53: the game then does not start). The numbers come from the 128-byte header of ampr_zstd.index (or ampr_assets.index, the LZ4 pack;
+   NG takes the zstd one when both exist) and from ampr_emu.index, all read anyway. `ids` is the AMPRIDX3 count when the game has one, else 0;
+   `ampr_bytes` the size of ampr_emu.index. Adds "index_check" (the newest version the app ships, 0.4.1: the view of all files and the pack tables
+   in the 80 MiB of index memory) and "index_check_old" (0.4.0: the earlier model, for the second version the app ships) to o; nothing when the
+   game has no pack. The 0.4.0 formulas are checked with the maintainers of ampr-emu-ng; the 0.4.1 ones are read from its source (what is
+   estimated is named in indexlimit.c). Both are an estimate in the margins ("state": ok, tight, over). */
 static void
 pack_check(const char *dir, uint64_t ids, long long ampr_bytes, cJSON *o) {
   uint8_t h[128];
   struct stat st;
   char p[AI_PATH];
   uint64_t abytes = ampr_bytes > 0 ? (uint64_t)ampr_bytes : 0;
-  ps5tm_need_t nd;
+  ps5tm_need_t nd, nd41;
   uint64_t files = 0, chunks = 0, volumes = 0;
   const char *kind = NULL;
 
@@ -628,6 +651,7 @@ pack_check(const char *dir, uint64_t ids, long long ampr_bytes, cJSON *o) {
       ix.index_bytes = (uint64_t)st.st_size;
       ix.ampr_bytes = abytes;
       ps5tm_zstd_need(&ix, &nd);
+      ps5tm_zstd_need_041(&ix, &nd41);
       files = ix.files; chunks = ix.chunks; volumes = ix.volumes;
       kind = "zstd";
     }
@@ -640,26 +664,15 @@ pack_check(const char *dir, uint64_t ids, long long ampr_bytes, cJSON *o) {
       if(fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && pread(fd, h, sizeof(h), 0) == (ssize_t)sizeof(h) &&
          ps5tm_lz4_header(h, sizeof(h), &files, &chunks, &volumes) == 0) {
         ps5tm_lz4_need(files, chunks, volumes, (uint64_t)st.st_size, abytes, &nd);
+        ps5tm_lz4_need_041(files, chunks, volumes, ids, &nd41);
         kind = "lz4";
       }
       close(fd);
     }
   }
   if(!kind) return;
-  cJSON *c = cJSON_AddObjectToObject(o, "index_check");
-  cJSON_AddStringToObject(c, "kind", kind);
-  cJSON_AddStringToObject(c, "ng_version", "0.4.0");
-  cJSON_AddNumberToObject(c, "files", (double)files);
-  cJSON_AddNumberToObject(c, "chunks", (double)chunks);
-  cJSON_AddNumberToObject(c, "volumes", (double)volumes);          /* LZ4: the packs */
-  cJSON_AddNumberToObject(c, "ids", (double)(ids ? ids : files));
-  cJSON_AddNumberToObject(c, "need_bytes", (double)nd.need);
-  cJSON_AddNumberToObject(c, "room_bytes", (double)nd.room);        /* index memory left after ampr_emu.index */
-  cJSON_AddNumberToObject(c, "headroom_bytes", (double)nd.headroom);
-  cJSON_AddNumberToObject(c, "limit_bytes", (double)PS5TM_NG_LOOKUP_MAX);
-  cJSON_AddBoolToObject(c, "paged", nd.paged);
-  cJSON_AddBoolToObject(c, "over", nd.over);
-  cJSON_AddStringToObject(c, "state", ps5tm_need_state(&nd));
+  index_check_json(o, "index_check", kind, "0.4.1", files, chunks, volumes, ids, &nd41, PS5TM_NG041_INDEX_MEMORY);
+  index_check_json(o, "index_check_old", kind, "0.4.0", files, chunks, volumes, ids, &nd, PS5TM_NG_LOOKUP_MAX);
 }
 
 /* What the page shows for a game: where its data lies, whether it has an index, and whether one can be built. */

@@ -324,7 +324,7 @@ gen/npfakesignin_blob.c: $(NPFSI_ELF) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(NPFSI_ELF) ps5tm_npfakesignin
 
 # Kraken Mount (quer3q, GPL-3.0): the released ELF, started from the page FPKGMount (src/kraken.c) over the loader on 127.0.0.1:9021.
-KRAKEN_ELF := third_party/kraken_mount/kraken-mount_v0.0.1-beta.elf
+KRAKEN_ELF := third_party/kraken_mount/kraken-mount_v0.2.0.elf
 gen/kraken_blob.c: $(KRAKEN_ELF) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(KRAKEN_ELF) ps5tm_kraken
 

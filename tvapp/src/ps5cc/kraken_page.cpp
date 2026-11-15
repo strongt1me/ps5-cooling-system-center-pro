@@ -442,6 +442,10 @@ class KrakenPage final : public Page
                    (state_.fetch_result.empty() ? "" : " · " + state_.fetch_result);
         if (!state_.version.empty())
             s += " " + state_.version;
+        if (state_.waiting == "shadowmount")
+            return s + " · wartet auf ShadowMountPlus";
+        if (state_.waiting == "kstuff")
+            return s + " · wartet auf kstuff";
         if (state_.busy)
             return s + " · arbeitet gerade …";
         if (state_.paused)

@@ -4429,6 +4429,7 @@ void HttpSource::poll_kraken()
         k.version = str(kr, "version");
         k.busy = flag(kr, "busy");
         k.paused = flag(kr, "paused");
+        k.waiting = str(kr, "waiting");
         const cJSON *cache = cJSON_GetObjectItemCaseSensitive(kr, "cache");
         k.low_space = cJSON_IsObject(cache) && flag(cache, "low_space");
         std::vector<std::string> live;

@@ -30,10 +30,10 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   kommen nur auf Wunsch in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` oder in ein Spiel
   (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Bauarten (`test-pack`,
   `test-nopack`, `test-debug-pack`) nach <https://github.com/drakmor/ampr_emu>.
-- **ampr-emu-ng** (quer3q, GPL-3.0): Je zwei Bauten der zwei neuesten Veröffentlichungen, 0.4.0 (vom 13.11.2026) und
-  0.3.5 (vom 11.11.2026) (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`, SHA-256 aus der `SHA256SUMS` der Veröffentlichung,
-  siehe `third_party/ampr_emu/ORIGIN.md`) sind wie die anderen gepackt eingebettet, als `libSceAmpr.sprx-0.4.0-ng`,
-  `libSceAmpr.sprx-0.3.5-ng` und je `-ng-debug`. Die App erkennt die Bauten dieser Weiterentwicklung von ampr_emu an ihrer Kennung und lädt auf Wunsch
+- **ampr-emu-ng** (quer3q, GPL-3.0): Je zwei Bauten der zwei neuesten Veröffentlichungen, 0.4.1 (vom 15.11.2026) und
+  0.4.0 (vom 13.11.2026) (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`, SHA-256 aus der `SHA256SUMS` der Veröffentlichung,
+  siehe `third_party/ampr_emu/ORIGIN.md`) sind wie die anderen gepackt eingebettet, als `libSceAmpr.sprx-0.4.1-ng`,
+  `libSceAmpr.sprx-0.4.0-ng` und je `-ng-debug`. Die App erkennt die Bauten dieser Weiterentwicklung von ampr_emu an ihrer Kennung und lädt auf Wunsch
   die Dateien einer neueren Veröffentlichung von <https://github.com/quer3q/ampr-emu-ng> in den Ordner
   `/data/PS5-Cooling-Center/AMPR_EMU` (`src/amprng.c`). Quelltext: das Projekt.
 - **pgo_stub** (drakmor, GPL-3.0): Zwei Bauten des PlayGo-Stubs (`libScePlayGo.sprx`, Fassung 0.6, mit und ohne
@@ -55,9 +55,9 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   Startcode, kein fremder Systemcode, siehe `sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt.
 - **ps-disc-detect** (GPL-3.0-or-later; „disc detect“, Archiv `ps-disc-detect-main.zip`, vom User am 21.10.2026 bereitgestellt): Vorbild und Wissen für den Reiter „Disc“ (`src/disc.c`): der Weg zum Laufwerk (`/dev/xpt0`, CAMIOCOMMAND mit GET CONFIGURATION, READ DISC STRUCTURE, SET STREAMING), die Profilnummern, wo die Titelkennung liegt (`SYSTEM.CNF`, `PARAM.SFO`, `param.json`), das Lesen von `/dev/cd0` in 128-KiB-Stücken, das Benennen nach Redump und das Schema der Redump-Datenbank. Der Code ist neu geschrieben (kein CD-Abbild, kein IRD, keine eingebettete Liste); die MD5- und SHA-1-Rechnungen sind eigene Fassungen der veröffentlichten Verfahren.
-- **Kraken Mount** (quer3q, GPL-3.0-or-later, Version 0.0.1-beta vom 13.11.2026, <https://github.com/quer3q/kraken-mount>, Tag `v0.0.1-beta`):
-  Für den Reiter „FPKGMount“ ist die veröffentlichte `kraken-mount.elf` (4 327 528 Bytes, SHA-256
-  `32cdf8e9aee9a8e91a7acd8884ac4701a75a38d96d483ea00bb7cbf4fe11a522`, gleich der `SHA256SUMS` der Veröffentlichung) unverändert als
+- **Kraken Mount** (quer3q, GPL-3.0-or-later, Version 0.2.0 vom 15.11.2026, <https://github.com/quer3q/kraken-mount>, Tag `v0.2.0`):
+  Für den Reiter „FPKGMount“ ist die veröffentlichte `kraken-mount.elf` (3 803 240 Bytes, SHA-256
+  `a9c02fe0dabd24581f2dec79b7bb92825284005045862c28e4e9fb973c3cf5bf`, gleich der `SHA256SUMS` der Veröffentlichung) unverändert als
   zlib-Blob eingebettet (`third_party/kraken_mount/`, `tools/gen_blob.py`) und wird bei „Kraken Mount starten“ an den ELF-Lader
   gesendet; die App bedient es über seine Schnittstelle auf Port 8097 (`src/kraken.c`). Aus seinem Quelltext ist nichts übernommen
   (er ist in Rust geschrieben); der Quelltext dieser Fassung steht unter der genannten Adresse. Eine neuere Veröffentlichung lädt die
