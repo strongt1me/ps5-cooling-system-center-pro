@@ -31,9 +31,9 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Bauarten (`test-pack`,
   `test-nopack`, `test-debug-pack`) nach <https://github.com/drakmor/ampr_emu>.
 - **ampr-emu-ng** (quer3q, GPL-3.0): Je zwei Bauten der zwei neuesten Veröffentlichungen, 0.4.1 (vom 15.11.2026) und
-  0.4.0 (vom 13.11.2026) (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`, SHA-256 aus der `SHA256SUMS` der Veröffentlichung,
+  0.3.5 (vom 11.11.2026) (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`, SHA-256 aus der `SHA256SUMS` der Veröffentlichung,
   siehe `third_party/ampr_emu/ORIGIN.md`) sind wie die anderen gepackt eingebettet, als `libSceAmpr.sprx-0.4.1-ng`,
-  `libSceAmpr.sprx-0.4.0-ng` und je `-ng-debug`. Die App erkennt die Bauten dieser Weiterentwicklung von ampr_emu an ihrer Kennung und lädt auf Wunsch
+  `libSceAmpr.sprx-0.3.5-ng` und je `-ng-debug`. Die App erkennt die Bauten dieser Weiterentwicklung von ampr_emu an ihrer Kennung und lädt auf Wunsch
   die Dateien einer neueren Veröffentlichung von <https://github.com/quer3q/ampr-emu-ng> in den Ordner
   `/data/PS5-Cooling-Center/AMPR_EMU` (`src/amprng.c`). Quelltext: das Projekt.
 - **pgo_stub** (drakmor, GPL-3.0): Zwei Bauten des PlayGo-Stubs (`libScePlayGo.sprx`, Fassung 0.6, mit und ohne
@@ -59,7 +59,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   Für den Reiter „FPKGMount“ ist die veröffentlichte `kraken-mount.elf` (3 803 240 Bytes, SHA-256
   `a9c02fe0dabd24581f2dec79b7bb92825284005045862c28e4e9fb973c3cf5bf`, gleich der `SHA256SUMS` der Veröffentlichung) unverändert als
   zlib-Blob eingebettet (`third_party/kraken_mount/`, `tools/gen_blob.py`) und wird bei „Kraken Mount starten“ an den ELF-Lader
-  gesendet; die App bedient es über seine Schnittstelle auf Port 8097 (`src/kraken.c`). Aus seinem Quelltext ist nichts übernommen
+  gesendet; die App bedient es über seine Schnittstelle auf Port 8097 (`src/kraken.c`). **Geänderte Kopie:** Die eingebettete ELF (und eine von GitHub geladene Fassung) trägt eine einzige Änderung: ein Byte der Zeichenkette `shadowmountplus.elf` (Prozessname, auf den Kraken Mount seit v0.2.0 beim Start wartet) wird geändert, damit es neben ShadowMountPlus arbeitet (`tools/patch_kraken.py`, `src/kraken.c`, siehe `third_party/kraken_mount/ORIGIN.md`); Quelltext des Projekts: <https://github.com/quer3q/kraken-mount> (Tag `v0.2.0`). Aus seinem Quelltext ist nichts übernommen
   (er ist in Rust geschrieben); der Quelltext dieser Fassung steht unter der genannten Adresse. Eine neuere Veröffentlichung lädt die
   App nur auf Knopfdruck von dort (HTTPS, Prüfsumme aus `SHA256SUMS`).
 - **Dump Forge** (quer3q, GPL-3.0-or-later, Version 0.5.5, <https://github.com/quer3q/ps5-dump-forge>, Tag `v0.5.5`): Motor des

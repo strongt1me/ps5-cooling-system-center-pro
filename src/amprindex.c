@@ -629,7 +629,7 @@ index_check_json(cJSON *o, const char *key, const char *kind, const char *ng, ui
    issues #67, #61, #53: the game then does not start). The numbers come from the 128-byte header of ampr_zstd.index (or ampr_assets.index, the LZ4 pack;
    NG takes the zstd one when both exist) and from ampr_emu.index, all read anyway. `ids` is the AMPRIDX3 count when the game has one, else 0;
    `ampr_bytes` the size of ampr_emu.index. Adds "index_check" (the newest version the app ships, 0.4.1: the view of all files and the pack tables
-   in the 80 MiB of index memory) and "index_check_old" (0.4.0: the earlier model, for the second version the app ships) to o; nothing when the
+   in the 80 MiB of index memory) to o (the second version the app ships, 0.3.5, has no limit this check knows; nothing when the
    game has no pack. The 0.4.0 formulas are checked with the maintainers of ampr-emu-ng; the 0.4.1 ones are read from its source (what is
    estimated is named in indexlimit.c). Both are an estimate in the margins ("state": ok, tight, over). */
 static void
@@ -672,7 +672,6 @@ pack_check(const char *dir, uint64_t ids, long long ampr_bytes, cJSON *o) {
   }
   if(!kind) return;
   index_check_json(o, "index_check", kind, "0.4.1", files, chunks, volumes, ids, &nd41, PS5TM_NG041_INDEX_MEMORY);
-  index_check_json(o, "index_check_old", kind, "0.4.0", files, chunks, volumes, ids, &nd, PS5TM_NG_LOOKUP_MAX);
 }
 
 /* What the page shows for a game: where its data lies, whether it has an index, and whether one can be built. */

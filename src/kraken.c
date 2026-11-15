@@ -98,6 +98,19 @@ has_text(const unsigned char *d, size_t n, const char *t) {
   return 0;
 }
 
+/* Kraken Mount v0.2.0 and later wait at start until no process named "shadowmountplus.elf" runs (and mount nothing before). The app runs it next to
+   ShadowMountPlus on purpose, so the last byte of that 19-byte name constant is changed in a downloaded copy, as tools/patch_kraken.py does for the
+   embedded one ("shadowmountplus.elf" -> "shadowmountplus.elX": no process has that name). Same length, nothing else changes. Number of places changed. */
+static int
+patch_smp_wait(unsigned char *d, size_t n) {
+  static const char name[] = "shadowmountplus.elf";
+  const size_t l = sizeof name - 1;
+  int changed = 0;
+  for(size_t i = 0; i + l <= n; i++)
+    if(d[i] == 's' && !memcmp(d + i, name, l)) { d[i + l - 1] = 'X'; changed++; i += l - 1; }
+  return changed;
+}
+
 static int
 elf_ok(const unsigned char *d, size_t n) {
   return n > 0x1000 && !memcmp(d, "\x7f" "ELF", 4) && has_text(d, n, "krakenmount");
@@ -585,6 +598,8 @@ fetch_release(char *msg, size_t n) {
   if(strcmp(got, want)) { snprintf(why, sizeof why, "Die Prüfsumme von kraken-mount.elf passt nicht zu SHA256SUMS. Die Datei wurde verworfen."); goto done; }
   if(!elf_ok((const unsigned char *)elf, elf_n)) { snprintf(why, sizeof why, "kraken-mount.elf ist keine Datei von Kraken Mount."); goto done; }
   if(make_dir(KR_DIR) != 0) { snprintf(why, sizeof why, "Der Ordner %s ließ sich nicht anlegen: %s", KR_DIR, strerror(errno)); goto done; }
+  int smp_places = patch_smp_wait((unsigned char *)elf, elf_n);
+  if(smp_places) PS5TM_INFO("kraken_patch", "Kraken Mount %s: Prozessname von ShadowMountPlus an %d Stelle(n) geändert (kein Warten auf ShadowMountPlus).", ver, smp_places);
   int e = ps5tm_put_lib_file(KR_ELF, (const unsigned char *)elf, elf_n);
   if(e) { snprintf(why, sizeof why, "Die Datei ließ sich nicht ablegen: %s", strerror(e)); goto done; }
   unlink(KR_BAD);                                  /* a newer release gets its chance */

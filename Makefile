@@ -325,8 +325,13 @@ gen/npfakesignin_blob.c: $(NPFSI_ELF) tools/gen_blob.py | gen
 
 # Kraken Mount (quer3q, GPL-3.0): the released ELF, started from the page FPKGMount (src/kraken.c) over the loader on 127.0.0.1:9021.
 KRAKEN_ELF := third_party/kraken_mount/kraken-mount_v0.2.0.elf
-gen/kraken_blob.c: $(KRAKEN_ELF) tools/gen_blob.py | gen
-	$(PYTHON) tools/gen_blob.py $@ $(KRAKEN_ELF) ps5tm_kraken
+# Since v0.2.0 Kraken Mount waits for ShadowMountPlus to end before it mounts anything; this app runs both side by side (as with v0.0.1-beta),
+# so one string constant of the program is changed (tools/patch_kraken.py; a downloaded newer version gets the same change in src/kraken.c).
+KRAKEN_PATCHED := gen/kraken-mount-patched.elf
+$(KRAKEN_PATCHED): $(KRAKEN_ELF) tools/patch_kraken.py | gen
+	$(PYTHON) tools/patch_kraken.py $(KRAKEN_ELF) $@
+gen/kraken_blob.c: $(KRAKEN_PATCHED) tools/gen_blob.py | gen
+	$(PYTHON) tools/gen_blob.py $@ $(KRAKEN_PATCHED) ps5tm_kraken
 
 # The APR-EMU versions (third_party/ampr_emu), packed into the app (tools/gen_emu_blob.py, src/amprlib.c).
 EMU_FILES := $(wildcard third_party/ampr_emu/libSceAmpr.sprx-*)

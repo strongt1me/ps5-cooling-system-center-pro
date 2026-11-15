@@ -2,7 +2,7 @@
  * (https://github.com/quer3q/ampr-emu-ng, GPL-3.0). It reads the same LZ4 packs and zstd ones, and its builds carry the mark
  * "ampr-emu-ng <version>" instead of "[AMPR_EMU]"; amprlib.c recognises them by that and shows them as "NG <version>".
  *
- * The two newest releases are carried by the app (wish of the user, 13.11.2026: always the two newest to choose from): 0.4.1 and 0.4.0,
+ * The two newest releases are carried by the app (wish of the user, 13.11.2026: always the two newest to choose from): 0.4.1 and 0.3.5,
  * third_party/ampr_emu/libSceAmpr.sprx-<version>-ng and -ng-debug of each, packed into the payload by tools/gen_emu_blob.py. A newer
  * release replaces the oldest of the two (the old files are taken out of third_party/ampr_emu). Between the two a file the table
  * below names counts as there when the app carries it. A newer release is fetched on request
