@@ -4957,7 +4957,8 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     else if(!strcmp(action, "start")) { if(ps5tm_dumpforge_start(msg, sizeof(msg)) != 0) http = 502; }
     else if(!strcmp(action, "stop")) {
       if(ps5tm_gameconvert_busy()) { http = 409; snprintf(msg, sizeof(msg), "Es läuft gerade eine Konvertierung."); }
-      else { ps5tm_dumpforge_stop(); snprintf(msg, sizeof(msg), "Dump Forge ist beendet."); }
+      else if(ps5tm_dumpforge_stop(0)) { http = 409; snprintf(msg, sizeof(msg), "Dump Forge arbeitet gerade (ein Auftrag läuft oder ein Gerät überträgt). Es lässt sich erst danach beenden."); }
+      else snprintf(msg, sizeof(msg), "Dump Forge ist beendet.");
     } else { http = 400; snprintf(msg, sizeof(msg), "Diese Aktion kennt die App nicht."); }
     if(http != 200) { ps5tm_http_send_error(fd, http, http == 409 ? "busy" : "dumpforge_failed", msg); return; }
     cJSON *o = cJSON_CreateObject();

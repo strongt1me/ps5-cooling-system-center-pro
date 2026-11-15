@@ -3,11 +3,13 @@
  * ShadowMountPlus 1.7beta10 can eject a USB drive (POST /api/v1/storage/eject, capability storage_eject). It checks
  * its own mounts, images and the running game, but knows nothing of this app's jobs: an eject in the middle of a copy,
  * a conversion or a backup would cut it off. Here the app asks it only when none of its own jobs runs and no folder of
- * the drive is mounted elsewhere (PS4Mount games are nullfs mounts of their ps4/ folder; cutting those off leaves the
- * tiles of running games without their data). The eject from ShadowMountPlus's own page cannot be held back: its checks
+ * the drive is mounted elsewhere (a PS4Mount game that is played from the drive is asked of the module itself: its mounts only
+ * link to the pkgs; cutting the drive off leaves the tile of a running game without its data). The eject from ShadowMountPlus's own
+ * page cannot be held back: its checks
  * look only at its own registry (sm_api_service.c usb_eject_block_reason / check_usb_eject_mount).
  *
  * One eject at a time; a thread follows ShadowMountPlus's storage job until the drive is gone or the job failed. */
+#include "ps4m.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 
@@ -67,6 +69,17 @@ drive_in_use(const char *mount, char *why, size_t n) {
   char first[64] = "";
   for(int i = 0; i < count; i++) {
     const char *from = list[i].f_mntfromname, *on = list[i].f_mntonname;
+    /* The built-in PS4Mount: a game is a nullfs mount of its own hold folder in the system data, which only links to the pkgs, so the
+       mount table never names the drive. The module knows which drive a game's pkgs are on, and whether it is played (ps4m_core.c). */
+    if(!strncmp(on, "/user/app/CUSA", 14) && strlen(on) == 19 && !strncmp(from, "/system_data/ps4mount/", 22)) {
+      /* -1, not to be known: held back. Once the module's lock was not to be had, the others are not asked again (1.5 s each). */
+      static __thread int unknown;
+      if(i == 0) unknown = 0;
+      int r = unknown ? -1 : ps4m_game_running_from(on + 10, mount);
+      if(r < 0) unknown = 1;
+      if(r != 0 && !ps4++) snprintf(first, sizeof(first), "%s", on + 10);
+      continue;
+    }
     if(strncmp(from, mount, ml) || from[ml] != '/' || !strcmp(on, mount)) continue;
     if(!strncmp(on, "/user/app/CUSA", 14) && strstr(from, "/ps4/")) {
       if(!ps4++) snprintf(first, sizeof(first), "%s", on + 10);

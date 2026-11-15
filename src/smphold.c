@@ -26,23 +26,35 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifndef __linux__
+#include <sys/sysctl.h>
+#include <sys/time.h>
+#endif
 
 #define HOLD_MAX      8
 #define HOLD_PATH     PS5TM_DATA_DIR "/smp-mounted.txt"
 #define HOLD_TMP      PS5TM_DATA_DIR "/smp-mounted.txt.part"
-#define HOLD_RETRY_MS 10000u       /* after a refusal, the next try comes this much later */
+#define HOLD_RETRY_MS 10000u       /* after a refusal, the next try comes this much later ... */
+#define HOLD_RETRY_MAX_MS (5u * 60u * 1000u)   /* ... twice as late each time, never later than this */
+#define HOLD_STATE_AGE_MS 15000u   /* a reading of the game state older than this says nothing */
+#define HOLD_SMP_GONE_MS  (10u * 60u * 1000u)  /* ShadowMountPlus silent this long: it was restarted or stopped, what it held is gone */
 
 typedef struct {
   char     id[12];
   uint64_t since_ms;               /* the clock only runs while nothing keeps it back */
+  uint64_t retry_at;               /* after a refused unmount: not before this; 0 none */
+  unsigned fails;                  /* refused unmounts in a row (the retry gets later, the log only the first) */
 } hold_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_rel_lock = PTHREAD_MUTEX_INITIALIZER;   /* one release at a time; taken before g_lock, never inside it */
 static hold_t          g_hold[HOLD_MAX];
 static int             g_n;
 static int             g_up;
+static uint64_t        g_smp_gone_since;                          /* when ShadowMountPlus stopped answering; 0 while it does */
 
 /* The real world; a test swaps it (ps5tm_smphold_test_env). */
 static ps5tm_smphold_env_t g_env;
@@ -60,12 +72,39 @@ env_smp_up(void) {
   return ps5tm_smp_available(NULL, 0);
 }
 
+/* Only a fresh reading that says "kein Spiel" frees the clock. Not known yet, a reading that is old (the game probe was switched off, or
+   is stuck), a title that is running but unnamed (the state is then not "kein Spiel", the id empty), and a state that cannot be told
+   ("nicht ermittelbar") all count as a game playing: the clock waits, nothing is unmounted under it. */
 static int
 env_game_running(void) {
-  if(!ps5tm_gamestate_measured()) return 1;            /* not known yet: as if one ran, the clock waits */
+  if(!ps5tm_gamestate_measured()) return 1;
+  if(ps5tm_gamestate_age_ms() > HOLD_STATE_AGE_MS) return 1;
   ps5tm_gamestate_t gs;
   ps5tm_gamestate_get(&gs);
-  return gs.title_id[0] != 0;
+  if(gs.title_id[0]) return 1;
+  return !gs.state || strcmp(gs.state, "kein Spiel") != 0;
+}
+
+/* Is this very title the one that runs? Then what the app held is done: the person started it. */
+static int
+env_title_running(const char *id) {
+  if(!ps5tm_gamestate_measured() || ps5tm_gamestate_age_ms() > HOLD_STATE_AGE_MS) return 0;
+  ps5tm_gamestate_t gs;
+  ps5tm_gamestate_get(&gs);
+  return gs.title_id[0] && !strcmp(gs.title_id, id);
+}
+
+/* The boot of the console (kern.boottime, seconds): what the file was written under; another boot, another ShadowMountPlus. 0: not known. */
+static uint64_t
+env_boot_id(void) {
+#ifdef __linux__
+  return 0;
+#else
+  struct timeval bt;
+  size_t sz = sizeof(bt);
+  if(sysctlbyname("kern.boottime", &bt, &sz, NULL, 0) != 0) return 0;
+  return (uint64_t)bt.tv_sec;
+#endif
 }
 
 static int
@@ -121,12 +160,11 @@ static int
 env_launch_failed(int reset, char *id, size_t n) {
   uint64_t newest = 0;
   int more = 0, lost = 0;
-  if(reset) {
+  if(reset || !g_klog_after) {                         /* a mark that did not take (the log could not be read then) is made again */
     ps5tm_klog_fetch(0, 1, g_klog_lines, &newest, &more, &lost);
     g_klog_after = newest;
     return 0;
   }
-  if(!g_klog_after) return 0;                          /* never reset: nothing to compare with */
   for(int round = 0; round < 4; round++) {
     unsigned got = ps5tm_klog_fetch(g_klog_after, 32, g_klog_lines, &newest, &more, &lost);
     for(unsigned i = 0; i < got; i++) {
@@ -160,6 +198,8 @@ env_default(void) {
   g_env.now_ms = ps5tm_mono_ms;
   g_env.notice = env_notice;
   g_env.launch_failed = env_launch_failed;
+  g_env.title_running = env_title_running;
+  g_env.boot_id = env_boot_id;
 }
 
 /* An id as ShadowMountPlus manages them: PPSA, CUSA, or a homebrew's FAKE and the like (nine letters and digits). */
@@ -173,8 +213,10 @@ id_ok(const char *id) {
 
 static void
 save_locked(void) {
-  char buf[HOLD_MAX * 16 + 1];
+  char buf[HOLD_MAX * 16 + 40];
   size_t k = 0;
+  uint64_t boot = g_env.boot_id ? g_env.boot_id() : 0;
+  if(boot) k += (size_t)snprintf(buf + k, sizeof(buf) - k, "boot=%llu\n", (unsigned long long)boot);   /* what the ids were written under */
   for(int i = 0; i < g_n; i++) k += (size_t)snprintf(buf + k, sizeof(buf) - k, "%s\n", g_hold[i].id);
   if(g_n == 0) {
     unlink(HOLD_PATH);
@@ -214,8 +256,14 @@ ps5tm_smphold_note(const char *id, int mounted) {
       g_hold[g_n].id[9] = 0;
       i = g_n++;
       changed = 1;
+    } else if(i < 0) {
+      PS5TM_WARN("smp_hold_full", "%s wurde eingehängt, aber die App kann nicht mehr als %d eingehängte Spiele im Auge behalten: es wird nicht von selbst ausgehängt.", id, HOLD_MAX);
     }
-    if(i >= 0) g_hold[i].since_ms = g_env.now_ms();
+    if(i >= 0) {
+      g_hold[i].since_ms = g_env.now_ms();             /* mounted afresh: the clock, and what a refusal had made later, start over */
+      g_hold[i].retry_at = 0;
+      g_hold[i].fails = 0;
+    }
   } else if(i >= 0) {
     drop_locked(i);
     changed = 1;
@@ -229,17 +277,31 @@ static void
 load(void) {
   FILE *f = fopen(HOLD_PATH, "r");
   if(!f) return;
-  char line[32];
+  char line[48];
   uint64_t now = g_env.now_ms();
+  uint64_t boot = g_env.boot_id ? g_env.boot_id() : 0;
   pthread_mutex_lock(&g_lock);
   while(fgets(line, sizeof(line), f) && g_n < HOLD_MAX) {
     line[strcspn(line, "\r\n")] = 0;
+    if(!strncmp(line, "boot=", 5)) {
+      /* Written under another boot of the console: ShadowMountPlus started afresh since, what the app had mounted is gone, and a game
+         it mounts itself now is not the app's to take out. (A second of difference is the clock's rounding.) */
+      unsigned long long saved = strtoull(line + 5, NULL, 10);
+      if(boot && saved && (saved > boot ? saved - boot : boot - saved) > 5) {
+        g_n = 0;
+        break;
+      }
+      continue;
+    }
     if(!id_ok(line) || index_of_locked(line) >= 0) continue;
     memcpy(g_hold[g_n].id, line, 9);                   /* id_ok: nine letters and digits */
     g_hold[g_n].id[9] = 0;
     g_hold[g_n].since_ms = now;
+    g_hold[g_n].retry_at = 0;
+    g_hold[g_n].fails = 0;
     g_n++;
   }
+  if(g_n == 0) unlink(HOLD_PATH);                      /* nothing worth keeping (another boot, or only wrong lines) */
   pthread_mutex_unlock(&g_lock);
   fclose(f);
 }
@@ -255,12 +317,32 @@ ps5tm_smphold_count(void) {
 /* Why a held game is let go; the log line says it (three fixed sentences, so the log page can translate them). */
 enum { REL_GRACE, REL_REFUSED, REL_START };
 
-/* Unmounts one title the app holds and writes it off. The HTTP status of the unmount (200 done). `other` is the title whose start was
-   refused (REL_REFUSED) or that the app is about to start (REL_START). Only the first two tell the person: after the third he started it. */
+/* Is this entry still written down, and (after the grace) is its time really up? Looked at again right before the unmount, under the
+   release lock: the person may have mounted it afresh, or another thread released it, since the caller made its copy. */
 static int
-release_one(const char *id, const char *other, int why) {
+still_due_locked(const char *id, int why) {
+  int k = index_of_locked(id);
+  if(k < 0) return 0;
+  if(why == REL_GRACE && g_env.now_ms() - g_hold[k].since_ms < PS5TM_SMPHOLD_GRACE_MS) return 0;
+  return 1;
+}
+
+/* Unmounts one title the app holds and writes it off. The HTTP status of the unmount (200 done), 0 when there was nothing to do any more.
+   `other` is the title whose start was refused (REL_REFUSED) or that the app is about to start (REL_START). Only the first two tell the
+   person: after the third he started it. `quiet`: a refusal that repeats is not written to the log again. */
+static int
+release_one(const char *id, const char *other, int why, int quiet) {
   char msg[300] = "";
+  pthread_mutex_lock(&g_rel_lock);
+  pthread_mutex_lock(&g_lock);
+  int due = still_due_locked(id, why);
+  pthread_mutex_unlock(&g_lock);
+  if(!due) {
+    pthread_mutex_unlock(&g_rel_lock);
+    return 0;
+  }
   int http = g_env.unmount(id, msg, sizeof(msg));
+  pthread_mutex_unlock(&g_rel_lock);
   if(http == 200) {
     /* ps5tm_smp_call has already written it off (the unmount went through it); this is for a test with its own unmount */
     pthread_mutex_lock(&g_lock);
@@ -276,7 +358,7 @@ release_one(const char *id, const char *other, int why) {
     else
       PS5TM_INFO("smp_hold_released", "%s war eingehängt, aber nicht gestartet. Die App hat es vor dem Start von %s ausgehängt.", id, other);
     if(why != REL_START && g_env.notice) g_env.notice(id, why == REL_REFUSED ? other : "");
-  } else {
+  } else if(!quiet) {
     PS5TM_WARN("smp_hold_failed", "%s ist eingehängt, aber nicht gestartet, und ließ sich nicht aushängen: %s", id, msg);
   }
   return http;
@@ -291,6 +373,15 @@ ps5tm_smphold_is_held(const char *title_id) {
   return yes;
 }
 
+/* Writes a title off without unmounting it: the app has no business with it any more. */
+static void
+forget_hold(const char *id) {
+  pthread_mutex_lock(&g_lock);
+  int k = index_of_locked(id);
+  if(k >= 0) { drop_locked(k); save_locked(); }
+  pthread_mutex_unlock(&g_lock);
+}
+
 /* One look at everything written down. Returns how many games it unmounted. */
 int
 ps5tm_smphold_step(void) {
@@ -301,8 +392,17 @@ ps5tm_smphold_step(void) {
   n = g_n;
   memcpy(cur, g_hold, sizeof(g_hold[0]) * (size_t)n);
   pthread_mutex_unlock(&g_lock);
-  if(n == 0) return 0;
-  if(!g_env.smp_up()) return 0;                        /* ShadowMountPlus not answering: nothing is known, nothing is done */
+  if(n == 0) { g_smp_gone_since = 0; return 0; }
+  if(!g_env.smp_up()) {                                /* ShadowMountPlus not answering: nothing is known, nothing is done ... */
+    uint64_t t = g_env.now_ms();
+    if(!g_smp_gone_since) g_smp_gone_since = t;
+    else if(t - g_smp_gone_since >= HOLD_SMP_GONE_MS) {   /* ... but not for ever: stopped or restarted, it holds nothing any more */
+      for(int i = 0; i < n; i++) forget_hold(cur[i].id);
+      g_smp_gone_since = 0;
+    }
+    return 0;
+  }
+  g_smp_gone_since = 0;
 
   /* While a game plays (an independent title mounted then does not take the place), or one of the app's jobs works with
      games, the time waits: it starts again afterwards. */
@@ -311,11 +411,16 @@ ps5tm_smphold_step(void) {
   int done = 0;
   for(int i = 0; i < n; i++) {
     int mounted = 0;
-    if(g_env.find(cur[i].id, &mounted) != 0 || !mounted) {   /* released meanwhile: started and ended, or ShadowMountPlus restarted */
-      pthread_mutex_lock(&g_lock);
-      int k = index_of_locked(cur[i].id);
-      if(k >= 0) { drop_locked(k); save_locked(); }
-      pthread_mutex_unlock(&g_lock);
+    int found = g_env.find(cur[i].id, &mounted);
+    /* ShadowMountPlus fell silent between the look above and this question (its list is asked again after a few seconds): nothing is
+       known, the title stays written down. Only an answer that does not have the title, or has it unmounted, writes it off. */
+    if(found != 0 && !g_env.smp_up()) continue;
+    if(found != 0 || !mounted) {                       /* released meanwhile: started and ended, or ShadowMountPlus restarted */
+      forget_hold(cur[i].id);
+      continue;
+    }
+    if(g_env.title_running && g_env.title_running(cur[i].id)) {   /* the person started it: ShadowMountPlus has it now, not the app */
+      forget_hold(cur[i].id);
       continue;
     }
     if(paused) {
@@ -326,13 +431,23 @@ ps5tm_smphold_step(void) {
       continue;
     }
     if(now - cur[i].since_ms < PS5TM_SMPHOLD_GRACE_MS) continue;
+    if(cur[i].retry_at && now < cur[i].retry_at) continue;   /* a refused unmount: not before its time */
 
-    if(release_one(cur[i].id, "", REL_GRACE) == 200) {
+    int http = release_one(cur[i].id, "", REL_GRACE, cur[i].fails > 0 && cur[i].fails % 6 != 0);
+    if(http == 200) {
       done++;
-    } else {
+    } else if(http != 0) {
+      /* Refused: asked again later, twice as late each time (10 s, 20 s ... 5 min); the log has the first and every sixth. The clock
+         is read again: the unmount itself may have taken half a minute. */
       pthread_mutex_lock(&g_lock);
       int k = index_of_locked(cur[i].id);
-      if(k >= 0) g_hold[k].since_ms = now - (PS5TM_SMPHOLD_GRACE_MS - HOLD_RETRY_MS);   /* the next try in HOLD_RETRY_MS */
+      if(k >= 0) {
+        unsigned shift = g_hold[k].fails < 5 ? g_hold[k].fails : 5;
+        uint64_t wait = (uint64_t)HOLD_RETRY_MS << shift;
+        if(wait > HOLD_RETRY_MAX_MS) wait = HOLD_RETRY_MAX_MS;
+        g_hold[k].fails++;
+        g_hold[k].retry_at = g_env.now_ms() + wait;
+      }
       pthread_mutex_unlock(&g_lock);
     }
   }
@@ -356,7 +471,11 @@ ps5tm_smphold_check_launch(void) {
   int done = 0;
   for(int i = 0; i < n; i++) {
     if(!strcmp(cur[i].id, other)) continue;            /* its own start failed: not what the game held */
-    if(release_one(cur[i].id, other, REL_REFUSED) == 200) done++;
+    if(g_env.title_running && g_env.title_running(cur[i].id)) {   /* it plays: not the one that blocked, and never unmounted under itself */
+      forget_hold(cur[i].id);
+      continue;
+    }
+    if(release_one(cur[i].id, other, REL_REFUSED, 0) == 200) done++;
   }
   return done;
 }
@@ -374,8 +493,17 @@ ps5tm_smphold_release_for_start(const char *title_id) {
   if(n == 0 || !g_env.smp_up()) return 0;
   int done = 0;
   for(int i = 0; i < n; i++) {
-    if(title_id && !strcmp(cur[i].id, title_id)) continue;   /* starting it is what it waits for */
-    if(release_one(cur[i].id, title_id ? title_id : "?", REL_START) == 200) done++;
+    if(title_id && !strcmp(cur[i].id, title_id)) {
+      /* Starting it is what it waits for. Its clock starts again now: the game state needs seconds to show the start, and the watcher
+         must not unmount a title that is just being started because its half minute ran out meanwhile. */
+      pthread_mutex_lock(&g_lock);
+      int k = index_of_locked(cur[i].id);
+      if(k >= 0) g_hold[k].since_ms = g_env.now_ms();
+      pthread_mutex_unlock(&g_lock);
+      continue;
+    }
+    if(g_env.title_running && g_env.title_running(cur[i].id)) { forget_hold(cur[i].id); continue; }
+    if(release_one(cur[i].id, title_id ? title_id : "?", REL_START, 0) == 200) done++;
   }
   return done;
 }
@@ -401,6 +529,13 @@ ps5tm_smphold_test_reset(void) {
   pthread_mutex_lock(&g_lock);
   g_n = 0;
   pthread_mutex_unlock(&g_lock);
+  g_smp_gone_since = 0;
+}
+
+void
+ps5tm_smphold_test_load(void) {
+  if(!g_env.now_ms) env_default();
+  load();
 }
 
 static void *

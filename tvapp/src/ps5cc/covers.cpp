@@ -94,7 +94,14 @@ void Covers::forget_failures()
 void Covers::prefer(const std::string &id)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    preferred_ = id;
+    if (listening_)
+        preferred_ = id;
+}
+
+void Covers::listen(bool on)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    listening_ = on;
 }
 
 int Covers::upload_pending(

@@ -73,6 +73,9 @@ class GameTools
     void draw_side(ui::Canvas &canvas, const gfx::Rect &box) const;
     float draw_paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width,
                          float size, gfx::Color ink, int max_lines = 6) const;
+    // Below this line no paragraph is drawn (the side column of the plans: what does not fit is left out, not drawn over the edge of the
+    // window); a huge value outside draw_side().
+    mutable float para_limit_ = 1.0e9f;
 
     ui::Theme theme_;
     ui::Menu menu_;

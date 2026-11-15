@@ -1,11 +1,13 @@
 /* See lhttp.h. */
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lhttp.h"
@@ -38,23 +40,36 @@ ps5tm_lhttp(int port, const char *method, const char *path, const char *content_
   size_t cap = 8192, len = 0;
   unsigned char *buf = malloc(cap);
   if(!buf) { close(fd); return -1; }
+  /* timeout_ms is the whole time of the answer, not the wait for each piece: a program that sends a byte now and then must not hold
+     the caller for ever. */
+  struct timespec t0;
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  int timed_out = 0, truncated = 0;
   for(;;) {
     if(len + 4096 + 1 > cap) {
-      if(cap >= LHTTP_REPLY_MAX) break;
+      if(cap >= LHTTP_REPLY_MAX) { truncated = 1; break; }
       unsigned char *nb = realloc(buf, cap * 2);
       if(!nb) break;
       buf = nb;
       cap *= 2;
     }
     ssize_t r = recv(fd, buf + len, cap - len - 1, 0);
+    if(r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) { timed_out = 1; break; }
     if(r <= 0) break;
     len += (size_t)r;
+    struct timespec t1;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    if((t1.tv_sec - t0.tv_sec) * 1000 + (t1.tv_nsec - t0.tv_nsec) / 1000000 > (long)timeout_ms + 1000) { timed_out = 1; break; }
   }
   close(fd);
   buf[len] = 0;
   int status = -1;
   if(len > 12 && !strncmp((char *)buf, "HTTP/1.", 7)) status = atoi((char *)buf + 9);
-  if(status <= 0) { free(buf); return -1; }
+  /* An answer cut off at the limit is no answer (a half JSON reads as nothing and must not pass for "the program answered"). Connected,
+     but not a word in time: LHTTP_NO_ANSWER. -1 stays for "nothing listens". A valid status line is an answer, as before, even when the
+     program kept the connection open after it (then the wait ran into the time). */
+  if(truncated) { free(buf); return LHTTP_TOO_BIG; }
+  if(status <= 0) { free(buf); return (timed_out || len == 0) ? LHTTP_NO_ANSWER : -1; }
   if(out) {
     unsigned char *p = NULL;
     for(size_t i = 0; i + 3 < len; i++)

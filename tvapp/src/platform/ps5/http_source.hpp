@@ -119,8 +119,6 @@ class HttpSource final : public Source
             package,
             ps4mount,
             ps4mount_fetch,
-            kraken,
-            dumpforge,
             disc,
             eject,
             playtime_reset,
@@ -157,7 +155,7 @@ class HttpSource final : public Source
     {
         bool start = false; // false: the plan
         int kind = 0; // 0: a plan or a start; 1: the check before a conversion; 2: the queue of
-                      // conversions
+                      // conversions; 3: FPKGMount or Dump Forge (id: "kraken" or "dumpforge")
         Tool tool = Tool::copy;
         std::string id;
         std::string body;
@@ -166,6 +164,8 @@ class HttpSource final : public Source
 
     void push(Request request);
     void handle_tool(const ToolRequest &request);
+    void handle_engine(const ToolRequest &request); // FPKGMount / Dump Forge (a tool request of kind 3)
+    void engine_post(const std::string &which, const std::string &json);
     void notice(Notice::Kind kind, std::string title, std::string body = {});
     void set_link(Link link, std::string detail);
     bool connect_phase();

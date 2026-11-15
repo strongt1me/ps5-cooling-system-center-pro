@@ -14,7 +14,11 @@ static int g_fail, g_n;
 #define CHECK(c) do { g_n++; if(!(c)) { g_fail++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while(0)
 
 /* ---- stubs of what smphold.c links against (the real calls are replaced by the test environment) */
-void ps5tm_log(const char *level, const char *code, const char *fmt, ...) { (void)level; (void)code; (void)fmt; }
+static int g_warns_failed;                                  /* log lines "the unmount was refused" */
+void ps5tm_log(const char *level, const char *code, const char *fmt, ...) {
+  (void)level; (void)fmt;
+  if(code && !strcmp(code, "smp_hold_failed")) g_warns_failed++;
+}
 void ps5tm_notify_plain(const char *fmt, ...) { (void)fmt; }
 uint64_t ps5tm_mono_ms(void) { return 0; }
 #undef pthread_create        /* ps5tm.h routes it through ps5tm_thread_create; the stub calls the real one */
@@ -29,6 +33,7 @@ int ps5tm_smp_find(const char *id, ps5tm_smp_game_t *out) {
 }
 int ps5tm_smp_available(char *v, size_t n) { (void)v; (void)n; return g_smp_available; }
 int ps5tm_gamestate_measured(void) { return 1; }
+uint64_t ps5tm_gamestate_age_ms(void) { return 0; }
 void ps5tm_gamestate_get(ps5tm_gamestate_t *o) { memset(o, 0, sizeof(*o)); }
 int ps5tm_app_job_running(char *why, size_t n) { (void)why; (void)n; return 0; }
 static int g_real_unmounts;
@@ -43,6 +48,7 @@ int ps5tm_library_launch_info(const char *id, char *name, size_t nn, char *link,
 /* A kernel log the test fills; the lines are what the test console wrote (14.11.2026) when a title was refused. */
 static ps5tm_klog_line_t g_kl[64];
 static unsigned g_kl_n;
+static int g_kl_fail;                                       /* the kernel log cannot be read */
 static void kl_add(const char *text) {
   ps5tm_klog_line_t *l = &g_kl[g_kl_n];
   memset(l, 0, sizeof(*l));
@@ -52,6 +58,12 @@ static void kl_add(const char *text) {
 }
 unsigned ps5tm_klog_fetch(uint64_t after, unsigned max, ps5tm_klog_line_t *out, uint64_t *newest, int *more, int *lost) {
   unsigned got = 0, first = 0;
+  if(g_kl_fail) {
+    if(newest) *newest = 0;
+    if(more) *more = 0;
+    if(lost) *lost = 0;
+    return 0;
+  }
   if(newest) *newest = g_kl_n ? g_kl[g_kl_n - 1].seq : 6250;
   if(more) *more = 0;
   if(lost) *lost = 0;
@@ -73,8 +85,17 @@ static int g_notices;
 static char g_notice_held[16], g_notice_other[16];
 static char g_failed_next[16];          /* the title the console "refuses" at the next look; "" none */
 static int g_resets;
+static char g_run_title[16];            /* the title that runs (a fresh reading); "" none */
+static uint64_t g_boot;                 /* the boot of the console; 0 not known */
+static int g_find_kills_up;             /* ShadowMountPlus falls silent while its list is asked */
 
-static int t_find(const char *id, int *mounted) { (void)id; if(!g_known) return -1; *mounted = g_mounted; return 0; }
+static int t_find(const char *id, int *mounted) {
+  (void)id;
+  if(g_find_kills_up) g_up = 0;
+  if(!g_known) return -1;
+  *mounted = g_mounted;
+  return 0;
+}
 static int t_up(void) { return g_up; }
 static int t_game(void) { return g_game; }
 static int t_job(void) { return g_job; }
@@ -99,14 +120,18 @@ static int t_failed(int reset, char *id, size_t n) {
   return 1;
 }
 
+static int t_title_running(const char *id) { return g_run_title[0] && !strcmp(g_run_title, id); }
+static uint64_t t_boot(void) { return g_boot; }
+
 static void
 world(void) {
-  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed };
+  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot };
   ps5tm_smphold_test_env(&e);
   ps5tm_smphold_test_reset();
   g_now = 1000000; g_up = 1; g_game = 0; g_job = 0; g_mounted = 1; g_known = 1;
   g_unmount_calls = 0; g_unmount_http = 200; g_unmounted[0] = 0; g_notices = 0;
   g_notice_held[0] = g_notice_other[0] = 0; g_failed_next[0] = 0; g_resets = 0;
+  g_run_title[0] = 0; g_boot = 0; g_find_kills_up = 0; g_warns_failed = 0;
 }
 
 static int
@@ -314,7 +339,7 @@ main(void) {
   CHECK(ps5tm_smphold_check_launch() == 0 && g_unmount_calls == 1 && ps5tm_smphold_count() == 1 && g_notices == 0);
 
   /* an environment without the kernel-log reading watches nothing */
-  { ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, NULL };
+  { ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, NULL, NULL, NULL };
     ps5tm_smphold_test_env(&e);
     ps5tm_smphold_test_reset();
     g_unmount_calls = 0;
@@ -341,6 +366,134 @@ main(void) {
   g_unmount_http = 409;
   CHECK(ps5tm_smphold_release_for_start("PPSA02433") == 0 && ps5tm_smphold_count() == 1);   /* refused: stays, the start goes on regardless */
 
+
+  /* ---- audit of 15.11.2026 */
+
+  /* the held title itself runs: the person started it, so it is written off and never unmounted (F-52) */
+  world();
+  ps5tm_smphold_note("PPSA02664", 1);
+  snprintf(g_run_title, sizeof(g_run_title), "PPSA02664");
+  g_game = 1;
+  g_now += 10 * PS5TM_SMPHOLD_GRACE_MS;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 0 && ps5tm_smphold_count() == 0 && !file_exists());
+  g_game = 0;
+  g_now += 10 * PS5TM_SMPHOLD_GRACE_MS;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 0);                              /* and after its end nothing comes to take it out */
+
+  /* a start is refused while the held title itself plays: it is not what blocked, it stays untouched */
+  world();
+  ps5tm_smphold_note("PPSA02664", 1);
+  snprintf(g_run_title, sizeof(g_run_title), "PPSA02664");
+  snprintf(g_failed_next, sizeof(g_failed_next), "PPSA02433");
+  CHECK(ps5tm_smphold_check_launch() == 0 && g_unmount_calls == 0 && ps5tm_smphold_count() == 0);
+  world();
+  ps5tm_smphold_note("PPSA02664", 1);
+  snprintf(g_run_title, sizeof(g_run_title), "PPSA02664");
+  CHECK(ps5tm_smphold_release_for_start("PPSA02433") == 0 && g_unmount_calls == 0 && ps5tm_smphold_count() == 0);
+
+  /* the app starts the held title: its clock starts again (the game state needs seconds to show the start) */
+  world();
+  ps5tm_smphold_note("PPSA02664", 1);
+  g_now += PS5TM_SMPHOLD_GRACE_MS - 1000;
+  CHECK(ps5tm_smphold_release_for_start("PPSA02664") == 0 && ps5tm_smphold_is_held("PPSA02664"));
+  g_now += 2000;                                                                         /* the half minute since the mount is over */
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 0);
+  g_now += PS5TM_SMPHOLD_GRACE_MS;
+  CHECK(ps5tm_smphold_step() == 1 && g_unmount_calls == 1);
+
+  /* ShadowMountPlus falls silent between the look and the question: the game stays written down (F-54) */
+  world();
+  ps5tm_smphold_note("PPSA02664", 1);
+  g_find_kills_up = 1;
+  g_known = 0;
+  g_now += 10 * PS5TM_SMPHOLD_GRACE_MS;
+  CHECK(ps5tm_smphold_step() == 0 && ps5tm_smphold_count() == 1 && g_unmount_calls == 0);
+  g_find_kills_up = 0;
+  g_up = 1;                                                                              /* it answers again and does not know the title: written off */
+  CHECK(ps5tm_smphold_step() == 0 && ps5tm_smphold_count() == 0);
+
+  /* ShadowMountPlus silent for ten minutes: it was stopped or restarted, nothing is held any more */
+  world();
+  ps5tm_smphold_note("PPSA02664", 1);
+  g_up = 0;
+  CHECK(ps5tm_smphold_step() == 0 && ps5tm_smphold_count() == 1);
+  g_now += 10 * 60 * 1000 - 1;
+  CHECK(ps5tm_smphold_step() == 0 && ps5tm_smphold_count() == 1);
+  g_now += 1;
+  CHECK(ps5tm_smphold_step() == 0 && ps5tm_smphold_count() == 0 && !file_exists());
+
+  /* a refused unmount is asked again 10 s, 20 s, 40 s, 80 s later, and only the first refusal is logged (F-55) */
+  world();
+  ps5tm_smphold_note("PPSA02664", 1);
+  g_unmount_http = 409;
+  g_now += PS5TM_SMPHOLD_GRACE_MS;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 1 && g_warns_failed == 1);
+  g_now += 9999;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 1);
+  g_now += 1;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 2 && g_warns_failed == 1);       /* the second refusal is not logged again */
+  g_now += 19999;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 2);
+  g_now += 1;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 3);
+  g_now += 39999;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 3);
+  g_now += 1;
+  g_unmount_http = 200;
+  CHECK(ps5tm_smphold_step() == 1 && g_unmount_calls == 4 && ps5tm_smphold_count() == 0);
+  world();                                                                               /* mounted afresh: the waiting starts over */
+  ps5tm_smphold_note("PPSA02664", 1);
+  g_unmount_http = 409;
+  g_now += PS5TM_SMPHOLD_GRACE_MS;
+  ps5tm_smphold_step();
+  g_now += 1000;
+  ps5tm_smphold_note("PPSA02664", 1);
+  g_now += PS5TM_SMPHOLD_GRACE_MS;
+  CHECK(ps5tm_smphold_step() == 0 && g_unmount_calls == 2 && g_warns_failed == 2);       /* a new first refusal, logged */
+
+  /* the ninth game is not forgotten silently: eight are held, the log says so (the count stays) (F-59) */
+  world();
+  for(int i = 0; i < 9; i++) {
+    char id[16];
+    snprintf(id, sizeof(id), "PPSA%05d", 200 + i);
+    ps5tm_smphold_note(id, 1);
+  }
+  CHECK(ps5tm_smphold_count() == 8);
+
+  /* the file is written under the boot of the console, and not read under another boot (F-51) */
+  world();
+  g_boot = 1234;
+  ps5tm_smphold_note("PPSA02664", 1);
+  CHECK(file_has("boot=1234") && file_has("PPSA02664"));
+  world();
+  g_boot = 1000;
+  { FILE *f = fopen(PS5TM_DATA_DIR "/smp-mounted.txt", "w"); fputs("boot=2000\nPPSA02664\n", f); fclose(f); }
+  ps5tm_smphold_test_load();
+  CHECK(ps5tm_smphold_count() == 0 && !file_exists());                                   /* another boot: nothing the app mounted is left */
+  world();
+  g_boot = 1000;
+  { FILE *f = fopen(PS5TM_DATA_DIR "/smp-mounted.txt", "w"); fputs("boot=1003\nPPSA02664\nCUSA00775\n", f); fclose(f); }
+  ps5tm_smphold_test_load();
+  CHECK(ps5tm_smphold_count() == 2);                                                     /* the same boot (a second or two of rounding) */
+  world();
+  g_boot = 1000;
+  { FILE *f = fopen(PS5TM_DATA_DIR "/smp-mounted.txt", "w"); fputs("PPSA02664\n", f); fclose(f); }
+  ps5tm_smphold_test_load();
+  CHECK(ps5tm_smphold_count() == 1);                                                     /* a file of an older version: read as it is */
+  world();
+  g_boot = 0;
+  { FILE *f = fopen(PS5TM_DATA_DIR "/smp-mounted.txt", "w"); fputs("boot=2000\nPPSA02664\n", f); fclose(f); }
+  ps5tm_smphold_test_load();
+  CHECK(ps5tm_smphold_count() == 1);                                                     /* the boot is not known now: no reason to throw it away */
+  ps5tm_smphold_test_reset();
+  unlink(PS5TM_DATA_DIR "/smp-mounted.txt");
+
+  /* a second release of the same title at the same moment does nothing more: the entry is gone, and the clock of a re-mounted one has not run out */
+  world();
+  ps5tm_smphold_note("PPSA02664", 1);
+  g_now += PS5TM_SMPHOLD_GRACE_MS;
+  CHECK(ps5tm_smphold_step() == 1 && g_unmount_calls == 1);
+  CHECK(ps5tm_smphold_release_for_start("PPSA02433") == 0 && g_unmount_calls == 1);
 
   /* The real watcher world (not the test one) against the lines the test console wrote: the first start of PPSA99996 was refused while
      PPSA99995 was mounted through the app. */
@@ -371,6 +524,20 @@ main(void) {
   CHECK(ps5tm_smphold_check_launch() == 0 && g_real_unmounts == 0 && ps5tm_smphold_is_held("PPSA99995"));
   kl_add("[SceShellUI] I/PSM.UI : SceneQ : Loaded[0.00msec] : LaunchFlowError.FAKE86922 : Scene");   /* a tile refused: the case of 14.11. */
   CHECK(ps5tm_smphold_check_launch() == 1 && g_real_unmounts == 1);
+
+  /* the log could not be read when the mark was made: the next look makes it again, and a refusal from before it does not count (F-56) */
+  ps5tm_smphold_test_env(NULL);
+  ps5tm_smphold_test_reset();
+  g_real_unmounts = 0; g_kl_n = 0;
+  kl_add("[SceShellUI] I/PSM.UI : ** Unload enqueue: LaunchFlowError.PPSA99996 : Scene");
+  ps5tm_smphold_note("PPSA99995", 1);
+  g_kl_fail = 1;
+  ps5tm_smphold_mark();
+  g_kl_fail = 0;
+  CHECK(ps5tm_smphold_check_launch() == 0 && g_real_unmounts == 0 && ps5tm_smphold_is_held("PPSA99995"));
+  kl_add("[SceShellUI] I/PSM.UI : ** Unload enqueue: LaunchFlowError.PPSA99997 : Scene");
+  CHECK(ps5tm_smphold_check_launch() == 1 && g_real_unmounts == 1);
+
   g_smp_available = 0;
   ps5tm_smphold_test_env(NULL);
   ps5tm_smphold_test_reset();

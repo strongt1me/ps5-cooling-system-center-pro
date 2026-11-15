@@ -870,6 +870,8 @@ typedef struct {
   char kind[8];
 } ps5tm_kraken_game_t;
 int ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max);
+/* Does Kraken Mount search this folder (its settings name it under scanpath)? 1 yes; 0 it runs and does not; -1 not running or not known. */
+int ps5tm_kraken_searches(const char *folder);
 
 /* Titles two mounters want at once (src/mounters.c, 14.11.2026): a game Kraken Mount lists that ShadowMountPlus (a folder or an image) or
    PS4Mount manages too. Both write /user/app/<ID> and mount /system_ex/app/<ID>; ShadowMountPlus also rewrites the param.json. An array of
@@ -896,11 +898,11 @@ int           ps5tm_dumpforge_installed(char *version, size_t n);
 void          ps5tm_tile_keep_away(const char *tile_id, const char *name, const char *const *markers, int n_markers);
 int           ps5tm_dumpforge_running(void);
 int           ps5tm_dumpforge_start(char *msg, size_t n);              /* 0 = running, -1 with a sentence */
-void          ps5tm_dumpforge_stop(void);
+int           ps5tm_dumpforge_stop(int force);                          /* 0 = ended (or not running), 1 = left running: it is busy and force is 0 */
 int           ps5tm_dumpforge_fetch(char *msg, size_t n);              /* 200 = there, else an HTTP-like status with a sentence */
 int           ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int *job, char *err, size_t n);
 int           ps5tm_dumpforge_job_poll(int job, ps5tm_dumpforge_job_t *out);
-void          ps5tm_dumpforge_job_cancel(int job);
+int           ps5tm_dumpforge_job_cancel(int job);                     /* the HTTP status of the request, -1 when it did not arrive */
 
 /* Checking, unpacking and repairing the image of a game (imgjob.c). */
 struct cJSON *ps5tm_imgjob_info(const char *title_id, int *http);

@@ -1580,6 +1580,9 @@ add_marks(cJSON *e, const char *title_id) {
 struct cJSON *
 ps5tm_library_json(void) {
   ensure_fresh(1);
+  /* Asked before the library's lock is taken: ps5tm_smp_can may have ShadowMountPlus's list read again (up to 5 s of HTTP), and everything
+     that needs the lock would wait for that. */
+  const int smp_can_remount = ps5tm_smp_can("mount_game") && ps5tm_smp_can("unmount_game");
   pthread_mutex_lock(&g_lock);
 
   cJSON *root = cJSON_CreateObject();
@@ -1677,8 +1680,7 @@ ps5tm_library_json(void) {
        (smphold.c); only that is worth a warning (console test 14.11.2026). */
     if(g->smp) cJSON_AddBoolToObject(e, "app_mounted", g->smp_mounted && ps5tm_smphold_is_held(g->title_id));
     /* Taken out and put back through ShadowMountPlus (smpremount.c): its folders and images, not installed packages. */
-    cJSON_AddBoolToObject(e, "can_remount", g->smp && strcmp(g->format, "pkg") && ps5tm_smp_can("mount_game") &&
-                          ps5tm_smp_can("unmount_game"));
+    cJSON_AddBoolToObject(e, "can_remount", g->smp && strcmp(g->format, "pkg") && smp_can_remount);
     if(g->ps4mount) cJSON_AddBoolToObject(e, "ps4mount", 1);
     cJSON_AddBoolToObject(e, "can_copy", g->real_path[0] == '/' &&
                           (!strcmp(g->format, "folder") || is_file));
@@ -2307,6 +2309,13 @@ probe_recover(void) {
   if(fgets(tid, sizeof(tid), f)) tid[strcspn(tid, "\r\n")] = 0;
   fclose(f);
   if(tid[0]) {
+    /* Only a mount that is still there and that nobody has taken over since: the person may have mounted the title himself in the
+       meantime (the app then holds it, smphold.c), and an unmount here would take it out from under him. */
+    ps5tm_smp_game_t sg;
+    if(ps5tm_smp_find(tid, &sg) != 0 || !sg.mounted || ps5tm_smphold_is_held(tid)) {
+      remove(PROBE_MARK);
+      return;
+    }
     char err[200];
     if(probe_post("/games/unmount", tid, 0, err, sizeof(err)) == 0)
       PS5TM_INFO("image_probe_recovered", "Abbild von %s, das beim letzten Mal eingehängt geblieben war, wurde freigegeben.", tid);
@@ -2528,6 +2537,7 @@ probe_round(void) {
   /* The fallback: a title whose image the reader does not know is mounted for a moment through ShadowMountPlus (see above). */
   if(g_probe_nfailed == 0) return;
   if(!ps5tm_smp_available(NULL, 0) || !ps5tm_smp_can("mount_game") || !ps5tm_smp_can("unmount_game")) return;
+  if(!probe_idle()) return;                                          /* a game plays or a job works: not even the blind unmount of an old mark */
   probe_recover();
 
   struct { char tid[12]; char source[128]; } todo[PROBE_MAX_TITLES];

@@ -520,8 +520,8 @@ class FilesPage final : public Page
         float y = card.y + 400.0f;
         if (!folder_.path.empty() && !folder_.writable)
             y = note_card(canvas, paint, card, y, "Nur ansehen",
-                          "Hier darf nichts geändert werden. Geschützt sind nur /dev, /proc, "
-                          "Einhängepunkte und Verknüpfungen.",
+                          "Gesperrt: /, Ordner direkt unter / und /mnt, /dev, /proc, Einhängepunkte, "
+                          "Verknüpfungen",
                           kWarning);
         if (!clip_paths_.empty())
             y = note_card(canvas, paint, card, y,
@@ -1902,13 +1902,22 @@ class FilesPage final : public Page
                     const std::string &title, const std::string &text, Color accent) const
     {
         gfx::DrawList &list = canvas.list;
-        const Rect box{card.x + 30.0f, y, card.w - 60.0f, 92.0f};
+        // up to two lines of the quiet text (a long note was cut after the first and lost its point)
+        std::vector<std::string> lines =
+            canvas.fonts.regular.font->wrap(text, 18.0f, card.w - 60.0f - 48.0f);
+        if (lines.size() > 2)
+            lines.resize(2);
+        const Rect box{card.x + 30.0f, y, card.w - 60.0f, lines.size() > 1 ? 116.0f : 92.0f};
         list.rounded_rect(box, 16.0f, accent.with_alpha(0.12f));
         list.rounded_rect({box.x, box.y + 14.0f, 4.0f, box.h - 28.0f}, 2.0f, accent);
         ui::text(list, canvas.fonts.semibold, ui::fit_label(paint, title, 22.0f, box.w - 48.0f),
                  box.x + 24.0f, box.y + 38.0f, 22.0f, kInk);
-        ui::text(list, canvas.fonts.regular, ui::fit_label(paint, text, 18.0f, box.w - 48.0f),
-                 box.x + 24.0f, box.y + 70.0f, 18.0f, kMuted);
+        float ty = box.y + 70.0f;
+        for (const std::string &line : lines)
+        {
+            ui::text(list, canvas.fonts.regular, line, box.x + 24.0f, ty, 18.0f, kMuted);
+            ty += 24.0f;
+        }
         return box.y + box.h + 14.0f;
     }
 

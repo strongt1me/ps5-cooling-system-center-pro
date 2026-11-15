@@ -13,7 +13,7 @@
 typedef struct {
   int      (*find)(const char *id, int *mounted);      /* 0 and *mounted when ShadowMountPlus knows the title */
   int      (*smp_up)(void);                             /* ShadowMountPlus answers */
-  int      (*game_running)(void);                       /* a game plays, or it is not known yet */
+  int      (*game_running)(void);                       /* a game plays, or it is not known (yet, any more: an old reading) */
   int      (*job_running)(void);                        /* one of the app's own jobs works */
   int      (*unmount)(const char *id, char *msg, size_t n); /* an HTTP status, 200 done */
   uint64_t (*now_ms)(void);
@@ -23,6 +23,11 @@ typedef struct {
   /* Did the console refuse to start a title since the last call (kernel log line "LaunchFlowError.<id>")? 1 and its id; with `reset`
      it forgets what was before and says 0. NULL: nothing is watched. Called only by the watcher thread. */
   int      (*launch_failed)(int reset, char *id, size_t n);
+  /* Is this very title the one that runs (a fresh reading)? Then the person started it: it is written off, never unmounted. NULL: never. */
+  int      (*title_running)(const char *id);
+  /* The boot of the console (seconds, kern.boottime); the file of held games is written under it and not read under another boot. 0 or NULL:
+     not known, the file is read as it is. */
+  uint64_t (*boot_id)(void);
 } ps5tm_smphold_env_t;
 
 /* Called for every /games/mount (mounted 1) and /games/unmount (0) the app sends (smp.c, ps5tm_smp_call). */
@@ -46,5 +51,6 @@ int  ps5tm_smphold_is_held(const char *title_id);
 /* Host test only. NULL gives the real world back. */
 void ps5tm_smphold_test_env(const ps5tm_smphold_env_t *env);
 void ps5tm_smphold_test_reset(void);
+void ps5tm_smphold_test_load(void);                 /* reads the file of held games (what the start of the app does) without starting the thread */
 
 #endif

@@ -388,8 +388,8 @@ TEST(Ps5ccPlans, TheDebugFpkgIsAFormatWithFourLevelsAndAnEngine)
     EXPECT_TRUE(hui::ps5cc::squeezes("fpkg-bal"));
     EXPECT_FALSE(hui::ps5cc::squeezes("fpkg-raw"));
     EXPECT_FALSE(hui::ps5cc::squeezes("exfat"));
-    EXPECT_EQ(hui::ps5cc::op_label("fpkg-bal"), "FPKG · ausgewogen");
-    EXPECT_EQ(hui::ps5cc::op_label("fpkg-raw"), "FPKG · unkomprimiert");
+    EXPECT_EQ(hui::ps5cc::op_label("fpkg-bal"), "FPKG · Ausgewogen");
+    EXPECT_EQ(hui::ps5cc::op_label("fpkg-raw"), "FPKG · Unkomprimiert");
     EXPECT_EQ(hui::ps5cc::op_label("exfat"), "exfat") << "the other ops stay as the app names them";
 }
 

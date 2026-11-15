@@ -1096,7 +1096,7 @@ float GameTools::draw_paragraph(ui::Canvas &canvas, const std::string &text, flo
     int lines = 0;
     for (const std::string &line : canvas.fonts.regular.font->wrap(text, size, width))
     {
-        if (++lines > max_lines)
+        if (++lines > max_lines || y > para_limit_)
             break;
         ui::text(canvas.list, canvas.fonts.regular, line, x, y, size, ink);
         y += size * 1.34f;
@@ -1118,8 +1118,20 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     };
     const auto para = [&](const std::string &text, Color ink, int max_lines = 6)
     { y = draw_paragraph(canvas, text, x, y, w, 20.0f, ink, max_lines); };
+    // the column ends with the box: a longer text is cut after the last line that fits, never drawn over the window's edge
+    struct Limit
+    {
+        float &value;
+        ~Limit()
+        {
+            value = 1.0e9f;
+        }
+    } limit{para_limit_};
+    const float limit_end = box.y + box.h - 24.0f;
 
     const std::string blocked = run_blocked(plan_);
+    // room is kept for the reason that blocks the start: it is the last paragraph and must never be the one that is cut
+    para_limit_ = limit_end - (blocked.empty() ? 0.0f : 80.0f);
     const std::string target = target_of(plan_, choice_);
     switch (tool_)
     {
@@ -1154,7 +1166,10 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  kWarning, 4);
         }
         if (!blocked.empty())
+            {
+            para_limit_ = limit_end;
             para(blocked, kCritical, 3);
+        }
         if (!target.empty())
             para("Jede Datei wird nach dem Schreiben zurückgelesen und verglichen; daneben "
                  "entsteht eine .sha256 mit den "
@@ -1231,17 +1246,18 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         }
         if (choice_.op == kOpFpkg)
         {
-            para("Ein Debug-Paket (.pkg), das Kraken Mount einhängt (Seite FPKGMount), geschrieben "
-                 "vom PS5-Programm Dump Forge von quer3q.",
-                 kMuted, 3);
+            // one paragraph for what it is (the two that said the same ran over the window's edge with the Dump Forge hint above)
+            para("Dump Forge von quer3q schreibt das Debug-Paket (.pkg) als eigenes Programm; die "
+                 "App zeigt seine Schritte. Kraken Mount (Seite FPKGMount) hängt es ein. Eine "
+                 "Prüfsummen-Datei entsteht nicht.",
+                 kMuted, 4);
             para(level_text(choice_.level), kMuted, 3);
         }
-        if (choice_.op == kOpFpkg)
-            para("Dump Forge läuft dabei als eigenes Programm auf der PS5 und schreibt das Paket; "
-                 "die App zeigt seine Schritte. Eine Prüfsummen-Datei entsteht nicht.",
-                 kMuted, 3);
         if (!blocked.empty())
+            {
+            para_limit_ = limit_end;
             para(blocked, kCritical, 3);
+        }
         break;
     }
     case Tool::move:
@@ -1272,7 +1288,10 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                 para("Die Abbild-Datei wird nach dem Entpacken gelöscht.", kWarning, 2);
         }
         if (!blocked.empty())
+            {
+            para_limit_ = limit_end;
             para(blocked, kCritical, 3);
+        }
         break;
     }
     case Tool::image_unpack:
@@ -1286,7 +1305,10 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             para(target, kInk, 2);
         }
         if (!blocked.empty())
+            {
+            para_limit_ = limit_end;
             para(blocked, kCritical, 3);
+        }
         para("Jede Datei wird geschrieben, zurückgelesen und verglichen; erst wenn alles stimmt, "
              "bekommt der Ordner seinen "
              "Namen. Das Abbild bleibt unberührt.",
@@ -1317,7 +1339,10 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         if (!plan_.note.empty())
             para(plan_.note, kMuted, 3);
         if (!blocked.empty())
+            {
+            para_limit_ = limit_end;
             para(blocked, kCritical, 3);
+        }
         break;
     case Tool::image_repair:
         para("Nur, wo es sicher geht: Stimmt die Größe der Datei nicht mit dem Kopf des Abbilds "
@@ -1327,7 +1352,10 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
              kMuted, 5);
         para("Defekte Blöcke lassen sich ohne Original nicht wiederherstellen.", kMuted, 2);
         if (!blocked.empty())
+            {
+            para_limit_ = limit_end;
             para(blocked, kCritical, 3);
+        }
         break;
     case Tool::erase:
     {
@@ -1352,7 +1380,10 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  kInk);
         y += 54.0f;
         if (!blocked.empty())
+            {
+            para_limit_ = limit_end;
             para(blocked, kCritical, 3);
+        }
         break;
     }
     case Tool::count:

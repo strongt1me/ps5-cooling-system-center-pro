@@ -5527,6 +5527,7 @@
       toast(e.message, "error");
     }
     await loadGames();
+    if (btn && btn.isConnected) btn.disabled = false;      /* der Streifen baut sich bei gleichem Spiel nicht neu: der Knopf bliebe sonst gesperrt */
   };
 
   const gmLaunch = async (id, btn, close) => {
@@ -6209,7 +6210,6 @@
       d: () => "Ein Debug-Paket (.pkg), das Kraken Mount einhängt (Reiter „FPKGMount“). Es schreibt das PS5-Programm Dump Forge von quer3q, das die App dafür startet."
     }
   };
-  const CV_EXT = { ffpfsc: ".ffpfsc", ffpkg: ".ffpkg", exfat: ".exfat", fpkg: ".pkg" };
   /* The compression levels of a debug FPKG: the op the app takes, its name and what it means (Dump Forge: balanced and smallest give a
      ~2.6 % smaller package and take about 6 and 9 times as long; stored is for a console that refuses a compressed one). */
   const CV_FLEVELS = [
@@ -6222,7 +6222,7 @@
   const cvKey = (op) => (cvIsFpkg(op) ? "fpkg" : op);          /* the key of the plan's targets */
   const cvLevelName = (op) => { const l = CV_FLEVELS.find((x) => x[0] === op); return l ? l[1].replace(" (empfohlen)", "") : ""; };
   const cvOpName = (op) => (cvIsFpkg(op) ? "FPKG" : op === "exfat" ? "exFAT" : op === "ffpkg" ? "ffpkg" : "ffpfsc");
-  const cvOpLabel = (op) => (cvIsFpkg(op) ? `FPKG · ${cvLevelName(op).toLowerCase()}` : op);
+  const cvOpLabel = (op) => (cvIsFpkg(op) ? `FPKG · ${cvLevelName(op)}` : op);
   /* Squeezing: the result is smaller than the game (ffpfsc and a compressed FPKG); the step is called "Komprimieren" then. */
   const cvSqueezes = (op) => op === "ffpfsc" || (cvIsFpkg(op) && op !== "fpkg-raw");
   /* What the result is, by its name: the job view and the end of it say it, not only the choice before. */
@@ -6911,9 +6911,13 @@
      blockieren (Konsolentest 14.11.2026). */
   /* Solange der Streifen steht, lädt die Seite die Liste alle 5 Sekunden still nach (sonst erst im Minutentakt): Die App gibt das
      Spiel nach 30 Sekunden oder früher frei, und der Streifen soll nicht noch eine halbe Minute danach behaupten, es sei blockiert. */
-  let gmHoldTimer = 0;
+  let gmHoldTimer = 0, gmHoldTick = 0;
   const gmHoldWatch = (on) => {
-    if (on && !gmHoldTimer) gmHoldTimer = setInterval(() => { if (!document.hidden && state.page === "games") loadGames(true); }, 5000);
+    if (on && !gmHoldTimer) gmHoldTimer = setInterval(() => {
+      if (document.hidden || state.page !== "games" || pt.tab !== "lib") return;
+      if (gm.live && ++gmHoldTick % 12) return;              /* ein Spiel läuft: auch der Wächter wartet, einmal pro Minute genügt */
+      loadGames(true);
+    }, 5000);
     else if (!on && gmHoldTimer) { clearInterval(gmHoldTimer); gmHoldTimer = 0; }
   };
   const gmHoldRender = () => {
@@ -7023,13 +7027,16 @@
      Karte die Bestätigung. Wer die Liste selbst neu lädt oder etwas ändert, bekommt sie immer neu gezeichnet. */
   const loadGames = async (quiet) => {
     let sig = "";
+    const seq = gm.loadSeq = (gm.loadSeq || 0) + 1;       /* eine ältere, langsamere Antwort überschreibt keine neuere */
     try {
       const d = await api("/api/v1/library");
+      if (seq !== gm.loadSeq) return;
       gm.list  = Array.isArray(d.games) ? d.games : [];
       gm.meta  = d;
       gm.error = "";
       sig = JSON.stringify(Object.assign({}, d, { age_s: 0 }));        /* age_s zählt nur hoch */
     } catch (e) {
+      if (seq !== gm.loadSeq) return;
       gm.error = e.message || "nicht verfügbar";
     }
     /* Im Minutentakt ändert ein Fehlschlag bei vorhandener Liste nichts: die alte bleibt stehen, ohne Neubau, und die
@@ -7696,7 +7703,7 @@
     if (!d.enabled) note.textContent = "PS4Mount ist ausgeschaltet. Einschalten, damit die Spiele auf den Laufwerken gesucht und eingebunden werden.";
     else if (waits) note.textContent = "Das eigenständige PS4Mount (ps4mount.elf) läuft schon. Die App lädt PS4Mount deshalb nicht ein "
       + `zweites Mal und übernimmt von selbst, sobald es beendet ist (Beenden auf der Seite Payloads). ${d.standalone}`;
-    $("#p4m-list").innerHTML = games.length ? games.map((g) => {
+    const p4mListHtml = games.length ? games.map((g) => {
       const st = P4M_STATE[g.state] || ["", g.state];
       const meta = [g.title_id, `Version ${g.version}`, bytes(g.size)];
       if (g.has_patch) meta.push("mit Update");
@@ -7736,7 +7743,11 @@
     }).join("") : `<p class="muted">Kein Spiel hat PKGs im Ordner ps4.</p>`;
     p4mPickButtons();
     $("#p4m-restore-all").disabled = !d.running || !movable.length;
-    $$("#p4m-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
+    { const el = $("#p4m-list");
+      if (el.__h !== p4mListHtml) {
+        setHtml(el, p4mListHtml);
+        $$("#p4m-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
+      } }
     /* A busy PS4Mount answers with "config":{} (ps4m_core.c): that is not the setting, and filling the form from it would
        write defaults over the real ones with the next save or restore. */
     if (!p4m.cfgShown && d.config && d.config.batch_size !== undefined) {
@@ -7816,11 +7827,15 @@
   };
   const FP_PACK = { plain: "Ordner", zstd: "Ordner (zstd)", lz4: "Ordner (LZ4)" };
 
-  const fpPost = async (body, quiet) => {
+  /* Der Server arbeitet bei „fetch“ (GitHub, bis zu drei Dateien zu je 3 Minuten) und „delete“ (großer Spielordner, bis 20 s) in einem
+     Zug; mit den 8 Sekunden der übrigen Aufrufe meldete die Seite „keine Antwort“, während die Konsole weiterarbeitete. */
+  const FP_TIMEOUT = { fetch: 600000, delete: 40000, rebuild: 40000, rescan: 40000, start: 20000, stop: 20000 };
+  const fpPost = async (body) => {
     try {
-      const r = await api("/api/v1/kraken", { method: "POST", body: JSON.stringify(body) });
-      if (r.message && !quiet) toast(r.message);
+      const r = await api("/api/v1/kraken", { method: "POST", body: JSON.stringify(body), timeoutMs: FP_TIMEOUT[body.action] || 20000 });
+      if (r.message) toast(r.message);
     } catch (e) { toast(e.message, "error"); }
+    $("#fp-list").__h = "";                       /* die Liste neu bauen: ein per Klick gesperrter Knopf wird frei */
     await loadFp();
     if (body.action !== "fetch") setTimeout(loadFp, 4000);
   };
@@ -7856,7 +7871,7 @@
     else if (k.cache && k.cache.low_space) note.textContent = "Auf der internen SSD ist nur noch wenig Platz frei. Kraken Mount legt dort den Zwischenspeicher der Spiele an.";
     else if (k.paused) note.textContent = "Ein Spiel läuft. Kraken Mount sucht und baut erst nach dem Spiel weiter.";
     dupFill($("#fp-dup"), d.conflicts);
-    $("#fp-list").innerHTML = games.length ? games.map((g) => {
+    const fpListHtml = games.length ? games.map((g) => {
       const st = running.has(g.title_id) ? ["ok", "Läuft"] : (FP_STATE[g.status] || ["", g.status]);
       const kind = g.kind === "pkg" ? "FPKG" : (FP_PACK[g.packing] || "Ordner");
       const meta = [g.title_id, g.version ? `Version ${g.version}` : "", g.size > 0 ? bytes(g.size) : "", drive(g.drive), kind].filter(Boolean);   /* a folder has no size of its own here */
@@ -7875,7 +7890,11 @@
             title="Löscht die PKG-Datei bzw. den Spielordner vom Laufwerk, dazu Kachel und Zwischenspeicher.">Spiel löschen</button>
         </div></div>`;
     }).join("") : `<p class="muted">${k ? "Kraken Mount hat auf den Laufwerken keine Spiele gefunden." : "Sobald Kraken Mount läuft, stehen hier seine Spiele."}</p>`;
-    $$("#fp-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
+    { const el = $("#fp-list");          /* nur bei geändertem Inhalt: sonst verliert der Knopf mit Fokus alle 5 s den Fokus, und jedes Symbol wird neu angefragt */
+      if (el.__h !== fpListHtml) {
+        setHtml(el, fpListHtml);
+        $$("#fp-list .p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
+      } }
     if (k && k.log) {
       const el = $("#fp-log");
       const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
@@ -8202,13 +8221,14 @@
   /* Zurückverschieben: zuerst die Gruppengröße speichern (wie im Original), dann den Auftrag geben. */
   const p4mRestore = async (body) => {
     const n = Number($("#p4m-rsize").value), max = Number($("#p4m-rsize").max) || 10;
-    if (!(n >= 1 && n <= max)) { toast(`Spiele pro Gruppe beim Herausnehmen: eine Zahl von 1 bis ${max}.`, "error"); return; }
+    if (!(n >= 1 && n <= max)) { toast(`Spiele pro Gruppe beim Zurückverschieben: eine Zahl von 1 bis ${max}.`, "error"); $("#p4m-list").__h = ""; loadP4m(); return; }
     try {
       await api("/api/v1/ps4mount", { method: "POST", body: JSON.stringify(p4mConfig()) });
       const r = await api("/api/v1/ps4mount", { method: "POST", body: JSON.stringify(body) });
       if (r.message) toast(r.message);
       p4m.sel.clear();
     } catch (e) { toast(e.message, "error"); }
+    $("#p4m-list").__h = "";                      /* der Knopf war per Klick gesperrt: die Liste neu bauen */
     await loadP4m();
     setTimeout(loadP4mLog, 2500);
   };
@@ -8694,7 +8714,9 @@
     const chip = c.state === "over"
       ? `<span class="apr-state bad">${esc(`zu groß · Tabellen ≈ ${mib(c.need_bytes)} MiB, es fehlen ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`
       : c.state === "tight"
-        ? `<span class="apr-state no">${esc(`knapp · Tabellen ≈ ${mib(c.need_bytes)} MiB, Spielraum ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`
+        ? `<span class="apr-state no">${esc(c.headroom_bytes < 0
+          ? `knapp · Tabellen ≈ ${mib(c.need_bytes)} MiB, es fehlen ≈ ${mib(c.headroom_bytes)} MiB`
+          : `knapp · Tabellen ≈ ${mib(c.need_bytes)} MiB, Spielraum ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`
         : `<span class="apr-state ok">${esc(`passt · Tabellen ≈ ${mib(c.need_bytes)} MiB, Spielraum ≈ ${mib(c.headroom_bytes)} MiB`)}</span>`;
     const counts = c.kind === "lz4"
       ? `${num(c.files)} Dateien · ${num(c.chunks)} Chunks · ${num(c.volumes)} Pakete · Schätzung für NG 0.4.0`

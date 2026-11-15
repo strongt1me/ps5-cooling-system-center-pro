@@ -48,6 +48,7 @@ int ps4m_standalone_active(char *why, size_t n) {
     return 1;
 }
 int ps4m_title_managed(const char *tid) { (void)tid; return 0; }
+int ps4m_game_running_from(const char *tid, const char *mount) { (void)tid; (void)mount; return 0; }
 char *ps4m_game_json(const char *tid, char *msg, size_t cap) { (void)tid; snprintf(msg, cap, "Host-Test"); return NULL; }
 int ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap) { (void)tid; (void)rel; snprintf(msg, cap, "Host-Test"); return -1; }
 int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) { (void)tid; (void)on; snprintf(msg, cap, "Host-Test"); return -1; }
@@ -397,7 +398,24 @@ typedef struct {
 /* PS4Mount 0.8.0: the pkgs of a drive are read once into an index, wherever they are, and used where they are. */
 static p4m_pidx_t g_index[10]; /* usb0-7, ext0-1 */
 
+/* A drive root as the module names them: /mnt/usb0..7 and /mnt/ext0..1, nothing else (a marker file under /data may say anything). */
+static int root_ok(const char *root) {
+    if (strlen(root) != 9 || strncmp(root, "/mnt/", 5))
+        return 0;
+    if (!strncmp(root + 5, "usb", 3))
+        return root[8] >= '0' && root[8] <= '7';
+    if (!strncmp(root + 5, "ext", 3))
+        return root[8] == '0' || root[8] == '1';
+    return 0;
+}
+
 static p4m_pidx_t *index_of(const char *root) { return &g_index[(root[5] == 'e' ? 8 : 0) + (root[8] - '0')]; }
+
+/* The path is inside the folder (dir + "/..."), not merely a folder whose name starts with the same letters ("<dir>_alt", "<root>/ps4dlc"). */
+static int under_dir(const char *path, const char *dir) {
+    size_t n = strlen(dir);
+    return !strncmp(path, dir, n) && path[n] == '/';
+}
 
 static const char *drive_rel(const char *root, const char *path);
 
@@ -523,7 +541,6 @@ static void dlc_open_organized(title_src_t *t, int *cap) {
  * prefix in SERVICE_ID_ADDCONT_ADD_n, as regional versions do. A copy organized by an earlier version stays; between
  * others the highest version is used (PS4Mount 0.8.0). */
 static void dlc_open_indexed(title_src_t *t, p4m_pidx_t *idx, int *cap) {
-    size_t dir_len = strlen(t->dir);
     for (int i = 0; i < idx->count; i++) {
         p4m_pidx_pkg_t *p = &idx->pkgs[i];
         if (p->kind != PIDX_ADDON || !p4m_pidx_usable(idx, p))
@@ -538,7 +555,7 @@ static void dlc_open_indexed(title_src_t *t, p4m_pidx_t *idx, int *cap) {
         for (int k = 0; k < t->ndlc && !a; k++)
             if (!strcmp(t->dlc[k].pkg.content_id, p->content_id))
                 a = &t->dlc[k];
-        if (a && (!strncmp(a->path, t->dir, dir_len) || strcmp(p->ver, a->ver) <= 0))
+        if (a && (under_dir(a->path, t->dir) || strcmp(p->ver, a->ver) <= 0))
             continue;
         if (!a && !(a = dlc_slot(t, cap)))
             return;
@@ -687,8 +704,7 @@ static int src_open(title_src_t *t, const char *root, const char *tid) {
         for (int i = 0; i < 32; i++)
             snprintf(digest + i * 2, 3, "%02x", t->patch.digest[i]);
     snprintf(t->marker, sizeof(t->marker), "%s\n%s\n", t->dir, t->has_patch ? digest : "nopatch");
-    size_t dir_len = strlen(t->dir);
-    if (strncmp(t->app_path, t->dir, dir_len) || (t->has_patch && strncmp(t->patch_path, t->dir, dir_len))) {
+    if (!under_dir(t->app_path, t->dir) || (t->has_patch && !under_dir(t->patch_path, t->dir))) {
         /* used where they are: moving a pkg adds the game again. Organized games keep their marker, so they are not
          * added again. The drive name is left out: it can change (PS4Mount 0.8.0). */
         buf_t where = {0};
@@ -1599,6 +1615,34 @@ static int title_running(const char *tid) {
     return 0;
 }
 
+/* (app) Is this PS4Mount game played right now, and do its pkgs come from the drive `mount` ("/mnt/usb0")? 1 yes, 0 no, -1 not to be
+ * known (the lock is held for too long). For the eject of a drive (usbeject.c): PS4Mount's games are nullfs mounts of its own hold
+ * folder, in turn links to the pkgs, so the mount table never names the drive. The drive of a game is the first line of its
+ * marker /data/ps4mount/<TID>.src (<drive>/ps4/<TID>). The pkgs of a game that is not running are only links that point nowhere
+ * for a while; nobody is cut off. (Audit 15.11.2026: the check on the mount table found none of these games, ever.) */
+int ps4m_game_running_from(const char *tid, const char *mount) {
+    if (!tid || !tid[0] || !mount || !root_ok(mount))
+        return 0;
+    char path[64], buf[PATH_MAX];
+    snprintf(path, sizeof(path), STATE_DIR "/%s.src", tid);
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return 0;
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 9)
+        return 0;
+    buf[n] = 0;
+    buf[strcspn(buf, "\n")] = 0;
+    if (strncmp(buf, mount, 9) || buf[9] != '/')
+        return 0;
+    if (lock_for_page(1500)) /* title_running reads the mount table into globals that the worker uses too */
+        return -1;
+    int running = title_running(tid);
+    pthread_mutex_unlock(&g_mu);
+    return running;
+}
+
 static void unmount_all_layers(const char *target, int force);
 
 /* Set while /user/app shows only the games being registered (see mask_user_app): the
@@ -1921,9 +1965,11 @@ static int served_elsewhere(const title_src_t *t) {
     if (!strcmp(buf, t->dir))
         return 0;
     /* buf is <root>/ps4/<TID>: the game pkg may be anywhere on that drive, the index knows (PS4Mount 0.8.0) */
-    if (strlen(buf) > 9 && !strncmp(buf, "/mnt/", 5) && !strncmp(buf + 9, "/ps4/", 5)) {
+    char marker_root[10];
+    snprintf(marker_root, sizeof(marker_root), "%.9s", buf);
+    if (strlen(buf) > 9 && root_ok(marker_root) && !strncmp(buf + 9, "/ps4/", 5)) {   /* the file under /data says which drive: only a real one is used */
         char root[10], legacy_patch[PATH_MAX + 16], patch[PATH_MAX + 16], want[16];
-        snprintf(root, sizeof(root), "%.9s", buf);
+        snprintf(root, sizeof(root), "%s", marker_root);
         snprintf(legacy_patch, sizeof(legacy_patch), "%s/patch.pkg", buf);
         snprintf(pkg, sizeof(pkg), "%s/app.pkg", buf);
         update_wanted(t->app.title_id, want, sizeof(want));
@@ -2551,16 +2597,27 @@ static int title_list(const char *root, char (*tids)[10], int max, int *over) {
     return n;
 }
 
+/* A drive that held no pkg and no ps4 folder is not walked down to eight levels again at every pass (the pass comes every 10 s and the
+ * worker holds its lock meanwhile; a drive full of PS5 games has hundreds of thousands of entries): it waits this long, unless it is new
+ * or "Scan for games" was pressed (audit 15.11.2026). */
+#define EMPTY_DRIVE_SECONDS 60
+static time_t g_empty_until[10]; /* by index_of(), usb0-7 and ext0-1 */
+
 static void scan_root(const char *root, int fresh, int reconnected) {
     const char *label = root + 5; /* "usb0" / "ext0" */
+    const int slot = (int)(index_of(root) - g_index);
+    if (!fresh && !g_manual_scan && g_empty_until[slot] > time(NULL))
+        return;
     long index_ms = index_refresh(root);
     char lib[PATH_MAX];
     snprintf(lib, sizeof(lib), "%s/ps4", root);
     if (!index_of(root)->count && !exists(lib)) {
+        g_empty_until[slot] = time(NULL) + EMPTY_DRIVE_SECONDS;
         if (fresh)
             printf("[scan] %s: no ps4 folder or pkg, skipped\n", root);
         return;
     }
+    g_empty_until[slot] = 0;
     if (fresh)
         notify("%s wird nach PS4-Spielen abgesucht ...", label);
     if (reconnected)
@@ -2598,7 +2655,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         int waiting = 0;
         for (int i = 0; i < idx->count; i++) {
             const p4m_pidx_pkg_t *p = &idx->pkgs[i];
-            if (p->kind == PIDX_ADDON && p4m_pidx_usable(idx, p) && !p->claimed && strncmp(p->path, lib, strlen(lib))) {
+            if (p->kind == PIDX_ADDON && p4m_pidx_usable(idx, p) && !p->claimed && !under_dir(p->path, lib)) {
                 printf("[scan] add-on %s waits for its game: %s\n", p->content_id, p->path);
                 waiting++;
             }
@@ -3112,11 +3169,19 @@ static int count_aside(const char *game) {
 /* The updates and add-ons of one PS4Mount game, for the panel's dialogs: {"title_id","name","dlc_limit",
  * "updates":[{"file","version","name","active"}],"dlcs":[{"content_id","name","on","data","copy","reason"}]}, malloc'd.
  * NULL when the title is not found. Runs on the big-stack thread of p4m_call (title_src_t is large) — see ps4m_game_json. */
-static char *game_json_impl(const char *tid) {
+static char *game_json_impl(const char *tid, int *busy) {
     char root[32];
     title_src_t t;
-    if (find_root(tid, root, sizeof(root)) || src_open(&t, root, tid))
+    /* The drive's package index is read here and rebuilt by the worker (realloc, compaction, sort) while it holds g_mu: like the other
+       pages this one takes the lock, and says "busy" when it does not get it (audit 15.11.2026). */
+    if (lock_for_page(3000)) {
+        *busy = 1;
         return NULL;
+    }
+    if (find_root(tid, root, sizeof(root)) || src_open(&t, root, tid)) {
+        pthread_mutex_unlock(&g_mu);
+        return NULL;
+    }
     buf_t out = {0};
     update_t ups[32]; /* (app) not static: two pages asking at once run this on two threads (11 KB, the stack is 4 MB) */
     int nu = list_updates(root, t.dir, tid, t.has_patch ? t.patch_path : "", ups, 32);
@@ -3147,6 +3212,7 @@ static char *game_json_impl(const char *tid) {
     }
     p4m_buf_printf(&out, "]}");
     src_close(&t);
+    pthread_mutex_unlock(&g_mu);
     return (char *)out.data;
 }
 
@@ -3205,7 +3271,12 @@ int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) {
     /* only add-ons with data use the devices a running game mounts its packages with; the unlock-only ones do not
      * count (PS4Mount 0.7.3) */
     title_src_t t;
+    if (lock_for_page(3000)) { /* the index is rebuilt by the worker under this lock (audit 15.11.2026) */
+        snprintf(msg, cap, P4M_BUSY);
+        return -1;
+    }
     if (find_root(tid, root, sizeof(root)) || src_open(&t, root, tid)) {
+        pthread_mutex_unlock(&g_mu);
         snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
         return -1;
     }
@@ -3221,6 +3292,7 @@ int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) {
     }
     free(list);
     src_close(&t);
+    pthread_mutex_unlock(&g_mu);
     if (data > DLC_LIMIT) {
         snprintf(msg, cap, "Höchstens %d Zusatzinhalte mit Daten können an sein (reine Freischaltungen zählen nicht)",
                  DLC_LIMIT);
@@ -4817,6 +4889,7 @@ typedef struct {
     size_t *len;
     int rc;
     int which;
+    int busy; /* the lock of the worker was not to be had in time */
 } p4m_call_t;
 
 static void *p4m_call_main(void *p) {
@@ -4826,7 +4899,7 @@ static void *p4m_call_main(void *p) {
     else if (c->which == 1)
         c->rc = icon_impl(c->tid, c->data, c->len);
     else
-        c->json = game_json_impl(c->tid);
+        c->json = game_json_impl(c->tid, &c->busy);
     return NULL;
 }
 
@@ -4869,7 +4942,10 @@ char *ps4m_game_json(const char *tid, char *msg, size_t cap) {
     c.which = 2;
     c.tid = tid;
     if (p4m_call(&c) || !c.json) {
-        snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
+        if (c.busy)
+            snprintf(msg, cap, P4M_BUSY);
+        else
+            snprintf(msg, cap, "%s liegt auf keinem angeschlossenen Laufwerk", tid);
         return NULL;
     }
     return c.json;

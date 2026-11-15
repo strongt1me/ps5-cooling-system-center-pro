@@ -129,7 +129,7 @@ class KrakenPage final : public Page
         info_.style.value_size = 21.0f;
         info_.style.row_height = 40.0f;
         info_.style.max_lines = 1;
-        info_.set_bounds({kRightX + 30.0f, kTop + 170.0f, kRightW - 60.0f, 330.0f});
+        info_.set_bounds({kRightX + 30.0f, kTop + 170.0f, kRightW - 60.0f, 424.0f}); // nine rows of 46.5 px: with a conflict and a hint all fit
 
         menu_.style.theme = solid_theme(theme);
         menu_.style.width = 600.0f;
@@ -182,7 +182,11 @@ class KrakenPage final : public Page
         const int before = list_.focus();
         const ui::Event event = list_.handle(input, feedback);
         if (list_.focus() != before)
+        {
+            if (const KrakenGame *now = focused())
+                focus_id_ = now->title_id;
             refresh_info();
+        }
         const KrakenGame *g = focused();
         if (event == ui::Event::activated || input.is_pressed(Action::west))
         {
@@ -248,7 +252,7 @@ class KrakenPage final : public Page
                      st.color);
             info_.draw(canvas);
             if (!g->error.empty())
-                paragraph(canvas, g->error, card.x + 30.0f, card.y + 520.0f, card.w - 60.0f,
+                paragraph(canvas, g->error, card.x + 30.0f, card.y + 600.0f, card.w - 60.0f,
                           kWarning, 3);
         }
         else
@@ -410,9 +414,9 @@ class KrakenPage final : public Page
         own.push_back("/mnt/ext1/FPKG-Games");
         if (state_.scanpaths == own)
             return "Suchordner: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und "
-                   "M.2-Laufwerk. ShadowMountPlus sucht dort nicht, deshalb kommen sich beide "
-                   "nicht "
-                   "in die Quere.";
+                   "M.2-Laufwerk. ShadowMountPlus sucht dort nicht. Liegt dasselbe Spiel "
+                   "(dieselbe Titel-ID) auch bei ShadowMountPlus, kommen sich beide doch in die "
+                   "Quere; die App meldet es dann.";
         std::string out = "Suchordner: ";
         for (std::size_t i = 0; i < state_.scanpaths.size(); ++i)
             out += (i == 0 ? "" : ", ") + state_.scanpaths[i];
@@ -437,8 +441,17 @@ class KrakenPage final : public Page
             return s + " · arbeitet gerade …";
         if (state_.paused)
             return s + " · ein Spiel läuft";
+        // The count comes first and the line does not end with "Spiele": the translator would take the whole line for the pattern
+        // "{0} Spiele" (the version number and all), and a Russian plural is chosen by the digits of {0} (audit 15.11.2026).
         const std::size_t n = state_.games.size();
-        return s + " · " + std::to_string(n) + (n == 1 ? " Spiel" : " Spiele");
+        s = std::to_string(n) + (n == 1 ? " Spiel" : " Spiele") + " · " + s;
+        // what the web page says in its note: the cache of the games is built on the internal storage, and that one is nearly full
+        if (state_.low_space)
+            s += " · wenig Platz auf der internen SSD";
+        // a newer release was loaded: the next start takes it (the web page says the same)
+        if (!state_.fetched_version.empty())
+            s += " · geladen: " + state_.fetched_version + " (wird beim Start genommen)";
+        return s;
     }
 
     // ---------------------------------------------------------------- menus
@@ -569,8 +582,25 @@ class KrakenPage final : public Page
         if (key != key_)
         {
             key_ = std::move(key);
+            // The focus stays on the same GAME (by its title id): the rows carry the index into state_.games as their tag, which shifts
+            // when a game appears above, and `refocus` of the other pages compares the list that is already replaced here.
+            int focus = std::clamp(list_.focus(), 0, std::max(static_cast<int>(next.size()) - 1, 0));
+            if (!focus_id_.empty())
+            {
+                for (std::size_t i = 0; i < next.size(); ++i)
+                {
+                    const KrakenGame *g = game_of(next[i]);
+                    if (g != nullptr && g->title_id == focus_id_)
+                    {
+                        focus = static_cast<int>(i);
+                        break;
+                    }
+                }
+            }
             list_.set_items(next);
-            list_.set_focus(refocus(list_, next));
+            list_.set_focus(focus);
+            if (const KrakenGame *g = focused())
+                focus_id_ = g->title_id;
         }
         refresh_info();
     }
@@ -611,6 +641,7 @@ class KrakenPage final : public Page
     tween::Spring shown_;
     KrakenState state_;
     std::string key_;
+    std::string focus_id_; // the game the focus is on (title id): it stays on it when the list is refilled
     std::string info_key_ = "\x01";
     std::string menu_id_;
     std::string menu_path_;

@@ -55,6 +55,9 @@ class Covers
     void forget_failures();
     // The screen's focused game is fetched before the others.
     void prefer(const std::string &id);
+    // Every page asks for the cover of its focused row in update(), also the pages that are not shown; the screen lets only the one in
+    // front be heard (the cover of the game in the library list was loaded last when the FPKGMount page had been opened once).
+    void listen(bool on);
 
     // GL side, once a frame. create(w, h, rgba) returns a texture name.
     int upload_pending(const std::function<std::uint32_t(int, int, const std::uint8_t *)> &create,
@@ -75,6 +78,7 @@ class Covers
         int edge = kCoverSize;
     };
     mutable std::mutex mutex_;
+    bool listening_ = true; // see listen()
     std::map<std::string, CoverShown> textures_;
     std::vector<Ready> ready_;
     std::set<std::string> busy_;   // fetched or decoded, not uploaded yet

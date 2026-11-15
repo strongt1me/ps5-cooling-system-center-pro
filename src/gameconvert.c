@@ -707,19 +707,27 @@ cv_run_fpkg(const cv_args_t *a) {
   int job = 0;
   if(ps5tm_dumpforge_job_start(a->source, a->target, fpkg_level(a->op), !a->quick, &job, err, sizeof(err)) != 0) {
     cv_fail("%s", err);
-    if(started_here) ps5tm_dumpforge_stop();
+    if(started_here) ps5tm_dumpforge_stop(0);
     return NULL;
   }
   PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s.", a->title_id, job, fpkg_level(a->op));
-  int cancel_sent = 0, lost = 0, final = -1;
-  uint64_t last_ms = ps5tm_mono_ms(), last_done = 0;
+  int cancel_sent = 0, lost = 0, final = -1, lost_out = 0, hung = 0;
+  uint64_t last_ms = ps5tm_mono_ms(), last_done = 0, cancel_first_ms = 0, cancel_last_ms = 0;
   ps5tm_dumpforge_job_t jb;
   for(;;) {
-    if(!cancel_sent && __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) { ps5tm_dumpforge_job_cancel(job); cancel_sent = 1; }
+    if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) {
+      /* The request to cancel is sent again every 10 s until the job ends (the first one may not have arrived), and Dump Forge has
+         two minutes to end it; after that the app lets go of the job (audit 15.11.2026). */
+      uint64_t t = ps5tm_mono_ms();
+      if(!cancel_sent) { cancel_sent = 1; cancel_first_ms = cancel_last_ms = t; ps5tm_dumpforge_job_cancel(job); }
+      else if(t - cancel_last_ms >= 10000) { cancel_last_ms = t; ps5tm_dumpforge_job_cancel(job); }
+      if(t - cancel_first_ms >= 120000) { hung = 1; final = CV_FAILED; break; }
+    }
     usleep(1000 * 1000);
     int st = ps5tm_dumpforge_job_poll(job, &jb);
+    if(st == -2) continue;                                  /* alive, but the list of its jobs is too long to read: not a silence */
     if(st < 0) {
-      if(++lost >= 40) { cv_fail("Dump Forge antwortet nicht mehr."); final = CV_FAILED; break; }
+      if(++lost >= 40) { lost_out = 1; final = CV_FAILED; break; }
       continue;
     }
     lost = 0;
@@ -746,6 +754,9 @@ cv_run_fpkg(const cv_args_t *a) {
     if(st == 1) { final = CV_DONE; break; }
     if(st == 2) { final = CV_FAILED; break; }
   }
+  /* Dump Forge went silent and the job was not asked to stop yet: ask once, so that it does not write on without anyone watching. */
+  if(lost_out && !cancel_sent) ps5tm_dumpforge_job_cancel(job);
+  const int cancelled = cancel_sent || __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE);
   if(final == CV_DONE) {
     pthread_mutex_lock(&g_lock);
     g_job.output_bytes = jb.bytes;
@@ -755,16 +766,23 @@ cv_run_fpkg(const cv_args_t *a) {
     g_job.note[0] = 0;
     if(!g_job.t_rename_ms) g_job.t_rename_ms = ps5tm_mono_ms();
     pthread_mutex_unlock(&g_lock);
+  }
+  /* Dump Forge ends BEFORE the end of the job is made known: the queue starts the next entry as soon as this one is no longer busy, and
+     a Dump Forge that is still closing refuses a job ("stopping") or, answering still, is taken for one that runs (audit 15.11.2026).
+     A running job of someone else (its own page) keeps it open (stop with 0 asks only when it is idle); a job that did not end after the
+     request to cancel, or a program that does not answer, is ended for good. */
+  if(started_here) ps5tm_dumpforge_stop(hung || lost_out);
+  if(final == CV_DONE) {
     cv_state(CV_DONE);
     PS5TM_INFO("game_convert_done", "Debug-FPKG von %s fertig: %s (%llu Bytes).", a->title_id, a->target, (unsigned long long)jb.bytes);
-  } else if(final == CV_FAILED && (cancel_sent || __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE))) {
+  } else if(final == CV_FAILED && cancelled) {
     cv_state(CV_CANCELLED);
     PS5TM_INFO("game_convert_cancelled", "Debug-FPKG von %s abgebrochen.", a->title_id);
   } else if(final == CV_FAILED) {
-    if(jb.error[0]) cv_fail("Dump Forge: %s", jb.error);
-    PS5TM_WARN("game_convert_failed", "Debug-FPKG von %s gescheitert: %s", a->title_id, jb.error);
+    if(lost_out) cv_fail("Dump Forge antwortet nicht mehr.");
+    else if(jb.error[0]) cv_fail("Dump Forge: %s", jb.error);
+    PS5TM_WARN("game_convert_failed", "Debug-FPKG von %s gescheitert: %s", a->title_id, lost_out ? "Dump Forge antwortet nicht mehr." : jb.error);
   }
-  if(started_here) ps5tm_dumpforge_stop();
   return NULL;
 }
 
@@ -1671,6 +1689,11 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
     char fname[300];
     snprintf(fname, sizeof(fname), "%s%s", stem, op_ext(op));
     chk_add(arr, "name", "ok", NULL, "Name der Ausgabe: %s (%zu von %d Bytes)", fname, name_bytes, PS5TM_CVNAME_MAX - PS5TM_CVNAME_SUFFIX);
+    /* Kraken Mount registers what lies in the folders it searches. The app gives it FPKG-Games when it writes its config, but a config
+       that was there before (or changed on its own page) may not name this one: the package would be written and never registered. */
+    if(is_fpkg_op(op) && !strcmp(mode, "homebrew") && ps5tm_kraken_searches(dir) == 0)
+      chk_add(arr, "kraken_dir", "warn", "Den Ordner auf der Seite von Kraken Mount (Port 8097) bei den Suchordnern eintragen, sonst meldet es das Paket nicht an.",
+              "Kraken Mount sucht in %s nicht.", dir);
     if(is_fpkg_op(op) && strlen(stem) > FPKG_NAME_MAX) {
       chk_add(arr, "name_len", "error", "Kürze den Namen, zum Beispiel mit einer Vorlage wie {id} v{version}.",
               "Dump Forge nimmt nur Namen bis %d Bytes ohne „.pkg“; dieser hat %zu.", FPKG_NAME_MAX, strlen(stem));

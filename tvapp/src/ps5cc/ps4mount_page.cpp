@@ -866,7 +866,7 @@ class Ps4MountPage final : public Page
         form_.add_toggle(kSetFast, "Neue Spiele schneller anmelden", c.fast_reg).description =
             "Verbirgt dabei kurz die anderen Spiele.";
         form_.add_header("NICHT MEHR VON USB SPIELEN");
-        form_.add_slider(kSetRestore, "Spiele pro Gruppe beim Herausnehmen",
+        form_.add_slider(kSetRestore, "Spiele pro Gruppe beim Zurückverschieben",
                          static_cast<float>(c.restore_batch), 1.0f,
                          static_cast<float>(std::max(1, c.max_restore_batch)), 1.0f);
         std::string paths;

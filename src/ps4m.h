@@ -29,6 +29,9 @@ char *ps4m_log_tail(size_t max);
 /* 1 when tid is one of PS4Mount's games: /user/app/<tid> is a mount of our own hold folder, never the title's own
    internally installed copy. The normal game-update path (updates.c) must not run against it — see ps4m_core.c. */
 int   ps4m_title_managed(const char *tid);
+/* 1 when this PS4Mount game is played right now and its pkgs are on the drive `mount` ("/mnt/usb0"), 0 when not, -1 when that cannot be
+   known now (the module's lock is held for long). For the eject of a drive (usbeject.c). */
+int   ps4m_game_running_from(const char *tid, const char *mount);
 
 /* The updates and add-ons of one PS4Mount game (0.7.0): {"title_id","name","dlc_limit","updates":[…],"dlcs":[…]},
    malloc'd. NULL with a sentence in msg when the title is not found. */

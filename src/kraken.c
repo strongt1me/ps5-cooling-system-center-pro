@@ -65,9 +65,14 @@ read_file(const char *path, unsigned char **out, size_t *len, size_t max) {
   *len = 0;
   FILE *f = fopen(path, "rb");
   if(!f) return -1;
-  unsigned char *b = malloc(max + 1);
-  size_t n = b ? fread(b, 1, max + 1, f) : 0;
+  /* the size of the file, not the limit: a start used to take 16 MiB for a few MiB of program */
+  struct stat st;
+  size_t want = max;
+  if(fstat(fileno(f), &st) == 0 && st.st_size > 0 && (uint64_t)st.st_size < max) want = (size_t)st.st_size;
+  unsigned char *b = malloc(want + 1);
+  size_t n = b ? fread(b, 1, want + 1, f) : 0;
   fclose(f);
+  if(n > want) { free(b); return -1; }                     /* it grew while it was read, or is over the limit */
   if(!b || n == 0 || n > max) { free(b); return -1; }
   *out = b;
   *len = n;
@@ -162,6 +167,33 @@ ps5tm_kraken_state(void) {
     cJSON_AddBoolToObject(o, "starting", starting);
   }
   return o;
+}
+
+/* Does Kraken Mount search this folder? Its settings (GET /api/settings) name the folders under scanpath; empty means its own defaults
+   (/data/homebrew, /data/etaHEN/games, <drive>/homebrew), which are not the app's FPKG-Games. 1 yes; 0 it runs and does not; -1 it does not
+   answer. The convert check asks it: a debug FPKG put where Kraken Mount does not search is never registered. */
+int
+ps5tm_kraken_searches(const char *folder) {
+  unsigned char *body = NULL;
+  size_t n = 0;
+  int st = kr_http("GET", "/api/settings", NULL, 0, 2000, &body, &n);
+  cJSON *set = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
+  free(body);
+  if(!cJSON_IsObject(set)) { cJSON_Delete(set); return -1; }
+  char want[256];
+  snprintf(want, sizeof want, "%s", folder);
+  for(size_t l = strlen(want); l > 1 && want[l - 1] == '/'; l--) want[l - 1] = 0;
+  int found = 0;
+  const cJSON *sp = cJSON_GetObjectItem(set, "scanpath"), *p;
+  cJSON_ArrayForEach(p, sp) {
+    if(!cJSON_IsString(p)) continue;
+    char have[256];
+    snprintf(have, sizeof have, "%s", p->valuestring);
+    for(size_t l = strlen(have); l > 1 && have[l - 1] == '/'; l--) have[l - 1] = 0;
+    if(!strcmp(have, want)) { found = 1; break; }
+  }
+  cJSON_Delete(set);
+  return found;
 }
 
 /* Kraken Mount's games as a small copy, for mounters.c. One ask of its /api/state every 10 s at most, however often the library or the
@@ -286,7 +318,10 @@ seed_config(void) {
 
 static int
 start_kraken(char *msg, size_t n) {
-  if(kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL) == 200) { snprintf(msg, n, "Kraken Mount läuft schon."); return 409; }
+  int alive = kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL);
+  if(alive == 200) { snprintf(msg, n, "Kraken Mount läuft schon."); return 409; }
+  /* It listens but does not answer: it is busy (a scan, a drive that hangs), not gone. A second copy would only send the first one away. */
+  if(alive == LHTTP_NO_ANSWER) { snprintf(msg, n, "Kraken Mount antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); return 409; }
   pthread_mutex_lock(&g_lock);
   uint64_t now = ps5tm_mono_ms();
   int again = g_started_ms && now - g_started_ms < 15000;
@@ -328,6 +363,7 @@ stop_kraken(char *msg, size_t n) {
   int st = kr_http("POST", "/api/quit", "shutdown", 8, 5000, NULL, NULL);
   if(st == 204 || st == 200) { snprintf(msg, n, "Kraken Mount wird beendet."); PS5TM_INFO("kraken_stop", "Kraken Mount beendet (Seite FPKGMount)."); return 200; }
   if(st == 409) { snprintf(msg, n, "Ein Spiel läuft gerade. Kraken Mount lässt sich erst nach dem Spiel beenden."); return 409; }
+  if(st == LHTTP_NO_ANSWER) { snprintf(msg, n, "Kraken Mount antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); return 409; }
   if(st < 0) { snprintf(msg, n, "Kraken Mount läuft nicht."); return 409; }
   snprintf(msg, n, "Kraken Mount hat das Beenden abgelehnt (%d).", st);
   return 502;
@@ -358,6 +394,8 @@ simple_post(const char *path, const char *body, const char *ok_msg, char *msg, s
   int st = kr_http("POST", path, body, body ? strlen(body) : 0, 20000, &reply, &rn);
   int rc;
   if(st == 204 || st == 200) { snprintf(msg, n, "%s", ok_msg); rc = 200; }
+  /* A delete of a big game folder takes longer than the time: Kraken Mount is not gone, it is working. */
+  else if(st == LHTTP_NO_ANSWER) { snprintf(msg, n, "Keine Antwort in der Frist: Kraken Mount arbeitet vermutlich noch. Bitte später in der Liste nachsehen."); rc = 409; }
   else if(st < 0) { snprintf(msg, n, "Kraken Mount läuft nicht."); rc = 409; }
   else {
     /* Kraken Mount's own reason, when it gave one (a short line of text) */
@@ -402,7 +440,9 @@ fetch_url(const char *url, size_t max, char **buf, size_t *len, char *why, size_
   r.range_to = -1;
   upd_res_t res;
   if(upd_http_fetch(&r, max, buf, len, &res) != 0) {
-    snprintf(why, why_len, "%s ließ sich nicht laden (%s%s%d).", what, res.step[0] ? res.step : "http", res.status ? " " : "", res.status);
+    const char *step = res.step[0] ? res.step : "http";
+    if(res.status) snprintf(why, why_len, "%s ließ sich nicht laden (%s %d).", what, step, res.status);
+    else snprintf(why, why_len, "%s ließ sich nicht laden (%s).", what, step);
     free(*buf);
     *buf = NULL;
     return -1;

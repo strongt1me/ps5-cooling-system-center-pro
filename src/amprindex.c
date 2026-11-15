@@ -37,6 +37,7 @@
 #include "indexlimit.h"
 #include "ioerr.h"
 #include "ps5tm.h"
+#include "smphold.h"
 #include "third_party/cJSON.h"
 
 #define AI_NAME        "ampr_emu.index"
@@ -497,6 +498,7 @@ ai_thread(void *arg) {
     ps5tm_smp_game_t s;
     if(ps5tm_smp_find(a->id, &s) != 0) { finish(AI_FAILED, "ShadowMountPlus kennt das Spiel gerade nicht."); goto out; }
     int was_mounted = s.mounted;
+    const int was_held = ps5tm_smphold_is_held(a->id);       /* the app held it already (button "Einhängen"): it stays held */
     char err[300] = "";
     phase("ShadowMountPlus hängt das Abbild zum Schreiben ein");
     if(smp_mount(a->id, "/games/mount", 1, err, sizeof(err)) != 0) {
@@ -531,6 +533,10 @@ ai_thread(void *arg) {
       phase("Das Abbild wird wieder freigegeben");
       if(smp_mount(a->id, "/games/unmount", 0, err, sizeof(err)) != 0)
         PS5TM_WARN("ampr_unmount_failed", "Das Abbild von %s ließ sich nicht wieder freigeben: %s", a->id, err);
+    } else {
+      /* It was mounted before the job and stays so: the mount above went through ps5tm_smp_call, which wrote it down as one the app
+         holds, and the watcher would unmount a game that was never the app's to unmount. Written off (no unmount). */
+      if(!was_held) ps5tm_smphold_note(a->id, 0);
     }
     ps5tm_smp_forget();
   }

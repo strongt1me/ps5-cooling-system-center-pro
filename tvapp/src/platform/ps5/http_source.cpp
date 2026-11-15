@@ -362,13 +362,24 @@ void HttpSource::ps4mount_post(const std::string &route, const std::string &json
 {
     push({Request::Kind::ps4mount, 0, route, json});
 }
+// FPKGMount and Dump Forge go through the tool thread: loading a newer release takes minutes, and the one thread that asks for the
+// temperatures, the jobs and the cancel of everything else must not wait for it (audit 15.11.2026).
+void HttpSource::engine_post(const std::string &which, const std::string &json)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    ToolRequest r;
+    r.kind = 3;
+    r.id = which;
+    r.body = json;
+    tool_requests_.push_back(std::move(r));
+}
 void HttpSource::kraken_post(const std::string &json)
 {
-    push({Request::Kind::kraken, 0, {}, json});
+    engine_post("kraken", json);
 }
 void HttpSource::dumpforge_fetch()
 {
-    push({Request::Kind::dumpforge, 0, {}, "{\"action\":\"fetch\"}"});
+    engine_post("dumpforge", "{\"action\":\"fetch\"}");
 }
 void HttpSource::ps4mount_fetch(const std::string &what, const std::string &id)
 {
@@ -782,6 +793,11 @@ void HttpSource::handle_tool(const ToolRequest &request)
         std::lock_guard<std::mutex> lock(mutex_);
         data_.convert_check = std::move(reply);
         ++data_.serial;
+        return;
+    }
+    if (request.kind == 3)
+    {
+        handle_engine(request);
         return;
     }
     if (request.kind == 2)
@@ -1225,7 +1241,25 @@ void HttpSource::run()
             sys::sleep_us(std::min(status_failures_, 4) * 500000);
             continue;
         }
-        if (library_wanted || now - last_library >= 30000000)
+        // The app lets go of a game it mounted and nobody started within half a minute (smphold.c): the mark "wird gleich ausgehängt" must
+        // not outlive that by a library period, so while such a game waits (and none plays: the app's clock waits then too) the library
+        // is read every 5 s, as the browser does.
+        bool game_held = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (data_.status.game_id.empty())
+            {
+                for (const Game &g : data_.games)
+                {
+                    if (g.app_mounted && g.smp_mounted)
+                    {
+                        game_held = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (library_wanted || now - last_library >= (game_held ? 5000000 : 30000000))
         {
             library_wanted = false;
             last_library = now;
@@ -1939,46 +1973,6 @@ void HttpSource::handle(const Request &request)
                 notice(Notice::Kind::success, "PS4Mount", msg);
         }
         poll_ps4mount();
-        break;
-    }
-    case Request::Kind::kraken:
-    {
-        // A download of a newer release can take minutes; everything else answers within seconds.
-        const bool fetch = request.text.find("\"fetch\"") != std::string::npos;
-        const Net net =
-            exchange("POST", "/api/v1/kraken", request.text, &status, &body, fetch ? 220 : 30);
-        if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "FPKGMount",
-                   message_of(body, "Die App hat nicht geantwortet."));
-        else
-        {
-            const std::string msg = message_of(body, "");
-            if (!msg.empty())
-                notice(Notice::Kind::success, "FPKGMount", msg);
-        }
-        poll_kraken();
-        break;
-    }
-    case Request::Kind::dumpforge:
-    {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            data_.dumpforge.fetching = true;
-            ++data_.dumpforge.epoch;
-            ++data_.serial;
-        }
-        // The download of the program (18 MB over the console's own connection) takes a while.
-        const Net net = exchange("POST", "/api/v1/dumpforge", request.text, &status, &body, 300);
-        if (net != Net::ok || status >= 300)
-            notice(Notice::Kind::error, "Dump Forge",
-                   message_of(body, "Die App hat nicht geantwortet."));
-        else
-        {
-            const std::string msg = message_of(body, "");
-            if (!msg.empty())
-                notice(Notice::Kind::success, "Dump Forge", msg);
-        }
-        poll_dumpforge();
         break;
     }
     case Request::Kind::ps4mount_fetch:
@@ -4250,11 +4244,74 @@ void HttpSource::poll_ps4mount()
     ++data_.serial;
 }
 
+// One request of FPKGMount ("kraken") or Dump Forge ("dumpforge"), on the tool thread.
+void HttpSource::handle_engine(const ToolRequest &request)
+{
+    int status = 0;
+    std::string body;
+    if (request.id == "kraken")
+    {
+        // A download of a newer release can take minutes (up to three files of three minutes each on the app's side); everything else
+        // answers within seconds.
+        const bool fetch = request.body.find("\"fetch\"") != std::string::npos;
+        const Net net =
+            exchange("POST", "/api/v1/kraken", request.body, &status, &body, fetch ? 620 : 40);
+        if (net != Net::ok || status >= 300)
+            notice(Notice::Kind::error, "FPKGMount",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        else
+        {
+            const std::string msg = message_of(body, "");
+            if (!msg.empty())
+                notice(Notice::Kind::success, "FPKGMount", msg);
+        }
+        poll_kraken();
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        data_.dumpforge.fetching = true;
+        ++data_.dumpforge.epoch;
+        ++data_.serial;
+    }
+    // The download of the program (18 MB over the console's own connection) takes a while.
+    const Net net = exchange("POST", "/api/v1/dumpforge", request.body, &status, &body, 620);
+    if (net != Net::ok || status >= 300)
+        notice(Notice::Kind::error, "Dump Forge", message_of(body, "Die App hat nicht geantwortet."));
+    else
+    {
+        const std::string msg = message_of(body, "");
+        if (!msg.empty())
+            notice(Notice::Kind::success, "Dump Forge", msg);
+    }
+    poll_dumpforge();
+    // The answer came late or not at all while the app went on loading: ask again until it has finished (the window shows "wird
+    // geladen ..." as long as the app says so), for a few minutes at most.
+    for (int i = 0; i < 100; ++i)
+    {
+        bool fetching = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            fetching = data_.dumpforge.fetching;
+        }
+        if (!fetching)
+            break;
+        sys::sleep_us(3000000);
+        poll_dumpforge();
+    }
+    // Given up waiting: the window must not say "wird geladen ..." for ever (the next question about the program says what is true).
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.dumpforge.fetching = false;
+    ++data_.dumpforge.epoch;
+    ++data_.serial;
+}
+
 void HttpSource::poll_dumpforge()
 {
     int status = 0;
     std::string body;
     DumpForgeState d;
+    bool ok = false;
     if (exchange("GET", "/api/v1/dumpforge", {}, &status, &body, 8) == Net::ok && status == 200)
     {
         cJSON *root = cJSON_Parse(body.c_str());
@@ -4264,10 +4321,18 @@ void HttpSource::poll_dumpforge()
             d.fetching = flag(root, "fetching");
             d.version = str(root, "version");
             cJSON_Delete(root);
+            ok = true;
         }
     }
     std::lock_guard<std::mutex> lock(mutex_);
-    d.epoch = data_.dumpforge.epoch + 1; // also when the question failed: the dialog stops waiting
+    if (!ok)
+    {
+        // A question that failed says nothing about the program: what was known stays ("fehlt noch" right after a load would be wrong).
+        ++data_.dumpforge.epoch; // the dialog still stops waiting for this answer
+        ++data_.serial;
+        return;
+    }
+    d.epoch = data_.dumpforge.epoch + 1;
     data_.dumpforge = std::move(d);
     ++data_.serial;
 }

@@ -229,15 +229,21 @@ ps5tm_dumpforge_start(char *msg, size_t n) {
   return -1;
 }
 
-void
-ps5tm_dumpforge_stop(void) {
-  if(!ps5tm_dumpforge_running()) return;
-  ps5tm_lhttp(DF_PORT, "POST", "/api/quit", "application/json", "{}", 2, 5000, NULL, NULL);
+/* force 0: only when Dump Forge has nothing to do (it takes {"if_idle":true} and answers 409 while a job is queued or running, or a
+   paired device transfers: the job of someone who works on its own page is not cut off); force 1: always, it cancels its jobs first.
+   0 when it is ended or was not running, 1 when it was left running because it is busy. */
+int
+ps5tm_dumpforge_stop(int force) {
+  if(!force && !ps5tm_dumpforge_running()) return 0;   /* forced: also when it does not answer (stuck), the quit is sent all the same */
+  const char *body = force ? "{}" : "{\"if_idle\":true}";
+  int st = ps5tm_lhttp(DF_PORT, "POST", "/api/quit", "application/json", body, strlen(body), 5000, NULL, NULL);
+  if(st == 409) return 1;
   for(int i = 0; i < 60 && ps5tm_dumpforge_running(); i++) usleep(500 * 1000);    /* it cancels its jobs and cleans up first */
   pthread_mutex_lock(&g_lock);
   g_started_ms = 0;
   pthread_mutex_unlock(&g_lock);
   PS5TM_INFO("dumpforge_stop", "Dump Forge beendet.");
+  return 0;
 }
 
 /* ------------------------------------------------------------------ the jobs */
@@ -290,6 +296,7 @@ ps5tm_dumpforge_job_poll(int job, ps5tm_dumpforge_job_t *out) {
   unsigned char *body = NULL;
   size_t n = 0;
   int st = ps5tm_lhttp(DF_PORT, "GET", "/api/jobs", NULL, NULL, 0, 6000, &body, &n);
+  if(st == LHTTP_TOO_BIG) { free(body); return -2; }      /* it answers, the list is only too long to read: alive, nothing known */
   if(st != 200 || !body) { free(body); return -1; }
   cJSON *root = cJSON_Parse((char *)body);
   free(body);
@@ -340,11 +347,11 @@ ps5tm_dumpforge_job_poll(int job, ps5tm_dumpforge_job_t *out) {
   return -1;
 }
 
-void
+int
 ps5tm_dumpforge_job_cancel(int job) {
   char b[48];
   snprintf(b, sizeof b, "{\"id\":%d}", job);
-  ps5tm_lhttp(DF_PORT, "POST", "/api/cancel_job", "application/json", b, strlen(b), 10000, NULL, NULL);
+  return ps5tm_lhttp(DF_PORT, "POST", "/api/cancel_job", "application/json", b, strlen(b), 10000, NULL, NULL);
 }
 
 /* ------------------------------------------------------------------ loading a release */
@@ -374,7 +381,9 @@ fetch_url(const char *url, size_t max, char **buf, size_t *len, char *why, size_
   r.range_to = -1;
   upd_res_t res;
   if(upd_http_fetch(&r, max, buf, len, &res) != 0) {
-    snprintf(why, why_len, "%s ließ sich nicht laden (%s%s%d).", what, res.step[0] ? res.step : "http", res.status ? " " : "", res.status);
+    const char *step = res.step[0] ? res.step : "http";
+    if(res.status) snprintf(why, why_len, "%s ließ sich nicht laden (%s %d).", what, step, res.status);
+    else snprintf(why, why_len, "%s ließ sich nicht laden (%s).", what, step);
     free(*buf);
     *buf = NULL;
     return -1;

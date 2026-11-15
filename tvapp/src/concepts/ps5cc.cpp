@@ -741,8 +741,16 @@ class Ps5cc final : public app::Concept
         for (ui::ProgressBar &bar : bars_)
             bar.update(dt);
         history_.update(dt);
-        for (const std::unique_ptr<ps5cc::Page> &page : pages_)
-            page->update(dt);
+        {
+            // Every page asks for the cover of its focused row; only the page in front is heard.
+            const ps5cc::Page *front = current_page();
+            for (const std::unique_ptr<ps5cc::Page> &page : pages_)
+            {
+                ps5cc::covers().listen(page.get() == front);
+                page->update(dt);
+            }
+            ps5cc::covers().listen(true);
+        }
         menu_.update(dt);
         language_menu_.update(dt);
         link_dialog_.update(dt);
@@ -1447,7 +1455,7 @@ class Ps5cc final : public app::Concept
         game_views_.push_back(kJobs);
         tabs.push_back({"Aufträge"});
         disc_tab_ = disc;
-        // eight tabs do not fit at the usual width: each as wide as its word, the row scrolls if it
+        // nine tabs do not fit at the usual width: each as wide as its word, the row scrolls if it
         // must (29.10.2026)
         ps5cc::style_subtabs(games_tabs_, theme_, static_cast<int>(tabs.size()));
         games_tabs_.style.width = ui::TabWidth::fit;

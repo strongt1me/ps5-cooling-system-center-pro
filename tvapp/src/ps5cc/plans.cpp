@@ -758,10 +758,8 @@ std::string op_label(const std::string &op)
     {
         if (op == kLevelOps[l])
         {
-            std::string name = kLevelNames[l];
-            for (char &ch : name)
-                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-            return "FPKG · " + name;
+            // as the dictionaries have the names ("Schnell", "Ausgewogen" ...): a lower-case form is found in none of them
+            return std::string("FPKG · ") + kLevelNames[l];
         }
     }
     return op;
