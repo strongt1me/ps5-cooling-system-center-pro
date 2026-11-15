@@ -1914,6 +1914,13 @@ input[type=checkbox]:focus-visible { outline: 2px solid rgba(138,180,255,.7); ou
 .cp-sub h5 { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
 .cp-sub .cp-choice { padding: 7px 10px; }
 .cv-engine { margin: 8px 0 0; }
+.cv-engine-guide { margin: 8px 0 0; }
+.cv-guide { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 13px; line-height: 1.5; }
+.cv-guide h4 { margin: 0 0 4px; font-size: 14px; }
+.cv-guide h5 { margin: 12px 0 4px; font-size: 13px; }
+.cv-guide ol, .cv-guide ul { margin: 4px 0 0; padding-left: 20px; }
+.cv-guide li { margin: 3px 0; }
+.cv-guide code { word-break: break-all; }
 .cv-engine.cp-warn { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 
 /* Verlauf (11.10.2026) */

@@ -5649,6 +5649,7 @@
         else if (act === "queue") cvQueueAdd(b);
         else if (act === "tpl") cvTemplate();
         else if (act === "dfetch") cvFetchEngine(b);
+        else if (act === "guide") { cv.guide = !cv.guide; cvRenderPlan(); }
         else if (act === "queueview") cvOpenQueue();
         else if (act === "jobview") { cvRenderJob(); cvPoll(); }
       });
@@ -6187,7 +6188,7 @@
    * ShadowMountPlus (mv…). Die Ziele sind die des Kopierens: der Ordner
    * homebrew eines Laufwerks oder PS5-Sicherung/Spiele. */
   const cv = { id: "", plan: null, op: "", fl: "fpkg", drive: "", mode: "", job: null, timer: 0, ampr: false,
-               name: "", check: null, cseq: 0, ctimer: 0, queue: null, qtimer: 0 };
+               name: "", check: null, cseq: 0, ctimer: 0, queue: null, qtimer: 0, guide: false };
 
   const CV_OPS = {
     ffpfsc: {
@@ -6340,6 +6341,33 @@
     try { cv.plan.dumpforge = await api("/api/v1/dumpforge"); } catch (e) { /* the plan stays as it was */ }
     cvRenderPlan();
   };
+  /* The guide for Dump Forge with the plain ELF (button "Anleitung" under the format FPKG): one sentence per element, so that each is translated whole. */
+  const cvGuideHtml = () => `<div class="cv-guide">
+      <h4>Dump Forge bei der reinen ELF-Version</h4>
+      <p class="muted">Das brauchst du nur für das Konvertierformat „FPKG (Debug-.pkg)“.</p>
+      <h5>Weg 1: Die App lädt Dump Forge selbst</h5>
+      <ol>
+        <li>Öffne die App im Browser unter der Adresse der Konsole, Port 8086:<br><code>http://&lt;IP der Konsole&gt;:8086</code></li>
+        <li>Wähle bei einem Spiel „Konvertieren“ und das Format „FPKG (Debug-.pkg)“.</li>
+        <li>Fehlt Dump Forge, erscheint „Dump Forge laden“. Drücke den Knopf.</li>
+        <li>Die App lädt die neueste Fassung von GitHub, prüft die SHA-256-Prüfsumme und legt sie ab. Das dauert etwas, die Datei ist rund 18 MB groß.</li>
+        <li>Danach ist das Format wählbar.</li>
+      </ol>
+      <h5>Weg 2: Von Hand ablegen (ohne Internet auf der Konsole)</h5>
+      <ol>
+        <li>Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt quer3q/ps5-dump-forge).</li>
+        <li>Kopiere sie per FTP (Port 2121) oder mit dem Dateimanager der App in diesen Ordner der Konsole:<br><code>/data/PS5-Cooling-Center/dumpforge/</code><br><span class="muted">Die App legt diesen Ordner bei jedem Start selbst an.</span></li>
+        <li>Der Name muss stimmen. Erlaubt sind diese beiden Formen (die Version nur aus Ziffern und Punkten, zum Beispiel 0.5.5):<br><code>ps5-dump-forge-&lt;Version&gt;-ps5.elf</code><br><code>ps5-dump-forge.elf</code></li>
+        <li>Die Datei muss zwischen 1 und 40 MiB groß sein und eine echte ELF-Datei sein.</li>
+        <li>Die Seite zeigt Dump Forge danach als vorhanden an, ein Neustart der App ist nicht nötig.</li>
+      </ol>
+      <h5>Hinweise</h5>
+      <ul>
+        <li>Liegen mehrere Fassungen da, nimmt die App die höchste Version. Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern.</li>
+        <li>Wer die Kacheln (FAKE86921 oder FAKE86922) installiert hat, braucht nichts davon. Dort liegt Dump Forge schon im Ordner „dumpforge“ der Kachel.</li>
+        <li>Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. Du musst es nicht von Hand starten.</li>
+      </ul>
+    </div>`;
   /* Under the format FPKG: the compression level, and where Dump Forge stands (there, or to be fetched). */
   const cvFpkgExtra = (p) => {
     const df = p.dumpforge || {};
@@ -6356,7 +6384,8 @@
           <span>Selbst laden geht auch: Lege die ELF-Datei von Dump Forge (Name: ps5-dump-forge-VERSION-ps5.elf) in diesen Ordner der PS5:</span>
           <code>${esc(df.folder || "/data/PS5-Cooling-Center/dumpforge")}</code>
           <button type="button" class="btn" data-cp="dfetch"${df.fetching ? " disabled" : ""}>Dump Forge laden</button></div>`;
-    return `<div class="cp-sub"><h5>Kompressionsstufe</h5><div class="cp-list">${levels}</div>${engine}</div>`;
+    const guide = `<div class="cv-engine-guide"><button type="button" class="btn ghost" data-cp="guide">${cv.guide ? "Anleitung schließen" : "Anleitung"}</button></div>${cv.guide ? cvGuideHtml() : ""}`;
+    return `<div class="cp-sub"><h5>Kompressionsstufe</h5><div class="cp-list">${levels}</div>${engine}${guide}</div>`;
   };
 
   const cvRenderPlan = () => {

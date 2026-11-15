@@ -66,6 +66,11 @@ class GameTools
     void rebuild_queue();
     std::string queue_line(const QueueItem &item) const;
     void draw_queue(ui::Canvas &canvas) const;
+    // The guide for Dump Forge with the plain ELF (the row "Anleitung" under the format FPKG): a scrolling text, O closes it.
+    void open_guide(ui::Feedback &feedback);
+    void close_guide(ui::Feedback &feedback);
+    void handle_guide(const InputFrame &input, ui::Feedback &feedback);
+    void draw_guide(ui::Canvas &canvas) const;
     float draw_checks(ui::Canvas &canvas, float x, float y, float width) const;
     void answer_question();
     std::string title() const;
@@ -105,6 +110,9 @@ class GameTools
     std::string
         queue_key_; // what the list's rows are made of, so it is rebuilt only when that changes
     tween::Spring queue_shown_;
+    ui::TextView guide_view_;
+    bool guide_open_ = false;
+    tween::Spring guide_shown_;
     std::vector<std::pair<int, int>>
         op_index_; // the format choice's options: {index into kOpKeys, level of the FPKG}
     std::uint64_t engine_epoch_ = 0; // the last answer about Dump Forge this dialog has taken in

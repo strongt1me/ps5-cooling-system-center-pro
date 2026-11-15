@@ -38,6 +38,7 @@ enum Row
     kRowQueueView,
     kRowDeleteSource,
     kRowEngine,
+    kRowGuide,
     kRowStart,
     kRowCancel, // the delete question's "Abbrechen", where its focus opens
     kRowInfo = 20,
@@ -437,13 +438,13 @@ void GameTools::absorb(const Snapshot &data)
 
 bool GameTools::modal() const
 {
-    return menu_.is_open() || open_ || queue_open_;
+    return menu_.is_open() || open_ || queue_open_ || guide_open_;
 }
 
 bool GameTools::visible() const
 {
     return menu_.visible() || open_ || shown_.value > 0.01f || queue_open_ ||
-           queue_shown_.value > 0.01f;
+           queue_shown_.value > 0.01f || guide_open_ || guide_shown_.value > 0.01f;
 }
 
 void GameTools::build_form()
@@ -509,6 +510,10 @@ void GameTools::build_form()
         // where its file goes).
         if (fpkg_offered && plan_.dumpforge.known)
             form_.add_action(kRowEngine, "Dump Forge laden");
+        // how to get Dump Forge with the plain ELF (the web page has the same button)
+        if (fpkg_offered)
+            form_.add_action(kRowGuide, "Anleitung").description =
+                "Dump Forge bei der reinen ELF-Version: laden oder von Hand ablegen.";
         if (plan_.kind == "folder" && !plan_.ps4)
             form_.add_toggle(kRowAmpr, "AMPR-Index vorher bauen", choice_.ampr).description =
                 "Für Spiele mit APR-EMU: ampr_emu.index kommt mit ins Abbild.";
@@ -778,6 +783,11 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         return;
     }
+    if (guide_open_)
+    {
+        handle_guide(input, feedback);
+        return;
+    }
     if (queue_open_)
     {
         handle_queue(input, feedback);
@@ -868,6 +878,10 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         {
             close_dialog(feedback);
         }
+        else if (id == kRowGuide)
+        {
+            open_guide(feedback);
+        }
         else if (id == kRowEngine)
         {
             if (!plan_.dumpforge.installed && !engine_fetching_)
@@ -922,6 +936,98 @@ void GameTools::open_queue(ui::Feedback &feedback)
     queue_list_.enter();
     source().convert_queue("");
     feedback.play(audio::Cue::open);
+}
+
+void GameTools::open_guide(ui::Feedback &feedback)
+{
+    using ui::TextBlock;
+    guide_view_.style.theme = theme_;
+    guide_view_.style.panel = false;
+    guide_view_.style.focus_ring = false;
+    guide_view_.style.footer = false;
+    guide_view_.style.body_size = 22.0f;
+    guide_view_.style.heading_size = 30.0f;
+    guide_view_.style.subheading_size = 25.0f;
+    guide_view_.style.block_gap = 12.0f;
+    guide_view_.style.item_gap = 8.0f;
+    guide_view_.style.heading_gap = 22.0f;
+    // one whole sentence per block: the translator looks each up as it is (the same texts as the web page's guide)
+    guide_view_.set_content({
+        TextBlock::heading("Dump Forge bei der reinen ELF-Version", 2),
+        TextBlock::paragraph("Das brauchst du nur für das Konvertierformat „FPKG (Debug-.pkg)“."),
+        TextBlock::heading("Weg 1: Die App lädt Dump Forge selbst", 3),
+        TextBlock::numbered("Öffne die App im Browser unter der Adresse der Konsole, Port 8086:", "1."),
+        TextBlock::code("http://<IP der Konsole>:8086"),
+        TextBlock::numbered("Wähle bei einem Spiel „Konvertieren“ und das Format „FPKG (Debug-.pkg)“.", "2."),
+        TextBlock::numbered("Fehlt Dump Forge, erscheint „Dump Forge laden“. Drücke den Knopf.", "3."),
+        TextBlock::numbered("Die App lädt die neueste Fassung von GitHub, prüft die SHA-256-Prüfsumme und legt sie ab. "
+                            "Das dauert etwas, die Datei ist rund 18 MB groß.", "4."),
+        TextBlock::numbered("Danach ist das Format wählbar.", "5."),
+        TextBlock::heading("Weg 2: Von Hand ablegen (ohne Internet auf der Konsole)", 3),
+        TextBlock::numbered("Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt quer3q/ps5-dump-forge).", "1."),
+        TextBlock::numbered("Kopiere sie per FTP (Port 2121) oder mit dem Dateimanager der App in diesen Ordner der Konsole:", "2."),
+        TextBlock::code("/data/PS5-Cooling-Center/dumpforge/"),
+        TextBlock::paragraph("Die App legt diesen Ordner bei jedem Start selbst an."),
+        TextBlock::numbered("Der Name muss stimmen. Erlaubt sind diese beiden Formen "
+                            "(die Version nur aus Ziffern und Punkten, zum Beispiel 0.5.5):", "3."),
+        TextBlock::code("ps5-dump-forge-<Version>-ps5.elf\nps5-dump-forge.elf"),
+        TextBlock::numbered("Die Datei muss zwischen 1 und 40 MiB groß sein und eine echte ELF-Datei sein.", "4."),
+        TextBlock::numbered("Die Seite zeigt Dump Forge danach als vorhanden an, ein Neustart der App ist nicht nötig.", "5."),
+        TextBlock::heading("Hinweise", 3),
+        TextBlock::bullet("Liegen mehrere Fassungen da, nimmt die App die höchste Version. "
+                          "Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern."),
+        TextBlock::bullet("Wer die Kacheln (FAKE86921 oder FAKE86922) installiert hat, braucht nichts davon. "
+                          "Dort liegt Dump Forge schon im Ordner „dumpforge“ der Kachel."),
+        TextBlock::bullet("Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. "
+                          "Du musst es nicht von Hand starten."),
+    });
+    guide_view_.set_bounds({kPanel.x + 40.0f, kPanel.y + 100.0f, kPanel.w - 80.0f, kPanel.h - 170.0f});
+    guide_view_.set_active(true);
+    guide_view_.scroll_to(0.0f, true);
+    guide_open_ = true;
+    feedback.play(audio::Cue::open);
+}
+
+void GameTools::close_guide(ui::Feedback &feedback)
+{
+    guide_open_ = false;
+    feedback.play(audio::Cue::back);
+}
+
+void GameTools::handle_guide(const InputFrame &input, ui::Feedback &feedback)
+{
+    if (input.is_pressed(Action::back))
+    {
+        close_guide(feedback);
+        return;
+    }
+    guide_view_.handle(input, feedback); // up and down and the right stick scroll
+}
+
+void GameTools::draw_guide(ui::Canvas &canvas) const
+{
+    const float amount = guide_shown_.value;
+    if (amount <= 0.01f)
+        return;
+    gfx::DrawList &list = canvas.list;
+    const ui::Fonts &fonts = canvas.fonts;
+    list.rounded_rect({0.0f, 0.0f, 1920.0f, 1080.0f}, 0.0f, kNavy.with_alpha(0.86f * amount));
+    list.push_opacity(amount);
+    const float rise = 24.0f * (1.0f - amount);
+    const Rect panel{kPanel.x, kPanel.y + rise, kPanel.w, kPanel.h};
+    ui::Painter paint(list, fonts, theme_);
+    solid_floor(list, panel, theme_.radius_card);
+    solid_floor(list, panel, theme_.radius_card);
+    paint.panel(panel);
+    ui::text(list, fonts.display, "Anleitung", panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
+    guide_view_.draw(canvas);
+    ui::HintLayout layout;
+    layout.size = 34.0f;
+    layout.text_size = 21.0f;
+    layout.cy = panel.y + panel.h - 42.0f;
+    const ui::Hint hints[] = {{ui::Button::dpad, "Blättern"}, {ui::Button::circle, "Schließen"}};
+    ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 2, panel.x + 40.0f, false, layout);
+    list.pop_opacity();
 }
 
 void GameTools::close_queue(ui::Feedback &feedback)
@@ -1078,6 +1184,9 @@ void GameTools::update(float dt)
     shown_.update(dt, 18.0f);
     queue_shown_.target = queue_open_ ? 1.0f : 0.0f;
     queue_shown_.update(dt, 18.0f);
+    guide_shown_.target = guide_open_ ? 1.0f : 0.0f;
+    guide_shown_.update(dt, 18.0f);
+    guide_view_.update(dt);
     if (queue_open_)
     {
         // The list is asked for again every two seconds while it is on screen.
@@ -1572,6 +1681,7 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
         list.pop_opacity();
     }
     draw_queue(canvas);
+    draw_guide(canvas);
     prompt_.draw(canvas);
 }
 

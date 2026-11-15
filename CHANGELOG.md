@@ -1,5 +1,10 @@
 # Changelog
 
+## Unveröffentlicht (nach v1.85.1)
+
+### Knopf „Anleitung“ beim Format FPKG
+- Im Konvertieren-Fenster gibt es beim Format „FPKG (Debug-.pkg)“ einen Knopf „Anleitung“ (Browser-App: unter den Kompressionsstufen, Vollbild-App: Zeile unter „Dump Forge laden“). Er zeigt „Dump Forge bei der reinen ELF-Version“: Weg 1 (die App lädt Dump Forge selbst), Weg 2 (von Hand nach `/data/PS5-Cooling-Center/dumpforge/` ablegen, erlaubte Namen, Größe) und Hinweise. Mit Übersetzungen in 6 Sprachen.
+
 ## v1.85.1 – 15.11.2026
 
 ### FPKGMount: richtiger Suchordner in der Anzeige

@@ -919,6 +919,12 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::up},
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "plan-konvertieren-engine"},
+            // the guide for Dump Forge with the plain ELF: the row under the Dump Forge row, O closes it
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "plan-konvertieren-anleitung"},
+            {0.2f, action_bit(Action::back)},
+            {0.3f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::right},
             {0.2f, 0, Direction::right},
