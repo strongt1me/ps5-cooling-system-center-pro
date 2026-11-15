@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.86.2 – 15.11.2026
+
+### AMPR EMU NG: früher mitgelieferte, nicht mehr eingebaute Fassungen verschwinden
+- Eine NG-Datei im Ordner AMPR_EMU, die eine **frühere App-Fassung** mitgeliefert hat und die diese nicht mehr mitliefert (NG 0.3.2 bis 0.4.0, erkannt an der Prüfsumme), wird in der Liste **nicht mehr angeboten** und beim **Start der App gelöscht** (Protokollzeile „AMPR_EMU: … entfernt“). Vorher blieb zum Beispiel eine alte `libSceAmpr.sprx-0.4.0-ng` liegen, belegte den zweiten Platz der Liste und verdrängte die 0.3.5. Die mitgelieferten Fassungen (0.4.1, 0.3.5) und selbst abgelegte Dateien mit anderem Inhalt bleiben. In einem Spiel eingebaute Fassungen werden weiter erkannt.
+
 ## v1.86.1 – 15.11.2026
 
 ### AMPR EMU NG: früher mitgelieferte Fassungen verdrängen keine neuere mehr

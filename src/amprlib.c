@@ -441,6 +441,30 @@ list_versions_all(const al_kind_t *k, al_ver_t **out) {
   return n;
 }
 
+/* NOTE: when a build stops carrying a version, add the SHA-256 of its two files here.
+   SHA-256 of the ampr-emu-ng files that earlier versions of the app carried (0.3.2 to 0.4.0): such a file in the folder came from the app, even though it is no
+   longer built in and no ledger names it (the app of that time copied it into the folder when the person chose "put the carried versions into the folder"). */
+static const char *const NG_EARLIER_SHA[] = {
+  "9a8f553a68d4e6e6be11bd9f8d5519b5faa68560761881966abff1dd65bf19f7", "5e4f1fcbfb83c9beb06d892dcd807a7f077bd54aa57cefa1d712b6f067ddae5d",
+  "1c1051f91bc7cba19b15362b2b832114b53a4c3d6193f50c90fdf1ae5d78d268", "1ae61d604fd2da60728175a37f700a1283a8ceb0c36e6f28770ab663215ab364",
+  "7d1bb260f954b755ed687733e52ccfa38c31440a9b88a6fbba5b3b75e08bfa26", "717299ddd8122716ba11c89e03cc56d05207d0cae2ef898da8a9a65536640997",
+  "998f2029b250d954725f864b57f2eee72aefbfb88054a3f1c3df550d4d6c8261", "a76c0336d667b486ba1a30b43a23281563dc323a20589cb28bc2454a70af581b",
+  "8320eb65c16565f42031b9d88b15a447039f0fd7e5694faf5f1cb84cafdba218", "d27f7c58a92da9807366db5d15423ef19257ad06df3b78ea0d0fbaea3ce664f6",
+};
+
+static int
+ng_was_carried(const char *sha) {
+  for(size_t i = 0; i < sizeof(NG_EARLIER_SHA) / sizeof(NG_EARLIER_SHA[0]); i++)
+    if(!strcmp(NG_EARLIER_SHA[i], sha)) return 1;
+  return 0;
+}
+
+/* An ampr-emu-ng file that an earlier version of the app carried and that this one no longer carries (v1.86.2): it is not offered any more and the app deletes it at its start. */
+static int
+ng_retired(const al_ver_t *v) {
+  return v->ng && v->valid && v->stored && !v->bundled && ng_was_carried(v->sha);
+}
+
 /* What the person is offered: of the builds of ampr-emu-ng only the two newest versions (15.11.2026, wish of the user: a newer one comes on top, the
    oldest drops out). The list is sorted, the fork first, newest first. */
 static size_t
@@ -452,6 +476,7 @@ list_versions(const al_kind_t *k, al_ver_t **out) {
   int distinct = 0;
   char last[sizeof(v[0].version)] = "";
   for(size_t i = 0; i < n; i++) {
+    if(ng_retired(&v[i])) continue;              /* a version that is no longer carried is not offered (the app deletes its file at the start) */
     if(v[i].ng && v[i].valid) {                  /* a broken file takes no place of a good version */
       if(strcmp(v[i].version, last)) { distinct++; snprintf(last, sizeof(last), "%s", v[i].version); }
       if(distinct > 2) continue;
@@ -487,38 +512,23 @@ ng_ledger_has(const char *name) {
   return found;
 }
 
-/* SHA-256 of the ampr-emu-ng files that earlier versions of the app carried (0.3.2 to 0.4.0): such a file in the folder came from the app, even though it is no
-   longer built in and no ledger names it (the app of that time copied it into the folder when the person chose "put the carried versions into the folder"). */
-static const char *const NG_EARLIER_SHA[] = {
-  "9a8f553a68d4e6e6be11bd9f8d5519b5faa68560761881966abff1dd65bf19f7", "5e4f1fcbfb83c9beb06d892dcd807a7f077bd54aa57cefa1d712b6f067ddae5d",
-  "1c1051f91bc7cba19b15362b2b832114b53a4c3d6193f50c90fdf1ae5d78d268", "1ae61d604fd2da60728175a37f700a1283a8ceb0c36e6f28770ab663215ab364",
-  "7d1bb260f954b755ed687733e52ccfa38c31440a9b88a6fbba5b3b75e08bfa26", "717299ddd8122716ba11c89e03cc56d05207d0cae2ef898da8a9a65536640997",
-  "998f2029b250d954725f864b57f2eee72aefbfb88054a3f1c3df550d4d6c8261", "a76c0336d667b486ba1a30b43a23281563dc323a20589cb28bc2454a70af581b",
-  "8320eb65c16565f42031b9d88b15a447039f0fd7e5694faf5f1cb84cafdba218", "d27f7c58a92da9807366db5d15423ef19257ad06df3b78ea0d0fbaea3ce664f6",
-};
-
-static int
-ng_was_carried(const char *sha) {
-  for(size_t i = 0; i < sizeof(NG_EARLIER_SHA) / sizeof(NG_EARLIER_SHA[0]); i++)
-    if(!strcmp(NG_EARLIER_SHA[i], sha)) return 1;
-  return 0;
-}
-
-/* The files of builds that dropped out of the two newest and that the app itself put into the folder (carried files, earlier carried ones, fetched ones). The number removed. */
+/* The files of builds that dropped out of the two newest, or are retired, and that the app itself put into the folder (carried files, earlier carried ones, fetched ones).
+   The number removed. Called at the start of the app and after a version was loaded. */
 unsigned
 ps5tm_amprlib_ng_prune(void) {
   al_ver_t *v = NULL;
   size_t n = list_versions_all(&K_AMPR, &v);
   char keep1[sizeof(v[0].version)] = "", keep2[sizeof(v[0].version)] = "";
   for(size_t i = 0; i < n; i++) {
-    if(!v[i].ng || !v[i].valid) continue;
+    if(!v[i].ng || !v[i].valid || ng_retired(&v[i])) continue;
     if(!keep1[0]) snprintf(keep1, sizeof(keep1), "%s", v[i].version);
     else if(!keep2[0] && strcmp(v[i].version, keep1)) snprintf(keep2, sizeof(keep2), "%s", v[i].version);
   }
   unsigned removed = 0;
   for(size_t i = 0; i < n; i++) {
-    if(!v[i].ng || !v[i].valid || !v[i].stored || !strcmp(v[i].version, keep1) || !strcmp(v[i].version, keep2)) continue;
-    if(!v[i].bundled && !ng_was_carried(v[i].sha) && !ng_ledger_has(v[i].name)) continue;       /* a file of the person's own stays */
+    if(!v[i].ng || !v[i].valid || !v[i].stored) continue;
+    if(!ng_retired(&v[i]) && (!strcmp(v[i].version, keep1) || !strcmp(v[i].version, keep2))) continue;
+    if(!v[i].bundled && !ng_retired(&v[i]) && !ng_ledger_has(v[i].name)) continue;       /* a file of the person's own stays */
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s", K_AMPR.dir, v[i].name);
     if(unlink(path) == 0) removed++;

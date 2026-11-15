@@ -399,6 +399,10 @@ main(int argc, char **argv) {
   mkdir(PS5TM_DATA_DIR "/Profilbilder", 0777);   /* own pictures for the Profil page (31.10.2026); 0777 as an FTP copy */
   ps5tm_dumpforge_prepare();                     /* the folder for the program Dump Forge (a file put there by hand is found at once) */
   ps5tm_log_file_start();                        /* app.log: the log survives a restart of the console (03.11.2026) */
+  {                                              /* ampr-emu-ng files of earlier app versions that are no longer carried (v1.86.2) */
+    unsigned gone = ps5tm_amprlib_ng_prune();
+    if(gone) PS5TM_INFO("ampr_ng_prune", "AMPR_EMU: %u ältere ampr-emu-ng-Datei(en) entfernt, die frühere Fassungen der App mitgeliefert hatten.", gone);
+  }
   ps5tm_config_load();
   ps5tm_payloads_init();                 /* the folder for own payloads, only if missing */
 
