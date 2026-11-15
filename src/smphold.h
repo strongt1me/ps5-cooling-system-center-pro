@@ -47,6 +47,7 @@ void ps5tm_smphold_mark(void);
 int  ps5tm_smphold_count(void);
 /* Is this title one the app mounted and nobody started yet? */
 int  ps5tm_smphold_is_held(const char *title_id);
+int  ps5tm_smphold_paused(void);                    /* the time of the held titles waits (a game plays or a job of the app works) */
 
 /* Host test only. NULL gives the real world back. */
 void ps5tm_smphold_test_env(const ps5tm_smphold_env_t *env);

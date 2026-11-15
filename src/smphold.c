@@ -223,12 +223,19 @@ save_locked(void) {
     return;
   }
   int fd = open(HOLD_TMP, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  if(fd < 0) return;
+  if(fd < 0) {
+    PS5TM_WARN("smp_hold_save", "Die Haltdatei ließ sich nicht schreiben: %s", strerror(errno));
+    return;
+  }
   ssize_t w = write(fd, buf, k);
   int ok = w == (ssize_t)k;
+  if(ok) fsync(fd);
   if(close(fd) != 0) ok = 0;
-  if(ok) rename(HOLD_TMP, HOLD_PATH);
-  else unlink(HOLD_TMP);
+  if(ok && rename(HOLD_TMP, HOLD_PATH) != 0) ok = 0;
+  if(!ok) {
+    PS5TM_WARN("smp_hold_save", "Die Haltdatei ließ sich nicht schreiben: %s", strerror(errno));
+    unlink(HOLD_TMP);
+  }
 }
 
 static int
@@ -341,13 +348,15 @@ release_one(const char *id, const char *other, int why, int quiet) {
     pthread_mutex_unlock(&g_rel_lock);
     return 0;
   }
+  const uint64_t t_unmount = g_env.now_ms();
   int http = g_env.unmount(id, msg, sizeof(msg));
   pthread_mutex_unlock(&g_rel_lock);
   if(http == 200) {
-    /* ps5tm_smp_call has already written it off (the unmount went through it); this is for a test with its own unmount */
+    /* ps5tm_smp_call has already written it off (the unmount went through it); this is for a test with its own unmount. An entry that is
+       younger than the unmount is the person's mount of the same title in the meantime: it stays (audit 15.11.2026). */
     pthread_mutex_lock(&g_lock);
     int k = index_of_locked(id);
-    if(k >= 0) { drop_locked(k); save_locked(); }
+    if(k >= 0 && g_hold[k].since_ms <= t_unmount) { drop_locked(k); save_locked(); }
     pthread_mutex_unlock(&g_lock);
     if(why == REL_GRACE)
       PS5TM_INFO("smp_hold_released", "%s war eingehängt, aber nicht gestartet. Die App hat es nach %u Sekunden ausgehängt, damit andere Spiele und Kacheln starten.",
@@ -480,6 +489,13 @@ ps5tm_smphold_check_launch(void) {
   return done;
 }
 
+/* 1 while the time of the held titles waits (a game plays or one of the app's jobs works with games): they are not released then. */
+int
+ps5tm_smphold_paused(void) {
+  if(!g_env.now_ms) env_default();
+  return g_env.game_running() || g_env.job_running();
+}
+
 /* The app starts a title itself (ps5tm_library_start): what it holds apart from that goes first, so this start cannot be refused. */
 int
 ps5tm_smphold_release_for_start(const char *title_id) {
@@ -492,8 +508,13 @@ ps5tm_smphold_release_for_start(const char *title_id) {
   pthread_mutex_unlock(&g_lock);
   if(n == 0 || !g_env.smp_up()) return 0;
   int done = 0;
+  /* In all not longer than 20 s: the start protection of the app (30 s from the tap) must not run out while SMP hangs at an unmount, or a
+     second tap could start the same title twice (audit 15.11.2026). What is left is released by the refusal path or the watcher. */
+  const uint64_t t_begin = g_env.now_ms();
   for(int i = 0; i < n; i++) {
-    if(title_id && !strcmp(cur[i].id, title_id)) {
+    const int is_target = title_id && !strcmp(cur[i].id, title_id);
+    if(!is_target && g_env.now_ms() - t_begin > 20000) continue;   /* the clock of the title being started is still set below */
+    if(is_target) {
       /* Starting it is what it waits for. Its clock starts again now: the game state needs seconds to show the start, and the watcher
          must not unmount a title that is just being started because its half minute ran out meanwhile. */
       pthread_mutex_lock(&g_lock);

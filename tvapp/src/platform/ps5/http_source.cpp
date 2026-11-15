@@ -203,6 +203,21 @@ void *tools_main(void *self)
     return nullptr;
 }
 
+struct EngineJob
+{
+    HttpSource *self;
+    std::string id;
+    std::string body;
+};
+
+void *engine_main(void *arg)
+{
+    EngineJob *job = static_cast<EngineJob *>(arg);
+    job->self->run_engine_fetch(job->id, job->body);
+    delete job;
+    return nullptr;
+}
+
 // A title id for a query string: letters, digits, '-' and '_' as they are, everything else
 // percent-encoded.
 // A file name inside a path (/avatars/<file>): as url_encoded, but the dot stays, since the
@@ -1251,7 +1266,7 @@ void HttpSource::run()
             {
                 for (const Game &g : data_.games)
                 {
-                    if (g.app_mounted && g.smp_mounted)
+                    if (g.app_mounted && g.smp_mounted && !g.hold_paused)
                     {
                         game_held = true;
                         break;
@@ -3113,6 +3128,7 @@ void HttpSource::poll_library()
         g.can_remount = flag(item, "can_remount");
         g.smp_mounted = flag(item, "mounted");
         g.app_mounted = flag(item, "app_mounted");
+        g.hold_paused = flag(item, "hold_paused");
         g.ampr_emu = flag(cJSON_GetObjectItemCaseSensitive(item, "mods"), "ampr_emu");
         g.disc = str(item, "disc");
         g.dump_mounted = flag(item, "dump_mounted");
@@ -4244,8 +4260,50 @@ void HttpSource::poll_ps4mount()
     ++data_.serial;
 }
 
-// One request of FPKGMount ("kraken") or Dump Forge ("dumpforge"), on the tool thread.
+// One request of FPKGMount ("kraken") or Dump Forge ("dumpforge"). The downloads take minutes and go to a thread of their own, so that
+// the plans and checks on the tool thread do not wait behind them; everything else answers within seconds and stays on the tool thread.
 void HttpSource::handle_engine(const ToolRequest &request)
+{
+    const bool slow = request.id == "dumpforge" || request.body.find("\"fetch\"") != std::string::npos;
+    if (!slow)
+    {
+        handle_engine_now(request);
+        return;
+    }
+    bool expected = false;
+    if (!engine_fetching_.compare_exchange_strong(expected, true))
+    {
+        notice(Notice::Kind::error, request.id == "kraken" ? "FPKGMount" : "Dump Forge",
+               "Es wird schon etwas geladen.");
+        return;
+    }
+    EngineJob *job = new EngineJob{this, request.id, request.body};
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 1024 * 1024);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_t thread;
+    const int rc = pthread_create(&thread, &attr, engine_main, job);
+    pthread_attr_destroy(&attr);
+    if (rc != 0)
+    {
+        delete job;
+        handle_engine_now(request); // no thread: on this one, as before
+        engine_fetching_.store(false);
+    }
+}
+
+void HttpSource::run_engine_fetch(const std::string &id, const std::string &body)
+{
+    ToolRequest request;
+    request.kind = 3;
+    request.id = id;
+    request.body = body;
+    handle_engine_now(request);
+    engine_fetching_.store(false);
+}
+
+void HttpSource::handle_engine_now(const ToolRequest &request)
 {
     int status = 0;
     std::string body;
@@ -4339,6 +4397,8 @@ void HttpSource::poll_dumpforge()
 
 void HttpSource::poll_kraken()
 {
+    // The data thread and the tool thread both ask: one after the other, so that an older answer never overwrites a newer one.
+    std::lock_guard<std::mutex> poll_lock(kraken_poll_mutex_);
     int status = 0;
     std::string body;
     if (exchange("GET", "/api/v1/kraken", {}, &status, &body, 8) != Net::ok || status != 200)

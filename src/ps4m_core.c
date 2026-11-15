@@ -3224,8 +3224,14 @@ static int game_open(const char *tid) {
 /* Changes asked in the panel, made by the worker loop between scans (PS4Mount 0.7.0). */
 static char g_upd_tid[10], g_upd_rel[64], g_dlc_tid[10], *g_dlc_on;
 
+static int tid_ok(const char *t);
+
 int ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap) {
     char root[32];
+    if (!tid_ok(tid)) {                              /* the id lands in file names: as strict as everywhere else (audit 15.11.2026) */
+        snprintf(msg, cap, "ungültige Titel-ID");
+        return -1;
+    }
     const char *name = rel + 9;
     int by_version = !strncmp(rel, "version/", 8) && rel[8] && strlen(rel + 8) <= 7 &&
                      strspn(rel + 8, "0123456789.") == strlen(rel + 8);

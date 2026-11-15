@@ -130,9 +130,10 @@ find_elf(char *path, size_t pn, char *ver, size_t vn) {
 
 /* ------------------------------------------------------------------ state */
 
-/* Dump Forge answers on its port: GET /api/session names it. Its version goes to ver when asked for. */
+/* Dump Forge answers on its port: GET /api/session names it. Its version goes to ver when asked for. 1 = it runs, 0 = nothing of it, -1 = it
+   listens but does not answer in time (busy, not gone: a second copy must not be sent, and it must not be taken for one the app started). */
 static int
-running_version(char *ver, size_t vn) {
+df_probe(char *ver, size_t vn) {
   unsigned char *body = NULL;
   size_t n = 0;
   int st = ps5tm_lhttp(DF_PORT, "GET", "/api/session", NULL, NULL, 0, 1500, &body, &n);
@@ -145,12 +146,23 @@ running_version(char *ver, size_t vn) {
     cJSON_Delete(j);
   }
   free(body);
-  return ok;
+  if(ok) return 1;
+  return (st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) ? -1 : 0;
+}
+
+static int
+running_version(char *ver, size_t vn) {
+  return df_probe(ver, vn) == 1;
 }
 
 int
 ps5tm_dumpforge_running(void) {
   return running_version(NULL, 0);
+}
+
+int
+ps5tm_dumpforge_probe(void) {
+  return df_probe(NULL, 0);
 }
 
 /* 1 when the program is there (path and version out). */
@@ -183,7 +195,16 @@ ps5tm_dumpforge_state(void) {
 
 int
 ps5tm_dumpforge_start(char *msg, size_t n) {
-  if(ps5tm_dumpforge_running()) { snprintf(msg, n, "Dump Forge läuft schon."); return 0; }
+  return ps5tm_dumpforge_start_c(msg, n, NULL);
+}
+
+/* As the start, with a question the wait for its port asks every half second: 1 = the person has cancelled (the wait ends). */
+int
+ps5tm_dumpforge_start_c(char *msg, size_t n, int (*cancelled)(void)) {
+  int pr = df_probe(NULL, 0);
+  if(pr == 1) { snprintf(msg, n, "Dump Forge läuft schon."); return 0; }
+  /* It listens but does not answer: it is busy (a job, a drive that hangs), not gone. A second copy would only send the first one away. */
+  if(pr < 0) { snprintf(msg, n, "Dump Forge antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); return -1; }
   pthread_mutex_lock(&g_lock);
   uint64_t now = ps5tm_mono_ms();
   int again = g_started_ms && now - g_started_ms < 20000;
@@ -223,6 +244,7 @@ ps5tm_dumpforge_start(char *msg, size_t n) {
   }
   for(int i = 0; i < 80; i++) {                    /* it takes a few seconds to bind its port */
     if(ps5tm_dumpforge_running()) { snprintf(msg, n, "Dump Forge läuft."); return 0; }
+    if(cancelled && cancelled()) { snprintf(msg, n, "Abgebrochen."); return -1; }
     usleep(500 * 1000);
   }
   snprintf(msg, n, "Dump Forge hat sich nicht gemeldet.");
@@ -376,7 +398,7 @@ fetch_url(const char *url, size_t max, char **buf, size_t *len, char *why, size_
   r.hop_ok = hop_ok;
   r.connect_ms = 15000;
   r.idle_ms = 30000;
-  r.total_ms = 8 * 60 * 1000;
+  r.total_ms = 3 * 60 * 1000;                       /* as with Kraken Mount; three files at most, so under ten minutes in all */
   r.range_from = -1;
   r.range_to = -1;
   upd_res_t res;
@@ -399,6 +421,22 @@ sha_hex(const unsigned char *d, size_t n, char out[65]) {
   ps5tm_sha256_update(&s, d, n);
   ps5tm_sha256_final(&s, dg);
   ps5tm_sha256_hex(dg, out);
+}
+
+/* Older versions of the program in the app's folder are removed once a newer one is there (each is about 18 MB, and every question about the
+   state looks at all of them). */
+static void
+prune_old(const char *keep_name, const char *ver) {
+  DIR *d = opendir(DF_DIR);
+  if(!d) return;
+  struct dirent *e;
+  while((e = readdir(d))) {
+    char v[40];
+    if(!strcmp(e->d_name, keep_name) || elf_name_version(e->d_name, v, sizeof v) != 1 || !ver_newer(ver, v)) continue;
+    char p[300];
+    if(snprintf(p, sizeof p, "%s/%s", DF_DIR, e->d_name) < (int)sizeof p) unlink(p);
+  }
+  closedir(d);
 }
 
 /* The newest release's program from GitHub into the folder. 200 (also "already there"), else an HTTP-like status with a sentence. */
@@ -462,6 +500,7 @@ ps5tm_dumpforge_fetch(char *msg, size_t n) {
   snprintf(path, sizeof path, DF_DIR "/%s", name);
   int e = ps5tm_put_lib_file(path, (const unsigned char *)elf, elf_n);
   if(e) { snprintf(why, sizeof why, "Die Datei ließ sich nicht ablegen: %s", strerror(e)); goto done; }
+  prune_old(name, ver);
   PS5TM_INFO("dumpforge_fetched", "Dump Forge %s geladen (%zu Bytes, SHA-256 geprüft).", ver, elf_n);
   snprintf(msg, n, "Dump Forge %s ist geladen.", ver);
   rc = 200;

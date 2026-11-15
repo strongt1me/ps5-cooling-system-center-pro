@@ -5058,7 +5058,10 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     query_param(req->query, "id", id, sizeof(id));
     unsigned char *png = NULL;
     size_t len = 0;
-    if(strlen(id) != 9 || strncmp(id, "CUSA", 4) || ps4m_icon_png(id, &png, &len) != 0) {
+    int id_digits = strlen(id) == 9 && !strncmp(id, "CUSA", 4);
+    for(int i = 4; id_digits && i < 9; i++)
+      if(id[i] < '0' || id[i] > '9') id_digits = 0;
+    if(!id_digits || ps4m_icon_png(id, &png, &len) != 0) {
       ps5tm_http_send_error(fd, 404, "no_icon", "Kein Symbol vorhanden.");
       return;
     }

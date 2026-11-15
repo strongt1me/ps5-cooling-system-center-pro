@@ -75,6 +75,7 @@ struct Game
     // launch is refused until the app lets go (smphold.c: at once when a start fails, else after 30 s); GET /api/v1/library
     // "app_mounted", 14.11.2026
     bool app_mounted = false;
+    bool hold_paused = false; // its 30 s wait stands still (a game plays or a job of the app works)
     // Another mounter wants this title too ("Kraken Mount"): both write /user/app/<ID> and mount
     // /system_ex/app/<ID> (GET /api/v1/library: "conflicts", 14.11.2026); "" when none does
     std::string conflict_with;

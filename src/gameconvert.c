@@ -694,16 +694,33 @@ cv_thread(void *arg) {
 
 /* The format "fpkg": Dump Forge's program writes the debug FPKG straight to the target (under a name of its own, renamed when verified);
    this worker gives it the job, shows its stages as the steps of this page and stops it again when the person cancels. */
+static int
+cv_cancelled(void) {
+  return __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE);
+}
+
 static void *
 cv_run_fpkg(const cv_args_t *a) {
   char msg[400] = "", err[400] = "";
-  int started_here = !ps5tm_dumpforge_running();
+  /* "Started here" only when nothing of it was there: a Dump Forge that merely answers late is the person's own and is never ended by us. */
+  int started_here = ps5tm_dumpforge_probe() == 0;
   char dir[PATH_MAX];
   snprintf(dir, sizeof(dir), "%s", a->target);
   char *sl = strrchr(dir, '/');
   if(sl) *sl = 0;
   if(mkdir_p(dir) != 0) { cv_fail("Der Zielordner ließ sich nicht anlegen."); return NULL; }
-  if(ps5tm_dumpforge_start(msg, sizeof(msg)) != 0) { cv_fail("%s", msg); return NULL; }
+  if(ps5tm_dumpforge_start_c(msg, sizeof(msg), cv_cancelled) != 0) {
+    if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) {                          /* cancelled while Dump Forge was starting */
+      /* What this job sent to the loader must not run on unattended: it ends as soon as it answers (it does not take a quit before). */
+      if(started_here)
+        for(int i = 0; i < 120; i++) {
+          if(ps5tm_dumpforge_running()) { ps5tm_dumpforge_stop(0); break; }
+          usleep(500 * 1000);
+        }
+      cv_state(CV_CANCELLED);
+    } else cv_fail("%s", msg);
+    return NULL;
+  }
   int job = 0;
   if(ps5tm_dumpforge_job_start(a->source, a->target, fpkg_level(a->op), !a->quick, &job, err, sizeof(err)) != 0) {
     cv_fail("%s", err);
@@ -711,7 +728,7 @@ cv_run_fpkg(const cv_args_t *a) {
     return NULL;
   }
   PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s.", a->title_id, job, fpkg_level(a->op));
-  int cancel_sent = 0, lost = 0, final = -1, lost_out = 0, hung = 0;
+  int cancel_sent = 0, lost = 0, final = -1, lost_out = 0, hung = 0, too_big = 0, list_big = 0;
   uint64_t last_ms = ps5tm_mono_ms(), last_done = 0, cancel_first_ms = 0, cancel_last_ms = 0;
   ps5tm_dumpforge_job_t jb;
   for(;;) {
@@ -725,7 +742,11 @@ cv_run_fpkg(const cv_args_t *a) {
     }
     usleep(1000 * 1000);
     int st = ps5tm_dumpforge_job_poll(job, &jb);
-    if(st == -2) continue;                                  /* alive, but the list of its jobs is too long to read: not a silence */
+    if(st == -2) {                                          /* alive, but the list of its jobs is too long to read: not a silence, but not for ever */
+      if(++too_big >= 600) { list_big = 1; final = CV_FAILED; break; }
+      continue;
+    }
+    too_big = 0;
     if(st < 0) {
       if(++lost >= 40) { lost_out = 1; final = CV_FAILED; break; }
       continue;
@@ -755,7 +776,7 @@ cv_run_fpkg(const cv_args_t *a) {
     if(st == 2) { final = CV_FAILED; break; }
   }
   /* Dump Forge went silent and the job was not asked to stop yet: ask once, so that it does not write on without anyone watching. */
-  if(lost_out && !cancel_sent) ps5tm_dumpforge_job_cancel(job);
+  if((lost_out || list_big) && !cancel_sent) ps5tm_dumpforge_job_cancel(job);
   const int cancelled = cancel_sent || __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE);
   if(final == CV_DONE) {
     pthread_mutex_lock(&g_lock);
@@ -779,7 +800,8 @@ cv_run_fpkg(const cv_args_t *a) {
     cv_state(CV_CANCELLED);
     PS5TM_INFO("game_convert_cancelled", "Debug-FPKG von %s abgebrochen.", a->title_id);
   } else if(final == CV_FAILED) {
-    if(lost_out) cv_fail("Dump Forge antwortet nicht mehr.");
+    if(list_big) cv_fail("Die Auftragsliste von Dump Forge ist zu groß zum Lesen; der Auftrag wurde abgebrochen.");
+    else if(lost_out) cv_fail("Dump Forge antwortet nicht mehr.");
     else if(jb.error[0]) cv_fail("Dump Forge: %s", jb.error);
     PS5TM_WARN("game_convert_failed", "Debug-FPKG von %s gescheitert: %s", a->title_id, lost_out ? "Dump Forge antwortet nicht mehr." : jb.error);
   }

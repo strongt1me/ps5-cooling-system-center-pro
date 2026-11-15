@@ -131,6 +131,7 @@ static struct {
   unsigned seq;                                  /* which job this is: counts up with every start, so the queue can tell its own */
 } g_job;
 static int g_cancel;
+static int g_uninstalling;                 /* an uninstall call is on its way (it uses the same port as an installation) */
 static unsigned g_seq;
 static unsigned g_job_seq;
 
@@ -1170,14 +1171,17 @@ uninstall_op(uint32_t op, const char *title_id, int *res_pat, int *res_addcont, 
   *res_pat = *res_addcont = 0;
   why[0] = 0;
   pthread_mutex_lock(&g_lock);
-  int busy = active_locked();
-  if(!busy) __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);   /* a cancel of an earlier installation is not this one's */
+  int busy = active_locked() || g_uninstalling;
+  if(!busy) { __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE); g_uninstalling = 1; }   /* a cancel of an earlier installation is not this one's */
   pthread_mutex_unlock(&g_lock);
-  if(busy) { snprintf(why, why_len, "Es wird gerade ein Paket installiert."); return PKGI_E_UNAVAILABLE; }
+  if(busy) { snprintf(why, why_len, "Es wird gerade ein Paket installiert oder entfernt."); return PKGI_E_UNAVAILABLE; }
 
   helper_t h;
   int rc = helper_start(&h, why, why_len, 0);
-  if(rc != 0) return rc;                                       /* helper_start has let it go already */
+  if(rc != 0) {                                                /* helper_start has let it go already */
+    pthread_mutex_lock(&g_lock); g_uninstalling = 0; pthread_mutex_unlock(&g_lock);
+    return rc;
+  }
   pkgi_request_t req;
   pkgi_response_t rsp;
   memset(&req, 0, sizeof(req));
@@ -1197,6 +1201,7 @@ uninstall_op(uint32_t op, const char *title_id, int *res_pat, int *res_addcont, 
   }
   drain_loader(&h);
   helper_close(&h);
+  pthread_mutex_lock(&g_lock); g_uninstalling = 0; pthread_mutex_unlock(&g_lock);
   return rc;
 }
 
@@ -1728,10 +1733,10 @@ start_impl(const char *id, char *err, size_t err_len, int *transient, unsigned *
   free(e);
 
   pthread_mutex_lock(&g_lock);
-  if(active_locked()) {
+  if(active_locked() || g_uninstalling) {
     pthread_mutex_unlock(&g_lock);
     free(a);
-    snprintf(err, err_len, "Es läuft schon eine Installation.");
+    snprintf(err, err_len, "Es läuft schon eine Installation oder eine Deinstallation.");
     if(transient) *transient = 1;
     return 409;
   }

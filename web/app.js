@@ -6332,7 +6332,7 @@
     btn.disabled = true;
     btn.textContent = "Wird geladen …";
     try {
-      const r = await api("/api/v1/dumpforge", { method: "POST", timeoutMs: 300000, body: JSON.stringify({ action: "fetch" }) });
+      const r = await api("/api/v1/dumpforge", { method: "POST", timeoutMs: 620000, body: JSON.stringify({ action: "fetch" }) });
       if (r.message) toast(r.message);
     } catch (e) { toast(e.message, "error"); }
     if (cp.view !== "cvplan" || !cv.plan) return;
@@ -6915,7 +6915,8 @@
   const gmHoldWatch = (on) => {
     if (on && !gmHoldTimer) gmHoldTimer = setInterval(() => {
       if (document.hidden || state.page !== "games" || pt.tab !== "lib") return;
-      if (gm.live && ++gmHoldTick % 12) return;              /* ein Spiel läuft: auch der Wächter wartet, einmal pro Minute genügt */
+      /* ein Spiel läuft oder ein Auftrag der App arbeitet: auch der Wächter wartet, einmal pro Minute genügt */
+      if ((gm.live || gm.list.some((x) => x.hold_paused)) && ++gmHoldTick % 12) return;
       loadGames(true);
     }, 5000);
     else if (!on && gmHoldTimer) { clearInterval(gmHoldTimer); gmHoldTimer = 0; }
@@ -7799,16 +7800,20 @@
     $$("#p4m-skip img.p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
   };
 
+  let p4mSeq = 0, p4mBusy = 0;                      /* as with the list of FPKGMount: an older answer is dropped, the timer does not stack */
   const loadP4m = async () => {
+    const my = ++p4mSeq;
+    p4mBusy++;
     try {
       const r = await api("/api/v1/ps4mount");
+      if (my !== p4mSeq) return;
       /* busy: the console answers from its last list while PS4Mount works; without one the old list stays on the page */
       if (r.busy && p4m.data && !(r.games && r.games.length)) p4m.data = Object.assign({}, p4m.data, { busy: true });
       else p4m.data = r;
       p4mRender();
     } catch (e) {
-      txt("#p4m-sub", e.message);
-    }
+      if (my === p4mSeq) txt("#p4m-sub", e.message);
+    } finally { p4mBusy--; }
   };
 
   const loadP4mLog = async () => {
@@ -7901,20 +7906,26 @@
     } else if (!k) $("#fp-log").textContent = "";
   };
 
+  /* An answer that comes after a newer request is dropped (a slow console must not put the switch back after "off"), and the timer
+     does not stack requests while one is still on the way. */
+  let fpSeq = 0, fpBusy = 0;
   const loadFp = async () => {
-    try { fp.data = await api("/api/v1/kraken"); fpRender(); }
-    catch (e) { txt("#fp-sub", e.message); }
+    const my = ++fpSeq;
+    fpBusy++;
+    try { const d = await api("/api/v1/kraken"); if (my === fpSeq) { fp.data = d; fpRender(); } }
+    catch (e) { if (my === fpSeq) txt("#fp-sub", e.message); }
+    finally { fpBusy--; }
   };
 
   const fpSync = () => {
     const run = state.page === "games" && pt.tab === "fpkg" && !document.hidden;
-    if (run && !fp.timer) fp.timer = setInterval(loadFp, 5000);
+    if (run && !fp.timer) fp.timer = setInterval(() => { if (!fpBusy) loadFp(); }, 5000);
     else if (!run && fp.timer) { clearInterval(fp.timer); fp.timer = 0; }
   };
 
   const p4mSync = () => {
     const run = state.page === "games" && pt.tab === "p4m" && !document.hidden;
-    if (run && !p4m.timer) p4m.timer = setInterval(loadP4m, 5000);
+    if (run && !p4m.timer) p4m.timer = setInterval(() => { if (!p4mBusy) loadP4m(); }, 5000);
     else if (!run && p4m.timer) { clearInterval(p4m.timer); p4m.timer = 0; }
   };
 

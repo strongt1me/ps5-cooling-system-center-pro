@@ -862,7 +862,7 @@ int           ps5tm_kraken_icon(const char *title_id, unsigned char **png, size_
 
 /* The games Kraken Mount lists (for the check of titles two mounters want, src/mounters.c): a copy kept for 10 s, nothing while it does
    not run. kind is "pkg" (a .pkg file) or "folder" (a game folder: Kraken Mount takes those too). Returns how many were filled in. */
-#define PS5TM_KRAKEN_MAX 64
+#define PS5TM_KRAKEN_MAX 256
 typedef struct {
   char title_id[12];
   char name[96];
@@ -898,6 +898,8 @@ int           ps5tm_dumpforge_installed(char *version, size_t n);
 void          ps5tm_tile_keep_away(const char *tile_id, const char *name, const char *const *markers, int n_markers);
 int           ps5tm_dumpforge_running(void);
 int           ps5tm_dumpforge_start(char *msg, size_t n);              /* 0 = running, -1 with a sentence */
+int           ps5tm_dumpforge_start_c(char *msg, size_t n, int (*cancelled)(void)); /* as the start; the wait ends when cancelled() says 1 */
+int           ps5tm_dumpforge_probe(void);                              /* 1 = runs, 0 = not there, -1 = listens but does not answer in time */
 int           ps5tm_dumpforge_stop(int force);                          /* 0 = ended (or not running), 1 = left running: it is busy and force is 0 */
 int           ps5tm_dumpforge_fetch(char *msg, size_t n);              /* 200 = there, else an HTTP-like status with a sentence */
 int           ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int *job, char *err, size_t n);

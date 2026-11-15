@@ -2,6 +2,20 @@
 
 ## Unveröffentlicht (nach v1.84.0)
 
+### Zweite Prüfung der ganzen App (15.11.2026): 23 Funde, 21 bestätigt, alle 21 behoben
+- Start eines Spiels: Das Aushängen gehaltener Spiele vor dem Start dauert höchstens 20 s, damit der 30-s-Startschutz nicht abläuft, während SMP hängt.
+- FPKG-Konvertierung: Ist die Auftragsliste von Dump Forge zu groß zum Lesen, endet der Auftrag nach 10 Minuten statt nie. Verbindungen zu Kraken Mount und Dump Forge haben beim Aufbau eine Frist (höchstens 5 s).
+- Kraken Mount: `config.toml` und `version.txt` werden über eine Zwischendatei geschrieben; eine leere Konfiguration wird neu angelegt.
+- Warteschlange: Ein Eintrag, der zwischen Auswahl und Start entfernt wird, startet keine Konvertierung mehr.
+- Browser: FPKGMount und PS4Mount werfen ältere Antworten weg und stapeln keine Abfragen mehr.
+- PS4Mount: „Update wählen“ und die Symbol-Route prüfen die Titel-ID streng.
+- Dump Forge: „antwortet nicht“ gilt nicht mehr als „läuft nicht“ (kein zweites Einspielen, kein Beenden eines selbst gestarteten Programms); „Abbrechen“ wirkt auch während des Starts; alte Fassungen werden nach dem Laden einer neueren gelöscht; die Ladefrist ist 3 Minuten je Datei, der Browser wartet 10 Minuten statt 5.
+- Kraken Mount: Die Spieleliste der Seite füttert auch den Zwischenspeicher der Bibliothek (eine Abfrage statt drei); die Warnliste für doppelt eingehängte Titel fasst 256 statt 64 Titel und meldet im Protokoll, wenn sie trotzdem abschneidet.
+- Wächter: Ein Titel, den man während des Aushängens neu einhängt, bleibt in der Haltliste; ein Fehler beim Schreiben der Haltdatei steht im Protokoll. Der Hinweisstreifen fragt während eines Auftrags der App nur noch einmal pro Minute (Browser und Vollbild, neues Feld `hold_paused`).
+- Pakete: Eine Kachel-Deinstallation und eine Paket-Installation schließen sich gegenseitig aus (gleicher Anschluss).
+- Downloads in den Speicher verdoppeln den Puffer, statt bei jedem Stück zu kopieren.
+- Vollbild-App: „Laden“ von FPKGMount/Dump Forge blockiert den Werkzeugfaden nicht mehr (eigener Faden), und die Abfragen von FPKGMount laufen nacheinander, damit eine ältere Antwort keine neuere überschreibt.
+
 ### Browser: FPKGMount ohne doppelte Knöpfe (15.11.2026)
 - Die Knöpfe „Kraken Mount starten“ und „Beenden“ in der Karte „Programm“ sind entfernt: Sie schickten dasselbe wie der Schalter „Einschalten“ oben. Es bleiben der Schalter, „Neue Fassung von GitHub laden“ und „Seite von Kraken Mount“. Handbuch (7 Sprachen) und Wörterbücher angepasst; die Vollbild-App bleibt unverändert (am Controller gibt es keinen Schalter).
 - „Neue Fassung von GitHub laden“: Das Ergebnis („schon die neueste Fassung“, „neu geladen“ oder der Fehler) bleibt jetzt mit der Uhrzeit der Prüfung auf der Karte „Programm“ stehen; die kurze Einblendung allein wurde übersehen.

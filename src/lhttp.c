@@ -1,7 +1,9 @@
 /* See lhttp.h. */
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +31,22 @@ ps5tm_lhttp(int port, const char *method, const char *path, const char *content_
   sa.sin_family = AF_INET;
   sa.sin_port = htons((unsigned short)port);
   sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  if(connect(fd, (struct sockaddr *)&sa, sizeof sa) != 0) { close(fd); return -1; }
+  /* connect with a time limit (a program that no longer accepts, full backlog, must not hold the caller for the TCP timeout): at most 5 s,
+     or less when the caller's time is shorter. */
+  {
+    int fl = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+    int rc = connect(fd, (struct sockaddr *)&sa, sizeof sa);
+    if(rc != 0) {
+      if(errno != EINPROGRESS) { close(fd); return -1; }
+      struct pollfd pf = { fd, POLLOUT, 0 };
+      int cms = timeout_ms < 5000 ? timeout_ms : 5000;
+      int soerr = 0;
+      socklen_t sl = sizeof soerr;
+      if(poll(&pf, 1, cms > 0 ? cms : 1) != 1 || getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &sl) != 0 || soerr != 0) { close(fd); return -1; }
+    }
+    fcntl(fd, F_SETFL, fl);
+  }
   char head[640];
   int hn = snprintf(head, sizeof head, "%s %s HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n%s%s%sContent-Length: %zu\r\n\r\n", method, path,
                     content_type ? "Content-Type: " : "", content_type ? content_type : "", content_type ? "\r\n" : "", body_len);

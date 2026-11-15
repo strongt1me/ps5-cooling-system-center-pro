@@ -91,6 +91,10 @@ start_marked(const cq_item_t *it, char *err, size_t err_len) {
   cq_item_t *me = find_locked(it->qid);
   if(me) me->starting = 1;
   pthread_mutex_unlock(&g_lock);
+  if(!me) {                                           /* removed in the meantime: no job for an entry that is on no list (audit 15.11.2026) */
+    snprintf(err, err_len, "Der Eintrag wurde entfernt.");
+    return 410;
+  }
   int rc = ps5tm_gameconvert_start(it->id, it->op, it->ampr, it->mount, it->mode, it->quick, it->name_tpl, it->qid, err, err_len);
   if(rc != 200) {
     pthread_mutex_lock(&g_lock);
@@ -118,6 +122,7 @@ runner(void *arg) {
       break;
     }
     g_it[idx].msg[0] = 0;                             /* the entry stays "waiting" until its job has really started */
+    g_it[idx].starting = 1;                           /* marked under the same lock as the choice: no removal between choosing and starting */
     it = g_it[idx];
     pthread_mutex_unlock(&g_lock);
 

@@ -1583,6 +1583,8 @@ ps5tm_library_json(void) {
   /* Asked before the library's lock is taken: ps5tm_smp_can may have ShadowMountPlus's list read again (up to 5 s of HTTP), and everything
      that needs the lock would wait for that. */
   const int smp_can_remount = ps5tm_smp_can("mount_game") && ps5tm_smp_can("unmount_game");
+  /* Also before the lock: whether a job of the app works asks the job modules (and ShadowMountPlus's storage status over HTTP). */
+  const int hold_paused = ps5tm_smphold_count() > 0 && ps5tm_smphold_paused();
   pthread_mutex_lock(&g_lock);
 
   cJSON *root = cJSON_CreateObject();
@@ -1678,7 +1680,11 @@ ps5tm_library_json(void) {
     /* "mounted" only says that /system_ex/app/<id> holds a game: ShadowMountPlus's own set-up and Kraken Mount's registration do
        that too, and neither blocks another start. The place that does is taken by what the app mounted itself and nobody started
        (smphold.c); only that is worth a warning (console test 14.11.2026). */
-    if(g->smp) cJSON_AddBoolToObject(e, "app_mounted", g->smp_mounted && ps5tm_smphold_is_held(g->title_id));
+    if(g->smp) {
+      const int held = g->smp_mounted && ps5tm_smphold_is_held(g->title_id);
+      cJSON_AddBoolToObject(e, "app_mounted", held);
+      if(held && hold_paused) cJSON_AddBoolToObject(e, "hold_paused", 1);   /* its 30 s wait for a job: the pages ask rarely meanwhile */
+    }
     /* Taken out and put back through ShadowMountPlus (smpremount.c): its folders and images, not installed packages. */
     cJSON_AddBoolToObject(e, "can_remount", g->smp && strcmp(g->format, "pkg") && smp_can_remount);
     if(g->ps4mount) cJSON_AddBoolToObject(e, "ps4mount", 1);

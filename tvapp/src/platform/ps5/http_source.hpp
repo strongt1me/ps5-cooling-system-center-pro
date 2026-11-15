@@ -94,6 +94,9 @@ class HttpSource final : public Source
     // Plans and starts of the game tools: a plan measures a whole game and may take a minute, so it
     // has a thread of its own and the temperatures keep coming meanwhile.
     void run_tools();
+    // The download of FPKGMount / Dump Forge (minutes): a thread of its own, so that plans, checks and
+    // starts of the tool thread do not wait behind it (audit 15.11.2026).
+    void run_engine_fetch(const std::string &id, const std::string &body);
 
   private:
     struct Request
@@ -165,6 +168,7 @@ class HttpSource final : public Source
     void push(Request request);
     void handle_tool(const ToolRequest &request);
     void handle_engine(const ToolRequest &request); // FPKGMount / Dump Forge (a tool request of kind 3)
+    void handle_engine_now(const ToolRequest &request);
     void engine_post(const std::string &which, const std::string &json);
     void notice(Notice::Kind kind, std::string title, std::string body = {});
     void set_link(Link link, std::string detail);
@@ -231,6 +235,8 @@ class HttpSource final : public Source
     // ShadowMountPlus keeps reporting its last job for ever: one that ended is shown only when it
     // ran in this session.
     std::atomic<std::int64_t> storage_seen_{0};
+    std::atomic<bool> engine_fetching_{false}; // a download of FPKGMount / Dump Forge is on its way
+    std::mutex kraken_poll_mutex_;              // one question about FPKGMount at a time: the newer answer wins
     std::atomic<bool> jobs_wanted_{false}; // a tool started: ask for the jobs at once
     bool leaving_for_delete_ = false;      // the app ends itself for a delete (worker thread only)
     bool leaving_for_storage_ = false;     // ... or for a move or an unpack of ShadowMountPlus

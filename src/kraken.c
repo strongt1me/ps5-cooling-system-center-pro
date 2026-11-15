@@ -129,6 +129,8 @@ valid_tid(const char *t) {
   return 1;
 }
 
+static int store_games(const cJSON *k, uint64_t now);
+
 struct cJSON *
 ps5tm_kraken_state(void) {
   cJSON *o = cJSON_CreateObject();
@@ -148,6 +150,7 @@ ps5tm_kraken_state(void) {
   cJSON *k = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
   free(body);
   if(cJSON_IsObject(k)) {
+    store_games(k, ps5tm_mono_ms());                     /* the games of this very answer: the conflict list below and the library need no second ask */
     cJSON_AddBoolToObject(o, "running", 1);
     cJSON_AddItemToObject(o, "kraken", k);
     /* its settings: the page names the folders it searches (scanpath; empty = its own defaults) */
@@ -202,6 +205,42 @@ static ps5tm_kraken_game_t g_games[PS5TM_KRAKEN_MAX];
 static int                 g_games_n;
 static uint64_t            g_games_ms;
 
+/* The games out of a parsed /api/state into the small copy (the page's own ask hands it over, so the library does not ask Kraken Mount again
+   a moment later). 1 when stored. */
+static int
+store_games(const cJSON *k, uint64_t now) {
+  const cJSON *games = k ? cJSON_GetObjectItem(k, "games") : NULL, *g;
+  ps5tm_kraken_game_t *tmp = calloc(PS5TM_KRAKEN_MAX, sizeof(*tmp));     /* 80 KB: not on a thread's stack */
+  if(!tmp) return 0;
+  int n = 0;
+  cJSON_ArrayForEach(g, games) {
+    if(n >= PS5TM_KRAKEN_MAX) {
+      static int warned;                               /* once: the page asks every 5 s */
+      if(!warned) {
+        warned = 1;
+        PS5TM_WARN("kraken_games", "Kraken Mount meldet mehr als %d Spiele; die weiteren fehlen in der Warnliste für doppelt eingehängte Titel.", PS5TM_KRAKEN_MAX);
+      }
+      break;
+    }
+    const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *nm = cJSON_GetObjectItem(g, "title_name"),
+                *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind");
+    if(!cJSON_IsString(t) || !valid_tid(t->valuestring)) continue;
+    ps5tm_kraken_game_t *e = &tmp[n++];
+    memset(e, 0, sizeof(*e));
+    snprintf(e->title_id, sizeof(e->title_id), "%s", t->valuestring);
+    snprintf(e->name, sizeof(e->name), "%s", cJSON_IsString(nm) ? nm->valuestring : "");
+    snprintf(e->path, sizeof(e->path), "%s", cJSON_IsString(p) ? p->valuestring : "");
+    snprintf(e->kind, sizeof(e->kind), "%s", cJSON_IsString(kd) && !strcmp(kd->valuestring, "pkg") ? "pkg" : "folder");
+  }
+  pthread_mutex_lock(&g_lock);
+  memcpy(g_games, tmp, sizeof(g_games[0]) * (size_t)n);
+  g_games_n = n;
+  g_games_ms = now;
+  pthread_mutex_unlock(&g_lock);
+  free(tmp);
+  return 1;
+}
+
 int
 ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max) {
   pthread_mutex_lock(&g_lock);
@@ -214,36 +253,8 @@ ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max) {
     int st = kr_http("GET", "/api/state", NULL, 0, 1500, &body, &bn);
     cJSON *k = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
     free(body);
-    const cJSON *games = k ? cJSON_GetObjectItem(k, "games") : NULL, *g;
-    ps5tm_kraken_game_t *tmp = calloc(PS5TM_KRAKEN_MAX, sizeof(*tmp));     /* 20 KB: not on a thread's stack */
-    int n = 0;
-    if(!tmp) {
-      cJSON_Delete(k);
-      pthread_mutex_lock(&g_lock);
-      int m = g_games_n < max ? g_games_n : max;
-      memcpy(out, g_games, sizeof(out[0]) * (size_t)m);
-      pthread_mutex_unlock(&g_lock);
-      return m;
-    }
-    cJSON_ArrayForEach(g, games) {
-      if(n >= PS5TM_KRAKEN_MAX) break;
-      const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *nm = cJSON_GetObjectItem(g, "title_name"),
-                  *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind");
-      if(!cJSON_IsString(t) || !valid_tid(t->valuestring)) continue;
-      ps5tm_kraken_game_t *e = &tmp[n++];
-      memset(e, 0, sizeof(*e));
-      snprintf(e->title_id, sizeof(e->title_id), "%s", t->valuestring);
-      snprintf(e->name, sizeof(e->name), "%s", cJSON_IsString(nm) ? nm->valuestring : "");
-      snprintf(e->path, sizeof(e->path), "%s", cJSON_IsString(p) ? p->valuestring : "");
-      snprintf(e->kind, sizeof(e->kind), "%s", cJSON_IsString(kd) && !strcmp(kd->valuestring, "pkg") ? "pkg" : "folder");
-    }
+    store_games(k, now);                               /* without a parsed state (switched off): the list is empty, the next ask waits 5 s */
     cJSON_Delete(k);
-    pthread_mutex_lock(&g_lock);
-    memcpy(g_games, tmp, sizeof(g_games[0]) * (size_t)n);
-    g_games_n = n;
-    g_games_ms = now;
-    pthread_mutex_unlock(&g_lock);
-    free(tmp);
   }
   pthread_mutex_lock(&g_lock);
   int n = g_games_n < max ? g_games_n : max;
@@ -298,7 +309,7 @@ static int make_dir(const char *p);
 static void
 seed_config(void) {
   struct stat st;
-  if(stat(KR_CONFIG, &st) == 0) return;
+  if(stat(KR_CONFIG, &st) == 0 && st.st_size > 0) return; /* an empty one is the rest of an interrupted write: written anew */
   make_dir(PS5TM_KRAKEN_DATA);
   make_dir("/data/" KR_FPKG_FOLDER);
   char buf[900];
@@ -307,10 +318,19 @@ seed_config(void) {
   for(int i = 0; i < 2 && o < sizeof buf; i++) o += (size_t)snprintf(buf + o, sizeof buf - o, ", \"/mnt/ext%d/" KR_FPKG_FOLDER "\"", i);
   if(o < sizeof buf) o += (size_t)snprintf(buf + o, sizeof buf - o, "]\n");
   if(o >= sizeof buf) return;
-  FILE *f = fopen(KR_CONFIG, "w");
+  /* Written to a file of its own and renamed, so that a full disk or a power cut never leaves half a config behind (audit 15.11.2026). */
+  const char *tmp = KR_CONFIG ".tmp";
+  FILE *f = fopen(tmp, "w");
   if(!f) { PS5TM_WARN("kraken_config", "%s ließ sich nicht anlegen: %s", KR_CONFIG, strerror(errno)); return; }
-  fputs(buf, f);
-  fclose(f);
+  int ok = fputs(buf, f) >= 0;
+  ok = (fflush(f) == 0) && ok;
+  if(ok) fsync(fileno(f));
+  ok = (fclose(f) == 0) && ok;
+  if(!ok || rename(tmp, KR_CONFIG) != 0) {
+    PS5TM_WARN("kraken_config", "%s ließ sich nicht schreiben: %s", KR_CONFIG, strerror(errno));
+    unlink(tmp);
+    return;
+  }
   PS5TM_INFO("kraken_config", "Suchordner für Kraken Mount angelegt: /data/%s und %s auf den Laufwerken.", KR_FPKG_FOLDER, KR_FPKG_FOLDER);
 }
 
@@ -507,9 +527,11 @@ fetch_release(char *msg, size_t n) {
   if(make_dir(KR_DIR) != 0) { snprintf(why, sizeof why, "Der Ordner %s ließ sich nicht anlegen: %s", KR_DIR, strerror(errno)); goto done; }
   int e = ps5tm_put_lib_file(KR_ELF, (const unsigned char *)elf, elf_n);
   if(e) { snprintf(why, sizeof why, "Die Datei ließ sich nicht ablegen: %s", strerror(e)); goto done; }
-  FILE *vf = fopen(KR_VER, "w");
-  if(!vf || fprintf(vf, "%s\n", ver) < 0) { if(vf) fclose(vf); remove(KR_ELF); snprintf(why, sizeof why, "Die Versionsdatei ließ sich nicht schreiben."); goto done; }
-  fclose(vf);
+  /* the version file is written to a file of its own and renamed (a start at the same moment never reads half of it) */
+  FILE *vf = fopen(KR_VER ".tmp", "w");
+  int vok = vf && fprintf(vf, "%s\n", ver) >= 0;
+  if(vf && fclose(vf) != 0) vok = 0;
+  if(!vok || rename(KR_VER ".tmp", KR_VER) != 0) { unlink(KR_VER ".tmp"); remove(KR_ELF); snprintf(why, sizeof why, "Die Versionsdatei ließ sich nicht schreiben."); goto done; }
   PS5TM_INFO("kraken_fetched", "Kraken Mount %s geladen (%zu Bytes, SHA-256 geprüft).", ver, elf_n);
   snprintf(msg, n, "Kraken Mount %s ist geladen. Der nächste Start nimmt diese Fassung.", ver);
   rc = 200;

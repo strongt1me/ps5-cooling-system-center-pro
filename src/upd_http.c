@@ -563,15 +563,22 @@ upd_http(const upd_req_t *req, upd_res_t *res) {
 
 /* ---------------------------------------------------------------- into a buffer */
 
-typedef struct { char *buf; size_t len, max; int over; } membuf_t;
+typedef struct { char *buf; size_t len, max, cap; int over; } membuf_t;
 
 static int
 mem_body(void *ctx, const void *data, size_t n) {
   membuf_t *m = ctx;
   if(n > m->max - m->len) { m->over = 1; return 1; }
-  char *nb = realloc(m->buf, m->len + n + 1);
-  if(!nb) return 1;
-  m->buf = nb;
+  /* the buffer doubles (a download of 40 MiB in pieces of a few KiB would copy itself a thousand times otherwise) */
+  if(m->len + n + 1 > m->cap) {
+    size_t cap = m->cap ? m->cap : 65536;
+    while(cap < m->len + n + 1) cap *= 2;
+    if(cap > m->max + 1) cap = m->max + 1;
+    char *nb = realloc(m->buf, cap);
+    if(!nb) return 1;
+    m->buf = nb;
+    m->cap = cap;
+  }
   memcpy(m->buf + m->len, data, n);
   m->len += n;
   m->buf[m->len] = 0;
@@ -582,7 +589,7 @@ int
 upd_http_fetch(const upd_req_t *req, size_t max, char **out, size_t *len, upd_res_t *res) {
   *out = NULL;
   *len = 0;
-  membuf_t m = { NULL, 0, max, 0 };
+  membuf_t m = { NULL, 0, max, 0, 0 };
   upd_req_t r = *req;
   r.on_body = mem_body;
   r.ctx = &m;
