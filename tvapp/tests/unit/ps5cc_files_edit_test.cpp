@@ -4,6 +4,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "ps5cc/files_edit.hpp"
+#include "ps5cc/pages.hpp"
+#include "ui/glyphs.hpp"
+#include "ui/theme.hpp"
 
 #include <gtest/gtest.h>
 
@@ -124,6 +127,39 @@ TEST(FilesEdit, MarksOnlyWhatChanged)
     // a line taken out marks nothing that is left
     EXPECT_EQ(edit_marks({"a", "c", "d"}, before), (std::vector<bool>{false, false, false}));
     EXPECT_EQ(edit_marks({}, before), std::vector<bool>{});
+}
+
+// The page itself (not only the helpers): an answer for a file the page did not ask for must not open the editor or the viewer, and the
+// page stays usable (no overlay, its hints fit the hint row) whatever the data and the buttons do.
+TEST(FilesPage, AnAnswerNobodyAskedForOpensNothing)
+{
+    const std::unique_ptr<Page> page = make_files_page();
+    ASSERT_FALSE(hui::ui::themes().empty());
+    page->init(hui::ui::themes()[0]);
+    Snapshot data;
+    std::uint64_t seen = 0;
+    source().fetch(data, seen);
+    page->absorb(data);
+    page->enter();
+    ASSERT_FALSE(page->modal());
+    data.fs_view.seq = 42;
+    data.fs_view.path = "/data/not-asked-for.txt";
+    data.fs_view.text = "secret\n";
+    page->absorb(data);
+    EXPECT_FALSE(page->modal());
+    hui::ui::Hint hints[8];
+    EXPECT_LE(page->hints(hints), 4);
+    // a few frames and buttons do not change that (the selection and the editor are opened from the list, not by a stray answer)
+    hui::ui::Feedback feedback;
+    for (int i = 0; i < 20; ++i)
+    {
+        hui::InputFrame input;
+        input.pressed = input.held = hui::action_bit(hui::Action::back);
+        page->handle(input, feedback);
+        page->update(0.05f);
+    }
+    EXPECT_FALSE(page->modal());
+    EXPECT_LE(page->hints(hints), 4);
 }
 
 } // namespace

@@ -403,9 +403,13 @@ class KrakenPage final : public Page
     std::string roots_text() const
     {
         if (state_.scanpaths.empty())
-            return "Suchordner (Grundeinstellung): /data/homebrew, /data/etaHEN/games, homebrew "
-                   "und "
-                   "etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks.";
+        {
+            // Not running: its setting is not known, the app writes the folder FPKG-Games at the first start.
+            // Running with an empty list: its own default.
+            if (!state_.running)
+                return "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner FPKG-Games ein: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk.";
+            return "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege FPKG-Spiele besser in den Ordner FPKG-Games (/data/FPKG-Games oder FPKG-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner ein.";
+        }
         // the folders the app writes into its config (kraken.c seed_config)
         std::vector<std::string> own = {"/data/FPKG-Games"};
         for (int i = 0; i < 8; ++i)

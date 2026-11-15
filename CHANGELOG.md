@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.85.1 – 15.11.2026
+
+### FPKGMount: richtiger Suchordner in der Anzeige
+- Die Zeile „Suchordner“ nennt nicht mehr die Grundeinstellung von Kraken Mount (`/data/homebrew`, `/data/etaHEN/games` …), wenn Kraken Mount ausgeschaltet ist und die App seine Einstellung gar nicht kennt: Dort steht jetzt der Ordner, den die App beim ersten Start einträgt (`/data/FPKG-Games` und `FPKG-Games` auf jedem USB- und M.2-Laufwerk). Läuft Kraken Mount mit leerer Einstellung, nennt die Zeile seine Grundeinstellung und verweist auf `FPKG-Games`, weil ShadowMountPlus die anderen Ordner ebenfalls durchsucht. Browser-App und Vollbild-App, mit Übersetzungen in 6 Sprachen.
+- Vollbild-App: Ein Test fährt die Dateien-Seite selbst (eine Antwort für eine nicht geöffnete Datei öffnet weder Editor noch Betrachter).
+
 ## v1.85.0 – 15.11.2026
 
 ### Zweite Prüfung der ganzen App (15.11.2026): 23 Funde, 21 bestätigt, alle 21 behoben
