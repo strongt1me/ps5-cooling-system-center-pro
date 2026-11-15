@@ -401,7 +401,7 @@ cmp_ver(const void *pa, const void *pb) {
 /* All versions: the files of the folder AMPR_EMU and those built into the app that are not in the folder yet, newest first.
    The caller frees *out. */
 static size_t
-list_versions(const al_kind_t *k, al_ver_t **out) {
+list_versions_all(const al_kind_t *k, al_ver_t **out) {
   *out = NULL;
   store_ready(k);
   size_t n = 0, cap = 16 + *k->nblobs;
@@ -439,6 +439,91 @@ list_versions(const al_kind_t *k, al_ver_t **out) {
   if(n) qsort(v, n, sizeof(*v), cmp_ver);
   *out = v;
   return n;
+}
+
+/* What the person is offered: of the builds of ampr-emu-ng only the two newest versions (15.11.2026, wish of the user: a newer one comes on top, the
+   oldest drops out). The list is sorted, the fork first, newest first. */
+static size_t
+list_versions(const al_kind_t *k, al_ver_t **out) {
+  size_t n = list_versions_all(k, out);
+  if(k != &K_AMPR || !n) return n;
+  al_ver_t *v = *out;
+  size_t w = 0;
+  int distinct = 0;
+  char last[sizeof(v[0].version)] = "";
+  for(size_t i = 0; i < n; i++) {
+    if(v[i].ng && v[i].valid) {                  /* a broken file takes no place of a good version */
+      if(strcmp(v[i].version, last)) { distinct++; snprintf(last, sizeof(last), "%s", v[i].version); }
+      if(distinct > 2) continue;
+    }
+    if(w != i) v[w] = v[i];
+    w++;
+  }
+  return w;
+}
+
+/* Names of the ampr-emu-ng files the app put into the folder itself (fetched from GitHub): only those are deleted when a version drops out. */
+#define NG_LEDGER PS5TM_DATA_DIR "/AMPR_EMU/.fetched"
+
+int
+ps5tm_amprlib_ng_note(const char *name) {
+  FILE *f = fopen(NG_LEDGER, "a");
+  if(!f) return errno ? errno : EIO;
+  int rc = fprintf(f, "%s\n", name) < 0 ? EIO : 0;
+  if(fclose(f) != 0) rc = EIO;
+  return rc;
+}
+
+static int
+ng_ledger_has(const char *name) {
+  uint8_t *d = NULL;
+  size_t n = 0;
+  if(slurp(NG_LEDGER, &d, &n, 64 * 1024) != 0) return 0;
+  size_t l = strlen(name);
+  int found = 0;
+  for(size_t i = 0; i + l <= n && !found; i++)
+    if((i == 0 || d[i - 1] == '\n') && !memcmp(d + i, name, l) && (i + l == n || d[i + l] == '\n')) found = 1;
+  free(d);
+  return found;
+}
+
+/* The files of builds that dropped out of the two newest and that the app itself put into the folder (carried files or fetched ones). The number removed. */
+unsigned
+ps5tm_amprlib_ng_prune(void) {
+  al_ver_t *v = NULL;
+  size_t n = list_versions_all(&K_AMPR, &v);
+  char keep1[sizeof(v[0].version)] = "", keep2[sizeof(v[0].version)] = "";
+  for(size_t i = 0; i < n; i++) {
+    if(!v[i].ng || !v[i].valid) continue;
+    if(!keep1[0]) snprintf(keep1, sizeof(keep1), "%s", v[i].version);
+    else if(!keep2[0] && strcmp(v[i].version, keep1)) snprintf(keep2, sizeof(keep2), "%s", v[i].version);
+  }
+  unsigned removed = 0;
+  for(size_t i = 0; i < n; i++) {
+    if(!v[i].ng || !v[i].valid || !v[i].stored || !strcmp(v[i].version, keep1) || !strcmp(v[i].version, keep2)) continue;
+    if(!v[i].bundled && !ng_ledger_has(v[i].name)) continue;       /* a file of the person's own stays */
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/%s", K_AMPR.dir, v[i].name);
+    if(unlink(path) == 0) removed++;
+  }
+  free(v);
+  return removed;
+}
+
+/* The newest ampr-emu-ng build offered (the plain one, not the debug one): its file name and version. 1, or 0 when there is none. */
+int
+ps5tm_amprlib_ng_newest(char *name, size_t nn, char *ver, size_t vn) {
+  al_ver_t *v = NULL;
+  size_t n = list_versions(&K_AMPR, &v);
+  int found = 0;
+  for(size_t i = 0; i < n && !found; i++) {
+    if(!v[i].ng || !v[i].valid || v[i].debug) continue;
+    if(name && nn) snprintf(name, nn, "%s", v[i].name);
+    if(ver && vn) snprintf(ver, vn, "%s", v[i].version);
+    found = 1;
+  }
+  free(v);
+  return found;
 }
 
 static const al_ver_t *
@@ -770,16 +855,22 @@ ps5tm_amprlib_install_bundled(const char *lib, char *why, size_t why_len) {
   const al_kind_t *k = kind_of(lib);
   if(!k) { snprintf(why, why_len, "Unbekannte Bibliothek."); return NULL; }
   unsigned put = 0;
+  al_ver_t *offered = NULL;
+  size_t noff = list_versions(k, &offered);                    /* an old ampr-emu-ng build that dropped out is not put back */
   for(unsigned i = 0; i < *k->nblobs; i++) {
     const ps5tm_emu_blob_t *b = &k->blobs[i];
     char path[PATH_MAX];
+    int listed = 0;
+    for(size_t j = 0; j < noff && !listed; j++) listed = !strcmp(offered[j].name, b->name);
+    if(!listed) continue;
     store_ready(k);
     snprintf(path, sizeof(path), "%s/%s", k->dir, b->name);
     if(is_file(path)) continue;
     int rc = materialize(k, b, why, why_len);
-    if(rc) return NULL;
+    if(rc) { free(offered); return NULL; }
     put++;
   }
+  free(offered);
   cJSON *o = ps5tm_amprlib_versions(lib);
   cJSON_AddNumberToObject(o, "installed", put);
   return o;
@@ -795,6 +886,8 @@ ps5tm_amprlib_state(const char *lib, const char *id, int *http) {
   if(probe_game(k, id, p) != 0) { free(p); *http = 404; return NULL; }
   al_ver_t *vers = NULL;
   size_t nv = list_versions(k, &vers);
+  free(vers);
+  size_t nall = list_versions_all(k, &vers);                   /* what is built into a game is found even when its version dropped out of the offer */
   cJSON *o = cJSON_CreateObject();
   cJSON_AddBoolToObject(o, "ok", 1);
   cJSON_AddStringToObject(o, "lib", k->id);
@@ -815,7 +908,7 @@ ps5tm_amprlib_state(const char *lib, const char *id, int *http) {
   cJSON_AddBoolToObject(inst, "present", present);
   if(present) {
     const char *sha = use_bp ? p->bp_sha : p->lib_sha;
-    const al_ver_t *m = find_by_sha(vers, nv, sha);
+    const al_ver_t *m = find_by_sha(vers, nall, sha);
     cJSON_AddNumberToObject(inst, "size", (double)(use_bp ? p->bp_lib_size : p->lib_size));
     cJSON_AddStringToObject(inst, "sha256", sha);
     cJSON_AddBoolToObject(inst, "emu", use_bp ? p->bp_lib_emu : p->lib_emu);

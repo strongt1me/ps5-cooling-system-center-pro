@@ -8972,11 +8972,11 @@
       ${noStore}
       <p class="apr-add">
         ${missing ? `<button type="button" class="btn" data-apr-emu-install>Mitgelieferte Versionen in den Ordner legen</button>` : ""}
-        ${ngr && ngr.missing ? `<button type="button" class="btn" data-apr-emu-ng ${ngr.busy ? "disabled" : ""}><span>AMPR EMU NG</span> ${esc(ngr.version)} <span>von GitHub laden</span></button>` : ""}
+        ${ngr ? `<button type="button" class="btn" data-apr-emu-ng ${ngr.busy ? "disabled" : ""}>Auf neue AMPR-EMU-NG-Fassung prüfen und laden</button>` : ""}
         <button type="button" class="btn ghost" data-apr-emu-add>Datei hinzufügen …</button>
         <input type="file" id="apr-emu-file" multiple hidden>
         <span class="muted" id="apr-emu-up">${esc(apr.emuNote || "")}</span></p>
-      ${ngr ? `<p class="muted"><span>AMPR EMU NG ist eine Weiterentwicklung von quer3q und liest LZ4- und zstd-Pakete.</span> <span>Die zwei neuesten Fassungen sind in der App mitgeliefert (siehe die Liste oben); eine neuere Veröffentlichung lädt die App nur auf Knopfdruck und prüft ihre Prüfsumme.</span>
+      ${ngr ? `<p class="muted"><span>AMPR EMU NG ist eine Weiterentwicklung von quer3q und liest LZ4- und zstd-Pakete.</span> <span>Zwei Fassungen stehen zur Auswahl (siehe die Liste oben). Der Knopf fragt GitHub nach der neuesten stabilen Veröffentlichung; ist sie neuer, kommt sie ganz nach oben und die älteste entfällt. Geladen wird nur auf Knopfdruck, die Prüfsumme wird gegen SHA256SUMS der Veröffentlichung geprüft.</span>
         <span>Dateien einer neueren Veröffentlichung (libSceAmpr.sprx, libSceAmpr-debug.sprx) benennt „Datei hinzufügen“ passend um.</span>
         <span>Beim Einbauen fragt die App, ob die automatische Fakelib-Aktualisierung in ShadowMountPlus abgeschaltet werden soll, weil ShadowMountPlus die NG-Datei sonst beim Spielstart wieder ersetzt.</span></p>` : ""}
       ${warn.map((w) => `<div class="cp-warn">${w}</div>`).join("")}
@@ -9146,13 +9146,13 @@
       if (apr.view === "emu") aprRender();
     } else if (b.hasAttribute("data-apr-emu-ng")) {
       b.disabled = true;
-      apr.emuNote = "AMPR EMU NG wird von GitHub geladen …";
+      apr.emuNote = "Prüfe bei GitHub …";
       const s = $("#apr-emu-up");
       if (s) s.textContent = apr.emuNote;
       try {
-        const r = await api("/api/v1/ampr-emu/fetch-ng", { method: "POST", body: "{}" });
+        const r = await api("/api/v1/ampr-emu/fetch-ng", { method: "POST", body: "{}", timeoutMs: 180000 });
         apr.vers = r;
-        apr.emuNote = r.installed ? `${r.installed} ${r.installed === 1 ? "Datei" : "Dateien"} von AMPR EMU NG im Ordner abgelegt.` : "Es war schon alles im Ordner.";
+        apr.emuNote = r.message || (r.installed ? `${r.installed} ${r.installed === 1 ? "Datei" : "Dateien"} von AMPR EMU NG im Ordner abgelegt.` : "Es war schon alles im Ordner.");
         apr.emuErr = "";
       } catch (err) { apr.emuErr = err.message; apr.emuNote = ""; }
       if (apr.view === "emu") aprRender();

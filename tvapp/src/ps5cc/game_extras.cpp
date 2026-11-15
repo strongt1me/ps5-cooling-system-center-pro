@@ -608,13 +608,10 @@ void GameExtras::build_versions()
     const cJSON *ng = get(j.root, "ng_release");
     if (lib_ == "ampr" && cJSON_IsObject(ng))
     {
-        const cJSON *missing = get(ng, "missing");
-        const bool want = cJSON_IsNumber(missing) && missing->valueint > 0;
-        ui::FormRow &f = form_.add_action(kFetchNg, "AMPR EMU NG von GitHub laden");
-        f.disabled = !want || yes(ng, "busy");
-        f.description = want ? "Weiterentwicklung von quer3q, liest LZ4- und zstd-Pakete; "
-                               "Prüfsumme wird geprüft."
-                             : "Schon im Ordner oder mitgeliefert.";
+        // always there: the button asks GitHub for the newest stable version (a newer one comes on top, the oldest drops out)
+        ui::FormRow &f = form_.add_action(kFetchNg, "Auf neue AMPR-EMU-NG-Fassung prüfen und laden");
+        f.disabled = yes(ng, "busy");
+        f.description = "Fragt GitHub nach der neuesten stabilen Fassung. Eine neuere kommt ganz nach oben, die älteste entfällt; die Prüfsumme wird geprüft.";
     }
     if (yes(inst, "has_orig"))
         form_.add_action(kRestore, "Original wiederherstellen");

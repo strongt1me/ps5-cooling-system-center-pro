@@ -2088,7 +2088,9 @@ void HttpSource::handle(const Request &request)
     case Request::Kind::extras_post:
     {
         const std::string route = "/api/v1/" + request.id;
-        const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 30);
+        // the check for a new AMPR EMU NG version loads up to three files from GitHub (about 3 minutes at most)
+        const int wait_s = request.id == "ampr-emu/fetch-ng" ? 190 : 30;
+        const Net net = exchange("POST", route.c_str(), request.text, &status, &body, wait_s);
         if (net != Net::ok || status >= 300)
             notice(Notice::Kind::error, "Extras",
                    message_of(body, "Die App hat nicht geantwortet."));

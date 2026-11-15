@@ -831,12 +831,18 @@ int           ps5tm_amprlib_pack_check(const char *title_id, const char *root, i
    embedded NG release in (ps5tm_amprng_name()). */
 /* The name of the NG release the app carries, as it stands in the folder AMPR_EMU: "libSceAmpr.sprx-0.4.1-ng" (the newest of the two the app carries). */
 const char   *ps5tm_amprng_name(void);
+/* ampr-emu-ng builds in the folder AMPR_EMU (amprlib.c): only the two newest versions are offered; the newest plain build (name, version; 1, or 0 when there is none),
+   what dropped out and that the app put there itself is deleted (the number), and a file the app fetched is written into the ledger. */
+int           ps5tm_amprlib_ng_newest(char *name, size_t nn, char *ver, size_t vn);
+unsigned      ps5tm_amprlib_ng_prune(void);
+int           ps5tm_amprlib_ng_note(const char *name);
 /* A program the app carries as a zlib stream (tools/gen_blob.py): the bytes unpacked into a new buffer (free it), or NULL when the
    stream does not give exactly raw_len bytes (src/blobz.c). */
 unsigned char *ps5tm_blob_inflate(const unsigned char *z, unsigned long z_len, unsigned long raw_len, size_t *out_len);
-/* ampr-emu-ng (amprng.c): the release the app can fetch into AMPR_EMU, added to the versions JSON as "ng_release"; the
-   fetch puts its missing files there (checked by SHA-256) and gives the versions JSON with "installed", or NULL with why
-   and an HTTP status (409 already running, 502 download or check failed). */
+/* ampr-emu-ng (amprng.c): "ng_release" in the versions JSON names the newest version offered; the fetch (only on the person's request) asks
+   GitHub for the newest stable release, and when it is newer than any offered, loads its two files (checked against the SHA256SUMS of the release and the
+   mark), puts them into AMPR_EMU, lets the oldest version drop out, and gives the versions JSON with "installed" (files put), "pruned" and "message";
+   or NULL with why and an HTTP status (409 already running, 502 check or download failed). */
 void          ps5tm_amprng_json(struct cJSON *o);
 /* After an ampr-emu-ng version went into a game: 2 and the warning to set update_emulators=0 in ShadowMountPlus (it is on),
    1 and a confirmation (it is off), 0 for any other version (amprlib.c). */

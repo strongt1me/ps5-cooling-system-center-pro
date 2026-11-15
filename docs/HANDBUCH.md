@@ -408,8 +408,7 @@ Die Liste der Versionen hat drei Gruppen mit eigenem Titel: **AMPR EMU NG @quer3
 **AMPR EMU @Drakmor** (die Fassung ohne Paketunterstützung, sie heißt dort nur „0.4.2.1“) und **LZ4 Asset Pack Version** (die beiden
 Fassungen nur für LZ4-Pakete, `test-pack` und `test-debug-pack`).
 **AMPR EMU NG** (quer3q, eine Weiterentwicklung, die LZ4- und zstd-Pakete liest) steht mit der Marke „NG“ ganz oben
-(„NG 0.4.1“, „NG 0.4.1 debug“, „NG 0.3.5“, „NG 0.3.5 debug“). Die beiden neuesten Fassungen sind in der App mitgeliefert; eine neuere Veröffentlichung holt
-„AMPR EMU NG von GitHub laden“ auf Knopfdruck in den Ordner und prüft ihre Prüfsumme, sobald die App sie kennt. Dateien einer neueren NG-Veröffentlichung
+(„NG 0.4.1“, „NG 0.4.1 debug“, „NG 0.3.5“, „NG 0.3.5 debug“). Zwei Fassungen stehen zur Auswahl; mitgeliefert sind `libSceAmpr.sprx-0.4.1-ng`, `-ng-debug`, `libSceAmpr.sprx-0.3.5-ng`, `-ng-debug`. Der Knopf **Auf neue AMPR-EMU-NG-Fassung prüfen und laden** fragt GitHub nach der neuesten **stabilen** Veröffentlichung (eine Beta nimmt die App nie); ist sie neuer als alle angebotenen, lädt die App ihre beiden Dateien in den Ordner `AMPR_EMU`, prüft sie gegen die `SHA256SUMS` der Veröffentlichung und die Kennung, stellt sie ganz oben in die Liste und lässt die älteste Fassung entfallen (ihre von der App abgelegten Dateien werden gelöscht, eigene Dateien bleiben liegen). Geladen wird nur auf Knopfdruck. Dateien einer neueren NG-Veröffentlichung
 (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`) benennt „Datei hinzufügen“ selbst passend um. ShadowMountPlus ersetzt die
 Datei beim Spielstart aus seinem Emulator-Ordner, solange seine automatische Fakelib-Aktualisierung an ist
 (`update_emulators=1`, ab 1.7beta12 `update_enabled=1` unter `[emulators]`). Deshalb **fragt die App beim Einbauen von NG**, ob sie
