@@ -203,7 +203,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 1. Descargar `PS5_Cooling_System_Center_v<versión>.elf` de las [Releases](../../releases).
 2. Enviarlo a la consola (cargador ELF, puerto **9021**), por ejemplo:
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.84.0.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.85.0.elf
    ```
 3. Abrir **`http://<IP-PS5>:8086`** en el navegador (la notificación arriba a la izquierda en la TV también muestra la dirección).
 

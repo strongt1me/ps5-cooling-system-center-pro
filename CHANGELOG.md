@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht (nach v1.84.0)
+## v1.85.0 – 15.11.2026
 
 ### Zweite Prüfung der ganzen App (15.11.2026): 23 Funde, 21 bestätigt, alle 21 behoben
 - Start eines Spiels: Das Aushängen gehaltener Spiele vor dem Start dauert höchstens 20 s, damit der 30-s-Startschutz nicht abläuft, während SMP hängt.
