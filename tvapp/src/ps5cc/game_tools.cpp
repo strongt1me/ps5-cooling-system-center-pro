@@ -112,8 +112,9 @@ const char *level_short(int level)
 
 std::string mode_text(bool fpkg)
 {
-    return fpkg ? "A: FPKG-Games, Kraken Mount meldet es an · B: PS5-Sicherung/Spiele, nur "
-                  "aufbewahrt"
+    return fpkg ? "A: Ordner FPKG-Games (intern, M.2-SSD oder USB) – der richtige Ort für FPKG in dieser App: "
+                  "Kraken Mount meldet es an, ShadowMountPlus sucht dort nicht · B: PS5-Sicherung/Spiele, "
+                  "nur aufbewahrt"
                 : "A: homebrew, ShadowMountPlus bindet es ein · B: PS5-Sicherung/Spiele, nur "
                   "aufbewahrt";
 }
@@ -841,6 +842,12 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             if (ui::FormRow *row = form_.row(kRowOp))
                 row->description =
                     choice_.op >= 0 ? op_text(plan_, choice_.op, choice_.level) : std::string();
+            // FPKG: the folder FPKG-Games is the right place, so it is chosen from the start (the person can still pick B)
+            if (choice_.op == kOpFpkg && choice_.mode < 0 && form_.row(kRowMode))
+            {
+                choice_.mode = 0;
+                form_.set_choice(kRowMode, 1);
+            }
         }
         else if (id == kRowName)
         {

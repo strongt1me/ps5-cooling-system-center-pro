@@ -562,6 +562,39 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
 
   if(!tid_ok(id)) { snprintf(msg, n, "Das ist keine Titelkennung eines PS5- oder PS4-Spiels."); return 400; }
 
+  /* "Starten" of a disc game in the Disc tab (16.11.2026, wish of the user): the game is started and dumped without the person opening the app
+     again, for the game is on the screen and the app is behind it. That is what the queue does for one title: it starts the game, gives it the
+     load time and dumps it. So the title goes alone into an empty list and the run starts. A list the person has prepared is not touched. */
+  if(!strcmp(act, "queue_launch")) {
+    pthread_mutex_lock(&g_lock);
+    const int prepared = g_n > 0 && g_item[0].state < Q_DONE;
+    pthread_mutex_unlock(&g_lock);
+    if(prepared) { snprintf(msg, n, "In der Warteschlange stehen schon Titel; sie bleibt, wie sie ist."); return 409; }
+    cJSON *add = cJSON_CreateObject();
+    cJSON_AddStringToObject(add, "action", "queue_add");
+    cJSON_AddStringToObject(add, "id", id);
+    int st = ps5tm_dumpq_action(add, msg, n);
+    cJSON_Delete(add);
+    if(st != 200) return st;
+    cJSON *go = cJSON_CreateObject();
+    cJSON_AddStringToObject(go, "action", "queue_start");
+    st = queue_start(go, msg, n);
+    cJSON_Delete(go);
+    if(st != 200) {                               /* nothing stays in the list that the person did not put there */
+      pthread_mutex_lock(&g_lock);
+      const int at2 = find_locked(id);
+      if(at2 >= 0) {
+        for(int i = at2; i + 1 < g_n; i++) g_item[i] = g_item[i + 1];
+        memset(&g_item[--g_n], 0, sizeof(g_item[0]));
+      }
+      pthread_mutex_unlock(&g_lock);
+      return st;
+    }
+    PS5TM_INFO("dumpq_launch", "%s: Start und Dump in einem Zug (Knopf „Starten“ im Reiter Disc).", id);
+    snprintf(msg, n, "Das Spiel wird gestartet und danach gleich gedumpt. Die App muss nicht geöffnet werden.");
+    return 200;
+  }
+
   if(!strcmp(act, "queue_add")) {
     char name[128], link[16];
     if(ps5tm_library_launch_info(id, name, sizeof(name), link, sizeof(link)) != 0) {

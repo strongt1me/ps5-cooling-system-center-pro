@@ -32,7 +32,7 @@ int ps5tm_thread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*s
  * A directory is a storage location, not a label. It has no reason to follow a
  * display name. */
 
-#define PS5TM_VERSION        "1.86.2"
+#define PS5TM_VERSION        "1.86.3"
 /* Raised to 4 so the port migration below runs once more: the removed
    fallback had written its own choice into the config, and that value would
    otherwise outlive the code that made it. */
@@ -884,6 +884,9 @@ int ps5tm_kraken_searches(const char *folder);
    PS4Mount manages too. Both write /user/app/<ID> and mount /system_ex/app/<ID>; ShadowMountPlus also rewrites the param.json. An array of
    {title_id, name, kraken:{path, kind}, other:{by:"smp"|"ps4mount", path}}; empty when Kraken Mount does not run. The caller frees it. */
 struct cJSON *ps5tm_mounters_conflicts(void);
+/* The watcher of fpkgdup.c (15.11.2026): when a title that lies at Kraken Mount and at ShadowMountPlus has ended, it is unmounted at ShadowMountPlus (its own
+   /games/unmount) and the person is told; nothing else is touched. */
+void ps5tm_fpkgdup_start(void);
 
 /* Dump Forge as the engine of the format "FPKG (Debug-.pkg)" (src/dumpforge.c): its PS5 program in the folder PS5TM_DATA_DIR/dumpforge, started
    through the loader, asked on 127.0.0.1:8095. The state is {installed, version?, folder, running, running_version?, project, fetching}. */

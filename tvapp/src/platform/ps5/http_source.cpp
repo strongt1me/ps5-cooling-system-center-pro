@@ -427,6 +427,19 @@ void HttpSource::extras_open(const std::string &id)
 }
 void HttpSource::extras_post(const std::string &route, const std::string &json)
 {
+    if (route == "ampr-emu/fetch-ng")
+    {
+        // The check asks GitHub and can take seconds: say so at once, and take no second press while it runs (each one
+        // would queue behind the first and answer "already there" in turn).
+        bool expected = false;
+        if (!ng_fetching_.compare_exchange_strong(expected, true))
+        {
+            notice(Notice::Kind::info, "AMPR EMU NG", "Die Prüfung bei GitHub läuft schon.");
+            return;
+        }
+        notice(Notice::Kind::info, "AMPR EMU NG",
+               "Prüfe bei GitHub, ob es eine neuere Fassung gibt. Das kann einige Sekunden dauern …");
+    }
     push({Request::Kind::extras_post, 0, route, json});
 }
 void HttpSource::extras_versions(const std::string &lib)
@@ -2001,8 +2014,20 @@ void HttpSource::handle(const Request &request)
         const std::string route = "/api/v1/" + request.id;
         const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 15);
         if (net != Net::ok || status >= 300)
+        {
             notice(Notice::Kind::error, request.id == "disc" ? "Laufwerk" : "Dump",
                    message_of(body, "Die App hat nicht geantwortet."));
+            // "Starten" of a disc game starts and dumps it in one go; when the app says no, the game is at least started
+            const std::size_t at = request.text.find("\"queue_launch\"");
+            const std::size_t idp = request.text.find("\"id\":\"");
+            if (request.id == "dump" && at != std::string::npos && idp != std::string::npos)
+            {
+                const std::size_t from = idp + 6;
+                const std::size_t to = request.text.find('"', from);
+                if (to != std::string::npos)
+                    push({Request::Kind::launch, 0, request.text.substr(from, to - from), {}});
+            }
+        }
         else
         {
             const std::string msg = message_of(body, "");
@@ -2091,6 +2116,8 @@ void HttpSource::handle(const Request &request)
         // the check for a new AMPR EMU NG version loads up to three files from GitHub (about 3 minutes at most)
         const int wait_s = request.id == "ampr-emu/fetch-ng" ? 190 : 30;
         const Net net = exchange("POST", route.c_str(), request.text, &status, &body, wait_s);
+        if (request.id == "ampr-emu/fetch-ng")
+            ng_fetching_.store(false);
         if (net != Net::ok || status >= 300)
             notice(Notice::Kind::error, "Extras",
                    message_of(body, "Die App hat nicht geantwortet."));

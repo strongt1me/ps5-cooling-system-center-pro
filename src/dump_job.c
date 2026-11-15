@@ -810,6 +810,7 @@ job_fail(const char *fmt, ...) {
   dlog("FEHLER: %s", why);
   PS5TM_WARN("dump_failed", "Dump von %s gescheitert: %s", tid, why);
   job_state(DJ_FAILED, "failed");
+  ps5tm_notify("Dump gescheitert: %s", why);
 }
 
 /* ---------------------------------------------------------------- copying */
@@ -1757,6 +1758,8 @@ dump_run(void *arg) {
   g_job.state = DJ_COPYING;
   snprintf(g_job.stage, sizeof(g_job.stage), "Kopieren");
   pthread_mutex_unlock(&g_lock);
+  /* The game is on the screen and the app behind it (a dump begun with "Starten" in the Disc tab): say that the dump has begun (16.11.2026). */
+  ps5tm_notify("Dump gestartet: %s", a.name);
 
   char sums_path[PATH_MAX + 16], serr[300] = "";
   ps5tm_sums_t *sums = NULL;

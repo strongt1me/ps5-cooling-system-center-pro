@@ -251,8 +251,17 @@ class KrakenPage final : public Page
             ui::text(list, fonts.semibold, st.text, card.x + 30.0f, card.y + 140.0f, 22.0f,
                      st.color);
             info_.draw(canvas);
-            if (!g->error.empty())
-                paragraph(canvas, g->error, card.x + 30.0f, card.y + 600.0f, card.w - 60.0f,
+            float below = card.y + (g->conflict_with.empty() ? 590.0f : 550.0f);
+            if (!g->conflict_with.empty())
+                below = paragraph(canvas,
+                                  "Achtung! Lege FPKG-Spiele nur in den Ordner FPKG-Games (auf dem "
+                                  "internen Speicher /data/FPKG-Games, auf einem USB- oder "
+                                  "M.2-Laufwerk der Ordner FPKG-Games im Hauptordner), dort sucht "
+                                  "ShadowMountPlus nicht!",
+                                  card.x + 30.0f, below + 10.0f, card.w - 60.0f, kWarning, 5);
+            // With the warning there is no room left for the error text; the state above names it and the log has it.
+            if (!g->error.empty() && g->conflict_with.empty())
+                paragraph(canvas, g->error, card.x + 30.0f, below + 10.0f, card.w - 60.0f,
                           kWarning, 3);
         }
         else
@@ -564,9 +573,7 @@ class KrakenPage final : public Page
             item.subtitle = g.title_id + (g.version.empty() ? "" : " · Version " + g.version) +
                             " · " + kind_of(g) + " · " + g.drive;
             item.value = g.size != 0 ? format_bytes(g.size) : std::string();
-            // A title ShadowMountPlus or PS4Mount manages too: both write its tile and mount it
-            // (src/mounters.c); more important than where the build stands
-            item.badge = g.conflict_with.empty() ? st.badge : "KONFLIKT";
+            item.badge = st.badge;
             item.tag = static_cast<int>(i);
             out.push_back(item);
         }
@@ -624,8 +631,6 @@ class KrakenPage final : public Page
             rows.push_back({"Titel-ID", g->title_id});
             rows.push_back({"Version", g->version.empty() ? "-" : g->version});
             rows.push_back({"Art", kind_of(*g)});
-            if (!g->conflict_with.empty())
-                rows.push_back({"Konflikt", "auch bei " + g->conflict_with});
             // Game folders are ShadowMountPlus's business; only .pkg files belong in these folders
             if (g->kind != "pkg")
                 rows.push_back({"Hinweis", "nur .pkg gehört hierher"});

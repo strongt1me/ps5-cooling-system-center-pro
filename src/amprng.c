@@ -107,7 +107,9 @@ fetch_url(const char *url, size_t max, char **buf, size_t *len, char *why, size_
   *buf = NULL;
   *len = 0;
   if(upd_http_fetch(&r, max, buf, len, &res) != 0) {
-    if(res.status == 403 || res.status == 429) snprintf(why, why_len, "%s ließ sich nicht laden: GitHub begrenzt gerade die Anfragen von dieser Adresse (HTTP %d). Bitte später noch einmal.", what, res.status);
+    if(!res.status && (!strcmp(res.step, "dns") || !strcmp(res.step, "connect")))
+      snprintf(why, why_len, "Keine Internetverbindung: GitHub ist nicht erreichbar. Bitte die Netzwerkverbindung der PS5 prüfen.");
+    else if(res.status == 403 || res.status == 429) snprintf(why, why_len, "%s ließ sich nicht laden: GitHub begrenzt gerade die Anfragen von dieser Adresse (HTTP %d). Bitte später noch einmal.", what, res.status);
     else snprintf(why, why_len, "%s ließ sich nicht laden (%s%s%d).", what, res.step[0] ? res.step : "http", res.status ? " " : "", res.status);
     free(*buf);
     *buf = NULL;

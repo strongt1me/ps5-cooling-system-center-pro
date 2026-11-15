@@ -513,7 +513,18 @@ class DiscPage final : public Page
         {
             const Game &g = games_[index_of(tag)];
             if (!g.dump_mounted)
-                source().launch(g.id);
+            {
+                // "Starten" starts the game and dumps it in one go (the game is on the screen then, and the app would have to be
+                // opened again to press "Dumpen"): with a free queue, a chosen target, no other game running and no dump yet.
+                const bool other_runs = std::any_of(games_.begin(), games_.end(),
+                                                    [](const Game &x) { return x.dump_mounted; });
+                if (g.dump != "done" && !other_runs && dump_.settings.valid &&
+                    !dump_.settings.target.empty() && !dump_busy() && dump_.queue.items.empty())
+                    source().disc_post("dump", "{\"action\":\"queue_launch\",\"id\":" +
+                                                   json_text(g.id) + "}");
+                else
+                    source().launch(g.id);
+            }
             else
                 source().disc_post("dump", "{\"action\":\"start\",\"id\":" + json_text(g.id) +
                                                (g.dump == "done" ? ",\"overwrite\":true}" : "}"));

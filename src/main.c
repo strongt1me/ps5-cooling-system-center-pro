@@ -592,6 +592,7 @@ main(int argc, char **argv) {
     ps5tm_playtime_start();
     ps5tm_library_probe_start();
     ps5tm_smphold_start();             /* a game the app mounted and nobody started is unmounted again (smphold.c) */
+    ps5tm_fpkgdup_start();             /* a game that lies at Kraken Mount and ShadowMountPlus: unmounted at the latter after it ended (fpkgdup.c) */
     ps5tm_payprof_start();
     ps4m_boot();                       /* PS4Mount, when it was switched on in the page */
     ps5tm_disc_boot();                 /* the optical drive: only when the person turned it on */

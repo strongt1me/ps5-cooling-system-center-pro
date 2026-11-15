@@ -5672,6 +5672,7 @@
         if (n === "cv-op") {
           if (e.target.value === "unpack") { mvOpen(cv.id, "unpack"); return; }
           cv.op = e.target.value === "fpkg" ? (cv.fl || "fpkg") : e.target.value;   /* the format "FPKG" carries the level chosen last */
+          if (cvIsFpkg(cv.op) && !cv.mode) cv.mode = "homebrew";                  /* FPKG: the folder FPKG-Games is the right place, chosen from the start */
         }
         if (n === "cv-fl") { cv.fl = e.target.value; cv.op = e.target.value; }
         if (n.startsWith("mv-")) mvRenderPlan();
@@ -5854,6 +5855,7 @@
   /* since 1.7beta8 ShadowMountPlus also reports its own installs here, a PKG or a source folder/image without a title id */
   const mvName = (j) => j.title_id ? gmName(j.title_id)
     : (j.title_name || j.name || String(j.source || "").split("/").pop() || "Paket");
+  const bn = { timer: 0, key: "", gone: "" };   /* das Ergebnis-Band: wann es zuerst stand, ob es schon weg ist */
   const jobBanner = () => {
     const b = $("#gm-copy-banner");
     if (!b) return;
@@ -5895,6 +5897,18 @@
         : `Kopie abgebrochen: „${c.name || c.title_id}“`;
       kind = "copy";
       outcome = c.state === "done" ? "done" : c.state === "failed" ? "failed" : "aborted";
+    }
+    /* Ein Ergebnis (fertig, gescheitert, abgebrochen) bleibt 10 Sekunden stehen und verschwindet dann: Es steht auch im
+       Verlauf. Läuft wieder etwas, gilt das Ergebnis eines neuen Auftrags von vorn. */
+    const bkey = `${kind}|${label}`;
+    if (live) { clearTimeout(bn.timer); bn.key = ""; bn.gone = ""; }
+    else if (label) {
+      if (bn.gone === bkey) label = "";
+      else if (bn.key !== bkey) {
+        clearTimeout(bn.timer);
+        bn.key = bkey;
+        bn.timer = setTimeout(() => { bn.gone = bkey; jobBanner(); }, 10000);
+      }
     }
     b.hidden = !label;
     b.textContent = label;
@@ -6455,9 +6469,9 @@
       <div class="cp-list">
         <label class="cp-choice">
           <input type="radio" name="cv-mode" value="homebrew" ${cv.mode === "homebrew" ? "checked" : ""}>
-          <span class="cp-choice-text"><b>A · Spielbar</b>
+          <span class="cp-choice-text"><b>${cvIsFpkg(cv.op) ? "A · Spielbar: Ordner FPKG-Games (richtig für diese App)" : "A · Spielbar"}</b>
             ${cvIsFpkg(cv.op)
-              ? `<span class="muted">In den Ordner <code>FPKG-Games</code> des Ziels. Kraken Mount (Reiter „FPKGMount“) sucht dort und meldet das Paket an.</span>`
+              ? `<span class="muted">In den Ordner <code>FPKG-Games</code> des Ziels (intern, M.2-SSD oder USB). Das ist der richtige Ort für FPKG in dieser App: Kraken Mount (Reiter „FPKGMount“) sucht dort und meldet das Paket an, ShadowMountPlus sucht dort nicht, es gibt also keine Konflikte.</span>`
               : `<span class="muted">In den Ordner <code>homebrew</code> des Ziels. ShadowMountPlus findet
               das Ergebnis dort und bindet es ein.</span>`}</span>
         </label>
@@ -6982,23 +6996,14 @@
      nichts selbst; sie nennt den Titel, die Person nimmt ihn aus einem der beiden heraus. Eine Zeile je Titel, höchstens fünf. */
   const dupFill = (box, list) => {
     if (!box) return;
-    const items = Array.isArray(list) ? list : [];
-    if (!items.length) { box.hidden = true; box.textContent = ""; box.dataset.key = ""; return; }
-    const by = (x) => (x.other && x.other.by === "ps4mount" ? "PS4Mount" : "ShadowMountPlus");
-    const key = items.map((x) => `${x.title_id}/${by(x)}`).join();
-    if (!box.hidden && box.dataset.key === key) return;
-    box.dataset.key = key;
+    const has = Array.isArray(list) && list.length > 0;
+    if (!has) { box.hidden = true; box.textContent = ""; box.dataset.key = ""; return; }
+    if (!box.hidden && box.dataset.key === "1") return;
+    box.dataset.key = "1";
     box.textContent = "";
-    items.slice(0, 5).forEach((x) => {
-      const p = document.createElement("p");
-      p.textContent = `„${x.name || x.title_id}“ (${x.title_id}) liegt bei Kraken Mount und bei ${by(x)}. Beide wollen dieselbe Kachel und dasselbe Einhängen. Lass das Spiel nur bei einem von beiden.`;
-      box.append(p);
-    });
-    if (items.length > 5) {
-      const p = document.createElement("p");
-      p.textContent = `… und ${items.length - 5} weitere`;
-      box.append(p);
-    }
+    const p = document.createElement("p");
+    p.textContent = "Achtung! Lege FPKG-Spiele nur in den Ordner FPKG-Games (auf dem internen Speicher /data/FPKG-Games, auf einem USB- oder M.2-Laufwerk der Ordner FPKG-Games im Hauptordner), dort sucht ShadowMountPlus nicht!";
+    box.append(p);
     box.hidden = false;
   };
 
@@ -7008,7 +7013,6 @@
     gm.running = gmRunningId();
     gm.live = gmLiveId();
     gmHoldRender();
-    dupFill($("#gm-dup"), gm.meta && gm.meta.conflicts);
 
     if (!gm.loaded) {
       txt("#gm-sub", "wird gelesen …");
@@ -10934,6 +10938,21 @@
         <div class="p4m-btns">${act}</div></div>`;
     }).join("") : `<p class="muted">${gm.loaded ? "Auf der Konsole ist kein Spiel von Disc installiert. Eine Disc muss erst installiert sein; die Konsole kopiert sie beim Einlegen." : "wird gelesen …"}</p>`);
   };
+  /* Start und Dump in einem Zug (src/dump_queue.c, „queue_launch“); sagt die Konsole nein (zum Beispiel: kein Disc-Spiel, Platz fehlt), startet das Spiel wie sonst. */
+  const dgLaunchDump = async (id, btn) => {
+    btn.disabled = true;
+    try {
+      const r = await api("/api/v1/dump", { method: "POST", body: JSON.stringify({ action: "queue_launch", id }) });
+      toast(r.message || `„${dmName(id)}“ wird gestartet und gedumpt.`);
+      await dmLoad(); dmSync();
+      setTimeout(() => { btn.disabled = false; }, 3000);
+    } catch (e) {
+      toast(e.message, "error");
+      btn.disabled = false;
+      gmLaunch(id, btn);                        /* wenigstens das Spiel starten */
+      dmOpen();
+    }
+  };
   $("#dg-list").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-dg]");
     if (!b || b.disabled) return;
@@ -10942,7 +10961,17 @@
     const g = (gm.list || []).find((x) => x.title_id === id);
     dm.sel = id;
     dm.hidden = dm.data && dm.data.job && dm.data.job.state ? dmJobKey(dm.data.job) : dm.hidden;
-    if (b.dataset.dg === "launch") { gmLaunch(id, b); dmOpen(); return; }
+    if (b.dataset.dg === "launch") {
+      /* „Starten“ startet das Spiel und dumpt es gleich (Wunsch des Users, 16.11.2026): Das Spiel liegt dann vor der App, und man
+         müsste die App erst wieder öffnen, um „Dumpen“ zu drücken. Das tut die Warteschlange für einen Titel (Start, Ladezeit, Dump).
+         Nur wenn nichts dagegen spricht: kein anderes Spiel läuft, es gibt noch keinen Dump, ein Ziel ist gewählt, die Warteschlange ist frei. */
+      const dd = dm.data || {}, dq = dd.queue || {};
+      const auto = g && g.dump !== "done" && !gm.running && dd.settings && dd.settings.target && !dq.active
+        && !(dq.items || []).some((it) => it.state === "pending" || it.state === "waiting_disc" || it.state === "launching" || it.state === "settling" || it.state === "dumping")
+        && !(dd.job && (dd.job.state === "running" || dd.job.state === "verifying"));
+      if (auto) { dgLaunchDump(id, b); return; }
+      gmLaunch(id, b); dmOpen(); return;
+    }
     /* ein fertiger Dump liegt schon da: die Karte „Dump“ fragt vor dem Ersetzen */
     if (g && g.dump === "done") {
       dmOpen();

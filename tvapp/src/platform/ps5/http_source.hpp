@@ -236,6 +236,7 @@ class HttpSource final : public Source
     // ran in this session.
     std::atomic<std::int64_t> storage_seen_{0};
     std::atomic<bool> engine_fetching_{false}; // a download of FPKGMount / Dump Forge is on its way
+    std::atomic<bool> ng_fetching_{false};     // the check for a new AMPR EMU NG version is on its way
     std::mutex kraken_poll_mutex_;              // one question about FPKGMount at a time: the newer answer wins
     std::atomic<bool> jobs_wanted_{false}; // a tool started: ask for the jobs at once
     bool leaving_for_delete_ = false;      // the app ends itself for a delete (worker thread only)

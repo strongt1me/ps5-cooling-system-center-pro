@@ -1677,8 +1677,6 @@ class Ps5cc final : public app::Concept
                 item.badge = "LÄUFT";
             else if (holds_launch(g))
                 item.badge = "EINGEHÄNGT";
-            else if (!g.conflict_with.empty())
-                item.badge = "KONFLIKT";
             item.disabled = !g.can_launch;
             items.push_back(item);
         }
@@ -1716,12 +1714,10 @@ class Ps5cc final : public app::Concept
         std::vector<ui::DetailItem> items;
         items.push_back({"Titel-ID", g->id});
         // What needs a look comes first, the list shows six rows: a mounted game that does not run
-        // keeps other launches from starting; two mounters want the title and both write its tile
-        // and mount it (src/mounters.c)
+        // keeps other launches from starting. (Titles that two mounters want are shown on the page
+        // FPKGMount only, not in the library.)
         if (holds_launch(*g))
             items.push_back({"Eingehängt", "wird gleich ausgehängt"});
-        if (!g->conflict_with.empty())
-            items.push_back({"Konflikt", "auch bei " + g->conflict_with});
         items.push_back({"Version", g->version});
         items.push_back({"Format", format_label(g->format)});
         add_fw_rows(items, *g);

@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.86.3 – 16.11.2026
+
+### Vollbild-App: Prüfung auf neue AMPR-EMU-NG-Fassung zeigt sofort, dass sie läuft
+- Beim Drücken auf „Auf neue AMPR-EMU-NG-Fassung prüfen und laden“ erscheint **sofort** die Meldung „Prüfe bei GitHub, ob es eine neuere Fassung gibt. Das kann einige Sekunden dauern …“. Vorher blieb der Bildschirm bis zur Antwort leer, und mehrfaches Drücken reihte mehrere Prüfungen hintereinander ein (jede meldete dann „schon da“). Solange eine Prüfung läuft, sagt jeder weitere Druck nur „Die Prüfung bei GitHub läuft schon.“ und startet keine zweite.
+- **Ohne Internetverbindung** (Namensauflösung oder Verbindung zu GitHub schlägt fehl) meldet die App jetzt „Keine Internetverbindung: GitHub ist nicht erreichbar. Bitte die Netzwerkverbindung der PS5 prüfen.“ statt einer technischen Fehlerzeile (Browser-App und Vollbild-App, Übersetzung in 6 Sprachen).
+
+### Browser-App: Ergebnis-Meldung verschwindet nach 10 Sekunden; genauere Doppelbelegungs-Warnung
+- Die Meldung über den Spielkarten nach einem Auftrag („Konvertieren fertig: …“, ebenso „Kopie fertig“, „gescheitert“, „abgebrochen“ und die von ShadowMountPlus) bleibt **10 Sekunden** stehen und wird dann ausgeblendet; das Ergebnis steht weiter im Verlauf. Läuft wieder etwas, gilt ein neues Ergebnis von vorn.
+
+### FPKG: Ordner FPKG-Games als richtiger Ort herausgestellt
+- Im Bereich **FPKGMount** (Browser-App und Vollbild-App; nicht mehr in der Spieleliste) steht bei einer Doppelbelegung mit ShadowMountPlus nur noch: **„Achtung! Lege FPKG-Spiele nur in den Ordner FPKG-Games (auf dem internen Speicher /data/FPKG-Games, auf einem USB- oder M.2-Laufwerk der Ordner FPKG-Games im Hauptordner), dort sucht ShadowMountPlus nicht!“** Die Zeile pro Titel mit den beiden Orten entfällt. In der **Bibliothek der Vollbild-App** entfallen die Marke „KONFLIKT“ und die Zeile „Konflikt: auch bei …“ (Wunsch des Users); die Doppelbelegung steht nur noch im Bereich FPKGMount, dort in der **Vollbild-App** nur noch als Achtung-Satz (die Marke „KONFLIKT“ und die Zeile „Konflikt“ sind auch dort entfallen).
+- Beim Konvertieren in das Format FPKG heißt die Auswahl „A“ jetzt **„Spielbar: Ordner FPKG-Games (richtig für diese App)“** mit der Erklärung (intern, M.2-SSD oder USB; Kraken Mount sucht dort, ShadowMountPlus nicht, also keine Konflikte); in der Vollbild-App steht dasselbe in der Beschreibung der Zeile „Ziel“. Wählt man das Format FPKG, ist **A (FPKG-Games) von Anfang an gewählt**; B (PS5-Sicherung/Spiele, nur aufbewahrt) bleibt möglich.
+
+### Doppelbelegung Kraken Mount / ShadowMountPlus: nach dem Beenden bei ShadowMountPlus aushängen
+- Liegt ein Spiel bei **Kraken Mount und bei ShadowMountPlus** (die Warnung der Spieleliste) und wird es nach dem Spielen **beendet**, hängt die App es bei ShadowMountPlus aus (dessen eigenes `/games/unmount`, wie der Knopf „Aushängen“ der Karte; Meldung auf der Konsole und Zeile `fpkg_dup_unmounted` im Protokoll). Spiele, die nur bei einem der beiden liegen, die Kacheln und alles, was die App nicht selbst erkannt hat, bleiben unberührt; Kraken Mount bekommt keinen Befehl. Neu: `src/fpkgdup.c` (Wächter, alle 3 s, liest nur den Spielzustand). An der Konsole noch nicht gesehen. Handbuch (7 Sprachen) im Kapitel „Spiele“.
+
+### Disc: „Starten“ startet das Spiel und dumpt es gleich
+- Beim **Dumpen** (Reiter Disc, auch in der Warteschlange) meldet die Konsole jetzt **„Dump gestartet: <Spiel>“**, sobald das Kopieren beginnt, und wie bisher „Dump fertig: <Spiel>“; scheitert der Dump, kommt „Dump gescheitert: <Grund>“. So sieht man es, auch wenn das Spiel vor der App liegt.
+- Im Reiter **Disc** startet „Starten“ bei einem Disc-Spiel jetzt das Spiel **und das Dumpen in einem Zug**: Die App legt das Spiel allein in die Dump-Warteschlange und startet sie; die Warteschlange startet das Spiel, gibt ihm die Ladezeit (Einstellung der Warteschlange, Vorgabe 30 s) und dumpt es. Die App muss dafür nicht wieder geöffnet werden (das Spiel liegt vor ihr). Browser-App und Vollbild-App. Nur wenn nichts dagegen spricht: Es läuft kein anderes Spiel, es gibt noch keinen Dump des Spiels, im Dump ist ein Ziel gewählt, und keine Warteschlange oder kein Dump läuft oder ist vorbereitet; sonst startet „Starten“ wie bisher nur das Spiel (auch wenn die Konsole das Dumpen ablehnt), und „Dumpen“ folgt von Hand. Neue Aktion `queue_launch` in `POST /api/v1/dump` (`src/dump_queue.c`). An der Konsole noch nicht ausprobiert.
+
 ## v1.86.2 – 15.11.2026
 
 ### AMPR EMU NG: früher mitgelieferte, nicht mehr eingebaute Fassungen verschwinden
