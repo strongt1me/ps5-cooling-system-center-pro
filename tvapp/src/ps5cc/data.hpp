@@ -190,6 +190,8 @@ struct Config
     int tz_offset_min = 0;         // minutes east of UTC: the console's zone, else the web page's
     int target_temp_c = 68;        // what a game profile remembers
     int warning_cpu_c = 85;        // 40..110; the chip's own limit is 5 °C more (config.c)
+    bool warning_follows_target = true; // the limit is never below the target + 2 °C (automatic mode)
+    int fan_cap_pct = 100;         // 30..100: the fan's ceiling in normal operation, 100 = none
     int warning_countdown_s = 120; // 30..900
     bool lightbar_enabled = false;
     int lightbar_warn_c = 70; // 55..90: yellow from here
@@ -1049,6 +1051,23 @@ enum class Watch : std::uint8_t
     backups,
     files,
     profile,
+    curve,
+};
+
+// GET /api/v1/fan/curve (16.11.2026): what the automatic mode asks of the fan at each temperature, and the
+// temperature of now; the page Lüfterkurve draws it.
+struct FanCurve
+{
+    bool loaded = false;
+    bool automatic = true;
+    std::string profile; // comfort, balanced, cool
+    int target_c = 0;
+    int safety_c = 0;
+    int cap_pct = 100;
+    float now_c = -1.0f;                // the controller's average, -1 = none
+    int fan_pct = -1;                   // what the fan really runs at, -1 = unknown
+    std::vector<int> temps;             // one per degree
+    std::vector<int> wish;              // percent asked for at that temperature, 0 = nothing
 };
 
 // GET /api/v1/system "user" and the console: the Profil page.
@@ -1220,6 +1239,7 @@ struct Snapshot
     FsWrite fs_write;
     std::map<std::string, FsSize> fs_sizes; // by path
     Playtime playtime;
+    FanCurve fan_curve;
     Saves saves;
     GameBackups game_backups;
     std::vector<Volume> volumes;
@@ -1325,6 +1345,9 @@ class Source
     virtual void usb_eject(const std::string &mount) = 0;
     // Spielzeit: the recorded sessions forgotten (the running one keeps counting).
     virtual void playtime_reset() = 0;
+    // POST /api/v1/fan/trace/save: the recording of the fan regulation (the last 30 minutes) into a file on the console; the
+    // answer comes as a notice.
+    virtual void fan_trace_save() = 0;
     // Spielstände: POST /api/v1/saves/<route> (backup, delete, verify, restore, cancel) with a JSON
     // body.
     virtual void saves_post(const std::string &route, const std::string &json) = 0;

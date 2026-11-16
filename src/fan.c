@@ -31,9 +31,10 @@
 
 /* ------------------------------------------------------------- servo tuning */
 
-#define SERVO_TOLERANCE_PCT 4   /* accept this much duty error, then act    */
-#define SERVO_INTERVAL_SEC  2   /* measured 26.10.2026: the firmware follows a threshold change in under a second */
+#define SERVO_TOLERANCE_PCT 7   /* accept this much duty error (more than one kelvin of threshold is worth, 5.6 %), then act */
+#define SERVO_INTERVAL_SEC  3   /* the fan and its reading follow a threshold change over a few seconds: correct no faster */
 #define SERVO_STEP_MAX_C    3   /* threshold movement per servo correction  */
+#define FF_JUMP_DAMP_PCT    3   /* the first jump out of rest aims this far under the wish */
 #define SERVO_IDLE_DUTY_PCT 5   /* below this the fan is left entirely alone*/
 
 #define DUTY_EMA_NUM 1          /* light smoothing on the duty readback     */
@@ -300,11 +301,19 @@ clamp_duty(int v) {
  * ignores this ceiling entirely. */
 static int
 comfort_ceiling(const ps5tm_config_t *cfg) {
+  int ceiling;
   switch(cfg->profile) {
-    case PS5TM_PROFILE_COOL:     return 100;
-    case PS5TM_PROFILE_BALANCED: return 85;
-    default:                     return 65;
+    case PS5TM_PROFILE_COOL:     ceiling = 100; break;
+    case PS5TM_PROFILE_BALANCED: ceiling = 85;  break;
+    default:                     ceiling = 65;  break;
   }
+  /* The person's own ceiling (fan_cap_pct, 100 = none; 0 only in a config nobody initialised) can only lower it. */
+  int cap = (int)cfg->fan_cap_pct;
+  if(cap > 0 && cap < ceiling) {
+    if(cap < PS5TM_FAN_CAP_MIN_PCT) cap = PS5TM_FAN_CAP_MIN_PCT;
+    ceiling = cap < ceiling ? cap : ceiling;
+  }
+  return ceiling;
 }
 
 /* The target as the controller may use it, whatever the settings say.
@@ -376,16 +385,75 @@ valid_profile(ps5tm_profile_t p) {
  * The band also makes an impossible target harmless instead of ruinous. Ask
  * for 60 °C with a 20 K band and a console at 72 °C runs the fan at 60 % —
  * audible, deliberate, and steady — rather than at 100 % forever. */
+/* The soft curve (16.11.2026, wish of the user: "when the temperature rises the fan should rise too, but not at once").
+ *
+ * A straight band that begins at the target leaves the fan on the console's own minimum right up to the target and then climbs steeply: on
+ * the console of 16.11.2026 the CPU went from 70 to 80 degrees with the fan standing at 23 %, and a rise of three kelvin over the target
+ * meant 40 % more fan at once. The curve now has two parts:
+ *   - from CURVE_LEAD_C100 below the target up to the target the speed rises gently from the console's usual minimum (CURVE_FLOOR_PCT) to
+ *     the profile's figure at the target (about 1.7 % per kelvin): the fan follows the temperature long before it matters, and no step is
+ *     big enough to be noticed;
+ *   - from the target up it rises on to full speed over 1.75 times the profile's band (4-5 % per kelvin in the profile Cool), not over the band
+ *     itself.
+ * The figure at the target is higher the cooler the profile: Cool 40 %, Balanced 33 %, Comfort 28 %. A speed below the console's minimum
+ * changes nothing, so a quiet console stays quiet far below the target. */
+#define CURVE_LEAD_C100  1000     /* 10 K under the target the gentle part begins */
+#define CURVE_FLOOR_PCT    23     /* what the console runs at in a game when nothing asks for more (Slim measured 16.11.2026) */
+
+static int
+curve_at_target_pct(const ps5tm_config_t *cfg) {
+  switch(cfg->profile) {
+    case PS5TM_PROFILE_COOL:     return 40;
+    case PS5TM_PROFILE_BALANCED: return 33;
+    default:                     return 28;
+  }
+}
+
 static int
 band_duty(int avg_c100, const ps5tm_config_t *cfg) {
   int start = target_c100(cfg);
   int span  = (int)cfg->control_band_c * 100;
   if(span < 100) span = 100;                 /* never divide by nothing */
+  int top   = span * 7 / 4;
+  int k0    = curve_at_target_pct(cfg);
 
-  if(avg_c100 <= start)        return 0;
-  if(avg_c100 >= start + span) return 100;
-  return (avg_c100 - start) * 100 / span;
+  if(avg_c100 <= start - CURVE_LEAD_C100) return 0;
+  if(avg_c100 < start)
+    return CURVE_FLOOR_PCT + (k0 - CURVE_FLOOR_PCT) * (avg_c100 - (start - CURVE_LEAD_C100)) / CURVE_LEAD_C100;
+  if(avg_c100 >= start + top) return 100;
+  return k0 + (100 - k0) * (avg_c100 - start) / top;
 }
+
+/* The curve for the picture of the app (GET /api/v1/fan/curve, 16.11.2026): what the controller wishes at a temperature, in percent. */
+int
+ps5tm_fan_curve_wish(const ps5tm_config_t *cfg, int temp_c100) {
+  int w = band_duty(temp_c100, cfg);
+  if(w <= 0) return 0;
+  if(w < CURVE_FLOOR_PCT) w = CURVE_FLOOR_PCT;                       /* the console does not run slower than this in a game */
+  int ceiling = comfort_ceiling(cfg);
+  if(w > ceiling && temp_c100 < (int)cfg->safety_temp_c * 100 - 300) w = ceiling;   /* the ceiling holds until the safety ramp takes over */
+  return w;
+}
+
+#define LIMIT_ROOM_MIN_C100 1000   /* less room than this between target and safety limit: no slow catch-up */
+
+/* How close to the safety limit the fan may no longer take its time (16.11.2026): half the distance between the target and the limit, at least
+   3 and at most 10 K. With the limit 27 K over the target (68 and 95) a 10 K band leaves a wide stretch in which the speed may swell instead of
+   jump. With the limit only a few kelvin over the target there is no room to be slow at all - the console would run into the limit and the
+   safety ramp would throw the fan to full speed, louder than a quick catch-up - so then it is "always close" (simulation: target 70, limit 74). */
+static int
+limit_band_c100(const ps5tm_config_t *cfg) {
+  int margin = (int)cfg->safety_temp_c * 100 - target_c100(cfg);
+  if(margin < LIMIT_ROOM_MIN_C100) return 100000;
+  int d = margin / 2;
+  if(d < 300) d = 300;
+  if(d > 1000) d = 1000;
+  return d;
+}
+
+#ifdef PS5TM_HOST_TEST
+static int g_sim_wish;
+#endif
 
 /* Returns the fan speed the controller wants next: the band says where to end
    up, the rate limit decides how quickly it gets there. */
@@ -521,9 +589,14 @@ comfort_step(int duty, int avg_c100, int trend_c100,
      * one before, so the approach eases off rather than slamming into place,
      * and the sound is a swell rather than a jump. The floor stays at the
      * configured step, so nothing gets slower than it was. */
-    int gap = want - duty;
-    int fast = gap / 2;
-    if(fast > step) step = fast;
+    /* ... but only when the console is within limit_band_c100() of the safety limit (16.11.2026). Further away there is time, and a
+       jump of half the gap per second is what made the fan "go up at once" at a rise of the temperature: from 23 to 60 % in
+       seconds. Away from the limit the speed rises by the profile's step, 1-2 % per second, which is heard as a swell. */
+    if(avg_c100 >= safety - limit_band_c100(cfg)) {
+      int gap = want - duty;
+      int fast = gap / 2;
+      if(fast > step) step = fast;
+    }
 
     int next = duty + step;
     return clamp_duty(next > want ? want : next);
@@ -612,9 +685,12 @@ servo_step(int current, int target_duty, int measured_duty,
   /* A big miss is a load step, not noise: one degree per six seconds walked the threshold
      back from 58 to 91 °C in over three minutes while the fan stayed loud. Small misses keep
      the small steps. */
+  /* One kelvin of threshold is about 5.6 % of fan speed, so a step of three is a jump of 17 %: audible as the fan "swaying" when it came
+     in the middle of an adjustment (console of 16.11.2026: 23 -> 38 -> 29 -> 32 % within a minute). The steps are smaller now: 1 for a
+     small miss, 2 for a larger one, 3 only for a big miss. */
   int cap;
-  if(err > 0) cap = (mag >= 20) ? 2 * SERVO_STEP_MAX_C : SERVO_STEP_MAX_C;
-  else        cap = (mag >= 20) ? 4 : (mag >= 10) ? 2 : 1;
+  if(err > 0) cap = (mag >= 20) ? SERVO_STEP_MAX_C : (mag >= 10) ? 2 : 1;
+  else        cap = (mag >= 20) ? SERVO_STEP_MAX_C : (mag >= 10) ? 2 : 1;
   if(step > cap) step = cap;
 
   /* A lower threshold widens the gap to the temperature, which is what makes
@@ -716,25 +792,20 @@ warn_worker(void *arg) {
 
 static void
 check_warnings(const ps5tm_sensors_t *s, int *warn_cpu, int *warn_soc) {
+  /* The limit in force: with "Warnschwelle folgt dem Ziel" (warning_follows_target) never lower than the target in
+     force + 2, see ps5tm_config_warning_cpu_c(). The target in force is the one of the previous cycle's snapshot (the
+     running game's own rule and the night mode included); read before the config lock, never nested with it. The
+     main chip's limit keeps its 5 °C above the processor's. */
+  pthread_mutex_lock(&g_snapshot_lock);
+  int target = g_snapshot.effective_target_c;
+  pthread_mutex_unlock(&g_snapshot_lock);
+
   ps5tm_config_lock();
-  int cpu_limit    = (int)g_config.warning_cpu_c;
+  int cpu_limit    = ps5tm_config_warning_cpu_c(&g_config, target);
   int soc_limit    = (int)g_config.warning_soc_c;
   int safety_limit = (int)g_config.safety_temp_c;
-  int automatic    = (g_config.mode == PS5TM_MODE_AUTOMATIC);
   ps5tm_config_unlock();
-
-  /* A warning is for a console that is hotter than it should be. With a target of 91 °C the console is meant to
-     run at 85, and a warning limit of 80 would nag all game long. So the limit in force is never lower than the
-     target in force + 2 (the target of the running game's own rule included: the snapshot of the previous cycle
-     has it); the configured value stays as it is and applies whenever the target is lower. The main chip's limit
-     keeps its 5 °C above the processor's. */
-  if(automatic) {
-    pthread_mutex_lock(&g_snapshot_lock);
-    int target = g_snapshot.effective_target_c;
-    pthread_mutex_unlock(&g_snapshot_lock);
-    if(target > 0 && cpu_limit < target + 2) cpu_limit = target + 2;
-    if(target > 0 && soc_limit < cpu_limit + 5) soc_limit = cpu_limit + 5;
-  }
+  if(soc_limit < cpu_limit + 5) soc_limit = cpu_limit + 5;
 
   *warn_cpu = (s->cpu_valid && s->cpu_c >= cpu_limit);
   *warn_soc = (s->soc_valid && s->soc_c >= soc_limit);
@@ -1526,6 +1597,9 @@ fan_worker(void *arg) {
                                     &cfg, now, &last_down_ms, &safety_active,
                                     at_min, measured, lead_c100);
         last_control_ms = now;
+#ifdef PS5TM_HOST_TEST
+        g_sim_wish = desired_duty;               /* the simulation's trace shows what the controller asks for */
+#endif
 
         if(safety_active && !safety_logged) {
           safety_logged = 1;
@@ -1567,7 +1641,7 @@ fan_worker(void *arg) {
       } else if(now - last_servo_ms >= (uint64_t)SERVO_INTERVAL_SEC * 1000) {
         int allow_more = avg_c100 >
                          target_c100(&cfg) -
-                         (int)cfg.deadband_c * 100;
+                         CURVE_LEAD_C100;     /* the gentle part of the curve begins under the target */
         desired_threshold = servo_step(last_applied, desired_duty, measured,
                                        allow_more || safety_active || blind);
       } else {
@@ -1622,7 +1696,11 @@ fan_worker(void *arg) {
 
       if(ff_floor >= 0 && last_applied >= hottest && desired_duty > SERVO_IDLE_DUTY_PCT && desired_duty > ff_floor &&
          desired_duty > measured + SERVO_TOLERANCE_PCT) {
-        int th = hottest - ((desired_duty - ff_floor) * 10 + ff_gain / 2) / ff_gain;
+        /* The first jump aims a little under the wish (FF_JUMP_DAMP_PCT): the console's answer overshoots (16.11.2026: wish 31 %, fan 37 % after the
+           jump), and the servo, which no longer corrects an error under 7 %, would leave that surplus standing. */
+        int above = desired_duty - ff_floor - FF_JUMP_DAMP_PCT;
+        if(above < 1) above = 1;
+        int th = hottest - (above * 10 + ff_gain / 2) / ff_gain;
         if(th < PS5TM_THRESHOLD_MIN_C) th = PS5TM_THRESHOLD_MIN_C;
         if(desired_threshold <= 0 || th < desired_threshold) {
           desired_threshold = th;
@@ -1769,6 +1847,9 @@ fan_worker(void *arg) {
     ps5tm_history_tick(s.cpu_c, s.cpu_valid, s.soc_c, s.soc_valid,
                        s.fan_duty_pct, s.fan_duty_valid,
                        (int)cfg.target_temp_c);
+    ps5tm_fantrace_add(s.cpu_valid ? s.cpu_c : -1, s.soc_valid ? s.soc_c : -1, avg_c100, automatic ? desired_duty : -1,
+                       s.fan_duty_valid ? s.fan_duty_pct * 10 : -1, last_applied, (int)cfg.target_temp_c, (int)cfg.profile, in_game,
+                       safety_active, automatic);
 
     pthread_mutex_lock(&g_snapshot_lock);
     g_snapshot.sensors             = s;

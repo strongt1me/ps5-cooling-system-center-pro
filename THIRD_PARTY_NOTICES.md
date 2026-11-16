@@ -55,9 +55,9 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   Startcode, kein fremder Systemcode, siehe `sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt.
 - **ps-disc-detect** (GPL-3.0-or-later; „disc detect“, Archiv `ps-disc-detect-main.zip`, vom User am 21.10.2026 bereitgestellt): Vorbild und Wissen für den Reiter „Disc“ (`src/disc.c`): der Weg zum Laufwerk (`/dev/xpt0`, CAMIOCOMMAND mit GET CONFIGURATION, READ DISC STRUCTURE, SET STREAMING), die Profilnummern, wo die Titelkennung liegt (`SYSTEM.CNF`, `PARAM.SFO`, `param.json`), das Lesen von `/dev/cd0` in 128-KiB-Stücken, das Benennen nach Redump und das Schema der Redump-Datenbank. Der Code ist neu geschrieben (kein CD-Abbild, kein IRD, keine eingebettete Liste); die MD5- und SHA-1-Rechnungen sind eigene Fassungen der veröffentlichten Verfahren.
-- **Kraken Mount** (quer3q, GPL-3.0-or-later, Version 0.2.0 vom 15.11.2026, <https://github.com/quer3q/kraken-mount>, Tag `v0.2.0`):
+- **Kraken Mount** (quer3q, GPL-3.0-or-later, Version 0.2.1 vom 16.11.2026, <https://github.com/quer3q/kraken-mount>, Tag `v0.2.1`):
   Für den Reiter „FPKGMount“ ist die veröffentlichte `kraken-mount.elf` (3 803 240 Bytes, SHA-256
-  `a9c02fe0dabd24581f2dec79b7bb92825284005045862c28e4e9fb973c3cf5bf`, gleich der `SHA256SUMS` der Veröffentlichung) unverändert als
+  `3b50bdfffaad5bacdd41ad380cc7ce3dfe419d8efde57b30c0c0e7a338fe2494`, gleich der `SHA256SUMS` der Veröffentlichung) unverändert als
   zlib-Blob eingebettet (`third_party/kraken_mount/`, `tools/gen_blob.py`) und wird bei „Kraken Mount starten“ an den ELF-Lader
   gesendet; die App bedient es über seine Schnittstelle auf Port 8097 (`src/kraken.c`). **Geänderte Kopie:** Die eingebettete ELF (und eine von GitHub geladene Fassung) trägt eine einzige Änderung: ein Byte der Zeichenkette `shadowmountplus.elf` (Prozessname, auf den Kraken Mount seit v0.2.0 beim Start wartet) wird geändert, damit es neben ShadowMountPlus arbeitet (`tools/patch_kraken.py`, `src/kraken.c`, siehe `third_party/kraken_mount/ORIGIN.md`); Quelltext des Projekts: <https://github.com/quer3q/kraken-mount> (Tag `v0.2.0`). Aus seinem Quelltext ist nichts übernommen
   (er ist in Rust geschrieben); der Quelltext dieser Fassung steht unter der genannten Adresse. Eine neuere Veröffentlichung lädt die

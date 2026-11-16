@@ -9,6 +9,7 @@
 
 #include "ps5tm.h"
 #include "smphold.h"
+#include "third_party/cJSON.h"
 
 static int g_fail, g_n;
 #define CHECK(c) do { g_n++; if(!(c)) { g_fail++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while(0)
@@ -121,13 +122,22 @@ static int t_failed(int reset, char *id, size_t n) {
 }
 
 static int t_title_running(const char *id) { return g_run_title[0] && !strcmp(g_run_title, id); }
+/* the start of a title (the own tile that was refused is started again, 16.11.2026) */
+static int g_start_calls, g_start_rc;
+static char g_start_id[16];
+static int t_start(const char *id) { g_start_calls++; snprintf(g_start_id, sizeof(g_start_id), "%s", id); return g_start_rc; }
+int ps5tm_library_start(const char *id) { (void)id; return -1; }
+cJSON *ps5tm_smp_call(const char *route, const cJSON *body, int timeout_ms, char *err, size_t err_len) { (void)route; (void)body; (void)timeout_ms; (void)err; (void)err_len; return NULL; }
+void ps5tm_config_smp_version(char *out, size_t n) { snprintf(out, n, "v2"); }
 static uint64_t t_boot(void) { return g_boot; }
 
 static void
 world(void) {
-  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot };
+  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot, t_start };
   ps5tm_smphold_test_env(&e);
   ps5tm_smphold_test_reset();
+  ps5tm_smphold_tile_test_reset();
+  g_start_calls = 0; g_start_rc = 0; g_start_id[0] = 0;
   g_now = 1000000; g_up = 1; g_game = 0; g_job = 0; g_mounted = 1; g_known = 1;
   g_unmount_calls = 0; g_unmount_http = 200; g_unmounted[0] = 0; g_notices = 0;
   g_notice_held[0] = g_notice_other[0] = 0; g_failed_next[0] = 0; g_resets = 0;
@@ -537,6 +547,72 @@ main(void) {
   CHECK(ps5tm_smphold_check_launch() == 0 && g_real_unmounts == 0 && ps5tm_smphold_is_held("PPSA99995"));
   kl_add("[SceShellUI] I/PSM.UI : ** Unload enqueue: LaunchFlowError.PPSA99997 : Scene");
   CHECK(ps5tm_smphold_check_launch() == 1 && g_real_unmounts == 1);
+
+
+  /* ---- an own tile refused while a game waits: started again after two seconds, at most three tries ---- */
+  world(); g_game = 0;
+  g_failed_next[0] = 0;
+  ps5tm_smphold_tile_tick();                                          /* no game: nothing read, nothing done */
+  CHECK(g_start_calls == 0 && g_resets == 0);
+
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();                                          /* a game: the log is looked at, from now on */
+  CHECK(g_resets == 1);
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  ps5tm_smphold_tile_tick();                                          /* refused: not at once */
+  CHECK(g_start_calls == 0);
+  g_now += 1000; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 0);
+  g_now += 1100; ps5tm_smphold_tile_tick();                           /* after two seconds */
+  CHECK(g_start_calls == 1 && !strcmp(g_start_id, "FAKE86922"));
+  g_now += 5000; ps5tm_smphold_tile_tick();                           /* accepted: not again */
+  CHECK(g_start_calls == 1);
+
+  /* another title that was refused: the app does not start it */
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "PPSA01325");
+  ps5tm_smphold_tile_tick();
+  g_now += 3000; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 0);
+
+  /* the console refuses the start again: three tries four seconds apart, then it is left */
+  world(); g_game = 1; g_start_rc = -1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86921");
+  ps5tm_smphold_tile_tick();
+  g_now += 2100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 1);
+  g_now += 4100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 2);
+  g_now += 4100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 3);
+  g_now += 4100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 3);   /* no fourth */
+
+  /* the tile is up before the second is over: nothing is started */
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  ps5tm_smphold_tile_tick();
+  snprintf(g_run_title, sizeof(g_run_title), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 0);
+
+  /* a console that refuses for good is not pestered: three starts in a minute */
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();
+  for(int i = 0; i < 6; i++) {
+    snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+    ps5tm_smphold_tile_tick();
+    g_now += 2100; ps5tm_smphold_tile_tick();
+    g_now += 1000;
+  }
+  CHECK(g_start_calls == 3);
+
+  /* with games held, the one reader of the log is the check for held games: it hands the refusal on */
+  world(); g_game = 1;
+  ps5tm_smphold_note("PPSA99994", 1);
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86921");
+  ps5tm_smphold_check_launch();
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 1 && !strcmp(g_start_id, "FAKE86921"));
 
   g_smp_available = 0;
   ps5tm_smphold_test_env(NULL);

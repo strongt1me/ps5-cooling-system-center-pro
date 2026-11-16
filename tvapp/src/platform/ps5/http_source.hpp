@@ -59,6 +59,7 @@ class HttpSource final : public Source
     void disc_post(const std::string &route, const std::string &json) override;
     void usb_eject(const std::string &mount) override;
     void playtime_reset() override;
+    void fan_trace_save() override;
     void saves_post(const std::string &route, const std::string &json) override;
     void backup_delete(const std::string &path) override;
     void extras_open(const std::string &id) override;
@@ -125,6 +126,7 @@ class HttpSource final : public Source
             disc,
             eject,
             playtime_reset,
+            trace_save,
             saves,
             backup_delete,
             extras_post,
@@ -202,6 +204,7 @@ class HttpSource final : public Source
     void poll_system_extra(bool first);
     int qr_rounds_ = 0; // System rounds since the QR code was last asked for (worker thread only)
     void poll_playtime();
+    void poll_curve();
     void poll_saves();
     void poll_save_job();
     void poll_game_backups();

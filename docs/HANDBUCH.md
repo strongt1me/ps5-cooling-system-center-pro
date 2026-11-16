@@ -1531,6 +1531,29 @@ vermerkt es als Überschreibung); SMPs Wert hält dann nur kurz. Wer SMPs Wert w
 - Solange er hält, zeigt der Status „Wächter“, eine feste Schwelle von Hand wird mit `409 fanguard_holding` abgelehnt; die
   Sensorwerte im Status laufen weiter. Geprüft mit `test/sim` (Szenarien Totmann, Übertemperatur, Absturz).
 
+## Lüfterkurve, Obergrenze, Regelaufzeichnung (seit 1.86.5)
+
+- **Die Kurve (`band_duty` in `src/fan.c`):** Von 10 °C unter dem Ziel steigt der Wunsch der Automatik langsam von der üblichen
+  Mindestdrehzahl (23 %) auf **28 % (Leise), 33 % (Ausgewogen), 40 % (Kühl)** am Ziel und von dort bis zur vollen Drehzahl
+  (nach dem 1,75-fachen des Bandes der Betriebsart: Leise rund 24 K, Ausgewogen rund 17 K, Kühl 14 K über dem Ziel). Das
+  Profil Kühl hat Schritt 2 %/s und Band 8 K. Ein Wunsch unter der Mindestdrehzahl der Konsole ändert nichts.
+- **Aufholen:** Der Sprung um die halbe Lücke je Sekunde gilt nur noch nahe der Sicherheitsgrenze (innerhalb der Hälfte des
+  Abstands zwischen Ziel und Grenze, 3 bis 10 K); bei weniger als 10 K Platz zwischen Ziel und Grenze bleibt es immer schnell.
+  Der Servo (Schwellen-Nachführung) lässt 7 Prozentpunkte Abweichung zu und prüft alle 3 s. Der erste Sprung der Schwelle
+  beim Spielstart wird um 3 Prozentpunkte gedämpft (`FF_JUMP_DAMP_PCT`).
+- **Karte „Lüfterkurve“** (Browser, unter dem Nachtmodus) und **Reiter „Lüfterkurve“** der Vollbild-App (Kühlung): die Kurve
+  als Bild mit der Temperatur von jetzt. Daten: `GET /api/v1/fan/curve`.
+- **Obergrenze der Lüfterdrehzahl (`fan_cap_pct`, 30–100, ab Werk 100):** senkt nur die Grenze des Normalbetriebs
+  (`comfort_ceiling`); Sicherheitspfad und Lüfterwächter ignorieren sie.
+- **Warnschwelle folgt dem Ziel (`warning_follows_target`, ab Werk 1):** in der Automatik gilt max(`warning_cpu_c`,
+  Ziel + 2); aus = genau `warning_cpu_c` (`ps5tm_config_warning_cpu_c`).
+- **Regelaufzeichnung (`src/fantrace.c`):** Ring der letzten 30 Minuten, eine Zeile je Sekunde (`zeit_utc;cpu_c;soc_c;mittel_c;
+  wunsch_pct;luefter_pct;schwelle_c;ziel_c;profil;spiel;sicherheit;automatik`), nur im Speicher.
+  `GET /api/v1/fan/trace` liefert die Tabelle, `POST /api/v1/fan/trace/save` legt sie als `regelaufzeichnung-<Datum>-<Zeit>.csv`
+  im Datenordner ab. Wechsel von Profil oder Ziel stehen im Protokoll (`profile_changed`, `target_temp_changed`).
+- **Simulation:** `test/sim/fansim.c` kennt erzeugte Läufe (`gen:<Art>:<Ziel>:<c|b|k>:<Seed>:<Sicherheit>:<Modell>`), die
+  Maße `fanmax`, `rise10`, `rise30`, `chg/min`, `above_safety` und Modelle mit den gemessenen Mindestdrehzahlen (Slim 13/23).
+
 ## Voraussetzung kstuff
 
 `/dev/icc_fan` ist nur mit geladenem **kstuff** erreichbar. Fehlt es, laufen

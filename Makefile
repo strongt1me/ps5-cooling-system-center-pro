@@ -47,6 +47,7 @@ SRCS += src/config.c
 SRCS += src/platform.c
 SRCS += src/fan.c
 SRCS += src/fanguard.c
+SRCS += src/fantrace.c
 SRCS += src/tile.c
 SRCS += src/log.c
 SRCS += src/regstats.c
@@ -325,7 +326,7 @@ gen/npfakesignin_blob.c: $(NPFSI_ELF) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(NPFSI_ELF) ps5tm_npfakesignin
 
 # Kraken Mount (quer3q, GPL-3.0): the released ELF, started from the page FPKGMount (src/kraken.c) over the loader on 127.0.0.1:9021.
-KRAKEN_ELF := third_party/kraken_mount/kraken-mount_v0.2.0.elf
+KRAKEN_ELF := third_party/kraken_mount/kraken-mount_v0.2.1.elf
 # Since v0.2.0 Kraken Mount waits for ShadowMountPlus to end before it mounts anything; this app runs both side by side (as with v0.0.1-beta),
 # so one string constant of the program is changed (tools/patch_kraken.py; a downloaded newer version gets the same change in src/kraken.c).
 KRAKEN_PATCHED := gen/kraken-mount-patched.elf

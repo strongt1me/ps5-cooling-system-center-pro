@@ -90,6 +90,7 @@ enum View
 {
     kCooling,
     kSettings,
+    kCurve, // Kühlung -> Lüfterkurve (16.11.2026)
     kGames,
     kPackages,
     kPs4,
@@ -123,7 +124,8 @@ enum PageIndex
     kPageFiles = 10,
     kPageProfile = 11,
     kPageKraken = 12,
-    kPageCount = 13,
+    kPageCurve = 13,
+    kPageCount = 14,
 };
 
 // The sidebar's icons, drawn with the kit's shapes (no artwork files): one per area.
@@ -412,8 +414,8 @@ class Ps5cc final : public app::Concept
         nav_.set_focus(kAreaCooling, true);
         nav_.set_focused(false);
 
-        ps5cc::style_subtabs(cooling_tabs_, theme_, 2);
-        cooling_tabs_.set_tabs({{"Übersicht"}, {"Einstellungen"}});
+        ps5cc::style_subtabs(cooling_tabs_, theme_, 3);
+        cooling_tabs_.set_tabs({{"Übersicht"}, {"Einstellungen"}, {"Lüfterkurve"}});
         cooling_tabs_.set_active(0, true);
         set_game_tabs(false);
         games_tabs_.set_active(0, true);
@@ -423,7 +425,7 @@ class Ps5cc final : public app::Concept
             ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
             ps5cc::make_system_page(),   ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
             ps5cc::make_backups_page(),  ps5cc::make_files_page(),    ps5cc::make_profile_page(),
-            ps5cc::make_kraken_page()};
+            ps5cc::make_kraken_page(),   ps5cc::make_fancurve_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -845,6 +847,13 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {4.0f, 0, Direction::none, "selbsttest"},
+            // Lüfterkurve (16.11.2026): the curve with the cursor at the temperature of now, then moved right
+            {0.5f, action_bit(Action::jump_next)},
+            {1.4f, 0, Direction::none, "luefterkurve"},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::right},
+            {0.6f, 0, Direction::none, "luefterkurve-cursor"},
             {0.3f, action_bit(Action::page_next)},
             {0.9f, 0, Direction::down},
             {0.35f, 0, Direction::down},
@@ -1526,7 +1535,7 @@ class Ps5cc final : public app::Concept
         switch (nav_.current())
         {
         case kAreaCooling:
-            return cooling_tabs_.active() == 0 ? kCooling : kSettings;
+            return cooling_tabs_.active() == 0 ? kCooling : cooling_tabs_.active() == 1 ? kSettings : kCurve;
         case kAreaGames:
             return game_views_[static_cast<std::size_t>(
                 std::clamp(games_tabs_.active(), 0, static_cast<int>(game_views_.size()) - 1))];
@@ -1561,6 +1570,8 @@ class Ps5cc final : public app::Concept
         {
         case kSettings:
             return pages_[kPageSettings].get();
+        case kCurve:
+            return pages_[kPageCurve].get();
         case kPayloads:
             return pages_[kPagePayloads].get();
         case kLogs:
@@ -2052,6 +2063,7 @@ class Ps5cc final : public app::Concept
         const View v = view();
         ps5cc::source().watch(v == kJobs       ? ps5cc::Watch::jobs
                               : v == kSettings ? ps5cc::Watch::settings
+                              : v == kCurve    ? ps5cc::Watch::curve
                               : v == kPayloads ? ps5cc::Watch::payloads
                               : v == kLogs     ? ps5cc::Watch::logs
                               : v == kPackages ? ps5cc::Watch::packages

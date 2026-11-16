@@ -408,6 +408,10 @@ void HttpSource::usb_eject(const std::string &mount)
 {
     push({Request::Kind::eject, 0, mount, {}});
 }
+void HttpSource::fan_trace_save()
+{
+    push({Request::Kind::trace_save, 0, {}, "{}"});
+}
 void HttpSource::playtime_reset()
 {
     push({Request::Kind::playtime_reset, 0, {}, {}});
@@ -1178,7 +1182,8 @@ void HttpSource::run()
     bool ps4_open = false;
     std::int64_t last_storage = 0;
     bool storage_open = false;
-    std::int64_t last_playtime = 0, last_save_job = 0;
+    std::int64_t last_playtime = 0, last_save_job = 0, last_curve = 0;
+    bool curve_open = false;
     bool playtime_open = false, saves_open = false, backups_open = false, backup_deleting = false;
     std::int64_t last_fs_job = 0;
     bool files_open_ = false;
@@ -1481,6 +1486,20 @@ void HttpSource::run()
                 last_disc = now;
                 poll_disc();
             }
+        }
+        // Lüfterkurve: every 3 s while it is open (the temperature of now moves on the picture)
+        if (page == Watch::curve)
+        {
+            if (!curve_open || now - last_curve >= 3000000)
+            {
+                last_curve = now;
+                poll_curve();
+            }
+            curve_open = true;
+        }
+        else
+        {
+            curve_open = false;
         }
         // Spielzeit: every 5 s while it is open, as the web page; Spielstände: the list on entry
         // and after a job, the job every second while one runs; Sicherungen: on entry, and again
@@ -2040,6 +2059,23 @@ void HttpSource::handle(const Request &request)
             poll_dump();
         else
             poll_dumps(false);
+        break;
+    }
+    case Request::Kind::trace_save:
+    {
+        if (exchange("POST", "/api/v1/fan/trace/save", request.text, &status, &body, 15) == Net::ok && status < 300)
+        {
+            std::string msg;
+            if (cJSON *root = cJSON_Parse(body.c_str()))
+            {
+                msg = str(root, "message");
+                cJSON_Delete(root);
+            }
+            notice(Notice::Kind::success, "Regelaufzeichnung", msg.empty() ? "Gespeichert." : msg);
+        }
+        else
+            notice(Notice::Kind::error, "Regelaufzeichnung",
+                   message_of(body, "Die App hat nicht geantwortet."));
         break;
     }
     case Request::Kind::playtime_reset:
@@ -2611,6 +2647,8 @@ void HttpSource::poll_config()
         console_tz_known_ ? console_tz_min_ : static_cast<int>(num(root, "night_tz_offset_min", 0));
     c.target_temp_c = static_cast<int>(num(root, "target_temp_c", 68));
     c.warning_cpu_c = static_cast<int>(num(root, "warning_cpu_c", 85));
+    c.warning_follows_target = num(root, "warning_follows_target", 1) != 0.0;
+    c.fan_cap_pct = static_cast<int>(num(root, "fan_cap_pct", 100));
     c.warning_countdown_s = static_cast<int>(num(root, "warning_countdown_s", 120));
     c.lightbar_enabled = num(root, "lightbar_enabled", 0) != 0.0;
     c.lightbar_warn_c = static_cast<int>(num(root, "lightbar_warn_c", 70));
@@ -3474,6 +3512,37 @@ void HttpSource::poll_package_queue()
     if (key_of(q) == key_of(data_.package_queue))
         return;
     data_.package_queue = std::move(q);
+    ++data_.serial;
+}
+
+void HttpSource::poll_curve()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/fan/curve", {}, &status, &body, 10) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    FanCurve c;
+    c.loaded = true;
+    c.automatic = flag(root, "automatic");
+    c.profile = str(root, "profile");
+    c.target_c = static_cast<int>(num(root, "target_c"));
+    c.safety_c = static_cast<int>(num(root, "safety_c"));
+    c.cap_pct = static_cast<int>(num(root, "cap_pct", 100));
+    const double now10 = num(root, "now_c10", -1);
+    c.now_c = now10 >= 0 ? static_cast<float>(now10 / 10.0) : -1.0f;
+    c.fan_pct = static_cast<int>(num(root, "now_fan_pct", -1));
+    const cJSON *p = nullptr;
+    cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(root, "points"))
+    {
+        c.temps.push_back(static_cast<int>(num(p, "c")));
+        c.wish.push_back(static_cast<int>(num(p, "pct")));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.fan_curve = std::move(c);
     ++data_.serial;
 }
 

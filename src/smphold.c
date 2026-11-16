@@ -20,6 +20,7 @@
  * the person's own business. */
 #include "ps5tm.h"
 #include "smphold.h"
+#include "third_party/cJSON.h"
 #include "titleid.h"
 
 #include <errno.h>
@@ -188,6 +189,59 @@ env_launch_failed(int reset, char *id, size_t n) {
   return 0;
 }
 
+static int
+env_start_title(const char *id) {
+  return ps5tm_library_start(id);
+}
+
+/* The lines of ShadowMountPlus's log (POST /api/v1/debug-log, read only) that speak of a start that was refused: "launch mount unavailable",
+   "Device busy", the title. The last few, joined, for one line of the app's log, so that the reason of a refused start is in the app and
+   not only on the screen of a diagnosis tool. */
+static int
+env_smp_excerpt(const char *id, char *out, size_t n) {
+  if(!n) return 0;
+  out[0] = 0;
+  if(!ps5tm_smp_available(NULL, 0)) return 0;
+  char err[120] = "";
+  cJSON *ans = ps5tm_smp_call("/debug-log", NULL, 4000, err, sizeof(err));
+  if(!ans) return 0;
+  const cJSON *c = cJSON_GetObjectItem(ans, "content");
+  if(cJSON_IsString(c) && c->valuestring) {
+    const char *txt = c->valuestring;
+    const char *lines[6];
+    size_t lens[6];
+    int keep = 0, w = 0;
+    for(const char *p = txt; *p;) {
+      const char *e = strchr(p, '\n');
+      size_t l = e ? (size_t)(e - p) : strlen(p);
+      char buf[300];
+      size_t m = l < sizeof(buf) - 1 ? l : sizeof(buf) - 1;
+      memcpy(buf, p, m);
+      buf[m] = 0;
+      if(strstr(buf, "unavailable") || strstr(buf, "Device busy") || (id && id[0] && strstr(buf, id) && strstr(buf, "launch"))) {
+        lines[w % 6] = p;
+        lens[w % 6] = l;
+        w++;
+        if(keep < 6) keep++;
+      }
+      if(!e) break;
+      p = e + 1;
+    }
+    size_t used = 0;
+    for(int k = 0; k < keep; k++) {
+      int idx = (w - keep + k) % 6;
+      size_t l = lens[idx] > 150 ? 150 : lens[idx];
+      if(used + l + 4 >= n) break;
+      if(used) { memcpy(out + used, " | ", 3); used += 3; }
+      memcpy(out + used, lines[idx], l);
+      used += l;
+      out[used] = 0;
+    }
+  }
+  cJSON_Delete(ans);
+  return out[0] != 0;
+}
+
 static void
 env_default(void) {
   g_env.find = env_find;
@@ -198,6 +252,8 @@ env_default(void) {
   g_env.now_ms = ps5tm_mono_ms;
   g_env.notice = env_notice;
   g_env.launch_failed = env_launch_failed;
+  g_env.start_title = env_start_title;
+  g_env.smp_excerpt = env_smp_excerpt;
   g_env.title_running = env_title_running;
   g_env.boot_id = env_boot_id;
 }
@@ -463,6 +519,8 @@ ps5tm_smphold_step(void) {
   return done;
 }
 
+static void tile_refused(const char *id);
+
 /* The console refused to start a title: it may well be the held game that did it, so it goes, at once. The person starts again. */
 int
 ps5tm_smphold_check_launch(void) {
@@ -470,6 +528,7 @@ ps5tm_smphold_check_launch(void) {
   if(!g_env.launch_failed || ps5tm_smphold_count() == 0) return 0;
   char other[16] = "";
   if(!g_env.launch_failed(0, other, sizeof(other))) return 0;
+  tile_refused(other);                                 /* an own tile that was refused is started again (ps5tm_smphold_tile_tick) */
   if(!g_env.smp_up()) return 0;
   hold_t cur[HOLD_MAX];
   int n;
@@ -559,6 +618,101 @@ ps5tm_smphold_test_load(void) {
   load();
 }
 
+/* ---- an own tile refused while a game waits in the background (16.11.2026) ----
+ *
+ * The person starts a game, presses the PS button and opens the app's tile: the console shows an error ("launch mount unavailable ...
+ * status=16, Device busy", ShadowMountPlus keeps its one place for the game that is running) and only the second press works. Seen on the
+ * console of 16.11.2026 twice (11:18, 12:41). The refusal leaves "LaunchFlowError.<id>" in the kernel log, as for a held game above; the
+ * second start works because the refusal has let go of the place. So the app does that second start itself: two seconds after the
+ * refusal, at most three tries four seconds apart, at most three starts a minute for the same tile (a console that refuses for good is not
+ * pestered). Only the app's own tiles, and only while a game is there, so the kernel log is read only then. */
+#define TR_FIRST_DELAY_MS   2000u
+#define TR_GAP_MS           4000u
+#define TR_TRIES            3
+#define TR_WINDOW_MS        60000u
+#define TR_WINDOW_STARTS    3
+
+static struct {
+  char     id[12];
+  uint64_t at;
+  int      tries;
+  int      fresh;                                /* the refusal has not been written to the log yet */
+} g_tr;                                          /* a start waiting; id[0] == 0 none (the watcher thread only) */
+static int      g_tr_watching;
+static uint64_t g_tr_window_ms;
+static int      g_tr_window_starts;
+
+/* A refusal was read from the kernel log (here or by the check for held games): an own tile is started again soon. */
+static void
+tile_refused(const char *id) {
+  if(!id || !ps5tm_is_own_tile(id) || !strcmp(g_tr.id, id)) return;
+  snprintf(g_tr.id, sizeof(g_tr.id), "%s", id);
+  g_tr.tries = 0;
+  g_tr.fresh = 1;
+  g_tr.at = (g_env.now_ms ? g_env.now_ms() : 0) + TR_FIRST_DELAY_MS;
+}
+
+/* read_log: look at the kernel log for a refusal (not while held games exist: their check reads the log and hands the refusal on). */
+static void
+tile_step(int read_log) {
+  if(!g_env.now_ms) env_default();
+  if(!g_env.launch_failed || !g_env.start_title) return;
+  const int game = g_env.game_running();
+  if(!game && !g_tr.id[0]) { g_tr_watching = 0; return; }     /* no game, nothing waiting: the log is not read */
+  const uint64_t now = g_env.now_ms();
+  if(read_log) {
+    if(!g_tr_watching) { g_env.launch_failed(1, NULL, 0); g_tr_watching = 1; }   /* refusals from before do not count */
+    char id[16] = "";
+    if(g_env.launch_failed(0, id, sizeof(id))) tile_refused(id);
+  }
+  if(g_tr.id[0] && g_tr.fresh) {                                /* the reason, as ShadowMountPlus gave it, into the app's log */
+    g_tr.fresh = 0;
+    char why[480] = "";
+    if(g_env.smp_excerpt && g_env.smp_excerpt(g_tr.id, why, sizeof(why)))
+      PS5TM_INFO("tile_refused", "Der Start der Kachel %s wurde abgelehnt. ShadowMountPlus meldet: %s", g_tr.id, why);
+    else
+      PS5TM_INFO("tile_refused", "Der Start der Kachel %s wurde abgelehnt (die Meldung von ShadowMountPlus war nicht zu lesen).", g_tr.id);
+    char ver[8] = "";
+    ps5tm_config_smp_version(ver, sizeof(ver));
+    if(!strcmp(ver, "old"))
+      PS5TM_WARN("tile_refused_old_smp", "ShadowMountPlus ist älter als 1.7beta12: Dieser Fehler („Device busy“ nach einem Spielwechsel) ist dort bekannt und ab 1.7beta12 behoben.");
+  }
+  if(!g_tr.id[0] || now < g_tr.at) return;
+
+  if(g_env.title_running && g_env.title_running(g_tr.id)) { g_tr.id[0] = 0; return; }   /* it is up already */
+  if(now - g_tr_window_ms >= TR_WINDOW_MS) { g_tr_window_ms = now; g_tr_window_starts = 0; }
+  if(g_tr_window_starts >= TR_WINDOW_STARTS) {                  /* it keeps being refused: left to the person */
+    PS5TM_WARN("tile_retry_giveup", "Der Start der Kachel %s wurde mehrfach abgelehnt; die App versucht es nicht weiter.", g_tr.id);
+    g_tr.id[0] = 0;
+    return;
+  }
+  g_tr_window_starts++;
+  g_tr.tries++;
+  int rc = g_env.start_title(g_tr.id);
+  if(rc >= 0) {
+    PS5TM_INFO("tile_retry_started", "Die Kachel %s wurde abgelehnt (ein Spiel wartet im Hintergrund) und von der App noch einmal gestartet (Versuch %d).", g_tr.id, g_tr.tries);
+    g_tr.id[0] = 0;
+  } else if(g_tr.tries >= TR_TRIES) {
+    PS5TM_WARN("tile_retry_failed", "Die Kachel %s ließ sich auch nach %d Versuchen nicht starten (0x%08X).", g_tr.id, g_tr.tries, (unsigned)rc);
+    g_tr.id[0] = 0;
+  } else {
+    g_tr.at = now + TR_GAP_MS;
+  }
+}
+
+void
+ps5tm_smphold_tile_tick(void) {
+  tile_step(1);
+}
+
+void
+ps5tm_smphold_tile_test_reset(void) {
+  memset(&g_tr, 0, sizeof(g_tr));
+  g_tr_watching = 0;
+  g_tr_window_ms = 0;
+  g_tr_window_starts = 0;
+}
+
 static void *
 hold_thread(void *arg) {
   (void)arg;
@@ -566,13 +720,14 @@ hold_thread(void *arg) {
   unsigned tick = 0;
   for(;;) {
     sleep(1);
-    if(ps5tm_smphold_count() == 0) { was = 0; continue; }   /* nothing held: nothing is read, nothing asked */
+    if(ps5tm_smphold_count() == 0) { was = 0; tile_step(1); continue; }   /* nothing held: nothing is read for games, nothing asked */
     if(!was) {
       ps5tm_smphold_mark();
       was = 1;
       tick = 0;
     }
     ps5tm_smphold_check_launch();
+    tile_step(0);
     if(++tick % 3 == 0) ps5tm_smphold_step();
   }
   return NULL;

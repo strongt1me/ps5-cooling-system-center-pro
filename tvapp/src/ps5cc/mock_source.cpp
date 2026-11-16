@@ -240,6 +240,8 @@ class MockSource final : public Source
         data_.config.tz_offset_min = 60;
         data_.config.target_temp_c = 68;
         data_.config.warning_cpu_c = 85;
+        data_.config.warning_follows_target = true;
+        data_.config.fan_cap_pct = 100;
         data_.config.warning_countdown_s = 120;
         data_.config.lightbar_enabled = true;
         data_.config.lightbar_warn_c = 70;
@@ -1793,6 +1795,42 @@ class MockSource final : public Source
         changed();
     }
 
+    void fan_trace_save() override
+    {
+        notice(Notice::Kind::success, "Regelaufzeichnung",
+               "Regelaufzeichnung gespeichert: /data/PS5-Cooling-Center/regelaufzeichnung-20261116-141500.csv");
+    }
+
+    // The curve of the balanced profile at a target of 66 °C and a limit of 85 °C, as the app computes it (fan.c band_duty).
+    void fill_fan_curve()
+    {
+        FanCurve &c = data_.fan_curve;
+        c.loaded = true;
+        c.automatic = true;
+        c.profile = "balanced";
+        c.target_c = 66;
+        c.safety_c = 85;
+        c.cap_pct = 100;
+        c.now_c = 68.9f;
+        c.fan_pct = 41;
+        for (int t = 52; t <= 85; ++t)
+        {
+            const int t100 = t * 100;
+            const int start = 6600, top = 1000 * 7 / 4 * 1;
+            int w = 0;
+            if (t100 <= start - 1000)
+                w = 0;
+            else if (t100 < start)
+                w = 23 + (33 - 23) * (t100 - (start - 1000)) / 1000;
+            else if (t100 >= start + top)
+                w = 100;
+            else
+                w = 33 + (100 - 33) * (t100 - start) / top;
+            c.temps.push_back(t);
+            c.wish.push_back(w);
+        }
+    }
+
     void playtime_reset() override
     {
         data_.playtime.sessions.clear();
@@ -2616,6 +2654,7 @@ class MockSource final : public Source
     // backups of games.
     void fill_phase4()
     {
+        fill_fan_curve();
         Playtime &p = data_.playtime;
         p.loaded = true;
         p.now = 1793275200; // 29.10.2026 12:00 UTC

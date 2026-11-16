@@ -1,11 +1,11 @@
 # Kraken Mount
 
-**Version:** v0.2.0 (15.11.2026)
+**Version:** v0.2.1 (16.11.2026)
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.2.0`, Commit `8531071016c27bcb5e23e49f143409b1e0b7371f`)
+**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.2.1`, Commit `029386534988d7f70ba3eb2e01d4c285336e5611`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext und Hinweise zu Fremdbausteinen im Quellprojekt: `LICENSE`, `THIRD_PARTY_NOTICES`)
-**Datei:** `kraken-mount_v0.2.0.elf` (PS5-ELF, 3 803 240 Bytes), unverändert aus der Veröffentlichung
-**SHA-256:** `a9c02fe0dabd24581f2dec79b7bb92825284005045862c28e4e9fb973c3cf5bf` (gleich `SHA256SUMS` der Veröffentlichung)
+**Datei:** `kraken-mount_v0.2.1.elf` (PS5-ELF, 3 803 240 Bytes), unverändert aus der Veröffentlichung
+**SHA-256:** `3b50bdfffaad5bacdd41ad380cc7ce3dfe419d8efde57b30c0c0e7a338fe2494` (gleich `SHA256SUMS` der Veröffentlichung)
 
 ## Verwendung
 
@@ -24,7 +24,19 @@ laut `ensure_tile` in Ruhe. Eine früher angelegte Kachel entfernt die App mit d
 (`keep_tile_away` in `src/kraken.c`).
 
 Aus dem Quellcode von Kraken Mount ist nichts in diese App übernommen; die ELF wird nur weitergegeben. Den Quellcode zu dieser Fassung
-gibt es unter der oben genannten Adresse (Tag `v0.2.0`).
+gibt es unter der oben genannten Adresse (Tag `v0.2.1`).
+
+## Neu in v0.2.1 (16.11.2026, laut Veröffentlichung)
+
+- **Trophäen, Spielstand-Symbole und Hintergründe** kommen jetzt auch bei FPKG-Spielen an: Dateien, die nur im äußeren Behälter des Pakets
+  liegen (`save_data.png`, `pic0`/`pic1`, `snd0.at9`, die Trophäendateien, die verschlüsselten `npbind.dat`/`nptitle.dat`), legt Kraken Mount
+  jetzt auch in den Zwischenspeicher des Spiels. Das behebt die Meldung CE-107112-2 bei Spielen, deren Spielstand eigentlich funktionierte
+  (#41, #48), fehlende Trophäen und fehlende Hintergründe (#51).
+- **Dateizugriff:** Spiele und die Spielstand- und Trophäendienste der Konsole lesen Dateien unter ihrem eigenen Benutzer. Kraken Mount macht
+  Zwischenspeicher, `.pkg`-Dateien samt Ordnern und Spielordner dafür lesbar (nur Rechte hinzufügen, nie entfernen). Vorher ließ eine mit
+  eingeschränkten Rechten hochgeladene `.pkg` ampr-emu-ng in den LZ4-Modus zurückfallen, und das Spiel startete nicht (#36, #56).
+- Beim ersten Start nach dem Wechsel baut Kraken Mount den Zwischenspeicher **jedes** Spiels einmal neu auf (dauert, braucht freien Platz).
+- Die Schnittstelle (Port 8097) ist unverändert; der Ein-Byte-Eingriff (`shadowmountplus.elf`) gilt unverändert (2 Stellen).
 
 ## Neu in v0.2.0 (laut Veröffentlichung und DESIGN.md)
 
@@ -42,9 +54,9 @@ null) in `GET /api/state`. Läuft ShadowMountPlus dauerhaft, meldet Kraken Mount
 mit v0.0.1-beta). Deshalb ändert sie in der eingebetteten ELF beim Bau (`tools/patch_kraken.py`, `Makefile`) und in einer von GitHub geladenen
 Fassung beim Speichern (`patch_smp_wait`, `src/kraken.c`) die Zeichenkette `shadowmountplus.elf` (die Konstante `SMP_PROCESS` in `src/main.rs`, zwei
 Stellen in der Datei) an ihrem letzten Byte zu `shadowmountplus.elX`: Kein Prozess hat diesen Namen, das Warten auf ShadowMountPlus endet sofort. Gleiche
-Länge, sonst bleibt die ELF unverändert; das Warten auf kstuff bleibt. Die Datei `kraken-mount_v0.2.0.elf` in diesem Ordner ist die unveränderte
+Länge, sonst bleibt die ELF unverändert; das Warten auf kstuff bleibt. Die Datei `kraken-mount_v0.2.1.elf` in diesem Ordner ist die unveränderte
 Veröffentlichung (SHA-256 oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderung ist
-der eine Wert in `SMP_PROCESS` (`src/main.rs` im Quellprojekt, Tag `v0.2.0`).
+der eine Wert in `SMP_PROCESS` (`src/main.rs` im Quellprojekt, Tag `v0.2.1`).
 
 ## Hinweise des Autors
 

@@ -1735,7 +1735,12 @@ ps5tm_library_switch(const char *id, char *err, size_t err_len) {
     return 0;
   }
   release_start(id);
-  snprintf(err, err_len, "Die Konsole ließ das Spiel nicht starten (0x%08X).", (unsigned)lrc);
+  /* Said in plain words (16.11.2026): the codes alone told the person nothing. Only what is known is claimed: 0x8094000C and 0x80940010 are "the
+     title runs already" (measured); for every other code the usual reasons are named without pretending to know which one it is. */
+  if((unsigned)lrc == 0x8094000Cu || (unsigned)lrc == 0x80940010u)
+    snprintf(err, err_len, "Das Spiel läuft schon (0x%08X).", (unsigned)lrc);
+  else
+    snprintf(err, err_len, "Die Konsole ließ das Spiel nicht starten (0x%08X). Häufige Gründe: die Disc ist noch nicht bereit, ein anderes Spiel wird gerade beendet oder gestartet, oder ShadowMountPlus hält einen Platz (Device busy).", (unsigned)lrc);
   return -1;
 }
 
@@ -2919,6 +2924,8 @@ handle_config_get(int fd) {
       "\"library_cache\":%u,"
       "\"night_enabled\":%u,\"night_start_min\":%u,\"night_end_min\":%u,"
       "\"night_target_c\":%u,\"night_tz_offset_min\":%d,"
+      "\"fan_cap_pct\":%u,\"fan_cap_min_pct\":%u,"
+      "\"warning_follows_target\":%u,"
       "\"tv_language\":\"%s\","
       "\"smp_version\":\"%s\","
       "\"smp_update_emulators\":%s,"
@@ -2946,6 +2953,8 @@ handle_config_get(int fd) {
       g_config.library_cache,
       g_config.night_enabled, g_config.night_start_min, g_config.night_end_min,
       g_config.night_target_c, g_config.night_tz_offset_min,
+      g_config.fan_cap_pct, PS5TM_FAN_CAP_MIN_PCT,
+      g_config.warning_follows_target,
       g_config.tv_language,
       g_config.smp_version,
       smp_update ? "true" : "false",
@@ -3085,6 +3094,10 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
     next.night_target_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_tz_offset_min")))
     next.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "fan_cap_pct")))
+    next.fan_cap_pct = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "warning_follows_target")))
+    next.warning_follows_target = ps5tm_num_u32(it->valuedouble);
   /* an unknown language falls back to "" (follow the console) in ps5tm_config_clamp */
   if(cJSON_IsString(it = cJSON_GetObjectItem(root, "tv_language")))
     snprintf(next.tv_language, sizeof(next.tv_language), "%s",
@@ -3129,6 +3142,8 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
   ps5tm_mode_t before = g_config.mode;
   unsigned before_probe = g_config.probe_mask;
   unsigned before_cache = g_config.library_cache;
+  ps5tm_profile_t before_profile = g_config.profile;     /* said in the log when it changes (16.11.2026: the changes of profile and target were not in it) */
+  unsigned before_target = g_config.target_temp_c;
   g_config = next;
   ps5tm_config_clamp(&g_config);
   if(has_probe) {
@@ -3137,8 +3152,14 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
   }
   ps5tm_mode_t after = g_config.mode;
   unsigned after_cache = g_config.library_cache;
+  ps5tm_profile_t after_profile = g_config.profile;
+  unsigned after_target = g_config.target_temp_c;
   ps5tm_config_unlock();
   int saved = (ps5tm_config_save() == 0);
+  if(before_profile != after_profile)
+    PS5TM_INFO("profile_changed", "Profil gewechselt: %s → %s.", profile_name(before_profile), profile_name(after_profile));
+  if(before_target != after_target)
+    PS5TM_INFO("target_temp_changed", "Zieltemperatur von %u auf %u °C gesetzt.", before_target, after_target);
 
   if(before_cache != after_cache) {
     ps5tm_library_forget();               /* the next list is read afresh: it fills (or stops filling) the folder */
@@ -3193,6 +3214,8 @@ handle_config_export(int fd) {
   cJSON_AddNumberToObject(cfg, "night_end_min", g_config.night_end_min);
   cJSON_AddNumberToObject(cfg, "night_target_c", g_config.night_target_c);
   cJSON_AddNumberToObject(cfg, "night_tz_offset_min", g_config.night_tz_offset_min);
+  cJSON_AddNumberToObject(cfg, "fan_cap_pct", g_config.fan_cap_pct);
+  cJSON_AddNumberToObject(cfg, "warning_follows_target", g_config.warning_follows_target);
   cJSON_AddStringToObject(cfg, "tv_language", g_config.tv_language);
   cJSON_AddStringToObject(cfg, "smp_version", g_config.smp_version);
   cJSON_AddStringToObject(cfg, "profile",
@@ -3310,6 +3333,10 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
     next.night_target_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_tz_offset_min")))
     next.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "fan_cap_pct")))
+    next.fan_cap_pct = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "warning_follows_target")))
+    next.warning_follows_target = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsString(it = cJSON_GetObjectItem(cfg, "tv_language")) && ps5tm_tv_language_ok(it->valuestring))
     snprintf(next.tv_language, sizeof(next.tv_language), "%s", it->valuestring);
   if(cJSON_IsString(it = cJSON_GetObjectItem(cfg, "smp_version")) && ps5tm_smp_version_ok(it->valuestring))
@@ -5767,6 +5794,68 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
     handle_backdrop_image(fd, req->query);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/fan/curve")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    ps5tm_config_t c;
+    ps5tm_config_lock();
+    c = g_config;
+    ps5tm_config_unlock();
+    ps5tm_snapshot_t sn;
+    ps5tm_fan_snapshot(&sn);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "profile", profile_name(c.profile));
+    cJSON_AddNumberToObject(o, "target_c", c.target_temp_c);
+    cJSON_AddNumberToObject(o, "safety_c", c.safety_temp_c);
+    cJSON_AddNumberToObject(o, "cap_pct", c.fan_cap_pct);
+    cJSON_AddBoolToObject(o, "automatic", c.mode == PS5TM_MODE_AUTOMATIC);
+    cJSON_AddNumberToObject(o, "now_c10", sn.samples > 0 ? sn.avg_temp_c10 : -1);      /* the controller's average, tenths of a degree */
+    cJSON_AddNumberToObject(o, "now_fan_pct", sn.sensors.fan_duty_valid ? sn.sensors.fan_duty_pct : -1);
+    cJSON *pts = cJSON_AddArrayToObject(o, "points");
+    int from = (int)c.target_temp_c - 14, to = (int)c.safety_temp_c;
+    if(from < 30) from = 30;
+    if(to > 110) to = 110;
+    for(int t = from; t <= to; t++) {
+      int w = ps5tm_fan_curve_wish(&c, t * 100);
+      cJSON *p = cJSON_CreateObject();
+      cJSON_AddNumberToObject(p, "c", t);
+      cJSON_AddNumberToObject(p, "pct", w);
+      cJSON_AddItemToArray(pts, p);
+    }
+    send_cjson(fd, 200, o);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/fan/trace")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    size_t tl = 0;
+    char *csv = ps5tm_fantrace_csv(&tl);
+    if(!csv) { ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
+    ps5tm_http_send(fd, 200, "OK", "text/csv; charset=utf-8", csv, tl,
+                    "Content-Disposition: attachment; filename=regelaufzeichnung.csv\r\n");
+    free(csv);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/fan/trace/save")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    char nm[96] = "";
+    int e = ps5tm_fantrace_save(nm, sizeof(nm));
+    if(e) {
+      ps5tm_http_send_error(fd, 500, "trace_save_failed", "Die Regelaufzeichnung ließ sich nicht speichern.");
+      return;
+    }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "name", nm);
+    cJSON_AddStringToObject(o, "dir", PS5TM_DATA_DIR);
+    char msg[220];
+    snprintf(msg, sizeof(msg), "Regelaufzeichnung gespeichert: %s/%s", PS5TM_DATA_DIR, nm);
+    cJSON_AddStringToObject(o, "message", msg);
+    PS5TM_INFO("fan_trace_saved", "%s", msg);
+    send_cjson(fd, 200, o);
     return;
   }
 

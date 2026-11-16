@@ -37,6 +37,8 @@ enum Row
     kLightbar,
     kLightWarn,
     kLightHot,
+    kFanCap,
+    kWarnFollows,
     kRuleSave,
     kRuleNone,
     kRuleBase = 100, // + index of the kept game profile
@@ -290,13 +292,14 @@ class SettingsPage final : public Page
   private:
     static std::string config_key(const Config &c)
     {
-        char text[200];
-        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
+        char text[220];
+        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
                       c.mode.c_str(), c.profile.c_str(), c.safety_temp_c, c.safety_min_c,
                       c.safety_max_c, c.night_enabled ? 1 : 0, c.night_start_min, c.night_end_min,
                       c.night_target_c, c.target_min_c, c.target_max_c, c.warning_cpu_c,
                       c.warning_countdown_s, c.lightbar_enabled ? 1 : 0, c.lightbar_warn_c,
-                      c.lightbar_hot_c, c.target_temp_c);
+                      c.lightbar_hot_c, c.target_temp_c, c.fan_cap_pct,
+                      c.warning_follows_target ? 1 : 0);
         return text;
     }
 
@@ -315,12 +318,20 @@ class SettingsPage final : public Page
             static_cast<float>(c.safety_min_c), static_cast<float>(c.safety_max_c), 1.0f);
         safety.unit = " °C";
         safety.description = "Darüber regelt der Lüfter ohne Rücksicht auf die Lautstärke hoch.";
+        ui::FormRow &cap = form_.add_slider(kFanCap, "Obergrenze der Lüfterdrehzahl",
+                                            static_cast<float>(c.fan_cap_pct), 30.0f, 100.0f, 5.0f);
+        cap.unit = " %";
+        cap.description = "Im Normalbetrieb nie schneller als das. 100 % = keine Grenze. Gilt nicht "
+                          "über der Sicherheitsgrenze.";
         form_.add_header("WARNUNGEN");
         ui::FormRow &warn = form_.add_slider(
             kWarnCpu, "Warnung ab", static_cast<float>(c.warning_cpu_c), 40.0f, 110.0f, 1.0f);
         warn.unit = " °C";
         warn.description = "Meldung auf dem Fernseher, wenn der Prozessor so warm wird. Der Chip "
-                           "warnt 5 °C später, im Automatikbetrieb nie unter Ziel + 2 °C.";
+                           "warnt 5 °C später.";
+        form_.add_toggle(kWarnFollows, "Warnschwelle folgt dem Ziel", c.warning_follows_target)
+            .description = "An: im Automatikbetrieb nie unter Ziel + 2 °C. Aus: genau der Wert "
+                           "bei „Warnung ab“.";
         ui::FormRow &countdown =
             form_.add_slider(kWarnCountdown, "Warn-Countdown",
                              static_cast<float>(c.warning_countdown_s), 30.0f, 900.0f, 30.0f);
@@ -398,6 +409,8 @@ class SettingsPage final : public Page
             row->maximum = static_cast<float>(c.safety_max_c);
         }
         form_.set_slider(kSafety, static_cast<float>(c.safety_temp_c));
+        form_.set_slider(kFanCap, static_cast<float>(c.fan_cap_pct));
+        form_.set_toggle(kWarnFollows, c.warning_follows_target);
         form_.set_toggle(kNight, c.night_enabled);
         form_.set_slider(kNightStart, static_cast<float>(c.night_start_min));
         form_.set_slider(kNightEnd, static_cast<float>(c.night_end_min));
@@ -462,6 +475,12 @@ class SettingsPage final : public Page
             break;
         case kWarnCpu:
             pending_["warning_cpu_c"] = number(kWarnCpu);
+            break;
+        case kFanCap:
+            pending_["fan_cap_pct"] = number(kFanCap);
+            break;
+        case kWarnFollows:
+            pending_["warning_follows_target"] = form_.toggle_value(kWarnFollows) ? "1" : "0";
             break;
         case kWarnCountdown:
             pending_["warning_countdown_s"] = number(kWarnCountdown);

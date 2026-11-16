@@ -211,6 +211,9 @@ typedef enum {
 #define PS5TM_TARGET_MIN_C   50
 #define PS5TM_TARGET_MAX_C   91
 
+/* The user's own ceiling for the fan in normal operation (fan_cap_pct); 100 = none. */
+#define PS5TM_FAN_CAP_MIN_PCT 30
+
 /* The proportional band: how many degrees above the target the fan needs to
  * go from its floor to full.
  *
@@ -292,6 +295,16 @@ typedef struct {
   unsigned        night_target_c;      /* PS5TM_TARGET_MIN_C..PS5TM_TARGET_MAX_C */
   int             night_tz_offset_min; /* -720..840 */
 
+  /* Upper limit of the fan speed in normal (comfort) operation, in percent: PS5TM_FAN_CAP_MIN_PCT..100, 100 = no
+     limit (the default). It lowers comfort_ceiling() in fan.c and nothing else: from the safety limit on, and for the
+     watchdog (fanguard.c), the limit does not apply. */
+  unsigned        fan_cap_pct;
+
+  /* 1 = the CPU warning limit follows the target: it is never lower than the target in force + 2 (the default:
+     this is what the app always did in automatic mode; 0 = warning_cpu_c exactly as typed). The one
+     reader is ps5tm_config_warning_cpu_c(). */
+  unsigned        warning_follows_target;
+
   /* The language of the fullscreen app (tile FAKE86921): "" follows the console's system language, else one of
      "de", "en", "es", "fr", "it", "ru". The browser keeps its own choice per browser. */
   char            tv_language[4];
@@ -330,6 +343,10 @@ extern ps5tm_config_t g_config;
 void ps5tm_config_defaults(ps5tm_config_t *cfg);
 void ps5tm_config_clamp(ps5tm_config_t *cfg);
 void ps5tm_config_apply_profile(ps5tm_config_t *cfg);
+/* The CPU warning limit in force, in degrees: warning_cpu_c, or - with warning_follows_target in automatic mode - at
+   least target_c + 2 (target_c <= 0 = use cfg->target_temp_c; pass the target in force when a game's rule or the night
+   mode changed it). Pure function of its arguments: call it with the config lock held, or on a copy. */
+int  ps5tm_config_warning_cpu_c(const ps5tm_config_t *cfg, int target_c);
 /* True for a dotted-quad IPv4 address — the only thing bind_address can be. */
 int  ps5tm_config_bind_valid(const char *s);
 /* True for "" (follow the console) and the languages the fullscreen app has: de, en, es, fr, it, ru. */
@@ -887,6 +904,11 @@ struct cJSON *ps5tm_mounters_conflicts(void);
 /* The watcher of fpkgdup.c (15.11.2026): when a title that lies at Kraken Mount and at ShadowMountPlus has ended, it is unmounted at ShadowMountPlus (its own
    /games/unmount) and the person is told; nothing else is touched. */
 void ps5tm_fpkgdup_start(void);
+
+/* The recording of the fan regulation (src/fantrace.c, 16.11.2026): one line a second for the last 30 minutes, in memory. */
+void  ps5tm_fantrace_add(int cpu_c, int soc_c, int avg_c100, int wish, int fan_x10, int thr_c, int target_c, int profile, int game, int safety, int automatic);
+char *ps5tm_fantrace_csv(size_t *len_out);                 /* the table, "zeit_utc;cpu_c;..." ; the caller frees it */
+int   ps5tm_fantrace_save(char *name, size_t name_len);   /* into the data folder; 0 or an errno */
 
 /* Dump Forge as the engine of the format "FPKG (Debug-.pkg)" (src/dumpforge.c): its PS5 program in the folder PS5TM_DATA_DIR/dumpforge, started
    through the loader, asked on 127.0.0.1:8095. The state is {installed, version?, folder, running, running_version?, project, fetching}. */
@@ -1965,6 +1987,7 @@ int  ps5tm_fan_apply_manual(int temp_c, int *errno_out);
 int  ps5tm_fan_duty_to_threshold(int duty_pct);
 int  ps5tm_fan_threshold_to_duty(int threshold_c);
 int  ps5tm_fan_curve_eval(const ps5tm_config_t *cfg, int temp_c);
+int  ps5tm_fan_curve_wish(const ps5tm_config_t *cfg, int temp_c100);   /* the soft curve of the automatic mode, percent (0 = not asked) */
 
 /* The fan self-test: the threshold is put well below the temperature for a short while and the fan speed is watched.
    That proves the whole chain (write, firmware, fan) independently of the temperature, which the regulation itself

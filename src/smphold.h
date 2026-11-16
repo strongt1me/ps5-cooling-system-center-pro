@@ -28,6 +28,10 @@ typedef struct {
   /* The boot of the console (seconds, kern.boottime); the file of held games is written under it and not read under another boot. 0 or NULL:
      not known, the file is read as it is. */
   uint64_t (*boot_id)(void);
+  /* Start a title (ps5tm_library_start): >= 0 the console accepted it. NULL: an own tile that was refused is not started again. */
+  int      (*start_title)(const char *id);
+  /* The last lines of ShadowMountPlus's own log that name a refused start (for the app's log): 1 and the text in out, else 0. NULL: not asked. */
+  int      (*smp_excerpt)(const char *id, char *out, size_t n);
 } ps5tm_smphold_env_t;
 
 /* Called for every /games/mount (mounted 1) and /games/unmount (0) the app sends (smp.c, ps5tm_smp_call). */
@@ -43,6 +47,10 @@ int  ps5tm_smphold_check_launch(void);
 int  ps5tm_smphold_release_for_start(const char *title_id);
 /* From now on only refusals that come later count (the watcher thread calls it when the app starts to hold a game). */
 void ps5tm_smphold_mark(void);
+/* One look at the app's own tiles (16.11.2026, wish of the user): the watcher thread calls it every second. While a game is in the background and the console
+   refuses to start a tile of the app ("launch mount unavailable ... Device busy": ShadowMountPlus keeps its one place for the running game), the
+   tile is started once more after two seconds, up to three times; the person who pressed it sees the app come up instead of having to press again. */
+void ps5tm_smphold_tile_tick(void);
 /* How many games are written down. */
 int  ps5tm_smphold_count(void);
 /* Is this title one the app mounted and nobody started yet? */
@@ -52,6 +60,7 @@ int  ps5tm_smphold_paused(void);                    /* the time of the held titl
 /* Host test only. NULL gives the real world back. */
 void ps5tm_smphold_test_env(const ps5tm_smphold_env_t *env);
 void ps5tm_smphold_test_reset(void);
+void ps5tm_smphold_tile_test_reset(void);
 void ps5tm_smphold_test_load(void);                 /* reads the file of held games (what the start of the app does) without starting the thread */
 
 #endif

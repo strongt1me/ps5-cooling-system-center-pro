@@ -43,6 +43,7 @@ typedef struct {
   int    pause_at, pause_len;/* rest mode: everything frozen, the clock jumps */
   int    broken;             /* the loop's writes are ignored (threshold stuck) */
   int    fan_full;           /* the firmware runs the fan at >= 95 % whatever */
+  int    floor_idle, floor_game;   /* the console's own minimum speed (percent); 0 = the Pro's 20 / 34 */
 } scen_t;
 
 static scen_t S;
@@ -85,6 +86,12 @@ static const scen_t SCEN[] = {
   { BASE("step_t91_gain0.5", 91, 1), .fw_gain = 0.5 },
   { BASE("pulses_t66_gain2_lag2", 66, 4), .t1 = 60, .fw_gain = 2, .lag_mul = 2 },
   /* guard */
+  /* a game with load spikes, as on the console on 16.11.2026 (Fishing at a target of 68 in the profile Cool: the fan went to 69 %) */
+  { BASE("spiky_t68_cool", 68, 6), .t1 = 60, .dur = 1200, .profile = PS5TM_PROFILE_COOL },
+  { BASE("spiky_t68_bal", 68, 6), .t1 = 60, .dur = 1200, .profile = PS5TM_PROFILE_BALANCED },
+  { BASE("spiky_t68_comfort", 68, 6), .t1 = 60, .dur = 1200 },
+  { BASE("spiky_t78_cool", 78, 6), .t1 = 60, .dur = 1200, .profile = PS5TM_PROFILE_COOL },
+  { BASE("step_t68_cool", 68, 1), .t1 = 60, .dur = 1200, .profile = PS5TM_PROFILE_COOL },
   { BASE("G_deadman_cool", 66, 0), .dur = 400, .guard = 1, .hang_at = 120, .hang_len = 60 },
   { BASE("G_deadman_hot", 78, 5), .dur = 700, .guard = 1, .hang_at = 300, .hang_len = 200 },
   { BASE("G_pause", 66, 5), .dur = 600, .guard = 1, .pause_at = 200, .pause_len = 120 },
@@ -116,15 +123,16 @@ power_at(int t) {
     case 2: return t < S.t1 ? 100 : 32;
     case 3: return t < S.t1 ? 32 : t >= S.t2 ? 100 : 32 + 68.0 * (t - S.t1) / (S.t2 - S.t1);
     case 4: return (t / S.t1) % 2 ? 100 : 32;
+    case 6: return t < S.t1 ? 32 : ((t - S.t1) % 90 < 25 ? 100 : 62);   /* a game with spikes (16.11.2026) */
     default: return 100;
   }
 }
-static int in_game_at(int t) { return power_at(t) > 60; }
+static int in_game_at(int t) { return S.load_kind == 6 ? t >= S.t1 : power_at(t) > 60; }
 
 static double
 fw_duty(double t_cpu, int thr, int game) {
   if(S.fan_full) return 96;
-  double floor = game ? 34 : 20;
+  double floor = game ? (S.floor_game ? S.floor_game : 34) : (S.floor_idle ? S.floor_idle : 20);
   double gap = t_cpu - thr, extra;
   if(gap <= -20)    extra = 0;
   else if(gap <= 0) extra = (20 + gap) * 0.15;
@@ -136,7 +144,7 @@ fw_duty(double t_cpu, int thr, int game) {
 static void
 plant_init(void) {
   double P = power_at(0);
-  double d = in_game_at(0) ? 34 : 20;
+  double d = in_game_at(0) ? (S.floor_game ? S.floor_game : 34) : (S.floor_idle ? S.floor_idle : 20);
   g_duty = d;
   g_th = T_AMB + P / G_of(d);
   g_td = g_th + P * R_DH;
@@ -214,6 +222,7 @@ sim_hang(uint64_t until_ms) {
 /* ------------------------------------------------------------------- metrics */
 
 #define MAXT 4000
+static int  m_wish[MAXT];
 static int  m_avg10[MAXT], m_thr[MAXT], m_duty[MAXT], m_cpu[MAXT], m_safety[MAXT], m_guard[MAXT], m_safelim[MAXT];
 static int  m_n = 0;
 static int  fan_writes_in_hold = 0, fan_writes = 0, guard_writes = 0;
@@ -228,6 +237,7 @@ advance(void) {
   g_vms += 1000;
   plant_step(t);
   if(m_n < MAXT) {
+    m_wish[m_n]   = g_sim_wish;
     m_avg10[m_n]  = g_snapshot.avg_temp_c10;
     m_thr[m_n]    = atomic_load(&g_thr);
     m_duty[m_n]   = (int)lround(g_duty);
@@ -286,6 +296,13 @@ report(void) {
   int lvl = m_duty[60 < n ? 60 : 0], changes = 0;
   for(int i = 60; i < n; i++) if(abs(m_duty[i] - lvl) >= 2) { changes++; lvl = m_duty[i]; }
   double cpm = changes / ((n - 60) / 60.0);
+  /* how loud and how sudden: the highest speed after the load came, and the biggest rise of the real speed within 10 s / 30 s (16.11.2026) */
+  int fanmax = 0, rise10 = 0, rise30 = 0;
+  for(int i = ev; i < n; i++) {
+    if(m_duty[i] > fanmax) fanmax = m_duty[i];
+    if(i >= 10 && m_duty[i] - m_duty[i - 10] > rise10) rise10 = m_duty[i] - m_duty[i - 10];
+    if(i >= 30 && m_duty[i] - m_duty[i - 30] > rise30) rise30 = m_duty[i] - m_duty[i - 30];
+  }
   int above = 0, safety_s = 0, guard_s = 0, maxcpu = 0;
   for(int i = 0; i < n; i++) {
     if(m_avg10[i] / 10 >= m_safelim[i]) above++;
@@ -294,9 +311,9 @@ report(void) {
     if(m_cpu[i] > maxcpu) maxcpu = m_cpu[i];
   }
   printf("%-22s reach=%4ds settle=%4ds final=%5.1f ss_err=%+5.1f over_final=%4.1f over_target=%+5.1f maxdie=%3d "
-         "lastduty=%d..%d lastT=%.1f..%.1f thr_rev=%d LC=%s chg/min=%.2f above_safety=%ds safety=%ds guard=%ds",
+         "lastduty=%d..%d lastT=%.1f..%.1f thr_rev=%d LC=%s chg/min=%.2f above_safety=%ds safety=%ds guard=%ds fanmax=%d rise10=%d rise30=%d",
          S.name, reach, settle, fin, fin - S.target, mx - fin, mx - S.target, maxcpu, dmin, dmax, tmin / 10.0, tmax / 10.0,
-         rev, lc ? "JA" : "nein", cpm, above, safety_s, guard_s);
+         rev, lc ? "JA" : "nein", cpm, above, safety_s, guard_s, fanmax, rise10, rise30);
   if(S.guard)
     printf(" | deadman@%d left@%d hot@%d(x%d) hot_left@%d fan_writes_in_hold=%d guard_thr:%s%s",
            ev_deadman, ev_deadman_left, ev_hot, hot_events, ev_hot_left, fan_writes_in_hold,
@@ -306,8 +323,8 @@ report(void) {
   if(getenv("SIMTRACE")) {
     FILE *f = fopen(getenv("SIMTRACE"), "w");
     if(f) {
-      fprintf(f, "t,avg,cpu,thr,duty,safety,guard\n");
-      for(int i = 0; i < n; i++) fprintf(f, "%d,%.1f,%d,%d,%d,%d,%d\n", i, m_avg10[i] / 10.0, m_cpu[i], m_thr[i], m_duty[i], m_safety[i], m_guard[i]);
+      fprintf(f, "t,avg,cpu,thr,duty,safety,guard,wish\n");
+      for(int i = 0; i < n; i++) fprintf(f, "%d,%.1f,%d,%d,%d,%d,%d,%d\n", i, m_avg10[i] / 10.0, m_cpu[i], m_thr[i], m_duty[i], m_safety[i], m_guard[i], m_wish[i]);
       fclose(f);
     }
   }
@@ -338,6 +355,7 @@ void ps5tm_show_dialog(const char *text) { (void)text; }
 void ps5tm_chanlog_sample(const ps5tm_sensors_t *s) { (void)s; }
 void ps5tm_thermal_sample(int a, int b, double c, int d, int e, int f, int g) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g; }
 void ps5tm_history_tick(int a, int b, int c, int d, int e, int f, int g) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g; }
+void ps5tm_fantrace_add(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j, int k) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g;(void)h;(void)i;(void)j;(void)k; }
 void ps5tm_pad_lightbar_request(int e, int s) { (void)e; (void)s; }
 int  ps5tm_pad_lightbar_supported(void) { return 0; }
 int  ps5tm_sony_api_trylock(void) { return 1; }
@@ -412,11 +430,25 @@ main(int argc, char **argv) {
     for(unsigned i = 0; i < sizeof(SCEN) / sizeof(SCEN[0]); i++) printf("%s\n", SCEN[i].name);
     return 0;
   }
-  int found = 0;
+  int found = 0, seed = 12345, safety_by_hand = 0;
   for(unsigned i = 0; i < sizeof(SCEN) / sizeof(SCEN[0]); i++)
     if(!strcmp(SCEN[i].name, argv[1])) { S = SCEN[i]; found = 1; }
+  /* generated: gen:<spiky|step|pulses>:<target>:<c|b|k>:<seed>:<safety>  (16.11.2026: many runs for a fair comparison of a change) */
+  if(!found && !strncmp(argv[1], "gen:", 4)) {
+    char kind[16] = "", pr = 'c', model = 'p';
+    int target = 68, sd = 1, saf = 0;
+    if(sscanf(argv[1] + 4, "%15[a-z]:%d:%c:%d:%d:%c", kind, &target, &pr, &sd, &saf, &model) >= 4) {
+      S = (scen_t){ .name = argv[1], .target = target, .fw_gain = 1, .lag_mul = 1, .tau_mul = 1, .noise = 1.5, .dur = 1200, .t1 = 60,
+                    .profile = pr == 'k' ? PS5TM_PROFILE_COOL : pr == 'b' ? PS5TM_PROFILE_BALANCED : PS5TM_PROFILE_COMFORT };
+      S.load_kind = !strcmp(kind, "spiky") ? 6 : !strcmp(kind, "pulses") ? 4 : 1;
+      if(model == 's') { S.floor_idle = 13; S.floor_game = 23; }   /* the Slim of 16.11.2026: idle 13 %, in a game 23 % */
+      seed = 1000 + sd;
+      safety_by_hand = saf;
+      found = 1;
+    }
+  }
   if(!found) { fprintf(stderr, "unknown scenario %s\n", argv[1]); return 2; }
-  srand(12345);
+  srand(seed);
   mkdir(PS5TM_DATA_DIR, 0755);
   unlink(FANMODEL_FILE);
 
@@ -425,6 +457,7 @@ main(int argc, char **argv) {
   g_config.target_temp_c = (unsigned)S.target;
   g_config.profile = S.profile;
   if(S.load_kind == 1 && S.t2) g_config.safety_temp_c = (unsigned)S.t2;   /* step scenarios: t2 = a safety limit set by hand */
+  if(safety_by_hand) g_config.safety_temp_c = (unsigned)safety_by_hand;
   ps5tm_config_clamp(&g_config);
 
   plant_init();

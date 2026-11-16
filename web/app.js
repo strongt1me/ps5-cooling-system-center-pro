@@ -726,6 +726,8 @@
           fan_threshold_c: c.fan_threshold_c,
           fan_reapply_sec: c.fan_reapply_sec,
           warning_cpu_c: c.warning_cpu_c,
+          warning_follows_target: c.warning_follows_target,
+          fan_cap_pct: c.fan_cap_pct,
           safety_temp_c: c.safety_temp_c,
           /* The mask the console returns to, not a temporary diagnosis one. */
           probe_mask: finiteOrNull(c.probe_revert_mask) ?? c.probe_mask,
@@ -2131,6 +2133,13 @@
     /* Fehlt das Feld (ältere App), gilt die Vorgabe „an". */
     if ($("#mic-button-status")) $("#mic-button-status").checked = c.ps_button_status !== 0;
     if ($("#s-smp-version")) { $("#s-smp-version").value = c.smp_version || "auto"; loadSmpNote(); }
+    /* Fehlt ein Feld (ältere App): keine Grenze, die Warnschwelle folgt dem Ziel. */
+    if ($("#fan-cap-range")) {
+      const cap = Number.isFinite(c.fan_cap_pct) ? c.fan_cap_pct : 100;
+      $("#fan-cap-range").min = c.fan_cap_min_pct ?? 30;
+      if (!state.fanCapDirty) { $("#fan-cap-range").value = cap; txt("#fan-cap-out", `${cap} %`); }
+    }
+    if ($("#s-warn-follows")) $("#s-warn-follows").checked = c.warning_follows_target !== 0;
 
     /* Regelbereich, Ruhezone, Intervall, Glättung und Schrittweite haben
        keine Felder mehr — sie ergeben sich aus der Betriebsart. Die Werte
@@ -2209,7 +2218,9 @@
        ist, und liegt bei hohen Zielen darunter. Bei 91 °C ist das der Wert, den die Konsole
        selbst einstellt. */
     const cfgNum = (k, dflt) => (state.cfg && Number.isFinite(state.cfg[k]) ? state.cfg[k] : dflt);
-    const warnC = Math.max(cfgNum("warning_cpu_c", 80), v + 2);   /* die Warnschwelle geht mit dem Ziel mit (Ziel + 2) */
+    /* mit „Warnschwelle folgt dem Ziel“ (ab Werk an) geht die Warnschwelle mit dem Ziel mit (Ziel + 2) */
+    const warnC = cfgNum("warning_follows_target", 1) === 0 ? cfgNum("warning_cpu_c", 80)
+                                                            : Math.max(cfgNum("warning_cpu_c", 80), v + 2);
     const safeC = Math.max(cfgNum("safety_temp_c", 78), v + 4);
     const hint = v <= 62 ? "Sehr kühl — der Lüfter ist dauerhaft gut hörbar."
                : v <= 65 ? "Kühl — spürbar mehr Lüftergeräusch."
@@ -12192,7 +12203,7 @@
       loadSystem(); loadHealth();
       if (state.status) renderCores(state.status);
     }
-    if (state.page === "cooling") { loadRules(); renderCharts(); loadHistory(); }
+    if (state.page === "cooling") { loadRules(); renderCharts(); loadHistory(); fcLoad(); }
     if (state.page === "payloads") loadPayloadsPage();
     if (state.page === "profile") loadProfile();
     if (state.page === "games") {
@@ -12345,6 +12356,30 @@
     saveConfig({ profile: r.value }, "Betriebsart geändert.")
       .catch((e) => toast(e.message, "error"));
   }));
+
+  /* Obergrenze der Lüfterdrehzahl: beim Ziehen nur die Anzeige, gespeichert wird beim Loslassen. */
+  if ($("#fan-cap-range")) {
+    $("#fan-cap-range").addEventListener("input", (e) => {
+      state.fanCapDirty = true;
+      txt("#fan-cap-out", `${e.target.value} %`);
+    });
+    $("#fan-cap-range").addEventListener("change", async (e) => {
+      if (!needCfg()) return;
+      const v = Number(e.target.value);
+      try {
+        await saveConfig({ fan_cap_pct: v }, v >= 100 ? "Obergrenze der Lüfterdrehzahl aufgehoben." : "Obergrenze der Lüfterdrehzahl gespeichert.");
+      } catch (err) { toast(err.message, "error"); }
+      state.fanCapDirty = false;
+      if (state.cfg) { const c = Number.isFinite(state.cfg.fan_cap_pct) ? state.cfg.fan_cap_pct : 100; e.target.value = c; txt("#fan-cap-out", `${c} %`); }
+    });
+  }
+  /* Warnschwelle folgt dem Ziel: gilt sofort, der Hinweis bei der Zieltemperatur zeigt die wirksame Schwelle. */
+  if ($("#s-warn-follows")) $("#s-warn-follows").addEventListener("change", (e) => {
+    saveConfig({ warning_follows_target: e.target.checked ? 1 : 0 },
+               e.target.checked ? "Die Warnschwelle folgt jetzt dem Ziel."
+                                : "Die Warnschwelle ist jetzt fest.")
+      .catch((err) => { toast(err.message, "error"); loadConfig().catch(() => {}); });
+  });
 
   $("#auto-mode").addEventListener("change", (e) => {
     saveConfig({ mode: e.target.checked ? "automatic" : "observe" },
@@ -12864,6 +12899,10 @@
           patch.fan_reapply_sec = clampInt(backend.fan_reapply_sec, 1, 300, 15);
         if (backend.warning_cpu_c !== undefined)
           patch.warning_cpu_c = clampInt(backend.warning_cpu_c, 40, 110, 80);
+        if (backend.warning_follows_target !== undefined)
+          patch.warning_follows_target = backend.warning_follows_target ? 1 : 0;
+        if (backend.fan_cap_pct !== undefined)
+          patch.fan_cap_pct = clampInt(backend.fan_cap_pct, 30, 100, 100);
         if (backend.safety_temp_c !== undefined)
           patch.safety_temp_c = clampInt(backend.safety_temp_c, 72, 95, 78);
         if (backend.probe_mask !== undefined)
@@ -13382,6 +13421,68 @@
   });
   if ($("#night-save")) $("#night-save").addEventListener("click", nightSave);
 
+  /* Lüfterkurve (16.11.2026): GET /api/v1/fan/curve gibt die Punkte der Kurve und die Temperatur von jetzt; die Karte zeichnet sie. */
+  const fcSvgNs = "http://www.w3.org/2000/svg";
+  const fcLoad = async () => {
+    const svg = $("#fc-svg");
+    if (!svg) return;
+    let c;
+    try { c = await api("/api/v1/fan/curve"); } catch { return; }
+    const pts = c.points || [];
+    if (pts.length < 2) return;
+    const X0 = 46, X1 = 700, Y0 = 206, Y1 = 12;                         /* the plot, in picture units */
+    const t0 = pts[0].c, t1 = pts[pts.length - 1].c;
+    const px = (t) => X0 + (X1 - X0) * (t - t0) / Math.max(1, t1 - t0);
+    const py = (p) => Y0 - (Y0 - Y1) * Math.max(0, Math.min(100, p)) / 100;
+    const grid = $("#fc-grid");
+    let g = "";
+    for (let p = 0; p <= 100; p += 25) g += `<path d="M${X0} ${py(p).toFixed(1)}H${X1}" class="fc-g"></path><text class="fc-ax" data-no-i18n x="${X0 - 6}" y="${(py(p) + 4).toFixed(1)}" text-anchor="end">${p} %</text>`;
+    for (let t = Math.ceil(t0 / 10) * 10; t <= t1; t += 10) g += `<text class="fc-ax" data-no-i18n x="${px(t).toFixed(1)}" y="${Y0 + 16}" text-anchor="middle">${t}°</text>`;
+    grid.innerHTML = g;
+    const drawn = pts.filter((p) => p.pct > 0);                       /* where nothing is asked for there is no curve: the console runs by itself */
+    if (drawn.length < 2) return;
+    const d = drawn.map((p, i) => `${i ? "L" : "M"}${px(p.c).toFixed(1)} ${py(p.pct).toFixed(1)}`).join("");
+    $("#fc-line").setAttribute("d", d);
+    $("#fc-area").setAttribute("d", `${d}L${px(drawn[drawn.length - 1].c).toFixed(1)} ${Y0}L${px(drawn[0].c).toFixed(1)} ${Y0}Z`);
+    const tx = px(c.target_c), sx = px(c.safety_c);
+    const tl = $("#fc-target"), sl = $("#fc-safety");
+    tl.setAttribute("x1", tx); tl.setAttribute("x2", tx);
+    sl.setAttribute("x1", sx); sl.setAttribute("x2", sx);
+    const lt = $("#fc-lbl-target"), ls = $("#fc-lbl-safety");
+    lt.setAttribute("x", tx); lt.setAttribute("text-anchor", "middle");
+    ls.setAttribute("x", sx); ls.setAttribute("text-anchor", "end");
+    const now = c.now_c10 >= 0 ? c.now_c10 / 10 : null;
+    const dot = $("#fc-now");
+    let curveAt = null;
+    if (now !== null && now >= t0 && now <= t1) {
+      const lo = pts.filter((p) => p.c <= now).pop() || pts[0];
+      const hi = pts.find((p) => p.c >= now) || pts[pts.length - 1];
+      curveAt = lo.c === hi.c ? lo.pct : lo.pct + (hi.pct - lo.pct) * (now - lo.c) / (hi.c - lo.c);
+      dot.setAttribute("cx", px(now).toFixed(1)); dot.setAttribute("cy", py(curveAt).toFixed(1));
+    } else { dot.setAttribute("cx", -20); dot.setAttribute("cy", -20); }
+    const parts = [];
+    if (now !== null) parts.push(`<span data-no-i18n>${now.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C</span>`);
+    if (c.now_fan_pct >= 0) parts.push(`<span>Lüfter</span> <span data-no-i18n>${c.now_fan_pct} %</span>`);
+    if (curveAt !== null) parts.push(`<span>Kurve</span> <span data-no-i18n>${Math.round(curveAt)} %</span>`);
+    const note = $("#fc-note");
+    const sig = c.automatic ? parts.join(" · ") : "off";
+    if (note && note.dataset.sig !== sig) {                              /* only touched when the text changes, so the translator is not run every 5 s */
+      note.dataset.sig = sig;
+      note.innerHTML = c.automatic ? sig : "<span>Automatik aus: Die Konsole regelt selbst, die Kurve gilt nicht.</span>";
+    }
+  };
+  const fcSave = async () => {
+    const b = $("#fc-trace-save");
+    if (b) b.disabled = true;
+    try {
+      const r = await api("/api/v1/fan/trace/save", { method: "POST", body: "{}" });
+      toast(r.message || "Regelaufzeichnung gespeichert.");
+    } catch (e) { toast(e.message, "error"); }
+    if (b) b.disabled = false;
+  };
+  if ($("#fc-trace-save")) $("#fc-trace-save").addEventListener("click", fcSave);
+  fcLoad();
+
   /* Lüfter-Selbsttest: der Knopf startet ihn oder bricht den laufenden ab; die Seite fragt jede Sekunde nach, solange er läuft. */
   const fanTest = { timer: 0, last: null };
   const ftRunning = (r) => !!r && (r.state === "requested" || r.state === "running");
@@ -13643,6 +13744,7 @@
      same picture. */
   setInterval(() => { if (!document.hidden && !scrolling && state.page === "cooling") loadHistory(); }, 60000);
   setInterval(() => { if (!document.hidden && !scrolling && state.page === "cooling") loadRules(true); }, 15000);
+  setInterval(() => { if (!document.hidden && !scrolling && state.page === "cooling") fcLoad(); }, 5000);
   /* Payloads: was läuft, ändert sich nach jedem Start; die Dateilisten nur,
      wenn jemand einen Stick steckt oder per FTP kopiert. Neu gezeichnet wird
      nur bei einer Änderung (plLast), damit ein halb bestätigtes „Löschen"

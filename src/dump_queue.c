@@ -42,8 +42,8 @@
 #ifndef DQ_DISC_REMINDER                  /* how often the console is reminded that the queue wants a disc */
 #define DQ_DISC_REMINDER 120
 #endif
-#define DQ_LAUNCH_TRIES 3
-#define DQ_LAUNCH_GAP   5
+#define DQ_LAUNCH_TRIES 5                 /* was 3 until 16.11.2026: 0x80940033 on the first call, the start worked a minute later */
+#define DQ_LAUNCH_GAP   6
 
 enum { Q_PENDING, Q_WAITING_DISC, Q_LAUNCHING, Q_SETTLING, Q_DUMPING, Q_DONE, Q_FAILED, Q_SKIPPED };
 static const char *const k_state[] = { "pending", "waiting_disc", "launching", "settling", "dumping", "done", "failed", "skipped" };

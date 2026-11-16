@@ -191,6 +191,8 @@ ps5tm_config_defaults(ps5tm_config_t *cfg) {
   cfg->night_end_min = 7 * 60;
   cfg->night_target_c = 75;
   cfg->night_tz_offset_min = 0;
+  cfg->fan_cap_pct = 100;                  /* no limit */
+  cfg->warning_follows_target = 1;         /* as the app always behaved in automatic mode */
   cfg->tv_language[0] = '\0';
   snprintf(cfg->smp_version, sizeof(cfg->smp_version), "auto");   /* default (09.11.2026): the config.ini tells which version runs */
 
@@ -262,11 +264,11 @@ static void
 apply_profile_presets(ps5tm_config_t *cfg) {
   switch(cfg->profile) {
     case PS5TM_PROFILE_COOL:
-      cfg->control_band_c     = 7;
+      cfg->control_band_c     = 8;
       cfg->deadband_c         = 1;
       cfg->control_interval_s = 1;
       cfg->average_window_s   = 3;
-      cfg->max_step_pct       = 3;
+      cfg->max_step_pct       = 2;      /* was 3 until 16.11.2026: 30 % in ten seconds is a jump */
       break;
     case PS5TM_PROFILE_BALANCED:
       cfg->control_band_c     = 10;
@@ -289,6 +291,22 @@ apply_profile_presets(ps5tm_config_t *cfg) {
 void
 ps5tm_config_apply_profile(ps5tm_config_t *cfg) {
   apply_profile_presets(cfg);
+}
+
+
+int
+ps5tm_config_warning_cpu_c(const ps5tm_config_t *cfg, int target_c) {
+  /* A warning is for a console that is hotter than it should be. With a target of 91 °C the console is meant to run
+     at 85, and a warning limit of 80 would nag all game long. So, when asked to, the limit in force is never lower
+     than the target in force + 2; the typed value applies whenever the target is lower (or the switch is off). In
+     observe mode there is no target to follow. The main chip's limit keeps its 5 °C above the processor's
+     (the caller). */
+  int limit = (int)cfg->warning_cpu_c;
+  if(cfg->warning_follows_target && cfg->mode == PS5TM_MODE_AUTOMATIC) {
+    int target = target_c > 0 ? target_c : (int)cfg->target_temp_c;
+    if(target > 0 && limit < target + 2) limit = target + 2;
+  }
+  return limit;
 }
 
 
@@ -338,6 +356,8 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
   cfg->night_start_min = clampu(cfg->night_start_min, 0, 1439);
   cfg->night_end_min = clampu(cfg->night_end_min, 0, 1439);
   cfg->night_target_c = clampu(cfg->night_target_c, PS5TM_TARGET_MIN_C, PS5TM_TARGET_MAX_C);
+  cfg->fan_cap_pct = clampu(cfg->fan_cap_pct, PS5TM_FAN_CAP_MIN_PCT, 100);
+  cfg->warning_follows_target = cfg->warning_follows_target ? 1u : 0u;
   if(cfg->night_tz_offset_min < -720) cfg->night_tz_offset_min = -720;
   if(cfg->night_tz_offset_min > 840)  cfg->night_tz_offset_min = 840;
   if(!ps5tm_tv_language_ok(cfg->tv_language)) cfg->tv_language[0] = '\0';
@@ -521,6 +541,10 @@ ps5tm_config_load(void) {
     g_config.night_target_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_tz_offset_min")))
     g_config.night_tz_offset_min = ps5tm_num_i32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "fan_cap_pct")))
+    g_config.fan_cap_pct = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "warning_follows_target")))
+    g_config.warning_follows_target = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsString(it = cJSON_GetObjectItem(root, "tv_language")) && ps5tm_tv_language_ok(it->valuestring))
     snprintf(g_config.tv_language, sizeof(g_config.tv_language), "%s", it->valuestring);
   if(cJSON_IsString(it = cJSON_GetObjectItem(root, "smp_version")) && ps5tm_smp_version_ok(it->valuestring))
@@ -728,6 +752,8 @@ ps5tm_config_save(void) {
           "  \"night_end_min\": %u,\n"
           "  \"night_target_c\": %u,\n"
           "  \"night_tz_offset_min\": %d,\n"
+          "  \"fan_cap_pct\": %u,\n"
+          "  \"warning_follows_target\": %u,\n"
           "  \"tv_language\": \"%s\",\n"
           "  \"smp_version\": \"%s\",\n"
           "  \"profile\": \"%s\",\n"
@@ -744,6 +770,7 @@ ps5tm_config_save(void) {
           c.ps_button_status,
           c.library_cache,
           c.night_enabled, c.night_start_min, c.night_end_min, c.night_target_c, c.night_tz_offset_min,
+          c.fan_cap_pct, c.warning_follows_target,
           c.tv_language,
           c.smp_version,
           c.profile == PS5TM_PROFILE_COOL       ? "cool"

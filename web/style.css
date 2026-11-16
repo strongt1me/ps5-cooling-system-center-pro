@@ -2422,3 +2422,17 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 :root[data-theme="hell"] .p4m-state.warn { color: #7a5200; }
 .fp-fetch-res { margin: 14px 0 0; }
 .fp-fetch-res.err { border-color: rgba(255,107,107,.5); }
+
+/* Lüfterkurve (16.11.2026) */
+.fc-host { margin: 6px 0 2px; }
+#fc-svg { width: 100%; height: auto; display: block; }
+.fc-g { stroke: var(--grid); stroke-width: 1; fill: none; }
+.fc-ax { fill: var(--ink-muted); font-size: 11px; }
+.fc-lbl { fill: var(--ink-2); font-size: 12px; }
+.fc-line { fill: none; stroke: var(--s3); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.fc-area { fill: var(--s3); opacity: .14; stroke: none; }
+.fc-target { stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: 6 6; }
+.fc-safety { stroke: var(--critical); stroke-width: 1.5; stroke-dasharray: 3 5; }
+.fc-now { fill: var(--accent); stroke: var(--ink); stroke-width: 2; }
+.fc-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 6px; }
+.fc-actions .btn { text-decoration: none; display: inline-flex; align-items: center; }

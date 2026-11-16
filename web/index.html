@@ -961,20 +961,30 @@
                 <p class="sub">wie kräftig der Lüfter auf Wärme antwortet — <b>ändert nicht das Ziel</b></p></div></div></div>
               <div class="choices">
                 <label class="choice"><input type="radio" name="profile" value="comfort">
-                  <span><b>Leise</b><small>Voller Lüfter erst 14 °C über dem Ziel,
-                  Änderungen in kleinsten Schritten. Gemessen im Spiel: 69–70 °C
-                  bei ruhigen 38 %. <b>Empfohlen.</b></small></span>
+                  <span><b>Leise</b><small>Sanfter Anstieg ab 10 °C unter dem Ziel, voller Lüfter erst etwa 24 °C
+                  über dem Ziel, Änderungen in kleinsten Schritten. <b>Empfohlen.</b></small></span>
                   <img class="choice-ico" src="/img/mode-quiet.png" alt=""></label>
                 <label class="choice"><input type="radio" name="profile" value="balanced">
-                  <span><b>Ausgewogen</b><small>Voller Lüfter schon 10 °C über dem
-                  Ziel, reagiert doppelt so schnell. Etwas kühler, etwas
+                  <span><b>Ausgewogen</b><small>Sanfter Anstieg ab 10 °C unter dem Ziel, voller Lüfter etwa 17 °C
+                  über dem Ziel, reagiert doppelt so schnell. Etwas kühler, etwas
                   hörbarer.</small></span>
                   <img class="choice-ico" src="/img/mode-balanced.png" alt=""></label>
                 <label class="choice"><input type="radio" name="profile" value="cool">
-                  <span><b>Kühl</b><small>Voller Lüfter bereits 7 °C über dem Ziel,
-                  dreifach flinke Anpassung. Deutlich kühler und deutlich
+                  <span><b>Kühl</b><small>Sanfter Anstieg ab 10 °C unter dem Ziel, voller Lüfter etwa 14 °C
+                  über dem Ziel, schnelle Anpassung. Deutlich kühler und deutlich
                   hörbar.</small></span>
                   <img class="choice-ico" src="/img/mode-cool.png" alt=""></label>
+              </div>
+              <!-- Obergrenze der Lüfterdrehzahl (fan_cap_pct): senkt nur die Grenze des Normalbetriebs, fan.c comfort_ceiling -->
+              <div class="co-quick" id="fan-cap-box">
+                <div class="co-quick-head"><b>Obergrenze der Lüfterdrehzahl</b><output id="fan-cap-out">100 %</output></div>
+                <input id="fan-cap-range" type="range" min="30" max="100" step="5" value="100" title="Obergrenze der Lüfterdrehzahl in Prozent">
+                <div class="scale">
+                  <span>30 %<small>leiser, wärmer</small></span>
+                  <span class="right">100 %<small>keine Grenze</small></span>
+                </div>
+                <p class="note" id="fan-cap-note">Im Normalbetrieb geht der Lüfter nicht über diese Drehzahl, auch wenn die Betriebsart mehr
+                  zuließe. Das gilt nicht über der Notfallgrenze: Dort fährt er wie bisher so hoch, wie nötig ist.</p>
               </div>
               <label class="switch-row">
                 <span><b>Automatik</b><small>Aus = die App gibt die Steuerung an
@@ -1013,6 +1023,34 @@
             </div>
             <p class="note" id="night-note">wird gelesen …</p>
             <button class="btn" id="night-save" type="button">Nachtmodus speichern</button>
+          </article>
+
+          <!-- Lüfterkurve (16.11.2026): die Kurve der Automatik als Bild, mit der Temperatur von jetzt; dazu die Regelaufzeichnung -->
+          <article class="card" id="fc-card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-thermo"/></svg></span><div class="ck-text"><h2>Lüfterkurve</h2>
+              <p class="sub">wie schnell der Lüfter bei welcher Temperatur laufen soll</p></div></div></div>
+            <div class="fc-host">
+              <svg id="fc-svg" viewBox="0 0 720 250" role="img" aria-label="Lüfterkurve">
+                <g id="fc-grid"></g>
+                <path class="fc-area" id="fc-area"></path>
+                <path class="fc-line" id="fc-line"></path>
+                <line class="fc-target" id="fc-target" y1="12" y2="206"></line>
+                <line class="fc-safety" id="fc-safety" y1="12" y2="206"></line>
+                <circle class="fc-now" id="fc-now" r="6" cx="-20" cy="-20"></circle>
+                <text class="fc-lbl" id="fc-lbl-target" y="226">Ziel</text>
+                <text class="fc-lbl" id="fc-lbl-safety" y="226">Notfallgrenze</text>
+              </svg>
+            </div>
+            <p class="note" id="fc-note">wird gelesen …</p>
+            <p class="note">Die Kurve zeigt, was die Automatik bei einer Temperatur verlangt: ein sanfter Anstieg schon 10 °C unter dem Ziel, am
+              Ziel je nach Betriebsart 28 bis 40 %, darüber weiter bis zur vollen Drehzahl. Der Punkt ist die Temperatur von jetzt. Weiter links verlangt sie nichts, die Konsole läuft dann mit ihrer
+              eigenen Mindestdrehzahl.</p>
+            <div class="fc-actions">
+              <a class="btn" id="fc-trace-dl" href="/api/v1/fan/trace" download="regelaufzeichnung.csv">Regelaufzeichnung herunterladen</a>
+              <button class="btn" id="fc-trace-save" type="button">Auf der Konsole speichern</button>
+            </div>
+            <p class="note">Die Regelaufzeichnung hält die letzten 30 Minuten fest, eine Zeile je Sekunde: Temperaturen, Wunsch, Drehzahl, Schwelle, Ziel und
+              Betriebsart. Sie liegt nur im Speicher, bis du sie speicherst.</p>
           </article>
 
           <!-- Reihe 3: Verlauf und Sensoren -->
@@ -1291,6 +1329,11 @@
                   <small><b>0.0.0.0</b> bedeutet: im LAN erreichbar. <b>127.0.0.1</b>
                     bedeutet: nur lokal auf der Konsole erreichbar.</small></label>
               </div>
+              <label class="switch-row">
+                <span><b>Warnschwelle folgt dem Ziel</b><small>An: Die Warnung kommt erst ab dem Ziel + 2 °C, wenn das höher liegt als
+                  „Warnung ab“ (bei hohem Ziel läuft die Konsole sonst dauernd über der Schwelle). Aus: Es gilt genau der Wert bei „Warnung ab“.</small></span>
+                <span class="switch"><input type="checkbox" id="s-warn-follows"><i></i></span>
+              </label>
               <div class="row-gap mt-12">
                 <button class="btn ghost" id="bind-lan">LAN-Zugriff (0.0.0.0)</button>
                 <button class="btn ghost" id="bind-local">Nur lokal (127.0.0.1)</button>

@@ -6,5 +6,5 @@ cd "$(dirname "$0")/../.."
 OUT=${SMPHOLDOUT:-$HOME/.cache/ps5tm-smphold}
 mkdir -p "$OUT"
 gcc -std=gnu11 -D_DEFAULT_SOURCE -O1 -g -fsanitize=address,undefined -Wall -Wextra -Isrc -Isrc/third_party \
-  -DPS5TM_DATA_DIR="\"$OUT/data\"" -o "$OUT/test" test/smphold/smphold_test.c src/smphold.c -lpthread
+  -DPS5TM_DATA_DIR="\"$OUT/data\"" -o "$OUT/test" test/smphold/smphold_test.c src/smphold.c src/third_party/cJSON.c -lpthread -lm
 "$OUT/test"

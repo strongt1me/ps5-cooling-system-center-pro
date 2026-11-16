@@ -1,0 +1,65 @@
+# All checks that need nothing of a console: the host tests (test/*/run.sh, built with gcc/clang and the sanitizers),
+# the fan simulation, a syntax check of the web scripts and a load check of the JSON files (languages, manual/FAQ sources).
+# Left out on purpose: test/lz4cross (needs the directory of a second LZ4 version as argument).
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    name: Host tests and simulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools (gcc, clang, python3)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc clang python3
+      - name: Host tests
+        run: |
+          # every test runs even when an earlier one failed; the step fails at the end if any did
+          failed=""
+          for t in account cvname cvsample convpfs filemgr fpkgdup fsign indexlimit instlock jobreg ps4m sha256 smpcfg smphold ufs2plan zstdpack; do
+            echo "::group::test/$t"
+            if sh "test/$t/run.sh"; then echo "ok: $t"; else echo "::error::test/$t failed"; failed="$failed $t"; fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then echo "Failed:$failed"; exit 1; fi
+      - name: Fan simulation (test/sim)
+        run: sh test/sim/run.sh
+
+  web-and-data:
+    name: Web scripts and JSON files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: node --check web/*.js
+        run: |
+          for f in web/*.js; do
+            echo "check $f"
+            node --check "$f"
+          done
+      - name: Load JSON files (docs_src.*.json, web/lang/*.json)
+        run: |
+          python3 - <<'PY'
+          import glob, json, sys
+          files = sorted(glob.glob("tools/i18n/docs/docs_src.*.json") + glob.glob("web/lang/*.json"))
+          if not files:
+              sys.exit("no JSON files found")
+          bad = 0
+          for f in files:
+              try:
+                  with open(f, encoding="utf-8") as fh:
+                      json.load(fh)
+                  print("ok", f)
+              except Exception as e:
+                  bad += 1
+                  print("::error file=%s::%s" % (f, e))
+          sys.exit(1 if bad else 0)
+          PY
