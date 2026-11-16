@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.86.4 – 16.11.2026
+
+- Keine inhaltlichen Änderungen gegenüber v1.86.3: nur die Versionsnummer. Das Release trägt die Stände aus v1.86.3 (Disc: „Starten“ dumpt gleich mit, FPKG-Games als richtiger Ort, Prüfung auf neue AMPR-EMU-NG-Fassung mit Sofort-Meldung, Aushängen nach dem Beenden bei Doppelbelegung) und ist an der Konsole gesehen: der Disc-Dump mit „Starten“ (Protokoll der .52: Start und Dump in einem Zug, Dump fertig). Das Aushängen nach dem Beenden ist nur im Host-Test geprüft, nicht an der Konsole.
+
 ## v1.86.3 – 16.11.2026
 
 ### Vollbild-App: Prüfung auf neue AMPR-EMU-NG-Fassung zeigt sofort, dass sie läuft
