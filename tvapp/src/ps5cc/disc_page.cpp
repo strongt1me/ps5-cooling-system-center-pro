@@ -451,6 +451,16 @@ class DiscPage final : public Page
         return dump_.job.active || dump_.queue.active;
     }
 
+    // "Dumpen starten" (before 16.11.2026 "Starten"): the button starts the game and dumps it in one go (the game is on the screen then, and
+    // the app would have to be opened again to press "Dumpen"). Only when nothing speaks against it: a free queue, a chosen target, no other
+    // game running and no dump yet; else it only starts the game.
+    bool starts_dump(const Game &g) const
+    {
+        const bool other_runs = std::any_of(games_.begin(), games_.end(), [](const Game &x) { return x.dump_mounted; });
+        return g.dump != "done" && !other_runs && dump_.settings.valid && !dump_.settings.target.empty() && !dump_busy() &&
+               dump_.queue.items.empty();
+    }
+
     // ---------------------------------------------------------------- the buttons of a row
 
     std::string cross_label(int tag) const
@@ -467,7 +477,12 @@ class DiscPage final : public Page
         {
             const Game &g = games_[index_of(tag)];
             if (!g.dump_mounted)
-                return g.can_launch ? "Starten" : "";
+            {
+                // grey while a dump runs or is about to begin (user, 16.11.2026)
+                if (dump_busy() || !g.can_launch)
+                    return "";
+                return starts_dump(g) ? "Dumpen starten" : "Starten";
+            }
             if (dump_busy())
                 return "";
             return g.dump == "done" ? "Ersetzen und dumpen" : "Dumpen";
@@ -514,12 +529,8 @@ class DiscPage final : public Page
             const Game &g = games_[index_of(tag)];
             if (!g.dump_mounted)
             {
-                // "Starten" starts the game and dumps it in one go (the game is on the screen then, and the app would have to be
-                // opened again to press "Dumpen"): with a free queue, a chosen target, no other game running and no dump yet.
-                const bool other_runs = std::any_of(games_.begin(), games_.end(),
-                                                    [](const Game &x) { return x.dump_mounted; });
-                if (g.dump != "done" && !other_runs && dump_.settings.valid &&
-                    !dump_.settings.target.empty() && !dump_busy() && dump_.queue.items.empty())
+                // "Dumpen starten": see starts_dump(); the answer of the app (the wait and the request to do nothing) comes as a notice.
+                if (starts_dump(g))
                     source().disc_post("dump", "{\"action\":\"queue_launch\",\"id\":" +
                                                    json_text(g.id) + "}");
                 else

@@ -65,6 +65,16 @@ class FanCurvePage final : public Page
     void absorb(const Snapshot &data) override
     {
         curve_ = data.fan_curve;
+        // Where nothing is asked for there is no curve (the console runs by itself): the picture begins at the first temperature that has a figure, as in the
+        // browser, and does not start with a flat stretch and a jump.
+        std::size_t lead = 0;
+        while (lead + 1 < curve_.wish.size() && curve_.wish[lead] <= 0)
+            ++lead;
+        if (lead > 0 && lead < curve_.wish.size())
+        {
+            curve_.temps.erase(curve_.temps.begin(), curve_.temps.begin() + static_cast<std::ptrdiff_t>(lead));
+            curve_.wish.erase(curve_.wish.begin(), curve_.wish.begin() + static_cast<std::ptrdiff_t>(lead));
+        }
         std::string key = std::to_string(curve_.temps.size()) + ":" + curve_.profile + ":" +
                           std::to_string(curve_.target_c) + ":" + std::to_string(curve_.cap_pct);
         for (int w : curve_.wish)

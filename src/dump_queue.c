@@ -590,8 +590,11 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
       pthread_mutex_unlock(&g_lock);
       return st;
     }
-    PS5TM_INFO("dumpq_launch", "%s: Start und Dump in einem Zug (Knopf „Starten“ im Reiter Disc).", id);
-    snprintf(msg, n, "Das Spiel wird gestartet und danach gleich gedumpt. Die App muss nicht geöffnet werden.");
+    PS5TM_INFO("dumpq_launch", "%s: Start und Dump in einem Zug (Knopf „Dumpen starten“ im Reiter Disc).", id);
+    pthread_mutex_lock(&g_lock);
+    const int wait_s = g_settle;
+    pthread_mutex_unlock(&g_lock);
+    snprintf(msg, n, "Das Dumpen startet in etwa %d Sekunden. Bitte warten, bis der Dump erstellt wurde, und so lange nichts tun.", wait_s);
     return 200;
   }
 

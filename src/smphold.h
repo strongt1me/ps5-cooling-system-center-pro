@@ -32,6 +32,9 @@ typedef struct {
   int      (*start_title)(const char *id);
   /* The last lines of ShadowMountPlus's own log that name a refused start (for the app's log): 1 and the text in out, else 0. NULL: not asked. */
   int      (*smp_excerpt)(const char *id, char *out, size_t n);
+  /* Take the home screen of the console (as the PS button does), so that the error dialog of the refused start is gone before the start is made again and the
+     person does not have to confirm it (16.11.2026). Called once before each new start of a tile that was refused. NULL: not done. */
+  void     (*go_home)(void);
 } ps5tm_smphold_env_t;
 
 /* Called for every /games/mount (mounted 1) and /games/unmount (0) the app sends (smp.c, ps5tm_smp_call). */

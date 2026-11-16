@@ -5866,14 +5866,13 @@
   /* since 1.7beta8 ShadowMountPlus also reports its own installs here, a PKG or a source folder/image without a title id */
   const mvName = (j) => j.title_id ? gmName(j.title_id)
     : (j.title_name || j.name || String(j.source || "").split("/").pop() || "Paket");
-  const bn = { timer: 0, key: "", gone: "" };   /* das Ergebnis-Band: wann es zuerst stand, ob es schon weg ist */
   const jobBanner = () => {
     const b = $("#gm-copy-banner");
     if (!b) return;
     const c = cp.job && cp.job.state !== "idle" ? cp.job : null;
     const m = mv.job && mv.job.job_id > 0 && (mv.job.active || mv.job.job_id === mv.seen) ? mv.job : null;
     const k = cv.job && cv.job.state !== "idle" ? cv.job : null;
-    let label = "", live = false, kind = "", outcome = "";
+    let label = "", live = false, kind = "";
     if (k && k.active) {
       const pct = k.total_bytes > 0 ? Math.min(100, Math.floor(k.done_bytes * 100 / k.total_bytes)) : 0;
       const cpct = k.check_total_bytes > 0
@@ -5891,40 +5890,13 @@
         ? Math.min(100, Math.floor(((c.done_bytes || 0) + (c.checked_bytes || 0)) * 100 / (2 * c.total_bytes))) : 0;
       label = `Kopie läuft: „${c.name || c.title_id}“ → ${c.drive || ""} · ${c.state === "scanning" ? "wird vermessen" : `${pct} %`}`;
       live = true; kind = "copy";
-    } else if (m) {
-      label = `ShadowMountPlus · ${mvVerb(m.operation)} ${m.state === "completed" ? "fertig"
-        : m.state === "failed" ? "gescheitert" : "abgebrochen"}: „${mvName(m)}“`;
-      kind = "store";
-      outcome = m.state === "completed" ? "done" : m.state === "failed" ? "failed" : "aborted";
-    } else if (k) {
-      label = k.state === "done" ? `Konvertieren fertig: „${k.name || k.title_id}“ → ${k.target || ""}`
-        : k.state === "failed" ? `Konvertieren gescheitert: „${k.name || k.title_id}“`
-        : `Konvertieren abgebrochen: „${k.name || k.title_id}“`;
-      kind = "convert";
-      outcome = k.state === "done" ? "done" : k.state === "failed" ? "failed" : "aborted";
-    } else if (c) {
-      label = c.state === "done" ? `Kopie fertig: „${c.name || c.title_id}“ → ${c.drive || ""}`
-        : c.state === "failed" ? `Kopie gescheitert: „${c.name || c.title_id}“`
-        : `Kopie abgebrochen: „${c.name || c.title_id}“`;
-      kind = "copy";
-      outcome = c.state === "done" ? "done" : c.state === "failed" ? "failed" : "aborted";
     }
-    /* Ein Ergebnis (fertig, gescheitert, abgebrochen) bleibt 10 Sekunden stehen und verschwindet dann: Es steht auch im
-       Verlauf. Läuft wieder etwas, gilt das Ergebnis eines neuen Auftrags von vorn. */
-    const bkey = `${kind}|${label}`;
-    if (live) { clearTimeout(bn.timer); bn.key = ""; bn.gone = ""; }
-    else if (label) {
-      if (bn.gone === bkey) label = "";
-      else if (bn.key !== bkey) {
-        clearTimeout(bn.timer);
-        bn.key = bkey;
-        bn.timer = setTimeout(() => { bn.gone = bkey; jobBanner(); }, 10000);
-      }
-    }
+    /* Nur was läuft steht über den Spielkarten. Das Ergebnis (fertig, gescheitert, abgebrochen) steht nur im Verlauf (Wunsch des Users, 16.11.2026;
+       vorher blieb es 10 Sekunden als Band stehen). */
     b.hidden = !label;
     b.textContent = label;
     b.dataset.kind = kind;
-    b.dataset.outcome = live ? "run" : outcome;
+    b.dataset.outcome = live ? "run" : "";
     b.classList.toggle("live", live);
   };
   const cpBanner = jobBanner;
@@ -10922,6 +10894,13 @@
   const dm = { data: null, sel: "", err: "", timer: 0, hidden: "", was: false, subdirTyped: false, subdirErr: "" };
 
   /* Die Disc-Spiele (library.c, Marke „disc“): von Disc installierte PS5- und PS4-Spiele, an jedem „Starten“ oder – läuft es – „Dumpen“. */
+  /* "Dumpen starten" (vorher „Starten“, 16.11.2026): startet das Spiel und dumpt es gleich. Nur wenn nichts dagegen spricht; sonst startet der Knopf nur das Spiel. */
+  const dgAuto = (g) => {
+    const dd = dm.data || {}, dq = dd.queue || {};
+    return !!g && g.dump !== "done" && !gm.running && !!(dd.settings && dd.settings.target) && !dq.active
+      && !(dq.items || []).some((it) => it.state === "pending" || it.state === "waiting_disc" || it.state === "launching" || it.state === "settling" || it.state === "dumping")
+      && !(dd.job && (dd.job.state === "running" || dd.job.state === "verifying"));
+  };
   const dgRunning = (x) => !!x.dump_mounted || (dm.sel === x.title_id && !!(dm.data && dm.data.title && dm.data.title.mounted));
   const dgRender = () => {
     const el = $("#dg-list");
@@ -10930,6 +10909,18 @@
     txt("#dg-sub", !gm.loaded ? "wird gelesen …" : rows.length ? `${rows.length} ${rows.length === 1 ? "Spiel" : "Spiele"} von Disc` : "keine Disc-Spiele gefunden");
     const j = dm.data && dm.data.job;
     const busy = !!(j && j.active);
+    /* Solange ein Dump läuft oder gleich beginnt, steht oben, was zu tun ist: nichts (Wunsch des Users, 16.11.2026). */
+    const wq = dqData();
+    const cur = (wq.items || []).find((it) => ["pending", "waiting_disc", "launching", "settling"].includes(it.state));
+    const wait = $("#dg-wait");
+    if (wait) {
+      const txtWait = busy || (wq.active && (wq.items || []).some((it) => it.state === "dumping"))
+        ? "Der Dump wird erstellt. Bitte warten, bis er fertig ist, und so lange nichts tun."
+        : cur ? "Das Dumpen startet gleich, sobald das Spiel geladen ist. Bitte warten, bis der Dump erstellt wurde, und so lange nichts tun." : "";
+      wait.hidden = !txtWait;
+      if (txtWait && wait.dataset.k !== txtWait) { wait.dataset.k = txtWait; wait.innerHTML = `<span>${esc(txtWait)}</span>`; }
+    }
+    const dgBlocked = busy || !!wq.active;
     setHtml(el, rows.length ? rows.map((x) => {
       const id = esc(x.title_id);
       const run = dgRunning(x);
@@ -10939,7 +10930,7 @@
       const queued = (q.items || []).some((it) => it.id === x.title_id);
       const act = (run
         ? `<button type="button" class="btn primary" data-dg="dump" data-id="${id}"${busy || q.active ? ` disabled title="${esc("Es läuft schon ein Dump.")}"` : ""}>Dumpen</button>`
-        : `<button type="button" class="btn primary" data-dg="launch" data-id="${id}"${x.can_launch ? "" : ` disabled title="${esc("Für dieses Spiel gibt es keinen Startlink.")}"`}>Starten</button>`)
+        : `<button type="button" class="btn primary" data-dg="launch" data-id="${id}"${dgBlocked ? ` disabled title="${esc("Es läuft schon ein Dump.")}"` : x.can_launch ? "" : ` disabled title="${esc("Für dieses Spiel gibt es keinen Startlink.")}"`}>${dgAuto(x) ? "Dumpen starten" : "Starten"}</button>`)
         + `<button type="button" class="btn ghost" data-dg="queue" data-id="${id}"${queued || q.active ? ` disabled title="${esc(queued ? "Dieses Spiel steht schon in der Warteschlange." : "Die Warteschlange läuft, die Liste lässt sich jetzt nicht ändern.")}"` : ""}>${queued ? "In der Warteschlange" : "In die Warteschlange"}</button>`;
       return `<div class="p4m-row">
         ${x.cover ? `<img class="p4m-icon" src="${esc(x.cover)}" alt="" loading="lazy" decoding="async">` : `<div class="p4m-icon"></div>`}
@@ -10956,7 +10947,6 @@
       const r = await api("/api/v1/dump", { method: "POST", body: JSON.stringify({ action: "queue_launch", id }) });
       toast(r.message || `„${dmName(id)}“ wird gestartet und gedumpt.`);
       await dmLoad(); dmSync();
-      setTimeout(() => { btn.disabled = false; }, 3000);
     } catch (e) {
       toast(e.message, "error");
       btn.disabled = false;
@@ -10976,11 +10966,7 @@
       /* „Starten“ startet das Spiel und dumpt es gleich (Wunsch des Users, 16.11.2026): Das Spiel liegt dann vor der App, und man
          müsste die App erst wieder öffnen, um „Dumpen“ zu drücken. Das tut die Warteschlange für einen Titel (Start, Ladezeit, Dump).
          Nur wenn nichts dagegen spricht: kein anderes Spiel läuft, es gibt noch keinen Dump, ein Ziel ist gewählt, die Warteschlange ist frei. */
-      const dd = dm.data || {}, dq = dd.queue || {};
-      const auto = g && g.dump !== "done" && !gm.running && dd.settings && dd.settings.target && !dq.active
-        && !(dq.items || []).some((it) => it.state === "pending" || it.state === "waiting_disc" || it.state === "launching" || it.state === "settling" || it.state === "dumping")
-        && !(dd.job && (dd.job.state === "running" || dd.job.state === "verifying"));
-      if (auto) { dgLaunchDump(id, b); return; }
+      if (dgAuto(g)) { dgLaunchDump(id, b); return; }
       gmLaunch(id, b); dmOpen(); return;
     }
     /* ein fertiger Dump liegt schon da: die Karte „Dump“ fragt vor dem Ersetzen */

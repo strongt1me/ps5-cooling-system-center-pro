@@ -194,6 +194,16 @@ env_start_title(const char *id) {
   return ps5tm_library_start(id);
 }
 
+/* The home screen, as the PS button does (ShellUI "navigateToHome"; the browser's close of library.c): the error dialog of the refused start is a scene
+   of the shell, and the person had to confirm it before the tile that was started again showed (user, 16.11.2026). A moment is given to the shell
+   to finish before the start follows. */
+static void
+env_go_home(void) {
+#ifndef PS5TM_HOST_TEST
+  if(ps5tm_library_close_browser() == 0) usleep(1200 * 1000);
+#endif
+}
+
 /* The lines of ShadowMountPlus's log (POST /api/v1/debug-log, read only) that speak of a start that was refused: "launch mount unavailable",
    "Device busy", the title. The last few, joined, for one line of the app's log, so that the reason of a refused start is in the app and
    not only on the screen of a diagnosis tool. */
@@ -253,6 +263,7 @@ env_default(void) {
   g_env.notice = env_notice;
   g_env.launch_failed = env_launch_failed;
   g_env.start_title = env_start_title;
+  g_env.go_home = env_go_home;
   g_env.smp_excerpt = env_smp_excerpt;
   g_env.title_running = env_title_running;
   g_env.boot_id = env_boot_id;
@@ -688,6 +699,7 @@ tile_step(int read_log) {
   }
   g_tr_window_starts++;
   g_tr.tries++;
+  if(g_env.go_home) g_env.go_home();                            /* the dialog of the refusal out of the way first */
   int rc = g_env.start_title(g_tr.id);
   if(rc >= 0) {
     PS5TM_INFO("tile_retry_started", "Die Kachel %s wurde abgelehnt (ein Spiel wartet im Hintergrund) und von der App noch einmal gestartet (Versuch %d).", g_tr.id, g_tr.tries);

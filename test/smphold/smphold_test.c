@@ -126,18 +126,21 @@ static int t_title_running(const char *id) { return g_run_title[0] && !strcmp(g_
 static int g_start_calls, g_start_rc;
 static char g_start_id[16];
 static int t_start(const char *id) { g_start_calls++; snprintf(g_start_id, sizeof(g_start_id), "%s", id); return g_start_rc; }
+static int g_home_calls;
+static void t_home(void) { g_home_calls++; }
 int ps5tm_library_start(const char *id) { (void)id; return -1; }
+int ps5tm_library_close_browser(void) { return -1; }
 cJSON *ps5tm_smp_call(const char *route, const cJSON *body, int timeout_ms, char *err, size_t err_len) { (void)route; (void)body; (void)timeout_ms; (void)err; (void)err_len; return NULL; }
 void ps5tm_config_smp_version(char *out, size_t n) { snprintf(out, n, "v2"); }
 static uint64_t t_boot(void) { return g_boot; }
 
 static void
 world(void) {
-  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot, t_start };
+  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot, t_start, NULL, t_home };
   ps5tm_smphold_test_env(&e);
   ps5tm_smphold_test_reset();
   ps5tm_smphold_tile_test_reset();
-  g_start_calls = 0; g_start_rc = 0; g_start_id[0] = 0;
+  g_start_calls = 0; g_start_rc = 0; g_start_id[0] = 0; g_home_calls = 0;
   g_now = 1000000; g_up = 1; g_game = 0; g_job = 0; g_mounted = 1; g_known = 1;
   g_unmount_calls = 0; g_unmount_http = 200; g_unmounted[0] = 0; g_notices = 0;
   g_notice_held[0] = g_notice_other[0] = 0; g_failed_next[0] = 0; g_resets = 0;
@@ -565,8 +568,9 @@ main(void) {
   CHECK(g_start_calls == 0);
   g_now += 1100; ps5tm_smphold_tile_tick();                           /* after two seconds */
   CHECK(g_start_calls == 1 && !strcmp(g_start_id, "FAKE86922"));
+  CHECK(g_home_calls == 1);                                           /* the home screen first, so that no dialog has to be confirmed */
   g_now += 5000; ps5tm_smphold_tile_tick();                           /* accepted: not again */
-  CHECK(g_start_calls == 1);
+  CHECK(g_start_calls == 1 && g_home_calls == 1);
 
   /* another title that was refused: the app does not start it */
   world(); g_game = 1;
