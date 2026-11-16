@@ -62,7 +62,7 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   gesendet; die App bedient es über seine Schnittstelle auf Port 8097 (`src/kraken.c`). **Geänderte Kopie:** Die eingebettete ELF (und eine von GitHub geladene Fassung) trägt eine einzige Änderung: ein Byte der Zeichenkette `shadowmountplus.elf` (Prozessname, auf den Kraken Mount seit v0.2.0 beim Start wartet) wird geändert, damit es neben ShadowMountPlus arbeitet (`tools/patch_kraken.py`, `src/kraken.c`, siehe `third_party/kraken_mount/ORIGIN.md`); Quelltext des Projekts: <https://github.com/quer3q/kraken-mount> (Tag `v0.2.0`). Aus seinem Quelltext ist nichts übernommen
   (er ist in Rust geschrieben); der Quelltext dieser Fassung steht unter der genannten Adresse. Eine neuere Veröffentlichung lädt die
   App nur auf Knopfdruck von dort (HTTPS, Prüfsumme aus `SHA256SUMS`).
-- **Dump Forge** (quer3q, GPL-3.0-or-later, Version 0.5.5, <https://github.com/quer3q/ps5-dump-forge>, Tag `v0.5.5`): Motor des
+- **Dump Forge** (quer3q, GPL-3.0-or-later, Version 0.5.6, <https://github.com/quer3q/ps5-dump-forge>, Tag `v0.5.6`): Motor des
   Konvertierformats „FPKG (Debug-.pkg)“. Das PS5-Programm `ps5-dump-forge-<Version>-ps5.elf` (18 MB) ist **nicht** in der App eingebettet
   und nicht in diesem Quellbaum: Die App lädt es nur auf Knopfdruck von der Veröffentlichung auf GitHub (HTTPS, Prüfsumme aus
   `SHA256SUMS`) nach `/data/PS5-Cooling-Center/dumpforge/` oder nimmt eine dort abgelegte Datei, startet es über den ELF-Lader und gibt ihm

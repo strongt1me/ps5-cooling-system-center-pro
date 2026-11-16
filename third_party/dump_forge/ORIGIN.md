@@ -1,11 +1,11 @@
 # Dump Forge
 
-**Version:** v0.5.5
+**Version:** v0.5.6
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/ps5-dump-forge (Tag `v0.5.5`)
+**Quelle:** https://github.com/quer3q/ps5-dump-forge (Tag `v0.5.6`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext im Quellprojekt)
-**Datei:** `ps5-dump-forge-0.5.5-ps5.elf` (PS5-ELF, 18 140 240 Bytes), **nicht in diesem Quellbaum und nicht in der App eingebettet**
-**SHA-256:** `858b8ae2954341a3389e4a9f998c6a57d01bc4e4fb8f01a71c41719001c30be7` (gleich `SHA256SUMS` der Veröffentlichung)
+**Datei:** `ps5-dump-forge-0.5.6-ps5.elf` (PS5-ELF, 18 549 840 Bytes), **nicht in diesem Quellbaum und nicht in der App eingebettet**
+**SHA-256:** `f0415aab6ded1cdf875418b6683ab56aeae3721492af99fba71b08c2c351f82f` (gleich `SHA256SUMS` der Veröffentlichung)
 
 ## Verwendung
 
@@ -26,6 +26,7 @@ schreibt (Kompressionsstufen `fast`, `balanced`, `smallest`, `stored`). Die App 
 - Dump Forge legt bei jedem Start eine Kachel `PDFG00001` an (`crates/ps5-dump-forge-server/src/tile.rs`). Die App will keine: Vor dem Start legt sie
   `/user/app/PDFG00001` als leere Datei an, die Dump Forge in Ruhe lässt („is not a folder“); eine früher angelegte Kachel entfernt sie mit der Deinstallation
   der Konsole und löscht die Besitzer-Datei `/data/dumpforge/tile-PDFG00001.owner` (`src/tilekeep.c`).
+- Seit 0.5.6 (16.11.2026, Vergleich `v0.5.5...v0.5.6`): bringt ampr-emu-ng v0.4.1 mit (vorher v0.3.4), behält beim Umwandeln eines `.pkg` die nur im Container verschlüsselt liegenden `nptitle.dat` und `npbind.dat` (Trophäen meldeten sich bei einem kleinen Teil der Pakete nicht an), schreibt Packs mit mehr als 32 Teilen auf eine gekoppelte PS5 (beide Seiten brauchen 0.5.6) und zeigt unter Linux jede eingehängte Platte als Wurzel. Die Schnittstelle, die die App benutzt (`/api/start_job`, `/api/jobs`, `/api/cancel_job`, `/api/quit`), hat sich im Vergleich nicht geändert.
 - Das Programm bleibt unverändert; aus seinem Quelltext ist nichts in diese App übernommen.
 
 ## Hinweise des Autors (aus `ps5-dump-forge convert --help`)

@@ -50,6 +50,9 @@
 - **Wunsch des Users (16.11.2026):** Läuft ein Dump, zeigt die Konsole den Fortschritt in der Meldung oben links (wie die Anzeige der Mikrofon-Taste, ohne Ton). Bisher gab es nur „Dump gestartet“ und „Dump fertig“, dazwischen sah man bei laufendem Spiel nichts.
 - **Wie (`src/progressnote.h`):** Eine einzeilige Meldung bei jedem zehnten Teil der Arbeit, höchstens alle 20 Sekunden, z. B. „Dump · Star Wars Racer Revenge · 40 % · 264 MB von 660 MB · noch 5 s“ (mit Zurücklesen zählt die Prüfung mit; Restzeit erst, wenn die Geschwindigkeit bekannt ist). Ein kurzer Dump zeigt nur Anfang und Ende. Die Meldung der Konsole lässt sich nicht ändern, deshalb ist es eine kurze Reihe statt eines wandernden Balkens. Gilt für den Dump eines Spiels (auch aus der Warteschlange) und für das Sichern eines Disc-Abbilds („Disc sichern · CUSA-03474 · 30 % …“). Test: `test/progressnote`. An der Konsole noch nicht erprobt.
 
+### Fremdbaustein: Dump Forge v0.5.6 (16.11.2026)
+- **Dump Forge v0.5.6** (quer3q, Motor des Konvertierformats „FPKG (Debug-.pkg)“) steckt jetzt in beiden Kacheln (`dumpforge/ps5-dump-forge-0.5.6-ps5.elf`, 18 549 840 Bytes, SHA-256 gegen `SHA256SUMS` geprüft, fest in `tools/fetch-dumpforge.sh`); die App-ELF bettet es weiter nicht ein, „Dump Forge laden“ holt die neueste. Neu laut Veröffentlichung: ampr-emu-ng v0.4.1 liegt bei (vorher v0.3.4); ein `.pkg`, dessen `nptitle.dat` und `npbind.dat` nur verschlüsselt im Container lagen, behält sie jetzt, sodass sich die Trophäen anmelden; Packs mit mehr als 32 Teilen lassen sich auf eine gekoppelte PS5 schreiben. Die Schnittstelle, die die App benutzt, ist unverändert. Nicht erprobt an der Konsole.
+
 ### Fremdbaustein: AMPR EMU NG geprüft
 - Geprüft am 16.11.2026: Die neueste Veröffentlichung ist weiterhin **v0.4.1** (15.11.2026), die schon eingebettet ist; neuer sind nur Commits und eine Vorabfassung („beta“), die nicht übernommen wird.
 

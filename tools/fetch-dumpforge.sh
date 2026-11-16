@@ -6,8 +6,8 @@
 # in third_party/dump_forge/ORIGIN.md and in tools/upstream.json.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version=0.5.5
-sha256=858b8ae2954341a3389e4a9f998c6a57d01bc4e4fb8f01a71c41719001c30be7
+version=0.5.6
+sha256=f0415aab6ded1cdf875418b6683ab56aeae3721492af99fba71b08c2c351f82f
 name="ps5-dump-forge-$version-ps5.elf"
 url="https://github.com/quer3q/ps5-dump-forge/releases/download/v$version/$name"
 cache="$root/gen/dumpforge"

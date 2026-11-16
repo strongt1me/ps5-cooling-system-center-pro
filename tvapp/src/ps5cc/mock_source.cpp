@@ -831,7 +831,7 @@ class MockSource final : public Source
         if (fpkg)
         {
             if (data_.dumpforge.installed)
-                add("engine", "ok", "Dump Forge 0.5.5 schreibt das Paket");
+                add("engine", "ok", "Dump Forge 0.5.6 schreibt das Paket");
             else
                 add("engine", "error", "Dump Forge, das die Pakete schreibt, ist noch nicht da.",
                     "Dump Forge laden (Knopf im Fenster) oder die Datei "
@@ -1319,9 +1319,9 @@ class MockSource final : public Source
     {
         data_.dumpforge.installed = true;
         data_.dumpforge.fetching = false;
-        data_.dumpforge.version = "0.5.5";
+        data_.dumpforge.version = "0.5.6";
         ++data_.dumpforge.epoch;
-        notice(Notice::Kind::success, "Dump Forge", "Dump Forge 0.5.5 ist geladen.");
+        notice(Notice::Kind::success, "Dump Forge", "Dump Forge 0.5.6 ist geladen.");
         changed();
     }
 
@@ -2168,7 +2168,7 @@ class MockSource final : public Source
             cJSON *engine = cJSON_AddObjectToObject(root, "dumpforge");
             cJSON_AddBoolToObject(engine, "installed", data_.dumpforge.installed);
             if (data_.dumpforge.installed)
-                cJSON_AddStringToObject(engine, "version", "0.5.5");
+                cJSON_AddStringToObject(engine, "version", "0.5.6");
             cJSON_AddStringToObject(engine, "folder", "/data/PS5-Cooling-Center/dumpforge");
             cJSON_AddBoolToObject(engine, "running", 0);
             cJSON_AddBoolToObject(root, "busy", job_active(JobKind::convert));
