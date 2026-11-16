@@ -356,6 +356,7 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
   cfg->night_start_min = clampu(cfg->night_start_min, 0, 1439);
   cfg->night_end_min = clampu(cfg->night_end_min, 0, 1439);
   cfg->night_target_c = clampu(cfg->night_target_c, PS5TM_TARGET_MIN_C, PS5TM_TARGET_MAX_C);
+  if(cfg->fan_cap_pct == 0) cfg->fan_cap_pct = 100;                  /* 0 is "no limit", as fan.c reads it: not the strictest cap */
   cfg->fan_cap_pct = clampu(cfg->fan_cap_pct, PS5TM_FAN_CAP_MIN_PCT, 100);
   cfg->warning_follows_target = cfg->warning_follows_target ? 1u : 0u;
   if(cfg->night_tz_offset_min < -720) cfg->night_tz_offset_min = -720;

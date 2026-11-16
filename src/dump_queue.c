@@ -497,6 +497,44 @@ queue_start(const cJSON *b, char *msg, size_t n) {
   return 200;
 }
 
+/* "Dumpen starten" of a disc game: one at a time (audit 16.11.2026: two of them at once, from the browser and the full-screen app, both saw an empty list and both
+   added their title, and the one that lost the start took its title out of the list that was running). */
+static pthread_mutex_t g_launch_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int
+queue_launch(const char *id, char *msg, size_t n) {
+  pthread_mutex_lock(&g_lock);
+  const int prepared = g_n > 0 && g_item[0].state < Q_DONE;
+  pthread_mutex_unlock(&g_lock);
+  if(prepared) { snprintf(msg, n, "In der Warteschlange stehen schon Titel; sie bleibt, wie sie ist."); return 409; }
+  cJSON *add = cJSON_CreateObject();
+  cJSON_AddStringToObject(add, "action", "queue_add");
+  cJSON_AddStringToObject(add, "id", id);
+  int st = ps5tm_dumpq_action(add, msg, n);
+  cJSON_Delete(add);
+  if(st != 200) return st;
+  cJSON *go = cJSON_CreateObject();
+  cJSON_AddStringToObject(go, "action", "queue_start");
+  st = queue_start(go, msg, n);
+  cJSON_Delete(go);
+  if(st != 200) {                               /* nothing stays in the list that the person did not put there */
+    pthread_mutex_lock(&g_lock);
+    const int at2 = find_locked(id);
+    if(at2 >= 0) {
+      for(int i = at2; i + 1 < g_n; i++) g_item[i] = g_item[i + 1];
+      memset(&g_item[--g_n], 0, sizeof(g_item[0]));
+    }
+    pthread_mutex_unlock(&g_lock);
+    return st;
+  }
+  PS5TM_INFO("dumpq_launch", "%s: Start und Dump in einem Zug (Knopf „Dumpen starten“ im Reiter Disc).", id);
+  pthread_mutex_lock(&g_lock);
+  const int wait_s = g_settle;
+  pthread_mutex_unlock(&g_lock);
+  snprintf(msg, n, "Das Dumpen startet in etwa %d Sekunden. Bitte warten, bis der Dump erstellt wurde, und so lange nichts tun.", wait_s);
+  return 200;
+}
+
 int
 ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
   const cJSON *ja = cJSON_GetObjectItem(b, "action");
@@ -566,36 +604,10 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
      again, for the game is on the screen and the app is behind it. That is what the queue does for one title: it starts the game, gives it the
      load time and dumps it. So the title goes alone into an empty list and the run starts. A list the person has prepared is not touched. */
   if(!strcmp(act, "queue_launch")) {
-    pthread_mutex_lock(&g_lock);
-    const int prepared = g_n > 0 && g_item[0].state < Q_DONE;
-    pthread_mutex_unlock(&g_lock);
-    if(prepared) { snprintf(msg, n, "In der Warteschlange stehen schon Titel; sie bleibt, wie sie ist."); return 409; }
-    cJSON *add = cJSON_CreateObject();
-    cJSON_AddStringToObject(add, "action", "queue_add");
-    cJSON_AddStringToObject(add, "id", id);
-    int st = ps5tm_dumpq_action(add, msg, n);
-    cJSON_Delete(add);
-    if(st != 200) return st;
-    cJSON *go = cJSON_CreateObject();
-    cJSON_AddStringToObject(go, "action", "queue_start");
-    st = queue_start(go, msg, n);
-    cJSON_Delete(go);
-    if(st != 200) {                               /* nothing stays in the list that the person did not put there */
-      pthread_mutex_lock(&g_lock);
-      const int at2 = find_locked(id);
-      if(at2 >= 0) {
-        for(int i = at2; i + 1 < g_n; i++) g_item[i] = g_item[i + 1];
-        memset(&g_item[--g_n], 0, sizeof(g_item[0]));
-      }
-      pthread_mutex_unlock(&g_lock);
-      return st;
-    }
-    PS5TM_INFO("dumpq_launch", "%s: Start und Dump in einem Zug (Knopf „Dumpen starten“ im Reiter Disc).", id);
-    pthread_mutex_lock(&g_lock);
-    const int wait_s = g_settle;
-    pthread_mutex_unlock(&g_lock);
-    snprintf(msg, n, "Das Dumpen startet in etwa %d Sekunden. Bitte warten, bis der Dump erstellt wurde, und so lange nichts tun.", wait_s);
-    return 200;
+    pthread_mutex_lock(&g_launch_lock);
+    int lr = queue_launch(id, msg, n);
+    pthread_mutex_unlock(&g_launch_lock);
+    return lr;
   }
 
   if(!strcmp(act, "queue_add")) {

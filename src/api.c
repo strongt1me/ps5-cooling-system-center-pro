@@ -1567,10 +1567,10 @@ sw_thread(void *arg) {
      browser stood in front of all of it (13.10.2026). What the page would have shown goes out as a notification of the console. */
   int early = job.on_console && job.then_id[0] && ps5tm_library_close_browser() == 0;
 
-  int rc = ps5tm_procmgr_close_game(job.close_id, 6000);
+  int rc = ps5tm_procmgr_close_game(job.close_id, 6000);          /* refused (-1) while a dump reads the game, see procmgr.c */
   if(rc < 0) {
     release_start(job.then_id);
-    sw_set(SW_FAILED, "„%s“ ließ sich nicht beenden.", job.close_name);
+    sw_set(SW_FAILED, ps5tm_dump_source_busy() ? "„%s“ lässt sich nicht beenden: Ein Dump liest das Spiel." : "„%s“ ließ sich nicht beenden.", job.close_name);
     PS5TM_WARN("game_close_failed", "%s (%s) ließ sich nicht beenden.",
                job.close_name, job.close_id);
     ps5tm_notify("„%s“ ließ sich nicht beenden.", job.close_name);
@@ -1660,6 +1660,15 @@ sw_thread(void *arg) {
   return NULL;
 }
 
+/* 1 while the app closes a game and perhaps starts another: a dump does not begin then. */
+int
+ps5tm_game_switching(void) {
+  pthread_mutex_lock(&g_sw_lock);
+  int busy = g_sw.state == SW_CLOSING || g_sw.state == SW_STARTING;
+  pthread_mutex_unlock(&g_sw_lock);
+  return busy;
+}
+
 /* 0 when the job runs; -1 when one is already running or no thread could be
    made, with `err` saying so. */
 static int
@@ -1669,7 +1678,7 @@ sw_start(const char *close_id, const char *close_name, const char *then_id,
   /* A dump reads the game's own mounts (/mnt/sandbox/pfsmnt/<ID>-app0-nest/pfs_image.dat). Closing the game while it copies took them away under
      the copy: on 16.11.2026 the PS5 (.52) went down with a kernel panic when the game was closed in the middle of a dump to a USB drive. So a
      game is not closed (by "Spiel beenden" or by a switch to another game) while a dump runs. */
-  if(ps5tm_dump_busy()) {
+  if(ps5tm_dump_source_busy()) {
     snprintf(err, err_len, "Ein Dump läuft und liest dieses Spiel. Das Spiel lässt sich erst nach dem Dump beenden; sonst kann die Konsole abstürzen.");
     return -1;
   }
@@ -5850,6 +5859,10 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
     char nm[96] = "";
     int e = ps5tm_fantrace_save(nm, sizeof(nm));
+    if(e == EAGAIN) {
+      ps5tm_http_send_error(fd, 409, "trace_too_often", "Die Regelaufzeichnung wurde eben erst gespeichert. Bitte ein paar Sekunden warten.");
+      return;
+    }
     if(e) {
       ps5tm_http_send_error(fd, 500, "trace_save_failed", "Die Regelaufzeichnung ließ sich nicht speichern.");
       return;

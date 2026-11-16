@@ -89,6 +89,7 @@ env_game_running(void) {
 /* Is this very title the one that runs? Then what the app held is done: the person started it. */
 static int
 env_title_running(const char *id) {
+  if(ps5tm_procmgr_title_running(id) == 1) return 1;       /* an own tile never counts as the game of the game state (audit 16.11.2026) */
   if(!ps5tm_gamestate_measured() || ps5tm_gamestate_age_ms() > HOLD_STATE_AGE_MS) return 0;
   ps5tm_gamestate_t gs;
   ps5tm_gamestate_get(&gs);
@@ -213,7 +214,7 @@ env_smp_excerpt(const char *id, char *out, size_t n) {
   out[0] = 0;
   if(!ps5tm_smp_available(NULL, 0)) return 0;
   char err[120] = "";
-  cJSON *ans = ps5tm_smp_call("/debug-log", NULL, 4000, err, sizeof(err));
+  cJSON *ans = ps5tm_smp_call("/debug-log", NULL, 1500, err, sizeof(err));
   if(!ans) return 0;
   const cJSON *c = cJSON_GetObjectItem(ans, "content");
   if(cJSON_IsString(c) && c->valuestring) {
@@ -642,6 +643,7 @@ ps5tm_smphold_test_load(void) {
 #define TR_TRIES            3
 #define TR_WINDOW_MS        60000u
 #define TR_WINDOW_STARTS    3
+#define TR_READ_GAP_MS      2000u                /* the kernel log is looked at every two seconds, not every one (audit 16.11.2026) */
 
 static struct {
   char     id[12];
@@ -650,6 +652,7 @@ static struct {
   int      fresh;                                /* the refusal has not been written to the log yet */
 } g_tr;                                          /* a start waiting; id[0] == 0 none (the watcher thread only) */
 static int      g_tr_watching;
+static uint64_t g_tr_read_ms;
 static uint64_t g_tr_window_ms;
 static int      g_tr_window_starts;
 
@@ -672,21 +675,14 @@ tile_step(int read_log) {
   if(!game && !g_tr.id[0]) { g_tr_watching = 0; return; }     /* no game, nothing waiting: the log is not read */
   const uint64_t now = g_env.now_ms();
   if(read_log) {
-    if(!g_tr_watching) { g_env.launch_failed(1, NULL, 0); g_tr_watching = 1; }   /* refusals from before do not count */
-    char id[16] = "";
-    if(g_env.launch_failed(0, id, sizeof(id))) tile_refused(id);
-  }
-  if(g_tr.id[0] && g_tr.fresh) {                                /* the reason, as ShadowMountPlus gave it, into the app's log */
-    g_tr.fresh = 0;
-    char why[480] = "";
-    if(g_env.smp_excerpt && g_env.smp_excerpt(g_tr.id, why, sizeof(why)))
-      PS5TM_INFO("tile_refused", "Der Start der Kachel %s wurde abgelehnt. ShadowMountPlus meldet: %s", g_tr.id, why);
-    else
-      PS5TM_INFO("tile_refused", "Der Start der Kachel %s wurde abgelehnt (die Meldung von ShadowMountPlus war nicht zu lesen).", g_tr.id);
-    char ver[8] = "";
-    ps5tm_config_smp_version(ver, sizeof(ver));
-    if(!strcmp(ver, "old"))
-      PS5TM_WARN("tile_refused_old_smp", "ShadowMountPlus ist älter als 1.7beta12: Dieser Fehler („Device busy“ nach einem Spielwechsel) ist dort bekannt und ab 1.7beta12 behoben.");
+    if(!g_tr_watching) { g_env.launch_failed(1, NULL, 0); g_tr_watching = 1; g_tr_read_ms = now; }   /* refusals from before do not count */
+    /* Not every second: the log is a copy of the kernel's buffer, and a game can run for hours. The refusal stays in the log, so a read two seconds
+       later finds it as well. (No question to ShadowMountPlus here: smp_up would send it two requests every ten seconds for as long as a game runs.) */
+    else if(now - g_tr_read_ms >= TR_READ_GAP_MS) {
+      g_tr_read_ms = now;
+      char id[16] = "";
+      if(g_env.launch_failed(0, id, sizeof(id))) tile_refused(id);
+    }
   }
   if(!g_tr.id[0] || now < g_tr.at) return;
 
@@ -699,8 +695,26 @@ tile_step(int read_log) {
   }
   g_tr_window_starts++;
   g_tr.tries++;
+  const int say = g_tr.fresh;
+  g_tr.fresh = 0;
+  char tile[12];
+  snprintf(tile, sizeof(tile), "%s", g_tr.id);
+  /* The reason is read BEFORE the new start (which writes its own lines about the same tile into the log of ShadowMountPlus) and written to the app's log
+     after it; the read is short, so the start is not held up long. */
+  char why[480] = "";
+  const int have_why = say && g_env.smp_excerpt && g_env.smp_excerpt(tile, why, sizeof(why));
   if(g_env.go_home) g_env.go_home();                            /* the dialog of the refusal out of the way first */
   int rc = g_env.start_title(g_tr.id);
+  if(say) {                                                     /* the reason, as ShadowMountPlus gave it, into the app's log */
+    if(have_why)
+      PS5TM_INFO("tile_refused", "Der Start der Kachel %s wurde abgelehnt. ShadowMountPlus meldet: %s", tile, why);
+    else
+      PS5TM_INFO("tile_refused", "Der Start der Kachel %s wurde abgelehnt (die Meldung von ShadowMountPlus war nicht zu lesen).", tile);
+    char ver[8] = "";
+    ps5tm_config_smp_version(ver, sizeof(ver));
+    if(!strcmp(ver, "old"))
+      PS5TM_WARN("tile_refused_old_smp", "ShadowMountPlus ist älter als 1.7beta12: Dieser Fehler („Device busy“ nach einem Spielwechsel) ist dort bekannt und ab 1.7beta12 behoben.");
+  }
   if(rc >= 0) {
     PS5TM_INFO("tile_retry_started", "Die Kachel %s wurde abgelehnt (ein Spiel wartet im Hintergrund) und von der App noch einmal gestartet (Versuch %d).", g_tr.id, g_tr.tries);
     g_tr.id[0] = 0;
@@ -721,6 +735,7 @@ void
 ps5tm_smphold_tile_test_reset(void) {
   memset(&g_tr, 0, sizeof(g_tr));
   g_tr_watching = 0;
+  g_tr_read_ms = 0;
   g_tr_window_ms = 0;
   g_tr_window_starts = 0;
 }

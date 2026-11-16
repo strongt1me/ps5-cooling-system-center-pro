@@ -320,6 +320,9 @@ ps5tm_procmgr_close_game(const char *title_id, unsigned timeout_ms) {
   return -1;
 #else
   if(!is_game_title_id(title_id)) return -1;
+  /* A dump reads the game's own mounts; they go with the game. The PS5 went down with a kernel panic when a game was closed in the middle of a dump
+     (16.11.2026). Whoever asks - the page, a switch of games, PS4Mount - is refused while one runs. */
+  if(ps5tm_dump_source_busy()) return -1;
   resolve();
   if(!p_sceKernelGetAppInfo) return -1;
 

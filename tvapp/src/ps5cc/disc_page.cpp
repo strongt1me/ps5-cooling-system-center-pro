@@ -1011,7 +1011,7 @@ class DiscPage final : public Page
                 naming_ = false;
                 feedback.play(audio::Cue::select);
                 // sent with the other settings; the app tidies the name and says so when it refuses it
-                dump_.settings.subdir = trimmed;
+                subdir_pending_ = trimmed; // not in dump_: the next poll of the app would write the old name over it before it is sent
                 form_.set_value_text(kSetSubdir, trimmed);
                 dump_dirty_ = true;
                 save_in_ = kSaveDelay;
@@ -1032,7 +1032,7 @@ class DiscPage final : public Page
         if (ev == ui::Event::activated && form_.changed_id() == kSetSubdir)
         {
             naming_ = true;
-            name_ = dump_.settings.subdir;
+            name_ = subdir_pending_.empty() ? dump_.settings.subdir : subdir_pending_;
             keys_.set_layout(0);
             keys_.set_length(static_cast<int>(name_.size()));
             keys_.set_active(true);
@@ -1061,6 +1061,8 @@ class DiscPage final : public Page
         if (dump_dirty_)
         {
             dump_dirty_ = false;
+            const std::string subdir = subdir_pending_.empty() ? dump_.settings.subdir : subdir_pending_;
+            subdir_pending_.clear();
             const int t = form_.choice_index(kSetTarget);
             const std::string target = t >= 0 && t < static_cast<int>(dump_.targets.size())
                                            ? dump_.targets[static_cast<std::size_t>(t)].mount
@@ -1069,7 +1071,7 @@ class DiscPage final : public Page
             source().disc_post(
                 "dump",
                 "{\"action\":\"settings\",\"target\":" + json_text(target) +
-                    ",\"subdir\":" + json_text(dump_.settings.subdir) +
+                    ",\"subdir\":" + json_text(subdir) +
                     ",\"folder_titles\":" + flag(kSetTitles) + ",\"dump_dlc\":" + flag(kSetDlc) +
                     ",\"verify\":" + flag(kSetVerify) + ",\"ps4_split\":" +
                     std::to_string(kSplitValues[std::clamp(form_.choice_index(kSetSplit), 0, 3)]) +
@@ -1339,6 +1341,7 @@ class DiscPage final : public Page
     ui::Form form_;
     ui::Keyboard keys_;            // the folder name
     std::string name_;
+    std::string subdir_pending_;   // the folder name typed and not yet sent
     bool naming_ = false;
     float clock_ = 0.0f;
     tween::Spring shown_;

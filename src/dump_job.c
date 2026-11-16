@@ -456,9 +456,13 @@ cfg_save(const dj_cfg_t *c) {
   char *s = cJSON_PrintUnformatted(o);
   cJSON_Delete(o);
   if(!s) return;
+  static pthread_mutex_t save_lock = PTHREAD_MUTEX_INITIALIZER;       /* two saves at once wrote the same temporary file (audit 16.11.2026) */
   mkdir(PS5TM_DATA_DIR, 0777);
   mkdir(DJ_DIR, 0777);
-  if(write_atomic(DJ_SETTINGS, s, strlen(s)) != 0)
+  pthread_mutex_lock(&save_lock);
+  int wrc = write_atomic(DJ_SETTINGS, s, strlen(s));
+  pthread_mutex_unlock(&save_lock);
+  if(wrc != 0)
     PS5TM_WARN("dump_settings", "Dump: Die Einstellungen ließen sich nicht speichern.");
   free(s);
 }
@@ -549,6 +553,25 @@ write_info(const char *dest, const char *folder, const char *tid, const char *ti
     dlog("Hinweis: Die Info-Datei %s ließ sich nicht schreiben.", path);
 }
 
+/* 1 when the folder has an info file beside it: a dump of this app or of the dumper it follows made it. A folder without one is not a dump (a game folder
+   of ShadowMountPlus, a copy made by hand, something of the person's own): it is never taken for one and never deleted or written into (16.11.2026;
+   until then "replace the existing dump" took such a folder for a finished dump and deleted it, when its name began like a dump's). */
+static int
+info_present(const char *dest, const char *folder) {
+  char path[640];
+  info_path(dest, folder, path, sizeof(path));
+  struct stat st;
+  return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+/* 1 when a folder of this name lies at the destination and is no dump of ours. */
+static int
+foreign_in_the_way(const char *dest, const char *folder) {
+  char full[PATH_MAX];
+  if(snprintf(full, sizeof(full), "%s/%s", dest, folder) >= (int)sizeof(full)) return 0;
+  return is_dir(full) && !info_present(dest, folder);
+}
+
 /* the "state" of a folder's info file; "" when there is none (an older dump, or something else) */
 static void
 info_state(const char *dest, const char *folder, char *out, size_t n) {
@@ -577,7 +600,7 @@ find_existing_each(const char *dest, const char *tid, char names[4][DJ_NAME_MAX]
     if(!folder_is_game_of(e->d_name, tid) || strlen(e->d_name) >= DJ_NAME_MAX) continue;
     char full[PATH_MAX];
     snprintf(full, sizeof(full), "%s/%s", dest, e->d_name);
-    if(!is_dir(full)) continue;
+    if(!is_dir(full) || !info_present(dest, e->d_name)) continue;     /* no info file: no dump, left alone */
     char st[16];
     info_state(dest, e->d_name, st, sizeof(st));
     int open_one = st[0] && strcmp(st, "done");
@@ -1592,6 +1615,14 @@ dump_run(void *arg) {
         }
   }
 
+  /* A folder of the name the dump would get that is no dump (no info file): not written into and not removed, the person is told. For a PS4 title the
+     names are known only after its plan, below. */
+  if(!a.dlc_only && !is4 && foreign_in_the_way(a.dest, gfolder)) {
+    job_fail("Am Ziel gibt es schon einen Ordner „%s“, der nicht von einem Dump stammt (es fehlt die Datei %s%s). Er wird weder überschrieben noch gelöscht. "
+             "Bitte einen anderen Ordner im Ziel wählen oder den Ordner selbst wegnehmen.", gfolder, gfolder, DJ_INFO_SUFFIX);
+    goto out;
+  }
+
   /* what there is to copy */
   job_state(DJ_MEASURING, "Größe messen");
   cp_ctx_t app_cx = { NULL, gfolder, "", 0, a.cfg.verify, 0, k_defer_app, 2 };
@@ -1614,6 +1645,12 @@ dump_run(void *arg) {
       job_state(DJ_CANCELLED, "cancelled");
       goto out;
     }
+    for(int i = 0; i < pl4->n; i++)
+      if(foreign_in_the_way(a.dest, pl4->part[i].folder)) {
+        job_fail("Am Ziel gibt es schon einen Ordner „%s“, der nicht von einem Dump stammt (es fehlt die Datei %s%s). Er wird weder überschrieben noch gelöscht. "
+                 "Bitte einen anderen Ordner im Ziel wählen oder den Ordner selbst wegnehmen.", pl4->part[i].folder, pl4->part[i].folder, DJ_INFO_SUFFIX);
+        goto out;
+      }
     for(int i = 0; i < pl4->n; i++) {
       const ps4_part_t *pt = &pl4->part[i];
       if(pt->use_img) {
@@ -2150,6 +2187,13 @@ dump_running(void) {
   return busy;
 }
 
+/* 1 while a dump reads the running game: measuring, copying, finishing. A game must not be closed then (kernel panic of 16.11.2026); the deletion of
+   a dump does not read it, so it is not counted here. */
+int
+ps5tm_dump_source_busy(void) {
+  return dump_running();
+}
+
 /* 1 while a dump is written or deleted: the deletion counts as a file job too, so no copy, conversion or file-manager job starts into the
    folder that is being emptied (audit F-38). Seen by the others through ps5tm_gamecopy_busy(). */
 int
@@ -2163,6 +2207,10 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
   if(!is_tid(tid)) {
     snprintf(err, en, "Das ist keine Titelkennung eines PS5- oder PS4-Spiels.");
     return 400;
+  }
+  if(ps5tm_game_switching()) {                       /* the game is being closed: the mount that the dump would read goes with it */
+    snprintf(err, en, "Das Spiel wird gerade beendet oder gewechselt. Bitte warten, bis das vorbei ist, und dann den Dump starten.");
+    return 409;
   }
   dj_cfg_t cfg = cfg_get();
   if(opt && opt->set) {                          /* a queued title with settings of its own; the rest stays the global settings */
@@ -2267,6 +2315,16 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
     memset(&g_job, 0, sizeof(g_job));
     pthread_mutex_unlock(&g_lock);
     free(a);
+    return 409;
+  }
+  /* The same for the closing of the game: it may have begun while the checks above ran. The job is set now, so a close that begins after this
+     sees it (ps5tm_dump_source_busy); one that began before is seen here, and the dump stands down. */
+  if(ps5tm_game_switching()) {
+    pthread_mutex_lock(&g_lock);
+    memset(&g_job, 0, sizeof(g_job));
+    pthread_mutex_unlock(&g_lock);
+    free(a);
+    snprintf(err, en, "Das Spiel wird gerade beendet oder gewechselt. Bitte warten, bis das vorbei ist, und dann den Dump starten.");
     return 409;
   }
 
@@ -2392,7 +2450,16 @@ ps5tm_dump_action(const cJSON *b, char *msg, size_t n) {
       snprintf(sd, sizeof(sd), "%s", v->valuestring);
       ps5tm_dumpdir_tidy(sd, c.target);          /* spaces, a slash at the end, the drive's own path in front: tidied, not refused */
       if(!subdir_ok(sd)) {
-        snprintf(msg, n, "Der Ordner „%s“ geht nicht: Er darf weder Doppelpunkt, Stern, Fragezeichen, Anführungszeichen, spitze Klammern, senkrechten Strich noch Rückwärts-Schrägstrich enthalten, kein Teil darf mit Punkt oder Leerzeichen enden oder nur aus Punkten bestehen, und er darf höchstens drei Ebenen tief und 95 Zeichen lang sein.", v->valuestring);
+        char echo[64] = "";                         /* the name as typed, cut at a whole letter; nothing of a name that is no text */
+        if(ps5tm_dumpdir_utf8_ok(v->valuestring)) {
+          size_t cut = strlen(v->valuestring);
+          if(cut > 60) {
+            cut = 60;
+            while(cut > 0 && (((unsigned char)v->valuestring[cut]) & 0xC0) == 0x80) cut--;
+          }
+          snprintf(echo, sizeof(echo), "%.*s", (int)cut, v->valuestring);
+        }
+        snprintf(msg, n, "Der Ordner „%s“ geht nicht: Er darf weder Doppelpunkt, Stern, Fragezeichen, Anführungszeichen, spitze Klammern, senkrechten Strich noch Rückwärts-Schrägstrich enthalten, kein Teil darf mit Punkt oder Leerzeichen enden oder nur aus Punkten bestehen, und er darf höchstens drei Ebenen tief und 95 Zeichen lang sein.", echo);
         return 400;
       }
       snprintf(c.subdir, sizeof(c.subdir), "%s", sd);

@@ -3902,6 +3902,11 @@ static int open_games(uint32_t *ids, char (*tids)[10], int max) {
  * game is open; -1 when one did not close within 30 seconds. why names the reason shown
  * in the notification (PS4Mount 0.7.0: also used to close a game before starting another). */
 static int close_open_games(const char *why) {
+    /* (app) A dump reads the running game: it is not closed then (kernel panic of 16.11.2026), and nothing waits 30 s for it to go. */
+    if (ps5tm_dump_source_busy()) {
+        notify("Ein Dump läuft und liest das Spiel; das Spiel wird nicht geschlossen");
+        return -1;
+    }
     uint32_t ids[8];
     char tids[8][10];
     int n = open_games(ids, tids, 8);

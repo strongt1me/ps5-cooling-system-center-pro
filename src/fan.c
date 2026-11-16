@@ -34,6 +34,8 @@
 #define SERVO_TOLERANCE_PCT 7   /* accept this much duty error (more than one kelvin of threshold is worth, 5.6 %), then act */
 #define SERVO_INTERVAL_SEC  3   /* the fan and its reading follow a threshold change over a few seconds: correct no faster */
 #define SERVO_STEP_MAX_C    3   /* threshold movement per servo correction  */
+#define SERVO_URGENT_TOLERANCE_PCT 4   /* the tolerance and the interval of the safety ramp and the blind sensor: as before 16.11.2026 */
+#define SERVO_URGENT_INTERVAL_SEC  2
 #define FF_JUMP_DAMP_PCT    3   /* the first jump out of rest aims this far under the wish */
 #define SERVO_IDLE_DUTY_PCT 5   /* below this the fan is left entirely alone*/
 
@@ -669,28 +671,27 @@ comfort_step(int duty, int avg_c100, int trend_c100,
    the fan slams to full. */
 static int
 servo_step(int current, int target_duty, int measured_duty,
-           int allow_more_cooling) {
+           int allow_more_cooling, int urgent) {
   int err = target_duty - measured_duty;
   int mag = err < 0 ? -err : err;
 
-  if(mag <= SERVO_TOLERANCE_PCT) return current;
+  /* urgent = the safety ramp or a blind sensor: the console is hot and must be cooled, so the quick servo of before 16.11.2026 applies (error of
+     4 %, steps up to 6 K, every two seconds); the calm one (7 %, 3 K, every three seconds) is for the normal range only (audit 16.11.2026). */
+  if(mag <= (urgent ? SERVO_URGENT_TOLERANCE_PCT : SERVO_TOLERANCE_PCT)) return current;
   if(err > 0 && !allow_more_cooling) return current;
 
   int step = mag / 6;
   if(step < 1) step = 1;
 
-  /* Asymmetric on purpose: falling behind while the console is hot is the
-     failure that matters, so adding cooling may move further per step than
-     taking it away. */
-  /* A big miss is a load step, not noise: one degree per six seconds walked the threshold
+  /* (Until 16.11.2026 adding cooling could move further per step than taking it away; the steps are the same now, see below.)
+     A big miss is a load step, not noise: one degree per six seconds walked the threshold
      back from 58 to 91 °C in over three minutes while the fan stayed loud. Small misses keep
      the small steps. */
   /* One kelvin of threshold is about 5.6 % of fan speed, so a step of three is a jump of 17 %: audible as the fan "swaying" when it came
      in the middle of an adjustment (console of 16.11.2026: 23 -> 38 -> 29 -> 32 % within a minute). The steps are smaller now: 1 for a
      small miss, 2 for a larger one, 3 only for a big miss. */
-  int cap;
-  if(err > 0) cap = (mag >= 20) ? SERVO_STEP_MAX_C : (mag >= 10) ? 2 : 1;
-  else        cap = (mag >= 20) ? SERVO_STEP_MAX_C : (mag >= 10) ? 2 : 1;
+  int cap = (mag >= 20) ? SERVO_STEP_MAX_C : (mag >= 10) ? 2 : 1;      /* the same up and down */
+  if(urgent) cap = (err > 0) ? ((mag >= 20) ? 2 * SERVO_STEP_MAX_C : SERVO_STEP_MAX_C) : ((mag >= 20) ? 4 : (mag >= 10) ? 2 : 1);
   if(step > cap) step = cap;
 
   /* A lower threshold widens the gap to the temperature, which is what makes
@@ -1638,12 +1639,12 @@ fan_worker(void *arg) {
            the firmware is reacting to a heat the sensors no longer report.
            Leave it: while the temperature is unknown, cooling may only grow. */
         desired_threshold = last_applied;
-      } else if(now - last_servo_ms >= (uint64_t)SERVO_INTERVAL_SEC * 1000) {
+      } else if(now - last_servo_ms >= (uint64_t)((safety_active || blind) ? SERVO_URGENT_INTERVAL_SEC : SERVO_INTERVAL_SEC) * 1000) {
         int allow_more = avg_c100 >
                          target_c100(&cfg) -
                          CURVE_LEAD_C100;     /* the gentle part of the curve begins under the target */
         desired_threshold = servo_step(last_applied, desired_duty, measured,
-                                       allow_more || safety_active || blind);
+                                       allow_more || safety_active || blind, safety_active || blind);
       } else {
         desired_threshold = last_applied;
       }

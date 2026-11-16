@@ -10911,7 +10911,7 @@
     const busy = !!(j && j.active);
     /* Solange ein Dump läuft oder gleich beginnt, steht oben, was zu tun ist: nichts (Wunsch des Users, 16.11.2026). */
     const wq = dqData();
-    const cur = (wq.items || []).find((it) => ["pending", "waiting_disc", "launching", "settling"].includes(it.state));
+    const cur = wq.active && (wq.items || []).find((it) => ["pending", "waiting_disc", "launching", "settling"].includes(it.state));   /* nur bei laufender Warteschlange: ein Titel, der nur in der Liste steht, startet nichts */
     const wait = $("#dg-wait");
     if (wait) {
       const txtWait = busy || (wq.active && (wq.items || []).some((it) => it.state === "dumping"))
@@ -11124,7 +11124,7 @@
     const c = $("#dm-card");
     if (c) c.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  const dmSettings = () => dmPost({ action: "settings", target: $("#dm-target").value, subdir: $("#dm-subdir").value.trim(),
+  const dmSettingsRun = () => dmPost({ action: "settings", target: $("#dm-target").value, subdir: $("#dm-subdir").value.trim(),
     folder_titles: $("#dm-titles").checked, dump_dlc: $("#dm-dlc").checked, verify: $("#dm-verify").checked,
     ps4_split: Number($("#dm-split").value), decrypt: $("#dm-decrypt").checked,
     fself: $("#dm-decrypt").checked && $("#dm-fself").checked,
@@ -11135,9 +11135,17 @@
     if (ok) { dm.subdirErr = ""; dm.subdirTyped = false; dmRender(); }
     return ok;
   });
+  /* The settings go one after the other, each with the values of the moment it is sent (16.11.2026): two at once (the change event of the field and the click on
+     "Dump starten") wrote the same temporary file in the app, and a start after a change of the drive could reach the app before the change. Every start waits for them. */
+  let dmSettingsChain = Promise.resolve(true);
+  const dmSettings = () => {
+    const p = dmSettingsChain.then(() => dmSettingsRun());
+    dmSettingsChain = p.catch(() => true);
+    return p;
+  };
   /* A typed folder is saved before a dump starts from it: the change event of the field and the click on "Dump starten" came in the same moment, and the start
      could reach the app first, so that the dump went to the old folder. A refused name stops the start. */
-  const dmFlushFolder = async () => (dm.subdirTyped || dm.subdirErr) ? dmSettings() : true;
+  const dmFlushFolder = async () => { if (dm.subdirTyped || dm.subdirErr) return dmSettings(); await dmSettingsChain; return true; };
   $("#dm-subdir").addEventListener("input", () => { dm.subdirTyped = true; dm.subdirErr = ""; });
   ["#dm-target", "#dm-titles", "#dm-dlc", "#dm-verify", "#dm-split", "#dm-decrypt", "#dm-fself", "#dm-bp", "#dm-bp4", "#dm-bp5"].forEach((s) => $(s).addEventListener("change", dmSettings));
   $("#dm-subdir").addEventListener("change", dmSettings);
@@ -13434,10 +13442,11 @@
     const px = (t) => X0 + (X1 - X0) * (t - t0) / Math.max(1, t1 - t0);
     const py = (p) => Y0 - (Y0 - Y1) * Math.max(0, Math.min(100, p)) / 100;
     const grid = $("#fc-grid");
+    const gridKey = `${t0}-${t1}`;
     let g = "";
     for (let p = 0; p <= 100; p += 25) g += `<path d="M${X0} ${py(p).toFixed(1)}H${X1}" class="fc-g"></path><text class="fc-ax" data-no-i18n x="${X0 - 6}" y="${(py(p) + 4).toFixed(1)}" text-anchor="end">${p} %</text>`;
     for (let t = Math.ceil(t0 / 10) * 10; t <= t1; t += 10) g += `<text class="fc-ax" data-no-i18n x="${px(t).toFixed(1)}" y="${Y0 + 16}" text-anchor="middle">${t}°</text>`;
-    grid.innerHTML = g;
+    if (grid.dataset.k !== gridKey) { grid.dataset.k = gridKey; grid.innerHTML = g; }      /* the grid only when the range moved: not every 5 s (the translator watches every change) */
     const drawn = pts.filter((p) => p.pct > 0);                       /* where nothing is asked for there is no curve: the console runs by itself */
     if (drawn.length < 2) return;
     const d = drawn.map((p, i) => `${i ? "L" : "M"}${px(p.c).toFixed(1)} ${py(p.pct).toFixed(1)}`).join("");
@@ -13480,7 +13489,7 @@
     if (b) b.disabled = false;
   };
   if ($("#fc-trace-save")) $("#fc-trace-save").addEventListener("click", fcSave);
-  fcLoad();
+  if (state.page === "cooling") fcLoad();
 
   /* Lüfter-Selbsttest: der Knopf startet ihn oder bricht den laufenden ab; die Seite fragt jede Sekunde nach, solange er läuft. */
   const fanTest = { timer: 0, last: null };

@@ -1688,6 +1688,8 @@ int  ps5tm_dump_action(const struct cJSON *body, char *msg, size_t msg_len);
 int  ps5tm_dumplib_locate(const char *mount, const char *dir, const char *folder, char *dest, size_t dest_len, char *state,
                           size_t state_len, char *err, size_t err_len);
 int  ps5tm_dump_delete(const char *mount, const char *dir, const char *folder, char *msg, size_t msg_len);   /* HTTP status */
+int  ps5tm_dump_source_busy(void);             /* 1 while a dump reads the running game (not while one is deleted): no game is closed then */
+int  ps5tm_game_switching(void);               /* 1 while the app closes a game and perhaps starts another (api.c) */
 int  ps5tm_dump_busy(void);                      /* 1 while a dump runs; ps5tm_gamecopy_busy() includes it */
 int  ps5tm_dump_mounted(const char *title_id);   /* the running title's folder under /mnt/sandbox/pfsmnt is there */
 int  ps5tm_filejobs_busy_for_dump(char *err, size_t err_len);   /* gamecopy.c: a copy or another file job runs, with the reason */

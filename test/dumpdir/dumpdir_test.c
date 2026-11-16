@@ -67,6 +67,14 @@ main(void) {
   ok_is("a\\b", 0);
   ok_is("a\tb", 0);
 
+  ok_is("A\xff", 0);                    /* a lone byte */
+  ok_is("\xc3", 0);                     /* a cut letter */
+  ok_is("\xc0\x80", 0);                /* an overlong NUL */
+  ok_is("\xc0\xae\xc0\xae", 0);       /* an overlong ".." */
+  ok_is("\xed\xa0\x80", 0);           /* a surrogate */
+  ok_is("\xf4\x90\x80\x80", 0);       /* above U+10FFFF */
+  ok_is("\xf0\x9f\x8e\xae Spiele", 1); /* a real four-byte letter */
+
   char longname[200];
   memset(longname, 'x', 95);
   longname[95] = 0;

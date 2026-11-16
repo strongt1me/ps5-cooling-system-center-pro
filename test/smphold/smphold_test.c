@@ -130,6 +130,7 @@ static int g_home_calls;
 static void t_home(void) { g_home_calls++; }
 int ps5tm_library_start(const char *id) { (void)id; return -1; }
 int ps5tm_library_close_browser(void) { return -1; }
+int ps5tm_procmgr_title_running(const char *id) { (void)id; return 0; }
 cJSON *ps5tm_smp_call(const char *route, const cJSON *body, int timeout_ms, char *err, size_t err_len) { (void)route; (void)body; (void)timeout_ms; (void)err; (void)err_len; return NULL; }
 void ps5tm_config_smp_version(char *out, size_t n) { snprintf(out, n, "v2"); }
 static uint64_t t_boot(void) { return g_boot; }
@@ -562,6 +563,7 @@ main(void) {
   ps5tm_smphold_tile_tick();                                          /* a game: the log is looked at, from now on */
   CHECK(g_resets == 1);
   snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100;                                                      /* the log is read every two seconds */
   ps5tm_smphold_tile_tick();                                          /* refused: not at once */
   CHECK(g_start_calls == 0);
   g_now += 1000; ps5tm_smphold_tile_tick();
@@ -576,6 +578,7 @@ main(void) {
   world(); g_game = 1;
   ps5tm_smphold_tile_tick();
   snprintf(g_failed_next, sizeof(g_failed_next), "PPSA01325");
+  g_now += 2100;                                                      /* the log is read every two seconds */
   ps5tm_smphold_tile_tick();
   g_now += 3000; ps5tm_smphold_tile_tick();
   CHECK(g_start_calls == 0);
@@ -584,6 +587,7 @@ main(void) {
   world(); g_game = 1; g_start_rc = -1;
   ps5tm_smphold_tile_tick();
   snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86921");
+  g_now += 2100;                                                      /* the log is read every two seconds */
   ps5tm_smphold_tile_tick();
   g_now += 2100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 1);
   g_now += 4100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 2);
@@ -594,6 +598,7 @@ main(void) {
   world(); g_game = 1;
   ps5tm_smphold_tile_tick();
   snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100;                                                      /* the log is read every two seconds */
   ps5tm_smphold_tile_tick();
   snprintf(g_run_title, sizeof(g_run_title), "FAKE86922");
   g_now += 2100; ps5tm_smphold_tile_tick();
@@ -604,6 +609,7 @@ main(void) {
   ps5tm_smphold_tile_tick();
   for(int i = 0; i < 6; i++) {
     snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+    g_now += 2100;                                                      /* the log is read every two seconds */
     ps5tm_smphold_tile_tick();
     g_now += 2100; ps5tm_smphold_tile_tick();
     g_now += 1000;

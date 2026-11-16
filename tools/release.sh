@@ -260,20 +260,17 @@ else
 fi
 
 # ---------- 4. commit + push ----------
-STAGE="Commit und Push"
-head_ "4. Commit und Push"
+STAGE="Commit"
+head_ "4. Commit (der Push folgt erst in Schritt 6, wenn gebaut und geprüft ist)"
 if [ "$DRY" = 1 ]; then
   dry "würde alle geänderten Dateien zum Commit vormerken (git add -u, dazu neue web/handbuch*.html und web/faq*.html)"
   dry "würde committen: git -c user.email=$IDENT_EMAIL commit -m \"release: $TAG\" -m \"$TRAILER\""
-  confirm "git push $REMOTE $BRANCH:$REMOTE_BRANCH"
-  dry "würde pushen: git push $REMOTE $BRANCH:$REMOTE_BRANCH"
   SHA="<voller SHA des neuen Commits>"
 else
   git add -u
-  new_docs="$(git ls-files --others --exclude-standard -- 'web/handbuch*.html' 'web/faq*.html')"
-  if [ -n "$new_docs" ]; then
-    # shellcheck disable=SC2086
-    git add -- $new_docs
+  mapfile -t new_docs < <(git ls-files --others --exclude-standard -- 'web/handbuch*.html' 'web/faq*.html')
+  if [ "${#new_docs[@]}" -gt 0 ]; then
+    git add -- "${new_docs[@]}"
   fi
   leftovers="$(git status --porcelain | grep -v '^[MADR]' || true)"
   if [ -n "$leftovers" ]; then
@@ -290,8 +287,6 @@ else
     say "Commit: $(git log -1 --format='%h %s')"
   fi
   SHA="$(git rev-parse HEAD)"
-  confirm "git push $REMOTE $BRANCH:$REMOTE_BRANCH (Commit ${SHA:0:7})"
-  git push "$REMOTE" "$BRANCH:$REMOTE_BRANCH"
 fi
 
 # ---------- 5. build ----------
@@ -353,13 +348,19 @@ FILES=("$RELDIR/$ELFNAME" "$RELDIR/${TILES[0]}.zip" "$RELDIR/${TILES[1]}.zip" "$
 
 # ---------- 6. release ----------
 STAGE="GitHub-Release anlegen"
-head_ "6. GitHub-Release anlegen"
+head_ "6. Push und GitHub-Release anlegen"
 if [ "$DRY" = 1 ]; then
+  confirm "git push $REMOTE $BRANCH:$REMOTE_BRANCH"
+  dry "würde pushen: git push $REMOTE $BRANCH:$REMOTE_BRANCH (erst jetzt: Bau und Zip-Dateien sind geprüft; scheitert vorher etwas, steht nichts auf $REMOTE_BRANCH)"
   dry "würde Seitentext aus $NOTES ohne die erste Zeile in eine Temp-Datei schreiben"
   confirm "gh release create $TAG (4 Dateien) in $REPO"
   dry "würde ausführen: gh release create $TAG <4 Dateien aus \"$RELDIR\"> --repo $REPO --target $SHA --title \"PS5 Cooling & System Center - Pro $TAG\" --notes-file <Notizen ohne erste Zeile> --latest"
 else
   for f in "${FILES[@]}"; do [ -f "$f" ] || { echo "FEHLER: Datei fehlt: $f" >&2; exit 1; }; done
+  STAGE="Push"
+  confirm "git push $REMOTE $BRANCH:$REMOTE_BRANCH (Commit ${SHA:0:7})"
+  git push "$REMOTE" "$BRANCH:$REMOTE_BRANCH"
+  STAGE="GitHub-Release anlegen"
   NOTES_TMP="$(mktemp)"
   tail -n +2 "$NOTES" > "$NOTES_TMP"
   confirm "gh release create $TAG mit ${#FILES[@]} Dateien in $REPO (Ziel-Commit ${SHA:0:7})"

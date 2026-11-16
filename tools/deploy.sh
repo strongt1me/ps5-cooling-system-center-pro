@@ -189,7 +189,23 @@ if [ "$DO_TILES" = 1 ]; then
     for f in "${files[@]}"; do
       f="${f#./}"
       url="ftp://$IP:$FTP_PORT/data/homebrew/$t/$(enc_path "$f")"
-      out="$(cd "$tdir" && curl -s -S -m 300 --ftp-create-dirs -T "$f" "$url" 2>&1)"; rc=$?
+      if [ "$f" = "eboot.bin" ]; then
+        # eboot.bin goes up under a temporary name and is renamed when it is whole: a net that fails in the middle leaves the old file, not a cut one.
+        # The old file is never removed by the script: the rename replaces it (FreeBSD), and when that fails the old file stays, with the new one beside it as eboot.bin.part.
+        out="$(cd "$tdir" && curl -s -S -m 300 --ftp-create-dirs -T "$f" "$url.part" 2>&1)"; rc=$?
+        if [ "$rc" -ne 0 ]; then
+          curl -s -m 20 -Q "*DELE /data/homebrew/$t/eboot.bin.part" "ftp://$IP:$FTP_PORT/" -o /dev/null 2>&1 || true      # the upload broke off: no half file is left
+        else
+          out="$(curl -s -S -m 60 -Q "RNFR /data/homebrew/$t/eboot.bin.part" -Q "RNTO /data/homebrew/$t/eboot.bin" "ftp://$IP:$FTP_PORT/" -o /dev/null 2>&1)"; rc=$?
+          if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q '550'; then
+            # the rename may have worked and only the listing after it failed: the size on the console decides
+            rs="$(curl -s -I -m 30 "ftp://$IP:$FTP_PORT/data/homebrew/$t/eboot.bin" 2>/dev/null | tr -d '\r' | sed -n 's/^[Cc]ontent-[Ll]ength:[[:space:]]*\([0-9]*\).*/\1/p' | head -n 1)"
+            [ "$rs" = "$(file_size "$tdir/eboot.bin")" ] && rc=0
+          fi
+        fi
+      else
+        out="$(cd "$tdir" && curl -s -S -m 300 --ftp-create-dirs -T "$f" "$url" 2>&1)"; rc=$?
+      fi
       n=$((n + 1))
       if [ "$rc" -ne 0 ]; then
         failed=$((failed + 1))

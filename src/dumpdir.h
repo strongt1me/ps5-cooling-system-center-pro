@@ -51,11 +51,33 @@ ps5tm_dumpdir_tidy(char *s, const char *mount) {
   return s;
 }
 
+/* 1 when s is valid UTF-8 (no overlong forms, no surrogates, nothing above U+10FFFF). */
+static inline int
+ps5tm_dumpdir_utf8_ok(const char *s) {
+  const unsigned char *p = (const unsigned char *)s;
+  while(*p) {
+    if(*p < 0x80) { p++; continue; }
+    int n;
+    unsigned cp;
+    if(*p >= 0xC2 && *p <= 0xDF)      { n = 1; cp = *p & 0x1Fu; }
+    else if(*p >= 0xE0 && *p <= 0xEF) { n = 2; cp = *p & 0x0Fu; }
+    else if(*p >= 0xF0 && *p <= 0xF4) { n = 3; cp = *p & 0x07u; }
+    else return 0;
+    for(int i = 1; i <= n; i++) {
+      if((p[i] & 0xC0) != 0x80) return 0;
+      cp = (cp << 6) | (p[i] & 0x3Fu);
+    }
+    if((n == 2 && (cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF))) || (n == 3 && (cp < 0x10000 || cp > 0x10FFFF))) return 0;
+    p += n + 1;
+  }
+  return 1;
+}
+
 /* 1 when s (already tidied) is safe to build a path from. */
 static inline int
 ps5tm_dumpdir_ok(const char *s) {
   size_t len = s ? strlen(s) : 0;
-  if(len == 0 || len >= 96) return 0;
+  if(len == 0 || len >= 96 || !ps5tm_dumpdir_utf8_ok(s)) return 0;
   int segs = 1;
   size_t seglen = 0;
   int only_dots = 1;
