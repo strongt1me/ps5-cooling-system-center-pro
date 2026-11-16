@@ -881,8 +881,10 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 
 .gm-info { width: 100%; padding: 8px 12px; display: flex; align-items: center;
   justify-content: space-between; gap: 8px; }
-.gm-info::after { content: "▾"; color: var(--ink-muted); }
-.gm-info[aria-expanded="true"]::after { content: "▴"; }
+/* Der Pfeil ist mit Rändern gezeichnet, nicht als Zeichen: ▾ und ▴ fehlen im Zeichensatz des Konsolen-Browsers und erschienen dort als „?“ (16.11.2026). */
+.gm-info::after, .chev { content: ""; display: inline-block; flex: none; width: 7px; height: 7px; margin: 0 6px 3px 0;
+  border-right: 2px solid var(--ink-muted); border-bottom: 2px solid var(--ink-muted); transform: rotate(45deg); }
+.gm-info[aria-expanded="true"]::after, .dm-adv[open] > summary .chev { transform: rotate(-135deg); margin-bottom: -2px; }
 .gm-start { width: 100%; padding: 9px 12px; }
 /* Hinweis nach dem Start im PS5-Browser: das Spiel läuft hinter der Seite. */
 .gm-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 60;
