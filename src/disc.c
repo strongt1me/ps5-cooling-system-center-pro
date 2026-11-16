@@ -45,6 +45,7 @@
 #include <cam/scsi/scsi_pass.h>
 
 #include "ps5tm.h"
+#include "progressnote.h"
 #include "sqlite_ro.h"
 #include "third_party/cJSON.h"
 #include "third_party/libdeflate/libdeflate.h"
@@ -108,6 +109,7 @@ static struct {
   double rate;
   int cancel;
   int verified;
+  ps5tm_pnote_t pn;                         /* the progress lines at the top left of the screen (progressnote.h) */
 } g_job;
 
 /* ---------------------------------------------------------------- small helpers */
@@ -1266,6 +1268,7 @@ dump_thread(void *arg) {
   g_job.rate_ms = t0;
   g_job.rate_bytes = 0;
   g_job.rate = 0;
+  ps5tm_pnote_reset(&g_job.pn, t0);
   event_locked("Sichern beginnt: %s (%llu MiB)", stem, (unsigned long long)(media_u >> 20));
   pthread_mutex_unlock(&g_lock);
   ps5tm_powerguard_hold();
@@ -1300,7 +1303,14 @@ dump_thread(void *arg) {
       g_job.rate_bytes = done;
     }
     int cancel = g_job.cancel;
+    char pline[200] = "";
+    if(g_job.total > 0) {
+      const int pct = (int)(done >= g_job.total ? 100 : done * 100 / g_job.total);
+      if(ps5tm_pnote_due(&g_job.pn, pct, now))
+        ps5tm_pnote_text(pline, sizeof(pline), "Disc sichern", g_job.serial[0] ? g_job.serial : "Disc", pct, done, g_job.total, g_job.rate);
+    }
     pthread_mutex_unlock(&g_lock);
+    if(pline[0]) ps5tm_notify_plain("%s", pline);
     if(cancel) { rc = -3; break; }
   }
   ps5tm_powerguard_release();

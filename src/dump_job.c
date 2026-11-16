@@ -58,6 +58,8 @@
 #include "ioerr.h"
 #include "iopolicy.h"
 #include "ps5tm.h"
+#include "dumpdir.h"
+#include "progressnote.h"
 #include "third_party/cJSON.h"
 #include "third_party/libdeflate/libdeflate.h"
 
@@ -154,6 +156,7 @@ static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static dj_job_t        g_job;
 static dj_cfg_t        g_cfg = { "", DJ_SUBDIR_DEF, 1, 1, 0, 3, 0, 0, 0, 4, 1 };
 static int             g_cfg_loaded;
+static ps5tm_pnote_t   g_pn;                     /* the progress lines at the top left of the screen (progressnote.h), under g_lock */
 static int             g_info_bp, g_info_bp4, g_info_bp5;   /* the backport ran, with these levels */
 static int             g_info_dec, g_info_fself;  /* what the running dump really did, for its info files (the worker's own) */
 static int             g_cancel;
@@ -393,27 +396,10 @@ clamp_level(int v, int max) {
   return v < 1 ? 1 : v > max ? max : v;
 }
 
-/* 1 for a folder name of the settings that is safe to build a path from: one to three plain segments. */
+/* 1 for a folder name of the settings that is safe to build a path from: one to three segments (dumpdir.h; until 16.11.2026 ASCII only). */
 static int
 subdir_ok(const char *s) {
-  size_t len = s ? strlen(s) : 0;
-  if(len == 0 || len >= 96 || s[0] == '/' || s[len - 1] == '/') return 0;
-  int segs = 1, seglen = 0;
-  for(size_t i = 0; i < len; i++) {
-    unsigned char c = (unsigned char)s[i];
-    if(c == '/') {
-      if(seglen == 0) return 0;
-      segs++;
-      seglen = 0;
-      continue;
-    }
-    if(!(isalnum(c) || c == '.' || c == '_' || c == '-' || c == ' ')) return 0;
-    seglen++;
-    if((seglen == 1 && c == '.' && (i + 1 == len || s[i + 1] == '/')) ||
-       (seglen == 2 && c == '.' && s[i - 1] == '.' && (i + 1 == len || s[i + 1] == '/')))
-      return 0;
-  }
-  return seglen > 0 && segs <= 3;
+  return ps5tm_dumpdir_ok(s);
 }
 
 /* ---------------------------------------------------------------- settings */
@@ -735,7 +721,16 @@ job_work(uint64_t n, int read_back) {
     g_job.window_ms = now;
     g_job.window_bytes = work;
   }
+  /* The progress at the top left of the screen (16.11.2026): a line at every tenth, at most every 20 s. Built under the lock, shown after it. */
+  char line[200] = "";
+  if(g_job.state == DJ_COPYING && g_job.total_bytes > 0) {
+    const uint64_t denom = g_job.total_bytes * (g_job.verify ? 2u : 1u);
+    const int pct = (int)(work >= denom ? 100 : work * 100 / denom);
+    if(ps5tm_pnote_due(&g_pn, pct, now))
+      ps5tm_pnote_text(line, sizeof(line), "Dump", g_job.name, pct, work, denom, g_job.rate);
+  }
   pthread_mutex_unlock(&g_lock);
+  if(line[0]) ps5tm_notify_plain("%s", line);
 }
 
 typedef struct { uint64_t last; } check_acc_t;
@@ -1757,6 +1752,7 @@ dump_run(void *arg) {
   snprintf(g_job.folder, sizeof(g_job.folder), "%s", a.dlc_only && ntodo ? dp[0].folder : gfolder);
   g_job.state = DJ_COPYING;
   snprintf(g_job.stage, sizeof(g_job.stage), "Kopieren");
+  ps5tm_pnote_reset(&g_pn, ps5tm_mono_ms());
   pthread_mutex_unlock(&g_lock);
   /* The game is on the screen and the app behind it (a dump begun with "Starten" in the Disc tab): say that the dump has begun (16.11.2026). */
   ps5tm_notify("Dump gestartet: %s", a.name);
@@ -2388,11 +2384,18 @@ ps5tm_dump_action(const cJSON *b, char *msg, size_t n) {
       snprintf(c.target, sizeof(c.target), "%s", v->valuestring);
     }
     if(cJSON_IsString(v = cJSON_GetObjectItem(b, "subdir"))) {
-      if(!subdir_ok(v->valuestring)) {
-        snprintf(msg, n, "Der Ordner darf nur aus Buchstaben, Ziffern, Punkt, Strich, Unterstrich und Leerzeichen bestehen, höchstens drei Ebenen tief.");
+      char sd[200];
+      if(strlen(v->valuestring) >= sizeof(sd)) {
+        snprintf(msg, n, "Der Ordnername ist zu lang (höchstens 95 Zeichen).");
         return 400;
       }
-      snprintf(c.subdir, sizeof(c.subdir), "%s", v->valuestring);
+      snprintf(sd, sizeof(sd), "%s", v->valuestring);
+      ps5tm_dumpdir_tidy(sd, c.target);          /* spaces, a slash at the end, the drive's own path in front: tidied, not refused */
+      if(!subdir_ok(sd)) {
+        snprintf(msg, n, "Der Ordner „%s“ geht nicht: Er darf weder Doppelpunkt, Stern, Fragezeichen, Anführungszeichen, spitze Klammern, senkrechten Strich noch Rückwärts-Schrägstrich enthalten, kein Teil darf mit Punkt oder Leerzeichen enden oder nur aus Punkten bestehen, und er darf höchstens drei Ebenen tief und 95 Zeichen lang sein.", v->valuestring);
+        return 400;
+      }
+      snprintf(c.subdir, sizeof(c.subdir), "%s", sd);
     }
     if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "folder_titles"))) c.folder_titles = cJSON_IsTrue(v);
     if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "dump_dlc"))) c.dump_dlc = cJSON_IsTrue(v);

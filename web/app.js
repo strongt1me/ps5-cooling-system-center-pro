@@ -10919,7 +10919,7 @@
    * Ein laufendes PS5- oder PS4-Spiel samt Metadaten und eingehängten DLC auf ein Laufwerk (dump_job.c, /api/v1/dump). Die Konsole
    * kopiert und führt Buch; die Seite fragt, solange ein Dump läuft und man sie sieht. Pfade nennt der Browser nie: Das Ziel
    * ist eines der Laufwerke aus der Liste der Konsole, der Ordner darunter wird dort geprüft. */
-  const dm = { data: null, sel: "", err: "", timer: 0, hidden: "", was: false };
+  const dm = { data: null, sel: "", err: "", timer: 0, hidden: "", was: false, subdirTyped: false, subdirErr: "" };
 
   /* Die Disc-Spiele (library.c, Marke „disc“): von Disc installierte PS5- und PS4-Spiele, an jedem „Starten“ oder – läuft es – „Dumpen“. */
   const dgRunning = (x) => !!x.dump_mounted || (dm.sel === x.title_id && !!(dm.data && dm.data.title && dm.data.title.mounted));
@@ -11073,7 +11073,10 @@
         `<option value="${esc(x.mount)}">${esc(`${x.label || x.mount} · ${bytes(x.free_bytes)} frei${x.console ? " (10 GB bleiben frei)" : ""}${x.fs ? " · " + cpFs(x.fs) : ""}`)}</option>`).join("");
       sel.value = (d.targets || []).some((x) => x.mount === d.settings.target) ? d.settings.target : "";
     }
-    if (document.activeElement !== $("#dm-subdir")) $("#dm-subdir").value = d.settings.subdir;
+    /* A refused folder name stays in the field with the reason beneath it (16.11.2026: it was put back to the old folder after a moment, and the dump went there) */
+    if (document.activeElement !== $("#dm-subdir") && !dm.subdirErr && !dm.subdirTyped) $("#dm-subdir").value = d.settings.subdir;
+    const sh = $("#dm-subdir-hint");
+    if (sh) { sh.textContent = dm.subdirErr || "Bis zu 3 Ordner tief"; sh.classList.toggle("dm-bad", !!dm.subdirErr); }
     $("#dm-titles").checked = !!d.settings.folder_titles;
     $("#dm-dlc").checked = !!d.settings.dump_dlc;
     $("#dm-verify").checked = !!d.settings.verify;
@@ -11116,13 +11119,15 @@
     const run = state.page === "games" && pt.tab === "disc" && !document.hidden && ((j && j.active) || qa || waiting);
     dm.timer = run ? setTimeout(async () => { await dmLoad(); dmSync(); }, (j && j.active) || qa ? 1000 : 4000) : 0;
   };
-  const dmPost = async (body, quiet) => {
+  const dmPost = async (body, quiet, fail) => {
+    let ok = true;
     try {
       const r = await api("/api/v1/dump", { method: "POST", body: JSON.stringify(body) });
       if (r.message && !quiet) toast(r.message);
-    } catch (e) { toast(e.message, "error"); }
+    } catch (e) { ok = false; if (fail) fail(e.message); toast(e.message, "error"); }
     await dmLoad();
     dmSync();
+    return ok;
   };
   const dmOpen = async () => { await dmLoad(); dmSync(); };
   const dmOpenFor = (id) => {
@@ -11139,16 +11144,24 @@
     fself: $("#dm-decrypt").checked && $("#dm-fself").checked,
     backport: $("#dm-decrypt").checked && $("#dm-bp").checked,
     ps4_backport_level: Math.min(6, Math.max(1, Math.round(Number($("#dm-bp4").value)) || 4)),
-    ps5_backport_level: Math.min(10, Math.max(1, Math.round(Number($("#dm-bp5").value)) || 1)) }, true);
+    ps5_backport_level: Math.min(10, Math.max(1, Math.round(Number($("#dm-bp5").value)) || 1)) }, true,
+    (m) => { if (/Ordner/.test(m)) dm.subdirErr = m; }).then((ok) => {
+    if (ok) { dm.subdirErr = ""; dm.subdirTyped = false; dmRender(); }
+    return ok;
+  });
+  /* A typed folder is saved before a dump starts from it: the change event of the field and the click on "Dump starten" came in the same moment, and the start
+     could reach the app first, so that the dump went to the old folder. A refused name stops the start. */
+  const dmFlushFolder = async () => (dm.subdirTyped || dm.subdirErr) ? dmSettings() : true;
+  $("#dm-subdir").addEventListener("input", () => { dm.subdirTyped = true; dm.subdirErr = ""; });
   ["#dm-target", "#dm-titles", "#dm-dlc", "#dm-verify", "#dm-split", "#dm-decrypt", "#dm-fself", "#dm-bp", "#dm-bp4", "#dm-bp5"].forEach((s) => $(s).addEventListener("change", dmSettings));
   $("#dm-subdir").addEventListener("change", dmSettings);
   $("#dm-card").addEventListener("click", (e) => {
     const b = e.target.closest("[data-dm]");
     if (!b || b.disabled) return;
     const act = b.dataset.dm;
-    if (act === "start") dmPost({ action: "start", id: dm.sel });
-    else if (act === "start_over") dmPost({ action: "start", id: dm.sel, overwrite: true });
-    else if (act === "dlc") dmPost({ action: "dlc_only", id: dm.sel });
+    if (act === "start") dmFlushFolder().then((ok) => { if (ok) dmPost({ action: "start", id: dm.sel }); });
+    else if (act === "start_over") dmFlushFolder().then((ok) => { if (ok) dmPost({ action: "start", id: dm.sel, overwrite: true }); });
+    else if (act === "dlc") dmFlushFolder().then((ok) => { if (ok) dmPost({ action: "dlc_only", id: dm.sel }); });
     else if (act === "cancel") dmPost({ action: "cancel" });
     else if (act === "reload") dmLoad();
     else if (act === "launch") gmLaunch(dm.sel, b);
@@ -11250,7 +11263,7 @@
     else if (act === "opts") { dq.open = dq.open === id ? "" : id; dqRender(); }
     else if (act === "opt_save") { const pn = b.closest("[data-dq-panel]"); if (pn) { dq.open = ""; dmPost({ action: "queue_set", id, options: dqOptions(pn) }); } }
     else if (act === "opt_reset") { dq.open = ""; dmPost({ action: "queue_set", id, reset: true }); }
-    else if (act === "start") dmPost({ action: "queue_start", confirm_close: true });
+    else if (act === "start") dmFlushFolder().then((ok) => { if (ok) dmPost({ action: "queue_start", confirm_close: true }); });
     else if (act === "stop") dmPost({ action: "queue_stop" });
     else if (act === "skip") dmPost({ action: "queue_skip" });
   });

@@ -2438,3 +2438,5 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 .fc-now { fill: var(--accent); stroke: var(--ink); stroke-width: 2; }
 .fc-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 6px; }
 .fc-actions .btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+.dm-field small.dm-bad { color: var(--critical); }
