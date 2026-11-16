@@ -17,7 +17,9 @@
 #include "ps5cc/pages.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace hui::ps5cc
@@ -30,6 +32,8 @@ using gfx::Color;
 using gfx::Rect;
 
 const Rect kPanel{200.0f, 92.0f, 1520.0f, 864.0f};
+const Rect kNamePanel{300.0f, 150.0f, 1320.0f, 760.0f}; // the window for the folder name over the settings
+constexpr int kNameMax = 95;                            // bytes, as the app takes them
 constexpr float kSaveDelay = 0.8f;
 
 enum Section
@@ -189,6 +193,30 @@ class DiscPage final : public Page
         form_.style.on_text = "An";
         form_.style.off_text = "Aus";
         form_.set_bounds({kPanel.x + 24.0f, kPanel.y + 130.0f, 1080.0f, 650.0f});
+
+        // The name of the folder for the dumps is typed on the keyboard (16.11.2026; until then only the browser could change it).
+        keys_.style.theme = theme;
+        keys_.style.bindings = ui::KeyboardBindings::standard();
+        keys_.style.space_label = "Leer";
+        keys_.style.done_label = "Fertig";
+        keys_.style.max_length = kNameMax;
+        keys_.set_layouts(german_layouts());
+        keys_.set_bounds({kNamePanel.x + 60.0f, kNamePanel.y + 250.0f, kNamePanel.w - 120.0f, 400.0f});
+        keys_.on_text = [this](std::string_view utf8)
+        {
+            // the characters no drive takes in a name are not entered (the app would refuse the name)
+            if (utf8.size() == 1 && std::string_view("\\:*?\"<>|").find(utf8[0]) != std::string_view::npos)
+                return;
+            if (name_.size() + utf8.size() <= static_cast<std::size_t>(kNameMax))
+                name_.append(utf8);
+        };
+        keys_.on_backspace = [this]
+        {
+            while (!name_.empty() && (static_cast<unsigned char>(name_.back()) & 0xC0) == 0x80)
+                name_.pop_back();
+            if (!name_.empty())
+                name_.pop_back();
+        };
     }
 
     void absorb(const Snapshot &data) override
@@ -206,6 +234,9 @@ class DiscPage final : public Page
         update_bar();
         if (dialog_ == kSettingsDialog && !settings_shown_ && dump_.settings.valid)
             build_settings();
+        // the folder as the app has it (it tidies the name, or refuses it): shown in the row unless a change is on its way
+        if (dialog_ == kSettingsDialog && settings_shown_ && !naming_ && !dump_dirty_ && save_in_ <= 0.0f)
+            form_.set_value_text(kSetSubdir, dump_.settings.subdir.empty() ? "–" : dump_.settings.subdir);
     }
 
     void enter() override
@@ -270,6 +301,8 @@ class DiscPage final : public Page
         menu_.update(dt);
         ask_.update(dt);
         form_.update(dt);
+        keys_.update(dt);
+        clock_ += dt;
         shown_.target = dialog_ != kNone ? 1.0f : 0.0f;
         shown_.update(dt, 14.0f);
         if (save_in_ > 0.0f)
@@ -385,13 +418,39 @@ class DiscPage final : public Page
                       "spielen.\n\nDer Backport ist "
                       "nur für ältere Firmware nötig und kann den Dump beschädigen.\n\nDen Ordner "
                       "auf dem Ziel änderst "
-                      "du in der Browser-App.",
+                      "du mit X auf der Zeile „Ordner“.",
                       panel.x + 1150.0f, panel.y + 160.0f, panel.w - 1190.0f, kMuted, 18);
             const ui::Hint hints[] = {{ui::Button::cross, "Ändern"},
                                       {ui::Button::circle, "Schließen"}};
             ui::draw_hints(list, fonts, glyphs, hints, 2, panel.x + 40.0f, false, layout);
         }
+        if (naming_)
+            draw_naming(canvas);
         list.pop_opacity();
+    }
+
+    // The folder name: a field with the text and the keyboard under it.
+    void draw_naming(ui::Canvas &canvas) const
+    {
+        gfx::DrawList &list = canvas.list;
+        const ui::Fonts &fonts = canvas.fonts;
+        list.rounded_rect({0.0f, 0.0f, 1920.0f, 1080.0f}, 0.0f, kNavy.with_alpha(0.6f));
+        ui::Painter paint(list, fonts, theme_);
+        solid_floor(list, kNamePanel, theme_.radius_card);
+        paint.panel(kNamePanel);
+        ui::text(list, fonts.display, "Ordner für die Dumps", kNamePanel.x + 40.0f, kNamePanel.y + 66.0f, 36.0f, kInk);
+        ui::text(list, fonts.regular, "bis zu drei Ordner, mit / getrennt", kNamePanel.x + kNamePanel.w - 40.0f,
+                 kNamePanel.y + 66.0f, 21.0f, kMuted, gfx::Align::right);
+        const Rect field{kNamePanel.x + 60.0f, kNamePanel.y + 120.0f, kNamePanel.w - 120.0f, 84.0f};
+        list.rounded_rect(field, 14.0f, Color::rgb(0x3880ff, 0.12f));
+        const std::string shown = ui::fit_label(paint, name_, 32.0f, field.w - 60.0f);
+        ui::text(list, fonts.semibold, shown, field.x + 28.0f, field.y + 54.0f, 32.0f, kInk);
+        if (std::fmod(clock_, 1.0f) < 0.6f)
+        {
+            const float cx = field.x + 30.0f + fonts.semibold.font->measure(shown, 32.0f);
+            list.rounded_rect({cx, field.y + 22.0f, 3.0f, 40.0f}, 1.5f, kBlue);
+        }
+        keys_.draw(canvas);
     }
 
     int hints(ui::Hint *out) const override
@@ -867,7 +926,12 @@ class DiscPage final : public Page
         if (targets.empty())
             targets.push_back("kein Laufwerk");
         form_.add_choice(kSetTarget, "Ziel", targets, target);
-        form_.add_value(kSetSubdir, "Ordner", s.subdir.empty() ? "–" : s.subdir);
+        {
+            ui::FormRow &row = form_.add_action(kSetSubdir, "Ordner");
+            row.text = s.subdir.empty() ? "–" : s.subdir;
+            row.chevron = true;
+            row.description = "Mit X ändern: bis zu drei Ordner, mit / getrennt (zum Beispiel „homebrew“).";
+        }
         form_.add_toggle(kSetTitles, "Spielname im Ordnernamen", s.folder_titles);
         form_.add_header("WAS WIRD GEDUMPT");
         form_.add_toggle(kSetDlc, "DLC mitdumpen", s.dump_dlc);
@@ -925,6 +989,35 @@ class DiscPage final : public Page
 
     void handle_dialog(const InputFrame &input, ui::Feedback &feedback)
     {
+        if (naming_)
+        {
+            keys_.set_length(static_cast<int>(name_.size()));
+            const ui::Event event = keys_.handle(input, feedback);
+            if (event == ui::Event::cancelled)
+            {
+                naming_ = false;
+                feedback.play(audio::Cue::back);
+            }
+            else if (event == ui::Event::activated)
+            {
+                std::string trimmed = name_;
+                while (!trimmed.empty() && (trimmed.back() == ' ' || trimmed.back() == '/'))
+                    trimmed.pop_back();
+                if (trimmed.empty())
+                {
+                    feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                    return;
+                }
+                naming_ = false;
+                feedback.play(audio::Cue::select);
+                // sent with the other settings; the app tidies the name and says so when it refuses it
+                dump_.settings.subdir = trimmed;
+                form_.set_value_text(kSetSubdir, trimmed);
+                dump_dirty_ = true;
+                save_in_ = kSaveDelay;
+            }
+            return;
+        }
         if (input.is_pressed(Action::back))
         {
             if (save_in_ > 0.0f)
@@ -935,7 +1028,19 @@ class DiscPage final : public Page
         }
         if (dialog_ != kSettingsDialog || !settings_shown_)
             return;
-        if (form_.handle(input, feedback) == ui::Event::changed)
+        const ui::Event ev = form_.handle(input, feedback);
+        if (ev == ui::Event::activated && form_.changed_id() == kSetSubdir)
+        {
+            naming_ = true;
+            name_ = dump_.settings.subdir;
+            keys_.set_layout(0);
+            keys_.set_length(static_cast<int>(name_.size()));
+            keys_.set_active(true);
+            keys_.enter();
+            feedback.play(audio::Cue::select);
+            return;
+        }
+        if (ev == ui::Event::changed)
         {
             const int id = form_.changed_id();
             dependent_rows();
@@ -1232,6 +1337,10 @@ class DiscPage final : public Page
     std::string delete_route_;     // what the question is about: the route ...
     std::string delete_json_;      // ... and its body
     ui::Form form_;
+    ui::Keyboard keys_;            // the folder name
+    std::string name_;
+    bool naming_ = false;
+    float clock_ = 0.0f;
     tween::Spring shown_;
     std::string key_;
     std::string info_key_ = "\x01";

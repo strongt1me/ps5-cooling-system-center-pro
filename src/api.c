@@ -1666,6 +1666,13 @@ static int
 sw_start(const char *close_id, const char *close_name, const char *then_id,
          const char *then_name, const char *then_link, int on_console,
          char *err, size_t err_len) {
+  /* A dump reads the game's own mounts (/mnt/sandbox/pfsmnt/<ID>-app0-nest/pfs_image.dat). Closing the game while it copies took them away under
+     the copy: on 16.11.2026 the PS5 (.52) went down with a kernel panic when the game was closed in the middle of a dump to a USB drive. So a
+     game is not closed (by "Spiel beenden" or by a switch to another game) while a dump runs. */
+  if(ps5tm_dump_busy()) {
+    snprintf(err, err_len, "Ein Dump läuft und liest dieses Spiel. Das Spiel lässt sich erst nach dem Dump beenden; sonst kann die Konsole abstürzen.");
+    return -1;
+  }
   pthread_mutex_lock(&g_sw_lock);
   if(g_sw.state == SW_CLOSING || g_sw.state == SW_STARTING) {
     pthread_mutex_unlock(&g_sw_lock);

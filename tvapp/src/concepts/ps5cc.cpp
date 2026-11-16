@@ -1176,8 +1176,14 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up}, // wraps to the end: Ereignisse, Größen, neu suchen, Dump-Einstellungen
             {0.3f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "disc-einstellungen"},
+            // the row "Ordner": ✕ opens the keyboard (16.11.2026), ○ closes it again
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "disc-ordner"},
+            {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "sicherungen"},
