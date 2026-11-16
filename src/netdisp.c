@@ -24,12 +24,14 @@
  * nothing, which is a far better failure than a dead dashboard. */
 
 #include <dlfcn.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "dynsym.h"
 #include "ps5tm.h"
+#include "tvname.h"
 
 #ifndef PS5TM_HOST_TEST
 
@@ -93,6 +95,14 @@ static fn_vo_monitor_t    p_vo_mon    = NULL;
 
 static int g_resolved = 0;
 
+/* The monitor block is asked for until a name has come out of it, but at most three times in a run: the name of a television does not change, and a call
+   that does not answer has no business on the display path every five seconds. The name is kept, and the first block is written to the log once. */
+#define MON_TRIES_MAX 3
+static pthread_mutex_t g_mon_lock = PTHREAD_MUTEX_INITIALIZER;
+static int  g_mon_tries = 0;
+static int  g_mon_logged = 0;
+static char g_mon_name[64] = "";
+
 /* Distinguishable from any Sony error code. */
 #define NET_NOT_BOUND 0x7FFFFFFF
 
@@ -109,9 +119,16 @@ static int g_resolved = 0;
  * VideoOut functions therefore stay NULL and the display card stays blank.
  * **Measured on 01.08.2026, that is wrong.** ps5tm_dynsym() reaches them
  * anyway (it resolves through the kernel, not only through NEEDED), and the
- * console reported 3840x2160. Only sceVideoOutGetHdmiMonitorInfo fails, so
- * the resolution arrives and the TV's model name does not. Not linking the
- * library is still right; the pessimism about the outcome was not. */
+ * console reported 3840x2160. Only sceVideoOutGetHdmiMonitorInfo failed, so
+ * the resolution arrives and the TV's model name did not. Not linking the
+ * library is still right; the pessimism about the outcome was not.
+ *
+ * ⚠ And the reason it failed (16.11.2026, system libraries of 43 firmwares from
+ * 1.00 to 12.70, tools/check_fw_imports.py): that name is exported by none of
+ * them. The call is sceVideoOutGetMonitorInfo(handle, block), exported by
+ * libSceVideoOut in all 43. Its block is about 76 bytes and not documented, see
+ * tvname.h; the first bytes are written to the log once, so the layout can be
+ * read from a console. */
 #ifndef PS5TM_HOST_TEST
 extern int sceNetCtlInit(void)                        __attribute__((weak));
 extern int sceNetCtlGetState(int *)                   __attribute__((weak));
@@ -140,7 +157,7 @@ resolve(void) {
   p_vo_res   = (fn_vo_resolution_t)ps5tm_dynsym(VOUT,
                                                 "sceVideoOutGetResolutionStatus");
   p_vo_mon   = (fn_vo_monitor_t)   ps5tm_dynsym(VOUT,
-                                                "sceVideoOutGetHdmiMonitorInfo");
+                                                "sceVideoOutGetMonitorInfo");
 
   PS5TM_INFO("netctl_resolved",
              "Netzwerkabfrage: GetState %s, GetInfo %s.",
@@ -266,21 +283,36 @@ read_display(ps5tm_sysinfo_t *info) {
     }
   }
 
-  /* The monitor block starts with the EDID-derived display name. Anything
-     unprintable means the layout is not what we assumed, so nothing is
-     reported rather than mojibake. */
-  if(p_vo_mon) {
+  /* The monitor block: a name at its start or an EDID name descriptor in it (tvname.h). Anything else means the layout is not what we assumed, so
+     nothing is reported rather than mojibake. The buffer is far larger than the 76 bytes the call is known to write (disassembly of FW 12.70). */
+  pthread_mutex_lock(&g_mon_lock);
+  int ask = p_vo_mon && !g_mon_name[0] && g_mon_tries < MON_TRIES_MAX;
+  if(ask) g_mon_tries++;
+  pthread_mutex_unlock(&g_mon_lock);
+  if(ask) {
     unsigned char mi[512];
     memset(mi, 0, sizeof(mi));
-    if(p_vo_mon(handle, mi) == 0) {
-      size_t n = 0;
-      while(n < 63 && mi[n] >= 0x20 && mi[n] < 0x7f) n++;
-      if(n >= 3) {
-        memcpy(info->tv_name, mi, n);
-        info->tv_name[n] = 0;
-      }
+    int rc = p_vo_mon(handle, mi);
+    char name[64] = "";
+    int found = rc == 0 && ps5tm_tvname_from_block(mi, sizeof(mi), name, sizeof(name));
+    pthread_mutex_lock(&g_mon_lock);
+    int say = !g_mon_logged;
+    g_mon_logged = 1;
+    if(found) snprintf(g_mon_name, sizeof(g_mon_name), "%s", name);
+    pthread_mutex_unlock(&g_mon_lock);
+    if(say) {                                                   /* two lines of 48 bytes: one log line holds 383 characters */
+      char hex[3 * 48 + 1];
+      ps5tm_tvname_hex(mi, 48, hex, sizeof(hex));
+      PS5TM_INFO("videoout_monitor",
+                 "Monitorinfo (sceVideoOutGetMonitorInfo): Rückgabe 0x%08x, Name %s. Byte 0-47: %s",
+                 (unsigned)rc, found ? name : "nicht erkannt", hex);
+      ps5tm_tvname_hex(mi + 48, 48, hex, sizeof(hex));
+      PS5TM_INFO("videoout_monitor", "Monitorinfo, Byte 48-95: %s", hex);
     }
   }
+  pthread_mutex_lock(&g_mon_lock);
+  if(g_mon_name[0]) snprintf(info->tv_name, sizeof(info->tv_name), "%s", g_mon_name);
+  pthread_mutex_unlock(&g_mon_lock);
 
   p_vo_close(handle);
 }

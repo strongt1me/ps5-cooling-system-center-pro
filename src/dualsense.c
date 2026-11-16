@@ -231,13 +231,13 @@ resolve(void) {
     void *batt = ps5tm_dynsym_in(0, HID, "sceHidControlGetBatteryState");
     const char *how = ps5tm_dynsym_route_name();
     void *init = ps5tm_dynsym_in(0, HID, "sceHidControlInit");
-    void *list = ps5tm_dynsym_in(0, HID, "sceHidControlGetDeviceList");
+    void *list = ps5tm_dynsym_in(0, HID, "sceHidControlGetDeviceInfo");   /* ...GetDeviceList exists in no firmware 1.00-12.70 (16.11.2026) */
     void *bt   = ps5tm_dynsym_in(0, "libSceBluetoothHid.sprx",
                                  "sceBluetoothHidInit");
 
     PS5TM_INFO("hid_probe",
                "libSceHidControl: GetBatteryState %s (Weg: %s), Init %s, "
-               "GetDeviceList %s. Nur aufgelöst, nicht aufgerufen.",
+               "GetDeviceInfo %s. Nur aufgelöst, nicht aufgerufen.",
                batt ? "gefunden" : "fehlt", how,
                init ? "gefunden" : "fehlt",
                list ? "gefunden" : "fehlt");

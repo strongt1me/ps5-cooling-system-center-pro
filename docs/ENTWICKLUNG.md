@@ -252,6 +252,24 @@ sh test/sim/run.sh step_t78    # eines; SIMV=1 zeigt das Protokoll, SIMTRACE=dat
 Das Modell ist nicht an einer Konsole vermessen (nur die Firmware-Kennlinie ist es); die Ergebnisse zeigen Tendenzen
 und Wechselwirkungen, keine Grade.
 
+## Systemfunktionen gegen die Firmwares prüfen
+
+Die App bindet 222 Systemfunktionen beim Laden (die undefinierten Symbole der ELF) und sucht 27 weitere zur Laufzeit (`dlsym`,
+`ps5tm_dynsym`). Die Systembibliotheken exportieren nach NID, dem Hash des Namens (SHA-1 über Name und 16 Byte Salz aus
+`tvapp/tooling/native/sce_module_writer.cpp`, die ersten 8 Byte umgekehrt, Base64, 11 Zeichen, `/` als `-`).
+`tools/check_fw_imports.py` rechnet die NID jedes Namens aus und sucht sie in den Exporten der entschlüsselten Bibliotheken
+je Firmware (ein Ordner je Firmware, z. B. `12.70`):
+
+```bash
+python3 tools/check_fw_imports.py --fw-dir "/pfad/zu/den/firmwares"      # oder PS5_FW_DIR; -v zeigt jeden Namen
+```
+
+Es liest nur und kopiert nichts aus den Dumps (die Dateien gehören nicht ins Repository). Der Rückgabewert ist 1, sobald ein Name
+unerwartet fehlt; bekannte Ausnahmen (`KNOWN_OPTIONAL` im Werkzeug) werden benannt. Nach einer Änderung an den Namen, die die App
+per `dlsym` sucht, oder nach einem neuen SDK laufen lassen. „Vorhanden“ heißt nur: Die Firmware exportiert die Funktion; Argumente
+und Verhalten sind damit nicht belegt, Firmwares ohne Dump (über 12.70) nicht abgedeckt, 7.00 ist verschlüsselt. Mit
+Zwischenspeicher (`~/.cache/ps5cc-fw-imports`) dauert ein Lauf wenige Sekunden. Test des Werkzeugs ohne Dump: `sh test/fwimports/run.sh`.
+
 ## PS4Mount-Prüfungen
 
 `third_party/ps4mount/test/unit.c` (aus dem Quellprojekt) prüft den Port `src/ps4m_pkg|build|crypto|origin.c`: PKG-Kopf,
