@@ -94,6 +94,7 @@ constexpr MockGame kGames[] = {
     {"PPSA09001", "Northwind Rally", "PS5", "01.000.004", "ffpfsc", 24.3, 7.2},
     {"PPSA09330", "Quiet Orbit", "PS5", "01.000.000", "folder", 3.3, 0.0},
     {"CUSA20220", "Brick Breakers HD", "PS4", "01.04", "ps4mount", 0.7, 1.9},
+    {"PPSA06330", "Neon Harbor", "PS5", "01.002.000", "fpkgmount", 0.4, 0.0},
     {"PPSA10777", "Echo Valley", "PS5", "01.001.000", "ffpkg", 15.0, 2.2},
     {"PPSA12345", "Starlight Express Tour", "PS5", "01.000.000", "exfat", 11.1, 0.7},
     // The console app lists the app's own tiles too (they lie in /data/homebrew); the source drops
@@ -120,7 +121,7 @@ class MockSource final : public Source
             g.format = m.format;
             const std::string format = m.format;
             const bool folder = format == "folder";
-            const bool installed = format == "fpkg" || format == "ps4mount";
+            const bool installed = format == "fpkg" || format == "ps4mount" || format == "fpkgmount";
             g.path = installed
                          ? std::string("/user/app/") + m.id
                          : std::string("/mnt/usb0/homebrew/") + m.id + (folder ? "" : "." + format);
@@ -2301,7 +2302,7 @@ class MockSource final : public Source
         }
         case Tool::erase:
         {
-            const bool installed = g->format == "fpkg" || g->format == "ps4mount";
+            const bool installed = g->format == "fpkg" || g->format == "ps4mount" || g->format == "fpkgmount";
             cJSON_AddStringToObject(root, "kind", installed ? "installed" : "smp");
             cJSON_AddStringToObject(root, "path", g->path.c_str());
             cJSON_AddStringToObject(root, "format", g->format.c_str());

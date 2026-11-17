@@ -307,6 +307,9 @@ const char *format_label(const std::string &format)
     // "ps4mount")
     if (format == "ps4mount")
         return "PS4Mount (USB)";
+    // played from the .pkg by Kraken Mount (http_source: "fpkgmount")
+    if (format == "fpkgmount")
+        return "FPKGMount";
     return format.c_str();
 }
 

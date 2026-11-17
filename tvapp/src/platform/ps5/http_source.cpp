@@ -3178,6 +3178,9 @@ void HttpSource::poll_library()
         // installed (29.10.2026).
         if (g.format == "pkg" && flag(item, "ps4mount"))
             g.format = "ps4mount";
+        // A game Kraken Mount (FPKGMount) mounted, the same way (17.11.2026): shown as what it is.
+        else if ((g.format.empty() || g.format == "pkg") && flag(item, "fpkgmount"))
+            g.format = "fpkgmount";
         g.path = str(item, "path");
         g.cover = str(item, "cover");
         // Only the app's own route: the bytes are fetched from 127.0.0.1 and must not lead anywhere

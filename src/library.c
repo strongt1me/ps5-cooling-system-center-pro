@@ -1585,6 +1585,10 @@ ps5tm_library_json(void) {
   const int smp_can_remount = ps5tm_smp_can("mount_game") && ps5tm_smp_can("unmount_game");
   /* Also before the lock: whether a job of the app works asks the job modules (and ShadowMountPlus's storage status over HTTP). */
   const int hold_paused = ps5tm_smphold_count() > 0 && ps5tm_smphold_paused();
+  /* And the games Kraken Mount (FPKGMount) lists - a copy kept for 10 s, an HTTP question to it when that is older (17.11.2026): a title among
+     them that is neither ShadowMountPlus's nor PS4Mount's carries the mark "fpkgmount", as a PS4Mount game carries "ps4mount". */
+  ps5tm_kraken_game_t *kraken = calloc(PS5TM_KRAKEN_MAX, sizeof(*kraken));          /* 77 KB: not on a thread's stack */
+  const int kraken_n = kraken ? ps5tm_kraken_games(kraken, PS5TM_KRAKEN_MAX) : 0;
   pthread_mutex_lock(&g_lock);
 
   cJSON *root = cJSON_CreateObject();
@@ -1593,6 +1597,7 @@ ps5tm_library_json(void) {
     cJSON_AddStringToObject(root, "code", "library_unavailable");
     cJSON_AddStringToObject(root, "message", g_error);
     pthread_mutex_unlock(&g_lock);
+    free(kraken);
     return root;
   }
   cJSON_AddStringToObject(root, "source", "app.db");
@@ -1688,6 +1693,12 @@ ps5tm_library_json(void) {
     /* Taken out and put back through ShadowMountPlus (smpremount.c): its folders and images, not installed packages. */
     cJSON_AddBoolToObject(e, "can_remount", g->smp && strcmp(g->format, "pkg") && smp_can_remount);
     if(g->ps4mount) cJSON_AddBoolToObject(e, "ps4mount", 1);
+    /* Kraken Mount registers the game with the system and plays it from the .pkg: no app.pkg of the package installer lies in /user/app (the
+       format is empty), or one does (pkg). A game ShadowMountPlus holds as an image or a folder stays what it is. */
+    if(!g->ps4mount && (!g->format[0] || !strcmp(g->format, "pkg"))) {
+      for(int k = 0; k < kraken_n; k++)
+        if(!strcmp(kraken[k].title_id, g->title_id)) { cJSON_AddBoolToObject(e, "fpkgmount", 1); break; }
+    }
     cJSON_AddBoolToObject(e, "can_copy", g->real_path[0] == '/' &&
                           (!strcmp(g->format, "folder") || is_file));
     cJSON_AddBoolToObject(e, "can_move", g->smp_can_move && strcmp(g->format, "pkg"));
@@ -1705,6 +1716,7 @@ ps5tm_library_json(void) {
   }
   int nmarks = g_count;
   pthread_mutex_unlock(&g_lock);
+  free(kraken);
   for(int i = 0; mark_obj && mark_id && i < nmarks; i++) add_marks(mark_obj[i], mark_id[i]);
   free(mark_obj);
   free(mark_id);

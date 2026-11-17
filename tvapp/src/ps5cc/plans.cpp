@@ -94,7 +94,7 @@ bool chosen(const Plan &plan, const PlanChoice &choice)
 bool is_image(const Game &game)
 {
     const std::string &f = game.format;
-    return !f.empty() && f != "folder" && f != "pkg" && f != "fpkg" && !game.path.empty() &&
+    return !f.empty() && f != "folder" && f != "pkg" && f != "fpkg" && f != "fpkgmount" && !game.path.empty() &&
            game.path[0] == '/';
 }
 

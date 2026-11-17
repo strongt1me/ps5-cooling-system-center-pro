@@ -5194,9 +5194,12 @@
   };
   /* 29.10.2026: ein PS4Mount-Spiel liegt auch als app.pkg in /user/app, läuft aber vom USB-Laufwerk (library.c meldet
      "ps4mount"); es heißt „PS4Mount“, damit man es nicht für ein vom Paket-Installer installiertes hält. */
+  /* 17.11.2026: ein Spiel, das Kraken Mount (FPKGMount) eingehängt hat, meldet library.c als "fpkgmount"; es heißt „FPKGMount“, wie das PS4Mount-Spiel. */
   const gmFormatLabel = (x) => {
     if (x.format === "pkg" && x.ps4mount)
       return "PS4Mount";
+    if (x.fpkgmount && (!x.format || x.format === "pkg"))
+      return "FPKGMount";
     if (x.format === "pkg")
       return "Installiert";
     return GM_FORMAT_TAGS[x.format] || "";
@@ -5254,7 +5257,7 @@
     const fmt = gmFormatLabel(x);
     const fw = gmFw(x);
     const t = fmt
-      ? [`<span class="gm-tag fmt" title="${esc(x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : GM_FORMATS[x.format] || x.format)}">${esc(fmt)}</span>`]
+      ? [`<span class="gm-tag fmt" title="${esc(x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : fmt === "FPKGMount" ? "FPKGMount: ein Debug-Paket (.pkg), das Kraken Mount einhängt, nicht installiert" : GM_FORMATS[x.format] || x.format)}">${esc(fmt)}</span>`]
       : [];
     if (fw && !fw.backport) t.push(gmFwTag(fw));
     gmMarks(x).forEach((s) => t.push(s));
@@ -5396,7 +5399,7 @@
                x.size_bytes > 0 ? bytes(x.size_bytes) : "—"]);
     /* Wo die Daten wirklich liegen: bei einem Abbild die Datei, nicht der
        Ordner unter /mnt/shadowmnt, in den ShadowMountPlus es einhängt. */
-    if (x.format) rows.push(["Format", x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : x.format === "pkg" && x.platform
+    if (x.format || gmFormatLabel(x) === "FPKGMount") rows.push(["Format", x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : gmFormatLabel(x) === "FPKGMount" ? "FPKGMount: ein Debug-Paket (.pkg), das Kraken Mount einhängt, nicht installiert" : x.format === "pkg" && x.platform
       ? `${x.platform} PKG (installiert)` : (GM_FORMATS[x.format] || x.format)]);
     if (x.path) {
       const drive = gmDrive(x.path);

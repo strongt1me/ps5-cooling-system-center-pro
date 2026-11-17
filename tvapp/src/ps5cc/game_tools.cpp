@@ -307,7 +307,7 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
     // as in the web app: only for games with a folder or image of their own, not for installed
     // packages
     extras.disabled = game.path.empty() || game.format == "pkg" || game.format == "fpkg" ||
-                      game.format == "ps4mount";
+                      game.format == "ps4mount" || game.format == "fpkgmount";
     items.push_back(extras);
     // Taken out of ShadowMountPlus and put back (30.10.2026): for a game that hangs or should be
     // found anew after copying, moving or deleting. Mounted: "Neu einhängen", else "Einhängen";
