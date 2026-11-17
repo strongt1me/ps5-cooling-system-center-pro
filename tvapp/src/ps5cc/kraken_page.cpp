@@ -471,6 +471,9 @@ class KrakenPage final : public Page
             s += " · geladen: " + state_.fetched_version + " (wird beim Start genommen)";
         if (!state_.fetch_result.empty())
             s += " · " + state_.fetch_result;
+        // it runs on from before an update (the app never stops it itself): the web page says the same in its note
+        if (state_.restart_needed)
+            s += " · Eine ältere Fassung läuft noch: Zum Wechsel Kraken Mount aus- und wieder einschalten.";
         return s;
     }
 

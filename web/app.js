@@ -7889,11 +7889,12 @@
       : d.settings ? "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege FPKG-Spiele besser in den Ordner FPKG-Games (/data/FPKG-Games oder FPKG-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner ein."
       : "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner FPKG-Games ein: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk.");
     const note = $("#fp-note");
-    note.hidden = !!k && !k.waiting && !(k.cache && k.cache.low_space) && !k.paused;
+    note.hidden = !!k && !k.waiting && !(k.cache && k.cache.low_space) && !k.paused && !d.restart_needed;
     if (!k) note.textContent = d.starting ? "Kraken Mount startet. Das dauert einige Sekunden." : "Kraken Mount ist ausgeschaltet. Einschalten, damit die Spiele gesucht und angemeldet werden.";
     else if (k.waiting) note.textContent = k.waiting === "kstuff" ? "Kraken Mount wartet, bis kstuff geladen ist. Vorher meldet es kein Spiel an." : "Kraken Mount wartet, bis ShadowMountPlus beendet ist. Solange es läuft, meldet Kraken Mount kein Spiel an (so arbeitet es seit Version 0.2.0).";
     else if (k.cache && k.cache.low_space) note.textContent = "Auf der internen SSD ist nur noch wenig Platz frei. Kraken Mount legt dort den Zwischenspeicher der Spiele an.";
     else if (k.paused) note.textContent = "Ein Spiel läuft. Kraken Mount sucht und baut erst nach dem Spiel weiter.";
+    else if (d.restart_needed) note.textContent = "Eine ältere Fassung läuft noch: Zum Wechsel Kraken Mount aus- und wieder einschalten.";   /* it runs on from before an update (the app never stops it itself) */
     dupFill($("#fp-dup"), d.conflicts);
     const fpListHtml = games.length ? games.map((g) => {
       const st = running.has(g.title_id) ? ["ok", "Läuft"] : (FP_STATE[g.status] || ["", g.status]);

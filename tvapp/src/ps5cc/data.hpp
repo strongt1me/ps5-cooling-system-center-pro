@@ -832,6 +832,7 @@ struct KrakenState
     bool paused = false;   // a game runs: it waits
     std::string waiting;   // "kstuff" or "shadowmount": since v0.2.0 it mounts nothing before kstuff is loaded and while ShadowMountPlus runs
     bool low_space = false;
+    bool restart_needed = false; // the running one is not the version the next start takes: off and on again
     std::string version; // the running one
     std::string embedded_version;
     std::string fetched_version;

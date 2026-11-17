@@ -881,6 +881,9 @@ struct cJSON *ps5tm_amprng_fetch(char *why, size_t why_len, int *http);
    start, stop, rescan, rebuild (id), rebuild_all, delete (id, path), fetch; the result is an HTTP status (200 = done) with a sentence in msg. */
 struct cJSON *ps5tm_kraken_state(void);
 int           ps5tm_kraken_action(const struct cJSON *body, char *msg, size_t n);
+/* Starts a thread that sends Kraken Mount ~25 s after the app's start unless the person switched it off in the page (marker kraken/aus.txt, krakenboot.h);
+   state adds {autostart, restart_needed}. */
+void          ps5tm_kraken_boot(void);
 /* icon0.png of one of its games (malloc'd); 0 = found. */
 int           ps5tm_kraken_icon(const char *title_id, unsigned char **png, size_t *len);
 

@@ -4519,6 +4519,7 @@ void HttpSource::poll_kraken()
     k.running = flag(root, "running");
     k.starting = flag(root, "starting");
     k.fetching = flag(root, "fetching");
+    k.restart_needed = flag(root, "restart_needed");
     k.embedded_version = str(root, "embedded_version");
     k.fetched_version = str(root, "fetched_version");
     const cJSON *kr = cJSON_GetObjectItemCaseSensitive(root, "kraken");

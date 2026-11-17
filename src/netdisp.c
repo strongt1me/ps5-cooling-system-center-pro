@@ -27,6 +27,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "dynsym.h"
@@ -95,9 +96,15 @@ static fn_vo_monitor_t    p_vo_mon    = NULL;
 
 static int g_resolved = 0;
 
-/* The monitor block is asked for until a name has come out of it, but at most three times in a run: the name of a television does not change, and a call
-   that does not answer has no business on the display path every five seconds. The name is kept, and the first block is written to the log once. */
+/* The monitor block is asked for until it has answered once, and at most three times in a run: a television does not change, and a call that does not
+   answer has no business on the display path every five seconds. Measured on the .52 (17.11.2026): the block holds the maker, the product code and the year
+   but no name of the display, so the name stays empty (the wish of the user) and the answer is only written to the log, once.
+   The call writes exactly PS5TM_EDID_SIZE (1024) bytes; it gets a buffer of four times that on the heap with a guard pattern behind the block, so a
+   firmware that writes more is noticed (and the call is never made again) instead of smashing a stack. */
 #define MON_TRIES_MAX 3
+#define MON_BUF_SIZE  (4 * PS5TM_EDID_SIZE)
+#define MON_GUARD     0xA5
+#define MON_DISPLAY   0x7000      /* the main output: the display argument of sceVideoOutGetMonitorInfo */
 static pthread_mutex_t g_mon_lock = PTHREAD_MUTEX_INITIALIZER;
 static int  g_mon_tries = 0;
 static int  g_mon_logged = 0;
@@ -126,9 +133,15 @@ static char g_mon_name[64] = "";
  * ⚠ And the reason it failed (16.11.2026, system libraries of 43 firmwares from
  * 1.00 to 12.70, tools/check_fw_imports.py): that name is exported by none of
  * them. The call is sceVideoOutGetMonitorInfo(handle, block), exported by
- * libSceVideoOut in all 43. Its block is about 76 bytes and not documented, see
- * tvname.h; the first bytes are written to the log once, so the layout can be
- * read from a console. */
+ * libSceVideoOut in all 41 readable ones (7.00 is encrypted). It is not what it
+ * first seemed (read from the libraries 17.11.2026, see tvname.h): the first
+ * argument is not the handle of sceVideoOutOpen but the display, 0x7000 for the
+ * main output (the Open handle, a large composite value, was refused with
+ * 0x80290018 on the first console), and the block it fills is the monitor's
+ * EDID without its header, exactly 1024 bytes; measured on the .52 on
+ * 17.11.2026: the call answered 0 and the block started with the maker "SAM".
+ * The first version of this code gave it 512 bytes on the stack; a successful
+ * call would have smashed them. */
 #ifndef PS5TM_HOST_TEST
 extern int sceNetCtlInit(void)                        __attribute__((weak));
 extern int sceNetCtlGetState(int *)                   __attribute__((weak));
@@ -283,31 +296,44 @@ read_display(ps5tm_sysinfo_t *info) {
     }
   }
 
-  /* The monitor block: a name at its start or an EDID name descriptor in it (tvname.h). Anything else means the layout is not what we assumed, so
-     nothing is reported rather than mojibake. The buffer is far larger than the 76 bytes the call is known to write (disassembly of FW 12.70). */
+  /* The monitor's EDID (tvname.h): the name of the display is in it. No EDID header, no name: nothing is reported rather than mojibake. The serial
+     number of the display is in the EDID and is never written to the log. */
   pthread_mutex_lock(&g_mon_lock);
   int ask = p_vo_mon && !g_mon_name[0] && g_mon_tries < MON_TRIES_MAX;
   if(ask) g_mon_tries++;
   pthread_mutex_unlock(&g_mon_lock);
-  if(ask) {
-    unsigned char mi[512];
-    memset(mi, 0, sizeof(mi));
-    int rc = p_vo_mon(handle, mi);
-    char name[64] = "";
-    int found = rc == 0 && ps5tm_tvname_from_block(mi, sizeof(mi), name, sizeof(name));
+  unsigned char *mi = ask ? malloc(MON_BUF_SIZE) : NULL;
+  if(mi) {
+    memset(mi, 0, PS5TM_EDID_SIZE);
+    memset(mi + PS5TM_EDID_SIZE, MON_GUARD, MON_BUF_SIZE - PS5TM_EDID_SIZE);
+    int rc = p_vo_mon(MON_DISPLAY, mi);
+    int overrun = 0;
+    for(size_t i = PS5TM_EDID_SIZE; i < MON_BUF_SIZE; i++)
+      if(mi[i] != MON_GUARD) { overrun = 1; break; }
+    char name[64] = "", maker[4] = "", desc[48] = "";
+    int found = !overrun && rc == 0 && ps5tm_tvname_from_block(mi, PS5TM_EDID_SIZE, name, sizeof(name));
+    int at = rc == 0 ? ps5tm_edid_id_at(mi, PS5TM_EDID_SIZE) : -1;       /* 8 with the EDID header, 0 without it (the console's block) */
+    unsigned product = 0, year = 0;
+    if(at >= 0) {
+      ps5tm_edid_maker(mi, PS5TM_EDID_SIZE, maker);
+      product = ps5tm_edid_product(mi, PS5TM_EDID_SIZE);
+      year = ps5tm_edid_year(mi, PS5TM_EDID_SIZE);
+    }
+    if(rc == 0) ps5tm_edid_descriptors(mi, PS5TM_EDID_SIZE, desc, sizeof(desc));
     pthread_mutex_lock(&g_mon_lock);
     int say = !g_mon_logged;
     g_mon_logged = 1;
+    if(overrun || rc == 0) g_mon_tries = MON_TRIES_MAX;    /* answered (or wrote too much): once is enough */
     if(found) snprintf(g_mon_name, sizeof(g_mon_name), "%s", name);
     pthread_mutex_unlock(&g_mon_lock);
-    if(say) {                                                   /* two lines of 48 bytes: one log line holds 383 characters */
-      char hex[3 * 48 + 1];
-      ps5tm_tvname_hex(mi, 48, hex, sizeof(hex));
+    free(mi);
+    if(overrun)
+      PS5TM_WARN("videoout_monitor_overrun", "Monitorinfo: Die Konsole hat mehr als %d Byte geschrieben; die Abfrage wird nicht wiederholt.", PS5TM_EDID_SIZE);
+    if(say) {
       PS5TM_INFO("videoout_monitor",
-                 "Monitorinfo (sceVideoOutGetMonitorInfo): Rückgabe 0x%08x, Name %s. Byte 0-47: %s",
-                 (unsigned)rc, found ? name : "nicht erkannt", hex);
-      ps5tm_tvname_hex(mi + 48, 48, hex, sizeof(hex));
-      PS5TM_INFO("videoout_monitor", "Monitorinfo, Byte 48-95: %s", hex);
+                 "Monitorinfo (sceVideoOutGetMonitorInfo, Anzeige 0x%x, Open-Handle %d): Rückgabe 0x%08x, Aufbau %s, Hersteller %s, Produkt 0x%04x, Baujahr %u, Deskriptoren %s, Name %s.",
+                 MON_DISPLAY, handle, (unsigned)rc, at == 8 ? "mit EDID-Kopf" : at == 0 ? "ohne Kopf" : "unbekannt", maker[0] ? maker : "-", product, year,
+                 desc[0] ? desc : "-", found ? name : "nicht erkannt");
     }
   }
   pthread_mutex_lock(&g_mon_lock);

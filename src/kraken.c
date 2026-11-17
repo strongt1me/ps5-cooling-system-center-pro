@@ -26,6 +26,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "krakenboot.h"
 #include "lhttp.h"
 #include "ps5tm.h"
 #include "sha256.h"
@@ -40,6 +41,8 @@
 #define KR_ELF               KR_DIR "/kraken-mount.elf"
 #define KR_VER               KR_DIR "/version.txt"
 #define KR_BAD               KR_DIR "/bad.txt"        /* a downloaded version that did not answer after its start: not used again */
+#define KR_OFF               KR_DIR "/aus.txt"        /* the person switched Kraken Mount off in the page: the app does not start it with itself */
+#define KR_BOOT_DELAY_SEC    25                       /* the app starts Kraken Mount this long after its own start (krakenboot.h) */
 #define KR_ELF_MAX           (16u * 1024 * 1024)
 
 extern const unsigned char ps5tm_kraken[];
@@ -59,6 +62,26 @@ kr_http(const char *method, const char *path, const char *body, size_t body_len,
 }
 
 /* ------------------------------------------------------------------ files */
+
+static int make_dir(const char *p);
+
+/* Kraken Mount is on unless the person switched it off in the page (17.11.2026): the marker file says "off". */
+static int
+kr_is_off(void) {
+  return access(KR_OFF, F_OK) == 0;
+}
+
+static void
+kr_set_off(int off) {
+  if(off) {
+    make_dir(KR_DIR);
+    FILE *f = fopen(KR_OFF, "w");
+    if(f) { fputs("ausgeschaltet\n", f); fclose(f); }
+    else PS5TM_WARN("kraken_off_marker", "Das Ausschalten von Kraken Mount ließ sich nicht merken (%s): %s", KR_OFF, strerror(errno));
+  } else {
+    unlink(KR_OFF);
+  }
+}
 
 static int
 read_file(const char *path, unsigned char **out, size_t *len, size_t max) {
@@ -187,6 +210,7 @@ ps5tm_kraken_state(void) {
   fetched_version(fv, sizeof fv);
   if(fv[0]) cJSON_AddStringToObject(o, "fetched_version", fv);
   cJSON_AddStringToObject(o, "start_version", fv[0] ? fv : KR_EMBEDDED_VERSION);
+  cJSON_AddBoolToObject(o, "autostart", !kr_is_off());                 /* the app starts Kraken Mount with itself unless it was switched off in the page */
   pthread_mutex_lock(&g_lock);
   cJSON_AddBoolToObject(o, "fetching", g_busy);
   pthread_mutex_unlock(&g_lock);
@@ -198,6 +222,10 @@ ps5tm_kraken_state(void) {
   if(cJSON_IsObject(k)) {
     store_games(k, ps5tm_mono_ms());                     /* the games of this very answer: the conflict list below and the library need no second ask */
     cJSON_AddBoolToObject(o, "running", 1);
+    /* a Kraken Mount that runs on from before an update is the old version until it is switched off and on again (the app never stops it by itself: a game may
+       run from it): the page says so */
+    const cJSON *kv = cJSON_GetObjectItem(k, "version");
+    cJSON_AddBoolToObject(o, "restart_needed", cJSON_IsString(kv) && ps5tm_krakenboot_restart_needed(kv->valuestring, fv[0] ? fv : KR_EMBEDDED_VERSION));
     cJSON_AddItemToObject(o, "kraken", k);
     /* its settings: the page names the folders it searches (scanpath; empty = its own defaults) */
     st = kr_http("GET", "/api/settings", NULL, 0, 2000, &body, &n);
@@ -384,6 +412,7 @@ seed_config(void) {
 
 static int
 start_kraken(char *msg, size_t n) {
+  kr_set_off(0);                                           /* wanted on: the next start of the app starts it, too */
   int alive = kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL);
   if(alive == 200) { snprintf(msg, n, "Kraken Mount läuft schon."); return 409; }
   /* It listens but does not answer: it is busy (a scan, a drive that hangs), not gone. A second copy would only send the first one away. */
@@ -437,10 +466,15 @@ start_kraken(char *msg, size_t n) {
 static int
 stop_kraken(char *msg, size_t n) {
   int st = kr_http("POST", "/api/quit", "shutdown", 8, 5000, NULL, NULL);
-  if(st == 204 || st == 200) { snprintf(msg, n, "Kraken Mount wird beendet."); PS5TM_INFO("kraken_stop", "Kraken Mount beendet (Seite FPKGMount)."); return 200; }
+  if(st == 204 || st == 200) {
+    kr_set_off(1);                                         /* switched off in the page: the app does not start it again with itself */
+    snprintf(msg, n, "Kraken Mount wird beendet.");
+    PS5TM_INFO("kraken_stop", "Kraken Mount beendet (Seite FPKGMount).");
+    return 200;
+  }
   if(st == 409) { snprintf(msg, n, "Ein Spiel läuft gerade. Kraken Mount lässt sich erst nach dem Spiel beenden."); return 409; }
   if(st == LHTTP_NO_ANSWER) { snprintf(msg, n, "Kraken Mount antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); return 409; }
-  if(st < 0) { snprintf(msg, n, "Kraken Mount läuft nicht."); return 409; }
+  if(st < 0) { kr_set_off(1); snprintf(msg, n, "Kraken Mount läuft nicht."); return 409; }
   snprintf(msg, n, "Kraken Mount hat das Beenden abgelehnt (%d).", st);
   return 502;
 }
@@ -664,4 +698,40 @@ ps5tm_kraken_action(const struct cJSON *b, char *msg, size_t n) {
   }
   snprintf(msg, n, "Diese Aktion kennt die App nicht.");
   return 400;
+}
+
+/* ------------------------------------------------------------------ start with the app */
+
+/* Kraken Mount runs on when the app is replaced or restarted, and is gone after a restart of the console: the app starts it by itself (17.11.2026, wish of the
+   user: switched on by default) unless the person switched it off in the page. One look after 25 s, then at most three more every 45 s when the loader does not
+   take it (nothing is sent while it is there, busy or not: krakenboot.h). The page's "Einschalten" and "Ausschalten" write and remove the marker. */
+static void *
+boot_thread(void *arg) {
+  (void)arg;
+  for(int tries = 0; tries < 4; tries++) {
+    sleep(tries == 0 ? KR_BOOT_DELAY_SEC : 45);
+    int alive = kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL);
+    if(!ps5tm_krakenboot_should_start(kr_is_off(), alive, LHTTP_NO_ANSWER)) {
+      if(tries == 0 && alive == 200) PS5TM_INFO("kraken_boot", "Kraken Mount läuft schon: die App startet es nicht noch einmal.");
+      else if(kr_is_off()) PS5TM_INFO("kraken_boot", "Kraken Mount ist in der Seite ausgeschaltet: die App startet es nicht.");
+      return NULL;
+    }
+    char msg[200];
+    int rc = start_kraken(msg, sizeof msg);
+    PS5TM_INFO("kraken_boot", "Kraken Mount mit der App gestartet (Versuch %d): %d, %s", tries + 1, rc, msg);
+    if(rc == 200) return NULL;
+  }
+  PS5TM_WARN("kraken_boot_failed", "Kraken Mount ließ sich mit der App nicht starten: auf der Seite FPKGMount „Einschalten“ drücken.");
+  return NULL;
+}
+
+void
+ps5tm_kraken_boot(void) {
+  pthread_t th;
+  pthread_attr_t at;
+  pthread_attr_init(&at);
+  pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&at, 128 * 1024);
+  if(pthread_create(&th, &at, boot_thread, NULL) != 0) PS5TM_WARN("kraken_boot_thread", "Kraken Mount lässt sich nicht mit der App starten: der Faden ließ sich nicht anlegen.");
+  pthread_attr_destroy(&at);
 }
