@@ -1,7 +1,7 @@
 /* PS5 Cooling & System Center - Pro: Kraken Mount starts with the app (krakenboot.h, 17.11.2026, wish of the user: "Kraken Mount soll standardmäßig
  * eingeschaltet sein"). The decisions are here, without any I/O, so a host test can try them (test/krakenboot).
  *
- * Kraken Mount is a program of its own that keeps running when the app is replaced or restarted. The app starts it ~25 s after its own start unless the person
+ * Kraken Mount is a program of its own that keeps running when the app is replaced or restarted. The app starts it ~5 s after its own start unless the person
  * switched it off in the page (the marker file kraken/aus.txt; the page writes it with "Ausschalten" and removes it with "Einschalten"). Without the marker
  * - the state of every console until now - it is on. */
 #ifndef PS5TM_KRAKENBOOT_H

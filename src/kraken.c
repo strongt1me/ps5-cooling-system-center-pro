@@ -42,7 +42,7 @@
 #define KR_VER               KR_DIR "/version.txt"
 #define KR_BAD               KR_DIR "/bad.txt"        /* a downloaded version that did not answer after its start: not used again */
 #define KR_OFF               KR_DIR "/aus.txt"        /* the person switched Kraken Mount off in the page: the app does not start it with itself */
-#define KR_BOOT_DELAY_SEC    25                       /* the app starts Kraken Mount this long after its own start (krakenboot.h) */
+#define KR_BOOT_DELAY_SEC    5                        /* the app starts Kraken Mount this long after its own start (krakenboot.h) */
 #define KR_ELF_MAX           (16u * 1024 * 1024)
 
 extern const unsigned char ps5tm_kraken[];
@@ -52,6 +52,7 @@ extern const unsigned long ps5tm_kraken_raw_len;
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static int             g_busy;                        /* a download runs */
 static uint64_t        g_started_ms;                  /* the last start: a second one within 15 s is not sent */
+static int             g_boot_pending;                /* the app has not yet had its first look at Kraken Mount (the start with the app): the page says "starts" */
 
 /* ------------------------------------------------------------------ loopback client */
 
@@ -239,7 +240,9 @@ ps5tm_kraken_state(void) {
     cJSON_Delete(k);
     cJSON_AddBoolToObject(o, "running", 0);
     pthread_mutex_lock(&g_lock);
-    int starting = g_started_ms && ps5tm_mono_ms() - g_started_ms < 20000;
+    /* "starting" also while the app waits to start it itself (the first seconds after the app's start): the page used to say "off" with a button to start it
+       until Kraken Mount was sent, which looked as if it were not on by default (17.11.2026) */
+    int starting = (g_started_ms && ps5tm_mono_ms() - g_started_ms < 20000) || g_boot_pending;
     pthread_mutex_unlock(&g_lock);
     cJSON_AddBoolToObject(o, "starting", starting);
   }
@@ -474,7 +477,16 @@ stop_kraken(char *msg, size_t n) {
   }
   if(st == 409) { snprintf(msg, n, "Ein Spiel läuft gerade. Kraken Mount lässt sich erst nach dem Spiel beenden."); return 409; }
   if(st == LHTTP_NO_ANSWER) { snprintf(msg, n, "Kraken Mount antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); return 409; }
-  if(st < 0) { kr_set_off(1); snprintf(msg, n, "Kraken Mount läuft nicht."); return 409; }
+  if(st < 0) {
+    kr_set_off(1);
+    pthread_mutex_lock(&g_lock);
+    int pending = g_boot_pending;                          /* switched off while the app was still waiting to start it: that is what the person asked for */
+    g_boot_pending = 0;
+    pthread_mutex_unlock(&g_lock);
+    if(pending) { snprintf(msg, n, "Kraken Mount wird nicht mit der App gestartet."); return 200; }
+    snprintf(msg, n, "Kraken Mount läuft nicht.");
+    return 409;
+  }
   snprintf(msg, n, "Kraken Mount hat das Beenden abgelehnt (%d).", st);
   return 502;
 }
@@ -703,8 +715,15 @@ ps5tm_kraken_action(const struct cJSON *b, char *msg, size_t n) {
 /* ------------------------------------------------------------------ start with the app */
 
 /* Kraken Mount runs on when the app is replaced or restarted, and is gone after a restart of the console: the app starts it by itself (17.11.2026, wish of the
-   user: switched on by default) unless the person switched it off in the page. One look after 25 s, then at most three more every 45 s when the loader does not
+   user: switched on by default) unless the person switched it off in the page. One look after 5 s, then at most three more every 45 s when the loader does not
    take it (nothing is sent while it is there, busy or not: krakenboot.h). The page's "Einschalten" and "Ausschalten" write and remove the marker. */
+static void
+boot_pending_done(void) {
+  pthread_mutex_lock(&g_lock);
+  g_boot_pending = 0;
+  pthread_mutex_unlock(&g_lock);
+}
+
 static void *
 boot_thread(void *arg) {
   (void)arg;
@@ -712,12 +731,14 @@ boot_thread(void *arg) {
     sleep(tries == 0 ? KR_BOOT_DELAY_SEC : 45);
     int alive = kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL);
     if(!ps5tm_krakenboot_should_start(kr_is_off(), alive, LHTTP_NO_ANSWER)) {
+      boot_pending_done();
       if(tries == 0 && alive == 200) PS5TM_INFO("kraken_boot", "Kraken Mount läuft schon: die App startet es nicht noch einmal.");
       else if(kr_is_off()) PS5TM_INFO("kraken_boot", "Kraken Mount ist in der Seite ausgeschaltet: die App startet es nicht.");
       return NULL;
     }
     char msg[200];
-    int rc = start_kraken(msg, sizeof msg);
+    int rc = start_kraken(msg, sizeof msg);                /* sets the time of the start: the page goes on saying "starts" from there */
+    boot_pending_done();
     PS5TM_INFO("kraken_boot", "Kraken Mount mit der App gestartet (Versuch %d): %d, %s", tries + 1, rc, msg);
     if(rc == 200) return NULL;
   }
@@ -727,11 +748,19 @@ boot_thread(void *arg) {
 
 void
 ps5tm_kraken_boot(void) {
+  if(!kr_is_off()) {
+    pthread_mutex_lock(&g_lock);
+    g_boot_pending = 1;
+    pthread_mutex_unlock(&g_lock);
+  }
   pthread_t th;
   pthread_attr_t at;
   pthread_attr_init(&at);
   pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
   pthread_attr_setstacksize(&at, 128 * 1024);
-  if(pthread_create(&th, &at, boot_thread, NULL) != 0) PS5TM_WARN("kraken_boot_thread", "Kraken Mount lässt sich nicht mit der App starten: der Faden ließ sich nicht anlegen.");
+  if(pthread_create(&th, &at, boot_thread, NULL) != 0) {
+    boot_pending_done();
+    PS5TM_WARN("kraken_boot_thread", "Kraken Mount lässt sich nicht mit der App starten: der Faden ließ sich nicht anlegen.");
+  }
   pthread_attr_destroy(&at);
 }
