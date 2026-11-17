@@ -141,6 +141,12 @@ class MockSource final : public Source
             if (std::string(m.id) == "PPSA01325")
                 g.conflict_with = "Kraken Mount";
             g.ampr_emu = std::string(m.id) == "PPSA01325";
+            // games in AMPR packs, in an image or in a folder
+            if (std::string(m.id) == "PPSA05522" || std::string(m.id) == "PPSA06620" ||
+                std::string(m.id) == "PPSA01325")
+                g.packing = "zstd";
+            else if (std::string(m.id) == "PPSA02433" || std::string(m.id) == "PPSA09912")
+                g.packing = "lz4";
             // the firmware a game asks for; one with a backport (the firmware it carries), a PS4
             // title
             const std::string mid = m.id;

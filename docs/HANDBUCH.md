@@ -79,6 +79,8 @@ Funktion, gleiche Sperren und Hinweise); der Browser merkt sich die Wahl je Ger�
 stattdessen die Firmware, die der Backport trägt (die SDK-Fassung seiner `eboot.bin`); was die `param.json`
 verlangt, steht im Hinweis. In der Vollbild-App steht sie in der Zeile des Spiels und in den Angaben.
 
+**Gepackt** (seit 17.11.2026): Liegt ein Spiel in AMPR-Packs, steht unter dem Titel „zstd gepackt“ oder „LZ4 gepackt“, egal in welchem Format das Spiel liegt (Ordner oder Abbild); unter „Infos & Metadaten“ gibt es die Zeile „Gepackt“. Bei Abbildern liest die App dafür beim Lesen der Abbild-Datei die beiden Index-Dateien (`ampr_zstd.index`, `ampr_assets.index`) mit, ohne etwas einzuhängen, und merkt es sich, bis sich die Datei ändert; kurz nach dem Start der App kann die Marke bei einem Abbild einen Moment fehlen. In der Vollbild-App steht die Angabe als farbige Plakette in der Zeile des Spiels (grün: zstd, blau: LZ4) und als Zeile „Gepackt“ im Infofeld.
+
 **Format und Speicherort.** Unter „Infos & Metadaten“ meldet ShadowMountPlus 1.7,
 wo das Spiel läuft: der Dump-Ordner oder die Abbild-Datei (`.exfat`, `.ffpkg`,
 `.ffpfs`, `.ffpfsc`), nicht der Ordner unter `/mnt/shadowmnt`, in den es sie

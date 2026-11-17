@@ -3173,6 +3173,9 @@ void HttpSource::poll_library()
             if (mods != nullptr && str(mods, "state") == "checked" && flag(mods, "backport") &&
                 g.platform != "PS4")
                 g.backport_fw = str(mods, "eboot_sdk");
+            // AMPR packs (17.11.2026): zstd (AMPR EMU NG) or LZ4, in a folder or inside an image
+            if (mods != nullptr && str(mods, "state") == "checked")
+                g.packing = flag(mods, "zstd") ? "zstd" : flag(mods, "lz4") ? "lz4" : "";
         }
         // A PS4Mount game is an installed package to the system; shown as what it is, not as
         // installed (29.10.2026).

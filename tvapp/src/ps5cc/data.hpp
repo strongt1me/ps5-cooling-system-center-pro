@@ -80,6 +80,8 @@ struct Game
     // /system_ex/app/<ID> (GET /api/v1/library: "conflicts", 14.11.2026); "" when none does
     std::string conflict_with;
     bool ampr_emu = false; // mods.ampr_emu: the conversion builds the AMPR index first by default
+    // The game lies in AMPR packs, whatever its format (mods.zstd / mods.lz4, 17.11.2026): "zstd", "lz4" or ""
+    std::string packing;
     std::string disc; // installed from disc: "in" (the disc is in the drive) or "out"; "" otherwise
     bool dump_mounted = false; // the game runs (mounted), so it can be dumped
     std::string dump;          // a dump of it lies on a drive: "done", "unfinished", ""

@@ -494,7 +494,8 @@ detect_mods(lib_game_t *g) {
   struct stat st;
   if(stat(g->source, &st) != 0 || !S_ISDIR(st.st_mode)) {
     /* An image that is not mounted: what was found while it was (a game running from it, or the image probe at the
-       start) is the last thing known, and better than "unknown". The two live marks are not known, the backport
+       start) is the last thing known, and better than "unknown". The pack marks (lz4, zstd) are kept too: they were read
+       with the image (17.11.2026); the two live marks of a folder (ampr_index, playgo_log) are not known, the backport
        verdict is drawn again from the saved parts. */
     if(!strncmp(g->source, "/mnt/shadowmnt/", 15)) {
       for(int i = 0; i < g_mods_cached; i++) {
@@ -503,8 +504,6 @@ detect_mods(lib_game_t *g) {
         *m = c->mods;
         m->ampr_index = 0;
         m->playgo_log = 0;
-        m->lz4 = 0;
-        m->zstd = 0;
         overlay_backports(g, m);
         uint32_t eb0 = (m->eboot_sdk >> 16) & 0xFFFF;
         uint32_t pj0 = (uint32_t)(g->param_sdk >> 48) & 0xFFFF;
@@ -558,6 +557,7 @@ detect_mods(lib_game_t *g) {
   m->lz4 = stat(path, &st) == 0;
   snprintf(path, sizeof(path), "%s/ampr_zstd.index", g->source);
   m->zstd = stat(path, &st) == 0;
+  if(c) { c->mods.lz4 = m->lz4; c->mods.zstd = m->zstd; }   /* an image: its pack marks stay known when it is unmounted again */
   overlay_backports(g, m);
 
   uint32_t eb = (m->eboot_sdk >> 16) & 0xFFFF;              /* 0x0400 = 4.00 */
@@ -767,6 +767,8 @@ cache_seed(void) {
       md->backport   = m->backport;
       md->ampr       = m->ampr;
       md->playgo     = m->playgo;
+      md->lz4        = m->lz4;
+      md->zstd       = m->zstd;
       md->extra_libs = m->extra_libs;
       md->eboot_sdk  = m->eboot_sdk;
       md->more_libs  = m->more_libs;
@@ -839,6 +841,8 @@ cache_save(const lib_game_t *list, int n) {
       m->backport      = md->backport;
       m->ampr          = md->ampr;
       m->playgo        = md->playgo;
+      m->lz4           = md->lz4;
+      m->zstd          = md->zstd;
       m->extra_libs    = md->extra_libs;
       m->eboot_sdk     = md->eboot_sdk;
       m->more_libs     = md->more_libs;
@@ -2208,6 +2212,10 @@ probe_read_into_cache(const char *tid, const char *source) {
   int64_t fl2_mtime = stat_mtime(path, NULL);
   if(fl2_mtime > fl_mtime) fl_mtime = fl2_mtime;
   else if(fl2_mtime >= 0) fl_mtime += 1;
+  snprintf(path, sizeof(path), "%s/ampr_assets.index", source);
+  m.lz4 = stat(path, &st) == 0;                         /* AMPR packs (17.11.2026) */
+  snprintf(path, sizeof(path), "%s/ampr_zstd.index", source);
+  m.zstd = stat(path, &st) == 0;
   pthread_mutex_lock(&g_refresh_lock);
   mods_cache_t *c = NULL;
   for(int i = 0; i < g_mods_cached; i++)
@@ -2242,6 +2250,9 @@ probe_save(void) {
     cJSON_AddNumberToObject(o, "eboot_sdk", (double)c->mods.eboot_sdk);
     cJSON_AddNumberToObject(o, "ampr", c->mods.ampr);
     cJSON_AddNumberToObject(o, "playgo", c->mods.playgo);
+    cJSON_AddNumberToObject(o, "lz4", c->mods.lz4);
+    cJSON_AddNumberToObject(o, "zstd", c->mods.zstd);
+    cJSON_AddNumberToObject(o, "packs", 1);                  /* the result knows the packs; an older file does not (probe_load reads it again) */
     cJSON_AddNumberToObject(o, "extra_libs", c->mods.extra_libs);
     cJSON_AddNumberToObject(o, "more_libs", c->mods.more_libs);
     cJSON_AddNumberToObject(o, "fakelib2", c->mods.fakelib2);
@@ -2301,6 +2312,10 @@ probe_load(void) {
     m->ampr       = cJSON_IsNumber(cJSON_GetObjectItem(o, "ampr")) && cJSON_GetObjectItem(o, "ampr")->valuedouble != 0;
     m->playgo     = cJSON_IsNumber(cJSON_GetObjectItem(o, "playgo")) && cJSON_GetObjectItem(o, "playgo")->valuedouble != 0;
     m->fakelib2   = cJSON_IsNumber(cJSON_GetObjectItem(o, "fakelib2")) && cJSON_GetObjectItem(o, "fakelib2")->valuedouble != 0;
+    m->lz4        = cJSON_IsNumber(cJSON_GetObjectItem(o, "lz4")) && cJSON_GetObjectItem(o, "lz4")->valuedouble != 0;
+    m->zstd       = cJSON_IsNumber(cJSON_GetObjectItem(o, "zstd")) && cJSON_GetObjectItem(o, "zstd")->valuedouble != 0;
+    /* A result saved before the packs were read (no "packs"): its image counts as not read yet, the next round reads it again. */
+    if(!cJSON_IsNumber(cJSON_GetObjectItem(o, "packs"))) c->img_size = 0;
     const cJSON *el = cJSON_GetObjectItem(o, "extra_libs"), *ml = cJSON_GetObjectItem(o, "more_libs");
     m->extra_libs = cJSON_IsNumber(el) ? (int)ps5tm_num_u32(el->valuedouble) : 0;
     m->more_libs  = cJSON_IsNumber(ml) ? (int)ps5tm_num_u32(ml->valuedouble) : 0;
@@ -2367,6 +2382,11 @@ probe_read_image_file(const char *tid, const char *image_path, int64_t img_size,
   if(imgr_list(r, "/fakelib2", probe_fakelib_cb, &m) == 0) m.fakelib2 = 1;     /* fakelib2 replaces fakelib */
   else imgr_list(r, "/fakelib", probe_fakelib_cb, &m);                         /* no fakelib folder: nothing in it */
   m.eboot_sdk = eboot_sdk_rd(rd_img_eboot, r);
+  {                                                                            /* AMPR packs (17.11.2026): the same reading amprlib.c makes */
+    uint8_t probe[1];
+    m.lz4  = imgr_pread(r, "/ampr_assets.index", 0, probe, 1) >= 0;
+    m.zstd = imgr_pread(r, "/ampr_zstd.index", 0, probe, 1) >= 0;
+  }
   imgr_close(r);
   pthread_mutex_lock(&g_refresh_lock);
   mods_cache_t *c = NULL;

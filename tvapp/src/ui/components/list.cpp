@@ -370,6 +370,24 @@ void ListView::draw(Canvas &canvas) const
                                     Painter::on(theme.accent), gfx::Align::center);
                         right -= width + 18.0f;
                     }
+                    // A tinted pill of its own (a wash of its colour, bordered by it), so it does not
+                    // pass for the solid badge; right-aligned left of the badge column.
+                    if (!item.chip.empty())
+                    {
+                        const gfx::Color tone =
+                            item.chip_color.a > 0.0f ? item.chip_color : theme.accent;
+                        const float chip_size = style.subtitle_size * 0.9f;
+                        const float width = paint.label_width(item.chip, chip_size) + 24.0f;
+                        const Rect pill{right - width, row.cy() - 15.0f, width, 30.0f};
+                        const float radius =
+                            theme.pill_chips ? 15.0f : std::min(theme.radius, 15.0f);
+                        paint.fill(pill, radius, tone.with_alpha(0.42f));
+                        paint.stroke(pill, radius, 2.0f, tone.with_alpha(1.0f));
+                        paint.label(item.chip, pill.cx(), pill.cy() + chip_size * 0.34f, chip_size,
+                                    gfx::mix(tone, gfx::Color{1.0f, 1.0f, 1.0f, 1.0f}, 0.8f),
+                                    gfx::Align::center);
+                        right -= width + 14.0f;
+                    }
                 }
 
                 const float room = std::max(right - left, 40.0f);

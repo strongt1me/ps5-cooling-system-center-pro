@@ -192,6 +192,8 @@ meta_object(const ps5tm_libmeta_t *m) {
     cJSON_AddBoolToObject(md, "backport", m->backport);
     cJSON_AddBoolToObject(md, "ampr_emu", m->ampr);
     cJSON_AddBoolToObject(md, "playgo", m->playgo);
+    cJSON_AddBoolToObject(md, "lz4", m->lz4);
+    cJSON_AddBoolToObject(md, "zstd", m->zstd);
     cJSON_AddNumberToObject(md, "extra_libs", m->extra_libs);
     cJSON_AddNumberToObject(md, "eboot_sdk", (double)m->eboot_sdk);
     cJSON *libs = cJSON_AddArrayToObject(md, "fakelib");
@@ -252,6 +254,8 @@ parse_meta(const char *txt, const char *tid, ps5tm_libmeta_t *m) {
       m->backport   = cJSON_IsTrue(cJSON_GetObjectItem(md, "backport"));
       m->ampr       = cJSON_IsTrue(cJSON_GetObjectItem(md, "ampr_emu"));
       m->playgo     = cJSON_IsTrue(cJSON_GetObjectItem(md, "playgo"));
+      m->lz4        = cJSON_IsTrue(cJSON_GetObjectItem(md, "lz4"));
+      m->zstd       = cJSON_IsTrue(cJSON_GetObjectItem(md, "zstd"));
       m->extra_libs = (int)jnum(md, "extra_libs", 0);
       m->eboot_sdk  = (uint32_t)jnum(md, "eboot_sdk", 0);
       m->more_libs  = (int)jnum(md, "fakelib_more", 0);

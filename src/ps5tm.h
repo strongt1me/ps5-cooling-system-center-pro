@@ -1612,6 +1612,7 @@ typedef struct {
   /* what a look into the game folder found (the keys say when it must be redone) */
   int      mods_checked;              /* 1: the fields below were measured          */
   int      backport, ampr, playgo, extra_libs, nlibs, more_libs;
+  int      lz4, zstd;                 /* AMPR packs in the game (ampr_assets.index / ampr_zstd.index), whatever its format */
   uint32_t eboot_sdk;
   char     libs[6][32];
   int64_t  eboot_mtime, eboot_size, fakelib_mtime;

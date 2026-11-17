@@ -313,6 +313,12 @@ const char *format_label(const std::string &format)
     return format.c_str();
 }
 
+// "zstd gepackt" / "LZ4 gepackt": the game lies in AMPR packs, whatever its format (17.11.2026)
+std::string packing_label(const std::string &packing)
+{
+    return packing == "zstd" ? "zstd gepackt" : packing == "lz4" ? "LZ4 gepackt" : std::string();
+}
+
 // "2026-10-27T10:29:26Z" -> "27.10.2026"
 std::string german_date(const std::string &iso)
 {
@@ -1647,7 +1653,7 @@ class Ps5cc final : public app::Concept
         std::string key = data_.status.game_id;
         for (const ps5cc::Game &g : data_.games)
             key += '\n' + g.id + '\t' + g.name + '\t' + g.platform + '\t' + g.version + '\t' +
-                   g.format + '\t' + g.system_ver + '\t' + g.backport_fw + '\t' +
+                   g.format + '\t' + g.packing + '\t' + g.system_ver + '\t' + g.backport_fw + '\t' +
                    std::to_string(g.size_bytes) + '\t' + std::to_string(g.played_s) +
                    (g.can_launch ? "+" : "-") + (holds_launch(g) ? "H" : "h") + g.conflict_with;
         return key;
@@ -1693,6 +1699,17 @@ class Ps5cc final : public app::Concept
             item.subtitle = g.platform + " · v" + g.version + " · " + format_label(g.format) +
                             fw_label(g) + " · " + ps5cc::format_bytes(g.size_bytes);
             item.value = ps5cc::format_playtime(g.played_s);
+            // AMPR packs: a coloured pill like the browser's (green zstd, blue LZ4; 17.11.2026)
+            if (g.packing == "zstd")
+            {
+                item.chip = "zstd";
+                item.chip_color = Color::rgb(0x2ecc71);
+            }
+            else if (g.packing == "lz4")
+            {
+                item.chip = "LZ4";
+                item.chip_color = Color::rgb(0x3987e5);
+            }
             if (g.id == data_.status.game_id)
                 item.badge = "LÄUFT";
             else if (holds_launch(g))
@@ -1740,6 +1757,8 @@ class Ps5cc final : public app::Concept
             items.push_back({"Eingehängt", "wird gleich ausgehängt"});
         items.push_back({"Version", g->version});
         items.push_back({"Format", format_label(g->format)});
+        if (!g->packing.empty())
+            items.push_back({"Gepackt", packing_label(g->packing)});
         add_fw_rows(items, *g);
         items.push_back({"Größe", ps5cc::format_bytes(g->size_bytes)});
         items.push_back({"Spielzeit", ps5cc::format_playtime(g->played_s)});
@@ -1757,6 +1776,8 @@ class Ps5cc final : public app::Concept
         items.push_back({"Plattform", g->platform});
         items.push_back({"Version", g->version});
         items.push_back({"Format", format_label(g->format)});
+        if (!g->packing.empty())
+            items.push_back({"Gepackt", packing_label(g->packing)});
         add_fw_rows(items, *g);
         items.push_back({"Größe", ps5cc::format_bytes(g->size_bytes)});
         items.push_back({"Spielzeit", ps5cc::format_playtime(g->played_s)});

@@ -5401,6 +5401,9 @@
        Ordner unter /mnt/shadowmnt, in den ShadowMountPlus es einhängt. */
     if (x.format || gmFormatLabel(x) === "FPKGMount") rows.push(["Format", x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : gmFormatLabel(x) === "FPKGMount" ? "FPKGMount: ein Debug-Paket (.pkg), das Kraken Mount einhängt, nicht installiert" : x.format === "pkg" && x.platform
       ? `${x.platform} PKG (installiert)` : (GM_FORMATS[x.format] || x.format)]);
+    /* AMPR-Packs, egal in welchem Format das Spiel liegt (17.11.2026): bei Abbildern liest die App sie mit dem Abbild */
+    if (m && (m.zstd || m.lz4))
+      rows.push(["Gepackt", m.zstd ? "zstd (AMPR EMU NG) · ampr_zstd.index" : "LZ4 (APR-EMU) · ampr_assets.index"]);
     if (x.path) {
       const drive = gmDrive(x.path);
       rows.push(["Speicherort", gmDir(x.path), "mono"]);

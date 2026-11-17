@@ -19,6 +19,8 @@ struct ListItem
     std::string subtitle;                      // second line; empty for a one-line row
     std::string value;                         // right-aligned text
     std::string badge;                         // a small pill before the value ("NEW", "3")
+    std::string chip;                          // a second pill, tinted, left of the badge ("zstd")
+    gfx::Color chip_color{0.0f, 0.0f, 0.0f, 0.0f}; // its colour; alpha 0: the theme's accent
     gfx::Color swatch{0.0f, 0.0f, 0.0f, 0.0f}; // a leading dot, when alpha > 0
     bool chevron = false;                      // "this opens something"
     bool disabled = false;                     // focusable, but refuses confirm
