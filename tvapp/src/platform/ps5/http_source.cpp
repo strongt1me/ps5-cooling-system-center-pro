@@ -2651,6 +2651,7 @@ void HttpSource::poll_config()
     c.fan_cap_pct = static_cast<int>(num(root, "fan_cap_pct", 100));
     c.warning_countdown_s = static_cast<int>(num(root, "warning_countdown_s", 120));
     c.lightbar_enabled = num(root, "lightbar_enabled", 0) != 0.0;
+    c.bg_pause = num(root, "bg_pause", 1) != 0.0;
     c.lightbar_warn_c = static_cast<int>(num(root, "lightbar_warn_c", 70));
     c.lightbar_hot_c = static_cast<int>(num(root, "lightbar_hot_c", 80));
     c.tv_language = str(root, "tv_language");
@@ -4518,6 +4519,7 @@ void HttpSource::poll_kraken()
     k.loaded = true;
     k.running = flag(root, "running");
     k.starting = flag(root, "starting");
+    k.stopping = flag(root, "stopping");
     k.fetching = flag(root, "fetching");
     k.restart_needed = flag(root, "restart_needed");
     k.embedded_version = str(root, "embedded_version");

@@ -2132,6 +2132,7 @@
     $("#auto-mode").checked = c.mode === "automatic";
     /* Fehlt das Feld (ältere App), gilt die Vorgabe „an". */
     if ($("#mic-button-status")) $("#mic-button-status").checked = c.ps_button_status !== 0;
+    if ($("#bg-pause")) $("#bg-pause").checked = c.bg_pause !== 0;
     if ($("#s-smp-version")) { $("#s-smp-version").value = c.smp_version || "auto"; loadSmpNote(); }
     /* Fehlt ein Feld (ältere App): keine Grenze, die Warnschwelle folgt dem Ziel. */
     if ($("#fan-cap-range")) {
@@ -7870,11 +7871,11 @@
     const games = k && k.games ? k.games : [];
     const running = new Set(k && k.running ? k.running : []);
     const drive = (m) => { const x = ((k && k.drives) || []).find((v) => v.mount === m); return x ? x.label : m; };
-    txt("#fp-sub", k ? (k.waiting === "shadowmount" ? "wartet auf ShadowMountPlus" : k.waiting === "kstuff" ? "wartet auf kstuff" : k.busy ? "arbeitet gerade (sucht oder baut auf) …" : `läuft · Version ${k.version} · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken`)
+    txt("#fp-sub", k ? (d.stopping ? "wird beendet …" : k.waiting === "shadowmount" ? "wartet auf ShadowMountPlus" : k.waiting === "kstuff" ? "wartet auf kstuff" : k.busy ? "arbeitet gerade (sucht oder baut auf) …" : `läuft · Version ${k.version} · ${games.length} Spiel${games.length === 1 ? "" : "e"} auf den Laufwerken`)
       : d.starting ? "startet gleich …" : "ausgeschaltet");
-    $("#fp-on").checked = !!k || !!d.starting;
-    $("#fp-scan").disabled = !k;
-    $("#fp-rebuild-all").disabled = !k;
+    $("#fp-on").checked = (!!k || !!d.starting) && !d.stopping;   /* it answers for a few seconds after "quit": the switch stays off (17.11.2026) */
+    $("#fp-scan").disabled = !k || !!d.stopping;
+    $("#fp-rebuild-all").disabled = !k || !!d.stopping;
     $("#fp-fetch").disabled = !!d.fetching;
     const prog = [`In der App: Kraken Mount ${d.embedded_version}`];
     if (d.fetched_version) prog.push(`geladen: ${d.fetched_version} (wird beim Start genommen)`);
@@ -12445,6 +12446,15 @@
     saveConfig({ ps_button_status: e.target.checked ? 1 : 0 },
                e.target.checked ? "Anzeige per Mikrofon-Taste eingeschaltet."
                                 : "Anzeige per Mikrofon-Taste ausgeschaltet.")
+      .catch((err) => toast(err.message, "error"));
+  });
+
+  /* 17.11.2026 (bgpause.c): the game that waits in the background is paused when the home screen is in front, so that a tap on a tile of the
+     app starts it without the failed first start and the console's error message. */
+  if ($("#bg-pause")) $("#bg-pause").addEventListener("change", (e) => {
+    saveConfig({ bg_pause: e.target.checked ? 1 : 0 },
+               e.target.checked ? "Spiel im Hintergrund pausieren eingeschaltet."
+                                : "Spiel im Hintergrund pausieren ausgeschaltet.")
       .catch((err) => toast(err.message, "error"));
   });
 

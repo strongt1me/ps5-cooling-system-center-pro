@@ -1808,6 +1808,22 @@ stattdessen die Zeile, mit der das System den neuen Stummschalt-Zustand meldet
 anderem Grund ändert (Headset, Party), dann kann selten eine Meldung ohne
 Tastendruck kommen. Bis 1.45.x lag diese Anzeige auf der PS-Taste.
 
+**Spiel im Hintergrund pausieren (seit 1.86.5).** Geht ein Spiel in den Hintergrund und ist der Startbildschirm vorn,
+pausiert die App das Spiel selbst (Schalter unter *Kühlung → Spiel im Hintergrund pausieren*, ab Werk an; in der
+Vollbild-App unter *Einstellungen → Spiel im Hintergrund*). Das schützt vor der Fehlermeldung der Konsole („Device
+busy“), die beim Antippen einer Kachel der App erscheinen konnte: Die Konsole pausiert ein laufendes Spiel im Augenblick
+des Antippens ohnehin, scheitert dabei aber einmal (`launchApp` meldet `checkExistingApp 0x80940011`, weil das Spiel noch
+läuft), und ShadowMountPlus gibt in dieser Zeit die Einhängung der Kachel frei, sodass der zweite Versuch der Konsole mit
+`status=16` abgelehnt wird. Ist das Spiel schon pausiert, entfällt der erste Fehlstart. Die App ruft die Konsole in einem
+eigenen kleinen Hilfsprogramm auf (`src/helper/bgpause_helper.c`: `sceLncUtilSuspendApp` für genau die Anwendungs-ID des
+Spiels, nur wenn der Dienst sie als die laufende große Anwendung meldet), nur für ein echtes Spiel (PPSA/CUSA, nie eine
+Kachel der App), nur wenn der Startbildschirm selbst vorn ist (die letzte Szenenänderung der Konsole ging zu
+`Render.NPXS40002`, kein Overlay), nur einmal je Aufenthalt im Hintergrund und nur, solange ShadowMountPlus antwortet.
+Solange ein Spiel läuft, liest die App seinen Zustand zweimal pro Sekunde statt alle 4 Sekunden. Fortsetzen geht wie
+sonst. Gesehen am 17.11.2026: PS4-Spiel aus PS4Mount auf der .94 und FPKG-Spiel aus Kraken Mount auf der .52, jeweils
+Pause etwa 1 Sekunde nach der PS-Taste, Kachelstart ohne Fehlstart und ohne Meldung. Protokoll: `bg_pause` (pausiert),
+`bg_pause_skip` (war schon pausiert), `bg_pause_failed` (Grund in der Zeile).
+
 Ein **dauerhaft eingeblendetes Overlay** wie bei etaHEN ist damit nicht
 gemeint und von außen auch nicht möglich: dafür müsste sich die App in den
 Prozess des laufenden Spiels einklinken und dessen Renderer hooken. Die

@@ -194,6 +194,7 @@ struct Config
     int fan_cap_pct = 100;         // 30..100: the fan's ceiling in normal operation, 100 = none
     int warning_countdown_s = 120; // 30..900
     bool lightbar_enabled = false;
+    bool bg_pause = true; // a game waiting in the background is paused at the home screen (bgpause.c)
     int lightbar_warn_c = 70; // 55..90: yellow from here
     int lightbar_hot_c = 80;  // 56..95: red from here, always above yellow
     // The fullscreen app's language: "" follows the console, else de, en, es, fr, it, ru.
@@ -827,6 +828,7 @@ struct KrakenState
     bool loaded = false;
     bool running = false;  // it answers on its port
     bool starting = false; // sent to the loader a moment ago
+    bool stopping = false; // told to quit and still answering for a few seconds
     bool fetching = false; // a newer release is being downloaded
     bool busy = false;     // it scans or builds
     bool paused = false;   // a game runs: it waits

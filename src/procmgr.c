@@ -238,7 +238,8 @@ is_game_title_id(const char *s) {
  * `want_app_id` picks the process carrying that application id; zero takes
  * the first process with a plausible game title. Returns 0 on success. */
 int
-ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_len) {
+ps5tm_procmgr_game_info(uint32_t want_app_id, char *out, size_t out_len, uint32_t *app_id_out) {
+  if(app_id_out) *app_id_out = 0;
   if(!out || out_len == 0) return -1;
   out[0] = '\0';
 
@@ -284,6 +285,7 @@ ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_len) {
       }
 
       snprintf(out, out_len, "%s", t);
+      if(app_id_out) *app_id_out = info.app_id;
       rc = 0;
       break;
     }
@@ -292,6 +294,11 @@ ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_len) {
   free(buf);
   return rc;
 #endif
+}
+
+int
+ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_len) {
+  return ps5tm_procmgr_game_info(want_app_id, out, out_len, NULL);
 }
 
 

@@ -128,17 +128,27 @@ static char g_start_id[16];
 static int t_start(const char *id) { g_start_calls++; snprintf(g_start_id, sizeof(g_start_id), "%s", id); return g_start_rc; }
 static int g_home_calls;
 static void t_home(void) { g_home_calls++; }
+static int g_bg;                        /* a game is in the background */
+static int t_game_bg(void) { return g_bg; }
+static int g_tile_notices;              /* "Bitte einen Moment Geduld ..." */
+static void t_tile_notice(void) { g_tile_notices++; }
+static char g_up_tile[16];              /* the tile that is up by the other way (the console's browser with its page); "" none */
+static int t_tile_up(const char *id) { return g_up_tile[0] && !strcmp(g_up_tile, id); }
 int ps5tm_library_start(const char *id) { (void)id; return -1; }
 int ps5tm_library_close_browser(void) { return -1; }
 int ps5tm_procmgr_title_running(const char *id) { (void)id; return 0; }
+int ps5tm_procmgr_pid_by_name(const char *name) { (void)name; return -1; }
 cJSON *ps5tm_smp_call(const char *route, const cJSON *body, int timeout_ms, char *err, size_t err_len) { (void)route; (void)body; (void)timeout_ms; (void)err; (void)err_len; return NULL; }
 void ps5tm_config_smp_version(char *out, size_t n) { snprintf(out, n, "v2"); }
 static uint64_t t_boot(void) { return g_boot; }
 
 static void
 world(void) {
-  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot, t_start, NULL, t_home };
+  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot, t_start, NULL, t_home, t_tile_up, t_game_bg, t_tile_notice };
   ps5tm_smphold_test_env(&e);
+  g_up_tile[0] = 0;
+  g_bg = 0;
+  g_tile_notices = 0;
   ps5tm_smphold_test_reset();
   ps5tm_smphold_tile_test_reset();
   g_start_calls = 0; g_start_rc = 0; g_start_id[0] = 0; g_home_calls = 0;
@@ -568,8 +578,9 @@ main(void) {
   CHECK(g_start_calls == 0);
   g_now += 1000; ps5tm_smphold_tile_tick();
   CHECK(g_start_calls == 0);
-  g_now += 1100; ps5tm_smphold_tile_tick();                           /* after two seconds */
+  g_now += 1100; ps5tm_smphold_tile_tick();                           /* after the delay */
   CHECK(g_start_calls == 1 && !strcmp(g_start_id, "FAKE86922"));
+  CHECK(g_tile_notices == 1);                                         /* the person was told when the refusal was read, once */
   CHECK(g_home_calls == 1);                                           /* the home screen first, so that no dialog has to be confirmed */
   g_now += 5000; ps5tm_smphold_tile_tick();                           /* accepted: not again */
   CHECK(g_start_calls == 1 && g_home_calls == 1);
@@ -615,6 +626,105 @@ main(void) {
     g_now += 1000;
   }
   CHECK(g_start_calls == 3);
+
+  /* 17.11.2026: the tile the app started came up (behind the dialog), and the console writes a second refusal of it when the dialog is closed: no third start */
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 1);
+  snprintf(g_run_title, sizeof(g_run_title), "FAKE86922");            /* it comes up (the person closed the dialog) */
+  g_now += 1000; ps5tm_smphold_tile_tick();
+  g_run_title[0] = 0;                                                 /* and the person closes it again with the circle button */
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");        /* the console's second refusal */
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  g_now += 6000; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 1);                                          /* it does not open again */
+  CHECK(g_tile_notices == 1);                                         /* and the echo says nothing */
+
+  /* the same with the tile that opens the web page: the console's browser counts as up */
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  snprintf(g_up_tile, sizeof(g_up_tile), "FAKE86922");
+  g_now += 1000; ps5tm_smphold_tile_tick();
+  g_up_tile[0] = 0;
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  g_now += 6000; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 1);
+
+  /* never seen up: the second refusal is a start that failed, and it is repeated, but not before five seconds have passed (the tile may just be coming up) */
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 1);
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();                           /* read: refused again */
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 1);                                          /* still waiting (4.2 s) */
+  g_now += 3100; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 2);
+
+  /* it comes up while that waits: no second start */
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();                           /* read: refused again */
+  snprintf(g_run_title, sizeof(g_run_title), "FAKE86922");
+  g_now += 1000; ps5tm_smphold_tile_tick();
+  g_run_title[0] = 0;                                                 /* gone again before the wait is over */
+  g_now += 6000; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 1);
+
+  /* a minute later a new refusal of the tile is a new one */
+  world(); g_game = 1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  snprintf(g_run_title, sizeof(g_run_title), "FAKE86922");
+  g_now += 1000; ps5tm_smphold_tile_tick();
+  g_run_title[0] = 0;
+  g_now += 61000; ps5tm_smphold_tile_tick();                          /* the watch is over */
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  g_now += 2100; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 2);
+
+  /* 17.11.2026: in the first minute after a game went to the background the log is read twice a second, and the person is told at once */
+  world(); g_game = 1; g_bg = 1;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 600; ps5tm_smphold_tile_tick();                            /* read after 0.6 s, not after 2 s */
+  CHECK(g_tile_notices == 1 && g_start_calls == 0);
+  g_now += 1600; ps5tm_smphold_tile_tick();
+  CHECK(g_start_calls == 1);                                          /* started 1.6 s after, about 2.2 s after the refusal's time */
+
+  /* a game that has been in the background for a long time: no quick look, no change from before */
+  world(); g_game = 1; g_bg = 0;
+  ps5tm_smphold_tile_tick();
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 600; ps5tm_smphold_tile_tick();
+  CHECK(g_tile_notices == 0);
+  g_now += 1600; ps5tm_smphold_tile_tick();                           /* 2.2 s: now it is read */
+  CHECK(g_tile_notices == 1 && g_start_calls == 0);
+
+  /* the quick look ends after a minute */
+  world(); g_game = 1; g_bg = 1;
+  ps5tm_smphold_tile_tick();
+  g_now += 61000; ps5tm_smphold_tile_tick();                          /* the window is over (this tick reads, nothing is there) */
+  snprintf(g_failed_next, sizeof(g_failed_next), "FAKE86922");
+  g_now += 600; ps5tm_smphold_tile_tick();
+  CHECK(g_tile_notices == 0);                                         /* back to every two seconds */
 
   /* with games held, the one reader of the log is the check for held games: it hands the refusal on */
   world(); g_game = 1;

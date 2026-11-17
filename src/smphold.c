@@ -148,6 +148,8 @@ env_notice(const char *held, const char *other) {
    number of the last line looked at; only the watcher thread comes here, so the buffer is not guarded. */
 static uint64_t g_klog_after;
 static ps5tm_klog_line_t g_klog_lines[32];
+/* The last refusal line of the shell that was read: it goes into the app's log with the refusal, so that what the console said is known (17.11.2026). */
+static char g_last_refusal[160];
 
 /* Nine capitals and digits: a title id, the app's own tiles included (a refused start of a tile is just what happened on 14.11.). */
 static int
@@ -182,6 +184,7 @@ env_launch_failed(int reset, char *id, size_t n) {
       if(strlen(p) >= 9) { memcpy(t, p, 9); t[9] = 0; }
       if(tid9_ok(t) && n > 9) {
         memcpy(id, t, 10);
+        snprintf(g_last_refusal, sizeof(g_last_refusal), "%s", g_klog_lines[i].text);
         return 1;
       }
     }
@@ -203,6 +206,34 @@ env_go_home(void) {
 #ifndef PS5TM_HOST_TEST
   if(ps5tm_library_close_browser() == 0) usleep(1200 * 1000);
 #endif
+}
+
+/* Is the tile up that the app started again? Its process (eboot.bin of the title) runs; for the tile that opens the web page also the console's browser:
+   the app took the browser down just before that start (env_go_home waits for it), so one that is open afterwards is the tile's page (17.11.2026). */
+static int
+env_tile_up(const char *id) {
+#ifdef PS5TM_HOST_TEST
+  (void)id;
+  return 0;
+#else
+  if(ps5tm_procmgr_title_running(id) == 1) return 1;
+  return !strcmp(id, PS5TM_BROWSER_TITLE_ID) && ps5tm_procmgr_pid_by_name("SceNKWebProcess") != -1;
+#endif
+}
+
+/* A game in the background: running, not in front, not an own tile, from a fresh reading. */
+static int
+env_game_background(void) {
+  if(!ps5tm_gamestate_measured() || ps5tm_gamestate_age_ms() > HOLD_STATE_AGE_MS) return 0;
+  ps5tm_gamestate_t gs;
+  ps5tm_gamestate_get(&gs);
+  return gs.title_id[0] && !gs.foreground && !ps5tm_is_own_tile(gs.title_id);
+}
+
+/* One line (a longer text with a line break would sound the notification tone, notify.c). */
+static void
+env_tile_notice(void) {
+  ps5tm_notify_plain("Bitte einen Moment Geduld: Die App wird gleich gestartet.");
 }
 
 /* The lines of ShadowMountPlus's log (POST /api/v1/debug-log, read only) that speak of a start that was refused: "launch mount unavailable",
@@ -268,6 +299,9 @@ env_default(void) {
   g_env.smp_excerpt = env_smp_excerpt;
   g_env.title_running = env_title_running;
   g_env.boot_id = env_boot_id;
+  g_env.tile_up = env_tile_up;
+  g_env.game_background = env_game_background;
+  g_env.tile_notice = env_tile_notice;
 }
 
 /* An id as ShadowMountPlus manages them: PPSA, CUSA, or a homebrew's FAKE and the like (nine letters and digits). */
@@ -638,12 +672,19 @@ ps5tm_smphold_test_load(void) {
  * second start works because the refusal has let go of the place. So the app does that second start itself: two seconds after the
  * refusal, at most three tries four seconds apart, at most three starts a minute for the same tile (a console that refuses for good is not
  * pestered). Only the app's own tiles, and only while a game is there, so the kernel log is read only then. */
-#define TR_FIRST_DELAY_MS   2000u
+#define TR_FIRST_DELAY_MS   1500u                /* was 2000: with the quick look below the start comes about two seconds after the tap instead of seven (17.11.2026) */
 #define TR_GAP_MS           4000u
 #define TR_TRIES            3
 #define TR_WINDOW_MS        60000u
 #define TR_WINDOW_STARTS    3
 #define TR_READ_GAP_MS      2000u                /* the kernel log is looked at every two seconds, not every one (audit 16.11.2026) */
+/* The tap that is refused comes shortly after the PS button, when the game has only just gone to the background (SMP log of the Pro, 17.11.2026: a game that
+ * had been paused for hours let the tile start at once). For the first minute after that the log is looked at twice a second (klog.c reads the kernel's
+ * buffer at most every 500 ms anyway), the person is told at once, and the tile is started after TR_FIRST_DELAY_MS. Before this the app noticed the refusal
+ * after two to four seconds and started the tile about seven seconds after the tap. */
+#define TR_READ_GAP_FAST_MS 500u
+#define TR_FAST_WINDOW_MS   60000u
+#define TR_FAST_STEP_US     250000u
 
 static struct {
   char     id[12];
@@ -656,14 +697,53 @@ static uint64_t g_tr_read_ms;
 static uint64_t g_tr_window_ms;
 static int      g_tr_window_starts;
 
+/* The app's own start of a tile and what followed (17.11.2026, test on the Pro .94 with a PS4 game from PS4 PKG von USB running): the error dialog stood until the
+ * person closed it, the tile the app had started came up then, and when the person closed the tile with the circle button it opened AGAIN: the console
+ * had written a second refusal of the tile (log 11:21:28 and 11:21:37 on the .94, the same pair on the .52 on 16.11. at 18:14), and the app took it for a new one.
+ * The app now watches the tile it started for a minute. Once it was seen up (its process, or the browser with its page), a further refusal of the same tile is
+ * the echo of the first (the dialog being closed) and starts nothing. A refusal while it was NOT seen up is a start that failed: it is repeated, but not before
+ * the tile had a few seconds to come up after the dialog. */
+#define TR_WATCH_MS         60000u
+#define TR_ECHO_DELAY_MS    5000u
+static char     g_tw_id[12];                     /* the tile the app started (watcher thread and the check for held games: both the watcher thread) */
+static uint64_t g_tw_until;
+static int      g_tw_up;                         /* seen up since the start */
+static int      g_tw_echo_said;
+static int      g_bg_on;                         /* a game was seen in the background ... */
+static uint64_t g_bg_since;                      /* ... since this time (g_env.now_ms) */
+
+/* 1 for the first minute after a game went to the background (the time of a tap that the console refuses). */
+static int
+tile_fast_window(void) {
+  if(!g_env.now_ms) env_default();
+  if(!g_env.game_background) return 0;
+  if(!g_env.game_background()) { g_bg_on = 0; return 0; }
+  const uint64_t now = g_env.now_ms();
+  if(!g_bg_on) { g_bg_on = 1; g_bg_since = now; }
+  return now - g_bg_since < TR_FAST_WINDOW_MS;
+}
+
 /* A refusal was read from the kernel log (here or by the check for held games): an own tile is started again soon. */
 static void
 tile_refused(const char *id) {
   if(!id || !ps5tm_is_own_tile(id) || !strcmp(g_tr.id, id)) return;
+  const uint64_t now = g_env.now_ms ? g_env.now_ms() : 0;
+  uint64_t delay = TR_FIRST_DELAY_MS;
+  if(g_tw_id[0] && !strcmp(g_tw_id, id) && now < g_tw_until) {
+    if(g_tw_up) {                                 /* it came up after the app's start: this is the echo of the first refusal */
+      if(!g_tw_echo_said) {
+        g_tw_echo_said = 1;
+        PS5TM_INFO("tile_refused_echo", "Die Kachel %s lief schon, als die Konsole den Start noch einmal als abgelehnt meldete (das Schließen der Fehlermeldung); die App startet sie nicht ein zweites Mal. Die Konsole schrieb: %s", id, g_last_refusal);
+      }
+      return;
+    }
+    delay = TR_ECHO_DELAY_MS;                     /* not up (yet): it may just be coming up after the dialog */
+  }
   snprintf(g_tr.id, sizeof(g_tr.id), "%s", id);
   g_tr.tries = 0;
   g_tr.fresh = 1;
-  g_tr.at = (g_env.now_ms ? g_env.now_ms() : 0) + TR_FIRST_DELAY_MS;
+  g_tr.at = now + delay;
+  if(g_env.tile_notice) g_env.tile_notice();     /* "Bitte einen Moment Geduld ...": the person is told at once, the start follows */
 }
 
 /* read_log: look at the kernel log for a refusal (not while held games exist: their check reads the log and hands the refusal on). */
@@ -674,11 +754,16 @@ tile_step(int read_log) {
   const int game = g_env.game_running();
   if(!game && !g_tr.id[0]) { g_tr_watching = 0; return; }     /* no game, nothing waiting: the log is not read */
   const uint64_t now = g_env.now_ms();
+  const int fast = tile_fast_window();                           /* every step keeps track of when the game went to the background */
+  if(g_tw_id[0]) {                                              /* the tile that was started again: has it come up? (before the log is read) */
+    if(now >= g_tw_until) g_tw_id[0] = 0;
+    else if(!g_tw_up && ((g_env.title_running && g_env.title_running(g_tw_id)) || (g_env.tile_up && g_env.tile_up(g_tw_id)))) g_tw_up = 1;
+  }
   if(read_log) {
     if(!g_tr_watching) { g_env.launch_failed(1, NULL, 0); g_tr_watching = 1; g_tr_read_ms = now; }   /* refusals from before do not count */
     /* Not every second: the log is a copy of the kernel's buffer, and a game can run for hours. The refusal stays in the log, so a read two seconds
        later finds it as well. (No question to ShadowMountPlus here: smp_up would send it two requests every ten seconds for as long as a game runs.) */
-    else if(now - g_tr_read_ms >= TR_READ_GAP_MS) {
+    else if(now - g_tr_read_ms >= (fast ? TR_READ_GAP_FAST_MS : TR_READ_GAP_MS)) {
       g_tr_read_ms = now;
       char id[16] = "";
       if(g_env.launch_failed(0, id, sizeof(id))) tile_refused(id);
@@ -687,6 +772,7 @@ tile_step(int read_log) {
   if(!g_tr.id[0] || now < g_tr.at) return;
 
   if(g_env.title_running && g_env.title_running(g_tr.id)) { g_tr.id[0] = 0; return; }   /* it is up already */
+  if(g_tw_id[0] && g_tw_up && !strcmp(g_tw_id, g_tr.id)) { g_tr.id[0] = 0; return; }    /* it came up while this waited, and was seen */
   if(now - g_tr_window_ms >= TR_WINDOW_MS) { g_tr_window_ms = now; g_tr_window_starts = 0; }
   if(g_tr_window_starts >= TR_WINDOW_STARTS) {                  /* it keeps being refused: left to the person */
     PS5TM_WARN("tile_retry_giveup", "Der Start der Kachel %s wurde mehrfach abgelehnt; die App versucht es nicht weiter.", g_tr.id);
@@ -714,9 +800,14 @@ tile_step(int read_log) {
     ps5tm_config_smp_version(ver, sizeof(ver));
     if(!strcmp(ver, "old"))
       PS5TM_WARN("tile_refused_old_smp", "ShadowMountPlus ist älter als 1.7beta12: Dieser Fehler („Device busy“ nach einem Spielwechsel) ist dort bekannt und ab 1.7beta12 behoben.");
+    if(g_last_refusal[0]) PS5TM_INFO("tile_refused_klog", "Die Konsole schrieb: %s", g_last_refusal);
   }
   if(rc >= 0) {
     PS5TM_INFO("tile_retry_started", "Die Kachel %s wurde abgelehnt (ein Spiel wartet im Hintergrund) und von der App noch einmal gestartet (Versuch %d).", g_tr.id, g_tr.tries);
+    snprintf(g_tw_id, sizeof(g_tw_id), "%s", g_tr.id);          /* watched for a minute: one more refusal of it, after it was up, is the echo */
+    g_tw_until = (g_env.now_ms ? g_env.now_ms() : now) + TR_WATCH_MS;
+    g_tw_up = 0;
+    g_tw_echo_said = 0;
     g_tr.id[0] = 0;
   } else if(g_tr.tries >= TR_TRIES) {
     PS5TM_WARN("tile_retry_failed", "Die Kachel %s ließ sich auch nach %d Versuchen nicht starten (0x%08X).", g_tr.id, g_tr.tries, (unsigned)rc);
@@ -734,6 +825,12 @@ ps5tm_smphold_tile_tick(void) {
 void
 ps5tm_smphold_tile_test_reset(void) {
   memset(&g_tr, 0, sizeof(g_tr));
+  g_tw_id[0] = 0;
+  g_tw_until = 0;
+  g_tw_up = 0;
+  g_tw_echo_said = 0;
+  g_bg_on = 0;
+  g_bg_since = 0;
   g_tr_watching = 0;
   g_tr_read_ms = 0;
   g_tr_window_ms = 0;
@@ -744,9 +841,12 @@ static void *
 hold_thread(void *arg) {
   (void)arg;
   int was = 0;
-  unsigned tick = 0;
+  unsigned tick = 0, quarter = 0;
   for(;;) {
-    sleep(1);
+    usleep(TR_FAST_STEP_US);
+    const int second = (++quarter >= 4);
+    if(second) quarter = 0;
+    if(!second && !tile_fast_window()) continue;     /* quarter seconds only while a tap on a tile may be refused (a game just went to the background) */
     if(ps5tm_smphold_count() == 0) { was = 0; tile_step(1); continue; }   /* nothing held: nothing is read for games, nothing asked */
     if(!was) {
       ps5tm_smphold_mark();
@@ -755,7 +855,7 @@ hold_thread(void *arg) {
     }
     ps5tm_smphold_check_launch();
     tile_step(0);
-    if(++tick % 3 == 0) ps5tm_smphold_step();
+    if(second && ++tick % 3 == 0) ps5tm_smphold_step();
   }
   return NULL;
 }

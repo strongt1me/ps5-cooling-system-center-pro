@@ -53,6 +53,8 @@ static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static int             g_busy;                        /* a download runs */
 static uint64_t        g_started_ms;                  /* the last start: a second one within 15 s is not sent */
 static int             g_boot_pending;                /* the app has not yet had its first look at Kraken Mount (the start with the app): the page says "starts" */
+static uint64_t        g_quit_ms;                     /* the last "quit" it accepted: it answers for a few more seconds, the page says "stopping" (17.11.2026) */
+#define KR_QUIT_WINDOW_MS    20000u                   /* so long after the quit an answer still counts as "on the way out" */
 
 /* ------------------------------------------------------------------ loopback client */
 
@@ -225,6 +227,11 @@ ps5tm_kraken_state(void) {
     cJSON_AddBoolToObject(o, "running", 1);
     /* a Kraken Mount that runs on from before an update is the old version until it is switched off and on again (the app never stops it by itself: a game may
        run from it): the page says so */
+    /* It was told to quit and still answers: it is on its way out (the page used to show the switch "on" again for those seconds, 17.11.2026) */
+    pthread_mutex_lock(&g_lock);
+    const int stopping = g_quit_ms && ps5tm_mono_ms() - g_quit_ms < KR_QUIT_WINDOW_MS;
+    pthread_mutex_unlock(&g_lock);
+    cJSON_AddBoolToObject(o, "stopping", stopping);
     const cJSON *kv = cJSON_GetObjectItem(k, "version");
     cJSON_AddBoolToObject(o, "restart_needed", cJSON_IsString(kv) && ps5tm_krakenboot_restart_needed(kv->valuestring, fv[0] ? fv : KR_EMBEDDED_VERSION));
     cJSON_AddItemToObject(o, "kraken", k);
@@ -239,7 +246,9 @@ ps5tm_kraken_state(void) {
   } else {
     cJSON_Delete(k);
     cJSON_AddBoolToObject(o, "running", 0);
+    cJSON_AddBoolToObject(o, "stopping", 0);
     pthread_mutex_lock(&g_lock);
+    g_quit_ms = 0;                                         /* gone: nothing to wait for any more */
     /* "starting" also while the app waits to start it itself (the first seconds after the app's start): the page used to say "off" with a button to start it
        until Kraken Mount was sent, which looked as if it were not on by default (17.11.2026) */
     int starting = (g_started_ms && ps5tm_mono_ms() - g_started_ms < 20000) || g_boot_pending;
@@ -417,13 +426,20 @@ static int
 start_kraken(char *msg, size_t n) {
   kr_set_off(0);                                           /* wanted on: the next start of the app starts it, too */
   int alive = kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL);
-  if(alive == 200) { snprintf(msg, n, "Kraken Mount läuft schon."); return 409; }
+  if(alive == 200) {
+    pthread_mutex_lock(&g_lock);
+    const int stopping = g_quit_ms && ps5tm_mono_ms() - g_quit_ms < KR_QUIT_WINDOW_MS;
+    pthread_mutex_unlock(&g_lock);
+    if(stopping) { snprintf(msg, n, "Kraken Mount wird gerade beendet. Bitte in einigen Sekunden wieder einschalten."); return 409; }
+    snprintf(msg, n, "Kraken Mount läuft schon.");
+    return 409;
+  }
   /* It listens but does not answer: it is busy (a scan, a drive that hangs), not gone. A second copy would only send the first one away. */
   if(alive == LHTTP_NO_ANSWER) { snprintf(msg, n, "Kraken Mount antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); return 409; }
   pthread_mutex_lock(&g_lock);
   uint64_t now = ps5tm_mono_ms();
   int again = g_started_ms && now - g_started_ms < 15000;
-  if(!again) g_started_ms = now;
+  if(!again) { g_started_ms = now; g_quit_ms = 0; }
   pthread_mutex_unlock(&g_lock);
   if(again) { snprintf(msg, n, "Kraken Mount wird gerade gestartet. Das dauert einige Sekunden."); return 409; }
   keep_tile_away();
@@ -471,6 +487,9 @@ stop_kraken(char *msg, size_t n) {
   int st = kr_http("POST", "/api/quit", "shutdown", 8, 5000, NULL, NULL);
   if(st == 204 || st == 200) {
     kr_set_off(1);                                         /* switched off in the page: the app does not start it again with itself */
+    pthread_mutex_lock(&g_lock);
+    g_quit_ms = ps5tm_mono_ms();
+    pthread_mutex_unlock(&g_lock);
     snprintf(msg, n, "Kraken Mount wird beendet.");
     PS5TM_INFO("kraken_stop", "Kraken Mount beendet (Seite FPKGMount).");
     return 200;

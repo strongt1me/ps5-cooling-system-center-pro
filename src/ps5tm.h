@@ -322,6 +322,11 @@ typedef struct {
      compatible, and an "off" saved then stays off. */
   unsigned        ps_button_status;
 
+  /* A game that waits in the background is paused through the console's own service as soon as the home screen is in front
+     (bgpause.c, 17.11.2026): a tap on a tile of the app then starts it at once, without the failed first start and the
+     error message that ShadowMountPlus's clean-up in between used to cause. 1 = on (default). */
+  unsigned        bg_pause;
+
   /* "Covers & Metadaten speichern" on the games page: the list keeps covers and the
      results of its slow checks in /data/PS5-Cooling-Center/covers_and_more and uses
      them at the next scan — see libcache.c. Off until someone switches it on. */
@@ -658,11 +663,13 @@ typedef struct {
   char        title_name[128]; /* display name, falls back to the id        */
   char        title_version[16];/* from the title's own metadata, may be "" */
   unsigned    app_id;
+  unsigned    game_app_id;     /* the application id the kernel names for the game's process (0 when not asked or not found) */
   unsigned    focus_id;
   int         focus_remembered;/* focus_id is from an earlier pass: its line
                                   has scrolled out of the kernel buffer      */
   int         foreground;      /* the game currently owns the controller    */
   int         suspended;       /* paused in the background                  */
+  int         home_scene;      /* the shell's last scene change went to the home screen (not an overlay, not an app) */
   const char *state;           /* short label for the dashboard             */
   /* Which route produced this reading, so a wrong answer can be traced to
      its source instead of guessed at: "bigapp", "msgbuf" or "none". */
@@ -1366,6 +1373,8 @@ void     ps5tm_procmgr_log_identity(void);
    `want_app_id` selects a specific application; 0 takes the first game found.
    Returns 0 on success. */
 int      ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_len);
+/* The same, and the application id the kernel names for that game's process in *app_id_out (the id the service calls use; 0 when none). */
+int      ps5tm_procmgr_game_info(uint32_t want_app_id, char *out, size_t out_len, uint32_t *app_id_out);
 /* SIGKILLs the eboot.bin of that game title until it is gone (procmgr.c).
    0 closed, 1 was not running, -1 still running after timeout_ms or unknown. */
 int      ps5tm_procmgr_close_game(const char *title_id, unsigned timeout_ms);
@@ -1777,6 +1786,14 @@ int  ps5tm_pkginst_uninstall(const char *title_id, int *res_pat, int *res_addcon
    microphone button, processor temperature and fan speed as a system
    notification. See micbutton.c. */
 void ps5tm_micbutton_poll(void);
+
+/* ----------------------------------------------------- pausing a background game */
+
+/* 1 when a game is resident and the setting is on: the probe thread then looks at the game twice a second instead of every four. */
+int  ps5tm_bgpause_wants_fast(void);
+/* One look (the probe thread, after a fresh reading of the game state): when the game waits in the background and the home screen
+   is in front, the console's service is asked - in a helper process of its own - to pause it. See bgpause.c. */
+void ps5tm_bgpause_tick(void);
 
 /* Clock rates from SceSystemStateMgr's power-state table — see clocks.c.
    Includes the per-core CPU clocks and the graphics clock, neither of which

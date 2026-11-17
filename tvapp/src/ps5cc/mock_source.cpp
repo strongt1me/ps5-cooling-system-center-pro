@@ -244,6 +244,7 @@ class MockSource final : public Source
         data_.config.fan_cap_pct = 100;
         data_.config.warning_countdown_s = 120;
         data_.config.lightbar_enabled = true;
+        data_.config.bg_pause = true;
         data_.config.lightbar_warn_c = 70;
         data_.config.lightbar_hot_c = 80;
         data_.game_rules = {{"PPSA01284", "ASTRO BOT", 72, "balanced"},

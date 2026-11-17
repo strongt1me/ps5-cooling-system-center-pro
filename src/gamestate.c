@@ -392,6 +392,7 @@ refresh(ps5tm_gamestate_t *st) {
   unsigned app_id = 0, focus_id = 0;
   int      have_focus = 0;
   char     title[16] = {0};
+  int      have_scene = 0, scene_home = 0;     /* the last scene change of the shell: did it go to the home screen? */
 
   /* Switch on the first character before comparing.
    *
@@ -433,6 +434,22 @@ refresh(ps5tm_gamestate_t *st) {
           }
         }
         break;
+      case 'O':
+        /* "[SceShellUI] I/PSM.UI : OnFocusActiveSceneChanged [AppScreen : ApplicationScreenScene] -> [Render.NPXS40002 : AppScene]":
+           the home screen is the scene Render.NPXS40002 (17.11.2026: the game in the background is paused only while it is in front,
+           never behind an overlay - a tap on a tile of the app must find the game paused, the overlay must not take it away). */
+        if(!strncmp(p, "OnFocusActiveSceneChanged [", 27) && !ps5tm_klog_own_line(buf, p)) {
+          char line[200];
+          size_t n = 0;
+          while(n < sizeof(line) - 1 && p[n] && p[n] != '\n') { line[n] = p[n]; n++; }
+          line[n] = 0;
+          const char *arrow = strstr(line, "-> [");
+          if(arrow) {
+            have_scene = 1;
+            scene_home = !strncmp(arrow + 4, "Render.NPXS40002 ", 17);
+          }
+        }
+        break;
       case '/':
         if(!strncmp(p, "/user/app/", 10) && is_title_id(p + 10) && !ps5tm_klog_own_line(buf, p)) {
           memcpy(title, p + 10, 9);
@@ -457,6 +474,12 @@ refresh(ps5tm_gamestate_t *st) {
    * so a buffer without one means "no change since the one already seen".
    * Whether the remembered holder still exists is checked below exactly like
    * a fresh one. */
+  static int g_last_home;                    /* the scene of the last change seen, kept when the line has scrolled out */
+  static int g_have_last_home;
+  if(have_scene) { g_last_home = scene_home; g_have_last_home = 1; }
+  else if(g_have_last_home) { scene_home = g_last_home; have_scene = 1; }
+  st->home_scene = have_scene && scene_home;
+
   int remembered = 0;
   if(have_focus) {
     g_last_focus      = focus_id;
@@ -532,11 +555,13 @@ refresh(ps5tm_gamestate_t *st) {
    * is missing. */
   if(ps5tm_procmgr_appinfo_ready()) {
     char kt[16] = {0};
-    if(ps5tm_procmgr_game_title(game_focus ? focus_id : 0, kt, sizeof(kt)) != 0
+    uint32_t kapp = 0;
+    if(ps5tm_procmgr_game_info(game_focus ? focus_id : 0, kt, sizeof(kt), &kapp) != 0
        || !kt[0]) {
       st->state = "kein Spiel";
       return;
     }
+    st->game_app_id = kapp;
     snprintf(title, sizeof(title), "%s", kt);
     st->source = "appinfo";
   }

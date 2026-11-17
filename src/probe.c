@@ -56,7 +56,10 @@ probe_worker(void *arg) {
 
   unsigned tick = 0;
   for(;;) {
-    if(tick % GAME_INTERVAL_SEC == 0 && probe_allowed(PS5TM_PROBE_GAME))
+    /* A game waits resident and the setting "pause in the background" is on (bgpause.c): the game state is read twice a second
+       below, so that the pause comes before a tap on a tile of the app, not after it. */
+    const int fast = ps5tm_bgpause_wants_fast();
+    if(!fast && tick % GAME_INTERVAL_SEC == 0 && probe_allowed(PS5TM_PROBE_GAME))
       ps5tm_gamestate_refresh();
     if(tick % SYS_INTERVAL_SEC == 0)
       ps5tm_sysinfo_refresh();            /* sensors and storage only */
@@ -90,7 +93,18 @@ probe_worker(void *arg) {
     ps5tm_micbutton_poll();
 
     tick++;
-    sleep(1);
+    if(fast) {
+      for(int half = 0; half < 2; half++) {
+        if(probe_allowed(PS5TM_PROBE_GAME)) {
+          ps5tm_gamestate_refresh();
+          ps5tm_bgpause_tick();
+        }
+        usleep(500 * 1000);
+      }
+    } else {
+      ps5tm_bgpause_tick();                 /* reads the answer of a helper, nothing else when no game is resident */
+      sleep(1);
+    }
   }
   return NULL;
 }

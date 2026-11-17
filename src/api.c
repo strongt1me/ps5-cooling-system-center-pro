@@ -2937,6 +2937,7 @@ handle_config_get(int fd) {
       "\"lightbar_warn_c\":%u,"
       "\"lightbar_hot_c\":%u,"
       "\"ps_button_status\":%u,"
+      "\"bg_pause\":%u,"
       "\"library_cache\":%u,"
       "\"night_enabled\":%u,\"night_start_min\":%u,\"night_end_min\":%u,"
       "\"night_target_c\":%u,\"night_tz_offset_min\":%d,"
@@ -2966,6 +2967,7 @@ handle_config_get(int fd) {
       g_config.lightbar_warn_c,
       g_config.lightbar_hot_c,
       g_config.ps_button_status,
+      g_config.bg_pause,
       g_config.library_cache,
       g_config.night_enabled, g_config.night_start_min, g_config.night_end_min,
       g_config.night_target_c, g_config.night_tz_offset_min,
@@ -3098,6 +3100,8 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
     next.lightbar_hot_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "ps_button_status")))
     next.ps_button_status = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "bg_pause")))
+    next.bg_pause = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "library_cache")))
     next.library_cache = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_enabled")))
@@ -3224,6 +3228,7 @@ handle_config_export(int fd) {
   cJSON_AddNumberToObject(cfg, "lightbar_warn_c", g_config.lightbar_warn_c);
   cJSON_AddNumberToObject(cfg, "lightbar_hot_c", g_config.lightbar_hot_c);
   cJSON_AddNumberToObject(cfg, "ps_button_status", g_config.ps_button_status);
+  cJSON_AddNumberToObject(cfg, "bg_pause", g_config.bg_pause);
   cJSON_AddNumberToObject(cfg, "library_cache", g_config.library_cache);
   cJSON_AddNumberToObject(cfg, "night_enabled", g_config.night_enabled);
   cJSON_AddNumberToObject(cfg, "night_start_min", g_config.night_start_min);
@@ -3337,6 +3342,8 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
     next.lightbar_hot_c = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "ps_button_status")))
     next.ps_button_status = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "bg_pause")))
+    next.bg_pause = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "library_cache")))
     next.library_cache = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_enabled")))

@@ -98,7 +98,7 @@ SRCS += src/jobreg.c
 SRCS += src/cvname.c
 SRCS += src/convqueue.c
 SRCS += src/smpremount.c
-SRCS += src/smphold.c
+SRCS += src/smphold.c src/bgpause.c
 SRCS += src/mounters.c
 SRCS += src/fpkgdup.c
 SRCS += src/indexlimit.c
@@ -160,6 +160,7 @@ GEN_SRCS += gen/dlc_blob.c
 GEN_SRCS += gen/lz4prof_blob.c
 GEN_SRCS += gen/npfakesignin_blob.c
 GEN_SRCS += gen/kraken_blob.c
+GEN_SRCS += gen/bgpause_blob.c
 
 # The home-screen tile as a folder: param.json, icon and pictures from
 # tile/sce_sys, about 1.7 MB. The app writes them to /user/app/<id>/sce_sys and
@@ -193,6 +194,12 @@ TILE_PKG ?=
 # sceAppInstUtilInitialize() blocks for good.
 PKGI_HELPER_ELF := gen/pkginst_helper.elf
 PKGI_HELPER_LIBS := -lpthread -lSceNetCtl -lSceUserService -lSceSystemService -lSceIpmi -lSceAppInstUtil -lSceNet
+
+# The background-pause helper (src/helper/bgpause_helper.c): a program of its own that the app hands to the payload loader for one
+# call into the system's LNC service (sceLncUtilSuspendApp). Never made in the app's own process: an LNC call from there killed the
+# app within seconds whenever a game ran (gamestate.c), and in a helper that dies the app only loses one pause.
+BGP_HELPER_ELF := gen/bgpause_helper.elf
+BGP_HELPER_LIBS := -lkernel_sys -lSceSystemService -lSceUserService
 
 # cJSON is built separately: upstream trips several of our warning flags.
 CJSON_OBJ := gen/cJSON.o
@@ -319,6 +326,18 @@ $(PKGI_HELPER_ELF): src/helper/pkginst_helper.c src/pkginst_ipc.h Makefile gen/s
 # The mark stands in the image once, followed by the dots the app writes its token over: the build checks it.
 gen/pkginst_blob.c: $(PKGI_HELPER_ELF) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(PKGI_HELPER_ELF) ps5tm_pkginst_helper PS5CC-PKGI-TOKEN:
+
+# Built with the plain flags of the test program that ran (17.11.2026): with -fno-asynchronous-unwind-tables the linker left out .eh_frame and
+# put the second segment right behind the code (0x68b0, not on a page): the payload loader then took the code's page over and the helper
+# died with a SIGSEGV on its first instruction there. tools/check_elf_pages.py keeps such an ELF from ever being embedded.
+$(BGP_HELPER_ELF): src/helper/bgpause_helper.c Makefile gen/sdk.stamp tools/check_elf_pages.py | gen
+	$(CC) -Os -Wall -Wextra -Werror $(LDFLAGS) -o $@ src/helper/bgpause_helper.c $(BGP_HELPER_LIBS)
+	"$(PS5_PAYLOAD_SDK)/bin/prospero-strip" --strip-all $@
+	@$(PYTHON) tools/check_elf_pages.py $@ || { rm -f $@; exit 1; }
+	@$(PYTHON) tools/check_sdk_firmware.py elf $@ $(FW_NEED) >/dev/null || { rm -f $@; exit 1; }
+
+gen/bgpause_blob.c: $(BGP_HELPER_ELF) tools/gen_blob.py | gen
+	$(PYTHON) tools/gen_blob.py $@ $(BGP_HELPER_ELF) ps5tm_bgpause_helper
 
 # np-fake-signin (earthonion) — the ELF injected to 127.0.0.1:9021 on "Fake-Anmeldung schreiben".
 NPFSI_ELF := third_party/np_fake_signin/np-fake-signin_v1.3.elf

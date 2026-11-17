@@ -35,6 +35,16 @@ typedef struct {
   /* Take the home screen of the console (as the PS button does), so that the error dialog of the refused start is gone before the start is made again and the
      person does not have to confirm it (16.11.2026). Called once before each new start of a tile that was refused. NULL: not done. */
   void     (*go_home)(void);
+  /* Is the app's own tile up that the app started again (17.11.2026)? Its process runs, or - for the tile that opens the web page - the console's browser is
+     open (the app took it down just before the start). Asked once a second for a minute after the app's own start of that tile: when it says yes, a refusal
+     of the same tile that is read afterwards is the echo of the first one (the dialog being closed), not a second refusal, and the tile is not started a
+     third time. NULL: only the title_running above counts. */
+  int      (*tile_up)(const char *id);
+  /* Is a game in the background (running, not in front, not one of the app's own tiles; a fresh reading)? For the first minute after it went there the
+     kernel log is looked at about twice a second instead of every two seconds: that is when a tap on a tile is refused (17.11.2026). NULL: never fast. */
+  int      (*game_background)(void);
+  /* A tile of the app was refused and the app starts it again in a moment: the person is told so ("Bitte einen Moment Geduld ..."). NULL: nothing is said. */
+  void     (*tile_notice)(void);
 } ps5tm_smphold_env_t;
 
 /* Called for every /games/mount (mounted 1) and /games/unmount (0) the app sends (smp.c, ps5tm_smp_call). */

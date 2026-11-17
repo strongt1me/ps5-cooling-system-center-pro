@@ -451,6 +451,8 @@ class KrakenPage final : public Page
                    (state_.fetch_result.empty() ? "" : " · " + state_.fetch_result);
         if (!state_.version.empty())
             s += " " + state_.version;
+        if (state_.stopping)
+            return s + " · wird beendet …"; // switched off a moment ago: it answers for a few seconds more
         if (state_.waiting == "shadowmount")
             return s + " · wartet auf ShadowMountPlus";
         if (state_.waiting == "kstuff")
@@ -513,9 +515,9 @@ class KrakenPage final : public Page
             items.push_back(m);
         };
         add(state_.running ? "Kraken Mount beenden" : "Kraken Mount starten", kPageSwitch,
-            !state_.loaded || state_.starting);
-        add("Jetzt suchen", kPageScan, !state_.running);
-        add("Alle neu aufbauen", kPageRebuildAll, !state_.running);
+            !state_.loaded || state_.starting || state_.stopping);
+        add("Jetzt suchen", kPageScan, !state_.running || state_.stopping);
+        add("Alle neu aufbauen", kPageRebuildAll, !state_.running || state_.stopping);
         add("Neue Fassung von GitHub laden", kPageFetch, state_.fetching);
         add("Protokoll", kPageLog);
         menu_.set_items(items);

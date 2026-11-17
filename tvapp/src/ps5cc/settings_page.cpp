@@ -39,6 +39,7 @@ enum Row
     kLightHot,
     kFanCap,
     kWarnFollows,
+    kBgPause,
     kRuleSave,
     kRuleNone,
     kRuleBase = 100, // + index of the kept game profile
@@ -292,14 +293,14 @@ class SettingsPage final : public Page
   private:
     static std::string config_key(const Config &c)
     {
-        char text[220];
-        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
+        char text[240];
+        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
                       c.mode.c_str(), c.profile.c_str(), c.safety_temp_c, c.safety_min_c,
                       c.safety_max_c, c.night_enabled ? 1 : 0, c.night_start_min, c.night_end_min,
                       c.night_target_c, c.target_min_c, c.target_max_c, c.warning_cpu_c,
                       c.warning_countdown_s, c.lightbar_enabled ? 1 : 0, c.lightbar_warn_c,
                       c.lightbar_hot_c, c.target_temp_c, c.fan_cap_pct,
-                      c.warning_follows_target ? 1 : 0);
+                      c.warning_follows_target ? 1 : 0, c.bg_pause ? 1 : 0);
         return text;
     }
 
@@ -352,6 +353,10 @@ class SettingsPage final : public Page
             kLightHot, "Rot ab", static_cast<float>(c.lightbar_hot_c), 56.0f, 95.0f, 1.0f);
         red.unit = " °C";
         red.description = "Liegt immer über Gelb.";
+        form_.add_header("SPIEL IM HINTERGRUND");
+        form_.add_toggle(kBgPause, "Spiel im Hintergrund pausieren", c.bg_pause)
+            .description = "Pausiert ein Spiel, sobald der Startbildschirm vorn ist: So starten die "
+                           "Kacheln der App ohne Fehlstart und Fehlermeldung.";
         form_.add_header("SPIELPROFILE");
         {
             const std::string game = game_name_.empty() ? game_id_ : game_name_;
@@ -411,6 +416,7 @@ class SettingsPage final : public Page
         form_.set_slider(kSafety, static_cast<float>(c.safety_temp_c));
         form_.set_slider(kFanCap, static_cast<float>(c.fan_cap_pct));
         form_.set_toggle(kWarnFollows, c.warning_follows_target);
+        form_.set_toggle(kBgPause, c.bg_pause);
         form_.set_toggle(kNight, c.night_enabled);
         form_.set_slider(kNightStart, static_cast<float>(c.night_start_min));
         form_.set_slider(kNightEnd, static_cast<float>(c.night_end_min));
@@ -481,6 +487,9 @@ class SettingsPage final : public Page
             break;
         case kWarnFollows:
             pending_["warning_follows_target"] = form_.toggle_value(kWarnFollows) ? "1" : "0";
+            break;
+        case kBgPause:
+            pending_["bg_pause"] = form_.toggle_value(kBgPause) ? "1" : "0";
             break;
         case kWarnCountdown:
             pending_["warning_countdown_s"] = number(kWarnCountdown);
