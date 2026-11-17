@@ -5984,7 +5984,7 @@
    * Konvertieren heißt bisher: ein Abbild in einen Dump-Ordner entpacken.
    * Die andere Richtung beherrscht noch keiner der beiden. */
   const mv = { id: "", op: "", plan: null, dest: "", del: false, job: null,
-               seen: 0, timer: 0, misses: 0 };
+               seen: 0, timer: 0, misses: 0, compressed: false };
 
   const MV_STATES = { preparing: "Wird vorbereitet", measuring: "Wird vermessen",
     transferring: "", deleting: "Alter Ort wird geräumt", finalizing: "Wird abgeschlossen",
@@ -6011,7 +6011,8 @@
     const g = gm.list.find((x) => x.title_id === p.title_id);
     const fmt = g && g.format ? (GM_FORMATS[g.format] || g.format) : "";
     const unpack = p.op === "unpack";
-    txt("#cp-title", `„${gmName(p.title_id)}“ ${unpack ? "konvertieren" : "verschieben"}`);
+    const only = unpack && mv.compressed;
+    txt("#cp-title", `„${gmName(p.title_id)}“ ${unpack ? (only ? "entpacken" : "konvertieren") : "verschieben"}`);
 
     const rows = p.destinations.map((d) => {
       const why = mvBlocked(d);
@@ -6028,7 +6029,18 @@
     const sel = p.destinations.find((d) => d.path === mv.dest);
     const target = sel ? (unpack ? sel.target : `${sel.path}/${gmBase(p.source)}`) : "";
     const blocked = p.running ? "Das Spiel läuft gerade. Bitte erst beenden." : "";
-    const intro = unpack
+    /* Like the conversion window ("1. Was soll entstehen?"): what the image can become, and why the other formats are not offered. */
+    const what = only ? `<h4 class="cp-step">1. Was soll entstehen?</h4>
+      <div class="cp-list">
+        <label class="cp-choice"><input type="radio" name="mvw" value="unpack" checked>
+          <span class="cp-choice-text"><b>Dump-Ordner · entpacken</b>
+            <span class="muted">ShadowMountPlus entpackt das Abbild in einen Ordner namens <code>${esc(p.title_id)}</code> im gewählten Ziel.</span>
+            ${p.image_type === "pfsc" ? `<span class="muted">Ein komprimiertes Abbild wird dabei deutlich größer als die Datei.</span>` : ""}</span></label>
+        ${["ffpkg", "exfat", "fpkg"].map((op) => `<label class="cp-choice off"><input type="radio" name="mvw" value="${op}" disabled>
+          <span class="cp-choice-text"><b>${esc(CV_OPS[op].t)}</b>
+            <span class="cp-why">Aus diesem Abbild nicht möglich: erst entpacken, dann den Ordner mit „Konvertieren“ umwandeln.</span></span></label>`).join("")}
+      </div>` : "";
+    const intro = only ? "" : unpack
       ? `<p class="muted">ShadowMountPlus entpackt das Abbild in einen Dump-Ordner namens
           <code>${esc(p.title_id)}</code> im gewählten Ziel.${p.image_type === "pfsc"
           ? " Ein komprimiertes Abbild wird dabei deutlich größer als die Datei." : ""}
@@ -6042,8 +6054,8 @@
     body.innerHTML = `
       <p class="cp-src"><span class="muted">Jetzt</span> <code>${esc(p.source)}</code>
         <span>${fmt ? `${esc(fmt)} · ` : ""}${bytes(p.size_bytes)}</span></p>
-      ${intro}
-      <h4 class="cp-step">${unpack ? "Wohin entpacken?" : "Wohin?"}</h4>
+      ${intro}${what}
+      <h4 class="cp-step">${unpack ? (only ? "2. Wohin entpacken?" : "Wohin entpacken?") : "Wohin?"}</h4>
       <div class="cp-list">${rows || `<p class="muted">Kein Ziel gefunden.</p>`}</div>
       ${unpack ? `<label class="cp-choice cp-check"><input type="checkbox" name="mv-del" ${mv.del ? "checked" : ""}>
           <span class="cp-choice-text"><b>Abbild danach löschen</b>
@@ -6130,13 +6142,16 @@
     else if (wasActive) loadGames();              /* der neue Ort */
   };
 
-  const mvOpen = async (id, op) => {
+  /* `compressed`: the person pressed "Konvertieren" on a game whose image the app cannot convert (a compressed ffpfsc) and landed here:
+     the window then names what it does ("entpacken") and lists the formats with the reason why none of them is possible (17.11.2026). */
+  const mvOpen = async (id, op, compressed) => {
     cpShell();
     const seq = ++dlg.seq;
     if (mv.job && mv.job.active) { mvRenderJob(); return; }
     mv.id = id; mv.op = op; mv.plan = null; mv.dest = ""; mv.del = false;
+    mv.compressed = !!compressed && op === "unpack";
     cp.view = "mvloading";
-    txt("#cp-title", `„${gmName(id)}“ ${op === "unpack" ? "konvertieren" : "verschieben"}`);
+    txt("#cp-title", `„${gmName(id)}“ ${op === "unpack" ? (mv.compressed ? "entpacken" : "konvertieren") : "verschieben"}`);
     $("#cp-body").innerHTML = `<p class="muted">Ziele werden ermittelt …</p>`;
     try {
       const plan = await api(`/api/v1/library/storage/plan?id=${encodeURIComponent(id)}&op=${encodeURIComponent(op)}`,
@@ -6726,7 +6741,7 @@
     if (cv.job && cv.job.active && cv.job.title_id === id) { cvRenderJob(); return; }
     const g = gm.list.find((x) => x.title_id === id);
     /* Ein komprimiertes Abbild lässt sich nur entpacken: gleich dorthin. */
-    if (g && !g.can_convert && g.can_unpack) { mvOpen(id, "unpack"); return; }
+    if (g && !g.can_convert && g.can_unpack) { mvOpen(id, "unpack", true); return; }
     cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cv.verify = "full"; cv.name = ""; cv.check = null; cp.view = "cvloading";
     { const g0 = gm.list.find((x) => x.title_id === id); cv.ampr = !!(g0 && g0.mods && g0.mods.ampr_emu); }
     txt("#cp-title", `„${g ? g.name : id}“ konvertieren`);

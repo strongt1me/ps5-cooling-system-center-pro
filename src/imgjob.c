@@ -102,6 +102,7 @@ typedef struct {
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static job_t           g_job;
+static char            g_force_dest[320]; /* unpack: the folder to unpack into, as it is (gamemove.c, when ShadowMountPlus could not); "" = <drive>/homebrew/<name> */
 static int             g_cancel;          /* __atomic */
 static last_t          g_last[IJ_LAST_MAX];
 static unsigned        g_last_next;
@@ -728,15 +729,28 @@ static void *
 unpack_run(void *arg) {
   char *mount = arg;
   ps5tm_powerguard_hold();
-  char img[256], id[16];
+  char img[256], id[16], forced[320];
   pthread_mutex_lock(&g_lock);
   snprintf(img, sizeof(img), "%s", g_job.image);
   snprintf(id, sizeof(id), "%s", g_job.id);
+  snprintf(forced, sizeof(forced), "%s", g_force_dest);
+  g_force_dest[0] = '\0';
   pthread_mutex_unlock(&g_lock);
   unp_t u;
   memset(&u, 0, sizeof(u));
-  char dest[320], base[64], label[40];
-  if(dest_for(mount, img, id, dest, sizeof(dest), base, sizeof(base), label, sizeof(label)) != 0) {
+  char dest[320], base[320], label[40];
+  label[0] = '\0';
+  if(forced[0]) {
+    /* The folder is given (and its parent exists: the caller made it); the room is looked at on the drive the parent is on. */
+    snprintf(dest, sizeof(dest), "%s", forced);
+    char *slash = strrchr(forced, '/');
+    if(!slash || slash == forced || !folder_name_ok(slash + 1)) {
+      finish(IJ_FAILED, "Der Zielordner ist ungültig.");
+      goto out;
+    }
+    *slash = '\0';
+    snprintf(base, sizeof(base), "%s", forced);
+  } else if(dest_for(mount, img, id, dest, sizeof(dest), base, sizeof(base), label, sizeof(label)) != 0) {
     finish(IJ_FAILED, "Dieses Laufwerk gibt es nicht (mehr).");
     goto out;
   }
@@ -1116,8 +1130,8 @@ other_job(char *err, size_t n) {
   return 0;
 }
 
-int
-ps5tm_imgjob_start(const char *kind, const char *id, const char *mount, char *err, size_t n) {
+static int
+imgjob_start_impl(const char *kind, const char *id, const char *mount, const char *force_dest, char *err, size_t n) {
   int is_check = kind && !strcmp(kind, "check"), is_unpack = kind && !strcmp(kind, "unpack"), is_repair = kind && !strcmp(kind, "repair");
   if(!is_check && !is_unpack && !is_repair) { snprintf(err, n, "Unbekannter Vorgang."); return 400; }
   ps5tm_libdel_t li;
@@ -1126,7 +1140,8 @@ ps5tm_imgjob_start(const char *kind, const char *id, const char *mount, char *er
     snprintf(err, n, "Dieses Spiel liegt nicht als Abbild vor.");
     return 409;
   }
-  if(is_unpack && (!mount || !mount[0])) { snprintf(err, n, "Es fehlt das Ziellaufwerk."); return 400; }
+  if(is_unpack && !force_dest && (!mount || !mount[0])) { snprintf(err, n, "Es fehlt das Ziellaufwerk."); return 400; }
+  if(force_dest && (!is_unpack || force_dest[0] != '/' || strlen(force_dest) >= sizeof(g_force_dest))) { snprintf(err, n, "Der Zielordner ist ungültig."); return 400; }
   if(ps5tm_procmgr_title_running(id) == 1) { snprintf(err, n, "Das Spiel läuft gerade. Bitte zuerst beenden."); return 409; }
   if(is_repair) {
     ps5tm_smp_game_t s;
@@ -1161,17 +1176,19 @@ ps5tm_imgjob_start(const char *kind, const char *id, const char *mount, char *er
   snprintf(g_job.format, sizeof(g_job.format), "%s", kind_name);
   snprintf(g_job.phase, sizeof(g_job.phase), "Wird vorbereitet");
   g_job.started_ms = ps5tm_mono_ms();
+  snprintf(g_force_dest, sizeof(g_force_dest), "%s", force_dest ? force_dest : "");
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
   /* claim first, then ask the others (they do the same): of two starts at the same moment one gives way (review 19.10.2026) */
   if(other_job(err, n)) {
     pthread_mutex_lock(&g_lock);
     memset(&g_job, 0, sizeof(g_job));
+    g_force_dest[0] = '\0';
     pthread_mutex_unlock(&g_lock);
     return 409;
   }
 
-  char *arg = is_unpack ? strdup(mount) : NULL;
+  char *arg = is_unpack ? strdup(mount ? mount : "") : NULL;
   if(is_unpack && !arg) { finish(IJ_FAILED, "Kein Speicher."); snprintf(err, n, "Kein Speicher."); return 500; }
   pthread_t th;
   pthread_attr_t at;
@@ -1188,6 +1205,19 @@ ps5tm_imgjob_start(const char *kind, const char *id, const char *mount, char *er
   }
   PS5TM_INFO("img_job_start", "Abbild-Vorgang gestartet: %s von %s (%s).", kind, name, id);
   return 200;
+}
+
+int
+ps5tm_imgjob_start(const char *kind, const char *id, const char *mount, char *err, size_t n) {
+  return imgjob_start_impl(kind, id, mount, NULL, err, n);
+}
+
+/* Unpacks the image of a game into the folder `dest` itself (a path whose parent exists): for the case that ShadowMountPlus's own unpack
+   was refused with "Permission denied" (gamemove.c), where the same folder is made with the permissions this app gives every game folder (0777). */
+int
+ps5tm_imgjob_unpack_to(const char *id, const char *dest, char *err, size_t n) {
+  if(!dest) { snprintf(err, n, "Der Zielordner ist ungültig."); return 400; }
+  return imgjob_start_impl("unpack", id, "", dest, err, n);
 }
 
 cJSON *

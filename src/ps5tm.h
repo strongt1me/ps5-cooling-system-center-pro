@@ -954,6 +954,9 @@ struct cJSON *ps5tm_imgjob_info(const char *title_id, int *http);
 struct cJSON *ps5tm_imgjob_plan(const char *title_id, char *err, size_t err_len);
 /* kind "check", "unpack" (mount = the drive to unpack to) or "repair"; the HTTP status, 200 when started. */
 int           ps5tm_imgjob_start(const char *kind, const char *title_id, const char *mount, char *err, size_t err_len);
+/* The same for "unpack" into the folder `dest` itself (its parent must exist), not <drive>/homebrew/<name>: gamemove.c's way out when
+   ShadowMountPlus's unpack ends with "Permission denied". */
+int           ps5tm_imgjob_unpack_to(const char *title_id, const char *dest, char *err, size_t err_len);
 struct cJSON *ps5tm_imgjob_status(void);
 int           ps5tm_imgjob_cancel(void);
 int           ps5tm_imgjob_busy(void);

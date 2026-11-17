@@ -36,6 +36,8 @@
 - Handbuch und FAQ in sieben Sprachen, Übersetzungen der neuen Texte in sechs Sprachen.
 
 ## Fehlerbehebungen
+- **Entpacken ohne „Permission denied“:** Scheitert das Entpacken über ShadowMountPlus mit „Permission denied“ (zum Beispiel bei einem Abbild, dessen Ordner keine Schreibrechte haben), entpackt die App dasselbe Abbild selbst in denselben Zielordner und zeigt den Fortschritt im selben Fenster. Das Abbild wird dabei nicht gelöscht, auch wenn „Abbild danach löschen“ gewählt war. An der Konsole noch nicht bestätigt.
+- **Komprimiertes Abbild (ffpfsc):** Das Fenster, das „Konvertieren“ bei einem solchen Spiel öffnet, heißt jetzt „… entpacken“ und zeigt wie das andere Konvertieren-Fenster, was entstehen kann: der Dump-Ordner ist wählbar, die übrigen Formate stehen ausgegraut mit dem Grund da (aus einem komprimierten Abbild nicht möglich: erst entpacken, dann den Ordner konvertieren).
 - **Lüfter laut oder zu leise:** Im Profil „Kühl“ stieg der Lüfter bei Ziel 68 °C plötzlich auf 54 %; bei Ziel 78 °C blieb er auf 23 %, obwohl die CPU auf 80 °C stieg. Beides war dieselbe Ursache (Gerade statt Kurve) und ist behoben.
 - **Eigener Dump-Ordner:** Ein selbst eingetippter Ordner wurde nicht benutzt, und der Dump startete danach nicht.
 - **„Vorhandenen Dump ersetzen“** konnte einen Ordner löschen, der nur so hieß wie ein Dump (etwa einen Spielordner für ShadowMountPlus). Als Dump gilt jetzt nur ein Ordner mit seiner Info-Datei; alles andere bleibt unberührt, und ein Dump bricht ab, statt in einen fremden Ordner zu schreiben.

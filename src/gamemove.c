@@ -35,6 +35,7 @@
 
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
+#include "unpackfb.h"
 
 #define SPACE_RESERVE    (256ull * 1024 * 1024)
 #define FAT32_MAX_FILE   0xFFFFFFFFull
@@ -254,6 +255,163 @@ typedef struct {
 static pthread_mutex_t g_wlock = PTHREAD_MUTEX_INITIALIZER;
 static struct { int on, watching; double watch_job; char title_id[12], op[8], tile[16]; } g_wait;
 
+/* ---------------------------------------------------------------- the way out when ShadowMountPlus cannot unpack
+
+   ShadowMountPlus makes the unpack folder with the permissions of the folder in the image, and cannot put a file into it when that has no write
+   bit: the job ends at once with "Permission denied" (Asterix & Obelix: Heroes, 17.11.2026, the image itself was fine: the app's check found
+   132 files in order, and its own unpack of the same image ran through). The app's own unpack gives every game folder 0777, so when the job
+   ends like that the app unpacks into the same folder itself. The pages keep following the same job (the id of ShadowMountPlus's failed one):
+   ps5tm_gamemove_status answers from the app's own job meanwhile and keeps its result until ShadowMountPlus runs another one. The image is
+   not deleted afterwards, also when the person asked for that: nothing the app did not check is thrown away, and the notice says so. */
+
+static struct {
+  int      active;                    /* the app's own unpack runs */
+  int      have;                      /* a record of one is kept (running or ended) */
+  double   smp_job;                   /* ShadowMountPlus's job it stands in for: the id the pages follow */
+  char     title_id[12], image[256], dest[320], state[12], error[300];
+  unsigned total_files, done_files;
+  uint64_t total_bytes, done_bytes;
+} g_fb;
+
+/* The record in the form of ShadowMountPlus's own job record (the fields both pages read). */
+static cJSON *
+fb_json(void) {
+  pthread_mutex_lock(&g_wlock);
+  int active = g_fb.active;
+  double job = g_fb.smp_job;
+  char title_id[12], image[256], dest[320], state[12], error[300];
+  snprintf(title_id, sizeof(title_id), "%s", g_fb.title_id);
+  snprintf(image, sizeof(image), "%s", g_fb.image);
+  snprintf(dest, sizeof(dest), "%s", g_fb.dest);
+  snprintf(state, sizeof(state), "%s", g_fb.state);
+  snprintf(error, sizeof(error), "%s", g_fb.error);
+  unsigned tf = g_fb.total_files, df = g_fb.done_files;
+  uint64_t tb = g_fb.total_bytes, db = g_fb.done_bytes;
+  pthread_mutex_unlock(&g_wlock);
+  double rate = 0;
+  const char *phase = "Wird mit dem eigenen Entpacken der App fortgesetzt";
+  if(active) {
+    cJSON *s = ps5tm_imgjob_status();
+    if(s) {
+      const cJSON *x;
+      if(cJSON_IsString(x = cJSON_GetObjectItem(s, "image"))) snprintf(image, sizeof(image), "%s", x->valuestring);
+      if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "work_total"))) tb = (uint64_t)x->valuedouble;
+      if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "work_done"))) db = (uint64_t)x->valuedouble;
+      if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "files_total"))) tf = (unsigned)x->valuedouble;
+      if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "files_done"))) df = (unsigned)x->valuedouble;
+      if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "bytes_per_s"))) rate = x->valuedouble;
+      if(cJSON_IsString(x = cJSON_GetObjectItem(s, "phase")) && x->valuestring[0]) phase = x->valuestring;
+      cJSON_Delete(s);
+    }
+    snprintf(state, sizeof(state), "%s", tb > 0 && db > 0 ? "transferring" : "measuring");
+  }
+  cJSON *o = cJSON_CreateObject();
+  cJSON_AddBoolToObject(o, "ok", 1);
+  cJSON_AddNumberToObject(o, "job_id", job);
+  cJSON_AddStringToObject(o, "operation", "unpack");
+  cJSON_AddStringToObject(o, "state", state);
+  cJSON_AddBoolToObject(o, "active", active);
+  cJSON_AddBoolToObject(o, "cancellable", active);
+  cJSON_AddBoolToObject(o, "cancel_requested", 0);
+  cJSON_AddStringToObject(o, "title_id", title_id);
+  cJSON_AddStringToObject(o, "source", image);
+  cJSON_AddStringToObject(o, "destination", dest);
+  cJSON_AddStringToObject(o, "phase", phase);
+  cJSON_AddNumberToObject(o, "progress_percent", ps5tm_unpack_fb_percent(db, tb));
+  cJSON_AddNumberToObject(o, "total_bytes", (double)tb);
+  cJSON_AddNumberToObject(o, "processed_bytes", (double)db);
+  cJSON_AddNumberToObject(o, "total_files", tf);
+  cJSON_AddNumberToObject(o, "processed_files", df);
+  cJSON_AddNumberToObject(o, "speed_bytes_per_second", rate);
+  cJSON_AddBoolToObject(o, "fallback", 1);
+  if(!active && !strcmp(state, "failed")) {
+    cJSON_AddNumberToObject(o, "result_status", 5);
+    cJSON_AddStringToObject(o, "result_error", error[0] ? error : "Das Entpacken ist gescheitert.");
+  } else if(!active) {
+    cJSON_AddNumberToObject(o, "result_status", !strcmp(state, "completed") ? 0 : 125);
+  }
+  return o;
+}
+
+static void
+fb_end(const char *state, const char *error) {
+  pthread_mutex_lock(&g_wlock);
+  g_fb.active = 0;
+  snprintf(g_fb.state, sizeof(g_fb.state), "%s", state);
+  snprintf(g_fb.error, sizeof(g_fb.error), "%s", error ? error : "");
+  pthread_mutex_unlock(&g_wlock);
+}
+
+/* Runs on the watcher's thread after ShadowMountPlus's unpack ended with "Permission denied": the app's own unpack into the same folder
+   (<destination>/<title id>), followed to its end. */
+static void
+fallback_unpack(const watch_t *w, const char *smp_msg) {
+  char child[320], err[200] = "", image[256] = "";
+  snprintf(child, sizeof(child), "%s/%s", w->dest, w->title_id);
+  {
+    ps5tm_smp_game_t sg;                      /* asked before the lock: ShadowMountPlus may take a moment */
+    if(ps5tm_smp_find(w->title_id, &sg) == 0) snprintf(image, sizeof(image), "%s", sg.path);
+  }
+  pthread_mutex_lock(&g_wlock);
+  memset(&g_fb, 0, sizeof(g_fb));
+  g_fb.have = 1;
+  g_fb.active = 1;
+  g_fb.smp_job = w->job_id;
+  snprintf(g_fb.title_id, sizeof(g_fb.title_id), "%s", w->title_id);
+  snprintf(g_fb.dest, sizeof(g_fb.dest), "%s", child);
+  snprintf(g_fb.image, sizeof(g_fb.image), "%s", image);
+  snprintf(g_fb.state, sizeof(g_fb.state), "%s", "measuring");
+  g_wait.watching = 0;      /* the image job asks whether a move or unpack is busy: this watcher has handed its job on */
+  pthread_mutex_unlock(&g_wlock);
+  PS5TM_WARN("game_storage_fallback", "ShadowMountPlus konnte %s nicht entpacken (%.120s); die App entpackt das Abbild selbst nach %s.",
+             w->title_id, smp_msg, child);
+  int rc = ps5tm_imgjob_unpack_to(w->title_id, child, err, sizeof(err));
+  if(rc != 200) {
+    fb_end("failed", err[0] ? err : "Das eigene Entpacken ließ sich nicht starten.");
+    ps5tm_notify("„%s“ wurde nicht entpackt: %.120s", w->name, err[0] ? err : "Das eigene Entpacken ließ sich nicht starten.");
+    return;
+  }
+  for(;;) {
+    usleep(1000 * 1000);
+    cJSON *s = ps5tm_imgjob_status();
+    if(!s) continue;
+    const cJSON *st = cJSON_GetObjectItem(s, "state"), *er = cJSON_GetObjectItem(s, "error");
+    const cJSON *id = cJSON_GetObjectItem(s, "id"), *kind = cJSON_GetObjectItem(s, "kind");
+    const char *state = cJSON_IsString(st) ? st->valuestring : "";
+    int ours = cJSON_IsString(id) && !strcmp(id->valuestring, w->title_id) && cJSON_IsString(kind) && !strcmp(kind->valuestring, "unpack");
+    if(!strcmp(state, "running") && ours) { cJSON_Delete(s); continue; }
+    char msg[300] = "";
+    if(cJSON_IsString(er)) snprintf(msg, sizeof(msg), "%s", er->valuestring);
+    const cJSON *tf = cJSON_GetObjectItem(s, "files_total"), *df = cJSON_GetObjectItem(s, "files_done");
+    const cJSON *tb = cJSON_GetObjectItem(s, "work_total"), *db = cJSON_GetObjectItem(s, "work_done");
+    pthread_mutex_lock(&g_wlock);
+    if(cJSON_IsNumber(tf)) g_fb.total_files = (unsigned)tf->valuedouble;
+    if(cJSON_IsNumber(df)) g_fb.done_files = (unsigned)df->valuedouble;
+    if(cJSON_IsNumber(tb)) g_fb.total_bytes = (uint64_t)tb->valuedouble;
+    if(cJSON_IsNumber(db)) g_fb.done_bytes = (uint64_t)db->valuedouble;
+    pthread_mutex_unlock(&g_wlock);
+    int done = ours && !strcmp(state, "done");
+    int cancelled = ours && !strcmp(state, "cancelled");
+    cJSON_Delete(s);
+    if(done) {
+      pthread_mutex_lock(&g_wlock);
+      g_fb.done_bytes = g_fb.total_bytes;
+      pthread_mutex_unlock(&g_wlock);
+      fb_end("completed", NULL);
+      ps5tm_notify("„%s“ ist entpackt (von der App selbst: ShadowMountPlus meldete „Permission denied“).%s", w->name,
+                   w->delete_source ? " Das Abbild wurde nicht gelöscht." : "");
+    } else if(cancelled) {
+      fb_end("cancelled", NULL);
+    } else {
+      fb_end("failed", msg[0] ? msg : "Das Entpacken ist gescheitert.");
+      ps5tm_notify("„%s“ wurde nicht entpackt: %.120s", w->name, msg[0] ? msg : "Das Entpacken ist gescheitert.");
+    }
+    break;
+  }
+  ps5tm_smp_forget();
+  ps5tm_library_forget();
+}
+
 static cJSON *
 smp_start(const watch_t *w, char *err, size_t err_len) {
   cJSON *body = cJSON_CreateObject();
@@ -279,8 +437,9 @@ tile_reason(const char *reason) {
 
 /* Waits for ShadowMountPlus's job job_id to end: 1 done, 0 failed (reason and message), -1 lost sight of it. */
 static int
-follow_job(double job_id, char *reason, size_t reason_len, char *msg, size_t msg_len) {
+follow_job(double job_id, char *reason, size_t reason_len, char *msg, size_t msg_len, int *status_out) {
   reason[0] = msg[0] = '\0';
+  if(status_out) *status_out = 0;
   for(int misses = 0; misses < 20; ) {
     usleep(1500 * 1000);
     char err[160];
@@ -293,6 +452,7 @@ follow_job(double job_id, char *reason, size_t reason_len, char *msg, size_t msg
     const cJSON *rr = cJSON_GetObjectItem(s, "result_error_reason");
     const cJSON *re = cJSON_GetObjectItem(s, "result_error");
     int ok = !cJSON_IsNumber(rs) || rs->valuedouble == 0;
+    if(status_out) *status_out = cJSON_IsNumber(rs) ? (int)rs->valuedouble : 0;
     snprintf(reason, reason_len, "%s", cJSON_IsString(rr) ? rr->valuestring : "");
     snprintf(msg, msg_len, "%s", cJSON_IsString(re) ? re->valuestring : "");
     cJSON_Delete(s);
@@ -305,8 +465,11 @@ static void *
 watch_thread(void *arg) {
   watch_t *w = arg;
   char reason[64], msg[200], tile[16], game[16];
-  int r = follow_job(w->job_id, reason, sizeof(reason), msg, sizeof(msg));
-  if(r == 0 && tile_reason(reason) && ps5tm_procmgr_own_tile_running(tile, sizeof(tile)) &&
+  int st = 0;
+  int r = follow_job(w->job_id, reason, sizeof(reason), msg, sizeof(msg), &st);
+  if(r == 0 && !tile_reason(reason) && ps5tm_unpack_fallback_wanted(w->op, st, msg))
+    fallback_unpack(w, msg);
+  else if(r == 0 && tile_reason(reason) && ps5tm_procmgr_own_tile_running(tile, sizeof(tile)) &&
      ps5tm_procmgr_game_title(0, game, sizeof(game)) != 0) {
     pthread_mutex_lock(&g_wlock);
     g_wait.on = 1;
@@ -335,7 +498,7 @@ watch_thread(void *arg) {
       pthread_mutex_lock(&g_wlock);
       g_wait.on = 0;                                       /* from here on ShadowMountPlus's own record tells the progress */
       pthread_mutex_unlock(&g_wlock);
-      r = follow_job(id, reason, sizeof(reason), msg, sizeof(msg));
+      r = follow_job(id, reason, sizeof(reason), msg, sizeof(msg), NULL);
       if(r == 0 && tile_reason(reason)) {
         pthread_mutex_lock(&g_wlock);
         g_wait.on = 1;                                     /* refused again: still waiting, still busy */
@@ -502,6 +665,8 @@ cJSON *
 ps5tm_gamemove_status(char *err, size_t err_len) {
   pthread_mutex_lock(&g_wlock);
   int on = g_wait.on, watching = g_wait.watching;
+  int fb_active = g_fb.active, fb_have = g_fb.have;
+  double fb_job = g_fb.smp_job;
   double watch_job = g_wait.watch_job;
   char id[12], op[8], tile[16];
   snprintf(id, sizeof(id), "%s", g_wait.title_id);
@@ -523,8 +688,25 @@ ps5tm_gamemove_status(char *err, size_t err_len) {
     cJSON_AddStringToObject(w, "tile", tile);
     return w;
   }
+  if(fb_active) return fb_json();            /* the app's own unpack stands in for the one ShadowMountPlus could not do: no question to it */
   cJSON *ans = ps5tm_smp_call("/games/storage/status", NULL, 4000, err, err_len);
   if(!ans) return NULL;
+  /* The record of the app's own unpack stays until ShadowMountPlus runs another job. */
+  if(fb_have && job_id_of(ans) == fb_job) { cJSON_Delete(ans); return fb_json(); }
+  /* Ended with "Permission denied" a moment ago: the watcher is about to unpack it itself, so that is what to show (not the failure). */
+  {
+    const cJSON *op = cJSON_GetObjectItem(ans, "operation"), *rs = cJSON_GetObjectItem(ans, "result_status");
+    const cJSON *re = cJSON_GetObjectItem(ans, "result_error");
+    if(watching && job_id_of(ans) == watch_job && !cJSON_IsTrue(cJSON_GetObjectItem(ans, "active")) &&
+       ps5tm_unpack_fallback_wanted(cJSON_IsString(op) ? op->valuestring : "", cJSON_IsNumber(rs) ? (int)rs->valuedouble : 0,
+                                    cJSON_IsString(re) ? re->valuestring : "")) {
+      cJSON_ReplaceItemInObject(ans, "active", cJSON_CreateBool(1));
+      cJSON_ReplaceItemInObject(ans, "state", cJSON_CreateString("measuring"));
+      cJSON_AddStringToObject(ans, "phase", "Wird mit dem eigenen Entpacken der App fortgesetzt");
+      cJSON_AddBoolToObject(ans, "ok", 1);
+      return ans;
+    }
+  }
   /* Refused for the app's own tile a moment ago: the watcher is about to wait for it, so that is what to show (a
      "failed" in between would read as the end of it). */
   const cJSON *rr = cJSON_GetObjectItem(ans, "result_error_reason");
@@ -590,6 +772,10 @@ ps5tm_gamemove_busy(void) {
 
 int
 ps5tm_gamemove_cancel(char *err, size_t err_len) {
+  pthread_mutex_lock(&g_wlock);
+  int fb_active = g_fb.active;
+  pthread_mutex_unlock(&g_wlock);
+  if(fb_active) { (void)ps5tm_imgjob_cancel(); return 200; }        /* the app's own unpack stands in for ShadowMountPlus's */
   cJSON *job = ps5tm_smp_call("/games/storage/status", NULL, 4000, err, err_len);
   if(!job) return 503;
   const cJSON *id = cJSON_GetObjectItem(job, "job_id");
