@@ -268,7 +268,7 @@ static struct {
   int      active;                    /* the app's own unpack runs */
   int      have;                      /* a record of one is kept (running or ended) */
   double   smp_job;                   /* ShadowMountPlus's job it stands in for: the id the pages follow */
-  char     title_id[12], image[256], dest[320], state[12], error[300];
+  char     title_id[12], image[256], dest[320], state[16], error[300];     /* state: "transferring" has 12 letters */
   unsigned total_files, done_files;
   uint64_t total_bytes, done_bytes;
 } g_fb;
@@ -279,7 +279,7 @@ fb_json(void) {
   pthread_mutex_lock(&g_wlock);
   int active = g_fb.active;
   double job = g_fb.smp_job;
-  char title_id[12], image[256], dest[320], state[12], error[300];
+  char title_id[12], image[256], dest[320], state[16], error[300];
   snprintf(title_id, sizeof(title_id), "%s", g_fb.title_id);
   snprintf(image, sizeof(image), "%s", g_fb.image);
   snprintf(dest, sizeof(dest), "%s", g_fb.dest);
@@ -289,7 +289,8 @@ fb_json(void) {
   uint64_t tb = g_fb.total_bytes, db = g_fb.done_bytes;
   pthread_mutex_unlock(&g_wlock);
   double rate = 0;
-  const char *phase = "Wird mit dem eigenen Entpacken der App fortgesetzt";
+  char phase[160];                         /* a copy: the record it comes from is freed below (17.11.2026: the text was read after that) */
+  snprintf(phase, sizeof(phase), "%s", "Wird mit dem eigenen Entpacken der App fortgesetzt");
   if(active) {
     cJSON *s = ps5tm_imgjob_status();
     if(s) {
@@ -300,7 +301,7 @@ fb_json(void) {
       if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "files_total"))) tf = (unsigned)x->valuedouble;
       if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "files_done"))) df = (unsigned)x->valuedouble;
       if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "bytes_per_s"))) rate = x->valuedouble;
-      if(cJSON_IsString(x = cJSON_GetObjectItem(s, "phase")) && x->valuestring[0]) phase = x->valuestring;
+      if(cJSON_IsString(x = cJSON_GetObjectItem(s, "phase")) && x->valuestring[0]) snprintf(phase, sizeof(phase), "%s", x->valuestring);
       cJSON_Delete(s);
     }
     snprintf(state, sizeof(state), "%s", tb > 0 && db > 0 ? "transferring" : "measuring");
