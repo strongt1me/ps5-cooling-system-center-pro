@@ -7,8 +7,8 @@
  * style.css (Abschnitt „Vier Designs“). Der Wähler oben (#theme) wechselt ohne Neuladen.
  *
  * Ebenso die Darstellung der Spielkarten (10.11.2026): „groß (wie bisher)“ oder „kompakt“, gemerkt je Gerät (localStorage "gmview"),
- * als data-gmview="compact" an <html>; „kompakt“ ist die Vorgabe (seit 11.11.2026; wer „groß“ gewählt hat, behält es), „groß“ braucht kein Attribut. Der Wähler #gm-view steht auf der
- * Spiele-Seite. */
+ * als data-gmview="compact" an <html>; „groß“ ist die Vorgabe (wieder seit 17.11.2026, Wunsch des Users; vom 11. bis 17.11. war es „kompakt“; wer „kompakt“
+ * gewählt hat, behält es) und braucht kein Attribut. Der Wähler #gm-view steht auf der Spiele-Seite. */
 (function () {
   var THEMES = { standard: 1, hell: 1, dunkel: 1, optimal: 1 };
   var root = document.documentElement;
@@ -24,8 +24,8 @@
   var cur = "standard";
   try { cur = localStorage.getItem("theme") || "standard"; } catch (e) { /* ohne Speicher: die Vorgabe */ }
   cur = apply(cur);
-  var view = "compact";
-  try { view = localStorage.getItem("gmview") === "classic" ? "classic" : "compact"; } catch (e) { /* ohne Speicher: die Vorgabe */ }
+  var view = "classic";
+  try { view = localStorage.getItem("gmview") === "compact" ? "compact" : "classic"; } catch (e) { /* ohne Speicher: die Vorgabe */ }
   function applyView(v) {
     if (v === "compact") root.setAttribute("data-gmview", "compact"); else root.removeAttribute("data-gmview");
     return v;

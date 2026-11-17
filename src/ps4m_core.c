@@ -120,7 +120,7 @@ typedef struct {
 #define DLC_LIMIT 29 /* add-ons a running game can use (PS4Mount 0.7.0 README) */
 
 static config_t g_cfg = {1, 5, 1, 0, {""}, 1, 5, 0};
-static int g_enabled;     /* switched on in the page; kept in config.txt (key enabled=) */
+static int g_enabled = 1; /* switched on in the page; kept in config.txt (key enabled=). On from the start (17.11.2026, user): without a saved config.txt (a new installation) PS4Mount runs; config_save() always writes enabled=, so a person's "off" stays off */
 
 
 /* Weak: a firmware without them must not keep the whole app (fan control included) from loading; PS4Mount then says so. */

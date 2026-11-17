@@ -71,8 +71,8 @@ installiert.
 **Darstellung.** Neben der Sortierung wählst du die „Darstellung“: **groß (wie bisher)** oder
 **kompakt**. Bei „kompakt“ steht das Bild klein neben dem Titel und die Knöpfe sind eine Reihe von
 Symbolen; fährst du mit der Maus oder dem Steuerkreuz auf ein Symbol (oder drückst „i“), steht unten, was es macht. Die Knöpfe sind in beiden Ansichten dieselben (gleiche
-Funktion, gleiche Sperren und Hinweise); der Browser merkt sich die Wahl je Gerät. Seit dem 11.11.2026 ist „kompakt“ die Vorgabe;
-wer „groß“ gewählt hat, behält es.
+Funktion, gleiche Sperren und Hinweise); der Browser merkt sich die Wahl je Gerät. Vom 11. bis 17.11.2026 war „kompakt“ die Vorgabe; seit dem 17.11.2026 ist es wieder
+„groß (wie bisher)“, und wer „kompakt“ gewählt hat, behält es.
 
 **Firmware.** Unter dem Titel steht auch die Firmware, die das Spiel verlangt („FW 13.60“, bei PS4-Titeln
 „PS4-FW“); verlangt es eine neuere als die der Konsole, ist die Marke gelb. Ist ein Backport angewendet, steht
@@ -507,7 +507,7 @@ filterbar. Die letzten 500 liegen auf der Konsole in
 Der Reiter **PS4 PKG von USB** auf der Spiele-Seite spielt PS4-Spiele (Fake-PKG) direkt vom USB-Laufwerk, ohne sie zu installieren. Er beruht auf PS4Mount von gasb07 (GPL-3.0), dessen Quelltext in die App übernommen ist.
 
 1. **Vorbereiten.** Auf einem exFAT-Laufwerk liegen Spiel, Update und Zusatzinhalte als `.pkg` irgendwo auf dem Laufwerk, in beliebigen Ordnern und mit beliebigen Dateinamen (in den Einstellungen lässt sich die Suche auf bestimmte Ordner beschränken). Sie gehören zusammen, wenn sie dieselbe Titel-ID haben. Die Pakete bleiben dort, wo sie liegen; die App verschiebt nichts (seit PS4Mount 0.8.0).
-2. **Einschalten.** Der Schalter „Einschalten“ startet die Suche; er bleibt über einen Neustart der App hinweg an. „Jetzt suchen“ löst eine Suche sofort aus.
+2. **Einschalten.** Der Schalter „Einschalten“ startet die Suche; er bleibt über einen Neustart der App hinweg an. „Jetzt suchen“ löst eine Suche sofort aus. Seit 17.11.2026 ist PS4Mount ab Werk eingeschaltet (bei einer neuen Installation, ohne gespeicherte Einstellung, `config.txt` in den Daten von PS4Mount); wer es ausschaltet, bei dem bleibt es aus. Browser-Seite und Vollbild-App zeigen den Schalter dann als „an“.
 3. **Warten.** Die App liest das Laufwerk einmal in eine Übersicht (jede PKG nur einmal) und meldet jedes Spiel, sobald es spielbereit ist. Das Spiel erscheint mit Symbol auf dem Startbildschirm. Gibt es für ein Spiel mehrere Updates, wird das neueste benutzt („Updates“ lässt ein anderes wählen); liegt dasselbe Spiel auf zwei Laufwerken, behält das zuerst angemeldete es.
 - Die PKG-Dateien bleiben auf dem Laufwerk; auf die Konsole kommen nur kleine Verwaltungsdateien. Löscht man ein Spiel auf der Konsole oder mit „Kachel entfernen“, verschwindet nur die Kachel, die PKG bleibt; „Kachel wieder anlegen“ holt sie zurück.
 - **Auf USB gefunden, nicht eingebunden** (seit 29.10.2026): Unter den Spielen zeigt der Reiter die PKGs, die die Suche liegen lässt, jeweils mit dem Grund: schon auf der Konsole installiert (dann erst das installierte Spiel löschen, um es von USB zu spielen), noch nicht fertig kopiert (die Datei ist kleiner, als ihr Kopf sagt), kein PS4-Paket (etwa ein PS5-PKG, das der Reiter „Pakete“ installiert), kein Fake-PKG, Zusatzinhalt ohne PS4-Spiel oder bei ausgeschalteten Zusatzinhalten, zweite Kopie einer benutzten Datei, beschädigtes Spielpaket (seit PS4Mount 0.7.1: fehlerhafte Kennungen in der param.sfo; so ein Paket kann die Konsole ausschalten und ihren Speicher beschädigen, darum wird es nie angemeldet). Die Liste steht auch in der Vollbild-App.
