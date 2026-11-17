@@ -25,6 +25,7 @@
 - **Dump Forge v0.5.6:** Trophäen melden sich auch bei FPKG, deren Dateien nur verschlüsselt im Container lagen; Packs mit mehr als 32 Teilen lassen sich schreiben.
 
 ### Spiele und Kacheln
+- **FPKG bei gepackten Spielen:** Ist ein Spiel mit AMPR-Packs (zstd oder LZ4) gepackt, kann daraus kein Debug-FPKG werden: Kraken Mount nimmt ein solches Paket nicht an, es stünde bei FPKGMount als „Fehlgeschlagen“. Das Konvertieren-Fenster zeigt „FPKG“ dann ausgegraut mit dem Grund (Vollbild-App: wählbar, aber mit Grund und nicht startbar); erst die Packs auflösen, dann konvertieren.
 - **Spiele-Ansicht:** Die Vorgabe der Spielkarten ist wieder „groß“ (wie bisher); wer „kompakt“ gewählt hat, behält es (Browser der Konsole und Browser am PC, je Gerät gemerkt).
 - **PS4Mount ist ab Werk eingeschaltet** (bei einer neuen Installation, ohne gespeicherte Einstellung), wie Kraken Mount. Wer es schon ausgeschaltet hat, behält das; der Schalter in Browser-Seite und Vollbild-App zeigt den echten Zustand.
 - **Marke „FPKGMount“:** Spiele, die Kraken Mount (FPKGMount) eingehängt hat, tragen jetzt die Marke „FPKGMount“, wie die PS4Mount-Spiele die Marke „PS4Mount“ (Browser und Vollbild-App). Sie erscheint, solange Kraken Mount läuft.

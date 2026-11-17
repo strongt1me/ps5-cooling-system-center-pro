@@ -213,6 +213,7 @@ Plan parse_plan(Tool tool, const PlanReply &reply)
     p.raw_bytes = bytes(root, "raw_bytes");
     p.ffpkg_bytes = bytes(root, "ffpkg_bytes");
     p.ffpkg_error = str(root, "ffpkg_error");
+    p.fpkg_error = str(root, "fpkg_error");
     const cJSON *item = nullptr;
     cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "ops"))
     {
@@ -557,7 +558,9 @@ bool ready(const Plan &p, const PlanChoice &c)
         if (!chosen(p, c) ||
             !drive_blocked(p, c, p.drives[static_cast<std::size_t>(c.drive)]).empty())
             return false;
-        if (p.tool == Tool::convert && (c.op < 0 || (c.op == 1 && !p.ffpkg_error.empty())))
+        if (p.tool == Tool::convert &&
+            (c.op < 0 || (c.op == 1 && !p.ffpkg_error.empty()) ||
+             (c.op == kOpFpkg && !p.fpkg_error.empty())))
             return false;
         return !target_of(p, c).empty();
     case Tool::erase:
@@ -574,7 +577,7 @@ PlanChoice first_choice(const Plan &p, const Game *game)
     {
         for (const std::string &op : p.ops)
         {
-            if (op == "ffpkg" && !p.ffpkg_error.empty())
+            if ((op == "ffpkg" && !p.ffpkg_error.empty()) || (op == "fpkg" && !p.fpkg_error.empty()))
                 continue;
             for (int o = 0; o < kOps; ++o)
             {

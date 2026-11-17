@@ -1334,6 +1334,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             para(check_.target, kInk, 2);
         if (choice_.op == 1 && !plan_.ffpkg_error.empty())
             para("Bei diesem Spiel nicht möglich: " + plan_.ffpkg_error, kCritical, 3);
+        if (choice_.op == kOpFpkg && !plan_.fpkg_error.empty())
+            para("Bei diesem Spiel nicht möglich: " + plan_.fpkg_error, kCritical, 3);
         if (choice_.op == 0 && !stream_reasons(plan_).empty())
             para("Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder "
                  "Texture-Streaming). Ein "

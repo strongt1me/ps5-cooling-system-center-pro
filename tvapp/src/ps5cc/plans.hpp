@@ -113,6 +113,7 @@ struct Plan
     std::uint64_t raw_bytes = 0;
     std::uint64_t ffpkg_bytes = 0;
     std::string ffpkg_error;
+    std::string fpkg_error; // no debug FPKG: the game holds AMPR packs, Kraken Mount refuses such a package
     std::vector<std::string> ops; // the formats the console app knows by name, in its order
     StreamRisk stream;
     UnsignedExec unsigned_exec;

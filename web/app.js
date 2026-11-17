@@ -6404,6 +6404,9 @@
     return `<div class="cp-sub"><h5>Kompressionsstufe</h5><div class="cp-list">${levels}</div>${engine}${guide}</div>`;
   };
 
+  /* Why a format cannot be chosen for this game ("" when it can): the plan's ffpkg_error / fpkg_error. */
+  const cvOpWhy = (p, op) => (op === "ffpkg" ? p.ffpkg_error : op === "fpkg" ? p.fpkg_error : "") || "";
+
   const cvRenderPlan = () => {
     const p = cv.plan;
     const body = $("#cp-body");
@@ -6415,14 +6418,15 @@
 
     /* Only operations this page knows by name; the value is text like any other. */
     /* A .ffpkg the app already knows it cannot build (a folder with too many entries, a file too big) is shown
-       with the reason, and cannot be chosen. */
+       with the reason, and cannot be chosen; so is the FPKG of a game with AMPR packs (Kraken Mount refuses such a package). */
     const ops = p.ops.filter((op) => CV_OPS[op]).map((op) => {
-      const off = op === "ffpkg" && p.ffpkg_error;
+      const why = cvOpWhy(p, op);
+      const off = !!why;
       return `<label class="cp-choice${off ? " off" : ""}">
         <input type="radio" name="cv-op" value="${esc(op)}" ${cvKey(cv.op) === op ? "checked" : ""} ${off ? "disabled" : ""}>
         <span class="cp-choice-text"><b>${esc(CV_OPS[op].t)}${op === "ffpfsc" && p.kind === "folder" ? " (empfohlen)" : ""}</b>
           <span class="muted">${esc(CV_OPS[op].d(p))}</span>
-          ${off ? `<span class="cp-why">Bei diesem Spiel nicht möglich: ${esc(p.ffpkg_error)}</span>` : ""}
+          ${off ? `<span class="cp-why">Bei diesem Spiel nicht möglich: ${esc(why)}</span>` : ""}
           ${op === "ffpfsc" && cvStreamReasons(p).length ? `<span class="cp-why">Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder Texture-Streaming): ein komprimiertes Abbild muss beim Spielen ständig entpackt werden.</span>` : ""}</span></label>`
         + (op === "fpkg" && cvIsFpkg(cv.op) ? cvFpkgExtra(p) : "");
     }).join("")
@@ -6756,7 +6760,7 @@
       await cvQueueLoad();
       if (seq !== dlg.seq || !$("#cp-overlay")) return;
       cv.plan = plan;
-      cv.op = plan.ops.find((op) => CV_OPS[op] && !(op === "ffpkg" && plan.ffpkg_error)) || "";
+      cv.op = plan.ops.find((op) => CV_OPS[op] && !cvOpWhy(plan, op)) || "";
       const first = plan.targets.find((d) => !d.source_here && d.enough_space && !d.fat32_too_big)
                  || plan.targets.find((d) => d.enough_space && !d.fat32_too_big);
       cv.drive = first ? first.mount : "";

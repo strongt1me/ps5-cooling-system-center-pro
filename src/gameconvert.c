@@ -1492,6 +1492,55 @@ stream_risk_json(const char *source, int folder, uint64_t raw_bytes) {
   return o;
 }
 
+/* AMPR packs in a game (zstd: ampr_zstd.index, LZ4: ampr_assets.index; 17.11.2026). Kraken Mount refuses a package whose folder holds one of them
+   ("a pkg made from an ampr-packed folder is refused", its cache.rs): the debug FPKG made from such a game would end as "Fehlgeschlagen" in its
+   list. So the plan says so before the format is chosen, the check and the start refuse with the same words. 0 none, 1 LZ4, 2 zstd. */
+typedef struct { const char *source; int folder; int packs; } packs_job_t;
+
+static void *
+packs_thread(void *arg) {
+  packs_job_t *j = arg;
+  imgr_t *r = imgr_open(j->source, NULL, 0);
+  if(r) {
+    uint8_t probe[1];
+    if(imgr_pread(r, "/ampr_zstd.index", 0, probe, 1) >= 0) j->packs = 2;
+    else if(imgr_pread(r, "/ampr_assets.index", 0, probe, 1) >= 0) j->packs = 1;
+    imgr_close(r);
+  }
+  return NULL;
+}
+
+static int
+source_packs(const char *source, int folder) {
+  if(folder) {
+    char p[300];
+    struct stat st;
+    if(snprintf(p, sizeof(p), "%s/ampr_zstd.index", source) < (int)sizeof(p) && stat(p, &st) == 0) return 2;
+    if(snprintf(p, sizeof(p), "%s/ampr_assets.index", source) < (int)sizeof(p) && stat(p, &st) == 0) return 1;
+    return 0;
+  }
+  packs_job_t j = { source, 0, 0 };                    /* an image goes through imgread.c: on a thread of its own with a large stack, like the walk above */
+  pthread_t th;
+  pthread_attr_t at;
+  pthread_attr_init(&at);
+  pthread_attr_setstacksize(&at, 1u << 20);
+  if(pthread_create(&th, &at, packs_thread, &j) == 0) pthread_join(th, NULL);
+  pthread_attr_destroy(&at);
+  return j.packs;
+}
+
+/* The reason a game with packs cannot become a FPKG; "" for none. */
+static void
+fpkg_packs_why(int packs, char *out, size_t n) {
+  if(packs == 2)
+    snprintf(out, n, "Es ist mit AMPR-Packs (zstd) gepackt, und Kraken Mount nimmt kein Paket aus einem gepackten Ordner an. "
+                     "Erst die Packs auflösen (Knopf „zstd entpacken“ bei den Asset-Packs des Spiels), dann konvertieren.");
+  else if(packs == 1)
+    snprintf(out, n, "Es ist mit AMPR-Packs (LZ4) gepackt, und Kraken Mount nimmt kein Paket aus einem gepackten Ordner an. "
+                     "Erst die Packs auflösen (Knopf „LZ4 entpacken“ bei den Asset-Packs des Spiels), dann konvertieren.");
+  else if(n) out[0] = 0;
+}
+
 /* --------------------------------------------------------------- interface */
 
 /* What the last plan worked out (the walk over the source is the costly part): the check before the start (ps5tm_gameconvert_check) and
@@ -1503,6 +1552,7 @@ typedef struct {
   int      folder, ps4;
   uint64_t raw, ffpkg_bytes, files;
   char     ffpkg_why[700];
+  char     fpkg_why[400];                       /* why no debug FPKG (AMPR packs in the game), "" when there can be one */
   char     exfat_why[400];                      /* why no exFAT image (and so no .exfat / .ffpfsc) of this folder, "" when there is one */
   unsigned skip_special, skip_system;           /* entries the images leave out on purpose; skip_eg: the first of them */
   char     skip_eg[96];
@@ -1600,6 +1650,8 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     }
     can_exfat = can_ffpfsc = 0;                        /* the page offers .ffpkg only */
   }
+  char fpkg_why[400] = "";                             /* a game with AMPR packs: Kraken Mount refuses its package (source_packs above) */
+  if(can_fpkg) fpkg_packs_why(source_packs(source, folder), fpkg_why, sizeof(fpkg_why));
 
   char stem[200];
   stem_of(source, folder, stem, sizeof(stem));
@@ -1647,6 +1699,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     pcs->ffpkg_bytes = ffpkg_bytes;
     pcs->files = files;
     snprintf(pcs->ffpkg_why, sizeof(pcs->ffpkg_why), "%s", ffpkg_why);
+    snprintf(pcs->fpkg_why, sizeof(pcs->fpkg_why), "%s", fpkg_why);
     snprintf(pcs->exfat_why, sizeof(pcs->exfat_why), "%s", exfat_why);
     pcs->skip_special = skip_special;
     pcs->skip_system = skip_system;
@@ -1660,6 +1713,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   cJSON_AddItemToObject  (root, "unsigned_exec", ps5tm_fsign_info(folder && !ps4 ? source : NULL));
   cJSON_AddNumberToObject(root, "ffpkg_bytes", (double)ffpkg_bytes);
   if(ffpkg_why[0]) cJSON_AddStringToObject(root, "ffpkg_error", ffpkg_why);
+  if(fpkg_why[0]) cJSON_AddStringToObject(root, "fpkg_error", fpkg_why);        /* "fpkg" stays in "ops"; the page shows it greyed out with this reason */
   if(exfat_why[0]) cJSON_AddStringToObject(root, "exfat_error", exfat_why);      /* no .exfat / .ffpfsc for this folder; "ops" has no more than .ffpkg */
   if(skip_special || skip_system) {
     char sn[300];
@@ -1832,6 +1886,10 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
   else chk_add(arr, "source", "ok", NULL, "Abbild-Datei lesbar: %s", size_text(pc.raw, b1, sizeof(b1)));
   if(!strcmp(op, "ffpkg") && pc.ffpkg_why[0]) {
     chk_add(arr, "ffpkg", "error", pc.ffpkg_why, "Ein ffpkg-Abbild ist bei diesem Spiel nicht möglich.");
+    errors++;
+  }
+  if(is_fpkg_op(op) && pc.fpkg_why[0]) {
+    chk_add(arr, "fpkg", "error", pc.fpkg_why, "Ein FPKG ist bei diesem Spiel nicht möglich.");
     errors++;
   }
   if(pc.exfat_why[0] && (!strcmp(op, "exfat") || !strcmp(op, "ffpfsc"))) {
@@ -2086,6 +2144,14 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   if(want_fpkg && !ps5tm_dumpforge_installed(NULL, 0)) {
     snprintf(err, err_len, "Dump Forge, das die Pakete schreibt, ist noch nicht da. Bitte laden oder die Datei in den Ordner %s legen.", PS5TM_DATA_DIR "/dumpforge");
     return 409;
+  }
+  if(want_fpkg) {                                      /* AMPR packs in the game: Kraken Mount would refuse the package (the page greys the choice out too) */
+    char why[400];
+    fpkg_packs_why(source_packs(source, is_dir(source)), why, sizeof(why));
+    if(why[0]) {
+      snprintf(err, err_len, "%s", why);
+      return 409;
+    }
   }
 
   int ps4 = ps4_folder(source);

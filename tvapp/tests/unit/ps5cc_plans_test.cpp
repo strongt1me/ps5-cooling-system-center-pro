@@ -413,6 +413,33 @@ TEST(Ps5ccPlans, TheDebugFpkgBodyCarriesTheLevelAndNoAmprIndex)
     EXPECT_NE(hui::ps5cc::queue_add_body(p, c).find(R"("op":"fpkg-min")"), std::string::npos);
 }
 
+// A game with AMPR packs: Kraken Mount refuses a package made from it, so the app says "fpkg_error" and the
+// debug FPKG is neither the first choice nor startable (17.11.2026).
+TEST(Ps5ccPlans, AGameWithAmprPacksCannotBecomeADebugFpkg)
+{
+    std::string json = kConvertFpkg;
+    json.insert(json.find(R"("ops":)"), R"("fpkg_error":"Es ist mit AMPR-Packs (zstd) gepackt.",)");
+    const Plan packed = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, json.c_str()));
+    const Plan plain = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertFpkg));
+    ASSERT_TRUE(packed.ok);
+    EXPECT_EQ(packed.fpkg_error, "Es ist mit AMPR-Packs (zstd) gepackt.");
+    EXPECT_TRUE(plain.fpkg_error.empty());
+    ASSERT_EQ(packed.ops.size(), 2u) << "fpkg stays in the list; the page shows it with the reason";
+
+    PlanChoice c;
+    c.mode = 0;
+    c.op = hui::ps5cc::kOpFpkg;
+    c.level = 0;
+    c.drive = 1;
+    EXPECT_TRUE(hui::ps5cc::ready(plain, c));
+    EXPECT_FALSE(hui::ps5cc::ready(packed, c));
+    c.level = 3; // a level does not get around it
+    EXPECT_FALSE(hui::ps5cc::ready(packed, c));
+
+    // the first choice is the first format that can be chosen: ffpfsc stays, even if fpkg were first
+    EXPECT_EQ(hui::ps5cc::first_choice(packed, nullptr).op, 0);
+}
+
 TEST(Ps5ccPlans, ACompressedFpkgMayGoToAFat32DriveButAnUncompressedOneMayNot)
 {
     const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertFpkg));
