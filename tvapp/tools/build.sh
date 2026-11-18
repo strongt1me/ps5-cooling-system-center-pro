@@ -158,7 +158,8 @@ for source in "${sources[@]}"; do
     object="$build/obj/$source.o"
     mkdir -p "$(dirname "$object")"
     if [[ $source == *.c ]]; then standard=-std=c11; else standard=-std=c++20; fi
-    args=("$standard" -O2 -Wall -Wextra -ffunction-sections -fdata-sections)
+    # __FILE__ (assert and error texts of the vendored stb code) must not carry the path of the build machine into the binary
+    args=("$standard" -O2 -Wall -Wextra -ffunction-sections -fdata-sections "-fmacro-prefix-map=$root=.")
     [[ $source == *.c ]] || args+=(-fno-exceptions -fno-rtti)
     # Vendored upstream code is built as published; its warnings are not ours to fix.
     [[ $source != src/third_party/* ]] || args+=(-w)
@@ -190,7 +191,7 @@ for name in app_crt app_cpp_runtime; do
         PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
         sh "$root/tooling/prospero-clang18" \
         -std=c++20 -O2 -Wall -Wextra -fno-exceptions -fno-rtti \
-        -ffunction-sections -fdata-sections -MD -MF "$object.d" \
+        -ffunction-sections -fdata-sections "-fmacro-prefix-map=$root=." -MD -MF "$object.d" \
         -c "$native/$name.cpp" -o "$object"
 done
 

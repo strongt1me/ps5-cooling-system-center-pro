@@ -113,7 +113,8 @@ struct Plan
     std::uint64_t raw_bytes = 0;
     std::uint64_t ffpkg_bytes = 0;
     std::string ffpkg_error;
-    std::string fpkg_error; // no debug FPKG: packs that could not be looked at, or both kinds of packs
+    std::string
+        fpkg_error; // no debug FPKG: packs that could not be looked at, or both kinds of packs
     // A game in AMPR packs ("zstd" / "lz4"): Kraken Mount takes no package with packs in it, so
     // Dump Forge decodes them while it writes the debug FPKG; the package then holds the unpacked
     // game, this big (0: not known, an image).

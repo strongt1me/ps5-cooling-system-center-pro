@@ -2863,7 +2863,7 @@ class MockSource final : public Source
         d.system =
             R"({"ok":true,"model":"CFI-7021 B01Y","serial_masked":"••••8023","firmware_raw":"0x12000043","firmware_version":"12.00",)"
             R"("firmware_group":"12.00-12.70","app_version":"1.75.7","firmware_reported":"12.000.043","uptime_sec":7425,)"
-            R"("network":{"probed":true,"up":true,"kind":"wlan","ip":"192.168.1.94","ssid":"Wohnzimmer-5G","signal_pct":86,"band_ghz":5,"link_mbit":866},)"
+            R"("network":{"probed":true,"up":true,"kind":"wlan","ip":"192.168.1.20","ssid":"Heimnetz-5G","signal_pct":86,"band_ghz":5,"link_mbit":866},)"
             R"("display":{"name":"Wohnzimmer-TV","width":3840,"height":2160,"refresh_hz":60,"hdr":true},)"
             R"("controller":{"in_use":true,"press_age_s":4,"battery_pct":80,"charging":false,"from_log":true,"restored":false,"age_s":30},)"
             R"("console_name":"PS5-054","locale":{"language":4,"time_zone":61,"timezone_offset_min":3600,"utc_offset_raw":3600,"summer_time":false,"local_offset_min":60,"region_code":"EU"},)"
@@ -2922,7 +2922,7 @@ class MockSource final : public Source
             }
         }
         d.qr =
-            R"({"ok":true,"url":"http://192.168.1.94:8086/","svg":"<svg viewBox=\"0 0 37 37\"><path d=\")" +
+            R"({"ok":true,"url":"http://192.168.1.20:8086/","svg":"<svg viewBox=\"0 0 37 37\"><path d=\")" +
             path + R"(\"/></svg>"})";
         ++d.seq;
     }

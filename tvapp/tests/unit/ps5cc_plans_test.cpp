@@ -441,6 +441,14 @@ TEST(Ps5ccPlans, AGameInAmprPacksIsUnpackedWhileItBecomesADebugFpkg)
     tight.drives[1].enough_space = false;
     EXPECT_EQ(hui::ps5cc::drive_blocked(tight, c, tight.drives[1]),
               "Zu wenig Platz: Nötig sind bis zu " + hui::ps5cc::format_bytes(31800000000ull));
+
+    // the usual way: the drive-wide figure says yes, the target of this format says no (the room
+    // of the drive is the best case); the text still names the unpacked game
+    Plan per_target = p;
+    per_target.drives[1].enough_space = true;
+    per_target.drives[1].convert[0][static_cast<std::size_t>(hui::ps5cc::kOpFpkg)].enough_space = 0;
+    EXPECT_EQ(hui::ps5cc::drive_blocked(per_target, c, per_target.drives[1]),
+              "Zu wenig Platz: Nötig sind bis zu " + hui::ps5cc::format_bytes(31800000000ull));
 }
 
 // Packs that could not be looked at, or both kinds of packs: the console app says "fpkg_error" and
