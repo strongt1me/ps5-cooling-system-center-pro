@@ -1269,7 +1269,8 @@ class PayloadsPage final : public Page
             delete_file_ = PayloadFile{};
             const std::size_t n = it->items.size();
             ask_.open("Profil löschen?",
-                      {DeleteAsk::line(it->name, std::to_string(n) + (n == 1 ? " Eintrag" : " Einträge"))},
+                      {DeleteAsk::line(it->name,
+                                       std::to_string(n) + (n == 1 ? " Eintrag" : " Einträge"))},
                       {}, feedback);
         }
     }
@@ -1305,9 +1306,9 @@ class PayloadsPage final : public Page
     int edit_index_ = -1;  // the entry the △ menu is about
     std::string menu_profile_;
     ui::Menu menu_;
-    DeleteAsk ask_;                // asked before a file or a profile is deleted
-    PayloadFile delete_file_;      // what the question is about (a file) ...
-    std::string delete_profile_;   // ... or a profile's id
+    DeleteAsk ask_;              // asked before a file or a profile is deleted
+    PayloadFile delete_file_;    // what the question is about (a file) ...
+    std::string delete_profile_; // ... or a profile's id
     ui::Keyboard keys_;
     bool naming_ = false;
     std::string name_;

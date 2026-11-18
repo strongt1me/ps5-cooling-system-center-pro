@@ -129,7 +129,8 @@ class KrakenPage final : public Page
         info_.style.value_size = 21.0f;
         info_.style.row_height = 40.0f;
         info_.style.max_lines = 1;
-        info_.set_bounds({kRightX + 30.0f, kTop + 170.0f, kRightW - 60.0f, 424.0f}); // nine rows of 46.5 px: with a conflict and a hint all fit
+        info_.set_bounds({kRightX + 30.0f, kTop + 170.0f, kRightW - 60.0f,
+                          424.0f}); // nine rows of 46.5 px: with a conflict and a hint all fit
 
         menu_.style.theme = solid_theme(theme);
         menu_.style.width = 600.0f;
@@ -259,10 +260,11 @@ class KrakenPage final : public Page
                                   "M.2-Laufwerk der Ordner FPKG-Games im Hauptordner), dort sucht "
                                   "ShadowMountPlus nicht!",
                                   card.x + 30.0f, below + 10.0f, card.w - 60.0f, kWarning, 5);
-            // With the warning there is no room left for the error text; the state above names it and the log has it.
+            // With the warning there is no room left for the error text; the state above names it
+            // and the log has it.
             if (!g->error.empty() && g->conflict_with.empty())
-                paragraph(canvas, g->error, card.x + 30.0f, below + 10.0f, card.w - 60.0f,
-                          kWarning, 3);
+                paragraph(canvas, g->error, card.x + 30.0f, below + 10.0f, card.w - 60.0f, kWarning,
+                          3);
         }
         else
         {
@@ -413,11 +415,18 @@ class KrakenPage final : public Page
     {
         if (state_.scanpaths.empty())
         {
-            // Not running: its setting is not known, the app writes the folder FPKG-Games at the first start.
-            // Running with an empty list: its own default.
+            // Not running: its setting is not known, the app writes the folder FPKG-Games at the
+            // first start. Running with an empty list: its own default.
             if (!state_.running)
-                return "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner FPKG-Games ein: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk.";
-            return "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege FPKG-Spiele besser in den Ordner FPKG-Games (/data/FPKG-Games oder FPKG-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner ein.";
+                return "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner "
+                       "FPKG-Games ein: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- "
+                       "und M.2-Laufwerk.";
+            return "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, "
+                   "/data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- "
+                   "und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege "
+                   "FPKG-Spiele besser in den Ordner FPKG-Games (/data/FPKG-Games oder FPKG-Games "
+                   "auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner "
+                   "ein.";
         }
         // the folders the app writes into its config (kraken.c seed_config)
         std::vector<std::string> own = {"/data/FPKG-Games"};
@@ -452,7 +461,8 @@ class KrakenPage final : public Page
         if (!state_.version.empty())
             s += " " + state_.version;
         if (state_.stopping)
-            return s + " · wird beendet …"; // switched off a moment ago: it answers for a few seconds more
+            return s + " · wird beendet …"; // switched off a moment ago: it answers for a few
+                                            // seconds more
         if (state_.waiting == "shadowmount")
             return s + " · wartet auf ShadowMountPlus";
         if (state_.waiting == "kstuff")
@@ -461,11 +471,14 @@ class KrakenPage final : public Page
             return s + " · arbeitet gerade …";
         if (state_.paused)
             return s + " · ein Spiel läuft";
-        // The count comes first and the line does not end with "Spiele": the translator would take the whole line for the pattern
-        // "{0} Spiele" (the version number and all), and a Russian plural is chosen by the digits of {0} (audit 15.11.2026).
+        // The count comes first and the line does not end with "Spiele": the translator would take
+        // the whole line for the pattern
+        // "{0} Spiele" (the version number and all), and a Russian plural is chosen by the digits
+        // of {0} (audit 15.11.2026).
         const std::size_t n = state_.games.size();
         s = std::to_string(n) + (n == 1 ? " Spiel" : " Spiele") + " · " + s;
-        // what the web page says in its note: the cache of the games is built on the internal storage, and that one is nearly full
+        // what the web page says in its note: the cache of the games is built on the internal
+        // storage, and that one is nearly full
         if (state_.low_space)
             s += " · wenig Platz auf der internen SSD";
         // a newer release was loaded: the next start takes it (the web page says the same)
@@ -473,9 +486,11 @@ class KrakenPage final : public Page
             s += " · geladen: " + state_.fetched_version + " (wird beim Start genommen)";
         if (!state_.fetch_result.empty())
             s += " · " + state_.fetch_result;
-        // it runs on from before an update (the app never stops it itself): the web page says the same in its note
+        // it runs on from before an update (the app never stops it itself): the web page says the
+        // same in its note
         if (state_.restart_needed)
-            s += " · Eine ältere Fassung läuft noch: Zum Wechsel Kraken Mount aus- und wieder einschalten.";
+            s += " · Eine ältere Fassung läuft noch: Zum Wechsel Kraken Mount aus- und wieder "
+                 "einschalten.";
         return s;
     }
 
@@ -605,9 +620,11 @@ class KrakenPage final : public Page
         if (key != key_)
         {
             key_ = std::move(key);
-            // The focus stays on the same GAME (by its title id): the rows carry the index into state_.games as their tag, which shifts
-            // when a game appears above, and `refocus` of the other pages compares the list that is already replaced here.
-            int focus = std::clamp(list_.focus(), 0, std::max(static_cast<int>(next.size()) - 1, 0));
+            // The focus stays on the same GAME (by its title id): the rows carry the index into
+            // state_.games as their tag, which shifts when a game appears above, and `refocus` of
+            // the other pages compares the list that is already replaced here.
+            int focus =
+                std::clamp(list_.focus(), 0, std::max(static_cast<int>(next.size()) - 1, 0));
             if (!focus_id_.empty())
             {
                 for (std::size_t i = 0; i < next.size(); ++i)
@@ -662,7 +679,8 @@ class KrakenPage final : public Page
     tween::Spring shown_;
     KrakenState state_;
     std::string key_;
-    std::string focus_id_; // the game the focus is on (title id): it stays on it when the list is refilled
+    std::string
+        focus_id_; // the game the focus is on (title id): it stays on it when the list is refilled
     std::string info_key_ = "\x01";
     std::string menu_id_;
     std::string menu_path_;

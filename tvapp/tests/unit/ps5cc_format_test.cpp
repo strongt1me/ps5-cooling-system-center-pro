@@ -59,7 +59,8 @@ TEST(Ps5ccFormat, JobTitleCountsTheEntries)
 {
     EXPECT_EQ(hui::ps5cc::format_job_title("copy", 0, 2), "Kopiere 1 von 2 Dateien/Ordnern");
     EXPECT_EQ(hui::ps5cc::format_job_title("move", 1, 3), "Verschiebe 2 von 3 Dateien/Ordnern");
-    EXPECT_EQ(hui::ps5cc::format_job_title("delete", 5, 5), "Lösche 5 von 5 Dateien/Ordnern"); // never past the last
+    EXPECT_EQ(hui::ps5cc::format_job_title("delete", 5, 5),
+              "Lösche 5 von 5 Dateien/Ordnern"); // never past the last
     EXPECT_EQ(hui::ps5cc::format_job_title("copy", 0, 1), "Kopiere 1 Datei/Ordner");
     EXPECT_EQ(hui::ps5cc::format_job_title("copy", 0, 0), "Kopieren");
 }

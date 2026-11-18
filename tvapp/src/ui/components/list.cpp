@@ -370,8 +370,8 @@ void ListView::draw(Canvas &canvas) const
                                     Painter::on(theme.accent), gfx::Align::center);
                         right -= width + 18.0f;
                     }
-                    // A tinted pill of its own (a wash of its colour, bordered by it), so it does not
-                    // pass for the solid badge; right-aligned left of the badge column.
+                    // A tinted pill of its own (a wash of its colour, bordered by it), so it does
+                    // not pass for the solid badge; right-aligned left of the badge column.
                     if (!item.chip.empty())
                     {
                         const gfx::Color tone =

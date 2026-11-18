@@ -1,6 +1,5 @@
-// ps5cc - How much a copy of the data snapshot costs (audit F-85: the frame copies it whenever the app has new numbers).
-// Copyright (C) 2026 strongt1me
-// SPDX-License-Identifier: GPL-3.0-or-later
+// ps5cc - How much a copy of the data snapshot costs (audit F-85: the frame copies it whenever the
+// app has new numbers). Copyright (C) 2026 strongt1me SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "ps5cc/data.hpp"
 
@@ -39,7 +38,8 @@ TEST(SnapshotCopy, ABigLibraryIsCopiedInUnderAMillisecond)
     const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count() / kRuns;
     std::printf("[SNAPSHOT] %zu games: one copy %.3f ms (sanitizers on)\n", snap.games.size(), ms);
     EXPECT_EQ(sink, snap.games.size() * kRuns);
-    // under AddressSanitizer a copy is several times slower than on the console; a copy in the milliseconds would be a finding
+    // under AddressSanitizer a copy is several times slower than on the console; a copy in the
+    // milliseconds would be a finding
     EXPECT_LT(ms, 5.0);
 }
 

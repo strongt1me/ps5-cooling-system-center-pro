@@ -106,7 +106,8 @@ std::unique_ptr<Page> make_payloads_page();
 std::unique_ptr<Page> make_packages_page();
 std::unique_ptr<Page> make_ps4mount_page();
 std::unique_ptr<Page> make_kraken_page();
-// Kühlung -> Lüfterkurve (16.11.2026): the curve of the automatic mode as a picture, and the recording of the regulation.
+// Kühlung -> Lüfterkurve (16.11.2026): the curve of the automatic mode as a picture, and the
+// recording of the regulation.
 std::unique_ptr<Page> make_fancurve_page();
 std::unique_ptr<Page> make_disc_page();
 std::unique_ptr<Page> make_storage_page();

@@ -6,7 +6,8 @@
 // through ShadowMountPlus (1.7beta10). The app itself refuses while one of its jobs runs or
 // PS4Mount plays games from the drive (src/usbeject.c), and says why; nothing is asked twice
 // (user, 27.10.2026). Under the drives: the pictures
-// behind the areas (the cover and metadata folder is always on and no longer shown, user 11.11.2026), folded in until the X button opens them (moved from Kühlung → Einstellungen,
+// behind the areas (the cover and metadata folder is always on and no longer shown,
+// user 11.11.2026), folded in until the X button opens them (moved from Kühlung → Einstellungen,
 // user 29.10.2026). Each part has its own title.
 
 #include "ps5cc/backdrops.hpp"

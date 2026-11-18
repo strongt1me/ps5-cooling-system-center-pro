@@ -856,7 +856,8 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {4.0f, 0, Direction::none, "selbsttest"},
-            // Lüfterkurve (16.11.2026): the curve with the cursor at the temperature of now, then moved right
+            // Lüfterkurve (16.11.2026): the curve with the cursor at the temperature of now, then
+            // moved right
             {0.5f, action_bit(Action::jump_next)},
             {1.4f, 0, Direction::none, "luefterkurve"},
             {0.2f, 0, Direction::right},
@@ -933,11 +934,13 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::right},
             {0.8f, 0, Direction::none, "plan-konvertieren"},
-            // the debug FPKG: the row of Dump Forge fetches it (the preview at once), then the format with a level
+            // the debug FPKG: the row of Dump Forge fetches it (the preview at once), then the
+            // format with a level
             {0.2f, 0, Direction::up},
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "plan-konvertieren-engine"},
-            // the guide for Dump Forge with the plain ELF: the row under the Dump Forge row, O closes it
+            // the guide for Dump Forge with the plain ELF: the row under the Dump Forge row, O
+            // closes it
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "plan-konvertieren-anleitung"},
@@ -1185,7 +1188,8 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
-            {0.2f, 0, Direction::up}, // wraps to the end: Ereignisse, Größen, neu suchen, Dump-Einstellungen
+            {0.2f, 0,
+             Direction::up}, // wraps to the end: Ereignisse, Größen, neu suchen, Dump-Einstellungen
             {0.3f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "disc-einstellungen"},
             // the row "Ordner": ✕ opens the keyboard (16.11.2026), ○ closes it again
@@ -1550,7 +1554,9 @@ class Ps5cc final : public app::Concept
         switch (nav_.current())
         {
         case kAreaCooling:
-            return cooling_tabs_.active() == 0 ? kCooling : cooling_tabs_.active() == 1 ? kSettings : kCurve;
+            return cooling_tabs_.active() == 0   ? kCooling
+                   : cooling_tabs_.active() == 1 ? kSettings
+                                                 : kCurve;
         case kAreaGames:
             return game_views_[static_cast<std::size_t>(
                 std::clamp(games_tabs_.active(), 0, static_cast<int>(game_views_.size()) - 1))];

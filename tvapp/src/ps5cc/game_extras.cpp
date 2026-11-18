@@ -161,7 +161,8 @@ void GameExtras::init(const ui::Theme &theme)
     ask_version_.style.scrim = 0.72f;
     ask_version_.style.width = 900.0f;
     ask_version_.style.body_lines = 10;
-    ask_version_.style.buttons = ui::DialogButtons::stacked; // three answers with long words: one under the other
+    ask_version_.style.buttons =
+        ui::DialogButtons::stacked; // three answers with long words: one under the other
 }
 
 void GameExtras::open_game(const Game &game, ui::Feedback &feedback)
@@ -229,7 +230,8 @@ void GameExtras::absorb(const Snapshot &data)
         {
             warned_ = job;
             // the toast shows two lines: the advice short, the full sentence stays in the window
-            const std::string key = str(a.root, "warn_key").empty() ? "update_emulators" : str(a.root, "warn_key");
+            const std::string key =
+                str(a.root, "warn_key").empty() ? "update_emulators" : str(a.root, "warn_key");
             toast(ui::StatusKind::warning, "AMPR EMU NG eingebaut",
                   "In ShadowMountPlus " + key + "=0 setzen, sonst wird die Datei ersetzt.");
         }
@@ -333,11 +335,14 @@ void GameExtras::build_main()
             form_.add_header("INDEX-TABELLEN (AMPR EMU NG)");
             // short rows: a long value is cut off at the right edge
             ui::FormRow &r = form_.add_value(kStatus + 70, "Zustand",
-                                             st == "over" ? "zu groß" : st == "tight" ? "knapp" : "passt");
+                                             st == "over"    ? "zu groß"
+                                             : st == "tight" ? "knapp"
+                                                             : "passt");
             form_.add_value(kStatus + 71, "Tabellen (geschätzt)",
                             format_bytes(static_cast<std::uint64_t>(num(c, "need_bytes"))));
-            form_.add_value(kStatus + 72, headroom < 0 ? "Es fehlen" : "Spielraum",
-                            format_bytes(static_cast<std::uint64_t>(headroom < 0 ? -headroom : headroom)));
+            form_.add_value(
+                kStatus + 72, headroom < 0 ? "Es fehlen" : "Spielraum",
+                format_bytes(static_cast<std::uint64_t>(headroom < 0 ? -headroom : headroom)));
             form_.add_value(kStatus + 73, "Pack-Index",
                             std::to_string(static_cast<long long>(num(c, "files"))) + " Dateien, " +
                                 std::to_string(static_cast<long long>(num(c, "chunks"))) +
@@ -352,21 +357,26 @@ void GameExtras::build_main()
                                 "Startet das Spiel nicht, ist wahrscheinlich dies der Grund.";
             else if (ver != "0.4.0")
                 r.description = "Die Ansicht aller Dateien und die Paket-Tabellen müssen in den "
-                                "Indexspeicher von 80 MiB passen (AMPR EMU NG " + ver + ").";
+                                "Indexspeicher von 80 MiB passen (AMPR EMU NG " +
+                                ver + ").";
             // the older version fails or is close, the newer one manages
             const cJSON *old = get(j.root, "index_check_old");
             const std::string ost = old != nullptr ? str(old, "state") : std::string();
             if (st == "ok" && (ost == "over" || ost == "tight"))
             {
-                const std::string over = str(old, "ng_version").empty() ? "0.4.0" : str(old, "ng_version");
-                form_.add_value(kStatus + 74, "Ältere Fassung", over + (ost == "over" ? ": zu groß" : ": knapp"));
-                r.description = ost == "over"
-                                    ? "NG " + over +
-                                          " liefert die gepackten Dateien dieses Spiels nicht aus; mit NG " +
-                                          ver + " passt es."
-                                    : "NG " + over +
-                                          " liegt bei diesem Spiel nahe an der Grenze und liefert die gepackten Dateien womöglich nicht aus; mit NG " +
-                                          ver + " passt es.";
+                const std::string over =
+                    str(old, "ng_version").empty() ? "0.4.0" : str(old, "ng_version");
+                form_.add_value(kStatus + 74, "Ältere Fassung",
+                                over + (ost == "over" ? ": zu groß" : ": knapp"));
+                r.description =
+                    ost == "over"
+                        ? "NG " + over +
+                              " liefert die gepackten Dateien dieses Spiels nicht aus; mit NG " +
+                              ver + " passt es."
+                        : "NG " + over +
+                              " liegt bei diesem Spiel nahe an der Grenze und liefert die "
+                              "gepackten Dateien womöglich nicht aus; mit NG " +
+                              ver + " passt es.";
             }
         }
     }
@@ -431,7 +441,8 @@ void GameExtras::build_main()
     // LZ4 packs
     {
         Json j(extras_.lz4);
-        const bool zst = str(get(j.root, "pack"), "kind") == "zstd"; // the packs are zstd ones (AMPR EMU NG)
+        const bool zst =
+            str(get(j.root, "pack"), "kind") == "zstd"; // the packs are zstd ones (AMPR EMU NG)
         form_.add_header(zst ? "ZSTD-ASSET-PACKS" : "LZ4-ASSET-PACKS");
         if (yes(j.root, "packed"))
         {
@@ -457,8 +468,8 @@ void GameExtras::build_main()
             ui::FormRow &r = form_.add_action(kLz4Pack, "Mit LZ4 packen …");
             r.description =
                 "Öffnet die Einstellungen: Stufe, Profil und ob im Ordner selbst oder als Kopie.";
-            // zstd is a group of its own, as in the web app: one list under one heading looked as if
-            // the two formats belonged together (10.11.2026)
+            // zstd is a group of its own, as in the web app: one list under one heading looked as
+            // if the two formats belonged together (10.11.2026)
             form_.add_header("ZSTD-ASSET-PACKS");
             ui::FormRow &z = form_.add_action(kZstPack, "Mit zstd packen …");
             z.description = "Nur für AMPR EMU NG: packt alles außer den Systemdateien. Öffnet die "
@@ -517,16 +528,18 @@ void GameExtras::build_versions()
     const bool packed_zstd = yes(emu.root, "packed_zstd"); // only AMPR EMU NG reads zstd packs
     version_names_.clear();
     version_ng_.clear();
-    // the answer of the app says whether ShadowMountPlus refreshes the fakelib (update_emulators, on by default), which
-    // line of its config.ini the app changes (update_emulators; update_enabled from 1.7beta12) and whether the person said
-    // which version runs (an older app has no such field: then there is nothing to ask)
+    // the answer of the app says whether ShadowMountPlus refreshes the fakelib (update_emulators,
+    // on by default), which line of its config.ini the app changes (update_emulators;
+    // update_enabled from 1.7beta12) and whether the person said which version runs (an older app
+    // has no such field: then there is nothing to ask)
     const cJSON *emus = get(j.root, "emus");
     smp_update_on_ = yes(emus, "update_emulators");
     smp_key_ = str(emus, "key").empty() ? "update_emulators" : str(emus, "key");
     smp_format_ = str(emus, "format");
     smp_asked_ = get(emus, "smp_version") == nullptr || !str(emus, "smp_version").empty();
-    // three groups with a title of their own (AMPR EMU only; PlayGo has one list): AMPR EMU NG by quer3q (every NG build, later
-    // ones too), AMPR EMU by drakmor (the rest) and the builds that only serve LZ4 packs (test-pack, test-debug-pack)
+    // three groups with a title of their own (AMPR EMU only; PlayGo has one list): AMPR EMU NG by
+    // quer3q (every NG build, later ones too), AMPR EMU by drakmor (the rest) and the builds that
+    // only serve LZ4 packs (test-pack, test-debug-pack)
     const bool playgo = lib_ == "playgo";
     auto group_of = [&](const cJSON *x)
     {
@@ -538,9 +551,13 @@ void GameExtras::build_versions()
     };
     int counts[3] = {0, 0, 0};
     const cJSON *v = nullptr;
-    cJSON_ArrayForEach(v, get(j.root, "versions")) { ++counts[group_of(v)]; }
+    cJSON_ArrayForEach(v, get(j.root, "versions"))
+    {
+        ++counts[group_of(v)];
+    }
     int i = 0;
-    // the rows go in the order of the groups; version_names_ and version_ng_ follow the same order, so row i is entry i
+    // the rows go in the order of the groups; version_names_ and version_ng_ follow the same order,
+    // so row i is entry i
     auto add_versions = [&](int group, int want_debug)
     {
         const cJSON *e = nullptr;
@@ -608,10 +625,13 @@ void GameExtras::build_versions()
     const cJSON *ng = get(j.root, "ng_release");
     if (lib_ == "ampr" && cJSON_IsObject(ng))
     {
-        // always there: the button asks GitHub for the newest stable version (a newer one comes on top, the oldest drops out)
-        ui::FormRow &f = form_.add_action(kFetchNg, "Auf neue AMPR-EMU-NG-Fassung prüfen und laden");
+        // always there: the button asks GitHub for the newest stable version (a newer one comes on
+        // top, the oldest drops out)
+        ui::FormRow &f =
+            form_.add_action(kFetchNg, "Auf neue AMPR-EMU-NG-Fassung prüfen und laden");
         f.disabled = yes(ng, "busy");
-        f.description = "Fragt GitHub nach der neuesten stabilen Fassung. Eine neuere kommt ganz nach oben, die älteste entfällt; die Prüfsumme wird geprüft.";
+        f.description = "Fragt GitHub nach der neuesten stabilen Fassung. Eine neuere kommt ganz "
+                        "nach oben, die älteste entfällt; die Prüfsumme wird geprüft.";
     }
     if (yes(inst, "has_orig"))
         form_.add_action(kRestore, "Original wiederherstellen");
@@ -625,15 +645,17 @@ void GameExtras::build_lz4()
     Json j(extras_.lz4);
     if (zstd_)
     {
-        // zstd: level 1 to 22 (four anchors), everything but the system files goes in, no profile. The game is always packed in its
-        // own folder and the originals go once every file has been compared with its pack (a failure leaves everything as it was),
-        // so there is nothing to choose about them; that the game ran unpacked is still confirmed first.
+        // zstd: level 1 to 22 (four anchors), everything but the system files goes in, no profile.
+        // The game is always packed in its own folder and the originals go once every file has been
+        // compared with its pack (a failure leaves everything as it was), so there is nothing to
+        // choose about them; that the game ran unpacked is still confirmed first.
         form_.add_header("VORAUSSETZUNG");
         form_.add_toggle(kTested, "Ungepackt mit AMPR EMU NG getestet", false).description =
             "Das Spiel muss so schon gelaufen sein; erst dann lohnt das Packen.";
         form_.add_header("EINSTELLUNGEN");
-        form_.add_choice(kLevel, "Stufe",
-                         {"5 (empfohlen)", "1 (am schnellsten)", "9 (kleiner)", "19 (am kleinsten)"}, 0);
+        form_.add_choice(
+            kLevel, "Stufe",
+            {"5 (empfohlen)", "1 (am schnellsten)", "9 (kleiner)", "19 (am kleinsten)"}, 0);
         profile_ids_.clear();
         form_.add_value(kOriginals, "Originale", "entfernt nach der Prüfung");
         form_.add_value(kPlanText, "Plan", plan_text());
@@ -770,17 +792,21 @@ std::string GameExtras::sign_text() const
     const int refused = static_cast<int>(num(u, "refused"));
     if (count == 0 && refused == 0)
         return "Alle signiert";
-    // into a copy the new folder gets them as FSELF; in the game's own folder they stay as they are (short: the value column is narrow)
+    // into a copy the new folder gets them as FSELF; in the game's own folder they stay as they are
+    // (short: the value column is narrow)
     const bool copy = !zstd_ && form_.choice_index(kTarget) == 1;
     std::string text;
     if (count > 0)
         text = std::to_string(count) + " unsigniert";
-    // zstd signs in the game's own folder when the switch is on; into a copy (LZ4) the new folder gets FSELF
+    // zstd signs in the game's own folder when the switch is on; into a copy (LZ4) the new folder
+    // gets FSELF
     const bool signs = copy || (zstd_ && form_.toggle_value(kSign));
     if (refused > 0)
         text += (text.empty() ? "" : " · ") + std::to_string(refused) + " nicht signierbar";
     else
-        text += copy ? " · FSELF in der Kopie" : signs ? " · werden zu FSELF" : " · bleiben unverändert";
+        text += copy    ? " · FSELF in der Kopie"
+                : signs ? " · werden zu FSELF"
+                        : " · bleiben unverändert";
     return text;
 }
 
@@ -820,27 +846,31 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         const std::size_t i = static_cast<std::size_t>(id - kVersion);
         if (i >= version_names_.size())
             return;
-        // AMPR EMU NG while ShadowMountPlus still refreshes the fakelib (06.11.2026): it would put its own file back
-        // at the start of a game. The question comes first: "Ja" switches the setting off and puts the version in,
-        // "Abbrechen" (or back) leaves everything as it was.
+        // AMPR EMU NG while ShadowMountPlus still refreshes the fakelib (06.11.2026): it would put
+        // its own file back at the start of a game. The question comes first: "Ja" switches the
+        // setting off and puts the version in, "Abbrechen" (or back) leaves everything as it was.
         if (lib_ == "ampr" && i < version_ng_.size() && version_ng_[i] && smp_update_on_)
         {
             pending_version_ = version_names_[i];
             if (!smp_asked_)
             {
-                // the person never said which version of ShadowMountPlus runs: asked once (09.11.2026), the answer is
-                // kept in the settings; "back" leaves everything as it was
+                // the person never said which version of ShadowMountPlus runs: asked once
+                // (09.11.2026), the answer is kept in the settings; "back" leaves everything as it
+                // was
                 ui::DialogContent content;
                 content.icon = ui::StatusKind::question;
                 content.title = "Welche Version von ShadowMountPlus nutzt du?";
-                content.body =
-                    "Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit Abschnitten statt einer "
-                    "flachen Liste). Die App ändert darin gleich eine Zeile und muss wissen, welche Version bei dir "
-                    "läuft.\n\n"
-                    "Du kannst das später jederzeit unter System im Reiter ShadowMountPlus ändern. Mit „Zurück“ "
-                    "bleibt alles, wie es ist, und NG wird nicht eingebaut.";
-                content.buttons = {
-                    {"Ab 1.7beta12", ui::ButtonKind::primary}, {"Vor 1.7beta12"}, {"Automatisch erkennen"}};
+                content.body = "Ab Version 1.7beta12 hat ShadowMountPlus eine neue config.ini (mit "
+                               "Abschnitten statt einer "
+                               "flachen Liste). Die App ändert darin gleich eine Zeile und muss "
+                               "wissen, welche Version bei dir "
+                               "läuft.\n\n"
+                               "Du kannst das später jederzeit unter System im Reiter "
+                               "ShadowMountPlus ändern. Mit „Zurück“ "
+                               "bleibt alles, wie es ist, und NG wird nicht eingebaut.";
+                content.buttons = {{"Ab 1.7beta12", ui::ButtonKind::primary},
+                                   {"Vor 1.7beta12"},
+                                   {"Automatisch erkennen"}};
                 ask_version_.open(content, feedback);
                 return;
             }
@@ -916,17 +946,18 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
         static const int kLevels[3] = {9, 3, 12};
         static const int kZstLevels[4] = {5, 1, 9, 19};
         const int mode = form_.choice_index(kMode);
-        const std::string profile = !zstd_ && mode >= 0 && mode < static_cast<int>(profile_ids_.size())
-                                        ? profile_ids_[static_cast<std::size_t>(mode)]
-                                        : std::string();
+        const std::string profile =
+            !zstd_ && mode >= 0 && mode < static_cast<int>(profile_ids_.size())
+                ? profile_ids_[static_cast<std::size_t>(mode)]
+                : std::string();
         const int level = zstd_ ? kZstLevels[std::clamp(form_.choice_index(kLevel), 0, 3)]
                                 : kLevels[std::clamp(form_.choice_index(kLevel), 0, 2)];
         source().extras_post(
             "library/lz4",
             "{\"id\":" + gid + ",\"kind\":\"" +
-                (!zstd_ && form_.choice_index(kTarget) == 1 ? "copy" : "pack") + "\",\"level\":" +
-                std::to_string(level) + ",\"profile\":" + json_text(profile) + ",\"format\":\"" +
-                (zstd_ ? "zstd" : "lz4") + "\",\"sign\":" +
+                (!zstd_ && form_.choice_index(kTarget) == 1 ? "copy" : "pack") +
+                "\",\"level\":" + std::to_string(level) + ",\"profile\":" + json_text(profile) +
+                ",\"format\":\"" + (zstd_ ? "zstd" : "lz4") + "\",\"sign\":" +
                 (zstd_ && form_.toggle_value(kSign) && has_unsigned() ? "true" : "false") + "}");
         view_ = kMain;
         key_.clear();
@@ -938,7 +969,8 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
     }
 }
 
-// "ShadowMountPlus umstellen?": yes switches its automatic fakelib update off and puts the waiting version in.
+// "ShadowMountPlus umstellen?": yes switches its automatic fakelib update off and puts the waiting
+// version in.
 void GameExtras::ask_switch(ui::Feedback &feedback)
 {
     ui::DialogContent content;
@@ -951,7 +983,9 @@ void GameExtras::ask_switch(ui::Feedback &feedback)
         "Soll die automatische Fakelib-Aktualisierung in ShadowMountPlus deaktiviert "
         "werden?\n\n"
         "Die App ändert dafür nur die Zeile " +
-        smp_key_ + " in /data/shadowmount/config.ini. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird nicht eingebaut.";
+        smp_key_ +
+        " in /data/shadowmount/config.ini. Mit „Abbrechen“ bleibt alles, wie es ist, und NG wird "
+        "nicht eingebaut.";
     content.buttons = {{"Ja", ui::ButtonKind::primary}, {"Abbrechen"}};
     ask_.open(content, feedback);
 }
@@ -960,8 +994,8 @@ void GameExtras::ask_switch(ui::Feedback &feedback)
 void GameExtras::apply_version(const std::string &name)
 {
     source().extras_post("library/emu", "{\"id\":" + json_text(game_.id) + ",\"lib\":\"" + lib_ +
-                                            "\",\"action\":\"apply\",\"name\":" +
-                                            json_text(name) + "}");
+                                            "\",\"action\":\"apply\",\"name\":" + json_text(name) +
+                                            "}");
     view_ = kMain;
     key_.clear();
     build();
@@ -973,8 +1007,9 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
         return;
     if (ask_version_.is_open())
     {
-        // the version of ShadowMountPlus, asked once: kept in the settings (the request queues before the one that changes
-        // its config.ini, so the named version is in force when that is written), then the question about switching off
+        // the version of ShadowMountPlus, asked once: kept in the settings (the request queues
+        // before the one that changes its config.ini, so the named version is in force when that is
+        // written), then the question about switching off
         const ui::Event event = ask_version_.handle(input, feedback);
         if (event == ui::Event::activated)
         {
@@ -982,7 +1017,8 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
             const int choice = std::clamp(ask_version_.choice(), 0, 2);
             source().save_config(std::string("{\"smp_version\":\"") + kWords[choice] + "\"}");
             smp_asked_ = true;
-            // a file with content decides which line it has; for one without, the named version does
+            // a file with content decides which line it has; for one without, the named version
+            // does
             if (smp_format_ == "none" || smp_format_.empty())
                 smp_key_ = choice == 0 ? "update_enabled" : "update_emulators";
             ask_switch(feedback);
@@ -993,8 +1029,9 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
     }
     if (ask_.is_open())
     {
-        // "Ja" switches the automatic fakelib update off in ShadowMountPlus, then the version goes in; "Abbrechen" and
-        // back change nothing (the requests queue in this order, so the setting is written before the file goes in)
+        // "Ja" switches the automatic fakelib update off in ShadowMountPlus, then the version goes
+        // in; "Abbrechen" and back change nothing (the requests queue in this order, so the setting
+        // is written before the file goes in)
         const ui::Event event = ask_.handle(input, feedback);
         if (event == ui::Event::activated && ask_.choice() == 0)
         {
@@ -1120,8 +1157,9 @@ void GameExtras::draw_overlay(ui::Canvas &canvas) const
         view_ == kLibrary ? "Bibliothek: Doppelte Abbilder"
         : view_ == kVersions
             ? std::string(lib_ == "playgo" ? "PlayGo" : "APR-EMU") + " · " + game_.name
-        : view_ == kLz4 ? std::string(zstd_ ? "Mit zstd packen · " : "Mit LZ4 packen · ") + game_.name
-                        : "Extras · " + game_.name;
+        : view_ == kLz4
+            ? std::string(zstd_ ? "Mit zstd packen · " : "Mit LZ4 packen · ") + game_.name
+            : "Extras · " + game_.name;
     ui::text(list, fonts.display, ui::fit_label(paint, title, 36.0f, panel.w - 80.0f),
              panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
     ui::text(list, fonts.regular,

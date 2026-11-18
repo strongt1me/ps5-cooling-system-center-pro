@@ -129,8 +129,9 @@ TEST(FilesEdit, MarksOnlyWhatChanged)
     EXPECT_EQ(edit_marks({}, before), std::vector<bool>{});
 }
 
-// The page itself (not only the helpers): an answer for a file the page did not ask for must not open the editor or the viewer, and the
-// page stays usable (no overlay, its hints fit the hint row) whatever the data and the buttons do.
+// The page itself (not only the helpers): an answer for a file the page did not ask for must not
+// open the editor or the viewer, and the page stays usable (no overlay, its hints fit the hint row)
+// whatever the data and the buttons do.
 TEST(FilesPage, AnAnswerNobodyAskedForOpensNothing)
 {
     const std::unique_ptr<Page> page = make_files_page();
@@ -149,7 +150,8 @@ TEST(FilesPage, AnAnswerNobodyAskedForOpensNothing)
     EXPECT_FALSE(page->modal());
     hui::ui::Hint hints[8];
     EXPECT_LE(page->hints(hints), 4);
-    // a few frames and buttons do not change that (the selection and the editor are opened from the list, not by a stray answer)
+    // a few frames and buttons do not change that (the selection and the editor are opened from the
+    // list, not by a stray answer)
     hui::ui::Feedback feedback;
     for (int i = 0; i < 20; ++i)
     {

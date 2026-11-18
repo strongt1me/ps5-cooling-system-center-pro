@@ -112,8 +112,10 @@ const char *level_short(int level)
 
 std::string mode_text(bool fpkg)
 {
-    return fpkg ? "A: Ordner FPKG-Games (intern, M.2-SSD oder USB) – der richtige Ort für FPKG in dieser App: "
-                  "Kraken Mount meldet es an, ShadowMountPlus sucht dort nicht · B: PS5-Sicherung/Spiele, "
+    return fpkg ? "A: Ordner FPKG-Games (intern, M.2-SSD oder USB) – der richtige Ort für FPKG in "
+                  "dieser App: "
+                  "Kraken Mount meldet es an, ShadowMountPlus sucht dort nicht · B: "
+                  "PS5-Sicherung/Spiele, "
                   "nur aufbewahrt"
                 : "A: homebrew, ShadowMountPlus bindet es ein · B: PS5-Sicherung/Spiele, nur "
                   "aufbewahrt";
@@ -325,10 +327,10 @@ void GameTools::open_menu(const Game &game, bool running, ui::Feedback &feedback
             // "Aushängen" of a game that is not mounted has nothing to take out: greyed, like the
             // button in the web app
             const bool nothing_to_unmount = offset == 1 && !game.smp_mounted;
-            m.shortcut = live                       ? "läuft gerade"
-                         : nothing_to_unmount       ? "nicht eingehängt"
-                         : offset == 1              ? "gibt andere Starts frei"
-                                                    : "ShadowMountPlus";
+            m.shortcut = live                 ? "läuft gerade"
+                         : nothing_to_unmount ? "nicht eingehängt"
+                         : offset == 1        ? "gibt andere Starts frei"
+                                              : "ShadowMountPlus";
             m.disabled = live || nothing_to_unmount;
             items.push_back(m);
         };
@@ -842,7 +844,8 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             if (ui::FormRow *row = form_.row(kRowOp))
                 row->description =
                     choice_.op >= 0 ? op_text(plan_, choice_.op, choice_.level) : std::string();
-            // FPKG: the folder FPKG-Games is the right place, so it is chosen from the start (the person can still pick B)
+            // FPKG: the folder FPKG-Games is the right place, so it is chosen from the start (the
+            // person can still pick B)
             if (choice_.op == kOpFpkg && choice_.mode < 0 && form_.row(kRowMode))
             {
                 choice_.mode = 0;
@@ -958,37 +961,55 @@ void GameTools::open_guide(ui::Feedback &feedback)
     guide_view_.style.block_gap = 12.0f;
     guide_view_.style.item_gap = 8.0f;
     guide_view_.style.heading_gap = 22.0f;
-    // one whole sentence per block: the translator looks each up as it is (the same texts as the web page's guide)
+    // one whole sentence per block: the translator looks each up as it is (the same texts as the
+    // web page's guide)
     guide_view_.set_content({
         TextBlock::heading("Dump Forge bei der reinen ELF-Version", 2),
         TextBlock::paragraph("Das brauchst du nur für das Konvertierformat „FPKG (Debug-.pkg)“."),
         TextBlock::heading("Weg 1: Die App lädt Dump Forge selbst", 3),
-        TextBlock::numbered("Öffne die App im Browser unter der Adresse der Konsole, Port 8086:", "1."),
+        TextBlock::numbered("Öffne die App im Browser unter der Adresse der Konsole, Port 8086:",
+                            "1."),
         TextBlock::code("http://<IP der Konsole>:8086"),
-        TextBlock::numbered("Wähle bei einem Spiel „Konvertieren“ und das Format „FPKG (Debug-.pkg)“.", "2."),
-        TextBlock::numbered("Fehlt Dump Forge, erscheint „Dump Forge laden“. Drücke den Knopf.", "3."),
-        TextBlock::numbered("Die App lädt die neueste Fassung von GitHub, prüft die SHA-256-Prüfsumme und legt sie ab. "
-                            "Das dauert etwas, die Datei ist rund 18 MB groß.", "4."),
+        TextBlock::numbered(
+            "Wähle bei einem Spiel „Konvertieren“ und das Format „FPKG (Debug-.pkg)“.", "2."),
+        TextBlock::numbered("Fehlt Dump Forge, erscheint „Dump Forge laden“. Drücke den Knopf.",
+                            "3."),
+        TextBlock::numbered("Die App lädt die neueste Fassung von GitHub, prüft die "
+                            "SHA-256-Prüfsumme und legt sie ab. "
+                            "Das dauert etwas, die Datei ist rund 18 MB groß.",
+                            "4."),
         TextBlock::numbered("Danach ist das Format wählbar.", "5."),
         TextBlock::heading("Weg 2: Von Hand ablegen (ohne Internet auf der Konsole)", 3),
-        TextBlock::numbered("Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt quer3q/ps5-dump-forge).", "1."),
-        TextBlock::numbered("Kopiere sie per FTP (Port 2121) oder mit dem Dateimanager der App in diesen Ordner der Konsole:", "2."),
+        TextBlock::numbered("Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt "
+                            "quer3q/ps5-dump-forge).",
+                            "1."),
+        TextBlock::numbered("Kopiere sie per FTP (Port 2121) oder mit dem Dateimanager der App in "
+                            "diesen Ordner der Konsole:",
+                            "2."),
         TextBlock::code("/data/PS5-Cooling-Center/dumpforge/"),
         TextBlock::paragraph("Die App legt diesen Ordner bei jedem Start selbst an."),
         TextBlock::numbered("Der Name muss stimmen. Erlaubt sind diese beiden Formen "
-                            "(die Version nur aus Ziffern und Punkten, zum Beispiel 0.5.5):", "3."),
+                            "(die Version nur aus Ziffern und Punkten, zum Beispiel 0.5.5):",
+                            "3."),
         TextBlock::code("ps5-dump-forge-<Version>-ps5.elf\nps5-dump-forge.elf"),
-        TextBlock::numbered("Die Datei muss zwischen 1 und 40 MiB groß sein und eine echte ELF-Datei sein.", "4."),
-        TextBlock::numbered("Die Seite zeigt Dump Forge danach als vorhanden an, ein Neustart der App ist nicht nötig.", "5."),
+        TextBlock::numbered(
+            "Die Datei muss zwischen 1 und 40 MiB groß sein und eine echte ELF-Datei sein.", "4."),
+        TextBlock::numbered("Die Seite zeigt Dump Forge danach als vorhanden an, ein Neustart der "
+                            "App ist nicht nötig.",
+                            "5."),
         TextBlock::heading("Hinweise", 3),
-        TextBlock::bullet("Liegen mehrere Fassungen da, nimmt die App die höchste Version. "
-                          "Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern."),
-        TextBlock::bullet("Wer die Kacheln (FAKE86921 oder FAKE86922) installiert hat, braucht nichts davon. "
-                          "Dort liegt Dump Forge schon im Ordner „dumpforge“ der Kachel."),
-        TextBlock::bullet("Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. "
-                          "Du musst es nicht von Hand starten."),
+        TextBlock::bullet(
+            "Liegen mehrere Fassungen da, nimmt die App die höchste Version. "
+            "Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern."),
+        TextBlock::bullet(
+            "Wer die Kacheln (FAKE86921 oder FAKE86922) installiert hat, braucht nichts davon. "
+            "Dort liegt Dump Forge schon im Ordner „dumpforge“ der Kachel."),
+        TextBlock::bullet(
+            "Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. "
+            "Du musst es nicht von Hand starten."),
     });
-    guide_view_.set_bounds({kPanel.x + 40.0f, kPanel.y + 100.0f, kPanel.w - 80.0f, kPanel.h - 170.0f});
+    guide_view_.set_bounds(
+        {kPanel.x + 40.0f, kPanel.y + 100.0f, kPanel.w - 80.0f, kPanel.h - 170.0f});
     guide_view_.set_active(true);
     guide_view_.scroll_to(0.0f, true);
     guide_open_ = true;
@@ -1234,7 +1255,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     };
     const auto para = [&](const std::string &text, Color ink, int max_lines = 6)
     { y = draw_paragraph(canvas, text, x, y, w, 20.0f, ink, max_lines); };
-    // the column ends with the box: a longer text is cut after the last line that fits, never drawn over the window's edge
+    // the column ends with the box: a longer text is cut after the last line that fits, never drawn
+    // over the window's edge
     struct Limit
     {
         float &value;
@@ -1246,7 +1268,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     const float limit_end = box.y + box.h - 24.0f;
 
     const std::string blocked = run_blocked(plan_);
-    // room is kept for the reason that blocks the start: it is the last paragraph and must never be the one that is cut
+    // room is kept for the reason that blocks the start: it is the last paragraph and must never be
+    // the one that is cut
     para_limit_ = limit_end - (blocked.empty() ? 0.0f : 80.0f);
     const std::string target = target_of(plan_, choice_);
     switch (tool_)
@@ -1282,7 +1305,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  kWarning, 4);
         }
         if (!blocked.empty())
-            {
+        {
             para_limit_ = limit_end;
             para(blocked, kCritical, 3);
         }
@@ -1364,7 +1387,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         }
         if (choice_.op == kOpFpkg)
         {
-            // one paragraph for what it is (the two that said the same ran over the window's edge with the Dump Forge hint above)
+            // one paragraph for what it is (the two that said the same ran over the window's edge
+            // with the Dump Forge hint above)
             para("Dump Forge von quer3q schreibt das Debug-Paket (.pkg) als eigenes Programm; die "
                  "App zeigt seine Schritte. Kraken Mount (Seite FPKGMount) hängt es ein. Eine "
                  "Prüfsummen-Datei entsteht nicht.",
@@ -1372,7 +1396,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             para(level_text(choice_.level), kMuted, 3);
         }
         if (!blocked.empty())
-            {
+        {
             para_limit_ = limit_end;
             para(blocked, kCritical, 3);
         }
@@ -1406,7 +1430,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                 para("Die Abbild-Datei wird nach dem Entpacken gelöscht.", kWarning, 2);
         }
         if (!blocked.empty())
-            {
+        {
             para_limit_ = limit_end;
             para(blocked, kCritical, 3);
         }
@@ -1423,7 +1447,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             para(target, kInk, 2);
         }
         if (!blocked.empty())
-            {
+        {
             para_limit_ = limit_end;
             para(blocked, kCritical, 3);
         }
@@ -1457,7 +1481,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         if (!plan_.note.empty())
             para(plan_.note, kMuted, 3);
         if (!blocked.empty())
-            {
+        {
             para_limit_ = limit_end;
             para(blocked, kCritical, 3);
         }
@@ -1470,7 +1494,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
              kMuted, 5);
         para("Defekte Blöcke lassen sich ohne Original nicht wiederherstellen.", kMuted, 2);
         if (!blocked.empty())
-            {
+        {
             para_limit_ = limit_end;
             para(blocked, kCritical, 3);
         }
@@ -1498,7 +1522,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  kInk);
         y += 54.0f;
         if (!blocked.empty())
-            {
+        {
             para_limit_ = limit_end;
             para(blocked, kCritical, 3);
         }

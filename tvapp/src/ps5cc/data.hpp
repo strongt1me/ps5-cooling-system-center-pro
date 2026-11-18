@@ -70,17 +70,19 @@ struct Game
     bool can_move = false;
     bool can_unpack = false;
     bool can_remount = false; // ShadowMountPlus can take it out and put it back (1.7beta10)
-    bool smp_mounted = false; // ShadowMountPlus has it mounted now (anyone's mount: its own set-up, Kraken Mount, the app)
-    // The app mounted it itself (the button) and nobody started it: the one place for a prepared runtime is taken, every other
-    // launch is refused until the app lets go (smphold.c: at once when a start fails, else after 30 s); GET /api/v1/library
-    // "app_mounted", 14.11.2026
+    bool smp_mounted = false; // ShadowMountPlus has it mounted now (anyone's mount: its own set-up,
+                              // Kraken Mount, the app)
+    // The app mounted it itself (the button) and nobody started it: the one place for a prepared
+    // runtime is taken, every other launch is refused until the app lets go (smphold.c: at once
+    // when a start fails, else after 30 s); GET /api/v1/library "app_mounted", 14.11.2026
     bool app_mounted = false;
     bool hold_paused = false; // its 30 s wait stands still (a game plays or a job of the app works)
     // Another mounter wants this title too ("Kraken Mount"): both write /user/app/<ID> and mount
     // /system_ex/app/<ID> (GET /api/v1/library: "conflicts", 14.11.2026); "" when none does
     std::string conflict_with;
     bool ampr_emu = false; // mods.ampr_emu: the conversion builds the AMPR index first by default
-    // The game lies in AMPR packs, whatever its format (mods.zstd / mods.lz4, 17.11.2026): "zstd", "lz4" or ""
+    // The game lies in AMPR packs, whatever its format (mods.zstd / mods.lz4, 17.11.2026): "zstd",
+    // "lz4" or ""
     std::string packing;
     std::string disc; // installed from disc: "in" (the disc is in the drive) or "out"; "" otherwise
     bool dump_mounted = false; // the game runs (mounted), so it can be dumped
@@ -189,14 +191,16 @@ struct Config
     int night_start_min = 23 * 60;
     int night_end_min = 7 * 60;
     int night_target_c = 75;
-    int tz_offset_min = 0;         // minutes east of UTC: the console's zone, else the web page's
-    int target_temp_c = 68;        // what a game profile remembers
-    int warning_cpu_c = 85;        // 40..110; the chip's own limit is 5 °C more (config.c)
-    bool warning_follows_target = true; // the limit is never below the target + 2 °C (automatic mode)
+    int tz_offset_min = 0;  // minutes east of UTC: the console's zone, else the web page's
+    int target_temp_c = 68; // what a game profile remembers
+    int warning_cpu_c = 85; // 40..110; the chip's own limit is 5 °C more (config.c)
+    bool warning_follows_target =
+        true;                      // the limit is never below the target + 2 °C (automatic mode)
     int fan_cap_pct = 100;         // 30..100: the fan's ceiling in normal operation, 100 = none
     int warning_countdown_s = 120; // 30..900
     bool lightbar_enabled = false;
-    bool bg_pause = true; // a game waiting in the background is paused at the home screen (bgpause.c)
+    bool bg_pause =
+        true; // a game waiting in the background is paused at the home screen (bgpause.c)
     int lightbar_warn_c = 70; // 55..90: yellow from here
     int lightbar_hot_c = 80;  // 56..95: red from here, always above yellow
     // The fullscreen app's language: "" follows the console, else de, en, es, fr, it, ru.
@@ -770,8 +774,8 @@ struct Ps4Skipped
     std::string mount;    // "/mnt/usb0"
     std::string title_id; // empty when the header could not be read
     std::string name;
-    std::string
-        why; // internal, incomplete, not_ps4, not_fake, dlc_foreign, dlc_off, duplicate, second_game, damaged
+    std::string why; // internal, incomplete, not_ps4, not_fake, dlc_foreign, dlc_off, duplicate,
+                     // second_game, damaged
 };
 
 struct Ps4Mount
@@ -834,13 +838,16 @@ struct KrakenState
     bool fetching = false; // a newer release is being downloaded
     bool busy = false;     // it scans or builds
     bool paused = false;   // a game runs: it waits
-    std::string waiting;   // "kstuff" or "shadowmount": since v0.2.0 it mounts nothing before kstuff is loaded and while ShadowMountPlus runs
+    std::string waiting; // "kstuff" or "shadowmount": since v0.2.0 it mounts nothing before kstuff
+                         // is loaded and while ShadowMountPlus runs
     bool low_space = false;
-    bool restart_needed = false; // the running one is not the version the next start takes: off and on again
+    bool restart_needed =
+        false; // the running one is not the version the next start takes: off and on again
     std::string version; // the running one
     std::string embedded_version;
     std::string fetched_version;
-    std::string fetch_result; // what the last "neue Fassung laden" said (stays on the page, as in the browser)
+    std::string fetch_result; // what the last "neue Fassung laden" said (stays on the page, as in
+                              // the browser)
     std::vector<KrakenGame> games;
     std::vector<std::string> log;       // the last lines of its log
     std::vector<std::string> scanpaths; // the folders it searches (empty: its own defaults)
@@ -1059,8 +1066,8 @@ enum class Watch : std::uint8_t
     curve,
 };
 
-// GET /api/v1/fan/curve (16.11.2026): what the automatic mode asks of the fan at each temperature, and the
-// temperature of now; the page Lüfterkurve draws it.
+// GET /api/v1/fan/curve (16.11.2026): what the automatic mode asks of the fan at each temperature,
+// and the temperature of now; the page Lüfterkurve draws it.
 struct FanCurve
 {
     bool loaded = false;
@@ -1069,10 +1076,10 @@ struct FanCurve
     int target_c = 0;
     int safety_c = 0;
     int cap_pct = 100;
-    float now_c = -1.0f;                // the controller's average, -1 = none
-    int fan_pct = -1;                   // what the fan really runs at, -1 = unknown
-    std::vector<int> temps;             // one per degree
-    std::vector<int> wish;              // percent asked for at that temperature, 0 = nothing
+    float now_c = -1.0f;    // the controller's average, -1 = none
+    int fan_pct = -1;       // what the fan really runs at, -1 = unknown
+    std::vector<int> temps; // one per degree
+    std::vector<int> wish;  // percent asked for at that temperature, 0 = nothing
 };
 
 // GET /api/v1/system "user" and the console: the Profil page.
@@ -1350,8 +1357,8 @@ class Source
     virtual void usb_eject(const std::string &mount) = 0;
     // Spielzeit: the recorded sessions forgotten (the running one keeps counting).
     virtual void playtime_reset() = 0;
-    // POST /api/v1/fan/trace/save: the recording of the fan regulation (the last 30 minutes) into a file on the console; the
-    // answer comes as a notice.
+    // POST /api/v1/fan/trace/save: the recording of the fan regulation (the last 30 minutes) into a
+    // file on the console; the answer comes as a notice.
     virtual void fan_trace_save() = 0;
     // Spielstände: POST /api/v1/saves/<route> (backup, delete, verify, restore, cancel) with a JSON
     // body.

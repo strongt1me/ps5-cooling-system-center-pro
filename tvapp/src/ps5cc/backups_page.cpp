@@ -5,8 +5,8 @@
 //
 // As the web app's tab: every backup with its drive, size, date and whether it is finished and has
 // checksums. Square deletes it after a question that names it (the app plans it first and refuses
-// when it must; the deletion then runs as a job under Aufträge). The saves are not part of these backups and are
-// never touched here.
+// when it must; the deletion then runs as a job under Aufträge). The saves are not part of these
+// backups and are never touched here.
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"

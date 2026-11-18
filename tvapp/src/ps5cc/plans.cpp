@@ -94,8 +94,8 @@ bool chosen(const Plan &plan, const PlanChoice &choice)
 bool is_image(const Game &game)
 {
     const std::string &f = game.format;
-    return !f.empty() && f != "folder" && f != "pkg" && f != "fpkg" && f != "fpkgmount" && !game.path.empty() &&
-           game.path[0] == '/';
+    return !f.empty() && f != "folder" && f != "pkg" && f != "fpkg" && f != "fpkgmount" &&
+           !game.path.empty() && game.path[0] == '/';
 }
 
 std::vector<Tool> tools_for(const Game &game)
@@ -558,9 +558,8 @@ bool ready(const Plan &p, const PlanChoice &c)
         if (!chosen(p, c) ||
             !drive_blocked(p, c, p.drives[static_cast<std::size_t>(c.drive)]).empty())
             return false;
-        if (p.tool == Tool::convert &&
-            (c.op < 0 || (c.op == 1 && !p.ffpkg_error.empty()) ||
-             (c.op == kOpFpkg && !p.fpkg_error.empty())))
+        if (p.tool == Tool::convert && (c.op < 0 || (c.op == 1 && !p.ffpkg_error.empty()) ||
+                                        (c.op == kOpFpkg && !p.fpkg_error.empty())))
             return false;
         return !target_of(p, c).empty();
     case Tool::erase:
@@ -577,7 +576,8 @@ PlanChoice first_choice(const Plan &p, const Game *game)
     {
         for (const std::string &op : p.ops)
         {
-            if ((op == "ffpkg" && !p.ffpkg_error.empty()) || (op == "fpkg" && !p.fpkg_error.empty()))
+            if ((op == "ffpkg" && !p.ffpkg_error.empty()) ||
+                (op == "fpkg" && !p.fpkg_error.empty()))
                 continue;
             for (int o = 0; o < kOps; ++o)
             {
@@ -761,7 +761,8 @@ std::string op_label(const std::string &op)
     {
         if (op == kLevelOps[l])
         {
-            // as the dictionaries have the names ("Schnell", "Ausgewogen" ...): a lower-case form is found in none of them
+            // as the dictionaries have the names ("Schnell", "Ausgewogen" ...): a lower-case form
+            // is found in none of them
             return std::string("FPKG · ") + kLevelNames[l];
         }
     }

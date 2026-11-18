@@ -294,13 +294,13 @@ class SettingsPage final : public Page
     static std::string config_key(const Config &c)
     {
         char text[240];
-        std::snprintf(text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
-                      c.mode.c_str(), c.profile.c_str(), c.safety_temp_c, c.safety_min_c,
-                      c.safety_max_c, c.night_enabled ? 1 : 0, c.night_start_min, c.night_end_min,
-                      c.night_target_c, c.target_min_c, c.target_max_c, c.warning_cpu_c,
-                      c.warning_countdown_s, c.lightbar_enabled ? 1 : 0, c.lightbar_warn_c,
-                      c.lightbar_hot_c, c.target_temp_c, c.fan_cap_pct,
-                      c.warning_follows_target ? 1 : 0, c.bg_pause ? 1 : 0);
+        std::snprintf(
+            text, sizeof(text), "%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d",
+            c.mode.c_str(), c.profile.c_str(), c.safety_temp_c, c.safety_min_c, c.safety_max_c,
+            c.night_enabled ? 1 : 0, c.night_start_min, c.night_end_min, c.night_target_c,
+            c.target_min_c, c.target_max_c, c.warning_cpu_c, c.warning_countdown_s,
+            c.lightbar_enabled ? 1 : 0, c.lightbar_warn_c, c.lightbar_hot_c, c.target_temp_c,
+            c.fan_cap_pct, c.warning_follows_target ? 1 : 0, c.bg_pause ? 1 : 0);
         return text;
     }
 
@@ -322,8 +322,9 @@ class SettingsPage final : public Page
         ui::FormRow &cap = form_.add_slider(kFanCap, "Obergrenze der Lüfterdrehzahl",
                                             static_cast<float>(c.fan_cap_pct), 30.0f, 100.0f, 5.0f);
         cap.unit = " %";
-        cap.description = "Im Normalbetrieb nie schneller als das. 100 % = keine Grenze. Gilt nicht "
-                          "über der Sicherheitsgrenze.";
+        cap.description =
+            "Im Normalbetrieb nie schneller als das. 100 % = keine Grenze. Gilt nicht "
+            "über der Sicherheitsgrenze.";
         form_.add_header("WARNUNGEN");
         ui::FormRow &warn = form_.add_slider(
             kWarnCpu, "Warnung ab", static_cast<float>(c.warning_cpu_c), 40.0f, 110.0f, 1.0f);
@@ -354,9 +355,9 @@ class SettingsPage final : public Page
         red.unit = " °C";
         red.description = "Liegt immer über Gelb.";
         form_.add_header("SPIEL IM HINTERGRUND");
-        form_.add_toggle(kBgPause, "Spiel im Hintergrund pausieren", c.bg_pause)
-            .description = "Pausiert ein Spiel, sobald der Startbildschirm vorn ist: So starten die "
-                           "Kacheln der App ohne Fehlstart und Fehlermeldung.";
+        form_.add_toggle(kBgPause, "Spiel im Hintergrund pausieren", c.bg_pause).description =
+            "Pausiert ein Spiel, sobald der Startbildschirm vorn ist: So starten die "
+            "Kacheln der App ohne Fehlstart und Fehlermeldung.";
         form_.add_header("SPIELPROFILE");
         {
             const std::string game = game_name_.empty() ? game_id_ : game_name_;

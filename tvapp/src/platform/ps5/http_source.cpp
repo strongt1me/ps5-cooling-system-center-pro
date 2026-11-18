@@ -377,8 +377,9 @@ void HttpSource::ps4mount_post(const std::string &route, const std::string &json
 {
     push({Request::Kind::ps4mount, 0, route, json});
 }
-// FPKGMount and Dump Forge go through the tool thread: loading a newer release takes minutes, and the one thread that asks for the
-// temperatures, the jobs and the cancel of everything else must not wait for it (audit 15.11.2026).
+// FPKGMount and Dump Forge go through the tool thread: loading a newer release takes minutes, and
+// the one thread that asks for the temperatures, the jobs and the cancel of everything else must
+// not wait for it (audit 15.11.2026).
 void HttpSource::engine_post(const std::string &which, const std::string &json)
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -433,16 +434,17 @@ void HttpSource::extras_post(const std::string &route, const std::string &json)
 {
     if (route == "ampr-emu/fetch-ng")
     {
-        // The check asks GitHub and can take seconds: say so at once, and take no second press while it runs (each one
-        // would queue behind the first and answer "already there" in turn).
+        // The check asks GitHub and can take seconds: say so at once, and take no second press
+        // while it runs (each one would queue behind the first and answer "already there" in turn).
         bool expected = false;
         if (!ng_fetching_.compare_exchange_strong(expected, true))
         {
             notice(Notice::Kind::info, "AMPR EMU NG", "Die Prüfung bei GitHub läuft schon.");
             return;
         }
-        notice(Notice::Kind::info, "AMPR EMU NG",
-               "Prüfe bei GitHub, ob es eine neuere Fassung gibt. Das kann einige Sekunden dauern …");
+        notice(
+            Notice::Kind::info, "AMPR EMU NG",
+            "Prüfe bei GitHub, ob es eine neuere Fassung gibt. Das kann einige Sekunden dauern …");
     }
     push({Request::Kind::extras_post, 0, route, json});
 }
@@ -1274,9 +1276,10 @@ void HttpSource::run()
             sys::sleep_us(std::min(status_failures_, 4) * 500000);
             continue;
         }
-        // The app lets go of a game it mounted and nobody started within half a minute (smphold.c): the mark "wird gleich ausgehängt" must
-        // not outlive that by a library period, so while such a game waits (and none plays: the app's clock waits then too) the library
-        // is read every 5 s, as the browser does.
+        // The app lets go of a game it mounted and nobody started within half a minute (smphold.c):
+        // the mark "wird gleich ausgehängt" must not outlive that by a library period, so while
+        // such a game waits (and none plays: the app's clock waits then too) the library is read
+        // every 5 s, as the browser does.
         bool game_held = false;
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -2036,7 +2039,8 @@ void HttpSource::handle(const Request &request)
         {
             notice(Notice::Kind::error, request.id == "disc" ? "Laufwerk" : "Dump",
                    message_of(body, "Die App hat nicht geantwortet."));
-            // "Starten" of a disc game starts and dumps it in one go; when the app says no, the game is at least started
+            // "Starten" of a disc game starts and dumps it in one go; when the app says no, the
+            // game is at least started
             const std::size_t at = request.text.find("\"queue_launch\"");
             const std::size_t idp = request.text.find("\"id\":\"");
             if (request.id == "dump" && at != std::string::npos && idp != std::string::npos)
@@ -2063,7 +2067,9 @@ void HttpSource::handle(const Request &request)
     }
     case Request::Kind::trace_save:
     {
-        if (exchange("POST", "/api/v1/fan/trace/save", request.text, &status, &body, 15) == Net::ok && status < 300)
+        if (exchange("POST", "/api/v1/fan/trace/save", request.text, &status, &body, 15) ==
+                Net::ok &&
+            status < 300)
         {
             std::string msg;
             if (cJSON *root = cJSON_Parse(body.c_str()))
@@ -2149,7 +2155,8 @@ void HttpSource::handle(const Request &request)
     case Request::Kind::extras_post:
     {
         const std::string route = "/api/v1/" + request.id;
-        // the check for a new AMPR EMU NG version loads up to three files from GitHub (about 3 minutes at most)
+        // the check for a new AMPR EMU NG version loads up to three files from GitHub (about 3
+        // minutes at most)
         const int wait_s = request.id == "ampr-emu/fetch-ng" ? 190 : 30;
         const Net net = exchange("POST", route.c_str(), request.text, &status, &body, wait_s);
         if (request.id == "ampr-emu/fetch-ng")
@@ -4365,11 +4372,13 @@ void HttpSource::poll_ps4mount()
     ++data_.serial;
 }
 
-// One request of FPKGMount ("kraken") or Dump Forge ("dumpforge"). The downloads take minutes and go to a thread of their own, so that
-// the plans and checks on the tool thread do not wait behind them; everything else answers within seconds and stays on the tool thread.
+// One request of FPKGMount ("kraken") or Dump Forge ("dumpforge"). The downloads take minutes and
+// go to a thread of their own, so that the plans and checks on the tool thread do not wait behind
+// them; everything else answers within seconds and stays on the tool thread.
 void HttpSource::handle_engine(const ToolRequest &request)
 {
-    const bool slow = request.id == "dumpforge" || request.body.find("\"fetch\"") != std::string::npos;
+    const bool slow =
+        request.id == "dumpforge" || request.body.find("\"fetch\"") != std::string::npos;
     if (!slow)
     {
         handle_engine_now(request);
@@ -4414,8 +4423,8 @@ void HttpSource::handle_engine_now(const ToolRequest &request)
     std::string body;
     if (request.id == "kraken")
     {
-        // A download of a newer release can take minutes (up to three files of three minutes each on the app's side); everything else
-        // answers within seconds.
+        // A download of a newer release can take minutes (up to three files of three minutes each
+        // on the app's side); everything else answers within seconds.
         const bool fetch = request.body.find("\"fetch\"") != std::string::npos;
         const Net net =
             exchange("POST", "/api/v1/kraken", request.body, &status, &body, fetch ? 620 : 40);
@@ -4450,7 +4459,8 @@ void HttpSource::handle_engine_now(const ToolRequest &request)
     // The download of the program (18 MB over the console's own connection) takes a while.
     const Net net = exchange("POST", "/api/v1/dumpforge", request.body, &status, &body, 620);
     if (net != Net::ok || status >= 300)
-        notice(Notice::Kind::error, "Dump Forge", message_of(body, "Die App hat nicht geantwortet."));
+        notice(Notice::Kind::error, "Dump Forge",
+               message_of(body, "Die App hat nicht geantwortet."));
     else
     {
         const std::string msg = message_of(body, "");
@@ -4458,8 +4468,9 @@ void HttpSource::handle_engine_now(const ToolRequest &request)
             notice(Notice::Kind::success, "Dump Forge", msg);
     }
     poll_dumpforge();
-    // The answer came late or not at all while the app went on loading: ask again until it has finished (the window shows "wird
-    // geladen ..." as long as the app says so), for a few minutes at most.
+    // The answer came late or not at all while the app went on loading: ask again until it has
+    // finished (the window shows "wird geladen ..." as long as the app says so), for a few minutes
+    // at most.
     for (int i = 0; i < 100; ++i)
     {
         bool fetching = false;
@@ -4472,7 +4483,8 @@ void HttpSource::handle_engine_now(const ToolRequest &request)
         sys::sleep_us(3000000);
         poll_dumpforge();
     }
-    // Given up waiting: the window must not say "wird geladen ..." for ever (the next question about the program says what is true).
+    // Given up waiting: the window must not say "wird geladen ..." for ever (the next question
+    // about the program says what is true).
     std::lock_guard<std::mutex> lock(mutex_);
     data_.dumpforge.fetching = false;
     ++data_.dumpforge.epoch;
@@ -4500,7 +4512,8 @@ void HttpSource::poll_dumpforge()
     std::lock_guard<std::mutex> lock(mutex_);
     if (!ok)
     {
-        // A question that failed says nothing about the program: what was known stays ("fehlt noch" right after a load would be wrong).
+        // A question that failed says nothing about the program: what was known stays ("fehlt noch"
+        // right after a load would be wrong).
         ++data_.dumpforge.epoch; // the dialog still stops waiting for this answer
         ++data_.serial;
         return;
@@ -4512,7 +4525,8 @@ void HttpSource::poll_dumpforge()
 
 void HttpSource::poll_kraken()
 {
-    // The data thread and the tool thread both ask: one after the other, so that an older answer never overwrites a newer one.
+    // The data thread and the tool thread both ask: one after the other, so that an older answer
+    // never overwrites a newer one.
     std::lock_guard<std::mutex> poll_lock(kraken_poll_mutex_);
     int status = 0;
     std::string body;

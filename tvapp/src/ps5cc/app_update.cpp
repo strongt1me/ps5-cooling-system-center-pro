@@ -54,7 +54,8 @@ std::string embedded_version(const unsigned char *elf, std::size_t size)
         return {};
     for (std::size_t i = 0; i + kMarkLen + 2 <= size; ++i)
     {
-        if (elf[i] != static_cast<unsigned char>(kMark[0]) || std::memcmp(elf + i, kMark, kMarkLen) != 0)
+        if (elf[i] != static_cast<unsigned char>(kMark[0]) ||
+            std::memcmp(elf + i, kMark, kMarkLen) != 0)
             continue;
         std::string version;
         for (std::size_t j = i + kMarkLen; j < size && elf[j] != ':' && version.size() < 24; ++j)

@@ -1,7 +1,5 @@
-// ps5cc - The PS4 PKG von USB page (Spiele → PS4 PKG von USB): PS4Mount's games, their updates and add-ons,
-// its settings.
-// Copyright (C) 2026 strongt1me
-// SPDX-License-Identifier: GPL-3.0-or-later
+// ps5cc - The PS4 PKG von USB page (Spiele → PS4 PKG von USB): PS4Mount's games, their updates and
+// add-ons, its settings. Copyright (C) 2026 strongt1me SPDX-License-Identifier: GPL-3.0-or-later
 //
 // As the web app's tab of the same name: ✕ removes a game's tile or brings it back, □ opens what
 // this game allows (updates, add-ons, no longer playing it from USB), △ the rest (switching

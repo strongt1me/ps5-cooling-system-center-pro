@@ -519,10 +519,11 @@ class FilesPage final : public Page
 
         float y = card.y + 400.0f;
         if (!folder_.path.empty() && !folder_.writable)
-            y = note_card(canvas, paint, card, y, "Nur ansehen",
-                          "Gesperrt: /, Ordner direkt unter / und /mnt, /dev, /proc, Einhängepunkte, "
-                          "Verknüpfungen",
-                          kWarning);
+            y = note_card(
+                canvas, paint, card, y, "Nur ansehen",
+                "Gesperrt: /, Ordner direkt unter / und /mnt, /dev, /proc, Einhängepunkte, "
+                "Verknüpfungen",
+                kWarning);
         if (!clip_paths_.empty())
             y = note_card(canvas, paint, card, y,
                           std::string(clip_move_ ? "Ausgeschnitten: " : "Kopiert: ") +
@@ -1902,7 +1903,8 @@ class FilesPage final : public Page
                     const std::string &title, const std::string &text, Color accent) const
     {
         gfx::DrawList &list = canvas.list;
-        // up to two lines of the quiet text (a long note was cut after the first and lost its point)
+        // up to two lines of the quiet text (a long note was cut after the first and lost its
+        // point)
         std::vector<std::string> lines =
             canvas.fonts.regular.font->wrap(text, 18.0f, card.w - 60.0f - 48.0f);
         if (lines.size() > 2)

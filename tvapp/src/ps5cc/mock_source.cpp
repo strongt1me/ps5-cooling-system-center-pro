@@ -121,7 +121,8 @@ class MockSource final : public Source
             g.format = m.format;
             const std::string format = m.format;
             const bool folder = format == "folder";
-            const bool installed = format == "fpkg" || format == "ps4mount" || format == "fpkgmount";
+            const bool installed =
+                format == "fpkg" || format == "ps4mount" || format == "fpkgmount";
             g.path = installed
                          ? std::string("/user/app/") + m.id
                          : std::string("/mnt/usb0/homebrew/") + m.id + (folder ? "" : "." + format);
@@ -1083,7 +1084,7 @@ class MockSource final : public Source
             g.smp_mounted = action != "unmount";
             g.app_mounted = g.smp_mounted;
             notice(Notice::Kind::success, g.name,
-                   action == "unmount"   ? "Ausgehängt."
+                   action == "unmount" ? "Ausgehängt."
                    : action == "remount"
                        ? "Neu eingehängt. Die App hängt es nach 30 Sekunden selbst wieder aus, "
                          "damit andere Spiele und Kacheln starten. Scheitert ein anderer Start, "
@@ -1316,7 +1317,8 @@ class MockSource final : public Source
             msg = "Die Kachel ist entfernt, die PKG bleibt auf dem USB-Laufwerk.";
         }
         else if (has("\"restore"))
-            msg = "Die PKGs kommen an ihren alten Platz zurück, das Spiel bleibt in der Bibliothek.";
+            msg =
+                "Die PKGs kommen an ihren alten Platz zurück, das Spiel bleibt in der Bibliothek.";
         if (!msg.empty())
             notice(Notice::Kind::success, "PS4Mount", msg);
         changed();
@@ -1433,7 +1435,8 @@ class MockSource final : public Source
         ++e.seq;
         e.ampr_job = R"({"ok":true,"state":"idle","active":false})";
         e.image_job = R"({"ok":true,"state":"idle","active":false})";
-        // a zstd pack whose tables do not fit AMPR EMU NG 0.4.0 (indexlimit.c): the preview shows the warning
+        // a zstd pack whose tables do not fit AMPR EMU NG 0.4.0 (indexlimit.c): the preview shows
+        // the warning
         e.ampr =
             R"({"ok":true,"has_index":true,"files":18342,"mtime":1793100000,"can_build":true,"why":"","format":"exfat",)"
             R"("index_check":{"kind":"zstd","ng_version":"0.4.0","files":1300000,"chunks":600000,"volumes":20,)"
@@ -1806,10 +1809,12 @@ class MockSource final : public Source
     void fan_trace_save() override
     {
         notice(Notice::Kind::success, "Regelaufzeichnung",
-               "Regelaufzeichnung gespeichert: /data/PS5-Cooling-Center/regelaufzeichnung-20261116-141500.csv");
+               "Regelaufzeichnung gespeichert: "
+               "/data/PS5-Cooling-Center/regelaufzeichnung-20261116-141500.csv");
     }
 
-    // The curve of the balanced profile at a target of 66 °C and a limit of 85 °C, as the app computes it (fan.c band_duty).
+    // The curve of the balanced profile at a target of 66 °C and a limit of 85 °C, as the app
+    // computes it (fan.c band_duty).
     void fill_fan_curve()
     {
         FanCurve &c = data_.fan_curve;
@@ -2308,7 +2313,8 @@ class MockSource final : public Source
         }
         case Tool::erase:
         {
-            const bool installed = g->format == "fpkg" || g->format == "ps4mount" || g->format == "fpkgmount";
+            const bool installed =
+                g->format == "fpkg" || g->format == "ps4mount" || g->format == "fpkgmount";
             cJSON_AddStringToObject(root, "kind", installed ? "installed" : "smp");
             cJSON_AddStringToObject(root, "path", g->path.c_str());
             cJSON_AddStringToObject(root, "format", g->format.c_str());
@@ -2586,7 +2592,8 @@ class MockSource final : public Source
             g.mount = "/mnt/usb0";
             // two games lie where they were put, one was sorted into ps4/ by an earlier version
             const bool sorted = std::string(s.id) == "CUSA18842";
-            g.source = sorted ? std::string("/mnt/usb0/ps4/") + s.id : std::string("/mnt/usb0/PS4 Spiele/") + s.name;
+            g.source = sorted ? std::string("/mnt/usb0/ps4/") + s.id
+                              : std::string("/mnt/usb0/PS4 Spiele/") + s.name;
             g.size = static_cast<std::uint64_t>(s.gb * 1e9);
             g.has_patch = s.patch;
             g.dlc = s.dlc;
@@ -2594,8 +2601,8 @@ class MockSource final : public Source
             g.updates = s.updates;
             m.games.push_back(g);
         }
-        // What the search left on the drive: a game installed on the console, a PS5 pkg, one that is
-        // still being copied.
+        // What the search left on the drive: a game installed on the console, a PS5 pkg, one that
+        // is still being copied.
         struct Skip
         {
             const char *file, *id, *name, *why;

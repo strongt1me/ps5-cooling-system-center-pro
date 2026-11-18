@@ -16,7 +16,8 @@ namespace
 {
 constexpr float kFadeSeconds = 0.25f;
 
-// Pictures of the Profil and Danksagungen pages are never given back to make room: their pages do not ask for them again by focus.
+// Pictures of the Profil and Danksagungen pages are never given back to make room: their pages do
+// not ask for them again by focus.
 bool keep_loaded(const std::string &key)
 {
     for (const char *prefix : {"profilepic:", "ownpic:", "avatarpick:", "credit:", "avatar:"})
@@ -37,7 +38,8 @@ Covers &covers()
 CoverWant Covers::next_wanted(const std::vector<Game> &games)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    // At the limit only the focused game is still fetched (the store gives a texture back for it); the rest of the library keeps waiting.
+    // At the limit only the focused game is still fetched (the store gives a texture back for it);
+    // the rest of the library keeps waiting.
     const bool full = textures_.size() + busy_.size() >= kCoverLimit;
     if (full && (preferred_.empty() || !busy_.empty()))
         return {};

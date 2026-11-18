@@ -1,7 +1,6 @@
-// ps5cc - The Lüfterkurve page (16.11.2026): what the automatic mode asks of the fan at each temperature, as a
-// picture, with the temperature of now; and the recording of the fan regulation, saved from here.
-// Copyright (C) 2026 strongt1me
-// SPDX-License-Identifier: GPL-3.0-or-later
+// ps5cc - The Lüfterkurve page (16.11.2026): what the automatic mode asks of the fan at each
+// temperature, as a picture, with the temperature of now; and the recording of the fan regulation,
+// saved from here. Copyright (C) 2026 strongt1me SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
@@ -65,15 +64,18 @@ class FanCurvePage final : public Page
     void absorb(const Snapshot &data) override
     {
         curve_ = data.fan_curve;
-        // Where nothing is asked for there is no curve (the console runs by itself): the picture begins at the first temperature that has a figure, as in the
-        // browser, and does not start with a flat stretch and a jump.
+        // Where nothing is asked for there is no curve (the console runs by itself): the picture
+        // begins at the first temperature that has a figure, as in the browser, and does not start
+        // with a flat stretch and a jump.
         std::size_t lead = 0;
         while (lead + 1 < curve_.wish.size() && curve_.wish[lead] <= 0)
             ++lead;
         if (lead > 0 && lead < curve_.wish.size())
         {
-            curve_.temps.erase(curve_.temps.begin(), curve_.temps.begin() + static_cast<std::ptrdiff_t>(lead));
-            curve_.wish.erase(curve_.wish.begin(), curve_.wish.begin() + static_cast<std::ptrdiff_t>(lead));
+            curve_.temps.erase(curve_.temps.begin(),
+                               curve_.temps.begin() + static_cast<std::ptrdiff_t>(lead));
+            curve_.wish.erase(curve_.wish.begin(),
+                              curve_.wish.begin() + static_cast<std::ptrdiff_t>(lead));
         }
         std::string key = std::to_string(curve_.temps.size()) + ":" + curve_.profile + ":" +
                           std::to_string(curve_.target_c) + ":" + std::to_string(curve_.cap_pct);
@@ -143,21 +145,21 @@ class FanCurvePage final : public Page
             right += std::string(right.empty() ? "" : " · ") + "Kurve " + std::to_string(at) + " %";
         ui::text(list, fonts.semibold, right, left + width, kTop + 44.0f, 28.0f, kInk,
                  gfx::Align::right);
-        std::string second = std::string("Betriebsart ") + profile_name(curve_.profile) + " · Ziel " +
-                             std::to_string(curve_.target_c) + " °C · Notfallgrenze " +
+        std::string second = std::string("Betriebsart ") + profile_name(curve_.profile) +
+                             " · Ziel " + std::to_string(curve_.target_c) + " °C · Notfallgrenze " +
                              std::to_string(curve_.safety_c) + " °C";
         if (curve_.cap_pct < 100)
             second += " · Obergrenze " + std::to_string(curve_.cap_pct) + " %";
-        ui::text(list, fonts.regular, ui::fit_label(paint, second, 21.0f, width), left, kTop + 84.0f,
-                 21.0f, kMuted);
+        ui::text(list, fonts.regular, ui::fit_label(paint, second, 21.0f, width), left,
+                 kTop + 84.0f, 21.0f, kMuted);
         chart_.draw(canvas);
         std::string note =
             curve_.automatic
                 ? "Sanfter Anstieg schon 10 °C unter dem Ziel, darüber bis zur vollen Drehzahl. "
                   "Links und rechts wählt die Temperatur."
                 : "Automatik aus: Die Konsole regelt selbst, die Kurve gilt nicht.";
-        ui::text(list, fonts.regular, ui::fit_label(paint, note, 19.0f, width), left, kBottom - 24.0f,
-                 19.0f, curve_.automatic ? kMuted : kWarning);
+        ui::text(list, fonts.regular, ui::fit_label(paint, note, 19.0f, width), left,
+                 kBottom - 24.0f, 19.0f, curve_.automatic ? kMuted : kWarning);
     }
 
     int hints(ui::Hint *out) const override
@@ -202,9 +204,9 @@ class FanCurvePage final : public Page
                 const float t0 = static_cast<float>(curve_.temps[i - 1]);
                 const float t1 = static_cast<float>(curve_.temps[i]);
                 const float f = (curve_.now_c - t0) / std::max(t1 - t0, 1.0f);
-                return static_cast<int>(std::lround(
-                    static_cast<float>(curve_.wish[i - 1]) +
-                    f * static_cast<float>(curve_.wish[i] - curve_.wish[i - 1])));
+                return static_cast<int>(
+                    std::lround(static_cast<float>(curve_.wish[i - 1]) +
+                                f * static_cast<float>(curve_.wish[i] - curve_.wish[i - 1])));
             }
         }
         return -1;

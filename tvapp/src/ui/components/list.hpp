@@ -16,16 +16,16 @@ namespace hui::ui
 struct ListItem
 {
     std::string title;
-    std::string subtitle;                      // second line; empty for a one-line row
-    std::string value;                         // right-aligned text
-    std::string badge;                         // a small pill before the value ("NEW", "3")
-    std::string chip;                          // a second pill, tinted, left of the badge ("zstd")
+    std::string subtitle; // second line; empty for a one-line row
+    std::string value;    // right-aligned text
+    std::string badge;    // a small pill before the value ("NEW", "3")
+    std::string chip;     // a second pill, tinted, left of the badge ("zstd")
     gfx::Color chip_color{0.0f, 0.0f, 0.0f, 0.0f}; // its colour; alpha 0: the theme's accent
-    gfx::Color swatch{0.0f, 0.0f, 0.0f, 0.0f}; // a leading dot, when alpha > 0
-    bool chevron = false;                      // "this opens something"
-    bool disabled = false;                     // focusable, but refuses confirm
-    bool header = false;                       // a section title: skipped by the focus
-    int tag = 0;                               // yours
+    gfx::Color swatch{0.0f, 0.0f, 0.0f, 0.0f};     // a leading dot, when alpha > 0
+    bool chevron = false;                          // "this opens something"
+    bool disabled = false;                         // focusable, but refuses confirm
+    bool header = false;                           // a section title: skipped by the focus
+    int tag = 0;                                   // yours
 };
 
 struct ListStyle : ComponentStyle

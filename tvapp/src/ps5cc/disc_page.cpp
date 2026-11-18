@@ -32,8 +32,9 @@ using gfx::Color;
 using gfx::Rect;
 
 const Rect kPanel{200.0f, 92.0f, 1520.0f, 864.0f};
-const Rect kNamePanel{300.0f, 150.0f, 1320.0f, 760.0f}; // the window for the folder name over the settings
-constexpr int kNameMax = 95;                            // bytes, as the app takes them
+const Rect kNamePanel{300.0f, 150.0f, 1320.0f,
+                      760.0f}; // the window for the folder name over the settings
+constexpr int kNameMax = 95;   // bytes, as the app takes them
 constexpr float kSaveDelay = 0.8f;
 
 enum Section
@@ -194,18 +195,22 @@ class DiscPage final : public Page
         form_.style.off_text = "Aus";
         form_.set_bounds({kPanel.x + 24.0f, kPanel.y + 130.0f, 1080.0f, 650.0f});
 
-        // The name of the folder for the dumps is typed on the keyboard (16.11.2026; until then only the browser could change it).
+        // The name of the folder for the dumps is typed on the keyboard (16.11.2026; until then
+        // only the browser could change it).
         keys_.style.theme = theme;
         keys_.style.bindings = ui::KeyboardBindings::standard();
         keys_.style.space_label = "Leer";
         keys_.style.done_label = "Fertig";
         keys_.style.max_length = kNameMax;
         keys_.set_layouts(german_layouts());
-        keys_.set_bounds({kNamePanel.x + 60.0f, kNamePanel.y + 250.0f, kNamePanel.w - 120.0f, 400.0f});
+        keys_.set_bounds(
+            {kNamePanel.x + 60.0f, kNamePanel.y + 250.0f, kNamePanel.w - 120.0f, 400.0f});
         keys_.on_text = [this](std::string_view utf8)
         {
-            // the characters no drive takes in a name are not entered (the app would refuse the name)
-            if (utf8.size() == 1 && std::string_view("\\:*?\"<>|").find(utf8[0]) != std::string_view::npos)
+            // the characters no drive takes in a name are not entered (the app would refuse the
+            // name)
+            if (utf8.size() == 1 &&
+                std::string_view("\\:*?\"<>|").find(utf8[0]) != std::string_view::npos)
                 return;
             if (name_.size() + utf8.size() <= static_cast<std::size_t>(kNameMax))
                 name_.append(utf8);
@@ -234,9 +239,12 @@ class DiscPage final : public Page
         update_bar();
         if (dialog_ == kSettingsDialog && !settings_shown_ && dump_.settings.valid)
             build_settings();
-        // the folder as the app has it (it tidies the name, or refuses it): shown in the row unless a change is on its way
-        if (dialog_ == kSettingsDialog && settings_shown_ && !naming_ && !dump_dirty_ && save_in_ <= 0.0f)
-            form_.set_value_text(kSetSubdir, dump_.settings.subdir.empty() ? "–" : dump_.settings.subdir);
+        // the folder as the app has it (it tidies the name, or refuses it): shown in the row unless
+        // a change is on its way
+        if (dialog_ == kSettingsDialog && settings_shown_ && !naming_ && !dump_dirty_ &&
+            save_in_ <= 0.0f)
+            form_.set_value_text(kSetSubdir,
+                                 dump_.settings.subdir.empty() ? "–" : dump_.settings.subdir);
     }
 
     void enter() override
@@ -438,9 +446,11 @@ class DiscPage final : public Page
         ui::Painter paint(list, fonts, theme_);
         solid_floor(list, kNamePanel, theme_.radius_card);
         paint.panel(kNamePanel);
-        ui::text(list, fonts.display, "Ordner für die Dumps", kNamePanel.x + 40.0f, kNamePanel.y + 66.0f, 36.0f, kInk);
-        ui::text(list, fonts.regular, "bis zu drei Ordner, mit / getrennt", kNamePanel.x + kNamePanel.w - 40.0f,
-                 kNamePanel.y + 66.0f, 21.0f, kMuted, gfx::Align::right);
+        ui::text(list, fonts.display, "Ordner für die Dumps", kNamePanel.x + 40.0f,
+                 kNamePanel.y + 66.0f, 36.0f, kInk);
+        ui::text(list, fonts.regular, "bis zu drei Ordner, mit / getrennt",
+                 kNamePanel.x + kNamePanel.w - 40.0f, kNamePanel.y + 66.0f, 21.0f, kMuted,
+                 gfx::Align::right);
         const Rect field{kNamePanel.x + 60.0f, kNamePanel.y + 120.0f, kNamePanel.w - 120.0f, 84.0f};
         list.rounded_rect(field, 14.0f, Color::rgb(0x3880ff, 0.12f));
         const std::string shown = ui::fit_label(paint, name_, 32.0f, field.w - 60.0f);
@@ -510,14 +520,16 @@ class DiscPage final : public Page
         return dump_.job.active || dump_.queue.active;
     }
 
-    // "Dumpen starten" (before 16.11.2026 "Starten"): the button starts the game and dumps it in one go (the game is on the screen then, and
-    // the app would have to be opened again to press "Dumpen"). Only when nothing speaks against it: a free queue, a chosen target, no other
-    // game running and no dump yet; else it only starts the game.
+    // "Dumpen starten" (before 16.11.2026 "Starten"): the button starts the game and dumps it in
+    // one go (the game is on the screen then, and the app would have to be opened again to press
+    // "Dumpen"). Only when nothing speaks against it: a free queue, a chosen target, no other game
+    // running and no dump yet; else it only starts the game.
     bool starts_dump(const Game &g) const
     {
-        const bool other_runs = std::any_of(games_.begin(), games_.end(), [](const Game &x) { return x.dump_mounted; });
-        return g.dump != "done" && !other_runs && dump_.settings.valid && !dump_.settings.target.empty() && !dump_busy() &&
-               dump_.queue.items.empty();
+        const bool other_runs =
+            std::any_of(games_.begin(), games_.end(), [](const Game &x) { return x.dump_mounted; });
+        return g.dump != "done" && !other_runs && dump_.settings.valid &&
+               !dump_.settings.target.empty() && !dump_busy() && dump_.queue.items.empty();
     }
 
     // ---------------------------------------------------------------- the buttons of a row
@@ -588,10 +600,11 @@ class DiscPage final : public Page
             const Game &g = games_[index_of(tag)];
             if (!g.dump_mounted)
             {
-                // "Dumpen starten": see starts_dump(); the answer of the app (the wait and the request to do nothing) comes as a notice.
+                // "Dumpen starten": see starts_dump(); the answer of the app (the wait and the
+                // request to do nothing) comes as a notice.
                 if (starts_dump(g))
-                    source().disc_post("dump", "{\"action\":\"queue_launch\",\"id\":" +
-                                                   json_text(g.id) + "}");
+                    source().disc_post(
+                        "dump", "{\"action\":\"queue_launch\",\"id\":" + json_text(g.id) + "}");
                 else
                     source().launch(g.id);
             }
@@ -628,8 +641,8 @@ class DiscPage final : public Page
             delete_json_ = "{\"mount\":" + json_text(d.mount) + ",\"dir\":" + json_text(d.dir) +
                            ",\"folder\":" + json_text(d.folder) + "}";
             const std::string what = !d.title.empty() && d.title != d.folder ? d.title
-                                     : d.bytes > 0 ? format_bytes(d.bytes)
-                                                   : std::string();
+                                     : d.bytes > 0                           ? format_bytes(d.bytes)
+                                                                             : std::string();
             const std::vector<std::string> names{DeleteAsk::line(d.folder, what)};
             ask_.open("Dump löschen?", names,
                       {"Ordner: " + d.mount + (d.dir.empty() ? "" : "/" + d.dir)}, feedback);
@@ -640,8 +653,8 @@ class DiscPage final : public Page
             const DiscImage &img = disc_.images[i];
             delete_route_ = "disc";
             delete_json_ = "{\"action\":\"delete\",\"name\":" + json_text(img.name) + "}";
-            ask_.open("Abbild löschen?",
-                      {DeleteAsk::line(img.name, format_bytes(img.size))}, {}, feedback);
+            ask_.open("Abbild löschen?", {DeleteAsk::line(img.name, format_bytes(img.size))}, {},
+                      feedback);
             return true;
         }
         default:
@@ -930,7 +943,8 @@ class DiscPage final : public Page
             ui::FormRow &row = form_.add_action(kSetSubdir, "Ordner");
             row.text = s.subdir.empty() ? "–" : s.subdir;
             row.chevron = true;
-            row.description = "Mit X ändern: bis zu drei Ordner, mit / getrennt (zum Beispiel „homebrew“).";
+            row.description =
+                "Mit X ändern: bis zu drei Ordner, mit / getrennt (zum Beispiel „homebrew“).";
         }
         form_.add_toggle(kSetTitles, "Spielname im Ordnernamen", s.folder_titles);
         form_.add_header("WAS WIRD GEDUMPT");
@@ -1010,8 +1024,10 @@ class DiscPage final : public Page
                 }
                 naming_ = false;
                 feedback.play(audio::Cue::select);
-                // sent with the other settings; the app tidies the name and says so when it refuses it
-                subdir_pending_ = trimmed; // not in dump_: the next poll of the app would write the old name over it before it is sent
+                // sent with the other settings; the app tidies the name and says so when it refuses
+                // it
+                subdir_pending_ = trimmed; // not in dump_: the next poll of the app would write the
+                                           // old name over it before it is sent
                 form_.set_value_text(kSetSubdir, trimmed);
                 dump_dirty_ = true;
                 save_in_ = kSaveDelay;
@@ -1061,7 +1077,8 @@ class DiscPage final : public Page
         if (dump_dirty_)
         {
             dump_dirty_ = false;
-            const std::string subdir = subdir_pending_.empty() ? dump_.settings.subdir : subdir_pending_;
+            const std::string subdir =
+                subdir_pending_.empty() ? dump_.settings.subdir : subdir_pending_;
             subdir_pending_.clear();
             const int t = form_.choice_index(kSetTarget);
             const std::string target = t >= 0 && t < static_cast<int>(dump_.targets.size())
@@ -1071,9 +1088,9 @@ class DiscPage final : public Page
             source().disc_post(
                 "dump",
                 "{\"action\":\"settings\",\"target\":" + json_text(target) +
-                    ",\"subdir\":" + json_text(subdir) +
-                    ",\"folder_titles\":" + flag(kSetTitles) + ",\"dump_dlc\":" + flag(kSetDlc) +
-                    ",\"verify\":" + flag(kSetVerify) + ",\"ps4_split\":" +
+                    ",\"subdir\":" + json_text(subdir) + ",\"folder_titles\":" + flag(kSetTitles) +
+                    ",\"dump_dlc\":" + flag(kSetDlc) + ",\"verify\":" + flag(kSetVerify) +
+                    ",\"ps4_split\":" +
                     std::to_string(kSplitValues[std::clamp(form_.choice_index(kSetSplit), 0, 3)]) +
                     ",\"decrypt\":" + (dec ? "true" : "false") + ",\"fself\":" +
                     (dec && form_.toggle_value(kSetFself) ? "true" : "false") + ",\"backport\":" +
@@ -1335,13 +1352,13 @@ class DiscPage final : public Page
     ui::DetailList info_;
     ui::ProgressBar bar_;
     ui::Menu menu_;
-    DeleteAsk ask_;                // asked before a dump or a disc image is deleted
-    std::string delete_route_;     // what the question is about: the route ...
-    std::string delete_json_;      // ... and its body
+    DeleteAsk ask_;            // asked before a dump or a disc image is deleted
+    std::string delete_route_; // what the question is about: the route ...
+    std::string delete_json_;  // ... and its body
     ui::Form form_;
-    ui::Keyboard keys_;            // the folder name
+    ui::Keyboard keys_; // the folder name
     std::string name_;
-    std::string subdir_pending_;   // the folder name typed and not yet sent
+    std::string subdir_pending_; // the folder name typed and not yet sent
     bool naming_ = false;
     float clock_ = 0.0f;
     tween::Spring shown_;

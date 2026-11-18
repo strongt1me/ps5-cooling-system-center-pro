@@ -66,7 +66,8 @@ class GameTools
     void rebuild_queue();
     std::string queue_line(const QueueItem &item) const;
     void draw_queue(ui::Canvas &canvas) const;
-    // The guide for Dump Forge with the plain ELF (the row "Anleitung" under the format FPKG): a scrolling text, O closes it.
+    // The guide for Dump Forge with the plain ELF (the row "Anleitung" under the format FPKG): a
+    // scrolling text, O closes it.
     void open_guide(ui::Feedback &feedback);
     void close_guide(ui::Feedback &feedback);
     void handle_guide(const InputFrame &input, ui::Feedback &feedback);
@@ -78,8 +79,8 @@ class GameTools
     void draw_side(ui::Canvas &canvas, const gfx::Rect &box) const;
     float draw_paragraph(ui::Canvas &canvas, const std::string &text, float x, float y, float width,
                          float size, gfx::Color ink, int max_lines = 6) const;
-    // Below this line no paragraph is drawn (the side column of the plans: what does not fit is left out, not drawn over the edge of the
-    // window); a huge value outside draw_side().
+    // Below this line no paragraph is drawn (the side column of the plans: what does not fit is
+    // left out, not drawn over the edge of the window); a huge value outside draw_side().
     mutable float para_limit_ = 1.0e9f;
 
     ui::Theme theme_;

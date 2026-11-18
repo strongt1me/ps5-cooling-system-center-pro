@@ -413,8 +413,8 @@ TEST(Ps5ccPlans, TheDebugFpkgBodyCarriesTheLevelAndNoAmprIndex)
     EXPECT_NE(hui::ps5cc::queue_add_body(p, c).find(R"("op":"fpkg-min")"), std::string::npos);
 }
 
-// A game with AMPR packs: Kraken Mount refuses a package made from it, so the app says "fpkg_error" and the
-// debug FPKG is neither the first choice nor startable (17.11.2026).
+// A game with AMPR packs: Kraken Mount refuses a package made from it, so the app says "fpkg_error"
+// and the debug FPKG is neither the first choice nor startable (17.11.2026).
 TEST(Ps5ccPlans, AGameWithAmprPacksCannotBecomeADebugFpkg)
 {
     std::string json = kConvertFpkg;
@@ -436,7 +436,8 @@ TEST(Ps5ccPlans, AGameWithAmprPacksCannotBecomeADebugFpkg)
     c.level = 3; // a level does not get around it
     EXPECT_FALSE(hui::ps5cc::ready(packed, c));
 
-    // the first choice is the first format that can be chosen: ffpfsc stays, even if fpkg were first
+    // the first choice is the first format that can be chosen: ffpfsc stays, even if fpkg were
+    // first
     EXPECT_EQ(hui::ps5cc::first_choice(packed, nullptr).op, 0);
 }
 

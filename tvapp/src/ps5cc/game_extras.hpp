@@ -77,14 +77,17 @@ class GameExtras
     std::string lib_; // ampr or playgo, for the versions view
     std::vector<std::string> version_names_;
     std::vector<bool> version_ng_; // and whether each is a build of AMPR EMU NG
-    bool smp_update_on_ = false;   // ShadowMountPlus replaces the fakelib files at the start of a game
-    std::string smp_key_ = "update_emulators"; // the line of its config.ini the app changes (from the app: by the file's format)
-    std::string smp_format_;       // "none", "flat" or "v2": what that config.ini is in
-    bool smp_asked_ = true;        // the person said which version of ShadowMountPlus runs (smp_version is not empty)
-    ui::Dialog ask_;               // "ShadowMountPlus umstellen?" before an NG version goes in
-    ui::Dialog ask_version_;       // "Welche Version von ShadowMountPlus nutzt du?", once, before that
-    std::string pending_version_;  // the version that waits for the answer
-    bool zstd_ = false;                    // the pack settings are for zstd packs (AMPR EMU NG), not LZ4
+    bool smp_update_on_ =
+        false; // ShadowMountPlus replaces the fakelib files at the start of a game
+    std::string smp_key_ = "update_emulators"; // the line of its config.ini the app changes (from
+                                               // the app: by the file's format)
+    std::string smp_format_;                   // "none", "flat" or "v2": what that config.ini is in
+    bool smp_asked_ =
+        true; // the person said which version of ShadowMountPlus runs (smp_version is not empty)
+    ui::Dialog ask_;         // "ShadowMountPlus umstellen?" before an NG version goes in
+    ui::Dialog ask_version_; // "Welche Version von ShadowMountPlus nutzt du?", once, before that
+    std::string pending_version_; // the version that waits for the answer
+    bool zstd_ = false;           // the pack settings are for zstd packs (AMPR EMU NG), not LZ4
     std::vector<std::string> profile_ids_; // the choices of the LZ4 mode, "" = automatic
     std::vector<std::string> paths_;       // the duplicate images, by row
     std::vector<bool> aside_;              // and whether each is set aside
