@@ -779,6 +779,9 @@ struct cJSON *ps5tm_gamedelete_backups_json(void);
 struct stat;
 int           ps5tm_gamedelete_original_ok(const char *id, const char *path, char *why, size_t why_len);
 int           ps5tm_gamedelete_original(const char *id, const char *name, const char *path, const struct stat *was, char *err, size_t err_len);
+/* The same job, but the original is renamed into target (an absolute path on the same file system; its folder is made) instead of being deleted: a move that needs no
+   copy. ShadowMountPlus lets the title go first. A rename the file system refuses (EXDEV) ends the job failed with "(EXDEV)" in its error and changes nothing. */
+int           ps5tm_gamedelete_original_rename(const char *id, const char *name, const char *path, const struct stat *was, const char *target, char *err, size_t err_len);
 
 /* "Original danach" (origafter.c, 18.11.2026): after a conversion, a copy or an unpack the person can have the original of the game deleted or
    moved to a folder ShadowMountPlus does not search, so that the title is not on the console twice. The choice is checked before the job starts

@@ -181,11 +181,13 @@ typedef struct {
   char     mount[48], label[40];
   uint64_t free_bytes, need_bytes;
   int      smp;                          /* ShadowMountPlus would search there */
+  int      rename;                       /* the target is on the file system of the original: a rename moves it, no copy and no room needed */
 } oa_dest_t;
 
 /* The kind of file system the drive with this mount point has (the kernel's name: "msdosfs" for FAT32), "" when not known. */
 #ifdef PS5TM_HOST_TEST
 const char *g_oa_test_fstype;                   /* the host test sets it */
+int g_oa_test_rename;                          /* the host test: 1 lets a target on the same file system (every one there) be renamed to */
 #endif
 static void
 oa_fstype(const char *mount, char *out, size_t n) {
@@ -202,7 +204,7 @@ oa_fstype(const char *mount, char *out, size_t n) {
 
 /* 0 when a move of the original at path to dest_in may go ahead, else -1 with the reason in why (German, for the person). */
 static int
-check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, char *why, size_t wn) {
+check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, char *why, size_t wn, int allow_rename) {
   memset(d, 0, sizeof(*d));
   d->need_bytes = size + OA_SPACE_RESERVE;
   if(!dest_in || !dest_in[0]) { snprintf(why, wn, "Es ist kein Zielordner gewählt."); return -1; }
@@ -254,7 +256,9 @@ check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, c
              !strcmp(d->mount, "/data") ? "/data" : d->mount, PS5TM_ORIG_FOLDER);
     return -1;
   }
-  /* what exists of the way must be plain folders (no link that carries the copy somewhere else) */
+  /* what exists of the way must be plain folders (no link that carries the copy somewhere else); the deepest one that exists says on which file system the target lies */
+  struct stat anc;
+  int have_anc = OA_LSTAT(d->mount, &anc) == 0;
   {
     char part[300];
     size_t ml = strlen(d->mount), l = strlen(d->dest);
@@ -269,16 +273,29 @@ check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, c
         snprintf(why, wn, "Auf dem Weg zum Zielordner liegt eine Verknüpfung oder eine Datei: %.200s", part);
         return -1;
       }
+      anc = ps;
+      have_anc = 1;
     }
   }
   struct stat ts;
+  const int target_exists = OA_LSTAT(d->target, &ts) == 0;
   /* what an earlier copy of this app left unfinished (its mark is in it) is not somebody's: the copy replaces it (gamecopy.c) */
-  if(OA_LSTAT(d->target, &ts) == 0 && !ps5tm_gamecopy_leftover(d->target)) {
+  if(target_exists && !ps5tm_gamecopy_leftover(d->target)) {
     snprintf(why, wn, "Am Ziel gibt es „%.150s“ schon.", d->target);
     return -1;
   }
+  /* A move inside one file system needs no copy: the original is renamed (gamedelete.c), so no room is needed and the 4 GiB limit of FAT32 does not matter. A leftover at the
+     target, or a rename the file system refuses (EXDEV), leaves the copy. */
+  struct stat os, ss;
+  char sums[400];
+  const int sums_there = snprintf(sums, sizeof(sums), "%s.sha256", d->target) < (int)sizeof(sums) && OA_LSTAT(sums, &ss) == 0;     /* the checksum file goes along with the rename */
+  d->rename = allow_rename && !target_exists && !sums_there && have_anc && OA_LSTAT(path, &os) == 0 && (uint64_t)anc.st_dev == (uint64_t)os.st_dev;
+#ifdef PS5TM_HOST_TEST
+  if(!g_oa_test_rename) d->rename = 0;
+#endif
+  if(d->rename) d->need_bytes = 0;
   /* a FAT32 drive takes no file of 4 GiB or more: said now, not after hours (the copy would refuse it only when it starts) */
-  {
+  if(!d->rename) {
     char fst[16];
     oa_fstype(d->mount, fst, sizeof(fst));
     if(!strcmp(fst, "msdosfs")) {
@@ -297,7 +314,7 @@ check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, c
     uint64_t fr = sv.f_frsize ? sv.f_frsize : sv.f_bsize;
     d->free_bytes = (uint64_t)sv.f_bavail * fr;
   }
-  if(d->free_bytes < d->need_bytes) {
+  if(!d->rename && d->free_bytes < d->need_bytes) {
     char a[24], b[24];
     ps5tm_orig_fmt_bytes(a, sizeof(a), d->free_bytes);
     ps5tm_orig_fmt_bytes(b, sizeof(b), d->need_bytes);
@@ -341,7 +358,7 @@ ps5tm_orig_prepare_for(const char *kind, const char *title_id, const char *after
   if(r->mode == PS5TM_ORIG_MOVE) {
     oa_dest_t d;
     if(strlen(dest ? dest : "") >= sizeof(r->dest)) { snprintf(err, err_len, "Der Zielordner ist zu lang."); return 400; }
-    if(check_dest(r->path, dest, size_of_original(title_id, r->path, &st), &d, why, sizeof(why)) != 0) {
+    if(check_dest(r->path, dest, size_of_original(title_id, r->path, &st), &d, why, sizeof(why), 1) != 0) {
       snprintf(err, err_len, "%s", why);
       return 409;
     }
@@ -653,6 +670,49 @@ delete_original(const oa_item_t *it, char *why, size_t wn, int *partial) {
   return -1;
 }
 
+/* Moves exactly it->r.path to target by a rename (gamedelete.c's job, which lets ShadowMountPlus go first). 0 when the original lies at target now (the same thing: device and
+   inode as when the choice was made), -2 when the file system refuses a rename between the two places (EXDEV; nothing changed), else -1 with the reason in why. */
+static int
+rename_original(const oa_item_t *it, const char *target, char *why, size_t wn) {
+  struct stat was;
+  if(OA_LSTAT(it->r.path, &was) != 0) {
+    snprintf(why, wn, "Das Original ist nicht mehr da.");
+    return -1;
+  }
+  if((uint64_t)was.st_dev != it->r.dev || (uint64_t)was.st_ino != it->r.ino) {
+    snprintf(why, wn, "An dieser Stelle liegt inzwischen etwas anderes als vorher. Es wurde nichts verschoben.");
+    return -1;
+  }
+  int rc = 0;
+  for(int tries = 0; tries < OA_RETRY_TRIES; tries++) {
+    rc = ps5tm_gamedelete_original_rename(it->r.title, it->r.name, it->r.path, &was, target, why, wn);
+    if(rc != 409 || (!strstr(why, "gleichzeitig") && !strstr(why, "Gelöscht wird erst danach") && !strstr(why, "gerade schon etwas gelöscht"))) break;
+    OA_SLEEP(3);
+  }
+  if(rc != 200) return -1;
+  for(int s = 0; s < OA_JOB_WAIT_S; s++) {
+    if(!ps5tm_gamedelete_busy()) break;
+    OA_SLEEP(1);
+  }
+  cJSON *st = ps5tm_gamedelete_status();
+  const cJSON *error = st ? cJSON_GetObjectItem(st, "error") : NULL, *kind = st ? cJSON_GetObjectItem(st, "kind") : NULL, *id = st ? cJSON_GetObjectItem(st, "id") : NULL;
+  const int mine = !((cJSON_IsString(kind) && strcmp(kind->valuestring, "orig")) || (cJSON_IsString(id) && strcmp(id->valuestring, it->r.title)));
+  /* What decides is what lies there now: the same kind of thing on the same drive (a folder with its markers, a file of the same size) and nothing at the old place. The inode
+     number is not compared: FAT and exFAT give a file another one when it changes its folder. */
+  struct stat tn, gone;
+  const int there = OA_LSTAT(target, &tn) == 0 && (uint64_t)tn.st_dev == it->r.dev &&
+                    (S_ISDIR(tn.st_mode) ? S_ISDIR(was.st_mode) && has_markers(target) : S_ISREG(tn.st_mode) && S_ISREG(was.st_mode) && tn.st_size == was.st_size);
+  if(there && OA_LSTAT(it->r.path, &gone) != 0 && errno == ENOENT) {
+    cJSON_Delete(st);
+    return 0;
+  }
+  const char *e = mine && cJSON_IsString(error) ? error->valuestring : "";
+  const int xdev = strstr(e, "EXDEV") != NULL;
+  snprintf(why, wn, "%s", e[0] ? e : "Das Verschieben ist gescheitert.");
+  cJSON_Delete(st);
+  return xdev ? -2 : -1;
+}
+
 /* Copies the original to its target through gamecopy.c (read back and compared) and follows that to its end. 0 when the copy is whole. */
 static int
 copy_original(uint64_t seq, const oa_item_t *it, const char *mount, const char *target, char *why, size_t wn) {
@@ -787,13 +847,40 @@ process(uint64_t seq, const oa_item_t *it) {
   if(move) {
     oa_dest_t d;
     struct stat os;
-    if(OA_LSTAT(it->r.path, &os) != 0 || check_dest(it->r.path, it->r.dest, size_of_original(it->r.title, it->r.path, &os), &d, why, sizeof(why)) != 0) {
+    if(OA_LSTAT(it->r.path, &os) != 0 || check_dest(it->r.path, it->r.dest, size_of_original(it->r.title, it->r.path, &os), &d, why, sizeof(why), 1) != 0) {
       snprintf(msg, sizeof(msg), "Das Original „%.120s“ blieb liegen: %.300s", it->r.name, why[0] ? why : "Das Ziel ist nicht mehr in Ordnung.");
       finish(seq, OA_FAILED, msg, NULL);
       ps5tm_notify_plain("Das Original „%s“ blieb liegen: %.120s", it->r.name, why);
       return;
     }
     snprintf(target, sizeof(target), "%s", d.target);
+    if(d.rename) {                                          /* the target lies on the original's own file system: a rename, no copy (audit round 2, F-309) */
+      snprintf(msg, sizeof(msg), "Das Original „%.100s“ wird nach %.150s verschoben …", it->r.name, it->r.dest);
+      progress(seq, msg, target);
+      PS5TM_INFO("orig_move", "Original von %s wird nach %s verschoben (umbenannt, keine Kopie).", it->r.title, target);
+      const int rr = rename_original(it, target, why, sizeof(why));
+      if(rr == 0) {
+        snprintf(msg, sizeof(msg), "Das Original „%.100s“ liegt jetzt in %.150s.", it->r.name, it->r.dest);
+        finish(seq, OA_DONE, msg, target);
+        PS5TM_INFO("orig_done", "Original von %s verschoben nach %s.", it->r.title, target);
+        ps5tm_notify_plain("Das Original „%s“ liegt jetzt in %s.", it->r.name, it->r.dest);
+        return;
+      }
+      if(rr == -1) {
+        snprintf(msg, sizeof(msg), "Das Original „%.100s“ blieb liegen: %.300s", it->r.name, why);
+        finish(seq, OA_FAILED, msg, NULL);
+        PS5TM_WARN("orig_failed", "Original von %s blieb liegen: %.200s", it->r.title, why);
+        ps5tm_notify_plain("Das Original „%s“ blieb liegen: %.120s", it->r.name, why);
+        return;
+      }
+      /* the file system refuses the rename between these two places (EXDEV): the copy goes ahead after all, its room looked at again */
+      if(check_dest(it->r.path, it->r.dest, size_of_original(it->r.title, it->r.path, &os), &d, why, sizeof(why), 0) != 0) {
+        snprintf(msg, sizeof(msg), "Das Original „%.120s“ blieb liegen: %.300s", it->r.name, why);
+        finish(seq, OA_FAILED, msg, NULL);
+        ps5tm_notify_plain("Das Original „%s“ blieb liegen: %.120s", it->r.name, why);
+        return;
+      }
+    }
     snprintf(msg, sizeof(msg), "Das Original „%.100s“ wird nach %.150s kopiert und geprüft …", it->r.name, it->r.dest);
     progress(seq, msg, target);
     PS5TM_INFO("orig_move", "Original von %s wird nach %s verschoben (kopiert, geprüft, dann gelöscht).", it->r.title, target);
@@ -1018,15 +1105,17 @@ ps5tm_orig_check_json(const char *title_id, const char *dest, int *http) {
   char why[500] = "", text[700];
   oa_dest_t d;
   memset(&d, 0, sizeof(d));
+  uint64_t osz = 0;
   int ok = 0;
   if(OA_LSTAT(path, &st) != 0) snprintf(why, sizeof(why), "Das Original ist nicht mehr da.");
   else if(ps5tm_gamedelete_original_ok(title_id, path, why, sizeof(why)) == 0)
-    ok = check_dest(path, dest, size_of_original(title_id, path, &st), &d, why, sizeof(why)) == 0;
+    { osz = size_of_original(title_id, path, &st); ok = check_dest(path, dest, osz, &d, why, sizeof(why), 1) == 0; }
   if(ok) {
     char a[24], b[24];
-    ps5tm_orig_fmt_bytes(a, sizeof(a), d.need_bytes > OA_SPACE_RESERVE ? d.need_bytes - OA_SPACE_RESERVE : 0);
+    ps5tm_orig_fmt_bytes(a, sizeof(a), osz);
     ps5tm_orig_fmt_bytes(b, sizeof(b), d.free_bytes);
-    snprintf(text, sizeof(text), "Das Original „%.100s“ (%s) wird nach %.150s verschoben. Frei auf dem Ziel: %s.", name, a, d.target, b);
+    if(d.rename) snprintf(text, sizeof(text), "Das Original „%.100s“ (%s) wird nach %.150s verschoben, ohne zu kopieren (gleiches Laufwerk).", name, a, d.target);
+    else snprintf(text, sizeof(text), "Das Original „%.100s“ (%s) wird nach %.150s verschoben. Frei auf dem Ziel: %s.", name, a, d.target, b);
   } else {
     snprintf(text, sizeof(text), "%s", why);
   }
@@ -1041,6 +1130,7 @@ ps5tm_orig_check_json(const char *title_id, const char *dest, int *http) {
   cJSON_AddNumberToObject(o, "free_bytes", (double)d.free_bytes);
   cJSON_AddNumberToObject(o, "need_bytes", (double)d.need_bytes);
   cJSON_AddBoolToObject(o, "smp_searches", d.smp);
+  cJSON_AddBoolToObject(o, "rename", d.rename);
   return o;
 }
 

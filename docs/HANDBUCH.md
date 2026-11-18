@@ -255,7 +255,9 @@ gelöscht, sagt die Meldung, wo der Rest liegt. Hat ShadowMountPlus ein Entpacke
 beendet, bleibt das Abbild bei „Löschen“ liegen (bei „Verschieben“ geht es weiter: die Kopie wird auf
 jeden Fall geprüft). Die Oberfläche schickt den Pfad des Originals, das sie gezeigt hat; liegt der
 Titel beim Start woanders, lehnt die App ab. Ein Ordner mit einem unfertigen Rest einer früheren Kopie
-dieser App am Ziel gilt nicht als belegt: Die Kopie ersetzt ihn.
+dieser App am Ziel gilt nicht als belegt: Die Kopie ersetzt ihn. Liegt der Zielordner auf demselben Laufwerk wie das
+Original (nicht bei der internen SSD, deren Spieleordner eigene Einhängungen sind), wird das Original nur umbenannt:
+sofort, ohne Kopie und ohne freien Platz; geht das zwischen den beiden Orten nicht, wird doch kopiert.
 
 **Verschieben** erledigt ShadowMountPlus selbst, damit es weiß, wo das Spiel danach
 liegt; zur Wahl stehen nur Ordner, in denen es sucht. Ein Abbild zurück zu einem

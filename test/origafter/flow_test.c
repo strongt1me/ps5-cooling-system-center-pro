@@ -126,11 +126,29 @@ int ps5tm_gamedelete_original(const char *id, const char *name, const char *path
   } else if(!g_del_fail) rm_tree(path);
   return 200;
 }
+static int g_ren_calls, g_ren_busy_in_worker = -1;
+static const char *g_ren_err;                                 /* when set, the rename "job" fails with this text and changes nothing */
+static int g_ren_newino;                                      /* 1: the move gives the thing another inode (FAT, exFAT): copied and removed instead of renamed */
+int ps5tm_gamedelete_original_rename(const char *id, const char *name, const char *path, const struct stat *was, const char *target, char *err, size_t n) {
+  (void)name; (void)was; (void)n;
+  err[0] = 0;
+  g_ren_calls++;
+  g_ren_busy_in_worker = ps5tm_orig_busy();
+  snprintf(g_del_id, sizeof(g_del_id), "%s", id);
+  g_del_busy_polls = 2;
+  if(!g_ren_err) {
+    char cmd[1800];
+    if(g_ren_newino) snprintf(cmd, sizeof(cmd), "mkdir -p \"$(dirname '%s%s')\" && cp -a '%s%s' '%s%s' && rm -rf '%s%s'", ROOT, target, ROOT, path, ROOT, target, ROOT, path);
+    else snprintf(cmd, sizeof(cmd), "mkdir -p \"$(dirname '%s%s')\" && mv '%s%s' '%s%s'", ROOT, target, ROOT, path, ROOT, target);
+    if(system(cmd) != 0) printf("mv failed\n");
+  }
+  return 200;
+}
 int ps5tm_gamedelete_busy(void) { return (g_del_hold && g_del_calls > 0) || g_del_busy_polls-- > 0; }
 cJSON *ps5tm_gamedelete_status(void) {
   cJSON *o = cJSON_CreateObject();
-  cJSON_AddStringToObject(o, "state", g_del_fail || g_del_partial ? "failed" : "done");
-  cJSON_AddStringToObject(o, "error", g_del_fail || g_del_partial ? "Beim Löschen: Zugriff verweigert." : "");
+  cJSON_AddStringToObject(o, "state", g_del_fail || g_del_partial || g_ren_err ? "failed" : "done");
+  cJSON_AddStringToObject(o, "error", g_ren_err ? g_ren_err : g_del_fail || g_del_partial ? "Beim Löschen: Zugriff verweigert." : "");
   cJSON_AddStringToObject(o, "kind", "orig");
   cJSON_AddStringToObject(o, "id", g_del_id);
   cJSON_AddNumberToObject(o, "files", g_del_partial ? 3 : 0);
@@ -169,6 +187,7 @@ void ps5tm_hist_add(const char *kind, const char *title, const char *detail, con
   if(g_nhist < 4) snprintf(g_hist[g_nhist++], sizeof(g_hist[0]), "%s: %s", title, error);
 }
 extern const char *g_oa_test_fstype;
+extern int g_oa_test_rename;
 static int g_cp_null_polls, g_cp_status_calls;
 cJSON *ps5tm_gamecopy_status(void) {
   g_cp_status_calls++;
@@ -238,7 +257,7 @@ static void reset_stubs(void) {
   g_del_calls = 0; g_del_http = 200; g_del_fail = 0; g_del_path[0] = 0; g_del_busy_polls = 0;
   g_cp_calls = 0; g_cp_http = 200; g_cp_fail = 0; g_cp_make = 0; g_cp_dest[0] = 0; g_cp_skipped = 0; g_cp_badsource = 0;
   g_idle_polls = 0; g_nnotes = 0; g_log_warn = 0;
-  g_del_hold = 0; g_del_partial = 0; g_del_drive_gone = 0; g_probe_check = 0; g_cp_null_polls = 0; g_cp_status_calls = 0; g_busy_in_worker = -1; g_cp_gone = 0; g_last_rc = -1; g_last_err[0] = 0; g_leftover = 0; g_oa_test_fstype = "";
+  g_del_hold = 0; g_del_partial = 0; g_del_drive_gone = 0; g_probe_check = 0; g_cp_null_polls = 0; g_cp_status_calls = 0; g_busy_in_worker = -1; g_cp_gone = 0; g_last_rc = -1; g_last_err[0] = 0; g_leftover = 0; g_oa_test_fstype = ""; g_oa_test_rename = 0; g_ren_calls = 0; g_ren_err = NULL; g_ren_newino = 0; g_ren_busy_in_worker = -1;
 }
 
 int
@@ -800,6 +819,113 @@ main(void) {
     unlink(sp);
     snprintf(g_src_path, sizeof(g_src_path), "/mnt/usb0/homebrew/PPSA00001");
   }
+
+  /* ---- F-309: a move inside one file system is a rename, not a copy ---- */
+  reset_stubs();
+  mk_orig();
+  g_oa_test_rename = 1;
+  g_cp_make = 1;
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  {
+    int http = 0;
+    cJSON *c = ps5tm_orig_check_json("PPSA00001", "/mnt/usb1/PS5-Sicherung/Spiele", &http);
+    CHECK(c && !strcmp(cJSON_GetObjectItem(c, "level")->valuestring, "ok") && cJSON_IsTrue(cJSON_GetObjectItem(c, "rename")));
+    CHECK(strstr(cJSON_GetObjectItem(c, "text")->valuestring, "ohne zu kopieren") != NULL);
+    cJSON_Delete(c);
+  }
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "done") && !strcmp(g_mode, "move"));
+  CHECK(strstr(g_msg, "liegt jetzt in /mnt/usb1/PS5-Sicherung/Spiele") != NULL);
+  CHECK(g_ren_calls == 1 && g_cp_calls == 0 && g_del_calls == 0);
+  CHECK(g_ren_busy_in_worker == 0);                          /* the worker's own start does not see itself as busy */
+  CHECK(exists("/mnt/usb1/PS5-Sicherung/Spiele/PPSA00001/sce_sys/param.json") && !exists("/mnt/usb0/homebrew/PPSA00001"));
+
+  /* no room needed for a rename (an image of 8 TiB, sparse) */
+  {
+    char sp[800];
+    snprintf(sp, sizeof(sp), "%s/mnt/usb0/gross.exfat", ROOT);
+    int fd = open(sp, O_CREAT | O_WRONLY, 0644);
+    CHECK(fd >= 0 && ftruncate(fd, (off_t)8 << 40) == 0);
+    if(fd >= 0) close(fd);
+    snprintf(g_src_path, sizeof(g_src_path), "/mnt/usb0/gross.exfat");
+    CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+    g_oa_test_rename = 0;
+    CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 409 && strstr(err, "nicht genug Platz") != NULL);
+    unlink(sp);
+    snprintf(g_src_path, sizeof(g_src_path), "/mnt/usb0/homebrew/PPSA00001");
+  }
+
+  /* a leftover of an earlier copy at the target: no rename onto it, the copy replaces it */
+  reset_stubs();
+  mk_orig();
+  g_oa_test_rename = 1;
+  mk("/mnt/usb1/PS5-Sicherung/Spiele2/PPSA00001", 1);
+  g_leftover = 1;
+  {
+    int http = 0;
+    cJSON *c = ps5tm_orig_check_json("PPSA00001", "/mnt/usb1/PS5-Sicherung/Spiele2", &http);
+    CHECK(c && !strcmp(cJSON_GetObjectItem(c, "level")->valuestring, "ok") && !cJSON_IsTrue(cJSON_GetObjectItem(c, "rename")));
+    cJSON_Delete(c);
+  }
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+
+  /* the file system refuses the rename (EXDEV): the copy goes ahead after all, then the original is deleted */
+  reset_stubs();
+  mk_orig();
+  g_oa_test_rename = 1;
+  g_cp_make = 1;
+  g_ren_err = "Das Verschieben geht zwischen diesen Orten nicht ohne Kopie (EXDEV).";
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "done"));
+  CHECK(g_ren_calls == 1 && g_cp_calls == 1 && g_del_calls == 1);
+  mk_orig();
+
+  /* any other failure of the rename: the original stays, nothing is copied */
+  reset_stubs();
+  mk_orig();
+  g_oa_test_rename = 1;
+  g_cp_make = 1;
+  g_ren_err = "Das Verschieben ist fehlgeschlagen: Permission denied. Das Original liegt unverändert.";
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "blieb liegen") != NULL && strstr(g_msg, "Permission denied") != NULL);
+  CHECK(g_ren_calls == 1 && g_cp_calls == 0 && g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
+  g_oa_test_rename = 0;
+  mk_orig();
+
+  /* F-309 (review): a rename that gives the thing another inode (FAT, exFAT) is still a success; a checksum file of somebody else at the target means no rename */
+  reset_stubs();
+  mk_orig();
+  g_oa_test_rename = 1;
+  g_ren_newino = 1;
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "done") && strstr(g_msg, "liegt jetzt in") != NULL);
+  CHECK(exists("/mnt/usb1/PS5-Sicherung/Spiele/PPSA00001/sce_sys/param.json") && !exists("/mnt/usb0/homebrew/PPSA00001"));
+  g_ren_newino = 0;
+  mk_orig();
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  mk("/mnt/usb1/PS5-Sicherung/Spiele/PPSA00001.sha256", 0);
+  {
+    int http = 0;
+    cJSON *c = ps5tm_orig_check_json("PPSA00001", "/mnt/usb1/PS5-Sicherung/Spiele", &http);
+    CHECK(c && !strcmp(cJSON_GetObjectItem(c, "level")->valuestring, "ok") && !cJSON_IsTrue(cJSON_GetObjectItem(c, "rename")));
+    cJSON_Delete(c);
+  }
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  g_oa_test_rename = 0;
 
   printf("%d Prüfungen, %d Fehler\n", g_n, g_fail);
   return g_fail ? 1 : 0;

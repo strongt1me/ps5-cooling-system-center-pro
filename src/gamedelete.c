@@ -107,6 +107,7 @@ typedef struct {
   char id[320];
   char path[320];
   int  orig;                  /* the original of a game (origafter.c): exactly this path */
+  char rename_to[320];        /* orig: not deleted but renamed to this path (a move inside one file system) */
 } dl_args_t;
 
 
@@ -919,10 +920,80 @@ run_smp(const dl_args_t *a) {
   job_end(DL_DONE, NULL, NULL);
 }
 
+/* The folders of path, made as far as they are not there (mode 0777 like every folder this app makes for a copy). path is changed and put back. */
+static int
+mkdirs(char *path) {
+  for(char *p = path + 1; *p; p++) {
+    if(*p != '/') continue;
+    *p = '\0';
+    const int r = mkdir(path, 0777), e = errno;
+    *p = '/';
+    if(r != 0 && e != EEXIST) return -1;
+  }
+  return mkdir(path, 0777) != 0 && errno != EEXIST ? -1 : 0;
+}
+
+/* A move inside one file system (origafter.c): the original is renamed into a->rename_to, nothing is copied. ShadowMountPlus has let the title go already (run_orig). The
+   target must not be there; a rename onto an existing file would replace it silently, so it is looked at first (what is left is the moment between that and the rename). */
+static void
+orig_rename(const dl_args_t *a) {
+  job_phase("Das Original wird verschoben");
+  struct stat ss, ts;
+  if(lstat(a->path, &ss) != 0 || (!S_ISDIR(ss.st_mode) && !S_ISREG(ss.st_mode))) {
+    job_end(DL_FAILED, "Das Original ist nicht mehr da. Es wurde nichts verschoben.", NULL);
+    return;
+  }
+  if(lstat(a->rename_to, &ts) == 0) {
+    job_end(DL_FAILED, "Am Ziel gibt es schon etwas. Es wurde nichts verschoben.", NULL);
+    return;
+  }
+  char parent[320];
+  snprintf(parent, sizeof(parent), "%s", a->rename_to);
+  char *sl = strrchr(parent, '/');
+  if(!sl || sl == parent || mkdirs((*sl = '\0', parent)) != 0) {
+    job_end(DL_FAILED, "Der Zielordner ließ sich nicht anlegen.", NULL);
+    return;
+  }
+  /* another file system below the target's folder: no rename, and the title is not let go for nothing (the copy takes over) */
+  struct stat ps;
+  if(lstat(parent, &ps) != 0 || ps.st_dev != ss.st_dev) {
+    job_end(DL_FAILED, "Das Verschieben geht zwischen diesen Orten nicht ohne Kopie (EXDEV).", NULL);
+    return;
+  }
+  /* everything that can be known beforehand is known: only now ShadowMountPlus lets the title go (as for a delete) */
+  ps5tm_smp_game_t sg;
+  if(ps5tm_smp_find(a->id, &sg) == 0 && !strcmp(sg.path, a->path) && smp_unregister(a) != 0) return;
+  if(rename(a->path, a->rename_to) != 0) {
+    const int e = errno;
+    char msg[400];
+    if(e == EXDEV) snprintf(msg, sizeof(msg), "Das Verschieben geht zwischen diesen Orten nicht ohne Kopie (EXDEV).");
+    else snprintf(msg, sizeof(msg), "Das Verschieben ist fehlgeschlagen: %s. Das Original liegt unverändert.", strerror(e));
+    PS5TM_WARN("game_delete_failed", "Verschieben des Originals von %s: %.150s", a->id, msg);
+    job_end(DL_FAILED, msg, NULL);
+    return;
+  }
+  /* the checksum file of the original goes with it (a copy would have written one next to its result) */
+  {
+    char s1[400], s2[400];
+    struct stat sb;
+    if(snprintf(s1, sizeof(s1), "%s" PS5TM_SUMS_EXT, a->path) < (int)sizeof(s1) && snprintf(s2, sizeof(s2), "%s" PS5TM_SUMS_EXT, a->rename_to) < (int)sizeof(s2) &&
+       lstat(s1, &sb) == 0 && S_ISREG(sb.st_mode) && lstat(s2, &sb) != 0)
+      (void)rename(s1, s2);
+  }
+  ps5tm_smp_forget();
+  ps5tm_library_forget();
+  PS5TM_INFO("game_delete_done", "%s: Original verschoben: %s -> %s.", a->id, a->path, a->rename_to);
+  job_end(DL_DONE, NULL, NULL);
+}
+
 /* The original of a game after a conversion, a copy or an unpack (origafter.c): exactly a->path, whatever ShadowMountPlus lists for the title now
    (it may list the new copy). When ShadowMountPlus knows the title it lets it go first, so that nothing stays mounted from the data that goes. */
 static void
 run_orig(const dl_args_t *a) {
+  if(a->rename_to[0]) {                                       /* it looks first and lets ShadowMountPlus go only when the rename is really tried */
+    orig_rename(a);
+    return;
+  }
   ps5tm_smp_game_t s;
   /* only when it lists exactly this data: for the title's new copy it lists, the uninstall would take that one off instead */
   if(ps5tm_smp_find(a->id, &s) == 0 && !strcmp(s.path, a->path) && smp_unregister(a) != 0) return;
@@ -975,6 +1046,7 @@ delete_thread(void *arg) {
   snprintf(kind, sizeof(kind), "%s", g_job.kind);
   pthread_mutex_unlock(&g_lock);
   const int orig = a->orig;
+  const int ren = a->rename_to[0] != 0;
   if(orig) run_orig(a);
   else if(!strcmp(kind, "installed")) run_installed(a);
   else if(!strcmp(kind, "smp")) run_smp(a);
@@ -991,8 +1063,8 @@ delete_thread(void *arg) {
   pthread_mutex_unlock(&g_lock);
   if(waited && st == DL_DONE) ps5tm_notify("„%s“ ist gelöscht.", name);
   else if(waited && st == DL_FAILED) ps5tm_notify("„%s“ wurde nicht gelöscht: %.120s", name, error);
-  if(st == DL_DONE || st == DL_FAILED)
-    ps5tm_hist_add("delete", name, orig ? "Original" : !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : "Spiel",
+  if((st == DL_DONE || st == DL_FAILED) && !(ren && st == DL_FAILED && strstr(error, "EXDEV")))
+    ps5tm_hist_add("delete", name, orig ? (ren ? "Original verschoben" : "Original") : !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : "Spiel",
                    st == DL_DONE ? "done" : "failed", error, bytes, dur);
   free(a);
   return NULL;
@@ -1168,10 +1240,11 @@ ps5tm_gamedelete_original_ok(const char *id, const char *path, char *why, size_t
 }
 
 /* Deletes exactly that path as the original of title id (name for the messages): ShadowMountPlus lets the title go first when it lists this data.
-   was: what lay there when the choice was made (NULL: not compared); a different thing at the same name is refused. An HTTP status: 200 when it
-   runs, else err says why. Nothing is deleted without its checks (_ok) having passed a moment ago. */
-int
-ps5tm_gamedelete_original(const char *id, const char *name, const char *path, const struct stat *was, char *err, size_t err_len) {
+   was: what lay there when the choice was made (NULL: not compared); a different thing at the same name is refused. rename_to: not deleted but renamed there (a move
+   inside one file system), NULL for the delete. An HTTP status: 200 when it runs, else err says why. Nothing is deleted without its checks (_ok) having passed a
+   moment ago. */
+static int
+original_start(const char *id, const char *name, const char *path, const struct stat *was, const char *rename_to, char *err, size_t err_len) {
   err[0] = 0;
   if(ps5tm_gamedelete_original_ok(id, path, err, err_len) != 0) return 409;
   if(was) {
@@ -1181,16 +1254,31 @@ ps5tm_gamedelete_original(const char *id, const char *name, const char *path, co
       return 409;
     }
   }
+  if(rename_to && (rename_to[0] != '/' || strlen(rename_to) >= sizeof(((dl_args_t *)0)->rename_to) || !deletable_root(rename_to))) {
+    snprintf(err, err_len, "Das Ziel gibt es nicht.");
+    return 400;
+  }
   if(other_job_active(err, err_len)) return 409;
   dl_args_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 500; }
   snprintf(a->kind, sizeof(a->kind), "%s", "orig");
   snprintf(a->id, sizeof(a->id), "%s", id ? id : "");
   snprintf(a->path, sizeof(a->path), "%s", path);
+  if(rename_to) snprintf(a->rename_to, sizeof(a->rename_to), "%s", rename_to);
   a->orig = 1;
   return launch_job(a, name && name[0] ? name : ps5tm_orig_basename(path), err, err_len);
 }
 
+int
+ps5tm_gamedelete_original(const char *id, const char *name, const char *path, const struct stat *was, char *err, size_t err_len) {
+  return original_start(id, name, path, was, NULL, err, err_len);
+}
+
+int
+ps5tm_gamedelete_original_rename(const char *id, const char *name, const char *path, const struct stat *was, const char *target, char *err, size_t err_len) {
+  if(!target) { snprintf(err, err_len, "Das Ziel gibt es nicht."); return 400; }
+  return original_start(id, name, path, was, target, err, err_len);
+}
 
 cJSON *
 ps5tm_gamedelete_status(void) {
