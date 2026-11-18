@@ -6387,6 +6387,17 @@
         <li>Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. Du musst es nicht von Hand starten.</li>
       </ul>
     </div>`;
+  /* A game with AMPR packs: Dump Forge decodes them before it writes the package, as Kraken Mount takes no package with packs in it. */
+  const cvUnpackNote = (p) => {
+    if (!p.fpkg_unpack) return "";
+    const kind = p.fpkg_unpack === "lz4" ? "LZ4" : "zstd";
+    const size = p.fpkg_unpack_bytes
+      ? `Das ungepackte Spiel ist ${bytes(p.fpkg_unpack_bytes)} groß, das Paket wird je nach Stufe kleiner.`
+      : "Wie groß das ungepackte Spiel wird, weiß erst Dump Forge.";
+    return `<div class="cp-warn cv-engine"><b>Die Packs werden vor dem Umwandeln ausgepackt.</b>
+      <span>Das Spiel liegt in AMPR-Packs (${kind}), und Kraken Mount nimmt kein Paket mit Packs an. Dump Forge löst sie deshalb beim Umwandeln auf: Das Paket enthält die ungepackten Dateien, das Original bleibt unverändert.</span>
+      <span>${size}</span></div>`;
+  };
   /* Under the format FPKG: the compression level, and where Dump Forge stands (there, or to be fetched). */
   const cvFpkgExtra = (p) => {
     const df = p.dumpforge || {};
@@ -6404,7 +6415,7 @@
           <code>${esc(df.folder || "/data/PS5-Cooling-Center/dumpforge")}</code>
           <button type="button" class="btn" data-cp="dfetch"${df.fetching ? " disabled" : ""}>Dump Forge laden</button></div>`;
     const guide = `<div class="cv-engine-guide"><button type="button" class="btn ghost" data-cp="guide">${cv.guide ? "Anleitung schließen" : "Anleitung"}</button></div>${cv.guide ? cvGuideHtml() : ""}`;
-    return `<div class="cp-sub"><h5>Kompressionsstufe</h5><div class="cp-list">${levels}</div>${engine}${guide}</div>`;
+    return `<div class="cp-sub">${cvUnpackNote(p)}<h5>Kompressionsstufe</h5><div class="cp-list">${levels}</div>${engine}${guide}</div>`;
   };
 
   /* Why a format cannot be chosen for this game ("" when it can): the plan's ffpkg_error / fpkg_error. */
@@ -6421,7 +6432,7 @@
 
     /* Only operations this page knows by name; the value is text like any other. */
     /* A .ffpkg the app already knows it cannot build (a folder with too many entries, a file too big) is shown
-       with the reason, and cannot be chosen; so is the FPKG of a game with AMPR packs (Kraken Mount refuses such a package). */
+       with the reason, and cannot be chosen; so is the FPKG of a game whose packs cannot be handled (not looked at, or zstd and LZ4 together: fpkg_error). */
     const ops = p.ops.filter((op) => CV_OPS[op]).map((op) => {
       const why = cvOpWhy(p, op);
       const off = !!why;

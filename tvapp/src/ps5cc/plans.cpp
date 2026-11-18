@@ -214,6 +214,8 @@ Plan parse_plan(Tool tool, const PlanReply &reply)
     p.ffpkg_bytes = bytes(root, "ffpkg_bytes");
     p.ffpkg_error = str(root, "ffpkg_error");
     p.fpkg_error = str(root, "fpkg_error");
+    p.fpkg_unpack = str(root, "fpkg_unpack");
+    p.fpkg_unpack_bytes = bytes(root, "fpkg_unpack_bytes");
     const cJSON *item = nullptr;
     cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "ops"))
     {
@@ -399,7 +401,10 @@ std::string drive_blocked(const Plan &p, const PlanChoice &c, const PlanDrive &d
         // A compressed FPKG gets smaller than the game: the check names a FAT32 drive, it is not
         // turned away here.
         const bool squeezed_fpkg = c.op == kOpFpkg && c.level != kLevelRaw;
-        const std::uint64_t need = ffpkg && p.ffpkg_bytes > 0 ? p.ffpkg_bytes : p.raw_bytes;
+        const std::uint64_t need = ffpkg && p.ffpkg_bytes > 0 ? p.ffpkg_bytes
+                                   : c.op == kOpFpkg && p.fpkg_unpack_bytes > 0
+                                       ? p.fpkg_unpack_bytes
+                                       : p.raw_bytes;
         const std::string room = "Zu wenig Platz: Nötig sind bis zu " + format_bytes(need);
         if (!squeezed_fpkg && (ffpkg ? d.fat32_too_big_ffpkg : d.fat32_too_big))
             return "FAT32 nimmt keine Datei über 4 GB auf";

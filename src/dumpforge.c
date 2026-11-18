@@ -277,10 +277,11 @@ ps5tm_dumpforge_stop(int force) {
 
 /* ------------------------------------------------------------------ the jobs */
 
-/* A job: source (a folder or an image) into the debug FPKG `output`; level "fast", "balanced", "smallest" or "stored". 0 and the job's number,
-   else -1 with a sentence. */
+/* A job: source (a folder or an image) into the debug FPKG `output`; level "fast", "balanced", "smallest" or "stored". unpack 1 / 2: the source's
+   LZ4 / zstd packs are decoded into the logical files first ("lz4":"unpack" / "zstd_unpack":true of Dump Forge's request; the two cannot be asked for
+   together), as Kraken Mount takes no package with packs in it. 0 and the job's number, else -1 with a sentence. */
 int
-ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int *job, char *err, size_t n) {
+ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int unpack, int *job, char *err, size_t n) {
   *job = 0;
   cJSON *req = cJSON_CreateObject();
   cJSON_AddStringToObject(req, "source", source);
@@ -290,6 +291,8 @@ ps5tm_dumpforge_job_start(const char *source, const char *output, const char *le
   cJSON_AddNullToObject(req, "inner");
   cJSON_AddBoolToObject(req, "remove_backport", 0);
   cJSON_AddBoolToObject(req, "full_verify", full_verify ? 1 : 0);
+  if(unpack == 2) cJSON_AddBoolToObject(req, "zstd_unpack", 1);
+  else if(unpack == 1) cJSON_AddStringToObject(req, "lz4", "unpack");
   cJSON_AddStringToObject(req, "kraken_level", level && *level ? level : "fast");
   cJSON *body = cJSON_CreateObject();
   cJSON_AddItemToObject(body, "request", req);

@@ -946,7 +946,8 @@ int           ps5tm_dumpforge_start_c(char *msg, size_t n, int (*cancelled)(void
 int           ps5tm_dumpforge_probe(void);                              /* 1 = runs, 0 = not there, -1 = listens but does not answer in time */
 int           ps5tm_dumpforge_stop(int force);                          /* 0 = ended (or not running), 1 = left running: it is busy and force is 0 */
 int           ps5tm_dumpforge_fetch(char *msg, size_t n);              /* 200 = there, else an HTTP-like status with a sentence */
-int           ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int *job, char *err, size_t n);
+/* unpack: 0 = the game is written as it is, 1 = its LZ4 packs are decoded first, 2 = its zstd packs (Kraken Mount refuses a package that holds packs). */
+int           ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int unpack, int *job, char *err, size_t n);
 int           ps5tm_dumpforge_job_poll(int job, ps5tm_dumpforge_job_t *out);
 int           ps5tm_dumpforge_job_cancel(int job);                     /* the HTTP status of the request, -1 when it did not arrive */
 

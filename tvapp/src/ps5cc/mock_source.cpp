@@ -824,6 +824,15 @@ class MockSource final : public Source
         if (g != nullptr && g->id == data_.status.game_id)
             add("running", "error", "Das Spiel läuft gerade.",
                 "Beende das Spiel, dann geht es weiter.");
+        if (g != nullptr && !g->packing.empty() && op.rfind("fpkg", 0) == 0)
+            add("unpack", "warn",
+                std::string("Die AMPR-Packs (") + (g->packing == "lz4" ? "LZ4" : "zstd") +
+                    ") werden vor dem Umwandeln ausgepackt: Das Paket enthält das ungepackte "
+                    "Spiel" +
+                    (folder ? " (" + gb(size * 1.6) + ")."
+                            : ", wie groß es wird, weiß erst Dump Forge."),
+                "Das dauert länger als bei einem Spiel ohne Packs. Das Original bleibt "
+                "unverändert.");
         std::string stem, err;
         std::string target;
         const MockDrive *drive = nullptr;
@@ -2152,6 +2161,13 @@ class MockSource final : public Source
             cJSON_AddStringToObject(risk, "stream_dir", "");
             cJSON_AddNumberToObject(risk, "stream_dir_bytes", 0);
             cJSON_AddNumberToObject(root, "ffpkg_bytes", ffpkg);
+            // a game in AMPR packs: Dump Forge decodes them while it writes the debug FPKG
+            // (gameconvert.c: fpkg_unpack); an image does not tell how big it gets
+            if (!g->packing.empty() && !ps4)
+            {
+                cJSON_AddStringToObject(root, "fpkg_unpack", g->packing.c_str());
+                cJSON_AddNumberToObject(root, "fpkg_unpack_bytes", folder ? size * 1.6 : 0.0);
+            }
             // plain ELF executables (fsign.c): a big PS5 folder game has a few, a very big one has
             // one that cannot be signed too
             cJSON *unsig = cJSON_AddObjectToObject(root, "unsigned_exec");

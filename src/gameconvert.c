@@ -67,9 +67,11 @@
 #include "ioerr.h"
 #include "imgread.h"
 #include "iopolicy.h"
+#include "lz4pack.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 #include "third_party/libdeflate/libdeflate.h"
+#include "zstdpack.h"
 
 #define SPACE_RESERVE    (256ull * 1024 * 1024)
 #define FAT32_MAX_FILE   0xFFFFFFFFull
@@ -139,6 +141,7 @@ typedef struct {
   int  folder;
   int  ampr;                  /* build ampr_emu.index in the folder first (amprindex.c) */
   int  quick;                 /* check the result the quick way (structure and a sample), no checksum file */
+  int  unpack;                /* a debug FPKG of a game with AMPR packs: 1 = Dump Forge decodes its LZ4 packs first, 2 = its zstd packs, else 0 */
   int  nroots;                /* a PS4 dump: the folders laid over each other (base, update, overlay), else 0 */
   char roots[3][336];                 /* a target path (320) and the ending of the folder of signed files */
   char overlay[256];          /* the folder of our own files among them, removed when the job is over */
@@ -820,12 +823,13 @@ cv_run_fpkg(const cv_args_t *a) {
     return NULL;
   }
   int job = 0;
-  if(ps5tm_dumpforge_job_start(a->source, a->target, fpkg_level(a->op), !a->quick, &job, err, sizeof(err)) != 0) {
+  if(ps5tm_dumpforge_job_start(a->source, a->target, fpkg_level(a->op), !a->quick, a->unpack, &job, err, sizeof(err)) != 0) {
     cv_fail("%s", err);
     if(started_here) ps5tm_dumpforge_stop(0);
     return NULL;
   }
-  PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s.", a->title_id, job, fpkg_level(a->op));
+  PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s%s.", a->title_id, job, fpkg_level(a->op),
+             a->unpack == 2 ? ", zstd-Packs werden ausgepackt" : a->unpack == 1 ? ", LZ4-Packs werden ausgepackt" : "");
   int cancel_sent = 0, lost = 0, final = -1, lost_out = 0, hung = 0, too_big = 0, list_big = 0;
   uint64_t last_ms = ps5tm_mono_ms(), last_done = 0, cancel_first_ms = 0, cancel_last_ms = 0;
   ps5tm_dumpforge_job_t jb;
@@ -1502,8 +1506,8 @@ static int
 packs_names_cb(const char *name, int is_dir, void *ctx) {
   int *found = ctx;
   if(is_dir) return 0;
-  if(!strcasecmp(name, "ampr_zstd.index")) *found = 2;
-  else if(!strcasecmp(name, "ampr_assets.index") && *found == 0) *found = 1;
+  if(!strcasecmp(name, "ampr_zstd.index")) *found |= 2;
+  else if(!strcasecmp(name, "ampr_assets.index")) *found |= 1;
   return 0;
 }
 
@@ -1520,18 +1524,20 @@ packs_thread(void *arg) {
   return NULL;
 }
 
+/* The AMPR packs a game holds: bit 1 = LZ4 (ampr_assets.index), bit 2 = zstd (ampr_zstd.index); 0 none, -1 when it could not be looked at. */
 static int
 source_packs(const char *source, int folder) {
   if(folder) {
     static const struct { const char *name; int packs; } idx[] = { { "ampr_zstd.index", 2 }, { "ampr_assets.index", 1 } };
+    int found = 0;
     for(unsigned i = 0; i < sizeof(idx) / sizeof(idx[0]); i++) {
       char p[300];
       struct stat st;
       if(snprintf(p, sizeof(p), "%s/%s", source, idx[i].name) >= (int)sizeof(p)) return -1;
-      if(stat(p, &st) == 0) return idx[i].packs;
-      if(errno != ENOENT) return -1;                   /* not "there is none": it could not be looked at */
+      if(stat(p, &st) == 0) found |= idx[i].packs;
+      else if(errno != ENOENT) return -1;              /* not "there is none": it could not be looked at */
     }
-    return 0;
+    return found;
   }
   packs_job_t j = { source, -1 };                      /* an image goes through imgread.c: on a thread of its own with a large stack, like the walk above */
   pthread_t th;
@@ -1544,18 +1550,33 @@ source_packs(const char *source, int folder) {
   return rc == 0 ? j.packs : -1;
 }
 
-/* The reason a game with packs cannot become a FPKG; "" for none. */
+/* The reason a game cannot become a FPKG because of its packs; "" for none. Kraken Mount takes no package with AMPR packs in it, so Dump Forge decodes a
+   game's packs before it writes the package (ps5tm_dumpforge_job_start, unpack): that is not a reason, only a note (fpkg_unpack_*). What stays: packs
+   that could not be looked at, and a game with both kinds (Dump Forge takes one kind of unpacking at a time). */
 static void
 fpkg_packs_why(int packs, char *out, size_t n) {
   if(packs < 0)
     snprintf(out, n, "Ob das Spiel AMPR-Packs enthält, ließ sich nicht prüfen (die Quelle ist gerade nicht lesbar). Bitte später noch einmal versuchen.");
-  else if(packs == 2)
-    snprintf(out, n, "Es ist mit AMPR-Packs (zstd) gepackt, und Kraken Mount nimmt kein Paket aus einem gepackten Ordner an. "
-                     "Erst die Packs auflösen (Knopf „zstd entpacken“ bei den Asset-Packs des Spiels), dann konvertieren.");
-  else if(packs == 1)
-    snprintf(out, n, "Es ist mit AMPR-Packs (LZ4) gepackt, und Kraken Mount nimmt kein Paket aus einem gepackten Ordner an. "
-                     "Erst die Packs auflösen (Knopf „LZ4 entpacken“ bei den Asset-Packs des Spiels), dann konvertieren.");
+  else if(packs == 3)
+    snprintf(out, n, "Es enthält zstd- und LZ4-Packs, und Dump Forge löst beim Umwandeln nur eine Art auf. "
+                     "Erst eine Art entpacken (Knopf bei den Asset-Packs des Spiels), dann konvertieren.");
   else if(n) out[0] = 0;
+}
+
+static const char *
+unpack_kind_name(int unpack) {
+  return unpack == 2 ? "zstd" : "LZ4";
+}
+
+/* What the game takes once its packs are decoded (the folder's image size without the packs' own bytes, plus the files inside them); 0 when it is not
+   known (an image: its packs lie inside it, out of reach here). Only an estimate to warn in time; Dump Forge checks the room itself too. */
+static uint64_t
+unpacked_size(const char *source, int folder, int unpack, uint64_t raw) {
+  if(!folder) return 0;
+  lzp_info_t inf;
+  if(!(unpack == 2 ? zsp_info(source, &inf, NULL) : lzp_info(source, &inf)) || inf.logical_bytes == 0) return 0;
+  const uint64_t rest = raw > inf.stored_bytes ? raw - inf.stored_bytes : 0;
+  return rest + inf.logical_bytes;
 }
 
 /* --------------------------------------------------------------- interface */
@@ -1569,7 +1590,9 @@ typedef struct {
   int      folder, ps4;
   uint64_t raw, ffpkg_bytes, files;
   char     ffpkg_why[700];
-  char     fpkg_why[400];                       /* why no debug FPKG (AMPR packs in the game), "" when there can be one */
+  char     fpkg_why[400];                       /* why no debug FPKG (packs that cannot be looked at, both kinds), "" when there can be one */
+  int      unpack;                              /* a debug FPKG of this game decodes its packs first: 1 LZ4, 2 zstd, else 0 */
+  uint64_t unpack_bytes;                        /* ... and then takes this much (0 = not known) */
   char     exfat_why[400];                      /* why no exFAT image (and so no .exfat / .ffpfsc) of this folder, "" when there is one */
   unsigned skip_special, skip_system;           /* entries the images leave out on purpose; skip_eg: the first of them */
   char     skip_eg[96];
@@ -1667,8 +1690,17 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     }
     can_exfat = can_ffpfsc = 0;                        /* the page offers .ffpkg only */
   }
-  char fpkg_why[400] = "";                             /* a game with AMPR packs: Kraken Mount refuses its package (source_packs above) */
-  if(can_fpkg) fpkg_packs_why(source_packs(source, folder), fpkg_why, sizeof(fpkg_why));
+  char fpkg_why[400] = "";                             /* packs that could not be looked at, or both kinds (source_packs above) */
+  int fpkg_unpack = 0;                                 /* a game with packs: Dump Forge decodes them first, Kraken Mount refuses a package with packs */
+  uint64_t fpkg_unpack_bytes = 0;
+  if(can_fpkg) {
+    const int packs = source_packs(source, folder);
+    fpkg_packs_why(packs, fpkg_why, sizeof(fpkg_why));
+    if(packs == 1 || packs == 2) {
+      fpkg_unpack = packs;
+      fpkg_unpack_bytes = unpacked_size(source, folder, packs, raw);
+    }
+  }
 
   char stem[200];
   stem_of(source, folder, stem, sizeof(stem));
@@ -1717,6 +1749,8 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     pcs->files = files;
     snprintf(pcs->ffpkg_why, sizeof(pcs->ffpkg_why), "%s", ffpkg_why);
     snprintf(pcs->fpkg_why, sizeof(pcs->fpkg_why), "%s", fpkg_why);
+    pcs->unpack = fpkg_unpack;
+    pcs->unpack_bytes = fpkg_unpack_bytes;
     snprintf(pcs->exfat_why, sizeof(pcs->exfat_why), "%s", exfat_why);
     pcs->skip_special = skip_special;
     pcs->skip_system = skip_system;
@@ -1731,6 +1765,10 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   cJSON_AddNumberToObject(root, "ffpkg_bytes", (double)ffpkg_bytes);
   if(ffpkg_why[0]) cJSON_AddStringToObject(root, "ffpkg_error", ffpkg_why);
   if(fpkg_why[0]) cJSON_AddStringToObject(root, "fpkg_error", fpkg_why);        /* "fpkg" stays in "ops"; the page shows it greyed out with this reason */
+  if(fpkg_unpack) {                                                              /* the page says so beside the choice: the packs are decoded first, the package gets as big as the game without them */
+    cJSON_AddStringToObject(root, "fpkg_unpack", fpkg_unpack == 2 ? "zstd" : "lz4");
+    cJSON_AddNumberToObject(root, "fpkg_unpack_bytes", (double)fpkg_unpack_bytes);
+  }
   if(exfat_why[0]) cJSON_AddStringToObject(root, "exfat_error", exfat_why);      /* no .exfat / .ffpfsc for this folder; "ops" has no more than .ffpkg */
   if(skip_special || skip_system) {
     char sn[300];
@@ -1753,6 +1791,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
   ps5tm_sysinfo_get(&info);
   uint64_t need = raw + SPACE_RESERVE;
   uint64_t need_ffpkg = ffpkg_bytes ? ffpkg_bytes + SPACE_RESERVE : need;
+  uint64_t need_fpkg = fpkg_unpack_bytes ? fpkg_unpack_bytes + SPACE_RESERVE : need;      /* without Kraken's compression: the package gets smaller than that */
   cJSON *arr = cJSON_AddArrayToObject(root, "targets");
   for(unsigned i = 0; i < info.volume_count; i++) {
     char base[64], label[40], fs[16];
@@ -1794,7 +1833,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
         snprintf(path, sizeof(path), "%s/%s%s", e == 3 ? fdir : dir, stem, exts[e]);
         int      ts   = target_state(path);
         uint64_t back = ts == 2 ? leftover_bytes(path) : 0;
-        int      fits = avail + back >= (e == 1 ? need_ffpkg : need);
+        int      fits = avail + back >= (e == 1 ? need_ffpkg : e == 3 ? need_fpkg : need);
         if(fits && offered[e]) fits_any = 1;
         cJSON *t = cJSON_AddObjectToObject(o, keys[e]);
         cJSON_AddStringToObject(t, "path", path);
@@ -1909,6 +1948,15 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
     chk_add(arr, "fpkg", "error", pc.fpkg_why, "Ein FPKG ist bei diesem Spiel nicht möglich.");
     errors++;
   }
+  if(is_fpkg_op(op) && pc.unpack) {                    /* not a reason against: the way it is made says what happens to the packs */
+    const char *hint = "Das dauert länger als bei einem Spiel ohne Packs. Das Original bleibt unverändert.";
+    if(pc.unpack_bytes)
+      chk_add(arr, "unpack", "warn", hint, "Die AMPR-Packs (%s) werden vor dem Umwandeln ausgepackt: Das Paket enthält das ungepackte Spiel (%s).",
+              unpack_kind_name(pc.unpack), size_text(pc.unpack_bytes, b1, sizeof(b1)));
+    else
+      chk_add(arr, "unpack", "warn", hint, "Die AMPR-Packs (%s) werden vor dem Umwandeln ausgepackt: Das Paket enthält das ungepackte Spiel, wie groß es wird, weiß erst Dump Forge.",
+              unpack_kind_name(pc.unpack));
+  }
   if(pc.exfat_why[0] && (!strcmp(op, "exfat") || !strcmp(op, "ffpfsc"))) {
     chk_add(arr, "exfat", "error", pc.exfat_why, "Ein exFAT-Abbild ist bei diesem Spiel nicht möglich.");
     errors++;
@@ -1985,7 +2033,7 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
     char fs[16];
     int ts = target_state(target);
     uint64_t back = ts == 2 ? leftover_bytes(target) : 0;
-    uint64_t need = !strcmp(op, "ffpkg") && pc.ffpkg_bytes ? pc.ffpkg_bytes : pc.raw;
+    uint64_t need = !strcmp(op, "ffpkg") && pc.ffpkg_bytes ? pc.ffpkg_bytes : is_fpkg_op(op) && pc.unpack_bytes ? pc.unpack_bytes : pc.raw;
     if(ts == 1) {
       chk_add(arr, "exists", "error", "Ändere den Namen oder wähle einen anderen Ordner.", "Am Ziel gibt es %s schon.", fname);
       errors++;
@@ -2162,13 +2210,16 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
     snprintf(err, err_len, "Dump Forge, das die Pakete schreibt, ist noch nicht da. Bitte laden oder die Datei in den Ordner %s legen.", PS5TM_DATA_DIR "/dumpforge");
     return 409;
   }
-  if(want_fpkg) {                                      /* AMPR packs in the game: Kraken Mount would refuse the package (the page greys the choice out too) */
+  int unpack = 0;                                      /* packs in the game: Dump Forge decodes them first, Kraken Mount would refuse a package with packs */
+  if(want_fpkg) {
+    const int packs = source_packs(source, is_dir(source));
     char why[400];
-    fpkg_packs_why(source_packs(source, is_dir(source)), why, sizeof(why));
+    fpkg_packs_why(packs, why, sizeof(why));           /* packs that cannot be looked at, or both kinds: the page greys the choice out too */
     if(why[0]) {
       snprintf(err, err_len, "%s", why);
       return 409;
     }
+    if(packs == 1 || packs == 2) unpack = packs;
   }
 
   int ps4 = ps4_folder(source);
@@ -2192,6 +2243,7 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   a->folder = is_dir(source);
   a->ampr = a->folder && ampr_index && !ps4 && !want_fpkg;       /* Dump Forge writes the AMPR index into its package itself */
   a->quick = quick ? 1 : 0;
+  a->unpack = unpack;
   {
     char version[40], eerr[200] = "";
     game_version(title_id, version, sizeof(version));

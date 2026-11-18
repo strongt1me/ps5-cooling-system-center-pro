@@ -413,16 +413,46 @@ TEST(Ps5ccPlans, TheDebugFpkgBodyCarriesTheLevelAndNoAmprIndex)
     EXPECT_NE(hui::ps5cc::queue_add_body(p, c).find(R"("op":"fpkg-min")"), std::string::npos);
 }
 
-// A game with AMPR packs: Kraken Mount refuses a package made from it, so the app says "fpkg_error"
-// and the debug FPKG is neither the first choice nor startable (17.11.2026).
-TEST(Ps5ccPlans, AGameWithAmprPacksCannotBecomeADebugFpkg)
+// A game in AMPR packs: Dump Forge decodes the packs while it writes the package ("fpkg_unpack"),
+// and the room the package needs is the unpacked game's, not the image's (18.11.2026).
+TEST(Ps5ccPlans, AGameInAmprPacksIsUnpackedWhileItBecomesADebugFpkg)
 {
     std::string json = kConvertFpkg;
-    json.insert(json.find(R"("ops":)"), R"("fpkg_error":"Es ist mit AMPR-Packs (zstd) gepackt.",)");
+    json.insert(json.find(R"("ops":)"), R"("fpkg_unpack":"zstd","fpkg_unpack_bytes":31800000000,)");
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, json.c_str()));
+    const Plan plain = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertFpkg));
+    ASSERT_TRUE(p.ok);
+    EXPECT_EQ(p.fpkg_unpack, "zstd");
+    EXPECT_EQ(p.fpkg_unpack_bytes, 31800000000ull);
+    EXPECT_TRUE(p.fpkg_error.empty()) << "the packs are no reason against the format any more";
+    EXPECT_TRUE(plain.fpkg_unpack.empty());
+
+    PlanChoice c;
+    c.mode = 0;
+    c.op = hui::ps5cc::kOpFpkg;
+    c.level = 0;
+    c.drive = 1;
+    EXPECT_TRUE(hui::ps5cc::ready(p, c)) << "it can be chosen and started";
+    EXPECT_EQ(hui::ps5cc::first_choice(p, nullptr).op, 0);
+
+    // the drive's room is named after the unpacked game when the console app says the drive is too
+    // small for it
+    Plan tight = p;
+    tight.drives[1].enough_space = false;
+    EXPECT_EQ(hui::ps5cc::drive_blocked(tight, c, tight.drives[1]),
+              "Zu wenig Platz: Nötig sind bis zu " + hui::ps5cc::format_bytes(31800000000ull));
+}
+
+// Packs that could not be looked at, or both kinds of packs: the console app says "fpkg_error" and
+// the debug FPKG is neither the first choice nor startable (17.11.2026).
+TEST(Ps5ccPlans, AGameWhosePacksCannotBeHandledCannotBecomeADebugFpkg)
+{
+    std::string json = kConvertFpkg;
+    json.insert(json.find(R"("ops":)"), R"("fpkg_error":"Es enthält zstd- und LZ4-Packs.",)");
     const Plan packed = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, json.c_str()));
     const Plan plain = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertFpkg));
     ASSERT_TRUE(packed.ok);
-    EXPECT_EQ(packed.fpkg_error, "Es ist mit AMPR-Packs (zstd) gepackt.");
+    EXPECT_EQ(packed.fpkg_error, "Es enthält zstd- und LZ4-Packs.");
     EXPECT_TRUE(plain.fpkg_error.empty());
     ASSERT_EQ(packed.ops.size(), 2u) << "fpkg stays in the list; the page shows it with the reason";
 
