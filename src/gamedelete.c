@@ -38,6 +38,7 @@
 #include "checkfile.h"
 #include "ioerr.h"
 #include "origafter.h"
+#include "smpunreg.h"
 #include "ps5tm.h"
 #include "titleid.h"
 #include "third_party/cJSON.h"
@@ -774,18 +775,15 @@ run_installed(const dl_args_t *a) {
   job_end(DL_DONE, NULL, note);
 }
 
-/* ShadowMountPlus lets the title go: its own uninstall, which unmounts it (alone it would mount the file again at its next scan). 0 when it did;
-   otherwise the job has ended as failed ("Es wurde nichts gelöscht.") and -1 is returned. */
+/* The one ask for ShadowMountPlus's uninstall, with the wait for the app's own tile: refused only because one of the tiles is open, it waits until
+   that has closed (the full-screen app closes itself when it sees "waiting_for":"tile") and asks again. 0 when ShadowMountPlus took the title off,
+   else -1 and its refusal in err. */
 static int
-smp_unregister(const dl_args_t *a) {
-  job_phase("ShadowMountPlus meldet das Spiel ab");
-  job_stage(3, 3, 0);
+unreg_uninstall(void *ctx, char *err, size_t err_len) {
+  const dl_args_t *a = ctx;
   cJSON *body = cJSON_CreateObject();
   cJSON_AddStringToObject(body, "title_id", a->id);
-  char err[300] = "";
-  cJSON *r = ps5tm_smp_call("/games/uninstall", body, 30000, err, sizeof(err));
-  /* Refused only because one of the app's own tiles is open: wait until it has closed (the full-screen app closes itself
-     when it sees "waiting_for":"tile"), then ask again. */
+  cJSON *r = ps5tm_smp_call("/games/uninstall", body, 30000, err, err_len);
   char tile[16];
   if(!r && blocked_by_own_tile(err, tile, sizeof(tile))) {
     pthread_mutex_lock(&g_lock);
@@ -798,25 +796,71 @@ smp_unregister(const dl_args_t *a) {
       usleep(2000 * 1000);
       if(ps5tm_procmgr_own_tile_running(tile, sizeof(tile))) continue;
       err[0] = '\0';
-      r = ps5tm_smp_call("/games/uninstall", body, 30000, err, sizeof(err));
+      r = ps5tm_smp_call("/games/uninstall", body, 30000, err, err_len);
       if(!r && !strstr(err, "game is active")) break;   /* another reason: report it */
     }
     pthread_mutex_lock(&g_lock);
     g_job.wait_tile[0] = '\0';
     g_job.waited_tile = 1;
     pthread_mutex_unlock(&g_lock);
-    if(!r && !err[0]) snprintf(err, sizeof(err), "die Vollbild-App wurde nicht geschlossen");
+    if(!r && !err[0]) snprintf(err, err_len, "die Vollbild-App wurde nicht geschlossen");
     job_phase("ShadowMountPlus meldet das Spiel ab");
   }
   cJSON_Delete(body);
-  if(!r) {
+  if(!r) return -1;
+  cJSON_Delete(r);
+  return 0;
+}
+
+/* 1 when ShadowMountPlus lists the title as mounted now (a fresh list: the cached one may be old). */
+static int
+unreg_mounted(void *ctx) {
+  const dl_args_t *a = ctx;
+  ps5tm_smp_game_t s;
+  ps5tm_smp_forget();
+  return ps5tm_smp_find(a->id, &s) == 0 && s.mounted;
+}
+
+/* Takes a mounted title out through ShadowMountPlus (not through ps5tm_smpremount: that refuses while a job of the app runs, and this delete is one).
+   Never a title that runs: its files would go from under it. */
+static int
+unreg_unmount(void *ctx, char *err, size_t err_len) {
+  const dl_args_t *a = ctx;
+  char run[16];
+  if(game_running(run, sizeof(run)) && !strcmp(run, a->id)) { snprintf(err, err_len, "the title runs");   /* not shown: ps5tm_unreg_run ignores the unmount's own words */ return -1; }
+  if(!ps5tm_smp_can("unmount_game")) { snprintf(err, err_len, "unmount_game is not offered"); return -1; }
+  cJSON *body = cJSON_CreateObject();
+  cJSON_AddStringToObject(body, "title_id", a->id);
+  cJSON *r = ps5tm_smp_call("/games/unmount", body, 30000, err, err_len);
+  cJSON_Delete(body);
+  if(!r) return -1;
+  cJSON_Delete(r);
+  PS5TM_INFO("game_delete_unmount", "Löschen von %s: Das Spiel war eingehängt und wurde vor dem Abmelden ausgehängt.", a->id);
+  return 0;
+}
+
+static void
+unreg_pause(void *ctx, int seconds) {
+  (void)ctx;
+  sleep((unsigned)seconds);
+}
+
+/* ShadowMountPlus lets the title go: its own uninstall, which unmounts it (alone it would mount the file again at its next scan). A mounted title is
+   taken out first, and a refusal that says the mount is still busy is tried again (smpunreg.h). 0 when it let go; otherwise the job has ended as
+   failed ("Es wurde nichts gelöscht.") and -1 is returned. */
+static int
+smp_unregister(const dl_args_t *a) {
+  job_phase("ShadowMountPlus meldet das Spiel ab");
+  job_stage(3, 3, 0);
+  char err[300] = "";
+  ps5tm_unreg_ops_t ops = { unreg_mounted, unreg_unmount, unreg_uninstall, unreg_pause, (void *)a };
+  if(ps5tm_unreg_run(&ops, PS5TM_UNREG_TRIES, NULL, err, sizeof(err)) != 0) {
     char e[640];
     snprintf(e, sizeof(e), "ShadowMountPlus hat das Abmelden abgelehnt (%s). Es wurde nichts gelöscht.", err[0] ? err : "ohne Angabe");
     PS5TM_WARN("game_delete_failed", "Löschen von %s: %.150s", a->id, e);
     job_end(DL_FAILED, e, NULL);
     return -1;
   }
-  cJSON_Delete(r);
   ps5tm_smp_forget();
   ps5tm_library_forget();
   return 0;

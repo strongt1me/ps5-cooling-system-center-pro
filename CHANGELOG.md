@@ -1,6 +1,14 @@
 # Changelog
 
-## Unveröffentlicht (nach v1.86.5)
+## Unveröffentlicht (nach v1.86.6)
+
+### „Original danach“: ein eingehängter Titel wird vor dem Abmelden ausgehängt, ein belegtes Abmelden wird wiederholt
+- **Befund (Konsolentest an der .52, 18.11.2026):** Das Konvertieren eines Spielordners auf dem USB-Laufwerk mit „Original verschieben“ nach M.2 lief bis zur geprüften Kopie durch, dann lehnte ShadowMountPlus das Abmelden ab: „title runtime could not be released; its mount or sandbox is still busy“. Der Titel stand bei ShadowMountPlus als **eingehängt** (er lief nicht). Die App löschte nichts, wie gewollt: Die Kopie war ganz, das Original blieb, die Wahl stand auf „gescheitert“ – die Person hatte danach aber zwei Kopien.
+- **Jetzt** (`src/smpunreg.h`, `smp_unregister` in `gamedelete.c`): Führt ShadowMountPlus den Titel als eingehängt, wird er zuerst über dessen eigene Schnittstelle **ausgehängt** (nie ein Titel, der läuft; nicht über den Knopf „Aushängen“ der App, der bei einem Auftrag der App ablehnt, und das Löschen ist selbst einer). Lehnt ShadowMountPlus das Abmelden mit „busy“ ab, wird es nach drei Sekunden noch einmal versucht, insgesamt dreimal. Jede andere Ablehnung beendet es sofort, ebenso ein Aushängen, das ShadowMountPlus ablehnt: Dann fragt die App trotzdem nach dem Abmelden und gibt dessen Antwort wieder. Gilt auch für „Spiel löschen“ bei einem Titel von ShadowMountPlus.
+- **Unverändert:** Wird das Abmelden am Ende doch abgelehnt, löscht die App nichts und sagt es (Original bleibt, Kopie bleibt).
+- **Geprüft:** Host-Test `test/smpunreg` (16 Prüfungen: Reihenfolge Aushängen → Abmelden, Wiederholen nur bei „busy“, höchstens drei Versuche, kein erneutes Aushängen nach dem Aushängen, ein abgelehntes Aushängen hält das Abmelden nicht auf), in `.github/workflows/tests.yml` eingetragen; ELF mit `-Werror` gebaut, alle Host-Tests und der Analysator ohne neuen Fund. **An der Konsole noch nicht erprobt** (der Fall trat an der .52 mit einem eingehängten Titel auf; ein Neustart des Tests dort steht aus).
+
+## v1.86.6 – 18.11.2026
 
 ### Neu: Liste für den Payload Manager von itsPLK (`payload-manager.json`) als Teil jedes Releases
 - **Wunsch (18.11.2026):** Die App soll sich auch im Payload Manager von itsPLK herunterladen lassen, über eine eigene Repository-Quelle, direkt von GitHub.
