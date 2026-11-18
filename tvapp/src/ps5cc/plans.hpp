@@ -171,6 +171,9 @@ struct PlanChoice
     // kOrigMove) and, for a move, the absolute folder it goes to (orig_dest_of)
     int orig = kOrigKeep;
     std::string orig_dest;
+    // the original the person saw (OrigPlan::path): sent along, so that the app refuses when the
+    // title lies somewhere else by the time the job starts
+    std::string orig_path;
     // convert: the template of the result's name ({titel} {id} {version} {quelle}); empty: the name
     // of the source
     std::string name;

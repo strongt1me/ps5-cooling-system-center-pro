@@ -160,12 +160,15 @@ std::string op_text(const Plan &p, int op, int level)
 }
 
 // What each way of "Original danach" means, in a line for the focused row.
-const char *orig_way_text(int way)
+const char *orig_way_text(int way, bool unpack)
 {
     switch (way)
     {
     case kOrigDelete:
-        return "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher.";
+        // an unpack by ShadowMountPlus is not read back by the app: the text says what it waits for
+        return unpack ? "Erst wenn das Spiel im Zielordner liegt und ShadowMountPlus das Entpacken "
+                        "als gelungen meldet. Die App fragt vorher."
+                      : "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher.";
     case kOrigMove:
         return "An einen Ort, den ShadowMountPlus nicht durchsucht.";
     default:
@@ -757,7 +760,7 @@ void GameTools::add_orig_rows(const char *header)
     form_
         .add_choice(kRowOrig, "Original danach", {"Behalten", "Löschen", "Verschieben"},
                     orig_choice_.after)
-        .description = orig_way_text(orig_choice_.after);
+        .description = orig_way_text(orig_choice_.after, tool_ == Tool::unpack);
     if (orig_choice_.after != kOrigMove)
         return;
     // A move says where to: the drive as a choice, the folder on it typed on the keyboard
@@ -771,7 +774,7 @@ void GameTools::add_orig_rows(const char *header)
 void GameTools::refresh_orig_rows()
 {
     if (ui::FormRow *row = form_.row(kRowOrig))
-        row->description = orig_way_text(orig_choice_.after);
+        row->description = orig_way_text(orig_choice_.after, tool_ == Tool::unpack);
     if (ui::FormRow *row = form_.row(kRowOrigDrive))
     {
         const std::size_t at = static_cast<std::size_t>(std::max(orig_choice_.drive, 0));
@@ -791,6 +794,7 @@ void GameTools::sync_orig()
     choice_.orig = orig_tool() ? orig_choice_.after : kOrigKeep;
     choice_.orig_dest =
         choice_.orig == kOrigMove ? orig_dest_of(orig_plan_, orig_choice_) : std::string();
+    choice_.orig_path = choice_.orig != kOrigKeep ? orig_plan_.path : std::string();
     request_orig_check();
 }
 

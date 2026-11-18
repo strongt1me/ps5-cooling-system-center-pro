@@ -95,11 +95,15 @@ void add_orig(cJSON *root, const PlanChoice &c)
     if (c.orig == kOrigDelete)
     {
         cJSON_AddStringToObject(root, "orig_after", kOrigKeys[kOrigDelete]);
+        if (!c.orig_path.empty())
+            cJSON_AddStringToObject(root, "orig_path", c.orig_path.c_str());
     }
     else if (c.orig == kOrigMove)
     {
         cJSON_AddStringToObject(root, "orig_after", kOrigKeys[kOrigMove]);
         cJSON_AddStringToObject(root, "orig_dest", c.orig_dest.c_str());
+        if (!c.orig_path.empty())
+            cJSON_AddStringToObject(root, "orig_path", c.orig_path.c_str());
     }
 }
 

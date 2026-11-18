@@ -33,6 +33,7 @@ typedef struct {
   int      starting;          /* ps5tm_gameconvert_start is being called for it: it cannot be removed in that moment */
   int      orig_mode;         /* what to do with the original afterwards (PS5TM_ORIG_*, origafter.c) */
   char     orig_dest[300];    /* move: where it goes */
+  char     orig_path[320];    /* the original the person confirmed when the entry was added: the entry starts only when the title still lies there (audit 18.11.2026, F-301) */
   char     msg[300];
   uint64_t out_bytes, started_ms, finished_ms;
 } cq_item_t;
@@ -102,7 +103,7 @@ start_marked(const cq_item_t *it, char *err, size_t err_len) {
   memset(&orq, 0, sizeof(orq));
   int rc = 200;
   if(it->orig_mode != PS5TM_ORIG_KEEP) {
-    const int ps = ps5tm_orig_prepare("convert", it->id, it->orig_mode == PS5TM_ORIG_MOVE ? "move" : "delete", it->orig_dest, &orq, err, err_len);
+    const int ps = ps5tm_orig_prepare_for("convert", it->id, it->orig_mode == PS5TM_ORIG_MOVE ? "move" : "delete", it->orig_dest, it->orig_path, &orq, err, err_len);
     if(ps != 0) rc = ps;
     else {
       const int arm = ps5tm_orig_arm(&orq, "convert");
@@ -251,6 +252,7 @@ ps5tm_convqueue_status(void) {
     if(it->orig_mode != PS5TM_ORIG_KEEP) {
       cJSON_AddStringToObject(o, "orig_after", it->orig_mode == PS5TM_ORIG_MOVE ? "move" : "delete");
       if(it->orig_mode == PS5TM_ORIG_MOVE) cJSON_AddStringToObject(o, "orig_dest", it->orig_dest);
+      if(it->orig_path[0]) cJSON_AddStringToObject(o, "orig_path", it->orig_path);
     }
     if(it->msg[0]) cJSON_AddStringToObject(o, "message", it->msg);
     if(it->out_bytes) cJSON_AddNumberToObject(o, "output_bytes", (double)it->out_bytes);
@@ -344,6 +346,7 @@ ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
       it->quick = quick;
       it->orig_mode = orq.mode;
       snprintf(it->orig_dest, sizeof(it->orig_dest), "%s", orq.mode == PS5TM_ORIG_MOVE ? orq.dest : "");
+      snprintf(it->orig_path, sizeof(it->orig_path), "%s", orq.mode != PS5TM_ORIG_KEEP ? orq.path : "");
       g_run = 1;                                                /* adding starts the queue */
       ensure_runner_locked();
       PS5TM_INFO("convq_add", "Konvertier-Warteschlange: %s (%s) nach %s eingereiht.", name, id, tg->valuestring);

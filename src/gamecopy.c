@@ -793,12 +793,14 @@ hist_note(void) {
   snprintf(detail, sizeof(detail), "nach %s", g_last.drive[0] ? g_last.drive : g_last.target);
   snprintf(error, sizeof(error), "%s", g_last.error);
   uint64_t bytes = g_last.done_bytes, dur = g_last.finished_ms > g_last.started_ms ? g_last.finished_ms - g_last.started_ms : 0;
+  const uint64_t began = g_last.started_ms;
+  const int whole = g_last.skipped == 0;                 /* read under the lock: a new job may overwrite g_last the moment it is let go */
   pthread_mutex_unlock(&g_lock);
   if(st != JOB_DONE && st != JOB_FAILED && st != JOB_CANCELLED) return;
   ps5tm_hist_add("copy", name, detail, hist_result(JOB_DONE, JOB_FAILED, st), error, bytes, dur);
   /* "Original danach" (origafter.c): what the person chose for the original of this copy */
   /* links and special files are left out of a copy: a game with some is not "whole" for the purpose of deleting its original */
-  ps5tm_orig_job_done("copy", title, st == JOB_DONE && g_last.skipped == 0, target);
+  ps5tm_orig_job_done("copy", title, st == JOB_DONE && whole, target, began);
 }
 
 static void *
@@ -1217,17 +1219,29 @@ static int
 copy_start_impl(const char *title_id, const char *mount, const char *mode, const char *dest_dir, const char *expect_source,
                 char *err, size_t err_len) {
   char name[128], source[256];
-  if(!title_id || !mount || !mode ||
-     ps5tm_library_copy_info(title_id, name, sizeof(name),
-                             source, sizeof(source)) != 0 ||
-     !strncmp(source, "/mnt/shadowmnt", 14)) {
+  const int listed = title_id && mount && mode &&
+                     ps5tm_library_copy_info(title_id, name, sizeof(name), source, sizeof(source)) == 0 &&
+                     strncmp(source, "/mnt/shadowmnt", 14) != 0;
+  if(expect_source) {
+    /* "Original danach" (origafter.c) copies one particular original, the path it was handed (checked by the caller against what lay there when the choice
+       was made): the library may list the title from the new result by now, or not yet from anything; it only gives the name */
+    if(!title_id || !mount || !mode || expect_source[0] != '/' || strlen(expect_source) >= sizeof(source) || !strncmp(expect_source, "/mnt/shadowmnt", 14)) {
+      snprintf(err, err_len, "Dieses Spiel lässt sich nicht kopieren.");
+      return 404;
+    }
+    struct stat es;
+    if(lstat(expect_source, &es) != 0 || (!S_ISDIR(es.st_mode) && !S_ISREG(es.st_mode))) {
+      snprintf(err, err_len, "Das Spiel liegt inzwischen woanders. Es wurde nichts kopiert.");
+      return 409;
+    }
+    snprintf(source, sizeof(source), "%s", expect_source);
+    if(!listed) {
+      const char *b = strrchr(source, '/');
+      snprintf(name, sizeof(name), "%s", b ? b + 1 : source);
+    }
+  } else if(!listed) {
     snprintf(err, err_len, "Dieses Spiel lässt sich nicht kopieren.");
     return 404;
-  }
-  /* "Original danach" (origafter.c) copies one particular original: the title may be listed from another place by now (the new result) */
-  if(expect_source && strcmp(expect_source, source)) {
-    snprintf(err, err_len, "Das Spiel liegt inzwischen woanders. Es wurde nichts kopiert.");
-    return 409;
   }
   const char *folder = strrchr(source, '/');
   folder = folder ? folder + 1 : "";
@@ -1361,6 +1375,33 @@ int
 ps5tm_gamecopy_start_to(const char *title_id, const char *mount, const char *dest_dir, const char *source, char *err, size_t err_len) {
   if(!dest_dir || dest_dir[0] != '/') { snprintf(err, err_len, "Das Ziel gibt es nicht."); return 400; }
   return copy_start_impl(title_id, mount, "backup", dest_dir, source, err, err_len);
+}
+
+/* How the copy into target ended, when it was the last one to end (g_last: a new job may have claimed g_job at once). */
+int
+ps5tm_gamecopy_last_result(const char *target, uint64_t since_ms, char *err, size_t err_len) {
+  if(err_len) err[0] = '\0';
+  pthread_mutex_lock(&g_lock);
+  int rc = -1;
+  if(target && g_last.target[0] && !strcmp(g_last.target, target) && g_last.state >= JOB_DONE && g_last.started_ms >= since_ms) {
+    if(g_last.state == JOB_DONE && g_last.skipped == 0) rc = 1;
+    else {
+      rc = 0;
+      const char *why = g_last.state == JOB_DONE ? "Die Kopie hat Verknüpfungen oder Sonderdateien ausgelassen."
+                      : g_last.state == JOB_CANCELLED ? "Das Kopieren wurde abgebrochen."
+                      : g_last.error[0] ? g_last.error : "Das Kopieren ist gescheitert.";
+      if(err_len) snprintf(err, err_len, "%s", why);
+    }
+  }
+  pthread_mutex_unlock(&g_lock);
+  return rc;
+}
+
+int
+ps5tm_gamecopy_leftover(const char *target) {
+  if(!target || !target[0]) return 0;
+  const int ds = dest_state(target);
+  return ds == 2 || ds == 3;
 }
 
 cJSON *

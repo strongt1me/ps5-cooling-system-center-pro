@@ -247,6 +247,16 @@ Original des vorigen Eintrags); das Ende kommt als Meldung ohne Ton, die Zeile �
 Fenster zeigt den Stand. Beim Entpacken ersetzt das den früheren Schalter „Abbild danach löschen“.
 Die Vollbild-App bietet dieselbe Auswahl. Schnittstelle: `docs/API.md`, Abschnitt „Original danach“.
 
+**Während das Original bearbeitet wird** (Löschen oder Verschieben), startet die App keinen anderen
+Vorgang, auch nicht den nächsten Eintrag der Warteschlange; eine Anfrage in dieser Zeit lehnt sie mit
+einem Hinweis ab. Startet die App in dieser Zeit neu (etwa durch eine neue ELF), ist die Wahl nicht
+mehr da: Beim nächsten Start steht im Verlauf und als Meldung, was offen war – war schon etwas
+gelöscht, sagt die Meldung, wo der Rest liegt. Hat ShadowMountPlus ein Entpacken ohne Erfolgswert
+beendet, bleibt das Abbild bei „Löschen“ liegen (bei „Verschieben“ geht es weiter: die Kopie wird auf
+jeden Fall geprüft). Die Oberfläche schickt den Pfad des Originals, das sie gezeigt hat; liegt der
+Titel beim Start woanders, lehnt die App ab. Ein Ordner mit einem unfertigen Rest einer früheren Kopie
+dieser App am Ziel gilt nicht als belegt: Die Kopie ersetzt ihn.
+
 **Verschieben** erledigt ShadowMountPlus selbst, damit es weiß, wo das Spiel danach
 liegt; zur Wahl stehen nur Ordner, in denen es sucht. Ein Abbild zurück zu einem
 Ordner entpackt ebenfalls ShadowMountPlus. Der Streifen über der Bibliothek zeigt

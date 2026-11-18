@@ -82,6 +82,15 @@ main(void) {
   CHECK(!strcmp(ps5tm_orig_basename("/data/homebrew/PPSA23000"), "PPSA23000"));
   CHECK(!strcmp(ps5tm_orig_basename("PPSA23000"), "PPSA23000"));
 
+  /* FAT32 takes no file of 4 GiB or more (the file system's own name is msdosfs) */
+  CHECK(ps5tm_orig_fat32_refuses("msdosfs", 4ull << 30));
+  CHECK(ps5tm_orig_fat32_refuses("msdosfs", 0xFFFFFFFFull + 1));
+  CHECK(!ps5tm_orig_fat32_refuses("msdosfs", 0xFFFFFFFFull));
+  CHECK(!ps5tm_orig_fat32_refuses("msdosfs", 1ull << 20));
+  CHECK(!ps5tm_orig_fat32_refuses("exfatfs", 8ull << 30));
+  CHECK(!ps5tm_orig_fat32_refuses("", 8ull << 30));
+  CHECK(!ps5tm_orig_fat32_refuses(NULL, 8ull << 30));
+
   printf("%d Prüfungen, %d Fehler\n", g_n, g_fail);
   return g_fail ? 1 : 0;
 }

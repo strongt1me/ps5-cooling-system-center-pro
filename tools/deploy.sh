@@ -29,6 +29,7 @@ Aufruf: tools/deploy.sh <IP> [Optionen]
   --nur-elf            nur die ELF senden (Schritt 1)
   --nur-kacheln        nur die Kacheln senden (Schritte 2 und 3)
   --trotzdem-kacheln   Kacheln auch senden, wenn die ELF in Schritt 1 nicht lief
+  --trotzdem           die ELF auch senden, wenn die App gerade arbeitet (ein Vorgang wird dann mitten im Lauf beendet)
   --dry-run           nur ausgeben, was getan würde
   -h, --help           diese Hilfe
 USAGE
@@ -42,6 +43,7 @@ DO_TILES=1
 IP_ARG=""
 ELF_GIVEN=0
 FORCE_TILES=0
+FORCE_SEND=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -50,6 +52,7 @@ while [ $# -gt 0 ]; do
     --nur-elf)     DO_TILES=0; shift ;;
     --nur-kacheln) DO_ELF=0; shift ;;
     --trotzdem-kacheln) FORCE_TILES=1; shift ;;
+    --trotzdem)    FORCE_SEND=1; shift ;;
     --dry-run)     DRY=1; shift ;;
     -h|--help)     usage; exit 0 ;;
     -*)            echo "Unbekannte Option: $1" >&2; usage >&2; exit 2 ;;
@@ -89,6 +92,21 @@ api_version() {
 api_pid() {
   curl -s -m 4 "http://$IP:$API_PORT/api/v1/status" 2>/dev/null \
     | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1
+}
+
+# What the app does right now: prints it and returns 0 when one of its jobs runs or a choice about an original is open (/api/v1/jobs/active,
+# /api/v1/library/orig/status). A new ELF would end the job in the middle (the old app is stopped, a delete is not cancelled): audit 18.11.2026, F-311.
+api_busy() {
+  local a o w
+  a="$(curl -s -m 4 "http://$IP:$API_PORT/api/v1/jobs/active" 2>/dev/null | tr -d '\r')"
+  o="$(curl -s -m 4 "http://$IP:$API_PORT/api/v1/library/orig/status" 2>/dev/null | tr -d '\r')"
+  if printf '%s' "$a" | grep -Eq '"active"[[:space:]]*:[[:space:]]*true'; then
+    w="$(printf '%s' "$a" | sed -n 's/.*"what"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    echo "${w:-ein Auftrag der App}"
+    return 0
+  fi
+  if printf '%s' "$o" | grep -Eq '"active"[[:space:]]*:[[:space:]]*true'; then echo "eine Wahl für ein Original (löschen oder verschieben) ist offen"; return 0; fi
+  return 1
 }
 
 # The PowerShell host for the socket send (Windows); nc as the fallback elsewhere.
@@ -153,7 +171,12 @@ if [ "$DO_ELF" = 1 ]; then
     dry "würde $ELF ($size Bytes) an $IP:$LOADER_PORT senden (tools/lib/send_elf.ps1)"
     dry "würde $WAIT_AFTER_ELF s warten und dann bis zu $WAIT_API_MAX s auf http://$IP:$API_PORT/api/v1/system warten"
     dry "würde app_version lesen${EXPECT_VER:+ und mit $EXPECT_VER vergleichen}"
+    dry "würde vorher fragen, ob die App gerade arbeitet (jobs/active, orig/status); dann nicht senden, außer mit --trotzdem"
   else
+    BUSY_WHAT="$(api_busy)" || BUSY_WHAT=""
+    if [ -n "$BUSY_WHAT" ] && [ "$FORCE_SEND" = 0 ]; then
+      err "Die App arbeitet gerade (${BUSY_WHAT}): Eine neue ELF würde den Vorgang mitten im Lauf beenden. Erst warten, bis er fertig ist, oder mit --trotzdem senden."
+    else
     OLD_PID="$(api_pid)"                      # the app that runs before the send ("" when none answers)
     say "Sende $ELF ($(file_size "$ELF") Bytes) ..."
     if ! send_elf_cmd; then
@@ -179,6 +202,7 @@ if [ "$DO_ELF" = 1 ]; then
           err "Die App läuft noch mit derselben Prozessnummer ($NEW_PID) wie vor dem Senden: Die neue ELF ist nicht angekommen oder nicht gestartet."
         fi
       fi
+    fi
     fi
   fi
 elif [ "$DRY" = 0 ]; then

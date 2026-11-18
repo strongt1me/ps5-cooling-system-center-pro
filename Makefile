@@ -476,7 +476,7 @@ release: $(BIN)
 	  exit 1; }
 	@if [ -d "$(RELEASE)" ]; then \
 	  foreign=$$(ls -A "$(RELEASE)" | grep -v -x -F \
-	    -e "$(RELEASE_MAIN)" -e LIESMICH.txt -e FAKE86921.zip \
+	    -e "$(RELEASE_MAIN)" -e LIESMICH.txt -e FAKE86921.zip -e FAKE86922.zip -e payload-manager.json \
 	    -e Thumbs.db -e desktop.ini); \
 	  if [ -n "$$foreign" ]; then \
 	    echo "release: In \"$(RELEASE)\" liegt, was dieses Ziel nicht selbst anlegt — es löscht nichts:" >&2; \

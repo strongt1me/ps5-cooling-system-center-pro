@@ -76,8 +76,11 @@ int ps5tm_gamecopy_measure(const char *path, uint64_t *bytes, uint64_t *largest)
 
 /* the jobs */
 static int g_idle_polls;                                    /* "busy" this many times before it is idle */
+static int g_probe_check, g_probe_busy = -1;
+static void *probe_thr(void *a) { (void)a; g_probe_busy = ps5tm_orig_busy(); return NULL; }
 int ps5tm_jobs_busy_except(int self, int flags, char *why, size_t n) {
   (void)self; (void)flags;
+  if(g_probe_check) { pthread_t t; if(pthread_create(&t, NULL, probe_thr, NULL) == 0) pthread_join(t, NULL); }     /* what another thread sees while the worker looks */
   if(g_idle_polls > 0) { g_idle_polls--; snprintf(why, n, "Es läuft etwas"); return 1; }
   return 0;
 }
@@ -87,10 +90,12 @@ int ps5tm_gamecopy_cancel(void) { return 0; }
 
 static int g_del_busy_polls, g_del_calls, g_del_http = 200, g_del_fail;
 static char g_del_path[320], g_del_id[16];
-static void rm_tree(const char *p) {                          /* the stub's "deleting": a file or an empty folder */
-  char b[700];
+static int g_del_hold, g_busy_in_worker = -1, g_del_partial, g_del_drive_gone;
+static void rm_tree(const char *p) {                          /* the stub's "deleting": a file or a whole folder */
+  char b[700], cmd[800];
   snprintf(b, sizeof(b), "%s%s", ROOT, p);
-  if(unlink(b) != 0) (void)rmdir(b);
+  snprintf(cmd, sizeof(cmd), "rm -rf '%s'", b);
+  if(system(cmd) != 0) printf("rm failed\n");
 }
 int ps5tm_gamedelete_original_ok(const char *id, const char *path, char *why, size_t n) {
   (void)id;
@@ -109,17 +114,30 @@ int ps5tm_gamedelete_original(const char *id, const char *name, const char *path
   snprintf(g_del_path, sizeof(g_del_path), "%s", path);
   snprintf(g_del_id, sizeof(g_del_id), "%s", id);
   g_del_busy_polls = 2;
-  if(!g_del_fail) rm_tree(path);
+  g_busy_in_worker = ps5tm_orig_busy();                       /* called by the worker thread: it must not count itself */
+  if(g_del_drive_gone) {                                      /* the drive is pulled while it deletes: the folder and the one it lay in are gone */
+    char dg[800];
+    snprintf(dg, sizeof(dg), "rm -rf '%s/mnt/usb0/homebrew'", ROOT);
+    if(system(dg) != 0) printf("rm failed\n");
+  } else if(g_del_partial) {                                         /* some of it went (its marker), the rest stays */
+    char mk2[800];
+    snprintf(mk2, sizeof(mk2), "rm -f '%s%s/sce_sys/param.json'", ROOT, path);
+    if(system(mk2) != 0) printf("rm failed\n");
+  } else if(!g_del_fail) rm_tree(path);
   return 200;
 }
-int ps5tm_gamedelete_busy(void) { return g_del_busy_polls-- > 0; }
+int ps5tm_gamedelete_busy(void) { return (g_del_hold && g_del_calls > 0) || g_del_busy_polls-- > 0; }
 cJSON *ps5tm_gamedelete_status(void) {
   cJSON *o = cJSON_CreateObject();
-  cJSON_AddStringToObject(o, "state", g_del_fail ? "failed" : "done");
-  cJSON_AddStringToObject(o, "error", g_del_fail ? "Beim Löschen: Zugriff verweigert." : "");
+  cJSON_AddStringToObject(o, "state", g_del_fail || g_del_partial ? "failed" : "done");
+  cJSON_AddStringToObject(o, "error", g_del_fail || g_del_partial ? "Beim Löschen: Zugriff verweigert." : "");
+  cJSON_AddStringToObject(o, "kind", "orig");
+  cJSON_AddStringToObject(o, "id", g_del_id);
+  cJSON_AddNumberToObject(o, "files", g_del_partial ? 3 : 0);
   return o;
 }
 
+static int g_cp_gone;
 static int g_cp_calls, g_cp_http = 200, g_cp_fail, g_cp_make, g_cp_skipped, g_cp_badsource;   /* g_cp_make: the stub creates the copy (a folder) as the real one would */
 static char g_cp_dest[320], g_cp_mount[48], g_cp_target[340], g_cp_source[320];
 int ps5tm_gamecopy_start_to(const char *id, const char *mount, const char *dest, const char *source, char *err, size_t n) {
@@ -140,11 +158,25 @@ int ps5tm_gamecopy_start_to(const char *id, const char *mount, const char *dest,
   }
   return 200;
 }
+static int g_last_rc = -1, g_leftover;
+static char g_last_err[200];
+int ps5tm_gamecopy_last_result(const char *target, uint64_t since_ms, char *err, size_t n) { (void)target; (void)since_ms; snprintf(err, n, "%s", g_last_err); return g_last_rc; }
+int ps5tm_gamecopy_leftover(const char *target) { (void)target; return g_leftover; }
+static int g_nhist;
+static char g_hist[4][520];
+void ps5tm_hist_add(const char *kind, const char *title, const char *detail, const char *result, const char *error, uint64_t bytes, uint64_t dur_ms) {
+  (void)kind; (void)detail; (void)result; (void)bytes; (void)dur_ms;
+  if(g_nhist < 4) snprintf(g_hist[g_nhist++], sizeof(g_hist[0]), "%s: %s", title, error);
+}
+extern const char *g_oa_test_fstype;
+static int g_cp_null_polls, g_cp_status_calls;
 cJSON *ps5tm_gamecopy_status(void) {
+  g_cp_status_calls++;
+  if(g_cp_null_polls > 0) { g_cp_null_polls--; return NULL; }            /* no answer (no memory) */
   cJSON *o = cJSON_CreateObject();
   cJSON_AddStringToObject(o, "state", g_cp_fail ? "failed" : "done");
   cJSON_AddBoolToObject(o, "active", 0);
-  cJSON_AddStringToObject(o, "target", g_cp_target);
+  cJSON_AddStringToObject(o, "target", g_cp_gone ? "" : g_cp_target);
   cJSON_AddNumberToObject(o, "total_bytes", 1000);
   cJSON_AddNumberToObject(o, "done_bytes", 1000);
   cJSON_AddStringToObject(o, "source", g_cp_badsource ? "/mnt/usb0/homebrew/ANDERES" : g_cp_source);
@@ -154,12 +186,20 @@ cJSON *ps5tm_gamecopy_status(void) {
 }
 
 /* ---------------------------------------------------------------- the test */
+static void mk(const char *rel, int dir);
+static void mk_orig(void);
 static void mk(const char *rel, int dir) {
   char b[700];
   snprintf(b, sizeof(b), "%s%s", ROOT, rel);
   char cmd[800];
   snprintf(cmd, sizeof(cmd), dir ? "mkdir -p '%s'" : "mkdir -p \"$(dirname '%s')\" && : > '%s'", b, b, b);
   if(system(cmd) != 0) { printf("setup failed: %s\n", cmd); exit(2); }
+}
+static void mk_orig(void) {                                   /* the original of the tests: a game folder (its marker) */
+  char m[400];
+  mk(g_src_path, 1);
+  snprintf(m, sizeof(m), "%s/sce_sys/param.json", g_src_path);
+  mk(m, 0);
 }
 static int exists(const char *rel) {
   char b[700];
@@ -198,24 +238,25 @@ static void reset_stubs(void) {
   g_del_calls = 0; g_del_http = 200; g_del_fail = 0; g_del_path[0] = 0; g_del_busy_polls = 0;
   g_cp_calls = 0; g_cp_http = 200; g_cp_fail = 0; g_cp_make = 0; g_cp_dest[0] = 0; g_cp_skipped = 0; g_cp_badsource = 0;
   g_idle_polls = 0; g_nnotes = 0; g_log_warn = 0;
+  g_del_hold = 0; g_del_partial = 0; g_del_drive_gone = 0; g_probe_check = 0; g_cp_null_polls = 0; g_cp_status_calls = 0; g_busy_in_worker = -1; g_cp_gone = 0; g_last_rc = -1; g_last_err[0] = 0; g_leftover = 0; g_oa_test_fstype = "";
 }
 
 int
 main(void) {
   char cmd[800];
-  snprintf(cmd, sizeof(cmd), "rm -rf '%s' && mkdir -p '%s/mnt/usb0' '%s/mnt/usb1' '%s/mnt/ext0' '%s/data'", ROOT, ROOT, ROOT, ROOT, ROOT);
+  snprintf(cmd, sizeof(cmd), "rm -rf '%s' && mkdir -p '%s/mnt/usb0' '%s/mnt/usb1' '%s/mnt/ext0' '%s/data/PS5-Cooling-Center'", ROOT, ROOT, ROOT, ROOT, ROOT);
   if(system(cmd) != 0) return 2;
   ps5tm_orig_req_t r;
   char err[400];
 
   /* ---- keep: nothing at all */
   snprintf(g_src_path, sizeof(g_src_path), "/mnt/usb0/homebrew/PPSA00001");
-  mk(g_src_path, 1);
+  mk_orig();
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "", "", &r, err, sizeof(err)) == 0 && r.mode == PS5TM_ORIG_KEEP);
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "keep", "", &r, err, sizeof(err)) == 0 && r.mode == PS5TM_ORIG_KEEP);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);                /* a no-op */
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, NULL);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, NULL, 0);
   CHECK(n_items() == 0);
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "bogus", "", &r, err, sizeof(err)) == 400);
   CHECK(ps5tm_orig_prepare("convert", "PPSA99999", "delete", "", &r, err, sizeof(err)) == 404);
@@ -229,7 +270,7 @@ main(void) {
   CHECK(n_items() == 1);
   ps5tm_orig_commit(&r, "convert", 1);
   g_idle_polls = 2;                                          /* the app's other jobs still run for a moment */
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end());
   CHECK(!strcmp(g_state, "done") && !strcmp(g_mode, "delete"));
   CHECK(strstr(g_msg, "Das Original „Testspiel“ wurde gelöscht.") != NULL);
@@ -240,20 +281,20 @@ main(void) {
 
   /* ---- the job ends before the choice was made firm (a job that finishes at once) */
   reset_stubs();
-  mk(g_src_path, 1);
+  mk_orig();
   CHECK(ps5tm_orig_prepare("copy", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "copy") == 0);
-  ps5tm_orig_job_done("copy", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("copy", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   ps5tm_orig_commit(&r, "copy", 1);
   CHECK(wait_end() && !strcmp(g_state, "done") && g_del_calls == 1);
 
   /* ---- a job that did not end well leaves the original alone */
   reset_stubs();
-  mk(g_src_path, 1);
+  mk_orig();
   CHECK(ps5tm_orig_prepare("copy", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "copy") == 0);
   ps5tm_orig_commit(&r, "copy", 1);
-  ps5tm_orig_job_done("copy", "PPSA00001", 0, NULL);
+  ps5tm_orig_job_done("copy", "PPSA00001", 0, NULL, 0);
   CHECK(wait_end() && !strcmp(g_state, "skipped"));
   CHECK(strstr(g_msg, "blieb liegen, weil der Vorgang nicht erfolgreich war") != NULL);
   CHECK(g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
@@ -266,7 +307,7 @@ main(void) {
   CHECK(n_items() == before + 1);
   ps5tm_orig_commit(&r, "unpack", 0);
   CHECK(n_items() == before);
-  ps5tm_orig_job_done("unpack", "PPSA00001", 1, NULL);        /* nobody is waiting for it */
+  ps5tm_orig_job_done("unpack", "PPSA00001", 1, NULL, 0);        /* nobody is waiting for it */
   usleep(100000);
   CHECK(g_del_calls == 0);
 
@@ -275,23 +316,23 @@ main(void) {
   CHECK(ps5tm_orig_prepare("unpack", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "unpack") == 0);
   ps5tm_orig_commit(&r, "unpack", 1);
-  ps5tm_orig_job_done("unpack", "PPSA00001", 1, "/mnt/usb1/gibt-es-nicht");
+  ps5tm_orig_job_done("unpack", "PPSA00001", 1, "/mnt/usb1/gibt-es-nicht", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "Das Ergebnis des Vorgangs wurde nicht gefunden") != NULL);
   CHECK(g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
 
   /* ---- the result lies in the original (or is it): nothing goes */
   reset_stubs();
-  mk(g_src_path, 1);
+  mk_orig();
   CHECK(ps5tm_orig_prepare("copy", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "copy") == 0);
   ps5tm_orig_commit(&r, "copy", 1);
-  ps5tm_orig_job_done("copy", "PPSA00001", 1, "/mnt/usb0/homebrew/PPSA00001/unterordner");
+  ps5tm_orig_job_done("copy", "PPSA00001", 1, "/mnt/usb0/homebrew/PPSA00001/unterordner", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "liegen ineinander") != NULL);
   CHECK(g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
   CHECK(ps5tm_orig_prepare("copy", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "copy") == 0);
   ps5tm_orig_commit(&r, "copy", 1);
-  ps5tm_orig_job_done("copy", "PPSA00001", 1, "/mnt/usb0/homebrew/PPSA00001");
+  ps5tm_orig_job_done("copy", "PPSA00001", 1, "/mnt/usb0/homebrew/PPSA00001", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && g_del_calls == 0);
 
   /* ---- the delete is refused (the game runs) */
@@ -300,7 +341,7 @@ main(void) {
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "blieb liegen: Das Spiel läuft gerade") != NULL);
   CHECK(exists("/mnt/usb0/homebrew/PPSA00001"));
 
@@ -310,13 +351,13 @@ main(void) {
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "Zugriff verweigert") != NULL && g_log_warn > 0);
   CHECK(exists("/mnt/usb0/homebrew/PPSA00001"));
 
   /* ---- moving: where it may go */
   reset_stubs();
-  mk(g_src_path, 1);
+  mk_orig();
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0 && r.mode == PS5TM_ORIG_MOVE);
 
   CHECK(!strcmp(r.dest, "/mnt/usb1/PS5-Sicherung/Spiele"));
@@ -357,13 +398,13 @@ main(void) {
 
   /* ---- moving: copied, read back, then the original goes */
   reset_stubs();
-  mk(g_src_path, 1);
+  mk_orig();
   g_cp_make = 1;
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
   mk("/mnt/usb1/PPSA00001.exfat", 0);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end());
   CHECK(!strcmp(g_state, "done") && !strcmp(g_mode, "move"));
   CHECK(strstr(g_msg, "liegt jetzt in /mnt/usb1/PS5-Sicherung/Spiele") != NULL);
@@ -375,12 +416,12 @@ main(void) {
   /* ---- moving: the copy fails, the original stays */
   reset_stubs();
   CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
-  mk(g_src_path, 1);
+  mk_orig();
   g_cp_fail = 1;
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "kein Platz mehr") != NULL && strstr(g_msg, "blieb liegen") != NULL);
   CHECK(g_cp_calls == 1 && g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
 
@@ -389,20 +430,20 @@ main(void) {
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "Die Kopie wurde nicht gefunden") != NULL);
   CHECK(g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
 
   /* ---- the copy was made of another source than the original: stopped, nothing deleted */
   reset_stubs();
   CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
-  mk(g_src_path, 1);
+  mk_orig();
   g_cp_make = 1;
   g_cp_badsource = 1;
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "liegt inzwischen woanders") != NULL);
   CHECK(!strcmp(g_cp_source, "/mnt/usb0/homebrew/PPSA00001") && g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
 
@@ -414,7 +455,7 @@ main(void) {
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "Verknüpfungen oder Sonderdateien") != NULL);
   CHECK(g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
 
@@ -423,7 +464,7 @@ main(void) {
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 2, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 2, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "skipped") && strstr(g_msg, "nur schnell geprüft") != NULL);
   CHECK(g_del_calls == 0 && exists("/mnt/usb0/homebrew/PPSA00001"));
   reset_stubs();
@@ -432,16 +473,16 @@ main(void) {
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "convert") == 0);
   ps5tm_orig_commit(&r, "convert", 1);
-  ps5tm_orig_job_done("convert", "PPSA00001", 2, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 2, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "done") && g_del_calls == 1);
-  mk(g_src_path, 1);
+  mk_orig();
 
   /* ---- no result named: nothing goes */
   reset_stubs();
   CHECK(ps5tm_orig_prepare("copy", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "copy") == 0);
   ps5tm_orig_commit(&r, "copy", 1);
-  ps5tm_orig_job_done("copy", "PPSA00001", 1, NULL);
+  ps5tm_orig_job_done("copy", "PPSA00001", 1, NULL, 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "Das Ergebnis ist nicht bekannt") != NULL && g_del_calls == 0);
 
   /* ---- an unpacked folder must hold the game (sce_sys/param.json), whatever ShadowMountPlus said */
@@ -450,15 +491,15 @@ main(void) {
   CHECK(ps5tm_orig_prepare("unpack", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "unpack") == 0);
   ps5tm_orig_commit(&r, "unpack", 1);
-  ps5tm_orig_job_done("unpack", "PPSA00001", 1, "/mnt/usb0/homebrew/PPSA00001-entpackt");
+  ps5tm_orig_job_done("unpack", "PPSA00001", 1, "/mnt/usb0/homebrew/PPSA00001-entpackt", 0);
   CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "unvollständig") != NULL && g_del_calls == 0);
   mk("/mnt/usb0/homebrew/PPSA00001-entpackt/sce_sys/param.json", 0);
   CHECK(ps5tm_orig_prepare("unpack", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r, "unpack") == 0);
   ps5tm_orig_commit(&r, "unpack", 1);
-  ps5tm_orig_job_done("unpack", "PPSA00001", 1, "/mnt/usb0/homebrew/PPSA00001-entpackt");
+  ps5tm_orig_job_done("unpack", "PPSA00001", 1, "/mnt/usb0/homebrew/PPSA00001-entpackt", 0);
   CHECK(wait_end() && !strcmp(g_state, "done") && g_del_calls == 1);
-  mk(g_src_path, 1);
+  mk_orig();
 
   /* ---- a second choice for the same job is refused, not put in place of the first */
   reset_stubs();
@@ -469,9 +510,9 @@ main(void) {
   ps5tm_orig_req_t r2;
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r2, err, sizeof(err)) == 0);
   CHECK(ps5tm_orig_arm(&r2, "convert") == -2);
-  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat");
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
   CHECK(wait_end() && !strcmp(g_state, "done") && !strcmp(g_mode, "delete") && g_del_calls == 1 && g_cp_calls == 0);
-  mk(g_src_path, 1);
+  mk_orig();
 
   /* ---- where ShadowMountPlus looks, whatever the case (exFAT and FAT drives do not tell them apart); the console's own folders */
   CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/HomeBrew", &r, err, sizeof(err)) == 409 && strstr(err, "ShadowMountPlus") != NULL);
@@ -533,6 +574,231 @@ main(void) {
     b = cJSON_Parse("{\"id\":\"PPSA00001\"}");
     CHECK(ps5tm_orig_prepare_body("unpack", "PPSA00001", b, &r, err, sizeof(err)) == 0 && r.mode == PS5TM_ORIG_KEEP);
     cJSON_Delete(b);
+  }
+
+  /* ---- audit 18.11.2026 (round 2) ---- */
+  /* F-302: from the moment the worker has the floor the original is in work: busy for everybody but the worker; what is open is noted in a file (F-304) */
+  reset_stubs();
+  mk_orig();
+  mk("/mnt/usb1/PPSA00001.exfat", 0);
+  g_del_hold = 1;
+  CHECK(!ps5tm_orig_busy());
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  for(int i = 0; i < 300 && !ps5tm_orig_busy(); i++) usleep(10000);
+  CHECK(ps5tm_orig_busy());
+  CHECK(exists("/data/PS5-Cooling-Center/orig-open.json"));
+  g_del_hold = 0;
+  CHECK(wait_end() && !strcmp(g_state, "done"));
+  CHECK(g_busy_in_worker == 0);                              /* the worker's own delete did not see itself as busy */
+  CHECK(!ps5tm_orig_busy());
+  CHECK(!exists("/data/PS5-Cooling-Center/orig-open.json"));
+  mk_orig();
+
+  /* F-304: what a restart found open is reported once */
+  g_nhist = 0;
+  g_nnotes = 0;
+  {
+    FILE *f = fopen(ROOT "/data/PS5-Cooling-Center/orig-open.json", "w");
+    CHECK(f != NULL);
+    if(f) {
+      fputs("{\"v\":1,\"items\":[{\"id\":\"PPSA00001\",\"name\":\"Testspiel\",\"kind\":\"convert\",\"mode\":\"delete\",\"state\":\"running\",\"path\":\"/mnt/usb0/homebrew/PPSA00001\",\"dest\":\"\"},"
+            "{\"id\":\"PPSA00002\",\"name\":\"Zweites\",\"kind\":\"copy\",\"mode\":\"move\",\"state\":\"waiting\",\"path\":\"/mnt/usb0/homebrew/PPSA00002\",\"dest\":\"/mnt/usb1/x\"}]}", f);
+      fclose(f);
+    }
+  }
+  ps5tm_orig_recover();
+  CHECK(g_nhist == 2 && strstr(g_hist[0], "unterbrochen") != NULL && strstr(g_hist[1], "nicht ausgeführt") != NULL);
+  CHECK(g_nnotes == 2 && !exists("/data/PS5-Cooling-Center/orig-open.json"));
+  ps5tm_orig_recover();
+  CHECK(g_nhist == 2);
+
+  /* F-303: the end of a job that began before the choice was noted is not this job's */
+  reset_stubs();
+  mk_orig();
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 1);      /* began at ms 1: long before */
+  usleep(150000);
+  CHECK(g_del_calls == 0);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", ps5tm_mono_ms());
+  CHECK(wait_end() && !strcmp(g_state, "done") && g_del_calls == 1);
+  mk_orig();
+
+  /* F-300: an unpack that ShadowMountPlus ended without a result value: a delete waits for the person, a move goes ahead */
+  reset_stubs();
+  mk_orig();
+  mk("/mnt/usb0/homebrew/PPSA00001-entpackt/sce_sys/param.json", 0);
+  CHECK(ps5tm_orig_prepare("unpack", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "unpack") == 0);
+  ps5tm_orig_commit(&r, "unpack", 1);
+  ps5tm_orig_job_done("unpack", "PPSA00001", 2, "/mnt/usb0/homebrew/PPSA00001-entpackt", 0);
+  CHECK(wait_end() && !strcmp(g_state, "skipped") && strstr(g_msg, "Erfolgswert") != NULL && g_del_calls == 0);
+  CHECK(exists("/mnt/usb0/homebrew/PPSA00001"));
+  g_cp_make = 1;
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  CHECK(ps5tm_orig_prepare("unpack", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "unpack") == 0);
+  ps5tm_orig_commit(&r, "unpack", 1);
+  ps5tm_orig_job_done("unpack", "PPSA00001", 2, "/mnt/usb0/homebrew/PPSA00001-entpackt", 0);
+  CHECK(wait_end() && !strcmp(g_state, "done") && g_cp_calls == 1 && g_del_calls == 1);
+  mk_orig();
+
+  /* F-301: the original the person confirmed is the one the choice is made for */
+  CHECK(ps5tm_orig_prepare_for("convert", "PPSA00001", "delete", "", "/mnt/usb0/homebrew/PPSA00001", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_prepare_for("convert", "PPSA00001", "delete", "", "/mnt/usb0/homebrew/ANDERES", &r, err, sizeof(err)) == 409 && strstr(err, "woanders als bestätigt") != NULL);
+  CHECK(ps5tm_orig_prepare_for("convert", "PPSA00001", "delete", "", "", &r, err, sizeof(err)) == 0);                 /* none named: not compared */
+  {
+    cJSON *b = cJSON_Parse("{\"orig_after\":\"delete\",\"orig_path\":\"/mnt/usb0/homebrew/ANDERES\"}");
+    CHECK(ps5tm_orig_prepare_body("convert", "PPSA00001", b, &r, err, sizeof(err)) == 409);
+    cJSON_Delete(b);
+    b = cJSON_Parse("{\"orig_after\":\"delete\",\"orig_path\":\"/mnt/usb0/homebrew/PPSA00001\"}");
+    CHECK(ps5tm_orig_prepare_body("convert", "PPSA00001", b, &r, err, sizeof(err)) == 0 && r.mode == PS5TM_ORIG_DELETE);
+    cJSON_Delete(b);
+  }
+
+  /* F-308: part of the original is gone when the delete fails: not "blieb liegen" */
+  reset_stubs();
+  mk_orig();
+  g_del_partial = 1;
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "nur teilweise gelöscht") != NULL && strstr(g_msg, "blieb liegen") == NULL);
+  CHECK(g_nnotes > 0 && strstr(g_notes[g_nnotes - 1], "teilweise") != NULL);
+  mk_orig();
+
+  /* F-310: how the copy ended is read from its own record when the running one is gone (another job claimed it) */
+  reset_stubs();
+  mk_orig();
+  g_cp_make = 1;
+  g_cp_gone = 1;
+  g_last_rc = 1;
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "done") && g_del_calls == 1);
+  mk_orig();
+  reset_stubs();
+  g_cp_make = 1;
+  g_cp_gone = 1;
+  g_last_rc = 0;
+  snprintf(g_last_err, sizeof(g_last_err), "Auf dem Ziel ist kein Platz mehr.");
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "kein Platz mehr") != NULL && g_del_calls == 0);
+  CHECK(exists("/mnt/usb0/homebrew/PPSA00001"));
+
+  /* F-319: an unfinished copy of this app at the target is replaced by the next copy; somebody's folder is not */
+  reset_stubs();
+  mk_orig();
+  mk("/mnt/usb1/PS5-Sicherung/Spiele/PPSA00001", 1);
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 409);
+  g_leftover = 1;
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  g_leftover = 0;
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+
+  /* round 3, G-2: while the worker looks whether the app is quiet, the choice counts as busy for the others */
+  reset_stubs();
+  mk_orig();
+  g_probe_check = 1;
+  g_probe_busy = -1;
+  g_idle_polls = 2;                                          /* two looks find the app busy: the flag must go back to 0 each time */
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "done"));
+  CHECK(g_probe_busy == 1);
+  CHECK(!ps5tm_orig_busy());                                 /* and it does not stay set after the work */
+  g_probe_check = 0;
+  mk_orig();
+
+  /* round 3, G-4: with the drive pulled the path is gone as well: that is not "deleted" */
+  reset_stubs();
+  mk_orig();
+  g_del_drive_gone = 1;
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "Laufwerk ist nicht mehr erreichbar") != NULL && strstr(g_msg, "wurde gelöscht") == NULL);
+  mk_orig();
+
+  /* round 3, G-5: an armed choice (its job is under way) is noted too and removed when the job ends badly */
+  reset_stubs();
+  mk_orig();
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  CHECK(!exists("/data/PS5-Cooling-Center/orig-open.json"));    /* pending is not noted: the job has not started */
+  ps5tm_orig_commit(&r, "convert", 1);
+  CHECK(exists("/data/PS5-Cooling-Center/orig-open.json"));
+  ps5tm_orig_job_done("convert", "PPSA00001", 0, NULL, 0);
+  CHECK(wait_end() && !strcmp(g_state, "skipped"));
+  CHECK(!exists("/data/PS5-Cooling-Center/orig-open.json"));
+  CHECK(g_del_calls == 0);
+
+  /* round 3, G-1: a second look at the note in the same run does not take what is open now for a leftover */
+  {
+    const int before = g_nhist;
+    FILE *f = fopen(ROOT "/data/PS5-Cooling-Center/orig-open.json", "w");
+    CHECK(f != NULL);
+    if(f) { fputs("{\"v\":1,\"items\":[{\"id\":\"PPSA00001\",\"name\":\"Testspiel\",\"kind\":\"convert\",\"mode\":\"delete\",\"state\":\"running\",\"path\":\"/x\",\"dest\":\"\"}]}", f); fclose(f); }
+    ps5tm_orig_recover();
+    CHECK(g_nhist == before && exists("/data/PS5-Cooling-Center/orig-open.json"));
+    CHECK(system("rm -f '" ROOT "/data/PS5-Cooling-Center/orig-open.json'") == 0);
+  }
+
+  /* round 3 (reviewer): no answer about the copy is no decision, however old the last record is */
+  reset_stubs();
+  mk_orig();
+  g_cp_make = 1;
+  g_cp_null_polls = 2;
+  g_last_rc = 1;
+  CHECK(system("rm -rf '" ROOT "/mnt/usb1/PS5-Sicherung'") == 0);
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 0);
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "done"));
+  CHECK(g_cp_status_calls >= 3);
+  mk_orig();
+
+  /* round 3 (reviewer): a refusal after another choice took the markers of the same original is "partly deleted", not "blieb liegen" */
+  reset_stubs();
+  mk_orig();
+  CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "delete", "", &r, err, sizeof(err)) == 0);
+  CHECK(system("rm -f '" ROOT "/mnt/usb0/homebrew/PPSA00001/sce_sys/param.json'") == 0);
+  g_del_http = 409;
+  CHECK(ps5tm_orig_arm(&r, "convert") == 0);
+  ps5tm_orig_commit(&r, "convert", 1);
+  ps5tm_orig_job_done("convert", "PPSA00001", 1, "/mnt/usb1/PPSA00001.exfat", 0);
+  CHECK(wait_end() && !strcmp(g_state, "failed") && strstr(g_msg, "nur teilweise gelöscht") != NULL);
+  mk_orig();
+
+  /* F-312: a FAT32 target takes no file of 4 GiB or more */
+  {
+    char sp[800];
+    snprintf(sp, sizeof(sp), "%s/mnt/usb0/gross.exfat", ROOT);
+    int fd = open(sp, O_CREAT | O_WRONLY, 0644);
+    CHECK(fd >= 0 && ftruncate(fd, (off_t)5 << 30) == 0);
+    if(fd >= 0) close(fd);
+    snprintf(g_src_path, sizeof(g_src_path), "/mnt/usb0/gross.exfat");
+    g_oa_test_fstype = "msdosfs";
+    CHECK(ps5tm_orig_prepare("convert", "PPSA00001", "move", "/mnt/usb1/PS5-Sicherung/Spiele", &r, err, sizeof(err)) == 409 && strstr(err, "FAT32") != NULL);
+    g_oa_test_fstype = "";
+    unlink(sp);
+    snprintf(g_src_path, sizeof(g_src_path), "/mnt/usb0/homebrew/PPSA00001");
   }
 
   printf("%d Prüfungen, %d Fehler\n", g_n, g_fail);

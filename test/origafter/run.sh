@@ -10,7 +10,7 @@ mkdir -p "$OUT"
 gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -Wall -Wextra -Isrc -o "$OUT/test" test/origafter/origafter_test.c
 "$OUT/test"
 gcc -std=gnu11 -D_GNU_SOURCE -O1 -g -fsanitize=address,undefined -Wall -Wextra -Isrc -Isrc/third_party \
-  "-DOA_ROOT=\"$ROOT\"" '-DOA_SLEEP(s)=usleep((s)*15000)' \
+  "-DOA_ROOT=\"$ROOT\"" '-DOA_SLEEP(s)=usleep((s)*15000)' -DPS5TM_HOST_TEST -DOA_RETRY_TRIES=40 \
   -o "$OUT/flow" test/origafter/flow_test.c src/origafter.c src/third_party/cJSON.c -lpthread -lm
 "$OUT/flow"
 rm -rf "$ROOT"

@@ -5659,8 +5659,10 @@
   const ogKeepWarn = (ctx) => !!ctx && (ctx.kind === "unpack" || (ctx.mode === "homebrew" && !ctx.fpkg));
   /* Die Felder der Start-Anfrage: nur wenn nicht „behalten“. */
   const ogFields = (s) => {
-    if (s.after === "delete") return { orig_after: "delete" };
-    if (s.after === "move") return { orig_after: "move", orig_dest: ogResolveDest(s.mount, s.folder) };
+    /* orig_path: das Original, das die Seite gezeigt und bestätigt hat; liegt der Titel beim Start woanders, lehnt die Konsole ab (Prüfung 18.11.2026, F-301) */
+    const seen = s.plan && s.plan.source && s.plan.source.path ? { orig_path: String(s.plan.source.path) } : {};
+    if (s.after === "delete") return Object.assign({ orig_after: "delete" }, seen);
+    if (s.after === "move") return Object.assign({ orig_after: "move", orig_dest: ogResolveDest(s.mount, s.folder) }, seen);
     return {};
   };
   /* Die Zeile unter dem Ordner (cls ok / err / warn / wait) und ob sie den Start sperrt. */
@@ -5795,7 +5797,9 @@
     const delWhy = p.can_delete ? "" : (p.delete_why || "Löschen ist bei diesem Spiel nicht möglich.");
     const movWhy = p.can_move ? "" : (p.move_why || "Verschieben ist bei diesem Spiel nicht möglich.");
     const list = row("keep", "Behalten", "Das Original bleibt, wo es ist (Vorgabe).", "")
-      + row("delete", "Löschen", "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher und nennt den Namen.", delWhy)
+      + row("delete", "Löschen", ctx.kind === "unpack"
+          ? "Erst wenn das Spiel im Zielordner liegt und ShadowMountPlus das Entpacken als gelungen meldet. Die App fragt vorher und nennt den Namen."
+          : "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher und nennt den Namen.", delWhy)
       + row("move", "Verschieben", "An einen Ort, den ShadowMountPlus nicht durchsucht.", movWhy)
       + (og.after === "move" && !movWhy ? ogMoveHtml(p) : "");
     const warn = og.after === "delete" && !delWhy

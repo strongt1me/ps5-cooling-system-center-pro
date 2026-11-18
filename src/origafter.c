@@ -31,6 +31,10 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
+#ifndef PS5TM_HOST_TEST
+#include <sys/param.h>
+#include <sys/mount.h>
+#endif
 
 #include "origafter.h"
 #include "ps5tm.h"
@@ -40,6 +44,10 @@
 #define OA_IDLE_WAIT_S    (12 * 3600)        /* how long a choice waits for the app's other jobs to end */
 #define OA_JOB_WAIT_S     (24 * 3600)        /* how long it follows its own copy or delete */
 #define OA_SPACE_RESERVE  (256ull << 20)     /* a drive is never filled up completely (as gamecopy.c) */
+#ifndef OA_RETRY_TRIES
+#define OA_RETRY_TRIES    40                     /* how often (every 3 s: two minutes) it asks again while another job that started in the same moment gives up its place */
+#endif
+#define OA_STATE_FILE     OA_APP_DIR "/orig-open.json"   /* what is open, for the next start of the app (ps5tm_orig_recover) */
 #define OA_APP_DIR        "/data/PS5-Cooling-Center"
 /* folders of the console itself: no game goes there (below any drive's mount point) */
 static const char *const OA_SYS_NAMES[] = { "/user", "/system", "/system_ex", "/preinst", "/update", "/pkg", "/sandbox", "/etaHEN" };
@@ -65,6 +73,8 @@ typedef struct {
   uint64_t           seq, updated_ms;
   char               kind[10];
   ps5tm_orig_req_t   r;
+  uint64_t           armed_ms;           /* when the choice was noted: the end of a job that began before is another job's */
+  int                probing;            /* the worker is looking whether the app is quiet: counts as busy for the others (ps5tm_orig_busy) */
   int                outcome;            /* -1 the job has not ended yet, 0 it did not end well, 1 it did, 2 it did but its result was only spot-checked */
   char               result[320];        /* where the job's result lies (from the hook), "" when not told */
   char               message[400];
@@ -72,9 +82,11 @@ typedef struct {
 } oa_item_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_wlock = PTHREAD_MUTEX_INITIALIZER;     /* one writer of the note file at a time (taken before g_lock, never while g_lock is held) */
 static oa_item_t       g_it[OA_MAX];
 static uint64_t        g_seq;
 static int             g_worker;
+static pthread_t       g_worker_th;                                    /* valid while g_worker is 1 */
 
 /* ------------------------------------------------------------------ the drives */
 
@@ -171,6 +183,23 @@ typedef struct {
   int      smp;                          /* ShadowMountPlus would search there */
 } oa_dest_t;
 
+/* The kind of file system the drive with this mount point has (the kernel's name: "msdosfs" for FAT32), "" when not known. */
+#ifdef PS5TM_HOST_TEST
+const char *g_oa_test_fstype;                   /* the host test sets it */
+#endif
+static void
+oa_fstype(const char *mount, char *out, size_t n) {
+  out[0] = '\0';
+#ifdef PS5TM_HOST_TEST
+  (void)mount;
+  snprintf(out, n, "%s", g_oa_test_fstype ? g_oa_test_fstype : "");
+#else
+  struct statfs sf;
+  char b[700];
+  if(statfs(oa_fs(b, sizeof(b), mount), &sf) == 0) snprintf(out, n, "%s", sf.f_fstypename);
+#endif
+}
+
 /* 0 when a move of the original at path to dest_in may go ahead, else -1 with the reason in why (German, for the person). */
 static int
 check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, char *why, size_t wn) {
@@ -243,9 +272,25 @@ check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, c
     }
   }
   struct stat ts;
-  if(OA_LSTAT(d->target, &ts) == 0) {
+  /* what an earlier copy of this app left unfinished (its mark is in it) is not somebody's: the copy replaces it (gamecopy.c) */
+  if(OA_LSTAT(d->target, &ts) == 0 && !ps5tm_gamecopy_leftover(d->target)) {
     snprintf(why, wn, "Am Ziel gibt es „%.150s“ schon.", d->target);
     return -1;
+  }
+  /* a FAT32 drive takes no file of 4 GiB or more: said now, not after hours (the copy would refuse it only when it starts) */
+  {
+    char fst[16];
+    oa_fstype(d->mount, fst, sizeof(fst));
+    if(!strcmp(fst, "msdosfs")) {
+      struct stat ps;
+      uint64_t bytes = 0, largest = 0;
+      if(OA_LSTAT(path, &ps) == 0 && S_ISREG(ps.st_mode)) largest = (uint64_t)ps.st_size;
+      else (void)ps5tm_gamecopy_measure(path, &bytes, &largest);
+      if(ps5tm_orig_fat32_refuses(fst, largest)) {
+        snprintf(why, wn, "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Dieses Spiel hat größere.");
+        return -1;
+      }
+    }
   }
   struct statvfs sv;
   if(OA_STATVFS(d->mount, &sv) == 0) {                                 /* the drive's room now, not as of the last look at the list of drives */
@@ -265,7 +310,7 @@ check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, c
 /* ------------------------------------------------------------------ prepare / arm / commit */
 
 int
-ps5tm_orig_prepare(const char *kind, const char *title_id, const char *after, const char *dest, ps5tm_orig_req_t *r, char *err, size_t err_len) {
+ps5tm_orig_prepare_for(const char *kind, const char *title_id, const char *after, const char *dest, const char *expect_path, ps5tm_orig_req_t *r, char *err, size_t err_len) {
   memset(r, 0, sizeof(*r));
   err[0] = '\0';
   if(!after || !after[0] || !strcmp(after, "keep")) return 0;
@@ -277,6 +322,11 @@ ps5tm_orig_prepare(const char *kind, const char *title_id, const char *after, co
   if(source_of(title_id, r->name, sizeof(r->name), r->path, sizeof(r->path)) != 0) {
     snprintf(err, err_len, "Zu diesem Spiel gibt es kein Original, das sich löschen oder verschieben lässt.");
     return 404;
+  }
+  /* the page showed the person one original and asked about exactly that one (audit 18.11.2026, F-301): where the title is listed from now must be the same place */
+  if(expect_path && expect_path[0] && strcmp(expect_path, r->path)) {
+    snprintf(err, err_len, "Das Original liegt inzwischen woanders als bestätigt (jetzt: %.200s). Bitte die Auswahl noch einmal öffnen.", r->path);
+    return 409;
   }
   char why[400];
   if(ps5tm_gamedelete_original_ok(title_id, r->path, why, sizeof(why)) != 0) {
@@ -301,12 +351,18 @@ ps5tm_orig_prepare(const char *kind, const char *title_id, const char *after, co
 }
 
 int
+ps5tm_orig_prepare(const char *kind, const char *title_id, const char *after, const char *dest, ps5tm_orig_req_t *r, char *err, size_t err_len) {
+  return ps5tm_orig_prepare_for(kind, title_id, after, dest, NULL, r, err, err_len);
+}
+
+int
 ps5tm_orig_prepare_body(const char *kind, const char *title_id, const cJSON *body, ps5tm_orig_req_t *r, char *err, size_t err_len) {
   const cJSON *ja = body ? cJSON_GetObjectItem(body, "orig_after") : NULL;
   const cJSON *jd = body ? cJSON_GetObjectItem(body, "orig_dest") : NULL;
+  const cJSON *jp = body ? cJSON_GetObjectItem(body, "orig_path") : NULL;
   const char *after = cJSON_IsString(ja) ? ja->valuestring : "";
   if(!after[0] && kind && !strcmp(kind, "unpack") && body && cJSON_IsTrue(cJSON_GetObjectItem(body, "delete_source"))) after = "delete";     /* the older field of the unpack */
-  return ps5tm_orig_prepare(kind, title_id, after, cJSON_IsString(jd) ? jd->valuestring : "", r, err, err_len);
+  return ps5tm_orig_prepare_for(kind, title_id, after, cJSON_IsString(jd) ? jd->valuestring : "", cJSON_IsString(jp) ? jp->valuestring : "", r, err, err_len);
 }
 
 static oa_item_t *
@@ -352,12 +408,14 @@ ps5tm_orig_arm(const ps5tm_orig_req_t *r, const char *kind) {
   snprintf(it->kind, sizeof(it->kind), "%s", kind);
   it->r = *r;
   it->outcome = -1;
+  it->armed_ms = ps5tm_mono_ms();
   touch_locked(it, OA_PENDING, "");
   pthread_mutex_unlock(&g_lock);
   return 0;
 }
 
 static void *worker(void *arg);
+static void persist(void);
 
 /* Starts the worker when it is not there. */
 static void
@@ -379,6 +437,7 @@ ensure_worker(void) {
     for(int i = 0; i < OA_MAX; i++)
       if(g_it[i].used && g_it[i].state == OA_WAIT) touch_locked(&g_it[i], OA_FAILED, "Das Original blieb liegen: Der Vorgang dafür ließ sich nicht starten.");
     pthread_mutex_unlock(&g_lock);
+    persist();
   }
 }
 
@@ -387,8 +446,11 @@ ensure_worker(void) {
 static int
 settle_locked(oa_item_t *it) {
   if(it->outcome == 2 && it->r.mode == PS5TM_ORIG_DELETE) {                 /* a spot check is no reason to throw 60 GB away; a move is: its copy is checked on its own */
-    char m[300];
-    snprintf(m, sizeof(m), "Das Original „%.120s“ blieb liegen, weil das Ergebnis nur schnell geprüft wurde. Zum Löschen bitte die gründliche Prüfung wählen.", it->r.name);
+    char m[400];
+    if(!strcmp(it->kind, "unpack"))
+      snprintf(m, sizeof(m), "Das Original „%.120s“ blieb liegen, weil ShadowMountPlus das Entpacken ohne Erfolgswert beendet hat und sich das Ergebnis nicht prüfen ließ. Bitte das entpackte Spiel prüfen und das Abbild von Hand löschen.", it->r.name);
+    else
+      snprintf(m, sizeof(m), "Das Original „%.120s“ blieb liegen, weil das Ergebnis nur schnell geprüft wurde. Zum Löschen bitte die gründliche Prüfung wählen.", it->r.name);
     touch_locked(it, OA_SKIPPED, m);
     PS5TM_INFO("orig_skipped", "Original von %s bleibt liegen: das Ergebnis (%s) wurde nur schnell geprüft.", it->r.title, it->kind);
     return 0;
@@ -408,31 +470,36 @@ settle_locked(oa_item_t *it) {
 void
 ps5tm_orig_commit(const ps5tm_orig_req_t *r, const char *kind, int started) {
   if(!r || r->mode == PS5TM_ORIG_KEEP) return;
-  int go = 0;
+  int go = 0, touched = 0;
   pthread_mutex_lock(&g_lock);
   for(int i = 0; i < OA_MAX; i++) {
     oa_item_t *it = &g_it[i];
     if(!it->used || it->state != OA_PENDING || strcmp(it->kind, kind) || strcmp(it->r.title, r->title)) continue;
     if(!started) { memset(it, 0, sizeof(*it)); break; }
     touch_locked(it, OA_ARMED, "");
+    touched = 1;
     if(it->outcome >= 0) go = settle_locked(it);              /* the job ended before this was made firm */
     break;
   }
   pthread_mutex_unlock(&g_lock);
+  if(touched) persist();                                      /* an armed choice is noted too: a restart in the middle of the job is reported (audit round 3, G-5) */
   if(go) ensure_worker();
 }
 
 void
-ps5tm_orig_job_done(const char *kind, const char *title_id, int ok, const char *target) {
-  int go = 0;
+ps5tm_orig_job_done(const char *kind, const char *title_id, int ok, const char *target, uint64_t started_ms) {
+  int go = 0, touched = 0;
   pthread_mutex_lock(&g_lock);
   oa_item_t *it = find_open_locked(kind, title_id);
+  /* a job that began before this choice was noted is another job of the same kind and title (a direct start and a queue entry): its end is not this one's */
+  if(it && started_ms != 0 && started_ms < it->armed_ms) it = NULL;
   if(it) {
     it->outcome = ok < 0 ? 0 : ok > 2 ? 2 : ok;
     snprintf(it->result, sizeof(it->result), "%s", target ? target : "");
-    if(it->state == OA_ARMED) go = settle_locked(it);
+    if(it->state == OA_ARMED) { go = settle_locked(it); touched = 1; }
   }
   pthread_mutex_unlock(&g_lock);
+  if(touched) persist();
   if(go) ensure_worker();
 }
 
@@ -453,13 +520,16 @@ ps5tm_orig_gate(int max_s) {
 
 static void
 finish(uint64_t seq, int state, const char *msg, const char *target) {
+  int changed = 0;
   pthread_mutex_lock(&g_lock);
   oa_item_t *it = find_seq_locked(seq);
   if(it) {
+    changed = it->state != state;
     touch_locked(it, state, msg);
     if(target) snprintf(it->target, sizeof(it->target), "%s", target);
   }
   pthread_mutex_unlock(&g_lock);
+  if(changed) persist();                                   /* only when the state changed: a copy reports its progress every two seconds */
 }
 
 static void
@@ -467,79 +537,148 @@ progress(uint64_t seq, const char *msg, const char *target) {
   finish(seq, OA_RUN, msg, target);
 }
 
-/* Waits until none of the app's jobs runs any more. 0 when it is so, -1 when it did not come to that. */
+int
+ps5tm_orig_busy(void) {
+  pthread_mutex_lock(&g_lock);
+  const int me = g_worker && pthread_equal(g_worker_th, pthread_self());          /* the thread that carries a choice out may start the copy and the delete it needs */
+  int run = 0;
+  for(int i = 0; i < OA_MAX; i++) if(g_it[i].used && (g_it[i].state == OA_RUN || g_it[i].probing)) run = 1;
+  pthread_mutex_unlock(&g_lock);
+  return run && !me;
+}
+
+static void
+set_probing(uint64_t seq, int v) {
+  pthread_mutex_lock(&g_lock);
+  oa_item_t *it = find_seq_locked(seq);
+  if(it) it->probing = v;
+  pthread_mutex_unlock(&g_lock);
+}
+
+/* Waits until none of the app's jobs runs any more. 0 when it is so (the choice is then "running"), -1 when it did not come to that.
+   While it looks, the choice counts as busy for the others (ps5tm_orig_busy): a job that starts in that moment finds the place taken and stands down (its own second
+   look). When all is quiet, the state turns to "running" in the same step, so that no job slips in between the look and the work (audit round 3, G-2). */
 static int
 wait_idle(uint64_t seq, int move) {
   char why[160];
   for(int s = 0; s < OA_IDLE_WAIT_S; s += 3) {
+    set_probing(seq, 1);
     if(!ps5tm_jobs_busy_except(-1, PS5TM_JOBS_NO_SMP, why, sizeof(why)) && !ps5tm_gamecopy_busy() && !ps5tm_gameconvert_busy() && !ps5tm_gamedelete_busy() &&
-       !ps5tm_jobs_busy_except(-1, 0, why, sizeof(why)))                  /* only now asked of ShadowMountPlus: does it still move or unpack something? */
+       !ps5tm_jobs_busy_except(-1, 0, why, sizeof(why))) {                /* only now asked of ShadowMountPlus: does it still move or unpack something? */
+      pthread_mutex_lock(&g_lock);
+      oa_item_t *it = find_seq_locked(seq);
+      if(it) { it->state = OA_RUN; it->probing = 0; it->updated_ms = ps5tm_mono_ms(); }
+      pthread_mutex_unlock(&g_lock);
+      persist();
       return 0;
+    }
+    set_probing(seq, 0);
     if(s == 0) finish(seq, OA_WAIT, move ? "Das Original wird verschoben, sobald nichts anderes mehr läuft." : "Das Original wird gelöscht, sobald nichts anderes mehr läuft.", NULL);
     OA_SLEEP(3);
   }
   return -1;
 }
 
-/* Deletes exactly it->r.path through gamedelete.c's job and follows that to its end. 0 when the original is gone, else -1 with the reason in why. */
+/* 1 when the folder at path still has the markers of a game (sce_sys/param.json or param.sfo). */
 static int
-delete_original(const oa_item_t *it, char *why, size_t wn) {
+has_markers(const char *path) {
+  static const char *const marks[] = { "/sce_sys/param.json", "/sce_sys/param.sfo" };
+  for(size_t i = 0; i < sizeof(marks) / sizeof(marks[0]); i++) {
+    char mk[400];
+    struct stat ms;
+    if(snprintf(mk, sizeof(mk), "%s%s", path, marks[i]) < (int)sizeof(mk) && OA_LSTAT(mk, &ms) == 0 && S_ISREG(ms.st_mode)) return 1;
+  }
+  return 0;
+}
+
+/* Deletes exactly it->r.path through gamedelete.c's job and follows that to its end. 0 when the original is gone, else -1 with the reason in why; *partial is 1 when
+   part of it is gone already (its markers or files): it can no longer be played, and what is left lies where it was. What decides is the original itself, not the
+   record of the delete job: another delete may have claimed that record in the meantime (audit 18.11.2026, F-310). */
+static int
+delete_original(const oa_item_t *it, char *why, size_t wn, int *partial) {
+  *partial = 0;
   struct stat was;
-  struct stat *wp = NULL;
-  if(OA_LSTAT(it->r.path, &was) == 0) {
-    if((uint64_t)was.st_dev != it->r.dev || (uint64_t)was.st_ino != it->r.ino) {
-      snprintf(why, wn, "An dieser Stelle liegt inzwischen etwas anderes als vorher. Es wurde nichts gelöscht.");
-      return -1;
-    }
-    wp = &was;
-  } else {
+  if(OA_LSTAT(it->r.path, &was) != 0) {
     snprintf(why, wn, "Das Original ist nicht mehr da.");
     return -1;
   }
+  if((uint64_t)was.st_dev != it->r.dev || (uint64_t)was.st_ino != it->r.ino) {
+    snprintf(why, wn, "An dieser Stelle liegt inzwischen etwas anderes als vorher. Es wurde nichts gelöscht.");
+    return -1;
+  }
   int rc = 0;
-  for(int tries = 0; tries < 40; tries++) {                  /* the other job that ended a moment ago may still be giving up its place */
-    rc = ps5tm_gamedelete_original(it->r.title, it->r.name, it->r.path, wp, why, wn);
-    if(rc != 409 || (!strstr(why, "gleichzeitig") && !strstr(why, "Gelöscht wird erst danach"))) break;
+  for(int tries = 0; tries < OA_RETRY_TRIES; tries++) {      /* the other job that ended a moment ago (or started in this moment) may still hold its place */
+    rc = ps5tm_gamedelete_original(it->r.title, it->r.name, it->r.path, &was, why, wn);
+    if(rc != 409 || (!strstr(why, "gleichzeitig") && !strstr(why, "Gelöscht wird erst danach") && !strstr(why, "gerade schon etwas gelöscht"))) break;
     OA_SLEEP(3);
   }
-  if(rc != 200) return -1;
+  if(rc != 200) {
+    /* another choice for the same original may have taken its markers already: then it cannot be played any more either */
+    struct stat cur;
+    if(S_ISDIR(was.st_mode) && OA_LSTAT(it->r.path, &cur) == 0 && cur.st_dev == was.st_dev && cur.st_ino == was.st_ino && !has_markers(it->r.path)) *partial = 1;
+    return -1;
+  }
   for(int s = 0; s < OA_JOB_WAIT_S; s++) {
     if(!ps5tm_gamedelete_busy()) break;
     OA_SLEEP(1);
   }
   cJSON *st = ps5tm_gamedelete_status();
-  const cJSON *state = st ? cJSON_GetObjectItem(st, "state") : NULL;
-  const cJSON *error = st ? cJSON_GetObjectItem(st, "error") : NULL;
-  int ok = cJSON_IsString(state) && !strcmp(state->valuestring, "done");
-  if(!ok) snprintf(why, wn, "%s", cJSON_IsString(error) && error->valuestring[0] ? error->valuestring : "Das Löschen ist gescheitert.");
+  const cJSON *error = st ? cJSON_GetObjectItem(st, "error") : NULL, *kind = st ? cJSON_GetObjectItem(st, "kind") : NULL;
+  const cJSON *id = st ? cJSON_GetObjectItem(st, "id") : NULL, *files = st ? cJSON_GetObjectItem(st, "files") : NULL;
+  const int mine = !((cJSON_IsString(kind) && strcmp(kind->valuestring, "orig")) || (cJSON_IsString(id) && strcmp(id->valuestring, it->r.title)));
+  struct stat now;
+  memset(&now, 0, sizeof(now));
+  const int lr = OA_LSTAT(it->r.path, &now);
+  const int le = errno;
+  if(lr != 0) {
+    /* gone counts only while its drive is still there: with the drive pulled the path is gone as well, and the data lies untouched on the drive */
+    char parent[330];
+    struct stat ps;
+    snprintf(parent, sizeof(parent), "%s", it->r.path);
+    char *sl = strrchr(parent, '/');
+    if(le == ENOENT && sl && sl > parent) {
+      *sl = '\0';
+      if(OA_LSTAT(parent, &ps) == 0 && (uint64_t)ps.st_dev == it->r.dev) {
+        cJSON_Delete(st);
+        return 0;
+      }
+    }
+    snprintf(why, wn, "Das Laufwerk ist nicht mehr erreichbar. Ob das Original gelöscht wurde, ließ sich nicht prüfen.");
+    cJSON_Delete(st);
+    return -1;
+  }
+  snprintf(why, wn, "%s", mine && cJSON_IsString(error) && error->valuestring[0] ? error->valuestring : "Das Löschen ist gescheitert.");
+  if(S_ISDIR(now.st_mode) && ((mine && cJSON_IsNumber(files) && files->valuedouble > 0) || !has_markers(it->r.path))) *partial = 1;
   cJSON_Delete(st);
-  return ok ? 0 : -1;
+  return -1;
 }
 
 /* Copies the original to its target through gamecopy.c (read back and compared) and follows that to its end. 0 when the copy is whole. */
 static int
 copy_original(uint64_t seq, const oa_item_t *it, const char *mount, const char *target, char *why, size_t wn) {
   int rc = 0;
-  for(int tries = 0; tries < 40; tries++) {
+  const uint64_t t0 = ps5tm_mono_ms();                        /* the copy's own record counts only when the copy began after this */
+  for(int tries = 0; tries < OA_RETRY_TRIES; tries++) {
     rc = ps5tm_gamecopy_start_to(it->r.title, mount, it->r.dest, it->r.path, why, wn);
-    if(rc != 409 || !strstr(why, "gleichzeitig")) break;
+    if(rc != 409 || (!strstr(why, "gleichzeitig") && !strstr(why, "Es läuft schon eine Kopie"))) break;
     OA_SLEEP(3);
   }
   if(rc != 200) return -1;
-  int lost = 0;
-  for(int s = 0; s < OA_JOB_WAIT_S; s++) {
+  int lost = 0, was_mine = 0;
+  for(int s = 0; s < OA_JOB_WAIT_S / 2; s++) {                /* a round is two seconds */
     OA_SLEEP(2);
     cJSON *st = ps5tm_gamecopy_status();
-    const cJSON *state = st ? cJSON_GetObjectItem(st, "state") : NULL;
-    const cJSON *tg = st ? cJSON_GetObjectItem(st, "target") : NULL;
-    const cJSON *act = st ? cJSON_GetObjectItem(st, "active") : NULL;
-    const cJSON *error = st ? cJSON_GetObjectItem(st, "error") : NULL;
-    const cJSON *tb = st ? cJSON_GetObjectItem(st, "total_bytes") : NULL, *db = st ? cJSON_GetObjectItem(st, "done_bytes") : NULL,
-                *cb = st ? cJSON_GetObjectItem(st, "checked_bytes") : NULL;
-    const cJSON *src = st ? cJSON_GetObjectItem(st, "source") : NULL, *skp = st ? cJSON_GetObjectItem(st, "skipped") : NULL;
+    if(!st) continue;                                         /* no answer (no memory): nothing is known, so nothing is decided */
+    const cJSON *state = cJSON_GetObjectItem(st, "state");
+    const cJSON *tg = cJSON_GetObjectItem(st, "target");
+    const cJSON *act = cJSON_GetObjectItem(st, "active");
+    const cJSON *error = cJSON_GetObjectItem(st, "error");
+    const cJSON *tb = cJSON_GetObjectItem(st, "total_bytes"), *db = cJSON_GetObjectItem(st, "done_bytes"), *cb = cJSON_GetObjectItem(st, "checked_bytes");
+    const cJSON *src = cJSON_GetObjectItem(st, "source"), *skp = cJSON_GetObjectItem(st, "skipped");
     int mine = cJSON_IsString(tg) && !strcmp(tg->valuestring, target);
     int end = 0, ok = 0;
     lost = mine ? 0 : lost + 1;
+    was_mine = mine;
     if(mine && cJSON_IsString(src) && strcmp(src->valuestring, it->r.path)) {   /* the copy takes another source than the original: it is stopped, nothing is deleted */
       (void)ps5tm_gamecopy_cancel();
       end = 1;
@@ -555,12 +694,19 @@ copy_original(uint64_t seq, const oa_item_t *it, const char *mount, const char *
         snprintf(why, wn, "%s", !strcmp(state->valuestring, "cancelled") ? "Das Kopieren wurde abgebrochen."
                                  : cJSON_IsString(error) && error->valuestring[0] ? error->valuestring : "Das Kopieren ist gescheitert.");
       }
-    } else if(!mine && cJSON_IsString(state) && strcmp(state->valuestring, "idle") && !cJSON_IsTrue(act)) {
-      end = 1;                                              /* another job has taken the place and this one's end was not seen */
-      snprintf(why, wn, "Das Ergebnis des Kopierens ließ sich nicht mehr lesen, weil gleich danach ein anderer Vorgang begann.");
-    } else if(!mine && lost > 30) {                         /* a minute of not seeing the copy at all: it is gone */
-      end = 1;
-      snprintf(why, wn, "Die Kopie ist nicht mehr zu sehen.");
+    } else if(!mine) {
+      /* The record of the running copy is not there (another job claimed it, or a refused start cleared it): how this copy ended is kept on its own (gamecopy.c) */
+      char le[400];
+      const int lr = ps5tm_gamecopy_last_result(target, t0, le, sizeof(le));
+      if(lr == 1) { end = 1; ok = 1; }
+      else if(lr == 0) { end = 1; snprintf(why, wn, "%s", le); }
+      else if(cJSON_IsString(state) && strcmp(state->valuestring, "idle") && !cJSON_IsTrue(act)) {
+        end = 1;                                            /* another job has taken the place and this one's end was not seen */
+        snprintf(why, wn, "Das Ergebnis des Kopierens ließ sich nicht mehr lesen, weil gleich danach ein anderer Vorgang begann.");
+      } else if(lost > 30) {                                /* a minute of not seeing the copy at all: it is gone */
+        end = 1;
+        snprintf(why, wn, "Die Kopie ist nicht mehr zu sehen.");
+      }
     }
     if(!end && mine && cJSON_IsNumber(tb) && tb->valuedouble > 0 && cJSON_IsNumber(db)) {           /* written, then read back: both count */
       double part = (db->valuedouble + (cJSON_IsNumber(cb) ? cb->valuedouble : 0)) / (2 * tb->valuedouble);
@@ -571,6 +717,7 @@ copy_original(uint64_t seq, const oa_item_t *it, const char *mount, const char *
     cJSON_Delete(st);
     if(end) return ok ? 0 : -1;
   }
+  if(was_mine) (void)ps5tm_gamecopy_cancel();                 /* too long: the copy is stopped, not left to write on beside the next choice */
   snprintf(why, wn, "Das Kopieren dauert zu lange.");
   return -1;
 }
@@ -586,6 +733,10 @@ process(uint64_t seq, const oa_item_t *it) {
     finish(seq, OA_FAILED, msg, NULL);
     return;
   }
+  /* From here on the original is in work: no other job of the app starts beside it (ps5tm_orig_busy), not between the copy and the delete either (audit 18.11.2026, F-302) */
+  if(move) snprintf(msg, sizeof(msg), "Das Original „%.100s“ wird nach %.150s kopiert und geprüft …", it->r.name, it->r.dest);
+  else snprintf(msg, sizeof(msg), "Das Original „%.120s“ wird gelöscht …", it->r.name);
+  finish(seq, OA_RUN, msg, NULL);
   /* The result of the job must be known and be there, or nothing goes; and it must not be the original itself or lie in it (or the original in it). */
   if(!it->result[0]) {
     snprintf(msg, sizeof(msg), "Das Original „%.120s“ blieb liegen: Das Ergebnis ist nicht bekannt.", it->r.name);
@@ -666,12 +817,18 @@ process(uint64_t seq, const oa_item_t *it) {
     progress(seq, msg, NULL);
   }
 
-  if(delete_original(it, why, sizeof(why)) != 0) {
-    if(move) snprintf(msg, sizeof(msg), "Das Original „%.60s“ ist kopiert (nach %.120s), ließ sich aber nicht löschen: %.200s", it->r.name, target, why);
+  int partial = 0;
+  if(delete_original(it, why, sizeof(why), &partial) != 0) {
+    if(partial) {                                           /* the markers or files are gone already: "blieb liegen" would be wrong */
+      if(move) snprintf(msg, sizeof(msg), "Das Original „%.60s“ ist kopiert (nach %.100s), aber nur teilweise gelöscht und nicht mehr spielbar (Rest in %.100s): %.120s", it->r.name, target, it->r.path, why);
+      else snprintf(msg, sizeof(msg), "Das Original „%.80s“ ist nur teilweise gelöscht und nicht mehr spielbar (Rest in %.120s): %.160s", it->r.name, it->r.path, why);
+    } else if(move) snprintf(msg, sizeof(msg), "Das Original „%.60s“ ist kopiert (nach %.120s), ließ sich aber nicht löschen: %.200s", it->r.name, target, why);
     else snprintf(msg, sizeof(msg), "Das Original „%.120s“ blieb liegen: %.300s", it->r.name, why);
     finish(seq, OA_FAILED, msg, move ? target : NULL);
     PS5TM_WARN("orig_failed", "Original von %s ließ sich nicht löschen: %.200s", it->r.title, why);
-    if(move) ps5tm_notify_plain("Das Original „%s“ ist kopiert, ließ sich aber nicht löschen: %.100s", it->r.name, why);
+    if(partial && move) ps5tm_notify_plain("Das Original „%s“ ist kopiert, aber nur teilweise gelöscht und nicht mehr spielbar (Rest in %s)", it->r.name, it->r.path);
+    else if(partial) ps5tm_notify_plain("Das Original „%s“ ist nur teilweise gelöscht und nicht mehr spielbar (Rest in %s)", it->r.name, it->r.path);
+    else if(move) ps5tm_notify_plain("Das Original „%s“ ist kopiert, ließ sich aber nicht löschen: %.100s", it->r.name, why);
     else ps5tm_notify_plain("Das Original „%s“ blieb liegen: %.120s", it->r.name, why);
     return;
   }
@@ -691,6 +848,9 @@ process(uint64_t seq, const oa_item_t *it) {
 static void *
 worker(void *arg) {
   (void)arg;
+  pthread_mutex_lock(&g_lock);
+  g_worker_th = pthread_self();                              /* ps5tm_orig_busy: this thread may start the copy and the delete it needs */
+  pthread_mutex_unlock(&g_lock);
   ps5tm_powerguard_hold();                                  /* a long copy follows: the console stays awake */
   for(;;) {
     oa_item_t cur;
@@ -707,6 +867,96 @@ worker(void *arg) {
   }
   ps5tm_powerguard_release();
   return NULL;
+}
+
+/* ------------------------------------------------------------------ what is open, for the next start of the app */
+
+/* What waits for the app's other jobs or is being carried out is noted in a file of the app, so that a restart in the middle (a new ELF sent, the console's own
+   end of the app) does not make it vanish: the next start reports it (ps5tm_orig_recover). Never held under g_lock. */
+static void
+persist(void) {
+  oa_item_t *snap = malloc(sizeof(g_it));
+  if(!snap) return;
+  pthread_mutex_lock(&g_wlock);
+  pthread_mutex_lock(&g_lock);
+  memcpy(snap, g_it, sizeof(g_it));
+  pthread_mutex_unlock(&g_lock);
+  cJSON *arr = cJSON_CreateArray();
+  for(int i = 0; i < OA_MAX; i++) {
+    const oa_item_t *it = &snap[i];
+    if(!it->used || (it->state != OA_WAIT && it->state != OA_RUN && it->state != OA_ARMED)) continue;
+    cJSON *e = cJSON_CreateObject();
+    cJSON_AddStringToObject(e, "id", it->r.title);
+    cJSON_AddStringToObject(e, "name", it->r.name);
+    cJSON_AddStringToObject(e, "kind", it->kind);
+    cJSON_AddStringToObject(e, "mode", it->r.mode == PS5TM_ORIG_MOVE ? "move" : "delete");
+    cJSON_AddStringToObject(e, "state", it->state == OA_RUN ? "running" : "waiting");
+    cJSON_AddStringToObject(e, "path", it->r.path);
+    cJSON_AddStringToObject(e, "dest", it->r.dest);
+    cJSON_AddItemToArray(arr, e);
+  }
+  char path[700], tmp[720];
+  oa_fs(path, sizeof(path), OA_STATE_FILE);
+  if(cJSON_GetArraySize(arr) == 0) {
+    (void)unlink(path);
+    cJSON_Delete(arr);
+  } else {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "v", 1);
+    cJSON_AddItemToObject(root, "items", arr);
+    char *text = cJSON_PrintUnformatted(root);
+    if(text) {
+      snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+      FILE *f = fopen(tmp, "w");
+      if(f) {
+        const size_t n = strlen(text);
+        int ok = fwrite(text, 1, n, f) == n;
+        ok = fclose(f) == 0 && ok;
+        if(ok) (void)rename(tmp, path);
+        else (void)unlink(tmp);
+      }
+      cJSON_free(text);
+    }
+    cJSON_Delete(root);
+  }
+  pthread_mutex_unlock(&g_wlock);
+  free(snap);
+}
+
+void
+ps5tm_orig_recover(void) {
+  static int done;                                            /* once per run of the app: what is open now is not a leftover */
+  if(done) return;
+  done = 1;
+  char path[700];
+  oa_fs(path, sizeof(path), OA_STATE_FILE);
+  FILE *f = fopen(path, "r");
+  if(!f) return;
+  char *buf = malloc(65536);
+  const size_t n = buf ? fread(buf, 1, 65535, f) : 0;
+  fclose(f);
+  (void)unlink(path);                                         /* reported once */
+  if(!buf) return;
+  buf[n] = '\0';
+  cJSON *root = cJSON_Parse(buf);
+  free(buf);
+  const cJSON *items = root ? cJSON_GetObjectItem(root, "items") : NULL;
+  const cJSON *e;
+  cJSON_ArrayForEach(e, items) {
+    const cJSON *jn = cJSON_GetObjectItem(e, "name"), *js = cJSON_GetObjectItem(e, "state"), *jp = cJSON_GetObjectItem(e, "path");
+    const char *name = cJSON_IsString(jn) ? jn->valuestring : "?", *op = cJSON_IsString(jp) ? jp->valuestring : "?";
+    char msg[500];
+    if(cJSON_IsString(js) && !strcmp(js->valuestring, "running")) {
+      snprintf(msg, sizeof(msg), "Das Löschen oder Verschieben des Originals von „%.80s“ wurde durch den Neustart der App unterbrochen. Bitte nachsehen, ob in %.120s noch ein Rest liegt.", name, op);
+      ps5tm_notify_plain("Das Löschen oder Verschieben des Originals von „%s“ wurde durch den Neustart der App unterbrochen. Bitte nachsehen, ob in %s noch ein Rest liegt.", name, op);
+    } else {
+      snprintf(msg, sizeof(msg), "Die Wahl für das Original von „%.80s“ wurde durch den Neustart der App nicht ausgeführt. Das Original liegt unverändert in %.120s.", name, op);
+      ps5tm_notify_plain("Die Wahl für das Original von „%s“ wurde durch den Neustart der App nicht ausgeführt. Das Original liegt unverändert in %s.", name, op);
+    }
+    PS5TM_WARN("orig_interrupted", "%.300s", msg);
+    ps5tm_hist_add("delete", name, "Original", "failed", msg, 0, 0);
+  }
+  cJSON_Delete(root);
 }
 
 /* ------------------------------------------------------------------ what the pages ask */

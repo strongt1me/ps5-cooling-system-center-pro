@@ -1118,6 +1118,32 @@ ps5tm_gamedelete_original_ok(const char *id, const char *path, char *why, size_t
     return -1;
   }
   if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) { snprintf(why, why_len, "Das Original ist weder Datei noch Ordner."); return -1; }
+  /* It must be a game: a folder with its sce_sys/param.json (or param.sfo), or an image file. The data of a title without ShadowMountPlus is wherever its mount.lnk
+     points (library.c), and that may be a folder that holds more than one game, or none (audit 18.11.2026, F-305). */
+  if(S_ISDIR(st.st_mode)) {
+    static const char *const marks[] = { "/sce_sys/param.json", "/sce_sys/param.sfo" };
+    int game = 0;
+    for(size_t i = 0; i < sizeof(marks) / sizeof(marks[0]); i++) {
+      char mk[1100];
+      struct stat ms;
+      if(snprintf(mk, sizeof(mk), "%s%s", path, marks[i]) < (int)sizeof(mk) && lstat(mk, &ms) == 0 && S_ISREG(ms.st_mode)) game = 1;
+    }
+    if(!game) { snprintf(why, why_len, "Das Original ist kein Spielordner: Es fehlt sce_sys/param.json (oder param.sfo)."); return -1; }
+  } else {
+    static const char *const exts[] = { ".exfat", ".ffpkg", ".ffpfs", ".ffpfsc" };
+    int image = 0;
+    for(size_t i = 0; i < sizeof(exts) / sizeof(exts[0]); i++) {
+      const size_t pl = strlen(path), el = strlen(exts[i]);
+      if(pl > el && !strcasecmp(path + pl - el, exts[i])) image = 1;
+    }
+    if(!image && title_id_ok(id)) {                           /* a name without the usual ending: ShadowMountPlus says what kind of image it is (library.c) */
+      ps5tm_smp_game_t sg;
+      if(ps5tm_smp_find(id, &sg) == 0 && !strcmp(sg.path, path) &&
+         (!strcmp(sg.image_type, "exfatfs") || !strcmp(sg.image_type, "ufs") || !strcmp(sg.image_type, "pfs") || !strcmp(sg.image_type, "pfsc")))
+        image = 1;
+    }
+    if(!image) { snprintf(why, why_len, "Das Original ist kein Spiel-Abbild (.exfat, .ffpkg, .ffpfs oder .ffpfsc)."); return -1; }
+  }
   /* what the console installed itself (packages, patches, add-ons) is its own business, never a game's original that this deletes */
   if(strstr(path, "/user/app/") || strstr(path, "/user/patch/") || strstr(path, "/user/addcont/") || ends_with(path, "/app.pkg")) {
     snprintf(why, why_len, "Das Original liegt im Installationsbereich der Konsole und wird von der App nicht gelöscht.");

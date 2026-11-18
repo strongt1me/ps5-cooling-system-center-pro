@@ -16,6 +16,12 @@
 #include <strings.h>
 
 #define PS5TM_ORIG_FOLDER "PS5-Sicherung/Spiele"
+/* A FAT32 drive (the kernel's name for it: "msdosfs") takes no file of 4 GiB or more (gamecopy.c's FAT32_MAX_FILE). */
+#define PS5TM_ORIG_FAT32_MAX_FILE 0xFFFFFFFFull
+static inline int
+ps5tm_orig_fat32_refuses(const char *fstype, uint64_t largest_file) {
+  return fstype && !strcmp(fstype, "msdosfs") && largest_file > PS5TM_ORIG_FAT32_MAX_FILE;
+}
 
 /* "/a//b/" -> "/a/b". 0 when in is an absolute path without "." or ".." parts and without control characters, else -1 (out is then not to be used). */
 static inline int

@@ -19,6 +19,7 @@ STUB(ps5tm_disc_busy, PS5TM_JOB_DISC)
 STUB(ps5tm_usbeject_busy, PS5TM_JOB_USBEJECT)
 STUB(ps5tm_gameconvert_busy, PS5TM_JOB_GAMECONVERT)
 STUB(ps5tm_gamecopy_busy, PS5TM_JOB_GAMECOPY)
+STUB(ps5tm_orig_busy, PS5TM_JOB_ORIGAFTER)
 static int g_move_local;
 int ps5tm_gamemove_busy_local(void) { return g_move_local; }
 int ps5tm_gamemove_busy(void) { g_asked_move++; return g_move_local || g_busy[PS5TM_JOB_GAMEMOVE]; }

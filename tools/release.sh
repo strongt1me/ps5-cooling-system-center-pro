@@ -204,6 +204,16 @@ if [ -d "$RELDIR" ]; then
   say "Hinweis: Der Ordner \"$RELDIR\" gibt es schon; 'make release' bricht ab, wenn Fremdes darin liegt."
 fi
 
+# the host tests (the list of .github/workflows/tests.yml): a release with a red test does not go out (audit 18.11.2026, F-314)
+head_ "1b. Host-Tests"
+if [ "${RELEASE_SKIP_TESTS:-0}" = 1 ]; then
+  say "Host-Tests übersprungen (RELEASE_SKIP_TESTS=1)."
+elif [ "$DRY" = 1 ]; then
+  dry "würde 'bash tools/run-host-tests.sh' ausführen (alle Tests der CI-Liste und die Simulation; unter Windows über WSL)"
+else
+  bash tools/run-host-tests.sh || problem "Die Host-Tests sind fehlgeschlagen oder nicht ausführbar (siehe oben). Nach dem Beheben noch einmal; nur im Notfall mit RELEASE_SKIP_TESTS=1."
+fi
+
 # ---------- 2. version ----------
 STAGE="Version setzen"
 head_ "2. Version setzen"

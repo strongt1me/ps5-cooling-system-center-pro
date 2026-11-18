@@ -330,6 +330,22 @@ TEST(Ps5ccOrig, TheStartBodiesCarryTheOriginalOnlyWhenItIsNotKept)
         hui::ps5cc::start_body(copy, move),
         R"({"id":"PPSA23000","target":"/mnt/ext0","mode":"backup","orig_after":"move","orig_dest":"/mnt/usb0/PS5-Sicherung/Spiele"})");
 
+    // the original the person saw goes along (the app refuses when the title lies elsewhere by then); never for "keep"
+    PlanChoice seen_keep = keep;
+    seen_keep.orig_path = "/mnt/usb0/homebrew/PPSA23000";
+    EXPECT_EQ(hui::ps5cc::start_body(copy, seen_keep),
+              R"({"id":"PPSA23000","target":"/mnt/ext0","mode":"backup"})");
+    PlanChoice seen_del = del;
+    seen_del.orig_path = "/mnt/usb0/homebrew/PPSA23000";
+    EXPECT_EQ(
+        hui::ps5cc::start_body(copy, seen_del),
+        R"({"id":"PPSA23000","target":"/mnt/ext0","mode":"backup","orig_after":"delete","orig_path":"/mnt/usb0/homebrew/PPSA23000"})");
+    PlanChoice seen_move = move;
+    seen_move.orig_path = "/mnt/usb0/homebrew/PPSA23000";
+    EXPECT_EQ(
+        hui::ps5cc::start_body(copy, seen_move),
+        R"({"id":"PPSA23000","target":"/mnt/ext0","mode":"backup","orig_after":"move","orig_dest":"/mnt/usb0/PS5-Sicherung/Spiele","orig_path":"/mnt/usb0/homebrew/PPSA23000"})");
+
     const Plan convert = tool_plan(Tool::convert);
     keep.op = del.op = move.op = 0; // ffpfsc
     keep.mode = del.mode = move.mode = 0;

@@ -2185,7 +2185,7 @@ send_cjson(int fd, int status, cJSON *root) {
 /* The value of a query parameter with its %XX escapes decoded (a path is sent as encodeURIComponent makes it: the slashes are %2F). */
 static void
 query_param_decoded(const char *query, const char *key, char *out, size_t out_len) {
-  char raw[512];
+  char raw[1024];                                            /* 320 characters of a path with every byte escaped (%XX) need 960 (audit 18.11.2026, F-316) */
   query_param(query, key, raw, sizeof(raw));
   size_t o = 0;
   for(size_t i = 0; raw[i] && o + 1 < out_len; i++) {

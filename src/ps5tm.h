@@ -799,6 +799,10 @@ typedef struct {
    HTTP status (400, 404 or 409) with the reason in err and nothing started. */
 int           ps5tm_orig_prepare(const char *kind, const char *title_id, const char *after, const char *dest,
                                  ps5tm_orig_req_t *r, char *err, size_t err_len);
+/* The same, with the path the person confirmed (the page's "orig_path": the original it showed): another original now (the library or ShadowMountPlus lists
+   the title from another place) is refused with 409 and nothing is started. expect_path NULL or "": not compared. */
+int           ps5tm_orig_prepare_for(const char *kind, const char *title_id, const char *after, const char *dest, const char *expect_path,
+                                     ps5tm_orig_req_t *r, char *err, size_t err_len);
 /* The same for a request body: "orig_after", "orig_dest", and the older "delete_source": true (= "delete"). */
 int           ps5tm_orig_prepare_body(const char *kind, const char *title_id, const struct cJSON *body, ps5tm_orig_req_t *r, char *err, size_t err_len);
 /* Before the job is started: the choice is noted as "pending". 0 when it is, -1 when the list of choices is full, -2 when the same kind of job
@@ -808,8 +812,16 @@ int           ps5tm_orig_arm(const ps5tm_orig_req_t *r, const char *kind);
 void          ps5tm_orig_commit(const ps5tm_orig_req_t *r, const char *kind, int started);
 /* A job ended (call it while the job still counts as busy, so that the next one of a queue cannot start in between). target: where its result
    lies (needed: without it nothing is deleted). ok: 0 the job did not end well, 1 it did, 2 it did but its result was only spot-checked ("Schnell"):
-   enough for a move (the copy of the original is checked on its own), not for a delete. Records only: nothing slow happens in the caller's thread. */
-void          ps5tm_orig_job_done(const char *kind, const char *title_id, int ok, const char *target);
+   enough for a move (the copy of the original is checked on its own), not for a delete. started_ms: when the job began (ps5tm_mono_ms; 0 when not known):
+   the end of a job that began before the choice was noted belongs to another job and is not taken for this one's. Records only: nothing slow happens in the
+   caller's thread. */
+void          ps5tm_orig_job_done(const char *kind, const char *title_id, int ok, const char *target, uint64_t started_ms);
+/* 1 while a choice is being carried out (the original is copied or deleted): no other job of the app starts beside it (src/jobreg.c). Not for the thread that
+   carries it out itself. */
+int           ps5tm_orig_busy(void);
+/* At the start of the app: what was open when it ended is reported (a choice that was waiting is gone, a delete that was under way left the rest of the original)
+   and the note about it removed. */
+void          ps5tm_orig_recover(void);
 /* The convert queue waits here before it starts the next entry, as long as a choice of an earlier one is still to be carried out (at most max_s). */
 void          ps5tm_orig_gate(int max_s);
 struct cJSON *ps5tm_orig_plan_json(const char *title_id, int *http);
@@ -1126,6 +1138,11 @@ int           ps5tm_gamecopy_start(const char *title_id, const char *mount,
 /* The same into a folder of the person's choosing (absolute, on the drive with this mount point; the copy lands in <dest_dir>/<the original's own
    name>): for moving an original out of ShadowMountPlus's reach (origafter.c, which has checked the folder). */
 int           ps5tm_gamecopy_start_to(const char *title_id, const char *mount, const char *dest_dir, const char *source, char *err, size_t err_len);
+/* How the copy into target ended, when it was the last one to end and began at or after since_ms (ps5tm_mono_ms): 1 whole, 0 not (err says why), -1 the last one
+   was another. For "Original danach". */
+int           ps5tm_gamecopy_last_result(const char *target, uint64_t since_ms, char *err, size_t err_len);
+/* 1 when target is an unfinished leftover of an earlier copy of this app (a copy replaces it), 0 when there is nothing or it is somebody's. */
+int           ps5tm_gamecopy_leftover(const char *target);
 /* source: exactly the folder or image the copy is to take (refused with 409 when the library lists the title from another place by now). */
 struct cJSON *ps5tm_gamecopy_status(void);
 /* Size of a folder (walked) or file, and its largest file. 0 on success. */
@@ -1630,7 +1647,7 @@ int           ps5tm_usbeject_busy(void);
 /* The one list of jobs that do not run beside each other (src/jobreg.c). A job module asks with its own id (or -1) before it starts. */
 typedef enum {
   PS5TM_JOB_SAVES, PS5TM_JOB_PKGSPLIT, PS5TM_JOB_PKGINST, PS5TM_JOB_PKGSCAN, PS5TM_JOB_GAMEDELETE, PS5TM_JOB_FILEMGR, PS5TM_JOB_AMPR,
-  PS5TM_JOB_IMGJOB, PS5TM_JOB_DISC, PS5TM_JOB_USBEJECT, PS5TM_JOB_GAMECONVERT, PS5TM_JOB_GAMECOPY, PS5TM_JOB_GAMEMOVE,
+  PS5TM_JOB_IMGJOB, PS5TM_JOB_DISC, PS5TM_JOB_USBEJECT, PS5TM_JOB_GAMECONVERT, PS5TM_JOB_GAMECOPY, PS5TM_JOB_ORIGAFTER, PS5TM_JOB_GAMEMOVE,
   PS5TM_JOB_COUNT
 } ps5tm_job_t;
 #define PS5TM_JOBS_READERS 1     /* also count the jobs that only read a drive (the package search): for ejecting a drive */

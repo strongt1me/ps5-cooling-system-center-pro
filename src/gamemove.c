@@ -251,6 +251,7 @@ typedef struct {
   int    delete_source;
   double job_id;
   unsigned gen;            /* g_wait.gen of the start of this watcher */
+  uint64_t started_ms;     /* when the app started the job (ps5tm_mono_ms): "Original danach" (origafter.c) takes only the end of a job that began after the choice */
 } watch_t;
 
 static pthread_mutex_t g_wlock = PTHREAD_MUTEX_INITIALIZER;
@@ -494,11 +495,13 @@ tile_reason(const char *reason) {
   return !strcmp(reason, "game_active") || !strcmp(reason, "runtime_prepared");
 }
 
-/* Waits for ShadowMountPlus's job job_id to end: 1 done, 0 failed (reason and message), -1 lost sight of it. */
+/* Waits for ShadowMountPlus's job job_id to end: 1 done, 0 failed (reason and message), -1 lost sight of it. *given_out: 1 when its record carried a result
+   value (result_status) - a record without one is taken for done, but it is only its word without a number ("Original danach" then does not delete). */
 static int
-follow_job(double job_id, char *reason, size_t reason_len, char *msg, size_t msg_len, int *status_out) {
+follow_job(double job_id, char *reason, size_t reason_len, char *msg, size_t msg_len, int *status_out, int *given_out) {
   reason[0] = msg[0] = '\0';
   if(status_out) *status_out = 0;
+  if(given_out) *given_out = 0;
   for(int misses = 0; misses < 20; ) {
     usleep(1500 * 1000);
     char err[160];
@@ -512,6 +515,7 @@ follow_job(double job_id, char *reason, size_t reason_len, char *msg, size_t msg
     const cJSON *re = cJSON_GetObjectItem(s, "result_error");
     int ok = !cJSON_IsNumber(rs) || rs->valuedouble == 0;
     if(status_out) *status_out = cJSON_IsNumber(rs) ? (int)rs->valuedouble : 0;
+    if(given_out) *given_out = cJSON_IsNumber(rs);
     snprintf(reason, reason_len, "%s", cJSON_IsString(rr) ? rr->valuestring : "");
     snprintf(msg, msg_len, "%s", cJSON_IsString(re) ? re->valuestring : "");
     cJSON_Delete(s);
@@ -524,9 +528,11 @@ static void *
 watch_thread(void *arg) {
   watch_t *w = arg;
   char reason[64], msg[200], tile[16], game[16];
-  int st = 0;
-  int r = follow_job(w->job_id, reason, sizeof(reason), msg, sizeof(msg), &st);
-  int unpack_ok = (r == 1);                                /* the unpack ended well (by ShadowMountPlus or by the app's own way out): what the person chose for the original (origafter.c) follows */
+  int st = 0, given = 0;
+  int r = follow_job(w->job_id, reason, sizeof(reason), msg, sizeof(msg), &st, &given);
+  /* the unpack ended well (by ShadowMountPlus or by the app's own way out): what the person chose for the original (origafter.c) follows; 1 when ShadowMountPlus
+     named a result value, 2 when it only ended without one (a move is then still allowed, a delete is not) */
+  int unpack_ok = (r == 1) ? (given ? 1 : 2) : 0;
   if(r == 0 && !tile_reason(reason) && ps5tm_unpack_fallback_wanted(w->op, st, msg))
     unpack_ok = fallback_unpack(w, msg);
   else if(r == 0 && tile_reason(reason) && ps5tm_procmgr_own_tile_running(tile, sizeof(tile)) &&
@@ -541,7 +547,7 @@ watch_thread(void *arg) {
                !strcmp(w->op, "move") ? "Verschieben" : "Entpacken", w->title_id, tile);
     const char *what = !strcmp(w->op, "move") ? "verschoben" : "entpackt";
     uint64_t t0 = ps5tm_mono_ms();
-    int started = 0, st2 = 0;
+    int started = 0, st2 = 0, given2 = 0;
     char err[300] = "";
     while(ps5tm_mono_ms() - t0 < (uint64_t)TILE_WAIT_S * 1000) {
       usleep(2000 * 1000);
@@ -562,7 +568,7 @@ watch_thread(void *arg) {
       pthread_mutex_lock(&g_wlock);
       g_wait.watch_job = id;                               /* the status route compares with this one */
       pthread_mutex_unlock(&g_wlock);
-      r = follow_job(id, reason, sizeof(reason), msg, sizeof(msg), &st2);
+      r = follow_job(id, reason, sizeof(reason), msg, sizeof(msg), &st2, &given2);
       if(r == 0 && tile_reason(reason)) {
         pthread_mutex_lock(&g_wlock);
         g_wait.on = 1;                                     /* refused again: still waiting, still busy */
@@ -579,7 +585,7 @@ watch_thread(void *arg) {
     ps5tm_library_forget();
     if(started && r == 0 && !tile_reason(reason) && ps5tm_unpack_fallback_wanted(w->op, st2, msg))
       unpack_ok = fallback_unpack(w, msg);                 /* the same way out as for the first try: it tells the person itself */
-    else if(started && r == 1) { unpack_ok = 1; ps5tm_notify("„%s“ ist %s.", w->name, what); }
+    else if(started && r == 1) { unpack_ok = given2 ? 1 : 2; ps5tm_notify("„%s“ ist %s.", w->name, what); }
     else if(started && r == 0) ps5tm_notify("„%s“ wurde nicht %s: %.120s", w->name, what, msg[0] ? msg : reason);
     else if(!started) ps5tm_notify("„%s“ wurde nicht %s: %.120s", w->name, what,
                                    err[0] ? err : "die Vollbild-App wurde nicht geschlossen");
@@ -590,7 +596,7 @@ watch_thread(void *arg) {
   if(!strcmp(w->op, "unpack")) {                           /* "Original danach" (origafter.c): the result lies in <destination>/<title id>; records only */
     char result[320];
     snprintf(result, sizeof(result), "%s/%s", w->dest, w->title_id);
-    ps5tm_orig_job_done("unpack", w->title_id, unpack_ok, result);
+    ps5tm_orig_job_done("unpack", w->title_id, unpack_ok, result, w->started_ms);
   }
   free(w);
   return NULL;
@@ -600,7 +606,7 @@ static void
 watch_spawn(const watch_t *req, double job_id) {
   watch_t *w = calloc(1, sizeof(*w));
   if(!w) {
-    if(!strcmp(req->op, "unpack")) ps5tm_orig_job_done("unpack", req->title_id, 0, NULL);     /* nobody follows the job: what was chosen for the original is dropped */
+    if(!strcmp(req->op, "unpack")) ps5tm_orig_job_done("unpack", req->title_id, 0, NULL, req->started_ms);     /* nobody follows the job: what was chosen for the original is dropped */
     return;
   }
   *w = *req;
@@ -623,7 +629,7 @@ watch_spawn(const watch_t *req, double job_id) {
     pthread_mutex_lock(&g_wlock);
     if(g_wait.gen == w->gen) g_wait.watching = 0;
     pthread_mutex_unlock(&g_wlock);
-    if(!strcmp(w->op, "unpack")) ps5tm_orig_job_done("unpack", w->title_id, 0, NULL);
+    if(!strcmp(w->op, "unpack")) ps5tm_orig_job_done("unpack", w->title_id, 0, NULL, w->started_ms);
     free(w);
   }
   pthread_attr_destroy(&attr);
@@ -732,7 +738,7 @@ gamemove_start_checked(const char *title_id, const char *op, const char *dest_di
     return 500;
   }
 
-  watch_t req = { .delete_source = delete_source };
+  watch_t req = { .delete_source = delete_source, .started_ms = ps5tm_mono_ms() };
   snprintf(req.title_id, sizeof(req.title_id), "%s", title_id);
   snprintf(req.op, sizeof(req.op), "%s", op);
   snprintf(req.dest, sizeof(req.dest), "%s", dest_dir);

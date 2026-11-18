@@ -29,6 +29,7 @@ static const job_t k_jobs[PS5TM_JOB_COUNT] = {
   [PS5TM_JOB_USBEJECT]    = { ps5tm_usbeject_busy,    "Ein Laufwerk wird gerade ausgeworfen", 0 },
   [PS5TM_JOB_GAMECONVERT] = { ps5tm_gameconvert_busy, "Es läuft eine Konvertierung", 0 },
   [PS5TM_JOB_GAMECOPY]    = { ps5tm_gamecopy_busy,    "Es läuft eine Kopie oder ein Dump", 0 },
+  [PS5TM_JOB_ORIGAFTER]   = { ps5tm_orig_busy,        "Das Original eines Spiels wird gerade gelöscht oder verschoben", 0 },
   [PS5TM_JOB_GAMEMOVE]    = { ps5tm_gamemove_busy,    "ShadowMountPlus verschiebt oder entpackt gerade ein Spiel für die App", 0 },
 };
 
