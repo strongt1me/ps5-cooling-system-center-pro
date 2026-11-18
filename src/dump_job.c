@@ -2208,7 +2208,7 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
     snprintf(err, en, "Das ist keine Titelkennung eines PS5- oder PS4-Spiels.");
     return 400;
   }
-  if(ps5tm_game_switching()) {                       /* the game is being closed: the mount that the dump would read goes with it */
+  if(ps5tm_game_switching() || ps5tm_procmgr_closing()) {   /* the game is being closed: the mount that the dump would read goes with it */
     snprintf(err, en, "Das Spiel wird gerade beendet oder gewechselt. Bitte warten, bis das vorbei ist, und dann den Dump starten.");
     return 409;
   }
@@ -2319,7 +2319,7 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
   }
   /* The same for the closing of the game: it may have begun while the checks above ran. The job is set now, so a close that begins after this
      sees it (ps5tm_dump_source_busy); one that began before is seen here, and the dump stands down. */
-  if(ps5tm_game_switching()) {
+  if(ps5tm_game_switching() || ps5tm_procmgr_closing()) {
     pthread_mutex_lock(&g_lock);
     memset(&g_job, 0, sizeof(g_job));
     pthread_mutex_unlock(&g_lock);

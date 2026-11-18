@@ -18,6 +18,7 @@ typedef struct {
   int      foreground;    /* the game owns the controller */
   int      home_scene;    /* the shell's last scene change went to the home screen */
   int      smp_up;        /* ShadowMountPlus answers (only then do the app's tiles start through it) */
+  int      is_game;       /* the title is a game the games page lists, not an app such as YouTube (17.11.2026: apps are never touched) */
 } ps5tm_bgpause_in_t;
 
 typedef struct {

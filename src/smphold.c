@@ -236,6 +236,11 @@ env_tile_notice(void) {
   ps5tm_notify_plain("Bitte einen Moment Geduld: Die App wird gleich gestartet.");
 }
 
+static void
+env_tile_giveup_notice(void) {
+  ps5tm_notify_plain("Die Kachel ließ sich nicht starten. Bitte noch einmal antippen.");
+}
+
 /* The lines of ShadowMountPlus's log (POST /api/v1/debug-log, read only) that speak of a start that was refused: "launch mount unavailable",
    "Device busy", the title. The last few, joined, for one line of the app's log, so that the reason of a refused start is in the app and
    not only on the screen of a diagnosis tool. */
@@ -302,6 +307,7 @@ env_default(void) {
   g_env.tile_up = env_tile_up;
   g_env.game_background = env_game_background;
   g_env.tile_notice = env_tile_notice;
+  g_env.tile_giveup_notice = env_tile_giveup_notice;
 }
 
 /* An id as ShadowMountPlus manages them: PPSA, CUSA, or a homebrew's FAKE and the like (nine letters and digits). */
@@ -723,6 +729,13 @@ tile_fast_window(void) {
   return now - g_bg_since < TR_FAST_WINDOW_MS;
 }
 
+/* The starts of a minute are used up (TR_WINDOW_STARTS): a further refusal is neither started again nor announced. */
+static int
+tile_window_full(uint64_t now) {
+  if(now - g_tr_window_ms >= TR_WINDOW_MS) return 0;           /* the window has run out: the count starts again */
+  return g_tr_window_starts >= TR_WINDOW_STARTS;
+}
+
 /* A refusal was read from the kernel log (here or by the check for held games): an own tile is started again soon. */
 static void
 tile_refused(const char *id) {
@@ -738,6 +751,11 @@ tile_refused(const char *id) {
       return;
     }
     delay = TR_ECHO_DELAY_MS;                     /* not up (yet): it may just be coming up after the dialog */
+  }
+  if(tile_window_full(now)) {                       /* it keeps being refused: nothing is promised that will not happen */
+    PS5TM_WARN("tile_retry_giveup", "Der Start der Kachel %s wurde mehrfach abgelehnt; die App versucht es nicht weiter.", id);
+    if(g_env.tile_giveup_notice) g_env.tile_giveup_notice();
+    return;
   }
   snprintf(g_tr.id, sizeof(g_tr.id), "%s", id);
   g_tr.tries = 0;
@@ -776,6 +794,7 @@ tile_step(int read_log) {
   if(now - g_tr_window_ms >= TR_WINDOW_MS) { g_tr_window_ms = now; g_tr_window_starts = 0; }
   if(g_tr_window_starts >= TR_WINDOW_STARTS) {                  /* it keeps being refused: left to the person */
     PS5TM_WARN("tile_retry_giveup", "Der Start der Kachel %s wurde mehrfach abgelehnt; die App versucht es nicht weiter.", g_tr.id);
+    if(g_env.tile_giveup_notice) g_env.tile_giveup_notice();
     g_tr.id[0] = 0;
     return;
   }
@@ -811,6 +830,7 @@ tile_step(int read_log) {
     g_tr.id[0] = 0;
   } else if(g_tr.tries >= TR_TRIES) {
     PS5TM_WARN("tile_retry_failed", "Die Kachel %s ließ sich auch nach %d Versuchen nicht starten (0x%08X).", g_tr.id, g_tr.tries, (unsigned)rc);
+    if(g_env.tile_giveup_notice) g_env.tile_giveup_notice();
     g_tr.id[0] = 0;
   } else {
     g_tr.at = now + TR_GAP_MS;

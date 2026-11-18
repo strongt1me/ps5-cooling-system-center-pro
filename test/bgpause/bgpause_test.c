@@ -30,7 +30,14 @@ void ps5tm_gamestate_get(ps5tm_gamestate_t *o) { *o = g_gs; }
 int ps5tm_gamestate_measured(void) { return g_measured; }
 uint64_t ps5tm_gamestate_age_ms(void) { return g_age; }
 static int g_smp = 1;
-int ps5tm_smp_available(char *v, size_t n) { (void)v; (void)n; return g_smp; }
+static int g_smp_calls;
+int ps5tm_smp_available(char *v, size_t n) { (void)v; (void)n; g_smp_calls++; return g_smp; }
+int ps5tm_smp_last_known_up(void) { return g_smp; }
+static int g_isgame = 1;
+static int g_lib_waits;                    /* questions that may wait for the list to be read */
+int ps5tm_library_is_game(const char *t) { (void)t; g_lib_waits++; return g_isgame; }
+int ps5tm_library_is_game_known(const char *t) { (void)t; return g_isgame; }
+void ps5tm_library_forget(void) {}
 unsigned char *ps5tm_blob_inflate(const unsigned char *z, unsigned long a, unsigned long b, size_t *n) { (void)z; (void)a; (void)b; (void)n; return NULL; }
 int ps5tm_loader_inject_mem(const unsigned char *d, unsigned long l, const char **why) { (void)d; (void)l; if(why) *why = NULL; return -1; }
 const unsigned char ps5tm_bgpause_helper[1] = {0};
@@ -41,7 +48,7 @@ static ps5tm_bgpause_in_t
 game(const char *title, unsigned app, int fg, int home) {
   ps5tm_bgpause_in_t in;
   memset(&in, 0, sizeof(in));
-  in.enabled = 1; in.measured = 1; in.smp_up = 1;
+  in.enabled = 1; in.measured = 1; in.smp_up = 1; in.is_game = 1;
   snprintf(in.title_id, sizeof(in.title_id), "%s", title);
   in.app_id = app; in.foreground = fg; in.home_scene = home;
   return in;
@@ -100,6 +107,13 @@ guard_tests(void) {
   in = game("", 0x8018, 0, 1);
   CHECK(ps5tm_bgpause_decide(&st, &in, 9000) == 0 && ps5tm_bgpause_decide(&st, &in, 10000) == 0);
 
+  /* never an app with a game-like id (a media app): the games page does not list it */
+  memset(&st, 0, sizeof(st));
+  in = game("PPSA01577", 0x8018, 0, 1); in.is_game = 0;
+  CHECK(ps5tm_bgpause_decide(&st, &in, 1000) == 0 && ps5tm_bgpause_decide(&st, &in, 2000) == 0);
+  in.is_game = 1;
+  CHECK(ps5tm_bgpause_decide(&st, &in, 3000) == 1);
+
   /* never the app's own tiles, nor another homebrew */
   const char *no[] = { "FAKE86921", "FAKE86922", "PPSA86921", "FAKE42007", "NPXS40002", "FAKE77031" };
   for(unsigned i = 0; i < sizeof(no) / sizeof(no[0]); i++) {
@@ -142,6 +156,59 @@ runtime_tests(void) {
   g_measured = 0;
   CHECK(ps5tm_bgpause_wants_fast() == 0);
   g_measured = 1;
+
+  /* the quick reading never asks ShadowMountPlus (it would be two requests every ten seconds for as long as a game runs) */
+  CHECK(g_smp_calls == 0);
+  g_smp = 0;
+  CHECK(ps5tm_bgpause_wants_fast() == 0);                      /* the last known answer: it does not answer */
+  g_smp = 1;
+  CHECK(g_smp_calls == 0);
+
+  /* an app (the games page does not list it): the list is read for the question while it is in front; then no quick reading for it, no pause */
+  ps5tm_bgpause_test_reset();                                  /* (a "yes" kept for the title from the lines above would stand) */
+  g_isgame = 0;
+  g_gs.game_app_id = 0xa018; g_gs.foreground = 1; g_gs.home_scene = 0;
+  g_now = 100000; ps5tm_bgpause_tick();
+  CHECK(ps5tm_bgpause_wants_fast() == 0);
+  /* a "no" from the list as it is may be an old list (a game just mounted): it keeps nobody from the quick reading and is not kept */
+  ps5tm_bgpause_test_reset();
+  g_isgame = 0;
+  g_gs.foreground = 0; g_gs.home_scene = 1;
+  g_now = 500; ps5tm_bgpause_tick();                           /* the first look after the start only notes it */
+  g_now = 600; ps5tm_bgpause_tick();
+  CHECK(ps5tm_bgpause_wants_fast() == 1);
+  g_isgame = 1;
+  ps5tm_bgpause_test_reset();
+  CHECK(ps5tm_bgpause_wants_fast() == 1);
+
+  /* the list is asked (and may be waited for) only while the game is in front, a minute apart at the most; at the home screen it is read as it is */
+  ps5tm_bgpause_test_reset();
+  g_lib_waits = 0;
+  g_gs.foreground = 1; g_gs.home_scene = 0;
+  g_now = 100000; ps5tm_bgpause_tick();
+  CHECK(g_lib_waits == 1);
+  g_now = 100500; ps5tm_bgpause_tick();
+  CHECK(g_lib_waits == 1);                                     /* a game is kept: no second question */
+  g_gs.foreground = 0; g_gs.home_scene = 1;
+  g_now = 101000; ps5tm_bgpause_tick();
+  CHECK(g_lib_waits == 1);                                     /* the home screen never waits */
+  g_isgame = 0;                                                /* "not a game" is kept for a minute only */
+  ps5tm_bgpause_test_reset();
+  g_lib_waits = 0;
+  g_gs.foreground = 1; g_gs.home_scene = 0;
+  g_now = 200000; ps5tm_bgpause_tick();
+  CHECK(g_lib_waits == 1);
+  g_now = 220000; ps5tm_bgpause_tick();
+  CHECK(g_lib_waits == 1);                                     /* the next question waits 30 s */
+  g_now = 270000; ps5tm_bgpause_tick();
+  CHECK(g_lib_waits == 1);                                     /* the list is read afresh once per title: not again and again for an app in front for hours */
+  snprintf(g_gs.title_id, sizeof(g_gs.title_id), "CUSA45556");  /* another title in front */
+  g_now = 340000; ps5tm_bgpause_tick();
+  CHECK(g_lib_waits == 2);
+  snprintf(g_gs.title_id, sizeof(g_gs.title_id), "CUSA45555");
+  g_isgame = 1;
+  ps5tm_bgpause_test_reset();
+  g_gs.foreground = 0; g_gs.home_scene = 1;
 
   /* the tick: the helper cannot be started on the host - the tick must go through without a crash */
   g_gs.game_app_id = 0xa018; g_gs.foreground = 0; g_gs.home_scene = 1;

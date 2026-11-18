@@ -132,6 +132,8 @@ static int g_bg;                        /* a game is in the background */
 static int t_game_bg(void) { return g_bg; }
 static int g_tile_notices;              /* "Bitte einen Moment Geduld ..." */
 static void t_tile_notice(void) { g_tile_notices++; }
+static int g_giveup_notices;            /* "Die Kachel liess sich nicht starten ..." */
+static void t_giveup_notice(void) { g_giveup_notices++; }
 static char g_up_tile[16];              /* the tile that is up by the other way (the console's browser with its page); "" none */
 static int t_tile_up(const char *id) { return g_up_tile[0] && !strcmp(g_up_tile, id); }
 int ps5tm_library_start(const char *id) { (void)id; return -1; }
@@ -144,11 +146,12 @@ static uint64_t t_boot(void) { return g_boot; }
 
 static void
 world(void) {
-  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot, t_start, NULL, t_home, t_tile_up, t_game_bg, t_tile_notice };
+  ps5tm_smphold_env_t e = { t_find, t_up, t_game, t_job, t_unmount, t_now, t_notice, t_failed, t_title_running, t_boot, t_start, NULL, t_home, t_tile_up, t_game_bg, t_tile_notice, t_giveup_notice };
   ps5tm_smphold_test_env(&e);
   g_up_tile[0] = 0;
   g_bg = 0;
   g_tile_notices = 0;
+  g_giveup_notices = 0;
   ps5tm_smphold_test_reset();
   ps5tm_smphold_tile_test_reset();
   g_start_calls = 0; g_start_rc = 0; g_start_id[0] = 0; g_home_calls = 0;
@@ -603,7 +606,9 @@ main(void) {
   g_now += 2100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 1);
   g_now += 4100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 2);
   g_now += 4100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 3);
+  CHECK(g_giveup_notices == 1);                                       /* the third try failed: the person is told to tap it again (audit 17.11.2026) */
   g_now += 4100; ps5tm_smphold_tile_tick(); CHECK(g_start_calls == 3);   /* no fourth */
+  CHECK(g_giveup_notices == 1);                                       /* and only once */
 
   /* the tile is up before the second is over: nothing is started */
   world(); g_game = 1;
@@ -626,6 +631,7 @@ main(void) {
     g_now += 1000;
   }
   CHECK(g_start_calls == 3);
+  CHECK(g_tile_notices == 3 && g_giveup_notices >= 1);                /* "gleich gestartet" only for the three that were started; the rest is told it is left */
 
   /* 17.11.2026: the tile the app started came up (behind the dialog), and the console writes a second refusal of it when the dialog is closed: no third start */
   world(); g_game = 1;

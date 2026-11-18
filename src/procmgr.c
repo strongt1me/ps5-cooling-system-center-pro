@@ -319,6 +319,19 @@ ps5tm_procmgr_game_title(uint32_t want_app_id, char *out, size_t out_len) {
  *
  * 0 when the game was running and is gone now, 1 when it was not running at
  * all, -1 when it is still there after `timeout_ms` or cannot be looked up. */
+static int g_closing;                       /* closes of a game under way: whoever closes it (the page, a switch of games, PS4Mount) is in here, not only the switch */
+
+/* 1 while some close_game below runs (audit 17.11.2026): a dump that starts now stands down, for every way a game is closed - dump_start only knew
+   the switch of games (ps5tm_game_switching), not PS4Mount's own closing. */
+int
+ps5tm_procmgr_closing(void) {
+  return __atomic_load_n(&g_closing, __ATOMIC_SEQ_CST) > 0;
+}
+
+#ifndef PS5TM_HOST_TEST
+static int close_game_body(const char *title_id, unsigned timeout_ms);
+#endif
+
 int
 ps5tm_procmgr_close_game(const char *title_id, unsigned timeout_ms) {
 #ifdef PS5TM_HOST_TEST
@@ -327,6 +340,18 @@ ps5tm_procmgr_close_game(const char *title_id, unsigned timeout_ms) {
   return -1;
 #else
   if(!is_game_title_id(title_id)) return -1;
+  /* Counted BEFORE the dump is looked at: a dump that sets its job after this sees the count, one that set it before is seen below (each looks at the
+     other's mark after setting its own). */
+  __atomic_add_fetch(&g_closing, 1, __ATOMIC_SEQ_CST);
+  int rc = close_game_body(title_id, timeout_ms);
+  __atomic_sub_fetch(&g_closing, 1, __ATOMIC_SEQ_CST);
+  return rc;
+#endif
+}
+
+#ifndef PS5TM_HOST_TEST
+static int
+close_game_body(const char *title_id, unsigned timeout_ms) {
   /* A dump reads the game's own mounts; they go with the game. The PS5 went down with a kernel panic when a game was closed in the middle of a dump
      (16.11.2026). Whoever asks - the page, a switch of games, PS4Mount - is refused while one runs. */
   if(ps5tm_dump_source_busy()) return -1;
@@ -368,8 +393,8 @@ ps5tm_procmgr_close_game(const char *title_id, unsigned timeout_ms) {
     if(ps5tm_mono_ms() - start >= timeout_ms) return -1;
     usleep(100 * 1000);
   }
-#endif
 }
+#endif
 
 
 /* Whether that title's eboot.bin is running: the lookup above, touching

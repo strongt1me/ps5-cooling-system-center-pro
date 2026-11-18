@@ -1494,17 +1494,27 @@ stream_risk_json(const char *source, int folder, uint64_t raw_bytes) {
 
 /* AMPR packs in a game (zstd: ampr_zstd.index, LZ4: ampr_assets.index; 17.11.2026). Kraken Mount refuses a package whose folder holds one of them
    ("a pkg made from an ampr-packed folder is refused", its cache.rs): the debug FPKG made from such a game would end as "Fehlgeschlagen" in its
-   list. So the plan says so before the format is chosen, the check and the start refuse with the same words. 0 none, 1 LZ4, 2 zstd. */
-typedef struct { const char *source; int folder; int packs; } packs_job_t;
+   list. So the plan says so before the format is chosen, the check and the start refuse with the same words. 0 none, 1 LZ4, 2 zstd, -1 the
+   source could not be looked into (a drive that hangs is not "no packs", audit 17.11.2026). */
+typedef struct { const char *source; int packs; } packs_job_t;
+
+static int
+packs_names_cb(const char *name, int is_dir, void *ctx) {
+  int *found = ctx;
+  if(is_dir) return 0;
+  if(!strcasecmp(name, "ampr_zstd.index")) *found = 2;
+  else if(!strcasecmp(name, "ampr_assets.index") && *found == 0) *found = 1;
+  return 0;
+}
 
 static void *
 packs_thread(void *arg) {
   packs_job_t *j = arg;
+  j->packs = -1;
   imgr_t *r = imgr_open(j->source, NULL, 0);
   if(r) {
-    uint8_t probe[1];
-    if(imgr_pread(r, "/ampr_zstd.index", 0, probe, 1) >= 0) j->packs = 2;
-    else if(imgr_pread(r, "/ampr_assets.index", 0, probe, 1) >= 0) j->packs = 1;
+    int found = 0;
+    if(imgr_list(r, "/", packs_names_cb, &found) == 0) j->packs = found;      /* the listing of the root: a failed read is not "no packs" */
     imgr_close(r);
   }
   return NULL;
@@ -1513,26 +1523,33 @@ packs_thread(void *arg) {
 static int
 source_packs(const char *source, int folder) {
   if(folder) {
-    char p[300];
-    struct stat st;
-    if(snprintf(p, sizeof(p), "%s/ampr_zstd.index", source) < (int)sizeof(p) && stat(p, &st) == 0) return 2;
-    if(snprintf(p, sizeof(p), "%s/ampr_assets.index", source) < (int)sizeof(p) && stat(p, &st) == 0) return 1;
+    static const struct { const char *name; int packs; } idx[] = { { "ampr_zstd.index", 2 }, { "ampr_assets.index", 1 } };
+    for(unsigned i = 0; i < sizeof(idx) / sizeof(idx[0]); i++) {
+      char p[300];
+      struct stat st;
+      if(snprintf(p, sizeof(p), "%s/%s", source, idx[i].name) >= (int)sizeof(p)) return -1;
+      if(stat(p, &st) == 0) return idx[i].packs;
+      if(errno != ENOENT) return -1;                   /* not "there is none": it could not be looked at */
+    }
     return 0;
   }
-  packs_job_t j = { source, 0, 0 };                    /* an image goes through imgread.c: on a thread of its own with a large stack, like the walk above */
+  packs_job_t j = { source, -1 };                      /* an image goes through imgread.c: on a thread of its own with a large stack, like the walk above */
   pthread_t th;
   pthread_attr_t at;
   pthread_attr_init(&at);
   pthread_attr_setstacksize(&at, 1u << 20);
-  if(pthread_create(&th, &at, packs_thread, &j) == 0) pthread_join(th, NULL);
+  int rc = pthread_create(&th, &at, packs_thread, &j);
+  if(rc == 0) pthread_join(th, NULL);
   pthread_attr_destroy(&at);
-  return j.packs;
+  return rc == 0 ? j.packs : -1;
 }
 
 /* The reason a game with packs cannot become a FPKG; "" for none. */
 static void
 fpkg_packs_why(int packs, char *out, size_t n) {
-  if(packs == 2)
+  if(packs < 0)
+    snprintf(out, n, "Ob das Spiel AMPR-Packs enthält, ließ sich nicht prüfen (die Quelle ist gerade nicht lesbar). Bitte später noch einmal versuchen.");
+  else if(packs == 2)
     snprintf(out, n, "Es ist mit AMPR-Packs (zstd) gepackt, und Kraken Mount nimmt kein Paket aus einem gepackten Ordner an. "
                      "Erst die Packs auflösen (Knopf „zstd entpacken“ bei den Asset-Packs des Spiels), dann konvertieren.");
   else if(packs == 1)

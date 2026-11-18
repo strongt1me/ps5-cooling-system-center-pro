@@ -19,6 +19,25 @@ ps5tm_krakenboot_should_start(int off, int alive, int no_answer_code) {
   return 1;
 }
 
+/* The console went down between the marker of a start with the app and now (audit 17.11.2026): the uptime only grows within a boot, so a smaller one is
+   another boot. The app starts at about the same time after every boot and writes the marker five seconds after that, so a start-up that crashed the console
+   finds a smaller uptime than the marker holds; a replaced app in the same boot finds a larger one. 0 for a marker that could not be read. */
+static inline int
+ps5tm_krakenboot_went_down(int marker_ok, unsigned long long written_uptime_s, unsigned long long now_uptime_s,
+                           long long written_boot_s, long long now_boot_s) {
+  if(!marker_ok) return 0;
+  if(now_uptime_s < written_uptime_s) return 1;                    /* the uptime fell: another boot */
+  /* The boot time of the system (seconds, 0 = not known) moves only a little within one boot (the clock being set: a jump of more than a minute while the marker
+   exists, at most a minute after a send, is unlikely); another boot is more than a minute later. Needed
+     because the app does not start at the same time after every boot (the jailbreak is run by hand), so the uptime alone is no safe sign. */
+  if(written_boot_s > 0 && now_boot_s > 0) {
+    long long d = now_boot_s - written_boot_s;
+    if(d < 0) d = -d;
+    if(d > 60) return 1;                                           /* the console that went down was up for a minute at least and was off for a while: the next boot is more than that later */
+  }
+  return 0;
+}
+
 /* A version without a leading "v". */
 static inline const char *
 ps5tm_krakenboot_plain(const char *v) {

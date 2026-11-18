@@ -12471,7 +12471,7 @@
     saveConfig({ ps_button_status: e.target.checked ? 1 : 0 },
                e.target.checked ? "Anzeige per Mikrofon-Taste eingeschaltet."
                                 : "Anzeige per Mikrofon-Taste ausgeschaltet.")
-      .catch((err) => toast(err.message, "error"));
+      .catch((err) => { e.target.checked = !e.target.checked; toast(err.message, "error"); });     /* der Schalter zeigt wieder, was die App wirklich hat */
   });
 
   /* 17.11.2026 (bgpause.c): the game that waits in the background is paused when the home screen is in front, so that a tap on a tile of the
@@ -12480,7 +12480,7 @@
     saveConfig({ bg_pause: e.target.checked ? 1 : 0 },
                e.target.checked ? "Spiel im Hintergrund pausieren eingeschaltet."
                                 : "Spiel im Hintergrund pausieren ausgeschaltet.")
-      .catch((err) => toast(err.message, "error"));
+      .catch((err) => { e.target.checked = !e.target.checked; toast(err.message, "error"); });
   });
 
   /* [field, config key, label]. The allowed range is the field's own min/max.

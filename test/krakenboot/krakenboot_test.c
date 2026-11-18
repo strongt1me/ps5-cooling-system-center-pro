@@ -37,6 +37,20 @@ main(void) {
   CHECK(ps5tm_krakenboot_restart_needed("0.2.0", NULL) == 0, "no next version");
   CHECK(!strcmp(ps5tm_krakenboot_plain("v1.2"), "1.2") && !strcmp(ps5tm_krakenboot_plain("1.2"), "1.2") && ps5tm_krakenboot_plain(NULL) == NULL, "plain");
 
+  /* the console went down between the marker and now (the uptime of the boot is smaller than the marker's) */
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 60, 0, 0) == 1, "a smaller uptime is another boot (the app starts a bit earlier in the next one)");
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 70, 0, 0) == 0, "a larger uptime is the same boot: the app was only replaced");
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 65, 0, 0) == 0, "the same second is the same boot");
+  CHECK(ps5tm_krakenboot_went_down(1, 4000, 70, 0, 0) == 1, "a console that ran for an hour and started again");
+  CHECK(ps5tm_krakenboot_went_down(0, 65, 10, 0, 0) == 0, "a marker that could not be read says nothing");
+  /* the app starts later after the next boot (the jailbreak is run by hand): the uptime alone would miss it, the boot time does not */
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 300, 1000000, 1000900) == 1, "another boot, the app starts later this time");
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 300, 1000000, 1000010) == 0, "the same boot: the boot time moved by ten seconds (the clock was set)");
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 300, 1000000, 1000045) == 0, "the same boot: the boot time moved by 45 seconds");
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 300, 1000000, 1000100) == 1, "another boot: more than a minute later");
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 300, 0, 1000900) == 0, "a marker without a boot time: the uptime says");
+  CHECK(ps5tm_krakenboot_went_down(1, 65, 300, 1000000, 0) == 0, "a boot time that cannot be read now: the uptime says");
+
   if(g_fail) { printf("%d failed\n", g_fail); return 1; }
   printf("krakenboot: all checks passed\n");
   return 0;

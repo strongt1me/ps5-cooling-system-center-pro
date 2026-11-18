@@ -1819,8 +1819,9 @@ des Antippens ohnehin, scheitert dabei aber einmal (`launchApp` meldet `checkExi
 läuft), und ShadowMountPlus gibt in dieser Zeit die Einhängung der Kachel frei, sodass der zweite Versuch der Konsole mit
 `status=16` abgelehnt wird. Ist das Spiel schon pausiert, entfällt der erste Fehlstart. Die App ruft die Konsole in einem
 eigenen kleinen Hilfsprogramm auf (`src/helper/bgpause_helper.c`: `sceLncUtilSuspendApp` für genau die Anwendungs-ID des
-Spiels, nur wenn der Dienst sie als die laufende große Anwendung meldet), nur für ein echtes Spiel (PPSA/CUSA, nie eine
-Kachel der App), nur wenn der Startbildschirm selbst vorn ist (die letzte Szenenänderung der Konsole ging zu
+Spiels, nur wenn der Dienst sie als die laufende große Anwendung meldet; kurz davor liest das Hilfsprogramm noch einmal das Kernel-Log
+und bricht ab, wenn der Startbildschirm nicht mehr vorn ist; es beendet sich nach 8 Sekunden von selbst), nur für ein echtes Spiel (PPSA/CUSA, nie eine
+Kachel der App und nie eine Medien-App wie YouTube: Die Liste der Spiele-Seite entscheidet, `ps5tm_library_is_game`), nur wenn der Startbildschirm selbst vorn ist (die letzte Szenenänderung der Konsole ging zu
 `Render.NPXS40002`, kein Overlay), nur einmal je Aufenthalt im Hintergrund und nur, solange ShadowMountPlus antwortet.
 Solange ein Spiel läuft, liest die App seinen Zustand zweimal pro Sekunde statt alle 4 Sekunden. Fortsetzen geht wie
 sonst. Gesehen am 17.11.2026: PS4-Spiel aus PS4Mount auf der .94 und FPKG-Spiel aus Kraken Mount auf der .52, jeweils

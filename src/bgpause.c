@@ -18,7 +18,8 @@
  * Rules (all of them keep the game safe, none is a guess):
  *  - only while the home screen itself is in front (the shell's last scene change went to Render.NPXS40002), never behind an overlay
  *    such as the control centre;
- *  - only a real game (PPSA, CUSA), never one of the app's own tiles or another homebrew (which may keep a service running);
+ *  - only a real game (PPSA, CUSA), never one of the app's own tiles or another homebrew (which may keep a service running), and only
+ *    a title the games page lists as a game: a media app (YouTube and the like) has a PPSA id too and is never touched (audit 17.11.2026);
  *  - only while ShadowMountPlus answers (without it the tiles do not start through it, nothing to avoid);
  *  - once per stay in the background: when the game is in front again, or another one is resident, the next one counts;
  *  - the setting "Spiel im Hintergrund pausieren" (bg_pause, default on) can switch it off.
@@ -44,7 +45,7 @@
 #define BGP_REQ PS5TM_DATA_DIR "/bgpause.req"
 #define BGP_RES PS5TM_DATA_DIR "/bgpause.res"
 
-#define BGP_ANSWER_WAIT_MS 8000u            /* the helper writes its answer within a second; after this it is called lost */
+#define BGP_ANSWER_WAIT_MS 10000u           /* the helper writes its answer within a second; after this it is called lost (it ends itself after 5 s, counted from its own start) */
 #define BGP_GAME_AGE_MS    2500u            /* a reading of the game state older than this says nothing about the home screen */
 
 extern const unsigned char ps5tm_bgpause_helper[];
@@ -60,7 +61,7 @@ ps5tm_bgpause_decide(ps5tm_bgpause_state_t *st, const ps5tm_bgpause_in_t *in, ui
   if(!in->measured || !in->title_id[0] || in->foreground) st->done_app = 0;
   if(game && st->done_app != 0 && st->done_app != in->app_id) st->done_app = 0;      /* another game */
 
-  const int candidate = in->enabled && game && !in->foreground && in->home_scene && in->smp_up;
+  const int candidate = in->enabled && game && !in->foreground && in->home_scene && in->smp_up && in->is_game;
   if(!candidate) { st->seen = 0; st->since_ms = 0; return 0; }
   if(st->done_app == in->app_id) return 0;                                           /* paused already in this stay */
 
@@ -81,6 +82,15 @@ static int g_first_look_done;                /* the first look after the start o
 static uint64_t g_started_ms;                /* when the last helper was started, 0 = none waiting for its answer */
 static char     g_started_title[16];
 static unsigned g_started_app;
+static unsigned g_again;                     /* "back in front" answers in this stay: the pause is tried again after the first three only (a log line of the shell that the helper and the app read differently must not make it a loop) */
+static unsigned g_lost_in_row;               /* helpers in a row that never answered (the console's service hangs): after BGP_LOST_MAX none is started */
+static char     g_ig_title[16];              /* the last title asked about, and the answer of the games page: 1 game, 0 app, -1 not known */
+static int      g_ig_val = -1;
+static uint64_t g_ig_ms;                     /* when the answer was kept: a "no" is kept for a minute only (a game just mounted is not in the list yet) */
+static uint64_t g_ig_try_ms;                 /* the last time the list was asked for while the game was in front */
+static char     g_ig_asked[16];              /* the title the list was read afresh for: once per title (an app in front for hours must not make the list be read again and again) */
+#define BGP_NO_KEEP_MS 60000u
+#define BGP_LOST_MAX 2u
 
 void
 ps5tm_bgpause_test_reset(void) {
@@ -89,6 +99,42 @@ ps5tm_bgpause_test_reset(void) {
   g_started_title[0] = 0;
   g_started_app = 0;
   g_first_look_done = 0;
+  g_lost_in_row = 0;
+  g_again = 0;
+  g_ig_title[0] = 0;
+  g_ig_val = -1;
+  g_ig_ms = 0;
+  g_ig_try_ms = 0;
+  g_ig_asked[0] = 0;
+}
+
+
+/* Is the title a game (1) or an app (0)? The games page's list answers. A "yes" is kept for the title; a "no" for a minute (a game that was just
+   mounted or installed is not in the list yet). may_wait: the question may wait for the list to be read (only while the game is in front - the
+   answer is wanted at the home screen, where nothing may wait); otherwise the list as it is. -1 while it is not known (nothing is paused then). */
+static int
+title_cached(const char *title_id, uint64_t now) {
+  if(!title_id || !title_id[0] || strcmp(g_ig_title, title_id) || g_ig_val < 0) return -1;
+  if(g_ig_val == 1 || now - g_ig_ms < BGP_NO_KEEP_MS) return g_ig_val;
+  return -1;
+}
+
+/* A "no" is kept only when the list was read for the question (may_wait): the list as it is can be old, and a game that was mounted after its last read is
+   in it only later - a "no" from it kept for a minute and asked again from the same old list would keep that game "an app" for good (audit 17.11.2026). */
+static int
+title_is_game(const char *title_id, int may_wait, uint64_t now) {
+  if(!title_id || !title_id[0]) return -1;
+  int c = title_cached(title_id, now);
+  if(c == 1) return 1;
+  /* A kept "no" is overruled by a "yes" from the list as it is (a page has read it again since: the game is in it now). */
+  if(c == 0) {
+    if(ps5tm_library_is_game_known(title_id) != 1) return 0;
+    snprintf(g_ig_title, sizeof(g_ig_title), "%s", title_id); g_ig_val = 1; g_ig_ms = now;
+    return 1;
+  }
+  int v = may_wait ? ps5tm_library_is_game(title_id) : ps5tm_library_is_game_known(title_id);
+  if(v == 1 || (v == 0 && may_wait)) { snprintf(g_ig_title, sizeof(g_ig_title), "%s", title_id); g_ig_val = v; g_ig_ms = now; }
+  return v;
 }
 
 
@@ -103,7 +149,10 @@ ps5tm_bgpause_wants_fast(void) {
   ps5tm_gamestate_t gs;
   ps5tm_gamestate_get(&gs);
   if(!gs.title_id[0] || !ps5tm_counts_as_game(gs.title_id)) return 0;
-  return ps5tm_smp_available(NULL, 0);          /* without ShadowMountPlus nothing is to be avoided: no quick reading */
+  if(title_cached(gs.title_id, ps5tm_mono_ms()) == 0) return 0;          /* an app (the list was read for the question): never touched, no quick reading for it */
+  /* The last answer only (audit 17.11.2026, F-180): asking would send ShadowMountPlus two requests every ten seconds for as long as a
+     game runs, and the probe thread waits for the answer. The real question comes in bgpause_tick, only at the home screen. */
+  return ps5tm_smp_last_known_up();             /* without ShadowMountPlus nothing is to be avoided: no quick reading */
 }
 
 
@@ -118,13 +167,22 @@ collect_answer(uint64_t now) {
     close(fd);
     if(n < 0) n = 0;
     line[n] = 0;
-    (void)unlink(BGP_RES);
+    /* Gone only after a read that got something: the helper creates the file and writes in two steps, and an empty read between the two
+       must not take the answer's place away (audit 17.11.2026). */
+    if(n > 0) (void)unlink(BGP_RES);
   }
   if(line[0]) {
     size_t n = strlen(line);
     while(n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
     if(!strncmp(line, "schon-pausiert ", 15))
       PS5TM_INFO("bg_pause_skip", "Das Spiel %s war schon pausiert (Anwendung 0x%x): Es war nichts zu tun. Antwort: %s", g_started_title, g_started_app, line);
+    else if(!strncmp(line, "wieder-vorne ", 13) || !strncmp(line, "anderes-spiel ", 14)) {
+      PS5TM_INFO("bg_pause_skip", "Das Spiel %s wurde nicht pausiert (Anwendung 0x%x): Es war schon wieder vorn oder ein anderes Spiel lief. Das ist so gewollt. Antwort: %s",
+                 g_started_title, g_started_app, line);
+      /* The home screen was not in front any more at the last moment (a menu over it, or the person went straight back): the stay in the background is not
+         over - the next look at the home screen decides again. */
+      if(!strncmp(line, "wieder-vorne ", 13) && ++g_again <= 3) g_state.done_app = 0;
+    }
     else if(!strncmp(line, "pausiert ", 9))
       PS5TM_INFO("bg_pause", "Das Spiel %s wurde im Hintergrund pausiert (Anwendung 0x%x), damit die Kachel der App ohne Fehlstart startet. Antwort: %s",
                  g_started_title, g_started_app, line);
@@ -132,10 +190,15 @@ collect_answer(uint64_t now) {
       PS5TM_WARN("bg_pause_failed", "Das Spiel %s wurde nicht pausiert (Anwendung 0x%x). Antwort des Hilfsprogramms: %s",
                  g_started_title, g_started_app, line);
     g_started_ms = 0;
+    g_lost_in_row = 0;
   } else if(now - g_started_ms > BGP_ANSWER_WAIT_MS) {
     PS5TM_WARN("bg_pause_failed", "Das Spiel %s wurde nicht pausiert (Anwendung 0x%x): Das Hilfsprogramm hat nicht geantwortet.",
                g_started_title, g_started_app);
     g_started_ms = 0;
+    /* A service that hangs hangs the helper too (it ends itself after seconds, but it never answered): after two in a row nothing more is
+       started in this run of the app, and the person is told. */
+    if(++g_lost_in_row == BGP_LOST_MAX)
+      PS5TM_WARN("bg_pause_off", "Das Hilfsprogramm hat zweimal nicht geantwortet: Das Pausieren im Hintergrund ruht, bis die App neu startet.");
   }
 }
 
@@ -150,14 +213,25 @@ start_helper(unsigned app_id) {
   char req[40];
   int n = snprintf(req, sizeof(req), "0x%x\n", app_id);
   int fd = open(BGP_REQ, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  if(fd < 0) return -1;
+  if(fd < 0) {
+    PS5TM_WARN("bg_pause_failed", "Das Spiel konnte nicht pausiert werden: Die Anfrage an das Hilfsprogramm ließ sich nicht schreiben (%s).", strerror(errno));
+    return -1;
+  }
   ssize_t w = write(fd, req, (size_t)n);
   close(fd);
-  if(w != n) { (void)unlink(BGP_REQ); return -1; }
+  if(w != n) {
+    PS5TM_WARN("bg_pause_failed", "Das Spiel konnte nicht pausiert werden: Die Anfrage an das Hilfsprogramm wurde nicht ganz geschrieben (%s).", strerror(errno));
+    (void)unlink(BGP_REQ);
+    return -1;
+  }
   (void)unlink(BGP_RES);
   size_t len = 0;
   unsigned char *elf = ps5tm_blob_inflate(ps5tm_bgpause_helper, ps5tm_bgpause_helper_len, ps5tm_bgpause_helper_raw_len, &len);
-  if(!elf) { (void)unlink(BGP_REQ); return -1; }
+  if(!elf) {
+    PS5TM_WARN("bg_pause_failed", "Das Spiel konnte nicht pausiert werden: Das Hilfsprogramm ließ sich nicht entpacken.");
+    (void)unlink(BGP_REQ);
+    return -1;
+  }
   const char *why = NULL;
   int rc = ps5tm_loader_inject_mem(elf, len, &why);
   free(elf);
@@ -194,6 +268,18 @@ ps5tm_bgpause_tick(void) {
   }
   /* Only asked when the rest already says "pause" (the answer comes from a service that may be slow). */
   in.smp_up = (in.enabled && in.title_id[0] && !in.foreground && in.home_scene) ? ps5tm_smp_available(NULL, 0) : 0;
+  /* The answer of the games page for the title of the game that is in front (a minute apart at the most, and only while the pause is on and the title could
+     be a game at all: an app in front for hours does not make the list be read again and again): it is wanted at the home screen, where the
+     list is only read as it is - a wait for its read would hold the probe thread right when a tile is tapped. */
+  if(in.measured && in.foreground) g_again = 0;                         /* a new stay in the background starts when the game has been in front */
+  if(in.enabled && in.measured && in.title_id[0] && in.foreground && ps5tm_counts_as_game(in.title_id) && now - g_ig_try_ms >= 60000u &&
+     strcmp(g_ig_asked, in.title_id) != 0) {
+    g_ig_try_ms = now;
+    /* The list is read afresh for this question, once per title (a game that was mounted after the last read would be a "no" from an old list; a "yes" or a
+       "no" from a fresh read stands - a later "yes" of the list as it is overrules a "no"). */
+    ps5tm_library_forget();
+    if(title_is_game(in.title_id, 1, now) >= 0) snprintf(g_ig_asked, sizeof(g_ig_asked), "%s", in.title_id);
+  }
 
   /* The game's application id as the kernel names it for the game's process (procmgr.c, sceKernelGetAppInfo): the id the service calls
      use. The helper checks it against the service's own answer before it pauses anything. */
@@ -205,9 +291,15 @@ ps5tm_bgpause_tick(void) {
     g_first_look_done = 1;
     if(in.title_id[0] && !in.foreground && in.home_scene && app_id) { g_state.done_app = app_id; return; }
   }
+  if(g_lost_in_row >= BGP_LOST_MAX) return;                                          /* the service hangs: no more helpers in this run */
+  /* A game, not an app such as YouTube (17.11.2026): looked at only when everything else says "pause" (after the first look above). */
+  in.is_game = in.smp_up ? title_is_game(in.title_id, 0, now) == 1 : 0;
   if(!ps5tm_bgpause_decide(&g_state, &in, now)) return;
 
-  if(g_started_ms != 0 && now - g_started_ms < BGP_ANSWER_WAIT_MS) return;           /* one helper at a time */
+  if(g_started_ms != 0 && now - g_started_ms < BGP_ANSWER_WAIT_MS) {                 /* one helper at a time: the next look tries again */
+    g_state.done_app = 0;
+    return;
+  }
   snprintf(g_started_title, sizeof(g_started_title), "%s", in.title_id);
   g_started_app = app_id;
   if(start_helper(app_id) == 0) g_started_ms = now;

@@ -45,6 +45,9 @@ typedef struct {
   int      (*game_background)(void);
   /* A tile of the app was refused and the app starts it again in a moment: the person is told so ("Bitte einen Moment Geduld ..."). NULL: nothing is said. */
   void     (*tile_notice)(void);
+  /* The app gives up on a tile that was refused (the limit of starts in a minute, or the tries are used up): the person is told to tap it again
+     (audit 17.11.2026: "Die App wird gleich gestartet" was said and nothing followed). NULL: nothing is said. */
+  void     (*tile_giveup_notice)(void);
 } ps5tm_smphold_env_t;
 
 /* Called for every /games/mount (mounted 1) and /games/unmount (0) the app sends (smp.c, ps5tm_smp_call). */

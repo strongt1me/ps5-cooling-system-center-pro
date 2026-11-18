@@ -1419,6 +1419,14 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                        "das Spiel am "
                        "neuen Ort ein und löscht es am alten erst, wenn alles angekommen ist."),
              kMuted, 5);
+        // A compressed image has no conversion of its own: the browser's "1. Was soll entstehen?"
+        // says why ffpkg, exFAT and FPKG are not offered; the same sentence here (audit 17.11.2026,
+        // browser and full-screen app can do the same)
+        if (tool_ == Tool::unpack && !game_.can_convert)
+            para("Aus diesem Abbild nicht möglich: erst entpacken, dann den Ordner mit "
+                 "„Konvertieren“ "
+                 "umwandeln.",
+                 kWarning, 3);
         if (!target.empty())
         {
             heading("Ziel", kMuted);

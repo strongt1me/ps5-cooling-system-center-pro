@@ -1515,6 +1515,19 @@ ps5tm_library_is_game(const char *title_id) {
   return rc;
 }
 
+/* The same from the list as it is now, never waiting for a read of it (the probe thread asks while it must not stand still; audit 17.11.2026):
+   -1 when the list has not been read yet. */
+int
+ps5tm_library_is_game_known(const char *title_id) {
+  if(!title_id) return -1;
+  pthread_mutex_lock(&g_lock);
+  int rc = g_state == 1 ? 0 : -1;
+  for(int i = 0; rc == 0 && i < g_count; i++)
+    if(!strcmp(g_games[i].title_id, title_id)) rc = 1;
+  pthread_mutex_unlock(&g_lock);
+  return rc;
+}
+
 /* Is a content id (a DLC's, for one) listed in the app database? 1, 0, or -1 when the database cannot be read. */
 typedef struct { const char *cid; int found, c_cid; } cinfo_ctx_t;
 
@@ -2371,6 +2384,24 @@ probe_fakelib_cb(const char *name, int is_dir, void *ctx) {
   return 0;
 }
 
+/* The two files that say "this game lies in AMPR packs", found in the root of the image (17.11.2026). Looked for in the listing of the root, not by reading
+   them: a read that fails (a drive that hangs) and a file that is not there both answer -1 from imgr_pread, and "no packs" saved for the image from a failed
+   read would stay until the image changes. A listing that fails is a failed read: nothing is saved. */
+typedef struct { int lz4, zstd, fakelib, fakelib2; } packs_scan_t;
+
+static int
+packs_cb(const char *name, int is_dir, void *ctx) {
+  packs_scan_t *x = ctx;
+  if(is_dir) {
+    if(!strcasecmp(name, "fakelib")) x->fakelib = 1;               /* the folder is found without regard to case, as imgr_list(r, "/fakelib") finds it */
+    else if(!strcasecmp(name, "fakelib2")) x->fakelib2 = 1;
+    return 0;
+  }
+  if(!strcasecmp(name, "ampr_zstd.index")) x->zstd = 1;
+  else if(!strcasecmp(name, "ampr_assets.index")) x->lz4 = 1;
+  return 0;
+}
+
 static int
 probe_read_image_file(const char *tid, const char *image_path, int64_t img_size, int64_t img_mtime) {
   char err[160];
@@ -2379,14 +2410,19 @@ probe_read_image_file(const char *tid, const char *image_path, int64_t img_size,
   lib_mods_t m;
   memset(&m, 0, sizeof(m));
   m.state = MODS_CHECKED;
-  if(imgr_list(r, "/fakelib2", probe_fakelib_cb, &m) == 0) m.fakelib2 = 1;     /* fakelib2 replaces fakelib */
-  else imgr_list(r, "/fakelib", probe_fakelib_cb, &m);                         /* no fakelib folder: nothing in it */
-  m.eboot_sdk = eboot_sdk_rd(rd_img_eboot, r);
-  {                                                                            /* AMPR packs (17.11.2026): the same reading amprlib.c makes */
-    uint8_t probe[1];
-    m.lz4  = imgr_pread(r, "/ampr_assets.index", 0, probe, 1) >= 0;
-    m.zstd = imgr_pread(r, "/ampr_zstd.index", 0, probe, 1) >= 0;
+  /* The root first (17.11.2026): what is in it says what is there to read, so that a folder that is there and cannot be read is a failed read and not "no
+     fakelib", and the same for the AMPR packs. A root that cannot be listed: nothing is saved, the image is read again later. */
+  packs_scan_t ps = { 0, 0, 0, 0 };
+  if(imgr_list(r, "/", packs_cb, &ps) != 0) { imgr_close(r); return -1; }
+  m.lz4 = ps.lz4;
+  m.zstd = ps.zstd;
+  if(ps.fakelib2) {                                                            /* fakelib2 replaces fakelib */
+    if(imgr_list(r, "/fakelib2", probe_fakelib_cb, &m) != 0) { imgr_close(r); return -1; }
+    m.fakelib2 = 1;
+  } else if(ps.fakelib) {
+    if(imgr_list(r, "/fakelib", probe_fakelib_cb, &m) != 0) { imgr_close(r); return -1; }
   }
+  m.eboot_sdk = eboot_sdk_rd(rd_img_eboot, r);
   imgr_close(r);
   pthread_mutex_lock(&g_refresh_lock);
   mods_cache_t *c = NULL;

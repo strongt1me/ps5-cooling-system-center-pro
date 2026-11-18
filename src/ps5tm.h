@@ -719,6 +719,7 @@ typedef struct {
 int           ps5tm_library_update_titles(ps5tm_libupd_t *out, int max);
 /* 1 when the games page lists the title, 0 for apps and homebrew tiles (YouTube...), -1 when the list is unknown. */
 int           ps5tm_library_is_game(const char *title_id);
+int           ps5tm_library_is_game_known(const char *title_id);   /* the same without waiting for a read of the list: -1 when it is not read yet */
 /* Is a content id (a DLC's, for one) listed in the app database? 1, 0, or -1 when it cannot be read. */
 int           ps5tm_library_content_listed(const char *content_id);
 int           ps5tm_library_cover(const char *title_id, char *path,
@@ -956,9 +957,10 @@ struct cJSON *ps5tm_imgjob_plan(const char *title_id, char *err, size_t err_len)
 int           ps5tm_imgjob_start(const char *kind, const char *title_id, const char *mount, char *err, size_t err_len);
 /* The same for "unpack" into the folder `dest` itself (its parent must exist), not <drive>/homebrew/<name>: gamemove.c's way out when
    ShadowMountPlus's unpack ends with "Permission denied". */
-int           ps5tm_imgjob_unpack_to(const char *title_id, const char *dest, char *err, size_t err_len);
+int           ps5tm_imgjob_unpack_to(const char *title_id, const char *dest, uint64_t *token, char *err, size_t err_len);   /* token: the job's start time, to follow and cancel exactly it */
 struct cJSON *ps5tm_imgjob_status(void);
 int           ps5tm_imgjob_cancel(void);
+int           ps5tm_imgjob_cancel_token(uint64_t token);   /* only the job that started at that time */
 int           ps5tm_imgjob_busy(void);
 /* LZ4 asset packs of a game (imgjob_lz4.inc, lz4pack.c): the state and the estimate for the window, and the jobs
    "pack" / "copy" (into <name>-lz4) / "verify" / "unpack" in the slot of the image jobs (ps5tm_imgjob_status follows them). */
@@ -1018,6 +1020,7 @@ typedef struct {
 int           ps5tm_smp_find(const char *title_id, ps5tm_smp_game_t *out);
 /* 1 when it answers; its version into version. */
 int           ps5tm_smp_available(char *version, size_t version_len);
+int           ps5tm_smp_last_known_up(void);   /* the last answer, no new ask (bgpause.c) */
 /* 1 when it answers and lists this capability ("move_game_source", ...). */
 int           ps5tm_smp_can(const char *capability);
 /* Drops the cached list, after a job has moved something. */
@@ -1381,6 +1384,7 @@ int      ps5tm_procmgr_game_info(uint32_t want_app_id, char *out, size_t out_len
 /* SIGKILLs the eboot.bin of that game title until it is gone (procmgr.c).
    0 closed, 1 was not running, -1 still running after timeout_ms or unknown. */
 int      ps5tm_procmgr_close_game(const char *title_id, unsigned timeout_ms);
+int      ps5tm_procmgr_closing(void);   /* 1 while a close_game runs, whoever asked for it (dump_job.c) */
 /* Whether that game title's eboot.bin is running: 1 yes, 0 no, -1 unknown. */
 int      ps5tm_procmgr_title_running(const char *title_id);
 /* 1 and the id in out when one of the app's own tiles (titleid.h) is running now. */

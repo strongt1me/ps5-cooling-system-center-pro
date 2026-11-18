@@ -1131,7 +1131,7 @@ other_job(char *err, size_t n) {
 }
 
 static int
-imgjob_start_impl(const char *kind, const char *id, const char *mount, const char *force_dest, char *err, size_t n) {
+imgjob_start_impl(const char *kind, const char *id, const char *mount, const char *force_dest, uint64_t *token_out, char *err, size_t n) {
   int is_check = kind && !strcmp(kind, "check"), is_unpack = kind && !strcmp(kind, "unpack"), is_repair = kind && !strcmp(kind, "repair");
   if(!is_check && !is_unpack && !is_repair) { snprintf(err, n, "Unbekannter Vorgang."); return 400; }
   ps5tm_libdel_t li;
@@ -1176,6 +1176,7 @@ imgjob_start_impl(const char *kind, const char *id, const char *mount, const cha
   snprintf(g_job.format, sizeof(g_job.format), "%s", kind_name);
   snprintf(g_job.phase, sizeof(g_job.phase), "Wird vorbereitet");
   g_job.started_ms = ps5tm_mono_ms();
+  if(token_out) *token_out = g_job.started_ms;                    /* the job's name for whoever follows it (gamemove.c), taken under the lock that made it */
   snprintf(g_force_dest, sizeof(g_force_dest), "%s", force_dest ? force_dest : "");
   __atomic_store_n(&g_cancel, 0, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
@@ -1209,15 +1210,15 @@ imgjob_start_impl(const char *kind, const char *id, const char *mount, const cha
 
 int
 ps5tm_imgjob_start(const char *kind, const char *id, const char *mount, char *err, size_t n) {
-  return imgjob_start_impl(kind, id, mount, NULL, err, n);
+  return imgjob_start_impl(kind, id, mount, NULL, NULL, err, n);
 }
 
 /* Unpacks the image of a game into the folder `dest` itself (a path whose parent exists): for the case that ShadowMountPlus's own unpack
    was refused with "Permission denied" (gamemove.c), where the same folder is made with the permissions this app gives every game folder (0777). */
 int
-ps5tm_imgjob_unpack_to(const char *id, const char *dest, char *err, size_t n) {
+ps5tm_imgjob_unpack_to(const char *id, const char *dest, uint64_t *token, char *err, size_t n) {
   if(!dest) { snprintf(err, n, "Der Zielordner ist ungültig."); return 400; }
-  return imgjob_start_impl("unpack", id, "", dest, err, n);
+  return imgjob_start_impl("unpack", id, "", dest, token, err, n);
 }
 
 cJSON *
@@ -1245,6 +1246,7 @@ ps5tm_imgjob_status(void) {
   cJSON_AddNumberToObject(o, "bad_files", g_job.bad_files);
   cJSON_AddNumberToObject(o, "bad_dirs", g_job.bad_dirs);
   cJSON_AddNumberToObject(o, "bytes_files", (double)g_job.bytes_files);
+  cJSON_AddNumberToObject(o, "started_ms", (double)g_job.started_ms);        /* tells this job from the one before and after it (gamemove.c follows its own by it) */
   cJSON_AddBoolToObject(o, "clean", g_job.clean);
   cJSON_AddNumberToObject(o, "fixed_from", (double)g_job.fixed_from);
   cJSON_AddNumberToObject(o, "fixed_to", (double)g_job.fixed_to);
@@ -1277,6 +1279,16 @@ ps5tm_imgjob_status(void) {
   }
   pthread_mutex_unlock(&g_lock);
   return o;
+}
+
+/* The same for the job that started at `token` (its started_ms): a job that began after it is not touched. 1 when it was cancelled. */
+int
+ps5tm_imgjob_cancel_token(uint64_t token) {
+  pthread_mutex_lock(&g_lock);
+  int act = active_locked() && g_job.started_ms == token;
+  if(act) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
+  pthread_mutex_unlock(&g_lock);
+  return act ? 1 : 0;
 }
 
 int

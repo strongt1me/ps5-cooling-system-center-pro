@@ -326,6 +326,8 @@ read_title_sfo(const char *path, char *name, size_t name_len,
 }
 
 
+static void resolve_title_meta_read(const char *title_id, char *name, size_t name_len, char *ver, size_t ver_len);
+
 /* Looks the title up wherever its metadata may live.
  *
  * The system's own appmeta directory comes first: it covers every installed
@@ -335,6 +337,29 @@ read_title_sfo(const char *path, char *name, size_t name_len,
 static void
 resolve_title_meta(const char *title_id, char *name, size_t name_len,
                    char *ver, size_t ver_len) {
+  /* One title at a time is asked about, and in the quick mode of the background pause (twice a second) it is the same one again and again:
+     the answer is kept for a minute (audit 17.11.2026: a fopen and a cJSON_Parse of param.json 14 400 times in two hours of play).
+     Only the probe thread calls this, so the cache needs no lock. */
+  static char     c_title[16], c_name[128], c_ver[40];
+  static uint64_t c_ms;
+  const uint64_t now = ps5tm_mono_ms();
+  if(c_title[0] && !strcmp(c_title, title_id) && c_name[0] && now - c_ms < 60000u) {
+    snprintf(name, name_len, "%s", c_name);
+    snprintf(ver, ver_len, "%s", c_ver);
+    return;
+  }
+  resolve_title_meta_read(title_id, name, name_len, ver, ver_len);
+  if(name[0]) {
+    snprintf(c_title, sizeof(c_title), "%s", title_id);
+    snprintf(c_name, sizeof(c_name), "%s", name);
+    snprintf(c_ver, sizeof(c_ver), "%s", ver);
+    c_ms = now;
+  }
+}
+
+static void
+resolve_title_meta_read(const char *title_id, char *name, size_t name_len,
+                        char *ver, size_t ver_len) {
   const char *patterns[] = {
     "/system_data/priv/appmeta/%s/param.json",
     "/user/app/%s/sce_sys/param.json",

@@ -23,7 +23,9 @@
 #include <strings.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "krakenboot.h"
@@ -42,6 +44,7 @@
 #define KR_VER               KR_DIR "/version.txt"
 #define KR_BAD               KR_DIR "/bad.txt"        /* a downloaded version that did not answer after its start: not used again */
 #define KR_OFF               KR_DIR "/aus.txt"        /* the person switched Kraken Mount off in the page: the app does not start it with itself */
+#define KR_PENDING           KR_DIR "/start-pending.txt"  /* written right before the app sends Kraken Mount with itself ("<version> <uptime of the console in seconds>"), gone when it has answered or the app has lived on for a minute */
 #define KR_BOOT_DELAY_SEC    5                        /* the app starts Kraken Mount this long after its own start (krakenboot.h) */
 #define KR_ELF_MAX           (16u * 1024 * 1024)
 
@@ -54,6 +57,9 @@ static int             g_busy;                        /* a download runs */
 static uint64_t        g_started_ms;                  /* the last start: a second one within 15 s is not sent */
 static int             g_boot_pending;                /* the app has not yet had its first look at Kraken Mount (the start with the app): the page says "starts" */
 static uint64_t        g_quit_ms;                     /* the last "quit" it accepted: it answers for a few more seconds, the page says "stopping" (17.11.2026) */
+static int             g_boot_sending;                /* the start with the app is at the loader just now: a "stop" in these seconds cannot take it back (audit 17.11.2026) */
+static uint64_t        g_boot_sent_ms;                /* when the start with the app was handed to the loader (0 = none): Kraken Mount may not be listening yet for a few seconds */
+static int             g_pending_active;              /* KR_PENDING was written and has not been taken back yet */
 #define KR_QUIT_WINDOW_MS    20000u                   /* so long after the quit an answer still counts as "on the way out" */
 
 /* ------------------------------------------------------------------ loopback client */
@@ -83,6 +89,76 @@ kr_set_off(int off) {
     else PS5TM_WARN("kraken_off_marker", "Das Ausschalten von Kraken Mount ließ sich nicht merken (%s): %s", KR_OFF, strerror(errno));
   } else {
     unlink(KR_OFF);
+  }
+}
+
+/* Seconds since the console started (the monotonic clock counts from the boot; it does not move when the clock is set, as the boot time of the system does). */
+static unsigned long long
+kr_uptime_s(void) {
+  return (unsigned long long)(ps5tm_mono_ms() / 1000u);
+}
+
+/* The boot time of the system (kern.boottime, seconds since 1970); 0 when it cannot be read. */
+static long long
+kr_boot_time_s(void) {
+  struct timeval bt;
+  size_t sz = sizeof(bt);
+  if(sysctlbyname("kern.boottime", &bt, &sz, NULL, 0) != 0) return 0;
+  return (long long)bt.tv_sec;
+}
+
+/* Protection against a start loop (audit 17.11.2026): a Kraken Mount that takes the console down would be sent again at every start of the app, 5 seconds
+   after it. Right before the app sends it with itself, the version and the uptime of the console go into KR_PENDING; it is removed when Kraken Mount has
+   answered, or when the app has lived on for a minute (a console that went down does not do that). Found at the next start of the app with a SMALLER uptime
+   than the one written, the console went down in between (the app starts at about the same time after every boot, a minute or so, and the marker is written
+   five seconds after that): a downloaded version then goes to bad.txt (the embedded one takes its place), the embedded one switches the start with the app off -
+   the person can switch it on again in the page. */
+static void
+pending_write(const char *version) {
+  make_dir(KR_DIR);
+  FILE *f = fopen(KR_PENDING ".tmp", "w");
+  int ok = f && fprintf(f, "%s %llu %lld\n", version, kr_uptime_s(), kr_boot_time_s()) > 0;
+  /* On the disk before the send: the marker is for the case that the console goes down seconds later, and a file that is only in the cache would be gone. */
+  if(f && (fflush(f) != 0 || fsync(fileno(f)) != 0)) ok = 0;
+  if(f && fclose(f) != 0) ok = 0;
+  if(ok && rename(KR_PENDING ".tmp", KR_PENDING) == 0) {
+    __atomic_store_n(&g_pending_active, 1, __ATOMIC_RELAXED);
+  } else {
+    PS5TM_WARN("kraken_pending", "Die Markierung für den Start von Kraken Mount mit der App ließ sich nicht schreiben (%s): Der Start läuft ohne den Schutz vor einer Startschleife.", strerror(errno));
+    unlink(KR_PENDING ".tmp");
+  }
+}
+
+static void
+pending_clear(void) {
+  if(__atomic_exchange_n(&g_pending_active, 0, __ATOMIC_RELAXED)) unlink(KR_PENDING);
+}
+
+static void
+pending_check(void) {
+  FILE *f = fopen(KR_PENDING, "r");
+  if(!f) return;
+  char ver[48] = "";
+  unsigned long long bid = 0;
+  long long btime = 0;
+  int got = fscanf(f, "%47s %llu %lld", ver, &bid, &btime);         /* a marker of an earlier build has no boot time: then the uptime alone says */
+  fclose(f);
+  unlink(KR_PENDING);
+  if(!ps5tm_krakenboot_went_down(got >= 2, bid, kr_uptime_s(), got >= 3 ? btime : 0, kr_boot_time_s())) return;   /* the same boot: the app was only replaced, nothing happened to the console */
+  if(strcmp(ver, KR_EMBEDDED_VERSION) != 0) {
+    FILE *bf = fopen(KR_BAD ".tmp", "w");
+    int wrote = bf && fprintf(bf, "%s\n", ver) >= 0;
+    if(bf && fclose(bf) != 0) wrote = 0;
+    if(wrote && rename(KR_BAD ".tmp", KR_BAD) == 0) {
+      PS5TM_WARN("kraken_start_lost", "Die Konsole ging aus, kurz nachdem die App Kraken Mount %s mit sich gestartet hatte: Diese Fassung wird nicht mehr genommen, die eingebettete startet statt ihrer.", ver);
+    } else {
+      PS5TM_WARN("kraken_start_lost", "Die Konsole ging aus, kurz nachdem die App Kraken Mount %s mit sich gestartet hatte, und die Fassung ließ sich nicht als unbrauchbar merken (%s).", ver, strerror(errno));
+      unlink(KR_BAD ".tmp");
+    }
+  } else {
+    kr_set_off(1);
+    if(kr_is_off())
+      PS5TM_WARN("kraken_start_lost", "Die Konsole ging aus, kurz nachdem die App Kraken Mount %s mit sich gestartet hatte: Die App startet es nicht mehr von selbst (Seite FPKGMount, „Einschalten“ schaltet es wieder ein).", ver);
   }
 }
 
@@ -224,6 +300,7 @@ ps5tm_kraken_state(void) {
   free(body);
   if(cJSON_IsObject(k)) {
     store_games(k, ps5tm_mono_ms());                     /* the games of this very answer: the conflict list below and the library need no second ask */
+    pending_clear();                                     /* it answers: the start with the app went through */
     cJSON_AddBoolToObject(o, "running", 1);
     /* a Kraken Mount that runs on from before an update is the old version until it is switched off and on again (the app never stops it by itself: a game may
        run from it): the page says so */
@@ -248,7 +325,7 @@ ps5tm_kraken_state(void) {
     cJSON_AddBoolToObject(o, "running", 0);
     cJSON_AddBoolToObject(o, "stopping", 0);
     pthread_mutex_lock(&g_lock);
-    g_quit_ms = 0;                                         /* gone: nothing to wait for any more */
+    if(st == -1) g_quit_ms = 0;                            /* gone (nothing listens): nothing to wait for any more. A late answer is no reason: it is busy on its way out (audit 17.11.2026) */
     /* "starting" also while the app waits to start it itself (the first seconds after the app's start): the page used to say "off" with a button to start it
        until Kraken Mount was sent, which looked as if it were not on by default (17.11.2026) */
     int starting = (g_started_ms && ps5tm_mono_ms() - g_started_ms < 20000) || g_boot_pending;
@@ -290,6 +367,8 @@ ps5tm_kraken_searches(const char *folder) {
 static ps5tm_kraken_game_t g_games[PS5TM_KRAKEN_MAX];
 static int                 g_games_n;
 static uint64_t            g_games_ms;
+static int                 g_games_flying;             /* one ask at a time: the others wait for its answer (audit 17.11.2026) */
+static pthread_cond_t      g_games_cv = PTHREAD_COND_INITIALIZER;
 
 /* The games out of a parsed /api/state into the small copy (the page's own ask hands it over, so the library does not ask Kraken Mount again
    a moment later). 1 when stored. */
@@ -330,19 +409,34 @@ store_games(const cJSON *k, uint64_t now) {
 int
 ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max) {
   pthread_mutex_lock(&g_lock);
-  uint64_t now = ps5tm_mono_ms();
-  int fresh = g_games_ms && now - g_games_ms < (g_games_n > 0 ? 10000u : 5000u);
-  pthread_mutex_unlock(&g_lock);
-  if(!fresh) {
+  for(;;) {
+    uint64_t now = ps5tm_mono_ms();
+    int fresh = g_games_ms && now - g_games_ms < (g_games_n > 0 ? 10000u : 5000u);
+    if(fresh) break;
+    if(g_games_flying) { pthread_cond_wait(&g_games_cv, &g_lock); continue; }       /* somebody asks already: wait for the answer */
+    g_games_flying = 1;
+    pthread_mutex_unlock(&g_lock);
     unsigned char *body = NULL;
     size_t bn = 0;
     int st = kr_http("GET", "/api/state", NULL, 0, 1500, &body, &bn);
     cJSON *k = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
     free(body);
-    store_games(k, now);                               /* without a parsed state (switched off): the list is empty, the next ask waits 5 s */
+    if(st == 200 || st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) pending_clear();      /* it is there: the start with the app went through */
+    if(st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) {
+      /* It listens and is busy (a scan, a rebuild): what was known stays - the mark "FPKGMount" and the warning for titles two mounters want
+         must not flicker away for seconds (audit 17.11.2026). The next ask waits for the usual time. */
+      pthread_mutex_lock(&g_lock);
+      g_games_ms = ps5tm_mono_ms();
+      pthread_mutex_unlock(&g_lock);
+    } else {
+      store_games(k, now);                             /* without a parsed state (switched off): the list is empty, the next ask waits 5 s */
+    }
     cJSON_Delete(k);
+    pthread_mutex_lock(&g_lock);
+    g_games_flying = 0;
+    pthread_cond_broadcast(&g_games_cv);
+    break;
   }
-  pthread_mutex_lock(&g_lock);
   int n = g_games_n < max ? g_games_n : max;
   memcpy(out, g_games, sizeof(out[0]) * (size_t)n);
   pthread_mutex_unlock(&g_lock);
@@ -422,9 +516,12 @@ seed_config(void) {
 
 /* ------------------------------------------------------------------ actions */
 
+/* by_person: the button "Einschalten" (it also takes the "off" marker away: wanted on, the next start of the app starts it, too); 0: the start with the app,
+   which respects the marker up to the moment before it sends (audit 17.11.2026: it used to take the marker away itself and so overrode a "Ausschalten" given in
+   the first seconds). */
 static int
-start_kraken(char *msg, size_t n) {
-  kr_set_off(0);                                           /* wanted on: the next start of the app starts it, too */
+start_kraken(char *msg, size_t n, int by_person) {
+  if(by_person) kr_set_off(0);
   int alive = kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL);
   if(alive == 200) {
     pthread_mutex_lock(&g_lock);
@@ -459,11 +556,27 @@ start_kraken(char *msg, size_t n) {
       return 500;
     }
   }
+  if(!by_person) {
+    /* The last look at the "off" marker, under the lock the "stop" of the page takes it under: from here on a "stop" is told that the start is under way. */
+    pthread_mutex_lock(&g_lock);
+    if(kr_is_off()) {
+      g_started_ms = 0;
+      pthread_mutex_unlock(&g_lock);
+      free(elf);
+      snprintf(msg, n, "Kraken Mount wurde ausgeschaltet, bevor die App es gesendet hat.");
+      return 409;
+    }
+    g_boot_sending = 1;
+    pthread_mutex_unlock(&g_lock);
+    pending_write(which);
+  }
   const char *why = NULL;
   int rc = ps5tm_loader_inject_mem(elf, (unsigned long)elf_len, &why);
   free(elf);
+  if(!by_person) { pthread_mutex_lock(&g_lock); g_boot_sending = 0; if(rc == 0) g_boot_sent_ms = ps5tm_mono_ms(); pthread_mutex_unlock(&g_lock); }
   if(rc != 0) {
     pthread_mutex_lock(&g_lock); g_started_ms = 0; pthread_mutex_unlock(&g_lock);
+    if(!by_person) pending_clear();
     snprintf(msg, n, "%s", why ? why : "Kraken Mount ließ sich nicht senden.");
     return 502;
   }
@@ -497,11 +610,17 @@ stop_kraken(char *msg, size_t n) {
   if(st == 409) { snprintf(msg, n, "Ein Spiel läuft gerade. Kraken Mount lässt sich erst nach dem Spiel beenden."); return 409; }
   if(st == LHTTP_NO_ANSWER) { snprintf(msg, n, "Kraken Mount antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); return 409; }
   if(st < 0) {
-    kr_set_off(1);
     pthread_mutex_lock(&g_lock);
+    kr_set_off(1);
     int pending = g_boot_pending;                          /* switched off while the app was still waiting to start it: that is what the person asked for */
+    /* ... but the start is at the loader right now, or was sent a few seconds ago and Kraken Mount is not listening yet (the same 20 s the page says "starts" for) */
+    int sending = g_boot_sending || (g_boot_sent_ms && ps5tm_mono_ms() - g_boot_sent_ms < 20000);
     g_boot_pending = 0;
     pthread_mutex_unlock(&g_lock);
+    if(sending) {
+      snprintf(msg, n, "Kraken Mount wird gerade mit der App gesendet und startet noch. Ab dem nächsten Start der App bleibt es aus; zum Beenden den Schalter in einigen Sekunden noch einmal ausschalten.");
+      return 409;
+    }
     if(pending) { snprintf(msg, n, "Kraken Mount wird nicht mit der App gestartet."); return 200; }
     snprintf(msg, n, "Kraken Mount läuft nicht.");
     return 409;
@@ -697,7 +816,7 @@ ps5tm_kraken_action(const struct cJSON *b, char *msg, size_t n) {
   if(!cJSON_IsString(ja)) { snprintf(msg, n, "Es fehlt die Aktion."); return 400; }
   const char *a = ja->valuestring;
   const char *id = cJSON_IsString(jid) ? jid->valuestring : "";
-  if(!strcmp(a, "start")) return start_kraken(msg, n);
+  if(!strcmp(a, "start")) return start_kraken(msg, n, 1);
   if(!strcmp(a, "stop")) return stop_kraken(msg, n);
   if(!strcmp(a, "rescan")) return simple_post("/api/rescan", NULL, "Kraken Mount sucht neu.", msg, n);
   if(!strcmp(a, "rebuild_all")) return simple_post("/api/rebuild-all", NULL, "Kraken Mount baut alle Spiele neu auf.", msg, n);
@@ -743,6 +862,18 @@ boot_pending_done(void) {
   pthread_mutex_unlock(&g_lock);
 }
 
+/* After the start with the app: the marker goes when Kraken Mount has answered (even late: busy is alive) or, at the latest, a minute after the send - the app has
+   lived on, so the console did not go down because of it. A console that does go down in these seconds never gets here, and the marker stays. */
+static void
+pending_confirm(void) {
+  for(int i = 0; i < 60; i++) {
+    sleep(1);
+    int st = kr_http("GET", "/api/state", NULL, 0, 1500, NULL, NULL);
+    if(st == 200 || st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) break;
+  }
+  pending_clear();
+}
+
 static void *
 boot_thread(void *arg) {
   (void)arg;
@@ -756,10 +887,10 @@ boot_thread(void *arg) {
       return NULL;
     }
     char msg[200];
-    int rc = start_kraken(msg, sizeof msg);                /* sets the time of the start: the page goes on saying "starts" from there */
+    int rc = start_kraken(msg, sizeof msg, 0);             /* sets the time of the start: the page goes on saying "starts" from there */
     boot_pending_done();
     PS5TM_INFO("kraken_boot", "Kraken Mount mit der App gestartet (Versuch %d): %d, %s", tries + 1, rc, msg);
-    if(rc == 200) return NULL;
+    if(rc == 200) { pending_confirm(); return NULL; }
   }
   PS5TM_WARN("kraken_boot_failed", "Kraken Mount ließ sich mit der App nicht starten: auf der Seite FPKGMount „Einschalten“ drücken.");
   return NULL;
@@ -767,6 +898,7 @@ boot_thread(void *arg) {
 
 void
 ps5tm_kraken_boot(void) {
+  pending_check();                                         /* a start with the app that the console did not survive: no second one (before the marker is looked at) */
   if(!kr_is_off()) {
     pthread_mutex_lock(&g_lock);
     g_boot_pending = 1;

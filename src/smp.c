@@ -293,6 +293,16 @@ ps5tm_smp_find(const char *title_id, ps5tm_smp_game_t *out) {
   return rc;
 }
 
+/* What the last ask found, without asking (audit 17.11.2026, F-180): 1 when ShadowMountPlus answered then - or has never been asked, so
+   that a caller that only wants to know whether to look closer errs on the side of looking -, 0 when it did not answer. */
+int
+ps5tm_smp_last_known_up(void) {
+  pthread_mutex_lock(&g_lock);
+  int up = g_games_ms == 0 || g_count >= 0;
+  pthread_mutex_unlock(&g_lock);
+  return up;
+}
+
 int
 ps5tm_smp_available(char *version, size_t version_len) {
   pthread_mutex_lock(&g_lock);

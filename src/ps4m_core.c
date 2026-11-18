@@ -4127,23 +4127,38 @@ static int clean_scan_path(const char *in, char *out, size_t n, char *why, size_
     return 0;
 }
 
-static void config_save(void) {
+/* 0 when the file is in place, -1 when it could not be written (audit 17.11.2026: PS4Mount is on from the start now, so a "switched off" that is lost
+   with a half-written file would switch it on again: the file is written whole under another name and put in place, and the answer is looked at). */
+static int config_save(void) {
+    int rc = -1;
     buf_t b = {0};
     p4m_buf_printf(&b, "batch=%d\nbatch_size=%d\ndlc=%d\ndlc_copy=%d\nrestore_batch=%d\nenabled=%d\nfast_reg=%d\n", g_cfg.batch,
                g_cfg.batch_size, g_cfg.dlc, g_cfg.dlc_copy, g_cfg.restore_batch, g_enabled, g_cfg.fast_reg);
     for (int i = 0; i < g_cfg.npaths; i++)
         p4m_buf_printf(&b, "path=%s\n", g_cfg.paths[i]);
-    if (b.failed) /* (app) PS4Mount PR #18 */
+    if (b.failed) { /* (app) PS4Mount PR #18 */
         printf("[config] out of memory: settings not saved\n");
-    else
-        write_file(CONFIG_PATH, b.data, b.len, 0666);
+    } else if (write_file(CONFIG_PATH ".tmp", b.data, b.len, 0666) == 0 && rename(CONFIG_PATH ".tmp", CONFIG_PATH) == 0) {
+        rc = 0;
+    } else {
+        printf("[config] settings not saved: %s\n", strerror(errno));
+        unlink(CONFIG_PATH ".tmp");
+    }
     p4m_buf_free(&b);
+    return rc;
 }
 
 static void config_load(void) {
     FILE *f = fopen(CONFIG_PATH, "r");
-    if (!f)
+    if (!f) {
+        /* No file: a new installation, the defaults stand (PS4Mount on). Any other reason (the drive is unreadable): not on by guess - a "switched off"
+           that could not be read must not turn into "on". */
+        if (errno != ENOENT) {
+            printf("[config] settings unreadable (%s): PS4Mount stays off until it is switched on in the page\n", strerror(errno));
+            g_enabled = 0;
+        }
         return;
+    }
     config_t c = g_cfg;
     c.npaths = 0;
     char line[256], why[160], path[128];
@@ -4170,6 +4185,12 @@ static void config_load(void) {
             else
                 over++;
         }
+    }
+    if (ferror(f)) { /* a read that broke off half way: nothing of it is taken, and "off" must not turn into "on" by a line that was not read */
+        printf("[config] settings unreadable (%s): PS4Mount stays off until it is switched on in the page\n", strerror(errno));
+        fclose(f);
+        g_enabled = 0;
+        return;
     }
     fclose(f);
     if (c.batch_size < 1 || c.batch_size > 50)
@@ -4282,11 +4303,11 @@ int ps4m_config_set(const char *body, char *msg, size_t cap) {
     if (g_cfg.dlc_copy && !c.dlc_copy)
         g_ac_revert = 1; /* back to mount mode: the copies are removed again (PS4Mount 0.7.0) */
     g_cfg = c;
-    config_save();
+    const int cfg_saved = config_save() == 0;
     printf("[config] saved: batch=%d batch_size=%d dlc=%d restore_batch=%d fast_reg=%d folders=%d\n", c.batch, c.batch_size, c.dlc,
            c.restore_batch, c.fast_reg, c.npaths);
     g_next_scan = 0;
-    snprintf(msg, cap, "Einstellungen gespeichert");
+    snprintf(msg, cap, cfg_saved ? "Einstellungen gespeichert" : "Die Einstellungen gelten jetzt, ließen sich aber nicht speichern: Nach einem Neustart der App sind sie wieder die alten");
     return 0;
 }
 
@@ -4785,7 +4806,7 @@ int ps4m_set_enabled(int on, char *msg, size_t n) {
         return -1;
     }
     g_enabled = on != 0;
-    config_save();
+    const int saved = config_save() == 0;
     if (!on) {
         g_stop = 1;
         /* what was asked for and not yet done does not wait for the next start (it would close a game at once then) */
@@ -4796,9 +4817,12 @@ int ps4m_set_enabled(int on, char *msg, size_t n) {
     pthread_mutex_unlock(&g_mu);
     if (on) {
         int rc = worker_start(msg, n);
+        if (!saved && rc <= 0) /* the "on" could not be written: with an old "off" in the file the next start of the app would find it off again (a whole message of its own, so that it is translated) */
+            snprintf(msg, n, "PS4Mount ist eingeschaltet. Das Einschalten ließ sich aber nicht speichern: Nach einem Neustart der App gilt wieder die alte Einstellung.");
         return rc > 0 ? 0 : rc;   /* waiting for the stand-alone one is no failure: switched on, msg says what happens */
     }
-    snprintf(msg, n, "PS4Mount ist ausgeschaltet, die Spiele sind ausgehängt. Eingeschaltet hängt PS4Mount sie wieder ein.");
+    snprintf(msg, n, saved ? "PS4Mount ist ausgeschaltet, die Spiele sind ausgehängt. Eingeschaltet hängt PS4Mount sie wieder ein."
+                           : "PS4Mount ist ausgeschaltet, die Spiele sind ausgehängt. Das Ausschalten ließ sich aber nicht speichern: Nach einem Neustart der App läuft PS4Mount wieder.");
     return 0;
 }
 

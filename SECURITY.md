@@ -47,11 +47,15 @@ Zum Beispiel:
   auf Port 8086. Wer das Programm nur auf der Konsole selbst ansprechen lassen
   will, setzt `bind_address` auf `127.0.0.1`.
 - **Kraken Mount (Port 8097) und Dump Forge (Port 8095) sind Programme anderer
-  Autoren**, die die App nur auf Knopfdruck startet (Dump Forge nur für die
-  Dauer einer Konvertierung). Beide lauschen im ganzen Heimnetz und prüfen
-  weder `Host` noch `Origin`; die Einstellung `bind_address` und der
-  Browser-Schutz dieser App gelten für sie nicht. Wer das nicht will, lässt
-  FPKGMount ausgeschaltet. Gemeldet wird so etwas bei den Autoren dieser Programme.
+  Autoren.** Kraken Mount startet die App seit dem 17.11.2026 von selbst, rund
+  fünf Sekunden nach ihrem eigenen Start, solange es nicht im Reiter FPKGMount
+  ausgeschaltet wurde (die Markierung `kraken/aus.txt` im Datenordner); Dump
+  Forge startet sie nur für die Dauer einer Konvertierung. Beide lauschen im
+  ganzen Heimnetz und prüfen weder `Host` noch `Origin`; die Einstellung
+  `bind_address` und der Browser-Schutz dieser App gelten für sie nicht. Wer
+  das nicht will, schaltet Kraken Mount im Reiter FPKGMount aus (der Schalter
+  merkt sich das über Neustarts). Gemeldet wird so etwas bei den Autoren dieser
+  Programme.
 - Schwachstellen in der Konsole selbst, im Jailbreak, in kstuff, im Payload-Lader
   oder in anderen Homebrew-Programmen. Bitte melde sie dort.
 - Das Umgehen von Schutzmaßnahmen des Herstellers. Dieses Projekt enthält dafür keinen

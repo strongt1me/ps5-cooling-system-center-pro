@@ -81,6 +81,13 @@ api_version() {
     | sed -n 's/.*"app_version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
+# The process id of the app that answers now (/api/v1/status, "pid"): a new ELF that really started has another one (audit 17.11.2026: the version alone
+# says nothing when the one that runs is the version that was sent - an old app that goes on running looked like a success).
+api_pid() {
+  curl -s -m 4 "http://$IP:$API_PORT/api/v1/status" 2>/dev/null \
+    | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1
+}
+
 # The PowerShell host for the socket send (Windows); nc as the fallback elsewhere.
 send_elf_cmd() {
   local ps=""
@@ -142,6 +149,7 @@ if [ "$DO_ELF" = 1 ]; then
     dry "würde $WAIT_AFTER_ELF s warten und dann bis zu $WAIT_API_MAX s auf http://$IP:$API_PORT/api/v1/system warten"
     dry "würde app_version lesen${EXPECT_VER:+ und mit $EXPECT_VER vergleichen}"
   else
+    OLD_PID="$(api_pid)"                      # the app that runs before the send ("" when none answers)
     say "Sende $ELF ($(file_size "$ELF") Bytes) ..."
     if ! send_elf_cmd; then
       err "ELF konnte nicht an $IP:$LOADER_PORT gesendet werden"
@@ -160,6 +168,10 @@ if [ "$DO_ELF" = 1 ]; then
         say "App läuft, Version $RUNNING_VER"
         if [ -n "$EXPECT_VER" ] && [ "$RUNNING_VER" != "$EXPECT_VER" ]; then
           err "Es läuft Version $RUNNING_VER, gesendet wurde $EXPECT_VER (die alte App läuft noch?)"
+        fi
+        NEW_PID="$(api_pid)"
+        if [ -n "$OLD_PID" ] && [ -n "$NEW_PID" ] && [ "$OLD_PID" = "$NEW_PID" ]; then
+          err "Die App läuft noch mit derselben Prozessnummer ($NEW_PID) wie vor dem Senden: Die neue ELF ist nicht angekommen oder nicht gestartet."
         fi
       fi
     fi
@@ -189,6 +201,12 @@ if [ "$DO_TILES" = 1 ]; then
     for f in "${files[@]}"; do
       f="${f#./}"
       url="ftp://$IP:$FTP_PORT/data/homebrew/$t/$(enc_path "$f")"
+      if [ "$f" = "eboot.bin" ] && [ "$failed" -gt 0 ]; then
+        # Other files of this tile did not arrive: a new eboot.bin beside old or cut ones would give a tile that mixes two versions - the old one stays whole.
+        err "Kachel $t ist uneinheitlich: $failed Datei(en) fehlgeschlagen, die eboot.bin wurde nicht gesendet (die alte bleibt). Noch einmal senden."
+        failed=$((failed + 1))
+        continue
+      fi
       if [ "$f" = "eboot.bin" ]; then
         # eboot.bin goes up under a temporary name and is renamed when it is whole: a net that fails in the middle leaves the old file, not a cut one.
         # The old file is never removed by the script: the rename replaces it (FreeBSD), and when that fails the old file stays, with the new one beside it as eboot.bin.part.
@@ -212,6 +230,7 @@ if [ "$DO_TILES" = 1 ]; then
         err "Kachel $t, Datei $f: $(printf '%s' "$out" | head -n 1)"
         if [ "$f" = "eboot.bin" ] && printf '%s' "$out" | grep -q '550'; then
           FULLSCREEN_OPEN=1
+          err "Kachel $t ist uneinheitlich: die übrigen Dateien sind neu, die eboot.bin ist die alte geblieben (die Vollbild-App ist offen). Nach dem Schließen noch einmal senden."
         fi
       fi
     done

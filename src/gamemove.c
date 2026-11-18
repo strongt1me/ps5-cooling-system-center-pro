@@ -250,10 +250,17 @@ typedef struct {
   char   title_id[12], op[8], dest[256], name[128];
   int    delete_source;
   double job_id;
+  unsigned gen;            /* g_wait.gen of the start of this watcher */
 } watch_t;
 
 static pthread_mutex_t g_wlock = PTHREAD_MUTEX_INITIALIZER;
-static struct { int on, watching; double watch_job; char title_id[12], op[8], tile[16]; } g_wait;
+static struct {
+  int      on, watching;
+  double   watch_job;
+  char     title_id[12], op[8], tile[16];
+  unsigned gen;            /* of the last watcher that was started: a watcher that ends takes "watching" away only while it is still the last one (audit 17.11.2026) */
+  int      cancel_pending; /* a "cancel" came in after ShadowMountPlus's job had ended and before the app's own unpack had its place: given to that unpack */
+} g_wait;
 
 /* ---------------------------------------------------------------- the way out when ShadowMountPlus cannot unpack
 
@@ -270,7 +277,14 @@ static struct {
   double   smp_job;                   /* ShadowMountPlus's job it stands in for: the id the pages follow */
   char     title_id[12], image[256], dest[320], state[16], error[300];     /* state: "transferring" has 12 letters */
   unsigned total_files, done_files;
-  uint64_t total_bytes, done_bytes;
+  uint64_t total_bytes, done_bytes;   /* the progress of the app's job (written, then read back: twice the bytes of the files) - the percentage comes from these */
+  uint64_t files_bytes;               /* the bytes of the files of the image: what the pages show as the size */
+  /* the hand-over from ShadowMountPlus's job to the app's own (audit 17.11.2026): until the app's job has taken its place the app counts as busy for everybody
+     else, but not for its own start (handover, thread); a "cancel" that comes in that moment is kept (cancel) and given to the job when it exists; the job is
+     known by the time it started (token), so another job's record is never taken for it. */
+  int         handover, cancel;
+  pthread_t   thread;
+  uint64_t    token;
 } g_fb;
 
 /* The record in the form of ShadowMountPlus's own job record (the fields both pages read). */
@@ -286,26 +300,31 @@ fb_json(void) {
   snprintf(state, sizeof(state), "%s", g_fb.state);
   snprintf(error, sizeof(error), "%s", g_fb.error);
   unsigned tf = g_fb.total_files, df = g_fb.done_files;
-  uint64_t tb = g_fb.total_bytes, db = g_fb.done_bytes;
+  uint64_t tb = g_fb.total_bytes, db = g_fb.done_bytes, fbytes = g_fb.files_bytes, token = g_fb.token;
   pthread_mutex_unlock(&g_wlock);
   double rate = 0;
   char phase[160];                         /* a copy: the record it comes from is freed below (17.11.2026: the text was read after that) */
   snprintf(phase, sizeof(phase), "%s", "Wird mit dem eigenen Entpacken der App fortgesetzt");
-  if(active) {
+  if(active && token) {                    /* before the app's job has its place the record is the one before it: not read (audit 17.11.2026) */
     cJSON *s = ps5tm_imgjob_status();
-    if(s) {
+    const cJSON *own = s ? cJSON_GetObjectItem(s, "started_ms") : NULL;
+    if(s && cJSON_IsNumber(own) && (uint64_t)own->valuedouble == token) {
       const cJSON *x;
       if(cJSON_IsString(x = cJSON_GetObjectItem(s, "image"))) snprintf(image, sizeof(image), "%s", x->valuestring);
+      if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "bytes_files"))) fbytes = (uint64_t)x->valuedouble;
       if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "work_total"))) tb = (uint64_t)x->valuedouble;
       if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "work_done"))) db = (uint64_t)x->valuedouble;
       if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "files_total"))) tf = (unsigned)x->valuedouble;
       if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "files_done"))) df = (unsigned)x->valuedouble;
       if(cJSON_IsNumber(x = cJSON_GetObjectItem(s, "bytes_per_s"))) rate = x->valuedouble;
       if(cJSON_IsString(x = cJSON_GetObjectItem(s, "phase")) && x->valuestring[0]) snprintf(phase, sizeof(phase), "%s", x->valuestring);
-      cJSON_Delete(s);
     }
+    cJSON_Delete(s);
     snprintf(state, sizeof(state), "%s", tb > 0 && db > 0 ? "transferring" : "measuring");
   }
+  /* The size the pages show is the files' (a 20 GB game is "20 GB", not "40 GB"); the progress keeps coming from the work done of the whole job. */
+  const uint64_t shown_total = fbytes ? fbytes : tb;
+  const uint64_t shown_done = tb ? (uint64_t)((double)db * (double)shown_total / (double)tb) : 0;
   cJSON *o = cJSON_CreateObject();
   cJSON_AddBoolToObject(o, "ok", 1);
   cJSON_AddNumberToObject(o, "job_id", job);
@@ -319,8 +338,8 @@ fb_json(void) {
   cJSON_AddStringToObject(o, "destination", dest);
   cJSON_AddStringToObject(o, "phase", phase);
   cJSON_AddNumberToObject(o, "progress_percent", ps5tm_unpack_fb_percent(db, tb));
-  cJSON_AddNumberToObject(o, "total_bytes", (double)tb);
-  cJSON_AddNumberToObject(o, "processed_bytes", (double)db);
+  cJSON_AddNumberToObject(o, "total_bytes", (double)shown_total);
+  cJSON_AddNumberToObject(o, "processed_bytes", (double)shown_done);
   cJSON_AddNumberToObject(o, "total_files", tf);
   cJSON_AddNumberToObject(o, "processed_files", df);
   cJSON_AddNumberToObject(o, "speed_bytes_per_second", rate);
@@ -357,43 +376,79 @@ fallback_unpack(const watch_t *w, const char *smp_msg) {
   memset(&g_fb, 0, sizeof(g_fb));
   g_fb.have = 1;
   g_fb.active = 1;
+  g_fb.cancel = g_wait.cancel_pending;      /* a "cancel" that came in between the end of ShadowMountPlus's job and now: the own unpack is not started at all */
+  const int pre_cancel = g_fb.cancel;
+  g_wait.cancel_pending = 0;
+  g_fb.handover = 1;                        /* the app's own job is not there yet: for everybody else the app is busy from now on, for this thread it is not */
+  g_fb.thread = pthread_self();
   g_fb.smp_job = w->job_id;
   snprintf(g_fb.title_id, sizeof(g_fb.title_id), "%s", w->title_id);
   snprintf(g_fb.dest, sizeof(g_fb.dest), "%s", child);
   snprintf(g_fb.image, sizeof(g_fb.image), "%s", image);
   snprintf(g_fb.state, sizeof(g_fb.state), "%s", "measuring");
-  g_wait.watching = 0;      /* the image job asks whether a move or unpack is busy: this watcher has handed its job on */
+  /* g_wait.watching stays 1 until the app's job has its place: the image job asks whether a move or unpack is busy, and ps5tm_gamemove_busy_local
+     leaves this thread out of the answer (handover). Nobody else gets into the gap. */
   pthread_mutex_unlock(&g_wlock);
+  if(pre_cancel) {                          /* the person cancelled before the own unpack could begin: it does not begin */
+    pthread_mutex_lock(&g_wlock);
+    g_fb.handover = 0;
+    if(g_wait.gen == w->gen) g_wait.watching = 0;
+    pthread_mutex_unlock(&g_wlock);
+    fb_end("cancelled", NULL);
+    PS5TM_INFO("game_storage_fallback", "Das Entpacken von %s wurde abgebrochen, bevor das eigene Entpacken der App begann.", w->title_id);
+    return;
+  }
   PS5TM_WARN("game_storage_fallback", "ShadowMountPlus konnte %s nicht entpacken (%.120s); die App entpackt das Abbild selbst nach %s.",
              w->title_id, smp_msg, child);
-  int rc = ps5tm_imgjob_unpack_to(w->title_id, child, err, sizeof(err));
+  uint64_t token = 0;                       /* the job's start time, handed out by the start itself: it tells this job from every other one */
+  int rc = ps5tm_imgjob_unpack_to(w->title_id, child, &token, err, sizeof(err));    /* (a "cancel" given to g_fb.cancel is handed on below, as soon as the job has its place) */
+  if(rc != 200) token = 0;
+  pthread_mutex_lock(&g_wlock);
+  g_fb.handover = 0;
+  g_fb.token = token;
+  if(g_wait.gen == w->gen) g_wait.watching = 0;      /* the image job counts as busy by itself from here (or there is none); not the marker of a newer watcher */
+  const int cancel_asked = g_fb.cancel;
+  pthread_mutex_unlock(&g_wlock);
   if(rc != 200) {
     fb_end("failed", err[0] ? err : "Das eigene Entpacken ließ sich nicht starten.");
     ps5tm_notify("„%s“ wurde nicht entpackt: %.120s", w->name, err[0] ? err : "Das eigene Entpacken ließ sich nicht starten.");
     return;
   }
+  if(cancel_asked && token) (void)ps5tm_imgjob_cancel_token(token);      /* "Abbrechen" came in while the job was being handed over: it goes to the job now */
   for(;;) {
-    usleep(1000 * 1000);
+    usleep(250 * 1000);
     cJSON *s = ps5tm_imgjob_status();
     if(!s) continue;
     const cJSON *st = cJSON_GetObjectItem(s, "state"), *er = cJSON_GetObjectItem(s, "error");
-    const cJSON *id = cJSON_GetObjectItem(s, "id"), *kind = cJSON_GetObjectItem(s, "kind");
+    const cJSON *own = cJSON_GetObjectItem(s, "started_ms");
     const char *state = cJSON_IsString(st) ? st->valuestring : "";
-    int ours = cJSON_IsString(id) && !strcmp(id->valuestring, w->title_id) && cJSON_IsString(kind) && !strcmp(kind->valuestring, "unpack");
+    /* the job is ours when it started when ours did (and not merely when it is an unpack of the same game): of two jobs one after the other the second
+       is not ours, and a start that was turned away wipes the record (imgjob.c) - then the state is "idle" with no start time */
+    const cJSON *jid = cJSON_GetObjectItem(s, "id"), *jkind = cJSON_GetObjectItem(s, "kind");
+    int ours = token ? (cJSON_IsNumber(own) && (uint64_t)own->valuedouble == token)
+                     : (cJSON_IsString(jid) && !strcmp(jid->valuestring, w->title_id) && cJSON_IsString(jkind) && !strcmp(jkind->valuestring, "unpack"));   /* no start time read: as before */
     if(!strcmp(state, "running") && ours) { cJSON_Delete(s); continue; }
     char msg[300] = "";
     if(cJSON_IsString(er)) snprintf(msg, sizeof(msg), "%s", er->valuestring);
     const cJSON *tf = cJSON_GetObjectItem(s, "files_total"), *df = cJSON_GetObjectItem(s, "files_done");
-    const cJSON *tb = cJSON_GetObjectItem(s, "work_total"), *db = cJSON_GetObjectItem(s, "work_done");
+    const cJSON *tb = cJSON_GetObjectItem(s, "work_total"), *db = cJSON_GetObjectItem(s, "work_done"), *bf = cJSON_GetObjectItem(s, "bytes_files");
     pthread_mutex_lock(&g_wlock);
-    if(cJSON_IsNumber(tf)) g_fb.total_files = (unsigned)tf->valuedouble;
-    if(cJSON_IsNumber(df)) g_fb.done_files = (unsigned)df->valuedouble;
-    if(cJSON_IsNumber(tb)) g_fb.total_bytes = (uint64_t)tb->valuedouble;
-    if(cJSON_IsNumber(db)) g_fb.done_bytes = (uint64_t)db->valuedouble;
+    if(ours) {
+      if(cJSON_IsNumber(tf)) g_fb.total_files = (unsigned)tf->valuedouble;
+      if(cJSON_IsNumber(df)) g_fb.done_files = (unsigned)df->valuedouble;
+      if(cJSON_IsNumber(tb)) g_fb.total_bytes = (uint64_t)tb->valuedouble;
+      if(cJSON_IsNumber(db)) g_fb.done_bytes = (uint64_t)db->valuedouble;
+      if(cJSON_IsNumber(bf)) g_fb.files_bytes = (uint64_t)bf->valuedouble;
+    }
     pthread_mutex_unlock(&g_wlock);
     int done = ours && !strcmp(state, "done");
     int cancelled = ours && !strcmp(state, "cancelled");
     cJSON_Delete(s);
+    if(!ours) {                             /* another job has taken the place before this one's end was seen: what became of it is not known */
+      fb_end("failed", "Das Ergebnis des Entpackens ließ sich nicht mehr lesen, weil gleich danach ein anderer Vorgang begann. Bitte den Zielordner prüfen.");
+      ps5tm_notify("„%s“: Das Ergebnis des Entpackens ließ sich nicht lesen. Bitte den Zielordner prüfen.", w->name);
+      break;
+    }
     if(done) {
       pthread_mutex_lock(&g_wlock);
       g_fb.done_bytes = g_fb.total_bytes;
@@ -482,7 +537,7 @@ watch_thread(void *arg) {
                !strcmp(w->op, "move") ? "Verschieben" : "Entpacken", w->title_id, tile);
     const char *what = !strcmp(w->op, "move") ? "verschoben" : "entpackt";
     uint64_t t0 = ps5tm_mono_ms();
-    int started = 0;
+    int started = 0, st2 = 0;
     char err[300] = "";
     while(ps5tm_mono_ms() - t0 < (uint64_t)TILE_WAIT_S * 1000) {
       usleep(2000 * 1000);
@@ -499,7 +554,11 @@ watch_thread(void *arg) {
       pthread_mutex_lock(&g_wlock);
       g_wait.on = 0;                                       /* from here on ShadowMountPlus's own record tells the progress */
       pthread_mutex_unlock(&g_wlock);
-      r = follow_job(id, reason, sizeof(reason), msg, sizeof(msg), NULL);
+      w->job_id = id;                                      /* the pages follow this job from here (and the own unpack stands in for it when it ends so) */
+      pthread_mutex_lock(&g_wlock);
+      g_wait.watch_job = id;                               /* the status route compares with this one */
+      pthread_mutex_unlock(&g_wlock);
+      r = follow_job(id, reason, sizeof(reason), msg, sizeof(msg), &st2);
       if(r == 0 && tile_reason(reason)) {
         pthread_mutex_lock(&g_wlock);
         g_wait.on = 1;                                     /* refused again: still waiting, still busy */
@@ -514,13 +573,15 @@ watch_thread(void *arg) {
     pthread_mutex_unlock(&g_wlock);
     ps5tm_smp_forget();
     ps5tm_library_forget();
-    if(started && r == 1) ps5tm_notify("„%s“ ist %s.", w->name, what);
+    if(started && r == 0 && !tile_reason(reason) && ps5tm_unpack_fallback_wanted(w->op, st2, msg))
+      fallback_unpack(w, msg);                             /* the same way out as for the first try: it tells the person itself */
+    else if(started && r == 1) ps5tm_notify("„%s“ ist %s.", w->name, what);
     else if(started && r == 0) ps5tm_notify("„%s“ wurde nicht %s: %.120s", w->name, what, msg[0] ? msg : reason);
     else if(!started) ps5tm_notify("„%s“ wurde nicht %s: %.120s", w->name, what,
                                    err[0] ? err : "die Vollbild-App wurde nicht geschlossen");
   }
   pthread_mutex_lock(&g_wlock);
-  g_wait.watching = 0;
+  if(g_wait.gen == w->gen) { g_wait.watching = 0; g_wait.cancel_pending = 0; }     /* only while this is still the last watcher */
   pthread_mutex_unlock(&g_wlock);
   free(w);
   return NULL;
@@ -542,11 +603,13 @@ watch_spawn(const watch_t *req, double job_id) {
   pthread_mutex_lock(&g_wlock);
   g_wait.watching = 1;
   g_wait.watch_job = job_id;
+  g_wait.cancel_pending = 0;
+  w->gen = ++g_wait.gen;
   pthread_mutex_unlock(&g_wlock);
   pthread_t th;
   if(pthread_create(&th, &attr, watch_thread, w) != 0) {
     pthread_mutex_lock(&g_wlock);
-    g_wait.watching = 0;
+    if(g_wait.gen == w->gen) g_wait.watching = 0;
     pthread_mutex_unlock(&g_wlock);
     free(w);
   }
@@ -569,6 +632,15 @@ static int g_starting;
 static int
 gamemove_start_checked(const char *title_id, const char *op, const char *dest_dir,
                        int delete_source, char *err, size_t err_len) {
+  /* First of all: while the app follows a job (or unpacks itself) nothing else starts. Before the question to ShadowMountPlus: the g_starting of this start
+     must not make the app's own hand-over (which asks the other jobs for room) give way. */
+  pthread_mutex_lock(&g_wlock);
+  const int following = g_fb.active || g_wait.watching;
+  pthread_mutex_unlock(&g_wlock);
+  if(following) {
+    snprintf(err, err_len, "Ein Verschieben oder Entpacken läuft noch (die App folgt dem Auftrag). Bitte warten, bis es fertig ist.");
+    return 409;
+  }
   ps5tm_smp_game_t s;
   int st = check_title(title_id, op, &s, err, err_len);
   if(st != 200) return st;
@@ -748,10 +820,13 @@ ps5tm_gamemove_start(const char *title_id, const char *op, const char *dest_dir,
    skips the app's own marks (audit F-34). */
 int
 ps5tm_gamemove_busy_local(void) {
-  if(__atomic_load_n(&g_starting, __ATOMIC_ACQUIRE)) return 1;
   pthread_mutex_lock(&g_wlock);
   int on = g_wait.on || g_wait.watching;               /* waiting for the tile, or following the job ShadowMountPlus has taken */
+  const int own = g_fb.handover && pthread_equal(g_fb.thread, pthread_self());     /* the app's own unpack asking for its own place */
+  if(own && !g_wait.on) on = 0;
   pthread_mutex_unlock(&g_wlock);
+  /* Another start that is only being checked (g_starting) does not hold the app's own hand-over up: that start looks for the follow-up first and gives way. */
+  if(!own && __atomic_load_n(&g_starting, __ATOMIC_ACQUIRE)) return 1;
   return on;
 }
 
@@ -773,20 +848,58 @@ ps5tm_gamemove_busy(void) {
 
 int
 ps5tm_gamemove_cancel(char *err, size_t err_len) {
+  /* Decided under the lock the hand-over ends under (handover = 0 and the read of cancel are one step in fallback_unpack): a "cancel" is either kept for
+     the job that is being handed over, or goes to the job by its start time - never to a job of somebody else, never into the gap between the two. */
   pthread_mutex_lock(&g_wlock);
-  int fb_active = g_fb.active;
+  int fb_active = g_fb.active, handing = g_fb.handover;
+  uint64_t fb_token = g_fb.token;
+  if(fb_active && handing) g_fb.cancel = 1;
   pthread_mutex_unlock(&g_wlock);
-  if(fb_active) { (void)ps5tm_imgjob_cancel(); return 200; }        /* the app's own unpack stands in for ShadowMountPlus's */
+  if(fb_active) {                                                   /* the app's own unpack stands in for ShadowMountPlus's */
+    if(!handing && fb_token) (void)ps5tm_imgjob_cancel_token(fb_token);
+    return 200;
+  }
   cJSON *job = ps5tm_smp_call("/games/storage/status", NULL, 4000, err, err_len);
   if(!job) return 503;
   const cJSON *id = cJSON_GetObjectItem(job, "job_id");
   int active = cJSON_IsTrue(cJSON_GetObjectItem(job, "active"));
   double job_id = cJSON_IsNumber(id) ? id->valuedouble : 0;
+  const cJSON *opj = cJSON_GetObjectItem(job, "operation"), *rsj = cJSON_GetObjectItem(job, "result_status"), *rej = cJSON_GetObjectItem(job, "result_error");
+  const cJSON *rrj = cJSON_GetObjectItem(job, "result_error_reason");
+  char opname[16] = "", emsg[200] = "", ereason[64] = "";
+  int rstat = cJSON_IsNumber(rsj) ? (int)rsj->valuedouble : 0;
+  if(cJSON_IsString(opj)) snprintf(opname, sizeof(opname), "%s", opj->valuestring);
+  if(cJSON_IsString(rej)) snprintf(emsg, sizeof(emsg), "%s", rej->valuestring);
+  if(cJSON_IsString(rrj)) snprintf(ereason, sizeof(ereason), "%s", rrj->valuestring);
   cJSON_Delete(job);
   if(!active || job_id <= 0) {
+    /* The hand-over may have begun while ShadowMountPlus was asked (up to 4 s): then the cancel goes where it belongs - to the job being handed over, or to the
+       own job by its start time - and not into a mark that nobody reads any more. */
+    pthread_mutex_lock(&g_wlock);
+    if(g_fb.active) {
+      const int handing = g_fb.handover;
+      const uint64_t tok = g_fb.token;
+      if(handing) g_fb.cancel = 1;
+      pthread_mutex_unlock(&g_wlock);
+      if(!handing && tok) (void)ps5tm_imgjob_cancel_token(tok);
+      return 200;
+    }
+    /* ShadowMountPlus's job is over, and the app follows it. When it ended the way that leads to the app's own unpack ("Permission denied"), the cancel is kept for
+       that unpack (audit 17.11.2026) - it used to be turned away here and the unpack then started all the same. For any other end (done, another failure) there
+       is nothing to cancel: the answer stays "no running job". Looked at under the same lock as g_fb above: the hand-over takes the mark under it, too. */
+    const int gap = g_wait.watching && !g_wait.on && job_id > 0 && job_id == g_wait.watch_job && rstat != 0 && !tile_reason(ereason) &&
+                    ps5tm_unpack_fallback_wanted(opname, rstat, emsg);
+    if(gap) g_wait.cancel_pending = 1;
+    pthread_mutex_unlock(&g_wlock);
+    if(gap) return 200;
     snprintf(err, err_len, "ShadowMountPlus hat keinen laufenden Auftrag.");
     return 409;
   }
+  /* The job may end with "Permission denied" between the status above and the cancel below, and the app's own unpack then starts all the same: the cancel is kept
+     for it as well (cleared when the watcher ends, so it never outlives this job). */
+  pthread_mutex_lock(&g_wlock);
+  if(g_wait.watching && !g_wait.on && job_id == g_wait.watch_job) g_wait.cancel_pending = 1;
+  pthread_mutex_unlock(&g_wlock);
   cJSON *body = cJSON_CreateObject();
   cJSON_AddNumberToObject(body, "job_id", job_id);
   cJSON *ans = ps5tm_smp_call("/games/storage/cancel", body, 4000, err, err_len);
