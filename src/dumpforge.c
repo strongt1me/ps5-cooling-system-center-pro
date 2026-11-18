@@ -179,6 +179,22 @@ ps5tm_dumpforge_installed(char *ver, size_t vn) {
   return find_elf(path, sizeof path, ver, vn);
 }
 
+/* 1 when the Dump Forge a job would use does not know "zstd_unpack" (a version before 0.5.0 takes the field and ignores it, so the package would come out with
+   the packs in it and Kraken Mount would refuse it): the one that runs (probe_running), else the one in the folder. ver gets that version. A version that is
+   not known (a file without one in its name) is let through. */
+int
+ps5tm_dumpforge_lacks_zstd_unpack(int probe_running, char *ver, size_t vn) {
+  char v[40] = "";
+  if(!probe_running || !running_version(v, sizeof v) || !v[0]) {
+    char path[300];
+    v[0] = 0;
+    if(!find_elf(path, sizeof path, v, sizeof v)) v[0] = 0;
+  }
+  if(!v[0]) return 0;
+  if(ver && vn) snprintf(ver, vn, "%s", v);
+  return ver_newer("0.5.0", v);
+}
+
 struct cJSON *
 ps5tm_dumpforge_state(void) {
   cJSON *o = cJSON_CreateObject();

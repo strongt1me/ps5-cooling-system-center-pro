@@ -936,6 +936,7 @@ typedef struct {
 } ps5tm_dumpforge_job_t;
 struct cJSON *ps5tm_dumpforge_state(void);
 int           ps5tm_dumpforge_installed(char *version, size_t n);
+int           ps5tm_dumpforge_lacks_zstd_unpack(int probe_running, char *ver, size_t vn); /* 1: the Dump Forge a job would use is older than 0.5.0 (probe_running: asks the running one too) */
 void          ps5tm_dumpforge_prepare(void);                              /* makes the app's folder for Dump Forge (at the start of the app) */
 /* Keeps the home-screen tile /user/app/<tile_id> of a helper program (Kraken Mount, Dump Forge) away: a tile it made earlier (one of the
    markers exists) is uninstalled, then an empty file takes the place of the folder, which the program leaves alone (tilekeep.c). */

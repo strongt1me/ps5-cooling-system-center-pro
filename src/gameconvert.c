@@ -155,10 +155,15 @@ static int             g_cancel;          /* read by the build loops */
 
 /* ------------------------------------------------------------------ helpers */
 
+/* 1 from the claim of a job until its worker thread has ended: the state turns final earlier (the page shows "done"), but the thread still removes its
+   leftovers, the overlay folder of a PS4 job (named after the title) and writes its line of the history. A job that started in between would have its
+   overlay folder taken away and its state read for that line (audit 18.11.2026). Under g_lock. */
+static int g_thread_live;
+
 static int
 active_locked(void) {
   return g_job.state == CV_SCANNING || g_job.state == CV_WRITING ||
-         g_job.state == CV_VERIFYING;
+         g_job.state == CV_VERIFYING || g_thread_live;
 }
 
 static void cv_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -791,6 +796,9 @@ cv_thread(void *arg) {
   pthread_mutex_unlock(&g_lock);
   if(st == CV_DONE || st == CV_FAILED || st == CV_CANCELLED)
     ps5tm_hist_add("convert", name, detail, st == CV_DONE ? "done" : st == CV_FAILED ? "failed" : "cancelled", error, bytes, dur);
+  pthread_mutex_lock(&g_lock);
+  g_thread_live = 0;                                 /* only now may the next job (the queue's, a page's) take the place */
+  pthread_mutex_unlock(&g_lock);
   return r;
 }
 
@@ -823,10 +831,17 @@ cv_run_fpkg(const cv_args_t *a) {
     } else cv_fail("%s", msg);
     return NULL;
   }
+  if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) {                            /* cancelled in the last moment before the job is sent: it is not sent (audit 18.11.2026) */
+    if(started_here) ps5tm_dumpforge_stop(0);
+    cv_state(CV_CANCELLED);
+    return NULL;
+  }
   int job = 0;
   if(ps5tm_dumpforge_job_start(a->source, a->target, fpkg_level(a->op), !a->quick, a->unpack, &job, err, sizeof(err)) != 0) {
     cv_fail("%s", err);
-    if(started_here) ps5tm_dumpforge_stop(0);
+    /* The request may have been taken although no answer came (it is waited for 30 s): a Dump Forge that this job started has nothing else to do, so it is
+       ended for good, with whatever job it holds (stop with 1 cancels first); a Dump Forge of the person's own is left alone. */
+    if(started_here) ps5tm_dumpforge_stop(1);
     return NULL;
   }
   PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s%s.", a->title_id, job, fpkg_level(a->op),
@@ -923,7 +938,8 @@ cv_run_fpkg(const cv_args_t *a) {
     if(list_big) cv_fail("Die Auftragsliste von Dump Forge ist zu groß zum Lesen; der Auftrag wurde abgebrochen.");
     else if(lost_out) cv_fail("Dump Forge antwortet nicht mehr.");
     else if(jb.error[0]) cv_fail("Dump Forge: %s", jb.error);
-    PS5TM_WARN("game_convert_failed", "Debug-FPKG von %s gescheitert: %s", a->title_id, lost_out ? "Dump Forge antwortet nicht mehr." : jb.error);
+    else cv_fail("Dump Forge hat den Auftrag ohne Angabe eines Grundes beendet.");          /* an empty text must not leave the job "running" for ever (audit 18.11.2026) */
+    PS5TM_WARN("game_convert_failed", "Debug-FPKG von %s gescheitert: %s", a->title_id, lost_out ? "Dump Forge antwortet nicht mehr." : jb.error[0] ? jb.error : "ohne Angabe");
   }
   return NULL;
 }
@@ -1591,6 +1607,11 @@ unpack_kind_name(int unpack) {
 static uint64_t
 unpacked_size(const char *source, int folder, int unpack, uint64_t raw) {
   if(!folder) return 0;
+  if(unpack == 1) {                                    /* lzp_info reads the whole manifest and holds it twice over: not for a big one on the thread of a page request */
+    char ix[300];
+    struct stat st;
+    if(snprintf(ix, sizeof(ix), "%s/ampr_assets.index", source) >= (int)sizeof(ix) || stat(ix, &st) != 0 || st.st_size > (off_t)(16u << 20)) return 0;
+  }
   lzp_info_t inf;
   if(!(unpack == 2 ? zsp_info(source, &inf, NULL) : lzp_info(source, &inf)) || inf.logical_bytes == 0) return 0;
   const uint64_t rest = raw > inf.stored_bytes ? raw - inf.stored_bytes : 0;
@@ -1998,6 +2019,12 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
       errors++;
     } else {
       chk_add(arr, "engine", "ok", NULL, "Dump Forge %s schreibt das Paket", dv[0] ? dv : "?");
+      if(pc.unpack == 2 && ps5tm_dumpforge_lacks_zstd_unpack(0, dv, sizeof(dv))) {
+        char hint[260];
+        snprintf(hint, sizeof(hint), "Dump Forge laden (Knopf im Fenster) oder die Datei ps5-dump-forge-VERSION-ps5.elf in den Ordner %s legen.", PS5TM_DATA_DIR "/dumpforge");
+        chk_add(arr, "unpack_engine", "error", hint, "Dump Forge %s kennt das Auspacken von zstd-Packs noch nicht, es braucht Version 0.5.0 oder neuer.", dv);
+        errors++;
+      }
     }
   }
 
@@ -2067,6 +2094,9 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
                 "Auf %s ist nicht genug Platz: %s frei, gebraucht werden bis zu %s.", label, size_text(avail + back, b1, sizeof(b1)),
                 size_text(need + SPACE_RESERVE, b2, sizeof(b2)));
         errors++;
+      } else if(is_fpkg_op(op) && pc.unpack && !pc.unpack_bytes) {      /* an image with packs: its own size is all that is known, the unpacked game is more */
+        chk_add(arr, "space", "warn", "Das ungepackte Spiel kann mehr brauchen als diese Datei; wie viel, weiß erst Dump Forge.",
+                "Platz auf %s: %s frei, gebraucht mindestens %s", label, size_text(avail + back, b1, sizeof(b1)), size_text(need, b2, sizeof(b2)));
       } else {
         chk_add(arr, "space", "ok", NULL, "Platz auf %s: %s frei, gebraucht höchstens %s", label, size_text(avail + back, b1, sizeof(b1)),
                 size_text(need, b2, sizeof(b2)));
@@ -2159,6 +2189,7 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
     return 409;
   }
   memset(&g_job, 0, sizeof(g_job));
+  g_thread_live = 1;
   g_job.state = CV_SCANNING;
   snprintf(g_job.title_id, sizeof(g_job.title_id), "%s", title_id);
   snprintf(g_job.name, sizeof(g_job.name), "%s", name);
@@ -2181,6 +2212,7 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
   if(other_job_active(0, err, err_len)) {
     pthread_mutex_lock(&g_lock);
     memset(&g_job, 0, sizeof(g_job));              /* idle again */
+    g_thread_live = 0;
     pthread_mutex_unlock(&g_lock);
     free(a);
     return 409;
@@ -2199,6 +2231,9 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
   if(rc != 0) {
     free(a);
     cv_fail("Das Konvertieren ließ sich nicht starten.");
+    pthread_mutex_lock(&g_lock);
+    g_thread_live = 0;
+    pthread_mutex_unlock(&g_lock);
     snprintf(err, err_len, "Das Konvertieren ließ sich nicht starten.");
     return 500;
   }
@@ -2238,6 +2273,11 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
       return 409;
     }
     if(packs == 1 || packs == 2) unpack = packs;
+    char dv[40] = "";
+    if(unpack == 2 && ps5tm_dumpforge_lacks_zstd_unpack(1, dv, sizeof(dv))) {   /* the one that runs too: a Dump Forge of the person's own may be an old one */
+      snprintf(err, err_len, "Dump Forge %s kennt das Auspacken von zstd-Packs noch nicht, es braucht Version 0.5.0 oder neuer.", dv);
+      return 409;
+    }
   }
 
   int ps4 = ps4_folder(source);

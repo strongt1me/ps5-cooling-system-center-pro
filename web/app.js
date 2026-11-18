@@ -6278,7 +6278,7 @@
   const cvBlocked = (d) => {
     const p = cv.plan;
     /* A .ffpkg is as big as its own image, which is not the exFAT one's size. */
-    const need = cv.op === "ffpkg" && p.ffpkg_bytes ? p.ffpkg_bytes : p.raw_bytes;
+    const need = cv.op === "ffpkg" && p.ffpkg_bytes ? p.ffpkg_bytes : cvIsFpkg(cv.op) && p.fpkg_unpack_bytes ? p.fpkg_unpack_bytes : p.raw_bytes;
     const fat32 = cv.op === "ffpkg" && d.fat32_too_big_ffpkg !== undefined ? d.fat32_too_big_ffpkg : d.fat32_too_big;
     /* A compressed FPKG gets smaller than the game: the check names a FAT32 drive, it is not turned away here. */
     if (fat32 && !(cvIsFpkg(cv.op) && cv.op !== "fpkg-raw")) return "FAT32 nimmt keine Datei über 4 GB auf";
