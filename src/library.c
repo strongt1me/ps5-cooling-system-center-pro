@@ -67,6 +67,7 @@
 #include "dynsym.h"
 #include "imgread.h"
 #include "ps4m.h"
+#include "probefail.h"
 #include "ps5tm.h"
 #include "sqlite_ro.h"
 #include "third_party/cJSON.h"
@@ -2469,6 +2470,11 @@ probe_note_failed(const char *tid) {
   snprintf(g_probe_failed[g_probe_nfailed++], sizeof(g_probe_failed[0]), "%s", tid);
 }
 
+/* Image files the direct reader could not read, by title, size and time (probefail.h, 18.11.2026): such an image is left alone while the file is the same
+   - for six hours at most, and not at all after "Prüfung anfordern" (POST /api/v1/library/probe) - and says so in the log once, not every round. Used by
+   the probe thread alone. The list above (g_probe_failed) is another thing: it is what the mount fallback works from, and it stays as it was. */
+static ps5tm_pfail_t g_probe_bad;
+
 /* Part one: read every image game's own file, nothing mounted, no call to ShadowMountPlus. A title is read again only when
    its image file has another size or time than the one the saved result was read from. Returns how many were read. */
 /* A title whose image the direct reader took the app down with is not read again after the restart: before every read its id goes into a
@@ -2584,15 +2590,18 @@ probe_read_images(void) {
     pthread_mutex_unlock(&g_refresh_lock);
     if(have) continue;
     if(probe_skipped(img[i].tid)) continue;                    /* the reader crashed on it before: left alone until the list is deleted */
+    if(ps5tm_pfail_skip(&g_probe_bad, img[i].tid, (int64_t)st.st_size, (int64_t)st.st_mtime, ps5tm_mono_ms())) continue;   /* could not be read, the file is the same */
     probe_mark_reading(img[i].tid);                            /* a crash inside the reader leaves this mark behind (audit F-21) */
     int rd = probe_read_image_file(img[i].tid, img[i].path, (int64_t)st.st_size, (int64_t)st.st_mtime);
     probe_mark_reading(NULL);
     if(rd == 0) {
       list_remove(PROBE_SUSPECT, img[i].tid);                  /* read well: no longer a suspect */
+      ps5tm_pfail_forget(&g_probe_bad, img[i].tid);
       done++;
     } else {
       probe_note_failed(img[i].tid);
-      PS5TM_INFO("image_probe_unread", "Das Abbild von %s ließ sich nicht direkt lesen (unbekanntes Format?); falls möglich wird es kurz eingehängt.", img[i].tid);
+      if(ps5tm_pfail_note(&g_probe_bad, img[i].tid, (int64_t)st.st_size, (int64_t)st.st_mtime, ps5tm_mono_ms()))
+        PS5TM_INFO("image_probe_unread", "Das Abbild von %s ließ sich nicht direkt lesen (unbekanntes Format?); falls möglich wird es kurz eingehängt. Der Versuch wird erst nach 6 Stunden, bei geänderter Datei oder auf Anforderung wiederholt.", img[i].tid);
     }
   }
   if(done) {
@@ -2680,8 +2689,10 @@ probe_thread(void *arg) {
     while(!g_probe_want) {
       if(pthread_cond_timedwait(&g_probe_cv, &g_probe_lock, &ts) != 0) break;
     }
+    const int asked = g_probe_want;                 /* a person asked for the check (POST /api/v1/library/probe): nothing is left alone this time */
     g_probe_want = 0;
     pthread_mutex_unlock(&g_probe_lock);
+    if(asked) ps5tm_pfail_clear(&g_probe_bad);
     probe_round();
     wait_ms = PROBE_EVERY_MS;
   }

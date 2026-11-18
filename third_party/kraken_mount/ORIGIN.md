@@ -1,11 +1,11 @@
 # Kraken Mount
 
-**Version:** v0.2.1 (16.11.2026)
+**Version:** v0.3.0 (18.11.2026)
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.2.1`, Commit `029386534988d7f70ba3eb2e01d4c285336e5611`)
+**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.3.0`, Commit `e1e784560fe3a56e3b5ffd579f47ed5b2cf194f7`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext und Hinweise zu Fremdbausteinen im Quellprojekt: `LICENSE`, `THIRD_PARTY_NOTICES`)
-**Datei:** `kraken-mount_v0.2.1.elf` (PS5-ELF, 3 803 240 Bytes), unverändert aus der Veröffentlichung
-**SHA-256:** `3b50bdfffaad5bacdd41ad380cc7ce3dfe419d8efde57b30c0c0e7a338fe2494` (gleich `SHA256SUMS` der Veröffentlichung)
+**Datei:** `kraken-mount_v0.3.0.elf` (PS5-ELF, 6 355 424 Bytes), unverändert aus der Veröffentlichung
+**SHA-256:** `092623a204b707b89d0867a0087f9dd1c430eef6a22db497f03b59aaf1297bfe` (gleich `SHA256SUMS` der Veröffentlichung)
 
 ## Verwendung
 
@@ -24,7 +24,28 @@ laut `ensure_tile` in Ruhe. Eine früher angelegte Kachel entfernt die App mit d
 (`keep_tile_away` in `src/kraken.c`).
 
 Aus dem Quellcode von Kraken Mount ist nichts in diese App übernommen; die ELF wird nur weitergegeben. Den Quellcode zu dieser Fassung
-gibt es unter der oben genannten Adresse (Tag `v0.2.1`).
+gibt es unter der oben genannten Adresse (Tag `v0.3.0`).
+
+## Neu in v0.3.0 (18.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.2.1…v0.3.0)
+
+- **Spielstände:** Die eigene `libSceSaveData.native.sprx` aus dem `fakelib/` eines Spiels wird nicht mehr benutzt. Sie ersetzte das
+  Spielstand-Modul der Konsole und ließ Spielstände verschwinden oder nicht laden (#68, #64; Dank an AstroBoot-Dev, #76, und an strongt1me für die Prüfung).
+- **.pkg-Spiele bekommen immer ampr-emu-ng,** auch bei `inject_ampr` aus: Nur ampr-emu-ng liest ein Spiel aus der `.pkg`. Die Einstellung gilt
+  nur noch für Ordner-Spiele (#73).
+- **Mitgelieferte Emulatoren für DLC und PlayGo:** dlc_emu 0.3 und pgo_stub 0.6 von drakmor (beide GPL-3.0) stecken in der ELF.
+  dlc_emu kommt in den `fakelib` eines Spiels mit `dlc_emu.ini`, pgo_stub bei einem Spiel, das PlayGo nutzt, jeweils nur, wenn das Spiel
+  keine neuere Kopie mitbringt. Einstellung `add_emulators` (an); siehe `docs/dlcemu.md`, `docs/playgo.md` im Quellprojekt (#71). Deshalb ist
+  die ELF von 3,8 auf 6,4 MB gewachsen.
+- **Weitere:** Titelmusik beim Markieren eines Spiels auf dem Startbildschirm (#57); Spielnamen in der Sprache der Konsole; **jedes USB-Laufwerk
+  hat auf der Seite von Kraken Mount einen Knopf zum Auswerfen** (neu in der Schnittstelle: `POST /api/eject` mit dem Laufwerkspfad im
+  Rumpf, 409 bei laufendem Spiel; das Feld `ejectable` je Laufwerk in `GET /api/state`; die App benutzt beides nicht).
+- **Scan:** Ein Spiel, das noch kopiert wird, bleibt außen vor, bis sich seine Dateien nicht mehr ändern (`stability_wait_seconds`, 10; bei
+  0 aus). Ein Titel, dessen Quelle 5 Minuten fehlt (zum Beispiel ein abgezogenes Laufwerk), wird vom Startbildschirm genommen
+  (`auto_remove_missing`, an; `auto_remove_delay_seconds`, 300); sein Zwischenspeicher bleibt, und er kommt mit der Quelle zurück. Nicht, solange ein Spiel läuft,
+  nicht bei DLC in `/user/addcont/<TID>`, und nie ein von der Konsole selbst installiertes Spiel mit gleicher Titelnummer.
+- **Beim ersten Start nach dem Wechsel** baut Kraken Mount den `fakelib` **jedes** Spiels einmal neu zusammen.
+- Die übrige Schnittstelle (Port 8097; die Felder, die `src/kraken.c` liest: `version`, `scanpath`, `games` mit `title_id`, `title_name`, `path`, `kind`) ist unverändert; der
+  Ein-Byte-Eingriff (`shadowmountplus.elf`) gilt unverändert (2 Stellen, an der ELF dieser Fassung geprüft; `wait_ready` in `src/main.rs` ist gleich geblieben).
 
 ## Neu in v0.2.1 (16.11.2026, laut Veröffentlichung)
 
@@ -54,9 +75,9 @@ null) in `GET /api/state`. Läuft ShadowMountPlus dauerhaft, meldet Kraken Mount
 mit v0.0.1-beta). Deshalb ändert sie in der eingebetteten ELF beim Bau (`tools/patch_kraken.py`, `Makefile`) und in einer von GitHub geladenen
 Fassung beim Speichern (`patch_smp_wait`, `src/kraken.c`) die Zeichenkette `shadowmountplus.elf` (die Konstante `SMP_PROCESS` in `src/main.rs`, zwei
 Stellen in der Datei) an ihrem letzten Byte zu `shadowmountplus.elX`: Kein Prozess hat diesen Namen, das Warten auf ShadowMountPlus endet sofort. Gleiche
-Länge, sonst bleibt die ELF unverändert; das Warten auf kstuff bleibt. Die Datei `kraken-mount_v0.2.1.elf` in diesem Ordner ist die unveränderte
+Länge, sonst bleibt die ELF unverändert; das Warten auf kstuff bleibt. Die Datei `kraken-mount_v0.3.0.elf` in diesem Ordner ist die unveränderte
 Veröffentlichung (SHA-256 oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderung ist
-der eine Wert in `SMP_PROCESS` (`src/main.rs` im Quellprojekt, Tag `v0.2.1`).
+der eine Wert in `SMP_PROCESS` (`src/main.rs` im Quellprojekt, Tag `v0.3.0`).
 
 ## Hinweise des Autors
 

@@ -27,6 +27,8 @@ main(void) {
   /* the version of the running one against the next start */
   CHECK(ps5tm_krakenboot_restart_needed("0.2.0", "0.2.1") == 1, "older running");
   CHECK(ps5tm_krakenboot_restart_needed("0.2.1", "0.2.1") == 0, "same version");
+  CHECK(ps5tm_krakenboot_restart_needed("0.2.1", "0.3.0") == 1, "0.2.1 still runs after the app brought 0.3.0 (18.11.2026): the page says so");
+  CHECK(ps5tm_krakenboot_restart_needed("0.3.0", "0.3.0") == 0, "0.3.0 runs, 0.3.0 is embedded");
   CHECK(ps5tm_krakenboot_restart_needed("v0.2.1", "0.2.1") == 0, "a v in front of the running one");
   CHECK(ps5tm_krakenboot_restart_needed("0.2.1", "v0.2.1") == 0, "a v in front of the next one");
   CHECK(ps5tm_krakenboot_restart_needed("0.2.2", "0.2.1") == 1, "a newer running one is also different");

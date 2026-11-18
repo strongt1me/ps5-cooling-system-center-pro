@@ -146,7 +146,7 @@ aus Skripten. Für Anfragen mit `Origin` gelten die Regeln aus
 | GET | `/api/v1/dumps` | Die Dumps, die der Disc-Reiter selbst gemacht hat (Info-Datei mit `origin: disc-tab`): `dumps:[{mount, dir, folder, title_id, title, state, kind, bytes, …}]`, `drives`, `truncated`, `scanned_at` |
 | POST | `/api/v1/dumps/scan` | Startet die Suche neu (`{"measure":true}` misst auch die Größen) |
 | POST | `/api/v1/dumps/delete` | `{"mount","dir","folder"}`: löscht einen Dump der Liste (409 bei laufendem Dump oder Dateiauftrag) |
-| POST | `/api/v1/library/probe` | Fordert eine sofortige Prüfung der Abbilder an (202); 503, wenn die Prüfung nicht läuft |
+| POST | `/api/v1/library/probe` | Fordert eine sofortige Prüfung der Abbilder an (202); 503, wenn die Prüfung nicht läuft. Die Anforderung gilt auch für Abbilder, deren Lesen zuvor scheiterte und die sonst bis zu 6 Stunden (bei gleicher Datei) übersprungen werden |
 | POST | `/api/v1/open-ui` | Öffnet die Oberfläche im PS5-Browser; nur von der Konsole selbst (`127.0.0.1`), sonst 403. Mit `{"from":"fullscreen"}` (so ruft die Vollbild-App) trägt die Adresse `?vollbild=1`; nur dann zeigt die Seite die Karte „Hintergründe der Vollbild-App“ (System) |
 | POST | `/api/v1/log/client` | `{"msg":…, "where":…}`: Skriptfehler der Seite ins Protokoll (höchstens 10 je Minute) |
 | GET | `/api/v1/saves/avatar?…` | Profilbild eines Kontos der Spielstände |
