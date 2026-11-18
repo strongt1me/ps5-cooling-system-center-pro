@@ -63,6 +63,7 @@
 #include "conv_ufs2.h"
 #include "cvsample.h"
 #include "dump_image.h"
+#include "fpkgprogress.h"
 #include "fsign.h"
 #include "ioerr.h"
 #include "imgread.h"
@@ -831,7 +832,9 @@ cv_run_fpkg(const cv_args_t *a) {
   PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s%s.", a->title_id, job, fpkg_level(a->op),
              a->unpack == 2 ? ", zstd-Packs werden ausgepackt" : a->unpack == 1 ? ", LZ4-Packs werden ausgepackt" : "");
   int cancel_sent = 0, lost = 0, final = -1, lost_out = 0, hung = 0, too_big = 0, list_big = 0;
-  uint64_t last_ms = ps5tm_mono_ms(), last_done = 0, cancel_first_ms = 0, cancel_last_ms = 0;
+  uint64_t last_ms = ps5tm_mono_ms(), last_done = 0, cancel_first_ms = 0, cancel_last_ms = 0, vlast_ms = 0, vlast_done = 0;
+  ps5tm_fpkgprog_t prog;                                   /* Dump Forge counts the whole job in one bar; the page has one for writing and one for reading back */
+  memset(&prog, 0, sizeof(prog));
   ps5tm_dumpforge_job_t jb;
   for(;;) {
     if(__atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE)) {
@@ -862,8 +865,8 @@ cv_run_fpkg(const cv_args_t *a) {
     if((g_job.state == CV_SCANNING || g_job.state == CV_WRITING) && verifying) { g_job.state = CV_VERIFYING; g_job.t_verify_ms = now; }
     if(g_job.state == CV_VERIFYING && !strcmp(jb.stage, "finalize") && !g_job.t_rename_ms) g_job.t_rename_ms = now;
     if(g_job.state == CV_WRITING && jb.total) {
-      g_job.total_bytes = jb.total;
-      g_job.done_bytes = jb.done > jb.total ? jb.total : jb.done;
+      /* the game's own bytes, not the job-wide count (fpkgprogress.h): "17.5 of 70.1 GB" and a time to go four times too long otherwise */
+      ps5tm_fpkgprog_write(&prog, !strcmp(jb.stage, "compress"), jb.done, jb.total, &g_job.done_bytes, &g_job.total_bytes);
       if(now > last_ms + 1500 && jb.done >= last_done) {
         double r = (double)(jb.done - last_done) * 1000.0 / (double)(now - last_ms);
         g_job.rate = g_job.rate > 0 ? g_job.rate * 0.6 + r * 0.4 : r;
@@ -871,7 +874,18 @@ cv_run_fpkg(const cv_args_t *a) {
         last_done = jb.done;
       }
     }
-    if(g_job.state == CV_VERIFYING && jb.total) { g_job.check_total = jb.total; g_job.check_done = jb.done > jb.total ? jb.total : jb.done; }
+    if(g_job.state == CV_VERIFYING && jb.total) {
+      ps5tm_fpkgprog_check(&prog, jb.done, jb.total, &g_job.check_done, &g_job.check_total);
+      if(!vlast_ms) {
+        vlast_ms = now;
+        vlast_done = jb.done;
+      } else if(now > vlast_ms + 1500 && jb.done >= vlast_done) {        /* the speed of the check: it had none, so there was no time to go */
+        double r = (double)(jb.done - vlast_done) * 1000.0 / (double)(now - vlast_ms);
+        g_job.crate = g_job.crate > 0 ? g_job.crate * 0.6 + r * 0.4 : r;
+        vlast_ms = now;
+        vlast_done = jb.done;
+      }
+    }
     if(jb.log[0]) snprintf(g_job.note, sizeof(g_job.note), "%s", jb.log);
     pthread_mutex_unlock(&g_lock);
     if(st == 1) { final = CV_DONE; break; }
