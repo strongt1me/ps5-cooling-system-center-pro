@@ -161,9 +161,14 @@ static int             g_cancel;          /* read by the build loops */
 static int g_thread_live;
 
 static int
-active_locked(void) {
+state_active_locked(void) {
   return g_job.state == CV_SCANNING || g_job.state == CV_WRITING ||
-         g_job.state == CV_VERIFYING || g_thread_live;
+         g_job.state == CV_VERIFYING;
+}
+
+static int
+active_locked(void) {
+  return state_active_locked() || g_thread_live;
 }
 
 static void cv_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -837,11 +842,12 @@ cv_run_fpkg(const cv_args_t *a) {
     return NULL;
   }
   int job = 0;
-  if(ps5tm_dumpforge_job_start(a->source, a->target, fpkg_level(a->op), !a->quick, a->unpack, &job, err, sizeof(err)) != 0) {
+  const int started = ps5tm_dumpforge_job_start(a->source, a->target, fpkg_level(a->op), !a->quick, a->unpack, &job, err, sizeof(err));
+  if(started != 0) {
     cv_fail("%s", err);
-    /* The request may have been taken although no answer came (it is waited for 30 s): a Dump Forge that this job started has nothing else to do, so it is
-       ended for good, with whatever job it holds (stop with 1 cancels first); a Dump Forge of the person's own is left alone. */
-    if(started_here) ps5tm_dumpforge_stop(1);
+    /* No answer (it is waited for 30 s) does not mean the job was not taken: a Dump Forge that this job started has nothing else to do, so it is ended for
+       good, with whatever job it holds (stop with 1 cancels first); after a refusal, or when the person's own Dump Forge was there, it is left alone. */
+    if(started_here) ps5tm_dumpforge_stop(started == -2);       /* forced only when no answer came: a refusal left no job of ours behind */
     return NULL;
   }
   PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s%s.", a->title_id, job, fpkg_level(a->op),
@@ -2095,7 +2101,7 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
                 size_text(need + SPACE_RESERVE, b2, sizeof(b2)));
         errors++;
       } else if(is_fpkg_op(op) && pc.unpack && !pc.unpack_bytes) {      /* an image with packs: its own size is all that is known, the unpacked game is more */
-        chk_add(arr, "space", "warn", "Das ungepackte Spiel kann mehr brauchen als diese Datei; wie viel, weiß erst Dump Forge.",
+        chk_add(arr, "space", "warn", "Das ungepackte Spiel kann mehr brauchen als das gepackte; wie viel, weiß erst Dump Forge.",
                 "Platz auf %s: %s frei, gebraucht mindestens %s", label, size_text(avail + back, b1, sizeof(b1)), size_text(need, b2, sizeof(b2)));
       } else {
         chk_add(arr, "space", "ok", NULL, "Platz auf %s: %s frei, gebraucht höchstens %s", label, size_text(avail + back, b1, sizeof(b1)),
@@ -2454,7 +2460,7 @@ int
 ps5tm_gameconvert_cancel(int expect_qid) {
   /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
   pthread_mutex_lock(&g_lock);
-  int active = active_locked();
+  int active = state_active_locked();                /* not the place held for the thread's cleanup: that job has ended */
   /* expect_qid >= 0: the entry of the queue the person saw (0 = a job that is not from the queue); another job is not cancelled */
   int other = active && expect_qid >= 0 && g_job.qid != expect_qid;
   if(active && !other) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);

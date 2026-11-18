@@ -24,6 +24,7 @@
 
 #include "lhttp.h"
 #include "ps5tm.h"
+#include "vercmp.h"
 #include "sha256.h"
 #include "third_party/cJSON.h"
 #include "titleid.h"
@@ -66,16 +67,10 @@ elf_name_version(const char *name, char *ver, size_t n) {
   return 1;
 }
 
-/* 1 when version a is newer than b ("0.5.5" against "0.5.4"; "" is the oldest). */
+/* 1 when version a is newer than b ("0.5.5" against "0.5.4"; "" is the oldest): vercmp.h, which ends for every text. */
 static int
 ver_newer(const char *a, const char *b) {
-  while(*a || *b) {
-    long x = strtol(a, (char **)&a, 10), y = strtol(b, (char **)&b, 10);
-    if(x != y) return x > y;
-    if(*a == '.') a++;
-    if(*b == '.') b++;
-  }
-  return 0;
+  return ps5tm_ver_newer(a, b);
 }
 
 static int
@@ -190,7 +185,7 @@ ps5tm_dumpforge_lacks_zstd_unpack(int probe_running, char *ver, size_t vn) {
     v[0] = 0;
     if(!find_elf(path, sizeof path, v, sizeof v)) v[0] = 0;
   }
-  if(!v[0]) return 0;
+  if(!ps5tm_ver_known(v)) return 0;                      /* no version, or text that is no version: let it through */
   if(ver && vn) snprintf(ver, vn, "%s", v);
   return ver_newer("0.5.0", v);
 }
@@ -326,6 +321,7 @@ ps5tm_dumpforge_job_start(const char *source, const char *output, const char *le
     cJSON_Delete(j);
   }
   if(rc != 0) {
+    if(st < 0) rc = -2;                                  /* no answer: the job may have been taken all the same */
     /* Dump Forge's own reason: {"error":"…"} */
     cJSON *j = reply ? cJSON_Parse((char *)reply) : NULL;
     const cJSON *e = j ? cJSON_GetObjectItem(j, "error") : NULL;
