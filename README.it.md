@@ -203,7 +203,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 1. Scaricare `PS5_Cooling_System_Center_v<versione>.elf` dalle [Release](../../releases).
 2. Inviarlo alla console (loader ELF, porta **9021**), per esempio:
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.86.4.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.86.5.elf
    ```
 3. Aprire **`http://<IP-PS5>:8086`** nel browser (l'indirizzo compare anche nella notifica in alto a sinistra sulla TV).
 
