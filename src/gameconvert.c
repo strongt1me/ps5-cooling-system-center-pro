@@ -862,7 +862,11 @@ cv_run_fpkg(const cv_args_t *a) {
     int writing = !strcmp(jb.stage, "compress") || !strcmp(jb.stage, "write");
     int verifying = !strcmp(jb.stage, "verify") || !strcmp(jb.stage, "finalize");
     if(g_job.state == CV_SCANNING && writing) { g_job.state = CV_WRITING; g_job.t_write_ms = now; }
-    if((g_job.state == CV_SCANNING || g_job.state == CV_WRITING) && verifying) { g_job.state = CV_VERIFYING; g_job.t_verify_ms = now; }
+    if((g_job.state == CV_SCANNING || g_job.state == CV_WRITING) && verifying) {
+      g_job.state = CV_VERIFYING;
+      g_job.t_verify_ms = now;
+      g_job.done_bytes = g_job.total_bytes;               /* the package is written: the writing bar does not stay at the last look of the poll */
+    }
     if(g_job.state == CV_VERIFYING && !strcmp(jb.stage, "finalize") && !g_job.t_rename_ms) g_job.t_rename_ms = now;
     if(g_job.state == CV_WRITING && jb.total) {
       /* the game's own bytes, not the job-wide count (fpkgprogress.h): "17.5 of 70.1 GB" and a time to go four times too long otherwise */
