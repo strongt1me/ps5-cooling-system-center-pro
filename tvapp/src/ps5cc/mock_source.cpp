@@ -372,6 +372,22 @@ class MockSource final : public Source
             data_.plan.ticket = plan_ticket_;
             changed();
         }
+        // "Original danach": the plan for the original and the check of a folder
+        if (orig_plan_at_ > 0.0f && clock_ >= orig_plan_at_)
+        {
+            orig_plan_at_ = 0.0f;
+            data_.orig_plan = make_orig_plan(orig_plan_id_);
+            data_.orig_plan.ticket = orig_plan_ticket_;
+            changed();
+        }
+        if (orig_check_at_ > 0.0f && clock_ >= orig_check_at_)
+        {
+            orig_check_at_ = 0.0f;
+            data_.orig_check = make_orig_check(orig_check_id_, orig_check_dest_);
+            data_.orig_check.ticket = orig_check_ticket_;
+            changed();
+        }
+        tick_orig();
         if (second_ >= 1.0f)
         {
             second_ = 0.0f;
@@ -390,6 +406,11 @@ class MockSource final : public Source
                     job.active = false;
                     job.finished = true;
                     job.state = "done";
+                    orig_job_done(i == static_cast<std::size_t>(JobKind::copy)      ? "copy"
+                                  : i == static_cast<std::size_t>(JobKind::convert) ? "convert"
+                                  : i == static_cast<std::size_t>(JobKind::storage) ? "unpack"
+                                                                                    : "",
+                                  job.id);
                     notice(Notice::Kind::success, "„" + job.name + "“ fertig");
                     for (QueueItem &q : queue_)
                     {
@@ -418,6 +439,7 @@ class MockSource final : public Source
                     conv = Job{};
                     conv.active = true;
                     conv.state = "writing";
+                    conv.id = q.id;
                     conv.name = q.name;
                     conv.op = q.op;
                     conv.queue_id = q.qid;
@@ -648,6 +670,24 @@ class MockSource final : public Source
         return plan_ticket_;
     }
 
+    // ---- "Original danach" (18.11.2026): the plan for the original, the check of a folder ----
+    std::uint64_t orig_plan(const std::string &id) override
+    {
+        orig_plan_ticket_ += 1;
+        orig_plan_id_ = id;
+        orig_plan_at_ = clock_ + 0.3f;
+        return orig_plan_ticket_;
+    }
+
+    std::uint64_t orig_check(const std::string &id, const std::string &dest) override
+    {
+        orig_check_ticket_ += 1;
+        orig_check_id_ = id;
+        orig_check_dest_ = dest;
+        orig_check_at_ = clock_ + 0.15f;
+        return orig_check_ticket_;
+    }
+
     // ---- the check before a conversion and the queue (13.11.2026) ----
     std::uint64_t convert_check(const std::string &body) override
     {
@@ -693,6 +733,7 @@ class MockSource final : public Source
                           stem + "." + (fpkg_item ? std::string("pkg") : item.op);
             queue_.push_back(item);
             queue_run_ = true;
+            orig_add("convert", g, text("orig_after"), text("orig_dest"));
         }
         else if (action == "start")
             queue_run_ = true;
@@ -991,7 +1032,6 @@ class MockSource final : public Source
 
     void start_tool(Tool tool, const std::string &id, const std::string &body) override
     {
-        (void)body;
         const Game *game = find(id);
         const std::string name = game != nullptr ? game->name : id;
         const JobKind kind = tool == Tool::copy                           ? JobKind::copy
@@ -1010,6 +1050,7 @@ class MockSource final : public Source
         job = Job{};
         job.active = true;
         job.state = "running";
+        job.id = id;
         job.name = name;
         job.total = game != nullptr ? static_cast<double>(game->size_bytes) : 1e9;
         job.cancellable = kind != JobKind::deletion;
@@ -1050,6 +1091,21 @@ class MockSource final : public Source
         job.done = job.total * 0.07;
         if (kind == JobKind::convert)
             fill_stages(job);
+        // What the start said about the original (only copy, convert and unpack carry it)
+        if (tool == Tool::copy || tool == Tool::convert || tool == Tool::unpack)
+        {
+            cJSON *request = cJSON_Parse(body.c_str());
+            const auto text = [&](const char *key) -> std::string
+            {
+                const cJSON *i = cJSON_GetObjectItemCaseSensitive(request, key);
+                return cJSON_IsString(i) && i->valuestring != nullptr ? i->valuestring : "";
+            };
+            orig_add(tool == Tool::copy      ? "copy"
+                     : tool == Tool::convert ? "convert"
+                                             : "unpack",
+                     game, text("orig_after"), text("orig_dest"));
+            cJSON_Delete(request);
+        }
         Notice n;
         n.kind = Notice::Kind::job_started;
         n.title = std::string(tool_label(tool)) + " gestartet";
@@ -1122,6 +1178,11 @@ class MockSource final : public Source
         job.active = false;
         job.finished = true;
         job.state = "cancelled";
+        orig_job_stopped(kind == JobKind::copy      ? "copy"
+                         : kind == JobKind::convert ? "convert"
+                         : kind == JobKind::storage ? "unpack"
+                                                    : "",
+                         job.id);
         notice(Notice::Kind::info, "Auftrag abgebrochen", job.name);
         changed();
     }
@@ -2364,6 +2425,276 @@ class MockSource final : public Source
         return reply;
     }
 
+    // The plan for the original (GET /api/v1/library/orig/plan): where it lies, which ways the app
+    // allows and the drives for a move. A game that runs is not touched.
+    OrigReply make_orig_plan(const std::string &id) const
+    {
+        OrigReply reply;
+        const Game *g = find(id);
+        if (g == nullptr)
+        {
+            reply.error = "Das Spiel ist nicht in der Liste.";
+            return reply;
+        }
+        const bool installed =
+            g->format == "fpkg" || g->format == "ps4mount" || g->format == "fpkgmount";
+        if (installed)
+        {
+            reply.error = "Ein installiertes Spiel hat kein Original, das sich bewegen ließe.";
+            return reply;
+        }
+        const bool running = g->id == data_.status.game_id;
+        const bool folder = g->format == "folder";
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddBoolToObject(root, "ok", 1);
+        cJSON_AddStringToObject(root, "id", g->id.c_str());
+        cJSON_AddStringToObject(root, "name", g->name.c_str());
+        cJSON *source = cJSON_AddObjectToObject(root, "source");
+        cJSON_AddStringToObject(source, "path", g->path.c_str());
+        cJSON_AddStringToObject(source, "kind", folder ? "folder" : "image");
+        cJSON_AddNumberToObject(source, "size_bytes", static_cast<double>(g->size_bytes));
+        for (const MockDrive &m : kDrives)
+        {
+            if (g->path.rfind(std::string(m.mount) + "/", 0) == 0)
+            {
+                cJSON_AddStringToObject(source, "mount", m.mount);
+                cJSON_AddStringToObject(source, "label", m.label);
+            }
+        }
+        const char *why = "Das Spiel läuft gerade. Bitte erst beenden.";
+        cJSON_AddBoolToObject(root, "can_delete", !running);
+        cJSON_AddStringToObject(root, "delete_why", running ? why : "");
+        cJSON_AddBoolToObject(root, "can_move", !running);
+        cJSON_AddStringToObject(root, "move_why", running ? why : "");
+        cJSON_AddStringToObject(root, "default_folder", "PS5-Sicherung/Spiele");
+        cJSON *drives = cJSON_AddArrayToObject(root, "drives");
+        for (const MockDrive &m : kDrives)
+        {
+            const std::string mount = m.mount;
+            cJSON *d = cJSON_CreateObject();
+            cJSON_AddStringToObject(d, "mount", m.mount);
+            cJSON_AddStringToObject(d, "label", m.label);
+            cJSON_AddStringToObject(d, "kind",
+                                    mount == "/data"                  ? "internal"
+                                    : mount.rfind("/mnt/ext", 0) == 0 ? "m2"
+                                                                      : "usb");
+            cJSON_AddNumberToObject(d, "free_bytes", m.free_gb * 1e9);
+            cJSON_AddStringToObject(d, "default_dest", (mount + "/PS5-Sicherung/Spiele").c_str());
+            cJSON_AddItemToArray(drives, d);
+        }
+        char *text = cJSON_PrintUnformatted(root);
+        reply.json = text != nullptr ? text : "{}";
+        cJSON_free(text);
+        cJSON_Delete(root);
+        reply.ok = true;
+        return reply;
+    }
+
+    // The check of a folder for the original (GET /api/v1/library/orig/check), with the refusals
+    // the console app has: a folder ShadowMountPlus searches, FAT32, no room, the original's own
+    // folder.
+    OrigReply make_orig_check(const std::string &id, const std::string &dest) const
+    {
+        OrigReply reply;
+        const Game *g = find(id);
+        if (g == nullptr)
+        {
+            reply.error = "Das Spiel ist nicht in der Liste.";
+            return reply;
+        }
+        const MockDrive *drive = nullptr;
+        for (const MockDrive &m : kDrives)
+        {
+            if (dest == m.mount || dest.rfind(std::string(m.mount) + "/", 0) == 0)
+                drive = &m;
+        }
+        const double size = static_cast<double>(g->size_bytes);
+        const auto gb = [](double bytes)
+        {
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), "%.1f GB", bytes / 1e9);
+            for (char &c : buf)
+            {
+                if (c == '.')
+                    c = ',';
+            }
+            return std::string(buf);
+        };
+        const std::size_t slash = g->path.find_last_of('/');
+        const std::string here = g->path.substr(0, slash);
+        const std::string leaf = g->path.substr(slash + 1);
+        std::string level = "ok", text;
+        bool searches = false;
+        if (drive == nullptr)
+        {
+            level = "error";
+            text = "Dieser Ordner liegt auf keinem Datenträger, den die App kennt.";
+        }
+        else if (dest.find("/homebrew") != std::string::npos ||
+                 dest.find("/games") != std::string::npos)
+        {
+            level = "error";
+            searches = true;
+            text = "Dorthin wird nicht verschoben: ShadowMountPlus würde das Spiel wieder finden. "
+                   "Bitte einen anderen Ordner wählen.";
+        }
+        else if (dest == here)
+        {
+            level = "error";
+            text = "Dort liegt das Original schon.";
+        }
+        else if (std::string(drive->fs) == "msdosfs" && size > 4.29e9)
+        {
+            level = "error";
+            text = std::string(drive->label) +
+                   " ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf.";
+        }
+        else if (drive->free_gb * 1e9 < size)
+        {
+            level = "error";
+            text = std::string("Auf ") + drive->label +
+                   " ist nicht genug Platz: " + gb(drive->free_gb * 1e9) + " frei, nötig sind " +
+                   gb(size) + ".";
+        }
+        else
+        {
+            text = dest + " · ShadowMountPlus sucht dort nicht · Platz reicht (" + gb(size) + ")";
+        }
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddBoolToObject(root, "ok", 1);
+        cJSON_AddStringToObject(root, "level", level.c_str());
+        cJSON_AddBoolToObject(root, "can_move", level == "ok");
+        cJSON_AddStringToObject(root, "text", text.c_str());
+        cJSON_AddStringToObject(root, "dest", dest.c_str());
+        cJSON_AddStringToObject(root, "target", (dest + "/" + leaf).c_str());
+        cJSON_AddNumberToObject(root, "free_bytes", drive != nullptr ? drive->free_gb * 1e9 : 0.0);
+        cJSON_AddNumberToObject(root, "need_bytes", size);
+        cJSON_AddBoolToObject(root, "smp_searches", searches);
+        char *out = cJSON_PrintUnformatted(root);
+        reply.json = out != nullptr ? out : "{}";
+        cJSON_free(out);
+        cJSON_Delete(root);
+        reply.ok = true;
+        return reply;
+    }
+
+    // ---- what becomes of the original (GET /api/v1/library/orig/status) ----
+    // An entry starts "waiting" with the job; when the job is done it runs for a moment and ends
+    // "done" (a move names where the original went).
+    struct MockOrig
+    {
+        OrigItem item;
+        float run_until = 0.0f;
+        std::uint64_t bytes = 0;
+        std::string dest;
+    };
+
+    void orig_add(const char *kind, const Game *g, const std::string &after,
+                  const std::string &dest)
+    {
+        if (g == nullptr || (after != "delete" && after != "move"))
+            return;
+        MockOrig m;
+        m.item.id = g->id;
+        m.item.name = g->name;
+        m.item.kind = kind;
+        m.item.mode = after;
+        m.item.state = "waiting";
+        m.item.message = after == "delete"
+                             ? "Das Original wird nach dem Prüfen des Ergebnisses gelöscht."
+                             : "Das Original wird nach dem Prüfen des Ergebnisses verschoben.";
+        m.item.target = after == "move" ? dest : std::string();
+        m.item.updated_ms = static_cast<std::int64_t>(clock_ * 1000.0f);
+        m.bytes = g->size_bytes;
+        m.dest = dest;
+        orig_items_.insert(orig_items_.begin(), std::move(m));
+        if (orig_items_.size() > 8)
+            orig_items_.pop_back();
+        sync_orig_status();
+    }
+
+    void orig_job_done(const std::string &kind, const std::string &id)
+    {
+        for (MockOrig &m : orig_items_)
+        {
+            if (m.item.kind != kind || m.item.id != id || m.item.state != "waiting")
+                continue;
+            m.item.state = "running";
+            m.item.message = m.item.mode == "delete" ? "Das Original wird gelöscht …"
+                                                     : "Das Original wird verschoben …";
+            m.item.updated_ms = static_cast<std::int64_t>(clock_ * 1000.0f);
+            m.run_until = clock_ + 2.5f;
+        }
+        sync_orig_status();
+    }
+
+    void orig_job_stopped(const std::string &kind, const std::string &id)
+    {
+        for (MockOrig &m : orig_items_)
+        {
+            if (m.item.kind != kind || m.item.id != id || m.item.state != "waiting")
+                continue;
+            m.item.state = "skipped";
+            m.item.message = "Das Original bleibt: Der Auftrag wurde abgebrochen.";
+            m.item.updated_ms = static_cast<std::int64_t>(clock_ * 1000.0f);
+        }
+        sync_orig_status();
+    }
+
+    void tick_orig()
+    {
+        bool any = false;
+        for (MockOrig &m : orig_items_)
+        {
+            if (m.item.state != "running" || clock_ < m.run_until)
+                continue;
+            m.item.state = "done";
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), "%.1f", static_cast<double>(m.bytes) / 1e9);
+            for (char &c : buf)
+            {
+                if (c == '.')
+                    c = ',';
+            }
+            m.item.message = m.item.mode == "delete"
+                                 ? std::string("Original gelöscht: ") + buf + " GB sind frei."
+                                 : "Original verschoben nach " + m.dest;
+            m.item.updated_ms = static_cast<std::int64_t>(clock_ * 1000.0f);
+            any = true;
+        }
+        if (any)
+            sync_orig_status();
+    }
+
+    void sync_orig_status()
+    {
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddBoolToObject(root, "ok", 1);
+        bool active = false;
+        cJSON *items = cJSON_AddArrayToObject(root, "items");
+        for (const MockOrig &m : orig_items_)
+        {
+            active = active || m.item.state == "waiting" || m.item.state == "running";
+            cJSON *o = cJSON_CreateObject();
+            cJSON_AddStringToObject(o, "id", m.item.id.c_str());
+            cJSON_AddStringToObject(o, "name", m.item.name.c_str());
+            cJSON_AddStringToObject(o, "kind", m.item.kind.c_str());
+            cJSON_AddStringToObject(o, "mode", m.item.mode.c_str());
+            cJSON_AddStringToObject(o, "state", m.item.state.c_str());
+            cJSON_AddStringToObject(o, "message", m.item.message.c_str());
+            if (!m.item.target.empty())
+                cJSON_AddStringToObject(o, "target", m.item.target.c_str());
+            cJSON_AddNumberToObject(o, "updated_ms", static_cast<double>(m.item.updated_ms));
+            cJSON_AddItemToArray(items, o);
+        }
+        cJSON_AddBoolToObject(root, "active", active);
+        char *out = cJSON_PrintUnformatted(root);
+        data_.orig_status_json = out != nullptr ? out : "";
+        cJSON_free(out);
+        cJSON_Delete(root);
+        changed();
+    }
+
     const Game *find(const std::string &id) const
     {
         for (const Game &g : data_.games)
@@ -3253,7 +3584,14 @@ class MockSource final : public Source
         queue_; // the queue of conversions (invented; a few entries stand in it from the start)
     bool queue_run_ = false;
     int queue_next_ = 1;
-    bool smp_update_off_ = false; // "Ja" to the ShadowMountPlus question was given
+    std::uint64_t orig_plan_ticket_ = 0;
+    std::string orig_plan_id_;
+    float orig_plan_at_ = 0.0f;
+    std::uint64_t orig_check_ticket_ = 0;
+    std::string orig_check_id_, orig_check_dest_;
+    float orig_check_at_ = 0.0f;
+    std::vector<MockOrig> orig_items_; // newest first
+    bool smp_update_off_ = false;      // "Ja" to the ShadowMountPlus question was given
 };
 
 Source *g_source = nullptr;

@@ -454,7 +454,7 @@ split_run(void *arg) {
   goto out;
 
 cleanup:
-  if(out >= 0) { close(out); out = -1; }
+  if(out >= 0) close(out);
   remove_temps(a, written ? written : 0);
 out:
   if(pf) ps5tm_prefetch_stop(pf);

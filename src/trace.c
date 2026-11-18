@@ -306,7 +306,7 @@ load_trace(model_t *m, const char *journal, const char *index, int trace) {
     }
     if(h.header_bytes > 96 && lseek(fd, h.header_bytes - 96, SEEK_CUR) < 0) break;
     if(h.payload_bytes > (64u << 20)) break;
-    if(grow((void **)&payload, &pcap, h.payload_bytes / 4 + 1, 4)) break;
+    if(grow((void **)&payload, &pcap, h.payload_bytes / 4 + 1, 4) || !payload) break;
     if(read_full(fd, payload, h.payload_bytes, &got) != 0 || got != h.payload_bytes) break;      /* cut off: stop */
     if(h.sequence != expect) m->gaps++;
     expect = h.sequence + 1;
@@ -567,7 +567,7 @@ typedef struct { uint64_t *k; uint32_t *v; size_t cap, used, live; } hmap_t;
 #define HM_EMPTY 0ull
 #define HM_TOMB UINT64_MAX
 
-static void hm_free(hmap_t *h) { free(h->k); free(h->v); memset(h, 0, sizeof(*h)); }
+static void hm_free(hmap_t *h) { free(h->k); h->k = NULL; free(h->v); h->v = NULL; memset(h, 0, sizeof(*h)); }
 static int
 hm_init(hmap_t *h, size_t cap) {
   memset(h, 0, sizeof(*h));

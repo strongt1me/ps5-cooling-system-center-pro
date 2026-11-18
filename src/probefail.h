@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define PS5TM_PFAIL_MAX      40                                   /* as many as the reader takes up in a round (PROBE_MAX_TITLES) */
+#define PS5TM_PFAIL_MAX      256                                  /* as many as the list holds (LIBRARY_MAX): the reader looks at all image games (audit F-260) */
 #define PS5TM_PFAIL_RETRY_MS (6ull * 60ull * 60ull * 1000ull)     /* a failure is tried again after six hours at the latest */
 
 typedef struct {

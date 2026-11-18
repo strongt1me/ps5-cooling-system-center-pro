@@ -55,7 +55,14 @@ Zum Beispiel:
   `bind_address` und der Browser-Schutz dieser App gelten für sie nicht. Wer
   das nicht will, schaltet Kraken Mount im Reiter FPKGMount aus (der Schalter
   merkt sich das über Neustarts). Gemeldet wird so etwas bei den Autoren dieser
-  Programme.
+  Programme. Die Folge für Kraken Mount 0.3.0 (Prüfung vom 18.11.2026, aus dem
+  Quelltext des Programms gelesen, nicht nachgestellt): Eine fremde Webseite im
+  Browser eines Geräts im Heimnetz kann dort ohne Anmeldung die Einstellungen
+  ändern (Suchordner, Fehlersuch-Modus) und ein Spiel löschen, dessen genauen
+  Pfad sie kennt; Dateien unter `/data` liest sie nur bei eingeschaltetem
+  Fehlersuch-Modus und über einen Umweg (DNS-Rebinding). Der Reiter FPKGMount
+  zeigt abweichende Suchordner an; die Prüfung von `Host` und `Origin` kann nur
+  der Autor von Kraken Mount einbauen.
 - Schwachstellen in der Konsole selbst, im Jailbreak, in kstuff, im Payload-Lader
   oder in anderen Homebrew-Programmen. Bitte melde sie dort.
 - Das Umgehen von Schutzmaßnahmen des Herstellers. Dieses Projekt enthält dafür keinen

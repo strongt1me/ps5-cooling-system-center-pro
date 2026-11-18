@@ -49,6 +49,8 @@ class HttpSource final : public Source
     void store_action(const std::string &action, const std::string &id) override;
     std::uint64_t convert_check(const std::string &body) override;
     void convert_queue(const std::string &body) override;
+    std::uint64_t orig_plan(const std::string &id) override;
+    std::uint64_t orig_check(const std::string &id, const std::string &dest) override;
     void set_backdrop(const std::string &area, BackdropMode mode) override;
     void package_action(const std::string &action, const std::string &id) override;
     void split_package(const std::string &id, const std::string &target, int part_mb) override;
@@ -149,6 +151,8 @@ class HttpSource final : public Source
             fs_view,
             fs_size,
             fs_write,
+            orig_plan,  // id: the title; value: the ticket
+            orig_check, // id: the title; text: the folder; value: the ticket
         } kind;
         int value = 0;
         std::string id;
@@ -243,6 +247,7 @@ class HttpSource final : public Source
     std::atomic<bool> ng_fetching_{false}; // the check for a new AMPR EMU NG version is on its way
     std::mutex kraken_poll_mutex_; // one question about FPKGMount at a time: the newer answer wins
     std::atomic<bool> jobs_wanted_{false}; // a tool started: ask for the jobs at once
+    bool orig_status_missing_ = false;     // an older app has no /library/orig/status (worker only)
     bool leaving_for_delete_ = false;      // the app ends itself for a delete (worker thread only)
     bool leaving_for_storage_ = false;     // ... or for a move or an unpack of ShadowMountPlus
     std::atomic<bool> library_wanted_{false}; // a job ended: games may have moved or gone

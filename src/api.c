@@ -1,5 +1,6 @@
 /* REST surface consumed by the bundled web UI, under /api/v1. */
 
+#include <ctype.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -1810,6 +1811,7 @@ typedef struct { char tv[16], id[16], name[128], link[96]; } after_exit_t;
 static void *
 after_exit_thread(void *arg) {
   after_exit_t *a = arg;
+  if(!a) return NULL;
   int waited = 0;
   while(ps5tm_procmgr_title_running(a->tv) == 1 && waited < TV_EXIT_WAIT_MS) {
     usleep(200 * 1000);
@@ -2180,6 +2182,81 @@ send_cjson(int fd, int status, cJSON *root) {
   free(txt);
 }
 
+/* The value of a query parameter with its %XX escapes decoded (a path is sent as encodeURIComponent makes it: the slashes are %2F). */
+static void
+query_param_decoded(const char *query, const char *key, char *out, size_t out_len) {
+  char raw[512];
+  query_param(query, key, raw, sizeof(raw));
+  size_t o = 0;
+  for(size_t i = 0; raw[i] && o + 1 < out_len; i++) {
+    if(raw[i] == '%' && isxdigit((unsigned char)raw[i + 1]) && isxdigit((unsigned char)raw[i + 2])) {
+      char h[3] = { raw[i + 1], raw[i + 2], 0 };
+      const long c = strtol(h, NULL, 16);
+      if(c == 0) break;                                       /* %00 ends the value: it is no part of a path */
+      out[o++] = (char)c;
+      i += 2;
+    } else {
+      out[o++] = raw[i];
+    }
+  }
+  out[o] = '\0';
+}
+
+/* "Original danach" (origafter.c): what the person can choose for the original of a game after a conversion, a copy or an unpack. */
+static void
+handle_orig_plan(int fd, const ps5tm_request_t *req) {
+  char id[16];
+  query_title_id(req->query, id, sizeof(id));
+  int http = 200;
+  cJSON *root = ps5tm_orig_plan_json(id, &http);
+  if(!root) {
+    ps5tm_http_send_error(fd, http, "not_found", "Zu diesem Spiel gibt es kein Original, das sich löschen oder verschieben lässt.");
+    return;
+  }
+  send_cjson(fd, 200, root);
+}
+
+/* GET ?id=&dest= (the path percent-encoded) or POST {id, dest}: may the original be moved there? */
+static void
+handle_orig_check(int fd, const ps5tm_request_t *req, int is_post) {
+  char id[16] = "", dest[320] = "";
+  if(is_post) {
+    cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *ji = body ? cJSON_GetObjectItem(body, "id") : NULL, *jd = body ? cJSON_GetObjectItem(body, "dest") : NULL;
+    if(cJSON_IsString(ji) && strlen(ji->valuestring) < sizeof(id)) snprintf(id, sizeof(id), "%s", ji->valuestring);
+    if(cJSON_IsString(jd) && strlen(jd->valuestring) < sizeof(dest)) snprintf(dest, sizeof(dest), "%s", jd->valuestring);
+    cJSON_Delete(body);
+  } else {
+    query_title_id(req->query, id, sizeof(id));
+    query_param_decoded(req->query, "dest", dest, sizeof(dest));
+  }
+  int http = 200;
+  cJSON *root = ps5tm_orig_check_json(id, dest, &http);
+  if(!root) {
+    ps5tm_http_send_error(fd, http, "not_found", "Zu diesem Spiel gibt es kein Original, das sich löschen oder verschieben lässt.");
+    return;
+  }
+  send_cjson(fd, 200, root);
+}
+
+/* Notes the choice for the original before a job is started (origafter.c): 1 when the request may go on, else the refusal has been sent. */
+static int
+orig_before(int fd, const char *kind, const char *id, const cJSON *body, ps5tm_orig_req_t *orq) {
+  char oerr[400] = "";
+  int ostat = ps5tm_orig_prepare_body(kind, id, body, orq, oerr, sizeof(oerr));
+  if(ostat != 0) {
+    ps5tm_http_send_error(fd, ostat, "orig_refused", oerr);
+    return 0;
+  }
+  int arm = ps5tm_orig_arm(orq, kind);
+  if(arm != 0) {
+    if(arm == -2) ps5tm_http_send_error(fd, 409, "orig_open", "Für dieses Spiel läuft oder wartet schon ein Vorgang mit einer Wahl für das Original.");
+    else ps5tm_http_send_error(fd, 409, "orig_full", "Zu viele offene Auswahlen für das Original.");
+    return 0;
+  }
+  return 1;
+}
+
 static void
 handle_copy_plan(int fd, const ps5tm_request_t *req) {
   char id[16], err[256] = "";
@@ -2202,10 +2279,14 @@ handle_copy_start(int fd, const ps5tm_request_t *req) {
   if(cJSON_IsString(jid))  snprintf(id, sizeof(id), "%s", jid->valuestring);
   if(cJSON_IsString(jdst)) snprintf(target, sizeof(target), "%s", jdst->valuestring);
   if(cJSON_IsString(jm))   snprintf(mode, sizeof(mode), "%s", jm->valuestring);
+  ps5tm_orig_req_t orq;                       /* "orig_after" / "orig_dest": what to do with the original afterwards (origafter.c) */
+  int orig_ok = orig_before(fd, "copy", id, body, &orq);
   cJSON_Delete(body);
+  if(!orig_ok) return;
 
   char err[640] = "";
   int status = ps5tm_gamecopy_start(id, target, mode, err, sizeof(err));
+  ps5tm_orig_commit(&orq, "copy", status == 200);
   if(status != 200) {
     ps5tm_http_send_error(fd, status, "copy_refused", err);
     return;
@@ -2297,10 +2378,14 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   if(cJSON_IsString(jop))  snprintf(op, sizeof(op), "%s", jop->valuestring);
   if(cJSON_IsString(jdst)) snprintf(target, sizeof(target), "%s", jdst->valuestring);
   if(cJSON_IsString(jm))   snprintf(mode, sizeof(mode), "%s", jm->valuestring);
+  ps5tm_orig_req_t orq;                       /* "orig_after" / "orig_dest": what to do with the original afterwards (origafter.c) */
+  int orig_ok = orig_before(fd, "convert", id, body, &orq);
   cJSON_Delete(body);
+  if(!orig_ok) return;
 
   char err[640] = "";
   int status = ps5tm_gameconvert_start(id, op, ampr, target, mode, quick, tpl, 0, err, sizeof(err));
+  ps5tm_orig_commit(&orq, "convert", status == 200);
   if(status != 200) {
     ps5tm_http_send_error(fd, status, "convert_refused", err);
     return;
@@ -2374,15 +2459,22 @@ handle_storage_start(int fd, const ps5tm_request_t *req) {
   const cJSON *jid  = body ? cJSON_GetObjectItem(body, "id")     : NULL;
   const cJSON *jop  = body ? cJSON_GetObjectItem(body, "op")     : NULL;
   const cJSON *jdst = body ? cJSON_GetObjectItem(body, "target") : NULL;
-  int del = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "delete_source"));
   char id[16] = "", op[12] = "", target[128] = "";
   if(cJSON_IsString(jid))  snprintf(id, sizeof(id), "%s", jid->valuestring);
   if(cJSON_IsString(jop))  snprintf(op, sizeof(op), "%s", jop->valuestring);
   if(cJSON_IsString(jdst)) snprintf(target, sizeof(target), "%s", jdst->valuestring);
+  /* An unpack leaves the image; what to do with it ("orig_after": keep | delete | move, and the older "delete_source": true = delete) is carried
+     out by the app after the unpack ended well and was looked at (origafter.c), no longer by ShadowMountPlus (delete_source is not passed on). */
+  const int unpack = !strcmp(op, "unpack");
+  ps5tm_orig_req_t orq;
+  memset(&orq, 0, sizeof(orq));
+  int orig_ok = !unpack || orig_before(fd, "unpack", id, body, &orq);
   cJSON_Delete(body);
+  if(!orig_ok) return;
 
   char err[256] = "";
-  int status = ps5tm_gamemove_start(id, op, target, del, err, sizeof(err));
+  int status = ps5tm_gamemove_start(id, op, target, 0, err, sizeof(err));
+  if(unpack) ps5tm_orig_commit(&orq, "unpack", status == 200);
   if(status != 200) {
     ps5tm_http_send_error(fd, status, "storage_refused", err);
     return;
@@ -5007,6 +5099,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     else if(!strcmp(action, "start")) { if(ps5tm_dumpforge_start(msg, sizeof(msg)) != 0) http = 502; }
     else if(!strcmp(action, "stop")) {
       if(ps5tm_gameconvert_busy()) { http = 409; snprintf(msg, sizeof(msg), "Es läuft gerade eine Konvertierung."); }
+      else if(ps5tm_dumpforge_probe() < 0) { http = 409; snprintf(msg, sizeof(msg), "Dump Forge antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); }   /* listens, stays silent: not "ended" (audit F-264) */
       else if(ps5tm_dumpforge_stop(0)) { http = 409; snprintf(msg, sizeof(msg), "Dump Forge arbeitet gerade (ein Auftrag läuft oder ein Gerät überträgt). Es lässt sich erst danach beenden."); }
       else snprintf(msg, sizeof(msg), "Dump Forge ist beendet.");
     } else { http = 400; snprintf(msg, sizeof(msg), "Diese Aktion kennt die App nicht."); }
@@ -5104,7 +5197,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
   if(!strcmp(req->path, "/api/v1/ps4mount/icon")) {
-    char id[16];
+    char id[16] = "";
     query_param(req->query, "id", id, sizeof(id));
     unsigned char *png = NULL;
     size_t len = 0;
@@ -5427,6 +5520,24 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   if(!strcmp(req->path, "/api/v1/library/backups")) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
     send_cjson(fd, 200, ps5tm_gamedelete_backups_json());
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/library/orig/plan")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    handle_orig_plan(fd, req);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/library/orig/check")) {
+    if(!is_get && !is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST."); return; }
+    handle_orig_check(fd, req, is_post);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/library/orig/status")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    send_cjson(fd, 200, ps5tm_orig_status_json());
     return;
   }
 

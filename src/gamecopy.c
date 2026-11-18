@@ -160,6 +160,7 @@ typedef struct {
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static job_t           g_job;
+static job_t           g_last;                 /* the job that ended last, copied at its end: the history and the hook of "Original danach" read this (a new job may claim g_job at once) */
 static int             g_cancel;               /* __atomic */
 
 /* The size of the last folder planned, so opening the dialog twice does not
@@ -342,7 +343,7 @@ drive_base(const char *mount, char *base, size_t base_len,
   ps5tm_sysinfo_t info;
   ps5tm_sysinfo_get(&info);
   for(unsigned i = 0; i < info.volume_count; i++) {
-    if(strcmp(info.volumes[i].path, mount)) continue;
+    if(strcmp(info.volumes[i].path, mount) && !(!strcmp(mount, "/data") && !strcmp(info.volumes[i].path, "/user"))) continue;
     snprintf(base, base_len, "%s", !strcmp(mount, "/user") ? "/data" : mount);
     snprintf(label, label_len, "%s", info.volumes[i].label);
     return 0;
@@ -531,7 +532,10 @@ static void
 job_state(int state) {
   pthread_mutex_lock(&g_lock);
   g_job.state = state;
-  if(state >= JOB_DONE) g_job.finished_ms = ps5tm_mono_ms();
+  if(state >= JOB_DONE) {
+    g_job.finished_ms = ps5tm_mono_ms();
+    g_last = g_job;
+  }
   pthread_mutex_unlock(&g_lock);
 }
 
@@ -781,15 +785,20 @@ hist_result(int done, int failed, int state) {
 static void
 hist_note(void) {
   pthread_mutex_lock(&g_lock);
-  int st = g_job.state;
-  char name[128], detail[96], error[640];
-  snprintf(name, sizeof(name), "%s", g_job.name);
-  snprintf(detail, sizeof(detail), "nach %s", g_job.drive[0] ? g_job.drive : g_job.target);
-  snprintf(error, sizeof(error), "%s", g_job.error);
-  uint64_t bytes = g_job.done_bytes, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  int st = g_last.state;
+  char name[128], detail[96], error[640], title[12], target[320];
+  snprintf(title, sizeof(title), "%s", g_last.title_id);
+  snprintf(target, sizeof(target), "%s", g_last.target);
+  snprintf(name, sizeof(name), "%s", g_last.name);
+  snprintf(detail, sizeof(detail), "nach %s", g_last.drive[0] ? g_last.drive : g_last.target);
+  snprintf(error, sizeof(error), "%s", g_last.error);
+  uint64_t bytes = g_last.done_bytes, dur = g_last.finished_ms > g_last.started_ms ? g_last.finished_ms - g_last.started_ms : 0;
   pthread_mutex_unlock(&g_lock);
   if(st != JOB_DONE && st != JOB_FAILED && st != JOB_CANCELLED) return;
   ps5tm_hist_add("copy", name, detail, hist_result(JOB_DONE, JOB_FAILED, st), error, bytes, dur);
+  /* "Original danach" (origafter.c): what the person chose for the original of this copy */
+  /* links and special files are left out of a copy: a game with some is not "whole" for the purpose of deleting its original */
+  ps5tm_orig_job_done("copy", title, st == JOB_DONE && g_last.skipped == 0, target);
 }
 
 static void *
@@ -1202,9 +1211,11 @@ ps5tm_filejobs_busy_for_dump(char *err, size_t err_len) {
   return other_job_active(1, err, err_len);
 }
 
-int
-ps5tm_gamecopy_start(const char *title_id, const char *mount, const char *mode,
-                     char *err, size_t err_len) {
+/* dest_dir NULL: the destination of mode ("homebrew" or "backup") on the drive with this mount point; else the absolute folder the copy goes
+   into (mode is then "backup"; the folder is the one the person chose for the original: origafter.c has checked it) */
+static int
+copy_start_impl(const char *title_id, const char *mount, const char *mode, const char *dest_dir, const char *expect_source,
+                char *err, size_t err_len) {
   char name[128], source[256];
   if(!title_id || !mount || !mode ||
      ps5tm_library_copy_info(title_id, name, sizeof(name),
@@ -1212,6 +1223,11 @@ ps5tm_gamecopy_start(const char *title_id, const char *mount, const char *mode,
      !strncmp(source, "/mnt/shadowmnt", 14)) {
     snprintf(err, err_len, "Dieses Spiel lässt sich nicht kopieren.");
     return 404;
+  }
+  /* "Original danach" (origafter.c) copies one particular original: the title may be listed from another place by now (the new result) */
+  if(expect_source && strcmp(expect_source, source)) {
+    snprintf(err, err_len, "Das Spiel liegt inzwischen woanders. Es wurde nichts kopiert.");
+    return 409;
   }
   const char *folder = strrchr(source, '/');
   folder = folder ? folder + 1 : "";
@@ -1224,7 +1240,8 @@ ps5tm_gamecopy_start(const char *title_id, const char *mount, const char *mode,
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 500; }
   char label[40];
   if(drive_base(mount, a->base, sizeof(a->base), label, sizeof(label)) != 0 ||
-     dest_path(a->base, mode, folder, a->target, sizeof(a->target)) != 0) {
+     (dest_dir ? (snprintf(a->target, sizeof(a->target), "%s/%s", dest_dir, folder) >= (int)sizeof(a->target) ? -1 : 0)
+               : dest_path(a->base, mode, folder, a->target, sizeof(a->target))) != 0) {
     free(a);
     snprintf(err, err_len, "Dieses Ziel gibt es nicht.");
     return 400;
@@ -1330,6 +1347,20 @@ ps5tm_gamecopy_start(const char *title_id, const char *mount, const char *mode,
   PS5TM_INFO("game_copy_started", "Kopie von %s (%s) nach %s gestartet.",
              title_id, source, target_log);
   return 200;
+}
+
+int
+ps5tm_gamecopy_start(const char *title_id, const char *mount, const char *mode,
+                     char *err, size_t err_len) {
+  return copy_start_impl(title_id, mount, mode, NULL, NULL, err, err_len);
+}
+
+/* Copies the title into dest_dir (absolute, no "." or ".." part; the copy lands in <dest_dir>/<the original's own name>) on the drive with this
+   mount point. For moving an original out of ShadowMountPlus's reach (origafter.c). */
+int
+ps5tm_gamecopy_start_to(const char *title_id, const char *mount, const char *dest_dir, const char *source, char *err, size_t err_len) {
+  if(!dest_dir || dest_dir[0] != '/') { snprintf(err, err_len, "Das Ziel gibt es nicht."); return 400; }
+  return copy_start_impl(title_id, mount, "backup", dest_dir, source, err, err_len);
 }
 
 cJSON *

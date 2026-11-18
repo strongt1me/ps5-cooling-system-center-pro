@@ -4433,7 +4433,7 @@ static int p4m_db_is_registered(const char *tid) {
     }
     /* (app) never read: "unknown" counts as registered, so that nothing is registered again with InstallAll (which would
        also take along whatever else waits under /user/app) while the database cannot be read */
-    if (!g_read_ok)
+    if (!g_read_ok || !g_ids)
         return 1;
     for (int i = 0; i < g_nids; i++)
         if (!strcmp(g_ids[i], tid))
@@ -5026,6 +5026,8 @@ char *ps4m_game_json(const char *tid, char *msg, size_t cap) {
 
 /* The last bytes of the module's log as a malloc'd string. */
 char *ps4m_log_tail(size_t max) {
+    if (max > (1u << 20))
+        max = 1u << 20;                     /* the one caller asks for 16 KB; no way to ask for SIZE_MAX (max + 1 would wrap) */
     FILE *f = fopen(STATE_DIR "/log.txt", "rb");
     if (!f)
         return strdup("");

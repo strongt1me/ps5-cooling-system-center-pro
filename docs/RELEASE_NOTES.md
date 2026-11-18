@@ -1,76 +1,55 @@
-# PS5 Cooling & System Center – Pro v1.86.5
+# PS5 Cooling & System Center – Pro v1.86.6
 
 ## Highlights
-- **Sanftere Lüfterregelung:** Der Lüfter folgt der Temperatur schon ab 10 K unter dem Ziel langsam, springt beim Aufholen nicht mehr und schwankt weniger. Neu: die **Lüfterkurve als Bild** (Browser-App und Vollbild-App), eine **Regelaufzeichnung** der letzten 30 Minuten und eine einstellbare **Obergrenze der Lüfterdrehzahl**.
-- **Kraken Mount startet mit der App:** Es ist ab jetzt standardmäßig eingeschaltet (etwa 5 Sekunden nach dem Start der App) und lässt sich in der Seite ausschalten; das merkt sich die App. Eingebettet ist Kraken Mount v0.2.1.
-- **Disc-Dump bequemer und sicherer:** Der Knopf heißt „Dumpen starten“, der Fortschritt erscheint als Meldung oben links, ein eigener Ordner lässt sich auch in der Vollbild-App eintippen, und ein Dump überschreibt oder löscht nie einen fremden Ordner.
+- **„Original danach“ beim Konvertieren, Kopieren und Entpacken:** Nach dem Vorgang kann man das Original **behalten** (wie bisher), **löschen** oder **an einen Ort verschieben, den ShadowMountPlus nicht durchsucht**. So liegt derselbe Titel nicht mehr zweimal auf der Konsole, und ShadowMountPlus meldet ihn nicht doppelt. In Browser-App und Vollbild-App; Löschen fragt vorher und nennt den Namen.
+- **Kraken Mount v0.3.0** ist eingebettet: Spielstände gehen nicht mehr verloren, wenn ein Spiel eine eigene Spielstand-Bibliothek im `fakelib` mitbringt, `.pkg`-Spiele bekommen AMPR EMU NG, ein noch kopiertes Spiel wird übersprungen, Titelmusik und Spielnamen in der Sprache der Konsole.
+- **Neu bei GitHub:** Jedes Release trägt eine Liste für den **Payload Manager von itsPLK** (`payload-manager.json`); die App lässt sich so von dort laden, mit SHA-256-Prüfung.
 
 ## Neu
-### Lüfter
-- **Lüfterkurve:** Karte „Lüfterkurve“ im Reiter Kühlung (Browser) und Reiter „Lüfterkurve“ in der Vollbild-App: welche Drehzahl die Automatik bei welcher Temperatur verlangt, mit der Temperatur von jetzt.
-- **Regelaufzeichnung:** Die letzten 30 Minuten der Regelung, eine Zeile je Sekunde, als Tabelle (CSV) herunterladen oder auf der Konsole speichern.
-- **Obergrenze der Lüfterdrehzahl** (30–100 %, ab Werk 100 = keine Grenze): im Normalbetrieb geht der Lüfter nicht darüber. Die Notfallgrenze bleibt unberührt.
-- **Warnschwelle folgt dem Ziel** (ab Werk an, wie bisher): lässt sich in den erweiterten Einstellungen ausschalten, dann gilt genau der Wert „Warnung ab“.
-- Profil- und Zielwechsel stehen jetzt im Protokoll.
+### Original danach
+- **Die Auswahl** steht in den Fenstern „Konvertieren“, „Kopieren“ und „Entpacken“ (auch bei „Zur Warteschlange“) und in der Vollbild-App: **Behalten** (Vorgabe), **Löschen** oder **Verschieben**.
+- **Verschieben:** Datenträger wählen (interne SSD, M.2-Erweiterung, USB; die Auswahl zeigt den freien Platz) und den Ordner; vorgeschlagen wird `<Laufwerk>/PS5-Sicherung/Spiele`, „Ordner wählen“ öffnet eine kleine Auswahl. Die App prüft den Ordner schon beim Eintippen und sperrt den Start, wenn **ShadowMountPlus dort suchen würde** (`homebrew`, `etaHEN/games`, bei USB und M.2 die Wurzel bis zwei Ebenen tief), wenn am Ziel schon etwas gleich heißt, der Platz nicht reicht, der Weg über eine Verknüpfung führt oder es ein Ordner der Konsole ist.
+- **Sicher:** Gelöscht oder verschoben wird erst, **nachdem der Vorgang gut zu Ende ging** und sein Ergebnis da ist. Scheitert er oder wird er abgebrochen, bleibt das Original unberührt. Bei „Schnell“ als Prüfung löscht die App nie. **Verschieben** macht zuerst eine geprüfte Kopie (jede Datei zurückgelesen und verglichen, `.sha256` daneben) und löscht das Original erst danach; scheitert ein Schritt, bleibt es, wo es war. Die Spielstände werden nie angefasst.
+- **Ablauf:** Die App wartet, bis nichts anderes mehr läuft; die Konvertier-Warteschlange startet den nächsten Eintrag erst, wenn das Original des vorigen erledigt ist. Das Ende kommt als Meldung ohne Ton, im Fenster des Vorgangs zeigt eine Zeile den Stand; der Verlauf führt das Löschen als „Original“.
+- Beim Entpacken ersetzt die Auswahl den früheren Schalter „Abbild danach löschen“.
+- Neue Schnittstelle (`docs/API.md`): `GET /api/v1/library/orig/plan`, `orig/check`, `orig/status` und die Felder `orig_after` und `orig_dest` an den Starts.
 
 ### Kraken Mount
-- Startet von selbst mit der App, solange man es nicht in der Seite ausgeschaltet hat. Läuft es schon oder ist es nur gerade beschäftigt, sendet die App nichts ein zweites Mal.
-- Läuft noch eine ältere Fassung als die eingebettete, steht ein Hinweis unter dem Schalter: Zum Wechsel aus- und wieder einschalten.
-- **Kraken Mount v0.2.1:** Trophäen, Spielstand-Symbole und Hintergründe kommen auch bei FPKG-Spielen an; Zwischenspeicher und `.pkg`-Dateien werden für die Dienste der Konsole lesbar gemacht.
+- **Kraken Mount v0.3.0** (quer3q): Spielstände nutzen nicht mehr die Spielstand-Bibliothek aus dem `fakelib` eines Spiels (sie ließ Spielstände verschwinden); `.pkg`-Spiele bekommen immer AMPR EMU NG; dlc_emu und pgo_stub stecken in der Datei; ein Spiel, das noch kopiert wird, wird übersprungen; fehlt die Quelle eines Spiels 5 Minuten, nimmt Kraken Mount es vom Startbildschirm; Titelmusik und Spielnamen in der Sprache der Konsole.
+- Eine geladene ältere Fassung nimmt die App nur noch, wenn sie **neuer** ist als die eingebettete.
 
-### Disc und Dump
-- **„Dumpen starten“** statt „Starten“, wenn der Knopf das Spiel startet und gleich dumpt. Er bleibt grau, bis der Dump fertig ist, und ein Hinweis nennt die Wartezeit.
-- **Fortschritt oben links** auf dem Bildschirm (Dump eines Spiels und Sichern eines Disc-Abbilds), alle 10 %.
-- **Dump-Ordner** (Browser-App und Vollbild-App mit Bildschirmtastatur): Umlaute, Klammern, ein Schrägstrich am Ende oder ein voller Pfad werden aufgeräumt statt abgelehnt; ein ungültiger Name bleibt mit Grund im Feld stehen.
-- **Dump Forge v0.5.6:** Trophäen melden sich auch bei FPKG, deren Dateien nur verschlüsselt im Container lagen; Packs mit mehr als 32 Teilen lassen sich schreiben.
+### Abbilder
+- Ein Abbild, das der Direktleser nicht kennt (zum Beispiel ein `.ffpfs`), wird nicht mehr alle 10 Minuten neu geöffnet: Ein Fehlschlag wird wie ein Erfolg nach Größe und Zeit der Datei gemerkt, höchstens 6 Stunden lang; „Prüfung anfordern“ liest alles neu. Das spart Schreibvorgänge und Protokollzeilen (vorher 490 Mal in drei Tagen).
 
-### Spiele und Kacheln
-- **Prüfrunde (War-Room-Audit):** Das Pausieren des Hintergrund-Spiels fasst nur noch echte Spiele an (nie eine Medien-App wie YouTube) und prüft kurz vorher, dass man nicht schon wieder im Spiel ist; Kraken Mount lässt sich in den ersten Sekunden nach dem Start mit der App sicher ausschalten, und ein Schutz verhindert eine Startschleife, falls es die Konsole je zum Absturz bringt; das Ausweich-Entpacken verliert „Abbrechen“ nicht mehr und zeigt die richtige Größe; PS4Mount speichert „aus“ sicher; viele kleinere Fehler (Anzeigen, Meldungen, Werkzeuge) behoben.
-- **Packs auf den Spielkarten:** „zstd gepackt“ / „LZ4 gepackt“ steht jetzt bei **jedem** Format unter dem Titel, auch bei Abbildern (exFAT, ffpkg, ffpfs, ffpfsc), die nicht eingehängt sind; die App liest es beim Lesen der Abbild-Datei mit, ohne etwas einzuhängen. Im Browser mit der Zeile „Gepackt“ unter „Infos & Metadaten“, in der Vollbild-App in der Zeile des Spiels und im Infofeld.
-- **FPKG bei gepackten Spielen:** Ist ein Spiel mit AMPR-Packs (zstd oder LZ4) gepackt, packt Dump Forge die Packs beim Umwandeln selbst aus: Kraken Mount nimmt kein Paket mit Packs an. Das Paket enthält dann das ungepackte Spiel (das Fenster nennt die Größe und prüft den Platz danach), die Quelle bleibt unverändert. Gesperrt bleibt „FPKG“ nur, wenn sich die Packs nicht prüfen lassen oder das Spiel zstd- und LZ4-Packs zugleich hat.
-- **Spiele-Ansicht:** Die Vorgabe der Spielkarten ist wieder „groß“ (wie bisher); wer „kompakt“ gewählt hat, behält es (Browser der Konsole und Browser am PC, je Gerät gemerkt).
-- **PS4Mount ist ab Werk eingeschaltet** (bei einer neuen Installation, ohne gespeicherte Einstellung), wie Kraken Mount. Wer es schon ausgeschaltet hat, behält das; der Schalter in Browser-Seite und Vollbild-App zeigt den echten Zustand.
-- **Marke „FPKGMount“:** Spiele, die Kraken Mount (FPKGMount) eingehängt hat, tragen jetzt die Marke „FPKGMount“, wie die PS4Mount-Spiele die Marke „PS4Mount“ (Browser und Vollbild-App). Sie erscheint, solange Kraken Mount läuft.
-- **Kachel nach einem Spiel ohne Fehlermeldung:** Die App pausiert ein Spiel im Hintergrund selbst, sobald der Startbildschirm vorn ist (Einstellung „Spiel im Hintergrund pausieren“, ab Werk an, in Browser und Vollbild-App). Tippst du danach die Kachel an (Browser oder Vollbild), startet sie ohne den Fehlstart und ohne die Meldung („Device busy“), die ShadowMountPlus sonst auslösen konnte. Die Konsole pausiert das Spiel beim Start einer Kachel ohnehin; die App tut es nur etwas früher. Fortsetzen geht wie sonst. An der Konsole gesehen mit einem PS4-Spiel aus PS4Mount (.94, mehrfach von Hand getestet) und einem FPKG-Spiel aus Kraken Mount (.52). Bleibt die Pause aus (Schalter aus, oder du tippst schon in der ersten Sekunde nach der PS-Taste), gilt weiter dieser Ausweg: Lehnt die Konsole den Start der Kachel bei laufendem Spiel ab, zeigt die App sofort „Bitte einen Moment Geduld: Die App wird gleich gestartet.“ und öffnet sie nach etwa 3 Sekunden von selbst (in den ersten 60 Sekunden, nachdem ein Spiel in den Hintergrund ging); ein zweites Drücken ist nicht mehr nötig, und sie öffnet sich nicht noch einmal, wenn man sie schließt. 
-- Die Dump-Warteschlange versucht den Start eines Titels bis zu fünfmal (vorher dreimal).
-- Browser-App, Spiele: Das Band zeigt nur noch, was läuft. Ergebnisse („fertig“, „abgebrochen“, „gescheitert“) stehen im Verlauf.
+### GitHub
+- `payload-manager.json` als fünfte Datei jedes Releases: Name, Dateiname, Link zur ELF desselben Releases, Version, Kategorie, Beschreibung, Datum und SHA-256 (aus der gebauten Datei berechnet).
 
 ## Verbesserungen
-- Der Spielstart schießt in der Drehzahl weniger über (Vorsteuerung um 3 Punkte gedämpft).
-- Ein abgelehnter Kachelstart steht mit dem Wortlaut von ShadowMountPlus im Protokoll; ein gescheiterter Spielwechsel nennt den Grund in Klartext.
-- Die Systemfunktionen der App wurden gegen die Bibliotheken von 43 Firmwares (1.00 bis 12.70) geprüft: Alle 174 fest gebundenen Funktionen sind überall vorhanden. Zwei Funktionsnamen, die es in keiner Firmware gab, sind korrigiert. Die Konsole liefert an dieser Stelle keinen Fernsehernamen; das Feld bleibt leer, Hersteller, Produktcode und Baujahr stehen einmal im Protokoll.
-- Handbuch und FAQ in sieben Sprachen, Übersetzungen der neuen Texte in sechs Sprachen.
+- Das eigene Entpacken der App legt `param.json` und `param.sfo` zuletzt an (unter einem Hilfsnamen, am Ende umbenannt): Ein halb entpackter Ordner wird nie für ein Spiel gehalten. Reste einer früheren Sitzung räumt die App beim ersten Auftrag weg.
+- Die Prüfung der Abbilder liest höchstens 40 Abbilder je Runde und prüft vor dem Aushängen noch einmal, dass der Titel nicht inzwischen läuft; eine Bremse schützt vor einer Schleife, wenn das kurze Einhängen scheitert.
+- „USB auswerfen“ fragt bei Kraken-Spielen den Prozess, ob das Spiel läuft.
+- `tools/release.sh` sucht vor dem Veröffentlichen nach Mustern persönlicher Daten und fragt nur noch einmal vor dem Push und dem Release; `tools/deploy.sh` sendet die Kacheln nicht, wenn die ELF nicht lief.
+- Handbuch in sieben Sprachen (neuer Abschnitt „Original danach“, Kraken Mount 0.3.0), Übersetzungen der neuen Texte in sechs Sprachen.
 
 ## Fehlerbehebungen
-- **Entpacken ohne „Permission denied“:** Scheitert das Entpacken über ShadowMountPlus mit „Permission denied“ (zum Beispiel bei einem Abbild, dessen Ordner keine Schreibrechte haben), entpackt die App dasselbe Abbild selbst in denselben Zielordner und zeigt den Fortschritt im selben Fenster. Das Abbild wird dabei nicht gelöscht, auch wenn „Abbild danach löschen“ gewählt war. An der Konsole noch nicht bestätigt.
-- **Komprimiertes Abbild (ffpfsc):** Das Fenster, das „Konvertieren“ bei einem solchen Spiel öffnet, heißt jetzt „… entpacken“ und zeigt wie das andere Konvertieren-Fenster, was entstehen kann: der Dump-Ordner ist wählbar, die übrigen Formate stehen ausgegraut mit dem Grund da (aus einem komprimierten Abbild nicht möglich: erst entpacken, dann den Ordner konvertieren).
-- **Lüfter laut oder zu leise:** Im Profil „Kühl“ stieg der Lüfter bei Ziel 68 °C plötzlich auf 54 %; bei Ziel 78 °C blieb er auf 23 %, obwohl die CPU auf 80 °C stieg. Beides war dieselbe Ursache (Gerade statt Kurve) und ist behoben.
-- **Eigener Dump-Ordner:** Ein selbst eingetippter Ordner wurde nicht benutzt, und der Dump startete danach nicht.
-- **„Vorhandenen Dump ersetzen“** konnte einen Ordner löschen, der nur so hieß wie ein Dump (etwa einen Spielordner für ShadowMountPlus). Als Dump gilt jetzt nur ein Ordner mit seiner Info-Datei; alles andere bleibt unberührt, und ein Dump bricht ab, statt in einen fremden Ordner zu schreiben.
-- **Spiel beenden während eines Dumps:** Beim Test stürzte die Konsole dabei ab (Kernel-Panic). Die App lehnt „Spiel beenden“ und den Spielwechsel ab, solange ein Dump läuft.
-- **Browser-App, Bereich Disc:** Der Pfeil der Aufklapp-Zeilen erschien am Konsolen-Browser als Fragezeichen; er ist jetzt gezeichnet statt ein Textzeichen.
-- **Vollbild-App, Lüfterkurve:** Das Bild beginnt bei der ersten Temperatur, für die die Automatik etwas verlangt, wie im Browser.
-- **Kraken Mount ausschalten:** Der Schalter springt nicht mehr sofort auf „an“ zurück; er bleibt aus, und die Seite zeigt „wird beendet …“, bis Kraken Mount weg ist (Browser-App und Vollbild-App).
-- **Kachel nach einem Spiel:** Nach dem Schließen der Meldung öffnete sich die Kachel ein zweites Mal, sobald man sie mit der O-Taste schloss. Das tut sie nicht mehr.
-- **Debug-FPKG, Fortschritt:** Die Balken zeigen die Bytes des Spiels statt der Gesamtzahl aller Durchgänge von Dump Forge (vorher stand z. B. am Anfang 25 % und die Restzeit war viermal zu lang); der Balken „Schreiben“ ist voll, sobald die Prüfung beginnt.
-- **Debug-FPKG, Warteschlange und Abbruch:** Meldet Dump Forge einen Fehler ohne Text, bleibt der Auftrag nicht mehr „aktiv“; ein Auftrag der Warteschlange startet erst, wenn der vorige aufgeräumt hat; eine zu alte Dump Forge (vor 0.5.0, sie kennt das Auspacken nicht) wird vor dem Start erkannt; ein von der App gestartetes Dump Forge, das nicht antwortet, wird beendet, statt unbeaufsichtigt weiterzulaufen.
-- **Vollbild-Kachel:** Die Programmdatei trägt keine Pfade des Build-Rechners und keine Beispieldaten aus der Entwicklung mehr.
+- **Prüfrunde 18.11.2026 (REA, Analysator, vier Prüfer mit Gegenprüfung):** 14 Funde behoben, unter anderem eine Spieleliste, die bei sehr vielen Spielen zu früh abschnitt, ein Auswerfen, das ein laufendes Kraken-Spiel nicht erkannte, ein Dump-Forge-„Beenden“, das bei einem stummen Programm hing, eine Auswahlliste im Browser, die bei jedem Zeichnen neu entstand, und zwanzig kleine Fehler des Analysators (Rückgabewerte, Nullzeiger, Grenzen).
+- **Sicherheit der neuen Funktion (unabhängiger Review, 10 Funde):** „Schnell“ löscht nie; ein entpackter Ordner muss das Spiel enthalten (`sce_sys/param.json`); eine Kopie, die Verknüpfungen oder Sonderdateien ausgelassen hat, gilt nicht als vollständig; Verschieben kopiert genau den Pfad des Originals; die interne SSD funktioniert als Ziel; Groß- und Kleinschreibung zählt bei den Suchordnern von ShadowMountPlus nicht (exFAT/FAT); Ordner der Konsole sind als Ziel gesperrt; was die Konsole selbst installiert hat, löscht die App nie; ein nicht antwortendes ShadowMountPlus gilt nicht als „kennt den Titel nicht“.
 
 ## Hinweise
-- Beim ersten Start nach dem Wechsel auf Kraken Mount v0.2.1 baut es den Zwischenspeicher **jedes** Spiels einmal neu auf; das dauert und braucht freien Platz.
-- Kraken Mount läuft als eigenes Programm weiter, wenn die App ersetzt wird; die App beendet es nie von selbst (ein Spiel kann davon laufen). Eine ältere laufende Fassung wird erst nach Aus- und Einschalten ersetzt.
-- An der Konsole gesehen: die sanftere Lüfterkurve, der Disc-Dump beim Start des Spiels, der Pfeil im Disc-Bereich, Kraken Mount v0.2.1 mit Autostart (nach dem Start der App). An der Konsole gesehen außerdem: das Pausieren des Spiels im Hintergrund vor dem Kachelstart (PS4-Spiel aus PS4Mount, FPKG-Spiel aus Kraken Mount; am 18.11. noch einmal mit der Vollbild-Kachel: kein Fehlstart, die Kachel startete), ein Debug-FPKG aus Spielen mit zstd- und LZ4-Packs (Dump Forge v0.5.6 packt sie aus; ein so gebautes Spiel startete), die Warteschlange mit zwei FPKG-Aufträgen samt Abbruch und erneutem Versuch, das Ausschalten von Kraken Mount in den ersten Sekunden nach dem Start der App und das Abbrechen eines Entpackens. Nur im Host-Test geprüft oder noch nicht an der Konsole bestätigt: der Neustart der Kachel nach einem Spiel (ohne zweites Öffnen; Ausweg, wenn die Pause ausbleibt), das Verhalten der Pause hinter dem Kontrollzentrum, die Fortschrittsmeldung oben links, der Autostart nach einem Neustart der Konsole, das Entpacken über die Ausweichlösung („Permission denied“) und eine zu alte Dump Forge.
+- **An der Konsole geprüft** (mit zwei echten PS5-Spielen, jedes Mal danach zurückgesetzt): Konvertieren + Verschieben, Kopieren + Löschen, Entpacken über ShadowMountPlus + Abbild verschieben, Abbrechen (das Original bleibt), die Warteschlange mit zwei Einträgen und die Ablehnung falscher Ziele; dazu Kraken Mount v0.3.0 mit Spielstand speichern und laden. **Nicht geprüft:** ein USB- oder M.2-Laufwerk als Ziel, die Bedienung der Vollbild-App mit dem Controller, ein Entpacken, bei dem ShadowMountPlus das Abmelden ablehnt.
+- Ein **PFS-Abbild** (`.ffpfs`) lässt sich nicht entpacken: ShadowMountPlus meldet „Permission denied“, und das eigene Entpacken der App kennt das Format nicht. Das Original bleibt dann liegen, auch wenn „Löschen“ gewählt war.
+- Beim ersten Start nach dem Wechsel auf Kraken Mount v0.3.0 setzt es den `fakelib` **jedes** Spiels einmal neu zusammen; das dauert und braucht freien Platz. Eine ältere laufende Fassung wird erst nach Aus- und Einschalten ersetzt.
+- Ob der Payload Manager der Weiterleitung von `latest/download` bei einer Quellliste folgt, ist nicht belegt.
 - Die neue ELF an Port 9021 senden und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein).
 
 ## Downloads
 | Datei | Wofür |
 |---|---|
-| `PS5_Cooling_System_Center_v1.86.5.elf` | Das Hauptprogramm (an Port 9021 senden) |
+| `PS5_Cooling_System_Center_v1.86.6.elf` | Das Hauptprogramm (an Port 9021 senden) |
 | `FAKE86921.zip` | Vollbild-Kachel (mit Dump Forge): Ordner nach `/data/homebrew/` kopieren |
 | `FAKE86922.zip` | Browser-Kachel (mit Dump Forge): Ordner nach `/data/homebrew/` kopieren |
 | `LIESMICH.txt` | Anleitung |
+| `payload-manager.json` | Liste für den Payload Manager von itsPLK: als Quelle `https://github.com/strongt1me/ps5-cooling-system-center-pro/releases/latest/download/payload-manager.json` eintragen, dann lädt er die App von GitHub (mit SHA-256-Prüfung) |
 
 ## Danke
-An alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke. Besonders **quer3q** für AMPR EMU NG, Kraken Mount und Dump Forge sowie **drakmor** für ShadowMountPlus.
-
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.86.4...v1.86.5
+An alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke. Besonders **quer3q** für AMPR EMU NG, Kraken Mount und Dump Forge, **drakmor** für ShadowMountPlus sowie **itsPLK** für den Payload Manager.

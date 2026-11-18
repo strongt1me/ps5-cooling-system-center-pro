@@ -772,6 +772,49 @@ int           ps5tm_gamedelete_start(const char *kind, const char *id, const cha
 struct cJSON *ps5tm_gamedelete_status(void);
 int           ps5tm_gamedelete_busy(void);
 struct cJSON *ps5tm_gamedelete_backups_json(void);
+/* The original of a game that was converted, copied or unpacked (origafter.c calls these; no token: the person's choice was made before the job
+   started and the checks are made again here). _ok: 0 when the data at path (a folder or an image file) may go now, else -1 with the reason in
+   why. The delete itself: exactly that path (ShadowMountPlus lets the title go first when it lists this very data); was (may be NULL) is what
+   lay there when the choice was made. An HTTP status: 200 when it runs, else err says why. */
+struct stat;
+int           ps5tm_gamedelete_original_ok(const char *id, const char *path, char *why, size_t why_len);
+int           ps5tm_gamedelete_original(const char *id, const char *name, const char *path, const struct stat *was, char *err, size_t err_len);
+
+/* "Original danach" (origafter.c, 18.11.2026): after a conversion, a copy or an unpack the person can have the original of the game deleted or
+   moved to a folder ShadowMountPlus does not search, so that the title is not on the console twice. The choice is checked before the job starts
+   (prepare), noted when it has started (arm, then commit) and carried out by a thread of its own once the job ended well (the job modules call
+   ps5tm_orig_job_done at their end). kind: "convert", "copy" or "unpack". */
+#define PS5TM_ORIG_KEEP   0
+#define PS5TM_ORIG_DELETE 1
+#define PS5TM_ORIG_MOVE   2
+typedef struct {
+  int      mode;              /* PS5TM_ORIG_* */
+  char     title[12];
+  char     name[128];
+  char     path[320];         /* the original: the folder or the image file the title runs from, as the library lists it before the job */
+  char     dest[300];         /* move: the folder the original goes into, normalised; it lands in <dest>/<its own name> */
+  uint64_t dev, ino;          /* what lay at path when the choice was made */
+} ps5tm_orig_req_t;
+/* after: "keep" (or NULL/""), "delete" or "move"; dest for "move". 0 when the job may start (r then says what is to be done afterwards); else an
+   HTTP status (400, 404 or 409) with the reason in err and nothing started. */
+int           ps5tm_orig_prepare(const char *kind, const char *title_id, const char *after, const char *dest,
+                                 ps5tm_orig_req_t *r, char *err, size_t err_len);
+/* The same for a request body: "orig_after", "orig_dest", and the older "delete_source": true (= "delete"). */
+int           ps5tm_orig_prepare_body(const char *kind, const char *title_id, const struct cJSON *body, ps5tm_orig_req_t *r, char *err, size_t err_len);
+/* Before the job is started: the choice is noted as "pending". 0 when it is, -1 when the list of choices is full, -2 when the same kind of job
+   of the same title has a choice open already (it is not replaced: the job it belongs to would lose it). After the start: commit with started 1
+   (the job ran: its end carries the choice out) or 0 (it was refused: the note is dropped). No-ops for "keep". */
+int           ps5tm_orig_arm(const ps5tm_orig_req_t *r, const char *kind);
+void          ps5tm_orig_commit(const ps5tm_orig_req_t *r, const char *kind, int started);
+/* A job ended (call it while the job still counts as busy, so that the next one of a queue cannot start in between). target: where its result
+   lies (needed: without it nothing is deleted). ok: 0 the job did not end well, 1 it did, 2 it did but its result was only spot-checked ("Schnell"):
+   enough for a move (the copy of the original is checked on its own), not for a delete. Records only: nothing slow happens in the caller's thread. */
+void          ps5tm_orig_job_done(const char *kind, const char *title_id, int ok, const char *target);
+/* The convert queue waits here before it starts the next entry, as long as a choice of an earlier one is still to be carried out (at most max_s). */
+void          ps5tm_orig_gate(int max_s);
+struct cJSON *ps5tm_orig_plan_json(const char *title_id, int *http);
+struct cJSON *ps5tm_orig_check_json(const char *title_id, const char *dest, int *http);
+struct cJSON *ps5tm_orig_status_json(void);
 
 /* The file manager (filemgr.c): 1 while it copies, moves or deletes. */
 int           ps5tm_filemgr_busy(void);
@@ -1080,6 +1123,10 @@ int           ps5tm_convqueue_action(const struct cJSON *body, char *err, size_t
 struct cJSON *ps5tm_gamecopy_plan(const char *title_id, char *err, size_t err_len);
 int           ps5tm_gamecopy_start(const char *title_id, const char *mount,
                                    const char *mode, char *err, size_t err_len);
+/* The same into a folder of the person's choosing (absolute, on the drive with this mount point; the copy lands in <dest_dir>/<the original's own
+   name>): for moving an original out of ShadowMountPlus's reach (origafter.c, which has checked the folder). */
+int           ps5tm_gamecopy_start_to(const char *title_id, const char *mount, const char *dest_dir, const char *source, char *err, size_t err_len);
+/* source: exactly the folder or image the copy is to take (refused with 409 when the library lists the title from another place by now). */
 struct cJSON *ps5tm_gamecopy_status(void);
 /* Size of a folder (walked) or file, and its largest file. 0 on success. */
 int           ps5tm_gamecopy_measure(const char *path, uint64_t *bytes,

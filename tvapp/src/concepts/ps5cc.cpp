@@ -926,6 +926,31 @@ class Ps5cc final : public app::Concept
             {0.4f, 0, Direction::none, "plan-laedt"},
             {0.5f, 0, Direction::right},
             {0.7f, 0, Direction::none, "plan-kopieren"},
+            // "Original danach" (18.11.2026): down past the drives to the row, then each way: the
+            // delete asks first (back leaves it), a move with a good folder, the keyboard for the
+            // folder, a drive without room (red, the start is held back)
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "kopieren-original"},
+            {0.2f, 0, Direction::right},
+            {0.7f, 0, Direction::none, "kopieren-original-loeschen"},
+            {0.3f, action_bit(Action::north)},
+            {0.8f, 0, Direction::none, "kopieren-original-frage"},
+            {0.3f, action_bit(Action::back)},
+            {0.2f, 0, Direction::right},
+            {0.9f, 0, Direction::none, "kopieren-original-verschieben"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.8f, 0, Direction::none, "kopieren-original-ordner"},
+            {0.3f, action_bit(Action::back)},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::left},
+            {0.2f, 0, Direction::left},
+            {0.8f, 0, Direction::none, "kopieren-original-fehler"},
             {0.2f, action_bit(Action::back)},
             {0.4f, action_bit(Action::west)},
             {0.3f, 0, Direction::down},
@@ -954,7 +979,9 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::left},
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
-            // down to "4. Prüfung danach" (the drives in between), then "Schnell"
+            // down to "4. Prüfung danach" (the drives in between; six since the row "Anleitung"
+            // joined the format, five stopped on the last drive), then "Schnell"
+            {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::down},
@@ -962,6 +989,14 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.2f, 0, Direction::right},
             {0.8f, 0, Direction::none, "plan-konvertieren-pruefung"},
+            // "Original danach" under the name: kept (the note about the folder ShadowMountPlus
+            // searches), then moved: the conversion starts with the original to go afterwards
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.8f, 0, Direction::none, "plan-konvertieren-original"},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::right},
+            {0.9f, 0, Direction::none, "plan-konvertieren-verschieben"},
             {0.2f, action_bit(Action::north)},
             {1.2f, 0, Direction::none, "auftrag-laeuft"},
             // the steps of the conversion with their times, then its queue (one finished, one that
@@ -969,9 +1004,19 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "auftrag-stufen"},
             {0.3f, action_bit(Action::north)},
             {0.9f, 0, Direction::none, "warteschlange"},
+            // the queue closed: when the conversion is through the card says what becomes of the
+            // original (first while it is moved, then when it has been)
+            {0.3f, action_bit(Action::back)},
+            {21.5f, 0, Direction::none, "auftrag-original-laeuft"},
+            {3.5f, 0, Direction::none, "auftrag-original-fertig"},
+            {0.3f, action_bit(Action::north)},
+            {0.6f, 0, Direction::none},
             {0.3f, action_bit(Action::north)},
             {28.0f, 0, Direction::none, "warteschlange-laeuft"},
             {0.3f, action_bit(Action::back)},
+            // from Aufträge back to Bibliothek: eight tabs since Disc and Sicherungen joined (seven
+            // left the tour on Spielzeit, and every picture after it with it)
+            {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
             {0.3f, action_bit(Action::jump_prev)},
@@ -991,6 +1036,15 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.2f, action_bit(Action::confirm)},
             {1.0f, 0, Direction::none, "plan-entpacken"},
+            // "Abbild danach löschen" is the row "Original danach" now: down past the drives to it,
+            // then "Löschen" and "Verschieben"
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.7f, 0, Direction::none, "entpacken-original-loeschen"},
+            {0.2f, 0, Direction::right},
+            {0.9f, 0, Direction::none, "entpacken-original-verschieben"},
             {0.2f, action_bit(Action::back)},
             {0.4f, action_bit(Action::west)},
             {0.3f, 0, Direction::down},
@@ -1533,6 +1587,12 @@ class Ps5cc final : public app::Concept
 
         if (data_.games_loaded && games_key() != shown_games_)
             rebuild_games();
+        // What became of the original after a copy, a conversion or an unpack: the cards say it
+        if (data_.orig_status_json != orig_status_json_)
+        {
+            orig_status_json_ = data_.orig_status_json;
+            orig_status_ = ps5cc::parse_orig_status(orig_status_json_);
+        }
         rebuild_jobs();
         if (data_.convert_queue_json != queue_json_)
         {
@@ -1817,6 +1877,23 @@ class Ps5cc final : public app::Concept
                                : job.active               ? ui::Status::accent
                                                           : ui::Status::success;
             bar.label = job_state_text(job);
+            // "Original danach": the app's own line about the original of this job, after the
+            // words of the job itself; an original that could not be deleted or moved turns the bar
+            // amber
+            const char *kind = i == static_cast<std::size_t>(JobKind::copy)      ? "copy"
+                               : i == static_cast<std::size_t>(JobKind::convert) ? "convert"
+                               : i == static_cast<std::size_t>(JobKind::storage) ? "unpack"
+                                                                                 : "";
+            if (const ps5cc::OrigItem *orig =
+                    kind[0] != 0 ? ps5cc::orig_status_for(orig_status_, kind, job.id, job.name)
+                                 : nullptr)
+            {
+                const std::string text = ps5cc::orig_card_text(*orig, job.active);
+                if (!text.empty())
+                    bar.label += (bar.label.empty() ? "" : " · ") + text;
+                if (orig->state == "failed" && !job.active)
+                    bar.style.status = ui::Status::warning;
+            }
             bar.set_value(known ? static_cast<float>(std::clamp(job.done / job.total, 0.0, 1.0))
                                 : 0.0f);
         }
@@ -2788,6 +2865,8 @@ class Ps5cc final : public app::Concept
     ps5cc::Snapshot data_;
     std::string queue_json_; // the queue of conversions as last parsed
     ps5cc::ConvertQueue queue_;
+    std::string orig_status_json_; // what became of the originals, as last parsed
+    ps5cc::OrigStatus orig_status_;
     std::uint64_t seen_ = 0;
     Link shown_link_ = Link::online;
     float age_ = 0.0f;

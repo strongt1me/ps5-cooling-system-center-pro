@@ -12,6 +12,7 @@
 #include "core/input.hpp"
 #include "core/tween.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/delete_ask.hpp"
 #include "ps5cc/plans.hpp"
 #include "ui/components.hpp"
 
@@ -52,11 +53,28 @@ class GameTools
   private:
     void open_dialog(Tool tool, ui::Feedback &feedback);
     void close_dialog(ui::Feedback &feedback);
-    void build_form();
+    // keep_focus: the row to stay on when the form is built anew under the person's hands (a way of
+    // "Original danach" that adds or removes rows); 0: the first row, with the entrance
+    void build_form(int keep_focus = 0);
     void refresh();
     void press_start(ui::Feedback &feedback);
     void press_queue(ui::Feedback &feedback);
     void start();
+    void queue_up(ui::Feedback &feedback);
+    // ---- "Original danach" (18.11.2026): the rows of copy, convert and unpack ----
+    bool
+    orig_tool() const; // the dialog is one of the three and the app has a plan for the original
+    void add_orig_rows(const char *header);
+    void refresh_orig_rows();
+    // choice_.orig and .orig_dest from the person's choice; asks the app about the folder
+    void sync_orig();
+    void request_orig_check();
+    bool orig_ready() const; // what is chosen for the original lets the start go ahead
+    void change_orig_way(ui::Feedback &feedback);
+    void open_folder_prompt(ui::Feedback &feedback);
+    // The question before a delete of the original: it names the game and where it lies, and
+    // nothing starts before "Löschen" is chosen; for_queue: it is the queue that waits.
+    void ask_delete_original(bool for_queue, ui::Feedback &feedback);
     // The check before a conversion starts: asked again whenever the choice changes.
     void request_check();
     bool start_ready() const;
@@ -102,6 +120,19 @@ class GameTools
     bool check_pending_ = false;
     int name_mode_ = 0; // 0: the source's name, 1: the template, 2: an own name
     ui::InputPrompt prompt_;
+    int prompt_for_ = 0; // what the keyboard types: 0 the name of the result, 1 the folder of the
+                         // original
+    // "Original danach": the plan of the app, what is chosen, the check of the folder and the
+    // question before a delete
+    OrigPlan orig_plan_;
+    OrigChoice orig_choice_;
+    OrigCheck orig_check_;
+    std::uint64_t orig_awaiting_ = 0; // the ticket of the plan the dialog waits for; 0: it has it
+    std::uint64_t orig_check_ticket_ = 0;
+    std::string orig_check_key_; // the folder last asked about
+    bool orig_check_pending_ = false;
+    DeleteAsk ask_;
+    bool ask_for_queue_ = false;
     ConvertQueue queue_;
     std::string queue_json_;
     Job convert_job_;

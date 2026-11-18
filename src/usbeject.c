@@ -11,6 +11,7 @@
  * One eject at a time; a thread follows ShadowMountPlus's storage job until the drive is gone or the job failed. */
 #include "ps4m.h"
 #include "ps5tm.h"
+#include "titleid.h"
 #include "third_party/cJSON.h"
 
 #include <pthread.h>
@@ -99,6 +100,25 @@ drive_in_use(const char *mount, char *why, size_t n) {
     return 1;
   }
   return 0;
+}
+
+/* A game of Kraken Mount (FPKGMount) that runs, also paused, from this drive (audit F-254). drive_in_use sees the nullfs of the .pkg's folder in the game's
+   sandbox, but not a .pkg that lies in the drive's root (that mount names the drive itself, as the nullfs of the whole drive does in every sandbox). Asked of
+   the kernel (the eboot.bin of that title), not of the game state; -1, not to be known: held back, as with PS4Mount. */
+static int
+kraken_game_on(const char *mount) {
+  ps5tm_kraken_game_t *kg = calloc(PS5TM_KRAKEN_MAX, sizeof(*kg));     /* ~80 KB: not on the stack */
+  if(!kg) return 0;
+  int k = ps5tm_kraken_games(kg, PS5TM_KRAKEN_MAX), hit = 0;
+  size_t ml = strlen(mount);
+  for(int i = 0; i < k && !hit; i++) {
+    if(strncmp(kg[i].path, mount, ml) || kg[i].path[ml] != '/') continue;
+    /* an id that the kernel way never judges (not PPSA/CUSA, not the app's tile) would count as "not to be known" for ever: skipped (review 18.11.) */
+    if(!ps5tm_is_game_title_id(kg[i].title_id) && !ps5tm_is_own_tile(kg[i].title_id)) continue;
+    hit = ps5tm_procmgr_title_running(kg[i].title_id) != 0;
+  }
+  free(kg);
+  return hit;
 }
 
 /* ShadowMountPlus's refusal codes (docs/api.md of 1.7beta10) in words. */
@@ -211,6 +231,12 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
   }
   if(drive_in_use(mount, why, sizeof(why))) {
     snprintf(msg, n, "%s wurde nicht ausgeworfen: %s", label, why);
+    PS5TM_INFO("usb_eject_held", "%s", msg);
+    finish("failed", msg);
+    return 409;
+  }
+  if(kraken_game_on(mount)) {
+    snprintf(msg, n, "%s wurde nicht ausgeworfen: %s", label, "Ein laufendes Spiel nutzt dieses Laufwerk.");
     PS5TM_INFO("usb_eject_held", "%s", msg);
     finish("failed", msg);
     return 409;

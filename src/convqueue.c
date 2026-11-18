@@ -31,6 +31,8 @@ typedef struct {
   char     id[12], name[128], op[12], mount[40], mode[12], name_tpl[200], target[400];
   int      ampr, quick;
   int      starting;          /* ps5tm_gameconvert_start is being called for it: it cannot be removed in that moment */
+  int      orig_mode;         /* what to do with the original afterwards (PS5TM_ORIG_*, origafter.c) */
+  char     orig_dest[300];    /* move: where it goes */
   char     msg[300];
   uint64_t out_bytes, started_ms, finished_ms;
 } cq_item_t;
@@ -95,7 +97,25 @@ start_marked(const cq_item_t *it, char *err, size_t err_len) {
     snprintf(err, err_len, "Der Eintrag wurde entfernt.");
     return 410;
   }
-  int rc = ps5tm_gameconvert_start(it->id, it->op, it->ampr, it->mount, it->mode, it->quick, it->name_tpl, it->qid, err, err_len);
+  /* the person's choice for the original (origafter.c): looked at afresh now, when the entry really starts */
+  ps5tm_orig_req_t orq;
+  memset(&orq, 0, sizeof(orq));
+  int rc = 200;
+  if(it->orig_mode != PS5TM_ORIG_KEEP) {
+    const int ps = ps5tm_orig_prepare("convert", it->id, it->orig_mode == PS5TM_ORIG_MOVE ? "move" : "delete", it->orig_dest, &orq, err, err_len);
+    if(ps != 0) rc = ps;
+    else {
+      const int arm = ps5tm_orig_arm(&orq, "convert");
+      if(arm != 0) {
+        rc = 409;
+        snprintf(err, err_len, arm == -2 ? "Für dieses Spiel läuft oder wartet schon ein Vorgang mit einer Wahl für das Original." : "Zu viele offene Auswahlen für das Original.");
+      }
+    }
+  }
+  if(rc == 200) {
+    rc = ps5tm_gameconvert_start(it->id, it->op, it->ampr, it->mount, it->mode, it->quick, it->name_tpl, it->qid, err, err_len);
+    if(it->orig_mode != PS5TM_ORIG_KEEP) ps5tm_orig_commit(&orq, "convert", rc == 200);
+  }
   if(rc != 200) {
     pthread_mutex_lock(&g_lock);
     me = find_locked(it->qid);
@@ -111,6 +131,8 @@ runner(void *arg) {
   int done_n = 0, tried = 0;
   ps5tm_powerguard_hold();                            /* the console stays awake from entry to entry too, not only inside a job (audit F-45) */
   for(;;) {
+    /* an original of an earlier entry that is still to be deleted or moved goes first (origafter.c): the next conversion would keep it from running */
+    ps5tm_orig_gate(900);
     cq_item_t it;
     int idx = -1;
     pthread_mutex_lock(&g_lock);
@@ -226,6 +248,10 @@ ps5tm_convqueue_status(void) {
     cJSON_AddStringToObject(o, "mount", it->mount);
     cJSON_AddStringToObject(o, "target", it->target);
     cJSON_AddStringToObject(o, "state", k_state[it->state]);
+    if(it->orig_mode != PS5TM_ORIG_KEEP) {
+      cJSON_AddStringToObject(o, "orig_after", it->orig_mode == PS5TM_ORIG_MOVE ? "move" : "delete");
+      if(it->orig_mode == PS5TM_ORIG_MOVE) cJSON_AddStringToObject(o, "orig_dest", it->orig_dest);
+    }
     if(it->msg[0]) cJSON_AddStringToObject(o, "message", it->msg);
     if(it->out_bytes) cJSON_AddNumberToObject(o, "output_bytes", (double)it->out_bytes);
     if(it->started_ms) {
@@ -266,6 +292,9 @@ ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
       return 400;
     }
     int quick = !strcmp(str_of(body, "verify"), "quick");
+    ps5tm_orig_req_t orq;                                       /* "orig_after": "keep" | "delete" | "move" (+ "orig_dest"), as for a single conversion */
+    int os = ps5tm_orig_prepare_body("convert", id, body, &orq, err, err_len);
+    if(os != 0) return os;
     int ampr = cJSON_IsTrue(cJSON_GetObjectItem(body, "ampr_index"));
     cJSON *chk = ps5tm_gameconvert_check(id, op, mount, mode, tpl, err, err_len);
     if(!chk) return 409;
@@ -313,6 +342,8 @@ ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
       snprintf(it->target, sizeof(it->target), "%s", tg->valuestring);
       it->ampr = ampr;
       it->quick = quick;
+      it->orig_mode = orq.mode;
+      snprintf(it->orig_dest, sizeof(it->orig_dest), "%s", orq.mode == PS5TM_ORIG_MOVE ? orq.dest : "");
       g_run = 1;                                                /* adding starts the queue */
       ensure_runner_locked();
       PS5TM_INFO("convq_add", "Konvertier-Warteschlange: %s (%s) nach %s eingereiht.", name, id, tg->valuestring);

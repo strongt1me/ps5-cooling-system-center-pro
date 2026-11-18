@@ -573,8 +573,9 @@ copy_verified(const char *src, const char *dst, frec_t *rec, const char *mode_fr
   int in = open(src, O_RDONLY);
   if(in < 0) { snprintf(err, err_len, "Lesen von %s: %s", rec->rel, err_text(errno)); return errno ? errno : EIO; }
   struct stat st;
-  if(fstat(in, &st) != 0 || !S_ISREG(st.st_mode)) {
-    int e = errno ? errno : EINVAL;
+  const int fst = fstat(in, &st);
+  if(fst != 0 || !S_ISREG(st.st_mode)) {
+    int e = fst != 0 ? (errno ? errno : EIO) : EINVAL;
     close(in);
     snprintf(err, err_len, "Lesen von %s: %s", rec->rel, err_text(e));
     return e;

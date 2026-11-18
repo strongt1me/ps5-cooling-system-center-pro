@@ -89,6 +89,31 @@ bool chosen(const Plan &plan, const PlanChoice &choice)
     return choice.drive >= 0 && choice.drive < static_cast<int>(plan.drives.size());
 }
 
+// What the console app is told about the original (the fields stay out for "Behalten").
+void add_orig(cJSON *root, const PlanChoice &c)
+{
+    if (c.orig == kOrigDelete)
+    {
+        cJSON_AddStringToObject(root, "orig_after", kOrigKeys[kOrigDelete]);
+    }
+    else if (c.orig == kOrigMove)
+    {
+        cJSON_AddStringToObject(root, "orig_after", kOrigKeys[kOrigMove]);
+        cJSON_AddStringToObject(root, "orig_dest", c.orig_dest.c_str());
+    }
+}
+
+// Spaces at both ends and slashes at the end are not part of a folder.
+std::string trimmed_folder(std::string text)
+{
+    while (!text.empty() && (text.back() == ' ' || text.back() == '/'))
+        text.pop_back();
+    std::size_t from = 0;
+    while (from < text.size() && text[from] == ' ')
+        ++from;
+    return text.substr(from);
+}
+
 } // namespace
 
 bool is_image(const Game &game)
@@ -626,6 +651,7 @@ std::string start_body(const Plan &p, const PlanChoice &c)
         cJSON_AddStringToObject(root, "id", p.id.c_str());
         cJSON_AddStringToObject(root, "target", drive.c_str());
         cJSON_AddStringToObject(root, "mode", mode);
+        add_orig(root, c);
         break;
     case Tool::convert:
         cJSON_AddStringToObject(root, "id", p.id.c_str());
@@ -638,13 +664,18 @@ std::string start_body(const Plan &p, const PlanChoice &c)
                               p.kind == "folder" && !p.ps4 && c.ampr && c.op != kOpFpkg);
         cJSON_AddStringToObject(root, "verify", c.quick ? "quick" : "full");
         cJSON_AddStringToObject(root, "name", c.name.c_str());
+        add_orig(root, c);
         break;
     case Tool::move:
     case Tool::unpack:
         cJSON_AddStringToObject(root, "id", p.id.c_str());
         cJSON_AddStringToObject(root, "op", p.tool == Tool::unpack ? "unpack" : "move");
         cJSON_AddStringToObject(root, "target", drive.c_str());
+        // the old switch stays for an app that has no "Original danach" plan; with one, the way of
+        // orig_after takes its place (the app still accepts both)
         cJSON_AddBoolToObject(root, "delete_source", p.tool == Tool::unpack && c.delete_source);
+        if (p.tool == Tool::unpack)
+            add_orig(root, c);
         break;
     case Tool::image_unpack:
     case Tool::image_check:
@@ -909,6 +940,289 @@ std::string queue_summary(const ConvertQueue &q)
     if (q.failed > 0)
         text += " · " + std::to_string(q.failed) + " mit Fehler";
     return text;
+}
+
+// ---- "Original danach" (18.11.2026) ----
+
+OrigPlan parse_orig_plan(const OrigReply &reply)
+{
+    OrigPlan p;
+    if (!reply.ok)
+    {
+        p.error = reply.error.empty() ? "Die App hat nicht geantwortet." : reply.error;
+        return p;
+    }
+    cJSON *root = cJSON_Parse(reply.json.c_str());
+    if (!cJSON_IsObject(root))
+    {
+        cJSON_Delete(root);
+        p.error = "Die Antwort der App ist nicht lesbar.";
+        return p;
+    }
+    if (cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(root, "ok")))
+    {
+        p.error = str(root, "message");
+        if (p.error.empty())
+            p.error = "Die App kennt dieses Spiel nicht.";
+        cJSON_Delete(root);
+        return p;
+    }
+    p.ok = true;
+    p.id = str(root, "id");
+    p.name = str(root, "name");
+    const cJSON *source = cJSON_GetObjectItemCaseSensitive(root, "source");
+    p.path = str(source, "path");
+    p.kind = str(source, "kind");
+    p.mount = str(source, "mount");
+    p.label = str(source, "label");
+    p.size_bytes = bytes(source, "size_bytes");
+    p.can_delete = flag(root, "can_delete");
+    p.delete_why = str(root, "delete_why");
+    p.can_move = flag(root, "can_move");
+    p.move_why = str(root, "move_why");
+    p.default_folder = str(root, "default_folder");
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "drives"))
+    {
+        OrigDrive d;
+        d.mount = str(item, "mount");
+        d.label = str(item, "label");
+        if (d.label.empty())
+            d.label = d.mount;
+        d.kind = str(item, "kind");
+        d.free_bytes = bytes(item, "free_bytes");
+        d.default_dest = str(item, "default_dest");
+        if (d.default_dest.empty() && !p.default_folder.empty())
+            d.default_dest = trimmed_folder(d.mount) + "/" + trimmed_folder(p.default_folder);
+        if (!d.mount.empty())
+            p.drives.push_back(std::move(d));
+    }
+    cJSON_Delete(root);
+    return p;
+}
+
+OrigCheck parse_orig_check(const OrigReply &reply)
+{
+    OrigCheck c;
+    if (!reply.ok)
+    {
+        c.error = reply.error.empty() ? "Die App hat nicht geantwortet." : reply.error;
+        return c;
+    }
+    cJSON *root = cJSON_Parse(reply.json.c_str());
+    if (!cJSON_IsObject(root))
+    {
+        cJSON_Delete(root);
+        c.error = "Die Antwort der App ist nicht lesbar.";
+        return c;
+    }
+    if (cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(root, "ok")))
+    {
+        c.error = str(root, "message");
+        if (c.error.empty())
+            c.error = "Die App hat den Ordner nicht geprüft.";
+        cJSON_Delete(root);
+        return c;
+    }
+    c.ok = true;
+    c.level = str(root, "level");
+    // Only the two levels this screen knows by name; anything else holds the start back.
+    if (c.level != "ok" && c.level != "error")
+        c.level = "error";
+    c.can_move = flag(root, "can_move");
+    c.text = str(root, "text");
+    c.dest = str(root, "dest");
+    c.target = str(root, "target");
+    c.free_bytes = bytes(root, "free_bytes");
+    c.need_bytes = bytes(root, "need_bytes");
+    c.smp_searches = flag(root, "smp_searches");
+    cJSON_Delete(root);
+    return c;
+}
+
+OrigStatus parse_orig_status(const std::string &json)
+{
+    OrigStatus s;
+    cJSON *root = cJSON_Parse(json.c_str());
+    if (!cJSON_IsObject(root))
+    {
+        cJSON_Delete(root);
+        return s;
+    }
+    s.ok = true;
+    s.active = flag(root, "active");
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "items"))
+    {
+        if (s.items.size() >= 8) // the app sends at most eight
+            break;
+        OrigItem it;
+        it.id = str(item, "id");
+        it.name = str(item, "name");
+        it.kind = str(item, "kind");
+        it.mode = str(item, "mode");
+        it.state = str(item, "state");
+        it.message = str(item, "message");
+        it.target = str(item, "target");
+        it.updated_ms = static_cast<std::int64_t>(num(item, "updated_ms"));
+        if (it.kind.empty() || (it.id.empty() && it.name.empty()))
+            continue;
+        s.items.push_back(std::move(it));
+    }
+    cJSON_Delete(root);
+    return s;
+}
+
+std::string orig_way_blocked(const OrigPlan &plan, int way)
+{
+    if (way == kOrigDelete && !plan.can_delete)
+        return plan.delete_why.empty() ? "Das Original lässt sich nicht löschen." : plan.delete_why;
+    if (way == kOrigMove)
+    {
+        if (!plan.can_move)
+            return plan.move_why.empty() ? "Das Original lässt sich nicht verschieben."
+                                         : plan.move_why;
+        if (plan.drives.empty())
+            return "Es gibt keinen Datenträger, auf den sich das Original verschieben ließe.";
+    }
+    return "";
+}
+
+int orig_next_way(const OrigPlan &plan, int wanted, bool forward)
+{
+    int way = std::clamp(wanted, 0, kOrigWays - 1);
+    for (int i = 0; i < kOrigWays; ++i)
+    {
+        if (orig_way_blocked(plan, way).empty())
+            return way;
+        way = (way + (forward ? 1 : kOrigWays - 1)) % kOrigWays;
+    }
+    return kOrigKeep;
+}
+
+OrigChoice first_orig_choice(const OrigPlan &plan)
+{
+    OrigChoice c;
+    // The first drive other than the original's own that has room for it: a move to the same drive
+    // would only be a rename, and the app's own check names it.
+    for (std::size_t i = 0; i < plan.drives.size() && c.drive < 0; ++i)
+    {
+        const OrigDrive &d = plan.drives[i];
+        if (d.mount != plan.mount && d.free_bytes >= plan.size_bytes)
+            c.drive = static_cast<int>(i);
+    }
+    for (std::size_t i = 0; i < plan.drives.size() && c.drive < 0; ++i)
+    {
+        if (plan.drives[i].mount != plan.mount)
+            c.drive = static_cast<int>(i);
+    }
+    if (c.drive < 0 && !plan.drives.empty())
+        c.drive = 0;
+    return c;
+}
+
+std::string orig_dest_of(const OrigPlan &plan, const OrigChoice &choice)
+{
+    if (choice.drive < 0 || choice.drive >= static_cast<int>(plan.drives.size()))
+        return {};
+    const OrigDrive &d = plan.drives[static_cast<std::size_t>(choice.drive)];
+    const std::string folder = trimmed_folder(choice.folder);
+    if (folder.empty())
+        return d.default_dest;
+    if (folder[0] == '/')
+        return folder;
+    return trimmed_folder(d.mount) + "/" + folder;
+}
+
+std::string orig_folder_text(const OrigPlan &plan, const OrigChoice &choice)
+{
+    const std::string dest = orig_dest_of(plan, choice);
+    if (dest.empty())
+        return {};
+    const OrigDrive &d = plan.drives[static_cast<std::size_t>(choice.drive)];
+    const std::string base = trimmed_folder(d.mount) + "/";
+    if (dest.size() > base.size() && dest.compare(0, base.size(), base) == 0)
+        return dest.substr(base.size());
+    return dest;
+}
+
+bool result_in_search_folder(Tool tool, const PlanChoice &choice)
+{
+    switch (tool)
+    {
+    case Tool::copy:
+        return choice.mode == 0;
+    case Tool::convert:
+        return choice.mode == 0 && choice.op != kOpFpkg;
+    case Tool::unpack:
+        return true;
+    default:
+        return false;
+    }
+}
+
+std::string orig_keep_note(Tool tool, const PlanChoice &choice)
+{
+    if (choice.orig != kOrigKeep || !result_in_search_folder(tool, choice))
+        return {};
+    return "Ergebnis und Original liegen beide in einem Ordner, den ShadowMountPlus durchsucht: "
+           "Er meldet dasselbe Spiel zweimal.";
+}
+
+std::string orig_blocked(const OrigPlan &plan, const PlanChoice &choice, const OrigCheck &check)
+{
+    if (!plan.ok || choice.orig == kOrigKeep)
+        return {};
+    if (choice.orig == kOrigDelete)
+        return orig_way_blocked(plan, kOrigDelete);
+    const std::string why = orig_way_blocked(plan, kOrigMove);
+    if (!why.empty())
+        return why;
+    if (choice.orig_dest.empty())
+        return "Wähle Datenträger und Ordner für das Original.";
+    if (!check.ok)
+        return check.error.empty() ? "Der Ordner für das Original ist noch nicht geprüft."
+                                   : check.error;
+    if (check.level != "ok" || !check.can_move)
+        return check.text.empty() ? "Dorthin lässt sich das Original nicht verschieben."
+                                  : check.text;
+    return {};
+}
+
+std::string orig_delete_warning(const OrigPlan &plan)
+{
+    return "Gelöscht wird " + quoted(plan.name) +
+           (plan.size_bytes > 0 ? " (" + format_bytes(plan.size_bytes) + ")" : std::string()) +
+           (plan.path.empty() ? std::string() : " aus " + plan.path) + ". Spielstände bleiben.";
+}
+
+std::vector<std::string> orig_delete_notes(const OrigPlan &plan)
+{
+    std::vector<std::string> notes;
+    if (!plan.path.empty())
+        notes.push_back(plan.path);
+    notes.push_back("Spielstände bleiben erhalten.");
+    return notes;
+}
+
+const OrigItem *orig_status_for(const OrigStatus &status, const std::string &kind,
+                                const std::string &id, const std::string &name)
+{
+    for (const OrigItem &item : status.items)
+    {
+        if (item.kind != kind)
+            continue;
+        if (!id.empty() ? item.id == id : (!name.empty() && item.name == name))
+            return &item;
+    }
+    return nullptr;
+}
+
+std::string orig_card_text(const OrigItem &item, bool job_active)
+{
+    if (item.message.empty() || (job_active && item.state == "waiting"))
+        return {};
+    return item.message;
 }
 
 } // namespace hui::ps5cc

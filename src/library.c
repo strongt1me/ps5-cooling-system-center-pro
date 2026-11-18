@@ -80,6 +80,7 @@
 #define SIZE_TTL_MS      (10u * 60 * 1000)   /* folder sizes: see real_size() */
 #define SIZE_SEED_TTL_MS (6u * 60 * 60 * 1000) /* ... one read from the cache folder counts this long */
 #define LIBRARY_MAX      256
+#define LIBRARY_SCAN_MAX 1024                /* rows read per refresh (audit F-253): the list itself keeps LIBRARY_MAX, the most recently used */
 #define ROW_GAMES        138
 #define MOD_LIB_NAMES    6
 
@@ -959,7 +960,7 @@ static int
 content_row(void *ctx, const sqlro_table_t *t, const sqlro_row_t *r) {
   content_ctx_t *c = ctx;
   (void)t;
-  if(c->count >= LIBRARY_MAX) { c->truncated = 1; return 1; }
+  if(c->count >= LIBRARY_SCAN_MAX) { c->truncated = 1; return 1; }
 
   lib_game_t *g = &c->list[c->count];
   memset(g, 0, sizeof(*g));
@@ -1066,7 +1067,7 @@ tile_row(void *ctx, const sqlro_table_t *t, const sqlro_row_t *r) {
     /* A tile without an installed-content row: keep what the tile knows. When
        there is no room left this one is skipped, not the rest of the scan —
        the tiles behind it may well be on the list already. */
-    if(*c->count >= LIBRARY_MAX) { *c->truncated = 1; return 0; }
+    if(*c->count >= LIBRARY_SCAN_MAX) { *c->truncated = 1; return 0; }
     g = &c->list[(*c->count)++];
     memset(g, 0, sizeof(*g));
     snprintf(g->title_id, sizeof(g->title_id), "%s", tid);
@@ -1094,6 +1095,22 @@ by_recent(const void *a, const void *b) {
   return strcmp(x->title_id, y->title_id);
 }
 
+/* Keeps only the titles of the list just read (audit F-257): the check cache never gave up an entry, and a full one (256) made every new title unreadable
+   for the image reader and sent it to the mount fallback again and again. Called from refresh(), with g_refresh_lock held. */
+static void
+mods_prune(const lib_game_t *list, int n) {
+  int k = 0;
+  for(int i = 0; i < g_mods_cached; i++) {
+    int keep = 0;
+    for(int j = 0; j < n && !keep; j++) keep = !strcmp(list[j].title_id, g_mods_cache[i].title_id);
+    if(!keep) continue;
+    if(k != i) g_mods_cache[k] = g_mods_cache[i];
+    k++;
+  }
+  memset(&g_mods_cache[k], 0, (size_t)(g_mods_cached - k) * sizeof(g_mods_cache[0]));      /* no stale copies behind the list: a new entry starts clean (review 18.11.) */
+  g_mods_cached = k;
+}
+
 /* Reads the database and replaces the cache. Called with g_refresh_lock held
    and g_lock NOT held: everything slow happens before g_lock is taken, once,
    to publish the finished list. */
@@ -1103,7 +1120,7 @@ refresh(void) {
   size_t size = 0;
   g_walk_deadline_ms = ps5tm_mono_ms() + 20000;    /* folder walks of this round: at most 20 s (F-03) */
   unsigned char *file = read_appdb(&size, err, sizeof(err));
-  lib_game_t    *list = calloc(LIBRARY_MAX, sizeof(lib_game_t));
+  lib_game_t    *list = calloc(LIBRARY_SCAN_MAX, sizeof(lib_game_t));       /* 1,26 MB of heap, freed at the end (audit F-253) */
   sqlro_table_t *tab  = malloc(sizeof(sqlro_table_t));
   sqlro_db_t     db;
   int count = 0, user_matched = 0, from_tiles = 0, ok = 0, truncated = 0;
@@ -1172,13 +1189,17 @@ refresh(void) {
   for(int i = 0; i < count; i++) {
     if(!list[i].picked) continue;
     if(n != i) list[n] = list[i];
-    read_mount_source(list[n].title_id, list[n].source, sizeof(list[n].source));
-    detect_mods(&list[n]);
-    detect_storage(&list[n]);
     n++;
   }
-  qsort(list, (size_t)n, sizeof(lib_game_t), by_recent);
+  qsort(list, (size_t)n, sizeof(lib_game_t), by_recent);        /* by_recent reads only the order and the title id */
+  if(n > LIBRARY_MAX) { n = LIBRARY_MAX; truncated = 1; }       /* the most recently used stay (audit F-253): the rows read were not only games */
+  for(int i = 0; i < n; i++) {                                  /* the slow checks only for the games that stay on the list */
+    read_mount_source(list[i].title_id, list[i].source, sizeof(list[i].source));
+    detect_mods(&list[i]);
+    detect_storage(&list[i]);
+  }
   count = n;
+  mods_prune(list, n);
   ok = 1;
 
 done:
@@ -1215,8 +1236,8 @@ done:
   }
   if(ok && truncated && !warned_truncated)
     PS5TM_WARN("library_truncated",
-               "Die App-Datenbank nennt mehr als %d Titel; die übrigen "
-               "erscheinen nicht in der Spieleliste.", LIBRARY_MAX);
+               "Die App-Datenbank nennt mehr als %d Spiele; die am längsten "
+               "nicht benutzten erscheinen nicht in der Spieleliste.", LIBRARY_MAX);
   if(ok) warned_truncated = truncated;
   free(tab);
   free(list);
@@ -2474,6 +2495,7 @@ probe_note_failed(const char *tid) {
    - for six hours at most, and not at all after "Prüfung anfordern" (POST /api/v1/library/probe) - and says so in the log once, not every round. Used by
    the probe thread alone. The list above (g_probe_failed) is another thing: it is what the mount fallback works from, and it stays as it was. */
 static ps5tm_pfail_t g_probe_bad;
+static ps5tm_pfail_t g_probe_mount_bad;   /* titles the mount fallback could not read: again after PS5TM_PFAIL_RETRY_MS or on request (audit F-255) */
 
 /* Part one: read every image game's own file, nothing mounted, no call to ShadowMountPlus. A title is read again only when
    its image file has another size or time than the one the saved result was read from. Returns how many were read. */
@@ -2563,11 +2585,12 @@ probe_after_crash(void) {
 
 static int
 probe_read_images(void) {
-  struct { char tid[12]; char path[256]; } img[PROBE_MAX_TITLES];
+  struct probe_img { char tid[12]; char path[256]; } *img = malloc(LIBRARY_MAX * sizeof(*img));   /* 68 KB: heap, not the thread's stack of 256 KB (audit F-260) */
   int n = 0;
   probe_after_crash();
+  if(!img) return 0;
   pthread_mutex_lock(&g_lock);
-  for(int i = 0; i < g_count && n < PROBE_MAX_TITLES; i++) {
+  for(int i = 0; i < g_count && n < LIBRARY_MAX; i++) {
     const lib_game_t *g = &g_games[i];
     if(g->platform != 0 || g->real_path[0] != '/' || !strcmp(g->format, "folder") || !strcmp(g->format, "pkg") || !g->format[0]) continue;
     snprintf(img[n].tid, sizeof(img[n].tid), "%s", g->title_id);
@@ -2576,8 +2599,8 @@ probe_read_images(void) {
   }
   pthread_mutex_unlock(&g_lock);
 
-  int done = 0;
-  for(int i = 0; i < n; i++) {
+  int done = 0, tried = 0;
+  for(int i = 0; i < n && tried < PROBE_MAX_TITLES; i++) {                          /* at most 40 reads a round, out of all image games (audit F-260) */
     struct stat st;
     if(stat(img[i].path, &st) != 0 || !S_ISREG(st.st_mode)) continue;            /* the drive is not there now */
     int have = 0;
@@ -2591,6 +2614,7 @@ probe_read_images(void) {
     if(have) continue;
     if(probe_skipped(img[i].tid)) continue;                    /* the reader crashed on it before: left alone until the list is deleted */
     if(ps5tm_pfail_skip(&g_probe_bad, img[i].tid, (int64_t)st.st_size, (int64_t)st.st_mtime, ps5tm_mono_ms())) continue;   /* could not be read, the file is the same */
+    tried++;
     probe_mark_reading(img[i].tid);                            /* a crash inside the reader leaves this mark behind (audit F-21) */
     int rd = probe_read_image_file(img[i].tid, img[i].path, (int64_t)st.st_size, (int64_t)st.st_mtime);
     probe_mark_reading(NULL);
@@ -2609,6 +2633,7 @@ probe_read_images(void) {
     ps5tm_library_forget();                                 /* the next list is made with what was found */
     PS5TM_INFO("image_probe_read", "Anpassungen der Abbilder gelesen: %d Spiel(e), ohne etwas einzuhängen.", done);
   }
+  free(img);
   return done;
 }
 
@@ -2644,6 +2669,7 @@ probe_round(void) {
       PS5TM_INFO("image_probe_stop", "Prüfung der Abbilder angehalten: ein Spiel oder ein anderer Vorgang läuft. %d von %d geprüft.", done, n);
       return;
     }
+    if(ps5tm_pfail_skip(&g_probe_mount_bad, todo[i].tid, 0, 0, ps5tm_mono_ms())) continue;      /* mounted and not readable a short while ago (audit F-255) */
     char err[200];
     probe_mark_set(todo[i].tid);
     if(probe_post("/games/mount", todo[i].tid, 1, err, sizeof(err)) != 0) {
@@ -2658,6 +2684,17 @@ probe_round(void) {
       read_ok = probe_read_into_cache(todo[i].tid, todo[i].source);
       if(read_ok != 0) usleep(250 * 1000);
     }
+    {
+      ps5tm_gamestate_t gs;
+      ps5tm_gamestate_get(&gs);
+      /* the game state is measured every 4 s (and is empty when that is switched off): the kernel is asked as well (review 18.11.) */
+      if(!strcmp(gs.title_id, todo[i].tid) || ps5tm_procmgr_title_running(todo[i].tid) == 1) {   /* the person started this very title in the meantime: it is theirs now (audit F-255) */
+        remove(PROBE_MARK);
+        ps5tm_smp_forget();
+        PS5TM_INFO("image_probe_stop", "Prüfung der Abbilder angehalten: %s wurde inzwischen gestartet.", todo[i].tid);
+        return;
+      }
+    }
     if(probe_post("/games/unmount", todo[i].tid, 0, err, sizeof(err)) == 0) {
       remove(PROBE_MARK);
     } else {
@@ -2668,7 +2705,8 @@ probe_round(void) {
     }
     ps5tm_smp_forget();
     if(read_ok == 0) { done++; probe_save(); }
-    else PS5TM_INFO("image_probe_unread", "Das Abbild von %s war eingehängt, ließ sich aber nicht lesen.", todo[i].tid);
+    else if(ps5tm_pfail_note(&g_probe_mount_bad, todo[i].tid, 0, 0, ps5tm_mono_ms()))
+      PS5TM_INFO("image_probe_unread", "Das Abbild von %s war eingehängt, ließ sich aber nicht lesen.", todo[i].tid);
     sleep(3);
   }
   if(done) ps5tm_library_forget();
@@ -2692,7 +2730,7 @@ probe_thread(void *arg) {
     const int asked = g_probe_want;                 /* a person asked for the check (POST /api/v1/library/probe): nothing is left alone this time */
     g_probe_want = 0;
     pthread_mutex_unlock(&g_probe_lock);
-    if(asked) ps5tm_pfail_clear(&g_probe_bad);
+    if(asked) { ps5tm_pfail_clear(&g_probe_bad); ps5tm_pfail_clear(&g_probe_mount_bad); }
     probe_round();
     wait_ms = PROBE_EVERY_MS;
   }

@@ -253,7 +253,6 @@ cp_file(cp_t *c, const char *src, const char *dst, const struct stat *st) {
     out = -1;
     if(werr) { snprintf(c->why, sizeof(c->why), "Schreiben schlug fehl (%s): %s", ps5tm_io_strerror(werr), dst + c->dstlen + 1); goto bad; }
   }
-  out = -1;
   /* read back */
   int rb = open(dst, O_RDONLY);
   if(rb < 0) { snprintf(c->why, sizeof(c->why), "Eine Kopie ließ sich nicht zurücklesen: %s", dst + c->dstlen + 1); goto bad2; }

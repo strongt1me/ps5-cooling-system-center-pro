@@ -134,12 +134,14 @@ Net exchange(const char *method, const char *path, const std::string &payload, i
     const int s = open_local(kPortApp, timeout_s, &why);
     if (s < 0)
         return why;
-    char head[512];
+    char head[1536];
     const int n = std::snprintf(head, sizeof(head),
                                 "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nConnection: close\r\n"
                                 "Content-Type: application/json\r\nContent-Length: %zu\r\n\r\n",
                                 method, path, kPortApp, payload.size());
-    if (n <= 0 || !send_all(s, head, static_cast<std::size_t>(n)) ||
+    // a request line that does not fit is not sent cut off (snprintf says how long it would be)
+    if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(head) ||
+        !send_all(s, head, static_cast<std::size_t>(n)) ||
         (!payload.empty() && !send_all(s, payload.data(), payload.size())))
     {
         close(s);
@@ -749,6 +751,31 @@ void HttpSource::start_tool(Tool tool, const std::string &id, const std::string 
     tool_requests_.push_back(std::move(r));
 }
 
+// "Original danach" (18.11.2026): what may become of the original, and whether a folder is fit for
+// it. Short reads, so they ride on the worker's own queue, not behind a plan that measures a game.
+std::uint64_t HttpSource::orig_plan(const std::string &id)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    const std::uint64_t ticket = ++next_ticket_;
+    // Only the newest one matters: one asked for earlier and still waiting is dropped.
+    requests_.erase(std::remove_if(requests_.begin(), requests_.end(), [](const Request &q)
+                                   { return q.kind == Request::Kind::orig_plan; }),
+                    requests_.end());
+    requests_.push_back({Request::Kind::orig_plan, static_cast<int>(ticket), id, {}});
+    return ticket;
+}
+
+std::uint64_t HttpSource::orig_check(const std::string &id, const std::string &dest)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    const std::uint64_t ticket = ++next_ticket_;
+    requests_.erase(std::remove_if(requests_.begin(), requests_.end(), [](const Request &q)
+                                   { return q.kind == Request::Kind::orig_check; }),
+                    requests_.end());
+    requests_.push_back({Request::Kind::orig_check, static_cast<int>(ticket), id, dest});
+    return ticket;
+}
+
 std::uint64_t HttpSource::convert_check(const std::string &body)
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -1201,6 +1228,7 @@ void HttpSource::run()
             if (connect_phase())
             {
                 online_ = true;
+                orig_status_missing_ = false;
                 status_failures_ = 0;
                 set_link(Link::online, {});
                 library_wanted = true;
@@ -2177,6 +2205,30 @@ void HttpSource::handle(const Request &request)
         }
         if (!id.empty())
             poll_extras(id);
+        break;
+    }
+    case Request::Kind::orig_plan:
+    case Request::Kind::orig_check:
+    {
+        const bool plan = request.kind == Request::Kind::orig_plan;
+        std::string path = std::string("/api/v1/library/orig/") + (plan ? "plan" : "check") +
+                           "?id=" + url_encoded(request.id);
+        if (!plan)
+            path += "&dest=" + url_encoded(request.text);
+        const Net net = exchange("GET", path.c_str(), {}, &status, &body, 30);
+        OrigReply reply;
+        reply.ticket = static_cast<std::uint64_t>(request.value);
+        reply.ok = net == Net::ok && status == 200;
+        if (reply.ok)
+            reply.json = std::move(body);
+        else if (net != Net::ok)
+            reply.error = "Die App hat nicht rechtzeitig geantwortet.";
+        else
+            reply.error = plan ? message_of(body, "Die App hat keinen Plan geliefert.")
+                               : message_of(body, "Die App hat den Ordner nicht geprüft.");
+        std::lock_guard<std::mutex> lock(mutex_);
+        (plan ? data_.orig_plan : data_.orig_check) = std::move(reply);
+        ++data_.serial;
         break;
     }
     case Request::Kind::extras_versions:
@@ -5013,8 +5065,9 @@ void HttpSource::poll_jobs()
                                job.state == "scanning" || job.state == "verifying");
         job.finished = !idle && !job.active;
         job.name = str(root, "name");
+        job.id = str(root, "title_id");
         if (job.name.empty())
-            job.name = str(root, "title_id");
+            job.name = job.id;
         if (i == 0)
         {
             // Written and read back count together, as in the web app.
@@ -5075,6 +5128,33 @@ void HttpSource::poll_jobs()
             }
         }
     }
+    {
+        // "Original danach": what became of the original after a copy, a conversion or an unpack.
+        // Asked only while this page is open and a job runs or has ended; an older app has no such
+        // route and is not asked again.
+        bool any = false;
+        for (const Job &j : jobs)
+            any = any || j.active || j.finished;
+        if (any && !orig_status_missing_ && watching_.load() == Watch::jobs)
+        {
+            int ostatus = 0;
+            std::string obody;
+            const Net net = exchange("GET", "/api/v1/library/orig/status", {}, &ostatus, &obody);
+            if (net == Net::ok && ostatus == 200)
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (data_.orig_status_json != obody)
+                {
+                    data_.orig_status_json = std::move(obody);
+                    ++data_.serial;
+                }
+            }
+            else if (net == Net::ok && ostatus == 404)
+            {
+                orig_status_missing_ = true;
+            }
+        }
+    }
     std::lock_guard<std::mutex> lock(mutex_);
     // A job that just ended may have moved, unpacked or deleted a game: the list is read again.
     for (std::size_t i = 0; i < jobs.size(); ++i)
@@ -5102,6 +5182,7 @@ void HttpSource::read_storage_job(const cJSON *root, Job &job)
                 : state == "failed"    ? "failed"
                                        : "cancelled";
     std::string tid = str(root, "title_id");
+    job.id = tid;
     job.name = !tid.empty() ? game_name(tid) : str(root, "title_name");
     if (job.name.empty())
         job.name = str(root, "name");

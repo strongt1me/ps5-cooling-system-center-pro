@@ -148,7 +148,7 @@ write_file(pfs_t *p, const char *dst, const char *rel, uint64_t start, uint64_t 
     done += n;
     if(p->pcb) p->pcb(p->ctx, n, NULL);
   }
-  int saved = errno;
+  int saved;
   if(rc == 0 && fsync(out) != 0) { saved = errno; rc = bad(p, "%s ließ sich nicht sichern (%s).", rel, strerror(saved ? saved : EIO)); }
   if(close(out) != 0 && rc == 0) { saved = errno; rc = bad(p, "%s ließ sich nicht abschließen (%s).", rel, strerror(saved ? saved : EIO)); }
   if(rc) {

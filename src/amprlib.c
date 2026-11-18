@@ -174,7 +174,8 @@ slurp(const char *path, uint8_t **data, size_t *len, size_t max) {
   int fd = open(path, O_RDONLY);
   if(fd < 0) return errno ? errno : EIO;
   struct stat st;
-  if(fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) { int e = errno ? errno : EINVAL; close(fd); return e; }
+  const int fst = fstat(fd, &st);
+  if(fst != 0 || !S_ISREG(st.st_mode)) { int e = fst != 0 ? (errno ? errno : EIO) : EINVAL; close(fd); return e; }
   if((uint64_t)st.st_size > max) { close(fd); return EFBIG; }
   uint8_t *buf = malloc((size_t)st.st_size + 1);
   if(!buf) { close(fd); return ENOMEM; }
@@ -182,7 +183,7 @@ slurp(const char *path, uint8_t **data, size_t *len, size_t max) {
   while(have < (size_t)st.st_size) {
     ssize_t r = read(fd, buf + have, (size_t)st.st_size - have);
     if(r < 0 && errno == EINTR) continue;
-    if(r <= 0) { int e = r < 0 ? errno : EIO; free(buf); close(fd); return e; }
+    if(r <= 0) { int e = r < 0 ? (errno ? errno : EIO) : EIO; free(buf); close(fd); return e; }
     have += (size_t)r;
   }
   close(fd);

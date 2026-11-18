@@ -1819,7 +1819,7 @@ dump_run(void *arg) {
   char held[2][PATH_MAX];                   /* the files held back, under their temporary names */
   int have[2] = { 0, 0 };
 
-  if(!a.dlc_only && is4) {
+  if(pl4) {                                 /* allocated above under exactly `!a.dlc_only && is4`; any failure there left through `out` */
     const int nfold = pl4->single ? 1 : pl4->n;
     char ps4why[220] = "";
     for(int i = 0; i < nfold; i++) write_info(a.dest, pl4->part[i].folder, a.title_id, a.name, "game", "running", 0, t_start, 0, a.origin);

@@ -188,7 +188,7 @@ fs_plan(int fd, uint64_t elf_size, fs_plan_t *p, char *why, size_t wn) {
   unsigned phnum = rd16(first + 0x38);
   uint64_t tbl = (uint64_t)phnum * FS_PHDR;
   if(phnum && phoff < 0x40) { say(why, wn, "ungewöhnliche Lage der Programmköpfe"); goto out; }
-  table = malloc(tbl ? (size_t)tbl : 1);
+  table = calloc(1, tbl ? (size_t)tbl : 1);
   copied = calloc(phnum ? phnum : 1, sizeof(unsigned));
   if(!table || !copied) { say(why, wn, "kein Speicher"); goto out; }
   if(phnum) {

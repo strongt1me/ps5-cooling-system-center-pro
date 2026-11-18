@@ -43,6 +43,7 @@ ended(const char *id) {
   ps5tm_smp_game_t g;
   if(ps5tm_smp_find(id, &g) != 0 || !strcmp(g.source_type, "pkg") || !g.mounted) return 0;
   if(!in_conflict(id)) return 0;
+  if(ps5tm_procmgr_title_running(id) == 1) return 0;   /* started again in the meantime: left mounted; its next end is seen anew (audit F-258) */
   char msg[240] = "";
   int st = ps5tm_smpremount(id, "unmount", msg, sizeof(msg));
   if(st != 200) {

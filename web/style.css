@@ -2440,3 +2440,36 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 .fc-actions .btn { text-decoration: none; display: inline-flex; align-items: center; }
 
 .dm-field small.dm-bad { color: var(--critical); }
+
+/* Original danach (18.11.2026): behalten, löschen oder verschieben, in den Fenstern Konvertieren, Kopieren und Entpacken.
+   Die Optionen sind die .cp-choice der anderen Fenster, der Block unter „Verschieben“ die .cp-sub, die Datenträger die Chips
+   (.fm-pick-place) und das Feld die Namenszeile (.cv-name); neu sind nur die Prüfzeile, die kleine Ordnerauswahl und die Zeile im Auftragsfenster. */
+.og-move h5 { margin-top: 8px; }
+.og-move h5:first-child { margin-top: 0; }
+.og-move .cv-name { margin: 0 0 4px; }
+.og-drives { margin: 0 0 4px; }
+.og-drives .fm-pick-place { text-align: left; line-height: 1.35; padding: 5px 12px; }
+.og-check { margin: 8px 0 2px; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.og-check .og-ic { display: inline-block; width: 16px; font-weight: 700; text-align: center; }
+.og-check.ok { color: #7fe0bc; }
+.og-check.err { color: #ff9b9b; }
+.og-check.warn { color: #ffd57b; }
+.og-check.wait { color: var(--ink-2); }
+.og-note { margin: 4px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.og-err { overflow-wrap: anywhere; }
+.og-pick { margin: 8px 0 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 11px; background: var(--surface-2); }
+.og-pick-cur { margin: 0 0 4px; font-size: 12px; overflow-wrap: anywhere; }
+.og-pick .fm-pick-list { max-height: 30vh; margin: 4px 0 8px; }
+.og-pick-err { margin: 0; padding: 10px 12px; overflow-wrap: anywhere; }
+.og-pick-bar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.og-pick-bar .btn:disabled { opacity: .5; cursor: default; }
+/* die Zeilen der Ordnerauswahl sind Knöpfe (Fokus mit dem Controller): der Rand und die Schrift wie die Zeilen des Dateimanagers */
+.og-row { width: 100%; border: 0; border-bottom: 1px solid var(--hairline); background: none; color: inherit; font: inherit; text-align: left; }
+.og-row:focus-visible { outline: 2px solid var(--s1); outline-offset: -2px; background: var(--inset); }
+.og-line { margin: 10px 0 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.og-line.og-ok { color: #7fe0bc; }
+.og-line.og-bad { color: #ff9b9b; }
+.og-line.og-skip { color: #ffd57b; }
+:root[data-theme="hell"] .og-check.ok, :root[data-theme="hell"] .og-line.og-ok { color: #1e7b59; }
+:root[data-theme="hell"] .og-check.err, :root[data-theme="hell"] .og-line.og-bad { color: #8e0b0b; }
+:root[data-theme="hell"] .og-check.warn, :root[data-theme="hell"] .og-line.og-skip { color: #8e640b; }

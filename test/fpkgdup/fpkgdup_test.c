@@ -63,12 +63,15 @@ int ps5tm_library_launch_info(const char *id, char *name, size_t nn, char *link,
   snprintf(name, nn, "Spiel %s", id);
   return 0;
 }
+static int g_title_running;                        /* what the kernel says about the title: 0 no, 1 yes, -1 not to be known */
+int ps5tm_procmgr_title_running(const char *id) { (void)id; return g_title_running; }
 
 static void reset(void) {
   g_title[0] = 0;
   snprintf(g_state, sizeof(g_state), "kein Spiel");
   g_measured = 1; g_age = 0; g_conflict = 1; g_mounted = 1; g_pkg = 0;
   g_unmounts = g_notices = g_warns = 0;
+  g_title_running = 0;
   snprintf(g_conflict_id, sizeof(g_conflict_id), "PPSA02664");
 }
 static void play(char *playing, const char *id) {
@@ -141,6 +144,18 @@ int main(void) {
   reset(); playing[0] = 0;
   play(playing, "PPSA02664"); play(playing, "PPSA02664");
   CHECK(g_unmounts == 0);
+
+  /* the title runs again at once (the state, measured a few seconds ago, still said "no game"): it stays mounted (audit F-258) */
+  reset(); playing[0] = 0;
+  play(playing, "PPSA02664");
+  g_title_running = 1; quit_game(playing);
+  CHECK(g_unmounts == 0 && !playing[0]);
+
+  /* the kernel cannot say (-1): as before, it is unmounted */
+  reset(); playing[0] = 0;
+  play(playing, "PPSA02664");
+  g_title_running = -1; quit_game(playing);
+  CHECK(g_unmounts == 1);
 
   printf("%d Prüfungen, %d Fehler\n", g_n, g_fail);
   return g_fail ? 1 : 0;

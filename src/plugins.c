@@ -99,7 +99,8 @@ read_file(const char *path, uint8_t **d, size_t *n) {
   int fd = open(path, O_RDONLY);
   if(fd < 0) return errno ? errno : EIO;
   struct stat st;
-  if(fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) { int e = errno ? errno : EINVAL; close(fd); return e; }
+  const int fst = fstat(fd, &st);
+  if(fst != 0 || !S_ISREG(st.st_mode)) { int e = fst != 0 ? (errno ? errno : EIO) : EINVAL; close(fd); return e; }
   if((uint64_t)st.st_size > PL_MAX_BYTES) { close(fd); return EFBIG; }
   uint8_t *b = malloc((size_t)st.st_size + 1);
   if(!b) { close(fd); return ENOMEM; }
@@ -107,7 +108,7 @@ read_file(const char *path, uint8_t **d, size_t *n) {
   while(have < (size_t)st.st_size) {
     ssize_t r = read(fd, b + have, (size_t)st.st_size - have);
     if(r < 0 && errno == EINTR) continue;
-    if(r <= 0) { free(b); close(fd); return r < 0 ? errno : EIO; }
+    if(r <= 0) { const int e = r < 0 ? (errno ? errno : EIO) : EIO; free(b); close(fd); return e; }
     have += (size_t)r;
   }
   close(fd);

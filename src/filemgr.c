@@ -1426,7 +1426,9 @@ copy_tree(const char *rs, const char *rt, const char *vs, dev_t dev, int depth) 
   }
   if(mkdir(rt, 0777) != 0) {
     struct stat ex;
-    if(errno != EEXIST || !g_replace || lstat(rt, &ex) != 0 || !S_ISDIR(ex.st_mode)) return errno ? errno : EEXIST;
+    if(errno != EEXIST || !g_replace) return errno ? errno : EEXIST;
+    if(lstat(rt, &ex) != 0) return errno ? errno : EEXIST;
+    if(!S_ISDIR(ex.st_mode)) return EEXIST;
     /* merged into the folder that is there: not ours, so a failure does not delete it */
   } else {
     if(depth == 0) g_made_top = 1;

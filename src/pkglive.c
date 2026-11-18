@@ -315,7 +315,7 @@ ps5tm_pkglive_read(const char *id, uint64_t off, void *vbuf, size_t n) {
     uint64_t began = now_ms();
     dem_add_locked(s);
     rdr_note_locked(s);
-    while(L.active && L.slot_of[s] < 0) {
+    while(L.active && !strcmp(id, L.id) && L.slot_of[s] < 0) {      /* another session (a new package) may have begun while this reader waited: not ours to end, and its table is another one */
       if(g_kick != kick) { pthread_mutex_unlock(&L.lock); return -1; }
       uint64_t now = now_ms();
       if(now - L.last_contact > LV_CONTACT_MS) {
@@ -323,11 +323,13 @@ ps5tm_pkglive_read(const char *id, uint64_t off, void *vbuf, size_t n) {
         snprintf(w, sizeof(w), "Der Browser hat sich seit %u Sekunden nicht mehr gemeldet. Die Übertragung vom PC ist abgebrochen; die Seite muss offen bleiben, bis die Installation fertig ist.",
                  (unsigned)((now - L.last_contact) / 1000));
         end_locked(w);
-        break;
+        pthread_mutex_unlock(&L.lock);
+        return -1;
       }
       if(now - began > LV_WAIT_MS) {
         end_locked("Ein Stück des Pakets kam vom PC nicht rechtzeitig an. Die Übertragung ist abgebrochen.");
-        break;
+        pthread_mutex_unlock(&L.lock);
+        return -1;
       }
       struct timespec ts;
       clock_gettime(CLOCK_REALTIME, &ts);

@@ -244,6 +244,8 @@ fetched_version(char *v, size_t n) {
     fclose(bf);
     if(bad[0] && !strcmp(bad, v)) v[0] = 0;
   }
+  /* Not newer than the embedded copy (a version loaded before an app update): the embedded one starts (audit F-251). */
+  if(v[0] && !ps5tm_krakenboot_take_fetched(v, KR_EMBEDDED_VERSION)) v[0] = 0;
 }
 
 /* After the start of a downloaded version: it has a minute to answer. If it does not, the version is written to KR_BAD and the next start
@@ -734,6 +736,11 @@ fetch_release(char *msg, size_t n) {
   fetched_version(fv, sizeof fv);
   if(!strcmp(ver, fv) || (!fv[0] && !strcmp(ver, KR_EMBEDDED_VERSION))) {
     snprintf(msg, n, "Die neueste Fassung (%s) ist schon da.", ver);
+    rc = 200;
+    goto done;
+  }
+  if(!ps5tm_krakenboot_take_fetched(ver, KR_EMBEDDED_VERSION)) {            /* not newer than what the app brings: nothing to load (audit F-251) */
+    snprintf(msg, n, "Die neueste Fassung (%s) ist nicht neuer als die eingebettete (%s). Die eingebettete wird genommen.", ver, KR_EMBEDDED_VERSION);
     rc = 200;
     goto done;
   }

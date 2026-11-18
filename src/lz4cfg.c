@@ -845,11 +845,11 @@ load_buf(char *buf, size_t len, const char *dir, lzc_cfg_t *c, char *err, size_t
   int ok = 0;
   for(;;) {
     skip_ws(&ps, 1);
-    if(ps.p >= ps.end) { ok = 1; break; }
+    if(ps.p >= ps.end) break;
     if(*ps.p == '[') {
       int arr = ps.p + 1 < ps.end && ps.p[1] == '[';
       ps.p += arr ? 2 : 1;
-      char name[128];
+      char name[128] = "";
       size_t j = 0;
       while(ps.p < ps.end && *ps.p != ']' && *ps.p != '\n' && j + 1 < sizeof(name)) {
         if(*ps.p == '"' && !arr) {                                  /* a quoted part of a dotted name */

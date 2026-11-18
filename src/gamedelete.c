@@ -37,6 +37,7 @@
 
 #include "checkfile.h"
 #include "ioerr.h"
+#include "origafter.h"
 #include "ps5tm.h"
 #include "titleid.h"
 #include "third_party/cJSON.h"
@@ -104,6 +105,7 @@ typedef struct {
   char kind[12];
   char id[320];
   char path[320];
+  int  orig;                  /* the original of a game (origafter.c): exactly this path */
 } dl_args_t;
 
 
@@ -772,13 +774,10 @@ run_installed(const dl_args_t *a) {
   job_end(DL_DONE, NULL, note);
 }
 
-static void
-run_smp(const dl_args_t *a) {
-  ps5tm_smp_game_t s;
-  if(ps5tm_smp_find(a->id, &s) != 0 || !deletable_root(s.path) || strcmp(s.path, a->path)) {
-    job_end(DL_FAILED, "ShadowMountPlus kennt das Spiel nicht mehr oder die Spieldaten liegen an einem unerlaubten Ort. Es wurde nichts gelöscht.", NULL);
-    return;
-  }
+/* ShadowMountPlus lets the title go: its own uninstall, which unmounts it (alone it would mount the file again at its next scan). 0 when it did;
+   otherwise the job has ended as failed ("Es wurde nichts gelöscht.") and -1 is returned. */
+static int
+smp_unregister(const dl_args_t *a) {
   job_phase("ShadowMountPlus meldet das Spiel ab");
   job_stage(3, 3, 0);
   cJSON *body = cJSON_CreateObject();
@@ -815,14 +814,18 @@ run_smp(const dl_args_t *a) {
     snprintf(e, sizeof(e), "ShadowMountPlus hat das Abmelden abgelehnt (%s). Es wurde nichts gelöscht.", err[0] ? err : "ohne Angabe");
     PS5TM_WARN("game_delete_failed", "Löschen von %s: %.150s", a->id, e);
     job_end(DL_FAILED, e, NULL);
-    return;
+    return -1;
   }
   cJSON_Delete(r);
   ps5tm_smp_forget();
   ps5tm_library_forget();
+  return 0;
+}
+
+/* The game's data at path (a folder or an image file), and the checksum file next to it. rc as delete_path (0 = gone). */
+static int
+delete_game_folder(const char *path, uint64_t *files, uint64_t *bytes, char *why, size_t why_len) {
   job_phase("Die Spieldaten werden gelöscht");
-  uint64_t files = 0, bytes = 0;
-  char why[640] = "";
   /* ShadowMountPlus has let the game go; its markers go first, so that a scan that comes while the folder is being emptied does not take the
      half-deleted rest for a game and register it again (audit F-35). The paths are fixed, below the game's own folder. */
   {
@@ -830,22 +833,36 @@ run_smp(const dl_args_t *a) {
     char mp[1100];
     /* only when the delete below will go ahead as well (the same checks on the folder): a game folder that is a mount point or lies behind a
        link is refused there, and its markers must not be gone then */
-    const char *root = deletable_root(s.path);
+    const char *root = deletable_root(path);
     /* sce_sys itself must be a plain folder on the game's own drive: a link there would carry the unlink into another game (audit N-1) */
     struct stat gs, ss;
-    int plain = root && path_is_plain(s.path, root) && snprintf(mp, sizeof(mp), "%s/sce_sys", s.path) < (int)sizeof(mp) &&
-                lstat(s.path, &gs) == 0 && lstat(mp, &ss) == 0 && S_ISDIR(ss.st_mode) && ss.st_dev == gs.st_dev;
+    int plain = root && path_is_plain(path, root) && snprintf(mp, sizeof(mp), "%s/sce_sys", path) < (int)sizeof(mp) &&
+                lstat(path, &gs) == 0 && lstat(mp, &ss) == 0 && S_ISDIR(ss.st_mode) && ss.st_dev == gs.st_dev;
     for(size_t i = 0; plain && i < sizeof(marks) / sizeof(marks[0]); i++) {
-      if(snprintf(mp, sizeof(mp), "%s%s", s.path, marks[i]) >= (int)sizeof(mp)) continue;
+      if(snprintf(mp, sizeof(mp), "%s%s", path, marks[i]) >= (int)sizeof(mp)) continue;
       struct stat ms;
       if(lstat(mp, &ms) == 0 && S_ISREG(ms.st_mode)) (void)unlink(mp);
     }
   }
-  int rc = delete_path(s.path, 10, 99, &files, &bytes, why, sizeof(why));
+  int rc = delete_path(path, 10, 99, files, bytes, why, why_len);
   pthread_mutex_lock(&g_lock);
-  g_job.files = files;
-  g_job.bytes = bytes;
+  g_job.files = *files;
+  g_job.bytes = *bytes;
   pthread_mutex_unlock(&g_lock);
+  return rc;
+}
+
+static void
+run_smp(const dl_args_t *a) {
+  ps5tm_smp_game_t s;
+  if(ps5tm_smp_find(a->id, &s) != 0 || !deletable_root(s.path) || strcmp(s.path, a->path)) {
+    job_end(DL_FAILED, "ShadowMountPlus kennt das Spiel nicht mehr oder die Spieldaten liegen an einem unerlaubten Ort. Es wurde nichts gelöscht.", NULL);
+    return;
+  }
+  if(smp_unregister(a) != 0) return;
+  uint64_t files = 0, bytes = 0;
+  char why[640] = "";
+  int rc = delete_game_folder(s.path, &files, &bytes, why, sizeof(why));
   if(rc != 0) {
     char e[640];
     snprintf(e, sizeof(e), "ShadowMountPlus hat das Spiel abgemeldet, aber die Spieldaten ließen sich nicht ganz löschen. %s", why);
@@ -854,6 +871,28 @@ run_smp(const dl_args_t *a) {
     return;
   }
   PS5TM_INFO("game_delete_done", "%s abgemeldet und gelöscht: %s (%llu Dateien, %llu MB).", a->id, s.path,
+             (unsigned long long)files, (unsigned long long)(bytes >> 20));
+  job_end(DL_DONE, NULL, NULL);
+}
+
+/* The original of a game after a conversion, a copy or an unpack (origafter.c): exactly a->path, whatever ShadowMountPlus lists for the title now
+   (it may list the new copy). When ShadowMountPlus knows the title it lets it go first, so that nothing stays mounted from the data that goes. */
+static void
+run_orig(const dl_args_t *a) {
+  ps5tm_smp_game_t s;
+  /* only when it lists exactly this data: for the title's new copy it lists, the uninstall would take that one off instead */
+  if(ps5tm_smp_find(a->id, &s) == 0 && !strcmp(s.path, a->path) && smp_unregister(a) != 0) return;
+  uint64_t files = 0, bytes = 0;
+  char why[640] = "";
+  int rc = delete_game_folder(a->path, &files, &bytes, why, sizeof(why));
+  if(rc != 0) {
+    char e[640];
+    snprintf(e, sizeof(e), "Das Original ließ sich nicht ganz löschen. %s", why);
+    PS5TM_WARN("game_delete_failed", "Löschen des Originals von %s: %.150s", a->id, e);
+    job_end(DL_FAILED, e, NULL);
+    return;
+  }
+  PS5TM_INFO("game_delete_done", "%s: Original gelöscht: %s (%llu Dateien, %llu MB).", a->id, a->path,
              (unsigned long long)files, (unsigned long long)(bytes >> 20));
   job_end(DL_DONE, NULL, NULL);
 }
@@ -891,7 +930,9 @@ delete_thread(void *arg) {
   char kind[12];
   snprintf(kind, sizeof(kind), "%s", g_job.kind);
   pthread_mutex_unlock(&g_lock);
-  if(!strcmp(kind, "installed")) run_installed(a);
+  const int orig = a->orig;
+  if(orig) run_orig(a);
+  else if(!strcmp(kind, "installed")) run_installed(a);
   else if(!strcmp(kind, "smp")) run_smp(a);
   else run_backup(a);
   ps5tm_powerguard_release();
@@ -907,11 +948,58 @@ delete_thread(void *arg) {
   if(waited && st == DL_DONE) ps5tm_notify("„%s“ ist gelöscht.", name);
   else if(waited && st == DL_FAILED) ps5tm_notify("„%s“ wurde nicht gelöscht: %.120s", name, error);
   if(st == DL_DONE || st == DL_FAILED)
-    ps5tm_hist_add("delete", name, !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : "Spiel",
+    ps5tm_hist_add("delete", name, orig ? "Original" : !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : "Spiel",
                    st == DL_DONE ? "done" : "failed", error, bytes, dur);
   free(a);
   return NULL;
 }
+
+/* Starts the job a prepared a (allocated by the caller, taken over here) describes: the checks that hold for every kind of delete, the state, the thread.
+   An HTTP status: 200 when it runs, else err says why (a was freed). */
+static int
+launch_job(dl_args_t *a, const char *name, char *err, size_t err_len) {
+  pthread_mutex_lock(&g_lock);
+  if(g_job.state == DL_RUNNING) {
+    pthread_mutex_unlock(&g_lock);
+    free(a);
+    snprintf(err, err_len, "Es wird gerade schon etwas gelöscht.");
+    return 409;
+  }
+  memset(&g_job, 0, sizeof(g_job));
+  g_job.state = DL_RUNNING;
+  snprintf(g_job.kind, sizeof(g_job.kind), "%s", a->kind);
+  snprintf(g_job.id, sizeof(g_job.id), "%s", a->id);
+  snprintf(g_job.name, sizeof(g_job.name), "%s", name);
+  snprintf(g_job.phase, sizeof(g_job.phase), "Wird vorbereitet");
+  g_job.started_ms = ps5tm_mono_ms();
+  pthread_mutex_unlock(&g_lock);
+
+  /* the others may have started in the same moment: they look at this job as well, so one of the two stands down */
+  if(other_job_active(err, err_len)) {
+    pthread_mutex_lock(&g_lock);
+    g_job.state = DL_IDLE;
+    pthread_mutex_unlock(&g_lock);
+    free(a);
+    return 409;
+  }
+
+  PS5TM_INFO("game_delete_start", "Löschen beginnt: %.40s „%.80s“ (%s).", a->id, name, a->orig ? "orig" : a->kind);
+  pthread_t th;
+  pthread_attr_t at;
+  pthread_attr_init(&at);
+  pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&at, 512 * 1024);       /* like every other worker: the default is not ours to rely on */
+  int rc = pthread_create(&th, &at, delete_thread, a);
+  pthread_attr_destroy(&at);
+  if(rc != 0) {
+    free(a);
+    job_end(DL_FAILED, "Das Löschen ließ sich nicht starten.", NULL);
+    snprintf(err, err_len, "Das Löschen ließ sich nicht starten.");
+    return 500;
+  }
+  return 200;
+}
+
 
 int
 ps5tm_gamedelete_start(const char *kind, const char *id, const char *token, char *err, size_t err_len) {
@@ -958,47 +1046,7 @@ ps5tm_gamedelete_start(const char *kind, const char *id, const char *token, char
   snprintf(a->kind, sizeof(a->kind), "%s", p.kind);
   snprintf(a->id, sizeof(a->id), "%s", id);
   snprintf(a->path, sizeof(a->path), "%s", p.path);
-
-  pthread_mutex_lock(&g_lock);
-  if(g_job.state == DL_RUNNING) {
-    pthread_mutex_unlock(&g_lock);
-    free(a);
-    snprintf(err, err_len, "Es wird gerade schon etwas gelöscht.");
-    return 409;
-  }
-  memset(&g_job, 0, sizeof(g_job));
-  g_job.state = DL_RUNNING;
-  snprintf(g_job.kind, sizeof(g_job.kind), "%s", p.kind);
-  snprintf(g_job.id, sizeof(g_job.id), "%s", id);
-  snprintf(g_job.name, sizeof(g_job.name), "%s", p.name);
-  snprintf(g_job.phase, sizeof(g_job.phase), "Wird vorbereitet");
-  g_job.started_ms = ps5tm_mono_ms();
-  pthread_mutex_unlock(&g_lock);
-
-  /* the others may have started in the same moment: they look at this job as well, so one of the two stands down */
-  if(other_job_active(err, err_len)) {
-    pthread_mutex_lock(&g_lock);
-    g_job.state = DL_IDLE;
-    pthread_mutex_unlock(&g_lock);
-    free(a);
-    return 409;
-  }
-
-  PS5TM_INFO("game_delete_start", "Löschen beginnt: %.40s „%.80s“ (%s).", id, p.name, p.kind);
-  pthread_t th;
-  pthread_attr_t at;
-  pthread_attr_init(&at);
-  pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
-  pthread_attr_setstacksize(&at, 512 * 1024);       /* like every other worker: the default is not ours to rely on */
-  int rc = pthread_create(&th, &at, delete_thread, a);
-  pthread_attr_destroy(&at);
-  if(rc != 0) {
-    free(a);
-    job_end(DL_FAILED, "Das Löschen ließ sich nicht starten.", NULL);
-    snprintf(err, err_len, "Das Löschen ließ sich nicht starten.");
-    return 500;
-  }
-  return 200;
+  return launch_job(a, p.name, err, err_len);
 }
 
 int
@@ -1008,6 +1056,71 @@ ps5tm_gamedelete_busy(void) {
   pthread_mutex_unlock(&g_lock);
   return b;
 }
+
+/* The original of a game that was converted, copied or unpacked (origafter.c): may the data at path (a folder or an image file) go now? 0 when it
+   may; else -1 and why in German. */
+int
+ps5tm_gamedelete_original_ok(const char *id, const char *path, char *why, size_t why_len) {
+  why[0] = 0;
+  const char *root = path ? deletable_root(path) : NULL;
+  if(!root) {
+    snprintf(why, why_len, "Das Original liegt an einem Ort, an dem die App nichts löscht: %.200s", path ? path : "");
+    return -1;
+  }
+  struct stat st;
+  if(lstat(path, &st) != 0) { snprintf(why, why_len, "Das Original ist nicht mehr da."); return -1; }
+  if(!path_is_plain(path, root)) {
+    snprintf(why, why_len, "Das Original liegt hinter einer Verknüpfung oder ist ein eingehängtes Laufwerk.");
+    return -1;
+  }
+  if(!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) { snprintf(why, why_len, "Das Original ist weder Datei noch Ordner."); return -1; }
+  /* what the console installed itself (packages, patches, add-ons) is its own business, never a game's original that this deletes */
+  if(strstr(path, "/user/app/") || strstr(path, "/user/patch/") || strstr(path, "/user/addcont/") || ends_with(path, "/app.pkg")) {
+    snprintf(why, why_len, "Das Original liegt im Installationsbereich der Konsole und wird von der App nicht gelöscht.");
+    return -1;
+  }
+  if(title_id_ok(id)) {
+    char run[16];
+    if(game_running(run, sizeof(run)) && !strcmp(run, id)) { snprintf(why, why_len, "Das Spiel läuft gerade. Bitte erst beenden."); return -1; }
+    ps5tm_smp_game_t s;
+    ps5tm_libdel_t li;
+    /* ShadowMountPlus manages the title but does not answer: it may have this data mounted, and deleting it under the mount is not for guessing */
+    if(ps5tm_smp_find(id, &s) != 0 && ps5tm_library_delete_info(id, &li) == 0 && li.smp) {
+      snprintf(why, why_len, "ShadowMountPlus antwortet nicht oder kennt das Spiel gerade nicht. Bitte ShadowMountPlus prüfen.");
+      return -1;
+    }
+    if(ps5tm_smp_find(id, &s) == 0 && !strcmp(s.path, path) && !ps5tm_smp_can("uninstall_game")) {
+      snprintf(why, why_len, "Diese Fassung von ShadowMountPlus kann Spiele nicht abmelden. Ohne Abmelden würde es die Datei wieder einbinden.");
+      return -1;
+    }
+  }
+  return 0;
+}
+
+/* Deletes exactly that path as the original of title id (name for the messages): ShadowMountPlus lets the title go first when it lists this data.
+   was: what lay there when the choice was made (NULL: not compared); a different thing at the same name is refused. An HTTP status: 200 when it
+   runs, else err says why. Nothing is deleted without its checks (_ok) having passed a moment ago. */
+int
+ps5tm_gamedelete_original(const char *id, const char *name, const char *path, const struct stat *was, char *err, size_t err_len) {
+  err[0] = 0;
+  if(ps5tm_gamedelete_original_ok(id, path, err, err_len) != 0) return 409;
+  if(was) {
+    struct stat now;
+    if(lstat(path, &now) != 0 || now.st_dev != was->st_dev || now.st_ino != was->st_ino) {
+      snprintf(err, err_len, "An dieser Stelle liegt inzwischen etwas anderes als vorher. Es wurde nichts gelöscht.");
+      return 409;
+    }
+  }
+  if(other_job_active(err, err_len)) return 409;
+  dl_args_t *a = calloc(1, sizeof(*a));
+  if(!a) { snprintf(err, err_len, "Kein Speicher."); return 500; }
+  snprintf(a->kind, sizeof(a->kind), "%s", "orig");
+  snprintf(a->id, sizeof(a->id), "%s", id ? id : "");
+  snprintf(a->path, sizeof(a->path), "%s", path);
+  a->orig = 1;
+  return launch_job(a, name && name[0] ? name : ps5tm_orig_basename(path), err, err_len);
+}
+
 
 cJSON *
 ps5tm_gamedelete_status(void) {

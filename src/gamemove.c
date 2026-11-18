@@ -363,8 +363,8 @@ fb_end(const char *state, const char *error) {
 }
 
 /* Runs on the watcher's thread after ShadowMountPlus's unpack ended with "Permission denied": the app's own unpack into the same folder
-   (<destination>/<title id>), followed to its end. */
-static void
+   (<destination>/<title id>), followed to its end. 1 when it completed (origafter.c carries out what the person chose for the image then). */
+static int
 fallback_unpack(const watch_t *w, const char *smp_msg) {
   char child[320], err[200] = "", image[256] = "";
   snprintf(child, sizeof(child), "%s/%s", w->dest, w->title_id);
@@ -396,7 +396,7 @@ fallback_unpack(const watch_t *w, const char *smp_msg) {
     pthread_mutex_unlock(&g_wlock);
     fb_end("cancelled", NULL);
     PS5TM_INFO("game_storage_fallback", "Das Entpacken von %s wurde abgebrochen, bevor das eigene Entpacken der App begann.", w->title_id);
-    return;
+    return 0;
   }
   PS5TM_WARN("game_storage_fallback", "ShadowMountPlus konnte %s nicht entpacken (%.120s); die App entpackt das Abbild selbst nach %s.",
              w->title_id, smp_msg, child);
@@ -412,9 +412,10 @@ fallback_unpack(const watch_t *w, const char *smp_msg) {
   if(rc != 200) {
     fb_end("failed", err[0] ? err : "Das eigene Entpacken ließ sich nicht starten.");
     ps5tm_notify("„%s“ wurde nicht entpackt: %.120s", w->name, err[0] ? err : "Das eigene Entpacken ließ sich nicht starten.");
-    return;
+    return 0;
   }
   if(cancel_asked && token) (void)ps5tm_imgjob_cancel_token(token);      /* "Abbrechen" came in while the job was being handed over: it goes to the job now */
+  int completed = 0;
   for(;;) {
     usleep(250 * 1000);
     cJSON *s = ps5tm_imgjob_status();
@@ -454,6 +455,7 @@ fallback_unpack(const watch_t *w, const char *smp_msg) {
       g_fb.done_bytes = g_fb.total_bytes;
       pthread_mutex_unlock(&g_wlock);
       fb_end("completed", NULL);
+      completed = 1;
       ps5tm_notify("„%s“ ist entpackt (von der App selbst: ShadowMountPlus meldete „Permission denied“).%s", w->name,
                    w->delete_source ? " Das Abbild wurde nicht gelöscht." : "");
     } else if(cancelled) {
@@ -466,6 +468,7 @@ fallback_unpack(const watch_t *w, const char *smp_msg) {
   }
   ps5tm_smp_forget();
   ps5tm_library_forget();
+  return completed;
 }
 
 static cJSON *
@@ -523,8 +526,9 @@ watch_thread(void *arg) {
   char reason[64], msg[200], tile[16], game[16];
   int st = 0;
   int r = follow_job(w->job_id, reason, sizeof(reason), msg, sizeof(msg), &st);
+  int unpack_ok = (r == 1);                                /* the unpack ended well (by ShadowMountPlus or by the app's own way out): what the person chose for the original (origafter.c) follows */
   if(r == 0 && !tile_reason(reason) && ps5tm_unpack_fallback_wanted(w->op, st, msg))
-    fallback_unpack(w, msg);
+    unpack_ok = fallback_unpack(w, msg);
   else if(r == 0 && tile_reason(reason) && ps5tm_procmgr_own_tile_running(tile, sizeof(tile)) &&
      ps5tm_procmgr_game_title(0, game, sizeof(game)) != 0) {
     pthread_mutex_lock(&g_wlock);
@@ -574,8 +578,8 @@ watch_thread(void *arg) {
     ps5tm_smp_forget();
     ps5tm_library_forget();
     if(started && r == 0 && !tile_reason(reason) && ps5tm_unpack_fallback_wanted(w->op, st2, msg))
-      fallback_unpack(w, msg);                             /* the same way out as for the first try: it tells the person itself */
-    else if(started && r == 1) ps5tm_notify("„%s“ ist %s.", w->name, what);
+      unpack_ok = fallback_unpack(w, msg);                 /* the same way out as for the first try: it tells the person itself */
+    else if(started && r == 1) { unpack_ok = 1; ps5tm_notify("„%s“ ist %s.", w->name, what); }
     else if(started && r == 0) ps5tm_notify("„%s“ wurde nicht %s: %.120s", w->name, what, msg[0] ? msg : reason);
     else if(!started) ps5tm_notify("„%s“ wurde nicht %s: %.120s", w->name, what,
                                    err[0] ? err : "die Vollbild-App wurde nicht geschlossen");
@@ -583,6 +587,11 @@ watch_thread(void *arg) {
   pthread_mutex_lock(&g_wlock);
   if(g_wait.gen == w->gen) { g_wait.watching = 0; g_wait.cancel_pending = 0; }     /* only while this is still the last watcher */
   pthread_mutex_unlock(&g_wlock);
+  if(!strcmp(w->op, "unpack")) {                           /* "Original danach" (origafter.c): the result lies in <destination>/<title id>; records only */
+    char result[320];
+    snprintf(result, sizeof(result), "%s/%s", w->dest, w->title_id);
+    ps5tm_orig_job_done("unpack", w->title_id, unpack_ok, result);
+  }
   free(w);
   return NULL;
 }
@@ -590,7 +599,10 @@ watch_thread(void *arg) {
 static void
 watch_spawn(const watch_t *req, double job_id) {
   watch_t *w = calloc(1, sizeof(*w));
-  if(!w) return;
+  if(!w) {
+    if(!strcmp(req->op, "unpack")) ps5tm_orig_job_done("unpack", req->title_id, 0, NULL);     /* nobody follows the job: what was chosen for the original is dropped */
+    return;
+  }
   *w = *req;
   w->job_id = job_id;
   char link[96];
@@ -611,6 +623,7 @@ watch_spawn(const watch_t *req, double job_id) {
     pthread_mutex_lock(&g_wlock);
     if(g_wait.gen == w->gen) g_wait.watching = 0;
     pthread_mutex_unlock(&g_wlock);
+    if(!strcmp(w->op, "unpack")) ps5tm_orig_job_done("unpack", w->title_id, 0, NULL);
     free(w);
   }
   pthread_attr_destroy(&attr);

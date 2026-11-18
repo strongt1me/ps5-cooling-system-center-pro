@@ -827,7 +827,7 @@ pfs_verify_full(int fd, const pfsc_check_t *c, uint8_t sha[32], char *err, size_
   vblocks_t v;
   memset(&v, 0, sizeof(v));
   v.fd   = fd;
-  v.tb   = malloc((size_t)TABLE_BATCH * 8);
+  v.tb   = calloc(TABLE_BATCH, 8);
   v.bbuf = malloc(LBS);
   v.raw  = malloc(LBS);
   v.d    = libdeflate_alloc_decompressor();

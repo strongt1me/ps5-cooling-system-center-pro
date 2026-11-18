@@ -9,6 +9,8 @@
 
 #include <string.h>
 
+#include "vercmp.h"
+
 /* 1 when the boot thread has to send Kraken Mount now. off: the marker of "switched off in the page" exists. alive: the HTTP status of Kraken Mount's
    /api/state (200 it answers, no_answer_code it listens but is busy - a scan, a drive that hangs - anything else nothing is there). A program that
    is there, however busy, is never started a second time: the second copy would only send the first one away. */
@@ -50,6 +52,13 @@ static inline int
 ps5tm_krakenboot_restart_needed(const char *running, const char *next) {
   if(!running || !running[0] || !next || !next[0]) return 0;
   return strcmp(ps5tm_krakenboot_plain(running), ps5tm_krakenboot_plain(next)) != 0;
+}
+
+/* 1 when a downloaded version is to be started instead of the embedded one: only when it is newer (audit F-251, 18.11.2026: a version loaded with the button
+   before an app update used to start instead of the newer embedded one - Kraken Mount before 0.3.0 let saves disappear). "" or a text that is no version: no. */
+static inline int
+ps5tm_krakenboot_take_fetched(const char *fetched, const char *embedded) {
+  return fetched && fetched[0] && embedded && ps5tm_ver_known(fetched) && ps5tm_ver_newer(fetched, embedded);
 }
 
 #endif

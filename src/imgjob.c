@@ -584,9 +584,13 @@ unp_cb(const imgr_entry_t *e, void *ctx) {
   if(u->rc) return 1;
   if(cancelled()) { unp_fail(u, ECANCELED, "", ""); return 1; }
   size_t pl = strlen(e->path);
-  if(u->tmp_len + pl >= PATH_MAX) { unp_fail(u, ENAMETOOLONG, "", e->path); return 1; }
+  /* The files a scanner knows a game by come last (as in gamecopy.c; audit F-256): written under the part name and renamed when the folder is whole, so a
+     folder that a power cut or a pulled drive left half written is not taken for a game. */
+  const int held = !e->is_dir && (!strcmp(e->path, "/sce_sys/param.json") || !strcmp(e->path, "/sce_sys/param.sfo"));
+  if(u->tmp_len + pl + (held ? sizeof(IJ_PART_SUFFIX) - 1 : 0) >= PATH_MAX) { unp_fail(u, ENAMETOOLONG, "", e->path); return 1; }
   memcpy(u->dst, u->tmp, u->tmp_len);
   memcpy(u->dst + u->tmp_len, e->path, pl + 1);
+  if(held) memcpy(u->dst + u->tmp_len + pl, IJ_PART_SUFFIX, sizeof(IJ_PART_SUFFIX));
   if(e->is_dir) {
     if(e->damaged) { unp_fail(u, EIO | IJ_SRC, "", e->path); return 1; }
     if(mkdir(u->dst, 0777) == 0) (void)chmod(u->dst, LZP_FILE_MODE);
@@ -725,6 +729,36 @@ dest_for(const char *mount, const char *image, const char *id, char *out, size_t
   return -1;
 }
 
+/* Once per run: folders "<name>.ps5cc-teil" in <drive>/homebrew that a power cut or a pulled drive left behind (audit F-256). Only an image job of this
+   app makes folders with this ending there, and none runs beside this one (g_job is ours). Old ones only (an hour), looked at with lstat. */
+static void
+sweep_unpack_leftovers(void) {
+  static int done;
+  if(__atomic_exchange_n(&done, 1, __ATOMIC_ACQ_REL)) return;
+  time_t now = time(NULL);
+  ps5tm_sysinfo_t info;
+  ps5tm_sysinfo_get(&info);
+  size_t sl = strlen(IJ_PART_SUFFIX);
+  for(unsigned i = 0; i < info.volume_count; i++) {
+    char dir[96];
+    snprintf(dir, sizeof(dir), "%s/homebrew", !strcmp(info.volumes[i].path, "/user") ? "/data" : info.volumes[i].path);
+    DIR *d = opendir(dir);
+    if(!d) continue;
+    struct dirent *de;
+    while((de = readdir(d))) {
+      size_t nl = strlen(de->d_name);
+      if(nl <= sl || strcmp(de->d_name + nl - sl, IJ_PART_SUFFIX)) continue;
+      char p[PATH_MAX];
+      if(snprintf(p, sizeof(p), "%s/%s", dir, de->d_name) >= (int)sizeof(p)) continue;
+      struct stat st;
+      if(lstat(p, &st) != 0 || !S_ISDIR(st.st_mode) || now - st.st_mtime < 3600) continue;
+      rm_tree(p, 0);
+      PS5TM_INFO("img_unpack_sweep", "Unfertig entpackter Ordner einer früheren Sitzung entfernt: %s", p);
+    }
+    closedir(d);
+  }
+}
+
 static void *
 unpack_run(void *arg) {
   char *mount = arg;
@@ -757,6 +791,7 @@ unpack_run(void *arg) {
   pthread_mutex_lock(&g_lock);
   snprintf(g_job.dest, sizeof(g_job.dest), "%s", dest);
   pthread_mutex_unlock(&g_lock);
+  sweep_unpack_leftovers();
   char err[160] = "";
   set_phase("Das Abbild wird geöffnet");
   imgr_t *r = imgr_open(img, err, sizeof(err));
@@ -868,6 +903,23 @@ unpack_run(void *arg) {
     goto out;
   }
   set_phase("Der Ordner wird fertiggestellt");
+  {                                                    /* the held files go to their places: only now is the folder one a scanner takes for a game (audit F-256) */
+    static const char *const held_names[] = { "/sce_sys/param.json", "/sce_sys/param.sfo" };
+    for(int h = 0; h < 2; h++) {
+      char from[PATH_MAX], to[PATH_MAX];
+      snprintf(to, sizeof(to), "%s%s", tmp, held_names[h]);
+      snprintf(from, sizeof(from), "%s" IJ_PART_SUFFIX, to);
+      if(lstat(from, &st) != 0) continue;
+      if(rename(from, to) != 0) {
+        int e = errno ? errno : EIO;
+        rm_tree(tmp, 0);
+        char m[300];
+        snprintf(m, sizeof(m), "Der fertige Ordner ließ sich nicht umbenennen: %s", ps5tm_io_strerror(e));
+        finish(IJ_FAILED, m);
+        goto out;
+      }
+    }
+  }
   /* The target was free at the start, hours ago: a rename onto an empty folder that has appeared since would replace it
      without a word (rename succeeds on an empty directory), so it is looked at once more (audit D-09). */
   if(lstat(dest, &st) == 0 || errno != ENOENT) {

@@ -29,6 +29,16 @@ main(void) {
   CHECK(ps5tm_krakenboot_restart_needed("0.2.1", "0.2.1") == 0, "same version");
   CHECK(ps5tm_krakenboot_restart_needed("0.2.1", "0.3.0") == 1, "0.2.1 still runs after the app brought 0.3.0 (18.11.2026): the page says so");
   CHECK(ps5tm_krakenboot_restart_needed("0.3.0", "0.3.0") == 0, "0.3.0 runs, 0.3.0 is embedded");
+
+  /* a downloaded version is only taken when it is newer than the embedded one (audit F-251, 18.11.2026) */
+  CHECK(ps5tm_krakenboot_take_fetched("0.2.1", "0.3.0") == 0, "an older downloaded version is not taken after an app update (F-251)");
+  CHECK(ps5tm_krakenboot_take_fetched("0.3.0", "0.3.0") == 0, "the same version: the embedded one");
+  CHECK(ps5tm_krakenboot_take_fetched("0.3.1", "0.3.0") == 1, "a newer one is taken");
+  CHECK(ps5tm_krakenboot_take_fetched("v0.4.0", "0.3.0") == 1, "a v in front");
+  CHECK(ps5tm_krakenboot_take_fetched("0.10.0", "0.3.0") == 1, "numbers, not text: 0.10.0 is newer than 0.3.0");
+  CHECK(ps5tm_krakenboot_take_fetched("", "0.3.0") == 0, "none");
+  CHECK(ps5tm_krakenboot_take_fetched("beta", "0.3.0") == 0, "text that is no version");
+  CHECK(ps5tm_krakenboot_take_fetched(NULL, "0.3.0") == 0, "NULL");
   CHECK(ps5tm_krakenboot_restart_needed("v0.2.1", "0.2.1") == 0, "a v in front of the running one");
   CHECK(ps5tm_krakenboot_restart_needed("0.2.1", "v0.2.1") == 0, "a v in front of the next one");
   CHECK(ps5tm_krakenboot_restart_needed("0.2.2", "0.2.1") == 1, "a newer running one is also different");

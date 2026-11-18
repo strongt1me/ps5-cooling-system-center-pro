@@ -44,6 +44,14 @@ constexpr const char *kLevelOps[kLevels] = {"fpkg", "fpkg-bal", "fpkg-min", "fpk
 constexpr const char *kLevelNames[kLevels] = {"Schnell", "Ausgewogen", "Kleinste", "Unkomprimiert"};
 constexpr int kLevelRaw = 3; // stored: nothing is compressed
 
+// "Original danach" (18.11.2026): what becomes of the game's original once a copy, a conversion or
+// an unpack has been written and checked. The console app does it after the check, never before.
+constexpr int kOrigKeep = 0; // the default: nothing is sent
+constexpr int kOrigDelete = 1;
+constexpr int kOrigMove = 2;
+constexpr int kOrigWays = 3;
+constexpr const char *kOrigKeys[kOrigWays] = {"keep", "delete", "move"};
+
 // A place the plan offers: a drive (copy, convert, image unpack) or a folder of ShadowMountPlus
 // (move, unpack).
 struct PlanDrive
@@ -156,7 +164,13 @@ struct PlanChoice
     bool ampr = false;
     bool quick =
         false; // convert: check the result the quick way (structure and a sample), no checksum file
+    // unpack, only when the app has no "Original danach" plan (an older one): the old switch; else
+    // the way of `orig` below takes its place
     bool delete_source = false;
+    // copy, convert, unpack: what becomes of the original afterwards (kOrigKeep, kOrigDelete,
+    // kOrigMove) and, for a move, the absolute folder it goes to (orig_dest_of)
+    int orig = kOrigKeep;
+    std::string orig_dest;
     // convert: the template of the result's name ({titel} {id} {version} {quelle}); empty: the name
     // of the source
     std::string name;
@@ -272,5 +286,112 @@ std::string duration_text(double ms);
 std::vector<StageText> stage_texts(const Job &job);
 // The words under the "Warteschlange" line: "2 offen · 1 fertig · 1 mit Fehler".
 std::string queue_summary(const ConvertQueue &queue);
+
+// ---- "Original danach" (18.11.2026) ----
+// A drive the original may be moved to.
+struct OrigDrive
+{
+    std::string mount; // "/mnt/usb0"
+    std::string label; // "usb0", "Interne SSD", "M.2-Erweiterung"
+    std::string kind;  // "internal", "m2", "usb"
+    std::uint64_t free_bytes = 0;
+    std::string default_dest; // the folder offered on this drive: "/mnt/usb0/PS5-Sicherung/Spiele"
+};
+
+// GET /api/v1/library/orig/plan?id=: where the original lies, which ways the app allows and the
+// drives for a move.
+struct OrigPlan
+{
+    bool ok = false;
+    std::string error; // why there is no plan (an older app, an unknown title)
+    std::string id, name;
+    std::string path, kind; // the original: its path, "folder", "image", "installed" or "other"
+    std::string mount, label;
+    std::uint64_t size_bytes = 0;
+    bool can_delete = false;
+    std::string delete_why; // why not, when it cannot be
+    bool can_move = false;
+    std::string move_why;
+    std::string default_folder; // "PS5-Sicherung/Spiele"
+    std::vector<OrigDrive> drives;
+};
+
+// What the person chose in the rows "Original danach", "Datenträger" and "Ordner".
+struct OrigChoice
+{
+    int after = kOrigKeep;
+    int drive = -1; // index into OrigPlan::drives
+    std::string
+        folder; // typed: under the drive ("Sicherung/Spiele") or absolute; "": the drive's own
+};
+
+// GET /api/v1/library/orig/check?id=&dest=: is this folder fit for the original?
+struct OrigCheck
+{
+    bool ok = false;   // an answer came
+    std::string error; // why not
+    std::string level; // "ok" or "error"
+    bool can_move = false;
+    std::string text; // one German sentence, for the check line
+    std::string dest, target;
+    std::uint64_t free_bytes = 0;
+    std::uint64_t need_bytes = 0;
+    bool smp_searches = false; // ShadowMountPlus searches this folder
+};
+
+// One entry of GET /api/v1/library/orig/status: kind is "convert", "copy" or "unpack", mode
+// "delete" or "move", state "waiting", "running", "done", "failed" or "skipped".
+struct OrigItem
+{
+    std::string id, name, kind, mode, state, message, target;
+    std::int64_t updated_ms = 0;
+};
+
+struct OrigStatus
+{
+    bool ok = false;
+    bool active = false;
+    std::vector<OrigItem> items; // newest first
+};
+
+OrigPlan parse_orig_plan(const OrigReply &reply);
+OrigCheck parse_orig_check(const OrigReply &reply);
+OrigStatus parse_orig_status(const std::string &json);
+
+// Keep, and for a move the first drive that is not the original's own and has room for it (else
+// the first that is not its own, else the first).
+OrigChoice first_orig_choice(const OrigPlan &plan);
+// Why this way (kOrigDelete, kOrigMove) cannot be chosen: the plan's own words; "" when it can.
+std::string orig_way_blocked(const OrigPlan &plan, int way);
+// The way the person lands on after pressing left or right: the one wanted, or when the plan
+// refuses it the next one in that direction that is allowed ("Behalten" always is).
+int orig_next_way(const OrigPlan &plan, int wanted, bool forward);
+// The folder the original would go to, absolute: the typed folder (under the drive, or absolute
+// when it starts with a "/"), else the drive's own proposal; "" while no drive is chosen.
+std::string orig_dest_of(const OrigPlan &plan, const OrigChoice &choice);
+// The same as the row "Ordner" shows it: under the drive ("PS5-Sicherung/Spiele"), or the whole
+// path when it lies elsewhere.
+std::string orig_folder_text(const OrigPlan &plan, const OrigChoice &choice);
+// True when the result of this tool and choice lands in a folder ShadowMountPlus searches: a copy
+// or a conversion as "A · Spielbar" (the folder homebrew; the debug FPKG goes to FPKG-Games, which
+// it does not search), an unpack always.
+bool result_in_search_folder(Tool tool, const PlanChoice &choice);
+// The note for "Behalten" when original and result both lie in a searched folder; "" otherwise
+// (and for every other way).
+std::string orig_keep_note(Tool tool, const PlanChoice &choice);
+// Why the start (and the queue) must not go ahead because of the original; "" when nothing speaks
+// against it. A check that has not arrived yet is the caller's business (it waits).
+std::string orig_blocked(const OrigPlan &plan, const PlanChoice &choice, const OrigCheck &check);
+// "Gelöscht wird „Name“ (9,4 GB) aus /data/homebrew/PPSA23000. Spielstände bleiben."
+std::string orig_delete_warning(const OrigPlan &plan);
+// The lines under the name in the question that comes before a delete: where it lies, what stays.
+std::vector<std::string> orig_delete_notes(const OrigPlan &plan);
+// The entry of the status that belongs to a job: the newest one of this kind ("copy", "convert",
+// "unpack") for this title id (when the job knows it), else for this name; null when none.
+const OrigItem *orig_status_for(const OrigStatus &status, const std::string &kind,
+                                const std::string &id, const std::string &name);
+// The words a job card adds for its original: the entry's message; "" when there is none, or while
+// the job still runs and the entry only waits (the card has the progress then).
+std::string orig_card_text(const OrigItem &item, bool job_active);
 
 } // namespace hui::ps5cc

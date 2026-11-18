@@ -792,7 +792,10 @@ cv_thread(void *arg) {
   /* one line in the history (jobhist.c) */
   pthread_mutex_lock(&g_lock);
   int st = g_job.state;
-  char name[128], detail[96], error[640];
+  char name[128], detail[96], error[640], title[12], target[320];
+  const int quick = g_job.quick;
+  snprintf(title, sizeof(title), "%s", g_job.title_id);
+  snprintf(target, sizeof(target), "%s", g_job.target);
   snprintf(name, sizeof(name), "%s", g_job.name);
   snprintf(detail, sizeof(detail), "zu %s%s%s", g_job.op, g_job.drive[0] ? " · " : "", g_job.drive);
   snprintf(error, sizeof(error), "%s", g_job.error);
@@ -801,6 +804,8 @@ cv_thread(void *arg) {
   pthread_mutex_unlock(&g_lock);
   if(st == CV_DONE || st == CV_FAILED || st == CV_CANCELLED)
     ps5tm_hist_add("convert", name, detail, st == CV_DONE ? "done" : st == CV_FAILED ? "failed" : "cancelled", error, bytes, dur);
+  /* "Original danach" (origafter.c): still before the place is given up below, so that the next entry of the queue cannot start in between */
+  if(st == CV_DONE || st == CV_FAILED || st == CV_CANCELLED) ps5tm_orig_job_done("convert", title, st == CV_DONE ? (quick ? 2 : 1) : 0, target);   /* 2: ended well, but the result was only spot-checked ("Schnell") */
   pthread_mutex_lock(&g_lock);
   g_thread_live = 0;                                 /* only now may the next job (the queue's, a page's) take the place */
   pthread_mutex_unlock(&g_lock);

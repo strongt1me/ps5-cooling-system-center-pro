@@ -28,7 +28,8 @@ Aufruf: tools/deploy.sh <IP> [Optionen]
   --tiles <Ordner>     Ordner mit FAKE86921 und FAKE86922 (Vorgabe: starter/out)
   --nur-elf            nur die ELF senden (Schritt 1)
   --nur-kacheln        nur die Kacheln senden (Schritte 2 und 3)
-  --dry-run            nur ausgeben, was getan würde
+  --trotzdem-kacheln   Kacheln auch senden, wenn die ELF in Schritt 1 nicht lief
+  --dry-run           nur ausgeben, was getan würde
   -h, --help           diese Hilfe
 USAGE
 }
@@ -40,6 +41,7 @@ DO_ELF=1
 DO_TILES=1
 IP_ARG=""
 ELF_GIVEN=0
+FORCE_TILES=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -47,6 +49,7 @@ while [ $# -gt 0 ]; do
     --tiles)       [ $# -ge 2 ] || { echo "--tiles braucht einen Ordner." >&2; exit 2; }; TILES_DIR="$2"; shift 2 ;;
     --nur-elf)     DO_TILES=0; shift ;;
     --nur-kacheln) DO_ELF=0; shift ;;
+    --trotzdem-kacheln) FORCE_TILES=1; shift ;;
     --dry-run)     DRY=1; shift ;;
     -h|--help)     usage; exit 0 ;;
     -*)            echo "Unbekannte Option: $1" >&2; usage >&2; exit 2 ;;
@@ -139,6 +142,8 @@ declare -a SUMMARY_TILES=()
 declare -a SUMMARY_LINES=()
 FULLSCREEN_OPEN=0
 
+ELF_ERRS_BEFORE=${#ERRORS[@]}
+
 # ---------- step 1: ELF ----------
 if [ "$DO_ELF" = 1 ]; then
   say ""
@@ -181,6 +186,11 @@ elif [ "$DRY" = 0 ]; then
 fi
 
 # ---------- step 2 + 3: tiles ----------
+if [ "$DO_TILES" = 1 ] && [ "$DO_ELF" = 1 ] && [ "$DRY" = 0 ] && [ "$FORCE_TILES" = 0 ] && [ "${#ERRORS[@]}" -gt "$ELF_ERRS_BEFORE" ]; then
+  say ""
+  err "Kacheln nicht gesendet: die ELF lief nicht (Schritt 1). Nach dem Beheben noch einmal, oder mit --trotzdem-kacheln / --nur-kacheln."
+  DO_TILES=0
+fi
 if [ "$DO_TILES" = 1 ]; then
   say ""
   say "== Schritt 2: Kacheln per FTP nach /data/homebrew/ senden (eboot.bin zuletzt) =="

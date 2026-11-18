@@ -76,6 +76,7 @@ SRCS += src/library.c
 SRCS += src/gamecopy.c
 SRCS += src/gamemove.c
 SRCS += src/gamedelete.c
+SRCS += src/origafter.c
 SRCS += src/filemgr.c
 SRCS += src/assets.c
 SRCS += src/imgread.c
@@ -348,8 +349,10 @@ gen/npfakesignin_blob.c: $(NPFSI_ELF) tools/gen_blob.py | gen
 KRAKEN_ELF := third_party/kraken_mount/kraken-mount_v0.3.0.elf
 # Since v0.2.0 Kraken Mount waits for ShadowMountPlus to end before it mounts anything; this app runs both side by side (as with v0.0.1-beta),
 # so one string constant of the program is changed (tools/patch_kraken.py; a downloaded newer version gets the same change in src/kraken.c).
+# The ELF is not in Git: before it is built in, its SHA-256 is compared with third_party/kraken_mount/SHA256SUMS (audit F-273).
 KRAKEN_PATCHED := gen/kraken-mount-patched.elf
-$(KRAKEN_PATCHED): $(KRAKEN_ELF) tools/patch_kraken.py | gen
+$(KRAKEN_PATCHED): $(KRAKEN_ELF) third_party/kraken_mount/SHA256SUMS tools/patch_kraken.py | gen
+	@$(PYTHON) -c "import hashlib,sys; h=hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest(); w=[l.split()[0] for l in open(sys.argv[2]) if l.split()[1:] in (['kraken-mount.elf'],['*kraken-mount.elf'])]; sys.exit(0 if w and w[0]==h else 'Kraken Mount: SHA-256 von '+sys.argv[1]+' passt nicht zu '+sys.argv[2])" $(KRAKEN_ELF) third_party/kraken_mount/SHA256SUMS
 	$(PYTHON) tools/patch_kraken.py $(KRAKEN_ELF) $@
 gen/kraken_blob.c: $(KRAKEN_PATCHED) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(KRAKEN_PATCHED) ps5tm_kraken

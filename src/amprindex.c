@@ -126,7 +126,7 @@ list_sorted(const char *dir, size_t *count) {
   }
   int rerr = errno;
   closedir(d);
-  if(!v) return NULL;
+  if(!v) { errno = ENOMEM; return NULL; }
   if(rerr) { for(size_t i = 0; i < n; i++) free(v[i]); free(v); errno = rerr; return NULL; }
   qsort(v, n, sizeof(*v), cmp_name);
   *count = n;

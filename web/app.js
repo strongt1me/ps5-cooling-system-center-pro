@@ -5592,6 +5592,563 @@
     setTimeout(() => { btn.disabled = false; }, 3000);
   };
 
+  /* ── Original danach (18.11.2026) ──────────────────────────────────────
+     Beim Konvertieren, Kopieren und Entpacken wählt man, was mit dem Original geschieht, wenn das Ergebnis fertig,
+     zurückgelesen und geprüft ist: behalten (Vorgabe), löschen oder an einen Ort verschieben, den ShadowMountPlus nicht
+     durchsucht. Die Konsole entscheidet und führt es aus (library/orig/…). Die Seite fragt den Plan (was geht, welche
+     Laufwerke) einmal je Spiel beim Öffnen des Fensters, prüft den Zielordner, schickt die Wahl mit dem Start
+     (orig_after, orig_dest; nur wenn nicht „behalten“) und zeigt danach die Zeile, die die Konsole dazu meldet.
+     Löschen fragt beim Start zuerst und nennt den Namen (Regel seit 06.11.2026); Verschieben löscht nichts. Der alte
+     Schalter „Abbild danach löschen“ des Entpackens ging in „Löschen“ auf (delete_source nimmt die Konsole weiter an). */
+  const og = { id: "", plan: null, loading: false, err: "", gen: 0,
+               after: "keep", mount: "", folder: "", check: null, checkKey: "", cbusy: false, cpend: false, ctimer: 0,
+               pickOpen: false, pick: null, pickSeq: 0,
+               w: null, st: 0, stBusy: false, stPend: false };
+
+  /* OG-PURE-BEGIN: die reine Logik ohne Seite und Netz (ein Prüfskript schneidet genau diesen Abschnitt aus) */
+  const OG_LIVE = { waiting: 1, running: 1 };
+  /* Pfad ohne doppelte Schrägstriche, „.“ und „..“; "" bei leerem Pfad oder wenn „..“ über die Wurzel hinausführt. */
+  const ogNorm = (p) => {
+    const s = String(p == null ? "" : p).trim();
+    if (!s) return "";
+    const out = [];
+    for (const seg of s.split("/")) {
+      if (!seg || seg === ".") continue;
+      if (seg === "..") { if (!out.length) return ""; out.pop(); continue; }
+      out.push(seg);
+    }
+    return (s.charAt(0) === "/" ? "/" : "") + out.join("/");
+  };
+  /* Der Ordner aus dem Feld als absoluter Pfad: ohne „/“ am Anfang gilt er unterhalb des gewählten Datenträgers. */
+  const ogResolveDest = (mount, folder) => {
+    const f = String(folder == null ? "" : folder).trim();
+    if (!f) return "";
+    if (f.charAt(0) === "/") return ogNorm(f);
+    const m = ogNorm(mount);
+    return m ? ogNorm(`${m === "/" ? "" : m}/${f}`) : "";
+  };
+  const ogInside = (path, mount) => {
+    const m = ogNorm(mount);
+    return !!m && (path === m || m === "/" || path.indexOf(`${m}/`) === 0);
+  };
+  /* Eine Ebene höher, aber nie über den Datenträger hinaus. */
+  const ogParent = (path, mount) => {
+    const m = ogNorm(mount);
+    const i = path.lastIndexOf("/");
+    const up = i > 0 ? path.slice(0, i) : "/";
+    return m && !ogInside(up, m) ? m : up;
+  };
+  const ogDefaultDest = (plan, d) => (!d ? "" : ogNorm(d.default_dest || `${d.mount}/${(plan && plan.default_folder) || ""}`));
+  /* Vorbelegung: ein anderes Laufwerk als das des Originals, auf dem das Original Platz hat; sonst das erste andere, sonst das erste. */
+  const ogPickDrive = (plan) => {
+    const ds = Array.isArray(plan && plan.drives) ? plan.drives.filter((d) => d && d.mount) : [];
+    const src = plan && plan.source ? plan.source.mount : "";
+    const need = plan && plan.source ? Number(plan.source.size_bytes) || 0 : 0;
+    return ds.find((d) => d.mount !== src && (Number(d.free_bytes) || 0) >= need)
+        || ds.find((d) => d.mount !== src) || ds[0] || null;
+  };
+  /* Der Datenträger wechselt: Liegt der Ordner unterhalb des alten, bleibt sein Unterordner; sonst gilt die Vorgabe des neuen. */
+  const ogRebase = (plan, oldMount, d, folder) => {
+    const o = ogNorm(oldMount), f = ogNorm(folder);
+    if (o && o !== "/" && f && ogInside(f, o)) return ogNorm(`${d.mount}/${f.slice(o.length)}`);
+    return ogDefaultDest(plan, d);
+  };
+  /* Der Hinweis „Original und Ergebnis liegen beide im Suchordner“ bei „Behalten“: nur wenn das Ergebnis in einen Suchordner von
+     ShadowMountPlus geht. Konvertieren/Kopieren: Art „Spielbar“ (homebrew); ein FPKG geht nach FPKG-Games, das ShadowMountPlus nicht
+     durchsucht. Entpacken: immer (das Ergebnis liegt in <Laufwerk>/homebrew). */
+  const ogKeepWarn = (ctx) => !!ctx && (ctx.kind === "unpack" || (ctx.mode === "homebrew" && !ctx.fpkg));
+  /* Die Felder der Start-Anfrage: nur wenn nicht „behalten“. */
+  const ogFields = (s) => {
+    if (s.after === "delete") return { orig_after: "delete" };
+    if (s.after === "move") return { orig_after: "move", orig_dest: ogResolveDest(s.mount, s.folder) };
+    return {};
+  };
+  /* Die Zeile unter dem Ordner (cls ok / err / warn / wait) und ob sie den Start sperrt. */
+  const ogCheckView = (s) => {
+    const dest = ogResolveDest(s.mount, s.folder);
+    if (!dest) return { cls: "err", icon: "✕", blocks: true, note: "",
+                        text: s.mount || (s.plan && s.plan.drives && s.plan.drives.length) ? "Bitte einen Ordner angeben." : "Kein Laufwerk gefunden." };
+    const c = s.check;
+    if (!c || s.checkKey !== `${s.id}|${dest}`) return { cls: "wait", icon: "", text: "Die Prüfung läuft …", blocks: true, note: "" };
+    const bad = c.level === "error" || c.can_move === false;
+    const cls = bad ? "err" : c.level === "warn" ? "warn" : "ok";
+    return { cls, icon: bad ? "✕" : cls === "warn" ? "⚠" : "✓", blocks: bad,
+             text: c.text || (bad ? "Dorthin kann nicht verschoben werden." : "Der Ordner passt."),
+             note: bad ? "" : `Das Original wird nach ${c.target || dest} verschoben, sobald das Ergebnis zurückgelesen und geprüft ist.` };
+  };
+  /* Warum der Start (noch) nicht geht, oder "". Ohne Plan oder bei „Behalten“ sperrt nichts. */
+  const ogBlockWhy = (s) => {
+    if (!s.plan) return "";
+    if (s.after === "delete") return s.plan.can_delete ? "" : (s.plan.delete_why || "Löschen ist bei diesem Spiel nicht möglich.");
+    if (s.after !== "move") return "";
+    if (!s.plan.can_move) return s.plan.move_why || "Verschieben ist bei diesem Spiel nicht möglich.";
+    const v = ogCheckView(s);
+    return v.blocks ? v.text : "";
+  };
+  const ogMatch = (items, kind, id) => (Array.isArray(items) ? items : []).find((it) => it && it.kind === kind && it.id === id) || null;
+  /* Gehört der Eintrag der Konsole zu diesem Vorgang? w.base: undefined = kein Vergleichswert (das Fenster hat den Vorgang nicht
+     gestartet: nur ein laufender Eintrag), null = vor dem Start gab es keinen Eintrag (jeder ist von diesem Vorgang), Zahl = updated_ms
+     des Eintrags vor dem Start (nur ein neuerer), "fail" = die Abfrage vor dem Start ging fehl (laufend, oder schon laufend gesehen). */
+  const ogItemVisible = (it, w) => {
+    if (!it) return false;
+    const live = !!OG_LIVE[it.state];
+    const b = w ? w.base : undefined;
+    if (b === null) return true;
+    if (typeof b === "number") return Number(it.updated_ms) > b;
+    if (b === "fail") return live || !!(w && w.seenLive);
+    return live;
+  };
+  /* OG-PURE-END */
+
+  const ogCtx = () => {
+    if (cp.view === "cvplan") return { kind: "convert", id: cv.id, mode: cv.mode, fpkg: cvIsFpkg(cv.op) };
+    if (cp.view === "plan") return { kind: "copy", id: cp.id, mode: cp.mode, fpkg: false };
+    if (cp.view === "mvplan" && mv.op === "unpack") return { kind: "unpack", id: mv.id, mode: "homebrew", fpkg: false };
+    return null;
+  };
+  /* Gibt es für dieses Spiel die Wahl (oder lädt sie noch)? Wenn nicht, bleiben die alten Warnungen der Fenster stehen. */
+  const ogOffered = (id) => og.id === id && !!(og.plan || og.loading);
+  const ogBlockNow = () => { const c = ogCtx(); return c && og.plan && og.id === c.id ? ogBlockWhy(og) : ""; };
+
+  const ogClose = () => {
+    og.gen++;
+    clearTimeout(og.ctimer);
+    clearTimeout(og.st);
+    og.id = ""; og.plan = null; og.loading = false; og.err = ""; og.after = "keep"; og.mount = ""; og.folder = "";
+    og.check = null; og.checkKey = ""; og.cbusy = false; og.cpend = false;
+    og.pickOpen = false; og.pick = null; og.pickSeq++;
+    og.w = null; og.stBusy = false; og.stPend = false;
+  };
+
+  /* Die Fenster zeichnen sich bei jeder Wahl neu; „Original danach“ hat dazu seinen eigenen Kasten (#og-box), den nur es selbst neu zeichnet. */
+  const ogRerender = () => {
+    if (cp.view === "cvplan") cvRenderPlan();
+    else if (cp.view === "plan") cpRenderPlan();
+    else if (cp.view === "mvplan") mvRenderPlan();
+  };
+
+  const ogPickHtml = () => {
+    const k = og.pick;
+    if (!k) return "";
+    const rows = (k.dirs || []).map((n) => `<button type="button" class="fm-pick-row og-row" data-og="nav" data-path="${esc(fmJoin(k.path, n))}">
+        <span class="fm-ico dir">${FM_ICO.dir}</span><span class="fm-name">${esc(n)}</span></button>`).join("");
+    const list = k.busy ? `<p class="fm-pick-empty">wird geladen …</p>`
+      : k.err ? `<p class="cp-err og-pick-err">${esc(k.err)}</p>`
+      : rows || `<p class="fm-pick-empty">Keine Unterordner</p>`;
+    const atTop = !k.path || k.path === ogNorm(og.mount);
+    return `<div class="og-pick" id="og-pick">
+        <p class="muted og-pick-cur">Aktuell: <b>${esc(k.path)}</b></p>
+        <div class="fm-pick-list">${list}</div>
+        <div class="og-pick-bar">
+          <button type="button" class="btn" data-og="up"${atTop || k.busy ? " disabled" : ""}>Zurück</button>
+          <button type="button" class="btn" data-og="pickclose">Abbrechen</button>
+          <button type="button" class="btn primary" data-og="pickok"${k.busy || k.err ? " disabled" : ""}>Diesen Ordner wählen</button>
+        </div>
+      </div>`;
+  };
+
+  const ogCheckHtml = () => {
+    const v = ogCheckView(og);
+    return { cls: v.cls, html: `${v.icon ? `<span class="og-ic" aria-hidden="true">${v.icon}</span> ` : ""}<span>${esc(v.text)}</span>`
+      + (v.note ? `<p class="muted og-note">${esc(v.note)}</p>` : "") };
+  };
+
+  const ogMoveHtml = (p) => {
+    const ds = Array.isArray(p.drives) ? p.drives.filter((d) => d && d.mount) : [];
+    const here = p.source ? p.source.mount : "";
+    const chips = ds.map((d) => {
+      const on = d.mount === og.mount;
+      const free = d.free_bytes != null && Number.isFinite(Number(d.free_bytes)) ? ` · ${cpBytes(Number(d.free_bytes))} frei` : "";
+      return `<button type="button" class="fm-pick-place" data-og="drive" data-mount="${esc(d.mount)}" aria-pressed="${on}"${on ? ' aria-current="true"' : ""}>${esc(d.label || d.mount)}${free}${d.mount === here ? " · hier liegt das Original" : ""}</button>`;
+    }).join("");
+    const c = ogCheckHtml();
+    return `<div class="cp-sub og-move">
+        <h5>Datenträger</h5>
+        <div class="fm-pick-places og-drives" role="group" aria-label="Datenträger">${chips || `<p class="muted">Kein Laufwerk gefunden.</p>`}</div>
+        <h5>Ordner</h5>
+        <div class="cv-name">
+          <input type="text" name="og-folder" value="${esc(og.folder)}" maxlength="400" spellcheck="false" autocomplete="off" aria-label="Ordner auf dem Datenträger">
+          <button type="button" class="btn" data-og="pick">Ordner wählen</button>
+        </div>
+        ${og.pickOpen ? ogPickHtml() : ""}
+        <div id="og-check" class="og-check ${c.cls}" aria-live="polite">${c.html}</div>
+      </div>`;
+  };
+
+  /* Der Kasten „Original danach“: drei Optionen; was der Plan sperrt, bleibt sichtbar mit dem Grund; unter „Verschieben“ Datenträger,
+     Ordner und die Prüfung; unter „Löschen“ und „Behalten“ je ein Hinweis. */
+  const ogBoxInner = () => {
+    const ctx = ogCtx();
+    if (!ctx || og.id !== ctx.id) return "";
+    const head = `<h4 class="cp-step">Original danach</h4>`;
+    const p = og.plan;
+    if (!p) {
+      return head + (og.loading ? `<p class="muted">Wird geladen …</p>`
+        : `<p class="muted">Die Wahl „Original danach“ ist gerade nicht verfügbar. Das Original bleibt, wo es ist.</p>${og.err ? `<p class="muted og-err">${esc(og.err)}</p>` : ""}`);
+    }
+    const row = (v, title, desc, why) => `<label class="cp-choice${why ? " off" : ""}">
+        <input type="radio" name="og-after" value="${v}" ${og.after === v ? "checked" : ""} ${why ? "disabled" : ""}>
+        <span class="cp-choice-text"><b>${title}</b><span class="muted">${desc}</span>${why ? `<span class="cp-why">${esc(why)}</span>` : ""}</span></label>`;
+    const src = p.source || {};
+    const name = p.name || gmName(og.id);
+    const size = Number(src.size_bytes) > 0 ? bytes(src.size_bytes) : "";
+    const delWhy = p.can_delete ? "" : (p.delete_why || "Löschen ist bei diesem Spiel nicht möglich.");
+    const movWhy = p.can_move ? "" : (p.move_why || "Verschieben ist bei diesem Spiel nicht möglich.");
+    const list = row("keep", "Behalten", "Das Original bleibt, wo es ist (Vorgabe).", "")
+      + row("delete", "Löschen", "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher und nennt den Namen.", delWhy)
+      + row("move", "Verschieben", "An einen Ort, den ShadowMountPlus nicht durchsucht.", movWhy)
+      + (og.after === "move" && !movWhy ? ogMoveHtml(p) : "");
+    const warn = og.after === "delete" && !delWhy
+      ? `<div class="cp-warn"><span aria-hidden="true">⚠</span> ${size
+          ? `Gelöscht wird „${esc(name)}“ (${esc(size)}) aus ${esc(src.path || "")}. Spielstände bleiben.`
+          : `Gelöscht wird „${esc(name)}“ aus ${esc(src.path || "")}. Spielstände bleiben.`}</div>`
+      : og.after === "keep" && ogKeepWarn(ctx)
+        ? `<div class="cp-warn"><span aria-hidden="true">⚠</span> Ergebnis und Original liegen beide in einem Ordner, den ShadowMountPlus durchsucht: Er meldet dasselbe Spiel zweimal.</div>` : "";
+    return `${head}<div class="cp-list">${list}</div>${warn}`;
+  };
+
+  const ogPaint = () => {
+    const box = $("#og-box");
+    if (!box) return;
+    const html = ogBoxInner();
+    if (box.__h === html) return;
+    box.__h = html;
+    box.innerHTML = html;
+  };
+  /* Der Kasten zeichnet sich bei einer Wahl neu; der Fokus (Controller, Tastatur) soll auf dem Bedienelement bleiben, das gerade gewählt wurde. */
+  const ogRefocus = (sel, test) => {
+    const f = $$(sel).find(test);
+    if (f) { try { f.focus({ preventScroll: true }); } catch (e) { f.focus(); } }
+  };
+  /* Nur die Prüfzeile unter dem Ordner: Das Eintippen darf das Feld nicht neu bauen (der Fokus ginge verloren). */
+  const ogPaintCheck = () => {
+    const el = $("#og-check");
+    if (!el) return;
+    const c = ogCheckHtml();
+    const cls = `og-check ${c.cls}`;
+    if (el.className !== cls) el.className = cls;
+    if (el.__h !== c.html) { el.__h = c.html; el.innerHTML = c.html; }
+  };
+
+  /* Die Start- und Warteschlangen-Knöpfe des offenen Fensters: Was die Prüfung von „Verschieben“ sperrt, sperrt sie hier. Freigeben
+     tut sie nur, was das Fenster selbst freigegeben hat (cv.fresh: die Prüfung vor dem Start ist für den jetzigen Stand da). */
+  const ogSyncButtons = () => {
+    const ctx = ogCtx();
+    if (!ctx) return;
+    const blocked = !!ogBlockNow();
+    const st = $('#cp-body [data-cp="start"]'), qu = $('#cp-body [data-cp="queue"]');
+    if (ctx.kind === "convert") {
+      const c = cv.fresh ? cv.check : null;
+      if (st) st.disabled = blocked || !(c && c.can_start);
+      if (qu) qu.disabled = blocked || !(c && c.can_queue);
+    } else if (st) {
+      st.disabled = blocked || !(ctx.kind === "copy" ? cp.ready : mv.ready);
+    }
+  };
+  /* Nach jedem Zeichnen eines Plan-Fensters. */
+  const ogRendered = () => {
+    if (!og.plan || !ogCtx()) return;
+    if (og.after === "move") ogCheckSoon(true);
+    ogPaintCheck();
+    ogSyncButtons();
+  };
+
+  const ogCheckSoon = (now) => {
+    clearTimeout(og.ctimer);
+    og.ctimer = setTimeout(ogCheckRun, now ? 0 : 350);
+  };
+  /* Die Prüfung des Zielordners: immer nur eine Frage zugleich; eine Antwort für einen Ordner, der inzwischen ein anderer ist, bleibt
+     gespeichert (mit dem Ordner, für den sie galt) und zählt nicht: Die Zeile zeigt dann „Die Prüfung läuft …“, bis die neue da ist. */
+  const ogCheckRun = async () => {
+    if (!og.plan || og.after !== "move" || !ogCtx()) return;
+    const gen = og.gen;
+    const dest = ogResolveDest(og.mount, og.folder);
+    if (!dest) { ogPaintCheck(); ogSyncButtons(); return; }
+    const key = `${og.id}|${dest}`;
+    if (og.check && og.checkKey === key && !og.check.fail) { ogPaintCheck(); ogSyncButtons(); return; }
+    if (og.cbusy) { og.cpend = true; return; }
+    og.cbusy = true;
+    ogPaintCheck();
+    ogSyncButtons();
+    let res;
+    try {
+      res = await api(`/api/v1/library/orig/check?id=${encodeURIComponent(og.id)}&dest=${encodeURIComponent(dest)}`, { timeoutMs: 30000 });
+      if (!res || typeof res !== "object") throw new Error("Die Antwort der Konsole war nicht lesbar.");
+    } catch (e) {
+      res = { level: "error", can_move: false, fail: true, text: e && e.message ? e.message : "" };
+    }
+    if (gen !== og.gen) return;
+    og.cbusy = false;
+    og.check = res;
+    og.checkKey = key;
+    ogPaintCheck();
+    ogSyncButtons();
+    if (og.cpend) { og.cpend = false; ogCheckRun(); }
+  };
+
+  /* Der Plan der Konsole: einmal je Spiel, solange das Fenster offen ist (nicht bei jedem Zeichnen). Fehlt er, bleibt das Original
+     unberührt und das Fenster sagt es; die Seite stürzt nie daran ab. */
+  const ogLoad = (id) => {
+    if (!id) return;
+    if (og.id === id && (og.plan || og.loading || og.err)) return;
+    og.gen++;
+    clearTimeout(og.ctimer);
+    const gen = og.gen;
+    Object.assign(og, { id, plan: null, loading: true, err: "", after: "keep", mount: "", folder: "", check: null, checkKey: "",
+                        cbusy: false, cpend: false, pickOpen: false, pick: null });
+    og.pickSeq++;
+    api(`/api/v1/library/orig/plan?id=${encodeURIComponent(id)}`, { timeoutMs: 30000 }).then((p) => {
+      if (gen !== og.gen) return;
+      if (!p || typeof p.source !== "object" || !p.source) throw new Error("Die Antwort der Konsole war nicht lesbar.");
+      og.plan = p;
+      const d = ogPickDrive(p);
+      og.mount = d ? d.mount : "";
+      og.folder = ogDefaultDest(p, d);
+    }).catch((e) => {
+      if (gen !== og.gen) return;
+      og.err = e && e.message ? e.message : "";
+    }).then(() => {
+      if (gen !== og.gen) return;
+      og.loading = false;
+      const ctx = ogCtx();
+      /* ging die Wahl nicht auf, brauchen die Fenster ihre alten Warnungen wieder: dann zeichnen sie sich neu */
+      if (!og.plan && ctx && ogKeepWarn(ctx)) ogRerender(); else { ogPaint(); ogRendered(); }
+    });
+  };
+
+  const ogSetDrive = (mount) => {
+    const p = og.plan;
+    const d = p && (Array.isArray(p.drives) ? p.drives : []).find((x) => x && x.mount === mount);
+    if (!d) return;
+    if (d.mount !== og.mount) {
+      og.folder = ogRebase(p, og.mount, d, og.folder);
+      og.mount = d.mount;
+      og.pickOpen = false; og.pick = null; og.pickSeq++;
+      ogPaint();
+      ogRefocus('#og-box [data-og="drive"]', (x) => x.dataset.mount === mount);
+    }
+    ogCheckSoon(true);
+    ogSyncButtons();
+  };
+  const ogChange = (t) => {
+    const n = t.name || "";
+    if (n === "og-after") {
+      if (!["keep", "delete", "move"].includes(t.value)) return;
+      og.after = t.value;
+      if (og.after !== "move") { og.pickOpen = false; og.pick = null; og.pickSeq++; }
+      ogPaint();
+      ogRefocus('#og-box input[name="og-after"]', (x) => x.value === t.value);
+      ogRendered();
+    } else if (n === "og-folder") {
+      og.folder = t.value;
+      ogCheckSoon(true);
+      ogSyncButtons();
+    }
+  };
+  /* Beim Tippen: gleich als „wird geprüft“ zeigen (der Start ist gesperrt), gefragt wird nach einer kurzen Pause. */
+  const ogFolderInput = (v) => {
+    og.folder = v;
+    ogPaintCheck();
+    ogSyncButtons();
+    ogCheckSoon(false);
+  };
+
+  /* Die kleine Ordnerauswahl unter dem Feld: nur Unterordner, auf den Datenträger beschränkt, mit „Zurück“ und „Diesen Ordner wählen“.
+     Sie öffnet im Ordner des Feldes, oder im nächsten vorhandenen darüber (der Vorgabeordner liegt oft noch nicht da). */
+  const ogPickList = async (path) => {
+    const d = await api(`/api/v1/files/list?path=${encodeURIComponent(path)}`, { timeoutMs: 20000 });
+    const dirs = (Array.isArray(d.entries) ? d.entries : []).filter((e) => e && e.type === "dir" && e.name).map((e) => String(e.name));
+    dirs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+    return { path: ogNorm(d.path || path) || path, dirs, err: "", busy: false };
+  };
+  const ogPickGo = async (path) => {
+    const seq = ++og.pickSeq;
+    og.pickOpen = true;
+    og.pick = { path, dirs: null, err: "", busy: true };
+    ogPaint();
+    try {
+      const k = await ogPickList(path);
+      if (seq !== og.pickSeq) return;
+      og.pick = k;
+    } catch (e) {
+      if (seq !== og.pickSeq) return;
+      og.pick = { path, dirs: [], err: e && e.message ? e.message : "Der Ordner lässt sich nicht lesen.", busy: false };
+    }
+    ogPaint();
+    ogPickFocus();
+  };
+  /* Nach jedem Laden der Auswahl: der Fokus auf die erste Zeile, sonst auf „Diesen Ordner wählen“ (die Zeilen sind neu gezeichnet). */
+  const ogPickFocus = () => {
+    if ($$("#og-pick .og-row").length) ogRefocus("#og-pick .og-row", () => true);
+    else ogRefocus('#og-pick [data-og="pickok"]', (x) => !x.disabled);
+  };
+  const ogPickOpen = async () => {
+    const mount = ogNorm(og.mount);
+    if (!mount) return;
+    const seq = ++og.pickSeq;
+    og.pickOpen = true;
+    og.pick = { path: mount, dirs: null, err: "", busy: true };
+    ogPaint();
+    let path = ogResolveDest(og.mount, og.folder);
+    if (!path || !ogInside(path, mount)) path = mount;
+    for (let i = 0; i < 16; i++) {
+      try {
+        const k = await ogPickList(path);
+        if (seq !== og.pickSeq) return;
+        og.pick = k;
+        ogPaint();
+        ogPickFocus();
+        return;
+      } catch (e) {
+        if (seq !== og.pickSeq) return;
+        if (path === mount) {
+          og.pick = { path, dirs: [], err: e && e.message ? e.message : "Der Ordner lässt sich nicht lesen.", busy: false };
+          ogPaint();
+          ogPickFocus();
+          return;
+        }
+        path = ogParent(path, mount);
+      }
+    }
+  };
+  const ogPickChoose = () => {
+    const k = og.pick;
+    if (!k || k.busy || k.err || !k.path) return;
+    og.folder = k.path;
+    og.pickOpen = false; og.pick = null; og.pickSeq++;
+    ogPaint();
+    ogRefocus('#og-box [data-og="pick"]', () => true);
+    ogCheckSoon(true);
+    ogSyncButtons();
+  };
+  const ogClick = (b) => {
+    const a = b.dataset.og;
+    if (a === "drive") ogSetDrive(b.dataset.mount || "");
+    else if (a === "pick" || a === "pickclose") {
+      if (og.pickOpen && a === "pick" || a === "pickclose") {
+        og.pickOpen = false; og.pick = null; og.pickSeq++;
+        ogPaint();
+        ogRefocus('#og-box [data-og="pick"]', () => true);
+      } else ogPickOpen();
+    }
+    else if (a === "nav") ogPickGo(b.dataset.path || "");
+    else if (a === "up") { if (og.pick && og.pick.path) ogPickGo(ogParent(og.pick.path, og.mount)); }
+    else if (a === "pickok") ogPickChoose();
+  };
+
+  /* Beim Start: erst sagen, was sperrt; bei „Löschen“ fragen. Liefert null (nicht starten) oder die Felder für die Anfrage ({} bei „Behalten“). */
+  const ogAskDelete = () => {
+    const p = og.plan, src = p.source || {};
+    /* Fenster und Frage hängen beide direkt an body; welches später dort steht, liegt oben (und bekommt den Fokus): die Frage muss zuletzt stehen. */
+    const ex = $("#ad-overlay");
+    if (ex) document.body.appendChild(ex);
+    return askDelete({ title: "Original löschen?",
+      lead: "Das Original wird erst gelöscht, wenn das Ergebnis fertig zurückgelesen und geprüft ist:",
+      items: [{ name: p.name || gmName(og.id), info: Number(src.size_bytes) > 0 ? bytes(src.size_bytes) : "" }],
+      notes: src.path ? [`Pfad: ${src.path}`] : [],
+      warn: ["Das lässt sich nicht rückgängig machen.", "Die Spielstände bleiben erhalten."] });
+  };
+  const ogPrepare = async (id) => {
+    if (!og.plan || og.id !== id || og.after === "keep") return {};
+    const why = ogBlockWhy(og);
+    if (why) { toast(why, "error"); return null; }
+    if (og.after === "delete") {
+      const gen = og.gen, view = cp.view;
+      const yes = await ogAskDelete();
+      if (!yes || gen !== og.gen || cp.view !== view) return null;
+    }
+    return ogFields(og);
+  };
+
+  /* Die Zeile der Konsole im Fenster des Vorgangs. Die Konsole führt eine kleine Liste ihrer letzten Auswahlen (library/orig/status);
+     gezeigt wird der Eintrag mit passender Titel-ID und Art, aber nur einer, der zu diesem Vorgang gehört (ogItemVisible). Gefragt wird
+     nur, solange das Fenster mit dem Vorgang offen ist und der Vorgang läuft oder sein Eintrag noch nicht zu Ende ist. */
+  const OG_VIEW = { convert: "cvjob", copy: "job", unpack: "mvjob" };
+  const ogJobActive = (kind) => { const j = kind === "convert" ? cv.job : kind === "copy" ? cp.job : mv.job; return !!(j && j.active); };
+  /* Vor dem Start: der Stand der Liste, damit ein älterer Eintrag derselben Art und Titel-ID nicht für den neuen gilt. */
+  const ogBaseline = async (kind, id) => {
+    try {
+      const s = await api("/api/v1/library/orig/status", { timeoutMs: 3000 });
+      const it = ogMatch(s.items, kind, id);
+      return it ? Number(it.updated_ms) || 0 : null;
+    } catch (e) {
+      return "fail";
+    }
+  };
+  /* Nach dem Start: gemerkt wird, was gewählt wurde (bei „Behalten“ nur „nichts zu fragen“). */
+  const ogWatchSet = (kind, id, fields, base) => {
+    og.w = fields.orig_after
+      ? { kind, id, after: fields.orig_after, dest: fields.orig_dest || "", base, item: null, seenLive: false, fails: 0, endedAt: 0, stopped: false }
+      : { kind, id, none: true };
+  };
+  const ogStaticLine = (w) => (w.after === "delete" ? "Das Original wird gelöscht, sobald das Ergebnis zurückgelesen und geprüft ist."
+    : w.after === "move" ? `Das Original wird nach ${w.dest} verschoben, sobald das Ergebnis zurückgelesen und geprüft ist.` : "");
+  const ogJobInner = (kind, id) => {
+    const w = og.w;
+    if (!w || w.none || w.kind !== kind || w.id !== id) return "";
+    const it = w.item;
+    const msg = (it && it.message) || ogStaticLine(w);
+    if (!msg) return "";
+    const cls = it ? (it.state === "done" ? " og-ok" : it.state === "failed" ? " og-bad" : it.state === "skipped" ? " og-skip" : "") : "";
+    return `<p class="og-line${cls}"><span class="muted">Original danach</span> <span>${esc(msg)}</span></p>`
+      + (it && it.mode === "move" && it.target ? `<p class="cp-dest"><span class="muted">Ziel des Originals</span> <code>${esc(it.target)}</code></p>` : "");
+  };
+  const ogJobHtml = (kind, id) => `<div id="og-job">${ogJobInner(kind, id)}</div>`;
+  const ogJobPaint = () => {
+    const w = og.w, el = $("#og-job");
+    if (!w || !el) return;
+    const h = ogJobInner(w.kind, w.id);
+    if (el.__h !== h) { el.__h = h; el.innerHTML = h; }
+  };
+  /* Wurde der Vorgang mit „Löschen“ oder „Verschieben“ gestartet, stimmt „das Spiel liegt jetzt zweimal vor“ am Ende nicht. */
+  const ogHandled = (kind, id) => {
+    const w = og.w;
+    return !!(w && !w.none && w.kind === kind && w.id === id && (w.after === "delete" || w.after === "move" || w.item));
+  };
+  const ogSchedule = (ms) => {
+    og.stPend = true;
+    clearTimeout(og.st);
+    og.st = setTimeout(ogStatusTick, ms);
+  };
+  const ogStatusTick = async () => {
+    og.stPend = false;
+    const w = og.w;
+    if (!w || w.none || w.stopped || !$("#cp-overlay") || cp.view !== OG_VIEW[w.kind]) return;
+    if (document.hidden) { ogSchedule(4000); return; }
+    og.stBusy = true;
+    const gen = og.gen;
+    let s = null;
+    try { s = await api("/api/v1/library/orig/status", { timeoutMs: 6000 }); } catch (e) { /* ohne Antwort bleibt stehen, was da steht */ }
+    og.stBusy = false;
+    if (gen !== og.gen || og.w !== w) return;
+    if (!s) {
+      if (++w.fails >= 3) { w.stopped = true; return; }
+      ogSchedule(4000);
+      return;
+    }
+    w.fails = 0;
+    const it = ogMatch(s.items, w.kind, w.id);
+    if (ogItemVisible(it, w)) { w.item = it; if (OG_LIVE[it.state]) w.seenLive = true; }
+    ogJobPaint();
+    const active = ogJobActive(w.kind);
+    if (active) w.endedAt = 0; else if (!w.endedAt) w.endedAt = Date.now();
+    const live = w.item && OG_LIVE[w.item.state];
+    if (w.item && !live) { w.stopped = true; return; }                     /* fertig, gescheitert oder übersprungen: mehr kommt nicht */
+    if (!active && !live && Date.now() - w.endedAt > 90000) { w.stopped = true; return; }
+    ogSchedule(2500);
+  };
+  /* Ruft jedes Zeichnen eines Auftragsfensters. Ein Fenster, das einen laufenden Vorgang zeigt, den es nicht selbst gestartet hat
+     (aus der Warteschlange, nach dem Wiederöffnen), fragt auch: ohne Vergleichswert, also nur einen laufenden Eintrag. */
+  const ogJobSeen = (kind, id, active) => {
+    let w = og.w;
+    if (!(w && w.kind === kind && w.id === id)) {
+      if (!active) return;
+      w = og.w = { kind, id, after: "", dest: "", base: undefined, item: null, seenLive: false, fails: 0, endedAt: 0, stopped: false };
+    }
+    if (w.none || w.stopped || og.stBusy || og.stPend) return;
+    ogStatusTick();
+  };
+
   /* ── Kopieren (1.46.0) ────────────────────────────────────────────────
    * Ein Spiel, das aus einem Ordner läuft, auf ein anderes Laufwerk
    * kopieren (gamecopy.c). Je Laufwerk zwei Ziele, die Wahl trifft der
@@ -5600,7 +6157,7 @@
    * Die Kopie läuft auf der Konsole weiter, auch wenn das Fenster zu ist;
    * der Streifen über den Karten zeigt sie dann an. */
   const cp = { id: "", plan: null, drive: "", mode: "", job: null,
-               view: "", timer: 0 };
+               view: "", timer: 0, ready: false };
 
   const cpBytes = (b) => (b > 0 ? bytes(b) : "0 B");
   const cpFiles = (n) => `${num(n)} ${n === 1 ? "Datei" : "Dateien"}`;
@@ -5635,6 +6192,7 @@
     if (o) o.remove();
     cp.view = "";
     dlg.seq++;
+    ogClose();                                        /* „Original danach“: Wahl, Prüfung und Abfragen enden mit dem Fenster */
   };
 
   const cpShell = () => {
@@ -5655,6 +6213,8 @@
         if (e.target === o) { cpClose(); return; }
         const q = e.target.closest("[data-cq]");
         if (q && !q.disabled) { cvQueueAct(q); return; }
+        const g = e.target.closest("[data-og]");              /* „Original danach“: Datenträger, Ordnerauswahl */
+        if (g && !g.disabled) { ogClick(g); return; }
         const b = e.target.closest("[data-cp]");
         if (!b || b.disabled) return;
         const act = b.dataset.cp;
@@ -5674,15 +6234,16 @@
       /* The name of a converted image: typing only refreshes the check (a new drawing of the dialog would take the focus away). */
       o.addEventListener("input", (e) => {
         if (e.target && e.target.name === "cv-name") { cv.name = e.target.value; cvCheckSoon(); }
+        else if (e.target && e.target.name === "og-folder") ogFolderInput(e.target.value);
       });
       o.addEventListener("change", (e) => {
         if (cp.view.startsWith("ap")) return;                      /* APR & LZ4 hat eigene Felder (apr…) und keinen Plan */
         const n = e.target.name || "";
         if (n === "cv-name") return;
+        if (n.startsWith("og-")) { ogChange(e.target); return; }   /* „Original danach“ zeichnet nur seinen eigenen Kasten neu */
         if (n === "cp-drive") cp.drive = e.target.value;
         if (n === "cp-mode") cp.mode = e.target.value;
         if (n === "mv-dest") mv.dest = e.target.value;
-        if (n === "mv-del") mv.del = e.target.checked;
         if (n === "cv-drive") cv.drive = e.target.value;
         if (n === "cv-mode") cv.mode = e.target.value;
         if (n === "cv-ampr") cv.ampr = e.target.checked;
@@ -5743,6 +6304,7 @@
                      : p.busy ? "Es läuft schon eine Kopie."
                      : p.other_busy ? "Es läuft gerade eine Konvertierung. Kopieren, Konvertieren und Verschieben laufen nicht gleichzeitig." : "";
     const ready = dest && !blockedRun;
+    cp.ready = !!ready;
 
     body.innerHTML = `
       <p class="cp-src"><span class="muted">Quelle</span>
@@ -5765,7 +6327,7 @@
               Dort sucht ShadowMountPlus nicht, die Kopie wird nur aufbewahrt.</span></span>
         </label>
       </div>
-      ${cp.mode === "homebrew" ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
+      ${cp.mode === "homebrew" && !ogOffered(cp.id) ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
           danach zweimal</b>: das Original und die Kopie, beide mit der Titel-ID
           ${esc(p.title_id)}. Zwei Ordner mit derselben Titel-ID können beim Einbinden
           Probleme machen: Es wird womöglich der falsche eingebunden oder das Spiel
@@ -5783,10 +6345,13 @@
         dem Original verglichen; das dauert etwa noch einmal so lange wie das Kopieren. Daneben entsteht
         <code>${esc(dest.path)}.sha256</code> mit den Prüfsummen (SHA-256).</p>` : ""}
 
+      <div id="og-box">${ogBoxInner()}</div>
+
       <div class="cp-actions">
         <button type="button" class="btn" data-cp="close">Abbrechen</button>
         <button type="button" class="btn primary" data-cp="start" ${ready ? "" : "disabled"}>Kopieren starten</button>
       </div>`;
+    ogRendered();
   };
 
   const cpRenderJob = () => {
@@ -5819,9 +6384,9 @@
          copy done when it matches the plan, so these are the same or more. */
       html = `<p class="cp-ok">✓ Fertig: ${bytes(j.done_bytes)} in ${cpFiles(j.files_done)} kopiert und zurückgelesen.</p>${where}
         ${cpSums(j, "die Kopie")}
-        ${j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus bindet die Kopie bei seinem nächsten
+        ${j.mode === "homebrew" ? (ogHandled("copy", j.title_id) ? "" : `<p class="muted">ShadowMountPlus bindet die Kopie bei seinem nächsten
           Durchlauf ein. Das Spiel liegt jetzt zweimal vor. Wenn du es nur verschieben wolltest,
-          lösche das Original.</p>` : `<p class="muted">Die Sicherung wird nicht eingebunden.</p>`}`;
+          lösche das Original.</p>`) : `<p class="muted">Die Sicherung wird nicht eingebunden.</p>`}`;
     } else if (j.state === "cancelled") {
       html = `<p>Abgebrochen. Was schon kopiert war, hat die App wieder entfernt
         (oder ersetzt es beim nächsten Versuch, falls das Laufwerk das Löschen verweigert).</p>${where}`;
@@ -5833,9 +6398,10 @@
       html = `<p class="muted">Keine Kopie.</p>`;
     }
     const active = !!j.active;
-    paintJob(body, html, `
+    paintJob(body, html + ogJobHtml("copy", j.title_id), `
         ${active ? `<button type="button" class="btn" data-cp="cancel">Kopie abbrechen</button>` : ""}
         <button type="button" class="btn${active ? "" : " primary"}" data-cp="close">${active ? "Im Hintergrund weiter" : "Schließen"}</button>`);
+    ogJobSeen("copy", j.title_id, active);
   };
 
   /* Auswahlkarten (.choice): die gewählte trägt .is-checked – Ersatz für :has(), das der Browser der Konsole nicht kennt. */
@@ -5939,6 +6505,7 @@
       if (!id) { cpClose(); return; }
     }
     cp.id = id; cp.plan = null; cp.drive = ""; cp.mode = ""; cp.view = "loading";
+    ogLoad(id);                                     /* „Original danach“: der Plan der Konsole, einmal je Spiel */
     const g = gm.list.find((x) => x.title_id === id);
     txt("#cp-title", `„${g ? g.name : id}“ kopieren`);
     $("#cp-body").innerHTML = `<p class="muted">Der Spielordner wird vermessen …</p>`;
@@ -5960,8 +6527,12 @@
   const cpStart = async (btn) => {
     btn.disabled = true;
     try {
+      const orig = await ogPrepare(cp.id);              /* Sperre melden; bei „Löschen“ fragen */
+      if (!orig) { ogSyncButtons(); return; }
+      const base = orig.orig_after ? await ogBaseline("copy", cp.id) : undefined;
       cp.job = await api("/api/v1/library/copy", { method: "POST",
-        body: JSON.stringify({ id: cp.id, target: cp.drive, mode: cp.mode }) });
+        body: JSON.stringify({ id: cp.id, target: cp.drive, mode: cp.mode, ...orig }) });
+      ogWatchSet("copy", cp.id, orig, base);
       cpRenderJob();
       cpBanner();
       cp.timer = setTimeout(cpPoll, 1000);
@@ -5989,8 +6560,8 @@
    * nur Ordner, in denen ShadowMountPlus sucht — und zeigt den Auftrag an.
    * Konvertieren heißt bisher: ein Abbild in einen Dump-Ordner entpacken.
    * Die andere Richtung beherrscht noch keiner der beiden. */
-  const mv = { id: "", op: "", plan: null, dest: "", del: false, job: null,
-               seen: 0, timer: 0, misses: 0, compressed: false };
+  const mv = { id: "", op: "", plan: null, dest: "", job: null,
+               seen: 0, timer: 0, misses: 0, compressed: false, ready: false };
 
   const MV_STATES = { preparing: "Wird vorbereitet", measuring: "Wird vermessen",
     transferring: "", deleting: "Alter Ort wird geräumt", finalizing: "Wird abgeschlossen",
@@ -6035,6 +6606,7 @@
     const sel = p.destinations.find((d) => d.path === mv.dest);
     const target = sel ? (unpack ? sel.target : `${sel.path}/${gmBase(p.source)}`) : "";
     const blocked = p.running ? "Das Spiel läuft gerade. Bitte erst beenden." : "";
+    mv.ready = !!(sel && !blocked);
     /* Like the conversion window ("1. Was soll entstehen?"): what the image can become, and why the other formats are not offered. */
     const what = only ? `<h4 class="cp-step">1. Was soll entstehen?</h4>
       <div class="cp-list">
@@ -6063,18 +6635,15 @@
       ${intro}${what}
       <h4 class="cp-step">${unpack ? (only ? "2. Wohin entpacken?" : "Wohin entpacken?") : "Wohin?"}</h4>
       <div class="cp-list">${rows || `<p class="muted">Kein Ziel gefunden.</p>`}</div>
-      ${unpack ? `<label class="cp-choice cp-check"><input type="checkbox" name="mv-del" ${mv.del ? "checked" : ""}>
-          <span class="cp-choice-text"><b>Abbild danach löschen</b>
-            <span class="muted">Erst wenn das Entpacken fertig und fehlerfrei ist.</span></span></label>` : ""}
       ${target ? `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(target)}</code></p>` : ""}
-      ${sel && (!unpack || mv.del) ? `<div class="cp-warn">${unpack
-        ? "Die Abbild-Datei wird nach dem Entpacken gelöscht."
-        : "Nach dem Verschieben gibt es das Spiel am alten Ort nicht mehr."}</div>` : ""}
+      ${sel && !unpack ? `<div class="cp-warn">Nach dem Verschieben gibt es das Spiel am alten Ort nicht mehr.</div>` : ""}
       ${blocked ? `<p class="cp-err">${esc(blocked)}</p>` : ""}
+      ${unpack ? `<div id="og-box">${ogBoxInner()}</div>` : ""}
       <div class="cp-actions">
         <button type="button" class="btn" data-cp="close">Abbrechen</button>
-        <button type="button" class="btn primary" data-cp="start" ${sel && !blocked ? "" : "disabled"}>${unpack ? "Entpacken starten" : "Verschieben starten"}</button>
+        <button type="button" class="btn primary" data-cp="start" ${mv.ready ? "" : "disabled"}>${unpack ? "Entpacken starten" : "Verschieben starten"}</button>
       </div>`;
+    ogRendered();
   };
 
   const mvRenderJob = () => {
@@ -6108,9 +6677,12 @@
     } else {
       html = `<p class="muted">ShadowMountPlus hat keinen Auftrag.</p>`;
     }
-    paintJob(body, html, `
+    /* „Original danach“ gibt es nur beim Entpacken; die Titel-ID nennt der Auftrag (fehlt sie, gilt die des Fensters) */
+    const ogId = j.operation === "unpack" ? (j.title_id || (og.w && og.w.kind === "unpack" ? og.w.id : mv.id)) : "";
+    paintJob(body, html + (ogId ? ogJobHtml("unpack", ogId) : ""), `
         ${j.active && j.cancellable ? `<button type="button" class="btn" data-cp="cancel" ${j.cancel_requested ? "disabled" : ""}>${j.cancel_requested ? "Wird abgebrochen …" : "Auftrag abbrechen"}</button>` : ""}
         <button type="button" class="btn${j.active ? "" : " primary"}" data-cp="close">${j.active ? "Im Hintergrund weiter" : "Schließen"}</button>`);
+    if (ogId) ogJobSeen("unpack", ogId, !!j.active);
   };
 
   /* ShadowMountPlus can be too busy copying to answer in time. One lost answer
@@ -6154,9 +6726,10 @@
     cpShell();
     const seq = ++dlg.seq;
     if (mv.job && mv.job.active) { mvRenderJob(); return; }
-    mv.id = id; mv.op = op; mv.plan = null; mv.dest = ""; mv.del = false;
+    mv.id = id; mv.op = op; mv.plan = null; mv.dest = "";
     mv.compressed = !!compressed && op === "unpack";
     cp.view = "mvloading";
+    if (op === "unpack") ogLoad(id);                /* „Original danach“: der Plan der Konsole, einmal je Spiel (nicht beim Verschieben) */
     txt("#cp-title", `„${gmName(id)}“ ${op === "unpack" ? (mv.compressed ? "entpacken" : "konvertieren") : "verschieben"}`);
     $("#cp-body").innerHTML = `<p class="muted">Ziele werden ermittelt …</p>`;
     try {
@@ -6175,9 +6748,13 @@
   const mvStart = async (btn) => {
     btn.disabled = true;
     try {
+      /* Entpacken: „Original danach“ (löst den alten Schalter „Abbild danach löschen“ ab; delete_source wird nicht mehr gesendet) */
+      const orig = mv.op === "unpack" ? await ogPrepare(mv.id) : {};
+      if (!orig) { ogSyncButtons(); return; }
+      const base = orig.orig_after ? await ogBaseline("unpack", mv.id) : undefined;
       mv.job = await api("/api/v1/library/storage", { method: "POST", timeoutMs: 20000,
-        body: JSON.stringify({ id: mv.id, op: mv.op, target: mv.dest,
-                               delete_source: mv.op === "unpack" && mv.del }) });
+        body: JSON.stringify({ id: mv.id, op: mv.op, target: mv.dest, ...orig }) });
+      if (mv.op === "unpack") ogWatchSet("unpack", mv.id, orig, base);
       if (mv.job.job_id) mv.seen = mv.job.job_id;
       mvRenderJob();
       jobBanner();
@@ -6207,7 +6784,7 @@
    * ShadowMountPlus (mv…). Die Ziele sind die des Kopierens: der Ordner
    * homebrew eines Laufwerks oder PS5-Sicherung/Spiele. */
   const cv = { id: "", plan: null, op: "", fl: "fpkg", drive: "", mode: "", job: null, timer: 0, ampr: false,
-               name: "", check: null, cseq: 0, ctimer: 0, queue: null, qtimer: 0, guide: false };
+               name: "", check: null, cseq: 0, ctimer: 0, queue: null, qtimer: 0, guide: false, fresh: false };
 
   const CV_OPS = {
     ffpfsc: {
@@ -6302,8 +6879,10 @@
         <div><span>${esc(k.text)}</span>${k.hint ? `<small>${esc(k.hint)}</small>` : ""}</div></div>`).join("")
       + (c.target ? `<p class="cp-dest cv-target"><span class="muted">Ziel</span> <code>${esc(c.target)}</code></p>` : "");
     const st = $('#cp-body [data-cp="start"]'), qu = $('#cp-body [data-cp="queue"]');
-    if (st) st.disabled = !c.can_start;
-    if (qu) qu.disabled = !c.can_queue;
+    cv.fresh = true;
+    const og1 = !!ogBlockNow();                        /* „Original danach“: ein gesperrter Ordner beim Verschieben sperrt auch hier */
+    if (st) st.disabled = !c.can_start || og1;
+    if (qu) qu.disabled = !c.can_queue || og1;
   };
   const cvRefreshCheck = async () => {
     const box = $("#cv-check");
@@ -6506,7 +7085,7 @@
       ${cv.mode === "homebrew" && cvIsFpkg(cv.op) ? `<div class="cp-warn"><b>⚠ Gleiche Titel-ID</b>: Das Original und das Paket
           haben beide die Titel-ID ${esc(p.title_id)}. Ist das Original bei ShadowMountPlus eingehängt, stören sich beide, sobald Kraken Mount
           das Paket anmeldet. Hänge das Original erst aus oder lösche es, bevor du das Paket startest.</div>`
-        : cv.mode === "homebrew" ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
+        : cv.mode === "homebrew" && !ogOffered(cv.id) ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
           danach zweimal</b>: das Original und das neue Abbild, beide mit der Titel-ID
           ${esc(p.title_id)}. Das kann beim Einbinden Probleme machen. ShadowMountPlus rät, je
           Titel-ID nur eine Quelle zu behalten. Lösche das Original erst, wenn das neue Abbild
@@ -6545,6 +7124,8 @@
         </label>
       </div>
 
+      <div id="og-box">${ogBoxInner()}</div>
+
       ${cv.op ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[cv.op] || cv.op)}</b></p>` : ""}
       <h4 class="cp-step">Prüfung vor dem Start</h4>
       <div id="cv-check" class="cv-check" aria-live="polite"><p class="muted">Die Prüfung läuft …</p></div>
@@ -6563,7 +7144,9 @@
         <button type="button" class="btn" data-cp="queue" disabled>Zur Warteschlange</button>
         <button type="button" class="btn primary" data-cp="start" disabled>Konvertieren starten</button>
       </div>`;
+    cv.fresh = false;                                 /* die Prüfung vor dem Start gilt erst, wenn sie für diesen Stand da ist */
     cvRefreshCheck();
+    ogRendered();
   };
 
   const cvRenderJob = () => {
@@ -6601,9 +7184,9 @@
         ${cpSums(j, "das Ergebnis")}
         ${cvIsFpkg(j.op) && j.mode === "homebrew" ? `<p class="muted">Kraken Mount sucht im Ordner „FPKG-Games“ des Laufwerks (Reiter „FPKGMount“, Knopf „Jetzt suchen“) und meldet das Paket an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
         : /^CUSA/.test(j.title_id || "") && j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das Abbild bei seinem nächsten Durchlauf im Ordner „homebrew“ des Laufwerks. Ob das Spiel läuft, zeigt erst ein Test. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“).</p>`
-        : j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das neue Abbild bei seinem
+        : j.mode === "homebrew" ? (ogHandled("convert", j.title_id) ? "" : `<p class="muted">ShadowMountPlus findet das neue Abbild bei seinem
           nächsten Durchlauf. Das Spiel liegt jetzt zweimal vor. Lösche das Original erst, wenn das
-          neue Abbild startet.</p>` : `<p class="muted">Die Sicherung wird nicht eingebunden.</p>`}`;
+          neue Abbild startet.</p>`) : `<p class="muted">Die Sicherung wird nicht eingebunden.</p>`}`;
     } else if (j.state === "cancelled") {
       html = `<p>Abgebrochen. Die unfertige Datei hat die App wieder entfernt
         (oder ersetzt sie beim nächsten Versuch, falls das Laufwerk das Löschen verweigert).</p>${where}`;
@@ -6615,12 +7198,13 @@
       html = `<p class="muted">Keine Konvertierung.</p>`;
     }
     const active = !!j.active;
-    html = cvStages(j) + html;
+    html = cvStages(j) + html + ogJobHtml("convert", j.title_id);
     const qn = cvQueueOpen();
     paintJob(body, html, `
         ${active ? `<button type="button" class="btn" data-cp="cancel">Konvertieren abbrechen</button>` : ""}
         ${qn || (cv.queue && cv.queue.items && cv.queue.items.length) ? `<button type="button" class="btn" data-cp="queueview">Warteschlange${qn ? ` (${qn})` : ""}</button>` : ""}
         <button type="button" class="btn${active ? "" : " primary"}" data-cp="close">${active ? "Im Hintergrund weiter" : "Schließen"}</button>`);
+    ogJobSeen("convert", j.title_id, active);
   };
 
   /* The steps of a conversion with the time each took (gameconvert.c: stages): done, running (with its share), stopped there, still to come. */
@@ -6648,9 +7232,11 @@
   const cvQueueAdd = async (btn) => {
     btn.disabled = true;
     try {
+      const orig = await ogPrepare(cv.id);              /* „Original danach“: Sperre melden; bei „Löschen“ fragen (das Löschen kommt später, ohne dass jemand dabei ist) */
+      if (!orig) { ogSyncButtons(); return; }
       cv.queue = await api("/api/v1/library/convert/queue", { method: "POST", timeoutMs: 120000,
         body: JSON.stringify({ action: "add", id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full", name: cv.name || "",
-                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op)) }) });
+                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op)), ...orig }) });
       toast("In die Warteschlange gestellt.");
       cvOpenQueue();
       cvPoll();
@@ -6764,6 +7350,7 @@
     /* Ein komprimiertes Abbild lässt sich nur entpacken: gleich dorthin. */
     if (g && !g.can_convert && g.can_unpack) { mvOpen(id, "unpack", true); return; }
     cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cv.verify = "full"; cv.name = ""; cv.check = null; cp.view = "cvloading";
+    ogLoad(id);                                     /* „Original danach“: der Plan der Konsole, einmal je Spiel */
     { const g0 = gm.list.find((x) => x.title_id === id); cv.ampr = !!(g0 && g0.mods && g0.mods.ampr_emu); }
     txt("#cp-title", `„${g ? g.name : id}“ konvertieren`);
     $("#cp-body").innerHTML = `<p class="muted">Das Spiel wird vermessen …</p>`;
@@ -6787,12 +7374,17 @@
   };
 
   const cvStart = async (btn) => {
-    /* The stream-risk warning stands in the dialog beside ffpfsc; no second question (nothing needs a second confirmation). */
+    /* The stream-risk warning stands in the dialog beside ffpfsc; no second question (nothing needs a second confirmation).
+       The one exception is deleting the original ("Original danach": Löschen fragt zuerst und nennt den Namen). */
     btn.disabled = true;
     try {
+      const orig = await ogPrepare(cv.id);
+      if (!orig) { ogSyncButtons(); return; }
+      const base = orig.orig_after ? await ogBaseline("convert", cv.id) : undefined;
       cv.job = await api("/api/v1/library/convert", { method: "POST",
         body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full", name: cv.name || "",
-                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op)) }) });
+                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op)), ...orig }) });
+      ogWatchSet("convert", cv.id, orig, base);
       cvRenderJob();
       jobBanner();
       cv.timer = setTimeout(cvPoll, 1000);
@@ -7791,12 +8383,17 @@
     /* die Auswahl zum Zurückverschieben: jedes Spiel mit PKGs im Ordner ps4, das nicht fest installiert ist; was mitgeht, steht dabei */
     const movable = games.filter((g) => g.state !== "internal" && p4mOrganized(g));
     for (const id of Array.from(p4m.sel)) if (!movable.some((g) => g.title_id === id)) p4m.sel.delete(id);
-    $("#p4m-pick").innerHTML = movable.length ? movable.map((g) => {
+    const pickHtml = movable.length ? movable.map((g) => {
       const what = g.has_patch && g.dlc ? `Spiel, Update und ${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}`
         : g.has_patch ? "Spiel und Update" : g.dlc ? `Spiel und ${g.dlc} Zusatzinhalt${g.dlc === 1 ? "" : "e"}` : "Spiel";
-      return `<label class="cp-check p4m-pickrow"><input type="checkbox" data-p4m-sel="${esc(g.title_id)}" ${p4m.sel.has(g.title_id) ? "checked" : ""}>
+      return `<label class="cp-check p4m-pickrow"><input type="checkbox" data-p4m-sel="${esc(g.title_id)}">
         <span><b>${esc(g.name)}</b> <span class="muted">${esc(`${g.title_id} · ${what}`)}</span></span></label>`;
     }).join("") : `<p class="muted">Kein Spiel hat PKGs im Ordner ps4.</p>`;
+    /* nur bei geänderter Liste neu bauen (Fokus und Scrollstelle bleiben); das Häkchen kommt aus p4m.sel und steht nicht im Vergleichstext,
+       sonst baute jedes Ankreuzen die Liste beim nächsten Abruf doch neu (Prüfung F-270) */
+    { const pickEl = $("#p4m-pick");
+      setHtml(pickEl, pickHtml);
+      pickEl.querySelectorAll("[data-p4m-sel]").forEach((c) => { c.checked = p4m.sel.has(c.dataset.p4mSel); }); }
     p4mPickButtons();
     $("#p4m-restore-all").disabled = !d.running || !movable.length;
     { const el = $("#p4m-list");

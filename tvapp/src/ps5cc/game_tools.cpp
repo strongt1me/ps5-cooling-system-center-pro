@@ -37,6 +37,9 @@ enum Row
     kRowQueue,
     kRowQueueView,
     kRowDeleteSource,
+    kRowOrig,       // "Original danach": Behalten, Löschen, Verschieben
+    kRowOrigDrive,  // ... for a move: the drive
+    kRowOrigFolder, // ... and the folder on it
     kRowEngine,
     kRowGuide,
     kRowStart,
@@ -156,6 +159,20 @@ std::string op_text(const Plan &p, int op, int level)
     }
 }
 
+// What each way of "Original danach" means, in a line for the focused row.
+const char *orig_way_text(int way)
+{
+    switch (way)
+    {
+    case kOrigDelete:
+        return "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher.";
+    case kOrigMove:
+        return "An einen Ort, den ShadowMountPlus nicht durchsucht.";
+    default:
+        return "Das Original bleibt, wo es ist (Vorgabe).";
+    }
+}
+
 const char *delete_kind(const std::string &kind)
 {
     if (kind == "installed")
@@ -247,6 +264,9 @@ void GameTools::init(const ui::Theme &theme)
     prompt_.keyboard.style.space_label = "Leer";
     prompt_.keyboard.style.done_label = "Fertig";
     prompt_.keyboard.set_layouts(german_layouts());
+
+    // The question before the original is deleted (the same one every other delete asks).
+    ask_.init(theme);
 
     // The queue of conversions: rows like the Pakete page's queue.
     queue_list_.style.theme = theme;
@@ -379,8 +399,20 @@ void GameTools::open_dialog(Tool tool, ui::Feedback &feedback)
     check_ticket_ = 0;
     name_mode_ = 0;
     engine_fetching_ = false;
+    prompt_for_ = 0;
+    orig_plan_ = OrigPlan{};
+    orig_choice_ = OrigChoice{};
+    orig_check_ = OrigCheck{};
+    orig_check_key_.clear();
+    orig_check_pending_ = false;
+    orig_check_ticket_ = 0;
+    orig_awaiting_ = 0;
     form_.clear();
     awaiting_ = source().request_plan(tool, game_.id);
+    // What may become of the original afterwards: asked once, with the plan (18.11.2026). A tool
+    // that keeps no original of its own (move, check, delete ...) does not ask.
+    if (tool == Tool::copy || tool == Tool::convert || tool == Tool::unpack)
+        orig_awaiting_ = source().orig_plan(game_.id);
     if (tool == Tool::convert)
         source().convert_queue(""); // how many wait, for the row that opens the queue
     feedback.play(audio::Cue::open);
@@ -390,6 +422,8 @@ void GameTools::close_dialog(ui::Feedback &feedback)
 {
     open_ = false;
     awaiting_ = 0;
+    orig_awaiting_ = 0;
+    orig_check_pending_ = false;
     feedback.play(audio::Cue::back);
 }
 
@@ -426,6 +460,26 @@ void GameTools::absorb(const Snapshot &data)
         check_pending_ = false;
         refresh();
     }
+    // The folder for the original was checked (an answer for an older folder is dropped).
+    if (open_ && orig_check_pending_ && orig_check_ticket_ != 0 &&
+        data.orig_check.ticket == orig_check_ticket_)
+    {
+        orig_check_ = parse_orig_check(data.orig_check);
+        orig_check_pending_ = false;
+        refresh();
+    }
+    // The plan for the original came: its rows join the form, the person stays where they are.
+    if (open_ && orig_awaiting_ != 0 && data.orig_plan.ticket == orig_awaiting_)
+    {
+        orig_awaiting_ = 0;
+        orig_plan_ = parse_orig_plan(data.orig_plan);
+        orig_choice_ = first_orig_choice(orig_plan_);
+        if (plan_.ok)
+        {
+            sync_orig();
+            build_form(form_.focus_id());
+        }
+    }
     if (!open_ || awaiting_ == 0 || data.plan.ticket != awaiting_)
         return;
     awaiting_ = 0;
@@ -433,6 +487,7 @@ void GameTools::absorb(const Snapshot &data)
     if (plan_.name.empty())
         plan_.name = game_.name;
     choice_ = first_choice(plan_, &game_);
+    sync_orig();
     build_form();
     // "Löschen" chosen in the menu used to delete at once (wish of the user, 27.10.2026). Since
     // 06.11.2026 the dialog stays: it names what goes, and only its red "Löschen" row starts it
@@ -450,7 +505,7 @@ bool GameTools::visible() const
            queue_shown_.value > 0.01f || guide_open_ || guide_shown_.value > 0.01f;
 }
 
-void GameTools::build_form()
+void GameTools::build_form(int keep_focus)
 {
     form_.clear();
     op_index_.clear();
@@ -480,6 +535,7 @@ void GameTools::build_form()
     case Tool::copy:
         add_mode("1. Als was?");
         add_drives("2. Wohin?");
+        add_orig_rows("3. Original danach");
         first = kRowMode;
         break;
     case Tool::convert:
@@ -536,6 +592,8 @@ void GameTools::build_form()
             .add_choice(kRowName, "Name",
                         {"Name des Ordners", "Titel [ID] vVersion", "Eigener Name …"}, name_mode_)
             .description = "Felder: {titel} {id} {version} {quelle}. Leer: der Name des Ordners.";
+        // 6. What becomes of the original once the result is written and checked
+        add_orig_rows("6. Original danach");
         form_.add_action(kRowQueueView, "Warteschlange ansehen").chevron = true;
         form_.add_action(kRowQueue, "Zur Warteschlange");
         first = options.empty() ? kRowMode : kRowOp;
@@ -546,8 +604,15 @@ void GameTools::build_form()
     case Tool::image_unpack:
         add_drives(tool_ == Tool::move ? "Wohin?" : "Wohin entpacken?");
         if (tool_ == Tool::unpack)
-            form_.add_toggle(kRowDeleteSource, "Abbild danach löschen", choice_.delete_source)
-                .description = "Erst wenn das Entpacken fertig und fehlerfrei ist.";
+        {
+            // "Abbild danach löschen" went into "Original danach" (18.11.2026); the old switch only
+            // stays for an app that has no plan for it, and is not shown while the plan is awaited
+            if (orig_plan_.ok)
+                add_orig_rows("Original danach");
+            else if (orig_awaiting_ == 0)
+                form_.add_toggle(kRowDeleteSource, "Abbild danach löschen", choice_.delete_source)
+                    .description = "Erst wenn das Entpacken fertig und fehlerfrei ist.";
+        }
         first = choice_.drive >= 0 ? kRowDrive + choice_.drive : kRowStart;
         break;
     case Tool::image_check:
@@ -599,6 +664,12 @@ void GameTools::build_form()
     start_row.danger = tool_ == Tool::erase;
     refresh();
     form_.set_active(true);
+    if (keep_focus > 0)
+    {
+        // built anew under the person's hands: the same row, no entrance
+        form_.focus_row(keep_focus);
+        return;
+    }
     form_.focus_row(first);
     form_.enter();
 }
@@ -664,11 +735,130 @@ void GameTools::refresh()
         if (ui::FormRow *row = form_.row(kRowQueueView))
             row->text = queue_.open > 0 ? queue_summary(queue_) : std::string();
     }
+    refresh_orig_rows();
     if (ui::FormRow *row = form_.row(kRowStart))
     {
         row->label = start_label();
         row->disabled = !start_ready();
     }
+}
+
+bool GameTools::orig_tool() const
+{
+    return orig_plan_.ok &&
+           (tool_ == Tool::copy || tool_ == Tool::convert || tool_ == Tool::unpack);
+}
+
+void GameTools::add_orig_rows(const char *header)
+{
+    if (!orig_tool())
+        return;
+    form_.add_header(header);
+    form_
+        .add_choice(kRowOrig, "Original danach", {"Behalten", "Löschen", "Verschieben"},
+                    orig_choice_.after)
+        .description = orig_way_text(orig_choice_.after);
+    if (orig_choice_.after != kOrigMove)
+        return;
+    // A move says where to: the drive as a choice, the folder on it typed on the keyboard
+    std::vector<std::string> drives;
+    for (const OrigDrive &d : orig_plan_.drives)
+        drives.push_back(d.label);
+    form_.add_choice(kRowOrigDrive, "Datenträger", drives, std::max(orig_choice_.drive, 0));
+    form_.add_action(kRowOrigFolder, "Ordner");
+}
+
+void GameTools::refresh_orig_rows()
+{
+    if (ui::FormRow *row = form_.row(kRowOrig))
+        row->description = orig_way_text(orig_choice_.after);
+    if (ui::FormRow *row = form_.row(kRowOrigDrive))
+    {
+        const std::size_t at = static_cast<std::size_t>(std::max(orig_choice_.drive, 0));
+        row->description = at < orig_plan_.drives.size()
+                               ? format_bytes(orig_plan_.drives[at].free_bytes) + " frei"
+                               : std::string();
+    }
+    if (ui::FormRow *row = form_.row(kRowOrigFolder))
+    {
+        row->text = orig_folder_text(orig_plan_, orig_choice_);
+        row->description = "Mit der X-Taste ändern. Leer: der Ordner, den die App vorschlägt.";
+    }
+}
+
+void GameTools::sync_orig()
+{
+    choice_.orig = orig_tool() ? orig_choice_.after : kOrigKeep;
+    choice_.orig_dest =
+        choice_.orig == kOrigMove ? orig_dest_of(orig_plan_, orig_choice_) : std::string();
+    request_orig_check();
+}
+
+// The app is asked about a folder only when a move is chosen and a folder is named, and only once
+// for each: the answer of an older folder never counts.
+void GameTools::request_orig_check()
+{
+    const std::string key = choice_.orig == kOrigMove ? choice_.orig_dest : std::string();
+    if (key == orig_check_key_)
+        return;
+    orig_check_key_ = key;
+    orig_check_ = OrigCheck{};
+    orig_check_pending_ = !key.empty();
+    orig_check_ticket_ = key.empty() ? 0 : source().orig_check(game_.id, key);
+}
+
+bool GameTools::orig_ready() const
+{
+    if (!orig_tool() || choice_.orig == kOrigKeep)
+        return true;
+    return !orig_check_pending_ && orig_blocked(orig_plan_, choice_, orig_check_).empty();
+}
+
+// The row "Original danach" moved: a way the plan refuses is skipped (its reason stands beside the
+// form), and a move adds or takes away the rows for drive and folder.
+void GameTools::change_orig_way(ui::Feedback &feedback)
+{
+    const int wanted = form_.choice_index(kRowOrig);
+    const bool forward = (wanted - orig_choice_.after + kOrigWays) % kOrigWays == 1;
+    const int way = orig_next_way(orig_plan_, wanted, forward);
+    form_.set_choice(kRowOrig, way);
+    if (way == orig_choice_.after)
+    {
+        // no other way is open
+        feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+        return;
+    }
+    const bool rows_change = (way == kOrigMove) != (orig_choice_.after == kOrigMove);
+    orig_choice_.after = way;
+    sync_orig();
+    if (rows_change)
+        build_form(kRowOrig);
+}
+
+void GameTools::open_folder_prompt(ui::Feedback &feedback)
+{
+    prompt_for_ = 1;
+    prompt_.set_title("Ordner für das Original");
+    prompt_.field.set_placeholder("Ordner auf dem Datenträger");
+    // the folder goes into a query on the console app's door: short, and with room for the drive
+    prompt_.style.max_length = 100;
+    prompt_.open(feedback, orig_folder_text(orig_plan_, orig_choice_));
+}
+
+void GameTools::ask_delete_original(bool for_queue, ui::Feedback &feedback)
+{
+    ask_for_queue_ = for_queue;
+    std::vector<std::string> notes = orig_delete_notes(orig_plan_);
+    if (!notes.empty() && !orig_plan_.path.empty())
+        notes[0] = DeleteAsk::shorten(notes[0]);
+    // Said as every delete says it: the name, where it lies, what stays. The original goes only
+    // after the result is read back and checked; "Das lässt sich nicht rückgängig machen." is the
+    // question's own last line.
+    ask_.open("Original danach löschen?",
+              {DeleteAsk::line(orig_plan_.name.empty() ? plan_.name : orig_plan_.name,
+                               orig_plan_.size_bytes > 0 ? format_bytes(orig_plan_.size_bytes)
+                                                         : std::string())},
+              notes, feedback, "Erst nach dem Prüfen des Ergebnisses wird gelöscht:");
 }
 
 void GameTools::request_check()
@@ -684,6 +874,10 @@ void GameTools::request_check()
 
 bool GameTools::start_ready() const
 {
+    // Red for the original (a folder ShadowMountPlus would search, no room, no answer) stops the
+    // start like every other refusal; the reason stands beside the form.
+    if (!orig_ready())
+        return false;
     if (tool_ != Tool::convert)
         return ready(plan_, choice_);
     return ready(plan_, choice_) && check_.ok && !check_pending_ && check_.can_start;
@@ -691,8 +885,8 @@ bool GameTools::start_ready() const
 
 bool GameTools::queue_ready() const
 {
-    return tool_ == Tool::convert && ready(plan_, choice_) && check_.ok && !check_pending_ &&
-           check_.can_queue;
+    return tool_ == Tool::convert && orig_ready() && ready(plan_, choice_) && check_.ok &&
+           !check_pending_ && check_.can_queue;
 }
 
 std::string GameTools::start_label() const
@@ -798,9 +992,37 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
     }
     if (!open_)
         return;
+    // The question before the original is deleted: "Löschen" starts what was asked for, anything
+    // else leaves the dialog as it was.
+    if (ask_.is_open())
+    {
+        if (ask_.handle(input, feedback))
+        {
+            if (ask_for_queue_)
+                queue_up(feedback);
+            else
+            {
+                feedback.play(audio::Cue::select);
+                start();
+            }
+        }
+        return;
+    }
     if (prompt_.is_open())
     {
         const ui::Event typed = prompt_.handle(input, feedback);
+        if (prompt_for_ == 1)
+        {
+            // the folder for the original; what the person did not change stays "the app's own"
+            if (typed == ui::Event::activated &&
+                prompt_.text() != orig_folder_text(orig_plan_, orig_choice_))
+            {
+                orig_choice_.folder = prompt_.text();
+                sync_orig();
+                refresh();
+            }
+            return;
+        }
         if (typed == ui::Event::activated)
         {
             choice_.name = prompt_.text();
@@ -859,6 +1081,10 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             {
                 // The keyboard opens with what stands there; Done keeps it, back leaves the row as
                 // it was.
+                prompt_for_ = 0;
+                prompt_.set_title("Name der Ausgabe");
+                prompt_.field.set_placeholder("Name des Ordners");
+                prompt_.style.max_length = 190;
                 prompt_.open(feedback,
                              choice_.name.empty() ? std::string(kNameTemplate) : choice_.name);
                 return;
@@ -875,6 +1101,13 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         else if (id == kRowDeleteSource)
             choice_.delete_source = form_.toggle_value(kRowDeleteSource);
+        else if (id == kRowOrig)
+            change_orig_way(feedback);
+        else if (id == kRowOrigDrive)
+        {
+            orig_choice_.drive = form_.choice_index(kRowOrigDrive);
+            sync_orig();
+        }
         refresh();
     }
     else if (event == ui::Event::activated)
@@ -883,6 +1116,10 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         {
             choice_.drive = id - kRowDrive;
             refresh();
+        }
+        else if (id == kRowOrigFolder)
+        {
+            open_folder_prompt(feedback);
         }
         else if (id == kRowCancel)
         {
@@ -924,8 +1161,20 @@ void GameTools::press_queue(ui::Feedback &feedback)
         feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
         return;
     }
-    // At once, nothing asked: the queue deletes nothing, and the conversion starts by itself when
-    // it is its turn.
+    // Asked first when the original is to be deleted afterwards: that is a delete, even though it
+    // happens later.
+    if (choice_.orig == kOrigDelete)
+    {
+        ask_delete_original(true, feedback);
+        return;
+    }
+    queue_up(feedback);
+}
+
+void GameTools::queue_up(ui::Feedback &feedback)
+{
+    // At once, nothing asked: the queue itself deletes nothing, and the conversion starts by itself
+    // when it is its turn.
     feedback.play(audio::Cue::select);
     source().convert_queue(queue_add_body(plan_, choice_));
     open_ = false;
@@ -1188,8 +1437,14 @@ void GameTools::press_start(ui::Feedback &feedback)
         feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
         return;
     }
-    // No ffpfsc question here: the stutter warning stands in the dialog's side text (nothing is
-    // asked twice).
+    // Only a delete of the original asks (the rule of every delete, 06.11.2026); there is no
+    // ffpfsc question here: the stutter warning stands in the dialog's side text (nothing is asked
+    // twice).
+    if (choice_.orig == kOrigDelete)
+    {
+        ask_delete_original(false, feedback);
+        return;
+    }
     feedback.play(audio::Cue::select);
     start();
 }
@@ -1207,6 +1462,7 @@ void GameTools::update(float dt)
     menu_.update(dt);
     form_.update(dt);
     prompt_.update(dt);
+    ask_.update(dt);
     queue_list_.update(dt);
     shown_.target = open_ ? 1.0f : 0.0f;
     shown_.update(dt, 18.0f);
@@ -1268,10 +1524,75 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     const float limit_end = box.y + box.h - 24.0f;
 
     const std::string blocked = run_blocked(plan_);
-    // room is kept for the reason that blocks the start: it is the last paragraph and must never be
-    // the one that is cut
-    para_limit_ = limit_end - (blocked.empty() ? 0.0f : 80.0f);
+    // "Original danach" (18.11.2026): a move the app refuses (a folder ShadowMountPlus searches, no
+    // room, no answer) is a reason like the one above; a check still under way is not
+    const bool orig_side = orig_tool();
+    const std::string orig_reason = orig_side && choice_.orig == kOrigMove && !orig_check_pending_
+                                        ? orig_blocked(orig_plan_, choice_, orig_check_)
+                                        : std::string();
+    // room is kept for the reasons that block the start: they are the last paragraphs and must
+    // never be the ones that are cut
+    para_limit_ =
+        limit_end - (blocked.empty() ? 0.0f : 80.0f) - (orig_reason.empty() ? 0.0f : 80.0f);
     const std::string target = target_of(plan_, choice_);
+    // a line with a dot (the check marks are not in the font), then the sentence in the colour of
+    // its level
+    const auto line = [&](const std::string &text, Color tone, Color ink, int max_lines)
+    {
+        if (text.empty() || y > para_limit_)
+            return;
+        list.rounded_rect({x, y - 14.0f, 12.0f, 12.0f}, 6.0f, tone);
+        int lines = 0;
+        for (const std::string &part : fonts.regular.font->wrap(text, 20.0f, w - 28.0f))
+        {
+            if (++lines > max_lines || y > para_limit_)
+                break;
+            ui::text(list, fonts.regular, part, x + 28.0f, y, 20.0f, ink);
+            y += 20.0f * 1.34f;
+        }
+        y += 10.0f;
+    };
+    // What the person chose for the original: the ways the plan refuses with its reasons, the note
+    // that "Behalten" leaves the game twice in a folder ShadowMountPlus searches, the delete's
+    // warning, the check of the folder of a move (green, or still under way; red goes last).
+    const auto orig_notes = [&]()
+    {
+        if (!orig_side)
+            return;
+        const std::string no_delete = orig_way_blocked(orig_plan_, kOrigDelete);
+        const std::string no_move = orig_way_blocked(orig_plan_, kOrigMove);
+        const std::string note = orig_keep_note(tool_, choice_);
+        const bool moving_fine = choice_.orig == kOrigMove && orig_reason.empty();
+        if (no_delete.empty() && no_move.empty() && note.empty() && choice_.orig != kOrigDelete &&
+            !moving_fine)
+            return;
+        heading("Original danach", kMuted);
+        if (!no_delete.empty())
+            para("Löschen geht nicht: " + no_delete, kWarning, 3);
+        if (!no_move.empty())
+            para("Verschieben geht nicht: " + no_move, kWarning, 3);
+        if (!note.empty())
+            para(note, kWarning, 4);
+        if (choice_.orig == kOrigDelete)
+            para(orig_delete_warning(orig_plan_), kWarning, 4);
+        if (moving_fine)
+        {
+            if (orig_check_pending_)
+                line("Der Ordner wird geprüft …", kMuted, kMuted, 1);
+            else
+                line(orig_check_.text, kGood, kGood, 4);
+        }
+    };
+    // the reasons that stop the start, last and never cut
+    const auto finish = [&]()
+    {
+        if (blocked.empty() && orig_reason.empty())
+            return;
+        para_limit_ = limit_end;
+        if (!blocked.empty())
+            para(blocked, kCritical, 3);
+        line(orig_reason, kCritical, kCritical, 4);
+    };
     switch (tool_)
     {
     case Tool::copy:
@@ -1295,8 +1616,11 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                               : std::string(".")),
                      kWarning, 3);
         }
-        if (choice_.mode == 0)
+        if (orig_side)
+            orig_notes();
+        else if (choice_.mode == 0)
         {
+            // an app without the plan for the original: the old warning
             heading("ShadowMountPlus findet das Spiel danach zweimal", kWarning);
             para("Das Original und die Kopie haben beide die Titel-ID " + plan_.id +
                      ". Das kann beim Einbinden Probleme machen. Wolltest du das Spiel "
@@ -1304,11 +1628,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                      "das Original.",
                  kWarning, 4);
         }
-        if (!blocked.empty())
-        {
-            para_limit_ = limit_end;
-            para(blocked, kCritical, 3);
-        }
+        finish();
         if (!target.empty())
             para("Jede Datei wird nach dem Schreiben zurückgelesen und verglichen; daneben "
                  "entsteht eine .sha256 mit den "
@@ -1365,13 +1685,17 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  "komprimiertes Abbild muss beim Spielen ständig entpackt werden – exFAT oder "
                  "ffpkg vermeiden das.",
                  kWarning, 5);
-        if (choice_.mode == 0 && choice_.op == kOpFpkg)
+        if (orig_side)
+            orig_notes();
+        // the debug FPKG goes to FPKG-Games, which ShadowMountPlus does not search: its own
+        // warning, while the original stays
+        if (choice_.mode == 0 && choice_.op == kOpFpkg && (!orig_side || choice_.orig == kOrigKeep))
             para("Das Original und das Paket haben beide die Titel-ID " + plan_.id +
                      ". Ist das Original bei ShadowMountPlus eingehängt, stören sich beide, sobald "
                      "Kraken Mount das Paket anmeldet. Hänge das Original erst aus oder lösche "
                      "es, bevor du das Paket startest.",
                  kWarning, 5);
-        else if (choice_.mode == 0)
+        else if (choice_.mode == 0 && !orig_side)
             para("ShadowMountPlus findet das Spiel danach zweimal (Original und neues Abbild). "
                  "Lösche das Original erst, wenn das neue Abbild startet.",
                  kWarning, 3);
@@ -1395,11 +1719,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  kMuted, 4);
             para(level_text(choice_.level), kMuted, 3);
         }
-        if (!blocked.empty())
-        {
-            para_limit_ = limit_end;
-            para(blocked, kCritical, 3);
-        }
+        finish();
         break;
     }
     case Tool::move:
@@ -1434,14 +1754,12 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             if (tool_ == Tool::move)
                 para("Nach dem Verschieben gibt es das Spiel am alten Ort nicht mehr.", kWarning,
                      2);
-            else if (choice_.delete_source)
+            else if (choice_.delete_source && !orig_side)
                 para("Die Abbild-Datei wird nach dem Entpacken gelöscht.", kWarning, 2);
         }
-        if (!blocked.empty())
-        {
-            para_limit_ = limit_end;
-            para(blocked, kCritical, 3);
-        }
+        if (tool_ == Tool::unpack)
+            orig_notes();
+        finish();
         break;
     }
     case Tool::image_unpack:
@@ -1724,6 +2042,7 @@ void GameTools::draw_overlay(ui::Canvas &canvas) const
     draw_queue(canvas);
     draw_guide(canvas);
     prompt_.draw(canvas);
+    ask_.draw(canvas); // last: it asks before anything starts
 }
 
 } // namespace hui::ps5cc

@@ -120,6 +120,7 @@ struct Job
     bool active = false;   // running now
     bool finished = false; // ended in this session: done, failed or cancelled
     std::string state;     // as the app says it ("scanning", "running", "done", ...)
+    std::string id;        // the game's title id ("" when the app did not say); "Original danach"
     std::string name;      // the game
     std::string detail;    // where to, or what is being done
     double done = 0.0;
@@ -163,6 +164,17 @@ struct CheckReply
     std::uint64_t ticket = 0; // the number convert_check() returned
     bool ok = false;
     std::string error;
+    std::string json;
+};
+
+// The answers to "Original danach" (18.11.2026): GET /api/v1/library/orig/plan (what may become of
+// the original) and GET /api/v1/library/orig/check (is this folder fit to move it to); parsed by
+// ps5cc/plans.hpp.
+struct OrigReply
+{
+    std::uint64_t ticket = 0; // the number orig_plan() or orig_check() returned
+    bool ok = false;
+    std::string error; // the app's message when ok is false
     std::string json;
 };
 
@@ -1213,6 +1225,9 @@ struct Snapshot
     CheckReply convert_check;       // the last check of a conversion that came back
     std::string convert_queue_json; // the last answer of GET/POST /api/v1/library/convert/queue (""
                                     // until one came)
+    OrigReply orig_plan;            // the last "Original danach" plan that came back
+    OrigReply orig_check;           // the last check of a folder for the original that came back
+    std::string orig_status_json;   // GET /api/v1/library/orig/status while the jobs page is open
     std::vector<Package> packages;
     PackageScan package_scan;
     PackageInstall package_install;
@@ -1330,6 +1345,13 @@ class Source
     // stop, clear); the answer is always the list, as Snapshot::convert_queue_json. A refusal comes
     // as an error notice.
     virtual void convert_queue(const std::string &body) = 0;
+    // "Original danach": what may become of the game's original after a copy, a conversion or an
+    // unpack (GET /api/v1/library/orig/plan?id=): arrives as Snapshot::orig_plan with the ticket
+    // returned here. Asked once when a tool's dialog opens.
+    virtual std::uint64_t orig_plan(const std::string &id) = 0;
+    // Whether this folder is fit to move the original to (GET /api/v1/library/orig/check): arrives
+    // as Snapshot::orig_check with the ticket returned here. Only the newest one matters.
+    virtual std::uint64_t orig_check(const std::string &id, const std::string &dest) = 0;
     // The Pakete page: "scan", "install" (id), "install_cancel", "queue_add" / "queue_remove" (id),
     // "queue_start", "queue_pause", "queue_retry", "queue_clear" (the finished ones).
     virtual void package_action(const std::string &action, const std::string &id) = 0;
