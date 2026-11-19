@@ -16,7 +16,7 @@
 
 [Deutsch](README.de.md) · [English](README.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · **Svenska**
 
-<img src="docs/images/kuehlung.jpg" alt="Kylning: temperatur, fläkt, pågående spel, måltemperatur och driftläge" width="860">
+<img src="docs/images/en/kuehlung.jpg" alt="Kylning: temperatur, fläkt, pågående spel, måltemperatur och driftläge" width="860">
 
 </div>
 
@@ -28,8 +28,8 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Webbapp: kylning"></td>
-    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Helskärmsapp: kylning"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung.jpg" alt="Webbapp: kylning"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-kuehlung.jpg" alt="Helskärmsapp: kylning"></td>
   </tr>
   <tr>
     <td valign="top">
@@ -94,24 +94,24 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/spiele.jpg" alt="Spelbibliotek"></td>
-    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="PS4-spel från USB"></td>
+    <td width="50%"><img src="docs/images/en/spiele.jpg" alt="Spelbibliotek"></td>
+    <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="PS4-spel från USB"></td>
   </tr>
   <tr>
     <td align="center"><sub>Spel: bibliotek i kompakt vy (standard) med start, kopiering, konvertering</sub></td>
     <td align="center"><sub>PS4 PKG från USB: fake-PKG utan installation</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spielzeit.jpg" alt="Speltid"></td>
-    <td><img src="docs/images/dateimanager.jpg" alt="Filhanterare"></td>
+    <td><img src="docs/images/en/spielzeit.jpg" alt="Speltid"></td>
+    <td><img src="docs/images/en/dateimanager.jpg" alt="Filhanterare"></td>
   </tr>
   <tr>
     <td align="center"><sub>Speltid med dagsdiagram och temperaturer</sub></td>
     <td align="center"><sub>Filhanterare för konsolen och USB-enheter</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/payloads.jpg" alt="Payloads"></td>
-    <td><img src="docs/images/system.jpg" alt="System"></td>
+    <td><img src="docs/images/en/payloads.jpg" alt="Payloads"></td>
+    <td><img src="docs/images/en/system.jpg" alt="System"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payloads: profiler, pågående och sparade</sub></td>
@@ -124,19 +124,19 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="Temperaturhistorik, sensorer och profiler per spel"></td>
-    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Säkerhetskopiering av spelsparningar"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Temperaturhistorik, sensorer och profiler per spel"></td>
+    <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Säkerhetskopiering av spelsparningar"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/pakete.jpg" alt="Installera paket"></td>
-    <td><img src="docs/images/profil.jpg" alt="Profil med 30 inbyggda profilbilder"></td>
+    <td><img src="docs/images/en/pakete.jpg" alt="Installera paket"></td>
+    <td><img src="docs/images/en/profil.jpg" alt="Profil med 30 inbyggda profilbilder"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/protokoll.jpg" alt="Logg"></td>
-    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Kylning på en mobil" width="240"></td>
+    <td><img src="docs/images/en/protokoll.jpg" alt="Logg"></td>
+    <td align="center"><img src="docs/images/en/kuehlung-mobil.jpg" alt="Kylning på en mobil" width="240"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spiele-gross.jpg" alt="Spel i stor vy"></td>
+    <td><img src="docs/images/en/spiele-gross.jpg" alt="Spel i stor vy"></td>
     <td align="center" valign="middle"><sub>Spel i stor vy: stora omslag, knappar med text (växlas på sidan Spel)</sub></td>
   </tr>
 </table>
@@ -147,16 +147,16 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Helskärmsapp: spel"></td>
-    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Helskärmsapp: filhanterare"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spiele.jpg" alt="Helskärmsapp: spel"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-dateien.jpg" alt="Helskärmsapp: filhanterare"></td>
   </tr>
   <tr>
     <td align="center"><sub>Spel: bibliotek med start, detaljer och åtgärder</sub></td>
     <td align="center"><sub>Filhanterare: kopiering med hastighet och återstående tid</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Helskärmsapp: payloads"></td>
-    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Helskärmsapp: speltid"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="Helskärmsapp: payloads"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spielzeit.jpg" alt="Helskärmsapp: speltid"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payloads: se och avsluta pågående</sub></td>

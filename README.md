@@ -16,7 +16,7 @@
 
 [Deutsch](README.de.md) · **English** · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
-<img src="docs/images/kuehlung.jpg" alt="Cooling: temperature, fan, running game, target temperature and mode" width="860">
+<img src="docs/images/en/kuehlung.jpg" alt="Cooling: temperature, fan, running game, target temperature and mode" width="860">
 
 </div>
 
@@ -28,8 +28,8 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Browser app: cooling"></td>
-    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Fullscreen app: cooling"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung.jpg" alt="Browser app: cooling"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-kuehlung.jpg" alt="Fullscreen app: cooling"></td>
   </tr>
   <tr>
     <td valign="top">
@@ -94,24 +94,24 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/spiele.jpg" alt="Game library"></td>
-    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="PS4 games from USB"></td>
+    <td width="50%"><img src="docs/images/en/spiele.jpg" alt="Game library"></td>
+    <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="PS4 games from USB"></td>
   </tr>
   <tr>
     <td align="center"><sub>Games: library in compact view (default) with start, copy, convert</sub></td>
     <td align="center"><sub>PS4 PKG from USB: fake PKGs without installing</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spielzeit.jpg" alt="Play time"></td>
-    <td><img src="docs/images/dateimanager.jpg" alt="File manager"></td>
+    <td><img src="docs/images/en/spielzeit.jpg" alt="Play time"></td>
+    <td><img src="docs/images/en/dateimanager.jpg" alt="File manager"></td>
   </tr>
   <tr>
     <td align="center"><sub>Play time with daily chart and temperatures</sub></td>
     <td align="center"><sub>File manager for the console and USB drives</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/payloads.jpg" alt="Payloads"></td>
-    <td><img src="docs/images/system.jpg" alt="System"></td>
+    <td><img src="docs/images/en/payloads.jpg" alt="Payloads"></td>
+    <td><img src="docs/images/en/system.jpg" alt="System"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payloads: profiles, running and saved</sub></td>
@@ -124,19 +124,19 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="Temperature history, sensors and per-game profiles"></td>
-    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Save data backup"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Temperature history, sensors and per-game profiles"></td>
+    <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Save data backup"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/pakete.jpg" alt="Installing packages"></td>
-    <td><img src="docs/images/profil.jpg" alt="Profile with 30 built-in profile pictures"></td>
+    <td><img src="docs/images/en/pakete.jpg" alt="Installing packages"></td>
+    <td><img src="docs/images/en/profil.jpg" alt="Profile with 30 built-in profile pictures"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/protokoll.jpg" alt="Log"></td>
-    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Cooling on a phone" width="240"></td>
+    <td><img src="docs/images/en/protokoll.jpg" alt="Log"></td>
+    <td align="center"><img src="docs/images/en/kuehlung-mobil.jpg" alt="Cooling on a phone" width="240"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spiele-gross.jpg" alt="Games in the large view"></td>
+    <td><img src="docs/images/en/spiele-gross.jpg" alt="Games in the large view"></td>
     <td align="center" valign="middle"><sub>Games in the large view: big covers, labelled buttons (switch on the Games page)</sub></td>
   </tr>
 </table>
@@ -147,16 +147,16 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Fullscreen app: games"></td>
-    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Fullscreen app: file manager"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spiele.jpg" alt="Fullscreen app: games"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-dateien.jpg" alt="Fullscreen app: file manager"></td>
   </tr>
   <tr>
     <td align="center"><sub>Games: library with start, details and actions</sub></td>
     <td align="center"><sub>File manager: copying with speed and time left</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Fullscreen app: payloads"></td>
-    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Fullscreen app: play time"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="Fullscreen app: payloads"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spielzeit.jpg" alt="Fullscreen app: play time"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payloads: see and end running ones</sub></td>

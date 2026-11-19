@@ -16,7 +16,7 @@
 
 [Deutsch](README.de.md) · [English](README.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · **Русский** · [Svenska](README.sv.md)
 
-<img src="docs/images/kuehlung.jpg" alt="Охлаждение: температура, вентилятор, запущенная игра, целевая температура и режим" width="860">
+<img src="docs/images/en/kuehlung.jpg" alt="Охлаждение: температура, вентилятор, запущенная игра, целевая температура и режим" width="860">
 
 </div>
 
@@ -28,8 +28,8 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Браузерное приложение: охлаждение"></td>
-    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Полноэкранное приложение: охлаждение"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung.jpg" alt="Браузерное приложение: охлаждение"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-kuehlung.jpg" alt="Полноэкранное приложение: охлаждение"></td>
   </tr>
   <tr>
     <td valign="top">
@@ -94,24 +94,24 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/spiele.jpg" alt="Библиотека игр"></td>
-    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Игры PS4 PKG с USB"></td>
+    <td width="50%"><img src="docs/images/en/spiele.jpg" alt="Библиотека игр"></td>
+    <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="Игры PS4 PKG с USB"></td>
   </tr>
   <tr>
     <td align="center"><sub>Игры: библиотека в компактном виде (по умолчанию) с запуском, копированием, конвертацией</sub></td>
     <td align="center"><sub>PS4 PKG с USB: fake PKG без установки</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spielzeit.jpg" alt="Время игры"></td>
-    <td><img src="docs/images/dateimanager.jpg" alt="Файловый менеджер"></td>
+    <td><img src="docs/images/en/spielzeit.jpg" alt="Время игры"></td>
+    <td><img src="docs/images/en/dateimanager.jpg" alt="Файловый менеджер"></td>
   </tr>
   <tr>
     <td align="center"><sub>Время игры с дневным графиком и температурами</sub></td>
     <td align="center"><sub>Файловый менеджер для консоли и USB-накопителей</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/payloads.jpg" alt="Пейлоады"></td>
-    <td><img src="docs/images/system.jpg" alt="Система"></td>
+    <td><img src="docs/images/en/payloads.jpg" alt="Пейлоады"></td>
+    <td><img src="docs/images/en/system.jpg" alt="Система"></td>
   </tr>
   <tr>
     <td align="center"><sub>Пейлоады: профили, запущенные и сохранённые</sub></td>
@@ -124,19 +124,19 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="История температуры, датчики и профили для игр"></td>
-    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Резервное копирование сохранений"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="История температуры, датчики и профили для игр"></td>
+    <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Резервное копирование сохранений"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/pakete.jpg" alt="Установка пакетов"></td>
-    <td><img src="docs/images/profil.jpg" alt="Профиль с 30 встроенными изображениями"></td>
+    <td><img src="docs/images/en/pakete.jpg" alt="Установка пакетов"></td>
+    <td><img src="docs/images/en/profil.jpg" alt="Профиль с 30 встроенными изображениями"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/protokoll.jpg" alt="Журнал"></td>
-    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Охлаждение на телефоне" width="240"></td>
+    <td><img src="docs/images/en/protokoll.jpg" alt="Журнал"></td>
+    <td align="center"><img src="docs/images/en/kuehlung-mobil.jpg" alt="Охлаждение на телефоне" width="240"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spiele-gross.jpg" alt="Игры в крупном виде"></td>
+    <td><img src="docs/images/en/spiele-gross.jpg" alt="Игры в крупном виде"></td>
     <td align="center" valign="middle"><sub>Игры в крупном виде: большие обложки, кнопки с подписями (переключается на странице «Игры»)</sub></td>
   </tr>
 </table>
@@ -147,16 +147,16 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Полноэкранное приложение: игры"></td>
-    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Полноэкранное приложение: файловый менеджер"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spiele.jpg" alt="Полноэкранное приложение: игры"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-dateien.jpg" alt="Полноэкранное приложение: файловый менеджер"></td>
   </tr>
   <tr>
     <td align="center"><sub>Игры: библиотека с запуском, подробностями и действиями</sub></td>
     <td align="center"><sub>Файловый менеджер: копирование со скоростью и оставшимся временем</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Полноэкранное приложение: пейлоады"></td>
-    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Полноэкранное приложение: время в игре"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="Полноэкранное приложение: пейлоады"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spielzeit.jpg" alt="Полноэкранное приложение: время в игре"></td>
   </tr>
   <tr>
     <td align="center"><sub>Пейлоады: просмотр и завершение запущенных</sub></td>

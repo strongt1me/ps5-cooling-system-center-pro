@@ -16,7 +16,7 @@
 
 [Deutsch](README.de.md) · [English](README.md) · **Italiano** · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
-<img src="docs/images/kuehlung.jpg" alt="Raffreddamento: temperatura, ventola, gioco in corso, temperatura obiettivo e modalità" width="860">
+<img src="docs/images/en/kuehlung.jpg" alt="Raffreddamento: temperatura, ventola, gioco in corso, temperatura obiettivo e modalità" width="860">
 
 </div>
 
@@ -28,8 +28,8 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="App per browser: raffreddamento"></td>
-    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="App a schermo intero: raffreddamento"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung.jpg" alt="App per browser: raffreddamento"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-kuehlung.jpg" alt="App a schermo intero: raffreddamento"></td>
   </tr>
   <tr>
     <td valign="top">
@@ -94,24 +94,24 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/spiele.jpg" alt="Libreria dei giochi"></td>
-    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Giochi PS4 PKG da USB"></td>
+    <td width="50%"><img src="docs/images/en/spiele.jpg" alt="Libreria dei giochi"></td>
+    <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="Giochi PS4 PKG da USB"></td>
   </tr>
   <tr>
     <td align="center"><sub>Giochi: libreria in vista compatta (predefinita) con avvio, copia, conversione</sub></td>
     <td align="center"><sub>PS4 PKG da USB: PKG falsi senza installazione</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spielzeit.jpg" alt="Tempo di gioco"></td>
-    <td><img src="docs/images/dateimanager.jpg" alt="File manager"></td>
+    <td><img src="docs/images/en/spielzeit.jpg" alt="Tempo di gioco"></td>
+    <td><img src="docs/images/en/dateimanager.jpg" alt="File manager"></td>
   </tr>
   <tr>
     <td align="center"><sub>Tempo di gioco con grafico giornaliero e temperature</sub></td>
     <td align="center"><sub>File manager per console e unità USB</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/payloads.jpg" alt="Payload"></td>
-    <td><img src="docs/images/system.jpg" alt="Sistema"></td>
+    <td><img src="docs/images/en/payloads.jpg" alt="Payload"></td>
+    <td><img src="docs/images/en/system.jpg" alt="Sistema"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payload: profili, in esecuzione e salvati</sub></td>
@@ -124,19 +124,19 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="Andamento della temperatura, sensori e profili per gioco"></td>
-    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Backup dei salvataggi"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Andamento della temperatura, sensori e profili per gioco"></td>
+    <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Backup dei salvataggi"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/pakete.jpg" alt="Installare pacchetti"></td>
-    <td><img src="docs/images/profil.jpg" alt="Profilo con 30 immagini integrate"></td>
+    <td><img src="docs/images/en/pakete.jpg" alt="Installare pacchetti"></td>
+    <td><img src="docs/images/en/profil.jpg" alt="Profilo con 30 immagini integrate"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/protokoll.jpg" alt="Registro"></td>
-    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Raffreddamento sullo smartphone" width="240"></td>
+    <td><img src="docs/images/en/protokoll.jpg" alt="Registro"></td>
+    <td align="center"><img src="docs/images/en/kuehlung-mobil.jpg" alt="Raffreddamento sullo smartphone" width="240"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spiele-gross.jpg" alt="Giochi in vista grande"></td>
+    <td><img src="docs/images/en/spiele-gross.jpg" alt="Giochi in vista grande"></td>
     <td align="center" valign="middle"><sub>Giochi in vista grande: copertine grandi, pulsanti con testo (si cambia nella pagina Giochi)</sub></td>
   </tr>
 </table>
@@ -147,16 +147,16 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="App a schermo intero: giochi"></td>
-    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="App a schermo intero: gestione file"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spiele.jpg" alt="App a schermo intero: giochi"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-dateien.jpg" alt="App a schermo intero: gestione file"></td>
   </tr>
   <tr>
     <td align="center"><sub>Giochi: libreria con avvio, dettagli e azioni</sub></td>
     <td align="center"><sub>Gestione file: copia con velocità e tempo rimanente</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="App a schermo intero: payload"></td>
-    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="App a schermo intero: tempo di gioco"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="App a schermo intero: payload"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spielzeit.jpg" alt="App a schermo intero: tempo di gioco"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payload: vedere e terminare quelli in esecuzione</sub></td>

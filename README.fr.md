@@ -16,7 +16,7 @@
 
 [Deutsch](README.de.md) · [English](README.md) · [Italiano](README.it.md) · [Español](README.es.md) · **Français** · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
-<img src="docs/images/kuehlung.jpg" alt="Refroidissement : température, ventilateur, jeu en cours, température cible et mode" width="860">
+<img src="docs/images/en/kuehlung.jpg" alt="Refroidissement : température, ventilateur, jeu en cours, température cible et mode" width="860">
 
 </div>
 
@@ -28,8 +28,8 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Application de navigateur : refroidissement"></td>
-    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Application plein écran : refroidissement"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung.jpg" alt="Application de navigateur : refroidissement"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-kuehlung.jpg" alt="Application plein écran : refroidissement"></td>
   </tr>
   <tr>
     <td valign="top">
@@ -94,24 +94,24 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/spiele.jpg" alt="Bibliothèque de jeux"></td>
-    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Jeux PS4 PKG depuis USB"></td>
+    <td width="50%"><img src="docs/images/en/spiele.jpg" alt="Bibliothèque de jeux"></td>
+    <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="Jeux PS4 PKG depuis USB"></td>
   </tr>
   <tr>
     <td align="center"><sub>Jeux : bibliothèque en vue compacte (par défaut) avec lancer, copier, convertir</sub></td>
     <td align="center"><sub>PS4 PKG depuis USB : faux PKG sans installation</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spielzeit.jpg" alt="Temps de jeu"></td>
-    <td><img src="docs/images/dateimanager.jpg" alt="Gestionnaire de fichiers"></td>
+    <td><img src="docs/images/en/spielzeit.jpg" alt="Temps de jeu"></td>
+    <td><img src="docs/images/en/dateimanager.jpg" alt="Gestionnaire de fichiers"></td>
   </tr>
   <tr>
     <td align="center"><sub>Temps de jeu avec graphique journalier et températures</sub></td>
     <td align="center"><sub>Gestionnaire de fichiers pour la console et les disques USB</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/payloads.jpg" alt="Payloads"></td>
-    <td><img src="docs/images/system.jpg" alt="Système"></td>
+    <td><img src="docs/images/en/payloads.jpg" alt="Payloads"></td>
+    <td><img src="docs/images/en/system.jpg" alt="Système"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payloads : profils, en cours et enregistrés</sub></td>
@@ -124,19 +124,19 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="Historique de température, capteurs et profils par jeu"></td>
-    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Sauvegarde des données de jeu"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Historique de température, capteurs et profils par jeu"></td>
+    <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Sauvegarde des données de jeu"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/pakete.jpg" alt="Installer des paquets"></td>
-    <td><img src="docs/images/profil.jpg" alt="Profil avec 30 images intégrées"></td>
+    <td><img src="docs/images/en/pakete.jpg" alt="Installer des paquets"></td>
+    <td><img src="docs/images/en/profil.jpg" alt="Profil avec 30 images intégrées"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/protokoll.jpg" alt="Journal"></td>
-    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Refroidissement sur un téléphone" width="240"></td>
+    <td><img src="docs/images/en/protokoll.jpg" alt="Journal"></td>
+    <td align="center"><img src="docs/images/en/kuehlung-mobil.jpg" alt="Refroidissement sur un téléphone" width="240"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spiele-gross.jpg" alt="Jeux en grande vue"></td>
+    <td><img src="docs/images/en/spiele-gross.jpg" alt="Jeux en grande vue"></td>
     <td align="center" valign="middle"><sub>Jeux en grande vue : grandes jaquettes, boutons avec libellé (réglable sur la page Jeux)</sub></td>
   </tr>
 </table>
@@ -147,16 +147,16 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Application plein écran : jeux"></td>
-    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Application plein écran : gestionnaire de fichiers"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spiele.jpg" alt="Application plein écran : jeux"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-dateien.jpg" alt="Application plein écran : gestionnaire de fichiers"></td>
   </tr>
   <tr>
     <td align="center"><sub>Jeux : bibliothèque avec lancement, détails et actions</sub></td>
     <td align="center"><sub>Gestionnaire de fichiers : copie avec débit et temps restant</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Application plein écran : payloads"></td>
-    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Application plein écran : temps de jeu"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="Application plein écran : payloads"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spielzeit.jpg" alt="Application plein écran : temps de jeu"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payloads : voir et arrêter ceux en cours</sub></td>

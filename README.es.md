@@ -16,7 +16,7 @@
 
 [Deutsch](README.de.md) · [English](README.md) · [Italiano](README.it.md) · **Español** · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
-<img src="docs/images/kuehlung.jpg" alt="Refrigeración: temperatura, ventilador, juego en marcha, temperatura objetivo y modo" width="860">
+<img src="docs/images/en/kuehlung.jpg" alt="Refrigeración: temperatura, ventilador, juego en marcha, temperatura objetivo y modo" width="860">
 
 </div>
 
@@ -28,8 +28,8 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Aplicación de navegador: refrigeración"></td>
-    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Aplicación a pantalla completa: refrigeración"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung.jpg" alt="Aplicación de navegador: refrigeración"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-kuehlung.jpg" alt="Aplicación a pantalla completa: refrigeración"></td>
   </tr>
   <tr>
     <td valign="top">
@@ -94,24 +94,24 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/spiele.jpg" alt="Biblioteca de juegos"></td>
-    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="Juegos de PS4 PKG desde USB"></td>
+    <td width="50%"><img src="docs/images/en/spiele.jpg" alt="Biblioteca de juegos"></td>
+    <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="Juegos de PS4 PKG desde USB"></td>
   </tr>
   <tr>
     <td align="center"><sub>Juegos: biblioteca en vista compacta (predeterminada) con iniciar, copiar, convertir</sub></td>
     <td align="center"><sub>PS4 PKG desde USB: PKG falsos sin instalar</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spielzeit.jpg" alt="Tiempo de juego"></td>
-    <td><img src="docs/images/dateimanager.jpg" alt="Gestor de archivos"></td>
+    <td><img src="docs/images/en/spielzeit.jpg" alt="Tiempo de juego"></td>
+    <td><img src="docs/images/en/dateimanager.jpg" alt="Gestor de archivos"></td>
   </tr>
   <tr>
     <td align="center"><sub>Tiempo de juego con gráfico diario y temperaturas</sub></td>
     <td align="center"><sub>Gestor de archivos para la consola y unidades USB</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/payloads.jpg" alt="Payloads"></td>
-    <td><img src="docs/images/system.jpg" alt="Sistema"></td>
+    <td><img src="docs/images/en/payloads.jpg" alt="Payloads"></td>
+    <td><img src="docs/images/en/system.jpg" alt="Sistema"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payloads: perfiles, en marcha y guardados</sub></td>
@@ -124,19 +124,19 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="Historial de temperatura, sensores y perfiles por juego"></td>
-    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Copia de partidas guardadas"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Historial de temperatura, sensores y perfiles por juego"></td>
+    <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Copia de partidas guardadas"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/pakete.jpg" alt="Instalar paquetes"></td>
-    <td><img src="docs/images/profil.jpg" alt="Perfil con 30 imágenes integradas"></td>
+    <td><img src="docs/images/en/pakete.jpg" alt="Instalar paquetes"></td>
+    <td><img src="docs/images/en/profil.jpg" alt="Perfil con 30 imágenes integradas"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/protokoll.jpg" alt="Registro"></td>
-    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Refrigeración en el móvil" width="240"></td>
+    <td><img src="docs/images/en/protokoll.jpg" alt="Registro"></td>
+    <td align="center"><img src="docs/images/en/kuehlung-mobil.jpg" alt="Refrigeración en el móvil" width="240"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spiele-gross.jpg" alt="Juegos en vista grande"></td>
+    <td><img src="docs/images/en/spiele-gross.jpg" alt="Juegos en vista grande"></td>
     <td align="center" valign="middle"><sub>Juegos en vista grande: carátulas grandes, botones con texto (se cambia en la página Juegos)</sub></td>
   </tr>
 </table>
@@ -147,16 +147,16 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Aplicación a pantalla completa: juegos"></td>
-    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Aplicación a pantalla completa: gestor de archivos"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spiele.jpg" alt="Aplicación a pantalla completa: juegos"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-dateien.jpg" alt="Aplicación a pantalla completa: gestor de archivos"></td>
   </tr>
   <tr>
     <td align="center"><sub>Juegos: biblioteca con inicio, detalles y acciones</sub></td>
     <td align="center"><sub>Gestor de archivos: copia con velocidad y tiempo restante</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Aplicación a pantalla completa: payloads"></td>
-    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Aplicación a pantalla completa: tiempo de juego"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="Aplicación a pantalla completa: payloads"></td>
+    <td width="50%"><img src="docs/images/en/vollbild-spielzeit.jpg" alt="Aplicación a pantalla completa: tiempo de juego"></td>
   </tr>
   <tr>
     <td align="center"><sub>Payloads: ver y cerrar los que se están ejecutando</sub></td>
