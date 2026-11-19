@@ -576,12 +576,14 @@ base_name(const char *p) {
   return s ? s + 1 : p;
 }
 
-/* The owner of a PS4 save is more than ACCOUNT_ID and the user id: the 1024-byte PARAMS record carries the user's id and a 32-byte value that is the same in all saves of
-   that user. It cannot be made up here, so it is taken from a save of the same user that is on this console: the same title and slot first (the whole record), then
-   another slot of that title, then any other title (only the user's id and that value, bytes 4 to 40: the rest of the record stays the incoming save's own). Each candidate
-   is a COPY of the image, mounted and read and let go again; the first whose param.sfo shows the account and the user id this import is for is the one. Never fails the
-   import for want of a donor: the note says how far the owner could be made right. 0, ECANCELED, or -1 (a donor that would not let go: nothing was changed). */
-typedef struct { char title[16]; char slot[100]; int rank; uint64_t size; } donor_t;
+/* The owner of a save (PS4 and PS5 alike) is more than ACCOUNT_ID and the user id: the 1024-byte PARAMS record carries the user's id and a 32-byte value that is the same in
+   all saves of that user, PS4 and PS5 (seen on the console: after a PS5 save was put in with the value of the other console's user, the console wrote the value of this user
+   back and the game did not take the data). It cannot be made up here, so it is taken from a save of the same user that is on this console: the same title and slot first (the
+   whole record), then another slot of that title, then any other title of the same kind (only the user's id and that value, bytes 4 to 40: the rest of the record stays the
+   incoming save's own), last a save of the other kind (PS5 for a PS4 save and the other way round). Each candidate is a COPY of the image, mounted and read and let go
+   again; the first whose param.sfo shows the account and the user id this import is for is the one. Never fails the import for want of a donor: the note says how far the
+   owner could be made right. 0, ECANCELED, or -1 (a donor that would not let go: nothing was changed). */
+typedef struct { char title[16]; char slot[100]; int rank; uint64_t size; int ps4; } donor_t;
 
 #define SI_DONOR_MAX (256ull << 20)                       /* a donor is copied: a larger image is not taken (the small ones do as well) */
 
@@ -593,37 +595,42 @@ cmp_donor(const void *x, const void *y) {
 }
 
 static int
-ps4_owner(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *sfo, size_t sfo_len, run_t *r, char *note, size_t note_len) {
-  char root[PATH_MAX];
+owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *sfo, size_t sfo_len, run_t *r, char *note, size_t note_len) {
   note[0] = 0;
-  if(snprintf(root, sizeof(root), "%s/%s/savedata", a->home_dir, a->uid) >= (int)sizeof(root)) return 0;
-  donor_t cand[48];
+  static const struct { const char *dir; int ps4; } k_areas[2] = { { "savedata_prospero", 0 }, { "savedata", 1 } };
+  donor_t cand[96];
   unsigned nc = 0;
-  DIR *d = opendir(root);
-  while(d) {
-    struct dirent *te = readdir(d);
-    if(!te) break;
-    if(!cusa_ok(te->d_name)) continue;
-    char tdir[PATH_MAX];
-    if(snprintf(tdir, sizeof(tdir), "%s/%s", root, te->d_name) >= (int)sizeof(tdir)) continue;
-    DIR *sd = opendir(tdir);
-    while(sd && nc < sizeof(cand) / sizeof(cand[0])) {
-      struct dirent *se = readdir(sd);
-      if(!se) break;
-      if(strncmp(se->d_name, "sdimg_", 6) || !slot_ok(se->d_name + 6)) continue;
-      char bin[PATH_MAX], img[PATH_MAX];
-      struct stat st, ist;
-      if(snprintf(bin, sizeof(bin), "%s/%s.bin", tdir, se->d_name + 6) >= (int)sizeof(bin) || stat(bin, &st) != 0) continue;
-      if(snprintf(img, sizeof(img), "%s/%s", tdir, se->d_name) >= (int)sizeof(img) || stat(img, &ist) != 0 || !S_ISREG(ist.st_mode) || (uint64_t)ist.st_size > SI_DONOR_MAX) continue;
-      cand[nc].size = (uint64_t)ist.st_size;
-      snprintf(cand[nc].title, sizeof(cand[nc].title), "%.15s", te->d_name);
-      snprintf(cand[nc].slot, sizeof(cand[nc].slot), "%.99s", se->d_name + 6);
-      cand[nc].rank = strcmp(te->d_name, info->title_id) ? 2 : strcmp(se->d_name + 6, info->slot) ? 1 : 0;
-      nc++;
+  for(int ai = 0; ai < 2; ai++) {
+    const int dps4 = k_areas[ai].ps4;
+    char root[PATH_MAX];
+    if(snprintf(root, sizeof(root), "%s/%s/%s", a->home_dir, a->uid, k_areas[ai].dir) >= (int)sizeof(root)) continue;
+    DIR *d = opendir(root);
+    while(d) {
+      struct dirent *te = readdir(d);
+      if(!te) break;
+      if(dps4 ? !cusa_ok(te->d_name) : !title_ok(te->d_name)) continue;
+      char tdir[PATH_MAX];
+      if(snprintf(tdir, sizeof(tdir), "%s/%s", root, te->d_name) >= (int)sizeof(tdir)) continue;
+      DIR *sd = opendir(tdir);
+      while(sd && nc < sizeof(cand) / sizeof(cand[0])) {
+        struct dirent *se = readdir(sd);
+        if(!se) break;
+        if(strncmp(se->d_name, "sdimg_", 6) || !slot_ok(se->d_name + 6)) continue;
+        char bin[PATH_MAX], img[PATH_MAX];
+        struct stat st, ist;
+        if(dps4 && (snprintf(bin, sizeof(bin), "%s/%s.bin", tdir, se->d_name + 6) >= (int)sizeof(bin) || stat(bin, &st) != 0)) continue;   /* a PS4 image needs its key file */
+        if(snprintf(img, sizeof(img), "%s/%s", tdir, se->d_name) >= (int)sizeof(img) || stat(img, &ist) != 0 || !S_ISREG(ist.st_mode) || (uint64_t)ist.st_size > SI_DONOR_MAX) continue;
+        cand[nc].size = (uint64_t)ist.st_size;
+        cand[nc].ps4 = dps4;
+        snprintf(cand[nc].title, sizeof(cand[nc].title), "%.15s", te->d_name);
+        snprintf(cand[nc].slot, sizeof(cand[nc].slot), "%.99s", se->d_name + 6);
+        cand[nc].rank = dps4 != info->ps4 ? 3 : strcmp(te->d_name, info->title_id) ? 2 : strcmp(se->d_name + 6, info->slot) ? 1 : 0;
+        nc++;
+      }
+      if(sd) closedir(sd);
     }
-    if(sd) closedir(sd);
+    if(d) closedir(d);
   }
-  if(d) closedir(d);
   qsort(cand, nc, sizeof(cand[0]), cmp_donor);                    /* the best rank first, the smallest image first within it */
 
   uint8_t params[1024];
@@ -631,27 +638,31 @@ ps4_owner(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *sf
   unsigned tries = 0;
   char ddir[PATH_MAX], dmnt[PATH_MAX];
   if(snprintf(ddir, sizeof(ddir), "%s/donor", a->work_dir) >= (int)sizeof(ddir) || snprintf(dmnt, sizeof(dmnt), "%s/donor_mnt", a->work_dir) >= (int)sizeof(dmnt)) return 0;
-  for(int rank = 0; rank <= 2 && got < 0 && tries < 8; rank++) {
+  for(int rank = 0; rank <= 3 && got < 0 && tries < 8; rank++) {
     for(unsigned i = 0; i < nc && got < 0 && tries < 8; i++) {
       if(cand[i].rank != rank) continue;
       if(stopped(r)) return ECANCELED;
       tries++;
       char src[PATH_MAX], bin[PATH_MAX], dimg[PATH_MAX];
       uint8_t sealed[SAVEMNT_SEALED_BYTES];
-      if(snprintf(src, sizeof(src), "%s/%s/sdimg_%s", root, cand[i].title, cand[i].slot) >= (int)sizeof(src) ||
-         snprintf(bin, sizeof(bin), "%s/%s/%s.bin", root, cand[i].title, cand[i].slot) >= (int)sizeof(bin) ||
+      memset(sealed, 0, sizeof(sealed));
+      const char *adir = cand[i].ps4 ? "savedata" : "savedata_prospero";
+      if(snprintf(src, sizeof(src), "%s/%s/%s/%s/sdimg_%s", a->home_dir, a->uid, adir, cand[i].title, cand[i].slot) >= (int)sizeof(src) ||
+         snprintf(bin, sizeof(bin), "%s/%s/%s/%s/%s.bin", a->home_dir, a->uid, adir, cand[i].title, cand[i].slot) >= (int)sizeof(bin) ||
          snprintf(dimg, sizeof(dimg), "%s/sdimg_%s", ddir, cand[i].slot) >= (int)sizeof(dimg)) continue;
-      const int bfd = open(bin, O_RDONLY);
-      const ssize_t bn = bfd >= 0 ? read(bfd, sealed, sizeof(sealed)) : -1;
-      if(bfd >= 0) close(bfd);
-      if(bn != (ssize_t)sizeof(sealed)) continue;
+      if(cand[i].ps4) {
+        const int bfd = open(bin, O_RDONLY);
+        const ssize_t bn = bfd >= 0 ? read(bfd, sealed, sizeof(sealed)) : -1;
+        if(bfd >= 0) close(bfd);
+        if(bn != (ssize_t)sizeof(sealed)) continue;
+      }
       mkdir(ddir, 0755);
       if(copy_new(src, dimg, 0755) != 0) { unlink(dimg); continue; }
       mkdir(dmnt, 0755);
       savemnt_t dm;
       char e2[300];
       int valid = 0;
-      if(savemnt_open_sealed(dimg, sealed, dmnt, &dm, e2, sizeof(e2)) == 0) {
+      if((cand[i].ps4 ? savemnt_open_sealed(dimg, sealed, dmnt, &dm, e2, sizeof(e2)) : savemnt_open(dimg, dmnt, &dm, e2, sizeof(e2))) == 0) {
         char sp[PATH_MAX];
         uint8_t buf[SI_MAX_SFO];
         if(snprintf(sp, sizeof(sp), "%s/sce_sys/param.sfo", dmnt) < (int)sizeof(sp)) {
@@ -789,11 +800,11 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
   }
   if(stopped(r)) { rc = ECANCELED; goto done; }
 
-  /* a PS4 save: the owner in the param.sfo is made right from a save of the same user (copies of images, mounted one by one) */
-  if(ps4) {
+  /* the owner in the param.sfo is made right from a save of the same user (copies of images, mounted one by one) */
+  {
     phase(r, "Besitzer prüfen", 0);
     current(r, "");
-    const int orc = ps4_owner(a, &info, sfo, sfo_len, r, owner_note, sizeof(owner_note));
+    const int orc = owner_donor(a, &info, sfo, sfo_len, r, owner_note, sizeof(owner_note));
     if(orc == ECANCELED) { rc = ECANCELED; goto done; }
     if(orc != 0) { stuck = 1; goto done; }
     if(stopped(r)) { rc = ECANCELED; goto done; }

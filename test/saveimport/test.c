@@ -332,6 +332,19 @@ make_ps4_zip(const char *path, const char *title, const char *slot) {
 }
 
 static char IMG4[560], BIN4[560], ICON4[600], DBP4[520];
+static uint8_t g_marker;                                        /* nonzero: a donor's PARAMS bytes 8..40 are marker + 0..31 and its byte 100 is 0x77 (the incoming ones are 24..117 and 0) */
+
+static size_t
+mark_params(uint8_t *sfo, size_t sl) {
+  if(g_marker) {
+    uint8_t mk[32];
+    for(int i = 0; i < 32; i++) mk[i] = (uint8_t)(g_marker + i);
+    const uint8_t b = 0x77;
+    savesfo_set_raw(sfo, sl, "PARAMS", 8, mk, sizeof(mk));
+    savesfo_set_raw(sfo, sl, "PARAMS", 100, &b, 1);
+  }
+  return sl;
+}
 
 /* a save of the same user that is already on the console: image, key file, and what its mount shows (a param.sfo that names the account and the user) */
 static void
@@ -345,8 +358,32 @@ make_donor(const char *title, const char *slot, uint64_t account, uint32_t uid) 
   wfile(p, key, sizeof(key));
   uint8_t sfo[4096];
   size_t sl = sfo_build(sfo, title, slot, 100, 0, "pfs", account, uid);
+  sl = mark_params(sfo, sl);
   snprintf(p, sizeof(p), "%s/sdimg_%s/sce_sys/param.sfo", STORE, slot);
   wfile(p, sfo, sl);
+}
+
+/* the same for a PS5 save of the user: an image in savedata_prospero (no key file), what its mount shows */
+static void
+make_donor5(const char *title, const char *slot, uint64_t account, uint32_t uid) {
+  char p[800];
+  snprintf(p, sizeof(p), "%s/%s/savedata_prospero/%s/sdimg_%s", HOME_, UID, title, slot);
+  wfile(p, "DONOR5 IMAGE BYTES", 18);
+  uint8_t sfo[4096];
+  size_t sl = sfo_build(sfo, title, slot, 100, 0, "ppr", account, uid);
+  sl = mark_params(sfo, sl);
+  snprintf(p, sizeof(p), "%s/sdimg_%s/sce_sys/param.sfo", STORE, slot);
+  wfile(p, sfo, sl);
+}
+
+/* PARAMS of the param.sfo the last import left in the mount of an image */
+static int
+stored_params(const char *slot, uint8_t params[1024]) {
+  uint8_t buf[8192];
+  char p[800];
+  snprintf(p, sizeof(p), "%s/sdimg_%s/sce_sys/param.sfo", STORE, slot);
+  const size_t n = slurp(p, buf, sizeof(buf));
+  return n > 100 && savesfo_valid(buf, n) && savesfo_get_raw(buf, n, "PARAMS", params, 1024) == 1024 ? 0 : -1;
 }
 
 static void
@@ -453,7 +490,7 @@ main(int argc, char **argv) {
   CHECK(count_dir(WORK) == 0);                                    /* the work folder is clean again */
   CHECK(ps5tm_savemnt_test_opened == 2 && ps5tm_savemnt_test_closed == 2);   /* once to write, once to check */
   CHECK(pr.no_return_calls == 1 && pr.bytes > 100000);
-  CHECK(!strcmp(pr.names[0], "ZIP-Datei prüfen") && !strcmp(pr.names[1], "Abbild anlegen"));
+  CHECK(!strcmp(pr.names[0], "ZIP-Datei prüfen") && !strcmp(pr.names[1], "Besitzer prüfen") && !strcmp(pr.names[2], "Abbild anlegen"));
   {
     uint8_t buf[200000];
     char p[700];
@@ -902,6 +939,100 @@ main(int argc, char **argv) {
   a = args();
   rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
   CHECK(rc == 0 && !strstr(res.note, "Abbildformat"));
+
+  /* ---- the owner of a PS5 save is made right from a save of the same user as well: bytes 4..40 of a donor (another title: rank 2) */
+  reset();
+  g_marker = 0xD0;
+  sp = good();
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", ACC, UIDN);
+  a = args();
+  memset(&pr, 0, sizeof(pr));
+  ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  if(rc) printf("  err: %s\n", err);
+  CHECK(rc == 0 && strstr(res.note, "anderen Spielstand") && ps5tm_savemnt_test_opened == 3 && ps5tm_savemnt_test_closed == 3 && count_dir(WORK) == 0);
+  {
+    uint8_t pa[1024];
+    CHECK(stored_params("SAVE0", pa) == 0 && pa[4] == 0x31 && pa[7] == 0x18);                       /* this console's user */
+    CHECK(pa[8] == 0xD0 && pa[39] == 0xD0 + 31 && pa[100] == 0);                                    /* the donor's value; the rest of the record is the incoming one's */
+  }
+  CHECK(exists(IMG) && fsize(IMG) == 48ll * 65536);
+
+  /* ... the save it replaces is the donor (rank 0): the whole record */
+  reset();
+  g_marker = 0xE0;
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA01234", "SAVE0", ACC, UIDN);
+  wfile(IMG, "OLD IMAGE", 9);
+  memset(&pr, 0, sizeof(pr));
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  if(rc) printf("  err: %s\n", err);
+  CHECK(rc == 0 && res.replaced == 1 && !strstr(res.note, "anderen Spielstand") && !strstr(res.note, "kein Spielstand") && count_dir(WORK) == 0);
+  {
+    uint8_t pa[1024];
+    CHECK(stored_params("SAVE0", pa) == 0 && pa[4] == 0x31 && pa[8] == 0xE0 && pa[39] == 0xE0 + 31 && pa[100] == 0x77);
+  }
+  CHECK(fsize(IMG) == 48ll * 65536);
+
+  /* ... only a save of the other kind is there (a PS4 save of the user: rank 3), and it is taken */
+  reset();
+  g_marker = 0xC0;
+  make_zip(ZIP, &sp);
+  make_donor("CUSA00099", "DON4", ACC, UIDN);
+  memset(&pr, 0, sizeof(pr));
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  if(rc) printf("  err: %s\n", err);
+  CHECK(rc == 0 && strstr(res.note, "anderen Spielstand") && count_dir(WORK) == 0);
+  {
+    uint8_t pa[1024];
+    CHECK(stored_params("SAVE0", pa) == 0 && pa[8] == 0xC0 && pa[39] == 0xC0 + 31 && pa[100] == 0);
+  }
+
+  /* ... a PS5 donor beats a PS4 one (the PS5 one is tried first) */
+  reset();
+  g_marker = 0xB0;
+  make_zip(ZIP, &sp);
+  make_donor("CUSA00099", "DON4", ACC, UIDN);
+  g_marker = 0xA8;
+  make_donor5("PPSA00099", "DON5", ACC, UIDN);
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  {
+    uint8_t pa[1024];
+    CHECK(rc == 0 && stored_params("SAVE0", pa) == 0 && pa[8] == 0xA8);
+  }
+
+  /* ... no save of the user, or only ones of another account or user id: the import goes on and says so (the incoming value stays) */
+  g_marker = 0;
+  reset();
+  make_zip(ZIP, &sp);
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  {
+    uint8_t pa[1024];
+    CHECK(rc == 0 && strstr(res.note, "kein Spielstand zu finden") && stored_params("SAVE0", pa) == 0 && pa[4] == 0x31 && pa[8] == 24 && pa[39] == 117);
+  }
+  reset();
+  g_marker = 0xD0;
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", 0x1234, UIDN);
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && strstr(res.note, "kein Spielstand zu finden") && count_dir(WORK) == 0);
+  reset();
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", ACC, 0x42424242);
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && strstr(res.note, "kein Spielstand zu finden") && count_dir(WORK) == 0);
+  g_marker = 0;
+
+  /* ... a donor that will not let go: nothing is changed, the message says restart */
+  reset();
+  g_marker = 0xD0;
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", ACC, UIDN);
+  ps5tm_savemnt_test_fail = 2;                                    /* the unmount of the donor fails */
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc != 0 && strstr(err, "neu starten") && !exists(IMG));
+  g_marker = 0;
 
   rmtree(ROOT);
   printf("%d checks, %d failed\n", g_n, g_fail);

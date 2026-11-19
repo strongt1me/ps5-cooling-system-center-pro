@@ -2588,10 +2588,10 @@ import_main(void *arg) {
   snprintf(a->id, sizeof(a->id), "%.9s", info.title_id);
   PS5TM_INFO("saves_import_start", "Spielstände: Einspielen eines Spielstands von %s für Benutzer %s beginnt.", info.title_id, a->uid);
 
-  /* the title's present state first, as a backup of its own (the same "undo" backup a restore makes) */
+  /* the title's present state first, as a backup of its own (the same "undo" backup a restore makes); without a target only when the request said no_backup on purpose
+     (ps5tm_saves_import_start refuses the rest) */
   const int iarea = info.ps4 ? 0 : 1;
-  if(title_has_files(a->uid, iarea, info.title_id)) {
-    if(!a->base[0]) { job_fail("Für den Stand davor gibt es kein Ziel. Es wurde nichts eingespielt."); goto out; }
+  if(a->base[0] && title_has_files(a->uid, iarea, info.title_id)) {
     undo.sel   = calloc(1, sizeof(*undo.sel));
     undo.users = calloc(1, sizeof(*undo.users));
     if(!undo.sel || !undo.users) { job_fail("Kein Speicher."); goto out; }

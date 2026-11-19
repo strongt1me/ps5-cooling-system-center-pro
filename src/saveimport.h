@@ -7,7 +7,7 @@
  *
  * PS4 saves (CUSA titles) travel as their files alone - the other tool writes no sidecar for them. They are recognised by the title in the param.sfo, the image is made
  * with the size such a save needs (files + 25 % + 4 MB, at least 32 MB, in 32 KiB steps) by the console's older formatter with a fresh key, which goes into the
- * companion file <slot>.bin, and the owner in the param.sfo is made right from a save of the same user (see saveimport.c: the PARAMS record of a PS4 save).
+ * companion file <slot>.bin, and the owner in the param.sfo is made right from a save of the same user (see saveimport.c, owner_donor: the PARAMS record; PS5 saves get it the same way).
  *
  * Only the layout this app can make exactly is accepted (what a firmware like 12.00 writes: 32 or 64 KiB blocks, no copy-on-write area, a real param.sfo in the file system,
  * SAVEDATA_BLOCKS equal to the block count). A save in the copy-on-write layout (fs_ext != 0: system blocks after the data blocks, the numbers of the param.sfo say SAVEDATA_BLOCKS

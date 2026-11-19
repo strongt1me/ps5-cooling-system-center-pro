@@ -1045,12 +1045,12 @@ ihre Trophäen gehören nicht dazu.
   Dateien, **kein** `chives.json` (auch Garlic SaveMgr schreibt für PS4 keines); sie wird als PS4-Spielstand an der Titel-Kennung `CUSA…` im `param.sfo` erkannt.
   Beim Einspielen berechnet die App die Größe des Abbilds aus den Dateien (Dateien plus ein Viertel plus 4 MB, mindestens 32 MB, in Schritten von 32 KiB), die
   Konsole legt es mit ihrem älteren Formatierer (`sceFsCreatePfsSaveDataImage`) und einem **neuen, für diese Konsole versiegelten Schlüssel** an (der Schlüssel kommt
-  in `<Spielstand>.bin`), und die Dateien erhalten die Zugriffsrechte der ZIP-Einträge. Die Besitzerangaben im `param.sfo` reichen bei PS4 nicht aus, das Feld
+  in `<Spielstand>.bin`), und die Dateien erhalten die Zugriffsrechte der ZIP-Einträge. Die Besitzerangaben im `param.sfo` reichen nicht aus (bei PS5 und PS4 gleichermaßen), das Feld
   `PARAMS` (1024 Byte: Benutzer-Kennung und ein 32-Byte-Wert, der in allen Spielständen eines Benutzers gleich ist) muss stimmen. Die App kann ihn nicht erfinden und
   nimmt ihn aus einem Spielstand desselben Benutzers an dieser Konsole: Sie legt dessen Abbild als **Kopie** in den Arbeitsordner, hängt es ein, liest sein `param.sfo`
   und hängt es wieder aus. Zuerst gilt ein Spielstand mit gleichem Titel und gleicher Kennung (der ganze Eintrag wird übernommen), dann einer mit gleichem Titel, dann
-  irgendeiner (nur Benutzer-Kennung und Wert, Byte 4 bis 40); verwendet wird nur ein Spielstand, dessen `param.sfo` das Konto und die Kennung dieses Benutzers zeigt (höchstens
-  acht Versuche). Gibt es keinen, wird trotzdem eingespielt, und der Auftrag sagt, dass das Spiel vielleicht beschädigte Daten meldet. Alles andere (Sicherung davor,
+  irgendeiner (nur Benutzer-Kennung und Wert, Byte 4 bis 40), zuletzt einer der anderen Art (bei PS4 ein PS5-Spielstand); verwendet wird nur ein Spielstand, dessen `param.sfo` das Konto und die Kennung dieses Benutzers zeigt (höchstens
+  acht Versuche). Gibt es keinen, wird trotzdem eingespielt, und der Auftrag sagt, dass das Spiel den Spielstand vielleicht nicht annimmt. Alles andere (Sicherung davor,
   Zurücklesen jeder Datei, Datenbank-Kopie, Zurückrollen bei einem Fehler) ist wie bei PS5.
 - **Aufräumen.** Die App löscht keine Sicherung, auch nicht den Stand vor dem Zurückspielen:
   Das geht am PC oder per FTP, indem man den Ordner unter `PS5-Sicherung/Spielstaende` entfernt.
