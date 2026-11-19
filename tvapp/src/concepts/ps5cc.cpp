@@ -682,6 +682,7 @@ class Ps5cc final : public app::Concept
             if (data_.dictionary != dictionary_)
             {
                 dictionary_ = data_.dictionary;
+                ps5cc::set_decimal_point(data_.language == "en" ? '.' : ',');
                 translator_.load(data_.language,
                                  dictionary_ ? *dictionary_ : std::vector<ps5cc::i18n::Entry>{});
                 gfx::set_text_filter(&translator_); // lay out kept text again, now translated

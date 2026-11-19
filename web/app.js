@@ -8818,7 +8818,7 @@
                   : "Die Datei ist größer als 64 MB oder keine SQLite-Datei und bleibt ungenutzt.")
       : "Ohne Liste heißen die Abbilder wie ihre Titelkennung und werden nicht geprüft. Die Liste baut man am PC mit tools/build_redump_db.py aus dem Projekt ps-disc-detect (sie lädt die Dateien von redump.info) und legt die erzeugte redump.db nach /data/redump.db.");
     const ev = d.events || [];
-    setHtml($("#disc-events"), ev.length ? ev.map((e) => `<div class="p4m-meta">${esc(new Date(e.time).toLocaleTimeString())} · ${esc(e.text)}</div>`).join("") : `<p class="muted">Noch nichts.</p>`);
+    setHtml($("#disc-events"), ev.length ? ev.map((e) => `<div class="p4m-meta">${esc(new Date(e.time).toLocaleTimeString(LOCALE))} · ${esc(e.text)}</div>`).join("") : `<p class="muted">Noch nichts.</p>`);
   };
 
   /* Ohne Laufwerk gibt es den Reiter Disc nicht (29.10.2026): Die Konsole sagt has_drive, auch wenn die Erkennung aus ist. */
@@ -11084,7 +11084,7 @@
       ? `${bk.list.length} ${bk.list.length === 1 ? "Sicherung" : "Sicherungen"}, zusammen ${bytes(total)} (Ordner PS5-Sicherung/Spiele)`
       : "Keine Sicherungen gefunden (Ordner PS5-Sicherung/Spiele auf der internen SSD und den Laufwerken).";
     $("#bk-list").innerHTML = bk.list.map((x, i) => {
-      const when = x.modified ? new Date(x.modified * 1000).toLocaleDateString() : "";
+      const when = x.modified ? new Date(x.modified * 1000).toLocaleDateString(LOCALE) : "";
       return `<div class="bk-row">
           <div><b>${esc(x.name)}</b>${x.unfinished ? ` <span class="badge warn">unfertig</span>` : ""}${x.sums ? ` <span class="badge">mit Prüfsumme</span>` : ""}<br>
             <span class="muted">${esc(x.type)} · ${esc(x.drive)} · ${bytes(x.size_bytes)}${when ? ` · ${esc(when)}` : ""}</span></div>
@@ -11704,7 +11704,7 @@
     const d = dp.data;
     if (!d) { txt("#dp-sub", dp.error || "wird gelesen …"); return; }
     const n = (d.dumps || []).length;
-    const when = d.ever && d.scanned_at ? new Date(d.scanned_at * 1000).toLocaleString() : "";
+    const when = d.ever && d.scanned_at ? new Date(d.scanned_at * 1000).toLocaleString(LOCALE) : "";
     txt("#dp-sub", d.scanning ? "die Suche läuft …" : !d.ever ? "noch nicht gesucht"
       : `${n} ${n === 1 ? "Dump" : "Dumps"} · gesucht ${when}${d.truncated ? " · Liste gekürzt" : ""}`);
     $("#dp-scan").disabled = !!d.scanning;

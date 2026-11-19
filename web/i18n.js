@@ -126,6 +126,11 @@
       if (p.need && core.indexOf(p.need) < 0) continue;
       var m = p.rx.exec(core);
       if (!m) continue;
+      /* Ein Wert, der über ein „ · “ reicht, ist kein Wert: „{0} Min.“ nähme sonst „6 Payloads · Stand vor 40“ als Zahl und ließe den Rest
+         unübersetzt. Dann geht es über die Stücke (viaSegments), jedes für sich (19.11.2026; die Vollbild-App tut dasselbe, i18n.cpp). */
+      var spans = false;
+      for (var q = 1; q < m.length; q++) if (m[q] && m[q].indexOf(SEP) >= 0) { spans = true; break; }
+      if (spans) continue;
       var tr = p.tr;
       if (tr.indexOf("|") > 0) {
         tr = tr.replace(/\{(\d+)\|([^{}]*)\}/g, function (_, n, forms) {

@@ -419,6 +419,11 @@ bool Translator::try_list(const std::vector<std::size_t> &list, std::string_view
                 }
             }
         }
+        // a value that spans a " · " is no value ("{0} Min." would take "6 Payloads · Stand vor 40"
+        // as its number and leave the rest German): the segments are translated one by one instead,
+        // as web/i18n.js does
+        for (std::size_t k = 0; k < values.size() && ok; ++k)
+            ok = values[k].find(kSeparator) == std::string_view::npos;
         if (!ok)
             continue;
         const auto value_of = [&](int number) -> int

@@ -4,6 +4,17 @@
 
 ## Unveröffentlicht
 
+### Übersetzung: halb übersetzte, zusammengesetzte Texte (Nebenbefunde beim Aufnehmen der englischen README-Bilder, 19.11.2026)
+- **Ursache:** Die Übersetzungslaufzeit (`web/i18n.js`, in der Vollbild-App `i18n.cpp`) probiert zuerst die Muster des Wörterbuchs und teilt erst danach bei „ · “ in Stücke. Ein Muster wie „{0} Min.“ nahm dabei „6 Payloads · Stand vor 40“ als seine Zahl und ließ den Rest deutsch („As of vor 40 min“, „Spiel, Update und 2 add-ons“, in der Vollbild-App „Kopiere 1 of 2 files/Ordnern“).
+- **Behoben:** Ein Wert, der über ein „ · “ reicht, gilt nicht mehr als Wert; dann wird Stück für Stück übersetzt. Gleiche Regel in beiden Oberflächen; neuer Test in der Vollbild-App (376 Tests).
+- **Fehlende Texte ergänzt (sechs Wörterbücher):** „{0} Spiele“, „{0} laufen“, „{0} Profil/Profile“, „heute, …“, „gestern, …“, „gesucht …“, „Nr. …“, „seit …“ (Dauer) und „seit … Uhr“ (Uhrzeit), „{0} GB von {1}“ und die übrigen Einheiten.
+- **Datum und Uhrzeit in der Sprache der Seite:** drei Stellen (Sicherungen der Bibliothek, Disc-Ereignisse, „gesucht“ bei den Paketen) nahmen die Sprache des Browsers; jetzt die der Seite.
+- **Vollbild-App, Englisch:** Zahlen mit Punkt statt Komma („47.8 GB“); die anderen Sprachen behalten das Komma.
+- **Bleibt:** Was kein Fehler ist: Namen, Einheiten, Protokollzeilen der Fremdbausteine und der Ordnername `PS5-Sicherung/Spiele` (so heißt der Ordner wirklich).
+
+### Vollbild-App: Versionsfenster nennt auch zstd (Hinweis des Users, 19.11.2026)
+- Der Text rechts im Fenster „APR-EMU im Spiel“ sagte nur „LZ4“. Jetzt: ein LZ4-gepacktes Spiel braucht eine LZ4-Fassung, ein zstd-gepacktes AMPR EMU NG; neue NG-Fassungen holt die App mit dem Knopf unten. Die Browser-App hat keinen solchen Sammeltext, sie nennt LZ4/zstd je Spiel und an den Versionsmarken.
+
 ### APR-EMU und PlayGo: Ablage im Backport-Ordner wählbar, bei vollem Abbild von selbst (Meldung des Users, 19.11.2026)
 - **Anlass:** Der Einbau eines AMPR EMU (auch NG) in ein Abbild scheiterte mit „Der Ordner fakelib ließ sich nicht anlegen: No space left on device“: Das Abbild (`.exfat`, `.ffpkg`) war voll (Abbilder sind so groß wie ihr Inhalt), und die App schrieb immer ins Abbild. Den Backport-Ordner nutzte sie nur bei einem komprimierten `.ffpfsc` oder wenn er schon da war; eine Wahl oder einen Ausweg gab es nicht.
 - **Wahl:** Im Fenster „Version wählen“ steht bei einem Abbild „Wohin kommt die Datei?“: **Im Abbild** (Vorgabe) oder **Im Backport-Ordner** (`<Ordner des Abbilds>/backports/<Titel-ID>/fakelib`, das Abbild bleibt unberührt und wird nicht eingehängt; die Dateien der `fakelib` des Spiels werden hineinkopiert, weil der Ordner sie verdeckt). Wo die Ablage feststeht (komprimiertes Abbild, vorhandener Backport-Ordner), gibt es keine Wahl. Gilt für APR-EMU (auch NG) und PlayGo, in der Browser-App und in der Vollbild-App (Zeile „Ablage“ in der Versionsliste).

@@ -1131,13 +1131,14 @@ std::string GameExtras::side_text() const
     switch (view_)
     {
     case kVersions:
-        return lib_ == "playgo" ? "PlayGo im Spiel: die Fassung von libScePlayGo, die das Spiel "
-                                  "lädt. Eine andere gewählt, "
-                                  "wird sie sofort eingebaut; das Original bleibt gesichert."
-                                : "APR-EMU im Spiel: die Fassung von libSceAmpr, die das Spiel "
-                                  "lädt. Ein gepacktes Spiel "
-                                  "braucht eine LZ4-Fassung (test-pack). Neue Fassungen vom PC "
-                                  "kommen über die Browser-App.";
+        return lib_ == "playgo"
+                   ? "PlayGo im Spiel: die Fassung von libScePlayGo, die das Spiel "
+                     "lädt. Eine andere gewählt, "
+                     "wird sie sofort eingebaut; das Original bleibt gesichert."
+                   : "APR-EMU im Spiel: die Fassung von libSceAmpr, die das Spiel lädt. Ein "
+                     "LZ4-gepacktes Spiel braucht eine LZ4-Fassung (test-pack), ein zstd-gepacktes "
+                     "AMPR EMU NG. Neue NG-Fassungen holt die App mit dem Knopf unten; andere "
+                     "Dateien kommen über die Browser-App.";
     case kLz4:
         if (zstd_)
             return "Packt das ganze Spiel außer den Systemdateien in zstd-Asset-Packs. Das spart "

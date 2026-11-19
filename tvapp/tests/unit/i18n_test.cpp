@@ -53,6 +53,25 @@ TEST(I18n, PatternsAndInnerValues)
     EXPECT_EQ(t.translate("Fertig: 12,5 GB in 30 s"), "Done: 12,5 GB in 30 s");
 }
 
+TEST(I18n, ValueNeverSpansASeparator)
+{
+    Translator t;
+    t.load("en", std::vector<Entry>{
+                     {"{0} Min.", "{0} min"},
+                     {"Stand vor {0} Min.", "As of {0} min ago"},
+                     {"{0} Zusatzinhalte", "{0} add-ons"},
+                     {"Spiel und {0} Zusatzinhalte", "Game and {0} add-ons"},
+                     {"{0} Payloads", "{0} payloads"},
+                 });
+    // "{0} Min." and "{0} Zusatzinhalte" must not take "6 Payloads · Stand vor 40" as their value:
+    // each piece is translated for itself
+    EXPECT_EQ(t.translate("6 Payloads · Stand vor 40 Min."), "6 payloads · As of 40 min ago");
+    EXPECT_EQ(t.translate("CUSA10001 · Spiel und 2 Zusatzinhalte"),
+              "CUSA10001 · Game and 2 add-ons");
+    // a value without a separator still matches as before
+    EXPECT_EQ(t.translate("12 Min."), "12 min");
+}
+
 TEST(I18n, Plurals)
 {
     Translator t = english();

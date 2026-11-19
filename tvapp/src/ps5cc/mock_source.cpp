@@ -3679,6 +3679,13 @@ void set_source(Source *source)
     g_source = source;
 }
 
+static char g_decimal_point = ',';
+
+void set_decimal_point(char sign)
+{
+    g_decimal_point = sign;
+}
+
 std::string format_decimal(float value, int decimals)
 {
     char text[32];
@@ -3686,7 +3693,7 @@ std::string format_decimal(float value, int decimals)
     for (char &c : text)
     {
         if (c == '.')
-            c = ',';
+            c = g_decimal_point;
     }
     return text;
 }

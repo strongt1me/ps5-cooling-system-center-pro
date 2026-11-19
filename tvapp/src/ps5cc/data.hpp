@@ -1511,8 +1511,12 @@ std::string format_job_route(const std::string &kind, const std::string &from,
                              const std::string &dest);
 // "2,9 h", "35 min", "–" for nothing.
 std::string format_playtime(std::uint64_t seconds);
-// "46,3" for 46.3.
+// "46,3" for 46.3 (German decimal comma; "46.3" once English is the language, see
+// set_decimal_point).
 std::string format_decimal(float value, int decimals);
+// The decimal sign of every number the app formats: ',' (the default) or '.'; the app sets it when
+// the language changes (English '.', the others ',').
+void set_decimal_point(char sign);
 // "23:00" for 1380 minutes after midnight (wraps at a day).
 std::string format_clock(int minutes);
 // "14:03:07" for a time in ms since 1970, shifted by tz_offset_min.
