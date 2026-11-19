@@ -27,7 +27,7 @@ jobs:
         run: |
           # every test runs even when an earlier one failed; the step fails at the end if any did
           failed=""
-          for t in account bgpause cvname cvsample convpfs dumpdir filemgr fpkgdup fpkgprogress fsign fwimports indexlimit instlock jobreg krakenboot origafter probefail progressnote ps4m sha256 smpcfg smphold smpunreg tvname ufs2plan unpackfb vercmp zstdpack; do
+          for t in account bgpause chives cvname cvsample convpfs dumpdir filemgr fpkgdup fpkgprogress fsign fwimports indexlimit instlock jobreg krakenboot origafter probefail progressnote ps4m savedb saveimport savesfo savexport savezip sha256 smpcfg smphold smpunreg tvname ufs2plan unpackfb vercmp zstdpack; do
             echo "::group::test/$t"
             if sh "test/$t/run.sh"; then echo "ok: $t"; else echo "::error::test/$t failed"; failed="$failed $t"; fi
             echo "::endgroup::"

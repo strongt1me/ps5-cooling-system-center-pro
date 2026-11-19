@@ -1639,9 +1639,20 @@ html.i18n-wait body { visibility: hidden; }
 .pl-card.pl-prof .pl-actions { flex-wrap: wrap; justify-content: flex-end; max-width: none; }
 .pl-ed-name input, .pl-ed-add select { padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.05); color: inherit; }
 .sv-group { margin: 14px 0 4px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; opacity: .85; }
-.sv-title-row { display: flex; align-items: center; gap: 10px; }
-.sv-title-row .sv-title { flex: 1; min-width: 0; }
+.sv-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sv-title-row .sv-title { flex: 1 1 240px; min-width: 0; }
+.sv-title-row .btn { margin-left: auto; }
+.sv-title-row .btn ~ .btn { margin-left: 0; }
 .sv-del { flex: none; }
+.sv-zip { flex: none; }
+.sv-ex-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--hairline); }
+.sv-ex-row:first-child { border-top: 0; }
+.sv-ex-row .sv-t-name { flex: 1; min-width: 0; }
+.sv-ex-row .btn { padding: 7px 12px; font-size: 12.5px; }
+.sv-ex-row a.btn { text-decoration: none; }
+.sv-job-dl { display: inline-block; margin-top: 6px; text-decoration: none; }
+.sv-im-card { margin-top: 12px; padding: 14px; border: 1px solid var(--hairline); border-radius: 12px; }
+.sv-im-card .cp-actions { flex-wrap: wrap; gap: 10px; }
 /* Paket vom PC */
 .pk-drop { margin-top: 10px; padding: 18px 16px; border: 2px dashed rgba(255,255,255,.2); border-radius: 12px; text-align: center; font-size: 13px; opacity: .85; }
 .pk-drop.over { border-color: rgba(59,130,246,.8); background: rgba(59,130,246,.08); opacity: 1; }

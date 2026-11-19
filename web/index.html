@@ -756,6 +756,28 @@
               <p class="muted sv-hint sv-unfinished" id="sv-unfinished" hidden></p>
             </article>
 
+            <article class="card" id="sv-tr-card">
+              <div class="card-head">
+                <div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-archive"/></svg></span><div class="ck-text"><h2>Auf eine andere Konsole übertragen</h2><p class="sub" id="sv-tr-sub"></p></div></div>
+              </div>
+              <p class="muted sv-intro">Eine Sicherung oben passt nur zu dieser Konsole. Um einen Spielstand (PS5 oder PS4) auf einer zweiten
+                Konsole zu benutzen, liest die Konsole ihn mit ihren eigenen Mitteln aus und die App packt die Dateien in eine ZIP-Datei:
+                beim Titel oben auf „Als ZIP“ drücken. Die Datei erscheint hier zum Herunterladen. Sie ist nicht verschlüsselt:
+                Behandle sie wie den Spielstand selbst und gib sie nur weiter, wenn du es willst. Nichts wird ins Internet geschickt;
+                ausgelesen wird nur, wenn kein Spiel läuft.</p>
+              <div id="sv-exports"></div>
+              <p class="cp-step">Spielstand einspielen</p>
+              <p class="muted sv-intro">Hier kommt ein Spielstand (PS5 oder PS4) an, der auf einer anderen Konsole ausgelesen wurde (mit „Als ZIP“ oder mit Garlic SaveMgr). Du wählst die
+                ZIP-Datei am Rechner; die App prüft sie, bevor sie etwas ändert. Dann wählst du den Benutzer dieser Konsole, dem der Spielstand gehören soll. Die Konsole legt
+                dafür ein neues, eigenes Abbild an; ein vorhandener Spielstand desselben Titels wird vorher gesichert. Eingespielt wird nur, wenn kein Spiel läuft.</p>
+              <div class="row-gap">
+                <label class="btn" for="sv-im-file" id="sv-im-pick" tabindex="0" role="button">ZIP-Datei wählen …</label>
+                <input type="file" id="sv-im-file" accept=".zip,application/zip" hidden>
+                <span class="muted" id="sv-im-state"></span>
+              </div>
+              <div id="sv-im-plan"></div>
+            </article>
+
           </div>
         </section>
 

@@ -1427,6 +1427,19 @@ int  ps5tm_saves_restore_start(const char *path, const char *uid, const char *ti
                                char *err, size_t err_len);
 /* no_backup: delete even without a target for the backup made first (the page never sends it; without it a missing target is 409) */
 int  ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mount, int no_backup, char *err, size_t err_len);
+/* A PS5 save read out into a ZIP of plain files, to put in on another console (savexport.c): the job writes <data>/savexport/<PPSA>_<slot>_<stamp>.zip. */
+int  ps5tm_saves_export_start(const char *uid, const char *title, const char *slot, char *err, size_t err_len);
+/* A save from a ZIP of plain files put in on this console (saveimport.c). The page uploads the ZIP into the inbox folder (ps5tm_saves_import_inbox gives its path,
+   made if missing), asks for the plan (what the file is, where it could go), then starts the job. The starts answer 200 or the HTTP status that refuses. */
+int  ps5tm_saves_import_inbox(char *path, size_t n);
+struct cJSON *ps5tm_saves_import_plan_json(const char *name, char *err, size_t err_len, int *status);
+/* target_mount: the drive the copy of the present state goes to (needed when the user has saves of that title already, unless no_backup) */
+int  ps5tm_saves_import_start(const char *name, const char *uid, const char *target_mount, int no_backup, char *err, size_t err_len);
+int  ps5tm_saves_import_discard(const char *name, char *err, size_t err_len);
+/* The path of a finished ZIP of that name (a plain file name; nothing else is accepted): 0 when it is there. */
+int  ps5tm_saves_export_path(const char *name, char *out, size_t out_len);
+/* Deletes a finished ZIP: 200, 404 or 503 with the reason in err. */
+int  ps5tm_saves_export_delete(const char *name, char *err, size_t err_len);
 void ps5tm_saves_cancel(void);
 int  ps5tm_saves_busy(void);                    /* 1 while a job with the saved games is under way */
 

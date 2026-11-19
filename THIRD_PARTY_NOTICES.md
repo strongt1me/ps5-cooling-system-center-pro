@@ -101,6 +101,14 @@ ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
   geschriebenen Spieldateien (SIGBUS/CE-108255-1, gemeldet von OmgWhatIsThisss), für die Reparatur beim Prüfen der Pakete und für
   die Auswahl eines getesteten Profils nach Titel-ID, Name oder Engine (`src/lz4cfg.c`, `src/lz4pack_read.inc`, `src/amprlib.c`,
   `src/imgjob_lz4.inc`); nachgebaut, kein Quelltext übernommen. <https://github.com/theghostonline/PS5-LZ4-Compression> (seit Oktober 2026 nicht mehr erreichbar; Konto und Projekt wurden gelöscht oder umbenannt)
+- **SQLite** 3.46.0 (D. Richard Hipp und Mitarbeiter, gemeinfrei): `src/third_party/sqlite3/` (`sqlite3.c`, `sqlite3.h`, die Gesamtquelle unverändert), gebaut nur
+  für den Eintrag eines eingespielten Spielstands in `savedata.db` (`src/savedb.c`: ohne Erweiterungen, ohne WAL, ein Faden). Gelesen wird die Datenbank sonst
+  weiter mit dem eigenen Leser `sqlite_ro.c`.
+- **Garlic SaveMgr** (earthonion u. a., 1.15-beta23, ohne Lizenzangabe, <https://github.com/earthonion/garlic-savemgr>): Vorbild und Wissen für das Übertragen von
+  Spielständen, **kein Quelltext ist übernommen**: wie die Konsole ein Spielstand-Abbild einhängt (`libSceFsInternalForVsh`, Schlüssel über `/dev/pfsmgr`), wie ein neues
+  angelegt wird (`sceFsUfsAllocateSaveData`, `sceFsCreatePprPfsSaveDataImage`), welche Felder im `param.sfo` den Besitzer tragen, der Aufbau der Zeile in `savedata.db` und
+  das Format der Beschreibung `chives.json` (so dass ZIP-Dateien beider Werkzeuge in beide Richtungen taugen). Die ZIP-Dateien, der Leser und Schreiber, die Prüfung,
+  der Ablauf und die Sicherungen davor sind eigener Code (`savezip.c`, `savesfo.c`, `chives.c`, `savemnt.c`, `savexport.c`, `saveimport.c`, `savedb.c`).
 - **LZ4** 1.11.1 (Yann Collet, BSD-2-Clause): `src/third_party/lz4/` (`lz4.c`, `lz4hc.c`), unverändert (seit 10.11.2026; vorher 1.11.0, davor 1.10.0). Die
   APR-EMU entpackt mit ihrer eigenen Fassung (1.10.0); das Blockformat ist gleich, `test/lz4cross` prüft beide Richtungen. Lizenztext:
   `src/third_party/lz4/LICENSE`.

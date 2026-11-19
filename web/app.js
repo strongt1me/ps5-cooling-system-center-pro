@@ -8948,7 +8948,7 @@
     install: ["⬇", "Paket installiert"], ampr_index: ["🗜", "AMPR-Index gebaut"],
     files_copy: ["📁", "Dateimanager: kopiert"], files_move: ["📁", "Dateimanager: verschoben"], files_delete: ["📁", "Dateimanager: gelöscht"],
     saves_backup: ["💾", "Spielstände gesichert"], saves_restore: ["💾", "Spielstände zurückgespielt"],
-    saves_verify: ["💾", "Spielstände geprüft"], saves_delete: ["💾", "Spielstände gelöscht"],
+    saves_verify: ["💾", "Spielstände geprüft"], saves_delete: ["💾", "Spielstände gelöscht"], saves_export: ["💾", "Spielstand als ZIP ausgelesen"], saves_import: ["💾", "Spielstand eingespielt"],
     img_lz4pack: ["🗜", "LZ4 gepackt"], img_lz4copy: ["🗜", "LZ4-Kopie gemacht"], img_lz4verify: ["🔍", "LZ4-Pakete geprüft"], img_lz4unpack: ["📂", "LZ4 entpackt"], ampr_emu: ["🧩", "APR-EMU geändert"], playgo: ["🧩", "PlayGo geändert"], img_check: ["🔍", "Abbild geprüft"], img_unpack: ["📂", "Abbild entpackt"], img_repair: ["🛠", "Abbild repariert"]
   };
   const HV_RES = { done: ["ok", "Fertig"], failed: ["bad", "Fehler"], cancelled: ["stop", "Abgebrochen"] };
@@ -11101,7 +11101,7 @@
     : "—");
   const svName = (t) => t.name || t.id;
   const svActive = () => !!(sv.job && sv.job.active);
-  const SV_KIND = { backup: "Sicherung", verify: "Prüfung", restore: "Zurückspielen", delete: "Löschen" };
+  const SV_KIND = { backup: "Sicherung", verify: "Prüfung", restore: "Zurückspielen", delete: "Löschen", export: "Auslesen", import: "Einspielen" };
   /* PS5 und PS4 getrennt, Spiele und Apps getrennt (YouTube & Co. sind keine Spiele). */
   const SV_GROUPS = [["PS5", "game", "PS5-Spiele"], ["PS4", "game", "PS4-Spiele"]];   /* apps are never listed (the app leaves them alone) */
 
@@ -11146,10 +11146,15 @@
         return `<h4 class="sv-group">${esc(label)} <span class="muted">${esc(String(list.length))}</span></h4>`
           + list.map((t) => {
             const k = `${u.uid}/${t.id}`;
+            /* saves (PS5 and PS4) can be read out as a ZIP of plain files for another console: one button per slot */
+            const slots = Array.isArray(t.slots) ? t.slots : [];
+            const zips = slots.map((s) => `<button type="button" class="btn ghost sv-zip" data-sv-export="${esc(`${k}/${s.slot}`)}" data-name="${esc(svName(t))}"
+              aria-label="${slots.length > 1 ? `${esc(svName(t))} (${esc(s.slot)}) als ZIP-Datei auslesen` : `${esc(svName(t))} als ZIP-Datei auslesen`}">${slots.length > 1 ? `Als ZIP · ${esc(s.slot)}` : "Als ZIP"}</button>`).join("");
             return `<div class="sv-title-row"><label class="sv-title"><input type="checkbox" data-sv-title="${esc(k)}"${sv.sel.has(k) ? " checked" : ""}>
           <span class="sv-t-name"><b>${esc(svName(t))}</b>
             <small>${esc(t.id)} · ${esc(t.platform)}${t.kind === "app" ? " · App" : ""}${t.installed ? "" : " · nicht installiert"}</small></span>
           <span class="sv-t-size">${esc(bytes(t.bytes))}<small>${t.mtime ? esc(svWhen(t.mtime)) : ""}</small></span></label>
+          ${zips}
           <button type="button" class="btn ghost sv-del" data-sv-delete="${esc(k)}" data-name="${esc(svName(t))}" aria-label="${esc(svName(t))} löschen">Löschen</button></div>`;
           }).join("");
       }).join("")}</div>`).join("");
@@ -11227,6 +11232,106 @@
     }).join("") : `<p class="pt-empty">Noch keine Sicherung. Wähle oben aus, was gesichert werden soll, und wohin.</p>`;
   };
 
+  /* The ZIPs that are ready to be downloaded (and the ones to be deleted again). */
+  const svRenderExports = () => {
+    const list = (sv.data && sv.data.exports) || [];
+    txt("#sv-tr-sub", list.length ? `${list.length} ${list.length === 1 ? "ZIP-Datei" : "ZIP-Dateien"} bereit, die neueste zuerst` : "");
+    $("#sv-exports").innerHTML = list.length ? list.map((x) => `<div class="sv-ex-row">
+        <span class="sv-t-name"><b>${esc(x.name)}</b><small>${esc(bytes(x.bytes))} · ${esc(svWhen(x.created))}</small></span>
+        <a class="btn ghost" href="/api/v1/saves/export/download?name=${encodeURIComponent(x.name)}" download>Herunterladen</a>
+        <button type="button" class="btn ghost" data-sv-exdel="${esc(x.name)}" aria-label="${esc(x.name)} löschen">Löschen</button>
+      </div>`).join("")
+      : `<p class="pt-empty">Noch keine ZIP-Datei. Drücke oben bei einem Titel auf „Als ZIP“.</p>`;
+  };
+
+
+  /* ── Einspielen: ein Spielstand aus einer ZIP-Datei (saveimport.c) ───────────────
+     Die ZIP-Datei geht über den Upload des Dateimanagers in den Eingangsordner der Konsole, die App prüft sie (…/import/plan) und
+     zeigt, was drin ist; dann wählt man den Benutzer. Erst „Einspielen“ ändert etwas. */
+  const svIm = { name: "", plan: null, user: "", busy: false, msg: "" };
+  const svImName = (fname) => {
+    const n = String(fname).replace(/\.zip$/i, "").replace(/[^A-Za-z0-9._-]/g, "_").replace(/\.{2,}/g, "_").replace(/^\.+/, "").slice(0, 80) || "spielstand";
+    return `import-${Date.now()}-${n}.zip`;
+  };
+
+  const svImRender = () => {
+    const host = $("#sv-im-plan");
+    txt("#sv-im-state", svIm.msg);
+    const p = svIm.plan, d = sv.data;
+    if (!p) { host.innerHTML = ""; return; }
+    if (!p.importable) {
+      host.innerHTML = `<div class="sv-im-card"><p class="cp-err">${esc(p.why)}</p>
+        <div class="cp-actions"><button type="button" class="btn" data-sv-imdrop>Verwerfen</button></div></div>`;
+      return;
+    }
+    const users = p.users || [];
+    if (!users.some((u) => u.uid === svIm.user)) svIm.user = (users[0] || {}).uid || "";
+    const sel = users.find((u) => u.uid === svIm.user);
+    const drive = d && d.drives.find((x) => x.mount === sv.drive);
+    const needBackup = !!(sel && sel.has_title);
+    const why = d && d.game_running ? "Es läuft ein Spiel. Beende es zuerst."
+      : svActive() ? "Es läuft schon ein Vorgang."
+      : !users.length ? "Auf der Konsole gibt es keinen Benutzer."
+      : needBackup && !drive ? "Für den Stand davor wird ein Ziel gebraucht: oben bei „Wohin soll gesichert werden?“ eines wählen."
+      : p.free_bytes >= 0 && p.free_bytes < 2 * p.image_bytes + 64 * 1048576 ? "Auf der internen Platte ist zu wenig Platz."
+      : "";
+    host.innerHTML = `<div class="sv-im-card">
+      <p><b>${esc(p.title_name || p.main_title || p.title_id)}</b> <span class="muted">${esc(p.title_id)} · ${esc(p.platform || "PS5")} · ${esc(p.slot)}</span></p>
+      <p class="muted">${esc(String(p.files))} Dateien, ${esc(bytes(p.bytes))}</p>
+      <p class="cp-step">Für welchen Benutzer?</p>
+      <div class="cp-list">${users.map((u) => `<label class="cp-choice"><input type="radio" name="sv-im-user" value="${esc(u.uid)}"${u.uid === svIm.user ? " checked" : ""}>
+        <span class="cp-choice-text"><b>${esc(u.name)}</b><span class="muted">${u.has_slot ? "hat diesen Spielstand schon: er wird ersetzt" : u.has_title ? "hat schon Spielstände dieses Titels" : "noch kein Spielstand dieses Titels"}</span></span></label>`).join("")}</div>
+      ${needBackup && drive ? `<p class="muted">Der jetzige Stand wird vorher auf ${esc(drive.label)} gesichert.</p>` : ""}
+      <div class="cp-actions"><p class="muted sv-hint">${esc(why)}</p>
+        <button type="button" class="btn" data-sv-imdrop>Verwerfen</button>
+        <button type="button" class="btn primary" id="sv-im-go"${why ? " disabled" : ""}>Einspielen</button></div></div>`;
+  };
+
+  const svImPick = async (file) => {
+    if (!file || svIm.busy) return;
+    if (!/\.zip$/i.test(file.name)) { toast("Bitte eine ZIP-Datei wählen.", "error"); return; }
+    svIm.busy = true;
+    svIm.plan = null;
+    svIm.msg = "wird hochgeladen …";
+    svImRender();
+    const name = svImName(file.name);
+    try {
+      const inbox = await api("/api/v1/saves/import/inbox", { method: "POST" });
+      const r = await fetch(`/api/v1/files/upload?path=${encodeURIComponent(inbox.path)}&name=${encodeURIComponent(name)}`, { method: "POST", body: file });
+      let d = null;
+      try { d = await r.json(); } catch { /* keine Antwort */ }
+      if (!r.ok || !d || d.ok === false) throw new Error((d && d.message) || `Die Konsole meldet einen Fehler (HTTP ${r.status}).`);
+      svIm.msg = "wird geprüft …";
+      svImRender();
+      svIm.plan = await api("/api/v1/saves/import/plan", { method: "POST", body: JSON.stringify({ name }) });
+      svIm.name = name;
+    } catch (e) { toast(e.message, "error"); }
+    svIm.msg = "";
+    svIm.busy = false;
+    svImRender();
+  };
+
+  const svImGo = async () => {
+    const p = svIm.plan;
+    if (!p) return;
+    const sel = (p.users || []).find((u) => u.uid === svIm.user);
+    const drive = sv.data && sv.data.drives.find((x) => x.mount === sv.drive);
+    const body = { name: p.name, user: svIm.user };
+    if (sel && sel.has_title && drive) body.mount = drive.mount;
+    $("#sv-im-go").disabled = true;
+    try {
+      svStarted(await api("/api/v1/saves/import", { method: "POST", body: JSON.stringify(body) }));
+    } catch (e) { toast(e.message, "error"); svImRender(); }
+  };
+
+  const svImDrop = async () => {
+    const name = svIm.name;
+    svIm.plan = null;
+    svIm.name = "";
+    svImRender();
+    if (name) { try { await api("/api/v1/saves/import/discard", { method: "POST", body: JSON.stringify({ name }) }); } catch { /* weg oder nie da */ } }
+  };
+
   const svRenderJob = () => {
     const j = sv.job, card = $("#sv-job-card");
     const recent = j && j.state !== "idle" && (j.active || (j.finished_ago_s >= 0 && j.finished_ago_s < 900));
@@ -11240,7 +11345,7 @@
       txt("#sv-job-sub", j.elapsed_s > 0 ? `seit ${ptDur(j.elapsed_s)}` : "");
       body = `<p class="cp-num"><b>${esc(j.phase)}</b> · ${esc(String(j.percent))} %</p>
         <div class="cp-bar" role="progressbar" aria-label="Fortschritt" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, j.percent))}"><div style="width:${Math.max(0, Math.min(100, j.percent))}%"></div></div>
-        <p class="muted cp-cur">${esc(String(j.files_done))} von ${esc(String(j.files_total))} Dateien${j.current ? " · " + esc(j.current) : ""}</p>`;
+        <p class="muted cp-cur">${j.kind === "export" || j.kind === "import" ? esc(j.current || "") : `${esc(String(j.files_done))} von ${esc(String(j.files_total))} Dateien${j.current ? " · " + esc(j.current) : ""}`}</p>`;
       cancel.textContent = "Abbrechen";
       cancel.hidden = !j.can_cancel;       /* beim Ersetzen der Dateien nimmt die Konsole keinen Abbruch mehr an */
     } else {
@@ -11254,6 +11359,17 @@
             <p class="sv-job-path muted">Ordner: <code>${esc(j.path)}</code></p>`;
         else if (j.kind === "verify")
           body = `<p class="cp-ok">Alle ${esc(String(j.ok_files))} Dateien stimmen mit der Sicherung überein.</p>`;
+        else if (j.kind === "export")
+          body = `<p class="cp-ok">${esc(String(j.ok_files))} Dateien ausgelesen und in eine ZIP-Datei gepackt.</p>
+            <p class="sv-job-path muted">Datei: <code>${esc(j.path)}</code></p>
+            ${j.note ? `<p class="muted">${esc(j.note)}</p>` : ""}
+            <a class="btn primary sv-job-dl" href="/api/v1/saves/export/download?name=${encodeURIComponent(String(j.path).split("/").pop())}" download>Herunterladen</a>`;
+        else if (j.kind === "import")
+          body = `<p class="cp-ok">${esc(String(j.ok_files))} Dateien eingespielt, im neuen Abbild zurückgelesen und geprüft.</p>
+            <p class="sv-job-path muted">Abbild: <code>${esc(j.path)}</code></p>
+            ${j.undo ? `<p class="sv-job-path muted">Der Stand davor liegt hier und lässt sich zurückspielen: <code>${esc(j.undo)}</code></p>` : ""}
+            ${j.note ? `<p class="muted">${esc(j.note)}</p>` : ""}
+            <p class="muted">Starte jetzt das Spiel und prüfe den Spielstand.</p>`;
         else if (j.kind === "delete")
           body = `<p class="cp-ok">Die Spielstände wurden gelöscht.</p>
             ${j.undo ? `<p class="sv-job-path muted">Der Stand davor liegt hier und lässt sich zurückspielen: <code>${esc(j.undo)}</code></p>` : ""}`;
@@ -11270,7 +11386,7 @@
         txt("#sv-job-title", `${kind} abgebrochen`);
         txt("#sv-job-sub", "");
         body = `<p class="muted">${j.kind === "verify" ? "Die Prüfung wurde abgebrochen."
-          : j.kind === "restore" ? "Auf der Konsole wurde nichts verändert."
+          : j.kind === "restore" || j.kind === "import" ? "Auf der Konsole wurde nichts verändert."
           : "Das Angefangene wurde entfernt."}</p>
           ${j.kind === "restore" && j.undo ? `<p class="sv-job-path muted">Die Sicherung des jetzigen Stands, die schon fertig war, bleibt liegen: <code>${esc(j.undo)}</code></p>` : ""}`;
       }
@@ -11283,7 +11399,8 @@
     if (!sv.data) {
       txt("#sv-sub", "nicht verfügbar");
       $("#sv-users").innerHTML = `<p class="pt-empty">Die Spielstände ließen sich nicht lesen: ${esc(sv.error)}</p>`;
-      ["#sv-drives", "#sv-backups"].forEach((s) => { $(s).innerHTML = ""; });
+      ["#sv-drives", "#sv-backups", "#sv-exports"].forEach((s) => { $(s).innerHTML = ""; });
+      txt("#sv-tr-sub", "");
       txt("#sv-bk-sub", "");
       txt("#sv-hint", "");
       $("#sv-start").disabled = true;
@@ -11301,6 +11418,8 @@
     svRenderDrives();
     svRenderStart();
     svRenderBackups();
+    svRenderExports();
+    svImRender();
     svRenderJob();
   };
 
@@ -11333,6 +11452,7 @@
       const was = svActive();
       sv.job = j;
       svRenderJob();
+      if (was && !j.active && j.kind === "import" && j.state === "done") { svIm.plan = null; svIm.name = ""; }      /* die hochgeladene Datei ist verbraucht */
       if (was && !j.active) await loadSaves();
       svSync();
     } catch { /* die nächste Runde versucht es wieder */ }
@@ -11389,12 +11509,24 @@
     } else if (t.name === "sv-drive") {
       sv.drive = t.value;
       svRenderStart();
+      svImRender();
+    } else if (t.id === "sv-im-file") {
+      const f = t.files && t.files[0];
+      t.value = "";
+      svImPick(f);
+    } else if (t.name === "sv-im-user") {
+      svIm.user = t.value;
+      svImRender();
     }
   });
+  const svImPickBtn = $("#sv-im-pick");
+  if (svImPickBtn) svImPickBtn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#sv-im-file").click(); } });
   svPane.addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;
     if (b.id === "sv-start") { svStart(); return; }
+    if (b.id === "sv-im-go") { svImGo(); return; }
+    if (b.dataset.svImdrop !== undefined) { svImDrop(); return; }
     if (b.id === "sv-reload") { loadSaves(); return; }
     if (b.id === "sv-cancel") {
       if (svActive()) {
@@ -11436,6 +11568,25 @@
         svStarted(await api("/api/v1/saves/delete", { method: "POST",
           body: JSON.stringify(sv.drive ? { uid, id, mount: sv.drive } : { uid, id, no_backup: true }) }));
       } catch (err) { toast(err.message, "error"); } finally { b.disabled = false; }
+      return;
+    }
+    if (b.dataset.svExport) {
+      const [uid, id, slot] = b.dataset.svExport.split("/");
+      b.disabled = true;
+      try {
+        svStarted(await api("/api/v1/saves/export", { method: "POST", body: JSON.stringify({ user: uid, title: id, slot }) }));
+      } catch (err) { toast(err.message, "error"); } finally { b.disabled = false; }
+      return;
+    }
+    if (b.dataset.svExdel) {
+      const name = b.dataset.svExdel;
+      const yes = await askDelete({ title: "ZIP-Datei löschen?", lead: "Das wird gelöscht:", items: [{ name, info: "ZIP-Datei" }],
+                                    notes: ["Der Spielstand an der Konsole bleibt unverändert."], warn: "" });
+      if (!yes) return;
+      try {
+        await api("/api/v1/saves/export/delete", { method: "POST", body: JSON.stringify({ name }) });
+        await loadSaves();
+      } catch (err) { toast(err.message, "error"); }
       return;
     }
     if (b.dataset.svRestore) {

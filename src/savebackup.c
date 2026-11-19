@@ -93,11 +93,16 @@
 #include "checkfile.h"
 #include "ioerr.h"
 #include "ps5tm.h"
+#include "saveimport.h"
+#include "savexport.h"
 #include "third_party/cJSON.h"
 #include "third_party/libdeflate/libdeflate.h"
 
 #ifndef PS5TM_SAVE_HOME
 #define PS5TM_SAVE_HOME "/user/home"
+#endif
+#ifndef PS5TM_SYS_DATA
+#define PS5TM_SYS_DATA "/system_data"       /* the folder of the console's databases; below it savedata_prospero/<user>/db/user/savedata.db */
 #endif
 #ifndef PS5TM_SAVE_SYS
 #define PS5TM_SAVE_SYS  "/system_data/savedata"
@@ -139,7 +144,7 @@ typedef struct {
   unsigned files_total, files_done;
   char     current[160];
   char     error[640];        /* room for PS5TM_IO_TEXT_MAX (ioerr.h) after a label and a path */
-  char     note[256];
+  char     note[640];            /* a sentence or two the person should read although it worked */
   char     path[320];            /* the backup made, or checked                  */
   char     undo[320];            /* the backup of the state before a restore     */
   unsigned ok_files, bad_files;
@@ -1272,6 +1277,9 @@ typedef struct {
   char     backup[320];              /* verify, restore: which */
   char     uid[9];
   char     id[10];
+  char     slot[72];                 /* export: the slot (sdimg_<slot>) */
+  int      area;                     /* export: 0 a PS4 save (savedata), 1 a PS5 save (savedata_prospero) */
+  char     zipname[140];             /* export: the file name of the ZIP */
   tsel_t  *sel;
   unsigned nsel;
   char   (*users)[9];
@@ -1286,6 +1294,7 @@ args_free(job_args_t *a) {
 }
 
 static void *backup_main(void *arg);
+static void *export_main(void *arg);
 static void *verify_main(void *arg);
 static void *restore_main(void *arg);
 static void *delete_main(void *arg);
@@ -2288,6 +2297,420 @@ ps5tm_saves_delete_start(const char *uid, const char *id, const char *target_mou
   return job_launch(delete_main, a, "delete", err, err_len);
 }
 
+/* ---- export: a PS5 save as a ZIP of plain files (savexport.c), to be put in on another console */
+
+#define SV_EXPORT_DIR  PS5TM_DATA_DIR "/savexport"
+#define SV_EXPORT_WORK PS5TM_DATA_DIR "/savexport/work"
+#define SV_EXPORT_MAX  60                 /* ZIPs the page lists */
+
+/* A slot is the name after "sdimg_": letters, digits, "_", "-", "."; never starting with a dot. */
+static int
+slot_ok(const char *s) {
+  const size_t n = s ? strlen(s) : 0;
+  if(n < 1 || n > 64 || s[0] == '.') return 0;
+  for(size_t i = 0; i < n; i++) {
+    const char c = s[i];
+    if(!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '-' || c == '.')) return 0;
+  }
+  return 1;
+}
+
+/* The console's own copies (sdimg_sce_bu_...) are no slot of a person's. */
+static int
+slot_is_system_copy(const char *slot) {
+  return !strncmp(slot, "sce_bu_", 7);
+}
+
+static int
+export_name_ok(const char *name) {
+  const size_t n = name ? strlen(name) : 0;
+  if(n < 5 || n > 130 || name[0] == '.' || strcmp(name + n - 4, ".zip")) return 0;
+  for(size_t i = 0; i < n; i++) {
+    const char c = name[i];
+    if(!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '-' || c == '.')) return 0;
+  }
+  return !strstr(name, "..");
+}
+
+static int
+slot_image_path(const char *uid, int area, const char *id, const char *slot, char *out, size_t n) {
+  return snprintf(out, n, "%s/%s/%s/%s/sdimg_%s", PS5TM_SAVE_HOME, uid, k_area[area].data, id, slot) >= (int)n ? -1 : 0;
+}
+
+static void
+ex_phase(void *c, const char *t, uint64_t total) { (void)c; job_phase(J_COPY, t, total); }
+static void
+ex_work(void *c, uint64_t n) { (void)c; job_work(n); }
+static void
+ex_current(void *c, const char *rel) { (void)c; job_current(rel); }
+static int
+ex_stop(void *c) { (void)c; return cancelled(); }
+
+/* ZIPs that were never finished (a power cut): only ours, only the unfinished ones. */
+static void
+export_sweep_partial(void) {
+  DIR *d = opendir(SV_EXPORT_DIR);
+  if(!d) return;
+  struct dirent *e;
+  while((e = readdir(d)) != NULL) {
+    const size_t n = strlen(e->d_name);
+    if(n > 12 && !strcmp(e->d_name + n - 12, ".zip.partial")) {
+      char p[PATH_MAX];
+      if(snprintf(p, sizeof(p), "%s/%s", SV_EXPORT_DIR, e->d_name) < (int)sizeof(p)) unlink(p);
+    }
+  }
+  closedir(d);
+}
+
+static void *
+export_main(void *arg) {
+  job_args_t *a = arg;
+  ps5tm_powerguard_hold();
+  mkdir(PS5TM_DATA_DIR, 0755);
+  mkdir(SV_EXPORT_DIR, 0755);
+  export_sweep_partial();
+
+  char image[PATH_MAX];
+  if(slot_image_path(a->uid, a->area, a->id, a->slot, image, sizeof(image)) != 0) {
+    job_fail("Der Pfad des Spielstands ist zu lang.");
+  } else {
+    savexport_args_t xa = { image, a->id, a->slot, SV_EXPORT_WORK, SV_EXPORT_DIR, a->zipname };
+    savexport_hooks_t h = { NULL, ex_phase, ex_work, ex_current, ex_stop };
+    savexport_result_t res;
+    char err[640];
+    PS5TM_INFO("saves_export_start", "Spielstände: Auslesen eines Spielstands von %s beginnt.", a->id);
+    const int rc = savexport_run(&xa, &h, &res, err, sizeof(err));
+    if(rc == 0) {
+      pthread_mutex_lock(&g_lock);
+      snprintf(g_job.path, sizeof(g_job.path), "%s", res.zip);
+      g_job.ok_files = res.files;
+      g_job.bytes_total = res.bytes;
+      if(res.note[0]) snprintf(g_job.note, sizeof(g_job.note), "%s", res.note);
+      if(res.skipped) {
+        const size_t n = strlen(g_job.note);
+        snprintf(g_job.note + n, sizeof(g_job.note) - n, "%s%u Einträge, die keine Dateien sind (Verknüpfungen), wurden nicht übernommen.", n ? " " : "", res.skipped);
+      }
+      pthread_mutex_unlock(&g_lock);
+      PS5TM_INFO("saves_export_done", "Spielstände: ZIP mit %u Dateien (%llu KB) fertig.", res.files, (unsigned long long)(res.bytes >> 10));
+      job_state(J_DONE);
+    } else if(rc == ECANCELED) {
+      PS5TM_INFO("saves_export_cancelled", "Spielstände: Auslesen abgebrochen, das Angefangene ist entfernt.");
+      job_state(J_CANCELLED);
+    } else {
+      PS5TM_WARN("saves_export_failed", "Spielstände: Auslesen fehlgeschlagen.");      /* the reason names files: for the page, not the log */
+      job_fail("%s", err);
+    }
+  }
+  ps5tm_powerguard_release();
+  args_free(a);
+  return NULL;
+}
+
+int
+ps5tm_saves_export_start(const char *uid, const char *id, const char *slot, char *err, size_t err_len) {
+  char gid[16];
+  if(game_running(gid, sizeof(gid))) {
+    snprintf(err, err_len, "Es läuft ein Spiel (%s). Ein Spielstand wird nur ausgelesen, wenn kein Spiel läuft, auch kein pausiertes: "
+             "Sonst wäre er vielleicht halb geschrieben.", gid);
+    return 409;
+  }
+  if(other_job_active(err, err_len)) return 409;
+  if(!uid_ok(uid) || !user_exists(uid)) { snprintf(err, err_len, "Diesen Benutzer gibt es an der Konsole nicht."); return 404; }
+  if(!tid_ok(id)) { snprintf(err, err_len, "Der Titel ist falsch angegeben."); return 400; }
+  if(title_is_app(id)) { snprintf(err, err_len, SV_APP_REFUSED); return 403; }
+  const int area = title_find(uid, id);                    /* 0: PS4, 1: PS5 */
+  if(area < 0) { snprintf(err, err_len, "Dieser Titel hat keinen Spielstand an der Konsole."); return 404; }
+  if(!slot_ok(slot) || slot_is_system_copy(slot)) { snprintf(err, err_len, "Dieser Spielstand ist falsch angegeben."); return 400; }
+  char image[PATH_MAX];
+  struct stat st;
+  if(slot_image_path(uid, area, id, slot, image, sizeof(image)) != 0 || stat(image, &st) != 0 || !S_ISREG(st.st_mode)) {
+    snprintf(err, err_len, "Diesen Spielstand gibt es nicht (mehr).");
+    return 404;
+  }
+
+  job_args_t *a = calloc(1, sizeof(*a));
+  if(!a) { snprintf(err, err_len, "Kein Speicher."); return 503; }
+  snprintf(a->kind, sizeof(a->kind), "export");
+  snprintf(a->uid, sizeof(a->uid), "%s", uid);
+  snprintf(a->id, sizeof(a->id), "%s", id);
+  snprintf(a->slot, sizeof(a->slot), "%s", slot);
+  a->area = area;
+  time_t now = time(NULL);
+  struct tm tmv;
+  char stamp[24] = "00000000-000000";
+  if(gmtime_r(&now, &tmv)) strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", &tmv);
+  snprintf(a->zipname, sizeof(a->zipname), "%s_%s_%s.zip", id, slot, stamp);
+  return job_launch(export_main, a, "export", err, err_len);
+}
+
+/* The path of a finished ZIP the page names, accepted only as a plain file name inside the export folder. 0 when it is there. */
+int
+ps5tm_saves_export_path(const char *name, char *out, size_t out_len) {
+  struct stat st;
+  if(!export_name_ok(name)) return -1;
+  if(snprintf(out, out_len, "%s/%s", SV_EXPORT_DIR, name) >= (int)out_len) return -1;
+  return lstat(out, &st) == 0 && S_ISREG(st.st_mode) ? 0 : -1;
+}
+
+int
+ps5tm_saves_export_delete(const char *name, char *err, size_t err_len) {
+  char p[PATH_MAX];
+  if(ps5tm_saves_export_path(name, p, sizeof(p)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); return 404; }
+  if(unlink(p) != 0) { snprintf(err, err_len, "Die Datei ließ sich nicht löschen: %s", err_text(errno ? errno : EIO)); return 503; }
+  return 200;
+}
+
+/* ---- import: a save from a ZIP of plain files put in on this console (saveimport.c) */
+
+#define SV_IMPORT_DIR   PS5TM_DATA_DIR "/savexport/import"
+#define SV_DB_BACKUP    PS5TM_DATA_DIR "/savexport/db-backup"
+
+/* The account the console has for a user, found by the name (username.dat is the name of the user, the registry lists the accounts by name). */
+static uint64_t
+user_account_id(const char *uid, int *found) {
+  char nm[64];
+  user_name(uid, nm, sizeof(nm));
+  ps5tm_account_entry_t acc[PS5TM_ACCOUNT_SLOTS];
+  const int n = ps5tm_account_list(acc, PS5TM_ACCOUNT_SLOTS);
+  if(found) *found = 0;
+  for(int i = 0; i < n; i++)
+    if(!strcmp(acc[i].name, nm)) { if(found) *found = 1; return acc[i].id; }
+  return 0;
+}
+
+static int
+import_zip_path(const char *name, char *out, size_t n) {
+  if(!export_name_ok(name)) return -1;
+  if(snprintf(out, n, "%s/%s", SV_IMPORT_DIR, name) >= (int)n) return -1;
+  struct stat st;
+  return lstat(out, &st) == 0 && S_ISREG(st.st_mode) ? 0 : -1;
+}
+
+/* Where the page puts an uploaded ZIP (the file manager's upload needs the folder to be there). */
+int
+ps5tm_saves_import_inbox(char *path, size_t n) {
+  mkdir(PS5TM_DATA_DIR, 0755);
+  mkdir(PS5TM_DATA_DIR "/savexport", 0755);
+  mkdir(SV_IMPORT_DIR, 0755);
+  struct stat st;
+  if(stat(SV_IMPORT_DIR, &st) != 0 || !S_ISDIR(st.st_mode)) return -1;
+  snprintf(path, n, "%s", SV_IMPORT_DIR);
+  return 0;
+}
+
+int
+ps5tm_saves_import_discard(const char *name, char *err, size_t err_len) {
+  char p[PATH_MAX];
+  if(import_zip_path(name, p, sizeof(p)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); return 404; }
+  if(unlink(p) != 0) { snprintf(err, err_len, "Die Datei ließ sich nicht löschen: %s", err_text(errno ? errno : EIO)); return 503; }
+  return 200;
+}
+
+/* What the ZIP is and where it could go: the page shows it before anything is done. NULL with err/status when the file is no readable ZIP. */
+cJSON *
+ps5tm_saves_import_plan_json(const char *name, char *err, size_t err_len, int *status) {
+  char zip[PATH_MAX];
+  *status = 200;
+  if(import_zip_path(name, zip, sizeof(zip)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); *status = 404; return NULL; }
+  saveimport_info_t info;
+  if(saveimport_inspect(zip, &info, err, err_len) != 0) { *status = 400; return NULL; }
+  cJSON *o = cJSON_CreateObject();
+  cJSON_AddBoolToObject(o, "ok", 1);
+  cJSON_AddStringToObject(o, "name", name);
+  cJSON_AddBoolToObject(o, "importable", info.importable);
+  cJSON_AddStringToObject(o, "why", info.why);
+  cJSON_AddStringToObject(o, "title_id", info.title_id);
+  cJSON_AddStringToObject(o, "platform", info.ps4 ? "PS4" : "PS5");
+  cJSON_AddStringToObject(o, "slot", info.slot);
+  cJSON *names = NULL;
+  names_load(&names);
+  char shown[160] = "";
+  if(info.title_id[0]) name_shown(names, info.title_id, shown, sizeof(shown));
+  cJSON_Delete(names);
+  cJSON_AddStringToObject(o, "title_name", shown);
+  cJSON_AddStringToObject(o, "main_title", info.main_title);
+  cJSON_AddNumberToObject(o, "files", info.files);
+  cJSON_AddNumberToObject(o, "bytes", (double)info.bytes);
+  cJSON_AddNumberToObject(o, "image_bytes", (double)info.image_size);
+  uint64_t avail = console_free();
+  cJSON_AddNumberToObject(o, "free_bytes", avail == UINT64_MAX ? -1 : (double)avail);
+  cJSON *users = cJSON_AddArrayToObject(o, "users");
+  char uids[SV_MAX_USERS][9];
+  const unsigned nu = users_all(uids, SV_MAX_USERS);
+  for(unsigned i = 0; i < nu; i++) {
+    cJSON *u = cJSON_CreateObject();
+    char nm[64];
+    user_name(uids[i], nm, sizeof(nm));
+    cJSON_AddStringToObject(u, "uid", uids[i]);
+    cJSON_AddStringToObject(u, "name", nm);
+    int has_title = 0, has_slot = 0;
+    if(info.importable) {
+      has_title = title_has_files(uids[i], info.ps4 ? 0 : 1, info.title_id);
+      char img[PATH_MAX];
+      struct stat st;
+      has_slot = snprintf(img, sizeof(img), "%s/%s/%s/%s/sdimg_%s", PS5TM_SAVE_HOME, uids[i], k_area[info.ps4 ? 0 : 1].data, info.title_id, info.slot) < (int)sizeof(img) &&
+                 stat(img, &st) == 0;
+    }
+    cJSON_AddBoolToObject(u, "has_title", has_title);
+    cJSON_AddBoolToObject(u, "has_slot", has_slot);
+    cJSON_AddItemToArray(users, u);
+  }
+  return o;
+}
+
+static int
+im_stop(void *c) { (void)c; return cancelled(); }
+static void
+im_phase(void *c, const char *t, uint64_t total) {
+  (void)c;
+  job_phase(__atomic_load_n(&g_nocancel, __ATOMIC_ACQUIRE) ? J_APPLY : J_COPY, t, total);
+}
+static void
+im_no_return(void *c) {
+  (void)c;
+  __atomic_store_n(&g_nocancel, 1, __ATOMIC_RELEASE);      /* from here the console's files are changed: no stop is taken */
+}
+
+static void *
+import_main(void *arg) {
+  job_args_t *a = arg;
+  ps5tm_powerguard_hold();
+  char err[640] = {0};
+  bk_t undo;
+  memset(&undo, 0, sizeof(undo));
+  char zip[PATH_MAX];
+  saveimport_info_t info;
+
+  if(import_zip_path(a->zipname, zip, sizeof(zip)) != 0) { job_fail("Die ZIP-Datei ist nicht mehr da."); goto out; }
+  if(saveimport_inspect(zip, &info, err, sizeof(err)) != 0) { job_fail("%s", err); goto out; }
+  if(!info.importable) { job_fail("%s", info.why); goto out; }
+  snprintf(a->id, sizeof(a->id), "%.9s", info.title_id);
+  PS5TM_INFO("saves_import_start", "Spielstände: Einspielen eines Spielstands von %s für Benutzer %s beginnt.", info.title_id, a->uid);
+
+  /* the title's present state first, as a backup of its own (the same "undo" backup a restore makes) */
+  const int iarea = info.ps4 ? 0 : 1;
+  if(title_has_files(a->uid, iarea, info.title_id)) {
+    if(!a->base[0]) { job_fail("Für den Stand davor gibt es kein Ziel. Es wurde nichts eingespielt."); goto out; }
+    undo.sel   = calloc(1, sizeof(*undo.sel));
+    undo.users = calloc(1, sizeof(*undo.users));
+    if(!undo.sel || !undo.users) { job_fail("Kein Speicher."); goto out; }
+    snprintf(undo.sel[0].uid, sizeof(undo.sel[0].uid), "%s", a->uid);
+    snprintf(undo.sel[0].id, sizeof(undo.sel[0].id), "%s", info.title_id);
+    undo.sel[0].area = iarea;
+    undo.nsel = 1;
+    snprintf(undo.users[0], 9, "%s", a->uid);
+    undo.nusers  = 1;
+    undo.with_db = 1;                                       /* the database goes along: the import writes a row into it */
+    snprintf(undo.base, sizeof(undo.base), "%s", a->base);
+    snprintf(undo.kind, sizeof(undo.kind), "undo");
+    char tag[40];
+    snprintf(tag, sizeof(tag), "vor-Einspielen_%s", info.title_id);
+    const int rc = bk_write(&undo, tag, "Jetzigen Stand sichern", err, sizeof(err));
+    if(rc == ECANCELED) { job_state(J_CANCELLED); goto out; }
+    if(rc != 0) {
+      PS5TM_WARN("saves_import_failed", "Spielstände: Einspielen von %s nicht begonnen, die Sicherung des jetzigen Stands schlug fehl.", info.title_id);
+      job_fail("Der jetzige Stand ließ sich nicht sichern, deshalb wurde nichts eingespielt. %s", err);
+      goto out;
+    }
+    pthread_mutex_lock(&g_lock);
+    snprintf(g_job.undo, sizeof(g_job.undo), "%s", undo.dir);
+    pthread_mutex_unlock(&g_lock);
+  }
+
+  {
+    char gid[16];
+    if(game_running(gid, sizeof(gid))) {
+      job_fail("Währenddessen wurde ein Spiel gestartet (%s). Es wurde nichts eingespielt.", gid);
+      goto out;
+    }
+  }
+
+  int acc_found = 0;
+  const uint64_t account = user_account_id(a->uid, &acc_found);
+  saveimport_args_t ia;
+  memset(&ia, 0, sizeof(ia));
+  ia.zip = zip;
+  ia.work_dir = SV_EXPORT_WORK;
+  ia.home_dir = PS5TM_SAVE_HOME;
+  ia.sys_dir = PS5TM_SYS_DATA;
+  ia.uid = a->uid;
+  ia.user_id = (uint32_t)strtoul(a->uid, NULL, 16);
+  ia.account_id = account;
+  ia.db_backup_dir = SV_DB_BACKUP;
+  saveimport_hooks_t ih;
+  memset(&ih, 0, sizeof(ih));
+  ih.base.phase = im_phase;
+  ih.base.work = ex_work;
+  ih.base.current = ex_current;
+  ih.base.stop = im_stop;
+  ih.no_return = im_no_return;
+  saveimport_result_t res;
+  const int rc = saveimport_run(&ia, &ih, &res, err, sizeof(err));
+  if(rc == 0) {
+    pthread_mutex_lock(&g_lock);
+    snprintf(g_job.path, sizeof(g_job.path), "%s", res.image);
+    g_job.ok_files = res.files;
+    g_job.bytes_total = res.bytes;
+    size_t n = 0;
+    g_job.note[0] = 0;
+    if(res.note[0]) n = (size_t)snprintf(g_job.note, sizeof(g_job.note), "%s", res.note);
+    if(!acc_found && n + 2 < sizeof(g_job.note))
+      snprintf(g_job.note + n, sizeof(g_job.note) - n, "%sFür diesen Benutzer wurde im Register der Konsole kein Konto gefunden; es wurde die Konto-ID %llu eingetragen.", n ? " " : "", (unsigned long long)account);
+    pthread_mutex_unlock(&g_lock);
+    unlink(zip);                                            /* the uploaded file has done its job */
+    PS5TM_INFO("saves_import_done", "Spielstände: %s eingespielt, %u Dateien, Eintrag in der Datenbank %s.", info.title_id, res.files, res.db_inserted ? "neu" : "aktualisiert");
+    job_state(J_DONE);
+  } else if(rc == ECANCELED) {
+    PS5TM_INFO("saves_import_cancelled", "Spielstände: Einspielen abgebrochen, an der Konsole ist nichts verändert.");
+    job_state(J_CANCELLED);
+  } else {
+    PS5TM_WARN("saves_import_failed", "Spielstände: Einspielen fehlgeschlagen.");           /* the reason names files: for the page, not the log */
+    job_fail("%s%s", err, undo.dir[0] ? " Der Stand davor ist gesichert." : "");
+  }
+
+out:
+  free(undo.files.v);
+  free(undo.sel);
+  free(undo.users);
+  ps5tm_powerguard_release();
+  args_free(a);
+  return NULL;
+}
+
+int
+ps5tm_saves_import_start(const char *name, const char *uid, const char *target_mount, int no_backup, char *err, size_t err_len) {
+  char gid[16];
+  if(game_running(gid, sizeof(gid))) {
+    snprintf(err, err_len, "Es läuft ein Spiel (%s). Spielstände werden nur eingespielt, wenn kein Spiel läuft, auch kein pausiertes.", gid);
+    return 409;
+  }
+  if(other_job_active(err, err_len)) return 409;
+  if(!uid_ok(uid) || !user_exists(uid)) { snprintf(err, err_len, "Diesen Benutzer gibt es an der Konsole nicht."); return 404; }
+  char zip[PATH_MAX];
+  if(import_zip_path(name, zip, sizeof(zip)) != 0) { snprintf(err, err_len, "Diese ZIP-Datei gibt es nicht (mehr)."); return 404; }
+  saveimport_info_t info;
+  if(saveimport_inspect(zip, &info, err, err_len) != 0) return 400;
+  if(!info.importable) { snprintf(err, err_len, "%s", info.why); return 400; }
+
+  job_args_t *a = calloc(1, sizeof(*a));
+  if(!a) { snprintf(err, err_len, "Kein Speicher."); return 503; }
+  snprintf(a->kind, sizeof(a->kind), "import");
+  snprintf(a->uid, sizeof(a->uid), "%s", uid);
+  snprintf(a->zipname, sizeof(a->zipname), "%s", name);
+  if(title_has_files(uid, info.ps4 ? 0 : 1, info.title_id)) {
+    drive_t dr;
+    if(target_mount && target_mount[0]) {
+      if(drive_resolve(target_mount, &dr) != 0) { args_free(a); snprintf(err, err_len, "Dieses Ziel gibt es an der Konsole gerade nicht."); return 404; }
+      snprintf(a->base, sizeof(a->base), "%s", dr.base);
+    } else if(!no_backup) {
+      args_free(a);
+      snprintf(err, err_len, "Dieser Benutzer hat schon Spielstände dieses Titels. Sie werden vor dem Einspielen gesichert: Dafür ein Ziel wählen.");
+      return 409;
+    }
+  }
+  return job_launch(import_main, a, "import", err, err_len);
+}
+
 int
 ps5tm_saves_busy(void) {
   pthread_mutex_lock(&g_lock);
@@ -2346,6 +2769,72 @@ ps5tm_saves_job_json(void) {
   /* -1: nothing has ended yet. The page shows a result for a quarter of an hour, not for ever. */
   cJSON_AddNumberToObject(o, "finished_ago_s", j.finished_ms ? (double)((now - j.finished_ms) / 1000) : -1);
   return o;
+}
+
+/* The slots of a title: one image each (sdimg_<slot>), the console's own copies left out; a PS4 slot needs its key file (<slot>.bin) beside the image. */
+static cJSON *
+slots_json(const char *uid, int area, const char *id) {
+  cJSON *arr = cJSON_CreateArray();
+  char dir[PATH_MAX];
+  if(!arr || snprintf(dir, sizeof(dir), "%s/%s/%s/%s", PS5TM_SAVE_HOME, uid, k_area[area].data, id) >= (int)sizeof(dir)) return arr;
+  DIR *d = opendir(dir);
+  if(!d) return arr;
+  struct dirent *e;
+  unsigned n = 0;
+  while((e = readdir(d)) != NULL && n < 16) {
+    if(strncmp(e->d_name, "sdimg_", 6)) continue;
+    const char *slot = e->d_name + 6;
+    if(!slot_ok(slot) || slot_is_system_copy(slot)) continue;
+    char full[PATH_MAX];
+    struct stat st;
+    if(snprintf(full, sizeof(full), "%s/%s", dir, e->d_name) >= (int)sizeof(full) || stat(full, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+    if(area == 0) {
+      char bin[PATH_MAX];
+      struct stat bs;
+      if(snprintf(bin, sizeof(bin), "%s/%s.bin", dir, slot) >= (int)sizeof(bin) || stat(bin, &bs) != 0) continue;
+    }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "slot", slot);
+    cJSON_AddNumberToObject(o, "bytes", (double)st.st_size);
+    cJSON_AddNumberToObject(o, "mtime", (double)st.st_mtime);
+    cJSON_AddItemToArray(arr, o);
+    n++;
+  }
+  closedir(d);
+  return arr;
+}
+
+static int
+cmp_export_newest(const void *x, const void *y) {
+  cJSON *ca = cJSON_GetObjectItem(*(cJSON *const *)x, "created"), *cb = cJSON_GetObjectItem(*(cJSON *const *)y, "created");
+  const double a = cJSON_IsNumber(ca) ? ca->valuedouble : 0, b = cJSON_IsNumber(cb) ? cb->valuedouble : 0;
+  return a < b ? 1 : a > b ? -1 : 0;
+}
+
+/* The ZIPs a page can download: the finished ones in the export folder, newest first. */
+static cJSON *
+exports_json(void) {
+  cJSON *arr = cJSON_CreateArray();
+  DIR *d = opendir(SV_EXPORT_DIR);
+  if(!d) return arr;
+  cJSON *found[SV_EXPORT_MAX];
+  unsigned n = 0;
+  struct dirent *e;
+  while((e = readdir(d)) != NULL && n < SV_EXPORT_MAX) {
+    if(!export_name_ok(e->d_name)) continue;
+    char full[PATH_MAX];
+    struct stat st;
+    if(snprintf(full, sizeof(full), "%s/%s", SV_EXPORT_DIR, e->d_name) >= (int)sizeof(full) || lstat(full, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "name", e->d_name);
+    cJSON_AddNumberToObject(o, "bytes", (double)st.st_size);
+    cJSON_AddNumberToObject(o, "created", (double)st.st_mtime);
+    found[n++] = o;
+  }
+  closedir(d);
+  qsort(found, n, sizeof(found[0]), cmp_export_newest);
+  for(unsigned i = 0; i < n; i++) cJSON_AddItemToArray(arr, found[i]);
+  return arr;
 }
 
 static void
@@ -2442,6 +2931,7 @@ ps5tm_saves_json(void) {
       cJSON_AddNumberToObject(tj, "bytes", (double)bytes);
       cJSON_AddNumberToObject(tj, "files", files);
       cJSON_AddNumberToObject(tj, "mtime", (double)mt);
+      cJSON_AddItemToObject(tj, "slots", slots_json(sel[i].uid, sel[i].area, sel[i].id));
       cJSON_AddItemToArray(tl, tj);
       user_bytes += bytes;
     }
@@ -2541,6 +3031,7 @@ ps5tm_saves_json(void) {
   cJSON *bl = cJSON_AddArrayToObject(root, "backups");
   for(unsigned i = 0; i < nfound; i++) cJSON_AddItemToArray(bl, found[i]);
   cJSON_AddNumberToObject(root, "unfinished", unfinished);
+  cJSON_AddItemToObject(root, "exports", exports_json());
 
   cJSON_Delete(names);
   cJSON_AddItemToObject(root, "job", ps5tm_saves_job_json());

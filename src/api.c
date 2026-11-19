@@ -4005,6 +4005,97 @@ handle_saves_delete(int fd, const ps5tm_request_t *req) {
   saves_started(fd, st, "saves_refused", err);
 }
 
+/* A save read out into a ZIP for another console: {"user": "<8 hex>", "title": "PPSA...", "slot": "<slot>"}. */
+static void
+handle_saves_export(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *ju = body ? cJSON_GetObjectItem(body, "user") : NULL;
+  const cJSON *jt = body ? cJSON_GetObjectItem(body, "title") : NULL;
+  const cJSON *js = body ? cJSON_GetObjectItem(body, "slot") : NULL;
+  char uid[16] = "", title[16] = "", slot[80] = "", err[640] = "";
+  if(cJSON_IsString(ju) && strlen(ju->valuestring) < sizeof(uid)) snprintf(uid, sizeof(uid), "%s", ju->valuestring);
+  if(cJSON_IsString(jt) && strlen(jt->valuestring) < sizeof(title)) snprintf(title, sizeof(title), "%s", jt->valuestring);
+  if(cJSON_IsString(js) && strlen(js->valuestring) < sizeof(slot)) snprintf(slot, sizeof(slot), "%s", js->valuestring);
+  cJSON_Delete(body);
+  saves_started(fd, ps5tm_saves_export_start(uid, title, slot, err, sizeof(err)), "saves_refused", err);
+}
+
+/* A finished ZIP as a download: GET ?name=<file name>. */
+static void
+handle_saves_export_download(int fd, const ps5tm_request_t *req) {
+  char name[160] = "", path[400];
+  query_param(req->query, "name", name, sizeof(name));
+  if(ps5tm_saves_export_path(name, path, sizeof(path)) != 0 ||
+     ps5tm_http_send_download(fd, path, "application/zip", name, 4ull << 30) != 0)
+    ps5tm_http_send_error(fd, 404, "not_found", "Diese Datei gibt es nicht (mehr).");
+}
+
+/* {"name": "<file name>"}: deletes a finished ZIP. */
+static void
+handle_saves_export_delete(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL;
+  char name[160] = "", err[256] = "";
+  if(cJSON_IsString(jn) && strlen(jn->valuestring) < sizeof(name)) snprintf(name, sizeof(name), "%s", jn->valuestring);
+  cJSON_Delete(body);
+  const int st = ps5tm_saves_export_delete(name, err, sizeof(err));
+  if(st != 200) { ps5tm_http_send_error(fd, st, "saves_refused", err); return; }
+  ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+}
+
+/* {"name": "<file in the inbox>"}: what the uploaded ZIP is and where it could go. */
+static void
+handle_saves_import_plan(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL;
+  char name[160] = "", err[400] = "";
+  if(cJSON_IsString(jn) && strlen(jn->valuestring) < sizeof(name)) snprintf(name, sizeof(name), "%s", jn->valuestring);
+  cJSON_Delete(body);
+  int st = 200;
+  cJSON *o = ps5tm_saves_import_plan_json(name, err, sizeof(err), &st);
+  if(!o) { ps5tm_http_send_error(fd, st, "saves_refused", err); return; }
+  send_cjson(fd, 200, o);
+}
+
+/* {"name": ..., "user": "<8 hex>", "mount": "<drive>"?, "no_backup": true?}: start the import. */
+static void
+handle_saves_import(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL, *ju = body ? cJSON_GetObjectItem(body, "user") : NULL,
+              *jm = body ? cJSON_GetObjectItem(body, "mount") : NULL;
+  char name[160] = "", uid[16] = "", mount[40] = "", err[640] = "";
+  if(cJSON_IsString(jn) && strlen(jn->valuestring) < sizeof(name)) snprintf(name, sizeof(name), "%s", jn->valuestring);
+  if(cJSON_IsString(ju) && strlen(ju->valuestring) < sizeof(uid)) snprintf(uid, sizeof(uid), "%s", ju->valuestring);
+  if(cJSON_IsString(jm) && strlen(jm->valuestring) < sizeof(mount)) snprintf(mount, sizeof(mount), "%s", jm->valuestring);
+  const int no_backup = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "no_backup"));
+  cJSON_Delete(body);
+  saves_started(fd, ps5tm_saves_import_start(name, uid, mount, no_backup, err, sizeof(err)), "saves_refused", err);
+}
+
+/* {"name": ...}: deletes an uploaded ZIP that is not going to be used. */
+static void
+handle_saves_import_discard(int fd, const ps5tm_request_t *req) {
+  cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+  const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL;
+  char name[160] = "", err[256] = "";
+  if(cJSON_IsString(jn) && strlen(jn->valuestring) < sizeof(name)) snprintf(name, sizeof(name), "%s", jn->valuestring);
+  cJSON_Delete(body);
+  const int st = ps5tm_saves_import_discard(name, err, sizeof(err));
+  if(st != 200) { ps5tm_http_send_error(fd, st, "saves_refused", err); return; }
+  ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+}
+
+/* Makes the folder the uploaded ZIP goes into; answers its path. */
+static void
+handle_saves_import_inbox(int fd) {
+  char p[200];
+  if(ps5tm_saves_import_inbox(p, sizeof(p)) != 0) { ps5tm_http_send_error(fd, 503, "no_inbox", "Der Ordner für die ZIP-Datei ließ sich nicht anlegen."); return; }
+  cJSON *o = cJSON_CreateObject();
+  cJSON_AddBoolToObject(o, "ok", 1);
+  cJSON_AddStringToObject(o, "path", p);
+  send_cjson(fd, 200, o);
+}
+
 static void
 handle_saves_verify(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
@@ -6060,6 +6151,28 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
     send_cjson(fd, 200, ps5tm_saves_job_json());
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/saves/export/download")) {
+    if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET erlaubt."); return; }
+    handle_saves_export_download(fd, req);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/saves/export") ||
+     !strcmp(req->path, "/api/v1/saves/export/delete") ||
+     !strcmp(req->path, "/api/v1/saves/import") ||
+     !strcmp(req->path, "/api/v1/saves/import/plan") ||
+     !strcmp(req->path, "/api/v1/saves/import/discard") ||
+     !strcmp(req->path, "/api/v1/saves/import/inbox")) {
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur POST erlaubt."); return; }
+    if(!strcmp(req->path, "/api/v1/saves/export")) handle_saves_export(fd, req);
+    else if(!strcmp(req->path, "/api/v1/saves/export/delete")) handle_saves_export_delete(fd, req);
+    else if(!strcmp(req->path, "/api/v1/saves/import")) handle_saves_import(fd, req);
+    else if(!strcmp(req->path, "/api/v1/saves/import/plan")) handle_saves_import_plan(fd, req);
+    else if(!strcmp(req->path, "/api/v1/saves/import/discard")) handle_saves_import_discard(fd, req);
+    else handle_saves_import_inbox(fd);
     return;
   }
 

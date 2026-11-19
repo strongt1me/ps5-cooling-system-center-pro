@@ -91,6 +91,13 @@ SRCS += src/powerguard.c
 SRCS += src/klog.c
 SRCS += src/playtime.c
 SRCS += src/savebackup.c
+SRCS += src/savesfo.c
+SRCS += src/savezip.c
+SRCS += src/chives.c
+SRCS += src/savemnt.c
+SRCS += src/savexport.c
+SRCS += src/savedb.c
+SRCS += src/saveimport.c
 SRCS += src/klogfiles.c
 SRCS += src/backdrops.c
 SRCS += src/usbeject.c
@@ -204,6 +211,10 @@ BGP_HELPER_LIBS := -lkernel_sys -lSceSystemService -lSceUserService
 
 # cJSON is built separately: upstream trips several of our warning flags.
 CJSON_OBJ := gen/cJSON.o
+
+# SQLite 3.46.0 (public domain) for the entry of an imported save in the console's save database (savedb.c). Built separately like cJSON:
+# the amalgamation's warnings must not trip -Werror. One thread at a time (the import job), no WAL (the console's file is a rollback-journal one).
+SQLITE_OBJ := gen/sqlite3.o
 
 # libdeflate 1.26 (MIT) for compressing and checking .ffpfsc images
 # (conv_pfs.c). Built separately like cJSON, and at -O2: it is the one place
@@ -395,6 +406,9 @@ $(CJSON_OBJ): src/third_party/cJSON.c src/third_party/cJSON_real.c \
 	$(CC) -Os -Isrc -Isrc/third_party -ffunction-sections -fdata-sections \
 	    -c -o $@ src/third_party/cJSON.c
 
+$(SQLITE_OBJ): src/third_party/sqlite3/sqlite3.c src/third_party/sqlite3/sqlite3.h Makefile gen/sdk.stamp | gen
+	$(CC) -Os -Isrc -Isrc/third_party/sqlite3 -ffunction-sections -fdata-sections 	    -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_WAL -w 	    -c -o $@ src/third_party/sqlite3/sqlite3.c
+
 gen/libdeflate/%.o: src/third_party/libdeflate/lib/%.c $(DEFLATE_HDRS) Makefile gen/sdk.stamp | gen
 	mkdir -p $(dir $@)
 	$(CC) -O2 -ffunction-sections -fdata-sections -c -o $@ $<
@@ -437,9 +451,9 @@ gen/sdk.stamp: FORCE | gen
 check-sdk-firmware:
 	@$(PYTHON) tools/check_sdk_firmware.py sdk "$(PS5_PAYLOAD_SDK)" $(FW_NEED)
 
-$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
+$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(SQLITE_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
         $(SHELLUI_STUB) gen/sdk.stamp | check-sdk-firmware
-	$(CC) $(CFLAGS) -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
+	$(CC) $(CFLAGS) -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(SQLITE_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
 	"$(PS5_PAYLOAD_SDK)/bin/prospero-strip" --strip-all $@
 	@$(PYTHON) tools/check_sdk_firmware.py elf $@ $(FW_NEED) >/dev/null || { rm -f $@; exit 1; }
 

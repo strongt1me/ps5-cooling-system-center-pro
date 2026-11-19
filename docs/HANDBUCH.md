@@ -1008,6 +1008,48 @@ ihre Trophäen gehören nicht dazu.
   ließen sie sich nicht öffnen. Eine Sicherung von einer anderen Konsole trägt die Marke
   *andere Konsole* und lässt sich prüfen, aber nicht zurückspielen. Zurückgespielt wird auch nur
   zu Benutzern, die es auf der Konsole gibt.
+- **Auf eine andere Konsole übertragen (ab 1.87.0).** Eine Sicherung passt nur zu ihrer Konsole. Bei jedem PS5-Titel gibt
+  es deshalb den Knopf **„Als ZIP“** (bei mehreren Spielständen eines Titels je einer): Die Konsole liest den Spielstand mit
+  ihren eigenen Mitteln im Klartext aus – sie hängt dafür eine **Kopie** des Abbilds ein, die App entschlüsselt nichts selbst
+  und das Original wird nie eingehängt oder verändert –, und die App packt die Dateien in eine ZIP-Datei (gespeichert, nicht
+  komprimiert, mit dem echten `sce_sys/param.sfo`, das die PS5 im Kopf des Abbilds versteckt). Dazu kommt `chives.json`:
+  Größe und Aufbau des Abbilds und Besitzer und Rechte jeder Datei, damit sich daraus später wieder ein Abbild bauen lässt, das
+  die andere Konsole annimmt (Dateiname `<Titel-ID>_<Spielstand>_<Zeit>.zip`, Ordner `/data/PS5-Cooling-Center/savexport`).
+  Die Karte **Auf eine andere Konsole übertragen** listet die fertigen Dateien zum Herunterladen und zum Löschen (mit Rückfrage).
+  Die ZIP-Datei ist **nicht verschlüsselt**: Sie enthält den Spielstand im Klartext; gib sie nur weiter, wenn du es willst. Ausgelesen
+  wird nur, wenn **kein Spiel läuft**; es läuft immer nur ein Vorgang, und „Abbrechen“ räumt alles auf (auch die Kopie des Abbilds).
+  Auf der internen Platte müssen etwa zweimal die Größe des Spielstands plus 64 MB frei sein. PS5- und PS4-Spielstände, höchstens 5000
+  Dateien und Ordner, keine Datei ab 4 GiB.
+- **Einspielen auf der anderen Konsole (ab 1.87.0).** Unter „Spielstand einspielen“ wählst du die ZIP-Datei am Rechner (von dieser App oder von
+  Garlic SaveMgr, mit `chives.json`). Sie geht über den Upload des Dateimanagers nach `/data/PS5-Cooling-Center/savexport/import`; die App liest sie
+  durch und zeigt Titel, Dateien und Größe, **ohne etwas zu ändern**. Dann wählst du den Benutzer dieser Konsole. Eingespielt wird so:
+  1. Hat der Benutzer schon Spielstände dieses Titels, werden sie zuerst als „Stand vor dem Einspielen“ auf das gewählte Laufwerk gesichert (samt
+     Spielstand-Datenbank; derselbe Weg wie beim Zurückspielen). Ohne Laufwerk wird nicht eingespielt.
+  2. Die Konsole legt mit ihrem eigenen Formatierer ein **neues Abbild** an (Größe und Aufbau aus `chives.json`; das Ergebnis muss genau dem
+     entsprechen). Die App hängt es ein und schreibt die Dateien hinein, mit den Zugriffsrechten der Quelle. Im `param.sfo` werden das Konto
+     (`ACCOUNT_ID`, aus dem Register der Konsole) und die Benutzer-Kennung dieser Konsole eingetragen: nur dort steht, wem der Spielstand gehört.
+  3. Das Abbild wird noch einmal eingehängt, **jede Datei zurückgelesen** und mit der ZIP-Datei verglichen (Größe, Prüfsumme).
+  4. Erst dann ändert sich etwas an der Konsole (bis hierher räumt „Abbrechen“ alles auf, auch bei einem Fehler): Das Abbild kommt nach
+     `/user/home/<Benutzer>/savedata_prospero/<Titel>/sdimg_<Spielstand>` (ein vorhandenes liegt bis zum Ende als `.ps5cc-alt` daneben), das Bild
+     des Spielstands nach `savedata_prospero_meta/user/<Titel>/<Spielstand>_icon0.png`, und der Eintrag in
+     `/system_data/savedata_prospero/<Benutzer>/db/user/savedata.db` wird angelegt oder aktualisiert, nachdem die Datenbank nach
+     `/data/PS5-Cooling-Center/savexport/db-backup` kopiert wurde. Scheitert dabei etwas, geht alles auf den Stand davor zurück.
+  Die ZIP-Datei wird danach gelöscht. Dann das Spiel starten und den Spielstand prüfen. **Nicht unterstützt:** Spielstände neuerer Firmware (Abbildformat mit
+  `fs_ext` ungleich 0, `param.sfo` nur im Abbildkopf), ZIP-Dateien ohne `chives.json` und solche mit mehreren Spielständen: Die App nennt den Grund,
+  ohne etwas zu ändern. Es läuft immer nur ein Vorgang; eingespielt wird nur, wenn kein Spiel läuft.
+- **PS4-Spielstände (ab 1.87.0).** „Als ZIP“ und „Spielstand einspielen“ gelten auch für PS4-Titel (`CUSA…`, Ordner `savedata`, Datenbank
+  `/system_data/savedata/<Benutzer>/db/user/savedata.db`), mit diesen Unterschieden: Ein PS4-Abbild trägt seinen versiegelten Schlüssel nicht in sich, er liegt in
+  der Begleitdatei `<Spielstand>.bin` neben `sdimg_<Spielstand>` (96 Byte); ohne sie lässt sich ein PS4-Spielstand nicht auslesen. Die ZIP-Datei enthält nur die
+  Dateien, **kein** `chives.json` (auch Garlic SaveMgr schreibt für PS4 keines); sie wird als PS4-Spielstand an der Titel-Kennung `CUSA…` im `param.sfo` erkannt.
+  Beim Einspielen berechnet die App die Größe des Abbilds aus den Dateien (Dateien plus ein Viertel plus 4 MB, mindestens 32 MB, in Schritten von 32 KiB), die
+  Konsole legt es mit ihrem älteren Formatierer (`sceFsCreatePfsSaveDataImage`) und einem **neuen, für diese Konsole versiegelten Schlüssel** an (der Schlüssel kommt
+  in `<Spielstand>.bin`), und die Dateien erhalten die Zugriffsrechte der ZIP-Einträge. Die Besitzerangaben im `param.sfo` reichen bei PS4 nicht aus, das Feld
+  `PARAMS` (1024 Byte: Benutzer-Kennung und ein 32-Byte-Wert, der in allen Spielständen eines Benutzers gleich ist) muss stimmen. Die App kann ihn nicht erfinden und
+  nimmt ihn aus einem Spielstand desselben Benutzers an dieser Konsole: Sie legt dessen Abbild als **Kopie** in den Arbeitsordner, hängt es ein, liest sein `param.sfo`
+  und hängt es wieder aus. Zuerst gilt ein Spielstand mit gleichem Titel und gleicher Kennung (der ganze Eintrag wird übernommen), dann einer mit gleichem Titel, dann
+  irgendeiner (nur Benutzer-Kennung und Wert, Byte 4 bis 40); verwendet wird nur ein Spielstand, dessen `param.sfo` das Konto und die Kennung dieses Benutzers zeigt (höchstens
+  acht Versuche). Gibt es keinen, wird trotzdem eingespielt, und der Auftrag sagt, dass das Spiel vielleicht beschädigte Daten meldet. Alles andere (Sicherung davor,
+  Zurücklesen jeder Datei, Datenbank-Kopie, Zurückrollen bei einem Fehler) ist wie bei PS5.
 - **Aufräumen.** Die App löscht keine Sicherung, auch nicht den Stand vor dem Zurückspielen:
   Das geht am PC oder per FTP, indem man den Ordner unter `PS5-Sicherung/Spielstaende` entfernt.
   Die Seite listet die 40 neuesten Sicherungen (nach dem Zeitstempel im Ordnernamen), die
