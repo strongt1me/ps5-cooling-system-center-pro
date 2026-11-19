@@ -156,6 +156,7 @@ enum MenuTag
     kMeasure,
     kView,
     kEdit,
+    kEject,
     kPaste = 20,
     kForget,
     kNewFolder,
@@ -272,6 +273,7 @@ class FilesPage final : public Page
     void absorb(const Snapshot &data) override
     {
         places_ = data.fs_places;
+        note_eject(data.usb_eject);
         job_ = data.fs_job;
         if (data.fs_conflict.seq != conflict_seq_)
         {
@@ -473,6 +475,18 @@ class FilesPage final : public Page
     void update(float dt) override
     {
         clock_ += dt;
+        if (!gone_mount_.empty())
+        {
+            // the drive the page was in is gone: back to the places, and what was cut or copied
+            // from it is gone with it
+            if (inside(clip_from_, gone_mount_))
+                clip_paths_.clear();
+            gone_mount_.clear();
+            history_.clear();
+            picked_.clear();
+            pick_mode_ = false;
+            source().files_open({});
+        }
         list_.update(dt);
         info_.update(dt);
         menu_.update(dt);
@@ -543,6 +557,20 @@ class FilesPage final : public Page
                           std::to_string(measure_done_) + " von " + std::to_string(measure_total_) +
                               " · Mehr: Messen beenden",
                           kBlue);
+        if (eject_.running)
+            y = note_card(canvas, paint, card, y, "Wird ausgeworfen …", eject_.mount, kWarning);
+        else if (!eject_note_.empty() && clock_ - eject_note_t_ < 12.0f)
+            y = note_card(canvas, paint, card, y,
+                          eject_note_ok_ ? "Ausgeworfen" : "Nicht ausgeworfen", eject_note_,
+                          eject_note_ok_ ? kGood : kCritical);
+        else if (pl != nullptr && pl->ejectable)
+            y = eject_.available
+                    ? note_card(canvas, paint, card, y, "Sicher auswerfen",
+                                "Quadrat-Taste · vor dem Abziehen des Laufwerks", kBlue)
+                    : note_card(canvas, paint, card, y, "Auswerfen nicht möglich",
+                                "Auswerfen braucht ShadowMountPlus ab 1.7beta10; es läuft nicht "
+                                "oder ist älter.",
+                                kWarning);
         if (!saved_name_.empty() && clock_ - saved_t_ < 6.0f)
             y = note_card(canvas, paint, card, y, "Gespeichert", saved_name_, kGood);
 
@@ -779,7 +807,13 @@ class FilesPage final : public Page
                 out[n++] = {ui::Button::cross, "Ansehen"};
             out[n++] = {ui::Button::square, "Aktionen"};
         }
-        else if (focused_place() != nullptr || focused_tag() == kUpTag)
+        else if (const FsPlace *p = focused_place())
+        {
+            out[n++] = {ui::Button::cross, "Öffnen"};
+            if (p->ejectable)
+                out[n++] = {ui::Button::square, "Auswerfen"};
+        }
+        else if (focused_tag() == kUpTag)
             out[n++] = {ui::Button::cross, "Öffnen"};
         out[n++] = {ui::Button::triangle, "Mehr"};
         if (pick_mode_)
@@ -812,6 +846,48 @@ class FilesPage final : public Page
         return folder_.path.empty() && i >= 0 && i < static_cast<int>(places_.size())
                    ? &places_[static_cast<std::size_t>(i)]
                    : nullptr;
+    }
+
+    // Is "path" the folder "mount" or in it?
+    static bool inside(const std::string &path, const std::string &mount)
+    {
+        return !mount.empty() &&
+               (path == mount || path.compare(0, mount.size() + 1, mount + "/") == 0);
+    }
+
+    // The USB drive the focused place is, or the one the open folder is on: what "Sicher auswerfen"
+    // acts on.
+    const FsPlace *drive_here() const
+    {
+        if (const FsPlace *p = focused_place())
+            return p->ejectable ? p : nullptr;
+        for (const FsPlace &p : places_)
+        {
+            if (p.ejectable && inside(folder_.path, p.path))
+                return &p;
+        }
+        return nullptr;
+    }
+
+    // Ejecting needs ShadowMountPlus 1.7beta10 or newer, and only one drive at a time.
+    bool can_eject(const FsPlace &p) const
+    {
+        return p.ejectable && eject_.available && !eject_.running;
+    }
+
+    // The end of an eject (this page's or another page's) is shown on the card for a while; a
+    // drive that went away takes the open folder with it.
+    void note_eject(const UsbEject &now)
+    {
+        if (eject_.running && !now.running && !now.message.empty())
+        {
+            eject_note_ = now.message;
+            eject_note_ok_ = now.state == "done";
+            eject_note_t_ = clock_;
+            if (eject_note_ok_ && inside(folder_.path, now.mount))
+                gone_mount_ = now.mount;
+        }
+        eject_ = now;
     }
 
     // The picked entries, or the focused one when none is picked: what copy, cut and delete act on.
@@ -938,6 +1014,11 @@ class FilesPage final : public Page
         const FsEntry *e = focused_entry();
         if (e == nullptr)
         {
+            if (const FsPlace *p = focused_place(); p != nullptr && p->ejectable)
+            {
+                open_place_menu(*p, feedback);
+                return;
+            }
             feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
             return;
         }
@@ -963,6 +1044,16 @@ class FilesPage final : public Page
         items.push_back(item("Ausschneiden" + count, kCut, !all_writable));
         items.push_back(item("Umbenennen", kRename, !e->writable || !pickable(*e)));
         items.push_back(item("Löschen" + count, kDelete, !all_writable || job_.active, true));
+        menu_.set_items(items);
+        menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
+    }
+
+    // A USB drive in the list of places: the one action it has besides opening.
+    void open_place_menu(const FsPlace &p, ui::Feedback &feedback)
+    {
+        eject_path_ = p.path;
+        std::vector<ui::MenuItem> items;
+        items.push_back(item("Sicher auswerfen", kEject, !can_eject(p)));
         menu_.set_items(items);
         menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
     }
@@ -1016,6 +1107,11 @@ class FilesPage final : public Page
         items.push_back(item(std::string("Sortieren nach: ") + orders[sort_], kSort, !inside));
         if (job_.active)
             items.push_back(item("Auftrag abbrechen", kCancel, false, true));
+        if (const FsPlace *p = drive_here())
+        {
+            eject_path_ = p->path;
+            items.push_back(item("Sicher auswerfen", kEject, !can_eject(*p)));
+        }
         items.push_back(item("Aktualisieren", kReload));
         menu_.set_items(items);
         menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
@@ -1127,6 +1223,10 @@ class FilesPage final : public Page
             break;
         case kCancel:
             source().files_post("job/cancel", "{}");
+            break;
+        case kEject:
+            // nothing is asked twice: the app refuses while one of its jobs runs and says which
+            source().usb_eject(eject_path_);
             break;
         case kConflictReplace:
         case kConflictKeep:
@@ -2032,6 +2132,13 @@ class FilesPage final : public Page
     std::uint64_t write_seq_ = 0;
     std::string saved_name_;
     float saved_t_ = -100.0f;
+
+    UsbEject eject_;         // the last eject (GET /api/v1/storage/eject)
+    std::string eject_path_; // the drive the open menu would eject
+    std::string eject_note_; // how the last eject ended, shown for a while
+    bool eject_note_ok_ = false;
+    float eject_note_t_ = -100.0f;
+    std::string gone_mount_; // a drive just ejected: its folders are left at the next update
 
     bool clip_move_ = false;
     std::string clip_from_;

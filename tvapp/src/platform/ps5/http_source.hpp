@@ -205,7 +205,9 @@ class HttpSource final : public Source
     void poll_kraken();
     void poll_dumpforge();
     void poll_storage();
-    std::string status_raw_; // the last /status answer, for System (worker thread only)
+    bool read_usb_eject(UsbEject &out); // GET /api/v1/storage/eject; false when it did not answer
+    void poll_usb_eject();              // ... and into data_ (Dateien shows the end of an eject)
+    std::string status_raw_;            // the last /status answer, for System (worker thread only)
     void poll_system_extra(bool first);
     int qr_rounds_ = 0; // System rounds since the QR code was last asked for (worker thread only)
     void poll_playtime();

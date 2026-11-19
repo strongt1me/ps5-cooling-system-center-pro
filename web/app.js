@@ -8290,24 +8290,29 @@
       usbEjectStop();
       if (r.message) toast(r.message, r.state === "done" ? "" : "error");
       if (typeof loadSystem === "function") loadSystem();
+      if (typeof fmAfterEject === "function") fmAfterEject(r.state === "done" ? r.mount : "");
     } catch (e) {
       /* die nächste Runde fragt wieder – aber nicht ewig, sonst bliebe jeder Auswerfen-Knopf stumm */
       if (++usbEject.fails >= 20) { usbEjectStop(); toast("Die Konsole antwortet nicht. Ob das Laufwerk ausgeworfen ist, zeigt die Liste nach dem Neuladen.", "error"); }
     }
   };
-  $("#storage-list").addEventListener("click", async (e) => {
-    const b = e.target.closest("button[data-eject]");
-    if (!b || usbEject.running) return;
-    b.disabled = true;
+  /* Startet das Auswerfen von „mount“; der Knopf (falls einer gedrückt wurde) bleibt gesperrt, bis die Konsole fertig meldet. */
+  const usbEjectStart = async (mount, b) => {
+    if (usbEject.running) return;
+    if (b) b.disabled = true;
     try {
-      const r = await api("/api/v1/storage/eject", { method: "POST", body: JSON.stringify({ mount: b.dataset.eject }) });
+      const r = await api("/api/v1/storage/eject", { method: "POST", body: JSON.stringify({ mount }) });
       toast(r.started || r.message || "Wird ausgeworfen …");
       usbEject.running = true;
       if (!usbEject.timer) usbEject.timer = setInterval(usbEjectPoll, 1500);
     } catch (err) {
       toast(err.message, "error");
-      b.disabled = false;
+      if (b) b.disabled = false;
     }
+  };
+  $("#storage-list").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-eject]");
+    if (b) usbEjectStart(b.dataset.eject, b);
   });
 
   /* ── PS4 PKG von USB (ps4m_core.c, 14.10.2026) ──────────────────────────
@@ -10109,6 +10114,21 @@
     try { fm.places = (await api("/api/v1/files/places")).places || []; } catch { fm.places = []; }
   };
 
+  /* Nach dem Auswerfen (usbEjectPoll): „mount“ ist das Laufwerk, das weg ist (leer: es blieb stecken). Die Orte werden neu gelesen;
+     lag der geöffnete Ordner auf dem Laufwerk, geht der Dateimanager auf die interne SSD, statt einen Fehler zu zeigen. */
+  const fmAfterEject = async (mount) => {
+    if (!fm.loaded) return;
+    await fmLoadPlaces();
+    const inside = mount && fm.path && (fm.path === mount || fm.path.startsWith(`${mount}/`));
+    if (inside) {
+      fm.sel.clear();
+      fm.clip = fm.clip && fm.clip.from && (fm.clip.from === mount || fm.clip.from.startsWith(`${mount}/`)) ? null : fm.clip;
+      await fmLoad("/data");
+    } else {
+      fmRender();
+    }
+  };
+
   /* Nur die neueste Antwort zählt: Ein Neuladen nach einem fertigen Auftrag, das erst ankommt, wenn schon ein
      anderer Ordner offen ist, darf nicht zurückspringen (und die Auswahl dort löschen). */
   let fmSeq = 0;
@@ -10139,7 +10159,7 @@
     fm.places.forEach((p) => {
       if ((d.path === p.path || d.path.startsWith(p.path === "/" ? "/" : `${p.path}/`)) && p.path.length > cur.length) cur = p.path;
     });
-    $("#fm-places").innerHTML = fm.places.map((p, i) => `<button type="button" class="gm-chip${p.path === cur ? " active" : ""}" data-fm-place="${i}">${esc(p.label)}${p.writable && p.free_bytes > 0 ? ` <small>${esc(bytes(p.free_bytes))} frei</small>` : ""}</button>`).join("");
+    $("#fm-places").innerHTML = fm.places.map((p, i) => `<button type="button" class="gm-chip${p.path === cur ? " active" : ""}" data-fm-place="${i}">${esc(p.label)}${p.writable && p.free_bytes > 0 ? ` <small>${esc(bytes(p.free_bytes))} frei</small>` : ""}</button>${p.ejectable ? `<button type="button" class="gm-chip fm-eject" data-fm-eject="${i}" ${usbEject.running ? "disabled" : ""} title="Sicher auswerfen. Läuft noch ein Auftrag der App, wird nicht ausgeworfen, und die App sagt, welcher Auftrag es ist.">Auswerfen</button>` : ""}`).join("");
     /* der Pfad zum Anklicken */
     const parts = d.path === "/" ? [] : d.path.slice(1).split("/");
     let acc = "";
@@ -10927,6 +10947,10 @@
       return;
     }
     if (d.fmPlace !== undefined) { const p = fm.places[+d.fmPlace]; if (p) fmLoad(p.path); }
+    else if (d.fmEject !== undefined) {
+      const p = fm.places[+d.fmEject];
+      if (p && p.ejectable) usbEjectStart(p.path, t).then(fmRender);
+    }
     else if (d.fmCrumb !== undefined) fmLoad(d.fmCrumb);
     else if (d.fmOpen !== undefined) { const en = fmEntries()[+d.fmOpen]; if (en) fmLoad(fmJoin(fm.path, en.name)); }
     else if (d.fmRen !== undefined) {

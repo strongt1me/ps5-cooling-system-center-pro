@@ -345,6 +345,10 @@ class MockSource final : public Source
             data_.volumes.erase(std::remove_if(data_.volumes.begin(), data_.volumes.end(),
                                                [&](const Volume &v) { return v.path == e.mount; }),
                                 data_.volumes.end());
+            data_.fs_places.erase(std::remove_if(data_.fs_places.begin(), data_.fs_places.end(),
+                                                 [&](const FsPlace &p)
+                                                 { return p.path == e.mount; }),
+                                  data_.fs_places.end());
             changed();
         }
         if (!closing_.empty() && clock_ >= close_at_)
@@ -3018,6 +3022,7 @@ class MockSource final : public Source
             p.path = path;
             p.free_bytes = free_gb < 0 ? -1 : static_cast<std::int64_t>(free_gb * 1e9);
             p.writable = writable;
+            p.ejectable = std::string(path).rfind("/mnt/usb", 0) == 0; // as the console says it
             return p;
         };
         data_.fs_places = {place("usb0", "/mnt/usb0", 247.1, true),

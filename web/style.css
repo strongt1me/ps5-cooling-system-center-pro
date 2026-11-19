@@ -1454,6 +1454,8 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 /* ── Dateien (06.10.2026): der Dateimanager ── */
 .fm-places { margin: 4px 0 10px; flex-wrap: wrap; }
 .fm-places small { color: var(--ink-muted); font-weight: 400; margin-left: 4px; }
+.fm-places .fm-eject { margin-left: -2px; padding: 7px 10px; font-weight: 500; color: var(--ink-muted); }
+.fm-places .fm-eject:disabled { opacity: .5; cursor: default; }
 .fm-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 0 0 12px; padding: 8px 10px;
   border-radius: var(--r-md); background: var(--inset); border: 1px solid var(--hairline); }
 .fm-crumb { background: none; border: 0; color: var(--ink); font: inherit; font-size: 14px; padding: 4px 6px;

@@ -403,6 +403,7 @@ add_place(cJSON *arr, const char *label, const char *path, int writable_here) {
   uint64_t fr = 0;
   cJSON_AddNumberToObject(o, "free_bytes", space_free(path, &fr) == 0 ? (double)fr : -1);
   cJSON_AddBoolToObject(o, "writable", writable_here);
+  cJSON_AddBoolToObject(o, "ejectable", ps5tm_usbeject_path_ok(path));  /* a USB drive: the file manager offers "eject safely" (usbeject.c) */
   cJSON_AddItemToArray(arr, o);
 }
 

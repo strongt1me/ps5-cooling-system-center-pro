@@ -1304,6 +1304,11 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "ausschalten"},
             {0.5f, action_bit(Action::page_next)},
             {0.9f, 0, Direction::none, "dateien"},
+            // a USB drive among the places: □ offers "Sicher auswerfen" (the eject itself is shown
+            // under System, Speicher); O closes the menu again
+            {0.3f, action_bit(Action::west)},
+            {0.7f, 0, Direction::none, "dateien-auswerfen"},
+            {0.3f, action_bit(Action::back)},
             {0.3f, action_bit(Action::confirm)},
             {0.8f, 0, Direction::none, "dateien-ordner"},
             {0.3f, action_bit(Action::jump_next)},

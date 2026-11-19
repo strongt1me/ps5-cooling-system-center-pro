@@ -713,6 +713,7 @@ struct FsPlace
     std::string path;
     std::int64_t free_bytes = -1;
     bool writable = false;
+    bool ejectable = false; // a USB drive: "Sicher auswerfen" (POST /api/v1/storage/eject)
 };
 
 struct FsEntry

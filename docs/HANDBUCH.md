@@ -752,6 +752,14 @@ Nur zum Schutz vor Unfällen gesperrt („Nur ansehen“, Knöpfe aus):
 USB-Laufwerke heißen seit 1.75.0 überall wie auf der Konsole: `usb0`, `usb1` … (der Ordner `/mnt/usb0` ist „usb0“; vorher
 zählte die Oberfläche ab 1).
 
+**USB-Laufwerk sicher auswerfen:** Neben jedem USB-Laufwerk (`/mnt/usb0` bis `usb7`, `/mnt/ext0`) steht in der Leiste der
+Orte der Knopf **Auswerfen**. In der Vollbild-App ist es die Quadrat-Taste auf dem Laufwerk unter „Orte“; in einem Ordner
+des Laufwerks gibt es △ → Mehr → **Sicher auswerfen**. Es ist dasselbe Auswerfen wie unter System → Speicher (siehe dort):
+über ShadowMountPlus (ab 1.7beta10), nur wenn kein Auftrag der App läuft und PS4Mount keine Spiele von dem Laufwerk spielt;
+sonst sagt die App, was noch läuft. Das Laufwerk erst abziehen, wenn die Konsole „… ist ausgeworfen und kann abgezogen
+werden“ meldet. Danach lädt der Dateimanager die Orte neu und verlässt einen Ordner des Laufwerks (Browser: auf die interne
+SSD; Vollbild-App: zu den Orten). Ein Laufwerk im Betrieb einfach abzuziehen kann das Dateisystem beschädigen.
+
 **Ordnen, auswählen, ansehen (seit 07.10.2026):**
 
 - **Sortieren:** Über der Liste stehen „Name“, „Größe“ und „Datum“; der Pfeil daneben kehrt die Richtung um. Ordner stehen

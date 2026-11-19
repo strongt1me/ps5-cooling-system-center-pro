@@ -1636,15 +1636,32 @@ void HttpSource::run()
         if (page == Watch::files)
         {
             bool active = false;
+            bool ejecting = false;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 active = data_.fs_job.active;
+                ejecting = data_.usb_eject.running;
             }
-            if (!files_open_ || now - last_fs_job >= (active ? 800000 : 3000000))
+            if (!files_open_ || now - last_fs_job >= (active || ejecting ? 800000 : 3000000))
             {
                 last_fs_job = now;
                 if (!files_open_)
+                {
                     poll_fs_places();
+                    poll_usb_eject(); // "ejectable" is in the places; this says whether it can be
+                                      // done
+                }
+                else if (ejecting)
+                {
+                    poll_usb_eject();
+                    bool over = false;
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        over = !data_.usb_eject.running;
+                    }
+                    if (over)
+                        poll_fs_places(); // the drive is gone from the places
+                }
                 poll_fs_job();
                 bool ended = false;
                 std::string folder;
@@ -4212,6 +4229,7 @@ void HttpSource::poll_fs_places()
         x.path = str(p, "path");
         x.free_bytes = static_cast<std::int64_t>(num(p, "free_bytes", -1));
         x.writable = flag(p, "writable");
+        x.ejectable = flag(p, "ejectable");
         places.push_back(std::move(x));
     }
     cJSON_Delete(root);
@@ -4396,19 +4414,7 @@ void HttpSource::poll_storage()
         }
     }
     UsbEject e;
-    if (exchange("GET", "/api/v1/storage/eject", {}, &status, &body, 4) == Net::ok && status == 200)
-    {
-        if (cJSON *root = cJSON_Parse(body.c_str()))
-        {
-            e.loaded = true;
-            e.available = flag(root, "available");
-            e.running = flag(root, "running");
-            e.state = str(root, "state");
-            e.mount = str(root, "mount");
-            e.message = str(root, "message");
-            cJSON_Delete(root);
-        }
-    }
+    read_usb_eject(e);
     std::lock_guard<std::mutex> lock(mutex_);
     if (got)
     {
@@ -4419,6 +4425,35 @@ void HttpSource::poll_storage()
     }
     if (e.loaded)
         data_.usb_eject = std::move(e);
+    ++data_.serial;
+}
+
+bool HttpSource::read_usb_eject(UsbEject &e)
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/storage/eject", {}, &status, &body, 4) != Net::ok || status != 200)
+        return false;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return false;
+    e.loaded = true;
+    e.available = flag(root, "available");
+    e.running = flag(root, "running");
+    e.state = str(root, "state");
+    e.mount = str(root, "mount");
+    e.message = str(root, "message");
+    cJSON_Delete(root);
+    return true;
+}
+
+void HttpSource::poll_usb_eject()
+{
+    UsbEject e;
+    if (!read_usb_eject(e))
+        return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.usb_eject = std::move(e);
     ++data_.serial;
 }
 
