@@ -4005,19 +4005,22 @@ handle_saves_delete(int fd, const ps5tm_request_t *req) {
   saves_started(fd, st, "saves_refused", err);
 }
 
-/* A save read out into a ZIP for another console: {"user": "<8 hex>", "title": "PPSA...", "slot": "<slot>"}. */
+/* A save read out into a ZIP for another console: {"user": "<8 hex>", "title": "PPSA...", "slot": "<slot>", "mount": "<drive>"?}; with a drive the ZIP is written
+   to its ZIP folder (a stick goes to the other console), else it stays in the export folder of the console. */
 static void
 handle_saves_export(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
   const cJSON *ju = body ? cJSON_GetObjectItem(body, "user") : NULL;
   const cJSON *jt = body ? cJSON_GetObjectItem(body, "title") : NULL;
   const cJSON *js = body ? cJSON_GetObjectItem(body, "slot") : NULL;
-  char uid[16] = "", title[16] = "", slot[80] = "", err[640] = "";
+  const cJSON *jm = body ? cJSON_GetObjectItem(body, "mount") : NULL;
+  char uid[16] = "", title[16] = "", slot[80] = "", mount[40] = "", err[640] = "";
   if(cJSON_IsString(ju) && strlen(ju->valuestring) < sizeof(uid)) snprintf(uid, sizeof(uid), "%s", ju->valuestring);
   if(cJSON_IsString(jt) && strlen(jt->valuestring) < sizeof(title)) snprintf(title, sizeof(title), "%s", jt->valuestring);
   if(cJSON_IsString(js) && strlen(js->valuestring) < sizeof(slot)) snprintf(slot, sizeof(slot), "%s", js->valuestring);
+  if(cJSON_IsString(jm) && strlen(jm->valuestring) < sizeof(mount)) snprintf(mount, sizeof(mount), "%s", jm->valuestring);
   cJSON_Delete(body);
-  saves_started(fd, ps5tm_saves_export_start(uid, title, slot, err, sizeof(err)), "saves_refused", err);
+  saves_started(fd, ps5tm_saves_export_start(uid, title, slot, mount, err, sizeof(err)), "saves_refused", err);
 }
 
 /* A finished ZIP as a download: GET ?name=<file name>. */
@@ -4047,29 +4050,41 @@ handle_saves_export_delete(int fd, const ps5tm_request_t *req) {
 static void
 handle_saves_import_plan(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
-  const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL;
-  char name[160] = "", err[400] = "";
+  const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL, *jf = body ? cJSON_GetObjectItem(body, "from") : NULL;
+  char name[160] = "", from[40] = "", err[400] = "";
   if(cJSON_IsString(jn) && strlen(jn->valuestring) < sizeof(name)) snprintf(name, sizeof(name), "%s", jn->valuestring);
+  if(cJSON_IsString(jf) && strlen(jf->valuestring) < sizeof(from)) snprintf(from, sizeof(from), "%s", jf->valuestring);
   cJSON_Delete(body);
   int st = 200;
-  cJSON *o = ps5tm_saves_import_plan_json(name, err, sizeof(err), &st);
+  cJSON *o = ps5tm_saves_import_plan_json(name, from, err, sizeof(err), &st);
   if(!o) { ps5tm_http_send_error(fd, st, "saves_refused", err); return; }
   send_cjson(fd, 200, o);
 }
 
-/* {"name": ..., "user": "<8 hex>", "mount": "<drive>"?, "no_backup": true?}: start the import. */
+/* {"name": ..., "user": "<8 hex>", "mount": "<drive>"?, "no_backup": true?, "from": "<drive>"?}: start the import; "mount" is where the backup of the present state goes,
+   "from" the drive whose ZIP folder holds the file (else the inbox of an upload). "names": [...] instead of "name" puts in the slots of one title, one after the other. */
 static void
 handle_saves_import(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
   const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL, *ju = body ? cJSON_GetObjectItem(body, "user") : NULL,
-              *jm = body ? cJSON_GetObjectItem(body, "mount") : NULL;
-  char name[160] = "", uid[16] = "", mount[40] = "", err[640] = "";
-  if(cJSON_IsString(jn) && strlen(jn->valuestring) < sizeof(name)) snprintf(name, sizeof(name), "%s", jn->valuestring);
+              *jm = body ? cJSON_GetObjectItem(body, "mount") : NULL, *jf = body ? cJSON_GetObjectItem(body, "from") : NULL,
+              *jl = body ? cJSON_GetObjectItem(body, "names") : NULL;
+  char name[16 * 141 + 1] = "", uid[16] = "", mount[40] = "", from[40] = "", err[640] = "";
+  if(cJSON_IsString(jn) && strlen(jn->valuestring) < 160) snprintf(name, sizeof(name), "%s", jn->valuestring);
+  if(cJSON_IsArray(jl)) {                                  /* the slots of one title: the file names, joined by "," (a file name has none) */
+    size_t used = 0;
+    const cJSON *it = NULL;
+    cJSON_ArrayForEach(it, jl) {
+      if(!cJSON_IsString(it) || strlen(it->valuestring) >= 140 || used + strlen(it->valuestring) + 2 >= sizeof(name)) { used = 0; name[0] = 0; break; }
+      used += (size_t)snprintf(name + used, sizeof(name) - used, "%s%s", used ? "," : "", it->valuestring);
+    }
+  }
   if(cJSON_IsString(ju) && strlen(ju->valuestring) < sizeof(uid)) snprintf(uid, sizeof(uid), "%s", ju->valuestring);
   if(cJSON_IsString(jm) && strlen(jm->valuestring) < sizeof(mount)) snprintf(mount, sizeof(mount), "%s", jm->valuestring);
+  if(cJSON_IsString(jf) && strlen(jf->valuestring) < sizeof(from)) snprintf(from, sizeof(from), "%s", jf->valuestring);
   const int no_backup = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "no_backup"));
   cJSON_Delete(body);
-  saves_started(fd, ps5tm_saves_import_start(name, uid, mount, no_backup, err, sizeof(err)), "saves_refused", err);
+  saves_started(fd, ps5tm_saves_import_start(name, from, uid, mount, no_backup, err, sizeof(err)), "saves_refused", err);
 }
 
 /* {"name": ...}: deletes an uploaded ZIP that is not going to be used. */

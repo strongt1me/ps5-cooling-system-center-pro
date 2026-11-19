@@ -109,6 +109,7 @@
 #endif
 
 #define SV_DIR        "PS5-Sicherung/Spielstaende"
+#define SV_ZIPDIR     "PS5-Sicherung/Spielstand-ZIP"   /* on a drive: the ZIPs of saves that travel by drive (the fullscreen app, no PC) */
 #define SV_MARK       ".ps5cc-unfertig"
 #define SV_MANIFEST   "manifest.json"
 #define SV_SUMS       "pruefsummen.sha256"
@@ -1279,7 +1280,14 @@ typedef struct {
   char     id[10];
   char     slot[72];                 /* export: the slot (sdimg_<slot>) */
   int      area;                     /* export: 0 a PS4 save (savedata), 1 a PS5 save (savedata_prospero) */
-  char     zipname[140];             /* export: the file name of the ZIP */
+  char     zipname[140];             /* export: the file name of the ZIP; import: the file to put in */
+  char     outdir[128];              /* export: the folder on a drive the ZIP is written to ("" = the export folder of the console) */
+  char     srcdir[128];              /* import: the folder on a drive the ZIP is read from ("" = the inbox; a ZIP from a drive is never deleted) */
+  char     slots[16][72];            /* export: the slots to read out, one ZIP each (all of a title, or the one named) */
+  unsigned nslots;
+  char     stamp[24];                /* export: the time in the names of the ZIPs of this run (the same for all) */
+  char     zipv[16][140];            /* import: the files to put in, one after the other (the slots of one title) */
+  unsigned nzips;
   tsel_t  *sel;
   unsigned nsel;
   char   (*users)[9];
@@ -2064,6 +2072,12 @@ drive_resolve(const char *mount, drive_t *out) {
   return -1;
 }
 
+/* The folder on a drive where ZIPs of saves are written and looked for. */
+static int
+zip_dir_of(const drive_t *d, char *out, size_t n) {
+  return snprintf(out, n, "%s/%s", d->base, SV_ZIPDIR) >= (int)n ? -1 : 0;
+}
+
 /* The area a title's save folder is in for this user, or -1. */
 static int
 title_find(const char *uid, const char *id) {
@@ -2337,6 +2351,41 @@ slot_image_path(const char *uid, int area, const char *id, const char *slot, cha
   return snprintf(out, n, "%s/%s/%s/%s/sdimg_%s", PS5TM_SAVE_HOME, uid, k_area[area].data, id, slot) >= (int)n ? -1 : 0;
 }
 
+static int
+cmp_slot_name(const void *x, const void *y) {
+  return strcmp((const char *)x, (const char *)y);
+}
+
+/* The slots of a title that can be read out (the rule of slots_json): files sdimg_<slot>, no system copies, a PS4 image only with its key file.
+   A person does not choose: the app reads out every slot a game keeps (SaveData, sce_sdmemory ...), sorted by name. */
+static unsigned
+title_slots(const char *uid, int area, const char *id, char out[][72], unsigned max) {
+  char dir[PATH_MAX];
+  unsigned n = 0;
+  if(snprintf(dir, sizeof(dir), "%s/%s/%s/%s", PS5TM_SAVE_HOME, uid, k_area[area].data, id) >= (int)sizeof(dir)) return 0;
+  DIR *d = opendir(dir);
+  if(!d) return 0;
+  struct dirent *e;
+  while((e = readdir(d)) != NULL && n < max) {
+    if(strncmp(e->d_name, "sdimg_", 6)) continue;
+    const char *slot = e->d_name + 6;
+    if(!slot_ok(slot) || slot_is_system_copy(slot) || strlen(slot) >= 72) continue;
+    char full[PATH_MAX];
+    struct stat st;
+    if(snprintf(full, sizeof(full), "%s/%s", dir, e->d_name) >= (int)sizeof(full) || stat(full, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+    if(area == 0) {
+      char bin[PATH_MAX];
+      struct stat bs;
+      if(snprintf(bin, sizeof(bin), "%s/%s.bin", dir, slot) >= (int)sizeof(bin) || stat(bin, &bs) != 0) continue;
+    }
+    snprintf(out[n], 72, "%s", slot);
+    n++;
+  }
+  closedir(d);
+  qsort(out, n, 72, cmp_slot_name);
+  return n;
+}
+
 static void
 ex_phase(void *c, const char *t, uint64_t total) { (void)c; job_phase(J_COPY, t, total); }
 static void
@@ -2370,44 +2419,68 @@ export_main(void *arg) {
   mkdir(SV_EXPORT_DIR, 0755);
   export_sweep_partial();
 
-  char image[PATH_MAX];
-  if(slot_image_path(a->uid, a->area, a->id, a->slot, image, sizeof(image)) != 0) {
-    job_fail("Der Pfad des Spielstands ist zu lang.");
-  } else {
-    savexport_args_t xa = { image, a->id, a->slot, SV_EXPORT_WORK, SV_EXPORT_DIR, a->zipname };
+  const char *outdir = a->outdir[0] ? a->outdir : SV_EXPORT_DIR;
+  char (*made)[PATH_MAX] = calloc(16, PATH_MAX);               /* the ZIPs of this run: a run that fails or is stopped takes them all back */
+  unsigned nmade = 0, files = 0;
+  uint64_t bytes = 0;
+  char err[640] = "", note[560] = "";
+  int rc = made ? 0 : -1;
+  if(!made) snprintf(err, sizeof(err), "Kein Speicher.");
+  PS5TM_INFO("saves_export_start", "Spielstände: Auslesen von %s beginnt (%u Spielstände).", a->id, a->nslots);
+  for(unsigned i = 0; rc == 0 && i < a->nslots; i++) {
+    char image[PATH_MAX], zipname[140], e2[640] = "";
+    if(slot_image_path(a->uid, a->area, a->id, a->slots[i], image, sizeof(image)) != 0 ||
+       snprintf(zipname, sizeof(zipname), "%s_%s_%s.zip", a->id, a->slots[i], a->stamp) >= (int)sizeof(zipname)) {
+      snprintf(err, sizeof(err), "Der Pfad des Spielstands ist zu lang.");
+      rc = -1;
+      break;
+    }
+    savexport_args_t xa = { image, a->id, a->slots[i], SV_EXPORT_WORK, outdir, zipname };
     savexport_hooks_t h = { NULL, ex_phase, ex_work, ex_current, ex_stop };
     savexport_result_t res;
-    char err[640];
-    PS5TM_INFO("saves_export_start", "Spielstände: Auslesen eines Spielstands von %s beginnt.", a->id);
-    const int rc = savexport_run(&xa, &h, &res, err, sizeof(err));
+    rc = savexport_run(&xa, &h, &res, e2, sizeof(e2));
     if(rc == 0) {
-      pthread_mutex_lock(&g_lock);
-      snprintf(g_job.path, sizeof(g_job.path), "%s", res.zip);
-      g_job.ok_files = res.files;
-      g_job.bytes_total = res.bytes;
-      if(res.note[0]) snprintf(g_job.note, sizeof(g_job.note), "%s", res.note);
-      if(res.skipped) {
-        const size_t n = strlen(g_job.note);
-        snprintf(g_job.note + n, sizeof(g_job.note) - n, "%s%u Einträge, die keine Dateien sind (Verknüpfungen), wurden nicht übernommen.", n ? " " : "", res.skipped);
-      }
-      pthread_mutex_unlock(&g_lock);
-      PS5TM_INFO("saves_export_done", "Spielstände: ZIP mit %u Dateien (%llu KB) fertig.", res.files, (unsigned long long)(res.bytes >> 10));
-      job_state(J_DONE);
-    } else if(rc == ECANCELED) {
+      snprintf(made[nmade++], PATH_MAX, "%s", res.zip);
+      files += res.files;
+      bytes += res.bytes;
+      const char *sep = a->nslots > 1 ? "Spielstand " : "";
+      size_t n = strlen(note);
+      if(res.note[0] && n + 2 < sizeof(note)) n += (size_t)snprintf(note + n, sizeof(note) - n, "%s%s%s%s%s", n ? " " : "", sep, sep[0] ? a->slots[i] : "", sep[0] ? ": " : "", res.note);
+      if(res.skipped && n + 2 < sizeof(note))
+        snprintf(note + n, sizeof(note) - n, "%s%u Einträge, die keine Dateien sind (Verknüpfungen), wurden nicht übernommen.", n ? " " : "", res.skipped);
+    } else if(rc != ECANCELED) {
+      if(a->nslots > 1) snprintf(err, sizeof(err), "Spielstand %.64s: %s Die schon ausgelesenen ZIP-Dateien dieses Laufs wurden wieder entfernt.", a->slots[i], e2);
+      else snprintf(err, sizeof(err), "%s", e2);
+    }
+  }
+  if(rc == 0) {
+    pthread_mutex_lock(&g_lock);
+    snprintf(g_job.path, sizeof(g_job.path), "%s", nmade ? made[nmade - 1] : "");
+    g_job.ok_files = files;
+    g_job.bytes_total = bytes;
+    if(nmade > 1) snprintf(g_job.note, sizeof(g_job.note), "%u Spielstände ausgelesen, eine ZIP-Datei je Spielstand.%s%s", nmade, note[0] ? " " : "", note);
+    else if(note[0]) snprintf(g_job.note, sizeof(g_job.note), "%s", note);
+    pthread_mutex_unlock(&g_lock);
+    PS5TM_INFO("saves_export_done", "Spielstände: %u ZIP-Dateien mit %u Dateien (%llu KB) fertig.", nmade, files, (unsigned long long)(bytes >> 10));
+    job_state(J_DONE);
+  } else {
+    for(unsigned i = 0; made && i < nmade; i++) unlink(made[i]);
+    if(rc == ECANCELED) {
       PS5TM_INFO("saves_export_cancelled", "Spielstände: Auslesen abgebrochen, das Angefangene ist entfernt.");
       job_state(J_CANCELLED);
     } else {
       PS5TM_WARN("saves_export_failed", "Spielstände: Auslesen fehlgeschlagen.");      /* the reason names files: for the page, not the log */
-      job_fail("%s", err);
+      job_fail("%s", err[0] ? err : "Das Auslesen ist fehlgeschlagen.");
     }
   }
+  free(made);
   ps5tm_powerguard_release();
   args_free(a);
   return NULL;
 }
 
 int
-ps5tm_saves_export_start(const char *uid, const char *id, const char *slot, char *err, size_t err_len) {
+ps5tm_saves_export_start(const char *uid, const char *id, const char *slot, const char *mount, char *err, size_t err_len) {
   char gid[16];
   if(game_running(gid, sizeof(gid))) {
     snprintf(err, err_len, "Es läuft ein Spiel (%s). Ein Spielstand wird nur ausgelesen, wenn kein Spiel läuft, auch kein pausiertes: "
@@ -2420,26 +2493,56 @@ ps5tm_saves_export_start(const char *uid, const char *id, const char *slot, char
   if(title_is_app(id)) { snprintf(err, err_len, SV_APP_REFUSED); return 403; }
   const int area = title_find(uid, id);                    /* 0: PS4, 1: PS5 */
   if(area < 0) { snprintf(err, err_len, "Dieser Titel hat keinen Spielstand an der Konsole."); return 404; }
-  if(!slot_ok(slot) || slot_is_system_copy(slot)) { snprintf(err, err_len, "Dieser Spielstand ist falsch angegeben."); return 400; }
-  char image[PATH_MAX];
-  struct stat st;
-  if(slot_image_path(uid, area, id, slot, image, sizeof(image)) != 0 || stat(image, &st) != 0 || !S_ISREG(st.st_mode)) {
-    snprintf(err, err_len, "Diesen Spielstand gibt es nicht (mehr).");
-    return 404;
+  /* with no slot named, every slot of the title is read out: a person does not have to know which ones a game keeps */
+  char slots[16][72];
+  unsigned ns = 0;
+  uint64_t image_total = 0;
+  if(slot && slot[0]) {
+    char image[PATH_MAX];
+    struct stat st;
+    if(!slot_ok(slot) || slot_is_system_copy(slot)) { snprintf(err, err_len, "Dieser Spielstand ist falsch angegeben."); return 400; }
+    if(slot_image_path(uid, area, id, slot, image, sizeof(image)) != 0 || stat(image, &st) != 0 || !S_ISREG(st.st_mode)) {
+      snprintf(err, err_len, "Diesen Spielstand gibt es nicht (mehr).");
+      return 404;
+    }
+    snprintf(slots[0], sizeof(slots[0]), "%s", slot);
+    ns = 1;
+    image_total = (uint64_t)st.st_size;
+  } else {
+    ns = title_slots(uid, area, id, slots, 16);
+    if(ns == 0) { snprintf(err, err_len, "Dieser Titel hat keinen Spielstand, der sich auslesen lässt."); return 404; }
+    for(unsigned i = 0; i < ns; i++) {
+      char image[PATH_MAX];
+      struct stat st;
+      if(slot_image_path(uid, area, id, slots[i], image, sizeof(image)) == 0 && stat(image, &st) == 0) image_total += (uint64_t)st.st_size;
+    }
+  }
+  /* on a drive (the fullscreen app: a ZIP goes to the other console by stick): the folder is made now, so that a stick that will not take it is told here */
+  char outdir[128] = "";
+  if(mount && mount[0]) {
+    drive_t dr;
+    if(drive_resolve(mount, &dr) != 0) { snprintf(err, err_len, "Dieses Ziel gibt es an der Konsole gerade nicht."); return 404; }
+    if(zip_dir_of(&dr, outdir, sizeof(outdir)) != 0) { snprintf(err, err_len, "Der Pfad auf dem Laufwerk ist zu lang."); return 400; }
+    if(dr.free_bytes < image_total + (32ull << 20)) { snprintf(err, err_len, "Auf %s ist nicht genug Platz für die ZIP-Datei.", dr.label); return 409; }
+    if(mkdir_p(outdir, 0755) != 0) { snprintf(err, err_len, "Auf %s lässt sich kein Ordner für die ZIP-Datei anlegen. Ist das Laufwerk beschreibbar?", dr.label); return 503; }
   }
 
   job_args_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 503; }
+  snprintf(a->outdir, sizeof(a->outdir), "%s", outdir);
   snprintf(a->kind, sizeof(a->kind), "export");
   snprintf(a->uid, sizeof(a->uid), "%s", uid);
   snprintf(a->id, sizeof(a->id), "%s", id);
-  snprintf(a->slot, sizeof(a->slot), "%s", slot);
+  snprintf(a->slot, sizeof(a->slot), "%s", slots[0]);
   a->area = area;
+  for(unsigned i = 0; i < ns; i++) snprintf(a->slots[i], sizeof(a->slots[i]), "%s", slots[i]);
+  a->nslots = ns;
   time_t now = time(NULL);
   struct tm tmv;
   char stamp[24] = "00000000-000000";
   if(gmtime_r(&now, &tmv)) strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", &tmv);
-  snprintf(a->zipname, sizeof(a->zipname), "%s_%s_%s.zip", id, slot, stamp);
+  snprintf(a->stamp, sizeof(a->stamp), "%s", stamp);
+  snprintf(a->zipname, sizeof(a->zipname), "%s_%s_%s.zip", id, slots[0], stamp);
   return job_launch(export_main, a, "export", err, err_len);
 }
 
@@ -2479,11 +2582,41 @@ user_account_id(const char *uid, int *found) {
 }
 
 static int
-import_zip_path(const char *name, char *out, size_t n) {
+zip_path_in(const char *dir, const char *name, char *out, size_t n) {
   if(!export_name_ok(name)) return -1;
-  if(snprintf(out, n, "%s/%s", SV_IMPORT_DIR, name) >= (int)n) return -1;
+  if(snprintf(out, n, "%s/%s", dir, name) >= (int)n) return -1;
   struct stat st;
   return lstat(out, &st) == 0 && S_ISREG(st.st_mode) ? 0 : -1;
+}
+
+static int
+import_zip_path(const char *name, char *out, size_t n) {
+  return zip_path_in(SV_IMPORT_DIR, name, out, n);
+}
+
+/* The folder of ZIPs on the drive a page names (a mount of the drives the console has right now), or -1. */
+static int
+drive_zip_dir(const char *from, char *out, size_t n) {
+  drive_t dr;
+  if(!from || !from[0] || drive_resolve(from, &dr) != 0) return -1;
+  return zip_dir_of(&dr, out, n);
+}
+
+/* The ZIP of a running import: srcdir is the folder import_zip_locate found ("" = the inbox of an upload). */
+static int
+import_zip_at(const char *srcdir, const char *name, char *zip, size_t n) {
+  return srcdir && srcdir[0] ? zip_path_in(srcdir, name, zip, n) : import_zip_path(name, zip, n);
+}
+
+/* The ZIP of an import: in the inbox, or in the ZIP folder of a drive. */
+static int
+import_zip_locate(const char *from, const char *name, char *zip, size_t n, char *dir_out, size_t dn) {
+  dir_out[0] = 0;
+  if(from && from[0]) {
+    if(drive_zip_dir(from, dir_out, dn) != 0) return -1;
+    return zip_path_in(dir_out, name, zip, n);
+  }
+  return import_zip_path(name, zip, n);
 }
 
 /* Where the page puts an uploaded ZIP (the file manager's upload needs the folder to be there). */
@@ -2508,10 +2641,10 @@ ps5tm_saves_import_discard(const char *name, char *err, size_t err_len) {
 
 /* What the ZIP is and where it could go: the page shows it before anything is done. NULL with err/status when the file is no readable ZIP. */
 cJSON *
-ps5tm_saves_import_plan_json(const char *name, char *err, size_t err_len, int *status) {
-  char zip[PATH_MAX];
+ps5tm_saves_import_plan_json(const char *name, const char *from, char *err, size_t err_len, int *status) {
+  char zip[PATH_MAX], sdir[128];
   *status = 200;
-  if(import_zip_path(name, zip, sizeof(zip)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); *status = 404; return NULL; }
+  if(import_zip_locate(from, name, zip, sizeof(zip), sdir, sizeof(sdir)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); *status = 404; return NULL; }
   saveimport_info_t info;
   if(saveimport_inspect(zip, &info, err, err_len) != 0) { *status = 400; return NULL; }
   cJSON *o = cJSON_CreateObject();
@@ -2581,15 +2714,17 @@ import_main(void *arg) {
   memset(&undo, 0, sizeof(undo));
   char zip[PATH_MAX];
   saveimport_info_t info;
+  if(a->nzips == 0) { snprintf(a->zipv[0], sizeof(a->zipv[0]), "%s", a->zipname); a->nzips = 1; }
+  const unsigned total = a->nzips;
 
-  if(import_zip_path(a->zipname, zip, sizeof(zip)) != 0) { job_fail("Die ZIP-Datei ist nicht mehr da."); goto out; }
+  if(import_zip_at(a->srcdir, a->zipv[0], zip, sizeof(zip)) != 0) { job_fail("Die ZIP-Datei ist nicht mehr da."); goto out; }
   if(saveimport_inspect(zip, &info, err, sizeof(err)) != 0) { job_fail("%s", err); goto out; }
   if(!info.importable) { job_fail("%s", info.why); goto out; }
   snprintf(a->id, sizeof(a->id), "%.9s", info.title_id);
-  PS5TM_INFO("saves_import_start", "Spielstände: Einspielen eines Spielstands von %s für Benutzer %s beginnt.", info.title_id, a->uid);
+  PS5TM_INFO("saves_import_start", "Spielstände: Einspielen von %s für Benutzer %s beginnt (%u Spielstände).", info.title_id, a->uid, total);
 
-  /* the title's present state first, as a backup of its own (the same "undo" backup a restore makes); without a target only when the request said no_backup on purpose
-     (ps5tm_saves_import_start refuses the rest) */
+  /* the title's present state first, once for all its slots, as a backup of its own (the same "undo" backup a restore makes); without a target only when the request
+     said no_backup on purpose (ps5tm_saves_import_start refuses the rest) */
   const int iarea = info.ps4 ? 0 : 1;
   if(a->base[0] && title_has_files(a->uid, iarea, info.title_id)) {
     undo.sel   = calloc(1, sizeof(*undo.sel));
@@ -2626,47 +2761,84 @@ import_main(void *arg) {
     }
   }
 
-  int acc_found = 0;
-  const uint64_t account = user_account_id(a->uid, &acc_found);
-  saveimport_args_t ia;
-  memset(&ia, 0, sizeof(ia));
-  ia.zip = zip;
-  ia.work_dir = SV_EXPORT_WORK;
-  ia.home_dir = PS5TM_SAVE_HOME;
-  ia.sys_dir = PS5TM_SYS_DATA;
-  ia.uid = a->uid;
-  ia.user_id = (uint32_t)strtoul(a->uid, NULL, 16);
-  ia.account_id = account;
-  ia.db_backup_dir = SV_DB_BACKUP;
-  saveimport_hooks_t ih;
-  memset(&ih, 0, sizeof(ih));
-  ih.base.phase = im_phase;
-  ih.base.work = ex_work;
-  ih.base.current = ex_current;
-  ih.base.stop = im_stop;
-  ih.no_return = im_no_return;
-  saveimport_result_t res;
-  const int rc = saveimport_run(&ia, &ih, &res, err, sizeof(err));
-  if(rc == 0) {
+  {
+    int acc_found = 0;
+    const uint64_t account = user_account_id(a->uid, &acc_found);
+    unsigned done = 0, files = 0;
+    uint64_t bytes = 0;
+    char notes[560] = "", last_image[320] = "";
+    for(unsigned i = 0; i < total; i++) {
+      if(i > 0) {
+        /* the next slot: its own look at the file, and a stop is taken again until it passes its point of no return */
+        __atomic_store_n(&g_nocancel, 0, __ATOMIC_RELEASE);
+        if(import_zip_at(a->srcdir, a->zipv[i], zip, sizeof(zip)) != 0) {
+          job_fail("Die ZIP-Datei %.100s ist nicht mehr da. Eingespielt sind %u von %u Spielständen.", a->zipv[i], done, total);
+          goto out;
+        }
+        if(saveimport_inspect(zip, &info, err, sizeof(err)) != 0 || !info.importable) {
+          job_fail("%s Eingespielt sind %u von %u Spielständen.", err[0] ? err : info.why, done, total);
+          goto out;
+        }
+      }
+      saveimport_args_t ia;
+      memset(&ia, 0, sizeof(ia));
+      ia.zip = zip;
+      ia.work_dir = SV_EXPORT_WORK;
+      ia.home_dir = PS5TM_SAVE_HOME;
+      ia.sys_dir = PS5TM_SYS_DATA;
+      ia.uid = a->uid;
+      ia.user_id = (uint32_t)strtoul(a->uid, NULL, 16);
+      ia.account_id = account;
+      ia.db_backup_dir = SV_DB_BACKUP;
+      saveimport_hooks_t ih;
+      memset(&ih, 0, sizeof(ih));
+      ih.base.phase = im_phase;
+      ih.base.work = ex_work;
+      ih.base.current = ex_current;
+      ih.base.stop = im_stop;
+      ih.no_return = im_no_return;
+      saveimport_result_t res;
+      const int rc = saveimport_run(&ia, &ih, &res, err, sizeof(err));
+      if(rc == ECANCELED) {
+        PS5TM_INFO("saves_import_cancelled", "Spielstände: Einspielen abgebrochen, an der Konsole ist nichts verändert.");
+        if(done) {
+          pthread_mutex_lock(&g_lock);
+          snprintf(g_job.note, sizeof(g_job.note), "Abgebrochen: Eingespielt sind %u von %u Spielständen.", done, total);
+          pthread_mutex_unlock(&g_lock);
+        }
+        job_state(J_CANCELLED);
+        goto out;
+      }
+      if(rc != 0) {
+        PS5TM_WARN("saves_import_failed", "Spielstände: Einspielen fehlgeschlagen.");           /* the reason names files: for the page, not the log */
+        if(total > 1) job_fail("Spielstand %.64s (%u von %u): %s Eingespielt sind %u von %u Spielständen.%s", info.slot, i + 1, total, err, done, total, undo.dir[0] ? " Der Stand davor ist gesichert." : "");
+        else job_fail("%s%s", err, undo.dir[0] ? " Der Stand davor ist gesichert." : "");
+        goto out;
+      }
+      done++;
+      files += res.files;
+      bytes += res.bytes;
+      snprintf(last_image, sizeof(last_image), "%s", res.image);
+      if(res.note[0]) {
+        const size_t n = strlen(notes);
+        if(n + 2 < sizeof(notes))
+          snprintf(notes + n, sizeof(notes) - n, "%s%s%s%s%s", n ? " " : "", total > 1 ? "Spielstand " : "", total > 1 ? info.slot : "", total > 1 ? ": " : "", res.note);
+      }
+      if(!a->srcdir[0]) unlink(zip);                        /* the uploaded file has done its job; a file on a drive is the person's and stays */
+      PS5TM_INFO("saves_import_done", "Spielstände: %s eingespielt, %u Dateien, Eintrag in der Datenbank %s.", info.title_id, res.files, res.db_inserted ? "neu" : "aktualisiert");
+    }
     pthread_mutex_lock(&g_lock);
-    snprintf(g_job.path, sizeof(g_job.path), "%s", res.image);
-    g_job.ok_files = res.files;
-    g_job.bytes_total = res.bytes;
+    snprintf(g_job.path, sizeof(g_job.path), "%s", last_image);
+    g_job.ok_files = files;
+    g_job.bytes_total = bytes;
     size_t n = 0;
     g_job.note[0] = 0;
-    if(res.note[0]) n = (size_t)snprintf(g_job.note, sizeof(g_job.note), "%s", res.note);
+    if(total > 1) n = (size_t)snprintf(g_job.note, sizeof(g_job.note), "%u Spielstände eingespielt.", done);
+    if(notes[0] && n + 2 < sizeof(g_job.note)) n += (size_t)snprintf(g_job.note + n, sizeof(g_job.note) - n, "%s%s", n ? " " : "", notes);
     if(!acc_found && n + 2 < sizeof(g_job.note))
       snprintf(g_job.note + n, sizeof(g_job.note) - n, "%sFür diesen Benutzer wurde im Register der Konsole kein Konto gefunden; es wurde die Konto-ID %llu eingetragen.", n ? " " : "", (unsigned long long)account);
     pthread_mutex_unlock(&g_lock);
-    unlink(zip);                                            /* the uploaded file has done its job */
-    PS5TM_INFO("saves_import_done", "Spielstände: %s eingespielt, %u Dateien, Eintrag in der Datenbank %s.", info.title_id, res.files, res.db_inserted ? "neu" : "aktualisiert");
     job_state(J_DONE);
-  } else if(rc == ECANCELED) {
-    PS5TM_INFO("saves_import_cancelled", "Spielstände: Einspielen abgebrochen, an der Konsole ist nichts verändert.");
-    job_state(J_CANCELLED);
-  } else {
-    PS5TM_WARN("saves_import_failed", "Spielstände: Einspielen fehlgeschlagen.");           /* the reason names files: for the page, not the log */
-    job_fail("%s%s", err, undo.dir[0] ? " Der Stand davor ist gesichert." : "");
   }
 
 out:
@@ -2679,7 +2851,7 @@ out:
 }
 
 int
-ps5tm_saves_import_start(const char *name, const char *uid, const char *target_mount, int no_backup, char *err, size_t err_len) {
+ps5tm_saves_import_start(const char *name, const char *from, const char *uid, const char *target_mount, int no_backup, char *err, size_t err_len) {
   char gid[16];
   if(game_running(gid, sizeof(gid))) {
     snprintf(err, err_len, "Es läuft ein Spiel (%s). Spielstände werden nur eingespielt, wenn kein Spiel läuft, auch kein pausiertes.", gid);
@@ -2687,18 +2859,45 @@ ps5tm_saves_import_start(const char *name, const char *uid, const char *target_m
   }
   if(other_job_active(err, err_len)) return 409;
   if(!uid_ok(uid) || !user_exists(uid)) { snprintf(err, err_len, "Diesen Benutzer gibt es an der Konsole nicht."); return 404; }
-  char zip[PATH_MAX];
-  if(import_zip_path(name, zip, sizeof(zip)) != 0) { snprintf(err, err_len, "Diese ZIP-Datei gibt es nicht (mehr)."); return 404; }
-  saveimport_info_t info;
-  if(saveimport_inspect(zip, &info, err, err_len) != 0) return 400;
-  if(!info.importable) { snprintf(err, err_len, "%s", info.why); return 400; }
+
+  /* name: one file, or the files of several slots of one title, separated by "," (a file name has no ","): each is looked at, nothing is started unless all can be put in */
+  char list[16][140];
+  unsigned nl = 0;
+  {
+    const char *p = name ? name : "";
+    while(*p && nl < 16) {
+      const char *q = strchr(p, ',');
+      const size_t len = q ? (size_t)(q - p) : strlen(p);
+      if(len == 0 || len >= sizeof(list[0])) { snprintf(err, err_len, "Der Name der ZIP-Datei ist ungültig."); return 400; }
+      memcpy(list[nl], p, len);
+      list[nl][len] = 0;
+      nl++;
+      p += len + (q ? 1 : 0);
+    }
+    if(nl == 0 || *p) { snprintf(err, err_len, "Der Name der ZIP-Datei ist ungültig oder es sind zu viele."); return 400; }
+  }
+  char zip[PATH_MAX], sdir[128] = "";
+  saveimport_info_t info, first;
+  memset(&first, 0, sizeof(first));
+  for(unsigned i = 0; i < nl; i++) {
+    if(import_zip_locate(from, list[i], zip, sizeof(zip), sdir, sizeof(sdir)) != 0) { snprintf(err, err_len, "Diese ZIP-Datei gibt es nicht (mehr)."); return 404; }
+    if(saveimport_inspect(zip, &info, err, err_len) != 0) return 400;
+    if(!info.importable) { snprintf(err, err_len, "%s", info.why); return 400; }
+    if(i == 0) first = info;
+    else if(strcmp(first.title_id, info.title_id) || first.ps4 != info.ps4) { snprintf(err, err_len, "Die ZIP-Dateien gehören zu verschiedenen Titeln."); return 400; }
+    for(unsigned k = 0; k < i; k++)
+      if(!strcmp(list[k], list[i])) { snprintf(err, err_len, "Dieselbe ZIP-Datei steht mehrfach in der Liste."); return 400; }
+  }
 
   job_args_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 503; }
+  snprintf(a->srcdir, sizeof(a->srcdir), "%s", sdir);
   snprintf(a->kind, sizeof(a->kind), "import");
   snprintf(a->uid, sizeof(a->uid), "%s", uid);
-  snprintf(a->zipname, sizeof(a->zipname), "%s", name);
-  if(title_has_files(uid, info.ps4 ? 0 : 1, info.title_id)) {
+  snprintf(a->zipname, sizeof(a->zipname), "%s", list[0]);
+  for(unsigned i = 0; i < nl; i++) snprintf(a->zipv[i], sizeof(a->zipv[i]), "%s", list[i]);
+  a->nzips = nl;
+  if(title_has_files(uid, first.ps4 ? 0 : 1, first.title_id)) {
     drive_t dr;
     if(target_mount && target_mount[0]) {
       if(drive_resolve(target_mount, &dr) != 0) { args_free(a); snprintf(err, err_len, "Dieses Ziel gibt es an der Konsole gerade nicht."); return 404; }
@@ -2833,6 +3032,40 @@ exports_json(void) {
     found[n++] = o;
   }
   closedir(d);
+  qsort(found, n, sizeof(found[0]), cmp_export_newest);
+  for(unsigned i = 0; i < n; i++) cJSON_AddItemToArray(arr, found[i]);
+  return arr;
+}
+
+/* The ZIPs on the drives the console has now (the ZIP folder of each), newest first: what a stick brings from another console. Each: mount, label, name, bytes, created. */
+static cJSON *
+zips_json(void) {
+  cJSON *arr = cJSON_CreateArray();
+  drive_t dr[16];
+  const unsigned nd = drives_get(dr, 16);
+  cJSON *found[SV_EXPORT_MAX];
+  unsigned n = 0;
+  for(unsigned i = 0; i < nd && n < SV_EXPORT_MAX; i++) {
+    char dir[128];
+    if(zip_dir_of(&dr[i], dir, sizeof(dir)) != 0) continue;
+    DIR *d = opendir(dir);
+    if(!d) continue;
+    struct dirent *e;
+    while((e = readdir(d)) != NULL && n < SV_EXPORT_MAX) {
+      if(!export_name_ok(e->d_name)) continue;
+      char full[PATH_MAX];
+      struct stat st;
+      if(snprintf(full, sizeof(full), "%s/%s", dir, e->d_name) >= (int)sizeof(full) || lstat(full, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+      cJSON *o = cJSON_CreateObject();
+      cJSON_AddStringToObject(o, "mount", dr[i].mount);
+      cJSON_AddStringToObject(o, "label", dr[i].label);
+      cJSON_AddStringToObject(o, "name", e->d_name);
+      cJSON_AddNumberToObject(o, "bytes", (double)st.st_size);
+      cJSON_AddNumberToObject(o, "created", (double)st.st_mtime);
+      found[n++] = o;
+    }
+    closedir(d);
+  }
   qsort(found, n, sizeof(found[0]), cmp_export_newest);
   for(unsigned i = 0; i < n; i++) cJSON_AddItemToArray(arr, found[i]);
   return arr;
@@ -3033,6 +3266,7 @@ ps5tm_saves_json(void) {
   for(unsigned i = 0; i < nfound; i++) cJSON_AddItemToArray(bl, found[i]);
   cJSON_AddNumberToObject(root, "unfinished", unfinished);
   cJSON_AddItemToObject(root, "exports", exports_json());
+  cJSON_AddItemToObject(root, "zips", zips_json());
 
   cJSON_Delete(names);
   cJSON_AddItemToObject(root, "job", ps5tm_saves_job_json());

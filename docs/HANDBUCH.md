@@ -1009,7 +1009,7 @@ ihre Trophäen gehören nicht dazu.
   *andere Konsole* und lässt sich prüfen, aber nicht zurückspielen. Zurückgespielt wird auch nur
   zu Benutzern, die es auf der Konsole gibt.
 - **Auf eine andere Konsole übertragen (ab 1.87.0).** Eine Sicherung passt nur zu ihrer Konsole. Bei jedem PS5-Titel gibt
-  es deshalb den Knopf **„Als ZIP“** (bei mehreren Spielständen eines Titels je einer): Die Konsole liest den Spielstand mit
+  es deshalb den Knopf **„Als ZIP“** (er liest alle Spielstände des Titels aus, eine ZIP-Datei je Spielstand, alle mit derselben Zeit im Namen; welche ein Spiel anlegt, ob `SaveData`, `sce_sdmemory` oder beides, muss man nicht wissen): Die Konsole liest jeden Spielstand mit
   ihren eigenen Mitteln im Klartext aus – sie hängt dafür eine **Kopie** des Abbilds ein, die App entschlüsselt nichts selbst
   und das Original wird nie eingehängt oder verändert –, und die App packt die Dateien in eine ZIP-Datei (gespeichert, nicht
   komprimiert, mit dem echten `sce_sys/param.sfo`, das die PS5 im Kopf des Abbilds versteckt). Dazu kommt `chives.json`:
@@ -1052,6 +1052,7 @@ ihre Trophäen gehören nicht dazu.
   irgendeiner (nur Benutzer-Kennung und Wert, Byte 4 bis 40), zuletzt einer der anderen Art (bei PS4 ein PS5-Spielstand); verwendet wird nur ein Spielstand, dessen `param.sfo` das Konto und die Kennung dieses Benutzers zeigt (höchstens
   acht Versuche). Gibt es keinen, wird trotzdem eingespielt, und der Auftrag sagt, dass das Spiel den Spielstand vielleicht nicht annimmt. Alles andere (Sicherung davor,
   Zurücklesen jeder Datei, Datenbank-Kopie, Zurückrollen bei einem Fehler) ist wie bei PS5.
+- **Vollbild-App (ab 1.88.0).** Dasselbe geht am Controller, mit einem USB-Laufwerk als Weg: Im Menü eines Spiels (Quadrat-Taste) schreibt „ZIP auslesen auf …“ die ZIP-Datei in den Ordner `PS5-Sicherung/Spielstand-ZIP` des gewählten Laufwerks (das Ziel wie bei den Sicherungen; alle Spielstände des Spiels, eine ZIP-Datei je Spielstand). An der anderen Konsole zeigt die Liste „ZIP-DATEIEN“ alles, was in diesem Ordner auf den Laufwerken liegt; die X-Taste sieht eine Datei an (die App prüft sie und schreibt nichts), danach „Für <Benutzer> einspielen“ (ersetzt / ergänzt / neu); gehören mehrere ZIP-Dateien zum selben Lauf (gleicher Titel, gleiche Zeit im Namen), steht davor „Für <Benutzer> alle N Spielstände einspielen“. Im Browser lassen sich ebenso mehrere ZIP-Dateien auf einmal wählen. Die App legt jeden Spielstand in den Platz, den seine ZIP-Datei nennt, und sichert den Stand davor einmal für das ganze Spiel. Der Stand davor wird wie im Browser zuerst gesichert; die Datei auf dem Laufwerk bleibt liegen. Ihr Name darf nur Buchstaben, Ziffern, `_`, `-` und `.` enthalten. Eine ZIP-Datei vom PC (zum Beispiel von Garlic SaveMgr) kommt in denselben Ordner.
 - **Aufräumen.** Die App löscht keine Sicherung, auch nicht den Stand vor dem Zurückspielen:
   Das geht am PC oder per FTP, indem man den Ordner unter `PS5-Sicherung/Spielstaende` entfernt.
   Die Seite listet die 40 neuesten Sicherungen (nach dem Zeitstempel im Ordnernamen), die

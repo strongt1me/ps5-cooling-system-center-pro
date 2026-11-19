@@ -11146,10 +11146,10 @@
         return `<h4 class="sv-group">${esc(label)} <span class="muted">${esc(String(list.length))}</span></h4>`
           + list.map((t) => {
             const k = `${u.uid}/${t.id}`;
-            /* saves (PS5 and PS4) can be read out as a ZIP of plain files for another console: one button per slot */
+            /* saves (PS5 and PS4) can be read out as ZIP files of plain files for another console: one button per title, the app reads out every slot the game keeps (no choice to make) */
             const slots = Array.isArray(t.slots) ? t.slots : [];
-            const zips = slots.map((s) => `<button type="button" class="btn ghost sv-zip" data-sv-export="${esc(`${k}/${s.slot}`)}" data-name="${esc(svName(t))}"
-              aria-label="${slots.length > 1 ? `${esc(svName(t))} (${esc(s.slot)}) als ZIP-Datei auslesen` : `${esc(svName(t))} als ZIP-Datei auslesen`}">${slots.length > 1 ? `Als ZIP · ${esc(s.slot)}` : "Als ZIP"}</button>`).join("");
+            const zips = slots.length ? `<button type="button" class="btn ghost sv-zip" data-sv-export="${esc(k)}" data-name="${esc(svName(t))}"
+              aria-label="${esc(svName(t))} als ZIP-Datei auslesen">Als ZIP</button>` : "";
             return `<div class="sv-title-row"><label class="sv-title"><input type="checkbox" data-sv-title="${esc(k)}"${sv.sel.has(k) ? " checked" : ""}>
           <span class="sv-t-name"><b>${esc(svName(t))}</b>
             <small>${esc(t.id)} · ${esc(t.platform)}${t.kind === "app" ? " · App" : ""}${t.installed ? "" : " · nicht installiert"}</small></span>
@@ -11194,6 +11194,11 @@
       + `${bytes(d.users.reduce((n, u) => n + u.bytes, 0))} auf der Konsole`);
   };
 
+  /* the games of a backup, for its heading: the first three, then "+N" (the list said only when, not which game) */
+  const svBkGames = (b) => {
+    const names = (b.titles || []).map((t) => svName(t));
+    return names.slice(0, 3).join(", ") + (names.length > 3 ? ` +${names.length - 3}` : "");
+  };
   const svRenderBackups = () => {
     const list = sv.data.backups;
     txt("#sv-bk-sub", list.length ? `${list.length} ${list.length === 1 ? "Sicherung" : "Sicherungen"}, die neueste zuerst` : "");
@@ -11209,10 +11214,10 @@
       const open = sv.open.has(b.path);
       return `<div class="sv-bk">
         <div class="sv-bk-head">
-          <div class="sv-bk-main"><b>${esc(svWhen(b.created))}</b>
+          <div class="sv-bk-main"><b>${esc(svBkGames(b) || svWhen(b.created))}</b>
             ${b.kind === "undo" ? `<span class="badge quiet" title="So war der Stand, bevor ein Titel zurückgespielt wurde.">Stand vor dem Zurückspielen</span>` : ""}
             ${b.this_console ? "" : `<span class="badge warn" title="Diese Sicherung stammt von einer anderen Konsole und lässt sich hier nicht zurückspielen.">andere Konsole</span>`}
-            <small>${esc(b.label)} · ${esc(String(b.titles.length))} Titel · ${esc(bytes(b.bytes))}
+            <small>${esc(svWhen(b.created))} · ${esc(b.label)} · ${esc(String(b.titles.length))} Titel · ${esc(bytes(b.bytes))}
               · ${esc(String(b.users.length))} Benutzer</small></div>
           <div class="row-gap">
             <button type="button" class="btn ghost" data-sv-verify="${esc(b.path)}" aria-label="${b.kind === "undo" ? "Stand vor dem Zurückspielen" : "Sicherung"} vom ${esc(svWhenSec(b.created))} prüfen">Prüfen</button>
@@ -11248,7 +11253,7 @@
   /* ── Einspielen: ein Spielstand aus einer ZIP-Datei (saveimport.c) ───────────────
      Die ZIP-Datei geht über den Upload des Dateimanagers in den Eingangsordner der Konsole, die App prüft sie (…/import/plan) und
      zeigt, was drin ist; dann wählt man den Benutzer. Erst „Einspielen“ ändert etwas. */
-  const svIm = { name: "", plan: null, user: "", busy: false, msg: "" };
+  const svIm = { name: "", names: [], plan: null, user: "", busy: false, msg: "" };
   const svImName = (fname) => {
     const n = String(fname).replace(/\.zip$/i, "").replace(/[^A-Za-z0-9._-]/g, "_").replace(/\.{2,}/g, "_").replace(/^\.+/, "").slice(0, 80) || "spielstand";
     return `import-${Date.now()}-${n}.zip`;
@@ -11279,6 +11284,7 @@
       <p><b>${esc(p.title_name || p.main_title || p.title_id)}</b> <span class="muted">${esc(p.title_id)} · ${esc(p.platform || "PS5")} · ${esc(p.slot)}</span></p>
       <p class="muted">${esc(String(p.files))} Dateien, ${esc(bytes(p.bytes))}</p>
       ${p.converted ? `<p class="muted">Dieser Spielstand liegt im neueren Abbildformat der Konsole. Er wird als klassisches Abbild angelegt; ob das Spiel ihn annimmt, zeigt erst ein Start des Spiels.</p>` : ""}
+      ${svIm.names.length > 1 ? `<p class="muted">${esc(String(svIm.names.length))} ZIP-Dateien: Alle Spielstände dieses Titels werden nacheinander eingespielt.</p>` : ""}
       <p class="cp-step">Für welchen Benutzer?</p>
       <div class="cp-list">${users.map((u) => `<label class="cp-choice"><input type="radio" name="sv-im-user" value="${esc(u.uid)}"${u.uid === svIm.user ? " checked" : ""}>
         <span class="cp-choice-text"><b>${esc(u.name)}</b><span class="muted">${u.has_slot ? "hat diesen Spielstand schon: er wird ersetzt" : u.has_title ? "hat schon Spielstände dieses Titels" : "noch kein Spielstand dieses Titels"}</span></span></label>`).join("")}</div>
@@ -11288,25 +11294,37 @@
         <button type="button" class="btn primary" id="sv-im-go"${why ? " disabled" : ""}>Einspielen</button></div></div>`;
   };
 
-  const svImPick = async (file) => {
-    if (!file || svIm.busy) return;
-    if (!/\.zip$/i.test(file.name)) { toast("Bitte eine ZIP-Datei wählen.", "error"); return; }
+  /* one or several ZIP files (the slots of one title): all are uploaded, the first is shown, the import puts them in one after the other */
+  const svImPick = async (files) => {
+    const list = Array.from(files || []);
+    if (!list.length || svIm.busy) return;
+    if (list.some((f) => !/\.zip$/i.test(f.name))) { toast("Bitte eine ZIP-Datei wählen.", "error"); return; }
     svIm.busy = true;
     svIm.plan = null;
+    svIm.names = [];
     svIm.msg = "wird hochgeladen …";
     svImRender();
-    const name = svImName(file.name);
+    const names = [];
     try {
       const inbox = await api("/api/v1/saves/import/inbox", { method: "POST" });
-      const r = await fetch(`/api/v1/files/upload?path=${encodeURIComponent(inbox.path)}&name=${encodeURIComponent(name)}`, { method: "POST", body: file });
-      let d = null;
-      try { d = await r.json(); } catch { /* keine Antwort */ }
-      if (!r.ok || !d || d.ok === false) throw new Error((d && d.message) || `Die Konsole meldet einen Fehler (HTTP ${r.status}).`);
+      for (const file of list.slice(0, 16)) {
+        const name = svImName(file.name);
+        const r = await fetch(`/api/v1/files/upload?path=${encodeURIComponent(inbox.path)}&name=${encodeURIComponent(name)}`, { method: "POST", body: file });
+        let d = null;
+        try { d = await r.json(); } catch { /* keine Antwort */ }
+        if (!r.ok || !d || d.ok === false) throw new Error((d && d.message) || `Die Konsole meldet einen Fehler (HTTP ${r.status}).`);
+        names.push(name);
+        await new Promise((res) => setTimeout(res, 2));     /* Date.now() in the names: never twice the same */
+      }
       svIm.msg = "wird geprüft …";
       svImRender();
-      svIm.plan = await api("/api/v1/saves/import/plan", { method: "POST", body: JSON.stringify({ name }) });
-      svIm.name = name;
-    } catch (e) { toast(e.message, "error"); }
+      svIm.plan = await api("/api/v1/saves/import/plan", { method: "POST", body: JSON.stringify({ name: names[0] }) });
+      svIm.name = names[0];
+      svIm.names = names;
+    } catch (e) {
+      toast(e.message, "error");
+      for (const name of names) { try { await api("/api/v1/saves/import/discard", { method: "POST", body: JSON.stringify({ name }) }); } catch { /* weg oder nie da */ } }
+    }
     svIm.msg = "";
     svIm.busy = false;
     svImRender();
@@ -11317,7 +11335,7 @@
     if (!p) return;
     const sel = (p.users || []).find((u) => u.uid === svIm.user);
     const drive = sv.data && sv.data.drives.find((x) => x.mount === sv.drive);
-    const body = { name: p.name, user: svIm.user };
+    const body = svIm.names.length > 1 ? { names: svIm.names, user: svIm.user } : { name: p.name, user: svIm.user };
     if (sel && sel.has_title && drive) body.mount = drive.mount;
     $("#sv-im-go").disabled = true;
     try {
@@ -11326,11 +11344,12 @@
   };
 
   const svImDrop = async () => {
-    const name = svIm.name;
+    const names = svIm.names.length ? svIm.names : svIm.name ? [svIm.name] : [];
     svIm.plan = null;
     svIm.name = "";
+    svIm.names = [];
     svImRender();
-    if (name) { try { await api("/api/v1/saves/import/discard", { method: "POST", body: JSON.stringify({ name }) }); } catch { /* weg oder nie da */ } }
+    for (const name of names) { try { await api("/api/v1/saves/import/discard", { method: "POST", body: JSON.stringify({ name }) }); } catch { /* weg oder nie da */ } }
   };
 
   const svRenderJob = () => {
@@ -11512,7 +11531,7 @@
       svRenderStart();
       svImRender();
     } else if (t.id === "sv-im-file") {
-      const f = t.files && t.files[0];
+      const f = Array.from(t.files || []);
       t.value = "";
       svImPick(f);
     } else if (t.name === "sv-im-user") {
@@ -11572,10 +11591,10 @@
       return;
     }
     if (b.dataset.svExport) {
-      const [uid, id, slot] = b.dataset.svExport.split("/");
+      const [uid, id] = b.dataset.svExport.split("/");
       b.disabled = true;
       try {
-        svStarted(await api("/api/v1/saves/export", { method: "POST", body: JSON.stringify({ user: uid, title: id, slot }) }));
+        svStarted(await api("/api/v1/saves/export", { method: "POST", body: JSON.stringify({ user: uid, title: id }) }));
       } catch (err) { toast(err.message, "error"); } finally { b.disabled = false; }
       return;
     }
