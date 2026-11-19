@@ -10,7 +10,9 @@
  * companion file <slot>.bin, and the owner in the param.sfo is made right from a save of the same user (see saveimport.c: the PARAMS record of a PS4 save).
  *
  * Only the layout this app can make exactly is accepted (what a firmware like 12.00 writes: 32 or 64 KiB blocks, no copy-on-write area, a real param.sfo in the file system,
- * SAVEDATA_BLOCKS equal to the block count): saves of newer firmware, whose images carry their metadata in the header, are refused with the reason, never guessed.
+ * SAVEDATA_BLOCKS equal to the block count). A save in the copy-on-write layout (fs_ext != 0: system blocks after the data blocks, the numbers of the param.sfo say SAVEDATA_BLOCKS
+ * = block_count - fs_ext and SYSTEM_BLOCKS = fs_ext) is made as the classic image of its data blocks (SYSTEM_BLOCKS 0; info.converted says so and the result note tells the user);
+ * anything else of a newer firmware is refused with the reason, never guessed.
  *
  * Order, so that the console changes as late and as little as possible:
  *   1. the ZIP is read through and checked (nothing is written);
@@ -45,6 +47,8 @@ typedef struct {
   unsigned files, dirs;
   uint64_t bytes;
   int      ps4;                    /* 1: a PS4 save (no sidecar: the image size is estimated, the key is made new and goes into <slot>.bin) */
+  int      converted;              /* 1: the save lies in the copy-on-write layout (fs_ext != 0); it is made as the classic image of its data blocks (block_count/image_size are the new ones) */
+  uint64_t src_system_blocks;      /* converted: the system blocks (fs_ext) the image in the ZIP had behind its data blocks */
   int      importable;             /* 1 when this console can put it in; else why says what is wrong */
   char     why[320];
 } saveimport_info_t;

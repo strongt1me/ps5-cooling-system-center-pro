@@ -146,6 +146,7 @@ typedef struct {
   const char *prefix;                  /* "" or "x/y/" */
   const char *title, *slot, *format;
   uint64_t blocks, sysblocks;
+  uint64_t sfo_blocks;                 /* SAVEDATA_BLOCKS in the param.sfo when it is not the block count of the image (0: the same) */
   uint32_t block_size;
   unsigned fs_ext, backup_headers, mode_raw;
   int with_chives, with_sfo, zero_sfo, two_chives, with_icon, own_list;
@@ -186,7 +187,7 @@ make_zip(const char *path, const zipspec_t *sp) {
   if(!w) return -1;
   char name[400];
   uint8_t sfo[4096];
-  size_t sl = sfo_build(sfo, sp->title, sp->slot, sp->blocks, sp->sysblocks, sp->format, 0x99AABBCCDDEEFF00ull, 0x11111111);
+  size_t sl = sfo_build(sfo, sp->title, sp->slot, sp->sfo_blocks ? sp->sfo_blocks : sp->blocks, sp->sysblocks, sp->format, 0x99AABBCCDDEEFF00ull, 0x11111111);
   if(sp->zero_sfo) { memset(sfo, 0, 3072); sl = 3072; }
   time_t now = 1790000000;
   if(sp->with_sfo) { snprintf(name, sizeof(name), "%ssce_sys/param.sfo", sp->prefix); szw_add_mem(w, name, sfo, sl, now, 0644); }
@@ -409,18 +410,22 @@ main(int argc, char **argv) {
   sp = good(); sp.prefix = "PPSA01234/SAVE0/";
   CHECK(make_zip(ZIP, &sp) == 0 && saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && info.importable && !strcmp(info.prefix, "PPSA01234/SAVE0/") && info.files == 5);
 
-  struct { zipspec_t s; const char *want; } bad[10];
+  struct { zipspec_t s; const char *want; } bad[16];
   int nb = 0;
   sp = good(); sp.with_chives = 0; bad[nb].s = sp; bad[nb++].want = "fehlt chives.json";
   sp = good(); sp.two_chives = 1; bad[nb].s = sp; bad[nb++].want = "mehrere Spielstände";
-  sp = good(); sp.fs_ext = 3; bad[nb].s = sp; bad[nb++].want = "neueren Firmware";
-  sp = good(); sp.mode_raw = 5; bad[nb].s = sp; bad[nb++].want = "neueren Firmware";
+  sp = good(); sp.fs_ext = 3; bad[nb].s = sp; bad[nb++].want = "Blockzahlen";                    /* fs_ext says a copy-on-write image, the param.sfo says it is not */
+  sp = good(); sp.mode_raw = 5; bad[nb].s = sp; bad[nb++].want = "Abbildformat";
   sp = good(); sp.zero_sfo = 1; bad[nb].s = sp; bad[nb++].want = "param.sfo";
   sp = good(); sp.with_sfo = 0; bad[nb].s = sp; bad[nb++].want = "fehlt sce_sys/param.sfo";
   sp = good(); sp.format = "pfs"; bad[nb].s = sp; bad[nb++].want = "ppr";
   sp = good(); sp.blocks = 48; sp.sysblocks = 5; bad[nb].s = sp; bad[nb++].want = "Blockzahlen";
   sp = good(); sp.title = "CUSA01234"; bad[nb].s = sp; bad[nb++].want = "PS5-Kennung";
   sp = good(); sp.slot = "sce_bu_x"; bad[nb].s = sp; bad[nb++].want = "ungültig";
+  sp = good(); sp.backup_headers = 2; bad[nb].s = sp; bad[nb++].want = "Abbildformat";
+  sp = good(); sp.blocks = 96; sp.fs_ext = 96; sp.sfo_blocks = 0; sp.sysblocks = 0; bad[nb].s = sp; bad[nb++].want = "keine gültige Beschreibung";    /* no data blocks at all: the sidecar itself is refused */
+  sp = good(); sp.blocks = 96; sp.fs_ext = 48; sp.sfo_blocks = 48; sp.sysblocks = 0; bad[nb].s = sp; bad[nb++].want = "Blockzahlen";               /* copy-on-write, but SYSTEM_BLOCKS 0 */
+  sp = good(); sp.blocks = 96; sp.fs_ext = 48; sp.sfo_blocks = 96; sp.sysblocks = 48; bad[nb].s = sp; bad[nb++].want = "Blockzahlen";              /* SAVEDATA_BLOCKS counts the system blocks too */
   for(int i = 0; i < nb; i++) {
     make_zip(ZIP, &bad[i].s);
     int rc = saveimport_inspect(ZIP, &info, err, sizeof(err));
@@ -612,12 +617,12 @@ main(int argc, char **argv) {
 
   /* ---- not importable: refused with the reason, nothing done */
   reset();
-  sp = good(); sp.fs_ext = 3;
+  sp = good(); sp.mode_raw = 5;
   make_zip(ZIP, &sp);
   a = args();
   ps5tm_savemnt_test_opened = 0;
   rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
-  CHECK(rc != 0 && strstr(err, "neueren Firmware") && ps5tm_savemnt_test_opened == 0 && !exists(IMG) && count_dir(WORK) == 0);
+  CHECK(rc != 0 && strstr(err, "Abbildformat") && ps5tm_savemnt_test_opened == 0 && !exists(IMG) && count_dir(WORK) == 0);
 
   /* ---- a cut-off earlier installation: the old image goes back first */
   reset();
@@ -841,6 +846,62 @@ main(int argc, char **argv) {
   ps5tm_savemnt_test_opened = 0;
   rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
   CHECK(rc != 0 && strstr(err, "keine gültige Beschreibung") && ps5tm_savemnt_test_opened == 0 && count_dir(WORK) == 0);
+
+  /* ---- the copy-on-write layout (fs_ext != 0): 96 blocks of 64 KiB, 48 of them system blocks, the param.sfo counts 48 data + 48 system. It is made as the classic image of 48 blocks. */
+  sp = good(); sp.blocks = 96; sp.fs_ext = 48; sp.sfo_blocks = 48; sp.sysblocks = 48;
+  make_zip(ZIP, &sp);
+  CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && info.importable && info.converted == 1 && info.src_system_blocks == 48);
+  CHECK(info.block_count == 48 && info.image_size == 48ull * 65536 && info.block_size == 65536 && !info.ps4);
+  reset();
+  make_zip(ZIP, &sp);
+  a = args();
+  memset(&pr, 0, sizeof(pr));
+  ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  if(rc) printf("  err: %s\n", err);
+  CHECK(rc == 0 && res.files == 5 && res.db_inserted == 1 && strstr(res.note, "neueren Abbildformat") && strstr(res.note, "48 Systemblöcken") && strstr(res.note, "48 Blöcken"));
+  CHECK(exists(IMG) && fsize(IMG) == 48ll * 65536);                    /* the classic image of the data blocks, not 96 blocks */
+  CHECK(scalar(DBP, "select blocks from savedata") == 48 && scalar(DBP, "select system_blocks from savedata") == 0 && scalar(DBP, "select size_kib from savedata") == 3072);
+  {
+    uint8_t buf[200000];
+    char p[700];
+    snprintf(p, sizeof(p), "%s/sce_sys/param.sfo", STORED);
+    const size_t n = slurp(p, buf, sizeof(buf));
+    uint8_t b8[8], s8[8];
+    CHECK(n > 100 && savesfo_valid(buf, n) && savesfo_get_raw(buf, n, "SAVEDATA_BLOCKS", b8, 8) == 8 && b8[0] == 48 && !b8[1] && !b8[7]);
+    CHECK(savesfo_get_raw(buf, n, "SYSTEM_BLOCKS", s8, 8) == 8 && !s8[0] && !s8[1] && !s8[7]);     /* no system blocks in the classic image */
+    snprintf(p, sizeof(p), "%s/data.bin", STORED);
+    CHECK(slurp(p, buf, sizeof(buf)) == sizeof(DATA) && !memcmp(buf, DATA, sizeof(DATA)));
+  }
+  CHECK(ps5tm_savemnt_test_opened == 2 && ps5tm_savemnt_test_closed == 2 && count_dir(WORK) == 0);
+
+  /* ... where the data blocks would not hold the files (4 blocks of 64 KiB for 2 blocks of files: the room the file system needs is 16 blocks more): the image gets the room, SAVEDATA_BLOCKS says so */
+  reset();
+  sp = good(); sp.blocks = 8; sp.fs_ext = 4; sp.sfo_blocks = 4; sp.sysblocks = 4;
+  make_zip(ZIP, &sp);
+  CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && info.importable && info.converted == 1 && info.block_count == 18 && info.image_size == 18ull * 65536);
+  a = args();
+  memset(&pr, 0, sizeof(pr));
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  if(rc) printf("  err: %s\n", err);
+  CHECK(rc == 0 && exists(IMG) && fsize(IMG) == 18ll * 65536 && scalar(DBP, "select blocks from savedata") == 18 && scalar(DBP, "select system_blocks from savedata") == 0);
+  {
+    uint8_t buf[8192];
+    char p[700];
+    snprintf(p, sizeof(p), "%s/sce_sys/param.sfo", STORED);
+    const size_t n = slurp(p, buf, sizeof(buf));
+    uint8_t b8[8];
+    CHECK(n > 100 && savesfo_get_raw(buf, n, "SAVEDATA_BLOCKS", b8, 8) == 8 && b8[0] == 18 && !b8[1]);
+  }
+
+  /* a classic save says nothing of a conversion */
+  reset();
+  sp = good();
+  make_zip(ZIP, &sp);
+  CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && info.importable && info.converted == 0);
+  a = args();
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && !strstr(res.note, "Abbildformat"));
 
   rmtree(ROOT);
   printf("%d checks, %d failed\n", g_n, g_fail);

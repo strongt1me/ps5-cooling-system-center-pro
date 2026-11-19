@@ -2532,6 +2532,7 @@ ps5tm_saves_import_plan_json(const char *name, char *err, size_t err_len, int *s
   cJSON_AddNumberToObject(o, "files", info.files);
   cJSON_AddNumberToObject(o, "bytes", (double)info.bytes);
   cJSON_AddNumberToObject(o, "image_bytes", (double)info.image_size);
+  cJSON_AddBoolToObject(o, "converted", info.converted);
   uint64_t avail = console_free();
   cJSON_AddNumberToObject(o, "free_bytes", avail == UINT64_MAX ? -1 : (double)avail);
   cJSON *users = cJSON_AddArrayToObject(o, "users");

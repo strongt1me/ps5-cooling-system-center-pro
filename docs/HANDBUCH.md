@@ -1034,8 +1034,10 @@ ihre Trophäen gehören nicht dazu.
      des Spielstands nach `savedata_prospero_meta/user/<Titel>/<Spielstand>_icon0.png`, und der Eintrag in
      `/system_data/savedata_prospero/<Benutzer>/db/user/savedata.db` wird angelegt oder aktualisiert, nachdem die Datenbank nach
      `/data/PS5-Cooling-Center/savexport/db-backup` kopiert wurde. Scheitert dabei etwas, geht alles auf den Stand davor zurück.
-  Die ZIP-Datei wird danach gelöscht. Dann das Spiel starten und den Spielstand prüfen. **Nicht unterstützt:** Spielstände neuerer Firmware (Abbildformat mit
-  `fs_ext` ungleich 0, `param.sfo` nur im Abbildkopf), ZIP-Dateien ohne `chives.json` und solche mit mehreren Spielständen: Die App nennt den Grund,
+  Die ZIP-Datei wird danach gelöscht. Dann das Spiel starten und den Spielstand prüfen. **Neueres Abbildformat:** Ein PS5-Spielstand mit `fs_ext` ungleich 0 (Systemblöcke hinter den Datenblöcken; `SAVEDATA_BLOCKS` = Blöcke − `fs_ext`, `SYSTEM_BLOCKS` = `fs_ext`) wird als
+  klassisches Abbild aus seinen Datenblöcken angelegt (`SYSTEM_BLOCKS` 0; bei Bedarf wachsen die Blöcke etwas, damit die Dateien hineinpassen). Die Karte sagt das vor dem Einspielen,
+  und ob das Spiel ihn annimmt, zeigt erst ein Start des Spiels. **Nicht unterstützt:** andere Abbildformate neuerer Firmware (zum Beispiel `param.sfo` nur im Abbildkopf),
+  ZIP-Dateien ohne `chives.json` und solche mit mehreren Spielständen: Die App nennt den Grund,
   ohne etwas zu ändern. Es läuft immer nur ein Vorgang; eingespielt wird nur, wenn kein Spiel läuft.
 - **PS4-Spielstände (ab 1.87.0).** „Als ZIP“ und „Spielstand einspielen“ gelten auch für PS4-Titel (`CUSA…`, Ordner `savedata`, Datenbank
   `/system_data/savedata/<Benutzer>/db/user/savedata.db`), mit diesen Unterschieden: Ein PS4-Abbild trägt seinen versiegelten Schlüssel nicht in sich, er liegt in

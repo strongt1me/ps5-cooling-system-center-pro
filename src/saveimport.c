@@ -122,6 +122,16 @@ le_num(const uint8_t *v, size_t n) {
   return x;
 }
 
+/* A number into a value of the param.sfo, little endian, in the bytes the value has in use (at most 8). 0 or -1. */
+static int
+sfo_set_num(uint8_t *sfo, size_t len, const char *key, uint64_t v) {
+  size_t off, used;
+  uint8_t b[8];
+  if(savesfo_find(sfo, len, key, &off, &used, NULL) != 0 || used < 1 || used > sizeof(b)) return -1;
+  for(size_t i = 0; i < sizeof(b); i++) b[i] = (uint8_t)(v >> (8 * i));
+  return savesfo_set_raw(sfo, len, key, 0, b, used);
+}
+
 static void
 why_set(saveimport_info_t *info, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static void
@@ -250,10 +260,13 @@ inspect_open(const char *zip, szr_t **zp, saveimport_info_t *info, chives_t *geo
   info->image_size = geo->image_size;
   info->block_count = geo->block_count;
   info->block_size = geo->block_size;
-  /* the layout this app can make exactly */
-  if(!geo->has_fs_ext || geo->fs_ext != 0 || geo->backup_header_count != 1 || geo->mode_raw != 0x000d || geo->image_size != geo->block_count * (uint64_t)geo->block_size) {
-    why_set(info, "Dieser Spielstand hat das Abbildformat einer neueren Firmware (Überschreibbereich fs_ext=%u, mode=%u): Dieses Format kann die App noch nicht anlegen. "
-            "Es wurde nichts verändert.", (unsigned)geo->fs_ext, (unsigned)geo->mode_raw);
+  /* the layout this app can make exactly: the classic image. The copy-on-write layout (fs_ext != 0, system blocks behind the data blocks) is made as the classic image of its
+     data blocks; its numbers are checked against the param.sfo below, before anything is taken over. */
+  const int cow = geo->has_fs_ext && geo->fs_ext != 0;
+  if(!geo->has_fs_ext || geo->backup_header_count != 1 || geo->mode_raw != 0x000d || geo->image_size != geo->block_count * (uint64_t)geo->block_size ||
+     (cow && geo->fs_ext >= geo->block_count)) {
+    why_set(info, "Dieser Spielstand hat ein Abbildformat, das die App nicht anlegen kann (Überschreibbereich fs_ext=%u, mode=%u, Sicherungsköpfe=%u). "
+            "Es wurde nichts verändert.", (unsigned)geo->fs_ext, (unsigned)geo->mode_raw, (unsigned)geo->backup_header_count);
     return 0;
   }
 
@@ -295,10 +308,26 @@ inspect_open(const char *zip, szr_t **zp, saveimport_info_t *info, chives_t *geo
   if(strcmp(fmt, "ppr")) { free(sfo); why_set(info, "Das ist kein PS5-Spielstand im Format ppr (FORMAT=%.12s).", fmt); return 0; }
   if(!title_ok(tid)) { free(sfo); why_set(info, "Die Titel-Kennung im param.sfo (%.20s) ist keine PS5-Kennung.", tid); return 0; }
   if(!slot_ok(slot)) { free(sfo); why_set(info, "Der Name des Spielstands im param.sfo (SAVEDATA_DIRECTORY) ist ungültig."); return 0; }
-  if(nb < 4 || le_num(b8, (size_t)nb) != geo->block_count || ns < 4 || le_num(s8, (size_t)ns) != 0) {
+  /* the classic layout: all blocks are data blocks. The copy-on-write layout: SAVEDATA_BLOCKS the data blocks, SYSTEM_BLOCKS the fs_ext blocks behind them */
+  const uint64_t want_data = cow ? geo->block_count - geo->fs_ext : geo->block_count, want_sys = cow ? geo->fs_ext : 0;
+  if(nb < 4 || le_num(b8, (size_t)nb) != want_data || ns < 4 || le_num(s8, (size_t)ns) != want_sys) {
     free(sfo);
     why_set(info, "Die Blockzahlen im param.sfo passen nicht zur chives.json: Dieser Spielstand hat ein Abbildformat, das die App nicht anlegen kann.");
     return 0;
+  }
+  if(cow) {
+    /* made as the classic image of the data blocks; a little more only when the files would not fit (the file system takes some of the blocks) */
+    uint64_t blocks = want_data;
+    const uint64_t file_blocks = (info->bytes + geo->block_size - 1) / geo->block_size;
+    const uint64_t need = file_blocks + file_blocks / 8 + 16;
+    if(need > blocks) blocks = need;
+    info->converted = 1;
+    info->src_system_blocks = geo->fs_ext;
+    geo->block_count = blocks;
+    geo->image_size = blocks * (uint64_t)geo->block_size;
+    geo->fs_ext = 0;
+    info->block_count = blocks;
+    info->image_size = geo->image_size;
   }
   snprintf(info->title_id, sizeof(info->title_id), "%.15s", tid);
   snprintf(info->slot, sizeof(info->slot), "%.99s", slot);
@@ -702,6 +731,11 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
     free(sfo);
     sfo = own_sfo;
     if(savesfo_patch_owner(sfo, sfo_len, a->account_id, 1, a->user_id) != 0) { fail(r, "Im param.sfo lassen sich das Konto und der Benutzer nicht eintragen (ACCOUNT_ID fehlt oder ist zu kurz)."); goto done; }
+    /* a save of the copy-on-write layout is made as the classic image: all blocks are data blocks, no system blocks */
+    if(info.converted && (sfo_set_num(sfo, sfo_len, "SAVEDATA_BLOCKS", info.block_count) != 0 || sfo_set_num(sfo, sfo_len, "SYSTEM_BLOCKS", 0) != 0)) {
+      fail(r, "Im param.sfo lassen sich die Blockzahlen für das klassische Abbild nicht eintragen.");
+      goto done;
+    }
   }
 
   /* room, folders, leftovers */
@@ -1056,6 +1090,9 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
   res->replaced = replaced;
   res->files = info.files;
   res->bytes = info.bytes;
+  if(info.converted)
+    snprintf(res->note, sizeof(res->note), "Der Spielstand lag im neueren Abbildformat (mit %llu Systemblöcken) und wurde als klassisches Abbild mit %llu Blöcken angelegt. "
+             "Ob das Spiel ihn annimmt, zeigt erst ein Start des Spiels.", (unsigned long long)info.src_system_blocks, (unsigned long long)info.block_count);
   if(f.chmod_failed && !res->note[0]) snprintf(res->note, sizeof(res->note), "Bei %d Dateien ließen sich die Zugriffsrechte der Quelle nicht übernehmen.", f.chmod_failed);
   if(owner_note[0]) {
     const size_t on = strlen(res->note);

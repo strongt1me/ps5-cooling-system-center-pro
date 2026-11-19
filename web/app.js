@@ -11278,6 +11278,7 @@
     host.innerHTML = `<div class="sv-im-card">
       <p><b>${esc(p.title_name || p.main_title || p.title_id)}</b> <span class="muted">${esc(p.title_id)} · ${esc(p.platform || "PS5")} · ${esc(p.slot)}</span></p>
       <p class="muted">${esc(String(p.files))} Dateien, ${esc(bytes(p.bytes))}</p>
+      ${p.converted ? `<p class="muted">Dieser Spielstand liegt im neueren Abbildformat der Konsole. Er wird als klassisches Abbild angelegt; ob das Spiel ihn annimmt, zeigt erst ein Start des Spiels.</p>` : ""}
       <p class="cp-step">Für welchen Benutzer?</p>
       <div class="cp-list">${users.map((u) => `<label class="cp-choice"><input type="radio" name="sv-im-user" value="${esc(u.uid)}"${u.uid === svIm.user ? " checked" : ""}>
         <span class="cp-choice-text"><b>${esc(u.name)}</b><span class="muted">${u.has_slot ? "hat diesen Spielstand schon: er wird ersetzt" : u.has_title ? "hat schon Spielstände dieses Titels" : "noch kein Spielstand dieses Titels"}</span></span></label>`).join("")}</div>
