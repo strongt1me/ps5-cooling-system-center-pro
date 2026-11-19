@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## v1.88.1 – 19.11.2026
 
 ### Dateimanager: USB-Laufwerk sicher auswerfen (Wunsch eines Nutzers, 19.11.2026)
 - **Anlass:** Ein Nutzer schrieb, er müsse die Konsole herunterfahren oder neu starten, um ein USB-Laufwerk abzuziehen; ein Abziehen im laufenden Betrieb habe zu einem Freeze, zur Reparatur des Systemspeichers und nach mehreren Malen zu einem beschädigten Dateisystem und Werksresets geführt. Das sichere Auswerfen gibt es seit 29.10.2026 unter System → Speicher; der Wunsch war, es auch im Dateimanager zu haben, wo man das Laufwerk gerade benutzt.
