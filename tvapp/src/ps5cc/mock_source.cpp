@@ -1924,6 +1924,43 @@ class MockSource final : public Source
 
     void saves_post(const std::string &route, const std::string &json) override
     {
+        if (route == "import/plan")
+        {
+            // what the ZIP is: the third one is a save of the newer layout, the last one is no save
+            // this console can take
+            const auto field = [&](const char *key)
+            {
+                const std::string k = std::string("\"") + key + "\":\"";
+                const std::size_t a = json.find(k);
+                if (a == std::string::npos)
+                    return std::string();
+                const std::size_t b = json.find('"', a + k.size());
+                return json.substr(a + k.size(), b == std::string::npos ? 0 : b - a - k.size());
+            };
+            SaveImportPlan p;
+            p.key = field("from") + "|" + field("name");
+            p.ready = true;
+            const std::string name = field("name");
+            p.title_id = name.substr(0, 9);
+            p.platform = p.title_id.rfind("CUSA", 0) == 0 ? "PS4" : "PS5";
+            p.slot =
+                name.size() > 11 && name[9] == '_' ? name.substr(10, name.find('_', 10) - 10) : "";
+            p.title_name = p.title_id == "PPSA01325"   ? "Lantern Pass"
+                           : p.title_id == "CUSA18842" ? "Iron Tide"
+                                                       : "Arcade Game Zone";
+            p.files = 3;
+            p.bytes = 1051532;
+            p.image_bytes = 3145728;
+            p.converted = p.title_id == "PPSA19015";
+            p.importable = p.title_id != "PPSA07777";
+            if (!p.importable)
+                p.why = "Dieser Spielstand hat ein Abbildformat, das die App nicht anlegen kann.";
+            p.users = {{"10000001", "Mira", true, p.title_id == "PPSA01325"},
+                       {"10000002", "Jonas", false, false}};
+            data_.saves.plan = std::move(p);
+            changed();
+            return;
+        }
         SaveJob &j = data_.saves.job;
         j = SaveJob{};
         j.active = j.can_cancel = route != "cancel";
@@ -3094,6 +3131,10 @@ class MockSource final : public Source
                 st.installed = x.installed;
                 st.bytes = static_cast<std::uint64_t>(x.mb * 1e6);
                 st.mtime = p.now - 86400;
+                st.slots.push_back(
+                    {std::string(x.platform) == "PS4" ? "save" : "SaveData", st.bytes, st.mtime});
+                if (std::string(x.id) == "PPSA01325")
+                    st.slots.push_back({"sce_sdmemory", 6291456, st.mtime});
                 u.bytes += st.bytes;
                 u.titles.push_back(st);
             }
@@ -3135,6 +3176,26 @@ class MockSource final : public Source
         undo.titles.resize(1);
         undo.bytes = undo.titles[0].bytes;
         s.backups.push_back(undo);
+        const struct
+        {
+            const char *name;
+            double mb;
+            int ago_h;
+        } kZips[] = {{"PPSA19015_sce_sdmemory_20261119-100716.zip", 1.05, 2},
+                     {"PPSA01325_SaveData_20261118-210501.zip", 48.2, 20},
+                     {"PPSA01325_sce_sdmemory_20261118-210501.zip", 6.3, 20},
+                     {"CUSA18842_save_20261115-164012.zip", 3.1, 90},
+                     {"PPSA07777_SaveData_20261112-083000.zip", 0.4, 160}};
+        for (const auto &x : kZips)
+        {
+            SaveZip z;
+            z.mount = "/mnt/usb0";
+            z.label = "usb0";
+            z.name = x.name;
+            z.bytes = static_cast<std::uint64_t>(x.mb * 1e6);
+            z.created = p.now - static_cast<std::int64_t>(x.ago_h) * 3600;
+            s.zips.push_back(z);
+        }
 
         GameBackups &g = data_.game_backups;
         g.loaded = true;

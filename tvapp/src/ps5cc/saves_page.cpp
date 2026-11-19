@@ -9,10 +9,17 @@
 // picked, the destination, pick all or none, cancel the job). Deleting asks first and names the
 // game (06.11.2026); the rest fires at once, and a restore keeps the state before it as its own
 // backup, as in the web app.
+//
+// To another console (19.11.2026): Square on a game offers "ZIP auslesen auf <drive>" (the ZIP goes
+// to the drive's folder PS5-Sicherung/Spielstand-ZIP, a stick is carried to the other console), and
+// the list ZIP-DATEIEN shows what the drives hold there: ✕ looks at the ZIP (nothing is written),
+// then the menu offers "Für <user> einspielen". A file on a drive stays; the web app has the
+// upload and the download.
 
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
 #include "ps5cc/playtime_rules.hpp"
+#include "ps5cc/save_zip.hpp"
 
 #include <algorithm>
 #include <set>
@@ -30,6 +37,7 @@ using gfx::Rect;
 
 constexpr int kTitleTag = 1000;  // + index into titles_
 constexpr int kBackupTag = 5000; // + index into the backups
+constexpr int kZipTag = 8000;    // + index into the ZIPs of the drives
 
 enum MenuTag
 {
@@ -42,7 +50,10 @@ enum MenuTag
     kNone,
     kCancel,
     kReload,
-    kDrive = 60, // + index into the drives
+    kDrive = 60,        // + index into the drives
+    kExportSlot = 2000, // ZIP files of a game: every slot it keeps
+    kZipUser = 2100,    // + index into the users of the plan
+    kZipUserAll = 2200, // + index: the same, for all slots of the title (the ZIP files of one run)
 };
 
 std::string json_text(const std::string &s)
@@ -119,6 +130,13 @@ class SavesPage final : public Page
                     target_ = d.mount;
             }
         }
+        // the answer to "look at this ZIP" has come: the menu opens in the next frame (it needs the
+        // feedback)
+        if (!wait_key_.empty() && saves_.plan.ready && saves_.plan.key == wait_key_)
+        {
+            wait_key_.clear();
+            open_zip_menu_pending_ = true;
+        }
         rebuild();
     }
 
@@ -134,6 +152,11 @@ class SavesPage final : public Page
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (open_zip_menu_pending_ && !menu_.is_open() && !ask_.is_open())
+        {
+            open_zip_menu_pending_ = false;
+            open_zip_menu(feedback);
+        }
         if (ask_.is_open())
         {
             // only "Löschen" in the question deletes the saves (06.11.2026)
@@ -159,6 +182,8 @@ class SavesPage final : public Page
             {
                 if (b != nullptr)
                     open_backup_menu(*b, feedback);
+                else if (const SaveZip *z = focused_zip())
+                    ask_plan(*z, feedback);
                 else
                     feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
                 return;
@@ -176,6 +201,8 @@ class SavesPage final : public Page
                 open_title_menu(*t, feedback);
             else if (b != nullptr)
                 open_backup_menu(*b, feedback);
+            else if (const SaveZip *z = focused_zip())
+                ask_plan(*z, feedback);
             else
                 feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
             return;
@@ -202,20 +229,23 @@ class SavesPage final : public Page
         paint.panel(card);
         const SaveTitle *t = focused_title();
         const SaveBackup *b = focused_backup();
+        const SaveZip *z = focused_zip();
         const std::string title = t != nullptr   ? (t->name.empty() ? t->id : t->name)
-                                  : b != nullptr ? "Sicherung vom " + play_date(b->created, tz_)
+                                  : b != nullptr ? backup_heading(*b)
+                                  : z != nullptr ? zip_title(*z)
                                                  : std::string("Spielstände");
         ui::text(list, fonts.display, ui::fit_label(paint, title, 32.0f, card.w - 60.0f),
                  card.x + 30.0f, card.y + 66.0f, 32.0f, kInk);
-        if (t != nullptr || b != nullptr)
+        if (t != nullptr || b != nullptr || z != nullptr)
             info_.draw(canvas);
         else
             paragraph(canvas,
                       "Sichert die Spielstände der Konsole verschlüsselt und unverändert, liest "
                       "jede Kopie zurück und "
                       "prüft sie. Zurückspielen geht nur auf dieser Konsole; der Stand davor wird "
-                      "vorher gesichert.",
-                      card.x + 30.0f, card.y + 120.0f, card.w - 60.0f, kMuted, 6);
+                      "vorher gesichert. Auf eine andere Konsole: ein Spiel → Aktionen → ZIP "
+                      "auslesen, das Laufwerk dort anstecken, in der Liste ZIP-DATEIEN einspielen.",
+                      card.x + 30.0f, card.y + 120.0f, card.w - 60.0f, kMuted, 7);
 
         // the job, or what the next backup would be
         const float y = card.y + 420.0f;
@@ -253,6 +283,13 @@ class SavesPage final : public Page
                 text += " Der Stand davor liegt in " + j.undo + ".";
             paragraph(canvas, text, card.x + 30.0f, y + 84.0f, card.w - 60.0f, kMuted, 5);
         }
+        else if (z != nullptr)
+        {
+            const std::string text = zip_text(*z);
+            ui::text(list, fonts.semibold, "ZIP-Datei", card.x + 30.0f, y + 46.0f, 22.0f, kInk);
+            paragraph(canvas, text, card.x + 30.0f, y + 84.0f, card.w - 60.0f,
+                      zip_warns(*z) ? kWarning : kMuted, 5);
+        }
         else
         {
             ui::text(list, fonts.semibold, "Nächste Sicherung", card.x + 30.0f, y + 46.0f, 22.0f,
@@ -284,16 +321,39 @@ class SavesPage final : public Page
         }
         else if (focused_backup() != nullptr)
             out[n++] = {ui::Button::cross, "Aktionen"};
+        else if (focused_zip() != nullptr)
+            out[n++] = {ui::Button::cross, "Ansehen und einspielen"};
         out[n++] = {ui::Button::triangle, "Mehr"};
         return n;
     }
 
   private:
+    // The games a backup holds, for its heading: the first three names, then "+N"
+    // (user, 19.11.2026: the list said only when, not which game).
+    static std::string backup_games(const SaveBackup &b)
+    {
+        std::string out;
+        for (std::size_t i = 0; i < b.titles.size() && i < 3; ++i)
+            out += (out.empty() ? "" : ", ") +
+                   (b.titles[i].name.empty() ? b.titles[i].id : b.titles[i].name);
+        if (b.titles.size() > 3)
+            out += " +" + std::to_string(b.titles.size() - 3);
+        return out;
+    }
+
+    std::string backup_heading(const SaveBackup &b) const
+    {
+        const std::string games = backup_games(b);
+        return games.empty() ? "Sicherung vom " + play_date(b.created, tz_) : games;
+    }
+
     static std::string job_title(const SaveJob &j)
     {
         return j.kind == "verify"    ? "Prüfung"
                : j.kind == "restore" ? "Zurückspielen"
                : j.kind == "delete"  ? "Löschen"
+               : j.kind == "export"  ? "ZIP auslesen"
+               : j.kind == "import"  ? "Einspielen"
                                      : "Sicherung";
     }
 
@@ -385,6 +445,96 @@ class SavesPage final : public Page
                    : nullptr;
     }
 
+    const SaveZip *focused_zip() const
+    {
+        const int i = focused_tag() - kZipTag;
+        return i >= 0 && i < static_cast<int>(saves_.zips.size())
+                   ? &saves_.zips[static_cast<std::size_t>(i)]
+                   : nullptr;
+    }
+
+    // "<drive>|<file>": the question the plan answers (the source keeps the same key)
+    static std::string zip_key(const SaveZip &z)
+    {
+        return z.mount + "|" + z.name;
+    }
+
+    // The game of a ZIP as this console knows it (a save of it is here), else its number.
+    std::string zip_title(const SaveZip &z) const
+    {
+        const std::string id = zip_title_id(z.name);
+        if (id.empty())
+            return z.name;
+        std::string name = id;
+        for (const SaveTitle &t : titles_)
+        {
+            if (t.id == id)
+            {
+                if (!t.name.empty())
+                    name = t.name;
+                break;
+            }
+        }
+        const std::string slot = zip_slot(z.name);
+        return slot.empty() ? name : name + " · " + slot;
+    }
+
+    // The ZIP files of the same run as this one: the same drive, title and time (every slot of a
+    // game read out together has one); this one is always in it. Sorted by name, at most sixteen.
+    std::vector<const SaveZip *> zip_siblings(const SaveZip &z) const
+    {
+        std::vector<const SaveZip *> out;
+        const std::string id = zip_title_id(z.name), stamp = zip_stamp(z.name);
+        for (const SaveZip &x : saves_.zips)
+        {
+            if (out.size() < 16 && x.mount == z.mount &&
+                (x.name == z.name || (!id.empty() && !stamp.empty() && zip_title_id(x.name) == id &&
+                                      zip_stamp(x.name) == stamp)))
+                out.push_back(&x);
+        }
+        std::sort(out.begin(), out.end(),
+                  [](const SaveZip *a, const SaveZip *b) { return a->name < b->name; });
+        return out;
+    }
+
+    bool zip_planned(const SaveZip &z) const
+    {
+        return saves_.plan.ready && saves_.plan.key == zip_key(z);
+    }
+
+    // Whether the text under the ZIP is a refusal.
+    bool zip_warns(const SaveZip &z) const
+    {
+        return zip_planned(z) && (!saves_.plan.error.empty() || !saves_.plan.importable);
+    }
+
+    std::string zip_text(const SaveZip &z) const
+    {
+        if (!wait_key_.empty() && wait_key_ == zip_key(z))
+            return "Die Datei wird geprüft …";
+        if (!zip_planned(z))
+            return "Die X-Taste sieht die Datei an: nichts wird geschrieben. Danach lässt sich der "
+                   "Spielstand für einen Benutzer einspielen.";
+        const SaveImportPlan &p = saves_.plan;
+        if (!p.error.empty())
+            return p.error;
+        if (!p.importable)
+            return p.why.empty() ? "Dieser Spielstand lässt sich hier nicht einspielen." : p.why;
+        std::string text = std::to_string(p.files) + (p.files == 1 ? " Datei, " : " Dateien, ") +
+                           format_bytes(p.bytes) + ". ";
+        if (p.converted)
+            text += "Das neuere Abbildformat wird als klassisches angelegt. ";
+        const std::size_t same = zip_siblings(z).size();
+        if (same > 1)
+            text += "Dazu gehören " + std::to_string(same) +
+                    " Spielstände dieses Titels: alle auf einmal einspielen ist möglich. ";
+        const SaveDrive *d = target();
+        text += d != nullptr
+                    ? "Ein vorhandener Stand wird vorher auf " + d->label + " gesichert."
+                    : "Für einen vorhandenen Stand wird ein Laufwerk zum Sichern gebraucht.";
+        return text;
+    }
+
     // ---------------------------------------------------------------- menus
 
     static ui::MenuItem item(const std::string &label, int tag, bool disabled = false,
@@ -404,6 +554,17 @@ class SavesPage final : public Page
         const SaveDrive *d = target();
         const bool busy = saves_.job.active || saves_.game_running;
         std::vector<ui::MenuItem> items;
+        // one action for the whole game: the app reads out every slot it keeps (SaveData,
+        // sce_sdmemory ...), a ZIP each, to the drive that is the target (as for the backups); the
+        // person does not choose a slot (user, 19.11.2026)
+        if (t.slots.empty())
+            items.push_back(item("ZIP auslesen (kein Spielstand gefunden)", kExportSlot, true));
+        else
+            items.push_back(item(
+                "ZIP auslesen auf " + (d != nullptr ? d->label : std::string("…")) +
+                    (t.slots.size() > 1 ? " (" + std::to_string(t.slots.size()) + " Spielstände)"
+                                        : std::string()),
+                kExportSlot, busy || d == nullptr));
         items.push_back(item(d != nullptr ? "Löschen (vorher nach " + d->label + " sichern)"
                                           : "Löschen (ohne Sicherung)",
                              kDelete, busy, true));
@@ -425,6 +586,56 @@ class SavesPage final : public Page
                 items.push_back(item("„" + (t.name.empty() ? t.id : t.name) + "“ zurückspielen",
                                      kRestore + static_cast<int>(i), busy));
             }
+        }
+        menu_.set_items(items);
+        menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
+    }
+
+    // ✕ on a ZIP: ask the app what it is (nothing is written); the menu follows with the answer.
+    void ask_plan(const SaveZip &z, ui::Feedback &feedback)
+    {
+        feedback.play(audio::Cue::select);
+        menu_zip_ = z;
+        if (zip_planned(z))
+        {
+            open_zip_menu(feedback);
+            return;
+        }
+        wait_key_ = zip_key(z);
+        source().saves_post("import/plan", "{\"name\":" + json_text(z.name) +
+                                               ",\"from\":" + json_text(z.mount) + "}");
+        rebuild();
+    }
+
+    // The users the save can go to; the refusal (or an error) is told under the ZIP instead.
+    void open_zip_menu(ui::Feedback &feedback)
+    {
+        const SaveImportPlan &p = saves_.plan;
+        if (!zip_planned(menu_zip_) || !p.error.empty() || !p.importable || p.users.empty())
+        {
+            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+            return;
+        }
+        const bool busy = saves_.job.active || saves_.game_running;
+        const SaveDrive *d = target();
+        std::vector<ui::MenuItem> items;
+        const std::size_t same = zip_siblings(menu_zip_).size();
+        for (std::size_t i = 0; same > 1 && i < p.users.size() && i < 16; ++i)
+        {
+            const SaveImportUser &u = p.users[i];
+            items.push_back(
+                item("Für " + u.name + " alle " + std::to_string(same) + " Spielstände einspielen",
+                     kZipUserAll + static_cast<int>(i), busy || (u.has_title && d == nullptr)));
+        }
+        for (std::size_t i = 0; i < p.users.size() && i < 16; ++i)
+        {
+            const SaveImportUser &u = p.users[i];
+            items.push_back(item("Für " + u.name + " einspielen" +
+                                     (u.has_slot    ? " (ersetzt)"
+                                      : u.has_title ? " (ergänzt)"
+                                                    : " (neu)"),
+                                 kZipUser + static_cast<int>(i),
+                                 busy || (u.has_title && d == nullptr)));
         }
         menu_.set_items(items);
         menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
@@ -501,6 +712,42 @@ class SavesPage final : public Page
     void run(int tag, ui::Feedback &feedback)
     {
         feedback.play(audio::Cue::select);
+        if (tag == kExportSlot)
+        {
+            // no slot named: the app reads out all of them
+            if (target() != nullptr)
+                source().saves_post("export", "{\"user\":" + json_text(menu_title_.uid) +
+                                                  ",\"title\":" + json_text(menu_title_.id) +
+                                                  ",\"mount\":" + json_text(target_) + "}");
+            return;
+        }
+        const bool all = tag >= kZipUserAll && tag < kZipUserAll + 100;
+        if ((tag >= kZipUser && tag < kZipUser + 100) || all)
+        {
+            const std::size_t i = static_cast<std::size_t>(tag - (all ? kZipUserAll : kZipUser));
+            const SaveImportPlan &p = saves_.plan;
+            if (i < p.users.size() && zip_planned(menu_zip_))
+            {
+                const SaveImportUser &u = p.users[i];
+                std::string body;
+                if (all)
+                {
+                    // every ZIP of the run (one title, every slot): put in one after the other
+                    for (const SaveZip *z : zip_siblings(menu_zip_))
+                        body += (body.empty() ? "" : ",") + json_text(z->name);
+                    body = "{\"names\":[" + body + "]";
+                }
+                else
+                {
+                    body = "{\"name\":" + json_text(menu_zip_.name);
+                }
+                body += ",\"from\":" + json_text(menu_zip_.mount) + ",\"user\":" + json_text(u.uid);
+                if (u.has_title && target() != nullptr)
+                    body += ",\"mount\":" + json_text(target_); // where the state before goes
+                source().saves_post("import", body + "}");
+            }
+            return;
+        }
         if (tag >= kDrive && tag < kRestore)
         {
             const std::size_t i = static_cast<std::size_t>(tag - kDrive);
@@ -626,16 +873,30 @@ class SavesPage final : public Page
         {
             const SaveBackup &b = saves_.backups[i];
             ui::ListItem item;
-            item.title = play_date(b.created, tz_) + ", " + play_clock(b.created, tz_) + " Uhr";
+            item.title = backup_heading(b);
             std::string users;
             for (const std::string &n : b.user_names)
                 users += (users.empty() ? "" : ", ") + n;
-            item.subtitle = b.label + " · " + std::to_string(b.titles.size()) + " Titel · " + users;
+            item.subtitle = play_date(b.created, tz_) + ", " + play_clock(b.created, tz_) +
+                            " Uhr · " + b.label + " · " + users;
             item.value = format_bytes(b.bytes);
             item.badge = b.kind == "undo"  ? "STAND VORHER"
                          : !b.this_console ? "ANDERE KONSOLE"
                                            : "";
             item.tag = kBackupTag + static_cast<int>(i);
+            out.push_back(item);
+        }
+        if (!saves_.zips.empty())
+            out.push_back(header("ZIP-DATEIEN"));
+        for (std::size_t i = 0; i < saves_.zips.size(); ++i)
+        {
+            const SaveZip &z = saves_.zips[i];
+            ui::ListItem item;
+            item.title = zip_title(z);
+            item.subtitle = z.name + " · " + play_date(z.created, tz_);
+            item.value = format_bytes(z.bytes);
+            item.badge = z.label;
+            item.tag = kZipTag + static_cast<int>(i);
             out.push_back(item);
         }
         return out;
@@ -674,12 +935,28 @@ class SavesPage final : public Page
         }
         else if (const SaveBackup *b = focused_backup())
         {
+            rows.push_back({"Gesichert", play_date(b->created, tz_) + ", " +
+                                             play_clock(b->created, tz_) + " Uhr"});
             rows.push_back({"Laufwerk", b->label});
             rows.push_back({"Titel", std::to_string(b->titles.size())});
             rows.push_back({"Größe", format_bytes(b->bytes)});
-            rows.push_back(
-                {"Art", b->kind == "undo" ? "Stand vor dem Zurückspielen" : "Sicherung"});
-            rows.push_back({"Konsole", b->this_console ? "diese" : "eine andere (nur ansehen)"});
+            rows.push_back({"Art", std::string(b->kind == "undo" ? "Stand vor dem Zurückspielen"
+                                                                 : "Sicherung") +
+                                       (b->this_console ? "" : " · andere Konsole")});
+        }
+        else if (const SaveZip *z = focused_zip())
+        {
+            rows.push_back({"Ort", z->label}); // the file name is the list's second line
+            rows.push_back({"Größe", format_bytes(z->bytes)});
+            rows.push_back({"Geändert", play_date(z->created, tz_) + ", " +
+                                            play_clock(z->created, tz_) + " Uhr"});
+            if (zip_planned(*z) && saves_.plan.error.empty())
+            {
+                const SaveImportPlan &p = saves_.plan;
+                rows.push_back({"Spielstand", p.title_name.empty() ? p.title_id : p.title_name});
+                if (p.importable)
+                    rows.push_back({"Abbild", p.converted ? "neueres Format" : "klassisch"});
+            }
         }
         std::string key;
         for (const ui::DetailItem &r : rows)
@@ -704,6 +981,9 @@ class SavesPage final : public Page
     std::string target_;
     SaveTitle menu_title_;
     SaveBackup menu_backup_;
+    SaveZip menu_zip_;
+    std::string wait_key_; // the ZIP whose plan was asked for and has not come yet
+    bool open_zip_menu_pending_ = false;
 };
 
 } // namespace

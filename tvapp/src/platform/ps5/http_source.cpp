@@ -2127,9 +2127,63 @@ void HttpSource::handle(const Request &request)
     {
         const std::string route = "/api/v1/saves/" + request.id;
         const Net net = exchange("POST", route.c_str(), request.text, &status, &body, 20);
+        if (request.id == "import/plan")
+        {
+            // what the ZIP is and where it could go: kept for the page (nothing is written by
+            // asking)
+            SaveImportPlan plan;
+            cJSON *ask = cJSON_Parse(request.text.c_str());
+            plan.key = (ask != nullptr ? str(ask, "from") : std::string()) + "|" +
+                       (ask != nullptr ? str(ask, "name") : std::string());
+            cJSON_Delete(ask);
+            plan.ready = true;
+            cJSON *root = net == Net::ok && status == 200 ? cJSON_Parse(body.c_str()) : nullptr;
+            if (root == nullptr)
+            {
+                plan.error = net == Net::ok
+                                 ? message_of(body, "Die ZIP-Datei ließ sich nicht prüfen.")
+                                 : "Die App hat nicht rechtzeitig geantwortet.";
+            }
+            else
+            {
+                plan.importable = flag(root, "importable");
+                plan.why = str(root, "why");
+                plan.title_id = str(root, "title_id");
+                plan.platform = str(root, "platform");
+                plan.slot = str(root, "slot");
+                plan.title_name = str(root, "title_name");
+                if (plan.title_name.empty())
+                    plan.title_name = str(root, "main_title");
+                plan.files = static_cast<int>(num(root, "files"));
+                plan.bytes = static_cast<std::uint64_t>(num(root, "bytes"));
+                plan.image_bytes = static_cast<std::uint64_t>(num(root, "image_bytes"));
+                plan.converted = flag(root, "converted");
+                const cJSON *u = nullptr;
+                cJSON_ArrayForEach(u, cJSON_GetObjectItemCaseSensitive(root, "users"))
+                {
+                    SaveImportUser x;
+                    x.uid = str(u, "uid");
+                    x.name = str(u, "name");
+                    x.has_title = flag(u, "has_title");
+                    x.has_slot = flag(u, "has_slot");
+                    plan.users.push_back(std::move(x));
+                }
+                cJSON_Delete(root);
+            }
+            std::lock_guard<std::mutex> lock(mutex_);
+            data_.saves.plan = std::move(plan);
+            ++data_.serial;
+            break;
+        }
         if (net != Net::ok || status >= 300)
             notice(Notice::Kind::error, "Spielstände",
                    message_of(body, "Die App hat nicht geantwortet."));
+        else if (request.id == "import" || request.id == "export")
+        {
+            // the state the plan described is about to change: the next ask looks again
+            std::lock_guard<std::mutex> lock(mutex_);
+            data_.saves.plan = SaveImportPlan{};
+        }
         poll_save_job();
         break;
     }
@@ -3714,6 +3768,8 @@ void HttpSource::poll_saves()
         s.users = data_.saves.users;
         s.backups = data_.saves.backups;
         s.drives = data_.saves.drives;
+        s.zips = data_.saves.zips;
+        s.plan = data_.saves.plan;
         s.job = data_.saves.job;
         data_.saves = std::move(s);
         ++data_.serial;
@@ -3743,6 +3799,16 @@ void HttpSource::poll_saves()
             x.installed = flag(t, "installed");
             x.bytes = static_cast<std::uint64_t>(num(t, "bytes"));
             x.mtime = static_cast<std::int64_t>(num(t, "mtime"));
+            const cJSON *sl = nullptr;
+            cJSON_ArrayForEach(sl, cJSON_GetObjectItemCaseSensitive(t, "slots"))
+            {
+                SaveSlot slot;
+                slot.slot = str(sl, "slot");
+                slot.bytes = static_cast<std::uint64_t>(num(sl, "bytes"));
+                slot.mtime = static_cast<std::int64_t>(num(sl, "mtime"));
+                if (!slot.slot.empty())
+                    x.slots.push_back(std::move(slot));
+            }
             user.titles.push_back(std::move(x));
         }
         s.users.push_back(std::move(user));
@@ -3788,9 +3854,22 @@ void HttpSource::poll_saves()
               [](const SaveBackup &a, const SaveBackup &c) { return a.created > c.created; });
     if (s.backups.size() > 40)
         s.backups.resize(40);
+    const cJSON *z = nullptr;
+    cJSON_ArrayForEach(z, cJSON_GetObjectItemCaseSensitive(root, "zips"))
+    {
+        SaveZip x;
+        x.mount = str(z, "mount");
+        x.label = str(z, "label");
+        x.name = str(z, "name");
+        x.bytes = static_cast<std::uint64_t>(num(z, "bytes"));
+        x.created = static_cast<std::int64_t>(num(z, "created"));
+        if (!x.name.empty())
+            s.zips.push_back(std::move(x));
+    }
     s.job = read_save_job(cJSON_GetObjectItemCaseSensitive(root, "job"));
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
+    s.plan = data_.saves.plan;
     data_.saves = std::move(s);
     ++data_.serial;
 }

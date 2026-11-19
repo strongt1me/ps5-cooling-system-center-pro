@@ -495,6 +495,13 @@ struct Playtime
 };
 
 // A save folder of one game of one user (GET /api/v1/saves).
+struct SaveSlot
+{
+    std::string slot; // the name after sdimg_ (SaveData, sce_sdmemory …)
+    std::uint64_t bytes = 0;
+    std::int64_t mtime = 0;
+};
+
 struct SaveTitle
 {
     std::string uid;
@@ -504,6 +511,7 @@ struct SaveTitle
     bool installed = true;
     std::uint64_t bytes = 0;
     std::int64_t mtime = 0;
+    std::vector<SaveSlot> slots; // what "Als ZIP auslesen" can take (PS5 and PS4 titles)
 };
 
 struct SaveUser
@@ -531,6 +539,44 @@ struct SaveBackup
     bool this_console = true;
     std::vector<std::string> user_names;
     std::vector<SaveTitle> titles;
+};
+
+// A ZIP of a save in the ZIP folder of a drive (PS5-Sicherung/Spielstand-ZIP): what a stick brings
+// from another console, or what this console wrote there.
+struct SaveZip
+{
+    std::string mount; // the drive
+    std::string label;
+    std::string name;
+    std::uint64_t bytes = 0;
+    std::int64_t created = 0;
+};
+
+struct SaveImportUser
+{
+    std::string uid;
+    std::string name;
+    bool has_title = false; // saves of this title are there: the present state is backed up first
+    bool has_slot = false;  // this very save is there: it is replaced
+};
+
+// What POST /api/v1/saves/import/plan said of one ZIP: nothing is written by asking.
+struct SaveImportPlan
+{
+    std::string key; // "<drive>|<file name>" of the ZIP it answers
+    bool ready = false;
+    std::string error; // the ZIP could not be read at all
+    bool importable = false;
+    std::string why; // when not
+    std::string title_id;
+    std::string platform;
+    std::string slot;
+    std::string title_name;
+    int files = 0;
+    std::uint64_t bytes = 0;
+    std::uint64_t image_bytes = 0;
+    bool converted = false; // a save of the newer image layout, made as the classic one here
+    std::vector<SaveImportUser> users;
 };
 
 struct SaveJob
@@ -563,6 +609,8 @@ struct Saves
     std::vector<SaveUser> users;
     std::vector<SaveDrive> drives;
     std::vector<SaveBackup> backups; // newest first
+    std::vector<SaveZip> zips;       // newest first, every drive
+    SaveImportPlan plan;             // the last answer; kept across polls
     SaveJob job;
 };
 
