@@ -670,9 +670,31 @@ donor_scan_title(const saveimport_args_t *a, const saveimport_info_t *info, dono
   if(sd) closedir(sd);
 }
 
+static const char k_owner_other[] = "Die Besitzerangaben stammen aus einem anderen Spielstand dieses Benutzers und sind nicht vollständig geprüft: Meldet das Spiel beschädigte Daten, liegt es vermutlich daran.";
+static const char k_owner_none[] = "Von diesem Benutzer war kein Spielstand zu finden, dessen Besitzerangaben sich übernehmen ließen. Der Spielstand ist eingespielt; das Spiel meldet vielleicht beschädigte Daten.";
+
 static int
 owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *sfo, size_t sfo_len, run_t *r, char *note, size_t note_len) {
   note[0] = 0;
+  saveimport_owner_t *cache = a->owner_cache;
+  if(cache && cache->state) {
+    /* an earlier slot of this job searched already: the user's values are the same for all of that user's saves. A slot that has a save of its own here is searched again (its
+       own record is the best donor); the others take the values of the first search, or its "nothing found". */
+    char own[PATH_MAX];
+    struct stat ost;
+    const int has_own = snprintf(own, sizeof(own), "%s/%s/%s/%s/sdimg_%s", a->home_dir, a->uid, info->ps4 ? "savedata" : "savedata_prospero", info->title_id, info->slot) < (int)sizeof(own) &&
+                        lstat(own, &ost) == 0;
+    if(!has_own) {
+      if(cache->state == 1) {
+        savesfo_set_raw(sfo, sfo_len, "PARAMS", 4, cache->record + 4, 36);
+        snprintf(note, note_len, "%s", k_owner_other);
+      } else {
+        snprintf(note, note_len, "%s", k_owner_none);
+      }
+      savesfo_patch_owner(sfo, sfo_len, a->account_id, 1, a->user_id);
+      return 0;
+    }
+  }
   static const struct { const char *dir; int ps4; } k_areas[2] = { { "savedata_prospero", 0 }, { "savedata", 1 } };
   donors_t dc = { calloc(SI_DONOR_CAND, sizeof(donor_t)), 0 };       /* on the heap: this runs on a job thread with a small stack */
   donor_t *cand = dc.v;                                              /* NULL (no memory): nothing is collected, the note says no donor was found */
@@ -751,13 +773,17 @@ owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *
   }
   free(cand);
   rmdir(ddir);
+  if(cache) {                                                      /* the search ran to its end: the next slot of this job need not do it again */
+    if(got >= 0) { memcpy(cache->record, params, sizeof(cache->record)); cache->rank = got; cache->state = 1; }
+    else cache->state = 2;
+  }
   if(got == 0) {
     savesfo_set_raw(sfo, sfo_len, "PARAMS", 0, params, 1024);
   } else if(got > 0) {
     savesfo_set_raw(sfo, sfo_len, "PARAMS", 4, params + 4, 36);
-    snprintf(note, note_len, "Die Besitzerangaben stammen aus einem anderen Spielstand dieses Benutzers und sind nicht vollständig geprüft: Meldet das Spiel beschädigte Daten, liegt es vermutlich daran.");
+    snprintf(note, note_len, "%s", k_owner_other);
   } else {
-    snprintf(note, note_len, "Von diesem Benutzer war kein Spielstand zu finden, dessen Besitzerangaben sich übernehmen ließen. Der Spielstand ist eingespielt; das Spiel meldet vielleicht beschädigte Daten.");
+    snprintf(note, note_len, "%s", k_owner_none);
   }
   savesfo_patch_owner(sfo, sfo_len, a->account_id, 1, a->user_id);              /* the account and the user id once more, over whatever the record brought */
   return 0;

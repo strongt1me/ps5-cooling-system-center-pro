@@ -65,6 +65,14 @@ typedef struct {
   int (*may_commit)(void *ctx, char *why, size_t why_len);
 } saveimport_hooks_t;
 
+/* What the search for the owner details found, kept by the caller for the runs of one job (the slots of one title): the values are the same for every save of a user, so
+   the donors are mounted once, not once per slot. A slot that has a save of its own on the console is searched again (its own record is the best donor). */
+typedef struct {
+  int     state;                   /* 0: nothing searched yet; 1: found (record, rank); 2: the search found no donor */
+  uint8_t record[1024];            /* state 1: the PARAMS record of the donor */
+  int     rank;                    /* state 1: 0 same title and slot, 1 same title, 2 another title, 3 the other kind of save */
+} saveimport_owner_t;
+
 typedef struct {
   const char *zip;
   const char *work_dir;            /* scratch, made if missing */
@@ -76,6 +84,7 @@ typedef struct {
   const char *db_backup_dir;       /* where the copy of the database goes before the row is written */
   int (*skip_title)(const char *title_id);   /* optional: non-zero for a title that is never read or touched (an app): the owner search leaves its saves alone */
   const char *journal_path;        /* where the record of an exchange under way is kept ("" or NULL: none); see saveimport_recover */
+  saveimport_owner_t *owner_cache; /* optional: shared by the runs of one job, see saveimport_owner_t */
 } saveimport_args_t;
 
 typedef struct {

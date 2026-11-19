@@ -2898,6 +2898,8 @@ import_main(void *arg) {
   {
     int acc_found = 0;
     const uint64_t account = user_account_id(a->uid, &acc_found);
+    saveimport_owner_t owner_cache;                                  /* the owner search is done once for the slots of this job */
+    memset(&owner_cache, 0, sizeof(owner_cache));
     unsigned done = 0, files = 0;
     uint64_t bytes = 0;
     char notes[560] = "", last_image[320] = "";
@@ -2930,6 +2932,7 @@ import_main(void *arg) {
       ia.account_id = account;
       ia.db_backup_dir = SV_DB_BACKUP;
       ia.journal_path = SV_JOURNAL;
+      ia.owner_cache = &owner_cache;
       saveimport_hooks_t ih;
       memset(&ih, 0, sizeof(ih));
       ih.base.phase = im_phase;

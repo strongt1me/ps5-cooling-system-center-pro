@@ -213,7 +213,8 @@ int main()
     // The data of the console app: HTTP to 127.0.0.1:8086 on a thread of its own, which also
     // starts the app through the ELF loader when it is not running.
     static ps5cc::HttpSource http;
-    if (tour_pending())
+    const bool demo_data = tour_pending();
+    if (demo_data)
     {
         // the built-in demo data (what ps5cc::source() answers until another is set); the console
         // app is not asked and not started
@@ -257,6 +258,7 @@ int main()
     const std::string handled_path = std::string(kDevRoot) + "/handled.txt";
     const std::string report_path = std::string(kDevRoot) + "/tour/report.txt";
     bool quit_requested = false;
+    bool tour_ignored_logged = false;
     const auto poll_request = [&]()
     {
         std::string request;
@@ -267,6 +269,18 @@ int main()
         char token[64] = {};
         if (std::sscanf(request.c_str(), "%15s %63s %63s", verb, argument, token) != 3)
             return;
+        if (std::strcmp(verb, "tour") == 0 && !demo_data)
+        {
+            // This launch talks to the console app (it started before the request was there), and
+            // a tour presses "confirm" on whatever rows it finds. It is not honoured and not marked
+            // as handled: the next launch with the request in place runs it on the demo data.
+            if (!tour_ignored_logged)
+            {
+                sys::log("[HUI] tour request ignored: this launch uses the console's data");
+                tour_ignored_logged = true;
+            }
+            return;
+        }
         std::string handled;
         save::read_file(handled_path, &handled, 128);
         if (handled == token)

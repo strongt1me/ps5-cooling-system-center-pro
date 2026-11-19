@@ -1420,6 +1420,74 @@ main(int argc, char **argv) {
     CHECK(!exists(alt) && !exists(balt) && !exists(bneu) && !exists(JOURNAL));
   }
 
+  /* ================================================================ the owner search is done once for the slots of one job */
+  /* ---- found for the first slot: the second slot takes the values without mounting a donor again */
+  reset();
+  g_marker = 0xD0;
+  sp = good();
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", ACC, UIDN);
+  {
+    saveimport_owner_t oc;
+    memset(&oc, 0, sizeof(oc));
+    a = args();
+    a.owner_cache = &oc;
+    memset(&pr, 0, sizeof(pr));
+    ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    CHECK(rc == 0 && oc.state == 1 && oc.rank == 2 && ps5tm_savemnt_test_opened == 3);                 /* its own two mounts and the donor's */
+    sp = good(); sp.slot = "SAVE1";
+    make_zip(ZIP, &sp);
+    memset(&pr, 0, sizeof(pr));
+    ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    uint8_t pa[1024];
+    CHECK(rc == 0 && ps5tm_savemnt_test_opened == 2 && ps5tm_savemnt_test_closed == 2 && strstr(res.note, "anderen Spielstand"));          /* no donor was mounted */
+    CHECK(stored_params("SAVE1", pa) == 0 && pa[4] == 0x31 && pa[8] == 0xD0 && pa[39] == 0xD0 + 31);                                         /* the same values */
+    /* ... a slot that has a save of its own is searched again: its own record is the best donor (rank 0, the whole record) */
+    g_marker = 0xE0;
+    make_donor5("PPSA01234", "SAVE2", ACC, UIDN);
+    sp = good(); sp.slot = "SAVE2";
+    make_zip(ZIP, &sp);
+    memset(&pr, 0, sizeof(pr));
+    ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    CHECK(rc == 0 && ps5tm_savemnt_test_opened == 3 && oc.rank == 0 && stored_params("SAVE2", pa) == 0 && pa[8] == 0xE0 && pa[100] == 0x77);
+  }
+  /* ---- nothing found for the first slot (a donor of another account): the second slot does not look again, and says the same */
+  reset();
+  g_marker = 0xD0;
+  sp = good();
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", 0x1234, UIDN);
+  make_donor5("PPSA00098", "DON", 0x1234, UIDN);
+  {
+    saveimport_owner_t oc;
+    memset(&oc, 0, sizeof(oc));
+    a = args();
+    a.owner_cache = &oc;
+    memset(&pr, 0, sizeof(pr));
+    ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    CHECK(rc == 0 && oc.state == 2 && ps5tm_savemnt_test_opened == 4 && strstr(res.note, "kein Spielstand zu finden"));              /* two of its own, two donors tried */
+    sp = good(); sp.slot = "SAVE1";
+    make_zip(ZIP, &sp);
+    memset(&pr, 0, sizeof(pr));
+    ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    CHECK(rc == 0 && ps5tm_savemnt_test_opened == 2 && strstr(res.note, "kein Spielstand zu finden"));
+  }
+  /* ---- without a cache every run searches, as before */
+  reset();
+  sp = good();
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", ACC, UIDN);
+  a = args();
+  ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && ps5tm_savemnt_test_opened == 3);
+  g_marker = 0;
+
   rmtree(ROOT);
   printf("%d checks, %d failed\n", g_n, g_fail);
   return g_fail ? 1 : 0;
