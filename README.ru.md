@@ -67,7 +67,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     </td>
     <td valign="top">
       <h3>📦 Пакеты и сохранения</h3>
-      Поиск, разделение и установка PKG; резервное копирование и восстановление сохранений; время игры с температурами.
+      Поиск, разделение и установка PKG; резервное копирование и восстановление сохранений и перенос их на другую консоль в виде ZIP; время игры с температурами.
     </td>
     <td valign="top">
       <h3>📁 Файлы и пейлоады</h3>
@@ -340,6 +340,7 @@ make
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: параметры для образов `.ffpkg`.
 - **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) и [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (образец и список для «Скачать пейлоады», [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): определение запущенной игры.
+- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: образец для переноса сохранений на другую консоль (формат ZIP-файла с `chives.json`, путь через собственное монтирование консоли); код этого приложения написан заново.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** и **[onionHEN](https://github.com/aydencharles/onionHEN)**: системные вызовы, показания, FPS.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: образец для многих функций (код каждый раз написан заново).
 - **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: принцип библиотек-заменителей.

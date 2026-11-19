@@ -67,7 +67,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
     </td>
     <td valign="top">
       <h3>📦 Paquets et sauvegardes</h3>
-      Trouver, découper et installer des PKG ; sauvegarder et restaurer les données de jeu ; temps de jeu avec températures.
+      Trouver, découper et installer des PKG ; sauvegarder et restaurer les données de jeu et les transférer vers une autre console en ZIP ; temps de jeu avec températures.
     </td>
     <td valign="top">
       <h3>📁 Fichiers et payloads</h3>
@@ -340,6 +340,7 @@ Ce projet repose sur les épaules de la communauté homebrew PS5. **Merci !** Un
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)** : paramètres des images `.ffpkg`.
 - **[itsPLK](https://github.com/itsPLK)** : [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) et [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (modèle et liste pour « Télécharger des payloads », [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT) : détection du jeu en cours.
+- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: modèle pour transférer des sauvegardes vers une autre console (format du fichier ZIP avec `chives.json`, voie par le montage propre de la console) ; le code de cette application est réécrit.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** et **[onionHEN](https://github.com/aydencharles/onionHEN)** : appels système, mesures, images/s.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)** : modèle de nombreuses fonctions (code réécrit à chaque fois).
 - **BestPig, [BackPork](https://github.com/BestPig/BackPork)** : le principe des bibliothèques de remplacement.

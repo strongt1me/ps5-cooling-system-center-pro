@@ -79,6 +79,10 @@ inline constexpr Credit kCredits[] = {
     {"Zusammenspiel, Wissen und Vorbilder", "", "danthespal", "@danthespal",
      "MkPFS.CSharp: schrieb und testete die vier LZ4-Profile, die die App mitbringt (ASTRO BOT, EA "
      "Sports UFC 6, Insomniac-Engine, Unity-Engine). Danke!"},
+    {"Zusammenspiel, Wissen und Vorbilder", "", "earthonion", "@earthonion",
+     "Garlic SaveMgr: Vorbild für das Übertragen von Spielständen – das Format der ZIP-Datei "
+     "(chives.json) und der Weg über das eigene Einhängen der Konsole. Der Code dieser App ist neu "
+     "geschrieben. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "kerrdec97.jpg", "kerrdec97", "@kerrdec97",
      "exFAT Image Builder: zeigte, mit welchen Einstellungen ein .ffpkg für ShadowMountPlus gebaut "
      "wird. Danke!"},

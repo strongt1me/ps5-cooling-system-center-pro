@@ -67,7 +67,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
     </td>
     <td valign="top">
       <h3>📦 Pakete & Spielstände</h3>
-      PKG finden, aufteilen und installieren; Spielstände sichern und zurückspielen; Spielzeit mit Temperaturen.
+      PKG finden, aufteilen und installieren; Spielstände sichern, zurückspielen und als ZIP auf eine andere Konsole übertragen; Spielzeit mit Temperaturen.
     </td>
     <td valign="top">
       <h3>📁 Dateien & Payloads</h3>
@@ -182,7 +182,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 - PS4 PKG von USB: PS4-Fake-PKGs vom USB-Laufwerk in die Bibliothek, ohne Installation (PS4Mount von gasb07).
 - FPKGMount: (F)PKG-Spiele und Spielordner ohne Installation spielen, mit Kraken Mount von quer3q (die App bringt es mit und startet es).
 - Disc: zeigt, welche Disc im Laufwerk liegt (PS2/PS3/PS4/PS5, Titelkennung), und legt von PS2-DVDs und PS3-Discs ein Abbild mit CRC-32, MD5 und SHA-1 an, auf Wunsch geprüft gegen Redump (nach ps-disc-detect).
-- Spielzeit mit Temperaturen, Spielstände sichern und zurückspielen, Pakete finden, aufteilen und installieren, Verlauf aller Vorgänge.
+- Spielzeit mit Temperaturen, Spielstände sichern, zurückspielen und auf eine andere Konsole übertragen, Pakete finden, aufteilen und installieren, Verlauf aller Vorgänge.
 
 **Verwaltung**
 - Dateimanager: ansehen, bearbeiten, herunter- und hochladen (auch ganze Ordner), Ordner anlegen, umbenennen, kopieren, verschieben, löschen – überall, mit Geschwindigkeit und Restzeit beim Kopieren; Löschen fragt zuerst und nennt, was weggeht.
@@ -340,6 +340,7 @@ Dieses Projekt steht auf den Schultern der PS5-Homebrew-Gemeinschaft. **Vielen D
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: Parameter für `.ffpkg`-Abbilder.
 - **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) und [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (Vorbild und Liste für „Payloads herunterladen“, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): Erkennung des laufenden Spiels.
+- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: Vorbild für das Übertragen von Spielständen auf eine andere Konsole (Format der ZIP-Datei mit `chives.json`, Weg über das eigene Einhängen der Konsole); der Code dieser App ist neu geschrieben.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** und **[onionHEN](https://github.com/aydencharles/onionHEN)**: Systemaufrufe, Messwerte, Bildrate.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: Vorbild für viele Funktionen (Code jeweils neu geschrieben).
 - **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: Prinzip der Ersatzbibliotheken.

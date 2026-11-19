@@ -67,7 +67,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     </td>
     <td valign="top">
       <h3>📦 Paket & spelsparningar</h3>
-      Hitta, dela och installera PKG; säkerhetskopiera och återställ spelsparningar; speltid med temperaturer.
+      Hitta, dela och installera PKG; säkerhetskopiera och återställ spelsparningar och för över dem till en annan konsol som ZIP; speltid med temperaturer.
     </td>
     <td valign="top">
       <h3>📁 Filer & payloads</h3>
@@ -340,6 +340,7 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: parametrar för `.ffpkg`-avbilder.
 - **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) och [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (förebild och lista för ”Hämta payloads”, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): igenkänning av pågående spel.
+- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: förebild för att föra över spelsparningar till en annan konsol (ZIP-filens format med `chives.json`, vägen via konsolens egen montering); appens kod är nyskriven.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** och **[onionHEN](https://github.com/aydencharles/onionHEN)**: systemanrop, mätvärden, bildfrekvens.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: förebild för många funktioner (koden skrevs varje gång om).
 - **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: principen med ersättningsbibliotek.
