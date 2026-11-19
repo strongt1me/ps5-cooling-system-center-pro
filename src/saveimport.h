@@ -21,7 +21,8 @@
  *   4. it is mounted a second time and every file is read back and compared with the ZIP (checksum and size) - nothing of the console is touched until this passes;
  *   5. the caller's "no way back" hook is called, then: the image goes beside the old one as ".ps5cc-neu" and replaces it by rename (the old one is kept as ".ps5cc-alt"
  *      until the end), the picture likewise, the database is copied, the row is written and the database is checked; any failure puts the old files and database back.
- * A failure or a stop before step 5 leaves the console exactly as it was.
+ * A failure or a stop before step 5 leaves the console exactly as it was. From the first rename of step 5 a record of the exchange is kept (args.journal_path); a run
+ * that is cut off then (power, the app replaced, a crash) is finished or taken back by saveimport_recover at the next start.
  *
  * Plain C, no HTTP and no job: the caller gives paths and hooks (savexport_hooks_t, plus the one hook of no return). */
 #ifndef PS5TM_SAVEIMPORT_H
@@ -74,6 +75,7 @@ typedef struct {
   uint64_t    account_id;          /* the account the user has on this console (0 when none) */
   const char *db_backup_dir;       /* where the copy of the database goes before the row is written */
   int (*skip_title)(const char *title_id);   /* optional: non-zero for a title that is never read or touched (an app): the owner search leaves its saves alone */
+  const char *journal_path;        /* where the record of an exchange under way is kept ("" or NULL: none); see saveimport_recover */
 } saveimport_args_t;
 
 typedef struct {
@@ -87,6 +89,11 @@ typedef struct {
   uint64_t bytes;
   char     note[560];
 } saveimport_result_t;
+
+/* An exchange that was cut off (power, a new copy of the app, a crash) leaves its record at journal_path. Called at every start of the app and before every put-in:
+   0 when there is no record; 1 when it was finished or taken back (report says which); -1 when it cannot be finished yet (the row of the database is locked, say; the
+   record stays and report says why). A record that cannot be read is removed. */
+int saveimport_recover(const char *journal_path, char *report, size_t report_len);
 
 /* 0 on success; ECANCELED when stopped (before the point of no return); any other value is a failure, err holds a sentence. */
 int saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimport_result_t *r, char *err, size_t err_len);

@@ -520,6 +520,22 @@ savexport_run(const savexport_args_t *a, const savexport_hooks_t *h, savexport_r
     memcpy(sfo, buf, sfo_len);
     if(pdiag[0]) snprintf(res->note, sizeof(res->note), "Die Metadaten stammen aus dem Spielstand selbst: Die Konsole gab die aus dem Kopf des Abbilds nicht heraus (%.300s).", pdiag);
   }
+  {
+    /* The ZIP travels (to another console, to a friend): the account of the user is not given away in it. ACCOUNT_ID goes in as zero; the putting-in writes the account of the
+       user it is for in any case. The rest of the owner details (PARAMS: the user id and the value all saves of a user share) stays, because the putting-in needs it when the
+       other console has no save of that user to take it from. */
+    char path[PATH_MAX];
+    uint8_t *pb = malloc(0x8000);
+    if(pb && snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", stage) < (int)sizeof(path)) {
+      const int fd = open(path, O_RDWR);
+      const ssize_t n = fd >= 0 ? read(fd, pb, 0x8000) : -1;
+      if(n > 0 && savesfo_valid(pb, (size_t)n) && savesfo_patch_owner(pb, (size_t)n, 0, 0, 0) == 0 && lseek(fd, 0, SEEK_SET) == 0 && write_all(fd, pb, (size_t)n) == 0 && fsync(fd) == 0) {
+        if(savesfo_valid(sfo, sfo_len)) (void)savesfo_patch_owner(sfo, sfo_len, 0, 0, 0);
+      }
+      if(fd >= 0) close(fd);
+    }
+    free(pb);
+  }
   if(savesfo_valid(sfo, sfo_len)) {
     savesfo_get_str(sfo, sfo_len, "TITLE_ID", res->title_id, sizeof(res->title_id));
     savesfo_get_str(sfo, sfo_len, "SAVEDATA_DIRECTORY", res->save_dir, sizeof(res->save_dir));

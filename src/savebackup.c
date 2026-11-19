@@ -2429,6 +2429,8 @@ export_sweep_partial(const char *dir) {
   closedir(d);
 }
 
+static void saves_housekeeping(void);
+
 static void *
 export_main(void *arg) {
   job_args_t *a = arg;
@@ -2436,6 +2438,7 @@ export_main(void *arg) {
   mkdir(PS5TM_DATA_DIR, 0755);
   mkdir(SV_EXPORT_DIR, 0755);
   export_sweep_partial(SV_EXPORT_DIR);
+  saves_housekeeping();
 
   const char *outdir = a->outdir[0] ? a->outdir : SV_EXPORT_DIR;
   if(a->outdir[0]) export_sweep_partial(outdir);                  /* a stick pulled out in an earlier run left its unfinished file there */
@@ -2594,6 +2597,88 @@ ps5tm_saves_export_delete(const char *name, char *err, size_t err_len) {
 #define SV_IMPORT_DIR   PS5TM_DATA_DIR "/savexport/import"
 #define SV_DB_BACKUP    PS5TM_DATA_DIR "/savexport/db-backup"
 
+/* ---- housekeeping and recovery: what the transfer leaves behind
+   - the copies of the save database (one per put-in, 16 KB each): the newest SV_DBBK_KEEP of each user stay, the older ones go;
+   - uploaded ZIP files that no put-in used within a day (the page that uploaded them is long gone);
+   - an exchange of images that a run did not finish (power, the app replaced, a crash): finished or taken back (saveimport_recover).
+   Run at every start of the app and at the start of every transfer job (one job runs at a time, so nothing of a running job is here). */
+#define SV_JOURNAL     SV_EXPORT_DIR "/import.journal"
+#define SV_DBBK_KEEP   10
+#define SV_INBOX_AGE_S (24 * 3600)
+
+typedef struct { char name[96]; char uid[9]; time_t mtime; } dbk_t;
+
+static int
+cmp_dbk(const void *x, const void *y) {
+  const dbk_t *a = x, *b = y;
+  const int c = strcmp(a->uid, b->uid);
+  if(c) return c;
+  if(a->mtime != b->mtime) return a->mtime < b->mtime ? 1 : -1;                         /* the newest of a user first */
+  return strcmp(b->name, a->name);
+}
+
+static void
+saves_housekeeping(void) {
+  unsigned db_dropped = 0, up_dropped = 0;
+  char oldest_db[96] = "";
+  DIR *d = opendir(SV_DB_BACKUP);
+  if(d) {
+    dbk_t *v = calloc(1024, sizeof(*v));
+    unsigned n = 0;
+    struct dirent *e;
+    while(v && n < 1024 && (e = readdir(d)) != NULL) {
+      const char *nm = e->d_name;
+      const size_t l = strlen(nm);
+      char full[PATH_MAX];
+      struct stat st;
+      if(l < 20 || l >= sizeof(v[0].name) || strncmp(nm, "savedata-", 9) || strcmp(nm + l - 3, ".db") || nm[17] != '-') continue;
+      memcpy(v[n].uid, nm + 9, 8);
+      v[n].uid[8] = 0;
+      if(!uid_ok(v[n].uid) || snprintf(full, sizeof(full), "%s/%s", SV_DB_BACKUP, nm) >= (int)sizeof(full) || lstat(full, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+      snprintf(v[n].name, sizeof(v[n].name), "%s", nm);
+      v[n].mtime = st.st_mtime;
+      n++;
+    }
+    closedir(d);
+    if(n > SV_DBBK_KEEP) qsort(v, n, sizeof(*v), cmp_dbk);
+    unsigned kept = 0;
+    for(unsigned i = 0; i < n; i++) {
+      kept = i && !strcmp(v[i].uid, v[i - 1].uid) ? kept + 1 : 1;
+      if(kept <= SV_DBBK_KEEP) continue;
+      char full[PATH_MAX];
+      if(snprintf(full, sizeof(full), "%s/%s", SV_DB_BACKUP, v[i].name) < (int)sizeof(full) && unlink(full) == 0) {
+        db_dropped++;
+        snprintf(oldest_db, sizeof(oldest_db), "%s", v[i].name);
+      }
+    }
+    free(v);
+  }
+  d = opendir(SV_IMPORT_DIR);
+  if(d) {
+    const time_t now = time(NULL);
+    struct dirent *e;
+    while((e = readdir(d)) != NULL) {
+      char full[PATH_MAX];
+      struct stat st;
+      if(!export_name_ok(e->d_name) || snprintf(full, sizeof(full), "%s/%s", SV_IMPORT_DIR, e->d_name) >= (int)sizeof(full) || lstat(full, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+      if(now - st.st_mtime > SV_INBOX_AGE_S && unlink(full) == 0) up_dropped++;
+    }
+    closedir(d);
+  }
+  if(db_dropped || up_dropped)
+    PS5TM_INFO("saves_housekeeping", "Spielstände: %u alte Kopien der Spielstand-Datenbank (zuletzt %s; die %d neuesten je Benutzer bleiben) und %u nicht benutzte hochgeladene ZIP-Dateien entfernt.",
+               db_dropped, oldest_db[0] ? oldest_db : "-", SV_DBBK_KEEP, up_dropped);
+}
+
+void
+ps5tm_saves_recover(void) {
+  char rep[480];
+  const int rc = saveimport_recover(SV_JOURNAL, rep, sizeof(rep));
+  if(rc > 0) PS5TM_WARN("saves_recovered", "Spielstände: %s", rep);
+  else if(rc < 0) PS5TM_WARN("saves_recover_pending", "Spielstände: %s", rep);
+  saves_housekeeping();
+}
+
 /* The account the console has for a user, found by the name (username.dat is the name of the user, the registry lists the accounts by name). */
 static uint64_t
 user_account_id(const char *uid, int *found) {
@@ -2749,6 +2834,7 @@ static void *
 import_main(void *arg) {
   job_args_t *a = arg;
   ps5tm_powerguard_hold();
+  saves_housekeeping();
   char err[640] = {0};
   bk_t undo;
   memset(&undo, 0, sizeof(undo));
@@ -2839,6 +2925,7 @@ import_main(void *arg) {
       ia.user_id = (uint32_t)strtoul(a->uid, NULL, 16);
       ia.account_id = account;
       ia.db_backup_dir = SV_DB_BACKUP;
+      ia.journal_path = SV_JOURNAL;
       saveimport_hooks_t ih;
       memset(&ih, 0, sizeof(ih));
       ih.base.phase = im_phase;

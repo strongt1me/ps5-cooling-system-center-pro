@@ -11,9 +11,11 @@
  *   param   a PS5 save keeps its real param.sfo not in the file system (there it is a block of zeros) but in a blob in the image header (offset 0xC00), which
  *           the kernel hands out decrypted through /dev/pfsctldev: 'PS5PARAM' u64, version u32 (0), SFO size u32, SFO offset u32 (20), then the SFO.
  *
- * All of it needs the identity of the save-data service (authid 0x4800000000000010). That identity is the process's, not a thread's: the fan control is on
- * another thread of this process and would lose its own meanwhile. So the whole time between savemnt_open and savemnt_close the Sony lock is held (the fan loop
- * only ever tries it, ps5tm_sony_api_trylock, and waits), and savemnt_close gives the fan's identity back - the same way the tile install does (tile.c).
+ * The mount, the unmount and the unsealing need the identity of the save-data service (authid 0x4800000000000010). That identity is the process's, not a thread's:
+ * the fan control is on another thread of this process and would lose its own meanwhile. So the Sony lock is held and the identity is the save-data service's only
+ * for those calls (the fan loop only ever tries the lock, ps5tm_sony_api_trylock, and waits): savemnt_open gives the fan its identity and the lock back as soon as the
+ * mount stands, and savemnt_close takes them again for the unmount. Reading and writing the files of the mount (seconds to minutes for a large save) are plain file calls
+ * and need neither (19.11.2026: before, the fan control and the power options waited that whole time).
  *
  * Under PS5TM_HOST_TEST nothing of this touches a kernel: a "mount" is a folder the test has filled, and the param blob is read from "<image>.param". */
 #ifndef PS5TM_SAVEMNT_H
@@ -31,12 +33,13 @@
 typedef struct {
   int  open;                    /* 1 between a successful savemnt_open and savemnt_close */
   int  handle;                  /* what sceFsMountSaveData returned */
+  int  released;                /* 1: the identity and the lock were given back after the mount (savemnt_close takes them again) */
   char image[320];
   char mount[256];
 } savemnt_t;
 
-/* The identity and the lock are taken here and held until savemnt_close. image: the copy under /data (PS5 image, byte 0 is 2); mount_dir: an empty folder.
-   0 on success; else -1 with a German sentence in err (nothing is held then). */
+/* The identity and the lock are taken here for the mount only (the files of the mount are read and written without them; savemnt_close takes them again). image: the
+   copy under /data (PS5 image, byte 0 is 2); mount_dir: an empty folder. 0 on success; else -1 with a German sentence in err (nothing is held then). */
 int savemnt_open(const char *image, const char *mount_dir, savemnt_t *m, char *err, size_t err_len);
 
 /* The same for a PS4 save: its image has no sealed key inside; the 96 bytes sit in the companion file <slot>.bin beside it (the caller reads them). */
@@ -51,7 +54,7 @@ int savemnt_create_ps4(const char *path, uint64_t size, uint8_t sealed_out[96], 
 int savemnt_header_kind(const uint8_t *header, size_t len);
 
 /* Unmounts (the image is written back by the console), gives the identity back and releases the lock. 0 when the unmount went well, else -1 (err says why); the
-   identity and the lock are given back in every case. Safe on a handle that is not open. */
+   identity and the lock are given back in every case (when they cannot be taken for the unmount, that is the error). Safe on a handle that is not open. */
 int savemnt_close(savemnt_t *m, char *err, size_t err_len);
 
 /* A new, empty PS5 save image at path (a file that must not exist yet) of `size` bytes with blocks of block_size (32768 or 65536), made by the console's own

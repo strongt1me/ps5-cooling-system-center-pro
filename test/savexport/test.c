@@ -235,7 +235,16 @@ main(int argc, char **argv) {
     unsigned i;
     uint8_t *buf; size_t len;
     CHECK((i = find_entry(z, "sce_sys/param.sfo")) != (unsigned)-1 && szr_read(z, i, &buf, &len, 1 << 20) == SZ_OK);
-    if(i != (unsigned)-1) { CHECK(len == sfo_len && !memcmp(buf, sfo, len)); free(buf); }              /* the real one, not the zeros of the file system */
+    if(i != (unsigned)-1) {
+      /* the real one, not the zeros of the file system - with one change: the account of the user is not given away (ACCOUNT_ID zero), everything else is as it was */
+      uint8_t want[4096], raw[8];
+      CHECK(sfo_len <= sizeof(want));
+      memcpy(want, sfo, sfo_len);
+      CHECK(savesfo_patch_owner(want, sfo_len, 0, 0, 0) == 0);
+      CHECK(len == sfo_len && !memcmp(buf, want, len));
+      CHECK(savesfo_get_raw(buf, len, "ACCOUNT_ID", raw, 8) == 8 && !memcmp(raw, (uint8_t[]){0, 0, 0, 0, 0, 0, 0, 0}, 8));
+      free(buf);
+    }
     CHECK((i = find_entry(z, "data.bin")) != (unsigned)-1 && szr_at(z, i)->usize == 100000);
     CHECK((i = find_entry(z, "sub/dir/a.txt")) != (unsigned)-1 && szr_read(z, i, &buf, &len, 100) == SZ_OK && len == 11 && !memcmp(buf, "hello save\n", 11));
     free(buf);

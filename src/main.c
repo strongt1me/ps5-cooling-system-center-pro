@@ -444,7 +444,10 @@ main(int argc, char **argv) {
   /* A choice about an original ("Original danach") that this app was carrying out or waiting for when it ended last: said once, then forgotten. Before the web
      interface answers: a choice made by a request cannot be taken for a leftover (audit 18.11.2026, round 3). Only with the lock of the single instance: an
      older copy that is still running owns the note. */
-  if(lock == 1) ps5tm_orig_recover();
+  if(lock == 1) {
+    ps5tm_orig_recover();
+    ps5tm_saves_recover();
+  }
 
   ps5tm_api_tile_refresh();
   /* The log already says why when the regulating thread cannot be started

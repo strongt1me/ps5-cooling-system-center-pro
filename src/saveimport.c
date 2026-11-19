@@ -21,6 +21,7 @@
 #include "savemnt.h"
 #include "savesfo.h"
 #include "savezip.h"
+#include "third_party/cJSON.h"
 #include "third_party/libdeflate/libdeflate.h"
 
 #define SI_MAX_FILES   5000u
@@ -762,6 +763,222 @@ owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *
   return 0;
 }
 
+
+/* ------------------------------------------------------------------ the record of an exchange
+   From the first rename of the exchange to its end a small record is kept (the paths, what was there before, the row of the database, and the phase), written whole and made
+   lasting each time. A run that is cut off in that time (power, the app replaced by a new one, a crash) leaves the record behind, and saveimport_recover finishes or takes back
+   what it names at the next start: phase "swap" (and "rollback"): the files go back as they were; phase "db" (the images are in place, the row is what is left): the row is
+   written again (the same values, so it does not matter whether the first try got through) and the old files go. */
+typedef struct {
+  char fin[PATH_MAX], ifin[PATH_MAX], dbp[PATH_MAX];
+  int ps4, replaced, bin_replaced, icon_existed;
+  savedb_row_t row;
+} jr_t;
+
+static void
+jr_hex(cJSON *o, const char *key, uint64_t v) {
+  char b[24];
+  snprintf(b, sizeof(b), "%llx", (unsigned long long)v);
+  cJSON_AddStringToObject(o, key, b);
+}
+
+static uint64_t
+jr_hex_get(const cJSON *o, const char *key) {
+  const cJSON *i = cJSON_GetObjectItem(o, key);
+  return cJSON_IsString(i) && i->valuestring ? (uint64_t)strtoull(i->valuestring, NULL, 16) : 0;
+}
+
+static void
+jr_str_get(const cJSON *o, const char *key, char *out, size_t n) {
+  const cJSON *i = cJSON_GetObjectItem(o, key);
+  snprintf(out, n, "%s", cJSON_IsString(i) && i->valuestring ? i->valuestring : "");
+}
+
+static int
+jr_int_get(const cJSON *o, const char *key) {
+  const cJSON *i = cJSON_GetObjectItem(o, key);
+  return cJSON_IsNumber(i) ? (int)i->valuedouble : 0;
+}
+
+/* The record, whole and lasting (a temporary file, fsync, rename, fsync of the folder). 0 or errno. */
+static int
+journal_write(const char *path, const jr_t *j, const char *phase) {
+  if(!path || !path[0]) return 0;
+  cJSON *o = cJSON_CreateObject();
+  if(!o) return ENOMEM;
+  cJSON_AddNumberToObject(o, "v", 1);
+  cJSON_AddStringToObject(o, "phase", phase);
+  cJSON_AddStringToObject(o, "fin", j->fin);
+  cJSON_AddStringToObject(o, "ifin", j->ifin);
+  cJSON_AddStringToObject(o, "dbp", j->dbp);
+  cJSON_AddNumberToObject(o, "ps4", j->ps4);
+  cJSON_AddNumberToObject(o, "replaced", j->replaced);
+  cJSON_AddNumberToObject(o, "bin_replaced", j->bin_replaced);
+  cJSON_AddNumberToObject(o, "icon_existed", j->icon_existed);
+  cJSON_AddStringToObject(o, "title_id", j->row.title_id);
+  cJSON_AddStringToObject(o, "dir_name", j->row.dir_name);
+  cJSON_AddStringToObject(o, "main_title", j->row.main_title);
+  cJSON_AddStringToObject(o, "sub_title", j->row.sub_title);
+  cJSON_AddStringToObject(o, "detail", j->row.detail);
+  cJSON_AddStringToObject(o, "mtime", j->row.mtime);
+  jr_hex(o, "account_id", j->row.account_id);
+  jr_hex(o, "user_id", j->row.user_id);
+  jr_hex(o, "user_param", j->row.user_param);
+  jr_hex(o, "blocks", j->row.blocks);
+  jr_hex(o, "free_blocks", j->row.free_blocks);
+  jr_hex(o, "size_kib", j->row.size_kib);
+  jr_hex(o, "system_blocks", j->row.system_blocks);
+  char *txt = cJSON_PrintUnformatted(o);
+  cJSON_Delete(o);
+  if(!txt) return ENOMEM;
+  char tmp[PATH_MAX], dir[PATH_MAX];
+  if(snprintf(tmp, sizeof(tmp), "%s.tmp", path) >= (int)sizeof(tmp) || snprintf(dir, sizeof(dir), "%s", path) >= (int)sizeof(dir)) { free(txt); return ENAMETOOLONG; }
+  char *sl = strrchr(dir, '/');
+  if(sl && sl != dir) { *sl = 0; (void)mkdir_like_parent(dir); }
+  int rc = 0;
+  const int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if(fd < 0) rc = errno ? errno : EIO;
+  else {
+    if(write_all(fd, txt, strlen(txt)) != 0 || fsync(fd) != 0) rc = errno ? errno : EIO;
+    if(close(fd) != 0 && rc == 0) rc = errno ? errno : EIO;
+  }
+  free(txt);
+  if(rc == 0 && rename(tmp, path) != 0) rc = errno ? errno : EIO;
+  if(rc != 0) { unlink(tmp); return rc; }
+  if(sl && sl != dir) {
+    const int dfd = open(dir, O_RDONLY);
+    if(dfd >= 0) { (void)fsync(dfd); close(dfd); }
+  }
+  return 0;
+}
+
+/* The record at path: 0, or -1 when it cannot be read or names something this code would not touch. */
+static int
+journal_read(const char *path, jr_t *j, char *phase, size_t phase_len) {
+  struct stat st;
+  if(stat(path, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 || st.st_size > 65536) return -1;
+  char *buf = malloc((size_t)st.st_size + 1);
+  if(!buf) return -1;
+  const int fd = open(path, O_RDONLY);
+  const ssize_t n = fd >= 0 ? read(fd, buf, (size_t)st.st_size) : -1;
+  if(fd >= 0) close(fd);
+  if(n <= 0) { free(buf); return -1; }
+  buf[n] = 0;
+  cJSON *o = cJSON_Parse(buf);
+  free(buf);
+  if(!o) return -1;
+  memset(j, 0, sizeof(*j));
+  if(jr_int_get(o, "v") != 1) { cJSON_Delete(o); return -1; }
+  jr_str_get(o, "phase", phase, phase_len);
+  jr_str_get(o, "fin", j->fin, sizeof(j->fin));
+  jr_str_get(o, "ifin", j->ifin, sizeof(j->ifin));
+  jr_str_get(o, "dbp", j->dbp, sizeof(j->dbp));
+  j->ps4 = jr_int_get(o, "ps4") != 0;
+  j->replaced = jr_int_get(o, "replaced") != 0;
+  j->bin_replaced = jr_int_get(o, "bin_replaced") != 0;
+  j->icon_existed = jr_int_get(o, "icon_existed") != 0;
+  jr_str_get(o, "title_id", j->row.title_id, sizeof(j->row.title_id));
+  jr_str_get(o, "dir_name", j->row.dir_name, sizeof(j->row.dir_name));
+  jr_str_get(o, "main_title", j->row.main_title, sizeof(j->row.main_title));
+  jr_str_get(o, "sub_title", j->row.sub_title, sizeof(j->row.sub_title));
+  jr_str_get(o, "detail", j->row.detail, sizeof(j->row.detail));
+  jr_str_get(o, "mtime", j->row.mtime, sizeof(j->row.mtime));
+  j->row.account_id = jr_hex_get(o, "account_id");
+  j->row.user_id = (uint32_t)jr_hex_get(o, "user_id");
+  j->row.user_param = (uint32_t)jr_hex_get(o, "user_param");
+  j->row.blocks = jr_hex_get(o, "blocks");
+  j->row.free_blocks = jr_hex_get(o, "free_blocks");
+  j->row.size_kib = jr_hex_get(o, "size_kib");
+  j->row.system_blocks = jr_hex_get(o, "system_blocks");
+  cJSON_Delete(o);
+  /* a record is only believed when it names what this code makes: an image "sdimg_<slot>" of that slot, its picture, the save database; no way out of those names */
+  const char *base = strrchr(j->fin, '/');
+  char want[128];
+  const size_t fl = strlen(j->fin), il = strlen(j->ifin), dl = strlen(j->dbp);
+  if(!base || j->fin[0] != '/' || strstr(j->fin, "..") || !slot_ok(j->row.dir_name) || snprintf(want, sizeof(want), "sdimg_%s", j->row.dir_name) >= (int)sizeof(want) || strcmp(base + 1, want)) return -1;
+  if(j->ifin[0] != '/' || strstr(j->ifin, "..") || il < 11 || strcmp(j->ifin + il - 10, "_icon0.png")) return -1;
+  if(j->dbp[0] != '/' || strstr(j->dbp, "..") || dl < 12 || strcmp(j->dbp + dl - 11, "savedata.db")) return -1;
+  if(fl + 12 >= sizeof(j->fin) || il + 12 >= sizeof(j->ifin)) return -1;
+  return 0;
+}
+
+/* out = a + b (cut off, with out empty, when it does not fit: a path of "" names nothing, so no call on it can hurt). out may be a. */
+static void
+path_cat(char *out, size_t n, const char *a, const char *b) {
+  const size_t al = strlen(a), bl = strlen(b);
+  if(al + bl >= n) { out[0] = 0; return; }
+  memmove(out, a, al);
+  memcpy(out + al, b, bl + 1);
+}
+
+int
+saveimport_recover(const char *path, char *report, size_t report_len) {
+  if(report_len) report[0] = 0;
+  struct stat st;
+  if(!path || !path[0] || lstat(path, &st) != 0) return 0;
+  jr_t *j = calloc(1, sizeof(*j));
+  if(!j) { snprintf(report, report_len, "Kein Speicher."); return -1; }
+  char phase[16] = "";
+  if(journal_read(path, j, phase, sizeof(phase)) != 0) {
+    free(j);
+    unlink(path);
+    snprintf(report, report_len, "Die Aufzeichnung eines unterbrochenen Einspielens war nicht lesbar und wurde entfernt.");
+    return 1;
+  }
+  char neu[PATH_MAX], alt[PATH_MAX], ineu[PATH_MAX], ialt[PATH_MAX], dir[PATH_MAX], bfin[PATH_MAX], bneu[PATH_MAX], balt[PATH_MAX];
+  /* journal_read has seen to the lengths (every name here is at most 12 bytes longer than a name that fits): plain copies, no format */
+  path_cat(neu, sizeof(neu), j->fin, ".ps5cc-neu");
+  path_cat(alt, sizeof(alt), j->fin, ".ps5cc-alt");
+  path_cat(ineu, sizeof(ineu), j->ifin, ".ps5cc-neu");
+  path_cat(ialt, sizeof(ialt), j->ifin, ".ps5cc-alt");
+  path_cat(dir, sizeof(dir), j->fin, "");
+  *strrchr(dir, '/') = 0;
+  path_cat(bfin, sizeof(bfin), dir, "/");
+  path_cat(bfin, sizeof(bfin), bfin, j->row.dir_name);
+  path_cat(bfin, sizeof(bfin), bfin, ".bin");
+  path_cat(bneu, sizeof(bneu), bfin, ".ps5cc-neu");
+  path_cat(balt, sizeof(balt), bfin, ".ps5cc-alt");
+  int rc;
+  if(!strcmp(phase, "db") && lstat(j->fin, &st) == 0) {
+    /* the images are in place: what is left is the row. The same values again; whether the first try got through does not matter. */
+    char e2[300] = "";
+    int inserted = 0;
+    rc = savedb_upsert(j->dbp, &j->row, &inserted, e2, sizeof(e2));
+    if(rc == 0) rc = savedb_check(j->dbp, e2, sizeof(e2));
+    if(rc != 0) {
+      snprintf(report, report_len, "Ein unterbrochenes Einspielen von %.15s (%.60s) ist fast zu Ende: Nur der Eintrag in der Spielstand-Datenbank fehlt noch (%.200s). Das nächste Einspielen versucht es noch einmal.",
+               j->row.title_id, j->row.dir_name, e2);
+      free(j);
+      return -1;
+    }
+    unlink(alt);
+    unlink(ialt);
+    if(j->ps4) unlink(balt);
+    unlink(neu);
+    unlink(ineu);
+    if(j->ps4) unlink(bneu);
+    snprintf(report, report_len, "Ein unterbrochenes Einspielen von %.15s (%.60s) wurde zu Ende geführt: Der Spielstand ist eingespielt.", j->row.title_id, j->row.dir_name);
+  } else {
+    /* the files go back as they were: the old image where it was set aside, nothing where there was nothing before (the key file and the picture alike) */
+    struct stat s2;
+    if(lstat(alt, &s2) == 0) (void)rename(alt, j->fin);
+    else if(!j->replaced) unlink(j->fin);
+    if(j->ps4) {
+      if(lstat(balt, &s2) == 0) (void)rename(balt, bfin);
+      else if(!j->bin_replaced) unlink(bfin);
+    }
+    if(lstat(ialt, &s2) == 0) (void)rename(ialt, j->ifin);
+    else if(!j->icon_existed) unlink(j->ifin);
+    unlink(neu);
+    unlink(ineu);
+    if(j->ps4) unlink(bneu);
+    snprintf(report, report_len, "Ein unterbrochenes Einspielen von %.15s (%.60s) wurde zurückgenommen: Der alte Spielstand liegt wieder an seinem Platz.", j->row.title_id, j->row.dir_name);
+  }
+  free(j);
+  unlink(path);
+  return 1;
+}
+
 int
 saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimport_result_t *res, char *err, size_t err_len) {
   run_t R = { &h->base, err, err_len };
@@ -774,7 +991,10 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
   szr_t *z = NULL;
   uint8_t *sfo = NULL;
   size_t sfo_len = 0;
-  int rc = -1, mounted = 0, stuck = 0, have_img = 0, committed = 0, ps4 = 0;
+  int rc = -1, mounted = 0, stuck = 0, have_img = 0, committed = 0, ps4 = 0, jw = 0;
+  jr_t *jrec = NULL;                                                /* the record of the exchange (heap: it is large), when one is kept */
+  char recover_note[420];
+  recover_note[0] = 0;
   char img[PATH_MAX] = "", mnt[PATH_MAX] = "", icon_tmp[PATH_MAX] = "", bin_tmp[PATH_MAX] = "";
   uint8_t sealed[SAVEMNT_SEALED_BYTES];
   char owner_note[400];
@@ -788,6 +1008,11 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
   if(!info.importable) { fail(r, "%s", info.why); goto done; }
   if(strlen(a->uid) != 8) { fail(r, "Der Benutzer ist ungültig."); goto done; }
   ps4 = info.ps4;
+  if(a->journal_path && a->journal_path[0]) {
+    /* an exchange that an earlier run did not finish (power, a new copy of the app, a crash) is finished or taken back first; where that is not possible yet, nothing new starts */
+    const int jr = saveimport_recover(a->journal_path, recover_note, sizeof(recover_note));
+    if(jr < 0) { fail(r, "Von einem früheren Einspielen ist noch etwas offen. %s Es wurde nichts verändert.", recover_note); goto done; }
+  }
 
   snprintf(res->title_id, sizeof(res->title_id), "%s", info.title_id);
   snprintf(res->slot, sizeof(res->slot), "%s", info.slot);
@@ -1029,6 +1254,26 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
   committed = 1;
   phase(r, "Spielstand installieren", 0);
   current(r, "");
+  char stamp[24] = "00000000-000000";
+  time_t now = time(NULL);
+  struct tm tmv;
+  memset(&tmv, 0, sizeof(tmv));
+  if(gmtime_r(&now, &tmv)) strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", &tmv);
+  savedb_row_t row;                                                 /* the row of the database, made now: the record of the exchange holds it */
+  memset(&row, 0, sizeof(row));
+  snprintf(row.title_id, sizeof(row.title_id), "%s", info.title_id);
+  snprintf(row.dir_name, sizeof(row.dir_name), "%s", info.slot);
+  snprintf(row.main_title, sizeof(row.main_title), "%s", info.main_title);
+  snprintf(row.sub_title, sizeof(row.sub_title), "%s", info.sub_title);
+  snprintf(row.detail, sizeof(row.detail), "%s", info.detail);
+  strftime(row.mtime, sizeof(row.mtime), "%Y-%m-%dT%H:%M:%S.00Z", &tmv);
+  row.account_id = a->account_id;
+  row.user_id = a->user_id;
+  row.user_param = info.user_param;
+  row.blocks = info.block_count;
+  row.free_blocks = free_blocks;
+  row.size_kib = info.image_size / 1024;
+  row.system_blocks = 0;
   char dir[PATH_MAX], fin[PATH_MAX], neu[PATH_MAX], alt[PATH_MAX];
   char idir[PATH_MAX], ifin[PATH_MAX], ineu[PATH_MAX], ialt[PATH_MAX];
   char dbp[PATH_MAX], dbb[PATH_MAX];
@@ -1089,6 +1334,24 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
       if(e) { unlink(neu); fail(r, "Die Schlüsseldatei ließ sich nicht an den Platz des Spielstands kopieren: %s", ps5tm_io_strerror(e)); goto done; }
       bin_replaced = lstat(bfin, &st) == 0;
     }
+    /* the record of the exchange, before the first rename: a run that is cut off from here on leaves it behind, and the next start finishes or takes back what it names */
+    if(a->journal_path && a->journal_path[0]) {
+      jrec = calloc(1, sizeof(*jrec));
+      int je = jrec ? 0 : ENOMEM;
+      if(jrec) {
+        snprintf(jrec->fin, sizeof(jrec->fin), "%s", fin);
+        snprintf(jrec->ifin, sizeof(jrec->ifin), "%s", ifin);
+        snprintf(jrec->dbp, sizeof(jrec->dbp), "%s", dbp);
+        jrec->ps4 = ps4;
+        jrec->replaced = replaced;
+        jrec->bin_replaced = bin_replaced;
+        jrec->icon_existed = lstat(ifin, &st) == 0;
+        jrec->row = row;
+        je = journal_write(a->journal_path, jrec, "swap");
+      }
+      if(je) { unlink(neu); if(ps4) unlink(bneu); fail(r, "Die Aufzeichnung für den Fall eines Abbruchs ließ sich nicht schreiben: %s", ps5tm_io_strerror(je)); goto done; }
+      jw = 1;
+    }
     /* the renames of the image and of its key file one after the other, so that the time in which they do not belong together is as short as it can be */
     if(replaced && rename(fin, alt) != 0) { const int re = errno ? errno : EIO; unlink(neu); if(ps4) unlink(bneu); fail(r, "Der bisherige Spielstand ließ sich nicht beiseite legen: %s", ps5tm_io_strerror(re)); goto done; }
     if(ps4 && bin_replaced && rename(bfin, balt) != 0) {
@@ -1135,11 +1398,8 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
 
   /* the row in the database, after a copy of it */
   {
-    char stamp[24] = "00000000-000000";
-    time_t now = time(NULL);
-    struct tm tmv;
-    if(gmtime_r(&now, &tmv)) strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", &tmv);
     struct stat st;
+    if(jw) (void)journal_write(a->journal_path, jrec, "db");        /* the images are in place: what is left is the row */
     db_existed = stat(dbp, &st) == 0;
     char e2[400];
     int dbr = 0, db_written = 0, dbb_mine = 0;
@@ -1166,21 +1426,6 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
       snprintf(e2, sizeof(e2), "Es gibt keinen Platz für die Sicherung der Spielstand-Datenbank.");
     }
     if(dbr == 0) {
-      savedb_row_t row;
-      memset(&row, 0, sizeof(row));
-      snprintf(row.title_id, sizeof(row.title_id), "%s", info.title_id);
-      snprintf(row.dir_name, sizeof(row.dir_name), "%s", info.slot);
-      snprintf(row.main_title, sizeof(row.main_title), "%s", info.main_title);
-      snprintf(row.sub_title, sizeof(row.sub_title), "%s", info.sub_title);
-      snprintf(row.detail, sizeof(row.detail), "%s", info.detail);
-      strftime(row.mtime, sizeof(row.mtime), "%Y-%m-%dT%H:%M:%S.00Z", &tmv);
-      row.account_id = a->account_id;
-      row.user_id = a->user_id;
-      row.user_param = info.user_param;
-      row.blocks = info.block_count;
-      row.free_blocks = free_blocks;
-      row.size_kib = info.image_size / 1024;
-      row.system_blocks = 0;
       int inserted = 0;
       dbr = savedb_upsert(dbp, &row, &inserted, e2, sizeof(e2));
       if(dbr == 0) { db_written = 1; dbr = savedb_check(dbp, e2, sizeof(e2)); }
@@ -1190,6 +1435,7 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
       /* everything goes back as it was. The database is put back from its copy only when it was written and then did not check out: where SQLite itself refused (locked, busy, an
          error) it rolled back and the file is as it was, and a file laid over a database the console may have open would do harm of its own. */
       int db_back = 1;
+      if(jw) (void)journal_write(a->journal_path, jrec, "rollback");   /* a cut-off from here on takes the files back, it does not finish the exchange */
       if(db_written && db_existed && dbb_mine) {
         char dneu[PATH_MAX];
         db_back = snprintf(dneu, sizeof(dneu), "%s.ps5cc-neu", dbp) < (int)sizeof(dneu) && copy_new(dbb, dneu, 0644) == 0 && rename(dneu, dbp) == 0;
@@ -1221,9 +1467,15 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
     const size_t on = strlen(res->note);
     snprintf(res->note + on, sizeof(res->note) - on, "%s%.350s", on ? " " : "", owner_note);
   }
+  if(recover_note[0]) {
+    const size_t rn = strlen(res->note);
+    snprintf(res->note + rn, sizeof(res->note) - rn, "%s%.350s", rn ? " " : "", recover_note);
+  }
   rc = 0;
 
 done:
+  if(jw && a->journal_path) unlink(a->journal_path);                /* finished or taken back: nothing is left for the next start to do */
+  free(jrec);
   if(mounted) {
     char e2[300];
     if(savemnt_close(&mt, e2, sizeof(e2)) != 0) {

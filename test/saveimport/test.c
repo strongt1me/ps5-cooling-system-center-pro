@@ -23,7 +23,7 @@ extern void (*ps5tm_savemnt_test_on_open)(const char *mount_dir, int nth);
 static int g_fail, g_n;
 #define CHECK(c) do { g_n++; if(!(c)) { g_fail++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while(0)
 
-static char ROOT[300], HOME_[330], SYS[330], WORK[330], STORE[330], DBBK[330], ZIP[330];
+static char ROOT[300], HOME_[330], SYS[330], WORK[330], STORE[330], DBBK[330], ZIP[330], JOURNAL[360];
 static const char *UID = "18161531";
 static const uint32_t UIDN = 0x18161531;
 static const uint64_t ACC = 0x1122334455667788ull;
@@ -276,6 +276,7 @@ args(void) {
   a.user_id = UIDN;
   a.account_id = ACC;
   a.db_backup_dir = DBBK;
+  a.journal_path = JOURNAL;
   return a;
 }
 
@@ -325,6 +326,18 @@ make_db(void) {
 }
 
 static char STORED[600];
+
+/* a record of an exchange as an earlier run that was cut off would have left it */
+static void
+write_journal(const char *phase, const char *title, const char *slot, int replaced, int ps4, int bin_replaced, int icon_existed, const char *fin, const char *ifin, const char *dbp) {
+  char js[4096];
+  snprintf(js, sizeof(js),
+           "{\"v\":1,\"phase\":\"%s\",\"fin\":\"%s\",\"ifin\":\"%s\",\"dbp\":\"%s\",\"ps4\":%d,\"replaced\":%d,\"bin_replaced\":%d,\"icon_existed\":%d,"
+           "\"title_id\":\"%s\",\"dir_name\":\"%s\",\"main_title\":\"Mein Spiel\",\"sub_title\":\"Unter\",\"detail\":\"Details\",\"mtime\":\"2026-11-19T12:00:00.00Z\","
+           "\"account_id\":\"1122334455667788\",\"user_id\":\"18161531\",\"user_param\":\"5\",\"blocks\":\"30\",\"free_blocks\":\"10\",\"size_kib\":\"c00\",\"system_blocks\":\"0\"}",
+           phase, fin, ifin, dbp, ps4, replaced, bin_replaced, icon_existed, title, slot);
+  wfile(JOURNAL, js, strlen(js));
+}
 
 /* ---- PS4: a ZIP of plain files only (no sidecar), the donors a user's other saves are */
 static int
@@ -432,6 +445,7 @@ main(int argc, char **argv) {
   snprintf(STORE, sizeof(STORE), "%s/store", ROOT);
   snprintf(DBBK, sizeof(DBBK), "%s/data/dbbk", ROOT);
   snprintf(ZIP, sizeof(ZIP), "%s/in.zip", ROOT);
+  snprintf(JOURNAL, sizeof(JOURNAL), "%s/data/journal/import.journal", ROOT);
   snprintf(IMGDIR, sizeof(IMGDIR), "%s/%s/savedata_prospero/PPSA01234", HOME_, UID);
   snprintf(IMG, sizeof(IMG), "%s/sdimg_SAVE0", IMGDIR);
   snprintf(ICONP, sizeof(ICONP), "%s/%s/savedata_prospero_meta/user/PPSA01234/SAVE0_icon0.png", HOME_, UID);
@@ -499,6 +513,7 @@ main(int argc, char **argv) {
   CHECK(scalar(DBP, "select blocks from savedata") == 48 && scalar(DBP, "select size_kib from savedata") == 3072 && scalar(DBP, "select user_param from savedata") == 5);
   CHECK(scalar(DBP, "select free_blocks from savedata") >= 0 && scalar(DBP, "select free_blocks from savedata") <= 48);
   CHECK(count_dir(WORK) == 0);                                    /* the work folder is clean again */
+  CHECK(!exists(JOURNAL));                                        /* and no record of an exchange is left: it ended */
   CHECK(ps5tm_savemnt_test_opened == 2 && ps5tm_savemnt_test_closed == 2);   /* once to write, once to check */
   CHECK(pr.no_return_calls == 1 && pr.bytes > 100000);
   CHECK(!strcmp(pr.names[0], "ZIP-Datei prüfen") && !strcmp(pr.names[1], "Besitzer prüfen") && !strcmp(pr.names[2], "Abbild anlegen"));
@@ -1234,6 +1249,175 @@ main(int argc, char **argv) {
     szw_add_mem(w, "PPSA01234/SAVE0/chives.json", json, (size_t)jn, 1790000000, 0644);
     CHECK(szw_finish(w) == SZ_OK);
     CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && !info.importable && strstr(info.why, "außerhalb"));
+  }
+
+  /* ================================================================ the record of an exchange: a run that is cut off is finished or taken back */
+  sp = good();
+  /* ---- phase "swap" (the images were being exchanged): the old image comes back, the new one and the leftovers go, the picture likewise */
+  reset();
+  make_db();
+  {
+    char alt[700], neu[700], ialt[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG);
+    snprintf(neu, sizeof(neu), "%s.ps5cc-neu", IMG);
+    snprintf(ialt, sizeof(ialt), "%s.ps5cc-alt", ICONP);
+    wfile(IMG, "NEW IMAGE", 9);                                   /* the new one was already in place ... */
+    wfile(alt, "OLD IMAGE", 9);                                   /* ... and the old one aside */
+    wfile(neu, "LEFTOVER", 8);
+    wfile(ICONP, "NEW ICON", 8);
+    wfile(ialt, "OLD ICON", 8);
+    write_journal("swap", "PPSA01234", "SAVE0", 1, 0, 0, 1, IMG, ICONP, DBP);
+    char rep[500];
+    const long long dbsz = fsize(DBP);
+    CHECK(saveimport_recover(JOURNAL, rep, sizeof(rep)) == 1 && strstr(rep, "zurückgenommen") && strstr(rep, "PPSA01234"));
+    uint8_t b2[16];
+    CHECK(slurp(IMG, b2, sizeof(b2)) == 9 && !memcmp(b2, "OLD IMAGE", 9) && slurp(ICONP, b2, sizeof(b2)) == 8 && !memcmp(b2, "OLD ICON", 8));
+    CHECK(!exists(alt) && !exists(neu) && !exists(ialt) && !exists(JOURNAL) && fsize(DBP) == dbsz);
+    CHECK(saveimport_recover(JOURNAL, rep, sizeof(rep)) == 0);                              /* nothing is left to do */
+  }
+  /* ... nothing was there before: the new image and its picture go, and the cut-off before any rename leaves the old image where it is */
+  reset();
+  wfile(IMG, "NEW IMAGE", 9);
+  wfile(ICONP, "NEW ICON", 8);
+  write_journal("swap", "PPSA01234", "SAVE0", 0, 0, 0, 0, IMG, ICONP, DBP);
+  CHECK(saveimport_recover(JOURNAL, err, sizeof(err)) == 1 && !exists(IMG) && !exists(ICONP) && !exists(JOURNAL));
+  reset();
+  wfile(IMG, "OLD IMAGE", 9);                                     /* the old image never went aside: it is still the one in place */
+  write_journal("swap", "PPSA01234", "SAVE0", 1, 0, 0, 0, IMG, ICONP, DBP);
+  CHECK(saveimport_recover(JOURNAL, err, sizeof(err)) == 1 && fsize(IMG) == 9 && !exists(JOURNAL));
+  /* ... phase "rollback" (the run was taking the files back itself when it was cut off) is the same */
+  reset();
+  {
+    char alt[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG);
+    wfile(IMG, "NEW IMAGE", 9);
+    wfile(alt, "OLD IMAGE", 9);
+    write_journal("rollback", "PPSA01234", "SAVE0", 1, 0, 0, 0, IMG, ICONP, DBP);
+    uint8_t b2[16];
+    CHECK(saveimport_recover(JOURNAL, err, sizeof(err)) == 1 && slurp(IMG, b2, sizeof(b2)) == 9 && !memcmp(b2, "OLD IMAGE", 9) && !exists(alt));
+  }
+
+  /* ---- phase "db" (the images are in place, the row is what was left): the row is written, the old files go */
+  reset();
+  make_db();
+  {
+    char alt[700], ialt[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG);
+    snprintf(ialt, sizeof(ialt), "%s.ps5cc-alt", ICONP);
+    wfile(IMG, "NEW IMAGE", 9);
+    wfile(alt, "OLD IMAGE", 9);
+    wfile(ICONP, "NEW ICON", 8);
+    wfile(ialt, "OLD ICON", 8);
+    write_journal("db", "PPSA01234", "SAVE0", 1, 0, 0, 1, IMG, ICONP, DBP);
+    char rep[500];
+    CHECK(scalar(DBP, "select count(*) from savedata") == 2 && scalar(DBP, "select blocks from savedata where dir_name='SAVE0'") == 10);        /* the row of the old state */
+    CHECK(saveimport_recover(JOURNAL, rep, sizeof(rep)) == 1 && strstr(rep, "zu Ende geführt"));
+    CHECK(scalar(DBP, "select count(*) from savedata") == 2 && scalar(DBP, "select blocks from savedata where dir_name='SAVE0'") == 48 && scalar(DBP, "select user_id from savedata where dir_name='SAVE0'") == UIDN);
+    CHECK(scalar(DBP, "select account_id from savedata where dir_name='SAVE0'") == (long long)ACC && scalar(DBP, "select size_kib from savedata where dir_name='SAVE0'") == 3072);
+    CHECK(scalar(DBP, "select user_id from savedata where id=9") == 1);                    /* the other row is as it was */
+    uint8_t b2[16];
+    CHECK(slurp(IMG, b2, sizeof(b2)) == 9 && !memcmp(b2, "NEW IMAGE", 9) && !exists(alt) && !exists(ialt) && !exists(JOURNAL));         /* the new one stays */
+    /* the same record again (a run cut off after the row was written): the row is written once more, nothing doubles */
+    write_journal("db", "PPSA01234", "SAVE0", 1, 0, 0, 1, IMG, ICONP, DBP);
+    CHECK(saveimport_recover(JOURNAL, rep, sizeof(rep)) == 1 && scalar(DBP, "select count(*) from savedata") == 2);
+  }
+  /* ... and where the row did not exist yet, it is made */
+  reset();
+  make_db();
+  {
+    sqlite3 *db = NULL;
+    sqlite3_open(DBP, &db);
+    sqlite3_exec(db, "DELETE FROM savedata", NULL, NULL, NULL);
+    sqlite3_close(db);
+    wfile(IMG, "NEW IMAGE", 9);
+    write_journal("db", "PPSA01234", "SAVE0", 0, 0, 0, 0, IMG, ICONP, DBP);
+    CHECK(saveimport_recover(JOURNAL, err, sizeof(err)) == 1 && scalar(DBP, "select count(*) from savedata") == 1 && scalar(DBP, "select blocks from savedata") == 48 && fsize(IMG) == 9);
+  }
+  /* ... the database is held by another writer: it is told, the record stays, the files stay, and the next try (the lock gone) finishes it */
+  reset();
+  make_db();
+  {
+    char alt[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG);
+    wfile(IMG, "NEW IMAGE", 9);
+    wfile(alt, "OLD IMAGE", 9);
+    write_journal("db", "PPSA01234", "SAVE0", 1, 0, 0, 0, IMG, ICONP, DBP);
+    sqlite3 *other = NULL;
+    CHECK(sqlite3_open(DBP, &other) == SQLITE_OK && sqlite3_exec(other, "BEGIN IMMEDIATE", NULL, NULL, NULL) == SQLITE_OK);
+    char rep[500];
+    CHECK(saveimport_recover(JOURNAL, rep, sizeof(rep)) == -1 && strstr(rep, "fast zu Ende") && exists(JOURNAL) && exists(alt) && fsize(IMG) == 9);
+    /* a new put-in does not start on top of it */
+    make_zip(ZIP, &sp);
+    a = args();
+    memset(&pr, 0, sizeof(pr));
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    CHECK(rc != 0 && strstr(err, "noch etwas offen") && strstr(err, "nichts verändert") && pr.no_return_calls == 0 && exists(JOURNAL) && count_dir(WORK) == 0);
+    sqlite3_exec(other, "ROLLBACK", NULL, NULL, NULL);
+    sqlite3_close(other);
+    CHECK(saveimport_recover(JOURNAL, rep, sizeof(rep)) == 1 && !exists(JOURNAL) && !exists(alt) && scalar(DBP, "select blocks from savedata where dir_name='SAVE0'") == 48);
+  }
+
+  /* ---- a put-in that finds the record of an earlier cut-off run takes it back first, goes on, and says so */
+  reset();
+  make_zip(ZIP, &sp);
+  make_db();
+  {
+    char alt[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG);
+    wfile(IMG, "NEW IMAGE", 9);
+    wfile(alt, "OLD IMAGE", 9);
+    write_journal("swap", "PPSA01234", "SAVE0", 1, 0, 0, 0, IMG, ICONP, DBP);
+    a = args();
+    memset(&pr, 0, sizeof(pr));
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    CHECK(rc == 0 && strstr(res.note, "zurückgenommen") && res.replaced == 1 && fsize(IMG) == 48ll * 65536 && !exists(alt) && !exists(JOURNAL));
+  }
+
+  /* ---- no record is left behind by a run that ends, whichever way: done, failed (the row cannot be written), stopped */
+  reset();
+  make_zip(ZIP, &sp);
+  a = args();
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && !exists(JOURNAL));
+  reset();
+  make_zip(ZIP, &sp);
+  {
+    sqlite3 *db = NULL;
+    sqlite3_open(DBP, &db);
+    sqlite3_exec(db, "CREATE TABLE savedata (title_id, dir_name);", NULL, NULL, NULL);
+    sqlite3_close(db);
+  }
+  wfile(IMG, "OLD IMAGE", 9);
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc != 0 && fsize(IMG) == 9 && !exists(JOURNAL));
+
+  /* ---- a record that cannot be believed is removed and touches nothing: garbage, a way out of the folders, a name that is not the slot's */
+  reset();
+  wfile(IMG, "OLD IMAGE", 9);
+  wfile(JOURNAL, "this is not json at all", 23);
+  CHECK(saveimport_recover(JOURNAL, err, sizeof(err)) == 1 && strstr(err, "nicht lesbar") && !exists(JOURNAL) && fsize(IMG) == 9);
+  write_journal("swap", "PPSA01234", "SAVE0", 0, 0, 0, 0, "/tmp/../etc/sdimg_SAVE0", ICONP, DBP);
+  CHECK(saveimport_recover(JOURNAL, err, sizeof(err)) == 1 && strstr(err, "nicht lesbar") && !exists(JOURNAL));
+  write_journal("swap", "PPSA01234", "SAVE0", 0, 0, 0, 0, "/tmp/ps5tm-x/home/sdimg_OTHER", ICONP, DBP);          /* the image is not the slot's */
+  CHECK(saveimport_recover(JOURNAL, err, sizeof(err)) == 1 && strstr(err, "nicht lesbar") && !exists(JOURNAL));
+  CHECK(saveimport_recover(NULL, err, sizeof(err)) == 0 && saveimport_recover("", err, sizeof(err)) == 0);
+
+  /* ---- PS4: the image and its key file go back as a pair */
+  reset4();
+  make_db4();
+  {
+    char alt[700], balt[700], bneu[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG4);
+    snprintf(balt, sizeof(balt), "%s.ps5cc-alt", BIN4);
+    snprintf(bneu, sizeof(bneu), "%s.ps5cc-neu", BIN4);
+    wfile(IMG4, "NEW IMAGE", 9);
+    wfile(alt, "OLD IMAGE", 9);
+    wfile(balt, "OLD KEY FILE", 12);
+    wfile(bneu, "NEW KEY FILE", 12);                                  /* cut off between the two renames: the new key file never arrived */
+    write_journal("swap", "CUSA12345", "SLOT0", 1, 1, 1, 0, IMG4, ICON4, DBP4);
+    uint8_t b1[16], b2[16];
+    CHECK(saveimport_recover(JOURNAL, err, sizeof(err)) == 1 && slurp(IMG4, b1, sizeof(b1)) == 9 && !memcmp(b1, "OLD IMAGE", 9) && slurp(BIN4, b2, sizeof(b2)) == 12 && !memcmp(b2, "OLD KEY FILE", 12));
+    CHECK(!exists(alt) && !exists(balt) && !exists(bneu) && !exists(JOURNAL));
   }
 
   rmtree(ROOT);

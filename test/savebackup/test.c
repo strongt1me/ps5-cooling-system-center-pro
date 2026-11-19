@@ -227,6 +227,17 @@ wait_job(char *state, size_t sn, char *error, size_t en) {
   usleep(20000);                                                    /* the thread that writes the history line is the last to go */
 }
 
+static unsigned
+count_prefix(const char *dir, const char *prefix) {
+  DIR *d = opendir(dir);
+  if(!d) return 0;
+  unsigned n = 0;
+  struct dirent *e;
+  while((e = readdir(d)) != NULL) if(!strncmp(e->d_name, prefix, strlen(prefix))) n++;
+  closedir(d);
+  return n;
+}
+
 static void
 img_path(char *out, size_t n, const char *title, const char *slot) { snprintf(out, n, "%s/%s/savedata_prospero/%s/sdimg_%s", HOME_, UID, title, slot); }
 
@@ -301,6 +312,67 @@ main(int argc, char **argv) {
     const cJSON *imp = pl ? cJSON_GetObjectItem(pl, "importable") : NULL, *slot = pl ? cJSON_GetObjectItem(pl, "slot") : NULL;
     CHECK(status == 200 && cJSON_IsTrue(imp) && slot && cJSON_IsString(slot) && !strcmp(slot->valuestring, "SAVE0"));
     cJSON_Delete(pl);
+  }
+
+
+  /* ---- housekeeping at the start of a job: the newest 10 copies of a user's save database stay, the older go (another user's are not touched, nor are files of another
+     name); an uploaded ZIP that is more than a day old goes, a fresh one stays */
+  reset();
+  {
+    char d[500], p[600];
+    snprintf(d, sizeof(d), "%s/savexport/db-backup", DATA);
+    mkdirs(d);
+    for(int i = 0; i < 13; i++) {
+      snprintf(p, sizeof(p), "%s/savedata-18161531-20261119-1200%02d-SAVE0.db", d, i);
+      wfile(p, "db", 2);
+      struct utimbuf ub = { 1700000000 + i * 100, 1700000000 + i * 100 };
+      utime(p, &ub);
+    }
+    for(int i = 0; i < 3; i++) {
+      snprintf(p, sizeof(p), "%s/savedata-22222222-20261119-1200%02d-X.db", d, i);
+      wfile(p, "db", 2);
+    }
+    snprintf(p, sizeof(p), "%s/savedata-18161531-notes.txt", d);
+    wfile(p, "mine", 4);
+    CHECK(make_zip("hk_SAVE0.zip", "PPSA01234", "SAVE0") == 0 && make_zip("old_one.zip", "PPSA01234", "SAVE1") == 0);
+    snprintf(p, sizeof(p), "%s/old_one.zip", INBOX);
+    struct utimbuf old = { time(NULL) - 2 * 24 * 3600, time(NULL) - 2 * 24 * 3600 };
+    utime(p, &old);
+    CHECK(ps5tm_saves_import_start("hk_SAVE0.zip", NULL, UID, NULL, 0, err, sizeof(err)) == 200);
+    wait_job(state, sizeof(state), jerr, sizeof(jerr));
+    CHECK(!strcmp(state, "done"));
+    CHECK(count_prefix(d, "savedata-18161531-2026") == 11);                                  /* 10 kept of 13, and the copy this put-in made */
+    snprintf(p, sizeof(p), "%s/savedata-18161531-20261119-120012-SAVE0.db", d); CHECK(exists(p));           /* the newest of the old ones stay ... */
+    snprintf(p, sizeof(p), "%s/savedata-18161531-20261119-120003-SAVE0.db", d); CHECK(exists(p));
+    snprintf(p, sizeof(p), "%s/savedata-18161531-20261119-120002-SAVE0.db", d); CHECK(!exists(p));           /* ... the oldest three go */
+    snprintf(p, sizeof(p), "%s/savedata-18161531-20261119-120000-SAVE0.db", d); CHECK(!exists(p));
+    CHECK(count_prefix(d, "savedata-22222222-") == 3 && count_prefix(d, "savedata-18161531-notes") == 1);
+    snprintf(p, sizeof(p), "%s/old_one.zip", INBOX); CHECK(!exists(p));
+  }
+
+  /* ---- a put-in cut off in the middle of the exchange: the next start takes it back (the record is in the app's folder), and old files are cleaned up too */
+  reset();
+  {
+    char fin[700], alt[760], icon[700], dbp[700], js[3000];
+    snprintf(fin, sizeof(fin), "%s/%s/savedata_prospero/PPSA01234/sdimg_SAVE0", HOME_, UID);
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", fin);
+    snprintf(icon, sizeof(icon), "%s/%s/savedata_prospero_meta/user/PPSA01234/SAVE0_icon0.png", HOME_, UID);
+    snprintf(dbp, sizeof(dbp), "%s/savedata_prospero/%s/db/user/savedata.db", SYS, UID);
+    wfile(fin, "NEW IMAGE", 9);
+    wfile(alt, "OLD IMAGE", 9);
+    snprintf(js, sizeof(js),
+             "{\"v\":1,\"phase\":\"swap\",\"fin\":\"%s\",\"ifin\":\"%s\",\"dbp\":\"%s\",\"ps4\":0,\"replaced\":1,\"bin_replaced\":0,\"icon_existed\":0,\"title_id\":\"PPSA01234\",\"dir_name\":\"SAVE0\","
+             "\"main_title\":\"M\",\"sub_title\":\"S\",\"detail\":\"D\",\"mtime\":\"2026-11-19T12:00:00.00Z\",\"account_id\":\"1\",\"user_id\":\"18161531\",\"user_param\":\"5\",\"blocks\":\"30\","
+             "\"free_blocks\":\"1\",\"size_kib\":\"c00\",\"system_blocks\":\"0\"}", fin, icon, dbp);
+    char jp[500];
+    snprintf(jp, sizeof(jp), "%s/savexport/import.journal", DATA);
+    wfile(jp, js, strlen(js));
+    ps5tm_saves_recover();
+    uint8_t b2[16];
+    FILE *f = fopen(fin, "rb");
+    const size_t n = f ? fread(b2, 1, sizeof(b2), f) : 0;
+    if(f) fclose(f);
+    CHECK(n == 9 && !memcmp(b2, "OLD IMAGE", 9) && !exists(alt) && !exists(jp));
   }
 
   /* ---- a game started while the new image was written and read back: the job asks again before the exchange, fails with the reason, changes nothing */

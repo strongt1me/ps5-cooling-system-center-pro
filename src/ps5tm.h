@@ -825,6 +825,7 @@ int           ps5tm_orig_busy(void);
 /* At the start of the app: what was open when it ended is reported (a choice that was waiting is gone, a delete that was under way left the rest of the original)
    and the note about it removed. */
 void          ps5tm_orig_recover(void);
+void          ps5tm_saves_recover(void);   /* at start: an exchange of save images that a run did not finish is finished or taken back; old copies of the save database and unused uploads go */
 /* The convert queue waits here before it starts the next entry, as long as a choice of an earlier one is still to be carried out (at most max_s). */
 void          ps5tm_orig_gate(int max_s);
 struct cJSON *ps5tm_orig_plan_json(const char *title_id, int *http);

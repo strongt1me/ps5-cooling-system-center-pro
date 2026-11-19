@@ -388,7 +388,12 @@ open_impl(const char *image, const uint8_t *sealed, const char *mount_dir, savem
   m->handle = h;
   snprintf(m->image, sizeof(m->image), "%s", image);
   snprintf(m->mount, sizeof(m->mount), "%s", mount_dir);
-  return 0;                                                      /* the identity and the lock stay with the caller until savemnt_close */
+  /* The mount stands: the fan control gets its identity and the Sony lock back now, not at savemnt_close. What is done in the mount is reading and writing files, and
+     that takes seconds to minutes for a large save; the fan loop, the crash handler and the power options must not wait for it. savemnt_close takes both again. */
+  ps5tm_platform_escalate();
+  ps5tm_sony_api_unlock();
+  m->released = 1;
+  return 0;
 }
 
 int
@@ -406,6 +411,16 @@ savemnt_close(savemnt_t *m, char *err, size_t err_len) {
   if(err_len) err[0] = '\0';
   if(!m || !m->open) return 0;
   int rc = 0;
+  if(m->released) {                                               /* the save-data service's identity and the lock again, for the unmount */
+    m->released = 0;
+    ps5tm_sony_api_lock();
+    if(ps5tm_platform_escalate_as(AUTHID_SAVEDATA) != 0) {
+      ps5tm_platform_escalate();
+      ps5tm_sony_api_unlock();
+      snprintf(err, err_len, "Die Rechte für den Spielstand-Dienst ließen sich zum Aushängen nicht setzen.");
+      return -1;                                                  /* still mounted (m->open stays 1): the caller says "restart the console", as for any unmount that fails */
+    }
+  }
   umount_opt_t uopt;
   memset(&uopt, 0, sizeof(uopt));
   fn_init_umount(&uopt);
