@@ -1,51 +1,29 @@
-# PS5 Cooling & System Center – Pro v1.86.6
+# PS5 Cooling & System Center – Pro v1.86.7
 
 ## Highlights
-- **„Original danach“ beim Konvertieren, Kopieren und Entpacken:** Nach dem Vorgang kann man das Original **behalten** (wie bisher), **löschen** oder **an einen Ort verschieben, den ShadowMountPlus nicht durchsucht**. So liegt derselbe Titel nicht mehr zweimal auf der Konsole, und ShadowMountPlus meldet ihn nicht doppelt. In Browser-App und Vollbild-App; Löschen fragt vorher und nennt den Namen.
-- **Kraken Mount v0.3.0** ist eingebettet: Spielstände gehen nicht mehr verloren, wenn ein Spiel eine eigene Spielstand-Bibliothek im `fakelib` mitbringt, `.pkg`-Spiele bekommen AMPR EMU NG, ein noch kopiertes Spiel wird übersprungen, Titelmusik und Spielnamen in der Sprache der Konsole.
-- **Neu bei GitHub:** Jedes Release trägt eine Liste für den **Payload Manager von itsPLK** (`payload-manager.json`); die App lässt sich so von dort laden, mit SHA-256-Prüfung.
-
-## Neu
-### Original danach
-- **Die Auswahl** steht in den Fenstern „Konvertieren“, „Kopieren“ und „Entpacken“ (auch bei „Zur Warteschlange“) und in der Vollbild-App: **Behalten** (Vorgabe), **Löschen** oder **Verschieben**.
-- **Verschieben:** Datenträger wählen (interne SSD, M.2-Erweiterung, USB; die Auswahl zeigt den freien Platz) und den Ordner; vorgeschlagen wird `<Laufwerk>/PS5-Sicherung/Spiele`, „Ordner wählen“ öffnet eine kleine Auswahl. Die App prüft den Ordner schon beim Eintippen und sperrt den Start, wenn **ShadowMountPlus dort suchen würde** (`homebrew`, `etaHEN/games`, bei USB und M.2 die Wurzel bis zwei Ebenen tief), wenn am Ziel schon etwas gleich heißt, der Platz nicht reicht, der Weg über eine Verknüpfung führt oder es ein Ordner der Konsole ist.
-- **Sicher:** Gelöscht oder verschoben wird erst, **nachdem der Vorgang gut zu Ende ging** und sein Ergebnis da ist. Scheitert er oder wird er abgebrochen, bleibt das Original unberührt. Bei „Schnell“ als Prüfung löscht die App nie. **Verschieben** macht zuerst eine geprüfte Kopie (jede Datei zurückgelesen und verglichen, `.sha256` daneben) und löscht das Original erst danach; scheitert ein Schritt, bleibt es, wo es war. Die Spielstände werden nie angefasst.
-- **Ablauf:** Die App wartet, bis nichts anderes mehr läuft; die Konvertier-Warteschlange startet den nächsten Eintrag erst, wenn das Original des vorigen erledigt ist. Das Ende kommt als Meldung ohne Ton, im Fenster des Vorgangs zeigt eine Zeile den Stand; der Verlauf führt das Löschen als „Original“.
-- Beim Entpacken ersetzt die Auswahl den früheren Schalter „Abbild danach löschen“.
-- Neue Schnittstelle (`docs/API.md`): `GET /api/v1/library/orig/plan`, `orig/check`, `orig/status` und die Felder `orig_after` und `orig_dest` an den Starts.
-
-### Kraken Mount
-- **Kraken Mount v0.3.0** (quer3q): Spielstände nutzen nicht mehr die Spielstand-Bibliothek aus dem `fakelib` eines Spiels (sie ließ Spielstände verschwinden); `.pkg`-Spiele bekommen immer AMPR EMU NG; dlc_emu und pgo_stub stecken in der Datei; ein Spiel, das noch kopiert wird, wird übersprungen; fehlt die Quelle eines Spiels 5 Minuten, nimmt Kraken Mount es vom Startbildschirm; Titelmusik und Spielnamen in der Sprache der Konsole.
-- Eine geladene ältere Fassung nimmt die App nur noch, wenn sie **neuer** ist als die eingebettete.
-
-### Abbilder
-- Ein Abbild, das der Direktleser nicht kennt (zum Beispiel ein `.ffpfs`), wird nicht mehr alle 10 Minuten neu geöffnet: Ein Fehlschlag wird wie ein Erfolg nach Größe und Zeit der Datei gemerkt, höchstens 6 Stunden lang; „Prüfung anfordern“ liest alles neu. Das spart Schreibvorgänge und Protokollzeilen (vorher 490 Mal in drei Tagen).
-
-### GitHub
-- `payload-manager.json` als fünfte Datei jedes Releases: Name, Dateiname, Link zur ELF desselben Releases, Version, Kategorie, Beschreibung, Datum und SHA-256 (aus der gebauten Datei berechnet).
-
-## Verbesserungen
-- Das eigene Entpacken der App legt `param.json` und `param.sfo` zuletzt an (unter einem Hilfsnamen, am Ende umbenannt): Ein halb entpackter Ordner wird nie für ein Spiel gehalten. Reste einer früheren Sitzung räumt die App beim ersten Auftrag weg.
-- Die Prüfung der Abbilder liest höchstens 40 Abbilder je Runde und prüft vor dem Aushängen noch einmal, dass der Titel nicht inzwischen läuft; eine Bremse schützt vor einer Schleife, wenn das kurze Einhängen scheitert.
-- „USB auswerfen“ fragt bei Kraken-Spielen den Prozess, ob das Spiel läuft.
-- `tools/release.sh` sucht vor dem Veröffentlichen nach Mustern persönlicher Daten und fragt nur noch einmal vor dem Push und dem Release; `tools/deploy.sh` sendet die Kacheln nicht, wenn die ELF nicht lief.
-- Handbuch in sieben Sprachen (neuer Abschnitt „Original danach“, Kraken Mount 0.3.0), Übersetzungen der neuen Texte in sechs Sprachen.
+- **„Original danach“ klappt jetzt auch bei einem Spiel, das ShadowMountPlus eingehängt hat:** Beim Löschen oder Verschieben des Originals hängt die App den Titel bei ShadowMountPlus zuerst aus und meldet ihn dann ab. Vorher lehnte ShadowMountPlus das Abmelden eines eingehängten Titels ab („title runtime could not be released; its mount or sandbox is still busy“), und das Original blieb neben der geprüften Kopie liegen.
 
 ## Fehlerbehebungen
-- **Prüfrunde 18.11.2026 (REA, Analysator, vier Prüfer mit Gegenprüfung):** 14 Funde behoben, unter anderem eine Spieleliste, die bei sehr vielen Spielen zu früh abschnitt, ein Auswerfen, das ein laufendes Kraken-Spiel nicht erkannte, ein Dump-Forge-„Beenden“, das bei einem stummen Programm hing, eine Auswahlliste im Browser, die bei jedem Zeichnen neu entstand, und zwanzig kleine Fehler des Analysators (Rückgabewerte, Nullzeiger, Grenzen).
-- **Sicherheit der neuen Funktion (unabhängiger Review, 10 Funde):** „Schnell“ löscht nie; ein entpackter Ordner muss das Spiel enthalten (`sce_sys/param.json`); eine Kopie, die Verknüpfungen oder Sonderdateien ausgelassen hat, gilt nicht als vollständig; Verschieben kopiert genau den Pfad des Originals; die interne SSD funktioniert als Ziel; Groß- und Kleinschreibung zählt bei den Suchordnern von ShadowMountPlus nicht (exFAT/FAT); Ordner der Konsole sind als Ziel gesperrt; was die Konsole selbst installiert hat, löscht die App nie; ein nicht antwortendes ShadowMountPlus gilt nicht als „kennt den Titel nicht“.
+- **Prüfrunde zu „Original danach“ (23 Funde, 19 bestätigt):** Solange ein Original kopiert oder gelöscht wird, startet kein anderer Auftrag der App mehr dazwischen (vorher konnte die Warteschlange den nächsten Eintrag starten, und Original und Kopie blieben beide liegen). Das Abbild eines Entpackens, das ShadowMountPlus ohne Ergebniswert beendet, wird bei „Löschen“ nicht gelöscht. Beide Oberflächen schicken den Pfad des Originals mit; liegt der Titel beim Start woanders, lehnt die App ab. Gelöscht wird nur, was ein Spiel ist (Ordner mit `sce_sys/param.json`, Abbild mit bekannter Endung). „Verschieben“ kopiert den Pfad, nicht den Titel. Ein Neustart der App mitten in der Wahl wird beim nächsten Start gemeldet. Teilweise Gelöschtes wird als solches gemeldet.
+- **„Verschieben“ auf demselben Laufwerk geht jetzt sofort:** Liegt der Zielordner auf dem USB- oder M.2-Laufwerk des Originals, wird es nur umbenannt (keine Kopie, kein freier Platz nötig). Auf der internen SSD und wenn das Dateisystem es verweigert, wird wie bisher kopiert, geprüft und gelöscht.
+- **Weitere kleine Korrekturen:** FAT32-Ziele mit Dateien über 4 GB werden gleich bei der Prüfung abgelehnt; ein unfertiger Rest einer früheren Kopie am Ziel wird ersetzt; lange Zielpfade mit Umlauten gehen bei der Prüfung nicht mehr verloren; die Zeitgrenze der Kopie sind 24 Stunden.
+- **Werkzeuge:** `deploy.sh` sendet nicht, solange die App arbeitet; `release.sh` führt vorher die Host-Tests aus; `make release` kennt alle Release-Dateien.
+- **Original verschieben oder löschen bei einem eingehängten Titel:** Führt ShadowMountPlus den Titel als eingehängt (das Spiel läuft nicht), hängt die App ihn über dessen eigene Schnittstelle aus, bevor sie ihn abmeldet; ein Titel, der läuft, wird nie ausgehängt. Lehnt ShadowMountPlus das Abmelden mit „busy“ ab, versucht die App es nach drei Sekunden noch einmal, insgesamt dreimal. Jede andere Ablehnung beendet es sofort.
+- Dasselbe gilt für „Spiel löschen“ bei einem Titel von ShadowMountPlus.
+- **Unverändert sicher:** Wird das Abmelden am Ende doch abgelehnt, löscht die App nichts, sagt es und lässt das Original und die Kopie liegen.
 
 ## Hinweise
-- **An der Konsole geprüft** (mit zwei echten PS5-Spielen, jedes Mal danach zurückgesetzt): Konvertieren + Verschieben, Kopieren + Löschen, Entpacken über ShadowMountPlus + Abbild verschieben, Abbrechen (das Original bleibt), die Warteschlange mit zwei Einträgen und die Ablehnung falscher Ziele; dazu Kraken Mount v0.3.0 mit Spielstand speichern und laden. **Nicht geprüft:** ein USB- oder M.2-Laufwerk als Ziel, die Bedienung der Vollbild-App mit dem Controller, ein Entpacken, bei dem ShadowMountPlus das Abmelden ablehnt.
-- Ein **PFS-Abbild** (`.ffpfs`) lässt sich nicht entpacken: ShadowMountPlus meldet „Permission denied“, und das eigene Entpacken der App kennt das Format nicht. Das Original bleibt dann liegen, auch wenn „Löschen“ gewählt war.
-- Beim ersten Start nach dem Wechsel auf Kraken Mount v0.3.0 setzt es den `fakelib` **jedes** Spiels einmal neu zusammen; das dauert und braucht freien Platz. Eine ältere laufende Fassung wird erst nach Aus- und Einschalten ersetzt.
-- Ob der Payload Manager der Weiterleitung von `latest/download` bei einer Quellliste folgt, ist nicht belegt.
-- Die neue ELF an Port 9021 senden und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein).
+- **An der Konsole geprüft** (Spielordner mit 132 Dateien, 1,6 GB, auf einem USB-Laufwerk, Titel eingehängt): Konvertieren zu `.ffpfsc` mit „Original verschieben“ auf die M.2-Erweiterung. Vor der Korrektur lehnte ShadowMountPlus das Abmelden ab; mit ihr wurde der Titel ausgehängt, abgemeldet und das Original nach der geprüften Kopie gelöscht. Damit ist auch ein USB-Laufwerk als Quelle und die M.2-Erweiterung als Ziel geprüft.
+- **An der Konsole geprüft (19.11.2026, Testkopie mit eigener Titel-ID):** „Verschieben“ auf dasselbe USB- und auf dasselbe M.2-Laufwerk (nur umbenannt, in Sekunden, 132 Dateien unverändert); Entpacken eines `.ffpfsc` und eines `.exfat` über ShadowMountPlus mit „Löschen“ (ShadowMountPlus meldet einen Ergebniswert, das Abbild wurde gelöscht); Neustart der App mitten in einer Wahl (keine Daten verloren, die Meldung kommt beim nächsten Start); `deploy.sh` sendet nicht, solange die App arbeitet; die Vollbild-App am Controller: Konvertieren mit „Original danach: Löschen“.
+- **Noch nicht geprüft:** „Verschieben“ und „Entpacken“ in der Vollbild-App am Controller (sie nutzen dieselbe Anfrage wie „Löschen“, getestet nur am PC); das Umbenennen auf einem Laufwerk mit FAT32.
+- Ein **PFS-Abbild** (`.ffpfs`) lässt sich weiterhin nicht entpacken (ShadowMountPlus meldet „Permission denied“, das eigene Entpacken der App kennt das Format nicht); das Original bleibt dann liegen.
+- Ob der Payload Manager von itsPLK der Weiterleitung von `latest/download` bei einer Quellliste folgt, ist nicht belegt.
+- Die neue ELF an Port 9021 senden und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein). Alles andere ist wie in v1.86.6.
 
 ## Downloads
 | Datei | Wofür |
 |---|---|
-| `PS5_Cooling_System_Center_v1.86.6.elf` | Das Hauptprogramm (an Port 9021 senden) |
+| `PS5_Cooling_System_Center_v1.86.7.elf` | Das Hauptprogramm (an Port 9021 senden) |
 | `FAKE86921.zip` | Vollbild-Kachel (mit Dump Forge): Ordner nach `/data/homebrew/` kopieren |
 | `FAKE86922.zip` | Browser-Kachel (mit Dump Forge): Ordner nach `/data/homebrew/` kopieren |
 | `LIESMICH.txt` | Anleitung |
