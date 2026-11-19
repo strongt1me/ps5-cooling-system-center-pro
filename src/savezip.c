@@ -401,6 +401,8 @@ szr_read(szr_t *z, unsigned i, uint8_t **out, size_t *len, size_t max_len) {
   const szr_entry_t *e = szr_at(z, i);
   if(!e || e->is_dir) return SZ_E_BAD;
   if(e->usize > max_len) return SZ_E_TOO_BIG;
+  /* the packed size is read into memory whole: a hostile entry with a tiny usize and a huge csize must not make it; deflate can make data a little larger, never much */
+  if(e->method == 0 ? e->csize != e->usize : e->csize > e->usize + e->usize / 8 + 1024) return SZ_E_BAD;
   uint64_t start;
   int rc = data_start(z, e, &start);
   if(rc != SZ_OK) return rc;

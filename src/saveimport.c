@@ -73,11 +73,13 @@ tick(void *ctx, uint64_t bytes) {
   return stopped(r);
 }
 
-/* A slot is the name after "sdimg_": letters, digits, "_", "-", "."; never starting with a dot, and never one of the console's own copies. */
+/* A slot is the name after "sdimg_": letters, digits, "_", "-", "."; never starting with a dot, never one of the console's own copies, and never a name that ends the way the
+   files of a put-in that was cut off do (".ps5cc-alt", ".ps5cc-neu": the old image kept for the way back, the new one not yet in place). */
 static int
 slot_ok(const char *s) {
   const size_t n = s ? strlen(s) : 0;
   if(n < 1 || n > 64 || s[0] == '.' || !strncmp(s, "sce_bu_", 7)) return 0;
+  if(n > 10 && (!strcmp(s + n - 10, ".ps5cc-alt") || !strcmp(s + n - 10, ".ps5cc-neu"))) return 0;
   for(size_t i = 0; i < n; i++) {
     const char c = s[i];
     if(!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '-' || c == '.')) return 0;
@@ -100,6 +102,15 @@ base_of(const char *name, size_t *dir_len) {
   const char *s = strrchr(name, '/');
   *dir_len = s ? (size_t)(s - name) + 1 : 0;
   return s ? s + 1 : name;
+}
+
+/* A folder entry that is the save's folder itself or one on the way to it ("x/" for the prefix "x/"; the reader has taken the slash off its name): 7-Zip and the file
+   manager of Windows write them, they hold nothing and are no file outside of the save. */
+static int
+is_prefix_dir(const szr_entry_t *e, const char *prefix, size_t pl) {
+  if(!e->is_dir) return 0;
+  const size_t n = strlen(e->name);
+  return n < pl && !strncmp(e->name, prefix, n) && prefix[n] == '/';
 }
 
 static int
@@ -176,9 +187,11 @@ inspect_ps4(szr_t *z, saveimport_info_t *info, chives_t *geo, uint8_t **sfo_out,
   info->prefix[pl] = 0;
   for(unsigned i = 0; i < n; i++) {
     const szr_entry_t *e = szr_at(z, i);
+    if(is_prefix_dir(e, info->prefix, pl)) continue;
     if(strncmp(e->name, info->prefix, pl)) { free(sfo); why_set(info, "Die ZIP-Datei enthält Dateien außerhalb des Spielstand-Ordners (%.100s).", e->name); return 1; }
     if(e->is_dir) { info->dirs++; continue; }
     if(chives_is_sidecar(e->name + pl) || is_foreign_sidecar(e->name + pl)) continue;
+    if(e->method != 0 && e->usize > SI_MEM_MAX) { free(sfo); why_set(info, "Eine Datei in der ZIP-Datei ist gepackt und größer als %u MB (%.100s): So große gepackte Dateien liest die App nicht.", SI_MEM_MAX >> 20, e->name); return 1; }
     info->files++;
     info->bytes += e->usize;
   }
@@ -273,9 +286,11 @@ inspect_open(const char *zip, szr_t **zp, saveimport_info_t *info, chives_t *geo
   /* every entry lies in the save's folder; count what is there */
   for(unsigned i = 0; i < n; i++) {
     const szr_entry_t *e = szr_at(z, i);
+    if(is_prefix_dir(e, info->prefix, pl)) continue;
     if(strncmp(e->name, info->prefix, pl)) { why_set(info, "Die ZIP-Datei enthält Dateien außerhalb des Spielstand-Ordners (%.100s).", e->name); return 0; }
     if(e->is_dir) { info->dirs++; continue; }
     if((int)i == side || is_foreign_sidecar(e->name + pl)) continue;
+    if(e->method != 0 && e->usize > SI_MEM_MAX) { why_set(info, "Eine Datei in der ZIP-Datei ist gepackt und größer als %u MB (%.100s): So große gepackte Dateien liest die App nicht.", SI_MEM_MAX >> 20, e->name); return 0; }
     info->files++;
     info->bytes += e->usize;
   }
@@ -431,6 +446,37 @@ copy_new(const char *src, const char *dst, mode_t mode) {
   if(rc == 0) (void)chmod(dst, mode);
   if(rc != 0) unlink(dst);
   return rc;
+}
+
+/* Reads up to len bytes, until the end of the file; the count, or -1. */
+static ssize_t
+read_upto(int fd, uint8_t *buf, size_t len) {
+  size_t got = 0;
+  while(got < len) {
+    const ssize_t n = read(fd, buf + got, len - got);
+    if(n < 0 && errno == EINTR) continue;
+    if(n < 0) return -1;
+    if(n == 0) break;
+    got += (size_t)n;
+  }
+  return (ssize_t)got;
+}
+
+/* Are the two files the same, byte for byte? */
+static int
+same_file(const char *x, const char *y) {
+  const int fx = open(x, O_RDONLY), fy = open(y, O_RDONLY);
+  uint8_t *bx = malloc(2 * (size_t)SI_BUF);
+  int same = fx >= 0 && fy >= 0 && bx != NULL;
+  while(same) {
+    const ssize_t nx = read_upto(fx, bx, SI_BUF), ny = read_upto(fy, bx + SI_BUF, SI_BUF);
+    if(nx < 0 || nx != ny || memcmp(bx, bx + SI_BUF, (size_t)nx) != 0) same = 0;
+    else if(nx < (ssize_t)SI_BUF) break;
+  }
+  free(bx);
+  if(fx >= 0) close(fx);
+  if(fy >= 0) close(fy);
+  return same;
 }
 
 static int
@@ -594,54 +640,68 @@ cmp_donor(const void *x, const void *y) {
   return a->size < b->size ? -1 : a->size > b->size ? 1 : 0;
 }
 
+#define SI_DONOR_CAND 192                                  /* the candidates kept: the title of the incoming save first, so that the cap never cuts the best ones */
+
+typedef struct { donor_t *v; unsigned n; } donors_t;
+
+/* The images of one title folder that can be a donor, added to c (an app's folder is never opened: its data is not touched, not even read). */
+static void
+donor_scan_title(const saveimport_args_t *a, const saveimport_info_t *info, donors_t *c, int dps4, const char *root, const char *title) {
+  if(c->n >= SI_DONOR_CAND || (a->skip_title && a->skip_title(title))) return;
+  char tdir[PATH_MAX];
+  if(snprintf(tdir, sizeof(tdir), "%s/%s", root, title) >= (int)sizeof(tdir)) return;
+  DIR *sd = opendir(tdir);
+  while(sd && c->n < SI_DONOR_CAND) {
+    struct dirent *se = readdir(sd);
+    if(!se) break;
+    if(strncmp(se->d_name, "sdimg_", 6) || !slot_ok(se->d_name + 6)) continue;
+    char bin[PATH_MAX], img[PATH_MAX];
+    struct stat st, ist;
+    if(dps4 && (snprintf(bin, sizeof(bin), "%s/%s.bin", tdir, se->d_name + 6) >= (int)sizeof(bin) || stat(bin, &st) != 0)) continue;   /* a PS4 image needs its key file */
+    if(snprintf(img, sizeof(img), "%s/%s", tdir, se->d_name) >= (int)sizeof(img) || stat(img, &ist) != 0 || !S_ISREG(ist.st_mode) || (uint64_t)ist.st_size > SI_DONOR_MAX) continue;
+    donor_t *d = &c->v[c->n++];
+    d->size = (uint64_t)ist.st_size;
+    d->ps4 = dps4;
+    snprintf(d->title, sizeof(d->title), "%.15s", title);
+    snprintf(d->slot, sizeof(d->slot), "%.99s", se->d_name + 6);
+    d->rank = dps4 != info->ps4 ? 3 : strcmp(title, info->title_id) ? 2 : strcmp(se->d_name + 6, info->slot) ? 1 : 0;
+  }
+  if(sd) closedir(sd);
+}
+
 static int
 owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *sfo, size_t sfo_len, run_t *r, char *note, size_t note_len) {
   note[0] = 0;
   static const struct { const char *dir; int ps4; } k_areas[2] = { { "savedata_prospero", 0 }, { "savedata", 1 } };
-  donor_t cand[96];
-  unsigned nc = 0;
-  for(int ai = 0; ai < 2; ai++) {
+  donors_t dc = { calloc(SI_DONOR_CAND, sizeof(donor_t)), 0 };       /* on the heap: this runs on a job thread with a small stack */
+  donor_t *cand = dc.v;                                              /* NULL (no memory): nothing is collected, the note says no donor was found */
+  for(int ai = 0; ai < 2 && cand; ai++) {
     const int dps4 = k_areas[ai].ps4;
     char root[PATH_MAX];
     if(snprintf(root, sizeof(root), "%s/%s/%s", a->home_dir, a->uid, k_areas[ai].dir) >= (int)sizeof(root)) continue;
+    if(dps4 == info->ps4) donor_scan_title(a, info, &dc, dps4, root, info->title_id);      /* the incoming save's own title first */
     DIR *d = opendir(root);
     while(d) {
       struct dirent *te = readdir(d);
       if(!te) break;
       if(dps4 ? !cusa_ok(te->d_name) : !title_ok(te->d_name)) continue;
-      char tdir[PATH_MAX];
-      if(snprintf(tdir, sizeof(tdir), "%s/%s", root, te->d_name) >= (int)sizeof(tdir)) continue;
-      DIR *sd = opendir(tdir);
-      while(sd && nc < sizeof(cand) / sizeof(cand[0])) {
-        struct dirent *se = readdir(sd);
-        if(!se) break;
-        if(strncmp(se->d_name, "sdimg_", 6) || !slot_ok(se->d_name + 6)) continue;
-        char bin[PATH_MAX], img[PATH_MAX];
-        struct stat st, ist;
-        if(dps4 && (snprintf(bin, sizeof(bin), "%s/%s.bin", tdir, se->d_name + 6) >= (int)sizeof(bin) || stat(bin, &st) != 0)) continue;   /* a PS4 image needs its key file */
-        if(snprintf(img, sizeof(img), "%s/%s", tdir, se->d_name) >= (int)sizeof(img) || stat(img, &ist) != 0 || !S_ISREG(ist.st_mode) || (uint64_t)ist.st_size > SI_DONOR_MAX) continue;
-        cand[nc].size = (uint64_t)ist.st_size;
-        cand[nc].ps4 = dps4;
-        snprintf(cand[nc].title, sizeof(cand[nc].title), "%.15s", te->d_name);
-        snprintf(cand[nc].slot, sizeof(cand[nc].slot), "%.99s", se->d_name + 6);
-        cand[nc].rank = dps4 != info->ps4 ? 3 : strcmp(te->d_name, info->title_id) ? 2 : strcmp(se->d_name + 6, info->slot) ? 1 : 0;
-        nc++;
-      }
-      if(sd) closedir(sd);
+      if(dps4 == info->ps4 && !strcmp(te->d_name, info->title_id)) continue;                 /* done above */
+      donor_scan_title(a, info, &dc, dps4, root, te->d_name);
     }
     if(d) closedir(d);
   }
-  qsort(cand, nc, sizeof(cand[0]), cmp_donor);                    /* the best rank first, the smallest image first within it */
+  const unsigned nc = cand ? dc.n : 0;
+  if(nc > 1) qsort(cand, nc, sizeof(donor_t), cmp_donor);        /* the best rank first, the smallest image first within it */
 
   uint8_t params[1024];
   int got = -1;
   unsigned tries = 0;
   char ddir[PATH_MAX], dmnt[PATH_MAX];
-  if(snprintf(ddir, sizeof(ddir), "%s/donor", a->work_dir) >= (int)sizeof(ddir) || snprintf(dmnt, sizeof(dmnt), "%s/donor_mnt", a->work_dir) >= (int)sizeof(dmnt)) return 0;
+  if(snprintf(ddir, sizeof(ddir), "%s/donor", a->work_dir) >= (int)sizeof(ddir) || snprintf(dmnt, sizeof(dmnt), "%s/donor_mnt", a->work_dir) >= (int)sizeof(dmnt)) { free(cand); return 0; }
   for(int rank = 0; rank <= 3 && got < 0 && tries < 8; rank++) {
     for(unsigned i = 0; i < nc && got < 0 && tries < 8; i++) {
       if(cand[i].rank != rank) continue;
-      if(stopped(r)) return ECANCELED;
+      if(stopped(r)) { free(cand); return ECANCELED; }
       tries++;
       char src[PATH_MAX], bin[PATH_MAX], dimg[PATH_MAX];
       uint8_t sealed[SAVEMNT_SEALED_BYTES];
@@ -657,6 +717,10 @@ owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *
         if(bn != (ssize_t)sizeof(sealed)) continue;
       }
       mkdir(ddir, 0755);
+      {
+        uint64_t room = 0;                                                  /* the copy of the donor takes room of its own: too little is no donor, not a half-written copy */
+        if(free_space(a->work_dir, &room) != 0 || room < cand[i].size + SI_MIN_FREE) continue;
+      }
       if(copy_new(src, dimg, 0755) != 0) { unlink(dimg); continue; }
       mkdir(dmnt, 0755);
       savemnt_t dm;
@@ -677,13 +741,14 @@ owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *
             if(nz) { memcpy(params, pr, sizeof(params)); valid = 1; }
           }
         }
-        if(savemnt_close(&dm, e2, sizeof(e2)) != 0) { fail(r, "%s Es wurde nichts verändert; bitte die Konsole neu starten, bevor es noch einmal versucht wird.", e2); return -1; }
+        if(savemnt_close(&dm, e2, sizeof(e2)) != 0) { free(cand); fail(r, "%s Es wurde nichts verändert; bitte die Konsole neu starten, bevor es noch einmal versucht wird.", e2); return -1; }
       }
       rmdir(dmnt);
       unlink(dimg);
       if(valid) got = rank;
     }
   }
+  free(cand);
   rmdir(ddir);
   if(got == 0) {
     savesfo_set_raw(sfo, sfo_len, "PARAMS", 0, params, 1024);
@@ -783,7 +848,9 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
       if(snprintf(dm, sizeof(dm), "%s/donor_mnt", a->work_dir) < (int)sizeof(dm) && snprintf(dd, sizeof(dd), "%s/donor", a->work_dir) < (int)sizeof(dd)) {
         if(rmdir(dm) != 0 && errno != ENOENT) {
           char e3[300];
-          if(savemnt_umount_path(dm, e3, sizeof(e3)) == 0) rmdir(dm);
+          /* a donor that would not let go: its image is the file the mount lies on, so it stays where it is and nothing else is started on top of it */
+          if(savemnt_umount_path(dm, e3, sizeof(e3)) != 0) { fail(r, "Von einem früheren Versuch ist noch ein Spielstand eingehängt, und die Konsole lässt ihn nicht los. %s Die Konsole neu starten, dann geht es wieder.", e3); goto done; }
+          rmdir(dm);
         }
         DIR *dq = opendir(dd);
         if(dq) {
@@ -945,9 +1012,19 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
       fail(r, "Die Spielstand-Datenbank dieses Benutzers lässt sich nicht lesen. %s Es wurde nichts verändert.", e2);
       goto done;
     }
+    /* a database that is not in order now is found out now, not after the images were exchanged (where the only way back would be a copy of a damaged file) */
+    if(stat(dbp0, &st) == 0 && savedb_check(dbp0, e2, sizeof(e2)) != 0) {
+      fail(r, "Die Spielstand-Datenbank dieses Benutzers ist nicht in Ordnung. %s Es wurde nichts verändert.", e2);
+      goto done;
+    }
   }
 
-  /* 5. the console is changed from here on */
+  /* 5. the console is changed from here on. First the last look at the one thing that can have changed in the meantime: a game started while the files were written and read back
+     holds the image that is about to be exchanged */
+  if(h->may_commit) {
+    char why[240] = "";
+    if(h->may_commit(h->base.ctx, why, sizeof(why))) { fail(r, "%s Es wurde nichts verändert.", why[0] ? why : "Die Konsole darf jetzt nicht verändert werden."); goto done; }
+  }
   if(h->no_return) h->no_return(h->base.ctx);
   committed = 1;
   phase(r, "Spielstand installieren", 0);
@@ -975,21 +1052,40 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
     struct stat st;
     int e = mkdir_like_parent(dir);
     if(e) { fail(r, "Der Ordner des Spielstands ließ sich nicht anlegen: %s", ps5tm_io_strerror(e)); goto done; }
-    /* a cut-off earlier installation: the old files go back, the unfinished ones go */
-    if(lstat(alt, &st) == 0) (void)rename(alt, fin);
+    /* a cut-off earlier installation: where the file is gone and only the old one is left, the old one goes back (it is the save); where both are there, the old one is a
+       leftover and is taken over by the next rename. The unfinished new ones go. */
+    /* a PS4 image and its key file are one pair: where the old key file is aside and the new one never arrived, the run was cut between the two renames, and the old PAIR goes
+       back (the image too, though a new one is in place) */
+    const int pair_cut = ps4 && lstat(balt, &st) == 0 && lstat(bfin, &st) != 0;
+    if(lstat(alt, &st) == 0 && (lstat(fin, &st) != 0 || pair_cut)) (void)rename(alt, fin);
     unlink(neu);
-    if(lstat(ialt, &st) == 0) (void)rename(ialt, ifin);
+    if(lstat(ialt, &st) == 0 && lstat(ifin, &st) != 0) (void)rename(ialt, ifin);
     unlink(ineu);
     if(ps4) {
-      if(lstat(balt, &st) == 0) (void)rename(balt, bfin);
+      if(lstat(balt, &st) == 0 && lstat(bfin, &st) != 0) (void)rename(balt, bfin);
       unlink(bneu);
     }
     replaced = lstat(fin, &st) == 0;
 
-    e = copy_new(img, neu, 0644);
-    if(e) { fail(r, "Das Abbild ließ sich nicht an den Platz des Spielstands kopieren: %s", ps5tm_io_strerror(e)); goto done; }
+    /* the image: on the same file system it is moved (nothing half written can come of that), else copied and compared with the one that was checked */
+    e = 0;
+    int moved = 0;
+    {
+      /* what was written while it was mounted (and by the second mount) is in the cache of the image file: made lasting first, because a rename moves only the name */
+      const int ifd = open(img, O_RDONLY);
+      const int lasting = ifd >= 0 && fsync(ifd) == 0;
+      if(ifd >= 0) close(ifd);
+      moved = lasting && rename(img, neu) == 0;
+    }
+    if(moved) (void)chmod(neu, 0644);
+    else {
+      e = copy_new(img, neu, 0644);
+      if(!e && !same_file(img, neu)) { unlink(neu); e = EIO; }
+    }
+    if(e) { fail(r, "Das Abbild ließ sich nicht an den Platz des Spielstands legen: %s", ps5tm_io_strerror(e)); goto done; }
     if(ps4) {
       e = copy_new(bin_tmp, bneu, 0644);
+      if(!e && !same_file(bin_tmp, bneu)) { unlink(bneu); e = EIO; }
       if(e) { unlink(neu); fail(r, "Die Schlüsseldatei ließ sich nicht an den Platz des Spielstands kopieren: %s", ps5tm_io_strerror(e)); goto done; }
       bin_replaced = lstat(bfin, &st) == 0;
     }
@@ -1046,11 +1142,24 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
     struct stat st;
     db_existed = stat(dbp, &st) == 0;
     char e2[400];
-    int dbr = 0;
+    int dbr = 0, db_written = 0, dbb_mine = 0;
     dbb[0] = 0;
     if(db_existed && a->db_backup_dir && a->db_backup_dir[0]) {
-      if(mkdir_like_parent(a->db_backup_dir) != 0 || snprintf(dbb, sizeof(dbb), "%s/savedata-%s-%s.db", a->db_backup_dir, a->uid, stamp) >= (int)sizeof(dbb)) dbr = -1;
-      else if(savedb_backup(dbp, dbb, e2, sizeof(e2)) != 0) dbr = -1;
+      if(mkdir_like_parent(a->db_backup_dir) != 0) dbr = -1;
+      else {
+        /* a name nobody has: the second, the slot, and a count if it is taken all the same; a copy that was not made here is never the one that is put back */
+        for(unsigned k = 0; k < 100 && dbr == 0; k++) {
+          char suf[16] = "";
+          if(k) snprintf(suf, sizeof(suf), "-%u", k + 1);
+          if(snprintf(dbb, sizeof(dbb), "%s/savedata-%s-%s-%s%s.db", a->db_backup_dir, a->uid, stamp, info.slot, suf) >= (int)sizeof(dbb)) dbr = -1;
+          else if(stat(dbb, &st) != 0 && errno == ENOENT) break;
+          else if(k == 99) dbr = -1;
+        }
+        if(dbr == 0) {
+          if(savedb_backup(dbp, dbb, e2, sizeof(e2)) != 0) dbr = -1;
+          else dbb_mine = 1;
+        }
+      }
       if(dbr != 0) snprintf(e2, sizeof(e2), "Die Spielstand-Datenbank ließ sich nicht sichern.");
     } else if(db_existed) {
       dbr = -1;
@@ -1074,21 +1183,24 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
       row.system_blocks = 0;
       int inserted = 0;
       dbr = savedb_upsert(dbp, &row, &inserted, e2, sizeof(e2));
-      if(dbr == 0) dbr = savedb_check(dbp, e2, sizeof(e2));
+      if(dbr == 0) { db_written = 1; dbr = savedb_check(dbp, e2, sizeof(e2)); }
       res->db_inserted = inserted;
     }
     if(dbr != 0) {
-      /* everything goes back as it was */
-      if(db_existed && dbb[0]) {
+      /* everything goes back as it was. The database is put back from its copy only when it was written and then did not check out: where SQLite itself refused (locked, busy, an
+         error) it rolled back and the file is as it was, and a file laid over a database the console may have open would do harm of its own. */
+      int db_back = 1;
+      if(db_written && db_existed && dbb_mine) {
         char dneu[PATH_MAX];
-        if(snprintf(dneu, sizeof(dneu), "%s.ps5cc-neu", dbp) < (int)sizeof(dneu) && copy_new(dbb, dneu, 0644) == 0) (void)rename(dneu, dbp);
+        db_back = snprintf(dneu, sizeof(dneu), "%s.ps5cc-neu", dbp) < (int)sizeof(dneu) && copy_new(dbb, dneu, 0644) == 0 && rename(dneu, dbp) == 0;
       } else if(!db_existed) {
         unlink(dbp);
       }
       if(icon_in) { if(icon_replaced) (void)rename(ialt, ifin); else unlink(ifin); }
       if(bin_in) { if(bin_replaced) (void)rename(balt, bfin); else unlink(bfin); }
       if(image_in) { if(replaced) (void)rename(alt, fin); else unlink(fin); }
-      fail(r, "%s Der Spielstand wurde nicht eingespielt; alles ist wieder so wie vorher.", e2);
+      if(db_back) fail(r, "%s Der Spielstand wurde nicht eingespielt; alles ist wieder so wie vorher.", e2);
+      else fail(r, "%s Der Spielstand wurde nicht eingespielt, und die Spielstand-Datenbank ließ sich nicht aus ihrer Sicherung zurücksetzen. Die Sicherung liegt unter %.200s.", e2, dbb);
       goto done;
     }
   }

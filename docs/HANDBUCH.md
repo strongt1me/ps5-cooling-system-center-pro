@@ -1039,6 +1039,18 @@ ihre Trophäen gehören nicht dazu.
   und ob das Spiel ihn annimmt, zeigt erst ein Start des Spiels. **Nicht unterstützt:** andere Abbildformate neuerer Firmware (zum Beispiel `param.sfo` nur im Abbildkopf),
   ZIP-Dateien ohne `chives.json` und solche mit mehreren Spielständen: Die App nennt den Grund,
   ohne etwas zu ändern. Es läuft immer nur ein Vorgang; eingespielt wird nur, wenn kein Spiel läuft.
+- **Sicherheitsprüfungen beim Übertragen (ab 1.88.0).** Kurz vor dem Punkt ohne Rückkehr (und vor jeder weiteren ZIP-Datei) schaut die App noch einmal, ob
+  inzwischen ein Spiel gestartet wurde, und ändert dann nichts. **Apps** (zum Beispiel YouTube) werden nie eingespielt, und ihre Spielstände dienen auch nicht als Vorlage für die
+  Besitzerangaben. Sind mehrere ZIP-Dateien gewählt, müssen sie zum selben Titel gehören und verschiedene Spielstände enthalten; die Datei wird vor jedem Spielstand neu
+  geprüft. Ein Abbild kommt, wo es geht, per Umbenennen an seinen Platz, sonst als Kopie, die mit dem geprüften Abbild Byte für Byte verglichen wird. Die Datenbank wird nur
+  aus ihrer Kopie zurückgesetzt, wenn sie geschrieben wurde und dann nicht mehr in Ordnung war; scheitert schon das Schreiben (zum Beispiel weil die Konsole sie gerade sperrt),
+  bleibt die Datei, wie sie ist. Die Kopie trägt Datum, Uhrzeit und Spielstand im Namen (`savedata-<Benutzer>-<Zeit>-<Spielstand>.db`). Reste eines unterbrochenen Einspielens
+  (`sdimg_<Spielstand>.ps5cc-alt` und `.ps5cc-neu`) erscheinen nicht als Spielstand; fehlt der Spielstand selbst und nur die alte Fassung ist da, kommt sie beim nächsten Einspielen
+  zurück. ZIP-Dateien mit Ordner-Einträgen (zum Beispiel aus 7-Zip) werden angenommen; gepackte Dateien über 64 MB und Einträge, deren gepackte Größe nicht zur Größe passt,
+  lehnt die App vor dem Start ab. Hat ein Titel mehr als 16 Spielstände, liest „Als ZIP“ nichts aus und sagt es. Die Listen zeigen immer die **neuesten** 60 ZIP-Dateien.
+  **Datenschutz:** Die ZIP-Datei enthält im `param.sfo` die Konto-Kennung und die Besitzerangaben des Benutzers; sie nur an Menschen weitergeben, denen man das zutraut.
+  **Bekannt und nicht geändert:** Während ein Spielstand eingehängt ist (Sekunden bis wenige Minuten), kann die App den Lüfter nicht neu einstellen und die Power-Optionen
+  warten; die zuletzt gesetzte Schwelle bleibt in Kraft. Die Kopien der Spielstand-Datenbank (`/data/PS5-Cooling-Center/savexport/db-backup`) räumt die App nicht von selbst auf.
 - **PS4-Spielstände (ab 1.87.0).** „Als ZIP“ und „Spielstand einspielen“ gelten auch für PS4-Titel (`CUSA…`, Ordner `savedata`, Datenbank
   `/system_data/savedata/<Benutzer>/db/user/savedata.db`), mit diesen Unterschieden: Ein PS4-Abbild trägt seinen versiegelten Schlüssel nicht in sich, er liegt in
   der Begleitdatei `<Spielstand>.bin` neben `sdimg_<Spielstand>` (96 Byte); ohne sie lässt sich ein PS4-Spielstand nicht auslesen. Die ZIP-Datei enthält nur die

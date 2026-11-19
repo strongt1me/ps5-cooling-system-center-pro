@@ -201,6 +201,8 @@ savedb_check(const char *db_path, char *err, size_t err_len) {
       const char *t = (const char *)sqlite3_column_text(st, 0);
       ok = t && !strcmp(t, "ok");
       if(!ok && err_len) snprintf(err, err_len, "Die Prüfung der Spielstand-Datenbank meldet: %.200s", t ? t : "?");
+    } else {
+      set_err(err, err_len, "Die Spielstand-Datenbank ließ sich nicht prüfen", db);     /* busy (the console is writing), an I/O error: said, not called damage */
     }
     sqlite3_finalize(st);
   } else set_err(err, err_len, "Die Spielstand-Datenbank ließ sich nicht prüfen", db);

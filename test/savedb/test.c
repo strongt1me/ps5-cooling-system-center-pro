@@ -192,6 +192,7 @@ main(int argc, char **argv) {
     sqlite3_exec(holder, "BEGIN EXCLUSIVE", NULL, NULL, NULL);
     r = row("PPSA77777", "LOCKED");
     CHECK(savedb_upsert(DB, &r, &ins, err, sizeof(err)) != 0);
+    CHECK(savedb_check(DB, err, sizeof(err)) != 0 && err[0] && strstr(err, "nicht prüfen"));      /* busy is said, not called damage (and not an empty reason) */
     sqlite3_exec(holder, "ROLLBACK", NULL, NULL, NULL);
     sqlite3_close(holder);
     CHECK(scalar(DB, "select count(*) from savedata where dir_name='LOCKED'") == 0);

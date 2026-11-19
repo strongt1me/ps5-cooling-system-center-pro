@@ -577,6 +577,17 @@ savexport_run(const savexport_args_t *a, const savexport_hooks_t *h, savexport_r
     goto done;
   }
   have_zip = 0;                                                  /* it is whole now: it stays */
+  {
+    /* the name in the folder is made lasting too: a stick pulled out right after "done" must have the file under its name, not as ".partial" or not at all */
+    char dd[PATH_MAX];
+    snprintf(dd, sizeof(dd), "%s", zip_fin);
+    char *sl = strrchr(dd, '/');
+    if(sl && sl != dd) {
+      *sl = 0;
+      const int dfd = open(dd, O_RDONLY);
+      if(dfd >= 0) { (void)fsync(dfd); close(dfd); }
+    }
+  }
   snprintf(res->zip, sizeof(res->zip), "%.*s", (int)sizeof(res->zip) - 1, zip_fin);
   res->skipped = list.skipped;
   rc = 0;

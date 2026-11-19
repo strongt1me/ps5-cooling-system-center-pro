@@ -60,6 +60,8 @@ typedef struct {
   savexport_hooks_t base;
   /* called once, before the first file of the console is changed; from then on a stop is no longer taken */
   void (*no_return)(void *ctx);
+  /* asked just before no_return (so after everything that takes time): non-zero when the console must not be changed now (a game was started meanwhile); why gets the sentence */
+  int (*may_commit)(void *ctx, char *why, size_t why_len);
 } saveimport_hooks_t;
 
 typedef struct {
@@ -71,6 +73,7 @@ typedef struct {
   uint32_t    user_id;             /* the same as a number */
   uint64_t    account_id;          /* the account the user has on this console (0 when none) */
   const char *db_backup_dir;       /* where the copy of the database goes before the row is written */
+  int (*skip_title)(const char *title_id);   /* optional: non-zero for a title that is never read or touched (an app): the owner search leaves its saves alone */
 } saveimport_args_t;
 
 typedef struct {

@@ -152,6 +152,7 @@ typedef struct {
   int with_chives, with_sfo, zero_sfo, two_chives, with_icon, own_list;
   int corrupt_data;                    /* flip a byte of data.bin inside the ZIP after writing */
   int foreign;                         /* the entries the other tool writes beside the files (the raw image, its key, a size) */
+  int dir_entries;                     /* folder entries: the save's folder itself, the ones on the way to it, sce_sys (7-Zip and the file manager of Windows write them) */
 } zipspec_t;
 
 static uint8_t DATA[100000], ICON[3000], KEYSTONE[96];
@@ -190,6 +191,13 @@ make_zip(const char *path, const zipspec_t *sp) {
   size_t sl = sfo_build(sfo, sp->title, sp->slot, sp->sfo_blocks ? sp->sfo_blocks : sp->blocks, sp->sysblocks, sp->format, 0x99AABBCCDDEEFF00ull, 0x11111111);
   if(sp->zero_sfo) { memset(sfo, 0, 3072); sl = 3072; }
   time_t now = 1790000000;
+  if(sp->dir_entries) {
+    const size_t pl = strlen(sp->prefix);
+    for(size_t i = 0; i < pl; i++)
+      if(sp->prefix[i] == '/') { memcpy(name, sp->prefix, i); name[i] = 0; szw_add_dir(w, name, now, 0755); }
+    snprintf(name, sizeof(name), "%ssce_sys", sp->prefix);
+    szw_add_dir(w, name, now, 0755);
+  }
   if(sp->with_sfo) { snprintf(name, sizeof(name), "%ssce_sys/param.sfo", sp->prefix); szw_add_mem(w, name, sfo, sl, now, 0644); }
   snprintf(name, sizeof(name), "%ssce_sys/keystone", sp->prefix); szw_add_mem(w, name, KEYSTONE, sizeof(KEYSTONE), now, 0640);
   snprintf(name, sizeof(name), "%sdata.bin", sp->prefix); szw_add_mem(w, name, DATA, sizeof(DATA), now, 0644);
@@ -243,6 +251,8 @@ static void p_phase(void *c, const char *t, uint64_t total) { probe_t *p = c; (v
 static void p_work(void *c, uint64_t n) { probe_t *p = c; p->works++; p->bytes += n; }
 static void p_cur(void *c, const char *r) { (void)c; (void)r; }
 static int  p_stop(void *c) { probe_t *p = c; p->polls++; return p->stop_after && p->polls >= p->stop_after && !p->no_return_calls; }
+static int  p_nocommit(void *c, char *why, size_t n) { (void)c; snprintf(why, n, "Währenddessen wurde ein Spiel gestartet (PPSA00042)."); return 1; }
+static int  skip_ppsa99(const char *t) { return !strcmp(t, "PPSA00099"); }
 static void p_noret(void *c) { probe_t *p = c; p->no_return_calls++; p->polls_at_commit = p->polls; }
 
 static saveimport_hooks_t *
@@ -250,6 +260,7 @@ hooks(probe_t *p) {
   static saveimport_hooks_t h;
   h.base.ctx = p; h.base.phase = p_phase; h.base.work = p_work; h.base.current = p_cur; h.base.stop = p_stop;
   h.no_return = p_noret;
+  h.may_commit = NULL;
   return &h;
 }
 
@@ -1033,6 +1044,197 @@ main(int argc, char **argv) {
   rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
   CHECK(rc != 0 && strstr(err, "neu starten") && !exists(IMG));
   g_marker = 0;
+
+  /* ================================================================ the audit of 19.11.2026 */
+  /* ---- a game started while the image was written: asked before the point of no return, nothing is changed */
+  reset();
+  sp = good();
+  make_zip(ZIP, &sp);
+  make_db();
+  wfile(IMG, "OLD IMAGE", 9);
+  wfile(ICONP, "OLD ICON", 8);
+  {
+    const long long dbsz = fsize(DBP);
+    a = args();
+    memset(&pr, 0, sizeof(pr));
+    saveimport_hooks_t *hk = hooks(&pr);
+    hk->may_commit = p_nocommit;
+    ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+    rc = saveimport_run(&a, hk, &res, err, sizeof(err));
+    CHECK(rc != 0 && rc != ECANCELED && strstr(err, "Spiel gestartet") && strstr(err, "nichts verändert"));
+    CHECK(pr.no_return_calls == 0 && fsize(IMG) == 9 && fsize(ICONP) == 8 && fsize(DBP) == dbsz && count_dir(WORK) == 0 && count_dir(DBBK) == 0);
+    CHECK(ps5tm_savemnt_test_opened == ps5tm_savemnt_test_closed);
+    char p[700];
+    snprintf(p, sizeof(p), "%s.ps5cc-alt", IMG); CHECK(!exists(p));
+    snprintf(p, sizeof(p), "%s.ps5cc-neu", IMG); CHECK(!exists(p));
+  }
+
+  /* ---- an app's saves are never a donor: not mounted, not read (the owner note says no donor was found) */
+  reset();
+  g_marker = 0xD0;
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", ACC, UIDN);
+  a = args();
+  a.skip_title = skip_ppsa99;
+  memset(&pr, 0, sizeof(pr));
+  ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && strstr(res.note, "kein Spielstand zu finden") && ps5tm_savemnt_test_opened == 2 && ps5tm_savemnt_test_closed == 2);
+  /* ... and the same donor, not skipped, is the one taken (the control of the test above) */
+  reset();
+  make_zip(ZIP, &sp);
+  make_donor5("PPSA00099", "DON", ACC, UIDN);
+  a = args();
+  memset(&pr, 0, sizeof(pr));
+  ps5tm_savemnt_test_opened = ps5tm_savemnt_test_closed = 0;
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && strstr(res.note, "anderen Spielstand") && ps5tm_savemnt_test_opened == 3);
+  g_marker = 0;
+
+  /* ---- the database is locked by another writer: SQLite changes nothing, so the file is NOT replaced by a copy (its inode stays), the images go back, the message is true */
+  reset();
+  make_zip(ZIP, &sp);
+  make_db();
+  wfile(IMG, "OLD IMAGE", 9);
+  wfile(ICONP, "OLD ICON", 8);
+  {
+    struct stat before, after;
+    CHECK(stat(DBP, &before) == 0);
+    sqlite3 *other = NULL;
+    CHECK(sqlite3_open(DBP, &other) == SQLITE_OK && sqlite3_exec(other, "BEGIN IMMEDIATE", NULL, NULL, NULL) == SQLITE_OK);   /* readers still read, a second writer waits */
+    a = args();
+    memset(&pr, 0, sizeof(pr));
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    sqlite3_exec(other, "ROLLBACK", NULL, NULL, NULL);
+    sqlite3_close(other);
+    CHECK(rc != 0 && rc != ECANCELED && strstr(err, "gesperrt") && strstr(err, "wieder so wie vorher"));
+    CHECK(stat(DBP, &after) == 0 && after.st_ino == before.st_ino && after.st_size == before.st_size);
+    uint8_t b2[16];
+    CHECK(slurp(IMG, b2, sizeof(b2)) == 9 && !memcmp(b2, "OLD IMAGE", 9) && fsize(ICONP) == 8);
+    CHECK(scalar(DBP, "select blocks from savedata where id=7") == 10 && count_dir(WORK) == 0);
+    char p[700];
+    snprintf(p, sizeof(p), "%s.ps5cc-alt", IMG); CHECK(!exists(p));
+    snprintf(p, sizeof(p), "%s.ps5cc-neu", IMG); CHECK(!exists(p));
+  }
+
+  /* ---- two puts-in in the same second get two copies of the database under two names (the slot is in the name; a name that is taken gets a count) */
+  reset();
+  make_zip(ZIP, &sp);
+  make_db();
+  a = args();
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && strstr(res.db_backup, "SAVE0"));
+  {
+    char first[400];
+    snprintf(first, sizeof(first), "%s", res.db_backup);
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    CHECK(rc == 0 && strcmp(first, res.db_backup) != 0 && count_dir(DBBK) == 2 && exists(first) && exists(res.db_backup));
+  }
+
+  /* ---- a cut-off earlier run left only the old image (".ps5cc-alt", nothing in its place): it is the save and comes back when this run fails, too */
+  reset();
+  make_zip(ZIP, &sp);
+  {
+    sqlite3 *db = NULL;
+    sqlite3_open(DBP, &db);
+    sqlite3_exec(db, "CREATE TABLE savedata (title_id, dir_name);", NULL, NULL, NULL);
+    sqlite3_close(db);
+  }
+  {
+    char alt[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG);
+    wfile(alt, "OLD IMAGE", 9);
+    a = args();
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    uint8_t b2[16];
+    CHECK(rc != 0 && slurp(IMG, b2, sizeof(b2)) == 9 && !memcmp(b2, "OLD IMAGE", 9) && !exists(alt));
+  }
+  /* ... where both are there, the old one is a leftover and the file in place is the one that is replaced (and kept for the way back) */
+  reset();
+  make_zip(ZIP, &sp);
+  {
+    char alt[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG);
+    wfile(alt, "STALE OLD", 9);
+    wfile(IMG, "CURRENT IMG", 11);
+    sqlite3 *db = NULL;
+    sqlite3_open(DBP, &db);
+    sqlite3_exec(db, "CREATE TABLE savedata (title_id, dir_name);", NULL, NULL, NULL);
+    sqlite3_close(db);
+    a = args();
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    uint8_t b2[16];
+    CHECK(rc != 0 && slurp(IMG, b2, sizeof(b2)) == 11 && !memcmp(b2, "CURRENT IMG", 11));                    /* the current one is what comes back */
+  }
+
+  /* ---- PS4: a run cut between the two renames (new image in place, new key file never arrived, the old key file aside): the old PAIR goes back when this run fails too */
+  reset4();
+  make_ps4_zip(ZIP, "CUSA12345", "SLOT0");
+  {
+    char alt[700], balt[700], bneu[700];
+    snprintf(alt, sizeof(alt), "%s.ps5cc-alt", IMG4);
+    snprintf(balt, sizeof(balt), "%s.ps5cc-alt", BIN4);
+    snprintf(bneu, sizeof(bneu), "%s.ps5cc-neu", BIN4);
+    wfile(IMG4, "NEW IMAGE", 9);
+    wfile(alt, "OLD IMAGE", 9);
+    wfile(balt, "OLD KEY FILE", 12);
+    wfile(bneu, "NEW KEY FILE", 12);
+    sqlite3 *db = NULL;
+    sqlite3_open(DBP4, &db);
+    sqlite3_exec(db, "CREATE TABLE savedata (title_id, dir_name);", NULL, NULL, NULL);
+    sqlite3_close(db);
+    a = args();
+    rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+    uint8_t b1[16], b2[16];
+    CHECK(rc != 0 && slurp(IMG4, b1, sizeof(b1)) == 9 && !memcmp(b1, "OLD IMAGE", 9) && slurp(BIN4, b2, sizeof(b2)) == 12 && !memcmp(b2, "OLD KEY FILE", 12));
+    CHECK(!exists(alt) && !exists(balt) && !exists(bneu));
+  }
+
+  /* ---- a slot that ends as the leftovers of a cut-off run do is no slot */
+  reset();
+  sp = good(); sp.slot = "SAVE0.ps5cc-alt";
+  make_zip(ZIP, &sp);
+  CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && !info.importable && strstr(info.why, "ungültig"));
+  sp = good(); sp.slot = "SAVE0.ps5cc-neu";
+  make_zip(ZIP, &sp);
+  CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && !info.importable && strstr(info.why, "ungültig"));
+
+  /* ---- folder entries in the ZIP (the save's folder, the ones on the way to it, sce_sys): they hold nothing and are no files outside of the save */
+  reset();
+  sp = good(); sp.dir_entries = 1;
+  make_zip(ZIP, &sp);
+  CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && info.importable && info.files == 5 && info.prefix[0] == 0);
+  sp = good(); sp.dir_entries = 1; sp.prefix = "PPSA01234/SAVE0/";
+  make_zip(ZIP, &sp);
+  CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && info.importable && info.files == 5 && !strcmp(info.prefix, "PPSA01234/SAVE0/"));
+  a = args();
+  memset(&pr, 0, sizeof(pr));
+  rc = saveimport_run(&a, hooks(&pr), &res, err, sizeof(err));
+  CHECK(rc == 0 && res.files == 5 && exists(IMG));
+  /* ... but a folder that is not on the way to the save is still outside of it */
+  {
+    unlink(ZIP);
+    szw_t *w = szw_create(ZIP);
+    uint8_t sfo[4096];
+    CHECK(w != NULL);
+    if(!w) return 1;
+    szw_add_dir(w, "OTHER", 1790000000, 0755);
+    const size_t sl = sfo_build(sfo, "PPSA01234", "SAVE0", 48, 0, "ppr", 0x99AABBCCDDEEFF00ull, 0x11111111);
+    szw_add_mem(w, "PPSA01234/SAVE0/sce_sys/param.sfo", sfo, sl, 1790000000, 0644);
+    szw_add_mem(w, "PPSA01234/SAVE0/data.bin", DATA, 100, 1790000000, 0644);
+    chives_t g;
+    chives_init(&g);
+    g.version = 2; g.block_size = 65536; g.block_count = 48; g.image_size = 48ull * 65536; g.backup_header_count = 1; g.mode_raw = 0x0d; g.has_fs_ext = 1;
+    snprintf(g.title_id, sizeof(g.title_id), "PPSA01234");
+    snprintf(g.save_dir, sizeof(g.save_dir), "SAVE0");
+    snprintf(g.image_name, sizeof(g.image_name), "sdimg_SAVE0");
+    char json[4096];
+    const int jn = chives_write(&g, json, sizeof(json));
+    chives_free(&g);
+    szw_add_mem(w, "PPSA01234/SAVE0/chives.json", json, (size_t)jn, 1790000000, 0644);
+    CHECK(szw_finish(w) == SZ_OK);
+    CHECK(saveimport_inspect(ZIP, &info, err, sizeof(err)) == 0 && !info.importable && strstr(info.why, "außerhalb"));
+  }
 
   rmtree(ROOT);
   printf("%d checks, %d failed\n", g_n, g_fail);

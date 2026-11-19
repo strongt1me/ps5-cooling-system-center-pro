@@ -217,11 +217,23 @@ job_active_locked(void) {
   return g_job.state >= J_SCAN && g_job.state <= J_APPLY;
 }
 
+/* The end of the last job as the history is to hear of it, taken under the lock at the moment the job ends: the thread that writes the history line comes a little later,
+   and a next job may have started (and cleared g_job) in between. */
+static struct { int st; char kind[24], detail[340], error[640]; uint64_t bytes, dur; } g_fin;
+
 static void
 job_state(int st) {
   pthread_mutex_lock(&g_lock);
   g_job.state = st;
-  if(st >= J_DONE) g_job.finished_ms = ps5tm_mono_ms();
+  if(st >= J_DONE) {
+    g_job.finished_ms = ps5tm_mono_ms();
+    g_fin.st = st;
+    snprintf(g_fin.kind, sizeof(g_fin.kind), "saves_%s", g_job.kind);
+    snprintf(g_fin.detail, sizeof(g_fin.detail), "%s", g_job.path);
+    snprintf(g_fin.error, sizeof(g_fin.error), "%s", g_job.error);
+    g_fin.bytes = g_job.bytes_total;
+    g_fin.dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  }
   pthread_mutex_unlock(&g_lock);
 }
 
@@ -774,10 +786,11 @@ sfo_value(const unsigned char *b, size_t n, const char *key, char *out, size_t o
 /* Is the title a game or an app (YouTube, a browser, a system app)? PS5: applicationCategoryType in param.json is 0
    for a game (measured: Arkanoid 0, YouTube 65536). PS4: CATEGORY in param.sfo starts with "g" for a game. A title
    the console no longer has any description of is called a game, as it is by default. Remembered until the app ends. */
+#define TK_MEMO 512                                   /* titles remembered: a console with more games than that asks the files again for the rest, nothing worse */
 static const char *
 title_kind(const char *id) {
-  static char memo_id[64][10];
-  static char memo_kind[64];                          /* 'g' or 'a' */
+  static char memo_id[TK_MEMO][10];
+  static char memo_kind[TK_MEMO];                     /* 'g' or 'a' */
   static int  nmemo;
   static pthread_mutex_t lk = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_lock(&lk);
@@ -814,7 +827,7 @@ title_kind(const char *id) {
   }
   if(!kind) kind = 'g';
   pthread_mutex_lock(&lk);
-  if(nmemo < 64) { snprintf(memo_id[nmemo], sizeof(memo_id[0]), "%s", id); memo_kind[nmemo++] = kind; }
+  if(nmemo < TK_MEMO) { snprintf(memo_id[nmemo], sizeof(memo_id[0]), "%s", id); memo_kind[nmemo++] = kind; }
   pthread_mutex_unlock(&lk);
   return kind == 'a' ? "app" : "game";
 }
@@ -1316,12 +1329,13 @@ sv_thread(void *arg) {
   free(arg);
   void *res = r.fn(r.a);
   pthread_mutex_lock(&g_lock);
-  int st = g_job.state;
+  const int st = g_fin.st;
   char kind[24], detail[340], error[640];
-  snprintf(kind, sizeof(kind), "saves_%s", g_job.kind);
-  snprintf(detail, sizeof(detail), "%s", g_job.path);
-  snprintf(error, sizeof(error), "%s", g_job.error);
-  uint64_t bytes = g_job.bytes_total, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+  snprintf(kind, sizeof(kind), "%s", g_fin.kind);
+  snprintf(detail, sizeof(detail), "%s", g_fin.detail);
+  snprintf(error, sizeof(error), "%s", g_fin.error);
+  const uint64_t bytes = g_fin.bytes, dur = g_fin.dur;
+  g_fin.st = 0;                                            /* heard of: a job that ends without a state (none does) writes nothing */
   pthread_mutex_unlock(&g_lock);
   if(st == J_DONE || st == J_FAILED || st == J_CANCELLED)
     ps5tm_hist_add(kind, "Spielstände", detail, st == J_DONE ? "done" : st == J_FAILED ? "failed" : "cancelled", error, bytes, dur);
@@ -2329,10 +2343,13 @@ slot_ok(const char *s) {
   return 1;
 }
 
-/* The console's own copies (sdimg_sce_bu_...) are no slot of a person's. */
+/* The console's own copies (sdimg_sce_bu_...) are no slot of a person's, and neither are the files a put-in that was cut off left behind (sdimg_<slot>.ps5cc-alt / -neu:
+   the old image kept for the way back, the new one not yet in place). */
 static int
 slot_is_system_copy(const char *slot) {
-  return !strncmp(slot, "sce_bu_", 7);
+  if(!strncmp(slot, "sce_bu_", 7)) return 1;
+  const size_t n = strlen(slot), sl = strlen(SV_NEW_SUFFIX);
+  return n > sl && (!strcmp(slot + n - sl, SV_NEW_SUFFIX) || !strcmp(slot + n - sl, ".ps5cc-alt"));
 }
 
 static int
@@ -2395,17 +2412,18 @@ ex_current(void *c, const char *rel) { (void)c; job_current(rel); }
 static int
 ex_stop(void *c) { (void)c; return cancelled(); }
 
-/* ZIPs that were never finished (a power cut): only ours, only the unfinished ones. */
+/* ZIPs that were never finished (a power cut) in a folder: only ours, only the unfinished ones (the files of a run that is going on are never there, one job runs at a time). */
 static void
-export_sweep_partial(void) {
-  DIR *d = opendir(SV_EXPORT_DIR);
+export_sweep_partial(const char *dir) {
+  DIR *d = opendir(dir);
   if(!d) return;
   struct dirent *e;
   while((e = readdir(d)) != NULL) {
     const size_t n = strlen(e->d_name);
     if(n > 12 && !strcmp(e->d_name + n - 12, ".zip.partial")) {
       char p[PATH_MAX];
-      if(snprintf(p, sizeof(p), "%s/%s", SV_EXPORT_DIR, e->d_name) < (int)sizeof(p)) unlink(p);
+      struct stat st;
+      if(snprintf(p, sizeof(p), "%s/%s", dir, e->d_name) < (int)sizeof(p) && lstat(p, &st) == 0 && S_ISREG(st.st_mode)) unlink(p);
     }
   }
   closedir(d);
@@ -2417,9 +2435,10 @@ export_main(void *arg) {
   ps5tm_powerguard_hold();
   mkdir(PS5TM_DATA_DIR, 0755);
   mkdir(SV_EXPORT_DIR, 0755);
-  export_sweep_partial();
+  export_sweep_partial(SV_EXPORT_DIR);
 
   const char *outdir = a->outdir[0] ? a->outdir : SV_EXPORT_DIR;
+  if(a->outdir[0]) export_sweep_partial(outdir);                  /* a stick pulled out in an earlier run left its unfinished file there */
   char (*made)[PATH_MAX] = calloc(16, PATH_MAX);               /* the ZIPs of this run: a run that fails or is stopped takes them all back */
   unsigned nmade = 0, files = 0;
   uint64_t bytes = 0;
@@ -2449,7 +2468,7 @@ export_main(void *arg) {
       if(res.skipped && n + 2 < sizeof(note))
         snprintf(note + n, sizeof(note) - n, "%s%u Einträge, die keine Dateien sind (Verknüpfungen), wurden nicht übernommen.", n ? " " : "", res.skipped);
     } else if(rc != ECANCELED) {
-      if(a->nslots > 1) snprintf(err, sizeof(err), "Spielstand %.64s: %s Die schon ausgelesenen ZIP-Dateien dieses Laufs wurden wieder entfernt.", a->slots[i], e2);
+      if(a->nslots > 1) snprintf(err, sizeof(err), "Spielstand %.64s: %s Die schon ausgelesenen ZIP-Dateien dieses Laufs werden wieder entfernt.", a->slots[i], e2);
       else snprintf(err, sizeof(err), "%s", e2);
     }
   }
@@ -2464,7 +2483,13 @@ export_main(void *arg) {
     PS5TM_INFO("saves_export_done", "Spielstände: %u ZIP-Dateien mit %u Dateien (%llu KB) fertig.", nmade, files, (unsigned long long)(bytes >> 10));
     job_state(J_DONE);
   } else {
-    for(unsigned i = 0; made && i < nmade; i++) unlink(made[i]);
+    unsigned left = 0;                                           /* the ZIPs of this run that could not be taken back (a drive pulled out): said, not hidden */
+    for(unsigned i = 0; made && i < nmade; i++)
+      if(unlink(made[i]) != 0 && errno != ENOENT) left++;
+    if(left && err[0]) {
+      const size_t en = strlen(err);
+      snprintf(err + en, sizeof(err) - en, " %u davon ließen sich nicht entfernen und liegen noch im Ordner.", left);
+    }
     if(rc == ECANCELED) {
       PS5TM_INFO("saves_export_cancelled", "Spielstände: Auslesen abgebrochen, das Angefangene ist entfernt.");
       job_state(J_CANCELLED);
@@ -2494,7 +2519,7 @@ ps5tm_saves_export_start(const char *uid, const char *id, const char *slot, cons
   const int area = title_find(uid, id);                    /* 0: PS4, 1: PS5 */
   if(area < 0) { snprintf(err, err_len, "Dieser Titel hat keinen Spielstand an der Konsole."); return 404; }
   /* with no slot named, every slot of the title is read out: a person does not have to know which ones a game keeps */
-  char slots[16][72];
+  char slots[17][72];                                      /* one more than a run takes: a title with more slots is told, not cut off */
   unsigned ns = 0;
   uint64_t image_total = 0;
   if(slot && slot[0]) {
@@ -2509,8 +2534,9 @@ ps5tm_saves_export_start(const char *uid, const char *id, const char *slot, cons
     ns = 1;
     image_total = (uint64_t)st.st_size;
   } else {
-    ns = title_slots(uid, area, id, slots, 16);
+    ns = title_slots(uid, area, id, slots, 17);
     if(ns == 0) { snprintf(err, err_len, "Dieser Titel hat keinen Spielstand, der sich auslesen lässt."); return 404; }
+    if(ns > 16) { snprintf(err, err_len, "Dieser Titel hat mehr als 16 Spielstände; die App liest höchstens 16 auf einmal aus, damit nichts davon unbemerkt fehlt."); return 409; }
     for(unsigned i = 0; i < ns; i++) {
       char image[PATH_MAX];
       struct stat st;
@@ -2647,6 +2673,10 @@ ps5tm_saves_import_plan_json(const char *name, const char *from, char *err, size
   if(import_zip_locate(from, name, zip, sizeof(zip), sdir, sizeof(sdir)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); *status = 404; return NULL; }
   saveimport_info_t info;
   if(saveimport_inspect(zip, &info, err, err_len) != 0) { *status = 400; return NULL; }
+  if(info.importable && title_is_app(info.title_id)) {            /* an app is shown, but not offered: its data is left alone */
+    info.importable = 0;
+    snprintf(info.why, sizeof(info.why), "%s", SV_APP_REFUSED);
+  }
   cJSON *o = cJSON_CreateObject();
   cJSON_AddBoolToObject(o, "ok", 1);
   cJSON_AddStringToObject(o, "name", name);
@@ -2704,6 +2734,16 @@ im_no_return(void *c) {
   (void)c;
   __atomic_store_n(&g_nocancel, 1, __ATOMIC_RELEASE);      /* from here the console's files are changed: no stop is taken */
 }
+/* Asked once per slot, just before its point of no return and after everything that takes time (the donor search, writing and reading back the new image): a game that was
+   started meanwhile holds the image about to be exchanged (and it may be the slot's own game or any other: all are refused, as at the start). */
+static int
+im_may_commit(void *c, char *why, size_t n) {
+  (void)c;
+  char gid[16];
+  if(!game_running(gid, sizeof(gid))) return 0;
+  snprintf(why, n, "Währenddessen wurde ein Spiel gestartet (%s).", gid);
+  return 1;
+}
 
 static void *
 import_main(void *arg) {
@@ -2720,7 +2760,11 @@ import_main(void *arg) {
   if(import_zip_at(a->srcdir, a->zipv[0], zip, sizeof(zip)) != 0) { job_fail("Die ZIP-Datei ist nicht mehr da."); goto out; }
   if(saveimport_inspect(zip, &info, err, sizeof(err)) != 0) { job_fail("%s", err); goto out; }
   if(!info.importable) { job_fail("%s", info.why); goto out; }
+  if(title_is_app(info.title_id)) { job_fail("%s", SV_APP_REFUSED); goto out; }
   snprintf(a->id, sizeof(a->id), "%.9s", info.title_id);
+  const int first_ps4 = info.ps4;
+  char first_id[16];
+  snprintf(first_id, sizeof(first_id), "%s", info.title_id);
   PS5TM_INFO("saves_import_start", "Spielstände: Einspielen von %s für Benutzer %s beginnt (%u Spielstände).", info.title_id, a->uid, total);
 
   /* the title's present state first, once for all its slots, as a backup of its own (the same "undo" backup a restore makes); without a target only when the request
@@ -2779,6 +2823,11 @@ import_main(void *arg) {
           job_fail("%s Eingespielt sind %u von %u Spielständen.", err[0] ? err : info.why, done, total);
           goto out;
         }
+        /* the file may have been swapped since the start: the title and the kind of the first one are what was looked at, backed up and agreed to */
+        if(strcmp(info.title_id, first_id) || info.ps4 != first_ps4) {
+          job_fail("Die ZIP-Datei %.100s gehört nicht mehr zum selben Titel wie die erste. Eingespielt sind %u von %u Spielständen.", a->zipv[i], done, total);
+          goto out;
+        }
       }
       saveimport_args_t ia;
       memset(&ia, 0, sizeof(ia));
@@ -2797,10 +2846,16 @@ import_main(void *arg) {
       ih.base.current = ex_current;
       ih.base.stop = im_stop;
       ih.no_return = im_no_return;
+      ih.may_commit = im_may_commit;
+      ia.skip_title = title_is_app;
       saveimport_result_t res;
       const int rc = saveimport_run(&ia, &ih, &res, err, sizeof(err));
       if(rc == ECANCELED) {
-        PS5TM_INFO("saves_import_cancelled", "Spielstände: Einspielen abgebrochen, an der Konsole ist nichts verändert.");
+        if(done) {
+          PS5TM_INFO("saves_import_cancelled", "Spielstände: Einspielen abgebrochen, %u von %u Spielständen waren schon eingespielt.", done, total);
+        } else {
+          PS5TM_INFO("saves_import_cancelled", "Spielstände: Einspielen abgebrochen, an der Konsole ist nichts verändert.");
+        }
         if(done) {
           pthread_mutex_lock(&g_lock);
           snprintf(g_job.note, sizeof(g_job.note), "Abgebrochen: Eingespielt sind %u von %u Spielständen.", done, total);
@@ -2877,16 +2932,23 @@ ps5tm_saves_import_start(const char *name, const char *from, const char *uid, co
     if(nl == 0 || *p) { snprintf(err, err_len, "Der Name der ZIP-Datei ist ungültig oder es sind zu viele."); return 400; }
   }
   char zip[PATH_MAX], sdir[128] = "";
+  char slots_seen[16][100];
   saveimport_info_t info, first;
   memset(&first, 0, sizeof(first));
   for(unsigned i = 0; i < nl; i++) {
     if(import_zip_locate(from, list[i], zip, sizeof(zip), sdir, sizeof(sdir)) != 0) { snprintf(err, err_len, "Diese ZIP-Datei gibt es nicht (mehr)."); return 404; }
     if(saveimport_inspect(zip, &info, err, err_len) != 0) return 400;
     if(!info.importable) { snprintf(err, err_len, "%s", info.why); return 400; }
-    if(i == 0) first = info;
-    else if(strcmp(first.title_id, info.title_id) || first.ps4 != info.ps4) { snprintf(err, err_len, "Die ZIP-Dateien gehören zu verschiedenen Titeln."); return 400; }
+    if(i == 0) {
+      first = info;
+      if(title_is_app(info.title_id)) { snprintf(err, err_len, "%s", SV_APP_REFUSED); return 403; }
+    } else if(strcmp(first.title_id, info.title_id) || first.ps4 != info.ps4) { snprintf(err, err_len, "Die ZIP-Dateien gehören zu verschiedenen Titeln."); return 400; }
     for(unsigned k = 0; k < i; k++)
       if(!strcmp(list[k], list[i])) { snprintf(err, err_len, "Dieselbe ZIP-Datei steht mehrfach in der Liste."); return 400; }
+    /* two files of one slot would replace each other: the one named last would win, whatever its age */
+    for(unsigned k = 0; k < i; k++)
+      if(!strcmp(slots_seen[k], info.slot)) { snprintf(err, err_len, "Zwei der ZIP-Dateien enthalten denselben Spielstand (%.60s): Es kann nur eine davon eingespielt werden.", info.slot); return 400; }
+    snprintf(slots_seen[i], sizeof(slots_seen[i]), "%s", info.slot);
   }
 
   job_args_t *a = calloc(1, sizeof(*a));
@@ -3011,16 +3073,48 @@ cmp_export_newest(const void *x, const void *y) {
   return a < b ? 1 : a > b ? -1 : 0;
 }
 
+/* The ZIPs found in a listing, all of them (up to a bound that keeps the memory small) so that the cap on what a page is shown is applied to the NEWEST: a folder lists its
+   files in the order they were made, and cutting that list at 60 would have dropped exactly the ones a person just made. */
+#define SV_LIST_BOUND 4096u
+typedef struct { cJSON **v; unsigned n, cap; } jlist_t;
+
+static void
+jlist_add(jlist_t *l, cJSON *o) {
+  if(!o) return;
+  if(l->n >= SV_LIST_BOUND) { cJSON_Delete(o); return; }
+  if(l->n == l->cap) {
+    const unsigned nc = l->cap ? l->cap * 2 : 64;
+    cJSON **nv = realloc(l->v, nc * sizeof(*nv));
+    if(!nv) { cJSON_Delete(o); return; }
+    l->v = nv;
+    l->cap = nc;
+  }
+  l->v[l->n++] = o;
+}
+
+/* Sorts newest first, hands the first SV_EXPORT_MAX to the array and frees the rest. */
+static cJSON *
+jlist_array(jlist_t *l) {
+  cJSON *arr = cJSON_CreateArray();
+  if(l->n > 1) qsort(l->v, l->n, sizeof(l->v[0]), cmp_export_newest);
+  for(unsigned i = 0; i < l->n; i++) {
+    if(arr && i < SV_EXPORT_MAX) cJSON_AddItemToArray(arr, l->v[i]);
+    else cJSON_Delete(l->v[i]);
+  }
+  free(l->v);
+  l->v = NULL;
+  l->n = l->cap = 0;
+  return arr;
+}
+
 /* The ZIPs a page can download: the finished ones in the export folder, newest first. */
 static cJSON *
 exports_json(void) {
-  cJSON *arr = cJSON_CreateArray();
   DIR *d = opendir(SV_EXPORT_DIR);
-  if(!d) return arr;
-  cJSON *found[SV_EXPORT_MAX];
-  unsigned n = 0;
+  if(!d) return cJSON_CreateArray();
+  jlist_t found = { 0 };
   struct dirent *e;
-  while((e = readdir(d)) != NULL && n < SV_EXPORT_MAX) {
+  while((e = readdir(d)) != NULL) {
     if(!export_name_ok(e->d_name)) continue;
     char full[PATH_MAX];
     struct stat st;
@@ -3029,29 +3123,25 @@ exports_json(void) {
     cJSON_AddStringToObject(o, "name", e->d_name);
     cJSON_AddNumberToObject(o, "bytes", (double)st.st_size);
     cJSON_AddNumberToObject(o, "created", (double)st.st_mtime);
-    found[n++] = o;
+    jlist_add(&found, o);
   }
   closedir(d);
-  qsort(found, n, sizeof(found[0]), cmp_export_newest);
-  for(unsigned i = 0; i < n; i++) cJSON_AddItemToArray(arr, found[i]);
-  return arr;
+  return jlist_array(&found);
 }
 
 /* The ZIPs on the drives the console has now (the ZIP folder of each), newest first: what a stick brings from another console. Each: mount, label, name, bytes, created. */
 static cJSON *
 zips_json(void) {
-  cJSON *arr = cJSON_CreateArray();
   drive_t dr[16];
   const unsigned nd = drives_get(dr, 16);
-  cJSON *found[SV_EXPORT_MAX];
-  unsigned n = 0;
-  for(unsigned i = 0; i < nd && n < SV_EXPORT_MAX; i++) {
+  jlist_t found = { 0 };
+  for(unsigned i = 0; i < nd; i++) {
     char dir[128];
     if(zip_dir_of(&dr[i], dir, sizeof(dir)) != 0) continue;
     DIR *d = opendir(dir);
     if(!d) continue;
     struct dirent *e;
-    while((e = readdir(d)) != NULL && n < SV_EXPORT_MAX) {
+    while((e = readdir(d)) != NULL) {
       if(!export_name_ok(e->d_name)) continue;
       char full[PATH_MAX];
       struct stat st;
@@ -3062,13 +3152,11 @@ zips_json(void) {
       cJSON_AddStringToObject(o, "name", e->d_name);
       cJSON_AddNumberToObject(o, "bytes", (double)st.st_size);
       cJSON_AddNumberToObject(o, "created", (double)st.st_mtime);
-      found[n++] = o;
+      jlist_add(&found, o);
     }
     closedir(d);
   }
-  qsort(found, n, sizeof(found[0]), cmp_export_newest);
-  for(unsigned i = 0; i < n; i++) cJSON_AddItemToArray(arr, found[i]);
-  return arr;
+  return jlist_array(&found);
 }
 
 static void

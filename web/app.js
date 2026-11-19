@@ -11299,6 +11299,7 @@
     const list = Array.from(files || []);
     if (!list.length || svIm.busy) return;
     if (list.some((f) => !/\.zip$/i.test(f.name))) { toast("Bitte eine ZIP-Datei wählen.", "error"); return; }
+    if (list.length > 16) { toast("Höchstens 16 ZIP-Dateien auf einmal.", "error"); return; }
     svIm.busy = true;
     svIm.plan = null;
     svIm.names = [];
@@ -11307,7 +11308,7 @@
     const names = [];
     try {
       const inbox = await api("/api/v1/saves/import/inbox", { method: "POST" });
-      for (const file of list.slice(0, 16)) {
+      for (const file of list) {
         const name = svImName(file.name);
         const r = await fetch(`/api/v1/files/upload?path=${encodeURIComponent(inbox.path)}&name=${encodeURIComponent(name)}`, { method: "POST", body: file });
         let d = null;
@@ -11444,9 +11445,11 @@
   };
 
   const loadSaves = async () => {
+    const seq = sv.loadSeq = (sv.loadSeq || 0) + 1;       /* eine ältere, langsamere Antwort überschreibt keine neuere */
     try {
       /* Die Konsole misst jeden Titel nach; während einer Sicherung dauert das länger. */
       const d = await api("/api/v1/saves", { timeoutMs: 20000 });
+      if (seq !== sv.loadSeq) return;
       if (!d || !Array.isArray(d.users) || !Array.isArray(d.drives) || !Array.isArray(d.backups))
         throw new Error("unerwartete Antwort der Konsole");
       sv.data = d;
@@ -11454,6 +11457,7 @@
       sv.error = "";
       svSyncSelection();
     } catch (e) {
+      if (seq !== sv.loadSeq) return;
       sv.error = e.message || "nicht verfügbar";
       sv.data = null;
     }
@@ -11472,7 +11476,12 @@
       const was = svActive();
       sv.job = j;
       svRenderJob();
-      if (was && !j.active && j.kind === "import" && j.state === "done") { svIm.plan = null; svIm.name = ""; }      /* die hochgeladene Datei ist verbraucht */
+      /* die hochgeladene Datei ist verbraucht; bei mehreren ZIP-Dateien auch nach einem Teilerfolg (die fertigen sind gelöscht), dann neu wählen */
+      if (was && !j.active && j.kind === "import" && (j.state === "done" || ((j.state === "failed" || j.state === "cancelled") && svIm.names.length > 1))) {
+        const left = j.state === "done" ? [] : svIm.names.slice();      /* was der Auftrag nicht verbraucht hat, bleibt sonst für immer im Eingang liegen */
+        svIm.plan = null; svIm.name = ""; svIm.names = [];
+        for (const name of left) { try { await api("/api/v1/saves/import/discard", { method: "POST", body: JSON.stringify({ name }) }); } catch { /* schon verbraucht (404) */ } }
+      }
       if (was && !j.active) await loadSaves();
       svSync();
     } catch { /* die nächste Runde versucht es wieder */ }
