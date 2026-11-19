@@ -66,6 +66,26 @@ constexpr double kCollectSeconds = 240.0;
 constexpr int kCaptureWidth = 480;
 constexpr int kCaptureHeight = 270;
 
+// True when a tour request is waiting that no launch has honoured yet. The tour is scripted against
+// the demo data of the pictures made on a PC: it presses "confirm" on whatever row it finds (a fan
+// target, a game to mount, the self-test). On a console that would act on the real data, so while a
+// tour runs the app shows the demo data and never asks the console app.
+bool tour_pending()
+{
+    std::string request;
+    if (!hui::save::read_file(kRequestPath, &request, 256))
+        return false;
+    char verb[16] = {};
+    char argument[64] = {};
+    char token[64] = {};
+    if (std::sscanf(request.c_str(), "%15s %63s %63s", verb, argument, token) != 3 ||
+        std::strcmp(verb, "tour") != 0)
+        return false;
+    std::string handled;
+    hui::save::read_file(std::string(kDevRoot) + "/handled.txt", &handled, 128);
+    return handled != token;
+}
+
 void log_heap(std::uint64_t frames)
 {
     std::size_t live = 0;
@@ -193,8 +213,17 @@ int main()
     // The data of the console app: HTTP to 127.0.0.1:8086 on a thread of its own, which also
     // starts the app through the ELF loader when it is not running.
     static ps5cc::HttpSource http;
-    http.start();
-    ps5cc::set_source(&http);
+    if (tour_pending())
+    {
+        // the built-in demo data (what ps5cc::source() answers until another is set); the console
+        // app is not asked and not started
+        sys::log("[HUI] tour pending: demo data, the console app is left alone");
+    }
+    else
+    {
+        http.start();
+        ps5cc::set_source(&http);
+    }
 
     ps5::Pad pad;
     pad.open();
