@@ -794,7 +794,8 @@ process(uint64_t seq, const oa_item_t *it) {
     return;
   }
   /* From here on the original is in work: no other job of the app starts beside it (ps5tm_orig_busy), not between the copy and the delete either (audit 18.11.2026, F-302) */
-  if(move) snprintf(msg, sizeof(msg), "Das Original „%.100s“ wird nach %.150s kopiert und geprüft …", it->r.name, it->r.dest);
+  /* "verschoben" is true for both ways (a rename, or a copy and a delete): which one it is, is known a moment later (check_dest), and the line says it then */
+  if(move) snprintf(msg, sizeof(msg), "Das Original „%.100s“ wird nach %.150s verschoben …", it->r.name, it->r.dest);
   else snprintf(msg, sizeof(msg), "Das Original „%.120s“ wird gelöscht …", it->r.name);
   finish(seq, OA_RUN, msg, NULL);
   /* The result of the job must be known and be there, or nothing goes; and it must not be the original itself or lie in it (or the original in it). */
