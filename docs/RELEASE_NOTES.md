@@ -20,7 +20,7 @@
 - Tote Zuweisungen in den Spielstand-Dateien entfernt, eine Absicherung vor einer leeren Liste ergänzt; ohne sichtbare Wirkung.
 
 ## Hinweise
-- **Nicht an der Konsole erprobt:** das Auswerfen im Dateimanager (geprüft: 35 Host-Tests, 375 Tests der Vollbild-App, die Browser-Seite gegen einen nachgebauten Ersatz der App, die Vollbild-Seite als Bilder am PC). Das Auswerfen selbst ist seit 29.10.2026 unverändert und an der Konsole bestätigt.
+- **An der Konsole bestätigt (19.11.2026):** das Auswerfen im Dateimanager, in der Browser-App und in der Vollbild-App, vom Nutzer an der Konsole ausprobiert. Dazu 35 Host-Tests und 375 Tests der Vollbild-App. Das Auswerfen selbst ist seit 29.10.2026 unverändert und an der Konsole bestätigt.
 - **An der Konsole bestätigt (Slim, Firmware 12.00, 19.11.2026):** die Wiederherstellung eines unterbrochenen Einspielens (beim Start und beim nächsten Einspielen) und die Ablehnung von Apps im Plan des Einspielens.
 - Die neue ELF an Port 9021 senden und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein). Alles andere ist wie in v1.88.0.
 
