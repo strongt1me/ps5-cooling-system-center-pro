@@ -1,39 +1,39 @@
 # PS5 Cooling & System Center – Pro v1.88.1
 
 ## Highlights
-- **USB-Laufwerk sicher auswerfen – jetzt auch im Dateimanager:** Neben jedem USB-Laufwerk steht **Auswerfen** (Browser), in der Vollbild-App die Quadrat-Taste auf dem Laufwerk unter „Orte“ oder △ → Mehr in einem Ordner des Laufwerks. Ein Laufwerk im Betrieb einfach abzuziehen kann das Dateisystem beschädigen; so geht es sicher, ohne die Konsole herunterzufahren.
-- **Mehrere Spielstände eines Spiels einspielen geht schneller:** Die Suche nach einem Spender für die Besitzerangaben läuft nur noch einmal je Auftrag, nicht für jeden Spielstand von vorn.
-- **Die Vollbild-Kachel führt sich nie mit den echten Daten vor:** Eine Kachel, die schon mit den Daten der Konsole läuft, nimmt keine Anfrage für den Selbstlauf mehr an.
+- **Eject a USB drive safely – now also in the file manager:** Every USB drive has an **Eject** button next to it (browser app); in the fullscreen app press the Square button on the drive under "Locations", or △ → More inside a folder of the drive. Pulling a drive out while the console is running can damage its file system; this way it is safe, without shutting the console down.
+- **Importing several saved data sets of one game is faster:** The search for a donor of the owner details now runs once per job instead of starting over for every saved data set.
+- **The fullscreen tile never plays its tour with real data:** A tile that already runs with the console's data no longer accepts a request for the self-running tour.
 
-## Neu
-### Dateimanager (Browser und Vollbild-App)
-- **Auswerfen im Dateimanager:** Es ist dasselbe Auswerfen wie unter System → Speicher (über ShadowMountPlus ab 1.7beta10): nur wenn kein Auftrag der App läuft und PS4Mount keine Spiele von dem Laufwerk spielt; sonst sagt die App, was noch läuft. Erst abziehen, wenn die Konsole „… ist ausgeworfen und kann abgezogen werden“ meldet.
-- **Danach räumt der Dateimanager auf:** Er liest die Orte neu und verlässt einen Ordner des Laufwerks (Browser: zur internen SSD; Vollbild-App: zu den Orten). Die Karte der Vollbild-App zeigt „Wird ausgeworfen …“ und danach das Ergebnis.
+## What's new
+### File manager (browser and fullscreen app)
+- **Eject in the file manager:** It is the same eject as under System → Storage (through ShadowMountPlus 1.7beta10 or newer): only while no job of the app is running and PS4Mount plays no game from the drive; otherwise the app says what is still running. Unplug the drive only when the console says "… is ejected and can be unplugged".
+- **Afterwards the file manager tidies up:** It reads the locations again and leaves a folder of the drive (browser: to the internal SSD; fullscreen app: to the locations). The card in the fullscreen app shows "Ejecting …" and then the result.
 
-### Spielstände übertragen
-- **Spendersuche einmal je Auftrag:** Beim Einspielen mehrerer Spielstände eines Titels wurden bis zu 8 Kopien je Spielstand eingehängt, um die Besitzerangaben zu finden; jetzt einmal je Auftrag. Ein Spielstand, der auf der Konsole schon einen eigenen hat, wird weiter einzeln gesucht.
+### Transferring saved data
+- **Donor search once per job:** When several saved data sets of one title were imported, up to 8 copies were mounted for each set to find the owner details; now it happens once per job. A set that already has one of its own on the console is still searched on its own.
 
-### Vollbild-App
-- **Selbstlauf nur mit Demodaten:** Der Selbstlauf der Kachel (für die Bilder in der Anleitung) drückt „Bestätigen“ auf Zeilen, die er in den Demodaten findet. Eine Kachel, die mit den echten Daten gestartet ist, ignoriert die Anfrage jetzt.
+### Fullscreen app
+- **Self-running tour with demo data only:** The tile's self-running tour (it produces the pictures for the guide) presses "Confirm" on rows it finds in the demo data. A tile that was started with the real data now ignores the request.
 
-### Aufräumen
-- Tote Zuweisungen in den Spielstand-Dateien entfernt, eine Absicherung vor einer leeren Liste ergänzt; ohne sichtbare Wirkung.
+### Housekeeping
+- Dead assignments removed in the saved-data files and a guard added before an empty list; no visible effect.
 
-## Hinweise
-- **An der Konsole bestätigt (19.11.2026):** das Auswerfen im Dateimanager, in der Browser-App und in der Vollbild-App, vom Nutzer an der Konsole ausprobiert. Dazu 35 Host-Tests und 375 Tests der Vollbild-App. Das Auswerfen selbst ist seit 29.10.2026 unverändert und an der Konsole bestätigt.
-- **An der Konsole bestätigt (Slim, Firmware 12.00, 19.11.2026):** die Wiederherstellung eines unterbrochenen Einspielens (beim Start und beim nächsten Einspielen) und die Ablehnung von Apps im Plan des Einspielens.
-- Die neue ELF an Port 9021 senden und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein). Alles andere ist wie in v1.88.0.
+## Notes
+- **Confirmed on the console (19.11.2026):** ejecting in the file manager, in the browser app and in the fullscreen app, tried by the user on the console. Also 35 host tests and 375 tests of the fullscreen app. The eject itself has been unchanged since 29.10.2026 and is confirmed on the console.
+- **Confirmed on the console (Slim, firmware 12.00, 19.11.2026):** the recovery of an interrupted import (at start-up and at the next import) and the refusal of apps in the import plan.
+- Send the new ELF to port 9021 and copy the tiles FAKE86921 and FAKE86922 from this release again (the fullscreen app must be closed for that). Everything else is as in v1.88.0.
 
 ## Downloads
-| Datei | Wofür |
+| File | What it is for |
 |---|---|
-| `PS5_Cooling_System_Center_v1.88.1.elf` | Das Hauptprogramm (an Port 9021 senden) |
-| `FAKE86921.zip` | Vollbild-Kachel (mit Dump Forge): Ordner nach `/data/homebrew/` kopieren |
-| `FAKE86922.zip` | Browser-Kachel (mit Dump Forge): Ordner nach `/data/homebrew/` kopieren |
-| `LIESMICH.txt` | Anleitung |
-| `payload-manager.json` | Liste für den Payload Manager von itsPLK: als Quelle `https://github.com/strongt1me/ps5-cooling-system-center-pro/releases/latest/download/payload-manager.json` eintragen, dann lädt er die App von GitHub (mit SHA-256-Prüfung) |
+| `PS5_Cooling_System_Center_v1.88.1.elf` | The main program (send it to port 9021) |
+| `FAKE86921.zip` | Fullscreen tile (with Dump Forge): copy the folder to `/data/homebrew/` |
+| `FAKE86922.zip` | Browser tile (with Dump Forge): copy the folder to `/data/homebrew/` |
+| `LIESMICH.txt` | Instructions (German) |
+| `payload-manager.json` | List for itsPLK's Payload Manager: enter `https://github.com/strongt1me/ps5-cooling-system-center-pro/releases/latest/download/payload-manager.json` as the source, and it downloads the app from GitHub (with a SHA-256 check) |
 
-## Danke
-An alle, deren Arbeit in der App steckt oder sie möglich macht – die vollständige Liste steht in der App unter „Credits“ bzw. Profil → Danke. Besonders **quer3q** für AMPR EMU NG, Kraken Mount und Dump Forge, **drakmor** für ShadowMountPlus sowie **itsPLK** für den Payload Manager und **earthonion** für Garlic SaveMgr (Vorbild für das Format der ZIP-Datei). Und dem Nutzer, der das Auswerfen im Dateimanager vorgeschlagen hat.
+## Thanks
+To everyone whose work is in the app or makes it possible – the full list is in the app under "Credits" or Profile → Thanks. Especially **quer3q** for AMPR EMU NG, Kraken Mount and Dump Forge, **drakmor** for ShadowMountPlus, **itsPLK** for the Payload Manager and **earthonion** for Garlic SaveMgr (the model for the format of the ZIP file). And to the user who suggested ejecting in the file manager.
 
 **Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.88.0...v1.88.1

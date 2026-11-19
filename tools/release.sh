@@ -2,6 +2,7 @@
 # Runs the release procedure of the project (see the memory note "release-vorgehen"):
 #
 #   tools/release.sh <X.Y.Z> [--dry-run] [--notes docs/RELEASE_NOTES.md] [--yes]
+#   (the release page is the English notes, with the German ones, docs/RELEASE_NOTES.de.md, in a folded "Deutsch" section)
 #
 #   1. checks      clean tree, something new since the last tag, version above the last tag, login, branch
 #   2. version     src/ps5tm.h, README*.md (badge + nc line), docs/LIESMICH.txt
@@ -24,7 +25,7 @@ BRANCH="public"
 REMOTE_BRANCH="main"
 IDENT_EMAIL="279990554+strongt1me@users.noreply.github.com"
 TRAILER="Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
-README_FILES=(README.md README.en.md README.es.md README.fr.md README.it.md README.ru.md README.sv.md)
+README_FILES=(README.md README.de.md README.es.md README.fr.md README.it.md README.ru.md README.sv.md)
 LIESMICH="docs/LIESMICH.txt"
 HEADER="src/ps5tm.h"
 TILES=(FAKE86921 FAKE86922)
@@ -35,7 +36,8 @@ Aufruf: tools/release.sh <Version> [Optionen]
 
   <Version>            neue Version, z. B. 1.87.0 (muss größer sein als der letzte Tag)
   --dry-run            nichts verändern, nur prüfen und auflisten, was getan würde
-  --notes <Datei>      Release-Notizen (Vorgabe: docs/RELEASE_NOTES.md; die erste Zeile wird weggelassen)
+  --notes <Datei>      Release-Notizen auf Englisch (Vorgabe: docs/RELEASE_NOTES.md; die erste Zeile wird weggelassen);
+                       die deutschen liegen daneben als <Name>.de.md und kommen aufklappbar dazu
   --yes                die eine Rückfrage vor Push und Release überspringen
   -h, --help           diese Hilfe
 USAGE
@@ -58,6 +60,7 @@ done
 [ -n "$VERSION" ] || { usage >&2; exit 2; }
 printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Ungültige Version: $VERSION (erwartet X.Y.Z)" >&2; exit 2; }
 NOTES="${NOTES#./}"
+NOTES_DE="${NOTES%.md}.de.md"      # the German notes: shown folded under the English ones
 
 TAG="v$VERSION"
 RELDIR="PS5 Cooling and System Center v$VERSION"
@@ -126,7 +129,7 @@ DIRTY_OTHER=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   st="${line:0:2}"; path="${line:3}"
-  if [ "$st" != "??" ] && { [ "$path" = "$NOTES" ] || [ "$path" = "CHANGELOG.md" ]; }; then
+  if [ "$st" != "??" ] && { [ "$path" = "$NOTES" ] || [ "$path" = "$NOTES_DE" ] || [ "$path" = "CHANGELOG.md" ]; }; then
     DIRTY_ALLOWED+=("$path")
   else
     DIRTY_OTHER+=("$line")
@@ -191,6 +194,15 @@ else
     *"$TAG"*) say "Notizen: $NOTES (Kopfzeile nennt $TAG)" ;;
     *)        problem "Die erste Zeile von $NOTES nennt $TAG nicht: $first" ;;
   esac
+  if [ ! -f "$NOTES_DE" ]; then
+    problem "Die deutschen Release-Notizen fehlen: $NOTES_DE (sie kommen aufklappbar auf die Release-Seite)"
+  else
+    first_de="$(head -n 1 "$NOTES_DE" | tr -d '\r')"
+    case "$first_de" in
+      *"$TAG"*) say "Notizen: $NOTES_DE (Kopfzeile nennt $TAG)" ;;
+      *)        problem "Die erste Zeile von $NOTES_DE nennt $TAG nicht: $first_de" ;;
+    esac
+  fi
 fi
 
 # login and existing release
@@ -413,13 +425,18 @@ head_ "6. Push und GitHub-Release anlegen"
 if [ "$DRY" = 1 ]; then
   confirm "git push $REMOTE $BRANCH:$REMOTE_BRANCH und gleich danach gh release create $TAG (5 Dateien) in $REPO"
   dry "würde pushen: git push $REMOTE $BRANCH:$REMOTE_BRANCH (erst jetzt: Bau und Zip-Dateien sind geprüft; scheitert vorher etwas, steht nichts auf $REMOTE_BRANCH)"
-  dry "würde Seitentext aus $NOTES ohne die erste Zeile in eine Temp-Datei schreiben"
+  dry "würde Seitentext aus $NOTES ohne die erste Zeile in eine Temp-Datei schreiben, danach $NOTES_DE ohne die erste Zeile in einem aufklappbaren Abschnitt \"Deutsch\""
   dry "würde ausführen: gh release create $TAG <5 Dateien aus \"$RELDIR\"> --repo $REPO --target $SHA --title \"PS5 Cooling & System Center - Pro $TAG\" --notes-file <Notizen ohne erste Zeile> --latest"
 else
   for f in "${FILES[@]}"; do [ -f "$f" ] || { echo "FEHLER: Datei fehlt: $f" >&2; exit 1; }; done
   STAGE="Push"
   NOTES_TMP="$(mktemp)"
-  tail -n +2 "$NOTES" > "$NOTES_TMP"
+  tail -n +2 "$NOTES" | tr -d '\r' > "$NOTES_TMP"
+  {
+    printf '\n---\n\n<details>\n<summary><b>Deutsch</b></summary>\n\n'
+    tail -n +2 "$NOTES_DE" | tr -d '\r'
+    printf '\n</details>\n'
+  } >> "$NOTES_TMP"
   # one question for both steps that cannot be taken back (audit F-267: a "no" after the push used to leave main pointing at a release that did not exist)
   confirm "git push $REMOTE $BRANCH:$REMOTE_BRANCH (Commit ${SHA:0:7}) und gleich danach gh release create $TAG mit ${#FILES[@]} Dateien in $REPO"
   git push "$REMOTE" "$BRANCH:$REMOTE_BRANCH"

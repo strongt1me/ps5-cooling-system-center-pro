@@ -14,7 +14,7 @@
 
 [Fonctions](#fonctions) · [Démarrage rapide](#démarrage-rapide) · [Prérequis](#prérequis) · [Utilisation](#utilisation) · [Documentation](#documentation) · [Mentions légales](#mentions-légales-et-clause-de-non-responsabilité) · [Crédits](#crédits-et-remerciements)
 
-[Deutsch](README.md) · [English](README.en.md) · [Italiano](README.it.md) · [Español](README.es.md) · **Français** · [Русский](README.ru.md) · [Svenska](README.sv.md)
+[Deutsch](README.de.md) · [English](README.md) · [Italiano](README.it.md) · [Español](README.es.md) · **Français** · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
 <img src="docs/images/kuehlung.jpg" alt="Refroidissement : température, ventilateur, jeu en cours, température cible et mode" width="860">
 
@@ -360,4 +360,4 @@ Si vous ne vous trouvez pas ici ou êtes mal décrit, signalez-le : la liste ser
 
 Copyright © 2026 strongt1me · **GNU General Public License v3.0 ou ultérieure**, voir [LICENSE](LICENSE). Jusqu'à 1.45.1 le projet était sous MIT ; depuis 1.46.0 il est sous GPL-3.0-or-later car il reprend des parties de projets GPL (détails dans [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-<sub>Ce README existe aussi en [Deutsch](README.md), [English](README.en.md), [Italiano](README.it.md), [Español](README.es.md), [Русский](README.ru.md) et [Svenska](README.sv.md). Le manuel et la FAQ accompagnent chaque release dans les sept langues.</sub>
+<sub>Ce README existe aussi en [Deutsch](README.de.md), [English](README.md), [Italiano](README.it.md), [Español](README.es.md), [Русский](README.ru.md) et [Svenska](README.sv.md). Le manuel et la FAQ accompagnent chaque release dans les sept langues.</sub>

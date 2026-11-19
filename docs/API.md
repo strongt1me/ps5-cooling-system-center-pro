@@ -1,6 +1,8 @@
 # Schnittstelle (API)
 
-[README](../README.md) · [Handbuch](HANDBUCH.md) · [API](API.md) · [Entwicklung](ENTWICKLUNG.md)
+[README](../README.de.md) · [Handbuch](HANDBUCH.md) · [API](API.md) · [Entwicklung](ENTWICKLUNG.md)
+
+> **This document is in German** (the endpoints and JSON fields are English). The [README](../README.md) is in English.
 
 Die Web-Oberfläche spricht mit der App über eine JSON-Schnittstelle unter
 `http://<PS5-IP>:8086/api/v1/`. Alles, was die Oberfläche kann, geht damit auch

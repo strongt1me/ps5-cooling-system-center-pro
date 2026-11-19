@@ -1,6 +1,8 @@
 # Entwicklung
 
-[README](../README.md) · [Handbuch](HANDBUCH.md) · [API](API.md) · [Entwicklung](ENTWICKLUNG.md)
+[README](../README.de.md) · [Handbuch](HANDBUCH.md) · [API](API.md) · [Entwicklung](ENTWICKLUNG.md)
+
+> **This document is in German.** The [README](../README.md) is in English and has a short build guide.
 
 Bauen, auf die Konsole senden, Fehlersuche und Aufbau des Quellcodes.
 

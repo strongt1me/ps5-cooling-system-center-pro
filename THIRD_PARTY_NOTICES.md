@@ -1,10 +1,12 @@
 # Fremde Bestandteile
 
+> **This file is in German.** The acknowledgements in English are in the [README](README.md#credits-and-acknowledgements).
+
 PS5 Cooling & System Center - Pro steht unter der GNU GPL, Version 3 oder später
 (siehe [LICENSE](LICENSE)). Diese Teile stammen aus anderen Projekten; ihre
 Lizenzen sind mit der GPL-3.0 verträglich und gelten für die jeweiligen
 Dateien weiter. Den Dank an die Urheber und eine verständliche Beschreibung
-ihrer Beiträge gibt es in der [README](README.md#credits-und-danksagung).
+ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
 
 ## Übernommener oder portierter Code
 

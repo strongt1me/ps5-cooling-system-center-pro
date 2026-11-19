@@ -1,5 +1,16 @@
 # Changelog
 
+> **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
+
+## Unveröffentlicht
+
+### GitHub: Englisch als Standard, Deutsch als Option (Wunsch des Users, 19.11.2026)
+- **README:** `README.md` ist jetzt Englisch (bisher `README.en.md`; diese Datei entfällt). Die deutsche steht als `README.de.md` daneben, und die Sprachleiste aller sieben READMEs führt zu beiden.
+- **Sicherheitsrichtlinie:** `SECURITY.md` Englisch, `SECURITY.de.md` Deutsch (mit Link in beide Richtungen).
+- **Release-Seiten ab v1.88.1:** Der Text ist Englisch (`docs/RELEASE_NOTES.md`), die deutschen Notizen (`docs/RELEASE_NOTES.de.md`) stehen darunter in einem aufklappbaren Abschnitt „Deutsch“. `tools/release.sh` baut die Seite so, prüft beide Dateien auf die Version in der ersten Zeile und kennt `README.de.md` für die Versionsnummer. Ältere Release-Seiten bleiben, wie sie sind (Deutsch).
+- **Repository-Beschreibung** nur noch Englisch.
+- **Bleiben Deutsch:** CHANGELOG, Handbuch (`docs/HANDBUCH.md`), API, Entwicklung, Erweiterungen und `THIRD_PARTY_NOTICES.md`, jeweils mit einem englischen Hinweis am Anfang; ihre Links auf die README zeigen auf `README.de.md`. Das Handbuch ist außerdem in der App in sieben Sprachen eingebaut. `LIESMICH.txt` (Anhang jedes Releases) bleibt Deutsch.
+
 ## v1.88.1 – 19.11.2026
 
 ### Dateimanager: USB-Laufwerk sicher auswerfen (Wunsch eines Nutzers, 19.11.2026)

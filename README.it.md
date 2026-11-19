@@ -14,7 +14,7 @@
 
 [Funzioni](#funzioni) · [Avvio rapido](#avvio-rapido) · [Requisiti](#requisiti) · [Utilizzo](#utilizzo) · [Documentazione](#documentazione) · [Note legali](#note-legali-ed-esclusione-di-responsabilità) · [Riconoscimenti](#riconoscimenti-e-ringraziamenti)
 
-[Deutsch](README.md) · [English](README.en.md) · **Italiano** · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
+[Deutsch](README.de.md) · [English](README.md) · **Italiano** · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
 <img src="docs/images/kuehlung.jpg" alt="Raffreddamento: temperatura, ventola, gioco in corso, temperatura obiettivo e modalità" width="860">
 
@@ -360,4 +360,4 @@ Chi non si trova qui o si trova descritto in modo errato può segnalarlo: l'elen
 
 Copyright © 2026 strongt1me · **GNU General Public License v3.0 o successiva**, vedi [LICENSE](LICENSE). Fino alla 1.45.1 il progetto era MIT; dalla 1.46.0 è GPL-3.0-or-later perché contiene parti di progetti GPL (dettagli in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-<sub>Questo README è disponibile anche in [Deutsch](README.md), [English](README.en.md), [Español](README.es.md), [Français](README.fr.md), [Русский](README.ru.md) e [Svenska](README.sv.md). Manuale e FAQ accompagnano ogni release in tutte e sette le lingue.</sub>
+<sub>Questo README è disponibile anche in [Deutsch](README.de.md), [English](README.md), [Español](README.es.md), [Français](README.fr.md), [Русский](README.ru.md) e [Svenska](README.sv.md). Manuale e FAQ accompagnano ogni release in tutte e sette le lingue.</sub>

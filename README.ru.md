@@ -14,7 +14,7 @@
 
 [Функции](#функции) · [Быстрый старт](#быстрый-старт) · [Требования](#требования) · [Использование](#использование) · [Документация](#документация) · [Правовая информация](#правовая-информация-и-отказ-от-ответственности) · [Благодарности](#авторы-и-благодарности)
 
-[Deutsch](README.md) · [English](README.en.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · **Русский** · [Svenska](README.sv.md)
+[Deutsch](README.de.md) · [English](README.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · **Русский** · [Svenska](README.sv.md)
 
 <img src="docs/images/kuehlung.jpg" alt="Охлаждение: температура, вентилятор, запущенная игра, целевая температура и режим" width="860">
 
@@ -360,4 +360,4 @@ make
 
 Copyright © 2026 strongt1me · **GNU General Public License v3.0 или более поздняя**, см. [LICENSE](LICENSE). До 1.45.1 проект был под MIT; с 1.46.0 — GPL-3.0-or-later, так как содержит части из проектов под GPL (подробности в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-<sub>Этот README есть также на [Deutsch](README.md), [English](README.en.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md) и [Svenska](README.sv.md). Руководство и FAQ прилагаются к каждому релизу на всех семи языках.</sub>
+<sub>Этот README есть также на [Deutsch](README.de.md), [English](README.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md) и [Svenska](README.sv.md). Руководство и FAQ прилагаются к каждому релизу на всех семи языках.</sub>

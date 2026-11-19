@@ -4,360 +4,360 @@
 
 # PS5 Cooling & System Center - Pro
 
-**Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser (Konsole, Handy, PC) oder als Vollbild-App auf dem Fernseher mit dem Controller, in sieben Sprachen.**
+**Fan control, temperature monitoring and system hub for the jailbroken PlayStation 5,<br>used in a browser (console, phone, PC) or as a fullscreen app on the TV with the controller, in seven languages.**
 
 ![Version](https://img.shields.io/badge/Version-1.88.1-1f6feb)
-![Firmware](https://img.shields.io/badge/FW-4.03%20bis%2014.10%20Support-2ea44f)
-![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
-![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
-![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
+![Firmware](https://img.shields.io/badge/FW-4.03%20to%2014.10%20supported-2ea44f)
+![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
+![Platform](https://img.shields.io/badge/Platform-PS5%20Payload-003791)
+![Languages](https://img.shields.io/badge/Languages-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
 
-[Funktionen](#funktionen) · [Schnellstart](#schnellstart) · [Voraussetzungen](#voraussetzungen) · [Bedienung](#bedienung) · [Dokumentation](#dokumentation) · [Rechtliches](#rechtliches-und-haftungsausschluss) · [Credits](#credits-und-danksagung)
+[Features](#features) · [Quick start](#quick-start) · [Requirements](#requirements) · [Usage](#usage) · [Documentation](#documentation) · [Legal](#legal-notice-and-disclaimer) · [Credits](#credits-and-acknowledgements)
 
-**Deutsch** · [English](README.en.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
+[Deutsch](README.de.md) · **English** · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Svenska](README.sv.md)
 
-<img src="docs/images/kuehlung.jpg" alt="Kühlung: Temperatur, Lüfter, laufendes Spiel, Zieltemperatur und Betriebsart" width="860">
+<img src="docs/images/kuehlung.jpg" alt="Cooling: temperature, fan, running game, target temperature and mode" width="860">
 
 </div>
 
-Ein Homebrew-Payload (ELF), das die Temperatursensoren der PS5 liest, den Lüfter nach einer ruhigen, einstellbaren Komfortkurve regelt und eine Browser-App sowie eine Vollbild-App mitbringt. Dazu kommen Spiele-, Datei-, Payload- und Profilverwaltung. Alles läuft auf der Konsole selbst, ohne PC und ohne Internet.
+A homebrew payload (ELF) that reads the PS5's temperature sensors, drives the fan along a quiet, adjustable comfort curve and comes with a browser app and a fullscreen app. On top of that: game, file, payload and profile management. Everything runs on the console itself, without a PC and without the internet.
 
-## Zwei Oberflächen
+## Two interfaces
 
-Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was die Browser-App kann; nur Dateien hoch- und herunterladen geht allein im Browser.
+One app, two ways to use it. The fullscreen app can do almost everything the browser app can; only uploading and downloading files works in the browser alone.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Browser-App: Kühlung"></td>
-    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Vollbild-App: Kühlung"></td>
+    <td width="50%"><img src="docs/images/kuehlung.jpg" alt="Browser app: cooling"></td>
+    <td width="50%"><img src="docs/images/vollbild-kuehlung.jpg" alt="Fullscreen app: cooling"></td>
   </tr>
   <tr>
     <td valign="top">
-      <h3>🌐 Browser-App</h3>
-      Im Browser der Konsole oder von Handy und PC im Heimnetz: <code>http://&lt;PS5-IP&gt;:8086</code>. Als Kachel <b>FAKE86922</b> öffnet ein Tipp den Browser der Konsole mit der App. Vier Designs, sieben Sprachen, Handbuch und FAQ eingebaut.
+      <h3>🌐 Browser app</h3>
+      In the console's browser or from a phone or PC on the home network: <code>http://&lt;PS5-IP&gt;:8086</code>. As the tile <b>FAKE86922</b>, a tap opens the console's browser with the app. Four designs, seven languages, manual and FAQ built in.
     </td>
     <td valign="top">
-      <h3>📺 Vollbild-App</h3>
-      Die Kachel <b>FAKE86921</b> im Medien-Bereich der Konsole füllt den Fernseher und wird nur mit dem Controller bedient, ganz ohne Browser. L1/R1 wechseln die Seite, L2/R2 die Ansicht, <b>X</b> öffnet oder startet, <b>Dreieck</b> zeigt mehr, <b>Quadrat</b> öffnet die Aktionen.
+      <h3>📺 Fullscreen app</h3>
+      The tile <b>FAKE86921</b> in the console's media area fills the TV and is operated with the controller only, no browser at all. L1/R1 switch the page, L2/R2 the view, <b>X</b> opens or starts, <b>Triangle</b> shows more, <b>Square</b> opens the actions.
     </td>
   </tr>
 </table>
 
-## Funktionen
+## Features
 
 <table>
   <tr>
     <td width="33%" valign="top">
-      <h3>🌡️ Kühlung</h3>
-      Ruhige Lüfterregelung auf eine Zieltemperatur (50–91 °C), Betriebsarten, Profile pro Spiel, Nachtmodus mit leiserem Ziel, Lüfter-Selbsttest, Sicherheitsgrenze in der Hardware.
+      <h3>🌡️ Cooling</h3>
+      Quiet fan control towards a target temperature (50–91 °C), modes, per-game profiles, a quieter target at night, a fan self-test, a safety limit left to the hardware.
     </td>
     <td width="33%" valign="top">
-      <h3>📊 Messwerte</h3>
-      Prozessor, Hauptchip, Grafik (Pro), Lüfter, Kernlast, Takt, Stromschienen, Bildrate und Controller-Akku, mit Verläufen.
+      <h3>📊 Readings</h3>
+      CPU, SoC, GPU (Pro), fan, core load, clocks, power rails, frame rate and controller battery, with history.
     </td>
     <td width="33%" valign="top">
-      <h3>🎮 Spiele</h3>
-      Starten, beenden, kopieren, verschieben, in exFAT/ffpkg/ffpfsc/FPKG umwandeln, LZ4-Asset-Packs, APR-EMU, PlayGo. Ansicht kompakt (Standard) oder groß.
+      <h3>🎮 Games</h3>
+      Start, close, copy, move, convert to exFAT/ffpkg/ffpfsc/FPKG, LZ4 asset packs, APR-EMU, PlayGo. Compact (default) or large view.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h3>💾 PS4 PKG von USB</h3>
-      PS4-Fake-PKGs direkt vom USB-Laufwerk spielen, ohne Installation (PS4Mount eingebaut), mit Updates und DLC.
+      <h3>💾 PS4 PKG from USB</h3>
+      Play PS4 fake PKGs straight from a USB drive without installing them (PS4Mount built in), with updates and DLC.
     </td>
     <td valign="top">
-      <h3>📦 Pakete & Spielstände</h3>
-      PKG finden, aufteilen und installieren; Spielstände sichern, zurückspielen und als ZIP auf eine andere Konsole übertragen; Spielzeit mit Temperaturen.
+      <h3>📦 Packages & saves</h3>
+      Find, split and install PKGs; back up and restore save data and carry it to another console as a ZIP; play time with temperatures.
     </td>
     <td valign="top">
-      <h3>📁 Dateien & Payloads</h3>
-      Dateimanager für Konsole und Laufwerke; Payloads herunterladen (Liste des Payload Managers), starten, beenden und als Profile nacheinander laden.
+      <h3>📁 Files & payloads</h3>
+      File manager for the console and drives; download payloads (the Payload Manager's list), start and stop them, load them one after another as profiles.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h3>🖥️ System & Protokoll</h3>
-      Modell, Firmware, Netzwerk, Bildschirm; Ereignisprotokoll und Kernel-Log live mit Aufnahme.
+      <h3>🖥️ System & log</h3>
+      Model, firmware, network, display; event log and live kernel log with recording.
     </td>
     <td valign="top">
-      <h3>🕹️ Bedienung am Controller</h3>
-      L1/R1 wechseln die Seite, L2/R2 scrollen; Mute-Taste zweimal zeigt Temperatur und Lüfter auf dem Fernseher.
+      <h3>🕹️ Controller shortcuts</h3>
+      L1/R1 switch pages, L2/R2 scroll; pressing Mute twice shows temperature and fan on the TV.
     </td>
     <td valign="top">
-      <h3>🚀 Starter-Kacheln</h3>
-      Zwei Ordner für <code>/data/homebrew</code>: <code>FAKE86921</code> startet die Vollbild-App, <code>FAKE86922</code> öffnet die Browser-App.
+      <h3>🚀 Starter tiles</h3>
+      Two folders for <code>/data/homebrew</code>: <code>FAKE86921</code> starts the fullscreen app, <code>FAKE86922</code> opens the browser app.
     </td>
   </tr>
 </table>
 
-### Ansichten der Browser-App
+### Screens of the browser app
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/spiele.jpg" alt="Spiele-Bibliothek"></td>
-    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="PS4-Spiele von USB"></td>
+    <td width="50%"><img src="docs/images/spiele.jpg" alt="Game library"></td>
+    <td width="50%"><img src="docs/images/ps4-von-usb.jpg" alt="PS4 games from USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Spiele: Bibliothek in kompakter Ansicht (Standard) mit Starten, Kopieren, Konvertieren</sub></td>
-    <td align="center"><sub>PS4 PKG von USB: Fake-PKGs ohne Installation</sub></td>
+    <td align="center"><sub>Games: library in compact view (default) with start, copy, convert</sub></td>
+    <td align="center"><sub>PS4 PKG from USB: fake PKGs without installing</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spielzeit.jpg" alt="Spielzeit"></td>
-    <td><img src="docs/images/dateimanager.jpg" alt="Dateimanager"></td>
+    <td><img src="docs/images/spielzeit.jpg" alt="Play time"></td>
+    <td><img src="docs/images/dateimanager.jpg" alt="File manager"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Spielzeit mit Tagesübersicht und Temperaturen</sub></td>
-    <td align="center"><sub>Dateimanager für Konsole und USB-Laufwerke</sub></td>
+    <td align="center"><sub>Play time with daily chart and temperatures</sub></td>
+    <td align="center"><sub>File manager for the console and USB drives</sub></td>
   </tr>
   <tr>
     <td><img src="docs/images/payloads.jpg" alt="Payloads"></td>
     <td><img src="docs/images/system.jpg" alt="System"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Payloads: Profile, laufende und gespeicherte</sub></td>
-    <td align="center"><sub>System: Konsole, Netzwerk, Bildschirm</sub></td>
+    <td align="center"><sub>Payloads: profiles, running and saved</sub></td>
+    <td align="center"><sub>System: console, network, display</sub></td>
   </tr>
 </table>
 
 <details>
-<summary><b>Weitere Ansichten</b> (Kühlung im Detail, Spielstände, Pakete, Profil, Protokoll, Handy)</summary>
+<summary><b>More screens</b> (cooling in detail, saves, packages, profile, log, phone)</summary>
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="Temperaturverlauf, Sensoren und Profile pro Spiel"></td>
-    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Spielstände sichern"></td>
+    <td width="50%"><img src="docs/images/kuehlung-diagramme.jpg" alt="Temperature history, sensors and per-game profiles"></td>
+    <td width="50%"><img src="docs/images/spielstaende.jpg" alt="Save data backup"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/pakete.jpg" alt="Pakete installieren"></td>
-    <td><img src="docs/images/profil.jpg" alt="Profil mit 30 eingebauten Profilbildern"></td>
+    <td><img src="docs/images/pakete.jpg" alt="Installing packages"></td>
+    <td><img src="docs/images/profil.jpg" alt="Profile with 30 built-in profile pictures"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/protokoll.jpg" alt="Protokoll"></td>
-    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Kühlung auf dem Handy" width="240"></td>
+    <td><img src="docs/images/protokoll.jpg" alt="Log"></td>
+    <td align="center"><img src="docs/images/kuehlung-mobil.jpg" alt="Cooling on a phone" width="240"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/spiele-gross.jpg" alt="Spiele in großer Ansicht"></td>
-    <td align="center" valign="middle"><sub>Spiele in großer Ansicht: große Titelbilder, Knöpfe mit Beschriftung (auf der Seite Spiele umschaltbar)</sub></td>
+    <td><img src="docs/images/spiele-gross.jpg" alt="Games in the large view"></td>
+    <td align="center" valign="middle"><sub>Games in the large view: big covers, labelled buttons (switch on the Games page)</sub></td>
   </tr>
 </table>
-<sub>Alle Bilder mit Beispieldaten und erfundenen Spielen.</sub>
+<sub>All pictures use sample data and made-up games; the interface is shown in German.</sub>
 </details>
 
-### Ansichten der Vollbild-App
+### Screens of the fullscreen app
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Vollbild-App: Spiele"></td>
-    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Vollbild-App: Dateimanager"></td>
+    <td width="50%"><img src="docs/images/vollbild-spiele.jpg" alt="Fullscreen app: games"></td>
+    <td width="50%"><img src="docs/images/vollbild-dateien.jpg" alt="Fullscreen app: file manager"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Spiele: Bibliothek mit Starten, Details und Aktionen</sub></td>
-    <td align="center"><sub>Dateimanager: Kopieren mit Rate und Restzeit</sub></td>
+    <td align="center"><sub>Games: library with start, details and actions</sub></td>
+    <td align="center"><sub>File manager: copying with speed and time left</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Vollbild-App: Payloads"></td>
-    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Vollbild-App: Spielzeit"></td>
+    <td width="50%"><img src="docs/images/vollbild-payloads.jpg" alt="Fullscreen app: payloads"></td>
+    <td width="50%"><img src="docs/images/vollbild-spielzeit.jpg" alt="Fullscreen app: play time"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Payloads: laufende ansehen und beenden</sub></td>
-    <td align="center"><sub>Spielzeit mit Tagesübersicht</sub></td>
+    <td align="center"><sub>Payloads: see and end running ones</sub></td>
+    <td align="center"><sub>Play time with a daily overview</sub></td>
   </tr>
 </table>
-<sub>Alle Bilder mit Beispieldaten und erfundenen Spielen.</sub>
+<sub>All pictures use sample data and made-up games; the interface is shown in German.</sub>
 
 <details>
-<summary><b>Alle Funktionen im Detail</b></summary>
+<summary><b>All features in detail</b></summary>
 
-**Kühlung**
-- Hält eine Zieltemperatur (Standard 66 °C, einstellbar 50–91 °C) mit gleitendem Mittelwert, Totzone und Trend und ändert die Drehzahl nur in kleinen Schritten.
-- Betriebsarten leise, ausgewogen und kühl, Schnellwahl und eigene Regeln je Spiel.
-- Ab der Sicherheitstemperatur (Standard 78 °C) gilt nur noch die Hardware; läuft die App nicht, regelt die Konsole selbst.
-- Nachtmodus: Zwischen zwei Uhrzeiten gilt ein leiseres Nachtziel; die Uhrzeit ist die des Geräts, auf dem die Seite offen ist.
-- Lüfter-Selbsttest per Knopf (antwortet der Lüfter auf die Schwelle?) und gelernte Mindestdrehzahl der Konsole (20 % im Leerlauf, 34 % im Spiel), die in der Diagnose steht.
+**Cooling**
+- Holds a target temperature (default 66 °C, adjustable 50–91 °C) with a moving average, dead band and trend, and changes the fan speed only in small steps.
+- Quiet, balanced and cool modes, quick picks and per-game rules.
+- Above the safety temperature (default 78 °C) only the hardware decides; when the app is not running, the console regulates on its own.
+- Night mode: a quieter target between two clock times; the time is that of the device the page is open on.
+- Fan self-test at the press of a button (does the fan answer to the threshold?) and the console's learned minimum fan speed (20 % idle, 34 % in a game), shown in the diagnosis.
 
-**Spiele**
-- Starten (aus dem Konsolen-Browser schließt sich die Seite sofort), beenden, auf andere Laufwerke kopieren, mit ShadowMountPlus verschieben oder entpacken.
-- Ohne PC in exFAT-, ffpkg- und ffpfsc-Abbilder umwandeln; alles wird nach dem Schreiben zurückgelesen und geprüft, mit `.sha256`-Datei. Dazu ein Debug-FPKG (`.pkg`) für Kraken Mount, geschrieben von Dump Forge (quer3q; die App lädt es auf Knopfdruck).
-- LZ4-Asset-Packs, AMPR-Index, APR-EMU (ampr_emu und AMPR EMU NG), PlayGo-Stub und DLC-Module pro Spiel, Abbilder prüfen, entpacken und reparieren.
-- PS4 PKG von USB: PS4-Fake-PKGs vom USB-Laufwerk in die Bibliothek, ohne Installation (PS4Mount von gasb07).
-- FPKGMount: (F)PKG-Spiele und Spielordner ohne Installation spielen, mit Kraken Mount von quer3q (die App bringt es mit und startet es).
-- Disc: zeigt, welche Disc im Laufwerk liegt (PS2/PS3/PS4/PS5, Titelkennung), und legt von PS2-DVDs und PS3-Discs ein Abbild mit CRC-32, MD5 und SHA-1 an, auf Wunsch geprüft gegen Redump (nach ps-disc-detect).
-- Spielzeit mit Temperaturen, Spielstände sichern, zurückspielen und auf eine andere Konsole übertragen, Pakete finden, aufteilen und installieren, Verlauf aller Vorgänge.
+**Games**
+- Start (from the console's browser the page closes at once), close, copy to other drives, move or unpack with ShadowMountPlus.
+- Convert to exFAT, ffpkg and ffpfsc images without a PC; everything is read back and checked after writing, with a `.sha256` file. Plus a debug FPKG (`.pkg`) for Kraken Mount, written by Dump Forge (quer3q; the app fetches it on a button press).
+- LZ4 asset packs, AMPR index, APR-EMU (ampr_emu and AMPR EMU NG), PlayGo stub and DLC modules per game; check, unpack and repair images.
+- PS4 PKG from USB: PS4 fake PKGs from a USB drive into the library without installing them (PS4Mount by gasb07).
+- FPKGMount: play (F)PKG games and game folders without installing them, with Kraken Mount by quer3q (the app carries and starts it).
+- Disc: shows which disc is in the drive (PS2/PS3/PS4/PS5, title ID) and makes an image of PS2 DVDs and PS3 discs with CRC-32, MD5 and SHA-1, checked against Redump if wanted (after ps-disc-detect).
+- Play time with temperatures, back up and restore saves, find, split and install packages, history of all jobs.
 
-**Verwaltung**
-- Dateimanager: ansehen, bearbeiten, herunter- und hochladen (auch ganze Ordner), Ordner anlegen, umbenennen, kopieren, verschieben, löschen – überall, mit Geschwindigkeit und Restzeit beim Kopieren; Löschen fragt zuerst und nennt, was weggeht.
-- Payloads: laufende ansehen und beenden, eigene `.elf` aus einem Ordner oder vom USB-Stick starten, Profile als Startfolge; die Payloads aus der Liste des Payload Managers von itsPLK herunterladen und aktualisieren (mit SHA-256-Prüfung).
-- Profil: Anzeigename und Profilbild (30 eingebaute Bilder oder eigene Datei).
-- Design: Standard, Hell, Dunkel und Optimal (am schnellsten gezeichnet, gedacht für den Fernseher); jedes Gerät merkt sich seine Wahl.
-- System: Modell, Firmware, Laufzeit, Speicher, Netzwerk; Rohsensoren und Diagnose im Expertenmodus.
-- Kopfzeile auf jeder Seite: Ruhemodus, Neu starten, Ausschalten, abgesicherter Modus (je ein Klick).
+**Management**
+- File manager: view, edit, download and upload (whole folders too), create folders, rename, copy, move, delete – everywhere, with speed and time left while copying; deleting asks first and names what will go.
+- Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence; download and update the payloads from itsPLK's Payload Manager list (SHA-256 checked).
+- Profile: display name and profile picture (30 built-in pictures or your own file).
+- Design: Standard, Light, Dark and Optimal (fastest to draw, meant for the TV); every device remembers its choice.
+- System: model, firmware, uptime, storage, network; raw sensors and diagnostics in expert mode.
+- Header on every page: rest mode, restart, power off, safe mode (one click each).
 
-**Technik**
-- Eigener HTTP-Server ohne Fremdbibliothek, dokumentierte [JSON-Schnittstelle](docs/API.md), Einstellungen unter `/data/PS5-Cooling-Center/config.json`.
-- Kein Zugriff aufs Internet, außer auf Knopfdruck: „Payloads herunterladen“ lädt die Payload-Liste und die Dateien von GitHub, „AMPR EMU NG laden“ eine neuere Fassung von dort. Sonst spricht die App nur mit Programmen auf der Konsole und mit den Browsern im Heimnetz.
+**Technology**
+- Its own HTTP server without a third-party library, a documented [JSON interface](docs/API.md), settings in `/data/PS5-Cooling-Center/config.json`.
+- No internet access unless you press a button: “Download payloads” fetches the payload list and the files from GitHub, “Download AMPR EMU NG” a newer release from there. Otherwise the app only talks to programs on the console and to the browsers on your home network.
 
 </details>
 
-## Schnellstart
+## Quick start
 
-1. Aus den [Releases](../../releases) die Datei `PS5_Cooling_System_Center_v<Version>.elf` laden.
-2. An die Konsole senden (ELF-Lader, Port **9021**), zum Beispiel:
+1. Download `PS5_Cooling_System_Center_v<version>.elf` from the [Releases](../../releases).
+2. Send it to the console (ELF loader, port **9021**), for example:
    ```bash
    nc -q0 <PS5-IP> 9021 < PS5_Cooling_System_Center_v1.88.1.elf
    ```
-3. Im Browser öffnen: **`http://<PS5-IP>:8086`** (die Adresse zeigt auch die Meldung oben links auf dem Fernseher).
+3. Open **`http://<PS5-IP>:8086`** in a browser (the notification at the top left of the TV shows the address too).
 
 > [!TIP]
-> **Ohne Senden starten:** `FAKE86921.zip` (Vollbild-App mit Controller) und/oder `FAKE86922.zip` (Weboberfläche im Browser) aus dem Release entpacken und die Ordner nach `/data/homebrew/` kopieren. ShadowMountPlus legt die Kacheln an; ein Tipp startet die App.
+> **Start without sending:** unpack `FAKE86921.zip` (fullscreen app with the controller) and/or `FAKE86922.zip` (web interface in the browser) from the release and copy the folders to `/data/homebrew/`. ShadowMountPlus adds the tiles; one tap on one starts the app.
 
 > [!IMPORTANT]
-> Es darf immer nur **eine** Instanz laufen, sonst regeln zwei Programme gegeneinander am Lüfter. Eine alte Instanz lässt sich auf der Seite „Payloads“ beenden. Mehr in der [LIESMICH](docs/LIESMICH.txt).
+> Only **one** instance may run at a time, otherwise two programs fight over the fan. An old instance can be stopped on the "Payloads" page. More in the [LIESMICH](docs/LIESMICH.txt) (German).
 
-## Voraussetzungen
+## Requirements
 
 | | |
 | --- | --- |
-| **Konsole** | PS5 mit Jailbreak und ELF-Lader auf Port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) o. ä.) |
-| **Firmware** | **FW 4.03 bis 14.10 Support** |
-| **Getestet** | PS5 Pro (CFI-7021), Firmware 12.00; laut mehreren Nutzern auch 4.xx bis 10.xx und 13.60 |
-| **Lüfter** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (ohne laufen Sensoren und Oberfläche, die Regelung nicht) |
-| **Netzwerk** | Browser im selben Netz, oder der Browser der Konsole selbst |
-| **Optional** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) für Verschieben, Entpacken und die Starter-Kachel |
+| **Console** | Jailbroken PS5 with an ELF loader on port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) or similar) |
+| **Firmware** | **FW 4.03 to 14.10 supported** |
+| **Tested** | PS5 Pro (CFI-7021), firmware 12.00; several users report 4.xx to 10.xx and 13.60 working too |
+| **Fan** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (without it, sensors and interface work, fan control does not) |
+| **Network** | A browser on the same network, or the console's own browser |
+| **Optional** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) for moving, unpacking and the starter tile |
 
 <details>
-<summary>Firmware und SDK im Detail</summary>
+<summary>Firmware and SDK in detail</summary>
 
-Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmware **von 4.03 bis 14.10** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
+The ELF is built with PS5 payload SDK **v0.45**, whose start-up code knows firmware **4.03 up to 14.10**. A firmware the start-up code does not know never reaches `main()`: the program then does not start at all and writes nothing to the log. There are no reports yet for 13.00 to 13.40 (the start-up code knows them). The GPU temperature exists on the Pro only.
 </details>
 
-## Bedienung
+## Usage
 
-| Seite | Inhalt |
+| Page | Contents |
 | --- | --- |
-| **Kühlung** | Status, Verlauf, Sensoren, Zieltemperatur, Betriebsart, Profile pro Spiel |
-| **Spiele** | Bibliothek, Spielzeit, Spielstände, Pakete, PS4 PKG von USB, FPKGMount, Sicherungen, Verlauf |
-| **Dateimanager** | Ordner der Konsole und der Laufwerke |
-| **Payloads** | laufende, gespeicherte und auf USB liegende Payloads, Profile, Payloads herunterladen |
-| **System** | Konsole, Speicher, Netzwerk, Diagnose |
-| **Profil** | Anzeigename und Profilbild |
-| **Protokoll** | Ereignisse der App und Kernel-Log live |
-| **Credits** | Dank an die Entwickler; dazu **Handbuch** und **FAQ** in sieben Sprachen |
+| **Cooling** | Status, history, sensors, target temperature, mode, per-game profiles |
+| **Games** | Library, play time, saves, packages, PS4 PKG from USB, FPKGMount, backups, history |
+| **File manager** | Folders of the console and the drives |
+| **Payloads** | Running, saved and USB payloads, profiles, download payloads |
+| **System** | Console, storage, network, diagnostics |
+| **Profile** | Display name and profile picture |
+| **Log** | App events and the live kernel log |
+| **Credits** | Thanks to the developers; plus the **manual** and **FAQ** in seven languages |
 
-**Am Controller (Browser der Konsole):** L1 / R1 vorherige / nächste Seite · L2 / R2 nach oben / unten scrollen · Mute-Taste zweimal: Temperatur und Lüfter auf dem Fernseher.
+**On the controller (console browser):** L1 / R1 previous / next page · L2 / R2 scroll up / down · Mute twice: temperature and fan on the TV.
 
 > [!WARNING]
-> Die Oberfläche hat **keine Anmeldung**: Jedes Gerät im Heimnetz kann lesen und ändern. Keine Portweiterleitung auf Port 8086 einrichten. Wer nur den Browser der Konsole zulassen will, setzt `bind_address` auf `127.0.0.1`. Details im [Handbuch](docs/HANDBUCH.md#zugriff-und-sicherheit-im-heimnetz) und in der [Sicherheitsrichtlinie](SECURITY.md).
+> The interface has **no login**: every device on your home network can read and change things. Do not set up port forwarding to port 8086. To allow only the console's browser, set `bind_address` to `127.0.0.1`. Details in the [manual](docs/HANDBUCH.md#zugriff-und-sicherheit-im-heimnetz) and the [security policy](SECURITY.md).
 
-## Dokumentation
+## Documentation
 
-| Dokument | Inhalt |
+| Document | Contents |
 | --- | --- |
-| [Handbuch](docs/HANDBUCH.md) | Bedienung im Detail (auch in der App, in sieben Sprachen) |
-| [API](docs/API.md) | Alle Endpunkte und Konfigurationsfelder |
-| [Entwicklung](docs/ENTWICKLUNG.md) | Bauen, Senden, Fehlersuche, Quellcode-Aufbau |
-| [Änderungen](CHANGELOG.md) | Was sich in welcher Version geändert hat |
-| [Entscheidungsprotokoll](docs/ERWEITERUNGEN.md) | Warum etwas so gebaut ist, was gemessen wurde |
-| [Fremde Bestandteile](THIRD_PARTY_NOTICES.md) | Übernommener Code und seine Lizenzen |
-| [Mitwirken](CONTRIBUTING.md) · [Sicherheit](SECURITY.md) | Beiträge und Meldung von Sicherheitslücken |
+| [Manual](docs/HANDBUCH.md) | Usage in detail (German; also in the app, in seven languages) |
+| [API](docs/API.md) | All endpoints and configuration fields |
+| [Development](docs/ENTWICKLUNG.md) | Building, sending, troubleshooting, source layout |
+| [Changes](CHANGELOG.md) | What changed in which version |
+| [Decision log](docs/ERWEITERUNGEN.md) | Why things are built the way they are, what was measured |
+| [Third-party parts](THIRD_PARTY_NOTICES.md) | Code taken over and its licences |
+| [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) | Contributions and reporting vulnerabilities |
 
 <details>
-<summary><b>Aus dem Quellcode bauen</b></summary>
+<summary><b>Building from source</b></summary>
 
-Voraussetzung ist das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk) **ab v0.42** (getestet mit v0.45); der Bau prüft das und bricht mit einem zu alten SDK ab. Unter Windows genügt Git Bash mit LLVM 21:
+You need the [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 or newer** (tested with v0.45); the build checks this and stops with an older SDK. On Windows, Git Bash with LLVM 21 is enough:
 
 ```bash
 tools/build-windows.sh
 ```
 
-Unter Linux oder WSL:
+On Linux or WSL:
 
 ```bash
 export PS5_PAYLOAD_SDK=$HOME/ps5sdk/sdk
 make
 ```
 
-Ergebnis ist `PS5_Cooling_Center.elf`; die Starter-Kachel baut `tools/make_starter.sh`. Alles Weitere in [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
+The result is `PS5_Cooling_Center.elf`; `tools/make_starter.sh` builds the starter tile. Everything else is in [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
 </details>
 
-## Rechtliches und Haftungsausschluss
+## Legal notice and disclaimer
 
 > [!CAUTION]
-> **Kein offizielles Produkt, keine Piraterie, keine Haftung.** Dieses Projekt steht in keiner Verbindung zu den Rechteinhabern der Konsole. Es enthält keine Spiele, keine Firmware, keine fremden Schlüssel (nur einen öffentlich bekannten Schlüssel für selbst gebaute Test-Pakete, siehe THIRD_PARTY_NOTICES.md) und keinen Code zum Umgehen von Kopierschutz, und es lädt nichts aus dem Internet außer, auf Knopfdruck, der Payload-Liste samt Dateien und einer neueren Fassung von AMPR EMU NG von GitHub. Das Modifizieren einer Konsole kann Garantie und Konto kosten; das Risiko trägt, wer es tut. Das Programm wird **ohne jede Gewährleistung** bereitgestellt.
+> **Not an official product, no piracy, no liability.** This project has no connection to the console's rights holders. It contains no games, no firmware, no third-party keys (only a publicly known key for self-built test packages, see THIRD_PARTY_NOTICES.md) and no code to circumvent copy protection, and it downloads nothing from the internet except, when you press a button, the payload list with its files and a newer release of AMPR EMU NG from GitHub. Modifying a console can cost you your warranty and account; the risk lies with whoever does it. The program is provided **without any warranty**.
 
 <details>
-<summary>Vollständiger Text</summary>
+<summary>Full text</summary>
 
-> Dieser Abschnitt ist eine allgemeine Information und keine Rechtsberatung. Wer das Projekt benutzt, ist selbst dafür verantwortlich, dass seine Nutzung in seinem Land und gegenüber seinen Vertragspartnern zulässig ist.
+> This section is general information, not legal advice. Anyone using the project is responsible for making sure that their use is permitted in their country and towards their contractual partners.
 
-- **Kein offizielles Produkt.** „PlayStation“, „PS5“ und die zugehörigen Logos sind Marken ihrer jeweiligen Inhaber. Dieses Projekt steht in keiner Verbindung zu ihnen und wird von ihnen weder unterstützt noch gebilligt. Alle weiteren Namen gehören ihren jeweiligen Inhabern.
-- **Eigene Konsole, eigene Verantwortung.** Das Programm läuft nur auf einer Konsole, die der Besitzer selbst modifiziert hat. Das Modifizieren kann gegen Nutzungsbedingungen verstoßen und zum Verlust der Garantie, zur Sperrung des Kontos oder der Konsole führen, in manchen Ländern auch rechtliche Folgen haben. Das Risiko trägt, wer die Konsole modifiziert und dieses Programm einsetzt.
-- **Keine Piraterie.** Dieses Projekt ist **nicht** dafür gedacht, Raubkopien zu beschaffen, zu verbreiten oder zu nutzen, und es unterstützt das nicht. Kopieren, Verschieben und Konvertieren wirken nur auf Spiele, die schon auf der eigenen Konsole liegen, und sind für Sicherungen rechtmäßig erworbener Spiele gedacht. Pakete finden, aufteilen, installieren und von USB einbinden wirken nur auf Pakete, die du selbst auf die Konsole oder ein Laufwerk gelegt hast; die App besorgt keine. Das Verbreiten urheberrechtlich geschützter Inhalte ist in den meisten Ländern strafbar. Hilfe dazu gibt es hier nicht, auch nicht in Issues.
-- **Keine fremden Systemdateien im Repository.** Systembibliotheken, Firmware und proprietäre SDK-Dateien werden weder mitgeliefert noch angenommen (siehe [CONTRIBUTING](CONTRIBUTING.md)). Die 30 Profilbilder hat der Autor selbst erzeugt.
-- **Keine Gewährleistung, keine Haftung.** Das Programm greift in die Lüftersteuerung und in Systemfunktionen der Konsole ein. Es wird so bereitgestellt, wie es ist, **ohne jede Gewährleistung** (GNU GPL, Abschnitte 15 und 16). Der Autor haftet nicht für Schäden an Konsole, Daten oder Konten. Eine verstaubte Konsole kühlt schlechter, egal wie der Lüfter geregelt wird.
-- **Datenschutz.** Verläufe, Protokoll und Einstellungen bleiben auf der Konsole unter `/data/PS5-Cooling-Center/`. Die App sendet keine Daten ins Internet. Einzige Ausnahme im Browser: Die Seite „Credits“ lädt einmal das kleine Symbolbild von github.com, um zu sehen, ob der Browser Internet hat; nur dann sind die Links anklickbar.
-- **Drittprojekte** stehen unter ihren eigenen Lizenzen, siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- **Not an official product.** "PlayStation", "PS5" and the related logos are trademarks of their respective owners. This project has no connection to them and is neither supported nor endorsed by them. All other names belong to their respective owners.
+- **Your console, your responsibility.** The program only runs on a console its owner has modified. Modifying it may breach terms of use and lead to loss of warranty or a ban of the account or console, and in some countries to legal consequences. The risk lies with whoever modifies the console and uses this program.
+- **No piracy.** This project is **not** meant to obtain, distribute or use pirated copies, and it does not support that. Copying, moving and converting only work on games already on your own console and are meant for backups of legitimately acquired games. Finding, splitting, installing and mounting packages from USB only work on packages you put on the console or a drive yourself; the app does not obtain any. Distributing copyrighted content is a criminal offence in most countries. There is no help with that here, not in issues either.
+- **No third-party system files in the repository.** System libraries, firmware and proprietary SDK files are neither shipped nor accepted (see [CONTRIBUTING](CONTRIBUTING.md)). The 30 profile pictures were created by the author.
+- **No warranty, no liability.** The program interferes with the console's fan control and system functions. It is provided as is, **without any warranty** (GNU GPL, sections 15 and 16). The author is not liable for damage to consoles, data or accounts. A dusty console cools worse, however the fan is driven.
+- **Privacy.** History, log and settings stay on the console in `/data/PS5-Cooling-Center/`. The app sends no data to the internet. The only exception is in the browser: the "Credits" page loads the small icon from github.com once to see whether the browser has internet; only then are the links clickable.
+- **Third-party projects** are under their own licences, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 </details>
 
-## Mitwirken und Fehler melden
+## Contributing and reporting bugs
 
-Fehler und Wünsche gern als [Issue](../../issues), mit Konsolenmodell, Firmware, Version und dem exportierten Protokoll (Seite „Protokoll“). Beiträge: [CONTRIBUTING.md](CONTRIBUTING.md). Sicherheitslücken bitte wie in [SECURITY.md](SECURITY.md) beschrieben melden.
+Bugs and wishes are welcome as an [issue](../../issues), with console model, firmware, version and the exported log ("Log" page). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Please report security vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
-## Credits und Danksagung
+## Credits and acknowledgements
 
-Dieses Projekt steht auf den Schultern der PS5-Homebrew-Gemeinschaft. **Vielen Dank!** Ein ganz besonderer Dank an **[Gezine](https://github.com/Gezine)**: Ohne Gezines Arbeit liefe auf vielen Konsolen kein Homebrew, und damit auch diese App nicht.
+This project stands on the shoulders of the PS5 homebrew community. **Thank you!** A very special thank you to **[Gezine](https://github.com/Gezine)**: without Gezine's work no homebrew would run on many consoles, and so neither would this app.
 
 <details>
-<summary><b>Plattform und Werkzeuge</b></summary>
+<summary><b>Platform and tools</b></summary>
 
-- **John Törnblom und alle Mitwirkenden von [ps5-payload-dev](https://github.com/ps5-payload-dev)**: das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk), der Payload-Lader [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) und [websrv](https://github.com/ps5-payload-dev/websrv).
-- **Die Entwickler von kstuff**: [sleirsgoevy](https://github.com/sleirsgoevy), [EchoStretch](https://github.com/EchoStretch) und [drakmor](https://github.com/drakmor) ([kstuff-lite](https://github.com/EchoStretch/kstuff-lite)). Ohne kstuff gäbe es keinen Zugriff auf den Lüfter-Controller.
+- **John Törnblom and all contributors to [ps5-payload-dev](https://github.com/ps5-payload-dev)**: the [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk), the payload loader [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) and [websrv](https://github.com/ps5-payload-dev/websrv).
+- **The kstuff developers**: [sleirsgoevy](https://github.com/sleirsgoevy), [EchoStretch](https://github.com/EchoStretch) and [drakmor](https://github.com/drakmor) ([kstuff-lite](https://github.com/EchoStretch/kstuff-lite)). Without kstuff there would be no access to the fan controller.
 </details>
 
 <details>
-<summary><b>Code aus anderen Projekten (portiert oder eingebunden)</b></summary>
+<summary><b>Code from other projects (ported or included)</b></summary>
 
-- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PS4-Fake-PKGs vom USB-Laufwerk ohne Installation; der Quelltext ist als Reiter „PS4 PKG von USB“ eingebaut.
-- **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) und die Mitwirkenden von [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT-, PFS- und PFSC-Abbilder.
-- **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): Vorlage für den UFS2-/ffpkg-Schreiber.
-- **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-Asset-Packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) und [dlc_emu](https://github.com/drakmor/dlc_emu) (eingebettete Fassungen, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest (die zwei neuesten Fassungen 0.4.1 und 0.3.5 eingebettet, neuere lädt die App auf Knopfdruck). Dazu [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): das Programm hinter dem Reiter „FPKGMount“ (unverändert als ELF eingebettet).
-- **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): Bauweise der Starter-Kachel als nativer Titel.
-- **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): Aufbau der Pakete und Ablauf des Installierens (eigener Code nach diesem Vorbild).
-- **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): Profilfunktion und Format des Profilbilds.
-- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR-Encoder.
-- **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): die vier getesteten LZ4-Profile (ASTRO BOT, EA Sports UFC 6, Insomniac-Engine, Unity-Engine), unverändert eingebettet.
-- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): eigene Namensauflösung und HTTPS-Abruf der App (für den Payload-Store).
-- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS für den Payload-Store.
+- **[gasb07](https://github.com/gasb07), [PS4Mount](https://github.com/gasb07/ps4mount)** (GPL-3.0): PS4 fake PKGs from a USB drive without installing; the source is built in as the "PS4 PKG from USB" tab.
+- **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) and the contributors to [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT, PFS and PFSC images.
+- **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): the model for the UFS2/ffpkg writer.
+- **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4 asset packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) and [dlc_emu](https://github.com/drakmor/dlc_emu) (embedded builds, GPL-3.0).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, a further development of ampr_emu that also reads zstd packs (the two newest releases, 0.4.1 and 0.3.5, embedded, newer ones fetched by the app on request). Also [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): the program behind the “FPKGMount” tab (embedded unchanged as an ELF).
+- **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): how the starter tile is built as a native title.
+- **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): package layout and the install flow (own code after this model).
+- **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profile function and profile picture format.
+- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR encoder.
+- **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): the four tested LZ4 profiles (ASTRO BOT, EA Sports UFC 6, Insomniac engine, Unity engine), embedded unchanged.
+- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): the app's own name resolution and HTTPS fetch (for the payload store).
+- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS for the payload store.
 - **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
 </details>
 
 <details>
-<summary><b>Zusammenspiel, Wissen und Vorbilder</b></summary>
+<summary><b>Working together, knowledge and inspiration</b></summary>
 
-- **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (Spiele einhängen, verschieben, entpacken) und [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (Stromschienen, Taktwerte).
-- **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: Liste für „Automatisch“, Mitschnitt zur Profil-Erzeugung, Pflege der Spiel-Plugins.
-- **theghostonline (Husam Osman), [PS5 LZ4 Compression](https://github.com/theghostonline/PS5-LZ4-Compression)**: Dateien, die beim Packen lose bleiben müssen, Rechte 0777, Reparatur beim Prüfen der Pakete, Auswahl der getesteten Profile.
-- **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: Parameter für `.ffpkg`-Abbilder.
-- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) und [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (Vorbild und Liste für „Payloads herunterladen“, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
-- **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): Erkennung des laufenden Spiels.
-- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: Vorbild für das Übertragen von Spielständen auf eine andere Konsole (Format der ZIP-Datei mit `chives.json`, Weg über das eigene Einhängen der Konsole); der Code dieser App ist neu geschrieben.
-- **[etaHEN](https://github.com/etaHEN/etaHEN)** und **[onionHEN](https://github.com/aydencharles/onionHEN)**: Systemaufrufe, Messwerte, Bildrate.
-- **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: Vorbild für viele Funktionen (Code jeweils neu geschrieben).
-- **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: Prinzip der Ersatzbibliotheken.
-- **Juma Sayeh und Osama Abualia, PS5 Game Compressor**: Ideen fürs Prüfen und Konvertieren (alles neu geschrieben, der Quelltext trägt keine Lizenz).
-- **Linux-Treiber `hid-playstation`** (Akkustand des DualSense) · **Xbox 360 DashLaunch** (Gedanke der ruhigen Regelung).
+- **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (mounting, moving, unpacking games) and [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (power rails, clocks).
+- **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: the list for "Automatic", recording for profile creation, upkeep of the game plugins.
+- **theghostonline (Husam Osman), [PS5 LZ4 Compression](https://github.com/theghostonline/PS5-LZ4-Compression)**: files that must stay loose when packing, permissions 0777, repair while checking the packs, choice of the tested profiles.
+- **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: parameters for `.ffpkg` images.
+- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) and [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (model and list for “Download payloads”, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
+- **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): detecting the running game.
+- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: model for carrying saved data to another console (format of the ZIP file with `chives.json`, the way through the console’s own mounting); the code of this app is newly written.
+- **[etaHEN](https://github.com/etaHEN/etaHEN)** and **[onionHEN](https://github.com/aydencharles/onionHEN)**: system calls, readings, frame rate.
+- **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: the model for many features (code rewritten each time).
+- **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: the principle of replacement libraries.
+- **Juma Sayeh and Osama Abualia, PS5 Game Compressor**: ideas for checking and converting (all rewritten; its source carries no licence).
+- **Linux driver `hid-playstation`** (DualSense battery level) · **Xbox 360 DashLaunch** (the idea of quiet regulation).
 </details>
 
 <details>
-<summary><b>Danke an die Community</b></summary>
+<summary><b>Thanks to the community</b></summary>
 
-Ihr Code steckt nicht in dieser App, aber ohne ihre geteilte Arbeit gäbe es die Szene so nicht: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [idlesauce](https://github.com/idlesauce), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) – und allen anderen, die mit Code, Tests, Anleitungen oder Antworten beitragen. In der App stehen alle mit Bild auf der Seite „Credits“.
+Their code is not in this app, but without their shared work the scene would not exist as it does: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [idlesauce](https://github.com/idlesauce), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) – and everyone else who contributes with code, tests, guides or answers. In the app, all of them are listed with a picture on the "Credits" page.
 </details>
 
-Wer sich hier vermisst oder falsch beschrieben findet: bitte melden, die Liste wird gern ergänzt.
+If you are missing here or described wrongly, please let me know and the list will gladly be extended.
 
-## Lizenz
+## License
 
-Copyright © 2026 strongt1me · **GNU General Public License v3.0 oder später**, siehe [LICENSE](LICENSE). Bis 1.45.1 galt MIT; ab 1.46.0 GPL-3.0-or-later, weil Teile aus GPL-Projekten übernommen sind (Einzelheiten in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+Copyright © 2026 strongt1me · **GNU General Public License v3.0 or later**, see [LICENSE](LICENSE). Up to 1.45.1 the project was MIT; from 1.46.0 it is GPL-3.0-or-later because parts are taken from GPL projects (details in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-<sub>Diese README gibt es auch auf [English](README.en.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md), [Русский](README.ru.md) und [Svenska](README.sv.md). Handbuch und FAQ liegen jeder Veröffentlichung in allen sieben Sprachen bei.</sub>
+<sub>This README is also available in [Deutsch](README.de.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md), [Русский](README.ru.md) and [Svenska](README.sv.md). The manual and FAQ come with every release in all seven languages.</sub>

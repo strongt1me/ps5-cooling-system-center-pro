@@ -14,7 +14,7 @@
 
 [Funktioner](#funktioner) · [Snabbstart](#snabbstart) · [Krav](#krav) · [Användning](#användning) · [Dokumentation](#dokumentation) · [Juridiskt](#juridisk-information-och-ansvarsfriskrivning) · [Medverkande](#medverkande-och-tack)
 
-[Deutsch](README.md) · [English](README.en.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · **Svenska**
+[Deutsch](README.de.md) · [English](README.md) · [Italiano](README.it.md) · [Español](README.es.md) · [Français](README.fr.md) · [Русский](README.ru.md) · **Svenska**
 
 <img src="docs/images/kuehlung.jpg" alt="Kylning: temperatur, fläkt, pågående spel, måltemperatur och driftläge" width="860">
 
@@ -360,4 +360,4 @@ Saknas du här eller är felaktigt beskriven: säg till, så kompletteras listan
 
 Copyright © 2026 strongt1me · **GNU General Public License v3.0 eller senare**, se [LICENSE](LICENSE). Till och med 1.45.1 gällde MIT; från 1.46.0 gäller GPL-3.0-or-later eftersom delar är hämtade från GPL-projekt (detaljer i [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
-<sub>Den här README finns också på [Deutsch](README.md), [English](README.en.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md) och [Русский](README.ru.md). Handboken och FAQ följer med varje release på alla sju språk.</sub>
+<sub>Den här README finns också på [Deutsch](README.de.md), [English](README.md), [Italiano](README.it.md), [Español](README.es.md), [Français](README.fr.md) och [Русский](README.ru.md). Handboken och FAQ följer med varje release på alla sju språk.</sub>

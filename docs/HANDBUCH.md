@@ -1,9 +1,11 @@
 # Handbuch
 
-[README](../README.md) · [Handbuch](HANDBUCH.md) · [API](API.md) · [Entwicklung](ENTWICKLUNG.md)
+[README](../README.de.md) · [Handbuch](HANDBUCH.md) · [API](API.md) · [Entwicklung](ENTWICKLUNG.md)
+
+> **This document is in German.** The [README](../README.md) is in English, and the manual is also built into the app in seven languages (page "Manual").
 
 Ausführliche Bedienung von PS5 Cooling & System Center - Pro. Die Kurzfassung
-steht in der [README](../README.md); die Schnittstelle der App in [API.md](API.md).
+steht in der [README](../README.de.md); die Schnittstelle der App in [API.md](API.md).
 
 ## Die Seiten der Oberfläche
 
@@ -1103,7 +1105,7 @@ ihre Trophäen gehören nicht dazu.
 Auf der Seite **Spiele** zeigt der vierte Reiter, **Pakete**, die Spiel-Pakete (`.pkg`) auf
 angesteckten USB-Laufwerken, Platten, in einem Disc-Laufwerk und im Konsolenspeicher. Er ist der Anfang
 einer Paket-Verwaltung nach dem Vorbild des PS5 PKG Managers von itsPLK (siehe die Credits in der
-[README](../README.md#credits-und-danksagung)): finden, aufteilen und [installieren](#pakete-installieren).
+[README](../README.de.md#credits-und-danksagung)): finden, aufteilen und [installieren](#pakete-installieren).
 
 - **Wo gesucht wird.** Auf jedem Laufwerk unter `/mnt` im Hauptordner (dort nur die Dateien, die
   direkt darin liegen) und im Ordner `pkg` mit seinen Unterordnern, bis zu drei Ebenen tief

@@ -1,5 +1,7 @@
 # Erweiterungen — laufende Liste
 
+> **This document is in German.** The [README](../README.md) is in English.
+
 Sammlung möglicher Funktionen für PS5 Cooling & System Center - Pro. Wird fortgeschrieben.
 Stand: **02.10.2026**, Programmfassung **1.46.0**.
 
