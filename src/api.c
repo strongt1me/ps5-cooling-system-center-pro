@@ -5056,11 +5056,12 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   }
   if(!strcmp(req->path, "/api/v1/library/emu")) {
     if(is_get) {
-      char id[16] = "", lib[8] = "";
+      char id[16] = "", lib[8] = "", place[12] = "";
       query_param(req->query, "id", id, sizeof(id));
       query_param(req->query, "lib", lib, sizeof(lib));
+      query_param(req->query, "place", place, sizeof(place));        /* "game" or "backport": where a change would go if the person chooses */
       int http = 200;
-      cJSON *o = ps5tm_amprlib_state(lib, id, &http);
+      cJSON *o = ps5tm_amprlib_state(lib, id, place, &http);
       if(!o) { ps5tm_http_send_error(fd, http, http == 400 ? "bad_request" : "not_found", http == 400 ? "Unbekannte Bibliothek." : "Das Spiel ist nicht in der Liste."); return; }
       send_cjson(fd, 200, o);
       return;
@@ -5071,14 +5072,16 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     const cJSON *ja = b ? cJSON_GetObjectItem(b, "action") : NULL;
     const cJSON *jn = b ? cJSON_GetObjectItem(b, "name") : NULL;
     const cJSON *jl = b ? cJSON_GetObjectItem(b, "lib") : NULL;
-    char id[16] = "", action[12] = "", store[100] = "", lib[8] = "";
+    const cJSON *jp = b ? cJSON_GetObjectItem(b, "place") : NULL;
+    char id[16] = "", action[12] = "", store[100] = "", lib[8] = "", place[12] = "";
     if(cJSON_IsString(jl)) snprintf(lib, sizeof(lib), "%s", jl->valuestring);
+    if(cJSON_IsString(jp)) snprintf(place, sizeof(place), "%s", jp->valuestring);
     if(cJSON_IsString(jid)) snprintf(id, sizeof(id), "%s", jid->valuestring);
     if(cJSON_IsString(ja)) snprintf(action, sizeof(action), "%s", ja->valuestring);
     if(cJSON_IsString(jn)) snprintf(store, sizeof(store), "%s", jn->valuestring);
     cJSON_Delete(b);
     char err[400] = "";
-    int http = ps5tm_ampr_emu_start(lib, action, store, id, err, sizeof(err));
+    int http = ps5tm_ampr_emu_start(lib, action, store, id, place, err, sizeof(err));
     if(http != 200) { ps5tm_http_send_error(fd, http, "ampr_emu_refused", err); return; }
     send_cjson(fd, 200, ps5tm_ampr_status());
     return;

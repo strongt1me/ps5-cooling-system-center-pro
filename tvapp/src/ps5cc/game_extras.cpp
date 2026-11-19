@@ -49,6 +49,7 @@ enum Row
     kSignText,
     kSign,
     kPackStart,
+    kPlace, // the versions view: where the APR-EMU / PlayGo file goes (image or backport folder)
     kStatus = 90,   // + section: the state, always in sight
     kVersion = 100, // + index
     kDup = 300,     // + index
@@ -549,6 +550,17 @@ void GameExtras::build_versions()
             return 0;
         return yes(x, "pack") ? 2 : 1;
     };
+    // an image can take the file inside or in the backport folder next to it (a folder game is
+    // changed in place; a compressed image or an existing backport folder leave no choice)
+    if (yes(emu.root, "place_choice"))
+    {
+        form_.add_header("WOHIN KOMMT DIE DATEI?");
+        form_
+            .add_choice(kPlace, "Ablage", {"Im Abbild", "Im Backport-Ordner"},
+                        place_backport_ ? 1 : 0)
+            .description =
+            "Im Abbild: ist es voll, kommt die Datei in den Backport-Ordner neben dem Abbild.";
+    }
     int counts[3] = {0, 0, 0};
     const cJSON *v = nullptr;
     cJSON_ArrayForEach(v, get(j.root, "versions"))
@@ -888,6 +900,7 @@ void GameExtras::activate(int id, ui::Feedback &feedback)
     case kEmuAmpr:
     case kEmuPlaygo:
         lib_ = id == kEmuAmpr ? "ampr" : "playgo";
+        place_backport_ = false;
         view_ = kVersions;
         versions_ = ExtrasVersions{};
         key_.clear();
@@ -993,9 +1006,10 @@ void GameExtras::ask_switch(ui::Feedback &feedback)
 // The version goes into the game; the window returns to the game's page.
 void GameExtras::apply_version(const std::string &name)
 {
+    const bool backport = place_backport_ && form_.row(kPlace) != nullptr;
     source().extras_post("library/emu", "{\"id\":" + json_text(game_.id) + ",\"lib\":\"" + lib_ +
                                             "\",\"action\":\"apply\",\"name\":" + json_text(name) +
-                                            "}");
+                                            (backport ? ",\"place\":\"backport\"" : "") + "}");
     view_ = kMain;
     key_.clear();
     build();
@@ -1063,6 +1077,8 @@ void GameExtras::handle(const InputFrame &input, ui::Feedback &feedback)
                 r->description = ok ? "Startet sofort; der Auftrag läuft auf der Konsole."
                                     : "Erst die Voraussetzung oben bestätigen.";
         }
+        else if (id == kPlace)
+            place_backport_ = form_.choice_index(kPlace) == 1;
         else if (id == kLevel || id == kMode)
             ask_plan();
         else if (id == kTarget || id == kSign)

@@ -444,7 +444,7 @@ is_image_format(const char *f) {
   return !strcmp(f, "exfat") || !strcmp(f, "ffpkg") || !strcmp(f, "ffpfs") || !strcmp(f, "image");
 }
 
-typedef struct { char id[16]; int emu; char lib[8]; char op[10]; char store[96]; } ai_args_t;
+typedef struct { char id[16]; int emu; char lib[8]; char op[10]; char store[96]; char prefer[10]; } ai_args_t;
 
 static int
 smp_mount(const char *id, const char *route, int rw, char *err, size_t n) {
@@ -490,9 +490,9 @@ ai_thread(void *arg) {
   if(ps5tm_library_delete_info(a->id, &li) != 0) { finish(AI_FAILED, "Das Spiel ist nicht mehr in der Liste."); goto out; }
   int rc;
   char place[10] = "game", pwhy[200] = "";
-  if(a->emu && ps5tm_amprlib_place(a->lib, a->id, place, sizeof(place), pwhy, sizeof(pwhy)) != 0) { finish(AI_FAILED, "Das Spiel ist nicht mehr in der Liste."); goto out; }
+  if(a->emu && ps5tm_amprlib_place(a->lib, a->id, a->prefer, place, sizeof(place), pwhy, sizeof(pwhy)) != 0) { finish(AI_FAILED, "Das Spiel ist nicht mehr in der Liste."); goto out; }
   if(a->emu && !strcmp(place, "backport")) {
-    /* a compressed .ffpfsc or an existing backport folder: nothing is mounted, the game stays untouched */
+    /* a compressed .ffpfsc, an existing backport folder or the person's choice: nothing is mounted, the game stays untouched */
     rc = root_job(NULL, &ctx);
   } else if(!strcmp(li.format, "folder")) {
     rc = root_job(li.path, &ctx);
@@ -541,6 +541,23 @@ ai_thread(void *arg) {
       if(!was_held) ps5tm_smphold_note(a->id, 0);
     }
     ps5tm_smp_forget();
+    /* The image has no room left (images are made as big as their content): the file goes to the backport folder instead, next to the image,
+       which leaves the image alone. Not when the person chose "in the image" on purpose, and only when nothing was written (ENOSPC at the first step, or a file that did not fit). */
+    if(rc == ENOSPC && a->emu && !strcmp(a->op, "apply") && strcmp(a->prefer, "game")) {
+      char pl[10] = "", pw[240] = "";
+      if(ps5tm_amprlib_place(a->lib, a->id, "backport", pl, sizeof(pl), pw, sizeof(pw)) == 0 && !strcmp(pl, "backport") && !pw[0]) {
+        phase("Das Abbild ist voll: Die Datei kommt in den Backport-Ordner");
+        PS5TM_INFO("ampr_emu_backport_fallback", "Das Abbild von %s hat keinen freien Platz: %s-Datei kommt in den Backport-Ordner.", a->id, !strcmp(a->lib, "playgo") ? "PlayGo" : "APR-EMU");
+        ctx.why[0] = 0;
+        ctx.note[0] = 0;
+        rc = root_job(NULL, &ctx);
+        if(rc == 0) {
+          char t[400];
+          snprintf(t, sizeof(t), "Das Abbild hat keinen freien Platz mehr, deshalb liegt die Datei im Backport-Ordner. %s", ctx.note);
+          snprintf(ctx.note, sizeof(ctx.note), "%s", t);
+        }
+      }
+    }
   }
   if(rc) { finish(AI_FAILED, ctx.why[0] ? ctx.why : (a->emu ? (!strcmp(a->lib, "playgo") ? "Die PlayGo-Datei ließ sich nicht ändern." : "Die APR-EMU-Datei ließ sich nicht ändern.") : "Das Verzeichnis ließ sich nicht bauen.")); goto out; }
   pthread_mutex_lock(&g_lock);
@@ -736,24 +753,25 @@ other_job(char *err, size_t n) {
   return 0;
 }
 
-static int ai_start(const char *kind, const char *lib, const char *op, const char *store, const char *id, char *err, size_t n);
+static int ai_start(const char *kind, const char *lib, const char *op, const char *store, const char *id, const char *prefer, char *err, size_t n);
 
 int
 ps5tm_ampr_start(const char *id, char *err, size_t n) {
-  return ai_start("index", "", "", "", id, err, n);
+  return ai_start("index", "", "", "", id, "", err, n);
 }
 
 /* The APR-EMU or PlayGo file of a game (amprlib.c; lib "ampr" or "playgo"): op "apply" (store = the version's file name),
    "restore" or "remove". */
 int
-ps5tm_ampr_emu_start(const char *lib, const char *op, const char *store, const char *id, char *err, size_t n) {
+ps5tm_ampr_emu_start(const char *lib, const char *op, const char *store, const char *id, const char *place, char *err, size_t n) {
   if(!lib || !lib[0]) lib = "ampr";
   if(strcmp(lib, "ampr") && strcmp(lib, "playgo")) { snprintf(err, n, "Unbekannte Bibliothek."); return 400; }
-  return ai_start("emu", lib, op, store, id, err, n);
+  if(place && place[0] && strcmp(place, "game") && strcmp(place, "backport")) { snprintf(err, n, "Unbekannte Ablage."); return 400; }
+  return ai_start("emu", lib, op, store, id, place ? place : "", err, n);
 }
 
 static int
-ai_start(const char *kind, const char *lib, const char *op, const char *store, const char *id, char *err, size_t n) {
+ai_start(const char *kind, const char *lib, const char *op, const char *store, const char *id, const char *prefer, char *err, size_t n) {
   int emu = !strcmp(kind, "emu");
   char name[128];
   if(emu) {
@@ -765,7 +783,8 @@ ai_start(const char *kind, const char *lib, const char *op, const char *store, c
     ps5tm_libdel_t li;
     if(!id || ps5tm_library_delete_info(id, &li) != 0) { snprintf(err, n, "Das Spiel ist nicht in der Liste."); return 404; }
     char place[10] = "", why[240] = "";
-    if(ps5tm_amprlib_place(lib, id, place, sizeof(place), why, sizeof(why)) != 0) { snprintf(err, n, "Das Spiel ist nicht in der Liste."); return 404; }
+    /* the chosen place only counts for putting a file in; restoring and removing go where the file is */
+    if(ps5tm_amprlib_place(lib, id, strcmp(op, "apply") ? "" : prefer, place, sizeof(place), why, sizeof(why)) != 0) { snprintf(err, n, "Das Spiel ist nicht in der Liste."); return 404; }
     if(!place[0] || why[0]) { snprintf(err, n, "%s", why[0] ? why : "Für dieses Spiel geht das nicht."); return 409; }
     snprintf(name, sizeof(name), "%s", li.name);
   } else {
@@ -807,6 +826,7 @@ ai_start(const char *kind, const char *lib, const char *op, const char *store, c
   snprintf(a->lib, sizeof(a->lib), "%s", lib);
   snprintf(a->op, sizeof(a->op), "%s", op);
   snprintf(a->store, sizeof(a->store), "%s", store ? store : "");
+  snprintf(a->prefer, sizeof(a->prefer), "%s", !strcmp(op, "apply") && prefer ? prefer : "");
   pthread_t th;
   pthread_attr_t at;
   pthread_attr_init(&at);

@@ -75,6 +75,8 @@ class GameExtras
     ExtrasLz4Plan plan_;
     LibraryTools library_;
     std::string lib_; // ampr or playgo, for the versions view
+    bool place_backport_ =
+        false; // the file goes to the backport folder (the choice "Ablage", images only)
     std::vector<std::string> version_names_;
     std::vector<bool> version_ng_; // and whether each is a build of AMPR EMU NG
     bool smp_update_on_ =

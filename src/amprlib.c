@@ -705,6 +705,11 @@ typedef struct {
   uint64_t bp_lib_size;
   char     place[10];              /* "game", "backport" or "" */
   char     why[240];
+  char     prefer[10];             /* "backport" or "game" when the person chose the place, else "" */
+  int      forced;                 /* the place is no choice: a backport folder is there already, or the image is a compressed .ffpfsc */
+  char     reason[12];             /* why the place is the backport folder: "existing", "compressed" or "chosen"; else "" */
+  int      opt_game, opt_backport; /* each of the two places is possible */
+  char     why_game[200], why_backport[200];   /* why one is not (empty when it is) */
 } al_probe_t;
 
 static void
@@ -802,9 +807,10 @@ probe_thread(void *arg) {
 
 /* Fills the probe for a title. 0, or -1 when the title is not on the list. */
 static int
-probe_game(const al_kind_t *k, const char *id, al_probe_t *p) {
+probe_game(const al_kind_t *k, const char *id, const char *prefer, al_probe_t *p) {
   memset(p, 0, sizeof(*p));
   p->k = k;
+  if(prefer && (!strcmp(prefer, "backport") || !strcmp(prefer, "game"))) snprintf(p->prefer, sizeof(p->prefer), "%s", prefer);
   if(!id || ps5tm_library_delete_info(id, &p->li) != 0) return -1;
   p->folder = !strcmp(p->li.format, "folder");
   int image = !p->folder && strcmp(p->li.format, "pkg") && p->li.path[0] == '/';
@@ -817,17 +823,31 @@ probe_game(const al_kind_t *k, const char *id, al_probe_t *p) {
   if(run_big(probe_thread, p) != 0) { snprintf(p->why, sizeof(p->why), "Das Spiel lässt sich gerade nicht lesen."); return 0; }
   probe_backport(p, id);
   if(!p->readable && !p->folder) { snprintf(p->why, sizeof(p->why), "Das Abbild lässt sich nicht lesen."); return 0; }
+  /* The two places a change can go (19.11.2026: the person may choose for an image; before, the backport folder was used only for a
+     compressed .ffpfsc and where one was there already). A game folder is changed in place. */
+  const int compressed = !strcmp(p->li.format, "ffpfsc");
+  p->forced = p->bp_exists || compressed;
+  if(p->folder) snprintf(p->why_backport, sizeof(p->why_backport), "Ein Spielordner wird direkt geändert, ein Backport-Ordner ist dafür nicht nötig.");
+  else if(p->bp_exists && p->bp_fakelib2) snprintf(p->why_backport, sizeof(p->why_backport), "Im Backport-Ordner liegt ein fakelib2: ShadowMountPlus liest nur dieses, eine Datei in fakelib bliebe ungenutzt. Zuerst fakelib2 entfernen.");
+  else if(!p->bp_exists && p->fakelib2) snprintf(p->why_backport, sizeof(p->why_backport), "Das Abbild enthält ein fakelib2; ein Backport-Ordner würde es verdecken. Zuerst entpacken.");
+  else if(!p->forced && !p->li.smp) snprintf(p->why_backport, sizeof(p->why_backport), "Nur für Abbilder, die ShadowMountPlus verwaltet.");
+  p->opt_backport = !p->why_backport[0];
+  if(compressed) snprintf(p->why_game, sizeof(p->why_game), "Ein komprimiertes Abbild (.ffpfsc) lässt sich nicht beschreiben.");
+  else if(p->bp_exists) snprintf(p->why_game, sizeof(p->why_game), "Im Backport-Ordner liegt schon eine fakelib: ShadowMountPlus liest zuerst diese, eine Datei im Abbild bliebe ungenutzt.");
+  else if(!p->folder && !p->li.smp) snprintf(p->why_game, sizeof(p->why_game), "Nur für Abbilder, die ShadowMountPlus verwaltet.");
+  else if(!p->folder && !ps5tm_smp_available(NULL, 0)) snprintf(p->why_game, sizeof(p->why_game), "ShadowMountPlus antwortet gerade nicht.");
+  p->opt_game = !p->why_game[0];
   /* where a change goes */
-  if(p->bp_exists) {
+  if(p->forced) {
     snprintf(p->place, sizeof(p->place), "backport");
-    if(p->bp_fakelib2) snprintf(p->why, sizeof(p->why), "Im Backport-Ordner liegt ein fakelib2: ShadowMountPlus liest nur dieses, eine Datei in fakelib bliebe ungenutzt. Zuerst fakelib2 entfernen.");
-  } else if(!strcmp(p->li.format, "ffpfsc")) {
+    snprintf(p->reason, sizeof(p->reason), "%s", p->bp_exists ? "existing" : "compressed");
+    snprintf(p->why, sizeof(p->why), "%s", p->why_backport);
+  } else if(!strcmp(p->prefer, "backport") && p->opt_backport) {
     snprintf(p->place, sizeof(p->place), "backport");
-    if(p->fakelib2) snprintf(p->why, sizeof(p->why), "Das Abbild enthält ein fakelib2; ein Backport-Ordner würde es verdecken. Zuerst entpacken.");
+    snprintf(p->reason, sizeof(p->reason), "chosen");
   } else {
     snprintf(p->place, sizeof(p->place), "game");
-    if(!p->folder && !p->li.smp) snprintf(p->why, sizeof(p->why), "Nur für Abbilder, die ShadowMountPlus verwaltet.");
-    else if(!p->folder && !ps5tm_smp_available(NULL, 0)) snprintf(p->why, sizeof(p->why), "ShadowMountPlus antwortet gerade nicht.");
+    snprintf(p->why, sizeof(p->why), "%s", p->why_game);
   }
   return 0;
 }
@@ -905,13 +925,13 @@ ps5tm_amprlib_install_bundled(const char *lib, char *why, size_t why_len) {
 }
 
 struct cJSON *
-ps5tm_amprlib_state(const char *lib, const char *id, int *http) {
+ps5tm_amprlib_state(const char *lib, const char *id, const char *prefer, int *http) {
   *http = 200;
   const al_kind_t *k = kind_of(lib);
   if(!k) { *http = 400; return NULL; }
   al_probe_t *p = calloc(1, sizeof(*p));
   if(!p) { *http = 500; return NULL; }
-  if(probe_game(k, id, p) != 0) { free(p); *http = 404; return NULL; }
+  if(probe_game(k, id, prefer, p) != 0) { free(p); *http = 404; return NULL; }
   al_ver_t *vers = NULL;
   size_t nv = list_versions(k, &vers);
   free(vers);
@@ -923,6 +943,18 @@ ps5tm_amprlib_state(const char *lib, const char *id, int *http) {
   cJSON_AddStringToObject(o, "name", p->li.name);
   cJSON_AddStringToObject(o, "format", p->li.format);
   cJSON_AddStringToObject(o, "place", p->place);
+  /* where a change can go: place_forced = no choice (a backport folder is there, or a compressed image); place_choice = the person may pick
+     one of the two for this image; place_options says for each why it is not possible (the page offers only what is) */
+  cJSON_AddBoolToObject(o, "place_forced", p->forced);
+  cJSON_AddBoolToObject(o, "place_choice", !p->forced && !p->folder && p->opt_backport);
+  if(p->reason[0]) cJSON_AddStringToObject(o, "place_reason", p->reason);
+  cJSON *po = cJSON_AddObjectToObject(o, "place_options");
+  cJSON *og = cJSON_AddObjectToObject(po, "game");
+  cJSON_AddBoolToObject(og, "ok", p->opt_game);
+  if(p->why_game[0]) cJSON_AddStringToObject(og, "why", p->why_game);
+  cJSON *ob = cJSON_AddObjectToObject(po, "backport");
+  cJSON_AddBoolToObject(ob, "ok", p->opt_backport);
+  if(p->why_backport[0]) cJSON_AddStringToObject(ob, "why", p->why_backport);
   cJSON_AddStringToObject(o, "game_path", p->li.path);
   cJSON_AddBoolToObject(o, "can_change", p->place[0] && !p->why[0] && p->readable);
   if(p->why[0]) cJSON_AddStringToObject(o, "why", p->why);
@@ -1184,16 +1216,21 @@ note_emus(const al_kind_t *k, char *note, size_t n) {
 }
 
 int
-ps5tm_amprlib_place(const char *lib, const char *id, char *place, size_t place_len, char *why, size_t why_len) {
+ps5tm_amprlib_place(const char *lib, const char *id, const char *prefer, char *place, size_t place_len, char *why, size_t why_len) {
   const al_kind_t *k = kind_of(lib);
   if(!k) return -1;
   al_probe_t *p = calloc(1, sizeof(*p));
   if(!p) return -1;
-  int rc = probe_game(k, id, p);
+  int rc = probe_game(k, id, prefer, p);
   if(rc == 0) {
     say(place, place_len, "%s", p->place);
     say(why, why_len, "%s", p->why);
     if(!p->place[0] && !p->why[0]) say(why, why_len, "Für dieses Spiel geht das nicht.");
+    /* a place was asked for and is not the one that goes: say why, so that nothing is written somewhere else */
+    if(p->prefer[0] && strcmp(p->prefer, p->place)) {
+      const char *w = !strcmp(p->prefer, "backport") ? p->why_backport : p->why_game;
+      say(why, why_len, "%s", w[0] ? w : "Diese Ablage geht für dieses Spiel nicht.");
+    }
   }
   free(p);
   return rc;
@@ -1253,7 +1290,7 @@ ps5tm_amprlib_run(const char *lib, const char *op, const char *id, const char *r
     if(is_dir(f)) add_note(note, note_len, "Im Spielordner liegt auch ein fakelib2: ShadowMountPlus ab 1.7beta1 liest dann nur dieses, die Datei in fakelib bliebe ungenutzt.");
   } else {                                                /* a backport folder */
     p = calloc(1, sizeof(*p));
-    if(!p || probe_game(k, id, p) != 0) { rc = ENOENT; say(why, why_len, "Das Spiel ist nicht mehr in der Liste."); goto out; }
+    if(!p || probe_game(k, id, "backport", p) != 0) { rc = ENOENT; say(why, why_len, "Das Spiel ist nicht mehr in der Liste."); goto out; }
     if(strcmp(p->place, "backport") || p->why[0]) { rc = EPERM; say(why, why_len, "%s", p->why[0] ? p->why : "Hier geht das nicht."); goto out; }
     snprintf(fakelib, sizeof(fakelib), "%s/fakelib", p->bp_dir);
     snprintf(bp_dir, sizeof(bp_dir), "%s", p->bp_dir);
@@ -1363,7 +1400,7 @@ ps5tm_amprlib_pack_check(const char *id, const char *root, int repair, int zstd,
   if(why && why_len) why[0] = 0;
   al_probe_t *p = calloc(1, sizeof(*p));
   if(!p) { say(why, why_len, "Kein Speicher."); return -1; }
-  if(probe_game(&K_AMPR, id, p) != 0 || !p->folder) { free(p); say(why, why_len, "Das Spiel ist nicht mehr in der Liste."); return -1; }
+  if(probe_game(&K_AMPR, id, "", p) != 0 || !p->folder) { free(p); say(why, why_len, "Das Spiel ist nicht mehr in der Liste."); return -1; }
   char dir[PATH_MAX];
   int bp = 0, two = 0;
   if(p->bp_exists && p->bp_fakelib2) { snprintf(dir, sizeof(dir), "%s/fakelib2", p->bp_dir); bp = 1; two = 1; }

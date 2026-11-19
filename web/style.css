@@ -229,23 +229,21 @@ body {
    Bis 1.51.x waren es zwei Bilder mit fester CSS-Drehung und einem Ring; die Komponente schützt sich selbst vor einem
    langsamen Browser (siehe ps5-fan.js, „lite"). */
 :root { --fan-rgb: 116,130,151; }
-.ov-fan { position: relative; width: 190px; flex: none; }
-.ov-fan ps5-cooling-fan { width: 190px; }
-/* Tacho (10.10.2026): das Bild hat einen weichen Rand, deshalb rückt es näher an den Kachelrand und an den Text */
-.ov-tile.fan-banner { padding-left: 8px; gap: 6px; }
-@media (max-width: 420px) { .ov-fan, .ov-fan ps5-cooling-fan { width: 150px; } }
-/* Der Text der Lüfter-Kachel steht in der Mitte zwischen Tacho und rechtem Rand, auch in der Höhe, und ist größer */
-/* Tacho und Text stehen als Paar in der Mitte der Kachel */
-.ov-tile.fan-banner:not(.ov-game) { justify-content: center; padding-left: 20px; gap: 22px; }
-.ov-fan + .ov-tile-text { flex: 0 1 auto; text-align: center; }
-.ov-fan + .ov-tile-text .ov-label { font-size: 14px; }
-.ov-fan + .ov-tile-text .ov-big { font-size: 46px; }
-.ov-fan + .ov-tile-text .ov-big i { font-size: 22px; }
-.ov-fan + .ov-tile-text small { font-size: 14.5px; }
+/* Der Ring der Lüfterdrehzahl (19.11.2026, vorher ein Tacho): derselbe Ring wie bei der Temperatur, etwas kleiner; Bogen und Farbe folgen der Drehzahl */
+.ov-gauge-fan, .ov-gauge-fan svg { width: 128px; height: 128px; }
+.ov-gauge-fan .hero-num { font-size: 34px; }
+.ov-gauge-fan .hero-num.is-long { font-size: 27px; }
+.ov-gauge-fan .hero-unit { font-size: 15px; }
+.ov-fanring { stroke: rgb(var(--fan-rgb)); transition: stroke-dasharray .8s cubic-bezier(.4,0,.2,1), stroke .8s; }
+@media (max-width: 420px) { .ov-gauge-fan, .ov-gauge-fan svg { width: 112px; height: 112px; } }
+/* Der Ring sitzt links in der Kachel (19.11.2026, Wunsch des Users: etwas weiter links), der Text steht in der Mitte des Rests rechts davon */
+.ov-tile.fan-banner:not(.ov-game) { justify-content: flex-start; padding-left: clamp(16px, 10%, 56px); padding-right: 6%; gap: 0; }
+.ov-gauge-fan + .ov-tile-text { flex: 1 1 auto; text-align: center; }
+.ov-gauge-fan + .ov-tile-text .ov-label { font-size: 14px; }
+.ov-gauge-fan + .ov-tile-text small { font-size: 14.5px; }
 .ov-tile.fan-glow { border-color: rgba(var(--fan-rgb),.55);
   box-shadow: 0 0 0 1px rgba(var(--fan-rgb),.25), 0 0 30px rgba(var(--fan-rgb),.26), inset 0 0 40px rgba(var(--fan-rgb),.07);
   background: linear-gradient(135deg, rgba(var(--fan-rgb),.10), var(--surface-1) 55%); transition: border-color .8s, box-shadow .8s; }
-.ov-tile.fan-glow #t-fan { color: rgb(var(--fan-rgb)); }
 
 /* Hinweis unter den Voreinstellungen */
 .sub b { color: var(--ink-2); font-weight: 600; }
@@ -401,10 +399,6 @@ body.offline .offline-note { display: flex; }
    hier nur 245–340 px, und der Wert („19,0 %“) wurde abgeschnitten. Darum hier wie unter 980 px untereinander. */
 @media (min-width: 981px) and (max-width: 1259px) { .ov-top { grid-template-columns: minmax(0, 1fr); } }
 /* Knapp darüber (1260–1379 px) passt „19,0 %“, aber „100,0 %“ wurde rechts abgeschnitten (04.11.2026): Tacho etwas kleiner, Abstand enger. */
-@media (min-width: 1260px) and (max-width: 1379px) {
-  .ov-tile.fan-banner .ov-fan { width: 168px; }
-  .ov-tile.fan-banner:not(.ov-game) { gap: 16px; }
-}
 @media (max-width: 720px) {
   /* Banner hochkant: Bild füllt die Karte, gleichmäßig abgedunkelt */
   .co-stat { padding: 2px 12px; }
@@ -1837,14 +1831,10 @@ input[type=checkbox]:focus-visible { outline: 2px solid rgba(138,180,255,.7); ou
   -webkit-mask-image: url(/img/fan-flow-mask.png); -webkit-mask-size: cover; -webkit-mask-position: center; -webkit-mask-repeat: no-repeat;
   mask-image: url(/img/fan-flow-mask.png); mask-size: cover; mask-position: center; mask-repeat: no-repeat; }
 .fan-shade { background: radial-gradient(ellipse 30% 55% at 72% 50%, rgba(10,15,26,.82), rgba(10,15,26,.35) 60%, rgba(10,15,26,0) 100%); }
-.ov-tile.fan-banner:not(.ov-game) > .ov-fan, .ov-tile.fan-banner:not(.ov-game) > .ov-tile-text { position: relative; z-index: 1; }
-.gauge-halo { position: absolute; left: -15.58%; top: -22.64%; width: 131.17%; height: 145.28%; pointer-events: none;
-  background: rgb(var(--fan-rgb)); opacity: .38;
-  -webkit-mask-image: url(/img/gauge-halo.png); -webkit-mask-size: 100% 100%; mask-image: url(/img/gauge-halo.png); mask-size: 100% 100%; }
-.ov-fan ps5-cooling-fan { position: relative; z-index: 1; }
-.ov-fan + .ov-tile-text .ov-label, .ov-fan + .ov-tile-text small, .ov-fan + .ov-tile-text .ov-big i { color: #e6ecf8; }
-.ov-fan + .ov-tile-text .ov-label, .ov-fan + .ov-tile-text small { text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(0,0,0,.8); }
-.ov-fan + .ov-tile-text .ov-big { text-shadow: 0 2px 10px rgba(0,0,0,.8); }
+.ov-tile.fan-banner:not(.ov-game) > .ov-gauge-fan, .ov-tile.fan-banner:not(.ov-game) > .ov-tile-text { position: relative; z-index: 1; }
+.ov-gauge-fan + .ov-tile-text .ov-label, .ov-gauge-fan + .ov-tile-text small { color: #e6ecf8; }
+.ov-gauge-fan + .ov-tile-text .ov-label, .ov-gauge-fan + .ov-tile-text small { text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 10px rgba(0,0,0,.8); }
+.ov-gauge-fan .hero-num { text-shadow: 0 2px 10px rgba(0,0,0,.8); }
 
 /* Kachel „Läuft gerade“ wie die Lüfter-Kachel (10.10.2026): Luftstrom und Rand leuchten in der Farbe der Lüfterdrehzahl */
 .ov-tile.ov-game.fan-banner { overflow: hidden; border-color: rgba(var(--fan-rgb),.55);
@@ -2066,10 +2056,10 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-theme="hell"] .ov-tile.ov-game .ov-tile-text { padding-right: 150px; }     /* ein langer Spielname endet vor dem Bild */
 :root[data-theme="hell"] .ov-tile.ov-game.fan-banner::after { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;
   background: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 42%, rgba(246,248,251,.88) 56%, rgba(246,248,251,.4) 76%, rgba(246,248,251,0) 94%); }
-:root[data-theme="hell"] .ov-fan + .ov-tile-text .ov-label, :root[data-theme="hell"] .ov-fan + .ov-tile-text small,
-:root[data-theme="hell"] .ov-fan + .ov-tile-text .ov-big i, :root[data-theme="hell"] .ov-tile.ov-game .ov-label,
+:root[data-theme="hell"] .ov-gauge-fan + .ov-tile-text .ov-label, :root[data-theme="hell"] .ov-gauge-fan + .ov-tile-text small,
+:root[data-theme="hell"] .ov-tile.ov-game .ov-label,
 :root[data-theme="hell"] .ov-tile.ov-game .ov-tile-text small { color: var(--ink-muted); text-shadow: none; }
-:root[data-theme="hell"] .ov-fan + .ov-tile-text .ov-big, :root[data-theme="hell"] .ov-tile.ov-game .ov-tile-text b { text-shadow: none; }
+:root[data-theme="hell"] .ov-gauge-fan .hero-num, :root[data-theme="hell"] .ov-tile.ov-game .ov-tile-text b { text-shadow: none; }
 @media (max-width: 720px) {
   /* schmal liegt die Schrift über der ganzen Kachel: das Bild nur als blasser Hauch */
   :root[data-theme="hell"] .card.ov-hero .hero-copy { margin-right: 0; }

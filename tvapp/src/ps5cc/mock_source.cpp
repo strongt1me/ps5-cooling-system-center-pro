@@ -1518,7 +1518,7 @@ class MockSource final : public Source
             R"("limit_bytes":50331648,"paged":true,"over":true,"state":"over"}})";
         e.image = R"({"ok":true,"can_check":true,"format":"exfat"})";
         e.emu_ampr =
-            R"({"ok":true,"place":"game","format":"exfat","can_change":true,"why":"","packed":false,)"
+            R"({"ok":true,"place":"game","place_choice":true,"format":"exfat","can_change":true,"why":"","packed":false,)"
             R"("installed":{"present":true,"known":true,"label":"0.4.2.1 test-pack","has_orig":true},"emus":{}})";
         e.emu_playgo =
             R"({"ok":true,"place":"game","can_change":true,"why":"","installed":{"present":false},"emus":{}})";

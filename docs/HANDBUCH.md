@@ -471,6 +471,12 @@ Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backpo
   Weil dieser die `fakelib` des Spiels verdeckt, werden deren Dateien (außer `libSceAmpr.sprx`)
   hineinkopiert. Ein schon vorhandener Backport-Ordner gilt für jedes Format. Ein `fakelib2` im Abbild oder
   im Backport sperrt die Änderung.
+- **Wahl bei einem Abbild (`.exfat`, `.ffpkg`, seit 19.11.2026):** Im Fenster „Version wählen“ steht „Wohin kommt die Datei?“:
+  **Im Abbild** (Vorgabe) oder **Im Backport-Ordner** neben dem Abbild (`<Ordner des Abbilds>/backports/<Titel-ID>/fakelib`). Der
+  Backport-Ordner lässt das Abbild unberührt, hängt es nicht ein und geht auch, wenn das Abbild voll ist. Ist es voll und nichts
+  gewählt („No space left on device“), legt die App die Datei selbst im Backport-Ordner ab und sagt es im Ergebnis. Wo die Ablage
+  feststeht (ein komprimiertes `.ffpfsc` oder ein schon vorhandener Backport-Ordner), gibt es keine Wahl. In der Vollbild-App ist es
+  die Zeile „Ablage“ in der Versionsliste.
 - Die Datei des Spiels wird einmal als `libSceAmpr.sprx.orig` gesichert und nie überschrieben; ein früherer
   APR-EMU (Kennung `[AMPR_EMU]`) oder PlayGo-Stub gilt nicht als Original. Ein leer werdender Backport-Ordner
   wird wieder entfernt, denn ein leerer Ordner würde die `fakelib` des Spiels verdecken.
@@ -1449,18 +1455,17 @@ und auf USB unter `etaHEN/games`. Die globale Bibliothek unter
 1.7beta6 kann sie je Spiel ausschließen, `ignore_global_fakelib` in seiner Schnittstelle; die App
 liest und ändert das nicht.)
 
-## Der Lüfter in der Oberfläche: der Tacho (ab 1.56.0, vorher ein drehender Lüfter ab 1.53.0)
+## Der Lüfter in der Oberfläche: der Ring (seit 19.11.2026; vorher ein Tacho ab 1.56.0, davor ein drehender Lüfter ab 1.53.0)
 
-Die Lüfter-Kachel auf der Seite **Kühlung** zeigt einen gezeichneten **Tacho** (Entwurf des Users, als Komponente `<ps5-cooling-fan>` in
-`web/ps5-fan.js`; das Zifferblatt ist ein Bild ohne Nadel, `web/img/gauge-dial.png`). Er zeigt den **gemessenen** Lüfterwert:
+Die Lüfter-Kachel auf der Seite **Kühlung** zeigt die **gemessene** Drehzahl als **Ring**, wie die Temperatur daneben:
 
-- **Nadel:** Sie steht bei 0 % ganz links und bei 100 % ganz rechts und fährt weich auf jeden neuen Wert. Dazwischen läuft nichts im Browser.
-  Der Regenbogenbogen leuchtet nur bis zur Nadel, dahinter ist er abgedunkelt. Das ist eine Darstellung, keine gemessene Drehzahl.
+- **Bogen:** Er füllt sich mit der Drehzahl von 0 % (leer) bis 100 % (voller Ring) und zieht weich auf jeden neuen Wert nach. Dazwischen läuft nichts im Browser.
+  Die Zahl (mit einer Nachkommastelle) steht in der Mitte.
 - **Farbe:** Sie geht stufenlos von Blau (bis 25 %) über Grün (um 55 %) und Gelb (um 75 %) zu Rot (ab 95 %). Die Farbe stellt die Lüfterlast dar, nicht die
-  Temperatur. Sie färbt Nadel und Zahl (das farbige Leuchten von Luftstrom und Rand der Kacheln gab es nur in 1.59.0 und 1.60.0).
-- **Kein Wert:** Ohne gültigen Messwert (oder ohne Verbindung zur App) steht die Nadel grau links, der Bogen ist abgedunkelt, die Zahl zeigt „—“.
-- **Schutz für langsame Browser:** Braucht der Browser zu lange für ein Bild (der Browser der Konsole ist alt), schaltet die Komponente
-  zuerst das Leuchten der Nadel ab und, wenn es immer noch ruckelt, die Fahrt der Nadel; Farbe und Werte bleiben. Eine Auswahl der Animation gibt es nicht mehr (bis 1.56.0 gab es „voll“, „reduziert“ und „aus“).
+  Temperatur. Sie färbt den Bogen und den Rand der Kachel.
+- **Kein Wert:** Ohne gültigen Messwert (oder ohne Verbindung zur App) ist der Ring grau und leer, die Zahl zeigt „--“.
+
+Den gezeichneten Tacho (Komponente `<ps5-cooling-fan>` in `web/ps5-fan.js`) zeigt die Kachel nicht mehr; `ps5-fan.js` liefert nur noch die Farbstufen.
 
 ## Betriebsarten
 

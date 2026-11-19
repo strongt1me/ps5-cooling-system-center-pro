@@ -1511,8 +1511,16 @@
        jeder Seite; am PS5-Browser war das ein Flackern der Spiele-Seite (Meldung des Users 17.10.2026). */
     const fanHost = $("#page-cooling") || document.documentElement;
     fanHost.style.setProperty("--fan-rgb", rgb.join(","));
-    const tile = $("#fan-tile");
-    if (tile && tile.closest(".ov-tile")) tile.closest(".ov-tile").classList.add("fan-glow");
+    const card = $("#fan-card");
+    if (card) card.classList.add("fan-glow");
+  };
+  /* Der Ring der Lüfterkachel (seit 19.11.2026): der Bogen ist die gemessene Drehzahl, 0–100 %; ohne Messwert bleibt er leer. */
+  const fanRing = (F) => {
+    const el = $("#ov-fan-ring");
+    if (!el) return;
+    const v = fanPctNum(F);
+    const f = v === null ? 0 : Math.max(0, Math.min(1, v / 100));
+    el.style.strokeDasharray = `${(f * RG_CIRC).toFixed(1)} ${RG_CIRC}`;
   };
 
   /* Die drei Voreinstellungen, genau wie presetApply() sie setzt: im Modus
@@ -1538,6 +1546,7 @@
     ringArc("#ov-hot-ring", T.hottest_c, T.hottest_c >= 0);
     lastFanPctStr = fanPctStr(F);
     fanVisual(fanPctNum(F) ?? NaN, !!F.measured_valid);
+    fanRing(F);
 
     const auto = !!F.automatic;
     /* Wirksames Ziel (eine Spielregel kann es überschreiben) wird gezeigt.
@@ -1612,12 +1621,10 @@
     /* Kacheln */
     $("#t-cpu").innerHTML = `${T.cpu_valid ? T.cpu_c : "--"}<i>°C</i>`;
     $("#t-soc").innerHTML = `${T.soc_valid ? T.soc_c : "--"}<i>°C</i>`;
-    /* Mit Messwert schreibt der Tacho die Zahl selbst, Schritt für Schritt mit der Nadel (Ereignis fan-display, unten);
-       nur ohne Messwert oder ohne Tacho steht sie hier. */
-    const fanTileEl = $("#fan-tile");
-    if (!F.measured_valid || !fanTileEl || !fanTileEl.setTelemetry)
-      lastFanPctStr = fanPctStr(F);
-    $("#t-fan").innerHTML = `${lastFanPctStr}<i>%</i>`;
+    /* Die Zahl steht in der Mitte des Rings der Lüfterkachel, die Einheit daneben; eine lange Zahl („100,0“) wird kleiner gesetzt. */
+    lastFanPctStr = fanPctStr(F);
+    txt("#t-fan", lastFanPctStr);
+    $("#t-fan").classList.toggle("is-long", lastFanPctStr.length > 4);
     txt("#t-cpu-note", T.cpu_valid ? "Hauptprozessor" : "nicht lesbar");
     /* Zeigt seit 1.17.0 die heißeste chipnahe Messstelle statt Kanal 0 —
        der lag bis zu 17 °C zu niedrig. Siehe platform.c. */
@@ -9001,7 +9008,8 @@
      Ein Fenster je Spiel (dasselbe wie Kopieren, cp-overlay): der AMPR-Index, dazu bei einem Abbild Prüfen, In einen
      Ordner entpacken und Reparieren. Aufträge laufen auf der PS5 weiter, auch wenn das Fenster zu ist. */
   const apr = { id: "", info: null, job: null, img: null, ij: null, plan: null, view: "main", drive: "", timer: 0, gen: 0, planErr: "",
-                emu: null, vers: null, emuSel: "", emuErr: "", emuNote: "", lz4: null, lz4s: null };
+                emu: null, vers: null, emuSel: "", emuErr: "", emuNote: "", lz4: null, lz4s: null,
+                place: "" };                       /* wohin die APR-EMU-/PlayGo-Datei kommt: "" = ins Abbild (ist es voll: Backport-Ordner), "backport" = Backport-Ordner */
   const aprViews = ["apr", "aprloading", "aprunpack", "apremu", "aplz4set"];
 
   const aprProgress = (j) => {
@@ -9592,9 +9600,30 @@
       : `<p class="muted">Noch keine Versionen im Speicher. Lege Dateien namens <code>libSceAmpr.sprx-0.4.2.1-test-pack</code> (so heißen sie bei drakmors Veröffentlichungen) mit „Datei hinzufügen“ ab.</p>`) : "";
     const busy = !!((apr.job && apr.job.active) || (apr.ij && apr.ij.active));
     const canApply = !!(sel && sel.valid && em.can_change && !busy && !(em.packed && !sel.pack) && !(em.packed_zstd && !sel.ng));
+    /* Wohin die Datei kommt (19.11.2026): bei einem Abbild ins Abbild oder in den Backport-Ordner daneben. Der Backport-Ordner lässt das Abbild unberührt
+       und geht auch, wenn es voll ist; ist es voll und nichts gewählt, nimmt die App ihn selbst. Gewählt werden kann nur, wo es keine Vorgabe gibt
+       (komprimiertes Abbild oder schon vorhandener Backport-Ordner: dort steht die Ablage fest). */
+    const po = em.place_options || {};
+    const placeBox = em.place_choice ? `
+      <h4 class="cp-step">Wohin kommt die Datei?</h4>
+      <div class="cp-list">
+        <button type="button" class="cp-choice apr-drive${em.place === "game" ? " on" : ""}${po.game && po.game.ok === false ? " off" : ""}" data-apr-place="" ${po.game && po.game.ok === false ? "disabled" : ""}>
+          <span class="cp-choice-text"><b>Im Abbild</b>
+            <span class="muted">ShadowMountPlus hängt das Abbild kurz zum Schreiben ein, die Datei kommt in den Ordner <code>fakelib</code> darin. Ist das Abbild voll, legt die App die Datei selbst im Backport-Ordner ab.</span>
+            ${po.game && po.game.ok === false ? `<span class="cp-why">${esc(po.game.why || "")}</span>` : ""}</span></button>
+        <button type="button" class="cp-choice apr-drive${em.place === "backport" ? " on" : ""}${po.backport && po.backport.ok === false ? " off" : ""}" data-apr-place="backport" ${po.backport && po.backport.ok === false ? "disabled" : ""}>
+          <span class="cp-choice-text"><b>Im Backport-Ordner</b>
+            <span class="muted">Die Datei kommt in den Ordner <code>backports/${esc(apr.id)}</code> neben dem Abbild; das Abbild selbst bleibt unberührt und wird nicht eingehängt. Der Ordner verdeckt die <code>fakelib</code> des Spiels, deshalb werden deren Dateien hineinkopiert.</span>
+            ${po.backport && po.backport.ok === false ? `<span class="cp-why">${esc(po.backport.why || "")}</span>` : ""}</span></button>
+      </div>` : "";
+    const backportNote = em.place !== "backport" ? ""
+      : em.place_reason === "chosen" ? `<p class="muted">Die Datei kommt auf deinen Wunsch in den Backport-Ordner; das Spiel selbst bleibt unberührt. Ein neuer Backport-Ordner verdeckt die <code>fakelib</code> des Spiels, deshalb werden deren Dateien hineinkopiert.</p>`
+      : em.place_reason === "existing" ? `<p class="muted">Dieses Spiel hat schon einen Backport-Ordner, den ShadowMountPlus zuerst liest: Die Datei kommt dorthin, das Spiel selbst bleibt unberührt.</p>`
+      : `<p class="muted">Dieses Spiel bekommt die Datei im Backport-Ordner (ein komprimiertes Abbild lässt sich nicht beschreiben); das Spiel selbst bleibt unberührt. Ein neuer Backport-Ordner verdeckt die <code>fakelib</code> des Spiels, deshalb werden deren Dateien hineinkopiert.</p>`;
     body.innerHTML = `
       <p class="cp-src"><span class="muted">Spiel</span> <code>${esc(em.place === "backport" ? em.backport.dir + "/fakelib" : (em.game_path + (em.format === "folder" ? "/fakelib" : " › fakelib")))}</code>
         <span><span>eingebaut:</span> <b>${cur}</b>${ins.has_orig ? ` · <span>Original des Spiels gesichert</span>` : ""}</span></p>
+      ${placeBox}
       <h4 class="cp-step">Welche Version?</h4>
       <p class="muted apr-folder">Die Dateien liegen im Ordner <code>${esc(v.dir)}</code>; ein Teil ist in der App mitgeliefert und kommt beim Einbauen (oder mit dem Knopf unten) dorthin.</p>
       ${ngList ? `<h4 class="cp-step">AMPR EMU NG @quer3q</h4><div class="cp-list">${ngList}</div>` : ""}
@@ -9611,7 +9640,7 @@
         <span>Dateien einer neueren Veröffentlichung (libSceAmpr.sprx, libSceAmpr-debug.sprx) benennt „Datei hinzufügen“ passend um.</span>
         <span>Beim Einbauen fragt die App, ob die automatische Fakelib-Aktualisierung in ShadowMountPlus abgeschaltet werden soll, weil ShadowMountPlus die NG-Datei sonst beim Spielstart wieder ersetzt.</span></p>` : ""}
       ${warn.map((w) => `<div class="cp-warn">${w}</div>`).join("")}
-      ${em.place === "backport" ? `<p class="muted">Dieses Spiel bekommt die Datei im Backport-Ordner (ein komprimiertes Abbild lässt sich nicht beschreiben); das Spiel selbst bleibt unberührt. Ein neuer Backport-Ordner verdeckt die <code>fakelib</code> des Spiels, deshalb werden deren Dateien hineinkopiert.</p>` : ""}
+      ${backportNote}
       <p class="muted">${pg
         ? "Gesichert wird nur die Datei, die das Spiel selbst mitbrachte – ein früherer PlayGo-Stub gilt nicht als Original. Das Spiel muss beendet sein."
         : "Gesichert wird nur die Datei, die das Spiel selbst mitbrachte – ein früherer APR-EMU gilt nicht als Original. Das Spiel muss beendet sein."}</p>
@@ -9672,8 +9701,9 @@
       const ij = await api("/api/v1/library/image/job");
       const info = await api(`/api/v1/library/ampr?id=${encodeURIComponent(apr.id)}`);
       const img = await api(`/api/v1/library/image?id=${encodeURIComponent(apr.id)}`).catch(() => ({}));
-      const emu = await api(`/api/v1/library/emu?id=${encodeURIComponent(apr.id)}&lib=ampr`).catch(() => null);
-      const pgo = await api(`/api/v1/library/emu?id=${encodeURIComponent(apr.id)}&lib=playgo`).catch(() => null);
+      const placeQ = apr.place ? `&place=${apr.place}` : "";
+      const emu = await api(`/api/v1/library/emu?id=${encodeURIComponent(apr.id)}&lib=ampr${placeQ}`).catch(() => null);
+      const pgo = await api(`/api/v1/library/emu?id=${encodeURIComponent(apr.id)}&lib=playgo${placeQ}`).catch(() => null);
       const lz4 = await api(`/api/v1/library/lz4?id=${encodeURIComponent(apr.id)}`).catch(() => null);
       const trace = await api(`/api/v1/library/trace?id=${encodeURIComponent(apr.id)}`).catch(() => null);
       const plug = await api(`/api/v1/library/plugins?id=${encodeURIComponent(apr.id)}`).catch(() => null);
@@ -9694,6 +9724,7 @@
   };
   const aprOpen = (id) => {
     cpShell();
+    if (apr.id !== id) apr.place = "";
     apr.id = id; apr.info = null; apr.job = null; apr.img = null; apr.ij = null; apr.plan = null; apr.view = "main"; apr.drive = ""; apr.planErr = "";
     apr.emu = null; apr.pgo = null; apr.lib = "ampr"; apr.vers = null; apr.emuSel = ""; apr.emuErr = ""; apr.emuNote = ""; apr.lz4 = null; apr.lz4s = null; apr.trace = null; apr.plug = null;
     cp.view = "aprloading";
@@ -9766,6 +9797,15 @@
     } else if (b.hasAttribute("data-apr-emu-pick")) {
       apr.emuSel = b.dataset.aprEmuPick;
       aprRender();
+    } else if (b.hasAttribute("data-apr-place")) {
+      /* the other place: the states are read again with it (what can be changed there, and why not) */
+      apr.place = b.dataset.aprPlace || "";
+      const my = apr.gen, lib = apr.lib, q = apr.place ? `&place=${apr.place}` : "";
+      try {
+        const st = await api(`/api/v1/library/emu?id=${encodeURIComponent(apr.id)}&lib=${lib}${q}`);
+        if (lib === "playgo") apr.pgo = st; else apr.emu = st;
+      } catch (err) { apr.emuErr = err.message; }
+      if (apr.view === "emu" && my === apr.gen) aprRender();
     } else if (b.hasAttribute("data-apr-emu-install")) {
       b.disabled = true;
       try {
@@ -9844,7 +9884,7 @@
       }
       b.disabled = true;
       try {
-        apr.job = await api("/api/v1/library/emu", { method: "POST", body: JSON.stringify({ id: apr.id, lib: apr.lib, action, name: action === "apply" ? apr.emuSel : "" }) });
+        apr.job = await api("/api/v1/library/emu", { method: "POST", body: JSON.stringify({ id: apr.id, lib: apr.lib, action, name: action === "apply" ? apr.emuSel : "", place: action === "apply" ? apr.place : "" }) });
         apr.view = "main"; apr.emuErr = "";
         aprLoad();
       } catch (err) { apr.emuErr = err.message; aprRender(); }
@@ -14144,10 +14184,6 @@
   /* ── Start ──────────────────────────────────────────────────────── */
 
   fanMotionApply();
-  { const ft = $("#fan-tile");
-    if (ft) ft.addEventListener("fan-display", (e) => {
-      if (ft.telemetryConnected) $("#t-fan").innerHTML = `${lastFanPctStr}<i>%</i>`;
-    }); }
 
   /* Dateiauswahl: Das Feld des Browsers schreibt seine Texte („Choose File“, „No file chosen“) in der Sprache des Browsers, und der
      alte Browser der Konsole zeichnet es eckig. Darum bleibt es unsichtbar im Dokument, und ein eigener runder Knopf mit eigenem Text

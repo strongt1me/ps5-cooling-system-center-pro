@@ -4,6 +4,20 @@
 
 ## Unveröffentlicht
 
+### APR-EMU und PlayGo: Ablage im Backport-Ordner wählbar, bei vollem Abbild von selbst (Meldung des Users, 19.11.2026)
+- **Anlass:** Der Einbau eines AMPR EMU (auch NG) in ein Abbild scheiterte mit „Der Ordner fakelib ließ sich nicht anlegen: No space left on device“: Das Abbild (`.exfat`, `.ffpkg`) war voll (Abbilder sind so groß wie ihr Inhalt), und die App schrieb immer ins Abbild. Den Backport-Ordner nutzte sie nur bei einem komprimierten `.ffpfsc` oder wenn er schon da war; eine Wahl oder einen Ausweg gab es nicht.
+- **Wahl:** Im Fenster „Version wählen“ steht bei einem Abbild „Wohin kommt die Datei?“: **Im Abbild** (Vorgabe) oder **Im Backport-Ordner** (`<Ordner des Abbilds>/backports/<Titel-ID>/fakelib`, das Abbild bleibt unberührt und wird nicht eingehängt; die Dateien der `fakelib` des Spiels werden hineinkopiert, weil der Ordner sie verdeckt). Wo die Ablage feststeht (komprimiertes Abbild, vorhandener Backport-Ordner), gibt es keine Wahl. Gilt für APR-EMU (auch NG) und PlayGo, in der Browser-App und in der Vollbild-App (Zeile „Ablage“ in der Versionsliste).
+- **Ausweg bei vollem Abbild:** Meldet das Schreiben im Abbild „kein Platz“ (und die Person hat „Im Abbild“ nicht ausdrücklich gewählt), legt die App die Datei selbst im Backport-Ordner ab; das Ergebnis sagt es, das Protokoll auch (`ampr_emu_backport_fallback`). Ein fakelib2 im Abbild oder im Backport-Ordner sperrt wie bisher, die Meldung nennt den Grund.
+- **Technik:** `amprlib.c` (`probe_game` mit Wunsch, `place_choice`, `place_forced`, `place_reason`, `place_options`), `amprindex.c` (Auftrag mit `place`, Ausweichlösung bei `ENOSPC`), `api.c` (`place` in GET und POST von `/api/v1/library/emu`), `web/app.js`, `tvapp/src/ps5cc/game_extras.cpp`; Handbuch (7 Sprachen), `docs/API.md`, 17 neue Texte in den sechs Wörterbüchern und 5 in denen der Vollbild-App. **Nicht an der Konsole erprobt** (ELF noch nicht gesendet; ein volles Abbild lässt sich dort schwer nachstellen, die Wahl „Im Backport-Ordner“ schon).
+
+### Browser-App: Lüfterdrehzahl als Ring statt Tacho (Wunsch des Users, 19.11.2026)
+- **Kühlung:** Die Lüfter-Kachel zeigt die gemessene Drehzahl nicht mehr als Tacho mit Nadel, sondern als **Ring wie die Temperatur**: der Bogen füllt sich von 0 bis 100 %, die Zahl (eine Nachkommastelle) steht in der Mitte, die Farbe folgt der Drehzahl (Blau bis Rot, grau ohne Messwert). Der Ring sitzt etwas weiter links in der Kachel, der Text rechts davon bleibt an seiner Stelle. Die Vollbild-App zeigte die Drehzahl schon als Ring.
+- **Technik:** `web/index.html` (Ring statt `<ps5-cooling-fan>` in der Kachel), `web/style.css` (`.ov-gauge-fan`, `.ov-fanring`), `web/app.js` (`fanRing`; die Zahl kommt wieder direkt aus der Statusantwort, das Ereignis `fan-display` des Tachos entfällt). `web/ps5-fan.js` bleibt für die Farbstufen. Handbuch (7 Sprachen) und `docs/HANDBUCH.md` beschreiben den Ring.
+
+### README-Bilder auf Englisch (Wunsch des Users, 19.11.2026)
+- Die Bilder der englischen README (`README.md` und die Sprachfassungen außer Deutsch) sind jetzt englisch: `docs/images/en/*.jpg`, 20 Bilder (15 Browser-App, 5 Vollbild-App), mit erfundenen Beispieldaten wie die bisherigen. Die deutsche README (`README.de.md`) behält die deutschen Bilder in `docs/images/`.
+- Die Browser-Bilder entstanden mit einem Ersatzserver für die App (nur erfundene Daten) und Edge über Playwright, die Vollbild-Bilder mit den Vorschaubildern der Vollbild-App am PC (`PS5CC_LANG=en`).
+
 ### GitHub: Englisch als Standard, Deutsch als Option (Wunsch des Users, 19.11.2026)
 - **README:** `README.md` ist jetzt Englisch (bisher `README.en.md`; diese Datei entfällt). Die deutsche steht als `README.de.md` daneben, und die Sprachleiste aller sieben READMEs führt zu beiden.
 - **Sicherheitsrichtlinie:** `SECURITY.md` Englisch, `SECURITY.de.md` Deutsch (mit Link in beide Richtungen).

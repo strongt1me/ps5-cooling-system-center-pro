@@ -920,18 +920,21 @@
             </article>
 
             <div class="ov-side">
-              <article class="card ov-tile fan-banner">
+              <article class="card ov-tile fan-banner" id="fan-card">
                 <!-- Luftstrom (10.10.2026): leuchtet in der Farbe der Drehzahl (--fan-rgb), eine Fläche mit dem Luftstrom als Maske -->
                 <div class="fan-flow" aria-hidden="true"></div><div class="fan-shade" aria-hidden="true"></div>
-                <!-- Der Tacho (seit 10.10.2026, vorher ein drehender Lüfter): <ps5-cooling-fan> aus ps5-fan.js, ein Zifferblatt mit Nadel, deren Stellung und Lichtfarbe
-                     dem gemessenen Wert folgen (app.js, fanVisual). Kein Wert: grau und stehend. -->
-                <div class="ov-fan fan-pic">
-                  <div class="gauge-halo" aria-hidden="true"></div>
-                  <ps5-cooling-fan id="fan-tile" speed="0" connected="false"></ps5-cooling-fan>
+                <!-- Die Drehzahl als Ring wie die Temperatur (seit 19.11.2026, Wunsch des Users; vorher ein Tacho, <ps5-cooling-fan>): der Bogen zeigt die
+                     gemessene Drehzahl in Prozent, die Zahl steht in der Mitte, die Farbe folgt dem Wert (app.js, fanRing und fanVisual, --fan-rgb). -->
+                <div class="ov-gauge ov-gauge-fan">
+                  <svg viewBox="0 0 150 150" aria-hidden="true">
+                    <circle class="rg-track" cx="75" cy="75" r="64"></circle>
+                    <circle class="rg-fill ov-fanring" id="ov-fan-ring" cx="75" cy="75" r="64"
+                            transform="rotate(-90 75 75)"></circle>
+                  </svg>
+                  <div class="ov-gauge-val"><span class="hero-num" id="t-fan">--</span><span class="hero-unit">%</span></div>
                 </div>
                 <div class="ov-tile-text">
                   <span class="ov-label">Lüfter</span>
-                  <strong class="ov-big" id="t-fan">--<i>%</i></strong>
                   <small id="t-fan-note">Drehzahl</small>
                 </div>
               </article>

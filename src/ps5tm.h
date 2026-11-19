@@ -852,7 +852,7 @@ struct cJSON *ps5tm_ampr_status(void);
 int           ps5tm_ampr_busy(void);
 /* The APR-EMU file of a game as a job of the AMPR job (amprindex.c): op "apply" (store = the version's file name),
    "restore" or "remove"; the HTTP status, 200 when started. */
-int           ps5tm_ampr_emu_start(const char *lib, const char *op, const char *store, const char *title_id, char *err, size_t err_len);
+int           ps5tm_ampr_emu_start(const char *lib, const char *op, const char *store, const char *title_id, const char *place, char *err, size_t err_len);
 
 /* The APR-EMU versions built into the app (gen/ampr_emu_blob.c, tools/gen_emu_blob.py): zlib-packed, SHA-256 of the unpacked file. */
 typedef struct {
@@ -895,13 +895,13 @@ int ps5tm_put_lib_file(const char *path, const unsigned char *d, size_t n);
 /* The APR-EMU file and the PlayGo file of a game (amprlib.c): the versions the person keeps, what a game has, and the
    changes. lib is "ampr" (NULL or "" too) or "playgo"; an unknown lib gives NULL / -1 / EINVAL. */
 struct cJSON *ps5tm_amprlib_versions(const char *lib);
-struct cJSON *ps5tm_amprlib_state(const char *lib, const char *title_id, int *http);
+struct cJSON *ps5tm_amprlib_state(const char *lib, const char *title_id, const char *place, int *http);
 /* Puts the versions built into the app that are not in the store folder (AMPR_EMU, PlayGo) there. The versions JSON afterwards, with "installed": how many were put. */
 struct cJSON *ps5tm_amprlib_install_bundled(const char *lib, char *why, size_t why_len);
 /* "game" (the game's own fakelib: a folder, or an image mounted read-write) or "backport" (a compressed .ffpfsc, or a
    backport folder that is already there); why is not empty when nothing can be changed. 0, or -1 when the title is not
    on the list. */
-int           ps5tm_amprlib_place(const char *lib, const char *title_id, char *place, size_t place_len, char *why, size_t why_len);
+int           ps5tm_amprlib_place(const char *lib, const char *title_id, const char *prefer, char *place, size_t place_len, char *why, size_t why_len);
 /* op "apply" (store_name), "restore" or "remove"; root is the game's root for the place "game", NULL for "backport".
    0 on success (note holds what else is worth knowing), else an errno with the reason in why. */
 int           ps5tm_amprlib_run(const char *lib, const char *op, const char *title_id, const char *root, const char *store_name,

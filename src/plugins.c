@@ -240,7 +240,7 @@ place_ok(const char *id, const char *game, char *why, size_t wn) {
     return 0;
   }
   int http = 200;
-  cJSON *st = ps5tm_amprlib_state("ampr", id, &http);
+  cJSON *st = ps5tm_amprlib_state("ampr", id, "", &http);
   int ok = 1;
   if(st) {
     const cJSON *pl = cJSON_GetObjectItem(st, "place");

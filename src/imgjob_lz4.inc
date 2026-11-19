@@ -191,7 +191,7 @@ lz4_job_stats(const lzp_stats_t *s, uint64_t loose) {
 static int
 lz4_install_apr(const char *id, const char *root, int backport, char *why, size_t wn) {
   int http = 0;
-  cJSON *st = ps5tm_amprlib_state("ampr", id, &http);
+  cJSON *st = ps5tm_amprlib_state("ampr", id, "", &http);
   int have = 0;
   if(st) {
     const cJSON *ins = cJSON_GetObjectItem(st, "installed");
@@ -658,7 +658,7 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   char sign_note[300] = "";                                    /* said at the end, beside whatever else the job has to say */
 
   char place[16] = "", pwhy[200] = "";
-  if(ps5tm_amprlib_place("ampr", id, place, sizeof(place), pwhy, sizeof(pwhy)) != 0) { lz4_fail("Das Spiel ist nicht mehr in der Liste.", -1); return; }
+  if(ps5tm_amprlib_place("ampr", id, "", place, sizeof(place), pwhy, sizeof(pwhy)) != 0) { lz4_fail("Das Spiel ist nicht mehr in der Liste.", -1); return; }
   backport = !strcmp(place, "backport");
   if(copy && backport) { lz4_fail("Dieses Spiel hat einen Backport-Ordner (ShadowMountPlus liest ihn zuerst): Eine Kopie bekäme keine eigene APR-EMU-Datei. Bitte im Spielordner packen.", -1); return; }
   if(pwhy[0] && !backport && !place[0]) { lz4_fail(pwhy, -1); return; }
