@@ -101,6 +101,10 @@
 #ifndef PS5TM_SAVE_HOME
 #define PS5TM_SAVE_HOME "/user/home"
 #endif
+#ifndef PS5TM_APPMETA_ROOTS
+/* where the console keeps what describes an installed title (param.json, or param.sfo for a PS4 title); a host test names a folder of its own (-DPS5TM_APPMETA_ROOTS) */
+#define PS5TM_APPMETA_ROOTS "/user/appmeta", "/system_data/priv/appmeta", "/mnt/ext0/user/appmeta", "/mnt/ext1/user/appmeta"
+#endif
 #ifndef PS5TM_SYS_DATA
 #define PS5TM_SYS_DATA "/system_data"       /* the folder of the console's databases; below it savedata_prospero/<user>/db/user/savedata.db */
 #endif
@@ -800,7 +804,7 @@ title_kind(const char *id) {
 
   char kind = 0;
   if(!strncmp(id, "NPXS", 4)) kind = 'a';                          /* PS4 system applications */
-  static const char *const roots[] = { "/user/appmeta", "/system_data/priv/appmeta", "/mnt/ext0/user/appmeta", "/mnt/ext1/user/appmeta" };
+  static const char *const roots[] = { PS5TM_APPMETA_ROOTS };
   for(size_t r = 0; r < sizeof(roots) / sizeof(roots[0]) && !kind; r++) {
     for(int k = 0; k < 2 && !kind; k++) {
       char path[160];
@@ -867,7 +871,7 @@ sfo_title(const unsigned char *b, size_t n, char *out, size_t out_len) {
 
 static int
 meta_title(const char *id, char *out, size_t out_len) {
-  static const char *const roots[] = { "/user/appmeta", "/system_data/priv/appmeta", "/mnt/ext0/user/appmeta", "/mnt/ext1/user/appmeta" };
+  static const char *const roots[] = { PS5TM_APPMETA_ROOTS };
   for(size_t r = 0; r < sizeof(roots) / sizeof(roots[0]); r++) {
     for(int k = 0; k < 2; k++) {
       char path[160];

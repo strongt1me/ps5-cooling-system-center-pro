@@ -1378,7 +1378,6 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
         if(replaced) (void)rename(alt, fin); else unlink(fin);
         if(bin_replaced) (void)rename(balt, bfin);
         unlink(bneu);
-        image_in = 0;
         fail(r, "Die Schlüsseldatei ließ sich nicht an ihren Platz legen: %s", ps5tm_io_strerror(re));
         goto done;
       }
@@ -1483,7 +1482,6 @@ done:
       if(rc == ECANCELED) rc = -1;
       if(!err[0]) snprintf(err, err_len, "%s Bitte die Konsole neu starten, bevor es noch einmal versucht wird.", e2);
     }
-    mounted = 0;
   }
   if(!stuck) {
     if(have_img) unlink(img);

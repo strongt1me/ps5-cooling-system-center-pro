@@ -4075,7 +4075,7 @@ handle_saves_import(int fd, const ps5tm_request_t *req) {
     size_t used = 0;
     const cJSON *it = NULL;
     cJSON_ArrayForEach(it, jl) {
-      if(!cJSON_IsString(it) || strlen(it->valuestring) >= 140 || used + strlen(it->valuestring) + 2 >= sizeof(name)) { used = 0; name[0] = 0; break; }
+      if(!cJSON_IsString(it) || strlen(it->valuestring) >= 140 || used + strlen(it->valuestring) + 2 >= sizeof(name)) { name[0] = 0; break; }
       used += (size_t)snprintf(name + used, sizeof(name) - used, "%s%s", used ? "," : "", it->valuestring);
     }
   }

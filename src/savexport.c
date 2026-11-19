@@ -288,7 +288,7 @@ savexport_run(const savexport_args_t *a, const savexport_hooks_t *h, savexport_r
   uint32_t sfo_len = 0;
   char pdiag[480];
   pdiag[0] = 0;
-  int rc = -1, mounted = 0, stuck = 0, have_img = 0, have_zip = 0, ps4 = 0;
+  int rc = -1, mounted = 0, stuck = 0, have_img = 0, ps4 = 0;
   uint8_t sealed[SAVEMNT_SEALED_BYTES];                          /* PS4: the key from the companion file <slot>.bin */
   memset(sealed, 0, sizeof(sealed));
   szw_t *z = NULL;
@@ -417,7 +417,7 @@ savexport_run(const savexport_args_t *a, const savexport_hooks_t *h, savexport_r
     else if(e != 0) fail(r, "Der Spielstand ließ sich nicht durchsehen (%s): %s", bad, ps5tm_io_strerror(e));
     if(e != 0) goto done;
     if(list.bytes > SX_ZIP_MAX) { fail(r, "Der Spielstand ist mit %llu MB zu groß für eine ZIP-Datei.", (unsigned long long)(list.bytes >> 20)); goto done; }
-    qsort(list.v, list.n, sizeof(*list.v), cmp_ent);
+    if(list.n > 1) qsort(list.v, list.n, sizeof(*list.v), cmp_ent);
   }
   {
     uint64_t avail = 0;
@@ -559,7 +559,6 @@ savexport_run(const savexport_args_t *a, const savexport_hooks_t *h, savexport_r
   phase(r, "ZIP-Datei schreiben", list.bytes);
   z = szw_create(zip_tmp);
   if(!z) { const int e = errno ? errno : EIO; free(json); fail(r, "Die ZIP-Datei ließ sich nicht anlegen: %s", ps5tm_io_strerror(e)); goto done; }
-  have_zip = 1;
   int zrc = SZ_OK;
   for(unsigned i = 0; i < list.n && zrc == SZ_OK; i++) {
     const ent_t *e = &list.v[i];
@@ -575,7 +574,6 @@ savexport_run(const savexport_args_t *a, const savexport_hooks_t *h, savexport_r
   if(zrc != SZ_OK) {
     szw_abort(z);
     z = NULL;
-    have_zip = 0;
     if(zrc == SZ_E_STOP) { rc = ECANCELED; goto done; }
     if(zrc == SZ_E_TOO_BIG) fail(r, "Der Spielstand ist zu groß für eine ZIP-Datei.");
     else if(zrc == SZ_E_CHANGED) fail(r, "Eine Datei hat sich beim Verpacken geändert.");
@@ -584,15 +582,14 @@ savexport_run(const savexport_args_t *a, const savexport_hooks_t *h, savexport_r
   }
   zrc = szw_finish(z);
   z = NULL;
-  if(zrc != SZ_OK) { have_zip = 0; fail(r, "Die ZIP-Datei ließ sich nicht abschließen: %s", ps5tm_io_strerror(errno ? errno : EIO)); goto done; }
+  if(zrc != SZ_OK) { fail(r, "Die ZIP-Datei ließ sich nicht abschließen: %s", ps5tm_io_strerror(errno ? errno : EIO)); goto done; }
   if(rename(zip_tmp, zip_fin) != 0) {
     const int e = errno ? errno : EIO;
     unlink(zip_tmp);
-    have_zip = 0;
     fail(r, "Die ZIP-Datei ließ sich nicht an ihren Platz legen: %s", ps5tm_io_strerror(e));
     goto done;
   }
-  have_zip = 0;                                                  /* it is whole now: it stays */
+                                                                 /* the ZIP is whole now: it stays */
   {
     /* the name in the folder is made lasting too: a stick pulled out right after "done" must have the file under its name, not as ".partial" or not at all */
     char dd[PATH_MAX];
@@ -617,9 +614,7 @@ done:
       if(rc == ECANCELED) rc = -1;                               /* a mount that will not let go is worth more than the stop */
       if(!err[0]) snprintf(err, err_len, "%s Bitte die Konsole neu starten, bevor es noch einmal versucht wird.", e2);
     }
-    mounted = 0;
   }
-  if(have_zip) unlink(zip_tmp);
   if(!stuck) {
     if(have_img) unlink(img);
     rmdir(mnt);

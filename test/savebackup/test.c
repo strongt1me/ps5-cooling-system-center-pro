@@ -391,6 +391,28 @@ main(int argc, char **argv) {
   ps5tm_savemnt_test_on_open = NULL;
   g_game = 0;
 
+  /* ---- an APP (YouTube: applicationCategoryType 65536 in the console's description of the title) is never put in: the plan says so, the start is refused (403) and no job runs */
+  reset();
+  {
+    char p[600];
+    snprintf(p, sizeof(p), "%s/appmeta/PPSA01650/param.json", ROOT);
+    wfile(p, "{\"applicationCategoryType\":65536}", strlen("{\"applicationCategoryType\":65536}"));
+    CHECK(make_zip("yt_SaveData.zip", "PPSA01650", "SaveData") == 0 && make_zip("game_SaveData.zip", "PPSA01234", "SaveData") == 0);
+    int status = 0;
+    cJSON *pl = ps5tm_saves_import_plan_json("yt_SaveData.zip", NULL, err, sizeof(err), &status);
+    const cJSON *imp = pl ? cJSON_GetObjectItem(pl, "importable") : NULL, *why = pl ? cJSON_GetObjectItem(pl, "why") : NULL;
+    CHECK(status == 200 && cJSON_IsFalse(imp) && cJSON_IsString(why) && strstr(why->valuestring, "App"));
+    cJSON_Delete(pl);
+    CHECK(ps5tm_saves_import_start("yt_SaveData.zip", NULL, UID, NULL, 1, err, sizeof(err)) == 403 && strstr(err, "App"));
+    CHECK(!ps5tm_saves_busy());
+    img_path(img0, sizeof(img0), "PPSA01650", "SaveData");
+    CHECK(!exists(img0) && db_count() == 0);
+    pl = ps5tm_saves_import_plan_json("game_SaveData.zip", NULL, err, sizeof(err), &status);       /* a game next to it is as before */
+    imp = pl ? cJSON_GetObjectItem(pl, "importable") : NULL;
+    CHECK(status == 200 && cJSON_IsTrue(imp));
+    cJSON_Delete(pl);
+  }
+
   /* ---- a game that runs: nothing starts */
   g_game = 1;
   CHECK(ps5tm_saves_import_start("g_SAVE0.zip", NULL, UID, NULL, 0, err, sizeof(err)) == 409);

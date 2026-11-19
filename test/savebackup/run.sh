@@ -24,9 +24,10 @@ fi
 D1="-DPS5TM_DATA_DIR=\"$WORK/data\""
 D2="-DPS5TM_SAVE_HOME=\"$WORK/home\""
 D3="-DPS5TM_SYS_DATA=\"$WORK/system\""
+D4="-DPS5TM_APPMETA_ROOTS=\"$WORK/appmeta\""
 CF="-std=gnu11 -D_GNU_SOURCE -DPS5TM_HOST_TEST -O1 -g -fsanitize=address,undefined -Isrc -Isrc/third_party -Isrc/third_party/libdeflate"
 # savebackup.c is built for the PS5 with clang -Werror; gcc's extra format-truncation warnings on its older parts are not this test's business
-gcc $CF -w "$D1" "$D2" "$D3" -c -o "$OUT/savebackup.o" src/savebackup.c
-gcc $CF -Wall -Wextra -Werror "$D1" "$D2" "$D3" -o "$OUT/test" test/savebackup/test.c "$OUT/savebackup.o" src/saveimport.c src/savexport.c src/savedb.c src/savemnt.c \
+gcc $CF -w "$D1" "$D2" "$D3" "$D4" -c -o "$OUT/savebackup.o" src/savebackup.c
+gcc $CF -Wall -Wextra -Werror "$D1" "$D2" "$D3" "$D4" -o "$OUT/test" test/savebackup/test.c "$OUT/savebackup.o" src/saveimport.c src/savexport.c src/savedb.c src/savemnt.c \
   src/chives.c src/savesfo.c src/savezip.c $LIBS "$SQ" -lm -lpthread
 "$OUT/test" "$WORK"

@@ -2,6 +2,14 @@
 
 ## Unveröffentlicht
 
+### Nachprüfung und Aufräumen nach v1.88.0 (19.11.2026)
+- **An der .52 bestätigt (Slim, Firmware 12.00):** Die **Wiederherstellung nach einem Abbruch** (mit einer nachgestellten Aufzeichnung an Testdateien im Datenordner der App): Stufe „swap“ nimmt beim Start der App den Tausch zurück (Dateien und Bild wie vorher, Protokollzeile `saves_recovered`), Stufe „db“ trägt beim nächsten Einspielen die Zeile in die Datenbank nach (richtige Werte, `integrity_check` ok), sagt es im Hinweis des Auftrags und lässt den Auftrag normal weiterlaufen. Die **Ablehnung von Apps**: Eine ZIP-Datei mit der Kennung von YouTube (`PPSA01650`) ist in `import/plan` nicht einspielbar („Das ist eine App, kein Spiel“); das Einspielen selbst wurde an der Konsole absichtlich nicht aufgerufen.
+- **Host-Test `savebackup` (52 Prüfungen):** neu die Ablehnung von Apps durch die echte Funktion (der Ordner mit den Titelbeschreibungen ist für Tests überschreibbar: `-DPS5TM_APPMETA_ROOTS`): Plan nicht einspielbar, Start mit 403, kein Auftrag, kein Abbild, keine Zeile in der Datenbank.
+- **Tote Zuweisungen beseitigt (F-348):** `saveimport.c` (`image_in`, `mounted`), `savexport.c` (die Hilfsvariable `have_zip` und `mounted`), `api.c` (`used`); dazu eine Absicherung vor `qsort` in `savexport.c` (leere Liste). Der Analyzer von clang meldet in den Spielstand-Dateien danach keinen Fund mehr; ELF mit `-Werror` ohne Warnungen, 35 Host-Tests grün. Die veröffentlichte ELF enthält diese Änderungen noch nicht (rein kosmetisch).
+- **Nicht an der Konsole erprobt:** die Bedienung der neuen Menüs der Vollbild-App mit dem Controller (Tests der Vollbild-App und Bilder am PC; `tvapp/tools/console-tour.py` würde die Kachel starten und den Fernseher belegen).
+
+## v1.88.0 – 19.11.2026
+
 ### Vollbild-App: Spielstände auf eine andere Konsole übertragen (mit einem USB-Laufwerk)
 - **Anlass:** Das Übertragen gab es nur im Browser (Herunterladen und Hochladen gehören nicht an den Controller). Die Vollbild-App nimmt ein Laufwerk als Weg: ohne PC, ohne Handy.
 - **Spiele → Spielstände:** Im Menü eines Spiels (Quadrat-Taste) steht „ZIP auslesen auf <Laufwerk>“ (bei mehreren Spielständen eines Titels je einer); das Laufwerk ist das Ziel, das auch für die Sicherungen gilt. Die Liste **„ZIP-DATEIEN“** zeigt alle ZIP-Dateien im Ordner `PS5-Sicherung/Spielstand-ZIP` der Laufwerke (Titel und Spielstand aus dem Dateinamen, Laufwerk als Marke). Die X-Taste sieht eine Datei an (die App prüft sie, es wird nichts geschrieben), danach das Menü „Für <Benutzer> einspielen (ersetzt / ergänzt / neu)“; ein Spielstand im neueren Abbildformat wird mit Hinweis als klassisches Abbild angelegt, einer, den die Konsole nicht einspielen kann, sagt den Grund unter der Datei. Der Stand davor wird wie im Browser zuerst gesichert; die Datei auf dem Laufwerk bleibt liegen. Der Auftrag zeigt sich in der Auftragskarte der Seite („ZIP auslesen“, „Einspielen“).
