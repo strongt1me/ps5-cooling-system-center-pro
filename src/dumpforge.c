@@ -174,11 +174,10 @@ ps5tm_dumpforge_installed(char *ver, size_t vn) {
   return find_elf(path, sizeof path, ver, vn);
 }
 
-/* 1 when the Dump Forge a job would use does not know "zstd_unpack" (a version before 0.5.0 takes the field and ignores it, so the package would come out with
-   the packs in it and Kraken Mount would refuse it): the one that runs (probe_running), else the one in the folder. ver gets that version. A version that is
-   not known (a file without one in its name) is let through. */
+/* 1 when the Dump Forge a job would use is older than `min`: the one that runs (probe_running), else the one in the folder. ver gets that version. A version
+   that is not known (a file without one in its name) is let through. */
 int
-ps5tm_dumpforge_lacks_zstd_unpack(int probe_running, char *ver, size_t vn) {
+ps5tm_dumpforge_older_than(const char *min, int probe_running, char *ver, size_t vn) {
   char v[40] = "";
   if(!probe_running || !running_version(v, sizeof v) || !v[0]) {
     char path[300];
@@ -187,7 +186,21 @@ ps5tm_dumpforge_lacks_zstd_unpack(int probe_running, char *ver, size_t vn) {
   }
   if(!ps5tm_ver_known(v)) return 0;                      /* no version, or text that is no version: let it through */
   if(ver && vn) snprintf(ver, vn, "%s", v);
-  return ver_newer("0.5.0", v);
+  return ver_newer(min, v);
+}
+
+/* 1 when the Dump Forge a job would use does not know "zstd_unpack" (a version before 0.5.0 takes the field and ignores it, so the package would come out with
+   the packs in it and Kraken Mount would refuse it). */
+int
+ps5tm_dumpforge_lacks_zstd_unpack(int probe_running, char *ver, size_t vn) {
+  return ps5tm_dumpforge_older_than("0.5.0", probe_running, ver, vn);
+}
+
+/* 1 when it cannot pack straight into an image (exfat / ffpkg with "lz4":"pack" or "zstd_pack", 19.11.2026): 0.5.6 is the version this was read from; an older one
+   may take the fields and ignore them, and the image would come out unpacked. */
+int
+ps5tm_dumpforge_lacks_image_pack(int probe_running, char *ver, size_t vn) {
+  return ps5tm_dumpforge_older_than("0.5.6", probe_running, ver, vn);
 }
 
 struct cJSON *
@@ -290,21 +303,36 @@ ps5tm_dumpforge_stop(int force) {
 
 /* A job: source (a folder or an image) into the debug FPKG `output`; level "fast", "balanced", "smallest" or "stored". unpack 1 / 2: the source's
    LZ4 / zstd packs are decoded into the logical files first ("lz4":"unpack" / "zstd_unpack":true of Dump Forge's request; the two cannot be asked for
-   together), as Kraken Mount takes no package with packs in it. 0 and the job's number, else -1 with a sentence. */
+   together), as Kraken Mount takes no package with packs in it. 0 and the job's number, else -1 with a sentence.
+   pack != NULL with pack->kind 1 / 2 (19.11.2026): not a package but the image `format` ("exfat" or "ffpkg") written straight with the game packed into LZ4 / zstd
+   packs ("lz4":"pack" + "lz4_level" + "lz4_runtime", or "zstd_pack":true + "zstd_level"; Dump Forge measures the game first and reads it twice). */
 int
-ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int unpack, int *job, char *err, size_t n) {
+ps5tm_dumpforge_job_start(const char *source, const char *output, const char *format, const char *level, int full_verify, int unpack,
+                          const ps5tm_cvpack_t *pack, int *job, char *err, size_t n) {
   *job = 0;
+  const int packing = pack && (pack->kind == 1 || pack->kind == 2);
   cJSON *req = cJSON_CreateObject();
   cJSON_AddStringToObject(req, "source", source);
-  cJSON_AddStringToObject(req, "format", "pkg");
+  cJSON_AddStringToObject(req, "format", format && *format ? format : "pkg");
   cJSON_AddStringToObject(req, "output", output);
   cJSON_AddNullToObject(req, "compression_threads");
   cJSON_AddNullToObject(req, "inner");
   cJSON_AddBoolToObject(req, "remove_backport", 0);
   cJSON_AddBoolToObject(req, "full_verify", full_verify ? 1 : 0);
-  if(unpack == 2) cJSON_AddBoolToObject(req, "zstd_unpack", 1);
-  else if(unpack == 1) cJSON_AddStringToObject(req, "lz4", "unpack");
-  cJSON_AddStringToObject(req, "kraken_level", level && *level ? level : "fast");
+  if(packing) {
+    if(pack->kind == 2) {
+      cJSON_AddBoolToObject(req, "zstd_pack", 1);
+      cJSON_AddNumberToObject(req, "zstd_level", pack->level > 0 ? pack->level : 5);
+    } else {
+      cJSON_AddStringToObject(req, "lz4", "pack");
+      cJSON_AddNumberToObject(req, "lz4_level", pack->level);
+      cJSON_AddStringToObject(req, "lz4_runtime", pack->runtime == 1 ? "ampr_emu" : "ng");
+    }
+  } else {
+    if(unpack == 2) cJSON_AddBoolToObject(req, "zstd_unpack", 1);
+    else if(unpack == 1) cJSON_AddStringToObject(req, "lz4", "unpack");
+    cJSON_AddStringToObject(req, "kraken_level", level && *level ? level : "fast");
+  }
   cJSON *body = cJSON_CreateObject();
   cJSON_AddItemToObject(body, "request", req);
   char *text = cJSON_PrintUnformatted(body);

@@ -11,6 +11,8 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "cvpack.h"
+
 /* Every thread of the app gets a small signal stack of its own (fanguard.c, review 31.10.2026): the crash handler that
  * hands the fan back to the console must also run after a stack overflow, and an alternate signal stack is set per
  * thread. pthread_create is routed through ps5tm_thread_create, which installs it and then calls the start routine. */
@@ -996,6 +998,8 @@ typedef struct {
 struct cJSON *ps5tm_dumpforge_state(void);
 int           ps5tm_dumpforge_installed(char *version, size_t n);
 int           ps5tm_dumpforge_lacks_zstd_unpack(int probe_running, char *ver, size_t vn); /* 1: the Dump Forge a job would use is older than 0.5.0 (probe_running: asks the running one too) */
+int           ps5tm_dumpforge_lacks_image_pack(int probe_running, char *ver, size_t vn);  /* 1: older than 0.5.6, which writes an image with the game packed straight in (19.11.2026) */
+int           ps5tm_dumpforge_older_than(const char *min, int probe_running, char *ver, size_t vn);
 void          ps5tm_dumpforge_prepare(void);                              /* makes the app's folder for Dump Forge (at the start of the app) */
 /* Keeps the home-screen tile /user/app/<tile_id> of a helper program (Kraken Mount, Dump Forge) away: a tile it made earlier (one of the
    markers exists) is uninstalled, then an empty file takes the place of the folder, which the program leaves alone (tilekeep.c). */
@@ -1007,8 +1011,10 @@ int           ps5tm_dumpforge_probe(void);                              /* 1 = r
 int           ps5tm_dumpforge_stop(int force);                          /* 0 = ended (or not running), 1 = left running: it is busy and force is 0 */
 int           ps5tm_dumpforge_fetch(char *msg, size_t n);              /* 200 = there, else an HTTP-like status with a sentence */
 /* unpack: 0 = the game is written as it is, 1 = its LZ4 packs are decoded first, 2 = its zstd packs (Kraken Mount refuses a package that holds packs).
+   format: "pkg" (NULL too) or the image to write ("exfat", "ffpkg") when pack asks for packing (pack may be NULL).
    0 = taken; -1 = refused (with the reason in err); -2 = no answer (the job may have been taken all the same). */
-int           ps5tm_dumpforge_job_start(const char *source, const char *output, const char *level, int full_verify, int unpack, int *job, char *err, size_t n);
+int           ps5tm_dumpforge_job_start(const char *source, const char *output, const char *format, const char *level, int full_verify, int unpack,
+                                        const ps5tm_cvpack_t *pack, int *job, char *err, size_t n);
 int           ps5tm_dumpforge_job_poll(int job, ps5tm_dumpforge_job_t *out);
 int           ps5tm_dumpforge_job_cancel(int job);                     /* the HTTP status of the request, -1 when it did not arrive */
 
@@ -1114,13 +1120,14 @@ struct cJSON *ps5tm_fsign_info(const char *folder);
 /* quick: check the result the quick way (structure and a sample, no checksum file) instead of reading it all back (10.11.2026) */
 /* name_tpl: the template of the result's name (cvname.h), NULL or "" for the name of the source; qid: the entry of the queue (convqueue.c) the
    job runs for, else 0 */
+/* pack: pack the game into LZ4 or zstd packs while it is written (exfat and ffpkg only, through Dump Forge); NULL = not */
 int           ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index,
                                       const char *mount, const char *mode, int quick,
-                                      const char *name_tpl, int qid, char *err, size_t err_len);
+                                      const char *name_tpl, const ps5tm_cvpack_t *pack, int qid, char *err, size_t err_len);
 /* Everything that speaks for or against the start with these choices, as a list (id, level ok/warn/error, text, hint) plus can_start and
    can_queue, the target and the name (13.11.2026); NULL with the reason in err. */
 struct cJSON *ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount, const char *mode, const char *name_tpl,
-                                      char *err, size_t err_len);
+                                      const ps5tm_cvpack_t *pack, char *err, size_t err_len);
 struct cJSON *ps5tm_gameconvert_status(void);
 /* How the last job that ran for queue entry qid ended ('done', 'failed' or 'cancelled'): 1 when known, else 0 (convqueue.c) */
 int ps5tm_gameconvert_queue_result(int qid, char *state, size_t state_len, char *error, size_t error_len, uint64_t *bytes);

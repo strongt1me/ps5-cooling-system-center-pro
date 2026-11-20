@@ -130,6 +130,12 @@ struct Job
     std::string op;          // convert: "ffpfsc", "ffpkg" or "exfat"
     std::vector<JobStage> stages; // convert: the steps with the time each took
     int queue_id = 0;             // convert: the entry of the queue it runs for, else 0
+    // convert: "lz4" or "zstd" while the game is packed on its way into an exFAT or ffpkg image
+    // (Dump Forge, 19.11.2026); "" otherwise. Its bar then only estimates how far the writing has
+    // come: the card shows a percentage, never "x of y GB".
+    std::string pack;
+    int pack_level = 0;
+    std::string pack_runtime; // LZ4 only: "ng" or "ampr_emu"
 };
 
 // The game tools of Spiele → Bibliothek, in the order of their menu.

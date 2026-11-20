@@ -5198,6 +5198,11 @@ void HttpSource::poll_jobs()
             const std::string target = str(root, "target");
             job.detail = target.empty() ? str(root, "op") : "→ " + target;
             job.op = str(root, "op");
+            // An image that packs the game on its way (Dump Forge, 19.11.2026): the card shows a
+            // percentage instead of sizes and names the packs after it.
+            job.pack = str(root, "pack");
+            job.pack_level = static_cast<int>(num(root, "pack_level"));
+            job.pack_runtime = str(root, "pack_runtime");
             job.queue_id = static_cast<int>(num(root, "queue_id"));
             const cJSON *stage = nullptr;
             cJSON_ArrayForEach(stage, cJSON_GetObjectItemCaseSensitive(root, "stages"))

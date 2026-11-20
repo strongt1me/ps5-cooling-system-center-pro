@@ -6259,6 +6259,10 @@
         if (n === "cv-mode") cv.mode = e.target.value;
         if (n === "cv-ampr") cv.ampr = e.target.checked;
         if (n === "cv-verify") cv.verify = e.target.value;
+        if (n === "cv-pk") cv.pack = e.target.value;
+        if (n === "cv-pl") cv.pl = Number(e.target.value);
+        if (n === "cv-pz") cv.pz = Number(e.target.value);
+        if (n === "cv-prt") cv.prt = e.target.value === "ampr_emu" ? "ampr_emu" : "ng";
         if (n === "cv-op") {
           if (e.target.value === "unpack") { mvOpen(cv.id, "unpack"); return; }
           cv.op = e.target.value === "fpkg" ? (cv.fl || "fpkg") : e.target.value;   /* the format "FPKG" carries the level chosen last */
@@ -6795,7 +6799,8 @@
    * ShadowMountPlus (mv…). Die Ziele sind die des Kopierens: der Ordner
    * homebrew eines Laufwerks oder PS5-Sicherung/Spiele. */
   const cv = { id: "", plan: null, op: "", fl: "fpkg", drive: "", mode: "", job: null, timer: 0, ampr: false,
-               name: "", check: null, cseq: 0, ctimer: 0, queue: null, qtimer: 0, guide: false, fresh: false };
+               name: "", check: null, cseq: 0, ctimer: 0, queue: null, qtimer: 0, guide: false, fresh: false,
+               pack: "", pl: 9, pz: 5, prt: "ng" };       /* Packen beim Konvertieren: "" | "lz4" | "zstd", Stufe LZ4, Stufe zstd, Laufzeit "ng" | "ampr_emu" */
 
   const CV_OPS = {
     ffpfsc: {
@@ -6834,6 +6839,19 @@
   const cvOpLabel = (op) => (cvIsFpkg(op) ? `FPKG · ${cvLevelName(op)}` : op);
   /* Squeezing: the result is smaller than the game (ffpfsc and a compressed FPKG); the step is called "Komprimieren" then. */
   const cvSqueezes = (op) => op === "ffpfsc" || (cvIsFpkg(op) && op !== "fpkg-raw");
+  /* Packing while converting (19.11.2026, gameconvert.c, Dump Forge): an exFAT or ffpkg image of a PS5 game folder that is written with the
+     game packed straight into LZ4 or zstd packs. Only for these two formats, only when the plan says pack_ok and Dump Forge is there. */
+  const cvPackable = (op) => op === "exfat" || op === "ffpkg";
+  const cvPackKind = () => (cv.plan && cv.plan.pack_ok && cv.plan.dumpforge && cv.plan.dumpforge.installed && cvPackable(cv.op)
+    && (cv.pack === "lz4" || cv.pack === "zstd") ? cv.pack : "");
+  /* the fields of the three requests (check, start, queue) */
+  const cvPackFields = () => {
+    const k = cvPackKind();
+    return k ? { pack: k, pack_level: k === "zstd" ? cv.pz : cv.pl, pack_runtime: k === "lz4" ? cv.prt : "ng" } : {};
+  };
+  const cvPackName = (k) => (k === "zstd" ? "zstd-Packs" : "LZ4-Packs");
+  /* Squeezing of a job as the server reports it: also an image written with packs */
+  const cvSqueezesJob = (j) => !!j.pack || cvSqueezes(j.op);
   /* What the result is, by its name: the job view and the end of it say it, not only the choice before. */
   const CV_FMT = { ffpfsc: "ffpfsc (komprimiertes PFS)", ffpkg: "ffpkg (UFS2-Abbild)", exfat: "exFAT-Abbild (.exfat)",
                    fpkg: "FPKG (Debug-.pkg), Stufe Schnell", "fpkg-bal": "FPKG (Debug-.pkg), Stufe Ausgewogen",
@@ -6869,7 +6887,7 @@
     const need = cv.op === "ffpkg" && p.ffpkg_bytes ? p.ffpkg_bytes : cvIsFpkg(cv.op) && p.fpkg_unpack_bytes ? p.fpkg_unpack_bytes : p.raw_bytes;
     const fat32 = cv.op === "ffpkg" && d.fat32_too_big_ffpkg !== undefined ? d.fat32_too_big_ffpkg : d.fat32_too_big;
     /* A compressed FPKG gets smaller than the game: the check names a FAT32 drive, it is not turned away here. */
-    if (fat32 && !(cvIsFpkg(cv.op) && cv.op !== "fpkg-raw")) return "FAT32 nimmt keine Datei über 4 GB auf";
+    if (fat32 && !(cvIsFpkg(cv.op) && cv.op !== "fpkg-raw") && !cvPackKind()) return "FAT32 nimmt keine Datei über 4 GB auf";
     if (!d.enough_space) return `Zu wenig Platz: Nötig sind bis zu ${bytes(need)}`;
     const t = cv.mode && cv.op && d[cv.mode] ? d[cv.mode][cvKey(cv.op)] : null;
     /* Per target, not per drive: the drive-wide figure is the best case, and
@@ -6911,7 +6929,7 @@
     cv.cbusy = true;
     try {
       const c = await api("/api/v1/library/convert/check", { method: "POST", timeoutMs: 120000,
-        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, name: cv.name || "" }) });
+        body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, name: cv.name || "", ...cvPackFields() }) });
       if (seq !== cv.cseq || cp.view !== "cvplan") return;
       cv.check = c;
       cvCheckPaint(c);
@@ -6988,14 +7006,10 @@
       <span>Das Spiel liegt in AMPR-Packs (${kind}), und Kraken Mount nimmt kein Paket mit Packs an. Dump Forge löst sie deshalb beim Umwandeln auf: Das Paket enthält die ungepackten Dateien, das Original bleibt unverändert.</span>
       <span>${size}</span></div>`;
   };
-  /* Under the format FPKG: the compression level, and where Dump Forge stands (there, or to be fetched). */
-  const cvFpkgExtra = (p) => {
-    const df = p.dumpforge || {};
-    const levels = CV_FLEVELS.map(([op, t, d]) => `<label class="cp-choice">
-        <input type="radio" name="cv-fl" value="${esc(op)}" ${cv.op === op ? "checked" : ""}>
-        <span class="cp-choice-text"><b>${esc(t)}</b><span class="muted">${esc(d)}</span></span></label>`).join("");
+  /* Where Dump Forge stands (there, or to be fetched): under the format FPKG and under the packing of an image. */
+  const cvEngineHtml = (df) => {
     const ver = esc(df.version || "");
-    const engine = df.installed
+    return df.installed
       ? `<p class="muted cv-engine">${df.running
           ? `Dump Forge ${ver} ist da und läuft schon. Die App startet es für den Auftrag und beendet es danach wieder.`
           : `Dump Forge ${ver} ist da. Die App startet es für den Auftrag und beendet es danach wieder.`}</p>`
@@ -7004,6 +7018,42 @@
           <span>Selbst laden geht auch: Lege die ELF-Datei von Dump Forge (Name: ps5-dump-forge-VERSION-ps5.elf) in diesen Ordner der PS5:</span>
           <code>${esc(df.folder || "/data/PS5-Cooling-Center/dumpforge")}</code>
           <button type="button" class="btn" data-cp="dfetch"${df.fetching ? " disabled" : ""}>Dump Forge laden</button></div>`;
+  };
+  /* Under the format exFAT / ffpkg: pack the game while the image is written. One group of choices: whether, which level, which runtime (LZ4 only). */
+  const cvPackExtra = (p) => {
+    const df = p.dumpforge || {};
+    if (!p.pack_ok) {
+      return `<div class="cp-sub cv-pack"><h5>Packen (AMPR-Packs)</h5>
+        <p class="cp-why">Bei diesem Spiel nicht möglich: ${esc(p.pack_error || "")}</p></div>`;
+    }
+    const kinds = [
+      ["", "Nicht packen", "Das Abbild enthält die Dateien des Spiels, wie sie sind."],
+      ["lz4", "LZ4-Packs", "Dump Forge packt das Spiel beim Schreiben in LZ4-Packs, ohne Zwischenordner. Das spart Platz; die APR-EMU im Spiel entpackt sie beim Spielen."],
+      ["zstd", "zstd-Packs (nur AMPR EMU NG)", "Dump Forge packt das Spiel beim Schreiben in zstd-Packs und legt AMPR EMU NG ins Spiel, die einzige Fassung, die zstd liest."]
+    ];
+    const kind = cvPackKind();
+    const radios = (name, rows, cur) => rows.map(([v, t, d, off]) => `<label class="cp-choice${off ? " off" : ""}">
+        <input type="radio" name="${name}" value="${esc(String(v))}" ${String(cur) === String(v) ? "checked" : ""} ${off ? "disabled" : ""}>
+        <span class="cp-choice-text"><b>${esc(t)}</b>${d ? `<span class="muted">${esc(d)}</span>` : ""}</span></label>`).join("");
+    const rows = kinds.map(([v, t, d]) => [v, t, d, v !== "" && !df.installed]);          /* without Dump Forge nothing is packed: greyed out, with the button below */
+    const lv = kind === "zstd" ? ZST_LEVELS : AL_LEVELS;
+    return `<div class="cp-sub cv-pack"><h5>Packen (AMPR-Packs)</h5>
+      <div class="cp-list">${radios("cv-pk", rows, kind)}</div>
+      ${kind ? `<h5>Stufe</h5><div class="cp-list">${radios(kind === "zstd" ? "cv-pz" : "cv-pl", lv, kind === "zstd" ? cv.pz : cv.pl)}</div>` : ""}
+      ${kind === "lz4" ? `<h5>Laufzeit im Spiel</h5><div class="cp-list">${radios("cv-prt", [
+        ["ng", "AMPR EMU NG (Vorgabe)", ""],
+        ["ampr_emu", "APR-EMU Original", "Nur für Spiele, die libSceAmpr laden. Dump Forge lehnt es ab, wenn das Spiel sie nicht braucht."]], cv.prt)}</div>` : ""}
+      ${kind ? `<p class="muted cv-engine">Die Quelle wird zweimal gelesen (erst messen, dann schreiben): Das dauert länger. Das Original bleibt unverändert. Eine Prüfsummen-Datei (.sha256) entsteht dabei nicht.</p>` : ""}
+      ${kind || !df.installed ? cvEngineHtml(df) : ""}</div>`;
+  };
+
+  /* Under the format FPKG: the compression level, and where Dump Forge stands (there, or to be fetched). */
+  const cvFpkgExtra = (p) => {
+    const df = p.dumpforge || {};
+    const levels = CV_FLEVELS.map(([op, t, d]) => `<label class="cp-choice">
+        <input type="radio" name="cv-fl" value="${esc(op)}" ${cv.op === op ? "checked" : ""}>
+        <span class="cp-choice-text"><b>${esc(t)}</b><span class="muted">${esc(d)}</span></span></label>`).join("");
+    const engine = cvEngineHtml(df);
     const guide = `<div class="cv-engine-guide"><button type="button" class="btn ghost" data-cp="guide">${cv.guide ? "Anleitung schließen" : "Anleitung"}</button></div>${cv.guide ? cvGuideHtml() : ""}`;
     return `<div class="cp-sub">${cvUnpackNote(p)}<h5>Kompressionsstufe</h5><div class="cp-list">${levels}</div>${engine}${guide}</div>`;
   };
@@ -7023,6 +7073,7 @@
     /* Only operations this page knows by name; the value is text like any other. */
     /* A .ffpkg the app already knows it cannot build (a folder with too many entries, a file too big) is shown
        with the reason, and cannot be chosen; so is the FPKG of a game whose packs cannot be handled (not looked at, or zstd and LZ4 together: fpkg_error). */
+    if (!p.pack_ok || !(p.dumpforge && p.dumpforge.installed)) cv.pack = "";                   /* nothing chosen that cannot be done */
     const ops = p.ops.filter((op) => CV_OPS[op]).map((op) => {
       const why = cvOpWhy(p, op);
       const off = !!why;
@@ -7032,7 +7083,8 @@
           <span class="muted">${esc(CV_OPS[op].d(p))}</span>
           ${off ? `<span class="cp-why">Bei diesem Spiel nicht möglich: ${esc(why)}</span>` : ""}
           ${op === "ffpfsc" && cvStreamReasons(p).length ? `<span class="cp-why">Achtung: Bei diesem Spiel sind Ruckler möglich (viele Daten oder Texture-Streaming): ein komprimiertes Abbild muss beim Spielen ständig entpackt werden.</span>` : ""}</span></label>`
-        + (op === "fpkg" && cvIsFpkg(cv.op) ? cvFpkgExtra(p) : "");
+        + (op === "fpkg" && cvIsFpkg(cv.op) ? cvFpkgExtra(p) : "")
+        + (cvPackable(op) && cv.op === op ? cvPackExtra(p) : "");
     }).join("")
       + (g && g.can_unpack ? `<label class="cp-choice">
         <input type="radio" name="cv-op" value="unpack">
@@ -7068,7 +7120,7 @@
       ${cvUnsigned(p)}
       <h4 class="cp-step">1. Was soll entstehen?</h4>
       <div class="cp-list">${ops}</div>
-      ${p.kind === "folder" && !p.ps4 && !cvIsFpkg(cv.op) ? `<label class="cp-choice cv-ampr">
+      ${p.kind === "folder" && !p.ps4 && !cvIsFpkg(cv.op) && !cvPackKind() ? `<label class="cp-choice cv-ampr">
         <input type="checkbox" name="cv-ampr" ${cv.ampr ? "checked" : ""}>
         <span class="cp-choice-text"><b>AMPR-Index vorher bauen</b>
           <span class="muted">Für Spiele mit APR-EMU: legt <code>ampr_emu.index</code> (die Liste aller Dateien) in den Ordner,
@@ -7122,12 +7174,14 @@
           <span class="cp-choice-text"><b>Gründlich (empfohlen)</b>
             <span class="muted">${cvIsFpkg(cv.op)
               ? "Dump Forge liest jedes Byte des fertigen Pakets noch einmal vom Laufwerk und prüft es. Das dauert länger."
+              : cvPackKind()
+              ? "Dump Forge liest jedes Byte des fertigen Abbilds noch einmal vom Laufwerk und prüft es. Das dauert länger."
               : "Liest das ganze Ergebnis noch einmal vom Laufwerk, prüft jeden Block und legt die Prüfsummen-Datei (SHA-256) an."}</span></span>
         </label>
         <label class="cp-choice">
           <input type="radio" name="cv-verify" value="quick" ${cv.verify === "quick" ? "checked" : ""}>
           <span class="cp-choice-text"><b>Schnell</b>
-            <span class="muted">${cvIsFpkg(cv.op)
+            <span class="muted">${cvIsFpkg(cv.op) || cvPackKind()
               ? "Dump Forge prüft den ganzen Aufbau, kleine Dateien ganz und vom Rest eine zufällige Stichprobe."
               : cv.op === "ffpkg"
               ? "Prüft den Aufbau und alle Dateien in einem Durchgang (statt in zwei) und legt keine Prüfsummen-Datei an."
@@ -7137,11 +7191,14 @@
 
       <div id="og-box">${ogBoxInner()}</div>
 
-      ${cv.op ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[cv.op] || cv.op)}</b></p>` : ""}
+      ${cv.op ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[cv.op] || cv.op)}${cvPackKind() ? ` · ${esc(cvPackName(cvPackKind()))}` : ""}</b></p>` : ""}
       <h4 class="cp-step">Prüfung vor dem Start</h4>
       <div id="cv-check" class="cv-check" aria-live="polite"><p class="muted">Die Prüfung läuft …</p></div>
       ${cvIsFpkg(cv.op)
         ? `<p class="muted">Dump Forge läuft dabei als eigenes Programm auf der PS5 und schreibt das Paket; die App zeigt seine Schritte hier. Bei großen Spielen dauert das.
+            Eine Prüfsummen-Datei entsteht nicht.</p>`
+        : cvPackKind()
+        ? `<p class="muted">Dump Forge läuft dabei als eigenes Programm auf der PS5 und schreibt das Abbild; die App zeigt seine Schritte hier. Bei großen Spielen dauert das.
             Eine Prüfsummen-Datei entsteht nicht.</p>`
         : cv.verify === "quick"
         ? `<p class="muted">Die PS5 rechnet dabei mit niedriger Priorität, damit Lüftersteuerung und Oberfläche Vorrang behalten. Bei großen Spielen dauert das. Danach prüft sie das Ergebnis schnell (Aufbau und Stichprobe); eine Prüfsummen-Datei entsteht dabei nicht.</p>`
@@ -7168,14 +7225,15 @@
     txt("#cp-title", `„${j.name || j.title_id}“ konvertieren`);
     const pct = j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0;
     const where = `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(j.target || "")}</code></p>`
-      + (CV_FMT[j.op] ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[j.op])}</b></p>` : "");
+      + (CV_FMT[j.op] ? `<p class="cp-dest"><span class="muted">Format</span> <b>${esc(CV_FMT[j.op])}${j.pack ? ` · ${esc(cvPackName(j.pack))}` : ""}</b></p>` : "");
     const verb = cvSqueezes(j.op) ? "komprimiert" : "geschrieben";
     let html;
     if (j.state === "scanning") {
-      html = `<p>Das Spiel wird vermessen …</p>${where}`;
+      html = `<p>${j.pack ? "Das Spiel wird für die Packs vermessen …" : "Das Spiel wird vermessen …"}</p>${where}`;
     } else if (j.state === "writing") {
+      /* A job that packs: the bar's length is only an estimate (the size of the packs is not known before), so no "x of y GB" */
       html = `<div class="cp-bar"><div style="width:${pct}%"></div></div>
-        <p class="cp-num"><b>${pct} %</b> · ${cpBytes(j.done_bytes)} von ${bytes(j.total_bytes)} ${verb}</p>
+        <p class="cp-num"><b>${pct} %</b> · ${j.pack ? "wird gepackt und geschrieben" : `${cpBytes(j.done_bytes)} von ${bytes(j.total_bytes)} ${verb}`}</p>
         <p class="muted">${j.bytes_per_s ? `${bytes(j.bytes_per_s)}/s` : "Tempo wird gemessen"}${j.eta_s ? ` · ${cpEta(j.eta_s)}` : ""}</p>
         ${where}
         <p class="muted">Das läuft auf der PS5 weiter, auch wenn du dieses Fenster schließt.</p>`;
@@ -7190,8 +7248,9 @@
         <p class="muted">Das läuft auf der PS5 weiter, auch wenn du dieses Fenster schließt.</p>`;
     } else if (j.state === "done") {
       const ratio = j.total_bytes > 0 && j.output_bytes ? Math.round(j.output_bytes * 100 / j.total_bytes) : 0;
-      html = `<p class="cp-ok">✓ Fertig und geprüft: ${bytes(j.output_bytes)}${cvSqueezes(j.op) && ratio
-          ? ` statt ${bytes(j.total_bytes)} (${ratio} %)` : ""}.</p>${where}
+      html = `<p class="cp-ok">${cvSqueezesJob(j) && ratio
+          ? `✓ Fertig und geprüft: ${bytes(j.output_bytes)} statt ${bytes(j.total_bytes)} (${ratio} %).`
+          : `✓ Fertig und geprüft: ${bytes(j.output_bytes)}.`}</p>${where}
         ${cpSums(j, "das Ergebnis")}
         ${cvIsFpkg(j.op) && j.mode === "homebrew" ? `<p class="muted">Kraken Mount sucht im Ordner „FPKG-Games“ des Laufwerks (Reiter „FPKGMount“, Knopf „Jetzt suchen“) und meldet das Paket an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
         : /^CUSA/.test(j.title_id || "") && j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das Abbild bei seinem nächsten Durchlauf im Ordner „homebrew“ des Laufwerks. Ob das Spiel läuft, zeigt erst ein Test. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“).</p>`
@@ -7225,7 +7284,7 @@
   };
   const cvStages = (j) => {
     if (!j || !j.stages || !j.stages.length) return "";
-    const names = { scan: "Vermessen", write: cvSqueezes(j.op) ? "Komprimieren" : "Schreiben", verify: "Prüfen", rename: "Umbenennen" };
+    const names = { scan: "Vermessen", write: j.pack ? "Packen und schreiben" : cvSqueezes(j.op) ? "Komprimieren" : "Schreiben", verify: "Prüfen", rename: "Umbenennen" };
     const pct = j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0;
     const cpct = j.check_total_bytes > 0 ? Math.min(100, Math.floor(j.check_done_bytes * 100 / j.check_total_bytes)) : 0;
     return `<div class="cv-steps" role="list">${j.stages.map((x) => {
@@ -7247,7 +7306,7 @@
       if (!orig) { ogSyncButtons(); return; }
       cv.queue = await api("/api/v1/library/convert/queue", { method: "POST", timeoutMs: 120000,
         body: JSON.stringify({ action: "add", id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full", name: cv.name || "",
-                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op)), ...orig }) });
+                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op) && !cvPackKind()), ...cvPackFields(), ...orig }) });
       toast("In die Warteschlange gestellt.");
       cvOpenQueue();
       cvPoll();
@@ -7278,7 +7337,7 @@
     const live = (i) => {
       const j = cv.job;
       if (i.state !== "running" || !j || j.queue_id !== i.qid) return i.state === "running" ? "wird gestartet …" : "";
-      const names = { scanning: "Vermessen", writing: cvSqueezes(j.op) ? "Komprimieren" : "Schreiben", verifying: "Prüfen" };
+      const names = { scanning: "Vermessen", writing: j.pack ? "Packen und schreiben" : cvSqueezes(j.op) ? "Komprimieren" : "Schreiben", verifying: "Prüfen" };
       const pct = j.state === "verifying"
         ? (j.check_total_bytes > 0 ? Math.min(100, Math.floor(j.check_done_bytes * 100 / j.check_total_bytes)) : 0)
         : (j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0);
@@ -7292,7 +7351,7 @@
       body.innerHTML = `<div class="cv-queue">${items.length ? items.map((i) => `<div class="cv-qrow ${esc(i.state)}">
           <i aria-hidden="true">${CV_QICON[i.state] || "•"}</i>
           <div class="cv-qname"><b>${esc(i.name)}</b>
-            <small>${esc(cvOpLabel(i.op))} · ${esc(i.target)}</small>
+            <small>${esc(cvOpLabel(i.op))}${i.pack ? ` · ${esc(cvPackName(i.pack))}` : ""} · ${esc(i.target)}</small>
             ${i.state === "running" ? `<small class="cv-qlive" data-qid="${i.qid}">${esc(live(i))}</small>` : ""}
             ${i.state === "done" ? `<small>${i.output_bytes && i.elapsed_s ? `Fertig und geprüft: ${esc(bytes(i.output_bytes))} in ${esc(cvDur(i.elapsed_s * 1000))}.`
               : i.output_bytes ? `Fertig und geprüft: ${esc(bytes(i.output_bytes))}.` : "Fertig und geprüft."}</small>` : ""}
@@ -7360,7 +7419,7 @@
     const g = gm.list.find((x) => x.title_id === id);
     /* Ein komprimiertes Abbild lässt sich nur entpacken: gleich dorthin. */
     if (g && !g.can_convert && g.can_unpack) { mvOpen(id, "unpack", true); return; }
-    cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cv.verify = "full"; cv.name = ""; cv.check = null; cp.view = "cvloading";
+    cv.id = id; cv.plan = null; cv.op = ""; cv.drive = ""; cv.mode = ""; cv.verify = "full"; cv.name = ""; cv.check = null; cv.pack = ""; cp.view = "cvloading";
     ogLoad(id);                                     /* „Original danach“: der Plan der Konsole, einmal je Spiel */
     { const g0 = gm.list.find((x) => x.title_id === id); cv.ampr = !!(g0 && g0.mods && g0.mods.ampr_emu); }
     txt("#cp-title", `„${g ? g.name : id}“ konvertieren`);
@@ -7394,7 +7453,7 @@
       const base = orig.orig_after ? await ogBaseline("convert", cv.id) : undefined;
       cv.job = await api("/api/v1/library/convert", { method: "POST",
         body: JSON.stringify({ id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full", name: cv.name || "",
-                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op)), ...orig }) });
+                               ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op) && !cvPackKind()), ...cvPackFields(), ...orig }) });
       ogWatchSet("convert", cv.id, orig, base);
       cvRenderJob();
       jobBanner();

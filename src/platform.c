@@ -1356,7 +1356,8 @@ ps5tm_platform_probe_risky_once(ps5tm_sensors_t *out) {
  * Up to 12.70 they follow "Kernel Offsets 3.00-12.70.txt", shipped with the
  * project earlier; 13.00 to 13.60 came with SDK v0.40 to v0.42 (13.00, 13.20,
  * 13.40, 13.42 and 13.60 are the versions it has a case for), 14.00 and 14.10
- * with v0.45.
+ * with v0.45. SDK v0.50 (20.11.2026) covers every firmware from 1.00 to 14.22
+ * (tools/check_sdk_firmware.py sdk lists them), so the groups run over that range.
  * kernel_get_fw_version() returns a packed BCD word, e.g. 0x03000000 for 3.00
  * and 0x13600000 for 13.60; the two high bytes carry major/minor.
  */
@@ -1391,15 +1392,20 @@ ps5tm_platform_firmware_text(uint32_t fw, char *out, size_t out_len) {
 const char *
 ps5tm_platform_firmware_group(uint32_t fw) {
   unsigned v = fw_hundredths(fw);
+  if(v >= 100  && v <= 270)  return "1.00-2.70";
   if(v >= 300  && v <= 321)  return "3.00-3.21";
-  if(v >= 402  && v <= 451)  return "4.02-4.51";
+  if(v >= 400  && v <= 451)  return "4.00-4.51";
+  if(v >= 500  && v <= 550)  return "5.00-5.50";
+  if(v >= 600  && v <= 650)  return "6.00-6.50";
+  if(v >= 700  && v <= 761)  return "7.00-7.61";
+  if(v >= 800  && v <= 860)  return "8.00-8.60";
   if(v == 900)               return "9.00";
   if(v >= 920  && v <= 960)  return "9.20-9.60";
   if(v >= 1000 && v <= 1060) return "10.00-10.60";
   if(v >= 1100 && v <= 1160) return "11.00-11.60";
   if(v >= 1200 && v <= 1270) return "12.00-12.70";
   if(v >= 1300 && v <= 1360) return "13.00-13.60";
-  if(v >= 1400 && v <= 1410) return "14.00-14.10";
+  if(v >= 1400 && v <= 1422) return "14.00-14.22";
   return "unbekannt";
 }
 

@@ -1918,6 +1918,7 @@ input[type=checkbox]:focus-visible { outline: 2px solid rgba(138,180,255,.7); ou
 .cp-sub { margin: -2px 0 2px 26px; padding: 8px 0 2px 12px; border-left: 2px solid var(--hairline); }
 .cp-sub h5 { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
 .cp-sub .cp-choice { padding: 7px 10px; }
+.cv-pack .cp-list + h5 { margin-top: 12px; }
 .cv-engine { margin: 8px 0 0; }
 .cv-engine-guide { margin: 8px 0 0; }
 .cv-guide { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 13px; line-height: 1.5; }

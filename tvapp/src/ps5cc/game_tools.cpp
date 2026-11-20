@@ -42,6 +42,9 @@ enum Row
     kRowOrigFolder, // ... and the folder on it
     kRowEngine,
     kRowGuide,
+    kRowPack,        // packing the game while an exFAT or ffpkg image is written: no / LZ4 / zstd
+    kRowPackLevel,   // ... its level
+    kRowPackRuntime, // ... for LZ4, the runtime in the game
     kRowStart,
     kRowCancel, // the delete question's "Abbrechen", where its focus opens
     kRowInfo = 20,
@@ -136,6 +139,66 @@ std::string verify_text(bool quick, bool fpkg)
                : "Liest das ganze Ergebnis noch einmal und legt die Prüfsummen-Datei an.";
 }
 
+// Packing the game while an exFAT or ffpkg image is written (19.11.2026, Dump Forge writes it). One
+// whole sentence each: the translator looks each up as it is.
+const char *pack_text(int pack)
+{
+    switch (pack)
+    {
+    case kPackLz4:
+        return "Dump Forge packt das Spiel beim Schreiben in LZ4-Packs, ohne Zwischenordner. Das "
+               "spart Platz; die APR-EMU im Spiel entpackt sie beim Spielen.";
+    case kPackZstd:
+        return "Dump Forge packt das Spiel beim Schreiben in zstd-Packs und legt AMPR EMU NG ins "
+               "Spiel, die einzige Fassung, die zstd liest.";
+    default:
+        return "Das Abbild enthält die Dateien des Spiels, wie sie sind.";
+    }
+}
+
+std::vector<std::string> pack_level_options(int pack)
+{
+    if (pack == kPackZstd)
+        return {"5 (empfohlen)", "1 (am schnellsten)", "9 (kleiner)", "19 (am kleinsten)"};
+    return {"9 (empfohlen)", "3 (schneller)", "12 (kleiner)"};
+}
+
+const char *pack_level_text(int pack, int level)
+{
+    if (pack == kPackZstd)
+    {
+        switch (level)
+        {
+        case 1:
+            return "zstd. Packt am schnellsten, spart aber am wenigsten Platz.";
+        case 2:
+            return "zstd. Spart mehr Platz, das Packen dauert deutlich länger.";
+        case 3:
+            return "zstd, am langsamsten. Spart am meisten; bei großen Spielen dauert das Packen "
+                   "sehr lange.";
+        default:
+            return "zstd. Gute Packung, packt zügig. Beim Spielen kostet das Entpacken wenig.";
+        }
+    }
+    switch (level)
+    {
+    case 1:
+        return "LZ4 Fast. Packt viel schneller, spart aber weniger Platz.";
+    case 2:
+        return "LZ4 HC, am langsamsten. Spart am meisten.";
+    default:
+        return "LZ4 HC. Gute Packung, das Packen dauert eine Weile. Beim Spielen kostet das "
+               "Entpacken kaum etwas.";
+    }
+}
+
+// The rows of packing stand under the format when it is exFAT or ffpkg of a game folder (greyed out
+// with the reason when it cannot be packed), and only when the console app speaks of packing.
+bool pack_rows(const Plan &p, int op)
+{
+    return p.kind == "folder" && pack_known(p) && pack_op(op);
+}
+
 std::string op_text(const Plan &p, int op, int level)
 {
     switch (op)
@@ -166,9 +229,10 @@ const char *orig_way_text(int way, bool unpack)
     {
     case kOrigDelete:
         // an unpack by ShadowMountPlus is not read back by the app: the text says what it waits for
-        return unpack ? "Erst wenn das Spiel im Zielordner liegt und ShadowMountPlus das Entpacken "
-                        "als gelungen meldet. Die App fragt vorher."
-                      : "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher.";
+        return unpack
+                   ? "Erst wenn das Spiel im Zielordner liegt und ShadowMountPlus das Entpacken "
+                     "als gelungen meldet. Die App fragt vorher."
+                   : "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher.";
     case kOrigMove:
         return "An einen Ort, den ShadowMountPlus nicht durchsucht.";
     default:
@@ -568,6 +632,31 @@ void GameTools::build_form(int keep_focus)
         if (!options.empty())
             form_.add_choice(kRowOp, "Format", options, index).description =
                 choice_.op >= 0 ? op_text(plan_, choice_.op, choice_.level) : std::string();
+        // Packing the game on the way into an exFAT or ffpkg image: no, LZ4 or zstd, with its level
+        // and (LZ4) the runtime. Greyed out, with the reason, when the game cannot be packed.
+        if (pack_rows(plan_, choice_.op))
+        {
+            const int kind = plan_.pack_ok ? choice_.pack : kPackNone;
+            ui::FormRow &packrow = form_.add_choice(
+                kRowPack, "Packen (AMPR-Packs)",
+                {"Nicht packen", "LZ4-Packs", "zstd-Packs (nur AMPR EMU NG)"}, kind);
+            packrow.disabled = !plan_.pack_ok;
+            packrow.description = plan_.pack_ok ? std::string(pack_text(kind)) : plan_.pack_error;
+            if (kind != kPackNone)
+            {
+                form_
+                    .add_choice(kRowPackLevel, "Stufe", pack_level_options(kind),
+                                choice_.pack_level)
+                    .description = pack_level_text(kind, choice_.pack_level);
+                if (kind == kPackLz4)
+                    form_
+                        .add_choice(kRowPackRuntime, "Laufzeit im Spiel",
+                                    {"AMPR EMU NG (Vorgabe)", "APR-EMU Original"},
+                                    choice_.pack_runtime)
+                        .description = "Nur für Spiele, die libSceAmpr laden. Dump Forge lehnt es "
+                                       "ab, wenn das Spiel sie nicht braucht.";
+            }
+        }
         // Dump Forge writes the debug FPKG: when it is not there yet, a row fetches it (or says
         // where its file goes).
         if (fpkg_offered && plan_.dumpforge.known)
@@ -707,17 +796,25 @@ void GameTools::refresh()
     {
         request_check();
         const bool fpkg = choice_.op == kOpFpkg;
+        const bool packs = packing(plan_, choice_);
         // The words of the rows that depend on the format: the targets, the check afterwards, the
         // AMPR index.
         if (ui::FormRow *row = form_.row(kRowMode))
             row->description = mode_text(fpkg);
         if (ui::FormRow *row = form_.row(kRowVerify))
             row->description = verify_text(choice_.quick, fpkg);
+        if (ui::FormRow *row = form_.row(kRowPack))
+            row->description =
+                plan_.pack_ok ? std::string(pack_text(choice_.pack)) : plan_.pack_error;
+        if (ui::FormRow *row = form_.row(kRowPackLevel))
+            row->description = pack_level_text(choice_.pack, choice_.pack_level);
         if (ui::FormRow *row = form_.row(kRowAmpr))
         {
-            row->disabled = fpkg;
-            row->description = fpkg
-                                   ? "Dump Forge schreibt den Index selbst ins Paket."
+            // Dump Forge writes the index itself, into the package and into an image with packs
+            row->disabled = fpkg || packs;
+            row->description = fpkg ? "Dump Forge schreibt den Index selbst ins Paket."
+                               : packs
+                                   ? "Dump Forge schreibt den Index selbst ins Abbild."
                                    : "Für Spiele mit APR-EMU: ampr_emu.index kommt mit ins Abbild.";
         }
         if (ui::FormRow *row = form_.row(kRowEngine))
@@ -1063,6 +1160,7 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             choice_.mode = form_.choice_index(kRowMode) - 1;
         else if (id == kRowOp)
         {
+            const bool had_pack_rows = pack_rows(plan_, choice_.op);
             const int index = form_.choice_index(kRowOp);
             const bool known = index >= 0 && index < static_cast<int>(op_index_.size());
             choice_.op = known ? op_index_[static_cast<std::size_t>(index)].first : -1;
@@ -1077,7 +1175,26 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
                 choice_.mode = 0;
                 form_.set_choice(kRowMode, 1);
             }
+            // the rows of packing stand under exFAT and ffpkg only: the form is built anew where
+            // they come or go, with the focus on the format
+            if (pack_rows(plan_, choice_.op) != had_pack_rows)
+                build_form(kRowOp);
         }
+        else if (id == kRowPack)
+        {
+            // another way has its own levels (and LZ4 a runtime): the rows are built anew
+            const int now = form_.choice_index(kRowPack);
+            if (now != choice_.pack)
+            {
+                choice_.pack = now;
+                choice_.pack_level = 0;
+                build_form(kRowPack);
+            }
+        }
+        else if (id == kRowPackLevel)
+            choice_.pack_level = form_.choice_index(kRowPackLevel);
+        else if (id == kRowPackRuntime)
+            choice_.pack_runtime = form_.choice_index(kRowPackRuntime);
         else if (id == kRowName)
         {
             const int mode = form_.choice_index(kRowName);
@@ -1319,7 +1436,7 @@ void GameTools::close_queue(ui::Feedback &feedback)
 
 std::string GameTools::queue_line(const QueueItem &item) const
 {
-    const std::string what = op_label(item.op) + " · " + item.target;
+    const std::string what = op_label(item.op, item.pack) + " · " + item.target;
     if (item.state == "running")
     {
         if (convert_job_.queue_id != item.qid)
@@ -1679,6 +1796,16 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         y = draw_checks(canvas, x, y, w);
         if (!check_.target.empty())
             para(check_.target, kInk, 2);
+        // packing on the way: what it costs (the check line says that the game is packed); a game
+        // that cannot be packed says why where the row is greyed out
+        if (packing(plan_, choice_))
+            para(
+                "Die Quelle wird zweimal gelesen (erst messen, dann schreiben): Das dauert länger. "
+                "Das Original bleibt unverändert. Eine Prüfsummen-Datei (.sha256) entsteht dabei "
+                "nicht.",
+                kMuted, 4);
+        else if (pack_rows(plan_, choice_.op) && !plan_.pack_ok)
+            para(plan_.pack_error, kMuted, 3);
         if (choice_.op == 1 && !plan_.ffpkg_error.empty())
             para("Bei diesem Spiel nicht möglich: " + plan_.ffpkg_error, kCritical, 3);
         if (choice_.op == kOpFpkg && !plan_.fpkg_error.empty())
@@ -1901,7 +2028,7 @@ float GameTools::draw_checks(ui::Canvas &canvas, float x, float y, float width) 
         lines = 0;
         for (const std::string &line : fonts.regular.font->wrap(row.hint, kHintSize, width - 28.0f))
         {
-            if (row.hint.empty() || ++lines > 2)
+            if (row.hint.empty() || ++lines > 3)
                 break;
             ui::text(list, fonts.regular, line, x + 28.0f, y, kHintSize, kMuted);
             y += kHintSize * 1.3f;

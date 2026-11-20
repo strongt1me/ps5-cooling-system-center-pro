@@ -405,6 +405,9 @@ class MockSource final : public Source
                 const bool crawl =
                     i == static_cast<std::size_t>(JobKind::storage) && job.name == "Maneater";
                 job.done = std::fmin(job.total, job.done + job.total * (crawl ? 0.002 : 0.04));
+                // an image that packs the game measures it first (Dump Forge's stage "measure")
+                if (!job.pack.empty() && job.active)
+                    job.state = job.done < job.total * 0.10 ? "scanning" : "writing";
                 if (job.done >= job.total)
                 {
                     job.active = false;
@@ -442,14 +445,16 @@ class MockSource final : public Source
                     const Game *g = find(q.id);
                     conv = Job{};
                     conv.active = true;
-                    conv.state = "writing";
+                    conv.state = q.pack.empty() ? "writing" : "scanning";
                     conv.id = q.id;
                     conv.name = q.name;
                     conv.op = q.op;
+                    conv.pack = q.pack;
+                    conv.pack_level = q.pack_level;
                     conv.queue_id = q.qid;
                     conv.detail = "→ " + q.target;
                     conv.total = g != nullptr ? static_cast<double>(g->size_bytes) : 1e9;
-                    conv.done = conv.total * 0.07;
+                    conv.done = conv.total * (q.pack.empty() ? 0.07 : 0.02);
                     fill_stages(conv);
                     sync_queue();
                     break;
@@ -728,6 +733,11 @@ class MockSource final : public Source
             item.mode = text("mode");
             item.mount = text("target");
             item.state = "waiting";
+            item.pack = text("pack");
+            {
+                const cJSON *pl = cJSON_GetObjectItemCaseSensitive(root, "pack_level");
+                item.pack_level = cJSON_IsNumber(pl) ? static_cast<int>(pl->valuedouble) : 0;
+            }
             std::string stem, err;
             expand_name(text("name"), g, stem, err);
             const bool fpkg_item = item.op.rfind("fpkg", 0) == 0;
@@ -838,6 +848,10 @@ class MockSource final : public Source
         };
         const Game *g = find(text("id"));
         const std::string op = text("op"), mount = text("target"), mode = text("mode");
+        // packing the game on its way into an exFAT or ffpkg image (the request says "lz4" or
+        // "zstd")
+        const std::string pack = text("pack");
+        const bool packing = !pack.empty();
         const double size = g != nullptr ? static_cast<double>(g->size_bytes) : 0.0;
         const double raw = size * 1.02;
         const bool folder = g != nullptr && g->format == "folder";
@@ -869,6 +883,21 @@ class MockSource final : public Source
         if (g != nullptr && g->id == data_.status.game_id)
             add("running", "error", "Das Spiel läuft gerade.",
                 "Beende das Spiel, dann geht es weiter.");
+        if (packing && g != nullptr && (!g->packing.empty() || g->platform == "PS4"))
+            add("pack", "error", "Packen ist bei diesem Spiel nicht möglich.",
+                g->platform == "PS4"
+                    ? "PS4-Spiele haben keine AMPR-Packs: Packen geht nur bei PS5-Spielen."
+                : g->packing == "lz4"
+                    ? "Das Spiel liegt schon in LZ4-Packs. Erst entpacken (Knopf bei den "
+                      "Asset-Packs des Spiels), dann konvertieren."
+                    : "Das Spiel liegt schon in zstd-Packs. Erst entpacken (Knopf bei den "
+                      "Asset-Packs des Spiels), dann konvertieren.");
+        else if (packing)
+            add("pack", "warn",
+                std::string("Das Spiel wird beim Schreiben in ") +
+                    (pack == "lz4" ? "LZ4" : "zstd") + "-Packs gepackt.",
+                "Dump Forge liest die Quelle zweimal (erst messen, dann schreiben): Das dauert "
+                "länger als ohne Packen. Das Original bleibt unverändert.");
         if (g != nullptr && !g->packing.empty() && op.rfind("fpkg", 0) == 0)
             add("unpack", "warn",
                 std::string("Die AMPR-Packs (") + (g->packing == "lz4" ? "LZ4" : "zstd") +
@@ -891,12 +920,16 @@ class MockSource final : public Source
                           : op == "exfat" ? ".exfat"
                           : op == "ffpkg" ? ".ffpkg"
                                           : ".ffpfsc";
-        if (fpkg)
+        if (fpkg || packing)
         {
             if (data_.dumpforge.installed)
-                add("engine", "ok", "Dump Forge 0.5.6 schreibt das Paket");
+                add("engine", "ok",
+                    packing ? "Dump Forge 0.5.6 schreibt das Abbild"
+                            : "Dump Forge 0.5.6 schreibt das Paket");
             else
-                add("engine", "error", "Dump Forge, das die Pakete schreibt, ist noch nicht da.",
+                add("engine", "error",
+                    packing ? "Dump Forge, das die Abbilder packt, ist noch nicht da."
+                            : "Dump Forge, das die Pakete schreibt, ist noch nicht da.",
                     "Dump Forge laden (Knopf im Fenster) oder die Datei "
                     "ps5-dump-forge-VERSION-ps5.elf in den Ordner "
                     "/data/PS5-Cooling-Center/dumpforge legen.");
@@ -927,7 +960,13 @@ class MockSource final : public Source
                 add("space", "ok",
                     std::string("Platz auf ") + drive->label + ": " + gb(drive->free_gb * 1e9) +
                         " frei, gebraucht höchstens " + gb(raw));
-            if (std::string(drive->fs) == "msdosfs" && raw > 4.29e9)
+            if (std::string(drive->fs) == "msdosfs" && raw > 4.29e9 && packing)
+                add("fat32", "warn",
+                    "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Das "
+                    "Abbild wird kleiner als das Spiel (" +
+                        gb(raw) + "), aber wie viel, weiß erst Dump Forge.",
+                    "Wähle ein Laufwerk mit exFAT, wenn das Abbild über 4 GB wird.");
+            else if (std::string(drive->fs) == "msdosfs" && raw > 4.29e9)
                 add("fat32", "error",
                     "Das Ziel ist mit FAT32 formatiert und nimmt keine Datei über 4 GB auf. Das "
                     "Abbild wird " +
@@ -983,6 +1022,11 @@ class MockSource final : public Source
             cJSON_AddStringToObject(o, "mount", q.mount.c_str());
             cJSON_AddStringToObject(o, "target", q.target.c_str());
             cJSON_AddStringToObject(o, "state", q.state.c_str());
+            if (!q.pack.empty())
+            {
+                cJSON_AddStringToObject(o, "pack", q.pack.c_str());
+                cJSON_AddNumberToObject(o, "pack_level", q.pack_level);
+            }
             if (!q.message.empty())
                 cJSON_AddStringToObject(o, "message", q.message.c_str());
             if (q.output_bytes > 0)
@@ -1016,7 +1060,8 @@ class MockSource final : public Source
     {
         job.stages.clear();
         const double frac = job.total > 0.0 ? job.done / job.total : 0.0;
-        const double write = std::clamp((frac - 0.04) / 0.72, 0.0, 1.0);
+        const double scan = job.pack.empty() ? 0.04 : 0.10; // measuring takes longer when packing
+        const double write = std::clamp((frac - scan) / (0.76 - scan), 0.0, 1.0);
         const double verify = std::clamp((frac - 0.76) / 0.21, 0.0, 1.0);
         const double rename = std::clamp((frac - 0.97) / 0.03, 0.0, 1.0);
         const bool over = !job.active && job.state == "done";
@@ -1028,8 +1073,8 @@ class MockSource final : public Source
             s.state = !began ? "todo" : (next_began || over) ? "done" : "now";
             job.stages.push_back(s);
         };
-        stage("scan", 42000.0, true, frac > 0.04);
-        stage("write", 1870000.0 * write, frac > 0.04, frac > 0.76);
+        stage("scan", 42000.0, true, frac > scan);
+        stage("write", 1870000.0 * write, frac > scan, frac > 0.76);
         stage("verify", 483000.0 * verify, frac > 0.76, frac > 0.97);
         stage("rename", 3000.0 * rename, frac > 0.97, false);
     }
@@ -1069,6 +1114,24 @@ class MockSource final : public Source
             job.detail = "→ /mnt/ext0/homebrew/" + id + ".ffpfsc";
             job.op = "ffpfsc";
             job.state = "writing";
+            // an image that packs the game on its way: the kind of packs, the format and the target
+            // come from the request; it measures the game first
+            cJSON *req = cJSON_Parse(body.c_str());
+            const auto field = [&](const char *key) -> std::string
+            {
+                const cJSON *i = cJSON_GetObjectItemCaseSensitive(req, key);
+                return cJSON_IsString(i) && i->valuestring != nullptr ? i->valuestring : "";
+            };
+            if (!field("pack").empty())
+            {
+                const cJSON *pl = cJSON_GetObjectItemCaseSensitive(req, "pack_level");
+                job.pack = field("pack");
+                job.pack_level = cJSON_IsNumber(pl) ? static_cast<int>(pl->valuedouble) : 0;
+                job.op = field("op");
+                job.state = "scanning";
+                job.detail = "→ " + field("target") + "/homebrew/" + id + "." + job.op;
+            }
+            cJSON_Delete(req);
             break;
         }
         case Tool::move:
@@ -1092,7 +1155,7 @@ class MockSource final : public Source
         case Tool::count:
             break;
         }
-        job.done = job.total * 0.07;
+        job.done = job.total * (job.pack.empty() ? 0.07 : 0.02); // measuring a game takes longer
         if (kind == JobKind::convert)
             fill_stages(job);
         // What the start said about the original (only copy, convert and unpack carry it)
@@ -2263,6 +2326,26 @@ class MockSource final : public Source
             cJSON_AddStringToObject(risk, "stream_dir", "");
             cJSON_AddNumberToObject(risk, "stream_dir_bytes", 0);
             cJSON_AddNumberToObject(root, "ffpkg_bytes", ffpkg);
+            // packing on the way into an exFAT or ffpkg image (gameconvert.c: pack_why): a PS5
+            // folder that does not lie in packs yet
+            if (folder)
+            {
+                cJSON_AddBoolToObject(root, "pack_ok", !ps4 && g->packing.empty());
+                if (ps4)
+                    cJSON_AddStringToObject(
+                        root, "pack_error",
+                        "PS4-Spiele haben keine AMPR-Packs: Packen geht nur bei PS5-Spielen.");
+                else if (g->packing == "lz4")
+                    cJSON_AddStringToObject(root, "pack_error",
+                                            "Das Spiel liegt schon in LZ4-Packs. Erst entpacken "
+                                            "(Knopf bei den Asset-Packs des Spiels), dann "
+                                            "konvertieren.");
+                else if (g->packing == "zstd")
+                    cJSON_AddStringToObject(root, "pack_error",
+                                            "Das Spiel liegt schon in zstd-Packs. Erst entpacken "
+                                            "(Knopf bei den Asset-Packs des Spiels), dann "
+                                            "konvertieren.");
+            }
             // a game in AMPR packs: Dump Forge decodes them while it writes the debug FPKG
             // (gameconvert.c: fpkg_unpack); an image does not tell how big it gets
             if (!g->packing.empty() && !ps4)

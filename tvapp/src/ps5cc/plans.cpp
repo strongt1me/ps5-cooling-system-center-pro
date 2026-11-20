@@ -107,6 +107,19 @@ void add_orig(cJSON *root, const PlanChoice &c)
     }
 }
 
+// What a request says about packing: nothing at all when the game is not packed (the bodies of
+// before stay as they were), else the way, the level and for LZ4 the runtime.
+void add_pack(cJSON *root, const Plan &p, const PlanChoice &c)
+{
+    if (!packing(p, c))
+        return;
+    cJSON_AddStringToObject(root, "pack", pack_key(c.pack));
+    cJSON_AddNumberToObject(root, "pack_level", pack_level_value(c));
+    if (c.pack == kPackLz4)
+        cJSON_AddStringToObject(root, "pack_runtime",
+                                c.pack_runtime == kRuntimeOriginal ? "ampr_emu" : "ng");
+}
+
 // Spaces at both ends and slashes at the end are not part of a folder.
 std::string trimmed_folder(std::string text)
 {
@@ -243,6 +256,8 @@ Plan parse_plan(Tool tool, const PlanReply &reply)
     p.ffpkg_bytes = bytes(root, "ffpkg_bytes");
     p.ffpkg_error = str(root, "ffpkg_error");
     p.fpkg_error = str(root, "fpkg_error");
+    p.pack_ok = flag(root, "pack_ok");
+    p.pack_error = str(root, "pack_error");
     p.fpkg_unpack = str(root, "fpkg_unpack");
     p.fpkg_unpack_bytes = bytes(root, "fpkg_unpack_bytes");
     const cJSON *item = nullptr;
@@ -427,9 +442,9 @@ std::string drive_blocked(const Plan &p, const PlanChoice &c, const PlanDrive &d
     case Tool::convert:
     {
         const bool ffpkg = c.op == 1;
-        // A compressed FPKG gets smaller than the game: the check names a FAT32 drive, it is not
-        // turned away here.
-        const bool squeezed_fpkg = c.op == kOpFpkg && c.level != kLevelRaw;
+        // A compressed FPKG gets smaller than the game, and so does an image with packs: the check
+        // names a FAT32 drive, it is not turned away here.
+        const bool squeezed_fpkg = (c.op == kOpFpkg && c.level != kLevelRaw) || packing(p, c);
         const std::uint64_t need = ffpkg && p.ffpkg_bytes > 0 ? p.ffpkg_bytes
                                    : c.op == kOpFpkg && p.fpkg_unpack_bytes > 0
                                        ? p.fpkg_unpack_bytes
@@ -595,6 +610,10 @@ bool ready(const Plan &p, const PlanChoice &c)
         if (p.tool == Tool::convert && (c.op < 0 || (c.op == 1 && !p.ffpkg_error.empty()) ||
                                         (c.op == kOpFpkg && !p.fpkg_error.empty())))
             return false;
+        // a packing way chosen for a game that cannot be packed: nothing starts (the row is shown
+        // greyed out, so this only holds against a choice made before the plan changed)
+        if (p.tool == Tool::convert && c.pack != kPackNone && pack_op(c.op) && !p.pack_ok)
+            return false;
         return !target_of(p, c).empty();
     case Tool::erase:
         return !p.confirm.empty();
@@ -665,9 +684,11 @@ std::string start_body(const Plan &p, const PlanChoice &c)
         // The AMPR index is a PS5 thing and only goes into an image built from a folder (Dump Forge
         // writes its own).
         cJSON_AddBoolToObject(root, "ampr_index",
-                              p.kind == "folder" && !p.ps4 && c.ampr && c.op != kOpFpkg);
+                              p.kind == "folder" && !p.ps4 && c.ampr && c.op != kOpFpkg &&
+                                  !packing(p, c));
         cJSON_AddStringToObject(root, "verify", c.quick ? "quick" : "full");
         cJSON_AddStringToObject(root, "name", c.name.c_str());
+        add_pack(root, p, c);
         add_orig(root, c);
         break;
     case Tool::move:
@@ -776,6 +797,38 @@ ConvertCheck parse_check(const CheckReply &reply)
     return c;
 }
 
+bool pack_op(int op)
+{
+    return op == 1 || op == 2; // ffpkg, exfat
+}
+
+bool pack_known(const Plan &p)
+{
+    return p.pack_ok || !p.pack_error.empty();
+}
+
+bool packing(const Plan &p, const PlanChoice &c)
+{
+    return c.pack != kPackNone && pack_op(c.op) && p.pack_ok && p.kind == "folder" && !p.ps4;
+}
+
+const char *pack_key(int pack)
+{
+    return pack == kPackLz4 ? "lz4" : pack == kPackZstd ? "zstd" : "";
+}
+
+int pack_level_value(const PlanChoice &c)
+{
+    if (c.pack == kPackZstd)
+        return kZstdLevelValues[c.pack_level >= 0 && c.pack_level < kZstdLevels ? c.pack_level : 0];
+    return kLz4LevelValues[c.pack_level >= 0 && c.pack_level < kLz4Levels ? c.pack_level : 0];
+}
+
+std::string pack_label(const std::string &pack)
+{
+    return pack == "lz4" ? "LZ4-Packs" : pack == "zstd" ? "zstd-Packs" : std::string();
+}
+
 std::string op_key(const PlanChoice &c)
 {
     if (c.op < 0 || c.op >= kOps)
@@ -795,7 +848,7 @@ bool squeezes(const std::string &op)
     return op == "ffpfsc" || (is_fpkg_op(op) && op != "fpkg-raw");
 }
 
-std::string op_label(const std::string &op)
+std::string op_label(const std::string &op, const std::string &pack)
 {
     for (int l = 0; l < kLevels; ++l)
     {
@@ -806,7 +859,8 @@ std::string op_label(const std::string &op)
             return std::string("FPKG · ") + kLevelNames[l];
         }
     }
-    return op;
+    const std::string packs = pack_label(pack);
+    return packs.empty() ? op : op + " · " + packs;
 }
 
 std::string check_body(const Plan &p, const PlanChoice &c)
@@ -820,6 +874,7 @@ std::string check_body(const Plan &p, const PlanChoice &c)
                             p.drives[static_cast<std::size_t>(c.drive)].mount.c_str());
     cJSON_AddStringToObject(root, "mode", kModeKeys[c.mode]);
     cJSON_AddStringToObject(root, "name", c.name.c_str());
+    add_pack(root, p, c);
     return json_text(root);
 }
 
@@ -869,6 +924,8 @@ ConvertQueue parse_queue(const std::string &json)
         it.target = str(item, "target");
         it.state = str(item, "state");
         it.message = str(item, "message");
+        it.pack = str(item, "pack");
+        it.pack_level = static_cast<int>(num(item, "pack_level"));
         it.output_bytes = bytes(item, "output_bytes");
         it.elapsed_s = num(item, "elapsed_s");
         if (it.qid == 0 || it.name.empty())
@@ -912,7 +969,9 @@ std::vector<StageText> stage_texts(const Job &job)
         if (s.id == "scan")
             t.label = "Vermessen";
         else if (s.id == "write")
-            t.label = squeezes(job.op) ? "Komprimieren" : "Schreiben";
+            t.label = !job.pack.empty()  ? "Packen"
+                      : squeezes(job.op) ? "Komprimieren"
+                                         : "Schreiben";
         else if (s.id == "verify")
             t.label = "Prüfen";
         else if (s.id == "rename")

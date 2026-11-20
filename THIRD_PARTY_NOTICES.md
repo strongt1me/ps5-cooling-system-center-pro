@@ -22,7 +22,7 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
 | **ampr_emu** (drakmor) — das Format des AMPR-Index (`AMPRIDX3`) und die Bauregeln aus `build_ampr_index.py`, nach C übertragen | `src/amprindex.c` | GPL-3.0 | <https://github.com/drakmor/ampr_emu> |
 | **BearSSL** 0.6 (Thomas Pornin) — TLS-Client der Spiel-Updates, unverändert (nur `src/` und `inc/` des Archivs) | `src/third_party/bearssl/` | MIT (`LICENSE.txt` dort) | <https://bearssl.org/>, Archiv `bearssl-0.6.tar.gz` |
 | **cJSON** 1.7.19 (Dave Gamble und Mitwirkende) | `src/third_party/cJSON*` | MIT | <https://github.com/DaveGamble/cJSON> |
-| **PS5-Payload-SDK** v0.45 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird; mindestens v0.42 nötig (Firmware 13.60), v0.45 kennt auch 14.00 und 14.10, der Bau prüft das | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
+| **PS5-Payload-SDK** v0.50 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird; mindestens v0.42 nötig (Firmware 13.60), v0.50 kennt jede Firmware von 1.00 bis 14.22, der Bau prüft das | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
 
 ## Eingebettete Fassungen, einzelne übernommene Dateien, Vorbilder und Schnittstellen (bei jedem Eintrag steht, was genau übernommen ist)
 

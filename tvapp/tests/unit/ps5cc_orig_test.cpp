@@ -330,7 +330,8 @@ TEST(Ps5ccOrig, TheStartBodiesCarryTheOriginalOnlyWhenItIsNotKept)
         hui::ps5cc::start_body(copy, move),
         R"({"id":"PPSA23000","target":"/mnt/ext0","mode":"backup","orig_after":"move","orig_dest":"/mnt/usb0/PS5-Sicherung/Spiele"})");
 
-    // the original the person saw goes along (the app refuses when the title lies elsewhere by then); never for "keep"
+    // the original the person saw goes along (the app refuses when the title lies elsewhere by
+    // then); never for "keep"
     PlanChoice seen_keep = keep;
     seen_keep.orig_path = "/mnt/usb0/homebrew/PPSA23000";
     EXPECT_EQ(hui::ps5cc::start_body(copy, seen_keep),

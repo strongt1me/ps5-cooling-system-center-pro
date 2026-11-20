@@ -2369,6 +2369,15 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
     snprintf(tpl, sizeof(tpl), "%s", jn->valuestring);
   }
   int ampr = body && cJSON_IsTrue(cJSON_GetObjectItem(body, "ampr_index"));
+  /* "pack": "lz4" | "zstd" (exfat and ffpkg only: Dump Forge writes the image with the game packed into asset packs on the way), "pack_level", "pack_runtime" (19.11.2026) */
+  ps5tm_cvpack_t cvpack;
+  char perr[200] = "";
+  const int pst = ps5tm_cvpack_parse(body, &cvpack, perr, sizeof(perr));
+  if(pst != 0) {
+    cJSON_Delete(body);
+    ps5tm_http_send_error(fd, pst, "convert_pack_invalid", perr);
+    return;
+  }
   /* "verify": "full" (the default) reads the whole result back and writes the checksum file; "quick" checks the structure and a
      sample and writes no checksum file (10.11.2026) */
   const cJSON *jv = body ? cJSON_GetObjectItem(body, "verify") : NULL;
@@ -2384,7 +2393,7 @@ handle_convert_start(int fd, const ps5tm_request_t *req) {
   if(!orig_ok) return;
 
   char err[640] = "";
-  int status = ps5tm_gameconvert_start(id, op, ampr, target, mode, quick, tpl, 0, err, sizeof(err));
+  int status = ps5tm_gameconvert_start(id, op, ampr, target, mode, quick, tpl, cvpack.kind ? &cvpack : NULL, 0, err, sizeof(err));
   ps5tm_orig_commit(&orq, "convert", status == 200);
   if(status != 200) {
     ps5tm_http_send_error(fd, status, "convert_refused", err);
@@ -2413,8 +2422,14 @@ handle_convert_check(int fd, const ps5tm_request_t *req) {
       snprintf(dst[i], cap[i], "%s", j->valuestring);
     }
   }
+  ps5tm_cvpack_t cvpack;
+  const int pst = ps5tm_cvpack_parse(body, &cvpack, err, sizeof(err));
   cJSON_Delete(body);
-  cJSON *root = ps5tm_gameconvert_check(id, op, target, mode, tpl, err, sizeof(err));
+  if(pst != 0) {
+    ps5tm_http_send_error(fd, pst, "convert_pack_invalid", err);
+    return;
+  }
+  cJSON *root = ps5tm_gameconvert_check(id, op, target, mode, tpl, cvpack.kind ? &cvpack : NULL, err, sizeof(err));
   if(!root) {
     ps5tm_http_send_error(fd, 409, "convert_check_failed", err);
     return;

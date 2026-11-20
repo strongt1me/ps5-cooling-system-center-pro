@@ -876,6 +876,26 @@ class Ps5cc final : public app::Concept
             {0.4f, action_bit(Action::west)},
             {0.7f, 0, Direction::none, "aktionen-eingehaengt"},
             {0.3f, action_bit(Action::back)},
+            // Konvertieren of Neon Courier (a PS5 folder): exFAT can pack the game while it is
+            // written; Dump Forge is not there yet (it is fetched further down), and the check
+            // says so
+            {0.4f, action_bit(Action::west)},
+            {0.3f, 0, Direction::down},
+            {0.2f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.9f, 0, Direction::none, "plan-packen-engine-fehlt"},
+            {0.3f, action_bit(Action::back)},
             {0.3f, 0, Direction::down},
             // the running game (Crash, first row) has "Spiel beenden" on top of its menu
             {0.2f, 0, Direction::up},
@@ -1086,7 +1106,89 @@ class Ps5cc final : public app::Concept
             {0.3f, 0, Direction::down},
             {0.2f, action_bit(Action::confirm)},
             {1.0f, 0, Direction::none, "plan-ps4"},
+            // exFAT and ffpkg of a PS4 title: the row of packing is greyed out, with the reason
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::down},
+            {0.7f, 0, Direction::none, "plan-packen-ps4"},
             {0.2f, action_bit(Action::back)},
+            // Arcade Game Zone (a PS5 folder that lies in LZ4 packs already): the row of packing is
+            // greyed out with the reason
+            {0.3f, 0, Direction::up},
+            {0.4f, action_bit(Action::west)},
+            {0.3f, 0, Direction::down},
+            {0.2f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::down},
+            {0.8f, 0, Direction::none, "plan-packen-gepackt"},
+            {0.3f, action_bit(Action::back)},
+            // Arkanoid (a PS5 folder that is not in packs): exFAT can pack it while it is written;
+            // no packs, LZ4 with its level and runtime, zstd with its levels
+            {0.3f, 0, Direction::down},
+            {0.3f, 0, Direction::down},
+            {0.4f, action_bit(Action::west)},
+            {0.3f, 0, Direction::down},
+            {0.2f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::down},
+            {0.8f, 0, Direction::none, "plan-packen-aus"},
+            {0.2f, 0, Direction::right},
+            {0.8f, 0, Direction::none, "plan-packen-lz4"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.8f, 0, Direction::none, "plan-packen-laufzeit"},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::right},
+            {0.8f, 0, Direction::none, "plan-packen-zstd"},
+            // back to LZ4, the target "A": the check (the packing warns, Dump Forge is there)
+            {0.2f, 0, Direction::left},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.9f, 0, Direction::none, "plan-packen-pruefung"},
+            // started: the card measures the game first, then says how far the packing and writing
+            // have come, with the steps
+            {0.2f, action_bit(Action::north)},
+            {0.6f, 0, Direction::none, "auftrag-packen-vermessen"},
+            {2.4f, 0, Direction::none, "auftrag-packen-schreibt"},
+            // back to Bibliothek (eight tabs), the same game with zstd into the queue
+            {0.2f, action_bit(Action::jump_prev)},
+            {0.2f, action_bit(Action::jump_prev)},
+            {0.2f, action_bit(Action::jump_prev)},
+            {0.2f, action_bit(Action::jump_prev)},
+            {0.2f, action_bit(Action::jump_prev)},
+            {0.2f, action_bit(Action::jump_prev)},
+            {0.2f, action_bit(Action::jump_prev)},
+            {0.2f, action_bit(Action::jump_prev)},
+            {0.4f, action_bit(Action::west)},
+            {0.3f, 0, Direction::down},
+            {0.2f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.2f, 0, Direction::right},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.2f, 0, Direction::right},
+            {0.9f, 0, Direction::none, "plan-packen-zstd-pruefung"},
+            {0.3f, action_bit(Action::west)},
+            {0.9f, 0, Direction::none, "warteschlange-packen"},
+            {0.3f, action_bit(Action::back)},
+            {0.3f, 0, Direction::up},
             // the extras of the focused game (a folder), its APR-EMU versions, the LZ4 settings;
             // the library tools
             {0.6f, action_bit(Action::back)},
@@ -1932,12 +2034,21 @@ class Ps5cc final : public app::Concept
         if (job.active)
         {
             if (job.state == "scanning")
-                return "wird vermessen";
+                return job.pack.empty() ? "wird vermessen"
+                                        : "Das Spiel wird für die Packs vermessen …";
             if (job.state == "verifying")
                 return "wird geprüft";
             if (job.total > 0.0)
+            {
+                // An image that packs the game: the bar only estimates how far the writing has
+                // come, so no "x of y GB" (the sizes would not be the game's)
+                if (!job.pack.empty())
+                    return std::to_string(static_cast<int>(
+                               std::clamp(job.done * 100.0 / job.total, 0.0, 100.0))) +
+                           " % · wird gepackt und geschrieben · " + ps5cc::pack_label(job.pack);
                 return ps5cc::format_bytes(static_cast<std::uint64_t>(job.done)) + " von " +
                        ps5cc::format_bytes(static_cast<std::uint64_t>(job.total));
+            }
             return "läuft";
         }
         if (job.state == "done")

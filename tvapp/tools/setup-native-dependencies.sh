@@ -16,9 +16,9 @@ zlib_version="1.3.2"
 zlib_source="$zlib_directory/zlib-$zlib_version"
 zlib_archive="$zlib_directory/zlib-$zlib_version.tar.gz"
 zlib_stamp="$zlib_root/.source-version"
-# ps5cc: v0.45 like the rest of the project (kernel offsets up to firmware 14.10); was v0.42 in the kit (8cfbc7cd...).
-sdk_url="https://github.com/ps5-payload-dev/sdk/releases/download/v0.45/ps5-payload-sdk.zip"
-sdk_hash="5fac64093d0e3e69f2584ce7935f24f703f622d9681f1495c85b9f00d1291a2c"
+# ps5cc: v0.50 like the rest of the project (kernel offsets for every firmware from 1.00 to 14.22); was v0.42 in the kit (8cfbc7cd...), v0.45 until 20.11.2026.
+sdk_url="https://github.com/ps5-payload-dev/sdk/releases/download/v0.50/ps5-payload-sdk.zip"
+sdk_hash="2993a69e52fea04a32bf1753318fc60b3f918ab635bdf946870e7d1849557bb2"
 sdk_stamp="$sdk/.pinned-sha256"
 zlib_urls=(
     "https://github.com/madler/zlib/releases/download/v$zlib_version/zlib-$zlib_version.tar.gz"

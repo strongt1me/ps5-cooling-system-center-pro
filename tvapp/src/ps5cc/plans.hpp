@@ -44,6 +44,20 @@ constexpr const char *kLevelOps[kLevels] = {"fpkg", "fpkg-bal", "fpkg-min", "fpk
 constexpr const char *kLevelNames[kLevels] = {"Schnell", "Ausgewogen", "Kleinste", "Unkomprimiert"};
 constexpr int kLevelRaw = 3; // stored: nothing is compressed
 
+// Packing the game into LZ4 or zstd asset packs while an exFAT or ffpkg image is written
+// (19.11.2026): Dump Forge does it. The levels are the ones the page offers (the middle one first,
+// as the packing window of a game does); zstd is read by AMPR EMU NG only, LZ4 by it or by the
+// original APR-EMU.
+constexpr int kPackNone = 0;
+constexpr int kPackLz4 = 1;
+constexpr int kPackZstd = 2;
+constexpr int kLz4Levels = 3;
+constexpr int kLz4LevelValues[kLz4Levels] = {9, 3, 12};
+constexpr int kZstdLevels = 4;
+constexpr int kZstdLevelValues[kZstdLevels] = {5, 1, 9, 19};
+constexpr int kRuntimeNg = 0;       // AMPR EMU NG
+constexpr int kRuntimeOriginal = 1; // the original APR-EMU (LZ4 only)
+
 // "Original danach" (18.11.2026): what becomes of the game's original once a copy, a conversion or
 // an unpack has been written and checked. The console app does it after the check, never before.
 constexpr int kOrigKeep = 0; // the default: nothing is sent
@@ -123,6 +137,11 @@ struct Plan
     std::string ffpkg_error;
     std::string
         fpkg_error; // no debug FPKG: packs that could not be looked at, or both kinds of packs
+    // Packing the game on its way into an exFAT or ffpkg image: "pack_ok" says it can be offered,
+    // "pack_error" why it cannot (a PS4 game, packs already, not readable). An older console app
+    // says neither, and then the choice is not shown.
+    bool pack_ok = false;
+    std::string pack_error;
     // A game in AMPR packs ("zstd" / "lz4"): Kraken Mount takes no package with packs in it, so
     // Dump Forge decodes them while it writes the debug FPKG; the package then holds the unpacked
     // game, this big (0: not known, an image).
@@ -157,9 +176,16 @@ struct Plan
 // What the person chose in a plan's dialog.
 struct PlanChoice
 {
-    int mode = -1;  // copy and convert: 0 homebrew, 1 backup, -1 not chosen yet
-    int op = -1;    // convert: index into kOpKeys
-    int level = 0;  // convert, format fpkg: index into kLevelOps
+    int mode = -1; // copy and convert: 0 homebrew, 1 backup, -1 not chosen yet
+    int op = -1;   // convert: index into kOpKeys
+    int level = 0; // convert, format fpkg: index into kLevelOps
+    // convert, formats exFAT and ffpkg: pack the game into LZ4 or zstd packs while the image is
+    // written (kPackNone, kPackLz4, kPackZstd), with the level (an index into kLz4LevelValues or
+    // kZstdLevelValues) and, for LZ4, the runtime (kRuntimeNg, kRuntimeOriginal). Only counts
+    // where packing() says so.
+    int pack = kPackNone;
+    int pack_level = 0;
+    int pack_runtime = kRuntimeNg;
     int drive = -1; // index into Plan::drives
     bool ampr = false;
     bool quick =
@@ -207,6 +233,8 @@ struct QueueItem
 {
     int qid = 0;
     std::string id, name, op, mode, mount, target, state, message;
+    std::string pack; // "lz4" or "zstd" when the entry packs the game while it writes the image
+    int pack_level = 0;
     std::uint64_t output_bytes = 0;
     double elapsed_s = 0.0;
 };
@@ -260,8 +288,22 @@ bool is_fpkg_op(const std::string &op);
 // True when the result gets smaller than the game (ffpfsc and a compressed FPKG): the step is
 // "Komprimieren".
 bool squeezes(const std::string &op);
-// The op in words for the queue: "FPKG · schnell", the others as they are.
-std::string op_label(const std::string &op);
+// The op in words for the queue: "FPKG · schnell", the others as they are; with `pack` ("lz4" or
+// "zstd") "exfat · LZ4-Packs".
+std::string op_label(const std::string &op, const std::string &pack = {});
+// ---- packing while an image is written (19.11.2026) ----
+// True for the formats that can pack on the way: exFAT and ffpkg.
+bool pack_op(int op);
+// True when the console app speaks of packing for this game at all (an older one does not).
+bool pack_known(const Plan &plan);
+// True when this choice packs: a packing format, a game that can be packed, and a way chosen.
+bool packing(const Plan &plan, const PlanChoice &choice);
+// The words the console app takes: "lz4", "zstd" (kPackNone: "").
+const char *pack_key(int pack);
+// The level of the choice as a number for the console app (LZ4 9, 3 or 12; zstd 5, 1, 9 or 19).
+int pack_level_value(const PlanChoice &choice);
+// "LZ4-Packs", "zstd-Packs" for "lz4", "zstd"; "" for anything else.
+std::string pack_label(const std::string &pack);
 // The body of the start's POST, exactly as the web app sends it.
 std::string start_body(const Plan &plan, const PlanChoice &choice);
 // Why a compressed image may stutter, one sentence each; empty when nothing speaks against it.

@@ -30,6 +30,7 @@ typedef struct {
   int      state;
   char     id[12], name[128], op[12], mount[40], mode[12], name_tpl[200], target[400];
   int      ampr, quick;
+  ps5tm_cvpack_t pack;        /* the game is packed into LZ4 / zstd packs while the image is written (Dump Forge), kind 0 = not */
   int      starting;          /* ps5tm_gameconvert_start is being called for it: it cannot be removed in that moment */
   int      orig_mode;         /* what to do with the original afterwards (PS5TM_ORIG_*, origafter.c) */
   char     orig_dest[300];    /* move: where it goes */
@@ -114,7 +115,7 @@ start_marked(const cq_item_t *it, char *err, size_t err_len) {
     }
   }
   if(rc == 200) {
-    rc = ps5tm_gameconvert_start(it->id, it->op, it->ampr, it->mount, it->mode, it->quick, it->name_tpl, it->qid, err, err_len);
+    rc = ps5tm_gameconvert_start(it->id, it->op, it->ampr, it->mount, it->mode, it->quick, it->name_tpl, &it->pack, it->qid, err, err_len);
     if(it->orig_mode != PS5TM_ORIG_KEEP) ps5tm_orig_commit(&orq, "convert", rc == 200);
   }
   if(rc != 200) {
@@ -249,6 +250,11 @@ ps5tm_convqueue_status(void) {
     cJSON_AddStringToObject(o, "mount", it->mount);
     cJSON_AddStringToObject(o, "target", it->target);
     cJSON_AddStringToObject(o, "state", k_state[it->state]);
+    if(it->pack.kind) {                                          /* the entry packs the game while it writes the image */
+      cJSON_AddStringToObject(o, "pack", it->pack.kind == 2 ? "zstd" : "lz4");
+      cJSON_AddNumberToObject(o, "pack_level", it->pack.level);
+      if(it->pack.kind == 1) cJSON_AddStringToObject(o, "pack_runtime", it->pack.runtime == 1 ? "ampr_emu" : "ng");
+    }
     if(it->orig_mode != PS5TM_ORIG_KEEP) {
       cJSON_AddStringToObject(o, "orig_after", it->orig_mode == PS5TM_ORIG_MOVE ? "move" : "delete");
       if(it->orig_mode == PS5TM_ORIG_MOVE) cJSON_AddStringToObject(o, "orig_dest", it->orig_dest);
@@ -278,7 +284,7 @@ str_of(const cJSON *b, const char *k) {
   return cJSON_IsString(j) ? j->valuestring : "";
 }
 
-/* action: "add" (id, op, target, mode, verify, ampr_index, name), "remove" (qid), "retry" (qid), "start", "stop", "clear" (takes the
+/* action: "add" (id, op, target, mode, verify, ampr_index, name, pack, pack_level, pack_runtime), "remove" (qid), "retry" (qid), "start", "stop", "clear" (takes the
    finished entries off the list). Returns an HTTP status; the reason in err when it is not 200. */
 int
 ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
@@ -298,7 +304,10 @@ ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
     int os = ps5tm_orig_prepare_body("convert", id, body, &orq, err, err_len);
     if(os != 0) return os;
     int ampr = cJSON_IsTrue(cJSON_GetObjectItem(body, "ampr_index"));
-    cJSON *chk = ps5tm_gameconvert_check(id, op, mount, mode, tpl, err, err_len);
+    ps5tm_cvpack_t pack;
+    const int ps = ps5tm_cvpack_parse(body, &pack, err, err_len);
+    if(ps != 0) return ps;
+    cJSON *chk = ps5tm_gameconvert_check(id, op, mount, mode, tpl, pack.kind ? &pack : NULL, err, err_len);
     if(!chk) return 409;
     const cJSON *cq = cJSON_GetObjectItem(chk, "can_queue");
     const cJSON *tg = cJSON_GetObjectItem(chk, "target");
@@ -342,8 +351,9 @@ ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
       snprintf(it->mode, sizeof(it->mode), "%s", mode);
       snprintf(it->name_tpl, sizeof(it->name_tpl), "%s", tpl);
       snprintf(it->target, sizeof(it->target), "%s", tg->valuestring);
-      it->ampr = ampr;
+      it->ampr = ampr && !pack.kind;
       it->quick = quick;
+      it->pack = pack;
       it->orig_mode = orq.mode;
       snprintf(it->orig_dest, sizeof(it->orig_dest), "%s", orq.mode == PS5TM_ORIG_MOVE ? orq.dest : "");
       snprintf(it->orig_path, sizeof(it->orig_path), "%s", orq.mode != PS5TM_ORIG_KEEP ? orq.path : "");

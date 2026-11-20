@@ -517,6 +517,215 @@ TEST(Ps5ccPlans, TheStepOfACompressedFpkgIsCalledCompressing)
     EXPECT_EQ(hui::ps5cc::stage_texts(job)[1].label, "Schreiben");
 }
 
+// ---- packing the game while an exFAT or ffpkg image is written (19.11.2026, Dump Forge) ----
+
+// A PS5 game folder that is not in packs yet: exFAT and ffpkg can pack it on the way. The first
+// target is a FAT32 stick, the second an exFAT M.2 drive.
+constexpr const char *kConvertPack =
+    R"({"ok":true,"title_id":"PPSA13001","name":"Arkanoid","source":"/mnt/usb0/homebrew/PPSA13001",
+  "kind":"folder","ps4":false,"stem":"PPSA13001","raw_bytes":4182000000,"ffpkg_bytes":4264000000,
+  "pack_ok":true,"files":812,"ops":["ffpfsc","ffpkg","exfat","fpkg"],
+  "dumpforge":{"ok":true,"installed":true,"version":"0.5.6","folder":"/data/PS5-Cooling-Center/dumpforge","running":false},
+  "running":false,"busy":false,"other_busy":false,"targets":[
+  {"mount":"/mnt/usb1","label":"USB-Stick","fs":"msdosfs","free_bytes":59000000000,"source_here":false,
+   "fat32_too_big":true,"fat32_too_big_ffpkg":true,"enough_space":true,
+   "homebrew":{"dir":"/mnt/usb1/homebrew","exfat":{"path":"/mnt/usb1/homebrew/PPSA13001.exfat","exists":false,"enough_space":true},
+               "ffpkg":{"path":"/mnt/usb1/homebrew/PPSA13001.ffpkg","exists":false,"enough_space":true}}},
+  {"mount":"/mnt/ext0","label":"M.2-Laufwerk","fs":"exfatfs","free_bytes":640000000000,"source_here":false,
+   "fat32_too_big":false,"fat32_too_big_ffpkg":false,"enough_space":true,
+   "homebrew":{"dir":"/mnt/ext0/homebrew","exfat":{"path":"/mnt/ext0/homebrew/PPSA13001.exfat","exists":false,"enough_space":true},
+               "ffpkg":{"path":"/mnt/ext0/homebrew/PPSA13001.ffpkg","exists":false,"enough_space":true}}}]})";
+
+PlanChoice exfat_choice()
+{
+    PlanChoice c;
+    c.mode = 0;
+    c.op = 2; // exfat
+    c.drive = 1;
+    return c;
+}
+
+TEST(Ps5ccPlans, PackingIsOfferedWhenTheAppSaysSoAndCanBeRefusedWithAReason)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertPack));
+    ASSERT_TRUE(p.ok);
+    EXPECT_TRUE(p.pack_ok);
+    EXPECT_TRUE(p.pack_error.empty());
+    EXPECT_TRUE(hui::ps5cc::pack_known(p));
+
+    // a game that cannot be packed: the reason is there, the choice is known but not ok
+    std::string json = kConvertPack;
+    json.replace(json.find(R"("pack_ok":true)"), 14,
+                 R"("pack_ok":false,"pack_error":"Das Spiel liegt schon in zstd-Packs.")");
+    const Plan no = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, json.c_str()));
+    EXPECT_FALSE(no.pack_ok);
+    EXPECT_EQ(no.pack_error, "Das Spiel liegt schon in zstd-Packs.");
+    EXPECT_TRUE(hui::ps5cc::pack_known(no)) << "shown greyed out, with the reason";
+
+    // an older console app says nothing: no rows
+    json = kConvertPack;
+    json.erase(json.find(R"("pack_ok":true,)"), 15);
+    const Plan old = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, json.c_str()));
+    EXPECT_FALSE(old.pack_ok);
+    EXPECT_FALSE(hui::ps5cc::pack_known(old));
+}
+
+TEST(Ps5ccPlans, OnlyExfatAndFfpkgCanPack)
+{
+    EXPECT_TRUE(hui::ps5cc::pack_op(1));  // ffpkg
+    EXPECT_TRUE(hui::ps5cc::pack_op(2));  // exfat
+    EXPECT_FALSE(hui::ps5cc::pack_op(0)); // ffpfsc: the compression is inside already
+    EXPECT_FALSE(hui::ps5cc::pack_op(hui::ps5cc::kOpFpkg));
+    EXPECT_FALSE(hui::ps5cc::pack_op(-1));
+
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertPack));
+    PlanChoice c = exfat_choice();
+    EXPECT_FALSE(hui::ps5cc::packing(p, c)) << "nothing chosen";
+    c.pack = hui::ps5cc::kPackLz4;
+    EXPECT_TRUE(hui::ps5cc::packing(p, c));
+    EXPECT_TRUE(hui::ps5cc::ready(p, c)) << "a game that can be packed starts with a way chosen";
+    c.op = 1;
+    EXPECT_TRUE(hui::ps5cc::packing(p, c));
+    c.op = 0;
+    EXPECT_FALSE(hui::ps5cc::packing(p, c)) << "a choice made for exFAT does not follow to ffpfsc";
+    c.op = hui::ps5cc::kOpFpkg;
+    EXPECT_FALSE(hui::ps5cc::packing(p, c));
+    // a game that cannot be packed never packs, whatever was chosen before
+    std::string json = kConvertPack;
+    json.replace(json.find(R"("pack_ok":true)"), 14, R"("pack_ok":false)");
+    const Plan no = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, json.c_str()));
+    c = exfat_choice();
+    c.pack = hui::ps5cc::kPackZstd;
+    EXPECT_FALSE(hui::ps5cc::packing(no, c));
+    EXPECT_FALSE(hui::ps5cc::ready(no, c)) << "a way chosen for a game that cannot take it";
+    // an image has no rows of packing: the plan of a file never says it can
+    const Plan image = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertFpkg));
+    c = exfat_choice();
+    c.pack = hui::ps5cc::kPackLz4;
+    EXPECT_FALSE(hui::ps5cc::packing(image, c));
+}
+
+TEST(Ps5ccPlans, ThePackingBodiesCarryTheWayTheLevelAndTheRuntime)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertPack));
+    PlanChoice c = exfat_choice();
+    // not packed: the bodies are the ones of before
+    EXPECT_EQ(
+        hui::ps5cc::start_body(p, c),
+        R"({"id":"PPSA13001","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"full","name":""})");
+    c.pack = hui::ps5cc::kPackLz4; // the first level is 9, the runtime AMPR EMU NG
+    EXPECT_EQ(
+        hui::ps5cc::start_body(p, c),
+        R"({"id":"PPSA13001","op":"exfat","target":"/mnt/ext0","mode":"homebrew","ampr_index":false,"verify":"full","name":"","pack":"lz4","pack_level":9,"pack_runtime":"ng"})");
+    EXPECT_EQ(
+        hui::ps5cc::check_body(p, c),
+        R"({"id":"PPSA13001","op":"exfat","target":"/mnt/ext0","mode":"homebrew","name":"","pack":"lz4","pack_level":9,"pack_runtime":"ng"})");
+    c.pack_level = 1;
+    c.pack_runtime = hui::ps5cc::kRuntimeOriginal;
+    c.op = 1; // ffpkg
+    const std::string lz4 = hui::ps5cc::start_body(p, c);
+    EXPECT_NE(lz4.find(R"("op":"ffpkg")"), std::string::npos);
+    EXPECT_NE(lz4.find(R"("pack_level":3)"), std::string::npos);
+    EXPECT_NE(lz4.find(R"("pack_runtime":"ampr_emu")"), std::string::npos);
+    c.pack_level = 2;
+    EXPECT_NE(hui::ps5cc::start_body(p, c).find(R"("pack_level":12)"), std::string::npos);
+
+    // zstd: its own four levels, no runtime to choose (AMPR EMU NG only)
+    c.pack = hui::ps5cc::kPackZstd;
+    c.pack_runtime = hui::ps5cc::kRuntimeOriginal;
+    const int zstd_levels[] = {5, 1, 9, 19};
+    for (int l = 0; l < hui::ps5cc::kZstdLevels; ++l)
+    {
+        c.pack_level = l;
+        const std::string body = hui::ps5cc::start_body(p, c);
+        EXPECT_NE(body.find(R"("pack":"zstd","pack_level":)" + std::to_string(zstd_levels[l])),
+                  std::string::npos)
+            << body;
+        EXPECT_EQ(body.find("pack_runtime"), std::string::npos) << "zstd names no runtime";
+    }
+    // a level out of the list falls back to the first, never past the array
+    c.pack_level = 99;
+    EXPECT_EQ(hui::ps5cc::pack_level_value(c), 5);
+    c.pack = hui::ps5cc::kPackLz4;
+    c.pack_level = -1;
+    EXPECT_EQ(hui::ps5cc::pack_level_value(c), 9);
+
+    // the queue takes the start's body plus its action, packing included
+    c.pack_level = 0;
+    const std::string add = hui::ps5cc::queue_add_body(p, c);
+    EXPECT_NE(add.find(R"("action":"add")"), std::string::npos);
+    EXPECT_NE(add.find(R"("pack":"lz4")"), std::string::npos);
+
+    // another format: nothing about packing goes out, however it was chosen before
+    c.op = 0;
+    EXPECT_EQ(hui::ps5cc::start_body(p, c).find("pack"), std::string::npos);
+    EXPECT_EQ(hui::ps5cc::check_body(p, c).find("pack"), std::string::npos);
+}
+
+TEST(Ps5ccPlans, PackingWritesTheAmprIndexItself)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertPack));
+    PlanChoice c = exfat_choice();
+    c.ampr = true;
+    EXPECT_NE(hui::ps5cc::start_body(p, c).find(R"("ampr_index":true)"), std::string::npos);
+    c.pack = hui::ps5cc::kPackZstd;
+    EXPECT_NE(hui::ps5cc::start_body(p, c).find(R"("ampr_index":false)"), std::string::npos)
+        << "Dump Forge writes the index of an image with packs itself";
+}
+
+TEST(Ps5ccPlans, AnImageWithPacksGetsSmallerSoAFat32DriveIsNotTurnedAway)
+{
+    const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvertPack));
+    PlanChoice c = exfat_choice();
+    c.drive = 0; // the FAT32 stick
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]),
+              "FAT32 nimmt keine Datei über 4 GB auf");
+    c.pack = hui::ps5cc::kPackLz4;
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]), "")
+        << "the check names the drive (a warning), the list does not turn it away";
+    c.op = 0; // ffpfsc: no packing, the old rule
+    EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]),
+              "FAT32 nimmt keine Datei über 4 GB auf");
+}
+
+TEST(Ps5ccPlans, TheQueueAndTheStepsSayThatTheGameIsPacked)
+{
+    const hui::ps5cc::ConvertQueue q = hui::ps5cc::parse_queue(
+        R"({"ok":true,"running":true,"running_id":1,"items":[
+      {"qid":1,"id":"PPSA13001","name":"A","op":"exfat","state":"running","pack":"lz4","pack_level":9,"pack_runtime":"ng"},
+      {"qid":2,"id":"PPSA13002","name":"B","op":"ffpkg","state":"waiting","pack":"zstd","pack_level":19},
+      {"qid":3,"id":"PPSA13003","name":"C","op":"exfat","state":"waiting"}]})");
+    ASSERT_EQ(q.items.size(), 3u);
+    EXPECT_EQ(q.items[0].pack, "lz4");
+    EXPECT_EQ(q.items[0].pack_level, 9);
+    EXPECT_EQ(q.items[1].pack, "zstd");
+    EXPECT_EQ(q.items[1].pack_level, 19);
+    EXPECT_TRUE(q.items[2].pack.empty());
+    EXPECT_EQ(hui::ps5cc::op_label("exfat", "lz4"), "exfat · LZ4-Packs");
+    EXPECT_EQ(hui::ps5cc::op_label("ffpkg", "zstd"), "ffpkg · zstd-Packs");
+    EXPECT_EQ(hui::ps5cc::op_label("exfat", ""), "exfat");
+    EXPECT_EQ(hui::ps5cc::op_label("exfat", "gzip"), "exfat")
+        << "a kind this screen does not know is left out";
+    EXPECT_EQ(hui::ps5cc::pack_label("lz4"), "LZ4-Packs");
+    EXPECT_EQ(hui::ps5cc::pack_label("zstd"), "zstd-Packs");
+    EXPECT_EQ(hui::ps5cc::pack_label(""), "");
+    EXPECT_STREQ(hui::ps5cc::pack_key(hui::ps5cc::kPackNone), "");
+    EXPECT_STREQ(hui::ps5cc::pack_key(hui::ps5cc::kPackLz4), "lz4");
+    EXPECT_STREQ(hui::ps5cc::pack_key(hui::ps5cc::kPackZstd), "zstd");
+
+    hui::ps5cc::Job job;
+    job.total = 100.0;
+    job.op = "exfat";
+    job.stages = {{"scan", "done", 1000.0},
+                  {"write", "now", 5000.0},
+                  {"verify", "todo", 0.0},
+                  {"rename", "todo", 0.0}};
+    EXPECT_EQ(hui::ps5cc::stage_texts(job)[1].label, "Schreiben");
+    job.pack = "lz4";
+    EXPECT_EQ(hui::ps5cc::stage_texts(job)[0].label, "Vermessen");
+    EXPECT_EQ(hui::ps5cc::stage_texts(job)[1].label, "Packen");
+}
+
 TEST(Ps5ccPlans, StreamRiskReasonsInWords)
 {
     const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvert));
