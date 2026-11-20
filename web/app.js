@@ -10243,6 +10243,24 @@
     }
   };
 
+  /* Auswerfen aus dem Dateimanager (21.11.2026): erst aus dem Laufwerk herausgehen, dann auswerfen. So macht es der Bereich System, der nichts vom
+     Laufwerk liest: Der Dateimanager stand sonst beim Auswerfen noch in einem Ordner des Laufwerks, und eine laufende Größenberechnung oder ein
+     Download las weiter, während ShadowMountPlus es abtrennte (die Konsole stürzte ab). fmSeq weiterzählen lässt die Antworten und die Schleife der
+     Ordnergrößen auf dem Laufwerk fallen; was auf der Konsole noch liest, wartet das Auswerfen ab (die App weist es sonst mit der Begründung ab). */
+  const fmEjectPlace = async (p, btn) => {
+    if (usbEject.running) return;
+    const inDrive = (path) => !!path && (path === p.path || path.startsWith(`${p.path}/`));
+    btn.disabled = true;
+    fmSeq++;
+    if (inDrive(fm.path)) {
+      fm.sel.clear();
+      if (fm.clip && inDrive(fm.clip.from)) fm.clip = null;
+      await fmLoad("/data");
+    }
+    await usbEjectStart(p.path, btn);
+    fmRender();
+  };
+
   /* Nur die neueste Antwort zählt: Ein Neuladen nach einem fertigen Auftrag, das erst ankommt, wenn schon ein
      anderer Ordner offen ist, darf nicht zurückspringen (und die Auswahl dort löschen). */
   let fmSeq = 0;
@@ -11063,7 +11081,7 @@
     if (d.fmPlace !== undefined) { const p = fm.places[+d.fmPlace]; if (p) fmLoad(p.path); }
     else if (d.fmEject !== undefined) {
       const p = fm.places[+d.fmEject];
-      if (p && p.ejectable) usbEjectStart(p.path, t).then(fmRender);
+      if (p && p.ejectable) fmEjectPlace(p, t);
     }
     else if (d.fmCrumb !== undefined) fmLoad(d.fmCrumb);
     else if (d.fmOpen !== undefined) { const en = fmEntries()[+d.fmOpen]; if (en) fmLoad(fmJoin(fm.path, en.name)); }

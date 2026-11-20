@@ -20,6 +20,7 @@ STUB(ps5tm_usbeject_busy, PS5TM_JOB_USBEJECT)
 STUB(ps5tm_gameconvert_busy, PS5TM_JOB_GAMECONVERT)
 STUB(ps5tm_gamecopy_busy, PS5TM_JOB_GAMECOPY)
 STUB(ps5tm_orig_busy, PS5TM_JOB_ORIGAFTER)
+STUB(ps5tm_filemgr_reading, PS5TM_JOB_FILEREAD)
 static int g_move_local;
 int ps5tm_gamemove_busy_local(void) { return g_move_local; }
 int ps5tm_gamemove_busy(void) { g_asked_move++; return g_move_local || g_busy[PS5TM_JOB_GAMEMOVE]; }
@@ -35,8 +36,8 @@ main(void) {
     memset(g_busy, 0, sizeof(g_busy));
     g_busy[j] = 1;
     why[0] = 0;
-    int reads = j == PS5TM_JOB_PKGSCAN;
-    /* a job beside which nothing else may start (the package search only reads: it stops an eject, no start) */
+    int reads = j == PS5TM_JOB_PKGSCAN || j == PS5TM_JOB_FILEREAD;
+    /* a job beside which nothing else may start (the package search and the file manager's reads only read: they stop an eject, no start) */
     CHECK(ps5tm_jobs_busy_except(-1, PS5TM_JOBS_READERS, why, sizeof(why)) == 1 && why[0]);
     CHECK(ps5tm_jobs_busy_except(-1, 0, NULL, 0) == (reads ? 0 : 1));
     /* a module never counts itself */
@@ -47,6 +48,13 @@ main(void) {
       CHECK(ps5tm_jobs_busy_except(k, PS5TM_JOBS_READERS, why, sizeof(why)) == 1);
     }
   }
+  /* the file manager's reads (21.11.2026): they hold an eject back and give the reason, but no other job's start */
+  memset(g_busy, 0, sizeof(g_busy));
+  g_busy[PS5TM_JOB_FILEREAD] = 1;
+  why[0] = 0;
+  CHECK(ps5tm_jobs_busy_except(PS5TM_JOB_USBEJECT, PS5TM_JOBS_READERS, why, sizeof(why)) == 1 && strstr(why, "Dateimanager") != NULL);
+  CHECK(ps5tm_jobs_busy_except(PS5TM_JOB_FILEMGR, 0, NULL, 0) == 0);
+  CHECK(ps5tm_jobs_busy_except(PS5TM_JOB_GAMECONVERT, 0, NULL, 0) == 0);
   /* no call to ShadowMountPlus when asked not to */
   memset(g_busy, 0, sizeof(g_busy));
   g_asked_move = 0;

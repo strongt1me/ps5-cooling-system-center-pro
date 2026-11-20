@@ -41,6 +41,22 @@ ps5tm_usbeject_busy(void) {
   return b;
 }
 
+/* 1 while a drive is being ejected and `path` is that drive or lies below it. The file manager asks it before it reads anything (a list, a view,
+   a size, a download): ShadowMountPlus cuts the drive off while the eject runs, and a read still under way on it was the one gap between the button
+   of the file manager and the one under System, which read nothing from the drive (21.11.2026). */
+int
+ps5tm_usbeject_covers(const char *path) {
+  if(!path) return 0;
+  pthread_mutex_lock(&g_lock);
+  int hit = 0;
+  if(g_job.running && g_job.mount[0]) {
+    size_t ml = strlen(g_job.mount);
+    hit = !strncmp(path, g_job.mount, ml) && (path[ml] == '/' || path[ml] == 0);
+  }
+  pthread_mutex_unlock(&g_lock);
+  return hit;
+}
+
 /* /mnt/usb0../mnt/usb7 and /mnt/ext0: what ShadowMountPlus calls ejectable (the M.2 drive /mnt/ext1 is not). */
 int
 ps5tm_usbeject_path_ok(const char *mount) {

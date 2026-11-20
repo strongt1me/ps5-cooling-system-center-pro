@@ -875,6 +875,21 @@ class FilesPage final : public Page
         return p.ejectable && eject_.available && !eject_.running;
     }
 
+    // Before a drive is ejected: when the open folder lies on it, back to the places (what is
+    // picked, the way back and what was cut or copied from the drive are let go), so that the page
+    // reads nothing from the drive while ShadowMountPlus cuts it off.
+    void leave_drive(const std::string &mount)
+    {
+        if (inside(clip_from_, mount))
+            clip_paths_.clear();
+        if (!inside(folder_.path, mount))
+            return;
+        history_.clear();
+        picked_.clear();
+        pick_mode_ = false;
+        source().files_open({});
+    }
+
     // The end of an eject (this page's or another page's) is shown on the card for a while; a
     // drive that went away takes the open folder with it.
     void note_eject(const UsbEject &now)
@@ -1225,7 +1240,11 @@ class FilesPage final : public Page
             source().files_post("job/cancel", "{}");
             break;
         case kEject:
-            // nothing is asked twice: the app refuses while one of its jobs runs and says which
+            // nothing is asked twice: the app refuses while one of its jobs runs and says which.
+            // Out of the drive first (21.11.2026), as under System → Speicher, which reads nothing
+            // from it: the requests queued for the open folder (a size, a list) are answered before
+            // the eject is sent, and the page asks the drive for nothing more
+            leave_drive(eject_path_);
             source().usb_eject(eject_path_);
             break;
         case kConflictReplace:
@@ -1239,7 +1258,9 @@ class FilesPage final : public Page
                                                             : "");
             break;
         case kReload:
-            source().files_open(folder_.path);
+            // not from the drive that is being ejected (the app refuses such a read anyway)
+            if (!(eject_.running && inside(folder_.path, eject_.mount)))
+                source().files_open(folder_.path);
             break;
         default:
             break;

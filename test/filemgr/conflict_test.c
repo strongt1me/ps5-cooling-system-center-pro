@@ -20,6 +20,17 @@ int ps5tm_ampr_busy(void) { return 0; }
 int ps5tm_disc_busy(void) { return 0; }
 int ps5tm_usbeject_busy(void) { return 0; }
 int ps5tm_usbeject_path_ok(const char *mount) { return mount && !strncmp(mount, "/mnt/usb", 8); }
+/* the drive that is being ejected (usbeject.c): this stub follows its rule - the mount itself or a path below it */
+static const char *g_eject_mount;
+int ps5tm_usbeject_covers(const char *path) {
+  if(!g_eject_mount || !path) return 0;
+  size_t n = strlen(g_eject_mount);
+  return !strncmp(path, g_eject_mount, n) && (path[n] == '/' || path[n] == 0);
+}
+/* filemgr.c calls this while a read is entered (-DFM_TEST_HOOK_READ, see run.sh): what the readers' count says at that moment */
+static int g_probe_n, g_probe_reading;
+int ps5tm_filemgr_reading(void);
+void fm_read_probe(void) { g_probe_n++; g_probe_reading = ps5tm_filemgr_reading(); }
 int ps5tm_jobs_busy_except(int self, int flags, char *why, size_t n) { (void)self; (void)flags; (void)why; (void)n; return 0; }
 int ps5tm_gameconvert_busy(void) { return 0; }
 int ps5tm_gamecopy_busy(void) { return 0; }
@@ -115,6 +126,18 @@ call(const char *method, const char *path, const char *body) {
   snprintf(req.path, sizeof(req.path), "%s", path);
   req.body = (char *)body;
   req.body_len = body ? strlen(body) : 0;
+  g_status = 0;
+  g_body[0] = 0;
+  ps5tm_filemgr_api(0, &req);
+}
+
+static void
+callq(const char *path, const char *query) {
+  ps5tm_request_t req;
+  memset(&req, 0, sizeof(req));
+  snprintf(req.method, sizeof(req.method), "GET");
+  snprintf(req.path, sizeof(req.path), "%s", path);
+  snprintf(req.query, sizeof(req.query), "%s", query);
   g_status = 0;
   g_body[0] = 0;
   ps5tm_filemgr_api(0, &req);
@@ -293,6 +316,51 @@ main(void) {
   CHECK(eta <= eta_first, "time left does not grow: %lld after %lld", eta, eta_first);
   call("GET", "/api/v1/files/job", NULL);
   CHECK(strstr(g_body, "\"rate_bps\":0,") != NULL && strstr(g_body, "\"eta_s\":0,") != NULL, "no speed once done: %s", g_body);
+
+  /* 19. reads of a drive (21.11.2026): a folder list, view, size and download are counted while they run, and refused while the drive they read is
+        being ejected. The eject button of the file manager used to start with the page standing in a folder of the drive and a size count or a
+        download still reading from it; ShadowMountPlus then cut the drive off under it. */
+  fresh();
+  g_eject_mount = NULL;
+  g_probe_n = 0;
+  CHECK(!ps5tm_filemgr_reading(), "nothing is reading at the start");
+  callq("/api/v1/files/list", "path=%2Fdata%2Fsrc");
+  CHECK(g_status == 200 && strstr(g_body, "f.txt") != NULL, "list without an eject: %d %s", g_status, g_body);
+  CHECK(g_probe_n == 1 && g_probe_reading == 1, "the list counts as a read while it runs (%d, %d)", g_probe_n, g_probe_reading);
+  CHECK(!ps5tm_filemgr_reading(), "the count is back to 0 after the list");
+  callq("/api/v1/files/size", "path=%2Fdata%2Fsrc");
+  CHECK(g_status == 200 && g_probe_n == 2 && g_probe_reading == 1 && !ps5tm_filemgr_reading(), "a size counts and ends: %d %s", g_status, g_body);
+  callq("/api/v1/files/list", "path=%2Fdata%2Fnope");               /* a folder that is not there: the handler's own refusal, the count still ends */
+  CHECK(g_status >= 400 && g_status != 409 && !ps5tm_filemgr_reading(), "a refused list does not leave the count up: %d", g_status);
+  callq("/api/v1/files/list", "path=nonsense");                     /* a bad path goes on to the handler */
+  CHECK(g_status == 400 && !ps5tm_filemgr_reading(), "a bad path: 400 and no count left: %d", g_status);
+
+  /* the drive is being ejected: its list, view, size and download are refused (409) and leave nothing counted */
+  g_eject_mount = "/data/src";
+  g_probe_n = 0;
+  static const char *const reads[] = { "/api/v1/files/list", "/api/v1/files/size", "/api/v1/files/view", "/api/v1/files/download" };
+  for(size_t i = 0; i < sizeof(reads) / sizeof(reads[0]); i++) {
+    callq(reads[i], "path=%2Fdata%2Fsrc");
+    CHECK(g_status == 409 && strstr(g_body, "\"code\":\"drive_ejecting\"") != NULL, "%s on the drive: 409 drive_ejecting, got %d %s", reads[i], g_status, g_body);
+    callq(reads[i], "path=%2Fdata%2Fsrc%2Fd");
+    CHECK(g_status == 409, "%s below the drive: 409, got %d", reads[i], g_status);
+    CHECK(!ps5tm_filemgr_reading(), "%s refused: no count left", reads[i]);
+  }
+  CHECK(g_probe_n == 0, "a refused read never reaches its handler (%d)", g_probe_n);
+  /* another folder is still readable, also one whose name only starts like the drive's */
+  callq("/api/v1/files/list", "path=%2Fdata%2Fdst");
+  CHECK(g_status == 200, "another folder is read as before: %d %s", g_status, g_body);
+  put("/data/srcx/a.txt", "A");
+  callq("/api/v1/files/list", "path=%2Fdata%2Fsrcx");
+  CHECK(g_status == 200, "a name that only starts like the drive is no part of it: %d %s", g_status, g_body);
+  /* the places do not fail while an eject runs (there is no drive list in this test, so only the call is made) */
+  call("GET", "/api/v1/files/places", NULL);
+  CHECK(g_status == 200, "places while an eject runs: %d", g_status);
+  /* the eject is over: the drive reads again */
+  g_eject_mount = NULL;
+  callq("/api/v1/files/list", "path=%2Fdata%2Fsrc");
+  CHECK(g_status == 200, "after the eject the list works again: %d", g_status);
+  CHECK(!ps5tm_filemgr_reading(), "no count is left at the end");
 
   printf("%d checks passed, %d failed\n", g_ok, g_fail);
   return g_fail ? 1 : 0;

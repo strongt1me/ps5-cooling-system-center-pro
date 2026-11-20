@@ -836,7 +836,12 @@ struct cJSON *ps5tm_orig_status_json(void);
 
 /* The file manager (filemgr.c): 1 while it copies, moves or deletes. */
 int           ps5tm_filemgr_busy(void);
-void          ps5tm_filemgr_shutdown(void);                               /* the app ends: a running copy/move/delete is asked to stop */
+/* 1 while the file manager reads from a drive for a request (folder list, view, size, download): they run in the thread of the request and are no
+   job, so ps5tm_filemgr_busy() does not see them. An eject of a drive waits for them (usbeject.c, jobreg.c) - 21.11.2026. */
+int           ps5tm_filemgr_reading(void);
+/* 1 while the drive that `path` lies on is being ejected (usbeject.c): the file manager reads nothing from it then. */
+int           ps5tm_usbeject_covers(const char *path);
+void          ps5tm_filemgr_shutdown(void);                              /* the app ends: a running copy/move/delete is asked to stop */
 
 /* The history of the app's jobs (jobhist.c): one line per finished job in /data/PS5-Cooling-Center/history.jsonl.
    result is "done", "failed" or "cancelled"; detail, error may be NULL. */
@@ -1671,7 +1676,8 @@ int           ps5tm_usbeject_busy(void);
 /* The one list of jobs that do not run beside each other (src/jobreg.c). A job module asks with its own id (or -1) before it starts. */
 typedef enum {
   PS5TM_JOB_SAVES, PS5TM_JOB_PKGSPLIT, PS5TM_JOB_PKGINST, PS5TM_JOB_PKGSCAN, PS5TM_JOB_GAMEDELETE, PS5TM_JOB_FILEMGR, PS5TM_JOB_AMPR,
-  PS5TM_JOB_IMGJOB, PS5TM_JOB_DISC, PS5TM_JOB_USBEJECT, PS5TM_JOB_GAMECONVERT, PS5TM_JOB_GAMECOPY, PS5TM_JOB_ORIGAFTER, PS5TM_JOB_GAMEMOVE,
+  PS5TM_JOB_IMGJOB, PS5TM_JOB_DISC, PS5TM_JOB_USBEJECT, PS5TM_JOB_GAMECONVERT, PS5TM_JOB_GAMECOPY, PS5TM_JOB_ORIGAFTER, PS5TM_JOB_FILEREAD,
+  PS5TM_JOB_GAMEMOVE,
   PS5TM_JOB_COUNT
 } ps5tm_job_t;
 #define PS5TM_JOBS_READERS 1     /* also count the jobs that only read a drive (the package search): for ejecting a drive */

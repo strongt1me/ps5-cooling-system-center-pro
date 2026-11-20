@@ -30,6 +30,8 @@ static const job_t k_jobs[PS5TM_JOB_COUNT] = {
   [PS5TM_JOB_GAMECONVERT] = { ps5tm_gameconvert_busy, "Es läuft eine Konvertierung", 0 },
   [PS5TM_JOB_GAMECOPY]    = { ps5tm_gamecopy_busy,    "Es läuft eine Kopie oder ein Dump", 0 },
   [PS5TM_JOB_ORIGAFTER]   = { ps5tm_orig_busy,        "Das Original eines Spiels wird gerade gelöscht oder verschoben", 0 },
+  /* the file manager's folder list, view, size and download: only reads, so they stop an eject but no other job from starting (21.11.2026) */
+  [PS5TM_JOB_FILEREAD]    = { ps5tm_filemgr_reading,  "Der Dateimanager liest gerade von einem Laufwerk (Ordner, Ansicht, Größe oder Download)", 1 },
   [PS5TM_JOB_GAMEMOVE]    = { ps5tm_gamemove_busy,    "ShadowMountPlus verschiebt oder entpackt gerade ein Spiel für die App", 0 },
 };
 

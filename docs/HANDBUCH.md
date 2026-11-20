@@ -1984,7 +1984,10 @@ Auf der Systemseite gibt es zusätzlich:
   Laufwerk spielt. Sonst wirft die App nicht aus und sagt, was noch läuft. Danach meldet die Konsole „… ist ausgeworfen und
   kann abgezogen werden“ oder den Grund, aus dem ShadowMountPlus abgelehnt hat (etwa ein laufendes Spiel von diesem
   Laufwerk). **Wichtig:** Der Auswerfen-Knopf auf der Seite von ShadowMountPlus selbst kennt die Aufträge dieser App nicht
-  und lässt sich von ihr nicht aufhalten; während eines Auftrags nur über diese App auswerfen.
+  und lässt sich von ihr nicht aufhalten; während eines Auftrags nur über diese App auswerfen. Im Dateimanager geht die Seite
+  dabei zuerst aus dem Laufwerk heraus (auf die interne SSD, in der Vollbild-App zu den Orten), damit die App währenddessen
+  nichts davon liest, wie unter „Speicher“; was der Dateimanager gerade noch liest (Ordnerliste, Größe, Ansicht, Download),
+  hält das Auswerfen zurück, und solange es läuft, antwortet er für dieses Laufwerk mit „Das Laufwerk wird gerade ausgeworfen“.
 - **Am Handy öffnen (ab 1.52.0)**: ein QR-Code mit der Adresse dieser Seite (`http://<Adresse der Konsole>:<Port>/`). Die Kamera des Handys
   darauf halten, und die Seite geht auf; das Handy muss im selben Netzwerk sein. Der Code enthält nur die Adresse, keine Zugangsdaten und
   keinen Text, den jemand anders bestimmen könnte (die Konsole erzeugt ihn nur für ihre eigene Adresse). Der Encoder (Byte-Modus, Stufe M,

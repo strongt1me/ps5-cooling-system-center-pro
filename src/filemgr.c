@@ -87,6 +87,10 @@ static pthread_mutex_t g_upload_lock = PTHREAD_MUTEX_INITIALIZER;
 /* Uploads under way (under g_lock). Counted as a file-manager job towards everyone else, so that a move, copy,
    conversion or delete does not start beside a file that is still arriving (audit 11.11.2026, F-04). */
 static int g_uploads;
+/* Requests under way that read from the console's files for their whole time: folder list, view, size and download (under g_lock; with_read below).
+   They run in the thread of the request and are no job, so nothing knew of them: an eject of a drive, started in the file manager while the page stood in
+   a folder of that drive (a size count of up to eight seconds, a long download), cut the drive off under a read (21.11.2026). */
+static int g_reads;
 static fm_job_t        g_job;
 static int             g_cancel;
 
@@ -401,7 +405,8 @@ add_place(cJSON *arr, const char *label, const char *path, int writable_here) {
   cJSON_AddStringToObject(o, "label", label);
   cJSON_AddStringToObject(o, "path", path);
   uint64_t fr = 0;
-  cJSON_AddNumberToObject(o, "free_bytes", space_free(path, &fr) == 0 ? (double)fr : -1);
+  /* the drive that is being ejected is not asked for its free space (a statfs on it, while ShadowMountPlus cuts it off) */
+  cJSON_AddNumberToObject(o, "free_bytes", !ps5tm_usbeject_covers(path) && space_free(path, &fr) == 0 ? (double)fr : -1);
   cJSON_AddBoolToObject(o, "writable", writable_here);
   cJSON_AddBoolToObject(o, "ejectable", ps5tm_usbeject_path_ok(path));  /* a USB drive: the file manager offers "eject safely" (usbeject.c) */
   cJSON_AddItemToArray(arr, o);
@@ -2160,6 +2165,48 @@ ps5tm_filemgr_busy(void) {
   return b;
 }
 
+/* 1 while a folder list, view, size or download is under way (an eject waits for them: jobreg.c, PS5TM_JOB_FILEREAD). */
+int
+ps5tm_filemgr_reading(void) {
+  pthread_mutex_lock(&g_lock);
+  int b = g_reads > 0;
+  pthread_mutex_unlock(&g_lock);
+  return b;
+}
+
+#ifdef FM_TEST_HOOK_READ
+void FM_TEST_HOOK_READ(void);                     /* host test only: runs while the read is entered, so that it can look at ps5tm_filemgr_reading() */
+#endif
+
+/* A request that reads files (folder list, download, view, size) is entered for its whole time and refused while the drive it reads is being ejected.
+   Entered first, asked afterwards, so that of an eject and a read that start together one sees the other: the eject claims its job before it looks at
+   the readers, the read counts itself before it looks at the eject - the eject is held back (ps5tm_usbeject_start) or the read is refused, and the
+   drive is never cut off under a read. The path is looked at as the page gave it and with its links resolved (a link may lead onto the drive); a path
+   the handler refuses anyway goes on to it. */
+static void
+with_read(int fd, const ps5tm_request_t *req, void (*handler)(int, const ps5tm_request_t *)) {
+  pthread_mutex_lock(&g_lock);
+  g_reads++;
+  pthread_mutex_unlock(&g_lock);
+  char p[FM_PATH], real[FM_PATH + 64];
+  if(query_value(req->query, "path", p, sizeof(p)) == 0 && path_plain(p) &&
+     (ps5tm_usbeject_covers(p) || (real_path(p, real, sizeof(real)) == 0 && ps5tm_usbeject_covers(real)))) {
+    pthread_mutex_lock(&g_lock);
+    g_reads--;
+    pthread_mutex_unlock(&g_lock);
+    ps5tm_http_send_error(fd, 409, "drive_ejecting",
+                          "Das Laufwerk wird gerade ausgeworfen. Der Dateimanager liest in dieser Zeit nichts davon; danach geht es wieder.");
+    return;
+  }
+#ifdef FM_TEST_HOOK_READ
+  FM_TEST_HOOK_READ();
+#endif
+  handler(fd, req);
+  pthread_mutex_lock(&g_lock);
+  g_reads--;
+  pthread_mutex_unlock(&g_lock);
+}
+
 
 /* ------------------------------------------------------------------ the API */
 
@@ -2184,8 +2231,8 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
     }
     switch(i) {
       case 0: send_obj(fd, 200, places_json()); break;
-      case 1: handle_list(fd, req); break;
-      case 2: handle_download(fd, req); break;
+      case 1: with_read(fd, req, handle_list); break;
+      case 2: with_read(fd, req, handle_download); break;
       case 3: send_obj(fd, 200, job_json()); break;
       case 4: handle_mkdir(fd, req); break;
       case 5: handle_rename(fd, req); break;
@@ -2203,8 +2250,8 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
         ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
         break;
       }
-      case 11: handle_view(fd, req); break;
-      case 12: handle_size(fd, req); break;
+      case 11: with_read(fd, req, handle_view); break;
+      case 12: with_read(fd, req, handle_size); break;
       case 13: handle_write(fd, req); break;
     }
     return 1;
