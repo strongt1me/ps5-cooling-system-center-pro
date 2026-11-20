@@ -36,7 +36,7 @@
 #include "upd_http.h"
 
 #define KR_PORT              8097
-#define KR_EMBEDDED_VERSION  "0.3.0"
+#define KR_EMBEDDED_VERSION  "0.3.1"
 #define KR_PROJECT           "https://github.com/quer3q/kraken-mount"
 #define KR_DIR               PS5TM_DATA_DIR "/kraken"
 #define PS5TM_KRAKEN_DATA    "/data/krakenmount"
@@ -842,6 +842,16 @@ ps5tm_kraken_action(const struct cJSON *b, char *msg, size_t n) {
     char path[40];
     snprintf(path, sizeof path, "/api/rebuild/%s", id);
     return simple_post(path, NULL, "Das Spiel wird neu aufgebaut.", msg, n);
+  }
+  /* the PlayGo stub of one game (Kraken Mount 0.3.1, POST /api/playgo/<TID>, body "on" or "off"); an older Kraken Mount has no such route (its games carry no
+     "playgo_off": the pages show no switch then) */
+  if(!strcmp(a, "playgo")) {
+    const cJSON *joff = cJSON_GetObjectItem(b, "off");
+    if(!valid_tid(id) || !cJSON_IsBool(joff)) { snprintf(msg, n, "Titel-ID oder Wert fehlen."); return 400; }
+    char path[48];
+    snprintf(path, sizeof path, "/api/playgo/%s", id);
+    const int off = cJSON_IsTrue(joff);
+    return simple_post(path, off ? "off" : "on", off ? "Der PlayGo-Stub ist für dieses Spiel ausgeschaltet." : "Der PlayGo-Stub ist für dieses Spiel eingeschaltet.", msg, n);
   }
   if(!strcmp(a, "delete")) {
     if(!valid_tid(id) || !cJSON_IsString(jp) || !jp->valuestring[0] || strlen(jp->valuestring) > 1000) { snprintf(msg, n, "Titel-ID oder Pfad fehlen."); return 400; }

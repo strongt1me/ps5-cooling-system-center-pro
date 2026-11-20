@@ -62,7 +62,7 @@ inline constexpr Credit kCredits[] = {
      "USB-Laufwerk ohne Installation. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "quer3q", "@quer3q",
      "AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die zwei "
-     "neuesten Fassungen (0.4.0 und 0.3.5) stecken eingebettet in der App, neuere lädt sie auf "
+     "neuesten Fassungen (0.5.0 und 0.4.1) stecken eingebettet in der App, neuere lädt sie auf "
      "Knopfdruck. Kraken Mount: das Programm hinter dem Reiter „FPKGMount“, es spielt "
      "(F)PKG-Spiele "
      "ohne Installation. Danke!"},

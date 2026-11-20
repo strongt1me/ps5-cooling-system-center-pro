@@ -882,6 +882,12 @@ struct KrakenGame
     std::uint64_t size = 0;
     std::uint64_t cache_size = 0;
     bool running = false; // a session of this game is live
+    // The PlayGo stub (Kraken Mount 0.3.1): playgo = the game's eboot.bin imports PlayGo, playgo_off = the
+    // stub is off for it, playgo_known = the answer carries the fields (an older Kraken Mount has none:
+    // no switch then).
+    bool playgo = false;
+    bool playgo_off = false;
+    bool playgo_known = false;
 };
 
 // Dump Forge (quer3q), the engine of the debug FPKG format, as the console app reported it last
@@ -1426,7 +1432,7 @@ class Source
     // "game" (with the title id): Snapshot::ps4_detail; "log": Snapshot::ps4_log.
     virtual void ps4mount_fetch(const std::string &what, const std::string &id) = 0;
     // FPKGMount: a JSON body for POST /api/v1/kraken (start, stop, rescan, rebuild, rebuild_all,
-    // delete, fetch); the answer's message comes back as a notice.
+    // playgo, delete, fetch); the answer's message comes back as a notice.
     virtual void kraken_post(const std::string &json) = 0;
     // Dump Forge fetched from GitHub for the format "FPKG" (POST /api/v1/dumpforge
     // {"action":"fetch"}); it takes a while. The answer arrives as a notice and as

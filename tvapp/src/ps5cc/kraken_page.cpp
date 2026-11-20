@@ -34,6 +34,7 @@ enum MenuTag
     // the game's (square)
     kGameRebuild = 1,
     kGameDelete,
+    kGamePlaygo,
     // the page's (triangle)
     kPageSwitch = 20,
     kPageScan,
@@ -508,6 +509,17 @@ class KrakenPage final : public Page
         rebuild_item.tag = kGameRebuild;
         rebuild_item.disabled = busy(g) || !state_.running;
         items.push_back(rebuild_item);
+        // the PlayGo stub of this game (Kraken Mount 0.3.1): shown when the game imports PlayGo or the stub is
+        // off for it already, as Kraken Mount's own page does
+        menu_playgo_off_ = g.playgo_off;
+        if (g.playgo_known && (g.playgo || g.playgo_off))
+        {
+            ui::MenuItem playgo_item;
+            playgo_item.label = g.playgo_off ? "PlayGo-Stub einschalten" : "PlayGo-Stub ausschalten";
+            playgo_item.tag = kGamePlaygo;
+            playgo_item.disabled = busy(g) || !state_.running;
+            items.push_back(playgo_item);
+        }
         ui::MenuItem del;
         del.label = "Spiel löschen";
         del.tag = kGameDelete;
@@ -546,6 +558,10 @@ class KrakenPage final : public Page
         {
         case kGameRebuild:
             source().kraken_post("{\"action\":\"rebuild\",\"id\":" + json_text(menu_id_) + "}");
+            break;
+        case kGamePlaygo:
+            source().kraken_post("{\"action\":\"playgo\",\"id\":" + json_text(menu_id_) + ",\"off\":" +
+                                 (menu_playgo_off_ ? "false" : "true") + "}");
             break;
         case kGameDelete:
         {
@@ -686,6 +702,7 @@ class KrakenPage final : public Page
     std::string menu_path_;
     std::string menu_name_;
     std::uint64_t menu_size_ = 0;
+    bool menu_playgo_off_ = false; // the PlayGo stub of the game in the menu is off now
     bool log_open_ = false;
 };
 

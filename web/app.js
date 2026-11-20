@@ -8635,6 +8635,8 @@
         <div class="p4m-btns">
           <button type="button" class="btn ghost" data-fp="rebuild" data-id="${esc(g.title_id)}" ${busy ? "disabled" : ""}
             title="Baut den Zwischenspeicher dieses Spiels neu auf und meldet es neu an.">Neu aufbauen</button>
+          ${(g.playgo === true || g.playgo_off === true) && typeof g.playgo_off === "boolean" ? `<button type="button" class="btn ghost" data-fp="playgo" data-id="${esc(g.title_id)}" data-off="${g.playgo_off ? 0 : 1}" ${busy ? "disabled" : ""}
+            title="Ausschalten, wenn das Spiel auf einem schwarzen Bildschirm bleibt; einschalten, wenn es verlangt, den Download abzuschließen.">${g.playgo_off ? "PlayGo-Stub einschalten" : "PlayGo-Stub ausschalten"}</button>` : ""}
           <button type="button" class="btn ghost" data-fp="delete" data-id="${esc(g.title_id)}" data-path="${esc(g.path)}" data-name="${esc(g.title_name || g.title_id)}" ${busy ? "disabled" : ""}
             title="Löscht die PKG-Datei bzw. den Spielordner vom Laufwerk, dazu Kachel und Zwischenspeicher.">Spiel löschen</button>
         </div></div>`;
@@ -8969,6 +8971,7 @@
     const b = e.target.closest("[data-fp]");
     if (!b || b.disabled) return;
     if (b.dataset.fp === "rebuild") { fpPost({ action: "rebuild", id: b.dataset.id }); return; }
+    if (b.dataset.fp === "playgo") { fpPost({ action: "playgo", id: b.dataset.id, off: b.dataset.off === "1" }); return; }
     if (b.dataset.fp === "delete") {
       if (!(await askDelete({ title: "Spiel löschen?", items: [{ name: b.dataset.name, info: b.dataset.path }],
         notes: ["Gelöscht werden die PKG-Datei bzw. der Spielordner auf dem Laufwerk, die Kachel auf dem Startbildschirm und der Zwischenspeicher des Spiels. Spielstände bleiben."] }))) return;
@@ -9481,8 +9484,8 @@
   /* Passen die Tabellen des Packs in AMPR EMU NG? (src/indexlimit.c, 14.11.2026) AMPR EMU NG liefert keine gepackte Datei aus, wenn die Tabellen,
      die es aus dem Pack-Index aufbaut, nicht in seinen Speicher passen: Das Spiel startet dann nicht (0.4.0: Final Fantasy XVI 49 MiB, Demon's Souls
      62 MiB; ampr-emu-ng #67, #61, #53). Die App schätzt es aus den Köpfen von ampr_zstd.index bzw. ampr_assets.index und ampr_emu.index; „knapp“ heißt:
-     innerhalb von 2 MiB um die Grenze. `c` ist das Ergebnis für die neueste mitgelieferte Fassung (c.ng_version, seit 15.11.2026 0.4.1: Ansicht aller
-     Dateien + Paket-Tabellen in 80 MiB Indexspeicher), `old` das für die ältere (index_check_old, 0.4.0: 48 MiB Tabellengrenze, Seitencache). Die
+     innerhalb von 2 MiB um die Grenze. `c` ist das Ergebnis für die neueste mitgelieferte Fassung (c.ng_version, seit 20.11.2026 0.5.0, seit 15.11.2026 0.4.1: Ansicht
+     aller Dateien + Paket-Tabellen in 80 MiB Indexspeicher; die zweite mitgelieferte Fassung 0.4.1 hat dasselbe Modell), `old` das für eine ältere (index_check_old, 0.4.0: 48 MiB Tabellengrenze, Seitencache). Die
      Zusatzzeile nennt, wenn die ältere Fassung das Spiel nicht ausliefert, die neuere es aber schafft. */
   const aprCheckRow = (c, old) => {
     if (!c) return "";

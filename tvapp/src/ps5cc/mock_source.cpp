@@ -1498,8 +1498,8 @@ class MockSource final : public Source
         {
             k.running = true;
             k.starting = false;
-            k.version = "0.3.0";
-            msg = "Kraken Mount 0.3.0 wird gestartet. Das dauert einige Sekunden.";
+            k.version = "0.3.1";
+            msg = "Kraken Mount 0.3.1 wird gestartet. Das dauert einige Sekunden.";
         }
         else if (has("\"stop\""))
         {
@@ -1513,7 +1513,7 @@ class MockSource final : public Source
         else if (has("\"rebuild\""))
             msg = "Das Spiel wird neu aufgebaut.";
         else if (has("\"fetch\""))
-            msg = "Die neueste Fassung (0.3.0) ist schon da.";
+            msg = "Die neueste Fassung (0.3.1) ist schon da.";
         else if (has("\"delete\""))
         {
             for (std::size_t i = 0; i < k.games.size(); ++i)
@@ -1659,10 +1659,10 @@ class MockSource final : public Source
                       (smp_update_off_ ? "false" : "true") +
                       R"(,"key":"update_emulators","format":"flat","warning":"","smp_version":")" +
                       data_.config.smp_version +
-                      R"("},"ng_release":{"version":"0.4.1","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.4.1-ng","label":"NG 0.4.1","ng":true,"pack":true,)"
-                      R"("valid":true,"bundled":true,"sha256":"n3"},{"name":"libSceAmpr.sprx-0.4.1-ng-debug","label":"NG 0.4.1 debug","ng":true,"pack":true,)"
-                      R"("debug":true,"valid":true,"bundled":true,"sha256":"n4"},{"name":"libSceAmpr.sprx-0.3.5-ng","label":"NG 0.3.5","ng":true,"pack":true,)"
-                      R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.3.5-ng-debug","label":"NG 0.3.5 debug","ng":true,"pack":true,)"
+                      R"("},"ng_release":{"version":"0.5.0","missing":0,"busy":false},"versions":[{"name":"libSceAmpr.sprx-0.5.0-ng","label":"NG 0.5.0","ng":true,"pack":true,)"
+                      R"("valid":true,"bundled":true,"sha256":"n3"},{"name":"libSceAmpr.sprx-0.5.0-ng-debug","label":"NG 0.5.0 debug","ng":true,"pack":true,)"
+                      R"("debug":true,"valid":true,"bundled":true,"sha256":"n4"},{"name":"libSceAmpr.sprx-0.4.1-ng","label":"NG 0.4.1","ng":true,"pack":true,)"
+                      R"("valid":true,"bundled":true,"sha256":"n1"},{"name":"libSceAmpr.sprx-0.4.1-ng-debug","label":"NG 0.4.1 debug","ng":true,"pack":true,)"
                       R"("debug":true,"valid":true,"bundled":true,"sha256":"n2"},{"name":"libSceAmpr.sprx-0.4.2.1-test-debug-pack","label":"0.4.2.1 test-debug-pack",)"
                       R"("pack":true,"debug":true,"valid":true,"bundled":true,"sha256":"a2"},{"name":"libSceAmpr.sprx-0.4.2.1-test-nopack","label":"0.4.2.1",)"
                       R"("valid":true,"bundled":true,"sha256":"a3"},{"name":"libSceAmpr.sprx-0.4.2.1-test-pack","label":"0.4.2.1 test-pack","pack":true,)"
@@ -3011,8 +3011,8 @@ class MockSource final : public Source
     {
         KrakenState &k = data_.kraken;
         k.loaded = k.running = true;
-        k.version = "0.3.0";
-        k.embedded_version = "0.3.0";
+        k.version = "0.3.1";
+        k.embedded_version = "0.3.1";
         struct Seed
         {
             const char *id, *name, *version, *kind, *packing, *drive, *status;
@@ -3042,6 +3042,10 @@ class MockSource final : public Source
             g.running = s.live;
             if (std::string(s.id) == "PPSA01325")
                 g.conflict_with = "ShadowMountPlus";
+            // the PlayGo switch: one game imports PlayGo, one has the stub off already
+            g.playgo_known = true;
+            g.playgo = std::string(s.id) == "PPSA01325";
+            g.playgo_off = std::string(s.id) == "PPSA04311";
             k.games.push_back(g);
         }
         k.log = {"[10:12:01] scan: 3 games, 0 errors",

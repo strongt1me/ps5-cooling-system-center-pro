@@ -4,6 +4,26 @@
 
 ## Unveröffentlicht
 
+### Fremdbausteine: AMPR EMU NG 0.5.0 und Kraken Mount 0.3.1 (20.11.2026)
+- **AMPR EMU NG v0.4.1 → v0.5.0** (Veröffentlichung vom 20.11.2026, Tag-Commit `d20210e`): Die zwei neuesten Fassungen sind eingebettet, jetzt **0.5.0 und 0.4.1**
+  (je `-ng` und `-ng-debug`); 0.3.5, seit dem 15.11.2026 die zweite Fassung (Ausnahme wegen der Fehler von 0.4.0), ist entfernt. SHA-256 mit `SHA256SUMS` verglichen,
+  SELF-Kopf und Kennung `ampr-emu-ng 0.5.0` geprüft. Neu laut Veröffentlichung: bis zu 20 % schnellere Lesezugriffe, weniger Speicher (150,89 statt 184,44 MiB), schnelleres
+  Laden des Dateiindex, dazu Korrekturen für Final Fantasy XVI, Marvel's Avengers, Demon Slayer, Grand Theft Auto V und zurückportierte Spiele ohne Spielstände. Die Paketformate
+  sind unverändert; der Index-Rechner (`src/indexlimit.c`, „Passt der Index in AMPR EMU NG?“) gilt für 0.5.0 wie für 0.4.1 (gleicher Indexspeicher von 80 MiB, gleiche
+  32-Byte-Dateizeilen: `rt/index_view.rs` und `rt/index_memory.rs` des Tags v0.5.0 gelesen) und trägt jetzt die Fassung 0.5.0. `NG_VERSION` in `src/amprng.c`, Handbuch ×7,
+  READMEs, Credits-Text, `third_party/ampr_emu/ORIGIN.md` und `THIRD_PARTY_NOTICES.md` nachgezogen. Hinweis der Veröffentlichung: FPKG-Unterstützung ist experimentell.
+- **Kraken Mount v0.3.0 → v0.3.1** (Veröffentlichung vom 20.11.2026, Tag-Commit `387e665`): `kraken-mount_v0.3.1.elf` (6 355 424 Bytes, SHA-256 `3ec636a6…`, gleich `SHA256SUMS`)
+  eingebettet, `KR_EMBEDDED_VERSION` und `Makefile` angepasst; der Ein-Byte-Eingriff (`shadowmountplus.elf`) greift unverändert (2 Stellen). Neu: Firmware 12 und neuer meldet
+  Spiele wieder am Startbildschirm an (ein gemeinsamer Aufruf am Ende des Suchlaufs), Spiele in einem Ordner direkt in einem Suchordner werden gefunden, schnellere Anmeldung
+  (etwa 21 statt 36 bis 44 s), Uhrzeit in jeder Zeile von `kraken.log`, ein falscher Eintrag in einer Liste der Einstellungen wird übersprungen, ampr-emu-ng 0.5.0 ist eingebaut.
+- **Neu in der App, Browser und Vollbild-App (PlayGo-Stub je Spiel):** Kraken Mount 0.3.1 kann den mitgelieferten PlayGo-Stub für ein einzelnes Spiel abschalten (Resident Evil Village und einige
+  andere bleiben mit ihm auf einem schwarzen Bildschirm). Im Reiter „FPKGMount“ gibt es dafür je Spiel den Knopf „PlayGo-Stub ausschalten“ bzw. „einschalten“ (Browser) und einen Eintrag
+  im Spielmenü (Vollbild-App); er erscheint nur bei Spielen, die PlayGo laden oder bei denen der Stub schon aus ist, und nur, wenn die Antwort von Kraken Mount das Feld
+  `playgo_off` trägt (ältere Fassungen kennen die Route nicht). Neue Aktion `playgo` in `POST /api/v1/kraken` (`{"action":"playgo","id":"PPSA…","off":true}`, `docs/API.md`),
+  Texte in sechs Sprachen (`web/lang`), Handbuch ×7 (Liste und „Neu in Version 0.3.1“).
+- **Geprüft:** ELF baut (-Werror), Host-Tests und Vollbild-Tests; nicht an der Konsole. Zu beachten: Die Kacheln und die ELF müssen gesendet werden, damit Kraken Mount 0.3.1 und
+  AMPR EMU NG 0.5.0 an der Konsole ankommen; ein laufendes Kraken Mount läuft bis zum Aus- und Einschalten weiter in der alten Fassung (die Seite sagt es).
+
 ### Auswerfen: P1 und P2 des Audits vom 22.11.2026 (Fund F-352 bis F-357)
 - **Weitere Leser (F-352):** Ein Laufwerk, das ausgeworfen wird oder es vor kurzem wurde (30 s nach der Annahme durch ShadowMountPlus), wird jetzt auch hier nicht angefasst: Größenläufe der Bibliothek (`real_size`), Lesen der Abbilder in der Bibliotheks-Probe, Suche nach doppelten Abbildern (Wurzeln; dazu lehnt „Beiseitelegen“ mit 409 ab), Payload-Liste der Laufwerke, Paket-Bild (`ps5tm_pkg_icon`). Die Suche nach doppelten Abbildern steht als Leser im Jobregister (`PS5TM_JOB_DUPIMG`, Test erweitert) und hält einen Auswurf zurück, solange sie läuft.
 - **Dateimanager (F-353):** Auch Ordner anlegen, Umbenennen und Speichern zählen sich für ihre Dauer als Lesezugriff; ein Auswurf, der daneben startet, wird zurückgehalten (sie selbst lehnen bei laufendem Auswurf schon ab).

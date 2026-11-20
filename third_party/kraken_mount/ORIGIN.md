@@ -1,11 +1,11 @@
 # Kraken Mount
 
-**Version:** v0.3.0 (18.11.2026)
+**Version:** v0.3.1 (20.11.2026)
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.3.0`, Commit `e1e784560fe3a56e3b5ffd579f47ed5b2cf194f7`)
+**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.3.1`, Commit `387e665f6372e1a11ae834c52e6f77ce99b2012b`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext und Hinweise zu Fremdbausteinen im Quellprojekt: `LICENSE`, `THIRD_PARTY_NOTICES`)
-**Datei:** `kraken-mount_v0.3.0.elf` (PS5-ELF, 6 355 424 Bytes), unverändert aus der Veröffentlichung
-**SHA-256:** `092623a204b707b89d0867a0087f9dd1c430eef6a22db497f03b59aaf1297bfe` (gleich `SHA256SUMS` der Veröffentlichung)
+**Datei:** `kraken-mount_v0.3.1.elf` (PS5-ELF, 6 355 424 Bytes), unverändert aus der Veröffentlichung
+**SHA-256:** `3ec636a6b42ceff61ac7aa47e0ed01a41be851da94cfcf3158811995ea868b27` (gleich `SHA256SUMS` der Veröffentlichung; am 20.11.2026 mit `gh release download v0.3.1` geladen, ELF-Kopf und Kennung `kraken-mount/0.3.1` geprüft)
 
 ## Verwendung
 
@@ -24,7 +24,27 @@ laut `ensure_tile` in Ruhe. Eine früher angelegte Kachel entfernt die App mit d
 (`keep_tile_away` in `src/kraken.c`).
 
 Aus dem Quellcode von Kraken Mount ist nichts in diese App übernommen; die ELF wird nur weitergegeben. Den Quellcode zu dieser Fassung
-gibt es unter der oben genannten Adresse (Tag `v0.3.0`).
+gibt es unter der oben genannten Adresse (Tag `v0.3.1`).
+
+## Neu in v0.3.1 (20.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.3.0…v0.3.1)
+
+- **Firmware 12 und neuer:** Spiele melden sich wieder am Startbildschirm an. Wo der Aufruf für ein einzelnes Spiel fehlt, bereitet jeder Suchlauf seine Spiele vor
+  und meldet sie am Ende mit einem einzigen Aufruf (`sceAppInstUtilAppInstallAll`) an, mit einer Meldung für die ganze Gruppe (#95; Dank an Dang3rZone). Nicht, solange
+  ein Spiel läuft: Dann werden die vorbereiteten Titel nach dem Spiel noch einmal vorbereitet und angemeldet.
+- **PlayGo-Stub je Spiel abschaltbar:** Einstellung `playgo_off` (Liste von Titelnummern) und neu in der Schnittstelle `POST /api/playgo/<TID>` (Rumpf genau `on` oder
+  `off`; 204, 404 für eine ungültige oder unbekannte Titelnummer, 400 sonst); die Spiele in `GET /api/state` tragen neu `playgo` (die `eboot.bin` lädt PlayGo, `null`
+  wenn unbekannt oder `add_emulators` aus) und `playgo_off`. Resident Evil Village und einige andere bleiben mit dem Stub auf einem schwarzen Bildschirm (#84, #85, #87).
+  **Die App zeigt den Schalter** je Spiel im Reiter „FPKGMount“ (Browser: Knopf „PlayGo-Stub ausschalten/einschalten“; Vollbild-App: Eintrag im Spielmenü), nur bei
+  Spielen, die PlayGo laden oder bei denen er schon aus ist, und nur wenn die Antwort `playgo_off` enthält (ältere Fassungen kennen die Route nicht); die Aktion
+  heißt `playgo` in `POST /api/v1/kraken` (`src/kraken.c`).
+- **Scan:** Spiele in einem Ordner direkt in einem Suchordner werden jetzt auch gefunden (#83; ein Titel, der direkt in einem Suchordner liegt, wird nie von einer Kopie
+  in einem Unterordner verdrängt).
+- **Schnellere Anmeldung:** Dateien in `sce_sys` und im Appmeta-Ordner werden in 1-MiB-Stücken kopiert; ein Spiel anzumelden dauert etwa 21 statt 36 bis 44 Sekunden (#94).
+- **Protokoll:** Jede Zeile in `kraken.log` beginnt mit der Uhrzeit; Zwischenspeicher-Bauten, Anmeldungen und langsame Suchläufe nennen ihre Dauer (#92).
+- **Einstellungen:** Ein falscher Eintrag in einer Liste (`scanpath`, `playgo_off`) wird übersprungen, die anderen bleiben.
+- **ampr-emu-ng v0.5.0 ist eingebaut** (vorher v0.4.1).
+- Die übrige Schnittstelle (Port 8097; die Felder, die `src/kraken.c` liest: `version`, `scanpath`, `games` mit `title_id`, `title_name`, `path`, `kind`) ist unverändert; der
+  Ein-Byte-Eingriff (`shadowmountplus.elf`) gilt unverändert (2 Stellen, an der ELF dieser Fassung geprüft).
 
 ## Neu in v0.3.0 (18.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.2.1…v0.3.0)
 
@@ -75,9 +95,9 @@ null) in `GET /api/state`. Läuft ShadowMountPlus dauerhaft, meldet Kraken Mount
 mit v0.0.1-beta). Deshalb ändert sie in der eingebetteten ELF beim Bau (`tools/patch_kraken.py`, `Makefile`) und in einer von GitHub geladenen
 Fassung beim Speichern (`patch_smp_wait`, `src/kraken.c`) die Zeichenkette `shadowmountplus.elf` (die Konstante `SMP_PROCESS` in `src/main.rs`, zwei
 Stellen in der Datei) an ihrem letzten Byte zu `shadowmountplus.elX`: Kein Prozess hat diesen Namen, das Warten auf ShadowMountPlus endet sofort. Gleiche
-Länge, sonst bleibt die ELF unverändert; das Warten auf kstuff bleibt. Die Datei `kraken-mount_v0.3.0.elf` in diesem Ordner ist die unveränderte
+Länge, sonst bleibt die ELF unverändert; das Warten auf kstuff bleibt. Die Datei `kraken-mount_v0.3.1.elf` in diesem Ordner ist die unveränderte
 Veröffentlichung (SHA-256 oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderung ist
-der eine Wert in `SMP_PROCESS` (`src/main.rs` im Quellprojekt, Tag `v0.3.0`).
+der eine Wert in `SMP_PROCESS` (`src/main.rs` im Quellprojekt, Tag `v0.3.1`).
 
 ## Hinweise des Autors
 

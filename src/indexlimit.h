@@ -51,7 +51,7 @@ int  ps5tm_lz4_header(const uint8_t *h, size_t n, uint64_t *files, uint64_t *chu
 /* LZ4 (rt/pack/manifest.rs lz4_lookup_bytes): fast 48 B per file, 12 B per chunk, 32 B per pack; derived 4 B per file. ampr_bytes as above. */
 void ps5tm_lz4_need(uint64_t files, uint64_t chunks, uint64_t packs, uint64_t index_bytes, uint64_t ampr_bytes, ps5tm_need_t *out);
 
-/* ---- ampr-emu-ng v0.4.1 (the newest version the app ships; 0.4.0 above stays for the second one) ----
+/* ---- ampr-emu-ng v0.4.1 and v0.5.0 (the two versions the app ships; the formulas hold for both, see the note below; 0.4.0 above is no longer shipped) ----
    v0.4.1 has no 48 MiB lookup limit and no paged reading any more (rt/index_memory.rs, rt/index_view.rs, docs/zstd-format.md of v0.4.1): the
    index memory ("Index ledger") is 80 MiB for everything about the indexes. The mount reads ampr_zstd.index (or ampr_assets.index) once, front to
    back, through two 64 KiB windows, builds a compiled view of every file of ampr_emu.index (columns hash, size, mtime, path_at, next, chunk, two

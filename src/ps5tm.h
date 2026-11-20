@@ -928,7 +928,7 @@ int           ps5tm_amprlib_pack_check(const char *title_id, const char *root, i
                                        char *why, size_t why_len);
 /* zstd = 1: the check is for zstd packs (06.11.2026), which only ampr-emu-ng reads: the file must be an NG build, and repair puts the
    embedded NG release in (ps5tm_amprng_name()). */
-/* The name of the NG release the app carries, as it stands in the folder AMPR_EMU: "libSceAmpr.sprx-0.4.1-ng" (the newest of the two the app carries). */
+/* The name of the NG release the app carries, as it stands in the folder AMPR_EMU: "libSceAmpr.sprx-0.5.0-ng" (the newest of the two the app carries). */
 const char   *ps5tm_amprng_name(void);
 /* ampr-emu-ng builds in the folder AMPR_EMU (amprlib.c): only the two newest versions are offered; the newest plain build (name, version; 1, or 0 when there is none),
    what dropped out and that the app put there itself is deleted (the number), and a file the app fetched is written into the ledger. */

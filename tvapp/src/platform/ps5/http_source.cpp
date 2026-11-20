@@ -4782,6 +4782,9 @@ void HttpSource::poll_kraken()
             x.error = str(g, "error");
             x.size = static_cast<std::uint64_t>(num(g, "size"));
             x.cache_size = static_cast<std::uint64_t>(num(g, "cache_size"));
+            x.playgo_known = cJSON_IsBool(cJSON_GetObjectItemCaseSensitive(g, "playgo_off"));
+            x.playgo = flag(g, "playgo");
+            x.playgo_off = flag(g, "playgo_off");
             x.running = std::find(live.begin(), live.end(), x.title_id) != live.end();
             if (!x.title_id.empty())
                 k.games.push_back(std::move(x));

@@ -110,7 +110,12 @@ ps5tm_lz4_need(uint64_t files, uint64_t chunks, uint64_t packs, uint64_t index_b
   decide(fast, mul(files, 4), index_bytes, ampr_bytes, out);
 }
 
-/* ---- ampr-emu-ng v0.4.1 (15.11.2026) ----
+/* ---- ampr-emu-ng v0.4.1 (15.11.2026), also v0.5.0 (20.11.2026) ----
+ *
+ * v0.5.0 (compared with the source of the tag v0.5.0, rt/index_view.rs layout and rt/index_memory.rs): the same 80 MiB index ledger, the file rows are one
+ * 32-byte block (hash, size, mtime, path_at, next: the same 32 bytes as the columns of 0.4.1), the chunk column 4 B per file with zstd packs, the file slots,
+ * the directory records and dir_of / lz4_hash in the transient block as before. What changed in memory is elsewhere: once the index is finished, its idle room
+ * above 2 MiB moves to the decoded cache (grow_cache_from_index), so the numbers below stay the limit of the mount, not of what the game keeps.
  *
  * Read from the source of the tag v0.4.1: crates/ampr-sys/src/rt/index_view.rs (layout, first_dir_cap), crates/ampr-format/src/view.rs (sizes,
  * slot_count, pack_columns, Dir = 32 B), rt/index_memory.rs (INDEX_MEMORY_MAX 80 MiB, page_round), rt/pack/zstd.rs (table_bytes: 8 B per chunk and per
