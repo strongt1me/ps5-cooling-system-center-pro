@@ -1,9 +1,10 @@
-/* PS5 Cooling & System Center - Pro: Kraken Mount starts with the app (krakenboot.h, 17.11.2026, wish of the user: "Kraken Mount soll standardmäßig
- * eingeschaltet sein"). The decisions are here, without any I/O, so a host test can try them (test/krakenboot).
+/* PS5 Cooling & System Center - Pro: Kraken Mount starts with the app only when the person switched it on (krakenboot.h). The decisions are here, without
+ * any I/O, so a host test can try them (test/krakenboot).
  *
- * Kraken Mount is a program of its own that keeps running when the app is replaced or restarted. The app starts it ~5 s after its own start unless the person
- * switched it off in the page (the marker file kraken/aus.txt; the page writes it with "Ausschalten" and removes it with "Einschalten"). Without the marker
- * - the state of every console until now - it is on. */
+ * Kraken Mount is a program of its own that keeps running when the app is replaced or restarted. The app starts it ~5 s after its own start when the person
+ * switched it on in the page. The choice is kept in the file kraken/zustand.txt, "an" or "aus" - written by "Einschalten" and by "Ausschalten" alike (as
+ * PS4Mount keeps its enabled= in config.txt). From 17.11.2026 (wish of the user) it was on unless the marker kraken/aus.txt existed; since 21.11.2026 (wish
+ * of the user) it is off unless the file says "an": a console without the file - a new installation, or one whose person never chose - has it off. */
 #ifndef PS5TM_KRAKENBOOT_H
 #define PS5TM_KRAKENBOOT_H
 
@@ -11,7 +12,15 @@
 
 #include "vercmp.h"
 
-/* 1 when the boot thread has to send Kraken Mount now. off: the marker of "switched off in the page" exists. alive: the HTTP status of Kraken Mount's
+/* The content of kraken/zustand.txt: 1 for "an", else 0 (a missing, empty or unreadable file, anything else: off - a choice that cannot be read does not
+   switch Kraken Mount on). */
+static inline int
+ps5tm_krakenboot_parse_state(const char *text) {
+  if(!text) return 0;
+  return text[0] == 'a' && text[1] == 'n' && (text[2] == 0 || text[2] == '\n' || text[2] == '\r');
+}
+
+/* 1 when the boot thread has to send Kraken Mount now. off: it is not switched on (no file, or the file says "aus"). alive: the HTTP status of Kraken Mount's
    /api/state (200 it answers, no_answer_code it listens but is busy - a scan, a drive that hangs - anything else nothing is there). A program that
    is there, however busy, is never started a second time: the second copy would only send the first one away. */
 static inline int

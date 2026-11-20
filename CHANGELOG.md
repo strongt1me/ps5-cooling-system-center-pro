@@ -4,6 +4,13 @@
 
 ## Unveröffentlicht
 
+### PS4Mount und Kraken Mount (FPKGMount) sind ab Werk ausgeschaltet (Wunsch des Users, 21.11.2026)
+- **Vorgabe geändert:** Vom 17. bis 21.11.2026 waren beide ab Werk eingeschaltet (PS4Mount ab 8a7b119, Kraken Mount ab c491493). Jetzt sind beide ab Werk aus; wer eines einschaltet, bei dem bleibt es an.
+- **PS4Mount:** `g_enabled` in `src/ps4m_core.c` startet mit 0. `config.txt` schrieb `enabled=` schon bei jedem Speichern, für „an“ wie für „aus“; die Wahl bleibt also über einen Neustart. Ohne `config.txt` (neue Installation) bleibt es aus.
+- **Kraken Mount:** Bisher merkte sich die App nur das Ausschalten (`kraken/aus.txt`), alles ohne Datei war „an“. Jetzt steht die Wahl in `kraken/zustand.txt` als `an` oder `aus`, geschrieben vom Schalter „Einschalten“ wie von „Ausschalten“ (erst unter anderem Namen, dann an Ort und Stelle gelegt); ohne Datei ist es aus, und nur `an` startet es beim Start der App (`ps5tm_krakenboot_parse_state`, Host-Test). Eine alte `aus.txt` wird nicht mehr gelesen und beim nächsten Speichern entfernt. `autostart` in `GET /api/v1/kraken` gilt entsprechend.
+- **Folge für bestehende Installationen:** Wer beide nie angefasst hat, hat nach dem Update beide aus und muss sie einmal einschalten; wer sie in der Seite ein- oder ausgeschaltet hat und dabei gespeichert hat, behält seine Wahl bei PS4Mount (`config.txt`). Bei Kraken Mount hatte das Einschalten keine Spur hinterlassen (es löschte nur `aus.txt`): auch wer es bewusst eingeschaltet ließ, muss es einmal neu einschalten. Ein laufendes Kraken Mount und eingehängte Spiele bleiben beim Update unberührt.
+- **Doku:** Handbuch ×7 und `docs/HANDBUCH.md`, `docs/API.md`. Geprüft am Host (Kraken-Test mit neun neuen Prüfungen, alle Host-Tests); nicht an der Konsole.
+
 ### Dateimanager: ein angeschlossenes Laufwerk erscheint ohne Bereichswechsel (Rückmeldung nach dem Test an der Pro, 21.11.2026)
 - **Beobachtung:** Nach dem Auswerfen und erneuten Anschließen des Sticks stand er nicht in den Orten, erst nachdem man den Bereich wechselte und zurückkam. Die Orte wurden nur beim ersten Öffnen der Seite (Browser) bzw. beim Betreten des Bereichs (Vollbild-App) gelesen und danach nicht mehr nachgeführt.
 - **Jetzt:** Solange die Seite offen ist, fragt der Browser alle vier Sekunden nach den Orten (`fmPlacesRefresh`), die Vollbild-App alle drei Sekunden, wenn kein Auftrag läuft. Gezeichnet wird nur, wenn sich die Laufwerke ändern, nicht beim freien Platz (die Vollbild-Liste würde sonst bei jeder Abfrage ihre Einblendung neu starten); ein Fehler lässt die alte Liste stehen; während des Auswerfens wird nicht gefragt. Der Browser liest die Orte außerdem bei jedem Wiederkommen auf die Seite neu.

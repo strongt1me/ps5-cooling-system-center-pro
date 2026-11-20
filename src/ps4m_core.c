@@ -120,7 +120,7 @@ typedef struct {
 #define DLC_LIMIT 29 /* add-ons a running game can use (PS4Mount 0.7.0 README) */
 
 static config_t g_cfg = {1, 5, 1, 0, {""}, 1, 5, 0};
-static int g_enabled = 1; /* switched on in the page; kept in config.txt (key enabled=). On from the start (17.11.2026, user): without a saved config.txt (a new installation) PS4Mount runs; config_save() always writes enabled=, so a person's "off" stays off */
+static int g_enabled = 0; /* switched on in the page; kept in config.txt (key enabled=, written for "on" and for "off" alike by config_save()). Off from the start (21.11.2026, user; from 17.11. to 21.11. it was on): without a saved config.txt (a new installation) PS4Mount does not run, and a person's "on" stays on */
 
 
 /* Weak: a firmware without them must not keep the whole app (fan control included) from loading; PS4Mount then says so. */
@@ -4127,8 +4127,9 @@ static int clean_scan_path(const char *in, char *out, size_t n, char *why, size_
     return 0;
 }
 
-/* 0 when the file is in place, -1 when it could not be written (audit 17.11.2026: PS4Mount is on from the start now, so a "switched off" that is lost
-   with a half-written file would switch it on again: the file is written whole under another name and put in place, and the answer is looked at). */
+/* 0 when the file is in place, -1 when it could not be written (audit 17.11.2026: a choice that is lost with a half-written file would come back as the
+   old one: the file is written whole under another name and put in place, and the answer is looked at). Since 21.11.2026 PS4Mount is off from the start,
+   so it is the "on" that this keeps across a restart of the app, as it kept the "off" before. */
 static int config_save(void) {
     int rc = -1;
     buf_t b = {0};
@@ -4151,8 +4152,8 @@ static int config_save(void) {
 static void config_load(void) {
     FILE *f = fopen(CONFIG_PATH, "r");
     if (!f) {
-        /* No file: a new installation, the defaults stand (PS4Mount on). Any other reason (the drive is unreadable): not on by guess - a "switched off"
-           that could not be read must not turn into "on". */
+        /* No file: a new installation, the defaults stand (PS4Mount off). Any other reason (the drive is unreadable): not on by guess - a choice that
+           could not be read must not turn into "on". */
         if (errno != ENOENT) {
             printf("[config] settings unreadable (%s): PS4Mount stays off until it is switched on in the page\n", strerror(errno));
             g_enabled = 0;

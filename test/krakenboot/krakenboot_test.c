@@ -24,6 +24,17 @@ main(void) {
   CHECK(ps5tm_krakenboot_should_start(1, 200, NO_ANSWER) == 0, "off and it answers");
   CHECK(ps5tm_krakenboot_should_start(1, 500, NO_ANSWER) == 0, "off and a 500");
 
+  /* the choice kept in kraken/zustand.txt (21.11.2026): only "an" is on; a missing, empty or unreadable file, or anything else, is off */
+  CHECK(ps5tm_krakenboot_parse_state("an\n") == 1, "an with a newline");
+  CHECK(ps5tm_krakenboot_parse_state("an") == 1, "an without a newline");
+  CHECK(ps5tm_krakenboot_parse_state("an\r\n") == 1, "an with a carriage return");
+  CHECK(ps5tm_krakenboot_parse_state("aus\n") == 0, "aus is off");
+  CHECK(ps5tm_krakenboot_parse_state("") == 0, "an empty file is off");
+  CHECK(ps5tm_krakenboot_parse_state(NULL) == 0, "no file is off");
+  CHECK(ps5tm_krakenboot_parse_state("ausgeschaltet\n") == 0, "the old marker's words are off");
+  CHECK(ps5tm_krakenboot_parse_state("ann\n") == 0, "a longer word that starts with an is off");
+  CHECK(ps5tm_krakenboot_parse_state("a") == 0, "half a word is off");
+
   /* the version of the running one against the next start */
   CHECK(ps5tm_krakenboot_restart_needed("0.2.0", "0.2.1") == 1, "older running");
   CHECK(ps5tm_krakenboot_restart_needed("0.2.1", "0.2.1") == 0, "same version");
