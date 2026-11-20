@@ -23,6 +23,9 @@ typedef struct {
   uint64_t write0;    /* an image with packs: the job-wide count when its write pass began (after the measure pass) */
   uint64_t rest;      /* ... and what the job still had to move then (the largest it has been since) */
   int      write_on;  /* write0 is taken */
+  uint64_t meas0;     /* an image with packs: the job-wide count when its measure pass began */
+  uint64_t meas_t;    /* ... and the length of that pass in the same count (an estimate; grows to what the pass has done when that was more) */
+  int      meas_on;   /* meas0 and meas_t are taken */
 } ps5tm_fpkgprog_t;
 
 /* The writing bar. compress: the stage is "compress" (the first pass); jdone/jtotal: the job-wide numbers of Dump Forge. */
@@ -32,6 +35,45 @@ ps5tm_fpkgprog_write(ps5tm_fpkgprog_t *p, int compress, uint64_t jdone, uint64_t
   if(compress && jdone > p->game) p->game = jdone;           /* the estimate was too low: the bar stays at its end */
   *total = p->game;
   *done = jdone < p->game ? jdone : p->game;
+}
+
+/* The bar of the MEASURE pass of an image with packs (20.11.2026: on a 6 GB game the page said only "wird vermessen" for nearly three minutes, as if it hung,
+ * though Dump Forge counts this pass like every other). Dump Forge's numbers are the job-wide ones again (jobs.rs: Ctx::expect_rest, Ctx::progress): when the pass
+ * begins, "total" is the job's whole expected movement, measure pass + write pass + the checks, and nothing before the pass has moved yet ("done" is the count
+ * so far). The pass itself is told only through its end (convert.rs measure_packs, zstd_pack.rs measure): LZ4 reads the packed files once, zstd counts every
+ * one of them twice ("one pass, counted as two"); the write pass is every file of the game again (src, the bytes the plan counted), and a full check reads every
+ * byte twice more, as written and through the packs (convert.rs after_measure: src + 2 * check). So with a full check the length of the pass is what is left
+ * over: span - 3 * src. A quick check reads only a sample (its size is not known here) and an unknown size of the game leaves nothing to subtract from: the pass
+ * is then taken as what each kind of pack makes of the game (all files packed), or as its usual share of the job. A derived length that is more than that guess
+ * (a wrong size of the game) is not believed. The bar never goes past its end, and, like the writing bar, it counts the job's own bytes, not the game's: the page
+ * shows a percentage and a time to go.
+ * src: the bytes of the game's files by the plan (0 = not known); zstd: the kind of packs; full: the check afterwards reads everything. */
+static inline void
+ps5tm_fpkgprog_measure(ps5tm_fpkgprog_t *p, int full, int zstd, uint64_t src, uint64_t jdone, uint64_t jtotal, uint64_t *done, uint64_t *total) {
+  if(!p->meas_on) {
+    p->meas_on = 1;
+    p->meas0 = jdone;
+    const uint64_t span = jtotal > jdone ? jtotal - jdone : 0;
+    uint64_t t;
+    if(src) {
+      t = zstd ? src * 2 : src;                                            /* all files packed */
+      if(full && span > src * 3) {
+        const uint64_t m = span - src * 3;
+        if(m <= t) t = m;                                                  /* some are not (small ones, loose ones) */
+      }
+    } else {
+      /* no size of the game: lz4 full = 4 parts (pass, write, 2 checks), zstd full = 5 (the pass counts 2), a quick check is mostly the pass and the write */
+      t = full ? (zstd ? span / 5 * 2 : span / 4) : (zstd ? span / 3 * 2 : span / 2);
+    }
+    if(t > span) t = span;
+    if(t == 0) t = 1;
+    p->meas_t = t;
+  }
+  if(jdone < p->meas0) p->meas0 = jdone;
+  const uint64_t d = jdone - p->meas0;
+  if(d > p->meas_t) p->meas_t = d;
+  *total = p->meas_t;
+  *done = d;
 }
 
 /* The writing bar of an IMAGE WITH PACKS (an .exfat or .ffpkg that Dump Forge writes with the game packed straight in, 19.11.2026). Its stages are "measure"

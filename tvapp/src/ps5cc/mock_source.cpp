@@ -405,9 +405,14 @@ class MockSource final : public Source
                 const bool crawl =
                     i == static_cast<std::size_t>(JobKind::storage) && job.name == "Maneater";
                 job.done = std::fmin(job.total, job.done + job.total * (crawl ? 0.002 : 0.04));
-                // an image that packs the game measures it first (Dump Forge's stage "measure")
+                // an image that packs the game measures it first (Dump Forge's stage "measure"),
+                // and the app gives that pass a figure of its own
                 if (!job.pack.empty() && job.active)
+                {
                     job.state = job.done < job.total * 0.10 ? "scanning" : "writing";
+                    job.measure_total = job.state == "scanning" ? job.total * 0.10 : 0.0;
+                    job.measure_done = job.state == "scanning" ? job.done : 0.0;
+                }
                 if (job.done >= job.total)
                 {
                     job.active = false;
@@ -455,6 +460,11 @@ class MockSource final : public Source
                     conv.detail = "→ " + q.target;
                     conv.total = g != nullptr ? static_cast<double>(g->size_bytes) : 1e9;
                     conv.done = conv.total * (q.pack.empty() ? 0.07 : 0.02);
+                    if (!q.pack.empty())
+                    {
+                        conv.measure_total = conv.total * 0.10;
+                        conv.measure_done = conv.done;
+                    }
                     fill_stages(conv);
                     sync_queue();
                     break;
@@ -1156,6 +1166,11 @@ class MockSource final : public Source
             break;
         }
         job.done = job.total * (job.pack.empty() ? 0.07 : 0.02); // measuring a game takes longer
+        if (!job.pack.empty())
+        {
+            job.measure_total = job.total * 0.10;
+            job.measure_done = job.done;
+        }
         if (kind == JobKind::convert)
             fill_stages(job);
         // What the start said about the original (only copy, convert and unpack carry it)

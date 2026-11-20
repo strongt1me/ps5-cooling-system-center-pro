@@ -136,6 +136,12 @@ struct Job
     std::string pack;
     int pack_level = 0;
     std::string pack_runtime; // LZ4 only: "ng" or "ampr_emu"
+    // convert, packing: how far the measure pass (Dump Forge's first pass over the game, the one
+    // that took nearly three minutes on a 6 GB game) has come, in the app's own count (an
+    // estimate, not the game's bytes). 0 for measure_total: no figure yet, the card says only that
+    // the game is measured.
+    double measure_done = 0.0;
+    double measure_total = 0.0;
 };
 
 // The game tools of Spiele → Bibliothek, in the order of their menu.

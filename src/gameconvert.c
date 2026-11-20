@@ -129,6 +129,7 @@ typedef struct {
   double   crate;             /* the same, for reading back               */
   int      qid;               /* the entry of the queue (convqueue.c) this job runs for, else 0 */
   int      pack_kind, pack_level, pack_runtime;   /* the game is packed into LZ4 (1) / zstd (2) packs while it is written (Dump Forge, 19.11.2026), else 0 */
+  uint64_t meas_done, meas_total;                 /* ... and how far its measure pass has come, in Dump Forge's own count (fpkgprogress.h; 0 = no figure yet) */
   /* when each step began (monotonic ms; 0 = not yet): the step line of the page shows how long each took (13.11.2026) */
   uint64_t t_write_ms, t_verify_ms, t_rename_ms;
 } cv_job_t;
@@ -146,6 +147,7 @@ typedef struct {
   int  unpack;                /* a debug FPKG of a game with AMPR packs: 1 = Dump Forge decodes its LZ4 packs first, 2 = its zstd packs, else 0 */
   ps5tm_cvpack_t pack;        /* exfat / ffpkg with the game packed into LZ4 or zstd packs on the way (Dump Forge writes the image), kind 0 = not */
   uint64_t pack_raw;          /* ... the game's own size by the plan (0 = not known): what the result is compared with at the end */
+  uint64_t pack_src;          /* ... and the bytes of its files (0 = not known): the length of the measure pass is worked out from them (fpkgprogress.h) */
   int  nroots;                /* a PS4 dump: the folders laid over each other (base, update, overlay), else 0 */
   char roots[3][336];                 /* a target path (320) and the ending of the folder of signed files */
   char overlay[256];          /* the folder of our own files among them, removed when the job is over */
@@ -881,7 +883,7 @@ cv_run_dumpforge(const cv_args_t *a) {
     PS5TM_INFO("game_convert_fpkg", "Debug-FPKG von %s: Dump Forge, Auftrag %d, Stufe %s%s.", a->title_id, job, fpkg_level(a->op),
                a->unpack == 2 ? ", zstd-Packs werden ausgepackt" : a->unpack == 1 ? ", LZ4-Packs werden ausgepackt" : "");
   int cancel_sent = 0, lost = 0, final = -1, lost_out = 0, hung = 0, too_big = 0, list_big = 0;
-  uint64_t last_ms = ps5tm_mono_ms(), last_done = 0, cancel_first_ms = 0, cancel_last_ms = 0, vlast_ms = 0, vlast_done = 0;
+  uint64_t last_ms = ps5tm_mono_ms(), last_done = 0, cancel_first_ms = 0, cancel_last_ms = 0, vlast_ms = 0, vlast_done = 0, mlast_ms = 0, mlast_done = 0;
   ps5tm_fpkgprog_t prog;                                   /* Dump Forge counts the whole job in one bar; the page has one for writing and one for reading back */
   memset(&prog, 0, sizeof(prog));
   ps5tm_dumpforge_job_t jb;
@@ -911,7 +913,25 @@ cv_run_dumpforge(const cv_args_t *a) {
     /* "measure" of an image with packs stays "scanning": the page says the game is measured; the writing starts with "write" */
     int writing = !strcmp(jb.stage, "compress") || !strcmp(jb.stage, "write");
     int verifying = !strcmp(jb.stage, "verify") || !strcmp(jb.stage, "finalize");
-    if(g_job.state == CV_SCANNING && writing) { g_job.state = CV_WRITING; g_job.t_write_ms = now; }
+    int measuring = packing && !strcmp(jb.stage, "measure");
+    if(g_job.state == CV_SCANNING && measuring && jb.total) {
+      /* the measure pass of an image with packs: the page shows a bar and a time to go for it (it took nearly three minutes on a 6 GB game with only a text) */
+      ps5tm_fpkgprog_measure(&prog, !a->quick, a->pack.kind == 2, a->pack_src, jb.done, jb.total, &g_job.meas_done, &g_job.meas_total);
+      if(!mlast_ms) {
+        mlast_ms = now;
+        mlast_done = jb.done;
+      } else if(now > mlast_ms + 1500 && jb.done >= mlast_done) {
+        double r = (double)(jb.done - mlast_done) * 1000.0 / (double)(now - mlast_ms);
+        g_job.rate = g_job.rate > 0 ? g_job.rate * 0.6 + r * 0.4 : r;
+        mlast_ms = now;
+        mlast_done = jb.done;
+      }
+    }
+    if(g_job.state == CV_SCANNING && writing) {
+      g_job.state = CV_WRITING;
+      g_job.t_write_ms = now;
+      if(packing) { g_job.rate = 0; last_ms = now; last_done = jb.done; }   /* the speed of the measure pass is not the writing's */
+    }
     if((g_job.state == CV_SCANNING || g_job.state == CV_WRITING) && verifying) {
       g_job.state = CV_VERIFYING;
       g_job.t_verify_ms = now;
@@ -1680,6 +1700,7 @@ typedef struct {
   char     title_id[12], name[128], source[256], version[40];
   int      folder, ps4;
   uint64_t raw, ffpkg_bytes, files;
+  uint64_t payload;                             /* the bytes of the game's files (0 = not known): what Dump Forge counts of a game it packs */
   char     ffpkg_why[700];
   char     fpkg_why[400];                       /* why no debug FPKG (packs that cannot be looked at, both kinds), "" when there can be one */
   char     pack_why[400];                       /* why the game cannot be packed while it is written into an image (a PS4 game, packs already, unreadable), "" when it can */
@@ -1723,7 +1744,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     }
   }
 
-  uint64_t raw = 0;
+  uint64_t raw = 0, payload = 0;
   unsigned files = 1;
   char     exfat_why[400] = "", skip_eg[96] = "";
   unsigned skip_special = 0, skip_system = 0;
@@ -1731,6 +1752,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     exfat_image_t *img = exfat_image_plan(source, serial_for(title_id), err, err_len);
     if(img) {
       raw   = exfat_image_size(img);
+      payload = exfat_image_payload(img);
       files = exfat_image_files(img);
       exfat_image_skipped(img, &skip_special, &skip_system, skip_eg, sizeof(skip_eg));
       exfat_image_free(img);
@@ -1841,6 +1863,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     pcs->ps4 = ps4;
     pcs->raw = raw;
     pcs->ffpkg_bytes = ffpkg_bytes;
+    pcs->payload = payload;
     pcs->files = files;
     snprintf(pcs->ffpkg_why, sizeof(pcs->ffpkg_why), "%s", ffpkg_why);
     snprintf(pcs->fpkg_why, sizeof(pcs->fpkg_why), "%s", fpkg_why);
@@ -2329,17 +2352,20 @@ cv_launch(cv_args_t *a, const char *title_id, const char *name, const char *sour
   return 200;
 }
 
-/* What the plan worked out for this game and op: the game's own size, the number an image with packs is compared with (0 = no plan at hand). */
+/* What the plan worked out for this game and op: the game's own size, the number an image with packs is compared with (0 = no plan at hand); *payload
+   (if given) the bytes of the game's files, which the bar of the measure pass is worked out from (0 = not known). */
 static uint64_t
-plan_raw_for(const char *title_id, const char *op) {
-  uint64_t v = 0;
+plan_raw_for(const char *title_id, const char *op, uint64_t *payload) {
+  uint64_t v = 0, pl = 0;
   pthread_mutex_lock(&g_pc_lock);
   for(int i = 0; i < PLAN_SLOTS; i++) {
     if(!g_pc[i].valid || strcmp(g_pc[i].title_id, title_id)) continue;
     v = !strcmp(op, "ffpkg") && g_pc[i].ffpkg_bytes ? g_pc[i].ffpkg_bytes : g_pc[i].raw;
+    pl = g_pc[i].payload;
     break;
   }
   pthread_mutex_unlock(&g_pc_lock);
+  if(payload) *payload = pl;
   return v;
 }
 
@@ -2432,7 +2458,7 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
   a->quick = quick ? 1 : 0;
   a->unpack = unpack;
   a->pack = pk;
-  a->pack_raw = pk.kind ? plan_raw_for(title_id, op) : 0;
+  a->pack_raw = pk.kind ? plan_raw_for(title_id, op, &a->pack_src) : 0;
   {
     char version[40], eerr[200] = "";
     game_version(title_id, version, sizeof(version));
@@ -2556,6 +2582,11 @@ ps5tm_gameconvert_status(void) {
     cJSON_AddNumberToObject(root, "check_total_bytes", (double)j.check_total);
     cJSON_AddNumberToObject(root, "check_done_bytes", (double)j.check_done);
   }
+  /* The measure pass of an image with packs: an estimate of how far it has come, in Dump Forge's own count, not the game's bytes (the pages show a percentage and a time to go). */
+  if(j.state == CV_SCANNING && j.pack_kind && j.meas_total) {
+    cJSON_AddNumberToObject(root, "measure_done_bytes", (double)j.meas_done);
+    cJSON_AddNumberToObject(root, "measure_total_bytes", (double)j.meas_total);
+  }
   if(j.sums[0]) cJSON_AddStringToObject(root, "sums", j.sums);
   if(j.note[0]) cJSON_AddStringToObject(root, "note", j.note);
   uint64_t end = j.finished_ms ? j.finished_ms : ps5tm_mono_ms();
@@ -2583,6 +2614,9 @@ ps5tm_gameconvert_status(void) {
     cJSON_AddNumberToObject(root, "bytes_per_s", j.rate);
     if(j.total_bytes > j.done_bytes)
       cJSON_AddNumberToObject(root, "eta_s", (double)(j.total_bytes - j.done_bytes) / j.rate);
+  } else if(j.state == CV_SCANNING && j.pack_kind && j.meas_total > j.meas_done && j.rate > 0) {
+    /* only the time to go: the pass counts zstd's files twice, so its speed in bytes would not be the game's */
+    cJSON_AddNumberToObject(root, "eta_s", (double)(j.meas_total - j.meas_done) / j.rate);
   } else if(j.state == CV_VERIFYING && j.crate > 0) {
     cJSON_AddNumberToObject(root, "bytes_per_s", j.crate);
     if(j.check_total > j.check_done)

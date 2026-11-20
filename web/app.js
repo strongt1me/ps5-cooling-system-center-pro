@@ -6466,7 +6466,8 @@
       const cpct = k.check_total_bytes > 0
         ? Math.min(100, Math.floor(k.check_done_bytes * 100 / k.check_total_bytes)) : 0;
       label = `Konvertieren läuft: „${k.name || k.title_id}“ → ${cvOpName(k.op)} · ${
-        k.state === "scanning" ? "wird vermessen" : k.state === "verifying" ? `wird geprüft ${cpct} %` : `${pct} %`}`;
+        k.state === "scanning" ? (cvMeasurePct(k) >= 0 ? `wird vermessen ${cvMeasurePct(k)} %` : "wird vermessen")
+        : k.state === "verifying" ? `wird geprüft ${cpct} %` : `${pct} %`}`;
       live = true; kind = "convert";
     } else if (m && m.active) {
       const pct = Math.floor(Number(m.progress_percent) || 0);
@@ -7217,6 +7218,10 @@
     ogRendered();
   };
 
+  /* How far the measure pass of an image with packs has come, in percent; -1 when the job does not pack, is not measuring or Dump Forge has not told its size yet */
+  const cvMeasurePct = (j) => j && j.state === "scanning" && j.pack && j.measure_total_bytes > 0
+    ? Math.min(100, Math.floor(j.measure_done_bytes * 100 / j.measure_total_bytes)) : -1;
+
   const cvRenderJob = () => {
     const j = cv.job;
     const body = $("#cp-body");
@@ -7229,7 +7234,15 @@
     const verb = cvSqueezes(j.op) ? "komprimiert" : "geschrieben";
     let html;
     if (j.state === "scanning") {
-      html = `<p>${j.pack ? "Das Spiel wird für die Packs vermessen …" : "Das Spiel wird vermessen …"}</p>${where}`;
+      /* An image with packs: the measure pass has a bar and a time to go as soon as Dump Forge has told its size (the estimate of the app, not the game's bytes) */
+      const mpct = cvMeasurePct(j);
+      html = mpct >= 0
+        ? `<div class="cp-bar"><div style="width:${mpct}%"></div></div>
+          <p class="cp-num"><b>${mpct} %</b> · wird für die Packs vermessen</p>
+          <p class="muted">${j.eta_s ? cpEta(j.eta_s) : "Tempo wird gemessen"}</p>
+          ${where}
+          <p class="muted">Das läuft auf der PS5 weiter, auch wenn du dieses Fenster schließt.</p>`
+        : `<p>${j.pack ? "Das Spiel wird für die Packs vermessen …" : "Das Spiel wird vermessen …"}</p>${where}`;
     } else if (j.state === "writing") {
       /* A job that packs: the bar's length is only an estimate (the size of the packs is not known before), so no "x of y GB" */
       html = `<div class="cp-bar"><div style="width:${pct}%"></div></div>
@@ -7287,9 +7300,10 @@
     const names = { scan: "Vermessen", write: j.pack ? "Packen und schreiben" : cvSqueezes(j.op) ? "Komprimieren" : "Schreiben", verify: "Prüfen", rename: "Umbenennen" };
     const pct = j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0;
     const cpct = j.check_total_bytes > 0 ? Math.min(100, Math.floor(j.check_done_bytes * 100 / j.check_total_bytes)) : 0;
+    const mpct = cvMeasurePct(j);
     return `<div class="cv-steps" role="list">${j.stages.map((x) => {
       const what = x.state === "done" ? cvDur(x.ms)
-        : x.state === "now" ? `${cvDur(x.ms)}${x.id === "write" ? ` · ${pct} %` : x.id === "verify" ? ` · ${cpct} %` : ""}`
+        : x.state === "now" ? `${cvDur(x.ms)}${x.id === "write" ? ` · ${pct} %` : x.id === "verify" ? ` · ${cpct} %` : x.id === "scan" && mpct >= 0 ? ` · ${mpct} %` : ""}`
         : x.state === "stopped" ? `${cvDur(x.ms)} · hier beendet` : "noch offen";
       return `<div class="cv-step ${esc(x.state)}" role="listitem"><b>${x.state === "done" ? "✓ " : ""}${esc(names[x.id] || x.id)}</b><span>${esc(what)}</span></div>`;
     }).join("")}</div>`;
@@ -7341,7 +7355,8 @@
       const pct = j.state === "verifying"
         ? (j.check_total_bytes > 0 ? Math.min(100, Math.floor(j.check_done_bytes * 100 / j.check_total_bytes)) : 0)
         : (j.total_bytes > 0 ? Math.min(100, Math.floor(j.done_bytes * 100 / j.total_bytes)) : 0);
-      return j.state === "scanning" ? "Vermessen …" : `${names[j.state] || j.state} ${pct} %`;
+      const mpct = cvMeasurePct(j);
+      return j.state === "scanning" ? (mpct >= 0 ? `Vermessen ${mpct} %` : "Vermessen …") : `${names[j.state] || j.state} ${pct} %`;
     };
     if (force || body.__qsig !== sig) {
       body.__qsig = sig;

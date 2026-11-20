@@ -2,6 +2,15 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
+## Unveröffentlicht
+
+### Packen beim Konvertieren: Fortschritt beim Vermessen (Beobachtung an der Pro, 20.11.2026)
+- **Anlass:** Beim Packen eines 6-GB-Spiels an der Pro stand knapp drei Minuten nur „Das Spiel wird für die Packs vermessen …“, ohne Balken – es sah nach einem Hänger aus. Dump Forge zählt diesen Durchgang aber wie jeden anderen (`ctx.progress("measure", …)`); die App las die Zahlen nur nicht.
+- **Jetzt:** Das Fenster zeigt beim Vermessen einen Balken mit Prozent und Restzeit („NN % · wird für die Packs vermessen“); die Schrittzeile nennt das Prozent beim Schritt „Vermessen“, die Warteschlange „Vermessen NN %“. Die Vollbild-App zeigt dasselbe auf der Auftragskarte („NN % · wird für die Packs vermessen · LZ4-Packs“).
+- **Wie gerechnet wird (`src/fpkgprogress.h`, `ps5tm_fpkgprog_measure`):** Dump Forge meldet nur Zahlen für den ganzen Auftrag. Die Länge des Vermessens ergibt sich bei gründlicher Prüfung genau als Gesamtzahl minus 3 × Größe der Spieldateien (Schreiben + zwei Lesedurchgänge der Prüfung; zstd zählt jede Datei doppelt); bei schneller Prüfung oder unbekannter Größe schätzt die App sie aus der Größe des Spiels, und ein abgeleiteter Wert über dieser Schätzung gilt nicht. Der Balken geht nie über sein Ende hinaus und zeigt keine Spielgrößen.
+- **API:** `GET /api/v1/library/convert` trägt beim Vermessen `measure_done_bytes`, `measure_total_bytes` und `eta_s`. Der Plan merkt sich dafür die Summe der Dateigrößen (`exfat_image_payload`). Handbuch ×7, `docs/API.md`; Texte „wird für die Packs vermessen“ und „Vermessen {0} %“ in allen sechs Sprachen (Browser-App und Vollbild-App).
+- **Nicht verifiziert an der Konsole:** wie genau die Schätzung bei einem echten Auftrag trifft (Host-Tests und die Vorschau der Vollbild-App belegen nur die Rechnung und die Darstellung).
+
 ## v1.89.0 – 20.11.2026
 
 ### Übersetzung: halb übersetzte, zusammengesetzte Texte (Nebenbefunde beim Aufnehmen der englischen README-Bilder, 19.11.2026)

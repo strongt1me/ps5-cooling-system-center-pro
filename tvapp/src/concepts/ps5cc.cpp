@@ -1998,7 +1998,10 @@ class Ps5cc final : public app::Concept
         {
             const ps5cc::Job &job = data_.jobs[i];
             ui::ProgressBar &bar = bars_[i];
-            const bool known = job.total > 0.0;
+            // an image that packs the game: its measure pass has a bar of its own as soon as the
+            // app has a figure for it
+            const bool measuring = is_measuring(job);
+            const bool known = measuring || job.total > 0.0;
             bar.style.mode = job.active && !known ? ui::ProgressMode::indeterminate
                                                   : ui::ProgressMode::determinate;
             bar.style.percent = known;
@@ -2024,9 +2027,18 @@ class Ps5cc final : public app::Concept
                 if (orig->state == "failed" && !job.active)
                     bar.style.status = ui::Status::warning;
             }
-            bar.set_value(known ? static_cast<float>(std::clamp(job.done / job.total, 0.0, 1.0))
-                                : 0.0f);
+            bar.set_value(measuring ? static_cast<float>(std::clamp(
+                                          job.measure_done / job.measure_total, 0.0, 1.0))
+                          : known   ? static_cast<float>(std::clamp(job.done / job.total, 0.0, 1.0))
+                                    : 0.0f);
         }
+    }
+
+    // The measure pass of an image that packs the game, with a figure from the app.
+    static bool is_measuring(const ps5cc::Job &job)
+    {
+        return job.active && job.state == "scanning" && !job.pack.empty() &&
+               job.measure_total > 0.0;
     }
 
     static std::string job_state_text(const ps5cc::Job &job)
@@ -2034,8 +2046,14 @@ class Ps5cc final : public app::Concept
         if (job.active)
         {
             if (job.state == "scanning")
+            {
+                if (is_measuring(job))
+                    return std::to_string(static_cast<int>(std::clamp(
+                               job.measure_done * 100.0 / job.measure_total, 0.0, 100.0))) +
+                           " % · wird für die Packs vermessen · " + ps5cc::pack_label(job.pack);
                 return job.pack.empty() ? "wird vermessen"
                                         : "Das Spiel wird für die Packs vermessen …";
+            }
             if (job.state == "verifying")
                 return "wird geprüft";
             if (job.total > 0.0)

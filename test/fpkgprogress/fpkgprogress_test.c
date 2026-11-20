@@ -101,6 +101,67 @@ main(void) {
     CHECK(d == 0 && d <= t, "count went down");
   }
 
+  /* the measure pass of an image with packs (20.11.2026): the numbers are Dump Forge's own, as at the first event of the pass:
+     done = what moved before it (0 here), total = pass + write (src) + checks (2 * src when every byte is read back) */
+  {
+    const uint64_t SRC = 6000000000ull;                                  /* the game's files by the plan */
+    const uint64_t LZ = 5400000000ull;                                   /* LZ4: the packed files, read once (90 % of the game) */
+    const uint64_t ZS = 2 * 5400000000ull;                               /* zstd: the same files, counted twice */
+    ps5tm_fpkgprog_t m = {0};
+    /* full check, LZ4: the length is exact (total - 3 * src) */
+    ps5tm_fpkgprog_measure(&m, 1, 0, SRC, 0, LZ + 3 * SRC, &d, &t);
+    CHECK(d == 0 && t == LZ, "measure LZ4 full: exact (%llu of %llu)", (unsigned long long)d, (unsigned long long)t);
+    ps5tm_fpkgprog_measure(&m, 1, 0, SRC, LZ / 2, LZ + 3 * SRC, &d, &t);
+    CHECK(d == LZ / 2 && t == LZ, "measure LZ4 half");
+    ps5tm_fpkgprog_measure(&m, 1, 0, SRC, LZ, LZ + 3 * SRC, &d, &t);
+    CHECK(d == t && t == LZ, "measure LZ4 end");
+    /* zstd counts every file twice */
+    ps5tm_fpkgprog_t z2 = {0};
+    ps5tm_fpkgprog_measure(&z2, 1, 1, SRC, 0, ZS + 3 * SRC, &d, &t);
+    CHECK(d == 0 && t == ZS, "measure zstd full: exact (%llu)", (unsigned long long)t);
+    /* what moved before the pass (a scan that counted bytes) is not part of the bar: it starts where the pass began */
+    ps5tm_fpkgprog_t b = {0};
+    ps5tm_fpkgprog_measure(&b, 1, 0, SRC, 1000, 1000 + LZ + 3 * SRC, &d, &t);
+    CHECK(d == 0 && t == LZ, "measure: base before the pass");
+    ps5tm_fpkgprog_measure(&b, 1, 0, SRC, 1000 + LZ / 4, 1000 + LZ + 3 * SRC, &d, &t);
+    CHECK(d == LZ / 4 && t == LZ, "measure: quarter after a base");
+    /* a derived length above the guess (the plan's size was wrong) is not believed: the guess holds */
+    ps5tm_fpkgprog_t w = {0};
+    ps5tm_fpkgprog_measure(&w, 1, 0, SRC, 0, 9 * SRC, &d, &t);
+    CHECK(t == SRC, "measure: derived above the guess -> the guess (%llu)", (unsigned long long)t);
+    /* a quick check reads a sample of unknown size: the guess is the length (all files packed) */
+    ps5tm_fpkgprog_t q = {0};
+    ps5tm_fpkgprog_measure(&q, 0, 0, SRC, 0, SRC + SRC + SRC / 10, &d, &t);
+    CHECK(t == SRC, "measure quick LZ4: the guess");
+    ps5tm_fpkgprog_t qz = {0};
+    ps5tm_fpkgprog_measure(&qz, 0, 1, SRC, 0, 2 * SRC + SRC + SRC / 10, &d, &t);
+    CHECK(t == 2 * SRC, "measure quick zstd: the guess counts twice");
+    /* the game's size is not known: the shares of the job (LZ4 full 1/4, zstd full 2/5, quick 1/2 and 2/3) */
+    ps5tm_fpkgprog_t u1 = {0}, u2 = {0}, u3 = {0}, u4 = {0};
+    ps5tm_fpkgprog_measure(&u1, 1, 0, 0, 0, 4000, &d, &t);
+    CHECK(t == 1000, "measure without size, LZ4 full");
+    ps5tm_fpkgprog_measure(&u2, 1, 1, 0, 0, 5000, &d, &t);
+    CHECK(t == 2000, "measure without size, zstd full");
+    ps5tm_fpkgprog_measure(&u3, 0, 0, 0, 0, 2000, &d, &t);
+    CHECK(t == 1000, "measure without size, LZ4 quick");
+    ps5tm_fpkgprog_measure(&u4, 0, 1, 0, 0, 3000, &d, &t);
+    CHECK(t == 2000, "measure without size, zstd quick");
+    /* the pass goes on past its estimate: the bar stays at its end, the total grows with it */
+    ps5tm_fpkgprog_t o = {0};
+    ps5tm_fpkgprog_measure(&o, 1, 0, SRC, 0, LZ + 3 * SRC, &d, &t);
+    ps5tm_fpkgprog_measure(&o, 1, 0, SRC, LZ + 100, LZ + 3 * SRC, &d, &t);
+    CHECK(d == t && d == LZ + 100, "measure past its estimate: capped (%llu of %llu)", (unsigned long long)d, (unsigned long long)t);
+    /* all zero, a count below the total, a count that goes down: no division, no underflow */
+    ps5tm_fpkgprog_t e1 = {0}, e2 = {0}, e3 = {0};
+    ps5tm_fpkgprog_measure(&e1, 1, 0, 0, 0, 0, &d, &t);
+    CHECK(t >= 1 && d == 0, "measure: all zero");
+    ps5tm_fpkgprog_measure(&e2, 1, 0, SRC, 500, 100, &d, &t);
+    CHECK(t >= 1 && d == 0 && d <= t, "measure: total below the count");
+    ps5tm_fpkgprog_measure(&e3, 1, 0, SRC, 1000, 1000 + LZ + 3 * SRC, &d, &t);
+    ps5tm_fpkgprog_measure(&e3, 1, 0, SRC, 400, 1000 + LZ + 3 * SRC, &d, &t);
+    CHECK(d == 0 && d <= t, "measure: count went down");
+  }
+
   printf(fails ? "%d FAILED\n" : "all passed\n", fails);
   return fails != 0;
 }

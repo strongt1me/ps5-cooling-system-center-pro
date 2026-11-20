@@ -5203,6 +5203,8 @@ void HttpSource::poll_jobs()
             job.pack = str(root, "pack");
             job.pack_level = static_cast<int>(num(root, "pack_level"));
             job.pack_runtime = str(root, "pack_runtime");
+            job.measure_done = num(root, "measure_done_bytes");
+            job.measure_total = num(root, "measure_total_bytes");
             job.queue_id = static_cast<int>(num(root, "queue_id"));
             const cJSON *stage = nullptr;
             cJSON_ArrayForEach(stage, cJSON_GetObjectItemCaseSensitive(root, "stages"))
