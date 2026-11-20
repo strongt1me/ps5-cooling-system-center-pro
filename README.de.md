@@ -7,7 +7,7 @@
 **Lüftersteuerung, Temperaturüberwachung und Systemzentrale für die gejailbreakte PlayStation 5,<br>bedienbar im Browser (Konsole, Handy, PC) oder als Vollbild-App auf dem Fernseher mit dem Controller, in sieben Sprachen.**
 
 ![Version](https://img.shields.io/badge/Version-1.88.1-1f6feb)
-![Firmware](https://img.shields.io/badge/FW-4.03%20bis%2014.10%20Support-2ea44f)
+![Firmware](https://img.shields.io/badge/FW-1.00%20bis%2014.22%20Support-2ea44f)
 ![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)
 ![Plattform](https://img.shields.io/badge/Plattform-PS5%20Payload-003791)
 ![Sprachen](https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
@@ -218,7 +218,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 | | |
 | --- | --- |
 | **Konsole** | PS5 mit Jailbreak und ELF-Lader auf Port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) o. ä.) |
-| **Firmware** | **FW 4.03 bis 14.10 Support** |
+| **Firmware** | **FW 1.00 bis 14.22 Support** |
 | **Getestet** | PS5 Pro (CFI-7021), Firmware 12.00; laut mehreren Nutzern auch 4.xx bis 10.xx und 13.60 |
 | **Lüfter** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (ohne laufen Sensoren und Oberfläche, die Regelung nicht) |
 | **Netzwerk** | Browser im selben Netz, oder der Browser der Konsole selbst |
@@ -227,7 +227,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 <details>
 <summary>Firmware und SDK im Detail</summary>
 
-Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmware **von 4.03 bis 14.10** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
+Die ELF ist mit dem PS5-Payload-SDK **v0.50** gebaut, dessen Startcode jede Firmware **von 1.00 bis 14.22** kennt. Eine Firmware, die der Startcode nicht kennt, kommt nicht bis `main()`: Das Programm startet dann gar nicht und schreibt nichts ins Protokoll. Für 13.00 bis 13.40 gibt es noch keine Rückmeldung (der Startcode kennt sie). Die Grafiktemperatur gibt es nur auf der Pro.
 </details>
 
 ## Bedienung
@@ -263,7 +263,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.45** gebaut, dessen Startcode die Firmw
 <details>
 <summary><b>Aus dem Quellcode bauen</b></summary>
 
-Voraussetzung ist das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk) **ab v0.42** (getestet mit v0.45); der Bau prüft das und bricht mit einem zu alten SDK ab. Unter Windows genügt Git Bash mit LLVM 21:
+Voraussetzung ist das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk) **ab v0.42** (getestet mit v0.50); der Bau prüft das und bricht mit einem zu alten SDK ab. Unter Windows genügt Git Bash mit LLVM 21:
 
 ```bash
 tools/build-windows.sh

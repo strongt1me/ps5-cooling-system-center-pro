@@ -7,7 +7,7 @@
 **Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak,<br>usabile nel browser (console, telefono, PC) o come app a schermo intero sulla TV con il controller, in sette lingue.**
 
 ![Versione](https://img.shields.io/badge/Versione-1.84.0-1f6feb)
-![Firmware](https://img.shields.io/badge/FW-da%204.03%20a%2014.10%20supportato-2ea44f)
+![Firmware](https://img.shields.io/badge/FW-da%201.00%20a%2014.22%20supportato-2ea44f)
 ![Licenza](https://img.shields.io/badge/Licenza-GPL--3.0--or--later-blue)
 ![Piattaforma](https://img.shields.io/badge/Piattaforma-PS5%20Payload-003791)
 ![Lingue](https://img.shields.io/badge/Lingue-DE%20%C2%B7%20EN%20%C2%B7%20IT%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20RU%20%C2%B7%20SV-lightgrey)
@@ -218,7 +218,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 | | |
 | --- | --- |
 | **Console** | PS5 con jailbreak e loader ELF sulla porta 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) o simile) |
-| **Firmware** | **Supporto per FW da 4.03 a 14.10** |
+| **Firmware** | **Supporto per FW da 1.00 a 14.22** |
 | **Testato** | PS5 Pro (CFI-7021), firmware 12.00; diversi utenti segnalano che funziona anche su 4.xx–10.xx e su 13.60 |
 | **Ventola** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (senza, sensori e interfaccia funzionano, la regolazione no) |
 | **Rete** | Un browser nella stessa rete, oppure il browser della console |
@@ -227,7 +227,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 <details>
 <summary>Firmware e SDK in dettaglio</summary>
 
-L'ELF è compilato con il PS5 payload SDK **v0.45**, il cui codice di avvio conosce il firmware **da 4.03 fino a 14.10**. Un firmware che il codice di avvio non conosce non arriva a `main()`: il programma non si avvia affatto e non scrive nulla nel registro. Per 13.00–13.40 non ci sono ancora segnalazioni (il codice di avvio li conosce). La temperatura della GPU esiste solo sulla Pro.
+L'ELF è compilato con il PS5 payload SDK **v0.50**, il cui codice di avvio conosce ogni firmware **da 1.00 fino a 14.22**. Un firmware che il codice di avvio non conosce non arriva a `main()`: il programma non si avvia affatto e non scrive nulla nel registro. Per 13.00–13.40 non ci sono ancora segnalazioni (il codice di avvio li conosce). La temperatura della GPU esiste solo sulla Pro.
 </details>
 
 ## Utilizzo
@@ -263,7 +263,7 @@ L'ELF è compilato con il PS5 payload SDK **v0.45**, il cui codice di avvio cono
 <details>
 <summary><b>Compilare dal codice sorgente</b></summary>
 
-Serve il [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 o successivo** (testato con v0.45); la compilazione lo verifica e si ferma con un SDK più vecchio. Su Windows basta Git Bash con LLVM 21:
+Serve il [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 o successivo** (testato con v0.50); la compilazione lo verifica e si ferma con un SDK più vecchio. Su Windows basta Git Bash con LLVM 21:
 
 ```bash
 tools/build-windows.sh
