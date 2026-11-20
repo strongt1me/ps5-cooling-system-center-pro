@@ -1922,6 +1922,8 @@ input[type=checkbox]:focus-visible { outline: 2px solid rgba(138,180,255,.7); ou
 .cp-sub .cp-choice { padding: 7px 10px; }
 .cv-pack .cp-list + h5 { margin-top: 12px; }
 .cv-engine { margin: 8px 0 0; }
+.cv-engine-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }   /* the state and the button for a newer Dump Forge side by side */
+.cv-engine-row p { margin: 0; }
 .cv-engine-guide { margin: 8px 0 0; }
 .cv-guide { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 13px; line-height: 1.5; }
 .cv-guide h4 { margin: 0 0 4px; font-size: 14px; }

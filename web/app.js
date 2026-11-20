@@ -6973,27 +6973,27 @@
   /* The guide for Dump Forge with the plain ELF (button "Anleitung" under the format FPKG): one sentence per element, so that each is translated whole. */
   const cvGuideHtml = () => `<div class="cv-guide">
       <h4>Dump Forge bei der reinen ELF-Version</h4>
-      <p class="muted">Das brauchst du nur für das Konvertierformat „FPKG (Debug-.pkg)“.</p>
-      <h5>Weg 1: Die App lädt Dump Forge selbst</h5>
+      <p class="muted">Dump Forge steckt schon in der App. Du brauchst diese Anleitung nur, wenn du eine neuere Fassung willst.</p>
+      <h5>Weg 1: Die App lädt eine neuere Fassung selbst</h5>
       <ol>
         <li>Öffne die App im Browser unter der Adresse der Konsole, Port 8086:<br><code>http://&lt;IP der Konsole&gt;:8086</code></li>
         <li>Wähle bei einem Spiel „Konvertieren“ und das Format „FPKG (Debug-.pkg)“.</li>
-        <li>Fehlt Dump Forge, erscheint „Dump Forge laden“. Drücke den Knopf.</li>
-        <li>Die App lädt die neueste Fassung von GitHub, prüft die SHA-256-Prüfsumme und legt sie ab. Das dauert etwas, die Datei ist rund 18 MB groß.</li>
-        <li>Danach ist das Format wählbar.</li>
+        <li>Drücke „Neue Fassung von GitHub laden“.</li>
+        <li>Gibt es eine neuere Fassung, lädt die App sie von GitHub, prüft die SHA-256-Prüfsumme und legt sie ab (rund 18 MB). Sonst meldet sie, dass die neueste schon da ist.</li>
+        <li>Danach nimmt die App die neue Fassung für jeden Auftrag.</li>
       </ol>
       <h5>Weg 2: Von Hand ablegen (ohne Internet auf der Konsole)</h5>
       <ol>
         <li>Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt quer3q/ps5-dump-forge).</li>
         <li>Kopiere sie per FTP (Port 2121) oder mit dem Dateimanager der App in diesen Ordner der Konsole:<br><code>/data/PS5-Cooling-Center/dumpforge/</code><br><span class="muted">Die App legt diesen Ordner bei jedem Start selbst an.</span></li>
-        <li>Der Name muss stimmen. Erlaubt sind diese beiden Formen (die Version nur aus Ziffern und Punkten, zum Beispiel 0.5.5):<br><code>ps5-dump-forge-&lt;Version&gt;-ps5.elf</code><br><code>ps5-dump-forge.elf</code></li>
+        <li>Der Name muss stimmen (die Version nur aus Ziffern und Punkten und neuer als die eingebaute 0.5.6, zum Beispiel 0.5.7):<br><code>ps5-dump-forge-&lt;Version&gt;-ps5.elf</code></li>
         <li>Die Datei muss zwischen 1 und 40 MiB groß sein und eine echte ELF-Datei sein.</li>
-        <li>Die Seite zeigt Dump Forge danach als vorhanden an, ein Neustart der App ist nicht nötig.</li>
+        <li>Ein Neustart der App ist nicht nötig; sie nimmt die Datei beim nächsten Auftrag.</li>
       </ol>
       <h5>Hinweise</h5>
       <ul>
         <li>Liegen mehrere Fassungen da, nimmt die App die höchste Version. Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern.</li>
-        <li>Wer die Kacheln (FAKE86921 oder FAKE86922) installiert hat, braucht nichts davon. Dort liegt Dump Forge schon im Ordner „dumpforge“ der Kachel.</li>
+        <li>Dump Forge 0.5.6 steckt in der App und damit auch in beiden Kacheln (FAKE86921, FAKE86922).</li>
         <li>Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. Du musst es nicht von Hand starten.</li>
       </ul>
     </div>`;
@@ -7011,10 +7011,12 @@
   /* Where Dump Forge stands (there, or to be fetched): under the format FPKG and under the packing of an image. */
   const cvEngineHtml = (df) => {
     const ver = esc(df.version || "");
+    /* Dump Forge is part of the app since 21.11.2026, so it is always "da"; the button asks GitHub for a newer one (the answer is a message: "schon da" or "geladen"). */
     return df.installed
-      ? `<p class="muted cv-engine">${df.running
+      ? `<div class="cv-engine cv-engine-row"><p class="muted">${df.running
           ? `Dump Forge ${ver} ist da und läuft schon. Die App startet es für den Auftrag und beendet es danach wieder.`
-          : `Dump Forge ${ver} ist da. Die App startet es für den Auftrag und beendet es danach wieder.`}</p>`
+          : `Dump Forge ${ver} ist da. Die App startet es für den Auftrag und beendet es danach wieder.`}</p>
+          <button type="button" class="btn ghost" data-cp="dfetch"${df.fetching ? " disabled" : ""}>Neue Fassung von GitHub laden</button></div>`
       : `<div class="cp-warn cv-engine"><b>Dump Forge fehlt noch.</b>
           <span>Mit dem Knopf holt die App es von GitHub und vergleicht die Prüfsumme mit SHA256SUMS.</span>
           <span>Selbst laden geht auch: Lege die ELF-Datei von Dump Forge (Name: ps5-dump-forge-VERSION-ps5.elf) in diesen Ordner der PS5:</span>

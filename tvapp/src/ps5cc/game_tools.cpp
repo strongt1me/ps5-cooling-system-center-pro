@@ -657,10 +657,10 @@ void GameTools::build_form(int keep_focus)
                                        "ab, wenn das Spiel sie nicht braucht.";
             }
         }
-        // Dump Forge writes the debug FPKG: when it is not there yet, a row fetches it (or says
-        // where its file goes).
+        // Dump Forge writes the debug FPKG. It is part of the app, so it is always there; the row
+        // asks GitHub for a newer one (the app answers "schon da" or "geladen").
         if (fpkg_offered && plan_.dumpforge.known)
-            form_.add_action(kRowEngine, "Dump Forge laden");
+            form_.add_action(kRowEngine, "Neue Fassung laden");
         // how to get Dump Forge with the plain ELF (the web page has the same button)
         if (fpkg_offered)
             form_.add_action(kRowGuide, "Anleitung").description =
@@ -819,11 +819,11 @@ void GameTools::refresh()
         }
         if (ui::FormRow *row = form_.row(kRowEngine))
         {
-            row->disabled = plan_.dumpforge.installed || engine_fetching_;
-            row->text = plan_.dumpforge.installed
+            row->disabled = engine_fetching_;
+            row->text = engine_fetching_ ? std::string("wird geladen …")
+                        : plan_.dumpforge.installed
                             ? "Version " + plan_.dumpforge.version + " ist da"
-                            : (engine_fetching_ ? std::string("wird geladen …")
-                                                : std::string("fehlt noch"));
+                            : std::string("fehlt noch");
             row->description = plan_.dumpforge.installed
                                    ? "Dump Forge ist da. Die App startet es für den Auftrag und "
                                      "beendet es danach wieder."
@@ -1252,7 +1252,7 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         else if (id == kRowEngine)
         {
-            if (!plan_.dumpforge.installed && !engine_fetching_)
+            if (!engine_fetching_)
             {
                 engine_fetching_ = true;
                 source().dumpforge_fetch();
@@ -1335,20 +1335,20 @@ void GameTools::open_guide(ui::Feedback &feedback)
     // web page's guide)
     guide_view_.set_content({
         TextBlock::heading("Dump Forge bei der reinen ELF-Version", 2),
-        TextBlock::paragraph("Das brauchst du nur für das Konvertierformat „FPKG (Debug-.pkg)“."),
-        TextBlock::heading("Weg 1: Die App lädt Dump Forge selbst", 3),
+        TextBlock::paragraph("Dump Forge steckt schon in der App. Du brauchst diese Anleitung nur, "
+                             "wenn du eine neuere Fassung willst."),
+        TextBlock::heading("Weg 1: Die App lädt eine neuere Fassung selbst", 3),
         TextBlock::numbered("Öffne die App im Browser unter der Adresse der Konsole, Port 8086:",
                             "1."),
         TextBlock::code("http://<IP der Konsole>:8086"),
         TextBlock::numbered(
             "Wähle bei einem Spiel „Konvertieren“ und das Format „FPKG (Debug-.pkg)“.", "2."),
-        TextBlock::numbered("Fehlt Dump Forge, erscheint „Dump Forge laden“. Drücke den Knopf.",
-                            "3."),
-        TextBlock::numbered("Die App lädt die neueste Fassung von GitHub, prüft die "
-                            "SHA-256-Prüfsumme und legt sie ab. "
-                            "Das dauert etwas, die Datei ist rund 18 MB groß.",
+        TextBlock::numbered("Drücke „Neue Fassung laden“.", "3."),
+        TextBlock::numbered("Gibt es eine neuere Fassung, lädt die App sie von GitHub, prüft die "
+                            "SHA-256-Prüfsumme und legt sie ab (rund 18 MB). Sonst meldet sie, "
+                            "dass die neueste schon da ist.",
                             "4."),
-        TextBlock::numbered("Danach ist das Format wählbar.", "5."),
+        TextBlock::numbered("Danach nimmt die App die neue Fassung für jeden Auftrag.", "5."),
         TextBlock::heading("Weg 2: Von Hand ablegen (ohne Internet auf der Konsole)", 3),
         TextBlock::numbered("Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt "
                             "quer3q/ps5-dump-forge).",
@@ -1358,22 +1358,21 @@ void GameTools::open_guide(ui::Feedback &feedback)
                             "2."),
         TextBlock::code("/data/PS5-Cooling-Center/dumpforge/"),
         TextBlock::paragraph("Die App legt diesen Ordner bei jedem Start selbst an."),
-        TextBlock::numbered("Der Name muss stimmen. Erlaubt sind diese beiden Formen "
-                            "(die Version nur aus Ziffern und Punkten, zum Beispiel 0.5.5):",
+        TextBlock::numbered("Der Name muss stimmen (die Version nur aus Ziffern und Punkten und "
+                            "neuer als die eingebaute 0.5.6, zum Beispiel 0.5.7):",
                             "3."),
-        TextBlock::code("ps5-dump-forge-<Version>-ps5.elf\nps5-dump-forge.elf"),
+        TextBlock::code("ps5-dump-forge-<Version>-ps5.elf"),
         TextBlock::numbered(
             "Die Datei muss zwischen 1 und 40 MiB groß sein und eine echte ELF-Datei sein.", "4."),
-        TextBlock::numbered("Die Seite zeigt Dump Forge danach als vorhanden an, ein Neustart der "
-                            "App ist nicht nötig.",
+        TextBlock::numbered("Ein Neustart der App ist nicht nötig; sie nimmt die Datei beim "
+                            "nächsten Auftrag.",
                             "5."),
         TextBlock::heading("Hinweise", 3),
         TextBlock::bullet(
             "Liegen mehrere Fassungen da, nimmt die App die höchste Version. "
             "Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern."),
-        TextBlock::bullet(
-            "Wer die Kacheln (FAKE86921 oder FAKE86922) installiert hat, braucht nichts davon. "
-            "Dort liegt Dump Forge schon im Ordner „dumpforge“ der Kachel."),
+        TextBlock::bullet("Dump Forge 0.5.6 steckt in der App und damit auch in beiden Kacheln "
+                          "(FAKE86921, FAKE86922)."),
         TextBlock::bullet(
             "Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. "
             "Du musst es nicht von Hand starten."),
