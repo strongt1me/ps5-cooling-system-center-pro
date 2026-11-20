@@ -454,6 +454,7 @@ overlay_backports(const lib_game_t *g, lib_mods_t *m) {
 
   for(int i = 0; i < n; i++) {
     char base[240], p2[300];
+    if(ps5tm_usbeject_settling(roots[i])) continue;        /* a drive that is being ejected is not looked at (22.11.2026) */
     if(!ps5tm_backport_dir(roots[i], g->title_id, base, sizeof(base))) continue;
     lib_mods_t t;
     memset(&t, 0, sizeof(t));

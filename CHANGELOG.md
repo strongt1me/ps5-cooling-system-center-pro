@@ -4,6 +4,13 @@
 
 ## Unveröffentlicht
 
+### Auswerfen: die Suchläufe der App lassen das Laufwerk in Ruhe (Rückmeldung des Forum-Users, 22.11.2026)
+- **Beobachtung:** Der Auswerfen-Knopf im Dateimanager stürzte bei einem Forum-User „hin und wieder“ ab, zweimal musste er den Systemspeicher reparieren. Die Absicherung vom 21.11. (Ordnerliste, Ansicht, Größe und Download halten sich zurück) hat das nicht beseitigt; sie war eine Vermutung, der Absturz selbst ist nie nachgestellt worden.
+- **Neuer Verdacht (aus dem Quelltext, nicht an der Konsole belegt):** Der PS4Mount-Dienst der App (seit 17.11. ab Werk an) geht alle 10 Sekunden über jedes Laufwerk (`statfs` und ein Lauf bis acht Ebenen tief) und fragte nie, ob gerade ein Auswurf läuft. Fällt der Auswurf in einen solchen Lauf, wird das Gerät unter einem Lesezugriff abgetrennt; das passt dazu, dass es nur manchmal passiert.
+- **Jetzt:** (1) Sobald der Auswurf angemeldet ist, sieht kein Lauf der App das Laufwerk mehr an (`ps5tm_usbeject_settling`: PS4Mount-Suche, Freigabe veralteter Einhängungen, Backport-Suche der Bibliothek); das gilt bis 30 Sekunden nach dem Auswerfen, denn ein gesteckt gebliebenes Laufwerk meldet sich in dieser Zeit neu an. (2) Ein Lauf, der schon begonnen hatte, wird abgewartet (`ps4m_wait_drive_free`: der Arbeiter hält sein Schloss während des ganzen Laufs); dauert er länger als 10 Sekunden, wird nicht ausgeworfen und die App sagt, man solle es gleich noch einmal versuchen. (3) Nach dem Wiederkommen gilt das Laufwerk für PS4Mount als neu angeschlossen.
+- **Nicht gedeckt:** Der eigenständige Kraken-Mount-Dienst sucht von sich aus in seinen Ordnern auf den Laufwerken; das kann die App nicht anhalten. Auch Vorgänge, die die Seite „PS4 von USB“ von Hand anstößt (Zurücklegen, Neu hinzufügen), sind nicht gesperrt.
+- **Geprüft:** ELF baut (-Werror), alle Host-Tests und die Simulation; **nicht an der Konsole**, der Absturz bleibt unbelegt.
+
 ### PS4Mount und Kraken Mount (FPKGMount) sind ab Werk ausgeschaltet (Wunsch des Users, 21.11.2026)
 - **Vorgabe geändert:** Vom 17. bis 21.11.2026 waren beide ab Werk eingeschaltet (PS4Mount ab 8a7b119, Kraken Mount ab c491493). Jetzt sind beide ab Werk aus; wer eines einschaltet, bei dem bleibt es an.
 - **PS4Mount:** `g_enabled` in `src/ps4m_core.c` startet mit 0. `config.txt` schrieb `enabled=` schon bei jedem Speichern, für „an“ wie für „aus“; die Wahl bleibt also über einen Neustart. Ohne `config.txt` (neue Installation) bleibt es aus.

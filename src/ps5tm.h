@@ -845,7 +845,11 @@ int           ps5tm_filemgr_busy(void);
 int           ps5tm_filemgr_reading(void);
 /* 1 while the drive that `path` lies on is being ejected (usbeject.c): the file manager reads nothing from it then. */
 int           ps5tm_usbeject_covers(const char *path);
-void          ps5tm_filemgr_shutdown(void);                              /* the app ends: a running copy/move/delete is asked to stop */
+/* As ps5tm_usbeject_covers, and for 30 s more after an eject went through: the drive that was ejected and is still plugged in announces itself
+   again within seconds (kernel log of the Pro, 21.11.2026), and a background walk down a drive that is just coming back is I/O on a bridge that
+   is not settled. The scanners of the app (PS4Mount, the library) keep away while this is 1 (22.11.2026). */
+int           ps5tm_usbeject_settling(const char *path);
+void          ps5tm_filemgr_shutdown(void);                             /* the app ends: a running copy/move/delete is asked to stop */
 
 /* The history of the app's jobs (jobhist.c): one line per finished job in /data/PS5-Cooling-Center/history.jsonl.
    result is "done", "failed" or "cancelled"; detail, error may be NULL. */

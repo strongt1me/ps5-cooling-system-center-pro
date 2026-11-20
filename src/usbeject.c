@@ -29,6 +29,7 @@ static struct {
   char     state[12];           /* "" never, running, done, failed */
   char     message[240];
   uint64_t at_ms;
+  uint64_t settle_until_ms;    /* after ShadowMountPlus took the eject: the drive may come back by itself, see ps5tm_usbeject_settling */
 } g_job;
 
 /* 1 while a drive is being ejected, from the first claim to the end (audit 11.11.2026, F-06): the jobs of the app do not start in that
@@ -55,6 +56,29 @@ ps5tm_usbeject_covers(const char *path) {
   }
   pthread_mutex_unlock(&g_lock);
   return hit;
+}
+
+/* The drive of the last eject that ShadowMountPlus took: for this long after it, the app's scanners keep away from it (see ps5tm.h). */
+#define SETTLE_MS 30000
+
+int
+ps5tm_usbeject_settling(const char *path) {
+  if(!path) return 0;
+  pthread_mutex_lock(&g_lock);
+  int hit = 0;
+  if(g_job.mount[0] && (g_job.running || ps5tm_now_ms() < g_job.settle_until_ms)) {
+    size_t ml = strlen(g_job.mount);
+    hit = !strncmp(path, g_job.mount, ml) && (path[ml] == '/' || path[ml] == 0);
+  }
+  pthread_mutex_unlock(&g_lock);
+  return hit;
+}
+
+static void
+settle(void) {
+  pthread_mutex_lock(&g_lock);
+  g_job.settle_until_ms = ps5tm_now_ms() + SETTLE_MS;
+  pthread_mutex_unlock(&g_lock);
 }
 
 /* /mnt/usb0../mnt/usb7 and /mnt/ext0: what ShadowMountPlus calls ejectable (the M.2 drive /mnt/ext1 is not). */
@@ -197,6 +221,7 @@ follow(void *arg) {
     else snprintf(msg, sizeof(msg), "%s wurde nicht ausgeworfen: %s", f->label,
                   why ? why : cJSON_IsString(re) && re->valuestring[0] ? re->valuestring : "ShadowMountPlus lehnte ab.");
     cJSON_Delete(s);
+    settle();
     PS5TM_INFO(ok ? "usb_ejected" : "usb_eject_refused", "%s", msg);
     ps5tm_notify_plain("%s", msg);
     finish(ok ? "done" : "failed", msg);
@@ -205,6 +230,7 @@ follow(void *arg) {
   }
   snprintf(msg, sizeof(msg), "Vom Auswerfen von %s kam keine Rückmeldung. Unter System nachsehen, ob es noch da ist.", f->label);
   PS5TM_WARN("usb_eject_lost", "%s", msg);
+  settle();
   finish("failed", msg);
   free(f);
   return NULL;
@@ -233,6 +259,7 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     snprintf(g_job.state, sizeof(g_job.state), "running");
     snprintf(g_job.message, sizeof(g_job.message), "%s wird ausgeworfen …", label);
     g_job.at_ms = ps5tm_now_ms();
+    g_job.settle_until_ms = 0;
   }
   pthread_mutex_unlock(&g_lock);
   if(busy) {
@@ -255,6 +282,17 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
   }
   if(kraken_game_on(mount)) {
     snprintf(msg, n, "%s wurde nicht ausgeworfen: %s", label, "Ein laufendes Spiel nutzt dieses Laufwerk.");
+    PS5TM_INFO("usb_eject_held", "%s", msg);
+    finish("failed", msg);
+    return 409;
+  }
+
+  /* The scanners of the app (the PS4Mount worker above all: every 10 s a walk down every drive, up to eight levels) look at no drive that is being
+     ejected from now on, as the claim above is made. One that began before it is waited for: the worker holds its lock for the whole of a pass.
+     Cutting a drive off under a walk that is still reading it is what the console does not forgive (reports of 21.11.2026: system storage to
+     repair after an eject from the file manager, now and then, not every time - the timing of the walk). */
+  if(ps4m_wait_drive_free(10000) != 0) {
+    snprintf(msg, n, "%s wurde nicht ausgeworfen: PS4Mount durchsucht gerade ein Laufwerk oder hängt ein Spiel ein oder aus. Gleich noch einmal versuchen.", label);
     PS5TM_INFO("usb_eject_held", "%s", msg);
     finish("failed", msg);
     return 409;

@@ -49,6 +49,7 @@ int ps4m_standalone_active(char *why, size_t n) {
 }
 int ps4m_title_managed(const char *tid) { (void)tid; return 0; }
 int ps4m_game_running_from(const char *tid, const char *mount) { (void)tid; (void)mount; return 0; }
+int ps4m_wait_drive_free(int ms) { (void)ms; return 0; }
 char *ps4m_game_json(const char *tid, char *msg, size_t cap) { (void)tid; snprintf(msg, cap, "Host-Test"); return NULL; }
 int ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap) { (void)tid; (void)rel; snprintf(msg, cap, "Host-Test"); return -1; }
 int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) { (void)tid; (void)on; snprintf(msg, cap, "Host-Test"); return -1; }
@@ -1644,6 +1645,15 @@ int ps4m_game_running_from(const char *tid, const char *mount) {
     return running;
 }
 
+/* (app) Waits for the worker to be between two jobs (see ps4m.h). The lock is the worker's own: it holds it through a scan, a walk down a drive, a
+ * mount or an unmount, and lets go of it only while it waits for the next pass (pump_events), so that getting it means nothing is reading a drive. */
+int ps4m_wait_drive_free(int ms) {
+    if (lock_for_page(ms))
+        return -1;
+    pthread_mutex_unlock(&g_mu);
+    return 0;
+}
+
 static void unmount_all_layers(const char *target, int force);
 
 /* Set while /user/app shows only the games being registered (see mask_user_app): the
@@ -2831,6 +2841,8 @@ static void release_stale(void) {
         snprintf(target, sizeof(target), "/user/app/%s", tid);
         if (!mounted_from(target, from, sizeof(from)) || strncmp(from, "/mnt/", 5))
             continue;
+        if (ps5tm_usbeject_settling(from)) /* (app) nothing is asked of a drive that is being ejected; looked at again once it is settled */
+            continue;
         snprintf(pkg_path, sizeof(pkg_path), "%s/app.pkg", from);
         if (!exists(pkg_path)) {
             printf("[scan] releasing %s (source gone)\n", target);
@@ -2855,6 +2867,12 @@ static void scan_all(void) {
             snprintf(root, sizeof(root), "/mnt/usb%d", i);
         else
             snprintf(root, sizeof(root), "/mnt/ext%d", i - 8);
+        /* (app) a drive that is being ejected, or has just been, is not looked at: not even asked for its mount (statfs), let alone walked down.
+           It counts as new when it is back, so that it is scanned like a drive just plugged in (22.11.2026) */
+        if (ps5tm_usbeject_settling(root)) {
+            seen[i] = 0;
+            continue;
+        }
         int present = is_mountpoint(root);
         if (present)
             scan_root(root, !seen[i] || g_manual_scan, !seen[i] && !first);
