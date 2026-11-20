@@ -2,7 +2,7 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.89.0 – 20.11.2026
 
 ### Übersetzung: halb übersetzte, zusammengesetzte Texte (Nebenbefunde beim Aufnehmen der englischen README-Bilder, 19.11.2026)
 - **Ursache:** Die Übersetzungslaufzeit (`web/i18n.js`, in der Vollbild-App `i18n.cpp`) probiert zuerst die Muster des Wörterbuchs und teilt erst danach bei „ · “ in Stücke. Ein Muster wie „{0} Min.“ nahm dabei „6 Payloads · Stand vor 40“ als seine Zahl und ließ den Rest deutsch („As of vor 40 min“, „Spiel, Update und 2 add-ons“, in der Vollbild-App „Kopiere 1 of 2 files/Ordnern“).
