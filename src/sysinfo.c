@@ -319,6 +319,21 @@ ps5tm_sysinfo_refresh(void) {
 }
 
 
+int
+ps5tm_volume_mounted_now(const char *path) {
+#ifdef PS5TM_HOST_TEST
+  (void)path;
+  return 1;
+#else
+  if(!path) return 0;
+  if(strncmp(path, "/mnt/", 5)) return 1;               /* the internal storage does not go away */
+  if(ps5tm_usbeject_covers(path)) return 1;             /* an eject is running: nothing is asked of that drive (usbeject.c) */
+  struct statfs sf;
+  return statfs(path, &sf) == 0 && !strcmp(sf.f_mntonname, path);   /* its own mount, as add_volume() demands */
+#endif
+}
+
+
 void
 ps5tm_sysinfo_get(ps5tm_sysinfo_t *out) {
   pthread_mutex_lock(&g_lock);

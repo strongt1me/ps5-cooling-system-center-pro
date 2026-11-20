@@ -83,6 +83,8 @@ ps5tm_pkg_drives(ps5tm_pkgdrive_t *out, unsigned max) {
     const char *p = info.volumes[i].path;
     int internal = !strcmp(p, "/user");
     if(!internal && strncmp(p, "/mnt/", 5)) continue;
+    /* the list is five seconds old: a drive that was just ejected or pulled is no mount any more (the file manager showed it as "usb0 2 MB frei") */
+    if(!internal && !ps5tm_volume_mounted_now(p)) continue;
     snprintf(out[n].mount, sizeof(out[n].mount), "%s", p);
     snprintf(out[n].base, sizeof(out[n].base), "%s", internal ? "/data" : p);
     snprintf(out[n].label, sizeof(out[n].label), "%s", info.volumes[i].label);

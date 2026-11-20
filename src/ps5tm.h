@@ -650,6 +650,10 @@ typedef struct {
 void ps5tm_sysinfo_get(ps5tm_sysinfo_t *out);
 /* Background thread only: may block inside a system service. */
 void ps5tm_sysinfo_refresh(void);
+/* 1 when `path` (a volume of the list above) is a mount right now: the list is read every five seconds (probe.c), a drive that was ejected or pulled
+   stays in it for that long, and its mount point is then a plain folder on the small system partition (about 2 MB free). The file manager showed
+   such a drive as "usb0 2 MB frei" (21.11.2026). The internal storage and a drive that is being ejected are not asked. */
+int  ps5tm_volume_mounted_now(const char *path);
 /* Whether SoC channel 7 may be called the graphics side on this model. */
 int  ps5tm_sysinfo_gpu_channel_known(const ps5tm_sysinfo_t *info);
 

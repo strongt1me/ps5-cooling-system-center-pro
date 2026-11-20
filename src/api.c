@@ -2732,6 +2732,7 @@ handle_system(int fd) {
 
   cJSON *vols = cJSON_AddArrayToObject(root, "volumes");
   for(unsigned i = 0; i < info.volume_count; i++) {
+    if(!ps5tm_volume_mounted_now(info.volumes[i].path)) continue;     /* an ejected or pulled drive stays in the five-second-old list for a moment */
     cJSON *v = cJSON_CreateObject();
     cJSON_AddStringToObject(v, "label", info.volumes[i].label);
     cJSON_AddStringToObject(v, "path",  info.volumes[i].path);

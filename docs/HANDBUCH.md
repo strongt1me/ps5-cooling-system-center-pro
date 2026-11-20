@@ -1988,6 +1988,8 @@ Auf der Systemseite gibt es zusätzlich:
   dabei zuerst aus dem Laufwerk heraus (auf die interne SSD, in der Vollbild-App zu den Orten), damit die App währenddessen
   nichts davon liest, wie unter „Speicher“; was der Dateimanager gerade noch liest (Ordnerliste, Größe, Ansicht, Download),
   hält das Auswerfen zurück, und solange es läuft, antwortet er für dieses Laufwerk mit „Das Laufwerk wird gerade ausgeworfen“.
+  Das Auswerfen trennt das Laufwerk nur per Software: Bleibt es gesteckt, meldet es sich nach einigen Sekunden bei der Konsole
+  wieder an und wird neu eingebunden; nach „ausgeworfen“ also abziehen.
 - **Am Handy öffnen (ab 1.52.0)**: ein QR-Code mit der Adresse dieser Seite (`http://<Adresse der Konsole>:<Port>/`). Die Kamera des Handys
   darauf halten, und die Seite geht auf; das Handy muss im selben Netzwerk sein. Der Code enthält nur die Adresse, keine Zugangsdaten und
   keinen Text, den jemand anders bestimmen könnte (die Konsole erzeugt ihn nur für ihre eigene Adresse). Der Encoder (Byte-Modus, Stufe M,
