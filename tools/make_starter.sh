@@ -42,13 +42,8 @@ for t in FAKE86921 FAKE86922; do
 done
 rm -f "$DDS"
 
-# Dump Forge (the engine of the format "FPKG (Debug-.pkg)") comes with both tiles in their folder dumpforge/: the app looks there as well
-# (src/dumpforge.c), so nobody has to fetch it. Pinned and checked by tools/fetch-dumpforge.sh; the app ELF alone does not carry it.
-DF_ELF="$(bash "$ROOT/tools/fetch-dumpforge.sh")"
-for t in FAKE86921 FAKE86922; do
-  mkdir -p "$ROOT/starter/out/$t/dumpforge"
-  cp "$DF_ELF" "$ROOT/starter/out/$t/dumpforge/"
-  cp "$ROOT/third_party/dump_forge/ORIGIN.md" "$ROOT/starter/out/$t/dumpforge/ORIGIN.md"
-done
+# Dump Forge (the engine of the format "FPKG (Debug-.pkg)") is in the app ELF itself since 21.11.2026 (src/dumpforge.c, tools/gen_zstd_blob.py, 8.0 MiB as
+# a zstd frame), and so in the ELF of each tile: the tiles no longer bring a copy in their own folder dumpforge/ (it was 17.7 MiB in each). The app still
+# looks in that folder, so a tile that an older build filled stays valid; a newer file there wins over the built-in program.
 
 for t in FAKE86921 FAKE86922; do echo "ok: starter/out/$t"; ls -l "$ROOT/starter/out/$t/eboot.bin"; done

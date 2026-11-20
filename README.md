@@ -177,7 +177,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 
 **Games**
 - Start (from the console's browser the page closes at once), close, copy to other drives, move or unpack with ShadowMountPlus.
-- Convert to exFAT, ffpkg and ffpfsc images without a PC; everything is read back and checked after writing, with a `.sha256` file. Plus a debug FPKG (`.pkg`) for Kraken Mount, written by Dump Forge (quer3q; the app fetches it on a button press).
+- Convert to exFAT, ffpkg and ffpfsc images without a PC; everything is read back and checked after writing, with a `.sha256` file. Plus a debug FPKG (`.pkg`) for Kraken Mount, written by Dump Forge (quer3q; built into the app).
 - LZ4 asset packs, AMPR index, APR-EMU (ampr_emu and AMPR EMU NG), PlayGo stub and DLC modules per game; check, unpack and repair images.
 - PS4 PKG from USB: PS4 fake PKGs from a USB drive into the library without installing them (PS4Mount by gasb07).
 - FPKGMount: play (F)PKG games and game folders without installing them, with Kraken Mount by quer3q (the app carries and starts it).

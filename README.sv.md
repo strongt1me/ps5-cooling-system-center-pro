@@ -177,7 +177,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 
 **Spel**
 - Starta (från konsolens webbläsare stängs sidan direkt), stäng, kopiera till andra enheter, flytta eller packa upp med ShadowMountPlus.
-- Konvertera till exFAT-, ffpkg- och ffpfsc-avbilder utan dator; allt läses tillbaka och kontrolleras efter skrivningen, med en `.sha256`-fil. Dessutom ett felsöknings-FPKG (`.pkg`) för Kraken Mount, skrivet av Dump Forge (quer3q; appen hämtar det när du trycker på en knapp).
+- Konvertera till exFAT-, ffpkg- och ffpfsc-avbilder utan dator; allt läses tillbaka och kontrolleras efter skrivningen, med en `.sha256`-fil. Dessutom ett felsöknings-FPKG (`.pkg`) för Kraken Mount, skrivet av Dump Forge (quer3q; inbyggt i appen).
 - LZ4-asset-paket, AMPR-index, APR-EMU (ampr_emu och AMPR EMU NG), PlayGo-stub och DLC-moduler per spel; kontrollera, packa upp och reparera avbilder.
 - PS4 PKG från USB: PS4-fake-PKG från en USB-enhet in i biblioteket utan installation (PS4Mount av gasb07).
 - FPKGMount: spela (F)PKG-spel och spelmappar utan installation, med Kraken Mount från quer3q (appen har med sig och startar det).

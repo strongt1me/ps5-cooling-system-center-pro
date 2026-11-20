@@ -4,8 +4,9 @@
 **Autor:** quer3q
 **Quelle:** https://github.com/quer3q/ps5-dump-forge (Tag `v0.5.6`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext im Quellprojekt)
-**Datei:** `ps5-dump-forge-0.5.6-ps5.elf` (PS5-ELF, 18 549 840 Bytes), **nicht in diesem Quellbaum und nicht in der App eingebettet**
-**SHA-256:** `f0415aab6ded1cdf875418b6683ab56aeae3721492af99fba71b08c2c351f82f` (gleich `SHA256SUMS` der Veröffentlichung)
+**Datei:** `ps5-dump-forge-0.5.6-ps5.elf` (PS5-ELF, 18 549 840 Bytes), unverändert aus der Veröffentlichung. Seit dem 21.11.2026 **in der App eingebettet**, als zstd-Rahmen
+`ps5-dump-forge-0.5.6-ps5.elf.zst` (Stufe 19, 8 411 490 Bytes, mit der Größe im Rahmenkopf und der XXH64-Prüfsumme des Rahmens) in diesem Ordner; die ELF selbst liegt nicht im Quellbaum.
+**SHA-256:** `f0415aab6ded1cdf875418b6683ab56aeae3721492af99fba71b08c2c351f82f` (der entpackten ELF; gleich `SHA256SUMS` der Veröffentlichung, steht in `ps5-dump-forge-0.5.6-ps5.elf.sha256`)
 
 ## Verwendung
 
@@ -13,13 +14,16 @@ Dump Forge ist ein eigenes Programm (Rust), das unter anderem ein **Debug-FPKG**
 schreibt (Kompressionsstufen `fast`, `balanced`, `smallest`, `stored`). Die App benutzt es als Motor des Konvertierformats „FPKG
 (Debug-.pkg)“ (Browser-App und Vollbild-App):
 
-- Die ELF holt die App nur auf Knopfdruck („Dump Forge laden“, `POST /api/v1/dumpforge {"action":"fetch"}`) von der neuesten
-  Veröffentlichung auf GitHub (HTTPS, die Prüfsumme wird mit `SHA256SUMS` der Veröffentlichung verglichen) nach
-  `/data/PS5-Cooling-Center/dumpforge/`. Wer sie selbst laden will, legt `ps5-dump-forge-<Version>-ps5.elf` (oder `ps5-dump-forge.elf`) in
-  diesen Ordner; die neueste Version zählt.
-- **Mit den Kacheln:** `tools/make_starter.sh` legt die unveränderte Datei (der Bau lädt sie über `tools/fetch-dumpforge.sh`, feste SHA-256) und diese
-  `ORIGIN.md` in den Ordner `dumpforge/` der beiden Kacheln `FAKE86921` und `FAKE86922`; die App sucht auch in `/data/homebrew/<Kachel>/dumpforge/`. Von allen
-  Stellen zählt die neueste Version, bei gleicher Version der Ordner der App. Wer nur die ELF der App benutzt, lädt Dump Forge mit dem Knopf oder legt es selbst ab.
+- **In der App eingebettet (seit 21.11.2026, Wunsch des Users: wer nur die ELF benutzt, soll nichts laden müssen):** `tools/pack-dumpforge.sh` lädt die Datei über
+  `tools/fetch-dumpforge.sh` (feste SHA-256), packt sie mit `zstd -19` (17,7 MiB auf 8,0 MiB; zlib hätte 10,2 MiB ergeben) und prüft den Rahmen durch Entpacken gegen die SHA-256;
+  `tools/gen_zstd_blob.py` legt den Rahmen unverändert in `gen/dumpforge_blob.c` (`Makefile`, `DF_ZST`), die ELF der App wächst um 8,0 MiB (23,0 MiB). Die App entpackt ihn bei
+  jedem Auftrag im Speicher (`ZSTD_decompress`), vergleicht Größe, ELF-Kennung und SHA-256 und sendet die Datei von dort an den ELF-Lader (`src/dumpforge.c`, `unpack_built_in`);
+  auf die Konsole wird nichts geschrieben. Die Kacheln tragen keine eigene Kopie mehr (`tools/make_starter.sh`); ihr Ordner `dumpforge/` wird nur noch gelesen, falls ein älterer
+  Bau ihn gefüllt hat.
+- **Eine neuere Fassung hat Vorrang:** „Dump Forge laden“ (`POST /api/v1/dumpforge {"action":"fetch"}`) holt die neueste Veröffentlichung nur auf Knopfdruck von GitHub (HTTPS, die
+  Prüfsumme wird mit `SHA256SUMS` der Veröffentlichung verglichen) nach `/data/PS5-Cooling-Center/dumpforge/`; wer sie selbst laden will, legt `ps5-dump-forge-<Version>-ps5.elf` in diesen
+  Ordner. Es zählt die höchste Version aus der eingebauten Datei, dem Ordner der App und den Ordnern der Kacheln; bei gleicher Version geht eine Datei im Ordner der App vor der eingebauten,
+  eine Datei ohne Version im Namen ist älter als die eingebaute. `GET /api/v1/dumpforge` nennt die Quelle (`source`: `built_in` oder `folder`).
 - Für einen Auftrag sendet die App die ELF an den lokalen ELF-Lader (127.0.0.1:9021), schickt `POST /api/start_job` an Dump Forge
   (Port 8095), fragt `GET /api/jobs` nach Fortschritt und Stufen (scan, preflight, check, plan, compress, write, verify, finalize),
   bricht mit `POST /api/cancel_job` ab und beendet das Programm danach mit `POST /api/quit` (`src/dumpforge.c`, `src/gameconvert.c`).

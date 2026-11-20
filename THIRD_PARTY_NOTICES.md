@@ -67,14 +67,14 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   sowie die Fremdbausteine, die Kraken Mount in seiner Datei `THIRD_PARTY_NOTICES` nennt (unter anderem SQLite, gemeinfrei). Eine neuere Veröffentlichung lädt die
   App nur auf Knopfdruck von dort (HTTPS, Prüfsumme aus `SHA256SUMS`).
 - **Dump Forge** (quer3q, GPL-3.0-or-later, Version 0.5.6, <https://github.com/quer3q/ps5-dump-forge>, Tag `v0.5.6`): Motor des
-  Konvertierformats „FPKG (Debug-.pkg)“. Das PS5-Programm `ps5-dump-forge-<Version>-ps5.elf` (18 MB) ist **nicht** in der App eingebettet
-  und nicht in diesem Quellbaum: Die App lädt es nur auf Knopfdruck von der Veröffentlichung auf GitHub (HTTPS, Prüfsumme aus
-  `SHA256SUMS`) nach `/data/PS5-Cooling-Center/dumpforge/` oder nimmt eine dort abgelegte Datei, startet es über den ELF-Lader und gibt ihm
-  die Aufträge über seine Schnittstelle (Port 8095; `src/dumpforge.c`, `src/gameconvert.c`). Aus seinem Quelltext (Rust) ist nichts übernommen;
-  der Quelltext der jeweiligen Fassung steht unter der genannten Adresse. Herkunft: `third_party/dump_forge/ORIGIN.md`.
-  Die beiden Kacheln (`FAKE86921`, `FAKE86922`) tragen die unveränderte Datei in ihrem Ordner `dumpforge/` mit (`tools/make_starter.sh`; der Bau lädt sie
-  von der Veröffentlichung und prüft die feste SHA-256 `858b8ae2954341a3389e4a9f998c6a57d01bc4e4fb8f01a71c41719001c30be7`, `tools/fetch-dumpforge.sh`);
-  daneben liegt die Herkunftsdatei mit Lizenz und Quelladresse.
+  Konvertierformats „FPKG (Debug-.pkg)“ und des Packens beim Konvertieren in exFAT/ffpkg. Das PS5-Programm `ps5-dump-forge-0.5.6-ps5.elf` (18 549 840 Bytes, SHA-256
+  `f0415aab6ded1cdf875418b6683ab56aeae3721492af99fba71b08c2c351f82f`, gleich der `SHA256SUMS` der Veröffentlichung) ist seit dem 21.11.2026 **unverändert** in der App
+  eingebettet, als zstd-Rahmen (Stufe 19, 8 411 490 Bytes: `third_party/dump_forge/ps5-dump-forge-0.5.6-ps5.elf.zst`, `tools/gen_zstd_blob.py`,
+  `tools/pack-dumpforge.sh`). Die App entpackt es für jeden Auftrag im Speicher, vergleicht Größe und SHA-256, startet es über den ELF-Lader und gibt ihm die
+  Aufträge über seine Schnittstelle (Port 8095; `src/dumpforge.c`, `src/gameconvert.c`); eine neuere Datei im Ordner `/data/PS5-Cooling-Center/dumpforge/` (auf
+  Knopfdruck von der Veröffentlichung auf GitHub geladen, HTTPS, Prüfsumme aus `SHA256SUMS`) hat Vorrang. Aus seinem Quelltext (Rust) ist nichts übernommen:
+  Es bleibt ein eigenes Programm, das mit der App nur zusammen ausgeliefert wird; der Quelltext der Fassung steht unter der genannten Adresse (GPL-3.0-or-later).
+  Herkunft: `third_party/dump_forge/ORIGIN.md`.
 - **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.8.0): Für den Reiter „PS4 PKG von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
   (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster

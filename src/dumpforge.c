@@ -6,12 +6,13 @@
  * job over its interface on 127.0.0.1:8095 (POST /api/start_job, GET /api/jobs, POST /api/cancel_job, POST /api/quit) and shows the
  * progress like that of every other conversion (gameconvert.c). Nothing of Dump Forge's source is in this app.
  *
- * The program is not part of the app (it is 18 MB): it lies in the folder /data/PS5-Cooling-Center/dumpforge. The file can be put there by
- * hand (any name ps5-dump-forge-<version>-ps5.elf or ps5-dump-forge.elf; the newest version counts) or loaded on request from the
- * releases of the project (HTTPS, SHA256SUMS of the release checked). Nothing goes online unless the person presses the button.
- * The two tiles bring a copy in their own folder dumpforge/ (tools/make_starter.sh, tools/fetch-dumpforge.sh): the app looks there as well
- * (/data/homebrew/FAKE86921/dumpforge and /data/homebrew/FAKE86922/dumpforge), so whoever uses a tile has to fetch nothing. Of all places
- * the newest version counts; on the same version the folder of the app comes first. */
+ * The program is part of the app since 21.11.2026 (wish of the user: whoever sends only the ELF fetches nothing): the released file (17.7 MiB) lies in
+ * the ELF as a zstd frame (8.0 MiB, level 19: third_party/dump_forge, tools/gen_zstd_blob.py, tools/pack-dumpforge.sh). At the start of a conversion
+ * it is unpacked in memory, size and SHA-256 are compared with the ones built in, and it is handed to the loader from there (as the file of the folder
+ * is). A newer program wins: one in the folder /data/PS5-Cooling-Center/dumpforge (put there by hand as ps5-dump-forge-<version>-ps5.elf, or loaded on
+ * request from the releases of the project: HTTPS, SHA256SUMS of the release checked; nothing goes online unless the person presses the button) or in the
+ * folder dumpforge/ of a tile (older tiles brought a copy there, /data/homebrew/FAKE86921/dumpforge and .../FAKE86922/dumpforge). On the same version the
+ * file of the folder comes first, so a build placed by hand is not overruled; a file that names no version is older than the built-in one. */
 #include <dirent.h>
 #include <errno.h>
 #include <pthread.h>
@@ -27,8 +28,14 @@
 #include "vercmp.h"
 #include "sha256.h"
 #include "third_party/cJSON.h"
+#include "third_party/zstd/lib/zstd.h"
 #include "titleid.h"
 #include "upd_http.h"
+
+/* The built-in program (gen/dumpforge_blob.c, tools/gen_zstd_blob.py): a zstd frame, its size, the size and SHA-256 of the program inside, its version. */
+extern const unsigned char ps5tm_dumpforge_zst[];
+extern const unsigned long ps5tm_dumpforge_zst_len, ps5tm_dumpforge_zst_raw_len;
+extern const char          ps5tm_dumpforge_zst_version[], ps5tm_dumpforge_zst_sha256[];
 
 #define DF_PORT      8095
 #define DF_DIR       PS5TM_DATA_DIR "/dumpforge"
@@ -107,8 +114,15 @@ scan_dir(const char *dir, char *path, size_t pn, char *ver, size_t vn, int found
   return found;
 }
 
-/* The program: its path and version; 1 when there is one (the newest of the files that are ELFs of the right size, in the folder of the app and
-   in the folders of the two tiles; the folder of the app wins on the same version). */
+/* Where find_elf found the program. */
+#define DF_FILE     1                             /* a file in the folder of the app or of a tile (path is set) */
+#define DF_BUILT_IN 2                             /* the one in the ELF (path is empty) */
+
+static void sha_hex(const unsigned char *d, size_t n, char out[65]);
+
+/* The program: DF_FILE with its path and version (the newest of the files that are ELFs of the right size, in the folder of the app and in the folders
+   of the two tiles; the folder of the app wins on the same version) when that is at least as new as the built-in one, else DF_BUILT_IN with the
+   version of the built-in one. Never 0: the program is in the ELF. */
 static int
 find_elf(char *path, size_t pn, char *ver, size_t vn) {
   char best[64] = "";
@@ -119,8 +133,34 @@ find_elf(char *path, size_t pn, char *ver, size_t vn) {
     snprintf(dir, sizeof dir, DF_TILE_DIR, tiles[i]);
     found = scan_dir(dir, path, pn, best, sizeof best, found);
   }
-  if(found) snprintf(ver, vn, "%s", best);
-  return found;
+  if(found && !ver_newer(ps5tm_dumpforge_zst_version, best)) {
+    snprintf(ver, vn, "%s", best);
+    return DF_FILE;
+  }
+  if(pn) path[0] = 0;
+  snprintf(ver, vn, "%s", ps5tm_dumpforge_zst_version);
+  return DF_BUILT_IN;
+}
+
+/* The built-in program, unpacked: a malloc'd copy of len bytes, or NULL with the reason in why. Size, the ELF mark and SHA-256 are checked against what
+   was built in, so that a damaged ELF never hands a broken program to the loader. */
+static unsigned char *
+unpack_built_in(size_t *len, char *why, size_t wn) {
+  size_t raw = (size_t)ps5tm_dumpforge_zst_raw_len;
+  if(raw < DF_ELF_MIN || raw > DF_ELF_MAX) { snprintf(why, wn, "Die eingebaute Fassung von Dump Forge hat eine unglaubwürdige Größe."); return NULL; }
+  unsigned char *buf = malloc(raw);
+  if(!buf) { snprintf(why, wn, "Für Dump Forge fehlt der Speicher (%zu Bytes zum Entpacken).", raw); return NULL; }
+  size_t got = ZSTD_decompress(buf, raw, ps5tm_dumpforge_zst, (size_t)ps5tm_dumpforge_zst_len);
+  char sha[65];
+  if(ZSTD_isError(got) || got != raw) { snprintf(why, wn, "Die eingebaute Fassung von Dump Forge ließ sich nicht entpacken."); free(buf); return NULL; }
+  sha_hex(buf, raw, sha);
+  if(memcmp(buf, "\x7f" "ELF", 4) || strcmp(sha, ps5tm_dumpforge_zst_sha256)) {
+    snprintf(why, wn, "Die eingebaute Fassung von Dump Forge ist beschädigt (Prüfsumme stimmt nicht).");
+    free(buf);
+    return NULL;
+  }
+  *len = raw;
+  return buf;
 }
 
 /* The folder of the app for the program Dump Forge, made at every start of the app (0777 as an FTP copy): whoever puts ps5-dump-forge-VERSION-ps5.elf
@@ -209,8 +249,10 @@ ps5tm_dumpforge_state(void) {
   cJSON_AddBoolToObject(o, "ok", 1);
   char ver[40] = "", rv[40] = "", path[300] = "";
   int have = find_elf(path, sizeof path, ver, sizeof ver);
-  cJSON_AddBoolToObject(o, "installed", have);
+  cJSON_AddBoolToObject(o, "installed", have != 0);      /* the program is in the ELF: always */
   if(have) cJSON_AddStringToObject(o, "version", ver);
+  cJSON_AddStringToObject(o, "source", have == DF_BUILT_IN ? "built_in" : "folder");     /* the one a job would use */
+  cJSON_AddStringToObject(o, "built_in_version", ps5tm_dumpforge_zst_version);
   cJSON_AddStringToObject(o, "folder", DF_DIR);
   int run = running_version(rv, sizeof rv);
   cJSON_AddBoolToObject(o, "running", run);
@@ -243,16 +285,15 @@ ps5tm_dumpforge_start_c(char *msg, size_t n, int (*cancelled)(void)) {
   pthread_mutex_unlock(&g_lock);
   if(!again) {
     char path[300], ver[40];
-    if(!find_elf(path, sizeof path, ver, sizeof ver)) {
-      pthread_mutex_lock(&g_lock); g_started_ms = 0; pthread_mutex_unlock(&g_lock);
-      snprintf(msg, n, "Dump Forge ist nicht da. Die Datei ps5-dump-forge-VERSION-ps5.elf gehört in den Ordner %s (oder „Dump Forge laden“ drücken).", DF_DIR);
-      return -1;
-    }
+    int from = find_elf(path, sizeof path, ver, sizeof ver);
     static const char *const tile_owner[] = { "/data/dumpforge/tile-" DF_TILE_ID ".owner", "/data/ps5-dump-forge/tile-" DF_TILE_ID ".owner" };
     ps5tm_tile_keep_away(DF_TILE_ID, "Dump Forge", tile_owner, 2);
     size_t len = 0;
     unsigned char *elf = NULL;
-    if(elf_file_ok(path, &len)) {
+    char why_in[200] = "";
+    if(from == DF_BUILT_IN) {
+      elf = unpack_built_in(&len, why_in, sizeof why_in);
+    } else if(elf_file_ok(path, &len)) {
       FILE *f = fopen(path, "rb");
       elf = f ? malloc(len) : NULL;
       if(f && elf && fread(elf, 1, len, f) != len) { free(elf); elf = NULL; }
@@ -260,7 +301,8 @@ ps5tm_dumpforge_start_c(char *msg, size_t n, int (*cancelled)(void)) {
     }
     if(!elf) {
       pthread_mutex_lock(&g_lock); g_started_ms = 0; pthread_mutex_unlock(&g_lock);
-      snprintf(msg, n, "Die Datei von Dump Forge ließ sich nicht lesen.");
+      if(why_in[0]) PS5TM_WARN("dumpforge_unpack", "%s", why_in);
+      snprintf(msg, n, "%s", why_in[0] ? why_in : "Die Datei von Dump Forge ließ sich nicht lesen.");
       return -1;
     }
     const char *why = NULL;
@@ -271,7 +313,7 @@ ps5tm_dumpforge_start_c(char *msg, size_t n, int (*cancelled)(void)) {
       snprintf(msg, n, "%s", why ? why : "Dump Forge ließ sich nicht senden.");
       return -1;
     }
-    PS5TM_INFO("dumpforge_start", "Dump Forge %s an den Payload-Lader gesendet.", ver[0] ? ver : "?");
+    PS5TM_INFO("dumpforge_start", "Dump Forge %s (%s) an den Payload-Lader gesendet.", ver[0] ? ver : "?", from == DF_BUILT_IN ? "in der App eingebaut" : "Datei aus dem Ordner");
   }
   for(int i = 0; i < 80; i++) {                    /* it takes a few seconds to bind its port */
     if(ps5tm_dumpforge_running()) { snprintf(msg, n, "Dump Forge läuft."); return 0; }

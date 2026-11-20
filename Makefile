@@ -168,6 +168,7 @@ GEN_SRCS += gen/playgo_blob.c
 GEN_SRCS += gen/dlc_blob.c
 GEN_SRCS += gen/lz4prof_blob.c
 GEN_SRCS += gen/npfakesignin_blob.c
+GEN_SRCS += gen/dumpforge_blob.c
 GEN_SRCS += gen/kraken_blob.c
 GEN_SRCS += gen/bgpause_blob.c
 
@@ -368,6 +369,13 @@ $(KRAKEN_PATCHED): $(KRAKEN_ELF) third_party/kraken_mount/SHA256SUMS tools/patch
 	$(PYTHON) tools/patch_kraken.py $(KRAKEN_ELF) $@
 gen/kraken_blob.c: $(KRAKEN_PATCHED) tools/gen_blob.py | gen
 	$(PYTHON) tools/gen_blob.py $@ $(KRAKEN_PATCHED) ps5tm_kraken
+
+# Dump Forge (quer3q, GPL-3.0-or-later): the released PS5 program, 17.7 MiB, kept as a zstd frame (level 19, 8.0 MiB) in third_party/dump_forge and put into the
+# app as it is (tools/gen_zstd_blob.py). The app unpacks it in memory at the start of a conversion (src/dumpforge.c); a newer file in the folder of the app wins.
+# Made by tools/pack-dumpforge.sh from the pinned release file; the SHA-256 of the unpacked program stands in the .sha256 beside the frame.
+DF_ZST := third_party/dump_forge/ps5-dump-forge-0.5.6-ps5.elf.zst
+gen/dumpforge_blob.c: $(DF_ZST) $(DF_ZST:.zst=.sha256) tools/gen_zstd_blob.py | gen
+	$(PYTHON) tools/gen_zstd_blob.py $@ $(DF_ZST) ps5tm_dumpforge_zst
 
 # The APR-EMU versions (third_party/ampr_emu), packed into the app (tools/gen_emu_blob.py, src/amprlib.c).
 EMU_FILES := $(wildcard third_party/ampr_emu/libSceAmpr.sprx-*)
