@@ -464,9 +464,10 @@ scan_main(void *arg) {
   return NULL;
 }
 
-/* 1 started, 0 one is under way already, -1 could not start */
+/* 1 started, 0 one is under way already, -1 could not start, -2 a drive is being ejected (22.11.2026: the search walks the drives, "measure" to the bottom) */
 int
 ps5tm_dumplib_start(int measure) {
+  if(ps5tm_usbeject_busy()) return -2;
   pthread_mutex_lock(&g_lock);
   if(g_st.scanning) { pthread_mutex_unlock(&g_lock); return 0; }
   g_st.scanning = 1;
@@ -486,6 +487,15 @@ ps5tm_dumplib_start(int measure) {
     return -1;
   }
   return 1;
+}
+
+/* 1 while the search runs: it only reads, so it stops an eject (jobreg.c) but no other job from starting (22.11.2026) */
+int
+ps5tm_dumplib_busy(void) {
+  pthread_mutex_lock(&g_lock);
+  int b = g_st.scanning;
+  pthread_mutex_unlock(&g_lock);
+  return b;
 }
 
 cJSON *

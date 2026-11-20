@@ -32,6 +32,8 @@ static const job_t k_jobs[PS5TM_JOB_COUNT] = {
   [PS5TM_JOB_ORIGAFTER]   = { ps5tm_orig_busy,        "Das Original eines Spiels wird gerade gelöscht oder verschoben", 0 },
   /* the file manager's folder list, view, size and download: only reads, so they stop an eject but no other job from starting (21.11.2026) */
   [PS5TM_JOB_FILEREAD]    = { ps5tm_filemgr_reading,  "Der Dateimanager liest gerade von einem Laufwerk (Ordner, Ansicht, Größe oder Download)", 1 },
+  /* the dump search walks the drives (and "measure" to the bottom): a reader as well (22.11.2026) */
+  [PS5TM_JOB_DUMPLIB]     = { ps5tm_dumplib_busy,     "Die Dumps werden gerade gesucht", 1 },
   [PS5TM_JOB_GAMEMOVE]    = { ps5tm_gamemove_busy,    "ShadowMountPlus verschiebt oder entpackt gerade ein Spiel für die App", 0 },
 };
 

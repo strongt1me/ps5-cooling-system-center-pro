@@ -6258,7 +6258,12 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     cJSON *b = req->body ? cJSON_Parse(req->body) : NULL;
     int measure = b && cJSON_IsTrue(cJSON_GetObjectItem(b, "measure"));
     cJSON_Delete(b);
-    if(ps5tm_dumplib_start(measure) < 0) {
+    int started = ps5tm_dumplib_start(measure);
+    if(started == -2) {
+      ps5tm_http_send_error(fd, 409, "drive_ejecting", "Ein Laufwerk wird gerade ausgeworfen. Die Suche startet erst danach.");
+      return;
+    }
+    if(started < 0) {
       ps5tm_http_send_error(fd, 503, "scan_failed", "Die Suche ließ sich nicht starten.");
       return;
     }
@@ -6296,7 +6301,12 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   if(!strcmp(req->path, "/api/v1/packages/scan")) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                          "Nur POST erlaubt."); return; }
-    if(ps5tm_pkgscan_start() < 0) {
+    int started = ps5tm_pkgscan_start();
+    if(started == -2) {
+      ps5tm_http_send_error(fd, 409, "drive_ejecting", "Ein Laufwerk wird gerade ausgeworfen. Die Suche startet erst danach.");
+      return;
+    }
+    if(started < 0) {
       ps5tm_http_send_error(fd, 503, "scan_failed", "Die Suche ließ sich nicht starten.");
       return;
     }

@@ -21,6 +21,7 @@ STUB(ps5tm_gameconvert_busy, PS5TM_JOB_GAMECONVERT)
 STUB(ps5tm_gamecopy_busy, PS5TM_JOB_GAMECOPY)
 STUB(ps5tm_orig_busy, PS5TM_JOB_ORIGAFTER)
 STUB(ps5tm_filemgr_reading, PS5TM_JOB_FILEREAD)
+STUB(ps5tm_dumplib_busy, PS5TM_JOB_DUMPLIB)
 static int g_move_local;
 int ps5tm_gamemove_busy_local(void) { return g_move_local; }
 int ps5tm_gamemove_busy(void) { g_asked_move++; return g_move_local || g_busy[PS5TM_JOB_GAMEMOVE]; }
@@ -36,7 +37,7 @@ main(void) {
     memset(g_busy, 0, sizeof(g_busy));
     g_busy[j] = 1;
     why[0] = 0;
-    int reads = j == PS5TM_JOB_PKGSCAN || j == PS5TM_JOB_FILEREAD;
+    int reads = j == PS5TM_JOB_PKGSCAN || j == PS5TM_JOB_FILEREAD || j == PS5TM_JOB_DUMPLIB;
     /* a job beside which nothing else may start (the package search and the file manager's reads only read: they stop an eject, no start) */
     CHECK(ps5tm_jobs_busy_except(-1, PS5TM_JOBS_READERS, why, sizeof(why)) == 1 && why[0]);
     CHECK(ps5tm_jobs_busy_except(-1, 0, NULL, 0) == (reads ? 0 : 1));

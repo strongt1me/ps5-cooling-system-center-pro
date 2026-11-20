@@ -327,7 +327,10 @@ ps5tm_volume_mounted_now(const char *path) {
 #else
   if(!path) return 0;
   if(strncmp(path, "/mnt/", 5)) return 1;               /* the internal storage does not go away */
-  if(ps5tm_usbeject_covers(path)) return 1;             /* an eject is running: nothing is asked of that drive (usbeject.c) */
+  /* A drive that is being ejected, or was a moment ago, is no mount for the lists: nothing is asked of it, and it is not handed on as "there" (until 22.11.2026 it
+     returned 1 here, so the package search, the dump search and the places took the drive along just while ShadowMountPlus cut it off). It reappears when the
+     settling time of usbeject.c is over and the console has mounted it again. */
+  if(ps5tm_usbeject_settling(path)) return 0;
   struct statfs sf;
   return statfs(path, &sf) == 0 && !strcmp(sf.f_mntonname, path);   /* its own mount, as add_volume() demands */
 #endif

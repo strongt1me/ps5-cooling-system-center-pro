@@ -1999,9 +1999,11 @@ identities(const fm_args_t *a) {
   return s;
 }
 
-/* POST delete/plan {paths}: what goes, and the token to start it with */
+/* POST delete/plan {paths}: what goes, and the token to start it with. Counts the whole tree of each path (no time limit: the numbers decide about the
+   bar and about what is asked), so it is a long read on a drive: it counts itself as a read for its whole time (with_read below, 22.11.2026; until then
+   it had no check at all) and is refused for a drive that is being ejected. */
 static void
-handle_delete_plan(int fd, const ps5tm_request_t *req) {
+delete_plan_body(int fd, const ps5tm_request_t *req) {
   cJSON *b = parse_body(req);
   fm_args_t a;
   memset(&a, 0, sizeof(a));
@@ -2017,9 +2019,12 @@ handle_delete_plan(int fd, const ps5tm_request_t *req) {
       snprintf(err, sizeof(err), "%.300s darf nicht gelöscht werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", a.src[i]);
       break;
     }
+    const char *eject_msg = "Das Laufwerk wird gerade ausgeworfen. Der Dateimanager liest in dieser Zeit nichts davon; danach geht es wieder.";
+    if(ps5tm_usbeject_covers(a.src[i])) { http = 409; snprintf(err, sizeof(err), "%s", eject_msg); break; }
     if(real_path(a.src[i], rs, sizeof(rs)) != 0 || lstat(rs, &st) != 0) {
       http = 404; snprintf(err, sizeof(err), "%.300s gibt es nicht (mehr).", a.src[i]); break;
     }
+    if(ps5tm_usbeject_covers(rs)) { http = 409; snprintf(err, sizeof(err), "%s", eject_msg); break; }   /* a link may lead onto the drive */
     if(S_ISDIR(st.st_mode)) dirs++;
     count_t c = { 0 };
     count_tree(rs, st.st_dev, 0, &c);
@@ -2202,6 +2207,20 @@ with_read(int fd, const ps5tm_request_t *req, void (*handler)(int, const ps5tm_r
   FM_TEST_HOOK_READ();
 #endif
   handler(fd, req);
+  pthread_mutex_lock(&g_lock);
+  g_reads--;
+  pthread_mutex_unlock(&g_lock);
+}
+
+
+/* The plan counts itself as a read for its whole time, entered first and asked afterwards, as with_read does (an eject that starts beside it sees it and is
+   held back, ps5tm_usbeject_start; or the plan sees the eject and is refused). */
+static void
+handle_delete_plan(int fd, const ps5tm_request_t *req) {
+  pthread_mutex_lock(&g_lock);
+  g_reads++;
+  pthread_mutex_unlock(&g_lock);
+  delete_plan_body(fd, req);
   pthread_mutex_lock(&g_lock);
   g_reads--;
   pthread_mutex_unlock(&g_lock);

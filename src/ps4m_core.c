@@ -49,7 +49,7 @@ int ps4m_standalone_active(char *why, size_t n) {
 }
 int ps4m_title_managed(const char *tid) { (void)tid; return 0; }
 int ps4m_game_running_from(const char *tid, const char *mount) { (void)tid; (void)mount; return 0; }
-int ps4m_wait_drive_free(int ms) { (void)ms; return 0; }
+int ps4m_wait_drive_free(const char *mount, int ms) { (void)mount; (void)ms; return 0; }
 char *ps4m_game_json(const char *tid, char *msg, size_t cap) { (void)tid; snprintf(msg, cap, "Host-Test"); return NULL; }
 int ps4m_choose_update(const char *tid, const char *rel, char *msg, size_t cap) { (void)tid; (void)rel; snprintf(msg, cap, "Host-Test"); return -1; }
 int ps4m_choose_dlc(const char *tid, const char *on, char *msg, size_t cap) { (void)tid; (void)on; snprintf(msg, cap, "Host-Test"); return -1; }
@@ -135,6 +135,10 @@ int sceAppInstUtilAppUnInstall(const char *) __attribute__((weak));
  * earlier in the file, can also use it (PS4Mount 0.7.0). */
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
 static int lock_for_page(int ms);
+/* 1 while the worker is in a round that touches the drives: set at the top of its loop, cleared just before it waits for the next round. It stays 1 where the
+   round lets go of g_mu to wait (pump_events inside install_all, wait_db_quiet, readd_title, run_restore), which is what ps4m_wait_drive_free needs to see
+   (22.11.2026; the lock alone is free there). Written by the worker under g_mu, read under g_mu. */
+static volatile int g_pass;
 void ps4m_rescan(void);
 #define P4M_BUSY "PS4Mount ist gerade beschäftigt: Es fügt hinzu, entfernt oder verschiebt. Bitte gleich noch einmal versuchen."
 
@@ -1645,15 +1649,6 @@ int ps4m_game_running_from(const char *tid, const char *mount) {
     return running;
 }
 
-/* (app) Waits for the worker to be between two jobs (see ps4m.h). The lock is the worker's own: it holds it through a scan, a walk down a drive, a
- * mount or an unmount, and lets go of it only while it waits for the next pass (pump_events), so that getting it means nothing is reading a drive. */
-int ps4m_wait_drive_free(int ms) {
-    if (lock_for_page(ms))
-        return -1;
-    pthread_mutex_unlock(&g_mu);
-    return 0;
-}
-
 static void unmount_all_layers(const char *target, int force);
 
 /* Set while /user/app shows only the games being registered (see mask_user_app): the
@@ -2759,7 +2754,7 @@ static void scan_root(const char *root, int fresh, int reconnected) {
             wait_db_quiet(BATCH_QUIET, 120);
         /* The lock is let go while waiting: the page may have switched PS4Mount off or opened the delete screen meanwhile. The groups still
            to come are not registered then (audit 15.11.2026). */
-        if (g_stop || !g_enabled || g_deleting)
+        if (g_stop || !g_enabled || g_deleting || ps5tm_usbeject_settling(root))   /* (app) an eject began meanwhile: the groups still to come are not touched */
             break;
         if (grouped) {
             buf_t names = {0};
@@ -2794,10 +2789,12 @@ static void scan_root(const char *root, int fresh, int reconnected) {
         install_all(ids, np);
         /* own rows only after ShellCore stopped writing to its databases */
         wait_db_quiet(3, 30);
+        /* (app) the drive is being ejected: its pkgs are not opened again; the games stay as they are and the next scan, once the drive is settled, does the rest */
+        const int cut = ps5tm_usbeject_settling(root);
         for (int k = 0; k < n; k++) {
             title_t *t = &titles[members[k]];
             title_src_t src;
-            if (!prepared[k] || removed(t->tid) || src_open(&src, root, t->tid))   /* removed meanwhile: not put back */
+            if (cut || !prepared[k] || removed(t->tid) || src_open(&src, root, t->tid))   /* removed meanwhile: not put back */
                 continue;
             if (register_finish(&src)) {
                 if (retry_failed(t->tid))
@@ -3099,6 +3096,8 @@ static int find_root(const char *tid, char *root, size_t n) {
             snprintf(r, sizeof(r), "/mnt/usb%d", i);
         else
             snprintf(r, sizeof(r), "/mnt/ext%d", i - 8);
+        if (ps5tm_usbeject_settling(r))   /* (app) a drive that is being ejected is not looked at */
+            continue;
         snprintf(la, sizeof(la), "%s/ps4/%s/app.pkg", r, tid);
         snprintf(lp, sizeof(lp), "%s/ps4/%s/patch.pkg", r, tid);
         if (is_mountpoint(r) && !p4m_pidx_resolve(index_of(r), NULL, tid, la, lp, app, patch, sizeof(app))) {
@@ -3467,6 +3466,8 @@ void ps4m_games_json(buf_t *out) {
             snprintf(root, sizeof(root), "/mnt/usb%d", i);
         else
             snprintf(root, sizeof(root), "/mnt/ext%d", i - 8);
+        if (ps5tm_usbeject_settling(root))   /* (app) the page asks every 5 s: not a drive that is being ejected */
+            continue;
         if (!is_mountpoint(root))
             continue;
         static char tids[MAX_TITLES][10];
@@ -4549,6 +4550,7 @@ static void *ps4m_worker(void *arg) {
     printf("[main] worker started\n");
     int give_way = 0, seen = 0;
     while (!g_stop && g_enabled) {
+        g_pass = 1;
         if (exists(STATE_DIR "/stop")) {
             unlink(STATE_DIR "/stop");
             break;
@@ -4585,13 +4587,15 @@ static void *ps4m_worker(void *arg) {
         if (g_deleting && time(NULL) - g_deleting_since > 600)
             end_delete_window(); /* the line of the screen change was missed */
         /* 0.5.0: moving pkgs back (asked by the page) and adding a title again after the system took it out */
-        if (g_restore_n || g_restore_all) {
+        /* (app) what the person asked for on the drives (put the pkgs back, choose an update or add-ons, add a game again) waits while a drive is being ejected
+           and for 30 s after it (the flags stay set): none of it starts under the eject (22.11.2026) */
+        if ((g_restore_n || g_restore_all) && !ps5tm_usbeject_active()) {
             run_restore(g_restore_all ? NULL : g_restore_tids, g_restore_n);
             g_restore_n = 0;
             g_restore_all = 0;
             continue;
         }
-        if ((g_upd_tid[0] || g_dlc_tid[0]) && !g_deleting) {
+        if ((g_upd_tid[0] || g_dlc_tid[0]) && !g_deleting && !ps5tm_usbeject_active()) {
             if (g_upd_tid[0])
                 apply_update_choice(g_upd_tid, g_upd_rel);
             if (g_dlc_tid[0])
@@ -4600,7 +4604,7 @@ static void *ps4m_worker(void *arg) {
             g_next_scan = 0;
             continue;
         }
-        if (g_readd_tid[0] && !g_deleting) {
+        if (g_readd_tid[0] && !g_deleting && !ps5tm_usbeject_active()) {
             char tid[10];
             snprintf(tid, sizeof(tid), "%s", g_readd_tid);
             g_readd_tid[0] = 0;
@@ -4619,8 +4623,10 @@ static void *ps4m_worker(void *arg) {
         }
         ac_poll();
         ac_tasks(g_deleting);
+        g_pass = 0;             /* between two rounds: an eject may go through (ps4m_wait_drive_free) */
         pump_events(1000);
     }
+    g_pass = 0;
     if (give_way) {
         notify("PS4Mount der App hält an: Das eigenständige PS4Mount läuft. Danach übernimmt die App wieder.");
         printf("[main] the stand-alone PS4Mount runs (%s): this module gives way\n", g_standalone_why);
@@ -4645,6 +4651,27 @@ static void *ps4m_worker(void *arg) {
 static int lock_for_page(int ms) {
     for (int waited = 0;; waited += 50) {
         if (!pthread_mutex_trylock(&g_mu))
+            return 0;
+        if (waited >= ms)
+            return -1;
+        usleep(50 * 1000);
+    }
+}
+
+/* (app) See ps4m.h. Not "the lock is free": the worker lets go of g_mu in the middle of a round (pump_events), then reads and writes the drive on. Looked at here:
+ * the round marker, ShellCore's InstallAll (it reads the pkgs through the links of the hold folders, without g_mu), and add-on copies from this drive (the
+ * system reads the pkg: ac.pkg is copied from the drive). Polled every 50 ms; the first moment all three are clear is the one. */
+int ps4m_wait_drive_free(const char *mount, int ms) {
+    size_t ml = mount ? strlen(mount) : 0;
+    for (int waited = 0;; waited += 50) {
+        int busy = 1;
+        if (!pthread_mutex_trylock(&g_mu)) {
+            busy = g_pass || g_install_busy;
+            for (int i = 0; i < g_acn && !busy; i++)
+                busy = !g_acj[i].ended && ml && !strncmp(g_acj[i].pkg_path, mount, ml) && g_acj[i].pkg_path[ml] == '/';
+            pthread_mutex_unlock(&g_mu);
+        }
+        if (!busy)
             return 0;
         if (waited >= ms)
             return -1;

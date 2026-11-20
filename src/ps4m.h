@@ -32,10 +32,11 @@ int   ps4m_title_managed(const char *tid);
 /* 1 when this PS4Mount game is played right now and its pkgs are on the drive `mount` ("/mnt/usb0"), 0 when not, -1 when that cannot be
    known now (the module's lock is held for long). For the eject of a drive (usbeject.c). */
 int   ps4m_game_running_from(const char *tid, const char *mount);
-/* The eject of a drive has been claimed (ps5tm_usbeject_covers is 1 for it, so no new pass looks at that drive): waits until the module's worker is
-   between two jobs, i.e. no walk down a drive, no scan and no (un)mount is under way. 0 when it is, -1 when it is not within ms (a long pass). The
-   worker holds its lock for the whole of a pass and lets go of it only to wait (22.11.2026). */
-int   ps4m_wait_drive_free(int ms);
+/* The eject of the drive `mount` has been claimed (ps5tm_usbeject_covers is 1 for it, so no new pass looks at that drive): waits until the module is not
+   at work on the drives: the worker is between two rounds (no scan, no restore, no update or add-on choice, no adding of games - it marks the whole round,
+   also where it lets go of its lock to wait: g_pass), ShellCore's InstallAll is not running, and no add-on copy from `mount` is under way. 0 when that is
+   so, -1 when it is not within ms. (Until 22.11.2026 this was only "the lock is free", which it also is in the middle of a round, 22.11.2026.) */
+int   ps4m_wait_drive_free(const char *mount, int ms);
 
 /* The updates and add-ons of one PS4Mount game (0.7.0): {"title_id","name","dlc_limit","updates":[…],"dlcs":[…]},
    malloc'd. NULL with a sentence in msg when the title is not found. */

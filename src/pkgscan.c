@@ -244,9 +244,10 @@ scan_main(void *arg) {
   return NULL;
 }
 
-/* 1 started, 0 one is under way already, -1 could not start */
+/* 1 started, 0 one is under way already, -1 could not start, -2 a drive is being ejected (22.11.2026: the search walks the drives) */
 int
 ps5tm_pkgscan_start(void) {
+  if(ps5tm_usbeject_busy()) return -2;
   pthread_mutex_lock(&g_lock);
   if(g_st.scanning) { pthread_mutex_unlock(&g_lock); return 0; }
   g_st.scanning = 1;

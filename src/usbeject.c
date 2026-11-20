@@ -74,6 +74,15 @@ ps5tm_usbeject_settling(const char *path) {
   return hit;
 }
 
+/* Any drive: the PS4Mount worker puts off what it does on the drives (a restore, an update or add-on choice, adding a game again) while this is 1. */
+int
+ps5tm_usbeject_active(void) {
+  pthread_mutex_lock(&g_lock);
+  int a = g_job.mount[0] && (g_job.running || ps5tm_now_ms() < g_job.settle_until_ms);
+  pthread_mutex_unlock(&g_lock);
+  return a;
+}
+
 static void
 settle(void) {
   pthread_mutex_lock(&g_lock);
@@ -291,8 +300,8 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
      ejected from now on, as the claim above is made. One that began before it is waited for: the worker holds its lock for the whole of a pass.
      Cutting a drive off under a walk that is still reading it is what the console does not forgive (reports of 21.11.2026: system storage to
      repair after an eject from the file manager, now and then, not every time - the timing of the walk). */
-  if(ps4m_wait_drive_free(10000) != 0) {
-    snprintf(msg, n, "%s wurde nicht ausgeworfen: PS4Mount durchsucht gerade ein Laufwerk oder hängt ein Spiel ein oder aus. Gleich noch einmal versuchen.", label);
+  if(ps4m_wait_drive_free(mount, 10000) != 0) {
+    snprintf(msg, n, "%s wurde nicht ausgeworfen: PS4Mount arbeitet gerade (Spiele anmelden, Zusatzinhalte kopieren oder zurücklegen). Gleich noch einmal versuchen.", label);
     PS5TM_INFO("usb_eject_held", "%s", msg);
     finish("failed", msg);
     return 409;
