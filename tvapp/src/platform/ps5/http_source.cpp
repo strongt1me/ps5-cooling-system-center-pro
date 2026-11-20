@@ -1662,6 +1662,10 @@ void HttpSource::run()
                     if (over)
                         poll_fs_places(); // the drive is gone from the places
                 }
+                else if (!active)
+                {
+                    poll_fs_places(); // a drive plugged in or pulled shows at once, as under System
+                }
                 poll_fs_job();
                 bool ended = false;
                 std::string folder;
@@ -4234,8 +4238,21 @@ void HttpSource::poll_fs_places()
     }
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
+    // The list is asked for every few seconds while the page is open (a drive that is plugged in
+    // or pulled shows without leaving the page); the screen is only told when the drives are
+    // others, not when only the free space moved (a list refilled on every poll would restart its
+    // animation).
+    bool same = data_.fs_places.size() == places.size();
+    for (std::size_t i = 0; same && i < places.size(); ++i)
+    {
+        const FsPlace &a = data_.fs_places[i];
+        const FsPlace &b = places[i];
+        same = a.label == b.label && a.path == b.path && a.writable == b.writable &&
+               a.ejectable == b.ejectable;
+    }
     data_.fs_places = std::move(places);
-    ++data_.serial;
+    if (!same)
+        ++data_.serial;
 }
 
 void HttpSource::poll_fs_list(const std::string &path)

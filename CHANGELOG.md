@@ -4,6 +4,11 @@
 
 ## Unveröffentlicht
 
+### Dateimanager: ein angeschlossenes Laufwerk erscheint ohne Bereichswechsel (Rückmeldung nach dem Test an der Pro, 21.11.2026)
+- **Beobachtung:** Nach dem Auswerfen und erneuten Anschließen des Sticks stand er nicht in den Orten, erst nachdem man den Bereich wechselte und zurückkam. Die Orte wurden nur beim ersten Öffnen der Seite (Browser) bzw. beim Betreten des Bereichs (Vollbild-App) gelesen und danach nicht mehr nachgeführt.
+- **Jetzt:** Solange die Seite offen ist, fragt der Browser alle vier Sekunden nach den Orten (`fmPlacesRefresh`), die Vollbild-App alle drei Sekunden, wenn kein Auftrag läuft. Gezeichnet wird nur, wenn sich die Laufwerke ändern, nicht beim freien Platz (die Vollbild-Liste würde sonst bei jeder Abfrage ihre Einblendung neu starten); ein Fehler lässt die alte Liste stehen; während des Auswerfens wird nicht gefragt. Der Browser liest die Orte außerdem bei jedem Wiederkommen auf die Seite neu.
+- **Geprüft nur am PC** (Syntax, Tests der Vollbild-App, Bau); nicht an der Konsole.
+
 ### USB-Laufwerk: Hinweis zum Abziehen und kein „usb0 2 MB frei“ mehr (Rückmeldung nach dem Test an der Pro, 21.11.2026)
 - **Beobachtung:** Nach dem Auswerfen war das Laufwerk wieder da, und der Dateimanager zeigte kurz „usb0 · 2 MB frei“. Das Kernel-Log belegt das Wiederkommen: Das Auswerfen (ShadowMountPlus) trennt den Stick nur per Software; bleibt er gesteckt, meldet er sich nach einigen Sekunden neu an (da1 detached, attached, mounted at /mnt/usb0), und die Konsole bindet ihn wieder ein.
 - **Hinweis:** Die Meldung nach dem Auswerfen sagt es jetzt: „… ist ausgeworfen und kann abgezogen werden. Bleibt das Laufwerk gesteckt, bindet die Konsole es nach einigen Sekunden wieder ein.“ (Meldung links, Toast im Browser, Karte der Vollbild-App; neuer Text in sechs Sprachen, Handbuch ×7).

@@ -10283,15 +10283,44 @@
     fmRender();
   };
 
-  const fmRender = () => {
+  /* Die Orte (Laufwerke) oben im Dateimanager: der längste, in dem der Pfad liegt, ist hervorgehoben. */
+  const fmRenderPlaces = () => {
     const d = fm.list;
-    if (!d) return;
-    /* die Orte: der längste, in dem der Pfad liegt, ist hervorgehoben */
+    if (!d || !$("#fm-places")) return;
     let cur = "";
     fm.places.forEach((p) => {
       if ((d.path === p.path || d.path.startsWith(p.path === "/" ? "/" : `${p.path}/`)) && p.path.length > cur.length) cur = p.path;
     });
     $("#fm-places").innerHTML = fm.places.map((p, i) => `<button type="button" class="gm-chip${p.path === cur ? " active" : ""}" data-fm-place="${i}">${esc(p.label)}${p.writable && p.free_bytes > 0 ? ` <small>${esc(bytes(p.free_bytes))} frei</small>` : ""}</button>${p.ejectable ? `<button type="button" class="gm-chip fm-eject" data-fm-eject="${i}" ${usbEject.running ? "disabled" : ""} title="Sicher auswerfen. Läuft noch ein Auftrag der App, wird nicht ausgeworfen, und die App sagt, welcher Auftrag es ist.">Auswerfen</button>` : ""}`).join("");
+  };
+
+  /* Die Orte nachführen (21.11.2026): Ein Laufwerk, das angeschlossen oder abgezogen wird, erschien erst, wenn man den Bereich wechselte und
+     zurückkam. Solange die Seite offen ist, fragt sie alle paar Sekunden nach; gezeichnet wird nur, wenn sich die Liste (nicht nur der freie Platz)
+     geändert hat, und ein Fehler lässt die alte Liste stehen. Nicht während des Auswerfens (die Konsole liest dann nichts vom Laufwerk). */
+  const fmPlacesSig = (list) => (list || []).map((p) => `${p.path}|${p.label}|${p.ejectable ? 1 : 0}|${p.writable ? 1 : 0}`).join(";");
+  let fmPlacesBusy = false;
+  const fmPlacesRefresh = async () => {
+    if (fmPlacesBusy || !fm.loaded || state.page !== "files" || document.hidden || usbEject.running) return;
+    fmPlacesBusy = true;
+    try {
+      const r = await api("/api/v1/files/places");
+      const list = (r && r.places) || [];
+      if (!list.length) return;
+      const changed = fmPlacesSig(list) !== fmPlacesSig(fm.places);
+      fm.places = list;
+      if (changed) fmRenderPlaces();
+    } catch (e) {
+      /* die alte Liste bleibt */
+    } finally {
+      fmPlacesBusy = false;
+    }
+  };
+  setInterval(fmPlacesRefresh, 4000);
+
+  const fmRender = () => {
+    const d = fm.list;
+    if (!d) return;
+    fmRenderPlaces();
     /* der Pfad zum Anklicken */
     const parts = d.path === "/" ? [] : d.path.slice(1).split("/");
     let acc = "";
@@ -11045,6 +11074,8 @@
       fm.loaded = true;
       await fmLoadPlaces();
       fm.path = fm.path || (fm.places[0] && fm.places[0].path) || "/data";
+    } else {
+      fmPlacesRefresh();                             /* beim Wiederkommen auf die Seite: die Orte neu lesen, ohne zu warten */
     }
     await fmLoad(fm.path);
     fmFollow();
