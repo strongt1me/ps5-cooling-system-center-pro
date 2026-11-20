@@ -2864,12 +2864,9 @@ static void scan_all(void) {
             snprintf(root, sizeof(root), "/mnt/usb%d", i);
         else
             snprintf(root, sizeof(root), "/mnt/ext%d", i - 8);
-        /* (app) a drive that is being ejected, or has just been, is not looked at: not even asked for its mount (statfs), let alone walked down.
-           It counts as new when it is back, so that it is scanned like a drive just plugged in (22.11.2026) */
-        if (ps5tm_usbeject_settling(root)) {
-            seen[i] = 0;
-            continue;
-        }
+        /* (app) a drive that is being ejected, or has just been, is not looked at: not even asked for its mount (statfs), let alone walked down (22.11.2026) */
+        if (ps5tm_usbeject_settling(root))
+            continue;   /* seen[i] stays as it was: an eject that ShadowMountPlus refused never took the drive away, and treating it as plugged in anew would bring the games the person took out back (F-354) */
         int present = is_mountpoint(root);
         if (present)
             scan_root(root, !seen[i] || g_manual_scan, !seen[i] && !first);

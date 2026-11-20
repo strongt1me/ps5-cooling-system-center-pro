@@ -1687,7 +1687,7 @@ int           ps5tm_usbeject_active(void);
 typedef enum {
   PS5TM_JOB_SAVES, PS5TM_JOB_PKGSPLIT, PS5TM_JOB_PKGINST, PS5TM_JOB_PKGSCAN, PS5TM_JOB_GAMEDELETE, PS5TM_JOB_FILEMGR, PS5TM_JOB_AMPR,
   PS5TM_JOB_IMGJOB, PS5TM_JOB_DISC, PS5TM_JOB_USBEJECT, PS5TM_JOB_GAMECONVERT, PS5TM_JOB_GAMECOPY, PS5TM_JOB_ORIGAFTER, PS5TM_JOB_FILEREAD,
-  PS5TM_JOB_DUMPLIB,
+  PS5TM_JOB_DUMPLIB, PS5TM_JOB_DUPIMG,
   PS5TM_JOB_GAMEMOVE,
   PS5TM_JOB_COUNT
 } ps5tm_job_t;
@@ -1808,6 +1808,7 @@ typedef struct {
 void ps5tm_title_marks(const char *title_id, ps5tm_title_marks_t *m);
 int  ps5tm_dumplib_start(int measure);          /* 1 started, 0 one is under way, -1 failed, -2 a drive is being ejected */
 int  ps5tm_dumplib_busy(void);                  /* 1 while the search runs (a reader in jobreg.c) */
+int  ps5tm_dupimg_busy(void);                   /* 1 while a search for images of the same game runs (a reader in jobreg.c) */
 struct cJSON *ps5tm_dumplib_json(void);
 /* Dumping a running PS5 game and its DLC (dump_job.c): GET the settings, the drives, the title and the job; POST {action: start |
    dlc_only | cancel | settings, ...}, which answers an HTTP status with a sentence in msg. */

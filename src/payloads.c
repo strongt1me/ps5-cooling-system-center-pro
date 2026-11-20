@@ -430,6 +430,7 @@ usb_mounts(pl_usb_t *out, unsigned room) {
   ps5tm_sysinfo_get(&info);
   for(unsigned i = 0; i < info.volume_count && n < room; i++) {
     if(strncmp(info.volumes[i].path, "/mnt/usb", 8) != 0) continue;
+    if(ps5tm_usbeject_settling(info.volumes[i].path)) continue;     /* a drive that is being ejected is not read (22.11.2026) */
     snprintf(out[n].mount, sizeof(out[n].mount), "%s", info.volumes[i].path);
     snprintf(out[n].label, sizeof(out[n].label), "%s", info.volumes[i].label);
     n++;

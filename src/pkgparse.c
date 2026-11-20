@@ -670,6 +670,7 @@ ps5tm_pkg_parse_slices(const ps5tm_pkgslice_t *sl, unsigned n, uint64_t total, p
 int
 ps5tm_pkg_icon(const ps5tm_pkg_t *p, uint8_t **data, size_t *n) {
   if(!p || !data || !n || p->icon_size == 0 || p->icon_size >= PKG_MAX_ICON) return -1;
+  if(ps5tm_usbeject_settling(p->path)) return -1;                 /* a drive that is being ejected is not read (22.11.2026) */
   int fd = open(p->path, O_RDONLY | O_NONBLOCK);
   if(fd < 0) return -1;
   struct stat st;

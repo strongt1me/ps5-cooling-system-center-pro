@@ -29,7 +29,6 @@ static struct {
   char     state[12];           /* "" never, running, done, failed */
   char     message[240];
   uint64_t at_ms;
-  uint64_t settle_until_ms;    /* after ShadowMountPlus took the eject: the drive may come back by itself, see ps5tm_usbeject_settling */
 } g_job;
 
 /* 1 while a drive is being ejected, from the first claim to the end (audit 11.11.2026, F-06): the jobs of the app do not start in that
@@ -58,18 +57,33 @@ ps5tm_usbeject_covers(const char *path) {
   return hit;
 }
 
-/* The drive of the last eject that ShadowMountPlus took: for this long after it, the app's scanners keep away from it (see ps5tm.h). */
+/* A drive whose eject ShadowMountPlus took: for this long after it, the app's scanners keep away from it (see ps5tm.h). Kept per drive (usb0..usb7, ext0),
+   so that the eject of a second drive does not end the quiet time of the first (F-356), and on the monotonic clock, which a change of the time of day does
+   not move (F-357). */
 #define SETTLE_MS 30000
+#define SETTLE_SLOTS 9
+static uint64_t g_settle_until[SETTLE_SLOTS];     /* 0: not settling; else ps5tm_mono_ms() until which it is */
+
+/* usb0..usb7 -> 0..7, ext0 -> 8, the drive `path` lies on (or is); -1 for anything else. */
+static int
+slot_of(const char *path) {
+  if(!path) return -1;
+  if(!strncmp(path, "/mnt/ext0", 9) && (path[9] == '/' || path[9] == 0)) return 8;
+  if(!strncmp(path, "/mnt/usb", 8) && path[8] >= '0' && path[8] <= '7' && (path[9] == '/' || path[9] == 0)) return path[8] - '0';
+  return -1;
+}
 
 int
 ps5tm_usbeject_settling(const char *path) {
   if(!path) return 0;
   pthread_mutex_lock(&g_lock);
   int hit = 0;
-  if(g_job.mount[0] && (g_job.running || ps5tm_now_ms() < g_job.settle_until_ms)) {
+  if(g_job.running && g_job.mount[0]) {
     size_t ml = strlen(g_job.mount);
     hit = !strncmp(path, g_job.mount, ml) && (path[ml] == '/' || path[ml] == 0);
   }
+  int s = slot_of(path);
+  if(!hit && s >= 0 && g_settle_until[s] && ps5tm_mono_ms() < g_settle_until[s]) hit = 1;
   pthread_mutex_unlock(&g_lock);
   return hit;
 }
@@ -78,15 +92,21 @@ ps5tm_usbeject_settling(const char *path) {
 int
 ps5tm_usbeject_active(void) {
   pthread_mutex_lock(&g_lock);
-  int a = g_job.mount[0] && (g_job.running || ps5tm_now_ms() < g_job.settle_until_ms);
+  int a = g_job.running;
+  uint64_t now = ps5tm_mono_ms();
+  for(int i = 0; i < SETTLE_SLOTS && !a; i++) a = g_settle_until[i] && now < g_settle_until[i];
   pthread_mutex_unlock(&g_lock);
   return a;
 }
 
+/* ShadowMountPlus took the eject of `mount` (or may have): the drive is left alone for SETTLE_MS. Not for a refusal that came before anything was cut off
+   (a game runs from it, it is in use): there the drive never went away, and it would only vanish from the lists for nothing. */
 static void
-settle(void) {
+settle(const char *mount) {
+  int s = slot_of(mount);
+  if(s < 0) return;
   pthread_mutex_lock(&g_lock);
-  g_job.settle_until_ms = ps5tm_now_ms() + SETTLE_MS;
+  g_settle_until[s] = ps5tm_mono_ms() + SETTLE_MS;
   pthread_mutex_unlock(&g_lock);
 }
 
@@ -191,6 +211,17 @@ reason_text(const char *r) {
   return NULL;
 }
 
+/* The refusal codes of ShadowMountPlus that come from its checks before it touches the drive: nothing was cut off then. The two others
+   (usb_eject_failed, usb_eject_unconfirmed) are after the detach was tried, the drive may be gone or half gone. */
+static int
+refused_before_detach(const char *r) {
+  static const char *const k[] = { "game_active", "runtime_prepared", "runtime_busy", "scanner_busy", "usb_mount_busy", "usb_partition_busy",
+                                   "usb_image_busy", "usb_disk_busy", "usb_mount_changed" };
+  for(size_t i = 0; r && i < sizeof(k) / sizeof(k[0]); i++)
+    if(!strcmp(r, k[i])) return 1;
+  return 0;
+}
+
 static void
 finish(const char *state, const char *msg) {
   pthread_mutex_lock(&g_lock);
@@ -229,8 +260,9 @@ follow(void *arg) {
     if(ok) snprintf(msg, sizeof(msg), "%s ist ausgeworfen und kann abgezogen werden. Bleibt das Laufwerk gesteckt, bindet die Konsole es nach einigen Sekunden wieder ein.", f->label);
     else snprintf(msg, sizeof(msg), "%s wurde nicht ausgeworfen: %s", f->label,
                   why ? why : cJSON_IsString(re) && re->valuestring[0] ? re->valuestring : "ShadowMountPlus lehnte ab.");
+    const int before = !ok && cJSON_IsString(rr) && refused_before_detach(rr->valuestring);
     cJSON_Delete(s);
-    settle();
+    if(!before) settle(f->mount);
     PS5TM_INFO(ok ? "usb_ejected" : "usb_eject_refused", "%s", msg);
     ps5tm_notify_plain("%s", msg);
     finish(ok ? "done" : "failed", msg);
@@ -239,7 +271,7 @@ follow(void *arg) {
   }
   snprintf(msg, sizeof(msg), "Vom Auswerfen von %s kam keine Rückmeldung. Unter System nachsehen, ob es noch da ist.", f->label);
   PS5TM_WARN("usb_eject_lost", "%s", msg);
-  settle();
+  settle(f->mount);
   finish("failed", msg);
   free(f);
   return NULL;
@@ -268,7 +300,6 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     snprintf(g_job.state, sizeof(g_job.state), "running");
     snprintf(g_job.message, sizeof(g_job.message), "%s wird ausgeworfen …", label);
     g_job.at_ms = ps5tm_now_ms();
-    g_job.settle_until_ms = 0;
   }
   pthread_mutex_unlock(&g_lock);
   if(busy) {
@@ -336,6 +367,8 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
   cJSON *ans = ps5tm_smp_call("/storage/eject", body, 8000, err, sizeof(err));
   cJSON_Delete(body);
   if(!ans) {
+    /* no answer in time: ShadowMountPlus may have taken it and be cutting the drive off now (a refusal it answers is one that came before anything was cut: smp.c) */
+    if(!strncmp(err, "ShadowMountPlus antwortet nicht", 31)) settle(mount);
     snprintf(msg, n, "%s wurde nicht ausgeworfen: %s", label, err);
     finish("failed", msg);
     return 409;
@@ -355,6 +388,7 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
   if(!f || pthread_create(&t, &at, follow, f) != 0) {
     free(f);
     pthread_attr_destroy(&at);
+    settle(mount);                                    /* ShadowMountPlus took it: nobody follows, the drive is still left alone */
     snprintf(msg, n, "%s: Auswerfen angestoßen, die App kann es aber nicht verfolgen.", label);
     finish("failed", msg);
     return 202;

@@ -4,6 +4,14 @@
 
 ## Unveröffentlicht
 
+### Auswerfen: P1 und P2 des Audits vom 22.11.2026 (Fund F-352 bis F-357)
+- **Weitere Leser (F-352):** Ein Laufwerk, das ausgeworfen wird oder es vor kurzem wurde (30 s nach der Annahme durch ShadowMountPlus), wird jetzt auch hier nicht angefasst: Größenläufe der Bibliothek (`real_size`), Lesen der Abbilder in der Bibliotheks-Probe, Suche nach doppelten Abbildern (Wurzeln; dazu lehnt „Beiseitelegen“ mit 409 ab), Payload-Liste der Laufwerke, Paket-Bild (`ps5tm_pkg_icon`). Die Suche nach doppelten Abbildern steht als Leser im Jobregister (`PS5TM_JOB_DUPIMG`, Test erweitert) und hält einen Auswurf zurück, solange sie läuft.
+- **Dateimanager (F-353):** Auch Ordner anlegen, Umbenennen und Speichern zählen sich für ihre Dauer als Lesezugriff; ein Auswurf, der daneben startet, wird zurückgehalten (sie selbst lehnen bei laufendem Auswurf schon ab).
+- **Ruhezeit je Laufwerk und monoton (F-356, F-357):** Die 30 s gelten je Laufwerk (usb0 bis usb7, ext0); der Auswurf eines zweiten Laufwerks beendet die Ruhezeit des ersten nicht mehr. Gemessen wird mit der monotonen Uhr, nicht mit der Uhrzeit.
+- **Ruhezeit nur, wenn etwas abgetrennt sein kann (F-354, F-355):** Keine Ruhezeit mehr nach einer Ablehnung, die ShadowMountPlus vor dem Abtrennen ausspricht (Spiel läuft, Laufwerk in Benutzung u. ä.): das Laufwerk war nie weg und verschwindet nicht für 30 s aus den Listen. Dafür neu: Ruhezeit auch bei Zeitüberschreitung der Anfrage `/storage/eject` und wenn der Verfolger-Faden nicht startet. PS4Mount behandelt ein Laufwerk, das nur in der Ruhezeit war, nicht mehr als neu angesteckt: Ein abgelehnter Auswurf holt damit keine per „Kachel entfernen“ herausgenommenen Spiele zurück.
+- **Weiterhin offen:** Alles außerhalb der App (Kernel, ShadowMountPlus, FTP, Kraken-Prozess); die Ursache des Absturzes ist unbelegt.
+- **Geprüft:** ELF baut (-Werror), 36 Host-Tests und Simulation; **nicht an der Konsole**.
+
 ### Auswerfen: Lücken aus dem Audit vom 22.11.2026 geschlossen (P0; Fund F-349, F-350, F-351, F-353)
 - **Ausgangslage:** Das Audit (`.warroom/audit/60-*`, 13 Rohfunde, 10 bestätigt) zeigte, dass 85603de nur den regelmäßigen PS4Mount-Lauf vom Laufwerk fernhält. Die Ursache des Absturzes bleibt weiter **unbelegt**; das hier sind die bestätigten Lücken, keine Behebung des Absturzes.
 - **Laufwerksliste (F-351):** `ps5tm_volume_mounted_now` meldete beim Auswurf „eingehängt“ (1), sodass Paketsuche, Dump-Suche und Orte das Laufwerk gerade dann mitnahmen. Jetzt meldet es für ein Laufwerk, das ausgeworfen wird oder es vor kurzem wurde (30 s nach der Annahme durch ShadowMountPlus), „nicht eingehängt“; es erscheint wieder, wenn die Ruhezeit vorbei und es neu eingebunden ist. `POST /api/v1/packages/scan` und `/api/v1/dumps/scan` antworten beim Auswurf mit 409 `drive_ejecting`; die Dump-Suche steht jetzt als Leser im Jobregister (`PS5TM_JOB_DUMPLIB`) und hält einen Auswurf zurück.

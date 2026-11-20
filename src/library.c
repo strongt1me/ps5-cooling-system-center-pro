@@ -625,6 +625,8 @@ dir_size(const char *path, int depth) {
    refresh(), with g_refresh_lock held. */
 static int64_t
 real_size(const char *path, int is_folder) {
+  /* a drive that is being ejected is not walked (22.11.2026); the size last known stays */
+  if(!is_folder && ps5tm_usbeject_settling(path)) return -1;
   if(!is_folder) {
     struct stat st;
     return stat(path, &st) == 0 ? (int64_t)st.st_size : -1;
@@ -637,6 +639,7 @@ real_size(const char *path, int is_folder) {
   }
   uint64_t now = ps5tm_mono_ms();
   if(c && now - c->ms < c->ttl_ms) return c->size;
+  if(ps5tm_usbeject_settling(path)) return c ? c->size : -1;
 
   int64_t sz = dir_size(path, 0);
   if(sz < 0) return c ? c->size : -1;
@@ -2603,6 +2606,7 @@ probe_read_images(void) {
   int done = 0, tried = 0;
   for(int i = 0; i < n && tried < PROBE_MAX_TITLES; i++) {                          /* at most 40 reads a round, out of all image games (audit F-260) */
     struct stat st;
+    if(ps5tm_usbeject_settling(img[i].path)) continue;                             /* a drive that is being ejected is not read (22.11.2026) */
     if(stat(img[i].path, &st) != 0 || !S_ISREG(st.st_mode)) continue;            /* the drive is not there now */
     int have = 0;
     pthread_mutex_lock(&g_refresh_lock);

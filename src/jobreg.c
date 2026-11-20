@@ -34,6 +34,7 @@ static const job_t k_jobs[PS5TM_JOB_COUNT] = {
   [PS5TM_JOB_FILEREAD]    = { ps5tm_filemgr_reading,  "Der Dateimanager liest gerade von einem Laufwerk (Ordner, Ansicht, Größe oder Download)", 1 },
   /* the dump search walks the drives (and "measure" to the bottom): a reader as well (22.11.2026) */
   [PS5TM_JOB_DUMPLIB]     = { ps5tm_dumplib_busy,     "Die Dumps werden gerade gesucht", 1 },
+  [PS5TM_JOB_DUPIMG]      = { ps5tm_dupimg_busy,      "Es wird nach doppelten Abbildern gesucht", 1 },
   [PS5TM_JOB_GAMEMOVE]    = { ps5tm_gamemove_busy,    "ShadowMountPlus verschiebt oder entpackt gerade ein Spiel für die App", 0 },
 };
 

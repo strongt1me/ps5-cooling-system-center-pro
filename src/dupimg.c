@@ -196,6 +196,7 @@ search_thread(void *arg) {
   di_list_t *l = arg;
   for(int r = 0; k_roots[r]; r++) {
     struct stat st;
+    if(ps5tm_usbeject_settling(k_roots[r])) continue;      /* a drive that is being ejected is not read */
     if(stat(k_roots[r], &st) != 0 || !S_ISDIR(st.st_mode)) continue;
     scan_dir(l, k_roots[r], 1);
   }
@@ -208,19 +209,26 @@ search_thread(void *arg) {
   return NULL;
 }
 
+/* 1 while a search runs: it reads the drives (and the images on them) in the thread of the request, no job - so it stops an eject as a reader (jobreg.c, 22.11.2026) */
+static volatile int g_busy;
+int
+ps5tm_dupimg_busy(void) { return __atomic_load_n(&g_busy, __ATOMIC_ACQUIRE) > 0; }
+
 static int
 search(di_list_t *l) {
   l->v = calloc(DI_MAX, sizeof(*l->v));
   l->n = 0;
   if(!l->v) return -1;
+  __atomic_fetch_add(&g_busy, 1, __ATOMIC_ACQ_REL);          /* entered before the drives are looked at, as with_read does: an eject sees it or the search sees the eject */
   pthread_t th;
   pthread_attr_t at;
   pthread_attr_init(&at);
   pthread_attr_setstacksize(&at, DI_STACK);
   int rc = pthread_create(&th, &at, search_thread, l);
   pthread_attr_destroy(&at);
-  if(rc != 0) { free(l->v); l->v = NULL; return -1; }
+  if(rc != 0) { free(l->v); l->v = NULL; __atomic_fetch_sub(&g_busy, 1, __ATOMIC_RELEASE); return -1; }
   pthread_join(th, NULL);
+  __atomic_fetch_sub(&g_busy, 1, __ATOMIC_RELEASE);
   return 0;
 }
 
@@ -333,6 +341,7 @@ ps5tm_dupimg_set_aside(const char *path, int undo, char *err, size_t n) {
       return 409;
     }
   }
+  if(ps5tm_usbeject_settling(path)) { snprintf(err, n, "Das Laufwerk wird gerade ausgeworfen. Danach geht es wieder."); return 409; }
   if(rename(path, to) != 0) { snprintf(err, n, "Das Umbenennen ging nicht: %s", ps5tm_io_strerror(errno)); return 500; }
   PS5TM_INFO(undo ? "dupimg_back" : "dupimg_aside", "%s: %s → %s", undo ? "Abbild zurückgeholt" : "Abbild beiseitegelegt", path, to);
   ps5tm_smp_forget();

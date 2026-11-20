@@ -2213,6 +2213,19 @@ with_read(int fd, const ps5tm_request_t *req, void (*handler)(int, const ps5tm_r
 }
 
 
+/* mkdir, rename and write: short, but they write on the drive, and an eject that starts beside them must see them (F-353, 22.11.2026). Entered before anything
+   else, left at the end; the eject refuses to start while they run, and they refuse to start while it runs (other_job_active in each). */
+static void
+with_count(int fd, const ps5tm_request_t *req, void (*handler)(int, const ps5tm_request_t *)) {
+  pthread_mutex_lock(&g_lock);
+  g_reads++;
+  pthread_mutex_unlock(&g_lock);
+  handler(fd, req);
+  pthread_mutex_lock(&g_lock);
+  g_reads--;
+  pthread_mutex_unlock(&g_lock);
+}
+
 /* The plan counts itself as a read for its whole time, entered first and asked afterwards, as with_read does (an eject that starts beside it sees it and is
    held back, ps5tm_usbeject_start; or the plan sees the eject and is refused). */
 static void
@@ -2253,8 +2266,8 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
       case 1: with_read(fd, req, handle_list); break;
       case 2: with_read(fd, req, handle_download); break;
       case 3: send_obj(fd, 200, job_json()); break;
-      case 4: handle_mkdir(fd, req); break;
-      case 5: handle_rename(fd, req); break;
+      case 4: with_count(fd, req, handle_mkdir); break;
+      case 5: with_count(fd, req, handle_rename); break;
       case 6: handle_copy(fd, req, 0); break;
       case 7: handle_copy(fd, req, 1); break;
       case 8: handle_delete_plan(fd, req); break;
@@ -2271,7 +2284,7 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
       }
       case 11: with_read(fd, req, handle_view); break;
       case 12: with_read(fd, req, handle_size); break;
-      case 13: handle_write(fd, req); break;
+      case 13: with_count(fd, req, handle_write); break;
     }
     return 1;
   }
