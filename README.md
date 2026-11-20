@@ -186,7 +186,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 
 **Management**
 - File manager: view, edit, download and upload (whole folders too), create folders, rename, copy, move, delete – everywhere, with speed and time left while copying; deleting asks first and names what will go.
-- Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence; download and update the payloads from itsPLK's Payload Manager list (SHA-256 checked).
+- Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence; download and update the payloads from itsPLK's Payload Manager list and from strongt1me's list (SHA-256 checked).
 - Profile: display name and profile picture (30 built-in pictures or your own file).
 - Design: Standard, Light, Dark and Optimal (fastest to draw, meant for the TV); every device remembers its choice.
 - System: model, firmware, uptime, storage, network; raw sensors and diagnostics in expert mode.

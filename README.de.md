@@ -186,7 +186,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 
 **Verwaltung**
 - Dateimanager: ansehen, bearbeiten, herunter- und hochladen (auch ganze Ordner), Ordner anlegen, umbenennen, kopieren, verschieben, löschen – überall, mit Geschwindigkeit und Restzeit beim Kopieren; Löschen fragt zuerst und nennt, was weggeht.
-- Payloads: laufende ansehen und beenden, eigene `.elf` aus einem Ordner oder vom USB-Stick starten, Profile als Startfolge; die Payloads aus der Liste des Payload Managers von itsPLK herunterladen und aktualisieren (mit SHA-256-Prüfung).
+- Payloads: laufende ansehen und beenden, eigene `.elf` aus einem Ordner oder vom USB-Stick starten, Profile als Startfolge; die Payloads aus der Liste des Payload Managers von itsPLK und aus der Liste von strongt1me herunterladen und aktualisieren (mit SHA-256-Prüfung).
 - Profil: Anzeigename und Profilbild (30 eingebaute Bilder oder eigene Datei).
 - Design: Standard, Hell, Dunkel und Optimal (am schnellsten gezeichnet, gedacht für den Fernseher); jedes Gerät merkt sich seine Wahl.
 - System: Modell, Firmware, Laufzeit, Speicher, Netzwerk; Rohsensoren und Diagnose im Expertenmodus.

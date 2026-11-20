@@ -2546,8 +2546,9 @@
   };
 
   /* ── Payloads herunterladen (paystore.c, 19.10.2026) ──────────────────────────────────────────────
-     Die Liste des Payload Managers von itsPLK. Beim Öffnen der Seite fragt die App nur dann im Internet nach, wenn schon einmal
-     eine Liste geladen wurde und sie älter als drei Stunden ist (?refresh=1); das erste Mal lädt erst „Liste laden“. */
+     Die Liste des Payload Managers von itsPLK und die von strongt1me (seit 21.11.2026, eine Anzeige). Beim Öffnen der Seite fragt die App
+     nur dann im Internet nach, wenn schon einmal eine Liste geladen wurde und eine davon älter als drei Stunden ist (?refresh=1); das erste
+     Mal lädt erst „Liste laden“. */
   const ps = { data: null, q: "", cat: "", timer: 0, sig: "" };
   const PS_CAT = { "Utilities & Tools": "Werkzeuge", "Networking & Servers": "Netzwerk & Server",
                    "System & Jailbreak": "System & Jailbreak", "Loaders": "Lader" };

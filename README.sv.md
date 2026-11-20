@@ -186,7 +186,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 
 **Hantering**
 - Filhanterare: visa, redigera, hämta och ladda upp (även hela mappar), skapa mappar, byta namn, kopiera, flytta, ta bort – överallt, med hastighet och återstående tid vid kopiering; borttagning frågar först och anger vad som försvinner.
-- Payloads: se och avsluta pågående, starta egna `.elf` från en mapp eller ett USB-minne, profiler som startföljd; hämta och uppdatera payloads från itsPLK:s Payload Manager-lista (med SHA-256-kontroll).
+- Payloads: se och avsluta pågående, starta egna `.elf` från en mapp eller ett USB-minne, profiler som startföljd; hämta och uppdatera payloads från itsPLK:s Payload Manager-lista och från strongt1mes lista (med SHA-256-kontroll).
 - Profil: visningsnamn och profilbild (30 inbyggda bilder eller en egen fil).
 - Tema: Standard, Ljust, Mörkt och Optimal (snabbast att rita, tänkt för TV:n); varje enhet minns sitt val.
 - System: modell, firmware, drifttid, lagring, nätverk; råa sensorer och diagnos i expertläge.

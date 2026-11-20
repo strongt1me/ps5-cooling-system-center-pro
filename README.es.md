@@ -186,7 +186,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 
 **Gestión**
 - Gestor de archivos: ver, editar, descargar y subir (también carpetas enteras), crear carpetas, cambiar nombre, copiar, mover, eliminar – en todas partes, con velocidad y tiempo restante al copiar; eliminar pregunta primero y nombra lo que se borrará.
-- Payloads: ver y detener los que están en marcha, iniciar `.elf` propios desde una carpeta o un USB, perfiles como secuencia de inicio; descargar y actualizar los payloads de la lista del Payload Manager de itsPLK (con comprobación SHA-256).
+- Payloads: ver y detener los que están en marcha, iniciar `.elf` propios desde una carpeta o un USB, perfiles como secuencia de inicio; descargar y actualizar los payloads de la lista del Payload Manager de itsPLK y de la lista de strongt1me (con comprobación SHA-256).
 - Perfil: nombre visible e imagen de perfil (30 imágenes integradas o un archivo propio).
 - Diseño: estándar, claro, oscuro y óptimo (el más rápido de dibujar, pensado para el televisor); cada dispositivo recuerda su elección.
 - Sistema: modelo, firmware, tiempo activo, almacenamiento, red; sensores en bruto y diagnóstico en modo experto.

@@ -506,7 +506,7 @@ class PayloadsPage final : public Page
                                         : "Meine Payloads";
             text = view_ == kFiles
                        ? "Payloads aus /data/PS5-Cooling-Center/payloads und von USB-Sticks."
-                   : view_ == kStore ? "Liste: itsPLK ps5-payloads-mirror."
+                   : view_ == kStore ? "Listen: itsPLK ps5-payloads-mirror und strongt1me ps5-payload-source."
                                      : "";
         }
         float title_w = card.w - 60.0f;

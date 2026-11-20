@@ -12,7 +12,10 @@
  * is). A newer program wins: one in the folder /data/PS5-Cooling-Center/dumpforge (put there by hand as ps5-dump-forge-<version>-ps5.elf, or loaded on
  * request from the releases of the project: HTTPS, SHA256SUMS of the release checked; nothing goes online unless the person presses the button) or in the
  * folder dumpforge/ of a tile (older tiles brought a copy there, /data/homebrew/FAKE86921/dumpforge and .../FAKE86922/dumpforge). On the same version the
- * file of the folder comes first, so a build placed by hand is not overruled; a file that names no version is older than the built-in one. */
+ * file of the folder comes first, so a build placed by hand is not overruled; a file that names no version is older than the built-in one. A file of a
+ * folder counts only when it is whole (dfcheck.h, 21.11.2026): of the built-in version its SHA-256 must be the built-in one, a newer one must not be cut off
+ * (its headers and what they point at lie inside the file; the app knows no sum of a version it was not built with). Otherwise the file is passed over
+ * (a line dumpforge_file in the log) and the next best, at last the built-in program, takes its place. */
 #include <dirent.h>
 #include <errno.h>
 #include <pthread.h>
@@ -23,6 +26,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "dfcheck.h"
 #include "lhttp.h"
 #include "ps5tm.h"
 #include "vercmp.h"
@@ -93,7 +97,51 @@ elf_file_ok(const char *path, size_t *size) {
   return ok;
 }
 
-/* The best program in one folder: its path and version into path/ver when it is newer than what is there (found: 1 when path/ver hold one). */
+/* What was found out about a file of a folder (is it whole?): its place, size and time of change decide whether the answer still holds, so that a question
+   about the state (the page asks every few seconds) does not read 18 MB each time. */
+#define DF_VC 8
+static struct { char path[300]; off_t size; time_t mtime; int ok; } g_vc[DF_VC];
+static unsigned        g_vc_next;
+static pthread_mutex_t g_vc_lock = PTHREAD_MUTEX_INITIALIZER;     /* only for the table: no file is read while it is held */
+
+/* 1 when the file `path`, named for version `ver` (not older than the built-in one), may be used in place of the built-in program: of the built-in version
+   it has the SHA-256 built in, of a newer one it is not cut off (the app knows no sum of that). The answer is kept; a file that could not be read to its
+   end is passed over this time and not remembered. */
+static int
+file_whole(const char *path, const char *ver) {
+  struct stat st;
+  if(stat(path, &st) != 0) return 0;
+  pthread_mutex_lock(&g_vc_lock);
+  for(int i = 0; i < DF_VC; i++) {
+    if(g_vc[i].path[0] && !strcmp(g_vc[i].path, path) && g_vc[i].size == st.st_size && g_vc[i].mtime == st.st_mtime) {
+      int ok = g_vc[i].ok;
+      pthread_mutex_unlock(&g_vc_lock);
+      return ok;
+    }
+  }
+  pthread_mutex_unlock(&g_vc_lock);
+  int ok;
+  if(!ver_newer(ver, ps5tm_dumpforge_zst_version)) {               /* the built-in version: its sum is known */
+    int m = ps5tm_df_sha_matches(path, ps5tm_dumpforge_zst_sha256);
+    if(m < 0) return 0;
+    ok = m;
+    if(!ok) PS5TM_WARN("dumpforge_file", "%s ist nicht die Datei von Dump Forge %s (die Prüfsumme stimmt nicht) und wird nicht benutzt.", path, ver);
+  } else {
+    ok = ps5tm_df_elf_complete(path, (uint64_t)st.st_size);
+    if(!ok) PS5TM_WARN("dumpforge_file", "%s ist abgeschnitten oder keine ELF-Datei für die PS5 und wird nicht benutzt.", path);
+  }
+  pthread_mutex_lock(&g_vc_lock);
+  unsigned i = g_vc_next++ % DF_VC;
+  snprintf(g_vc[i].path, sizeof g_vc[i].path, "%s", path);
+  g_vc[i].size  = st.st_size;
+  g_vc[i].mtime = st.st_mtime;
+  g_vc[i].ok    = ok;
+  pthread_mutex_unlock(&g_vc_lock);
+  return ok;
+}
+
+/* The best program in one folder: its path and version into path/ver when it is newer than what is there (found: 1 when path/ver hold one). A file older
+   than the built-in program never wins, so it is not even read; one that is not whole (file_whole) is passed over. */
 static int
 scan_dir(const char *dir, char *path, size_t pn, char *ver, size_t vn, int found) {
   DIR *d = opendir(dir);
@@ -101,9 +149,9 @@ scan_dir(const char *dir, char *path, size_t pn, char *ver, size_t vn, int found
   struct dirent *e;
   while((e = readdir(d))) {
     char v[40];
-    if(elf_name_version(e->d_name, v, sizeof v) < 0) continue;
+    if(elf_name_version(e->d_name, v, sizeof v) < 0 || ver_newer(ps5tm_dumpforge_zst_version, v)) continue;
     char p[300];
-    if(snprintf(p, sizeof p, "%s/%s", dir, e->d_name) >= (int)sizeof p || !elf_file_ok(p, NULL)) continue;
+    if(snprintf(p, sizeof p, "%s/%s", dir, e->d_name) >= (int)sizeof p || !elf_file_ok(p, NULL) || !file_whole(p, v)) continue;
     if(!found || ver_newer(v, ver)) {
       found = 1;
       snprintf(ver, vn, "%s", v);

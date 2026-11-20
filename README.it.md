@@ -186,7 +186,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 
 **Gestione**
 - Gestione file: visualizzare, modificare, scaricare e caricare (anche cartelle intere), creare cartelle, rinominare, copiare, spostare, eliminare – ovunque, con velocità e tempo residuo durante la copia; l'eliminazione chiede prima conferma e indica cosa verrà eliminato.
-- Payload: vedere e fermare quelli in esecuzione, avviare i propri `.elf` da una cartella o da una chiavetta USB, profili come sequenza di avvio; scaricare e aggiornare i payload dall'elenco del Payload Manager di itsPLK (con controllo SHA-256).
+- Payload: vedere e fermare quelli in esecuzione, avviare i propri `.elf` da una cartella o da una chiavetta USB, profili come sequenza di avvio; scaricare e aggiornare i payload dall'elenco del Payload Manager di itsPLK e da quello di strongt1me (con controllo SHA-256).
 - Profilo: nome visualizzato e immagine del profilo (30 immagini integrate o un file proprio).
 - Tema: standard, chiaro, scuro e ottimale (il più veloce da disegnare, pensato per il televisore); ogni dispositivo ricorda la sua scelta.
 - Sistema: modello, firmware, tempo di attività, memoria, rete; sensori grezzi e diagnostica in modalità esperto.

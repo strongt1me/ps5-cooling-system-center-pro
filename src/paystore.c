@@ -5,6 +5,11 @@
  * description, file name, URL and SHA-256 into that list. Only the URL is used here; nothing of the mirror is part of
  * this app.
  *
+ * Since 21.11.2026 (wish of the user) a second list of the same shape stands beside it: the payloads of strongt1me,
+ * https://raw.githubusercontent.com/strongt1me/ps5-payload-source/main/payloads.json. Both are fetched together, each
+ * is kept in a file of its own (a list that cannot be reached keeps its last copy), and the page shows one list. When
+ * the two name the same id or the same file, the first one (itsPLK's) keeps it.
+ *
  * What the app does with it:
  *   - The list is fetched when the person asks for it ("Liste laden"), and later, once one is there, when the payloads
  *     page is opened and the list is older than three hours (the Payload Manager's interval). Nothing else goes online.
@@ -16,8 +21,9 @@
  *   - Starting goes the usual way (payloads.c: the loader on port 9021).
  *
  * The network: the app's own HTTPS client (upd_http.c, BearSSL, TLS 1.2), the app's own name lookup (upd_dns.c), the
- * roots of GitHub's certificates only (upd_ca.h, UPD_WEB_*), https only, and every hop on GitHub's hosts: the list on
- * itsplk.github.io, the files on github.com, which sends them on to release-assets.githubusercontent.com. */
+ * roots of GitHub's certificates only (upd_ca.h, UPD_WEB_*), https only, and every hop on GitHub's hosts: the lists on
+ * itsplk.github.io and raw.githubusercontent.com, the files on github.com, which sends them on to
+ * release-assets.githubusercontent.com. */
 
 #include <ctype.h>
 #include <errno.h>
@@ -38,15 +44,12 @@
 #include "third_party/cJSON.h"
 #include "upd_http.h"
 
-#define PS_CATALOG_URL   "https://itsplk.github.io/ps5-payloads-mirror/payloads_v2.json"
-#define PS_SOURCE_NAME   "itsPLK ps5-payloads-mirror"
 #ifndef PS_DIR
 #define PS_DIR           PS5TM_DATA_DIR "/payload-store"
 #endif
 #ifndef PS_PAY_DIR
 #define PS_PAY_DIR       PS5TM_DATA_DIR "/payloads"
 #endif
-#define PS_CATALOG       PS_DIR "/catalog.json"
 #define PS_INDEX         PS_DIR "/installed.json"
 #define PS_TTL_S         (3 * 3600)
 #define PS_MAX_CATALOG   (2u << 20)
@@ -57,14 +60,32 @@
 typedef struct {
   char id[64], name[80], filename[96], url[400], version[48], category[48], description[480];
   char last_update[16], source[200], checksum[65];
+  int  src;                                /* the list it came from: an index into g_srcs */
 } ps_item_t;
 
+/* The lists, in the order that decides who keeps an id or a file name both name. Each is saved in a file of its own. */
+typedef struct {
+  const char *name, *url, *file;
+} ps_src_t;
+static const ps_src_t g_srcs[] = {
+  { "itsPLK ps5-payloads-mirror",   "https://itsplk.github.io/ps5-payloads-mirror/payloads_v2.json",                           PS_DIR "/catalog.json" },
+  { "strongt1me ps5-payload-source", "https://raw.githubusercontent.com/strongt1me/ps5-payload-source/main/payloads.json", PS_DIR "/catalog-strongt1me.json" },
+};
+#define PS_NSRC ((int)(sizeof g_srcs / sizeof g_srcs[0]))
+
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
-static ps_item_t      *g_items;
+static ps_item_t      *g_items;            /* all the lists in one: what the page shows */
 static int             g_n = -1;           /* -1: no list read yet (not even the saved one) */
-static int64_t         g_cat_at;           /* when the list was fetched (wall clock, s) */
-static char            g_cat_err[200];
+static struct {                            /* each list as it was read last (fetched or saved) */
+  ps_item_t *items;
+  int        n;
+  int64_t    at;                           /* when it was fetched (wall clock, s); 0: not at all yet */
+  char       err[200];                     /* why the last fetch of it failed, "" when it did not */
+} g_sv[PS_NSRC];
+static int64_t         g_cat_at;           /* when the oldest of the lists that are there was fetched (wall clock, s) */
+static char            g_cat_err[240];
 static int             g_fetching;
+static unsigned        g_gen;              /* grows with every change of the lists: the pictures are looked for again */
 
 enum { PJ_IDLE = 0, PJ_RUNNING, PJ_DONE, PJ_FAILED, PJ_CANCELLED };
 static struct {
@@ -221,9 +242,12 @@ ver_cmp(const char *a, const char *b) {
 
 /* ---------------------------------------------------------------- the list */
 
-/* Parses payloads_v2.json (or the bare array of payloads.json). Entries that do not pass every check are left out. */
+static int owner_ok(const char *o);
+
+/* Parses a list of the source `src` (payloads_v2.json of the mirror, or a list of the same shape; also the bare array of payloads.json). Entries that do
+   not pass every check are left out. */
 static int
-parse_catalog(const char *json, ps_item_t **out, int *count) {
+parse_catalog(const char *json, int src, ps_item_t **out, int *count) {
   cJSON *root = cJSON_Parse(json);
   if(!root) return -1;
   const cJSON *arr = cJSON_IsArray(root) ? root : cJSON_GetObjectItem(root, "payloads");
@@ -237,6 +261,7 @@ parse_catalog(const char *json, ps_item_t **out, int *count) {
     if(!cJSON_IsObject(e)) continue;
     ps_item_t *it = &items[n];
     memset(it, 0, sizeof *it);
+    it->src = src;
     copy_field(e, "name", it->name, sizeof it->name);
     copy_field(e, "filename", it->filename, sizeof it->filename);
     copy_field(e, "url", it->url, sizeof it->url);
@@ -245,6 +270,11 @@ parse_catalog(const char *json, ps_item_t **out, int *count) {
     copy_field(e, "description", it->description, sizeof it->description);
     copy_field(e, "last_update", it->last_update, sizeof it->last_update);
     copy_field(e, "source", it->source, sizeof it->source);
+    if(!it->source[0]) {                             /* no source page: the author's GitHub name stands for it (the picture of the developer) */
+      char au[48];
+      copy_field(e, "author", au, sizeof au);
+      if(owner_ok(au)) snprintf(it->source, sizeof it->source, "https://github.com/%s", au);
+    }
     copy_field(e, "checksum", it->checksum, sizeof it->checksum);
     for(char *p = it->checksum; *p; p++) *p = (char)tolower((unsigned char)*p);
     const cJSON *idv = cJSON_GetObjectItem(e, "id");
@@ -259,85 +289,131 @@ parse_catalog(const char *json, ps_item_t **out, int *count) {
     n++;
   }
   cJSON_Delete(root);
-  *out = items;
+  ps_item_t *small = realloc(items, (n ? (size_t)n : 1) * sizeof *items);      /* only what is there stays in memory */
+  *out = small ? small : items;
   *count = n;
   return 0;
+}
+
+/* Under g_lock: the lists in one, g_items. The first list comes first and keeps an id or a file that a later one names too (two payloads in one
+   file would overwrite each other in the folder). g_cat_at is the time of the oldest of the lists that are there. */
+static void
+merge_locked(void) {
+  int total = 0;
+  for(int s = 0; s < PS_NSRC; s++) total += g_sv[s].n;
+  ps_item_t *all = malloc((total ? (size_t)total : 1) * sizeof *all);
+  if(!all) return;                                   /* what was there stays */
+  int n = 0;
+  for(int s = 0; s < PS_NSRC; s++)
+    for(int i = 0; i < g_sv[s].n; i++) {
+      const ps_item_t *it = &g_sv[s].items[i];
+      int dup = 0;
+      for(int k = 0; k < n && !dup; k++)
+        if(!strcmp(all[k].id, it->id) || (all[k].src != it->src && !strcasecmp(all[k].filename, it->filename))) dup = 1;
+      if(!dup) all[n++] = *it;
+    }
+  free(g_items);
+  g_items = all;
+  g_n = n;
+  int64_t at = 0;
+  for(int s = 0; s < PS_NSRC; s++)
+    if(g_sv[s].n > 0 && g_sv[s].at > 0 && (!at || g_sv[s].at < at)) at = g_sv[s].at;
+  g_cat_at = at;
+  g_gen++;
 }
 
 static void
 load_saved_locked(void) {
   if(g_n >= 0) return;
   g_n = 0;
-  size_t len = 0;
-  char *b = read_file(PS_CATALOG, PS_MAX_CATALOG, &len);
-  if(!b) return;
-  ps_item_t *items = NULL;
-  int n = 0;
-  if(parse_catalog(b, &items, &n) == 0) {
-    free(g_items);
-    g_items = items;
-    g_n = n;
-    struct stat st;
-    if(stat(PS_CATALOG, &st) == 0) g_cat_at = (int64_t)st.st_mtime;
+  for(int s = 0; s < PS_NSRC; s++) {
+    size_t len = 0;
+    char *b = read_file(g_srcs[s].file, PS_MAX_CATALOG, &len);
+    if(!b) continue;
+    ps_item_t *items = NULL;
+    int n = 0;
+    if(parse_catalog(b, s, &items, &n) == 0) {
+      free(g_sv[s].items);
+      g_sv[s].items = items;
+      g_sv[s].n = n;
+      struct stat st;
+      g_sv[s].at = stat(g_srcs[s].file, &st) == 0 ? (int64_t)st.st_mtime : 1;     /* 1: very old, so it is asked for again */
+    }
+    free(b);
   }
-  free(b);
+  merge_locked();
 }
 
-/* Fetches the list (outside the lock). 0, or -1 with the reason in g_cat_err. */
+/* Fetches the lists, one after the other (outside the lock). 0: all of them; 2: some, the others keep their saved copy, with the reason in g_cat_err;
+   -1: none, the reason in g_cat_err; 1: another fetch is running. */
 static int
 fetch_catalog(void) {
   pthread_mutex_lock(&g_lock);
   if(g_fetching) { pthread_mutex_unlock(&g_lock); return 1; }   /* another fetch is running: nothing new yet */
   g_fetching = 1;
+  load_saved_locked();                               /* the saved copies first: a list that cannot be fetched stays in what is shown */
   pthread_mutex_unlock(&g_lock);
 
-  upd_req_t r;
-  memset(&r, 0, sizeof r);
-  r.url = PS_CATALOG_URL;
-  r.trust = UPD_TRUST_WEB;
-  r.max_redirects = 3;
-  r.hop_ok = hop_ok;
-  r.connect_ms = 10000;
-  r.idle_ms = 20000;
-  r.total_ms = 45000;
-  r.range_from = -1;
-  r.range_to = -1;
-  r.extra_header = "Accept: application/json";
-  upd_res_t res;
-  char *buf = NULL;
-  size_t len = 0;
-  int rc = upd_http_fetch(&r, PS_MAX_CATALOG, &buf, &len, &res);
-  ps_item_t *items = NULL;
-  int n = 0;
-  char err[200] = "";
-  if(rc != 0) snprintf(err, sizeof err, "Die Liste ließ sich nicht laden (%s%s%d).", res.step[0] ? res.step : "http", res.status ? " " : "", res.status);
-  else if(parse_catalog(buf, &items, &n) != 0) snprintf(err, sizeof err, "Die Liste ist kein gültiges JSON.");
-  else if(n == 0) snprintf(err, sizeof err, "Die Liste enthält keinen brauchbaren Eintrag.");
-  if(!err[0]) {
-    mkdir(PS5TM_DATA_DIR, 0777);
-    mkdir(PS_DIR, 0777);
-    if(write_atomic(PS_CATALOG, buf, len) != 0)
-      PS5TM_WARN("paystore_save", "Payload-Liste: ließ sich nicht speichern (%s).", strerror(errno));
+  int ok = 0;
+  for(int s = 0; s < PS_NSRC; s++) {
+    upd_req_t r;
+    memset(&r, 0, sizeof r);
+    r.url = g_srcs[s].url;
+    r.trust = UPD_TRUST_WEB;
+    r.max_redirects = 3;
+    r.hop_ok = hop_ok;
+    r.connect_ms = 10000;
+    r.idle_ms = 20000;
+    r.total_ms = 45000;
+    r.range_from = -1;
+    r.range_to = -1;
+    r.extra_header = "Accept: application/json";
+    upd_res_t res;
+    char *buf = NULL;
+    size_t len = 0;
+    int rc = upd_http_fetch(&r, PS_MAX_CATALOG, &buf, &len, &res);
+    ps_item_t *items = NULL;
+    int n = 0;
+    char err[200] = "";
+    if(rc != 0) snprintf(err, sizeof err, "Die Liste von %s ließ sich nicht laden (%s%s%d).", g_srcs[s].name, res.step[0] ? res.step : "http", res.status ? " " : "", res.status);
+    else if(parse_catalog(buf, s, &items, &n) != 0) snprintf(err, sizeof err, "Die Liste von %s ist kein gültiges JSON.", g_srcs[s].name);
+    else if(n == 0) snprintf(err, sizeof err, "Die Liste von %s enthält keinen brauchbaren Eintrag.", g_srcs[s].name);
+    if(!err[0]) {
+      mkdir(PS5TM_DATA_DIR, 0777);
+      mkdir(PS_DIR, 0777);
+      if(write_atomic(g_srcs[s].file, buf, len) != 0)
+        PS5TM_WARN("paystore_save", "Payload-Liste: ließ sich nicht speichern (%s).", strerror(errno));
+    }
+    free(buf);
+
+    pthread_mutex_lock(&g_lock);
+    if(err[0]) {
+      snprintf(g_sv[s].err, sizeof g_sv[s].err, "%s", err);
+      free(items);
+    } else {
+      free(g_sv[s].items);
+      g_sv[s].items = items;
+      g_sv[s].n = n;
+      g_sv[s].at = ps5tm_now_ms() / 1000;
+      g_sv[s].err[0] = 0;
+      ok++;
+    }
+    pthread_mutex_unlock(&g_lock);
+    if(err[0]) PS5TM_WARN("paystore_fetch", "Payload-Liste: %s", err);
   }
-  free(buf);
 
   pthread_mutex_lock(&g_lock);
   g_fetching = 0;
-  if(err[0]) {
-    snprintf(g_cat_err, sizeof g_cat_err, "%s", err);
-    free(items);
-    pthread_mutex_unlock(&g_lock);
-    PS5TM_WARN("paystore_fetch", "Payload-Liste: %s", err);
-    return -1;
-  }
-  free(g_items);
-  g_items = items;
-  g_n = n;
-  g_cat_at = ps5tm_now_ms() / 1000;
+  if(ok) merge_locked();
   g_cat_err[0] = 0;
+  size_t off = 0;
+  for(int s = 0; s < PS_NSRC; s++)
+    if(g_sv[s].err[0] && off < sizeof g_cat_err)
+      off += (size_t)snprintf(g_cat_err + off, sizeof g_cat_err - off, "%s%s", off ? " " : "", g_sv[s].err);
+  int total = g_n;
   pthread_mutex_unlock(&g_lock);
-  PS5TM_INFO("paystore_fetched", "Payload-Liste geladen: %d Payloads.", n);
-  return 0;
+  if(ok) PS5TM_INFO("paystore_fetched", "Payload-Liste geladen: %d Payloads.", total);
+  return ok == PS_NSRC ? 0 : ok ? 2 : -1;
 }
 
 /* ---------------------------------------------------------------- what is installed */
@@ -592,7 +668,7 @@ install_thread(void *arg) {
 
 static int     g_av_running;
 static int     g_av_net_logged;
-static int64_t g_av_scanned_at = -1;               /* the list (g_cat_at) the last pass went through */
+static unsigned g_av_scanned_gen;                  /* the state of the lists (g_gen) the last pass went through */
 static char g_av_tried[PS_AV_OWNERS][40];
 static int  g_av_ntried;
 
@@ -713,8 +789,8 @@ avatar_thread(void *arg) {
 static void
 avatars_kick(void) {
   pthread_mutex_lock(&g_lock);
-  int start = g_n > 0 && !g_av_running && g_av_scanned_at != g_cat_at;
-  if(start) { g_av_running = 1; g_av_scanned_at = g_cat_at; }
+  int start = g_n > 0 && !g_av_running && g_av_scanned_gen != g_gen;
+  if(start) { g_av_running = 1; g_av_scanned_gen = g_gen; }
   pthread_mutex_unlock(&g_lock);
   if(!start) return;
   pthread_attr_t a;
@@ -748,17 +824,19 @@ ps5tm_paystore_json(int refresh) {
   pthread_mutex_lock(&g_lock);
   load_saved_locked();
   int64_t now = ps5tm_now_ms() / 1000;
-  int stale = g_n <= 0 || now - g_cat_at >= PS_TTL_S || now < g_cat_at;
+  /* a list that was never fetched (a new one came with an update of the app) or is old makes it old */
+  int stale = g_n <= 0;
+  for(int s = 0; s < PS_NSRC && !stale; s++)
+    if(g_sv[s].at == 0 || now - g_sv[s].at >= PS_TTL_S || now < g_sv[s].at) stale = 1;
   /* refresh 1: only when a list was loaded once before and is old by now; 2: always (the button) */
   int want = refresh == 2 || (refresh == 1 && g_n > 0 && stale && now >= g_next_try_s);
-  int64_t before = g_cat_at;
   pthread_mutex_unlock(&g_lock);
   if(want) {
-    fetch_catalog();
+    int fr = fetch_catalog();
     pthread_mutex_lock(&g_lock);
     int64_t t = ps5tm_now_ms() / 1000;
-    if(g_cat_at != before) { g_backoff_s = 0; g_next_try_s = 0; }
-    else {
+    if(fr == 0) { g_backoff_s = 0; g_next_try_s = 0; }
+    else if(fr != 1) {                               /* a list that did not come: the next try by itself waits longer each time */
       g_backoff_s = g_backoff_s ? (g_backoff_s * 2 > 10800 ? 10800 : g_backoff_s * 2) : 600;
       g_next_try_s = t + g_backoff_s;
     }
@@ -769,8 +847,23 @@ ps5tm_paystore_json(int refresh) {
   cJSON *idx = index_load();
   pthread_mutex_lock(&g_lock);
   cJSON_AddBoolToObject(o, "ok", 1);
-  cJSON_AddStringToObject(o, "source", PS_SOURCE_NAME);
-  cJSON_AddStringToObject(o, "source_url", PS_CATALOG_URL);
+  char names[160] = "";
+  for(int s = 0; s < PS_NSRC; s++) {
+    size_t used = strlen(names);
+    snprintf(names + used, sizeof names - used, "%s%s", used ? " + " : "", g_srcs[s].name);
+  }
+  cJSON_AddStringToObject(o, "source", names);
+  cJSON_AddStringToObject(o, "source_url", g_srcs[0].url);
+  cJSON *lists = cJSON_AddArrayToObject(o, "sources");
+  for(int s = 0; s < PS_NSRC; s++) {
+    cJSON *l = cJSON_CreateObject();
+    cJSON_AddStringToObject(l, "name", g_srcs[s].name);
+    cJSON_AddStringToObject(l, "url", g_srcs[s].url);
+    cJSON_AddNumberToObject(l, "count", g_sv[s].n);
+    cJSON_AddNumberToObject(l, "fetched_at", (double)g_sv[s].at);
+    if(g_sv[s].err[0]) cJSON_AddStringToObject(l, "error", g_sv[s].err);
+    cJSON_AddItemToArray(lists, l);
+  }
   cJSON_AddNumberToObject(o, "fetched_at", (double)g_cat_at);
   cJSON_AddNumberToObject(o, "age_s", g_cat_at ? (double)(now - g_cat_at) : -1);
   cJSON_AddBoolToObject(o, "loaded", g_n > 0);
@@ -787,6 +880,7 @@ ps5tm_paystore_json(int refresh) {
     cJSON_AddStringToObject(x, "description", it->description);
     cJSON_AddStringToObject(x, "last_update", it->last_update);
     cJSON_AddStringToObject(x, "source", it->source);
+    cJSON_AddStringToObject(x, "list", g_srcs[it->src].name);
     char owner[40];
     owner_of(it->source, owner, sizeof owner);
     cJSON_AddStringToObject(x, "owner", owner);
@@ -840,8 +934,8 @@ ps5tm_paystore_action(const cJSON *b, char *msg, size_t mn) {
 
   if(!strcmp(a, "refresh")) {
     int fr = fetch_catalog();
-    if(fr > 0) { snprintf(msg, mn, "Die Liste wird gerade geladen."); return 409; }
-    if(fr != 0) {
+    if(fr == 1) { snprintf(msg, mn, "Die Liste wird gerade geladen."); return 409; }
+    if(fr < 0) {                                     /* none of the lists came; when only some did not, the page shows why (error) */
       pthread_mutex_lock(&g_lock);
       snprintf(msg, mn, "%s", g_cat_err);
       pthread_mutex_unlock(&g_lock);

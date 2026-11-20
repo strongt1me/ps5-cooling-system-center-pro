@@ -186,7 +186,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 
 **Gestion**
 - Gestionnaire de fichiers : afficher, modifier, télécharger et téléverser (dossiers entiers compris), créer des dossiers, renommer, copier, déplacer, supprimer – partout, avec débit et temps restant pendant la copie ; la suppression demande d'abord confirmation et nomme ce qui disparaît.
-- Payloads : voir et arrêter ceux en cours, lancer ses propres `.elf` depuis un dossier ou une clé USB, profils comme séquence de démarrage ; télécharger et mettre à jour les payloads de la liste du Payload Manager d'itsPLK (vérification SHA-256).
+- Payloads : voir et arrêter ceux en cours, lancer ses propres `.elf` depuis un dossier ou une clé USB, profils comme séquence de démarrage ; télécharger et mettre à jour les payloads de la liste du Payload Manager d'itsPLK et de celle de strongt1me (vérification SHA-256).
 - Profil : nom affiché et image de profil (30 images intégrées ou un fichier personnel).
 - Thème : standard, clair, sombre et optimal (le plus rapide à dessiner, pensé pour le téléviseur) ; chaque appareil retient son choix.
 - Système : modèle, firmware, durée de fonctionnement, stockage, réseau ; capteurs bruts et diagnostic en mode expert.
