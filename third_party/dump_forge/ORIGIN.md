@@ -20,7 +20,7 @@ schreibt (Kompressionsstufen `fast`, `balanced`, `smallest`, `stored`). Die App 
   jedem Auftrag im Speicher (`ZSTD_decompress`), vergleicht Größe, ELF-Kennung und SHA-256 und sendet die Datei von dort an den ELF-Lader (`src/dumpforge.c`, `unpack_built_in`);
   auf die Konsole wird nichts geschrieben. Die Kacheln tragen keine eigene Kopie mehr (`tools/make_starter.sh`); ihr Ordner `dumpforge/` wird nur noch gelesen, falls ein älterer
   Bau ihn gefüllt hat.
-- **Eine neuere Fassung hat Vorrang:** „Dump Forge laden“ (`POST /api/v1/dumpforge {"action":"fetch"}`) holt die neueste Veröffentlichung nur auf Knopfdruck von GitHub (HTTPS, die
+- **Eine neuere Fassung hat Vorrang:** „Neue Fassung von GitHub laden“ (Browser, im Konvertieren-Fenster; vorher „Dump Forge laden“, das mit dem Einbau nicht mehr erschien; `POST /api/v1/dumpforge {"action":"fetch"}`) holt die neueste Veröffentlichung nur auf Knopfdruck von GitHub (HTTPS, die
   Prüfsumme wird mit `SHA256SUMS` der Veröffentlichung verglichen) nach `/data/PS5-Cooling-Center/dumpforge/`; wer sie selbst laden will, legt `ps5-dump-forge-<Version>-ps5.elf` in diesen
   Ordner. Es zählt die höchste Version aus der eingebauten Datei, dem Ordner der App und den Ordnern der Kacheln; bei gleicher Version geht eine Datei im Ordner der App vor der eingebauten,
   eine Datei ohne Version im Namen ist älter als die eingebaute. `GET /api/v1/dumpforge` nennt die Quelle (`source`: `built_in` oder `folder`).
