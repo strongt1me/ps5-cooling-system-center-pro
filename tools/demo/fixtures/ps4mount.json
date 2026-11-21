@@ -1,0 +1,1 @@
+{"ok":true,"enabled":false,"running":false,"version":"0.8.0","games":[],"skipped":[],"config":{"batch":true,"batch_size":5,"dlc":true,"dlc_copy":true,"restore_batch":5,"max_restore_batch":10,"fast_reg":false,"paths":["/","/pkg"]}}

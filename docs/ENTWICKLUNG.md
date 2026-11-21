@@ -391,7 +391,16 @@ bleiben es; die Übersetzung geschieht zur Laufzeit im Browser.
   selbst auf.
 - **Handbuch und FAQ** (`web/handbuch*.html`, `web/faq*.html` und die PDFs) entstehen aus `tools/i18n/docs/docs_src.<xx>.json` (Texte) und
   `docs_style.css`; `python tools/i18n/docs_build.py app` schreibt die Fassungen für die App, `... full --shots <Ordner>` die mit Bildschirmfotos
-  für PDF und HTML (der Ordner hat je Sprache einen Unterordner mit den Bildern; PDF daraus mit dem Druckdialog des Browsers).
+  für PDF und HTML (der Ordner hat je Sprache einen Unterordner mit den Bildern; PDF daraus mit dem Druckdialog des Browsers oder mit
+  `msedge --headless=new --print-to-pdf=<Datei>.pdf <Datei>.html`).
+- **Demo-Modus und Bildschirmfotos (seit 21.11.2026):** `tools/demo/` stellt die Weboberfläche ohne Konsole bereit, mit erfundenen Daten:
+  `python tools/demo/demo_server.py --lang de` bedient `web/` und `/api/v1/…` aus `tools/demo/fixtures/*.json` (Spiele heißen „Spiel 1 …“, die Cover
+  zeichnet der Server, Uhr und Verlauf laufen bis „jetzt“); `python tools/demo/make_shots.py [Sprache …]` öffnet damit die 14 Seiten des Handbuchs in
+  jeder Sprache und schreibt `docs/shots/<xx>/NN-name.png` (1500 × 937; braucht Python mit playwright und Microsoft Edge, es wird nichts geladen).
+  Die Fixtures entstehen aus Antworten einer echten Konsole: `tools/demo/record.py http://<Konsole>:8086` (nur lesend) und
+  `tools/demo/make_fixtures.py <Ordner>` ersetzen jeden persönlichen Wert (Titel, Kennungen, Konto, Netz, Pfade); am Ende sucht das Skript jeden echten
+  Wert in seinem Ergebnis und bricht ab, wenn einer übrig ist. Die Aufnahmen selbst gehören nicht ins Repository (`tools/demo/raw/`, in `.gitignore`).
+  Eine Route ohne Fixture meldet der Server auf stderr (404); `qr.json` macht `tools/demo/qr_demo.c` mit dem QR-Kodierer der App.
 - **Klasse `ps5`:** `web/theme-boot.js` setzt sie an `<html>`, wenn der Browser „PlayStation“ meldet. Sie gilt nur für PS5-eigene Dinge
   (Titelbilder der kompakten Ansicht, Zeichenbereich je Spielkarte, Scroll-Messung). Eine größere Schrift nur für die PS5 gab es kurz am
   10.11.2026 (erzeugter Block `PS5-TEXT`); sie wurde auf Wunsch des Users zurückgenommen, die Schrift ist dort wie überall.
