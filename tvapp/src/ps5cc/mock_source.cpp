@@ -341,7 +341,7 @@ class MockSource final : public Source
             UsbEject &e = data_.usb_eject;
             e.running = false;
             e.state = "done";
-            e.message = "usb0 ist ausgeworfen und kann abgezogen werden. Bleibt das Laufwerk gesteckt, bindet die Konsole es nach einigen Sekunden wieder ein.";
+            e.message = "usb0 ist ausgeworfen und kann abgezogen werden. Manche Laufwerke meldet die Konsole nach einigen Sekunden von selbst wieder an, andere erst nach erneutem Einstecken.";
             data_.volumes.erase(std::remove_if(data_.volumes.begin(), data_.volumes.end(),
                                                [&](const Volume &v) { return v.path == e.mount; }),
                                 data_.volumes.end());

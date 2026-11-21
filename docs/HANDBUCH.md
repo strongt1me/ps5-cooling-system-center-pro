@@ -774,7 +774,7 @@ Knopf dort, und damit nichts von der Dateimanager-Seite mehr das Laufwerk abfrag
 Es ist dasselbe Auswerfen wie unter System → Speicher (siehe dort): über ShadowMountPlus (ab 1.7beta10), nur wenn kein Auftrag der App läuft,
 PS4Mount keine Spiele von dem Laufwerk spielt und die App selbst nichts mehr darauf offen hat (ob ein anderes Programm, etwa ein FTP-Server, Dateien darauf offen hat, fragt
 sie nur, wo die Konsole es zulässt: auf der Pro mit Firmware 12.00 nicht); sonst sagt die App, was noch läuft oder welches Programm es ist. Das Laufwerk erst abziehen, wenn die Konsole „… ist ausgeworfen und kann abgezogen
-werden“ meldet; bleibt das Laufwerk gesteckt, bindet die Konsole es nach einigen Sekunden wieder ein. Ein Laufwerk im Betrieb einfach abzuziehen kann
+werden“ meldet; manche Laufwerke meldet die Konsole nach einigen Sekunden von selbst wieder an, andere erst nach erneutem Einstecken. Ein Laufwerk im Betrieb einfach abzuziehen kann
 das Dateisystem beschädigen. Ist die Konsole oder die App beim letzten Auswerfen abgestürzt, bleibt das Auswerfen gesperrt, bis du es auf der Seite
 Dateien oder System wieder erlaubst.
 
@@ -2016,8 +2016,8 @@ Auf der Systemseite gibt es zusätzlich:
   System → Speicherplatz (so, dass die Dateimanager-Seite mit ihren Abfragen nicht mehr offen ist) und wirft dort aus; die Vollbild-App fragt auf der Seite Dateien
   nichts mehr ab, sobald das Auswerfen angefragt ist. Was der Dateimanager gerade noch liest (Ordnerliste, Größe, Ansicht, Download),
   hält das Auswerfen zurück, und für dieses Laufwerk antwortet er bis 30 s nach dem Auswerfen mit „Das Laufwerk wird gerade ausgeworfen“.
-  Das Auswerfen trennt das Laufwerk nur per Software: Bleibt es gesteckt, meldet es sich nach einigen Sekunden bei der Konsole
-  wieder an und wird neu eingebunden; nach „ausgeworfen“ also abziehen. **Gesperrt nach einem Absturz:** Kurz vor der Anfrage an ShadowMountPlus schreibt die App eine
+  Das Auswerfen trennt das Laufwerk nur per Software: Manche Laufwerke meldet die Konsole nach einigen Sekunden von selbst
+  wieder an und bindet sie neu ein, andere erst nach erneutem Einstecken; nach „ausgeworfen“ also abziehen. **Gesperrt nach einem Absturz:** Kurz vor der Anfrage an ShadowMountPlus schreibt die App eine
   Markierung (`usb_eject_offen.txt` im Datenordner der App) und löscht sie 30 s nach dem Ende. Findet sie die Markierung beim nächsten Start, ist die Konsole oder
   die App dabei oder kurz danach abgestürzt; dann bleibt das Auswerfen gesperrt (`ejectable` ist nirgends mehr wahr, `blocked` steht in `GET /api/v1/storage/eject`,
   ein Hinweis mit „Auswerfen wieder erlauben“ erscheint im Browser unter „Speicherplatz“ und auf der Seite „Dateien“; `POST /api/v1/storage/eject` mit

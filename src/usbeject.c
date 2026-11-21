@@ -272,7 +272,7 @@ follow(void *arg) {
     const char *why = cJSON_IsString(rr) ? reason_text(rr->valuestring) : NULL;
     /* ejecting only detaches the drive by software: left plugged in, it announces itself again after a few seconds and the console mounts it anew
        (kernel log of the Pro, 21.11.2026: da1 detached, attached, mounted at /mnt/usb0), so the message says it */
-    if(ok) snprintf(msg, sizeof(msg), "%s ist ausgeworfen und kann abgezogen werden. Bleibt das Laufwerk gesteckt, bindet die Konsole es nach einigen Sekunden wieder ein.", f->label);
+    if(ok) snprintf(msg, sizeof(msg), "%s ist ausgeworfen und kann abgezogen werden. Manche Laufwerke meldet die Konsole nach einigen Sekunden von selbst wieder an, andere erst nach erneutem Einstecken.", f->label);
     else snprintf(msg, sizeof(msg), "%s wurde nicht ausgeworfen: %s", f->label,
                   why ? why : cJSON_IsString(re) && re->valuestring[0] ? re->valuestring : "ShadowMountPlus lehnte ab.");
     const int before = !ok && cJSON_IsString(rr) && refused_before_detach(rr->valuestring);
