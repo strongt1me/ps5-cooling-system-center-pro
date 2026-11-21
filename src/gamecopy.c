@@ -327,7 +327,12 @@ measure_cached(const char *source, uint64_t ttl_ms) {
    walking a USB drive again with the page waiting. */
 int
 ps5tm_gamecopy_measure(const char *path, uint64_t *bytes, uint64_t *largest) {
+  /* through the gate: an eject waits for the walk, or the walk is not made while the drive is ejected (review of 21.11.2026, R1:
+     the move plan, the move's start and "Original danach" walk the source with it) */
+  int gate = ps5tm_drive_enter(path);
+  if(gate == 0) return -1;
   tree_t t = measure_cached(path, MOVE_TTL_MS);
+  ps5tm_drive_leave(gate);
   if(t.err) return -1;
   if(bytes)   *bytes   = t.bytes;
   if(largest) *largest = t.largest;
@@ -1098,7 +1103,13 @@ ps5tm_gamecopy_plan(const char *title_id, char *err, size_t err_len) {
   }
 
   int busy = ps5tm_gamecopy_busy();
+  int sgate = ps5tm_drive_enter(source);          /* the walk of the source through the gate: an eject waits for it, or it is refused (review F2) */
+  if(sgate == 0) {
+    snprintf(err, err_len, "Das Laufwerk wird gerade ausgeworfen. Bitte gleich noch einmal.");
+    return NULL;
+  }
   tree_t t = measure_cached(source, PLAN_TTL_MS);
+  ps5tm_drive_leave(sgate);
   if(t.err) {
     snprintf(err, err_len, "Die Spieldaten sind nicht lesbar: %s",
              errno_text(t.err));
@@ -1133,9 +1144,11 @@ ps5tm_gamecopy_plan(const char *title_id, char *err, size_t err_len) {
     const char *mount = info.volumes[i].path;
     char base[64], label[40];
     if(drive_base(mount, base, sizeof(base), label, sizeof(label)) != 0) continue;
+    int gate = ps5tm_drive_enter(mount);           /* a drive that is being ejected is not offered, one that is looked at is waited for (F2) */
+    if(gate == 0) continue;
     uint64_t avail = 0;
     char fstype[16];
-    if(drive_space(base, &avail, fstype, sizeof(fstype)) != 0) continue;
+    if(drive_space(base, &avail, fstype, sizeof(fstype)) != 0) { ps5tm_drive_leave(gate); continue; }
 
     cJSON *d = cJSON_CreateObject();
     cJSON_AddStringToObject(d, "mount", mount);
@@ -1172,6 +1185,7 @@ ps5tm_gamecopy_plan(const char *title_id, char *err, size_t err_len) {
     }
     cJSON_AddBoolToObject  (d, "enough_space", fits_any);
     cJSON_AddItemToArray(arr, d);
+    ps5tm_drive_leave(gate);
   }
   return root;
 }

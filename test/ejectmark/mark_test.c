@@ -78,6 +78,7 @@ main(int argc, char **argv) {
   CHECK(restart(self, "rearm") == 1);
   CHECK(!exists());
   CHECK(restart(self, "plain") == 0);
+  ps5tm_ejectmark_clear_now();                                /* this process's own write of usb0 (in a real crash the process would be gone) */
 
   /* a planned end of a clean run removes the marker (nothing crashed) */
   ps5tm_ejectmark_write("/mnt/usb1");
@@ -107,6 +108,15 @@ main(int argc, char **argv) {
   usleep((useconds_t)(LATER_MS * 2) * 1000);
   CHECK(exists());
   ps5tm_ejectmark_clear_later();                              /* and its own thread removes it */
+  usleep((useconds_t)(LATER_MS * 2) * 1000);
+  CHECK(!exists());
+
+  /* an eject refused before anything was cut off (clear_now) while another one is inside its window: the other one's marker stays (review F4) */
+  ps5tm_ejectmark_write("/mnt/usb7");
+  ps5tm_ejectmark_clear_later();
+  ps5tm_ejectmark_write("/mnt/usb1");
+  ps5tm_ejectmark_clear_now();
+  CHECK(exists());                                            /* usb7 may still crash the console: the marker must stay */
   usleep((useconds_t)(LATER_MS * 2) * 1000);
   CHECK(!exists());
 

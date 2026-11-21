@@ -4186,10 +4186,14 @@
     }
   });
 
+  /* Laufnummer: Nur der neueste Aufruf zeichnet. Die direkten Aufrufe nach dem Auswerfen und nach dem Seriennummer-Knopf überholen sonst einen
+     älteren 10-s-Lauf, der danach seinen alten Stand zeichnet (Durchsicht 21.11.2026). */
+  let sysSeq = 0;
   const loadSystem = async () => {
     if (bdOn && state.page === "system" && !bd.once) bdLoad();
     let sys;
     try { sys = await api("/api/v1/system"); } catch { return; }
+    const mySeq = ++sysSeq;                         /* counted only with an answer: a failed newer call leaves the older one to draw */
     const qrNow = sys && sys.network ? String(sys.network.ip || "") : "";
     /* The key counts as done only when the picture came: one timed-out request must not leave the code gone until a reload. */
     if (qrNow !== qrKey && !qrBusy) {
@@ -4224,6 +4228,7 @@
         driveOff = e.code === "drive_probe_disabled";
       }
     }
+    if (mySeq !== sysSeq) return;                   /* a newer call is under way: it draws */
 
     txt("#console-model", sys.model || "PlayStation 5");
     /* txt() setzt textContent, kein innerHTML — hier gehört also das echte
@@ -4314,7 +4319,7 @@
            Protokoll; abfragen lässt er sich nicht (es gibt keine HID-
            Bibliothek im SDK). Ohne diesen Satz müsste man das wissen. */
         if (a >= 3600)
-          text += " — Controller kurz aus- und einschalten für einen aktuellen Wert";
+          text += " · Controller kurz aus- und einschalten für einen aktuellen Wert";   /* its own piece: the translation takes it alone */
       }
       rows.push(["Controller-Akku", text]);
     }

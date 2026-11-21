@@ -622,7 +622,10 @@ class PayloadsPage final : public Page
         if (view_ == kStore)
         {
             if (item.store != nullptr)
-                out[n++] = {ui::Button::cross, store_verb(*item.store)};
+                out[n++] = {ui::Button::cross, job_.state == "running" && job_.id == item.store->id &&
+                                                       !(!item.store->installed_version.empty() && !item.store->update)
+                                                   ? "Abbrechen"
+                                                   : store_verb(*item.store)};
             out[n++] = {ui::Button::square, "Liste neu laden"};
         }
         return n;
@@ -766,6 +769,8 @@ class PayloadsPage final : public Page
         {
             if (!item.store->installed_version.empty() && !item.store->update)
                 source().store_action("start", item.store->id);
+            else if (job_.state == "running" && job_.id == item.store->id)
+                source().store_action("cancel", item.store->id); // its own download: X stops it, as the browser's button
             else if (job_.state == "running")
                 feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
             else
@@ -877,7 +882,8 @@ class PayloadsPage final : public Page
                 ui::ListItem item;
                 item.title = f.name;
                 item.subtitle = f.valid ? format_bytes(f.size) + " · " + format_date(f.mtime)
-                                        : "ungültig – " + f.why;
+                                        : std::string(gfx::filter_text("ungültig")) + " – " +
+                                              std::string(gfx::filter_text(f.why)); // each part on its own (review of 21.11.2026)
                 item.disabled = !f.valid;
                 item.tag = static_cast<int>(i);
                 out.push_back(item);

@@ -11,6 +11,7 @@
 // user 29.10.2026). Each part has its own title.
 
 #include "ps5cc/backdrops.hpp"
+#include "ps5cc/delete_ask.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
 #include "third_party/cjson/cJSON.h"
@@ -61,6 +62,17 @@ class StoragePage final : public Page
         info_.style.row_height = 40.0f;
         info_.style.max_lines = 1;
         info_.set_bounds({kRightX + 30.0f, kTop + 130.0f, kRightW - 60.0f, 220.0f});
+        ask_.init(theme);
+    }
+
+    bool modal() const override
+    {
+        return ask_.is_open();
+    }
+
+    void draw_overlay(ui::Canvas &canvas) const override
+    {
+        ask_.draw(canvas);
     }
 
     void absorb(const Snapshot &data) override
@@ -101,6 +113,25 @@ class StoragePage final : public Page
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        if (ask_.is_open())
+        {
+            // only "Löschen" in the question deletes the picture
+            if (ask_.handle(input, feedback) && ask_area_ >= 0)
+                source().delete_backdrop(backdrop_name(ask_area_));
+            return;
+        }
+        // □ on an area with an own picture: that picture deleted, after the question (as the browser's "Löschen"; review of 21.11.2026)
+        if (input.is_pressed(Action::west))
+        {
+            const int tag = focused_tag();
+            if (tag >= kBgArea && tag < kBgArea + kBackdropAreas && bg_custom_[static_cast<std::size_t>(tag - kBgArea)])
+            {
+                ask_area_ = tag - kBgArea;
+                ask_.open("Bild löschen?", {DeleteAsk::line(kAreaLabels[ask_area_], "eigenes Hintergrundbild")},
+                          {"Der Bereich zeigt danach wieder das Standardbild."}, feedback);
+                return;
+            }
+        }
         const int before = list_.focus();
         const ui::Event event = list_.handle(input, feedback);
         if (list_.focus() != before)
@@ -134,6 +165,13 @@ class StoragePage final : public Page
             return;
         }
         const Volume *v = focused();
+        if (v != nullptr && can_rearm(*v))
+        {
+            // blocked after an eject that did not come back: X allows it again (in the browser: System -> Speicherplatz)
+            feedback.play(audio::Cue::select);
+            source().usb_eject_rearm();
+            return;
+        }
         if (v == nullptr || !can_eject(*v))
         {
             feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
@@ -147,6 +185,7 @@ class StoragePage final : public Page
     {
         list_.update(dt);
         info_.update(dt);
+        ask_.update(dt);
     }
 
     void draw(ui::Canvas &canvas) const override
@@ -202,11 +241,11 @@ class StoragePage final : public Page
                                                    "ab und sagt, was noch läuft."
                                                  : "Auswerfen braucht ShadowMountPlus ab "
                                                    "1.7beta10; es läuft nicht oder ist älter.")
-                             : eject_.blocked
+                             : can_rearm(*v)
                                    ? "Auswerfen ist gesperrt: Beim letzten Auswerfen ist die Konsole "
-                                     "oder die App abgestürzt. Im Browser unter System → "
-                                     "Speicherplatz lässt es sich wieder erlauben. Sicherer: die "
-                                     "Konsole ganz ausschalten und das Laufwerk danach abziehen."
+                                     "oder die App abgestürzt. Die X-Taste erlaubt es wieder. "
+                                     "Sicherer: die Konsole ganz ausschalten und das Laufwerk "
+                                     "danach abziehen."
                                    : "Dieses Laufwerk lässt sich nicht auswerfen.";
             y = paragraph(canvas, about, card.x + 30.0f, y, card.w - 60.0f,
                           v->ejectable ? kInk : kMuted, 6);
@@ -229,16 +268,31 @@ class StoragePage final : public Page
         if (tag == kBgToggle)
             out[n++] = {ui::Button::cross, bg_open_ ? "Zuklappen" : "Aufklappen"};
         else if (tag >= kBgArea && tag < kBgArea + kBackdropAreas)
+        {
             out[n++] = {ui::Button::cross, "Wechseln"};
+            if (bg_custom_[static_cast<std::size_t>(tag - kBgArea)])
+                out[n++] = {ui::Button::square, "Bild löschen"};
+        }
         else if (const Volume *v = focused(); v != nullptr && can_eject(*v))
             out[n++] = {ui::Button::cross, "Auswerfen"};
+        else if (v != nullptr && can_rearm(*v))
+            out[n++] = {ui::Button::cross, "Wieder erlauben"};
         return n;
     }
 
   private:
+    DeleteAsk ask_;     // asked before an area's own picture is deleted
+    int ask_area_ = -1; // the area the question is about
+
     bool can_eject(const Volume &v) const
     {
         return v.ejectable && eject_.available && !eject_.running;
+    }
+
+    // a USB drive (usb0..usb7, ext0) while ejecting is blocked: X allows it again; the internal storage never shows this
+    bool can_rearm(const Volume &v) const
+    {
+        return eject_.blocked && (v.path.rfind("/mnt/usb", 0) == 0 || v.path == "/mnt/ext0");
     }
 
     int focused_tag() const

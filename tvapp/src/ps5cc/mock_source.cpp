@@ -1735,9 +1735,31 @@ class MockSource final : public Source
         ++data_.system_data.seq;
     }
 
+    void delete_backdrop(const std::string &area) override
+    {
+        for (BackdropSetting &b : data_.backdrops)
+        {
+            if (b.id != area)
+                continue;
+            b.custom = false;
+            if (b.mode == BackdropMode::custom)
+                b.mode = BackdropMode::standard;
+        }
+        backdrops().apply(data_.backdrops);
+        notice(Notice::Kind::success, "Hintergrund", "Das eigene Bild ist gelöscht.");
+        changed();
+    }
+
     void system_post(const std::string &route, const std::string &json) override
     {
         (void)json;
+        if (route == "jobs/history/clear")
+        {
+            data_.history.clear();
+            notice(Notice::Kind::success, "Verlauf", "Der Verlauf ist geleert.");
+            changed();
+            return;
+        }
         if (route == "cooling-health")
             notice(Notice::Kind::success, "System", "Der Vergleich beginnt neu.");
         else
@@ -2088,6 +2110,14 @@ class MockSource final : public Source
             std::remove_if(b.begin(), b.end(), [&](const GameBackup &x) { return x.path == path; }),
             b.end());
         notice(Notice::Kind::info, "Sicherung", "Die Sicherung wird gelöscht.");
+        changed();
+    }
+
+    void usb_eject_rearm() override
+    {
+        data_.usb_eject.blocked = false;
+        data_.usb_eject.available = true;
+        notice(Notice::Kind::success, "Auswerfen", "Das Auswerfen ist wieder erlaubt.");
         changed();
     }
 
@@ -3825,26 +3855,30 @@ std::string format_decimal(float value, int decimals)
     return text;
 }
 
+// Binary units, as the browser and the app's own messages count them (1 GB = 1024^3 bytes): the same size reads the same on both surfaces
+// (review of 21.11.2026: a 1 TB stick showed "931 GB" in the browser and "1,00 TB" here).
 std::string format_bytes(std::uint64_t bytes)
 {
     const double b = static_cast<double>(bytes);
-    if (b >= 1e12)
-        return format_decimal(static_cast<float>(b / 1e12), 2) + " TB";
-    if (b >= 1e9)
-        return format_decimal(static_cast<float>(b / 1e9), 1) + " GB";
-    if (b >= 1e6)
-        return format_decimal(static_cast<float>(b / 1e6), 0) + " MB";
-    if (b >= 1e3)
-        return format_decimal(static_cast<float>(b / 1e3), 0) + " KB";
+    constexpr double kK = 1024.0, kM = kK * 1024.0, kG = kM * 1024.0, kT = kG * 1024.0;
+    if (b >= kT)
+        return format_decimal(static_cast<float>(b / kT), 2) + " TB";
+    if (b >= kG)
+        return format_decimal(static_cast<float>(b / kG), 1) + " GB";
+    if (b >= kM)
+        return format_decimal(static_cast<float>(b / kM), 0) + " MB";
+    if (b >= kK)
+        return format_decimal(static_cast<float>(b / kK), 0) + " KB";
     return std::to_string(bytes) + " B";
 }
 
 std::string format_rate(std::uint64_t bytes_per_second)
 {
     const double b = static_cast<double>(bytes_per_second);
-    if (b >= 1e6)
-        return format_decimal(static_cast<float>(b / 1e6), b >= 1e7 ? 0 : 1) + " MB/s";
-    return std::to_string(std::max<std::uint64_t>(1, bytes_per_second / 1000)) + " KB/s";
+    constexpr double kM = 1024.0 * 1024.0; // binary, as format_bytes
+    if (b >= kM)
+        return format_decimal(static_cast<float>(b / kM), b >= 10.0 * kM ? 0 : 1) + " MB/s";
+    return std::to_string(std::max<std::uint64_t>(1, bytes_per_second / 1024)) + " KB/s";
 }
 
 std::string format_eta(int seconds)

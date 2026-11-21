@@ -71,7 +71,7 @@ TEST(Ps5ccPlans, CopyRefusesAsTheWebApp)
     EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[3]),
               "FAT32 nimmt keine Datei über 4 GB auf");
     EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[0]),
-              "Zu wenig Platz: Die Kopie braucht 31,2 GB");
+              "Zu wenig Platz: Die Kopie braucht 29,1 GB"); // binary units since 21.11.2026
     // The drive is fine as such; only "playable" would land on the original.
     EXPECT_EQ(hui::ps5cc::drive_blocked(p, c, p.drives[1]), "");
     c.mode = 0;
@@ -731,9 +731,9 @@ TEST(Ps5ccPlans, StreamRiskReasonsInWords)
     const Plan p = hui::ps5cc::parse_plan(Tool::convert, reply(Tool::convert, kConvert));
     const std::vector<std::string> why = hui::ps5cc::stream_reasons(p);
     ASSERT_EQ(why.size(), 3u);
-    EXPECT_EQ(why[0], "Es hat sehr viele Daten (52,0 GB).");
-    EXPECT_EQ(why[1], "Es enthält große Streaming-Container (a.pak, b.pak, zusammen 9,0 GB).");
-    EXPECT_EQ(why[2], "Es hat einen Streaming-Ordner („streaming“, 3,0 GB).");
+    EXPECT_EQ(why[0], "Es hat sehr viele Daten (48,4 GB)."); // binary units
+    EXPECT_EQ(why[1], "Es enthält große Streaming-Container (a.pak, b.pak, zusammen 8,4 GB).");
+    EXPECT_EQ(why[2], "Es hat einen Streaming-Ordner („streaming“, 2,8 GB).");
 }
 
 TEST(Ps5ccPlans, UnsignedExecutablesAreReadAndNamed)
@@ -789,7 +789,7 @@ TEST(Ps5ccPlans, MoveAndUnpackRules)
     EXPECT_EQ(c.drive, 1);
     EXPECT_EQ(hui::ps5cc::drive_blocked(move, c, move.drives[0]), "Hier liegt das Spiel schon");
     EXPECT_EQ(hui::ps5cc::drive_blocked(move, c, move.drives[2]),
-              "Zu wenig Platz: Nötig sind mindestens 22,0 GB");
+              "Zu wenig Platz: Nötig sind mindestens 20,5 GB");
     EXPECT_EQ(hui::ps5cc::target_of(move, c), "/mnt/ext0/homebrew/PPSA01862.ffpfs");
     c.delete_source = true; // only an unpack deletes its source
     EXPECT_EQ(
@@ -816,7 +816,7 @@ TEST(Ps5ccPlans, ImageUnpackPlanAndInfo)
     EXPECT_EQ(hui::ps5cc::run_blocked(p), "Das Abbild ist beschädigt: ein Ordner darin lässt sich "
                                           "nicht lesen. Zuerst „Abbild prüfen“.");
     EXPECT_EQ(hui::ps5cc::drive_blocked(p, PlanChoice{}, p.drives[0]),
-              "Nicht genug Platz: nötig sind 18,8 GB.");
+              "Nicht genug Platz: nötig sind 17,5 GB.");
 
     const char *info =
         R"({"ok":true,"id":"PPSA03860","name":"Lantern Pass","format":"ffpfsc","image_bytes":5,

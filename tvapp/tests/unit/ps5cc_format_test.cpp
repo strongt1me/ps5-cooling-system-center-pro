@@ -38,9 +38,10 @@ TEST(Ps5ccFormat, DateIsCivil)
 
 TEST(Ps5ccFormat, RateIsInMegabytesPerSecond)
 {
-    EXPECT_EQ(hui::ps5cc::format_rate(82400000), "82 MB/s");
-    EXPECT_EQ(hui::ps5cc::format_rate(6400000), "6,4 MB/s");
-    EXPECT_EQ(hui::ps5cc::format_rate(340000), "340 KB/s");
+    // binary units, as the browser (1 MB = 1024^2 bytes)
+    EXPECT_EQ(hui::ps5cc::format_rate(82ull << 20), "82 MB/s");
+    EXPECT_EQ(hui::ps5cc::format_rate(6710886), "6,4 MB/s");
+    EXPECT_EQ(hui::ps5cc::format_rate(340ull << 10), "340 KB/s");
     EXPECT_EQ(hui::ps5cc::format_rate(10), "1 KB/s");
 }
 

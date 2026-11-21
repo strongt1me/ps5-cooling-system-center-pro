@@ -334,6 +334,10 @@ void HttpSource::retry()
 {
     retry_ = true;
 }
+void HttpSource::delete_backdrop(const std::string &area)
+{
+    push({Request::Kind::backdrop, 1, area, {}});
+}
 void HttpSource::set_backdrop(const std::string &area, BackdropMode mode)
 {
     if (mode == BackdropMode::custom)
@@ -411,6 +415,10 @@ void HttpSource::usb_eject(const std::string &mount)
 {
     eject_pending_ = true; // before the request is queued: what the worker does from now on reads nothing from the drives
     push({Request::Kind::eject, 0, mount, {}});
+}
+void HttpSource::usb_eject_rearm()
+{
+    push({Request::Kind::eject, 1, {}, {}}); // value 1: {"action":"rearm"}
 }
 void HttpSource::fan_trace_save()
 {
@@ -1418,8 +1426,8 @@ void HttpSource::run()
             const bool storing = [&]
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                return data_.store_job.state == "running" || data_.store_fetching ||
-                       !data_.store_loaded;
+                // not while nothing was ever loaded: without internet that would ask every 1.5 s for good
+                return data_.store_job.state == "running" || data_.store_fetching;
             }();
             if (now - last_store >= (storing ? 1500000 : 10000000))
             {
@@ -1645,7 +1653,13 @@ void HttpSource::run()
             }
             if (eject_pending_ && files_open_)
             {
-                // asked for, not yet seen to run: nothing of the drives is asked (the worker is in the request or has just left it)
+                // asked for: nothing of the drives is asked, only the state of the eject - its end clears the mark (read_usb_eject); without
+                // this the page stayed at "Wird ausgeworfen" for good (review of 21.11.2026)
+                if (now - last_fs_job >= 800000)
+                {
+                    last_fs_job = now;
+                    poll_usb_eject();
+                }
             }
             else if (!files_open_ || now - last_fs_job >= (active || ejecting ? 800000 : 3000000))
             {
@@ -2356,6 +2370,8 @@ void HttpSource::handle(const Request &request)
                    message_of(body, "Die App hat nicht geantwortet."));
         poll_status();
         poll_system_extra(false);
+        if (request.id == "jobs/history/clear")
+            poll_history(); // the emptied list shows at once
         break;
     }
     case Request::Kind::risky:
@@ -2707,6 +2723,17 @@ void HttpSource::handle(const Request &request)
     }
     case Request::Kind::eject:
     {
+        if (request.value == 1)
+        {
+            // the person allows ejecting again after an eject that did not come back (the console or the app crashed in it)
+            if (exchange("POST", "/api/v1/storage/eject", "{\"action\":\"rearm\"}", &status, &body, 10) == Net::ok &&
+                status < 300)
+                notice(Notice::Kind::success, "Auswerfen", "Das Auswerfen ist wieder erlaubt.");
+            else
+                notice(Notice::Kind::error, "Auswerfen", message_of(body, "Die App hat nicht geantwortet."));
+            poll_storage();
+            break;
+        }
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root, "mount", request.id.c_str());
         char *text = cJSON_PrintUnformatted(root);
@@ -2730,7 +2757,10 @@ void HttpSource::handle(const Request &request)
     {
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root, "area", request.id.c_str());
-        cJSON_AddStringToObject(root, "mode", request.text.c_str());
+        if (request.value == 1)
+            cJSON_AddBoolToObject(root, "delete", 1); // the area's own picture goes (asked before: DeleteAsk)
+        else
+            cJSON_AddStringToObject(root, "mode", request.text.c_str());
         char *text = cJSON_PrintUnformatted(root);
         const Net net =
             exchange("POST", "/api/v1/backdrops", text != nullptr ? text : "{}", &status, &body);
@@ -2748,18 +2778,31 @@ void HttpSource::handle(const Request &request)
         cJSON_AddStringToObject(root, "action", request.text.c_str());
         if (!request.id.empty())
             cJSON_AddStringToObject(root, "id", request.id.c_str());
+        // a file of the same name the store did not put there: the server answers 409 "press again to replace it" - the second press of
+        // the same entry says so, as in the browser (review of 21.11.2026)
+        const bool force = request.text == "install" && !request.id.empty() && store_force_id_ == request.id;
+        if (force)
+            cJSON_AddBoolToObject(root, "force", 1);
+        store_force_id_.clear();
         char *text = cJSON_PrintUnformatted(root);
-        const Net net =
-            exchange("POST", "/api/v1/paystore", text != nullptr ? text : "{}", &status, &body, 10);
+        // refresh: the app loads two lists from GitHub one after the other (up to 45 s each). The worker does not wait for that (it would
+        // hold temperatures and every queued action): after 10 s the lists go on loading in the app, and poll_store follows them.
+        const Net net = exchange("POST", "/api/v1/paystore", text != nullptr ? text : "{}", &status, &body, 10);
+        if (net == Net::ok && status == 409 && request.text == "install" && !force)
+            store_force_id_ = request.id;
         cJSON_free(text);
         cJSON_Delete(root);
-        if (net != Net::ok || status >= 300)
+        if (net != Net::ok && request.text == "refresh")
+            notice(Notice::Kind::info, "Payload-Store", "Die Listen werden noch geladen; das kann bis zu eineinhalb Minuten dauern.");
+        else if (net != Net::ok || status >= 300)
             notice(Notice::Kind::error, "Payload-Store",
                    message_of(body, "Die App hat nicht geantwortet."));
         else if (request.text == "start")
             notice(Notice::Kind::success, "Gestartet", "An den ELF-Loader gesendet.");
         else if (request.text == "refresh")
             notice(Notice::Kind::info, "Liste wird neu geladen");
+        else if (request.text == "cancel")
+            notice(Notice::Kind::info, "Payload-Store", "Der Download wird abgebrochen.");
         poll_store();
         break;
     }

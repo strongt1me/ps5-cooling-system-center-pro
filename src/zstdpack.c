@@ -838,7 +838,7 @@ header_check(const uint8_t *h, uint64_t file_len, zidx_t *x, char *why, size_t w
   uint64_t nf = g64(h, 40), nc = g64(h, 48), fo = g64(h, 56), co = g64(h, 64), vo = g64(h, 72), so = g64(h, 80), sl = g64(h, 88);
   unsigned nv = g32(h, 20);
   if(nf == 0 || nf > MAX_FILES || nv == 0 || nv > MAX_VOLUMES || nc > 0xFFFFFFFFull) { say(why, wn, "Der Index hat unmögliche Zahlen."); return -1; }
-  if(fo != INDEX_HEADER || co != fo + FILE_REC * nf || vo != co + 8 * nc || so != vo + 8ull * nv || so + sl != file_len) {
+  if(fo != INDEX_HEADER || co != fo + FILE_REC * nf || vo != co + 8 * nc || so != vo + 8ull * nv || so > file_len || sl != file_len - so) {   /* not so + sl: that wraps (review 21.11.2026) */
     say(why, wn, "Die Teile des Index passen nicht zu seiner Länge.");
     return -1;
   }

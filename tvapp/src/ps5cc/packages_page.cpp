@@ -213,7 +213,8 @@ class PackagesPage final : public Page
                             : job_.state == "cancelled" ? ui::Status::warning
                             : job_.active               ? ui::Status::accent
                                                         : ui::Status::success;
-        std::string label = "„" + job_.name + "“ " + install_state(job_);
+        // the state through the dictionary on its own: joined to the game's name it matched no entry (review of 21.11.2026)
+        std::string label = "„" + job_.name + "“ " + std::string(gfx::filter_text(install_state(job_)));
         const std::string remain = job_.active ? remain_text(job_.remain_s) : std::string();
         if (!remain.empty())
             label += " · " + remain;

@@ -144,8 +144,12 @@ int p4m_build_app_xml(buf_t *out, const uint8_t *pg, size_t len) {
         uint32_t first = le32(a + 0x10) / 2;
         uint16_t count = le16(a + 0x16);
         p4m_buf_printf(out, "<scenario>");
-        for (unsigned i = 0; i < count && (first + i) * 2 + 2 <= cs; i++)
-            p4m_buf_printf(out, i ? " %u" : "%u", le16(pg + co + (first + i) * 2));
+        for (unsigned i = 0; i < count; i++) {
+            const uint64_t k = (uint64_t)first + i; /* (app) 64-bit: first comes from the file, and (first + i) * 2 wrapped in 32 bits */
+            if (k * 2 + 2 > cs)
+                break;
+            p4m_buf_printf(out, i ? " %u" : "%u", le16(pg + co + k * 2));
+        }
         p4m_buf_printf(out, "</scenario>");
     }
     p4m_buf_printf(out, "</scenarios></chunk_status></psproject>");
@@ -176,7 +180,7 @@ int p4m_build_pfs_pbm(buf_t *out, const pkg_t *pkg, const uint8_t *pg, size_t le
     memcpy(hdr + 0x14, fixed, sizeof(fixed));
     for (int i = 0; i < 2 && pk[i]; i++) {
         uint64_t inner = i ? playgo_inner_size(patch->playgo, patch->playgo_len) : playgo_inner_size(pg, len);
-        if (!inner)
+        if (!inner || inner > P4M_MAX_PKG_BYTES) /* (app) a damaged playgo-chunk.dat: no bitmap of gigabytes */
             return -1;
         bits[i * 2] = (pk[i]->pfs_size + BLK - 1) / BLK;
         bits[i * 2 + 1] = (inner + BLK - 1) / BLK;

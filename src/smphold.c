@@ -112,7 +112,7 @@ env_boot_id(void) {
 static int
 env_job_running(void) {
   char why[200];
-  return ps5tm_app_job_running(why, sizeof(why));
+  return ps5tm_any_job_running(why, sizeof(why));                 /* an eject too (F3) */
 }
 
 static int

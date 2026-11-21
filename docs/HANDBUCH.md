@@ -1722,10 +1722,14 @@ mitbenutzen — ohne Kennwort hätte sie damit ausschalten, Spiele verschieben,
 Zusatzprogramme beenden oder die Einstellungen ändern können. Seit 1.46.0
 weist der Server deshalb ab, was erkennbar von einer fremden Webseite kommt:
 
-- Der `Host` einer Anfrage muss eine IP-Adresse, `localhost`, ein einzelner
-  Rechnername ohne Punkt oder ein Name mit üblicher Heimnetz-Endung sein
-  (`.local`, `.lan`, `.home`, `.home.arpa`, `.internal`, `.localdomain`,
-  `.intranet`, `.fritz.box`). Das schließt Umlenkungstricks über DNS aus.
+- Der `Host` einer Anfrage muss eine IP-Adresse, `localhost` oder ein Name mit einer
+  Heimnetz-Endung sein, die es im öffentlichen DNS nicht gibt (`.local`, `.lan`, `.home`,
+  `.home.arpa`, `.internal`, `.localdomain`, `.intranet`). Seit 21.11.2026 nicht mehr: Namen
+  ohne Punkt und `.fritz.box` – `.box` ist eine öffentliche Endung, und wer den DNS-Eintrag eines
+  solchen Namens kontrolliert, könnte die App über eine eigene Webseite fernsteuern (DNS-Rebinding).
+  Wer die Oberfläche bisher über `ps5.fritz.box` aufgerufen hat, nimmt die IP-Adresse der Konsole.
+- Fragt der Browser im Namen einer fremden Webseite an (Kopfzeile `Sec-Fetch-Site` mit
+  `cross-site` oder `same-site`), lehnt der Server jede API-Anfrage ab, auch eine lesende.
 - Bei allem außer Lesen muss ein mitgeschickter `Origin` dieselbe Adresse nennen.
 - Werkzeuge ohne `Origin` (curl, Skripte, die eigene Oberfläche über die
   Kachel) funktionieren wie bisher. Die Oberfläche am besten über die

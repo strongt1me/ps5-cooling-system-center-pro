@@ -141,6 +141,14 @@ ps5tm_app_job_running(char *why, size_t n) {
   return ps5tm_jobs_busy_except(PS5TM_JOB_USBEJECT, PS5TM_JOBS_READERS, why, n);
 }
 
+/* The same, with an eject that runs counted too: for the questions asked from outside the eject (/api/v1/jobs/active - the tile replaces the app only when
+   it says no -, mounting over ShadowMountPlus, the hold guard). ps5tm_app_job_running leaves the eject out because the eject asks it itself (review of
+   21.11.2026, F3). */
+int
+ps5tm_any_job_running(char *why, size_t n) {
+  return ps5tm_jobs_busy_except(-1, PS5TM_JOBS_READERS, why, n);
+}
+
 /* A folder of the drive mounted somewhere else (PS4Mount's games, a ShadowMountPlus title): 1 with the reason. */
 static int
 drive_in_use(const char *mount, char *why, size_t n) {
@@ -280,9 +288,9 @@ follow(void *arg) {
     if(!before) settle(f->mount);
     if(before) ps5tm_ejectmark_clear_now();                    /* nothing was cut off: no crash can be blamed on this one */
     else ps5tm_ejectmark_clear_later();                        /* cut off (or may be): the marker stays through the re-announce window of the drive */
+    finish(ok ? "done" : "failed", msg);                    /* first: a notification that hangs must not keep the eject claimed (F11) */
     PS5TM_INFO(ok ? "usb_ejected" : "usb_eject_refused", "%s", msg);
     ps5tm_notify_plain("%s", msg);
-    finish(ok ? "done" : "failed", msg);
     free(f);
     return NULL;
   }

@@ -16,6 +16,7 @@
 // then the menu offers "Für <user> einspielen". A file on a drive stays; the web app has the
 // upload and the download.
 
+#include "gfx/font.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
 #include "ps5cc/playtime_rules.hpp"
@@ -520,18 +521,22 @@ class SavesPage final : public Page
             return p.error;
         if (!p.importable)
             return p.why.empty() ? "Dieser Spielstand lässt sich hier nicht einspielen." : p.why;
-        std::string text = std::to_string(p.files) + (p.files == 1 ? " Datei, " : " Dateien, ") +
-                           format_bytes(p.bytes) + ". ";
+        // each sentence through the dictionary on its own: joined, the text matched no entry and stayed German in every other language
+        // (review of 21.11.2026)
+        const auto tr = [](const std::string &s) { return std::string(gfx::filter_text(s)); };
+        std::string text = tr(p.files == 1 ? "1 Datei, " + format_bytes(p.bytes) + "."
+                                           : std::to_string(p.files) + " Dateien, " + format_bytes(p.bytes) + ".") +
+                           " ";
         if (p.converted)
-            text += "Das neuere Abbildformat wird als klassisches angelegt. ";
+            text += tr("Das neuere Abbildformat wird als klassisches angelegt.") + " ";
         const std::size_t same = zip_siblings(z).size();
         if (same > 1)
-            text += "Dazu gehören " + std::to_string(same) +
-                    " Spielstände dieses Titels: alle auf einmal einspielen ist möglich. ";
+            text += tr("Dazu gehören " + std::to_string(same) +
+                       " Spielstände dieses Titels: alle auf einmal einspielen ist möglich.") +
+                    " ";
         const SaveDrive *d = target();
-        text += d != nullptr
-                    ? "Ein vorhandener Stand wird vorher auf " + d->label + " gesichert."
-                    : "Für einen vorhandenen Stand wird ein Laufwerk zum Sichern gebraucht.";
+        text += tr(d != nullptr ? "Ein vorhandener Stand wird vorher auf " + d->label + " gesichert."
+                                : "Für einen vorhandenen Stand wird ein Laufwerk zum Sichern gebraucht.");
         return text;
     }
 

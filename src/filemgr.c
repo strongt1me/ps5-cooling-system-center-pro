@@ -534,9 +534,10 @@ handle_download(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
     return;
   }
-  int in = open(real, O_RDONLY | O_NONBLOCK);       /* a FIFO must not hold the thread until someone writes */
+  struct stat pre;                                  /* only a regular file is opened: a device node's open() already runs its driver (review S2) */
+  int in = stat(real, &pre) == 0 && S_ISREG(pre.st_mode) ? open(real, O_RDONLY | O_NONBLOCK) : -1;   /* a FIFO must not hold the thread until someone writes */
   struct stat st;
-  if(in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode)) {
+  if(in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode) || st.st_dev != pre.st_dev || st.st_ino != pre.st_ino) {
     if(in >= 0) close(in);
     ps5tm_http_send_error(fd, 404, "not_a_file", "Das ist keine Datei, die sich herunterladen lässt.");
     return;
@@ -942,6 +943,13 @@ ps5tm_filemgr_receive_upload(int fd, const char *query, const char *prefix, size
   /* the other jobs of the app write into the same folders, and a move or delete takes its source away at the end */
   char why[200];
   int other = other_job_active(why, sizeof(why));
+  /* counted already (g_uploads: the eject waits for it); its target is asked before anything is written (review of 21.11.2026, R2) */
+  char upath[FM_PATH], ureal[FM_PATH + 64];
+  if(!other && query_value(query, "path", upath, sizeof(upath)) == 0 && path_plain(upath) &&
+     (ps5tm_usbeject_settling(upath) || (real_path(upath, ureal, sizeof(ureal)) == 0 && ps5tm_usbeject_settling(ureal)))) {
+    snprintf(why, sizeof(why), "Das Laufwerk wird gerade ausgeworfen. Der Dateimanager liest in dieser Zeit nichts davon; danach geht es wieder.");
+    other = 1;
+  }
   if(!other && pthread_mutex_trylock(&g_upload_lock) != 0) {
     snprintf(why, sizeof(why), "Es wird gerade schon eine Datei hochgeladen.");
     other = 1;
@@ -1195,9 +1203,10 @@ handle_view(int fd, const ps5tm_request_t *req) {
     if(!end || *end || v == 0) { ps5tm_http_send_error(fd, 400, "bad_max", "Ungültige Länge."); return; }
     max = v > FM_VIEW_TEXT_MAX ? FM_VIEW_TEXT_MAX : (size_t)v;
   }
-  int in = open(real, O_RDONLY | O_NONBLOCK);
+  struct stat pre;                                  /* only a regular file is opened (review S2) */
+  int in = stat(real, &pre) == 0 && S_ISREG(pre.st_mode) ? open(real, O_RDONLY | O_NONBLOCK) : -1;
   struct stat st;
-  if(in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode)) {
+  if(in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode) || st.st_dev != pre.st_dev || st.st_ino != pre.st_ino) {
     if(in >= 0) close(in);
     ps5tm_http_send_error(fd, 404, "not_a_file", "Das ist keine Datei, die sich ansehen lässt.");
     return;
@@ -1853,6 +1862,23 @@ start_job(fm_args_t *a, uint64_t bytes_total, uint64_t files_total, char *err, s
   return 200;
 }
 
+/* 1 (with the message in err) when one of the selected paths or the target (as given and below the root) lies on a drive that is being ejected or
+   settles after it. Copy, move and delete count the tree before their job starts; they are entered as reads first (with_count), so an eject that starts
+   beside them sees them, and they ask here before the first look at a drive (review of 21.11.2026, F1). */
+static int
+paths_settling(const fm_args_t *a, const char *dest, char *err, size_t n) {
+  char real[FM_PATH + 64];
+  for(unsigned i = 0; i <= a->n; i++) {
+    const char *p = i < a->n ? a->src[i] : dest;
+    if(!p || !*p) continue;
+    if(ps5tm_usbeject_settling(p) || (real_path(p, real, sizeof(real)) == 0 && ps5tm_usbeject_settling(real))) {
+      snprintf(err, n, "Das Laufwerk wird gerade ausgeworfen. Der Dateimanager liest in dieser Zeit nichts davon; danach geht es wieder.");
+      return 1;
+    }
+  }
+  return 0;
+}
+
 /* POST copy/move {paths, dest} */
 static void
 handle_copy(int fd, const ps5tm_request_t *req, int move) {
@@ -1873,6 +1899,7 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
     else { snprintf(a->dest, sizeof(a->dest), "%s", dest); http = read_paths(b, a, err, sizeof(err)); }
   }
   cJSON_Delete(b);
+  if(!http && paths_settling(a, a->dest, err, sizeof(err))) http = 409;
   char rd[FM_PATH + 64], rs[FM_PATH + 64], t[FM_PATH], rt[FM_PATH + 64];
   struct stat ds;
   if(!http && (!dir_writable(a->dest) || real_path(a->dest, rd, sizeof(rd)) != 0 || stat(rd, &ds) != 0 || !S_ISDIR(ds.st_mode))) {
@@ -2025,11 +2052,11 @@ delete_plan_body(int fd, const ps5tm_request_t *req) {
       break;
     }
     const char *eject_msg = "Das Laufwerk wird gerade ausgeworfen. Der Dateimanager liest in dieser Zeit nichts davon; danach geht es wieder.";
-    if(ps5tm_usbeject_covers(a.src[i])) { http = 409; snprintf(err, sizeof(err), "%s", eject_msg); break; }
+    if(ps5tm_usbeject_settling(a.src[i])) { http = 409; snprintf(err, sizeof(err), "%s", eject_msg); break; }   /* settling: also the 30 s after the eject (F7) */
     if(real_path(a.src[i], rs, sizeof(rs)) != 0 || lstat(rs, &st) != 0) {
       http = 404; snprintf(err, sizeof(err), "%.300s gibt es nicht (mehr).", a.src[i]); break;
     }
-    if(ps5tm_usbeject_covers(rs)) { http = 409; snprintf(err, sizeof(err), "%s", eject_msg); break; }   /* a link may lead onto the drive */
+    if(ps5tm_usbeject_settling(rs)) { http = 409; snprintf(err, sizeof(err), "%s", eject_msg); break; }   /* a link may lead onto the drive */
     if(S_ISDIR(st.st_mode)) dirs++;
     count_t c = { 0 };
     count_tree(rs, st.st_dev, 0, &c);
@@ -2072,6 +2099,7 @@ handle_delete(int fd, const ps5tm_request_t *req) {
   fm_args_t *a = calloc(1, sizeof(*a));
   char err[800] = "";
   int http = a ? read_paths(b, a, err, sizeof(err)) : 500;
+  if(!http && paths_settling(a, NULL, err, sizeof(err))) http = 409;
   const char *tok = b ? jstr(b, "confirm") : NULL;
   char token[40] = "";
   if(tok) snprintf(token, sizeof(token), "%s", tok);
@@ -2220,11 +2248,43 @@ with_read(int fd, const ps5tm_request_t *req, void (*handler)(int, const ps5tm_r
 
 /* mkdir, rename and write: short, but they write on the drive, and an eject that starts beside them must see them (F-353, 22.11.2026). Entered before anything
    else, left at the end; the eject refuses to start while they run, and they refuse to start while it runs (other_job_active in each). */
+static int
+body_path_settling(const cJSON *v) {
+  char real[FM_PATH + 64];
+  if(cJSON_IsString(v) && v->valuestring[0] == '/' && strlen(v->valuestring) < FM_PATH)
+    return ps5tm_usbeject_settling(v->valuestring) || (real_path(v->valuestring, real, sizeof(real)) == 0 && ps5tm_usbeject_settling(real));
+  return 0;
+}
+
+/* Any path the body names (a string, or strings in an array, at the top level: path, dir, dest, paths ...) on a drive that is being ejected or settles. Asked
+   after the request is counted and before the handler looks at a drive (review of 21.11.2026, F5). */
+static int
+body_paths_settling(const ps5tm_request_t *req) {
+  cJSON *b = parse_body(req);
+  if(!b) return 0;
+  int hit = 0;
+  const cJSON *it;
+  cJSON_ArrayForEach(it, b) {
+    if(cJSON_IsArray(it)) { const cJSON *e; cJSON_ArrayForEach(e, it) if(body_path_settling(e)) hit = 1; }
+    else if(body_path_settling(it)) hit = 1;
+  }
+  cJSON_Delete(b);
+  return hit;
+}
+
 static void
 with_count(int fd, const ps5tm_request_t *req, void (*handler)(int, const ps5tm_request_t *)) {
   pthread_mutex_lock(&g_lock);
   g_reads++;
   pthread_mutex_unlock(&g_lock);
+  if(body_paths_settling(req)) {
+    pthread_mutex_lock(&g_lock);
+    g_reads--;
+    pthread_mutex_unlock(&g_lock);
+    ps5tm_http_send_error(fd, 409, "drive_ejecting",
+                          "Das Laufwerk wird gerade ausgeworfen. Der Dateimanager liest in dieser Zeit nichts davon; danach geht es wieder.");
+    return;
+  }
   handler(fd, req);
   pthread_mutex_lock(&g_lock);
   g_reads--;
@@ -2244,6 +2304,9 @@ handle_delete_plan(int fd, const ps5tm_request_t *req) {
   pthread_mutex_unlock(&g_lock);
 }
 
+
+static void handle_copy_plain(int fd, const ps5tm_request_t *req) { handle_copy(fd, req, 0); }
+static void handle_move_plain(int fd, const ps5tm_request_t *req) { handle_copy(fd, req, 1); }
 
 /* ------------------------------------------------------------------ the API */
 
@@ -2273,10 +2336,10 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
       case 3: send_obj(fd, 200, job_json()); break;
       case 4: with_count(fd, req, handle_mkdir); break;
       case 5: with_count(fd, req, handle_rename); break;
-      case 6: handle_copy(fd, req, 0); break;
-      case 7: handle_copy(fd, req, 1); break;
+      case 6: with_count(fd, req, handle_copy_plain); break;
+      case 7: with_count(fd, req, handle_move_plain); break;
       case 8: handle_delete_plan(fd, req); break;
-      case 9: handle_delete(fd, req); break;
+      case 9: with_count(fd, req, handle_delete); break;
       case 10: {
         /* set under the lock that saw the job: a cancel arriving as one job ends must not hit the next */
         pthread_mutex_lock(&g_lock);
@@ -2289,7 +2352,7 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
       }
       case 11: with_read(fd, req, handle_view); break;
       case 12: with_read(fd, req, handle_size); break;
-      case 13: with_count(fd, req, handle_write); break;
+      case 13: with_read(fd, req, handle_write); break;    /* the query's path is asked (the body is the file's content, not paths: review R2) */
     }
     return 1;
   }

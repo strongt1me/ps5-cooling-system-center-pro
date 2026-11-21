@@ -751,10 +751,10 @@ owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *
       int valid = 0;
       if((cand[i].ps4 ? savemnt_open_sealed(dimg, sealed, dmnt, &dm, e2, sizeof(e2)) : savemnt_open(dimg, dmnt, &dm, e2, sizeof(e2))) == 0) {
         char sp[PATH_MAX];
-        uint8_t buf[SI_MAX_SFO];
-        if(snprintf(sp, sizeof(sp), "%s/sce_sys/param.sfo", dmnt) < (int)sizeof(sp)) {
+        uint8_t *buf = malloc(SI_MAX_SFO);                     /* on the heap: a job thread with a small stack (review 21.11.2026) */
+        if(buf && snprintf(sp, sizeof(sp), "%s/sce_sys/param.sfo", dmnt) < (int)sizeof(sp)) {
           const int fd = open(sp, O_RDONLY);
-          const ssize_t n = fd >= 0 ? read(fd, buf, sizeof(buf)) : -1;
+          const ssize_t n = fd >= 0 ? read(fd, buf, SI_MAX_SFO) : -1;
           if(fd >= 0) close(fd);
           uint8_t aid[8], pr[1024];
           if(n > 0 && savesfo_valid(buf, (size_t)n) && savesfo_get_raw(buf, (size_t)n, "ACCOUNT_ID", aid, 8) == 8 && le_num(aid, 8) == a->account_id &&
@@ -764,6 +764,7 @@ owner_donor(const saveimport_args_t *a, const saveimport_info_t *info, uint8_t *
             if(nz) { memcpy(params, pr, sizeof(params)); valid = 1; }
           }
         }
+        free(buf);
         if(savemnt_close(&dm, e2, sizeof(e2)) != 0) { free(cand); fail(r, "%s Es wurde nichts verändert; bitte die Konsole neu starten, bevor es noch einmal versucht wird.", e2); return -1; }
       }
       rmdir(dmnt);

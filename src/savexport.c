@@ -507,17 +507,15 @@ savexport_run(const savexport_args_t *a, const savexport_hooks_t *h, savexport_r
     /* no blob in the header: the file system's own param.sfo is the real one - it must be there and sound */
     char path[PATH_MAX];
     if(snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", stage) >= (int)sizeof(path)) { fail(r, "Ein Pfad ist zu lang."); goto done; }
-    uint8_t buf[0x8000];
-    int fd = open(path, O_RDONLY);
-    ssize_t n = fd >= 0 ? read(fd, buf, sizeof(buf)) : -1;
+    int fd = open(path, O_RDONLY);                     /* into sfo (heap, SAVEMNT_PARAM_BYTES): not 32 KiB on the job thread's stack */
+    ssize_t n = fd >= 0 ? read(fd, sfo, SAVEMNT_PARAM_BYTES) : -1;
     if(fd >= 0) close(fd);
-    if(n <= 0 || !savesfo_valid(buf, (size_t)n)) {
+    if(n <= 0 || !savesfo_valid(sfo, (size_t)n)) {
       if(pdiag[0]) fail(r, "Dem Spielstand fehlen die Metadaten (param.sfo): ohne sie lässt er sich später nicht einspielen. Antwort der Konsole: %s", pdiag);
       else fail(r, "Dem Spielstand fehlen die Metadaten (param.sfo): ohne sie lässt er sich später nicht einspielen.");
       goto done;
     }
     sfo_len = (uint32_t)n;
-    memcpy(sfo, buf, sfo_len);
     if(pdiag[0]) snprintf(res->note, sizeof(res->note), "Die Metadaten stammen aus dem Spielstand selbst: Die Konsole gab die aus dem Kopf des Abbilds nicht heraus (%.300s).", pdiag);
   }
   {

@@ -93,8 +93,10 @@ list_dests(const char *source, dest_t *out, int max) {
     int internal = !strcmp(mount, "/user");
     const char *base = internal ? "/data" : mount;
 
+    int gate = ps5tm_drive_enter(base);            /* a drive that is being ejected is not offered (review F2) */
+    if(gate == 0) continue;
     struct statvfs sv;
-    if(statvfs(base, &sv) != 0) continue;
+    if(statvfs(base, &sv) != 0) { ps5tm_drive_leave(gate); continue; }
     uint64_t fr    = sv.f_frsize ? sv.f_frsize : sv.f_bsize;
     uint64_t avail = (uint64_t)sv.f_bavail * fr;
     char fs[16] = "";
@@ -125,6 +127,7 @@ list_dests(const char *source, dest_t *out, int max) {
       d->same_device = same;
       n++;
     }
+    ps5tm_drive_leave(gate);
   }
   return n;
 }
@@ -181,7 +184,7 @@ ps5tm_gamemove_plan(const char *title_id, const char *op, char *err, size_t err_
 
   uint64_t size = 0, largest = 0;
   if(ps5tm_gamecopy_measure(s.path, &size, &largest) != 0) {
-    snprintf(err, err_len, "Die Spieldaten sind nicht lesbar.");
+    snprintf(err, err_len, "%s", ps5tm_usbeject_settling(s.path) ? "Das Laufwerk wird gerade ausgeworfen. Bitte gleich noch einmal." : "Die Spieldaten sind nicht lesbar.");
     return NULL;
   }
   char here[256];
@@ -707,7 +710,7 @@ gamemove_start_checked(const char *title_id, const char *op, const char *dest_di
   }
   uint64_t size = 0, largest = 0;
   if(ps5tm_gamecopy_measure(s.path, &size, &largest) != 0) {
-    snprintf(err, err_len, "Die Spieldaten sind nicht lesbar.");
+    snprintf(err, err_len, "%s", ps5tm_usbeject_settling(s.path) ? "Das Laufwerk wird gerade ausgeworfen. Bitte gleich noch einmal." : "Die Spieldaten sind nicht lesbar.");
     return 409;
   }
   const dest_t *dd = &d[found];

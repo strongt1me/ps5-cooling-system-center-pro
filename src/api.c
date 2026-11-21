@@ -2530,6 +2530,7 @@ handle_system(int fd) {
      can be read by every device on the home network. serial_full is always sent, so the pages know which way the switch stands. */
   ps5tm_config_lock();
   const int serial_full = g_config.serial_full ? 1 : 0;
+  const unsigned probe_mask = g_config.probe_mask;            /* read under the lock: a PUT copies the whole config (F9) */
   ps5tm_config_unlock();
   cJSON_AddBoolToObject(root, "serial_full", serial_full);
   if(serial_full && info.serial[0])
@@ -2568,7 +2569,7 @@ handle_system(int fd) {
        controller object has carried its probe_mask for this reason all along;
        the network object did not. */
     cJSON_AddBoolToObject(net, "probed",
-                          (g_config.probe_mask & PS5TM_PROBE_NETDISP) != 0);
+                          (probe_mask & PS5TM_PROBE_NETDISP) != 0);
     cJSON_AddBoolToObject(net, "up", info.net_up);
     if(info.net_up) {
       cJSON_AddStringToObject(net, "kind", info.net_wifi ? "wlan" : "kabel");
@@ -2600,7 +2601,7 @@ handle_system(int fd) {
     ps5tm_pad_get(&pad);
 
     cJSON *c = cJSON_AddObjectToObject(root, "controller");
-    cJSON_AddNumberToObject(c, "probe_mask", g_config.probe_mask);
+    cJSON_AddNumberToObject(c, "probe_mask", probe_mask);
     cJSON_AddBoolToObject(c, "connected", pad.connected);
     /* Always, not only on success. "connected: false" on its own cannot say
        whether the symbols are missing, the open was refused, or there really
@@ -5906,7 +5907,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
     char why[200] = "";
-    int active = ps5tm_app_job_running(why, sizeof(why));
+    int active = ps5tm_any_job_running(why, sizeof(why));       /* an eject too: the tile must not replace the app inside one (F3) */
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", 1);
     cJSON_AddBoolToObject(o, "active", active);
@@ -6064,7 +6065,8 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
   if(!strcmp(req->path, "/api/v1/storage/holders") && is_get) {          /* who has a file open on a drive (read-only, usbeject.c) */
     char mount[32] = "";
     query_param_decoded(req->query, "mount", mount, sizeof(mount));
-    send_cjson(fd, 200, ps5tm_usbeject_holders_json(mount));
+    cJSON *ho = ps5tm_usbeject_holders_json(mount);
+    send_cjson(fd, cJSON_IsTrue(cJSON_GetObjectItem(ho, "ok")) ? 200 : 400, ho);   /* a wrong mount is a bad request */
     return;
   }
 

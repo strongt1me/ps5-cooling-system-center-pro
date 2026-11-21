@@ -1121,7 +1121,15 @@ ps5tm_imgjob_plan(const char *id, char *err, size_t err_len) {
     snprintf(p->path, sizeof(p->path), "%s", li.path);
     p->size = (uint64_t)st.st_size;
     p->mtime = (int64_t)st.st_mtime;
-    if(run_big(plan_thread, p) != 0 || p->err) {
+    int gate = ps5tm_drive_enter(li.path);          /* the walk of the image through the gate (review of 21.11.2026, R1) */
+    if(gate == 0) {
+      free(p);
+      snprintf(err, err_len, "Das Laufwerk wird gerade ausgeworfen. Bitte gleich noch einmal.");
+      return NULL;
+    }
+    const int bad = run_big(plan_thread, p) != 0 || p->err;
+    ps5tm_drive_leave(gate);
+    if(bad) {
       free(p);
       snprintf(err, err_len, "Das Abbild lässt sich nicht lesen.");
       return NULL;
@@ -1150,9 +1158,11 @@ ps5tm_imgjob_plan(const char *id, char *err, size_t err_len) {
     const char *mount = info.volumes[i].path;
     char dest[320], base[64], label[40];
     if(dest_for(mount, li.path, id, dest, sizeof(dest), base, sizeof(base), label, sizeof(label)) != 0) continue;
+    int gate = ps5tm_drive_enter(mount);           /* a drive that is being ejected is not offered (review F2) */
+    if(gate == 0) continue;
     uint64_t avail = 0;
     char fstype[16];
-    if(drive_free(base, &avail, fstype, sizeof(fstype)) != 0) continue;
+    if(drive_free(base, &avail, fstype, sizeof(fstype)) != 0) { ps5tm_drive_leave(gate); continue; }
     struct stat ds;
     cJSON *d = cJSON_CreateObject();
     cJSON_AddStringToObject(d, "mount", mount);
@@ -1167,6 +1177,7 @@ ps5tm_imgjob_plan(const char *id, char *err, size_t err_len) {
     cJSON_AddBoolToObject(d, "path_too_long", strlen(dest) + sizeof(IJ_PART_SUFFIX) + p->max_rel + 1 >= PATH_MAX);
     cJSON_AddBoolToObject(d, "source_here", !strncmp(li.path, base, strlen(base)) && li.path[strlen(base)] == '/');
     cJSON_AddItemToArray(arr, d);
+    ps5tm_drive_leave(gate);
   }
   free(p);
   return root;

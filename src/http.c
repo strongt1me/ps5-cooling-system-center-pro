@@ -32,6 +32,7 @@
    cap keeps a flood of connections from starving the fan controller that
    shares the process. A page load keeps six or so open at once. */
 #define MAX_CONNECTIONS  24
+#define LOOPBACK_RESERVE 6     /* places above MAX_CONNECTIONS only for 127.x (review of 21.11.2026) */
 
 /* Wall-clock budgets for receiving a request. SO_RCVTIMEO alone only drops a
    client that goes completely silent; one that sends a byte every few seconds
@@ -215,6 +216,7 @@ ps5tm_http_send_file(int fd, const char *path, const char *ctype,
                    "Content-Type: %s\r\n"
                    "Content-Length: %lld\r\n"
                    "Cache-Control: private, max-age=%u\r\n"
+                   "X-Content-Type-Options: nosniff\r\n"
                    "Connection: close\r\n\r\n",
                    ctype, (long long)st.st_size, max_age_s);
   if(n < 0 || n >= (int)sizeof(head)) { close(in); return -1; }
@@ -449,11 +451,15 @@ host_allowed(const char *host) {
 
   struct in_addr a4;
   if(inet_pton(AF_INET, name, &a4) == 1) return 1;
-  if(!strchr(name, '.')) return 1;                  /* localhost, ps5-konsole */
+  /* Names without a dot are no longer taken (only localhost), nor .fritz.box: a single name is completed with the search domain the router hands out
+     (a FritzBox: fritz.box), and .box is a public top-level domain (fritz.box itself was registered by others in 2024) - whoever controls such a name's
+     DNS reaches the app through a page of theirs by DNS rebinding (review of 21.11.2026, S1; the user chose: IP addresses and local names only).
+     The endings below are not delegated in the public DNS. */
+  if(!strchr(name, '.')) return strcasecmp(name, "localhost") == 0;
 
   static const char *const lan[] = {
     ".local", ".lan", ".home", ".home.arpa", ".internal", ".localdomain",
-    ".intranet", ".fritz.box",
+    ".intranet",
   };
   for(size_t i = 0; i < sizeof(lan) / sizeof(lan[0]); i++) {
     size_t sl = strlen(lan[i]);
@@ -633,6 +639,14 @@ serve_connection(void *arg) {
     else if(hl > 0 && !host_allowed(host))    refused = "Host";
     else if(!reads && ol > 0 && !origin_allowed(origin, host))
                                               refused = "Origin";
+    else if(!strncmp(req.path, "/api/", 5)) {
+      /* Fetch metadata (review of 21.11.2026): a request that a page of another site starts - an <img>, a form - is refused for the API, reads
+         too: some reads have effects (the file manager's reads hold an eject back, a refresh fetches the payload lists). Browsers that do not
+         send the header (the console's own WebKit) are unaffected; the Host and Origin checks above stay as they were. */
+      char sfs[32];
+      int sl = header_value(headers, "Sec-Fetch-Site", sfs, sizeof(sfs));
+      if(sl < 0 || (sl > 0 && strcasecmp(sfs, "same-origin") && strcasecmp(sfs, "none"))) refused = "Sec-Fetch-Site";
+    }
     if(refused) {
       log_refused(refused, req.method, req.path, refused[0] == 'O' ? origin : host);
       ps5tm_http_send_error(fd, 403, "forbidden_origin",
@@ -685,7 +699,7 @@ serve_connection(void *arg) {
   /* The tile package is ten megabytes and must never be held in memory — that
      is what broke the app when it was embedded. It streams straight to disk
      instead, and is the only path allowed to exceed the body limit. */
-  if(!strcmp(req.path, "/api/v1/tile/upload")) {
+  if(!strcmp(req.path, "/api/v1/tile/upload") && !strcmp(req.method, "POST")) {
     /* The header budget is spent; from here on a sender may be silent for ten
        seconds at a time, and the handler keeps the clock on the whole. */
     rcv_timeout_until(fd, ps5tm_mono_ms() + 10000);
@@ -698,7 +712,7 @@ serve_connection(void *arg) {
   /* The avatar textures are a few hundred kilobytes together — under the body
      limit, but they arrive as raw bytes rather than JSON, so they take the
      same straight-to-disk path instead of being decoded into a request. */
-  if(!strcmp(req.path, "/api/v1/profile/avatar/file")) {
+  if(!strcmp(req.path, "/api/v1/profile/avatar/file") && !strcmp(req.method, "POST")) {
     rcv_timeout_until(fd, ps5tm_mono_ms() + 10000);
     ps5tm_api_receive_avatar_file(fd, req.query, body_start, body_have, want);
     free(raw);
@@ -1054,8 +1068,10 @@ ps5tm_http_run(int srv, unsigned port) {
     int nodelay = 1;
     setsockopt(cl_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
-    /* Over the cap: say so and hang up, rather than add another thread. */
-    if(atomic_load(&g_connections) >= MAX_CONNECTIONS) {
+    /* Over the cap: say so and hang up, rather than add another thread. The console itself (127.x: the full-screen app, the console's browser) has
+       LOOPBACK_RESERVE places above it, so that clients of the network cannot lock it out (review of 21.11.2026, S3). */
+    const int loopback = (ntohl(peer.sin_addr.s_addr) >> 24) == 127;
+    if(atomic_load(&g_connections) >= MAX_CONNECTIONS + (loopback ? LOOPBACK_RESERVE : 0)) {
       struct timeval sndtv = { 1, 0 };
       setsockopt(cl_fd, SOL_SOCKET, SO_SNDTIMEO, &sndtv, sizeof(sndtv));
       ps5tm_http_send_error(cl_fd, 503, "too_many_connections",

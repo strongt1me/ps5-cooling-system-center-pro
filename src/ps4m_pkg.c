@@ -88,6 +88,9 @@ int p4m_pkg_open(pkg_t *pkg, const char *path) {
     pkg->pfs_offset = be64(pkg->header + 0x410);
     pkg->pfs_size = be64(pkg->header + 0x418);
     pkg->pkg_size = be64(pkg->header + 0x430);
+    /* (app) the sizes decide how big the PFS bitmap becomes (ps4m_build.c): the image inside the package, the package not larger than any there is */
+    if (!pkg->pkg_size || pkg->pkg_size > P4M_MAX_PKG_BYTES || pkg->pfs_offset > pkg->pkg_size || pkg->pfs_size > pkg->pkg_size - pkg->pfs_offset)
+        goto fail;
     memcpy(pkg->digest, pkg->header + 0xfe0, 32);
     uint32_t count = be32(pkg->header + 0x10), table = be32(pkg->header + 0x18);
     if (count > PKG_MAX_ENTRIES)

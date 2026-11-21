@@ -7,6 +7,8 @@
 #include <stdint.h>
 
 #define PKG_MAX_ENTRIES 512
+/* (app) the largest package the port accepts (4 TiB): sizes from a header beyond it are damage, and they size allocations (ps4m_build.c) */
+#define P4M_MAX_PKG_BYTES (1ull << 42)
 #define PKG_MAX_ENTRY_SIZE (64u << 20) /* largest entry p4m_pkg_entry reads */
 
 typedef struct {

@@ -51,7 +51,7 @@ ps5tm_smpremount(const char *title_id, const char *action, char *msg, size_t n) 
     return 409;
   }
   char why[200];
-  if(ps5tm_app_job_running(why, sizeof(why))) {
+  if(ps5tm_any_job_running(why, sizeof(why))) {                  /* an eject too (F3) */
     snprintf(msg, n, "%s. Solange ein Auftrag der App läuft, hängt die App kein Spiel aus oder ein.", why);
     return 409;
   }

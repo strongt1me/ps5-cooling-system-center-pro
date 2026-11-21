@@ -15,6 +15,9 @@ $CC -I"$OUT" -Isrc -o "$OUT/unit" third_party/ps4mount/test/unit.c \
 $CC -Isrc -o "$OUT/pkgindex_test" third_party/ps4mount/test/pkgindex_test.c \
   src/ps4m_pkgindex.c src/ps4m_pkg.c src/ps4m_crypto.c
 "$OUT/pkgindex_test"
+$CC -fsanitize=address,undefined -I"$OUT" -Isrc -o "$OUT/playgo_hostile_test" test/ps4m/playgo_hostile_test.c \
+  src/ps4m_pkg.c src/ps4m_build.c src/ps4m_crypto.c src/ps4m_origin.c   # (app) hostile playgo-chunk.dat (review of 21.11.2026)
+"$OUT/playgo_hostile_test"
 $CC -Isrc -o "$OUT/klogdup_test" third_party/ps4mount/test/klogdup_test.c src/ps4m_klogdup.c
 "$OUT/klogdup_test"
 $CC -Isrc -o "$OUT/accopy_test" third_party/ps4mount/test/accopy_test.c src/ps4m_accopy.c

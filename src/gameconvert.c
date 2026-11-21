@@ -1724,8 +1724,26 @@ game_version(const char *title_id, char *out, size_t n) {
   if(ps5tm_library_delete_info(title_id, &d) == 0) snprintf(out, n, "%s", d.version);
 }
 
+static cJSON *plan_body(const char *title_id, char *err, size_t err_len);
+
+/* The plan walks the game (image plan, packs, stream risk, unsigned files): through the gate on the game's drive, so that an eject waits for it
+   or the plan is not made while the drive is ejected (review of 21.11.2026, R1). */
 cJSON *
 ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
+  char name[128], source[256];
+  if(ps5tm_library_copy_info(title_id, name, sizeof(name), source, sizeof(source)) != 0) return plan_body(title_id, err, err_len);   /* says why */
+  int gate = ps5tm_drive_enter(source);
+  if(gate == 0) {
+    snprintf(err, err_len, "Das Laufwerk wird gerade ausgeworfen. Bitte gleich noch einmal.");
+    return NULL;
+  }
+  cJSON *o = plan_body(title_id, err, err_len);
+  ps5tm_drive_leave(gate);
+  return o;
+}
+
+static cJSON *
+plan_body(const char *title_id, char *err, size_t err_len) {
   char name[128], source[256];
   if(ps5tm_library_copy_info(title_id, name, sizeof(name), source, sizeof(source)) != 0) {
     snprintf(err, err_len, "Dieses Spiel lässt sich nicht konvertieren.");
@@ -1920,9 +1938,11 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     char base[64], label[40], fs[16];
     uint64_t avail = 0;
     if((ps4 && !image_drive_ok(info.volumes[i].path)) ||
-       drive_base(info.volumes[i].path, base, sizeof(base), label, sizeof(label)) != 0 ||
-       drive_space(base, &avail, fs, sizeof(fs)) != 0)
+       drive_base(info.volumes[i].path, base, sizeof(base), label, sizeof(label)) != 0)
       continue;
+    int gate = ps5tm_drive_enter(info.volumes[i].path);   /* a drive that is being ejected is not offered (review F2) */
+    if(gate == 0) continue;
+    if(drive_space(base, &avail, fs, sizeof(fs)) != 0) { ps5tm_drive_leave(gate); continue; }
     cJSON *d = cJSON_CreateObject();
     cJSON_AddStringToObject(d, "mount", info.volumes[i].path);
     cJSON_AddStringToObject(d, "label", label);
@@ -1968,6 +1988,7 @@ ps5tm_gameconvert_plan(const char *title_id, char *err, size_t err_len) {
     }
     cJSON_AddBoolToObject  (d, "enough_space", fits_any);
     cJSON_AddItemToArray(arr, d);
+    ps5tm_drive_leave(gate);
   }
   return root;
 }

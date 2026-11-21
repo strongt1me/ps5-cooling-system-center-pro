@@ -1116,6 +1116,9 @@ mods_prune(const lib_game_t *list, int n) {
   g_mods_cached = k;
 }
 
+/* Set by ps5tm_library_forget() and by a read an eject cut short (described below, at ensure_fresh). */
+static int g_dirty;
+
 /* Reads the database and replaces the cache. Called with g_refresh_lock held
    and g_lock NOT held: everything slow happens before g_lock is taken, once,
    to publish the finished list. */
@@ -1212,6 +1215,9 @@ refresh(void) {
   }
   if(cut_off) {
     snprintf(err, sizeof(err), "Ein Laufwerk wird gerade ausgeworfen; die Spieleliste bleibt, wie sie war.");
+    pthread_mutex_lock(&g_lock);
+    g_dirty = 1;                                 /* read again once the drive has settled: a forget that came before is not lost (F8) */
+    pthread_mutex_unlock(&g_lock);
     goto done;
   }
   count = n;
@@ -1267,8 +1273,7 @@ done:
    nothing to fall back on and is waited for. */
 /* Set by ps5tm_library_forget(): something changed on disk (a move, an unpack, a delete). The next caller reads afresh
    whatever it asks for, and waits for that read: a job must not be planned against the list from before the change
-   (review 19.10.2026: single-title lookups skipped the TTL and kept the old list until the games page asked). */
-static int g_dirty;
+   (review 19.10.2026: single-title lookups skipped the TTL and kept the old list until the games page asked). Declared above refresh(). */
 
 /* Waits for a mutex for at most `ms` (polling: no timed lock is needed anywhere else). 0 = got it. */
 static int
@@ -1308,10 +1313,14 @@ ensure_fresh(int ttl_applies) {
   } else if(pthread_mutex_trylock(&g_refresh_lock) != 0) return;
 
   /* The thread ahead of us may just have finished the very read we came for. */
+  const int ejecting = ps5tm_usbeject_active();   /* asked before g_lock (the eject has a lock of its own) */
   pthread_mutex_lock(&g_lock);
-  int need = (g_state == 0) || g_dirty ||
-             (ttl_applies && ps5tm_mono_ms() - g_read_ms >= LIBRARY_TTL_MS);
-  g_dirty = 0;                                   /* a forget from now on asks for the read after this one */
+  /* A read an eject cut short (g_dirty) is redone once the drive has settled, not at every poll of a page in between: each try would read
+     the whole app database and stop at the gate again (review of 21.11.2026, R3). The list from before stays meanwhile. */
+  const int hold = ejecting && g_dirty && g_state != 0;
+  int need = !hold && ((g_state == 0) || g_dirty ||
+             (ttl_applies && ps5tm_mono_ms() - g_read_ms >= LIBRARY_TTL_MS));
+  if(!hold) g_dirty = 0;                         /* a forget from now on asks for the read after this one */
   pthread_mutex_unlock(&g_lock);
   if(need) refresh();
   pthread_mutex_unlock(&g_refresh_lock);

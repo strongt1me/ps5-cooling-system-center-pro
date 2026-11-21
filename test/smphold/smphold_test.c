@@ -37,6 +37,7 @@ int ps5tm_gamestate_measured(void) { return 1; }
 uint64_t ps5tm_gamestate_age_ms(void) { return 0; }
 void ps5tm_gamestate_get(ps5tm_gamestate_t *o) { memset(o, 0, sizeof(*o)); }
 int ps5tm_app_job_running(char *why, size_t n) { (void)why; (void)n; return 0; }
+int ps5tm_any_job_running(char *why, size_t n) { (void)why; (void)n; return 0; }
 static int g_real_unmounts;
 int ps5tm_smpremount(const char *id, const char *a, char *msg, size_t n) {
   (void)a; (void)msg; (void)n;

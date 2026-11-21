@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "zstdpack.h"
+#include "third_party/libdeflate/libdeflate.h"
 
 /* the two list helpers of lz4pack.c (not linked here), the same code */
 static int cmp_str(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
@@ -259,6 +260,37 @@ main(int argc, char **argv) {
     CHECK(exists(a));
   }
   CHECK(zsp_verify(root, NULL, &vs, NULL, err, sizeof(err)) == 0);          /* the set alone still reads */
+  {
+    /* review of 21.11.2026 (M1): so > file length with sl = file length - so (mod 2^64) passed "so + sl == file_len"; the index must be refused,
+       not read past its end (ASan would stop here). Both CRC-32 are right, so only the layout check can refuse it. */
+    char hd[PATH_MAX], hp[PATH_MAX];
+    snprintf(hd, sizeof(hd), "%s/hostile", argv[1]);
+    mkdir(hd, 0777);
+    snprintf(hp, sizeof(hp), "%s/%s", hd, ZSP_INDEX_NAME);
+    uint8_t hb[256] = { 0 };
+    const size_t hl = sizeof(hb);
+    memcpy(hb, "AMPRZPK1", 8);
+    for(int i = 0; i < 4; i++) { hb[8 + i] = (uint8_t)(1 >> (8 * i)); hb[12 + i] = (uint8_t)(128 >> (8 * i)); hb[20 + i] = (uint8_t)(1 >> (8 * i)); }
+    hb[16] = 18; hb[17] = 5;
+    const uint64_t nf = 100000, nc = 0, fo = 128, co = fo + 32 * nf, vo = co + 8 * nc, so = vo + 8, sl = (uint64_t)hl - so;
+    const uint64_t f64[] = { nf, nc, fo, co, vo, so, sl };
+    for(int k = 0; k < 7; k++) for(int i = 0; i < 8; i++) hb[40 + 8 * k + i] = (uint8_t)(f64[k] >> (8 * i));
+    hb[128 + 8] = 1; hb[128 + 24] = 1;
+    uint32_t c1 = libdeflate_crc32(0, hb + 128, hl - 128);
+    for(int i = 0; i < 4; i++) hb[112 + i] = (uint8_t)(c1 >> (8 * i));
+    uint8_t t[128];
+    memcpy(t, hb, 128);
+    memset(t + 112, 0, 8);
+    uint32_t c2 = libdeflate_crc32(0, t, 128);
+    for(int i = 0; i < 4; i++) hb[116 + i] = (uint8_t)(c2 >> (8 * i));
+    int hfd = open(hp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    CHECK(hfd >= 0 && write(hfd, hb, hl) == (ssize_t)hl);
+    if(hfd >= 0) close(hfd);
+    lzp_stats_t hs;
+    char herr[256] = "";
+    CHECK(zsp_verify(hd, NULL, &hs, NULL, herr, sizeof(herr)) != 0);   /* refused, not read past the end */
+  }
+
   if(!keep) {
     CHECK(zsp_remove_set(root, err, sizeof(err)) == 0);
     CHECK(!zsp_packed_dir(root));

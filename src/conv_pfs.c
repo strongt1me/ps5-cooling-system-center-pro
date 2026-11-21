@@ -676,6 +676,7 @@ static int
 block_bounds(vblocks_t *v) {
   uint64_t a, b;
   if(table_at(v, v->next, &a) != 0 || table_at(v, v->next + 1, &b) != 0) return -1;
+  if(b <= a || b - a > LBS) return -1;            /* read again from the disk: the file may have changed since the table was checked */
   v->b_start = v->base + a;
   v->b_end   = v->base + b;
   v->have    = 0;
@@ -803,7 +804,11 @@ verify_quick(vblocks_t *v, const pfsc_check_t *c, uint64_t fsize, uint64_t entri
       snprintf(err, err_len, "Die Blocktabelle ist nicht lesbar.");
       return -1;
     }
-    const size_t len = (size_t)(get64(ent + 8) - get64(ent));            /* the table was checked: 1 to LBS */
+    if(get64(ent + 8) <= get64(ent) || get64(ent + 8) - get64(ent) > LBS) {   /* read again from the disk: the file may have changed since the table was checked */
+      snprintf(err, err_len, "Die Blocktabelle ist beschädigt.");
+      return -1;
+    }
+    const size_t len = (size_t)(get64(ent + 8) - get64(ent));
     if(pread_all(v->fd, v->bbuf, len, v->base + get64(ent)) != 0) {
       snprintf(err, err_len, "Lesefehler beim Prüfen: %s", ps5tm_io_strerror(errno));
       return -1;

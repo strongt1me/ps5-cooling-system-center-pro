@@ -60,6 +60,8 @@ class HttpSource final : public Source
     void dumpforge_fetch() override;
     void disc_post(const std::string &route, const std::string &json) override;
     void usb_eject(const std::string &mount) override;
+    void usb_eject_rearm() override;
+    void delete_backdrop(const std::string &area) override;
     void playtime_reset() override;
     void fan_trace_save() override;
     void saves_post(const std::string &route, const std::string &json) override;
@@ -248,6 +250,7 @@ class HttpSource final : public Source
     // An eject was asked for and has not been seen to end: the Dateien page asks the app for nothing about the drives meanwhile (no places, no job), as the
     // System page does not (21.11.2026; the console cuts the drive off with a forced unmount that asks nobody).
     std::atomic<bool> eject_pending_{false};
+    std::string store_force_id_; // worker thread only: the store entry whose next "install" replaces a foreign file
     std::atomic<bool> engine_fetching_{false}; // a download of FPKGMount / Dump Forge is on its way
     std::atomic<bool> ng_fetching_{false}; // the check for a new AMPR EMU NG version is on its way
     std::mutex kraken_poll_mutex_; // one question about FPKGMount at a time: the newer answer wins

@@ -1728,6 +1728,7 @@ typedef enum {
 int           ps5tm_jobs_busy_except(int self, int flags, char *why, size_t n);                   /* 1 while a drive is being ejected: no job of the app starts beside it (audit F-06) */
 /* 1 and what runs ("Es läuft eine Kopie oder ein Dump") while any of the app's own jobs runs. */
 int           ps5tm_app_job_running(char *why, size_t n);
+int           ps5tm_any_job_running(char *why, size_t n);                                         /* the same, an eject that runs included (jobs/active, smpremount, smphold) */
 /* smpremount.c (30.10.2026): one game "mount", "unmount" or "remount" through ShadowMountPlus; the HTTP status and a
    message for the user. */
 int           ps5tm_smpremount(const char *title_id, const char *action, char *msg, size_t n);

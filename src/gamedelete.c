@@ -468,8 +468,10 @@ list_backups(backup_t *out, int max) {
   for(int b = 0; b < nb && n < max; b++) {
     char dir[160];
     snprintf(dir, sizeof(dir), "%s/" BACKUP_DIR, bases[b]);
+    int gate = ps5tm_drive_enter(bases[b]);       /* a drive that is being ejected is not listed (review F2) */
+    if(gate == 0) continue;
     DIR *d = opendir(dir);
-    if(!d) continue;
+    if(!d) { ps5tm_drive_leave(gate); continue; }
     struct dirent *e;
     while(n < max && (e = readdir(d)) != NULL) {
       const char *nm = e->d_name;
@@ -501,6 +503,7 @@ list_backups(backup_t *out, int max) {
       n++;
     }
     closedir(d);
+    ps5tm_drive_leave(gate);
   }
   return n;
 }

@@ -13,6 +13,7 @@
 #include "ps5cc/backdrops.hpp"
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/delete_ask.hpp"
 #include "ps5cc/game_extras.hpp"
 #include "ps5cc/game_tools.hpp"
 #include "ps5cc/i18n.hpp"
@@ -547,6 +548,7 @@ class Ps5cc final : public app::Concept
         history_.style.entrance_step = 0.0f;
         history_.set_active(false);
         history_.set_bounds({kRightX, kTop + 54.0f, kRightW, kBottom - kTop - 54.0f});
+        history_ask_.init(theme_);
 
         menu_.style.theme = ps5cc::solid_theme(theme_);
         menu_.style.width = 560.0f;
@@ -750,6 +752,7 @@ class Ps5cc final : public app::Concept
         sheet_.update(dt);
         tools_.update(dt);
         extras_.update(dt);
+        history_ask_.update(dt);
         for (ui::ProgressBar &bar : bars_)
             bar.update(dt);
         history_.update(dt);
@@ -782,7 +785,7 @@ class Ps5cc final : public app::Concept
         frame.backdrop.time = clock_;
         const ps5cc::Page *page = current_page();
         frame.glass = sheet_.visible() || link_dialog_.visible() || tools_.visible() ||
-                      extras_.visible() || (page != nullptr && page->modal());
+                      extras_.visible() || history_ask_.is_open() || (page != nullptr && page->modal());
 
         ui::Canvas canvas{frame.scene, context_.fonts, 0, clock_};
         draw_area_picture(canvas);
@@ -815,6 +818,7 @@ class Ps5cc final : public app::Concept
         sheet_.draw(top);
         tools_.draw_overlay(top);
         extras_.draw_overlay(top);
+        history_ask_.draw(top);
         menu_.draw(top);
         language_menu_.draw(top);
         toasts_.draw(top);
@@ -2193,6 +2197,13 @@ class Ps5cc final : public app::Concept
             tools_.handle(input, feedback);
             return;
         }
+        if (history_ask_.is_open())
+        {
+            // only "Löschen" in the question empties the history
+            if (history_ask_.handle(input, feedback))
+                src.system_post("jobs/history/clear", "{}");
+            return;
+        }
         if (sheet_.is_open())
         {
             sheet_.handle(input, feedback);
@@ -2438,6 +2449,20 @@ class Ps5cc final : public app::Concept
             {
                 feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
             }
+            return;
+        }
+        // X: the history of the jobs emptied, as with the browser's button - after the question that says how much goes (review of
+        // 21.11.2026: the full-screen app could show the history but not empty it)
+        if (input.is_pressed(Action::confirm))
+        {
+            if (data_.history.empty())
+            {
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                return;
+            }
+            const std::size_t n = data_.history.size();
+            history_ask_.open("Verlauf leeren?", {n == 1 ? std::string("1 Eintrag") : std::to_string(n) + " Einträge"},
+                              {"Aufträge, die gerade laufen, bleiben."}, feedback, "Aus dem Verlauf der Aufträge wird gelöscht:");
             return;
         }
         // △ on the conversion's card: its queue (several games one after the other)
@@ -3005,6 +3030,8 @@ class Ps5cc final : public app::Concept
             case kJobs:
                 hints[count++] = {ui::Button::dpad, "Auswählen"};
                 hints[count++] = {ui::Button::square, "Abbrechen"};
+                if (!data_.history.empty())
+                    hints[count++] = {ui::Button::cross, "Verlauf leeren"};
                 if (job_focus_ == static_cast<int>(JobKind::convert))
                     hints[count++] = {ui::Button::triangle, "Warteschlange"};
                 break;
@@ -3072,6 +3099,7 @@ class Ps5cc final : public app::Concept
 
     std::array<ui::ProgressBar, static_cast<std::size_t>(JobKind::count)> bars_;
     ui::ListView history_;
+    ps5cc::DeleteAsk history_ask_; // asked before the history of the jobs is emptied
     int job_focus_ = 0;
     ui::SpringRect job_focus_amount_;
 

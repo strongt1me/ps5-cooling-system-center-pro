@@ -25,7 +25,20 @@
 #define TOKEN_ANY (SLOTS + 1)
 
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t  g_cv = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t  g_cv;
+static pthread_once_t  g_cv_once = PTHREAD_ONCE_INIT;
+
+/* The condition waits on the monotonic clock: a jump of the wall clock (network time, rest mode) must not stretch the eject's wait (review F10). */
+static clockid_t g_cv_clock = CLOCK_REALTIME;   /* the clock the condition waits on: monotonic when the system takes it (review R5) */
+
+static void
+cv_init(void) {
+  pthread_condattr_t a;
+  pthread_condattr_init(&a);
+  if(pthread_condattr_setclock(&a, CLOCK_MONOTONIC) == 0) g_cv_clock = CLOCK_MONOTONIC;
+  pthread_cond_init(&g_cv, &a);
+  pthread_condattr_destroy(&a);
+}
 static int             g_n[SLOTS];
 static int             g_any;
 
@@ -40,6 +53,7 @@ ps5tm_drive_slot(const char *path) {
 
 static void
 back_out(int *counter) {
+  pthread_once(&g_cv_once, cv_init);
   pthread_mutex_lock(&g_mu);
   (*counter)--;
   pthread_cond_broadcast(&g_cv);
@@ -78,6 +92,7 @@ ps5tm_drive_enter_any(void) {
 void
 ps5tm_drive_leave(int token) {
   if(token <= 0) return;
+  pthread_once(&g_cv_once, cv_init);
   pthread_mutex_lock(&g_mu);
   if(token == TOKEN_ANY) { if(g_any > 0) g_any--; }
   else if(token <= SLOTS) { if(g_n[token - 1] > 0) g_n[token - 1]--; }
@@ -91,8 +106,9 @@ int
 ps5tm_drive_wait_idle(const char *mount, int ms) {
   int s = ps5tm_drive_slot(mount);
   if(s < 0) return 0;
+  pthread_once(&g_cv_once, cv_init);
   struct timespec until;
-  clock_gettime(CLOCK_REALTIME, &until);
+  clock_gettime(g_cv_clock, &until);
   until.tv_sec += ms / 1000;
   until.tv_nsec += (long)(ms % 1000) * 1000000L;
   if(until.tv_nsec >= 1000000000L) { until.tv_sec++; until.tv_nsec -= 1000000000L; }

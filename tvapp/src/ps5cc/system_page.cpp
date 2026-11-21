@@ -749,9 +749,21 @@ class SystemPage final : public Page
             out.push_back(header("CONTROLLER"));
             out.push_back(row("In Benutzung", yes(pad, "in_use") ? "ja" : "nein"));
             if (has(pad, "battery_pct") && num(pad, "battery_pct") >= 0)
-                out.push_back(
-                    row("Akku", std::to_string(static_cast<int>(num(pad, "battery_pct"))) + " %" +
-                                    (yes(pad, "charging") ? " · lädt" : "")));
+            {
+                std::string akku = std::to_string(static_cast<int>(num(pad, "battery_pct"))) + " %";
+                akku += yes(pad, "full") ? " · voll geladen" : yes(pad, "charging") ? " · lädt" : " · im Akkubetrieb";
+                // The console logs the level only when a controller connects: a number without its age would
+                // claim a freshness it does not have (as the browser page says it; review of 21.11.2026).
+                if (yes(pad, "from_log") && has(pad, "age_s") && num(pad, "age_s") >= 0)
+                {
+                    const long a = static_cast<long>(num(pad, "age_s"));
+                    akku += a < 90       ? std::string(" · Stand gerade eben")
+                            : a < 5400   ? " · Stand vor " + std::to_string((a + 30) / 60) + " Min."
+                            : a < 172800 ? " · Stand vor " + std::to_string((a + 1800) / 3600) + " Std."
+                                         : " · Stand vor " + std::to_string((a + 43200) / 86400) + " Tagen";
+                }
+                out.push_back(row("Akku", akku));
+            }
         }
         return out;
     }

@@ -202,6 +202,8 @@ copy_str(const cJSON *j, const char *key, char *out, size_t out_len) {
 static int            g_refreshing;
 static pthread_cond_t g_refresh_cv = PTHREAD_COND_INITIALIZER;
 
+static int g_asked;                             /* the list was asked for at least once; a forget does not reset it */
+
 static void
 refresh_locked(void) {
   while(g_refreshing) pthread_cond_wait(&g_refresh_cv, &g_lock);
@@ -210,8 +212,9 @@ refresh_locked(void) {
   if(g_games_ms && now - g_games_ms < ttl) return;
   /* While a drive is being ejected (and for the settling time after it) the list is not asked for again: ShadowMountPlus answers it with a stat() of every
      game's source, and some of them lie on the drive that the console is cutting off (21.11.2026). What was known stays. */
-  if(g_games_ms && ps5tm_usbeject_active()) return;
+  if(g_asked && ps5tm_usbeject_active()) return;                /* g_asked, not g_games_ms: a forget (ps5tm_smp_forget) must not open the way (F6) */
   g_games_ms = now;
+  g_asked = 1;
   g_refreshing = 1;
   pthread_mutex_unlock(&g_lock);
 

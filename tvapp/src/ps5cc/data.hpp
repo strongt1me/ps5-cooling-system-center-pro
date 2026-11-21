@@ -1445,6 +1445,8 @@ class Source
     // A USB drive ejected through ShadowMountPlus ("/mnt/usb0"); the app refuses while one of its
     // jobs runs.
     virtual void usb_eject(const std::string &mount) = 0;
+    // POST /api/v1/storage/eject {"action":"rearm"}: ejecting allowed again after an eject that did not come back.
+    virtual void usb_eject_rearm() = 0;
     // Spielzeit: the recorded sessions forgotten (the running one keeps counting).
     virtual void playtime_reset() = 0;
     // POST /api/v1/fan/trace/save: the recording of the fan regulation (the last 30 minutes) into a
@@ -1501,6 +1503,8 @@ class Source
     // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture
     // (uploaded in the browser).
     virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;
+    // POST /api/v1/backdrops {area, delete:true}: the area's own picture deleted (the page asked first).
+    virtual void delete_backdrop(const std::string &area) = 0;
     // Ends the app on the console (the preview only says so).
     virtual void quit_app() = 0;
     // Preview only: steps the link through starting / failed / online so

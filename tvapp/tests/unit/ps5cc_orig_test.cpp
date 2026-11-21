@@ -432,7 +432,7 @@ TEST(Ps5ccOrig, TheDeleteQuestionNamesWhatGoes)
 {
     const OrigPlan p = plan();
     EXPECT_EQ(hui::ps5cc::orig_delete_warning(p),
-              "Gelöscht wird „Double Dragon Revive“ (9,4 GB) aus /data/homebrew/PPSA23000. "
+              "Gelöscht wird „Double Dragon Revive“ (8,8 GB) aus /data/homebrew/PPSA23000. "   /* binary units since 21.11.2026 */
               "Spielstände bleiben.");
     const std::vector<std::string> notes = hui::ps5cc::orig_delete_notes(p);
     ASSERT_EQ(notes.size(), 2u);
