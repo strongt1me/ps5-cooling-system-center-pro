@@ -586,13 +586,6 @@ Versionen verschoben haben, landen in der obersten Ebene als `CUSAxxxxx - Name -
   Freischaltungen zählen seit PS4Mount 0.7.3 nicht mit). Das ist eine Grenze der
   Konsole, auch für installierte Spiele.
 
-## LZ4-Asset-Packs: Schritt für Schritt (seit 12.10.2026)
-
-Ein **Asset-Pack** besteht aus wenigen Dateien (`ampr_assets-000.pak` und weitere, dazu `ampr_assets.index`). Die App packt die
-Spieldaten eines Spiels hinein und verkleinert sie mit LZ4. Die APR-EMU liest sie beim Spielen und entpackt jeden Block erst, wenn
-das Spiel ihn braucht. Laut dem Entwickler (drakmor, *ampr_emu*) halbiert das den Platzbedarf und lädt oft 30 bis 40 Prozent
-schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes Spiel verträgt das.**
-
 ### (F)PKG-Spiele mit Kraken Mount (FPKGMount)
 
 Der Reiter **FPKGMount** neben „PS4 PKG von USB“ spielt (F)PKG-Spiele und Spielordner (roh, zstd, LZ4) direkt von der Platte oder vom USB-Laufwerk, ohne sie zu installieren. Dafür bringt die App das Programm **Kraken Mount** von quer3q mit (GPL-3.0, Version 0.3.1; ein eigenes Programm, nicht in die App umgeschrieben), startet es und zeigt seine Spiele.
@@ -610,6 +603,13 @@ Der Reiter **FPKGMount** neben „PS4 PKG von USB“ spielt (F)PKG-Spiele und Sp
 - **Derselbe Titel bei zwei Einhängern (seit 14.11.2026, `src/mounters.c`).** Kraken Mount, ShadowMountPlus und PS4Mount melden jedes Spiel bei der Konsole an und hängen es ein (`/user/app/<ID>`, `/system_ex/app/<ID>`). Liegt dieselbe Titel-ID bei zwei von ihnen (so am 14.11.2026 mit Alex Kidd: eine `.pkg` bei Kraken Mount, ein Abbild bei ShadowMountPlus), kommen sie sich in die Quere: Kraken Mount hängt die Einhängung von ShadowMountPlus aus (Protokoll „not ours, or stale; unmounting it“), es gibt `Device busy`, und die Kachel unterscheidet sich (Kraken Mount meldet die `param.json` unverändert an, ShadowMountPlus schreibt sie um). Die App meldet es im Reiter FPKGMount (Browser und Vollbild-App) mit einem gelben Achtung-Hinweis; in der Spieleliste gibt es dazu keine Warnung. Sie verschiebt nichts selbst; das Spiel soll nur bei einem von beiden liegen. Auch **Spielordner im Suchordner von Kraken Mount** (`FPKG-Games`) meldet der Reiter („nur .pkg gehört hierher“): Ordner-Spiele gehören zu ShadowMountPlus. Ein Schalter, der Kraken Mount auf `.pkg` beschränkt, fehlt in Kraken Mount selbst (Einstellungen: nur Suchordner, Fakelib, Backports, Intervall, Speichergrenze, Meldungen, Protokoll); die App liefert dessen ELF unverändert aus.
 
 Lege FPKG-Spiele nur in den Ordner `FPKG-Games` (intern, M.2-SSD oder USB): Dort sucht ShadowMountPlus nicht. Beim Konvertieren in das Format FPKG ist dieser Ordner deshalb vorgewählt („A · Spielbar“). Liegt ein Spiel trotzdem bei Kraken Mount und bei ShadowMountPlus und wird beendet, hängt die App es bei ShadowMountPlus aus (wie der Knopf „Aushängen“ der Karte); Spiele, die nur bei einem der beiden liegen, und die Kacheln bleiben unberührt.
+
+## LZ4-Asset-Packs: Schritt für Schritt (seit 12.10.2026)
+
+Ein **Asset-Pack** besteht aus wenigen Dateien (`ampr_assets-000.pak` und weitere, dazu `ampr_assets.index`). Die App packt die
+Spieldaten eines Spiels hinein und verkleinert sie mit LZ4. Die APR-EMU liest sie beim Spielen und entpackt jeden Block erst, wenn
+das Spiel ihn braucht. Laut dem Entwickler (drakmor, *ampr_emu*) halbiert das den Platzbedarf und lädt oft 30 bis 40 Prozent
+schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes Spiel verträgt das.**
 
 ### Was nötig ist
 
