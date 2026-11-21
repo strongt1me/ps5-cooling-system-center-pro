@@ -2526,6 +2526,14 @@ handle_system(int fd) {
   cJSON_AddStringToObject(root, "model", info.model);
   if(info.serial_masked[0])
     cJSON_AddStringToObject(root, "serial_masked", info.serial_masked);
+  /* The whole serial number only when the person chose it (setting serial_full, off by default): the app has no login, so what is sent here
+     can be read by every device on the home network. serial_full is always sent, so the pages know which way the switch stands. */
+  ps5tm_config_lock();
+  const int serial_full = g_config.serial_full ? 1 : 0;
+  ps5tm_config_unlock();
+  cJSON_AddBoolToObject(root, "serial_full", serial_full);
+  if(serial_full && info.serial[0])
+    cJSON_AddStringToObject(root, "serial", info.serial);
 
   char fwstr[16];
   snprintf(fwstr, sizeof(fwstr), "0x%08X", info.firmware);
@@ -3047,6 +3055,7 @@ handle_config_get(int fd) {
       "\"lightbar_hot_c\":%u,"
       "\"ps_button_status\":%u,"
       "\"bg_pause\":%u,"
+      "\"serial_full\":%u,"
       "\"library_cache\":%u,"
       "\"night_enabled\":%u,\"night_start_min\":%u,\"night_end_min\":%u,"
       "\"night_target_c\":%u,\"night_tz_offset_min\":%d,"
@@ -3077,6 +3086,7 @@ handle_config_get(int fd) {
       g_config.lightbar_hot_c,
       g_config.ps_button_status,
       g_config.bg_pause,
+      g_config.serial_full,
       g_config.library_cache,
       g_config.night_enabled, g_config.night_start_min, g_config.night_end_min,
       g_config.night_target_c, g_config.night_tz_offset_min,
@@ -3211,6 +3221,8 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
     next.ps_button_status = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "bg_pause")))
     next.bg_pause = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "serial_full")))
+    next.serial_full = ps5tm_num_u32(it->valuedouble) ? 1u : 0u;
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "library_cache")))
     next.library_cache = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_enabled")))
@@ -3338,6 +3350,7 @@ handle_config_export(int fd) {
   cJSON_AddNumberToObject(cfg, "lightbar_hot_c", g_config.lightbar_hot_c);
   cJSON_AddNumberToObject(cfg, "ps_button_status", g_config.ps_button_status);
   cJSON_AddNumberToObject(cfg, "bg_pause", g_config.bg_pause);
+  cJSON_AddNumberToObject(cfg, "serial_full", g_config.serial_full);
   cJSON_AddNumberToObject(cfg, "library_cache", g_config.library_cache);
   cJSON_AddNumberToObject(cfg, "night_enabled", g_config.night_enabled);
   cJSON_AddNumberToObject(cfg, "night_start_min", g_config.night_start_min);
@@ -3453,6 +3466,8 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
     next.ps_button_status = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "bg_pause")))
     next.bg_pause = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "serial_full")))
+    next.serial_full = ps5tm_num_u32(it->valuedouble) ? 1u : 0u;
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "library_cache")))
     next.library_cache = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "night_enabled")))

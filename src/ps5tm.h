@@ -329,6 +329,11 @@ typedef struct {
      error message that ShadowMountPlus's clean-up in between used to cause. 1 = on (default). */
   unsigned        bg_pause;
 
+  /* The serial number of the console on the System page and in the full-screen app (21.11.2026): 0 = only the last four
+     characters (the default), 1 = the whole number. The whole number leaves the app only while this is 1 (GET /api/v1/system,
+     "serial"); the app has no login, so every device on the home network could read it then. */
+  unsigned        serial_full;
+
   /* "Covers & Metadaten speichern" on the games page: the list keeps covers and the
      results of its slow checks in /data/PS5-Cooling-Center/covers_and_more and uses
      them at the next scan — see libcache.c. Off until someone switches it on. */
@@ -609,6 +614,7 @@ typedef struct {
 typedef struct {
   char     model[128];
   char     serial_masked[48];
+  char     serial[48];           /* the whole number; handed out only while the setting serial_full is on (api.c handle_system) */
   uint32_t firmware;
 
   uint64_t uptime_sec;          int uptime_valid;

@@ -1545,6 +1545,16 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::back)},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "system"},
+            // System → Konsole: the serial number, shortened first, then whole with X, then shortened again
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.7f, 0, Direction::none, "system-seriennummer"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "system-seriennummer-voll"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.6f},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
             // System → ShadowMountPlus (version and the automatic fakelib update)
             {0.4f, action_bit(Action::jump_next)},
             {0.9f, 0, Direction::none, "system-shadowmountplus"},

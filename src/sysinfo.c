@@ -250,13 +250,15 @@ refresh(ps5tm_sysinfo_t *info) {
   else
     snprintf(info->model, sizeof(info->model), "PlayStation 5");
 
-  /* The serial identifies the console, so only the tail is shown — enough to
-     tell two machines apart, not enough to be worth harvesting. */
+  /* The serial identifies the console, so by default only the tail is shown — enough to
+     tell two machines apart, not enough to be worth harvesting. The whole number is kept too and
+     leaves the app only when the person chose it (serial_full, api.c handle_system); it is never logged. */
   char serial[256] = {0};
   if(sceKernelGetHwSerialNumber(serial) == 0 && serial[0]) {
     size_t n = strlen(serial);
     const char *tail = (n > 4) ? serial + n - 4 : serial;
     snprintf(info->serial_masked, sizeof(info->serial_masked), "••••%s", tail);
+    snprintf(info->serial, sizeof(info->serial), "%s", serial);
   }
 
   info->firmware = ps5tm_platform_firmware();

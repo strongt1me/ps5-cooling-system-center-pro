@@ -1905,6 +1905,9 @@ void HttpSource::handle(const Request &request)
                    message_of(body, "Die App hat nicht geantwortet."));
         poll_config();
         poll_status();
+        // the System page reads the serial number from /api/v1/system: the new choice shows at once, not with the next round
+        if (request.text.find("\"serial_full\"") != std::string::npos)
+            poll_storage();
         break;
     case Request::Kind::rule:
         if (exchange("PUT", "/api/v1/games", request.text, &status, &body) == Net::ok &&

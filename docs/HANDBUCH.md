@@ -1994,6 +1994,11 @@ Expertenmodus-Schalter) und ist für schnelle Profilwechsel gedacht.
 
 Auf der Systemseite gibt es zusätzlich:
 
+- **Seriennummer (seit 21.11.2026)**: Die Zeile „Seriennummer“ zeigt ab Werk nur die letzten vier Stellen (`••••8023`). Der Knopf
+  **Vollständig** in der Zeile zeigt die ganze Nummer, **Gekürzt** schaltet zurück; in der Vollbild-App schaltet die X-Taste auf
+  der Zeile um. Die Wahl wird auf der Konsole gespeichert (Einstellung `serial_full`) und gilt für Browser und Vollbild-App. Die
+  App hat keine Anmeldung: Ist die ganze Nummer eingeschaltet, kann jedes Gerät im Heimnetz sie abrufen; darum ist sie ab Werk
+  gekürzt.
 - **USB-Laufwerk auswerfen (seit 29.10.2026)**: Unter „Speicher“ steht bei jedem USB-Laufwerk (`/mnt/usb0` bis `usb7`,
   `/mnt/ext0`) der Knopf **Auswerfen**; in der Vollbild-App unter System → Speicher die X-Taste. Ausgeworfen wird über
   ShadowMountPlus (ab 1.7beta10), aber nur, wenn kein Auftrag der App läuft (Kopieren, Konvertieren, Verschieben, Löschen,

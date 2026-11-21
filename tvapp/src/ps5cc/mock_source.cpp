@@ -495,6 +495,13 @@ class MockSource final : public Source
                 data_.config.tv_language = lang->valuestring;
                 changed();
             }
+            const cJSON *serial = cJSON_GetObjectItemCaseSensitive(root, "serial_full");
+            if (cJSON_IsNumber(serial))
+            {
+                serial_full_ = serial->valuedouble != 0.0;
+                show_serial();
+                changed();
+            }
             const cJSON *smp = cJSON_GetObjectItemCaseSensitive(root, "smp_version");
             if (cJSON_IsString(smp) && smp->valuestring != nullptr)
             {
@@ -1704,6 +1711,22 @@ class MockSource final : public Source
                    R"({"probe_mask":13,"probe_revert_in_s":0,"probe_revert_mask":0,"smp_version":")") +
                data_.config.smp_version + R"(","smp_update_emulators":)" +
                (smp_update_off_ ? "false" : "true") + "}";
+    }
+
+    // the System page's serial number: shortened ("serial_full":false) or, with the whole number, as the console app answers
+    // (an invented number)
+    void show_serial()
+    {
+        std::string &s = data_.system_data.system;
+        const std::string from = "\"serial_masked\":\"••••8023\",";
+        const std::size_t a = s.find(from);
+        const std::size_t b = s.find("\"firmware_raw\"");
+        if (a == std::string::npos || b == std::string::npos || b < a)
+            return;
+        s.replace(a, b - a,
+                  from + (serial_full_ ? "\"serial_full\":true,\"serial\":\"XFJ12345678023\","
+                                       : "\"serial_full\":false,"));
+        ++data_.system_data.seq;
     }
 
     void sync_system_config()
@@ -3370,6 +3393,7 @@ class MockSource final : public Source
             R"("processes":[{"name":"PPSA01325 eboot.bin","used_mb":10480,"total_mb":13312},{"name":"NPXS40087 SceShellUI.elf","used_mb":612,"total_mb":1024},)"
             R"({"name":"ps5tm.elf","used_mb":298,"total_mb":512},{"name":"shadowmountplus.elf","used_mb":42,"total_mb":64}]},)"
             R"("power_state":{"mode":"BIG_APP","idle_s":12,"age_s":3}})";
+        show_serial();
         d.status =
             R"({"ok":true,"temperatures":{"hottest_c":71,"gpu_valid":true,"gpu_c":66},)"
             R"("load":{"cores":[38,41,22,57,12,9,30,25],"cpus":[40,36,44,38,20,24,61,53,14,10,8,10,33,27,26,24],"system_cpu_mask":49152,)"
@@ -3759,6 +3783,7 @@ class MockSource final : public Source
     std::string orig_check_id_, orig_check_dest_;
     float orig_check_at_ = 0.0f;
     std::vector<MockOrig> orig_items_; // newest first
+    bool serial_full_ = false;         // the System page shows the serial number whole
     bool smp_update_off_ = false;      // "Ja" to the ShadowMountPlus question was given
 };
 

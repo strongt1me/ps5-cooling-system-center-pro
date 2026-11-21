@@ -51,6 +51,7 @@ constexpr int kTimedStop = 59;
 constexpr int kRiskyMeasure = 60;
 constexpr int kSmpVersionRow = 70;
 constexpr int kSmpUpdateRow = 71;
+constexpr int kSerialRow = 72; // the serial number: shortened (the default) or whole
 constexpr int kPart = 100; // + part index * 100 + row, Experte
 
 struct Probe
@@ -593,6 +594,19 @@ class SystemPage final : public Page
             set_mask(revert_mask_, 0, feedback);
             return;
         }
+        if (tag == kSerialRow)
+        {
+            Json s(d_.system);
+            if (s.root == nullptr)
+            {
+                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+                return;
+            }
+            feedback.play(audio::Cue::select);
+            source().save_config(yes(s.root, "serial_full") ? "{\"serial_full\":0}"
+                                                           : "{\"serial_full\":1}");
+            return;
+        }
         if (tag == kHealthReset)
         {
             feedback.play(audio::Cue::select);
@@ -675,7 +689,16 @@ class SystemPage final : public Page
         out.push_back(row("Modell", model));
         if (!str(r, "console_name").empty())
             out.push_back(row("Name", str(r, "console_name")));
-        out.push_back(row("Seriennummer", str(r, "serial_masked")));
+        // shortened to the last four characters (the default) or whole; the X button switches, the choice is kept in the
+        // console's configuration (serial_full), so the browser shows the same
+        const bool serial_full = yes(r, "serial_full") && !str(r, "serial").empty();
+        const bool serial_known = !str(r, "serial_masked").empty();
+        ui::ListItem serial = row("Seriennummer", serial_full ? str(r, "serial") : str(r, "serial_masked"),
+                                  serial_known ? kSerialRow : kInfo);
+        if (serial_known)
+            serial.subtitle = serial_full ? "Vollständig. Mit der X-Taste auf vier Stellen kürzen."
+                                          : "Gekürzt. Mit der X-Taste die ganze Nummer zeigen.";
+        out.push_back(serial);
         out.push_back(row("Firmware", str(r, "firmware_version")));
         out.push_back(row("Läuft seit", uptime(num(r, "uptime_sec"))));
         out.push_back(row("App-Version", str(r, "app_version")));

@@ -186,6 +186,7 @@ ps5tm_config_defaults(ps5tm_config_t *cfg) {
   cfg->lightbar_hot_c = 76;
   cfg->ps_button_status = 1;
   cfg->bg_pause = 1;
+  cfg->serial_full = 0;
   cfg->library_cache = 1;
   cfg->night_enabled = 0;
   cfg->night_start_min = 23 * 60;
@@ -353,6 +354,7 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
   cfg->lightbar_enabled = cfg->lightbar_enabled ? 1u : 0u;
   cfg->ps_button_status = cfg->ps_button_status ? 1u : 0u;
   cfg->bg_pause = cfg->bg_pause ? 1u : 0u;
+  cfg->serial_full = cfg->serial_full ? 1u : 0u;
   cfg->library_cache = 1u;                 /* always on (11.11.2026): see ps5tm_libcache_enabled() */
   cfg->night_enabled = cfg->night_enabled ? 1u : 0u;
   cfg->night_start_min = clampu(cfg->night_start_min, 0, 1439);
@@ -534,6 +536,8 @@ ps5tm_config_load(void) {
     g_config.ps_button_status = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "bg_pause")))
     g_config.bg_pause = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "serial_full")))
+    g_config.serial_full = ps5tm_num_u32(it->valuedouble) ? 1u : 0u;
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "library_cache")))
     g_config.library_cache = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "night_enabled")))
@@ -752,6 +756,7 @@ ps5tm_config_save(void) {
           "  \"lightbar_hot_c\": %u,\n"
           "  \"ps_button_status\": %u,\n"
           "  \"bg_pause\": %u,\n"
+          "  \"serial_full\": %u,\n"
           "  \"library_cache\": %u,\n"
           "  \"night_enabled\": %u,\n"
           "  \"night_start_min\": %u,\n"
@@ -775,6 +780,7 @@ ps5tm_config_save(void) {
           c.lightbar_hot_c,
           c.ps_button_status,
           c.bg_pause,
+          c.serial_full,
           c.library_cache,
           c.night_enabled, c.night_start_min, c.night_end_min, c.night_target_c, c.night_tz_offset_min,
           c.fan_cap_pct, c.warning_follows_target,

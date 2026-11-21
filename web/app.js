@@ -4238,9 +4238,15 @@
     if (!onSys) { capturePowerHistory(sys, state.status); return; }
     state.sysOnce = true;
 
+    /* Die Seriennummer: gekürzt (die letzten vier Stellen, ab Werk) oder vollständig; ein Knopf an der Zeile schaltet um. Die Wahl steht in der Konfiguration der Konsole
+       (serial_full), gilt also für alle Geräte und die Vollbild-App; die App schickt die volle Nummer nur mit, wenn sie gewählt ist (serial). */
+    const snFull = !!sys.serial_full && !!sys.serial;
+    const snButton = sys.serial || sys.serial_masked
+      ? ` <button type="button" class="btn ghost sn-toggle" data-sn-toggle="${snFull ? "short" : "full"}" title="${snFull ? "Nur die letzten vier Stellen zeigen." : "Die ganze Seriennummer zeigen."}">${snFull ? "Gekürzt" : "Vollständig"}</button>`
+      : "";
     const rows = [
       ["Modell", sys.model || "--"],
-      ["Seriennummer", sys.serial_masked || "nicht verfügbar"],
+      ["Seriennummer", snFull ? sys.serial : (sys.serial_masked || "nicht verfügbar"), snButton],
       ["Firmware", sys.firmware_version || "--"],
       /* „Firmware (intern)" (Rohwert + Offset-Gruppe) stand hier einmal. Das
          war eine Entwicklerangabe — für die Bedienung sagt sie nichts, was
@@ -4313,7 +4319,7 @@
       rows.push(["Controller-Akku", text]);
     }
     $("#sys-list").innerHTML = rows
-      .map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("");
+      .map(([k, v, extra]) => `<div><span>${esc(k)}</span><b>${esc(v)}${extra || ""}</b></div>`).join("");
 
     const localeCard = $("#locale-expert-card");
     const localeList = $("#locale-expert-list");
@@ -13231,6 +13237,16 @@
   });
 
   /* ── Bedienung ──────────────────────────────────────────────────── */
+
+  /* Seriennummer: gekürzt (ab Werk) oder vollständig. Der Knopf speichert die Wahl in der Konfiguration der Konsole (serial_full): Browser und Vollbild-App zeigen dasselbe. */
+  $("#sys-list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sn-toggle]");
+    if (!b) return;
+    b.disabled = true;
+    saveConfig({ serial_full: b.dataset.snToggle === "full" ? 1 : 0 })
+      .then(() => loadSystem())
+      .catch((err) => { b.disabled = false; toast(err.message, "error"); });
+  });
 
   $$(".tab").forEach((b) => b.addEventListener("click", () => {
     if (!b.dataset.page) return;                       /* Handbuch und FAQ sind Links, keine Seiten */
