@@ -47,13 +47,15 @@ For example:
   8086. If you want the program to answer only on the console itself, set
   `bind_address` to `127.0.0.1`.
 - **Kraken Mount (port 8097) and Dump Forge (port 8095) are programs by other
-  authors.** Since 17.11.2026 Kraken Mount starts the app by itself, about five
-  seconds after its own start, unless it was switched off on the FPKGMount tab
-  (the marker `kraken/aus.txt` in the data folder); Dump Forge starts it only
+  authors.** Kraken Mount is started by the app only when you switched it on on
+  the FPKGMount tab (it is off from the start since 21.11.2026; the choice is
+  kept in `kraken/zustand.txt` in the data folder); switched on, the app starts
+  it by itself about five seconds after its own start. Dump Forge starts it only
   for the duration of a conversion. Both listen on the whole home network and
   check neither `Host` nor `Origin`; the setting `bind_address` and this app's
-  browser protection do not apply to them. If you do not want that, switch Kraken
-  Mount off on the FPKGMount tab (the switch is remembered across restarts).
+  browser protection do not apply to them. If you do not want that, leave Kraken
+  Mount switched off (as it is from the start) or switch it off again on the
+  FPKGMount tab (the switch is remembered across restarts).
   Such things are reported to the authors of those programs. The consequence for
   Kraken Mount 0.3.0 (checked on 18.11.2026, read from the program's source
   code, not reproduced): a foreign web page in the browser of a device on the
