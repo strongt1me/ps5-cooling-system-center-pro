@@ -381,7 +381,9 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     g_job.running = 1;
     snprintf(g_job.mount, sizeof(g_job.mount), "%s", mount);
     snprintf(g_job.state, sizeof(g_job.state), "running");
-    snprintf(g_job.message, sizeof(g_job.message), "%s wird ausgeworfen …", label);
+    /* "not yet" in the text itself: pulled while this shows, the drive is pulled mid-unmount (the eject took 2 to 7 s on
+       the test consoles, 21.11.2026); the message that it may be pulled comes only after the console has unmounted it */
+    snprintf(g_job.message, sizeof(g_job.message), "%s wird ausgeworfen … Bitte noch nicht abziehen, bis „ausgeworfen“ erscheint.", label);
     g_job.at_ms = ps5tm_now_ms();
   }
   pthread_mutex_unlock(&g_lock);
@@ -523,7 +525,7 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
   }
   pthread_attr_destroy(&at);
   PS5TM_INFO("usb_eject_started", "%s wird über ShadowMountPlus ausgeworfen.", label);
-  snprintf(msg, n, "%s wird ausgeworfen …", label);
+  snprintf(msg, n, "%s wird ausgeworfen … Bitte noch nicht abziehen, bis „ausgeworfen“ erscheint.", label);
   return 202;
 }
 

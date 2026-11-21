@@ -774,7 +774,7 @@ Knopf dort, und damit nichts von der Dateimanager-Seite mehr das Laufwerk abfrag
 Es ist dasselbe Auswerfen wie unter System → Speicher (siehe dort): über ShadowMountPlus (ab 1.7beta10), nur wenn kein Auftrag der App läuft,
 PS4Mount keine Spiele von dem Laufwerk spielt und die App selbst nichts mehr darauf offen hat (ob ein anderes Programm, etwa ein FTP-Server, Dateien darauf offen hat, fragt
 sie nur, wo die Konsole es zulässt: auf der Pro mit Firmware 12.00 nicht); sonst sagt die App, was noch läuft oder welches Programm es ist. Das Laufwerk erst abziehen, wenn die Konsole „… ist ausgeworfen und kann abgezogen
-werden“ meldet; manche Laufwerke meldet die Konsole nach einigen Sekunden von selbst wieder an, andere erst nach erneutem Einstecken. Ein Laufwerk im Betrieb einfach abzuziehen kann
+werden“ meldet – solange „… wird ausgeworfen …“ dasteht (je nach Laufwerk zwei bis sieben Sekunden), noch nicht; manche Laufwerke meldet die Konsole nach einigen Sekunden von selbst wieder an, andere erst nach erneutem Einstecken. Ein Laufwerk im Betrieb einfach abzuziehen kann
 das Dateisystem beschädigen. Ist die Konsole oder die App beim letzten Auswerfen abgestürzt, bleibt das Auswerfen gesperrt, bis du es auf der Seite
 Dateien oder System wieder erlaubst.
 

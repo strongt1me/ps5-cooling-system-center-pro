@@ -2127,7 +2127,7 @@ class MockSource final : public Source
         e.running = true;
         e.state = "running";
         e.mount = mount;
-        e.message = "usb0 wird ausgeworfen …";
+        e.message = "usb0 wird ausgeworfen … Bitte noch nicht abziehen, bis „ausgeworfen“ erscheint.";
         eject_at_ = clock_ + 1.5f;
         changed();
     }

@@ -558,7 +558,8 @@ class FilesPage final : public Page
                               " · Mehr: Messen beenden",
                           kBlue);
         if (eject_.running)
-            y = note_card(canvas, paint, card, y, "Wird ausgeworfen …", eject_.mount, kWarning);
+            y = note_card(canvas, paint, card, y, "Wird ausgeworfen …",
+                          eject_.mount + " · Bitte noch nicht abziehen, bis „Ausgeworfen“ erscheint.", kWarning);
         else if (!eject_note_.empty() && clock_ - eject_note_t_ < 12.0f)
             y = note_card(canvas, paint, card, y,
                           eject_note_ok_ ? "Ausgeworfen" : "Nicht ausgeworfen", eject_note_,

@@ -8385,7 +8385,8 @@
     try {
       const r = await api("/api/v1/storage/eject");
       usbEject.fails = 0;
-      if (r.running) return;
+      /* while it runs the message stays up ("… not yet unplug"): the toast alone went after about 5 s, the eject took up to 7 s (21.11.2026) */
+      if (r.running) { if (r.message) toast(r.message); return; }
       usbEjectStop();
       if (r.message) toast(r.message, r.state === "done" ? "" : "error");
       if (typeof loadSystem === "function") loadSystem();
