@@ -667,10 +667,20 @@ ps5tm_pkg_parse_slices(const ps5tm_pkgslice_t *sl, unsigned n, uint64_t total, p
 
 /* The icon of a package: the bytes at the place the container named, only if they are a PNG. 0 and a malloc'd
    buffer, or -1. */
+static int pkg_icon_ungated(const ps5tm_pkg_t *p, uint8_t **data, size_t *n);
+
 int
 ps5tm_pkg_icon(const ps5tm_pkg_t *p, uint8_t **data, size_t *n) {
   if(!p || !data || !n || p->icon_size == 0 || p->icon_size >= PKG_MAX_ICON) return -1;
-  if(ps5tm_usbeject_settling(p->path)) return -1;                 /* a drive that is being ejected is not read (22.11.2026) */
+  int gate = ps5tm_drive_enter(p->path);                          /* through the gate: not read from a drive that is being ejected, and waited for if it is (21.11.2026) */
+  if(gate == 0) return -1;
+  int rc = pkg_icon_ungated(p, data, n);
+  ps5tm_drive_leave(gate);
+  return rc;
+}
+
+static int
+pkg_icon_ungated(const ps5tm_pkg_t *p, uint8_t **data, size_t *n) {
   int fd = open(p->path, O_RDONLY | O_NONBLOCK);
   if(fd < 0) return -1;
   struct stat st;

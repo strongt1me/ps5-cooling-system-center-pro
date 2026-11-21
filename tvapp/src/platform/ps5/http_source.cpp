@@ -409,6 +409,7 @@ void HttpSource::disc_post(const std::string &route, const std::string &json)
 }
 void HttpSource::usb_eject(const std::string &mount)
 {
+    eject_pending_ = true; // before the request is queued: what the worker does from now on reads nothing from the drives
     push({Request::Kind::eject, 0, mount, {}});
 }
 void HttpSource::fan_trace_save()
@@ -1642,7 +1643,11 @@ void HttpSource::run()
                 active = data_.fs_job.active;
                 ejecting = data_.usb_eject.running;
             }
-            if (!files_open_ || now - last_fs_job >= (active || ejecting ? 800000 : 3000000))
+            if (eject_pending_ && files_open_)
+            {
+                // asked for, not yet seen to run: nothing of the drives is asked (the worker is in the request or has just left it)
+            }
+            else if (!files_open_ || now - last_fs_job >= (active || ejecting ? 800000 : 3000000))
             {
                 last_fs_job = now;
                 if (!files_open_)
@@ -2539,7 +2544,8 @@ void HttpSource::handle(const Request &request)
         break;
     }
     case Request::Kind::fs_open:
-        if (request.id.empty())
+        // no places while an eject is on its way: this request is sent right before it when the page leaves the drive
+        if (request.id.empty() && !eject_pending_)
             poll_fs_places();
         poll_fs_list(request.id);
         break;
@@ -2702,14 +2708,18 @@ void HttpSource::handle(const Request &request)
         cJSON_AddStringToObject(root, "mount", request.id.c_str());
         char *text = cJSON_PrintUnformatted(root);
         cJSON_Delete(root);
+        // 40 s: before it asks the console the app waits for what still reads the drive, flushes it (sync) and asks ShadowMountPlus (up to 6 + 8 s)
         const Net net = exchange("POST", "/api/v1/storage/eject", text != nullptr ? text : "{}",
-                                 &status, &body, 15);
+                                 &status, &body, 40);
         cJSON_free(text);
         // A refusal (a job of the app runs, PS4Mount games on the drive) says why; the end comes
         // with the next poll.
         if (net != Net::ok || status >= 300)
+        {
+            eject_pending_ = false; // refused: the drive stays, the page may ask for it again
             notice(Notice::Kind::error, "Nicht ausgeworfen",
                    message_of(body, "Die App hat nicht geantwortet."));
+        }
         poll_storage();
         break;
     }
@@ -4456,7 +4466,10 @@ bool HttpSource::read_usb_eject(UsbEject &e)
         return false;
     e.loaded = true;
     e.available = flag(root, "available");
+    e.blocked = flag(root, "blocked");
     e.running = flag(root, "running");
+    if (!e.running)
+        eject_pending_ = false; // the eject is over (or was refused): the page asks the drives again
     e.state = str(root, "state");
     e.mount = str(root, "mount");
     e.message = str(root, "message");

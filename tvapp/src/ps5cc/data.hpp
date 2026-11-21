@@ -833,6 +833,7 @@ struct UsbEject
 {
     bool loaded = false;
     bool available = false; // ShadowMountPlus 1.7beta10 or newer runs
+    bool blocked = false; // the last eject did not come back (a crash): off until it is allowed again (in the browser)
     bool running = false;
     std::string state; // "" never, running, done, failed
     std::string mount;

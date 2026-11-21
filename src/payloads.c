@@ -372,8 +372,10 @@ cmp_file(const void *a, const void *b) {
    page sends back to name this folder. Returns how many it put into out. */
 static unsigned
 scan_dir(const char *dir_path, const char *dir_label, pl_file_t *out, unsigned room) {
+  int gate = ps5tm_drive_enter(dir_path);                 /* a folder on a drive: through the gate (drivegate.c, 21.11.2026) */
+  if(gate == 0) return 0;
   DIR *d = opendir(dir_path);
-  if(!d) return 0;
+  if(!d) { ps5tm_drive_leave(gate); return 0; }
   unsigned n = 0;
   struct dirent *de;
   while(n < room && (de = readdir(d)) != NULL) {
@@ -401,6 +403,7 @@ scan_dir(const char *dir_path, const char *dir_label, pl_file_t *out, unsigned r
     n++;
   }
   closedir(d);
+  ps5tm_drive_leave(gate);
   qsort(out, n, sizeof(*out), cmp_file);
   return n;
 }
@@ -465,8 +468,10 @@ add_file(cJSON *arr, const pl_file_t *f) {
 static void
 usb_payload_dir(const char *mount, char *out, size_t out_len) {
   out[0] = 0;
+  int gate = ps5tm_drive_enter(mount);                    /* through the gate (drivegate.c, 21.11.2026) */
+  if(gate == 0) return;
   DIR *d = opendir(mount);
-  if(!d) return;
+  if(!d) { ps5tm_drive_leave(gate); return; }
   struct dirent *de;
   while((de = readdir(d)) != NULL) {
     if(strcasecmp(de->d_name, PL_DIR_NAME) != 0) continue;
@@ -479,6 +484,7 @@ usb_payload_dir(const char *mount, char *out, size_t out_len) {
     }
   }
   closedir(d);
+  ps5tm_drive_leave(gate);
 }
 
 /* Creates the payload folder when it is not there. An existing folder is left

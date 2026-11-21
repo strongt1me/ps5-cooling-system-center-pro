@@ -202,7 +202,12 @@ class StoragePage final : public Page
                                                    "ab und sagt, was noch läuft."
                                                  : "Auswerfen braucht ShadowMountPlus ab "
                                                    "1.7beta10; es läuft nicht oder ist älter.")
-                             : "Dieses Laufwerk lässt sich nicht auswerfen.";
+                             : eject_.blocked
+                                   ? "Auswerfen ist gesperrt: Beim letzten Auswerfen ist die Konsole "
+                                     "oder die App abgestürzt. Im Browser unter System → "
+                                     "Speicherplatz lässt es sich wieder erlauben. Sicherer: die "
+                                     "Konsole ganz ausschalten und das Laufwerk danach abziehen."
+                                   : "Dieses Laufwerk lässt sich nicht auswerfen.";
             y = paragraph(canvas, about, card.x + 30.0f, y, card.w - 60.0f,
                           v->ejectable ? kInk : kMuted, 6);
         }

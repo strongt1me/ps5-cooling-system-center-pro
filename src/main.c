@@ -284,6 +284,7 @@ stopper_thread(void *arg) {
     (void)ps5tm_imgjob_cancel();
     ps5tm_dumpq_shutdown();                          /* the queue keeps its mark (the next start tells that the run was interrupted) */
     ps5tm_filemgr_shutdown();
+    ps5tm_usbeject_shutdown();                       /* a planned end is no crash of an eject: its marker goes (usbeject.c) */
     {
       cJSON *c = cJSON_CreateObject();               /* the disc image: the same as the button "Abbrechen" */
       if(c) {
@@ -399,6 +400,7 @@ main(int argc, char **argv) {
   mkdir(PS5TM_DATA_DIR "/Profilbilder", 0777);   /* own pictures for the Profil page (31.10.2026); 0777 as an FTP copy */
   ps5tm_dumpforge_prepare();                     /* the folder for the program Dump Forge (a file put there by hand is found at once) */
   ps5tm_log_file_start();                        /* app.log: the log survives a restart of the console (03.11.2026) */
+  ps5tm_usbeject_init();                         /* did the last eject of a USB drive not come back (a crash)? Then ejecting stays off until it is allowed again */
   {                                              /* ampr-emu-ng files of earlier app versions that are no longer carried (v1.86.2) */
     unsigned gone = ps5tm_amprlib_ng_prune();
     if(gone) PS5TM_INFO("ampr_ng_prune", "AMPR_EMU: %u ältere ampr-emu-ng-Datei(en) entfernt, die frühere Fassungen der App mitgeliefert hatten.", gone);

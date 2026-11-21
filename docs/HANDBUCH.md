@@ -769,11 +769,14 @@ zählte die Oberfläche ab 1).
 
 **USB-Laufwerk sicher auswerfen:** Neben jedem USB-Laufwerk (`/mnt/usb0` bis `usb7`, `/mnt/ext0`) steht in der Leiste der
 Orte der Knopf **Auswerfen**. In der Vollbild-App ist es die Quadrat-Taste auf dem Laufwerk unter „Orte“; in einem Ordner
-des Laufwerks gibt es △ → Mehr → **Sicher auswerfen**. Es ist dasselbe Auswerfen wie unter System → Speicher (siehe dort):
-über ShadowMountPlus (ab 1.7beta10), nur wenn kein Auftrag der App läuft und PS4Mount keine Spiele von dem Laufwerk spielt;
-sonst sagt die App, was noch läuft. Das Laufwerk erst abziehen, wenn die Konsole „… ist ausgeworfen und kann abgezogen
-werden“ meldet. Vor dem Auswerfen verlässt der Dateimanager einen Ordner des Laufwerks (Browser: auf die interne
-SSD; Vollbild-App: zu den Orten) und lädt danach die Orte neu; bleibt das Laufwerk gesteckt, bindet die Konsole es nach einigen Sekunden wieder ein. Ein Laufwerk im Betrieb einfach abzuziehen kann das Dateisystem beschädigen.
+des Laufwerks gibt es △ → Mehr → **Sicher auswerfen**. Im Browser wechselt die Seite dabei auf System → Speicherplatz und wirft dort aus (wie der
+Knopf dort, und damit nichts von der Dateimanager-Seite mehr das Laufwerk abfragt); in der Vollbild-App fragt die Seite das Laufwerk nicht mehr ab.
+Es ist dasselbe Auswerfen wie unter System → Speicher (siehe dort): über ShadowMountPlus (ab 1.7beta10), nur wenn kein Auftrag der App läuft,
+PS4Mount keine Spiele von dem Laufwerk spielt und die App selbst nichts mehr darauf offen hat (ob ein anderes Programm, etwa ein FTP-Server, Dateien darauf offen hat, fragt
+sie nur, wo die Konsole es zulässt: auf der Pro mit Firmware 12.00 nicht); sonst sagt die App, was noch läuft oder welches Programm es ist. Das Laufwerk erst abziehen, wenn die Konsole „… ist ausgeworfen und kann abgezogen
+werden“ meldet; bleibt das Laufwerk gesteckt, bindet die Konsole es nach einigen Sekunden wieder ein. Ein Laufwerk im Betrieb einfach abzuziehen kann
+das Dateisystem beschädigen. Ist die Konsole oder die App beim letzten Auswerfen abgestürzt, bleibt das Auswerfen gesperrt, bis du es auf der Seite
+Dateien oder System wieder erlaubst.
 
 **Ordnen, auswählen, ansehen (seit 07.10.2026):**
 
@@ -1994,16 +1997,32 @@ Auf der Systemseite gibt es zusätzlich:
 - **USB-Laufwerk auswerfen (seit 29.10.2026)**: Unter „Speicher“ steht bei jedem USB-Laufwerk (`/mnt/usb0` bis `usb7`,
   `/mnt/ext0`) der Knopf **Auswerfen**; in der Vollbild-App unter System → Speicher die X-Taste. Ausgeworfen wird über
   ShadowMountPlus (ab 1.7beta10), aber nur, wenn kein Auftrag der App läuft (Kopieren, Konvertieren, Verschieben, Löschen,
-  Dateimanager, Spielstände, Pakete installieren oder teilen, AMPR-Index, Disc-Abbild) und PS4Mount keine Spiele von diesem
-  Laufwerk spielt. Sonst wirft die App nicht aus und sagt, was noch läuft. Danach meldet die Konsole „… ist ausgeworfen und
+  Dateimanager, Spielstände, Pakete installieren oder teilen, AMPR-Index, Disc-Abbild), PS4Mount keine Spiele von diesem
+  Laufwerk spielt und die App selbst nichts auf dem Laufwerk offen hat (andere Programme nur, wo die Konsole die Abfrage zulässt: auf der Pro mit Firmware 12.00 nicht). Sonst wirft die App nicht aus und sagt, was noch läuft.
+  **Warum so vorsichtig (Stand 21.11.2026):** Die Konsole trennt das Laufwerk mit einem erzwungenen Unmount (`unmount(Pfad, MNT_FORCE)`) und fragt
+  niemanden, ob noch etwas darauf offen ist; sie prüft nur, dass das Gerät bekannt ist und ein Dateisystem eingehängt ist (belegt in jeder ShellCore-Fassung
+  von 3.20 bis 12.70, auch 9.40 und 12.00). Was dann noch auf dem Laufwerk liest oder offen hat, wird mitgerissen. ShadowMountPlus und Kraken Mount schützen
+  davor nicht, sie lassen den Aufruf der Konsole zu. Darum macht die App vor dem Anfragen (`src/usbeject.c`): (1) sie beansprucht das Laufwerk, sodass
+  nichts Neues davon liest, und **wartet bis zu 4 s, bis jeder Leser, der schon dabei war, fertig ist** (das Laufwerks-Tor `src/drivegate.c`: der
+  5-Sekunden-Takt von System, die Orte des Dateimanagers, die Bibliothek, die Payload-Seite, das Paket-Symbol); (2) sie prüft, **welche Dateien auf dem Laufwerk offen sind** (`src/driveholders.c`): die der App selbst auf jeder Firmware (`fstatfs` auf jede Dateinummer), die
+  anderer Prozesse mit `sysctl kern.proc.filedesc` (ShadowMountPlus, kstuff und die Dienste der Konsole zählen nicht), aber **auf der Pro mit Firmware 12.00 antwortet die Konsole darauf
+  mit „nicht vorhanden“**, dort ist es also „nicht bekannt“ und das Auswerfen geht weiter; sie lehnt mit dem Namen des Programms ab; (3) `sync()`, 0,3 s Pause, das Tor noch einmal; (4) ein Zustandsbericht (`usb_eject_state`, `usb_eject_holder`) in
+  `app.log`, sofort auf die Platte geschrieben, damit nach einem Absturz etwas da ist; erst dann fragt sie ShadowMountPlus. Fragt man die App, wer ein
+  Laufwerk offen hat: `GET /api/v1/storage/holders?mount=/mnt/usb0`. Die Liste von ShadowMountPlus selbst fragt die App währenddessen nicht neu ab (das
+  wäre ein `stat()` jedes Spiels). Danach meldet die Konsole „… ist ausgeworfen und
   kann abgezogen werden“ oder den Grund, aus dem ShadowMountPlus abgelehnt hat (etwa ein laufendes Spiel von diesem
   Laufwerk). **Wichtig:** Der Auswerfen-Knopf auf der Seite von ShadowMountPlus selbst kennt die Aufträge dieser App nicht
-  und lässt sich von ihr nicht aufhalten; während eines Auftrags nur über diese App auswerfen. Im Dateimanager geht die Seite
-  dabei zuerst aus dem Laufwerk heraus (auf die interne SSD, in der Vollbild-App zu den Orten), damit die App währenddessen
-  nichts davon liest, wie unter „Speicher“; was der Dateimanager gerade noch liest (Ordnerliste, Größe, Ansicht, Download),
-  hält das Auswerfen zurück, und solange es läuft, antwortet er für dieses Laufwerk mit „Das Laufwerk wird gerade ausgeworfen“.
+  und lässt sich von ihr nicht aufhalten; während eines Auftrags nur über diese App auswerfen. Im Dateimanager wechselt die Seite dabei zuerst auf
+  System → Speicherplatz (so, dass die Dateimanager-Seite mit ihren Abfragen nicht mehr offen ist) und wirft dort aus; die Vollbild-App fragt auf der Seite Dateien
+  nichts mehr ab, sobald das Auswerfen angefragt ist. Was der Dateimanager gerade noch liest (Ordnerliste, Größe, Ansicht, Download),
+  hält das Auswerfen zurück, und für dieses Laufwerk antwortet er bis 30 s nach dem Auswerfen mit „Das Laufwerk wird gerade ausgeworfen“.
   Das Auswerfen trennt das Laufwerk nur per Software: Bleibt es gesteckt, meldet es sich nach einigen Sekunden bei der Konsole
-  wieder an und wird neu eingebunden; nach „ausgeworfen“ also abziehen.
+  wieder an und wird neu eingebunden; nach „ausgeworfen“ also abziehen. **Gesperrt nach einem Absturz:** Kurz vor der Anfrage an ShadowMountPlus schreibt die App eine
+  Markierung (`usb_eject_offen.txt` im Datenordner der App) und löscht sie 30 s nach dem Ende. Findet sie die Markierung beim nächsten Start, ist die Konsole oder
+  die App dabei oder kurz danach abgestürzt; dann bleibt das Auswerfen gesperrt (`ejectable` ist nirgends mehr wahr, `blocked` steht in `GET /api/v1/storage/eject`,
+  ein Hinweis mit „Auswerfen wieder erlauben“ erscheint im Browser unter „Speicherplatz“ und auf der Seite „Dateien“; `POST /api/v1/storage/eject` mit
+  `{"action":"rearm"}` hebt es auf). Ein planmäßiges Beenden der App löscht die Markierung nicht, wenn die Sperre schon bestand. Wer ganz sicher gehen will: die Konsole
+  ganz ausschalten und das Laufwerk erst danach abziehen.
 - **Am Handy öffnen (ab 1.52.0)**: ein QR-Code mit der Adresse dieser Seite (`http://<Adresse der Konsole>:<Port>/`). Die Kamera des Handys
   darauf halten, und die Seite geht auf; das Handy muss im selben Netzwerk sein. Der Code enthält nur die Adresse, keine Zugangsdaten und
   keinen Text, den jemand anders bestimmen könnte (die Konsole erzeugt ihn nur für ihre eigene Adresse). Der Encoder (Byte-Modus, Stufe M,

@@ -19,6 +19,7 @@
 int ps5tm_ampr_busy(void) { return 0; }
 int ps5tm_disc_busy(void) { return 0; }
 int ps5tm_usbeject_busy(void) { return 0; }
+int ps5tm_usbeject_blocked(void) { return 0; }
 int ps5tm_usbeject_path_ok(const char *mount) { return mount && !strncmp(mount, "/mnt/usb", 8); }
 /* the drive that is being ejected (usbeject.c): this stub follows its rule - the mount itself or a path below it */
 static const char *g_eject_mount;
@@ -27,6 +28,16 @@ int ps5tm_usbeject_covers(const char *path) {
   size_t n = strlen(g_eject_mount);
   return !strncmp(path, g_eject_mount, n) && (path[n] == '/' || path[n] == 0);
 }
+/* the same drive for the 30 s after an eject, too (usbeject.c); here the eject is over when the test clears it, so it is the same rule */
+int ps5tm_usbeject_settling(const char *path) { return ps5tm_usbeject_covers(path); }
+/* the drive gate (drivegate.c): the places count their statvfs through it; here: refused for the drive that is being ejected, counted in g_gate_in otherwise */
+static int g_gate_in, g_gate_out;
+int ps5tm_drive_enter(const char *path) {
+  if(ps5tm_usbeject_covers(path)) return 0;
+  g_gate_in++;
+  return strncmp(path, "/mnt/usb", 8) ? -1 : 1;
+}
+void ps5tm_drive_leave(int token) { if(token > 0) g_gate_out++; }
 /* filemgr.c calls this while a read is entered (-DFM_TEST_HOOK_READ, see run.sh): what the readers' count says at that moment */
 static int g_probe_n, g_probe_reading;
 int ps5tm_filemgr_reading(void);

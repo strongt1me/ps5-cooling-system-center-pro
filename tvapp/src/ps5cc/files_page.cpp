@@ -1241,11 +1241,14 @@ class FilesPage final : public Page
             break;
         case kEject:
             // nothing is asked twice: the app refuses while one of its jobs runs and says which.
-            // Out of the drive first (21.11.2026), as under System → Speicher, which reads nothing
-            // from it: the requests queued for the open folder (a size, a list) are answered before
-            // the eject is sent, and the page asks the drive for nothing more
-            leave_drive(eject_path_);
+            // As under System → Speicher, which reads nothing from the drive (21.11.2026): the eject
+            // is queued FIRST, which marks it as pending at once, so that nothing the worker does
+            // after the requests already queued asks the app about the drives (no places before the
+            // eject, none while it runs); then the page lets go of the drive. What was queued for the
+            // open folder (a size, a list) is answered first, and the app waits for it before it
+            // asks the console.
             source().usb_eject(eject_path_);
+            leave_drive(eject_path_);
             break;
         case kConflictReplace:
         case kConflictKeep:

@@ -208,6 +208,9 @@ refresh_locked(void) {
   uint64_t now = ps5tm_mono_ms();
   uint64_t ttl = g_count < 0 ? SMP_DOWN_TTL : SMP_GAMES_TTL;
   if(g_games_ms && now - g_games_ms < ttl) return;
+  /* While a drive is being ejected (and for the settling time after it) the list is not asked for again: ShadowMountPlus answers it with a stat() of every
+     game's source, and some of them lie on the drive that the console is cutting off (21.11.2026). What was known stays. */
+  if(g_games_ms && ps5tm_usbeject_active()) return;
   g_games_ms = now;
   g_refreshing = 1;
   pthread_mutex_unlock(&g_lock);
@@ -320,6 +323,18 @@ ps5tm_smp_can(const char *capability) {
   pthread_mutex_lock(&g_lock);
   refresh_locked();
   int yes = g_count >= 0 && strstr(g_caps, want) != NULL;
+  pthread_mutex_unlock(&g_lock);
+  return yes;
+}
+
+/* ps5tm_smp_can from what is known, never asking ShadowMountPlus: the eject asks it just before it cuts a drive off, and an ask is a stat() of every game's
+   source (21.11.2026). 0 when the capabilities were never read (the caller then takes the asking way once). */
+int
+ps5tm_smp_can_cached(const char *capability) {
+  char want[64];
+  snprintf(want, sizeof(want), ",%s,", capability);
+  pthread_mutex_lock(&g_lock);
+  int yes = g_games_ms != 0 && g_count >= 0 && strstr(g_caps, want) != NULL;
   pthread_mutex_unlock(&g_lock);
   return yes;
 }

@@ -178,7 +178,7 @@ usb_storage_present(void) {
 
 
 static void
-add_volume(ps5tm_sysinfo_t *info, const char *label, const char *path) {
+add_volume_ungated(ps5tm_sysinfo_t *info, const char *label, const char *path) {
   if(info->volume_count >= PS5TM_MAX_VOLUMES) return;
 
 #ifndef PS5TM_HOST_TEST
@@ -221,6 +221,21 @@ add_volume(ps5tm_sysinfo_t *info, const char *label, const char *path) {
   v->total_bytes = total;
   v->free_bytes  = avail;                 /* what a user can actually fill */
   v->used_bytes  = total - freeb;
+}
+
+
+/* The probe asks every drive every 5 s, whatever page is open, and it was the one reader that asked nothing of an eject (statfs, statvfs, statfs). Through the
+   gate (drivegate.c): an eject waits for a round that has begun, and a drive that is being ejected, or settles, is left out of this round (21.11.2026). */
+static void
+add_volume(ps5tm_sysinfo_t *info, const char *label, const char *path) {
+#ifdef PS5TM_HOST_TEST
+  add_volume_ungated(info, label, path);
+#else
+  int gate = ps5tm_drive_enter(path);
+  if(gate == 0) return;
+  add_volume_ungated(info, label, path);
+  ps5tm_drive_leave(gate);
+#endif
 }
 
 
@@ -330,9 +345,12 @@ ps5tm_volume_mounted_now(const char *path) {
   /* A drive that is being ejected, or was a moment ago, is no mount for the lists: nothing is asked of it, and it is not handed on as "there" (until 22.11.2026 it
      returned 1 here, so the package search, the dump search and the places took the drive along just while ShadowMountPlus cut it off). It reappears when the
      settling time of usbeject.c is over and the console has mounted it again. */
-  if(ps5tm_usbeject_settling(path)) return 0;
+  int gate = ps5tm_drive_enter(path);                     /* through the gate, as add_volume: counted, and refused while the drive is being ejected or settles (drivegate.c) */
+  if(gate == 0) return 0;
   struct statfs sf;
-  return statfs(path, &sf) == 0 && !strcmp(sf.f_mntonname, path);   /* its own mount, as add_volume() demands */
+  int here = statfs(path, &sf) == 0 && !strcmp(sf.f_mntonname, path);   /* its own mount, as add_volume() demands */
+  ps5tm_drive_leave(gate);
+  return here;
 #endif
 }
 

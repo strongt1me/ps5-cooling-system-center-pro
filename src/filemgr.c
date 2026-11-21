@@ -406,8 +406,11 @@ add_place(cJSON *arr, const char *label, const char *path, int writable_here) {
   cJSON_AddStringToObject(o, "label", label);
   cJSON_AddStringToObject(o, "path", path);
   uint64_t fr = 0;
-  /* the drive that is being ejected is not asked for its free space (a statfs on it, while ShadowMountPlus cuts it off) */
-  cJSON_AddNumberToObject(o, "free_bytes", !ps5tm_usbeject_covers(path) && space_free(path, &fr) == 0 ? (double)fr : -1);
+  /* The drive that is being ejected, or settles, is not asked for its free space; one that is asked is counted by the gate (drivegate.c), so that an eject waits
+     for this statvfs, too: the page asks the places every 4 s while it is open (and the Vollbild-App every 3 s), and that was an access the eject did not know. */
+  int gate = ps5tm_drive_enter(path);
+  cJSON_AddNumberToObject(o, "free_bytes", gate != 0 && space_free(path, &fr) == 0 ? (double)fr : -1);
+  ps5tm_drive_leave(gate);
   cJSON_AddBoolToObject(o, "writable", writable_here);
   cJSON_AddBoolToObject(o, "ejectable", ps5tm_usbeject_path_ok(path));  /* a USB drive: the file manager offers "eject safely" (usbeject.c) */
   cJSON_AddItemToArray(arr, o);
@@ -417,6 +420,7 @@ static cJSON *
 places_json(void) {
   cJSON *o = cJSON_CreateObject();
   cJSON_AddBoolToObject(o, "ok", 1);
+  cJSON_AddBoolToObject(o, "eject_blocked", ps5tm_usbeject_blocked());     /* the last eject did not come back: no drive is offered for ejecting until it is allowed again */
   cJSON *arr = cJSON_AddArrayToObject(o, "places");
   ps5tm_pkgdrive_t dr[PS5TM_MAX_VOLUMES];
   unsigned nd = ps5tm_pkg_drives(dr, PS5TM_MAX_VOLUMES);
@@ -2196,7 +2200,7 @@ with_read(int fd, const ps5tm_request_t *req, void (*handler)(int, const ps5tm_r
   pthread_mutex_unlock(&g_lock);
   char p[FM_PATH], real[FM_PATH + 64];
   if(query_value(req->query, "path", p, sizeof(p)) == 0 && path_plain(p) &&
-     (ps5tm_usbeject_covers(p) || (real_path(p, real, sizeof(real)) == 0 && ps5tm_usbeject_covers(real)))) {
+     (ps5tm_usbeject_settling(p) || (real_path(p, real, sizeof(real)) == 0 && ps5tm_usbeject_settling(real)))) {   /* settling: the eject AND the 30 s after it (21.11.2026; it was covers: only while the job ran) */
     pthread_mutex_lock(&g_lock);
     g_reads--;
     pthread_mutex_unlock(&g_lock);

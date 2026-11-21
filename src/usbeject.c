@@ -14,12 +14,16 @@
 #include "titleid.h"
 #include "third_party/cJSON.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/mount.h>
 #include <sys/param.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -67,10 +71,7 @@ static uint64_t g_settle_until[SETTLE_SLOTS];     /* 0: not settling; else ps5tm
 /* usb0..usb7 -> 0..7, ext0 -> 8, the drive `path` lies on (or is); -1 for anything else. */
 static int
 slot_of(const char *path) {
-  if(!path) return -1;
-  if(!strncmp(path, "/mnt/ext0", 9) && (path[9] == '/' || path[9] == 0)) return 8;
-  if(!strncmp(path, "/mnt/usb", 8) && path[8] >= '0' && path[8] <= '7' && (path[9] == '/' || path[9] == 0)) return path[8] - '0';
-  return -1;
+  return ps5tm_drive_slot(path);                       /* drivegate.c: the one place that names the drives */
 }
 
 int
@@ -110,10 +111,24 @@ settle(const char *mount) {
   pthread_mutex_unlock(&g_lock);
 }
 
-/* /mnt/usb0../mnt/usb7 and /mnt/ext0: what ShadowMountPlus calls ejectable (the M.2 drive /mnt/ext1 is not). */
+/* The marker of an eject that did not come back (ejectmark.c, 21.11.2026): the eject stays off after a crash until the person allows it again. */
+void
+ps5tm_usbeject_init(void) { ps5tm_ejectmark_init(); }
+
+int
+ps5tm_usbeject_blocked(void) { return ps5tm_ejectmark_blocked(); }
+
+int
+ps5tm_usbeject_rearm(void) { return ps5tm_ejectmark_rearm(); }
+
+void
+ps5tm_usbeject_shutdown(void) { ps5tm_ejectmark_shutdown(); }
+
+/* /mnt/usb0../mnt/usb7 and /mnt/ext0: what ShadowMountPlus calls ejectable (the M.2 drive /mnt/ext1 is not). Nothing is offered while the eject is blocked. */
 int
 ps5tm_usbeject_path_ok(const char *mount) {
   if(!mount) return 0;
+  if(ps5tm_usbeject_blocked()) return 0;
   if(!strcmp(mount, "/mnt/ext0")) return 1;
   return !strncmp(mount, "/mnt/usb", 8) && mount[8] >= '0' && mount[8] <= '7' && !mount[9];
 }
@@ -263,6 +278,8 @@ follow(void *arg) {
     const int before = !ok && cJSON_IsString(rr) && refused_before_detach(rr->valuestring);
     cJSON_Delete(s);
     if(!before) settle(f->mount);
+    if(before) ps5tm_ejectmark_clear_now();                    /* nothing was cut off: no crash can be blamed on this one */
+    else ps5tm_ejectmark_clear_later();                        /* cut off (or may be): the marker stays through the re-announce window of the drive */
     PS5TM_INFO(ok ? "usb_ejected" : "usb_eject_refused", "%s", msg);
     ps5tm_notify_plain("%s", msg);
     finish(ok ? "done" : "failed", msg);
@@ -272,19 +289,77 @@ follow(void *arg) {
   snprintf(msg, sizeof(msg), "Vom Auswerfen von %s kam keine Rückmeldung. Unter System nachsehen, ob es noch da ist.", f->label);
   PS5TM_WARN("usb_eject_lost", "%s", msg);
   settle(f->mount);
+  ps5tm_ejectmark_clear_later();
   finish("failed", msg);
   free(f);
   return NULL;
 }
 
+/* Does this process, which has a file open on the drive, stop an eject? The console cuts the drive off with a forced unmount and asks nobody (drivegate.c), so
+   a process that does not know about it loses what it has open, and whatever that costs the kernel it costs on this console. Not counted: ShadowMountPlus
+   (it closes its own watchers right before, sm_scanner_suspend_usb_for_eject), the console's own services (Sce*, NPXS*, mini-syscore: the console's eject takes
+   care of them itself), kstuff and the payload loader (kstuff keeps a watcher on /mnt/usbN for good, on every console that runs the fan control).
+   Counted: this app itself (a handler or a job that did not close something) and every other payload, FTP server, file manager or tool.
+   (Written without having seen the list of a console: GET /api/v1/storage/holders shows it, and which of the names blocks is easily changed here.) */
+static int
+holder_blocks(const ps5tm_holder_t *h, int *self) {
+  *self = h->pid == (int)getpid();
+  if(*self) return 1;
+  static const char *const ok[] = { "shadowmount", "kstuff", "elfldr", "Sce", "SCE", "NPXS", "mini-syscore", "SceShell", "ps5-payload", "ps5tm", "ps5cc" };
+  for(size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++)
+    if(!strncasecmp(h->name, ok[i], strlen(ok[i]))) return 0;
+  return 1;
+}
+
+/* One line (and a few more) in the log, written to the file at once: what the state of the app and of the mount table was when the drive was cut off.
+   After a crash this is what is left (the app log is on the internal storage and is fsync'ed here). */
+static void
+snapshot(const char *mount, int nholders, const ps5tm_holder_t *h) {
+  int per[9], any = 0;
+  ps5tm_drive_counts(per, &any);
+  int slot = ps5tm_drive_slot(mount);
+  char line[400];
+  int o = snprintf(line, sizeof(line), "Vor dem Auswerfen von %s: Leser im Tor %d (alle Laufwerke %d); Dateimanager liest %d; Auftrag der App %d; Prozesse mit offenen Dateien: ",
+                   mount, slot >= 0 ? per[slot] : 0, any, ps5tm_filemgr_reading(), ps5tm_app_job_running(NULL, 0));
+  if(nholders < 0) o += snprintf(line + o, sizeof(line) - (size_t)o, "nicht ermittelbar");
+  else if(nholders == 0) o += snprintf(line + o, sizeof(line) - (size_t)o, "keine");
+  for(int i = 0; i < nholders && o < (int)sizeof(line) - 80; i++)
+    o += snprintf(line + o, sizeof(line) - (size_t)o, "%s%s(%d)x%d", i ? ", " : "", h[i].name, h[i].pid, h[i].count);
+  PS5TM_INFO("usb_eject_state", "%s", line);
+  int count = getfsstat(NULL, 0, MNT_NOWAIT);
+  if(count > 0) {
+    struct statfs *list = malloc(sizeof(*list) * (size_t)(count + 16));
+    if(list) {
+      count = getfsstat(list, (long)(sizeof(*list) * (size_t)(count + 16)), MNT_NOWAIT);
+      size_t ml = strlen(mount);
+      int shown = 0;
+      for(int i = 0; i < count && shown < 8; i++) {
+        const char *from = list[i].f_mntfromname, *on = list[i].f_mntonname;
+        if(strncmp(on, mount, ml) && strncmp(from, mount, ml) && strncmp(from, "/dev/da", 7)) continue;
+        PS5TM_INFO("usb_eject_state", "Einhängung: %s auf %s (%s)", from, on, list[i].f_fstypename);
+        shown++;
+      }
+      free(list);
+    }
+  }
+  ps5tm_log_file_flush();                           /* to the file now: the console may be gone a moment later */
+}
+
 /* Starts the eject of mount. 202 started, otherwise the HTTP status of the refusal; msg says why or what happens. */
 int
 ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
-  if(!ps5tm_usbeject_path_ok(mount)) {
+  if(ps5tm_usbeject_blocked()) {
+    snprintf(msg, n, "Auswerfen ist gesperrt: Das letzte Auswerfen eines USB-Laufwerks ist nicht zurückgekommen, die App oder die Konsole ist dabei abgestürzt. "
+             "Auf der Seite Dateien oder System lässt es sich wieder erlauben.");
+    return 409;
+  }
+  /* the form of the path, not whether it is blocked (asked above) */
+  if(!(mount && (!strcmp(mount, "/mnt/ext0") || (!strncmp(mount, "/mnt/usb", 8) && mount[8] >= '0' && mount[8] <= '7' && !mount[9])))) {
     snprintf(msg, n, "Auswerfen geht nur bei USB-Laufwerken.");
     return 400;
   }
-  if(!ps5tm_smp_can("storage_eject")) {
+  /* from what is known: ShadowMountPlus answers a fresh ask with a stat() of every game's source, and the eject is the one moment the drives are best left alone */
+  if(!ps5tm_smp_can_cached("storage_eject") && !ps5tm_smp_can("storage_eject")) {
     snprintf(msg, n, "Auswerfen braucht ShadowMountPlus ab 1.7beta10; es läuft nicht oder ist älter.");
     return 409;
   }
@@ -338,6 +413,46 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     return 409;
   }
 
+  /* The drive gate (drivegate.c, 21.11.2026): every reader of the app that was on the drive before the claim is WAITED for (the new ones are turned away, as
+     they were before). Until now only new reads were refused; one that had begun was cut off with the drive. */
+  if(ps5tm_drive_wait_idle(mount, 4000) != 0) {
+    snprintf(msg, n, "%s wurde nicht ausgeworfen: Die App liest noch vom Laufwerk. Gleich noch einmal versuchen.", label);
+    PS5TM_INFO("usb_eject_held", "%s", msg);
+    finish("failed", msg);
+    return 409;
+  }
+
+  /* Who else has a file open: the console's forced unmount takes it away from them (firmware analysis of 21.11.2026). Written to the log whatever the answer. */
+  ps5tm_holder_t holders[16];
+  int nh = ps5tm_drive_holders(mount, holders, 16);
+  for(int i = 0; i < nh; i++) {
+    int self = 0;
+    int blocks = holder_blocks(&holders[i], &self);
+    PS5TM_INFO("usb_eject_holder", "%s: %s (PID %d) hat %d Datei(en) offen, zum Beispiel %s%s", mount, holders[i].name, holders[i].pid, holders[i].count,
+               holders[i].sample, blocks ? " – hält das Auswerfen zurück" : "");
+    if(blocks) {
+      if(self) snprintf(msg, n, "%s wurde nicht ausgeworfen: Die App selbst hat noch eine Datei auf dem Laufwerk offen (%s). Gleich noch einmal versuchen.", label, holders[i].sample);
+      else snprintf(msg, n, "%s wurde nicht ausgeworfen: Das Programm „%s“ hat noch %d Datei(en) auf dem Laufwerk offen (zum Beispiel %s). Erst dort schließen oder unter Payloads beenden, "
+                    "dann noch einmal. Die Konsole trennt das Laufwerk mit Gewalt und fragt nicht nach.", label, holders[i].name, holders[i].count, holders[i].sample);
+      PS5TM_INFO("usb_eject_held", "%s", msg);
+      finish("failed", msg);
+      return 409;
+    }
+  }
+  if(nh < 0) PS5TM_INFO("usb_eject_holders_unknown", "%s: Welche Programme Dateien auf dem Laufwerk offen haben, ließ sich nicht ermitteln; es wird trotzdem ausgeworfen.", mount);
+
+  /* Everything the app wrote is on the drive before it is cut off (prosperomgr and PS5Upload do the same; ShadowMountPlus does not). Then the gate once more: a
+     reader that came in while the flush ran is waited for, too. */
+  sync();
+  usleep(300 * 1000);
+  if(ps5tm_drive_wait_idle(mount, 2000) != 0) {
+    snprintf(msg, n, "%s wurde nicht ausgeworfen: Die App liest noch vom Laufwerk. Gleich noch einmal versuchen.", label);
+    PS5TM_INFO("usb_eject_held", "%s", msg);
+    finish("failed", msg);
+    return 409;
+  }
+  snapshot(mount, nh, holders);
+
   /* the drive as ShadowMountPlus lists it: its source and mount_id go back unchanged */
   char err[160], source[96] = "", mount_id[24] = "";
   cJSON *list = ps5tm_smp_call("/storage", NULL, 6000, err, sizeof(err));
@@ -360,6 +475,9 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     finish("failed", msg);
     return 409;
   }
+  ps5tm_ejectmark_write(mount);                                 /* from here the drive may be cut off: if the console dies, this stays (see above) */
+  PS5TM_INFO("usb_eject_ask", "%s: ShadowMountPlus wird gebeten, das Laufwerk auszuwerfen.", mount);
+  ps5tm_log_file_flush();
   cJSON *body = cJSON_CreateObject();
   cJSON_AddStringToObject(body, "path", mount);
   cJSON_AddStringToObject(body, "source", source);
@@ -368,7 +486,8 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
   cJSON_Delete(body);
   if(!ans) {
     /* no answer in time: ShadowMountPlus may have taken it and be cutting the drive off now (a refusal it answers is one that came before anything was cut: smp.c) */
-    if(!strncmp(err, "ShadowMountPlus antwortet nicht", 31)) settle(mount);
+    if(!strncmp(err, "ShadowMountPlus antwortet nicht", 31)) { settle(mount); ps5tm_ejectmark_clear_later(); }
+    else ps5tm_ejectmark_clear_now();                           /* it was not even asked: nothing was cut off */
     snprintf(msg, n, "%s wurde nicht ausgeworfen: %s", label, err);
     finish("failed", msg);
     return 409;
@@ -389,6 +508,7 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     free(f);
     pthread_attr_destroy(&at);
     settle(mount);                                    /* ShadowMountPlus took it: nobody follows, the drive is still left alone */
+    ps5tm_ejectmark_clear_later();
     snprintf(msg, n, "%s: Auswerfen angestoßen, die App kann es aber nicht verfolgen.", label);
     finish("failed", msg);
     return 202;
@@ -403,15 +523,62 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
 cJSON *
 ps5tm_usbeject_json(void) {
   cJSON *o = cJSON_CreateObject();
+  const int blocked = ps5tm_ejectmark_blocked();            /* asked before g_lock: ejectmark.c has its own lock */
   pthread_mutex_lock(&g_lock);
   cJSON_AddBoolToObject(o, "ok", 1);
   cJSON_AddBoolToObject(o, "available", 0);
+  cJSON_AddBoolToObject(o, "blocked", blocked);            /* the last eject did not come back: off until it is allowed again (POST {"action":"rearm"}) */
   cJSON_AddStringToObject(o, "state", g_job.state);
   cJSON_AddBoolToObject(o, "running", g_job.running);
   cJSON_AddStringToObject(o, "mount", g_job.mount);
   cJSON_AddStringToObject(o, "message", g_job.message);
   cJSON_AddNumberToObject(o, "at_ms", (double)g_job.at_ms);
   pthread_mutex_unlock(&g_lock);
-  cJSON_ReplaceItemInObject(o, "available", cJSON_CreateBool(ps5tm_smp_can("storage_eject")));
+  /* from what is known while a drive is being cut off: the page asks every 1.5 s then, and a fresh ask of ShadowMountPlus is a stat() of every game's source */
+  int av = !ps5tm_usbeject_blocked() && (ps5tm_smp_can_cached("storage_eject") || (!ps5tm_usbeject_active() && ps5tm_smp_can("storage_eject")));
+  cJSON_ReplaceItemInObject(o, "available", cJSON_CreateBool(av));
+  return o;
+}
+
+/* GET /api/v1/storage/holders?mount=/mnt/usb0: read-only; who has a file open on the drive, and whether that would hold an eject back. For a person who wants to
+   know why an eject was refused, and for finding out what runs on a console (21.11.2026). */
+cJSON *
+ps5tm_usbeject_holders_json(const char *mount) {
+  cJSON *o = cJSON_CreateObject();
+  /* exactly the mount point of a drive (/mnt/usb0 .. /mnt/usb7, /mnt/ext0: nine characters), no path below it */
+  if(!mount || strlen(mount) != 9 || ps5tm_drive_slot(mount) < 0) {
+    cJSON_AddBoolToObject(o, "ok", 0);
+    cJSON_AddStringToObject(o, "error", "mount muss /mnt/usb0 bis /mnt/usb7 oder /mnt/ext0 sein");
+    return o;
+  }
+  cJSON_AddBoolToObject(o, "ok", 1);
+  cJSON_AddStringToObject(o, "mount", mount);
+  ps5tm_holder_t h[32];
+  int nh = ps5tm_drive_holders(mount, h, 32);
+  cJSON_AddBoolToObject(o, "known", nh >= 0);
+  {
+    char diag[320];
+    ps5tm_drive_holders_diag(diag, sizeof(diag));
+    cJSON_AddStringToObject(o, "diag", diag);
+  }
+  cJSON *arr = cJSON_AddArrayToObject(o, "holders");
+  for(int i = 0; i < nh; i++) {
+    int self = 0;
+    cJSON *e = cJSON_CreateObject();
+    cJSON_AddNumberToObject(e, "pid", h[i].pid);
+    cJSON_AddStringToObject(e, "name", h[i].name);
+    cJSON_AddNumberToObject(e, "files", h[i].count);
+    cJSON_AddStringToObject(e, "sample", h[i].sample);
+    cJSON_AddBoolToObject(e, "blocks", holder_blocks(&h[i], &self));
+    cJSON_AddBoolToObject(e, "self", self);
+    cJSON_AddItemToArray(arr, e);
+  }
+  int per[9], any = 0;
+  ps5tm_drive_counts(per, &any);
+  int s = ps5tm_drive_slot(mount);
+  cJSON *gate = cJSON_AddObjectToObject(o, "gate");
+  cJSON_AddNumberToObject(gate, "readers", s >= 0 ? per[s] : 0);
+  cJSON_AddNumberToObject(gate, "readers_any", any);
+  cJSON_AddNumberToObject(gate, "file_manager_reads", ps5tm_filemgr_reading());
   return o;
 }

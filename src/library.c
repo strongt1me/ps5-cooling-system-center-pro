@@ -586,6 +586,7 @@ static int64_t
 dir_size(const char *path, int depth) {
   if(depth > 32) return -1;
   if(g_walk_deadline_ms && ps5tm_mono_ms() > g_walk_deadline_ms) return -1;
+  if(ps5tm_usbeject_active()) return -1;           /* a drive is being cut off (or just was): the walk ends at once, the eject waits for it (drivegate.c) */
   DIR *d = opendir(path);
   if(!d) return -1;
   int64_t total = 0;
@@ -1197,10 +1198,21 @@ refresh(void) {
   }
   qsort(list, (size_t)n, sizeof(lib_game_t), by_recent);        /* by_recent reads only the order and the title id */
   if(n > LIBRARY_MAX) { n = LIBRARY_MAX; truncated = 1; }       /* the most recently used stay (audit F-253): the rows read were not only games */
+  int cut_off = 0;
   for(int i = 0; i < n; i++) {                                  /* the slow checks only for the games that stay on the list */
+    /* These checks look at the drives (a stat, a walk down a game's folder). Through the gate (drivegate.c, 21.11.2026): a game's checks that have begun are
+       waited for by an eject, and when an eject comes the pass ends here and the last good list stays - a list with half of its games unchecked would show
+       them as plain for a minute. */
+    int gate = ps5tm_drive_enter_any();
+    if(gate == 0) { cut_off = 1; break; }
     read_mount_source(list[i].title_id, list[i].source, sizeof(list[i].source));
     detect_mods(&list[i]);
     detect_storage(&list[i]);
+    ps5tm_drive_leave(gate);
+  }
+  if(cut_off) {
+    snprintf(err, sizeof(err), "Ein Laufwerk wird gerade ausgeworfen; die Spieleliste bleibt, wie sie war.");
+    goto done;
   }
   count = n;
   mods_prune(list, n);
@@ -2606,8 +2618,11 @@ probe_read_images(void) {
   int done = 0, tried = 0;
   for(int i = 0; i < n && tried < PROBE_MAX_TITLES; i++) {                          /* at most 40 reads a round, out of all image games (audit F-260) */
     struct stat st;
-    if(ps5tm_usbeject_settling(img[i].path)) continue;                             /* a drive that is being ejected is not read (22.11.2026) */
-    if(stat(img[i].path, &st) != 0 || !S_ISREG(st.st_mode)) continue;            /* the drive is not there now */
+    int g1 = ps5tm_drive_enter(img[i].path);                                       /* through the gate: a drive that is being ejected is not read, and one that is read is waited for (21.11.2026) */
+    if(g1 == 0) continue;
+    int there = stat(img[i].path, &st) == 0 && S_ISREG(st.st_mode);
+    ps5tm_drive_leave(g1);
+    if(!there) continue;                                                           /* the drive is not there now */
     int have = 0;
     pthread_mutex_lock(&g_refresh_lock);
     for(int k = 0; k < g_mods_cached; k++) {
@@ -2619,10 +2634,13 @@ probe_read_images(void) {
     if(have) continue;
     if(probe_skipped(img[i].tid)) continue;                    /* the reader crashed on it before: left alone until the list is deleted */
     if(ps5tm_pfail_skip(&g_probe_bad, img[i].tid, (int64_t)st.st_size, (int64_t)st.st_mtime, ps5tm_mono_ms())) continue;   /* could not be read, the file is the same */
+    int g2 = ps5tm_drive_enter(img[i].path);
+    if(g2 == 0) continue;                                      /* an eject began meanwhile: not a failure of this image, it is read another time */
     tried++;
     probe_mark_reading(img[i].tid);                            /* a crash inside the reader leaves this mark behind (audit F-21) */
     int rd = probe_read_image_file(img[i].tid, img[i].path, (int64_t)st.st_size, (int64_t)st.st_mtime);
     probe_mark_reading(NULL);
+    ps5tm_drive_leave(g2);
     if(rd == 0) {
       list_remove(PROBE_SUSPECT, img[i].tid);                  /* read well: no longer a suspect */
       ps5tm_pfail_forget(&g_probe_bad, img[i].tid);

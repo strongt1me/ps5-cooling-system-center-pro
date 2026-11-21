@@ -1104,6 +1104,7 @@ int           ps5tm_smp_available(char *version, size_t version_len);
 int           ps5tm_smp_last_known_up(void);   /* the last answer, no new ask (bgpause.c) */
 /* 1 when it answers and lists this capability ("move_game_source", ...). */
 int           ps5tm_smp_can(const char *capability);
+int           ps5tm_smp_can_cached(const char *capability);          /* the same from what is known, without asking (never refreshes); 0 when it was never asked */
 /* Drops the cached list, after a job has moved something. */
 void          ps5tm_smp_forget(void);
 /* POSTs body to /api/v1<route>; the answer on "status": 0, else NULL with a
@@ -1683,6 +1684,30 @@ int           ps5tm_usbeject_busy(void);
 /* 1 while ANY drive is being ejected or was a moment ago (30 s after ShadowMountPlus took it): the PS4Mount worker puts off what it does on the drives (22.11.2026). */
 int           ps5tm_usbeject_active(void);
 
+/* The drive gate (drivegate.c, 21.11.2026). The console cuts a drive off with a forced unmount that asks nobody, so before an eject the app must be sure that
+   none of its own readers is still on the drive: a reader brackets its access with enter .. leave, the eject claims the drive and waits until it is idle.
+   enter: -1 not a removable drive (go ahead, leave(-1) does nothing), 0 the drive is being ejected or settles (do not touch it), >0 counted (leave with it).
+   enter_any: for readers that walk every drive (library, duplicate images); 0 while any eject runs or settles. wait_idle: 0 idle, -1 still busy after ms. */
+int           ps5tm_drive_slot(const char *path);                       /* usb0..usb7 -> 0..7, ext0 -> 8, else -1 */
+int           ps5tm_drive_enter(const char *path);
+int           ps5tm_drive_enter_any(void);
+void          ps5tm_drive_leave(int token);
+int           ps5tm_drive_wait_idle(const char *mount, int ms);
+void          ps5tm_drive_counts(int *per_slot, int *any);              /* per_slot: 9 entries */
+
+/* Who has a file, folder or working directory open on a drive (driveholders.c, 21.11.2026; sysctl kern.proc.filedesc, read-only). Returns how many processes,
+   -1 when the process table cannot be read (not known). */
+typedef struct {
+  int  pid;
+  char name[24];
+  int  count;
+  char sample[200];
+} ps5tm_holder_t;
+int           ps5tm_drive_holders(const char *mount, ps5tm_holder_t *out, int max);
+void          ps5tm_drive_holders_diag(char *out, size_t n);           /* what the process table answers on this console (one line) */
+/* 1 while an eject is blocked because the last one did not come back (the app or the console died inside it): usbeject.c; GET/POST /api/v1/storage/eject. */
+int           ps5tm_usbeject_blocked(void);
+
 /* The one list of jobs that do not run beside each other (src/jobreg.c). A job module asks with its own id (or -1) before it starts. */
 typedef enum {
   PS5TM_JOB_SAVES, PS5TM_JOB_PKGSPLIT, PS5TM_JOB_PKGINST, PS5TM_JOB_PKGSCAN, PS5TM_JOB_GAMEDELETE, PS5TM_JOB_FILEMGR, PS5TM_JOB_AMPR,
@@ -1702,6 +1727,19 @@ int           ps5tm_app_job_running(char *why, size_t n);
 int           ps5tm_smpremount(const char *title_id, const char *action, char *msg, size_t n);
 int           ps5tm_usbeject_start(const char *mount, char *msg, size_t n);
 struct cJSON *ps5tm_usbeject_json(void);
+/* ejectmark.c: the marker of an eject that did not come back (a crash). init at the start; blocked 1 until rearm; write just before ShadowMountPlus is asked;
+   clear_now when nothing was cut off; clear_later after the re-announce window (30 s); shutdown at a planned end of the app. */
+void          ps5tm_ejectmark_init(void);
+int           ps5tm_ejectmark_blocked(void);
+int           ps5tm_ejectmark_rearm(void);
+void          ps5tm_ejectmark_write(const char *mount);
+void          ps5tm_ejectmark_clear_now(void);
+void          ps5tm_ejectmark_clear_later(void);
+void          ps5tm_ejectmark_shutdown(void);
+void          ps5tm_usbeject_init(void);                                /* at the start: was the last eject left unfinished? (usbeject.c) */
+void          ps5tm_usbeject_shutdown(void);                            /* the app ends as planned: that is no crash of an eject */
+int           ps5tm_usbeject_rearm(void);                               /* the person allows ejecting again after such a crash; 1 when it was blocked */
+struct cJSON *ps5tm_usbeject_holders_json(const char *mount);            /* GET /api/v1/storage/holders?mount=... */
 int  ps5tm_backdrops_set_mode(int area, const char *mode);
 int  ps5tm_backdrops_take(int area, const char *part);             /* moves an uploaded JPEG into place */
 int  ps5tm_backdrops_remove(int area);

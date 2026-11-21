@@ -2742,6 +2742,7 @@ handle_system(int fd) {
     if(ps5tm_usbeject_path_ok(info.volumes[i].path)) cJSON_AddBoolToObject(v, "ejectable", 1);
     cJSON_AddItemToArray(vols, v);
   }
+  cJSON_AddBoolToObject(root, "usb_eject_blocked", ps5tm_usbeject_blocked());   /* the last eject did not come back: off until it is allowed again (usbeject.c) */
 
   char *txt = cJSON_PrintUnformatted(root);
   cJSON_Delete(root);
@@ -4589,8 +4590,18 @@ static void
 handle_usb_eject(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
   const cJSON *jm = body ? cJSON_GetObjectItem(body, "mount") : NULL;
+  const cJSON *ja = body ? cJSON_GetObjectItem(body, "action") : NULL;
   char mount[16] = "", msg[300];
   if(cJSON_IsString(jm)) snprintf(mount, sizeof(mount), "%s", jm->valuestring);
+  /* {"action":"rearm"}: the person allows ejecting again after the last eject did not come back (usbeject.c, 21.11.2026) */
+  if(cJSON_IsString(ja) && !strcmp(ja->valuestring, "rearm")) {
+    cJSON_Delete(body);
+    int was = ps5tm_usbeject_rearm();
+    cJSON *o = ps5tm_usbeject_json();
+    cJSON_AddBoolToObject(o, "was_blocked", was);
+    send_cjson(fd, 200, o);
+    return;
+  }
   cJSON_Delete(body);
   int rc = ps5tm_usbeject_start(mount, msg, sizeof(msg));
   if(rc != 202) { ps5tm_http_send_error(fd, rc, rc == 400 ? "bad_mount" : "eject_refused", msg); return; }
@@ -6032,6 +6043,13 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     if(!is_get) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                         "Nur GET erlaubt."); return; }
     handle_klog_file(fd, req);
+    return;
+  }
+
+  if(!strcmp(req->path, "/api/v1/storage/holders") && is_get) {          /* who has a file open on a drive (read-only, usbeject.c) */
+    char mount[32] = "";
+    query_param_decoded(req->query, "mount", mount, sizeof(mount));
+    send_cjson(fd, 200, ps5tm_usbeject_holders_json(mount));
     return;
   }
 

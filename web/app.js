@@ -4373,7 +4373,10 @@
     }
 
     const vols = sys.volumes || [];
-    $("#storage-list").innerHTML = vols.length ? vols.map((v) => {
+    const ejectNote = sys.usb_eject_blocked ? `<div class="note warn eject-blocked"><b>Auswerfen ist gesperrt.</b> Beim letzten Auswerfen ist die Konsole oder die App
+        abgestürzt; damit sich das nicht wiederholt, wirft die App keine Laufwerke aus, bis du es erlaubst. Sicherer: die Konsole ganz ausschalten und das Laufwerk
+        erst danach abziehen. <button type="button" class="btn ghost" data-eject-rearm>Auswerfen wieder erlauben</button></div>` : "";
+    $("#storage-list").innerHTML = ejectNote + (vols.length ? vols.map((v) => {
       const pct = Math.round((v.used_bytes / v.total_bytes) * 100);
       const cls = pct >= 92 ? "hot" : pct >= 80 ? "warn" : "s1";
       /* 29.10.2026: USB-Laufwerke lassen sich über ShadowMountPlus auswerfen, aber nur, solange kein Auftrag der App
@@ -4385,7 +4388,7 @@
           <span>${v.free_bytes === 0 && v.total_bytes > 0 ? "0 B" : bytes(v.free_bytes)} frei von ${bytes(v.total_bytes)}</span>${eject}</div>
         <div class="bar"><span class="${cls}" style="width:${pct}%"></span></div>
       </div>`;
-    }).join("") : `<p class="muted">Keine Laufwerke lesbar.</p>`;
+    }).join("") : `<p class="muted">Keine Laufwerke lesbar.</p>`);
 
     const dHost = $("#drive-telemetry-list");
     if (dHost) {
@@ -8364,6 +8367,7 @@
     usbEject.timer = 0;
     usbEject.running = false;
     usbEject.fails = 0;
+    if (typeof fm !== "undefined") fm.ejecting = false;
   };
   const usbEjectPoll = async () => {
     if (document.hidden) return;
@@ -8383,20 +8387,37 @@
   /* Startet das Auswerfen von „mount“; der Knopf (falls einer gedrückt wurde) bleibt gesperrt, bis die Konsole fertig meldet. */
   const usbEjectStart = async (mount, b) => {
     if (usbEject.running) return;
+    /* Sofort belegt, nicht erst nach der Antwort (21.11.2026): Die Seiten fragen nach „usbEject.running“, bevor sie das Laufwerk anfassen (der Dateimanager alle
+       4 s die Orte), und ein zweiter Klick findet den Knopf besetzt. Die Frist ist länger als die Standardfrist: Die App wartet vor dem Auswerfen, bis nichts
+       mehr vom Laufwerk liest (bis 6 s), schreibt alles aufs Laufwerk (sync) und fragt dann erst ShadowMountPlus. */
+    usbEject.running = true;
     if (b) b.disabled = true;
     try {
-      const r = await api("/api/v1/storage/eject", { method: "POST", body: JSON.stringify({ mount }) });
+      const r = await api("/api/v1/storage/eject", { method: "POST", body: JSON.stringify({ mount }), timeoutMs: 45000 });
       toast(r.started || r.message || "Wird ausgeworfen …");
-      usbEject.running = true;
       if (!usbEject.timer) usbEject.timer = setInterval(usbEjectPoll, 1500);
     } catch (err) {
+      usbEjectStop();
       toast(err.message, "error");
       if (b) b.disabled = false;
+      if (typeof loadSystem === "function") loadSystem();
     }
+  };
+  /* Nach einem Absturz beim Auswerfen bleibt es aus, bis man es wieder erlaubt (usbeject.c, 21.11.2026). */
+  const usbEjectRearm = async () => {
+    try {
+      await api("/api/v1/storage/eject", { method: "POST", body: JSON.stringify({ action: "rearm" }) });
+      toast("Auswerfen ist wieder erlaubt.");
+    } catch (err) {
+      toast(err.message, "error");
+    }
+    if (typeof loadSystem === "function") loadSystem();
+    if (typeof fmLoadPlaces === "function" && fm.loaded) fmLoadPlaces().then(() => fmRender());
   };
   $("#storage-list").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-eject]");
     if (b) usbEjectStart(b.dataset.eject, b);
+    if (e.target.closest("button[data-eject-rearm]")) usbEjectRearm();
   });
 
   /* ── PS4 PKG von USB (ps4m_core.c, 14.10.2026) ──────────────────────────
@@ -10231,7 +10252,7 @@
   };
 
   const fmLoadPlaces = async () => {
-    try { fm.places = (await api("/api/v1/files/places")).places || []; } catch { fm.places = []; }
+    try { const r = await api("/api/v1/files/places"); fm.places = r.places || []; fm.ejectBlocked = !!r.eject_blocked; } catch { fm.places = []; }
   };
 
   /* Nach dem Auswerfen (usbEjectPoll): „mount“ ist das Laufwerk, das weg ist (leer: es blieb stecken). Die Orte werden neu gelesen;
@@ -10254,17 +10275,26 @@
      Download las weiter, während ShadowMountPlus es abtrennte (die Konsole stürzte ab). fmSeq weiterzählen lässt die Antworten und die Schleife der
      Ordnergrößen auf dem Laufwerk fallen; was auf der Konsole noch liest, wartet das Auswerfen ab (die App weist es sonst mit der Begründung ab). */
   const fmEjectPlace = async (p, btn) => {
-    if (usbEject.running) return;
+    if (usbEject.running || fm.ejecting) return;
     const inDrive = (path) => !!path && (path === p.path || path.startsWith(`${p.path}/`));
+    /* 21.11.2026, as under System and not only "a bit like it": the Dateimanager page ends here (its places every 4 s, its lists, its sizes and downloads stop with
+       it: fmPlacesRefresh and the rest ask for state.page), the System page opens, and only then the same function as there starts the eject. Before, the page
+       stayed on "Dateien" and read the places (statfs and statvfs on the drive) up to the moment the console cut the drive off; the consoles of users crashed
+       there, while the same drive ejected from System never did. */
+    fm.ejecting = true;
     btn.disabled = true;
-    fmSeq++;
+    fmSeq++;                                      /* answers and the loop of folder sizes that are under way fall away */
     if (inDrive(fm.path)) {
       fm.sel.clear();
       if (fm.clip && inDrive(fm.clip.from)) fm.clip = null;
-      await fmLoad("/data");
+      fm.path = "/data";                          /* back on this page it opens the internal storage, not the drive */
     }
-    await usbEjectStart(p.path, btn);
-    fmRender();
+    const tab = document.querySelector('.tab[data-page="system"]');
+    if (tab) tab.click();
+    toast("Das Laufwerk wird über System → Speicherplatz ausgeworfen. Davor liest die App nichts mehr davon.");
+    await new Promise((r) => setTimeout(r, 1500)); /* what was under way on the page finishes; the app waits for it as well before it asks the console */
+    await usbEjectStart(p.path, null);
+    if (!usbEject.running) fm.ejecting = false;
   };
 
   /* Nur die neueste Antwort zählt: Ein Neuladen nach einem fertigen Auftrag, das erst ankommt, wenn schon ein
@@ -10297,7 +10327,8 @@
     fm.places.forEach((p) => {
       if ((d.path === p.path || d.path.startsWith(p.path === "/" ? "/" : `${p.path}/`)) && p.path.length > cur.length) cur = p.path;
     });
-    $("#fm-places").innerHTML = fm.places.map((p, i) => `<button type="button" class="gm-chip${p.path === cur ? " active" : ""}" data-fm-place="${i}">${esc(p.label)}${p.writable && p.free_bytes > 0 ? ` <small>${esc(bytes(p.free_bytes))} frei</small>` : ""}</button>${p.ejectable ? `<button type="button" class="gm-chip fm-eject" data-fm-eject="${i}" ${usbEject.running ? "disabled" : ""} title="Sicher auswerfen. Läuft noch ein Auftrag der App, wird nicht ausgeworfen, und die App sagt, welcher Auftrag es ist.">Auswerfen</button>` : ""}`).join("");
+    $("#fm-places").innerHTML = fm.places.map((p, i) => `<button type="button" class="gm-chip${p.path === cur ? " active" : ""}" data-fm-place="${i}">${esc(p.label)}${p.writable && p.free_bytes > 0 ? ` <small>${esc(bytes(p.free_bytes))} frei</small>` : ""}</button>${p.ejectable ? `<button type="button" class="gm-chip fm-eject" data-fm-eject="${i}" ${usbEject.running || fm.ejecting ? "disabled" : ""} title="Sicher auswerfen. Die App wechselt dazu auf System → Speicherplatz, wirft dort aus und liest davor nichts mehr vom Laufwerk. Läuft noch ein Auftrag der App, wird nicht ausgeworfen, und die App sagt, welcher Auftrag es ist.">Auswerfen</button>` : ""}`).join("") +
+      (fm.ejectBlocked ? ` <span class="muted fm-eject-blocked">Auswerfen ist gesperrt (die Konsole ist beim letzten Auswerfen abgestürzt).</span> <button type="button" class="gm-chip" data-fm-rearm>Wieder erlauben</button>` : "");
   };
 
   /* Die Orte nachführen (21.11.2026): Ein Laufwerk, das angeschlossen oder abgezogen wird, erschien erst, wenn man den Bereich wechselte und
@@ -10306,14 +10337,16 @@
   const fmPlacesSig = (list) => (list || []).map((p) => `${p.path}|${p.label}|${p.ejectable ? 1 : 0}|${p.writable ? 1 : 0}`).join(";");
   let fmPlacesBusy = false;
   const fmPlacesRefresh = async () => {
-    if (fmPlacesBusy || !fm.loaded || state.page !== "files" || document.hidden || usbEject.running) return;
+    if (fmPlacesBusy || !fm.loaded || state.page !== "files" || document.hidden || usbEject.running || fm.ejecting) return;
     fmPlacesBusy = true;
     try {
       const r = await api("/api/v1/files/places");
       const list = (r && r.places) || [];
       if (!list.length) return;
-      const changed = fmPlacesSig(list) !== fmPlacesSig(fm.places);
+      const blocked = !!(r && r.eject_blocked);
+      const changed = fmPlacesSig(list) !== fmPlacesSig(fm.places) || blocked !== !!fm.ejectBlocked;
       fm.places = list;
+      fm.ejectBlocked = blocked;
       if (changed) fmRenderPlaces();
     } catch (e) {
       /* die alte Liste bleibt */
@@ -11116,6 +11149,7 @@
       return;
     }
     if (d.fmPlace !== undefined) { const p = fm.places[+d.fmPlace]; if (p) fmLoad(p.path); }
+    else if (d.fmRearm !== undefined) usbEjectRearm();
     else if (d.fmEject !== undefined) {
       const p = fm.places[+d.fmEject];
       if (p && p.ejectable) fmEjectPlace(p, t);

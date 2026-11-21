@@ -245,6 +245,9 @@ class HttpSource final : public Source
     // ShadowMountPlus keeps reporting its last job for ever: one that ended is shown only when it
     // ran in this session.
     std::atomic<std::int64_t> storage_seen_{0};
+    // An eject was asked for and has not been seen to end: the Dateien page asks the app for nothing about the drives meanwhile (no places, no job), as the
+    // System page does not (21.11.2026; the console cuts the drive off with a forced unmount that asks nobody).
+    std::atomic<bool> eject_pending_{false};
     std::atomic<bool> engine_fetching_{false}; // a download of FPKGMount / Dump Forge is on its way
     std::atomic<bool> ng_fetching_{false}; // the check for a new AMPR EMU NG version is on its way
     std::mutex kraken_poll_mutex_; // one question about FPKGMount at a time: the newer answer wins
