@@ -16,21 +16,23 @@ Deeplink enthält. Frühere Fassungen nutzten 8080 und 8770; alte
 Konfigurationen ziehen beim ersten Start automatisch um.
 
 - **Profil** — Anzeigename und Profilbild der Konsole (eigenes Bild oder eines
-   der 30 eingebauten)
+   der 30 eingebauten); weiter unten Offline-Konto, Fake-Anmeldung und das Sichern und Übertragen von Profilen
 - **Spiele** — die Spiele des Startbildschirms: starten, kopieren, verschieben,
    konvertieren; ein zweiter Reiter zeigt die **Spielzeit**, ein dritter sichert die
    **Spielstände**, ein vierter listet die **Pakete** auf Sticks und Laufwerken, teilt
-   große auf und installiert sie (alles siehe unten)
+   große auf und installiert sie; dazu kommen die Reiter **PS4 PKG von USB**, **FPKGMount**, **Disc**, **Sicherungen**
+   und **Verlauf** (alles siehe unten)
 - **Payloads** — laufende, gespeicherte und auf USB liegende Payloads: starten,
-   beenden, kopieren (siehe unten)
+   beenden, kopieren; dazu Profile (Abläufe aus mehreren Payloads) und „Payloads herunterladen“ (siehe unten)
 - **Kühlung** — Klartext-Status, wärmster Punkt, Lüfter und laufendes Spiel, gleich
    darunter Zieltemperatur mit Schnellwahl und Betriebsart (leise/ausgewogen/kühl),
-   dann Temperaturverlauf, Sensoren und Spielprofile. Bis 1.45.x stand ein Teil davon auf
+   dann Nachtmodus, Lüfterkurve, Temperaturverlauf, Sensoren und Spielprofile. Bis 1.45.x stand ein Teil davon auf
    einer eigenen Seite „Übersicht“; sie ist hier aufgegangen, ohne dass dieselbe
    Zahl zweimal erscheint. Im Expertenmodus kommen Verläufe, Rohwerte,
    Regelzustand, Diagnose und erweiterte Parameter dazu.
-- **System** — Konsole, Firmware, Laufzeit, Speicherplatz, Netzwerk, Kachel,
-   Bildschirmanzeige, Zusatzabfragen, Expertenmodus mit Rohdiagnose
+- **System** — ShadowMountPlus (Version und „Fakelib automatisch aktualisieren“), Konsole, Firmware, Laufzeit, Netzwerk,
+   Bildschirm, QR-Code „Am Handy öffnen“, Speicherplatz (mit „Auswerfen“ für USB-Laufwerke), Kühlleistung über die Zeit,
+   Zusatzabfragen, Expertenmodus mit Rohdiagnose
 - **Protokoll** — Ereignisse der App, als `.log` exportierbar, und das
    Kernel-Log live (siehe unten). Seit 1.75.6 schreibt die App jedes Ereignis
    auch in `/data/PS5-Cooling-Center/app.log` (höchstens 2 s später, Warnungen
@@ -42,7 +44,7 @@ Konfigurationen ziehen beim ersten Start automatisch um.
    das in einer eigenen Zeile.
 
 Darunter öffnen **Handbuch** und **FAQ** (seit 1.49.1) das eingebaute Benutzerhandbuch und die häufigen Fragen,
-am PC in einem neuen Tab; oben steht „← Zurück zur App“. Sie erscheinen in der gewählten Sprache (seit 1.50.0 sechs, siehe
+am PC in einem neuen Tab; oben steht „← Zurück zur App“. Sie erscheinen in der gewählten Sprache (seit 1.50.0 sechs, inzwischen sieben mit Schwedisch; siehe
 „Sprache der Oberfläche“ unten). Die eingebauten Fassungen haben keine Bildschirmfotos, damit die App klein bleibt.
 
 In der **Kopfzeile**, auf jeder Seite, stehen die **Power-Optionen**: vier Knöpfe, mit denen
@@ -93,7 +95,7 @@ steht auch als Marke unter dem Titel, neben Backport, AMPR EMU und PlayGo:
 sich nicht erkennen: Beide liegen als `app.pkg` unter `/user/app`. Was für ein
 Spiel nicht geht (Kopieren eines installierten Pakets, zum Beispiel), bleibt
 ausgegraut sichtbar, damit alle Karten gleich aufgebaut sind; der Grund steht im
-Hinweis des Knopfs.
+Hinweis des Knopfs. **Pfad öffnen** springt im Dateimanager in den Ordner, in dem das Spiel liegt (bei einem Abbild: in den Ordner der Abbild-Datei).
 
 **Backport, AMPR EMU und PlayGo** liest die App aus dem Spielordner eingehängter
 PS5-Spiele: Ersatzbibliotheken im Ordner `fakelib` (`libSceAmpr.sprx`,
@@ -102,7 +104,7 @@ Backport unter die aus `param.json` absenkt. Spiele, die ShadowMountPlus als
 Abbild einhängt, lassen sich nur prüfen, solange das Abbild eingehängt ist.
 
 Jedes Spiel bringt diese Dateien selbst mit, im eigenen `fakelib`-Ordner. Die App
-**zeigt sie nur an** und baut oder lädt davon nichts hoch:
+**zeigt sie hier nur an**. Bauen, Packen und Austauschen der mitgelieferten Fassungen geschieht im Fenster der Spielkarte (siehe „AMPR-Index, APR-EMU, PlayGo und der Verlauf“); eigene Dateien über diese Seite hochzuladen gibt es nicht mehr:
 
 - **Bibliotheken ersetzen.** Ein früherer Versuch, sie über die Weboberfläche
   hochzuladen, wurde am 02.10.2026 entfernt: ShadowMountPlus' Overlay dafür
@@ -253,7 +255,7 @@ Die Vollbild-App bietet dieselbe Auswahl. Schnittstelle: `docs/API.md`, Abschnit
 Vorgang, auch nicht den nächsten Eintrag der Warteschlange; eine Anfrage in dieser Zeit lehnt sie mit
 einem Hinweis ab. Startet die App in dieser Zeit neu (etwa durch eine neue ELF), ist die Wahl nicht
 mehr da: Beim nächsten Start steht im Verlauf und als Meldung, was offen war – war schon etwas
-gelöscht, sagt die Meldung, wo der Rest liegt. Hat ShadowMountPlus ein Entpacken ohne Erfolgswert
+gelöscht, sagt die Meldung, wo der Rest liegt. Wurde das Ergebnis nur mit „Schnell“ geprüft, bleibt das Original bei „Löschen“ liegen (die Meldung sagt es: dann „Gründlich“ wählen); „Verschieben“ geht auch dann, weil seine Kopie für sich geprüft wird. Hat ShadowMountPlus ein Entpacken ohne Erfolgswert
 beendet, bleibt das Abbild bei „Löschen“ liegen (bei „Verschieben“ geht es weiter: die Kopie wird auf
 jeden Fall geprüft). Die Oberfläche schickt den Pfad des Originals, das sie gezeigt hat; liegt der
 Titel beim Start woanders, lehnt die App ab. Ein Ordner mit einem unfertigen Rest einer früheren Kopie
@@ -322,7 +324,7 @@ Laufwerk zurück und prüft es ganz, nicht nur stichprobenweise:
   verglichen, die beim Lesen des Originals entstand; danach wird die Datei noch
   einmal ganz gelesen.
 
-**Prüfstufe (seit 11.11.2026).** Beim Konvertieren wählst du unter „4. Prüfung danach“ zwischen **Gründlich**
+**Prüfstufe (seit 11.11.2026).** Beim Konvertieren wählst du unter „5. Prüfung danach“ zwischen **Gründlich**
 (Vorgabe: alles wie oben beschrieben) und **Schnell**. Schnell liest das Ergebnis nicht noch einmal ganz:
 
 - **ffpfsc:** Köpfe, Inodes, die ganze Blocktabelle und die Bereiche, die leer sein müssen, werden geprüft, dazu höchstens 2048 Blöcke
@@ -331,7 +333,7 @@ Laufwerk zurück und prüft es ganz, nicht nur stichprobenweise:
   könnte. Die Prüfsumme der Nutzdaten wird nicht verglichen.
 - **exFAT:** Die Größe der Datei und rund 400 Stücke (die ersten und letzten drei und gleichmäßig verteilte dazwischen), deren
   CRC-32 beim Schreiben genommen wurde, werden vom Laufwerk zurückgelesen und verglichen.
-- **ffpkg (PS4):** Aufbau und der Inhalt jeder Datei werden geprüft wie oben, aber ohne das zweite Durchlesen für die SHA-256.
+- **ffpkg:** Aufbau und der Inhalt jeder Datei werden geprüft wie oben, aber in einem Durchgang statt in zweien, also ohne das zweite Durchlesen für die SHA-256.
 - Bei Schnell entsteht **keine** Prüfsummen-Datei (`.sha256`); die Meldung am Ende sagt es. Ein beschädigter Block außerhalb der
   Stichprobe wird nicht gefunden; wer sich nicht sicher ist, nimmt Gründlich oder prüft das Abbild später mit „Prüfen“.
 
@@ -340,11 +342,11 @@ zwischen zwei Laufwerken hält drei solche Stücke bereit. Blöcke, die sich nic
 bisher: Ein Block wird nur gepackt, wenn er dabei mindestens 5 % spart. Einen Vorfilter, der solche Blöcke ohne Versuch überspringt,
 gibt es nicht: Ein Test an der Konsole mit zwei großen Spielen brachte damit keinen Zeitgewinn.
 
-**Debug-FPKG (seit 1.84.0).** Neben ffpfsc, ffpkg und exFAT baut das Fenster ein **Debug-FPKG** (`.pkg`), das Kraken Mount einhängt (Reiter „FPKGMount“). Geschrieben wird es von **Dump Forge** (quer3q, GPL-3.0), einem eigenen PS5-Programm: Die App startet es für den Auftrag, gibt ihm Quelle und Ziel, zeigt seine Schritte (Vermessen, Komprimieren, Prüfen, Umbenennen) wie bei den anderen Formaten und beendet es danach wieder; mit „Zur Warteschlange“ geht es ebenfalls. Dump Forge steckt in der App: Seine ELF (17,7 MiB) liegt gepackt (zstd, 8,0 MiB) in der ELF der App und damit auch in beiden Kacheln, wer nur die ELF benutzt, muss nichts laden. Eine neuere Fassung hat Vorrang vor der eingebauten (0.5.6): „Dump Forge laden“ im Fenster holt sie von GitHub (nur auf Knopfdruck, HTTPS, die Prüfsumme aus `SHA256SUMS` wird verglichen) nach `/data/PS5-Cooling-Center/dumpforge/`, oder man legt `ps5-dump-forge-<Version>-ps5.elf` selbst in diesen Ordner (zum Beispiel per FTP); die neueste Version zählt. Vier **Kompressionsstufen** gibt es: **Schnell** (Kraken, empfohlen), **Ausgewogen** und **Kleinste** (rund 2,6 % kleiner, aber etwa 6- und 9-mal so lange, alle Kerne rechnen durchgehend) und **Unkomprimiert** (das Paket so groß wie das Spiel, für den Fall, dass die Konsole ein komprimiertes nicht startet). „Spielbar“ legt das Paket in den Ordner `FPKG-Games` des Ziels, den Kraken Mount durchsucht, „Sicherung“ nach `PS5-Sicherung/Spiele`. Der Name der Ausgabe darf höchstens 63 Bytes (ohne „.pkg“) haben; das Fenster prüft es vor dem Start. Bei **Gründlich** liest Dump Forge jedes Byte des fertigen Pakets noch einmal, bei **Schnell** prüft es den Aufbau, kleine Dateien ganz und vom Rest eine Stichprobe; eine Prüfsummen-Datei entsteht nicht. Hat das Original dieselbe Titel-ID und hängt bei ShadowMountPlus, stören sich beide, sobald Kraken Mount das Paket anmeldet: Hänge das Original vorher aus. Dump Forge legt keine Kachel auf dem Startbildschirm an: Die App hält den Platz `/user/app/PDFG00001` mit einer leeren Datei besetzt (wie bei Kraken Mount) und entfernt eine früher angelegte Kachel beim nächsten Start. **Spiele mit AMPR-Packs** (seit 18.11.2026): Ist das Spiel mit AMPR-Packs gepackt (`ampr_zstd.index` oder `ampr_assets.index` im Ordner oder im Abbild), packt Dump Forge die Packs beim Umwandeln selbst aus (zstd-Packs mit „zstd_unpack“, LZ4-Packs mit „lz4: unpack“ in seinem Auftrag), denn Kraken Mount nimmt kein Paket mit Packs an, es stünde in seiner Liste als „Fehlgeschlagen“. Das Paket enthält dann das ungepackte Spiel und wird entsprechend groß (je nach Stufe kleiner), die Quelle bleibt unverändert, und es dauert länger als bei einem Spiel ohne Packs. Das Fenster sagt es vorher: Bei einem Ordner nennt es die Größe des ungepackten Spiels (aus dem Index der Packs) und prüft den Platz danach, bei einem Abbild kann erst Dump Forge sagen, wie groß es wird; die Prüfung vor dem Start zeigt einen gelben Hinweis. Ausgegraut bleibt „FPKG“ nur, wenn sich nicht prüfen lässt, ob das Spiel Packs enthält, oder wenn es zstd- und LZ4-Packs zugleich hat (Dump Forge löst nur eine Art auf): Dann erst eine Art entpacken („zstd entpacken“ oder „LZ4 entpacken“ bei den Asset-Packs des Spiels), dann konvertieren.
+**Debug-FPKG (seit 1.84.0).** Neben ffpfsc, ffpkg und exFAT baut das Fenster ein **Debug-FPKG** (`.pkg`), das Kraken Mount einhängt (Reiter „FPKGMount“). Geschrieben wird es von **Dump Forge** (quer3q, GPL-3.0), einem eigenen PS5-Programm: Die App startet es für den Auftrag, gibt ihm Quelle und Ziel, zeigt seine Schritte (Vermessen, Komprimieren, Prüfen, Umbenennen) wie bei den anderen Formaten und beendet es danach wieder; mit „Zur Warteschlange“ geht es ebenfalls. Dump Forge steckt in der App: Seine ELF (17,7 MiB) liegt gepackt (zstd, 8,0 MiB) in der ELF der App und damit auch in beiden Kacheln, wer nur die ELF benutzt, muss nichts laden. Eine neuere Fassung hat Vorrang vor der eingebauten (0.5.6): „Neue Fassung von GitHub laden“ im Fenster holt sie von GitHub (nur auf Knopfdruck, HTTPS, die Prüfsumme aus `SHA256SUMS` wird verglichen) nach `/data/PS5-Cooling-Center/dumpforge/`, oder man legt `ps5-dump-forge-<Version>-ps5.elf` selbst in diesen Ordner (zum Beispiel per FTP); die neueste Version zählt. Vier **Kompressionsstufen** gibt es: **Schnell** (Kraken, empfohlen), **Ausgewogen** und **Kleinste** (rund 2,6 % kleiner, aber etwa 6- und 9-mal so lange, alle Kerne rechnen durchgehend) und **Unkomprimiert** (das Paket so groß wie das Spiel, für den Fall, dass die Konsole ein komprimiertes nicht startet). „Spielbar“ legt das Paket in den Ordner `FPKG-Games` des Ziels, den Kraken Mount durchsucht, „Sicherung“ nach `PS5-Sicherung/Spiele`. Der Name der Ausgabe darf höchstens 63 Bytes (ohne „.pkg“) haben; das Fenster prüft es vor dem Start. Bei **Gründlich** liest Dump Forge jedes Byte des fertigen Pakets noch einmal, bei **Schnell** prüft es den Aufbau, kleine Dateien ganz und vom Rest eine Stichprobe; eine Prüfsummen-Datei entsteht nicht. Hat das Original dieselbe Titel-ID und hängt bei ShadowMountPlus, stören sich beide, sobald Kraken Mount das Paket anmeldet: Hänge das Original vorher aus. Dump Forge legt keine Kachel auf dem Startbildschirm an: Die App hält den Platz `/user/app/PDFG00001` mit einer leeren Datei besetzt (wie bei Kraken Mount) und entfernt eine früher angelegte Kachel beim nächsten Start. **Spiele mit AMPR-Packs** (seit 18.11.2026): Ist das Spiel mit AMPR-Packs gepackt (`ampr_zstd.index` oder `ampr_assets.index` im Ordner oder im Abbild), packt Dump Forge die Packs beim Umwandeln selbst aus (zstd-Packs mit „zstd_unpack“, LZ4-Packs mit „lz4: unpack“ in seinem Auftrag), denn Kraken Mount nimmt kein Paket mit Packs an, es stünde in seiner Liste als „Fehlgeschlagen“. Das Paket enthält dann das ungepackte Spiel und wird entsprechend groß (je nach Stufe kleiner), die Quelle bleibt unverändert, und es dauert länger als bei einem Spiel ohne Packs. Das Fenster sagt es vorher: Bei einem Ordner nennt es die Größe des ungepackten Spiels (aus dem Index der Packs) und prüft den Platz danach, bei einem Abbild kann erst Dump Forge sagen, wie groß es wird; die Prüfung vor dem Start zeigt einen gelben Hinweis. Ausgegraut bleibt „FPKG“ nur, wenn sich nicht prüfen lässt, ob das Spiel Packs enthält, oder wenn es zstd- und LZ4-Packs zugleich hat (Dump Forge löst nur eine Art auf): Dann erst eine Art entpacken („zstd entpacken“ oder „LZ4 entpacken“ bei den Asset-Packs des Spiels), dann konvertieren.
 
 **Packen beim Konvertieren (seit 19.11.2026).** Bei **exFAT** und **ffpkg** eines PS5-Spielordners erscheint im Konvertieren-Fenster die Gruppe **Packen (AMPR-Packs)**: **Nicht packen** (Vorgabe; die App schreibt das Abbild wie bisher selbst), **LZ4-Packs** oder **zstd-Packs (nur AMPR EMU NG)**. Dazu wählst du die **Stufe** (LZ4: 9 ausgewogen, empfohlen, 3 schnell, 12 am kleinsten; zstd: 5 ausgewogen, empfohlen, 1 am schnellsten, 9 kleiner, 19 am kleinsten) und bei LZ4 die **Laufzeit im Spiel**: **AMPR EMU NG** (Vorgabe) oder **APR-EMU Original** (nur für Spiele, die libSceAmpr selbst laden; Dump Forge lehnt sie sonst ab). Das Abbild schreibt dann **Dump Forge** (mindestens Version 0.5.6; die App bringt 0.5.6 mit) und packt das Spiel **im Strom**: Die Dateien kommen beim Schreiben des Abbilds in die Packs, ohne Zwischenordner und ohne dass vorher ein gepacktes Spiel entsteht. Das Original bleibt unverändert. Die Schritte: Vermessen (die Packdateien werden einmal durchgerechnet, es wird nichts geschrieben; das Fenster sagt „Das Spiel wird für die Packs vermessen …“ und zeigt dann Prozent und Restzeit, eine Schätzung), Schreiben („wird gepackt und geschrieben“, mit Prozent und Restzeit statt Größen) und Prüfen. Dump Forge liest die Quelle dabei **zweimal**, darum dauert es länger als ohne Packen. Am Ende steht „<Größe> statt <Größe des Spiels> (n %)“.
 
-Welche Dateien gepackt werden, bestimmt Dump Forge: Mit AMPR EMU NG (zstd, und LZ4 mit der Laufzeit NG) alles außer den Systemdateien (Programme, `sce_sys`, `sce_module`, `fakelib`, leere Dateien); mit „APR-EMU Original“ ein vorsichtigeres LZ4-Verfahren, das Medien, Konfigurationsdateien und die Dateien im Wurzelordner lose lässt. Ein Profil wie bei „Im Spielordner packen“ gibt es hier nicht. Bei zstd (für jedes Spiel) und bei LZ4 mit der Laufzeit NG legt Dump Forge die AMPR EMU NG (in Dump Forge 0.5.6: v0.4.1) selbst als `fakelib/libSceAmpr.sprx` ins Spiel; mit „APR-EMU Original“ kommt die in Dump Forge eingebaute APR-EMU hinein. Eine andere NG-Fassung lässt sich danach unter „APR-EMU im Spiel“ einbauen. „AMPR-Index vorher bauen“ entfällt (Dump Forge schreibt den Index selbst). Die Prüfung danach (**Gründlich** oder **Schnell**) bleibt und gilt für Dump Forge; eine Prüfsummen-Datei (`.sha256`) entsteht nicht. Der Name der Ausgabe darf höchstens 63 Bytes (ohne „.exfat“ oder „.ffpkg“) haben, wie beim FPKG; auf einem FAT32-Laufwerk ist die Grenze von 4 GB hier nur eine Warnung, weil das Abbild kleiner als das Spiel wird (wie viel, weiß erst Dump Forge). **Ausgegraut** ist die Wahl (mit dem Grund im Fenster) bei PS4-Spielen (sie haben keine AMPR-Packs), bei einem Spiel, das schon in LZ4- oder zstd-Packs liegt (erst bei den Asset-Packs des Spiels entpacken, dann konvertieren), wenn sich nicht prüfen lässt, ob es Packs enthält, und wenn Dump Forge fehlt oder älter als 0.5.6 ist. Für **ffpfsc** gibt es die Wahl nicht: Dort steckt die Komprimierung schon im Abbild. „Zur Warteschlange“ und „Original danach“ gehen wie bei den anderen Formaten; die Warteschlange nennt den Eintrag mit „LZ4-Packs“ oder „zstd-Packs“, der Verlauf mit „exfat + LZ4“. Probiere es zuerst an einem kleinen Spiel: Ob ein gepacktes Spiel läuft, hängt wie sonst von AMPR EMU NG (oder der APR-EMU) ab, und das Original bleibt ja unverändert.
+Welche Dateien gepackt werden, bestimmt Dump Forge: Mit AMPR EMU NG (zstd, und LZ4 mit der Laufzeit NG) alles außer den Systemdateien (Programme, `sce_sys`, `sce_module`, `fakelib`, leere Dateien); mit „APR-EMU Original“ ein vorsichtigeres LZ4-Verfahren, das Medien, Konfigurationsdateien und die Dateien im Wurzelordner lose lässt. Ein Profil wie bei „Im Spielordner packen“ gibt es hier nicht. Bei zstd (für jedes Spiel) und bei LZ4 mit der Laufzeit NG legt Dump Forge die AMPR EMU NG (in Dump Forge 0.5.6: v0.4.1) selbst als `fakelib/libSceAmpr.sprx` ins Spiel; mit „APR-EMU Original“ kommt die in Dump Forge eingebaute APR-EMU hinein. Eine andere NG-Fassung lässt sich danach unter „APR-EMU im Spiel“ einbauen. „AMPR-Index vorher bauen“ entfällt (Dump Forge schreibt den Index selbst). Die Prüfung danach (**Gründlich** oder **Schnell**) bleibt und gilt für Dump Forge; eine Prüfsummen-Datei (`.sha256`) entsteht nicht. Der Name der Ausgabe darf höchstens 63 Bytes (ohne „.exfat“ oder „.ffpkg“) haben, wie beim FPKG; auf einem FAT32-Laufwerk ist die Grenze von 4 GB hier nur eine Warnung, weil das Abbild kleiner als das Spiel wird (wie viel, weiß erst Dump Forge). **Ausgegraut** ist die Wahl (mit dem Grund im Fenster) bei PS4-Spielen (sie haben keine AMPR-Packs), bei einem Spiel, das schon in LZ4- oder zstd-Packs liegt (erst bei den Asset-Packs des Spiels entpacken, dann konvertieren), und wenn sich nicht prüfen lässt, ob es Packs enthält. Für **ffpfsc** gibt es die Wahl nicht: Dort steckt die Komprimierung schon im Abbild. „Zur Warteschlange“ und „Original danach“ gehen wie bei den anderen Formaten; die Warteschlange nennt den Eintrag mit „LZ4-Packs“ oder „zstd-Packs“, der Verlauf mit „exfat + LZ4“. Probiere es zuerst an einem kleinen Spiel: Ob ein gepacktes Spiel läuft, hängt wie sonst von AMPR EMU NG (oder der APR-EMU) ab, und das Original bleibt ja unverändert.
 
 **Dump Forge bei der reinen ELF-Version.** Wer nur die ELF benutzt (ohne Kachel), muss Dump Forge nicht mehr laden: Die App bringt Dump Forge 0.5.6 gepackt mit (seit 21.11.2026; die ELF ist dadurch rund 8 MiB größer), entpackt es für jeden Auftrag im Speicher, prüft Größe und Prüfsumme und sendet es an den Payload-Lader; auf die Konsole wird dafür nichts geschrieben. Eine neuere Fassung kommt auf zwei Wegen dazu: (1) **Laden lassen:** im Konvertieren-Fenster das Format „FPKG (Debug-.pkg)“ wählen und **Neue Fassung von GitHub laden** drücken; gibt es eine neuere Fassung, holt die App sie (rund 18 MB) von GitHub, vergleicht die Prüfsumme aus `SHA256SUMS` und legt sie ab, sonst meldet sie, dass die neueste schon da ist. (2) **Von Hand ablegen:** die Datei `ps5-dump-forge-VERSION-ps5.elf` (die Version nur aus Ziffern und Punkten und neuer als die eingebaute 0.5.6, zum Beispiel `0.5.7`) per FTP (Port 2121) oder mit dem Dateimanager nach `/data/PS5-Cooling-Center/dumpforge/` kopieren. Die App legt den Ordner bei jedem Start an. Die Datei muss 1 bis 40 MiB groß, eine ELF-Datei und vollständig sein (bei der eingebauten Version prüft die App die SHA-256-Prüfsumme, bei einer neueren, dass die Datei nicht abgeschnitten ist; eine Datei, die das nicht besteht, übergeht sie und nimmt die eingebaute Fassung); ein Neustart der App ist nicht nötig. Liegen mehrere Fassungen da, nimmt die App die höchste Version; bei gleicher Version gewinnt eine Datei im Ordner der App vor der eingebauten Fassung und vor den Ordnern der Kacheln, und eine Datei ohne Version im Namen (`ps5-dump-forge.elf`) ist älter als die eingebaute. Dump Forge startet und beendet die App für jeden Auftrag selbst.
 
@@ -412,13 +414,13 @@ wieder an. Am 05.10.2026 war genau das der Grund für vier abgebrochene Konverti
 anderen Kabel liefen sie durch. Was der Auftrag geschrieben hat, räumt er weg. Nach einer
 Konvertierung kann eine `….ps5cc-konv-teil`-Datei liegen bleiben (nach einem Absturz, einem Stromausfall oder wenn die
 Platte beim Aufräumen fehlte, bis zur Größe des Abbilds). Ein neuer Auftrag mit **demselben Ziel** (gleicher Name, gleiches
-Format, gleiches Laufwerk) ersetzt sie; bei einem anderen Namen oder Format bleibt sie liegen, bis du sie im Dateimanager löschst.
-Die App räumt Reste nicht von selbst beim Start auf.
+Format, gleiches Laufwerk) ersetzt sie; bei einem anderen Namen oder Format bleibt sie zunächst liegen.
+Außerdem räumt die App vor der ersten Konvertierung nach jedem Start solche Reste auf, die älter als eine Stunde sind (in den Zielordnern `homebrew`, `PS5-Sicherung/Spiele` und `FPKG-Games` jedes Laufwerks); was jünger ist oder woanders liegt, löschst du im Dateimanager.
 
 ## AMPR-Index, APR-EMU, PlayGo und der Verlauf (seit 11.10.2026)
 
 Jede Spielkarte hat unter **Konvertieren** den Knopf **LZ4-/zstd-Asset-Packs …**. Er öffnet das Fenster „LZ4-/zstd-Asset-Packs & APR-EMU“, ein
-Fenster mit Werkzeugen rund um APR-EMU; bisher ist das der **AMPR-Index**
+Fenster mit Werkzeugen rund um APR-EMU; dazu gehören der **AMPR-Index**, „APR-EMU im Spiel“, „PlayGo im Spiel“, das Packen in LZ4- oder zstd-Pakete, die Optimierung per Mitschnitt, die Spiel-Plugins und bei einem Abbild Prüfen, Entpacken und Reparieren. Der **AMPR-Index**
 (`ampr_emu.index`): die Liste aller Dateien des Spiels, die APR-EMU zum Finden
 braucht. Das Fenster zeigt, ob es einen gibt und wie viele Dateien er kennt. Bei einem Abbild heißt der Knopf
 **AMPR & APR-EMU …** und das Fenster „AMPR & APR-EMU“: LZ4 und zstd gehen nur bei
@@ -463,7 +465,7 @@ festlegen lässt es sich mit **Ab 1.7beta12** oder **Vor 1.7beta12** im Browser 
 **ShadowMountPlus** und in der Vollbild-App unter **System → ShadowMountPlus**. Welche Zeile geschrieben wird, bestimmt die Datei selbst, sobald
 sie ihr Format verrät; deine Angabe gilt für eine fehlende oder leere `config.ini` und löst einen Hinweis aus, wenn sie nicht zur
 Datei passt (etwa wenn ShadowMountPlus nach dem Update noch nicht gestartet wurde und die Datei noch die alte ist: es wandelt sie
-beim ersten Start um und übernimmt die Zeile). Ist die Aktualisierung schon aus, kommt die Frage nicht. Wohin die
+beim ersten Start um und übernimmt die Zeile). Ist die Aktualisierung schon aus, kommt die Frage nicht. Dieselbe Einstellung steht auch als Schalter **Fakelib automatisch aktualisieren** in der Karte **ShadowMountPlus** auf der Seite **System** (Vollbild-App: **System → ShadowMountPlus**); dort lässt sie sich jederzeit von Hand ein- oder ausschalten. Wohin die
 Datei im Spiel kommt, folgt ShadowMountPlus ab 1.7beta1 (Suchreihenfolge: Backport-Ordner
 `<Suchpfad>/backports/<Titel-ID>/` (seit 1.7beta6 auch ein Ordner, dessen Name nur mit der Titel-ID beginnt, etwa „PPSA12345 Spielname“: der genau so benannte gewinnt, sonst der erste in Byte-Reihenfolge) mit `fakelib2` vor `fakelib`, dann das Spiel mit `fakelib2` vor
 `fakelib`; der erste vorhandene Ordner gilt allein, auch ein leerer):
@@ -544,10 +546,10 @@ Das Ergebnis der letzten Prüfung jedes Abbilds bleibt bis zum Neustart der App 
 stehen; jeder Vorgang steht außerdem im Verlauf.
 
 Der Reiter **Verlauf** (Spiele-Seite) zeigt alle Vorgänge der App – Kopieren,
-Verschieben, Konvertieren, Paket teilen, Installieren, Löschen, Dateimanager,
-Spielstände, AMPR-Index – mit Ergebnis, Größe, Dauer und Zeit, nach Ergebnis
+Konvertieren, Paket teilen, Installieren, Löschen, Dateimanager, Spielstände,
+Disc-Abbilder, Dumps, AMPR-Index, APR-EMU und PlayGo, LZ4-Pakete sowie Abbild prüfen, entpacken und reparieren – mit Ergebnis, Größe, Dauer und Zeit, nach Ergebnis
 filterbar. Die letzten 500 liegen auf der Konsole in
-`/data/PS5-Cooling-Center/history.jsonl`; **Verlauf leeren** löscht sie.
+`/data/PS5-Cooling-Center/history.jsonl`; **Verlauf leeren** löscht sie nach einer Rückfrage.
 
 ### PS4-Spiele von USB (PS4Mount)
 
@@ -574,8 +576,8 @@ PS5-Spiel. Fehlt ein Ordner, wird er angelegt; eine vorhandene Datei wird nie er
 Versionen verschoben haben, landen in der obersten Ebene als `CUSAxxxxx - Name - game.pkg`. Keine PKG wird gelöscht.
 
 - **Vor dem Ruhemodus PS4Mount-Spiele schließen.** Der Ruhemodus schaltet das Laufwerk ab; ein offenes Spiel kann danach nicht
-- **Ausschalten hängt die Spiele aus** (seit PS4Mount 0.7.2): Wer vor dem Ruhemodus PS4Mount ausschaltet, ist sicher. Die App hängt dabei jedes Spiel aus, ohne Zwang; läuft gerade ein Spiel, lehnt sie ab und nennt es. Ist ein Spielordner noch in Benutzung, hängt sie alle wieder ein und bittet, es gleich noch einmal zu versuchen. Eingeschaltet hängt PS4Mount die Spiele wieder ein.
   mehr lesen und hängt.
+- **Ausschalten hängt die Spiele aus** (seit PS4Mount 0.7.2): Wer vor dem Ruhemodus PS4Mount ausschaltet, ist sicher. Die App hängt dabei jedes Spiel aus, ohne Zwang; läuft gerade ein Spiel, lehnt sie ab und nennt es. Ist ein Spielordner noch in Benutzung, hängt sie alle wieder ein und bittet, es gleich noch einmal zu versuchen. Eingeschaltet hängt PS4Mount die Spiele wieder ein.
 - Zwei oder mehr angeschlossene Laufwerke (auch Partitionen) können die Oberfläche der Konsole träge machen, mit oder ohne
   PS4Mount. Dann nur ein Laufwerk mit einer Partition anschließen.
 - PS4Mount verwaltet seit 0.7.3 bis zu 768 Spiele je Laufwerk (vorher 256) und durchsucht bis zu 64 Ordner (vorher 8). Was
@@ -593,7 +595,7 @@ schneller. Die Version 0.4.2.1 ist ausdrücklich eine Testversion: **nicht jedes
 
 ### (F)PKG-Spiele mit Kraken Mount (FPKGMount)
 
-Der Reiter **FPKGMount** neben „PS4 PKG von USB“ spielt (F)PKG-Spiele und Spielordner (roh, zstd, LZ4) direkt von der Platte oder vom USB-Laufwerk, ohne sie zu installieren. Dafür bringt die App das Programm **Kraken Mount** von quer3q mit (GPL-3.0, Version 0.3.0; ein eigenes Programm, nicht in die App umgeschrieben), startet es und zeigt seine Spiele.
+Der Reiter **FPKGMount** neben „PS4 PKG von USB“ spielt (F)PKG-Spiele und Spielordner (roh, zstd, LZ4) direkt von der Platte oder vom USB-Laufwerk, ohne sie zu installieren. Dafür bringt die App das Programm **Kraken Mount** von quer3q mit (GPL-3.0, Version 0.3.1; ein eigenes Programm, nicht in die App umgeschrieben), startet es und zeigt seine Spiele.
 
 > **Kraken Mount ab Version 0.2.0:** Das Programm selbst wartet nach dem Start, bis ShadowMountPlus beendet ist, und meldet bis dahin kein Spiel an. Damit FPKGMount wie bisher neben ShadowMountPlus arbeitet, ändert die App in der eingebauten Fassung (und in einer von GitHub geladenen) nur den Namen des Prozesses, auf den es wartet (`shadowmountplus.elf`, ein Byte): Es findet dann keinen und wartet nicht. Das Warten auf kstuff bleibt. Eine ELF von Kraken Mount, die du selbst an den ELF-Lader sendest, wartet weiter auf ShadowMountPlus; die Seite zeigt es dann als „wartet auf ShadowMountPlus“.
 
@@ -605,7 +607,7 @@ Der Reiter **FPKGMount** neben „PS4 PKG von USB“ spielt (F)PKG-Spiele und Sp
 - **Neu in Version 0.3.1 (20.11.2026):** Auf der Firmware 12 und neuer melden sich Spiele wieder am Startbildschirm an: Fehlt der Aufruf für ein einzelnes Spiel, bereitet jeder Suchlauf seine Spiele vor und meldet sie am Ende mit einem Aufruf an (eine Meldung für die ganze Gruppe). Neu ist der Schalter **PlayGo-Stub** je Spiel (siehe oben). Spiele in einem Ordner direkt in einem Suchordner werden jetzt auch gefunden; die Anmeldung eines Spiels geht schneller (etwa 21 statt 36 bis 44 Sekunden); jede Zeile in `kraken.log` beginnt mit der Uhrzeit; ein falscher Eintrag in einer Liste der Einstellungen wird übersprungen, die übrigen bleiben. Mitgeliefert ist AMPR EMU NG 0.5.0.
 - **Marke (seit 17.11.2026):** Die Karte eines Spiels, das Kraken Mount eingehängt hat, trägt die Marke **FPKGMount** (wie **PS4Mount** bei den PS4-Spielen von USB), Browser und Vollbild-App: Es wurde nicht von einem Paket-Installer installiert, sondern läuft aus dem Debug-Paket. Die Marke gilt, solange Kraken Mount läuft und das Spiel auflistet (`fpkgmount` in `GET /api/v1/library`).
 - **Hinweise:** Kraken Mount ist eine Beta; als `.pkg` läuft ein Spiel womöglich schlechter als als zstd-Ordner. Stellst du Kraken Mount auf Ordner um, die auch ShadowMountPlus durchsucht (etwa /data/homebrew), würde jedes Ordner-Spiel dort doppelt angemeldet. Nach einem Neustart der Konsole muss Kraken Mount laufen, damit die Spiele sichtbar bleiben. Die Vollbild-App hat dieselbe Seite unter Spiele → FPKGMount (Quadrat: Neu aufbauen, Löschen; Dreieck: Start/Beenden, Suchen, neue Fassung, Protokoll). Ein Spiel, dessen `param.json` „upgradable“ als `applicationDrmType` trägt (das haben viele Abbilder), zeigt die Konsole mit einem Vorhängeschloss an der Kachel, weil Kraken Mount die Datei unverändert anmeldet; ShadowMountPlus schreibt sie dabei auf „standard“ um. Starten lässt sich das Spiel trotzdem.
-- **Derselbe Titel bei zwei Einhängern (seit 14.11.2026, `src/mounters.c`).** Kraken Mount, ShadowMountPlus und PS4Mount melden jedes Spiel bei der Konsole an und hängen es ein (`/user/app/<ID>`, `/system_ex/app/<ID>`). Liegt dieselbe Titel-ID bei zwei von ihnen (so am 14.11.2026 mit Alex Kidd: eine `.pkg` bei Kraken Mount, ein Abbild bei ShadowMountPlus), kommen sie sich in die Quere: Kraken Mount hängt die Einhängung von ShadowMountPlus aus (Protokoll „not ours, or stale; unmounting it“), es gibt `Device busy`, und die Kachel unterscheidet sich (Kraken Mount meldet die `param.json` unverändert an, ShadowMountPlus schreibt sie um). Die App meldet es: gelber Streifen über der Spieleliste und im Reiter FPKGMount, in der Vollbild-App die Marke „KONFLIKT“ und die Zeile „Konflikt“. Sie verschiebt nichts selbst; das Spiel soll nur bei einem von beiden liegen. Auch **Spielordner im Suchordner von Kraken Mount** (`FPKG-Games`) meldet der Reiter („nur .pkg gehört hierher“): Ordner-Spiele gehören zu ShadowMountPlus. Ein Schalter, der Kraken Mount auf `.pkg` beschränkt, fehlt in Kraken Mount selbst (Einstellungen: nur Suchordner, Fakelib, Backports, Intervall, Speichergrenze, Meldungen, Protokoll); die App liefert dessen ELF unverändert aus.
+- **Derselbe Titel bei zwei Einhängern (seit 14.11.2026, `src/mounters.c`).** Kraken Mount, ShadowMountPlus und PS4Mount melden jedes Spiel bei der Konsole an und hängen es ein (`/user/app/<ID>`, `/system_ex/app/<ID>`). Liegt dieselbe Titel-ID bei zwei von ihnen (so am 14.11.2026 mit Alex Kidd: eine `.pkg` bei Kraken Mount, ein Abbild bei ShadowMountPlus), kommen sie sich in die Quere: Kraken Mount hängt die Einhängung von ShadowMountPlus aus (Protokoll „not ours, or stale; unmounting it“), es gibt `Device busy`, und die Kachel unterscheidet sich (Kraken Mount meldet die `param.json` unverändert an, ShadowMountPlus schreibt sie um). Die App meldet es im Reiter FPKGMount (Browser und Vollbild-App) mit einem gelben Achtung-Hinweis; in der Spieleliste gibt es dazu keine Warnung. Sie verschiebt nichts selbst; das Spiel soll nur bei einem von beiden liegen. Auch **Spielordner im Suchordner von Kraken Mount** (`FPKG-Games`) meldet der Reiter („nur .pkg gehört hierher“): Ordner-Spiele gehören zu ShadowMountPlus. Ein Schalter, der Kraken Mount auf `.pkg` beschränkt, fehlt in Kraken Mount selbst (Einstellungen: nur Suchordner, Fakelib, Backports, Intervall, Speichergrenze, Meldungen, Protokoll); die App liefert dessen ELF unverändert aus.
 
 Lege FPKG-Spiele nur in den Ordner `FPKG-Games` (intern, M.2-SSD oder USB): Dort sucht ShadowMountPlus nicht. Beim Konvertieren in das Format FPKG ist dieser Ordner deshalb vorgewählt („A · Spielbar“). Liegt ein Spiel trotzdem bei Kraken Mount und bei ShadowMountPlus und wird beendet, hängt die App es bei ShadowMountPlus aus (wie der Knopf „Aushängen“ der Karte); Spiele, die nur bei einem der beiden liegen, und die Kacheln bleiben unberührt.
 
@@ -729,13 +731,13 @@ Danach **Mitschnitt beenden**: Das entfernt `fakelib2` wieder. Ein Mitschnitt ze
 
 ### Passt der Index in AMPR EMU NG? (seit 14.11.2026, `src/indexlimit.c`)
 
-AMPR EMU NG 0.4.0 baut aus dem Pack-Index Tabellen auf, die in seinen Speicher passen müssen: höchstens 48 MiB, und vom ganzen Indexspeicher (64 MiB) gehen noch die Größe der `ampr_emu.index` und 16 MiB Seitencache ab. Passt es nicht, liefert NG **keine** gepackte Datei aus, und das Spiel startet nicht (beim Start erscheint „index tables need 49 MiB, over the 48 MiB beside the page cache; packed files not served“; so bei Final Fantasy XVI und Demon's Souls, ampr-emu-ng #67, #61, #53). Der Dialog „LZ4-/zstd-Asset-Packs & APR-EMU“ zeigt bei einem Spiel mit Pack die Zeile **Passt der Index in AMPR EMU NG?** („passt“, „knapp“ = innerhalb von 2 MiB um die Grenze, „zu groß“) mit den geschätzten Tabellen in MiB; in der Vollbild-App steht es unter „INDEX-TABELLEN (AMPR EMU NG)“. Gerechnet wird aus den Köpfen von `ampr_zstd.index` (Dateien @40, Chunks @48, Volumes @20; NG nimmt sie vor dem LZ4-Paket) bzw. `ampr_assets.index` (Dateien @40, Chunks @48, Pakete @56) und der Größe der `ampr_emu.index`: zstd braucht `8·(2·Dateien + Chunks + Volumes)` (nur bei seitenweise gelesenem Index) plus `16·IDs + 4·min(Dateien, IDs)`, LZ4 `48·Dateien + 12·Chunks + 32·Pakete` plus `4·Dateien`; ein Index, der samt dieser Tabellen in den freien Indexspeicher passt, wird ganz geladen (dann zählt nur der abgeleitete Teil). Die Formeln sind mit den Betreuern von ampr-emu-ng abgestimmt; die App prüft sie am Fall Demon's Souls (LZ4, 223.180 Dateien, `ampr_emu.index` 34.373.632 Byte). Es ist eine **Schätzung für Version 0.4.0** (angenommen: die `ampr_emu.index` wird ganz geladen, vor dem Pack liegen keine weiteren Tabellen; bei einem Spiel ohne `ampr_emu.index` zählt die Runtime alle Dateien des Ordners): Eine spätere Fassung kann die Grenzen verschieben, die Meldung von NG beim Start ist verbindlich. Nach den Berichten startet ein solches Spiel mit NG 0.3.4; sonst hilft es, das Spiel mit weniger Dateien zu packen. Die Antwort von `GET /api/v1/library/ampr` trägt dazu `index_check`.
+AMPR EMU NG 0.4.0 baut aus dem Pack-Index Tabellen auf, die in seinen Speicher passen müssen: höchstens 48 MiB, und vom ganzen Indexspeicher (64 MiB) gehen noch die Größe der `ampr_emu.index` und 16 MiB Seitencache ab. Passt es nicht, liefert NG **keine** gepackte Datei aus, und das Spiel startet nicht (beim Start erscheint „index tables need 49 MiB, over the 48 MiB beside the page cache; packed files not served“; so bei Final Fantasy XVI und Demon's Souls, ampr-emu-ng #67, #61, #53). Der Dialog „LZ4-/zstd-Asset-Packs & APR-EMU“ zeigt bei einem Spiel mit Pack die Zeile **Passt der Index in AMPR EMU NG?** („passt“, „knapp“ = innerhalb von 2 MiB um die Grenze, „zu groß“) mit den geschätzten Tabellen in MiB; in der Vollbild-App steht es unter „INDEX-TABELLEN (AMPR EMU NG)“. Gerechnet wird aus den Köpfen von `ampr_zstd.index` (Dateien @40, Chunks @48, Volumes @20; NG nimmt sie vor dem LZ4-Paket) bzw. `ampr_assets.index` (Dateien @40, Chunks @48, Pakete @56) und der Größe der `ampr_emu.index`: zstd braucht `8·(2·Dateien + Chunks + Volumes)` (nur bei seitenweise gelesenem Index) plus `16·IDs + 4·min(Dateien, IDs)`, LZ4 `48·Dateien + 12·Chunks + 32·Pakete` plus `4·Dateien`; ein Index, der samt dieser Tabellen in den freien Indexspeicher passt, wird ganz geladen (dann zählt nur der abgeleitete Teil). Die Formeln sind mit den Betreuern von ampr-emu-ng abgestimmt; die App prüft sie am Fall Demon's Souls (LZ4, 223.180 Dateien, `ampr_emu.index` 34.373.632 Byte). Das beschreibt NG 0.4.0, das die App nicht mehr mitliefert; die Zeile in der App rechnet nach dem Modell von NG 0.4.1 und 0.5.0 (siehe nächster Absatz). Es ist eine **Schätzung für Version 0.4.0** (angenommen: die `ampr_emu.index` wird ganz geladen, vor dem Pack liegen keine weiteren Tabellen; bei einem Spiel ohne `ampr_emu.index` zählt die Runtime alle Dateien des Ordners): Eine spätere Fassung kann die Grenzen verschieben, die Meldung von NG beim Start ist verbindlich. Nach den Berichten startet ein solches Spiel mit NG 0.3.4; sonst hilft es, das Spiel mit weniger Dateien zu packen. Die Antwort von `GET /api/v1/library/ampr` trägt dazu `index_check`.
 
 Ab **NG 0.4.1** (in der App beide Fassungen: 0.5.0 und 0.4.1) gilt ein anderes Modell als bei 0.4.0: Es gibt keine 48-MiB-Grenze und kein seitenweises Lesen mehr; die Ansicht aller Dateien der `ampr_emu.index` und die Paket-Tabellen müssen zusammen in den Indexspeicher von 80 MiB passen. Die Zeile **Passt der Index in AMPR EMU NG?** rechnet für diese Fassung; mit 0.4.1 passt in der Regel auch ein Spiel, das mit 0.4.0 „zu groß“ war (Final Fantasy XVI, Demon's Souls). NG 0.5.0 hat dieselbe Ansicht und dieselbe Größe des Indexspeichers; die App rechnet für beide mitgelieferten Fassungen gleich. Auch das ist eine Schätzung aus dem Quelltext von NG; die Meldung von NG beim Start bleibt verbindlich.
 
 ## Dateien: der Dateimanager (seit 06.10.2026)
 
-Die Seite **Dateien** zeigt die Ordner der Konsole. Oben stehen die Orte (Interne SSD `/data`, jedes angeschlossene
+Die Seite **Dateimanager** zeigt die Ordner der Konsole. Oben stehen die Orte (Interne SSD `/data`, jedes angeschlossene
 Laufwerk, „Ganzes System“), darunter der Pfad zum Anklicken und die Liste: Ordner zuerst, mit Größe und
 Datum. Ein Ordnername öffnet ihn, **↑ Hoch** geht eine Ebene zurück.
 
@@ -743,13 +745,13 @@ Datum. Ein Ordnername öffnet ihn, **↑ Hoch** geht eine Ebene zurück.
 **Herunterladen** (im Browser am PC; Gerätedateien wie unter `/dev` werden nicht ausgeliefert).
 
 **Ändern geht überall (seit 1.75.3, vorher nur auf den Laufwerken und in `/data`):** **Neuer Ordner**, **Hochladen** (eine
-oder mehrere Dateien, mit Fortschrittsbalken in Prozent; am PC auch per Ziehen auf die Liste), **Umbenennen**,
+oder mehrere Dateien, mit Fortschrittsbalken in Prozent; am PC auch per Ziehen auf die Liste), **Ordner hochladen** (ein ganzer Ordner samt Unterordnern, auch per Ziehen; Dateien, die es am Ziel schon gibt, werden übersprungen und gezählt, nie überschrieben), **Umbenennen**,
 **Kopieren**, **Ausschneiden** (Verschieben) und **Löschen** – auch in Systemordnern wie `/user` (z. B. `/user/download`)
 und im Ordner der App `/data/PS5-Cooling-Center`. Bereiche, die die Konsole schreibgeschützt eingehängt hat (`/system`
 u. a.), lehnen eine Änderung selbst ab (Meldung „schreibgeschützt“). Das prüft die Konsole selbst, nicht nur die Seite.
 Nur zum Schutz vor Unfällen gesperrt („Nur ansehen“, Knöpfe aus):
 
-- `/` selbst, `/dev` und `/proc`;
+- `/` selbst, `/mnt`, `/dev` und `/proc`;
 - Verknüpfungen: Sie werden nie verfolgt, wenn etwas geändert wird, und lassen sich weder umbenennen noch löschen; liegt
   eine Verknüpfung auf dem Weg, ist der ganze Pfad gesperrt;
 - eingehängte Laufwerke selbst (`/mnt/usb0`, `/data`): nur ihr Inhalt. Kopieren und Löschen gehen nie auf ein anderes
@@ -770,8 +772,8 @@ Orte der Knopf **Auswerfen**. In der Vollbild-App ist es die Quadrat-Taste auf d
 des Laufwerks gibt es △ → Mehr → **Sicher auswerfen**. Es ist dasselbe Auswerfen wie unter System → Speicher (siehe dort):
 über ShadowMountPlus (ab 1.7beta10), nur wenn kein Auftrag der App läuft und PS4Mount keine Spiele von dem Laufwerk spielt;
 sonst sagt die App, was noch läuft. Das Laufwerk erst abziehen, wenn die Konsole „… ist ausgeworfen und kann abgezogen
-werden“ meldet. Danach lädt der Dateimanager die Orte neu und verlässt einen Ordner des Laufwerks (Browser: auf die interne
-SSD; Vollbild-App: zu den Orten). Ein Laufwerk im Betrieb einfach abzuziehen kann das Dateisystem beschädigen.
+werden“ meldet. Vor dem Auswerfen verlässt der Dateimanager einen Ordner des Laufwerks (Browser: auf die interne
+SSD; Vollbild-App: zu den Orten) und lädt danach die Orte neu; bleibt das Laufwerk gesteckt, bindet die Konsole es nach einigen Sekunden wieder ein. Ein Laufwerk im Betrieb einfach abzuziehen kann das Dateisystem beschädigen.
 
 **Ordnen, auswählen, ansehen (seit 07.10.2026):**
 
@@ -779,7 +781,7 @@ SSD; Vollbild-App: zu den Orten). Ein Laufwerk im Betrieb einfach abzuziehen kan
   immer oben. Der Browser merkt sich die Wahl.
 - **Alle auswählen:** Das Kästchen über der Liste wählt alle Einträge des Ordners, ausgenommen Verknüpfungen und
   Sonderdateien. Halb gefüllt heißt: nur ein Teil ist gewählt.
-- **Ordnergrößen:** „Größe“ an einem Ordner zählt nach, wie viel darin liegt; „Ordnergrößen“ macht das nacheinander für alle
+- **Ordnergrößen:** „Größe berechnen“ im Menü „⋯“ eines Ordners zählt nach, wie viel darin liegt; „Ordnergrößen“ macht das nacheinander für alle
   Ordner der Ansicht. Die Konsole zählt höchstens etwa 8 Sekunden je Ordner; dauert es länger, steht die Größe als
   „mindestens“ da (`partial`).
 
@@ -862,8 +864,8 @@ mit Laufwerk, Größe, Datum und den Hinweisen „unfertig“ und „mit Prüfsu
 
 **Die Spielstände bleiben immer erhalten.** Keiner dieser Wege fasst sie an.
 
-**Ohne Rückfrage:** Ein Klick auf „Löschen“ genügt (seit 27.10.2026: nichts muss doppelt bestätigt werden). Die
-Seite holt den Plan still, zeigt im Dialog, was gelöscht wird (Name, Art, Ort, Größe), und löscht sofort. Lehnt die
+**Mit Rückfrage (seit 06.11.2026):** Ein Klick auf „Löschen“ löscht noch nichts. Die
+Seite holt den Plan still und zeigt im Fenster, was gelöscht wird (Name, Art, Ort, Größe); erst „Löschen“ im Fenster löscht, „Abbrechen“ (dort liegt der Fokus) lässt alles, wie es war. Lehnt die
 Konsole ab (etwa weil das Spiel läuft), bleibt der Dialog mit dem Grund stehen. Die Konsole löscht weiter nur mit
 einem Kennwort, das sie zum Plan ausgegeben hat (einmal gültig, zehn Minuten lang, nur für genau dieses Spiel oder diese Sicherung).
 
@@ -940,7 +942,7 @@ die Liste der Spiele.
   bis die Erkennung wieder etwas Eindeutiges meldet.
 - **Als Tabelle speichern und Löschen.** „Als Tabelle speichern“ legt alle Sitzungen als
   `ps5-spielzeit.csv` ab (Semikolon als Trenner, mit der Ortszeit des Browsers, für Excel
-  und Calc). „Verlauf löschen“ löscht beim ersten Klick die gespeicherten
+  und Calc). „Verlauf löschen“ fragt zuerst und löscht erst nach „Löschen“ im Fenster die gespeicherten
   Sitzungen; ein Spiel, das gerade läuft, zählt weiter und wird wie jedes andere
   gespeichert, wenn es endet.
 
@@ -964,7 +966,7 @@ ihre Trophäen gehören nicht dazu.
   ungleich 0 (YouTube: 65536, Spiele: 0), bei PS4-Titeln eine `CATEGORY` in `param.sfo`, die nicht mit „g“ beginnt, und
   die System-Anwendungen `NPXS…`. Fehlt jede Beschreibung, gilt der Titel als Spiel. Neben der Titel-ID steht der Name,
   auch bei nicht mehr installierten Titeln, soweit ihn die Konsole noch kennt.
-- **Löschen (ab 1.51.0).** Jeder Titel hat einen Knopf „Löschen“; er wirkt beim ersten Klick. Die App sichert den
+- **Löschen (ab 1.51.0).** Jeder Titel hat einen Knopf „Löschen“; ein Fenster nennt zuerst den Titel (und das Laufwerk, auf das vorher gesichert wird), erst „Löschen“ im Fenster startet. Die App sichert den
   jetzigen Stand zuerst auf dem gewählten Ziel (vorgewählt ist das erste passende Laufwerk; gibt es keines, wird ohne
   Sicherung gelöscht, und ein Hinweis sagt das) (als „Stand vor dem Löschen“, derselbe Weg wie beim Zurückspielen; er lässt sich
   zurückspielen) und entfernt dann die Spielstand-Ordner dieses Titels für diesen Benutzer. Das geht nur, wenn
@@ -1079,7 +1081,7 @@ ihre Trophäen gehören nicht dazu.
   nächsten Auftrags.
   **Aufräumen:** Von den Kopien der Spielstand-Datenbank (`/data/PS5-Cooling-Center/savexport/db-backup`) bleiben je Benutzer die **10 neuesten**; hochgeladene ZIP-Dateien im Eingang, die
   einen Tag lang niemand eingespielt hat, werden entfernt. Das geschieht beim Start der App und zu Beginn jedes Auslesens oder Einspielens und steht im Protokoll.
-  **Lüfter:** Die Identität des Spielstand-Dienstes und die Sperre der Sony-Schnittstelle hält die App nur noch für das Ein- und Aushängen; während die Dateien eines eingehängten Spielstands
+  **Lüfter:** Die Identität des Spielstand-Dienstes und die Sperre der Systemschnittstelle hält die App nur noch für das Ein- und Aushängen; während die Dateien eines eingehängten Spielstands
   gelesen oder geschrieben werden, regelt der Lüfter weiter und die Power-Optionen warten nicht.
 - **PS4-Spielstände (ab 1.87.0).** „Als ZIP“ und „Spielstand einspielen“ gelten auch für PS4-Titel (`CUSA…`, Ordner `savedata`, Datenbank
   `/system_data/savedata/<Benutzer>/db/user/savedata.db`), mit diesen Unterschieden: Ein PS4-Abbild trägt seinen versiegelten Schlüssel nicht in sich, er liegt in
@@ -1160,16 +1162,17 @@ einer Paket-Verwaltung nach dem Vorbild des PS5 PKG Managers von itsPLK (siehe d
 
 ## Pakete installieren
 
-An den Karten des Reiters **Pakete** steht der Knopf **„Installieren …“** (bei einem großen, noch nicht geteilten Paket neben „Aufteilen …“).
+An den Karten des Reiters **Pakete** steht der Knopf **„Installieren“** (bei einem großen, noch nicht geteilten Paket neben „Aufteilen …“).
 Er fehlt bei einem geteilten Paket, dem Teile fehlen, und er verschwindet, solange ein Vorgang dieser Seite läuft (Aufteilen oder eine Installation). Die Konsole
 installiert das Paket selbst, mit der Installation, die auch das Menü benutzt (die Systembibliothek AppInstUtil). Die App
 stellt es ihr nur bereit und zeigt den Fortschritt.
 
-- **Erst die Prüfung, dann der Klick.** „Installieren …“ klappt unter der Karte einen Plan auf, den die Konsole für genau dieses
+- **Der Klick startet die Installation (seit 28.10.2026).** „Installieren“ beginnt sofort, ohne zweite Bestätigung; die Konsole prüft beim Start alles selbst.
+  Lehnt sie das Paket ab (oder lässt sich die Installation nicht beginnen), klappt unter der Karte ein Plan auf, den die Konsole für genau dieses
   Paket erstellt: Name, Art (Spiel, Update, Zusatzinhalt), Version, PS4 oder PS5, Größe (bei einem geteilten Paket die des
   ganzen Pakets und die Zahl der Teile), der freie Platz im internen Speicher und, wenn es schon installiert ist, welche Version.
-  Rot steht, was die Installation verhindert, gelb, was man wissen sollte; „Jetzt installieren“ ist nur dann zu drücken, wenn nichts
-  verhindert. Die Konsole prüft beim Start noch einmal selbst alles nach; der Plan zeigt es nur vorher.
+  Rot steht, was die Installation verhindert, gelb, was man wissen sollte; „Jetzt installieren“ im Plan ist nur dann zu drücken, wenn nichts
+  verhindert.
 - **Was verhindert.**
   - *Das Spiel ist schon da:* ein Spiel, das die Konsole schon kennt (die App überschreibt nichts; zum Neuinstallieren erst an der
     Konsole löschen); ein Update, wenn das Spiel fehlt oder dieselbe oder eine neuere Version schon installiert ist; ein Zusatzinhalt, der
@@ -1256,7 +1259,7 @@ stellt es ihr nur bereit und zeigt den Fortschritt.
   Fortschritt endet die Installation mit einem Fehler (je nachdem „holt keine Daten mehr“ oder „alles übertragen, aber nicht als fertig
   gemeldet“). Ändert sich die Paketdatei während der Installation oder wird das Laufwerk abgezogen, endet sie ebenfalls mit einem Fehler.
 - **Was die App nie tut.** Sie löscht oder deinstalliert nichts, überschreibt nichts, startet kein Spiel und verändert das Paket nicht (es
-  wird nur gelesen). Eine Installation beginnt nur mit dem Klick auf „Jetzt installieren“, und wenn die Konsole sie ablehnt, gibt es keinen
+  wird nur gelesen). Eine Installation beginnt nur mit dem Klick auf „Installieren“ (oder „Jetzt installieren“ im Plan), und wenn die Konsole sie ablehnt, gibt es keinen
   Rückfall auf einen anderen Weg. Außer ihrem Protokoll schreibt sie bei einer Installation nur in `pkginst-helper.log` (das Protokoll des
   Hilfsprogramms, das vor jedem Start geleert wird).
 - **Abbrechen.** „Abbrechen“ stoppt die Installation: Die Karte sagt sofort „Wird abgebrochen …“, das Hilfsprogramm und der Server werden
@@ -1288,9 +1291,9 @@ Der Reiter **Disc** auf der Spiele-Seite zeigt, welche Disc im Laufwerk liegt, u
 - **Redump:** `/data/redump.db` (mit `tools/build_redump_db.py` aus ps-disc-detect gebaut, Tabellen `serials`, `images`, `tracks`, bis 64 MB) liefert den Namen, wenn die Titelkennung genau einen hat, und die Prüfung des fertigen Abbilds (Größe, CRC-32, MD5, SHA-1 gegen `images`, Art `iso`). Bei einem Treffer wird nach dem Redump-Namen benannt, sonst nach der Titelkennung. Die Datei wird nur für diese Abfragen kurz in den Speicher gelesen. Nicht übernommen: CD-Abbilder (`.bin`/`.cue`), der IRD für PS3 (das Laufwerk gibt den Schlüssel nicht her), die eingebettete Liste (die Nutzlast der App ist ohnehin an ihrer Größengrenze).
 - Schnittstelle: `GET /api/v1/disc`, `POST /api/v1/disc` (siehe API.md).
 
-### Disc-Spiele dumpen: „Starten“ dumpt gleich mit
+### Disc-Spiele dumpen: „Dumpen starten“ dumpt gleich mit
 
-Im Reiter Disc steht unter „Disc-Spiele dumpen“ jedes Spiel, das von Disc installiert ist. **„Starten“** startet das Spiel und dumpt es nach der Ladezeit gleich von selbst (die Dump-Warteschlange mit einem Titel; Ladezeit in den Einstellungen der Warteschlange, Vorgabe 30 s). Die App muss danach nicht wieder geöffnet werden, denn das Spiel liegt vor ihr. Die Konsole meldet **„Dump gestartet“**, **„Dump fertig“** oder **„Dump gescheitert“**. Voraussetzungen: Die Disc liegt im Laufwerk, im Dump ist ein Ziel gewählt, es läuft kein anderes Spiel, das Spiel hat noch keinen Dump, und keine Warteschlange läuft oder ist vorbereitet; sonst startet „Starten“ nur das Spiel, und „Dumpen“ folgt von Hand.
+Im Reiter Disc steht unter „Disc-Spiele dumpen“ jedes Spiel, das von Disc installiert ist. **„Dumpen starten“** (so heißt der Knopf, solange nichts dagegen spricht; sonst heißt er „Starten“) startet das Spiel und dumpt es nach der Ladezeit gleich von selbst (die Dump-Warteschlange mit einem Titel; Ladezeit in den Einstellungen der Warteschlange, Vorgabe 30 s). Die App muss danach nicht wieder geöffnet werden, denn das Spiel liegt vor ihr. Die Konsole meldet **„Dump gestartet“**, **„Dump fertig“** oder **„Dump gescheitert“**. Voraussetzungen: Die Disc liegt im Laufwerk, im Dump ist ein Ziel gewählt, es läuft kein anderes Spiel, das Spiel hat noch keinen Dump, und keine Warteschlange läuft oder ist vorbereitet; sonst startet „Starten“ nur das Spiel, und „Dumpen“ folgt von Hand.
 
 ## Kernel-Log live
 
@@ -1340,7 +1343,7 @@ Programm.
     Ende und der Grund stehen am Ende der Datei, und die Seite meldet es.
 - **Die Dateien auf der Konsole.** Unter dem Log listet eine Karte alles, was im Ordner liegt (neueste
   zuerst, mit Art, Datum und Größe) und lässt jede Datei herunterladen. **„Ordner leeren“** löscht
-  die gespeicherten Auszüge und Aufnahmen sofort; eine Aufnahme, die gerade läuft, bleibt.
+  nach einer Rückfrage die gespeicherten Auszüge und Aufnahmen; eine Aufnahme, die gerade läuft, bleibt.
   Gelöscht werden nur Dateien, die diese App angelegt hat (Namen `klog-….log` und `aufnahme-….log`);
   Unterordner und Dateien mit anderen Namen bleiben, und Verknüpfungen werden nie verfolgt.
 - **Grenzen.** Die App hält die letzten 3000 Zeilen, die Seite bis zu 5000, im Fenster
@@ -1376,7 +1379,7 @@ angesteckten USB-Sticks — im Hauptverzeichnis des Sticks und im Ordner `payloa
 darin. „Starten“ schickt die Datei an den Payload-Lader der Konsole (elfldr,
 Port 9021), genau das, was sonst vom PC aus geschieht, nur ohne PC. Von einem
 Stick lässt sich eine Datei außerdem in den internen Ordner kopieren (das
-Original bleibt); aus dem internen Ordner lässt sie sich löschen (ein Klick).
+Original bleibt); aus dem internen Ordner lässt sie sich löschen (ein Fenster fragt zuerst und nennt den Namen).
 
 - Der Ordner wird beim Start der App angelegt, **wenn es ihn nicht gibt**. Ein
   vorhandener bleibt unberührt: kein erneutes Anlegen, keine geänderten Rechte.
@@ -1488,7 +1491,7 @@ Den gezeichneten Tacho (Komponente `<ps5-cooling-fan>` in `web/ps5-fan.js`) zeig
 | Modus | Verhalten |
 | --- | --- |
 | `automatic` | Komfortregelung: hält die Zieltemperatur, sanft und träge. |
-| `observe` | Nur Beobachtung. Der Lüfter wird nur angefasst, wenn zuvor per „Anwenden" eine feste Schwelle gesetzt wurde. |
+| `observe` | Nur Beobachtung. Der Lüfter wird nur angefasst, wenn zuvor per Schnellwahl oder „Direkt setzen“ eine feste Schwelle gesetzt wurde. |
 
 ## Komfortregelung
 
@@ -1499,23 +1502,23 @@ DashLaunch.
 | Parameter | Standard | Bedeutung |
 | --- | --- | --- |
 | `target_temp_c` | 66 °C | zu haltende Temperatur (50–91, bis 72 empfohlen) |
-| `deadband_c` | 1 °C | innerhalb passiert nichts |
-| `control_interval_s` | 5 s | Messung bleibt bei 1 s |
-| `average_window_s` | 12 s | gleitender Mittelwert |
-| `max_step_pct` | 1 % | Drehzahländerung pro Zyklus |
+| `deadband_c` | 1 °C | Ruhezone nur beim Runterregeln: Die Drehzahl sinkt erst, wenn der Wunsch um 1 °C des Regelbands darunter liegt |
+| `control_interval_s` | 1 s | Regelschritt jede Sekunde (Messung ebenfalls 1 s) |
+| `average_window_s` | 4 s | gleitender Mittelwert (3 s bei Kühl) |
+| `max_step_pct` | 1 % | Drehzahländerung pro Zyklus (2 % bei Ausgewogen und Kühl) |
 | `safety_temp_c` | 78 °C | darüber wird der Lüfter hochgefahren (72–95; mindestens Ziel + 4) |
-| `profile` | comfort | comfort / balanced / cool |
+| `profile` | comfort | comfort / balanced / cool (= Leise / Ausgewogen / Kühl); legt Regelband, Ruhezone, Intervall, Mittelwert und Schrittweite fest |
 
 Wie es arbeitet:
 
 - Die Regelung nutzt **nie** den Rohwert, sondern den gleitenden Mittelwert.
-- Innerhalb der Totzone (65–67 °C) passiert **gar nichts**.
+- Die Drehzahl folgt der **weichen Lüfterkurve** (Abschnitt „Lüfterkurve, Obergrenze, Regelaufzeichnung“): Sie steigt schon 10 °C unter dem Ziel sanft an, nicht erst am Ziel. Nur das Runterregeln hat eine kleine Ruhezone (`deadband_c`).
 - Der **Trend** zählt mehr als der Einzelwert: Fällt die Temperatur bereits,
   wird nicht weiter hochgeregelt.
 - Hochregeln in 1-%-Schritten; Runterregeln nur 1 % und erst nach 20 s
   stabil niedriger Temperatur — bei deutlich untertemperierter Konsole
   entsprechend schneller.
-- Direkter Eingriff ist weiter möglich: der Direktwert-Block bietet Presets
+- Direkter Eingriff ist weiter möglich: die **Schnellwahl** auf der Karte „Zieltemperatur“ bietet Presets
    (`Kühl`, `Ausgewogen`, `Leise`) und setzt je nach Modus entweder die
    Zieltemperatur (`automatic`: 62, 77 und 91 °C; bis 07.10.2026 waren es 62, 70 und 78 °C, bis
    03.10.2026 62, 66 und 70 °C, als der Regler noch nur bis 72 °C ging) oder eine feste Schwelle (`observe`:
@@ -1528,7 +1531,7 @@ Wie es arbeitet:
    Controller-Rohdaten.
 - **Komfortgrenze** (65 % im Komfortprofil): verhindert, dass ein Thermostat,
   der sein Ziel unter Dauerlast nie erreicht, bis auf 100 % hochdreht.
-- Ab `safety_temp_c` werden Totzone, Mittelwert und Komfortgrenze ignoriert.
+- Ab `safety_temp_c` werden Kurve, Trend und Komfortgrenze ignoriert.
 - **Ziele über 72 °C** (seit dem 03.10.2026 bis 78 °C, seit dem 07.10.2026 bis 91 °C einstellbar): Die Konsole läuft
   dann deutlich wärmer, der Lüfter bleibt länger auf seiner leisen Grundkurve. Die
   Notfallgrenze rückt dabei von selbst auf Ziel + 4 °C (bei 78 °C auf 82 °C, bei 91 °C auf 95 °C), sonst
@@ -1552,7 +1555,7 @@ sie darunter, dreht die Firmware proportional zum Abstand auf.
 Ein Grad Schwelle entspricht etwa 5 % Drehzahl. Feine 1-%-Schritte sind damit
 nicht direkt möglich, deshalb arbeitet die App zweistufig: Der Komfortregler
 rechnet intern in Prozent, ein nachgelagerter Servo überträgt das auf die
-Schwelle und greift erst ab 4 % Abweichung ein. Er liest die **tatsächliche**
+Schwelle und greift erst ab 7 Prozentpunkten Abweichung ein (im Notfall ab 4). Er liest die **tatsächliche**
 Drehzahl zurück und kalibriert sich damit selbst.
 
 Die Schwelle wird mindestens alle 15 Sekunden neu gesetzt, weil die Firmware
@@ -1566,7 +1569,7 @@ proportional zum Abstand über der Schwelle hoch und gibt schon innerhalb von et
 (das Messmodell der Firmware 12.00 steht in `test/stubs_comfort.c`). Läge die Ruhelage fest bei 80 °C, könnte eine Konsole,
 die bei 85 °C gehalten werden soll, nie so leise laufen, wie das Ziel verspricht. Bei einem Ziel von 91 °C ist die
 Ruhelage die 91 °C, die die Konsole selbst einstellt. Überschreitet die Temperatur das Ziel, senkt der Servo die Schwelle
-wie bisher in Schritten von höchstens 3 °C alle 6 Sekunden, bis die Drehzahl zum Bedarf passt.
+in Schritten von 1 bis höchstens 3 °C alle 3 Sekunden (im Notfall alle 2 Sekunden), bis die Drehzahl zum Bedarf passt.
 
 ### Schnellere Reaktion bei hohem Ziel (seit 17.10.2026)
 
@@ -1587,7 +1590,7 @@ deren Ziel. Gleiche Uhrzeiten bedeuten „nie“.
 - Die Konsole kennt keine Zeitzone. Die Seite schickt deshalb beim Speichern den Zeitversatz des Geräts mit, auf dem sie
   geöffnet ist (aus dem Browser). Ändert sich dieser (Sommer-/Winterzeit), zieht die Seite ihn beim nächsten Öffnen
   still nach.
-- Das Nachtziel liegt wie jedes Ziel zwischen 60 und 91 °C; die Notfallgrenze bleibt mindestens 4 °C darüber.
+- Das Nachtziel liegt wie jedes Ziel zwischen 50 und 91 °C; die Notfallgrenze bleibt mindestens 4 °C darüber.
 - Im Protokoll stehen `night_mode_on` und `night_mode_off`; im Status zeigt `control.night_active`, ob er gerade gilt, und
   `control.effective_target_c` das Ziel, nach dem geregelt wird.
 
@@ -1627,8 +1630,8 @@ Lüfter auf mindestens 70 %.
 
 Beendet jemand die App mit SIGTERM oder SIGINT, gibt sie die Lüftersteuerung zuerst an die Konsole zurück (Protokoll
 `fan_stop`) und endet innerhalb einer Sekunde; klemmt der Lüfterfaden, beendet ein Alarm sie nach 5 Sekunden. **SIGKILL**
-lässt sich nicht abfangen: Damit beendet die App ihre ältere Ausführung beim Neustart, und so beenden auch Werkzeuge wie
-der Prozess-Manager Programme. Dann bleibt, wie bisher, die letzte Schwelle stehen, bis die Konsole sie beim nächsten
+lässt sich nicht abfangen: So beenden Werkzeuge wie
+der Prozess-Manager Programme (die App selbst beendet eine ältere Ausführung beim Neustart zuerst mit SIGTERM, damit die Lüftersteuerung zurückgegeben wird, und erst nach etwa sechs Sekunden mit SIGKILL, wenn der Port dann noch belegt ist). Dann bleibt, wie bisher, die letzte Schwelle stehen, bis die Konsole sie beim nächsten
 Zustandswechsel (Spielstart oder -ende, Ruhemodus) selbst auf 91 °C setzt. Das ist nie mehr als das, was die Konsole ohne
 die App einstellt; die App kann den Lüfter nur schneller machen, nicht langsamer als im Auslieferungszustand.
 
@@ -1707,6 +1710,8 @@ ShadowMountPlus nimmt seit 1.7beta8 ebenfalls standardmäßig Anfragen aus dem
 ganzen Heimnetz an (Port 10101, ohne Anmeldung). Wer das nicht möchte, setzt
 in dessen `config.ini` `api_bind_address=127.0.0.1`; die App spricht
 ShadowMountPlus ohnehin über `127.0.0.1` an.
+
+**Kraken Mount** (Port 8097, nur wenn du es im Reiter FPKGMount eingeschaltet hast; ab Werk aus) und **Dump Forge** (Port 8095, nur während einer Konvertierung) sind Programme anderer Autoren, die die App startet. Sie lauschen im ganzen Heimnetz und prüfen weder `Host` noch `Origin`; `bind_address` und der Schutz vor fremden Webseiten gelten für sie nicht. Wer das nicht will, lässt Kraken Mount ausgeschaltet.
 
 Offen heißt nicht „für jede Webseite". Eine Seite, die im Browser eines
 Geräts im Heimnetz geöffnet ist, kann dessen Verbindungen zur Konsole
@@ -1819,8 +1824,8 @@ dafür nicht mehr nötig:
   der Lüftersteuerung auf deren Identität (`0x4801000000000013`) zurück. Ist die
   Kachel da, passiert nichts.
 - **Das geschieht einmal.** Wer die Kachel in der Konsole löscht, hat das mit Absicht
-  getan; sie kehrt nicht bei jedem Start zurück. Auf der Systemseite legt „Kachel
-  installieren“ sie jederzeit wieder an. Eine neue Version versucht es nach einem
+  getan; sie kehrt nicht bei jedem Start zurück. Mit `POST /api/v1/tile/ensure` lässt sie sich jederzeit wieder
+  anlegen (die Oberfläche bietet „Kachel installieren“ seit 1.74.1 nicht mehr an). Eine neue Version versucht es nach einem
   Fehlschlag einmal neu. Zwei kleine Notizen im Datenordner halten den Stand fest:
   `tile-auto` (was aus dem automatischen Versuch wurde) und `tile-staging` (die
   Dateien liegen, sind aber noch nicht angemeldet; eine so halbfertige Kachel gilt
@@ -1846,8 +1851,7 @@ Installer (`cooling-center-launcher-installer_v<Version>.elf`) mehr bei: Der Ord
 oben reicht. Wer noch ein Paket aus einer älteren Veröffentlichung hat
 (`IV9999-PSCC69690_00-PS5COOLINGCNTR01-A0100-V0100.pkg`), kann es weiter verwenden. Im Hauptprogramm ist das Paket nicht
 eingebaut: Es kostete dort 10,5 MB Speicher, und die Konsole konnte dann keine
-Anfrage mehr bedienen (siehe [ENTWICKLUNG.md](ENTWICKLUNG.md#bauen)). Über die
-Systemseite lässt sich ein Paket auch hochladen.
+Anfrage mehr bedienen (siehe [ENTWICKLUNG.md](ENTWICKLUNG.md#bauen)). Mit `POST /api/v1/tile/upload` lässt sich ein Paket auch hochladen (die Oberfläche bietet das nicht mehr an).
 
 Wie die Kachel-Dateien eingebettet und das Paket gebaut werden, steht in
 [ENTWICKLUNG.md](ENTWICKLUNG.md#kachel-dateien-und-kachel-paket-bauen).
@@ -1902,17 +1906,17 @@ derselben laufenden App über `127.0.0.1:8086`.
   Systemsprache der Konsole (andere Sprachen: Englisch); Options-Taste → „Sprache / Language“ öffnet eine Liste
   aller Sprachen (Häkchen = aktiv); ein Druck wählt, die Wahl bleibt gespeichert. Die Texte kommen aus denselben Wörterbüchern wie im
   Browser; was keines kennt, bleibt deutsch.
-- **Bereiche:** Kühlung (Übersicht, Einstellungen mit Warnungen, Lichtleiste, Spielprofilen, Nachtmodus, Selbsttest),
+- **Bereiche:** Kühlung (Übersicht, Einstellungen mit Warnungen, Lichtleiste, Spielprofilen, Nachtmodus, Selbsttest; dazu der Reiter Lüfterkurve mit der Kurve der Automatik und der Regelaufzeichnung),
   Spiele (Bibliothek mit Aktionen-Menü – Kopieren, Konvertieren, Verschieben, Entpacken, Abbild prüfen, Löschen, Extras,
   Aus-/Einhängen, laufendes Spiel beenden –, Spielzeit, Spielstände, Pakete mit Installieren/Warteschlange/Aufteilen,
   PS4 PKG von USB, FPKGMount, Disc, Sicherungen, Aufträge), Dateimanager, Payloads (eigene, geladene, Store, Profile mit Editor),
-  System (Konsole, Speicher, Kühlleistung, Zusatzabfragen, Experte), Profil (Name, Profilbild, Danke) und Protokoll
+  System (Konsole, ShadowMountPlus, Speicher, Kühlleistung, Zusatzabfragen, Experte), Profil (Name, Profilbild, Konto, Danke) und Protokoll
   (App-Protokoll, Kernel-Log live, Gespeichert).
 - **Nur im Browser:** Hochladen vom PC, Herunterladen, Profile als Datei sichern/laden, Links öffnen. Unter System zeigt
   die Vollbild-App einen QR-Code mit der Adresse der Weboberfläche.
 - **Eingaben** über die Bildschirmtastatur des Baukastens (eigene Seite mit ä ö ü ß). Hintergrundbilder je Bereich unter
-  System → Speicher → Hintergrundbilder (eigene Bilder lädt man über die Weboberfläche hoch).
-- Löschen, Beenden, Abbrechen und die Power-Optionen wirken beim ersten Druck, ohne Rückfrage.
+  System → Speicher → Hintergrundbilder (eigene Bilder lädt man über die Weboberfläche hoch, die du mit Options → „Weboberfläche im Browser öffnen“ aus der Vollbild-App startest: Nur dann zeigt die Seite System die Karte „Hintergründe der Vollbild-App“).
+- Beenden, Abbrechen und die Power-Optionen wirken beim ersten Druck, ohne Rückfrage. **Löschen** fragt zuerst und nennt, was weggeht.
 
 ## Tasten am Controller (seit 1.66.0)
 
@@ -1924,9 +1928,7 @@ Gamepad-Schnittstelle des Browsers liefert auf der PS5 nichts.
 ## Bildschirmanzeige auf der Konsole
 
 Beim Start meldet sich der Payload mit einem Hinweis oben links (einzeilig, ohne Ton) —
-Version, IP-Adresse und Port der Web-UI. Mit einem Zeilenumbruch spielte die Konsole dabei ihren Meldeton, deshalb steht alles in einer Zeile. Zusätzlich lässt sich unter
-*System → Anzeige auf dem Fernseher* eine wiederkehrende Statusmeldung
-einschalten (Temperaturen, Lüfter, IP, freier Speicher; Intervall einstellbar).
+Version, IP-Adresse und Port der Web-UI. Mit einem Zeilenumbruch spielte die Konsole dabei ihren Meldeton, deshalb steht alles in einer Zeile. Weitere Meldungen kommen nur bei einer Warnung oder einem Fehler.
 
 Auf Knopfdruck geht es auch: Wer die **Mikrofon-Taste des Controllers zweimal kurz
 hintereinander** drückt, sieht oben links (ohne Ton) kurz Prozessortemperatur und
@@ -2045,7 +2047,7 @@ Auf der Systemseite gibt es zusätzlich:
    wird nach einem Neuladen der Seite wiederhergestellt.
    Ein Zähler und der Knopf **Zurücksetzen** erlauben, Diagnoseläufe
    gezielt neu zu starten und sauber zu vergleichen.
-- **Lüfterdiagnose (Soll / Ist / Clamp)**: zeigt effektives Regelziel,
+- **Lüfterdiagnose (Soll / Ist / Clamp)** (auf der Seite Kühlung, Expertenansicht): zeigt effektives Regelziel,
   aktive Spielregel, Soll-Ist-Abweichung, Rohwert und erkennbare Clamp-Lage
   (unterer/oberer Anschlag oder Regelbereich) sowie einen 60-Sekunden-
    Mini-Trend für Soll- und Ist-Drehzahl.
@@ -2075,7 +2077,7 @@ Auf der Systemseite gibt es zusätzlich:
    potenziell blockierende Pad-Aufrufe die Lüfterregelung nicht ausbremsen.
    Hinweis: je nach Firmware/Permissions kann die echte Controller-Ansteuerung
    aus einem Payload-Kontext eingeschränkt sein.
-- **Spielprofile Export/Import**: vorhandene Titelprofile lassen sich als JSON
+- **Spielprofile Export/Import** (auf der Seite „Profil“): vorhandene Titelprofile lassen sich als JSON
    exportieren und wieder importieren (Backup/Transfer zwischen Konsolen).
 - **Live-Protokoll (Tail)**: zusätzlich zum normalen Protokoll kann ein
    kompaktes Live-Fenster die letzten Einträge zyklisch nachladen.

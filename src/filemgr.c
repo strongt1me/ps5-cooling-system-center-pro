@@ -13,7 +13,8 @@
  * cannot be read endlessly).
  *
  * Copying, moving and deleting run as one job at a time on a thread of their own, with a bar (bytes done of total),
- * the current file and Abbrechen. Nothing is ever overwritten: a name that is taken stops the job before it begins.
+ * the current file and Abbrechen. A name that is taken is asked about first (Ersetzen / Beide behalten / Überspringen / Abbrechen, FM_C_*), so
+ * nothing is overwritten without that answer.
  * A copy that fails or is cancelled removes what it had written of the item it was at (that item's target is the
  * job's own: it did not exist before). Moving within one drive is a rename; across drives it is a copy, and the
  * source is deleted only when its copy is complete. Deleting needs the token of its plan, which the page gets after
