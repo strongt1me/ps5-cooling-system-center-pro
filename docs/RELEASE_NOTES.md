@@ -1,43 +1,58 @@
-# PS5 Cooling & System Center – Pro v1.89.0
+# PS5 Cooling & System Center – Pro v1.90.0
 
 ## Highlights
-- **Pack a game into LZ4 or zstd packs while converting it to an image:** In the "Convert" window, exFAT and ffpkg now have a "Packing (AMPR packs)" choice: *Do not pack*, *LZ4 packs* or *zstd packs (AMPR EMU NG only)*. Dump Forge packs the game straight into the image while it writes it – no temporary folder, the original stays untouched. Browser app and fullscreen app both offer it.
-- **Firmware 1.00 to 14.22:** The app (the ELF and both tiles) is now built with the PS5 payload SDK **v0.50**, whose start-up code knows every firmware from 1.00 to 14.22 (v0.45 knew 4.03 to 14.10). A firmware the start-up code does not know never reaches `main()`, so this decides on which consoles the app starts at all.
-- **Fan speed as a ring (browser app):** The speed in percent is shown as a ring, like in the fullscreen app, instead of a speedometer.
+- **Ejecting USB drives safely:** The console cuts a drive off by force and asks nobody. The app now frees the drive first: everything of the app that reads from it waits or is refused, everything is written to the drive (sync), and only then is ShadowMountPlus asked to eject. While it runs the app says "Ejecting usb0 … Do not unplug it until “is ejected” appears." Tried on the Slim and the Pro, from the file manager and from the fullscreen app, without a crash.
+- **Dump Forge is built into the app:** The FPKG format and packing while converting no longer need a download from GitHub. A button still fetches a newer version, and files you place yourself are checked (SHA-256, cut-off downloads are refused).
+- **The whole app reviewed (browser and fullscreen):** two memory errors in file readers fixed, the web interface accepts only the console's IP address and local names, a foreign web page can no longer trigger the API, 168 messages and 97 fullscreen texts translated in six languages.
+- **Serial number shortened or whole:** a button on the system page (X button in the fullscreen app) switches between `••••8023` and the whole number; the choice is stored on the console.
 
 ## What's new
-### Converting
-- **Packing while converting (exFAT and ffpkg of a PS5 game folder):** Choose LZ4 (level 9, 3 or 12; runtime AMPR EMU NG or "APR-EMU original") or zstd (level 5, 1, 9 or 19; zstd is read by AMPR EMU NG only, which Dump Forge puts into the game). The source is read twice (first measured, then written), so it takes longer than without packing; no `.sha256` file is written; "Check afterwards" (thorough or quick) works as before.
-- **Not possible (greyed out, with the reason beside it):** PS4 games (they have no AMPR packs), games that already lie in packs (unpack them first under the game's asset packs), a source that cannot be read, Dump Forge missing (button "Load Dump Forge") or older than 0.5.6, and names over 63 bytes without the ending.
-- **The job card tells what happens:** "The game is being measured for the packs …", then "NN % · packing and writing", then the check; at the end "24 GB instead of 38 GB (63 %)". The queue and the history name the choice ("to exfat + LZ4").
+### USB drives
+- **Eject:** The file manager leaves the drive first and ejects through System → Storage; copying, moving, deleting, saving, uploading and every planning step pass a drive gate and are refused while a drive is being ejected or settles (30 s). If the console or the app crashed during an eject, ejecting stays off until you allow it again (browser and fullscreen).
+- **"Do not unplug yet":** The message stays up until the eject has finished (it took 2 to 7 seconds on the test consoles); "is ejected" only appears after the console has unmounted the drive. Some drives come back by themselves after a few seconds, others only after plugging them in again.
+- **After the eject:** no more "usb0 · 2 MB free" ghost; a drive plugged in again appears without switching pages; the empty folder of an ejected drive (`/mnt/usb0`, it lies on the small system partition) can no longer be written to.
 
-### Firmware and build
-- **PS5 payload SDK v0.50 instead of v0.45:** official release file, SHA-256 checked. Only seven files differ (the start-up code `crt1.o`, two headers, two libraries and two tools). The build now checks 21 firmware versions from 1.00 to 14.22 in the SDK and in the finished program; the system page names the firmware groups over the whole range (5.xx to 8.xx used to read "unknown"). The fullscreen app's SDK is pinned to v0.50 too.
+### Games and converting
+- **Dump Forge 0.5.6 inside the app** (the ELF grows to about 24 MB); the tiles no longer carry their own copy. Button "Download newer version from GitHub" in the convert window.
+- **Progress while measuring** for packs: bar, percent and time left instead of a still text.
+- **AMPR EMU NG 0.5.0** (the two newest versions are embedded: 0.5.0 and 0.4.1) and **Kraken Mount 0.3.1** with the **PlayGo stub per game** (switch in the game list of FPKGMount, browser and fullscreen).
+- **PS4Mount and Kraken Mount are off by default;** whoever switches one on keeps it on after a restart (tried on the Slim). PS4Mount 0.8.0 tried with real PS4 packages on the Slim: five games registered from a USB stick, one started and closed again.
 
-### Games
-- **APR-EMU and PlayGo file: choose where it goes:** For an image (`.exfat`, `.ffpkg`) you can put the file into the image or into the backport folder next to it (`backports/<title id>/fakelib`); if the image is full ("No space left on device"), the app puts it into the backport folder by itself. For a compressed `.ffpfsc` and for an existing backport folder the place is fixed.
-- **The version window of the fullscreen app names zstd** as well as LZ4 (an LZ4-packed game needs an LZ4 version, a zstd-packed one needs AMPR EMU NG).
+### Payloads
+- **Second list in "Download payloads":** `strongt1me/ps5-payload-source` next to itsPLK's mirror (browser and fullscreen). Every file is still checked against the SHA-256 in its own list.
 
-### Translations
-- **Composed texts are no longer half German:** A pattern such as "{0} min" took "6 payloads · as of 40" as its number and left the rest untranslated; a value that spans a " · " no longer counts. Eleven missing texts added in six languages, three dates use the page's language, and the fullscreen app prints "47.8 GB" with a point in English.
-- **Gaps of the convert window closed:** the title, the format names, the UFS2 sentence and two check texts in all six languages; the description of the "Guide" button in the fullscreen app.
+### System
+- **Serial number switch** (see above); the whole number leaves the app only when chosen.
+- **Controller battery:** the fullscreen app shows the state and the age of the value like the browser ("80 % · on battery · as of 9 h ago"); the hint "switch the controller off and on for a current value" is translated now.
+- **Browser:** the version tile is orange.
+
+### Security and stability
+- **Two memory errors fixed** (reproduced with AddressSanitizer): a crafted `ampr_zstd.index` and a crafted `playgo-chunk.dat` in a PS4 package could make the app read past its buffers (the second one crashed it). Further checks for PFS block tables and PS4 package sizes, two 32 KiB buffers moved off the job stacks.
+- **Addresses:** only an IP address, `localhost` or a private home-network name (`.local`, `.lan`, `.home`, `.home.arpa`, `.internal`, `.localdomain`, `.intranet`). Names without a dot and `.fritz.box` are refused (DNS rebinding).
+- **Foreign web pages** (`Sec-Fetch-Site` cross-site/same-site) cannot call the API; downloads open regular files only; `nosniff`; uploads only with POST; a few connections are kept free for the console itself.
+- **SQLite 3.54.1** (was 3.46.0), used to register an imported save.
+
+### Manual, FAQ, translations
+- Manual and FAQ checked against the code and corrected in seven languages (FAQ now 60 questions); new screenshots in all seven languages.
+- Translations: 168 server messages and 97 fullscreen texts in six languages; upper-case headings in the fullscreen app show umlauts and Cyrillic correctly; "(game rule)" under the temperature ring is translated.
 
 ## Notes
-- **Confirmed on the console (Slim, firmware 12.00, 20.11.2026):** packing while converting with one small game (1.75 GB, a folder): **LZ4 level 3 → 1.21 GB (69.5 %)** in 133 s, **zstd level 5 → 1.03 GB (59.2 %)** in 113 s, both with the thorough check; the game started from each image and ran (confirmed by the user). One measurement with one small game and a USB stick (about 10 to 15 MB/s while writing), so no statement about big games. Not tried: the Pro, the runtime "APR-EMU original", ffpkg as the target.
-- **ShadowMountPlus ignores an image whose title ID already exists as a folder** ("Duplicate … ignored"): to start the game from such an image, the original has to leave the search folders first. At the start, ShadowMountPlus logged "sandbox fakelib unavailable (Device busy)" with both images; the game ran all the same.
-- **Not tried on the console:** the choice of the backport folder when the image is full (only the lookup was checked), and the firmware range beyond 12.00 – the start-up code knows 1.00 to 14.22, but the app is tested on 12.00 only.
-- 36 host tests with the fan simulation and 382 tests of the fullscreen app pass. Send the new ELF to port 9021 and copy the tiles FAKE86921 and FAKE86922 from this release again (the fullscreen app must be closed for that). Everything else is as in v1.88.1.
+- **Addresses changed:** If you opened the web interface through `ps5.fritz.box` or a name without a dot, use the console's IP address now.
+- **PS4Mount and Kraken Mount after the update:** Whoever never switched them shows both off – switch them on once if you use them. Kraken Mount has to be switched on again even if it ran before (until now only "off" was stored).
+- **Tried on the console** (Slim, firmware 12.00): eject from the file manager (also refused correctly while something still read from the stick), the "do not unplug yet" message, the fullscreen eject, the controller battery line, 80 read routes and 31 malformed requests without a crash, every browser page in English. The Pro (firmware 12.00) was tried with the eject only, on an earlier build.
+- **Not proven:** whether this ends the eject crash one user had on firmware 4.03 (no feedback yet); writing to `savedata.db` with the new SQLite was only tested on the PC; PS4Mount updates and add-ons were not tried on the console.
+- 46 host test runs and 387 tests of the fullscreen app pass. Send the new ELF to port 9021 and copy the tiles FAKE86921 and FAKE86922 from this release again (the fullscreen app must be closed for that).
 
 ## Downloads
 | File | What it is for |
 |---|---|
-| `PS5_Cooling_System_Center_v1.89.0.elf` | The main program (send it to port 9021) |
-| `FAKE86921.zip` | Fullscreen tile (with Dump Forge): copy the folder to `/data/homebrew/` |
-| `FAKE86922.zip` | Browser tile (with Dump Forge): copy the folder to `/data/homebrew/` |
+| `PS5_Cooling_System_Center_v1.90.0.elf` | The main program (send it to port 9021) |
+| `FAKE86921.zip` | Fullscreen tile: copy the folder to `/data/homebrew/` |
+| `FAKE86922.zip` | Browser tile: copy the folder to `/data/homebrew/` |
 | `LIESMICH.txt` | Instructions (German) |
 | `payload-manager.json` | List for itsPLK's Payload Manager: enter `https://github.com/strongt1me/ps5-cooling-system-center-pro/releases/latest/download/payload-manager.json` as the source, and it downloads the app from GitHub (with a SHA-256 check) |
 
 ## Thanks
-To everyone whose work is in the app or makes it possible – the full list is in the app under "Credits" or Profile → Thanks. Especially **quer3q** for Dump Forge (it does the packing), AMPR EMU NG and Kraken Mount, **drakmor** for ShadowMountPlus, **itsPLK** for the Payload Manager, and **John Törnblom** and the contributors of the PS5 payload SDK (v0.50 with every firmware from 1.00 to 14.22).
+To everyone whose work is in the app or makes it possible – the full list is in the app under "Credits" or Profile → Thanks. Especially **quer3q** for Dump Forge (now inside the app), AMPR EMU NG and Kraken Mount, **drakmor** for ShadowMountPlus (it ejects the drives), **gasb07** for PS4Mount, **itsPLK** for the Payload Manager and the payload mirror, the **SQLite** authors, and **John Törnblom** and the contributors of the PS5 payload SDK.
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.88.1...v1.89.0
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.89.0...v1.90.0

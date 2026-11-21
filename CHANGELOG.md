@@ -2,7 +2,7 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.90.0 – 22.11.2026
 
 ### SQLite 3.54.1 und die letzten Konsolentests (Auftrag des Users „mach alles, was noch offen ist“, 22.11.2026)
 - **SQLite 3.46.0 → 3.54.1** (`src/third_party/sqlite3/`, Gesamtquelle unverändert von sqlite.org, SHA3-256 der Zip-Datei gegen die Download-Seite geprüft). Gebraucht nur für den Eintrag eines eingespielten Spielstands in `savedata.db` (`src/savedb.c`); die Bauschalter bleiben (ohne Erweiterungen, ohne WAL, ein Faden). Die ELF wächst um 49 KB. Geprüft: alle Host-Tests (darunter `savedb`, `saveimport`, `savebackup`, `fuzz`, die SQLite mitbauen), an der Slim alle 80 lesenden Routen; das Schreiben in `savedata.db` ist nur am PC geprüft.
