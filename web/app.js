@@ -5360,7 +5360,7 @@
       : btn("", `data-remount="mount" data-id="${id}"`, "Einhängen", rmOk, rmWhy, "mount", 'Hängt das Spiel über ShadowMountPlus ein.')}
             ${btn("", `data-remount="unmount" data-id="${id}"`, "Aushängen", rmOk && !!x.mounted, unmountWhy, "unmount", 'Hängt das Spiel über ShadowMountPlus aus.')}`;
     /* läuft das Spiel schon, ist „Starten“ aus: ein zweiter Start desselben Titels kann die Konsole abstürzen lassen */
-    return `${btn(" primary gm-start", `data-launch="${id}"`, "Starten", !!x.can_launch && !live, live ? "Das Spiel läuft schon." : why.launch, "play", 'Startet das Spiel. Läuft schon ein anderes, fragt die App zuerst nach.')}
+    return `${btn(" primary gm-start", `data-launch="${id}"`, "Starten", !!x.can_launch && !live, live ? "Das Spiel läuft schon." : why.launch, "play", 'Startet das Spiel. Läuft schon ein anderes, schließt die App es und startet dieses in einem Zug.')}
           ${close}
           <div class="gm-more">
             ${btn("", `data-copy="${id}"`, "Kopieren", !!x.can_copy, why.copy, "copy", 'Kopiert das Spiel (Ordner oder Abbild) auf ein anderes Laufwerk.')}
