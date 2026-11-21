@@ -103,7 +103,7 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   geschriebenen Spieldateien (SIGBUS/CE-108255-1, gemeldet von OmgWhatIsThisss), für die Reparatur beim Prüfen der Pakete und für
   die Auswahl eines getesteten Profils nach Titel-ID, Name oder Engine (`src/lz4cfg.c`, `src/lz4pack_read.inc`, `src/amprlib.c`,
   `src/imgjob_lz4.inc`); nachgebaut, kein Quelltext übernommen. <https://github.com/theghostonline/PS5-LZ4-Compression> (seit Oktober 2026 nicht mehr erreichbar; Konto und Projekt wurden gelöscht oder umbenannt)
-- **SQLite** 3.46.0 (D. Richard Hipp und Mitarbeiter, gemeinfrei): `src/third_party/sqlite3/` (`sqlite3.c`, `sqlite3.h`, die Gesamtquelle unverändert), gebaut nur
+- **SQLite** 3.54.1 (D. Richard Hipp und Mitarbeiter, gemeinfrei): `src/third_party/sqlite3/` (`sqlite3.c`, `sqlite3.h`, die Gesamtquelle unverändert), gebaut nur
   für den Eintrag eines eingespielten Spielstands in `savedata.db` (`src/savedb.c`: ohne Erweiterungen, ohne WAL, ein Faden). Gelesen wird die Datenbank sonst
   weiter mit dem eigenen Leser `sqlite_ro.c`.
 - **Garlic SaveMgr** (earthonion u. a., 1.15-beta23, ohne Lizenzangabe, <https://github.com/earthonion/garlic-savemgr>): Vorbild und Wissen für das Übertragen von
