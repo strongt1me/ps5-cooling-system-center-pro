@@ -301,13 +301,13 @@ static tree_t
 measure_cached(const char *source, uint64_t ttl_ms) {
   tree_t t;
   pthread_mutex_lock(&g_lock);
-  if(!strcmp(g_plan.source, source) &&
-     ps5tm_mono_ms() - g_plan.at_ms < ttl_ms) {
-    t = g_plan.tree;
-    pthread_mutex_unlock(&g_lock);
-    return t;
-  }
+  int hit = !strcmp(g_plan.source, source) && ps5tm_mono_ms() - g_plan.at_ms < ttl_ms;
+  if(hit) t = g_plan.tree;
   pthread_mutex_unlock(&g_lock);
+  /* ... and only while the folder is still there: right after an eject the plan answered "ok" from this memory for a game whose
+     drive was gone (live test on the Slim, 21.11.2026). One lstat, not a walk. */
+  struct stat st;
+  if(hit && lstat(source, &st) == 0) return t;
 
   t = measure(source);
   if(!t.err) {

@@ -299,15 +299,34 @@ holds_mount(const char *p) {
   pthread_mutex_unlock(&g_mnt_lock);
   return found;
 }
+
+/* A path on a USB drive or an M.2 extension that is not mounted right now (ejected, pulled, never there): its folder,
+   /mnt/usb0 say, is then an empty folder on the system partition, and what is written there fills that small partition
+   (1.7 MB free on the Slim right after an eject, review of 21.11.2026). Nothing is made or changed there. */
+static int
+drive_absent(const char *p) {
+  if((strncmp(p, "/mnt/usb", 8) && strncmp(p, "/mnt/ext", 8)) || p[8] < '0' || p[8] > '9') return 0;
+  size_t l = 9;
+  while(p[l] >= '0' && p[l] <= '9') l++;
+  if(p[l] != 0 && p[l] != '/') return 0;                /* "/mnt/usb0x" is no drive's place */
+  char mount[24], real[FM_PATH + 64];
+  if(l >= sizeof(mount)) return 1;
+  memcpy(mount, p, l);
+  mount[l] = 0;
+  struct statfs sf;
+  if(real_path(mount, real, sizeof(real)) != 0) return 1;
+  return statfs(real, &sf) != 0 || strcmp(sf.f_mntonname, real) != 0;
+}
 #else
 static int special_fs(const char *p) { (void)p; return 0; }
 static int holds_mount(const char *p) { (void)p; return 0; }
+static int drive_absent(const char *p) { (void)p; return 0; }
 #endif
 
 /* May p be changed (created, renamed, deleted)? */
 static int
 writable(const char *p) {
-  return write_root(p) && no_links(p) && !mounted_here(p) && !special_fs(p) && !holds_mount(p);
+  return write_root(p) && no_links(p) && !mounted_here(p) && !special_fs(p) && !holds_mount(p) && !drive_absent(p);
 }
 
 /* May something be made inside the folder dir? A name below it must be writable; the name used to ask is one nobody
@@ -316,7 +335,7 @@ static int
 dir_writable(const char *dir) {
   char probe[FM_PATH];
   return join(dir, ".ps5cc-schreibprobe", probe, sizeof(probe)) == 0 && write_root(probe) && no_links(probe) &&
-         !special_fs(probe);
+         !special_fs(probe) && !drive_absent(probe);
 }
 
 static int
