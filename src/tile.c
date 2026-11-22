@@ -329,6 +329,8 @@ tile_installed(void) {
 static volatile int g_init_done = 0;
 static volatile int g_init_rc   = -1;
 static int          g_init_started = 0;
+static pthread_mutex_t g_init_mu = PTHREAD_MUTEX_INITIALIZER;   /* the check and the start of the thread: the tile, PS4Mount's worker and the
+                                                                   game delete may come at once (review of 22.11.2026) */
 
 static void *
 init_thread(void *arg) {
@@ -350,12 +352,13 @@ timed_init(void) {
   if(!p_inst_init || (!p_inst_dir && !p_inst_all && !p_inst_pkg))
     return TILE_NO_SYMBOLS;
 
+  pthread_mutex_lock(&g_init_mu);
   if(!g_init_started) {
     /* Linking does not guarantee the module is resident. etaHEN's package
        write-up is explicit that it must be started before Initialize(). */
 
     pthread_t tid;
-    if(pthread_create(&tid, NULL, init_thread, NULL) != 0) return -1;
+    if(pthread_create(&tid, NULL, init_thread, NULL) != 0) { pthread_mutex_unlock(&g_init_mu); return -1; }
     /* Only once a thread exists. Set before the call, a failed pthread_create
        (the console is short of memory) left this at 1 with nobody to answer:
        every later attempt waited out the full ten seconds and timed out, until
@@ -363,6 +366,7 @@ timed_init(void) {
     g_init_started = 1;
     pthread_detach(tid);
   }
+  pthread_mutex_unlock(&g_init_mu);
 
   for(int i = 0; i < 100; i++) {          /* up to 10 s */
     if(g_init_done) return g_init_rc;

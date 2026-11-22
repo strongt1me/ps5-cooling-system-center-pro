@@ -22,7 +22,9 @@ int   ps4m_standalone_active(char *why, size_t n);
 int   ps4m_do_action(const char *action, const char *tid, char *msg, size_t n);
 /* For the app's game delete (gamedelete.c, 22.11.2026): takes one of PS4Mount's games out of the library exactly as the action "remove" does
    (it is unmounted first, then the system uninstalls it; PS4Mount does not take it in again on its own), waiting up to wait_ms for the module.
-   *pkg_left says whether the game's app pkg was still on the drive. 0 = removed; -1 with a sentence in msg; -2 when the module is busy. */
+   *pkg_left says whether the game's app pkg was still on the drive. 0 = removed; -1 with a sentence in msg; -2 when the module is busy;
+   -3 when the game is unmounted but the system uninstall is still running (asking again hands over its result; review of 22.11.2026).
+   Initialises AppInstUtil itself and refuses while a stand-alone PS4Mount runs. */
 int   ps4m_remove_title(const char *tid, int wait_ms, int *pkg_left, char *msg, size_t n);
 /* Settings as the form string of the original panel (batch=0|1&batch_size=N&dlc=0|1&restore_batch=N&paths=...). */
 int   ps4m_do_config(const char *form, char *msg, size_t n);

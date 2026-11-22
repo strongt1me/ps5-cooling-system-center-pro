@@ -8372,7 +8372,7 @@
   /* ── USB auswerfen (usbeject.c, 29.10.2026) ──────────────────────────
    * Über ShadowMountPlus (ab 1.7beta10), aber nur, wenn kein Auftrag der App läuft und kein Ordner des Laufwerks
    * woanders eingehängt ist (PS4Mount-Spiele). Die Konsole sagt sonst, was noch läuft; nichts wird doppelt bestätigt. */
-  const usbEject = { running: false, timer: 0, fails: 0 };
+  const usbEject = { running: false, timer: 0, fails: 0, busy: false, okAt: 0 };
   const usbEjectStop = () => {
     clearInterval(usbEject.timer);
     usbEject.timer = 0;
@@ -8381,10 +8381,15 @@
     if (typeof fm !== "undefined") fm.ejecting = false;
   };
   const usbEjectPoll = async () => {
-    if (document.hidden) return;
+    /* one question at a time, and an answer that comes after the stop counts no more: the console answers each connection on its own
+       thread, and a late "running" brought "do not unplug yet" back over "is ejected" (review of 22.11.2026) */
+    if (document.hidden || usbEject.busy) return;
+    usbEject.busy = true;
     try {
-      const r = await api("/api/v1/storage/eject");
+      const r = await api("/api/v1/storage/eject", { timeoutMs: 4000 });
+      if (!usbEject.timer) return;
       usbEject.fails = 0;
+      usbEject.okAt = Date.now();
       /* while it runs the message stays up ("… not yet unplug"): the toast alone went after about 5 s, the eject took up to 7 s (21.11.2026) */
       if (r.running) { if (r.message) toast(r.message); return; }
       usbEjectStop();
@@ -8393,7 +8398,11 @@
       if (typeof fmAfterEject === "function") fmAfterEject(r.state === "done" ? r.mount : "");
     } catch (e) {
       /* die nächste Runde fragt wieder – aber nicht ewig, sonst bliebe jeder Auswerfen-Knopf stumm */
-      if (++usbEject.fails >= 20) { usbEjectStop(); toast("Die Konsole antwortet nicht. Ob das Laufwerk ausgeworfen ist, zeigt die Liste nach dem Neuladen.", "error"); }
+      /* not for ever, or every eject button would stay mute: 40 s without an answer (polls go one at a time now, so a count of failures took minutes) */
+      ++usbEject.fails;
+      if (usbEject.timer && Date.now() - usbEject.okAt > 40000) { usbEjectStop(); toast("Die Konsole antwortet nicht. Ob das Laufwerk ausgeworfen ist, zeigt die Liste nach dem Neuladen.", "error"); }
+    } finally {
+      usbEject.busy = false;
     }
   };
   /* Startet das Auswerfen von „mount“; der Knopf (falls einer gedrückt wurde) bleibt gesperrt, bis die Konsole fertig meldet. */
@@ -8407,6 +8416,7 @@
     try {
       const r = await api("/api/v1/storage/eject", { method: "POST", body: JSON.stringify({ mount }), timeoutMs: 45000 });
       toast(r.started || r.message || "Wird ausgeworfen …");
+      usbEject.okAt = Date.now();
       if (!usbEject.timer) usbEject.timer = setInterval(usbEjectPoll, 1500);
     } catch (err) {
       usbEjectStop();
@@ -11899,7 +11909,7 @@
       const img = `<div class="p4m-btns">${x.state === "running" ? "" : `<button type="button" class="btn ghost" data-dpdel="1" ${fields}>Löschen</button>`}</div>`;
       return `<div class="p4m-row">
         <div class="p4m-main"><div class="p4m-name" title="${esc(x.title || x.folder)}">${esc(x.title || x.folder)}</div>
-          <div class="p4m-meta">${esc(x.folder)} · ${esc(where)}${size ? " · " + esc(size) : ""}${tags.length ? " · " + esc(tags.join(", ")) : ""}</div></div>
+          <div class="p4m-meta">${esc(x.folder)} · ${esc(where)}${size ? " · " + esc(size) : ""}${tags.length ? " · " + esc(tags.join(" · ")) : ""}</div></div>
         <span class="p4m-state ${st[0]}">${esc(st[1])}</span>${img}</div>`;
     });
     setHtml($("#dp-list"), rows.length ? rows.join("")

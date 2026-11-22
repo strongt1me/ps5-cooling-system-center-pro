@@ -22,6 +22,20 @@ mem_read(void *ctx, uint64_t off, void *buf, size_t n) {
   return (long)take;
 }
 
+/* A reader that counts its calls (the costly ones) and, like imgr_pread, gives as much as asked up to the end of the file. */
+typedef struct { mem_t m; unsigned long calls; } counted_t;
+
+static long
+counted_read(void *ctx, uint64_t off, void *buf, size_t n) {
+  counted_t *c = ctx;
+  c->calls++;
+  if(c->m.fail_at >= 0 && off + n > (uint64_t)c->m.fail_at) return -1;
+  if(off >= c->m.n) return 0;
+  const size_t take = c->m.n - (size_t)off < n ? c->m.n - (size_t)off : n;
+  memcpy(buf, c->m.p + off, take);
+  return (long)take;
+}
+
 static int
 check_mem(const uint8_t *p, size_t n) {
   mem_t m = { p, n, -1 };
@@ -86,6 +100,8 @@ main(int argc, char **argv) {
   CHECK(check_mem(buf, sizeof(one)) == 1, "a length over 2^31-1");
   memcpy(buf, one, sizeof(one)); buf[38] = '1';                   /* a type that is not four letters */
   CHECK(check_mem(buf, sizeof(one)) == 1, "a chunk type with a digit");
+  memcpy(buf, one, sizeof(one)); buf[33] = 0x10;                  /* IDAT length 0x1000000A: far past 64 MiB, in a 67-byte file */
+  CHECK(check_mem(buf, sizeof(one)) == 1, "a damaged length in a small file is damage, not 'too large to judge'");
 
   /* random data, as the 532-byte pic2.png of fpkg-cli's notes; and the same behind a good signature */
   uint8_t rnd[532];
@@ -120,6 +136,52 @@ main(int argc, char **argv) {
   }
   free(data);
   free(p);
+
+  /* the window (review of 22.11.2026): 100 000 empty chunks behind IHDR, as a crafted picture in an image could be; every call of the
+     slow reader (imgread looks the path up each time) is counted */
+  {
+    const size_t nchunks = 100000, sz = 8 + 25 + nchunks * 12 + 12;
+    uint8_t *q = malloc(sz);
+    uint8_t *win = malloc(65536);
+    if(!q || !win) { printf("no memory\n"); return 2; }
+    size_t o2 = 8;
+    memcpy(q, one, 8);
+    o2 += put_chunk(q + o2, "IHDR", one + 16, 13);
+    for(size_t i = 0; i < nchunks; i++) o2 += put_chunk(q + o2, "tEXt", NULL, 0);
+    o2 += put_chunk(q + o2, "IEND", NULL, 0);
+    CHECK(o2 == sz, "built %zu of %zu bytes", o2, sz);
+    counted_t c = { { q, sz, -1 }, 0 };
+    CHECK(ps5tm_pngcheck(counted_read, &c) == 0, "100 000 empty chunks read directly");
+    const unsigned long direct = c.calls;
+    c.calls = 0;
+    pngcheck_window_t w = { counted_read, &c, win, 65536, 0, 0, 0 };
+    CHECK(ps5tm_pngcheck(pngcheck_window_read, &w) == 0, "100 000 empty chunks through the window");
+    CHECK(c.calls < 64, "through the window: %lu calls of the slow reader (directly: %lu)", c.calls, direct);
+    CHECK(direct > 200000, "directly: %lu calls (the case the window is for)", direct);
+    q[sz / 2] ^= 0x01;                                           /* a damaged byte in the middle */
+    c.calls = 0;
+    pngcheck_window_t w2 = { counted_read, &c, win, 65536, 0, 0, 0 };
+    CHECK(ps5tm_pngcheck(pngcheck_window_read, &w2) == 1, "damage found through the window");
+    q[sz / 2] ^= 0x01;
+    c.m.fail_at = (int)(sz / 3);
+    pngcheck_window_t w3 = { counted_read, &c, win, 65536, 0, 0, 0 };
+    CHECK(ps5tm_pngcheck(pngcheck_window_read, &w3) == -1, "a read error through the window: no verdict");
+    c.calls = 0;
+    pngcheck_window_t w3b = { counted_read, &c, win, 65536, 0, 0, 0 };
+    CHECK(ps5tm_pngcheck(pngcheck_window_read, &w3b) == -1 && c.calls <= 2 * (PNGCHECK_WINDOW_MISSES + 1) + 40,
+          "an unreadable spot costs a bounded number of calls (%lu)", c.calls);
+    /* damage before an unreadable spot is still found through the window: the refill fails, the bytes asked for read */
+    {
+      uint8_t d[67];
+      memcpy(d, one, sizeof(one));
+      d[44] ^= 0x01;                                             /* a changed IDAT byte: its CRC no longer fits */
+      counted_t cd = { { d, sizeof(d), 64 }, 0 };                /* the bytes from 64 on cannot be read */
+      pngcheck_window_t wd = { counted_read, &cd, win, 65536, 0, 0, 0 };
+      CHECK(ps5tm_pngcheck(pngcheck_window_read, &wd) == 1, "damage found although a refill fails");
+    }
+    free(win);
+    free(q);
+  }
 
   /* the real pictures given on the command line */
   int real = 0;

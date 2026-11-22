@@ -1448,11 +1448,15 @@ std::string GameTools::queue_line(const QueueItem &item) const
         }
         return what;
     }
-    if (item.state == "done")
-        return "Fertig und geprüft" +
-               (item.output_bytes > 0 ? ": " + format_bytes(item.output_bytes) : std::string()) +
-               (item.elapsed_s > 0.0 ? " in " + duration_text(item.elapsed_s * 1000.0)
-                                     : std::string());
+    if (item.state == "done")                  /* whole sentences, as the dictionaries know them */
+    {
+        if (item.output_bytes <= 0)
+            return "Fertig und geprüft.";
+        if (item.elapsed_s <= 0.0)
+            return "Fertig und geprüft: " + format_bytes(item.output_bytes) + ".";
+        return "Fertig und geprüft: " + format_bytes(item.output_bytes) + " in " +
+               duration_text(item.elapsed_s * 1000.0) + ".";
+    }
     if (!item.message.empty())
         return item.message;
     return what;
@@ -1720,7 +1724,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
     {
         heading("Quelle", kMuted);
         para(plan_.source, kInk, 2);
-        para(format_bytes(plan_.size_bytes) + " in " + files_text(plan_.files) +
+        para(format_bytes(plan_.size_bytes) + " · " + files_text(plan_.files) +
                  (plan_.skipped > 0 ? " · " + std::to_string(plan_.skipped) +
                                           " Verknüpfungen oder Sonderdateien bleiben weg"
                                     : ""),

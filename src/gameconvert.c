@@ -1659,6 +1659,10 @@ art_fd_read(void *ctx, uint64_t off, void *buf, size_t n) {
   return r < 0 ? -1 : (long)r;
 }
 
+/* A picture inside an image is read through a window of ART_WINDOW bytes (pngcheck_window_t): every imgr_pread looks the path up again
+   (and, in a .ffpfsc, unpacks those blocks again), and pngcheck reads chunk by chunk, so a picture of a million empty chunks would
+   otherwise cost millions of look-ups and hold the plan for hours (review of 22.11.2026). With the window it is one look-up per MiB. */
+#define ART_WINDOW (1u << 20)
 typedef struct { imgr_t *r; const char *path; } art_img_t;
 
 static long
@@ -1674,8 +1678,10 @@ art_check_folder(const char *source, art_bad_t *out) {
     char p[400];
     struct stat st;
     if(snprintf(p, sizeof(p), "%s/sce_sys/%s.png", source, k_art[i]) >= (int)sizeof(p)) continue;
-    int fd = open(p, O_RDONLY);
-    if(fd < 0) continue;                               /* not there (or not readable): nothing to say */
+    /* a regular file only, as the file manager reads one: no link followed, and a FIFO of that name must not hold the plan */
+    if(lstat(p, &st) != 0 || !S_ISREG(st.st_mode)) continue;   /* not there (or not a plain file): nothing to say */
+    int fd = open(p, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+    if(fd < 0) continue;
     const int bad = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && ps5tm_pngcheck(art_fd_read, &fd) == 1;
     close(fd);
     if(!bad) continue;
@@ -1693,6 +1699,7 @@ art_thread(void *arg) {
   art_job_t *j = arg;
   imgr_t *r = imgr_open(j->source, NULL, 0);
   if(!r) return NULL;
+  uint8_t *window = malloc(ART_WINDOW);
   for(int i = 0; i < ART_N; i++) {
     char png[32], dds[32];
     uint8_t b;
@@ -1700,12 +1707,14 @@ art_thread(void *arg) {
     snprintf(dds, sizeof(dds), "/sce_sys/%s.dds", k_art[i]);
     if(imgr_pread(r, png, 0, &b, 1) < 0) continue;     /* not there */
     art_img_t a = { r, png };
-    if(ps5tm_pngcheck(art_img_read, &a) != 1) continue;
+    pngcheck_window_t w = { art_img_read, &a, window, ART_WINDOW, 0, 0, 0 };
+    if((window ? ps5tm_pngcheck(pngcheck_window_read, &w) : ps5tm_pngcheck(art_img_read, &a)) != 1) continue;   /* no memory for the window: read as asked */
     art_bad_t *o = j->out;
     snprintf(o->name[o->n], sizeof(o->name[o->n]), "%s", k_art[i]);
     o->dds[o->n] = imgr_pread(r, dds, 0, &b, 1) > 0;
     o->n++;
   }
+  free(window);
   imgr_close(r);
   return NULL;
 }

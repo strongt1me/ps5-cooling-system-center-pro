@@ -665,7 +665,7 @@ class FilesPage final : public Page
                                : std::string(name_mode_ == kRename ? "Umbenennen" : "Neuer Ordner"),
                      panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
             ui::text(list, fonts.regular,
-                     ui::fit_label(paint, line_mode ? edit_path_ : "in " + folder_.path, 21.0f,
+                     ui::fit_label(paint, line_mode ? edit_path_ : "Ordner: " + folder_.path, 21.0f,
                                    panel.w - 80.0f),
                      panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
             const Rect field{panel.x + 120.0f, panel.y + 160.0f, panel.w - 240.0f, 84.0f};

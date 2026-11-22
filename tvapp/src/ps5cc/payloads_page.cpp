@@ -840,7 +840,9 @@ class PayloadsPage final : public Page
             if (!profiles_loaded_)
                 return {note("Wird geladen …", "Die App liest die Profile.")};
             if (run_.running)
-                out.push_back(header("LÄUFT: " + run_.name + " (Schritt " +
+                // normal case, the list header puts it in capitals after translating it (a
+                // mixed "LÄUFT: … von …" only met the pattern "{0} von {1}": review of 22.11.2026)
+                out.push_back(header("Läuft: " + run_.name + " (Schritt " +
                                      std::to_string(run_.step) + " von " +
                                      std::to_string(run_.total) + ")"));
             out.push_back(header("PROFILE (" + std::to_string(profiles_.size()) + ")"));

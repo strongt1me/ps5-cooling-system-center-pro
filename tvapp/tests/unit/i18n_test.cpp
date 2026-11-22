@@ -160,6 +160,20 @@ TEST(I18n, CapitalsAreTranslatedBeforeTheyBecomeCapitals)
     EXPECT_EQ(hui::ui::upper("3. Wohin?"), "3. WOHIN?");
 }
 
+// A header in normal case finds its own pattern before the general "{0} von {1}" (review of
+// 22.11.2026: the running payload profile read "LÄUFT: AUTOSTART (SCHRITT 1 OF 3)").
+TEST(I18n, AHeaderFindsItsOwnPatternBeforeAGeneralOne)
+{
+    Translator t;
+    t.load("en", std::vector<Entry>{
+                     {"{0} von {1}", "{0} of {1}"},
+                     {"Läuft: {0} (Schritt {1} von {2})", "Running: {0} (step {1} of {2})"}});
+    gfx::set_text_filter(&t);
+    EXPECT_EQ(hui::ui::upper("Läuft: Autostart (Schritt 1 von 3)"),
+              "RUNNING: AUTOSTART (STEP 1 OF 3)");
+    gfx::set_text_filter(nullptr);
+}
+
 TEST(I18n, ConsoleLanguage)
 {
     EXPECT_EQ(console_language(4), "de");

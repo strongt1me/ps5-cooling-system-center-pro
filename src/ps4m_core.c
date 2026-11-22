@@ -1853,6 +1853,70 @@ static void ac_reconcile(title_src_t *t) {
     }
 }
 
+/* (app) STATE_DIR/<TID>.addcont: the add-on title IDs mount_paths last handled for the game, one per line. The module's own list is
+ * empty while it is off, but its mounts stay until the console restarts: removing the game reads them here (review of 22.11.2026). */
+static int addcont_record_read(const char *tid, char (*dtids)[10], int max) {
+    char path[64], buf[MAX_DLC_TIDS * 10 + 16];
+    snprintf(path, sizeof(path), STATE_DIR "/%s.addcont", tid);
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return 0;
+    ssize_t len = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (len <= 0)
+        return 0;
+    buf[len] = 0;
+    int n = 0;
+    for (char *s = buf, *e; n < max && *s; s = e + (*e != 0)) {
+        e = s + strcspn(s, "\n");
+        if (e - s == 9 && !strncmp(s, "CUSA", 4))
+            snprintf(dtids[n++], 10, "%.9s", s);
+    }
+    return n;
+}
+
+static void addcont_record_write(const char *tid, char (*dtids)[10], int n) {
+    char path[64], buf[MAX_DLC_TIDS * 10 + 16], old[sizeof(buf)];
+    size_t len = 0;
+    for (int i = 0; i < n && i < MAX_DLC_TIDS; i++)
+        len += (size_t)snprintf(buf + len, sizeof(buf) - len, "%.9s\n", dtids[i]);
+    snprintf(path, sizeof(path), STATE_DIR "/%s.addcont", tid);
+    if (!len) {
+        unlink(path);
+        return;
+    }
+    int fd = open(path, O_RDONLY);
+    if (fd >= 0) {
+        ssize_t k = read(fd, old, sizeof(old));
+        close(fd);
+        if (k == (ssize_t)len && !memcmp(old, buf, len))
+            return; /* unchanged: nothing written on every mount */
+    }
+    write_file(path, buf, len, 0666);
+}
+
+/* (app) Another game still mounted lists this add-on title too (regional versions share one): its mount stays. */
+static int addcont_shared(const char *dtid, const char *tid) {
+    DIR *d = opendir(STATE_DIR);
+    if (!d)
+        return 0;
+    struct dirent *e;
+    int shared = 0;
+    while (!shared && (e = readdir(d))) {
+        if (strlen(e->d_name) != 17 || strcmp(e->d_name + 9, ".addcont") || !strncmp(e->d_name, tid, 9))
+            continue;
+        char other[10], dt[MAX_DLC_TIDS][10];
+        snprintf(other, sizeof(other), "%.9s", e->d_name);
+        if (!ps4m_title_managed(other))
+            continue;
+        int n = addcont_record_read(other, dt, MAX_DLC_TIDS);
+        for (int i = 0; i < n && !shared; i++)
+            shared = !strcmp(dt[i], dtid);
+    }
+    closedir(d);
+    return shared;
+}
+
 /* /user/app/<TID> always, /user/patch/<TID> only with an update and
  * /user/addcont/<ADD-ON TID> for each add-on title. */
 static int mount_paths(const char *tid, int has_patch, char (*dtids)[10], int ndtids) {
@@ -1865,6 +1929,7 @@ static int mount_paths(const char *tid, int has_patch, char (*dtids)[10], int nd
     hold_path(hold, sizeof(hold), "patch", tid);
     if (has_patch ? mount_dir(hold, target) : (unmount_all_layers(target, 1), 0))
         return -1;
+    addcont_record_write(tid, dtids, ndtids); /* (app) read by remove_title when the module's list does not have the game */
     for (int i = 0; !g_cfg.dlc_copy && i < ndtids; i++) {
         int copying = 0;
         for (int k = 0; k < g_acn; k++)
@@ -3032,6 +3097,8 @@ static void handle_klog_line(const char *line) {
             write_file(path, m->dir, strlen(m->dir), 0666);
             snprintf(path, sizeof(path), STATE_DIR "/%s.src", m->tid);
             unlink(path);
+            snprintf(path, sizeof(path), STATE_DIR "/%s.addcont", m->tid);
+            unlink(path);
             char hold[PATH_MAX];
             hold_path(hold, sizeof(hold), "app", m->tid);
             rm_tree(hold);
@@ -3597,6 +3664,7 @@ int ps4m_add(const char *tid, char *msg, size_t cap) {
 #define UNINSTALL_WAIT 60
 
 static volatile int g_uninstall_busy, g_uninstall_rc;
+static volatile int g_uninstall_unreported;  /* (app) the last call timed out: its result, once there, belongs to the next call for that title */
 static char g_uninstall_tid[10];
 
 static void *uninstall_thread(void *arg) {
@@ -3612,6 +3680,14 @@ static int uninstall_title(const char *tid) {
         printf("[remove] %s: an earlier uninstall (%s) is still running\n", tid, g_uninstall_tid);
         return -2;
     }
+    /* (app) The game delete asks again after a time-out: the uninstall it started may have finished meanwhile, and the library may not
+       show it yet. A second uninstall would then fail for a game that is gone (review of 22.11.2026): hand over the first one's result. */
+    if (g_uninstall_unreported && !strcmp(g_uninstall_tid, tid)) {
+        g_uninstall_unreported = 0;
+        printf("[remove] %s: the earlier uninstall ended with 0x%08x\n", tid, (unsigned)g_uninstall_rc);
+        return g_uninstall_rc;
+    }
+    g_uninstall_unreported = 0;
     snprintf(g_uninstall_tid, sizeof(g_uninstall_tid), "%s", tid);
     g_uninstall_busy = 1;
     pthread_t th;
@@ -3624,6 +3700,7 @@ static int uninstall_title(const char *tid) {
         usleep(100000);
     if (g_uninstall_busy) {
         printf("[remove] %s: uninstall did not return within %d s\n", tid, UNINSTALL_WAIT);
+        g_uninstall_unreported = 1;
         return -2;
     }
     return g_uninstall_rc;
@@ -3641,7 +3718,7 @@ static int app_pkg_left(const char *tid) {
 static int remove_title(const char *tid, char *msg, size_t cap, int *pkg_left_out);
 
 int ps4m_remove(const char *tid, char *msg, size_t cap) {
-    return remove_title(tid, msg, cap, NULL);
+    return remove_title(tid, msg, cap, NULL) ? -1 : 0;   /* (app) the page and the module know only "done" or "not" */
 }
 
 static int remove_title(const char *tid, char *msg, size_t cap, int *pkg_left_out) {
@@ -3662,8 +3739,23 @@ static int remove_title(const char *tid, char *msg, size_t cap, int *pkg_left_ou
     }
     if (m)
         unmount_title(tid, m->dlc_tids, m->ndlc_tids);
-    else
+    else {
         unmount_title(tid, NULL, 0);
+        /* (app) Not in this run's list (the module is off, or the pkgs are gone, and the game delete found it by the mount table): the
+           add-on titles mount_paths recorded for it, and the game's own title ID (the usual case, also for mounts from before the
+           record). Unmounted when PS4Mount's hold folder is mounted there and no other mounted game lists the same add-on title, so no
+           add-on mount outlives the uninstall (review of 22.11.2026). */
+        char dtids[MAX_DLC_TIDS + 1][10];
+        int nd = addcont_record_read(tid, dtids, MAX_DLC_TIDS);
+        snprintf(dtids[nd++], 10, "%s", tid);
+        for (int i = 0; i < nd; i++) {
+            char ac[64], from[PATH_MAX];
+            snprintf(ac, sizeof(ac), "/user/addcont/%s", dtids[i]);
+            if (mounted_from(ac, from, sizeof(from)) && !strncmp(from, HOLD_DIR "/addcont/", strlen(HOLD_DIR "/addcont/")) &&
+                !addcont_shared(dtids[i], tid))
+                unmount_all_layers(ac, 1);
+        }
+    }
     char a[64], b[64];
     snprintf(a, sizeof(a), "/user/app/%s", tid);
     snprintf(b, sizeof(b), "/user/patch/%s", tid);
@@ -3676,6 +3768,8 @@ static int remove_title(const char *tid, char *msg, size_t cap, int *pkg_left_ou
     snprintf(path, sizeof(path), STATE_DIR "/%s.removed", tid);
     write_file(path, tid, strlen(tid), 0666);
     snprintf(path, sizeof(path), STATE_DIR "/%s.src", tid);
+    unlink(path);
+    snprintf(path, sizeof(path), STATE_DIR "/%s.addcont", tid);
     unlink(path);
     int rc = p4m_db_is_registered(tid) ? uninstall_title(tid) : 0;
     if (m)
@@ -3690,7 +3784,8 @@ static int remove_title(const char *tid, char *msg, size_t cap, int *pkg_left_ou
                            : pkg_left ? "%s ist aus der Bibliothek entfernt. Die PKG bleibt auf dem USB-Laufwerk."
                                       : "%s ist aus der Bibliothek entfernt.",
                  tid, rc);
-    return rc ? -1 : 0;
+    /* (app) -3: the system uninstall is still running (or an earlier one is): everything else is done, a second call only asks again */
+    return rc == -2 ? -3 : rc ? -1 : 0;
 }
 
 /* Removes a game refused with "system file disagree" from the library and adds it again. */
@@ -3877,6 +3972,8 @@ static void restore_clear_state(const char *tid) {
     snprintf(p, sizeof(p), STATE_DIR "/%s.removed", tid);
     unlink(p);
     snprintf(p, sizeof(p), STATE_DIR "/%s.src", tid);
+    unlink(p);
+    snprintf(p, sizeof(p), STATE_DIR "/%s.addcont", tid);
     unlink(p);
     retry_clear(tid);
 }
@@ -4957,6 +5054,15 @@ static int tid_ok(const char *t) {
    Returns 0 or -1; msg says what happened. Moving back runs in the worker, which must be running. */
 int ps4m_do_action(const char *action, const char *tid, char *msg, size_t n) {
     int rc = -1;
+    /* (app) "remove" uninstalls through AppInstUtil, which only the worker initialises: with the module off nobody may have (review of
+       22.11.2026). Before the lock, bounded to 10 s, once per process. */
+    if (!strcmp(action, "remove")) {   /* action is never NULL: api.c compares it before the call, as the code below does */
+        const int irc = ps5tm_appinst_init();
+        if (irc) {
+            snprintf(msg, n, "Der Installationsdienst der Konsole ist nicht bereit (0x%08x). Es wurde nichts entfernt.", (unsigned)irc);
+            return -1;
+        }
+    }
     if (lock_for_page(3000)) {
         snprintf(msg, n, P4M_BUSY);
         return -1;
@@ -4999,6 +5105,20 @@ int ps4m_remove_title(const char *tid, int wait_ms, int *pkg_left, char *msg, si
         *pkg_left = 0;
     if (!tid_ok(tid)) {
         snprintf(msg, n, "Unbekannte Titel-ID");
+        return -1;
+    }
+    /* The game delete finds a PS4Mount game by the mount table, so it gets here also with the module switched off, when no worker has
+       initialised AppInstUtil in this process: that happens here, before anything is unmounted (otherwise the uninstall fails and the
+       game stays listed but unmounted). The games of a stand-alone PS4Mount are its own. Both before the lock: they may wait (review
+       of 22.11.2026). */
+    char why[160];
+    if (!g_alive && ps4m_standalone_active(why, sizeof(why))) {
+        snprintf(msg, n, "Ein eigenständiges PS4Mount läuft. %s Entferne das Spiel dort.", why);
+        return -1;
+    }
+    const int irc = ps5tm_appinst_init();
+    if (irc) {
+        snprintf(msg, n, "Der Installationsdienst der Konsole ist nicht bereit (0x%08x). Es wurde nichts entfernt.", (unsigned)irc);
         return -1;
     }
     if (lock_for_page(wait_ms)) {

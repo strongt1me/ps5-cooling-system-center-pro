@@ -30,6 +30,7 @@
  * console's own tools pass to it (as the ps5-pkg-manager of itsPLK, GPL-3.0, whose use of the library was read for
  * this; nothing of its code is here). */
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -112,7 +113,35 @@ extern int sceAppInstUtilInstallByPackage(const pkg_metadata_t *, pkg_info_t *, 
 extern int sceAppInstUtilGetInstallStatus(const char *content_id, install_status_t *);
 extern int sceAppInstUtilAppUnInstall(const char *title_id);
 extern int sceAppInstUtilAppUnInstallPat(const char *title_id);
-extern int sceAppInstUtilAppUnInstallAddcont(const char *title_id);
+/* Two arguments, the title and the add-on's name (its label, the content id after "XXXXXX-CUSA00000_00-"): read from the export in
+   libSceAppInstUtil.sprx of 40 firmwares 1.00-12.70, which hands both to the installer service and answers 0x80A30003 for a NULL name
+   (review of 22.11.2026). It was declared with one argument, as in the PKG Manager, so the name was whatever rsi held. */
+extern int sceAppInstUtilAppUnInstallAddcont(const char *title_id, const char *addcont_name);
+
+#define ADDCONT_MAX 64
+/* The add-ons of a title as the console keeps them: one folder per add-on under /user/addcont/<title id>, named by its label.
+   Returns how many names went into names (at most ADDCONT_MAX). */
+static int
+list_addcont(const char *title_id, char names[][48]) {
+  char dir[64];
+  snprintf(dir, sizeof(dir), "/user/addcont/%s", title_id);
+  DIR *d = opendir(dir);
+  if(!d) return 0;
+  int n = 0;
+  struct dirent *e;
+  while(n < ADDCONT_MAX && (e = readdir(d))) {
+    const size_t len = strlen(e->d_name);
+    if(e->d_name[0] == '.' || len == 0 || len >= 48) continue;
+    int ok = 1;                                   /* a label is letters, digits, '_' or '-'; anything else is not an add-on folder */
+    for(size_t i = 0; i < len && ok; i++) {
+      const char c = e->d_name[i];
+      ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+    }
+    if(ok) snprintf(names[n++], 48, "%s", e->d_name);
+  }
+  closedir(d);
+  return n;
+}
 
 /* Four capital letters and five digits, nothing else: what reaches the system's uninstall is a title id. */
 static int
@@ -393,12 +422,27 @@ serve(int fd) {
         rsp.result = PKGI_E_BADREPLY;
         plog("serve: uninstall refused: not a title id\n");
       } else {
-        plog("serve: sceAppInstUtilAppUnInstall %s\n", req.title_id);
+        /* the add-ons are named before the game goes: each is removed by its name afterwards */
+        static char addcont[ADDCONT_MAX][48];
+        const int nadd = list_addcont(req.title_id, addcont);
+        plog("serve: sceAppInstUtilAppUnInstall %s (%d add-on folder(s))\n", req.title_id, nadd);
         rsp.result = sceAppInstUtilAppUnInstall(req.title_id);
         plog("serve: sceAppInstUtilAppUnInstall -> 0x%08X (errno %d)\n", (unsigned)rsp.result, errno);
         if(rsp.result == 0) {
           rsp.result_pat = sceAppInstUtilAppUnInstallPat(req.title_id);
-          rsp.result_addcont = sceAppInstUtilAppUnInstallAddcont(req.title_id);
+          rsp.result_addcont = 0;                  /* none, or all removed; else the first refusal */
+          for(int i = 0; i < nadd; i++) {
+            char path[128];
+            struct stat st;
+            snprintf(path, sizeof(path), "/user/addcont/%s/%s", req.title_id, addcont[i]);
+            if(stat(path, &st) != 0) {                /* the game's uninstall already took it along */
+              plog("serve: add-on %s already gone\n", addcont[i]);
+              continue;
+            }
+            const int r = sceAppInstUtilAppUnInstallAddcont(req.title_id, addcont[i]);
+            plog("serve: add-on %s -> 0x%08X\n", addcont[i], (unsigned)r);
+            if(r != 0 && rsp.result_addcont == 0) rsp.result_addcont = r;
+          }
           plog("serve: updates -> 0x%08X, add-ons -> 0x%08X\n", (unsigned)rsp.result_pat, (unsigned)rsp.result_addcont);
         }
       }

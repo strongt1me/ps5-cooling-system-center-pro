@@ -2607,7 +2607,8 @@ class MockSource final : public Source
                                                                "hängt es aus, dann deinstalliert es "
                                                                "die Konsole"));
                 cJSON_AddItemToArray(
-                    items, cJSON_CreateString("seine Updates und Zusatzinhalte in der Bibliothek"));
+                    items, cJSON_CreateString("die Updates und Zusatzinhalte, die PS4Mount "
+                                              "dafür eingehängt hat"));
             }
             else
             {
@@ -3716,7 +3717,7 @@ class MockSource final : public Source
              "An die Konsole übergeben: 78 °C – Durchschnitt 71,4 °C, gewünschte Drehzahl 46 %."},
             {"ERROR", "paystore_fetch_failed",
              "Die Liste der Payloads ließ sich nicht laden (Zeitüberschreitung)."},
-            {"INFO", "paystore_loaded", "34 Payloads in der Liste."},
+            {"INFO", "paystore_fetched", "Payload-Liste geladen: 34 Payloads."}, /* as src/paystore.c writes it */
         };
         std::int64_t t = 1793114617243;
         for (const auto &line : kLog)

@@ -169,6 +169,8 @@ static struct {
   char     source[256];
   uint64_t at_ms;
   tree_t   tree;
+  dev_t    dev;                                 /* the folder measured: a path that exists again is not the same folder (review of 22.11.2026) */
+  ino_t    ino;
 } g_plan;
 
 
@@ -300,21 +302,26 @@ is_file(const char *path) {
 static tree_t
 measure_cached(const char *source, uint64_t ttl_ms) {
   tree_t t;
+  dev_t dev = 0;
+  ino_t ino = 0;
   pthread_mutex_lock(&g_lock);
   int hit = !strcmp(g_plan.source, source) && ps5tm_mono_ms() - g_plan.at_ms < ttl_ms;
-  if(hit) t = g_plan.tree;
+  if(hit) { t = g_plan.tree; dev = g_plan.dev; ino = g_plan.ino; }
   pthread_mutex_unlock(&g_lock);
-  /* ... and only while the folder is still there: right after an eject the plan answered "ok" from this memory for a game whose
-     drive was gone (live test on the Slim, 21.11.2026). One lstat, not a walk. */
+  /* ... and only while it is still the same folder: right after an eject the plan answered "ok" from this memory for a game whose
+     drive was gone (live test on the Slim, 21.11.2026), and another drive plugged in under the same name is not the measured one
+     (review of 22.11.2026). One lstat, not a walk. */
   struct stat st;
-  if(hit && lstat(source, &st) == 0) return t;
+  if(hit && lstat(source, &st) == 0 && st.st_dev == dev && st.st_ino == ino) return t;
 
   t = measure(source);
-  if(!t.err) {
+  if(!t.err && lstat(source, &st) == 0) {
     pthread_mutex_lock(&g_lock);
     snprintf(g_plan.source, sizeof(g_plan.source), "%s", source);
     g_plan.at_ms = ps5tm_mono_ms();
     g_plan.tree  = t;
+    g_plan.dev   = st.st_dev;
+    g_plan.ino   = st.st_ino;
     pthread_mutex_unlock(&g_lock);
   }
   return t;
@@ -1306,9 +1313,12 @@ copy_start_impl(const char *title_id, const char *mount, const char *mode, const
      it offers "start"): a path that cannot fit below THIS destination is
      refused right here, as an error on the button, not as a failed job. The
      copy checks again with a measurement of its own either way. */
+  struct stat pst;
+  const int have_st = lstat(source, &pst) == 0;
   pthread_mutex_lock(&g_lock);
-  int      planned = !strcmp(g_plan.source, source) &&
-                     ps5tm_mono_ms() - g_plan.at_ms < PLAN_TTL_MS;
+  int      planned = have_st && !strcmp(g_plan.source, source) &&
+                     ps5tm_mono_ms() - g_plan.at_ms < PLAN_TTL_MS &&
+                     pst.st_dev == g_plan.dev && pst.st_ino == g_plan.ino;   /* the same folder, as in measure_cached (review of 22.11.2026) */
   unsigned max_rel = planned ? g_plan.tree.max_rel : 0;
   pthread_mutex_unlock(&g_lock);
   if(planned && strlen(a->target) + 1 + max_rel >= PATH_MAX) {

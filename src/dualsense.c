@@ -290,9 +290,10 @@ resolve(void) {
       closedir(d);
     }
 
+    /* The two nodes stand in the message itself and only their state is a value: the log page translates a value that
+       is a dictionary entry as a whole ("offen, aber leer"), not a list of them (review of 22.11.2026). */
     static const char *nodes[] = { "/dev/bluetooth_hid", "/dev/hid" };
-    char   verdict[160] = {0};
-    size_t used = 0;
+    const char *state[2] = { "kein Zugriff", "kein Zugriff" };
     for(size_t i = 0; i < sizeof(nodes) / sizeof(nodes[0]); i++) {
       const char *how;
       int fd = open(nodes[i], O_RDONLY | O_NONBLOCK);
@@ -313,13 +314,11 @@ resolve(void) {
             : err == ENODEV    ? "nur über Steuerbefehle"
                                : "offen, aber stumm";
       }
-      used += (size_t)snprintf(verdict + used, sizeof(verdict) - used,
-                               "%s%s: %s", used ? ", " : "", nodes[i], how);
-      if(used >= sizeof(verdict)) break;
+      state[i] = how;
     }
 
     PS5TM_INFO("dev_hid_scan",
-               "Controller-Gerätedateien: %d vorhanden — %s.", n_nodes, verdict);
+               "Controller-Gerätedateien: %d vorhanden — /dev/bluetooth_hid: %s, /dev/hid: %s.", n_nodes, state[0], state[1]);
   }
 
   PS5TM_INFO("pad_resolved",

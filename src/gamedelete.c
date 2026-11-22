@@ -585,6 +585,11 @@ make_plan(const char *kind, const char *id, plan_t *p) {
          games as well (with /user/app/<TID>/app.pkg as their data), and its way refused them (Slim, 22.11.2026). */
       snprintf(p->kind, sizeof(p->kind), "ps4mount");
       snprintf(p->note, sizeof(p->note), "Die PKG-Dateien auf dem USB-Laufwerk bleiben liegen; PS4Mount nimmt das Spiel nicht von selbst wieder auf.");
+      char why[160];
+      if(!ps4m_running() && ps4m_standalone_active(why, sizeof(why))) {   /* its games are its own: said before the start (review of 22.11.2026) */
+        snprintf(p->why, sizeof(p->why), "Ein eigenständiges PS4Mount läuft. %s Entferne das Spiel dort.", why);
+        return 0;
+      }
     } else if(li.smp) {
       snprintf(p->kind, sizeof(p->kind), "smp");
       ps5tm_smp_game_t s;
@@ -663,7 +668,7 @@ ps5tm_gamedelete_plan(const char *kind, const char *id, int *http) {
     cJSON_AddItemToArray(items, cJSON_CreateString("seine Updates und Zusatzinhalte"));
   } else if(!strcmp(p.kind, "ps4mount")) {
     cJSON_AddItemToArray(items, cJSON_CreateString("das Spiel in der Bibliothek: PS4Mount hängt es aus, dann deinstalliert es die Konsole"));
-    cJSON_AddItemToArray(items, cJSON_CreateString("seine Updates und Zusatzinhalte in der Bibliothek"));
+    cJSON_AddItemToArray(items, cJSON_CreateString("die Updates und Zusatzinhalte, die PS4Mount dafür eingehängt hat"));
   } else if(!strcmp(p.kind, "smp")) {
     cJSON_AddItemToArray(items, cJSON_CreateString("der Eintrag bei ShadowMountPlus (das Spiel wird ausgehängt und abgemeldet)"));
     char t[400];
@@ -790,8 +795,10 @@ run_installed(const dl_args_t *a) {
   if(!gone) snprintf(note, sizeof(note), "Die Konsole hat das Deinstallieren angenommen, ist aber noch nicht fertig. Bitte gleich in der Spieleliste nachsehen.");
   ps5tm_smp_forget();
   ps5tm_library_forget();
-  PS5TM_INFO("game_delete_done", "%s über die Konsole deinstalliert%s (Updates 0x%08X, Zusatzinhalte 0x%08X).",
-             a->id, gone ? "" : ", Aufräumen noch nicht fertig", (unsigned)pat, (unsigned)add);
+  /* two whole sentences: the log page translated the inserted ", Aufräumen noch nicht fertig" only in part (review of 22.11.2026) */
+  if(gone) PS5TM_INFO("game_delete_done", "%s über die Konsole deinstalliert (Updates 0x%08X, Zusatzinhalte 0x%08X).", a->id, (unsigned)pat, (unsigned)add);
+  else     PS5TM_INFO("game_delete_done", "%s über die Konsole deinstalliert, Aufräumen noch nicht fertig (Updates 0x%08X, Zusatzinhalte 0x%08X).",
+                      a->id, (unsigned)pat, (unsigned)add);
   job_end(DL_DONE, NULL, note);
 }
 
@@ -804,7 +811,9 @@ run_ps4mount(const dl_args_t *a) {
   char msg[400] = "";
   int pkg_left = 0, rc;
   const uint64_t t0 = ps5tm_mono_ms();
-  while((rc = ps4m_remove_title(a->id, 3000, &pkg_left, msg, sizeof(msg))) == -2 && ps5tm_mono_ms() - t0 < 120000)
+  /* -2: the module is busy; -3: the system uninstall is still running (the game is unmounted already, asking again is safe and only
+     asks the system again). Both are tried again for two minutes (review of 22.11.2026: a retry by hand found no PS4Mount game any more). */
+  while(((rc = ps4m_remove_title(a->id, 3000, &pkg_left, msg, sizeof(msg))) == -2 || rc == -3) && ps5tm_mono_ms() - t0 < 120000)
     usleep(2000 * 1000);
   if(rc != 0) {
     char e[640];
@@ -825,8 +834,9 @@ run_ps4mount(const dl_args_t *a) {
   else note[0] = '\0';
   ps5tm_smp_forget();
   ps5tm_library_forget();
-  PS5TM_INFO("game_delete_done", "%s über PS4Mount aus der Bibliothek entfernt%s (PKG %s).", a->id, gone ? "" : ", Aufräumen noch nicht fertig",
-             pkg_left ? "bleibt auf dem Laufwerk" : "nicht mehr da");
+  const char *pkg = pkg_left ? "bleibt auf dem Laufwerk" : "nicht gefunden";   /* not found: deleted, or the drive is not plugged in */
+  if(gone) PS5TM_INFO("game_delete_done", "%s über PS4Mount aus der Bibliothek entfernt (PKG %s).", a->id, pkg);
+  else     PS5TM_INFO("game_delete_done", "%s über PS4Mount aus der Bibliothek entfernt, Aufräumen noch nicht fertig (PKG %s).", a->id, pkg);
   job_end(DL_DONE, NULL, note[0] ? note : NULL);
 }
 
