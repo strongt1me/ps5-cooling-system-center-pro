@@ -16,7 +16,7 @@
 - **Dump Forge 0.5.6 steckt in der App** (die ELF wächst auf rund 24 MB); die Kacheln bringen keine eigene Kopie mehr mit. Knopf „Neue Fassung von GitHub laden“ im Konvertieren-Fenster.
 - **Fortschritt beim Vermessen** für die Packs: Balken, Prozent und Restzeit statt eines stehenden Texts.
 - **AMPR EMU NG 0.5.0** (die zwei neuesten Fassungen sind eingebettet: 0.5.0 und 0.4.1) und **Kraken Mount 0.3.1** mit dem **PlayGo-Stub je Spiel** (Schalter in der Spieleliste von FPKGMount, Browser und Vollbild).
-- **PS4Mount und Kraken Mount sind ab Werk aus;** wer eines einschaltet, bei dem bleibt es nach einem Neustart an (an der Slim erprobt). PS4Mount 0.8.0 an der Slim mit echten PS4-Paketen erprobt: fünf Spiele von einem USB-Stick angemeldet, eines gestartet und wieder beendet.
+- **PS4Mount und Kraken Mount sind ab Werk aus;** wer eines einschaltet, bei dem bleibt es nach einem Neustart an (an der Slim erprobt). PS4Mount 0.8.0 an der Slim mit echten PS4-Paketen erprobt: fünf Spiele von einem USB-Stick angemeldet, eines gestartet und wieder beendet; danach ein Spiel mit Update (1.02) vom selben Stick: das Update wurde gefunden und genommen, das Spiel startete als 1.02.
 
 ### Payloads
 - **Zweite Liste unter „Payloads herunterladen“:** `strongt1me/ps5-payload-source` neben dem Spiegel von itsPLK (Browser und Vollbild). Jede Datei wird weiter gegen die SHA-256 aus ihrer eigenen Liste geprüft.
@@ -39,8 +39,8 @@
 ## Hinweise
 - **Adressen geändert:** Wer die Weboberfläche über `ps5.fritz.box` oder einen Namen ohne Punkt aufgerufen hat, nimmt jetzt die IP-Adresse der Konsole.
 - **PS4Mount und Kraken Mount nach dem Update:** Wer sie nie geschaltet hat, sieht beide aus – bei Bedarf einmal einschalten. Kraken Mount muss auch dann einmal neu eingeschaltet werden, wenn es vorher lief (bisher wurde nur „aus“ gespeichert).
-- **An der Konsole erprobt** (Slim, Firmware 12.00): Auswerfen aus dem Dateimanager (auch richtig abgelehnt, solange noch vom Stick gelesen wurde), die Meldung „noch nicht abziehen“, das Auswerfen aus der Vollbild-App, die Akku-Zeile, 80 lesende Abfragen und 31 fehlerhafte Anfragen ohne Absturz, alle Browser-Seiten auf Englisch. Die Pro (Firmware 12.00) nur beim Auswerfen, mit einem früheren Stand.
-- **Nicht belegt:** ob damit der Absturz beim Auswerfen weg ist, den ein Nutzer mit Firmware 4.03 hatte (noch keine Rückmeldung); das Schreiben in `savedata.db` mit dem neuen SQLite ist nur am PC geprüft; Updates und Zusatzinhalte von PS4Mount sind an der Konsole nicht erprobt.
+- **An der Konsole erprobt** (Slim, Firmware 12.00): Auswerfen aus dem Dateimanager (auch richtig abgelehnt, solange noch vom Stick gelesen wurde), die Meldung „noch nicht abziehen“, das Auswerfen aus der Vollbild-App, die Akku-Zeile, das Einspielen eines Spielstands mit SQLite 3.54.1 (der Eintrag in `savedata.db` wurde geschrieben), ein PS4-Spiel mit Update über PS4Mount (1.02 gefunden und aktiv, als 1.02 gestartet und wieder beendet), 80 lesende Abfragen und 31 fehlerhafte Anfragen ohne Absturz, alle Browser-Seiten auf Englisch. Die Pro (Firmware 12.00) nur beim Auswerfen, mit einem früheren Stand.
+- **Nicht belegt:** ob damit der Absturz beim Auswerfen weg ist, den ein Nutzer mit Firmware 4.03 hatte (noch keine Rückmeldung); Zusatzinhalte von PS4Mount sind an der Konsole nicht erprobt (keine PS4-Zusatzinhalte zur Hand).
 - 46 Host-Testläufe und 387 Tests der Vollbild-App bestehen. Die neue ELF an Port 9021 senden und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein).
 
 ## Downloads

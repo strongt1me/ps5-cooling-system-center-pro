@@ -16,7 +16,7 @@
 - **Dump Forge 0.5.6 inside the app** (the ELF grows to about 24 MB); the tiles no longer carry their own copy. Button "Download newer version from GitHub" in the convert window.
 - **Progress while measuring** for packs: bar, percent and time left instead of a still text.
 - **AMPR EMU NG 0.5.0** (the two newest versions are embedded: 0.5.0 and 0.4.1) and **Kraken Mount 0.3.1** with the **PlayGo stub per game** (switch in the game list of FPKGMount, browser and fullscreen).
-- **PS4Mount and Kraken Mount are off by default;** whoever switches one on keeps it on after a restart (tried on the Slim). PS4Mount 0.8.0 tried with real PS4 packages on the Slim: five games registered from a USB stick, one started and closed again.
+- **PS4Mount and Kraken Mount are off by default;** whoever switches one on keeps it on after a restart (tried on the Slim). PS4Mount 0.8.0 tried with real PS4 packages on the Slim: five games registered from a USB stick, one started and closed again; then a game with its update (1.02) from the same stick: the update was found and used, the game started as 1.02.
 
 ### Payloads
 - **Second list in "Download payloads":** `strongt1me/ps5-payload-source` next to itsPLK's mirror (browser and fullscreen). Every file is still checked against the SHA-256 in its own list.
@@ -39,8 +39,8 @@
 ## Notes
 - **Addresses changed:** If you opened the web interface through `ps5.fritz.box` or a name without a dot, use the console's IP address now.
 - **PS4Mount and Kraken Mount after the update:** Whoever never switched them shows both off – switch them on once if you use them. Kraken Mount has to be switched on again even if it ran before (until now only "off" was stored).
-- **Tried on the console** (Slim, firmware 12.00): eject from the file manager (also refused correctly while something still read from the stick), the "do not unplug yet" message, the fullscreen eject, the controller battery line, 80 read routes and 31 malformed requests without a crash, every browser page in English. The Pro (firmware 12.00) was tried with the eject only, on an earlier build.
-- **Not proven:** whether this ends the eject crash one user had on firmware 4.03 (no feedback yet); writing to `savedata.db` with the new SQLite was only tested on the PC; PS4Mount updates and add-ons were not tried on the console.
+- **Tried on the console** (Slim, firmware 12.00): eject from the file manager (also refused correctly while something still read from the stick), the "do not unplug yet" message, the fullscreen eject, the controller battery line, importing a save with SQLite 3.54.1 (the entry in `savedata.db` was written), a PS4 game with its update through PS4Mount (1.02 found and active, started as 1.02 and closed again), 80 read routes and 31 malformed requests without a crash, every browser page in English. The Pro (firmware 12.00) was tried with the eject only, on an earlier build.
+- **Not proven:** whether this ends the eject crash one user had on firmware 4.03 (no feedback yet); PS4Mount add-ons were not tried on the console (no PS4 add-on packages at hand).
 - 46 host test runs and 387 tests of the fullscreen app pass. Send the new ELF to port 9021 and copy the tiles FAKE86921 and FAKE86922 from this release again (the fullscreen app must be closed for that).
 
 ## Downloads

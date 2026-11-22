@@ -2,6 +2,13 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
+## Unveröffentlicht
+
+### Nach v1.90.0 an der Slim erprobt (22.11.2026)
+- **Spielstand einspielen mit SQLite 3.54.1:** Ein Spielstand (Arcade Game Zone) als ZIP nach `usb0` ausgelesen und unverändert wieder eingespielt; das Protokoll meldet „Eintrag in der Datenbank aktualisiert“, danach dieselben 3 Dateien in derselben Größe wie vorher. Damit ist das Schreiben in `savedata.db` mit dem neuen SQLite auch an der Konsole belegt.
+- **PS4Mount 0.8.0 mit einem Update:** Ein PS4-Spiel (Offroad Racing, CUSA16627, 5,2 GB) und sein Update 1.02 (0,7 GB) übers Netz (FTP) auf `usb0` kopiert. PS4Mount fand das Update (`updates: 1`, aktiv) und meldete das Spiel als „ready“ mit Version 01.02; über die App gestartet, lief es als 01.02 im Vordergrund und wurde über „Spiel beenden“ nach wenigen Sekunden beendet. Zusatzinhalte bleiben unerprobt (keine PS4-Zusatzinhalte vorhanden).
+- **Release-Notizen v1.90.0** (Dateien und Release-Seite) entsprechend berichtigt: beides steht jetzt unter „An der Konsole erprobt“.
+
 ## v1.90.0 – 22.11.2026
 
 ### SQLite 3.54.1 und die letzten Konsolentests (Auftrag des Users „mach alles, was noch offen ist“, 22.11.2026)
