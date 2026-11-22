@@ -7008,7 +7008,7 @@
       <ul>
         <li>Liegen mehrere Fassungen da, nimmt die App die höchste Version. Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern.</li>
         <li>Dump Forge 0.5.7 steckt in der App und damit auch in beiden Kacheln (FAKE86921, FAKE86922).</li>
-        <li>Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. Du musst es nicht von Hand starten.</li>
+        <li>Die App startet Dump Forge bei Bedarf selbst und beendet es nach dem Auftrag wieder. Du musst es nicht von Hand starten.</li>
       </ul>
     </div>`;
   /* A game with AMPR packs: Dump Forge decodes them before it writes the package, as Kraken Mount takes no package with packs in it. */

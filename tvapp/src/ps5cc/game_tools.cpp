@@ -1333,24 +1333,23 @@ void GameTools::open_guide(ui::Feedback &feedback)
     guide_view_.style.block_gap = 12.0f;
     guide_view_.style.item_gap = 8.0f;
     guide_view_.style.heading_gap = 22.0f;
-    // one whole sentence per block: the translator looks each up as it is (the same texts as the
-    // web page's guide)
+    // one whole sentence per block: the translator looks each up as it is. Most are the web page's
+    // guide (its dictionary comes first on the console); way 1 points to this window's own row
+    // instead of the browser (user, 22.11.2026), its first step is in assets/lang.
     guide_view_.set_content({
         TextBlock::heading("Dump Forge bei der reinen ELF-Version", 2),
         TextBlock::paragraph("Dump Forge steckt schon in der App. Du brauchst diese Anleitung nur, "
                              "wenn du eine neuere Fassung willst."),
         TextBlock::heading("Weg 1: Die App lädt eine neuere Fassung selbst", 3),
-        TextBlock::numbered("Öffne die App im Browser unter der Adresse der Konsole, Port 8086:",
+        TextBlock::numbered("Schließe diese Anleitung. „Neue Fassung laden“ ist die Zeile direkt "
+                            "über „Anleitung“.",
                             "1."),
-        TextBlock::code("http://<IP der Konsole>:8086"),
-        TextBlock::numbered(
-            "Wähle bei einem Spiel „Konvertieren“ und das Format „FPKG (Debug-.pkg)“.", "2."),
-        TextBlock::numbered("Drücke „Neue Fassung laden“.", "3."),
+        TextBlock::numbered("Drücke „Neue Fassung laden“.", "2."),
         TextBlock::numbered("Gibt es eine neuere Fassung, lädt die App sie von GitHub, prüft die "
                             "SHA-256-Prüfsumme und legt sie ab (rund 18 MB). Sonst meldet sie, "
                             "dass die neueste schon da ist.",
-                            "4."),
-        TextBlock::numbered("Danach nimmt die App die neue Fassung für jeden Auftrag.", "5."),
+                            "3."),
+        TextBlock::numbered("Danach nimmt die App die neue Fassung für jeden Auftrag.", "4."),
         TextBlock::heading("Weg 2: Von Hand ablegen (ohne Internet auf der Konsole)", 3),
         TextBlock::numbered("Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt "
                             "quer3q/ps5-dump-forge).",
@@ -1376,7 +1375,7 @@ void GameTools::open_guide(ui::Feedback &feedback)
         TextBlock::bullet("Dump Forge 0.5.7 steckt in der App und damit auch in beiden Kacheln "
                           "(FAKE86921, FAKE86922)."),
         TextBlock::bullet(
-            "Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. "
+            "Die App startet Dump Forge bei Bedarf selbst und beendet es nach dem Auftrag wieder. "
             "Du musst es nicht von Hand starten."),
     });
     guide_view_.set_bounds(
