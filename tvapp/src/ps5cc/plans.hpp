@@ -168,7 +168,7 @@ struct Plan
     std::string check_container;
     std::vector<std::string> check_bad;
     // ---- delete ----
-    std::string path, version, keeps, confirm;
+    std::string path, version, keeps, confirm; // the delete plan's "note" is read into note above
     std::vector<std::string> items;
     bool can_delete = false;
 };

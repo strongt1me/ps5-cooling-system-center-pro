@@ -36,6 +36,7 @@ void ps4m_boot(void) {}
 int ps4m_set_enabled(int on, char *msg, size_t n) { snprintf(msg, n, on ? "PS4Mount ist eingeschaltet" : "PS4Mount ist ausgeschaltet"); return 0; }
 char *ps4m_state_json(void) { return strdup("{}"); }
 int ps4m_do_action(const char *action, const char *tid, char *msg, size_t n) { (void)action; (void)tid; snprintf(msg, n, "Host-Test"); return -1; }
+int ps4m_remove_title(const char *tid, int wait_ms, int *pkg_left, char *msg, size_t n) { (void)tid; (void)wait_ms; if (pkg_left) *pkg_left = 0; snprintf(msg, n, "Host-Test"); return -1; }
 int ps4m_do_config(const char *form, char *msg, size_t n) { (void)form; snprintf(msg, n, "Host-Test"); return -1; }
 int ps4m_icon_png(const char *tid, unsigned char **data, size_t *len) { (void)tid; (void)data; (void)len; return -1; }
 char *ps4m_log_tail(size_t max) { (void)max; return strdup(""); }
@@ -3628,8 +3629,27 @@ static int uninstall_title(const char *tid) {
     return g_uninstall_rc;
 }
 
+/* (app) Whether the app pkg the game's hold folder links to is still there (stat follows the link). */
+static int app_pkg_left(const char *tid) {
+    char hold[PATH_MAX], link[PATH_MAX + 16];
+    struct stat st;
+    hold_path(hold, sizeof(hold), "app", tid);
+    snprintf(link, sizeof(link), "%s/app.pkg", hold);
+    return stat(link, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static int remove_title(const char *tid, char *msg, size_t cap, int *pkg_left_out);
+
 int ps4m_remove(const char *tid, char *msg, size_t cap) {
+    return remove_title(tid, msg, cap, NULL);
+}
+
+static int remove_title(const char *tid, char *msg, size_t cap, int *pkg_left_out) {
     managed_t *m = managed_by(tid, NULL);
+    /* (app) looked at before the unmount: whether the pkg is still on the drive (22.11.2026: after its pkgs were deleted, the message said the pkg stays) */
+    const int pkg_left = app_pkg_left(tid);
+    if (pkg_left_out)
+        *pkg_left_out = pkg_left;
     if (installed_internally(tid)) { /* (app) a game installed on the console is not PS4Mount's to remove */
         printf("[web] remove %s refused: installed on the console\n", tid);
         snprintf(msg, cap, "%s ist fest auf der Konsole installiert; PS4Mount entfernt es nicht", tid);
@@ -3666,7 +3686,9 @@ int ps4m_remove(const char *tid, char *msg, size_t cap) {
     if (rc == -2)
         snprintf(msg, cap, "Die Konsole hat %s noch nicht fertig entfernt; bitte gleich noch einmal versuchen", tid);
     else
-        snprintf(msg, cap, rc ? "%s ließ sich nicht entfernen (0x%08x)" : "%s ist aus der Bibliothek entfernt. Die PKG bleibt auf dem USB-Laufwerk.",
+        snprintf(msg, cap, rc ? "%s ließ sich nicht entfernen (0x%08x)"
+                           : pkg_left ? "%s ist aus der Bibliothek entfernt. Die PKG bleibt auf dem USB-Laufwerk."
+                                      : "%s ist aus der Bibliothek entfernt.",
                  tid, rc);
     return rc ? -1 : 0;
 }
@@ -4967,6 +4989,28 @@ int ps4m_do_action(const char *action, const char *tid, char *msg, size_t n) {
     } else {
         snprintf(msg, n, "Unbekannte Aktion oder Titel-ID");
     }
+    pthread_mutex_unlock(&g_mu);
+    return rc;
+}
+
+/* (app) See ps4m.h: the action "remove" for the game delete of the app, which waits and tries again while the module is busy. */
+int ps4m_remove_title(const char *tid, int wait_ms, int *pkg_left, char *msg, size_t n) {
+    if (pkg_left)
+        *pkg_left = 0;
+    if (!tid_ok(tid)) {
+        snprintf(msg, n, "Unbekannte Titel-ID");
+        return -1;
+    }
+    if (lock_for_page(wait_ms)) {
+        snprintf(msg, n, P4M_BUSY);
+        return -2;
+    }
+    if (g_masked) {
+        pthread_mutex_unlock(&g_mu);
+        snprintf(msg, n, P4M_BUSY);
+        return -2;
+    }
+    int rc = remove_title(tid, msg, n, pkg_left);
     pthread_mutex_unlock(&g_mu);
     return rc;
 }

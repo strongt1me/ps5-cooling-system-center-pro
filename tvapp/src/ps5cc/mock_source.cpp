@@ -2582,21 +2582,37 @@ class MockSource final : public Source
         }
         case Tool::erase:
         {
-            const bool installed =
-                g->format == "fpkg" || g->format == "ps4mount" || g->format == "fpkgmount";
-            cJSON_AddStringToObject(root, "kind", installed ? "installed" : "smp");
+            const bool ps4mount = g->format == "ps4mount";
+            const bool installed = g->format == "fpkg" || ps4mount || g->format == "fpkgmount";
+            cJSON_AddStringToObject(root, "kind",
+                                    ps4mount ? "ps4mount" : installed ? "installed" : "smp");
+            if (ps4mount)
+                cJSON_AddStringToObject(root, "note",
+                                        "Die PKG-Dateien auf dem USB-Laufwerk bleiben liegen; "
+                                        "PS4Mount nimmt das Spiel nicht von selbst wieder auf.");
             cJSON_AddStringToObject(root, "path", g->path.c_str());
             cJSON_AddStringToObject(root, "format", g->format.c_str());
             cJSON_AddStringToObject(root, "version", g->version.c_str());
             cJSON_AddNumberToObject(root, "size_bytes", size);
             cJSON *items = cJSON_AddArrayToObject(root, "items");
             const std::string what = (folder ? "Der Spielordner " : "Die Abbilddatei ") + g->path;
-            cJSON_AddItemToArray(
-                items,
-                cJSON_CreateString(installed ? "Das installierte Spiel (über die Deinstallation "
-                                               "der Konsole)"
-                                             : what.c_str()));
-            cJSON_AddItemToArray(items, cJSON_CreateString("Die Kachel auf dem Startbildschirm"));
+            if (ps4mount)
+            {
+                cJSON_AddItemToArray(items, cJSON_CreateString("das Spiel in der Bibliothek: PS4Mount "
+                                                               "hängt es aus, dann deinstalliert es "
+                                                               "die Konsole"));
+                cJSON_AddItemToArray(
+                    items, cJSON_CreateString("seine Updates und Zusatzinhalte in der Bibliothek"));
+            }
+            else
+            {
+                cJSON_AddItemToArray(
+                    items, cJSON_CreateString(installed ? "Das installierte Spiel (über die "
+                                                          "Deinstallation der Konsole)"
+                                                        : what.c_str()));
+                cJSON_AddItemToArray(items,
+                                     cJSON_CreateString("Die Kachel auf dem Startbildschirm"));
+            }
             if (!installed)
                 cJSON_AddItemToArray(items, cJSON_CreateString("Der Eintrag bei ShadowMountPlus"));
             cJSON_AddBoolToObject(root, "saves_kept", 1);

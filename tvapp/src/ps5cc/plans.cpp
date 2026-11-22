@@ -347,7 +347,8 @@ Plan parse_plan(Tool tool, const PlanReply &reply)
     p.can_delete = flag(root, "can_delete");
     if (tool == Tool::erase)
     {
-        // The delete plan says what kind of thing it is ("installed", "smp") and why it refuses.
+        // The delete plan says what kind of thing it is ("installed", "smp", "ps4mount") and why it
+        // refuses.
         p.why = str(root, "why");
         cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "items"))
         {

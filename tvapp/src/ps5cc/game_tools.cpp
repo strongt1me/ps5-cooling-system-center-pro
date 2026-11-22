@@ -246,6 +246,8 @@ const char *delete_kind(const std::string &kind)
         return "Installiertes Spiel";
     if (kind == "smp")
         return "Spiel von ShadowMountPlus";
+    if (kind == "ps4mount")
+        return "Spiel von PS4Mount";
     return "Spiel";
 }
 
@@ -1966,6 +1968,8 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         if (!plan_.keeps.empty())
             para("Bleibt liegen: " + plan_.keeps + " (die Spieldaten, auf die das Spiel verweist).",
                  kMuted, 3);
+        if (!plan_.note.empty())
+            para(plan_.note, kMuted, 3);
         heading("Deine Spielstände bleiben erhalten.", kGood);
         y += 6.0f;
         // The strong warning: a red plate, not only red text.

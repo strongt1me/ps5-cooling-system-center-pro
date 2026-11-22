@@ -863,6 +863,10 @@ mit Laufwerk, Größe, Datum und den Hinweisen „unfertig“ und „mit Prüfsu
 - **Spiele von ShadowMountPlus:** Zuerst meldet ShadowMountPlus das Spiel ab (es hängt es dabei aus); erst dann löscht die
   App das Abbild bzw. den Ordner und eine Prüfsummen-Datei daneben. Ohne das Abmelden würde ShadowMountPlus die Datei
   beim nächsten Durchsuchen wieder einbinden. Dazu muss die laufende ShadowMountPlus-Fassung das Abmelden anbieten.
+- **PS4-Spiele von PS4Mount (seit 22.11.2026):** PS4Mount nimmt das Spiel aus der Bibliothek, wie mit „Entfernen“ auf der
+  Seite PS4Mount: Es hängt das Spiel aus, dann deinstalliert es die Konsole, und PS4Mount nimmt es nicht von selbst wieder
+  auf. Die Deinstallation allein lehnte die Konsole ab, solange das Spiel eingehängt war (Fehler 0x80AF5002). Die
+  PKG-Dateien auf dem USB-Laufwerk bleiben liegen; löschen lassen sie sich im Dateimanager.
 - **Sicherungen der App:** die Datei bzw. der Ordner und die Prüfsummen-Datei daneben.
 
 **Die Spielstände bleiben immer erhalten.** Keiner dieser Wege fasst sie an.

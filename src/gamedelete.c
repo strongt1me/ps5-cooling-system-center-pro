@@ -10,6 +10,10 @@
  *   smp        a game ShadowMountPlus mounts from an image or a folder on a drive: SMP takes it off first (its own
  *              uninstall, which unmounts it; alone it would mount the file again at its next scan), then the image or
  *              the folder is deleted, and the checksum file next to it if there is one.
+ *   ps4mount   a PS4 game PS4Mount serves from a pkg on a drive (22.11.2026): PS4Mount's own "remove", which unmounts
+ *              it and then has the system uninstall it, and keeps it from being taken in again. The system's uninstall
+ *              alone was refused while the title was still mounted (0x80AF5002, Slim, after its pkgs had been deleted).
+ *              The pkgs on the drive stay; the plan says so.
  *   backup     a copy or conversion this app made (PS5-Sicherung/Spiele on a drive): the file or the folder, and its
  *              checksum file.
  * Saved games are never touched: they are not part of any of these.
@@ -38,6 +42,7 @@
 #include "checkfile.h"
 #include "ioerr.h"
 #include "origafter.h"
+#include "ps4m.h"
 #include "smpunreg.h"
 #include "ps5tm.h"
 #include "titleid.h"
@@ -548,7 +553,7 @@ find_backup(const char *path, backup_t *out) {
 /* ------------------------------------------------------------------ the plan */
 
 typedef struct {
-  char    kind[12];         /* "installed", "smp", "backup" */
+  char    kind[12];         /* "installed", "smp", "ps4mount", "backup" */
   char    name[160];
   char    path[320];
   char    format[12];
@@ -556,6 +561,7 @@ typedef struct {
   int64_t size;
   char    why[400];         /* why it cannot be deleted; empty when it can */
   char    keeps[320];       /* data that stays where it is (a title mounted by a link without ShadowMountPlus) */
+  char    note[300];        /* one more sentence for the page (what stays, for a PS4Mount game) */
 } plan_t;
 
 /* What deleting kind/id would do. 0 when there is such a thing (why says if it cannot be deleted now), 404 when
@@ -573,7 +579,13 @@ make_plan(const char *kind, const char *id, plan_t *p) {
     snprintf(p->format, sizeof(p->format), "%s", li.format);
     snprintf(p->version, sizeof(p->version), "%s", li.version);
     p->size = li.size;
-    if(li.smp) {
+    if(ps4m_title_managed(id)) {
+      /* A PS4Mount game: /user/app/<TID> is PS4Mount's mount of its hold folder (looked at on the mount table, so also with the module switched
+         off and after the pkgs were deleted). PS4Mount takes it out; the pkgs on the drive are not touched. First: ShadowMountPlus lists these
+         games as well (with /user/app/<TID>/app.pkg as their data), and its way refused them (Slim, 22.11.2026). */
+      snprintf(p->kind, sizeof(p->kind), "ps4mount");
+      snprintf(p->note, sizeof(p->note), "Die PKG-Dateien auf dem USB-Laufwerk bleiben liegen; PS4Mount nimmt das Spiel nicht von selbst wieder auf.");
+    } else if(li.smp) {
       snprintf(p->kind, sizeof(p->kind), "smp");
       ps5tm_smp_game_t s;
       if(ps5tm_smp_find(id, &s) != 0) {
@@ -649,6 +661,9 @@ ps5tm_gamedelete_plan(const char *kind, const char *id, int *http) {
   if(!strcmp(p.kind, "installed")) {
     cJSON_AddItemToArray(items, cJSON_CreateString("das Spiel, deinstalliert über die Konsole (wie im Menü „Löschen“)"));
     cJSON_AddItemToArray(items, cJSON_CreateString("seine Updates und Zusatzinhalte"));
+  } else if(!strcmp(p.kind, "ps4mount")) {
+    cJSON_AddItemToArray(items, cJSON_CreateString("das Spiel in der Bibliothek: PS4Mount hängt es aus, dann deinstalliert es die Konsole"));
+    cJSON_AddItemToArray(items, cJSON_CreateString("seine Updates und Zusatzinhalte in der Bibliothek"));
   } else if(!strcmp(p.kind, "smp")) {
     cJSON_AddItemToArray(items, cJSON_CreateString("der Eintrag bei ShadowMountPlus (das Spiel wird ausgehängt und abgemeldet)"));
     char t[400];
@@ -662,6 +677,7 @@ ps5tm_gamedelete_plan(const char *kind, const char *id, int *http) {
     cJSON_AddItemToArray(items, cJSON_CreateString("ihre Prüfsummen-Datei, falls vorhanden"));
   }
   if(p.keeps[0]) cJSON_AddStringToObject(o, "keeps", p.keeps);
+  if(p.note[0]) cJSON_AddStringToObject(o, "note", p.note);
   int can = p.why[0] == 0;
   cJSON_AddBoolToObject(o, "can_delete", can);
   if(!can) cJSON_AddStringToObject(o, "why", p.why);
@@ -777,6 +793,41 @@ run_installed(const dl_args_t *a) {
   PS5TM_INFO("game_delete_done", "%s über die Konsole deinstalliert%s (Updates 0x%08X, Zusatzinhalte 0x%08X).",
              a->id, gone ? "" : ", Aufräumen noch nicht fertig", (unsigned)pat, (unsigned)add);
   job_end(DL_DONE, NULL, note);
+}
+
+/* A PS4Mount game: PS4Mount's own "remove" (it unmounts the title, then the system uninstalls it). The module may be at work on a drive for a
+   while (a scan, an add-on copy), so it is asked again until it lets the delete in, for two minutes at most. */
+static void
+run_ps4mount(const dl_args_t *a) {
+  job_phase("PS4Mount hängt das Spiel aus, die Konsole deinstalliert es");
+  job_stage(5, 5, 0);
+  char msg[400] = "";
+  int pkg_left = 0, rc;
+  const uint64_t t0 = ps5tm_mono_ms();
+  while((rc = ps4m_remove_title(a->id, 3000, &pkg_left, msg, sizeof(msg))) == -2 && ps5tm_mono_ms() - t0 < 120000)
+    usleep(2000 * 1000);
+  if(rc != 0) {
+    char e[640];
+    snprintf(e, sizeof(e), "PS4Mount hat das Spiel nicht entfernt: %s", msg[0] ? msg : "ohne Angabe.");
+    PS5TM_WARN("game_delete_failed", "Löschen von %s: %.150s", a->id, e);
+    job_end(DL_FAILED, e, NULL);
+    return;
+  }
+  job_phase("Die Konsole räumt auf");
+  job_stage(60, 60, 0);
+  const uint64_t t1 = ps5tm_mono_ms();
+  int gone = 0;
+  while(!(gone = title_gone(a->id)) && ps5tm_mono_ms() - t1 < (uint64_t)DL_WAIT_GONE_S * 1000)
+    usleep(2000 * 1000);
+  char note[400];
+  if(!gone) snprintf(note, sizeof(note), "Die Konsole hat das Deinstallieren angenommen, ist aber noch nicht fertig. Bitte gleich in der Spieleliste nachsehen.");
+  else if(pkg_left) snprintf(note, sizeof(note), "Die PKG-Dateien liegen weiter auf dem USB-Laufwerk.");
+  else note[0] = '\0';
+  ps5tm_smp_forget();
+  ps5tm_library_forget();
+  PS5TM_INFO("game_delete_done", "%s über PS4Mount aus der Bibliothek entfernt%s (PKG %s).", a->id, gone ? "" : ", Aufräumen noch nicht fertig",
+             pkg_left ? "bleibt auf dem Laufwerk" : "nicht mehr da");
+  job_end(DL_DONE, NULL, note[0] ? note : NULL);
 }
 
 /* The one ask for ShadowMountPlus's uninstall, with the wait for the app's own tile: refused only because one of the tiles is open, it waits until
@@ -1053,6 +1104,7 @@ delete_thread(void *arg) {
   if(orig) run_orig(a);
   else if(!strcmp(kind, "installed")) run_installed(a);
   else if(!strcmp(kind, "smp")) run_smp(a);
+  else if(!strcmp(kind, "ps4mount")) run_ps4mount(a);
   else run_backup(a);
   ps5tm_powerguard_release();
   /* one line in the history (jobhist.c) */
@@ -1067,7 +1119,7 @@ delete_thread(void *arg) {
   if(waited && st == DL_DONE) ps5tm_notify("„%s“ ist gelöscht.", name);
   else if(waited && st == DL_FAILED) ps5tm_notify("„%s“ wurde nicht gelöscht: %.120s", name, error);
   if((st == DL_DONE || st == DL_FAILED) && !(ren && st == DL_FAILED && strstr(error, "EXDEV")))
-    ps5tm_hist_add("delete", name, orig ? (ren ? "Original verschoben" : "Original") : !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : "Spiel",
+    ps5tm_hist_add("delete", name, orig ? (ren ? "Original verschoben" : "Original") : !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : !strcmp(kind, "ps4mount") ? "Spiel von PS4Mount" : "Spiel",
                    st == DL_DONE ? "done" : "failed", error, bytes, dur);
   free(a);
   return NULL;

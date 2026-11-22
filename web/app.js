@@ -10136,6 +10136,7 @@
     const p = dl.plan;
     const what = p.kind === "installed" ? "installiertes Spiel"
       : p.kind === "smp" ? "Spiel von ShadowMountPlus"
+      : p.kind === "ps4mount" ? "Spiel von PS4Mount"
       : p.kind === "backup" ? "Sicherung der App" : "Spiel";
     const size = p.size_bytes > 0 ? ` · ${bytes(p.size_bytes)}` : "";
     const ver = p.version ? ` · Version ${esc(p.version)}` : "";
@@ -10146,6 +10147,7 @@
       ${p.path ? `<p class="muted">Ort: <code>${esc(p.path)}</code></p>` : ""}
       ${items ? `<p>Gelöscht wird:</p><ul class="dl-items">${items}</ul>` : ""}
       ${p.keeps ? `<p class="muted">Bleibt liegen: <code>${esc(p.keeps)}</code> – die Spieldaten, auf die das Spiel verweist. Welche Dateien dazugehören, weiß die App nicht sicher; sie lassen sich danach von Hand löschen.</p>` : ""}
+      ${p.note ? `<p class="muted">${esc(p.note)}</p>` : ""}
       <p class="dl-keep">Deine Spielstände bleiben erhalten.</p>
       ${ok ? `<p class="fm-del-warn">Das lässt sich nicht rückgängig machen.</p>
       <div class="cp-actions">
