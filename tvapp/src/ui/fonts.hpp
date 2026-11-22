@@ -50,9 +50,13 @@ inline float text(gfx::DrawList &list, const FontRef &font, std::string_view val
 // European languages (ä ö ü é è à ç ñ å ..., in UTF-8; ß and ÿ stay as they are) and Cyrillic.
 // (app) It was ASCII only, so a German heading read "4. PRüFUNG DANACH" and a Russian one stayed
 // in small letters (review of 21.11.2026).
+// (app) The text is translated first (the fonts' text filter, gfx::filter_text), then put in
+// capitals: a dictionary holds "3. Wohin?", and the filter at drawing only saw "3. WOHIN?", so a
+// heading stayed German unless its capitals stood in the dictionary as well (22.11.2026). Without
+// a filter, or inside a RawText, the text comes back as it is.
 inline std::string upper(std::string_view value)
 {
-    std::string result(value);
+    std::string result(gfx::filter_text(value));
     for (std::size_t i = 0; i < result.size(); ++i)
     {
         const unsigned char c = static_cast<unsigned char>(result[i]);

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "ps5cc/i18n.hpp"
+#include "ui/fonts.hpp"
 
 #include <gtest/gtest.h>
 
@@ -135,6 +136,28 @@ TEST(I18n, ATranslationIsNotTranslatedAgain)
     }
     EXPECT_EQ(gfx::filter_text("Profil"), "Profile");
     gfx::set_text_filter(nullptr);
+}
+
+// Headings in capitals (form steps, labels of caps themes): ui::upper translates first, so the
+// dictionary needs the text as written in the code, not its capitals (22.11.2026: "3. WOHIN?"
+// stayed German in the English fullscreen app).
+TEST(I18n, CapitalsAreTranslatedBeforeTheyBecomeCapitals)
+{
+    Translator t;
+    t.load("en", std::vector<Entry>{{"3. Wohin?", "3. Where to?"},
+                                    {"4. Prüfung danach", "4. Check afterwards"},
+                                    {"{0} Titel", "{0} titles"}});
+    gfx::set_text_filter(&t);
+    EXPECT_EQ(hui::ui::upper("3. Wohin?"), "3. WHERE TO?");
+    EXPECT_EQ(hui::ui::upper("4. Prüfung danach"), "4. CHECK AFTERWARDS");
+    EXPECT_EQ(hui::ui::upper("12 Titel"), "12 TITLES");
+    EXPECT_EQ(hui::ui::upper("Nicht im Wörterbuch"), "NICHT IM WÖRTERBUCH");
+    {
+        const gfx::RawText raw; // a text already rewritten stays as it is
+        EXPECT_EQ(hui::ui::upper("3. Wohin?"), "3. WOHIN?");
+    }
+    gfx::set_text_filter(nullptr);
+    EXPECT_EQ(hui::ui::upper("3. Wohin?"), "3. WOHIN?");
 }
 
 TEST(I18n, ConsoleLanguage)
