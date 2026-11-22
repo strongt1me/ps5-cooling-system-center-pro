@@ -69,6 +69,7 @@
 #include "imgread.h"
 #include "iopolicy.h"
 #include "lz4pack.h"
+#include "pngcheck.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
 #include "third_party/libdeflate/libdeflate.h"
@@ -1641,6 +1642,88 @@ source_packs(const char *source, int folder) {
   return rc == 0 ? j.packs : -1;
 }
 
+/* The pictures of the home screen (22.11.2026, wish of the user after reading fpkg-cli 0.6.8): a dump can carry a damaged icon0/pic0/pic1/pic2.png
+   (pngcheck.h). The app takes the files over as they are, so the check before the start names such a picture, with a .dds of the same name when one
+   lies beside it. Only a warning: what the console does with a damaged picture is not known. A picture that is not there is not named. */
+#define ART_N 4
+static const char *const k_art[ART_N] = { "icon0", "pic0", "pic1", "pic2" };
+typedef struct {
+  int           n;                              /* damaged pictures found */
+  char          name[ART_N][8];                 /* "pic2" */
+  unsigned char dds[ART_N];                     /* sce_sys/<name>.dds is there (and not empty) */
+} art_bad_t;
+
+static long
+art_fd_read(void *ctx, uint64_t off, void *buf, size_t n) {
+  ssize_t r = pread(*(int *)ctx, buf, n, (off_t)off);
+  return r < 0 ? -1 : (long)r;
+}
+
+typedef struct { imgr_t *r; const char *path; } art_img_t;
+
+static long
+art_img_read(void *ctx, uint64_t off, void *buf, size_t n) {
+  const art_img_t *a = ctx;
+  return imgr_pread(a->r, a->path, off, buf, n);
+}
+
+/* A folder: the files under sce_sys/ as they lie. */
+static void
+art_check_folder(const char *source, art_bad_t *out) {
+  for(int i = 0; i < ART_N; i++) {
+    char p[400];
+    struct stat st;
+    if(snprintf(p, sizeof(p), "%s/sce_sys/%s.png", source, k_art[i]) >= (int)sizeof(p)) continue;
+    int fd = open(p, O_RDONLY);
+    if(fd < 0) continue;                               /* not there (or not readable): nothing to say */
+    const int bad = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && ps5tm_pngcheck(art_fd_read, &fd) == 1;
+    close(fd);
+    if(!bad) continue;
+    snprintf(out->name[out->n], sizeof(out->name[out->n]), "%s", k_art[i]);
+    snprintf(p, sizeof(p), "%s/sce_sys/%s.dds", source, k_art[i]);
+    out->dds[out->n] = stat(p, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0;
+    out->n++;
+  }
+}
+
+typedef struct { const char *source; art_bad_t *out; } art_job_t;
+
+static void *
+art_thread(void *arg) {
+  art_job_t *j = arg;
+  imgr_t *r = imgr_open(j->source, NULL, 0);
+  if(!r) return NULL;
+  for(int i = 0; i < ART_N; i++) {
+    char png[32], dds[32];
+    uint8_t b;
+    snprintf(png, sizeof(png), "/sce_sys/%s.png", k_art[i]);
+    snprintf(dds, sizeof(dds), "/sce_sys/%s.dds", k_art[i]);
+    if(imgr_pread(r, png, 0, &b, 1) < 0) continue;     /* not there */
+    art_img_t a = { r, png };
+    if(ps5tm_pngcheck(art_img_read, &a) != 1) continue;
+    art_bad_t *o = j->out;
+    snprintf(o->name[o->n], sizeof(o->name[o->n]), "%s", k_art[i]);
+    o->dds[o->n] = imgr_pread(r, dds, 0, &b, 1) > 0;
+    o->n++;
+  }
+  imgr_close(r);
+  return NULL;
+}
+
+/* The damaged pictures of a game, into *out (cleared first). A source that cannot be read gives none: the check names only what it saw. */
+static void
+source_art(const char *source, int folder, art_bad_t *out) {
+  memset(out, 0, sizeof(*out));
+  if(folder) { art_check_folder(source, out); return; }
+  art_job_t j = { source, out };                       /* an image goes through imgread.c: on a thread of its own with a large stack, like the packs above */
+  pthread_t th;
+  pthread_attr_t at;
+  pthread_attr_init(&at);
+  pthread_attr_setstacksize(&at, 1u << 20);
+  if(pthread_create(&th, &at, art_thread, &j) == 0) pthread_join(th, NULL);
+  pthread_attr_destroy(&at);
+}
+
 /* The reason a game cannot become a FPKG because of its packs; "" for none. Kraken Mount takes no package with AMPR packs in it, so Dump Forge decodes a
    game's packs before it writes the package (ps5tm_dumpforge_job_start, unpack): that is not a reason, only a note (fpkg_unpack_*). What stays: packs
    that could not be looked at, and a game with both kinds (Dump Forge takes one kind of unpacking at a time). */
@@ -1710,6 +1793,7 @@ typedef struct {
   unsigned skip_special, skip_system;           /* entries the images leave out on purpose; skip_eg: the first of them */
   char     skip_eg[96];
   unsigned max_name, max_path;
+  art_bad_t art;                                /* damaged pictures under sce_sys/ (only a warning in the check) */
   uint64_t at_ms;
 } plan_cache_t;
 static pthread_mutex_t g_pc_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1837,6 +1921,9 @@ plan_body(const char *title_id, char *err, size_t err_len) {
     }
   }
 
+  art_bad_t art;
+  source_art(source, folder, &art);
+
   char stem[200];
   stem_of(source, folder, stem, sizeof(stem));
   ps5tm_gamestate_t gs;
@@ -1892,6 +1979,7 @@ plan_body(const char *title_id, char *err, size_t err_len) {
     pcs->skip_special = skip_special;
     pcs->skip_system = skip_system;
     snprintf(pcs->skip_eg, sizeof(pcs->skip_eg), "%s", skip_eg);
+    pcs->art = art;
     pcs->max_name = cJSON_IsNumber(mn) ? (unsigned)mn->valuedouble : 0;
     pcs->max_path = cJSON_IsNumber(mp) ? (unsigned)mp->valuedouble : 0;
     pcs->at_ms = ps5tm_mono_ms();
@@ -2086,6 +2174,16 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
                                                 (unsigned long long)pc.files, size_text(pc.raw, b1, sizeof(b1)));
   else if(pc.folder) chk_add(arr, "source", "ok", NULL, "Quelle lesbar: %llu Dateien", (unsigned long long)pc.files);
   else chk_add(arr, "source", "ok", NULL, "Abbild-Datei lesbar: %s", size_text(pc.raw, b1, sizeof(b1)));
+  for(int i = 0; i < pc.art.n && i < ART_N; i++) {     /* damaged pictures: a warning, the start stays open */
+    char png[24], dds[16], hint[240];
+    snprintf(png, sizeof(png), "sce_sys/%s.png", pc.art.name[i]);
+    snprintf(dds, sizeof(dds), "%s.dds", pc.art.name[i]);
+    if(pc.art.dds[i])
+      snprintf(hint, sizeof(hint), "Das Bild wird unverändert übernommen und kann auf dem Startbildschirm fehlen. Im Ordner sce_sys liegt dieselbe Grafik als %s.", dds);
+    else
+      snprintf(hint, sizeof(hint), "Das Bild wird unverändert übernommen und kann auf dem Startbildschirm fehlen.");
+    chk_add(arr, "artwork", "warn", hint, "Kein gültiges PNG: %s", png);
+  }
   if(!strcmp(op, "ffpkg") && pc.ffpkg_why[0]) {
     chk_add(arr, "ffpkg", "error", pc.ffpkg_why, "Ein ffpkg-Abbild ist bei diesem Spiel nicht möglich.");
     errors++;

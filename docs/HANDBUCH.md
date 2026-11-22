@@ -352,7 +352,9 @@ Welche Dateien gepackt werden, bestimmt Dump Forge: Mit AMPR EMU NG (zstd, und L
 
 **Prüfung vor dem Start, Name, Schritte, Warteschlange (seit 13.11.2026).** Das Fenster fragt bei jeder Wahl `POST /api/v1/library/convert/check`
 und zeigt die Befunde als Liste (Rot sperrt Start und Warteschlange, Gelb warnt, ein anderer laufender Auftrag sperrt nur den Start; die
-Grenzen für Namen und Pfade sind die von exFAT und der App). Der Name der Ausgabe kommt aus einer Vorlage mit `{titel}`, `{id}`, `{version}` und
+Grenzen für Namen und Pfade sind die von exFAT und der App). Seit dem 22.11.2026 steht dort gelb auch ein beschädigtes Bild des Startbildschirms
+(`sce_sys/icon0.png`, `pic0.png`, `pic1.png`, `pic2.png`: kein gültiges PNG, geprüft werden Anfang, jeder Abschnitt mit seiner CRC-32 und das
+Ende `IEND`; `src/pngcheck.h`), aus einem Ordner wie aus einem Abbild; die App übernimmt es unverändert, auf dem Startbildschirm kann es fehlen. Der Name der Ausgabe kommt aus einer Vorlage mit `{titel}`, `{id}`, `{version}` und
 `{quelle}` (`src/cvname.c`); leer heißt wie bisher der Name des Ordners. Der Status hat `stages` (Vermessen, Schreiben, Prüfen, Umbenennen mit der
 Zeit je Schritt). Die Warteschlange (`src/convqueue.c`) hält bis zu 24 Einträge im Speicher und startet sie nacheinander über
 `ps5tm_gameconvert_start`; ein Eintrag, dessen Start an einem anderen Auftrag scheitert, wartet (alle zehn Sekunden ein neuer Versuch, ohne dabei

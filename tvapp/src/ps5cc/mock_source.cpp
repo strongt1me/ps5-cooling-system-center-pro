@@ -897,6 +897,11 @@ class MockSource final : public Source
         add("source", "ok",
             folder ? "Quelle lesbar: 2312 Dateien, als exFAT-Abbild " + gb(raw)
                    : "Abbild-Datei lesbar: " + gb(raw));
+        // a dump with a damaged picture under sce_sys (gameconvert.c: the artwork check, 22.11.2026)
+        if (g != nullptr && g->id == "PPSA06620")
+            add("artwork", "warn", "Kein gültiges PNG: sce_sys/pic2.png",
+                "Das Bild wird unverändert übernommen und kann auf dem Startbildschirm fehlen. "
+                "Im Ordner sce_sys liegt dieselbe Grafik als pic2.dds.");
         if (g != nullptr && g->id == data_.status.game_id)
             add("running", "error", "Das Spiel läuft gerade.",
                 "Beende das Spiel, dann geht es weiter.");

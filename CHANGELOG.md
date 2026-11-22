@@ -2,6 +2,15 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
+## Unveröffentlicht
+
+### Prüfung vor dem Konvertieren: beschädigte Bilder (Wunsch des Users, 22.11.2026)
+- **Anlass:** fpkg-cli 0.6.8 (eine Bedienschicht für LibProsperoPkg am PC, ohne Lizenzangabe, nur gelesen) berichtet von Dumps mit beschädigten Bildern, etwa einer `pic2.png` aus 532 Bytes Zufallsdaten neben einer heilen `pic2.dds`. Die App übernimmt die Dateien eines Spiels unverändert.
+- **Neu:** Die Prüfung vor dem Start (Browser und Vollbild-App, alle Formate) liest `sce_sys/icon0.png`, `pic0.png`, `pic1.png` und `pic2.png` aus dem Ordner oder aus dem Abbild und nennt ein Bild, das kein gültiges PNG ist, gelb: „Kein gültiges PNG: sce_sys/pic2.png“, darunter „Das Bild wird unverändert übernommen und kann auf dem Startbildschirm fehlen.“ und, wenn eine `.dds` gleichen Namens daneben liegt, auch diese. Starten und Warteschlange bleiben möglich; ein fehlendes Bild wird nicht genannt.
+- **Geprüft wird** (`src/pngcheck.h`): der PNG-Anfang, IHDR als erster Abschnitt, jeder Abschnitt mit Länge, Typ und CRC-32 bis `IEND`. Bytes nach `IEND` gelten nicht als Fehler (fpkg-cli ist da strenger). Gelesen wird in Stücken von 64 KiB auf dem Heap; Dateien über 64 MiB werden nicht beurteilt. Das Ergebnis steht mit dem Plan des Spiels 30 Minuten im Zwischenspeicher.
+- **An der Slim erprobt (Gegenprobe):** Plan und Prüfung für sieben echte Spiele, nur lesend: zwei Ordner (interne SSD und `usb0`), ein exFAT-, drei ffpfsc- und ein ffpkg-Abbild. Keine einzige falsche Warnung; der Plan dauerte 0,1 bis 0,9 s (das 27-GB-ffpkg 9,2 s), die Prüfung unter 0,1 s. Beim Ordner von Asterix & Obelix: Heroes lagen `icon0.png` (408 KB) und `pic0.png` (4,2 MB) da und galten als heil; `pic1` und `pic2` gibt es dort nur als `.dds`, das nennt die Prüfung zu Recht nicht. Ein wirklich beschädigtes Bild gab es an der Konsole nicht zum Ausprobieren; das deckt der Host-Test ab.
+- Neuer Host-Test `test/pngcheck` (heile, abgeschnittene, veränderte und zufällige Daten, ein Lesefehler; dazu alle 37 PNG-Bilder des Repos als Gegenprobe), in der CI-Liste. Wörterbücher (3 Texte, sechs Sprachen, sie gelten auch für die Vollbild-App), Handbuch in sieben Sprachen, `docs/HANDBUCH.md`, `docs/API.md`, Musterdaten der Vollbild-App (Harbor Lights).
+
 ## v1.91.0 – 22.11.2026
 
 ### Fremdbaustein: Dump Forge v0.5.7 (22.11.2026)
