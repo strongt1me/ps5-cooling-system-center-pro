@@ -1,12 +1,12 @@
 # Dump Forge
 
-**Version:** v0.5.6
+**Version:** v0.5.7
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/ps5-dump-forge (Tag `v0.5.6`)
+**Quelle:** https://github.com/quer3q/ps5-dump-forge (Tag `v0.5.7`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext im Quellprojekt)
-**Datei:** `ps5-dump-forge-0.5.6-ps5.elf` (PS5-ELF, 18 549 840 Bytes), unverändert aus der Veröffentlichung. Seit dem 21.11.2026 **in der App eingebettet**, als zstd-Rahmen
-`ps5-dump-forge-0.5.6-ps5.elf.zst` (Stufe 19, 8 411 490 Bytes, mit der Größe im Rahmenkopf und der XXH64-Prüfsumme des Rahmens) in diesem Ordner; die ELF selbst liegt nicht im Quellbaum.
-**SHA-256:** `f0415aab6ded1cdf875418b6683ab56aeae3721492af99fba71b08c2c351f82f` (der entpackten ELF; gleich `SHA256SUMS` der Veröffentlichung, steht in `ps5-dump-forge-0.5.6-ps5.elf.sha256`)
+**Datei:** `ps5-dump-forge-0.5.7-ps5.elf` (PS5-ELF, 18 582 608 Bytes), unverändert aus der Veröffentlichung. Seit dem 21.11.2026 **in der App eingebettet**, als zstd-Rahmen
+`ps5-dump-forge-0.5.7-ps5.elf.zst` (Stufe 19, 8 429 589 Bytes, mit der Größe im Rahmenkopf und der XXH64-Prüfsumme des Rahmens) in diesem Ordner; die ELF selbst liegt nicht im Quellbaum.
+**SHA-256:** `83a7e82a9070a671953d96e4acfc909697505281e4a023a2c6411316c2c1ce6c` (der entpackten ELF; gleich `SHA256SUMS` der Veröffentlichung, steht in `ps5-dump-forge-0.5.7-ps5.elf.sha256`)
 
 ## Verwendung
 
@@ -31,6 +31,7 @@ schreibt (Kompressionsstufen `fast`, `balanced`, `smallest`, `stored`). Die App 
   `/user/app/PDFG00001` als leere Datei an, die Dump Forge in Ruhe lässt („is not a folder“); eine früher angelegte Kachel entfernt sie mit der Deinstallation
   der Konsole und löscht die Besitzer-Datei `/data/dumpforge/tile-PDFG00001.owner` (`src/tilekeep.c`).
 - Seit 0.5.6 (16.11.2026, Vergleich `v0.5.5...v0.5.6`): bringt ampr-emu-ng v0.4.1 mit (vorher v0.3.4), behält beim Umwandeln eines `.pkg` die nur im Container verschlüsselt liegenden `nptitle.dat` und `npbind.dat` (Trophäen meldeten sich bei einem kleinen Teil der Pakete nicht an), schreibt Packs mit mehr als 32 Teilen auf eine gekoppelte PS5 (beide Seiten brauchen 0.5.6) und zeigt unter Linux jede eingehängte Platte als Wurzel. Die Schnittstelle, die die App benutzt (`/api/start_job`, `/api/jobs`, `/api/cancel_job`, `/api/quit`), hat sich im Vergleich nicht geändert.
+- Seit 0.5.7 (22.11.2026, Vergleich `v0.5.6...v0.5.7`): liest ein `ampr_emu.index`, dessen Slot-Tabelle an einer 8-Byte-Grenze beginnt (vorher nur an einer 16-Byte-Grenze; der eigene Index mancher Pakete, etwa Crisis Core, galt als beschädigt und wurde beim Umwandeln neu geschrieben, jetzt bleibt er, wenn er genau die Dateien der Ausgabe nennt), nennt im Auftragsprotokoll den Grund eines beschädigten Index, liest ein `.ffpfsc`-Abbild, dessen Datei am letzten Datenbyte endet statt am Ende des letzten 64-KiB-Blocks, und bringt in der Kommandozeile den Befehl `edit` sowie eine statische arm64-Fassung mit. Die Schnittstelle, die die App benutzt, die Stufen, die Kraken-Stufen und die Namensgrenze haben sich im Vergleich nicht geändert; die mitgebrachte ampr-emu-ng bleibt v0.4.1. Die App selbst musste nichts nachziehen: ihr eigener AMPR-Index (`src/amprindex.c`) liegt an einer 16-Byte-Grenze, `src/fsign.c` prüft die Lage der Slot-Tabelle nicht, und die eigenen PFS-Abbilder (`src/conv_pfs.c`) enden immer am Blockende.
 - Seit 19.11.2026 schickt die App auch Aufträge, die ein Abbild mit gepacktem Spiel schreiben: `format` `exfat` oder `ffpkg` mit `lz4: "pack"` (`lz4_level` 0 oder 3 bis 12, `lz4_runtime` `ng` oder `ampr_emu`) oder `zstd_pack: true` (`zstd_level` 1 bis 22), ohne `kraken_level`; Dump Forge misst und schreibt im Strom, ohne Zwischenordner (Stufen scan, preflight, measure, write, verify, finalize). Das verlangt Dump Forge 0.5.6 oder neuer (`src/dumpforge.c`, `ps5tm_dumpforge_lacks_image_pack`; `src/gameconvert.c`).
 - Das Programm bleibt unverändert; aus seinem Quelltext ist nichts in diese App übernommen.
 

@@ -7000,14 +7000,14 @@
       <ol>
         <li>Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt quer3q/ps5-dump-forge).</li>
         <li>Kopiere sie per FTP (Port 2121) oder mit dem Dateimanager der App in diesen Ordner der Konsole:<br><code>/data/PS5-Cooling-Center/dumpforge/</code><br><span class="muted">Die App legt diesen Ordner bei jedem Start selbst an.</span></li>
-        <li>Der Name muss stimmen (die Version nur aus Ziffern und Punkten und neuer als die eingebaute 0.5.6, zum Beispiel 0.5.7):<br><code>ps5-dump-forge-&lt;Version&gt;-ps5.elf</code></li>
+        <li>Der Name muss stimmen (die Version nur aus Ziffern und Punkten und neuer als die eingebaute 0.5.7, zum Beispiel 0.5.8):<br><code>ps5-dump-forge-&lt;Version&gt;-ps5.elf</code></li>
         <li>Die Datei muss zwischen 1 und 40 MiB groß sein und eine echte ELF-Datei sein.</li>
         <li>Ein Neustart der App ist nicht nötig; sie nimmt die Datei beim nächsten Auftrag.</li>
       </ol>
       <h5>Hinweise</h5>
       <ul>
         <li>Liegen mehrere Fassungen da, nimmt die App die höchste Version. Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern.</li>
-        <li>Dump Forge 0.5.6 steckt in der App und damit auch in beiden Kacheln (FAKE86921, FAKE86922).</li>
+        <li>Dump Forge 0.5.7 steckt in der App und damit auch in beiden Kacheln (FAKE86921, FAKE86922).</li>
         <li>Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. Du musst es nicht von Hand starten.</li>
       </ul>
     </div>`;

@@ -1361,7 +1361,7 @@ void GameTools::open_guide(ui::Feedback &feedback)
         TextBlock::code("/data/PS5-Cooling-Center/dumpforge/"),
         TextBlock::paragraph("Die App legt diesen Ordner bei jedem Start selbst an."),
         TextBlock::numbered("Der Name muss stimmen (die Version nur aus Ziffern und Punkten und "
-                            "neuer als die eingebaute 0.5.6, zum Beispiel 0.5.7):",
+                            "neuer als die eingebaute 0.5.7, zum Beispiel 0.5.8):",
                             "3."),
         TextBlock::code("ps5-dump-forge-<Version>-ps5.elf"),
         TextBlock::numbered(
@@ -1373,7 +1373,7 @@ void GameTools::open_guide(ui::Feedback &feedback)
         TextBlock::bullet(
             "Liegen mehrere Fassungen da, nimmt die App die höchste Version. "
             "Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern."),
-        TextBlock::bullet("Dump Forge 0.5.6 steckt in der App und damit auch in beiden Kacheln "
+        TextBlock::bullet("Dump Forge 0.5.7 steckt in der App und damit auch in beiden Kacheln "
                           "(FAKE86921, FAKE86922)."),
         TextBlock::bullet(
             "Dump Forge startet die App bei Bedarf selbst und beendet es nach dem Auftrag wieder. "
