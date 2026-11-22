@@ -2,7 +2,7 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.91.0 – 22.11.2026
 
 ### Fremdbaustein: Dump Forge v0.5.7 (22.11.2026)
 - **Dump Forge v0.5.7** (quer3q) steckt jetzt statt 0.5.6 in der App: `ps5-dump-forge-0.5.7-ps5.elf` (18 582 608 Bytes, SHA-256 `83a7e82a…ce6c`, gleich `SHA256SUMS` der Veröffentlichung), unverändert als zstd-Rahmen (Stufe 19, 8 429 589 Bytes; die ELF der App wächst um rund 18 KB).
