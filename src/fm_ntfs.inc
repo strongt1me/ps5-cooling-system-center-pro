@@ -775,21 +775,28 @@ fmn_receive_upload(int fd, const char *dir, const char *name_in, const char *con
     return;
   }
   ps5tm_powerguard_hold();
+  /* The driver writes straight to the device, without a cache: the pieces the network hands over (a few KB, of any length) became one
+     read and rewrite of the same edge sectors each, and a cheap stick fell to 17 KB/s (console test 23.11.2026, a 60 GB stick; copying
+     onto it ran at 3 MB/s). So the body is gathered into whole blocks of FM_BUF first, as a copy writes them. */
   char *buf = malloc(FM_BUF);
-  size_t got = 0;
+  size_t got = 0, fill = 0;
   int werr = buf ? 0 : ENOMEM, too_slow = 0;
   size_t first = prefix_len < total ? prefix_len : total;
-  if(!werr && first) { werr = fmn_write(&w, prefix, first); got = first; }
+  if(!werr && first > FM_BUF) werr = fmn_write(&w, prefix, first);   /* (the part read with the head is far smaller) */
+  else if(!werr && first) { memcpy(buf, prefix, first); fill = first; }
+  if(!werr) got = first;
+  if(!werr && fill && got == total) { werr = fmn_write(&w, buf, fill); fill = 0; }
   uint64_t t0 = ps5tm_mono_ms();
   while(!werr && got < total) {
     if(ps5tm_ntfs_closing()) { werr = ECANCELED; break; }   /* the app ends: removed, not left behind half written (audit 23.11.2026) */
-    size_t want = total - got < FM_BUF ? total - got : FM_BUF;
-    int r = read_some(fd, buf, want);
+    size_t want = total - got < FM_BUF - fill ? total - got : FM_BUF - fill;
+    int r = read_some(fd, buf + fill, want);
     if(r <= 0) break;
     uint64_t el = ps5tm_mono_ms() - t0;           /* at least 16 KB/s after two minutes, as on the console (review 15.10.2026) */
     if(el > 120000 && (uint64_t)got < (el / 1000) * 16384) { too_slow = 1; break; }
-    werr = fmn_write(&w, buf, (size_t)r);
+    fill += (size_t)r;
     got += (size_t)r;
+    if(fill == FM_BUF || got == total) { werr = fmn_write(&w, buf, fill); fill = 0; }
   }
   free(buf);
   int ok = !werr && got == total;
