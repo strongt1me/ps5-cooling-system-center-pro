@@ -269,6 +269,7 @@ static void *
 stopper_thread(void *arg) {
   (void)arg;
   while(!g_stop_pending) usleep(100 * 1000);
+  ps5tm_ntfs_shutdown_begin();                       /* an upload onto an NTFS stick stops (audit 23.11.2026) */
   char why[200] = "", err[200];
   if(jobs_running(why, sizeof(why))) {
     PS5TM_INFO("stop_jobs", "Beenden angefordert, aber es läuft noch etwas (%.120s): die Aufträge werden abgebrochen.", why);
@@ -285,7 +286,6 @@ stopper_thread(void *arg) {
     (void)ps5tm_imgjob_cancel();
     ps5tm_dumpq_shutdown();                          /* the queue keeps its mark (the next start tells that the run was interrupted) */
     ps5tm_filemgr_shutdown();
-    ps5tm_ntfs_shutdown();                           /* NTFS sticks: what was written goes out to them (ntfsvol.c) */
     ps5tm_usbeject_shutdown();                       /* a planned end is no crash of an eject: its marker goes (usbeject.c) */
     {
       cJSON *c = cJSON_CreateObject();               /* the disc image: the same as the button "Abbrechen" */
@@ -297,8 +297,14 @@ stopper_thread(void *arg) {
       }
     }
     (void)ps5tm_pkgqueue_cancel();                   /* the package that runs and the queue behind it */
+    /* NTFS sticks once now, after every cancel went out: the end of the process may come before the waiting below is through
+       (audit 23.11.2026) */
+    ps5tm_ntfs_sync_idle();
     for(int i = 0; i < 25 && jobs_running(why, sizeof(why)); i++) usleep(100 * 1000);
   }
+  /* NTFS sticks, after the jobs had their time to stop (audit 23.11.2026: before, the flush ran while a cancelled copy still tidied up),
+     and also when nothing ran: what was written goes out to them (ntfsvol.c) */
+  ps5tm_ntfs_shutdown();
   ps5tm_fan_request_stop();
   return NULL;
 }

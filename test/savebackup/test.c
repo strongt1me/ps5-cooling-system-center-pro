@@ -49,7 +49,18 @@ int ps5tm_procmgr_appinfo_ready(void) { return 0; }
 int ps5tm_procmgr_game_title(uint32_t id, char *out, size_t n) { (void)id; (void)out; (void)n; return -1; }
 void ps5tm_gamestate_get(ps5tm_gamestate_t *o) { memset(o, 0, sizeof(*o)); if(g_game) snprintf(o->title_id, sizeof(o->title_id), "%s", g_game_id); }
 struct cJSON *ps5tm_library_json(void) { return NULL; }
-void ps5tm_sysinfo_get(ps5tm_sysinfo_t *o) { memset(o, 0, sizeof(*o)); snprintf(o->model, sizeof(o->model), "CFI-TEST"); snprintf(o->serial_masked, sizeof(o->serial_masked), "••••0001"); }
+static char g_vol[40];                                             /* a drive the console has (empty: none) */
+void ps5tm_sysinfo_get(ps5tm_sysinfo_t *o) {
+  memset(o, 0, sizeof(*o));
+  snprintf(o->model, sizeof(o->model), "CFI-TEST");
+  snprintf(o->serial_masked, sizeof(o->serial_masked), "••••0001");
+  if(g_vol[0]) {
+    snprintf(o->volumes[0].path, sizeof(o->volumes[0].path), "%s", g_vol);
+    snprintf(o->volumes[0].label, sizeof(o->volumes[0].label), "USB-Test");
+    o->volumes[0].free_bytes = 1ull << 30;
+    o->volume_count = 1;
+  }
+}
 int ps5tm_account_list(ps5tm_account_entry_t *out, int max) {
   if(max < 1) return 0;
   memset(&out[0], 0, sizeof(out[0]));
@@ -411,6 +422,30 @@ main(int argc, char **argv) {
     imp = pl ? cJSON_GetObjectItem(pl, "importable") : NULL;
     CHECK(status == 200 && cJSON_IsTrue(imp));
     cJSON_Delete(pl);
+  }
+
+  /* ---- "ZIP-Datei löschen" of the fullscreen app: the file on the drive it names goes, the export folder's file of the same name stays
+     (audit 23.11.2026: mount was not looked at) */
+  reset();
+  {
+    char zd[600], zp[700], ep[700];
+    if(snprintf(g_vol, sizeof(g_vol), "%s/usb", ROOT) < (int)sizeof(g_vol)) {
+      snprintf(zd, sizeof(zd), "%s/PS5-Sicherung/Spielstand-ZIP", g_vol);
+      mkdirs(zd);
+      snprintf(zp, sizeof(zp), "%s/PPSA01234_SAVE0_20261123-120000.zip", zd);
+      wfile(zp, "zip", 3);
+      snprintf(ep, sizeof(ep), "%s/savexport", DATA);
+      mkdirs(ep);
+      snprintf(ep, sizeof(ep), "%s/savexport/PPSA01234_SAVE0_20261123-120000.zip", DATA);
+      wfile(ep, "zip", 3);
+      CHECK(ps5tm_saves_export_delete("PPSA01234_SAVE0_20261123-120000.zip", g_vol, err, sizeof(err)) == 200);
+      CHECK(!exists(zp) && exists(ep));
+      CHECK(ps5tm_saves_export_delete("PPSA01234_SAVE0_20261123-120000.zip", g_vol, err, sizeof(err)) == 404);
+      CHECK(ps5tm_saves_export_delete("PPSA01234_SAVE0_20261123-120000.zip", "/mnt/usb7", err, sizeof(err)) == 404);
+      CHECK(ps5tm_saves_export_delete("../x.zip", g_vol, err, sizeof(err)) == 404);
+      CHECK(ps5tm_saves_export_delete("PPSA01234_SAVE0_20261123-120000.zip", NULL, err, sizeof(err)) == 200 && !exists(ep));
+    }
+    g_vol[0] = 0;
   }
 
   /* ---- a game that runs: nothing starts */

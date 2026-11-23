@@ -414,7 +414,7 @@ store_games(const cJSON *k, uint64_t now) {
   /* where the caches lie: an absolute path without "..", else the last one stays */
   const cJSON *cache = k ? cJSON_GetObjectItem(k, "cache") : NULL, *cp = cache ? cJSON_GetObjectItem(cache, "path") : NULL;
   char cdir[sizeof(g_cache_dir)] = "";
-  if(cJSON_IsString(cp) && cp->valuestring[0] == '/' && !strstr(cp->valuestring, "..") && strlen(cp->valuestring) < sizeof(cdir))
+  if(cp && cJSON_IsString(cp) && cp->valuestring[0] == '/' && !strstr(cp->valuestring, "..") && strlen(cp->valuestring) < sizeof(cdir))
     snprintf(cdir, sizeof(cdir), "%s", cp->valuestring);
   for(size_t l = strlen(cdir); l > 1 && cdir[l - 1] == '/'; l--) cdir[l - 1] = 0;
   pthread_mutex_lock(&g_lock);

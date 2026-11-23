@@ -2588,10 +2588,21 @@ ps5tm_saves_export_path(const char *name, char *out, size_t out_len) {
   return lstat(out, &st) == 0 && S_ISREG(st.st_mode) ? 0 : -1;
 }
 
+static int zip_path_in(const char *dir, const char *name, char *out, size_t n);
+static int drive_zip_dir(const char *from, char *out, size_t n);
+
+/* mount: a ZIP in the ZIP folder of that drive (the fullscreen app lists those), else one of the export folder (the browser's). Never
+   while a job with the saved games runs: it may read or write that very file (audit 23.11.2026; before, mount was not looked at and the
+   export folder's file of that name went instead). */
 int
-ps5tm_saves_export_delete(const char *name, char *err, size_t err_len) {
+ps5tm_saves_export_delete(const char *name, const char *mount, char *err, size_t err_len) {
   char p[PATH_MAX];
-  if(ps5tm_saves_export_path(name, p, sizeof(p)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); return 404; }
+  if(mount && mount[0]) {
+    char dir[128];
+    if(drive_zip_dir(mount, dir, sizeof(dir)) != 0) { snprintf(err, err_len, "Dieses Laufwerk gibt es an der Konsole gerade nicht."); return 404; }
+    if(zip_path_in(dir, name, p, sizeof(p)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); return 404; }
+    if(ps5tm_saves_busy()) { snprintf(err, err_len, "Gerade läuft eine Übertragung der Spielstände; bitte danach noch einmal."); return 409; }
+  } else if(ps5tm_saves_export_path(name, p, sizeof(p)) != 0) { snprintf(err, err_len, "Diese Datei gibt es nicht (mehr)."); return 404; }
   if(unlink(p) != 0) { snprintf(err, err_len, "Die Datei ließ sich nicht löschen: %s", err_text(errno ? errno : EIO)); return 503; }
   return 200;
 }

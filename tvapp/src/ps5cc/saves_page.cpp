@@ -55,6 +55,7 @@ enum MenuTag
     kExportSlot = 2000, // ZIP files of a game: every slot it keeps
     kZipUser = 2100,    // + index into the users of the plan
     kZipUserAll = 2200, // + index: the same, for all slots of the title (the ZIP files of one run)
+    kZipDelete = 2300,  // the ZIP file itself goes (asked first, as in the browser)
 };
 
 std::string json_text(const std::string &s)
@@ -160,9 +161,16 @@ class SavesPage final : public Page
         }
         if (ask_.is_open())
         {
-            // only "Löschen" in the question deletes the saves (06.11.2026)
+            // only "Löschen" in the question deletes the saves (06.11.2026), or the ZIP file
             if (ask_.handle(input, feedback))
-                delete_saves();
+            {
+                if (ask_zip_)
+                    source().saves_post("export/delete", "{\"name\":" + json_text(menu_zip_.name) +
+                                                             ",\"mount\":" +
+                                                             json_text(menu_zip_.mount) + "}");
+                else
+                    delete_saves();
+            }
             return;
         }
         if (menu_.is_open())
@@ -612,19 +620,21 @@ class SavesPage final : public Page
         rebuild();
     }
 
-    // The users the save can go to; the refusal (or an error) is told under the ZIP instead.
+    // The users the save can go to (the refusal, or an error, is told under the ZIP instead), and
+    // deleting the ZIP file, also one that cannot be put in (as the browser, audit 23.11.2026).
     void open_zip_menu(ui::Feedback &feedback)
     {
         const SaveImportPlan &p = saves_.plan;
-        if (!zip_planned(menu_zip_) || !p.error.empty() || !p.importable || p.users.empty())
+        if (!zip_planned(menu_zip_))
         {
             feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
             return;
         }
+        const bool can_import = p.error.empty() && p.importable && !p.users.empty();
         const bool busy = saves_.job.active || saves_.game_running;
         const SaveDrive *d = target();
         std::vector<ui::MenuItem> items;
-        const std::size_t same = zip_siblings(menu_zip_).size();
+        const std::size_t same = can_import ? zip_siblings(menu_zip_).size() : 0;
         for (std::size_t i = 0; same > 1 && i < p.users.size() && i < 16; ++i)
         {
             const SaveImportUser &u = p.users[i];
@@ -632,7 +642,7 @@ class SavesPage final : public Page
                 item("Für " + u.name + " alle " + std::to_string(same) + " Spielstände einspielen",
                      kZipUserAll + static_cast<int>(i), busy || (u.has_title && d == nullptr)));
         }
-        for (std::size_t i = 0; i < p.users.size() && i < 16; ++i)
+        for (std::size_t i = 0; can_import && i < p.users.size() && i < 16; ++i)
         {
             const SaveImportUser &u = p.users[i];
             items.push_back(item("Für " + u.name + " einspielen" +
@@ -642,6 +652,7 @@ class SavesPage final : public Page
                                  kZipUser + static_cast<int>(i),
                                  busy || (u.has_title && d == nullptr)));
         }
+        items.push_back(item("ZIP-Datei löschen", kZipDelete, saves_.job.active));
         menu_.set_items(items);
         menu_.open({kRightX, kTop + 10.0f, kRightW, 80.0f}, feedback);
     }
@@ -697,6 +708,7 @@ class SavesPage final : public Page
             notes.push_back("Kein Laufwerk für eine Sicherung da:");
         if (d == nullptr)
             notes.push_back("Es wird ohne Sicherung gelöscht.");
+        ask_zip_ = false;
         ask_.open("Spielstände löschen?", {DeleteAsk::line(name, "Spielstände")}, notes, feedback,
                   d != nullptr ? "Das wird gelöscht:" : "Das wird endgültig gelöscht:",
                   d != nullptr ? std::string()
@@ -717,6 +729,14 @@ class SavesPage final : public Page
     void run(int tag, ui::Feedback &feedback)
     {
         feedback.play(audio::Cue::select);
+        if (tag == kZipDelete)
+        {
+            ask_zip_ = true;
+            ask_.open("ZIP-Datei löschen?", {DeleteAsk::line(menu_zip_.name, "ZIP-Datei")},
+                      {"Der Spielstand an der Konsole bleibt unverändert."}, feedback,
+                      "Das wird gelöscht:", std::string());
+            return;
+        }
         if (tag == kExportSlot)
         {
             // no slot named: the app reads out all of them
@@ -977,6 +997,7 @@ class SavesPage final : public Page
     ui::DetailList info_;
     ui::Menu menu_;
     DeleteAsk ask_;
+    bool ask_zip_ = false; // the open question is about the ZIP file menu_zip_, not saves
     std::string key_;
     std::string info_key_ = "\x01";
     Saves saves_;

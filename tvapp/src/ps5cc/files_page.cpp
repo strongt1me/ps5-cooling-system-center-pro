@@ -279,6 +279,7 @@ class FilesPage final : public Page
         {
             conflict_seq_ = data.fs_conflict.seq;
             conflict_names_ = data.fs_conflict.names;
+            conflict_dest_ = data.fs_conflict.dest;
             conflict_ask_ = !conflict_names_.empty();
         }
         sizes_ = data.fs_sizes;
@@ -1093,8 +1094,9 @@ class FilesPage final : public Page
         ui::MenuItem sep;
         sep.separator = true;
         std::vector<ui::MenuItem> items;
-        // on an NTFS stick nothing is replaced: "Beide behalten" puts the new one beside it
-        const bool ntfs = is_ntfs_path(folder_.path);
+        // on an NTFS stick nothing is replaced: "Beide behalten" puts the new one beside it (the
+        // copy's target, not the folder shown by now)
+        const bool ntfs = is_ntfs_path(conflict_dest_.empty() ? folder_.path : conflict_dest_);
         items.push_back(item(what, 0, true));
         items.push_back(sep);
         if (!ntfs)
@@ -1865,14 +1867,21 @@ class FilesPage final : public Page
                                              std::to_string(s->second.files) + " Dateien"});
             rows.push_back(
                 {"Geändert", play_date(e->mtime, tz_) + ", " + play_clock(e->mtime, tz_) + " Uhr"});
-            rows.push_back({"Ändern", e->writable ? "erlaubt" : "nur ansehen"});
+            // on an NTFS stick a file is never changed or renamed, only deleted; a stick Windows did
+            // not close is read-only (audit 23.11.2026)
+            const bool ntfs = is_ntfs_path(folder_.path);
+            rows.push_back({"Ändern", !e->writable  ? (ntfs ? "nur lesbar" : "nur ansehen")
+                                      : ntfs && e->type == "file" ? "nur löschen"
+                                                                  : "erlaubt"});
         }
         else if (const FsPlace *p = focused_place())
         {
             rows.push_back({"Ordner", p->path});
             if (p->free_bytes >= 0)
                 rows.push_back({"Frei", format_bytes(static_cast<std::uint64_t>(p->free_bytes))});
-            rows.push_back({"Ändern", p->writable ? "erlaubt" : "nur ansehen"});
+            rows.push_back({"Ändern", p->writable       ? "erlaubt"
+                                      : p->fs == "ntfs" ? "nur lesbar"
+                                                        : "nur ansehen"});
         }
         else if (!folder_.path.empty())
         {
@@ -1880,7 +1889,9 @@ class FilesPage final : public Page
             if (folder_.free_bytes >= 0)
                 rows.push_back(
                     {"Frei", format_bytes(static_cast<std::uint64_t>(folder_.free_bytes))});
-            rows.push_back({"Ändern", folder_.writable ? "erlaubt" : "nur ansehen"});
+            rows.push_back({"Ändern", folder_.writable                ? "erlaubt"
+                                      : is_ntfs_path(folder_.path) ? "nur lesbar"
+                                                                   : "nur ansehen"});
         }
         std::string key;
         for (const ui::DetailItem &r : rows)
@@ -2049,12 +2060,32 @@ class FilesPage final : public Page
         gfx::DrawList &list = canvas.list;
         // up to four lines of the quiet text (a long note was cut after the first and lost its
         // point; the reason an NTFS stick is read-only says what to do at the PC, 23.11.2026)
-        std::vector<std::string> lines =
-            canvas.fonts.regular.font->wrap(text, 18.0f, card.w - 60.0f - 48.0f);
-        if (lines.size() > 4)
-            lines.resize(4);
-        const float rows = static_cast<float>(std::max<std::size_t>(lines.size(), 1));
-        const Rect box{card.x + 30.0f, y, card.w - 60.0f, 68.0f + 24.0f * rows};
+        const float text_w = card.w - 60.0f - 48.0f;
+        std::vector<std::string> lines = canvas.fonts.regular.font->wrap(text, 18.0f, text_w);
+        // up to five lines, and never into the job's area at the bottom (only while it is shown):
+        // what is cut ends in "…"; with no room for a line the title stays alone (audit 23.11.2026:
+        // a French reason needs five, a stack of notes reached the job, and a note with no room
+        // left vanished with its title)
+        const bool job_shown =
+            job_.active ||
+            (job_.finished_ago_s >= 0 && job_.finished_ago_s < 60 && !job_.kind.empty());
+        const float limit = job_shown ? kBottom - 214.0f : kBottom - 14.0f;
+        if (limit - y < 56.0f)
+            return y;
+        const float room = limit - y - 68.0f;
+        const std::size_t max_rows =
+            room < 24.0f ? 0 : std::min<std::size_t>(5, static_cast<std::size_t>(room / 24.0f));
+        if (lines.size() > max_rows)
+        {
+            lines.resize(max_rows);
+            if (!lines.empty())
+                lines.back() = ui::fit_body(paint, lines.back() + "\xE2\x80\xA6", 18.0f, text_w);
+        }
+        const float h = lines.empty() && !text.empty()
+                            ? 56.0f
+                            : 68.0f + 24.0f * static_cast<float>(
+                                                  std::max<std::size_t>(lines.size(), 1));
+        const Rect box{card.x + 30.0f, y, card.w - 60.0f, h};
         list.rounded_rect(box, 16.0f, accent.with_alpha(0.12f));
         list.rounded_rect({box.x, box.y + 14.0f, 4.0f, box.h - 28.0f}, 2.0f, accent);
         ui::text(list, canvas.fonts.semibold, ui::fit_label(paint, title, 22.0f, box.w - 48.0f),
@@ -2127,6 +2158,7 @@ class FilesPage final : public Page
     std::vector<std::string> delete_paths_; // what that question is about
     std::uint64_t conflict_seq_ = 0;
     std::vector<std::string> conflict_names_;
+    std::string conflict_dest_;
     bool conflict_ask_ = false;  // a question is waiting to be asked
     bool conflict_menu_ = false; // the menu on screen is that question
     ui::Keyboard keys_;

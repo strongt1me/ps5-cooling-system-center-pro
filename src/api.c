@@ -4156,15 +4156,18 @@ handle_saves_export_download(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 404, "not_found", "Diese Datei gibt es nicht (mehr).");
 }
 
-/* {"name": "<file name>"}: deletes a finished ZIP. */
+/* {"name": "<file name>"[, "mount": "<drive>"]}: deletes a finished ZIP (with mount: the one in that drive's ZIP folder). */
 static void
 handle_saves_export_delete(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
-  const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL;
-  char name[160] = "", err[256] = "";
+  const cJSON *jn = body ? cJSON_GetObjectItem(body, "name") : NULL, *jm = body ? cJSON_GetObjectItem(body, "mount") : NULL;
+  char name[160] = "", mount[40] = "", err[256] = "";
   if(cJSON_IsString(jn) && strlen(jn->valuestring) < sizeof(name)) snprintf(name, sizeof(name), "%s", jn->valuestring);
+  if(cJSON_IsString(jm) && strlen(jm->valuestring) < sizeof(mount)) snprintf(mount, sizeof(mount), "%s", jm->valuestring);
+  const int bad_mount = cJSON_IsString(jm) && jm->valuestring[0] && !mount[0];
   cJSON_Delete(body);
-  const int st = ps5tm_saves_export_delete(name, err, sizeof(err));
+  if(bad_mount) { ps5tm_http_send_error(fd, 404, "saves_refused", "Dieses Laufwerk gibt es an der Konsole gerade nicht."); return; }
+  const int st = ps5tm_saves_export_delete(name, mount, err, sizeof(err));
   if(st != 200) { ps5tm_http_send_error(fd, st, "saves_refused", err); return; }
   ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
 }

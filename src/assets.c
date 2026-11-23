@@ -55,6 +55,12 @@ int
 ps5tm_asset_serve(int fd, const ps5tm_request_t *req) {
   const char *path = req->path;
   if(!strcmp(path, "/")) path = "/index.html";
+  /* The pages name no icon, so a browser asks for /favicon.ico by itself: an empty answer instead of a 404 that shows as an
+     error in its console on every visit (audit 23.11.2026) */
+  if(!strcmp(path, "/favicon.ico")) {
+    ps5tm_http_send_cc(fd, 204, "No Content", "image/x-icon", "", 0, "", "max-age=86400");
+    return 1;
+  }
 
   for(unsigned i = 0; i < ps5tm_assets_count; i++) {
     const ps5tm_asset_t *a = &ps5tm_assets[i];

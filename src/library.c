@@ -360,7 +360,10 @@ static uint32_t
 eboot_sdk(const char *root) {
   char path[192];
   snprintf(path, sizeof(path), "%s/eboot.bin", root);
-  int fd = open(path, O_RDONLY);
+  /* only a regular file, never waiting on one (a FIFO would hold the list's refresh for ever; audit 23.11.2026) */
+  struct stat pre;
+  if(lstat(path, &pre) != 0 || !S_ISREG(pre.st_mode)) return 0;
+  int fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
   if(fd < 0) return 0;
   uint32_t sdk = eboot_sdk_rd(rd_fd_at, &fd);
   close(fd);

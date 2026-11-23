@@ -156,6 +156,10 @@ const char *why_short(const std::string &why)
         return "Zusatzinhalte aus";
     if (why == "duplicate")
         return "zweite Kopie";
+    if (why == "dlc_foreign")
+        return "ohne Spiel";
+    if (why == "second_game")
+        return "anderes Paket aktiv";
     if (why == "damaged")
         return "beschädigt";
     if (why == "m2")
@@ -1079,7 +1083,7 @@ class Ps4MountPage final : public Page
         if (!mount_.skipped.empty())
         {
             ui::ListItem fold;
-            fold.title = "Auf USB gefunden, nicht eingebunden (" +
+            fold.title = "Gefunden, nicht eingebunden (" +
                          std::to_string(mount_.skipped.size()) + ")";
             fold.tag = kSkipToggle;
             out.push_back(fold);

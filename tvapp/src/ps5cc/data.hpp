@@ -791,6 +791,8 @@ struct FsConflict
     std::uint64_t seq = 0; // goes up with every new question and every answer
     std::vector<std::string> names;
     bool move = false;
+    std::string dest; // where the copy goes (the folder shown may be another one by the time the
+                      // console has checked, up to 2 min)
 };
 
 // A text file's beginning (GET /api/v1/files/view).

@@ -76,7 +76,7 @@ typedef struct {
   char     from[FM_PATH];                 /* the folder all entries come from; "" when they come from several */
   char     current[FM_PATH];
   char     error[800];
-  char     note[400];
+  char     note[800];                     /* up to four sentences after a copy or move (NTFS: also originals kept because they were read) */
   uint64_t bytes_total, bytes_done, files_total, files_done;
   unsigned items, items_done, skipped;
   uint64_t started_ms, finished_ms;

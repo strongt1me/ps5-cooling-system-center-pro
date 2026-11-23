@@ -1967,6 +1967,9 @@ class MockSource final : public Source
             // the app refuses with the names in the way, the screen asks
             data_.fs_conflict.names = {"eboot.bin", "sce_sys"};
             data_.fs_conflict.move = route == "move";
+            const std::size_t at = json.find("\"dest\":\"");
+            data_.fs_conflict.dest =
+                at == std::string::npos ? "" : json.substr(at + 8, json.find('"', at + 8) - (at + 8));
             ++data_.fs_conflict.seq;
             changed();
             return;
@@ -2095,6 +2098,22 @@ class MockSource final : public Source
 
     void saves_post(const std::string &route, const std::string &json) override
     {
+        if (route == "export/delete")
+        {
+            // as the app: only the file of that name on that drive (the mount is part of the request)
+            auto &z = data_.saves.zips;
+            z.erase(std::remove_if(z.begin(), z.end(),
+                                   [&](const SaveZip &x)
+                                   {
+                                       return json.find("\"name\":\"" + x.name + "\"") != std::string::npos &&
+                                              json.find("\"mount\":\"" + x.mount + "\"") != std::string::npos;
+                                   }),
+                    z.end());
+            data_.saves.plan = SaveImportPlan{};
+            notice(Notice::Kind::success, "Spielstände", "Die ZIP-Datei ist gelöscht.");
+            changed();
+            return;
+        }
         if (route == "import/plan")
         {
             // what the ZIP is: the third one is a save of the newer layout, the last one is no save

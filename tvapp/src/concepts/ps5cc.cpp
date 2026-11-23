@@ -1962,9 +1962,14 @@ class Ps5cc final : public app::Concept
 
     static void add_fw_rows(std::vector<ui::DetailItem> &items, const ps5cc::Game &g)
     {
+        // newer than the console and nothing says it starts anyway: as the browser's warning,
+        // "13.60 (Konsole 12.00)" (audit 23.11.2026)
+        const ps5cc::FwFit fit = ps5cc::fw_fit(g);
         if (!g.system_ver.empty())
             items.push_back({g.platform == "PS4" ? "Benötigte PS4-Firmware" : "Benötigte Firmware",
-                             g.system_ver});
+                             fit.newer && !fit.fits && g.backport_fw.empty()
+                                 ? g.system_ver + " (Konsole " + g.console_fw + ")"
+                                 : g.system_ver});
         if (!g.backport_fw.empty())
             items.push_back({"Backport-Firmware", g.backport_fw});
     }

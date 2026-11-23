@@ -1475,8 +1475,9 @@ int  ps5tm_saves_import_start(const char *name, const char *from, const char *ui
 int  ps5tm_saves_import_discard(const char *name, char *err, size_t err_len);
 /* The path of a finished ZIP of that name (a plain file name; nothing else is accepted): 0 when it is there. */
 int  ps5tm_saves_export_path(const char *name, char *out, size_t out_len);
-/* Deletes a finished ZIP: 200, 404 or 503 with the reason in err. */
-int  ps5tm_saves_export_delete(const char *name, char *err, size_t err_len);
+/* Deletes a finished ZIP of the export folder, or with mount one in the ZIP folder of that drive: 200, 404, 409 (a job with the saved
+   games runs) or 503 with the reason in err. */
+int  ps5tm_saves_export_delete(const char *name, const char *mount, char *err, size_t err_len);
 void ps5tm_saves_cancel(void);
 int  ps5tm_saves_busy(void);                    /* 1 while a job with the saved games is under way */
 

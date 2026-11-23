@@ -32,6 +32,7 @@ ntfs_words(int e) {
   if(e == EEXIST) return "Diesen Namen gibt es hier schon (NTFS unterscheidet nicht nach Groß- und Kleinschreibung).";
   if(e == ENODEV) return "Das NTFS-Laufwerk ist nicht (mehr) da.";
   if(e == EIO) return "Lese- oder Schreibfehler auf dem Laufwerk (ist es noch eingesteckt?).";
+  if(e == EBUSY) return "Von dem NTFS-Laufwerk wird gerade heruntergeladen oder eine Datei angesehen; danach noch einmal.";
   return io_words(e);
 }
 
@@ -245,21 +246,26 @@ fmn_ntfs_split(fmn_node_t *n, uint64_t *parent, const char **name) {
   return rc ? -rc : 0;
 }
 
-typedef struct { int fd; ntfs_file_t *nf; uint64_t size; } fmn_rf_t;
+typedef struct { int fd; ntfs_file_t *nf; uint64_t size; ps5tm_ntfsvol_t *rvol; } fmn_rf_t;
 
 static int
 fmn_ropen(fmn_node_t *n, fmn_rf_t *f) {
   f->fd = -1;
   f->nf = NULL;
   f->size = 0;
+  f->rvol = NULL;
   if(n->ntfs) {
     uint64_t ino;
     ntfs_stat_t ns;
+    /* counted before the file is looked up: the driver knows no open files, and a file deleted while it is read would hand out
+       whatever the drive puts into its clusters next (audit 23.11.2026) */
+    if(ps5tm_ntfs_reading(n->vol, 1)) return EBUSY;   /* a delete step that does not end */
     int rc = ntfs_lookup(nh(n), n->p, &ino);
     if(!rc) rc = ntfs_stat(nh(n), ino, &ns);
     if(!rc && (ns.is_dir || (ns.attrs & NTFS_FA_REPARSE))) rc = -EISDIR;
     if(!rc) rc = ntfs_open(nh(n), ino, &f->nf);
-    if(rc) return -rc;
+    if(rc) { ps5tm_ntfs_reading(n->vol, 0); return -rc; }
+    f->rvol = n->vol;
     f->size = ntfs_file_size(f->nf);
     return 0;
   }
@@ -290,11 +296,14 @@ static void
 fmn_rclose(fmn_rf_t *f) {
   if(f->nf) ntfs_close(f->nf);
   if(f->fd >= 0) close(f->fd);
+  if(f->rvol) ps5tm_ntfs_reading(f->rvol, 0);
   f->nf = NULL;
   f->fd = -1;
+  f->rvol = NULL;
 }
 
-typedef struct { int fd; ntfs_wfile_t *nw; int replace; char tmp[PATH_MAX]; } fmn_wf_t;
+/* wvol: the drive counts this file as written to (ps5tm_ntfs_writing) from its creation to its end */
+typedef struct { int fd; ntfs_wfile_t *nw; int replace; char tmp[PATH_MAX]; ps5tm_ntfsvol_t *wvol; } fmn_wf_t;
 
 /* A new file of size bytes at the node. On the console as copy_file makes it (0777; a file that is there is written beside it and
    renamed over it at the end, when replace); on a drive with its final size and the source's time, never over a file that is there. */
@@ -304,11 +313,15 @@ fmn_wcreate(fmn_node_t *t, uint64_t size, int64_t mtime, int replace, fmn_wf_t *
   w->nw = NULL;
   w->replace = 0;
   w->tmp[0] = 0;
+  w->wvol = NULL;
   if(t->ntfs) {
     uint64_t parent;
     const char *name;
+    ps5tm_ntfs_writing(t->vol, 1);                 /* the places use their last answer meanwhile (the driver's lock is held long) */
     int rc = fmn_ntfs_split(t, &parent, &name);
     if(!rc) rc = -ntfs_create(nh(t), parent, name, size, mtime, &w->nw);
+    if(rc) ps5tm_ntfs_writing(t->vol, 0);
+    else w->wvol = t->vol;
     return rc;
   }
   const char *dst = t->p;
@@ -350,6 +363,7 @@ fmn_wclose(fmn_node_t *t, fmn_wf_t *w, int ok) {
   if(t->ntfs) {
     if(w->nw) { int r = ntfs_wclose(w->nw); if(r && ok) rc = -r; w->nw = NULL; }
     if(!ok || rc) (void)fmn_remove(t, 'f');
+    if(w->wvol) { ps5tm_ntfs_writing(w->wvol, 0); w->wvol = NULL; }
     return rc;
   }
   if(w->fd >= 0) {
@@ -369,8 +383,10 @@ fmn_mkdir(fmn_node_t *t, int64_t mtime) {
   if(t->ntfs) {
     uint64_t parent;
     const char *name;
+    ps5tm_ntfs_writing(t->vol, 1);
     int rc = fmn_ntfs_split(t, &parent, &name);
     if(!rc) rc = -ntfs_mkdir(nh(t), parent, name, mtime > 0 ? mtime : (int64_t)time(NULL), NULL);
+    ps5tm_ntfs_writing(t->vol, 0);
     return rc;
   }
   if(mkdir(t->p, 0777) != 0) return errno ? errno : EIO;
@@ -384,8 +400,10 @@ fmn_remove(fmn_node_t *n, char type) {
   if(n->ntfs) {
     uint64_t parent;
     const char *name;
+    ps5tm_ntfs_writing(n->vol, 1);
     int rc = fmn_ntfs_split(n, &parent, &name);
     if(!rc) rc = -ntfs_unlink(nh(n), parent, name);
+    ps5tm_ntfs_writing(n->vol, 0);
     return rc;
   }
   if(type == 'd') return rmdir(n->p) == 0 ? 0 : (errno ? errno : EIO);
@@ -419,6 +437,7 @@ fmn_count(fmn_node_t *n, dev_t dev, int depth, count_t *c) {
   memset(&d, 0, sizeof(d));
   rc = fmn_list(n, &d);
   if(rc) { fmn_dir_free(&d); c->err = rc; return; }
+  c->files += d.total - (unsigned)d.n;            /* names too long to be taken: counted as the copy counts them (left out) */
   size_t was = n->len;
   for(size_t i = 0; i < d.n && !c->err; i++) {
     if(fmn_push(n, d.e[i].name) != 0) { c->err = ENAMETOOLONG; break; }
@@ -475,7 +494,7 @@ fmn_handle_list(int fd, const char *p) {
     return;
   }
   if(d.n) qsort(d.e, d.n, sizeof(fmn_ent_t), fmn_ent_cmp);
-  char why[200] = "";
+  char why[PS5TM_NTFS_WHY] = "";                   /* the longest reason is 221 bytes (audit 23.11.2026: 200 cut it) */
   int here = ps5tm_ntfs_writable(n.vol, why, sizeof(why));
   uint64_t fr = 0;
   int have_free = fmn_free_space(&n, &fr) == 0;
@@ -628,7 +647,7 @@ fmn_handle_size(int fd, const char *p) {
 /* Is the drive of a node writable? 0, or 403 with the reason in msg. */
 static int
 fmn_writable_or(fmn_node_t *n, char *msg, size_t mn) {
-  char why[200];
+  char why[PS5TM_NTFS_WHY];
   if(ps5tm_ntfs_writable(n->vol, why, sizeof(why))) return 0;
   snprintf(msg, mn, "Das NTFS-Laufwerk ist nur lesbar: %s", why);
   return 403;
@@ -693,7 +712,11 @@ fmn_receive_upload(int fd, const char *dir, const char *name_in, const char *con
   fmn_safe_name(name, sizeof(name), name_in);
   fmn_node_t d;
   int rc = fmn_make(dir, &d);
-  if(rc) { drain_body(fd, prefix_len, total); ps5tm_http_send_error(fd, rc == ENODEV ? 404 : 400, "bad_name", ntfs_words(rc)); return; }
+  if(rc) {                                              /* a stick that is gone is no bad name (audit 23.11.2026) */
+    drain_body(fd, prefix_len, total);
+    ps5tm_http_send_error(fd, rc == ENODEV ? 404 : 400, rc == ENODEV ? "not_found" : "bad_name", ntfs_words(rc));
+    return;
+  }
   int http = fmn_writable_or(&d, msg, sizeof(msg));
   if(http) { fmn_unmake(&d); drain_body(fd, prefix_len, total); ps5tm_http_send_error(fd, http, "read_only", msg); return; }
   size_t was = d.len;
@@ -759,6 +782,7 @@ fmn_receive_upload(int fd, const char *dir, const char *name_in, const char *con
   if(!werr && first) { werr = fmn_write(&w, prefix, first); got = first; }
   uint64_t t0 = ps5tm_mono_ms();
   while(!werr && got < total) {
+    if(ps5tm_ntfs_closing()) { werr = ECANCELED; break; }   /* the app ends: removed, not left behind half written (audit 23.11.2026) */
     size_t want = total - got < FM_BUF ? total - got : FM_BUF;
     int r = read_some(fd, buf, want);
     if(r <= 0) break;
@@ -848,6 +872,12 @@ fmn_copy(fmn_node_t *s, fmn_node_t *t, char *vs, size_t vl, dev_t dev, int depth
   fmn_dir_t d;
   memset(&d, 0, sizeof(d));
   rc = fmn_list(s, &d);
+  if(!rc && d.total > d.n) {                       /* names of 256 bytes and more (NTFS holds up to 765): left out, but counted (audit 23.11.2026) */
+    pthread_mutex_lock(&g_lock);
+    g_job.skipped += d.total - (unsigned)d.n;
+    g_job.files_done += d.total - (unsigned)d.n;
+    pthread_mutex_unlock(&g_lock);
+  }
   size_t sw = s->len, tw = t->len;
   for(size_t i = 0; !rc && i < d.n; i++) {
     char tn[FM_NAME];
@@ -897,7 +927,15 @@ fmn_delete(fmn_node_t *n, char *vp, size_t vl, dev_t dev, int depth, int live) {
     return fmn_remove(n, 'd');
   }
   if(live) job_current(vp);
+  /* the job's own deleting waits for no download: it stops with a message while a file of the drive is read, its clusters stay
+     (audit 23.11.2026); tidying up a copy (not live) deletes only what it wrote itself */
+  int held = 0;
+  if(live && n->ntfs) {
+    if(ps5tm_ntfs_delete_begin(n->vol)) return EBUSY;
+    held = 1;
+  }
   rc = fmn_remove(n, st.type);
+  if(held) ps5tm_ntfs_delete_end(n->vol);
   if(rc) return rc;
   if(live) job_add(st.type == 'f' ? st.size : 0, 1);
   return 0;
@@ -906,14 +944,20 @@ fmn_delete(fmn_node_t *n, char *vp, size_t vl, dev_t dev, int depth, int live) {
 /* After a move: removes from the source exactly what the copy holds (same name, a file of the same size not newer than its copy), then
    the folders that became empty; what is not in the copy stays and is counted in *kept (delete_copied for the console). */
 static int
-fmn_delete_copied(fmn_node_t *s, fmn_node_t *t, int depth, unsigned *kept) {
+fmn_delete_copied(fmn_node_t *s, fmn_node_t *t, int depth, unsigned *kept, unsigned *read_kept) {
   if(depth > FM_DEPTH) return ELOOP;
   fmn_st_t ss, ts;
   int rc = fmn_stat(s, &ss);
   if(rc) return rc == ENOENT ? 0 : rc;
   if(fmn_stat(t, &ts) != 0) { (*kept)++; return 0; }
   if(ss.type == 'f') {
-    if(ts.type == 'f' && ts.size == ss.size && ss.mtime <= ts.mtime) return fmn_remove(s, 'f');
+    if(ts.type == 'f' && ts.size == ss.size && ss.mtime <= ts.mtime) {
+      if(!s->ntfs) return fmn_remove(s, 'f');
+      if(ps5tm_ntfs_delete_begin(s->vol)) { (*read_kept)++; return 0; }   /* read meanwhile: the original stays */
+      rc = fmn_remove(s, 'f');
+      ps5tm_ntfs_delete_end(s->vol);
+      return rc;
+    }
     (*kept)++;
     return 0;
   }
@@ -927,7 +971,7 @@ fmn_delete_copied(fmn_node_t *s, fmn_node_t *t, int depth, unsigned *kept) {
     if(t->ntfs) fmn_safe_name(tn, sizeof(tn), d.e[i].name);
     else snprintf(tn, sizeof(tn), "%s", d.e[i].name);
     if((rc = fmn_push(s, d.e[i].name)) != 0 || (rc = fmn_push(t, tn)) != 0) { fmn_pop(s, sw); fmn_pop(t, tw); break; }
-    rc = fmn_delete_copied(s, t, depth + 1, kept);
+    rc = fmn_delete_copied(s, t, depth + 1, kept, read_kept);
     fmn_pop(s, sw);
     fmn_pop(t, tw);
   }
@@ -950,7 +994,7 @@ fmn_job_has_ntfs(const fm_args_t *a) {
 static void
 fmn_run_copy(fm_args_t *a, int move) {
   job_state(FM_COPYING);
-  unsigned conflict_skipped = 0, move_kept = 0;
+  unsigned conflict_skipped = 0, move_kept = 0, read_kept = 0;
   char err[800] = "", *vs = malloc(PATH_MAX);
   fmn_node_t t;
   int rc = vs ? fmn_make(a->dest, &t) : ENOMEM;
@@ -1027,14 +1071,14 @@ fmn_run_copy(fm_args_t *a, int move) {
       fmn_st_t ps;
       if(ours && fmn_stat(&t, &ps) == 0) (void)fmn_delete(&t, vs, strlen(vs), ps.dev, 0, 0);
     } else if(move && skipped_some) {
-      snprintf(err, sizeof(err), "%.250s wurde kopiert, aber Verknüpfungen oder Gerätedateien darin ließen sich nicht mitnehmen. Das "
-               "Original bleibt deshalb liegen (es liegt jetzt an beiden Orten).", a->src[i]);
+      snprintf(err, sizeof(err), "%.250s wurde kopiert, aber Verknüpfungen, Gerätedateien oder zu lange Namen darin ließen sich nicht "
+               "mitnehmen. Das Original bleibt deshalb liegen (es liegt jetzt an beiden Orten).", a->src[i]);
       fmn_pop(&t, tw);
       fmn_unmake(&s);
       break;
     } else if(move) {
       job_current(a->src[i]);
-      int drc = fmn_delete_copied(&s, &t, 0, &move_kept);
+      int drc = fmn_delete_copied(&s, &t, 0, &move_kept, &read_kept);
       if(drc) {
         snprintf(err, sizeof(err), "%.250s wurde kopiert, aber das Original ließ sich nicht ganz löschen: %s. Es liegt jetzt an beiden "
                  "Orten (das Original vielleicht nur noch zum Teil).", a->src[i], ntfs_words(drc));
@@ -1075,12 +1119,13 @@ fmn_run_copy(fm_args_t *a, int move) {
     job_finish(FM_FAILED, err, NULL);
     return;
   }
-  char note[400] = "";
+  char note[800] = "";
   pthread_mutex_lock(&g_lock);
   unsigned skipped = g_job.skipped;
   uint64_t done = g_job.bytes_done;
   pthread_mutex_unlock(&g_lock);
-  if(skipped) snprintf(note, sizeof(note), "%u Einträge wurden ausgelassen (Verknüpfungen, Gerätedateien oder ein anderes Laufwerk darin).", skipped);
+  if(skipped) snprintf(note, sizeof(note), "%u Einträge wurden ausgelassen (Verknüpfungen, Gerätedateien, zu lange Namen oder ein anderes "
+                       "Laufwerk darin).", skipped);
   if(conflict_skipped) {
     size_t nl = strlen(note);
     snprintf(note + nl, sizeof(note) - nl, "%s%u Einträge gab es im Ziel schon; sie blieben unverändert.", nl ? " " : "", conflict_skipped);
@@ -1089,6 +1134,11 @@ fmn_run_copy(fm_args_t *a, int move) {
     size_t nl = strlen(note);
     snprintf(note + nl, sizeof(note) - nl, "%s%u Einträge sind während des Verschiebens im Original neu entstanden oder haben sich "
              "geändert; sie blieben dort liegen.", nl ? " " : "", move_kept);
+  }
+  if(read_kept) {
+    size_t nl = strlen(note);
+    snprintf(note + nl, sizeof(note) - nl, "%s%u Dateien wurden während des Verschiebens heruntergeladen oder angesehen; ihr Original "
+             "blieb liegen.", nl ? " " : "", read_kept);
   }
   PS5TM_INFO("files_copy_done", "Dateien: %u Einträge %s nach %.100s (%llu MB).", a->n, move ? "verschoben" : "kopiert", a->dest,
              (unsigned long long)(done >> 20));
@@ -1146,6 +1196,24 @@ fmn_run_delete(fm_args_t *a) {
   job_finish(FM_DONE, NULL, NULL);
 }
 
+/* Is the NTFS folder ino the target folder or one above it? NTFS finds a folder under any spelling of its name (upper and lower case,
+   the 8.3 short name), so the names alone do not tell (audit 23.11.2026). */
+static int
+fmn_ntfs_inside(fmn_node_t *t, uint64_t ino) {
+  char *p = t->p;
+  size_t l = strlen(p);
+  for(size_t i = 1; i <= l; i++) {
+    if(p[i] != '/' && p[i] != 0) continue;
+    char c = p[i];
+    p[i] = 0;
+    uint64_t got;
+    int hit = ntfs_lookup(nh(t), p, &got) == 0 && got == ino;
+    p[i] = c;
+    if(hit) return 1;
+  }
+  return 0;
+}
+
 /* POST copy/move with a drive in it: what handle_copy checks for the console (the target, each source, names that are taken, room),
    on nodes. 0 with bytes and files counted, or an HTTP status with err (and the taken names in conflicts). */
 static int
@@ -1177,7 +1245,8 @@ fmn_copy_check(fm_args_t *a, int move, cJSON *conflicts, uint64_t *bytes, uint64
       http = 403;
       snprintf(err, en, "%.300s darf nicht verschoben werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", a->src[i]);
     }
-    if(!http && !strncmp(a->dest, a->src[i], sl) && (a->dest[sl] == 0 || a->dest[sl] == '/')) {
+    if(!http && ((!strncmp(a->dest, a->src[i], sl) && (a->dest[sl] == 0 || a->dest[sl] == '/')) ||
+                 (s.ntfs && t.ntfs && s.vol == t.vol && ss.type == 'd' && fmn_ntfs_inside(&t, ss.id)))) {
       http = 400;
       snprintf(err, en, "Ein Ordner kann nicht in sich selbst %s werden.", move ? "verschoben" : "kopiert");
     }

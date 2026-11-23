@@ -2035,7 +2035,29 @@ void HttpSource::handle(const Request &request)
             break;
         }
         if (a == "install")
+        {
+            // As the browser (audit 23.11.2026): the plan first. What blocks the install is said
+            // and nothing starts; a warning is shown and the install goes on (no second press).
+            const std::string q = "/api/v1/packages/install/plan?id=" + url_encoded(request.id);
+            if (exchange("GET", q.c_str(), {}, &status, &body, 20) == Net::ok && status == 200)
+            {
+                if (cJSON *plan = cJSON_Parse(body.c_str()))
+                {
+                    const std::string blocked = str(plan, "blocked"), warning = str(plan, "warning");
+                    const std::string name = str(plan, "name");
+                    cJSON_Delete(plan);
+                    if (!blocked.empty())
+                    {
+                        notice(Notice::Kind::error, name.empty() ? "Nicht installiert" : name,
+                               blocked);
+                        break;
+                    }
+                    if (!warning.empty())
+                        notice(Notice::Kind::info, name.empty() ? "Hinweis" : name, warning);
+                }
+            }
             route = "/api/v1/packages/install";
+        }
         else if (a == "install_cancel")
             route = "/api/v1/packages/install/cancel";
         else if (a == "queue_clear")
@@ -2231,6 +2253,16 @@ void HttpSource::handle(const Request &request)
             // the state the plan described is about to change: the next ask looks again
             std::lock_guard<std::mutex> lock(mutex_);
             data_.saves.plan = SaveImportPlan{};
+        }
+        else if (request.id == "export/delete")
+        {
+            // the ZIP is gone: the list of the drives' ZIP files at once (audit 23.11.2026)
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                data_.saves.plan = SaveImportPlan{};
+            }
+            notice(Notice::Kind::success, "Spielstände", "Die ZIP-Datei ist gelöscht.");
+            poll_saves();
         }
         poll_save_job();
         break;
@@ -2606,6 +2638,12 @@ void HttpSource::handle(const Request &request)
                 pending_conflict_json_ = request.text;
                 data_.fs_conflict.names = std::move(taken);
                 data_.fs_conflict.move = request.id == "move";
+                data_.fs_conflict.dest.clear();
+                if (cJSON *req = cJSON_Parse(request.text.c_str()))
+                {
+                    data_.fs_conflict.dest = str(req, "dest");
+                    cJSON_Delete(req);
+                }
                 ++data_.fs_conflict.seq;
                 ++data_.serial;
                 break;

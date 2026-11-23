@@ -8610,7 +8610,7 @@
     const key = JSON.stringify(list);
     if (key === p4m.skipKey) return;
     p4m.skipKey = key;
-    box.innerHTML = `<details class="p4m-skipbox"${p4m.skipOpen ? " open" : ""}><summary class="p4m-skiphead">Auf USB gefunden, nicht eingebunden (${list.length})</summary>` + list.map((s) => {
+    box.innerHTML = `<details class="p4m-skipbox"${p4m.skipOpen ? " open" : ""}><summary class="p4m-skiphead">Gefunden, nicht eingebunden (${list.length})</summary>` + list.map((s) => {
       const file = s.path.slice(s.path.lastIndexOf("/") + 1);
       const meta = [s.mount.replace("/mnt/", ""), s.title_id, s.name ? file : ""].filter(Boolean);
       const icon = /^CUSA\d{5}$/.test(s.title_id) ? `<img class="p4m-icon" src="/api/v1/ps4mount/icon?id=${esc(s.title_id)}" alt="" loading="lazy">`
@@ -10344,6 +10344,9 @@
     if (inDrive(fm.path)) {
       fm.sel.clear();
       if (fm.clip && inDrive(fm.clip.from)) fm.clip = null;
+      /* erst den Stick verlassen, dann auswerfen (Prüfung 23.11.2026): sonst blieb seine Liste bis zu 60 s anklickbar, und Öffnen oder
+         Herunterladen liefen in „wird gerade benutzt“ */
+      await fmLoad("/data");
     }
     try {
       const r = await api("/api/v1/files/eject", { method: "POST", body: JSON.stringify({ path: p.path }), timeoutMs: 60000 });
@@ -10655,9 +10658,11 @@
       }
       if (!fm.pick) return;
       fm.pick.path = d.path;
-      const parts = d.path === "/" ? ["/"] : ["", ...d.path.slice(1).split("/")];
+      /* ein NTFS-Stick liegt nicht unter „/“ der Konsole: seine Leiste beginnt bei ihm, wie die des Dateimanagers (Prüfung 23.11.2026) */
+      const ntfsPick = fmIsNtfs(d.path);
+      const parts = d.path === "/" ? ["/"] : ntfsPick ? d.path.slice(1).split("/") : ["", ...d.path.slice(1).split("/")];
       const crumbs = parts.map((p, i) => {
-        const full = i === 0 ? "/" : parts.slice(0, i + 1).join("/");
+        const full = ntfsPick ? `/${parts.slice(0, i + 1).join("/")}` : i === 0 ? "/" : parts.slice(0, i + 1).join("/");
         return i === parts.length - 1
           ? `<b>${esc(p || "/")}</b>`
           : `<button type="button" class="fm-pick-nav" data-fmpicknav="${esc(full)}">${esc(p || "/")}</button>`;
@@ -11244,10 +11249,6 @@
     }
     else if (d.fmCrumb !== undefined) fmLoad(d.fmCrumb);
     else if (d.fmOpen !== undefined) { const en = fmEntries()[+d.fmOpen]; if (en) fmLoad(fmJoin(fm.path, en.name)); }
-    else if (d.fmRen !== undefined) {
-      const en = fmEntries()[+d.fmRen];
-      if (en) fmAskName("Umbenennen", "Neuer Name", en.name, (v) => api("/api/v1/files/rename", { method: "POST", body: JSON.stringify({ path: fmJoin(fm.path, en.name), name: v }) }));
-    }
     else if (d.fmView !== undefined) fmView(+d.fmView);
     else if (t.id === "fm-sizes") fmSizeAll();
     else if (t.id === "fm-dir") { fm.desc = !fm.desc; fmSaveSort(); fmRender(); }

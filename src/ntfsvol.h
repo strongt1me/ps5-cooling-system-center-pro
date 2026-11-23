@@ -20,6 +20,7 @@ struct ntfs_vol;
 typedef struct ps5tm_ntfsvol ps5tm_ntfsvol_t;
 
 #define PS5TM_NTFS_MAX 8                 /* drives at once */
+#define PS5TM_NTFS_WHY 400               /* a read-only reason in bytes (the longest is 221) */
 
 typedef struct {
   char     name[8];                      /* "ntfs0" */
@@ -28,7 +29,7 @@ typedef struct {
   uint64_t total_bytes, free_bytes;      /* free_bytes 0 when it could not be read */
   int      free_known;
   int      writable;
-  char     why[200];                     /* why it is read-only (empty when writable) */
+  char     why[PS5TM_NTFS_WHY];          /* why it is read-only (empty when writable) */
 } ps5tm_ntfsinfo_t;
 
 /* 1 when p is an NTFS drive's path ("/ntfs3" or "/ntfs3/..."), whether or not that drive is there. */
@@ -44,17 +45,34 @@ void ps5tm_ntfs_put(ps5tm_ntfsvol_t *v);
 struct ntfs_vol *ps5tm_ntfs_handle(ps5tm_ntfsvol_t *v);
 const char *ps5tm_ntfs_name(const ps5tm_ntfsvol_t *v);
 uint64_t ps5tm_ntfs_serial(const ps5tm_ntfsvol_t *v);
-/* 1 writable; 0 read-only with the reason in why. */
+/* 1 writable; 0 read-only with the reason in why. While something writes to the drive, the last answer (no wait for the driver). */
 int  ps5tm_ntfs_writable(ps5tm_ntfsvol_t *v, char *why, size_t n);
+/* Driver work that writes begins (on = 1) or ends (on = 0): the places answer from their last look meanwhile. */
+void ps5tm_ntfs_writing(ps5tm_ntfsvol_t *v, int on);
+/* A file of the drive is read for a download or a view (on = 1) or no longer (on = 0): no file of the drive is deleted while one is
+   read (the driver knows no open files; ps5tm_ntfs_delete_begin). on = 1 answers EBUSY when a delete step did not end in 10 s
+   (then nothing is counted), else 0. */
+int  ps5tm_ntfs_reading(ps5tm_ntfsvol_t *v, int on);
+/* A file of the drive is about to be deleted: EBUSY while one is read, else 0 and no read starts until ps5tm_ntfs_delete_end (a read
+   that comes meanwhile waits for it and then looks its file up afresh). */
+int  ps5tm_ntfs_delete_begin(ps5tm_ntfsvol_t *v);
+void ps5tm_ntfs_delete_end(ps5tm_ntfsvol_t *v);
+/* 1 once the app ends (ps5tm_ntfs_shutdown_begin): an upload stops. */
+int  ps5tm_ntfs_closing(void);
 
 /* The drives there are now, for the places of the file manager. */
 unsigned ps5tm_ntfs_list(ps5tm_ntfsinfo_t *out, unsigned max);
 
-/* "Sicher auswerfen": writes out what is pending and lets the drive go; it is not taken up again until it is plugged in anew.
+/* "Sicher auswerfen": writes out what is pending and lets the drive go, with every other drive of the same disk; it is not taken up
+   again until it is plugged in anew.
    0, or an HTTP status with the reason (409 while the file manager uses it, 404 not there, 500 the flush failed). */
 int  ps5tm_ntfs_eject(const char *name, char *msg, size_t n);
 
-/* The app ends: what is written is flushed to the drives. */
+/* The app is asked to end: an upload stops. */
+void ps5tm_ntfs_shutdown_begin(void);
+/* What is written is flushed now, on every drive nobody writes to at this moment. */
+void ps5tm_ntfs_sync_idle(void);
+/* The app ends: after a short wait for steps under way, what is written is flushed to the drives (again). */
 void ps5tm_ntfs_shutdown(void);
 
 /* Host tests: an image file to be looked at like a drive. */
