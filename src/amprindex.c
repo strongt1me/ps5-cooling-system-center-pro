@@ -720,9 +720,11 @@ ps5tm_ampr_info(const char *id, int *http) {
     }
     pack_check(li.path, have ? count : 0, ampr_bytes, o);
     can = 1;
-    if(ps5tm_lz4_packed_dir(li.path)) {
+    const int packed = ps5tm_lz4_packed_dir(li.path);
+    if(packed) {
       can = 0;
-      why = "Gesperrt, solange das Spiel in LZ4-Paketen liegt: Die Pakete gehören zu genau diesem Index. Zuerst „LZ4 entpacken“.";
+      why = packed == 2 ? "Gesperrt, solange das Spiel in zstd-Paketen liegt: Die Pakete gehören zu genau diesem Index. Zuerst „zstd entpacken“."
+                        : "Gesperrt, solange das Spiel in LZ4-Paketen liegt: Die Pakete gehören zu genau diesem Index. Zuerst „LZ4 entpacken“.";
     }
   } else if(is_image_format(li.format) || !strcmp(li.format, "ffpfsc")) {
     if(ai_img_header(li.path, &count) == 0) have = 1;

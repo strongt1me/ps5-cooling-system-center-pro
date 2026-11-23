@@ -1075,7 +1075,7 @@ ps5tm_lz4_packed_dir(const char *dir) {
   struct stat st;
   snprintf(p, sizeof(p), "%s/" LZP_INDEX_NAME, dir);
   if(stat(p, &st) == 0 && S_ISREG(st.st_mode)) return 1;
-  return zsp_packed_dir(dir);                             /* zstd packs count as well: the index is tied to them just the same */
+  return zsp_packed_dir(dir) ? 2 : 0;                     /* zstd packs count as well: the index is tied to them just the same */
 }
 
 /* Does the game load libSceAmpr itself? The tools for LZ4 asset packs ask exactly this (12.10.2026, the LZ4 tool of theghostonline,

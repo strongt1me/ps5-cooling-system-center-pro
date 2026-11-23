@@ -1065,7 +1065,8 @@ int           ps5tm_plugins_apply(const char *title_id, char *msg, size_t msg_le
 struct cJSON *ps5tm_lz4_info(const char *title_id, int *http);
 struct cJSON *ps5tm_lz4_plan(const char *title_id, int level, const char *profile, const char *format, int *http);
 int           ps5tm_lz4_start(const char *kind, const char *title_id, int level, const char *profile, const char *format, int sign, char *err, size_t err_len);
-/* 1 when the game folder holds a pack set (ampr_assets.index) */
+/* Does the game folder hold a pack set? 1 LZ4 (ampr_assets.index), 2 zstd (AMPR EMU NG), 0 none. The texts name the kind: a zstd
+ * game was told to "unpack LZ4" (23.11.2026). */
 int           ps5tm_lz4_packed_dir(const char *dir);
 
 /* The same game in several images on the drives, and setting one aside as <name>.off (dupimg.c). */

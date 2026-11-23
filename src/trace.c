@@ -1199,8 +1199,10 @@ ps5tm_trace_info(const char *id, int *http) {
   cJSON_AddStringToObject(o, "name", li.name);
   const char *why = NULL;
   char buf[300];
+  int packed;
   if(strcmp(li.format, "folder") || li.path[0] != '/') why = "Nur für Spiele, die als Ordner vorliegen. Ein Abbild lässt sich vorher mit „In einen Ordner entpacken“ in einen Ordner bringen.";
-  else if(ps5tm_lz4_packed_dir(li.path)) why = "Das Spiel liegt in LZ4-Paketen. Zuerst „LZ4 entpacken“.";
+  else if((packed = ps5tm_lz4_packed_dir(li.path)) != 0)
+    why = packed == 2 ? "Das Spiel liegt in zstd-Paketen. Zuerst „zstd entpacken“." : "Das Spiel liegt in LZ4-Paketen. Zuerst „LZ4 entpacken“.";
   else if(ps5tm_lz4_ampr_import(li.path) == 0) why = "Dieses Spiel lädt libSceAmpr nicht selbst: Ein Mitschnitt bliebe leer.";
   else {
     char ip[PATH_MAX];
@@ -1375,7 +1377,11 @@ ps5tm_trace_action(const char *id, const char *action, char *msg, size_t n) {
   snprintf(dir, sizeof(dir), "%s/fakelib2", li.path);
   if(!strcmp(action, "start")) {
     if(ps5tm_procmgr_title_running(id) == 1) { snprintf(msg, n, "Das Spiel läuft gerade. Bitte zuerst beenden."); return 409; }
-    if(ps5tm_lz4_packed_dir(li.path)) { snprintf(msg, n, "Das Spiel liegt in LZ4-Paketen. Zuerst „LZ4 entpacken“."); return 409; }
+    const int packed = ps5tm_lz4_packed_dir(li.path);
+    if(packed) {
+      snprintf(msg, n, "%s", packed == 2 ? "Das Spiel liegt in zstd-Paketen. Zuerst „zstd entpacken“." : "Das Spiel liegt in LZ4-Paketen. Zuerst „LZ4 entpacken“.");
+      return 409;
+    }
     if(ps5tm_lz4_ampr_import(li.path) == 0) { snprintf(msg, n, "Dieses Spiel lädt libSceAmpr nicht selbst: Ein Mitschnitt bliebe leer."); return 409; }
     snprintf(dst, sizeof(dst), "%s/ampr_emu.index", li.path);
     if(!is_file(dst)) { snprintf(msg, n, "Der AMPR-Index des Spiels fehlt. Zuerst bauen."); return 409; }
