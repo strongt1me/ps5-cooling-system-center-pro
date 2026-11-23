@@ -251,7 +251,7 @@ static void
 why_words(const char *w, char *out, size_t n) {
   static const struct { const char *start, *de; } t[] = {
     { "Windows did not unmount", "Das Laufwerk wurde nicht sauber getrennt (am PC ohne „Sicher entfernen“ oder an der PS5 mitten im Schreiben abgezogen). Damit die PS5 darauf schreiben kann: an einem Windows-PC prüfen lassen, „Sicher entfernen“ wählen und wieder an die PS5 stecken." },
-    { "the drive's journal", "Windows hat auf dem Laufwerk noch nicht alles zu Ende geschrieben (Schnellstart). Damit die PS5 darauf schreiben kann: am PC „Sicher entfernen“ wählen oder Windows ganz herunterfahren, dann wieder an die PS5 stecken." },
+    { "the drive's journal", "Windows hat auf dem Laufwerk noch nicht alles zu Ende geschrieben (ohne „Sicher entfernen“ abgezogen oder Schnellstart). Damit die PS5 darauf schreiben kann: am PC „Sicher entfernen“ wählen oder Windows ganz herunterfahren, dann wieder an die PS5 stecken." },
     { "Windows is hibernated", "Das Laufwerk ist die Systemplatte eines Windows-PCs im Ruhezustand (Schnellstart). Damit die PS5 darauf schreiben kann: den PC davon starten, mit gedrückter Umschalttaste herunterfahren, dann wieder an die PS5 stecken." },
     { "chkdsk has unfinished", "Die Windows-Prüfung (chkdsk) ist auf dem Laufwerk nicht fertig geworden. Damit die PS5 darauf schreiben kann: chkdsk am Windows-PC zu Ende laufen lassen, dann das Laufwerk wieder an die PS5 stecken." },
     { "only NTFS 3", "Das Laufwerk hat ein sehr altes NTFS (älter als Windows 2000); die PS5 kann es nur lesen." },
