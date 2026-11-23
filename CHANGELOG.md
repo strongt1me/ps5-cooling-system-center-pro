@@ -2,7 +2,7 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.93.0 – 24.11.2026
 
 ### NTFS: Dirty-Flag und Windows-Journal (Upstream-Issue #9, Wunsch des Users, 23.11.2026)
 - **Anlass:** Eine andere Prüf-Sitzung hat zwei Lücken des NTFS-Treibers (PS5-NTFS-BROWSER) mit Tests belegt ([Issue #9](https://github.com/abcde6543/PS5-NTFS-BROWSER/issues/9)); beide galten auch für die Kopie in der App.
