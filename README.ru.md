@@ -203,7 +203,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 1. Скачайте `PS5_Cooling_System_Center_v<версия>.elf` из [Releases](../../releases).
 2. Отправьте его на консоль (загрузчик ELF, порт **9021**), например:
    ```bash
-   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.91.0.elf
+   nc -q0 <IP-PS5> 9021 < PS5_Cooling_System_Center_v1.92.0.elf
    ```
 3. Откройте **`http://<IP-PS5>:8086`** в браузере (адрес также показывает уведомление вверху слева на ТВ).
 

@@ -2,7 +2,7 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.92.0 – 23.11.2026
 
 ### Gesamtprüfung der App, Browser und Vollbild (Wunsch des Users, 22.11.2026)
 - **Wie geprüft:** clang Static Analyzer über alle 125 Quelldateien mit der echten Toolchain (174 Hinweise wie am 21.11., keiner neu), dazu clang-tidy 21 mit den Fehlermuster-Prüfungen (keine echten Fehler: ungeprüfte Rückgabewerte, `!strcmp`, beabsichtigte Ganzzahl-Divisionen; die eine Makro-Warnung in `libcache.c` ist ein Fehlalarm, das zweite Vorkommen steht in `sizeof`). REA an ELF und beiden Kacheln: nichts offengelegt; die Treffer auf private Muster sind der öffentliche Name, Bildnamen, Pfade des GitHub-Bauservers von ps5-opengl und die erfundene Beispiel-IP der Musterdaten. Der Awesome-REA-Katalog hat keine Werkzeuge zur Quelltextprüfung; dafür REA selbst und clang-tidy.
