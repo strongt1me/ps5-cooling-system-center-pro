@@ -1,0 +1,135 @@
+/* A small, read-only NTFS driver that runs entirely in user space.
+ *
+ * Supports: NTFS 3.x volumes with any cluster size, fragmented and very large
+ * files, attribute lists, directory B-trees of any size, sparse files,
+ * LZNT1 compressed files, Unicode names, case-insensitive lookup, hard links
+ * and 8.3 short-name lookup. Encrypted (EFS) file contents cannot be read.
+ *
+ * All functions are thread-safe; each volume serialises access internally.
+ * Errors are returned as negative errno values. */
+#pragma once
+
+#include <stddef.h>
+#include <stdint.h>
+#include <sys/types.h>
+
+#include "bdev.h"
+
+#define NTFS_ROOT_INODE 5
+
+/* Windows file attribute bits (as stored in $STANDARD_INFORMATION). */
+#define NTFS_FA_READONLY   0x0001
+#define NTFS_FA_HIDDEN     0x0002
+#define NTFS_FA_SYSTEM     0x0004
+#define NTFS_FA_DIRECTORY  0x0010
+#define NTFS_FA_ARCHIVE    0x0020
+#define NTFS_FA_SPARSE     0x0200
+#define NTFS_FA_REPARSE    0x0400
+#define NTFS_FA_COMPRESSED 0x0800
+#define NTFS_FA_ENCRYPTED  0x4000
+
+typedef struct ntfs_vol ntfs_vol_t;
+typedef struct ntfs_file ntfs_file_t;
+
+typedef struct ntfs_stat {
+  uint64_t inode;
+  uint64_t size;     /* logical size of the unnamed data stream */
+  uint64_t alloc;    /* bytes allocated on disk */
+  int64_t  crtime;   /* Unix time, seconds */
+  int64_t  mtime;
+  int64_t  atime;
+  uint32_t attrs;    /* NTFS_FA_* */
+  uint32_t nlink;
+  int      is_dir;
+} ntfs_stat_t;
+
+typedef struct ntfs_info {
+  char     label[128];   /* UTF-8 volume label, may be empty */
+  uint64_t serial;
+  uint64_t total_bytes;
+  uint32_t cluster_size;
+  uint32_t mft_record_size;
+  uint8_t  ver_major, ver_minor;
+  int      dirty;        /* volume was not cleanly unmounted */
+} ntfs_info_t;
+
+/* Called once per directory entry. Return non-zero to stop early. */
+typedef int (*ntfs_dir_cb)(void *ctx, const char *name, const ntfs_stat_t *st);
+
+/* Mount the NTFS file system on b. The volume takes ownership of b. On
+ * failure, b is left open and an error string is written to err. */
+int  ntfs_mount(bdev_t *b, ntfs_vol_t **out, char *err, size_t errlen);
+void ntfs_umount(ntfs_vol_t *v);
+
+void ntfs_get_info(ntfs_vol_t *v, ntfs_info_t *info);
+
+/* Free space in bytes. Scans $Bitmap the first time (can take a moment on
+ * large volumes), then returns the cached value. */
+int  ntfs_free_bytes(ntfs_vol_t *v, uint64_t *out);
+
+/* Resolve a '/'-separated UTF-8 path (relative to the volume root). */
+int  ntfs_lookup(ntfs_vol_t *v, const char *path, uint64_t *inode);
+int  ntfs_stat(ntfs_vol_t *v, uint64_t inode, ntfs_stat_t *st);
+
+/* List a directory. Metadata files ($MFT, $Bitmap...) and DOS short-name
+ * aliases are skipped. Entries arrive in NTFS collation order. */
+int  ntfs_readdir(ntfs_vol_t *v, uint64_t dir_inode, ntfs_dir_cb cb, void *ctx);
+
+int     ntfs_open(ntfs_vol_t *v, uint64_t inode, ntfs_file_t **out);
+ssize_t ntfs_pread(ntfs_file_t *f, void *buf, size_t len, uint64_t off);
+uint64_t ntfs_file_size(const ntfs_file_t *f);
+void    ntfs_close(ntfs_file_t *f);
+
+/* ---- Writing -------------------------------------------------------------
+ *
+ * Writing is off until ntfs_enable_write() succeeds. Enabling only checks the
+ * volume and allows writes; the drive is first modified (journal emptied) by
+ * the first actual write. It refuses volumes that
+ * Windows did not unmount cleanly (dirty flag, hibernation/Fast Startup,
+ * pending journal), because writing to those can corrupt them.
+ *
+ * Supported: creating folders and files. Files are created with their final
+ * size, then filled sequentially with ntfs_wwrite(); an interrupted file can
+ * be continued with ntfs_wopen(). Files and empty folders can be deleted
+ * with ntfs_unlink(); existing files are never modified or renamed. */
+
+typedef struct ntfs_wfile ntfs_wfile_t;
+
+/* 0 if writing can be enabled; otherwise -errno and a reason in why. */
+int  ntfs_can_write(ntfs_vol_t *v, char *why, size_t len);
+int  ntfs_enable_write(ntfs_vol_t *v, char *err, size_t errlen);
+int  ntfs_is_writable(ntfs_vol_t *v);
+void ntfs_disable_write(ntfs_vol_t *v);
+
+/* Flush everything written so far to the device. */
+int  ntfs_sync(ntfs_vol_t *v);
+
+/* Create a folder named name (UTF-8, no '/') in parent. -EEXIST if a file or
+ * folder with that name exists (names compare case-insensitively). */
+int  ntfs_mkdir(ntfs_vol_t *v, uint64_t parent, const char *name, int64_t mtime,
+                uint64_t *inode);
+
+/* Create a file of exactly size bytes; its space is allocated now. */
+int  ntfs_create(ntfs_vol_t *v, uint64_t parent, const char *name, uint64_t size,
+                 int64_t mtime, ntfs_wfile_t **out);
+
+/* Continue writing a partly written file. *done is how much is already
+ * written (equal to the file size when it is complete). */
+int  ntfs_wopen(ntfs_vol_t *v, uint64_t inode, ntfs_wfile_t **out, uint64_t *done);
+
+/* Delete the file or empty folder `name` in parent: its folder entries
+ * (including an 8.3 alias) are removed first, then its clusters and records
+ * are freed. -ENOTEMPTY for a folder with contents; -ENOTSUP for files
+ * Windows tracks elsewhere (object IDs, reparse points) or with other
+ * hard links; -EPERM for system files. */
+int  ntfs_unlink(ntfs_vol_t *v, uint64_t parent, const char *name);
+
+/* Append data at the current position. Returns 0 or -errno. */
+int  ntfs_wwrite(ntfs_wfile_t *f, const void *buf, size_t len);
+
+/* Record how much was written and release the handle. */
+int  ntfs_wclose(ntfs_wfile_t *f);
+
+/* Exposed for unit tests. Returns decompressed length or -1. */
+ssize_t ntfs_lznt1_decompress(const uint8_t *src, size_t srclen, uint8_t *dst,
+                              size_t dstlen);
