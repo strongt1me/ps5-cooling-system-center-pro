@@ -656,7 +656,7 @@ pack_check(const char *dir, uint64_t ids, long long ampr_bytes, cJSON *o) {
   struct stat st;
   char p[AI_PATH];
   uint64_t abytes = ampr_bytes > 0 ? (uint64_t)ampr_bytes : 0;
-  ps5tm_need_t nd, nd41;
+  ps5tm_need_t nd41;
   uint64_t files = 0, chunks = 0, volumes = 0;
   const char *kind = NULL;
 
@@ -668,7 +668,6 @@ pack_check(const char *dir, uint64_t ids, long long ampr_bytes, cJSON *o) {
       ix.ids = ids;
       ix.index_bytes = (uint64_t)st.st_size;
       ix.ampr_bytes = abytes;
-      ps5tm_zstd_need(&ix, &nd);
       ps5tm_zstd_need_041(&ix, &nd41);
       files = ix.files; chunks = ix.chunks; volumes = ix.volumes;
       kind = "zstd";
@@ -681,7 +680,6 @@ pack_check(const char *dir, uint64_t ids, long long ampr_bytes, cJSON *o) {
     if(fd >= 0) {
       if(fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && pread(fd, h, sizeof(h), 0) == (ssize_t)sizeof(h) &&
          ps5tm_lz4_header(h, sizeof(h), &files, &chunks, &volumes) == 0) {
-        ps5tm_lz4_need(files, chunks, volumes, (uint64_t)st.st_size, abytes, &nd);
         ps5tm_lz4_need_041(files, chunks, volumes, ids, &nd41);
         kind = "lz4";
       }

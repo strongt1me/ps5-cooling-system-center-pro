@@ -18,7 +18,8 @@
 - **Behoben, Hilfsprogramm:** Das Entfernen vieler Zusatzinhalte hört nach 75 s auf, damit die Antwort die App innerhalb ihrer 120 s erreicht (der Rest wird mit `PKGI_E_TIMEOUT` gemeldet).
 - **Behoben, Vollbild-App:** Eigene Profilbilder über 4 MB stehen nicht mehr in der Liste (sie kamen abgeschnitten an und wurden alle 30 s neu geladen); bei einem Bild wird die Größe vor dem Entpacken gelesen (ein 24-MP-Foto belegte rund 190 MB, nur um verworfen zu werden). Die Warteschlange der Konvertierungen zeigte einen eben entfernten Eintrag bis zur nächsten Abfrage wieder (auch im Browser).
 - **Behoben, Browser:** Eine Fehlermeldung des AMPR-Fensters konnte im danach geöffneten Fenster (Kopieren, Konvertieren) landen.
-- **Bewusst nicht geändert:** Das Feld `index_check_old` liefert die App seit der Rückkehr zur zweiten NG-Fassung 0.3.5 nicht mehr; der Code, der es in den Oberflächen liest, ist ohne Wirkung. Jedes übernommene Profilbild bleibt in der Vollbild-App als Bild von 256 KB geladen, bis sie endet (wächst nur durch eigene Wahl).
+- **Aufgeräumt (offene Punkte, 23.11.2026):** Das Feld `index_check_old` liefert die App seit der Rückkehr zur zweiten NG-Fassung 0.3.5 nicht mehr; der Code, der es in beiden Oberflächen las, und die Schätzung dafür in `amprindex.c` sind entfernt (dazu drei Einträge je Wörterbuch). Die Vollbild-App gibt das vorige Profilbild frei, sobald ein neues gewählt ist (vorher blieb jedes als Bild von 256 KB geladen, bis sie endete).
+- **Behoben, Payload-Store im Browser:** Nach „Abbrechen“ bei der Frage „Datei ersetzen?“ oder nach einer Ablehnung blieb der Knopf „Herunterladen“ grau, bis sich die Liste änderte. An der Slim geprüft: Mit einer eigenen Testdatei `elfldr_v0.28.elf` im Payload-Ordner antwortet die App mit `paystore_exists`, der Browser fragt „Datei ersetzen?“ und nennt die Datei; nach „Abbrechen“ war die Testdatei unverändert (danach wieder entfernt).
 
 ## v1.92.0 – 23.11.2026
 

@@ -324,8 +324,8 @@ void GameExtras::build_main()
     // the pack index and ampr_emu.index (14.11.2026); "tight" is within 2 MiB of the limit.
     // "index_check" is the result for the newest version the app ships (ng_version, 0.5.0 since
     // 20.11.2026, 0.4.1 from 15.11.2026: the view of all files and the pack tables in 80 MiB of
-    // index memory; the second version the app ships, 0.4.1, has the same layout),
-    // "index_check_old" the one for an older version (0.4.0: 48 MiB table limit, page cache).
+    // index memory; the second version the app ships, 0.4.1, has the same layout). The estimate for an
+    // older version ("index_check_old", 0.4.0) is no longer sent since 0.3.5 is the second version again.
     {
         Json j(extras_.ampr);
         const cJSON *c = get(j.root, "index_check");
@@ -361,25 +361,6 @@ void GameExtras::build_main()
                 r.description = "Die Ansicht aller Dateien und die Paket-Tabellen müssen in den "
                                 "Indexspeicher von 80 MiB passen (AMPR EMU NG " +
                                 ver + ").";
-            // the older version fails or is close, the newer one manages
-            const cJSON *old = get(j.root, "index_check_old");
-            const std::string ost = old != nullptr ? str(old, "state") : std::string();
-            if (st == "ok" && (ost == "over" || ost == "tight"))
-            {
-                const std::string over =
-                    str(old, "ng_version").empty() ? "0.4.0" : str(old, "ng_version");
-                form_.add_value(kStatus + 74, "Ältere Fassung",
-                                over + (ost == "over" ? ": zu groß" : ": knapp"));
-                r.description =
-                    ost == "over"
-                        ? "NG " + over +
-                              " liefert die gepackten Dateien dieses Spiels nicht aus; mit NG " +
-                              ver + " passt es."
-                        : "NG " + over +
-                              " liegt bei diesem Spiel nahe an der Grenze und liefert die "
-                              "gepackten Dateien womöglich nicht aus; mit NG " +
-                              ver + " passt es.";
-            }
         }
     }
     // APR-EMU and PlayGo in the game

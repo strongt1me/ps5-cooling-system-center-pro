@@ -2692,7 +2692,9 @@
     if (ins && !ins.disabled) {
       const body = { action: "install", id: ins.dataset.psInstall };
       ins.disabled = true;
-      await psPost(body);
+      /* nothing started ("Abbrechen" at the question, a refusal): the button is free again; the list is drawn anew only when it changed
+         (23.11.2026, at the Slim: it stayed grey until then) */
+      if (!(await psPost(body)) && ins.isConnected) ins.disabled = false;
     } else if (st) {
       await psPost({ action: "start", id: st.dataset.psStart });
     } else if (del && !del.disabled) {
@@ -9553,9 +9555,9 @@
      die es aus dem Pack-Index aufbaut, nicht in seinen Speicher passen: Das Spiel startet dann nicht (0.4.0: Final Fantasy XVI 49 MiB, Demon's Souls
      62 MiB; ampr-emu-ng #67, #61, #53). Die App schätzt es aus den Köpfen von ampr_zstd.index bzw. ampr_assets.index und ampr_emu.index; „knapp“ heißt:
      innerhalb von 2 MiB um die Grenze. `c` ist das Ergebnis für die neueste mitgelieferte Fassung (c.ng_version, seit 20.11.2026 0.5.0, seit 15.11.2026 0.4.1: Ansicht
-     aller Dateien + Paket-Tabellen in 80 MiB Indexspeicher; die zweite mitgelieferte Fassung 0.4.1 hat dasselbe Modell), `old` das für eine ältere (index_check_old, 0.4.0: 48 MiB Tabellengrenze, Seitencache). Die
-     Zusatzzeile nennt, wenn die ältere Fassung das Spiel nicht ausliefert, die neuere es aber schafft. */
-  const aprCheckRow = (c, old) => {
+     aller Dateien + Paket-Tabellen in 80 MiB Indexspeicher; die zweite mitgelieferte Fassung 0.4.1 hat dasselbe Modell). Die Schätzung für
+     eine ältere Fassung (index_check_old, 0.4.0) liefert die App seit der Rückkehr zu 0.3.5 als zweiter Fassung nicht mehr. */
+  const aprCheckRow = (c) => {
     if (!c) return "";
     const ver = c.ng_version || "0.4.0";
     const mib = (b) => (Math.abs(b) / 1048576).toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -9574,18 +9576,12 @@
       : c.state === "tight"
         ? "Das liegt nahe an der Grenze (Schätzung, 2 MiB Spielraum). Startet das Spiel nicht, ist wahrscheinlich dies der Grund."
         : "";
-    /* die ältere Fassung scheitert (oder liegt knapp), die neuere schafft es */
-    const olderNote = old && c.state === "ok" && (old.state === "over" || old.state === "tight")
-      ? (old.state === "over"
-        ? `NG ${old.ng_version || "0.4.0"} liefert die gepackten Dateien dieses Spiels nicht aus; mit NG ${ver} passt es.`
-        : `NG ${old.ng_version || "0.4.0"} liegt bei diesem Spiel nahe an der Grenze und liefert die gepackten Dateien womöglich nicht aus; mit NG ${ver} passt es.`)
-      : "";
     const what = ver === "0.4.0"
       ? `Die Tabellen, die AMPR EMU NG ${ver} aus dem Pack-Index aufbaut, müssen in seinen Speicher passen (Grenze 48 MiB, abzüglich des Platzes für ampr_emu.index und 16 MiB Seitencache). Passt es nicht, liefert NG keine gepackte Datei aus und das Spiel startet nicht (ampr-emu-ng #67, #61, #53).`
       : `Die Ansicht aller Dateien und die Paket-Tabellen müssen in den Indexspeicher von 80 MiB passen (AMPR EMU NG ${ver}). Passt es nicht, liefert NG keine gepackte Datei aus und das Spiel startet nicht.`;
     return `<div class="apr-row"><div><b>Passt der Index in AMPR EMU NG?</b>
         <small>${esc(what)}</small>${chip}
-        <small>${esc(counts)}</small>${note ? `<small>${esc(note)}</small>` : ""}${olderNote ? `<small>${esc(olderNote)}</small>` : ""}</div></div>`;
+        <small>${esc(counts)}</small>${note ? `<small>${esc(note)}</small>` : ""}</div></div>`;
   };
 
   const aprRender = () => {
@@ -9695,7 +9691,7 @@
 
     paintJob(body, `
       <p class="muted" style="margin:0 0 14px">${esc(fmtName)}${img.image_bytes ? ` · ${bytes(img.image_bytes)}` : ""}</p>
-      ${ampr}${aprCheckRow(i.index_check, i.index_check_old)}${aprLz4Rows(apr.lz4, ij, mine, anyRunning)}${aprTraceRow(apr.trace, ij, anyRunning)}${emuRow}${aprPlugRow(apr.plug, anyRunning)}${imgRows}`,
+      ${ampr}${aprCheckRow(i.index_check)}${aprLz4Rows(apr.lz4, ij, mine, anyRunning)}${aprTraceRow(apr.trace, ij, anyRunning)}${emuRow}${aprPlugRow(apr.plug, anyRunning)}${imgRows}`,
       `<button type="button" class="btn" data-cp="close">${anyRunning ? "Im Hintergrund weiter" : "Schließen"}</button>`);
   };
 

@@ -149,6 +149,22 @@ int Covers::upload_pending(
         textures_[r.id] = {texture, 0.0f};
         used_[r.id] = ++tick_;
         ++uploaded;
+        // A newly chosen profile picture replaces the one before it: only the current revision is
+        // drawn, and keep_loaded() held every earlier one until the app ended.
+        if (destroy && r.id.rfind("profilepic:", 0) == 0)
+        {
+            for (auto it = textures_.begin(); it != textures_.end();)
+            {
+                if (it->first != r.id && it->first.rfind("profilepic:", 0) == 0)
+                {
+                    destroy(it->second.texture);
+                    used_.erase(it->first);
+                    it = textures_.erase(it);
+                }
+                else
+                    ++it;
+            }
+        }
         // Over the limit: the picture drawn least recently goes (never the one just made).
         while (destroy && textures_.size() > kCoverLimit)
         {
