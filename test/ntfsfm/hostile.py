@@ -8,6 +8,11 @@ clusters), each with one lie a stick can tell. python3 hostile.py <clean.img> <o
   div0.img     2^23 sectors per cluster: the cluster size wrapped to 0 in 32 bits (division by zero while mounting)
   short.img    not hostile: the image is 8 KB shorter than its volume, as behind a USB bridge that reports a few sectors less (must
                still be read, never written: clusters past the end would be handed out)
+  log_p1.img   $LogFile: restart page 0 older and clean, page 1 newer with a client open (Windows goes by the newer: read-only)
+  log_p0.img   the same with the pages the other way round (read-only)
+  log_old.img  page 0 newer and clean, page 1 older with a client open (writable: the newer page counts)
+  log_chkd.img page 1 says chkdsk has unfinished work (read-only)
+               (upstream issue #9: only page 0 was read; the restart pages hold only the fields the driver reads)
 """
 import os
 import struct
@@ -171,4 +176,41 @@ save(img, "div0.img")
 # short: the drive ends 8 KB before its volume
 img = bytearray(clean[:len(clean) - 8192])
 save(img, "short.img")
-print("hostile images: attrlen nameoff bitmap dag div0 short")
+
+
+def logfile_start(img):
+    """byte offset and length of $LogFile's first data run"""
+    off, rec = record(img, 2)
+    for p, t in attrs(rec):
+        if t == 0x80 and rec[p + 8]:
+            r = p + u16(rec, p + 32)
+            lb, ob = rec[r] & 15, rec[r] >> 4
+            ln = int.from_bytes(rec[r + 1:r + 1 + lb], "little")
+            lcn = int.from_bytes(rec[r + 1 + lb:r + 1 + lb + ob], "little", signed=True)
+            return lcn * cluster, ln * cluster
+    raise SystemExit("no $LogFile data")
+
+
+def restart(img, page, lsn, in_use, flags, magic=b"RSTR"):
+    base, length = logfile_start(img)
+    assert length >= 8192
+    pg = bytearray(b"\xff" * 512)
+    pg[0:4] = magic
+    struct.pack_into("<HHQIIHHH", pg, 4, 0x1E, 9, 0, 4096, 4096, 0x30, 1, 1)
+    struct.pack_into("<QHHHH", pg, 0x30, lsn, 1, 0xFFFF, in_use, flags)   # current LSN, clients, free list, in-use list, flags
+    o = base + page * 4096
+    img[o:o + 512] = pg
+
+
+CLEAN, OPEN = (0xFFFF, 0x0002), (0x0000, 0x0000)
+for name, pages in (("log_p1", ((100,) + CLEAN, (200,) + OPEN)), ("log_p0", ((200,) + OPEN, (100,) + CLEAN)),
+                    ("log_old", ((200,) + CLEAN, (100,) + OPEN))):
+    img = bytearray(clean)
+    for i, (lsn, use, fl) in enumerate(pages):
+        restart(img, i, lsn, use, fl)
+    save(img, name + ".img")
+img = bytearray(clean)
+restart(img, 0, 200, *CLEAN)
+restart(img, 1, 100, *CLEAN, magic=b"CHKD")
+save(img, "log_chkd.img")
+print("hostile images: attrlen nameoff bitmap dag div0 short log_p1 log_p0 log_old log_chkd")

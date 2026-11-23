@@ -851,7 +851,9 @@ Ortsleiste zeigt „ntfs0 (NTFS · Name)“. Ein Laufwerk ohne NTFS wird einmal 
   die Konsole das Laufwerk nicht sieht.
 - **Nur lesbar:** Schreiben wird beim Einlesen nur für saubere Laufwerke erlaubt; zum Schreiben geöffnet wird das Gerät erst beim
   ersten Schreiben. Sonst tragen Orte und Liste `read_only_why` (Browser: „Nur lesbar · Grund“ über der Liste, Vollbild:
-  Hinweiskarte rechts). Der Grund ist aus Sicht der PS5 gesagt: was mit dem Laufwerk ist (ohne „Sicher entfernen“ abgezogen,
+  Hinweiskarte rechts). Der Grund ist aus Sicht der PS5 gesagt: was mit dem Laufwerk ist (nicht sauber getrennt: am PC ohne „Sicher
+  entfernen“ oder an der PS5 mitten im Schreiben abgezogen – die App setzt dafür beim Schreiben das Dirty-Flag und löscht es nach dem
+  Ausschreiben wieder,
   Journal von Windows offen, chkdsk nicht fertig, Systemplatte eines Windows-PCs im Ruhezustand, NTFS älter als 3.x, `$UpCase`
   fehlt, Gerät nicht beschreibbar, Schreibfehler) und dann „Damit die PS5 darauf schreiben kann: …“ mit den Schritten am
   Windows-PC und „wieder an die PS5 stecken“ (`src/ntfsvol.c`, `why_words`).

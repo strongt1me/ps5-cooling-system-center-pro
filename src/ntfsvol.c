@@ -37,6 +37,8 @@
 #define NV_SOURCES 4                     /* host tests: image files */
 #define NV_SCAN_MS 3000u
 #define NV_TRIES   5                     /* opens of a new disk that fail before it is left alone (some need a moment) */
+/* after the n-th failed open the next one waits NV_SCAN_MS << n (6, 12, 24, 48 s): a disk that is still announcing itself (the console
+   logs new USB addresses and "cam_open_device failed" then, 21.11.2026) is not touched in the look's 3 s beat (upstream issue #1) */
 #define NV_NAME_MS 120000u               /* a name let go is not given to another disk for this long */
 #define NV_RETIRED 16
 #define NV_SETTLE_S 10                   /* a disk node younger than this is not touched yet */
@@ -66,6 +68,7 @@ typedef struct {
   int      rejected;                     /* no NTFS on it (or it never opened) */
   int      ejected;                      /* "Sicher auswerfen": not taken up again until it is unplugged */
   int      tries;
+  uint64_t next_ms;                      /* not opened again before this (after a failed open) */
 } nv_probe_t;
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;   /* the list, references, probe results, sources */
@@ -247,7 +250,7 @@ ps5tm_ntfs_get(const char *p, const char **rest) {
 static void
 why_words(const char *w, char *out, size_t n) {
   static const struct { const char *start, *de; } t[] = {
-    { "Windows did not unmount", "Das Laufwerk wurde zuletzt an einem Windows-PC ohne „Sicher entfernen“ abgezogen. Damit die PS5 darauf schreiben kann: am PC einstecken, „Sicher entfernen“ wählen und wieder an die PS5 stecken." },
+    { "Windows did not unmount", "Das Laufwerk wurde nicht sauber getrennt (am PC ohne „Sicher entfernen“ oder an der PS5 mitten im Schreiben abgezogen). Damit die PS5 darauf schreiben kann: an einem Windows-PC prüfen lassen, „Sicher entfernen“ wählen und wieder an die PS5 stecken." },
     { "the drive's journal", "Windows hat auf dem Laufwerk noch nicht alles zu Ende geschrieben (Schnellstart). Damit die PS5 darauf schreiben kann: am PC „Sicher entfernen“ wählen oder Windows ganz herunterfahren, dann wieder an die PS5 stecken." },
     { "Windows is hibernated", "Das Laufwerk ist die Systemplatte eines Windows-PCs im Ruhezustand (Schnellstart). Damit die PS5 darauf schreiben kann: den PC davon starten, mit gedrückter Umschalttaste herunterfahren, dann wieder an die PS5 stecken." },
     { "chkdsk has unfinished", "Die Windows-Prüfung (chkdsk) ist auf dem Laufwerk nicht fertig geworden. Damit die PS5 darauf schreiben kann: chkdsk am Windows-PC zu Ende laufen lassen, dann das Laufwerk wieder an die PS5 stecken." },
@@ -505,6 +508,7 @@ ps5tm_ntfs_scan(int force) {
     for(unsigned i = 0; i < g_nprobe && !p; i++)
       if(!strcmp(g_probe[i].node, cand[c])) p = &g_probe[i];
     if(p && (p->rejected || p->ejected)) skip = 1;
+    if(p && p->next_ms && now < p->next_ms) skip = 1;
     if(g_closing || g_retired_lost) skip = 1;
     pthread_mutex_unlock(&g_lock);
     if(skip) continue;
@@ -524,8 +528,8 @@ ps5tm_ntfs_scan(int force) {
     }
     if(p) {
       p->ident = ident[c];
-      if(rc == -2) p->tries++;
-      if(rc == 0) p->tries = 0;
+      if(rc == -2) { p->tries++; p->next_ms = ps5tm_mono_ms() + ((uint64_t)NV_SCAN_MS << p->tries); }
+      if(rc == 0) { p->tries = 0; p->next_ms = 0; }
       p->rejected = rc == -1 || (rc == -2 && p->tries >= NV_TRIES);
     }
     pthread_mutex_unlock(&g_lock);

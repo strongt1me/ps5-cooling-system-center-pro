@@ -27,7 +27,8 @@ Built as objects of their own (`gen/ntfsb/*.o`, Makefile) with `-Wno-unused-para
 A stick is untrusted input: the driver reads it as soon as it is plugged in and the file manager is open. Found with libFuzzer
 (ASan/UBSan, about 400 000 made-up images in two rounds and 4.4 million runs afterwards) and made-up images; each fix is checked by
 the app's host test `test/ntfsfm` (four hostile images that hang or crash the driver as taken over, one that crashed a first version
-of these fixes, and one volume a little larger than its drive that must still be read). Some are marked `(app, 23.11.2026)`
+of these fixes, one volume a little larger than its drive that must still be read, and four journals; `dirty.c` checks the dirty
+flag). Some are marked `(app, 23.11.2026)`
 in the code; the full list:
 
 - `ntfs.c` `read_record`/`read_record_any` (`record_ok`): a record's used and allocated size and its first attribute's offset must fit
@@ -58,6 +59,13 @@ in the code; the full list:
 - `ntfs_write.c` `free_inode`: the MFT records are released before their clusters are freed (pulled half way, a record still in use
   owned clusters the bitmap called free, and the next file shared them; now the worst case is clusters chkdsk gives back). From a
   review of the upstream code in another session of the user (23.11.2026, patch "loeschreihenfolge").
+- `ntfs_write.c` `ntfs_can_write`: both restart pages of `$LogFile` are read and the newer one (higher current LSN) decides, as in
+  ntfs-3g; "CHKD" on either page keeps the drive read-only (only page 0 was read: a drive whose newer page had a client open was written
+  and its journal cleared). Upstream issue #9, shown by tests of another review session.
+- `ntfs_write.c` `mark_volume` (new), `prepare_locked`, `ntfs_wwrite`, `ntfs_wclose`, `ntfs_sync`, `ntfs_disable_write`, `ntfs.c`
+  `ntfs_umount`: the dirty flag of `$VOLUME_INFORMATION` is set before the first change after a sync and cleared by the sync once the
+  rest is on the disk (it was never set: a stick pulled while writing looked clean to Windows, a half-written file showed its full
+  size). Upstream issue #9; test `test/ntfsfm/dirty.c`.
 - `bdev.c` `bdev_flush_cache`, `ntfs_write.c` `ntfs_flush_cache` (new): `DIOCGFLUSH`, so that the stick empties its own write cache;
   the app calls it once when a drive is ejected, after `ntfs_sync` (not at every sync: some USB bridges are slow on the command; an
   error is ignored, not every stick knows it).

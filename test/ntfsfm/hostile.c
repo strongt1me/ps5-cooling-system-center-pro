@@ -39,12 +39,12 @@ int main(int argc, char **argv) {
     int rw = ntfs_enable_write(nv, why, sizeof why) == 0;
     uint64_t fr = 0;
     int free_rc = ntfs_free_bytes(nv, &fr);
-    ntfs_can_write(nv, why, sizeof why);
+    if (rw) ntfs_can_write(nv, why, sizeof why);
     uint64_t root = 0;
     int entries = 0, rc = ntfs_lookup(nv, "/", &root);
     if (!rc) rc = ntfs_readdir(nv, root, count_cb, &entries);
-    printf("%s: mounted, writable %d, free %s, root listing %s (%d entries)\n", argv[1], rw, free_rc ? "unknown" : "counted",
-           rc ? "refused" : "read", entries);
+    printf("%s: mounted, writable %d, free %s, root listing %s (%d entries)%s%.70s\n", argv[1], rw, free_rc ? "unknown" : "counted",
+           rc ? "refused" : "read", entries, rw ? "" : "; read-only: ", rw ? "" : why);
     ntfs_umount(nv);
   }
   bdev_close(b);

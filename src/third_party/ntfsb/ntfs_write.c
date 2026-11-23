@@ -29,6 +29,7 @@
 #define NS_POSIX 0
 
 static int prepare_locked(ntfs_vol_t *v);
+static int mark_volume(ntfs_vol_t *v, int on);
 static int check_name(const char *name, uint16_t *out, int *nlen);
 
 struct ntfs_wfile {
@@ -2603,7 +2604,9 @@ int ntfs_wwrite(ntfs_wfile_t *f, const void *buf, size_t len) {
   if (f->pos + len > f->a.size) return -EFBIG;
   ntfs_vol_t *v = f->v;
   pthread_mutex_lock(&v->lock);
-  int rc = write_raw(v, &f->a, f->pos, buf, len);
+  /* (app) a sync for another file may have cleared the dirty flag meanwhile */
+  int rc = !v->vol_marked && mark_volume(v, 1) ? -EIO : 0;
+  if (!rc) rc = write_raw(v, &f->a, f->pos, buf, len);
   if (!rc) {
     f->pos += len;
     if (f->pos - f->flushed >= INIT_FLUSH_EVERY) {
@@ -2620,7 +2623,8 @@ int ntfs_wclose(ntfs_wfile_t *f) {
   ntfs_vol_t *v = f->v;
   pthread_mutex_lock(&v->lock);
   bdev_flush(v->dev);
-  int rc = store_init(f);
+  int rc = !v->vol_marked && mark_volume(v, 1) ? -EIO : 0;   /* (app) as in ntfs_wwrite */
+  if (!rc) rc = store_init(f);
   bdev_flush(v->dev);
   pthread_mutex_unlock(&v->lock);
   attr_free(&f->a);
@@ -2669,26 +2673,41 @@ int ntfs_can_write(ntfs_vol_t *v, char *why, size_t len) {
     rc = -EROFS;
   }
   if (!rc) {
-    /* A pending journal means Windows would replay it over our changes. */
+    /* A pending journal means Windows would replay it over our changes. (app, 23.11.2026) $LogFile has two restart pages and Windows
+     * goes by the newer one (the higher current LSN), as ntfs-3g does: the first alone let a drive be written whose newer page still
+     * had a client open (upstream issue #9). A "CHKD" on either page stops it. */
     attr_t lf;
     if (attr_find(v, INODE_LOGFILE, AT_DATA, NULL, 0, &lf) == 0) {
-      uint8_t pg[512];
-      if (attr_pread(v, &lf, 0, pg, sizeof pg) == (ssize_t)sizeof pg) {
-        if (!memcmp(pg, "CHKD", 4)) {
-          snprintf(why, len, "chkdsk has unfinished work on this drive");
-          rc = -EBUSY;
-        } else if (!memcmp(pg, "RSTR", 4)) {
-          uint16_t ro = le16(pg + 0x18);
-          if (ro + 0x10 <= 510) {
-            uint16_t in_use = le16(pg + ro + 0x0C), flags = le16(pg + ro + 0x0E);
-            if (in_use != 0xFFFF && !(flags & 0x0002)) {
-              snprintf(why, len, "the drive's journal has unsaved changes (Windows "
-                                 "Fast Startup?). Shut Windows down fully or use "
-                                 "\"Safely remove\" first");
-              rc = -EBUSY;
-            }
-          }
+      uint8_t pg[2][512];
+      int kind[2] = {0, 0}, unclean[2] = {0, 0};   /* kind 1 RSTR, 2 CHKD */
+      uint64_t lsn[2] = {0, 0};
+      for (int i = 0; i < 2; i++) {
+        uint64_t off = 0;
+        if (i) {
+          uint32_t sps = kind[0] ? le32(pg[0] + 0x10) : 0;
+          off = sps >= 512 && sps <= 65536 && !(sps & (sps - 1)) ? sps : 4096;
         }
+        if (attr_pread(v, &lf, off, pg[i], sizeof pg[i]) != (ssize_t)sizeof pg[i]) continue;
+        if (!memcmp(pg[i], "CHKD", 4)) kind[i] = 2;
+        else if (!memcmp(pg[i], "RSTR", 4)) {
+          uint16_t ro = le16(pg[i] + 0x18);
+          if (ro + 0x10 > 510) continue;
+          kind[i] = 1;
+          lsn[i] = le64(pg[i] + ro);
+          uint16_t in_use = le16(pg[i] + ro + 0x0C), flags = le16(pg[i] + ro + 0x0E);
+          unclean[i] = in_use != 0xFFFF && !(flags & 0x0002);
+        }
+      }
+      int newer = kind[0] == 1 && kind[1] == 1 ? (lsn[1] > lsn[0] ? 1 : lsn[0] > lsn[1] ? 0 : -1)
+                : kind[0] == 1 ? 0 : kind[1] == 1 ? 1 : -2;
+      if (kind[0] == 2 || kind[1] == 2) {
+        snprintf(why, len, "chkdsk has unfinished work on this drive");
+        rc = -EBUSY;
+      } else if (newer >= 0 ? unclean[newer] : newer == -1 && (unclean[0] || unclean[1])) {
+        snprintf(why, len, "the drive's journal has unsaved changes (Windows "
+                           "Fast Startup?). Shut Windows down fully or use "
+                           "\"Safely remove\" first");
+        rc = -EBUSY;
       }
       attr_free(&lf);
     }
@@ -2719,7 +2738,37 @@ int ntfs_can_write(ntfs_vol_t *v, char *why, size_t len) {
  * allocation bitmap and empty the journal. Deferred until the first write so
  * that drives which are only browsed are never modified. Caller holds the
  * volume lock. */
+/* (app, 23.11.2026) The dirty flag of $VOLUME_INFORMATION, set (on = 1) or cleared on the disk and flushed. Set before the first change
+ * after a sync and cleared by the sync once everything before it is on the disk: a stick pulled in between is marked as not cleanly
+ * removed, and Windows checks it (upstream issue #9: the flag was never set, a half-written file showed its full size). */
+static int mark_volume(ntfs_vol_t *v, int on) {
+  uint8_t *rec = malloc(v->rec_size);
+  if (!rec) return -ENOMEM;
+  int rc = read_record(v, INODE_VOLUME, rec);
+  uint8_t *at = rc ? NULL : rec_attr(rec, v->rec_size, AT_VOLUME_INFORMATION, NULL, 0);
+  uint32_t vl = 0;
+  uint8_t *val = at ? res_val(at, &vl) : NULL;
+  if (!rc && (!val || vl < 12)) rc = -EIO;
+  if (!rc) {
+    uint16_t fl = le16(val + 10);
+    put_le16(val + 10, (uint16_t)(on ? fl | 0x0001 : fl & ~0x0001));
+    rc = write_record(v, INODE_VOLUME, rec);
+  }
+  if (!rc && bdev_flush(v->dev)) rc = -EIO;
+  free(rec);
+  if (!rc) v->vol_marked = on;
+  return rc;
+}
+
+static int prepare_once_locked(ntfs_vol_t *v);
+
 static int prepare_locked(ntfs_vol_t *v) {
+  int rc = prepare_once_locked(v);
+  if (!rc && !v->vol_marked && mark_volume(v, 1)) rc = -EROFS;
+  return rc;
+}
+
+static int prepare_once_locked(ntfs_vol_t *v) {
   if (v->rw_ready) return 0;
   int rc = bdev_enable_write(v->dev);
   if (rc) {
@@ -2786,13 +2835,20 @@ void ntfs_flush_cache(ntfs_vol_t *v) {
 int ntfs_sync(ntfs_vol_t *v) {
   pthread_mutex_lock(&v->lock);
   int rc = v->rw_ready ? bdev_flush(v->dev) : 0;
+  if (!rc && v->vol_marked && mark_volume(v, 0)) rc = -1;   /* (app) clean again once the rest is on the disk */
   pthread_mutex_unlock(&v->lock);
   return rc ? -EIO : 0;
+}
+
+/* (app) For ntfs_umount: the flag cleared when the drive is let go after its last sync (ntfs.c cannot see mark_volume). */
+void ntfs_unmark_for_umount(ntfs_vol_t *v) {
+  if (v->rw_ready && v->vol_marked && !bdev_flush(v->dev)) (void)mark_volume(v, 0);
 }
 
 void ntfs_disable_write(ntfs_vol_t *v) {
   pthread_mutex_lock(&v->lock);
   if (v->rw_ready) bdev_flush(v->dev);
+  if (v->rw_ready && v->vol_marked) (void)mark_volume(v, 0);
   v->rw = 0;
   pthread_mutex_unlock(&v->lock);
 }

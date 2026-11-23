@@ -98,6 +98,7 @@ struct ntfs_vol {
   /* Write support (see ntfs_write.c). */
   int      rw;             /* writes allowed */
   int      rw_ready;       /* device reopened read-write, bitmap loaded */
+  int      vol_marked;     /* (app) the dirty flag is set on the disk until the next sync */
   char     write_err[160]; /* why preparing for writes failed, if it did */
   attr_t   cbmp;           /* $Bitmap $DATA: cluster allocation bitmap */
   uint64_t alloc_hint;     /* next cluster to try when allocating */
@@ -125,6 +126,8 @@ int      read_record(ntfs_vol_t *v, uint64_t inode, uint8_t *buf);
 /* Like read_record but also accepts records that are not in use. */
 int      read_record_any(ntfs_vol_t *v, uint64_t inode, uint8_t *buf);
 const uint8_t *next_attr(const uint8_t *rec, uint32_t rec_size, uint32_t *pos);
+/* (app) ntfs_write.c: clears the dirty flag the writer set, for ntfs_umount. */
+void ntfs_unmark_for_umount(ntfs_vol_t *v);
 int      attr_name_eq(const uint8_t *at, const uint16_t *name, int nlen);
 int      absorb(attr_t *a, const uint8_t *at, uint32_t at_len, int first);
 int      attr_find(ntfs_vol_t *v, uint64_t inode, uint32_t type,

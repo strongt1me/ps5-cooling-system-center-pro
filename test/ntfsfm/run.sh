@@ -58,16 +58,30 @@ clang -std=gnu11 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined
 truncate -s 2M "$work/clean.img"
 mkntfs -F -Q -q -c 512 -s 512 -L CLEAN "$work/clean.img" >/dev/null 2>&1
 python3 -I "$here/hostile.py" "$work/clean.img" "$work" >/dev/null
-for h in clean attrlen nameoff bitmap dag div0 short; do
+for h in clean attrlen nameoff bitmap dag div0 short log_p1 log_p0 log_old log_chkd; do
   if out=$(timeout 20 "$work/hostile" "$work/$h.img" 2>&1); then
     echo "   $out" | head -1
     case "$h" in
       clean) echo "$out" | grep -q "mounted, writable 1.*listing read" || { echo "FAIL image $h is not read and writable"; fail=1; } ;;
       short) echo "$out" | grep -q "mounted, writable 0.*listing read" || { echo "FAIL image $h is not read, or writable"; fail=1; } ;;
+      log_p1|log_p0) echo "$out" | grep -q "writable 0.*journal has unsaved" || { echo "FAIL image $h: the newer restart page is not heeded"; fail=1; } ;;
+      log_chkd) echo "$out" | grep -q "writable 0.*chkdsk" || { echo "FAIL image $h: chkdsk on page 1 is not heeded"; fail=1; } ;;
+      log_old) echo "$out" | grep -q "mounted, writable 1" || { echo "FAIL image $h: an older open page made it read-only"; fail=1; } ;;
     esac
   else
     echo "FAIL hostile image $h (exit $?):"; echo "$out" | head -12; fail=1
   fi
 done
 [ "$fail" = 0 ] || exit 1
-echo "ok: ntfsfm (file manager on NTFS images, read back by ntfs-3g; 5 hostile images, 1 a little larger than its drive)"
+
+# the dirty flag (upstream issue #9): set while the driver writes, cleared by the sync. The images the file manager wrote above are clean
+# again; then the whole sequence on a copy of the clean image.
+clang -std=gnu11 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined -Wall -Wextra -Werror \
+  -I"$repo/src" "$here/dirty.c" "$nb/ntfs.c" "$nb/ntfs_write.c" "$nb/bdev.c" "$nb/part.c" "$nb/utf.c" -lpthread -o "$work/dirty"
+for i in "$img" "$disk"; do
+  out=$("$work/dirty" --clean "$i" 2>&1) || { echo "FAIL dirty flag left set: $out"; fail=1; }
+done
+cp "$work/clean.img" "$work/dirty.img"
+if out=$(timeout 60 "$work/dirty" "$work/dirty.img" 2>&1); then echo "   $out" | tail -1; else echo "FAIL dirty flag:"; echo "$out" | head -20; fail=1; fi
+[ "$fail" = 0 ] || exit 1
+echo "ok: ntfsfm (file manager on NTFS images, read back by ntfs-3g; 5 hostile images, 1 a little larger than its drive, 4 journals, dirty flag)"

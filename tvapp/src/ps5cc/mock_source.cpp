@@ -30,8 +30,9 @@ namespace
 // the reason the second NTFS stick of the pictures can only be read (as ntfsvol.c words it)
 // The common case for a USB stick (the one about hibernation exists only on a disk Windows starts from).
 constexpr const char *kNtfsNotRemoved =
-    "Das Laufwerk wurde zuletzt an einem Windows-PC ohne „Sicher entfernen“ abgezogen. Damit die PS5 "
-    "darauf schreiben kann: am PC einstecken, „Sicher entfernen“ wählen und wieder an die PS5 stecken.";
+    "Das Laufwerk wurde nicht sauber getrennt (am PC ohne „Sicher entfernen“ oder an der PS5 mitten im "
+    "Schreiben abgezogen). Damit die PS5 darauf schreiben kann: an einem Windows-PC prüfen lassen, „Sicher "
+    "entfernen“ wählen und wieder an die PS5 stecken.";
 
 // A diagonal two-colour gradient with a soft light, different for every seed. No artwork of any
 // real game.

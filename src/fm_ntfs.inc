@@ -670,7 +670,10 @@ fmn_handle_mkdir(int fd, const char *dir, const char *name_in) {
   }
   if(other_job_active(msg, sizeof(msg))) { fmn_unmake(&n); ps5tm_http_send_error(fd, 409, "job_busy", msg); return; }
   rc = fmn_mkdir(&n, (int64_t)time(NULL));
-  if(!rc) rc = -ntfs_sync(nh(&n));
+  {                                                  /* also after a failure: the drive's dirty flag is cleared by the sync */
+    int s = -ntfs_sync(nh(&n));
+    if(!rc) rc = s;
+  }
   fmn_unmake(&n);
   if(rc) {
     snprintf(msg, sizeof(msg), rc == EEXIST ? "Diesen Namen gibt es hier schon." : "Der Ordner ließ sich nicht anlegen: %s", ntfs_words(rc));
@@ -802,7 +805,10 @@ fmn_receive_upload(int fd, const char *dir, const char *name_in, const char *con
   int ok = !werr && got == total;
   int crc = fmn_wclose(&d, &w, ok);
   if(ok && crc) { werr = crc; ok = 0; }
-  if(ok) { int s = ntfs_sync(nh(&d)); if(s) { werr = -s; ok = 0; } }
+  {                                                  /* also after a failure (the half file is removed): the dirty flag goes */
+    int s = ntfs_sync(nh(&d));
+    if(ok && s) { werr = -s; ok = 0; }
+  }
   fmn_unmake(&d);
   ps5tm_powerguard_release();
   if(!ok) {
