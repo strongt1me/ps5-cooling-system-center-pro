@@ -86,6 +86,7 @@ struct ntfs_vol {
   char     label[128];
   uint8_t  ver_major, ver_minor;
   int      dirty;
+  int      short_dev;      /* (app) the volume is larger than the device: read only */
   int      free_known;
   uint64_t free_clusters;
   int      has_list_mft;   /* $MFT itself has an attribute list */

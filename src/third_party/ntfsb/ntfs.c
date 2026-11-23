@@ -52,6 +52,8 @@ int run_push(attr_t *a, int64_t vcn, int64_t lcn, uint64_t len) {
 int decode_runs(attr_t *a, const uint8_t *p, const uint8_t *end,
                        int64_t vcn) {
   int64_t lcn = 0;
+  const uint64_t lim = (uint64_t)INT64_MAX >> 21;       /* clusters of at most 2 MiB: vcn/lcn * cluster stays below 2^63 */
+  if (vcn < 0 || (uint64_t)vcn > lim) return -EIO;
   while (p < end && *p) {
     int lb = *p & 0x0F, ob = *p >> 4;
     p++;
@@ -66,10 +68,9 @@ int decode_runs(attr_t *a, const uint8_t *p, const uint8_t *end,
       if (ob < 8 && (p[ob - 1] & 0x80)) u |= ~0ULL << (8 * ob); /* sign extend */
       delta = (int64_t)u;
       p += ob;
-      lcn += delta;
-      if (lcn < 0) return -EIO;
+      if (__builtin_add_overflow(lcn, delta, &lcn) || lcn < 0) return -EIO;
     }
-    if (!len) return -EIO;
+    if (!len || len > lim - (uint64_t)vcn || (ob && (uint64_t)lcn > lim)) return -EIO;
     int rc = run_push(a, vcn, ob ? lcn : -1, len);
     if (rc) return rc;
     vcn += (int64_t)len;
@@ -171,6 +172,7 @@ static int read_raw(ntfs_vol_t *v, const attr_t *a, uint64_t off, uint8_t *buf,
     uint64_t run_end = r ? (uint64_t)(r->vcn + (int64_t)r->len) * cs
                          : (off / cs + 1) * cs;
     size_t n = run_end - off < len ? (size_t)(run_end - off) : len;
+    if (!n) return -EIO;
     if (!r || r->lcn < 0) {
       memset(buf, 0, n);
     } else {
@@ -266,13 +268,19 @@ ssize_t attr_pread(ntfs_vol_t *v, attr_t *a, uint64_t off, void *out,
 
 /* ---- MFT records --------------------------------------------------------- */
 
+static int record_ok(const ntfs_vol_t *v, const uint8_t *buf) {
+  uint32_t used = le32(buf + 0x18), cap = le32(buf + 0x1C), ao = le16(buf + 0x14);
+  return cap == v->rec_size && used <= cap && ao >= 0x18 && !(ao & 7) && ao + 8 <= used;
+}
+
 int read_record_any(ntfs_vol_t *v, uint64_t inode, uint8_t *buf) {
   uint64_t off = inode * v->rec_size;
   if (off >= v->mft.size) return -ENOENT;
   ssize_t n = attr_pread(v, &v->mft, off, buf, v->rec_size);
   if (n != (ssize_t)v->rec_size) return -EIO;
   if (memcmp(buf, "FILE", 4) != 0) return -ENOENT;
-  return apply_fixups(buf, v->rec_size) ? -EIO : 0;
+  if (apply_fixups(buf, v->rec_size)) return -EIO;
+  return record_ok(v, buf) ? 0 : -EIO;
 }
 
 int read_record(ntfs_vol_t *v, uint64_t inode, uint8_t *buf) {
@@ -282,6 +290,7 @@ int read_record(ntfs_vol_t *v, uint64_t inode, uint8_t *buf) {
   if (n != (ssize_t)v->rec_size) return -EIO;
   if (memcmp(buf, "FILE", 4) != 0) return -ENOENT;
   if (apply_fixups(buf, v->rec_size)) return -EIO;
+  if (!record_ok(v, buf)) return -EIO;
   if (!(le16(buf + 0x16) & MFT_IN_USE)) return -ENOENT;
   return 0;
 }
@@ -295,13 +304,14 @@ const uint8_t *next_attr(const uint8_t *rec, uint32_t rec_size,
   if (p + 8 > used) return NULL;
   const uint8_t *at = rec + p;
   uint32_t type = le32(at), len = le32(at + 4);
-  if (type == AT_END || len < 24 || p + len > used || (len & 7)) return NULL;
+  if (type == AT_END || len < 24 || len > used - p || (len & 7)) return NULL;
   *pos = p + len;
   return at;
 }
 
 int attr_name_eq(const uint8_t *at, const uint16_t *name, int nlen) {
   if (at[9] != nlen) return 0;
+  if (le16(at + 10) + (uint32_t)nlen * 2 > le32(at + 4)) return 0;
   const uint8_t *n = at + le16(at + 10);
   for (int i = 0; i < nlen; i++)
     if (le16(n + i * 2) != name[i]) return 0;
@@ -313,7 +323,7 @@ int absorb(attr_t *a, const uint8_t *at, uint32_t at_len, int first) {
   if (!at[8]) {
     uint32_t vlen = le32(at + 16);
     uint16_t voff = le16(at + 20);
-    if ((uint32_t)voff + vlen > at_len) return -EIO;
+    if (voff > at_len || vlen > at_len - voff) return -EIO;
     a->resident = 1;
     a->data = malloc(vlen ? vlen : 1);
     if (!a->data) return -ENOMEM;
@@ -333,7 +343,10 @@ int absorb(attr_t *a, const uint8_t *at, uint32_t at_len, int first) {
     a->size = le64(at + 48);
     a->init = le64(at + 56);
     uint8_t cu = at[34];
-    if ((a->flags & ATTR_COMPRESSED) && cu) a->cu_clusters = 1u << cu;
+    if ((a->flags & ATTR_COMPRESSED) && cu) {
+      if (cu > 4) return -EIO;
+      a->cu_clusters = 1u << cu;
+    }
     if (a->init > a->size) a->init = a->size;
   }
   return decode_runs(a, at + mp, at + at_len, lowest);
@@ -387,6 +400,7 @@ int attr_find(ntfs_vol_t *v, uint64_t inode, uint32_t type,
     if (elen < 26 || p + elen > (size_t)ln) break;
     p += elen;
     if (le32(e) != type || e[6] != nlen) continue;
+    if (e[7] + nlen * 2u > elen) continue;
     int match = 1;
     for (int i = 0; i < nlen && match; i++)
       if (le16(e + e[7] + i * 2) != name[i]) match = 0;
@@ -432,7 +446,38 @@ typedef struct idx_ctx {
   uint32_t    vcn_unit;
   uint8_t    *blocks[MAX_DEPTH];
   unsigned    visited, max_visits;
+  uint64_t   *seen;                 /* (app) the blocks visited, an open-addressing set of vcn + 1 */
+  size_t      seen_n, seen_cap;
 } idx_ctx_t;
+
+/* (app, 23.11.2026) A B-tree reaches each block once: a block reached again is a damaged (or made-up) index. Without this, a few blocks
+ * that point at each other many times kept a listing busy for minutes. 1 new, 0 seen before, -ENOMEM. */
+static int seen_add(idx_ctx_t *ix, uint64_t vcn) {
+  uint64_t key = vcn + 1;
+  if ((ix->seen_n + 1) * 2 > ix->seen_cap) {
+    size_t nc = ix->seen_cap ? ix->seen_cap * 2 : 64;
+    uint64_t *ns = calloc(nc, sizeof *ns);
+    if (!ns) return -ENOMEM;
+    for (size_t i = 0; i < ix->seen_cap; i++) {
+      uint64_t k = ix->seen[i];
+      if (!k) continue;
+      size_t h = (size_t)((k * 0x9E3779B97F4A7C15ull) & (nc - 1));
+      while (ns[h]) h = (h + 1) & (nc - 1);
+      ns[h] = k;
+    }
+    free(ix->seen);
+    ix->seen = ns;
+    ix->seen_cap = nc;
+  }
+  size_t h = (size_t)((key * 0x9E3779B97F4A7C15ull) & (ix->seen_cap - 1));
+  while (ix->seen[h]) {
+    if (ix->seen[h] == key) return 0;
+    h = (h + 1) & (ix->seen_cap - 1);
+  }
+  ix->seen[h] = key;
+  ix->seen_n++;
+  return 1;
+}
 
 /* Callback: return 1 to stop the walk, 0 to continue, <0 on error. */
 
@@ -443,6 +488,8 @@ static int walk_block(idx_ctx_t *ix, uint64_t vcn, int depth, idx_cb cb,
                       void *ctx) {
   if (!ix->have_alloc || depth >= MAX_DEPTH || ++ix->visited > ix->max_visits)
     return -EIO;
+  int fresh = seen_add(ix, vcn);
+  if (fresh <= 0) return fresh < 0 ? fresh : -EIO;
   if (!ix->blocks[depth] && !(ix->blocks[depth] = malloc(ix->block_size)))
     return -ENOMEM;
   uint8_t *b = ix->blocks[depth];
@@ -490,7 +537,13 @@ int index_walk(ntfs_vol_t *v, uint64_t inode, idx_cb cb, void *ctx) {
   if (attr_find(v, inode, AT_INDEX_ALLOCATION, I30, 4, &ix.alloc) == 0) {
     ix.have_alloc = 1;
     if (ix.block_size < 512 || ix.block_size > 65536) rc = -EIO;
-    ix.max_visits = (unsigned)(ix.alloc.size / (ix.block_size ? ix.block_size : 1)) + 1;
+    uint64_t mapped = 0;
+    for (size_t i = 0; i < ix.alloc.nruns; i++)
+      if (ix.alloc.runs[i].lcn >= 0) mapped += ix.alloc.runs[i].len;
+    uint64_t blocks = ix.alloc.size / (ix.block_size ? ix.block_size : 1);
+    uint64_t mblocks = mapped * v->cluster / (ix.block_size ? ix.block_size : 1);
+    if (blocks > mblocks) blocks = mblocks;
+    ix.max_visits = (unsigned)(blocks > (1u << 20) ? (1u << 20) : blocks) + 1;
   }
 
   if (!rc) {
@@ -501,6 +554,7 @@ int index_walk(ntfs_vol_t *v, uint64_t inode, idx_cb cb, void *ctx) {
   }
 
   for (int i = 0; i < MAX_DEPTH; i++) free(ix.blocks[i]);
+  free(ix.seen);
   if (ix.have_alloc) attr_free(&ix.alloc);
   attr_free(&root);
   return rc < 0 ? rc : 0;
@@ -756,13 +810,17 @@ int ntfs_mount(bdev_t *b, ntfs_vol_t **out, char *err, size_t errlen) {
 
   uint32_t bps = le16(bs + 0x0B);
   uint8_t spc_raw = bs[0x0D];
+  /* (app, 23.11.2026) clusters of at most 2 MiB: from a shift of 13 on the product below wrapped to 0 in 32 bits (division by zero) */
+  if (spc_raw > 0x80 && 256 - spc_raw > 12) FAIL("bad boot sector geometry");
   uint32_t spc = spc_raw <= 0x80 ? spc_raw : 1u << (256 - spc_raw);
   if (bps < 256 || bps > 4096 || (bps & (bps - 1)) || !spc || (spc & (spc - 1)))
     FAIL("bad boot sector geometry");
+  if ((uint64_t)bps * spc > 2u * 1024 * 1024) FAIL("unsupported cluster size");
   v->cluster = bps * spc;
-  if (v->cluster > 2u * 1024 * 1024) FAIL("unsupported cluster size");
+  if (!v->cluster) FAIL("bad boot sector geometry");
 
   int8_t cpr = (int8_t)bs[0x40];
+  if (cpr < -31) FAIL("bad MFT record size");
   v->rec_size = cpr > 0 ? (uint32_t)cpr * v->cluster : 1u << -cpr;
   if (v->rec_size < 1024 || v->rec_size > 65536 || (v->rec_size & 511))
     FAIL("bad MFT record size");
@@ -771,12 +829,20 @@ int ntfs_mount(bdev_t *b, ntfs_vol_t **out, char *err, size_t errlen) {
   v->total_clusters = total_sectors / spc;
   v->serial = le64(bs + 0x48);
   uint64_t mft_lcn = le64(bs + 0x30);
+  /* (app, 23.11.2026) not (much) larger than the device: a made-up size let the free-space count run for years. A few MB more than
+   * the device is still read (some USB bridges report a little less than the partition table says), but never written: clusters past
+   * the device's end would be handed out and fail. */
+  {
+    uint64_t dev = bdev_size(b) / v->cluster, slack = dev / 100 + (64u << 20) / v->cluster;
+    if (v->total_clusters > dev + slack) FAIL("volume larger than the drive");
+    v->short_dev = v->total_clusters > dev;
+  }
   if (mft_lcn >= v->total_clusters) FAIL("MFT location out of range");
   v->mft_lcn = mft_lcn;
   v->mftmirr_lcn = le64(bs + 0x38);
   v->sector = bps;
   int8_t cpi = (int8_t)bs[0x44];
-  v->idx_size = cpi > 0 ? (uint32_t)cpi * v->cluster : 1u << -cpi;
+  v->idx_size = cpi > 0 ? (uint32_t)cpi * v->cluster : cpi >= -31 ? 1u << -cpi : 0;
   if (v->idx_size < 512 || v->idx_size > 65536) v->idx_size = 4096;
 
   /* Bootstrap: read $MFT's own record straight from disk. */

@@ -15,6 +15,10 @@ static void add(part_t *parts, int *n, int max, uint64_t off, uint64_t size,
                 const char *scheme, int index, uint64_t disk) {
   if (*n >= max || !size || off >= disk) return;
   if (size > disk - off) size = disk - off;
+  /* (app, 23.11.2026) a partition that overlaps one already found is left out: two drives on the same sectors would each keep their
+   * own view of the free space and spoil the volume */
+  for (int i = 0; i < *n; i++)
+    if (off < parts[i].offset + parts[i].size && parts[i].offset < off + size) return;
   parts[*n].offset = off;
   parts[*n].size = size;
   parts[*n].index = index;

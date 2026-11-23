@@ -83,6 +83,7 @@ static int write_raw(ntfs_vol_t *v, const attr_t *a, uint64_t off,
     if (!r || r->lcn < 0) return -EIO; /* never write into holes */
     uint64_t run_end = (uint64_t)(r->vcn + (int64_t)r->len) * cs;
     size_t n = run_end - off < len ? (size_t)(run_end - off) : len;
+    if (!n) return -EIO;
     uint64_t phys = (uint64_t)r->lcn * cs + (off - (uint64_t)r->vcn * cs);
     if (bdev_write(v->dev, phys, buf, n)) return -EIO;
     buf += n; off += n; len -= n;
@@ -122,6 +123,15 @@ static int write_record(ntfs_vol_t *v, uint64_t inode, const uint8_t *rec) {
 }
 
 /* ---- Editing attributes inside a record ---------------------------------- */
+
+/* The value of a resident attribute, NULL unless it lies inside the attribute. */
+static uint8_t *res_val(uint8_t *at, uint32_t *vlen) {
+  if (!at || at[8]) return NULL;
+  uint32_t vo = le16(at + 20), vl = le32(at + 16);
+  if (vo < 0x18 || vo > le32(at + 4) || vl > le32(at + 4) - vo) return NULL;
+  if (vlen) *vlen = vl;
+  return at + vo;
+}
 
 static uint8_t *rec_attr(uint8_t *rec, uint32_t rec_size, uint32_t type,
                          const uint16_t *name, int nlen) {
@@ -169,6 +179,7 @@ static int rec_insert(uint8_t *rec, uint32_t rec_size, uint8_t *attr) {
 
 /* Replace the value of a resident attribute. */
 static int set_resident_value(uint8_t *rec, uint8_t *at, const void *val, uint32_t vlen) {
+  if (!res_val(at, NULL)) return -EIO;
   uint16_t voff = le16(at + 20);
   int rc = rec_resize(rec, at, voff + vlen);
   if (rc) return rc;
@@ -265,6 +276,7 @@ static int update_nonresident(uint8_t *rec, uint32_t rec_size, uint8_t *at,
                               const attr_t *a) {
   uint8_t tmp[4096];
   int nlen = at[9];
+  if (le16(at + 10) + (uint32_t)nlen * 2 > le32(at + 4)) return -EIO;
   uint16_t name[255];
   for (int i = 0; i < nlen; i++) name[i] = le16(at + le16(at + 10) + i * 2);
   int len = build_nonresident(tmp, sizeof tmp < rec_size ? sizeof tmp : rec_size,
@@ -497,11 +509,14 @@ static int extend_mft(ntfs_vol_t *v) {
   if (!bat) { rc = -EIO; goto undo; }
   uint64_t need_bytes = (new_recs + 63) / 64 * 8;
   if (!bat[8]) {
-    uint32_t vlen = le32(bat + 16);
+    uint32_t vlen = 0;
+    const uint8_t *old = res_val(bat, &vlen);
+    if (!old) { rc = -EIO; goto undo; }
+    if (need_bytes > vlen && need_bytes > v->rec_size) { rc = -EIO; goto undo; }
     if (need_bytes > vlen) {
       uint8_t *val = calloc(1, (size_t)need_bytes);
       if (!val) { rc = -ENOMEM; goto undo; }
-      memcpy(val, bat + le16(bat + 20), vlen);
+      memcpy(val, old, vlen);
       rc = set_resident_value(rec0, bat, val, (uint32_t)need_bytes);
       free(val);
       if (rc) goto undo;
@@ -590,9 +605,11 @@ static int alloc_record(ntfs_vol_t *v, uint64_t *inode) {
       uint8_t *rec0 = malloc(v->rec_size);
       rc = rec0 ? read_record(v, INODE_MFT, rec0) : -ENOMEM;
       uint8_t *bat = rc ? NULL : rec_attr(rec0, v->rec_size, AT_BITMAP, NULL, 0);
-      if (!rc && (!bat || bat[8])) rc = -EIO;
+      uint32_t blen = 0;
+      uint8_t *bits = rc ? NULL : res_val(bat, &blen);
+      if (!rc && (!bits || found / 8 >= blen)) rc = -EIO;
       if (!rc) {
-        bat[le16(bat + 20) + found / 8] |= (uint8_t)(1u << (found % 8));
+        bits[found / 8] |= (uint8_t)(1u << (found % 8));
         rc = write_record(v, INODE_MFT, rec0);
       }
       free(rec0);
@@ -615,8 +632,10 @@ static void release_record(ntfs_vol_t *v, uint64_t inode) {
     uint8_t *rec0 = malloc(v->rec_size);
     if (rec0 && read_record(v, INODE_MFT, rec0) == 0) {
       uint8_t *bat = rec_attr(rec0, v->rec_size, AT_BITMAP, NULL, 0);
-      if (bat && !bat[8]) {
-        bat[le16(bat + 20) + inode / 8] &= (uint8_t)~(1u << (inode % 8));
+      uint32_t blen = 0;
+      uint8_t *bits = res_val(bat, &blen);
+      if (bits && inode / 8 < blen) {
+        bits[inode / 8] &= (uint8_t)~(1u << (inode % 8));
         write_record(v, INODE_MFT, rec0);
       }
     }
@@ -700,6 +719,9 @@ static int node_parse(xnode_t *x, const uint8_t *p, const uint8_t *end) {
     uint32_t len = le16(p + 8);
     uint16_t flags = le16(p + 12);
     if (len < 16 || p + len > end || (len & 7)) return -EIO;
+    uint32_t klen = le16(p + 10);
+    if (!(flags & IE_LAST) && (klen < 0x42 || 16 + klen > len || 0x42u + p[16 + 0x40] * 2u > klen)) return -EIO;
+    if ((flags & IE_NODE) && (len < 24 || (!(flags & IE_LAST) && 16 + klen + 8 > len))) return -EIO;
     uint8_t *c = malloc(len);
     if (!c) return -ENOMEM;
     memcpy(c, p, len);
@@ -818,8 +840,9 @@ static int write_block(ictx_t *c, const xnode_t *x) {
 /* Rebuild $INDEX_ROOT's value from a node. */
 static int store_root(ictx_t *c, const xnode_t *x) {
   uint8_t *at = rec_attr(c->rec, c->v->rec_size, AT_INDEX_ROOT, I30, 4);
-  if (!at || at[8]) return -EIO;
-  const uint8_t *old = at + le16(at + 20);
+  uint32_t olen = 0;
+  const uint8_t *old = res_val(at, &olen);
+  if (!old || olen < 0x10) return -EIO;
   uint32_t ebytes = node_bytes(x), vlen = 0x20 + ebytes;
   uint8_t *val = malloc(vlen);
   if (!val) return -ENOMEM;
@@ -843,7 +866,7 @@ static int store_root(ictx_t *c, const xnode_t *x) {
 /* Root edits must leave room for the rest of the record. */
 static int root_fits(ictx_t *c, const xnode_t *x) {
   uint8_t *at = rec_attr(c->rec, c->v->rec_size, AT_INDEX_ROOT, I30, 4);
-  if (!at) return 0;
+  if (!res_val(at, NULL)) return 0;
   uint32_t cur = le32(at + 4);
   uint32_t want = align8(le16(at + 20) + 0x20 + node_bytes(x));
   uint32_t used = le32(c->rec + 0x18), cap = le32(c->rec + 0x1C);
@@ -881,9 +904,9 @@ static int64_t idx_find_free(ictx_t *c, uint64_t limit, uint64_t *count) {
     }
   } else {
     uint8_t *bat = rec_attr(c->arec, c->v->rec_size, AT_BITMAP, I30, 4);
-    if (bat && !bat[8]) {
-      uint32_t blen = le32(bat + 16);
-      const uint8_t *bits = bat + le16(bat + 20);
+    uint32_t blen = 0;
+    const uint8_t *bits = res_val(bat, &blen);
+    if (bits) {
       for (uint64_t b = 0; b < limit && b < (uint64_t)blen * 8; b++)
         if (!(bits[b / 8] & (1u << (b % 8)))) {
           if (first < 0) first = (int64_t)b;
@@ -901,8 +924,9 @@ static int idx_set_bit(ictx_t *c, uint64_t b, int val) {
     return bitmap_set(c->v, &c->ibm, b, 1, val);
   }
   uint8_t *bat = rec_attr(c->arec, c->v->rec_size, AT_BITMAP, I30, 4);
-  if (!bat || bat[8] || b / 8 >= le32(bat + 16)) return -EIO;
-  uint8_t *bits = bat + le16(bat + 20);
+  uint32_t blen = 0;
+  uint8_t *bits = res_val(bat, &blen);
+  if (!bits || b / 8 >= blen) return -EIO;
   if (val) bits[b / 8] |= (uint8_t)(1u << (b % 8));
   else bits[b / 8] &= (uint8_t)~(1u << (b % 8));
   c->arec_dirty = 1;
@@ -995,7 +1019,7 @@ static int seg_list(ictx_t *c, uint32_t type, uint64_t *low, uint64_t *ino, int 
     uint16_t elen = le16(e + 4);
     if (elen < 26 || p + elen > a.size) break;
     p += elen;
-    if (le32(e) != type || e[6] != 4) continue;
+    if (le32(e) != type || e[6] != 4 || e[7] + 8u > elen) continue;
     int match = 1;
     for (int i = 0; i < 4; i++)
       if (le16(e + e[7] + i * 2) != I30[i]) match = 0;
@@ -1026,6 +1050,7 @@ static int rewrite_seg(uint8_t *rec, uint32_t rec_size, uint8_t *at, const attr_
                        uint64_t lowest) {
   uint8_t tmp[4096];
   int nlen = at[9];
+  if (le16(at + 10) + (uint32_t)nlen * 2 > le32(at + 4)) return -EIO;
   uint32_t mpoff = align8(0x40 + (uint32_t)nlen * 2);
   size_t max = sizeof tmp < rec_size ? sizeof tmp : rec_size;
   memset(tmp, 0, mpoff);
@@ -1123,8 +1148,10 @@ static int grow_index_alloc_ext(ictx_t *c) {
   uint8_t *bat = brec ? rec_attr(brec, v->rec_size, AT_BITMAP, I30, 4) : NULL;
   if (!rc && !bat) rc = -EIO;
   if (!rc && !bat[8]) {
-    uint32_t vlen = le32(bat + 16);
-    if (need > vlen) {
+    uint32_t vlen = 0;
+    if (!res_val(bat, &vlen)) rc = -EIO;
+    if (!rc && need > vlen && need > v->rec_size) rc = -EIO;
+    if (!rc && need > vlen) {
       uint8_t *val = calloc(1, (size_t)need);
       if (!val) rc = -ENOMEM;
       else {
@@ -1223,9 +1250,13 @@ static int grow_index_alloc(ictx_t *c) {
     /* The bitmap needs a bit per block, in 8-byte steps. */
     uint8_t *bat = rec_attr(copy, v->rec_size, AT_BITMAP, I30, 4);
     uint64_t blocks = grown.size / c->ibs;
-    uint32_t need = (uint32_t)((blocks + 63) / 64 * 8);
+    uint64_t need64 = (blocks + 63) / 64 * 8;
+    uint32_t need = need64 > v->rec_size ? 0xFFFFFFFFu : (uint32_t)need64;
+    uint32_t bl = 0;
     if (!bat || bat[8]) rc = -ENOTSUP;
-    else if (le32(bat + 16) < need) {
+    else if (!res_val(bat, &bl)) rc = -EIO;
+    else if (bl < need && need > v->rec_size) rc = -EIO;
+    else if (bl < need) {
       uint8_t *val = calloc(1, need);
       if (!val) rc = -ENOMEM;
       else {
@@ -1386,7 +1417,7 @@ static int locate_attr(ntfs_vol_t *v, uint64_t dir, uint32_t type, uint64_t *ino
     uint16_t elen = le16(e + 4);
     if (elen < 26 || p + elen > a.size) break;
     p += elen;
-    if (le32(e) != type || e[6] != 4) continue;
+    if (le32(e) != type || e[6] != 4 || e[7] + 8u > elen) continue;
     int match = 1;
     for (int i = 0; i < 4; i++)
       if (le16(e + e[7] + i * 2) != I30[i]) match = 0;
@@ -1450,7 +1481,9 @@ static int index_insert(ntfs_vol_t *v, uint64_t dir, const uint8_t *key,
 
   uint8_t *ra = rec_attr(c.rec, v->rec_size, AT_INDEX_ROOT, I30, 4);
   if (!ra || ra[8]) { rc = -ENOTDIR; goto out; }
-  const uint8_t *rv = ra + le16(ra + 20);
+  uint32_t rvl = 0;
+  const uint8_t *rv = res_val(ra, &rvl);
+  if (!rv || rvl < 0x20 || 0x10 + (uint64_t)le32(rv + 0x14) > rvl || le32(rv + 0x10) >= le32(rv + 0x14)) { rc = -EIO; goto out; }
   if (le32(rv) != AT_FILE_NAME || le32(rv + 4) != 1) { rc = -ENOTSUP; goto out; }
   c.ibs = le32(rv + 8);
   if (c.ibs < 512 || c.ibs > 65536) { rc = -EIO; goto out; }
@@ -1613,7 +1646,9 @@ static int ictx_open(ntfs_vol_t *v, uint64_t dir, ictx_t *c, xnode_t *root) {
   }
   uint8_t *ra = rec_attr(c->rec, v->rec_size, AT_INDEX_ROOT, I30, 4);
   if (!ra || ra[8]) return -ENOTDIR;
-  const uint8_t *rv = ra + le16(ra + 20);
+  uint32_t rvl = 0;
+  const uint8_t *rv = res_val(ra, &rvl);
+  if (!rv || rvl < 0x20 || 0x10 + (uint64_t)le32(rv + 0x14) > rvl || le32(rv + 0x10) >= le32(rv + 0x14)) return -EIO;
   if (le32(rv) != AT_FILE_NAME || le32(rv + 4) != 1) return -ENOTSUP;
   c->ibs = le32(rv + 8);
   if (c->ibs < 512 || c->ibs > 65536) return -EIO;
@@ -1698,6 +1733,14 @@ static int node_move_all(xnode_t *dst, xnode_t *src, int include_end) {
 /* Sanity check of a node before it is written: ends with END, child
  * pointers on all entries or none, entries in order, and (below the root)
  * at least one real entry. */
+/* (app, 23.11.2026) the file name of an entry lies inside its key, the key inside the entry */
+static int ie_name_ok(const ient_t *e) {
+  if (e->len < 16 + 0x42) return 0;
+  uint16_t kl = le16(e->p + 10);
+  if (kl < 0x42 || 16u + kl > e->len) return 0;
+  return 0x42u + 2u * e->p[16 + 0x40] <= kl;
+}
+
 static int node_validate(const ntfs_vol_t *v, const xnode_t *x, int below_root) {
   if (x->n < 1 || !ie_is_end(&x->e[x->n - 1])) return -EIO;
   if (below_root && x->n < 2) return -EIO;
@@ -1709,6 +1752,7 @@ static int node_validate(const ntfs_vol_t *v, const xnode_t *x, int below_root) 
   if (subs && subs != x->n) return -EIO;
   if (!!subs != !!x->internal && x->n > 1) return -EIO;
   for (int i = 0; i + 2 < x->n; i++) {
+    if (!ie_name_ok(&x->e[i]) || !ie_name_ok(&x->e[i + 1])) return -EIO;
     const uint8_t *a = x->e[i].p + 16, *b = x->e[i + 1].p + 16;
     uint16_t an[255];
     for (int k = 0; k < a[0x40]; k++) an[k] = le16(a + 0x42 + k * 2);
@@ -2117,26 +2161,47 @@ static int inode_records(ntfs_vol_t *v, uint64_t ino, const uint8_t *base,
   return rc;
 }
 
-/* Free every cluster and record of an inode whose names are all gone. */
+/* Free every cluster and record of an inode whose names are all gone.
+ *
+ * (app) The order matters if the drive is pulled half way: release the MFT records first and free their clusters afterwards.
+ * The worst case is then clusters that stay marked in use (chkdsk gives them back). The other way round, a record that is still
+ * in use would own clusters the bitmap calls free, and the next file written would share them. */
 static int free_inode(ntfs_vol_t *v, const uint64_t *recs, int n) {
   uint8_t *rec = malloc(v->rec_size);
   if (!rec) return -ENOMEM;
-  for (int i = 0; i < n; i++) {
+  /* Collect the run lists first: a released record can't be read any more. */
+  attr_t *held = NULL;
+  size_t nheld = 0, cap = 0;
+  int rc = 0;
+  for (int i = 0; i < n && !rc; i++) {
     if (read_record_any(v, recs[i], rec)) continue;
     uint32_t pos = 0;
     const uint8_t *at;
-    while ((at = next_attr(rec, v->rec_size, &pos))) {
+    while (!rc && (at = next_attr(rec, v->rec_size, &pos))) {
       if (!at[8]) continue;
       attr_t a = {0};
       a.cu_idx = -1;
-      if (decode_runs(&a, at + le16(at + 32), at + le32(at + 4), (int64_t)le64(at + 16)) == 0)
-        free_clusters(v, &a);
-      free(a.runs);
+      if (decode_runs(&a, at + le16(at + 32), at + le32(at + 4), (int64_t)le64(at + 16)) != 0) {
+        free(a.runs);
+        continue;
+      }
+      if (nheld == cap) {
+        attr_t *nh = realloc(held, (cap ? cap * 2 : 8) * sizeof *held);
+        if (!nh) { free(a.runs); rc = -ENOMEM; break; }
+        held = nh;
+        cap = cap ? cap * 2 : 8;
+      }
+      held[nheld++] = a;
     }
   }
-  for (int i = 0; i < n; i++) release_record(v, recs[i]);
+  if (!rc) {
+    for (int i = 0; i < n; i++) release_record(v, recs[i]);
+    for (size_t i = 0; i < nheld; i++) free_clusters(v, &held[i]);
+  }
+  for (size_t i = 0; i < nheld; i++) free(held[i].runs);
+  free(held);
   free(rec);
-  return 0;
+  return rc;
 }
 
 typedef struct del_find {
@@ -2213,7 +2278,9 @@ int ntfs_unlink(ntfs_vol_t *v, uint64_t parent, const char *name) {
        * such files to Windows rather than leave stale entries behind. */
       if (t == 0x40 || t == 0xC0) { rc = -ENOTSUP; break; }
       if (t != AT_FILE_NAME || at[8]) continue;
-      const uint8_t *fn = at + le16(at + 20);
+      uint32_t fl = 0;
+      const uint8_t *fn = res_val((uint8_t *)at, &fl);
+      if (!fn || fl < 0x42 || 0x42u + fn[0x40] * 2u > fl) { rc = -EIO; break; }
       if (nnames >= 16) { rc = -ENOTSUP; break; }
       fn_rec_t *e = &names[nnames++];
       e->rec = recs[i];
@@ -2597,6 +2664,9 @@ int ntfs_can_write(ntfs_vol_t *v, char *why, size_t len) {
   } else if (v->upcase_len < 0x10000) {
     snprintf(why, len, "the $UpCase table is missing or incomplete");
     rc = -ENOTSUP;
+  } else if (v->short_dev) {
+    snprintf(why, len, "the drive is smaller than its NTFS volume");
+    rc = -EROFS;
   }
   if (!rc) {
     /* A pending journal means Windows would replay it over our changes. */
@@ -2705,6 +2775,12 @@ int ntfs_enable_write(ntfs_vol_t *v, char *err, size_t errlen) {
   v->rw = 1;
   pthread_mutex_unlock(&v->lock);
   return 0;
+}
+
+void ntfs_flush_cache(ntfs_vol_t *v) {
+  pthread_mutex_lock(&v->lock);
+  bdev_flush_cache(v->dev);
+  pthread_mutex_unlock(&v->lock);
 }
 
 int ntfs_sync(ntfs_vol_t *v) {

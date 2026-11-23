@@ -33,6 +33,8 @@ int bdev_write(bdev_t *b, uint64_t off, const void *buf, size_t len);
 
 /* Push written data to the device. */
 int bdev_flush(bdev_t *b);
+/* (app) Ask the device to empty its own write cache (on eject). */
+void bdev_flush_cache(bdev_t *b);
 
 uint64_t    bdev_size(const bdev_t *b);
 uint32_t    bdev_sector_size(const bdev_t *b);

@@ -219,6 +219,23 @@ static int write_full(int fd, uint64_t off, const void *buf, size_t len) {
   return 0;
 }
 
+/* (app, 23.11.2026) Is fd (the node opened anew) still the disk old (the fd the drive was read through)? A stick swapped for another under
+ * the same /dev/daN between two looks of the app was opened here and written with the first stick's cached tables (its files were lost).
+ * On the console the old fd of an unplugged disk answers with an error; a disk that is there has the same size on both. An image file
+ * (host tests) is the same file. */
+static int same_disk(int old, int fd) {
+  struct stat a, b;
+  if (fstat(old, &a) != 0 || fstat(fd, &b) != 0) return 0;
+  if (S_ISREG(a.st_mode) || S_ISREG(b.st_mode))
+    return S_ISREG(a.st_mode) && S_ISREG(b.st_mode) && a.st_dev == b.st_dev && a.st_ino == b.st_ino;
+  if (a.st_rdev != b.st_rdev) return 0;
+#if defined(__FreeBSD__) || defined(__PROSPERO__)
+  off_t ma = 0, mb = 0;
+  if (ioctl(old, DIOCGMEDIASIZE, &ma) != 0 || ioctl(fd, DIOCGMEDIASIZE, &mb) != 0 || ma != mb) return 0;
+#endif
+  return 1;
+}
+
 int bdev_enable_write(bdev_t *b) {
   bdev_t *root = b->parent ? b->parent : b;
   pthread_mutex_lock(&root->lock);
@@ -230,7 +247,8 @@ int bdev_enable_write(bdev_t *b) {
     } else {
       /* dup2 swaps the descriptor atomically, so reads running in other
        * threads keep working. */
-      if (dup2(fd, root->fd) < 0) rc = -errno;
+      if (!same_disk(root->fd, fd)) rc = -ENODEV;
+      else if (dup2(fd, root->fd) < 0) rc = -errno;
       else root->writable = 1;
       close(fd);
     }
@@ -292,6 +310,17 @@ int bdev_flush(bdev_t *b) {
   bdev_t *root = b->parent ? b->parent : b;
   if (!root->writable) return 0;
   return fsync(root->fd) ? -1 : 0;
+}
+
+/* (app, 23.11.2026) fsync on a raw disk does not empty the stick's own write cache: ask the disk to, once, when the drive is ejected
+ * (not at every sync: some USB bridges are slow or stuck on the command). A stick that does not know it answers with an error, which
+ * is no reason to call the eject failed. */
+void bdev_flush_cache(bdev_t *b) {
+  bdev_t *root = b->parent ? b->parent : b;
+  if (!root->writable) return;
+#if defined(__FreeBSD__) || defined(__PROSPERO__)
+  (void)ioctl(root->fd, DIOCGFLUSH);
+#endif
 }
 
 uint64_t bdev_size(const bdev_t *b) { return b->size; }

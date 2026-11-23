@@ -103,6 +103,8 @@ void ntfs_disable_write(ntfs_vol_t *v);
 
 /* Flush everything written so far to the device. */
 int  ntfs_sync(ntfs_vol_t *v);
+/* (app) After ntfs_sync, when the drive is let go: the stick empties its own write cache. */
+void ntfs_flush_cache(ntfs_vol_t *v);
 
 /* Create a folder named name (UTF-8, no '/') in parent. -EEXIST if a file or
  * folder with that name exists (names compare case-insensitively). */

@@ -50,4 +50,24 @@ dd if="$disk" of="$work/part.out" bs=1M skip=1 status=none
 check "file on the partition" '[ "$(ntfscat "$work/part.out" /Partition/p.txt)" = "auf der Partition" ]'
 check "partition consistent" 'ntfsresize --check --force "$work/part.out" >"$work/resize2.log" 2>&1 || { cat "$work/resize2.log"; false; }'
 [ "$fail" = 0 ] || exit 1
-echo "ok: ntfsfm (file manager on NTFS images, read back by ntfs-3g)"
+
+# a hostile stick (audit 23.11.2026): images that lie about lengths, offsets, sizes and the index tree. What the app does when a stick
+# is plugged in and the file manager is open must end quickly and without a sanitizer report.
+clang -std=gnu11 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined -Wall -Wextra -Werror -Wno-unused-parameter \
+  -I"$repo/src" "$here/hostile.c" "$nb/ntfs.c" "$nb/ntfs_write.c" "$nb/bdev.c" "$nb/part.c" "$nb/utf.c" -lpthread -o "$work/hostile"
+truncate -s 2M "$work/clean.img"
+mkntfs -F -Q -q -c 512 -s 512 -L CLEAN "$work/clean.img" >/dev/null 2>&1
+python3 -I "$here/hostile.py" "$work/clean.img" "$work" >/dev/null
+for h in clean attrlen nameoff bitmap dag div0 short; do
+  if out=$(timeout 20 "$work/hostile" "$work/$h.img" 2>&1); then
+    echo "   $out" | head -1
+    case "$h" in
+      clean) echo "$out" | grep -q "mounted, writable 1.*listing read" || { echo "FAIL image $h is not read and writable"; fail=1; } ;;
+      short) echo "$out" | grep -q "mounted, writable 0.*listing read" || { echo "FAIL image $h is not read, or writable"; fail=1; } ;;
+    esac
+  else
+    echo "FAIL hostile image $h (exit $?):"; echo "$out" | head -12; fail=1
+  fi
+done
+[ "$fail" = 0 ] || exit 1
+echo "ok: ntfsfm (file manager on NTFS images, read back by ntfs-3g; 5 hostile images, 1 a little larger than its drive)"
