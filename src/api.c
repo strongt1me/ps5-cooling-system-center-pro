@@ -1447,6 +1447,33 @@ launched_anyway(const char *id, int rc) {
   return 0;
 }
 
+/* ShadowMountPlus sometimes refuses a start with "Device busy" (its log: "launch mount unavailable: <id> status=16"), and the
+ * launcher answers 0x80940033; a later call goes through (23.11.2026 at the Slim: the zstd test copy PPSA99998 was refused at
+ * 10:06 and started at 10:11; the dump queue met the same on 16.11.2026). In its source (1.7beta12, sm_shellcore_service.c) that
+ * EBUSY comes from states of seconds: a start still being prepared, an image being mounted, a title being released. So a start
+ * refused with this code is asked again twice, 3 s apart, before the shell's own way (the notification) is offered. The refusal
+ * comes before any launch, and a title that runs meanwhile is never launched again. *anyway is set when the title runs although
+ * the answer was an error (launched_anyway); *calls counts the launcher calls. */
+#define START_BUSY_CODE    0x80940033u
+#define START_BUSY_RETRIES 2
+#define START_BUSY_GAP_MS  3000
+
+static int
+start_retrying_busy(const char *id, int *anyway, int *calls) {
+  int rc = ps5tm_library_start(id);
+  int n = 1;
+  *anyway = 0;
+  while((unsigned)rc == START_BUSY_CODE && n <= START_BUSY_RETRIES) {
+    for(int ms = START_BUSY_GAP_MS; ms > 0; ms -= 250) usleep(250 * 1000);   /* in slices: a second or more is not portable */
+    if(ps5tm_procmgr_title_running(id) == 1) { *anyway = 1; break; }
+    rc = ps5tm_library_start(id);
+    n++;
+  }
+  if(!*anyway) *anyway = rc < 0 && launched_anyway(id, rc);
+  if(calls) *calls = n;
+  return rc;
+}
+
 static void send_cjson(int fd, int status, cJSON *root);
 
 /* The cover and metadata folder (libcache.c): how much is in it, and emptying it. */
@@ -1634,14 +1661,20 @@ sw_thread(void *arg) {
      series. */
   char waited[64] = "";
   sw_wait_for_shell(job.close_id, waited, sizeof(waited));
-  int lrc = -1, other = 0, anyway = 0, tries = 0;
+  int lrc = -1, other = 0, anyway = 0, tries = 0, busy = 0;
   while(tries < SW_TRIES) {
     lrc = ps5tm_library_start(job.then_id);
     tries++;
     if(lrc >= 0) break;
     if((anyway = launched_anyway(job.then_id, lrc)) != 0) break;
     unsigned c = (unsigned)lrc;
-    if(c == 0xFFFFFFFFu || c == 0x80940033u) break;  /* not asked / not mounted */
+    if(c == 0xFFFFFFFFu) break;                       /* not asked */
+    if(c == START_BUSY_CODE) {                        /* ShadowMountPlus busy for a moment (start_retrying_busy) */
+      if(++busy > START_BUSY_RETRIES) break;
+      sw_pause(START_BUSY_GAP_MS);
+      if(ps5tm_procmgr_title_running(job.then_id) == 1) { anyway = 1; break; }
+      continue;
+    }
     if(c != 0x80940010u && c != 0x80020010u && ++other >= SW_OTHER_TRIES) break;
     sw_pause(SW_RETRY_MS);
   }
@@ -1761,14 +1794,20 @@ ps5tm_library_switch(const char *id, char *err, size_t err_len) {
     sw_wait_for_shell(rid, waited, sizeof(waited));
   }
   if(!claim_start(id)) return 0;
-  int lrc = -1, other = 0, anyway = 0, tries = 0;
+  int lrc = -1, other = 0, anyway = 0, tries = 0, busy = 0;
   while(tries < SW_TRIES) {
     lrc = ps5tm_library_start(id);
     tries++;
     if(lrc >= 0) break;
     if((anyway = launched_anyway(id, lrc)) != 0) break;
     unsigned c = (unsigned)lrc;
-    if(c == 0xFFFFFFFFu || c == 0x80940033u) break;
+    if(c == 0xFFFFFFFFu) break;
+    if(c == START_BUSY_CODE) {                        /* ShadowMountPlus busy for a moment (start_retrying_busy) */
+      if(++busy > START_BUSY_RETRIES) break;
+      sw_pause(START_BUSY_GAP_MS);
+      if(ps5tm_procmgr_title_running(id) == 1) { anyway = 1; break; }
+      continue;
+    }
     if(c != 0x80940010u && c != 0x80020010u && ++other >= SW_OTHER_TRIES) break;
     sw_pause(SW_RETRY_MS);
   }
@@ -1854,11 +1893,13 @@ after_exit_thread(void *arg) {
   usleep(TV_EXIT_SETTLE_MS * 1000);
 
   unsigned slow = slow_start_begin(a->name);
-  int rc = ps5tm_library_start(a->id);
+  int anyway = 0, calls = 1;
+  int rc = start_retrying_busy(a->id, &anyway, &calls);
   slow_start_end(slow);
-  if(rc >= 0 || launched_anyway(a->id, rc)) {
+  if(rc >= 0 || anyway) {
     remember_started(a->id);
-    PS5TM_INFO("library_started", "Gestartet: %s (%s) nach dem Ende der Vollbild-App (0x%08X).", a->name, a->id, (unsigned)rc);
+    PS5TM_INFO("library_started", "Gestartet: %s (%s) nach dem Ende der Vollbild-App (0x%08X, %d. Startaufruf).", a->name, a->id,
+               (unsigned)rc, calls);
   } else if((unsigned)rc == 0x80940010u) {
     char run_id[16] = "", run_name[128] = "";
     release_start(a->id);
@@ -2042,6 +2083,7 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
   /* Only with nothing running: a running title — the same one included, when
      handing it over failed — is never launched again (START_GUARD_MS). */
   int rc = -1;
+  int calls = 0;                                  /* launcher calls (start_retrying_busy) */
   int early = 0;                                  /* the console's browser is being closed before the launch */
   if(game_link && !gs.title_id[0]) {
     /* From the console's browser the page goes at once, as if the PS button had been pressed at the tap: a launch that has to wait
@@ -2049,9 +2091,9 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
        offer that the page would have shown goes out as a notification of the console instead. */
     early = on_console && ps5tm_library_close_browser() == 0;
     unsigned slow = early ? slow_start_begin(name) : 0;
-    rc = ps5tm_library_start(id);
+    int anyway = 0;
+    rc = start_retrying_busy(id, &anyway, &calls);
     if(early) slow_start_end(slow);
-    int anyway = rc < 0 && launched_anyway(id, rc);
     if(rc >= 0 || anyway) {
       remember_started(id);
       int closing;
@@ -2060,8 +2102,8 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
       char how[48];
       if(anyway) snprintf(how, sizeof(how), "läuft (Antwort 0x%08X)", (unsigned)rc);
       else       snprintf(how, sizeof(how), "App-ID 0x%X", (unsigned)rc);
-      PS5TM_INFO("library_started", "Gestartet: %s (%s), %s, angefragt von %s%s.",
-                 name, id, how, req->peer[0] ? req->peer : "?",
+      PS5TM_INFO("library_started", "Gestartet: %s (%s), %s, %d. Startaufruf, angefragt von %s%s.",
+                 name, id, how, calls, req->peer[0] ? req->peer : "?",
                  !on_console ? ""
                  : closing ? " (Browser der Konsole, wird geschlossen)"
                            : " (Browser der Konsole, bleibt offen)");
@@ -2124,8 +2166,8 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
   }
   remember_started(id);
   PS5TM_INFO("library_launch_offered",
-             "Start angeboten: %s (%s) über %s — der direkte Start ergab 0x%08X.",
-             name, id, link, (unsigned)rc);
+             "Start angeboten: %s (%s) über %s — der direkte Start ergab 0x%08X (%d Startaufrufe).",
+             name, id, link, (unsigned)rc, calls);
   snprintf(out, sizeof(out),
            "{\"ok\":true,\"started\":false,\"via\":\"notification\","
            "\"already_running\":%s,\"other_running\":false,\"code\":\"0x%08X\"}",

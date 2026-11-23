@@ -5584,7 +5584,9 @@
     const name = g ? g.name : id;
     btn.disabled = true;
     try {
-      const r = await api("/api/v1/library/launch", { method: "POST", body: JSON.stringify(close ? { id, close: close.id } : { id }) });
+      /* up to two more launcher calls 3 s apart when ShadowMountPlus is busy for a moment (api.c start_retrying_busy): longer
+         than the usual 8 s */
+      const r = await api("/api/v1/library/launch", { method: "POST", body: JSON.stringify(close ? { id, close: close.id } : { id }), timeoutMs: 20000 });
       if (r.state === "closing") {
         toast(`„${close.name}“ wird geschlossen, danach startet „${name}“.`);
         setTimeout(() => { btn.disabled = false; }, 3000);
