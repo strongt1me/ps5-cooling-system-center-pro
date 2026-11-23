@@ -132,6 +132,9 @@ const char *why_text(const std::string &why)
         return "Eine zweite Kopie einer Datei, die schon benutzt wird.";
     if (why == "second_game")
         return "Für dieses Spiel wird schon ein anderes Spielpaket benutzt.";
+    if (why == "m2")
+        return "Liegt auf der M.2-Erweiterung. Von dort startet die Konsole keine PS4-Spiele "
+               "(Fehler 0x80B2150F); bitte auf einen USB-Stick (exFAT) legen.";
     if (why == "damaged")
         return "Das Spielpaket ist beschädigt (Kennungen in der param.sfo fehlerhaft). Es wird "
                "nicht angemeldet, weil so "
@@ -155,6 +158,8 @@ const char *why_short(const std::string &why)
         return "zweite Kopie";
     if (why == "damaged")
         return "beschädigt";
+    if (why == "m2")
+        return "auf der M.2";
     return "nicht eingebunden";
 }
 

@@ -8589,6 +8589,8 @@
     dlc_off: "Zusatzinhalt. Zusatzinhalte sind in den Einstellungen ausgeschaltet.",
     duplicate: "Eine zweite Kopie einer Datei, die schon benutzt wird.",
     second_game: "Für dieses Spiel wird schon ein anderes Spielpaket benutzt.",
+    /* 23.11.2026: an der Slim startete ein PS4Mount-Spiel von /mnt/ext1 nie (process_mount, PlayGo 0x80B2150F), vom exFAT-Stick schon */
+    m2: "Liegt auf der M.2-Erweiterung. Von dort startet die Konsole keine PS4-Spiele (Fehler 0x80B2150F); bitte auf einen USB-Stick (exFAT) legen.",
     damaged: "Das Spielpaket ist beschädigt (Kennungen in der param.sfo fehlerhaft). Es wird nicht angemeldet, weil so ein Paket die Konsole abstürzen lassen und ihren Speicher beschädigen kann."
   };
   const p4mSkipRender = (list) => {

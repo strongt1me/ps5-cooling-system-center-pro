@@ -1940,6 +1940,21 @@ after_exit_spawn(const char *tv, const char *id, const char *name, const char *l
   return 0;
 }
 
+/* May a start of an unknown title read the game list afresh? Only for a title id as the console writes them (four capitals,
+   five digits) and at most every 5 s: each reread reads the whole app database, and a page must not be able to make the
+   app do that at every request. */
+static int
+launch_reread_ok(const char *id) {
+  static uint64_t last_ms;
+  for(int i = 0; i < 4; i++) if(id[i] < 'A' || id[i] > 'Z') return 0;
+  for(int i = 4; i < 9; i++) if(id[i] < '0' || id[i] > '9') return 0;
+  if(id[9]) return 0;
+  uint64_t now = ps5tm_mono_ms(), last = __atomic_load_n(&last_ms, __ATOMIC_RELAXED);
+  if(last && now - last < 5000) return 0;
+  __atomic_store_n(&last_ms, now, __ATOMIC_RELAXED);
+  return 1;
+}
+
 static void
 handle_library_launch(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
@@ -1957,7 +1972,14 @@ handle_library_launch(int fd, const ps5tm_request_t *req) {
   }
 
   char name[128], link[96], icon[160];
-  if(ps5tm_library_launch_info(id, name, sizeof(name), link, sizeof(link)) != 0) {
+  int known = ps5tm_library_launch_info(id, name, sizeof(name), link, sizeof(link)) == 0;
+  if(!known && launch_reread_ok(id)) {
+    /* 23.11.2026: a title registered a moment ago (PS4Mount, a tile) may not be in the list the app read yet: read it
+       afresh once before saying no (World War Z at the Slim: "steht nicht in der Spieleliste", a minute later fine) */
+    ps5tm_library_forget();
+    known = ps5tm_library_launch_info(id, name, sizeof(name), link, sizeof(link)) == 0;
+  }
+  if(!known) {
     ps5tm_http_send_error(fd, 404, "not_launchable",
                           "Dieser Titel steht nicht in der Spieleliste oder "
                           "hat keinen Startlink.");

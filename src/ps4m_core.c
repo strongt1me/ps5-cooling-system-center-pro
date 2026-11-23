@@ -2392,6 +2392,10 @@ static void install_all(char (*tids)[10], int n) {
         unmask_user_app(tids, n);
     printf("[reg] %s=%s0x%08x: %d of %d title(s) registered\n", reg_mode_name(), g_install_busy ? "(still running) " : "",
            g_install_rc, done, n);
+    /* (app, 23.11.2026) the app's game list is read afresh: a start right after "spielbereit" found the title not yet in it
+     * ("steht nicht in der Spieleliste", World War Z at the Slim) */
+    if (done)
+        ps5tm_library_forget();
 }
 
 /* The system databases are only ever written by the system: ShellCore keeps them
@@ -2595,6 +2599,16 @@ static void index_report(const char *root, long ms) {
  * the page (see skip_note). Rebuilt on every scan of the drive; the pkgs of PS5 games and other pkgs, which can be many on
  * a drive, fill at most NOT_PS4_LISTED lines. Updates are not listed: the update choice of the game shows them. */
 #define NOT_PS4_LISTED 32
+
+/* (app, 23.11.2026) The M.2 expansion: the console does not start a PS4Mount game from there. Tried at the Slim (FW 12.00):
+ * World War Z with three add-ons registered from /mnt/ext1 and showed "ready", but every start ended in the console's own
+ * process_mount and PlayGo 0x80B2150F (an error dialog on the TV); the same pkg from an exFAT USB stick started, add-ons
+ * included. So its PS4 pkgs are listed with the reason "m2" and not registered. /mnt/ext0 (extended USB storage) is not
+ * tried and stays as it was. */
+static int is_m2(const char *root) {
+    return !strcmp(root, "/mnt/ext1");
+}
+
 static void index_skips(const char *root) {
     static p4m_pidx_game_t games[MAX_TITLES];
     p4m_pidx_t *idx = index_of(root);
@@ -2618,6 +2632,12 @@ static void index_skips(const char *root) {
         }
         if (p->incomplete) {
             skip_note(p->path, p->title_id, p->name, "incomplete");
+            continue;
+        }
+        if (is_m2(root)) {
+            /* (app) games and add-ons alike; an update follows its game */
+            if (p->kind == PIDX_GAME || p->kind == PIDX_ADDON)
+                skip_note(p->path, p->title_id, p->name, "m2");
             continue;
         }
         if (!p4m_pidx_usable(idx, p))
@@ -2658,6 +2678,8 @@ static int title_list(const char *root, char (*tids)[10], int max, int *over) {
     char lib[PATH_MAX], p[PATH_MAX];
     int n = 0;
     *over = 0;
+    if (is_m2(root))
+        return 0; /* (app) not started from there: listed as skipped instead (index_skips) */
     snprintf(lib, sizeof(lib), "%s/ps4", root);
     DIR *d = opendir(lib);
     struct dirent *e;
@@ -2717,6 +2739,20 @@ static void scan_root(const char *root, int fresh, int reconnected) {
     if (fresh)
         index_report(root, index_ms);
     index_skips(root);
+    if (is_m2(root)) {
+        /* (app) nothing registered from the M.2 expansion: the page lists its pkgs with the reason "m2" */
+        static p4m_pidx_game_t m2games[MAX_TITLES];
+        int ng = p4m_pidx_group(index_of(root), m2games, MAX_TITLES), with_game = 0;
+        for (int i = 0; i < ng; i++)
+            with_game += m2games[i].game >= 0;
+        if (fresh && with_game) {
+            printf("[scan] %s: %d PS4 game(s) not registered, the console does not start them from the M.2 expansion\n", root,
+                   with_game);
+            notify("M.2-Erweiterung: %d PS4-Spiel(e) gefunden. Von dort startet die Konsole keine PS4-Spiele; bitte auf einen "
+                   "USB-Stick (exFAT) legen.", with_game);
+        }
+        return;
+    }
     static title_t titles[MAX_TITLES];
     static char tids[MAX_TITLES][10];
     static int over_told[10]; /* games past the limit in the last notification, per drive (PS4Mount 0.7.3) */
