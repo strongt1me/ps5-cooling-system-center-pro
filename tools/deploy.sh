@@ -4,7 +4,8 @@
 #   tools/deploy.sh <IP|94|52> [--elf <file>] [--tiles <dir>] [--nur-elf | --nur-kacheln] [--dry-run]
 #
 # Order (the two kinds of transfer are separate steps, as the virus scanner wants them):
-#   1. ELF to port 9021 (tools/lib/send_elf.ps1, own process), wait ~12 s, poll http://<IP>:8086/api/v1/system for app_version
+#   1. ELF to port 9021 (tools/lib/send_elf.ps1, own process), wait ~12 s, poll http://<IP>:8086/api/v1/system for app_version;
+#      before it: not while the app works on a job, and not while a title starts at the console (kernel log, waits up to 90 s)
 #   2. tiles by curl over FTP (port 2121) to /data/homebrew/<tile>/, eboot.bin last
 #   3. size of every eboot.bin locally and on the console (Content-Length of the FTP file)
 #   4. summary
@@ -30,6 +31,7 @@ Aufruf: tools/deploy.sh <IP> [Optionen]
   --nur-kacheln        nur die Kacheln senden (Schritte 2 und 3)
   --trotzdem-kacheln   Kacheln auch senden, wenn die ELF in Schritt 1 nicht lief
   --trotzdem           die ELF auch senden, wenn die App gerade arbeitet (ein Vorgang wird dann mitten im Lauf beendet)
+                       oder an der Konsole 90 s lang immer wieder ein Titel startete
   --dry-run           nur ausgeben, was getan würde
   -h, --help           diese Hilfe
 USAGE
@@ -109,6 +111,46 @@ api_busy() {
   return 1
 }
 
+# Is a title starting on the console right now? An ELF that arrived while an app was being started at the console brought the Slim
+# down (23.11.2026; it had to be restarted). The kernel log names a start: createApp, launchApp(, the shell's LaunchFlow and
+# SplashScreen scenes. A line of that kind from the last START_QUIET_S seconds counts as a start under way, measured on the console's
+# own clock (timestamp_ms of /api/v1/status; it can be many minutes off the PC's). Prints the line and returns 0 then; 1 when nothing
+# starts; 2 when the app does not answer (then it cannot be told).
+START_QUIET_S=15       # seconds after the last start line that count as "starting"
+START_WAIT_MAX=90      # seconds to wait for a start to end before the ELF is not sent
+title_starting() {
+  local now k line
+  now="$(curl -s -m 4 "http://$IP:$API_PORT/api/v1/status" 2>/dev/null \
+    | sed -n 's/.*"timestamp_ms"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+  [ -n "$now" ] || return 2
+  k="$(curl -s -m 6 "http://$IP:$API_PORT/api/v1/klog?max=1000" 2>/dev/null | tr -d '\r')"
+  printf '%s' "$k" | grep -q '"lines"' || return 2
+  line="$(printf '%s' "$k" | sed 's/},{/}\n{/g' \
+    | grep -E 'createApp |launchApp\(|LaunchFlow\.|SplashScreen\.' \
+    | sed -n 's/.*"t":\([0-9][0-9]*\),.*"s":"\(.*\)"}.*/\1 \2/p' \
+    | awk -v now="$now" -v q="$START_QUIET_S" '$1 + q * 1000 >= now { t = $0; sub(/^[0-9]+ /, "", t); last = t } END { if(last != "") print last }')"
+  [ -n "$line" ] || return 1
+  printf '%s' "$line"
+  return 0
+}
+
+# Waits while a title starts (title_starting), in steps of 5 s up to START_WAIT_MAX. 0 when the ELF may go, 1 when starts went on all
+# that time.
+wait_title_start() {
+  local waited=0 what rc
+  while :; do
+    what="$(title_starting)"; rc=$?
+    if [ "$rc" = 2 ]; then
+      say "Ob an der Konsole gerade ein Titel startet, lässt sich nicht prüfen (die App antwortet nicht)."
+      return 0
+    fi
+    [ "$rc" = 1 ] && return 0
+    [ "$waited" -ge "$START_WAIT_MAX" ] && return 1
+    say "An der Konsole startet gerade ein Titel (${what:0:110}) - warte 5 s ..."
+    sleep 5; waited=$((waited + 5))
+  done
+}
+
 # The PowerShell host for the socket send (Windows); nc as the fallback elsewhere.
 send_elf_cmd() {
   local ps=""
@@ -172,10 +214,13 @@ if [ "$DO_ELF" = 1 ]; then
     dry "würde $WAIT_AFTER_ELF s warten und dann bis zu $WAIT_API_MAX s auf http://$IP:$API_PORT/api/v1/system warten"
     dry "würde app_version lesen${EXPECT_VER:+ und mit $EXPECT_VER vergleichen}"
     dry "würde vorher fragen, ob die App gerade arbeitet (jobs/active, orig/status); dann nicht senden, außer mit --trotzdem"
+    dry "würde vorher im Kernel-Log nachsehen, ob an der Konsole gerade ein Titel startet, und bis zu $START_WAIT_MAX s warten; startet es so lange immer wieder, nicht senden, außer mit --trotzdem"
   else
     BUSY_WHAT="$(api_busy)" || BUSY_WHAT=""
     if [ -n "$BUSY_WHAT" ] && [ "$FORCE_SEND" = 0 ]; then
       err "Die App arbeitet gerade (${BUSY_WHAT}): Eine neue ELF würde den Vorgang mitten im Lauf beenden. Erst warten, bis er fertig ist, oder mit --trotzdem senden."
+    elif ! wait_title_start && [ "$FORCE_SEND" = 0 ]; then
+      err "An der Konsole startete $START_WAIT_MAX s lang immer wieder ein Titel: ELF nicht gesendet (eine ELF mitten in einem Start hat die Konsole abstürzen lassen). Später noch einmal, oder mit --trotzdem senden."
     else
     OLD_PID="$(api_pid)"                      # the app that runs before the send ("" when none answers)
     say "Sende $ELF ($(file_size "$ELF") Bytes) ..."
