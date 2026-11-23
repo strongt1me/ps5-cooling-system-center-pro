@@ -872,20 +872,25 @@ void HttpSource::handle_tool(const ToolRequest &request)
     }
     if (request.kind == 2)
     {
-        // The queue: the list, or one action whose answer is the list again.
+        // The queue: the list, or one action whose answer is the list again. A list fetched while an action ran is older than the
+        // action's answer and is dropped (queue_seq_; review of 23.11.2026: a removed entry came back until the next poll).
         const bool post = !request.body.empty();
+        const unsigned seq = post ? ++queue_seq_ : queue_seq_.load();
         const Net net = exchange(post ? "POST" : "GET", "/api/v1/library/convert/queue",
                                  request.body, &status, &body, 130);
-        if (net == Net::ok && status == 200)
+        const bool ok = net == Net::ok && status == 200;
         {
+            // the second count and every compare under the lock of the write: a list read across the action cannot land after its answer
             std::lock_guard<std::mutex> lock(mutex_);
-            if (data_.convert_queue_json != body)
+            if (post)
+                ++queue_seq_;
+            if (ok && (post || queue_seq_.load() == seq) && data_.convert_queue_json != body)
             {
                 data_.convert_queue_json = std::move(body);
                 ++data_.serial;
             }
         }
-        else if (post)
+        if (!ok && post)
         {
             notice(Notice::Kind::error, "Warteschlange",
                    net == Net::ok ? message_of(body, "Das hat nicht geklappt.")
@@ -2788,8 +2793,17 @@ void HttpSource::handle(const Request &request)
         // refresh: the app loads two lists from GitHub one after the other (up to 45 s each). The worker does not wait for that (it would
         // hold temperatures and every queued action): after 10 s the lists go on loading in the app, and poll_store follows them.
         const Net net = exchange("POST", "/api/v1/paystore", text != nullptr ? text : "{}", &status, &body, 10);
+        // only the answer "a foreign file of that name" arms the second press; a 409 for a running download did too, and the next
+        // press replaced a file whose name was never shown (review of 23.11.2026)
         if (net == Net::ok && status == 409 && request.text == "install" && !force)
-            store_force_id_ = request.id;
+        {
+            if (cJSON *reply = cJSON_Parse(body.c_str()))
+            {
+                if (str(reply, "code") == "paystore_exists")
+                    store_force_id_ = request.id;
+                cJSON_Delete(reply);
+            }
+        }
         cJSON_free(text);
         cJSON_Delete(root);
         if (net != Net::ok && request.text == "refresh")
@@ -4148,7 +4162,9 @@ void HttpSource::poll_own_pictures()
         {
             const std::string name = str(e, "name");
             const auto size = static_cast<std::uint64_t>(num(e, "size"));
-            if (str(e, "type") != "file" || !picture(name) || size == 0 || size > (16u << 20))
+            // not over what exchange() takes whole (kMaxBody): a bigger one arrived cut off, failed, and was fetched again after every
+            // library poll (review of 23.11.2026)
+            if (str(e, "type") != "file" || !picture(name) || size == 0 || size > kMaxBody - 4096)   // the HTTP head counts too
                 continue;
             OwnPicture pic;
             pic.path = folder + "/" + name;
@@ -5317,11 +5333,12 @@ void HttpSource::poll_jobs()
         // older console app has no such route.
         int qstatus = 0;
         std::string qbody;
+        const unsigned qseq = queue_seq_.load();
         if (exchange("GET", "/api/v1/library/convert/queue", {}, &qstatus, &qbody) == Net::ok &&
             qstatus == 200)
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (data_.convert_queue_json != qbody)
+            if (queue_seq_.load() == qseq && data_.convert_queue_json != qbody)
             {
                 data_.convert_queue_json = std::move(qbody);
                 ++data_.serial;

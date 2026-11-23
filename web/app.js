@@ -2580,10 +2580,16 @@
       if (r.message) toast(r.message);
       return true;
     } catch (e) {
-      /* a foreign file of the same name: replaced in the same click (nothing needs a second confirmation) */
-      if (e.code === "paystore_conflict" && body.action === "install" && !body.force) {
-        toast("Eine Datei gleichen Namens lag schon im Ordner; sie wird ersetzt.");
-        return psPost({ ...body, force: true });
+      /* a foreign file of the same name (one the store did not put there, perhaps the user's own build): replacing it deletes it,
+         so it is asked first and named, like every delete (review of 23.11.2026; before, any 409 replaced it in the same click) */
+      if (e.code === "paystore_exists" && body.action === "install" && !body.force) {
+        const it = (ps.data && Array.isArray(ps.data.items) ? ps.data.items : []).find((x) => x.id === body.id);
+        const name = (it && (it.filename || it.name)) || body.id;
+        if (await askYesNo({ title: "Datei ersetzen?", yes: "Ersetzen",
+                             paras: [`Im Payload-Ordner liegt schon eine andere Datei namens ${name}.`,
+                                     "Sie wird gelöscht und durch die Fassung aus der Liste ersetzt."] }))
+          return psPost({ ...body, force: true });
+        return false;
       }
       toast(e.message, "error");
       return false;
@@ -7327,17 +7333,22 @@
   };
 
   /* The queue of conversions (convqueue.c). Added from the plan; it runs one game after the other. */
+  /* cv.qseq counts the actions on the queue (twice each, at the start and at the answer): a list fetched across one is older than the action's
+     answer and is dropped (review of 23.11.2026: a removed entry came back until the next poll) */
   const cvQueueLoad = async () => {
-    try { cv.queue = await api("/api/v1/library/convert/queue"); } catch (e) { /* ohne Liste geht der Rest weiter */ }
+    const seq = cv.qseq || 0;
+    try { const q = await api("/api/v1/library/convert/queue"); if ((cv.qseq || 0) === seq) cv.queue = q; } catch (e) { /* ohne Liste geht der Rest weiter */ }
   };
   const cvQueueAdd = async (btn) => {
     btn.disabled = true;
     try {
       const orig = await ogPrepare(cv.id);              /* „Original danach“: Sperre melden; bei „Löschen“ fragen (das Löschen kommt später, ohne dass jemand dabei ist) */
       if (!orig) { ogSyncButtons(); return; }
+      cv.qseq = (cv.qseq || 0) + 1;
       cv.queue = await api("/api/v1/library/convert/queue", { method: "POST", timeoutMs: 120000,
         body: JSON.stringify({ action: "add", id: cv.id, op: cv.op, target: cv.drive, mode: cv.mode, verify: cv.verify === "quick" ? "quick" : "full", name: cv.name || "",
                                ampr_index: !!(cv.plan && cv.plan.kind === "folder" && !cv.plan.ps4 && cv.ampr && !cvIsFpkg(cv.op) && !cvPackKind()), ...cvPackFields(), ...orig }) });
+      cv.qseq++;
       toast("In die Warteschlange gestellt.");
       cvOpenQueue();
       cvPoll();
@@ -7348,9 +7359,11 @@
   };
   const cvQueueAct = async (b) => {
     b.disabled = true;
+    cv.qseq = (cv.qseq || 0) + 1;
     try {
       cv.queue = await api("/api/v1/library/convert/queue", { method: "POST",
         body: JSON.stringify({ action: b.dataset.cq, qid: Number(b.dataset.qid) || 0 }) });
+      cv.qseq++;
       cvQueueRender(true);
     } catch (e) {
       toast(e.message, "error");
@@ -8372,18 +8385,27 @@
   /* ── USB auswerfen (usbeject.c, 29.10.2026) ──────────────────────────
    * Über ShadowMountPlus (ab 1.7beta10), aber nur, wenn kein Auftrag der App läuft und kein Ordner des Laufwerks
    * woanders eingehängt ist (PS4Mount-Spiele). Die Konsole sagt sonst, was noch läuft; nichts wird doppelt bestätigt. */
-  const usbEject = { running: false, timer: 0, fails: 0, busy: false, okAt: 0 };
+  const usbEject = { running: false, timer: 0, fails: 0, busy: false, okAt: 0, tickAt: 0 };
   const usbEjectStop = () => {
     clearInterval(usbEject.timer);
     usbEject.timer = 0;
     usbEject.running = false;
     usbEject.fails = 0;
+    usbEject.tickAt = 0;
     if (typeof fm !== "undefined") fm.ejecting = false;
   };
   const usbEjectPoll = async () => {
     /* one question at a time, and an answer that comes after the stop counts no more: the console answers each connection on its own
        thread, and a late "running" brought "do not unplug yet" back over "is ejected" (review of 22.11.2026) */
-    if (document.hidden || usbEject.busy) return;
+    /* hidden (phone locked, other tab): nothing is asked, and that time does not count as "no answer": the first poll after
+       waking often fails, and it alone ended the watch (review of 23.11.2026) */
+    const now = Date.now();
+    /* and a gap of more than 5 s between two ticks is a page that slept (iOS freezes it, Chrome slows a hidden one to a tick a minute): that
+       time is not counted either */
+    if (document.hidden || (usbEject.tickAt && now - usbEject.tickAt > 5000)) usbEject.okAt = now;
+    usbEject.tickAt = now;
+    if (document.hidden) return;
+    if (usbEject.busy) return;
     usbEject.busy = true;
     try {
       const r = await api("/api/v1/storage/eject", { timeoutMs: 4000 });
@@ -9838,7 +9860,8 @@
       clearTimeout(apr.timer);
       if (job.active || ij.active || (trace && trace.busy)) apr.timer = setTimeout(aprLoad, 1000);
     } catch (e) {
-      if (my !== apr.gen) return;
+      /* closed meanwhile, or another window (copy, convert) opened in the same frame: the error is not its business (review of 23.11.2026) */
+      if (my !== apr.gen || !aprViews.includes(cp.view)) return;
       const bodyEl = $("#cp-body");
       if (!bodyEl) return;                         /* the dialog was closed while the request was failing */
       bodyEl.innerHTML = `<p class="cp-err">${esc(e.message)}</p>

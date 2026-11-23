@@ -1076,6 +1076,9 @@ int           ps5tm_dupimg_set_aside(const char *path, int undo, char *msg, size
    1 fetch it again when it is older than three hours (and was loaded once), 2 always. */
 struct cJSON *ps5tm_paystore_json(int refresh);
 int ps5tm_paystore_action(const struct cJSON *body, char *msg, size_t msg_len);
+/* What ps5tm_paystore_action answers for a file of that name in the payload folder that the store did not put there: sent as
+   409 "paystore_exists" (the other 409s are "paystore_conflict": a list or a download is busy). Replaced only with "force". */
+#define PS5TM_PAYSTORE_EXISTS 1409
 int ps5tm_paystore_busy(void);
 /* The cached GitHub picture of a store payload's developer (paystore.c): 0 with the file and its type, -1 not (yet)
    cached, -2 not a valid owner name. */

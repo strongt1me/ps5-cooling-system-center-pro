@@ -154,6 +154,9 @@ typedef struct {
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static dj_job_t        g_job;
+/* 1 from the start of a dump until its worker has left dump_run: after the state says done it still writes the log, the checksum state and the
+   history line, and a second dump started then had its log file closed under it (review of 23.11.2026). Under g_lock. */
+static int             g_thread_live;
 static dj_cfg_t        g_cfg = { "", DJ_SUBDIR_DEF, 1, 1, 0, 3, 0, 0, 0, 4, 1 };
 static int             g_cfg_loaded;
 static ps5tm_pnote_t   g_pn;                     /* the progress lines at the top left of the screen (progressnote.h), under g_lock */
@@ -2170,6 +2173,9 @@ out:
   ps5tm_powerguard_release();
   ps5tm_library_forget();
   ps5tm_dumplib_start(0);                  /* the new dump counts in the list and as GEDUMPT */
+  pthread_mutex_lock(&g_lock);
+  g_thread_live = 0;                       /* only now may the next dump (the queue's, a page's) take the place */
+  pthread_mutex_unlock(&g_lock);
   return NULL;
 }
 
@@ -2182,7 +2188,7 @@ static int g_deleting;
 static int
 dump_running(void) {
   pthread_mutex_lock(&g_lock);
-  int busy = g_job.state >= DJ_MEASURING && g_job.state <= DJ_FINISHING;
+  int busy = (g_job.state >= DJ_MEASURING && g_job.state <= DJ_FINISHING) || g_thread_live;
   pthread_mutex_unlock(&g_lock);
   return busy;
 }
@@ -2284,7 +2290,7 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
   if(ps5tm_filejobs_busy_for_dump(err, en)) { free(a); return 409; }
 
   pthread_mutex_lock(&g_lock);
-  if(g_job.state >= DJ_MEASURING && g_job.state <= DJ_FINISHING) {
+  if((g_job.state >= DJ_MEASURING && g_job.state <= DJ_FINISHING) || g_thread_live) {
     pthread_mutex_unlock(&g_lock);
     free(a);
     snprintf(err, en, "Es läuft schon ein Dump.");
@@ -2333,9 +2339,15 @@ dump_start(const char *tid, const char *target_in, int overwrite, int dlc_only, 
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
   pthread_attr_setstacksize(&attr, 1024 * 1024);
   pthread_t th;
+  pthread_mutex_lock(&g_lock);
+  g_thread_live = 1;
+  pthread_mutex_unlock(&g_lock);
   int rc = pthread_create(&th, &attr, dump_run, a);
   pthread_attr_destroy(&attr);
   if(rc != 0) {
+    pthread_mutex_lock(&g_lock);
+    g_thread_live = 0;
+    pthread_mutex_unlock(&g_lock);
     free(a);
     job_fail("Der Dump ließ sich nicht starten.");
     snprintf(err, en, "Der Dump ließ sich nicht starten.");

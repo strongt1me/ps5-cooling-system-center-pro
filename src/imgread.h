@@ -43,6 +43,7 @@ typedef struct {
   uint64_t size;                 /* bytes of a file, 0 for a folder */
   uint64_t h1;                   /* the reader's own handle (first cluster, inode), for the calls below */
   uint32_t h2;
+  uint64_t h3;                   /* the reader's own too: the length of an exFAT folder (size stays 0 for a folder) */
 } imgr_entry_t;
 
 /* Calls cb for every file and folder, depth first, parents first (cb gets the entry for the length of the call only);

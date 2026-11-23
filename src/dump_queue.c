@@ -519,7 +519,7 @@ queue_launch(const char *id, char *msg, size_t n) {
   cJSON_Delete(go);
   if(st != 200) {                               /* nothing stays in the list that the person did not put there */
     pthread_mutex_lock(&g_lock);
-    const int at2 = find_locked(id);
+    const int at2 = g_active ? -1 : find_locked(id);   /* a run another surface started meanwhile keeps its list */
     if(at2 >= 0) {
       for(int i = at2; i + 1 < g_n; i++) g_item[i] = g_item[i + 1];
       memset(&g_item[--g_n], 0, sizeof(g_item[0]));
@@ -587,8 +587,11 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
     return 200;
   }
 
+  /* below, the look at g_active is made again under the lock that changes the list: a start from the other surface could come in between (review
+     of 23.11.2026) */
   if(!strcmp(act, "queue_clear")) {
     pthread_mutex_lock(&g_lock);
+    if(g_active) { pthread_mutex_unlock(&g_lock); snprintf(msg, n, "Die Warteschlange läuft, die Liste lässt sich jetzt nicht ändern."); return 409; }
     g_n = 0;
     g_current = -1;
     g_interrupted = 0;
@@ -622,6 +625,7 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
     ps5tm_title_marks(id, &m);
     if(!m.disc) { snprintf(msg, n, "Die Warteschlange ist nur für Spiele, die von Disc installiert sind."); return 409; }
     pthread_mutex_lock(&g_lock);
+    if(g_active) { pthread_mutex_unlock(&g_lock); snprintf(msg, n, "Die Warteschlange läuft, die Liste lässt sich jetzt nicht ändern."); return 409; }
     if(g_n > 0 && g_item[0].state >= Q_DONE) {   /* the list of a finished run is replaced by the new one */
       g_n = 0;
       memset(g_item, 0, sizeof(g_item));
@@ -640,6 +644,7 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
   }
 
   pthread_mutex_lock(&g_lock);
+  if(g_active) { pthread_mutex_unlock(&g_lock); snprintf(msg, n, "Die Warteschlange läuft, die Liste lässt sich jetzt nicht ändern."); return 409; }
   int at = find_locked(id);
   if(at < 0) { pthread_mutex_unlock(&g_lock); snprintf(msg, n, "Dieses Spiel steht nicht in der Warteschlange."); return 404; }
 

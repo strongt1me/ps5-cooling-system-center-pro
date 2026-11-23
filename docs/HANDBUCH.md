@@ -1434,7 +1434,7 @@ aus ihrer Liste verglichen.
 - **Starten** schickt die Datei wie gewohnt an den ELF-Lader (Port 9021); die Datei taucht auch
   unter „Gespeicherte Payloads“ auf und lässt sich in Profile aufnehmen.
 - **Löschen** entfernt nur Dateien, die die App selbst heruntergeladen hat (`payload-store/installed.json`). Hat sich die Datei seit dem Laden geändert (Prüfsumme weicht ab), bleibt sie liegen und nur der Eintrag verschwindet. Ein zweites „Aktualisieren“, während die Liste noch lädt, meldet „Die Liste wird gerade geladen.“
-  Liegt im Ordner schon eine fremde Datei gleichen Namens, ersetzt erst ein zweiter Klick sie.
+  Liegt im Ordner schon eine fremde Datei gleichen Namens, fragt die App zuerst und nennt sie; ersetzt wird sie erst nach „Ersetzen“ (in der Vollbild-App nach einem zweiten Druck, der Hinweis nennt die Datei).
 - Verbunden wird nur mit GitHub (https, nur über die App-eigene Namensauflösung und feste
   Wurzelzertifikate). Die Payloads stammen von ihren Autoren; die App prüft nur, dass die Datei
   die aus der Liste ist.

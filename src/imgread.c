@@ -512,6 +512,9 @@ exf_entry_of(const exf_node_t *n, imgr_entry_t *e) {
   e->size = n->is_dir ? 0 : n->size;
   e->h1 = n->first;
   e->h2 = (n->nofat ? 1u : 0u) | (n->is_dir ? 2u : 0u);
+  /* a folder's own length: a contiguous one (NoFatChain) is read by it, and without it the walk found such a folder unreadable (review of
+     23.11.2026, an image of another tool on the Slim lost its Media, sce_module and sce_sys) */
+  e->h3 = n->is_dir ? n->size : 0;
 }
 
 static exf_node_t
@@ -520,7 +523,7 @@ exf_node_of(const imgr_entry_t *e) {
   n.first = (uint32_t)e->h1;
   n.nofat = (e->h2 & 1) != 0;
   n.is_dir = (e->h2 & 2) != 0;
-  n.size = e->size;
+  n.size = n.is_dir ? e->h3 : e->size;
   return n;
 }
 
@@ -669,14 +672,14 @@ ufs_bmap(ufs_t *u, const ufs_ino_t *in, uint64_t lbn) {
 }
 
 static int
-ufs_read(ufs_t *u, const ufs_ino_t *in, uint64_t off, void *buf, size_t n) {
+ufs_read_ex(ufs_t *u, const ufs_ino_t *in, uint64_t off, void *buf, size_t n, int holes_ok) {
   uint8_t *out = buf;
   while(n) {
     uint64_t lbn = off / u->bsize, within = off % u->bsize;
     size_t take = (size_t)(u->bsize - within);
     if(take > n) take = n;
     int64_t fr = ufs_bmap(u, in, lbn);
-    if(fr < 0) return -1;
+    if(fr < 0 || (fr == 0 && !holes_ok)) return -1;
     if(fr == 0) memset(out, 0, take);
     else if(u->f.b->rd(u->f.b, (uint64_t)fr * u->fsize + within, out, take) != 0) return -1;
     out += take; off += take; n -= take;
@@ -685,10 +688,17 @@ ufs_read(ufs_t *u, const ufs_ino_t *in, uint64_t off, void *buf, size_t n) {
 }
 
 static int
+ufs_read(ufs_t *u, const ufs_ino_t *in, uint64_t off, void *buf, size_t n) {
+  return ufs_read_ex(u, in, off, buf, n, 1);
+}
+
+static int
 ufs_each(ufs_t *u, const ufs_ino_t *dir, int (*cb)(const char *, uint32_t, int, void *), void *ctx) {
   if((dir->mode & 0xF000) != 0x4000 || dir->size == 0 || dir->size > MAX_DIR_BYTES) return -1;
   uint8_t *buf = malloc((size_t)dir->size);
-  if(!buf || ufs_read(u, dir, 0, buf, (size_t)dir->size) != 0) { free(buf); return -1; }
+  /* a folder with holes is broken (a real one has every block): one of 8 MiB made of nothing but holes cost the image a few bytes
+     and the walk 8 MiB of memory at every level (review of 23.11.2026) */
+  if(!buf || ufs_read_ex(u, dir, 0, buf, (size_t)dir->size, 0) != 0) { free(buf); return -1; }
   size_t pos = 0, len = (size_t)dir->size;
   while(pos + 8 <= len) {
     uint32_t ino = rd32(buf + pos);
@@ -926,7 +936,44 @@ typedef struct {
   size_t len;
   int depth, stopped, too_deep, too_many;
   uint64_t visits, skipped;  /* entries seen; names that could not be taken (empty, with a slash, too long) */
+  uint64_t *seen;            /* folders walked so far, by handle + 1 (open addressing, 0 = free) */
+  size_t seen_n, seen_cap;
 } walk_t;
+
+static size_t
+walk_slot(uint64_t key, size_t cap) {
+  return (size_t)((key * 0x9E3779B97F4A7C15ull) >> 32) & (cap - 1);
+}
+
+/* A folder met a second time in one walk is a loop or a cross-link of a broken image: walked again, a folder that names one
+   subfolder twice made the walk exponential, and one that names itself held a copy of itself at every level (review of
+   23.11.2026). By the reader's handle (first cluster, inode). 1 new, 0 seen before, -1 out of memory. */
+static int
+walk_seen_add(walk_t *w, uint64_t handle) {
+  const uint64_t key = handle + 1;
+  if((w->seen_n + 1) * 2 > w->seen_cap) {
+    const size_t cap = w->seen_cap ? w->seen_cap * 2 : 1024;
+    uint64_t *t = calloc(cap, sizeof(*t));
+    if(!t) return -1;
+    for(size_t i = 0; i < w->seen_cap; i++) {
+      if(!w->seen[i]) continue;
+      size_t j = walk_slot(w->seen[i], cap);
+      while(t[j]) j = (j + 1) & (cap - 1);
+      t[j] = w->seen[i];
+    }
+    free(w->seen);
+    w->seen = t;
+    w->seen_cap = cap;
+  }
+  size_t j = walk_slot(key, w->seen_cap);
+  while(w->seen[j]) {
+    if(w->seen[j] == key) return 0;
+    j = (j + 1) & (w->seen_cap - 1);
+  }
+  w->seen[j] = key;
+  w->seen_n++;
+  return 1;
+}
 
 /* A game has a few hundred thousand files at most. An image whose folders point at the same subfolder again and again would
    make the walk practically endless (2^depth visits): past this many entries it is broken (review 15.10.2026). */
@@ -952,7 +999,13 @@ walk_kid(const char *name, const imgr_entry_t *kid, void *ctx) {
   memcpy(e->path, w->path, w->len + 1);
   int stop = w->cb(e, w->ctx);
   if(!stop && kid->is_dir) {
-    if(w->depth >= MAX_WALK_DEPTH) { w->too_deep = 1; stop = 1; }
+    const int fresh = kid->h1 ? walk_seen_add(w, kid->h1) : 1;   /* 0: no handle (an empty exFAT folder), nothing to compare */
+    if(fresh < 0) { w->too_many = 1; w->stopped = 1; stop = 1; }   /* no memory for the list: the walk failed (-1), it was not stopped by cb */
+    else if(fresh == 0) {
+      e->damaged = 1;                                        /* said once more, with damaged set, like a folder that cannot be read */
+      stop = w->cb(e, w->ctx);
+    }
+    else if(w->depth >= MAX_WALK_DEPTH) { w->too_deep = 1; stop = 1; }
     else {
       w->depth++;
       imgr_entry_t d = *kid;
@@ -995,12 +1048,13 @@ imgr_walk2(imgr_t *r, int (*cb)(const imgr_entry_t *, void *), void *ctx, uint64
   imgr_entry_t *root = malloc(sizeof(*root));
   if(!root) { free(w.path); return -1; }
   int rc = -1;
-  if(r->fs->root(r->fs, root) == 0) {
+  if(r->fs->root(r->fs, root) == 0 && (!root->h1 || walk_seen_add(&w, root->h1) >= 0)) {
     rc = walk_dir(&w, root);
     if(rc == 0) rc = (w.too_deep || w.too_many) ? -1 : w.stopped ? 1 : 0;
     else rc = -1;
   }
   if(skipped) *skipped = w.skipped;
+  free(w.seen);
   free(root);
   free(w.path);
   return rc;

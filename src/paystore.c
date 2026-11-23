@@ -1019,7 +1019,7 @@ ps5tm_paystore_action(const cJSON *b, char *msg, size_t mn) {
       snprintf(p, sizeof p, PS_PAY_DIR "/%s", it.filename);
       if(file_sha256(p, hex) != 0 || strcmp(hex, it.checksum)) {
         snprintf(msg, mn, "Im Payload-Ordner liegt schon eine andere Datei namens %s. Noch einmal klicken ersetzt sie.", it.filename);
-        return 409;
+        return PS5TM_PAYSTORE_EXISTS;
       }
     }
     struct statvfs sv;

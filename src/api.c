@@ -1325,8 +1325,29 @@ handle_library_cover(int fd, const ps5tm_request_t *req) {
  * right after a start does not mean the start failed. */
 #define START_GUARD_MS 30000
 static pthread_mutex_t g_started_lock = PTHREAD_MUTEX_INITIALIZER;
-static char            g_started_id[16];
-static uint64_t        g_started_ms;
+/* One mark per title (review of 23.11.2026: with a single one, the start of another title took the mark of one still under way). busy: the start
+   has not come back yet, held however long that takes (freeing ShadowMountPlus's hold or waiting for the fullscreen app can take longer than the
+   half minute), at most START_BUSY_MAX_MS so that a start that never came back does not lock its title for the rest of the session. */
+#define START_BUSY_MAX_MS 300000
+#define START_MARKS 4
+typedef struct { char id[16]; uint64_t ms; int busy; } start_mark_t;
+static start_mark_t    g_started[START_MARKS];
+
+static start_mark_t *
+start_mark_locked(const char *id, int take) {
+  for(int i = 0; i < START_MARKS; i++)
+    if(g_started[i].id[0] && !strcmp(g_started[i].id, id)) return &g_started[i];
+  if(!take) return NULL;
+  start_mark_t *m = NULL;                   /* a free one, else the oldest that is not under way, else the oldest */
+  for(int i = 0; i < START_MARKS && !m; i++)
+    if(!g_started[i].id[0]) m = &g_started[i];
+  for(int pass = 0; pass < 2 && !m; pass++)
+    for(int i = 0; i < START_MARKS; i++)
+      if((pass || !g_started[i].busy) && (!m || g_started[i].ms < m->ms)) m = &g_started[i];
+  memset(m, 0, sizeof(*m));
+  snprintf(m->id, sizeof(m->id), "%s", id);
+  return m;
+}
 
 /* The check and the mark in one step: two requests for the same title in the same moment (a double tap, two
    tabs) cannot both pass and both start it. The mark holds while the start is under way; a request that ends
@@ -1334,10 +1355,13 @@ static uint64_t        g_started_ms;
 static int
 claim_start(const char *id) {
   pthread_mutex_lock(&g_started_lock);
-  int free_ = !(g_started_id[0] && !strcmp(g_started_id, id) && ps5tm_mono_ms() - g_started_ms < START_GUARD_MS);
+  const uint64_t now = ps5tm_mono_ms();
+  start_mark_t *m = start_mark_locked(id, 0);
+  int free_ = !(m && (now - m->ms < START_GUARD_MS || (m->busy && now - m->ms < START_BUSY_MAX_MS)));
   if(free_) {
-    snprintf(g_started_id, sizeof(g_started_id), "%s", id);
-    g_started_ms = ps5tm_mono_ms();
+    m = start_mark_locked(id, 1);
+    m->ms = now;
+    m->busy = 1;
   }
   pthread_mutex_unlock(&g_started_lock);
   return free_;
@@ -1346,7 +1370,8 @@ claim_start(const char *id) {
 static void
 release_start(const char *id) {
   pthread_mutex_lock(&g_started_lock);
-  if(!strcmp(g_started_id, id)) { g_started_id[0] = 0; g_started_ms = 0; }
+  start_mark_t *m = start_mark_locked(id, 0);
+  if(m) memset(m, 0, sizeof(*m));
   pthread_mutex_unlock(&g_started_lock);
 }
 
@@ -1398,8 +1423,9 @@ slow_start_end(unsigned gen) {
 static void
 remember_started(const char *id) {
   pthread_mutex_lock(&g_started_lock);
-  snprintf(g_started_id, sizeof(g_started_id), "%s", id);
-  g_started_ms = ps5tm_mono_ms();
+  start_mark_t *m = start_mark_locked(id, 1);
+  m->ms = ps5tm_mono_ms();                        /* the half minute counts from the start itself */
+  m->busy = 0;
   pthread_mutex_unlock(&g_started_lock);
 }
 
@@ -5559,6 +5585,9 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     char msg[400];
     int http = ps5tm_paystore_action(b, msg, sizeof(msg));
     cJSON_Delete(b);
+    /* a foreign file of that name has its own code: only that one may be answered with "force" (review of 23.11.2026: the
+       browser replaced the file on any 409, a running download too, without a question) */
+    if(http == PS5TM_PAYSTORE_EXISTS) { ps5tm_http_send_error(fd, 409, "paystore_exists", msg); return; }
     if(http != 200) { ps5tm_http_send_error(fd, http, http == 409 ? "paystore_conflict" : "paystore_refused", msg); return; }
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", 1);

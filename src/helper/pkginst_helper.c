@@ -119,6 +119,8 @@ extern int sceAppInstUtilAppUnInstallPat(const char *title_id);
 extern int sceAppInstUtilAppUnInstallAddcont(const char *title_id, const char *addcont_name);
 
 #define ADDCONT_MAX 64
+#define ADDCONT_BUDGET_MS 75000   /* from the request: the app gives the whole uninstall 120 s (pkginstall.c, PI_UNINSTALL_MS); the rest is room
+                                     for the one call that may still begin just before this, and for the answer */
 /* The add-ons of a title as the console keeps them: one folder per add-on under /user/addcont/<title id>, named by its label.
    Returns how many names went into names (at most ADDCONT_MAX). */
 static int
@@ -434,6 +436,11 @@ serve(int fd) {
           for(int i = 0; i < nadd; i++) {
             char path[128];
             struct stat st;
+            if(now_ms() - c0 > ADDCONT_BUDGET_MS) {   /* the answer must reach the app within its 120 s (PI_UNINSTALL_MS) */
+              plog("serve: %d add-on(s) left, time is up\n", nadd - i);
+              if(rsp.result_addcont == 0) rsp.result_addcont = PKGI_E_TIMEOUT;
+              break;
+            }
             snprintf(path, sizeof(path), "/user/addcont/%s/%s", req.title_id, addcont[i]);
             if(stat(path, &st) != 0) {                /* the game's uninstall already took it along */
               plog("serve: add-on %s already gone\n", addcont[i]);

@@ -12,6 +12,7 @@ extern "C"
 unsigned char *stbi_load_from_memory(const unsigned char *buffer, int len, int *x, int *y,
                                      int *channels_in_file, int desired_channels);
 void stbi_image_free(void *retval_from_stbi_load);
+int stbi_info_from_memory(const unsigned char *buffer, int len, int *x, int *y, int *comp);
 
 #ifdef __cplusplus
 }

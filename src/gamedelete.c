@@ -96,6 +96,7 @@ typedef struct {
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static dl_job_t        g_job;
+static int             g_thread_live;   /* the worker still reads g_job for its history line after job_end (review of 23.11.2026); under g_lock */
 static struct {
   char     token[33];
   char     kind[12];
@@ -1125,6 +1126,7 @@ delete_thread(void *arg) {
   snprintf(error, sizeof(error), "%s", g_job.error);
   uint64_t bytes = g_job.bytes, dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
   int waited = g_job.waited_tile;
+  g_thread_live = 0;                    /* read: the next delete may take the place */
   pthread_mutex_unlock(&g_lock);
   if(waited && st == DL_DONE) ps5tm_notify("„%s“ ist gelöscht.", name);
   else if(waited && st == DL_FAILED) ps5tm_notify("„%s“ wurde nicht gelöscht: %.120s", name, error);
@@ -1140,7 +1142,14 @@ delete_thread(void *arg) {
 static int
 launch_job(dl_args_t *a, const char *name, char *err, size_t err_len) {
   pthread_mutex_lock(&g_lock);
-  if(g_job.state == DL_RUNNING) {
+  /* the last worker has ended its job and only reads it for the history: that takes a moment, which is waited for (the next original of a
+     queue comes right after) */
+  for(int i = 0; i < 40 && g_thread_live && g_job.state != DL_RUNNING; i++) {
+    pthread_mutex_unlock(&g_lock);
+    usleep(50 * 1000);
+    pthread_mutex_lock(&g_lock);
+  }
+  if(g_job.state == DL_RUNNING || g_thread_live) {
     pthread_mutex_unlock(&g_lock);
     free(a);
     snprintf(err, err_len, "Es wird gerade schon etwas gelöscht.");
@@ -1170,9 +1179,15 @@ launch_job(dl_args_t *a, const char *name, char *err, size_t err_len) {
   pthread_attr_init(&at);
   pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
   pthread_attr_setstacksize(&at, 512 * 1024);       /* like every other worker: the default is not ours to rely on */
+  pthread_mutex_lock(&g_lock);
+  g_thread_live = 1;                                /* cleared by the worker once it has read its result */
+  pthread_mutex_unlock(&g_lock);
   int rc = pthread_create(&th, &at, delete_thread, a);
   pthread_attr_destroy(&at);
   if(rc != 0) {
+    pthread_mutex_lock(&g_lock);
+    g_thread_live = 0;
+    pthread_mutex_unlock(&g_lock);
     free(a);
     job_end(DL_FAILED, "Das Löschen ließ sich nicht starten.", NULL);
     snprintf(err, err_len, "Das Löschen ließ sich nicht starten.");

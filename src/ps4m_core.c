@@ -1015,10 +1015,20 @@ static void ac_copy_path(char *out, size_t n, const char *cid) {
  * behind, it means a failed or partial copy that ac_reconcile still has to clean up. */
 static void ac_pend_path(char *out, size_t n, const char *cid) { snprintf(out, n, STATE_DIR "/%s.acpend", cid); }
 
+/* (app) The batch is read and the result written under g_mu: the worker empties and refills g_acj for the next batch, and a call given up on came
+   back into the middle of that (review of 23.11.2026). The call itself runs without the lock, on copies of what it needs. */
 static void *ac_install_thread(void *arg) {
     int gen = (int)(intptr_t)arg;
-    for (int i = 0; i < g_acn && g_ac_gen == gen; i++) {
-        ac_job_t *j = &g_acj[i];
+    for (int i = 0;; i++) {
+        ac_job_t job;
+        pthread_mutex_lock(&g_mu);
+        const int go = i < g_acn && g_ac_gen == gen;
+        if (go)
+            job = g_acj[i];
+        pthread_mutex_unlock(&g_mu);
+        if (!go)
+            break;
+        ac_job_t *j = &job;
         ac_meta_t meta;
         ac_pkg_t info;
         char name[32];
@@ -1032,10 +1042,15 @@ static void *ac_install_thread(void *arg) {
         meta.content_name = name;
         int rc = sceAppInstUtilInstallByPackage ? sceAppInstUtilInstallByPackage(&meta, &info, &playgo) : -1; /* (app) weak */
         printf("[accopy] %s: InstallByPackage=0x%08x\n", meta.uri, rc);
-        if (g_ac_gen != gen)
-            break; /* given up on: a newer batch owns the jobs */
-        j->rc = rc;
-        j->called = 1;
+        pthread_mutex_lock(&g_mu);
+        const int mine = g_ac_gen == gen && i < g_acn; /* given up on: a newer batch owns the jobs */
+        if (mine) {
+            g_acj[i].rc = rc;
+            g_acj[i].called = 1;
+        }
+        pthread_mutex_unlock(&g_mu);
+        if (!mine)
+            break;
     }
     return NULL;
 }
@@ -1954,7 +1969,10 @@ static int mount_title(title_src_t *t) {
     return mount_paths(t->app.title_id, t->has_patch, t->dlc_tids, t->ndlc_tids);
 }
 
+static void uninstall_forget(const char *tid);
+
 static void manage(const title_src_t *t) {
+    uninstall_forget(t->app.title_id); /* (app) taken in again: a result an earlier uninstall left to hand over is not this one's */
     managed_t *m = managed_by(t->app.title_id, NULL);
     for (int i = 0; !m && i < MAX_TITLES; i++)
         if (!g_managed[i].used)
@@ -3667,6 +3685,13 @@ static volatile int g_uninstall_busy, g_uninstall_rc;
 static volatile int g_uninstall_unreported;  /* (app) the last call timed out: its result, once there, belongs to the next call for that title */
 static char g_uninstall_tid[10];
 
+/* (app) The result of a timed-out uninstall of tid is no longer to be handed over: the title is gone from the library, or it was taken in again
+   (review of 23.11.2026: kept, it answered the next delete of the game after it was added again, and the system uninstall never ran). */
+static void uninstall_forget(const char *tid) {
+    if (g_uninstall_unreported && !strcmp(g_uninstall_tid, tid))
+        g_uninstall_unreported = 0;
+}
+
 static void *uninstall_thread(void *arg) {
     (void)arg;
     g_uninstall_rc = sceAppInstUtilAppUnInstall ? sceAppInstUtilAppUnInstall(g_uninstall_tid) : -1; /* (app) weak */
@@ -3692,8 +3717,11 @@ static int uninstall_title(const char *tid) {
     g_uninstall_busy = 1;
     pthread_t th;
     if (pthread_create(&th, NULL, uninstall_thread, NULL)) {
-        uninstall_thread(NULL);
-        return g_uninstall_rc;
+        /* (app) not called here instead: it would run without a time limit while g_mu is held, and one that never returned would hold PS4Mount and every
+           eject for good (review of 23.11.2026; install_all_start gives up the same way) */
+        g_uninstall_busy = 0;
+        printf("[remove] %s: no thread for the uninstall\n", tid);
+        return -1;
     }
     pthread_detach(th);
     for (int i = 0; i < UNINSTALL_WAIT * 10 && g_uninstall_busy; i++)
@@ -3771,7 +3799,13 @@ static int remove_title(const char *tid, char *msg, size_t cap, int *pkg_left_ou
     unlink(path);
     snprintf(path, sizeof(path), STATE_DIR "/%s.addcont", tid);
     unlink(path);
-    int rc = p4m_db_is_registered(tid) ? uninstall_title(tid) : 0;
+    const int registered = p4m_db_is_registered(tid);
+    /* (app) Gone from the library: whatever an earlier, timed-out uninstall of this title left to hand over is settled. Kept, it would
+       answer for the next delete of the same game after it was added again, and the system uninstall would never run (review of
+       23.11.2026). */
+    if (!registered)
+        uninstall_forget(tid);
+    int rc = registered ? uninstall_title(tid) : 0;
     if (m)
         m->used = 0;
     if (!rc)
@@ -4728,7 +4762,9 @@ static void *ps4m_worker(void *arg) {
             g_next_scan = 0; /* its add-on copies start now, not at the next scan (PS4Mount 0.7.0) */
             continue;
         }
-        if (time(NULL) >= g_next_scan && !g_deleting) {
+        /* (app) no scan while a drive is being ejected or settles: a registration on another drive ends in InstallAll, and that reads the pkgs of every
+           title through the hold links, those on the drive being cut off too (review of 23.11.2026). The scan waits; g_next_scan stays due. */
+        if (time(NULL) >= g_next_scan && !g_deleting && !ps5tm_usbeject_active()) {
             if (g_reg_mode != REG_NONE)
                 scan_all();
             else if (g_manual_scan)

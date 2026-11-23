@@ -925,6 +925,11 @@ boot_thread(void *arg) {
 
 void
 ps5tm_kraken_boot(void) {
+  /* main() calls this in its bind loop, which runs again after rest mode or a new network: once per start of the app. A second run took away the
+     marker of a start still under way (the guard against a start loop) and could send a second copy (review of 23.11.2026). */
+  static int booted;
+  if(booted) return;
+  booted = 1;
   pending_check();                                         /* a start with the app that the console did not survive: no second one (before the marker is looked at) */
   if(kr_is_on()) {
     pthread_mutex_lock(&g_lock);

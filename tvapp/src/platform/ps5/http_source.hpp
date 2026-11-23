@@ -250,6 +250,7 @@ class HttpSource final : public Source
     // An eject was asked for and has not been seen to end: the Dateien page asks the app for nothing about the drives meanwhile (no places, no job), as the
     // System page does not (21.11.2026; the console cuts the drive off with a forced unmount that asks nobody).
     std::atomic<bool> eject_pending_{false};
+    std::atomic<unsigned> queue_seq_{0}; // counts actions on the convert queue (twice each): a list fetched across one is older
     std::string store_force_id_; // worker thread only: the store entry whose next "install" replaces a foreign file
     std::atomic<bool> engine_fetching_{false}; // a download of FPKGMount / Dump Forge is on its way
     std::atomic<bool> ng_fetching_{false}; // the check for a new AMPR EMU NG version is on its way

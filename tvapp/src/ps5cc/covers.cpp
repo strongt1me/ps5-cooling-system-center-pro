@@ -247,6 +247,11 @@ std::vector<std::uint8_t> decode_cover(const std::uint8_t *png, std::size_t size
     int w = 0;
     int h = 0;
     int channels = 0;
+    // The size from the header first: a camera photo of 24 MP was decoded whole (some 190 MB) only to be thrown away for its size
+    // (review of 23.11.2026).
+    if (stbi_info_from_memory(png, static_cast<int>(size), &w, &h, &channels) == 0 || w <= 0 || h <= 0 || w > 4096 ||
+        h > 4096)
+        return {};
     unsigned char *pixels =
         stbi_load_from_memory(png, static_cast<int>(size), &w, &h, &channels, 4);
     if (pixels == nullptr)

@@ -348,11 +348,14 @@ static int
 timed_init(void) {
   if(g_init_done) return g_init_rc;
 
-  resolve_appinst();
-  if(!p_inst_init || (!p_inst_dir && !p_inst_all && !p_inst_pkg))
-    return TILE_NO_SYMBOLS;
-
+  /* the symbols are looked up under the lock too: resolve_appinst marks itself done before the look-ups, and a second caller
+     (the tile, PS4Mount's worker, the game delete) came through with the pointers still empty (review of 23.11.2026) */
   pthread_mutex_lock(&g_init_mu);
+  resolve_appinst();
+  if(!p_inst_init || (!p_inst_dir && !p_inst_all && !p_inst_pkg)) {
+    pthread_mutex_unlock(&g_init_mu);
+    return TILE_NO_SYMBOLS;
+  }
   if(!g_init_started) {
     /* Linking does not guarantee the module is resident. etaHEN's package
        write-up is explicit that it must be started before Initialize(). */
@@ -489,6 +492,7 @@ stage_tile(char *why, size_t why_len) {
 
 /* Distinct from any Sony code: the batch call was not made, see below. */
 #define TILE_BATCH_REFUSED (-0xBA7C)
+#define TILE_EJECTING      (-0xBA7D)   /* a drive is being ejected: the batch call would read the titles on it too */
 
 /* The batch call registers every title that waits under /user/app, not only
  * ours. On 03.10.2026 it registered Arkanoid along with the tile: the console's
@@ -581,6 +585,11 @@ register_tile(const char **how, char *why, size_t why_len) {
                  "Sammelinstallation nicht aufgerufen: %s.", why);
       return TILE_BATCH_REFUSED;
     }
+    /* the batch call has the system read the folder of every title, those on a drive being ejected too (review of 23.11.2026) */
+    if(ps5tm_usbeject_active()) {
+      snprintf(why, why_len, "ein Laufwerk wird gerade ausgeworfen");
+      return TILE_EJECTING;
+    }
     int rc_all = p_inst_all(NULL);
     PS5TM_INFO("tile_register_all", "Sammelinstallation: 0x%08X.", (unsigned)rc_all);
     if(rc_accepted(rc_all)) { *how = "Sammelinstallation"; return 0; }
@@ -647,6 +656,11 @@ ensure_folder(char *msg, size_t msg_len) {
 
   const char *how = "";
   int rc = register_tile(&how, why, sizeof(why));
+  if(rc == TILE_EJECTING) {
+    snprintf(msg, msg_len, "Die Kachel wurde nicht angemeldet: Ein Laufwerk wird gerade ausgeworfen. Bitte in einer halben Minute noch einmal versuchen.");
+    PS5TM_WARN("tile_register_later", "%s", msg);
+    return PS5TM_TILE_ERROR;
+  }
   if(rc == TILE_BATCH_REFUSED) {
     snprintf(msg, msg_len,
              "Die Kachel wurde nicht angemeldet: Die Sammelanmeldung hätte "
