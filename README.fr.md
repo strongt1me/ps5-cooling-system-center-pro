@@ -186,6 +186,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 
 **Gestion**
 - Gestionnaire de fichiers : afficher, modifier, télécharger et téléverser (dossiers entiers compris), créer des dossiers, renommer, copier, déplacer, supprimer – partout, avec débit et temps restant pendant la copie ; la suppression demande d'abord confirmation et nomme ce qui disparaît.
+- Lecteurs NTFS (Windows) : lire et écrire les clés et disques NTFS dans le gestionnaire de fichiers (téléverser, créer des dossiers, copier, déplacer, supprimer ; sans renommer ni remplacer), éjecter sans ShadowMountPlus (pilote de PS5-NTFS-BROWSER d’abcde6543).
 - Payloads : voir et arrêter ceux en cours, lancer ses propres `.elf` depuis un dossier ou une clé USB, profils comme séquence de démarrage ; télécharger et mettre à jour les payloads de la liste du Payload Manager d'itsPLK et de celle de strongt1me (vérification SHA-256).
 - Profil : nom affiché et image de profil (30 images intégrées ou un fichier personnel).
 - Thème : standard, clair, sombre et optimal (le plus rapide à dessiner, pensé pour le téléviseur) ; chaque appareil retient son choix.
@@ -327,6 +328,7 @@ Ce projet repose sur les épaules de la communauté homebrew PS5. **Merci !** Un
 - **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0) : encodeur QR.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0) : les quatre profils LZ4 testés (ASTRO BOT, EA Sports UFC 6, moteur d'Insomniac, moteur Unity), intégrés sans modification.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0) : la résolution de noms propre à l'appli et le téléchargement HTTPS (pour la boutique de payloads).
+- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): le pilote NTFS (lecture et écriture) derrière les lecteurs NTFS du gestionnaire de fichiers, intégré sans modification (v1.4.0).
 - **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT) : TLS pour la boutique de payloads.
 - **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
 </details>

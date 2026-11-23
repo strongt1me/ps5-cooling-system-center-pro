@@ -52,6 +52,9 @@ inline constexpr Credit kCredits[] = {
      "Danke!"},
     {"Code, der in der App steckt", "DaveGamble.jpg", "Dave Gamble", "@DaveGamble",
      "cJSON: jede Antwort der App an diese Seite. Danke an ihn und alle Mitwirkenden!"},
+    {"Code, der in der App steckt", "", "abcde6543", "@abcde6543",
+     "PS5-NTFS-BROWSER: der NTFS-Treiber, mit dem der Dateimanager NTFS-Laufwerke liest und "
+     "beschreibt. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "drakmor.jpg", "Drakmor", "@drakmor",
      "ShadowMountPlus: Spiele einhängen, verschieben und entpacken – die Spiele-Seite baut darauf "
      "auf. Dazu ps5-hwinfo mit den Stromschienen und Taktwerten, und als einer der größten "

@@ -186,6 +186,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 
 **Hantering**
 - Filhanterare: visa, redigera, hämta och ladda upp (även hela mappar), skapa mappar, byta namn, kopiera, flytta, ta bort – överallt, med hastighet och återstående tid vid kopiering; borttagning frågar först och anger vad som försvinner.
+- NTFS-enheter (Windows): läsa och skriva NTFS-minnen och -diskar i filhanteraren (ladda upp, skapa mappar, kopiera, flytta, ta bort; utan att byta namn eller ersätta), mata ut utan ShadowMountPlus (drivrutin från PS5-NTFS-BROWSER av abcde6543).
 - Payloads: se och avsluta pågående, starta egna `.elf` från en mapp eller ett USB-minne, profiler som startföljd; hämta och uppdatera payloads från itsPLK:s Payload Manager-lista och från strongt1mes lista (med SHA-256-kontroll).
 - Profil: visningsnamn och profilbild (30 inbyggda bilder eller en egen fil).
 - Tema: Standard, Ljust, Mörkt och Optimal (snabbast att rita, tänkt för TV:n); varje enhet minns sitt val.
@@ -327,6 +328,7 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 - **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR-kodare.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): de fyra testade LZ4-profilerna (ASTRO BOT, EA Sports UFC 6, Insomniac-motorn, Unity-motorn), inbyggda oförändrade.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): appens egen namnuppslagning och HTTPS-hämtning (för payload-butiken).
+- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): NTFS-drivrutinen (läsa och skriva) bakom NTFS-enheterna i filhanteraren, inbyggd oförändrad (v1.4.0).
 - **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS för payload-butiken.
 - **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
 </details>

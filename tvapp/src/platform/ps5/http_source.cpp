@@ -2625,6 +2625,14 @@ void HttpSource::handle(const Request &request)
             }
             notice(Notice::Kind::error, "Dateien", msg);
         }
+        if (request.id == "eject") // an NTFS stick (/ntfsN): answered at once, then gone from the places
+        {
+            if (net == Net::ok && status < 300)
+                notice(Notice::Kind::success, "Ausgeworfen",
+                       message_of(body, "Das Laufwerk kann jetzt abgezogen werden."));
+            poll_fs_places();
+            break;
+        }
         poll_fs_job();
         std::string folder;
         {
@@ -4306,6 +4314,8 @@ void HttpSource::poll_fs_places()
         x.free_bytes = static_cast<std::int64_t>(num(p, "free_bytes", -1));
         x.writable = flag(p, "writable");
         x.ejectable = flag(p, "ejectable");
+        x.fs = str(p, "fs");
+        x.read_only_why = str(p, "read_only_why");
         places.push_back(std::move(x));
     }
     cJSON_Delete(root);
@@ -4320,7 +4330,7 @@ void HttpSource::poll_fs_places()
         const FsPlace &a = data_.fs_places[i];
         const FsPlace &b = places[i];
         same = a.label == b.label && a.path == b.path && a.writable == b.writable &&
-               a.ejectable == b.ejectable;
+               a.ejectable == b.ejectable && a.fs == b.fs && a.read_only_why == b.read_only_why;
     }
     data_.fs_places = std::move(places);
     if (!same)
@@ -4350,6 +4360,8 @@ void HttpSource::poll_fs_list(const std::string &path)
             l.free_bytes = static_cast<std::int64_t>(num(root, "free_bytes", -1));
             l.total = static_cast<int>(num(root, "total"));
             l.truncated = flag(root, "truncated");
+            l.fs = str(root, "fs");
+            l.read_only_why = str(root, "read_only_why");
             const cJSON *e = nullptr;
             cJSON_ArrayForEach(e, cJSON_GetObjectItemCaseSensitive(root, "entries"))
             {

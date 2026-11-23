@@ -5,6 +5,7 @@
 #include "core/save_file.hpp"
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
+#include "ps5cc/files_edit.hpp"
 #include "ps5cc/i18n.hpp"
 #include "ps5cc/plans.hpp"
 #include "third_party/cjson/cJSON.h"
@@ -25,6 +26,12 @@ namespace hui::ps5cc
 
 namespace
 {
+
+// the reason the second NTFS stick of the pictures can only be read (as ntfsvol.c words it)
+// The common case for a USB stick (the one about hibernation exists only on a disk Windows starts from).
+constexpr const char *kNtfsNotRemoved =
+    "Das Laufwerk wurde zuletzt an einem Windows-PC ohne „Sicher entfernen“ abgezogen. Damit die PS5 "
+    "darauf schreiben kann: am PC einstecken, „Sicher entfernen“ wählen und wieder an die PS5 stecken.";
 
 // A diagonal two-colour gradient with a soft light, different for every seed. No artwork of any
 // real game.
@@ -1913,10 +1920,19 @@ class MockSource final : public Source
         {
             l.entries = it->second;
             l.total = static_cast<int>(l.entries.size());
-            l.writable = path.rfind("/mnt/usb0", 0) == 0 || path.rfind("/data", 0) == 0;
+            l.writable = path.rfind("/mnt/usb0", 0) == 0 || path.rfind("/data", 0) == 0 ||
+                         path.rfind("/ntfs0", 0) == 0;
             l.free_bytes = static_cast<std::int64_t>(247e9);
             const std::size_t slash = path.find_last_of('/');
             l.parent = path == "/" ? "" : slash == 0 ? "/" : path.substr(0, slash);
+            if (is_ntfs_path(path))
+            {
+                l.fs = "ntfs";
+                if (path.size() == 6)
+                    l.parent = ""; // a stick's root has no folder above it
+                if (path.rfind("/ntfs1", 0) == 0)
+                    l.read_only_why = kNtfsNotRemoved;
+            }
         }
         changed();
     }
@@ -1962,7 +1978,17 @@ class MockSource final : public Source
         }
         else if (route == "mkdir")
             notice(Notice::Kind::success, "Dateien", "Der Ordner ist angelegt.");
-        (void)json;
+        else if (route == "eject")
+        {
+            // {"path":"/ntfs0"}: written out and let go at once
+            const std::size_t at = json.find("/ntfs");
+            const std::string path = at == std::string::npos ? std::string() : json.substr(at, 6);
+            data_.fs_places.erase(std::remove_if(data_.fs_places.begin(), data_.fs_places.end(),
+                                                 [&](const FsPlace &p) { return p.path == path; }),
+                                  data_.fs_places.end());
+            notice(Notice::Kind::success, "Ausgeworfen",
+                   path.substr(1) + " kann jetzt abgezogen werden.");
+        }
         changed();
     }
 
@@ -3202,8 +3228,18 @@ class MockSource final : public Source
             p.ejectable = std::string(path).rfind("/mnt/usb", 0) == 0; // as the console says it
             return p;
         };
+        // two NTFS sticks (23.11.2026): one Windows closed cleanly, one it left in Fast Startup
+        FsPlace ntfs0 = place("ntfs0 (NTFS · BACKUP)", "/ntfs0", 812.6, true);
+        ntfs0.fs = "ntfs";
+        ntfs0.ejectable = true;
+        FsPlace ntfs1 = place("ntfs1 (NTFS)", "/ntfs1", -1, false);
+        ntfs1.fs = "ntfs";
+        ntfs1.ejectable = true;
+        ntfs1.read_only_why = kNtfsNotRemoved;
         data_.fs_places = {place("usb0", "/mnt/usb0", 247.1, true),
                            place("Daten der Konsole", "/data", 612.4, true),
+                           ntfs0,
+                           ntfs1,
                            place("Ganzes System", "/", -1, true)};
         const auto entry =
             [](const char *name, const char *type, double mb, int days, bool writable)
@@ -3225,6 +3261,14 @@ class MockSource final : public Source
                                  entry("notes.txt", "file", 0.004, 12, true)};
         fs_tree_["/mnt/usb0/homebrew"] = {entry("PPSA01325", "dir", 0, 2, true),
                                           entry("CUSA05041", "dir", 0, 4, true)};
+        fs_tree_["/ntfs0"] = {entry("Filme", "dir", 0, 14, true),
+                              entry("Spiele-Backup", "dir", 0, 3, true),
+                              entry("System Volume Information", "dir", 0, 40, false),
+                              entry("liesmich.txt", "file", 0.001, 40, true)};
+        fs_tree_["/ntfs0/Spiele-Backup"] = {entry("PPSA01325", "dir", 0, 3, true),
+                                            entry("Lantern Pass.ffpfsc", "file", 31200, 3, true)};
+        fs_tree_["/ntfs1"] = {entry("Fotos", "dir", 0, 60, false),
+                              entry("Urlaub 2026.zip", "file", 2140, 61, false)};
         fs_tree_["/data"] = {entry("homebrew", "dir", 0, 1, true),
                              entry("PS5-Cooling-Center", "dir", 0, 0, false)};
         fs_tree_["/"] = {entry("data", "dir", 0, 0, false), entry("mnt", "dir", 0, 0, false),

@@ -115,6 +115,19 @@ TEST(FilesEdit, OnlyTheAnswerForTheOpenFileIsTaken)
     EXPECT_FALSE(view_matches(FsView{}, "")); // nothing asked, nothing taken
 }
 
+// NTFS sticks (23.11.2026): /ntfs0 ... /ntfs7 and what is below them, nothing else that only looks alike
+TEST(FilesEdit, KnowsTheNtfsSticks)
+{
+    EXPECT_TRUE(is_ntfs_path("/ntfs0"));
+    EXPECT_TRUE(is_ntfs_path("/ntfs7/Filme/a.mkv"));
+    EXPECT_FALSE(is_ntfs_path("/ntfs8"));
+    EXPECT_FALSE(is_ntfs_path("/ntfs"));
+    EXPECT_FALSE(is_ntfs_path("/ntfs01"));
+    EXPECT_FALSE(is_ntfs_path("/ntfs0x/a"));
+    EXPECT_FALSE(is_ntfs_path("/mnt/usb0/ntfs0"));
+    EXPECT_FALSE(is_ntfs_path(""));
+}
+
 TEST(FilesEdit, MarksOnlyWhatChanged)
 {
     const std::vector<std::string> before{"a", "b", "c", "d"};

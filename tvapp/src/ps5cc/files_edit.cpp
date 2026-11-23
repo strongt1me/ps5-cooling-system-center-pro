@@ -27,6 +27,12 @@ bool is_text_name(const std::string &name)
                        [&](const char *e) { return ending == e; });
 }
 
+bool is_ntfs_path(const std::string &path)
+{
+    return path.size() >= 6 && path.compare(0, 5, "/ntfs") == 0 && path[5] >= '0' && path[5] <= '7' &&
+           (path.size() == 6 || path[6] == '/');
+}
+
 std::string edit_refusal(const FsEntry &entry)
 {
     if (entry.type != "file")

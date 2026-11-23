@@ -186,6 +186,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 
 **Gestión**
 - Gestor de archivos: ver, editar, descargar y subir (también carpetas enteras), crear carpetas, cambiar nombre, copiar, mover, eliminar – en todas partes, con velocidad y tiempo restante al copiar; eliminar pregunta primero y nombra lo que se borrará.
+- Unidades NTFS (Windows): leer y escribir memorias y discos NTFS en el gestor de archivos (subir, crear carpetas, copiar, mover, eliminar; sin cambiar nombre ni reemplazar), expulsar sin ShadowMountPlus (controlador de PS5-NTFS-BROWSER de abcde6543).
 - Payloads: ver y detener los que están en marcha, iniciar `.elf` propios desde una carpeta o un USB, perfiles como secuencia de inicio; descargar y actualizar los payloads de la lista del Payload Manager de itsPLK y de la lista de strongt1me (con comprobación SHA-256).
 - Perfil: nombre visible e imagen de perfil (30 imágenes integradas o un archivo propio).
 - Diseño: estándar, claro, oscuro y óptimo (el más rápido de dibujar, pensado para el televisor); cada dispositivo recuerda su elección.
@@ -327,6 +328,7 @@ Este proyecto se apoya en los hombros de la comunidad homebrew de PS5. **¡Graci
 - **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): codificador QR.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): los cuatro perfiles LZ4 probados (ASTRO BOT, EA Sports UFC 6, motor de Insomniac, motor Unity), integrados sin cambios.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): la resolución de nombres propia de la app y la descarga HTTPS (para la tienda de payloads).
+- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): el controlador NTFS (lectura y escritura) de las unidades NTFS del gestor de archivos, integrado sin cambios (v1.4.0).
 - **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS para la tienda de payloads.
 - **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
 </details>

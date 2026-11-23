@@ -10296,6 +10296,10 @@
     });
   };
 
+  /* NTFS-Sticks (23.11.2026, Treiber aus PS5-NTFS-BROWSER): ihre Pfade beginnen mit /ntfs0 … /ntfs7. Dort ersetzt, ändert und benennt die App
+     nichts um; sie legt nur an und löscht. */
+  const fmIsNtfs = (path) => /^\/ntfs[0-7](\/|$)/.test(path || "");
+
   const fmLoadPlaces = async () => {
     try { const r = await api("/api/v1/files/places"); fm.places = r.places || []; fm.ejectBlocked = !!r.eject_blocked; } catch { fm.places = []; }
   };
@@ -10319,7 +10323,31 @@
      Laufwerk liest: Der Dateimanager stand sonst beim Auswerfen noch in einem Ordner des Laufwerks, und eine laufende Größenberechnung oder ein
      Download las weiter, während ShadowMountPlus es abtrennte (die Konsole stürzte ab). fmSeq weiterzählen lässt die Antworten und die Schleife der
      Ordnergrößen auf dem Laufwerk fallen; was auf der Konsole noch liest, wartet das Auswerfen ab (die App weist es sonst mit der Begründung ab). */
+  /* Ein NTFS-Stick wird hier ausgeworfen: Die App schreibt Ausstehendes hinaus und gibt ihn frei (POST /api/v1/files/eject); ShadowMountPlus ist
+     daran nicht beteiligt. Der Dateimanager verlässt den Stick vorher. */
+  const fmEjectNtfs = async (p, btn) => {
+    if (fm.ejecting) return;
+    fm.ejecting = true;
+    btn.disabled = true;
+    fmSeq++;
+    const inDrive = (path) => !!path && (path === p.path || path.startsWith(`${p.path}/`));
+    if (inDrive(fm.path)) {
+      fm.sel.clear();
+      if (fm.clip && inDrive(fm.clip.from)) fm.clip = null;
+    }
+    try {
+      const r = await api("/api/v1/files/eject", { method: "POST", body: JSON.stringify({ path: p.path }), timeoutMs: 60000 });
+      toast(r.message || "Ausgeworfen.");
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      fm.ejecting = false;
+      await fmAfterEject(p.path);
+    }
+  };
+
   const fmEjectPlace = async (p, btn) => {
+    if (p.fs === "ntfs") { await fmEjectNtfs(p, btn); return; }
     if (usbEject.running || fm.ejecting) return;
     const inDrive = (path) => !!path && (path === p.path || path.startsWith(`${p.path}/`));
     /* 21.11.2026, as under System and not only "a bit like it": the Dateimanager page ends here (its places every 4 s, its lists, its sizes and downloads stop with
@@ -10372,7 +10400,7 @@
     fm.places.forEach((p) => {
       if ((d.path === p.path || d.path.startsWith(p.path === "/" ? "/" : `${p.path}/`)) && p.path.length > cur.length) cur = p.path;
     });
-    $("#fm-places").innerHTML = fm.places.map((p, i) => `<button type="button" class="gm-chip${p.path === cur ? " active" : ""}" data-fm-place="${i}">${esc(p.label)}${p.writable && p.free_bytes > 0 ? ` <small>${esc(bytes(p.free_bytes))} frei</small>` : ""}</button>${p.ejectable ? `<button type="button" class="gm-chip fm-eject" data-fm-eject="${i}" ${usbEject.running || fm.ejecting ? "disabled" : ""} title="Sicher auswerfen. Die App wechselt dazu auf System → Speicherplatz, wirft dort aus und liest davor nichts mehr vom Laufwerk. Läuft noch ein Auftrag der App, wird nicht ausgeworfen, und die App sagt, welcher Auftrag es ist.">Auswerfen</button>` : ""}`).join("") +
+    $("#fm-places").innerHTML = fm.places.map((p, i) => `<button type="button" class="gm-chip${p.path === cur ? " active" : ""}" data-fm-place="${i}"${p.read_only_why ? ` title="${esc(p.read_only_why)}"` : ""}>${esc(p.label)}${p.writable && p.free_bytes > 0 ? ` <small>${esc(bytes(p.free_bytes))} frei</small>` : ""}${p.fs === "ntfs" && !p.writable ? " <small>nur lesbar</small>" : ""}</button>${p.ejectable ? `<button type="button" class="gm-chip fm-eject" data-fm-eject="${i}" ${(p.fs !== "ntfs" && usbEject.running) || fm.ejecting ? "disabled" : ""} title="${p.fs === "ntfs" ? "Sicher auswerfen: Die App schreibt alles Ausstehende auf den Stick und gibt ihn frei. Danach kann er abgezogen werden." : "Sicher auswerfen. Die App wechselt dazu auf System → Speicherplatz, wirft dort aus und liest davor nichts mehr vom Laufwerk. Läuft noch ein Auftrag der App, wird nicht ausgeworfen, und die App sagt, welcher Auftrag es ist."}">Auswerfen</button>` : ""}`).join("") +
       (fm.ejectBlocked ? ` <span class="muted fm-eject-blocked">Auswerfen ist gesperrt (die Konsole ist beim letzten Auswerfen abgestürzt).</span> <button type="button" class="gm-chip" data-fm-rearm>Wieder erlauben</button>` : "");
   };
 
@@ -10408,14 +10436,17 @@
     /* der Pfad zum Anklicken */
     const parts = d.path === "/" ? [] : d.path.slice(1).split("/");
     let acc = "";
-    $("#fm-crumbs").innerHTML = `<button type="button" class="fm-crumb" data-fm-crumb="/">/</button>` + parts.map((p) => {
+    /* ein NTFS-Stick (/ntfs0 …) liegt nicht unter „/“ der Konsole: die Leiste beginnt bei ihm */
+    const ntfsHere = fmIsNtfs(d.path);
+    $("#fm-crumbs").innerHTML = (ntfsHere ? "" : `<button type="button" class="fm-crumb" data-fm-crumb="/">/</button>`) + parts.map((p, i) => {
       acc += `/${p}`;
-      return `<span class="fm-sep">›</span><button type="button" class="fm-crumb" data-fm-crumb="${esc(acc)}">${esc(p)}</button>`;
+      return `${ntfsHere && i === 0 ? "" : `<span class="fm-sep">›</span>`}<button type="button" class="fm-crumb" data-fm-crumb="${esc(acc)}">${esc(p)}</button>`;
     }).join("");
     const n = d.entries.length;
     txt("#fm-sub", `${d.path} · ${n} ${n === 1 ? "Eintrag" : "Einträge"}${d.truncated ? ` (die ersten ${n} von ${d.total})` : ""}`);
     txt("#fm-free", d.free_bytes > 0 ? `${bytes(d.free_bytes)} frei` : "");
     $("#fm-ro").hidden = !!d.writable;
+    txt("#fm-ro", d.read_only_why ? `Nur lesbar · ${d.read_only_why}` : "Nur ansehen – hier darf nichts geändert werden");
     $("#fm-mkdir").disabled = !d.writable;
     $("#fm-upload-lbl").classList.toggle("disabled", !d.writable);
     $("#fm-upload").disabled = !d.writable;
@@ -10515,7 +10546,7 @@
   /* Kopieren und Verschieben starten. Gibt es im Ziel schon Namen, fragt ein Fenster (wie im Prospero Manager):
      Ersetzen, Beide behalten oder Überspringen. Ersetzen legt eine Datei neben die alte und tauscht sie erst am Ende
      aus; ein Ordner wird zusammengeführt. true, wenn der Auftrag läuft. */
-  const fmAskConflict = (names) => new Promise((resolve) => {
+  const fmAskConflict = (names, ntfs) => new Promise((resolve) => {
     const o = fmShell();
     o.querySelector(".cp-dialog").classList.remove("fm-view");
     txt("#fm-dlg-title", "Namen schon vorhanden");
@@ -10524,12 +10555,12 @@
     $("#fm-dlg-body").innerHTML = `
       <p>Im Ziel gibt es schon:</p>
       <ul class="fm-conflict-list">${shown}${more}</ul>
-      <p class="muted" style="font-size:12px">Ordner werden zusammengeführt; gleichnamige Dateien darin werden ersetzt.</p>
+      <p class="muted" style="font-size:12px">${ntfs ? "Auf einem NTFS-Laufwerk ersetzt die App nichts. „Beide behalten“ legt die neue Fassung mit „(2)“ im Namen daneben." : "Ordner werden zusammengeführt; gleichnamige Dateien darin werden ersetzt."}</p>
       <div class="cp-actions">
         <button type="button" class="btn" data-fmc="">Abbrechen</button>
         <button type="button" class="btn" data-fmc="skip">Überspringen</button>
-        <button type="button" class="btn" data-fmc="keep">Beide behalten</button>
-        <button type="button" class="btn primary" data-fmc="replace">Ersetzen</button>
+        <button type="button" class="btn${ntfs ? " primary" : ""}" data-fmc="keep">Beide behalten</button>
+        ${ntfs ? "" : `<button type="button" class="btn primary" data-fmc="replace">Ersetzen</button>`}
       </div>`;
     fm.ask = resolve;
     o.hidden = false;
@@ -10546,7 +10577,7 @@
     try { await send(); return true; } catch (e) {
       const names = e.data && Array.isArray(e.data.conflicts) ? e.data.conflicts : [];
       if (!(e.status === 409 && e.code === "exists" && names.length)) { toast(e.message, "error"); return false; }
-      const choice = await fmAskConflict(names);
+      const choice = await fmAskConflict(names, fmIsNtfs(dest));
       if (!choice) return false;
       try { await send(choice); return true; } catch (e2) { toast(e2.message, "error"); return false; }
     }
@@ -10569,10 +10600,11 @@
     const fullEnc = encodeURIComponent(full);
     const items = [];
     if (isFile) items.push(`<button type="button" data-fmma="view" data-fmmi="${i}">Ansehen</button>`);
-    if (isFile && FM_TEXT_EXT.test(e.name)) items.push(`<button type="button" data-fmma="edit" data-fmmi="${i}">Bearbeiten</button>`);
+    const ntfs = fmIsNtfs(full);                       /* NTFS: anlegen und löschen, nie ändern oder umbenennen */
+    if (isFile && FM_TEXT_EXT.test(e.name) && !ntfs) items.push(`<button type="button" data-fmma="edit" data-fmmi="${i}">Bearbeiten</button>`);
     if (isFile) items.push(`<a href="/api/v1/files/download?path=${fullEnc}" download>Herunterladen</a>`);
     if (isDir && !fm.sizes.has(full)) items.push(`<button type="button" data-fmma="size" data-fmmi="${i}">Größe berechnen</button>`);
-    if (e.writable) {
+    if (e.writable && !ntfs) {
       items.push(`<div class="fm-menu-sep"></div>`);
       items.push(`<button type="button" data-fmma="ren" data-fmmi="${i}">Umbenennen</button>`);
     }
@@ -10798,9 +10830,9 @@
           <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
         return;
       }
-      if (!e.writable || !exact) {
+      if (!e.writable || !exact || fmIsNtfs(full)) {
         $("#fm-dlg-body").innerHTML = `<pre class="fm-view-text"></pre>
-          <p class="muted fm-view-note">${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))} · <em>${e.writable ? "Nur ansehen: andere Zeichenkodierung oder gemischte Zeilenenden, hier würde das Speichern die Datei verändern. Bitte herunterladen, bearbeiten und wieder hochladen." : "schreibgeschützt"}</em></p>
+          <p class="muted fm-view-note">${esc(bytes(e.size))} · ${esc(fmWhen(e.mtime))} · <em>${fmIsNtfs(full) ? "Auf einem NTFS-Laufwerk lassen sich Dateien nicht ändern, nur neu anlegen und löschen." : e.writable ? "Nur ansehen: andere Zeichenkodierung oder gemischte Zeilenenden, hier würde das Speichern die Datei verändern. Bitte herunterladen, bearbeiten und wieder hochladen." : "schreibgeschützt"}</em></p>
           <div class="cp-actions"><button type="button" class="btn" data-fmd="close">Schließen</button></div>`;
         $("#fm-dlg-body .fm-view-text").textContent = text || "(leer)";
         return;
@@ -11048,7 +11080,7 @@
       else if (x.status === 200 && d && d.ok) fmUpNext(done + 1, total);
       else if (it.skipExisting && x.status === 409 && d && d.code === "exists") { fm.upSkipped = (fm.upSkipped || 0) + 1; fmUpNext(done + 1, total); }
       else if (!it.conflict && x.status === 409 && d && d.code === "exists") {
-        const choice = await fmAskConflict([it.f.name]);
+        const choice = await fmAskConflict([it.f.name], fmIsNtfs(it.dir));
         fmClose();                                      /* das Fenster hat seine Aufgabe getan, mit oder ohne Wahl */
         if (!choice) { fail("Abgebrochen."); return; }
         fm.upQueue.unshift({ ...it, conflict: choice });

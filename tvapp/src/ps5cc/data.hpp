@@ -726,6 +726,11 @@ struct FsPlace
     std::int64_t free_bytes = -1;
     bool writable = false;
     bool ejectable = false; // a USB drive: "Sicher auswerfen" (POST /api/v1/storage/eject)
+    // "ntfs" for an NTFS stick (/ntfs0 ... /ntfs7, ntfsvol.c, 23.11.2026): its own eject (POST
+    // /api/v1/files/eject), nothing replaced, renamed or edited there; read_only_why when the
+    // stick can only be read (Windows did not close it cleanly ...)
+    std::string fs;
+    std::string read_only_why;
 };
 
 struct FsEntry
@@ -748,6 +753,8 @@ struct FsList
     std::int64_t free_bytes = -1;
     int total = 0;
     bool truncated = false;
+    std::string fs;            // "ntfs" on an NTFS stick
+    std::string read_only_why; // why it can only be read (NTFS)
     std::vector<FsEntry> entries;
 };
 

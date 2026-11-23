@@ -79,6 +79,7 @@ SRCS += src/gamemove.c
 SRCS += src/gamedelete.c
 SRCS += src/origafter.c
 SRCS += src/filemgr.c
+SRCS += src/ntfsvol.c
 SRCS += src/assets.c
 SRCS += src/imgread.c
 SRCS += src/smp.c
@@ -160,7 +161,8 @@ DEFLATE_HDRS := $(wildcard src/third_party/libdeflate/*.h \
                 src/third_party/libdeflate/lib/*.h \
                 src/third_party/libdeflate/lib/x86/*.h)
 HDRS := $(wildcard src/*.h) $(wildcard src/*.inc) \
-        $(wildcard src/third_party/*.h) $(DEFLATE_HDRS) $(wildcard src/third_party/lz4/*.h)
+        $(wildcard src/third_party/*.h) $(DEFLATE_HDRS) $(wildcard src/third_party/lz4/*.h) \
+        $(wildcard src/third_party/ntfsb/*.h)
 
 GEN_SRCS := gen/assets.c
 GEN_SRCS += gen/tile_pkg.c
@@ -235,6 +237,11 @@ DEFLATE_OBJS := $(patsubst src/third_party/libdeflate/lib/%.c,gen/libdeflate/%.o
 
 # LZ4 1.11.1 (BSD-2-Clause) for the asset packs (lz4pack.c): the compressor and the decoder, built at -O2 like libdeflate.
 LZ4_OBJS := gen/lz4/lz4.o gen/lz4/lz4hc.o
+
+# The NTFS driver of PS5-NTFS-BROWSER 1.4.0 (abcde6543, GPL-3.0-or-later) for NTFS sticks in the file manager (ntfsvol.c, fm_ntfs.inc,
+# 23.11.2026). Taken over unchanged; it builds clean with the app's warnings, at -O2 because copying speed is the person's waiting time.
+NTFSB_OBJS := gen/ntfsb/ntfs.o gen/ntfsb/ntfs_write.o gen/ntfsb/bdev.o gen/ntfsb/part.o gen/ntfsb/utf.o
+NTFSB_HDRS := $(wildcard src/third_party/ntfsb/*.h)
 LZ4_HDRS := $(wildcard src/third_party/lz4/*.h)
 
 # zstd 1.5.7 (BSD-3-Clause) for the zstd asset packs (zstdpack.c, 06.11.2026): the compressor makes the frames, the decoder reads them
@@ -433,6 +440,10 @@ gen/lz4/%.o: src/third_party/lz4/%.c $(LZ4_HDRS) Makefile gen/sdk.stamp | gen
 	mkdir -p $(dir $@)
 	$(CC) -O2 -ffunction-sections -fdata-sections -c -o $@ $<
 
+gen/ntfsb/%.o: src/third_party/ntfsb/%.c $(NTFSB_HDRS) Makefile gen/sdk.stamp | gen
+	mkdir -p $(dir $@)
+	$(CC) -O2 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-ident -c -o $@ $<
+
 gen/bearssl/%.o: $(BSSL_DIR)/src/%.c Makefile gen/sdk.stamp | gen
 	mkdir -p $(dir $@)
 	$(CC) -O2 -w -I$(BSSL_DIR)/inc -I$(BSSL_DIR)/src -ffunction-sections -fdata-sections -c -o $@ $<
@@ -463,9 +474,9 @@ gen/sdk.stamp: FORCE | gen
 check-sdk-firmware:
 	@$(PYTHON) tools/check_sdk_firmware.py sdk "$(PS5_PAYLOAD_SDK)" $(FW_NEED)
 
-$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(SQLITE_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
+$(BIN): Makefile $(SRCS) $(HDRS) $(GEN_SRCS) $(CJSON_OBJ) $(SQLITE_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(NTFSB_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) \
         $(SHELLUI_STUB) gen/sdk.stamp | check-sdk-firmware
-	$(CC) $(CFLAGS) -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(SQLITE_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
+	$(CC) $(CFLAGS) -I$(BSSL_DIR)/inc $(LDFLAGS) -o $@ $(SRCS) $(GEN_SRCS) $(CJSON_OBJ) $(SQLITE_OBJ) $(DEFLATE_OBJS) $(LZ4_OBJS) $(NTFSB_OBJS) $(ZSTD_OBJS) $(FAST_OBJS) $(BSSL_LIB) $(LDADD)
 	"$(PS5_PAYLOAD_SDK)/bin/prospero-strip" --strip-all $@
 	@$(PYTHON) tools/check_sdk_firmware.py elf $@ $(FW_NEED) >/dev/null || { rm -f $@; exit 1; }
 

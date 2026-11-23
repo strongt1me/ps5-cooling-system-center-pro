@@ -186,6 +186,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 
 **Management**
 - File manager: view, edit, download and upload (whole folders too), create folders, rename, copy, move, delete – everywhere, with speed and time left while copying; deleting asks first and names what will go.
+- NTFS drives (Windows): read and write NTFS sticks and hard drives in the file manager (upload, new folders, copy, move, delete; no renaming or replacing), eject without ShadowMountPlus (driver from PS5-NTFS-BROWSER by abcde6543).
 - Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence; download and update the payloads from itsPLK's Payload Manager list and from strongt1me's list (SHA-256 checked).
 - Profile: display name and profile picture (30 built-in pictures or your own file).
 - Design: Standard, Light, Dark and Optimal (fastest to draw, meant for the TV); every device remembers its choice.
@@ -327,6 +328,7 @@ This project stands on the shoulders of the PS5 homebrew community. **Thank you!
 - **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR encoder.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): the four tested LZ4 profiles (ASTRO BOT, EA Sports UFC 6, Insomniac engine, Unity engine), embedded unchanged.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): the app's own name resolution and HTTPS fetch (for the payload store).
+- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): the NTFS driver (reading and writing) behind NTFS drives in the file manager, built in unchanged (v1.4.0).
 - **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS for the payload store.
 - **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
 </details>

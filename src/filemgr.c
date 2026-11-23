@@ -42,8 +42,10 @@
 #include <unistd.h>
 
 #include "ioerr.h"
+#include "ntfsvol.h"
 #include "ps5tm.h"
 #include "third_party/cJSON.h"
+#include "third_party/ntfsb/ntfs.h"
 
 #ifndef FM_ROOT
 #define FM_ROOT          ""
@@ -115,6 +117,22 @@ typedef struct {
   char   (*src)[FM_PATH];
   char    *buf;                       /* this job's copy buffer; the job frees it (not g_buf: a next job may own that by then) */
 } fm_args_t;
+
+/* NTFS drives (/ntfsN/..., 23.11.2026): fm_ntfs.inc, included further down where the job's parts are defined. */
+static void fmn_places(cJSON *arr);
+static void fmn_handle_list(int fd, const char *p);
+static void fmn_handle_download(int fd, const char *p);
+static void fmn_handle_view(int fd, const char *p, size_t max);
+static void fmn_handle_size(int fd, const char *p);
+static void fmn_handle_mkdir(int fd, const char *dir, const char *name);
+static void fmn_receive_upload(int fd, const char *dir, const char *name, const char *conflict, const char *prefix, size_t prefix_len,
+                               size_t total);
+static int  fmn_job_has_ntfs(const fm_args_t *a);
+static int  fmn_copy_check(fm_args_t *a, int move, cJSON *conflicts, uint64_t *bytes, uint64_t *files, char *err, size_t en);
+static int  fmn_delete_check(const fm_args_t *a, uint64_t *bytes, uint64_t *files, uint64_t *dirs, char *err, size_t en);
+static void fmn_identity(const char *vpath, char *out, size_t n);
+static void fmn_run_copy(fm_args_t *a, int move);
+static void fmn_run_delete(fm_args_t *a);
 
 
 /* ------------------------------------------------------------------ paths */
@@ -449,6 +467,7 @@ places_json(void) {
     add_place(arr, dr[i].label[0] ? dr[i].label : dr[i].mount, dr[i].mount, 1);
   }
   if(!have_data) add_place(arr, "Interne SSD (/data)", "/data", 1);
+  fmn_places(arr);                                    /* NTFS sticks (ntfsvol.c): looked for here, at most every 3 s */
   add_place(arr, "Ganzes System", "/", dir_writable("/"));
   return o;
 }
@@ -476,6 +495,7 @@ handle_list(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
     return;
   }
+  if(ps5tm_ntfs_path(p)) { fmn_handle_list(fd, p); return; }
   DIR *d = opendir(real);
   if(!d) {
     int e = errno;
@@ -545,24 +565,11 @@ handle_list(int fd, const ps5tm_request_t *req) {
 
 /* ------------------------------------------------------------------ download */
 
-static void
-handle_download(int fd, const ps5tm_request_t *req) {
-  char p[FM_PATH], real[FM_PATH + 64];
-  if(query_value(req->query, "path", p, sizeof(p)) != 0 || !path_plain(p) || !strcmp(p, "/") ||
-     real_path(p, real, sizeof(real)) != 0) {
-    ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
-    return;
-  }
-  struct stat pre;                                  /* only a regular file is opened: a device node's open() already runs its driver (review S2) */
-  int in = stat(real, &pre) == 0 && S_ISREG(pre.st_mode) ? open(real, O_RDONLY | O_NONBLOCK) : -1;   /* a FIFO must not hold the thread until someone writes */
-  struct stat st;
-  if(in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode) || st.st_dev != pre.st_dev || st.st_ino != pre.st_ino) {
-    if(in >= 0) close(in);
-    ps5tm_http_send_error(fd, 404, "not_a_file", "Das ist keine Datei, die sich herunterladen lässt.");
-    return;
-  }
+/* The head of a download of `size` bytes named nm (also for the NTFS drives, fm_ntfs.inc). 0 when it went out, -1 when not (a name too
+   long is answered with an error; a broken connection is not). */
+static int
+download_head(int fd, const char *nm, long long size) {
   /* the name twice: plain ASCII for old clients (others become "_"), and UTF-8 percent-encoded (RFC 5987) */
-  const char *nm = base_name(p);
   char ascii[FM_NAME], enc[FM_NAME * 3 + 1];
   size_t a = 0, e = 0;
   for(const unsigned char *c = (const unsigned char *)nm; *c && a + 1 < sizeof(ascii); c++) {
@@ -586,16 +593,36 @@ handle_download(int fd, const ps5tm_request_t *req) {
                    "Cache-Control: no-store\r\n"
                    "X-Content-Type-Options: nosniff\r\n"
                    "Connection: close\r\n\r\n",
-                   (long long)st.st_size, ascii, enc);
-  if(n < 0 || n >= (int)sizeof(head)) { close(in); ps5tm_http_send_error(fd, 500, "name_too_long", "Name zu lang."); return; }
+                   size, ascii, enc);
+  if(n < 0 || n >= (int)sizeof(head)) { ps5tm_http_send_error(fd, 500, "name_too_long", "Name zu lang."); return -1; }
+  return write(fd, head, (size_t)n) == n ? 0 : -1;
+}
+
+static void
+handle_download(int fd, const ps5tm_request_t *req) {
+  char p[FM_PATH], real[FM_PATH + 64];
+  if(query_value(req->query, "path", p, sizeof(p)) != 0 || !path_plain(p) || !strcmp(p, "/") ||
+     real_path(p, real, sizeof(real)) != 0) {
+    ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
+    return;
+  }
+  if(ps5tm_ntfs_path(p)) { fmn_handle_download(fd, p); return; }
+  struct stat pre;                                  /* only a regular file is opened: a device node's open() already runs its driver (review S2) */
+  int in = stat(real, &pre) == 0 && S_ISREG(pre.st_mode) ? open(real, O_RDONLY | O_NONBLOCK) : -1;   /* a FIFO must not hold the thread until someone writes */
+  struct stat st;
+  if(in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode) || st.st_dev != pre.st_dev || st.st_ino != pre.st_ino) {
+    if(in >= 0) close(in);
+    ps5tm_http_send_error(fd, 404, "not_a_file", "Das ist keine Datei, die sich herunterladen lässt.");
+    return;
+  }
+  char *buf = malloc(256 * 1024);
+  if(!buf) { close(in); ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
+  if(download_head(fd, base_name(p), (long long)st.st_size) != 0) { free(buf); close(in); return; }
   /* a long download: the browser may read slowly, so a send may wait a while */
   struct timeval tv = { 60, 0 };
   setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-  char *buf = malloc(256 * 1024);
-  if(!buf) { close(in); ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
-  ssize_t w = write(fd, head, (size_t)n);
   off_t left = st.st_size;
-  while(w == n && left > 0) {
+  while(left > 0) {
     ssize_t r = read(in, buf, 256 * 1024);
     if(r <= 0) break;
     ssize_t off = 0;
@@ -630,6 +657,14 @@ handle_mkdir(int fd, const ps5tm_request_t *req) {
   if(!dir || !name || !path_plain(dir) || !name_ok(name) || join(dir, name, t, sizeof(t)) != 0) {
     cJSON_Delete(b);
     ps5tm_http_send_error(fd, 400, "bad_name", "Ungültiger Ordner oder Name.");
+    return;
+  }
+  if(ps5tm_ntfs_path(dir)) {
+    char d2[FM_PATH], n2[FM_NAME];
+    snprintf(d2, sizeof(d2), "%s", dir);
+    snprintf(n2, sizeof(n2), "%s", name);
+    cJSON_Delete(b);
+    fmn_handle_mkdir(fd, d2, n2);
     return;
   }
   if(!dir_writable(dir) || !writable(t)) {
@@ -681,6 +716,10 @@ handle_rename(int fd, const ps5tm_request_t *req) {
   snprintf(nm, sizeof(nm), "%s", name);
   name = nm;                                        /* the body goes now; what is still needed is copied */
   cJSON_Delete(b);
+  if(ps5tm_ntfs_path(src)) {                        /* the NTFS driver never renames (fm_ntfs.inc) */
+    ps5tm_http_send_error(fd, 403, "ntfs_no_rename", "Auf einem NTFS-Laufwerk kann die App nichts umbenennen.");
+    return;
+  }
   if(!ok || !writable(src) || !writable(t)) {
     ps5tm_http_send_error(fd, 403, "read_only", "Das lässt sich hier nicht umbenennen (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).");
     return;
@@ -790,6 +829,12 @@ receive_upload(int fd, const char *query, const char *prefix, size_t prefix_len,
      !path_plain(dir) || !name_ok(name) || join(dir, name, t, sizeof(t)) != 0 || real_path(t, real, sizeof(real)) != 0) {
     drain_body(fd, prefix_len, total);
     ps5tm_http_send_error(fd, 400, "bad_name", "Ungültiger Ordner oder Dateiname.");
+    return;
+  }
+  if(ps5tm_ntfs_path(dir)) {
+    char nc[8];
+    query_value(query, "conflict", nc, sizeof(nc));
+    fmn_receive_upload(fd, dir, name, nc, prefix, prefix_len, total);
     return;
   }
   if(!dir_writable(dir) || !writable(t)) {
@@ -1137,6 +1182,10 @@ handle_write(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
     return;
   }
+  if(ps5tm_ntfs_path(p)) {                          /* the NTFS driver never changes a file that is there (fm_ntfs.inc) */
+    ps5tm_http_send_error(fd, 403, "ntfs_no_change", "Auf einem NTFS-Laufwerk lassen sich Dateien nicht ändern, nur neu anlegen und löschen.");
+    return;
+  }
   if(!writable(p)) {
     ps5tm_http_send_error(fd, 403, "read_only", "Diese Datei ist schreibgeschützt (geschützt sind „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).");
     return;
@@ -1207,6 +1256,27 @@ handle_write(int fd, const ps5tm_request_t *req) {
   ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
 }
 
+/* The head of a view (a picture of type img, or text when img is NULL) of send_n of size bytes (also for the NTFS drives). 0 when it went
+   out, -1 when not (a head too long is answered with an error). */
+static int
+view_head(int fd, const char *img, size_t send_n, long long size) {
+  char head[640];
+  int n = snprintf(head, sizeof(head),
+                   "HTTP/1.1 200 OK\r\n"
+                   "Content-Type: %s\r\n"
+                   "Content-Length: %zu\r\n"
+                   "Content-Disposition: inline\r\n"
+                   "Cache-Control: no-store\r\n"
+                   "X-Content-Type-Options: nosniff\r\n"
+                   "Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox\r\n"
+                   "X-Fm-Size: %lld\r\n"
+                   "X-Fm-Truncated: %d\r\n"
+                   "Connection: close\r\n\r\n",
+                   img ? img : "text/plain; charset=utf-8", send_n, size, (long long)send_n < size);
+  if(n < 0 || n >= (int)sizeof(head)) { ps5tm_http_send_error(fd, 500, "head_failed", "Antwort zu lang."); return -1; }
+  return write(fd, head, (size_t)n) == n ? 0 : -1;
+}
+
 static void
 handle_view(int fd, const ps5tm_request_t *req) {
   char p[FM_PATH], real[FM_PATH + 64], num[24];
@@ -1222,7 +1292,8 @@ handle_view(int fd, const ps5tm_request_t *req) {
     if(!end || *end || v == 0) { ps5tm_http_send_error(fd, 400, "bad_max", "Ungültige Länge."); return; }
     max = v > FM_VIEW_TEXT_MAX ? FM_VIEW_TEXT_MAX : (size_t)v;
   }
-  struct stat pre;                                  /* only a regular file is opened (review S2) */
+  if(ps5tm_ntfs_path(p)) { fmn_handle_view(fd, p, max); return; }
+  struct stat pre;                                /* only a regular file is opened (review S2) */
   int in = stat(real, &pre) == 0 && S_ISREG(pre.st_mode) ? open(real, O_RDONLY | O_NONBLOCK) : -1;
   struct stat st;
   if(in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode) || st.st_dev != pre.st_dev || st.st_ino != pre.st_ino) {
@@ -1250,25 +1321,12 @@ handle_view(int fd, const ps5tm_request_t *req) {
     if(lseek(in, 0, SEEK_SET) < 0) { close(in); ps5tm_http_send_error(fd, 500, "seek_failed", "Lesen ging nicht."); return; }
     send_n = (uint64_t)st.st_size > max ? max : (size_t)st.st_size;
   }
-  char head[640];
-  int n = snprintf(head, sizeof(head),
-                   "HTTP/1.1 200 OK\r\n"
-                   "Content-Type: %s\r\n"
-                   "Content-Length: %zu\r\n"
-                   "Content-Disposition: inline\r\n"
-                   "Cache-Control: no-store\r\n"
-                   "X-Content-Type-Options: nosniff\r\n"
-                   "Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox\r\n"
-                   "X-Fm-Size: %lld\r\n"
-                   "X-Fm-Truncated: %d\r\n"
-                   "Connection: close\r\n\r\n",
-                   img ? img : "text/plain; charset=utf-8", send_n, (long long)st.st_size, send_n < (size_t)st.st_size);
-  if(n < 0 || n >= (int)sizeof(head)) { close(in); ps5tm_http_send_error(fd, 500, "head_failed", "Antwort zu lang."); return; }
-  struct timeval tv = { 30, 0 };
-  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
   char *buf = malloc(128 * 1024);
   if(!buf) { close(in); ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
-  int ok = write(fd, head, (size_t)n) == n;
+  if(view_head(fd, img, send_n, (long long)st.st_size) != 0) { free(buf); close(in); return; }
+  struct timeval tv = { 30, 0 };
+  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+  int ok = 1;
   size_t left = send_n;
   while(ok && left > 0) {
     ssize_t r = read(in, buf, left < 128 * 1024 ? left : 128 * 1024);
@@ -1301,6 +1359,7 @@ handle_size(int fd, const ps5tm_request_t *req) {
     ps5tm_http_send_error(fd, 400, "bad_path", "Ungültiger Pfad.");
     return;
   }
+  if(ps5tm_ntfs_path(p)) { fmn_handle_size(fd, p); return; }
   struct stat st;
   if(lstat(real, &st) != 0) { ps5tm_http_send_error(fd, 404, "not_found", "Das gibt es nicht (mehr)."); return; }
   count_t c = { 0 };
@@ -1506,6 +1565,8 @@ job_finish(int state, const char *error, const char *note) {
   g_job.finished_ms = ps5tm_mono_ms();
   pthread_mutex_unlock(&g_lock);
 }
+
+#include "fm_ntfs.inc"                           /* NTFS drives: listing, looking, uploading, and the jobs with them */
 
 static void
 run_delete(fm_args_t *a) {
@@ -1767,7 +1828,9 @@ static void *
 job_thread(void *arg) {
   fm_args_t *a = arg;
   ps5tm_powerguard_hold();
-  if(!strcmp(a->kind, "delete")) run_delete(a);
+  int ntfs = fmn_job_has_ntfs(a);                 /* an NTFS drive in it: the node layer of fm_ntfs.inc; else as before */
+  if(!strcmp(a->kind, "delete")) { if(ntfs) fmn_run_delete(a); else run_delete(a); }
+  else if(ntfs) fmn_run_copy(a, !strcmp(a->kind, "move"));
   else run_copy(a, !strcmp(a->kind, "move"));
   ps5tm_powerguard_release();
   /* one line in the history (jobhist.c) */
@@ -1919,16 +1982,18 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
   }
   cJSON_Delete(b);
   if(!http && paths_settling(a, a->dest, err, sizeof(err))) http = 409;
+  int ntfs = !http && fmn_job_has_ntfs(a);         /* an NTFS drive in it: checked on nodes (fm_ntfs.inc) */
   char rd[FM_PATH + 64], rs[FM_PATH + 64], t[FM_PATH], rt[FM_PATH + 64];
   struct stat ds;
-  if(!http && (!dir_writable(a->dest) || real_path(a->dest, rd, sizeof(rd)) != 0 || stat(rd, &ds) != 0 || !S_ISDIR(ds.st_mode))) {
+  if(!http && !ntfs && (!dir_writable(a->dest) || real_path(a->dest, rd, sizeof(rd)) != 0 || stat(rd, &ds) != 0 || !S_ISDIR(ds.st_mode))) {
     http = 403;
     snprintf(err, sizeof(err), "In diesen Ordner darf nichts %s werden (geschützt sind nur „/“, /dev, /proc, eingehängte Laufwerke und Verknüpfungen).", move ? "verschoben" : "kopiert");
   }
   uint64_t bytes = 0, files = 0;
   int merge_room = 0;                              /* a folder is merged by copying: it needs room even on the same drive */
   cJSON *conflicts = cJSON_CreateArray();
-  for(unsigned i = 0; !http && i < a->n; i++) {
+  if(!http && ntfs) http = fmn_copy_check(a, move, conflicts, &bytes, &files, err, sizeof(err));
+  for(unsigned i = 0; !http && !ntfs && i < a->n; i++) {
     struct stat ss;
     size_t sl = strlen(a->src[i]);
     if(real_path(a->src[i], rs, sizeof(rs)) != 0 || lstat(rs, &ss) != 0) {
@@ -1982,11 +2047,11 @@ handle_copy(int fd, const ps5tm_request_t *req, int move) {
   }
   uint64_t fr = 0;
   int needs_room = merge_room;
-  for(unsigned i = 0; !http && i < a->n; i++) {
+  for(unsigned i = 0; !http && !ntfs && i < a->n; i++) {
     struct stat ss;
     if(real_path(a->src[i], rs, sizeof(rs)) == 0 && lstat(rs, &ss) == 0 && (!move || ss.st_dev != ds.st_dev)) needs_room = 1;
   }
-  if(!http && needs_room && space_free(a->dest, &fr) == 0 && (fr < FM_SPACE_SPARE || fr - FM_SPACE_SPARE < bytes)) {
+  if(!http && !ntfs && needs_room && space_free(a->dest, &fr) == 0 && (fr < FM_SPACE_SPARE || fr - FM_SPACE_SPARE < bytes)) {
     http = 409;
     snprintf(err, sizeof(err), "Im Ziel ist nicht genug Platz: gebraucht %llu MB, frei %llu MB.",
              (unsigned long long)(bytes >> 20), (unsigned long long)(fr >> 20));
@@ -2042,7 +2107,11 @@ identities(const fm_args_t *a) {
   char rs[FM_PATH + 64];
   for(unsigned i = 0; i < a->n; i++) {
     struct stat st;
-    if(real_path(a->src[i], rs, sizeof(rs)) == 0 && lstat(rs, &st) == 0)
+    if(ps5tm_ntfs_path(a->src[i])) {                /* on an NTFS drive: its serial number and the file's record */
+      char id[48];
+      fmn_identity(a->src[i], id, sizeof(id));
+      p += snprintf(p, cap - (size_t)(p - s), "%s\n", id);
+    } else if(real_path(a->src[i], rs, sizeof(rs)) == 0 && lstat(rs, &st) == 0)
       p += snprintf(p, cap - (size_t)(p - s), "%llu:%llu\n", (unsigned long long)st.st_dev, (unsigned long long)st.st_ino);
     else
       p += snprintf(p, cap - (size_t)(p - s), "-\n");
@@ -2063,7 +2132,9 @@ delete_plan_body(int fd, const ps5tm_request_t *req) {
   cJSON_Delete(b);
   uint64_t bytes = 0, files = 0, dirs = 0;
   char rs[FM_PATH + 64];
-  for(unsigned i = 0; !http && i < a.n; i++) {
+  int ntfs = !http && fmn_job_has_ntfs(&a);
+  if(ntfs) http = fmn_delete_check(&a, &bytes, &files, &dirs, err, sizeof(err));
+  for(unsigned i = 0; !http && !ntfs && i < a.n; i++) {
     struct stat st;
     if(!writable(a.src[i])) {
       http = 403;
@@ -2140,7 +2211,10 @@ handle_delete(int fd, const ps5tm_request_t *req) {
   }
   uint64_t bytes = 0, files = 0;
   char rs[FM_PATH + 64];
-  for(unsigned i = 0; !http && i < a->n; i++) {
+  if(!http && fmn_job_has_ntfs(a)) {
+    uint64_t dirs = 0;
+    http = fmn_delete_check(a, &bytes, &files, &dirs, err, sizeof(err));
+  } else for(unsigned i = 0; !http && i < a->n; i++) {
     struct stat st;
     if(!writable(a->src[i])) { http = 403; snprintf(err, sizeof(err), "%.300s darf nicht gelöscht werden.", a->src[i]); break; }
     if(real_path(a->src[i], rs, sizeof(rs)) != 0 || lstat(rs, &st) != 0) continue;
@@ -2340,7 +2414,7 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
     { "/api/v1/files/copy", 1 }, { "/api/v1/files/move", 1 }, { "/api/v1/files/delete/plan", 1 },
     { "/api/v1/files/delete", 1 }, { "/api/v1/files/job/cancel", 1 },
     { "/api/v1/files/view", 0 }, { "/api/v1/files/size", 0 },
-    { "/api/v1/files/write", 1 },
+    { "/api/v1/files/write", 1 }, { "/api/v1/files/eject", 1 },
   };
   for(size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
     if(strcmp(p, routes[i].path)) continue;
@@ -2372,6 +2446,7 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
       case 11: with_read(fd, req, handle_view); break;
       case 12: with_read(fd, req, handle_size); break;
       case 13: with_read(fd, req, handle_write); break;    /* the query's path is asked (the body is the file's content, not paths: review R2) */
+      case 14: fmn_handle_eject(fd, req); break;          /* NTFS sticks only (fm_ntfs.inc) */
     }
     return 1;
   }

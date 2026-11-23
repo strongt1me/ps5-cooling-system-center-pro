@@ -186,6 +186,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 
 **Управление**
 - Файловый менеджер: просмотр, правка, скачивание и загрузка (в том числе целых папок), создание папок, переименование, копирование, перемещение, удаление — везде, со скоростью и оставшимся временем при копировании; удаление сначала спрашивает и называет, что будет удалено.
+- Накопители NTFS (Windows): чтение и запись флешек и дисков NTFS в файловом менеджере (загрузка, новые папки, копирование, перемещение, удаление; без переименования и замены), извлечение без ShadowMountPlus (драйвер из PS5-NTFS-BROWSER от abcde6543).
 - Пейлоады: просмотр и остановка запущенных, запуск своих `.elf` из папки или с USB, профили как последовательность запуска; загрузка и обновление пейлоадов из списка Payload Manager от itsPLK и из списка strongt1me (с проверкой SHA-256).
 - Профиль: отображаемое имя и изображение профиля (30 встроенных изображений или свой файл).
 - Оформление: стандартное, светлое, тёмное и оптимальное (быстрее всего рисуется, рассчитано на телевизор); каждое устройство запоминает свой выбор.
@@ -327,6 +328,7 @@ make
 - **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR-кодировщик.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): четыре проверенных профиля LZ4 (ASTRO BOT, EA Sports UFC 6, движок Insomniac, движок Unity), встроены без изменений.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): собственное разрешение имён и HTTPS-загрузка приложения (для магазина пейлоадов).
+- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): драйвер NTFS (чтение и запись) для накопителей NTFS в файловом менеджере, встроен без изменений (v1.4.0).
 - **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS для магазина пейлоадов.
 - **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
 </details>

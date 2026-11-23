@@ -30,6 +30,10 @@ bool is_text_name(const std::string &name);
 // Why this entry cannot be edited, "" when it can.
 std::string edit_refusal(const FsEntry &entry);
 
+// An NTFS stick's path (/ntfs0 ... /ntfs7 and below, 23.11.2026): there the app only adds and deletes;
+// it never replaces, renames or edits a file.
+bool is_ntfs_path(const std::string &path);
+
 struct EditText
 {
     std::vector<std::string> lines; // at least one; without the line ending

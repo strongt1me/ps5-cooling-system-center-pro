@@ -21,13 +21,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Tools (gcc, clang, python3)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc clang python3
+      - name: Tools (gcc, clang, python3, ntfs-3g and sfdisk for test/ntfsfm)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc clang python3 ntfs-3g fdisk
       - name: Host tests
         run: |
           # every test runs even when an earlier one failed; the step fails at the end if any did
           failed=""
-          for t in account bgpause chives configserial cvname cvpack cvsample convpfs dfcheck drivegate driveholders dumpdir ejectmark filemgr fpkgdup fpkgprogress fsign fwimports imgwalk indexlimit instlock jobreg krakenboot origafter paystore pngcheck probefail progressnote ps4m savebackup savedb saveimport savesfo savexport savezip sha256 smpcfg smphold smpunreg tvname ufs2plan unpackfb usbeject vercmp zstdpack; do
+          for t in account bgpause chives configserial cvname cvpack cvsample convpfs dfcheck drivegate driveholders dumpdir ejectmark filemgr fpkgdup fpkgprogress fsign fwimports imgwalk indexlimit instlock jobreg krakenboot ntfsfm origafter paystore pngcheck probefail progressnote ps4m savebackup savedb saveimport savesfo savexport savezip sha256 smpcfg smphold smpunreg tvname ufs2plan unpackfb usbeject vercmp zstdpack; do
             echo "::group::test/$t"
             if sh "test/$t/run.sh"; then echo "ok: $t"; else echo "::error::test/$t failed"; failed="$failed $t"; fi
             echo "::endgroup::"

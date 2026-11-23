@@ -824,6 +824,37 @@ Vollbild-App (seit 06.11.2026; vorher löschte alles sofort).
 Während Kopieren, Verschieben oder Löschen läuft, startet kein zweiter solcher Auftrag; der Dateimanager startet nicht,
 solange ein anderer Vorgang der App läuft (Spiel kopieren, konvertieren, installieren …). Jede Änderung steht im Protokoll.
 
+**NTFS-Laufwerke (seit 23.11.2026):** Laufwerke mit NTFS hängt die Konsole nicht ein; der Dateimanager liest und beschreibt sie
+mit dem Treiber aus [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER) (abcde6543, v1.4.0, GPL-3.0-or-later,
+unverändert in `src/third_party/ntfsb/`, Herkunft in `ORIGIN.md`), im Browser wie in der Vollbild-App. Solange der Dateimanager
+offen ist (er fragt die Orte alle 3–4 s), sucht die App höchstens alle 3 s nach ganzen Platten `/dev/daN`, von denen die Konsole
+nichts eingehängt hat – nie, während ein Laufwerk ausgeworfen wird oder sich danach setzt. Jede NTFS-Partition (ohne Tabelle,
+MBR samt logischen Partitionen, GPT) wird ein Ort `ntfs0` … `ntfs7` (die kleinste freie Nummer) mit Pfaden `/ntfsN/...`; die
+Ortsleiste zeigt „ntfs0 (NTFS · Name)“. Ein Laufwerk ohne NTFS wird einmal angesehen und bis zum Abziehen gemerkt.
+
+- **Geht:** Liste, Ansehen, Herunterladen, Größe, Hochladen (auch Ordner), Neuer Ordner, Kopieren und Verschieben in beide
+  Richtungen (auch von NTFS zu NTFS; Verschieben ist dort Kopieren und danach Löschen dessen, was die Kopie wirklich hat) und
+  Löschen (mit Plan und Nachfrage wie überall). Einträge mit dem Windows-Merkmal „System“ (etwa „System Volume Information“,
+  „$RECYCLE.BIN“) sind `writable: false`.
+- **Geht nicht** (der Treiber ändert oder benennt eine vorhandene Datei nie um): Umbenennen (403 `ntfs_no_rename`), Bearbeiten
+  (403 `ntfs_no_change`) und Ersetzen (409 `no_replace`; das Konfliktfenster bietet auf NTFS nur „Beide behalten“, „Überspringen“
+  und Abbrechen). Namen, die Windows nicht erlaubt (`\ : * ? " < > |`, Steuerzeichen, Punkt oder Leerzeichen am Ende, `CON`,
+  `NUL`, `COM1` …), schreibt die App mit `_` an dieser Stelle. Spiele lassen sich von NTFS weder starten noch einhängen, weil
+  die Konsole das Laufwerk nicht sieht.
+- **Nur lesbar:** Schreiben wird beim Einlesen nur für saubere Laufwerke erlaubt; zum Schreiben geöffnet wird das Gerät erst beim
+  ersten Schreiben. Sonst tragen Orte und Liste `read_only_why` (Browser: „Nur lesbar · Grund“ über der Liste, Vollbild:
+  Hinweiskarte rechts). Der Grund ist aus Sicht der PS5 gesagt: was mit dem Laufwerk ist (ohne „Sicher entfernen“ abgezogen,
+  Journal von Windows offen, chkdsk nicht fertig, Systemplatte eines Windows-PCs im Ruhezustand, NTFS älter als 3.x, `$UpCase`
+  fehlt, Gerät nicht beschreibbar, Schreibfehler) und dann „Damit die PS5 darauf schreiben kann: …“ mit den Schritten am
+  Windows-PC und „wieder an die PS5 stecken“ (`src/ntfsvol.c`, `why_words`).
+- **Auswerfen:** Knopf „Auswerfen“ am Ort (Vollbild: Quadrat-Taste auf dem Laufwerk oder △ → Mehr → Sicher auswerfen) →
+  `POST /api/v1/files/eject` – ohne ShadowMountPlus: schreibt Offenes aus, schließt das Gerät und meldet „ntfs0 kann jetzt
+  abgezogen werden.“. 409, solange die App das Laufwerk benutzt (Kopieren, Herunterladen, eine Liste); 500 mit chkdsk-Hinweis,
+  wenn das letzte Schreiben scheiterte (das Laufwerk ist trotzdem frei). Ein ausgeworfenes Laufwerk bleibt bis zum Abziehen weg.
+- Der Treiber hält beim Einlesen eines Ordners seine Sperre; die App liest deshalb jeden Ordner erst ganz in eine Liste und
+  arbeitet dann. Host-Test `test/ntfsfm` (48 Prüfungen auf mkntfs-Abbildern, auch mit MBR-Partition und nur lesbar; Gegenprüfung
+  mit ntfs-3g: `ntfscat`, `ntfsls`, `ntfsresize --check`).
+
 ## Sprache der Oberfläche (seit 07.10.2026)
 
 Oben rechts in der Kopfzeile steht die Sprachwahl: **Auto (System), Deutsch, English, Italiano, Español, Français, Русский, Svenska**. Ab Werk steht

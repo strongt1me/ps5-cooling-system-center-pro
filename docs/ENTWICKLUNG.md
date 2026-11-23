@@ -445,6 +445,9 @@ src/gameconvert.c   Spiele konvertieren (exFAT, ffpfsc, ffpkg), Ergebnis zurück
 src/fsign.c          Unsignierte PS5-Programmdateien als fake-signierte SELF-Dateien (FSELF) schreiben: beim Konvertieren und beim Packen in einen neuen Ordner
 src/gamemove.c      Verschieben und Entpacken über ShadowMountPlus
 src/filemgr.c      Dateimanager: ansehen, laden, hochladen, kopieren, verschieben, umbenennen, löschen; ändern nur unter den Laufwerken und /data, nie über Verknüpfungen
+src/fm_ntfs.inc    NTFS-Laufwerke im Dateimanager (in filemgr.c eingebunden): Knoten Konsole/NTFS, Liste, Ansicht, Hochladen, Kopieren/Verschieben/Löschen, Auswerfen; nie ersetzen oder umbenennen
+src/ntfsvol.c      NTFS-Laufwerke finden (ganze Platten daN ohne Einhängung, höchstens alle 3 s, nie beim Auswerfen), ntfs0..7, nur-lesbar-Gründe, Auswerfen
+src/third_party/ntfsb/  NTFS-Treiber aus PS5-NTFS-BROWSER v1.4.0 (abcde6543, GPL-3.0-or-later), unverändert
 src/jobhist.c      Verlauf der Aufträge (history.jsonl): eine Zeile je beendetem Kopieren, Konvertieren, Installieren, Löschen, Dateimanager-Auftrag usw.
 src/imgread.c      nur-lesender Leser für exFAT-, PFS/PFSC- (.ffpfsc) und UFS2-Abbilder (.ffpkg); alles gegen die Größen der Köpfe geprüft, Fehler statt wilder Lesezugriffe
 src/imgjob.c       Abbild prüfen, in einen Ordner entpacken und reparieren (mit imgjob_lz4.inc für LZ4-Pakete)

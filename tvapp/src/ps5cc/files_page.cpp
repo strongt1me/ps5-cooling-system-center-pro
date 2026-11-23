@@ -533,11 +533,13 @@ class FilesPage final : public Page
 
         float y = card.y + 400.0f;
         if (!folder_.path.empty() && !folder_.writable)
-            y = note_card(
-                canvas, paint, card, y, "Nur ansehen",
-                "Gesperrt: /, Ordner direkt unter / und /mnt, /dev, /proc, Einhängepunkte, "
-                "Verknüpfungen",
-                kWarning);
+            y = !folder_.read_only_why.empty()
+                    ? note_card(canvas, paint, card, y, "Nur lesbar", folder_.read_only_why, kWarning)
+                    : note_card(
+                          canvas, paint, card, y, "Nur ansehen",
+                          "Gesperrt: /, Ordner direkt unter / und /mnt, /dev, /proc, Einhängepunkte, "
+                          "Verknüpfungen",
+                          kWarning);
         if (!clip_paths_.empty())
             y = note_card(canvas, paint, card, y,
                           std::string(clip_move_ ? "Ausgeschnitten: " : "Kopiert: ") +
@@ -564,6 +566,9 @@ class FilesPage final : public Page
             y = note_card(canvas, paint, card, y,
                           eject_note_ok_ ? "Ausgeworfen" : "Nicht ausgeworfen", eject_note_,
                           eject_note_ok_ ? kGood : kCritical);
+        else if (pl != nullptr && pl->ejectable && pl->fs == "ntfs")
+            y = note_card(canvas, paint, card, y, "Sicher auswerfen",
+                          "Quadrat-Taste · schreibt Ausstehendes auf den Stick, dann abziehen", kBlue);
         else if (pl != nullptr && pl->ejectable)
             y = eject_.available
                     ? note_card(canvas, paint, card, y, "Sicher auswerfen",
@@ -873,6 +878,8 @@ class FilesPage final : public Page
     // Ejecting needs ShadowMountPlus 1.7beta10 or newer, and only one drive at a time.
     bool can_eject(const FsPlace &p) const
     {
+        if (p.fs == "ntfs") // written out and let go by the app itself, no ShadowMountPlus
+            return p.ejectable && !job_.active;
         return p.ejectable && eject_.available && !eject_.running;
     }
 
@@ -1050,15 +1057,16 @@ class FilesPage final : public Page
             items.push_back(item("Auswahl beenden", kPickMode));
         if (e->type == "file")
             items.push_back(item("Ansehen", kView));
+        const bool ntfs = is_ntfs_path(folder_.path); // NTFS: add and delete, never change
         if (e->type == "file" && is_text_name(e->name))
-            items.push_back(item("Bearbeiten", kEdit, !edit_refusal(*e).empty()));
+            items.push_back(item("Bearbeiten", kEdit, !edit_refusal(*e).empty() || ntfs));
         if (e->type == "dir")
             items.push_back(item("Größe messen", kMeasure));
         items.push_back(
             item("Kopieren" + count, kCopy,
                  !std::all_of(t.begin(), t.end(), [](const FsEntry *x) { return pickable(*x); })));
         items.push_back(item("Ausschneiden" + count, kCut, !all_writable));
-        items.push_back(item("Umbenennen", kRename, !e->writable || !pickable(*e)));
+        items.push_back(item("Umbenennen", kRename, !e->writable || !pickable(*e) || ntfs));
         items.push_back(item("Löschen" + count, kDelete, !all_writable || job_.active, true));
         menu_.set_items(items);
         menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
@@ -1085,9 +1093,12 @@ class FilesPage final : public Page
         ui::MenuItem sep;
         sep.separator = true;
         std::vector<ui::MenuItem> items;
+        // on an NTFS stick nothing is replaced: "Beide behalten" puts the new one beside it
+        const bool ntfs = is_ntfs_path(folder_.path);
         items.push_back(item(what, 0, true));
         items.push_back(sep);
-        items.push_back(item("Ersetzen", kConflictReplace));
+        if (!ntfs)
+            items.push_back(item("Ersetzen", kConflictReplace));
         items.push_back(item("Beide behalten", kConflictKeep));
         items.push_back(item("\xC3\x9C"
                              "berspringen",
@@ -1095,7 +1106,7 @@ class FilesPage final : public Page
         items.push_back(item("Abbrechen", kConflictCancel));
         menu_.set_items(items);
         menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
-        menu_.set_focus(3);
+        menu_.set_focus(ntfs ? 2 : 3);
         conflict_menu_ = true;
     }
 
@@ -1248,6 +1259,13 @@ class FilesPage final : public Page
             // eject, none while it runs); then the page lets go of the drive. What was queued for the
             // open folder (a size, a list) is answered first, and the app waits for it before it
             // asks the console.
+            if (is_ntfs_path(eject_path_))
+            {
+                // an NTFS stick: the app writes out what is pending and lets it go at once
+                leave_drive(eject_path_);
+                source().files_post("eject", "{\"path\":\"" + eject_path_ + "\"}");
+                break;
+            }
             source().usb_eject(eject_path_);
             leave_drive(eject_path_);
             break;
@@ -1682,7 +1700,8 @@ class FilesPage final : public Page
                 const FsPlace &p = places_[i];
                 ui::ListItem item;
                 item.title = p.label;
-                item.subtitle = p.path + (p.writable ? "" : " · nur ansehen");
+                item.subtitle =
+                    p.path + (p.writable ? "" : p.fs == "ntfs" ? " · nur lesbar" : " · nur ansehen");
                 if (p.free_bytes >= 0 && p.writable)
                     item.value = format_bytes(static_cast<std::uint64_t>(p.free_bytes)) + " frei";
                 item.tag = kPlaceTag + static_cast<int>(i);
@@ -2028,13 +2047,14 @@ class FilesPage final : public Page
                     const std::string &title, const std::string &text, Color accent) const
     {
         gfx::DrawList &list = canvas.list;
-        // up to two lines of the quiet text (a long note was cut after the first and lost its
-        // point)
+        // up to four lines of the quiet text (a long note was cut after the first and lost its
+        // point; the reason an NTFS stick is read-only says what to do at the PC, 23.11.2026)
         std::vector<std::string> lines =
             canvas.fonts.regular.font->wrap(text, 18.0f, card.w - 60.0f - 48.0f);
-        if (lines.size() > 2)
-            lines.resize(2);
-        const Rect box{card.x + 30.0f, y, card.w - 60.0f, lines.size() > 1 ? 116.0f : 92.0f};
+        if (lines.size() > 4)
+            lines.resize(4);
+        const float rows = static_cast<float>(std::max<std::size_t>(lines.size(), 1));
+        const Rect box{card.x + 30.0f, y, card.w - 60.0f, 68.0f + 24.0f * rows};
         list.rounded_rect(box, 16.0f, accent.with_alpha(0.12f));
         list.rounded_rect({box.x, box.y + 14.0f, 4.0f, box.h - 28.0f}, 2.0f, accent);
         ui::text(list, canvas.fonts.semibold, ui::fit_label(paint, title, 22.0f, box.w - 48.0f),

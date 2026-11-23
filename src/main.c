@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "instlock.h"
+#include "ntfsvol.h"
 #include "ps4m.h"
 #include "ps5tm.h"
 #include "sha256.h"
@@ -284,6 +285,7 @@ stopper_thread(void *arg) {
     (void)ps5tm_imgjob_cancel();
     ps5tm_dumpq_shutdown();                          /* the queue keeps its mark (the next start tells that the run was interrupted) */
     ps5tm_filemgr_shutdown();
+    ps5tm_ntfs_shutdown();                           /* NTFS sticks: what was written goes out to them (ntfsvol.c) */
     ps5tm_usbeject_shutdown();                       /* a planned end is no crash of an eject: its marker goes (usbeject.c) */
     {
       cJSON *c = cJSON_CreateObject();               /* the disc image: the same as the button "Abbrechen" */
