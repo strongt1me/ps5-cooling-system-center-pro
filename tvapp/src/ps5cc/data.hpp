@@ -56,6 +56,9 @@ struct Game
                              // "" when unknown
     std::string backport_fw; // PS5 with a backport applied: the firmware it carries (SDK of the
                              // eboot.bin), else ""
+    std::string run_sdk;     // the SDK the game is built with: the eboot.bin's when the app read it,
+                             // else the param.json's; "" when unknown (23.11.2026)
+    std::string console_fw;  // the console's firmware, from the same answer of the app
     std::string path;
     std::string
         cover; // where the app serves its cover ("/api/v1/library/cover?id=…"), "" when none
@@ -1541,6 +1544,16 @@ std::string format_job_route(const std::string &kind, const std::string &from,
                              const std::string &dest);
 // "2,9 h", "35 min", "–" for nothing.
 std::string format_playtime(std::uint64_t seconds);
+// A PS5 game whose param.json asks for a newer firmware than the console's (newer): whether it
+// starts is decided by the SDK it is built with, and that fits when it is not newer than the
+// console (fits). Seen 23.11.2026: param.json 13.60, eboot.bin SDK 12.00, console 12.00, runs
+// without a backport. Both false when it is not newer or something is unknown.
+struct FwFit
+{
+    bool newer = false;
+    bool fits = false;
+};
+FwFit fw_fit(const Game &g);
 // "46,3" for 46.3 (German decimal comma; "46.3" once English is the language, see
 // set_decimal_point).
 std::string format_decimal(float value, int decimals);

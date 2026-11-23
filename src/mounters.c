@@ -21,7 +21,7 @@
 cJSON *
 ps5tm_mounters_conflicts(void) {
   cJSON *arr = cJSON_CreateArray();
-  ps5tm_kraken_game_t *kg = calloc(PS5TM_KRAKEN_MAX, sizeof(*kg));          /* 20 KB: not on a thread's stack */
+  ps5tm_kraken_game_t *kg = calloc(PS5TM_KRAKEN_MAX, sizeof(*kg));          /* 120 KB: not on a thread's stack */
   if(!kg) return arr;
   int n = ps5tm_kraken_games(kg, PS5TM_KRAKEN_MAX);
   for(int i = 0; i < n; i++) {

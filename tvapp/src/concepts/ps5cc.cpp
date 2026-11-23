@@ -933,6 +933,51 @@ class Ps5cc final : public app::Concept
             {0.2f, action_bit(Action::north)},
             {0.9f, 0, Direction::none, "details"},
             {0.2f, action_bit(Action::back)},
+            // the firmware a game asks for is newer than the console's (23.11.2026): Neon Harbor
+            // (FPKGMount, SDK 12.00) starts, Double Dragon Revive (SDK 13.00) does not; back to
+            // ASTRO BOT after
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.15f, 0, Direction::down},
+            {0.2f, action_bit(Action::north)},
+            {0.9f, 0, Direction::none, "details-sdk-passt"},
+            {0.2f, action_bit(Action::back)},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.2f, action_bit(Action::north)},
+            {0.9f, 0, Direction::none, "details-sdk-zu-neu"},
+            {0.2f, action_bit(Action::back)},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
+            {0.15f, 0, Direction::up},
             {0.6f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "spielwechsel"},
             {0.2f, action_bit(Action::back)},
@@ -2014,6 +2059,13 @@ class Ps5cc final : public app::Concept
         if (!g->packing.empty())
             items.push_back({"Gepackt", packing_label(g->packing)});
         add_fw_rows(items, *g);
+        // The param.json asks for a newer firmware than the console's: what decides is the SDK the
+        // game is built with (23.11.2026)
+        const ps5cc::FwFit fit = ps5cc::fw_fit(*g);
+        if (fit.newer && g->backport_fw.empty() && !g->run_sdk.empty())
+            items.push_back({"Gebaut mit SDK",
+                             g->run_sdk + (fit.fits ? " · startet auf FW " : " · neuer als FW ") +
+                                 g->console_fw});
         items.push_back({"Größe", ps5cc::format_bytes(g->size_bytes)});
         items.push_back({"Spielzeit", ps5cc::format_playtime(g->played_s)});
         items.push_back({"Zuletzt gespielt", german_date(g->last_played)});

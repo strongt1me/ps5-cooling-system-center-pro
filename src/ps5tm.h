@@ -976,15 +976,20 @@ void          ps5tm_kraken_boot(void);
 int           ps5tm_kraken_icon(const char *title_id, unsigned char **png, size_t *len);
 
 /* The games Kraken Mount lists (for the check of titles two mounters want, src/mounters.c): a copy kept for 10 s, nothing while it does
-   not run. kind is "pkg" (a .pkg file) or "folder" (a game folder: Kraken Mount takes those too). Returns how many were filled in. */
+   not run. kind is "pkg" (a .pkg file) or "folder" (a game folder: Kraken Mount takes those too). backport is the backport folder Kraken
+   Mount applies to the game (<scan root>/backports/<TITLE_ID>...), empty when none (23.11.2026). Returns how many were filled in. */
 #define PS5TM_KRAKEN_MAX 256
 typedef struct {
   char title_id[12];
   char name[96];
   char path[192];
   char kind[8];
+  char backport[160];
 } ps5tm_kraken_game_t;
 int ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max);
+/* The folder Kraken Mount keeps its game caches in (its /api/state names it; /data/krakenmount/caches until it has): <dir>/<TITLE_ID> holds
+   what a .pkg game runs with - eboot.bin, sce_sys, the fakelib it put together. No question to Kraken Mount, never blocks. */
+void ps5tm_kraken_cache_dir(char *out, size_t n);
 /* Does Kraken Mount search this folder (its settings name it under scanpath)? 1 yes; 0 it runs and does not; -1 not running or not known. */
 int ps5tm_kraken_searches(const char *folder);
 

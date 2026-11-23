@@ -79,9 +79,17 @@ Funktion, gleiche Sperren und Hinweise); der Browser merkt sich die Wahl je Ger�
 „groß (wie bisher)“, und wer „kompakt“ gewählt hat, behält es.
 
 **Firmware.** Unter dem Titel steht auch die Firmware, die das Spiel verlangt („FW 13.60“, bei PS4-Titeln
-„PS4-FW“); verlangt es eine neuere als die der Konsole, ist die Marke gelb. Ist ein Backport angewendet, steht
+„PS4-FW“); verlangt es eine neuere als die der Konsole und ist auch das SDK, mit dem es gebaut ist (das der
+`eboot.bin`, sonst das der `param.json`), neuer, ist die Marke gelb. Passt das SDK zur Konsole, bleibt sie grau,
+denn dann startet das Spiel trotzdem (seit 23.11.2026; an der Pro verlangt Marsupilami 2 laut `param.json` 13.60,
+seine `eboot.bin` ist mit SDK 12.00 gebaut und läuft auf 12.00 ohne Backport). Ist ein Backport angewendet, steht
 stattdessen die Firmware, die der Backport trägt (die SDK-Fassung seiner `eboot.bin`); was die `param.json`
-verlangt, steht im Hinweis. In der Vollbild-App steht sie in der Zeile des Spiels und in den Angaben.
+verlangt, steht im Hinweis. Seit 23.11.2026 auch bei FPKGMount-Spielen: Die App liest dafür den Zwischenspeicher
+von Kraken Mount (`/data/krakenmount/caches/<Titel-ID>`: `eboot.bin` und `fakelib`); die Bibliotheken, die Kraken
+Mount selbst beilegt (AMPR, PlayGo, DLC), zählen nicht als Backport, und nennt Kraken Mount einen Backport-Ordner,
+gilt das Spiel als zurückportiert. In der Vollbild-App steht die Firmware in der Zeile des Spiels und in den
+Angaben; verlangt sie eine neuere als die der Konsole, zeigen die Details zusätzlich „Gebaut mit SDK“ (etwa
+„12.00 · startet auf FW 12.00“ oder „13.00 · neuer als FW 12.00“).
 
 **Gepackt** (seit 17.11.2026): Liegt ein Spiel in AMPR-Packs, steht unter dem Titel „zstd gepackt“ oder „LZ4 gepackt“, egal in welchem Format das Spiel liegt (Ordner oder Abbild); unter „Infos & Metadaten“ gibt es die Zeile „Gepackt“. Bei Abbildern liest die App dafür beim Lesen der Abbild-Datei die beiden Index-Dateien (`ampr_zstd.index`, `ampr_assets.index`) mit, ohne etwas einzuhängen, und merkt es sich, bis sich die Datei ändert; kurz nach dem Start der App kann die Marke bei einem Abbild einen Moment fehlen. In der Vollbild-App steht die Angabe als farbige Plakette in der Zeile des Spiels (grün: zstd, blau: LZ4) und als Zeile „Gepackt“ im Infofeld.
 

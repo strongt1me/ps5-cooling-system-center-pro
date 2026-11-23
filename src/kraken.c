@@ -377,6 +377,7 @@ ps5tm_kraken_searches(const char *folder) {
 /* Kraken Mount's games as a small copy, for mounters.c. One ask of its /api/state every 10 s at most, however often the library or the
    page asks; while it does not answer (switched off), nothing is listed and the next ask waits 5 s. */
 static ps5tm_kraken_game_t g_games[PS5TM_KRAKEN_MAX];
+static char                g_cache_dir[160] = "/data/krakenmount/caches";   /* cache.path of the last state that named one */
 static int                 g_games_n;
 static uint64_t            g_games_ms;
 static int                 g_games_flying;             /* one ask at a time: the others wait for its answer (audit 17.11.2026) */
@@ -387,7 +388,7 @@ static pthread_cond_t      g_games_cv = PTHREAD_COND_INITIALIZER;
 static int
 store_games(const cJSON *k, uint64_t now) {
   const cJSON *games = k ? cJSON_GetObjectItem(k, "games") : NULL, *g;
-  ps5tm_kraken_game_t *tmp = calloc(PS5TM_KRAKEN_MAX, sizeof(*tmp));     /* 80 KB: not on a thread's stack */
+  ps5tm_kraken_game_t *tmp = calloc(PS5TM_KRAKEN_MAX, sizeof(*tmp));     /* 120 KB: not on a thread's stack */
   if(!tmp) return 0;
   int n = 0;
   cJSON_ArrayForEach(g, games) {
@@ -400,7 +401,7 @@ store_games(const cJSON *k, uint64_t now) {
       break;
     }
     const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *nm = cJSON_GetObjectItem(g, "title_name"),
-                *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind");
+                *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind"), *bp = cJSON_GetObjectItem(g, "backport");
     if(!cJSON_IsString(t) || !valid_tid(t->valuestring)) continue;
     ps5tm_kraken_game_t *e = &tmp[n++];
     memset(e, 0, sizeof(*e));
@@ -408,8 +409,16 @@ store_games(const cJSON *k, uint64_t now) {
     snprintf(e->name, sizeof(e->name), "%s", cJSON_IsString(nm) ? nm->valuestring : "");
     snprintf(e->path, sizeof(e->path), "%s", cJSON_IsString(p) ? p->valuestring : "");
     snprintf(e->kind, sizeof(e->kind), "%s", cJSON_IsString(kd) && !strcmp(kd->valuestring, "pkg") ? "pkg" : "folder");
+    snprintf(e->backport, sizeof(e->backport), "%s", cJSON_IsString(bp) ? bp->valuestring : "");   /* null: none applied */
   }
+  /* where the caches lie: an absolute path without "..", else the last one stays */
+  const cJSON *cache = k ? cJSON_GetObjectItem(k, "cache") : NULL, *cp = cache ? cJSON_GetObjectItem(cache, "path") : NULL;
+  char cdir[sizeof(g_cache_dir)] = "";
+  if(cJSON_IsString(cp) && cp->valuestring[0] == '/' && !strstr(cp->valuestring, "..") && strlen(cp->valuestring) < sizeof(cdir))
+    snprintf(cdir, sizeof(cdir), "%s", cp->valuestring);
+  for(size_t l = strlen(cdir); l > 1 && cdir[l - 1] == '/'; l--) cdir[l - 1] = 0;
   pthread_mutex_lock(&g_lock);
+  if(cdir[0]) memcpy(g_cache_dir, cdir, sizeof(cdir));
   memcpy(g_games, tmp, sizeof(g_games[0]) * (size_t)n);
   g_games_n = n;
   g_games_ms = now;
@@ -453,6 +462,13 @@ ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max) {
   memcpy(out, g_games, sizeof(out[0]) * (size_t)n);
   pthread_mutex_unlock(&g_lock);
   return n;
+}
+
+void
+ps5tm_kraken_cache_dir(char *out, size_t n) {
+  pthread_mutex_lock(&g_lock);
+  snprintf(out, n, "%s", g_cache_dir);
+  pthread_mutex_unlock(&g_lock);
 }
 
 int

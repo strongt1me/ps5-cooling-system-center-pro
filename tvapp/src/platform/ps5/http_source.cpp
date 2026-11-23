@@ -3356,6 +3356,7 @@ void HttpSource::poll_library()
     if (root == nullptr)
         return;
     std::vector<Game> games;
+    const std::string console_fw = str(root, "console_fw");
     // Titles Kraken Mount lists that ShadowMountPlus or PS4Mount manages too: the row says so
     std::vector<std::string> conflicts;
     const cJSON *item = nullptr;
@@ -3385,6 +3386,12 @@ void HttpSource::poll_library()
             if (mods != nullptr && str(mods, "state") == "checked" && flag(mods, "backport") &&
                 g.platform != "PS4")
                 g.backport_fw = str(mods, "eboot_sdk");
+            // The SDK the game is built with (23.11.2026): the eboot.bin's, else the param.json's
+            if (mods != nullptr && str(mods, "state") == "checked")
+                g.run_sdk = str(mods, "eboot_sdk");
+            if (g.run_sdk.empty())
+                g.run_sdk = str(item, "sdk");
+            g.console_fw = console_fw;
             // AMPR packs (17.11.2026): zstd (AMPR EMU NG) or LZ4, in a folder or inside an image
             if (mods != nullptr && str(mods, "state") == "checked")
                 g.packing = flag(mods, "zstd") ? "zstd" : flag(mods, "lz4") ? "lz4" : "";

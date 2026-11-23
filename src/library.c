@@ -568,6 +568,83 @@ detect_mods(lib_game_t *g) {
   m->backport = m->extra_libs > 0 || (eb && pj && eb < pj);
 }
 
+/* A game Kraken Mount (FPKGMount) plays from a .pkg has no folder of its own to look into. Kraken Mount unpacks what it runs with into its
+   cache, <cache>/<TITLE_ID> (mounted as /system_ex/app/<TITLE_ID>): the eboot.bin - a backport's over the package's - and the fakelib it put
+   together, the backport's or else the game's, plus the emulators it brings itself: ampr-emu-ng always (libSceAmpr.sprx), pgo_stub
+   (libScePlayGo.sprx) for a game that uses PlayGo, the three files of dlc_emu when a dlc_emu.ini lies beside the game. So the cache says
+   whether a backport is applied, as a folder does; Kraken Mount's own libraries are no backport and are left out, and so are its packs
+   index and the marks of a folder (23.11.2026, Marsupilami 2 at the Pro: the param.json asks for 13.60, the eboot.bin is SDK 12.00, no
+   backport, it runs on 12.00). Only for a title with nothing else to look at - no folder, no image, no installed package - and the cache
+   of a .pkg (kraken.image). */
+static int
+kraken_own_lib(const char *nm, int dlc_ini) {
+  if(!strcasecmp(nm, "libSceAmpr.sprx") || !strcasecmp(nm, "libScePlayGo.sprx")) return 1;
+  return dlc_ini && (!strcasecmp(nm, "libSceAppContent.sprx") || !strcasecmp(nm, "libSceGameUpdate.sprx") ||
+                     !strcasecmp(nm, "libSceNpEntitlementAccess.sprx"));
+}
+
+static void
+kraken_cache_mods(lib_game_t *g) {
+  if(g->platform != 0 || g->source[0] || g->format[0] || g->mods.state != MODS_NONE) return;
+  char dir[160], root[128], path[192];
+  struct stat st;
+  ps5tm_kraken_cache_dir(dir, sizeof(dir));
+  if((size_t)snprintf(root, sizeof(root), "%s/%s", dir, g->title_id) >= sizeof(root)) return;
+  snprintf(path, sizeof(path), "%s/kraken.image", root);
+  if(stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return;
+
+  lib_mods_t *m = &g->mods;
+  int64_t eb_size = -1;
+  snprintf(path, sizeof(path), "%s/eboot.bin", root);
+  int64_t eb_mtime = stat_mtime(path, &eb_size);
+  snprintf(path, sizeof(path), "%s/fakelib", root);
+  int64_t fl_mtime = stat_mtime(path, NULL);
+  snprintf(path, sizeof(path), "%s/fakelib2", root);
+  int64_t fl2_mtime = stat_mtime(path, NULL);
+  if(fl2_mtime > fl_mtime) fl_mtime = fl2_mtime;
+  else if(fl2_mtime >= 0) fl_mtime += 1;
+
+  mods_cache_t *c = NULL;
+  for(int i = 0; i < g_mods_cached; i++)
+    if(!strcmp(g_mods_cache[i].title_id, g->title_id)) { c = &g_mods_cache[i]; break; }
+  if(c && !strcmp(c->source, root) && c->eboot_mtime == eb_mtime && c->eboot_size == eb_size && c->fakelib_mtime == fl_mtime) {
+    *m = c->mods;
+  } else {
+    memset(m, 0, sizeof(*m));
+    m->state = MODS_CHECKED;
+    snprintf(path, sizeof(path), "%s/dlc_emu.ini", root);
+    const int dlc_ini = stat(path, &st) == 0;
+    snprintf(path, sizeof(path), "%s/fakelib2", root);
+    DIR *d = opendir(path);
+    if(d) m->fakelib2 = 1;
+    else {
+      snprintf(path, sizeof(path), "%s/fakelib", root);
+      d = opendir(path);
+    }
+    if(d) {
+      struct dirent *e;
+      while((e = readdir(d)) != NULL)
+        if(!kraken_own_lib(e->d_name, dlc_ini)) fakelib_add(m, e->d_name);
+      closedir(d);
+    }
+    if(m->nlibs + m->more_libs > 0) m->bp_from = 1;
+    m->eboot_sdk = eboot_sdk(root);
+    if(!c && g_mods_cached < LIBRARY_MAX) c = &g_mods_cache[g_mods_cached++];
+    if(c) {
+      memset(c, 0, sizeof(*c));
+      snprintf(c->title_id, sizeof(c->title_id), "%s", g->title_id);
+      snprintf(c->source, sizeof(c->source), "%s", root);
+      c->eboot_mtime   = eb_mtime;
+      c->eboot_size    = eb_size;
+      c->fakelib_mtime = fl_mtime;
+      c->mods          = *m;
+    }
+  }
+  uint32_t eb = (m->eboot_sdk >> 16) & 0xFFFF;
+  uint32_t pj = (uint32_t)(g->param_sdk >> 48) & 0xFFFF;
+  m->backport = m->extra_libs > 0 || (eb && pj && eb < pj);
+}
+
 
 /* Real, current size on disk. The database's own "size" is only the local
    part for a title kept elsewhere (see the file header) — a placeholder set
@@ -1211,6 +1288,7 @@ refresh(void) {
     read_mount_source(list[i].title_id, list[i].source, sizeof(list[i].source));
     detect_mods(&list[i]);
     detect_storage(&list[i]);
+    kraken_cache_mods(&list[i]);                                /* after the storage: only for a game with no folder, image or package */
     ps5tm_drive_leave(gate);
   }
   if(cut_off) {
@@ -1651,7 +1729,7 @@ ps5tm_library_json(void) {
   const int hold_paused = ps5tm_smphold_count() > 0 && ps5tm_smphold_paused();
   /* And the games Kraken Mount (FPKGMount) lists - a copy kept for 10 s, an HTTP question to it when that is older (17.11.2026): a title among
      them that is neither ShadowMountPlus's nor PS4Mount's carries the mark "fpkgmount", as a PS4Mount game carries "ps4mount". */
-  ps5tm_kraken_game_t *kraken = calloc(PS5TM_KRAKEN_MAX, sizeof(*kraken));          /* 77 KB: not on a thread's stack */
+  ps5tm_kraken_game_t *kraken = calloc(PS5TM_KRAKEN_MAX, sizeof(*kraken));          /* 120 KB: not on a thread's stack */
   const int kraken_n = kraken ? ps5tm_kraken_games(kraken, PS5TM_KRAKEN_MAX) : 0;
   pthread_mutex_lock(&g_lock);
 
@@ -1702,6 +1780,12 @@ ps5tm_library_json(void) {
                (unsigned)(g->param_sdk >> 48) & 0xFF);
       cJSON_AddStringToObject(e, "sdk", v);
     }
+    /* Kraken Mount's entry for a game it plays from a .pkg (FPKGMount): a game ShadowMountPlus holds as an image or a folder stays what it
+       is, and so does a PS4Mount game (17.11.2026) */
+    const ps5tm_kraken_game_t *kg = NULL;
+    if(!g->ps4mount && (!g->format[0] || !strcmp(g->format, "pkg")))
+      for(int k = 0; k < kraken_n; k++)
+        if(!strcmp(kraken[k].title_id, g->title_id)) { kg = &kraken[k]; break; }
     if(g->mods.state == MODS_UNREACHABLE) {
       cJSON *m = cJSON_AddObjectToObject(e, "mods");
       cJSON_AddStringToObject(m, "state", "unreachable");
@@ -1711,6 +1795,13 @@ ps5tm_library_json(void) {
             : "Der Spielordner ist gerade nicht erreichbar.");
     } else if(g->mods.state == MODS_CHECKED) {
       const lib_mods_t *md = &g->mods;
+      lib_mods_t kmd;
+      if(kg && kg->backport[0]) {                   /* Kraken Mount names the backport folder it applies (23.11.2026) */
+        kmd = g->mods;
+        kmd.backport = 1;
+        kmd.bp_from = 2;
+        md = &kmd;
+      }
       cJSON *m = cJSON_AddObjectToObject(e, "mods");
       cJSON_AddStringToObject(m, "state", "checked");
       cJSON_AddBoolToObject  (m, "backport", md->backport);
@@ -1759,10 +1850,7 @@ ps5tm_library_json(void) {
     if(g->ps4mount) cJSON_AddBoolToObject(e, "ps4mount", 1);
     /* Kraken Mount registers the game with the system and plays it from the .pkg: no app.pkg of the package installer lies in /user/app (the
        format is empty), or one does (pkg). A game ShadowMountPlus holds as an image or a folder stays what it is. */
-    if(!g->ps4mount && (!g->format[0] || !strcmp(g->format, "pkg"))) {
-      for(int k = 0; k < kraken_n; k++)
-        if(!strcmp(kraken[k].title_id, g->title_id)) { cJSON_AddBoolToObject(e, "fpkgmount", 1); break; }
-    }
+    if(kg) cJSON_AddBoolToObject(e, "fpkgmount", 1);
     cJSON_AddBoolToObject(e, "can_copy", g->real_path[0] == '/' &&
                           (!strcmp(g->format, "folder") || is_file));
     cJSON_AddBoolToObject(e, "can_move", g->smp_can_move && strcmp(g->format, "pkg"));

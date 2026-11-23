@@ -167,8 +167,21 @@ class MockSource final : public Source
             }
             else if (mid == "PPSA01862")
                 g.system_ver = "5.00";
+            // newer than the console (12.00): one built with SDK 12.00, which starts (as
+            // Marsupilami 2 at the Pro, 23.11.2026), one with SDK 13.00, which does not
+            else if (mid == "PPSA06330")
+            {
+                g.system_ver = "13.60";
+                g.run_sdk = "12.00";
+            }
+            else if (mid == "PPSA07788")
+            {
+                g.system_ver = "13.20";
+                g.run_sdk = "13.00";
+            }
             else if (mid == "CUSA44880" || mid == "CUSA05041" || mid == "CUSA20220")
                 g.system_ver = "9.00";
+            g.console_fw = "12.00";
             g.size_bytes = static_cast<std::uint64_t>(m.gigabytes * 1e9);
             g.played_s = static_cast<std::uint64_t>(m.hours * 3600.0);
             g.last_played = m.hours > 0.0 ? "2026-10-27T10:29:26Z" : "";
@@ -3979,6 +3992,39 @@ std::string format_job_route(const std::string &kind, const std::string &from,
     if (dest.empty())
         return "";
     return from.empty() ? "Ziel: " + dest : "von " + from + " nach " + dest;
+}
+
+namespace
+{
+// "13.60" -> 1360; -1 when it is no firmware number
+int fw_number(const std::string &v)
+{
+    const std::size_t dot = v.find('.');
+    if (dot == std::string::npos || dot == 0 || dot > 2 || v.size() != dot + 3)
+        return -1;
+    int n = 0;
+    for (std::size_t i = 0; i < v.size(); i++)
+    {
+        if (i == dot)
+            continue;
+        if (v[i] < '0' || v[i] > '9')
+            return -1;
+        n = n * 10 + (v[i] - '0');
+    }
+    return n;
+}
+} // namespace
+
+FwFit fw_fit(const Game &g)
+{
+    FwFit fit;
+    const int need = fw_number(g.system_ver), console = fw_number(g.console_fw);
+    if (g.platform == "PS4" || need < 0 || console < 0 || need <= console)
+        return fit;
+    fit.newer = true;
+    const int sdk = fw_number(g.run_sdk);
+    fit.fits = sdk >= 0 && sdk <= console;
+    return fit;
 }
 
 std::string format_playtime(std::uint64_t seconds)

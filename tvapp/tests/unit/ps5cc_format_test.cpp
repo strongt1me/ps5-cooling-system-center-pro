@@ -11,6 +11,34 @@ namespace
 
 using hui::ps5cc::KlogLine;
 
+TEST(Ps5ccFormat, FirmwareFitFollowsTheSdk)
+{
+    hui::ps5cc::Game g;
+    g.platform = "PS5";
+    g.console_fw = "12.00";
+    g.system_ver = "13.60";
+    g.run_sdk = "12.00"; // Marsupilami 2 at the Pro (23.11.2026)
+    EXPECT_TRUE(hui::ps5cc::fw_fit(g).newer);
+    EXPECT_TRUE(hui::ps5cc::fw_fit(g).fits);
+    g.run_sdk = "13.00";
+    EXPECT_TRUE(hui::ps5cc::fw_fit(g).newer);
+    EXPECT_FALSE(hui::ps5cc::fw_fit(g).fits);
+    g.run_sdk = "";
+    EXPECT_FALSE(hui::ps5cc::fw_fit(g).fits);
+    g.run_sdk = "9.00";
+    EXPECT_TRUE(hui::ps5cc::fw_fit(g).fits);
+    g.system_ver = "12.00"; // not newer
+    EXPECT_FALSE(hui::ps5cc::fw_fit(g).newer);
+    g.system_ver = "9.60";
+    EXPECT_FALSE(hui::ps5cc::fw_fit(g).newer);
+    g.system_ver = "13.60";
+    g.platform = "PS4"; // PS4 firmware is not compared with the console
+    EXPECT_FALSE(hui::ps5cc::fw_fit(g).newer);
+    g.platform = "PS5";
+    g.console_fw = "";
+    EXPECT_FALSE(hui::ps5cc::fw_fit(g).newer);
+}
+
 TEST(Ps5ccFormat, ClockWrapsAtADay)
 {
     EXPECT_EQ(hui::ps5cc::format_clock(0), "00:00");

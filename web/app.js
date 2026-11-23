@@ -5263,6 +5263,21 @@
   /* Firmware, die das Spiel verlangt (10.11.2026): „FW 13.60“ aus der param.json (PS4-Titel: „PS4-FW“ aus der param.sfo). Ist ein Backport
      angewendet, steht die Firmware, die der Backport trägt: die SDK-Fassung der eboot.bin; was die param.json verlangt, steht im Hinweis.
      Nur Anzeige. */
+  /* Verlangt die param.json eine neuere Firmware als die der Konsole? Ob das Spiel startet, entscheidet das SDK, mit dem es gebaut ist (die
+     eboot.bin, sonst die param.json), nicht die Firmware, die die param.json nennt (23.11.2026: Marsupilami 2 an der Pro, param.json 13.60,
+     eboot.bin SDK 12.00, Konsole 12.00, läuft ohne Backport). fits: das SDK passt, die Marke ist dann grau statt orange. */
+  const gmFwFit = (x, m) => {
+    const cfw = gm.meta && gm.meta.console_fw;
+    const need = x.system_ver || "";
+    if (x.platform === "PS4" || !cfw || !need || !(parseFloat(need) > parseFloat(cfw))) return { newer: false, fits: false, why: "", cfw };
+    const sdk = (m && m.eboot_sdk) || x.sdk || "";
+    const fits = !!sdk && parseFloat(sdk) <= parseFloat(cfw);
+    const why = !fits ? `Neuer als die Firmware der Konsole (${cfw}).`
+      : m && m.eboot_sdk ? `Neuer als die Firmware der Konsole (${cfw}). Die eboot.bin nutzt SDK ${sdk}, damit startet es trotzdem.`
+      : `Neuer als die Firmware der Konsole (${cfw}). Laut param.json nutzt das Spiel SDK ${sdk}, damit startet es trotzdem.`;
+    return { newer: true, fits, why, cfw };
+  };
+
   const gmFw = (x) => {
     const m = x.mods && x.mods.state === "checked" ? x.mods : null;
     const ps4 = x.platform === "PS4";
@@ -5274,11 +5289,10 @@
       return { text: name(m.eboot_sdk), cls: "bp", title: why, backport: true };
     }
     if (!need) return null;
-    const cfw = gm.meta && gm.meta.console_fw;
-    const newer = !ps4 && cfw && parseFloat(need) > parseFloat(cfw);
+    const fit = gmFwFit(x, m);
     const why = (ps4 ? `Benötigte PS4-Firmware (param.sfo): ${need}` : `Benötigte Firmware (param.json): ${need}`)
-      + (newer ? ` · Neuer als die Firmware der Konsole (${cfw}).` : "");
-    return { text: name(need), cls: newer ? "bp" : "fmt", title: why, backport: false };
+      + (fit.newer ? ` · ${fit.why}` : "");
+    return { text: name(need), cls: fit.newer && !fit.fits ? "bp" : "fmt", title: why, backport: false };
   };
   const gmFwTag = (fw) => `<span class="gm-tag ${fw.cls}" title="${esc(fw.title)}">${esc(fw.text)}</span>`;
 
@@ -5406,17 +5420,11 @@
        param.json, bei PS4-Titeln SYSTEM_VER aus param.sfo — die PS4-Firmware,
        gegen die die Konsole nicht verglichen wird. */
     if (x.system_ver) {
-      const cfw = gm.meta && gm.meta.console_fw;
-      const newer = x.platform === "PS5" && cfw && parseFloat(x.system_ver) > parseFloat(cfw);
-      let why = "";
-      if (newer) {
-        why = `Neuer als die Firmware der Konsole (${cfw}).`;
-        if (m && m.eboot_sdk && parseFloat(m.eboot_sdk) <= parseFloat(cfw))
-          why += ` Die eboot.bin nutzt SDK ${m.eboot_sdk}, damit startet es trotzdem.`;
-      }
+      /* neuer als die Konsole: Warnung nur, wenn auch das SDK des Spiels nicht passt (23.11.2026) */
+      const fit = gmFwFit(x, m);
       rows.push([x.platform === "PS4" ? "Benötigte PS4-Firmware" : "Benötigte Firmware",
-                 newer ? `${x.system_ver} (Konsole ${cfw})` : x.system_ver,
-                 newer ? "warn" : "", why]);
+                 fit.newer ? `${x.system_ver} (Konsole ${fit.cfw})` : x.system_ver,
+                 fit.newer && !fit.fits ? "warn" : "", fit.why]);
     }
     if (m && m.backport && m.eboot_sdk && x.platform !== "PS4") rows.push(["Backport-Firmware", m.eboot_sdk]);
     if (x.sdk) rows.push(["SDK", x.sdk]);
