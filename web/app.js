@@ -10939,7 +10939,8 @@
       fm.poll = setTimeout(fmFollow, 800);
       return;
     }
-    const msg = j.state === "done" ? `${esc(what)} fertig: ${num(j.items_done)} ${j.items_done === 1 ? "Eintrag" : "Einträge"}, ${esc(bytes(j.bytes_done))}.`
+    /* only empty folders (0 bytes): no size, bytes() would say "--" (23.11.2026, seen copying an empty folder onto an NTFS stick) */
+    const msg = j.state === "done" ? `${esc(what)} fertig: ${num(j.items_done)} ${j.items_done === 1 ? "Eintrag" : "Einträge"}${j.bytes_done > 0 ? `, ${esc(bytes(j.bytes_done))}` : ""}.`
       : j.state === "cancelled" ? `${esc(what)} abgebrochen.` : `${esc(what)} gescheitert.`;
     box.innerHTML = `<p class="${j.state === "failed" ? "cp-err" : "dl-done"}">${msg}</p>
       ${j.error ? `<p class="cp-err">${esc(j.error)}</p>` : ""}${j.note ? `<p class="muted">${esc(j.note)}</p>` : ""}
