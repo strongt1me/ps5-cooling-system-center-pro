@@ -995,6 +995,96 @@ lz4_run_verify(const char *id, const char *root, const lz4arg_t *a) {
   finish(IJ_DONE, NULL);
 }
 
+/* What lay at a packed path before an unpack: LZ4_UNDO_FILE (a loose file, it is left alone), else how many of the folders of the path,
+   counted from the top, were there already (the unpack makes the others; mkdir_p fills a path from the top, so the ones there are a
+   prefix). */
+#define LZ4_UNDO_FILE 0xffffu
+
+static unsigned
+lz4_rel_dirs(const char *rel) {
+  unsigned n = 0;
+  for(const char *c = rel; *c; c++) n += *c == '/';
+  return n;
+}
+
+/* prev, *prev_keep: the parent folder of the path before and what was found for it, so that the files of one folder cost one lstat. */
+static uint16_t
+lz4_undo_note(const char *root, const char *rel, char *prev, size_t pn, uint16_t *prev_keep) {
+  char p[PATH_MAX + 300];
+  struct stat ls;
+  if(snprintf(p, sizeof(p), "%s/%s", root, rel) >= (int)sizeof(p)) return LZ4_UNDO_FILE;   /* not to be named: never touched */
+  if(lstat(p, &ls) == 0) return LZ4_UNDO_FILE;
+  const unsigned nd = lz4_rel_dirs(rel);                              /* < sizeof(p): fits in 16 bits */
+  if(nd == 0) return 0;
+  const size_t rl = strlen(root) + 1;
+  char *sl = strrchr(p, '/');
+  *sl = 0;                                                            /* p = the parent folder */
+  if(prev[0] && strcmp(prev, p) == 0) return *prev_keep;
+  uint16_t keep = (uint16_t)nd;
+  if(lstat(p, &ls) != 0) {
+    keep = 0;
+    for(char *c = p + rl; ; c++) {                                    /* count the folders from the top that are there */
+      if(*c != '/' && *c != 0) continue;
+      const char was = *c;
+      *c = 0;
+      const int there = lstat(p, &ls) == 0;
+      *c = was;
+      if(!there) break;
+      keep++;
+      if(was == 0) break;
+    }
+  }
+  snprintf(prev, pn, "%s", p);
+  *prev_keep = keep;
+  return keep;
+}
+
+/* The files an unpack put in place, taken away again after it failed, was cancelled or did not match the packs (audit 24.11.2026): the
+   game is then packed as before, not packed with loose copies beside the packs, one of them perhaps different (which of the two the
+   APR-EMU reads is not known; the packs are whole and stay). Loose files that lay there before are left alone (was[i] ==
+   LZ4_UNDO_FILE); the folders the unpack made go too, deepest first and only when empty (rmdir), the ones that were there before stay
+   (console test at the Pro: 12 empty folders were left beside the packs). Returns how many files were removed; *kept how many could
+   not be. */
+static unsigned
+lz4_unpack_undo(const char *root, const lzp_list_t *pk, const uint16_t *was, unsigned *kept) {
+  unsigned removed = 0;
+  *kept = 0;
+  for(size_t i = 0; i < pk->n; i++) {
+    if(was[i] == LZ4_UNDO_FILE) continue;
+    char p[PATH_MAX + 300];
+    if(snprintf(p, sizeof(p), "%s/%s", root, pk->rel[i]) >= (int)sizeof(p)) continue;
+    struct stat st;
+    if(lstat(p, &st) == 0) {                                          /* else not reached by the unpack (its folder perhaps) */
+      if(!S_ISREG(st.st_mode) || unlink(p) != 0) { (*kept)++; continue; }
+      removed++;
+    }
+    for(unsigned d = lz4_rel_dirs(pk->rel[i]); d > was[i]; d--) {
+      char *sl = strrchr(p, '/');
+      if(!sl) break;
+      *sl = 0;
+      if(rmdir(p) != 0) break;                                        /* not empty (another file still there) or gone already */
+    }
+  }
+  return removed;
+}
+
+/* The end of a failed unpack: the message, and what was taken away again said with it (" · ": both parts are looked up on their own). */
+static void
+lz4_unpack_fail(const char *msg, int rc, const char *root, const lzp_list_t *pk, const uint16_t *was) {
+  unsigned kept = 0;
+  const unsigned removed = lz4_unpack_undo(root, pk, was, &kept);
+  char m[900];
+  if(kept)
+    snprintf(m, sizeof(m), "%s · %u entpackte Dateien ließen sich nicht wieder entfernen; sie liegen neben den Paketen.", msg, kept);
+  else if(removed)
+    snprintf(m, sizeof(m), "%s · Die schon entpackten Dateien wurden wieder entfernt; das Spiel liegt weiter in Paketen.", msg);
+  else
+    snprintf(m, sizeof(m), "%s", msg);
+  if(removed || kept)
+    PS5TM_INFO("lz4_unpack_undone", "Entpacken in %.160s nicht fertig: %u entpackte Dateien wieder entfernt, %u nicht.", root, removed, kept);
+  lz4_fail(m, rc);
+}
+
 static void
 lz4_run_unpack(const char *id, const char *root, const lz4arg_t *a) {
   const int zs = a->zstd;
@@ -1010,15 +1100,35 @@ lz4_run_unpack(const char *id, const char *root, const lz4arg_t *a) {
     lz4_fail(m, -1);
     return;
   }
+  /* which of the packed paths already lie there loose, and which of their folders are there: an unpack that does not finish takes away
+     only what it put there itself */
+  lzp_list_t pk = { NULL, 0 };
+  if((zs ? zsp_list(root, &pk, err, sizeof(err)) : lzp_list(root, &pk, err, sizeof(err))) != 0) { lz4_fail(err, -1); return; }
+  uint16_t *was = calloc(pk.n ? pk.n : 1, sizeof(*was));
+  if(!was) { lzp_list_free(&pk); lz4_fail("Kein Speicher.", -1); return; }
+  {
+    char prev[PATH_MAX + 300] = "";
+    uint16_t prev_keep = 0;
+    for(size_t i = 0; i < pk.n; i++) was[i] = lz4_undo_note(root, pk.rel[i], prev, sizeof(prev), &prev_keep);
+  }
   lzp_stats_t st;
-  if((zs ? zsp_unpack(root, root, &st, &ui, err, sizeof(err)) : lzp_unpack(root, root, &st, &ui, err, sizeof(err))) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
+  if((zs ? zsp_unpack(root, root, &st, &ui, err, sizeof(err)) : lzp_unpack(root, root, &st, &ui, err, sizeof(err))) != 0) {
+    lz4_unpack_fail(err, cancelled() ? ECANCELED : -1, root, &pk, was);
+    free(was);
+    lzp_list_free(&pk);
+    return;
+  }
   lzp_stats_t vs;
   if((zs ? zsp_verify(root, root, &vs, &ui, err, sizeof(err)) : lzp_verify(root, root, &vs, &ui, err, sizeof(err))) != 0) {
     char m[600];
     snprintf(m, sizeof(m), "Die entpackten Dateien weichen von den Paketen ab (%s). Die Pakete bleiben.", err);
-    lz4_fail(m, cancelled() ? ECANCELED : -1);
+    lz4_unpack_fail(m, cancelled() ? ECANCELED : -1, root, &pk, was);
+    free(was);
+    lzp_list_free(&pk);
     return;
   }
+  free(was);
+  lzp_list_free(&pk);
   set_phase("Die Pakete werden entfernt");
   if((zs ? zsp_remove_set(root, err, sizeof(err)) : lzp_remove_set(root, err, sizeof(err))) != 0) { lz4_fail(err, -1); return; }
   lz4_job_stats(&st, 0);
