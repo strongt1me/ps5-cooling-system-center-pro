@@ -1,36 +1,36 @@
-# PS5 Cooling & System Center – Pro v1.93.0
+# PS5 Cooling & System Center – Pro v1.94.0
 
 ## Highlights
-- **NTFS drives in the file manager:** A stick or hard drive with NTFS (the Windows file system), which the console does not mount itself, appears as `ntfs0` and can be read and written: view, download, upload, new folder, copy and move in both directions, delete, eject safely. In the browser and in the fullscreen app, with the driver of PS5-NTFS-BROWSER (abcde6543).
-- **Safe with broken or crafted sticks:** The NTFS driver is hardened against damaged media (fuzzing with more than 22 million runs, images that hang or crash the original driver). A stick that Windows has not fully let go of, or that was unplugged in the middle of writing, stays read-only, with the reason and what to do.
-- **Firmware badge follows the game's SDK:** If the `param.json` asks for a newer firmware but the `eboot.bin` is built with a fitting SDK, the badge stays grey and says why the game starts anyway. FPKGMount games (Kraken Mount) are now checked for a backport too.
+- **NTFS drives are much faster:** Big folders, many small files and the first write after the app starts no longer crawl. On the console with a slow stick: a small upload takes 0.2 s instead of 2–3.5 s, a folder of 101 files (83 MB) copies in 6 s, 121 files delete in 3 s, and the first write after a start of the app takes 0.2 s instead of 5–9 s.
+- **AMPR EMU NG 0.5.1 (quer3q):** Faster reading of packed games (about 10 % in pkg mode) and fixes for Marvel's Wolverine (could not save), Hades (hung on exit), DIRT 5 (crashed after 15 s), MARVEL Cosmic Invasion and Scott Pilgrim EX. The app carries 0.5.1 and 0.5.0 now; 0.4.1 is gone.
+- **Security update for zstd packs:** zstd 1.6.0 closes CVE-2026-124851. The app only uses the one-shot functions, so it was most likely not affected; packs stay byte-identical, and packs made before still read.
 
 ## What's new
 ### File manager: NTFS
-- **Read and write:** Every NTFS partition (MBR or GPT) becomes a location of its own (`ntfs0`, `ntfs1` …). Renaming, editing and replacing are not possible – the driver never changes an existing file; for names that are taken there are "Keep both" and "Skip". Names Windows does not allow are adjusted with `_`. Games cannot be started from NTFS.
-- **Read-only, with the reason:** unplugged without "Safely remove", Fast Startup, chkdsk unfinished, a hibernated Windows system disk, unplugged from the PS5 in the middle of writing – the note says what to do on the Windows PC.
-- **Eject safely:** button on the NTFS location (fullscreen: Square button). Writes out what is pending, empties the stick's write cache and lets it go ("ntfs0 can be unplugged now.").
-- **Care when plugging in:** The app opens whole disks only, a freshly plugged one only after 10 s, never during an eject, and tries a disk that does not open only at growing intervals.
-- **Uploads in whole blocks:** 2.8 MB/s on a slow stick instead of 17 KB/s and an abort before.
+- **Big folders:** A name is looked up in the sorted index instead of walking every entry. On the PC, 20,000 names take 0.03 s instead of 2.45 s; copying or deleting many files in one folder no longer reads the folder over and over.
+- **Many small files:** The driver collects its small changes and writes only the changed sectors, in order, when an upload, folder or job ends. On a simulated slow stick, 300 small files are created in 0.8 s instead of 14.2 s and deleted in 3.9 s instead of 10.4 s. A stick pulled in the middle of a job is still marked as not safely removed.
+- **First write after the app starts:** The Windows journal of the stick is only cleared when it is not empty already, so the first write no longer rewrites up to 64 MB.
 
 ### Games
-- **Firmware badge and backport for FPKGMount games:** See the highlights. The fullscreen app shows the row "Built with SDK" in the details.
-- **PS4Mount:** PS4 games on the M.2 expansion are no longer registered (the console aborts their start); they are listed under "Found, not set up" with the reason. Right after registering, a game starts at once (before: "not in the game list").
-- **Start on "Device busy":** If ShadowMountPlus briefly refuses a start, the app tries twice more, 3 s apart.
+- **AMPR EMU NG 0.5.1:** See the highlights. The index check ("Does the index fit AMPR EMU NG?") calculates for 0.5.1 – nothing changed in NG's index memory.
+- **zstd 1.6.0:** Packing and unpacking use the new library; the frames are byte-identical to those of 1.5.7, so existing packs stay valid.
 
-### Full reviews
-- Two reviews of the whole app with several reviewers, counter-checks and stress tests. Fixed among others: ejecting a USB drive while PS4Mount searches; images with folders that point to themselves; exFAT folders of other tools ("NoFatChain") that counted as damaged; a double game start; the payload store replaces a foreign file only after asking; zstd-packed games are named correctly in the AMPR window.
-- **Fullscreen app:** A save-game ZIP on a drive can be deleted (asks first); before installing a package it asks for the plan; conflict question, note cards and more than 30 translations fixed.
+### Manual, FAQ and screenshots
+- **Renewed:** All 98 screenshots (14 pages × 7 languages) show v1.93 – NTFS in the file manager, the grey firmware badge, the full serial number on request. Texts in all seven languages are up to date: start protection, "Device busy" retry, home-network names and error 403, NTFS unplugged in the middle of writing.
+- **API notes:** The rows for the index check and the NG download described NG 0.4.0; they now describe what the app answers.
+
+## Fixes
+- **Translations:** The location "Internal SSD (/data)" in the file manager and a few lines of the play-time page were half German in the other languages.
 
 ## Notes
-- **Tried on the console** (Slim, firmware 12.00): NTFS with two sticks (250 GB and 60 GB) – upload, read back with checksum, copies in every direction, move, delete, eject, plugging in again after 10 s; a stick unplugged from a Windows PC and one unplugged from the PS5 in the middle of writing appear read-only with the fitting reason. All 80 read-only routes and 31 malformed requests without a problem, kernel log without a crash.
-- **Known:** Very large folders on NTFS (about 100,000 files) are slow; on a slow stick every new small file takes one to three seconds, and the first write after each start of the app empties the stick's Windows journal (a few seconds).
+- **Tried on the console** (Slim, firmware 12.00): the NTFS speeds above with a 60 GB stick; a test game with zstd packs started with the debug build of NG 0.5.1 (1,134 blocks read in 26 s, nothing odd in the kernel log); zstd 1.6.0 verified, unpacked, packed again (compared byte by byte with the originals) and verified again without a bad block.
+- **Known:** A very cheap stick can stall for minutes on a write now and then – seen with one stick, also with the old driver. Folders with about 100,000 files have not been tried since the speed-up.
 - 391 tests of the fullscreen app, 46 host tests and the simulation pass. Send the new ELF to port 9021 and copy the tiles FAKE86921 and FAKE86922 from this release again (the fullscreen app must be closed for that).
 
 ## Downloads
 | File | What it is for |
 |---|---|
-| `PS5_Cooling_System_Center_v1.93.0.elf` | The main program (send it to port 9021) |
+| `PS5_Cooling_System_Center_v1.94.0.elf` | The main program (send it to port 9021) |
 | `FAKE86921.zip` | Fullscreen tile: copy the folder to `/data/homebrew/` |
 | `FAKE86922.zip` | Browser tile: copy the folder to `/data/homebrew/` |
 | `LIESMICH.txt` | Instructions (German) |
@@ -39,4 +39,4 @@
 ## Thanks
 To everyone whose work is in the app or makes it possible – the full list is in the app under "Credits" or Profile → Thanks. Especially **abcde6543** for PS5-NTFS-BROWSER, **gasb07** for PS4Mount, **quer3q** for Dump Forge, AMPR EMU NG and Kraken Mount, **drakmor** for ShadowMountPlus, **itsPLK** for the Payload Manager and the payload mirror, and **John Törnblom** and the contributors of the PS5 payload SDK.
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.92.0...v1.93.0
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.93.0...v1.94.0

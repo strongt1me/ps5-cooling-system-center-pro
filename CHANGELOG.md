@@ -2,7 +2,7 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.94.0 – 24.11.2026
 
 ### Fremdbaustein: zstd 1.6.0 (facebook/zstd, 23.11.2026; Wunsch des Users, 24.11.2026)
 - **zstd 1.5.7 → 1.6.0** in `src/third_party/zstd` (BSD-3): 31 Dateien der Bibliothek ersetzt, `common/bmi2.h` neu; die Liste der gebauten Dateien bleibt gleich (ohne Mehrfädigkeit, ohne Assembler-Entpacker). Prüfsumme des Quellarchivs mit der `.sha256` der Veröffentlichung verglichen.

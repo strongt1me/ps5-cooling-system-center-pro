@@ -1,36 +1,36 @@
-# PS5 Cooling & System Center – Pro v1.93.0
+# PS5 Cooling & System Center – Pro v1.94.0
 
 ## Highlights
-- **NTFS-Laufwerke im Dateimanager:** Ein Stick oder eine Festplatte mit NTFS (dem Dateisystem von Windows), die die Konsole selbst nicht einhängt, erscheint als `ntfs0` und lässt sich lesen und beschreiben: ansehen, herunterladen, hochladen, neuer Ordner, kopieren und verschieben in beide Richtungen, löschen, sicher auswerfen. Im Browser und in der Vollbild-App, mit dem Treiber von PS5-NTFS-BROWSER (abcde6543).
-- **Sicher bei kaputten oder präparierten Sticks:** Der NTFS-Treiber ist gegen beschädigte Datenträger gehärtet (Fuzzing mit über 22 Millionen Durchläufen, Abbilder, die den Original-Treiber hängen oder abstürzen lassen). Ein Stick, den Windows nicht ganz freigegeben hat oder der mitten im Schreiben abgezogen wurde, bleibt nur lesbar, mit Grund und Anleitung.
-- **Firmware-Marke nach dem SDK des Spiels:** Verlangt die `param.json` eine neuere Firmware, die `eboot.bin` ist aber mit einem passenden SDK gebaut, bleibt die Marke grau und sagt, warum das Spiel trotzdem startet. FPKGMount-Spiele (Kraken Mount) werden jetzt auch auf einen Backport geprüft.
+- **NTFS-Laufwerke sind viel schneller:** Große Ordner, viele kleine Dateien und der erste Schreibvorgang nach dem Start der App dauern nicht mehr ewig. An der Konsole mit einem langsamen Stick: Eine kleine Datei hochladen dauert 0,2 s statt 2–3,5 s, ein Ordner mit 101 Dateien (83 MB) ist in 6 s kopiert, 121 Dateien sind in 3 s gelöscht, und der erste Schreibvorgang nach einem Start der App dauert 0,2 s statt 5–9 s.
+- **AMPR EMU NG 0.5.1 (quer3q):** Schnelleres Lesen gepackter Spiele (etwa 10 % im pkg-Modus) und Korrekturen für Marvel's Wolverine (konnte nicht speichern), Hades (hing beim Beenden), DIRT 5 (stürzte nach 15 s ab), MARVEL Cosmic Invasion und Scott Pilgrim EX. Die App bringt jetzt 0.5.1 und 0.5.0 mit; 0.4.1 ist entfallen.
+- **Sicherheitsaktualisierung für zstd-Pakete:** zstd 1.6.0 schließt die Lücke CVE-2026-124851. Die App nutzt nur die einfachen Funktionen und war vermutlich nicht betroffen; die Pakete bleiben byte-gleich, und früher gepackte lesen sich weiter.
 
 ## Neu
 ### Dateimanager: NTFS
-- **Lesen und Schreiben:** Jede NTFS-Partition (MBR oder GPT) wird ein eigener Ort (`ntfs0`, `ntfs1` …). Umbenennen, Bearbeiten und Ersetzen gehen nicht – der Treiber ändert vorhandene Dateien nie; bei vergebenen Namen gibt es „Beide behalten“ und „Überspringen“. Namen, die Windows nicht erlaubt, werden mit `_` angepasst. Spiele lassen sich von NTFS nicht starten.
-- **Nur lesbar, mit Grund:** Ohne „Sicher entfernen“ abgezogen, Schnellstart, chkdsk nicht fertig, Ruhezustand einer Windows-Systemplatte, an der PS5 mitten im Schreiben abgezogen – der Hinweis sagt jeweils, was am Windows-PC zu tun ist.
-- **Sicher auswerfen:** Knopf am NTFS-Ort (Vollbild: Quadrat-Taste). Schreibt Ausstehendes aus, leert den Schreib-Cache des Sticks und gibt ihn frei („ntfs0 kann jetzt abgezogen werden.“).
-- **Vorsicht beim Einstecken:** Die App öffnet nur ganze Platten, eine frisch eingesteckte erst nach 10 s, nie während eines Auswerfens, und versucht eine Platte, die sich nicht öffnen lässt, nur noch in wachsenden Abständen.
-- **Hochladen in ganzen Blöcken:** auf einem langsamen Stick 2,8 MB/s statt vorher 17 KB/s mit Abbruch.
+- **Große Ordner:** Ein Name wird im sortierten Index gesucht, statt jeden Eintrag abzulaufen. Am PC brauchen 20 000 Namen 0,03 s statt 2,45 s; viele Dateien in einem Ordner kopieren oder löschen liest den Ordner nicht mehr immer wieder.
+- **Viele kleine Dateien:** Der Treiber sammelt seine kleinen Änderungen und schreibt nur die geänderten Sektoren, geordnet, wenn ein Hochladen, ein Ordner oder ein Auftrag endet. Auf einem nachgebildeten langsamen Stick sind 300 kleine Dateien in 0,8 s statt 14,2 s angelegt und in 3,9 s statt 10,4 s gelöscht. Ein Stick, der mitten im Auftrag abgezogen wird, gilt weiter als nicht sauber getrennt.
+- **Erster Schreibvorgang nach dem Start der App:** Das Windows-Journal des Sticks wird nur geleert, wenn es nicht schon leer ist; der erste Schreibvorgang schreibt nicht mehr bis zu 64 MB neu.
 
 ### Spiele
-- **Firmware-Marke und Backport bei FPKGMount-Spielen:** Siehe Highlights. Die Vollbild-App zeigt in den Details die Zeile „Gebaut mit SDK“.
-- **PS4Mount:** PS4-Spiele auf der M.2-Erweiterung werden nicht mehr angemeldet (die Konsole bricht ihren Start ab); sie stehen unter „Gefunden, nicht eingebunden“ mit Grund. Direkt nach dem Anmelden startet ein Spiel sofort (vorher kam „nicht in der Spieleliste“).
-- **Start bei „Device busy“:** Lehnt ShadowMountPlus einen Start kurz ab, versucht die App es noch zweimal im Abstand von 3 s.
+- **AMPR EMU NG 0.5.1:** Siehe Highlights. Die Prüfung „Passt der Index in AMPR EMU NG?“ rechnet für 0.5.1 – am Indexspeicher von NG hat sich nichts geändert.
+- **zstd 1.6.0:** Packen und Entpacken nutzen die neue Bibliothek; die Frames sind byte-gleich mit denen von 1.5.7, vorhandene Pakete bleiben also gültig.
 
-### Gesamtprüfungen
-- Zwei Durchsichten der ganzen App mit mehreren Prüfern, Gegenprüfungen und Belastungstests. Behoben unter anderem: Auswerfen eines USB-Laufwerks, während PS4Mount sucht; Abbilder mit Ordnern, die auf sich selbst zeigen; exFAT-Ordner anderer Werkzeuge („NoFatChain“), die als beschädigt galten; doppelter Spielstart; der Payload-Store ersetzt eine fremde Datei nur nach Rückfrage; zstd-gepackte Spiele heißen im AMPR-Fenster richtig.
-- **Vollbild-App:** Eine Spielstand-ZIP auf einem Laufwerk lässt sich löschen (fragt zuerst); vor dem Installieren eines Pakets fragt sie den Plan; Konfliktfrage, Hinweiskarten und über 30 Übersetzungen berichtigt.
+### Handbuch, FAQ und Bildschirmfotos
+- **Erneuert:** Alle 98 Bildschirmfotos (14 Seiten × 7 Sprachen) zeigen v1.93 – NTFS im Dateimanager, die graue Firmware-Marke, die ganze Seriennummer auf Wunsch. Die Texte in allen sieben Sprachen sind auf Stand: Startschutz, Wiederholung bei „Device busy“, Heimnetz-Namen und Fehler 403, NTFS mitten im Schreiben abgezogen.
+- **API-Hinweise:** Die Zeilen zur Indexprüfung und zum NG-Download beschrieben noch NG 0.4.0; jetzt stehen dort die Antworten der App.
+
+## Fehlerbehebungen
+- **Übersetzungen:** Der Ort „Interne SSD (/data)“ im Dateimanager und einige Zeilen der Seite Spielzeit blieben in den anderen Sprachen halb deutsch.
 
 ## Hinweise
-- **An der Konsole erprobt** (Slim, Firmware 12.00): NTFS mit zwei Sticks (250 GB und 60 GB) – Hochladen, Lesen mit Prüfsumme, Kopieren in alle Richtungen, Verschieben, Löschen, Auswerfen, Wiedereinstecken nach 10 s; ein Stick, der am Windows-PC und einer, der an der PS5 mitten im Schreiben abgezogen wurde, erscheint nur lesbar mit dem passenden Grund. Alle 80 lesenden Routen und 31 Fehl-Anfragen ohne Problem, Kernel-Log ohne Absturz.
-- **Bekannt:** Sehr große Ordner auf NTFS (etwa 100 000 Dateien) sind langsam; auf einem langsamen Stick kostet jede neue kleine Datei ein bis drei Sekunden, und der erste Schreibvorgang nach jedem Start der App leert das Windows-Journal des Sticks (einige Sekunden).
+- **An der Konsole erprobt** (Slim, Firmware 12.00): die NTFS-Zeiten oben mit einem 60-GB-Stick; ein Testspiel mit zstd-Paketen startete mit der Debug-Fassung von NG 0.5.1 (1 134 Blöcke in 26 s gelesen, im Kernel-Log nichts Auffälliges); zstd 1.6.0 prüfte, entpackte, packte neu (Byte für Byte mit den Originalen verglichen) und prüfte wieder – ohne defekten Block.
+- **Bekannt:** Ein sehr billiger Stick kann beim Schreiben ab und zu minutenlang stocken – bei einem Stick gesehen, auch mit dem alten Treiber. Ordner mit etwa 100 000 Dateien sind seit der Beschleunigung nicht ausprobiert.
 - 391 Tests der Vollbild-App, 46 Host-Tests und die Simulation bestehen. Die neue ELF an Port 9021 senden und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein).
 
 ## Downloads
 | Datei | Wofür |
 |---|---|
-| `PS5_Cooling_System_Center_v1.93.0.elf` | Das Hauptprogramm (an Port 9021 senden) |
+| `PS5_Cooling_System_Center_v1.94.0.elf` | Das Hauptprogramm (an Port 9021 senden) |
 | `FAKE86921.zip` | Vollbild-Kachel: Ordner nach `/data/homebrew/` kopieren |
 | `FAKE86922.zip` | Browser-Kachel: Ordner nach `/data/homebrew/` kopieren |
 | `LIESMICH.txt` | Anleitung (Deutsch) |
@@ -39,4 +39,4 @@
 ## Dank
 An alle, deren Arbeit in der App steckt oder sie möglich macht – die ganze Liste steht in der App unter „Credits“ oder Profil → Dank. Besonders **abcde6543** für PS5-NTFS-BROWSER, **gasb07** für PS4Mount, **quer3q** für Dump Forge, AMPR EMU NG und Kraken Mount, **drakmor** für ShadowMountPlus, **itsPLK** für den Payload Manager und den Payload-Spiegel sowie **John Törnblom** und den Mitwirkenden am PS5-Payload-SDK.
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.92.0...v1.93.0
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.93.0...v1.94.0
