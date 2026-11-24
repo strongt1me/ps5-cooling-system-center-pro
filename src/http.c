@@ -136,6 +136,12 @@ write_all(int fd, const void *buf, size_t len) {
   return 0;
 }
 
+/* the same rule for the downloads of the file manager, which write their body themselves (review 24.11.2026) */
+int
+ps5tm_http_write_all(int fd, const void *buf, size_t len) {
+  return write_all(fd, buf, len);
+}
+
 /* Closing a socket with unread request bytes in it makes TCP send a reset, and the browser shows a network error
    instead of the answer just written. So: end the sending side, read away what the client still sends (1 s, 64 KiB
    at most), then close. */

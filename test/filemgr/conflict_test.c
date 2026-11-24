@@ -68,6 +68,16 @@ int ps5tm_thread_create(pthread_t *t, const pthread_attr_t *a, void *(*f)(void *
 static int g_status;
 static char g_body[16384];
 void ps5tm_http_send_json(int fd, int status, const char *json) { (void)fd; g_status = status; snprintf(g_body, sizeof(g_body), "%s", json); }
+/* downloads write their body through http.c's rule (at least 64 KiB in every 30 s); here: plain writes */
+int ps5tm_http_write_all(int fd, const void *buf, size_t len) {
+  for(const char *p = buf; len;) {
+    ssize_t n = write(fd, p, len);
+    if(n <= 0) return -1;
+    p += n;
+    len -= (size_t)n;
+  }
+  return 0;
+}
 void ps5tm_http_send_error(int fd, int status, const char *code, const char *message) {
   (void)fd;
   g_status = status;
@@ -211,6 +221,21 @@ main(void) {
   CHECK(is("/data/dst/f.txt", "NEW"), "file replaced");
   CHECK(is("/data/src/f.txt", "NEW"), "copy keeps the original");
   CHECK(!has("/data/dst/f.txt.fm-tmp"), "no temporary file left");
+
+  /* 2b. replace, but the copy fails (the source cannot be read): the old file stays. The clean-up after a failed item took the
+     name in the target for its own and deleted it, though the copy goes to a temporary file and the old one is still there (review
+     24.11.2026). Not as root: root reads a file without read permission. */
+  if(geteuid() != 0) {
+    fresh();
+    char p[700];
+    snprintf(p, sizeof(p), "%s/data/src/f.txt", ROOT);
+    chmod(p, 0);
+    int st = transfer("/api/v1/files/copy", "/data/src/f.txt", "/data/dst", "replace");
+    call("GET", "/api/v1/files/job", NULL);
+    CHECK(is("/data/dst/f.txt", "OLD"), "failed replace keeps the old file (HTTP %d, job %s)", st, g_body);
+    CHECK(!has("/data/dst/f.txt.fm-tmp"), "failed replace: no temporary file left");
+    chmod(p, 0644);
+  }
 
   /* 3. keep both: f (2).txt, then f (3).txt */
   fresh();

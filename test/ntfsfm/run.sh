@@ -8,7 +8,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 work=${TMPDIR:-/tmp}/ntfsfm
 PATH="$PATH:/usr/sbin:/sbin"
-for t in mkntfs ntfsls ntfscat ntfsresize sfdisk; do
+for t in mkntfs ntfsls ntfscat ntfsresize ntfsfix sfdisk python3 cc; do
   command -v "$t" >/dev/null || { echo "ntfsfm: $t fehlt (Pakete ntfs-3g, fdisk)" >&2; exit 2; }
 done
 rm -rf "$work"
@@ -96,4 +96,9 @@ left=$(ntfsls -p /gross "$work/big.img" 2>/dev/null | grep -c "_Mixed.TXT")
 ntfsresize --check --force "$work/big.img" >"$work/resize3.log" 2>&1 || { echo "FAIL bigdir: ntfs-3g check"; tail -5 "$work/resize3.log"; fail=1; }
 "$work/dirty" --clean "$work/big.img" >/dev/null 2>&1 || { echo "FAIL bigdir: dirty flag left set"; fail=1; }
 [ "$fail" = 0 ] || exit 1
-echo "ok: ntfsfm (file manager on NTFS images, read back by ntfs-3g; 5 hostile images, 1 a little larger than its drive, 4 journals, dirty flag, a folder of 3000 files)"
+
+# interrupted index changes (24.11.2026, after upstream PR #22): every add and remove of a folder that splits and merges its index is cut
+# after each of its device writes; the app's reader and ntfs-3g must still find every name (crash.py, about a minute)
+if out=$(TMPDIR="$work" timeout 900 python3 "$here/crash.py" 2>&1); then echo "   $out" | head -1; else echo "FAIL crash:"; echo "$out" | head -20; fail=1; fi
+[ "$fail" = 0 ] || exit 1
+echo "ok: ntfsfm (file manager on NTFS images, read back by ntfs-3g; 5 hostile images, 1 a little larger than its drive, 4 journals, dirty flag, a folder of 3000 files, index changes cut at every write)"

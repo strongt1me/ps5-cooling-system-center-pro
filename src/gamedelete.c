@@ -773,7 +773,13 @@ run_installed(const dl_args_t *a) {
   snprintf(smp.id, sizeof(smp.id), "%s", a->id);
   job_stage(5, 99, smp.initial);
   pthread_t sth;
-  int sampling = smp.initial > 0 && pthread_create(&sth, NULL, sampler_thread, &smp) == 0;
+  /* (review 24.11.2026) a stack of its own: title_bytes walks the title's folders recursively (up to 64 levels, a struct stat each),
+     and a thread without a size gets only 64 KiB from the console's libkernel (thr_init, upstream PS5-NTFS-BROWSER PR #13) */
+  pthread_attr_t sat;
+  pthread_attr_init(&sat);
+  pthread_attr_setstacksize(&sat, 256 * 1024);
+  int sampling = smp.initial > 0 && pthread_create(&sth, &sat, sampler_thread, &smp) == 0;
+  pthread_attr_destroy(&sat);
   int pat = 0, add = 0;
   char why[600];
   int rc = ps5tm_pkginst_uninstall(a->id, &pat, &add, why, sizeof(why));

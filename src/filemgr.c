@@ -659,14 +659,8 @@ handle_download(int fd, const ps5tm_request_t *req) {
   while(left > 0) {
     ssize_t r = read(in, buf, 256 * 1024);
     if(r <= 0) break;
-    ssize_t off = 0;
-    while(off < r) {
-      ssize_t k = write(fd, buf + off, (size_t)(r - off));
-      if(k < 0 && errno == EINTR) continue;
-      if(k <= 0) { left = -1; break; }
-      off += k;
-    }
-    if(left < 0) break;
+    /* at least 64 KiB in every 30 s, as every answer (review 24.11.2026): a trickling reader held the thread for ever */
+    if(ps5tm_http_write_all(fd, buf, (size_t)r) != 0) break;
     left -= r;
   }
   free(buf);
@@ -678,7 +672,10 @@ handle_download(int fd, const ps5tm_request_t *req) {
 
 static cJSON *
 parse_body(const ps5tm_request_t *req) {
-  return req->body ? cJSON_Parse(req->body) : NULL;
+  /* "\u0000" in a string is a NUL byte for cJSON, so "/ntfs0/Saves\u0000/x" arrived as "/ntfs0/Saves" (review 24.11.2026, after upstream
+     PR #14). No name or path holds one: such a request is refused as a whole (NULL, the callers answer 400). */
+  if(!req->body || strstr(req->body, "\\u0000")) return NULL;
+  return cJSON_Parse(req->body);
 }
 
 static int other_job_active(char *err, size_t n);
@@ -1796,7 +1793,9 @@ run_copy(fm_args_t *a, int move) {
            (EEXIST at the top): then someone else made it in the meantime, and it is not ours to delete. An EEXIST
            from inside a folder this job made does not count as that (review 31.10.2026). */
         struct stat ps;
-        int ours = S_ISDIR(ss.st_mode) ? g_made_top : rc != EEXIST;
+        /* A replaced file is not ours either: the copy went to a temporary file beside it (copy_file), so the name still holds
+           the old file, and the clean-up deleted it (review 24.11.2026: "Ersetzen" and a source that could not be read). */
+        int ours = S_ISDIR(ss.st_mode) ? g_made_top : (!replacing && rc != EEXIST);
         if(ours && lstat(rt, &ps) == 0) delete_tree(rt, t, ps.st_dev, 0, 0);
       } else if(move && skipped_some) {
         snprintf(err, sizeof(err), "%.250s wurde kopiert, aber Verknüpfungen oder Gerätedateien darin ließen sich nicht "

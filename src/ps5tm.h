@@ -2313,6 +2313,9 @@ int  ps5tm_http_send_download(int fd, const char *path, const char *ctype,
                               const char *filename, uint64_t max_bytes);
 void ps5tm_http_send_error(int fd, int status, const char *code,
                            const char *message);
+/* Writes len bytes to a client as every answer does: at least 64 KiB in every 30 s, or -1 (a client that only trickles
+   would hold its connection thread, and on an NTFS drive its reference, for ever; review 24.11.2026). 0 when all went out. */
+int  ps5tm_http_write_all(int fd, const void *buf, size_t len);
 
 /* Returns a listening socket, -1 on error, or -2 when the port is taken. */
 int  ps5tm_http_bind(unsigned port);

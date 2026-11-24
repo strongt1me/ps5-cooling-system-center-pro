@@ -268,9 +268,30 @@ ssize_t attr_pread(ntfs_vol_t *v, attr_t *a, uint64_t off, void *out,
 
 /* ---- MFT records --------------------------------------------------------- */
 
+/* A record must agree with itself before anything trusts it (app, 23.11.2026; the walk over the attributes 24.11.2026 after upstream
+   PR #17, the checks ntfs-3g makes before using a record): its sizes match the record size, the attributes start behind the fixup
+   array and end with the end marker inside the used part, and every attribute's name, resident value and run list lie inside the
+   attribute. The writer moves and resizes attributes in place from these fields (rec_insert with a length past `used` moved about
+   4 GB), and the readers take values and run lists from them. */
 static int record_ok(const ntfs_vol_t *v, const uint8_t *buf) {
   uint32_t used = le32(buf + 0x18), cap = le32(buf + 0x1C), ao = le16(buf + 0x14);
-  return cap == v->rec_size && used <= cap && ao >= 0x18 && !(ao & 7) && ao + 8 <= used;
+  if (cap != v->rec_size || used > cap || ao < 0x18 || (ao & 7) || ao + 8 > used) return 0;
+  if (ao < le16(buf + 4) + 2u * le16(buf + 6)) return 0;
+  for (uint32_t p = ao;;) {
+    if ((uint64_t)p + 4 > used) return 0;                     /* no end marker */
+    if (le32(buf + p) == AT_END) return 1;
+    if ((uint64_t)p + 8 > used) return 0;
+    const uint8_t *at = buf + p;
+    uint32_t len = le32(at + 4);
+    if (len < 24 || (len & 7) || len > used - p) return 0;
+    if (at[9] && le16(at + 10) + 2u * at[9] > len) return 0;
+    if (!at[8]) {
+      if ((uint64_t)le16(at + 20) + le32(at + 16) > len) return 0;
+    } else if (len < 0x40 || le16(at + 32) >= len) {
+      return 0;
+    }
+    p += len;
+  }
 }
 
 int read_record_any(ntfs_vol_t *v, uint64_t inode, uint8_t *buf) {
@@ -393,6 +414,11 @@ int attr_find(ntfs_vol_t *v, uint64_t inode, uint32_t type,
   uint8_t *ext = malloc(v->rec_size);
   if (!ext) { free(lbuf); rc = -ENOMEM; goto done; }
   int found = 0;
+  /* The segments of a non-resident attribute follow each other: each starts where the runs read so far end (the list is sorted by
+     lowest VCN, as Windows and ntfs-3g write it). Without this a list naming the same segment again and again appended its runs again
+     and again: hundreds of MB from a few MB on the stick, already while mounting ($MFT). (app, 24.11.2026, after upstream PR #21; the
+     end is taken from the runs, not from the segment's highest VCN, which is -1 for an empty attribute and would wrap to 0.) */
+  uint64_t next_vcn = 0;
   rc = 0;
   for (size_t p = 0; p + 26 <= (size_t)ln && !rc;) {
     const uint8_t *e = lbuf + p;
@@ -419,7 +445,17 @@ int attr_find(ntfs_vol_t *v, uint64_t inode, uint32_t type,
       if (le32(seg) == type && le16(seg + 14) == inst &&
           attr_name_eq(seg, name, nlen)) {
         if (seg[8] && le64(seg + 16) != lowest) continue;
+        if (seg[8] && lowest != next_vcn) { rc = -EIO; break; }
+        const int later = found;
         rc = absorb(out, seg, le32(seg + 4), !found);
+        if (!rc && seg[8]) {
+          const run_t *r = out->nruns ? &out->runs[out->nruns - 1] : NULL;
+          uint64_t end = r ? (uint64_t)r->vcn + r->len : 0;
+          /* a segment after the first maps clusters in a valid list; one that adds none could be named again and again, each time
+             a record read under the lock (upstream PR #21, commit 862fda8) */
+          if (later && end <= next_vcn) { rc = -EIO; break; }
+          next_vcn = end;
+        }
         found = 1;
         break;
       }

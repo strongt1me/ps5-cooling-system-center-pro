@@ -37,13 +37,15 @@ ntfs_words(int e) {
 }
 
 /* A name Windows can hold, as the original makes it (vfs_safe_name): no \ : * ? " < > |, no control character, no trailing dot or
-   space, and not a device name such as CON. */
-static void
+   space, and not a device name such as CON (also COM0, LPT0 and COM¹ … LPT³, which Windows treats the same; upstream PR #20). 0, or -1
+   when the name does not fit: it is never cut, a cut name could be another one that is there (upstream PR #14). */
+static int
 fmn_safe_name(char *dst, size_t len, const char *src) {
-  static const char *const reserved[] = { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-                                          "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" };
+  static const char *const reserved[] = { "CON", "PRN", "AUX", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+                                          "COM8", "COM9", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+                                          "COM\xC2\xB9", "COM\xC2\xB2", "COM\xC2\xB3", "LPT\xC2\xB9", "LPT\xC2\xB2", "LPT\xC2\xB3" };
   char tmp[FM_NAME];
-  snprintf(tmp, sizeof(tmp), "%s", src);
+  if(snprintf(tmp, sizeof(tmp), "%s", src) >= (int)sizeof(tmp)) return -1;
   for(char *p = tmp; *p; p++)
     if(strchr("\\:*?\"<>|", *p) || (unsigned char)*p < 0x20) *p = '_';
   size_t n = strlen(tmp);
@@ -55,9 +57,9 @@ fmn_safe_name(char *dst, size_t len, const char *src) {
     memcpy(stem, tmp, sl);
     stem[sl] = 0;
     for(size_t i = 0; i < sizeof(reserved) / sizeof(reserved[0]); i++)
-      if(!strcasecmp(stem, reserved[i])) { snprintf(dst, len, "_%s", tmp); return; }
+      if(!strcasecmp(stem, reserved[i])) return snprintf(dst, len, "_%s", tmp) >= (int)len ? -1 : 0;
   }
-  snprintf(dst, len, "%s", tmp);
+  return snprintf(dst, len, "%s", tmp) >= (int)len ? -1 : 0;
 }
 
 
@@ -541,13 +543,9 @@ fmn_send_body(int fd, fmn_rf_t *f, uint64_t count, size_t chunk) {
     size_t want = count - off < chunk ? (size_t)(count - off) : chunk;
     ssize_t r = fmn_read(f, buf, want, off);
     if(r <= 0) { ok = 0; break; }
-    ssize_t s = 0;
-    while(s < r) {
-      ssize_t k = write(fd, buf + s, (size_t)(r - s));
-      if(k < 0 && errno == EINTR) continue;
-      if(k <= 0) { ok = 0; break; }
-      s += k;
-    }
+    /* at least 64 KiB in every 30 s (review 24.11.2026): a trickling reader held the thread, the drive's reference (eject: 409) and the
+       read count for ever */
+    if(ps5tm_http_write_all(fd, buf, (size_t)r) != 0) { ok = 0; break; }
     off += (uint64_t)r;
   }
   free(buf);
@@ -658,8 +656,10 @@ fmn_writable_or(fmn_node_t *n, char *msg, size_t mn) {
 static void
 fmn_handle_mkdir(int fd, const char *dir, const char *name_in) {
   char name[FM_NAME], t[FM_PATH], msg[400];
-  fmn_safe_name(name, sizeof(name), name_in);
-  if(join(dir, name, t, sizeof(t)) != 0) { ps5tm_http_send_error(fd, 400, "bad_name", "Ungültiger Ordner oder Name."); return; }
+  if(fmn_safe_name(name, sizeof(name), name_in) != 0 || join(dir, name, t, sizeof(t)) != 0) {
+    ps5tm_http_send_error(fd, 400, "bad_name", "Ungültiger Ordner oder Name.");
+    return;
+  }
   fmn_node_t n;
   int rc = fmn_make(t, &n);
   if(rc) { ps5tm_http_send_error(fd, rc == ENODEV ? 404 : 400, "mkdir_failed", ntfs_words(rc)); return; }
@@ -714,7 +714,11 @@ fmn_free_name(fmn_node_t *dir, const char *base, int is_dir, char *out, size_t o
 static void
 fmn_receive_upload(int fd, const char *dir, const char *name_in, const char *conflict, const char *prefix, size_t prefix_len, size_t total) {
   char name[FM_NAME], t[FM_PATH], msg[500];
-  fmn_safe_name(name, sizeof(name), name_in);
+  if(fmn_safe_name(name, sizeof(name), name_in) != 0) {
+    drain_body(fd, prefix_len, total);
+    ps5tm_http_send_error(fd, 400, "bad_name", "Ungültiger Ordner oder Name.");
+    return;
+  }
   fmn_node_t d;
   int rc = fmn_make(dir, &d);
   if(rc) {                                              /* a stick that is gone is no bad name (audit 23.11.2026) */
@@ -896,8 +900,10 @@ fmn_copy(fmn_node_t *s, fmn_node_t *t, char *vs, size_t vl, dev_t dev, int depth
   size_t sw = s->len, tw = t->len;
   for(size_t i = 0; !rc && i < d.n; i++) {
     char tn[FM_NAME];
-    if(t->ntfs) fmn_safe_name(tn, sizeof(tn), d.e[i].name);
-    else snprintf(tn, sizeof(tn), "%s", d.e[i].name);
+    if(t->ntfs ? fmn_safe_name(tn, sizeof(tn), d.e[i].name) != 0 : snprintf(tn, sizeof(tn), "%s", d.e[i].name) >= (int)sizeof(tn)) {
+      rc = ENAMETOOLONG;
+      break;
+    }
     size_t nl = strlen(d.e[i].name);
     if(vl + 1 + nl >= PATH_MAX) { rc = ENAMETOOLONG; break; }
     if((rc = fmn_push(s, d.e[i].name)) != 0 || (rc = fmn_push(t, tn)) != 0) { fmn_pop(s, sw); fmn_pop(t, tw); break; }
@@ -983,8 +989,10 @@ fmn_delete_copied(fmn_node_t *s, fmn_node_t *t, int depth, unsigned *kept, unsig
   size_t sw = s->len, tw = t->len;
   for(size_t i = 0; !rc && i < d.n; i++) {
     char tn[FM_NAME];
-    if(t->ntfs) fmn_safe_name(tn, sizeof(tn), d.e[i].name);
-    else snprintf(tn, sizeof(tn), "%s", d.e[i].name);
+    if(t->ntfs ? fmn_safe_name(tn, sizeof(tn), d.e[i].name) != 0 : snprintf(tn, sizeof(tn), "%s", d.e[i].name) >= (int)sizeof(tn)) {
+      rc = ENAMETOOLONG;
+      break;
+    }
     if((rc = fmn_push(s, d.e[i].name)) != 0 || (rc = fmn_push(t, tn)) != 0) { fmn_pop(s, sw); fmn_pop(t, tw); break; }
     rc = fmn_delete_copied(s, t, depth + 1, kept, read_kept);
     fmn_pop(s, sw);
@@ -1039,10 +1047,10 @@ fmn_run_copy(fm_args_t *a, int move) {
       }
     }
     char name[FM_NAME];
-    if(t.ntfs) fmn_safe_name(name, sizeof(name), base_name(a->src[i]));
-    else snprintf(name, sizeof(name), "%s", base_name(a->src[i]));
+    if(t.ntfs ? fmn_safe_name(name, sizeof(name), base_name(a->src[i])) != 0
+              : snprintf(name, sizeof(name), "%s", base_name(a->src[i])) >= (int)sizeof(name)) rc = ENAMETOOLONG;
     int replacing = 0, skip = 0;
-    if((rc = fmn_push(&t, name)) != 0) { fmn_unmake(&s); snprintf(err, sizeof(err), "Bei %.300s: %s", a->src[i], ntfs_words(rc)); break; }
+    if(rc || (rc = fmn_push(&t, name)) != 0) { fmn_unmake(&s); snprintf(err, sizeof(err), "Bei %.300s: %s", a->src[i], ntfs_words(rc)); break; }
     if(fmn_stat(&t, &ts) == 0) {
       if(a->conflict == FM_C_SKIP || (a->conflict == FM_C_REPLACE && !s.ntfs && !t.ntfs && ts.dev == ss.dev && ts.id == ss.id)) skip = 1;
       else if(a->conflict == FM_C_KEEP) {
@@ -1082,7 +1090,9 @@ fmn_run_copy(fm_args_t *a, int move) {
     pthread_mutex_unlock(&g_lock);
     if(rc) {
       /* what this item left behind is its own and goes again, unless the very first step found the name taken (made by someone else) */
-      int ours = ss.type == 'd' ? g_made_top : rc != EEXIST;
+      /* a replaced file neither: the copy went to a temporary file beside it (fmn_wcreate), the name still holds the old file
+         (review 24.11.2026: the clean-up deleted it after "Ersetzen" with a source that could not be read) */
+      int ours = ss.type == 'd' ? g_made_top : (!replacing && rc != EEXIST);
       fmn_st_t ps;
       if(ours && fmn_stat(&t, &ps) == 0) (void)fmn_delete(&t, vs, strlen(vs), ps.dev, 0, 0);
     } else if(move && skipped_some) {
@@ -1274,9 +1284,16 @@ fmn_copy_check(fm_args_t *a, int move, cJSON *conflicts, uint64_t *bytes, uint64
       http = 400;
       snprintf(err, en, "Ein Ordner kann nicht in sich selbst %s werden.", move ? "verschoben" : "kopiert");
     }
+    /* (24.11.2026, upstream PR #16) Windows' own entries (system attribute: $Extend and what is in it, System Volume Information) are not
+       moved: the move ends with deleting the original, and the delete refuses them too */
+    if(!http && move && s.ntfs && (ss.attrs & NTFS_FA_SYSTEM)) {
+      http = 403;
+      snprintf(err, en, "%.300s gehört zu Windows (Systemordner) und bleibt.", a->src[i]);
+    }
     char name[FM_NAME], tv[FM_PATH];
-    if(t.ntfs) fmn_safe_name(name, sizeof(name), s.ntfs && !strcmp(s.p, "/") ? ps5tm_ntfs_name(s.vol) : base_name(a->src[i]));
-    else snprintf(name, sizeof(name), "%s", base_name(a->src[i]));
+    int long_name = t.ntfs ? fmn_safe_name(name, sizeof(name), s.ntfs && !strcmp(s.p, "/") ? ps5tm_ntfs_name(s.vol) : base_name(a->src[i])) != 0
+                           : snprintf(name, sizeof(name), "%s", base_name(a->src[i])) >= (int)sizeof(name);
+    if(!http && long_name) { http = 400; snprintf(err, en, "Pfad zu lang."); }   /* never a cut name, which could be another one (upstream PR #14) */
     if(!http && (join(a->dest, name, tv, sizeof(tv)) != 0 || (!t.ntfs && !writable(tv)))) {
       http = 403;
       snprintf(err, en, "Dorthin darf „%.200s“ nicht.", name);

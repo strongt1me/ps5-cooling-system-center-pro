@@ -100,5 +100,34 @@ in the code; the full list:
     "clean" record would otherwise wait in the cache for a later flush while `vol_marked` still said set, so the next changes would not
     set it again.
 
-Not changed: three leaks in `ntfs_write.c` that happen only when memory runs out; calloc sizes from the disk in the index and MFT growth
+- From the upstream pull requests of another review session (24.11.2026, fork strongt1me/PS5-NTFS-BROWSER, PRs #13–#22 open upstream,
+  none merged yet), checked against this copy one by one (most of #17 and #21 the app had fixed already, see above):
+  - `ntfs.c` `record_ok` (PR #17): besides the sizes, a walk over the attributes as ntfs-3g makes it: they start behind the fixup
+    array and end with the end marker inside the used part, every name, resident value and run list lies inside its attribute,
+    a non-resident one is at least 0x40 bytes. `rec_insert` moved about 4 GB when an attribute's length reached past `used` (creating
+    in such a folder), and short non-resident headers were read and written past the record.
+  - `ntfs.c` `attr_find` (PR #21): the segments of a non-resident attribute must follow each other in VCN order, measured at the runs
+    read so far (upstream uses the segment's highest VCN, which is -1 for an empty attribute and wraps to 0). A list naming the same
+    segment again and again appended its runs again and again: hundreds of MB from a few MB, already while mounting ($MFT). A segment
+    after the first must map clusters (upstream commit 862fda8: an empty one named again and again cost a record read each time).
+  - `ntfs_write.c` `alloc_fits` (PR #17): `$INDEX_ALLOCATION`'s sizes may not exceed the volume (a flipped bit made growing it ask for
+    4 GB, and `idx_find_free` walked a bitmap of that size under the lock); the index header of `$INDEX_ROOT` starts at 0x10 at least.
+  - `ntfs_write.c` `inode_records` (PR #17): a record listed in a deleted file's attribute list is freed with its clusters only when
+    its base reference names that file (an entry pointing at record 0 freed the clusters of `$MFT`).
+  - `ntfs_write.c` `in_extend` (PR #16): nothing below `$Extend` (record numbers from 24 up, past the `ino < 24` guard) is deleted,
+    and nothing is created there.
+  - `ntfs_write.c` index write order (PR #22): new blocks first, then allocation, bitmap and root, then the changed blocks top-down;
+    a removal writes every node that receives an entry before the one that gives it up (`index_commit`, neighbours in `sib[]` instead
+    of written in step 3), freed blocks last. On top of it, for this copy's write-back cache, ordering points (`ix_order`,
+    `bdev_writeout`) between dependent writes of one change, only where an earlier write of the same change is pending: a plain
+    insert or removal that touches one node costs no extra pass. Test `test/ntfsfm/crash.py`: every add and remove of a folder
+    that splits and merges is cut after each device write (an LD_PRELOAD shim around pwrite), and the app's reader and ntfs-3g must
+    find every name: 901 cut points, 0 lost; the copy before these changes lost names at 11 of 1094 (up to ten at once, or a folder
+    that could no longer be listed). Before, the cache put the blocks of a split or merge on the stick by block number, and a removal
+    that failed in step 4/5 (ENOSPC) had already written the neighbour.
+  - Not taken over: PR #15 (one writer per file): the app runs one upload at a time, never beside a job, and uploads only create new
+    files (`ntfs_wopen` is not used); PRs #13, #14, #18, #19, #20 concern the upstream web server, jobs and vfs, which the app does not
+    carry; the app's own code was checked for the same faults (`src/fm_ntfs.inc`, `src/filemgr.c`, `src/http.c`, see CHANGELOG).
+
+Not changed: three leaks in `ntfs_write.c` that happen only when memory runs out; calloc sizes from the disk in the MFT growth
 (a refused allocation is handled).

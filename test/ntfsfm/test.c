@@ -54,6 +54,16 @@ int ps5tm_thread_create(pthread_t *t, const pthread_attr_t *a, void *(*f)(void *
 static int g_status;
 static char g_body[65536];
 void ps5tm_http_send_json(int fd, int status, const char *json) { (void)fd; g_status = status; snprintf(g_body, sizeof(g_body), "%s", json); }
+/* downloads write their body through http.c's rule (at least 64 KiB in every 30 s); here: plain writes */
+int ps5tm_http_write_all(int fd, const void *buf, size_t len) {
+  for(const char *p = buf; len;) {
+    ssize_t n = write(fd, p, len);
+    if(n <= 0) return -1;
+    p += n;
+    len -= (size_t)n;
+  }
+  return 0;
+}
 void ps5tm_http_send_error(int fd, int status, const char *code, const char *message) {
   (void)fd;
   g_status = status;
@@ -239,6 +249,14 @@ main(int argc, char **argv) {
   CHECK(g_status == 409, "mkdir of a taken name (NTFS ignores case)");
   call("POST", "/api/v1/files/mkdir", "{\"path\":\"/ntfs0\",\"name\":\"a:b\"}");
   CHECK(g_status == 200 && has("\"path\":\"/ntfs0/a_b\""), "mkdir with an adjusted name");
+  /* device names Windows refuses, also COM0/LPT0 and the superscript ones (24.11.2026, upstream PR #20) */
+  call("POST", "/api/v1/files/mkdir", "{\"path\":\"/ntfs0\",\"name\":\"COM0\"}");
+  CHECK(g_status == 200 && has("\"path\":\"/ntfs0/_COM0\""), "mkdir COM0 becomes _COM0: %s", g_body);
+  call("POST", "/api/v1/files/mkdir", "{\"path\":\"/ntfs0\",\"name\":\"lpt\xC2\xB9.txt\"}");
+  CHECK(g_status == 200 && has("\"path\":\"/ntfs0/_lpt\xC2\xB9.txt\""), "mkdir LPT¹.txt becomes _LPT¹.txt: %s", g_body);
+  /* a NUL in the JSON body never cuts a path short (24.11.2026, upstream PR #14) */
+  call("POST", "/api/v1/files/mkdir", "{\"path\":\"/ntfs0/Spiele\\u0000/x\",\"name\":\"neu\"}");
+  CHECK(g_status == 400, "a \\u0000 in the body is refused: %d", g_status);
 
   /* uploads and taken names */
   CHECK(upload("path=%2Fntfs0%2FSpiele&name=notiz.txt", "Hallo NTFS") == 200, "upload");

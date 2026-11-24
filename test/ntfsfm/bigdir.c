@@ -96,6 +96,15 @@ int main(int argc, char **argv) {
   }
   CHECK(still == 0);
   CHECK(miss == 0);
+  /* Windows' metadata below $Extend (record numbers from 24 up, past the "< 24" guard) is neither deleted nor written into (24.11.2026,
+     upstream PR #16); mkntfs makes $Quota, $ObjId and $Reparse there */
+  uint64_t ext = 0;
+  CHECK(ntfs_lookup(v, "/$Extend", &ext) == 0);
+  CHECK(ntfs_lookup(v, "/$Extend/$Quota", &ino) == 0);
+  CHECK(ntfs_unlink(v, ext, "$Quota") == -EPERM);
+  CHECK(ntfs_unlink(v, ext, "$ObjId") == -EPERM);
+  CHECK(ntfs_mkdir(v, ext, "neu", 0, NULL) == -EPERM);
+  CHECK(ntfs_lookup(v, "/$Extend/$Quota", &ino) == 0);
   ntfs_umount(v);
   bdev_close(b);
   printf("bigdir: %d checks, %d failed (%d files, %d deleted)\n", g_n, g_fail, n, del);
