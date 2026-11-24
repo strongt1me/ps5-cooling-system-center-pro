@@ -9566,8 +9566,8 @@
   /* Passen die Tabellen des Packs in AMPR EMU NG? (src/indexlimit.c, 14.11.2026) AMPR EMU NG liefert keine gepackte Datei aus, wenn die Tabellen,
      die es aus dem Pack-Index aufbaut, nicht in seinen Speicher passen: Das Spiel startet dann nicht (0.4.0: Final Fantasy XVI 49 MiB, Demon's Souls
      62 MiB; ampr-emu-ng #67, #61, #53). Die App schätzt es aus den Köpfen von ampr_zstd.index bzw. ampr_assets.index und ampr_emu.index; „knapp“ heißt:
-     innerhalb von 2 MiB um die Grenze. `c` ist das Ergebnis für die neueste mitgelieferte Fassung (c.ng_version, seit 20.11.2026 0.5.0, seit 15.11.2026 0.4.1: Ansicht
-     aller Dateien + Paket-Tabellen in 80 MiB Indexspeicher; die zweite mitgelieferte Fassung 0.4.1 hat dasselbe Modell). Die Schätzung für
+     innerhalb von 2 MiB um die Grenze. `c` ist das Ergebnis für die neueste mitgelieferte Fassung (c.ng_version, seit 24.11.2026 0.5.1, seit 20.11.2026 0.5.0, seit 15.11.2026 0.4.1: Ansicht
+     aller Dateien + Paket-Tabellen in 80 MiB Indexspeicher; die zweite mitgelieferte Fassung 0.5.0 hat dasselbe Modell). Die Schätzung für
      eine ältere Fassung (index_check_old, 0.4.0) liefert die App seit der Rückkehr zu 0.3.5 als zweiter Fassung nicht mehr. */
   const aprCheckRow = (c) => {
     if (!c) return "";

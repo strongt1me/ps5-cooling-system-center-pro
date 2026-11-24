@@ -322,9 +322,9 @@ void GameExtras::build_main()
     // Do the tables of the pack fit into AMPR EMU NG? It serves no packed file when they do not,
     // and the game does not start (ampr-emu-ng #67, #61, #53). Estimated by src/indexlimit.c from
     // the pack index and ampr_emu.index (14.11.2026); "tight" is within 2 MiB of the limit.
-    // "index_check" is the result for the newest version the app ships (ng_version, 0.5.0 since
-    // 20.11.2026, 0.4.1 from 15.11.2026: the view of all files and the pack tables in 80 MiB of
-    // index memory; the second version the app ships, 0.4.1, has the same layout). The estimate for an
+    // "index_check" is the result for the newest version the app ships (ng_version, 0.5.1 since
+    // 24.11.2026, 0.5.0 from 20.11.2026: the view of all files and the pack tables in 80 MiB of
+    // index memory; the second version the app ships, 0.5.0, has the same layout). The estimate for an
     // older version ("index_check_old", 0.4.0) is no longer sent since 0.3.5 is the second version again.
     {
         Json j(extras_.ampr);

@@ -110,7 +110,8 @@ ps5tm_lz4_need(uint64_t files, uint64_t chunks, uint64_t packs, uint64_t index_b
   decide(fast, mul(files, 4), index_bytes, ampr_bytes, out);
 }
 
-/* ---- ampr-emu-ng v0.4.1 (15.11.2026), also v0.5.0 (20.11.2026) ----
+/* ---- ampr-emu-ng v0.4.1 (15.11.2026), also v0.5.0 (20.11.2026) and v0.5.1 (24.11.2026: rt/index_view.rs unchanged, rt/index_memory.rs
+ * only the debug pool 32 KiB smaller, which is cache, not index memory) ----
  *
  * v0.5.0 (compared with the source of the tag v0.5.0, rt/index_view.rs layout and rt/index_memory.rs): the same 80 MiB index ledger, the file rows are one
  * 32-byte block (hash, size, mtime, path_at, next: the same 32 bytes as the columns of 0.4.1), the chunk column 4 B per file with zstd packs, the file slots,

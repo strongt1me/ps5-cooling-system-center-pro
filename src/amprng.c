@@ -4,7 +4,7 @@
  *
  * Two versions of it are offered at any time (wish of the user, 13.11.2026: the two newest; 15.11.2026: a newer one comes on top by a button, the
  * oldest drops out). The app carries two (third_party/ampr_emu/libSceAmpr.sprx-<version>-ng and -ng-debug, packed into the payload by
- * tools/gen_emu_blob.py: 0.5.0 and 0.4.1, the two newest; from 15.11.2026 to 20.11.2026 the second one was 0.3.5 by choice of the user, because 0.4.0 had
+ * tools/gen_emu_blob.py: 0.5.1 and 0.5.0, the two newest (0.5.1 since 24.11.2026; 0.4.1 was the second one from 20.11.2026); from 15.11.2026 to 20.11.2026 the second one was 0.3.5 by choice of the user, because 0.4.0 had
  * known errors). A newer one is fetched on the
  * person's request (POST /api/v1/ampr-emu/fetch-ng): the app loads libSceAmpr.sprx of the newest STABLE release of the project (releases/latest/download:
  * github.com's own redirect, a beta pre-release is never taken), reads the version from its mark "ampr-emu-ng <version>", and when that is newer than
@@ -29,7 +29,7 @@
 #include "third_party/cJSON.h"
 #include "upd_http.h"
 
-#define NG_VERSION  "0.5.0"      /* the newest version the app carries: the name for the zstd repair when the folder holds nothing newer */
+#define NG_VERSION  "0.5.1"      /* the newest version the app carries: the name for the zstd repair when the folder holds nothing newer */
 /* "latest" of github.com is the newest STABLE release (a pre-release never is) and redirects to its files: no use of the API, whose 60 requests an hour
    for one address ran out in tests (HTTP 403) */
 #define NG_LATEST   "https://github.com/quer3q/ampr-emu-ng/releases/latest/download/"
