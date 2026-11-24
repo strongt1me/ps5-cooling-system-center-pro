@@ -2481,24 +2481,3 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 :root[data-theme="hell"] .og-check.ok, :root[data-theme="hell"] .og-line.og-ok { color: #1e7b59; }
 :root[data-theme="hell"] .og-check.err, :root[data-theme="hell"] .og-line.og-bad { color: #8e0b0b; }
 :root[data-theme="hell"] .og-check.warn, :root[data-theme="hell"] .og-line.og-skip { color: #8e640b; }
-
-/* Remote Play (24.11.2026): Karte auf der Seite System */
-.rp-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-.rp-allow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-muted); }
-.rp-copy { margin-left: 8px; padding: 1px 9px; font-size: .78em; }
-.rp-pin-box { margin: 12px 0 0; padding: 14px; text-align: center; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--inset); }
-.rp-pin-digits { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 32px; letter-spacing: 6px; font-weight: 600; }
-.rp-pin-left { margin-top: 4px; font-size: 12.5px; color: var(--ink-muted); }
-
-/* Remote Play (24.11.2026): der Kopf der eigenen Seite zeigt das Bild der Spiele; die drei Werte sind breiter, damit lange Beschriftungen (Russisch) nicht umbrechen */
-@media (min-width: 721px) { .card.page-banner.pb-remoteplay .pb-stats { grid-template-columns: repeat(3, minmax(0, 250px)); } }
-.card.page-banner.pb-remoteplay {
-  background-image: linear-gradient(90deg, rgba(20,27,41,.8) 0%, rgba(20,27,41,.55) 38%, rgba(20,27,41,.12) 72%, rgba(20,27,41,0) 100%),
-    url(/img/banner-game.jpg); }
-:root[data-theme="hell"] .card.page-banner.pb-remoteplay {
-  background-image: linear-gradient(90deg, #f6f8fb 0%, #f6f8fb 46%, rgba(246,248,251,.92) 60%, rgba(246,248,251,.45) 76%, rgba(246,248,251,0) 94%),
-    url(/img/banner-game.jpg); }
-@media (max-width: 720px) {
-  .card.page-banner.pb-remoteplay { background-image: linear-gradient(rgba(20,27,41,.84), rgba(20,27,41,.84)), url(/img/banner-game.jpg); }
-  :root[data-theme="hell"] .card.page-banner.pb-remoteplay { background-image: linear-gradient(rgba(246,248,251,.9), rgba(246,248,251,.9)), url(/img/banner-game.jpg); }
-}

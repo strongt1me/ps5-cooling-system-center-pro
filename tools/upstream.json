@@ -50,6 +50,6 @@
     {"id": "cjson", "repo": "DaveGamble/cJSON", "current": "v1.7.19", "prereleases": false,
      "where": "src/third_party/cJSON.c/.h", "how": "Dateien tauschen"},
     {"id": "ps5upload", "repo": "phantomptr/ps5upload", "current": "v12.6.25", "prereleases": false, "watch": true,
-     "where": "nur Wissen (Starten über eine Meldung, caller-pid-Prüfung; Remote Play: src/remoteplay.c, rpair.c, rpkeys.h nach seinem Vorgehen neu geschrieben, Prüfung der Schlüssel in test/rpair); wird nicht ausgeliefert", "how": "Nur lesen, bei sicherheits- oder startrelevanten Änderungen melden"}
+     "where": "nur Wissen (Starten über eine Meldung, caller-pid-Prüfung); wird nicht ausgeliefert", "how": "Nur lesen, bei sicherheits- oder startrelevanten Änderungen melden"}
   ]
 }

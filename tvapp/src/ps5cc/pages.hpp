@@ -114,9 +114,6 @@ std::unique_ptr<Page> make_storage_page();
 // System (Phase 7): Konsole, Speicher (the storage page inside it), Kühlleistung, Zusatzabfragen,
 // Experte.
 std::unique_ptr<Page> make_system_page();
-// Remote Play (24.11.2026), an area of its own under System: the console prepared for chiaki-ng or
-// ps5upload (service, users, pairing PIN, devices).
-std::unique_ptr<Page> make_remoteplay_page();
 std::unique_ptr<Page> make_playtime_page();
 std::unique_ptr<Page> make_saves_page();
 std::unique_ptr<Page> make_backups_page();

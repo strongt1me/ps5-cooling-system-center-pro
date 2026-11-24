@@ -46,7 +46,7 @@ inline constexpr Credit kCredits[] = {
      "ps5-payload-manager als Vorbild der Payload-Verwaltung und ps5-unified-autoloader. Danke für "
      "gleich drei Werkzeuge!"},
     {"Code, der in der App steckt", "phantomptr.jpg", "PhantomPtr", "@phantomptr",
-     "ps5upload: der Aufbau der Profilfunktion, das Format des Profilbilds und die Wege von Remote Play (PIN, Dienst, Erlaubnis je Benutzer). Danke!"},
+     "ps5upload: der Aufbau der Profilfunktion und das Format des Profilbilds. Danke!"},
     {"Code, der in der App steckt", "ebiggers.jpg", "Eric Biggers", "@ebiggers",
      "libdeflate: die schnelle Kompression, mit der die Abbilder auf der Konsole entstehen. "
      "Danke!"},

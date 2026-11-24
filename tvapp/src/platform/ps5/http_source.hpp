@@ -74,7 +74,6 @@ class HttpSource final : public Source
     void library_tools_fetch() override;
     void library_tools_post(const std::string &route, const std::string &json) override;
     void system_post(const std::string &route, const std::string &json) override;
-    void remoteplay_post(const std::string &route, const std::string &json) override;
     void risky_measure() override;
     void klog_record(bool on) override;
     void set_username(const std::string &name) override;
@@ -167,8 +166,7 @@ class HttpSource final : public Source
     {
         bool start = false; // false: the plan
         int kind = 0; // 0: a plan or a start; 1: the check before a conversion; 2: the queue of
-                      // conversions; 3: FPKGMount or Dump Forge (id: "kraken" or "dumpforge");
-                      // 4: a post of Remote Play (id: the route after /api/v1/remoteplay/)
+                      // conversions; 3: FPKGMount or Dump Forge (id: "kraken" or "dumpforge")
         Tool tool = Tool::copy;
         std::string id;
         std::string body;
@@ -180,7 +178,6 @@ class HttpSource final : public Source
     void
     handle_engine(const ToolRequest &request); // FPKGMount / Dump Forge (a tool request of kind 3)
     void handle_engine_now(const ToolRequest &request);
-    void handle_remoteplay(const ToolRequest &request); // a post of Remote Play (tool request 4)
     void engine_post(const std::string &which, const std::string &json);
     void notice(Notice::Kind kind, std::string title, std::string body = {});
     void set_link(Link link, std::string detail);
@@ -214,10 +211,6 @@ class HttpSource final : public Source
     void poll_usb_eject();              // ... and into data_ (Dateien shows the end of an eject)
     std::string status_raw_;            // the last /status answer, for System (worker thread only)
     void poll_system_extra(bool first);
-    // Remote Play: the whole state, or (pin_only) the cheap answer about the PIN merged
-    // into it. An answer that a post overtook while it was on its way is dropped (rp_seq_).
-    void poll_remoteplay(bool pin_only);
-    std::atomic<unsigned> rp_seq_{0}; // counts the posts of Remote Play, twice each
     int qr_rounds_ = 0; // System rounds since the QR code was last asked for (worker thread only)
     void poll_playtime();
     void poll_curve();

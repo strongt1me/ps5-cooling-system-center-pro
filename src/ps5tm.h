@@ -2294,12 +2294,6 @@ typedef struct {
 /* The file manager's requests (/api/v1/files/...): 1 when it answered, 0 when the path is not its own. */
 int  ps5tm_filemgr_api(int fd, const ps5tm_request_t *req);
 
-/* Remote Play, the preparation on the console's side (remoteplay.c, 24.11.2026): the requests under /api/v1/remoteplay. */
-void ps5tm_remoteplay_api(int fd, const ps5tm_request_t *req);
-/* Saves the current values of registry keys before they are changed (/data/PS5-Cooling-Center/remoteplay-backup, the newest 40 are kept).
-   kinds[i]: 'i' an int, 'b' 8 raw bytes, 's' a string. 0 = saved; otherwise the caller must not change anything. */
-int  ps5tm_regbackup(const char *what, const uint32_t *keys, const char *kinds, int n);
-
 void ps5tm_http_send(int fd, int status, const char *status_text,
                      const char *ctype, const void *body, size_t len,
                      const char *extra_headers);

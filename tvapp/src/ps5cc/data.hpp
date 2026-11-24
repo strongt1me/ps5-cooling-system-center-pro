@@ -690,17 +690,6 @@ struct SystemData
     std::string risky;    // GET /api/v1/sensors/risky, on "Jetzt messen"
 };
 
-// Remote Play (src/remoteplay.c of the console app, 24.11.2026): the state as the app answers
-// GET /api/v1/remoteplay and each of its POSTs (the same object), read by the page with
-// ps5cc/remoteplay.hpp. Only fetched while Watch::remoteplay: the whole state every 3 s, the PIN
-// alone every second while one waits.
-struct RemotePlayData
-{
-    std::uint64_t seq = 0; // grows with every answer
-    std::string state;     // "" until the app answered
-    int pending = 0;       // POSTs on their way: making a PIN can take 25 s the first time
-};
-
 struct LibraryTools
 {
     std::uint64_t seq = 0;
@@ -1167,7 +1156,6 @@ enum class Watch : std::uint8_t
     files,
     profile,
     curve,
-    remoteplay, // Remote Play (24.11.2026), the area under System
 };
 
 // GET /api/v1/fan/curve (16.11.2026): what the automatic mode asks of the fan at each temperature,
@@ -1340,7 +1328,6 @@ struct Snapshot
     ExtrasLz4Plan extras_lz4_plan;
     LibraryTools library_tools;
     SystemData system_data;
-    RemotePlayData remoteplay;
     KlogRecord klog_record;
     ProfileInfo profile;
     AccountInfo account;
@@ -1497,12 +1484,6 @@ class Source
     virtual void library_tools_fetch() = 0;
     // System: a POST of the console app ("cooling-health") and one reading of the risky sensors.
     virtual void system_post(const std::string &route, const std::string &json) = 0;
-    // Remote Play: POST /api/v1/remoteplay/<route> with this body, route "service" ({"enabled":
-    // bool}), "user" ({"slot":n,"enabled":bool}), "pin" ({}) or "pin/cancel" ({}). The answer is the
-    // whole state (Snapshot::remoteplay); a refusal comes as an error notice with the app's
-    // sentence; a success of a switch as a success notice. Snapshot::remoteplay.pending counts the
-    // posts until they are answered.
-    virtual void remoteplay_post(const std::string &route, const std::string &json) = 0;
     virtual void risky_measure() = 0;
     virtual void library_tools_post(const std::string &route, const std::string &json) = 0;
     // The kernel log recorded into a file (on) or not (off).

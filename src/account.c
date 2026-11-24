@@ -254,19 +254,6 @@ ps5tm_account_activate_slot(int slot, uint64_t id, const char **why)
   }
   if(!id) id = e.id ? e.id : gen_account_id(e.name);
 
-#ifndef PS5TM_HOST_TEST
-  /* Before anything is written, the three values are saved (24.11.2026): id, type and flags of the slot as they are now. */
-  {
-    uint32_t keys[3] = {(uint32_t)KEY_ACCOUNT_ID(slot), (uint32_t)KEY_ACCOUNT_TYPE(slot), (uint32_t)KEY_ACCOUNT_FLAGS(slot)};
-    char what[24];
-    snprintf(what, sizeof(what), "account%d", slot);
-    if(ps5tm_regbackup(what, keys, "bsi", 3) != 0) {
-      if(why) *why = "Die Sicherung der Einstellungen ist nicht möglich, deshalb ändert die App nichts.";
-      return -1;
-    }
-  }
-#endif
-
   char type[PS5TM_ACCOUNT_TYPE_MAX];
   memset(type, 0, sizeof(type));
   snprintf(type, sizeof(type), "np");
