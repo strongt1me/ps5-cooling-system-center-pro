@@ -2,6 +2,11 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
+## Unveröffentlicht
+
+### Kraken Mount ist keine Beta mehr (Hinweis des Users, 24.11.2026)
+- Der Hinweis im Reiter FPKGMount (Browser und Vollbild-App) nennt Kraken Mount nicht mehr „noch eine Beta“; der Rest des Hinweises bleibt. Im Handbuch (7 Sprachen) steht statt „ist eine Beta“, was die Readme von Kraken Mount 0.3.2 sagt: Für große, anspruchsvolle Spiele laufen zstd-Pakete besser als eine `.pkg`. Wörterbücher (Browser und Vollbild, je sechs Sprachen), `docs/HANDBUCH.md`, `third_party/kraken_mount/ORIGIN.md`.
+
 ## v1.95.0 – 24.11.2026
 
 ### Fremdbaustein: Kraken Mount v0.3.2 (quer3q, 24.11.2026; Hinweis des Users, 24.11.2026)

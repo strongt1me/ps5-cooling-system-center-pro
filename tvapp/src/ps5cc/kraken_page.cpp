@@ -278,10 +278,9 @@ class KrakenPage final : public Page
                       5);
             paragraph(
                 canvas,
-                "Kraken Mount ist noch eine Beta. Nach einem Neustart der Konsole muss "
-                "Kraken Mount laufen, damit die Spiele sichtbar bleiben. Sucht es in Ordnern, "
-                "die auch ShadowMountPlus durchsucht, würden deren Ordner-Spiele doppelt "
-                "angemeldet.",
+                "Nach einem Neustart der Konsole muss Kraken Mount laufen, damit die Spiele "
+                "sichtbar bleiben. Sucht es in Ordnern, die auch ShadowMountPlus durchsucht, "
+                "würden deren Ordner-Spiele doppelt angemeldet.",
                 card.x + 30.0f, card.y + 470.0f, card.w - 60.0f, kWarning, 6);
         }
         const float line_y = kBottom - 96.0f;

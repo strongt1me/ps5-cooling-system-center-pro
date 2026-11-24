@@ -137,6 +137,6 @@ oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nich
 
 ## Hinweise des Autors
 
-Experimentell: Nur wenige Spiele wurden bisher ausprobiert. Ein Spiel kann als `.pkg` schlechter laufen als in zstd-Paketen;
-Einstellungen, Cache-Aufbau und Pfade können sich zwischen Fassungen ändern (dann baut sich der Cache neu auf). Probleme bitte mit
-den Zeilen aus `/data/krakenmount/kraken.log` beim Autor melden.
+Kraken Mount ist keine Beta mehr (die Readme von v0.3.2 nennt keine; vorher „experimentell“). Für große, anspruchsvolle Spiele
+empfiehlt der Autor das zstd-Paketformat: Es läuft besser als FPKG. Einstellungen stehen in `/data/krakenmount/config.toml`, das
+Protokoll in `/data/krakenmount/kraken.log`; Probleme bitte mit dessen Zeilen beim Autor melden.
