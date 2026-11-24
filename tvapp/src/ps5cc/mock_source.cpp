@@ -1531,8 +1531,8 @@ class MockSource final : public Source
         {
             k.running = true;
             k.starting = false;
-            k.version = "0.3.1";
-            msg = "Kraken Mount 0.3.1 wird gestartet. Das dauert einige Sekunden.";
+            k.version = "0.3.2";
+            msg = "Kraken Mount 0.3.2 wird gestartet. Das dauert einige Sekunden.";
         }
         else if (has("\"stop\""))
         {
@@ -1546,7 +1546,7 @@ class MockSource final : public Source
         else if (has("\"rebuild\""))
             msg = "Das Spiel wird neu aufgebaut.";
         else if (has("\"fetch\""))
-            msg = "Die neueste Fassung (0.3.1) ist schon da.";
+            msg = "Die neueste Fassung (0.3.2) ist schon da.";
         else if (has("\"delete\""))
         {
             for (std::size_t i = 0; i < k.games.size(); ++i)
@@ -3145,8 +3145,8 @@ class MockSource final : public Source
     {
         KrakenState &k = data_.kraken;
         k.loaded = k.running = true;
-        k.version = "0.3.1";
-        k.embedded_version = "0.3.1";
+        k.version = "0.3.2";
+        k.embedded_version = "0.3.2";
         struct Seed
         {
             const char *id, *name, *version, *kind, *packing, *drive, *status;

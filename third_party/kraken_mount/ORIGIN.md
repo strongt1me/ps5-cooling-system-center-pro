@@ -1,11 +1,11 @@
 # Kraken Mount
 
-**Version:** v0.3.1 (20.11.2026)
+**Version:** v0.3.2 (24.11.2026)
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.3.1`, Commit `387e665f6372e1a11ae834c52e6f77ce99b2012b`)
+**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.3.2`, Commit `dbe78a7a7c8d3f2381247ca478fbef65f4c58b77`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext und Hinweise zu Fremdbausteinen im Quellprojekt: `LICENSE`, `THIRD_PARTY_NOTICES`)
-**Datei:** `kraken-mount_v0.3.1.elf` (PS5-ELF, 6 355 424 Bytes), unverändert aus der Veröffentlichung
-**SHA-256:** `3ec636a6b42ceff61ac7aa47e0ed01a41be851da94cfcf3158811995ea868b27` (gleich `SHA256SUMS` der Veröffentlichung; am 20.11.2026 mit `gh release download v0.3.1` geladen, ELF-Kopf und Kennung `kraken-mount/0.3.1` geprüft)
+**Datei:** `kraken-mount_v0.3.2.elf` (PS5-ELF, 6 552 144 Bytes), unverändert aus der Veröffentlichung
+**SHA-256:** `5b72ea22af0b28dd3522be4a4f10cbec9b5423fbe2e4e8990b45b4d1daeabdde` (gleich `SHA256SUMS` der Veröffentlichung; am 24.11.2026 mit `gh release download v0.3.2` geladen, ELF-Kopf und Kennung `kraken-mount/0.3.2` geprüft)
 
 ## Verwendung
 
@@ -19,12 +19,39 @@ lokalen ELF-Lader (127.0.0.1:9021) gesendet. Eine neuere Fassung lädt die App n
 `/data/PS5-Cooling-Center/kraken/`; sie wird dann statt der eingebauten gestartet.
 
 Kraken Mount legt bei jedem Start eine Kachel (KRKN00001) für seine Seite an (`register.rs`, `ensure_tile`). Die App will keine: Vor dem
-Start legt sie `/user/app/KRKN00001` als leere Datei an; ohne seine Markierung `/data/krakenmount/tile.ok` lässt das Programm den Platz
-laut `ensure_tile` in Ruhe. Eine früher angelegte Kachel entfernt die App mit der Deinstallation der Konsole und löscht die Markierung
-(`keep_tile_away` in `src/kraken.c`).
+Start legt sie `/user/app/KRKN00001` als leere Datei an. Bis v0.3.1 ließ das Programm den Platz ohne seine Markierung
+`/data/krakenmount/tile.ok` in Ruhe; ab v0.3.2 gibt es diese Regel nicht mehr, aber sein `create_dir_all(KRKN00001/sce_sys)` scheitert an der
+Datei, und es entsteht keine Kachel (nur eine Zeile „not registered“ im Protokoll). Ein leerer Ordner an dieser Stelle wird vorher entfernt
+(ab v0.3.2 würde das Programm ihn füllen und anmelden). Eine früher angelegte Kachel entfernt die App mit der Deinstallation der Konsole und
+löscht die Markierung (`keep_tile_away` in `src/kraken.c`, `src/tilekeep.c`).
 
 Aus dem Quellcode von Kraken Mount ist nichts in diese App übernommen; die ELF wird nur weitergegeben. Den Quellcode zu dieser Fassung
-gibt es unter der oben genannten Adresse (Tag `v0.3.1`).
+gibt es unter der oben genannten Adresse (Tag `v0.3.2`).
+
+## Neu in v0.3.2 (24.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.3.1…v0.3.2)
+
+- **Selbst-Update:** Bei jedem Start fragt das Programm `api.github.com/repos/quer3q/kraken-mount/releases/latest` (`src/update.rs`, ohne
+  Einstellung, immer an); ist eine neuere Fassung da, bietet seine Seite „Update“ an (`/api/state` Feld `update`, `POST /api/self_update`): Es lädt
+  `kraken-mount.elf` und sendet es an den ELF-Lader, die neue Kopie übernimmt Port 8097 und beendet die alte (#117). Neu ist auch eine
+  `payloads.json` für den ps5-payload-manager. **Die App schaltet diese Abfrage ab** (siehe „Änderung durch diese App“): Die geladene Kopie wäre
+  nicht geändert und würde auf das Ende von ShadowMountPlus warten.
+- **Playden-Unterstützung (#105):** Ordner lassen sich vom Suchlauf ausnehmen (Einstellung `exclude`); ein Titel lässt sich vom Startbildschirm
+  nehmen, während sein Ordner bleibt; `GET /api/state` sagt je Spiel `registered`, `mounted` und `source_present`; ein Schalter je Ordner-Spiel
+  (`overlay_off`, `POST /api/overlay/<TID>`) schaltet den Fakelib-Überbau ab. Die Aufrufe folgen der `/api/v1`-Schnittstelle von ShadowMountPlus auf
+  Port 8097. Die App nutzt davon nichts.
+- **Absturzbericht (#100):** Ein Absturz eines Spiels wird mit Zeit und Prozess festgehalten (`crashes.json`, Feld `crash` je Spiel,
+  `GET /api/report/<TID>`).
+- **Neu aufbauen** bleibt gesperrt, bis der Neuaufbau fertig ist (#115; Feld `rebuild_queued` je Spiel). **Die App übernimmt das**: Browser und
+  Vollbild-App sperren „Neu aufbauen“, solange `rebuild_queued` gilt oder das Spiel noch wartet (`pending`).
+- **Weitere:** Bibliothek mit Suche, Spielen-Knopf und Laufwerksfilter (#116); Apps, die beim Beenden eine zweite ELF starten, laufen aus einer
+  `.pkg`, und das Schließen eines Spiels hängt nicht mehr und schaltet die Konsole nicht mehr aus (#109; die Zwischenspeicher der `.pkg`-Spiele
+  bauen sich dafür einmal neu auf); Homebrew sieht die Schriften der Konsole unter `/preinst/common/font` (#119); auf der Firmware 12 und neuer
+  meldet sich die eigene Kachel wieder an, auch nachdem sie entfernt wurde (#120; siehe oben, die App hält sie fern); die Seite ist nach dem
+  Ruhemodus wieder erreichbar (#110).
+- **ampr-emu-ng v0.5.1 ist eingebaut** (vorher v0.5.0).
+- Die Schnittstelle, die `src/kraken.c` benutzt (`version`, `scanpath`, `games` mit `title_id`, `title_name`, `path`, `kind`, `status`, `playgo`,
+  `playgo_off`; `/api/rescan`, `/api/rebuild/<TID>`, `/api/rebuild-all`, `/api/playgo/<TID>`, `/api/delete/<TID>`, `/api/quit`), ist unverändert;
+  der Ein-Byte-Eingriff (`shadowmountplus.elf`) greift unverändert (2 Stellen, `wait_ready` in `src/main.rs` gleich geblieben).
 
 ## Neu in v0.3.1 (20.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.3.0…v0.3.1)
 
@@ -93,11 +120,20 @@ null) in `GET /api/state`. Läuft ShadowMountPlus dauerhaft, meldet Kraken Mount
 
 **Änderung durch diese App (modifizierte Kopie, GPL-3.0):** Die App betreibt Kraken Mount absichtlich neben ShadowMountPlus (getrennte Suchordner, wie
 mit v0.0.1-beta). Deshalb ändert sie in der eingebetteten ELF beim Bau (`tools/patch_kraken.py`, `Makefile`) und in einer von GitHub geladenen
-Fassung beim Speichern (`patch_smp_wait`, `src/kraken.c`) die Zeichenkette `shadowmountplus.elf` (die Konstante `SMP_PROCESS` in `src/main.rs`, zwei
-Stellen in der Datei) an ihrem letzten Byte zu `shadowmountplus.elX`: Kein Prozess hat diesen Namen, das Warten auf ShadowMountPlus endet sofort. Gleiche
-Länge, sonst bleibt die ELF unverändert; das Warten auf kstuff bleibt. Die Datei `kraken-mount_v0.3.1.elf` in diesem Ordner ist die unveränderte
-Veröffentlichung (SHA-256 oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderung ist
-der eine Wert in `SMP_PROCESS` (`src/main.rs` im Quellprojekt, Tag `v0.3.1`).
+Fassung beim Speichern (`patch_smp_wait` und `patch_self_update`, `src/kraken.c`) zwei Zeichenketten, jede an einem Byte und an zwei Stellen (das Programm
+trägt sich für seine Selbstkopie zweimal in der Datei):
+
+1. `shadowmountplus.elf` (die Konstante `SMP_PROCESS` in `src/main.rs`) wird zu `shadowmountplus.elX`: Kein Prozess hat diesen Namen, das Warten auf
+   ShadowMountPlus endet sofort. Das Warten auf kstuff bleibt.
+2. Ab v0.3.2: `https://api.github.com/repos/quer3q/kraken-mount/releases/latest` (die Konstante `RELEASE_URL` in `src/update.rs`) wird zu
+   `xttps://…`: Die HTTP-Bibliothek der Konsole lehnt das unbekannte Schema sofort ab, keine Anfrage verlässt die Konsole, das Programm findet keine
+   neuere Fassung und bietet auf seiner Seite kein „Update“ an. Sonst käme über diesen Knopf eine ungeänderte Fassung, die die laufende ablöst und
+   dann auf das Ende von ShadowMountPlus wartet. Neue Fassungen kommen über den Knopf der App, der beide Änderungen macht. Die Abfrage für
+   ampr-emu-ng hat eine eigene Adresse und bleibt.
+
+Gleiche Länge, sonst bleibt die ELF unverändert. Die Datei `kraken-mount_v0.3.2.elf` in diesem Ordner ist die unveränderte Veröffentlichung (SHA-256
+oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderungen sind die beiden Werte
+`SMP_PROCESS` (`src/main.rs`) und `RELEASE_URL` (`src/update.rs`) im Quellprojekt, Tag `v0.3.2`.
 
 ## Hinweise des Autors
 

@@ -3,7 +3,8 @@
  * Kraken Mount (kraken.c) and Dump Forge (dumpforge.c) are programs of their own, and each makes a tile of its own at every start:
  * /user/app/<title id> with sce_sys/param.json, registered with the system. The app wants only its page or its format, no tile. Both
  * programs leave the place alone when /user/app/<title id> exists and is not a folder (Kraken Mount: ensure_tile, when its marker is
- * missing; Dump Forge: tile.rs, "is not a folder"), so before every start the app puts an empty file there. A tile made earlier (a marker of
+ * missing, up to 0.3.1; from 0.3.2 its mkdir of <title id>/sce_sys fails on the file; Dump Forge: tile.rs, "is not a folder"), so before every
+ * start the app puts an empty file there (an empty folder in its place is taken away first). A tile made earlier (a marker of
  * the program says it is theirs: Kraken Mount's tile.ok, Dump Forge's tile-<title id>.owner) is uninstalled first and the marker removed; a
  * folder with no marker is another app's and is left as it is. */
 #include <errno.h>
@@ -40,6 +41,9 @@ ps5tm_tile_keep_away(const char *tile_id, const char *name, const char *const *m
     for(int i = 0; i < n_markers; i++) unlink(markers[i]);
     present = lstat(path, &st) == 0;
   }
+  /* An empty folder is no app's tile (an uninstall that left it, or a start that stopped after its mkdir). Kraken Mount 0.3.2 and later no longer
+     leave a folder without their marker alone: they fill it and register the tile. rmdir takes only an empty folder. */
+  if(present && S_ISDIR(st.st_mode) && rmdir(path) == 0) present = 0;
   if(!present) {
     int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
     if(fd >= 0) close(fd);

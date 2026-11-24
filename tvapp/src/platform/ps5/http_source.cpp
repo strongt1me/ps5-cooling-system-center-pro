@@ -4965,6 +4965,7 @@ void HttpSource::poll_kraken()
             x.playgo_known = cJSON_IsBool(cJSON_GetObjectItemCaseSensitive(g, "playgo_off"));
             x.playgo = flag(g, "playgo");
             x.playgo_off = flag(g, "playgo_off");
+            x.rebuild_queued = flag(g, "rebuild_queued");
             x.running = std::find(live.begin(), live.end(), x.title_id) != live.end();
             if (!x.title_id.empty())
                 k.games.push_back(std::move(x));

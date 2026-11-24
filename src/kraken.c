@@ -36,7 +36,7 @@
 #include "upd_http.h"
 
 #define KR_PORT              8097
-#define KR_EMBEDDED_VERSION  "0.3.1"
+#define KR_EMBEDDED_VERSION  "0.3.2"
 #define KR_PROJECT           "https://github.com/quer3q/kraken-mount"
 #define KR_DIR               PS5TM_DATA_DIR "/kraken"
 #define PS5TM_KRAKEN_DATA    "/data/krakenmount"
@@ -220,6 +220,21 @@ patch_smp_wait(unsigned char *d, size_t n) {
   int changed = 0;
   for(size_t i = 0; i + l <= n; i++)
     if(d[i] == 's' && !memcmp(d + i, name, l)) { d[i + l - 1] = 'X'; changed++; i += l - 1; }
+  return changed;
+}
+
+/* Kraken Mount v0.3.2 and later ask GitHub at every start for a newer release of themselves, and their page then offers "Update": it sends the
+   release ELF, unchanged, to the loader. That copy takes the port over and waits for ShadowMountPlus (no patch_smp_wait), so nothing mounts while
+   ShadowMountPlus runs. The first byte of that one URL is changed ("https" -> "xttps"), as tools/patch_kraken.py does: the console's HTTP library
+   refuses the scheme at once, no request leaves the console, no update is offered; a newer version comes through the app's button (fetch), which
+   makes both changes. The ampr-emu-ng update of Kraken Mount has a URL of its own. Number of places changed. */
+static int
+patch_self_update(unsigned char *d, size_t n) {
+  static const char url[] = "https://api.github.com/repos/quer3q/kraken-mount/releases/latest";
+  const size_t l = sizeof url - 1;
+  int changed = 0;
+  for(size_t i = 0; i + l <= n; i++)
+    if(d[i] == 'h' && !memcmp(d + i, url, l)) { d[i] = 'x'; changed++; i += l - 1; }
   return changed;
 }
 
@@ -817,6 +832,8 @@ fetch_release(char *msg, size_t n) {
   if(make_dir(KR_DIR) != 0) { snprintf(why, sizeof why, "Der Ordner %s ließ sich nicht anlegen: %s", KR_DIR, strerror(errno)); goto done; }
   int smp_places = patch_smp_wait((unsigned char *)elf, elf_n);
   if(smp_places) PS5TM_INFO("kraken_patch", "Kraken Mount %s: Prozessname von ShadowMountPlus an %d Stelle(n) geändert (kein Warten auf ShadowMountPlus).", ver, smp_places);
+  int upd_places = patch_self_update((unsigned char *)elf, elf_n);
+  if(upd_places) PS5TM_INFO("kraken_patch", "Kraken Mount %s: eigene Update-Abfrage an %d Stelle(n) abgeschaltet (neue Fassungen nur über die App).", ver, upd_places);
   int e = ps5tm_put_lib_file(KR_ELF, (const unsigned char *)elf, elf_n);
   if(e) { snprintf(why, sizeof why, "Die Datei ließ sich nicht ablegen: %s", strerror(e)); goto done; }
   unlink(KR_BAD);                                  /* a newer release gets its chance */

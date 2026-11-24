@@ -8708,6 +8708,8 @@
       const kind = g.kind === "pkg" ? "FPKG" : (FP_PACK[g.packing] || "Ordner");
       const meta = [g.title_id, g.version ? `Version ${g.version}` : "", g.size > 0 ? bytes(g.size) : "", drive(g.drive), kind].filter(Boolean);   /* a folder has no size of its own here */
       const busy = g.status === "building" || g.status === "checking" || running.has(g.title_id);
+      /* Kraken Mount 0.3.2 (#115): a rebuild asked for and not started yet (rebuild_queued), or a game still waiting: no second one */
+      const rebuildBusy = busy || g.rebuild_queued === true || g.status === "pending";
       return `<div class="p4m-row">
         <img class="p4m-icon" src="/api/v1/kraken/icon?id=${esc(g.title_id)}" alt="" loading="lazy">
         <div class="p4m-main"><div class="p4m-name">${esc(g.title_name || g.title_id)}</div>
@@ -8716,7 +8718,7 @@
           ${g.kind === "pkg" ? "" : `<div class="p4m-meta fp-folder">Ein Spielordner im Suchordner von Kraken Mount. Ordner-Spiele gehören zu ShadowMountPlus; hier sollten nur .pkg-Dateien liegen.</div>`}</div>
         <span class="p4m-state ${st[0]}">${esc(st[1])}</span>
         <div class="p4m-btns">
-          <button type="button" class="btn ghost" data-fp="rebuild" data-id="${esc(g.title_id)}" ${busy ? "disabled" : ""}
+          <button type="button" class="btn ghost" data-fp="rebuild" data-id="${esc(g.title_id)}" ${rebuildBusy ? "disabled" : ""}
             title="Baut den Zwischenspeicher dieses Spiels neu auf und meldet es neu an.">Neu aufbauen</button>
           ${(g.playgo === true || g.playgo_off === true) && typeof g.playgo_off === "boolean" ? `<button type="button" class="btn ghost" data-fp="playgo" data-id="${esc(g.title_id)}" data-off="${g.playgo_off ? 0 : 1}" ${busy ? "disabled" : ""}
             title="Ausschalten, wenn das Spiel auf einem schwarzen Bildschirm bleibt; einschalten, wenn es verlangt, den Download abzuschließen.">${g.playgo_off ? "PlayGo-Stub einschalten" : "PlayGo-Stub ausschalten"}</button>` : ""}

@@ -895,6 +895,8 @@ struct KrakenGame
     std::uint64_t size = 0;
     std::uint64_t cache_size = 0;
     bool running = false; // a session of this game is live
+    // A rebuild was asked for and has not started yet (Kraken Mount 0.3.2, #115): Rebuild stays off.
+    bool rebuild_queued = false;
     // The PlayGo stub (Kraken Mount 0.3.1): playgo = the game's eboot.bin imports PlayGo, playgo_off = the
     // stub is off for it, playgo_known = the answer carries the fields (an older Kraken Mount has none:
     // no switch then).

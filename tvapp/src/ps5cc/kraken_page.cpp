@@ -507,7 +507,9 @@ class KrakenPage final : public Page
         ui::MenuItem rebuild_item;
         rebuild_item.label = "Neu aufbauen";
         rebuild_item.tag = kGameRebuild;
-        rebuild_item.disabled = busy(g) || !state_.running;
+        // Kraken Mount 0.3.2 (#115): a rebuild asked for and not started yet, or a game still waiting: no second one
+        rebuild_item.disabled =
+            busy(g) || g.rebuild_queued || g.status == "pending" || !state_.running;
         items.push_back(rebuild_item);
         // the PlayGo stub of this game (Kraken Mount 0.3.1): shown when the game imports PlayGo or the stub is
         // off for it already, as Kraken Mount's own page does
