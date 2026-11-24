@@ -15,6 +15,7 @@
 #include "ps5cc/covers.hpp"
 #include "ps5cc/credits.hpp"
 #include "ps5cc/i18n.hpp"
+#include "ps5cc/remoteplay.hpp"
 #include "third_party/cjson/cJSON.h"
 
 #include <algorithm>
@@ -480,6 +481,19 @@ void HttpSource::system_post(const std::string &route, const std::string &json)
 {
     push({Request::Kind::sys_post, 0, route, json});
 }
+// Remote Play goes through the tool thread: making a PIN can take 25 s on the console the first time,
+// and the thread that asks for the temperatures and the jobs must not stand still meanwhile.
+void HttpSource::remoteplay_post(const std::string &route, const std::string &json)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++data_.remoteplay.pending;
+    ++data_.serial;
+    ToolRequest r;
+    r.kind = 4;
+    r.id = route;
+    r.body = json;
+    tool_requests_.push_back(std::move(r));
+}
 void HttpSource::risky_measure()
 {
     push({Request::Kind::risky, 0, {}, {}});
@@ -870,6 +884,11 @@ void HttpSource::handle_tool(const ToolRequest &request)
         handle_engine(request);
         return;
     }
+    if (request.kind == 4)
+    {
+        handle_remoteplay(request);
+        return;
+    }
     if (request.kind == 2)
     {
         // The queue: the list, or one action whose answer is the list again. A list fetched while an action ran is older than the
@@ -1222,6 +1241,8 @@ void HttpSource::run()
     std::int64_t last_ps4mount = 0;
     std::int64_t last_kraken = 0;
     bool kraken_open = false;
+    std::int64_t last_rp = 0, last_rp_pin = 0;
+    bool rp_open = false;
     bool ps4_open = false;
     std::int64_t last_storage = 0;
     bool storage_open = false;
@@ -1741,6 +1762,38 @@ void HttpSource::run()
         else
         {
             kraken_open = false;
+        }
+        // Remote Play: the whole state every 3 s, at once when the page opens; while a PIN
+        // waits only its part every second (the countdown), and the whole state again when it ends
+        // (a device was paired: the list of devices).
+        if (page == Watch::remoteplay)
+        {
+            if (!rp_open || now - last_rp >= 3000000)
+            {
+                last_rp = last_rp_pin = now;
+                poll_remoteplay(false);
+            }
+            else if (now - last_rp_pin >= 1000000)
+            {
+                last_rp_pin = now;
+                bool waiting = false;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    waiting = remoteplay_waiting(data_.remoteplay.state);
+                }
+                if (waiting)
+                {
+                    poll_remoteplay(true);
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    if (!remoteplay_waiting(data_.remoteplay.state))
+                        last_rp = 0; // ended: the whole state at the next pass
+                }
+            }
+            rp_open = true;
+        }
+        else
+        {
+            rp_open = false;
         }
         // PS4 PKG von USB: every 5 s while it is open, as the web page; at once when it opens.
         if (page == Watch::ps4mount)
@@ -2576,6 +2629,8 @@ void HttpSource::handle(const Request &request)
                             : "Nicht zurückgesetzt",
                    message_of(body, "Die App hat nicht geantwortet."));
         poll_profile();
+        if (watching_.load() == Watch::remoteplay)
+            poll_remoteplay(false); // an account activated there shows in the list of users
         break;
     }
     case Request::Kind::klog_record:
@@ -4529,6 +4584,84 @@ void HttpSource::poll_system_extra(bool first)
         d.qr = std::move(qr);
     ++d.seq;
     ++data_.serial;
+}
+
+// Remote Play. The whole state (GET /api/v1/remoteplay), or only the PIN's part of it
+// (GET /api/v1/remoteplay/pin: cheap, every second while a PIN waits) merged into the one at hand.
+// The data thread and the tool thread both write: an answer fetched while a post ran or ended is
+// older than the post's own answer and is dropped (rp_seq_ changed; as the queue of conversions).
+void HttpSource::poll_remoteplay(bool pin_only)
+{
+    const unsigned seq = rp_seq_.load();
+    int status = 0;
+    std::string body;
+    const char *path = pin_only ? "/api/v1/remoteplay/pin" : "/api/v1/remoteplay";
+    if (exchange("GET", path, {}, &status, &body, 6) != Net::ok || status != 200)
+        return;
+    RpState parsed;
+    if (!pin_only && !parse_remoteplay(body, &parsed))
+        return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (rp_seq_.load() != seq)
+        return;
+    RemotePlayData &d = data_.remoteplay;
+    if (pin_only)
+    {
+        if (d.state.empty())
+            return;
+        body = merge_pairing(d.state, body);
+    }
+    if (body == d.state)
+        return;
+    d.state = std::move(body);
+    ++d.seq;
+    ++data_.serial;
+}
+
+// One post of Remote Play (tool request kind 4). The answer of each is the whole state. Making a PIN
+// can take 25 s on the console the first time; the others come back at once.
+void HttpSource::handle_remoteplay(const ToolRequest &request)
+{
+    ++rp_seq_;
+    int status = 0;
+    std::string body;
+    const Net net = exchange("POST", ("/api/v1/remoteplay/" + request.id).c_str(),
+                             request.body.empty() ? "{}" : request.body, &status, &body,
+                             request.id == "pin" ? 40 : 15);
+    const bool ok = net == Net::ok && status >= 200 && status < 300;
+    RpState parsed;
+    const bool is_state = ok && parse_remoteplay(body, &parsed);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++rp_seq_;
+        RemotePlayData &d = data_.remoteplay;
+        if (d.pending > 0)
+            --d.pending;
+        if (is_state && body != d.state)
+        {
+            d.state = body;
+            ++d.seq;
+        }
+        ++data_.serial;
+    }
+    if (ok)
+    {
+        // a switch is told, as the web page tells it; making or cancelling a PIN shows on the page
+        const bool on = request.body.find("\"enabled\":true") != std::string::npos;
+        if (request.id == "service")
+            notice(Notice::Kind::success, "Remote Play",
+                   on ? "Remote Play ist eingeschaltet." : "Remote Play ist ausgeschaltet.");
+        else if (request.id == "user")
+            notice(Notice::Kind::success, "Remote Play",
+                   on ? "Remote Play ist für diesen Benutzer erlaubt."
+                      : "Remote Play ist für diesen Benutzer gesperrt.");
+        return;
+    }
+    // the console's own sentence (a 4xx or 5xx answers {"ok":false,"code":"rp_...","message":"..."})
+    notice(Notice::Kind::error, "Remote Play",
+           net == Net::ok ? message_of(body, "Das hat nicht geklappt.")
+                          : "Die App hat nicht geantwortet.");
+    poll_remoteplay(false); // the page shows what the console really has
 }
 
 void HttpSource::poll_storage()

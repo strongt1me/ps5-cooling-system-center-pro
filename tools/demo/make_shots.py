@@ -78,6 +78,8 @@ def shots(lang, out, only):
         snap("10", "profil")
         go('button.tab[data-page="system"]', 2500)
         snap("11", "system")
+        go('button.tab[data-page="remoteplay"]', 2500)
+        snap("12", "remote-play")
         go('button.tab[data-page="log"]', 1500)
         go("#log-tab-klog", 2500)
         snap("14", "kernel-log-live")

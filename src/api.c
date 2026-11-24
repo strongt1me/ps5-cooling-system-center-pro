@@ -6082,6 +6082,11 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
+  if(!strncmp(req->path, "/api/v1/remoteplay", 18) && (req->path[18] == 0 || req->path[18] == '/')) {
+    ps5tm_remoteplay_api(fd, req);
+    return;
+  }
+
   if(!strcmp(req->path, "/api/v1/config")) {
     if(is_get) { handle_config_get(fd); return; }
     if(is_put) { handle_config_put(fd, req); return; }

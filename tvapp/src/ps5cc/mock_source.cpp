@@ -291,6 +291,7 @@ class MockSource final : public Source
         fill_payloads();
         fill_store();
         fill_logs();
+        fill_remoteplay();
         refresh_status();
         data_.console_language = 4; // German, as the owner's console
         data_.app_version = "1.76.6";
@@ -413,6 +414,7 @@ class MockSource final : public Source
             changed();
         }
         tick_orig();
+        tick_remoteplay();
         if (second_ >= 1.0f)
         {
             second_ = 0.0f;
@@ -1793,6 +1795,242 @@ class MockSource final : public Source
         changed();
     }
 
+    // ------------------------------------------------------------ Remote Play (remoteplay.c)
+
+    struct RpUser
+    {
+        int slot;
+        std::string name;
+        bool activated;
+        int allowed; // 1, 0, or -1 (unreadable)
+    };
+
+    struct RpDevice
+    {
+        int slot;
+        int client_type;
+        std::string user;
+    };
+
+    // The console's state, invented: one user with an activated account, one without, one device
+    // paired. PS5CC_RP shows the other cases: "noaccount" (nobody has an account), "unavailable"
+    // (no registry: no jailbreak), "missing" (the firmware has no Remote Play for programs).
+    void fill_remoteplay()
+    {
+        const char *mode = std::getenv("PS5CC_RP");
+        const std::string how = mode != nullptr ? mode : "";
+        rp_available_ = how != "unavailable";
+        rp_module_ = how == "missing" ? "missing" : "ready";
+        rp_service_ = rp_available_ ? 0 : -1;
+        if (rp_available_)
+        {
+            rp_users_ = {{1, "Spieler1", how != "noaccount", 1}, {3, "Gast", false, 0}};
+            rp_devices_ = {{1, 2, "Spieler1"}};
+        }
+        rp_publish();
+    }
+
+    static std::string rp_account_id(int slot)
+    {
+        return slot == 1 ? "AAAAAAcAAAA=" : "AAAAAAcAAAQ=";
+    }
+
+    // The user whose account the PIN is made for: the first with an activated one (-1: none)
+    int rp_pairing_slot() const
+    {
+        for (const RpUser &u : rp_users_)
+        {
+            if (u.activated)
+                return u.slot;
+        }
+        return -1;
+    }
+
+    int rp_seconds_left() const
+    {
+        return std::max(0, static_cast<int>(std::ceil(300.0f - (clock_ - rp_pin_at_))));
+    }
+
+    std::string rp_state_json() const
+    {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddBoolToObject(o, "ok", 1);
+        cJSON_AddBoolToObject(o, "available", rp_available_ ? 1 : 0);
+        cJSON_AddStringToObject(o, "firmware", "12.00");
+        cJSON_AddBoolToObject(o, "per_user", 1);
+        cJSON *svc = cJSON_AddObjectToObject(o, "service");
+        if (rp_service_ < 0)
+            cJSON_AddNullToObject(svc, "enabled");
+        else
+            cJSON_AddBoolToObject(svc, "enabled", rp_service_ != 0 ? 1 : 0);
+        cJSON *users = cJSON_AddArrayToObject(o, "users");
+        for (const RpUser &u : rp_users_)
+        {
+            cJSON *e = cJSON_CreateObject();
+            cJSON_AddNumberToObject(e, "slot", u.slot);
+            cJSON_AddStringToObject(e, "name", u.name.c_str());
+            cJSON_AddBoolToObject(e, "activated", u.activated ? 1 : 0);
+            cJSON_AddStringToObject(e, "account_id",
+                                    u.activated ? rp_account_id(u.slot).c_str() : "");
+            if (u.allowed < 0)
+                cJSON_AddNullToObject(e, "allowed");
+            else
+                cJSON_AddBoolToObject(e, "allowed", u.allowed != 0 ? 1 : 0);
+            cJSON_AddItemToArray(users, e);
+        }
+        cJSON *pu = cJSON_AddObjectToObject(o, "pairing_user");
+        const int pslot = rp_pairing_slot();
+        cJSON_AddNumberToObject(pu, "slot", pslot);
+        cJSON_AddStringToObject(pu, "via", pslot < 0 ? "none" : "foreground");
+        cJSON *devices = cJSON_AddArrayToObject(o, "devices");
+        for (const RpDevice &d : rp_devices_)
+        {
+            cJSON *e = cJSON_CreateObject();
+            cJSON_AddNumberToObject(e, "slot", d.slot);
+            cJSON_AddNumberToObject(e, "client_type", d.client_type);
+            cJSON_AddStringToObject(e, "user", d.user.c_str());
+            cJSON_AddItemToArray(devices, e);
+        }
+        cJSON *p = cJSON_AddObjectToObject(o, "pairing");
+        const bool waiting = rp_state_ == "waiting";
+        cJSON_AddStringToObject(p, "state", rp_state_.c_str());
+        cJSON_AddStringToObject(p, "pin", waiting ? rp_pin_.c_str() : "");
+        cJSON_AddNumberToObject(p, "seconds_left", waiting ? rp_seconds_left() : 0);
+        cJSON_AddStringToObject(p, "code", rp_code_.c_str());
+        cJSON_AddStringToObject(p, "err", rp_err_.c_str());
+        cJSON_AddBoolToObject(p, "busy", 0);
+        cJSON *m = cJSON_AddObjectToObject(o, "module");
+        cJSON_AddStringToObject(m, "state", rp_module_.c_str());
+        cJSON *b = cJSON_AddObjectToObject(o, "backup");
+        cJSON_AddStringToObject(b, "dir", "/data/PS5-Cooling-Center/remoteplay-backup");
+        cJSON_AddNumberToObject(b, "files", 3);
+        cJSON_AddStringToObject(b, "last", "20261124-041200-service.json");
+        char *text = cJSON_PrintUnformatted(o);
+        std::string out = text != nullptr ? text : "{}";
+        cJSON_free(text);
+        cJSON_Delete(o);
+        return out;
+    }
+
+    void rp_publish()
+    {
+        data_.remoteplay.state = rp_state_json();
+        ++data_.remoteplay.seq;
+        changed();
+    }
+
+    // The offline activation of an account (the Profil page's button, or the one here)
+    void rp_activate(const std::string &name)
+    {
+        for (RpUser &u : rp_users_)
+        {
+            if (u.name == name)
+                u.activated = true;
+        }
+        rp_publish();
+    }
+
+    // A PIN is made after a moment (the console's first one takes seconds); four seconds after that
+    // a device types it: wrongly the first time, rightly the second.
+    void tick_remoteplay()
+    {
+        if (rp_make_due_ > 0.0f && clock_ >= rp_make_due_)
+        {
+            rp_make_due_ = 0.0f;
+            if (data_.remoteplay.pending > 0)
+                --data_.remoteplay.pending;
+            ++rp_made_;
+            rp_state_ = "waiting";
+            rp_pin_ = rp_made_ % 2 == 1 ? "47291853" : "30586247";
+            rp_code_.clear();
+            rp_err_.clear();
+            rp_pin_at_ = clock_;
+            rp_left_shown_ = -1;
+            rp_publish();
+        }
+        if (rp_state_ != "waiting")
+            return;
+        if (clock_ - rp_pin_at_ >= 4.0f)
+        {
+            if (rp_made_ % 2 == 1)
+            {
+                rp_state_ = "failed";
+                rp_code_ = "pin_invalid";
+                rp_err_ = "die PIN wurde falsch eingegeben";
+            }
+            else
+            {
+                rp_state_ = "paired";
+                rp_devices_.push_back({2, 3, rp_users_.empty() ? "" : rp_users_[0].name});
+            }
+            rp_publish();
+            return;
+        }
+        if (rp_seconds_left() != rp_left_shown_)
+        {
+            rp_left_shown_ = rp_seconds_left();
+            rp_publish();
+        }
+    }
+
+    void remoteplay_post(const std::string &route, const std::string &json) override
+    {
+        cJSON *body = cJSON_Parse(json.c_str());
+        const cJSON *on_item =
+            body != nullptr ? cJSON_GetObjectItemCaseSensitive(body, "enabled") : nullptr;
+        const cJSON *slot_item =
+            body != nullptr ? cJSON_GetObjectItemCaseSensitive(body, "slot") : nullptr;
+        const bool on = cJSON_IsTrue(on_item);
+        if (route == "service" && rp_available_)
+        {
+            rp_service_ = on ? 1 : 0;
+            notice(Notice::Kind::success, "Remote Play",
+                   on ? "Remote Play ist eingeschaltet." : "Remote Play ist ausgeschaltet.");
+        }
+        else if (route == "user" && cJSON_IsNumber(slot_item))
+        {
+            for (RpUser &u : rp_users_)
+            {
+                if (u.slot == static_cast<int>(slot_item->valuedouble))
+                    u.allowed = on ? 1 : 0;
+            }
+            notice(Notice::Kind::success, "Remote Play",
+                   on ? "Remote Play ist für diesen Benutzer erlaubt."
+                      : "Remote Play ist für diesen Benutzer gesperrt.");
+        }
+        else if (route == "pin")
+        {
+            if (rp_pairing_slot() < 0)
+            {
+                notice(Notice::Kind::error, "Remote Play",
+                       "Kein Benutzer mit aktiviertem Konto. Aktiviere zuerst das Offline-Konto "
+                       "(Seite Profil).");
+            }
+            else
+            {
+                // with the service off the console makes a PIN that cannot be used: it switches
+                // the service on first
+                rp_service_ = 1;
+                rp_make_due_ = clock_ + 1.2f;
+                ++data_.remoteplay.pending;
+            }
+        }
+        else if (route == "pin/cancel")
+        {
+            if (rp_make_due_ > 0.0f)
+            {
+                rp_make_due_ = 0.0f; // the PIN asked for is not made after all
+                if (data_.remoteplay.pending > 0)
+                    --data_.remoteplay.pending;
+            }
+            rp_state_ = "idle";
+            rp_code_.clear();
+            rp_err_.clear();
+        }
+        cJSON_Delete(body);
+        rp_publish();
+    }
+
     void risky_measure() override
     {
         SystemData &d = data_.system_data;
@@ -1870,6 +2108,7 @@ class MockSource final : public Source
             }
             a.activated = true;
             a.username = name;
+            rp_activate(name);
             notice(Notice::Kind::success, "Offline-Konto aktiviert",
                    "Die Konsole zeigt jetzt diesen Namen.");
         }
@@ -3912,6 +4151,17 @@ class MockSource final : public Source
     std::string orig_check_id_, orig_check_dest_;
     float orig_check_at_ = 0.0f;
     std::vector<MockOrig> orig_items_; // newest first
+    bool rp_available_ = true; // Remote Play: the console's registry can be reached
+    std::string rp_module_ = "ready";
+    int rp_service_ = 0; // 1 on, 0 off, -1 unreadable
+    std::vector<RpUser> rp_users_;
+    std::vector<RpDevice> rp_devices_;
+    std::string rp_state_ = "idle"; // the pairing: idle, waiting, paired, failed
+    std::string rp_pin_, rp_code_, rp_err_;
+    float rp_pin_at_ = 0.0f;   // when the PIN was made
+    float rp_make_due_ = 0.0f; // when the PIN asked for is made (0: none is)
+    int rp_made_ = 0;          // PINs made so far
+    int rp_left_shown_ = -1;
     bool serial_full_ = false;         // the System page shows the serial number whole
     bool smp_update_off_ = false;      // "Ja" to the ShadowMountPlus question was given
 };

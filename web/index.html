@@ -44,6 +44,10 @@
           <button class="tab" data-page="system" role="tab">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg>System
           </button>
+          <!-- Seit 24.11.2026: Remote Play, ein eigener Bereich unter System (remoteplay.c) -->
+          <button class="tab" data-page="remoteplay" role="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M10.5 7.5v5l4-2.5z"/></svg>Remote Play
+          </button>
           <button class="tab" data-page="profile" role="tab">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profil
           </button>
@@ -1871,6 +1875,57 @@
         </section>
 
         <!-- ══════════════════════ PROTOKOLL ══════════════════════ -->
+        <!-- Remote Play (24.11.2026, remoteplay.c): ein eigener Bereich unter System. Die Konsole für Remote Play vorbereiten; gespielt wird mit chiaki-ng oder ps5upload -->
+        <section class="page" id="page-remoteplay">
+          <article class="card page-banner pb-remoteplay">
+            <h2>Remote Play</h2>
+            <p class="pb-sub">Die Konsole am PC oder Handy spielen: Diese Seite bereitet sie vor, gespielt wird mit chiaki-ng oder ps5upload.</p>
+            <div class="pb-stats">
+              <div class="co-stat"><span class="ov-label">Dienst</span><strong class="pb-val" id="rp-st-service">--</strong></div>
+              <div class="co-stat"><span class="ov-label">Aktive Konten</span><strong class="pb-val" id="rp-st-users">--</strong></div>
+              <div class="co-stat"><span class="ov-label">Gekoppelte Geräte</span><strong class="pb-val" id="rp-st-devices">--</strong></div>
+            </div>
+          </article>
+
+          <article class="card" id="rp-card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-pad"/></svg></span><div class="ck-text"><h2>Dienst</h2>
+              <p class="sub">Remote Play der Konsole ein- oder ausschalten</p></div></div></div>
+            <p class="note" id="rp-note" hidden></p>
+            <label class="switch-row mt-12">
+              <span><b>Remote Play einschalten</b><small>Schaltet den Dienst der Konsole an. Ein Neustart ist nicht nötig.</small></span>
+              <span class="switch"><input type="checkbox" id="rp-service" disabled><i></i></span>
+            </label>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-user"/></svg></span><div class="ck-text"><h2>Benutzer</h2>
+              <p class="sub">Konto, Konto-ID und Erlaubnis</p></div></div></div>
+            <div class="acc-list" id="rp-users" role="list"><p class="muted">wird gelesen …</p></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-link"/></svg></span><div class="ck-text"><h2>Kopplungs-PIN</h2>
+              <p class="sub">ein neues Gerät koppeln</p></div></div></div>
+            <div class="row-gap">
+              <button type="button" class="btn primary" id="rp-pin-btn" disabled>PIN erzeugen</button>
+              <button type="button" class="btn ghost" id="rp-pin-cancel" hidden>PIN abbrechen</button>
+            </div>
+            <div class="rp-pin-box" id="rp-pin-box" hidden>
+              <div class="rp-pin-digits" id="rp-pin-digits" data-no-i18n></div>
+              <div class="rp-pin-left" id="rp-pin-left"></div>
+            </div>
+            <p class="note" id="rp-pin-note">Die PIN gilt 5 Minuten und steht auch auf dem Fernseher.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div class="ck-title"><span class="ck-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#ck-phone"/></svg></span><div class="ck-text"><h2>Gekoppelte Geräte</h2>
+              <p class="sub">was die Konsole gespeichert hat</p></div></div></div>
+            <div class="kv-list" id="rp-devices"><p class="muted">wird gelesen …</p></div>
+            <p class="note">Die Konsole merkt sich je Gerät nur den Benutzer und die Art, keinen Namen. Die App zeigt die Geräte nur an und entfernt keines.</p>
+            <p class="note" id="rp-backup-note">Vor jeder Änderung sichert die App die betroffenen Einstellungen der Konsole nach <code>/data/PS5-Cooling-Center/remoteplay-backup</code></p>
+          </article>
+        </section>
+
         <section class="page" id="page-log">
           <article class="card page-banner pb-log">
             <h2>Was ist passiert?</h2>
@@ -2146,7 +2201,7 @@
               <img class="cr-pic" src="/credits/phantomptr.jpg" alt="" width="56" height="56">
               <div class="cr-text">
                 <b>PhantomPtr</b> <a class="cr-login" href="https://github.com/phantomptr" target="_blank" rel="noopener noreferrer">@phantomptr</a>
-                <p>ps5upload: der Aufbau der Profilfunktion und das Format des Profilbilds. Danke!</p>
+                <p>ps5upload: der Aufbau der Profilfunktion, das Format des Profilbilds und die Wege von Remote Play (PIN, Dienst, Erlaubnis je Benutzer). Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/phantomptr/ps5upload" target="_blank" rel="noopener noreferrer">ps5upload</a>
                   <a href="https://github.com/phantomptr/ps5drive" target="_blank" rel="noopener noreferrer">ps5drive</a>

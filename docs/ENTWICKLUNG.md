@@ -436,6 +436,8 @@ src/procmgr.c       Laufende Payloads auflisten und beenden
 src/payloads.c      Payload-Dateien (interner Ordner, USB): starten, kopieren, löschen
 src/payprofiles.c  Payload-Profile: benannte Folgen von Payloads mit Pausen, ein Startprofil, Abbruch zwischen zwei Einträgen
 src/profile.c       Anzeigename und Profilbild des Benutzers
+src/remoteplay.c    Remote Play, die Vorbereitung auf der Konsole: Dienst, Erlaubnis je Benutzer, Kopplungs-PIN (eigener Faden für das Modul), Sicherung der Registry-Werte vor jeder Änderung
+src/rpair.c        Zustandsmaschine der Kopplung (rein, ohne Konsolenaufruf; test/rpair); src/rpkeys.h die Registry-Schlüssel und Base64
 src/regstats.c      Konsolenname aus der Registry (nur lesend)
 src/library.c       Spiele des Startbildschirms, Start, Cover
 src/sqlite_ro.c     Nur-lesender SQLite-Leser für die App-Datenbank der Konsole

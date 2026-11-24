@@ -324,7 +324,7 @@ make
 - **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроены две самые новые версии, 0.5.1 и 0.5.0, более новые приложение загружает по запросу). А также [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): программа за вкладкой «FPKGMount» (встроена без изменений как ELF).
 - **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): как собрана плитка запуска в виде нативного приложения.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): структура пакетов и процесс установки (собственный код по этому образцу).
-- **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): функция профиля и формат изображения профиля.
+- **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): функция профиля, формат изображения профиля и порядок действий для Remote Play (PIN-код, служба, разрешение для пользователя).
 - **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR-кодировщик.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): четыре проверенных профиля LZ4 (ASTRO BOT, EA Sports UFC 6, движок Insomniac, движок Unity), встроены без изменений.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): собственное разрешение имён и HTTPS-загрузка приложения (для магазина пейлоадов).

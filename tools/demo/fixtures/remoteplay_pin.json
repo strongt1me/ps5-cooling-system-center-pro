@@ -1,0 +1,11 @@
+{
+ "ok": true,
+ "pairing": {
+  "state": "waiting",
+  "pin": "47291853",
+  "seconds_left": 292,
+  "code": "",
+  "err": "",
+  "busy": false
+ }
+}

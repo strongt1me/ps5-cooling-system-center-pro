@@ -1,0 +1,52 @@
+{
+ "ok": true,
+ "available": true,
+ "firmware": "12.00",
+ "per_user": true,
+ "service": {
+  "enabled": true
+ },
+ "users": [
+  {
+   "slot": 1,
+   "name": "Max",
+   "activated": true,
+   "account_id": "2fPpvOBq0m4=",
+   "allowed": true
+  },
+  {
+   "slot": 2,
+   "name": "Anna",
+   "activated": false,
+   "account_id": "",
+   "allowed": false
+  }
+ ],
+ "pairing_user": {
+  "slot": 1,
+  "via": "foreground"
+ },
+ "devices": [
+  {
+   "slot": 1,
+   "client_type": 2,
+   "user": "Max"
+  }
+ ],
+ "pairing": {
+  "state": "waiting",
+  "pin": "47291853",
+  "seconds_left": 292,
+  "code": "",
+  "err": "",
+  "busy": false
+ },
+ "module": {
+  "state": "ready"
+ },
+ "backup": {
+  "dir": "/data/PS5-Cooling-Center/remoteplay-backup",
+  "files": 3,
+  "last": "20261124-041200-service.json"
+ }
+}

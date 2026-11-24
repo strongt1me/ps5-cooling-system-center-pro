@@ -81,9 +81,10 @@ enum Area
     kAreaFiles = 2,
     kAreaPayloads = 3,
     kAreaSystem = 4,
-    kAreaProfile = 5,
-    kAreaLogs = 6,
-    kAreas = 7,
+    kAreaRemotePlay = 5, // directly under System, as in the browser (24.11.2026)
+    kAreaProfile = 6,
+    kAreaLogs = 7,
+    kAreas = 8,
 };
 
 // What the content area shows: an area and, where it has sub-tabs, which one.
@@ -106,6 +107,7 @@ enum View
     kFiles,       // Dateien (29.10.2026)
     kStorage,     // System → Speicher, the first part of the System area (29.10.2026)
     kProfile,     // Profil and Danke (Phase 10, 31.10.2026)
+    kRemotePlay,  // Remote Play (24.11.2026)
     kPlaceholder, // an area without a page of its own
 };
 
@@ -126,7 +128,8 @@ enum PageIndex
     kPageProfile = 11,
     kPageKraken = 12,
     kPageCurve = 13,
-    kPageCount = 14,
+    kPageRemotePlay = 14,
+    kPageCount = 15,
 };
 
 // The sidebar's icons, drawn with the kit's shapes (no artwork files): one per area.
@@ -190,6 +193,14 @@ void draw_area_icon(gfx::DrawList &list, int area, const Rect &box, Color ink)
         }
         list.ring(cx, cy, s * 0.33f, s * 0.14f, ink);
         list.ring(cx, cy, s * 0.13f, t, ink);
+        break;
+    case kAreaRemotePlay: // a screen with a play triangle on a stand: playing the console elsewhere
+        list.bordered_rect({x + s * 0.04f, y + s * 0.1f, s * 0.92f, s * 0.62f}, s * 0.1f, clear, t,
+                           ink);
+        list.triangle({cx - s * 0.11f, y + s * 0.26f, s * 0.22f, s * 0.3f}, ink, 0.0f,
+                      kPi * 0.5f);
+        list.line(cx, y + s * 0.72f, cx, y + s * 0.88f, t, ink);
+        list.line(cx - s * 0.2f, y + s * 0.9f, cx + s * 0.2f, y + s * 0.9f, t, ink);
         break;
     case kAreaProfile: // a person in a circle
         list.ring(cx, cy, s * 0.47f, t * 0.8f, ink);
@@ -407,8 +418,9 @@ class Ps5cc final : public app::Concept
         nav_.icon = [](ui::Canvas &canvas, const Rect &box, const ui::NavEntry &entry, int, float,
                        Color ink) { draw_area_icon(canvas.list, entry.tag, box, ink); };
         {
-            const char *const labels[kAreas] = {"Kühlung", "Spiele", "Dateimanager", "Payloads",
-                                                "System",  "Profil", "Protokoll"};
+            const char *const labels[kAreas] = {"Kühlung", "Spiele",      "Dateimanager",
+                                                "Payloads", "System",      "Remote Play",
+                                                "Profil",  "Protokoll"};
             std::vector<ui::NavEntry> entries;
             for (int i = 0; i < kAreas; ++i)
             {
@@ -435,7 +447,8 @@ class Ps5cc final : public app::Concept
             ps5cc::make_packages_page(), ps5cc::make_ps4mount_page(), ps5cc::make_disc_page(),
             ps5cc::make_system_page(),   ps5cc::make_playtime_page(), ps5cc::make_saves_page(),
             ps5cc::make_backups_page(),  ps5cc::make_files_page(),    ps5cc::make_profile_page(),
-            ps5cc::make_kraken_page(),   ps5cc::make_fancurve_page()};
+            ps5cc::make_kraken_page(),   ps5cc::make_fancurve_page(),
+            ps5cc::make_remoteplay_page()};
         for (const std::unique_ptr<ps5cc::Page> &page : pages_)
             page->init(theme_);
 
@@ -1690,6 +1703,30 @@ class Ps5cc final : public app::Concept
             {0.15f, 0, Direction::down},
             {0.15f, 0, Direction::down},
             {0.8f, 0, Direction::none, "system-experte-grafik"},
+            // Remote Play (24.11.2026), the area under System: the rail with its new entry, the
+            // service off, switched on, a PIN made and typed wrongly (an error), a second one that
+            // pairs a device
+            {0.5f, action_bit(Action::page_next)},
+            {0.4f, action_bit(Action::touch)},
+            {0.8f, 0, Direction::none, "remoteplay-seitenleiste"},
+            {0.4f, action_bit(Action::back)},
+            {0.9f, 0, Direction::none, "remoteplay"},
+            {0.3f, action_bit(Action::confirm)},
+            {0.9f, 0, Direction::none, "remoteplay-an"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.7f, 0, Direction::none, "remoteplay-benutzer"},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.5f, 0, Direction::none, "remoteplay-erzeugt"},
+            {3.0f, 0, Direction::none, "remoteplay-pin"},
+            {2.5f, 0, Direction::none, "remoteplay-fehler"},
+            {0.3f, action_bit(Action::confirm)},
+            {7.0f, 0, Direction::none, "remoteplay-gekoppelt"},
             {0.5f, action_bit(Action::page_next)},
             {0.5f, action_bit(Action::page_next)},
             {1.0f, 0, Direction::none, "protokoll"},
@@ -1719,6 +1756,7 @@ class Ps5cc final : public app::Concept
             {0.4f, action_bit(Action::jump_prev)},
             {0.5f, action_bit(Action::page_next)},
             {0.4f, action_bit(Action::touch)},
+            {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::up},
             {0.8f, 0, Direction::none, "seitenleiste"},
@@ -1840,6 +1878,8 @@ class Ps5cc final : public app::Concept
             return kLogs;
         case kAreaSystem:
             return kStorage;
+        case kAreaRemotePlay:
+            return kRemotePlay;
         case kAreaFiles:
             return kFiles;
         case kAreaProfile:
@@ -1885,6 +1925,8 @@ class Ps5cc final : public app::Concept
             return pages_[kPagePlaytime].get();
         case kProfile:
             return pages_[kPageProfile].get();
+        case kRemotePlay:
+            return pages_[kPageRemotePlay].get();
         case kSaves:
             return pages_[kPageSaves].get();
         case kBackups:
@@ -2449,6 +2491,7 @@ class Ps5cc final : public app::Concept
                               : v == kBackups  ? ps5cc::Watch::backups
                               : v == kFiles    ? ps5cc::Watch::files
                               : v == kProfile  ? ps5cc::Watch::profile
+                              : v == kRemotePlay ? ps5cc::Watch::remoteplay
                                                : ps5cc::Watch::none);
         if (ps5cc::Page *page = current_page())
             page->enter();

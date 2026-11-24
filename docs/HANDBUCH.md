@@ -33,6 +33,8 @@ Konfigurationen ziehen beim ersten Start automatisch um.
 - **System** — ShadowMountPlus (Version und „Fakelib automatisch aktualisieren“), Konsole, Firmware, Laufzeit, Netzwerk,
    Bildschirm, QR-Code „Am Handy öffnen“, Speicherplatz (mit „Auswerfen“ für USB-Laufwerke), Kühlleistung über die Zeit,
    Zusatzabfragen, Expertenmodus mit Rohdiagnose
+- **Remote Play** — die Konsole für Remote Play vorbereiten: Dienst, Benutzer (Konto, Erlaubnis), Kopplungs-PIN und
+   gekoppelte Geräte; steht in der Seitenleiste direkt unter System (siehe unten)
 - **Protokoll** — Ereignisse der App, als `.log` exportierbar, und das
    Kernel-Log live (siehe unten). Seit 1.75.6 schreibt die App jedes Ereignis
    auch in `/data/PS5-Cooling-Center/app.log` (höchstens 2 s später, Warnungen
@@ -874,6 +876,20 @@ Ortsleiste zeigt „ntfs0 (NTFS · Name)“. Ein Laufwerk ohne NTFS wird einmal 
 - Der Treiber hält beim Einlesen eines Ordners seine Sperre; die App liest deshalb jeden Ordner erst ganz in eine Liste und
   arbeitet dann. Host-Test `test/ntfsfm` (48 Prüfungen auf mkntfs-Abbildern, auch mit MBR-Partition und nur lesbar; Gegenprüfung
   mit ntfs-3g: `ntfscat`, `ntfsls`, `ntfsresize --check`).
+
+## Remote Play (seit 24.11.2026)
+
+Der Bereich **Remote Play** (seit 24.11.2026) steht in der Seitenleiste direkt unter **System**; in der Vollbild-App ist er ein eigener Bereich hinter System. Er bereitet die Konsole auf Remote Play vor, damit du sie mit **chiaki-ng** oder **ps5upload** am PC oder Handy spielen kannst. Die App selbst streamt nicht.
+
+- **Remote Play einschalten:** der Schalter der Konsole (Einstellungen → System → Remote Play); ein Neustart ist nicht nötig.
+- **Benutzer:** Die Karte listet die Benutzer der Konsole mit ihrer Konto-ID in der Form, die chiaki-ng verlangt (im Browser mit „Kopieren“). Ein Benutzer ohne Konto lässt sich mit „Offline aktivieren“ einrichten (dasselbe wie auf der Seite Profil). Ab Firmware 10.00 zeigt die Karte je Benutzer, ob Remote Play erlaubt ist; ist es das nicht, gibt es „Erlauben“. Sperren lässt sich ein Benutzer nur an der Konsole selbst.
+- **Kopplungs-PIN:** „PIN erzeugen“ macht eine achtstellige PIN. Sie gilt 5 Minuten, steht auf der Seite und erscheint als Meldung auf dem Fernseher; du gibst sie in chiaki-ng oder ps5upload bei „Registrieren“ ein. Die Karte zeigt, ob das Koppeln gelungen ist oder warum nicht. Ist Remote Play aus, schaltet „PIN erzeugen“ es vorher ein, weil die PIN sonst unbrauchbar bleibt.
+- **Gekoppelte Geräte:** Die Konsole merkt sich je Gerät nur den Benutzer und eine Art, keinen Namen. Die App zeigt die Geräte nur an und entfernt keines.
+- **Sicherung:** Vor jeder Änderung (Dienst, Erlaubnis, Offline-Aktivierung) sichert die App die betroffenen Einstellungen der Konsole nach `/data/PS5-Cooling-Center/remoteplay-backup`; die neuesten 40 bleiben. Lässt sich nicht sichern, ändert die App nichts; nach dem Schreiben liest sie den Wert zurück.
+- **Technik:** Die Remote-Play-Bibliothek der Konsole lädt die App in einem eigenen Faden; antwortet sie nicht, meldet die Seite „Remote Play antwortet gerade nicht“, und die übrige App läuft weiter. Wege und Schlüssel stammen aus dem Quelltext von ps5upload und elf-arsenal (beide GPL-3.0-or-later); der Code ist neu geschrieben.
+- **Zugriff:** Wie alles in dieser App hat auch Remote Play keine Anmeldung: Jedes Gerät im Heimnetz kann eine PIN erzeugen und sich damit koppeln. Die Konsole gehört deshalb nur in ein Netz, dem du vertraust (siehe „Sicherheit im Heimnetz“).
+
+Schnittstelle: `/api/v1/remoteplay` (siehe `docs/API.md`).
 
 ## Sprache der Oberfläche (seit 07.10.2026)
 

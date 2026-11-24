@@ -4194,6 +4194,159 @@
     }
   });
 
+  /* ── Remote Play (remoteplay.c, 24.11.2026) ─────────────────────────────────────────────────────────────────────────
+     Die Karte auf der Seite System: Dienst, Benutzer (Konto, Erlaubnis), Kopplungs-PIN, gekoppelte Geräte. Die Seite fragt den ganzen Stand
+     mit dem Takt der Seite System, die PIN allein jede Sekunde, solange eine gilt. Geschrieben wird nur nach einem Klick; die Konsole
+     sichert vorher (remoteplay-backup). Die Texte der Fehler stehen hier als Kürzel -> Satz, weil die Konsole sie mit Zahlen schickt. */
+  const rp = { pinTimer: 0, last: null, busy: false };
+  const RP_ERR = {
+    pin_expired: "Die PIN ist abgelaufen, bevor ein Gerät gekoppelt wurde.",
+    not_available: "Remote Play ist nicht verfügbar.",
+    gen_failed: "Die Konsole konnte keine PIN erzeugen.",
+    pin_invalid: "Das Koppeln ist fehlgeschlagen: Die PIN wurde falsch eingegeben.",
+    account_invalid: "Das Koppeln ist fehlgeschlagen: Die Konto-ID wurde nicht angenommen.",
+    aborted: "Das Koppeln ist fehlgeschlagen: Die Konsole hat die Anmeldung beendet.",
+    refused: "Das Koppeln ist fehlgeschlagen: Die Konsole hat die Anmeldung abgelehnt.",
+    no_account: "Kein Benutzer mit aktiviertem Konto. Aktiviere zuerst das Offline-Konto (Seite Profil).",
+    no_module: "Diese Firmware stellt Remote Play für Programme nicht bereit.",
+    init_failed: "Remote Play ließ sich nicht starten.",
+  };
+  const rpCopy = (text) => {
+    const done = () => toast("Konto-ID kopiert.");
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, () => {}); return; }
+    /* eine Seite im Heimnetz ist kein „sicherer Kontext“: dann der alte Weg über ein Textfeld */
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { if (document.execCommand("copy")) done(); } catch { /* ohne Kopie bleibt die ID lesbar */ }
+    ta.remove();
+  };
+  const rpMinSec = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const rpPinText = (p) => (p && p.length === 8 ? `${p.slice(0, 4)} ${p.slice(4)}` : p || "");
+
+  const rpDrawPin = (pr) => {
+    const box = $("#rp-pin-box"), note = $("#rp-pin-note"), btn = $("#rp-pin-btn"), cancel = $("#rp-pin-cancel");
+    if (!box || !pr) return;
+    const waiting = pr.state === "waiting";
+    box.hidden = !waiting;
+    cancel.hidden = !waiting;
+    btn.textContent = waiting ? "Neue PIN erzeugen" : "PIN erzeugen";
+    if (waiting) {
+      $("#rp-pin-digits").textContent = rpPinText(pr.pin);
+      $("#rp-pin-left").textContent = `noch ${rpMinSec(pr.seconds_left)}`;
+    }
+    note.classList.toggle("acc-active", pr.state === "paired");
+    if (pr.state === "waiting") note.textContent = "In chiaki-ng oder ps5upload bei „Registrieren“ eingeben. Die PIN steht auch auf dem Fernseher.";
+    else if (pr.state === "paired") note.textContent = "Ein Gerät wurde gekoppelt.";
+    else if (pr.state === "failed" || pr.state === "timeout") note.textContent = RP_ERR[pr.code] || pr.err || "Das Koppeln ist fehlgeschlagen.";
+    else note.textContent = "Die PIN gilt 5 Minuten und steht auch auf dem Fernseher.";
+    /* die Abfrage jede Sekunde nur, solange die PIN gilt und die Seite sichtbar ist */
+    if (waiting && !rp.pinTimer) {
+      rp.pinTimer = setInterval(async () => {
+        if (state.page !== "remoteplay") return;
+        try {
+          const r = await api("/api/v1/remoteplay/pin");
+          rpDrawPin(r.pairing);
+          if (r.pairing.state !== "waiting") rpLoad();      /* gekoppelt oder abgelaufen: der ganze Stand (Geräteliste) */
+        } catch { /* ein Aussetzer: der nächste Takt */ }
+      }, 1000);
+    } else if (!waiting && rp.pinTimer) { clearInterval(rp.pinTimer); rp.pinTimer = 0; }
+  };
+
+  const rpDraw = (d) => {
+    if (!$("#page-remoteplay") || !d) return;
+    rp.last = d;
+    const svc = $("#rp-service"), note = $("#rp-note"), users = $("#rp-users"), devs = $("#rp-devices"), btn = $("#rp-pin-btn");
+    const noteText = !d.available ? "Die Registry der Konsole ist nicht erreichbar. Läuft der Jailbreak?"
+      : d.module && d.module.state === "missing" ? "Diese Firmware stellt Remote Play für Programme nicht bereit."
+      : d.pairing_user && d.pairing_user.slot < 0 ? "Kein Benutzer hat ein aktiviertes Konto: ohne Konto lässt sich kein Gerät koppeln. Aktiviere es unten (Offline-Konto) oder auf der Seite Profil."
+      : "";
+    note.hidden = !noteText;
+    note.textContent = noteText;
+    svc.disabled = !d.available || d.service.enabled === null;
+    svc.checked = d.service.enabled === true;
+    btn.disabled = !d.available || !(d.pairing_user && d.pairing_user.slot > 0) || (d.module && d.module.state === "missing") || rp.busy;
+
+    const us = Array.isArray(d.users) ? d.users : [];
+    users.innerHTML = us.length ? us.map((u) => {
+      const parts = [u.activated ? "Konto aktiviert" : "Konto nicht aktiviert", `Platz ${u.slot}`];
+      if (d.pairing_user && d.pairing_user.slot === u.slot) parts.push("für die PIN genutzt");
+      const id = u.activated && u.account_id
+        ? `<small class="muted">${esc("Konto-ID")} <code data-no-i18n>${esc(u.account_id)}</code>
+             <button type="button" class="btn ghost rp-copy" data-rp-copy="${esc(u.account_id)}">Kopieren</button></small>` : "";
+      const act = u.activated ? "" : `<button type="button" class="btn primary" data-rp-act="${u.slot}">Offline aktivieren</button>`;
+      /* nur „erlauben“: das Ausschalten der Erlaubnis nimmt die Konsole nicht an (an der Slim gemessen: die Schreibung wird bestätigt, der alte Wert kommt zurück) */
+      const allow = !d.per_user || u.allowed === null ? ""
+        : u.allowed ? `<span class="rp-allow"><span>Remote Play erlaubt</span><b>Ja</b></span>`
+        : `<span class="rp-allow"><span>Remote Play nicht erlaubt</span></span><button type="button" class="btn primary" data-rp-allow="${u.slot}">Erlauben</button>`;
+      return `<div class="acc-row${u.activated ? " acc-active" : ""}" role="listitem">
+        <div class="acc-main"><b data-no-i18n>${esc(u.name)}</b><small class="muted">${parts.map(esc).join(" · ")}</small>${id}</div>
+        <div class="rp-actions">${act}${allow}</div></div>`;
+    }).join("") : `<p class="muted">Keine Benutzer gefunden (läuft der Jailbreak?).</p>`;
+
+    const dv = Array.isArray(d.devices) ? d.devices : [];
+    devs.innerHTML = dv.length ? dv.map((x) =>
+      `<div><span>${esc(`Gerät ${x.slot}`)}</span><b>${esc(x.user ? `Benutzer ${x.user}` : "Benutzer unbekannt")} · ${esc(`Art ${x.client_type}`)}</b></div>`).join("")
+      : `<p class="muted">Noch kein Gerät gekoppelt.</p>`;
+
+    /* die drei Werte im Banner */
+    txt("#rp-st-service", d.service.enabled === true ? "An" : d.service.enabled === false ? "Aus" : "unbekannt");
+    txt("#rp-st-users", `${us.filter((u) => u.activated).length} von ${us.length}`);
+    txt("#rp-st-devices", String(dv.length));
+    rpDrawPin(d.pairing);
+  };
+
+  const rpLoad = async () => {
+    if (!$("#page-remoteplay")) return;
+    try { rpDraw(await api("/api/v1/remoteplay")); } catch { /* die Karte behält ihren letzten Stand */ }
+  };
+
+  /* Eine Änderung: die Schalter und Knöpfe ruhen, bis die Konsole geantwortet hat; ihre Antwort ist der neue Stand. */
+  const rpPost = async (path, body, okText, el) => {
+    if (rp.busy) return;
+    rp.busy = true;
+    if (el) el.disabled = true;
+    try {
+      const r = await api(path, { method: "POST", body: JSON.stringify(body || {}), timeoutMs: 40000 });
+      if (okText) toast(okText);
+      rp.busy = false;
+      rpDraw(r);
+    } catch (err) {
+      rp.busy = false;
+      toast(err.message, "error");
+      await rpLoad();                                  /* der Schalter zeigt wieder, was die Konsole wirklich hat */
+    }
+    if (el) el.disabled = false;
+  };
+
+  const wireRemotePlay = () => {
+    if (!$("#page-remoteplay")) return;
+    $("#rp-service").addEventListener("change", (e) => {
+      const on = e.target.checked;
+      rpPost("/api/v1/remoteplay/service", { enabled: on }, on ? "Remote Play ist eingeschaltet." : "Remote Play ist ausgeschaltet.", e.target);
+    });
+    $("#rp-pin-btn").addEventListener("click", (e) => rpPost("/api/v1/remoteplay/pin", {}, "", e.currentTarget));
+    $("#rp-pin-cancel").addEventListener("click", (e) => rpPost("/api/v1/remoteplay/pin/cancel", {}, "", e.currentTarget));
+    $("#rp-users").addEventListener("click", async (e) => {
+      const cp = e.target.closest("[data-rp-copy]");
+      if (cp) { rpCopy(cp.dataset.rpCopy); return; }
+      const al = e.target.closest("[data-rp-allow]");
+      if (al && !al.disabled) {
+        rpPost("/api/v1/remoteplay/user", { slot: Number(al.dataset.rpAllow), enabled: true }, "Remote Play ist für diesen Benutzer erlaubt.", al);
+        return;
+      }
+      const act = e.target.closest("[data-rp-act]");
+      if (act && !act.disabled) {
+        act.disabled = true;
+        try {
+          await api("/api/v1/profile/account/activate", { method: "POST", body: JSON.stringify({ slot: Number(act.dataset.rpAct) }) });
+          toast("Offline-Konto aktiviert.");
+        } catch (err) { toast(err.message, "error"); }
+        await rpLoad();
+      }
+    });
+  };
+
   /* Laufnummer: Nur der neueste Aufruf zeichnet. Die direkten Aufrufe nach dem Auswerfen und nach dem Seriennummer-Knopf überholen sonst einen
      älteren 10-s-Lauf, der danach seinen alten Stand zeichnet (Durchsicht 21.11.2026). */
   let sysSeq = 0;
@@ -13357,6 +13510,7 @@
     }
     if (state.page === "cooling") { loadRules(); renderCharts(); loadHistory(); fcLoad(); }
     if (state.page === "payloads") loadPayloadsPage();
+    if (state.page === "remoteplay") rpLoad();
     if (state.page === "profile") loadProfile();
     if (state.page === "games") {
       loadGames(); cpPoll(); mvPoll(); cvPoll(); discProbeTab();
@@ -13758,6 +13912,7 @@
   wireProbes();
   wireUsername();
   wireAccountActivate();
+  wireRemotePlay();
   wireAccountFakesignin();
   wireAvatar();
   const diagWindow = $("#diag-window");
@@ -14505,6 +14660,7 @@
     refresh().finally(() => { pollBusy.status = false; });
   };
   const pollSystem = () => {
+    if (state.page === "remoteplay") rpLoad();           /* Remote Play: im Takt der Seite, ohne zu warten */
     if (pollBusy.system) return;
     pollBusy.system = true;
     loadSystem().finally(() => { pollBusy.system = false; });
